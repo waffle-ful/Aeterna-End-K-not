@@ -41,6 +41,37 @@ public static class VanillaSuppressor
         DisableByName("FriendsButton");
         DisableByName("NewRequest");
 
+        // AccountManager root container (re-enables on async sign-in events; we
+        // also kill the whole hierarchy so its children can't pop back).
+        Object.FindObjectOfType<AccountManager>()?.gameObject.SetActive(false);
+
+        // StoreMenu (vanilla cosmetics store) sits behind the menu and bleeds
+        // through with the Calamity background.
+        DisableByName("StoreMenu");
+
+        // Vanilla menu shows a "Dropship + idle" PoolablePlayer character
+        // standing in the background; sprite-name based suppression because
+        // the GameObject chain is unstable across scene loads.
+        foreach (SpriteRenderer sr in Object.FindObjectsOfType<SpriteRenderer>(true))
+        {
+            if (sr == null || sr.sprite == null) continue;
+            string spriteName = sr.sprite.name;
+            if (spriteName == "Dropship" || spriteName == "idle")
+                sr.enabled = false;
+        }
+
+        // SaveIconCamera renders the "save in progress" indicator on top of the
+        // Calamity menu — disable the camera itself rather than the GameObject
+        // (the GO is shared with other systems).
+        foreach (Camera cam in Object.FindObjectsOfType<Camera>(true))
+        {
+            if (cam != null && cam.name == "SaveIconCamera")
+            {
+                cam.enabled = false;
+                break;
+            }
+        }
+
         // Vanilla EjectMainMenu (red X eject easter-egg button bottom-right)
         Object.FindObjectOfType<EjectMainMenu>()?.gameObject.SetActive(false);
 
@@ -67,11 +98,12 @@ public static class VanillaSuppressor
         // PlayerParticles: keep alive for EjectMainMenu, just hide
         Object.FindObjectOfType<PlayerParticles>()?.gameObject.SetActive(false);
 
-        // screenTint
-        if (mm.screenTint != null)
-        {
-            mm.screenTint.enabled = false;
-        }
+        // screenTint — mm.screenTint reference goes stale after scene reload
+        // (Multi → lobby → Exit re-parents Tint back under MainUI). Disabling the
+        // captured reference does nothing then. GameObject.Find("Tint") is the
+        // reliable path; this is the actual fix for the right-half darkening.
+        if (mm.screenTint != null) mm.screenTint.enabled = false;
+        GameObject.Find("Tint")?.SetActive(false);
 
         CalamityMenuState.VanillaSuppressed = true;
     }

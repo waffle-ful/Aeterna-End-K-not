@@ -230,6 +230,9 @@ public static class MainMenuManagerPatch
     private static PassiveButton CreateButton(string name, Vector3 localPosition, Color32 normalColor, Color32 hoverColor, Action action, string label, Vector2? scale = null)
     {
         PassiveButton button = Object.Instantiate(Template, Template.transform.parent);
+        // Cloned TMP inherits the template button's mesh ("終了" / "Quit"); without
+        // hiding while we re-configure, the original label flashes for a frame.
+        button.gameObject.SetActive(false);
         button.name = name;
         Object.Destroy(button.GetComponent<AspectPosition>());
         button.transform.localPosition = localPosition;
@@ -259,6 +262,8 @@ public static class MainMenuManagerPatch
 
         buttonCollider.offset = new(0f, 0f);
 
+        button.gameObject.SetActive(true);
+        buttonText.ForceMeshUpdate();
         return button;
     }
 }

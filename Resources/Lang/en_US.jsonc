@@ -1002,10 +1002,10 @@
   "JournalistError.IndexOutOfRange": "You didn't provide enough arguments.",
   "JournalistError.InvalidArgument": "Invalid argument. Use <b>/cmd note {add/remove/clear/view} [value]</b>",
   "JournalistError.Unknown": "An unknown error occurred.",
-  "Judge": "Judge",
+  "Judge": "Meeting Sheriff",
   "JudgeInfo": "Silence in the courtroom!",
-  "JudgeInfoLong": "(Crewmates):\\nThe Judge can judge a player during the meeting. If the target is evil, it's killed; if it's wrong, the Judge dies. Use the <b>/cmd tl [player id]</b> command to judge and <b>/cmd id</b> to view player IDs. Judges can judge all players when they're Madmate.",
-  "JudgeCanBeMadmate": "<color=#f8d85a>Judge</color> can become <color=#ff1919>Madmate</color>",
+  "JudgeInfoLong": "(<#8cffff>Crewmates</color>):\\n<size=80%>Silence in the courtroom.\\n_____________________________________\\nDifficulty: ★★★☆☆\\n\\n[Role]\\n・<b><color=#f8d85a>Meeting Sheriff</color></b>\\nDuring meetings, the Meeting Sheriff can put a player on trial and execute the wicked. Trial uses are limited — guess wrong and pay with your life.\\n\\n＜Trial Effect＞\\n・If the target is trialable, they die instantly.\\n・If the target is not trialable, the Meeting Sheriff dies instead.\\n・Who is trialable depends on host settings.\\n\\n＜Special Cases＞\\n・Trialing yourself counts as suicide.\\n・Targets imprisoned by the <color=#aa900d>Jailor</color> cannot be trialed.\\n・Targets shielded by the <color=#00ff97>Medic</color> cannot be trialed (configurable to ignore the shield).\\n・If the Meeting Sheriff becomes <color=#ff1919>Madmate</color>, every trial succeeds against any target.\\n・<color=#343136>Pestilence</color> and <b>Trickster</b> always kill the Meeting Sheriff regardless.\\n\\n＜Trial Limits＞\\n・Three caps apply: per meeting, per game, and total ability uses.\\n・Completing tasks can refill ability uses (configurable).\\n\\n＜Win Condition＞\\nSame as <color=#8cffff>Crewmates</color>.\\n\\n<i>Silence in the courtroom. See the truth — and judge without hesitation.</i>\\n\\n[Commands]\\n・Trial:　<b>/tl [player id]</b>　(or <b>/jj</b>)\\n・Check IDs:　<b>/id</b></size>",
+  "JudgeCanBeMadmate": "<color=#f8d85a>Meeting Sheriff</color> can become <color=#ff1919>Madmate</color>",
   "JudgeCanTrialContagious": "Can trial <color=#2E8B57>Contagious</color>",
   "JudgeCanTrialConverted": "Can trial <#ffab1b>Converted</color> players",
   "JudgeCanTrialCoven": "Can trial <color=#7b3fbb>Coven</color>",
@@ -1788,7 +1788,7 @@
   "ConvictInfoLong": "(Madmates):\\nAs the Convict, you now work for the Impostors.",
   "Councillor": "Councillor",
   "CouncillorInfo": "Kill crewmates during meetings",
-  "CouncillorInfoLong": "(Impostors):\\nAs the Councillor, you can kill players during a meeting like a Judge.\\n\\nWhen killing in a meeting, those kills will appear as a trial from a Judge.\\n\\nThe kill command is <b>/cmd tl [player id]</b>\\nYou can see the player's id before the player's name, or use the <b>/cmd id</b> command to view the id of all players.",
+  "CouncillorInfoLong": "(Impostors):\\nAs the Councillor, you can kill players during a meeting like a Meeting Sheriff.\\n\\nWhen killing in a meeting, those kills will appear as a trial from a Meeting Sheriff.\\n\\nThe kill command is <b>/cmd tl [player id]</b>\\nYou can see the player's id before the player's name, or use the <b>/cmd id</b> command to view the id of all players.",
   "CouncillorCanMurderImpostor": "Can Murder <color=#ff1919>Impostors</color>",
   "CouncillorCanMurderMadmate": "Can Murder <color=#ff1919>Madmates</color>",
   "CouncillorDead": " You can't murder from the dead.",
@@ -9649,7 +9649,7 @@
   "CommandDescription.TPOut": "Teleport out of the lobby",
   "CommandDescription.Target": "Target a player as the Ventriloquist",
   "CommandDescription.Template": "Send a message template (from template.txt)",
-  "CommandDescription.Trial": "Trial a player as the Judge or Councillor",
+  "CommandDescription.Trial": "Trial a player as the Meeting Sheriff or Councillor",
   "CommandDescription.UIScale": "Set the scale of the buttons in the UI",
   "CommandDescription.Unmute": "Unmute someone.",
   "CommandDescription.Up": "[DEPRECATED] Use /setrole or /setaddon instead",
@@ -10480,7 +10480,7 @@
     General Settings           
   ============================== */
   "GanInvestigatorCanBeMadmate": "<color=#BA55D3>Investigator</color> can be converted",
-  "GanJudgeCanBeMadmate": "<color=#f8d85a>Judge</color> can be converted",
+  "GanJudgeCanBeMadmate": "<color=#f8d85a>Meeting Sheriff</color> can be converted",
   "GanMarshallCanBeMadmate": "<color=#5573AA>Marshall</color> can be converted",
   "GanMayorCanBeMadmate": "<color=#204d42>Mayor</color> can be converted",
 
@@ -10675,7 +10675,7 @@
   ============================== */
   "LaughToWhoGuessSelf": "Tried to guess, who tried to self-guess! It's you! Ahah!",
   "LaughToWhoMurderSelf": "Hahaha, who would've thought someone was stupid enough to murder themselves?\\n\\nGuess it happens to be... YOU!",
-  "LaughToWhoTrialSelf": "God, I didn't think the Judges would be so blind that they wouldn't even see that they had sentenced themselves.",
+  "LaughToWhoTrialSelf": "God, I didn't think the Meeting Sheriffs would be so blind that they wouldn't even see that they had sentenced themselves.",
 
   /* ==============================
     Lovers           
@@ -11839,7 +11839,7 @@
   "Mad-": "Mad ",
   "MadmateHasImpostorVision": "<color=#ff1919>Madmates</color> Have <color=#ff1919>Impostor</color> Vision",
   "MadmateInfo": "Help the Impostors",
-  "MadmateInfoLong": "(Add-ons):\\nMadmates assist the Impostors in winning the game. They are only available to Crewmates but can identify Impostors depending on the host's settings. Certain roles like Sheriff, Snitch, and Mayor can become Madmates. The abilities of some roles change when they become Madmates. For example, the Grenadier's flash bomb works on Crewmates and Neutrals instead of Impostors. The Judge can judge anyone.",
+  "MadmateInfoLong": "(Add-ons):\\nMadmates assist the Impostors in winning the game. They are only available to Crewmates but can identify Impostors depending on the host's settings. Certain roles like Sheriff, Snitch, and Mayor can become Madmates. The abilities of some roles change when they become Madmates. For example, the Grenadier's flash bomb works on Crewmates and Neutrals instead of Impostors. The Meeting Sheriff can judge anyone.",
   "MadmateKillImpostor": "Madmates cannot kill Impostors",
   "MadmateKnowWhosImp": "<color=#ff1919>Madmates</color> know <color=#ff1919>Impostors</color>",
   "MadmateKnowWhosMadmate": "<color=#ff1919>Madmates</color> know each other",

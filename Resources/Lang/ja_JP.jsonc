@@ -1002,10 +1002,10 @@
   "JournalistError.IndexOutOfRange": "<size=80%>あなたは 十分な引数を指定していません。</size>",
   "JournalistError.InvalidArgument": "<size=80%>無効な引数。\\n<b>/note {add/remove/clear/view} [value]</b> を使用する</size>",
   "JournalistError.Unknown": "<size=80%>不明な エラーが発生した。</size>",
-  "Judge": "裁判官",
+  "Judge": "ミーティングシェリフ",
   "JudgeInfo": "法廷での沈黙！",
-  "JudgeInfoLong": "(<#8cffff>クルーメイト</color>):\\n<size=75%>裁判官は 会議の間で プレイヤーを判断できます。\\nもし ターゲットが邪悪なとき、それは 殺害されます。\\nもし 間違えたとき、裁判官が死亡します。\\n判断するには コマンド <b>/tl [プレイヤー ID]</b> を プレイヤーID を見るためには <b>id</b> を使用します。\\n裁判官は 彼らが <#ff1919>マッドメイト</color>のとき すべてのプレイヤーを判断できます。</size>",
-  "JudgeCanBeMadmate": "<color=#f8d85a>裁判官</color>は <color=#ff1919>マッドメイト</color>になることができる",
+  "JudgeInfoLong": "(<#8cffff>クルーメイト</color>):\\n<size=80%>沈黙、これは法廷である。\\n_____________________________________\\n難易度：★★★☆☆\\n\\n[役職]\\n・<b><color=#f8d85a>ミーティングシェリフ</color></b>\\n会議中にプレイヤーを判決にかけ、邪悪を裁ける。判決の権利には限りがあり、誤れば自らの命で償う。\\n\\n＜判決の効果＞\\n・対象が裁ける役職なら 即座に死亡させる。\\n・対象が裁けない役職なら ミーティングシェリフ自身が死亡する。\\n・誰を裁けるかはホストの設定に依存する。\\n\\n＜特殊ケース＞\\n・自分自身を判決すると 自殺となる。\\n・<color=#aa900d>看守</color>に拘束されている対象は判決できない。\\n・<color=#00ff97>メディック</color>に保護されている対象も判決できない（設定で無視可）。\\n・<color=#ff1919>マッドメイト</color>になったミーティングシェリフは すべての相手を必ず成功で判決できる。\\n・<color=#343136>ペスティレンス</color>と<b>トリックスター</b>を判決すると、必ずミーティングシェリフが死亡する。\\n\\n＜判決の制限＞\\n・会議ごとの上限・ゲーム全体の上限・能力使用回数 の3つで管理される。\\n・タスク完了で能力使用回数を補充できる（設定有）。\\n\\n＜勝利条件＞\\n<color=#8cffff>クルーメイト</color>と同じ。\\n\\n<i>沈黙、これは法廷である。真実を見抜き、躊躇なく裁け。</i>\\n\\n[コマンド]\\n・判決：　<b>/tl [プレイヤー ID]</b>　（または <b>/jj</b>）\\n・ID 確認：　<b>/id</b></size>",
+  "JudgeCanBeMadmate": "<color=#f8d85a>ミーティングシェリフ</color>は <color=#ff1919>マッドメイト</color>になることができる",
   "JudgeCanTrialContagious": "<color=#2E8B57>伝染病</color>を判断できる",
   "JudgeCanTrialConverted": "<#ffab1b>変換した</color>プレイヤーを判断できる",
   "JudgeCanTrialCoven": "<color=#7b3fbb>カヴン</color>を判断できる",
@@ -1767,7 +1767,7 @@
   "ConvictInfoLong": "(<#ff1919>マッドメイト</color>):\\n<size=80%>犯罪者として、あなたは 今 <#ff1919>インポスター</color>のために 働きましょう。</size>",
   "Councillor": "評議員",
   "CouncillorInfo": "会議中に 乗組員を殺害しよう",
-  "CouncillorInfoLong": "(<#ff1919>インポスター</color>):\\n<size=75%>評議員として、あなたは <#f8d85a>裁判官</color>のように 会議中に プレイヤーを殺害できます。\\n\\n会議で殺害するとき、それらの殺害は <#f8d85a>裁判官</color>からの判断として 表されます。\\n\\n殺害コマンドは <b>/tl [プレイヤー id]</b> です。\\nあなたは プレイヤー名の前 あるいは すべてのプレイヤーの idを見るために <b>/id</b> コマンドを使用して プレイヤー id を見ることができます。</size>",
+  "CouncillorInfoLong": "(<#ff1919>インポスター</color>):\\n<size=75%>評議員として、あなたは <#f8d85a>ミーティングシェリフ</color>のように 会議中に プレイヤーを殺害できます。\\n\\n会議で殺害するとき、それらの殺害は <#f8d85a>ミーティングシェリフ</color>からの判断として 表されます。\\n\\n殺害コマンドは <b>/tl [プレイヤー id]</b> です。\\nあなたは プレイヤー名の前 あるいは すべてのプレイヤーの idを見るために <b>/id</b> コマンドを使用して プレイヤー id を見ることができます。</size>",
   "CouncillorCanMurderImpostor": "<color=#ff1919>インポスター</color>を殺人できる",
   "CouncillorCanMurderMadmate": "<color=#ff1919>マッドメイト</color>を殺人できる",
   "CouncillorDead": " You can't murder from the dead.",
@@ -9074,7 +9074,7 @@
   "CommandDescription.TPOut": "ロビーの外にテレポートする",
   "CommandDescription.Target": "<#ff1919>腹話術師</color>として 1人のプレイヤーをターゲットにする",
   "CommandDescription.Template": "1つのメッセージテンプレートを送信する (template.txtから)",
-  "CommandDescription.Trial": "<#f8d85a>裁判官</color> または <#ff1919>評議員</color>として 1人のプレイヤーを判断する",
+  "CommandDescription.Trial": "<#f8d85a>ミーティングシェリフ</color> または <#ff1919>評議員</color>として 1人のプレイヤーを判断する",
   "CommandDescription.UIScale": "Set the scale of the buttons in the UI",
   "CommandDescription.Unmute": "誰かのミュートを解除する。",
   "CommandDescription.Up": "[非推奨] 代わりに /setrole または /setaddon を使用しましょう",
@@ -9884,7 +9884,7 @@
     General Settings           
   ============================== */
   "GanInvestigatorCanBeMadmate": "<color=#BA55D3>調査官</color>を 変換することができる",
-  "GanJudgeCanBeMadmate": "<color=#f8d85a>裁判官</color>を 変換することができる",
+  "GanJudgeCanBeMadmate": "<color=#f8d85a>ミーティングシェリフ</color>を 変換することができる",
   "GanMarshallCanBeMadmate": "<color=#5573AA>マーシャル</color>を 変換することができる",
   "GanMayorCanBeMadmate": "<color=#204d42>メイヤー</color>を 変換することができる",
 
@@ -10079,7 +10079,7 @@
   ============================== */
   "LaughToWhoGuessSelf": "<size=80%>推測を試しました、だれが自己推測を試したのでしょう！\\nそれは あなたでした！ あはは！</size>",
   "LaughToWhoMurderSelf": "<size=80%>ははは、自分自身を殺人するほど 十分愚かだと 誰が思ったか？\\n\\nその推測が起こったのは... あなただ！</size>",
-  "LaughToWhoTrialSelf": "<size=80%>神よ、<#f8d85a>裁判官</color>の彼自身が判断を下したことさえ 見ていないとは思いませんでした。</size>",
+  "LaughToWhoTrialSelf": "<size=80%>神よ、<#f8d85a>ミーティングシェリフ</color>の彼自身が判断を下したことさえ 見ていないとは思いませんでした。</size>",
 
   /* ==============================
     Lovers           
@@ -10205,6 +10205,11 @@
   "MainMenu.CreditsButton": "クレジット",
   "MainMenu.ExitGameButton": "終了",
   "MainMenu.InventoryButton": "持ち物",
+  "MainMenu.Calamity.SinglePlayer": "シングルプレイ",
+  "MainMenu.Calamity.Multiplayer": "マルチプレイ",
+  "MainMenu.Calamity.Settings": "設定",
+  "MainMenu.Calamity.Credits": "クレジット",
+  "MainMenu.Calamity.Quit": "終了",
 
   /* ==============================
     Lobby View Settings           
@@ -10827,7 +10832,7 @@
     Meeting Settings         
   ============================== */
   "TrialHelp": "<size=80%>コマンド: <b>/tl [プレイヤー ID]</b>\\nあなたは各プレイヤー名の前で プレイヤー ID を見ることができます。\\nまたは <b>id</b> を使用して すべてのプレイヤーの ID のリストを表示します。</size>",
-  "TrialKill": "<size=90%><b>{0}</b>が <#f8d85a>裁判官</color>によって裁かれた。</size>",
+  "TrialKill": "<size=90%><b>{0}</b>が <#f8d85a>ミーティングシェリフ</color>によって裁かれた。</size>",
   "TrialLimitPerGame": "ゲームごとの 判断回数",
   "TrialLimitPerMeeting": "会議ごとの 判断回数",
   "TrialNull": "<size=80%>判断するための 生存プレイヤーを選択してください</size>",
@@ -11241,7 +11246,7 @@
   "Mad-": "マッド ",
   "MadmateHasImpostorVision": "<color=#ff1919>マッドメイト</color>は <color=#ff1919>インポスター</color> ビジョンを持つ",
   "MadmateInfo": "インポスターを助けよう",
-  "MadmateInfoLong": "(<#00ffa5>混合する</color> <#ff9ace>属性</color>):\\n<size=70%>マッドメイトは <#ff1919>インポスター</color>がゲームに勝利する手伝いをしましょう。\\nこれは <#8cffff>クルーメイト</color>が 利用できますが ホストの設定に応じて <#ff1919>インポスター</color>を識別できます。\\n特定の役割も同様に <#ffb347>シェリフ</color>、<#b8fb4f>スニッチ</color>、そして <#204d42>メイヤー</color>も マッドメイトになることもできます。\\nいくつかの役割は 彼らがマッドメイトになったとき 変化します。\\n例えば、<#3c4a16>グレネーダー</color>の 光弾は <#ff1919>インポスター</color>の代わりに <#8cffff>クルーメイト</color> と <#ffab1b>ニュートラル</color> に作用します。\\n<#f8d85a>裁判官</color>の 裁判は 誰でもできます。</size>",
+  "MadmateInfoLong": "(<#00ffa5>混合する</color> <#ff9ace>属性</color>):\\n<size=70%>マッドメイトは <#ff1919>インポスター</color>がゲームに勝利する手伝いをしましょう。\\nこれは <#8cffff>クルーメイト</color>が 利用できますが ホストの設定に応じて <#ff1919>インポスター</color>を識別できます。\\n特定の役割も同様に <#ffb347>シェリフ</color>、<#b8fb4f>スニッチ</color>、そして <#204d42>メイヤー</color>も マッドメイトになることもできます。\\nいくつかの役割は 彼らがマッドメイトになったとき 変化します。\\n例えば、<#3c4a16>グレネーダー</color>の 光弾は <#ff1919>インポスター</color>の代わりに <#8cffff>クルーメイト</color> と <#ffab1b>ニュートラル</color> に作用します。\\n<#f8d85a>ミーティングシェリフ</color>の 裁判は 誰でもできます。</size>",
   "MadmateKillImpostor": "マッドメイトは インポスターを殺害できません",
   "MadmateKnowWhosImp": "<color=#ff1919>マッドメイト</color>は <color=#ff1919>インポスター</color>を知れる",
   "MadmateKnowWhosMadmate": "<color=#ff1919>マッドメイト</color>は お互いを知れる",
