@@ -1,0 +1,1082 @@
+﻿using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using AmongUs.InnerNet.GameDataMessages;
+using EndKnot.Gamemodes;
+using EndKnot.Modules;
+using EndKnot.Roles;
+using HarmonyLib;
+using Hazel;
+using InnerNet;
+using UnityEngine;
+using Tree = EndKnot.Roles.Tree;
+
+// Credit: https://github.com/Rabek009/MoreGamemodes/blob/e054eb498094dfca0a365fc6b6fea8d17f9974d7/Modules/AllObjects
+// Huge thanks to Rabek009 for this code!
+
+namespace EndKnot
+{
+    public class CustomNetObject
+    {
+        public static readonly List<CustomNetObject> AllObjects = [];
+        private static int MaxId = -1;
+
+        protected int Id;
+        public PlayerControl playerControl;
+        public Vector2 Position;
+        private string Sprite;
+
+        // true なら通常プレイヤーのように振る舞う CNO:
+        //   - AllPlayerControls 残存（vanilla キル対象になる）
+        //   - BodySprite を表示
+        //   - 標準の Shapeshift-text outfit 設定をスキップ
+        //   - MurderPlayer FailedError による非モッド隠蔽をスキップ
+        //   - CachedPlayerData の LocalPlayer 共有をスキップ（自前 Data を使う）
+        // outfit / 名前等は派生クラスの OnAfterCreate で設定する
+        protected virtual bool IsPlayerLike => false;
+
+        // CreateNetObject 完了後に呼ばれる派生クラス用 hook。
+        // player-like CNO はここで Utils.RpcChangeSkin 等で個別 outfit を適用する。
+        protected virtual void OnAfterCreate() { }
+
+        public void RpcChangeSprite(string sprite)
+        {
+            if (!AmongUsClient.Instance.AmHost) return;
+            if (IsPlayerLike) return; // sprite-text 戦略は player-like CNO には適用不可
+            if (this is not NaturalDisaster nd || nd.SpawnTimer <= 0f) Logger.Info($" Change Custom Net Object {GetType().Name} (ID {Id}) sprite", "CNO.RpcChangeSprite");
+
+            Sprite = sprite;
+
+            string name = PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].PlayerName;
+            int colorId = PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].ColorId;
+            string hatId = PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].HatId;
+            string skinId = PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].SkinId;
+            string petId = PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].PetId;
+            string visorId = PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].VisorId;
+            bool notImportant = this is BedWarsItemGenerator || (this is NaturalDisaster { SpawnTimer: > 1f } && Options.CurrentGameMode != CustomGameMode.NaturalDisasters && GameStates.CurrentServerType == GameStates.ServerType.Vanilla);
+            var sender = CustomRpcSender.Create("CustomNetObject.RpcChangeSprite", notImportant ? SendOption.None : SendOption.Reliable, log: false);
+            MessageWriter writer = sender.stream;
+            sender.StartMessage();
+            PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].PlayerName = "<size=14><br></size>" + sprite;
+            PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].ColorId = 0;
+            PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].HatId = "";
+            PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].SkinId = "";
+            PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].PetId = "";
+            PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].VisorId = "";
+            writer.StartMessage(1);
+            {
+                writer.WritePacked(PlayerControl.LocalPlayer.Data.NetId);
+                PlayerControl.LocalPlayer.Data.Serialize(writer, false);
+            }
+            writer.EndMessage();
+
+            try { playerControl.Shapeshift(PlayerControl.LocalPlayer, false); }
+            catch (Exception e) { Utils.ThrowException(e); }
+
+            sender.StartRpc(playerControl.NetId, (byte)RpcCalls.Shapeshift)
+                .WriteNetObject(PlayerControl.LocalPlayer)
+                .Write(false)
+                .EndRpc();
+
+            PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].PlayerName = name;
+            PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].ColorId = colorId;
+            PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].HatId = hatId;
+            PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].SkinId = skinId;
+            PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].PetId = petId;
+            PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].VisorId = visorId;
+            writer.StartMessage(1);
+            {
+                writer.WritePacked(PlayerControl.LocalPlayer.Data.NetId);
+                PlayerControl.LocalPlayer.Data.Serialize(writer, false);
+            }
+            writer.EndMessage();
+
+            sender.EndMessage();
+            sender.SendMessage();
+        }
+
+        public void TP(Vector2 position)
+        {
+            Position = position;
+        }
+
+        // player-like CNO 用: CNO の表示名を上書きする (TOHP パターン)。
+        // ApplyOutfit (Shapeshift trick) は PlayerName を変更しないため、
+        // CNO は host の name を継承してしまう。SetName で明示的に上書きする
+        protected void RpcSetCnoName(string name)
+        {
+            if (!AmongUsClient.Instance.AmHost || playerControl == null) return;
+
+            try
+            {
+                if (playerControl.cosmetics != null && playerControl.cosmetics.nameText != null)
+                    playerControl.cosmetics.nameText.text = name;
+            }
+            catch (Exception e) { Utils.ThrowException(e); }
+
+            MessageWriter writer = AmongUsClient.Instance.StartRpcImmediately(
+                playerControl.NetId, (byte)RpcCalls.SetName, SendOption.Reliable);
+            writer.Write(playerControl.Data.NetId);
+            writer.Write(name);
+            writer.Write(false);
+            AmongUsClient.Instance.FinishRpcImmediately(writer);
+        }
+
+        public void Despawn()
+        {
+            if (!AmongUsClient.Instance.AmHost) return;
+            Logger.Info($" Despawn Custom Net Object {GetType().Name} (ID {Id})", "CNO.Despawn");
+
+            try
+            {
+                if (playerControl)
+                {
+                    MessageWriter writer = MessageWriter.Get(SendOption.Reliable);
+                    writer.StartMessage(5);
+                    writer.Write(AmongUsClient.Instance.GameId);
+                    writer.StartMessage(5);
+                    writer.WritePacked(playerControl.NetId);
+                    writer.EndMessage();
+                    writer.EndMessage();
+                    AmongUsClient.Instance.SendOrDisconnect(writer);
+                    writer.Recycle();
+
+                    AmongUsClient.Instance.RemoveNetObject(playerControl);
+                    Object.Destroy(playerControl.gameObject);
+                }
+                
+                AllObjects.Remove(this);
+            }
+            catch (Exception e) { Utils.ThrowException(e); }
+        }
+
+        protected void Hide(PlayerControl player)
+        {
+            if (!AmongUsClient.Instance.AmHost) return;
+            Logger.Info($" Hide Custom Net Object {GetType().Name} (ID {Id}) from {player.GetNameWithRole()}", "CNO.Hide");
+
+            if (player.AmOwner)
+            {
+                LateTask.New(() => playerControl.transform.FindChild("Names").FindChild("NameText_TMP").gameObject.SetActive(false), 0.1f);
+                playerControl.Visible = false;
+                return;
+            }
+
+            if (this is not ShapeshiftMenuElement)
+            {
+                LateTask.New(() =>
+                {
+                    var sender = CustomRpcSender.Create("FixModdedClientCNOText", SendOption.Reliable);
+
+                    sender.AutoStartRpc(PlayerControl.LocalPlayer.NetId, (byte)CustomRPC.FixModdedClientCNO, player.OwnerId)
+                        .WriteNetObject(playerControl)
+                        .Write(false)
+                        .EndRpc();
+
+                    sender.SendMessage();
+                }, 0.4f);
+            }
+
+            MessageWriter writer = MessageWriter.Get(SendOption.Reliable);
+            writer.StartMessage(6);
+            writer.Write(AmongUsClient.Instance.GameId);
+            writer.WritePacked(player.OwnerId);
+            writer.StartMessage(5);
+            writer.WritePacked(playerControl.NetId);
+            writer.EndMessage();
+            writer.EndMessage();
+            AmongUsClient.Instance.SendOrDisconnect(writer);
+            writer.Recycle();
+        }
+
+        protected virtual void OnFixedUpdate()
+        {
+            try
+            {
+                if (!AmongUsClient.Instance.AmHost) return;
+            
+                if (AmongUsClient.Instance.AmClient)
+                {
+                    try { playerControl.NetTransform.SnapTo(Position, (ushort)(playerControl.NetTransform.lastSequenceId + 1U)); }
+                    catch { }
+                }
+
+                ushort num = (ushort)(playerControl.NetTransform.lastSequenceId + 2U);
+                MessageWriter messageWriter = AmongUsClient.Instance.StartRpcImmediately(playerControl.NetTransform.NetId, 21, SendOption.None);
+                NetHelpers.WriteVector2(Position, messageWriter);
+                messageWriter.Write(num);
+                AmongUsClient.Instance.FinishRpcImmediately(messageWriter);
+            }
+            catch { }
+        }
+
+        protected void CreateNetObject(string sprite, Vector2 position)
+        {
+            if (GameStates.IsEnded || !AmongUsClient.Instance.AmHost) return;
+            
+            Logger.Info($" Create Custom Net Object {GetType().Name} (ID {MaxId + 1}) at {position} - Time since game start: {Utils.TimeStamp - IntroCutsceneDestroyPatch.IntroDestroyTS}s", "CNO.CreateNetObject");
+
+            if (Options.CurrentGameMode == CustomGameMode.Standard && (!GameStates.InGame || !Main.IntroDestroyed || Utils.TimeStamp - IntroCutsceneDestroyPatch.IntroDestroyTS < 10))
+            {
+                if (GameStates.InGame && (!Main.IntroDestroyed || Utils.TimeStamp - IntroCutsceneDestroyPatch.IntroDestroyTS < 10))
+                {
+                    Main.Instance.StartCoroutine(CoRoutine());
+                    
+                    IEnumerator CoRoutine()
+                    {
+                        Logger.Info("Delaying CNO Spawn", "CustomNetObject.CreateNetObject");
+                        while (GameStates.InGame && !GameStates.IsEnded && (!Main.IntroDestroyed || Utils.TimeStamp - IntroCutsceneDestroyPatch.IntroDestroyTS < 10)) yield return null;
+                        yield return new WaitForSecondsRealtime(3f);
+                        if (!GameStates.InGame || GameStates.IsEnded || GameStates.IsMeeting || ExileController.Instance || AntiBlackout.SkipTasks) yield break;
+                        CreateNetObject(sprite, position);
+                    }
+                }
+                
+                return;
+            }
+            
+            playerControl = Object.Instantiate(AmongUsClient.Instance.PlayerPrefab, Vector2.zero, Quaternion.identity);
+            playerControl.PlayerId = 254;
+            playerControl.isNew = false;
+            playerControl.notRealPlayer = true;
+
+            try { playerControl.NetTransform.SnapTo(new Vector2(50f, 50f)); }
+            catch (Exception e) { Utils.ThrowException(e); }
+
+            AmongUsClient.Instance.NetIdCnt += 1U;
+            MessageWriter msg = MessageWriter.Get(SendOption.Reliable);
+            msg.StartMessage(5);
+            msg.Write(AmongUsClient.Instance.GameId);
+            msg.StartMessage(4);
+            SpawnGameDataMessage item = AmongUsClient.Instance.CreateSpawnMessage(playerControl, -2, SpawnFlags.None);
+            item.SerializeValues(msg);
+            msg.EndMessage();
+
+            if (GameStates.CurrentServerType == GameStates.ServerType.Vanilla)
+            {
+                for (uint i = 1; i <= 3; ++i)
+                {
+                    msg.StartMessage(4);
+                    msg.WritePacked(2U);
+                    msg.WritePacked(-2);
+                    msg.Write((byte)SpawnFlags.None);
+                    msg.WritePacked(1);
+                    msg.WritePacked(AmongUsClient.Instance.NetIdCnt - i);
+                    msg.StartMessage(1);
+                    msg.EndMessage();
+                    msg.EndMessage();
+                }
+            }
+
+            msg.EndMessage();
+            AmongUsClient.Instance.SendOrDisconnect(msg);
+            msg.Recycle();
+
+            // CNO は常に AllPlayerControls から除外する。
+            // 残すと vanilla iteration (BlockVentInteraction 等) が pc.Data null で NRE 連発するため
+            if (PlayerControl.AllPlayerControls.Contains(playerControl))
+                PlayerControl.AllPlayerControls.Remove(playerControl);
+
+            if (this is not ShapeshiftMenuElement && !IsPlayerLike)
+            {
+                LateTask.New(() =>
+                {
+                    string name = PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].PlayerName;
+                    int colorId = PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].ColorId;
+                    string hatId = PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].HatId;
+                    string skinId = PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].SkinId;
+                    string petId = PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].PetId;
+                    string visorId = PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].VisorId;
+                    var sender = CustomRpcSender.Create("CustomNetObject.CreateNetObject", SendOption.Reliable, log: false);
+                    MessageWriter writer = sender.stream;
+                    sender.StartMessage();
+                    PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].PlayerName = "<size=14><br></size>" + sprite;
+                    PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].ColorId = 0;
+                    PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].HatId = "";
+                    PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].SkinId = "";
+                    PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].PetId = "";
+                    PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].VisorId = "";
+                    writer.StartMessage(1);
+                    {
+                        writer.WritePacked(PlayerControl.LocalPlayer.Data.NetId);
+                        PlayerControl.LocalPlayer.Data.Serialize(writer, false);
+                    }
+                    writer.EndMessage();
+
+                    try { playerControl.Shapeshift(PlayerControl.LocalPlayer, false); }
+                    catch (Exception e) { Utils.ThrowException(e); }
+                    
+                    sender.StartRpc(playerControl.NetId, (byte)RpcCalls.Shapeshift)
+                        .WriteNetObject(PlayerControl.LocalPlayer)
+                        .Write(false)
+                        .EndRpc();
+
+                    PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].PlayerName = name;
+                    PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].ColorId = colorId;
+                    PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].HatId = hatId;
+                    PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].SkinId = skinId;
+                    PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].PetId = petId;
+                    PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].VisorId = visorId;
+                    writer.StartMessage(1);
+                    {
+                        writer.WritePacked(PlayerControl.LocalPlayer.Data.NetId);
+                        PlayerControl.LocalPlayer.Data.Serialize(writer, false);
+                    }
+                    writer.EndMessage();
+
+                    try { playerControl.NetTransform.SnapTo(Position); }
+                    catch (Exception e) { Utils.ThrowException(e); }
+
+                    sender.StartRpc(playerControl.NetTransform.NetId, (byte)RpcCalls.SnapTo)
+                        .WriteVector2(Position)
+                        .Write(playerControl.NetTransform.lastSequenceId)
+                        .EndRpc();
+
+                    sender.EndMessage();
+                    sender.SendMessage();
+                }, 0.25f);
+            }
+
+            // colorBlindText は常に消す（TOHP も全 CNO で消している）。
+            // BodySprite は player-like CNO では Shapeshift で見た目を入れるため残す
+            playerControl.cosmetics.colorBlindText.color = Color.clear;
+            if (!IsPlayerLike)
+            {
+                playerControl.cosmetics.currentBodySprite.BodySprite.color = Color.clear;
+            }
+
+            Position = position;
+            Sprite = sprite;
+            ++MaxId;
+            Id = MaxId;
+            if (MaxId == int.MaxValue) MaxId = int.MinValue;
+
+            AllObjects.Add(this);
+
+            LateTask.New(() =>
+            {
+                foreach (PlayerControl pc in Main.EnumeratePlayerControls())
+                {
+                    if (pc.AmOwner) continue;
+
+                    var sender = CustomRpcSender.Create("CustomNetObject.CreateNetObject (2)", SendOption.Reliable, log: false);
+                    MessageWriter writer = sender.stream;
+                    sender.StartMessage(pc.OwnerId);
+                    writer.StartMessage(1);
+                    {
+                        writer.WritePacked(playerControl.NetId);
+                        writer.Write(pc.PlayerId);
+                    }
+                    writer.EndMessage();
+
+                    sender.StartRpc(playerControl.NetId, (byte)RpcCalls.MurderPlayer)
+                        .WriteNetObject(playerControl)
+                        .Write((int)MurderResultFlags.FailedError)
+                        .EndRpc();
+
+                    writer.StartMessage(1);
+                    {
+                        writer.WritePacked(playerControl.NetId);
+                        writer.Write((byte)254);
+                    }
+                    writer.EndMessage();
+
+                    sender.EndMessage();
+                    sender.SendMessage();
+                }
+
+                // CachedPlayerData は常に設定する。
+                // 設定しないと cnoPC.Data lookup が GameData.Instance.GetPlayerById(254) で null を返し、
+                // vanilla iteration (BlockVentInteraction 等) が NRE する
+                playerControl.CachedPlayerData = PlayerControl.LocalPlayer.Data;
+            }, 0.1f);
+
+            if (IsPlayerLike)
+            {
+                // OnAfterCreate で派生クラスが outfit を設定する。
+                // spawn 完了 + CachedPlayerData セット完了を待つため 0.5s 後に呼ぶ
+                LateTask.New(() =>
+                {
+                    OnAfterCreate();
+                    // SnapTo は player-like CNO では明示的に呼ぶ必要がある。
+                    // 既存 CNO は L247 の Shapeshift-text LateTask 内で SnapTo するが、
+                    // IsPlayerLike はその LateTask をスキップするため SnapTo も飛ばされる。
+                    // 結果 CNO は spawn 直後の (50, 50) に留まり画面外になる
+                    if (playerControl != null)
+                    {
+                        try { playerControl.NetTransform.SnapTo(Position); }
+                        catch (Exception e) { Utils.ThrowException(e); }
+
+                        var snapSender = CustomRpcSender.Create("CustomNetObject.PlayerLike.SnapTo", SendOption.Reliable, log: false);
+                        snapSender.StartMessage();
+                        snapSender.StartRpc(playerControl.NetTransform.NetId, (byte)RpcCalls.SnapTo)
+                            .WriteVector2(Position)
+                            .Write(playerControl.NetTransform.lastSequenceId)
+                            .EndRpc();
+                        snapSender.EndMessage();
+                        snapSender.SendMessage();
+                    }
+                }, 0.5f, "CustomNetObject.OnAfterCreate");
+            }
+        }
+        
+        public virtual void OnMeeting()
+        {
+            if (!AmongUsClient.Instance.AmHost) return;
+            
+            Despawn();
+            
+            Main.Instance.StartCoroutine(WaitForMeetingEnd());
+            return;
+
+            IEnumerator WaitForMeetingEnd()
+            {
+                yield return new WaitForSecondsRealtime(10f);
+                while (ReportDeadBodyPatch.MeetingStarted || GameStates.IsMeeting || ExileController.Instance || AntiBlackout.SkipTasks) yield return null;
+                yield return new WaitForSecondsRealtime(3f);
+                while (ReportDeadBodyPatch.MeetingStarted || GameStates.IsMeeting || ExileController.Instance || AntiBlackout.SkipTasks) yield return null;
+                if (GameStates.IsEnded || !GameStates.InGame || GameStates.IsLobby) yield break;
+
+                CreateNetObject(Sprite, Position);
+            }
+        }
+
+        public static void FixedUpdate()
+        {
+            foreach (CustomNetObject cno in AllObjects.ToArray())
+                cno?.OnFixedUpdate();
+        }
+
+        public static CustomNetObject Get(int id)
+        {
+            return AllObjects.FirstOrDefault(x => x.Id == id);
+        }
+
+        public static void Reset()
+        {
+            try
+            {
+                AllObjects.ToArray().Do(x => x.Despawn());
+                AllObjects.Clear();
+            }
+            catch (Exception e) { Utils.ThrowException(e); }
+        }
+
+        public static void AfterMeeting()
+        {
+            AllObjects.OfType<ShapeshiftMenuElement>().ToArray().Do(x => x.Despawn());
+        }
+    }
+
+
+    internal sealed class TornadoObject : CustomNetObject
+    {
+        private readonly long SpawnTimeStamp;
+        private bool Gone;
+
+        public TornadoObject(Vector2 position, IEnumerable<byte> visibleList)
+        {
+            SpawnTimeStamp = Utils.TimeStamp;
+            CreateNetObject("<size=100%><font=\"VCR SDF\"><line-height=67%><alpha=#00>\u2588<alpha=#00>\u2588<#bababa>\u2588<#bababa>\u2588<#bababa>\u2588<#bababa>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br><alpha=#00>\u2588<#bababa>\u2588<#bababa>\u2588<#8c8c8c>\u2588<#8c8c8c>\u2588<#bababa>\u2588<#bababa>\u2588<alpha=#00>\u2588<br><#bababa>\u2588<#bababa>\u2588<#8c8c8c>\u2588<#8c8c8c>\u2588<#8c8c8c>\u2588<#8c8c8c>\u2588<#bababa>\u2588<#bababa>\u2588<br><#bababa>\u2588<#8c8c8c>\u2588<#8c8c8c>\u2588<#636363>\u2588<#636363>\u2588<#8c8c8c>\u2588<#8c8c8c>\u2588<#bababa>\u2588<br><#bababa>\u2588<#8c8c8c>\u2588<#8c8c8c>\u2588<#636363>\u2588<#636363>\u2588<#8c8c8c>\u2588<#8c8c8c>\u2588<#bababa>\u2588<br><#bababa>\u2588<#bababa>\u2588<#8c8c8c>\u2588<#8c8c8c>\u2588<#8c8c8c>\u2588<#8c8c8c>\u2588<#bababa>\u2588<#bababa>\u2588<br><alpha=#00>\u2588<#bababa>\u2588<#bababa>\u2588<#8c8c8c>\u2588<#8c8c8c>\u2588<#bababa>\u2588<#bababa>\u2588<alpha=#00>\u2588<br><alpha=#00>\u2588<alpha=#00>\u2588<#bababa>\u2588<#bababa>\u2588<#bababa>\u2588<#bababa>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br></color></line-height></font></size>", position);
+            LateTask.New(() => Main.EnumerateAlivePlayerControls().ExceptBy(visibleList, x => x.PlayerId).Do(Hide), 0.4f);
+        }
+
+        protected override void OnFixedUpdate()
+        {
+            base.OnFixedUpdate();
+
+            try
+            {
+                if (Gone) return;
+
+                if (SpawnTimeStamp + Tornado.TornadoDuration.GetInt() < Utils.TimeStamp)
+                {
+                    Gone = true;
+                    Despawn();
+                }
+            }
+            catch (NullReferenceException)
+            {
+                try { Despawn(); }
+                finally { Gone = true; }
+            }
+        }
+
+        public override void OnMeeting()
+        {
+            Despawn();
+        }
+    }
+
+    internal sealed class PlayerDetector : CustomNetObject
+    {
+        public PlayerDetector(Vector2 position, List<byte> visibleList, out int id)
+        {
+            CreateNetObject("<size=100%><font=\"VCR SDF\"><line-height=67%><alpha=#00>\u2588<alpha=#00>\u2588<#33e6b0>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<#33e6b0>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br><alpha=#00>\u2588<#33e6b0>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<#33e6b0>\u2588<alpha=#00>\u2588<br><#33e6b0>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<#33e6b0>\u2588<#33e6b0>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<#33e6b0>\u2588<br><#33e6b0>\u2588<alpha=#00>\u2588<#33e6b0>\u2588<#000000>\u2588<#000000>\u2588<#33e6b0>\u2588<alpha=#00>\u2588<#33e6b0>\u2588<br><#33e6b0>\u2588<alpha=#00>\u2588<#33e6b0>\u2588<#000000>\u2588<#000000>\u2588<#33e6b0>\u2588<alpha=#00>\u2588<#33e6b0>\u2588<br><#33e6b0>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<#33e6b0>\u2588<#33e6b0>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<#33e6b0>\u2588<br><alpha=#00>\u2588<#33e6b0>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<#33e6b0>\u2588<alpha=#00>\u2588<br><alpha=#00>\u2588<alpha=#00>\u2588<#33e6b0>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<#33e6b0>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br></color></line-height></font></size>", position);
+            LateTask.New(() => Main.EnumerateAlivePlayerControls().ExceptBy(visibleList, x => x.PlayerId).Do(Hide), 0.4f);
+            id = Id;
+        }
+    }
+
+    internal sealed class AdventurerItem : CustomNetObject
+    {
+        public readonly Adventurer.Resource Resource;
+
+        internal AdventurerItem(Vector2 position, Adventurer.Resource resource, IEnumerable<byte> visibleList)
+        {
+            Resource = resource;
+            (char Icon, Color Color) data = Adventurer.ResourceDisplayData[resource];
+            CreateNetObject($"<size=300%><font=\"VCR SDF\"><line-height=67%>{Utils.ColorString(data.Color, data.Icon.ToString())}</line-height></font></size>", position);
+            LateTask.New(() => Main.EnumerateAlivePlayerControls().ExceptBy(visibleList, x => x.PlayerId).Do(Hide), 0.4f);
+        }
+    }
+
+    internal sealed class Toilet : CustomNetObject
+    {
+        internal Toilet(Vector2 position, IEnumerable<PlayerControl> hideList)
+        {
+            CreateNetObject("<size=100%><font=\"VCR SDF\"><line-height=67%><alpha=#00>\u2588<#e6e6e6>\u2588<#e6e6e6>\u2588<#e6e6e6>\u2588<#e6e6e6>\u2588<#e6e6e6>\u2588<#e6e6e6>\u2588<#e6e6e6>\u2588<#e6e6e6>\u2588<alpha=#00>\u2588<br><#e6e6e6>\u2588<#d3d4ce>\u2588<#d3d4ce>\u2588<#d3d4ce>\u2588<#d3d4ce>\u2588<#d3d4ce>\u2588<#d3d4ce>\u2588<#d3d4ce>\u2588<#d3d4ce>\u2588<#e6e6e6>\u2588<br><#e6e6e6>\u2588<#d3d4ce>\u2588<#d3d4ce>\u2588<#d3d4ce>\u2588<#d3d4ce>\u2588<#d3d4ce>\u2588<#d3d4ce>\u2588<#d3d4ce>\u2588<#d3d4ce>\u2588<#e6e6e6>\u2588<br><alpha=#00>\u2588<#e6e6e6>\u2588<#d3d4ce>\u2588<#d3d4ce>\u2588<#d3d4ce>\u2588<#d3d4ce>\u2588<#d3d4ce>\u2588<#d3d4ce>\u2588<#e6e6e6>\u2588<alpha=#00>\u2588<br><alpha=#00>\u2588<#e6e6e6>\u2588<#e6e6e6>\u2588<#d3d4ce>\u2588<#dedede>\u2588<#dedede>\u2588<#d3d4ce>\u2588<#e6e6e6>\u2588<#e6e6e6>\u2588<alpha=#00>\u2588<br><alpha=#00>\u2588<#bfbfbf>\u2588<#454545>\u2588<#333333>\u2588<#333333>\u2588<#333333>\u2588<#333333>\u2588<#333333>\u2588<#333333>\u2588<#bfbfbf>\u2588<br><alpha=#00>\u2588<#bfbfbf>\u2588<#bfbfbf>\u2588<#454545>\u2588<#454545>\u2588<#454545>\u2588<#454545>\u2588<#454545>\u2588<#454545>\u2588<#bfbfbf>\u2588<br><alpha=#00>\u2588<alpha=#00>\u2588<#bfbfbf>\u2588<#bfbfbf>\u2588<#bfbfbf>\u2588<#bfbfbf>\u2588<#bfbfbf>\u2588<#bfbfbf>\u2588<#bfbfbf>\u2588<#bfbfbf>\u2588<br><alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<#dedede>\u2588<#dedede>\u2588<#dedede>\u2588<#dedede>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br><alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<#dedede>\u2588<#dedede>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br></color></line-height></font></size>", position);
+            LateTask.New(() => hideList.Do(Hide), 0.4f);
+        }
+    }
+
+    internal sealed class BlackHole : CustomNetObject
+    {
+        internal BlackHole(Vector2 position)
+        {
+            CreateNetObject("<size=100%><font=\"VCR SDF\"><line-height=67%><alpha=#00>█<alpha=#00>█<#000000>█<#19131c>█<#000000>█<#000000>█<alpha=#00>█<alpha=#00>█<br><alpha=#00>█<#412847>█<#000000>█<#19131c>█<#000000>█<#412847>█<#260f26>█<alpha=#00>█<br><#000000>█<#412847>█<#412847>█<#000000>█<#260f26>█<#1c0d1c>█<#19131c>█<#000000>█<br><#19131c>█<#000000>█<#412847>█<#1c0d1c>█<#1c0d1c>█<#000000>█<#19131c>█<#000000>█<br><#000000>█<#000000>█<#260f26>█<#1c0d1c>█<#1c0d1c>█<#000000>█<#000000>█<#260f26>█<br><#000000>█<#260f26>█<#1c0d1c>█<#1c0d1c>█<#19131c>█<#412847>█<#412847>█<#19131c>█<br><alpha=#00>█<#260f26>█<#412847>█<#412847>█<#19131c>█<#260f26>█<#19131c>█<alpha=#00>█<br><alpha=#00>█<alpha=#00>█<#412847>█<#260f26>█<#260f26>█<#000000>█<alpha=#00>█<alpha=#00>█<br></line-height></size>", position);
+        }
+
+        public override void OnMeeting()
+        {
+            if (Abyssbringer.ShouldDespawnCNOOnMeeting) Despawn();
+            else base.OnMeeting();
+        }
+    }
+
+    internal sealed class SprayedArea : CustomNetObject
+    {
+        public SprayedArea(Vector2 position, IEnumerable<byte> visibleList)
+        {
+            CreateNetObject("<size=100%><font=\"VCR SDF\"><line-height=67%><alpha=#00>\u2588<alpha=#00>\u2588<#ffd000>\u2588<#ffd000>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br><alpha=#00>\u2588<#ffd000>\u2588<#ffd000>\u2588<#ffd000>\u2588<#ffd000>\u2588<alpha=#00>\u2588<br><#ffd000>\u2588<#ffd000>\u2588<#ffd000>\u2588<#ffd000>\u2588<#ffd000>\u2588<#ffd000>\u2588<br><#ffd000>\u2588<#ffd000>\u2588<#ffd000>\u2588<#ffd000>\u2588<#ffd000>\u2588<#ffd000>\u2588<br><alpha=#00>\u2588<#ffd000>\u2588<#ffd000>\u2588<#ffd000>\u2588<#ffd000>\u2588<alpha=#00>\u2588<br><alpha=#00>\u2588<alpha=#00>\u2588<#ffd000>\u2588<#ffd000>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br></line-height></size>", position);
+            LateTask.New(() => Main.EnumerateAlivePlayerControls().ExceptBy(visibleList, x => x.PlayerId).Do(Hide), 0.4f);
+        }
+
+        public override void OnMeeting()
+        {
+            Despawn();
+        }
+    }
+
+    internal sealed class CatcherTrap : CustomNetObject
+    {
+        public CatcherTrap(Vector2 position, PlayerControl catcher)
+        {
+            CreateNetObject("<size=100%><font=\"VCR SDF\"><line-height=67%><alpha=#00>\u2588<alpha=#00>\u2588<#ccffda>\u2588<#ccffda>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br><alpha=#00>\u2588<#ccffda>\u2588<#ccffda>\u2588<#ccffda>\u2588<#ccffda>\u2588<alpha=#00>\u2588<br><#ccffda>\u2588<#ccffda>\u2588<#ccffda>\u2588<#ccffda>\u2588<#ccffda>\u2588<#ccffda>\u2588<br><#ccffda>\u2588<#ccffda>\u2588<#ccffda>\u2588<#ccffda>\u2588<#ccffda>\u2588<#ccffda>\u2588<br><alpha=#00>\u2588<#ccffda>\u2588<#ccffda>\u2588<#ccffda>\u2588<#ccffda>\u2588<alpha=#00>\u2588<br><alpha=#00>\u2588<alpha=#00>\u2588<#ccffda>\u2588<#ccffda>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br></line-height></size>", position);
+            LateTask.New(() => Main.EnumerateAlivePlayerControls().Without(catcher).Do(Hide), 0.4f);
+        }
+
+        public override void OnMeeting()
+        {
+            Despawn();
+        }
+    }
+
+    internal sealed class YellowFlag : CustomNetObject
+    {
+        public YellowFlag(Vector2 position)
+        {
+            CreateNetObject("<size=100%><font=\"VCR SDF\"><line-height=67%><#000000>\u2588<#ffff00>\u2588<#ffff00>\u2588<#ffff00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br><#000000>\u2588<#ffff00>\u2588<#ffff00>\u2588<#ffff00>\u2588<#ffff00>\u2588<#ffff00>\u2588<br><#000000>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<#ffff00>\u2588<#ffff00>\u2588<#ffff00>\u2588<br><#000000>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br><#000000>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br><#000000>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br></line-height></size>", position);
+        }
+    }
+
+    internal sealed class BlueFlag : CustomNetObject
+    {
+        public BlueFlag(Vector2 position)
+        {
+            CreateNetObject("<size=100%><font=\"VCR SDF\"><line-height=67%><#000000>\u2588<#0000ff>\u2588<#0000ff>\u2588<#0000ff>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br><#000000>\u2588<#0000ff>\u2588<#0000ff>\u2588<#0000ff>\u2588<#0000ff>\u2588<#0000ff>\u2588<br><#000000>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<#0000ff>\u2588<#0000ff>\u2588<#0000ff>\u2588<br><#000000>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br><#000000>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br><#000000>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br></line-height></size>", position);
+        }
+    }
+
+    internal sealed class SoulObject : CustomNetObject
+    {
+        public SoulObject(Vector2 position, PlayerControl whisperer)
+        {
+            CreateNetObject("<size=80%><font=\"VCR SDF\"><line-height=67%><alpha=#00>\u2588<alpha=#00>\u2588<#fcfcfc>\u2588<#fcfcfc>\u2588<#fcfcfc>\u2588<alpha=#00>\u2588<br><alpha=#00>\u2588<#fcfcfc>\u2588<#fcfcfc>\u2588<#fcfcfc>\u2588<#fcfcfc>\u2588<#fcfcfc>\u2588<br><#fcfcfc>\u2588<#fcfcfc>\u2588<#fcfcfc>\u2588<#fcfcfc>\u2588<#cfcfcf>\u2588<#cfcfcf>\u2588<br><#fcfcfc>\u2588<#fcfcfc>\u2588<#fcfcfc>\u2588<#fcfcfc>\u2588<#fcfcfc>\u2588<#fcfcfc>\u2588<br><alpha=#00>\u2588<#fcfcfc>\u2588<#fcfcfc>\u2588<#fcfcfc>\u2588<#fcfcfc>\u2588<#fcfcfc>\u2588<br><alpha=#00>\u2588<#fcfcfc>\u2588<#fcfcfc>\u2588<#fcfcfc>\u2588<alpha=#00>\u2588<#fcfcfc>\u2588<br></line-height></size>", position);
+            LateTask.New(() => Main.EnumerateAlivePlayerControls().Without(whisperer).Do(Hide), 0.4f);
+        }
+    }
+
+    public sealed class NaturalDisaster : CustomNetObject
+    {
+        public NaturalDisaster(Vector2 position, float time, string sprite, string disasterName, SystemTypes? room)
+        {
+            string name = Translator.GetString($"ND_{disasterName}");
+            string warning = $"<size=250%>{Math.Ceiling(time):N0}</size>\n{name}";
+
+            if (room.HasValue)
+            {
+                warning = $"<#ff4444>{warning}</color>";
+                Main.EnumerateAlivePlayerControls().DoIf(x => x.IsInRoom(room.Value), x => x.ReactorFlash());
+            }
+
+            SpawnTimer = time;
+            DisasterSprite = sprite;
+            DisasterName = disasterName;
+            DisasterNameTranslated = name;
+            Room = room;
+
+            CreateNetObject(warning, position);
+        }
+
+        public SystemTypes? Room { get; }
+        public string DisasterName { get; }
+        public float SpawnTimer { get; private set; }
+        private string DisasterSprite { get; }
+        
+        private int TimeInt => (int)Math.Ceiling(SpawnTimer);
+        private string DisasterNameTranslated { get; }
+
+        public void Update()
+        {
+            if (float.IsNaN(SpawnTimer)) return;
+
+            int oldTime = TimeInt;
+            SpawnTimer -= Time.fixedDeltaTime;
+
+            if (SpawnTimer <= 0f)
+            {
+                if (!Room.HasValue) RpcChangeSprite(DisasterSprite);
+                SpawnTimer = float.NaN;
+            }
+            else
+            {
+                int newTime = TimeInt;
+                if (oldTime == newTime) return;
+                string warning = $"<size=250%>{newTime:N0}</size>\n{DisasterNameTranslated}";
+                if (Room.HasValue) warning = $"<#ff4444>{warning}</color>";
+                RpcChangeSprite(warning);
+            }
+        }
+    }
+
+    internal sealed class Lightning : CustomNetObject
+    {
+        private float Timer = 5f;
+
+        public Lightning(Vector2 position)
+        {
+            CreateNetObject("<size=100%><font=\"VCR SDF\"><line-height=67%><alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<#c6c7c3>\u2588<br><alpha=#00>\u2588<#c6c7c3>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<#c6c7c3>\u2588<alpha=#00>\u2588<br><#c6c7c3>\u2588<alpha=#00>\u2588<#fffb00>\u2588<#fffb00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br><alpha=#00>\u2588<alpha=#00>\u2588<#fffb00>\u2588<#fffb00>\u2588<alpha=#00>\u2588<#c6c7c3>\u2588<br><#c6c7c3>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br><alpha=#00>\u2588<alpha=#00>\u2588<#c6c7c3>\u2588<#c6c7c3>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br></line-height></size>", position);
+        }
+
+        protected override void OnFixedUpdate()
+        {
+            base.OnFixedUpdate();
+            Timer -= Time.fixedDeltaTime;
+            if (Timer <= 0) Despawn();
+        }
+    }
+
+    internal sealed class BlueBed : BedWars.Bed
+    {
+        public BlueBed(Vector2 position)
+        {
+            BaseSprite = "<size=70%><line-height=67%><alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<br><#c7deff>█<#c7deff>█<#00aeff>█<#00aeff>█<#00aeff>█<#00aeff>█<br><#c7deff>█<#c7deff>█<#00aeff>█<#00aeff>█<#00aeff>█<#00aeff>█<br><#c7deff>█<#c7deff>█<#00aeff>█<#00aeff>█<#00aeff>█<#00aeff>█<br><#82531a>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<#82531a>█<br><alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<br></line-height></size>";
+            UpdateStatus(false);
+            CreateNetObject(GetSprite(), position);
+        }
+    }
+
+    internal sealed class GreenBed : BedWars.Bed
+    {
+        public GreenBed(Vector2 position)
+        {
+            BaseSprite = "<size=70%><line-height=67%><alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<br><#baffd0>█<#baffd0>█<#00ff7b>█<#00ff7b>█<#00ff7b>█<#00ff7b>█<br><#baffd0>█<#baffd0>█<#00ff7b>█<#00ff7b>█<#00ff7b>█<#00ff7b>█<br><#baffd0>█<#baffd0>█<#00ff7b>█<#00ff7b>█<#00ff7b>█<#00ff7b>█<br><#82531a>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<#82531a>█<br><alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<br></line-height></size>";
+            UpdateStatus(false);
+            CreateNetObject(GetSprite(), position);
+        }
+    }
+
+    internal sealed class YellowBed : BedWars.Bed
+    {
+        public YellowBed(Vector2 position)
+        {
+            BaseSprite = "<size=70%><line-height=67%><alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<br><#fffebd>█<#fffebd>█<#ffff00>█<#ffff00>█<#ffff00>█<#ffff00>█<br><#fffebd>█<#fffebd>█<#ffff00>█<#ffff00>█<#ffff00>█<#ffff00>█<br><#fffebd>█<#fffebd>█<#ffff00>█<#ffff00>█<#ffff00>█<#ffff00>█<br><#82531a>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<#82531a>█<br><alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<br></line-height></size>";
+            UpdateStatus(false);
+            CreateNetObject(GetSprite(), position);
+        }
+    }
+
+    internal sealed class RedBed : BedWars.Bed
+    {
+        public RedBed(Vector2 position)
+        {
+            BaseSprite = "<size=70%><line-height=67%><alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<br><#ffbbb5>█<#ffbbb5>█<#ff0008>█<#ff0008>█<#ff0008>█<#ff0008>█<br><#ffbbb5>█<#ffbbb5>█<#ff0008>█<#ff0008>█<#ff0008>█<#ff0008>█<br><#ffbbb5>█<#ffbbb5>█<#ff0008>█<#ff0008>█<#ff0008>█<#ff0008>█<br><#82531a>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<#82531a>█<br><alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<br></line-height></size>";
+            UpdateStatus(false);
+            CreateNetObject(GetSprite(), position);
+        }
+    }
+
+    internal sealed class BedWarsItemGenerator : CustomNetObject
+    {
+        private readonly string ItemSprite;
+
+        public BedWarsItemGenerator(Vector2 position, string itemSprite)
+        {
+            ItemSprite = itemSprite;
+            CreateNetObject($"{itemSprite} 0", position);
+        }
+
+        public void SetCount(int count)
+        {
+            RpcChangeSprite($"{ItemSprite} {count}");
+        }
+    }
+
+    internal sealed class BedWarsShop : CustomNetObject
+    {
+        public BedWarsShop(Vector2 position, string sprite)
+        {
+            CreateNetObject(sprite, position);
+        }
+    }
+
+    internal sealed class TNT : CustomNetObject
+    {
+        private readonly Vector2 Location;
+        private float timer;
+
+        public TNT(Vector2 location)
+        {
+            Location = location;
+            timer = 4f;
+            CreateNetObject("<size=100%><line-height=67%><alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<#000000>█<#ffea00>█<br><alpha=#00>█<alpha=#00>█<alpha=#00>█<#000000>█<alpha=#00>█<alpha=#00>█<br><alpha=#00>█<#ff0004>█<#ff0004>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<br><#ff0004>█<#ff0004>█<#ff0004>█<#ff0004>█<alpha=#00>█<alpha=#00>█<br><#ff0004>█<#ff0004>█<#ff0004>█<#ff0004>█<alpha=#00>█<alpha=#00>█<br><alpha=#00>█<#ff0004>█<#ff0004>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<br></line-height></size>", location);
+        }
+
+        protected override void OnFixedUpdate()
+        {
+            base.OnFixedUpdate();
+            if (Options.CurrentGameMode != CustomGameMode.BedWars) return;
+            timer -= Time.fixedDeltaTime;
+
+            if (timer <= 0f)
+            {
+                BedWars.OnTNTExplode(Location);
+                Despawn();
+            }
+        }
+    }
+
+    internal sealed class Portal : CustomNetObject
+    {
+        public Portal(Vector2 position)
+        {
+            CreateNetObject("<size=70%><line-height=67%><alpha=#00>█<#2b006b>█<#2b006b>█<#2b006b>█<#2b006b>█<alpha=#00>█<br><alpha=#00>█<#2b006b>█<#fa69ff>█<#fa69ff>█<#2b006b>█<alpha=#00>█<br><alpha=#00>█<#2b006b>█<#fa69ff>█<#fa69ff>█<#2b006b>█<alpha=#00>█<br><alpha=#00>█<#2b006b>█<#fa69ff>█<#fa69ff>█<#2b006b>█<alpha=#00>█<br><alpha=#00>█<#2b006b>█<#fa69ff>█<#fa69ff>█<#2b006b>█<alpha=#00>█<br><alpha=#00>█<#2b006b>█<#2b006b>█<#2b006b>█<#2b006b>█<alpha=#00>█<br></line-height></size>", position);
+        }
+    }
+
+    internal sealed class Plant : CustomNetObject
+    {
+        public bool Spawned;
+
+        public Plant(Vector2 position)
+        {
+            Position = position;
+            Spawned = false;
+        }
+
+        public void SpawnIfNotSpawned()
+        {
+            if (Spawned) return;
+            CreateNetObject("<size=100%><line-height=67%><alpha=#00>█<#00ff15>█<alpha=#00>█<#00ff15>█<alpha=#00>█<#00ff15>█<br><alpha=#00>█<#00ff15>█<alpha=#00>█<#00ff15>█<alpha=#00>█<#00ff15>█<br><#00ff15>█<#00ff15>█<alpha=#00>█<#00ff15>█<alpha=#00>█<#00ff15>█<br><#00ff15>█<alpha=#00>█<alpha=#00>█<#00ff15>█<alpha=#00>█<#00ff15>█<br><#00ff15>█<alpha=#00>█<#00ff15>█<#00ff15>█<alpha=#00>█<#00ff15>█<br><#00ff15>█<alpha=#00>█<#00ff15>█<alpha=#00>█<alpha=#00>█<#00ff15>█<br></line-height></size>", Position);
+            Spawned = true;
+        }
+    }
+
+    internal sealed class Seed : CustomNetObject
+    {
+        public bool Spawned;
+        private readonly string Color;
+
+        public Seed(Vector2 position, string color)
+        {
+            Position = position;
+            Spawned = false;
+            Color = color;
+        }
+
+        public void SpawnIfNotSpawned()
+        {
+            if (Spawned) return;
+            CreateNetObject($"<size=100%><line-height=67%><alpha=#00>█<#{Color}>█<alpha=#00>█<#{Color}>█<alpha=#00>█<#{Color}>█<br><alpha=#00>█<#{Color}>█<alpha=#00>█<#{Color}>█<alpha=#00>█<#{Color}>█<br><#{Color}>█<#{Color}>█<alpha=#00>█<#{Color}>█<alpha=#00>█<#{Color}>█<br><#{Color}>█<alpha=#00>█<alpha=#00>█<#{Color}>█<alpha=#00>█<#{Color}>█<br><#{Color}>█<alpha=#00>█<#{Color}>█<#{Color}>█<alpha=#00>█<#{Color}>█<br><#{Color}>█<alpha=#00>█<#{Color}>█<alpha=#00>█<alpha=#00>█<#{Color}>█<br></line-height></size>", Position);
+            Spawned = true;
+        }
+    }
+
+    internal sealed class FallenTree : CustomNetObject
+    {
+        public FallenTree(Vector2 position)
+        {
+            CreateNetObject(Tree.FallenSprite, position);
+        }
+    }
+
+    internal sealed class ShapeshiftMenuElement : CustomNetObject
+    {
+        public ShapeshiftMenuElement(byte visibleTo)
+        {
+            CreateNetObject(string.Empty, new Vector2(0f, 0f));
+            LateTask.New(() => Main.EnumeratePlayerControls().DoIf(x => x.PlayerId != visibleTo, Hide), 0.4f);
+        }
+    }
+
+    public sealed class DeathracePowerUp : CustomNetObject
+    {
+        public readonly Deathrace.PowerUp PowerUp;
+        
+        public DeathracePowerUp(Vector2 position, Deathrace.PowerUp powerUp)
+        {
+            PowerUp = powerUp;
+            
+            char icon = powerUp switch
+            {
+                Deathrace.PowerUp.Smoke => '♨',
+                Deathrace.PowerUp.Taser => '〄',
+                Deathrace.PowerUp.EnergyDrink => '∂',
+                Deathrace.PowerUp.Grenade => '♁',
+                Deathrace.PowerUp.Ice => '☃',
+                _ => throw new ArgumentOutOfRangeException(nameof(powerUp), powerUp, "Unhandled power-up type")
+            };
+            
+            Color color = powerUp switch
+            {
+                Deathrace.PowerUp.Smoke => new Color(0.5f, 0.5f, 0.5f),
+                Deathrace.PowerUp.Taser => new Color(1f, 1f, 0f),
+                Deathrace.PowerUp.EnergyDrink => new Color(1f, 0.5f, 0f),
+                Deathrace.PowerUp.Grenade => new Color(1f, 0f, 0f),
+                Deathrace.PowerUp.Ice => new Color(0f, 1f, 1f),
+                _ => throw new ArgumentOutOfRangeException(nameof(powerUp), powerUp, "Unhandled power-up type")
+            };
+            
+            CreateNetObject(Utils.ColorString(color, $"{icon}\n<size=80%>{Translator.GetString($"Deathrace.PowerUpDisplay.{powerUp}").ToUpper()}</size>"), position);
+        }
+    }
+    
+    internal sealed class Snowball : CustomNetObject
+    {
+        public PlayerControl Thrower;
+        private Vector2 Direction;
+        public bool Active;
+
+        public Snowball(Vector2 from, Vector2 direction, PlayerControl thrower)
+        {
+            Thrower = thrower;
+            Direction = direction;
+            CreateNetObject("<line-height=97%><cspace=0.16em><#0000>W</color><mark=#e4fdff>WWWW</mark><#0000>W</color>\n<mark=#e4fdff>WWWWWW</mark>\n<mark=#e4fdff>WWWWWW</mark>\n<mark=#e4fdff>WWWWWW</mark>\n<mark=#e4fdff>WWWWWW</mark>\n<#0000>W</color><mark=#e4fdff>WWWW</mark><#0000>W", from);
+            Active = true;
+        }
+
+        protected override void OnFixedUpdate()
+        {
+            base.OnFixedUpdate();
+            
+            if (!Active) return;
+            
+            Vector2 newPos = Position + Direction * Time.fixedDeltaTime * Snowdown.SnowballThrowSpeed;
+            
+            if ((PhysicsHelpers.AnythingBetween(Position, newPos, Constants.ShipOnlyMask, false)) ||
+                newPos.x < Snowdown.MapBounds.X.Left || newPos.x > Snowdown.MapBounds.X.Right || newPos.y < Snowdown.MapBounds.Y.Bottom || newPos.y > Snowdown.MapBounds.Y.Top)
+            {
+                SetInactive();
+                return;
+            }
+
+            TP(newPos);
+        }
+
+        public void SetInactive()
+        {
+            TP(new(50f, 50f));
+            Active = false;
+        }
+
+        public void Reuse(Vector2 from, Vector2 direction, PlayerControl thrower)
+        {
+            TP(from);
+            Thrower = thrower;
+            Direction = direction;
+            Active = true;
+        }
+    }
+
+    internal sealed class EvilJumperMark : CustomNetObject
+    {
+        private static readonly (int LineHeight, int Size)[] SizeTable =
+        [
+            (1400, 1200),
+            (2400, 1900),
+            (2700, 2200),
+            (3000, 2800),
+            (3500, 3200),
+        ];
+
+        public EvilJumperMark(Vector2 position, int rangeIndex)
+        {
+            (int lh, int sz) = SizeTable[Math.Clamp(rangeIndex - 1, 0, 4)];
+            CreateNetObject($"<size={sz}%><color=#ff1919>●</color></size>", position);
+        }
+
+        public override void OnMeeting()
+        {
+            Despawn();
+        }
+    }
+
+    public sealed class DummyPlayer : CustomNetObject
+    {
+        public static readonly Dictionary<int, DummyPlayer> ActiveDummies = new();
+        public readonly string DummyName;
+        private static int NextIndex;
+
+        public DummyPlayer(Vector2 position, string dummyName)
+        {
+            DummyName = dummyName;
+            int colorId = NextIndex % Palette.PlayerColors.Length;
+            CreateNetObject($"<size=150%><color=#888888>[{dummyName}]</color></size>", position);
+            if (!playerControl)
+            {
+                Logger.Warn($"[Dummy] playerControl null after CreateNetObject (IntroDestroyed={Main.IntroDestroyed}, InGame={GameStates.InGame})", "Dummy");
+                return;
+            }
+            ActiveDummies[Id] = this;
+            LateTask.New(() =>
+            {
+                if (!playerControl) return;
+                Logger.Info($"[Dummy] 0.5s: Visible={playerControl.Visible} pos={playerControl.GetTruePosition()}", "Dummy");
+                try
+                {
+                    playerControl.transform.FindChild("Names")?.gameObject.SetActive(true);
+                    playerControl.transform.FindChild("Names")?.FindChild("NameText_TMP")?.gameObject.SetActive(true);
+                    var nt = playerControl.cosmetics?.nameText;
+                    if (nt != null) nt.enabled = true;
+                    var bodySprite = playerControl.cosmetics.currentBodySprite.BodySprite;
+                    PlayerMaterial.SetColors(colorId, bodySprite);
+                    bodySprite.color = Color.white;
+                }
+                catch (Exception e) { Utils.ThrowException(e); }
+                playerControl.Visible = true;
+            }, 0.5f);
+            LateTask.New(() =>
+            {
+                if (!playerControl) return;
+                try
+                {
+                    var namesTf = playerControl.transform.FindChild("Names");
+                    var ntTf = namesTf?.FindChild("NameText_TMP");
+                    var nt = playerControl.cosmetics?.nameText;
+                    Logger.Info($"[Dummy] 2s:" +
+                        $" Visible={playerControl.Visible}" +
+                        $" PC.inHierarchy={playerControl.gameObject.activeInHierarchy}" +
+                        $" NameText.inHierarchy={ntTf?.gameObject.activeInHierarchy}" +
+                        $" nt.enabled={nt?.enabled}" +
+                        $" nt.color={nt?.color}" +
+                        $" text=\"{nt?.text?.Replace("\n", "\\n")}\"", "Dummy");
+                }
+                catch (Exception e) { Logger.Warn($"[Dummy] 2s error: {e.Message}", "Dummy"); }
+            }, 2.0f);
+        }
+
+        protected override void OnFixedUpdate()
+        {
+            if (!playerControl || !AmongUsClient.Instance.AmHost || !AmongUsClient.Instance.AmClient) return;
+            try { playerControl.NetTransform.SnapTo(Position, (ushort)(playerControl.NetTransform.lastSequenceId + 1U)); }
+            catch { }
+        }
+
+        public override void OnMeeting()
+        {
+            Despawn();
+            ActiveDummies.Remove(Id);
+        }
+
+        public static int SpawnBatch(int count, Vector2 origin)
+        {
+            int spawned = 0;
+            Utils.CombineSendTimeLowering(() =>
+            {
+                for (int i = 0; i < count; i++)
+                {
+                    _ = new DummyPlayer(origin + new Vector2(i * 0.6f, 0f), $"dummy{++NextIndex}");
+                    spawned++;
+                }
+            });
+            return spawned;
+        }
+
+        public static int DespawnAll()
+        {
+            int n = ActiveDummies.Count;
+            ActiveDummies.Values.ToArray().Do(d => d.Despawn());
+            ActiveDummies.Clear();
+            return n;
+        }
+    }
+
+    internal sealed class WaveCannonWarning : CustomNetObject
+    {
+        public WaveCannonWarning(Vector2 position, string sprite)
+        {
+            CreateNetObject(sprite, position);
+        }
+
+        public override void OnMeeting() => Despawn();
+    }
+
+    internal sealed class WaveCannonBeamSegment : CustomNetObject
+    {
+        public WaveCannonBeamSegment(Vector2 position, string sprite)
+        {
+            CreateNetObject(sprite, position);
+        }
+
+        public override void OnMeeting() => Despawn();
+    }
+
+    internal sealed class WaveCannonGate : CustomNetObject
+    {
+        public WaveCannonGate(Vector2 position, string borderColor = "#5e1a00", string midColor = "#ff7a00", string centerColor = "#ffaa00")
+        {
+            CreateNetObject("<size=252%><line-height=67%>" +
+                $"<alpha=#00>█<{borderColor}>█<{borderColor}>█<{borderColor}>█<{borderColor}>█<alpha=#00>█<br>" +
+                $"<alpha=#00>█<{borderColor}>█<{midColor}>█<{midColor}>█<{borderColor}>█<alpha=#00>█<br>" +
+                $"<alpha=#00>█<{borderColor}>█<{centerColor}>█<{centerColor}>█<{borderColor}>█<alpha=#00>█<br>" +
+                $"<alpha=#00>█<{borderColor}>█<{centerColor}>█<{centerColor}>█<{borderColor}>█<alpha=#00>█<br>" +
+                $"<alpha=#00>█<{borderColor}>█<{midColor}>█<{midColor}>█<{borderColor}>█<alpha=#00>█<br>" +
+                $"<alpha=#00>█<{borderColor}>█<{borderColor}>█<{borderColor}>█<{borderColor}>█<alpha=#00>█<br>" +
+                "</line-height></size>", position);
+        }
+
+        public override void OnMeeting() => Despawn();
+    }
+}
+
+// This method sometimes throws an exception, preventing further code from running
+// Fixed by wrapping each line in try-catch
+[HarmonyPatch(typeof(PlayerControl), nameof(PlayerControl.RawSetName))]
+static class RawSetNameErrorFixPatch
+{
+    public static bool Prefix(PlayerControl __instance, [HarmonyArgument(0)] string name)
+    {
+        try { __instance.gameObject.name = name; }
+        catch { }
+        
+        try { __instance.cosmetics.SetName(name); }
+        catch { }
+        
+        try { __instance.cosmetics.SetNameMask(true); }
+        catch { }
+        
+        return false;
+    }
+}
