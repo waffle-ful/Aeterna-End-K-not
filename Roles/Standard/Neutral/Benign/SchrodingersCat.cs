@@ -8,6 +8,8 @@ internal class SchrodingersCat : RoleBase
 
     public static OptionItem WinsWithCrewIfNotAttacked;
     public static OptionItem StealsExactImpostorRole;
+    public static OptionItem KillBackKiller;
+    public static OptionItem KillBackDelay;
     public override bool IsEnable => On;
 
     public override void SetupCustomOption()
@@ -20,6 +22,13 @@ internal class SchrodingersCat : RoleBase
 
         StealsExactImpostorRole = new BooleanOptionItem(id + 3, "SchrodingersCat.StealsExactImpostorRole", true, TabGroup.NeutralRoles)
             .SetParent(Options.CustomRoleSpawnChances[CustomRoles.SchrodingersCat]);
+
+        KillBackKiller = new BooleanOptionItem(id + 4, "SchrodingersCat.KillBackKiller", false, TabGroup.NeutralRoles)
+            .SetParent(Options.CustomRoleSpawnChances[CustomRoles.SchrodingersCat]);
+
+        KillBackDelay = new FloatOptionItem(id + 5, "SchrodingersCat.KillBackDelay", new(0f, 60f, 0.5f), 1f, TabGroup.NeutralRoles)
+            .SetParent(KillBackKiller)
+            .SetValueFormat(OptionFormat.Seconds);
     }
 
     public override void Add(byte playerId)
@@ -55,6 +64,17 @@ internal class SchrodingersCat : RoleBase
 
         Utils.NotifyRoles(SpecifySeer: killer, ForceLoop: true);
         Utils.NotifyRoles(SpecifySeer: target, ForceLoop: true);
+
+        if (KillBackKiller.GetBool())
+        {
+            byte killerId = killer.PlayerId;
+            LateTask.New(() =>
+            {
+                var pc = Utils.GetPlayerById(killerId);
+                if (pc == null || !pc.IsAlive() || GameStates.IsMeeting) return;
+                pc.Suicide(PlayerState.DeathReason.Misfire);
+            }, KillBackDelay.GetFloat(), "SchrodingersCat KillBack");
+        }
 
         return false;
     }

@@ -686,6 +686,7 @@ public class Main : BasePlugin
                 { CustomRoles.JackalHadouHo, "#00b4eb" },
                 { CustomRoles.Tama, "#00b4eb" },
                 { CustomRoles.SantaClaus, "#e05050" },
+                { CustomRoles.MassMedia, "#512513" },
                 // Ghost roles
                 { CustomRoles.Warden, "#32a852" },
                 { CustomRoles.Minion, "#ff1919" },
@@ -1190,6 +1191,7 @@ public enum CustomWinner
     CurseMaker = CustomRoles.CurseMaker,
     Missioneer = CustomRoles.Missioneer,
     SantaClaus = CustomRoles.SantaClaus,
+    MassMedia = CustomRoles.MassMedia,
     Monochromer = CustomRoles.Monochromer,
 
     Coven = CustomRoles.CovenLeader,
@@ -1249,7 +1251,8 @@ public enum AdditionalWinners
     Monochromer = CustomRoles.Monochromer,
     Turncoat = CustomRoles.Turncoat,
     Missioneer = CustomRoles.Missioneer,
-    SantaClaus = CustomRoles.SantaClaus
+    SantaClaus = CustomRoles.SantaClaus,
+    MassMedia = CustomRoles.MassMedia
 }
 
 public enum SuffixModes

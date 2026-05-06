@@ -19,6 +19,8 @@ public static class BGMInfoDisplay
     private static Coroutine activeFade;
     private static Dictionary<string, BGMTitle> titleMap;
 
+    public static bool HasDisplay => displayText != null && displayText.gameObject != null;
+
     public class BGMTitle
     {
         public string title { get; set; }
@@ -29,10 +31,16 @@ public static class BGMInfoDisplay
     {
         try
         {
+            (string title, string author) = ResolveTitle(bgmFileName);
+
+            // No credits prepared yet (both fields empty in bgm_titles.json) →
+            // skip the visual entirely so test builds don't ship a bare "♪ In-Task"
+            // placeholder. Filling in the JSON later automatically re-enables it.
+            if (string.IsNullOrEmpty(title) && string.IsNullOrEmpty(author)) return;
+
             EnsureDisplay();
             if (displayText == null) return;
 
-            (string title, string author) = ResolveTitle(bgmFileName);
             displayText.text = string.IsNullOrEmpty(author)
                 ? $"♪ {title}"
                 : $"♪ {title} <color=#aaaaaa>-{author}</color>";
@@ -56,30 +64,17 @@ public static class BGMInfoDisplay
         if (displayText != null && displayText.gameObject != null) return;
         displayText = null;
 
-        Transform parent = null;
         TextMeshPro template = null;
-        bool useHudPosition = false;
 
+        // Prefer a HUD-side template when in-game (cooldown text font). In menu/lobby
+        // pre-HUD, fall back to a button label TMP. The choice of template only
+        // affects font/material — we override every transform/anchor below.
         if (HudManager.InstanceExists && HudManager.Instance.KillButton != null)
-        {
-            parent = HudManager.Instance.transform.FindChild("TopRight");
             template = HudManager.Instance.KillButton.cooldownTimerText;
-            useHudPosition = true;
-            Logger.Info("Using HUD anchor for credit display", "BGMInfoDisplay");
-        }
         else
         {
             MainMenuManager menu = UnityEngine.Object.FindObjectOfType<MainMenuManager>();
-            if (menu == null)
-            {
-                Logger.Warn("MainMenuManager not found, cannot display credit", "BGMInfoDisplay");
-                return;
-            }
-
-            // Use scene root (no parent) to bypass any LayoutGroup that controls button positions
-            parent = null;
-
-            PassiveButton btnSrc = menu.quitButton ?? menu.playButton;
+            PassiveButton btnSrc = menu != null ? (menu.quitButton ?? menu.playButton) : null;
             if (btnSrc != null)
             {
                 Transform tmpTf = btnSrc.transform.Find("FontPlacer/Text_TMP");
@@ -87,7 +82,6 @@ public static class BGMInfoDisplay
             }
 
             template ??= UnityEngine.Object.FindObjectOfType<TextMeshPro>();
-            Logger.Info($"Using scene root for menu credit, template found: {template != null}", "BGMInfoDisplay");
         }
 
         if (template == null)
@@ -96,9 +90,7 @@ public static class BGMInfoDisplay
             return;
         }
 
-        displayText = parent != null
-            ? UnityEngine.Object.Instantiate(template, parent, false)
-            : UnityEngine.Object.Instantiate(template);
+        displayText = UnityEngine.Object.Instantiate(template);
 
         // Cloned TMP inherits the template's mesh; without clearing first,
         // the next SetActive(true) flashes the original button label
@@ -109,37 +101,28 @@ public static class BGMInfoDisplay
         displayText.gameObject.name = "BGMInfoDisplay";
         displayText.DestroyTranslator(); // remove vanilla TextTranslator that would re-localize our title
 
-        // In menu mode, detach from any layout-controlled parent and strip AspectPosition
-        // so our explicit world-position placement isn't overridden each frame.
-        if (!useHudPosition)
-        {
-            displayText.transform.SetParent(null, false);
-            var ap = displayText.GetComponent<AspectPosition>();
-            if (ap != null) UnityEngine.Object.Destroy(ap);
-        }
+        // Detach from any layout-controlled parent and strip the inherited
+        // AspectPosition so our own anchor (added below) is the only one steering
+        // position. Without this, the cloned KillButton timer keeps pinning the
+        // text to the bottom-right kill button slot in lobby/in-game.
+        displayText.transform.SetParent(null, false);
+        var inheritedAp = displayText.GetComponent<AspectPosition>();
+        if (inheritedAp != null) UnityEngine.Object.Destroy(inheritedAp);
 
-        displayText.alignment = useHudPosition ? TextAlignmentOptions.Right : TextAlignmentOptions.CaplineRight;
+        displayText.alignment = TextAlignmentOptions.CaplineRight;
         displayText.fontStyle = FontStyles.Normal;
-        float size = useHudPosition ? 1.6f : 3f;
-        displayText.fontSize = displayText.fontSizeMax = displayText.fontSizeMin = size;
+        displayText.fontSize = displayText.fontSizeMax = displayText.fontSizeMin = 3f;
         displayText.color = Color.white;
         displayText.transform.localScale = Vector3.one;
 
-        if (useHudPosition)
-            displayText.transform.localPosition = new Vector3(0f, -0.6f, -10f);
-        else
+        var rt = displayText.GetComponent<RectTransform>();
+        if (rt != null)
         {
-            // Right-anchored RectTransform so the title grows leftward from (5.2, 2.9).
-            var rt = displayText.GetComponent<RectTransform>();
-            if (rt != null)
-            {
-                rt.pivot = new Vector2(1f, 1f);
-                rt.sizeDelta = new Vector2(6f, 0.8f);
-                var anchor = new Vector2(0.5f, 0.5f);
-                rt.anchorMax = anchor;
-                rt.anchorMin = anchor;
-            }
-            displayText.transform.position = new Vector3(5.2f, 2.9f, 0f); // world space, top-right (matches 5/5 18:38 build)
+            rt.pivot = new Vector2(1f, 1f);
+            rt.sizeDelta = new Vector2(6f, 0.8f);
+            var anchor = new Vector2(0.5f, 0.5f);
+            rt.anchorMax = anchor;
+            rt.anchorMin = anchor;
         }
 
         displayText.overflowMode = TextOverflowModes.Overflow;
@@ -147,7 +130,20 @@ public static class BGMInfoDisplay
         displayText.sortingOrder = 100;
         displayText.gameObject.SetActive(false);
         displayText.ForceMeshUpdate();
-        Logger.Info($"Credit display created, useHud={useHudPosition}, pos={displayText.transform.position}", "BGMInfoDisplay");
+
+        // Anchor to the camera's top-right edge so the credit stays in the same
+        // visual spot whether we're in MainMenu (fixed cam), lobby (cam follows
+        // player), or in-game (cam follows player + meeting).
+        AnchorToCamera();
+        Logger.Info($"Credit display created, pos={displayText.transform.position}", "BGMInfoDisplay");
+    }
+
+    private static void AnchorToCamera()
+    {
+        Camera cam = Camera.main;
+        if (cam == null) return;
+        Vector3 offset = new(0.4f, 0.9f, cam.nearClipPlane + 0.1f);
+        displayText.transform.position = AspectPosition.ComputeWorldPosition(cam, AspectPosition.EdgeAlignments.RightTop, offset);
     }
 
     private static IEnumerator FadeRoutine()
@@ -157,15 +153,21 @@ public static class BGMInfoDisplay
 
         for (float t = 0f; t < FadeInDuration; t += Time.deltaTime)
         {
+            AnchorToCamera();
             displayText.alpha = t / FadeInDuration;
             yield return null;
         }
 
         displayText.alpha = 1f;
-        yield return new WaitForSeconds(HoldDuration);
+        for (float t = 0f; t < HoldDuration; t += Time.deltaTime)
+        {
+            AnchorToCamera();
+            yield return null;
+        }
 
         for (float t = 0f; t < FadeOutDuration; t += Time.deltaTime)
         {
+            AnchorToCamera();
             displayText.alpha = 1f - (t / FadeOutDuration);
             yield return null;
         }

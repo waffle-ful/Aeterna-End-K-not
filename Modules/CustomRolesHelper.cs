@@ -631,6 +631,7 @@ internal static class CustomRolesHelper
                 CustomRoles.CurseMaker => RoleTypes.Impostor,
                 CustomRoles.JackalHadouHo => RoleTypes.Phantom,
                 CustomRoles.Tama => RoleTypes.Impostor,
+                CustomRoles.MassMedia => RoleTypes.Impostor,
                 CustomRoles.Traitor => Traitor.LegacyTraitor.GetBool() ? RoleTypes.Shapeshifter : RoleTypes.Impostor,
                 CustomRoles.PlagueBearer => RoleTypes.Impostor,
                 CustomRoles.Pestilence => RoleTypes.Impostor,
@@ -756,7 +757,8 @@ internal static class CustomRolesHelper
                 CustomRoles.Strawdoll or
                 CustomRoles.CurseMaker or
                 CustomRoles.JackalHadouHo or
-                CustomRoles.Tama;
+                CustomRoles.Tama or
+                CustomRoles.MassMedia;
         }
 
         public bool IsGhostRole()
@@ -1033,6 +1035,8 @@ internal static class CustomRolesHelper
                 CustomRoles.PonkotuTeller => true,
                 CustomRoles.AmateurTeller => true,
                 CustomRoles.JackalHadouHo => true,
+                CustomRoles.MassMedia => true,
+                CustomRoles.Romantic when Romantic.DesignationMethod.GetValue() != 0 => true,
 
                 _ => false
             };
@@ -1290,6 +1294,7 @@ internal static class CustomRolesHelper
                 CustomRoles.JackalHadouHo => RoleOptionType.Neutral_Killing,
                 CustomRoles.Tama => RoleOptionType.Neutral_Killing,
                 CustomRoles.SantaClaus => RoleOptionType.Neutral_Benign,
+                CustomRoles.MassMedia => RoleOptionType.Neutral_Killing,
                 _ => role.IsNK(true) ? RoleOptionType.Neutral_Killing : role.IsImpostor() ? RoleOptionType.Impostor_Miscellaneous : RoleOptionType.Crewmate_Miscellaneous
             };
         }
@@ -1856,6 +1861,7 @@ internal static class CustomRolesHelper
                 CustomRoles.JackalHadouHo => CountTypes.Jackal,
                 CustomRoles.Tama => CountTypes.Jackal,
                 CustomRoles.SantaClaus => CountTypes.OutOfGame,
+                CustomRoles.MassMedia => CountTypes.OutOfGame,
                 CustomRoles.Shifter => CountTypes.OutOfGame,
                 CustomRoles.NoteKiller when !NoteKiller.CountsAsNeutralKiller => CountTypes.Crew,
                 CustomRoles.DoubleAgent => CountTypes.Crew,

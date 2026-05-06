@@ -1335,6 +1335,9 @@ internal static class ReportDeadBodyPatch
                         string msg = string.Format(GetString("SleuthMsg"), tpc.GetRealName(), tpc.GetDisplayRoleName());
                         Main.SleuthMsgs[player.PlayerId] = msg;
                     }
+
+                    if (player.Is(CustomRoles.MassMedia) && Main.PlayerStates[player.PlayerId].Role is MassMedia massMediaRole)
+                        massMediaRole.OnSelfReport(target.PlayerId);
                 }
 
                 if (Virus.InfectedBodies.Contains(target.PlayerId))

@@ -874,6 +874,8 @@ internal static class MeetingHudStartPatch
     {
         SoundManager.Instance.ChangeAmbienceVolume(0f);
 
+        BGMManager.SetMeetingBGM();
+
         GuessManager.TextTemplate = Object.Instantiate(__instance.playerStates[0].NameText);
         GuessManager.TextTemplate.enabled = false;
 
@@ -1310,6 +1312,8 @@ internal static class MeetingHudOnDestroyPatch
         CheckForEndVotingPatch.ShouldSkip = false;
 
         if (!GameStates.InGame) return;
+
+        BGMManager.SetTaskBGM();
         
         if (AmongUsClient.Instance.AmHost)
         {

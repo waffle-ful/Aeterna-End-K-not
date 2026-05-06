@@ -32,6 +32,9 @@ public class Romantic : RoleBase
     public static OptionItem RuthlessKCD;
     public static OptionItem RuthlessCanVent;
     public static OptionItem RuthlessHasImpVision;
+    public static OptionItem DesignationMethod;
+    public static OptionItem LoverDeathTransformRole;
+    private static bool IsSelectingMode;
 
     private static readonly Dictionary<CustomRoles, CustomRoles> ConvertingRolesAndAddons = new()
     {
@@ -96,6 +99,14 @@ public class Romantic : RoleBase
 
         RuthlessHasImpVision = new BooleanOptionItem(Id + 23, "RuthlessHasImpVision", true, TabGroup.NeutralRoles)
             .SetParent(Options.CustomRoleSpawnChances[CustomRoles.Romantic]);
+
+        DesignationMethod = new StringOptionItem(Id + 24, "RomanticDesignationMethod",
+            ["RomanticDesignation.Kill", "RomanticDesignation.SelfVote", "RomanticDesignation.Both"], 0, TabGroup.NeutralRoles)
+            .SetParent(Options.CustomRoleSpawnChances[CustomRoles.Romantic]);
+
+        LoverDeathTransformRole = new StringOptionItem(Id + 25, "RomanticLoverDeathTransformRole",
+            ["VengefulRomantic", "Crewmate", "Jester", "Opportunist", "Madmate", "Monochromer"], 0, TabGroup.NeutralRoles)
+            .SetParent(Options.CustomRoleSpawnChances[CustomRoles.Romantic]);
     }
 
     public override void Init()
@@ -105,6 +116,7 @@ public class Romantic : RoleBase
         PartnerId = byte.MaxValue;
         Partner = null;
         IsPartnerProtected = false;
+        IsSelectingMode = false;
     }
 
     public override void Add(byte playerId)
@@ -114,6 +126,7 @@ public class Romantic : RoleBase
         PartnerId = byte.MaxValue;
         Partner = null;
         IsPartnerProtected = false;
+        IsSelectingMode = false;
     }
 
     private static void SendRPC()
@@ -152,33 +165,39 @@ public class Romantic : RoleBase
         return (player.Is(CustomRoles.Romantic) && PartnerId == target.PlayerId) || (BetTargetKnowRomantic.GetBool() && target.Is(CustomRoles.Romantic) && player.PlayerId == PartnerId);
     }
 
+    private static void SetPartner(PlayerControl target)
+    {
+        PartnerId = target.PlayerId;
+        Partner = target;
+
+        SendRPC();
+
+        RomanticPC.ResetKillCooldown();
+        RomanticPC.SetKillCooldown();
+        RomanticPC.RPCPlayCustomSound("Bet");
+
+        RomanticPC.Notify(Translator.GetString("RomanticBetPlayer"));
+        if (BetTargetKnowRomantic.GetBool()) target.Notify(Utils.ColorString(Utils.GetRoleColor(CustomRoles.Romantic), Translator.GetString("RomanticBetOnYou")));
+
+        if (RomanticGetsPartnerConvertedAddons.GetBool() && Partner.IsConverted()) Partner.GetCustomSubRoles().DoIf(x => x.IsConverted() && !RomanticPC.Is(x), x => RomanticPC.RpcSetCustomRole(x));
+
+        if (Arrows.GetBool())
+        {
+            TargetArrow.Add(RomanticId, PartnerId);
+            if (PartnerHasArrows.GetBool() && BetTargetKnowRomantic.GetBool()) TargetArrow.Add(PartnerId, RomanticId);
+        }
+
+        Logger.Info($"Partner picked: {RomanticPC.GetNameWithRole().RemoveHtmlTags()} => {target.GetNameWithRole().RemoveHtmlTags()}", "Romantic");
+    }
+
     public override bool OnCheckMurder(PlayerControl killer, PlayerControl target)
     {
         if (killer == null || target == null || killer.PlayerId == target.PlayerId || killer.PlayerId != RomanticId) return true;
 
         if (!HasPickedPartner)
         {
-            PartnerId = target.PlayerId;
-            Partner = target;
-
-            SendRPC();
-
-            RomanticPC.ResetKillCooldown();
-            RomanticPC.SetKillCooldown();
-            RomanticPC.RPCPlayCustomSound("Bet");
-
-            RomanticPC.Notify(Translator.GetString("RomanticBetPlayer"));
-            if (BetTargetKnowRomantic.GetBool()) target.Notify(Utils.ColorString(Utils.GetRoleColor(CustomRoles.Romantic), Translator.GetString("RomanticBetOnYou")));
-
-            if (RomanticGetsPartnerConvertedAddons.GetBool() && Partner.IsConverted()) Partner.GetCustomSubRoles().DoIf(x => x.IsConverted() && !RomanticPC.Is(x), x => RomanticPC.RpcSetCustomRole(x));
-
-            if (Arrows.GetBool())
-            {
-                TargetArrow.Add(RomanticId, PartnerId);
-                if (PartnerHasArrows.GetBool() && BetTargetKnowRomantic.GetBool()) TargetArrow.Add(PartnerId, RomanticId);
-            }
-
-            Logger.Info($"Partner picked: {RomanticPC.GetNameWithRole().RemoveHtmlTags()} => {target.GetNameWithRole().RemoveHtmlTags()}", "Romantic");
+            if (DesignationMethod.GetValue() == 1) return false; // SelfVote-only: kill does not pick partner
+            SetPartner(target);
         }
         else if (!IsPartnerProtected)
         {
@@ -246,9 +265,38 @@ public class Romantic : RoleBase
         return Utils.ColorString(color, text);
     }
 
+    public override bool OnVote(PlayerControl voter, PlayerControl voted)
+    {
+        if (voter.PlayerId != RomanticId) return false;
+        if (!AmongUsClient.Instance.AmHost) return false;
+        if (DesignationMethod.GetValue() == 0) return false; // Kill-only
+        if (HasPickedPartner) return false;
+        if (!voter.IsAlive()) return false;
+
+        if (!IsSelectingMode)
+        {
+            if (voted == null || voted.PlayerId != RomanticId) return false;
+            IsSelectingMode = true;
+            Utils.SendMessage(Translator.GetString("RomanticSelfVoteActivate"), RomanticId, Utils.ColorString(Utils.GetRoleColor(CustomRoles.Romantic), Translator.GetString("Romantic")));
+            return true;
+        }
+
+        if (voted == null || voted.PlayerId == RomanticId)
+        {
+            IsSelectingMode = false;
+            Utils.SendMessage(Translator.GetString("RomanticConfessionCanceled"), RomanticId, Utils.ColorString(Utils.GetRoleColor(CustomRoles.Romantic), Translator.GetString("Romantic")));
+            return true;
+        }
+
+        IsSelectingMode = false;
+        SetPartner(voted);
+        return true;
+    }
+
     public override void OnReportDeadBody()
     {
         IsPartnerProtected = false;
+        IsSelectingMode = false;
     }
 
     public override bool CanUseImpostorVentButton(PlayerControl pc)
@@ -317,13 +365,39 @@ public class Romantic : RoleBase
                 RomanticPC.RpcSetCustomRole(CustomRoles.RuthlessRomantic);
             }
         }
-        else // In every other scenario, Romantic becomes Vengeful Romantic and must kill the killer of their Partner
+        else // In every other scenario, transform per LoverDeathTransformRole option
         {
-            Logger.Info($"Non-Killing Crew Romantic Partner Died => Changing {RomanticPC.GetNameWithRole()} to Vengeful Romantic", "Romantic");
-
-            RomanticPC.RpcSetCustomRole(CustomRoles.VengefulRomantic);
-            VengefulRomantic.Target = killer.PlayerId;
-            VengefulRomantic.SendRPC();
+            int transform = LoverDeathTransformRole.GetValue();
+            switch (transform)
+            {
+                case 1: // Crewmate
+                    Logger.Info($"Non-Killing Crew Romantic Partner Died => Changing {RomanticPC.GetNameWithRole()} to Crewmate", "Romantic");
+                    RomanticPC.RpcSetCustomRole(CustomRoles.Crewmate);
+                    break;
+                case 2: // Jester
+                    Logger.Info($"Non-Killing Crew Romantic Partner Died => Changing {RomanticPC.GetNameWithRole()} to Jester", "Romantic");
+                    RomanticPC.RpcSetCustomRole(CustomRoles.Jester);
+                    break;
+                case 3: // Opportunist
+                    Logger.Info($"Non-Killing Crew Romantic Partner Died => Changing {RomanticPC.GetNameWithRole()} to Opportunist", "Romantic");
+                    RomanticPC.RpcSetCustomRole(CustomRoles.Opportunist);
+                    break;
+                case 4: // Madmate
+                    Logger.Info($"Non-Killing Crew Romantic Partner Died => Changing {RomanticPC.GetNameWithRole()} to Madmate", "Romantic");
+                    RomanticPC.RpcSetCustomRole(CustomRoles.Crewmate);
+                    RomanticPC.RpcSetCustomRole(CustomRoles.Madmate);
+                    break;
+                case 5: // Monochromer
+                    Logger.Info($"Non-Killing Crew Romantic Partner Died => Changing {RomanticPC.GetNameWithRole()} to Monochromer", "Romantic");
+                    RomanticPC.RpcSetCustomRole(CustomRoles.Monochromer);
+                    break;
+                default: // 0 = VengefulRomantic
+                    Logger.Info($"Non-Killing Crew Romantic Partner Died => Changing {RomanticPC.GetNameWithRole()} to Vengeful Romantic", "Romantic");
+                    RomanticPC.RpcSetCustomRole(CustomRoles.VengefulRomantic);
+                    VengefulRomantic.Target = killer.PlayerId;
+                    VengefulRomantic.SendRPC();
+                    break;
+            }
         }
 
         if (RomanticGetsPartnerConvertedAddons.GetBool() && Partner.IsConverted()) Partner.GetCustomSubRoles().DoIf(x => x.IsConverted() && !RomanticPC.Is(x), x => RomanticPC.RpcSetCustomRole(x));

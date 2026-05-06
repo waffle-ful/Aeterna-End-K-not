@@ -468,6 +468,7 @@ public enum CustomRoles
     JackalHadouHo,
     Tama,
     SantaClaus,
+    MassMedia,
 
     // Coven
 

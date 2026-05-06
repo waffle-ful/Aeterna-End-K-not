@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
@@ -9,6 +10,7 @@ namespace EndKnot.Modules;
 public static class BGMManager
 {
     public const int BGMOptionId = 44500;
+    private const float FadeOutDuration = 1.5f;
 
     public static OptionItem ClimaxCount;
 
@@ -69,10 +71,36 @@ public static class BGMManager
 
     public static void Stop()
     {
-        if (currentSource != null) currentSource.Stop();
+        BGMInfoDisplay.Hide();
+        if (currentSource == null) { currentBGMName = string.Empty; return; }
+
+        // Hand the source off to a fade coroutine and clear our reference, so a
+        // subsequent Play() can start a new track at full volume immediately
+        // while the old one tails out (cross-fade behaviour).
+        AudioSource fading = currentSource;
         currentSource = null;
         currentBGMName = string.Empty;
-        BGMInfoDisplay.Hide();
+        StartFadeOut(fading);
+    }
+
+    private static void StartFadeOut(AudioSource src)
+    {
+        if (src == null) return;
+        if (Main.Instance == null) { src.Stop(); return; }
+        Main.Instance.StartCoroutine(FadeOutRoutine(src));
+    }
+
+    private static IEnumerator FadeOutRoutine(AudioSource src)
+    {
+        if (src == null) yield break;
+        float startVol = src.volume;
+        for (float t = 0f; t < FadeOutDuration; t += Time.deltaTime)
+        {
+            if (src == null) yield break;
+            src.volume = startVol * (1f - t / FadeOutDuration);
+            yield return null;
+        }
+        if (src != null) { src.volume = 0f; src.Stop(); }
     }
 
     private static bool IsEnabled() => Main.EnableBGM?.Value ?? false;
@@ -82,12 +110,36 @@ public static class BGMManager
         try
         {
             if (!IsEnabled() || !OperatingSystem.IsWindows()) return;
-            if (currentBGMName == name && currentSource != null && currentSource.isPlaying) return;
+
+            // Audio is already playing this track — but the credit display may
+            // have failed on first attempt (e.g. SetLobbyBGM fired from
+            // OnGameJoined before HudManager spawned). Retry the credit so the
+            // LobbyBehaviour.Start re-trigger can recover it.
+            if (currentBGMName == name && currentSource != null && currentSource.isPlaying)
+            {
+                if ((Main.ShowBGMInfo?.Value ?? true) && !BGMInfoDisplay.HasDisplay)
+                    BGMInfoDisplay.Show(name);
+                return;
+            }
 
             AudioClip clip = LoadBGM(name);
-            if (clip == null) return;
+            if (clip == null)
+            {
+                // The new phase has no BGM file (e.g. user shipped only menu.ogg
+                // + lobby.ogg, no intask/climax). Mirror the menu→lobby behaviour
+                // and fade the previous track out instead of letting it bleed
+                // across the phase boundary.
+                Stop();
+                return;
+            }
 
-            if (currentSource != null) currentSource.Stop();
+            // Fade the previous track out asynchronously so the transition
+            // sounds natural (cross-fade with the new clip starting below).
+            if (currentSource != null)
+            {
+                StartFadeOut(currentSource);
+                currentSource = null;
+            }
 
             SilenceVanillaAudio();
 
