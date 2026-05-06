@@ -1,4 +1,5 @@
 ﻿using System;
+using EndKnot.Modules;
 using HarmonyLib;
 using TMPro;
 using UnityEngine;
@@ -77,12 +78,58 @@ public static class HostInfoPanelSetUpPatch
     }
 }
 
+[HarmonyPatch(typeof(LobbyBehaviour), nameof(LobbyBehaviour.Start))]
+internal static class LobbyBehaviourStartPatch
+{
+    // Mirror the menu BGM pattern exactly:
+    //   frame 1 of Update: SilenceVanillaAudio → SetLobbyBGM (once)
+    //   frame 2+         : SilenceVanillaAudio only, until 2.5s elapses
+    internal static bool SilencePending;
+    private static bool _bgmStarted;
+    private static float _silenceUntil;
+
+    public static void Postfix()
+    {
+        if (!(Main.EnableBGM?.Value ?? false)) return;
+        SilencePending = true;
+        _bgmStarted = false;
+        _silenceUntil = Time.realtimeSinceStartup + 2.5f;
+    }
+
+    internal static void Tick()
+    {
+        if (!SilencePending) return;
+
+        if (SoundManager.Instance != null)
+        {
+            BGMManager.SilenceVanillaAudio();
+
+            if (!_bgmStarted)
+            {
+                BGMManager.SetLobbyBGM();
+                _bgmStarted = true;
+            }
+        }
+
+        if (Time.realtimeSinceStartup >= _silenceUntil)
+            SilencePending = false;
+    }
+}
+
 // https://github.com/SuperNewRoles/SuperNewRoles/blob/master/SuperNewRoles/Patches/LobbyBehaviourPatch.cs
-//[HarmonyPatch(typeof(LobbyBehaviour), nameof(LobbyBehaviour.Update))]
+[HarmonyPatch(typeof(LobbyBehaviour), nameof(LobbyBehaviour.Update))]
 internal static class LobbyBehaviourUpdatePatch
 {
     public static void Postfix(LobbyBehaviour __instance)
     {
+        // When custom BGM is active, keep MapTheme suppressed via the Start-initiated window.
+        if (Main.EnableBGM?.Value ?? false)
+        {
+            LobbyBehaviourStartPatch.Tick();
+            return;
+        }
+
+        // BGM disabled: honour the vanilla LobbyMusic option.
         // ReSharper disable once ConvertToLocalFunction
         Func<ISoundPlayer, bool> lobbybgm = x => x.Name.Equals("MapTheme");
         ISoundPlayer mapThemeSound = SoundManager.Instance.soundPlayers.Find(lobbybgm);

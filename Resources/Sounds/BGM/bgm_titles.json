@@ -1,8 +1,26 @@
-  {
-    "menu": {
-      "title": "Main Menu",  
-      "author": "DM Dokuro"
-    },
-    "lobby": { ... },
-    ...
+{
+  "menu": {
+    "title": "The Tale of a Cruel World",
+    "author": "DM Dokuro"
+  },
+  "lobby": {
+    "title": "0の部屋",
+    "author": "自称芸術家みーさん"
+  },
+  "intask": {
+    "title": "In-Task",
+    "author": ""
+  },
+  "climax": {
+    "title": "Climax",
+    "author": ""
+  },
+  "meeting": {
+    "title": "Meeting",
+    "author": ""
+  },
+  "result": {
+    "title": "Result",
+    "author": ""
   }
+}

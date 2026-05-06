@@ -16,7 +16,6 @@ public static class VanillaSuppressor
         DisableByName("BackgroundTexture");
         DisableByName("WindowShine");
         DisableByName("ScreenCover");
-        DisableByName("ModStamp");
         DisableByName("Ambience");
         DisableByName("Divider");
         // LOGO-AU is kept alive; CalamityLogo repositions it

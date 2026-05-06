@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using System.Text.Json;
 using TMPro;
 using UnityEngine;
@@ -194,56 +195,21 @@ public static class BGMInfoDisplay
 
         try
         {
-            string path = BGMManager.BGMPath + "bgm_titles.json";
-
-            if (!Directory.Exists(BGMManager.BGMPath))
-                Directory.CreateDirectory(BGMManager.BGMPath);
-
-            Dictionary<string, BGMTitle> defaults = GetDefaultTitles();
-
-            if (!File.Exists(path))
+            Stream stream = Assembly.GetExecutingAssembly()
+                .GetManifestResourceStream("EndKnot.Resources.Sounds.BGM.bgm_titles.json");
+            if (stream == null)
             {
-                titleMap = defaults;
-                WriteTitlesJson(path, titleMap);
+                Logger.Warn("Embedded bgm_titles.json not found", "BGMInfoDisplay");
                 return;
             }
 
-            string json = File.ReadAllText(path);
+            using var reader = new StreamReader(stream);
+            string json = reader.ReadToEnd();
             titleMap = JsonSerializer.Deserialize<Dictionary<string, BGMTitle>>(json) ?? [];
-
-            // Merge missing default keys into existing JSON so users get new entries on update
-            bool changed = false;
-            foreach (var kv in defaults)
-            {
-                if (!titleMap.ContainsKey(kv.Key))
-                {
-                    titleMap[kv.Key] = kv.Value;
-                    changed = true;
-                }
-            }
-
-            if (changed) WriteTitlesJson(path, titleMap);
         }
         catch (Exception ex)
         {
             Logger.Exception(ex, "BGMInfoDisplay.EnsureTitleMap");
-            titleMap = GetDefaultTitles();
         }
-    }
-
-    private static Dictionary<string, BGMTitle> GetDefaultTitles() => new()
-    {
-        ["menu"] = new() { title = "Main Menu", author = "DM Dokuro" },
-        ["lobby"] = new() { title = "Lobby", author = "DM Dokuro" },
-        ["intask"] = new() { title = "In-Task", author = "DM Dokuro" },
-        ["climax"] = new() { title = "stained, brutal calamity", author = "DM Dokuro" },
-        ["meeting"] = new() { title = "Meeting", author = "DM Dokuro" },
-        ["result"] = new() { title = "Result", author = "DM Dokuro" }
-    };
-
-    private static void WriteTitlesJson(string path, Dictionary<string, BGMTitle> map)
-    {
-        string json = JsonSerializer.Serialize(map, new JsonSerializerOptions { WriteIndented = true });
-        File.WriteAllText(path, json);
     }
 }
