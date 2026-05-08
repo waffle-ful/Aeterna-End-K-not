@@ -278,6 +278,8 @@ public class Main : BasePlugin
     {
         try
         {
+            // Migrate legacy data/config from upstream EHR and the earlier KnotHost rename.
+            // Safe to keep indefinitely: no-op once End Knot folders exist.
             string root = DataPath;
             string dst = Path.Combine(root, "EndKnot_DATA");
             foreach (string legacy in new[] { "EHR_DATA", "KnotHost_DATA" })
@@ -343,7 +345,6 @@ public class Main : BasePlugin
         AddComponent<ClientControlGUI>();
         Log.LogInfo("ClientControlGUI registered");
 
-        //Logger = BepInEx.Logging.Logger.CreateLogSource("EHR");
         coroutines = AddComponent<Coroutines>();
         Logger.Enable();
         Logger.Disable("NotifyRoles");
