@@ -1,0 +1,33 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET 6
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '6.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore EndKnot.csproj
+
+      - name: Build (Release)
+        run: dotnet build EndKnot.csproj -c Release -o build/ --no-restore
+
+      - name: Upload EndKnot.dll artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: EndKnot-${{ github.sha }}
+          path: build/EndKnot.dll
+          retention-days: 30
+          if-no-files-found: error
