@@ -158,6 +158,7 @@ public static class MainMenuManagerPatch
         MgLogo = logoObject.AddComponent<SpriteRenderer>();
         logoTransform.localPosition = new(2f, -0.5f, 1f);
         logoTransform.localScale *= 1.2f;
+        // TODO(public-release): replace EHR-Icon.png with End Knot's own logo before going public
         MgLogo.sprite = Utils.LoadSprite("EndKnot.Resources.Images.EHR-Icon.png", 400f);
 
         // GitHub Button

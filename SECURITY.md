@@ -1,43 +1,29 @@
-# Security Policy for Endless Host Roles (EHR)
+# Security Policy
 
-Ensuring the security of our community and mod is a top priority. This document explains how to responsibly report security issues and what to expect.
+## Reporting a vulnerability
 
----
+If you discover a security vulnerability in End Knot — for example an in-game exploit, a way for a non-host client to crash other lobbies, or a bug in the mod that could harm users — please report it **privately** rather than opening a public issue.
 
-## 1. Reporting a Vulnerability
+Preferred channels:
 
-If you discover a security vulnerability in EHR (either in-game exploits or issues in the mod code), please report it **privately** through the **[EHR Discord server](https://discord.gg/ehr)** by opening a support ticket.
+1. GitHub's [private vulnerability reporting](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing-information-about-vulnerabilities/privately-reporting-a-security-vulnerability) on this repository
+2. Direct message on the project Discord: <TBD: Discord invite link>
 
-**Include as much information as possible:**
+Please include:
 
-- Steps to reproduce the issue  
-- Video footage or screenshots demonstrating the problem  
-- Logs from the mod (`log.html`, `LogOutput.log`, `Errorlog.log`)
+- Steps to reproduce
+- Screenshots or video if possible
+- Logs (`BepInEx/LogOutput.log`, `BepInEx/Errorlog.log` if present)
 
-Providing all three is ideal to help us understand and fix the issue quickly.
+## Scope
 
----
+This policy covers:
 
-## 2. Response Time
+- In-game exploits or crashes triggered by End Knot's added behavior
+- Mod code vulnerabilities affecting users running the mod
 
-We aim to respond to all security reports **within the same day** whenever possible.
+It does **not** cover vulnerabilities in upstream Among Us, BepInEx, or upstream EHR — please report those to their respective projects.
 
----
+## Disclosure
 
-## 3. Scope
-
-This policy applies to:
-
-- In-game exploits or bugs that could be abused  
-- Mod code vulnerabilities that could affect users or the community  
-
----
-
-## 4. Disclosure
-
-- Please **do not publicly disclose** any vulnerabilities until a fix has been released.  
-- We will work to release a patch as soon as possible to resolve reported issues.
-
----
-
-Thank you for helping us keep EHR safe and fair for all players. 💜
+Please do not publicly disclose a vulnerability until a fix has been released. End Knot is a small fork maintained as a hobby — response time is best-effort.

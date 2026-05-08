@@ -32,6 +32,8 @@
 
 このプロジェクトは **GPL-3.0** ライセンスの下で公開されています。詳細は [`LICENSE`](./LICENSE) を参照してください。
 
+End Knot は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) の派生プロジェクトです。**2026年4月以降の改変** は waffle-ful により行われており、改変履歴は本リポジトリの git log および [`CHANGELOG.md`](./CHANGELOG.md) で追跡できます。
+
 ## クレジット
 
 - **[Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles)** (Gurge44 他) — ベースMod、GPL-3.0

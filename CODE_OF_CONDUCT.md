@@ -1,72 +1,37 @@
-# Code of Conduct for Endless Host Roles (EHR)
+# Code of Conduct
 
-This Code of Conduct applies to **all interactions** involving the EHR community, including:
+This Code of Conduct applies to all interactions involving the End Knot community: this GitHub repository, the project Discord, and lobbies hosted with the mod.
 
-- Contributing to the GitHub repository  
-- Participating in the Discord server  
-- Playing games with the EHR mod  
+The goal is simple: **everyone should be able to participate, contribute, and have fun without being mistreated.**
 
-Our goal is to ensure a **safe, fun, and fair environment** for everyone.
+## Expected behavior
 
----
+- Be respectful in code review, issue threads, and chat
+- Play fair, follow host rules, and don't deliberately ruin other players' games
+- When reporting bugs, share enough information for us to actually reproduce them
+- Don't abuse known unfixed bugs for unfair advantage
 
-## 1. Expected Behavior
+## Unacceptable behavior
 
-We encourage everyone to:
+- Harassment, hate speech, or personal attacks
+- Doxing or sharing private information
+- Cheating in ways that ruin fairness for others
+- Coordinated abuse of hosts or sabotage of public lobbies
 
-- **Play fair** and follow the rules set by hosts  
-- **Have fun** and make sure others are having fun too  
-- **Pay attention** to instructions and read all relevant information before acting  
-- **Respect unfixable bugs**, do not abuse them for unfair advantage  
-- **Be considerate** of new players and other community members  
+Light trolling among friends who are all in on it is fine. Light trolling at the expense of someone who isn't enjoying it is not.
 
----
+## Reporting
 
-## 2. Unacceptable Behavior
+If you experience or witness a violation:
 
-The following behaviors are **strictly prohibited**:
+- On GitHub: report the issue/PR/comment via GitHub's report flow, or contact the maintainer privately
+- In Discord: open a support ticket / DM a moderator
+- In-game: provide friend code, hashed PUID, or Discord ID of the offender plus context (screenshots, video, logs)
 
-- Harassment, discrimination, or any speech or actions that can be mentally harmful  
-- Abusing hosts or intentionally sabotaging the experience for others  
-- Cheating in ways that ruin fairness or fun  
+Anonymous reports are not acted on, but reports made privately to the maintainer are kept confidential.
 
-**Note:** Light trolling is allowed as long as everyone involved enjoys it and it does not negatively impact anyone.
+## Enforcement
 
----
+The project maintainer (and Discord moderators, where applicable) will decide outcomes case by case. Possible actions include warnings, temporary bans, or permanent bans from the project's spaces.
 
-## 3. Reporting Violations
-
-If you encounter violations of this Code of Conduct:
-
-1. Report abuse via the **EHR Discord server** using a support ticket.  
-2. Provide as much information as possible about the offender:  
-   - Friend code  
-   - Hashed PUID  
-   - Discord ID  
-   At least **one** of these is required.  
-3. Reports should be **attributed**, anonymous reports are not accepted.  
-
----
-
-## 4. Enforcement
-
-Violations will be handled by the **project maintainer and Discord moderators**. Possible consequences include:
-
-- Warnings  
-- Temporary or permanent bans from **all EHR lobbies**  
-- Bans from the Discord server and partner communities  
-
-Enforcement is applied **consistently** to ensure the community remains safe and fun for everyone.
-
----
-
-## 5. Additional Notes
-
-- **Jokes and playful behavior** are welcome as long as everyone understands them and enjoys them.  
-- The **top priority** is that everyone has fun and plays fairly. Do not ruin the experience for others.  
-
-By participating in EHR, you agree to abide by this Code of Conduct.
-
----
-
-Thank you for helping keep EHR a fun, fair, and welcoming community! 💜
+By participating in End Knot, you agree to follow this Code of Conduct.

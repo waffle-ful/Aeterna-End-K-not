@@ -1,57 +1,27 @@
-# Support for Endless Host Roles (EHR)
+# Support
 
-If you need help with EHR, here’s how to get support for different situations:
+End Knot is a small personal fork of [Endless Host Roles (EHR)](https://github.com/Gurge44/EndlessHostRoles). Support is best-effort.
 
----
+## Where to ask
 
-## 1. General Questions
+| Topic | Where |
+|---|---|
+| Bug reports / technical issues | GitHub Issues on this repository |
+| Discussion, gameplay questions, suggestions | <TBD: Discord invite link> |
+| Security vulnerabilities | See [SECURITY.md](SECURITY.md) — do not file a public issue |
 
-For gameplay questions, mod features, or general discussion:
+## When filing a bug report
 
-- Ask the **community** on the **[EHR Discord server](https://discord.gg/ehr)**  
-- Discuss ideas, tips, or suggestions democratically — the community decides what’s best
+Please include:
 
----
+- End Knot version (visible in the lobby version display)
+- Among Us version
+- Steps to reproduce
+- Logs from `Among Us/BepInEx/`:
+  - `LogOutput.log` (always)
+  - `Errorlog.log` if present
+- Screenshots or video if the bug is visual
 
-## 2. Bug Reports
+## Upstream issues
 
-If you encounter a bug or technical issue:
-
-- Submit a **bug report** through GitHub Issues or Discord  
-- Include as much information as possible:  
-  - Steps to reproduce the issue  
-  - Platform / version of the mod  
-  - Any relevant logs or screenshots  
-
----
-
-## 3. Reporting Abuse
-
-If a player is behaving inappropriately in-game or on Discord:
-
-- Open a **support ticket** on the **Discord server**  
-- Provide at least one of the following for identification:  
-  - Friend code  
-  - Hashed PUID  
-  - Discord ID  
-- Include all relevant context and evidence for the report  
-
----
-
-## 4. Response Times
-
-We aim to respond to **all support requests within 1 hour** whenever possible.  
-
----
-
-## 5. Contributor Support
-
-If you’re contributing to EHR:
-
-- Discuss questions or ideas with the community first  
-- Check **CONTRIBUTING.md** for coding guidelines and workflow  
-- Respect the democratic decision-making of the project when suggesting major changes  
-
----
-
-Thank you for helping make EHR fun and fair for everyone! 💜
+Bugs that also reproduce on stock EHR are best reported [upstream](https://github.com/Gurge44/EndlessHostRoles/issues). End Knot does not fix upstream EHR bugs unless they specifically affect the End Knot use case.

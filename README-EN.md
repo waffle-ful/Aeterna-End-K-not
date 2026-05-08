@@ -32,6 +32,8 @@ Supported Among Us version: **2026.3.31**
 
 This project is licensed under **GPL-3.0**. See [`LICENSE`](./LICENSE) for details.
 
+End Knot is a derivative of [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles). **Modifications since April 2026** were made by waffle-ful; the modification history is tracked in this repository's git log and [`CHANGELOG.md`](./CHANGELOG.md).
+
 ## Credits
 
 - **[Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles)** (Gurge44 et al.) — Base mod, GPL-3.0
