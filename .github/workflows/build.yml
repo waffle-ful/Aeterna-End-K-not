@@ -3,12 +3,14 @@ name: Build
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
     branches: [main]
   workflow_dispatch:
 
 jobs:
-  build:
+  ci-build:
+    name: CI build (no BGM)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -31,3 +33,61 @@ jobs:
           path: build/EndKnot.dll
           retention-days: 30
           if-no-files-found: error
+
+  release-build:
+    name: Release build (with BGM)
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: ci-build
+    runs-on: [self-hosted, endknot-bgm]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Stage BGM files from local cache
+        shell: pwsh
+        run: |
+          $cache = $env:ENDKNOT_BGM_CACHE
+          if (-not $cache) {
+            Write-Error "ENDKNOT_BGM_CACHE env var is not set on this runner. Configure it to point to a local folder containing menu.ogg, lobby.ogg, etc."
+            exit 1
+          }
+          if (-not (Test-Path $cache)) {
+            Write-Error "BGM cache directory not found: $cache"
+            exit 1
+          }
+          $required = @('menu.ogg', 'lobby.ogg')
+          foreach ($f in $required) {
+            if (-not (Test-Path (Join-Path $cache $f))) {
+              Write-Error "Required BGM file missing: $cache\$f"
+              exit 1
+            }
+          }
+          New-Item -ItemType Directory -Force -Path Resources\Sounds\BGM | Out-Null
+          Copy-Item (Join-Path $cache '*.ogg') -Destination Resources\Sounds\BGM\ -Force -ErrorAction SilentlyContinue
+          Copy-Item (Join-Path $cache '*.mp3') -Destination Resources\Sounds\BGM\ -Force -ErrorAction SilentlyContinue
+          Copy-Item (Join-Path $cache '*.wav') -Destination Resources\Sounds\BGM\ -Force -ErrorAction SilentlyContinue
+          Write-Host "Staged BGM files:"
+          Get-ChildItem Resources\Sounds\BGM\ | Select-Object Name, Length
+
+      - name: Set up .NET 6
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '6.0.x'
+
+      - name: Restore + build (Release with BGM)
+        shell: pwsh
+        run: |
+          dotnet restore EndKnot.csproj
+          dotnet build EndKnot.csproj -c Release -o build\ --no-restore
+
+      - name: Upload BGM-bundled DLL artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: EndKnot-BGM-${{ github.ref_name }}
+          path: build/EndKnot.dll
+          if-no-files-found: error
+
+      - name: Attach DLL to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/EndKnot.dll
+          fail_on_unmatched_files: true

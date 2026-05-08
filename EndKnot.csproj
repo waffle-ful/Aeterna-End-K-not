@@ -32,18 +32,12 @@
         <None Remove="CTA\**"/>
     </ItemGroup>
 
-    <!-- BGM audio is NOT embedded into the distributed DLL: those tracks have
-         their own usage terms (DM Dokuro etc.) and must not ship inside the
-         binary. Devs keep the .ogg files on disk under Resources/Sounds/BGM/
-         for local testing; users drop their own files into BepInEx/resources/BGM/. -->
-    <ItemGroup>
-        <EmbeddedResource Remove="Resources/Sounds/BGM/*.ogg"/>
-        <EmbeddedResource Remove="Resources/Sounds/BGM/*.mp3"/>
-        <EmbeddedResource Remove="Resources/Sounds/BGM/*.wav"/>
-        <None Remove="Resources/Sounds/BGM/*.ogg"/>
-        <None Remove="Resources/Sounds/BGM/*.mp3"/>
-        <None Remove="Resources/Sounds/BGM/*.wav"/>
-    </ItemGroup>
+    <!-- BGM audio files in Resources/Sounds/BGM/ are gitignored (kept out of the public
+         source repo) but ARE embedded into the DLL when present at build time. The
+         canonical release build runs on a self-hosted runner that supplies the files.
+         Public CI builds (GitHub-hosted runners) produce a no-BGM DLL because the files
+         are absent. End users can override the embedded defaults at runtime by dropping
+         their own .ogg / .mp3 / .wav into BepInEx/resources/BGM/. -->
 
     <ItemGroup>
 		<PackageReference Include="AmongUs.GameLibs.Steam" Version="2026.3.31" PrivateAssets="all" Condition="'$(Configuration)' == 'Release' Or '$(Configuration)' == 'Debug'" />
