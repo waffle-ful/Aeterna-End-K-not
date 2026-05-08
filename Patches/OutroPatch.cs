@@ -197,7 +197,7 @@ internal static class EndGamePatch
                 }
             }
             
-            Main.Instance.StartCoroutine(BanManager.LoadEACList(reload: true));
+            Main.Instance.StartCoroutine(BanManager.LoadEACList());
         }
     }
 }

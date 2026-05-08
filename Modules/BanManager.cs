@@ -10,7 +10,6 @@ using System.Text.RegularExpressions;
 using HarmonyLib;
 using InnerNet;
 using UnityEngine;
-using UnityEngine.Networking;
 using static EndKnot.Translator;
 
 namespace EndKnot;
@@ -60,42 +59,10 @@ public static class BanManager
         catch (Exception ex) { Logger.Exception(ex, "BanManager"); }
     }
 
-    public static IEnumerator LoadEACList(bool reload = false)
+    public static IEnumerator LoadEACList()
     {
-        if (!reload) EACList.Clear();
+        EACList.Clear();
 
-        // External EAC list fetch disabled
-        yield break;
-#pragma warning disable CS0162
-        UnityWebRequest request = UnityWebRequest.Get("https://raw.githubusercontent.com/Gurge44/EndlessHostRoles/main/Resources/Config/EACList.txt");
-        request.timeout = 5;
-        request.SetRequestHeader("User-Agent", $"{Main.ModName} v{Main.PluginVersion}");
-                
-        yield return request.SendWebRequest();
-
-        if (request.result == UnityWebRequest.Result.Success && !string.IsNullOrWhiteSpace(request.downloadHandler.text))
-        {
-            if (reload) EACList.Clear();
-            
-            using StringReader reader = new(request.downloadHandler.text);
-
-            while (reader.ReadLine() is { } line)
-            {
-                line = line.Trim();
-                if (line.Length == 0 || line.StartsWith("#")) continue;
-
-                EACList.Add(line);
-            }
-
-            Logger.Info("EAC list loaded from GitHub", "BanManager");
-            yield break;
-        }
-        
-        if (reload) yield break;
-
-        Logger.Warn($"Failed to load EAC list from GitHub, falling back to local copy: {request.error}", "BanManager");
-        
-        // Fallback: embedded resource
         Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("EndKnot.Resources.Config.EACList.txt")!;
         stream.Position = 0;
         using StreamReader sr = new(stream, Encoding.UTF8);
@@ -108,8 +75,8 @@ public static class BanManager
             EACList.Add(line);
         }
 
-        Logger.Info("EAC list loaded from embedded resource", "BanManager");
-#pragma warning restore CS0162
+        Logger.Info($"EAC list loaded from embedded resource ({EACList.Count} entries)", "BanManager");
+        yield break;
     }
 
     private static string GetResourcesTxt(string path)
