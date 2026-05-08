@@ -5,7 +5,7 @@ Thanks for your interest in contributing! End Knot is a small personal fork — 
 ## Getting in touch
 
 - **Bug reports / feature requests**: open a GitHub Issue on this repository
-- **Discussion / questions**: <TBD: Discord invite link>
+- **Discussion / questions**: https://discord.gg/sEYAFzD3a
 
 You don't need to file an issue before opening a small PR. For larger changes (new roles, refactors, gamemode tweaks), please open an issue or ask on Discord first so we can confirm the change is wanted before you spend time on it.
 

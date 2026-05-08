@@ -7,7 +7,7 @@ If you discover a security vulnerability in End Knot — for example an in-game 
 Preferred channels:
 
 1. GitHub's [private vulnerability reporting](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing-information-about-vulnerabilities/privately-reporting-a-security-vulnerability) on this repository
-2. Direct message on the project Discord: <TBD: Discord invite link>
+2. Direct message on the project Discord: https://discord.gg/sEYAFzD3a
 
 Please include:
 

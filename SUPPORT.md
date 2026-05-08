@@ -7,7 +7,7 @@ End Knot is a small personal fork of [Endless Host Roles (EHR)](https://github.c
 | Topic | Where |
 |---|---|
 | Bug reports / technical issues | GitHub Issues on this repository |
-| Discussion, gameplay questions, suggestions | <TBD: Discord invite link> |
+| Discussion, gameplay questions, suggestions | https://discord.gg/sEYAFzD3a |
 | Security vulnerabilities | See [SECURITY.md](SECURITY.md) — do not file a public issue |
 
 ## When filing a bug report
