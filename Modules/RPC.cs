@@ -1442,6 +1442,7 @@ internal static class RPC
     public static void SyncAllPlayerNames()
     {
         if (!AmongUsClient.Instance.AmHost) return;
+        if (GameStates.CurrentServerType == GameStates.ServerType.Vanilla) return;
 
         MessageWriter writer = AmongUsClient.Instance.StartRpcImmediately(PlayerControl.LocalPlayer.NetId, (byte)CustomRPC.SyncAllPlayerNames, SendOption.Reliable);
         writer.Write(Main.AllPlayerNames.Count);
@@ -1467,6 +1468,7 @@ internal static class RPC
     public static void SyncAllClientRealNames()
     {
         if (!AmongUsClient.Instance.AmHost) return;
+        if (GameStates.CurrentServerType == GameStates.ServerType.Vanilla) return;
 
         MessageWriter writer = AmongUsClient.Instance.StartRpcImmediately(PlayerControl.LocalPlayer.NetId, (byte)CustomRPC.SyncAllClientRealNames, SendOption.Reliable);
         writer.WritePacked(Main.AllClientRealNames.Count);

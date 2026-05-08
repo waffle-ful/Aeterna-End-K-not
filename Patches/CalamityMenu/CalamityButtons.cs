@@ -23,23 +23,38 @@ public static class CalamityButtons
         var defs = new (string label, float y, Action onClick)[]
         {
             (Translator.GetString("MainMenu.Calamity.SinglePlayer"), +0.9f,
-                () => { CalamityVisibility.HideMenuContent(); OpenFreeplayPopover(mm); }),
+                () =>
+                {
+                    Logger.Info("SinglePlayer clicked", "CalamityButtons");
+                    CalamityVisibility.HideMenuContent();
+                    OpenFreeplayPopover(mm);
+                }),
 
-            // Multiplayer: TitleLogoPatch.SetupRightPanelForCalamity wired RightPanel + close
-            // button + tint, MainMenuManager_LateUpdate runs the slide animation in Calamity
-            // mode too, and CalamityVisibility treats RightPanel as a "popover" so the menu
-            // hides/restores correctly.
+            // Multiplayer: AU 2026 changed `mm.OpenGameModeMenu()` to scene-transition into
+            // MatchMaking the first time it's called (loads MMOnlineManager); the user comes
+            // back to MainMenu and only the SECOND OpenGameModeMenu call opens the menu in
+            // place. From the user's POV the first click "did nothing" then second click works.
             //
-            // Call mm.OpenGameModeMenu() directly instead of routing through PlayOnlineButton.OnClick:
-            // VanillaSuppressor disables mm.playButton.gameObject (the parent of PlayOnlineButton),
-            // and even though OnClick.Invoke runs listeners regardless of activeInHierarchy, the
-            // direct call is one less indirection and triggers the same ShowRightPanel Prefix.
+            // Fire the vanilla PlayOnlineButton's full OnClick chain instead — that mirrors
+            // a real button press (ResetScreen + OpenGameModeMenu + SceneChanger.Click), so
+            // the scene transition is intentional and the first click reaches MatchMaking
+            // cleanly. mm.playButton.gameObject is SetActive(false) by VanillaSuppressor but
+            // UnityEvent.Invoke fires listeners regardless of activeInHierarchy.
+            // AU 2026 changed `mm.OpenGameModeMenu()` so the FIRST call scene-transitions
+            // into MatchMaking (loading MMOnlineManager); the user comes back to MainMenu
+            // and only the SECOND call opens the menu in place. From the user's POV the
+            // first click "did nothing" then second click works. Tried PlayOnlineButton.
+            // OnClick.Invoke() with temporary playButton activation — vanilla listeners
+            // still no-op, so reverted to the direct OpenGameModeMenu call. Workaround
+            // for users: click Multi twice. Real fix needs vanilla AU 2026 source review.
             (Translator.GetString("MainMenu.Calamity.Multiplayer"),  +0.4f,
                 () =>
                 {
+                    Logger.Info($"Multiplayer clicked. ShowingPanel={MainMenuManagerPatch.ShowingPanel}", "CalamityButtons");
                     MultiplayerMapIdFix();
                     CalamityVisibility.HideMenuContent();
                     mm.OpenGameModeMenu();
+                    Logger.Info("OpenGameModeMenu returned", "CalamityButtons");
                 }),
 
             (Translator.GetString("MainMenu.Calamity.Settings"),     -0.1f,

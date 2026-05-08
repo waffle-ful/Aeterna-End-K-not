@@ -32,6 +32,19 @@
         <None Remove="CTA\**"/>
     </ItemGroup>
 
+    <!-- BGM audio is NOT embedded into the distributed DLL: those tracks have
+         their own usage terms (DM Dokuro etc.) and must not ship inside the
+         binary. Devs keep the .ogg files on disk under Resources/Sounds/BGM/
+         for local testing; users drop their own files into BepInEx/resources/BGM/. -->
+    <ItemGroup>
+        <EmbeddedResource Remove="Resources/Sounds/BGM/*.ogg"/>
+        <EmbeddedResource Remove="Resources/Sounds/BGM/*.mp3"/>
+        <EmbeddedResource Remove="Resources/Sounds/BGM/*.wav"/>
+        <None Remove="Resources/Sounds/BGM/*.ogg"/>
+        <None Remove="Resources/Sounds/BGM/*.mp3"/>
+        <None Remove="Resources/Sounds/BGM/*.wav"/>
+    </ItemGroup>
+
     <ItemGroup>
 		<PackageReference Include="AmongUs.GameLibs.Steam" Version="2026.3.31" PrivateAssets="all" Condition="'$(Configuration)' == 'Release' Or '$(Configuration)' == 'Debug'" />
         <PackageReference Include="AmongUs.GameLibs.Android" Version="2025.10.14" PrivateAssets="all" Condition="'$(Configuration)' == 'Android'"/>

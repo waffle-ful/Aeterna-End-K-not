@@ -307,6 +307,9 @@ public static class NaturalDisasters
             long now = Utils.TimeStamp;
             int frequency = DisasterFrequency.GetInt();
 
+            if (frequency < 2 && GameStates.CurrentServerType is GameStates.ServerType.Local or GameStates.ServerType.Vanilla)
+                frequency = 2; // Due to rate limits on InnerSloth's servers
+
             if (now - LastDisaster >= frequency)
             {
                 LastDisaster = now;

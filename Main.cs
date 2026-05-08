@@ -38,7 +38,13 @@ namespace EndKnot;
 [SuppressMessage("Interoperability", "CA1416:Validate platform compatibility")]
 public class Main : BasePlugin
 {
-    public const string PluginGuid = "EndKnot";
+    // V4 UUID per Innersloth's Modding Information (https://github.com/Innersloth-LLC/AmongUsModdingInformation):
+    // Mod GUIDs must be V4 UUIDs so the matchmaker can register the lobby as modded
+    // and apply special treatment. Plain identifiers like "EndKnot" trigger anti-cheat
+    // ("Hacking" disconnect ~1s after lobby join) on official servers as of 2026-05-08.
+    // EHR's reverse-domain GUID `com.gurge44.endlesshostroles` appears to be grandfathered
+    // in; a fresh fork needs a fresh UUID.
+    public const string PluginGuid = "cf13a94a-1671-41f1-85a8-3e32770cf09e";
     public const string PluginVersion = "0.1.0";
     public const string PluginDisplayVersion = "0.1.0";
     public const bool TestBuild = false;
