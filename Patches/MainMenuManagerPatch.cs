@@ -125,6 +125,9 @@ public static class MainMenuManagerPatch
                 {
                     BGMManager.SetMenuBGM();
                     MenuBGMStarted = true;
+                    // OGG 同期デコードで実再生まで 2-4 秒掛かる場合があるため、
+                    // 鳴った瞬間から 2.5 秒に張り直して AU の遅延アンビエント再生を潰す。
+                    MenuBGMSilenceUntil = Time.realtimeSinceStartup + 2.5f;
                 }
             }
 

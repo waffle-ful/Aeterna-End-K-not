@@ -79,7 +79,15 @@ public static class EndKnotFeatureBridge
             if (SoundManager.Instance != null)
             {
                 BGMManager.SilenceVanillaAudio();
-                if (!_bgmStarted) { BGMManager.SetMenuBGM(); _bgmStarted = true; }
+                if (!_bgmStarted)
+                {
+                    BGMManager.SetMenuBGM();
+                    _bgmStarted = true;
+                    // OGG 同期デコードで Init から実再生まで 2-4 秒空く。Init 基準の 2.5 秒
+                    // 窓は BGM が鳴る頃に閉じてしまうので、実際に鳴った瞬間から 2.5 秒
+                    // に張り直す。AU が遅れて再アームするアンビエントを確実に潰す。
+                    _bgmSilenceUntil = Time.realtimeSinceStartup + 2.5f;
+                }
             }
 
             if (Time.realtimeSinceStartup >= _bgmSilenceUntil)

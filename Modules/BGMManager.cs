@@ -40,6 +40,11 @@ public static class BGMManager
     {
         try
         {
+            // VanillaSuppressor.Apply は MainMenuManager.Start_Postfix で一度だけ走り、
+            // その瞬間 Ambience GO がまだ生成されてないと永久に無効化されない。
+            // ここで毎フレーム冪等に SetActive(false) を打つことで遅延生成を捕捉する。
+            GameObject.Find("Ambience")?.SetActive(false);
+
             SoundManager sm = SoundManager.Instance;
             if (sm == null) return;
 

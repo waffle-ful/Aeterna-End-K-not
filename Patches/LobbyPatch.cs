@@ -108,6 +108,9 @@ internal static class LobbyBehaviourStartPatch
             {
                 BGMManager.SetLobbyBGM();
                 _bgmStarted = true;
+                // OGG 同期デコードで実再生まで遅延が出る場合に備え、鳴った瞬間から
+                // 2.5 秒に張り直す。AU が遅れて再アームする MapTheme/ambient を潰す。
+                _silenceUntil = Time.realtimeSinceStartup + 2.5f;
             }
         }
 
