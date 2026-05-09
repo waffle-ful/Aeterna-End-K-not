@@ -59,6 +59,8 @@ End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/End
 
 - **[Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles)** (Gurge44 et al.) — base mod, GPL-3.0
 - **[TownOfHost-K](https://github.com/KYMario/TownOfHost-K)** (KYMario et al.) — source of ported roles, GPL-3.0
+- **[SuperNewRoles](https://github.com/SuperNewRoles/SuperNewRoles)** (SuperNewRoles team) — WaveCannon design reference, GPL-3.0
+- **[TownOfHost-Pko](https://github.com/satokazoku/TownOfHost-Pko)** (satokazoku et al.) — WaveCannon design reference, GPL-3.0
 - **[Town Of Host](https://github.com/tukasa0001/TownOfHost)** (tukasa0001 et al.) — root of the TOH lineage, README format reference
 - **[Town Of Host_ForE](https://github.com/AsumuAkaguma/TownOfHost_ForE)** — README structure reference
 

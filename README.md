@@ -59,6 +59,8 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 
 - **[Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles)** (Gurge44 他) — ベース Mod、GPL-3.0
 - **[TownOfHost-K](https://github.com/KYMario/TownOfHost-K)** (KYMario 他) — 移植元役職、GPL-3.0
+- **[SuperNewRoles](https://github.com/SuperNewRoles/SuperNewRoles)** (SuperNewRoles 開発チーム) — 波動砲 (WaveCannon) の設計参考、GPL-3.0
+- **[TownOfHost-Pko](https://github.com/satokazoku/TownOfHost-Pko)** (satokazoku 他) — 波動砲の設計参考、GPL-3.0
 - **[Town Of Host](https://github.com/tukasa0001/TownOfHost)** (tukasa0001 他) — TOH 系列の祖、README フォーマット参考
 - **[Town Of Host_ForE](https://github.com/AsumuAkaguma/TownOfHost_ForE)** — README 構成参考
 
