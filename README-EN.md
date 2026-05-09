@@ -22,7 +22,7 @@ Supported Among Us version: **2026.3.31**
 - **EHR + TOHK role merge** — EHR's full role catalog plus a growing set of roles ported from TOHK and re-implemented on RoleBase
 - **Calamity-themed main menu** *(work in progress)* — A custom Calamity-style title screen
 - **BGM system** — Replaceable background music for menu / lobby / in-task / climax / meeting / result. Default tracks bundled
-- **External communication fully disabled** — Update checks, achievements API, online presets, news fetching, and other upstream EHR network calls are **all disabled**. End K not makes no outbound network requests while running
+- **External communication reduced** — Achievements API, online presets, news fetching, and other upstream EHR network calls are disabled. Exceptions: update checks against this mod's GitHub releases, and gameplay features such as Bard and the anagram command that fetch public data from third-party APIs
 - **GPL-3.0 open source** — Full source available; you may study, modify, and redistribute under GPL-3.0
 
 ## Installation
