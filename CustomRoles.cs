@@ -556,6 +556,7 @@ public enum CustomRoles
     GM,
 
     // ????
+    ForceFielder,
     Convict,
 
 

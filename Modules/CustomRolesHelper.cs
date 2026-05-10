@@ -1627,6 +1627,7 @@ internal static class CustomRolesHelper
                 CustomRoles.ToiletMaster => RoleOptionType.Crewmate_Chaos,
                 CustomRoles.Tornado => RoleOptionType.Crewmate_Chaos,
                 CustomRoles.Tree => RoleOptionType.Crewmate_Chaos,
+                CustomRoles.ForceFielder => RoleOptionType.Crewmate_Chaos,
                 _ => role.IsImpostor() ? RoleOptionType.Impostor_Miscellaneous : RoleOptionType.Neutral_Benign
             };
         }

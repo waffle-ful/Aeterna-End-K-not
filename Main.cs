@@ -692,6 +692,7 @@ public class Main : BasePlugin
                 { CustomRoles.Missioneer, "#b1ae8f" },
                 { CustomRoles.JackalHadouHo, "#00b4eb" },
                 { CustomRoles.Tama, "#00b4eb" },
+                { CustomRoles.ForceFielder, "#4488ff" },
                 { CustomRoles.SantaClaus, "#e05050" },
                 { CustomRoles.MassMedia, "#512513" },
                 // Ghost roles

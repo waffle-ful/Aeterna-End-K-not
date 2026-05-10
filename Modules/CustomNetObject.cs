@@ -509,6 +509,39 @@ namespace EndKnot
         }
     }
 
+    internal sealed class ForceFieldCNO : CustomNetObject
+    {
+        // 8x8 リング（外周青・中央透明）。<size=X%> で半径に応じてスケール。
+        // X = clamp(radius * 40, 30, 300)。radius=3 → 120%。
+        private static string BuildSprite(float radius)
+        {
+            int s = Math.Clamp((int)(radius * 40f), 30, 300);
+            string t = $"<size={s}%><font=\"VCR SDF\"><line-height=67%>";
+            const string B = "<#4488ff>█";
+            const string E = "<alpha=#00>█";
+            t += $"{E}{E}{B}{B}{B}{B}{E}{E}<br>";
+            t += $"{E}{B}{B}{E}{E}{B}{B}{E}<br>";
+            t += $"{B}{B}{E}{E}{E}{E}{B}{B}<br>";
+            t += $"{B}{E}{E}{E}{E}{E}{E}{B}<br>";
+            t += $"{B}{E}{E}{E}{E}{E}{E}{B}<br>";
+            t += $"{B}{B}{E}{E}{E}{E}{B}{B}<br>";
+            t += $"{E}{B}{B}{E}{E}{B}{B}{E}<br>";
+            t += $"{E}{E}{B}{B}{B}{B}{E}{E}<br>";
+            t += "</color></line-height></font></size>";
+            return t;
+        }
+
+        public ForceFieldCNO(Vector2 position, float radius)
+        {
+            CreateNetObject(BuildSprite(radius), position);
+        }
+
+        public override void OnMeeting()
+        {
+            Despawn();
+        }
+    }
+
     internal sealed class PlayerDetector : CustomNetObject
     {
         public PlayerDetector(Vector2 position, List<byte> visibleList, out int id)

@@ -12287,6 +12287,17 @@
   "TamaLoadCooldown": "Tama Load Cooldown",
   "TamaLoaded": "Loaded! Your owner can now fire a super beam.",
 
+  "ForceFielder": "Force Fielder",
+  "ForceFielderInfo": "Toggle a force field that repels nearby players; your speed drops while it's active",
+  "ForceFielderInfoLong": "(<#8cffff>Crewmates</color>):\n<size=80%>Deploy a force field that pushes away anyone who enters it — at the cost of your own speed.\n_____________________________________\nDifficulty: ★★☆☆☆\n\n[Skills]\n・<b><color=#8cffff>Force Field</color></b>\nPet to toggle the force field on or off. While active, any player who enters the field is pushed outward. Your movement speed is reduced while the field is active. The field deactivates automatically at the start of a meeting.\n\n<i>Back off.</i></size>",
+  "ForceFielder.FieldRadius": "Field Radius",
+  "ForceFielder.SpeedMultiplier": "Speed Multiplier While Active",
+  "ForceFielder.PropelForce": "Propel Force",
+  "ForceFielder.ActivationCooldown": "Activation Cooldown",
+  "ForceFielder.FieldOn": "Force Field: ON",
+  "ForceFielder.FieldOff": "Force Field: OFF",
+  "ForceFielder.Cooldown": "Force Field is on cooldown",
+
   "SantaClaus": "SantaClaus",
   "SantaClausInfo": "Complete tasks to gather presents, then enter the chimney vent to deliver them; reach the delivery target to win",
   "SantaClausInfoLong": "(<#ffab1b>Neutrals</color>):\n<size=80%>Gather presents through tasks and deliver them via the chimney vent — spread enough gifts to win.\n_____________________________________\nDifficulty: ★★☆☆☆\n\n[Skills]\n・<b><color=#ffab1b>Present Delivery</color></b>\nComplete tasks to collect presents (one per task). A random vent is marked as the chimney — enter it while holding a present to deliver. Each delivery grants a random alive player an add-on, and the chimney moves to a new vent afterward.\n\n[Win Condition]\nDeliver the required number of presents. With Add-Win Mode on, you win alongside whoever wins instead of winning outright.\n\n<i>Spreading joy, one delivery at a time.</i></size>",
