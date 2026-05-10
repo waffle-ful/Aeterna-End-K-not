@@ -10,7 +10,7 @@ namespace EndKnot.Roles;
 
 public class Akazukin : RoleBase
 {
-    private const int Id = 703500;
+    private const int Id = 703760;
     public static List<byte> PlayerIdList = [];
     public static Dictionary<byte, AkazukinState> PseudoDead = [];
 
