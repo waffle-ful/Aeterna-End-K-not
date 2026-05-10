@@ -998,7 +998,12 @@ internal static class StartGameHostPatch
                 Spurt.Add();
                 Allergic.Init();
                 Lovers.Init();
+                EndKnot.Roles.Stack.Apply();
+                Twins.Init();
+                LastNeutral.Init();
+                SlowStarter.Init();
                 LateTask.New(Tired.Reset, 7f, log: false);
+                LateTask.New(OneWolf.ApplyDesync, 1.5f, log: false);
             }
             catch (Exception e) { Utils.ThrowException(e); }
 

@@ -676,5 +676,24 @@ public enum CustomRoles
     Warden, // Ghost role
     Watcher,
     Workhorse,
-    Youtuber
+    Youtuber,
+    Water,
+    Notvoter,
+    Elector,
+    Transparent,
+    Moon,
+    MagicHand,
+    Serial,
+    Opener,
+    NonReport,
+    InfoPoor,
+    News,
+    SlowStarter,
+    Amanojaku,
+    Connecting,
+    OneWolf,
+    Twins,
+    Faction,
+    LastNeutral,
+    Stack
 }

@@ -182,6 +182,7 @@ internal static class CheckForEndVotingPatch
                 if (ps.VotedFor.GetPlayer() != null && CheckRole(ps.VotedFor, CustomRoles.Zombie)) canVote = false;
                 if (Poache.PoachedPlayers.Contains(ps.TargetPlayerId)) canVote = false;
                 if (Silencer.ForSilencer.Contains(ps.TargetPlayerId) && Main.AllAlivePlayerControls.Count > Silencer.MaxPlayersAliveForSilencedToVote.GetInt()) canVote = false;
+                if (CheckRole(ps.TargetPlayerId, CustomRoles.Notvoter)) canVote = false;
 
                 switch (Main.PlayerStates[ps.TargetPlayerId].Role)
                 {
@@ -651,6 +652,7 @@ internal static class ExtendedMeetingHud
 
                 if (Poache.PoachedPlayers.Contains(ps.TargetPlayerId)) voteNum = 0;
                 if (Silencer.ForSilencer.Contains(ps.TargetPlayerId) && Main.AllAlivePlayerControls.Count > Silencer.MaxPlayersAliveForSilencedToVote.GetInt()) voteNum = 0;
+                if (CheckForEndVotingPatch.CheckRole(ps.TargetPlayerId, CustomRoles.Notvoter)) voteNum = 0;
 
                 if (CheckForEndVotingPatch.CheckRole(ps.TargetPlayerId, CustomRoles.Magistrate) && Magistrate.CallCourtNextMeeting) voteNum += Magistrate.ExtraVotes.GetInt();
                 if (CheckForEndVotingPatch.CheckRole(ps.TargetPlayerId, CustomRoles.Knighted)) voteNum += 1;
@@ -854,6 +856,14 @@ internal static class MeetingHudStartPatch
         Virus.VirusNotify.Clear();
         Mortician.MsgToSend.Clear();
         Enigma.MsgToSend.Clear();
+
+        if (CustomRoles.News.IsEnable())
+        {
+            string newsBroadcast = News.BuildBroadcast();
+            if (!string.IsNullOrEmpty(newsBroadcast))
+                AddMsg(newsBroadcast, 255, Utils.ColorString(Utils.GetRoleColor(CustomRoles.News), GetString("News.BroadcastTitle")));
+        }
+
         return;
 
         void AddMsg(string text, byte sendTo = 255, string title = "") => msgToSend.Add(new(text, sendTo, title));
@@ -868,6 +878,7 @@ internal static class MeetingHudStartPatch
         MeetingStates.MeetingNum++;
         CheckForEndVotingPatch.TempExiledPlayer = null;
         CheckForEndVotingPatch.EjectionText = string.Empty;
+        SlowStarter.OnMeetingStart();
     }
 
     public static void Postfix(MeetingHud __instance)
@@ -1420,6 +1431,14 @@ internal static class MeetingHudCastVotePatch
         if (!pcSrc.IsAlive())
         {
             ShouldCancelVoteList.TryAdd(srcPlayerId, (__instance, pvaSrc, pcSrc));
+            return false;
+        }
+
+        if (skip && pcSrc.Is(CustomRoles.Elector))
+        {
+            ShouldCancelVoteList.TryAdd(srcPlayerId, (__instance, pvaSrc, pcSrc));
+            Utils.SendMessage(Translator.GetString("ElectorCancelMessage"), srcPlayerId);
+            Logger.Info($"{pcSrc.GetNameWithRole()} skip vote blocked by Elector", "Vote");
             return false;
         }
 

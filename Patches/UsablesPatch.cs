@@ -43,6 +43,36 @@ internal static class EmergencyMinigamePatch
     }
 }
 
+[HarmonyPatch(typeof(VitalsMinigame), nameof(VitalsMinigame.Begin))]
+internal static class VitalsMinigameBeginInfoPoorPatch
+{
+    public static bool Prefix(VitalsMinigame __instance)
+    {
+        if (PlayerControl.LocalPlayer.Is(CustomRoles.InfoPoor))
+        {
+            __instance.Close();
+            return false;
+        }
+
+        return true;
+    }
+}
+
+[HarmonyPatch(typeof(SurveillanceMinigame), nameof(SurveillanceMinigame.Begin))]
+internal static class SurveillanceMinigameBeginInfoPoorPatch
+{
+    public static bool Prefix(SurveillanceMinigame __instance)
+    {
+        if (PlayerControl.LocalPlayer.Is(CustomRoles.InfoPoor))
+        {
+            __instance.Close();
+            return false;
+        }
+
+        return true;
+    }
+}
+
 [HarmonyPatch(typeof(Vent), nameof(Vent.CanUse))]
 internal static class CanUseVentPatch
 {

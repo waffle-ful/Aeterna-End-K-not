@@ -256,6 +256,12 @@ internal static class GameEndChecker
                             AdditionalWinnerTeams.Add((AdditionalWinners)role);
                             break;
                     }
+
+                    if (pc.Is(CustomRoles.Amanojaku) && Amanojaku.ShouldWin(pc, reason))
+                    {
+                        WinnerIds.Add(pc.PlayerId);
+                        AdditionalWinnerTeams.Add(AdditionalWinners.Amanojaku);
+                    }
                 }
 
                 foreach (PlayerControl pc in Main.EnumeratePlayerControls()) // Second loop for roles depending on other winners
@@ -273,7 +279,23 @@ internal static class GameEndChecker
                             AdditionalWinnerTeams.Add((AdditionalWinners)role);
                             break;
                     }
+
+                    // Twins ride-along win
+                    if (Twins.AddWin.GetBool() && pc.Is(CustomRoles.Twins) && Twins.Pairs.TryGetValue(pc.PlayerId, out byte partner) && WinnerIds.Contains(partner) && !WinnerIds.Contains(pc.PlayerId))
+                    {
+                        WinnerIds.Add(pc.PlayerId);
+                        AdditionalWinnerTeams.Add(AdditionalWinners.Twins);
+                    }
+
+                    // LastNeutral opportunist-style add-win
+                    if (pc.Is(CustomRoles.LastNeutral) && LastNeutral.GiveOpportunist.GetBool() && pc.IsAlive() && !Main.LoversPlayers.Exists(x => x.PlayerId == pc.PlayerId) && !WinnerIds.Contains(pc.PlayerId))
+                    {
+                        WinnerIds.Add(pc.PlayerId);
+                        AdditionalWinnerTeams.Add(AdditionalWinners.LastNeutral);
+                    }
                 }
+
+                Faction.OnGameEnd();
 
                 if (WinnerTeam == CustomWinner.Impostor)
                 {

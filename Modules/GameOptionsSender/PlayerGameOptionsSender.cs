@@ -335,6 +335,17 @@ public sealed class PlayerGameOptionsSender(PlayerControl player) : GameOptionsS
 
                                 break;
                             }
+                            case CustomRoles.Moon when Utils.IsActive(SystemTypes.Electrical):
+                            {
+                                opt.SetFloat(FloatOptionNames.CrewLightMod, Main.DefaultCrewmateVision * 5);
+                                opt.SetFloat(FloatOptionNames.ImpostorLightMod, Main.DefaultImpostorVision);
+                                break;
+                            }
+                            case CustomRoles.MagicHand:
+                            {
+                                opt.SetInt(Int32OptionNames.KillDistance, MagicHand.KillDistance.GetInt());
+                                break;
+                            }
                             case CustomRoles.Bewilder when !Utils.IsActive(SystemTypes.Electrical):
                             {
                                 opt.SetVision(false);

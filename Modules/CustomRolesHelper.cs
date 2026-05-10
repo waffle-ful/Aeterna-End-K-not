@@ -2096,6 +2096,31 @@ internal static class CustomRolesHelper
             CustomRoles.DoubleShot when !pc.Is(CustomRoles.Guesser) && !pc.Is(CustomRoles.NiceGuesser) && pc.Is(CustomRoleTypes.Crewmate) && !Options.CrewmatesCanGuess.GetBool() => false,
             CustomRoles.DoubleShot when !pc.Is(CustomRoles.Guesser) && ((pc.GetCustomRole().IsNonNK() && !Options.PassiveNeutralsCanGuess.GetBool()) || (pc.IsNeutralKiller() && !Options.NeutralKillersCanGuess.GetBool())) => false,
             CustomRoles.DoubleShot when !pc.Is(CustomRoles.Guesser) && !pc.Is(CustomRoles.Augur) && pc.Is(CustomRoleTypes.Coven) && !Options.CovenCanGuess.GetBool() => false,
+            // TOHK migration addons (Batch 1-5)
+            CustomRoles.Water when pc.Is(CustomRoles.Moon) => false,
+            CustomRoles.Moon when pc.Is(CustomRoles.Water) => false,
+            CustomRoles.Moon when pc.Is(CustomRoles.Sleep) => false,
+            CustomRoles.Notvoter when pc.Is(CustomRoles.Tiebreaker) || pc.Is(CustomRoles.Dictator) || pc.Is(CustomRoles.Elector) => false,
+            CustomRoles.Elector when pc.Is(CustomRoles.Notvoter) || pc.Is(CustomRoles.Dictator) => false,
+            CustomRoles.Transparent when pc.Is(CustomRoles.Bait) || pc.Is(CustomRoles.Disregarded) || pc.Is(CustomRoles.Beartrap) || pc.Is(CustomRoles.Hidden) => false,
+            CustomRoles.NonReport when pc.Is(CustomRoles.Bait) || pc.Is(CustomRoles.Oblivious) => false,
+            CustomRoles.InfoPoor when pc.Is(CustomRoles.Sleuth) => false,
+            CustomRoles.Connecting when pc.Is(CustomRoles.Lovers) || pc.Is(CustomRoles.Romantic) => false,
+            CustomRoles.MagicHand when pc.Is(CustomRoles.Reach) || pc.Is(CustomRoles.Constricted) => false,
+            CustomRoles.Reach when pc.Is(CustomRoles.MagicHand) => false,
+            CustomRoles.Constricted when pc.Is(CustomRoles.MagicHand) => false,
+            CustomRoles.Serial when pc.Is(CustomRoles.Mare) || pc.Is(CustomRoles.Bloodlust) || pc.Is(CustomRoles.Tired) => false,
+            CustomRoles.Amanojaku when pc.Is(CustomRoles.Lovers) || pc.Is(CustomRoles.Romantic) => false,
+            CustomRoles.SlowStarter when pc.Is(CustomRoles.LastImpostor) || pc.Is(CustomRoles.Tired) => false,
+            CustomRoles.News when pc.Is(CustomRoles.Hidden) => false,
+            // Batch 6
+            CustomRoles.OneWolf when !pc.IsImpostor() => false,
+            CustomRoles.OneWolf when pc.Is(CustomRoles.Egoist) => false,
+            CustomRoles.Twins when pc.Is(CustomRoles.Lovers) || pc.Is(CustomRoles.Romantic) || pc.IsImpostor() || pc.GetCustomRole().IsNK() => false,
+            CustomRoles.Faction when pc.IsCrewmate() || pc.IsImpostor() => false,
+            CustomRoles.Faction when pc.Is(CustomRoles.Lovers) => false,
+            CustomRoles.LastNeutral when !pc.GetCustomRole().IsNeutral() => false,
+            CustomRoles.LastNeutral when pc.Is(CustomRoles.Lovers) => false,
             _ => true
         };
     }

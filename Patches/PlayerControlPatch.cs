@@ -196,6 +196,13 @@ internal static class CheckMurderPatch
 
             killer.ResetKillCooldown(false);
 
+            if (killer.Is(CustomRoles.SlowStarter) && !SlowStarter.CanKill())
+            {
+                killer.Notify(Translator.GetString("SlowStarterCannotKill"));
+                Logger.Info(killer.GetNameWithRole().RemoveHtmlTags() + " is SlowStarter and cannot kill yet", "CheckMurder");
+                return false;
+            }
+
             if (killer.PlayerId != target.PlayerId && !killer.CanUseKillButton())
             {
                 Logger.Info(killer.GetNameWithRole().RemoveHtmlTags() + " cannot use their kill button, the kill was blocked", "CheckMurder");
@@ -1078,6 +1085,12 @@ internal static class ReportDeadBodyPatch
                     return false;
                 }
 
+                if (__instance.Is(CustomRoles.NonReport) && NonReport.BlocksButton)
+                {
+                    Notify("NonReportCannotUseButton");
+                    return false;
+                }
+
                 if (__instance.Is(CustomRoles.Swapper) && !Swapper.CanStartMeeting.GetBool())
                 {
                     Notify("SwapperCannotCallEmergencyMeeting");
@@ -1166,6 +1179,18 @@ internal static class ReportDeadBodyPatch
                 if (tpc.Is(CustomRoles.Disregarded))
                 {
                     Notify("TargetDisregarded");
+                    return false;
+                }
+
+                if (tpc.Is(CustomRoles.Transparent))
+                {
+                    Notify("TargetTransparent");
+                    return false;
+                }
+
+                if (__instance.Is(CustomRoles.NonReport) && NonReport.BlocksReport)
+                {
+                    Notify("NonReportCannotReport");
                     return false;
                 }
 
@@ -1641,6 +1666,7 @@ internal static class FixedUpdatePatch
             {
                 NameNotifyManager.OnFixedUpdate();
                 LastImpostor.SetSubRole();
+                LastNeutral.SetSubRole();
             }
         }
 

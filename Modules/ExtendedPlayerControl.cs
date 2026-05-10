@@ -1775,6 +1775,8 @@ internal static class ExtendedPlayerControl
 
             if (player.Is(CustomRoles.Bloodlust)) Main.AllPlayerKillCooldown[player.PlayerId] = Bloodlust.KCD.GetFloat();
 
+            if (player.Is(CustomRoles.Serial)) Main.AllPlayerKillCooldown[player.PlayerId] = Serial.KillCooldown.GetFloat();
+
             if (Main.KilledDiseased.TryGetValue(player.PlayerId, out int value))
             {
                 Main.AllPlayerKillCooldown[player.PlayerId] += value * Options.DiseasedCDOpt.GetFloat();

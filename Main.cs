@@ -814,6 +814,25 @@ public class Main : BasePlugin
                 { CustomRoles.Swift, "#ff1919" },
                 { CustomRoles.Mare, "#ff1919" },
                 { CustomRoles.Underdog, "#ff1919" },
+                { CustomRoles.Water, "#3399ff" },
+                { CustomRoles.Notvoter, "#6c848d" },
+                { CustomRoles.Elector, "#544a47" },
+                { CustomRoles.Transparent, "#7b7c7d" },
+                { CustomRoles.Moon, "#ffff33" },
+                { CustomRoles.MagicHand, "#dea785" },
+                { CustomRoles.Serial, "#ff1919" },
+                { CustomRoles.Opener, "#007bbb" },
+                { CustomRoles.NonReport, "#006666" },
+                { CustomRoles.InfoPoor, "#555647" },
+                { CustomRoles.News, "#88ddff" },
+                { CustomRoles.SlowStarter, "#ffaa66" },
+                { CustomRoles.Amanojaku, "#ff66cc" },
+                { CustomRoles.Connecting, "#96514d" },
+                { CustomRoles.OneWolf, "#ff5050" },
+                { CustomRoles.Twins, "#aaffaa" },
+                { CustomRoles.Faction, "#cc66ff" },
+                { CustomRoles.LastNeutral, "#999999" },
+                { CustomRoles.Stack, "#b55f47" },
 
                 // Solo PVP
                 { CustomRoles.Challenger, "#f55252" },
@@ -1261,7 +1280,11 @@ public enum AdditionalWinners
     Turncoat = CustomRoles.Turncoat,
     Missioneer = CustomRoles.Missioneer,
     SantaClaus = CustomRoles.SantaClaus,
-    MassMedia = CustomRoles.MassMedia
+    MassMedia = CustomRoles.MassMedia,
+    Amanojaku = CustomRoles.Amanojaku,
+    Twins = CustomRoles.Twins,
+    Faction = CustomRoles.Faction,
+    LastNeutral = CustomRoles.LastNeutral
 }
 
 public enum SuffixModes
