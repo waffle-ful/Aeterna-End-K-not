@@ -363,6 +363,7 @@
   "Akazukin_DisplayDeathReasonInName": "名前に死因を表示する",
   "Akazukin_CanReviveAfterMeeting": "会議でキラーが追放されたら復活する",
   "Akazukin_ReviveAtOriginalPosition": "倒れた場所に復活する",
+  "Akazukin_CannotVotePseudoDead": "擬似死亡中は投票できない。裁きの帰還を待つしかない。",
   "Aid": "エイド",
   "AidInfo": "一時的に プレイヤーを保護する",
   "AidInfoLong": "(<#8cffff>クルーメイト</color>):\n<size=80%>見えない盾で、仲間を守る。\n_____________________________________\n難易度：★★★☆☆\n\n[スキル]\n・<b><color=#8cffff>一時的シールド</color></b>\nキルボタンでターゲットをマークし、通気口でシールドを発動。一定時間、直接攻撃からターゲットを守る。シールド中は自分・ターゲットどちらも通知されない（設定依存）。\n\n<i>最強の盾は、見えないところにある。</i></size>",
@@ -12334,7 +12335,7 @@
   "MassMediaChance": "ターゲットをキルした犯人に投票しよう。外せば自分が死亡。",
   "MassMediaGuessCanceled": "推理をキャンセルしました。",
   "MassMediaGuessCorrect": "正解！スクープを世に放った！",
-  "MassMediaGuessWrong": "外れ……記事は崩れ去った。"
+  "MassMediaGuessWrong": "外れ……記事は崩れ去った。",
   "EightballCommandIndexes": "/8ballコマンドの応答数（カスタム翻訳ファイルを使って追加の応答をインポートできます。これらの応答は以下の既存の応答に追加されます）",
   "EnableImpostorChat": "インポスター陣営チャットを有効化（/ic）",
   "EnableJackalChat": "ジャッカル陣営チャットを有効化（/jc）",

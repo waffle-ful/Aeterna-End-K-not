@@ -1947,6 +1947,9 @@ internal static class ExtendedPlayerControl
                 case false when !player.Is(CustomRoles.Pestilence) && Main.PlayerStates[target.PlayerId].Role is SchrodingersCat cat:
                     cat.OnCheckMurderAsTarget(player, target);
                     return;
+                case false when Main.PlayerStates[target.PlayerId].Role is Akazukin akazukin:
+                    akazukin.OnCheckMurderAsTarget(player, target);
+                    return;
                 default:
                     DoKill();
                     break;
@@ -2116,6 +2119,8 @@ internal static class ExtendedPlayerControl
 
         public bool KnowDeathReason(PlayerControl target)
         {
+            if (target == null) return false;
+            if (Akazukin.ShouldDisplayDeathReason(target.PlayerId)) return true;
             return (player.Is(CustomRoles.Doctor)
                     || player.Is(CustomRoles.Autopsy)
                     || Options.EveryoneSeesDeathReasons.GetBool()

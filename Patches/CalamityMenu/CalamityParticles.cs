@@ -42,9 +42,9 @@ public static class CalamityParticles
         Active.Clear();
 
         // Pre-spawn all particles at random positions so the screen isn't empty at start
-        for (int i = 0; i < 30; i++) SpawnFirefly(randomY: true);
-        for (int i = 0; i < 20; i++) SpawnAsh(randomY: true);
-        for (int i = 0; i < 5;  i++) SpawnGlow(randomY: true);
+        for (int i = 0; i < 70; i++) SpawnFirefly(randomY: true);
+        for (int i = 0; i < 35; i++) SpawnAsh(randomY: true);
+        for (int i = 0; i < 12; i++) SpawnGlow(randomY: true);
     }
 
     public static void UpdateAll(float dt)
@@ -60,8 +60,9 @@ public static class CalamityParticles
 
             if (p.life <= 0f)
             {
-                Object.Destroy(p.go);
-                Active.RemoveAt(i);
+                // respawn instead of destroy so particles persist indefinitely
+                if (p.vel.y >= 0f) RespawnAtBottom(i);
+                else RespawnAtTop(i);
                 continue;
             }
 
@@ -76,7 +77,7 @@ public static class CalamityParticles
             float t = (Mathf.Sin(Time.time * p.breathSpeed + p.phase) + 1f) * 0.5f;
             float lifeRatio = p.life / p.maxLife;
             float fade = lifeRatio < 0.15f ? lifeRatio / 0.15f : 1f; // fade out near end
-            float alpha = Mathf.Lerp(0.2f, 0.75f, t) * fade;
+            float alpha = Mathf.Lerp(0.35f, 1.0f, t) * fade;
             p.sr.color = new Color(p.baseColor.r, p.baseColor.g, p.baseColor.b, alpha);
 
             p.go.transform.localPosition = p.pos;

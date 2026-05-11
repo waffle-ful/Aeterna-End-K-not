@@ -69,6 +69,9 @@ public class Akazukin : RoleBase
 
     public static bool IsPseudoDead(byte id) => PseudoDead.ContainsKey(id);
 
+    public static bool ShouldDisplayDeathReason(byte id)
+        => PseudoDead.ContainsKey(id) && DisplayDeathReasonInName != null && DisplayDeathReasonInName.GetBool();
+
     public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
     {
         if (killer == null || target == null) return true;
@@ -239,7 +242,9 @@ public class Akazukin : RoleBase
 
     public override bool OnVote(PlayerControl voter, PlayerControl target)
     {
-        return voter != null && PseudoDead.ContainsKey(voter.PlayerId);
+        if (voter == null || !PseudoDead.ContainsKey(voter.PlayerId)) return false;
+        Utils.SendMessage(Translator.GetString("Akazukin_CannotVotePseudoDead"), voter.PlayerId);
+        return true;
     }
 
     public override bool OnVanish(PlayerControl pc)
@@ -250,13 +255,6 @@ public class Akazukin : RoleBase
     public override bool OnShapeshift(PlayerControl shapeshifter, PlayerControl target, bool shapeshifting)
     {
         return !PseudoDead.ContainsKey(shapeshifter.PlayerId);
-    }
-
-    public override string GetSuffix(PlayerControl seer, PlayerControl target, bool hud = false, bool meeting = false)
-    {
-        if (target == null || !PseudoDead.TryGetValue(target.PlayerId, out var state)) return string.Empty;
-        if (DisplayDeathReasonInName == null || !DisplayDeathReasonInName.GetBool()) return string.Empty;
-        return Utils.ColorString(Color.gray, $"\n[{Translator.GetString($"DeathReason.{state.DeathReason}")}]");
     }
 
     public override bool KnowRole(PlayerControl seer, PlayerControl target)

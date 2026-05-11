@@ -597,7 +597,8 @@ public static class Utils
     public static string GetVitalText(byte playerId, bool realKillerColor = false)
     {
         PlayerState state = Main.PlayerStates[playerId];
-        string deathReason = state.IsDead ? GetString("DeathReason." + state.deathReason) : GetString("Alive");
+        bool considerDead = state.IsDead || Akazukin.IsPseudoDead(playerId);
+        string deathReason = considerDead ? GetString("DeathReason." + state.deathReason) : GetString("Alive");
 
         if (realKillerColor)
         {

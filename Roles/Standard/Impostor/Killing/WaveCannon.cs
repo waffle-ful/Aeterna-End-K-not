@@ -398,5 +398,6 @@ public class WaveCannon : RoleBase
         AURoleOptions.PhantomCooldown =
             ChargeDuration.GetFloat() + WarningDuration.GetFloat() + FiringDuration.GetFloat()
             + AbilityCooldown.GetFloat();
+        Logger.Info($"id={playerId} ability={AbilityCooldown.GetFloat()} charge={ChargeDuration.GetFloat()} warn={WarningDuration.GetFloat()} fire={FiringDuration.GetFloat()} → PhantomCD={AURoleOptions.PhantomCooldown}", "WaveCannon.ApplyGameOptions");
     }
 }

@@ -1264,19 +1264,11 @@ internal static class ReportDeadBodyPatch
             Main.GameTimer.Stop();
 
         var allCNO = CustomNetObject.AllObjects.ToArray();
-        
-        foreach (CustomNetObject cno in allCNO)
-        {
-            try
-            {
-                MessageWriter writer = AmongUsClient.Instance.StartRpcImmediately(cno.playerControl.NetId, (byte)RpcCalls.Shapeshift, SendOption.Reliable);
-                writer.WriteNetObject(cno.playerControl);
-                writer.Write(false);
-                AmongUsClient.Instance.FinishRpcImmediately(writer);
-            }
-            catch (Exception e) { ThrowException(e); }
-        }
-        
+
+        // CNO Shapeshift reset loop removed: AU 2026 anti-cheat kicks host as "Hacking"
+        // when sending Shapeshift RPC for a non-Shapeshifter NetId (CNO PlayerControl).
+        // The LateTask below despawns CNOs, which fully cleans up their visual state.
+
         LateTask.New(() =>
         {
             foreach (CustomNetObject cno in allCNO)

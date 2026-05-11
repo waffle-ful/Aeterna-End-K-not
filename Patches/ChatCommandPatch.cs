@@ -129,6 +129,20 @@ internal static class ChatCommands
 
     private static long LastSetNameInLobby;
 
+    // バレたら致命的なコマンドは /cmd を付け忘れても自動でステルス扱い
+    // AlwaysHidden=true のものは元々警告対象なので暗黙的に含める
+    private static readonly HashSet<string> AutoHiddenCommandKeys =
+    [
+        "ImpostorChat", "JackalChat", "LoversChat", "Guess"
+    ];
+
+    private static bool ShouldAutoHide(string text)
+    {
+        string head = text.ToLower().TrimStart('/').Split(' ')[0];
+        Command match = Command.AllCommands.Find(c => c.CommandForms.Contains(head));
+        return match != null && (match.AlwaysHidden || AutoHiddenCommandKeys.Contains(match.Key));
+    }
+
     public static void LoadCommands()
     {
         Command.AllCommands =
@@ -424,8 +438,9 @@ internal static class ChatCommands
         if (text.StartsWith('/'))
         {
             Utils.CheckServerCommand(ref text, out bool spamRequired);
+            if (spamRequired && ShouldAutoHide(text)) spamRequired = false;
             string[] args = text.Split(' ');
-            
+
             foreach (Command command in Command.AllCommands)
             {
                 if (!command.IsThisCommand(text)) continue;
@@ -3475,8 +3490,9 @@ internal static class ChatCommands
         if (text.StartsWith('/') && !player.IsModdedClient() && (!GameStates.IsMeeting || MeetingHud.Instance.state is not MeetingHud.VoteStates.Results and not MeetingHud.VoteStates.Proceeding))
         {
             Utils.CheckServerCommand(ref text, out bool spamRequired);
+            if (spamRequired && ShouldAutoHide(text)) spamRequired = false;
             string[] args = text.Split(' ');
-            
+
             foreach (Command command in Command.AllCommands)
             {
                 if (!command.IsThisCommand(text)) continue;
@@ -3492,7 +3508,7 @@ internal static class ChatCommands
 
                 if (command.AlwaysHidden && spamRequired) Utils.SendMessage("\n", player.PlayerId, GetString("NoSpamAnymoreUseCmd"));
                 command.Action(player, text, args);
-                if (command.IsCanceled) canceled = command.AlwaysHidden || !Options.HostSeesCommandsEnteredByOthers.GetBool();
+                if (command.IsCanceled) canceled = command.AlwaysHidden || !spamRequired || !Options.HostSeesCommandsEnteredByOthers.GetBool() || command.Key is "ImpostorChat" or "JackalChat" or "LoversChat";
                 break;
             }
         }
@@ -3560,7 +3576,7 @@ internal static class ChatCommands
         foreach (PlayerControl pc in Main.EnumeratePlayerControls())
         {
             if (pc.IsAlive() && !isInFaction(pc)) continue;
-            Utils.SendMessage(body, pc.PlayerId, title, multiple: true);
+            Utils.SendMessage(body, pc.PlayerId, title);
         }
     }
 

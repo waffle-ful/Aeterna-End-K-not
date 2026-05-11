@@ -363,6 +363,7 @@
   "Akazukin_DisplayDeathReasonInName": "Display Death Reason in Name",
   "Akazukin_CanReviveAfterMeeting": "Revive When Killer is Voted Out",
   "Akazukin_ReviveAtOriginalPosition": "Revive at the Place You Fell",
+  "Akazukin_CannotVotePseudoDead": "You cannot vote while pseudo-dead. Await the judgement's return.",
   "Aid": "Aid",
   "AidInfo": "Protect players temporarily",
   "AidInfoLong": "(<#8cffff>Crewmates</color>):\n<size=80%>Mark a target, then vent to shield them before it's too late.\n_____________________________________\nDifficulty: ★★☆☆☆\n\n[Skills]\n・<b><color=#8cffff>Protective Shield</color></b>\nUse your kill button to mark a target, then vent to activate their shield. The shield blocks direct attacks. Neither you nor your target will know if an attack was attempted.\n\n<i>Protection is most powerful when it goes unnoticed.</i></size>",
