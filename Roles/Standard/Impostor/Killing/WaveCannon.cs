@@ -143,9 +143,8 @@ public class WaveCannon : RoleBase
         if (Camouflage.PlayerSkins.TryGetValue(id, out var original))
         {
             OriginalOutfit = original;
-            int chargeColor = original.ColorId == 5 ? 4 : 5;
             var chargeOutfit = new NetworkedPlayerInfo.PlayerOutfit()
-                .Set(original.PlayerName, chargeColor, "", "", "", "", "");
+                .Set(original.PlayerName, original.ColorId, "", "skin_rhm", "", "", "");
             Camouflage.PlayerSkins[id] = chargeOutfit;
             Camouflage.BlockCamouflage = true;
             if (!Camouflage.IsCamouflage)

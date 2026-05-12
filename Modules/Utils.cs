@@ -3765,6 +3765,7 @@ public static class Utils
             CustomRoles.EvilMaker => EvilMaker.AbilityCooldown.GetInt(),
             CustomRoles.ToiletFan => (int)ToiletFan.Cooldown.GetFloat(),
             CustomRoles.UltraStar => (int)UltraStar.PetCooldownOpt.GetFloat(),
+            CustomRoles.Sandbox => (int)Sandbox.PlaceCooldown.GetFloat(),
             _ => -1
         };
 
@@ -3898,6 +3899,7 @@ public static class Utils
             Deadlined.AfterMeetingTasks();
             Blessed.AfterMeetingTasks();
             Amnesia.AfterMeetingTasks();
+            Sandbox.OnAfterMeetingTasks();
             Tired.Reset();
         }
         catch (Exception e) { ThrowException(e); }

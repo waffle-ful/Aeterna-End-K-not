@@ -45,6 +45,7 @@ internal static class CustomRolesHelper
         CustomRoles.ToiletFan,
         CustomRoles.UltraStar,
         CustomRoles.WaveCannon,
+        CustomRoles.Sandbox,
 
         // Add-ons
         CustomRoles.Energetic,
@@ -906,7 +907,8 @@ internal static class CustomRolesHelper
                 CustomRoles.Fakeshifter or
                 CustomRoles.WaveCannon or
                 CustomRoles.Perplexer or
-                CustomRoles.DummySpawner;
+                CustomRoles.DummySpawner or
+                CustomRoles.Skinwalker;
         }
 
         public bool IsNeutral(bool check = false)
@@ -1387,6 +1389,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Occultist => RoleOptionType.Impostor_Support,
                 CustomRoles.Perplexer => RoleOptionType.Impostor_Support,
                 CustomRoles.Silencer => RoleOptionType.Impostor_Support,
+                CustomRoles.Skinwalker => RoleOptionType.Impostor_Support,
                 CustomRoles.Swapster => RoleOptionType.Impostor_Support,
                 CustomRoles.TimeThief => RoleOptionType.Impostor_Support,
                 CustomRoles.Twister => RoleOptionType.Impostor_Support,
@@ -1630,6 +1633,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Tornado => RoleOptionType.Crewmate_Chaos,
                 CustomRoles.Tree => RoleOptionType.Crewmate_Chaos,
                 CustomRoles.ForceFielder => RoleOptionType.Crewmate_Chaos,
+                CustomRoles.Sandbox => RoleOptionType.Crewmate_Chaos,
                 _ => role.IsImpostor() ? RoleOptionType.Impostor_Miscellaneous : RoleOptionType.Neutral_Benign
             };
         }

@@ -1192,7 +1192,31 @@ internal static class MeetingHudStartPatch
         Ventriloquist.StartMeetingPatch.Postfix(__instance);
         ShowHostMeetingPatch.Setup_Postfix(__instance);
         Crowded.MeetingHudStartPatch.Postfix(__instance);
-        
+
+        ChaosPotSupport.BuildRoleListFromCurrentGame();
+        if (ChaosPotSupport.Enable.GetBool() && Options.CurrentGameMode == CustomGameMode.Standard)
+        {
+            string meetingText = ChaosPotSupport.GetMeetingScreenText();
+            if (!string.IsNullOrEmpty(meetingText) && __instance.playerStates.Length > 0)
+            {
+                PlayerVoteArea anchor = __instance.playerStates[0];
+                TextMeshPro chaosPotInfo = Object.Instantiate(anchor.NameText, anchor.PlayerIcon.transform, true);
+                chaosPotInfo.gameObject.SetActive(false);
+                chaosPotInfo.gameObject.name = "ChaosPotInfo";
+                chaosPotInfo.transform.localPosition = new(3.13f, 1.71f, 0f);
+                chaosPotInfo.transform.localScale = Vector3.one;
+                chaosPotInfo.fontSize = 1.5f;
+                chaosPotInfo.alignment = TextAlignmentOptions.TopLeft;
+                chaosPotInfo.enableWordWrapping = false;
+                chaosPotInfo.color = Color.white;
+                chaosPotInfo.text = meetingText;
+                chaosPotInfo.ForceMeshUpdate();
+                chaosPotInfo.gameObject.SetActive(true);
+            }
+
+            LateTask.New(ChaosPotSupport.SendChatBroadcastOnMeetingStart, 9f, "ChaosPotSupport Chat");
+        }
+
         TextBoxPatch.OnMeetingStart();
     }
 }

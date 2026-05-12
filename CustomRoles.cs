@@ -289,6 +289,7 @@ public enum CustomRoles
     Rhapsode,
     Ricochet,
     Safeguard,
+    Sandbox,
     Scanner,
     Scout,
     SecurityGuard,
@@ -558,11 +559,12 @@ public enum CustomRoles
     // ????
     ForceFielder,
     Akazukin,
+    Skinwalker,
     Convict,
 
 
-    // Sub-role after 500
-    NotAssigned = 500,
+    // Sub-role after 1000 (buffer reserved for ~500 future main roles)
+    NotAssigned = 1000,
     Absorber,
     Aide,
     Allergic,

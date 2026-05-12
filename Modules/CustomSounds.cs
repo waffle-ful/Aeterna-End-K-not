@@ -11,6 +11,7 @@ namespace EndKnot.Modules;
 public static class CustomSoundsManager
 {
     private static readonly string SoundsPath = $"{Environment.CurrentDirectory.Replace(@"\", "/")}/BepInEx/resources/";
+    private static readonly string[] SupportedExtensions = [".wav", ".ogg", ".mp3"];
 
     public static void RPCPlayCustomSound(this PlayerControl pc, string sound, float volume = 1f, float pitch = 1f, bool force = false)
     {
@@ -61,29 +62,40 @@ public static class CustomSoundsManager
         {
             if (!Constants.ShouldPlaySfx() || !Main.EnableCustomSoundEffect.Value || !OperatingSystem.IsWindows()) return;
 
-            string path = SoundsPath + sound + ".wav";
             if (!Directory.Exists(SoundsPath)) Directory.CreateDirectory(SoundsPath);
 
             DirectoryInfo folder = new(SoundsPath);
             if ((folder.Attributes & FileAttributes.Hidden) != FileAttributes.Hidden) folder.Attributes = FileAttributes.Hidden;
 
-            if (!File.Exists(path))
+            string foundPath = null;
+            foreach (string ext in SupportedExtensions)
             {
-                Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("EndKnot.Resources.Sounds." + sound + ".wav");
+                string candidate = SoundsPath + sound + ext;
+                if (File.Exists(candidate)) { foundPath = candidate; break; }
+            }
 
-                if (stream == null)
+            if (foundPath == null)
+            {
+                foreach (string ext in SupportedExtensions)
+                {
+                    Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("EndKnot.Resources.Sounds." + sound + ext);
+                    if (stream == null) continue;
+
+                    foundPath = SoundsPath + sound + ext;
+                    using FileStream fileStream = File.Create(foundPath);
+                    stream.CopyTo(fileStream);
+                    break;
+                }
+
+                if (foundPath == null)
                 {
                     Logger.Warn($"Could not find sound: {sound}", "CustomSounds");
                     return;
                 }
-
-                FileStream fileStream = File.Create(path);
-                stream.CopyTo(fileStream);
-                fileStream.Close();
             }
 
-            StartPlay(path, volume, pitch);
-            Logger.Msg($"Playing sound: {sound}", "CustomSounds");
+            StartPlay(foundPath, volume, pitch);
+            Logger.Msg($"Playing sound: {sound} ({Path.GetExtension(foundPath)})", "CustomSounds");
         }
         catch (Exception e) { Utils.ThrowException(e); }
     }
@@ -94,7 +106,13 @@ public static class CustomSoundsManager
     {
         if (!audioCache.TryGetValue(path, out var clip))
         {
-            clip = LoadWAV(path);
+            string ext = Path.GetExtension(path).ToLowerInvariant();
+            clip = ext switch
+            {
+                ".ogg" => LoadOGG(path),
+                ".mp3" => LoadMP3(path),
+                _ => LoadWAV(path)
+            };
             audioCache[path] = clip;
         }
 

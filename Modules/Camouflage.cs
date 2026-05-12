@@ -183,7 +183,9 @@ public static class Camouflage
         {
             if (id.IsPlayerShifted() && !revertToDefault) id = Main.ShapeshiftTarget[id];
 
-            if (!gameEnd && Doppelganger.DoppelPresentSkin.TryGetValue(id, out NetworkedPlayerInfo.PlayerOutfit value))
+            if (!gameEnd && Skinwalker.SkinwalkerPresentSkin.TryGetValue(id, out NetworkedPlayerInfo.PlayerOutfit swValue))
+                newOutfit = swValue;
+            else if (!gameEnd && Doppelganger.DoppelPresentSkin.TryGetValue(id, out NetworkedPlayerInfo.PlayerOutfit value))
                 newOutfit = value;
             else
             {

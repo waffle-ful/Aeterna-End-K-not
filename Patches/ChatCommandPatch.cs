@@ -254,6 +254,7 @@ internal static class ChatCommands
             new("PlayerInfo", "[id]", Command.UsageLevels.Everyone, Command.UsageTimes.Always, PlayerInfoCommand, true, false, [GetString("CommandArgs.PlayerInfo.Id")]),
             new("TimeLimit", "", Command.UsageLevels.Everyone, Command.UsageTimes.InGame, TimeLimitCommand, true, false),
             new("YT", "{action}", Command.UsageLevels.Host, Command.UsageTimes.Always, YTCommand, true, false, [GetString("CommandArgs.YT.Action")]),
+            new("Yaminabe", "", Command.UsageLevels.Everyone, Command.UsageTimes.Always, YaminabeCommand, true, false),
             
             // Commands with action handled elsewhere
             new("Guess", "{id} {role}", Command.UsageLevels.Everyone, Command.UsageTimes.InMeeting, (_, _, _) => { }, true, false, [GetString("CommandArgs.Guess.Id"), GetString("CommandArgs.Guess.Role")]),
@@ -644,6 +645,11 @@ internal static class ChatCommands
     private static void NeutralInfoCommand(PlayerControl player, string text, string[] args)
     {
         Utils.SendMessage(GetString("NeutralInfoDescription"), player.PlayerId);
+    }
+
+    private static void YaminabeCommand(PlayerControl player, string text, string[] args)
+    {
+        ChaosPotSupport.SendChatToPlayer(player);
     }
     
     private static void CovenInfoCommand(PlayerControl player, string text, string[] args)

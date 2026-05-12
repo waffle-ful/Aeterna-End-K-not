@@ -1307,6 +1307,15 @@
   "SafeguardInfoLong": "(<#8cffff>クルーメイト</color>):\n<size=80%>タスクのたびに、一時的な護りを纏う。\n_____________________________________\n難易度：★★☆☆☆\n\n[スキル]\n・<b><color=#8cffff>タスクシールド</color></b>\nタスクを完了するごとに一時的なシールドを獲得する。\n\n<i>働き続ける者に、神は盾を与える。</i></size>",
   "SafeguardSuffix": "<#00ffa5>保護されている</color>",
   "SafeguardSuffixTimer": "<#00ffa5>保護中（残り</color> <b>{0}</b>s<#00ffa5>）</color>",
+  "Sandbox": "サンドボックス",
+  "SandboxInfo": "ブロックを設置して 壁を作る",
+  "SandboxInfoLong": "(<#8cffff>クルーメイト</color>):\n<size=80%>地面に置いたブロックが壁になる。マップを自分で書き換えろ。\n_____________________________________\n難易度：★★★☆☆\n\n[スキル]\n・<b><color=#8cffff>ブロック設置</color></b>\nペットボタンで足元にブロックを設置する。ブロックはクルー2人分ほどの大きさで、触れたプレイヤー（自分自身を含む）は最も近い空きスペースに弾かれる。同時設置数には上限があり、超えると一番古いブロックが消える。会議中は一時的に消えるが、会議後に同じ位置に再出現する。\n\n<i>マップは、お前が書き換えるものだ。</i></size>",
+  "SandboxMaxBlocks": "同時設置できるブロック数の上限",
+  "SandboxPlaceCooldown": "設置クールダウン",
+  "SandboxBlockRadius": "ブロックの当たり判定半径",
+  "SandboxEjectMargin": "弾き出し距離のマージン",
+  "SandboxBlockPlaced": "<#8cffff>ブロックを設置した</color>",
+  "SandboxCooldownActive": "<#ff4444>クールダウン中だ</color>",
   "Scanner": "スキャナー",
   "ScannerInfo": "透明プレイヤーを可視状態に戻す",
   "ScannerInfoLong": "(<#8cffff>クルーメイト</color>):\n<size=80%>透明な敵を、レーダーで捕捉する。\n_____________________________________\n難易度：★★★☆☆\n\n[スキル]\n・<b><color=#8cffff>透明プレイヤー可視化</color></b>\nVanishで能力を発動する。設定された時間内に透明なプレイヤーが範囲内にいると、そのプレイヤーを再び可視状態にする。透明プレイヤーには脱出を促す警告が届く。\n\n<i>隠れている者を、光の中に引き出す。</i></size>",
@@ -2186,6 +2195,15 @@
   "SilencerDead": "<size=80%><b>{0}</b>は <color=#ff1919>サイレンサー</color>によって脅迫されている！</size>",
   "MaxPlayersAliveForSilencedToVote": "サイレンス状態でも投票可能な 生存プレイヤー数の上限",
   "SilenceMode": "沈黙の方法",
+  "Skinwalker": "皮仲ばね魔",
+  "SkinwalkerInfo": "死体を被って その人物に成り代わる",
+  "SkinwalkerInfoLong": "(<#ff1919>インポスター</color>):\n<size=80%>死体に重なって通報すれば、被ったまま会議にも入れる。\n_____________________________________\n難易度：★★★★☆\n\n[スキル]\n・<b><color=#ff1919>死体を被る</color></b>\n死体の上で通報ボタンを押すと、その死体を身に纏う。名前・色・コスメ・ネームプレート・<b>レベルまで完全コピー</b>し、死体は消える。会議中もそのまま入れる。\n・<b><color=#ff1919>脱ぐ</color></b>\nペットボタンで脱ぎ捨てる。死体は脱いだ位置に再出現し、通常通り通報できる。\n\n<i>仮面じゃない、肌そのものを被るんだ。</i></size>",
+  "SkinwalkerMaxUsage": "被れる回数の上限",
+  "SkinwalkerCopyLevel": "プレイヤーレベルもコピーする",
+  "SkinwalkerNoUsageLeft": "<#ff4444>もう被れる回数が残っていない</color>",
+  "SkinwalkerAlreadyWorn": "<#ff4444>既に他の死体を被っている。先に脱げ</color>",
+  "SkinwalkerWorn": "<#ff1919>被った：</color><b>{0}</b>",
+  "SkinwalkerUnworn": "<#ff1919>死体を脱ぎ捨てた</color>",
   "Sniper": "スナイパー",
   "SniperInfo": "シフトによって 遠距離からプレイヤーを射撃する",
   "SniperInfoLong": "(<#ff1919>インポスター</color>):\n<size=80%>触れずして、命を断つ。\n_____________________________________\n難易度：★★★★★\n\n[スキル]\n・<b><color=#ff1919>狙撃</color></b>\nシェイプシフトまたはペットを2回使って射撃方向を決定し、弾丸が残っている間は<b>遠距離の対象をキル</b>できる。弾丸の軌道上の最初の人のみを殺害する。弾薬を使い切るまで通常キル不可。\n\n<i>見えないところから届く、それが答えだ。</i></size>",
@@ -9328,6 +9346,7 @@
   "CommandForms.Winner": "win,winner",
   "CommandForms.XOR": "xor",
   "CommandForms.YT": "yt,youtube",
+  "CommandForms.Yaminabe": "yaminabe,yn,闇鍋,やみなべ,chaos",
   // Command Access
   "CommandList": "★ コマンドリスト:",
   "Commands.ChangeSettingHelp": "<b><u>引数:</u></b><size=70%>\\n- map(マップ) (<#66a186>theskeld</color>/<#e84b56>mirahq</color>/<#a167c0>polus</color>/<#66a186>dlekseht</color>/<#ed0007>airship</color>/<#ffa646>thefungle</color>/custom)\\n- <#ff1919>impostors(インポスター数)</color> (数字)\\n- players(プレイヤー数) (数字)\\n- recommended(推奨設定) (on/off)\\n- confirmejects(追放確認) (on/off)\\n- emergencymeetings(緊急会議) (数字)\\n- anonymousvotes(匿名投票) (on/off)\\n- emergencycooldown(緊急会議のクールダウン) (数字)\\n- discussiontime(会議時間) (数字)\\n- votingtime(投票タイム) (数字)\\n- playerspeed(プレイヤーの速度) (float)\\n- <#8cffff>crewmatevision(クルーメイト ビジョン)</color> (float)\\n- <#ff1919>impostorvision(インポスター ビジョン)</color> (float)\\n- killcooldown(キルのクールダウン) (float)\\n- killdistance(キルの可能距離) (short/medium/long/custom)\\n- taskbarupdates(タスクバーのアップデート) (always(いつでも)/meetings(会議毎)/never(しない))\\n- visualtasks(視認タスク) (on/off)\\n- commontasks(通常タスク) (数字)\\n- longtasks(ロングタスク) (数字)\\n- shorttasks(ショートタスク) (数字)\\n- <#8cffff>scientistcount(科学者の数)</color> (数字)\\n- <#8cffff>scientistchance(科学者の確率)</color> (数字)\\n- <#8cffff>vitalsdisplaycooldown(バイタル画面のクールダウン)</color> (float)\\n- <#8cffff>batteryduration(バッテリーの持続時間)</color> (float)\\n- <#8cffff>engineercount(エンジニアの数)</color> (数字)\\n- <#8cffff>engineerchance(エンジニアの確率)</color> (数字)\\n- <#8cffff>ventusecooldown(通気口の使用のクールダウン)</color> (float)\\n- <#8cffff>maxtimeinvents(通気口内の最大時間)</color> (float)\\n- <#8cffff>guardianangelcount(守護天使の数)</color> (数字)\\n- <#8cffff>guardianangelchance(守護天使の確率)</color> (数字)\\n- <#8cffff>protectcooldown(保護のクールダウン)</color> (float)\\n- <#8cffff>protectduration(保護の継続時間)</color> (float)\\n- <#8cffff>protectvisibletoimpostors(保護は <#ff1919>インポスター</color>からも見える)</color> (on/off)\\n- <#ff1919>shapeshiftercount(シェイプシフターの数)</color> (数字)\\n- <#ff1919>shapeshifterchance(シェイプシフターの確率)</color> (数字)\\n- <#ff1919>shapeshiftduration(変身の持続時間)</color> (float)\\n- <#ff1919>shapeshiftcooldown(変身のクールダウン)</color> (float)\\n- <#ff1919>leaveshapeshiftevidence(変身の痕を残す)</color> (on/off)\\n- <#ff1919>phantomcount(亡霊の数)</color> (数字)\\n- <#ff1919>phantomchance(亡霊の確率)</color> (数字)\\n- <#ff1919>inviscooldown(消える クールダウン)</color> (float)\\n- <#ff1919>invisduration(消える 長さ)</color> (float)\\n- <#8cffff>noisemakercount(ノイズメーカーの数)</color> (数字)\\n- <#8cffff>noisemakerchance(ノイズメーカーの確率)</color> (数字)\\n- <#8cffff>noisemakerimpostoralert(<#ff1919>インポスター</color>にも警告する)</color> (on/off)\\n- <#8cffff>noisemakeralertduration(警告の長さ)</color> (数字)\\n- <#8cffff>trackercount(トラッカーの数)</color> (数字)\\n- <#8cffff>trackerchance(トラッカーの確率)</color> (数字)\\n- <#8cffff>trackduration(追跡の持続時間)</color> (float)\\n- <#8cffff>trackcooldown(追跡のクールダウン)</color> (float)\\n- <#8cffff>trackdelay(追跡の遅れ)</color> (float)\\n- ghostdotasks(幽霊のタスク) (on/off)\\n\\n<u><b>注意:</b></u>\\n1. 大文字 と 小文字は 重要\\n2. custom と書いているところは、当然ですが その後に 1つの数字の引数を置きます\\n3. float と書かれているところは 1.7 のような、1つの単精度浮動小数点です\\n4. 「ghostdotasks」を セットすると 問題が発生する。\\n5. 使用例:\\n   - \"/cs map <#a167c0>polus</color>\"\\n   - \"/cs killdistance custom 4\"\\n   - \"/cs <#8cffff>trackdelay</color> 1,7\"\\n   - \"/cs confirmejects on",
@@ -12487,5 +12506,22 @@
   "8BallResponse.96": "\\ ",
   "8BallResponse.97": "\\ ",
   "8BallResponse.98": "\\ ",
-  "8BallResponse.99": "\\ "
+  "8BallResponse.99": "\\ ",
+
+  /* ==============================
+    闇鍋サポート (Chaos Pot Support)
+  ============================== */
+  "ChaosPotSupport.Enable": "闇鍋サポート",
+  "ChaosPotSupport.RevealImpostor": "インポスター陣営の役職構成を通知する",
+  "ChaosPotSupport.RevealNeutral": "第三陣営 (ニュートラル) の役職構成を通知する",
+  "ChaosPotSupport.RevealCoven": "コヴン陣営の役職構成を通知する",
+  "ChaosPotSupport.RevealCrewmate": "クルーメイト陣営の役職構成を通知する",
+  "ChaosPotSupport.ShowOnMeetingScreen": "会議画面の右上にも常時表示する (ホストのみ・インポスター/ニュートラル/コヴンに限る)",
+  "ChaosPotSupport.HeaderImpostor": "今回のインポスター陣営",
+  "ChaosPotSupport.HeaderNeutral": "今回の第三陣営 (ニュートラル)",
+  "ChaosPotSupport.HeaderCoven": "今回のコヴン陣営",
+  "ChaosPotSupport.HeaderCrewmate": "今回のクルーメイト陣営",
+  "ChaosPotSupport.None": "(なし)",
+  "ChaosPotSupport.Disabled": "ホストが闇鍋サポートを無効にしています。",
+  "ChaosPotSupport.NothingRevealed": "公開対象の陣営が一つも選ばれていません。"
 }

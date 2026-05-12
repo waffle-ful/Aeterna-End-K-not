@@ -1311,6 +1311,15 @@
   "SafeguardInfoLong": "(<#8cffff>Crewmates</color>):\n<size=80%>Complete tasks to earn a temporary shield against death.\n_____________________________________\nDifficulty: ★☆☆☆☆\n\n[Skills]\n・<b><color=#8cffff>Task Shield</color></b>\nEach completed task grants a temporary shield that blocks the next kill attempt.\n\n<i>Diligence is its own armor.</i></size>",
   "SafeguardSuffix": "<#00ffa5>You're shielded</color>",
   "SafeguardSuffixTimer": "<#00ffa5>You're shielded for</color> <b>{0}</b>s",
+  "Sandbox": "Sandbox",
+  "SandboxInfo": "Build walls by placing blocks",
+  "SandboxInfoLong": "(<#8cffff>Crewmates</color>):\n<size=80%>Drop solid blocks anywhere — they become walls that bounce anyone who touches them.\n_____________________________________\nDifficulty: ★★★☆☆\n\n[Skills]\n・<b><color=#8cffff>Place Block</color></b>\nPress Pet to drop a block at your feet. Blocks are roughly two crew wide and act as walls — anyone who steps on them (including you) is ejected to the nearest open spot. There's a cap on how many blocks can exist at once; placing past the cap removes the oldest one. Blocks are cleared during meetings and respawn at the same positions afterward.\n\n<i>The map is yours to redraw.</i></size>",
+  "SandboxMaxBlocks": "Maximum Blocks at Once",
+  "SandboxPlaceCooldown": "Place Cooldown",
+  "SandboxBlockRadius": "Block Hitbox Radius",
+  "SandboxEjectMargin": "Eject Distance Margin",
+  "SandboxBlockPlaced": "<#8cffff>Block placed</color>",
+  "SandboxCooldownActive": "<#ff4444>Place cooldown active</color>",
   "Scanner": "Scanner",
   "ScannerInfo": "Scan for Invisible Players and Make them Visible Again",
   "ScannerInfoLong": "(<#8cffff>Crewmates</color>):\n<size=80%>Vanish and expose invisible players who linger too close.\n_____________________________________\nDifficulty: ★★☆☆☆\n\n[Skills]\n・<b><color=#8cffff>Reveal Scan</color></b>\nVanish to activate. Any invisible player who remains within your radius for the duration automatically becomes visible again.\n\n<i>No one stays hidden forever.</i></size>",
@@ -2630,6 +2639,15 @@
   "SilencerDead": "<b>{0}</b> has been blackmailed by a <color=#ff1919>Silencer</color>!",
   "MaxPlayersAliveForSilencedToVote": "Max Players Alive for Silenced Players to be able to Vote",
   "SilenceMode": "Silencing Method",
+  "Skinwalker": "Skinwalker",
+  "SkinwalkerInfo": "Wear a corpse to perfectly impersonate the dead",
+  "SkinwalkerInfoLong": "(<#ff1919>Impostors</color>):\n<size=80%>Press Report on a body to wear it — you take on their full appearance, including their level. The body vanishes. Pet to remove the disguise and the body reappears where you stood.\n_____________________________________\nDifficulty: ★★★★☆\n\n[Skills]\n・<b><color=#ff1919>Wear Corpse</color></b>\nPress Report while standing on a body to wear it. Your name, color, cosmetics, name plate, and level all match the victim. You stay disguised through meetings. Press Pet to remove the disguise — the body reappears where you discarded it and can be reported normally again.\n\n<i>The best disguise isn't a mask. It's a skin.</i></size>",
+  "SkinwalkerMaxUsage": "Maximum Wear Count",
+  "SkinwalkerCopyLevel": "Copy Player Level",
+  "SkinwalkerNoUsageLeft": "<#ff4444>You have no wears left</color>",
+  "SkinwalkerAlreadyWorn": "<#ff4444>You're already wearing a corpse — discard it first</color>",
+  "SkinwalkerWorn": "<#ff1919>Worn:</color> <b>{0}</b>",
+  "SkinwalkerUnworn": "<#ff1919>Disguise discarded</color>",
   "Sniper": "Sniper",
   "SniperInfo": "Snipe players from a distance by shifting",
   "SniperInfoLong": "(<#ff1919>Impostors</color>):\n<size=80%>Shoot players from a distance using directional shapeshifts.\n_____________________________________\nDifficulty: ★★★★☆\n\n[Skills]\n・<b><color=#ff1919>Snipe</color></b>\nShapeshift or pet twice to fire a shot. The bullet travels in the direction from your first shift location to your second. It kills the first player in its path. You cannot kill normally while you have ammo remaining.\n\n<i>One shot. One chance. No second guesses.</i></size>",
@@ -9918,6 +9936,7 @@
   "CommandForms.Winner": "win,winner",
   "CommandForms.XOR": "xor",
   "CommandForms.YT": "yt,youtube",
+  "CommandForms.Yaminabe": "yaminabe,yn,chaos",
   // Command Access
   "CommandList": "★ Command list:",
   "Commands.ChangeSettingHelp": "<b><u>Arguments:</u></b><size=70%>\\n- map (theskeld/mirahq/polus/dlekseht/airship/thefungle/custom)\\n- impostors (number)\\n- players (number)\\n- recommended (on/off)\\n- confirmejects (on/off)\\n- emergencymeetings (number)\\n- anonymousvotes (on/off)\\n- emergencycooldown (number)\\n- discussiontime (number)\\n- votingtime (number)\\n- playerspeed (float)\\n- crewmatevision (float)\\n- impostorvision (float)\\n- killcooldown (float)\\n- killdistance (short/medium/long/custom)\\n- taskbarupdates (always/meetings/never)\\n- visualtasks (on/off)\\n- commontasks (number)\\n- longtasks (number)\\n- shorttasks (number)\\n- scientistcount (number)\\n- scientistchance (number)\\n- vitalsdisplaycooldown (float)\\n- batteryduration (float)\\n- engineercount (number)\\n- engineerchance (number)\\n- ventusecooldown (float)\\n- maxtimeinvents (float)\\n- guardianangelcount (number)\\n- guardianangelchance (number)\\n- protectcooldown (float)\\n- protectduration (float)\\n- protectvisibletoimpostors (on/off)\\n- shapeshiftercount (number)\\n- shapeshifterchance (number)\\n- shapeshiftduration (float)\\n- shapeshiftcooldown (float)\\n- leaveshapeshiftevidence (on/off)\\n- phantomcount (number)\\n- phantomchance (number)\\n- inviscooldown (float)\\n- invisduration (float)\\n- noisemakercount (number)\\n- noisemakerchance (number)\\n- noisemakerimpostoralert (on/off)\\n- noisemakeralertduration (number)\\n- trackercount (number)\\n- trackerchance (number)\\n- trackduration (float)\\n- trackcooldown (float)\\n- trackdelay (float)\\n- ghostdotasks (on/off)\\n\\n<u><b>Notes:</b></u>\\n1. Upper and lowercase matters\\n2. Where it says custom, you obviously put a number argument after it\\n3. A float is a single precision floating number, like 1.7\\n4. \"ghostdotasks\" causes issues if you set it\\n5. Example uses:\\n   - \"/cs map polus\"\\n   - \"/cs killdistance custom 4\"\\n   - \"/cs trackdelay 1,7\"\\n   - \"/cs confirmejects on\"",
@@ -12461,5 +12480,22 @@
   ============================== */
 
   "CovenInfoDescription": "The Coven is a Team of 1-4 people, after 3 meetings (amount replaced with hosts settings) a random Member of the Coven will gain the Necronomicon. With the Necronomicon, that Coven Member may kill normally and also has a stronger ability. After the Necronomicon was given to the first member, every meeting after will give it to another until all members of the Coven have it. Most roles in this faction are also Support oriented, meaning that they need Teamwork and coordination to work perfectly together.\n\nThe Necronomicon is an ability buff owned by a single member of the Coven. The Necronomicon goes to a different Coven member after every meeting, and for that round will buff their role's ability. Most Coven roles will state in their description what the Necronomicon buffs in their role.\n\n<size=50%>Credit to mystic_haze2 on Discord for writing the first paragraph</size>",
-  "NeutralInfoDescription": "Neutrals do not belong to Crewmates or Impostors, and they win on their own terms. Each type of neutral wins in a different way. Neutrals work for themselves and have specific conditions depending on their role on how to win.\n\n<b>Neutral Benigns</b> win when their specific conditions are completed, each role having different conditions necessary to win. They do not trigger the game to end, meaning they must wait until the Crewmates, Impostors, Coven, or another Neutral to win the game and win along with them. \n\n<b>Neutral Evils</b> also have their own specific conditions to win, much like the Neutral Benigns. However, when they complete their objectives to win the game, they end the game and win without Crewmates, Coven, or Impostors- also called 'stealing the win'.\n\n<b>Neutral Killers</b> are neutrals who can kill, much like Impostors, but do not work with the Impostors. Most of the Neutral killers work on their own, although some can recruit other players to work with them. They win the game by killing off all the Impostors, Cremwates, Coven, and other Neutrals, until they are the only player remaining.\n\n<b>Neutral Pariah</b> roles are much like Neutral Benign roles, however their main objective is to make sure Crewmates do not win. If any team other than the Crewmates win, said Neutral Pariah role will win along with the winning team. They have special abilities to try and harm the crewmates."
+  "NeutralInfoDescription": "Neutrals do not belong to Crewmates or Impostors, and they win on their own terms. Each type of neutral wins in a different way. Neutrals work for themselves and have specific conditions depending on their role on how to win.\n\n<b>Neutral Benigns</b> win when their specific conditions are completed, each role having different conditions necessary to win. They do not trigger the game to end, meaning they must wait until the Crewmates, Impostors, Coven, or another Neutral to win the game and win along with them. \n\n<b>Neutral Evils</b> also have their own specific conditions to win, much like the Neutral Benigns. However, when they complete their objectives to win the game, they end the game and win without Crewmates, Coven, or Impostors- also called 'stealing the win'.\n\n<b>Neutral Killers</b> are neutrals who can kill, much like Impostors, but do not work with the Impostors. Most of the Neutral killers work on their own, although some can recruit other players to work with them. They win the game by killing off all the Impostors, Cremwates, Coven, and other Neutrals, until they are the only player remaining.\n\n<b>Neutral Pariah</b> roles are much like Neutral Benign roles, however their main objective is to make sure Crewmates do not win. If any team other than the Crewmates win, said Neutral Pariah role will win along with the winning team. They have special abilities to try and harm the crewmates.",
+
+  /* ==============================
+    Chaos Pot Support (Yaminabe)
+  ============================== */
+  "ChaosPotSupport.Enable": "Chaos Pot Support",
+  "ChaosPotSupport.RevealImpostor": "Announce Impostor roster",
+  "ChaosPotSupport.RevealNeutral": "Announce Neutral roster",
+  "ChaosPotSupport.RevealCoven": "Announce Coven roster",
+  "ChaosPotSupport.RevealCrewmate": "Announce Crewmate roster",
+  "ChaosPotSupport.ShowOnMeetingScreen": "Show roster on top-right of meeting screen (host only, Impostor / Neutral / Coven)",
+  "ChaosPotSupport.HeaderImpostor": "Impostors in this game",
+  "ChaosPotSupport.HeaderNeutral": "Neutrals in this game",
+  "ChaosPotSupport.HeaderCoven": "Coven in this game",
+  "ChaosPotSupport.HeaderCrewmate": "Crewmates in this game",
+  "ChaosPotSupport.None": "(none)",
+  "ChaosPotSupport.Disabled": "Chaos Pot Support is disabled by the host.",
+  "ChaosPotSupport.NothingRevealed": "No team is set to be revealed."
 }

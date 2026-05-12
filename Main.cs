@@ -45,8 +45,8 @@ public class Main : BasePlugin
     // EHR's reverse-domain GUID `com.gurge44.endlesshostroles` appears to be grandfathered
     // in; a fresh fork needs a fresh UUID.
     public const string PluginGuid = "cf13a94a-1671-41f1-85a8-3e32770cf09e";
-    public const string PluginVersion = "0.2.0";
-    public const string PluginDisplayVersion = "0.2.0";
+    public const string PluginVersion = "0.3.0";
+    public const string PluginDisplayVersion = "0.3.0";
     public const bool TestBuild = false;
 
     public const string NeutralColor = "#ffab1b";
@@ -493,6 +493,7 @@ public class Main : BasePlugin
                 { CustomRoles.Socialite, "#32a8a8" },
                 { CustomRoles.Adrenaline, "#ffff00" },
                 { CustomRoles.Safeguard, "#4949e3" },
+                { CustomRoles.Sandbox, "#a5c5a8" },
                 { CustomRoles.Clairvoyant, "#d4ffdd" },
                 { CustomRoles.Inquirer, "#7c55f2" },
                 { CustomRoles.Soothsayer, "#4e529c" },
