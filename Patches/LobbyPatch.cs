@@ -129,6 +129,19 @@ internal static class LobbyBehaviourUpdatePatch
         if (Main.EnableBGM?.Value ?? false)
         {
             LobbyBehaviourStartPatch.Tick();
+
+            // Tick's silence window closes after 2.5s — but AU 2026.3.31 can
+            // re-arm MapTheme later (post player-spawn handshake). Mirror the
+            // Ambience GO idempotent-every-frame pattern: target MapTheme only
+            // so we don't kill our own AudioSource sitting in soundPlayers.
+            SoundManager sm = SoundManager.Instance;
+            if (sm?.soundPlayers != null)
+            {
+                Func<ISoundPlayer, bool> isMapTheme = x => x.Name.Equals("MapTheme");
+                if (sm.soundPlayers.Find(isMapTheme) != null)
+                    sm.StopNamedSound("MapTheme");
+            }
+
             return;
         }
 
