@@ -10573,6 +10573,10 @@
     Cooldowns and Timers           
   ============================== */
   "FixFirstKillCooldown": "Reset First Kill Cooldown",
+  "FirstTurnMeeting": "Force First Turn Meeting",
+  "FirstTurnMeetingCantAbility": "Disable Role Abilities During Forced Meeting",
+  "FirstTurnMeetingNoVote": "Disable Voting During Forced Meeting",
+  "FirstTurnMeetingNoVoteMessage": "Voting is disabled during the forced first meeting.",
 
   /* ==============================
     Cooldowns and Timers           

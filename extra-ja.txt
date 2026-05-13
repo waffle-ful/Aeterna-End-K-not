@@ -1,0 +1,10 @@
+﻿CommandArgs.ConfirmAuth.UUID
+CommandDescription.ConfirmAuth
+CommandForms.ConfirmAuth
+ConfirmAuth.Error
+ConfirmAuth.ErrorLobbyUnlisted
+ConfirmAuth.ErrorNotVanilla
+Message.LobbyCodeSendError
+Message.LobbyCodeSent
+ConfirmAuth.Success
+SendHashedPuidToUseLinkedAccount

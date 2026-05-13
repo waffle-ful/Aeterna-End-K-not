@@ -1466,9 +1466,19 @@ internal static class MeetingHudCastVotePatch
             return false;
         }
 
+        if (Options.FirstTurnMeeting.GetBool() && Options.FirstTurnMeetingNoVote.GetBool() && MeetingStates.FirstMeeting)
+        {
+            ShouldCancelVoteList.TryAdd(srcPlayerId, (__instance, pvaSrc, pcSrc));
+            Utils.SendMessage(Translator.GetString("FirstTurnMeetingNoVoteMessage"), srcPlayerId);
+            Logger.Info($"{pcSrc.GetNameWithRole()} vote blocked by FirstTurnMeetingNoVote", "Vote");
+            return false;
+        }
+
         var voteCanceled = false;
 
-        if (!Main.DontCancelVoteList.Contains(srcPlayerId) && !skip && pcSrc.GetCustomRole().CancelsVote() && !pcSrc.UsesMeetingShapeshift() && Main.PlayerStates[srcPlayerId].Role.OnVote(pcSrc, pcTarget))
+        var firstTurnNoAbility = Options.FirstTurnMeeting.GetBool() && Options.FirstTurnMeetingCantAbility.GetBool() && MeetingStates.FirstMeeting;
+
+        if (!firstTurnNoAbility && !Main.DontCancelVoteList.Contains(srcPlayerId) && !skip && pcSrc.GetCustomRole().CancelsVote() && !pcSrc.UsesMeetingShapeshift() && Main.PlayerStates[srcPlayerId].Role.OnVote(pcSrc, pcTarget))
         {
             ShouldCancelVoteList.TryAdd(srcPlayerId, (__instance, pvaSrc, pcSrc));
             voteCanceled = true;
