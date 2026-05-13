@@ -730,6 +730,9 @@ public static class Options
     public static OptionItem LadderDeathChance;
 
     public static OptionItem FixFirstKillCooldown;
+    public static OptionItem FirstTurnMeeting;
+    public static OptionItem FirstTurnMeetingCantAbility;
+    public static OptionItem FirstTurnMeetingNoVote;
     public static OptionItem StartingKillCooldown;
     public static OptionItem FallBackKillCooldownValue;
     public static OptionItem ShieldPersonDiedFirst;
@@ -3015,6 +3018,16 @@ public static class Options
 
         FixFirstKillCooldown = new BooleanOptionItem(23900, "FixFirstKillCooldown", false, TabGroup.GameSettings)
             .SetColor(new Color32(193, 255, 209, byte.MaxValue));
+
+        FirstTurnMeeting = new BooleanOptionItem(23901, "FirstTurnMeeting", false, TabGroup.GameSettings)
+            .SetGameMode(CustomGameMode.Standard)
+            .SetColor(new Color32(79, 214, 167, byte.MaxValue));
+        FirstTurnMeetingCantAbility = new BooleanOptionItem(23902, "FirstTurnMeetingCantAbility", false, TabGroup.GameSettings)
+            .SetParent(FirstTurnMeeting)
+            .SetColor(new Color32(79, 214, 167, byte.MaxValue));
+        FirstTurnMeetingNoVote = new BooleanOptionItem(23903, "FirstTurnMeetingNoVote", true, TabGroup.GameSettings)
+            .SetParent(FirstTurnMeeting)
+            .SetColor(new Color32(79, 214, 167, byte.MaxValue));
 
         StartingKillCooldown = new FloatOptionItem(23950, "StartingKillCooldown", new(1, 60, 1), 10, TabGroup.GameSettings)
             .SetColor(new Color32(193, 255, 209, byte.MaxValue))

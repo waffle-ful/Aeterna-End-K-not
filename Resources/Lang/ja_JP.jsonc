@@ -9977,6 +9977,10 @@
     Cooldowns and Timers           
   ============================== */
   "FixFirstKillCooldown": "初手のキルのクールダウンをリセットする",
+  "FirstTurnMeeting": "開始直後に強制会議を発生させる",
+  "FirstTurnMeetingCantAbility": "強制会議中は役職能力を発動させない",
+  "FirstTurnMeetingNoVote": "強制会議中は投票を無効にする",
+  "FirstTurnMeetingNoVoteMessage": "強制された初回会議中は投票できません。",
 
   /* ==============================
     Cooldowns and Timers           

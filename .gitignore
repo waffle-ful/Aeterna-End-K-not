@@ -10,6 +10,18 @@
 *.userosscache
 *.sln.docstates
 
+# Release packaging directories (never commit zips or extracted packages)
+release-v*/
+release-*/
+
+# Translation work-in-progress / dump files
+dupes_out.txt
+extra-ja.txt
+identical-ja.txt
+missing-ja.txt
+needs-translation.csv
+to-translate-sorted.csv
+
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
 

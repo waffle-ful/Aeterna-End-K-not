@@ -1360,6 +1360,17 @@ internal static class IntroCutsceneDestroyPatch
             LateTask.New(Utils.MarkEveryoneDirtySettings, 0.5f, "SyncAllSettings On Game Start");
             LateTask.New(() => Main.Instance.StartCoroutine(ShipStatusFixedUpdatePatch.Postfix()), 5f, "ShipStatusFixedUpdatePatch Postfix Start");
 
+            if (Options.CurrentGameMode == CustomGameMode.Standard && Options.FirstTurnMeeting.GetBool())
+            {
+                LateTask.New(() =>
+                {
+                    if (!GameStates.IsInGame || MeetingHud.Instance || ExileController.Instance) return;
+                    PlayerControl host = PlayerControl.LocalPlayer;
+                    if (!host || !host.IsAlive()) host = Main.AllAlivePlayerControls.FirstOrDefault();
+                    if (host) host.NoCheckStartMeeting(null, force: true);
+                }, 5f, "FirstTurnMeetingTrigger");
+            }
+
             Utils.CheckAndSetVentInteractions();
         }
         else
