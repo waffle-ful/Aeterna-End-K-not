@@ -2764,11 +2764,15 @@ internal static class ChatCommands
     {
         if (!player.FriendCode.GetDevUser().up && !player.FriendCode.IsLocalDev()) return;
 
-        Vector2 origin = player.GetTruePosition() + new Vector2(2f, 0f);
-        int spawned = SizeTestCNO.SpawnRow(origin);
+        // 第2引数 "percent" でパーセント mode、それ以外 (or 引数無し) は絶対 mode
+        bool absolute = args.Length < 2 || !args[1].Equals("percent", System.StringComparison.OrdinalIgnoreCase);
 
-        Logger.Info($"DevCmd /sizetest: spawned={spawned} at {origin}", "DevCmd");
-        Utils.SendMessage($"[sizetest] Spawned {spawned} 〇 at sizes 600/800/1000/1200/1500%. Walk right to see each.", player.PlayerId);
+        Vector2 origin = player.GetTruePosition() + new Vector2(2f, 0f);
+        int spawned = SizeTestCNO.SpawnRow(origin, absolute);
+
+        string sizes = absolute ? "20/40/60/80/100 (absolute)" : "600/800/1000/1200/1500% (percent)";
+        Logger.Info($"DevCmd /sizetest absolute={absolute}: spawned={spawned} at {origin}", "DevCmd");
+        Utils.SendMessage($"[sizetest] Spawned {spawned} ○ at sizes {sizes}. Walk right to see each.", player.PlayerId);
     }
 
     private static void SizeCleanCommand(PlayerControl player, string text, string[] args)
