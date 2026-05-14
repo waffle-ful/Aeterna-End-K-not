@@ -437,7 +437,7 @@ namespace EndKnot
                 playerControl.CachedPlayerData = PlayerControl.LocalPlayer.Data;
 
                 yield return new WaitForSecondsRealtime(0.15f);
-
+                
                 if (this is not ShapeshiftMenuElement && !IsPlayerLike)
                 {
                     yield return DataFlagRateLimiter.Enqueue(() =>
@@ -585,7 +585,7 @@ namespace EndKnot
         public TornadoObject(Vector2 position, IEnumerable<byte> visibleList)
         {
             SpawnTimeStamp = Utils.TimeStamp;
-            CreateNetObject("<size=100%><font=\"VCR SDF\"><line-height=67%><alpha=#00>\u2588<alpha=#00>\u2588<#bababa>\u2588<#bababa>\u2588<#bababa>\u2588<#bababa>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br><alpha=#00>\u2588<#bababa>\u2588<#bababa>\u2588<#8c8c8c>\u2588<#8c8c8c>\u2588<#bababa>\u2588<#bababa>\u2588<alpha=#00>\u2588<br><#bababa>\u2588<#bababa>\u2588<#8c8c8c>\u2588<#8c8c8c>\u2588<#8c8c8c>\u2588<#8c8c8c>\u2588<#bababa>\u2588<#bababa>\u2588<br><#bababa>\u2588<#8c8c8c>\u2588<#8c8c8c>\u2588<#636363>\u2588<#636363>\u2588<#8c8c8c>\u2588<#8c8c8c>\u2588<#bababa>\u2588<br><#bababa>\u2588<#8c8c8c>\u2588<#8c8c8c>\u2588<#636363>\u2588<#636363>\u2588<#8c8c8c>\u2588<#8c8c8c>\u2588<#bababa>\u2588<br><#bababa>\u2588<#bababa>\u2588<#8c8c8c>\u2588<#8c8c8c>\u2588<#8c8c8c>\u2588<#8c8c8c>\u2588<#bababa>\u2588<#bababa>\u2588<br><alpha=#00>\u2588<#bababa>\u2588<#bababa>\u2588<#8c8c8c>\u2588<#8c8c8c>\u2588<#bababa>\u2588<#bababa>\u2588<alpha=#00>\u2588<br><alpha=#00>\u2588<alpha=#00>\u2588<#bababa>\u2588<#bababa>\u2588<#bababa>\u2588<#bababa>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br></color></line-height></font></size>", position);
+            CreateNetObject("<line-height=97%><cspace=0.16em><#0000>WW</color><mark=#bababa>WWWW</mark><#0000>WW\nW</color><mark=#bababa>WW</mark><mark=#8c8c8c>WW</mark><mark=#bababa>WW</mark><#0000>W</color>\n<mark=#bababa>WW</mark><mark=#8c8c8c>WWWW</mark><mark=#bababa>WW</mark>\n<mark=#bababa>W</mark><mark=#8c8c8c>WW</mark><mark=#636363>WW</mark><mark=#8c8c8c>WW</mark><mark=#bababa>W</mark>\n<mark=#bababa>W</mark><mark=#8c8c8c>WW</mark><mark=#636363>WW</mark><mark=#8c8c8c>WW</mark><mark=#bababa>W</mark>\n<mark=#bababa>WW</mark><mark=#8c8c8c>WWWW</mark><mark=#bababa>WW</mark>\n<#0000>W</color><mark=#bababa>WW</mark><mark=#8c8c8c>WW</mark><mark=#bababa>WW</mark><#0000>W\nWW</color><mark=#bababa>WWWW</mark><#0000>WW</color>", position);
             LateTask.New(() => Hide(Main.EnumerateAlivePlayerControls().ExceptBy(visibleList, x => x.PlayerId)), 0.4f);
         }
 
@@ -620,7 +620,7 @@ namespace EndKnot
     {
         public PlayerDetector(Vector2 position, List<byte> visibleList, out int id)
         {
-            CreateNetObject("<size=100%><font=\"VCR SDF\"><line-height=67%><alpha=#00>\u2588<alpha=#00>\u2588<#33e6b0>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<#33e6b0>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br><alpha=#00>\u2588<#33e6b0>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<#33e6b0>\u2588<alpha=#00>\u2588<br><#33e6b0>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<#33e6b0>\u2588<#33e6b0>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<#33e6b0>\u2588<br><#33e6b0>\u2588<alpha=#00>\u2588<#33e6b0>\u2588<#000000>\u2588<#000000>\u2588<#33e6b0>\u2588<alpha=#00>\u2588<#33e6b0>\u2588<br><#33e6b0>\u2588<alpha=#00>\u2588<#33e6b0>\u2588<#000000>\u2588<#000000>\u2588<#33e6b0>\u2588<alpha=#00>\u2588<#33e6b0>\u2588<br><#33e6b0>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<#33e6b0>\u2588<#33e6b0>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<#33e6b0>\u2588<br><alpha=#00>\u2588<#33e6b0>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<#33e6b0>\u2588<alpha=#00>\u2588<br><alpha=#00>\u2588<alpha=#00>\u2588<#33e6b0>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<#33e6b0>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br></color></line-height></font></size>", position);
+            CreateNetObject("<line-height=97%><cspace=0.16em><#0000>WW</color><mark=#33e6b0>W</mark><#0000>WW</color><mark=#33e6b0>W</mark><#0000>WW\nW</color><mark=#33e6b0>W</mark><#0000>WWWW</color><mark=#33e6b0>W</mark><#0000>W</color>\n<mark=#33e6b0>W</mark><#0000>WW</color><mark=#33e6b0>WW</mark><#0000>WW</color><mark=#33e6b0>W</mark>\n<mark=#33e6b0>W</mark><#0000>W</color><mark=#33e6b0>W</mark><mark=#000>WW</mark><mark=#33e6b0>W</mark><#0000>W</color><mark=#33e6b0>W</mark>\n<mark=#33e6b0>W</mark><#0000>W</color><mark=#33e6b0>W</mark><mark=#000>WW</mark><mark=#33e6b0>W</mark><#0000>W</color><mark=#33e6b0>W</mark>\n<mark=#33e6b0>W</mark><#0000>WW</color><mark=#33e6b0>WW</mark><#0000>WW</color><mark=#33e6b0>W</mark>\n<#0000>W</color><mark=#33e6b0>W</mark><#0000>WWWW</color><mark=#33e6b0>W</mark><#0000>W\nWW</color><mark=#33e6b0>W</mark><#0000>WW</color><mark=#33e6b0>W</mark><#0000>WW</color>", position);
             LateTask.New(() => Hide(Main.EnumerateAlivePlayerControls().ExceptBy(visibleList, x => x.PlayerId)), 0.4f);
             id = Id;
         }
@@ -643,7 +643,7 @@ namespace EndKnot
     {
         internal Toilet(Vector2 position, IEnumerable<PlayerControl> hideList)
         {
-            CreateNetObject("<size=100%><font=\"VCR SDF\"><line-height=67%><alpha=#00>\u2588<#e6e6e6>\u2588<#e6e6e6>\u2588<#e6e6e6>\u2588<#e6e6e6>\u2588<#e6e6e6>\u2588<#e6e6e6>\u2588<#e6e6e6>\u2588<#e6e6e6>\u2588<alpha=#00>\u2588<br><#e6e6e6>\u2588<#d3d4ce>\u2588<#d3d4ce>\u2588<#d3d4ce>\u2588<#d3d4ce>\u2588<#d3d4ce>\u2588<#d3d4ce>\u2588<#d3d4ce>\u2588<#d3d4ce>\u2588<#e6e6e6>\u2588<br><#e6e6e6>\u2588<#d3d4ce>\u2588<#d3d4ce>\u2588<#d3d4ce>\u2588<#d3d4ce>\u2588<#d3d4ce>\u2588<#d3d4ce>\u2588<#d3d4ce>\u2588<#d3d4ce>\u2588<#e6e6e6>\u2588<br><alpha=#00>\u2588<#e6e6e6>\u2588<#d3d4ce>\u2588<#d3d4ce>\u2588<#d3d4ce>\u2588<#d3d4ce>\u2588<#d3d4ce>\u2588<#d3d4ce>\u2588<#e6e6e6>\u2588<alpha=#00>\u2588<br><alpha=#00>\u2588<#e6e6e6>\u2588<#e6e6e6>\u2588<#d3d4ce>\u2588<#dedede>\u2588<#dedede>\u2588<#d3d4ce>\u2588<#e6e6e6>\u2588<#e6e6e6>\u2588<alpha=#00>\u2588<br><alpha=#00>\u2588<#bfbfbf>\u2588<#454545>\u2588<#333333>\u2588<#333333>\u2588<#333333>\u2588<#333333>\u2588<#333333>\u2588<#333333>\u2588<#bfbfbf>\u2588<br><alpha=#00>\u2588<#bfbfbf>\u2588<#bfbfbf>\u2588<#454545>\u2588<#454545>\u2588<#454545>\u2588<#454545>\u2588<#454545>\u2588<#454545>\u2588<#bfbfbf>\u2588<br><alpha=#00>\u2588<alpha=#00>\u2588<#bfbfbf>\u2588<#bfbfbf>\u2588<#bfbfbf>\u2588<#bfbfbf>\u2588<#bfbfbf>\u2588<#bfbfbf>\u2588<#bfbfbf>\u2588<#bfbfbf>\u2588<br><alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<#dedede>\u2588<#dedede>\u2588<#dedede>\u2588<#dedede>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br><alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<#dedede>\u2588<#dedede>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br></color></line-height></font></size>", position);
+            CreateNetObject("<line-height=97%><cspace=0.16em><#0000>W</color><mark=#e6e6e6>WWWWWWWW</mark><#0000>W</color>\n<mark=#e6e6e6>W</mark><mark=#d3d4ce>WWWWWWWW</mark><mark=#e6e6e6>W</mark>\n<mark=#e6e6e6>W</mark><mark=#d3d4ce>WWWWWWWW</mark><mark=#e6e6e6>W</mark>\n<#0000>W</color><mark=#e6e6e6>W</mark><mark=#d3d4ce>WWWWWW</mark><mark=#e6e6e6>W</mark><#0000>W\nW</color><mark=#e6e6e6>WW</mark><mark=#d3d4ce>W</mark><mark=#dedede>WW</mark><mark=#d3d4ce>W</mark><mark=#e6e6e6>WW</mark><#0000>W\nW</color><mark=#bfbfbf>W</mark><mark=#454545>W</mark><mark=#333>WWWWWW</mark><mark=#bfbfbf>W</mark>\n<#0000>W</color><mark=#bfbfbf>WW</mark><mark=#454545>WWWWWW</mark><mark=#bfbfbf>W</mark>\n<#0000>WW</color><mark=#bfbfbf>WWWWWWWW</mark>\n<#0000>WWW</color><mark=#dedede>WWWW</mark><#0000>WWW\nWWWW</color><mark=#dedede>WW</mark><#0000>WWWW</color>", position);
             LateTask.New(() => Hide(hideList), 0.4f);
         }
     }
@@ -652,7 +652,7 @@ namespace EndKnot
     {
         internal BlackHole(Vector2 position)
         {
-            CreateNetObject("<size=100%><font=\"VCR SDF\"><line-height=67%><alpha=#00>█<alpha=#00>█<#000000>█<#19131c>█<#000000>█<#000000>█<alpha=#00>█<alpha=#00>█<br><alpha=#00>█<#412847>█<#000000>█<#19131c>█<#000000>█<#412847>█<#260f26>█<alpha=#00>█<br><#000000>█<#412847>█<#412847>█<#000000>█<#260f26>█<#1c0d1c>█<#19131c>█<#000000>█<br><#19131c>█<#000000>█<#412847>█<#1c0d1c>█<#1c0d1c>█<#000000>█<#19131c>█<#000000>█<br><#000000>█<#000000>█<#260f26>█<#1c0d1c>█<#1c0d1c>█<#000000>█<#000000>█<#260f26>█<br><#000000>█<#260f26>█<#1c0d1c>█<#1c0d1c>█<#19131c>█<#412847>█<#412847>█<#19131c>█<br><alpha=#00>█<#260f26>█<#412847>█<#412847>█<#19131c>█<#260f26>█<#19131c>█<alpha=#00>█<br><alpha=#00>█<alpha=#00>█<#412847>█<#260f26>█<#260f26>█<#000000>█<alpha=#00>█<alpha=#00>█<br></line-height></size>", position);
+            CreateNetObject("<line-height=97%><cspace=0.16em><#0000>WW</color><mark=#000>WWWW</mark><#0000>WW\nW</color><mark=#000>WWWWWW</mark><#0000>W</color>\n<mark=#000>WWWWWWWW\nWWWWWWWW\nWWWWWWWW\nWWWWWWWW</mark>\n<#0000>W</color><mark=#000>WWWWWW</mark><#0000>W\nWW</color><mark=#000>WWWW</mark><#0000>WW</color>", position);
         }
 
         public override void OnMeeting()
@@ -666,7 +666,7 @@ namespace EndKnot
     {
         public SprayedArea(Vector2 position, IEnumerable<byte> visibleList)
         {
-            CreateNetObject("<size=100%><font=\"VCR SDF\"><line-height=67%><alpha=#00>\u2588<alpha=#00>\u2588<#ffd000>\u2588<#ffd000>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br><alpha=#00>\u2588<#ffd000>\u2588<#ffd000>\u2588<#ffd000>\u2588<#ffd000>\u2588<alpha=#00>\u2588<br><#ffd000>\u2588<#ffd000>\u2588<#ffd000>\u2588<#ffd000>\u2588<#ffd000>\u2588<#ffd000>\u2588<br><#ffd000>\u2588<#ffd000>\u2588<#ffd000>\u2588<#ffd000>\u2588<#ffd000>\u2588<#ffd000>\u2588<br><alpha=#00>\u2588<#ffd000>\u2588<#ffd000>\u2588<#ffd000>\u2588<#ffd000>\u2588<alpha=#00>\u2588<br><alpha=#00>\u2588<alpha=#00>\u2588<#ffd000>\u2588<#ffd000>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br></line-height></size>", position);
+            CreateNetObject("<line-height=97%><cspace=0.16em><#0000>WW</color><mark=#ffd000>WW</mark><#0000>WW\nW</color><mark=#ffd000>WWWW</mark><#0000>W</color>\n<mark=#ffd000>WWWWWW</mark>\n<mark=#ffd000>WWWWWW</mark>\n<#0000>W</color><mark=#ffd000>WWWW</mark><#0000>W\nWW</color><mark=#ffd000>WW</mark><#0000>WW</color>", position);
             LateTask.New(() => Hide(Main.EnumerateAlivePlayerControls().ExceptBy(visibleList, x => x.PlayerId)), 0.4f);
         }
 
@@ -680,7 +680,7 @@ namespace EndKnot
     {
         public CatcherTrap(Vector2 position, PlayerControl catcher)
         {
-            CreateNetObject("<size=100%><font=\"VCR SDF\"><line-height=67%><alpha=#00>\u2588<alpha=#00>\u2588<#ccffda>\u2588<#ccffda>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br><alpha=#00>\u2588<#ccffda>\u2588<#ccffda>\u2588<#ccffda>\u2588<#ccffda>\u2588<alpha=#00>\u2588<br><#ccffda>\u2588<#ccffda>\u2588<#ccffda>\u2588<#ccffda>\u2588<#ccffda>\u2588<#ccffda>\u2588<br><#ccffda>\u2588<#ccffda>\u2588<#ccffda>\u2588<#ccffda>\u2588<#ccffda>\u2588<#ccffda>\u2588<br><alpha=#00>\u2588<#ccffda>\u2588<#ccffda>\u2588<#ccffda>\u2588<#ccffda>\u2588<alpha=#00>\u2588<br><alpha=#00>\u2588<alpha=#00>\u2588<#ccffda>\u2588<#ccffda>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br></line-height></size>", position);
+            CreateNetObject("<line-height=97%><cspace=0.16em><#0000>WW</color><mark=#ccffda>WW</mark><#0000>WW\nW</color><mark=#ccffda>WWWW</mark><#0000>W</color>\n<mark=#ccffda>WWWWWW</mark>\n<mark=#ccffda>WWWWWW</mark>\n<#0000>W</color><mark=#ccffda>WWWW</mark><#0000>W\nWW</color><mark=#ccffda>WW</mark><#0000>WW</color>", position);
             LateTask.New(() => Hide(Main.EnumerateAlivePlayerControls().Without(catcher)), 0.4f);
         }
 
@@ -694,7 +694,7 @@ namespace EndKnot
     {
         public YellowFlag(Vector2 position)
         {
-            CreateNetObject("<size=100%><font=\"VCR SDF\"><line-height=67%><#000000>\u2588<#ffff00>\u2588<#ffff00>\u2588<#ffff00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br><#000000>\u2588<#ffff00>\u2588<#ffff00>\u2588<#ffff00>\u2588<#ffff00>\u2588<#ffff00>\u2588<br><#000000>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<#ffff00>\u2588<#ffff00>\u2588<#ffff00>\u2588<br><#000000>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br><#000000>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br><#000000>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br></line-height></size>", position);
+            CreateNetObject("<line-height=97%><cspace=0.16em><mark=#000>W</mark><mark=#ff0>WWW</mark><#0000>WW</color>\n<mark=#000>W</mark><mark=#ff0>WWWWW</mark>\n<mark=#000>W</mark><#0000>WW</color><mark=#ff0>WWW</mark>\n<mark=#000>W</mark><#0000>WWWWW</color>\n<mark=#000>W</mark><#0000>WWWWW</color>\n<mark=#000>W</mark><#0000>WWWWW</color>", position);
         }
     }
 
@@ -702,7 +702,7 @@ namespace EndKnot
     {
         public BlueFlag(Vector2 position)
         {
-            CreateNetObject("<size=100%><font=\"VCR SDF\"><line-height=67%><#000000>\u2588<#0000ff>\u2588<#0000ff>\u2588<#0000ff>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br><#000000>\u2588<#0000ff>\u2588<#0000ff>\u2588<#0000ff>\u2588<#0000ff>\u2588<#0000ff>\u2588<br><#000000>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<#0000ff>\u2588<#0000ff>\u2588<#0000ff>\u2588<br><#000000>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br><#000000>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br><#000000>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br></line-height></size>", position);
+            CreateNetObject("<line-height=97%><cspace=0.16em><mark=#000>W</mark><mark=#00f>WWW</mark><#0000>WW</color>\n<mark=#000>W</mark><mark=#00f>WWWWW</mark>\n<mark=#000>W</mark><#0000>WW</color><mark=#00f>WWW</mark>\n<mark=#000>W</mark><#0000>WWWWW</color>\n<mark=#000>W</mark><#0000>WWWWW</color>\n<mark=#000>W</mark><#0000>WWWWW</color>", position);
         }
     }
 
@@ -710,7 +710,7 @@ namespace EndKnot
     {
         public SoulObject(Vector2 position, PlayerControl whisperer)
         {
-            CreateNetObject("<size=80%><font=\"VCR SDF\"><line-height=67%><alpha=#00>\u2588<alpha=#00>\u2588<#fcfcfc>\u2588<#fcfcfc>\u2588<#fcfcfc>\u2588<alpha=#00>\u2588<br><alpha=#00>\u2588<#fcfcfc>\u2588<#fcfcfc>\u2588<#fcfcfc>\u2588<#fcfcfc>\u2588<#fcfcfc>\u2588<br><#fcfcfc>\u2588<#fcfcfc>\u2588<#fcfcfc>\u2588<#fcfcfc>\u2588<#cfcfcf>\u2588<#cfcfcf>\u2588<br><#fcfcfc>\u2588<#fcfcfc>\u2588<#fcfcfc>\u2588<#fcfcfc>\u2588<#fcfcfc>\u2588<#fcfcfc>\u2588<br><alpha=#00>\u2588<#fcfcfc>\u2588<#fcfcfc>\u2588<#fcfcfc>\u2588<#fcfcfc>\u2588<#fcfcfc>\u2588<br><alpha=#00>\u2588<#fcfcfc>\u2588<#fcfcfc>\u2588<#fcfcfc>\u2588<alpha=#00>\u2588<#fcfcfc>\u2588<br></line-height></size>", position);
+            CreateNetObject("<size=80%><line-height=97%><cspace=0.16em><#0000>WW</color><mark=#fcfcfc>WWW</mark><#0000>W\nW</color><mark=#fcfcfc>WWWWW</mark>\n<mark=#fcfcfc>WWWW</mark><mark=#cfcfcf>WW</mark>\n<mark=#fcfcfc>WWWWWW</mark>\n<#0000>W</color><mark=#fcfcfc>WWWWW</mark>\n<#0000>W</color><mark=#fcfcfc>WWW</mark><#0000>W</color><mark=#fcfcfc>W</mark>", position);
             LateTask.New(() => Hide(Main.EnumerateAlivePlayerControls().Without(whisperer)), 0.4f);
         }
     }
@@ -779,7 +779,7 @@ namespace EndKnot
 
         public Lightning(Vector2 position)
         {
-            CreateNetObject("<size=100%><font=\"VCR SDF\"><line-height=67%><alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<#c6c7c3>\u2588<br><alpha=#00>\u2588<#c6c7c3>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<#c6c7c3>\u2588<alpha=#00>\u2588<br><#c6c7c3>\u2588<alpha=#00>\u2588<#fffb00>\u2588<#fffb00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br><alpha=#00>\u2588<alpha=#00>\u2588<#fffb00>\u2588<#fffb00>\u2588<alpha=#00>\u2588<#c6c7c3>\u2588<br><#c6c7c3>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br><alpha=#00>\u2588<alpha=#00>\u2588<#c6c7c3>\u2588<#c6c7c3>\u2588<alpha=#00>\u2588<alpha=#00>\u2588<br></line-height></size>", position);
+            CreateNetObject("<line-height=97%><cspace=0.16em><#0000>WWWWW</color><mark=#c6c7c3>W</mark>\n<#0000>W</color><mark=#c6c7c3>W</mark><#0000>WW</color><mark=#c6c7c3>W</mark><#0000>W</color>\n<mark=#c6c7c3>W</mark><#0000>W</color><mark=#fffb00>WW</mark><#0000>WW\nWW</color><mark=#fffb00>WW</mark><#0000>W</color><mark=#c6c7c3>W</mark>\n<mark=#c6c7c3>W</mark><#0000>WWWWW\nWW</color><mark=#c6c7c3>WW</mark><#0000>WW</color>", position);
         }
 
         protected override void OnFixedUpdate()
@@ -793,7 +793,7 @@ namespace EndKnot
     {
         public BlueBed(Vector2 position)
         {
-            BaseSprite = "<size=70%><line-height=67%><alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<br><#c7deff>█<#c7deff>█<#00aeff>█<#00aeff>█<#00aeff>█<#00aeff>█<br><#c7deff>█<#c7deff>█<#00aeff>█<#00aeff>█<#00aeff>█<#00aeff>█<br><#c7deff>█<#c7deff>█<#00aeff>█<#00aeff>█<#00aeff>█<#00aeff>█<br><#82531a>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<#82531a>█<br><alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<br></line-height></size>";
+            BaseSprite = "<size=70%><line-height=97%><cspace=0.16em><mark=#c7deff>WW</mark><mark=#00aeff>WWWW</mark>\n<mark=#c7deff>WW</mark><mark=#00aeff>WWWW</mark>\n<mark=#c7deff>WW</mark><mark=#00aeff>WWWW</mark>\n<mark=#82531a>W</mark><#0000>WWWW</color><mark=#82531a>W</mark>";
             UpdateStatus(false);
             CreateNetObject(GetSprite(), position);
         }
@@ -803,7 +803,7 @@ namespace EndKnot
     {
         public GreenBed(Vector2 position)
         {
-            BaseSprite = "<size=70%><line-height=67%><alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<br><#baffd0>█<#baffd0>█<#00ff7b>█<#00ff7b>█<#00ff7b>█<#00ff7b>█<br><#baffd0>█<#baffd0>█<#00ff7b>█<#00ff7b>█<#00ff7b>█<#00ff7b>█<br><#baffd0>█<#baffd0>█<#00ff7b>█<#00ff7b>█<#00ff7b>█<#00ff7b>█<br><#82531a>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<#82531a>█<br><alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<br></line-height></size>";
+            BaseSprite = "<size=70%><line-height=97%><cspace=0.16em><mark=#baffd0>WW</mark><mark=#00ff7b>WWWW</mark>\n<mark=#baffd0>WW</mark><mark=#00ff7b>WWWW</mark>\n<mark=#baffd0>WW</mark><mark=#00ff7b>WWWW</mark>\n<mark=#82531a>W</mark><#0000>WWWW</color><mark=#82531a>W</mark>";
             UpdateStatus(false);
             CreateNetObject(GetSprite(), position);
         }
@@ -813,7 +813,7 @@ namespace EndKnot
     {
         public YellowBed(Vector2 position)
         {
-            BaseSprite = "<size=70%><line-height=67%><alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<br><#fffebd>█<#fffebd>█<#ffff00>█<#ffff00>█<#ffff00>█<#ffff00>█<br><#fffebd>█<#fffebd>█<#ffff00>█<#ffff00>█<#ffff00>█<#ffff00>█<br><#fffebd>█<#fffebd>█<#ffff00>█<#ffff00>█<#ffff00>█<#ffff00>█<br><#82531a>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<#82531a>█<br><alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<br></line-height></size>";
+            BaseSprite = "<size=70%><line-height=97%><cspace=0.16em><mark=#fffebd>WW</mark><mark=#ff0>WWWW</mark>\n<mark=#fffebd>WW</mark><mark=#ff0>WWWW</mark>\n<mark=#fffebd>WW</mark><mark=#ff0>WWWW</mark>\n<mark=#82531a>W</mark><#0000>WWWW</color><mark=#82531a>W</mark>";
             UpdateStatus(false);
             CreateNetObject(GetSprite(), position);
         }
@@ -823,7 +823,7 @@ namespace EndKnot
     {
         public RedBed(Vector2 position)
         {
-            BaseSprite = "<size=70%><line-height=67%><alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<br><#ffbbb5>█<#ffbbb5>█<#ff0008>█<#ff0008>█<#ff0008>█<#ff0008>█<br><#ffbbb5>█<#ffbbb5>█<#ff0008>█<#ff0008>█<#ff0008>█<#ff0008>█<br><#ffbbb5>█<#ffbbb5>█<#ff0008>█<#ff0008>█<#ff0008>█<#ff0008>█<br><#82531a>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<#82531a>█<br><alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<br></line-height></size>";
+            BaseSprite = "<size=70%><line-height=97%><cspace=0.16em><mark=#ffbbb5>WW</mark><mark=#ff0008>WWWW</mark>\n<mark=#ffbbb5>WW</mark><mark=#ff0008>WWWW</mark>\n<mark=#ffbbb5>WW</mark><mark=#ff0008>WWWW</mark>\n<mark=#82531a>W</mark><#0000>WWWW</color><mark=#82531a>W</mark>";
             UpdateStatus(false);
             CreateNetObject(GetSprite(), position);
         }
@@ -862,7 +862,7 @@ namespace EndKnot
         {
             Location = location;
             timer = 4f;
-            CreateNetObject("<size=100%><line-height=67%><alpha=#00>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<#000000>█<#ffea00>█<br><alpha=#00>█<alpha=#00>█<alpha=#00>█<#000000>█<alpha=#00>█<alpha=#00>█<br><alpha=#00>█<#ff0004>█<#ff0004>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<br><#ff0004>█<#ff0004>█<#ff0004>█<#ff0004>█<alpha=#00>█<alpha=#00>█<br><#ff0004>█<#ff0004>█<#ff0004>█<#ff0004>█<alpha=#00>█<alpha=#00>█<br><alpha=#00>█<#ff0004>█<#ff0004>█<alpha=#00>█<alpha=#00>█<alpha=#00>█<br></line-height></size>", location);
+            CreateNetObject("<line-height=97%><cspace=0.16em><#0000>WWWW</color><mark=#000>W</mark><mark=#ffea00>W</mark>\n<#0000>WWW</color><mark=#000>W</mark><#0000>WW\nW</color><mark=#ff0004>WW</mark><#0000>WWW</color>\n<mark=#ff0004>WWWW</mark><#0000>WW</color>\n<mark=#ff0004>WWWW</mark><#0000>WW\nW</color><mark=#ff0004>WW</mark><#0000>WWW</color>", location);
         }
 
         protected override void OnFixedUpdate()
@@ -891,7 +891,7 @@ namespace EndKnot
     {
         public Portal(Vector2 position)
         {
-            CreateNetObject("<size=70%><line-height=67%><alpha=#00>█<#2b006b>█<#2b006b>█<#2b006b>█<#2b006b>█<alpha=#00>█<br><alpha=#00>█<#2b006b>█<#fa69ff>█<#fa69ff>█<#2b006b>█<alpha=#00>█<br><alpha=#00>█<#2b006b>█<#fa69ff>█<#fa69ff>█<#2b006b>█<alpha=#00>█<br><alpha=#00>█<#2b006b>█<#fa69ff>█<#fa69ff>█<#2b006b>█<alpha=#00>█<br><alpha=#00>█<#2b006b>█<#fa69ff>█<#fa69ff>█<#2b006b>█<alpha=#00>█<br><alpha=#00>█<#2b006b>█<#2b006b>█<#2b006b>█<#2b006b>█<alpha=#00>█<br></line-height></size>", position);
+            CreateNetObject("<size=70%><line-height=97%><cspace=0.16em><mark=#2b006b>WWWW</mark>\n<mark=#2b006b>W</mark><mark=#fa69ff>WW</mark><mark=#2b006b>W</mark>\n<mark=#2b006b>W</mark><mark=#fa69ff>WW</mark><mark=#2b006b>W</mark>\n<mark=#2b006b>W</mark><mark=#fa69ff>WW</mark><mark=#2b006b>W</mark>\n<mark=#2b006b>W</mark><mark=#fa69ff>WW</mark><mark=#2b006b>W</mark>\n<mark=#2b006b>WWWW</mark>", position);
         }
     }
 
@@ -908,7 +908,7 @@ namespace EndKnot
         public void SpawnIfNotSpawned()
         {
             if (Spawned) return;
-            CreateNetObject("<size=100%><line-height=67%><alpha=#00>█<#00ff15>█<alpha=#00>█<#00ff15>█<alpha=#00>█<#00ff15>█<br><alpha=#00>█<#00ff15>█<alpha=#00>█<#00ff15>█<alpha=#00>█<#00ff15>█<br><#00ff15>█<#00ff15>█<alpha=#00>█<#00ff15>█<alpha=#00>█<#00ff15>█<br><#00ff15>█<alpha=#00>█<alpha=#00>█<#00ff15>█<alpha=#00>█<#00ff15>█<br><#00ff15>█<alpha=#00>█<#00ff15>█<#00ff15>█<alpha=#00>█<#00ff15>█<br><#00ff15>█<alpha=#00>█<#00ff15>█<alpha=#00>█<alpha=#00>█<#00ff15>█<br></line-height></size>", Position);
+            CreateNetObject("<line-height=97%><cspace=0.16em><#0000>W</color><mark=#00ff15>W</mark><#0000>W</color><mark=#00ff15>W</mark><#0000>W</color><mark=#00ff15>W</mark>\n<#0000>W</color><mark=#00ff15>W</mark><#0000>W</color><mark=#00ff15>W</mark><#0000>W</color><mark=#00ff15>W</mark>\n<mark=#00ff15>WW</mark><#0000>W</color><mark=#00ff15>W</mark><#0000>W</color><mark=#00ff15>W</mark>\n<mark=#00ff15>W</mark><#0000>WW</color><mark=#00ff15>W</mark><#0000>W</color><mark=#00ff15>W</mark>\n<mark=#00ff15>W</mark><#0000>W</color><mark=#00ff15>WW</mark><#0000>W</color><mark=#00ff15>W</mark>\n<mark=#00ff15>W</mark><#0000>W</color><mark=#00ff15>W</mark><#0000>WW</color><mark=#00ff15>W</mark>", Position);
             Spawned = true;
         }
     }
