@@ -273,7 +273,9 @@ internal static class ChatCommands
             new("DevTp", "{x} {y} [id]", Command.UsageLevels.Host, Command.UsageTimes.InGame, DevTpCommand, true, true, [GetString("CommandArgs.DevTp.X"), GetString("CommandArgs.DevTp.Y"), GetString("CommandArgs.DevTp.Id")]),
             new("DevTpTo", "{srcId} {dstId}", Command.UsageLevels.Host, Command.UsageTimes.InGame, DevTpToCommand, true, true, [GetString("CommandArgs.DevTpTo.SrcId"), GetString("CommandArgs.DevTpTo.DstId")]),
             new("Dummy", "[count]", Command.UsageLevels.Host, Command.UsageTimes.InGame, DummyCommand, true, true, [GetString("CommandArgs.Dummy.Count")]),
-            new("UnDummy", "", Command.UsageLevels.Host, Command.UsageTimes.InGame, UnDummyCommand, true, true)
+            new("UnDummy", "", Command.UsageLevels.Host, Command.UsageTimes.InGame, UnDummyCommand, true, true),
+            new("SizeTest", "", Command.UsageLevels.Host, Command.UsageTimes.InGame, SizeTestCommand, true, true),
+            new("SizeClean", "", Command.UsageLevels.Host, Command.UsageTimes.InGame, SizeCleanCommand, true, true)
         ];
     }
 
@@ -2756,6 +2758,26 @@ internal static class ChatCommands
         int removed = DummyPlayer.DespawnAll();
         Logger.Info($"DevCmd /undummy: removed={removed}", "DevCmd");
         Utils.SendMessage($"[undummy] Despawned {removed} dummy marker(s).", player.PlayerId);
+    }
+
+    private static void SizeTestCommand(PlayerControl player, string text, string[] args)
+    {
+        if (!player.FriendCode.GetDevUser().up && !player.FriendCode.IsLocalDev()) return;
+
+        Vector2 origin = player.GetTruePosition() + new Vector2(2f, 0f);
+        int spawned = SizeTestCNO.SpawnRow(origin);
+
+        Logger.Info($"DevCmd /sizetest: spawned={spawned} at {origin}", "DevCmd");
+        Utils.SendMessage($"[sizetest] Spawned {spawned} 〇 at sizes 600/800/1000/1200/1500%. Walk right to see each.", player.PlayerId);
+    }
+
+    private static void SizeCleanCommand(PlayerControl player, string text, string[] args)
+    {
+        if (!player.FriendCode.GetDevUser().up && !player.FriendCode.IsLocalDev()) return;
+
+        int removed = SizeTestCNO.DespawnAll();
+        Logger.Info($"DevCmd /sizeclean: removed={removed}", "DevCmd");
+        Utils.SendMessage($"[sizeclean] Despawned {removed} size-test marker(s).", player.PlayerId);
     }
 
     private static void KCountCommand(PlayerControl player, string text, string[] args)
