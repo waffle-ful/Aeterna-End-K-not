@@ -5,10 +5,6 @@ using Hazel;
 
 namespace EndKnot.Modules;
 
-// Ported from upstream EHR commit 7650ac30 (2026-05-06) — rate-limits outbound RPCs to
-// 23/sec each (Reliable / Unreliable) on Innersloth's Vanilla and Local regions, to
-// avoid AU 2026 anti-cheat "Hacking" reason kicks triggered by burst packet send.
-// Bypassed entirely on modded regions (CurrentServerType is not Local/Vanilla).
 public static class DataFlagRateLimiter
 {
     public class QueuedAction
@@ -28,17 +24,29 @@ public static class DataFlagRateLimiter
 
     private static int LastPingMs;
 
+    // =========================
+    // RELIABLE
+    // =========================
+
     private static readonly Queue<QueuedAction> ReliableQueue = new();
     private static readonly Stopwatch ReliableTimer = Stopwatch.StartNew();
     private static int ReliableSent;
 
     private const int ReliableRateLimitPerSecond = 23;
 
+    // =========================
+    // UNRELIABLE (SendOption.None)
+    // =========================
+
     private static readonly Queue<QueuedAction> UnreliableQueue = new();
     private static readonly Stopwatch UnreliableTimer = Stopwatch.StartNew();
     private static int UnreliableSent;
 
     private const int UnreliableRateLimitPerSecond = 23;
+
+    // =========================
+    // PUBLIC API
+    // =========================
 
     public static QueuedAction Enqueue(Action action, SendOption channel = SendOption.Reliable, int calls = 1, Action cleanup = null)
     {
@@ -50,6 +58,7 @@ public static class DataFlagRateLimiter
             Done = false
         };
 
+        // Not needed on modded regions
         if (GameStates.CurrentServerType is not (GameStates.ServerType.Local or GameStates.ServerType.Vanilla))
         {
             Execute(qa);
@@ -62,7 +71,7 @@ public static class DataFlagRateLimiter
                 EnqueueInternal(ReliableQueue, ref ReliableSent, ReliableRateLimitPerSecond, qa);
                 break;
 
-            case SendOption.None:
+            case SendOption.None: // Unreliable
                 EnqueueInternal(UnreliableQueue, ref UnreliableSent, UnreliableRateLimitPerSecond, qa);
                 break;
         }
@@ -70,14 +79,24 @@ public static class DataFlagRateLimiter
         return qa;
     }
 
+    // Called once per frame
     public static void OnFixedUpdate()
     {
         ProcessQueue(ReliableQueue, ref ReliableSent, ReliableTimer, ReliableRateLimitPerSecond);
         ProcessQueue(UnreliableQueue, ref UnreliableSent, UnreliableTimer, UnreliableRateLimitPerSecond);
     }
 
-    private static void EnqueueInternal(Queue<QueuedAction> queue, ref int sent, int limit, QueuedAction qa)
+    // =========================
+    // INTERNAL LOGIC
+    // =========================
+
+    private static void EnqueueInternal(
+        Queue<QueuedAction> queue,
+        ref int sent,
+        int limit,
+        QueuedAction qa)
     {
+        // Try immediate execution if no backlog
         if (queue.Count == 0 && sent + qa.Cost <= limit)
         {
             Execute(qa);
@@ -88,8 +107,13 @@ public static class DataFlagRateLimiter
         queue.Enqueue(qa);
     }
 
-    private static void ProcessQueue(Queue<QueuedAction> queue, ref int sent, Stopwatch timer, int limit)
+    private static void ProcessQueue(
+        Queue<QueuedAction> queue,
+        ref int sent,
+        Stopwatch timer,
+        int limit)
     {
+        // Reset window every second
         if (timer.ElapsedMilliseconds >= 1000 + Math.Max(0, LastPingMs - AmongUsClient.Instance.Ping))
         {
             LastPingMs = AmongUsClient.Instance.Ping;
