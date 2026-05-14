@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -20,6 +20,7 @@ public class CustomRpcSender
     {
         BeforeInit = 0, // Cannot do anything before initialization
         Ready, // Ready to send - StartMessage and SendMessage can be executed
+        InRootPackedMessage, // State where only GameDataTo submessages can be started
         InRootMessage, // State between StartMessage and EndMessage - StartRpc and EndMessage can be executed
         InRpc, // State between StartRpc and EndRpc - Write and EndRpc can be executed
         Finished // Nothing can be done after sending
@@ -39,8 +40,10 @@ public class CustomRpcSender
     // -2: Not set
     private int currentRpcTarget;
 
+    private bool packed;
+
     private State currentState = State.BeforeInit;
-    private int messages;
+    public int messages;
     public MessageWriter stream;
 
     private CustomRpcSender() { }
@@ -54,6 +57,7 @@ public class CustomRpcSender
         this.sendOption = sendOption;
         this.log = log;
         currentRpcTarget = -2;
+        packed = false;
         onSendDelegate = () => { };
         messages = 0;
 
@@ -99,9 +103,19 @@ public class CustomRpcSender
     {
         if (targetClientId == -2) targetClientId = -1;
 
-        if (currentState is not State.Ready and not State.InRootMessage)
+        if (currentState is not State.Ready and not State.InRootPackedMessage and not State.InRootMessage)
         {
-            var errorMsg = $"Tried to start RPC automatically, but State is not Ready or InRootMessage (in: \"{name}\", state: {currentState}) (called from {callerPath}:{callerLine})";
+            var errorMsg = $"Tried to start RPC automatically, but State is not Ready or InRootPackedMessage or InRootMessage (in: \"{name}\", state: {currentState}) (called from {callerPath}:{callerLine})";
+
+            if (isUnsafe)
+                Logger.Warn(errorMsg, "CustomRpcSender.Warn");
+            else
+                throw new InvalidOperationException(errorMsg);
+        }
+
+        if (currentState == State.InRootPackedMessage && targetClientId < 0)
+        {
+            var errorMsg = $"Tried to start RPC automatically, but State is InRootPackedMessage and the requested targetClientId is negative. Only GameDataTo messages can be started in this state. (in: \"{name}\", state: {currentState}) (called from {callerPath}:{callerLine})";
 
             if (isUnsafe)
                 Logger.Warn(errorMsg, "CustomRpcSender.Warn");
@@ -114,11 +128,23 @@ public class CustomRpcSender
             // StartMessage processing
             if (currentState == State.InRootMessage)
                 EndMessage(startNew: true);
-            else if (messages > 0) // state is Ready
+            else if (messages > 0) // state is Ready or InRootPackedMessage
             {
-                doneStreams.Add(stream);
-                stream = MessageWriter.Get(sendOption);
-                messages = 0;
+                if (currentState == State.InRootPackedMessage)
+                {
+                    stream.EndMessage();
+                    currentState = State.Ready;
+                    doneStreams.Add(stream);
+                    stream = MessageWriter.Get(sendOption);
+                    messages = 0;
+                    StartPackedMessage(); // assume the next message should be in a PackedGameDataTo message as well
+                }
+                else // state is Ready
+                {
+                    doneStreams.Add(stream);
+                    stream = MessageWriter.Get(sendOption);
+                    messages = 0;
+                }
             }
 
             StartMessage(targetClientId);
@@ -132,6 +158,8 @@ public class CustomRpcSender
     public void SendMessage(bool dispose = false)
     {
         if (currentState == State.InRootMessage) EndMessage();
+        
+        if (currentState == State.InRootPackedMessage) EndMessage();
 
         if (currentState != State.Ready && !dispose)
         {
@@ -170,6 +198,9 @@ public class CustomRpcSender
             onSendDelegate();
         }
 
+        packed = false;
+        currentRpcTarget = -2;
+        messages = 0;
         currentState = State.Finished;
         stream.Recycle();
     }
@@ -178,7 +209,7 @@ public class CustomRpcSender
     {
         if (currentState != State.InRpc)
         {
-            var errorMsg = $"Tried to write RPC, but State is not Write (in: \"{name}\")";
+            var errorMsg = $"Tried to write RPC, but State is not InRpc (in: \"{name}\")";
 
             if (isUnsafe)
                 Logger.Warn(errorMsg, "CustomRpcSender.Warn");
@@ -197,9 +228,19 @@ public class CustomRpcSender
 
     public CustomRpcSender StartMessage(int targetClientId = -1)
     {
-        if (currentState != State.Ready)
+        if (currentState is not State.Ready and not State.InRootPackedMessage)
         {
-            var errorMsg = $"Tried to start Message but State is not Ready (in: \"{name}\")";
+            var errorMsg = $"Tried to start Message but State is not Ready or InRootPackedMessage (in: \"{name}\")";
+
+            if (isUnsafe)
+                Logger.Warn(errorMsg, "CustomRpcSender.Warn");
+            else
+                throw new InvalidOperationException(errorMsg);
+        }
+
+        if (currentState == State.InRootPackedMessage && targetClientId < 0)
+        {
+            var errorMsg = $"Tried to start RPC automatically, but State is InRootPackedMessage and the requested targetClientId is negative. Only GameDataTo messages can be started in this state. (in: \"{name}\")";
 
             if (isUnsafe)
                 Logger.Warn(errorMsg, "CustomRpcSender.Warn");
@@ -209,9 +250,20 @@ public class CustomRpcSender
 
         if (stream.Length > 500)
         {
-            doneStreams.Add(stream);
-            stream = MessageWriter.Get(sendOption);
-            messages = 0;
+            if (currentState == State.InRootPackedMessage)
+            {
+                stream.EndMessage();
+                doneStreams.Add(stream);
+                stream = MessageWriter.Get(sendOption);
+                messages = 0;
+                StartPackedMessage();
+            }
+            else
+            {
+                doneStreams.Add(stream);
+                stream = MessageWriter.Get(sendOption);
+                messages = 0;
+            }
         }
 
         if (targetClientId < 0)
@@ -233,11 +285,11 @@ public class CustomRpcSender
         return this;
     }
 
-    public CustomRpcSender EndMessage(bool startNew = false)
+    public CustomRpcSender StartPackedMessage()
     {
-        if (currentState != State.InRootMessage)
+        if (currentState != State.Ready)
         {
-            var errorMsg = $"Tried to exit Message but State is not InRootMessage (in: \"{name}\")";
+            var errorMsg = $"Tried to start Message but State is not Ready (in: \"{name}\")";
 
             if (isUnsafe)
                 Logger.Warn(errorMsg, "CustomRpcSender.Warn");
@@ -245,17 +297,65 @@ public class CustomRpcSender
                 throw new InvalidOperationException(errorMsg);
         }
 
-        stream.EndMessage();
-
-        if (startNew)
+        if (stream.Length > 500)
         {
             doneStreams.Add(stream);
             stream = MessageWriter.Get(sendOption);
             messages = 0;
         }
 
+        stream.StartMessage(26);
+        stream.WritePacked(AmongUsClient.Instance.GameId);
+
         currentRpcTarget = -2;
-        currentState = State.Ready;
+        currentState = State.InRootPackedMessage;
+        packed = true;
+        return this;
+    }
+
+    public CustomRpcSender EndMessage(bool startNew = false)
+    {
+        if (currentState is not State.InRootMessage and not State.InRootPackedMessage)
+        {
+            var errorMsg = $"Tried to exit Message but State is not InRootMessage or InRootPackedMessage (in: \"{name}\")";
+
+            if (isUnsafe)
+                Logger.Warn(errorMsg, "CustomRpcSender.Warn");
+            else
+                throw new InvalidOperationException(errorMsg);
+        }
+
+        bool wasPackedContext = packed;
+        bool closingPackedRoot = currentState == State.InRootPackedMessage;
+
+        stream.EndMessage();
+
+        if (closingPackedRoot)
+            packed = false;
+
+        if (startNew)
+        {
+            if (wasPackedContext && !closingPackedRoot)
+            {
+                // Close outer packed root too
+                stream.EndMessage();
+            }
+
+            doneStreams.Add(stream);
+            stream = MessageWriter.Get(sendOption);
+            messages = 0;
+            
+            currentState = State.Ready;
+            currentRpcTarget = -2;
+
+            if (wasPackedContext)
+                StartPackedMessage();
+            
+            return this;
+        }
+
+        currentRpcTarget = -2;
+        currentState = packed ? State.InRootPackedMessage : State.Ready;
         return this;
     }
 
@@ -642,15 +742,25 @@ public static class CustomRpcSenderExtensions
             if (!text.Contains("<size=")) text = $"<size=1.9>{text}</size>";
 
             long expireTS = Utils.TimeStamp + (long)time;
+            bool alreadyContainsKey = false;
 
             if (overrideAll || !NameNotifyManager.Notifies.TryGetValue(pc.PlayerId, out Dictionary<string, long> notifies))
                 NameNotifyManager.Notifies[pc.PlayerId] = new() { { text, expireTS } };
             else
+            {
+                alreadyContainsKey = notifies.ContainsKey(text);
                 notifies[text] = expireTS;
+            }
 
             bool returnValue = pc.IsNonHostModdedClient();
-
             if (returnValue) NameNotifyManager.SendRPC(sender, pc.PlayerId, text, expireTS, overrideAll);
+
+            if (alreadyContainsKey)
+            {
+                if (log) Logger.Info($"Extended name notify for {pc.GetNameWithRole().RemoveHtmlTags()}: {text} ({time}s)", "Name Notify");
+                return returnValue;
+            }
+
             if (setName) returnValue |= Utils.WriteSetNameRpcsToSender(ref sender, false, false, false, false, false, false, pc, [pc], [], out bool senderWasCleared) && !senderWasCleared;
             if (log) Logger.Info($"New name notify for {pc.GetNameWithRole().RemoveHtmlTags()}: {text} ({time}s)", "Name Notify");
 
