@@ -198,12 +198,17 @@ public class Sandbox : RoleBase
         Collider2D collider = target.Collider;
         float pushDist = radius + EdgeBuffer;
 
+        // raycast 始点は collider.bounds.center を使う (Car.cs:111 と同パターン)。
+        // target.Pos() を始点にすると collider 範囲外の点になり exclusion が効かず、
+        // ray が自分のコライダーに即ヒット → 全 12 方向で AnythingBetween が true 返す
+        Vector2 rayStart = collider != null ? (Vector2)collider.bounds.center : target.Pos();
+
         foreach (float offset in PushAngleOffsets)
         {
             Vector2 candidateDir = Rotate(baseDir, offset);
             Vector2 candidate = center + candidateDir * pushDist;
 
-            if (PhysicsHelpers.AnythingBetween(collider, target.Pos(), candidate, Constants.ShipOnlyMask, false))
+            if (PhysicsHelpers.AnythingBetween(collider, rayStart, candidate, Constants.ShipOnlyMask, false))
                 continue;
 
             target.TP(candidate, log: false);

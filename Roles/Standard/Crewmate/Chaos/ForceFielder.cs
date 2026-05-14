@@ -178,12 +178,18 @@ public class ForceFielder : RoleBase
         Vector2 baseDir = outward.normalized;
         Collider2D collider = target.Collider;
 
+        // raycast 始点は collider.bounds.center を使う (Car.cs:111 と同パターン)。
+        // target.Pos() (=GetTruePosition、足元) を始点にすると collider 範囲外の点になる
+        // ため exclusion が効かず、ray が自分のコライダーに即ヒット → 全 12 方向で
+        // AnythingBetween が true を返し、毎回 TPToFallback (spawn) に落ちていた。
+        Vector2 rayStart = collider != null ? (Vector2)collider.bounds.center : target.Pos();
+
         foreach (float offset in EjectAngleOffsets)
         {
             Vector2 candidateDir = Rotate(baseDir, offset);
             Vector2 candidate = center + candidateDir * ejectDist;
 
-            if (PhysicsHelpers.AnythingBetween(collider, target.Pos(), candidate, Constants.ShipOnlyMask, false))
+            if (PhysicsHelpers.AnythingBetween(collider, rayStart, candidate, Constants.ShipOnlyMask, false))
                 continue;
 
             target.TP(candidate, noCheckState: true, log: false);
