@@ -57,6 +57,9 @@ public static class FixedUpdateCaller
             // YouTube chat polling は HUD の有無と無関係に進める（ロビーから動かす前提）
             YouTubeChatManager.Tick(UnityEngine.Time.fixedDeltaTime);
 
+            try { DataFlagRateLimiter.OnFixedUpdate(); }
+            catch (Exception e) { Utils.ThrowException(e); }
+
             if (!PlayerControl.LocalPlayer) return;
 
             if (amongUsClient.IsGameStarted)
