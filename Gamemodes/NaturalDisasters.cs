@@ -384,7 +384,7 @@ public static class NaturalDisasters
             {
                 naturalDisaster.Update();
 
-                if (float.IsNaN(naturalDisaster.SpawnTimer))
+                if (!naturalDisaster.SpawnTimer.IsRunning)
                 {
                     Type type = AllDisasters.Find(d => d.Name == naturalDisaster.DisasterName);
                     LateTask.New(() => Activator.CreateInstance(type, naturalDisaster.Position, naturalDisaster), Utils.CalculatePingDelay(), log: false);
@@ -395,7 +395,7 @@ public static class NaturalDisasters
 
         public static void AddPreparingDisaster(Vector2 position, string disasterName, SystemTypes? room)
         {
-            PreparingDisasters.Add(new(position, DisasterWarningTime.GetFloat(), Sprite(disasterName), disasterName, room));
+            PreparingDisasters.Add(new(position, DisasterWarningTime.GetInt(), Sprite(disasterName), disasterName, room));
         }
     }
     
