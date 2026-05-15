@@ -2943,7 +2943,7 @@ public static class Options
             .SetGameMode(CustomGameMode.Standard)
             .SetColor(new Color32(147, 241, 240, byte.MaxValue));
 
-        ChaosPotSupport.SetupOptions(44443);
+        ChaosPotSupport.SetupOptions(44445);
 
         LoadingPercentage = 94;
 
