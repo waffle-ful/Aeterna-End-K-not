@@ -11,6 +11,11 @@ namespace EndKnot
         public readonly string DummyName;
         private static int NextIndex;
 
+        // true (default): 毎フレーム自前 Position に snap し続けて静的マーカーとして固定
+        // false: snap-back を止めて他役職 (ForceField の eject TP 等) で吹き飛ばし可能にする
+        // /dummyfree でトグル。ForceField 視覚 vs 判定の calibration test 用。
+        public static bool LockPosition = true;
+
         public DummyPlayer(Vector2 position, string dummyName)
         {
             DummyName = dummyName;
@@ -62,6 +67,7 @@ namespace EndKnot
         protected override void OnFixedUpdate()
         {
             if (!playerControl || !AmongUsClient.Instance.AmHost || !AmongUsClient.Instance.AmClient) return;
+            if (!LockPosition) return;
             try { playerControl.NetTransform.SnapTo(Position, (ushort)(playerControl.NetTransform.lastSequenceId + 1U)); }
             catch { }
         }

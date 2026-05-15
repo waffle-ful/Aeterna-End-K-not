@@ -274,6 +274,7 @@ internal static class ChatCommands
             new("DevTpTo", "{srcId} {dstId}", Command.UsageLevels.Host, Command.UsageTimes.InGame, DevTpToCommand, true, true, [GetString("CommandArgs.DevTpTo.SrcId"), GetString("CommandArgs.DevTpTo.DstId")]),
             new("Dummy", "[count]", Command.UsageLevels.Host, Command.UsageTimes.InGame, DummyCommand, true, true, [GetString("CommandArgs.Dummy.Count")]),
             new("UnDummy", "", Command.UsageLevels.Host, Command.UsageTimes.InGame, UnDummyCommand, true, true),
+            new("DummyFree", "", Command.UsageLevels.Host, Command.UsageTimes.InGame, DummyFreeCommand, true, true),
             new("SizeTest", "", Command.UsageLevels.Host, Command.UsageTimes.InGame, SizeTestCommand, true, true),
             new("SizeClean", "", Command.UsageLevels.Host, Command.UsageTimes.InGame, SizeCleanCommand, true, true)
         ];
@@ -2758,6 +2759,16 @@ internal static class ChatCommands
         int removed = DummyPlayer.DespawnAll();
         Logger.Info($"DevCmd /undummy: removed={removed}", "DevCmd");
         Utils.SendMessage($"[undummy] Despawned {removed} dummy marker(s).", player.PlayerId);
+    }
+
+    private static void DummyFreeCommand(PlayerControl player, string text, string[] args)
+    {
+        if (!player.FriendCode.GetDevUser().up && !player.FriendCode.IsLocalDev()) return;
+
+        DummyPlayer.LockPosition = !DummyPlayer.LockPosition;
+        string state = DummyPlayer.LockPosition ? "LOCKED (default)" : "FREE (eject-testable)";
+        Logger.Info($"DevCmd /dummyfree: LockPosition={DummyPlayer.LockPosition}", "DevCmd");
+        Utils.SendMessage($"[dummyfree] Dummy position: {state}", player.PlayerId);
     }
 
     private static void SizeTestCommand(PlayerControl player, string text, string[] args)

@@ -9844,6 +9844,8 @@
   "CommandArgs.Dummy.Count": "Count (1-3, default 1)",
   "CommandForms.UnDummy": "undummy",
   "CommandDescription.UnDummy": "Despawn all dummy markers [dev]",
+  "CommandForms.DummyFree": "dummyfree",
+  "CommandDescription.DummyFree": "Toggle dummy snap-back lock for eject calibration testing [dev]",
   "CommandForms.SizeTest": "sizetest",
   "CommandDescription.SizeTest": "Spawn 5 〇 markers at 600/800/1000/1200/1500% to visually verify TMP <size> rendering limits [dev]",
   "CommandForms.SizeClean": "sizeclean",
