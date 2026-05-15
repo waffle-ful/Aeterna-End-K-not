@@ -57,7 +57,7 @@ public static class AntiBlackout
     // After the ejection screen, we revert the role types to their actual values.
     public static void RevertToActualRoleTypes()
     {
-        if (CachedRoleMap.Count == 0 || CustomWinnerHolder.WinnerTeam != CustomWinner.Default || GameStates.IsEnded)
+        if (CachedRoleMap.Count == 0 || GameStates.IsEnded)
         {
             SkipTasks = false;
             ExileControllerWrapUpPatch.AfterMeetingTasks();
