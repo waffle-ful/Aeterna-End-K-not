@@ -19,17 +19,13 @@ namespace EndKnot
         // - <size=N> (無単位、絶対 font size) は WaveCannon 流で線形にスケール、上限なし
         // → 絶対値 mode を採用
         //
-        // 較正 (実機 2026-05-16 二段階再測定):
-        //   - 旧 radius × 15 → 当たり判定の半分 (報告)
-        //   - radius × 30 → まだ判定が 1.5x 広い (再報告)
-        //   - radius × 45 → 一致狙い (この修正)
-        // <size=100> ≈ world radius 2.2 が実態。FieldRadius (1f-8f) × 45 で一致:
-        //   radius=1 → size=45   (≈ visual radius 1 unit)
-        //   radius=3 → size=135  (≈ default、visual radius 3 unit)
-        //   radius=8 → size=360  (≈ visual radius 8 unit、最大)
+        // 較正中 (2026-05-16 三段階目): mult 15→30→45 と上げても比率 2x→1.5x→1.5x で
+        // 45 → 1.5x が改善せず。線形応答 vs 頭打ちを切り分けるため一気に 150 まで上げる。
+        //   - 視覚が線形なら overshoot して見える → 計算式正しい、後で半分に戻す
+        //   - 視覚が頭打ちなら mult 45 と同じ大きさ → W グリッド方式に切替
         private static string BuildSprite(float radius)
         {
-            int s = (int)(radius * 45f);
+            int s = (int)(radius * 150f);
             return $"<size={s}><font=\"VCR SDF\"><line-height=67%><color=#4488ff>○</color></line-height></font></size>";
         }
 
