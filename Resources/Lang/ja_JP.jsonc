@@ -11804,12 +11804,14 @@
   "WaveCannon": "波動砲",
   "WaveCannonInfo": "ビームをチャージして発射し、当たったものを殺す",
   "WaveCannon.AbilityCooldown": "波動砲のクールダウン",
+  "WaveCannon.DirectionDetectDuration": "方向確定時間",
   "WaveCannon.ChargeDuration": "チャージ時間",
   "WaveCannon.WarningDuration": "警告時間",
   "WaveCannon.FiringDuration": "発射時間",
   "WaveCannon.MaxThicknessStages": "ビームの最大太さ段階",
   "WaveCannon.FriendlyFire": "フレンドリーファイア",
   "WaveCannon.ButtonText": "発射",
+  "WaveCannon.DirectionDetect": "発射方向に少し動いて。直後にチャージ開始するから",
 
   /* --- Banker --- */
   "Banker": "バンカー",
@@ -11899,6 +11901,7 @@
   /* --- JackalHadouHo (波動砲ジャッカル) --- */
   "JackalHadouHo": "波動砲ジャッカル",
   "JackalHadouHoInfo": "ファントムボタンで指向性波動砲をチャージ・発射；弾を仲間にして消費すると超ビームを撃てる",
+  "JackalHadouHoDirectionDetectDuration": "方向確定時間",
   "JackalHadouHoChargeTime": "通常チャージ時間",
   "JackalHadouHoSuperChargeTime": "超ビームチャージ時間",
   "JackalHadouHoWarningTime": "警告フェーズ時間",
@@ -11918,6 +11921,7 @@
   "JackalHadouHoSkCandidate": "候補設定: {0}。次ラウンドで1.5マス以内に1.5秒近づいてください。",
   "JackalHadouHoSkSuccess": "{0} が弾になりました。",
   "JackalHadouHoLoaded": "装填完了！次の発射は超ビームです。",
+  "JackalHadouHo.DirectionDetect": "発射方向に少し動いて。直後にチャージ開始するから",
 
   /* --- Tama (弾) --- */
   "Tama": "弾",

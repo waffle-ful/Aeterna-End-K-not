@@ -19,6 +19,7 @@ public class JackalHadouHo : RoleBase
     public static bool NextNoSideKick;
 
     private static OptionItem KillCooldown;
+    private static OptionItem DirectionDetectDuration;
     private static OptionItem ChargeDuration;
     private static OptionItem SuperChargeDuration;
     private static OptionItem WarningDuration;
@@ -38,25 +39,30 @@ public class JackalHadouHo : RoleBase
 
     private const int BeamCharCount = 20;
     private const int BeamSizeUnit = 30;
-    private const float BeamHalfWidthUnit = 0.075f;
+    private const float BeamHalfWidthUnit = 0.12f;
     private const float BeamLengthUnit = 0.015f;
-    private const float BeamHitboxMargin = 0.5f;
+    private const float BeamHitboxMargin = 0.85f;
     private const int WarningCharCount = 20;
     private const float GateForwardOffset = 1.5f;
     private const float GateUpOffset = 0.3f;
     private const float GateRadius = 0.5f;
     private const float BeamBackwardReach = GateForwardOffset + GateRadius;
 
-    private enum Phase { Idle, Charging, Warning, Firing }
+    private enum Phase { Idle, DirectionDetect, Charging, Warning, Firing }
+
+    // Sniper 風方向確定 phase の秒数は option で可変 (DirectionDetectDuration)。
+    // Utils.TimeStamp (秒精度 long) だと秒境界またぎで即 trigger されるため Time.time で計測。
 
     private byte JhhId;
     private PlayerControl JhhPC;
     private Phase CurrentPhase;
     private long PhaseEndTS;
+    private float DirectionDetectEndTime;
     private bool IsSuperShot;
     private Vector2 StartPosition;
     private Vector2 Direction = Vector2.right;
     private Vector2 LastTrackedPos;
+    private float OriginalSpeed;
     private NetworkedPlayerInfo.PlayerOutfit OriginalOutfit;
     private readonly HashSet<byte> AlreadyKilled = [];
     private bool PhaseEntryDone;
@@ -83,6 +89,9 @@ public class JackalHadouHo : RoleBase
         SetupRoleOptions(Id, TabGroup.NeutralRoles, CustomRoles.JackalHadouHo);
 
         KillCooldown = new FloatOptionItem(Id + 10, "KillCooldown", new(0f, 180f, 0.5f), 30f, TabGroup.NeutralRoles)
+            .SetParent(CustomRoleSpawnChances[CustomRoles.JackalHadouHo])
+            .SetValueFormat(OptionFormat.Seconds);
+        DirectionDetectDuration = new FloatOptionItem(Id + 27, "JackalHadouHoDirectionDetectDuration", new(0f, 10f, 0.5f), 1f, TabGroup.NeutralRoles)
             .SetParent(CustomRoleSpawnChances[CustomRoles.JackalHadouHo])
             .SetValueFormat(OptionFormat.Seconds);
         ChargeDuration = new FloatOptionItem(Id + 11, "JackalHadouHoChargeTime", new(0.5f, 10f, 0.5f), 3f, TabGroup.NeutralRoles)
@@ -199,9 +208,19 @@ public class JackalHadouHo : RoleBase
     private void TriggerCharge(PlayerControl pc)
     {
         if (!pc.IsAlive() || CurrentPhase != Phase.Idle || !GameStates.IsInTask) return;
-        StartPosition = pc.GetTruePosition();
         IsSuperShot = IsLoaded;
-        EnterCharging(pc);
+        float detectDur = DirectionDetectDuration.GetFloat();
+        if (detectDur <= 0f)
+        {
+            // 0 秒設定 = 旧挙動 (即 Charging)
+            StartPosition = pc.GetTruePosition();
+            EnterCharging(pc);
+            return;
+        }
+        CurrentPhase = Phase.DirectionDetect;
+        DirectionDetectEndTime = Time.time + detectDur;
+        PhaseEntryDone = false;
+        pc.Notify(GetString("JackalHadouHo.DirectionDetect"));
     }
 
     private void EnterCharging(PlayerControl pc)
@@ -212,6 +231,12 @@ public class JackalHadouHo : RoleBase
         PhaseEntryDone = false;
 
         byte id = pc.PlayerId;
+
+        // 移動ロック (毎フレーム TP は SnapTo sid 汚染を引き起こすため速度方式)
+        OriginalSpeed = Main.AllPlayerSpeed[id];
+        Main.AllPlayerSpeed[id] = Main.MinSpeed;
+        pc.MarkDirtySettings();
+
         if (Camouflage.PlayerSkins.TryGetValue(id, out var original))
         {
             OriginalOutfit = original;
@@ -265,6 +290,14 @@ public class JackalHadouHo : RoleBase
         OriginalOutfit = null;
     }
 
+    private void RestoreSpeed(PlayerControl pc, bool deathPreserve = false)
+    {
+        if (OriginalSpeed <= 0f) return;
+        Main.AllPlayerSpeed[pc.PlayerId] = OriginalSpeed;
+        if (!deathPreserve) pc.MarkDirtySettings();
+        OriginalSpeed = 0f;
+    }
+
     private void ResetState()
     {
         CurrentPhase = Phase.Idle;
@@ -272,6 +305,7 @@ public class JackalHadouHo : RoleBase
         IsSuperShot = false;
         StartPosition = Vector2.zero;
         LastTrackedPos = Vector2.zero;
+        OriginalSpeed = 0f;
         AlreadyKilled.Clear();
         PhaseEntryDone = false;
         HasHit = false;
@@ -336,23 +370,37 @@ public class JackalHadouHo : RoleBase
             {
                 DespawnAllCNOs();
                 RestoreSkin(pc, deathPreserve: true);
+                RestoreSpeed(pc, deathPreserve: true);
                 CurrentPhase = Phase.Idle;
             }
             return;
         }
 
-        if (CurrentPhase == Phase.Idle)
+        if (CurrentPhase == Phase.Idle || CurrentPhase == Phase.DirectionDetect)
         {
             Vector2 pos = pc.GetTruePosition();
-            if (LastTrackedPos == Vector2.zero) { LastTrackedPos = pos; return; }
-            float deltaX = pos.x - LastTrackedPos.x;
-            if (Mathf.Abs(deltaX) > 0.05f)
-                Direction = deltaX > 0 ? Vector2.right : Vector2.left;
-            LastTrackedPos = pos;
+            if (LastTrackedPos == Vector2.zero) LastTrackedPos = pos;
+            else
+            {
+                float deltaX = pos.x - LastTrackedPos.x;
+                if (Mathf.Abs(deltaX) > 0.05f)
+                    Direction = deltaX > 0 ? Vector2.right : Vector2.left;
+                LastTrackedPos = pos;
+            }
+
+            if (CurrentPhase == Phase.Idle) return;
+
+            // DirectionDetect 経過 → Charging へ。動いた先から発射する。
+            // Time.time (float) で計測 — Utils.TimeStamp は秒境界またぎ取りこぼしあり。
+            if (Time.time >= DirectionDetectEndTime)
+            {
+                StartPosition = pc.GetTruePosition();
+                EnterCharging(pc);
+            }
             return;
         }
 
-        pc.TP(StartPosition, log: false);
+        // 毎フレーム TP は廃止 (EnterCharging の速度ロックで移動を抑止)
 
         switch (CurrentPhase)
         {
@@ -407,6 +455,7 @@ public class JackalHadouHo : RoleBase
                 {
                     DespawnAllCNOs();
                     RestoreSkin(pc);
+                    RestoreSpeed(pc);
                     pc.SetKillCooldown();
                     if (!HasHit && SelfDestructOnMissOpt.GetBool())
                     {
@@ -546,7 +595,11 @@ public class JackalHadouHo : RoleBase
         if (CurrentPhase != Phase.Idle)
         {
             DespawnAllCNOs();
-            if (JhhPC != null) RestoreSkin(JhhPC);
+            if (JhhPC != null)
+            {
+                RestoreSkin(JhhPC);
+                RestoreSpeed(JhhPC);
+            }
             CurrentPhase = Phase.Idle;
             PhaseEntryDone = false;
             AlreadyKilled.Clear();

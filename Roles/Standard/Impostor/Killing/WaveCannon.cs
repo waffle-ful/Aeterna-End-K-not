@@ -16,6 +16,7 @@ public class WaveCannon : RoleBase
     private static List<WaveCannon> Instances = [];
 
     public static OptionItem AbilityCooldown;
+    private static OptionItem DirectionDetectDuration;
     private static OptionItem ChargeDuration;
     private static OptionItem WarningDuration;
     private static OptionItem FiringDuration;
@@ -24,9 +25,9 @@ public class WaveCannon : RoleBase
 
     private const int BeamCharCount = 20;
     private const int BeamSizeUnit = 30; // 1 thickness 単位あたりのフォントサイズ
-    private const float BeamHalfWidthUnit = 0.075f; // 1 thickness 単位あたりの判定半厚 (世界座標)
+    private const float BeamHalfWidthUnit = 0.12f; // 1 thickness 単位あたりの判定半厚 (世界座標)
     private const float BeamLengthUnit = 0.015f; // 1 char 1 size 単位ありの世界距離
-    private const float BeamHitboxMargin = 0.5f;   // プレイヤー本体半径ぶんの判定マージン
+    private const float BeamHitboxMargin = 0.85f;   // プレイヤー本体半径ぶんの判定マージン
     private const int WarningCharCount = 20;
 
     // ゲート (発射元の portal 風 CNO) のレイアウト
@@ -36,13 +37,19 @@ public class WaveCannon : RoleBase
 
     private const float BeamBackwardReach = GateForwardOffset + GateRadius; // 1.5 unit、根本判定をプレイヤー位置まで伸ばす
 
-    private enum Phase { Idle, Charging, Warning, Firing }
+    private enum Phase { Idle, DirectionDetect, Charging, Warning, Firing }
+
+    // Sniper 風方向確定 phase の秒数は option で可変 (DirectionDetectDuration)。
+    // Utils.TimeStamp (秒精度 long) だと秒境界をまたぐと即 Charging に入ってしまうため、
+    // Time.time (float) で計測する。
 
     private Phase CurrentPhase;
     private long PhaseEndTS;
+    private float DirectionDetectEndTime;
     private Vector2 StartPosition;
     private Vector2 Direction;
     private Vector2 LastTrackedPos;
+    private float OriginalSpeed;
     private NetworkedPlayerInfo.PlayerOutfit OriginalOutfit;
     private readonly HashSet<byte> AlreadyKilled = [];
     private bool PhaseEntryDone;
@@ -58,6 +65,7 @@ public class WaveCannon : RoleBase
     {
         StartSetup(Id)
             .AutoSetupOption(ref AbilityCooldown, 30, new IntegerValueRule(10, 60, 1), OptionFormat.Seconds)
+            .AutoSetupOption(ref DirectionDetectDuration, 1f, new FloatValueRule(0f, 10f, 0.5f), OptionFormat.Seconds)
             .AutoSetupOption(ref ChargeDuration, 3, new IntegerValueRule(1, 10, 1), OptionFormat.Seconds)
             .AutoSetupOption(ref WarningDuration, 1, new IntegerValueRule(1, 5, 1), OptionFormat.Seconds)
             .AutoSetupOption(ref FiringDuration, 3, new IntegerValueRule(1, 10, 1), OptionFormat.Seconds)
@@ -92,6 +100,7 @@ public class WaveCannon : RoleBase
         StartPosition = Vector2.zero;
         Direction = Vector2.right;
         LastTrackedPos = Vector2.zero;
+        OriginalSpeed = 0f;
         AlreadyKilled.Clear();
         PhaseEntryDone = false;
         DespawnAllCNOs();
@@ -108,8 +117,8 @@ public class WaveCannon : RoleBase
     }
 
     // 発動はファントムボタン (vanish) のみに統一する。
-    // 非モッド側で pet 撫でアニメ → cosmetics.FlipX 書換 → 方向制御不可になるため
-    // OnPet は意図的に削除。OnShapeshift も Phantom basis では呼ばれないが念のため残す
+    // OnPet は意図的に削除 (非モッド側 pet animation で FlipX が書換わるため)。
+    // OnShapeshift は Phantom basis では呼ばれないが念のため残す
     public override bool OnShapeshift(PlayerControl shapeshifter, PlayerControl target, bool shapeshifting)
     {
         if (!shapeshifting) return true;
@@ -127,10 +136,21 @@ public class WaveCannon : RoleBase
     {
         if (!pc.IsAlive() || CurrentPhase != Phase.Idle || !GameStates.IsInTask) return;
 
-        StartPosition = pc.GetTruePosition();
-        // pc.cosmetics.FlipX は非モッド側で pet animation により書き換わるため使えない。
-        // OnFixedUpdate の Idle 中位置追跡で更新した Direction をそのまま使う
-        EnterCharging(pc);
+        // Sniper 風方向確定 phase に入る。この秒数だけ自由に動けて発射方向を
+        // 微調整できる。cosmetics.flipX はホスト側で同期されない仕様のため、
+        // deltaX tracking で向きを取るしかない → 動きながら向きを決める設計。
+        float detectDur = DirectionDetectDuration.GetFloat();
+        if (detectDur <= 0f)
+        {
+            // 0 秒設定 = 旧挙動 (即 Charging)
+            StartPosition = pc.GetTruePosition();
+            EnterCharging(pc);
+            return;
+        }
+        CurrentPhase = Phase.DirectionDetect;
+        DirectionDetectEndTime = Time.time + detectDur;
+        PhaseEntryDone = false;
+        pc.Notify(GetString("WaveCannon.DirectionDetect"));
     }
 
     private void EnterCharging(PlayerControl pc)
@@ -140,6 +160,16 @@ public class WaveCannon : RoleBase
         PhaseEntryDone = false;
 
         byte id = pc.PlayerId;
+
+        // 移動ロック: 旧実装は OnFixedUpdate で毎フレーム pc.TP(StartPosition) で
+        // 発射元に固定していたが、50fps × 7秒 = 350 SnapTo で nt.lastSequenceId が
+        // ushort overflow → 以降ホスト側で非モッドからの位置 update を「古い sid」
+        // 判定で取りこぼし、非モッドが動いても止まって見える同期破綻が発生した。
+        // 速度を Main.MinSpeed (0.0001) に落とすことで TP 不要でロックする。
+        OriginalSpeed = Main.AllPlayerSpeed[id];
+        Main.AllPlayerSpeed[id] = Main.MinSpeed;
+        pc.MarkDirtySettings();
+
         if (Camouflage.PlayerSkins.TryGetValue(id, out var original))
         {
             OriginalOutfit = original;
@@ -176,6 +206,21 @@ public class WaveCannon : RoleBase
         OriginalOutfit = null;
     }
 
+    private void RestoreSpeed(PlayerControl pc)
+    {
+        if (OriginalSpeed <= 0f) return;
+        Main.AllPlayerSpeed[pc.PlayerId] = OriginalSpeed;
+        pc.MarkDirtySettings();
+        OriginalSpeed = 0f;
+    }
+
+    private void RestoreSpeedDeathPreserve(PlayerControl pc)
+    {
+        if (OriginalSpeed <= 0f) return;
+        Main.AllPlayerSpeed[pc.PlayerId] = OriginalSpeed;
+        OriginalSpeed = 0f;
+    }
+
     public override void OnFixedUpdate(PlayerControl pc)
     {
         if (!GameStates.IsInTask) return;
@@ -186,23 +231,41 @@ public class WaveCannon : RoleBase
             {
                 DespawnAllCNOs();
                 RestoreSkinDeathPreserve(pc);
+                RestoreSpeedDeathPreserve(pc);
                 CurrentPhase = Phase.Idle;
             }
             return;
         }
 
-        if (CurrentPhase == Phase.Idle)
+        if (CurrentPhase == Phase.Idle || CurrentPhase == Phase.DirectionDetect)
         {
+            // 向き tracking。Idle 中と DirectionDetect 中の両方で deltaX を取り続けて、
+            // Charging に入る直前の最新の Direction を確定する。
             Vector2 pos = pc.GetTruePosition();
-            if (LastTrackedPos == Vector2.zero) { LastTrackedPos = pos; return; }
-            float deltaX = pos.x - LastTrackedPos.x;
-            if (Mathf.Abs(deltaX) > 0.05f)
-                Direction = deltaX > 0 ? Vector2.right : Vector2.left;
-            LastTrackedPos = pos;
+            if (LastTrackedPos == Vector2.zero) LastTrackedPos = pos;
+            else
+            {
+                float deltaX = pos.x - LastTrackedPos.x;
+                if (Mathf.Abs(deltaX) > 0.05f)
+                    Direction = deltaX > 0 ? Vector2.right : Vector2.left;
+                LastTrackedPos = pos;
+            }
+
+            if (CurrentPhase == Phase.Idle) return;
+
+            // DirectionDetect 経過 → Charging へ。動いた先から発射する。
+            // Time.time (float) で計測 — Utils.TimeStamp は秒精度 long のため、
+            // 秒境界をまたぐと即 trigger される取りこぼし問題があった。
+            if (Time.time >= DirectionDetectEndTime)
+            {
+                StartPosition = pc.GetTruePosition();
+                EnterCharging(pc);
+            }
             return;
         }
 
-        pc.TP(StartPosition, log: false);
+        // 旧 pc.TP(StartPosition) 連発を削除。速度ロック (EnterCharging で MinSpeed) で
+        // 移動を抑止しているため、毎フレーム TP は不要。SnapTo の sequenceId 汚染も解消。
 
         switch (CurrentPhase)
         {
@@ -254,6 +317,7 @@ public class WaveCannon : RoleBase
                 {
                     DespawnAllCNOs();
                     RestoreSkin(pc);
+                    RestoreSpeed(pc);
                     pc.SetKillCooldown();
                     // Phantom cooldown が AU 側で自動でかかるので AddAbilityCD 不要
                     CurrentPhase = Phase.Idle;
@@ -381,7 +445,11 @@ public class WaveCannon : RoleBase
     {
         if (CurrentPhase == Phase.Idle) return;
         DespawnAllCNOs();
-        if (WaveCannonPC != null) RestoreSkin(WaveCannonPC);
+        if (WaveCannonPC != null)
+        {
+            RestoreSkin(WaveCannonPC);
+            RestoreSpeed(WaveCannonPC);
+        }
         CurrentPhase = Phase.Idle;
         PhaseEntryDone = false;
         AlreadyKilled.Clear();
