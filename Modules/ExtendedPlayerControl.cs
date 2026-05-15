@@ -1038,7 +1038,7 @@ internal static class ExtendedPlayerControl
 
         public void SyncSettings()
         {
-            PlayerGameOptionsSender.SendImmediately(player.PlayerId);
+            PlayerGameOptionsSender.ForceSendImmediately(player.PlayerId);
         }
 
         public TaskState GetTaskState()

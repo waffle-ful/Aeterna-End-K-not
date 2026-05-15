@@ -1,4 +1,3 @@
-﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -14,8 +13,6 @@ namespace EndKnot.Modules;
 public abstract class GameOptionsSender
 {
     protected abstract bool IsDirty { get; set; }
-
-    protected virtual int TargetClientId => -1;
 
     private Il2CppStructArray<byte> BuildOptionArray()
     {
@@ -61,7 +58,7 @@ public abstract class GameOptionsSender
         for (byte i = 0; i < count; i++)
         {
             Il2CppSystem.Object logicComponent = GameManager.Instance.LogicComponents[i];
-            if (logicComponent.TryCast<LogicOptions>(out _)) SendOptionsArray(optionArray, i, TargetClientId);
+            if (logicComponent.TryCast<LogicOptions>(out _)) SendOptionsArray(optionArray, i);
         }
     }
 
@@ -72,41 +69,12 @@ public abstract class GameOptionsSender
         for (byte i = 0; i < count; i++)
         {
             Il2CppSystem.Object logicComponent = GameManager.Instance.LogicComponents[i];
-            if (logicComponent.TryCast<LogicOptions>(out _)) SendOptionsArray(optionArray, i, TargetClientId);
+            if (logicComponent.TryCast<LogicOptions>(out _)) SendOptionsArray(optionArray, i);
             yield return WaitFrameIfNecessary();
         }
     }
 
-    private static void SendOptionsArray(Il2CppStructArray<byte> optionArray, byte logicOptionsIndex, int targetClientId)
-    {
-        try
-        {
-            MessageWriter writer = MessageWriter.Get(SendOption.Reliable);
-
-            writer.StartMessage(targetClientId == -1 ? Tags.GameData : Tags.GameDataTo);
-            {
-                writer.Write(AmongUsClient.Instance.GameId);
-                if (targetClientId != -1) writer.WritePacked(targetClientId);
-
-                writer.StartMessage(1);
-                {
-                    writer.WritePacked(GameManager.Instance.NetId);
-                    writer.StartMessage(logicOptionsIndex);
-                    {
-                        writer.WriteBytesAndSize(optionArray);
-                    }
-                    writer.EndMessage();
-                }
-                writer.EndMessage();
-            }
-
-            writer.EndMessage();
-
-            AmongUsClient.Instance.SendOrDisconnect(writer);
-            writer.Recycle();
-        }
-        catch (Exception ex) { Logger.Fatal(ex.ToString(), "GameOptionsSender.SendOptionsArray"); }
-    }
+    protected abstract void SendOptionsArray(Il2CppStructArray<byte> optionArray, byte logicOptionsIndex);
 
     public abstract IGameOptions BuildGameOptions();
 
@@ -172,16 +140,41 @@ public abstract class GameOptionsSender
 
     public static readonly List<GameOptionsSender> AllSenders = [new NormalGameOptionsSender()];
 
+    protected static MessageWriter PackedWriter;
+    protected static int PackedWriterMessages;
+
     public static IEnumerator SendDirtyGameOptionsContinuously()
     {
         try
         {
             while (GameStates.InGame || GameStates.IsLobby)
             {
+                if (GameStates.InGame)
+                {
+                    PackedWriterMessages = 0;
+                    PackedWriter = MessageWriter.Get(SendOption.Reliable);
+                    PackedWriter.StartMessage(26);
+                    PackedWriter.WritePacked(AmongUsClient.Instance.GameId);
+                }
+
                 for (var index = 0; index < AllSenders.Count; index++)
                 {
                     yield return WaitFrameIfNecessary();
-                    
+
+                    if (PackedWriter != null && (PackedWriter.Length > 500 || PackedWriterMessages >= AmongUsClient.Instance.GetMaxMessagePackingLimit()))
+                    {
+                        PackedWriter.EndMessage();
+                        var qa = DataFlagRateLimiter.Enqueue(() => AmongUsClient.Instance.SendOrDisconnect(PackedWriter));
+                        yield return qa.Wait();
+                        PackedWriterMessages = 0;
+                        if (qa.Dropped) break;
+                        PackedWriter.Clear(SendOption.Reliable);
+                        PackedWriter.StartMessage(26);
+                        PackedWriter.WritePacked(AmongUsClient.Instance.GameId);
+                    }
+
+                    yield return WaitFrameIfNecessary();
+
                     if (index >= AllSenders.Count) break;
                     GameOptionsSender sender = AllSenders[index];
 
@@ -198,6 +191,18 @@ public abstract class GameOptionsSender
                     sender.IsDirty = false;
                 }
 
+                yield return WaitFrameIfNecessary();
+
+                if (PackedWriterMessages > 0 && PackedWriter != null)
+                {
+                    PackedWriter.EndMessage();
+                    yield return DataFlagRateLimiter.Enqueue(() => AmongUsClient.Instance.SendOrDisconnect(PackedWriter)).Wait();
+                }
+
+                PackedWriter?.Recycle();
+                PackedWriter = null;
+                PackedWriterMessages = 0;
+
                 ForceWaitFrame = true;
                 yield return WaitFrameIfNecessary();
             }
@@ -205,6 +210,9 @@ public abstract class GameOptionsSender
         finally
         {
             ActiveCoroutine = null;
+            PackedWriter?.Recycle();
+            PackedWriter = null;
+            PackedWriterMessages = 0;
         }
     }
 
