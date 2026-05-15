@@ -2381,6 +2381,12 @@ internal static class EnterVentPatch
 [HarmonyPatch(typeof(GameData), nameof(GameData.CompleteTask))]
 internal static class GameDataCompleteTaskPatch
 {
+    public static void Prefix(PlayerControl pc)
+    {
+        Workhorse.OnCompleteTask(pc);
+        Capitalist.AddTaskForPlayer(pc);
+    }
+    
     public static void Postfix(PlayerControl pc, uint taskId)
     {
         if (MeetingHud.Instance && MeetingHud.Instance.state != MeetingHud.VoteStates.Animating) return;
@@ -2390,34 +2396,20 @@ internal static class GameDataCompleteTaskPatch
             var task = pc.myTasks.Find((Il2CppSystem.Predicate<PlayerTask>)(x => taskId == x.Id));
             Hider.OnSpecificTaskComplete(pc, task);
         }
+        
+        try
+        {
+            if (pc.IsAlive())
+            {
+                var task = pc.myTasks.Find((Il2CppSystem.Predicate<PlayerTask>)(x => taskId == x.Id));
+                Benefactor.OnTaskComplete(pc, task);
+            }
+        }
+        catch (Exception e) { ThrowException(e); }
 
         Logger.Info($"TaskComplete: {pc.GetNameWithRole().RemoveHtmlTags()}", "CompleteTask");
         Main.PlayerStates[pc.PlayerId].UpdateTask(pc);
         NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
-    }
-}
-
-[HarmonyPatch(typeof(PlayerControl), nameof(PlayerControl.CompleteTask))]
-internal static class PlayerControlCompleteTaskPatch
-{
-    public static bool Prefix(PlayerControl __instance)
-    {
-        if (MeetingHud.Instance && MeetingHud.Instance.state != MeetingHud.VoteStates.Animating) return false;
-        return !Workhorse.OnCompleteTask(__instance) && Capitalist.AddTaskForPlayer(__instance); // Cancel task win
-    }
-
-    public static void Postfix(PlayerControl __instance, [HarmonyArgument(0)] uint idx)
-    {
-        if (GameStates.IsMeeting || !__instance || !__instance.IsAlive()) return;
-
-        Snitch.OnCompleteTask(__instance);
-
-        try
-        {
-            var task = __instance.myTasks.Find((Il2CppSystem.Predicate<PlayerTask>)(x => idx == x.Id));
-            Benefactor.OnTaskComplete(__instance, task);
-        }
-        catch (Exception e) { ThrowException(e); }
     }
 }
 

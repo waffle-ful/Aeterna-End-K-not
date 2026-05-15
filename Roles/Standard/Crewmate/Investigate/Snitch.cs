@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using static EndKnot.Options;
@@ -150,7 +150,7 @@ public class Snitch : RoleBase
 
     public static string GetWarningArrow(PlayerControl seer, PlayerControl target = null)
     {
-        if (GameStates.IsMeeting || !IsSnitchTarget(seer) || (target != null && seer.PlayerId != target.PlayerId)) return string.Empty;
+        if (GameStates.IsMeeting || !IsSnitchTarget(seer) || (target && seer.PlayerId != target.PlayerId)) return string.Empty;
 
         IEnumerable<byte> exposedSnitch = PlayerIdList.Where(s => !Main.PlayerStates[s].IsDead && IsExposed[s]);
         byte[] snitch = exposedSnitch as byte[] ?? exposedSnitch.ToArray();
@@ -168,7 +168,7 @@ public class Snitch : RoleBase
 
     public override string GetSuffix(PlayerControl seer, PlayerControl target, bool hud = false, bool meeting = false)
     {
-        if (seer.Is(CustomRoles.Madmate) || !EnableTargetArrow || GameStates.IsMeeting || seer.PlayerId != SnitchId || (target != null && seer.PlayerId != target.PlayerId) || hud) return string.Empty;
+        if (seer.Is(CustomRoles.Madmate) || !EnableTargetArrow || GameStates.IsMeeting || seer.PlayerId != SnitchId || seer.PlayerId != target.PlayerId || hud) return string.Empty;
 
         var arrows = string.Empty;
 
@@ -181,10 +181,10 @@ public class Snitch : RoleBase
         return arrows;
     }
 
-    public static void OnCompleteTask(PlayerControl player)
+    public override void OnTaskComplete(PlayerControl pc, int completedTaskCount, int totalTaskCount)
     {
-        if (!IsSnitch(player.PlayerId) || player.Is(CustomRoles.Madmate)) return;
+        if (!IsSnitch(pc.PlayerId) || pc.Is(CustomRoles.Madmate)) return;
 
-        CheckTask(player);
+        CheckTask(pc);
     }
 }
