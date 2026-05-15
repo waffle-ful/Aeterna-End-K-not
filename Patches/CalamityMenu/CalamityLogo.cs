@@ -6,45 +6,73 @@ namespace EndKnot.Patches.CalamityMenu;
 public static class CalamityLogo
 {
     // App-lifetime flag: subtitle and divider show only on the first menu load.
-    // AMONG US text logo is rebuilt every time because reparenting vanilla LOGO-AU
-    // across scenes leaves it in inconsistent renderer state.
     private static bool _subtitleShown;
+
+    private static Transform _logoTransform;
+    private static Vector3   _logoBasePos;
+    private static float     _shakeTime;
 
     public static void Build(Transform logoLayer)
     {
-        Logger.Info($"Build start, logoLayer={(logoLayer != null ? logoLayer.name : "NULL")}, fontVanilla={(CalamityFonts.Vanilla != null ? "set" : "null")}", "CalamityLogo");
+        _logoTransform = null;
+        _shakeTime     = 0f;
 
-        // ── Among Us text logo (always shown) ────────────────────────────
-        // On the second menu scene load (after a freeplay session), reparenting vanilla
-        // LOGO-AU sometimes leaves it invisible (renderer state lost between scenes).
-        // Always render a TMP "AMONG  US" text at the same slot — reliable and consistent.
-        var fallbackGo = new GameObject("AmongUsTextLogo");
-        fallbackGo.transform.SetParent(logoLayer);
-        fallbackGo.transform.localPosition = new Vector3(0f, 1.95f, 0f);
+        Logger.Info($"Build start, logoLayer={(logoLayer != null ? logoLayer.name : "NULL")}", "CalamityLogo");
 
-        var fb = fallbackGo.AddComponent<TextMeshPro>();
-        fb.text             = "AMONG  US";
-        fb.fontSize         = 4.2f;
-        fb.alignment        = TextAlignmentOptions.Center;
-        fb.fontStyle        = FontStyles.Bold;
-        fb.characterSpacing = 6f;
-        fb.color            = Color.white;
-        fb.outlineColor     = new Color32(40, 0, 60, 230);
-        fb.outlineWidth     = 0.25f;
-        fb.sortingOrder     = 20;
-        CalamityFonts.Apply(fb);
-        fb.ForceMeshUpdate();
-        Logger.Info($"AMONG US TMP created at world {fallbackGo.transform.position}, activeInHierarchy={fallbackGo.activeInHierarchy}, font={(fb.font != null ? fb.font.name : "null")}", "CalamityLogo");
+        // ── Among Us logo (vanilla sprite → TMP fallback) ────────────────
+        // Create a fresh SpriteRenderer carrying the vanilla sprite instead of reparenting
+        // LOGO-AU directly — reparenting loses renderer state on the second scene load.
+        var auLogo    = FindAULogo();
+        var auSr      = auLogo != null ? auLogo.GetComponent<SpriteRenderer>() : null;
+        var logoSprite = auSr?.sprite;
 
-        // Keep the vanilla LOGO-AU spawn lookup so we can hide it if it shows up alongside
-        // (otherwise it would render on top of our text from its default scene position).
-        var auLogo = FindAULogo();
+        var basePos = new Vector3(0f, 1.95f, 0f);
+        GameObject logoGo;
+
+        if (logoSprite != null)
+        {
+            logoGo = new GameObject("CalamityLogoSprite");
+            logoGo.transform.SetParent(logoLayer);
+            logoGo.transform.localPosition = basePos;
+            logoGo.transform.localScale    = auSr.transform.lossyScale;
+
+            var sr = logoGo.AddComponent<SpriteRenderer>();
+            sr.sprite         = logoSprite;
+            sr.sortingLayerID = auSr.sortingLayerID;
+            sr.sortingOrder   = auSr.sortingOrder + 1;
+
+            Logger.Info($"Logo sprite: {logoSprite.name} {logoSprite.rect.width}x{logoSprite.rect.height}px lossyScale={auSr.transform.lossyScale} layer={auSr.sortingLayerName}/{auSr.sortingOrder}", "CalamityLogo");
+        }
+        else
+        {
+            // Vanilla sprite not found — fall back to TMP text.
+            logoGo = new GameObject("AmongUsTextLogo");
+            logoGo.transform.SetParent(logoLayer);
+            logoGo.transform.localPosition = basePos;
+
+            var fb = logoGo.AddComponent<TextMeshPro>();
+            fb.text             = "AMONG  US";
+            fb.fontSize         = 4.2f;
+            fb.alignment        = TextAlignmentOptions.Center;
+            fb.fontStyle        = FontStyles.Bold;
+            fb.characterSpacing = 6f;
+            fb.color            = Color.white;
+            fb.outlineColor     = new Color32(40, 0, 60, 230);
+            fb.outlineWidth     = 0.25f;
+            fb.sortingOrder     = 20;
+            CalamityFonts.Apply(fb);
+            fb.ForceMeshUpdate();
+            Logger.Info("AMONG US TMP fallback (vanilla sprite not found)", "CalamityLogo");
+        }
+
+        _logoTransform = logoGo.transform;
+        _logoBasePos   = basePos;
+
+        // Hide the original LOGO-AU to avoid a duplicate on screen.
         if (auLogo != null) auLogo.SetActive(false);
 
         // ── "End K not" subtitle + divider (startup only) ────────────────
-        // User intent: Multi → lobby → Exit shouldn't show "End K not" again.
-        // The AMONG US logo above is allowed to repeat (it replaces a vanilla element
-        // that's invisible after scene reload), but the brand subtitle is once-only.
+        // Multi → lobby → Exit shouldn't show "End K not" again.
         if (!_subtitleShown)
         {
             _subtitleShown = true;
@@ -77,6 +105,16 @@ public static class CalamityLogo
             line.sortingOrder = 20;
             CalamityFonts.Apply(line);
         }
+    }
+
+    // Gentle logo vibration — two-frequency X and Y sines for an organic feel.
+    public static void Tick(float dt)
+    {
+        if (_logoTransform == null) return;
+        _shakeTime += dt;
+        float ox = Mathf.Sin(_shakeTime * 11.0f) * 0.020f + Mathf.Sin(_shakeTime * 7.3f) * 0.008f;
+        float oy = Mathf.Sin(_shakeTime *  8.0f + 0.7f) * 0.012f + Mathf.Sin(_shakeTime * 14.1f) * 0.005f;
+        _logoTransform.localPosition = _logoBasePos + new Vector3(ox, oy, 0f);
     }
 
     private static GameObject FindAULogo()

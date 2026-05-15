@@ -103,5 +103,6 @@ public static class CalamityMenuPatch
         EndKnotFeatureBridge.Tick();
         CalamityVisibility.Tick();
         CalamityFadeIn.Tick();
+        CalamityLogo.Tick(Time.deltaTime);
     }
 }
