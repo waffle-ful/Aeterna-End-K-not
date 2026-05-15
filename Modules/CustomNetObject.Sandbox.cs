@@ -16,9 +16,6 @@ namespace EndKnot
             CreateNetObject("<size=380%><color=#888888>▣</color></size>", position);
         }
 
-        // 固定位置のため毎フレーム SnapTo を送らない (帯域節約)
-        protected override void OnFixedUpdate() { }
-
         public override void OnMeeting() => Despawn();
     }
 }
