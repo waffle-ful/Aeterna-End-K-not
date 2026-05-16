@@ -47,6 +47,12 @@ public class ForceFielder : RoleBase
 
     private const float EjectCooldownSec = 0.5f;
 
+    // 当たり判定半径 = FieldRadius option × HitRadiusScale。CNO sprite の <size> mult と
+    // 視覚倍率が乖離していたため、option 値 (= 視覚半径) に対して hit 検出側を倍率調整して合わせる
+    // (2026-05-16 calibration)。option 数値はそのまま視覚半径として扱うので option label は変えない。
+    // internal: ForceFieldCNO 側 (BuildSprite) も同じ HitRadiusScale を参照して font_size を逆算する。
+    internal const float HitRadiusScale = 1.9f;
+
     public override bool IsEnable => On;
 
     public override void SetupCustomOption()
@@ -112,7 +118,7 @@ public class ForceFielder : RoleBase
             if (!EjectOnActivation.GetBool())
             {
                 Vector2 ctr = pc.Pos();
-                float rad = FieldRadius.GetFloat();
+                float rad = FieldRadius.GetFloat() * HitRadiusScale;
                 foreach (PlayerControl t in FastVector2.GetPlayersInRange(ctr, rad, p => p.PlayerId != pc.PlayerId))
                     ActivationTrapped.Add(t.PlayerId);
             }
@@ -134,7 +140,7 @@ public class ForceFielder : RoleBase
         if (FieldCNO != null) FieldCNO.Position = pc.Pos();
 
         Vector2 center = pc.Pos();
-        float radius = FieldRadius.GetFloat();
+        float radius = FieldRadius.GetFloat() * HitRadiusScale;
         float ejectDist = radius + EjectMargin.GetFloat() * 0.5f;
         float now = Time.time;
 

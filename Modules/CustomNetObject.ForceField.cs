@@ -19,13 +19,24 @@ namespace EndKnot
         // - <size=N> (無単位、絶対 font size) は WaveCannon 流で線形にスケール、上限なし
         // → 絶対値 mode を採用
         //
-        // 較正中 (2026-05-16 三段階目): mult 15→30→45 と上げても比率 2x→1.5x→1.5x で
-        // 45 → 1.5x が改善せず。線形応答 vs 頭打ちを切り分けるため一気に 150 まで上げる。
-        //   - 視覚が線形なら overshoot して見える → 計算式正しい、後で半分に戻す
-        //   - 視覚が頭打ちなら mult 45 と同じ大きさ → W グリッド方式に切替
+        // 較正 (2026-05-16):
+        // 線形 mult (font = radius × 50) では FieldRadius=1 で見た目と当たり判定がほぼ一致するが
+        // FieldRadius=8 で当たり判定 > 見た目になる。つまり TMP <size=N> 絶対モードでも N が
+        // 大きくなるとサブリニア応答 (頭打ち) する。
+        //
+        // モデル:  visual_world_radius ≈ K × font_size ^ P    (0 < P ≤ 1)
+        //   → font_size = (visual_radius / K) ^ (1 / P)
+        //
+        // 目標視覚半径は ForceFielder の当たり判定半径 (radius × HitRadiusScale) と一致させる。
+        // K / P は実測前の暫定値。/sizetest を 50/100/200/400/800 で打って各 visual 直径を測り
+        // log-log 回帰で fit 直すこと (詳細は plans/1-8-precious-pie.md)。
+        private const float K = 0.05f;
+        private const float P = 0.9f;
+
         private static string BuildSprite(float radius)
         {
-            int s = (int)(radius * 150f);
+            float targetVisualRadius = radius * Roles.ForceFielder.HitRadiusScale;
+            int s = Mathf.Max(1, (int)Mathf.Pow(targetVisualRadius / K, 1f / P));
             return $"<size={s}><font=\"VCR SDF\"><line-height=67%><color=#4488ff>○</color></line-height></font></size>";
         }
 

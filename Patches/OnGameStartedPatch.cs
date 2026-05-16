@@ -188,6 +188,17 @@ internal static class ChangeRoleSettings
             }
             catch (Exception e) { Utils.ThrowException(e); }
 
+            foreach (PlayerControl pc in Main.EnumeratePlayerControls())
+            {
+                if (pc.Data == null || !pc.Data.IsDead) continue;
+                pc.Data.IsDead = false;
+                pc.Data.SetDirtyBit(0b_1u << pc.PlayerId);
+            }
+
+            __instance.SendAllStreamedObjects();
+            Main.LobbyDead.Clear();
+            Main.LobbyKillers.Clear();
+
             Main.PlayerStates = [];
 
             Main.AbilityUseLimit = [];

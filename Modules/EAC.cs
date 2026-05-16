@@ -237,6 +237,12 @@ internal static class EAC
                 }
                 case RpcCalls.MurderPlayer:
                 {
+                    if (GameStates.IsLobby)
+                    {
+                        sr.Recycle();
+                        return false;
+                    }
+
                     var target = sr.ReadNetObject<PlayerControl>();
                     var resultFlags = (MurderResultFlags)sr.ReadInt32();
 

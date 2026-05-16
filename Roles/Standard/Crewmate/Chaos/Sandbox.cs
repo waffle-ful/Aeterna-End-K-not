@@ -24,7 +24,8 @@ public class Sandbox : RoleBase
 
     // プレイヤー本体の半径 (Among Us の標準プレイヤー collider 相当)。
     // GetPlayersInRange はプレイヤー中心点で距離を測るため、見た目の端で止めるにはこの分を足す必要がある。
-    private const float PlayerColliderRadius = 0.25f;
+    // CNO 視覚もこれを足した radius で描画して「視覚 = プレイヤーが止まる端」を一致させる。
+    internal const float PlayerColliderRadius = 0.25f;
     // ブロック中心 → エッジ位置の追加バッファ (再侵入防止の極小オフセット)
     private const float EdgeBuffer = 0.05f;
 
@@ -109,7 +110,7 @@ public class Sandbox : RoleBase
             list.RemoveAt(0);
         }
 
-        var block = new SandboxBlock(pc.Pos(), pc.PlayerId);
+        var block = new SandboxBlock(pc.Pos(), pc.PlayerId, BlockRadius.GetFloat() + PlayerColliderRadius);
         list.Add(block);
         LastPlaceTime[pc.PlayerId] = now;
 
@@ -177,9 +178,10 @@ public class Sandbox : RoleBase
                     list = ActiveBlocks[owner] = [];
                 }
 
+                float visualRadius = BlockRadius.GetFloat() + PlayerColliderRadius;
                 foreach (Vector2 pos in positions)
                 {
-                    list.Add(new SandboxBlock(pos, owner));
+                    list.Add(new SandboxBlock(pos, owner, visualRadius));
                 }
             }
 

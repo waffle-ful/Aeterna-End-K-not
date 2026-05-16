@@ -4808,7 +4808,8 @@ public static class Utils
     // through DataFlagRateLimiter (cost: 4 messages per call) to avoid Hacking kicks.
     public static void RpcCreateDeadBody(Vector3 position, byte colorId, PlayerControl deadBodyParent, SendOption sendOption = SendOption.Reliable)
     {
-        if (!deadBodyParent || !Main.IntroDestroyed || !AmongUsClient.Instance.AmHost) return;
+        if (!deadBodyParent || !AmongUsClient.Instance.AmHost) return;
+        if (!Main.IntroDestroyed && !GameStates.IsLobby) return;
 
         DataFlagRateLimiter.Enqueue(() =>
         {

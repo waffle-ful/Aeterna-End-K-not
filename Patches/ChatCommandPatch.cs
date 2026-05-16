@@ -219,7 +219,7 @@ internal static class ChatCommands
             new("EnableAllRoles", "", Command.UsageLevels.Host, Command.UsageTimes.InLobby, EnableAllRolesCommand, true, false),
             new("Achievements", "", Command.UsageLevels.Modded, Command.UsageTimes.Always, AchievementsCommand, true, false),
             new("DeathNote", "{name}", Command.UsageLevels.Everyone, Command.UsageTimes.InMeeting, DeathNoteCommand, true, true, [GetString("CommandArgs.DeathNote.Name")]),
-            new("Whisper", "{ids} {message}", Command.UsageLevels.Everyone, Command.UsageTimes.InMeeting, WhisperCommand, true, true, [GetString("CommandArgs.Whisper.Ids"), GetString("CommandArgs.Whisper.Message")]),
+            new("Whisper", "{ids} {message}", Command.UsageLevels.Everyone, Command.UsageTimes.Always, WhisperCommand, true, true, [GetString("CommandArgs.Whisper.Ids"), GetString("CommandArgs.Whisper.Message")]),
             new("HWhisper", "{id} {message}", Command.UsageLevels.Host, Command.UsageTimes.Always, HWhisperCommand, true, false, [GetString("CommandArgs.HWhisper.Id"), GetString("CommandArgs.HWhisper.Message")]),
             new("Spectate", "[id]", Command.UsageLevels.Everyone, Command.UsageTimes.InLobby, SpectateCommand, false, false, [GetString("CommandArgs.Spectate.Id")]),
             new("Anagram", "", Command.UsageLevels.Everyone, Command.UsageTimes.AfterDeathOrLobby, AnagramCommand, true, false),
@@ -243,7 +243,7 @@ internal static class ChatCommands
             new("VoteStart", "", Command.UsageLevels.Everyone, Command.UsageTimes.InLobby, VoteStartCommand, true, false),
             new("Imitate", "{id}", Command.UsageLevels.Everyone, Command.UsageTimes.InMeeting, ImitateCommand, true, true, [GetString("CommandArgs.Imitate.Id")]),
             new("Retribute", "{id}", Command.UsageLevels.Everyone, Command.UsageTimes.InMeeting, RetributeCommand, true, true, [GetString("CommandArgs.Retribute.Id")]),
-            new("Revive", "{id}", Command.UsageLevels.Host, Command.UsageTimes.InGame, ReviveCommand, true, false, [GetString("CommandArgs.Revive.Id")]),
+            new("Revive", "{id}", Command.UsageLevels.Host, Command.UsageTimes.Always, ReviveCommand, true, false, [GetString("CommandArgs.Revive.Id")]),
             new("Select", "{id} {role}", Command.UsageLevels.Everyone, Command.UsageTimes.InMeeting, SelectCommand, true, true, [GetString("CommandArgs.Select.Id"), GetString("CommandArgs.Select.Role")]),
             new("UIScale", "{scale}", Command.UsageLevels.Modded, Command.UsageTimes.Always, UIScaleCommand, true, false, [GetString("CommandArgs.UIScale.Scale")]),
             new("Fabricate", "{deathreason}", Command.UsageLevels.Everyone, Command.UsageTimes.InMeeting, FabricateCommand, true, true, [GetString("CommandArgs.Fabricate.DeathReason")]),
@@ -734,11 +734,23 @@ internal static class ChatCommands
     
     private static void ReviveCommand(PlayerControl player, string text, string[] args)
     {
-        if ((!Options.NoGameEnd.GetBool() && !player.FriendCode.GetDevUser().up && !player.FriendCode.IsLocalDev()) || args.Length < 2 || !byte.TryParse(args[1], out byte targetId)) return;
-        
+        if (args.Length < 2 || !byte.TryParse(args[1], out byte targetId)) return;
+
         PlayerControl target = Utils.GetPlayerById(targetId);
         if (target == null) return;
-        
+
+        if (GameStates.IsLobby)
+        {
+            if (target.Data == null || !target.Data.IsDead) return;
+            target.Data.IsDead = false;
+            target.Data.SetDirtyBit(0b_1u << target.PlayerId);
+            AmongUsClient.Instance.SendAllStreamedObjects();
+            Utils.SendMessage(string.Format(GetString("Message.Revived"), target.Data.PlayerName));
+            return;
+        }
+
+        if (!Options.NoGameEnd.GetBool() && !player.FriendCode.GetDevUser().up && !player.FriendCode.IsLocalDev()) return;
+
         target.RpcRevive();
     }
     
@@ -1257,9 +1269,9 @@ internal static class ChatCommands
         foreach (string id in ids)
         {
             if (!byte.TryParse(id, out byte targetId)) continue;
-            
-            PlayerState state = Main.PlayerStates[targetId];
-            if (state.IsDead || state.SubRoles.Contains(CustomRoles.Shy)) continue;
+
+            if (Main.PlayerStates.TryGetValue(targetId, out PlayerState state)
+                && (state.IsDead || state.SubRoles.Contains(CustomRoles.Shy))) continue;
 
             string fromName = player.PlayerId.ColoredPlayerName();
             string toName = targetId.ColoredPlayerName();
@@ -2057,29 +2069,35 @@ internal static class ChatCommands
 
     private static void ExeCommand(PlayerControl player, string text, string[] args)
     {
-        if (GameStates.IsLobby)
-        {
-            Utils.SendMessage(GetString("Message.CanNotUseInLobby"), player.PlayerId, importance: MessageImportance.Low);
-            return;
-        }
-
         if (args.Length < 2 || !int.TryParse(args[1], out int id)) return;
 
         PlayerControl pc = Utils.GetPlayerById(id);
+        if (pc == null) return;
 
-        if (pc != null)
+        if (GameStates.IsLobby)
         {
-            Main.PlayerStates[pc.PlayerId].deathReason = PlayerState.DeathReason.etc;
+            if (pc.AmOwner)
+            {
+                Utils.SendMessage(GetString("HostKillSelfByCommand"), player.PlayerId, title: $"<color=#ff0000>{GetString("DefaultSystemMessageTitle")}</color>");
+                return;
+            }
+
             pc.RpcExileV2();
             pc.Data.IsDead = true;
-            Main.PlayerStates[pc.PlayerId].SetDead();
-            Utils.AfterPlayerDeathTasks(pc, GameStates.IsMeeting);
-
-            if (pc.AmOwner)
-                Utils.SendMessage(GetString("HostKillSelfByCommand"), title: $"<color=#ff0000>{GetString("DefaultSystemMessageTitle")}</color>");
-            else
-                Utils.SendMessage(string.Format(GetString("Message.Executed"), pc.Data.PlayerName));
+            Utils.SendMessage(string.Format(GetString("Message.Executed"), pc.Data.PlayerName));
+            return;
         }
+
+        Main.PlayerStates[pc.PlayerId].deathReason = PlayerState.DeathReason.etc;
+        pc.RpcExileV2();
+        pc.Data.IsDead = true;
+        Main.PlayerStates[pc.PlayerId].SetDead();
+        Utils.AfterPlayerDeathTasks(pc, GameStates.IsMeeting);
+
+        if (pc.AmOwner)
+            Utils.SendMessage(GetString("HostKillSelfByCommand"), title: $"<color=#ff0000>{GetString("DefaultSystemMessageTitle")}</color>");
+        else
+            Utils.SendMessage(string.Format(GetString("Message.Executed"), pc.Data.PlayerName));
     }
 
     private static void BanKickCommand(PlayerControl player, string text, string[] args)
@@ -3864,9 +3882,27 @@ internal static class LobbyKillSystem
     {
         if (!AmongUsClient.Instance.AmHost) return;
         PlayerControl target = Utils.GetPlayerById(targetId);
-        if (target == null) return;
+        if (target == null || target.Data == null || target.Data.IsDead) return;
+        if (Main.LobbyDead.Contains(targetId)) return;
 
         Main.LobbyDead.Add(targetId);
+
+        try
+        {
+            target.RpcExileV2();
+        }
+        catch (Exception ex) { Logger.Warn($"RpcExileV2 in lobby failed: {ex.Message}", "LobbyKill"); }
+
+        try
+        {
+            Utils.RpcCreateDeadBody(target.transform.position, (byte)target.Data.DefaultOutfit.ColorId, target);
+        }
+        catch (Exception ex) { Logger.Warn($"RpcCreateDeadBody in lobby failed: {ex.Message}", "LobbyKill"); }
+
+        target.Data.IsDead = true;
+        target.Data.SetDirtyBit(0b_1u << targetId);
+        AmongUsClient.Instance.SendAllStreamedObjects();
+
         EndKnot.Modules.RPC.SyncLobbyState();
 
         string msg = string.Format(Translator.GetString("LobbyKill.ChatMessage"), killer.GetRealName(), target.GetRealName());

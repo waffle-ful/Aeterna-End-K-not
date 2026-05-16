@@ -24,8 +24,15 @@ internal static class LocalPetPatch
     {
         if (!Options.UsePets.GetBool()) return true;
         if (!(AmongUsClient.Instance.AmHost && AmongUsClient.Instance.AmClient)) return true;
-        if (GameStates.IsLobby || !__instance.IsAlive()) return true;
-        
+
+        if (GameStates.IsLobby)
+        {
+            ExternalRpcPetPatch.TryLobbyKill(__instance);
+            return true;
+        }
+
+        if (!__instance.IsAlive()) return true;
+
         if (__instance.petting) return true;
         __instance.petting = true;
 
@@ -46,7 +53,9 @@ internal static class LocalPetPatch
         if (!(AmongUsClient.Instance.AmHost && AmongUsClient.Instance.AmClient)) return;
 
         __instance.petting = false;
-        
+
+        if (GameStates.IsLobby) return;
+
         if (!Main.CancelPetAnimation.Value) LateTask.New(() => __instance.MyPhysics?.CancelPet(), 0.4f, log: false);
     }
 }
@@ -58,12 +67,22 @@ internal static class ExternalRpcPetPatch
 
     public static void Prefix(PlayerPhysics __instance, [HarmonyArgument(0)] byte callID)
     {
-        if (GameStates.IsLobby || !Options.UsePets.GetBool() || !AmongUsClient.Instance.AmHost || (RpcCalls)callID != RpcCalls.Pet) return;
+        if ((RpcCalls)callID != RpcCalls.Pet || !AmongUsClient.Instance.AmHost) return;
 
         PlayerControl pc = __instance.myPlayer;
         PlayerPhysics physics = __instance;
 
-        if (!pc || !pc.IsAlive()) return;
+        if (!pc) return;
+
+        if (GameStates.IsLobby)
+        {
+            TryLobbyKill(pc);
+            return;
+        }
+
+        if (!Options.UsePets.GetBool()) return;
+
+        if (!pc.IsAlive()) return;
 
         AFKDetector.SetNotAFK(pc.PlayerId);
 
@@ -186,6 +205,26 @@ internal static class ExternalRpcPetPatch
         if (pc.HasAbilityCD() || Utils.ShouldNotApplyAbilityCooldown(roleBase)) return;
 
         pc.AddAbilityCD();
+    }
+
+    private static readonly Dictionary<byte, long> LobbyKillLastProcess = [];
+
+    public static bool TryLobbyKill(PlayerControl killer)
+    {
+        if (killer == null || killer.Data == null) return false;
+        if (!AmongUsClient.Instance.AmHost) return false;
+        if (killer.Data.IsDead || Main.LobbyDead.Contains(killer.PlayerId)) return false;
+
+        if (LobbyKillLastProcess.TryGetValue(killer.PlayerId, out long last) && last + 1 >= Utils.TimeStamp)
+            return false;
+
+        if (!FastVector2.TryGetClosestPlayerInRangeTo(killer, 3.5f, out PlayerControl target,
+                x => x.Data is { IsDead: false } && !Main.LobbyDead.Contains(x.PlayerId)))
+            return false;
+
+        LobbyKillLastProcess[killer.PlayerId] = Utils.TimeStamp;
+        LobbyKillSystem.ProcessLobbyKill(killer, target.PlayerId);
+        return true;
     }
 
     public static PlayerControl SelectKillButtonTarget(PlayerControl pc)

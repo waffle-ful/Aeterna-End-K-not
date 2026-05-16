@@ -56,12 +56,12 @@ internal static class CheckProtectPatch
     }
 }
 
-[HarmonyPatch(typeof(PlayerControl), nameof(PlayerControl.RpcMurderPlayer))] // never used by the mod
+[HarmonyPatch(typeof(PlayerControl), nameof(PlayerControl.RpcMurderPlayer))] // never used by the mod (except lobby kill)
 internal static class RpcMurderPlayerPatch
 {
     public static bool Prefix()
     {
-        return false;
+        return GameStates.IsLobby;
     }
 }
 
@@ -617,20 +617,21 @@ internal static class MurderPlayerPatch
 {
     public static bool Prefix(PlayerControl __instance, [HarmonyArgument(0)] PlayerControl target, [HarmonyArgument(1)] MurderResultFlags resultFlags, ref bool __state)
     {
-        if (GameStates.IsLobby || AntiBlackout.SkipTasks || !GameStates.InGame || GameStates.IsMeeting || ExileController.Instance) return false;
+        if (AntiBlackout.SkipTasks || GameStates.IsMeeting || ExileController.Instance) return false;
+        if (!GameStates.IsLobby && !GameStates.InGame) return false;
 
         bool protectedByClient = resultFlags.HasFlag(MurderResultFlags.DecisionByHost) && target.IsProtected();
         bool protectedByHost = resultFlags.HasFlag(MurderResultFlags.FailedProtected);
         bool failed = resultFlags.HasFlag(MurderResultFlags.FailedError);
         __state = !protectedByClient && !protectedByHost && !failed;
 
-        if (__state && (!Main.IntroDestroyed || IntroCutsceneDestroyPatch.PreventKill)) return false;
+        if (__state && !GameStates.IsLobby && (!Main.IntroDestroyed || IntroCutsceneDestroyPatch.PreventKill)) return false;
 
         Logger.Info($"{__instance.GetNameWithRole()} => {target.GetNameWithRole()} - {nameof(protectedByClient)}: {protectedByClient}, {nameof(protectedByHost)}: {protectedByHost}, {nameof(failed)}: {failed}", "MurderPlayer");
 
-        RandomSpawn.CustomNetworkTransformHandleRpcPatch.HasSpawned.Add(__instance.PlayerId);
+        if (!GameStates.IsLobby) RandomSpawn.CustomNetworkTransformHandleRpcPatch.HasSpawned.Add(__instance.PlayerId);
 
-        if (!target.IsProtected() && !Doppelganger.DoppelVictim.ContainsKey(target.PlayerId) && !Camouflage.ResetSkinAfterDeathPlayers.Contains(target.PlayerId))
+        if (!GameStates.IsLobby && !target.IsProtected() && !Doppelganger.DoppelVictim.ContainsKey(target.PlayerId) && !Camouflage.ResetSkinAfterDeathPlayers.Contains(target.PlayerId))
         {
             Camouflage.ResetSkinAfterDeathPlayers.Add(target.PlayerId);
             LateTask.New(() => Camouflage.RpcSetSkin(target, true), 0.2f, log: false);
@@ -642,6 +643,7 @@ internal static class MurderPlayerPatch
     public static void Postfix(PlayerControl __instance, [HarmonyArgument(0)] PlayerControl target, bool __state)
     {
         if (!__instance || !target || __instance.PlayerId >= 200 || target.PlayerId >= 200 || !__state) return;
+        if (GameStates.IsLobby) return;
 
         if (target.AmOwner) RemoveDisableDevicesPatch.UpdateDisableDevices();
 
