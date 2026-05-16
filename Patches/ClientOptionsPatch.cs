@@ -36,6 +36,7 @@ public static class OptionsMenuBehaviourStartPatch
     private static ClientOptionItem CancelPetAnimation;
     private static ClientOptionItem TryFixStuttering;
     private static ClientOptionItem ShowClientControlGUI;
+    private static ClientOptionItem ShareLobbyToDiscord;
 #if DEBUG
     private static ClientOptionItem GodMode;
 #endif
@@ -294,6 +295,9 @@ public static class OptionsMenuBehaviourStartPatch
                 }
             }
         }
+
+        if ((ShareLobbyToDiscord == null || !ShareLobbyToDiscord.ToggleButton) && Modules.LobbyShare.IsConfigured)
+            ShareLobbyToDiscord = ClientOptionItem.Create("ShareLobbyToDiscord", Main.ShareLobbyToDiscord, __instance);
 
 #if DEBUG
         if ((GodMode == null || GodMode.ToggleButton == null) && DebugModeManager.AmDebugger)

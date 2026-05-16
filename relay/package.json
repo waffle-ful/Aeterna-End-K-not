@@ -1,0 +1,17 @@
+{
+  "name": "endknot-lobby-relay",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cloudflare Workers relay that forwards End K not lobby announcements to a Discord channel.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250101.0",
+    "typescript": "^5.5.0",
+    "wrangler": "^3.90.0"
+  }
+}

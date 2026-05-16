@@ -412,6 +412,17 @@ FodyWeavers.xml
 local.props
 Modules/LocalDevOverride.Local.cs
 
+# Lobby share secrets — operator's real RelayUrl + HmacKey for the Cloudflare Worker.
+# The committed Modules/LobbyShareSecrets.Default.cs provides empty fallbacks so
+# source-built copies still compile (feature disabled). See relay/DEPLOY.md.
+Modules/LobbyShareSecrets.cs
+
+# Cloudflare Wrangler local state and dev secrets — never commit.
+relay/.dev.vars
+relay/.wrangler/
+.wrangler/
+.dev.vars
+
 # Claude Code / AI assistant artifacts
 .claude/
 .claudeignore

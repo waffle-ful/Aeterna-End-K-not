@@ -32,6 +32,13 @@
         <None Remove="CTA\**"/>
     </ItemGroup>
 
+    <!-- LobbyShare secrets: if the operator has filled in Modules/LobbyShareSecrets.cs
+         (which is gitignored), it gets compiled and the empty Default.cs is excluded.
+         Otherwise source-built copies fall back to Default.cs and the feature is OFF. -->
+    <ItemGroup Condition="Exists('Modules/LobbyShareSecrets.cs')">
+        <Compile Remove="Modules/LobbyShareSecrets.Default.cs"/>
+    </ItemGroup>
+
     <!-- BGM audio files in Resources/Sounds/BGM/ are gitignored (kept out of the public
          source repo) but ARE embedded into the DLL when present at build time. The
          canonical release build runs on a self-hosted runner that supplies the files.

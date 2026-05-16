@@ -1,0 +1,23 @@
+name = "endknot-lobby-relay"
+main = "src/index.ts"
+compatibility_date = "2026-05-01"
+workers_dev = true
+
+# KV namespace for state (rate limits, dedup, denylist).
+# Create with: wrangler kv namespace create STATE
+# Then paste the returned id below.
+[[kv_namespaces]]
+binding = "STATE"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+# Secrets — set via wrangler:
+#   wrangler secret put DISCORD_WEBHOOK_URL   # the channel webhook the relay posts to
+#   wrangler secret put ADMIN_TOKEN           # bearer token for /admin/* endpoints
+#   wrangler secret put SHARED_HMAC_KEY       # must match the value baked into the DLL
+# Do NOT commit these values.
+
+[vars]
+ENV = "production"
+ANNOUNCE_TTL_SECONDS = "10800"   # KV TTL for active lobby entries (3h)
+RATE_LIMIT_SECONDS = "60"        # per-IP and per-fcHash floor between announces
+DEDUP_WINDOW_SECONDS = "30"      # ignore identical announces inside this window

@@ -1,0 +1,308 @@
+using System;
+using System.Net.Http;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
+using HarmonyLib;
+using InnerNet;
+
+namespace EndKnot.Modules;
+
+// Posts lobby announcements to the Cloudflare Workers relay (see relay/ in the
+// repo for the server side). Off by default; opt-in via Client Options.
+//
+// Wire format: relay/CONTRACT.md
+//   POST /api/announce  on host's LobbyBehaviour.Start  (online room with valid code)
+//   POST /api/start     on ShipStatus.Begin             (lobby moved to in-game)
+//   POST /api/end       on AmongUsClient.OnGameEnd      (also fires on quit-to-menu)
+//
+// The relay URL + HMAC key + FC salt are baked into the DLL. They are EXTRACTABLE
+// — that's by design (see relay/README.md threat model). The HMAC only stops
+// casual curl-attacks; a determined reverser bypasses it. Rotation = ship a
+// new DLL release with new constants and rotate the Worker secret.
+internal static class LobbyShare
+{
+    // ─── operator-baked constants ─────────────────────────────────────────────
+    // Real values live in Modules/LobbyShareSecrets.cs (gitignored). Source-built
+    // copies fall back to LobbyShareSecrets.Default.cs which has empty strings,
+    // so IsConfigured returns false and nothing leaves the host.
+    // See relay/DEPLOY.md Step 7.
+
+    private const int HttpTimeoutSeconds = 8;
+
+    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(HttpTimeoutSeconds) };
+
+    private static string activeCode;
+    private static string activeFcHash;
+    private static volatile bool announceSucceeded;
+    // pendingNotification: staged from background HTTP completion; drained on the
+    // main thread by PumpNotifications() (called from LobbyBehaviour.Update).
+    // Utils.SendMessage cannot be called from a worker thread — it touches Unity RPC.
+    private static string pendingNotification;
+
+    public static bool IsConfigured => LobbyShareSecrets.RelayUrl.Length > 0 && LobbyShareSecrets.HmacKey.Length > 0;
+
+    // ─── public entry points ──────────────────────────────────────────────────
+
+    public static void TryAnnounce()
+    {
+        // Clear stale state from a prior lobby BEFORE the eligibility gate. Otherwise a
+        // succeeded-then-toggled-off scenario can leave activeCode pointing at the old
+        // lobby, and OnGameStarted would fire /api/start against the wrong code.
+        activeCode = null;
+        activeFcHash = null;
+        announceSucceeded = false;
+
+        try
+        {
+            if (!ShouldAnnounce(out string code, out string region, out string fcHash, out int players, out int max, out string mode, out string hostName)) return;
+
+            var body = new AnnounceBody
+            {
+                code = code,
+                region = region,
+                players = players,
+                max = max,
+                mode = mode,
+                modVersion = Main.PluginVersion,
+                hostName = hostName,
+                fcHash = fcHash,
+            };
+
+            activeCode = code;
+            activeFcHash = fcHash;
+            announceSucceeded = false;
+
+            FireAndForget(PostSignedAsync("/api/announce", body, isAnnounce: true));
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn($"TryAnnounce failed: {ex.Message}", "LobbyShare");
+        }
+    }
+
+    public static void OnGameStarted()
+    {
+        if (!CanLifecycle()) return;
+        FireAndForget(PostSignedAsync("/api/start", new LifecycleBody { code = activeCode, fcHash = activeFcHash }));
+    }
+
+    public static void OnGameEnded()
+    {
+        if (!CanLifecycle()) return;
+        string code = activeCode;
+        string fc = activeFcHash;
+        activeCode = null;
+        activeFcHash = null;
+        announceSucceeded = false;
+        FireAndForget(PostSignedAsync("/api/end", new LifecycleBody { code = code, fcHash = fc }));
+    }
+
+    // ─── eligibility ──────────────────────────────────────────────────────────
+
+    private static bool ShouldAnnounce(out string code, out string region, out string fcHash, out int players, out int max, out string mode, out string hostName)
+    {
+        code = region = fcHash = mode = hostName = null;
+        players = max = 0;
+
+        if (!IsConfigured) return false;
+        if (!(Main.ShareLobbyToDiscord?.Value ?? false)) return false;
+        if (!AmongUsClient.Instance || !AmongUsClient.Instance.AmHost) return false;
+        if (AmongUsClient.Instance.NetworkMode != NetworkModes.OnlineGame) return false;
+
+        string rawCode = GameCode.IntToGameName(AmongUsClient.Instance.GameId);
+        if (string.IsNullOrEmpty(rawCode) || rawCode.Length != 6) return false;
+        code = rawCode.ToUpperInvariant();
+
+        region = NormalizeRegion(ServerManager.Instance?.CurrentRegion?.Name);
+        if (region == null) return false;
+
+        PlayerControl local = PlayerControl.LocalPlayer;
+        if (!local) return false;
+        fcHash = HashFriendCode(local.FriendCode ?? string.Empty);
+
+        players = Main.AllPlayerControls.Count;
+        max = Main.NormalOptions?.MaxPlayers ?? 15;
+        if (players < 1) players = 1;
+        if (max < 1 || max > 15) max = 15;
+
+        mode = FormatMode(Options.CurrentGameMode);
+        hostName = local.Data?.PlayerName ?? string.Empty;
+
+        return true;
+    }
+
+    private static bool CanLifecycle() => IsConfigured && announceSucceeded && !string.IsNullOrEmpty(activeCode) && !string.IsNullOrEmpty(activeFcHash);
+
+    private static string NormalizeRegion(string raw)
+    {
+        // Maps whatever AU's CurrentRegion.Name returns (vendor-format unverified across
+        // AU versions) to the canonical 2-char codes the relay expects. The relay also
+        // accepts long-form names — we still normalize here so failure is observable
+        // via the unrecognized-region log line below.
+        if (string.IsNullOrEmpty(raw)) return null;
+        string u = raw.ToUpperInvariant().Trim();
+        if (u.Contains("NORTH AMERICA")) return "NA";
+        if (u.Contains("EUROPE")) return "EU";
+        if (u.Contains("ASIA")) return "AS";
+        if (u == "NA" || u == "EU" || u == "AS") return u;
+        // Log raw value so the first-test path is debuggable. Otherwise the feature
+        // silently no-ops and the operator has no breadcrumb.
+        Logger.Info($"unrecognized region: '{raw}' — announce skipped", "LobbyShare");
+        return null;
+    }
+
+    private static string FormatMode(CustomGameMode m)
+    {
+        // The relay caps mode at 32 chars. Use enum name as-is.
+        string s = m.ToString();
+        return s.Length > 32 ? s[..32] : s;
+    }
+
+    // ─── HTTP ─────────────────────────────────────────────────────────────────
+
+    private static async Task PostSignedAsync(string path, object body, bool isAnnounce = false)
+    {
+        string json = null;
+        try
+        {
+            json = JsonSerializer.Serialize(body);
+            string ts = ((long)(DateTime.UtcNow - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalSeconds).ToString();
+            string sig = SignHmac(ts + "." + json);
+
+            using var req = new HttpRequestMessage(HttpMethod.Post, LobbyShareSecrets.RelayUrl.TrimEnd('/') + path);
+            req.Content = new StringContent(json, Encoding.UTF8, "application/json");
+            req.Headers.Add("X-Timestamp", ts);
+            req.Headers.Add("X-Signature", sig);
+
+            using HttpResponseMessage resp = await Http.SendAsync(req).ConfigureAwait(false);
+            string respBody = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+            if (resp.IsSuccessStatusCode)
+            {
+                Logger.Info($"{path} ok: {Trunc(respBody, 120)}", "LobbyShare");
+                if (isAnnounce) announceSucceeded = true;
+            }
+            else
+            {
+                Logger.Warn($"{path} {(int)resp.StatusCode}: {Trunc(respBody, 200)}", "LobbyShare");
+                if (isAnnounce) NotifyHostOfFailure((int)resp.StatusCode, respBody);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn($"{path} exception: {ex.Message}", "LobbyShare");
+            if (isAnnounce) NotifyHostOfFailure(-1, ex.Message);
+        }
+    }
+
+    private static void FireAndForget(Task t)
+    {
+        // Swallow background-task exceptions so an unhandled task never bubbles
+        // into Unity's main loop. Logging already happens inside PostSignedAsync.
+        _ = t.ContinueWith(static x =>
+        {
+            if (x.Exception != null) Logger.Warn($"background task fault: {x.Exception.GetBaseException().Message}", "LobbyShare");
+        }, TaskScheduler.Default);
+    }
+
+    private static void NotifyHostOfFailure(int code, string detail)
+    {
+        // Stage the message — actual SendMessage call happens on main thread in PumpNotifications().
+        string codeStr = code > 0 ? code.ToString() : "ERR";
+        string detailStr = Trunc(detail, 80);
+        string format;
+        try { format = Translator.GetString("LobbyShare.AnnounceFailed"); }
+        catch { format = "Lobby Share failed ({0}): {1}"; }
+        Interlocked.Exchange(ref pendingNotification, string.Format(format, codeStr, detailStr));
+    }
+
+    internal static void PumpNotifications()
+    {
+        string msg = Interlocked.Exchange(ref pendingNotification, null);
+        if (msg == null) return;
+        try
+        {
+            if (!PlayerControl.LocalPlayer) return;
+            byte hostId = PlayerControl.LocalPlayer.PlayerId;
+            Utils.SendMessage(msg, hostId, Translator.GetString("LobbyShare.Title"));
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn($"PumpNotifications failed: {ex.Message}", "LobbyShare");
+        }
+    }
+
+    // ─── crypto helpers ───────────────────────────────────────────────────────
+
+    private static string HashFriendCode(string fc)
+    {
+        using SHA256 sha = SHA256.Create();
+        byte[] hash = sha.ComputeHash(Encoding.UTF8.GetBytes(fc + LobbyShareSecrets.FcSalt));
+        return ToHex(hash);
+    }
+
+    private static string SignHmac(string message)
+    {
+        using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(LobbyShareSecrets.HmacKey));
+        byte[] mac = hmac.ComputeHash(Encoding.UTF8.GetBytes(message));
+        return ToHex(mac);
+    }
+
+    private static string ToHex(byte[] bytes)
+    {
+        var sb = new StringBuilder(bytes.Length * 2);
+        foreach (byte b in bytes) sb.Append(b.ToString("x2"));
+        return sb.ToString();
+    }
+
+    private static string Trunc(string s, int max) => string.IsNullOrEmpty(s) || s.Length <= max ? s : s[..max];
+
+    // ─── DTOs (lowercase to match relay wire format verbatim) ─────────────────
+
+    private sealed class AnnounceBody
+    {
+        public string code { get; set; }
+        public string region { get; set; }
+        public int players { get; set; }
+        public int max { get; set; }
+        public string mode { get; set; }
+        public string modVersion { get; set; }
+        public string hostName { get; set; }
+        public string fcHash { get; set; }
+    }
+
+    private sealed class LifecycleBody
+    {
+        public string code { get; set; }
+        public string fcHash { get; set; }
+    }
+}
+
+// ─── Harmony hooks ────────────────────────────────────────────────────────────
+
+[HarmonyPatch(typeof(LobbyBehaviour), nameof(LobbyBehaviour.Start))]
+internal static class LobbyShareAnnounceHook
+{
+    public static void Postfix() => LobbyShare.TryAnnounce();
+}
+
+[HarmonyPatch(typeof(ShipStatus), nameof(ShipStatus.Begin))]
+internal static class LobbyShareStartHook
+{
+    public static void Postfix() => LobbyShare.OnGameStarted();
+}
+
+[HarmonyPatch(typeof(AmongUsClient), nameof(AmongUsClient.OnGameEnd))]
+internal static class LobbyShareEndHook
+{
+    public static void Postfix() => LobbyShare.OnGameEnded();
+}
+
+[HarmonyPatch(typeof(LobbyBehaviour), nameof(LobbyBehaviour.Update))]
+internal static class LobbyShareTickHook
+{
+    public static void Postfix() => LobbyShare.PumpNotifications();
+}
