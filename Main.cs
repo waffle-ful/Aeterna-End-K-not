@@ -567,6 +567,7 @@ public class Main : BasePlugin
                 { CustomRoles.Speedrunner, "#800080" },
                 { CustomRoles.Unshifter, "#00b4eb" },
                 { CustomRoles.Scanner, "#42f5a7" },
+                { CustomRoles.Walker, "#5fb8d6" },
                 // Neutrals
                 { CustomRoles.Arsonist, "#ff6633" },
                 { CustomRoles.Pyromaniac, "#ff6633" },

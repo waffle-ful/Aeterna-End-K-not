@@ -218,6 +218,9 @@ internal static class GameEndChecker
                         case CustomRoles.WolfBoy when WinnerTeam == CustomWinner.Crewmate && roleBase is WolfBoy wb && WolfBoy.OptionWinKillCount != null && WolfBoy.OptionWinKillCount.GetInt() > 0 && wb.GetKillCount() < WolfBoy.OptionWinKillCount.GetInt():
                             WinnerIds.Remove(pc.PlayerId);
                             break;
+                        case CustomRoles.Walker when WinnerTeam == CustomWinner.Crewmate && pc.IsAlive() && !Walker.HasCompletedTour(pc.PlayerId) && !pc.GetTaskState().IsTaskFinished:
+                            WinnerIds.Remove(pc.PlayerId);
+                            break;
                         case CustomRoles.Monochromer when pc.IsAlive() && WinnerTeam != CustomWinner.Monochromer && reason != GameOverReason.CrewmatesByTask:
                             ResetAndSetWinner(CustomWinner.Monochromer);
                             WinnerIds.Add(pc.PlayerId);

@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using EndKnot.Modules;
 using UnityEngine;
 using static EndKnot.Translator;
 
@@ -52,7 +53,31 @@ public class Walker : RoleBase
         if (room == null) return;
 
         if (!VisitedRooms.TryGetValue(pc.PlayerId, out var visited)) return;
-        visited.Add(room.RoomId);
+
+        int before = visited.Count;
+        if (!visited.Add(room.RoomId)) return;
+
+        int required = OptionWalkTaskCount.GetInt();
+        if (before < required && visited.Count >= required)
+            ForceCompleteTasks(pc);
+    }
+
+    private static void ForceCompleteTasks(PlayerControl pc)
+    {
+        TaskState ts = pc.GetTaskState();
+        if (!ts.HasTasks || ts.IsTaskFinished) return;
+
+        foreach (PlayerTask task in pc.myTasks)
+        {
+            if (!task.IsComplete)
+                pc.RpcCompleteTask(task.Id);
+        }
+    }
+
+    public static bool HasCompletedTour(byte playerId)
+    {
+        int visited = VisitedRooms.TryGetValue(playerId, out var set) ? set.Count : 0;
+        return visited >= OptionWalkTaskCount.GetInt();
     }
 
     public override string GetProgressText(byte playerId, bool comms)
