@@ -46,10 +46,12 @@ internal static class LobbyShare
     // OnLobbyDestroyed to distinguish "lobby → ship transition" (skip /api/close)
     // from "host actually left the lobby" (fire /api/close).
     private static volatile bool inGame;
-    // Last player count sent via /api/update (or /api/announce baseline). -1 sentinel
-    // until the first announce fires, so MaybeUpdatePlayerCount doesn't try to PATCH
-    // before there's even an embed to PATCH.
+    // Last values pushed via /api/announce or /api/update. -1 / null sentinel until
+    // the first announce fires, so MaybeUpdatePlayerCount doesn't try to PATCH before
+    // there's even an embed to PATCH.
     private static int lastSentPlayerCount = -1;
+    private static int lastSentMax = -1;
+    private static string lastSentMode;
     private static float lastUpdateAt;
     // pendingNotification: staged from background HTTP completion; drained on the
     // main thread by PumpNotifications() (called from LobbyBehaviour.Update).
@@ -89,6 +91,8 @@ internal static class LobbyShare
             activeCode = code;
             activeFcHash = fcHash;
             lastSentPlayerCount = players;
+            lastSentMax = max;
+            lastSentMode = mode;
             lastUpdateAt = Time.time;
             // Don't reset announceSucceeded — may already be true from re-entry to
             // the same lobby. Server PATCHes existing entries idempotently.
@@ -153,12 +157,21 @@ internal static class LobbyShare
         activeFcHash = null;
         announceSucceeded = false;
         lastSentPlayerCount = -1;
+        lastSentMax = -1;
+        lastSentMode = null;
         FireAndForget(PostSignedAsync("/api/close", new LifecycleBody { code = code, fcHash = fc }));
     }
 
     // Called every tick by LobbyShareTickHook. Cheap diff-check + 5s throttle gates
-    // actual HTTP. Only fires during the lobby phase (inGame=false) — in-game player
-    // disconnects don't matter for "is this lobby joinable" signaling.
+    // actual HTTP. Only fires during the lobby phase (inGame=false) — in-game changes
+    // don't matter for "is this lobby joinable" signaling.
+    //
+    // Watches three fields:
+    //   - players (host count via AllPlayerControls.Count)
+    //   - max (host-side MaxPlayers setting)
+    //   - mode (host changed the EHR custom game mode)
+    // A single 5s throttle gates all of them together; the same /api/update call
+    // ships whatever fields are present.
     public static void MaybeUpdatePlayerCount()
     {
         if (!CanLifecycle()) return;
@@ -167,15 +180,21 @@ internal static class LobbyShare
 
         int count = Main.AllPlayerControls?.Count ?? 0;
         if (count < 1) return;
-        if (count == lastSentPlayerCount) return;
+        int max = Main.NormalOptions?.MaxPlayers ?? 15;
+        if (max < 1 || max > 15) max = 15;
+        string mode = FormatMode(Options.CurrentGameMode);
+
+        if (count == lastSentPlayerCount && max == lastSentMax && mode == lastSentMode) return;
 
         float now = Time.time;
         if (now - lastUpdateAt < UpdateThrottleSeconds) return;
 
         lastSentPlayerCount = count;
+        lastSentMax = max;
+        lastSentMode = mode;
         lastUpdateAt = now;
 
-        FireAndForget(PostSignedAsync("/api/update", new UpdateBody { code = activeCode, fcHash = activeFcHash, players = count }));
+        FireAndForget(PostSignedAsync("/api/update", new UpdateBody { code = activeCode, fcHash = activeFcHash, players = count, max = max, mode = mode }));
     }
 
     // ─── eligibility ──────────────────────────────────────────────────────────
@@ -363,6 +382,8 @@ internal static class LobbyShare
         public string code { get; set; }
         public string fcHash { get; set; }
         public int players { get; set; }
+        public int max { get; set; }
+        public string mode { get; set; }
     }
 }
 
