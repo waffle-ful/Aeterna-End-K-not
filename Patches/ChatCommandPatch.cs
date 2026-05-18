@@ -1238,6 +1238,35 @@ internal static class ChatCommands
             Utils.SendMessage("\n", player.PlayerId, GetString("SpectateCommand.Success"));
     }
 
+    private static void SendLobbyWhisper(byte targetId, string title, string msg)
+    {
+        PlayerControl target = Utils.GetPlayerById(targetId);
+        if (target == null || target.Data == null) return;
+        int targetClientId = target.OwnerId;
+        if (targetClientId < 0) return;
+
+        PlayerControl sender = PlayerControl.LocalPlayer;
+        if (sender == null || sender.Data == null) return;
+
+        try
+        {
+            CustomRpcSender w = CustomRpcSender.Create("WhisperCommand.Lobby", SendOption.Reliable);
+            w.AutoStartRpc(sender.NetId, (byte)RpcCalls.SetName, targetClientId)
+                .Write(sender.Data.NetId)
+                .Write(title)
+                .EndRpc();
+            w.AutoStartRpc(sender.NetId, (byte)RpcCalls.SendChat, targetClientId)
+                .Write(msg)
+                .EndRpc();
+            w.AutoStartRpc(sender.NetId, (byte)RpcCalls.SetName, targetClientId)
+                .Write(sender.Data.NetId)
+                .Write(Main.AllPlayerNames.GetValueOrDefault(sender.PlayerId, string.Empty))
+                .EndRpc();
+            w.SendMessage();
+        }
+        catch (Exception ex) { Logger.Warn($"SendLobbyWhisper failed: {ex.Message}", "Whisper"); }
+    }
+
     private static void WhisperCommand(PlayerControl player, string text, string[] args)
     {
         if (!player.IsAlive() || Silencer.ForSilencer.Contains(player.PlayerId)) return;
@@ -1266,6 +1295,8 @@ internal static class ChatCommands
         PlayerControl[] listeners = CustomRoles.Listener.IsEnable() ? Main.EnumerateAlivePlayerControls().Where(x => x.Is(CustomRoles.Listener)).ToArray() : [];
         string[] ids = args[1].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
+        CustomRpcSender batchWriter = null;
+
         foreach (string id in ids)
         {
             if (!byte.TryParse(id, out byte targetId)) continue;
@@ -1275,23 +1306,33 @@ internal static class ChatCommands
 
             string fromName = player.PlayerId.ColoredPlayerName();
             string toName = targetId.ColoredPlayerName();
-        
+
             string msg = args[2..].Join(delimiter: " ");
             string title = string.Format(GetString("WhisperTitle"), fromName, player.PlayerId);
 
-            Utils.SendMessage(msg, targetId, title, importance: MessageImportance.High);
+            if (GameStates.IsLobby)
+            {
+                SendLobbyWhisper(targetId, title, msg);
+                ChatUpdatePatch.LastMessages.Add((msg, targetId, title, Utils.TimeStamp));
+                continue;
+            }
+
+            batchWriter = Utils.SendMessage(msg, targetId, title, writer: batchWriter, multiple: true, importance: MessageImportance.High);
             ChatUpdatePatch.LastMessages.Add((msg, targetId, title, Utils.TimeStamp));
 
             foreach (PlayerControl listener in listeners)
             {
                 if (IRandom.Instance.Next(100) >= Listener.WhisperHearChance.GetInt()) continue;
                 string message = IRandom.Instance.Next(100) < Listener.FullMessageHearChance.GetInt() ? string.Format(GetString("Listener.FullMessage"), coloredRole, fromName, toName, msg) : string.Format(GetString("Listener.FromTo"), coloredRole, fromName, toName);
-                Utils.SendMessage("\n", listener.PlayerId, message);
-                
+                batchWriter = Utils.SendMessage("\n", listener.PlayerId, message, writer: batchWriter, multiple: true);
+
                 if (listener.AmOwner && ++Listener.LocalPlayerHeardMessagesThisMeeting >= 3)
                     Achievements.Type.Eavesdropper.Complete();
             }
         }
+
+        if (batchWriter != null && batchWriter.CurrentState != CustomRpcSender.State.Finished)
+            batchWriter.SendMessage();
 
         MeetingManager.SendCommandUsedMessage(args[0]);
     }
@@ -1302,6 +1343,13 @@ internal static class ChatCommands
 
         string msg = args[2..].Join(delimiter: " ");
         string title = string.Format(GetString("HWhisperTitle"), player.PlayerId.ColoredPlayerName());
+
+        if (GameStates.IsLobby)
+        {
+            SendLobbyWhisper(targetId, title, msg);
+            ChatUpdatePatch.LastMessages.Add((msg, targetId, title, Utils.TimeStamp));
+            return;
+        }
 
         Utils.SendMessage(msg, targetId, title, importance: MessageImportance.High);
         ChatUpdatePatch.LastMessages.Add((msg, targetId, title, Utils.TimeStamp));
@@ -3710,11 +3758,16 @@ internal static class ChatCommands
         string title = Utils.ColorString(factionColor, $"{mark}{sender.GetRealName()}{mark}");
         string body = Utils.ColorString(factionColor, message);
 
+        CustomRpcSender batchWriter = null;
+
         foreach (PlayerControl pc in Main.EnumeratePlayerControls())
         {
             if (pc.IsAlive() && !isInFaction(pc)) continue;
-            Utils.SendMessage(body, pc.PlayerId, title);
+            batchWriter = Utils.SendMessage(body, pc.PlayerId, title, writer: batchWriter, multiple: true);
         }
+
+        if (batchWriter != null && batchWriter.CurrentState != CustomRpcSender.State.Finished)
+            batchWriter.SendMessage();
     }
 
     private static void ImpostorChatCommand(PlayerControl player, string text, string[] args)
@@ -3902,6 +3955,15 @@ internal static class LobbyKillSystem
         target.Data.IsDead = true;
         target.Data.SetDirtyBit(0b_1u << targetId);
         AmongUsClient.Instance.SendAllStreamedObjects();
+
+        try { target.RpcSetRole(RoleTypes.CrewmateGhost); } catch (Exception ex) { Logger.Warn($"RpcSetRole(CrewmateGhost) in lobby failed: {ex.Message}", "LobbyKill"); }
+
+        try
+        {
+            if (HudManager.InstanceExists && killer != null && killer.KillSfx)
+                SoundManager.Instance.PlaySound(killer.KillSfx, false, 0.8f);
+        }
+        catch (Exception ex) { Logger.Warn($"kill sfx in lobby failed: {ex.Message}", "LobbyKill"); }
 
         EndKnot.Modules.RPC.SyncLobbyState();
 

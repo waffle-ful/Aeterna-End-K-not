@@ -90,6 +90,28 @@ internal static class LobbyBehaviourStartPatch
 
     public static void Postfix()
     {
+        if (AmongUsClient.Instance != null && AmongUsClient.Instance.AmHost)
+        {
+            LateTask.New(() =>
+            {
+                try
+                {
+                    if (AmongUsClient.Instance == null || PlayerControl.LocalPlayer == null) return;
+                    foreach (PlayerControl pc in Main.EnumeratePlayerControls())
+                    {
+                        if (pc == null || pc.Data == null || !pc.Data.IsDead) continue;
+                        pc.Data.IsDead = false;
+                        pc.Data.SetDirtyBit(0b_1u << pc.PlayerId);
+                    }
+                    AmongUsClient.Instance.SendAllStreamedObjects();
+                    Main.LobbyDead.Clear();
+                    Main.LobbyKillers.Clear();
+                    EndKnot.Modules.RPC.SyncLobbyState();
+                }
+                catch (Exception ex) { Logger.Warn($"LobbyBehaviour.Start reset failed: {ex.Message}", "LobbyKill"); }
+            }, 1.0f, log: false);
+        }
+
         if (!(Main.EnableBGM?.Value ?? false)) return;
         SilencePending = true;
         _bgmStarted = false;

@@ -103,6 +103,12 @@ internal static class CheckMurderPatch
         {
             if (!AmongUsClient.Instance.AmHost) return false;
 
+            if (GameStates.IsLobby)
+            {
+                if (target != null && Options.LobbyKillEnabled.GetBool()) LobbyKillSystem.ProcessLobbyKill(__instance, target.PlayerId);
+                return false;
+            }
+
             PlayerControl killer = __instance;
 
             AFKDetector.SetNotAFK(killer.PlayerId);

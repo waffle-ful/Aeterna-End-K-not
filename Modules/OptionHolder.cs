@@ -276,6 +276,12 @@ public static class Options
     public static OptionItem SeeEjectedRolesInMeeting;
     public static OptionItem EveryoneSeesDeathReasons;
     public static OptionItem HostSeesCommandsEnteredByOthers;
+    public static OptionItem LobbyKillEnabled;
+    public static OptionItem LobbyKillRange;
+
+    public static OptionItem LobbyCorpseEnabled;
+    public static OptionItem LobbyCorpseCount;
+    public static OptionItem LobbyCorpseSpreadRadius;
 
     public static OptionItem DisableShieldAnimations;
     public static OptionItem DisableShapeshiftAnimations;
@@ -2942,6 +2948,27 @@ public static class Options
         HostSeesCommandsEnteredByOthers = new BooleanOptionItem(44441, "HostSeesCommandsEnteredByOthers", true, TabGroup.GameSettings)
             .SetGameMode(CustomGameMode.Standard)
             .SetColor(new Color32(147, 241, 240, byte.MaxValue));
+
+        LobbyKillEnabled = new BooleanOptionItem(44451, "LobbyKillEnabled", true, TabGroup.GameSettings)
+            .SetColor(new Color32(255, 102, 102, byte.MaxValue));
+
+        LobbyKillRange = new FloatOptionItem(44452, "LobbyKillRange", new(0.5f, 3.5f, 0.25f), 1.5f, TabGroup.GameSettings)
+            .SetParent(LobbyKillEnabled)
+            .SetValueFormat(OptionFormat.Multiplier)
+            .SetColor(new Color32(255, 102, 102, byte.MaxValue));
+
+        LobbyCorpseEnabled = new BooleanOptionItem(44453, "LobbyCorpseEnabled", false, TabGroup.GameSettings)
+            .SetColor(new Color32(180, 60, 60, byte.MaxValue));
+
+        LobbyCorpseCount = new IntegerOptionItem(44454, "LobbyCorpseCount", new(1, 30, 1), 5, TabGroup.GameSettings)
+            .SetParent(LobbyCorpseEnabled)
+            .SetValueFormat(OptionFormat.Pieces)
+            .SetColor(new Color32(180, 60, 60, byte.MaxValue));
+
+        LobbyCorpseSpreadRadius = new FloatOptionItem(44455, "LobbyCorpseSpreadRadius", new(0.5f, 10f, 0.5f), 3f, TabGroup.GameSettings)
+            .SetParent(LobbyCorpseEnabled)
+            .SetValueFormat(OptionFormat.Multiplier)
+            .SetColor(new Color32(180, 60, 60, byte.MaxValue));
 
         ChaosPotSupport.SetupOptions(44445);
 

@@ -178,7 +178,9 @@ public enum CustomRPC
     BedWarsSync,
     DeathraceSync,
     SyncLobbyState,
-    SyncAkazukinPseudoDeath
+    SyncAkazukinPseudoDeath,
+    LobbyDecorSpawn,
+    LobbyDecorClear
 
     // The total number of RPCs must not exceed 255
     // Because HandleRpc accepts Rpc in byte (max 255) system, and it will be impossible to use int
@@ -1375,6 +1377,16 @@ internal static class RPCHandlerPatch
                     Main.LobbyDead = [];
                     for (int i = 0; i < deadCount; i++) Main.LobbyDead.Add(reader.ReadByte());
                     Logger.Info($"SyncLobbyState received: Killers=[{string.Join(",", Main.LobbyKillers)}] Dead=[{string.Join(",", Main.LobbyDead)}]", "LobbyKill");
+                    break;
+                }
+                case CustomRPC.LobbyDecorSpawn:
+                {
+                    LobbyDecor.ReceiveSpawnRPC(reader);
+                    break;
+                }
+                case CustomRPC.LobbyDecorClear:
+                {
+                    LobbyDecor.ReceiveClearRPC();
                     break;
                 }
             }

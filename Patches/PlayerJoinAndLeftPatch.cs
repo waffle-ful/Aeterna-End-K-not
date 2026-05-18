@@ -492,6 +492,13 @@ internal static class OnPlayerJoinedPatch
             {
                 if (!AmongUsClient.Instance.AmHost) return;
 
+                if (client.Character != null)
+                {
+                    byte joinedId = client.Character.PlayerId;
+                    bool lobbyStateChanged = Main.LobbyDead.Remove(joinedId) | Main.LobbyKillers.Remove(joinedId);
+                    if (lobbyStateChanged) EndKnot.Modules.RPC.SyncLobbyState();
+                }
+
                 if (Options.KickSlowJoiningPlayers.GetBool() && ((!client.IsDisconnected() && client.Character.Data.IsIncomplete) || ((client.Character.Data.DefaultOutfit.ColorId < 0 || Palette.PlayerColors.Length <= client.Character.Data.DefaultOutfit.ColorId) && PlayerControl.AllPlayerControls.Count <= 15)))
                 {
                     Logger.SendInGame(GetString("Error.InvalidColor") + $" {client.Id}/{client.PlayerName}", Color.yellow);
@@ -551,10 +558,17 @@ internal static class OnPlayerLeftPatch
     {
         try
         {
+            if (AmongUsClient.Instance.AmHost && data != null && data.Character)
+            {
+                byte leftId = data.Character.PlayerId;
+                bool lobbyStateChanged = Main.LobbyDead.Remove(leftId) | Main.LobbyKillers.Remove(leftId);
+                if (lobbyStateChanged) EndKnot.Modules.RPC.SyncLobbyState();
+            }
+
             if (AmongUsClient.Instance.AmHost && GameStates.IsInGame && data != null && data.Character)
             {
                 byte id = data.Character.PlayerId;
-                
+
                 ExtendedPlayerControl.TempExiled.Remove(id);
 
                 switch (Options.CurrentGameMode)

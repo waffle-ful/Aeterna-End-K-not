@@ -539,6 +539,44 @@ internal static class KillButtonSetTargetPatch
     }
 }
 
+[HarmonyPatch(typeof(HudManager), nameof(HudManager.Update))]
+internal static class LobbyKillButtonHudPatch
+{
+    public static void Postfix(HudManager __instance)
+    {
+        if (!GameStates.IsLobby) return;
+        if (PlayerControl.LocalPlayer == null || PlayerControl.LocalPlayer.Data == null) return;
+        if (!__instance || !__instance.KillButton) return;
+
+        PlayerControl localPlayer = PlayerControl.LocalPlayer;
+        KillButton killButton = __instance.KillButton;
+
+        if (!Options.LobbyKillEnabled.GetBool() || localPlayer.Data.IsDead || Main.LobbyDead.Contains(localPlayer.PlayerId))
+        {
+            killButton.gameObject.SetActive(false);
+            return;
+        }
+
+        killButton.gameObject.SetActive(true);
+
+        PlayerControl closest = FastVector2.TryGetClosestPlayerInRangeTo(localPlayer, Options.LobbyKillRange.GetFloat(), out PlayerControl c,
+            x => x.Data is { IsDead: false } && !Main.LobbyDead.Contains(x.PlayerId)) ? c : null;
+
+        if (killButton.currentTarget && killButton.currentTarget != closest)
+            killButton.currentTarget.ToggleHighlight(false, RoleTeamTypes.Impostor);
+
+        killButton.currentTarget = closest;
+
+        if (killButton.currentTarget)
+        {
+            killButton.currentTarget.ToggleHighlight(true, RoleTeamTypes.Impostor);
+            killButton.SetEnabled();
+        }
+        else
+            killButton.SetDisabled();
+    }
+}
+
 [HarmonyPatch(typeof(Vent), nameof(Vent.SetOutline))]
 internal static class SetVentOutlinePatch
 {
