@@ -37,6 +37,10 @@ internal static class LobbyShare
     private static string activeCode;
     private static string activeFcHash;
     private static volatile bool announceSucceeded;
+    // inGame: true between ShipStatus.Begin and AmongUsClient.OnGameEnd. Used by
+    // OnLobbyDestroyed to distinguish "lobby → ship transition" (skip /api/close)
+    // from "host actually left the lobby" (fire /api/close).
+    private static volatile bool inGame;
     // pendingNotification: staged from background HTTP completion; drained on the
     // main thread by PumpNotifications() (called from LobbyBehaviour.Update).
     // Utils.SendMessage cannot be called from a worker thread — it touches Unity RPC.
@@ -48,16 +52,17 @@ internal static class LobbyShare
 
     public static void TryAnnounce()
     {
-        // Clear stale state from a prior lobby BEFORE the eligibility gate. Otherwise a
-        // succeeded-then-toggled-off scenario can leave activeCode pointing at the old
-        // lobby, and OnGameStarted would fire /api/start against the wrong code.
-        activeCode = null;
-        activeFcHash = null;
-        announceSucceeded = false;
+        Logger.Info("TryAnnounce called (LobbyBehaviour.Start Postfix)", "LobbyShare");
+
+        // No reset-at-start here — when a lobby returns from a game (Play Again), the
+        // existing activeCode/activeFcHash should persist so the server-side idempotent
+        // PATCH can identify the same lobby. New-lobby-session resets happen in
+        // OnLobbyDestroyed (clears state after /api/close).
 
         try
         {
             if (!ShouldAnnounce(out string code, out string region, out string fcHash, out int players, out int max, out string mode, out string hostName)) return;
+            Logger.Info($"announcing code={code} region={region} players={players}/{max} mode={mode}", "LobbyShare");
 
             var body = new AnnounceBody
             {
@@ -73,7 +78,8 @@ internal static class LobbyShare
 
             activeCode = code;
             activeFcHash = fcHash;
-            announceSucceeded = false;
+            // Don't reset announceSucceeded — may already be true from re-entry to
+            // the same lobby. Server PATCHes existing entries idempotently.
 
             FireAndForget(PostSignedAsync("/api/announce", body, isAnnounce: true));
         }
@@ -83,21 +89,58 @@ internal static class LobbyShare
         }
     }
 
+    public static void OnGameStarting()
+    {
+        // Set inGame BEFORE the lobby→ship scene transition (which fires
+        // LobbyBehaviour.OnDestroy) so OnLobbyDestroyed doesn't mistake it for a
+        // host-quit. GameStartManager.BeginGame Postfix is the right place:
+        // it fires when host clicks Start, before the scene unloads, and Harmony
+        // skips Postfixes if any Prefix returned false (so aborted starts don't
+        // leave inGame stuck at true).
+        inGame = true;
+        Logger.Info("OnGameStarting: inGame=true (host clicked Start)", "LobbyShare");
+    }
+
     public static void OnGameStarted()
     {
         if (!CanLifecycle()) return;
+        // OnGameStarting already set inGame=true. Defensive re-set in case the
+        // BeginGame hook missed (alternate start paths).
+        inGame = true;
         FireAndForget(PostSignedAsync("/api/start", new LifecycleBody { code = activeCode, fcHash = activeFcHash }));
     }
 
     public static void OnGameEnded()
     {
         if (!CanLifecycle()) return;
+        inGame = false;
+        // Lobby is still alive — keep activeCode/activeFcHash for the upcoming
+        // /api/end PATCH and the subsequent Play-Again re-announce / future /api/close.
+        FireAndForget(PostSignedAsync("/api/end", new LifecycleBody { code = activeCode, fcHash = activeFcHash }));
+    }
+
+    public static void OnLobbyDestroyed()
+    {
+        // OnDestroy fires in two scenarios:
+        //   (a) Game starting — lobby scene unloads to load ship scene. inGame=true.
+        //       SKIP /api/close — the embed should stay (it'll flip to in-game next).
+        //   (b) Host actually leaving the lobby. inGame=false. Call /api/close so the
+        //       Discord embed and KV entry are cleaned up promptly (without waiting
+        //       for the 3h TTL).
+        if (inGame)
+        {
+            Logger.Info("OnLobbyDestroyed: inGame=true, skipping /api/close (lobby → ship transition)", "LobbyShare");
+            return;
+        }
+
+        if (!CanLifecycle()) return;
+        Logger.Info($"OnLobbyDestroyed: host left, firing /api/close for code={activeCode}", "LobbyShare");
         string code = activeCode;
         string fc = activeFcHash;
         activeCode = null;
         activeFcHash = null;
         announceSucceeded = false;
-        FireAndForget(PostSignedAsync("/api/end", new LifecycleBody { code = code, fcHash = fc }));
+        FireAndForget(PostSignedAsync("/api/close", new LifecycleBody { code = code, fcHash = fc }));
     }
 
     // ─── eligibility ──────────────────────────────────────────────────────────
@@ -107,20 +150,20 @@ internal static class LobbyShare
         code = region = fcHash = mode = hostName = null;
         players = max = 0;
 
-        if (!IsConfigured) return false;
-        if (!(Main.ShareLobbyToDiscord?.Value ?? false)) return false;
-        if (!AmongUsClient.Instance || !AmongUsClient.Instance.AmHost) return false;
-        if (AmongUsClient.Instance.NetworkMode != NetworkModes.OnlineGame) return false;
+        if (!IsConfigured) { Logger.Info("skip: not configured (LobbyShareSecrets empty)", "LobbyShare"); return false; }
+        if (!(Main.ShareLobbyToDiscord?.Value ?? false)) { Logger.Info("skip: ShareLobbyToDiscord toggle is OFF", "LobbyShare"); return false; }
+        if (!AmongUsClient.Instance || !AmongUsClient.Instance.AmHost) { Logger.Info($"skip: not host (AmHost={AmongUsClient.Instance?.AmHost})", "LobbyShare"); return false; }
+        if (AmongUsClient.Instance.NetworkMode != NetworkModes.OnlineGame) { Logger.Info($"skip: NetworkMode={AmongUsClient.Instance.NetworkMode} (need OnlineGame)", "LobbyShare"); return false; }
 
         string rawCode = GameCode.IntToGameName(AmongUsClient.Instance.GameId);
-        if (string.IsNullOrEmpty(rawCode) || rawCode.Length != 6) return false;
+        if (string.IsNullOrEmpty(rawCode) || rawCode.Length != 6) { Logger.Info($"skip: invalid game code '{rawCode}'", "LobbyShare"); return false; }
         code = rawCode.ToUpperInvariant();
 
         region = NormalizeRegion(ServerManager.Instance?.CurrentRegion?.Name);
         if (region == null) return false;
 
         PlayerControl local = PlayerControl.LocalPlayer;
-        if (!local) return false;
+        if (!local) { Logger.Info("skip: PlayerControl.LocalPlayer null", "LobbyShare"); return false; }
         fcHash = HashFriendCode(local.FriendCode ?? string.Empty);
 
         players = Main.AllPlayerControls.Count;
@@ -286,7 +329,18 @@ internal static class LobbyShare
 [HarmonyPatch(typeof(LobbyBehaviour), nameof(LobbyBehaviour.Start))]
 internal static class LobbyShareAnnounceHook
 {
-    public static void Postfix() => LobbyShare.TryAnnounce();
+    // LobbyBehaviour.Start fires before PlayerControl.LocalPlayer is spawned (the
+    // host connection completes a few ticks later). Delay so LocalPlayer + region
+    // + game-code are all available when ShouldAnnounce runs.
+    public static void Postfix() => LateTask.New(LobbyShare.TryAnnounce, 3f, "LobbyShare.TryAnnounce");
+}
+
+[HarmonyPatch(typeof(GameStartManager), nameof(GameStartManager.BeginGame))]
+internal static class LobbyShareGameStartingHook
+{
+    // Postfix only runs if all Prefixes returned true — aborted starts (invalid
+    // color, etc.) skip this, so inGame doesn't get stuck on a non-started game.
+    public static void Postfix() => LobbyShare.OnGameStarting();
 }
 
 [HarmonyPatch(typeof(ShipStatus), nameof(ShipStatus.Begin))]
@@ -299,6 +353,12 @@ internal static class LobbyShareStartHook
 internal static class LobbyShareEndHook
 {
     public static void Postfix() => LobbyShare.OnGameEnded();
+}
+
+[HarmonyPatch(typeof(LobbyBehaviour), nameof(LobbyBehaviour.OnDestroy))]
+internal static class LobbyShareCloseHook
+{
+    public static void Postfix() => LobbyShare.OnLobbyDestroyed();
 }
 
 [HarmonyPatch(typeof(LobbyBehaviour), nameof(LobbyBehaviour.Update))]
