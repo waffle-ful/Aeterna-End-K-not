@@ -122,11 +122,12 @@ export default {
                 return err(404, "not found");
             }
 
-            if (method === "POST" && (path === "/api/announce" || path === "/api/start" || path === "/api/end" || path === "/api/close")) {
+            if (method === "POST" && (path === "/api/announce" || path === "/api/start" || path === "/api/end" || path === "/api/close" || path === "/api/update")) {
                 const raw = await req.text();
                 const sigOk = await verifySignature(req, env, raw);
                 if (!sigOk) return err(401, "bad signature");
                 if (path === "/api/announce") return await handleAnnounce(req, env, raw);
+                if (path === "/api/update") return await handleUpdate(env, raw);
                 if (path === "/api/start") return await handleLifecycle(env, raw, "start");
                 if (path === "/api/end") return await handleLifecycle(env, raw, "end");
                 return await handleLifecycle(env, raw, "close");
@@ -312,6 +313,46 @@ async function handleLifecycle(env: Env, raw: string, phase: "start" | "end" | "
     await env.STATE.delete(`code:${code}`);
     if (!r.ok) return ok({ status: "kv-cleared", warn: r.error });
     return ok({ status: "closed" });
+}
+
+// PATCH the existing embed with new player count / max / mode. Status (open vs
+// in-game) is preserved — this endpoint is for live updates, not state changes.
+// DLL fires this throttled (~5s + diff-detect) from LobbyBehaviour.Update.
+async function handleUpdate(env: Env, raw: string): Promise<Response> {
+    const body = safeParse<Partial<{ code: string; fcHash: string; players?: number; max?: number; mode?: string }>>(raw);
+    if (!body) return err(400, "invalid json");
+
+    const code = (body.code ?? "").toString().toUpperCase();
+    const fcHash = (body.fcHash ?? "").toString().toLowerCase();
+    if (!CODE_RE.test(code)) return err(400, "invalid code");
+    if (!HEX64_RE.test(fcHash)) return err(400, "invalid fcHash");
+
+    const entry = await env.STATE.get(`code:${code}`, "json") as CodeEntry | null;
+    if (!entry) return ok({ status: "no-op" });
+    if (entry.fcHash !== fcHash) return err(403, "fcHash mismatch");
+
+    let changed = false;
+    if (typeof body.players === "number") {
+        const p = Math.floor(body.players);
+        if (p >= 1 && p <= 15 && entry.announce.players !== p) { entry.announce.players = p; changed = true; }
+    }
+    if (typeof body.max === "number") {
+        const m = Math.floor(body.max);
+        if (m >= 1 && m <= 15 && entry.announce.max !== m) { entry.announce.max = m; changed = true; }
+    }
+    if (typeof body.mode === "string") {
+        const m = sanitize(body.mode, 32) || "Standard";
+        if (entry.announce.mode !== m) { entry.announce.mode = m; changed = true; }
+    }
+
+    if (!changed) return ok({ status: "no-change" });
+
+    const phase = entry.status === "in-game" ? "in-game" : "open";
+    const r = await editDiscordMessage(env.DISCORD_WEBHOOK_URL, entry.messageId, buildEmbed(entry.announce, phase));
+    if (!r.ok) return err(502, `discord patch failed: ${r.error}`);
+
+    await env.STATE.put(`code:${code}`, JSON.stringify(entry), { expirationTtl: kvTtl(remainingTtl(entry, env)) });
+    return ok({ status: "updated" });
 }
 
 async function handleAdminBan(req: Request, env: Env, ban: boolean): Promise<Response> {
