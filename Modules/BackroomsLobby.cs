@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Text;
+using HarmonyLib;
 using UnityEngine;
 
 namespace EndKnot.Modules;
@@ -420,6 +421,9 @@ public static class BackroomsLobby
         // 3. 新座標 (= player.Pos() = (100, 100)) を中心に procgen 生成
         GenerateLobby(seed, targetPid);
 
+        // 4. 円形ヴィネット (視界制限オーバーレイ) を生成
+        CreateVignette();
+
         Logger.Info($"Entered Backrooms at ({BackroomsX},{BackroomsY}) seed={seed} disabled={disabled}", "BackroomsGen");
     }
 
@@ -458,7 +462,124 @@ public static class BackroomsLobby
 
         DisabledColliders.Clear();
 
+        // 4. ヴィネット撤去
+        DestroyVignette();
+
         Utils.SendMessage($"Exited Backrooms. Cleared {wiped} tiles, restored {restored} colliders.", targetPid);
         Logger.Info($"Exited Backrooms cleared={wiped} restored={restored}", "BackroomsGen");
+    }
+
+    // 円形ヴィネット (視界制限オーバーレイ)
+    // HudManager.FullScreen を clone して sortingLayer/camera追従を自動継承
+
+    private static GameObject _vignette;
+    private static Sprite _vignetteSprite;
+
+    private static Sprite VignetteSprite
+    {
+        get
+        {
+            if (_vignetteSprite != null) return _vignetteSprite;
+            const int N = 512;
+            Texture2D tex = new(N, N, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear };
+            Color[] pixels = new Color[N * N];
+            float cx = N / 2f;
+            float cy = N / 2f;
+            // 512px, ppu=20 → 25.6 unit のスプライト (画面より広め)
+            // 中央 1.5 unit 完全可視、3.5 unit で完全暗黒
+            // 1.5 unit = 1.5 * 20 / 512 = 0.0586 = N * 0.0586
+            // 3.5 unit = 3.5 * 20 / 512 = 0.137 = N * 0.137
+            float visRadius = N * 0.06f;   // ~1.5 unit
+            float fadeRadius = N * 0.14f;  // ~3.5 unit
+            for (int y = 0; y < N; y++)
+            for (int x = 0; x < N; x++)
+            {
+                float dx = x - cx;
+                float dy = y - cy;
+                float d = Mathf.Sqrt(dx * dx + dy * dy);
+                float alpha;
+                if (d <= visRadius) alpha = 0f;
+                else if (d >= fadeRadius) alpha = 1f;
+                else alpha = (d - visRadius) / (fadeRadius - visRadius);
+                pixels[y * N + x] = new Color(0f, 0f, 0f, alpha);
+            }
+            tex.SetPixels(pixels);
+            tex.Apply();
+            _vignetteSprite = Sprite.Create(tex, new Rect(0, 0, N, N), new Vector2(0.5f, 0.5f), 20f); // 512/20 = 25.6 unit
+            _vignetteSprite.hideFlags |= HideFlags.HideAndDontSave;
+            return _vignetteSprite;
+        }
+    }
+
+    // 切り分けテスト用: 均一に 50% alpha 黒スプライト
+    // これが見えれば rendering 経路 OK、見えなければ Layer/Camera 問題
+    private static Sprite _testSolidSprite;
+    private static Sprite TestSolidSprite
+    {
+        get
+        {
+            if (_testSolidSprite != null) return _testSolidSprite;
+            const int N = 64;
+            Texture2D tex = new(N, N, TextureFormat.RGBA32, false);
+            Color[] pixels = new Color[N * N];
+            for (int i = 0; i < N * N; i++) pixels[i] = new Color(0f, 0f, 0f, 0.5f);
+            tex.SetPixels(pixels);
+            tex.Apply();
+            _testSolidSprite = Sprite.Create(tex, new Rect(0, 0, N, N), new Vector2(0.5f, 0.5f), 4f); // 64/4 = 16 unit
+            _testSolidSprite.hideFlags |= HideFlags.HideAndDontSave;
+            return _testSolidSprite;
+        }
+    }
+
+    public static void CreateVignette()
+    {
+        if (_vignette != null) return;
+        if (PlayerControl.LocalPlayer == null) return;
+
+        // HudManager 親をやめて world 空間に直配置 (Backrooms タイルと同じ描画経路で確実に動く)
+        // Phase 1 テスト: 円形ヴィネットの代わりに均一 50% alpha 黒スプライトを使用 (rendering 経路の切り分け)
+        _vignette = new GameObject("BackroomsVignette");
+        _vignette.transform.SetParent(null);
+        Vector2 ppos = PlayerControl.LocalPlayer.Pos();
+        _vignette.transform.position = new Vector3(ppos.x, ppos.y, -5f);
+        _vignette.transform.localScale = Vector3.one;
+        _vignette.layer = 0; // Default (Backrooms タイルと同じ)
+
+        SpriteRenderer sr = _vignette.AddComponent<SpriteRenderer>();
+        sr.sprite = VignetteSprite; // 円形ヴィネット (中央可視、周辺暗黒)
+        sr.color = Color.white;
+        sr.sortingLayerName = "Default";
+        sr.sortingOrder = 30000;
+
+        Logger.Info($"Vignette (world-space): worldPos={_vignette.transform.position}, " +
+                    $"sortingLayer='{sr.sortingLayerName}' order={sr.sortingOrder}, " +
+                    $"sprite size={sr.sprite.rect}, layer={_vignette.layer}, active={_vignette.activeInHierarchy}",
+                    "BackroomsDiag");
+    }
+
+    // 各フレーム: vignette を player に追従させる
+    public static void UpdateVignettePosition()
+    {
+        if (_vignette == null) return;
+        if (PlayerControl.LocalPlayer == null) return;
+        Vector2 ppos = PlayerControl.LocalPlayer.Pos();
+        _vignette.transform.position = new Vector3(ppos.x, ppos.y, -5f);
+    }
+
+    public static void DestroyVignette()
+    {
+        if (_vignette == null) return;
+        Object.Destroy(_vignette);
+        _vignette = null;
+        Logger.Info("Destroyed vignette overlay", "BackroomsGen");
+    }
+}
+
+[HarmonyPatch(typeof(LobbyBehaviour), nameof(LobbyBehaviour.Update))]
+internal static class BackroomsLobbyVignetteFollowHook
+{
+    public static void Postfix()
+    {
+        BackroomsLobby.UpdateVignettePosition();
     }
 }
