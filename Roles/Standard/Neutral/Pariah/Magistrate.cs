@@ -1,5 +1,6 @@
 ﻿using AmongUs.GameOptions;
 using EndKnot.Modules;
+using UnityEngine;
 
 namespace EndKnot.Roles;
 
@@ -34,6 +35,21 @@ public class Magistrate : RoleBase
         MagistrateID = playerId;
         playerId.SetAbilityUseLimit(1);
         AbilityTrigger = Options.UsePhantomBasis.GetBool() && Options.UsePhantomBasisForNKs.GetBool() ? AbilityTriggers.Vanish : Options.UsePets.GetBool() ? AbilityTriggers.Pet : AbilityTriggers.Vent;
+    }
+
+    public override void Remove(byte playerId)
+    {
+        Main.Instance.StartCoroutine(Coroutine());
+        return;
+
+        System.Collections.IEnumerator Coroutine()
+        {
+            while (GameStates.IsMeeting || ExileController.Instance || AntiBlackout.SkipTasks) yield return new WaitForSecondsRealtime(5f);
+            yield return new WaitForSecondsRealtime(1f);
+            while (GameStates.IsMeeting || ExileController.Instance || AntiBlackout.SkipTasks) yield return new WaitForSecondsRealtime(2f);
+            if (GameStates.IsEnded || !GameStates.InGame) yield break;
+            AfterMeetingTasks();
+        }
     }
 
     public override void AfterMeetingTasks()

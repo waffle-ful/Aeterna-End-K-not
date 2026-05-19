@@ -290,7 +290,7 @@ internal class Adventurer : RoleBase
             Vector2 pos = pc.Pos();
             LocateArrow.Add(AdventurerPC.PlayerId, pos);
             ResourceLocations[Resource.Random] = pos;
-            _ = new AdventurerItem(pos, Resource.Random, [AdventurerPC.PlayerId]);
+            _ = new AdventurerItem(pos, Resource.Random, AdventurerPC);
             LastRandomResourceTimeStamp = now;
             Utils.NotifyRoles(SpecifySeer: AdventurerPC, SpecifyTarget: AdventurerPC);
         }
@@ -306,7 +306,7 @@ internal class Adventurer : RoleBase
             Vector2 pos = pc.Pos();
             LocateArrow.Add(AdventurerPC.PlayerId, pos);
             ResourceLocations[Resource.Grouping] = pos;
-            _ = new AdventurerItem(pos, Resource.Grouping, [AdventurerPC.PlayerId]);
+            _ = new AdventurerItem(pos, Resource.Grouping, AdventurerPC);
             LastGroupingResourceTimeStamp = now;
             Utils.NotifyRoles(SpecifySeer: AdventurerPC, SpecifyTarget: AdventurerPC);
         }
@@ -355,7 +355,7 @@ internal class Adventurer : RoleBase
         Vector2 pos = shapeshifter.Pos();
         av.ResourceLocations[Resource.ShapeshiftSkin] = pos;
         HideObject(Resource.ShapeshiftSkin);
-        _ = new AdventurerItem(pos, Resource.ShapeshiftSkin, [av.AdventurerPC.PlayerId]);
+        _ = new AdventurerItem(pos, Resource.ShapeshiftSkin, av.AdventurerPC);
     }
 
     public static void OnAnyoneDead(PlayerControl target)
@@ -367,7 +367,7 @@ internal class Adventurer : RoleBase
                 Vector2 pos = target.Pos();
                 av.ResourceLocations[Resource.DeadBody] = pos;
                 HideObject(Resource.DeadBody);
-                _ = new AdventurerItem(pos, Resource.DeadBody, [av.AdventurerPC.PlayerId]);
+                _ = new AdventurerItem(pos, Resource.DeadBody, av.AdventurerPC);
             }
         }
     }

@@ -309,7 +309,7 @@ namespace EndKnot
             catch { }
         }
 
-        protected void CreateNetObject(string sprite, Vector2 position)
+        protected void CreateNetObject(string sprite, Vector2 position, IEnumerable<PlayerControl> hideFrom = null, PlayerControl onlyVisibleTo = null)
         {
             if (GameStates.IsEnded || !AmongUsClient.Instance.AmHost || TryReusePooledObject(sprite, position)) return;
             
@@ -449,6 +449,12 @@ namespace EndKnot
 
                 playerControl.CachedPlayerData = PlayerControl.LocalPlayer.Data;
 
+                if (hideFrom != null || onlyVisibleTo)
+                {
+                    yield return new WaitForSecondsRealtime(0.3f);
+                    Hide(onlyVisibleTo ? Main.EnumerateAlivePlayerControls().Without(onlyVisibleTo) : hideFrom);
+                }
+
                 yield return new WaitForSecondsRealtime(0.15f);
                 
                 if (this is not ShapeshiftMenuElement && !IsPlayerLike)
@@ -463,7 +469,7 @@ namespace EndKnot
                         string visorId = PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].VisorId;
                         var sender = CustomRpcSender.Create("CustomNetObject.CreateNetObject", SendOption.Reliable, log: false);
                         MessageWriter writer = sender.stream;
-                        sender.StartMessage();
+                        sender.StartMessage(onlyVisibleTo ? onlyVisibleTo.OwnerId : -1);
                         PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].PlayerName = "<size=14><br></size>" + sprite;
                         PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].ColorId = 0;
                         PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].HatId = "";
@@ -595,11 +601,10 @@ namespace EndKnot
         private readonly long SpawnTimeStamp;
         private bool Gone;
 
-        public TornadoObject(Vector2 position, IEnumerable<byte> visibleList)
+        public TornadoObject(Vector2 position, PlayerControl tornado)
         {
             SpawnTimeStamp = Utils.TimeStamp;
-            CreateNetObject("<line-height=97%><cspace=0.16em><#0000>WW</color><mark=#bababa>WWWW</mark><#0000>WW\nW</color><mark=#bababa>WW</mark><mark=#8c8c8c>WW</mark><mark=#bababa>WW</mark><#0000>W</color>\n<mark=#bababa>WW</mark><mark=#8c8c8c>WWWW</mark><mark=#bababa>WW</mark>\n<mark=#bababa>W</mark><mark=#8c8c8c>WW</mark><mark=#636363>WW</mark><mark=#8c8c8c>WW</mark><mark=#bababa>W</mark>\n<mark=#bababa>W</mark><mark=#8c8c8c>WW</mark><mark=#636363>WW</mark><mark=#8c8c8c>WW</mark><mark=#bababa>W</mark>\n<mark=#bababa>WW</mark><mark=#8c8c8c>WWWW</mark><mark=#bababa>WW</mark>\n<#0000>W</color><mark=#bababa>WW</mark><mark=#8c8c8c>WW</mark><mark=#bababa>WW</mark><#0000>W\nWW</color><mark=#bababa>WWWW</mark><#0000>WW", position);
-            LateTask.New(() => Hide(Main.EnumerateAlivePlayerControls().ExceptBy(visibleList, x => x.PlayerId)), 0.4f);
+            CreateNetObject("<line-height=97%><cspace=0.16em><#0000>WW</color><mark=#bababa>WWWW</mark><#0000>WW\nW</color><mark=#bababa>WW</mark><mark=#8c8c8c>WW</mark><mark=#bababa>WW</mark><#0000>W</color>\n<mark=#bababa>WW</mark><mark=#8c8c8c>WWWW</mark><mark=#bababa>WW</mark>\n<mark=#bababa>W</mark><mark=#8c8c8c>WW</mark><mark=#636363>WW</mark><mark=#8c8c8c>WW</mark><mark=#bababa>W</mark>\n<mark=#bababa>W</mark><mark=#8c8c8c>WW</mark><mark=#636363>WW</mark><mark=#8c8c8c>WW</mark><mark=#bababa>W</mark>\n<mark=#bababa>WW</mark><mark=#8c8c8c>WWWW</mark><mark=#bababa>WW</mark>\n<#0000>W</color><mark=#bababa>WW</mark><mark=#8c8c8c>WW</mark><mark=#bababa>WW</mark><#0000>W\nWW</color><mark=#bababa>WWWW</mark><#0000>WW", position, onlyVisibleTo: tornado);
         }
 
         protected override void OnFixedUpdate()
@@ -631,10 +636,9 @@ namespace EndKnot
 
     internal sealed class PlayerDetector : CustomNetObject
     {
-        public PlayerDetector(Vector2 position, List<byte> visibleList, out int id)
+        public PlayerDetector(Vector2 position, PlayerControl druid, out int id)
         {
-            CreateNetObject("<line-height=97%><cspace=0.16em><#0000>WW</color><mark=#33e6b0>W</mark><#0000>WW</color><mark=#33e6b0>W</mark><#0000>WW\nW</color><mark=#33e6b0>W</mark><#0000>WWWW</color><mark=#33e6b0>W</mark><#0000>W</color>\n<mark=#33e6b0>W</mark><#0000>WW</color><mark=#33e6b0>WW</mark><#0000>WW</color><mark=#33e6b0>W</mark>\n<mark=#33e6b0>W</mark><#0000>W</color><mark=#33e6b0>W</mark><mark=#000000>WW</mark><mark=#33e6b0>W</mark><#0000>W</color><mark=#33e6b0>W</mark>\n<mark=#33e6b0>W</mark><#0000>W</color><mark=#33e6b0>W</mark><mark=#000000>WW</mark><mark=#33e6b0>W</mark><#0000>W</color><mark=#33e6b0>W</mark>\n<mark=#33e6b0>W</mark><#0000>WW</color><mark=#33e6b0>WW</mark><#0000>WW</color><mark=#33e6b0>W</mark>\n<#0000>W</color><mark=#33e6b0>W</mark><#0000>WWWW</color><mark=#33e6b0>W</mark><#0000>W\nWW</color><mark=#33e6b0>W</mark><#0000>WW</color><mark=#33e6b0>W</mark><#0000>WW", position);
-            LateTask.New(() => Hide(Main.EnumerateAlivePlayerControls().ExceptBy(visibleList, x => x.PlayerId)), 0.4f);
+            CreateNetObject("<line-height=97%><cspace=0.16em><#0000>WW</color><mark=#33e6b0>W</mark><#0000>WW</color><mark=#33e6b0>W</mark><#0000>WW\nW</color><mark=#33e6b0>W</mark><#0000>WWWW</color><mark=#33e6b0>W</mark><#0000>W</color>\n<mark=#33e6b0>W</mark><#0000>WW</color><mark=#33e6b0>WW</mark><#0000>WW</color><mark=#33e6b0>W</mark>\n<mark=#33e6b0>W</mark><#0000>W</color><mark=#33e6b0>W</mark><mark=#000000>WW</mark><mark=#33e6b0>W</mark><#0000>W</color><mark=#33e6b0>W</mark>\n<mark=#33e6b0>W</mark><#0000>W</color><mark=#33e6b0>W</mark><mark=#000000>WW</mark><mark=#33e6b0>W</mark><#0000>W</color><mark=#33e6b0>W</mark>\n<mark=#33e6b0>W</mark><#0000>WW</color><mark=#33e6b0>WW</mark><#0000>WW</color><mark=#33e6b0>W</mark>\n<#0000>W</color><mark=#33e6b0>W</mark><#0000>WWWW</color><mark=#33e6b0>W</mark><#0000>W\nWW</color><mark=#33e6b0>W</mark><#0000>WW</color><mark=#33e6b0>W</mark><#0000>WW", position, onlyVisibleTo: druid);
             id = Id;
         }
     }
@@ -643,12 +647,11 @@ namespace EndKnot
     {
         public readonly Adventurer.Resource Resource;
 
-        internal AdventurerItem(Vector2 position, Adventurer.Resource resource, IEnumerable<byte> visibleList)
+        internal AdventurerItem(Vector2 position, Adventurer.Resource resource, PlayerControl adventurer)
         {
             Resource = resource;
             (char Icon, Color Color) data = Adventurer.ResourceDisplayData[resource];
-            CreateNetObject($"<size=300%><font=\"VCR SDF\"><line-height=67%>{Utils.ColorString(data.Color, data.Icon.ToString())}</line-height></font></size>", position);
-            LateTask.New(() => Hide(Main.EnumerateAlivePlayerControls().ExceptBy(visibleList, x => x.PlayerId)), 0.4f);
+            CreateNetObject($"<size=300%><font=\"VCR SDF\"><line-height=67%>{Utils.ColorString(data.Color, data.Icon.ToString())}</line-height></font></size>", position, onlyVisibleTo: adventurer);
         }
     }
 
@@ -656,8 +659,7 @@ namespace EndKnot
     {
         internal Toilet(Vector2 position, IEnumerable<PlayerControl> hideList)
         {
-            CreateNetObject("<line-height=97%><cspace=0.16em><#0000>W</color><mark=#e6e6e6>WWWWWWWW</mark><#0000>W</color>\n<mark=#e6e6e6>W</mark><mark=#d3d4ce>WWWWWWWW</mark><mark=#e6e6e6>W</mark>\n<mark=#e6e6e6>W</mark><mark=#d3d4ce>WWWWWWWW</mark><mark=#e6e6e6>W</mark>\n<#0000>W</color><mark=#e6e6e6>W</mark><mark=#d3d4ce>WWWWWW</mark><mark=#e6e6e6>W</mark><#0000>W\nW</color><mark=#e6e6e6>WW</mark><mark=#d3d4ce>W</mark><mark=#dedede>WW</mark><mark=#d3d4ce>W</mark><mark=#e6e6e6>WW</mark><#0000>W\nW</color><mark=#bfbfbf>W</mark><mark=#454545>W</mark><mark=#333333>WWWWWW</mark><mark=#bfbfbf>W</mark>\n<#0000>W</color><mark=#bfbfbf>WW</mark><mark=#454545>WWWWWW</mark><mark=#bfbfbf>W</mark>\n<#0000>WW</color><mark=#bfbfbf>WWWWWWWW</mark>\n<#0000>WWW</color><mark=#dedede>WWWW</mark><#0000>WWW\nWWWW</color><mark=#dedede>WW</mark><#0000>WWWW", position);
-            LateTask.New(() => Hide(hideList), 0.4f);
+            CreateNetObject("<line-height=97%><cspace=0.16em><#0000>W</color><mark=#e6e6e6>WWWWWWWW</mark><#0000>W</color>\n<mark=#e6e6e6>W</mark><mark=#d3d4ce>WWWWWWWW</mark><mark=#e6e6e6>W</mark>\n<mark=#e6e6e6>W</mark><mark=#d3d4ce>WWWWWWWW</mark><mark=#e6e6e6>W</mark>\n<#0000>W</color><mark=#e6e6e6>W</mark><mark=#d3d4ce>WWWWWW</mark><mark=#e6e6e6>W</mark><#0000>W\nW</color><mark=#e6e6e6>WW</mark><mark=#d3d4ce>W</mark><mark=#dedede>WW</mark><mark=#d3d4ce>W</mark><mark=#e6e6e6>WW</mark><#0000>W\nW</color><mark=#bfbfbf>W</mark><mark=#454545>W</mark><mark=#333333>WWWWWW</mark><mark=#bfbfbf>W</mark>\n<#0000>W</color><mark=#bfbfbf>WW</mark><mark=#454545>WWWWWW</mark><mark=#bfbfbf>W</mark>\n<#0000>WW</color><mark=#bfbfbf>WWWWWWWW</mark>\n<#0000>WWW</color><mark=#dedede>WWWW</mark><#0000>WWW\nWWWW</color><mark=#dedede>WW</mark><#0000>WWWW", position, hideList);
         }
     }
 
@@ -677,10 +679,9 @@ namespace EndKnot
 
     internal sealed class SprayedArea : CustomNetObject
     {
-        public SprayedArea(Vector2 position, IEnumerable<byte> visibleList)
+        public SprayedArea(Vector2 position, PlayerControl sprayer)
         {
-            CreateNetObject("<line-height=97%><cspace=0.16em><#0000>WW</color><mark=#ffd000>WW</mark><#0000>WW\nW</color><mark=#ffd000>WWWW</mark><#0000>W</color>\n<mark=#ffd000>WWWWWW</mark>\n<mark=#ffd000>WWWWWW</mark>\n<#0000>W</color><mark=#ffd000>WWWW</mark><#0000>W\nWW</color><mark=#ffd000>WW</mark><#0000>WW", position);
-            LateTask.New(() => Hide(Main.EnumerateAlivePlayerControls().ExceptBy(visibleList, x => x.PlayerId)), 0.4f);
+            CreateNetObject("<line-height=97%><cspace=0.16em><#0000>WW</color><mark=#ffd000>WW</mark><#0000>WW\nW</color><mark=#ffd000>WWWW</mark><#0000>W</color>\n<mark=#ffd000>WWWWWW</mark>\n<mark=#ffd000>WWWWWW</mark>\n<#0000>W</color><mark=#ffd000>WWWW</mark><#0000>W\nWW</color><mark=#ffd000>WW</mark><#0000>WW", position, onlyVisibleTo: sprayer);
         }
 
         public override void OnMeeting()
@@ -693,8 +694,7 @@ namespace EndKnot
     {
         public CatcherTrap(Vector2 position, PlayerControl catcher)
         {
-            CreateNetObject("<line-height=97%><cspace=0.16em><#0000>WW</color><mark=#ccffda>WW</mark><#0000>WW\nW</color><mark=#ccffda>WWWW</mark><#0000>W</color>\n<mark=#ccffda>WWWWWW</mark>\n<mark=#ccffda>WWWWWW</mark>\n<#0000>W</color><mark=#ccffda>WWWW</mark><#0000>W\nWW</color><mark=#ccffda>WW</mark><#0000>WW", position);
-            LateTask.New(() => Hide(Main.EnumerateAlivePlayerControls().Without(catcher)), 0.4f);
+            CreateNetObject("<line-height=97%><cspace=0.16em><#0000>WW</color><mark=#ccffda>WW</mark><#0000>WW\nW</color><mark=#ccffda>WWWW</mark><#0000>W</color>\n<mark=#ccffda>WWWWWW</mark>\n<mark=#ccffda>WWWWWW</mark>\n<#0000>W</color><mark=#ccffda>WWWW</mark><#0000>W\nWW</color><mark=#ccffda>WW</mark><#0000>WW", position, onlyVisibleTo: catcher);
         }
 
         public override void OnMeeting()
@@ -723,8 +723,7 @@ namespace EndKnot
     {
         public SoulObject(Vector2 position, PlayerControl whisperer)
         {
-            CreateNetObject("<size=80%><line-height=97%><cspace=0.16em><#0000>WW</color><mark=#fcfcfc>WWW</mark><#0000>W\nW</color><mark=#fcfcfc>WWWWW</mark>\n<mark=#fcfcfc>WWWW</mark><mark=#cfcfcf>WW</mark>\n<mark=#fcfcfc>WWWWWW</mark>\n<#0000>W</color><mark=#fcfcfc>WWWWW</mark>\n<#0000>W</color><mark=#fcfcfc>WWW</mark><#0000>W</color><mark=#fcfcfc>W", position);
-            LateTask.New(() => Hide(Main.EnumerateAlivePlayerControls().Without(whisperer)), 0.4f);
+            CreateNetObject("<size=80%><line-height=97%><cspace=0.16em><#0000>WW</color><mark=#fcfcfc>WWW</mark><#0000>W\nW</color><mark=#fcfcfc>WWWWW</mark>\n<mark=#fcfcfc>WWWW</mark><mark=#cfcfcf>WW</mark>\n<mark=#fcfcfc>WWWWWW</mark>\n<#0000>W</color><mark=#fcfcfc>WWWWW</mark>\n<#0000>W</color><mark=#fcfcfc>WWW</mark><#0000>W</color><mark=#fcfcfc>W", position, onlyVisibleTo: whisperer);
         }
     }
 
@@ -956,10 +955,9 @@ namespace EndKnot
 
     internal sealed class ShapeshiftMenuElement : CustomNetObject
     {
-        public ShapeshiftMenuElement(byte visibleTo)
+        public ShapeshiftMenuElement(PlayerControl guesser)
         {
-            CreateNetObject(string.Empty, new Vector2(0f, 0f));
-            LateTask.New(() => Hide(Main.EnumeratePlayerControls().Where(x => x.PlayerId != visibleTo)), 0.4f);
+            CreateNetObject(string.Empty, new Vector2(0f, 0f), onlyVisibleTo: guesser);
         }
     }
 
