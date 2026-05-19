@@ -114,7 +114,9 @@ internal class Chemist : RoleBase
     private Dictionary<Item, int> ItemCounts;
     private long LastUpdate;
     private string SelectedProcess;
-    private List<string> SortedAvailableProcesses;
+    private readonly List<string> SortedAvailableProcesses = [];
+    private readonly List<string> Available = [];
+    private readonly List<string> Unavailable = [];
 
     public override bool IsEnable => On;
 
@@ -214,7 +216,9 @@ internal class Chemist : RoleBase
         ItemCounts = [];
         CurrentFactory = Factory.None;
         SelectedProcess = string.Empty;
-        SortedAvailableProcesses = [];
+        SortedAvailableProcesses.Clear();
+        Available.Clear();
+        Unavailable.Clear();
 
         AcidPlayers = [];
         IsBlinding = false;
@@ -503,12 +507,44 @@ internal class Chemist : RoleBase
 
             if (CurrentFactory != beforeFactory)
             {
-                SortedAvailableProcesses = Processes[CurrentFactory]
-                    .OrderByDescending(x => x.Value.Ingredients.TrueForAll(y => ItemCounts[y.Item] >= y.Count))
-                    .Select(x => x.Key)
-                    .ToList();
+                Available.Clear();
+                Unavailable.Clear();
+                string firstAvailable = null;
 
-                SelectedProcess = SortedAvailableProcesses.FirstOrDefault() ?? string.Empty;
+                if (Processes.TryGetValue(CurrentFactory, out var processes))
+                {
+                    var processesEnumerator = processes.GetEnumerator();
+                    while (processesEnumerator.MoveNext())
+                    {
+                        var pair = processesEnumerator.Current;
+                        var processKey = pair.Key;
+                        var ingredients = pair.Value.Ingredients;
+                        bool available = true;
+
+                        for (int index = 0; index < ingredients.Count; index++)
+                        {
+                            var ingredient = ingredients[index];
+                            if (!ItemCounts.TryGetValue(ingredient.Item, out int count) || count < ingredient.Count)
+                            {
+                                available = false;
+                                break;
+                            }
+                        }
+
+                        if (available)
+                        {
+                            firstAvailable ??= processKey;
+                            Available.Add(processKey);
+                        }
+                        else Unavailable.Add(processKey);
+                    }
+                }
+
+                SortedAvailableProcesses.Clear();
+                if (Available.Count > 0) SortedAvailableProcesses.AddRange(Available);
+                if (Unavailable.Count > 0) SortedAvailableProcesses.AddRange(Unavailable);
+
+                SelectedProcess = firstAvailable ?? string.Empty;
                 Utils.SendRPC(CustomRPC.SyncRoleData, pc.PlayerId, 2, SelectedProcess);
             }
         }
