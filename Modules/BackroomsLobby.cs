@@ -176,10 +176,11 @@ public static class BackroomsLobby
 
     private static int GetSortingOrder(string kind) => kind switch
     {
-        "floor" or "stain" => -10,
-        "ceiling"          => 10,
-        "light"            => 5,
-        _                  => 0
+        "floor" or "stain"             => -10,
+        "wall" or "wall_h" or "wall_v" => -5, // 床より前、player より背面
+        "ceiling"                      => 10,
+        "light"                        => 5,
+        _                              => 0
     };
 
     public static GameObject SpawnTile(string kind, Vector2 pos, float scale = 1f)
@@ -197,10 +198,13 @@ public static class BackroomsLobby
             case "wall_h":
                 sr.sprite = WallSpriteH;
                 sr.color = Color.white;
+                go.AddComponent<BoxCollider2D>(); // 全面 1x1 で衝突
                 break;
             case "wall_v":
                 sr.sprite = WallSpriteV;
                 sr.color = Color.white;
+                BoxCollider2D thin = go.AddComponent<BoxCollider2D>();
+                thin.size = new Vector2(0.2f, 1f); // 中央の暗線部分だけ衝突
                 break;
             default:
                 sr.sprite = BaselineSprite;
