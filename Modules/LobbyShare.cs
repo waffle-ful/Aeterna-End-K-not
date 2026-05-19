@@ -149,13 +149,30 @@ internal static class LobbyShare
             return;
         }
 
+        FireClose("OnLobbyDestroyed");
+    }
+
+    // Catches the mid-game disconnect path that OnLobbyDestroyed can't see:
+    // LobbyBehaviour.OnDestroy already fired during the lobby→ship transition
+    // (with inGame=true, correctly skipped) and there is no second LobbyBehaviour
+    // to OnDestroy when the host quits mid-game. Without this hook the embed sits
+    // until KV TTL (~3h). Idempotent with OnLobbyDestroyed — whichever runs first
+    // clears activeCode, the second sees CanLifecycle()=false and no-ops.
+    public static void OnHostDisconnected()
+    {
+        FireClose("OnHostDisconnected");
+    }
+
+    private static void FireClose(string source)
+    {
         if (!CanLifecycle()) return;
-        Logger.Info($"OnLobbyDestroyed: host left, firing /api/close for code={activeCode}", "LobbyShare");
+        Logger.Info($"{source}: firing /api/close for code={activeCode}", "LobbyShare");
         string code = activeCode;
         string fc = activeFcHash;
         activeCode = null;
         activeFcHash = null;
         announceSucceeded = false;
+        inGame = false;
         lastSentPlayerCount = -1;
         lastSentMax = -1;
         lastSentMode = null;
@@ -422,6 +439,16 @@ internal static class LobbyShareEndHook
 internal static class LobbyShareCloseHook
 {
     public static void Postfix() => LobbyShare.OnLobbyDestroyed();
+}
+
+[HarmonyPatch(typeof(InnerNetClient), nameof(InnerNetClient.DisconnectInternal))]
+internal static class LobbyShareDisconnectHook
+{
+    public static void Postfix(InnerNetClient __instance)
+    {
+        if (__instance is not AmongUsClient) return;
+        LobbyShare.OnHostDisconnected();
+    }
 }
 
 [HarmonyPatch(typeof(LobbyBehaviour), nameof(LobbyBehaviour.Update))]

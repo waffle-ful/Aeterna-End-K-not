@@ -22,6 +22,20 @@ namespace EndKnot
         public static readonly List<CustomNetObject> AllObjects = [];
         private static int MaxId = -1;
 
+        // vanilla 2026 の GameData PlayerInfo cache は PlayerId をキーに管理。
+        // 全 CNO を 254 固定にすると Sandbox のような multi-instance per-player CNO で衝突し、
+        // 2 体目以降の Shapeshift-text trick が非モッド受信側で間欠的に反映されない (memory: cno_vanilla_2026_solutions)。
+        // 254→253→...→200→254 と循環させ各 CNO に固有 PlayerId を割り当てる。
+        // 範囲 200-254 は実プレイヤー (0-14) と衝突せず、EHR の filter は既に `>= 200` で対応済み。
+        private static byte NextPlayerId = 254;
+
+        private static byte AllocateNextPlayerId()
+        {
+            byte allocated = NextPlayerId;
+            NextPlayerId = NextPlayerId <= 200 ? (byte)254 : (byte)(NextPlayerId - 1);
+            return allocated;
+        }
+
         protected int Id;
         public PlayerControl playerControl;
         public Vector2 Position;
@@ -323,7 +337,7 @@ namespace EndKnot
                 var qa = DataFlagRateLimiter.Enqueue(() =>
                 {
                     playerControl = Object.Instantiate(AmongUsClient.Instance.PlayerPrefab, Vector2.zero, Quaternion.identity);
-                    playerControl.PlayerId = 254;
+                    playerControl.PlayerId = AllocateNextPlayerId();
                     playerControl.isNew = false;
                     playerControl.notRealPlayer = true;
 
@@ -419,7 +433,7 @@ namespace EndKnot
                         stream.EndMessage();
                         stream.StartMessage(1);
                         stream.WritePacked(playerControl.NetId);
-                        stream.Write((byte)254);
+                        stream.Write(playerControl.PlayerId);
                         stream.EndMessage();
                         stream.EndMessage();
 
