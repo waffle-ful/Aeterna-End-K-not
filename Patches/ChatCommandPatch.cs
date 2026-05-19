@@ -175,6 +175,8 @@ internal static class ChatCommands
             new("LoversChat", "{message}", Command.UsageLevels.Everyone, Command.UsageTimes.InGame, LoversChatCommand, true, false, [GetString("CommandArgs.LoversChat.Message")]),
             new("TPOut", "", Command.UsageLevels.Everyone, Command.UsageTimes.InLobby, TPOutCommand, true, false),
             new("TPIn", "", Command.UsageLevels.Everyone, Command.UsageTimes.InLobby, TPInCommand, true, false),
+            new("BBDiag", "", Command.UsageLevels.Host, Command.UsageTimes.InLobby, BBDiagCommand, true, true),
+            new("BBToggle", "", Command.UsageLevels.Host, Command.UsageTimes.InLobby, BBToggleCommand, true, true),
             new("Template", "{tag}", Command.UsageLevels.Everyone, Command.UsageTimes.Always, TemplateCommand, true, false, [GetString("CommandArgs.Template.Tag")]),
             new("MessageWait", "{duration}", Command.UsageLevels.Host, Command.UsageTimes.Always, MessageWaitCommand, true, false, [GetString("CommandArgs.MessageWait.Duration")]),
             new("Death", "[id]", Command.UsageLevels.Everyone, Command.UsageTimes.AfterDeath, DeathCommand, true, false, [GetString("CommandArgs.Death.Id")]),
@@ -2405,6 +2407,16 @@ internal static class ChatCommands
         }
 
         player.TP(new Vector2(0.1f, 3.8f));
+    }
+
+    private static void BBDiagCommand(PlayerControl player, string text, string[] args)
+    {
+        BackroomsLobby.DumpLobbyColliders(player.PlayerId);
+    }
+
+    private static void BBToggleCommand(PlayerControl player, string text, string[] args)
+    {
+        BackroomsLobby.ToggleShipColliders(player.PlayerId);
     }
 
     private static void MyRoleCommand(PlayerControl player, string text, string[] args)

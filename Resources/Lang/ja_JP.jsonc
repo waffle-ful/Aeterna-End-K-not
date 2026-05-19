@@ -9332,6 +9332,8 @@
   "CommandForms.Summon": "summon",
   "CommandForms.Swap": "sw,swap,st",
   "CommandForms.TimeLimit": "til,timelimit",
+  "CommandForms.BBDiag": "bbdiag",
+  "CommandForms.BBToggle": "bbtoggle",
   "CommandForms.TPIn": "tpin",
   "CommandForms.TPOut": "tpout",
   "CommandForms.Target": "target,ターゲット",
