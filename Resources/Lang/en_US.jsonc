@@ -9934,6 +9934,7 @@
   "CommandForms.BBToggle": "bbtoggle",
   "CommandForms.BBSpawn": "bbspawn",
   "CommandForms.BBClear": "bbclear",
+  "CommandForms.BBGen": "bbgen",
   "CommandForms.TPIn": "tpin",
   "CommandForms.TPOut": "tpout",
   "CommandForms.Target": "target",
