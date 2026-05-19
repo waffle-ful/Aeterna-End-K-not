@@ -180,6 +180,8 @@ internal static class ChatCommands
             new("BBSpawn", "", Command.UsageLevels.Host, Command.UsageTimes.InLobby, BBSpawnCommand, true, true),
             new("BBClear", "", Command.UsageLevels.Host, Command.UsageTimes.InLobby, BBClearCommand, true, true),
             new("BBGen", "[seed]", Command.UsageLevels.Host, Command.UsageTimes.InLobby, BBGenCommand, true, true),
+            new("BBEnter", "[seed]", Command.UsageLevels.Host, Command.UsageTimes.InLobby, BBEnterCommand, true, true),
+            new("BBExit", "", Command.UsageLevels.Host, Command.UsageTimes.InLobby, BBExitCommand, true, true),
             new("Template", "{tag}", Command.UsageLevels.Everyone, Command.UsageTimes.Always, TemplateCommand, true, false, [GetString("CommandArgs.Template.Tag")]),
             new("MessageWait", "{duration}", Command.UsageLevels.Host, Command.UsageTimes.Always, MessageWaitCommand, true, false, [GetString("CommandArgs.MessageWait.Duration")]),
             new("Death", "[id]", Command.UsageLevels.Everyone, Command.UsageTimes.AfterDeath, DeathCommand, true, false, [GetString("CommandArgs.Death.Id")]),
@@ -2439,6 +2441,20 @@ internal static class ChatCommands
             : (uint)UnityEngine.Random.Range(1, int.MaxValue);
 
         BackroomsLobby.GenerateLobby(seed, player.PlayerId);
+    }
+
+    private static void BBEnterCommand(PlayerControl player, string text, string[] args)
+    {
+        uint seed = args.Length >= 2 && uint.TryParse(args[1], out uint parsedSeed)
+            ? parsedSeed
+            : (uint)UnityEngine.Random.Range(1, int.MaxValue);
+
+        BackroomsLobby.EnterBackrooms(seed, player.PlayerId);
+    }
+
+    private static void BBExitCommand(PlayerControl player, string text, string[] args)
+    {
+        BackroomsLobby.ExitBackrooms(player.PlayerId);
     }
 
     private static void MyRoleCommand(PlayerControl player, string text, string[] args)

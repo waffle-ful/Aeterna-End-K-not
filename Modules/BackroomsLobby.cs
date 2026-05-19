@@ -375,4 +375,86 @@ public static class BackroomsLobby
         h = (h ^ tag) * 16777619u;
         return h;
     }
+
+    // Phase 3: Backrooms 入退場 (Matrix 構造の心臓部)
+    // モッド client は遠隔座標 (BackroomsX, BackroomsY) に物理移動する
+    // 非モッド client から見るとホストが通常ロビーの外へフェードアウト → Backrooms 内部の動きは観測不能
+
+    private const float BackroomsX = 100f;
+    private const float BackroomsY = 100f;
+
+    public static void EnterBackrooms(uint seed, byte targetPid)
+    {
+        if (LobbyBehaviour.Instance == null)
+        {
+            Utils.SendMessage("Not in lobby", targetPid);
+            return;
+        }
+
+        if (PlayerControl.LocalPlayer == null) return;
+
+        // 1. ロビー collider を disable (見えない壁を消して移動自由化)
+        int disabled = 0;
+        if (DisabledColliders.Count == 0)
+        {
+            Collider2D[] colliders = LobbyBehaviour.Instance.GetComponentsInChildren<Collider2D>(true);
+            int shipMask = Constants.ShipOnlyMask;
+            foreach (Collider2D c in colliders)
+            {
+                int layer = c.gameObject.layer;
+                bool isShip = (shipMask & (1 << layer)) != 0;
+                if (!isShip || !c.enabled) continue;
+                c.enabled = false;
+                DisabledColliders.Add(c);
+                disabled++;
+            }
+        }
+
+        // 2. Backrooms 座標へ瞬間移動 (Utils.TP は EAC 例外登録済)
+        PlayerControl.LocalPlayer.TP(new Vector2(BackroomsX, BackroomsY));
+
+        // 3. 新座標 (= player.Pos() = (100, 100)) を中心に procgen 生成
+        GenerateLobby(seed, targetPid);
+
+        Logger.Info($"Entered Backrooms at ({BackroomsX},{BackroomsY}) seed={seed} disabled={disabled}", "BackroomsGen");
+    }
+
+    public static void ExitBackrooms(byte targetPid)
+    {
+        if (LobbyBehaviour.Instance == null)
+        {
+            Utils.SendMessage("Not in lobby", targetPid);
+            return;
+        }
+
+        if (PlayerControl.LocalPlayer == null) return;
+
+        // 1. ロビー中央へ帰還 TP
+        PlayerControl.LocalPlayer.TP(new Vector2(0f, 0f));
+
+        // 2. Backrooms タイル全消去
+        int wiped = 0;
+        foreach (GameObject go in SpawnedTiles)
+        {
+            if (go == null) continue;
+            Object.Destroy(go);
+            wiped++;
+        }
+
+        SpawnedTiles.Clear();
+
+        // 3. ロビー collider 復元
+        int restored = 0;
+        foreach (Collider2D c in DisabledColliders)
+        {
+            if (c == null) continue;
+            c.enabled = true;
+            restored++;
+        }
+
+        DisabledColliders.Clear();
+
+        Utils.SendMessage($"Exited Backrooms. Cleared {wiped} tiles, restored {restored} colliders.", targetPid);
+        Logger.Info($"Exited Backrooms cleared={wiped} restored={restored}", "BackroomsGen");
+    }
 }
