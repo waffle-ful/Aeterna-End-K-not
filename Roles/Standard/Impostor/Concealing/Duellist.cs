@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using AmongUs.GameOptions;
 using EndKnot.Modules;
+using UnityEngine;
 using static EndKnot.Options;
 using static EndKnot.Translator;
 using static EndKnot.Utils;
@@ -80,6 +81,7 @@ public class Duellist : RoleBase
             System.Collections.IEnumerator Coroutine()
             {
                 while (GameStates.IsInTask && duellist.IsAlive() && target.IsAlive()) yield return null;
+                yield return new WaitForSecondsRealtime(1f);
                 if (!GameStates.IsInTask) yield break;
                 
                 DuelPair.Remove(duellist.PlayerId);

@@ -96,6 +96,20 @@ internal static class ExileControllerWrapUpPatch
             Main.EnumerateAlivePlayerControls().Do(player => map.RandomTeleport(player));
         }
 
+        try
+        {
+            foreach ((byte id, UnityEngine.Vector2 pos) in Lazy.BeforeMeetingPositions)
+            {
+                PlayerControl pc = id.GetPlayer();
+                if (!pc || !pc.IsAlive()) continue;
+
+                pc.TP(pos);
+            }
+        }
+        catch (Exception e) { Utils.ThrowException(e); }
+
+        Lazy.BeforeMeetingPositions = [];
+
         FallFromLadder.Reset();
         Utils.CountAlivePlayers(true);
         
