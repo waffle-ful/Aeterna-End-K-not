@@ -182,6 +182,9 @@ internal static class ChatCommands
             new("BBGen", "[seed]", Command.UsageLevels.Host, Command.UsageTimes.InLobby, BBGenCommand, true, true),
             new("BBEnter", "[seed]", Command.UsageLevels.Host, Command.UsageTimes.InLobby, BBEnterCommand, true, true),
             new("BBExit", "", Command.UsageLevels.Host, Command.UsageTimes.InLobby, BBExitCommand, true, true),
+            new("BBShadowDiag", "", Command.UsageLevels.Host, Command.UsageTimes.InLobby, BBShadowDiagCommand, true, true),
+            new("BBVisToggle", "", Command.UsageLevels.Host, Command.UsageTimes.InLobby, BBVisToggleCommand, true, true),
+            new("BBLightProbe", "", Command.UsageLevels.Host, Command.UsageTimes.InLobby, BBLightProbeCommand, true, true),
             new("Template", "{tag}", Command.UsageLevels.Everyone, Command.UsageTimes.Always, TemplateCommand, true, false, [GetString("CommandArgs.Template.Tag")]),
             new("MessageWait", "{duration}", Command.UsageLevels.Host, Command.UsageTimes.Always, MessageWaitCommand, true, false, [GetString("CommandArgs.MessageWait.Duration")]),
             new("Death", "[id]", Command.UsageLevels.Everyone, Command.UsageTimes.AfterDeath, DeathCommand, true, false, [GetString("CommandArgs.Death.Id")]),
@@ -2455,6 +2458,21 @@ internal static class ChatCommands
     private static void BBExitCommand(PlayerControl player, string text, string[] args)
     {
         BackroomsLobby.ExitBackrooms(player.PlayerId);
+    }
+
+    private static void BBShadowDiagCommand(PlayerControl player, string text, string[] args)
+    {
+        BackroomsLobby.DumpShadowSystem(player.PlayerId);
+    }
+
+    private static void BBVisToggleCommand(PlayerControl player, string text, string[] args)
+    {
+        BackroomsLobby.ToggleVisionPaused(player.PlayerId);
+    }
+
+    private static void BBLightProbeCommand(PlayerControl player, string text, string[] args)
+    {
+        BackroomsLobby.ProbeLightSystem(player.PlayerId);
     }
 
     private static void MyRoleCommand(PlayerControl player, string text, string[] args)

@@ -6,7 +6,7 @@
 
 ## このMod について
 
-**End K not** は、[Endless Host Roles (EHR)](https://github.com/Gurge44/EndlessHostRoles) をベースとした Among Us の非公式個人フォークです。EHR の **600+ の役職・16 のゲームモード**に加え、[TownOfHost-K (TOHK)](https://github.com/KYMario/TownOfHost-K) 由来の役職を EHR の RoleBase 化して移植中。
+**End K not** は、[Endless Host Roles (EHR)](https://github.com/Gurge44/EndlessHostRoles) をベースとした Among Us の非公式個人フォークです。 **600+ の役職**の役職が現在あります。
 
 ホストのクライアントに導入するだけで動作し、他のプレイヤーは Mod を導入せずに追加役職を楽しめます。
 
