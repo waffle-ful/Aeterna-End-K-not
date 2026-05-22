@@ -45,7 +45,7 @@ public class Main : BasePlugin
     // EHR's reverse-domain GUID `com.gurge44.endlesshostroles` appears to be grandfathered
     // in; a fresh fork needs a fresh UUID.
     public const string PluginGuid = "cf13a94a-1671-41f1-85a8-3e32770cf09e";
-    public const string PluginVersion = "0.6.0";
+    public const string PluginVersion = "0.7.0";
     public const string PluginDisplayVersion = "0.4.0";
     public const bool TestBuild = false;
 
