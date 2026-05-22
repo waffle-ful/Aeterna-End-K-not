@@ -174,6 +174,38 @@ public static class BackroomsLobby
         }
     }
 
+    // 床シミ用のソフトエッジ円 sprite。procgen で 32×32 に距離フォールオフを焼く。
+    // 中心 alpha 1.0 → 縁 alpha 0、a^2 で急峻化させてエッジを少しぼかし気味に。
+    // 1 sprite を 3 サブブロブで重ねて回転＋楕円スケールすると amorphous なシミ形になる
+    private static Sprite _stainSprite;
+    private static Sprite StainSprite
+    {
+        get
+        {
+            if (_stainSprite != null) return _stainSprite;
+            const int N = 32;
+            Texture2D tex = new(N, N, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear };
+            Color[] px = new Color[N * N];
+            float c = N / 2f - 0.5f;
+            float maxR = N / 2f;
+            for (int y = 0; y < N; y++)
+            for (int x = 0; x < N; x++)
+            {
+                float dx = x - c;
+                float dy = y - c;
+                float d = Mathf.Sqrt(dx * dx + dy * dy);
+                float a = Mathf.Clamp01(1f - d / maxR);
+                a *= a;
+                px[y * N + x] = new Color(1f, 1f, 1f, a);
+            }
+            tex.SetPixels(px);
+            tex.Apply();
+            _stainSprite = Sprite.Create(tex, new Rect(0, 0, N, N), new Vector2(0.5f, 0.5f), N);
+            _stainSprite.hideFlags |= HideFlags.HideAndDontSave;
+            return _stainSprite;
+        }
+    }
+
     // 壁の dark mass / 暗帯に使う黒系色。vanilla Skeld の wall back と同程度
     private static readonly Color WallDarkColor = new(0.04f, 0.03f, 0.01f);
 
@@ -406,9 +438,9 @@ public static class BackroomsLobby
         ApplyFloorVariation(sr, floor.transform, wp.x, wp.y);
     }
 
-    // 床に稀 (~2%) なシミを散らす。BaselineSprite (1x1 white) を暗茶半透明で小さく置くだけ。
-    // 位置 / scale / rotation を cell hash から決定的に決めるので cull の出し入れで変動しない。
-    // 視覚的に不気味感 (古びた汚れたカーペット) を加える役割
+    // 床に時々 (~7%) シミを散らす。StainSprite (円ソフトエッジ) を 3 個ずらして重ね、
+    // 各 sub-blob を楕円スケール (sx ≠ sy) + 回転で amorphous なブロブ形に。
+    // hash 決定的なので cull の出し入れで形が変わらない
     private static void MaybeAddFloorStain(GameObject parent, Vector2 pos)
     {
         int cx = Mathf.RoundToInt(pos.x);
@@ -417,26 +449,44 @@ public static class BackroomsLobby
         h = (h ^ (h >> 13)) * 1274126177u;
         h ^= h >> 16;
 
-        if ((h % 100u) >= 2u) return; // ~2%
+        if ((h % 100u) >= 7u) return; // ~7%
 
         GameObject stain = new("FloorStain");
         stain.transform.SetParent(parent.transform, false);
 
-        float scaleSeed = ((h >> 8) & 0xFFu) / 255f;
-        float rotSeed = ((h >> 16) & 0xFFu) / 255f;
-        float scale = 0.3f + scaleSeed * 0.35f;
         float ox = ((((h >> 4) & 0x0Fu) / 15f) - 0.5f) * 0.4f;
         float oy = ((((h >> 12) & 0x0Fu) / 15f) - 0.5f) * 0.4f;
-
         stain.transform.localPosition = new Vector3(ox, oy, 0f);
-        stain.transform.localRotation = Quaternion.Euler(0f, 0f, rotSeed * 360f);
-        stain.transform.localScale = new Vector3(scale, scale, 1f);
 
-        SpriteRenderer sr = stain.AddComponent<SpriteRenderer>();
-        sr.sprite = BaselineSprite;
-        sr.color = new Color(0.18f, 0.13f, 0.07f, 0.55f); // 暗茶半透明
-        sr.sortingLayerName = "Default";
-        sr.sortingOrder = -9; // floor (-10) より前、wall (-5) より後
+        Color blobColor = new(0.16f, 0.11f, 0.06f, 0.50f); // 暗茶半透明、重ね前提で少し薄め
+        Sprite stainSp = StainSprite;
+
+        for (int i = 0; i < 3; i++)
+        {
+            uint subH = h * (uint)(7919 + i * 31);
+            subH ^= subH >> 13;
+            subH *= 0x85ebca6bu;
+            subH ^= subH >> 11;
+
+            GameObject sub = new($"FloorStainBlob{i}");
+            sub.transform.SetParent(stain.transform, false);
+
+            float sx = 0.30f + ((subH & 0xFFu) / 255f) * 0.30f;          // 0.30 - 0.60
+            float sy = 0.30f + (((subH >> 8) & 0xFFu) / 255f) * 0.30f;
+            float subOx = ((((subH >> 16) & 0x0Fu) / 15f) - 0.5f) * 0.22f;
+            float subOy = ((((subH >> 20) & 0x0Fu) / 15f) - 0.5f) * 0.22f;
+            float subRot = (((subH >> 24) & 0xFFu) / 255f) * 360f;
+
+            sub.transform.localPosition = new Vector3(subOx, subOy, 0f);
+            sub.transform.localRotation = Quaternion.Euler(0f, 0f, subRot);
+            sub.transform.localScale = new Vector3(sx, sy, 1f);
+
+            SpriteRenderer sr = sub.AddComponent<SpriteRenderer>();
+            sr.sprite = stainSp;
+            sr.color = blobColor;
+            sr.sortingLayerName = "Default";
+            sr.sortingOrder = -9; // floor (-10) より前、wall (-5) より後
+        }
     }
 
     // 床テクスチャの「同じ模様が並んでる」感を抑えるための per-cell variation。
@@ -1437,10 +1487,11 @@ public static class BackroomsLobby
     private static GameObject _overlayGO;
     private static SpriteRenderer _overlaySR;
 
-    // 黄色フィルター基本値 (alpha 0.14 は「明るい蛍光灯下で空気が黄ばんで見える」程度)
-    private static readonly Color OverlayYellowBase = new(1f, 0.92f, 0.55f, 0.14f);
-    // フリッカー時の覆い (alpha 0.55 で半暗黒化、完全黒だと唐突なので半透明)
-    private static readonly Color OverlayBlackout = new(0f, 0f, 0f, 0.55f);
+    // 黄色フィルター基本値。明るすぎを避けるため RGB を少し下げて alpha を上げ、
+    // 全体に「暗く黄ばんだ蛍光灯下」感を出す (2026-05-23 明度下げチューニング)
+    private static readonly Color OverlayYellowBase = new(0.78f, 0.72f, 0.42f, 0.22f);
+    // フリッカー時の覆い。「真っ暗」だと唐突なので alpha 0.32 黒で「明るさを下げる」感じに
+    private static readonly Color OverlayBlackout = new(0f, 0f, 0f, 0.32f);
     // vignette mesh の色 — 完全黒ではなく僅かに暖色 (≒ #1a1410) で「淀んだ空気」感を出す。
     // alpha 1.0 で不透明維持 (壁は sortingOrder で前面に来るので隠れない既存仕様)
     private static readonly Color VignetteWarmDark = new(0.10f, 0.08f, 0.06f, 1f);
@@ -1475,7 +1526,7 @@ public static class BackroomsLobby
         _overlaySR.sortingLayerName = "Default";
         _overlaySR.sortingOrder = 100;
 
-        _flickerNextEvalAt = Time.time + UnityEngine.Random.Range(2f, 5f);
+        _flickerNextEvalAt = Time.time + UnityEngine.Random.Range(60f, 120f); // 初回まで 1-2 分
         _flickerHoldUntil = 0f;
         _flickerInBlackout = false;
 
@@ -1497,13 +1548,13 @@ public static class BackroomsLobby
 
         float now = Time.time;
 
-        // 1. 停電 hold 中: 暗黒色を出し続け、hold 過ぎたら次回まで間隔セット
+        // 1. 停電 hold 中: 暗化色を出し続け、hold 過ぎたら次回まで間隔セット (≈2 分に 1 回)
         if (_flickerInBlackout)
         {
             if (now >= _flickerHoldUntil)
             {
                 _flickerInBlackout = false;
-                _flickerNextEvalAt = now + UnityEngine.Random.Range(2.5f, 7f);
+                _flickerNextEvalAt = now + UnityEngine.Random.Range(90f, 180f);
             }
             else
             {
@@ -1518,11 +1569,11 @@ public static class BackroomsLobby
         c.a = Mathf.Clamp01(c.a + noise);
         _overlaySR.color = c;
 
-        // 3. 次の停電発火判定
+        // 3. 次の停電発火判定 (≈2 分に 1 回、ホールド 0.15-0.4s = 「明るさが落ちる」体感)
         if (now >= _flickerNextEvalAt)
         {
             _flickerInBlackout = true;
-            _flickerHoldUntil = now + UnityEngine.Random.Range(0.03f, 0.12f);
+            _flickerHoldUntil = now + UnityEngine.Random.Range(0.15f, 0.4f);
         }
     }
 
