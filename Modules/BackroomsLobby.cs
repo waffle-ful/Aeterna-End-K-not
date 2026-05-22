@@ -288,6 +288,8 @@ public static class BackroomsLobby
                     sr.sprite = BaselineSprite;
                     sr.color = GetTileColor(kind);
                 }
+                // 同じ模様の繰返し感を打ち消す per-cell 向き＋tint 揺らぎ
+                ApplyFloorVariation(sr, go.transform, pos.x, pos.y);
                 break;
             default:
                 sr.sprite = BaselineSprite;
@@ -398,6 +400,31 @@ public static class BackroomsLobby
         }
         sr.sortingLayerName = "Default";
         sr.sortingOrder = sortingOrder;
+        Vector3 wp = parent.transform.position;
+        ApplyFloorVariation(sr, floor.transform, wp.x, wp.y);
+    }
+
+    // 床テクスチャの「同じ模様が並んでる」感を抑えるための per-cell variation。
+    // cell 座標から決定的 hash を取り、(flipX, flipY, 90°回転) の 8 向き + ±5% 程度の輝度
+    // 揺らぎを割当てる。同じ cell は常に同じ向き＆色になるので cull の出し入れで動かない。
+    // SpriteRenderer.flipX/Y と transform.rotation は frame ごとのコストゼロ。1×1 正方 sprite
+    // なので 90° 回転しても bounds は変わらず隣 cell にはみ出さない。
+    private static void ApplyFloorVariation(SpriteRenderer sr, Transform target, float worldX, float worldY)
+    {
+        int cx = Mathf.RoundToInt(worldX);
+        int cy = Mathf.RoundToInt(worldY);
+        uint h = (uint)(cx * 73856093) ^ (uint)(cy * 19349663);
+        h ^= h >> 16;
+        h *= 0x85ebca6b;
+        h ^= h >> 13;
+        sr.flipX = (h & 1u) != 0;
+        sr.flipY = (h & 2u) != 0;
+        if ((h & 4u) != 0)
+            target.localRotation = Quaternion.Euler(0f, 0f, 90f);
+        int tintIdx = (int)((h >> 4) & 15u) - 7; // -7..+8
+        float mul = 1f + tintIdx * 0.007f;       // ≈ ±5%
+        Color c = sr.color;
+        sr.color = new Color(c.r * mul, c.g * mul, c.b * mul, c.a);
     }
 
     // Polus 風 outlined dark mass: floor bg + 0.4 wide dark body + 両端 0.025 wide lighter edge highlights
@@ -406,6 +433,46 @@ public static class BackroomsLobby
     {
         DrawFloorBackground(parent);
         BuildWallVOutline(parent);
+    }
+
+    // WallV cell の真下が Floor (= V が下向きに宙ぶらりんに終わる) のとき呼ぶ。
+    // V 終端 cell の中身を WallH と同じ構造 (face 全面 + 上端 20% dark band) で塗り直す。
+    // 幅は V 幅 (0.4u) を維持し、両端の V edge highlight は cap 外側 (±0.2125u) に残るので
+    // V outline の中に H face が嵌まる絵になる。sortingOrder は V body (-4) より前 (-3)。
+    //
+    // perf: cap face は V body と完全に同サイズ・同位置で重なるので、V body の SR を disable
+    // して GPU fill 量を倍化させない (memory: backrooms-perf-bottleneck-diagnosed — fill rate が支配)
+    public static void AddWallVBottomCap(GameObject wallV)
+    {
+        if (wallV == null) return;
+
+        // overdraw 抑止: cap face で完全に覆われる V body の SR を off
+        Transform bodyT = wallV.transform.Find("WallVBody");
+        if (bodyT != null)
+        {
+            SpriteRenderer bodySr = bodyT.GetComponent<SpriteRenderer>();
+            if (bodySr != null) bodySr.enabled = false;
+        }
+
+        GameObject face = new("WallVBottomCapFace");
+        face.transform.SetParent(wallV.transform, false);
+        face.transform.localPosition = Vector3.zero;
+        face.transform.localScale = new Vector3(0.4f, 1f, 1f);
+        SpriteRenderer fsr = face.AddComponent<SpriteRenderer>();
+        fsr.sprite = WallPngSprite ?? WallSpriteH ?? BaselineSprite;
+        fsr.color = Color.white;
+        fsr.sortingLayerName = "Default";
+        fsr.sortingOrder = -3;
+
+        GameObject band = new("WallVBottomCapBand");
+        band.transform.SetParent(wallV.transform, false);
+        band.transform.localPosition = new Vector3(0f, 0.4f, 0f);
+        band.transform.localScale = new Vector3(0.4f, 0.2f, 1f);
+        SpriteRenderer bsr = band.AddComponent<SpriteRenderer>();
+        bsr.sprite = BaselineSprite;
+        bsr.color = WallDarkColor;
+        bsr.sortingLayerName = "Default";
+        bsr.sortingOrder = -3;
     }
 
     private static void BuildWallVOutline(GameObject parent)
@@ -852,6 +919,12 @@ public static class BackroomsLobby
                     CellKind south = ClassifyCell(wx, wy - 1, seed);
                     // 真下が WallV なら L 字 connector で V column と上端 dark band を連結
                     if (south == CellKind.WallV) AddWallHBottomConnector(go);
+                }
+                else if (cell == CellKind.WallV)
+                {
+                    CellKind south = ClassifyCell(wx, wy - 1, seed);
+                    // 真下が Floor (= V が下向きに宙ぶらりんに終わる) なら H 風の終端キャップ
+                    if (south == CellKind.Floor) AddWallVBottomCap(go);
                 }
 
                 count++;
