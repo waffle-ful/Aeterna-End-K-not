@@ -1425,7 +1425,10 @@ public static class BackroomsLobby
         if (PlayerControl.LocalPlayer == null) return;
         if (SpawnedTiles.Count == 0) return;
 
-        Vector2 player = PlayerControl.LocalPlayer.GetTruePosition();
+        // no-clip ON 時に GetTruePosition() が 127u 上空を返す罠 ([[LocalPlayerFeet]])。
+        // ここで GetTruePosition を使うと全 tile が「player から遠い」扱いになり SetActive(false)
+        // で Backrooms 全消失する症状の元凶 (2026-05-22)。
+        Vector2 player = LocalPlayerFeet();
 
         if (_cullValid)
         {

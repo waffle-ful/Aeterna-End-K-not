@@ -36,18 +36,17 @@ internal static class ControllerManagerUpdatePatch
                     KeysDown(KeyCode.LeftControl, KeyCode.BackQuote) ||
                     KeysDown(KeyCode.RightControl, KeyCode.BackQuote))
                     ClientControlGUI.Instance.IsOpen = !ClientControlGUI.Instance.IsOpen;
-                
+
                 if (ClientControlGUI.Instance.IsOpen) return;
             }
 
             if (HudManager.InstanceExists)
             {
-                if (PlayerControl.LocalPlayer)
+                if (PlayerControl.LocalPlayer && PlayerControl.LocalPlayer.Collider)
                 {
-                    bool shouldNoclip =
-                        (NoClipEnabled || Input.GetKey(KeyCode.LeftControl)) &&
-                        (!AmongUsClient.Instance.IsGameStarted || !GameStates.IsOnlineGame) && PlayerControl.LocalPlayer.CanMove;
-
+                    // No-clip 制限全撤廃: flag が立っているか LeftCtrl 押下中なら常に発動。
+                    // CanMove / IsGameStarted / IsOnlineGame は気にしない (host-only mod なので)
+                    bool shouldNoclip = NoClipEnabled || Input.GetKey(KeyCode.LeftControl);
                     PlayerControl.LocalPlayer.Collider.offset = shouldNoclip ? new Vector2(0f, 127f) : new Vector2(0f, -0.3636f);
                 }
             

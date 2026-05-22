@@ -460,79 +460,64 @@ public class ClientControlGUI : MonoBehaviour
             });
 
         bool canZoom = Zoom.CanZoom;
-        bool canNoClip = canMove && Main.IntroDestroyed && (!AmongUsClient.Instance.IsGameStarted || !GameStates.IsOnlineGame) && (!GameStartManager.Instance || GameStartManager.Instance.startState == GameStartManager.StartingStates.NotStarting);
         bool canToggleHud = Main.IntroDestroyed && !inMeeting && !ExileController.Instance && !ReportDeadBodyPatch.MeetingStarted;
 
-        if (canZoom || canNoClip || canToggleHud)
+        // No-clip は制限なし — いつでもボタン表示・トグル可能
+        Section(ref y, "Camera");
+
+        if (canZoom)
         {
-            Section(ref y, "Camera");
+            // Sync slider to actual camera value so external changes (scroll wheel, touch pinch) are reflected
+            if (_cam) _zoomValue = _cam.orthographicSize;
 
-            if (canZoom)
+            float newZoom = Slider(ref y, $"Zoom  {_zoomValue:F1}x", _zoomValue, 3.0f, 18.0f, w);
+            if (Mathf.Abs(newZoom - _zoomValue) > 0.01f)
             {
-                // Sync slider to actual camera value so external changes (scroll wheel, touch pinch) are reflected
-                if (_cam) _zoomValue = _cam.orthographicSize;
-
-                float newZoom = Slider(ref y, $"Zoom  {_zoomValue:F1}x", _zoomValue, 3.0f, 18.0f, w);
-                if (Mathf.Abs(newZoom - _zoomValue) > 0.01f)
-                {
-                    _zoomValue = newZoom;
-                    Zoom.SetZoomSize(reset: false);
-                    if (_cam) _cam.orthographicSize = _zoomValue;
-                    if (HudManager.InstanceExists) HudManager.Instance.UICamera.orthographicSize = _zoomValue;
-                }
-
-                if (GUI.Button(new Rect(0, y, w, ButtonHeight), "Reset Zoom", _sAction))
-                {
-                    Zoom.SetZoomSize(reset: true);
-                    _zoomValue = 3.0f;
-                }
-                y += ButtonHeight + Padding * 0.7f;
+                _zoomValue = newZoom;
+                Zoom.SetZoomSize(reset: false);
+                if (_cam) _cam.orthographicSize = _zoomValue;
+                if (HudManager.InstanceExists) HudManager.Instance.UICamera.orthographicSize = _zoomValue;
             }
-            else if (!Mathf.Approximately(_zoomValue, 3.0f))
+
+            if (GUI.Button(new Rect(0, y, w, ButtonHeight), "Reset Zoom", _sAction))
             {
                 Zoom.SetZoomSize(reset: true);
                 _zoomValue = 3.0f;
             }
+            y += ButtonHeight + Padding * 0.7f;
+        }
+        else if (!Mathf.Approximately(_zoomValue, 3.0f))
+        {
+            Zoom.SetZoomSize(reset: true);
+            _zoomValue = 3.0f;
+        }
 
-            if (canNoClip)
+        {
+            bool noclipOn = ControllerManagerUpdatePatch.NoClipEnabled;
+            Btn(ref y, noclipOn ? "No-clip: ON" : "No-clip: OFF", noclipOn ? _sHost : _sAction, () =>
             {
-                // Reads live state every frame for correct label/colour; lambda also reads it on click to avoid stale values
-                bool noclipOn = ControllerManagerUpdatePatch.NoClipEnabled;
-                Btn(ref y, noclipOn ? "No-clip: ON" : "No-clip: OFF", noclipOn ? _sHost : _sAction, () =>
-                {
-                    // Toggle flag + immediately write Collider.offset on ALL platforms.
-                    // 直書きしないと Windows では ControllerManager.Update Postfix が
-                    // menu open 中 早期 return ([[ControlPatch.cs:40]]) するため、
-                    // menu を閉じるまで no-clip が物理的に発動しない。
-                    bool newState = !ControllerManagerUpdatePatch.NoClipEnabled;
-                    ControllerManagerUpdatePatch.NoClipEnabled = newState;
-                    if (PlayerControl.LocalPlayer && PlayerControl.LocalPlayer.Collider)
-                        PlayerControl.LocalPlayer.Collider.offset = newState ? new Vector2(0f, 127f) : new Vector2(0f, -0.3636f);
-                    Logger.Info($"No-clip toggled via menu → {newState} (offset written directly)", "ClientControlGUI");
-                });
-            }
-            else if (ControllerManagerUpdatePatch.NoClipEnabled && PlayerControl.LocalPlayer)
-            {
-                // Defensive cleanup — when canNoClip becomes false (game start), reset offset on any platform
-                PlayerControl.LocalPlayer.Collider.offset = new Vector2(0f, -0.3636f);
-                ControllerManagerUpdatePatch.NoClipEnabled = false;
-            }
+                // Direct write on all platforms — menu open 中も即発動
+                bool newState = !ControllerManagerUpdatePatch.NoClipEnabled;
+                ControllerManagerUpdatePatch.NoClipEnabled = newState;
+                if (PlayerControl.LocalPlayer && PlayerControl.LocalPlayer.Collider)
+                    PlayerControl.LocalPlayer.Collider.offset = newState ? new Vector2(0f, 127f) : new Vector2(0f, -0.3636f);
+            });
+        }
 
-            if (canToggleHud)
+        if (canToggleHud)
+        {
+            Btn(ref y, HudHidden ? "Show HUD" : "Hide HUD", HudHidden ? _sHost : _sAction, () =>
             {
-                Btn(ref y, HudHidden ? "Show HUD" : "Hide HUD", HudHidden ? _sHost : _sAction, () =>
-                {
-                    HudHidden = !HudHidden;
-                    if (HudManager.InstanceExists)
-                        HudManager.Instance.gameObject.SetActive(!HudHidden);
-                });
-            }
-            else if (HudHidden)
-            {
-                HudHidden = false;
+                HudHidden = !HudHidden;
                 if (HudManager.InstanceExists)
-                    HudManager.Instance.gameObject.SetActive(true);
-            }
+                    HudManager.Instance.gameObject.SetActive(!HudHidden);
+            });
+        }
+        else if (HudHidden)
+        {
+            HudHidden = false;
+            if (HudManager.InstanceExists)
+                HudManager.Instance.gameObject.SetActive(true);
         }
 
         if (inLobby)
