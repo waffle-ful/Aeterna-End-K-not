@@ -95,6 +95,11 @@ internal static class LobbyBehaviourStartPatch
         try { BackroomsLobby.OnLobbyReload(); }
         catch (Exception ex) { Logger.Warn($"OnLobbyReload failed: {ex.Message}", "BackroomsGen"); }
 
+        // バニラ船を即時に隠す (LocalPlayer 非依存)。procgen + vision mesh は LocalPlayer 必須なので
+        // LateTask に後置するが、「ロビー入室後にバニラ船が約 1 秒見える」ラグはこの即時 disable で消える (2026-05-22)
+        try { BackroomsLobby.HideVanillaShipImmediate(); }
+        catch (Exception ex) { Logger.Warn($"HideVanillaShipImmediate failed: {ex.Message}", "BackroomsGen"); }
+
         if (AmongUsClient.Instance != null && AmongUsClient.Instance.AmHost)
         {
             LateTask.New(() =>
@@ -119,22 +124,41 @@ internal static class LobbyBehaviourStartPatch
 
         // Auto-enter Backrooms — モッドクライアント全員 (host も guest も) ローカル視界が Backrooms に置き換わる。
         // TP しないので非モッドクライアントには影響なし。seed は GameId 由来でモッド client 間で同じ layout
-        LateTask.New(() =>
-        {
-            try
-            {
-                if (LobbyBehaviour.Instance == null || PlayerControl.LocalPlayer == null) return;
-                uint seed = AmongUsClient.Instance != null ? unchecked((uint)AmongUsClient.Instance.GameId) : 0u;
-                if (seed == 0u) seed = (uint)UnityEngine.Random.Range(1, int.MaxValue);
-                BackroomsLobby.EnterBackrooms(seed, byte.MaxValue, silent: true);
-            }
-            catch (Exception ex) { Logger.Warn($"Auto-enter Backrooms failed: {ex.Message}", "BackroomsGen"); }
-        }, 1.5f, log: false);
+        //
+        // LocalPlayer の準備時刻は環境差があり (Start 直後〜数秒)、固定遅延だと外す。0.3s 毎に
+        // 自己再スケジュールするポーリング方式で、LocalPlayer が揃った瞬間に発火 (最大 16 回 = 5s 試行)
+        _autoEnterAttempts = 0;
+        LateTask.New(TryAutoEnterBackrooms, 0.3f, log: false);
 
         if (!(Main.EnableBGM?.Value ?? false)) return;
         SilencePending = true;
         _bgmStarted = false;
         _silenceUntil = Time.realtimeSinceStartup + 2.5f;
+    }
+
+    private static int _autoEnterAttempts;
+    private const int MaxAutoEnterAttempts = 16; // 0.3s × 16 ≈ 5s 上限
+
+    private static void TryAutoEnterBackrooms()
+    {
+        try
+        {
+            _autoEnterAttempts++;
+            if (LobbyBehaviour.Instance == null) return; // lobby を出た = 中止
+            if (PlayerControl.LocalPlayer == null)
+            {
+                if (_autoEnterAttempts < MaxAutoEnterAttempts)
+                    LateTask.New(TryAutoEnterBackrooms, 0.3f, log: false);
+                else
+                    Logger.Warn($"Auto-enter Backrooms gave up: LocalPlayer null after {_autoEnterAttempts} attempts", "BackroomsGen");
+                return;
+            }
+
+            uint seed = AmongUsClient.Instance != null ? unchecked((uint)AmongUsClient.Instance.GameId) : 0u;
+            if (seed == 0u) seed = (uint)UnityEngine.Random.Range(1, int.MaxValue);
+            BackroomsLobby.EnterBackrooms(seed, byte.MaxValue, silent: true);
+        }
+        catch (Exception ex) { Logger.Warn($"Auto-enter Backrooms failed: {ex.Message}", "BackroomsGen"); }
     }
 
     internal static void Tick()

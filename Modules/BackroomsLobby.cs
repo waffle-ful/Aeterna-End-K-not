@@ -110,9 +110,28 @@ public static class BackroomsLobby
     // SpawnedTiles を mutate する全 site で同期維持必須
     private static readonly List<Vector2> SpawnedTilePositions = [];
 
+    // 各タイルが所属する chunk の packed key (long)。streaming chunks (2026-05-22)
+    // で chunk 単位の destroy を可能にするため。long.MinValue は「chunk 非所属」(test
+    // pattern など)。0L だと PackChunkKey(0,0)==0L と衝突する罠 (advisor 指摘) を回避。
+    // SpawnedTiles を mutate する全 site で同期維持必須
+    private static readonly List<long> SpawnedTileChunkKeys = [];
+
+    // 「chunk 非所属」を示す sentinel。PackChunkKey が long.MinValue を返すには
+    // cx=int.MinValue かつ cy=0 が必須で、world 座標 -3.4×10¹⁰ なので歩行で到達不能
+    private const long NoChunkKey = long.MinValue;
+
     // 壁 AABB を spawn 時に cache (UpdateVision の毎フレーム GetComponent ストーム回避)
     // entry: (cx, cy, halfX, halfY) — 中心と半サイズ
     private static readonly List<(float cx, float cy, float halfX, float halfY)> WallAabbs = [];
+
+    // WallAabbs と完全に index 一致する chunk key cache。UnloadChunk で WallAabbs を
+    // 部分削除するため。WallAabbs を mutate する全 site で同期維持必須
+    private static readonly List<long> WallAabbChunkKeys = [];
+
+    // SpawnTile が現在 spawn 中の chunk key を読むスクラッチ。GenerateChunk が
+    // try/finally で set/clear、外部から SpawnTile が呼ばれた場合 (test pattern など) は
+    // NoChunkKey = long.MinValue で残る → UnloadChunk が誤って消さない
+    private static long _currentChunkKey = NoChunkKey;
 
     private static Sprite _baselineSprite;
     private static Sprite _wallSpriteH;
@@ -240,6 +259,7 @@ public static class BackroomsLobby
 
         SpawnedTiles.Add(go);
         SpawnedTilePositions.Add(pos); // 距離 cull の hot loop で interop 回避するため
+        SpawnedTileChunkKeys.Add(_currentChunkKey); // GenerateChunk 中なら chunk key、それ以外は 0L
 
         // 即時 cull: GenerateLobby が _spawnCullCenterValid を立てると、spawn 時点で
         // player から CullRadius 圏外なら inactive で生まれる。bulk sweep (~6k SetActive) を
@@ -262,6 +282,7 @@ public static class BackroomsLobby
                 float hx = bc.size.x * 0.5f * Mathf.Abs(ls.x);
                 float hy = bc.size.y * 0.5f * Mathf.Abs(ls.y);
                 WallAabbs.Add((c.x, c.y, hx, hy));
+                WallAabbChunkKeys.Add(_currentChunkKey); // parallel cache for streaming unload
 
                 // (vanilla shadow hijack 路線は 2026-05-21 dead — caster 追加無し)
             }
@@ -423,7 +444,11 @@ public static class BackroomsLobby
 
         SpawnedTiles.Clear();
         SpawnedTilePositions.Clear();
+        SpawnedTileChunkKeys.Clear();
         WallAabbs.Clear();
+        WallAabbChunkKeys.Clear();
+        _loadedChunks.Clear();
+        _streamValid = false;
         Utils.SendMessage($"Cleared {cleared} tiles.", targetPid);
         Logger.Info($"Cleared {cleared} tiles", "BackroomsDiag");
     }
@@ -498,14 +523,32 @@ public static class BackroomsLobby
     // Backrooms 風: 部屋境界に決定論的 opening、それ以外は壁
 
     private const int ChunkSize = 16;
-    // GenerationRadius: 1 = 3×3 chunks = 2304 tiles (≈ 旧 baseline) / 0 = 1 chunk = 256 tiles (極小モード)
-    // 2026-05-22 v3: GenRad=2 (6400 tiles = 11k 子 SR) は inactive scene 管理 overhead で FPS=30
-    //   active 数は cull で同じ ~492 SR でも、inactive 11k の per-frame 走査が効く
-    // 10× 達成は streaming chunks (chunk 動的 destroy/create) への拡張必須
-    private const int BaselineGenerationRadius = 1;
-    private const int ReducedGenerationRadius = 0;
-    private static int GenerationRadius => (Main.BackroomsReduceProcgen?.Value ?? false) ? ReducedGenerationRadius : BaselineGenerationRadius;
+    // ActiveChunkRadius (旧 GenerationRadius): player を中心とした (2r+1)² chunks を常にロード。
+    //   1 = 3×3 chunks = 2304 tiles (≈ 旧 baseline) / 0 = 1 chunk = 256 tiles (極小モード)
+    // 2026-05-22 v4: streaming chunks 導入 — player が chunk 境界を跨ぐと遠方 chunk を Destroy、
+    //   新方向 chunk を Load。world は実質無限、瞬間ロード量は baseline 据置。前回 GenRad=2
+    //   一括生成 (6400 tiles = 11k 子 SR) は inactive scene 管理 overhead で FPS=60→30 になった
+    //   経路 → streaming で「探索可能距離 10×」を実現
+    private const int BaselineActiveChunkRadius = 1;
+    private const int ReducedActiveChunkRadius = 0;
+    private static int ActiveChunkRadius => (Main.BackroomsReduceProcgen?.Value ?? false) ? ReducedActiveChunkRadius : BaselineActiveChunkRadius;
     private const int RoomSize = 6;
+
+    // === Streaming chunks state ===
+    // _loadedChunks: 現在シーンに展開済みの chunk key set。LoadChunk が add、UnloadChunk が remove
+    // _streamCx/Cy: 直近 UpdateStreaming 時の player chunk。これと一致してれば早期 return
+    // _streamValid: 初回 or 強制再評価 (RegenerateIfActive / toggle) で false
+    private static readonly HashSet<long> _loadedChunks = [];
+    private static int _streamCx, _streamCy;
+    private static bool _streamValid;
+
+    private static long PackChunkKey(int cx, int cy) => ((long)cx << 32) | (uint)cy;
+
+    private static void UnpackChunkKey(long key, out int cx, out int cy)
+    {
+        cx = (int)(key >> 32);
+        cy = (int)(uint)key;
+    }
 
     public static void GenerateLobby(uint seed, byte targetPid, bool silent = false)
     {
@@ -517,7 +560,7 @@ public static class BackroomsLobby
 
         if (PlayerControl.LocalPlayer == null) return;
 
-        // 既存タイル全消去 (procgen と test pattern を同じ list で管理)
+        // 既存タイル全消去 (procgen と test pattern を同じ list で管理) + streaming state リセット
         int wiped = 0;
         foreach (GameObject go in SpawnedTiles)
         {
@@ -528,7 +571,13 @@ public static class BackroomsLobby
 
         SpawnedTiles.Clear();
         SpawnedTilePositions.Clear();
+        SpawnedTileChunkKeys.Clear();
         WallAabbs.Clear();
+        WallAabbChunkKeys.Clear();
+        _loadedChunks.Clear();
+        _streamValid = false;
+
+        _lastSeed = seed;
 
         Vector2 origin = PlayerControl.LocalPlayer.Pos();
         int centerCx = Mathf.FloorToInt(origin.x / ChunkSize);
@@ -539,12 +588,17 @@ public static class BackroomsLobby
         _spawnCullCenter = PlayerControl.LocalPlayer.GetTruePosition();
         _spawnCullCenterValid = true;
 
-        int generated = 0;
-        for (int dcx = -GenerationRadius; dcx <= GenerationRadius; dcx++)
-        for (int dcy = -GenerationRadius; dcy <= GenerationRadius; dcy++)
-            generated += GenerateChunk(centerCx + dcx, centerCy + dcy, seed);
+        int r = ActiveChunkRadius;
+        for (int dx = -r; dx <= r; dx++)
+        for (int dy = -r; dy <= r; dy++)
+            LoadChunk(centerCx + dx, centerCy + dy, seed);
 
         _spawnCullCenterValid = false;
+
+        // 後続 UpdateStreaming が同 chunk なら早期 return できるよう center を記録
+        _streamCx = centerCx;
+        _streamCy = centerCy;
+        _streamValid = true;
 
         // 2026-05-21: spawn-in-wall 対策。procgen は player cell を考慮しないので
         // vanilla lobby spawn (~ -0.2, 1.3) → cell (0,1) が WallV になり player が壁中に
@@ -553,13 +607,13 @@ public static class BackroomsLobby
         // で再取得。collision/vision と同じ cell に揃える ([[reference_pos_vs_gettrueposition]])
         EnsureSpawnFloor(PlayerControl.LocalPlayer.GetTruePosition());
 
-        int chunkCount = (GenerationRadius * 2 + 1) * (GenerationRadius * 2 + 1);
+        int chunkCount = _loadedChunks.Count;
         int activeAfterSpawn = 0;
         for (int i = 0; i < SpawnedTiles.Count; i++)
             if (SpawnedTiles[i] != null && SpawnedTiles[i].activeSelf) activeAfterSpawn++;
         if (!silent)
-            Utils.SendMessage($"Gen seed={seed}: wiped {wiped}, generated {generated} tiles ({activeAfterSpawn} active) in {chunkCount} chunks around ({centerCx},{centerCy})", targetPid);
-        Logger.Info($"GenerateLobby seed={seed} chunks={chunkCount} tiles={generated} active={activeAfterSpawn} center=({centerCx},{centerCy})", "BackroomsGen");
+            Utils.SendMessage($"Gen seed={seed}: wiped {wiped}, generated {SpawnedTiles.Count} tiles ({activeAfterSpawn} active) in {chunkCount} chunks around ({centerCx},{centerCy})", targetPid);
+        Logger.Info($"GenerateLobby seed={seed} chunks={chunkCount} tiles={SpawnedTiles.Count} active={activeAfterSpawn} center=({centerCx},{centerCy})", "BackroomsGen");
     }
 
     public static void DumpCullInfo(byte targetPid)
@@ -568,7 +622,7 @@ public static class BackroomsLobby
         int active = 0;
         for (int i = 0; i < total; i++)
             if (SpawnedTiles[i] != null && SpawnedTiles[i].activeSelf) active++;
-        string msg = $"Cull: {active}/{total} active (radius={CullRadius}u, _inBackrooms={_inBackrooms}, _cullValid={_cullValid}, GenRad={GenerationRadius})";
+        string msg = $"Cull: {active}/{total} active (radius={CullRadius}u, _inBackrooms={_inBackrooms}, _cullValid={_cullValid}, ActiveChunkRadius={ActiveChunkRadius}, loadedChunks={_loadedChunks.Count}, center=({_streamCx},{_streamCy}))";
         Utils.SendMessage(msg, targetPid);
         Logger.Info(msg, "BackroomsCull");
     }
@@ -647,17 +701,27 @@ public static class BackroomsLobby
             if (Mathf.RoundToInt(pos.x) != cx || Mathf.RoundToInt(pos.y) != cy) continue;
             if (!t.name.Contains("wall")) return false; // already floor
 
+            long preservedKey = SpawnedTileChunkKeys[i]; // 新 floor は元 wall と同じ chunk に属させる
+
             for (int j = WallAabbs.Count - 1; j >= 0; j--)
             {
                 var w = WallAabbs[j];
                 if (Mathf.RoundToInt(w.cx) == cx && Mathf.RoundToInt(w.cy) == cy)
+                {
                     WallAabbs.RemoveAt(j);
+                    WallAabbChunkKeys.RemoveAt(j); // parallel
+                }
             }
 
             Object.Destroy(t);
             SpawnedTiles.RemoveAt(i);
-            SpawnedTilePositions.RemoveAt(i); // index 同期維持
-            SpawnTile("floor", new Vector2(cx, cy));
+            SpawnedTilePositions.RemoveAt(i);
+            SpawnedTileChunkKeys.RemoveAt(i); // parallel
+
+            long prevKey = _currentChunkKey;
+            _currentChunkKey = preservedKey;
+            try { SpawnTile("floor", new Vector2(cx, cy)); }
+            finally { _currentChunkKey = prevKey; }
             return true;
         }
         return false;
@@ -670,32 +734,146 @@ public static class BackroomsLobby
         int count = 0;
         int baseX = cx * ChunkSize;
         int baseY = cy * ChunkSize;
+        long prevKey = _currentChunkKey;
+        _currentChunkKey = PackChunkKey(cx, cy);
 
-        for (int lx = 0; lx < ChunkSize; lx++)
-        for (int ly = 0; ly < ChunkSize; ly++)
+        try
         {
-            int wx = baseX + lx;
-            int wy = baseY + ly;
-            CellKind cell = ClassifyCell(wx, wy, seed);
-            string kind = cell switch
+            for (int lx = 0; lx < ChunkSize; lx++)
+            for (int ly = 0; ly < ChunkSize; ly++)
             {
-                CellKind.WallH => "wall_h",
-                CellKind.WallV => "wall_v",
-                _              => "floor"
-            };
-            GameObject go = SpawnTile(kind, new Vector2(wx, wy));
+                int wx = baseX + lx;
+                int wy = baseY + ly;
+                CellKind cell = ClassifyCell(wx, wy, seed);
+                string kind = cell switch
+                {
+                    CellKind.WallH => "wall_h",
+                    CellKind.WallV => "wall_v",
+                    _              => "floor"
+                };
+                GameObject go = SpawnTile(kind, new Vector2(wx, wy));
 
-            if (cell == CellKind.WallH)
-            {
-                CellKind south = ClassifyCell(wx, wy - 1, seed);
-                // 真下が WallV なら L 字 connector で V column と上端 dark band を連結
-                if (south == CellKind.WallV) AddWallHBottomConnector(go);
+                if (cell == CellKind.WallH)
+                {
+                    CellKind south = ClassifyCell(wx, wy - 1, seed);
+                    // 真下が WallV なら L 字 connector で V column と上端 dark band を連結
+                    if (south == CellKind.WallV) AddWallHBottomConnector(go);
+                }
+
+                count++;
             }
-
-            count++;
+        }
+        finally
+        {
+            _currentChunkKey = prevKey;
         }
 
         return count;
+    }
+
+    // === Streaming chunks API (2026-05-22) ===
+
+    // idempotent: 既ロード chunk は no-op。spawn cull center 設定は呼出側 (GenerateLobby /
+    // UpdateStreaming) の責務 — まとめロード時の interop call を 1 回にまとめるため
+    private static void LoadChunk(int cx, int cy, uint seed)
+    {
+        long key = PackChunkKey(cx, cy);
+        if (!_loadedChunks.Add(key)) return;
+        GenerateChunk(cx, cy, seed);
+    }
+
+    // chunk 内の全 tile / WallAabb を flat list から逆順削除。_loadedChunks からも除去。
+    // 削除は parallel list (SpawnedTiles + Positions + ChunkKeys と WallAabbs + ChunkKeys)
+    // を同一 index で同期 RemoveAt
+    private static void UnloadChunk(int cx, int cy)
+    {
+        long key = PackChunkKey(cx, cy);
+        if (key == NoChunkKey) return; // 防御: sentinel と衝突する key は無効化 (実機到達不能だが念のため)
+        if (!_loadedChunks.Remove(key)) return;
+
+        int destroyed = 0;
+        for (int i = SpawnedTiles.Count - 1; i >= 0; i--)
+        {
+            if (SpawnedTileChunkKeys[i] != key) continue;
+            GameObject t = SpawnedTiles[i];
+            if (t != null) UnityEngine.Object.Destroy(t);
+            SpawnedTiles.RemoveAt(i);
+            SpawnedTilePositions.RemoveAt(i);
+            SpawnedTileChunkKeys.RemoveAt(i);
+            destroyed++;
+        }
+
+        for (int i = WallAabbs.Count - 1; i >= 0; i--)
+        {
+            if (WallAabbChunkKeys[i] != key) continue;
+            WallAabbs.RemoveAt(i);
+            WallAabbChunkKeys.RemoveAt(i);
+        }
+
+        if (destroyed > 0)
+            Logger.Info($"UnloadChunk ({cx},{cy}): destroyed {destroyed} tiles", "BackroomsGen");
+    }
+
+    // 毎フレ呼び。player chunk が変わったら radius 内/外を再評価し、差分 load/unload。
+    // force=true: 同 chunk でも強制再評価 (toggle / regen で呼ぶ)
+    public static void UpdateStreaming(bool force = false)
+    {
+        if (!_inBackrooms) return;
+        if (PlayerControl.LocalPlayer == null) return;
+
+        Vector2 p = PlayerControl.LocalPlayer.GetTruePosition();
+        int playerCx = Mathf.FloorToInt(p.x / ChunkSize);
+        int playerCy = Mathf.FloorToInt(p.y / ChunkSize);
+
+        if (!force && _streamValid && playerCx == _streamCx && playerCy == _streamCy) return;
+
+        int r = ActiveChunkRadius;
+
+        // 1. Unload: radius 外の chunk を削除。foreach 中 mutate を避けるため一旦 list に集める
+        List<long> toUnload = null;
+        foreach (long key in _loadedChunks)
+        {
+            UnpackChunkKey(key, out int kcx, out int kcy);
+            if (Math.Abs(kcx - playerCx) > r || Math.Abs(kcy - playerCy) > r)
+                (toUnload ??= []).Add(key);
+        }
+
+        if (toUnload != null)
+        {
+            for (int i = 0; i < toUnload.Count; i++)
+            {
+                UnpackChunkKey(toUnload[i], out int kcx, out int kcy);
+                UnloadChunk(kcx, kcy);
+            }
+        }
+
+        // 2. Load: radius 内の未ロード chunk を生成。spawn cull center をループ前に 1 回だけ取得
+        _spawnCullCenter = p;
+        _spawnCullCenterValid = true;
+
+        int loadedNow = 0;
+        for (int dx = -r; dx <= r; dx++)
+        for (int dy = -r; dy <= r; dy++)
+        {
+            long key = PackChunkKey(playerCx + dx, playerCy + dy);
+            if (_loadedChunks.Contains(key)) continue;
+            LoadChunk(playerCx + dx, playerCy + dy, _lastSeed);
+            loadedNow++;
+        }
+
+        _spawnCullCenterValid = false;
+
+        _streamCx = playerCx;
+        _streamCy = playerCy;
+        _streamValid = true;
+
+        // chunk set 変動時は vision / cull キャッシュを invalidate
+        if (loadedNow > 0 || toUnload != null)
+        {
+            _lastVisionValid = false;
+            _cullValid = false;
+            Logger.Info($"UpdateStreaming center=({playerCx},{playerCy}) loaded+={loadedNow} unloaded={toUnload?.Count ?? 0} totalChunks={_loadedChunks.Count} totalTiles={SpawnedTiles.Count}", "BackroomsGen");
+        }
     }
 
     private static CellKind ClassifyCell(int wx, int wy, uint seed)
@@ -752,6 +930,46 @@ public static class BackroomsLobby
     private static bool _inBackrooms;
     private static uint _lastSeed; // /bbvisdiag で procgen 再現用
 
+    // バニラ船 collider + Renderer を disable するだけの軽量パス。LocalPlayer 非依存なので
+    // LobbyBehaviour.Start Postfix で即時に呼べる → 「ロビー入室後にバニラ船が数秒見える」ラグを消す。
+    // procgen + vision は EnterBackrooms 側で LocalPlayer 揃ってから後置 (2026-05-22)
+    public static (int cols, int rs) HideVanillaShipImmediate()
+    {
+        if (LobbyBehaviour.Instance == null) return (0, 0);
+
+        // Collider: stale Unity ref を除去してから rescan
+        DisabledColliders.RemoveAll(c => c == null);
+        int disabledCols = 0;
+        Collider2D[] colliders = LobbyBehaviour.Instance.GetComponentsInChildren<Collider2D>(true);
+        int shipMask = Constants.ShipOnlyMask;
+        foreach (Collider2D c in colliders)
+        {
+            int layer = c.gameObject.layer;
+            bool isShip = (shipMask & (1 << layer)) != 0;
+            if (!isShip || !c.enabled) continue;
+            c.enabled = false;
+            DisabledColliders.Add(c);
+            disabledCols++;
+        }
+
+        // Renderer: SpriteRenderer + ParticleSystemRenderer (流れ星/星空) + MeshRenderer 全部 catch
+        DisabledRenderers.RemoveAll(r => r == null);
+        int disabledRs = 0;
+        Renderer[] rs = LobbyBehaviour.Instance.GetComponentsInChildren<Renderer>(true);
+        foreach (Renderer r in rs)
+        {
+            if (r == null || !r.enabled) continue;
+            r.enabled = false;
+            DisabledRenderers.Add(r);
+            disabledRs++;
+        }
+
+        if (disabledCols > 0 || disabledRs > 0)
+            Logger.Info($"HideVanillaShipImmediate: cols={disabledCols} rs={disabledRs}", "BackroomsGen");
+
+        return (disabledCols, disabledRs);
+    }
+
     public static void EnterBackrooms(uint seed, byte targetPid, bool silent = false)
     {
         if (LobbyBehaviour.Instance == null)
@@ -762,42 +980,8 @@ public static class BackroomsLobby
 
         if (PlayerControl.LocalPlayer == null) return;
 
-        // 1. ロビー collider + Renderer を disable
-        //    2026-05-22 v3: 旧コードは `Count == 0` ゲートで stale Unity ref (前 LobbyBehaviour
-        //    instance の死 ref) が list 内に残ってると skip → 新 LobbyBehaviour の船が visible に。
-        //    user が lobby → main menu → 新 lobby で再現。dead-ref を RemoveAll で除去してから判定
-        int disabledCols = 0;
-        DisabledColliders.RemoveAll(c => c == null);
-        if (!_inBackrooms || DisabledColliders.Count == 0)
-        {
-            Collider2D[] colliders = LobbyBehaviour.Instance.GetComponentsInChildren<Collider2D>(true);
-            int shipMask = Constants.ShipOnlyMask;
-            foreach (Collider2D c in colliders)
-            {
-                int layer = c.gameObject.layer;
-                bool isShip = (shipMask & (1 << layer)) != 0;
-                if (!isShip || !c.enabled) continue;
-                c.enabled = false;
-                DisabledColliders.Add(c);
-                disabledCols++;
-            }
-        }
-
-        // 2. バニラ船 Renderer を全 disable (モッドクライアント目線で船を完全に隠す)
-        //    SpriteRenderer + ParticleSystemRenderer (流れ星/星空) + MeshRenderer を全部 catch
-        int disabledRs = 0;
-        DisabledRenderers.RemoveAll(r => r == null);
-        if (!_inBackrooms || DisabledRenderers.Count == 0)
-        {
-            Renderer[] rs = LobbyBehaviour.Instance.GetComponentsInChildren<Renderer>(true);
-            foreach (Renderer r in rs)
-            {
-                if (r == null || !r.enabled) continue;
-                r.enabled = false;
-                DisabledRenderers.Add(r);
-                disabledRs++;
-            }
-        }
+        // 1+2. バニラ船を隠す (LobbyBehaviour.Start Postfix で既に走っていれば全 skip)
+        (int disabledCols, int disabledRs) = HideVanillaShipImmediate();
 
         // 3. プレイヤー位置を中心に procgen (TP しない — player はそのまま)
         _lastSeed = seed;
@@ -841,7 +1025,11 @@ public static class BackroomsLobby
 
         SpawnedTiles.Clear();
         SpawnedTilePositions.Clear();
+        SpawnedTileChunkKeys.Clear();
         WallAabbs.Clear();
+        WallAabbChunkKeys.Clear();
+        _loadedChunks.Clear();
+        _streamValid = false;
 
         // 2. ロビー collider 復元
         int restoredC = 0;
@@ -891,7 +1079,11 @@ public static class BackroomsLobby
 
         SpawnedTiles.Clear();
         SpawnedTilePositions.Clear();
+        SpawnedTileChunkKeys.Clear();
         WallAabbs.Clear();
+        WallAabbChunkKeys.Clear();
+        _loadedChunks.Clear();
+        _streamValid = false;
         DisabledColliders.Clear();
         DisabledRenderers.Clear();
 
@@ -918,7 +1110,11 @@ public static class BackroomsLobby
 
         SpawnedTiles.Clear();
         SpawnedTilePositions.Clear();
+        SpawnedTileChunkKeys.Clear();
         WallAabbs.Clear();
+        WallAabbChunkKeys.Clear();
+        _loadedChunks.Clear();
+        _streamValid = false;
         DisabledColliders.Clear();
         DisabledRenderers.Clear();
 
@@ -937,7 +1133,9 @@ public static class BackroomsLobby
     // 2026-05-22 v4: vision/dark radius を絞って GPU 負荷 + corner ray 数を削減 (user request)
     //   8u → 5u: 視界半径 (60% に絞ると lit area 面積は 39%、より「Backrooms らしい」狭視界)
     //   60u → 25u: dark mesh 外周。プレイヤー本体が見える範囲を覆えれば十分 (camera ortho ~3.5u)
-    private const float VisionRadius = 5f;
+    // 2026-05-22 v5: streaming 実装後 perf 余裕が生まれたので VisionRadius を 8u に戻す
+    //   camera diagonal ≈ sqrt(3.5^2 + 6.2^2) ≈ 7.1u なので 5u だと画面コーナーに dark boundary が見えてしまう
+    private const float VisionRadius = 8f;
     // ray dist のフロア値 — 退化頂点 (distance≈0 で全方位 collapse) の防止だけが目的。
     // ここを player radius (~0.15) より大きくすると「触れた壁の先が見える」バグが発生する。
     // 0.05 は player collider が物理的に到達不可能な距離なので、実プレイ中は一度も clamp しない。
@@ -1003,7 +1201,7 @@ public static class BackroomsLobby
     private static bool _lastVisionValid;
 
     // ===== 距離 cull システム (2026-05-22) =====
-    // 視界 (VisionRadius=5u) 外は dark mesh で必ず黒く塗られるので、cull radius は vision 同等で十分。
+    // 視界 (VisionRadius=8u) 外は dark mesh で必ず黒く塗られるので、cull radius は vision 同等で十分。
     //   CullRadius=7u: vision 5u + safety 2u → walk 1 cycle (2u) 内に新タイル active 化、popup 不可視
     //   active 領域 π×7² ≈ 154 cells (旧 314 の半分)
     // Wall AABB cache は SetActive 状態と独立に保持されるので視界 raycast は正しく occlude する。
@@ -1175,15 +1373,16 @@ public static class BackroomsLobby
         _cosTableBuiltFor = 0;
     }
 
-    // procgen toggle 切替時に呼ぶ。Backrooms 滞在中なら新 GenerationRadius で再生成
+    // procgen toggle 切替時に呼ぶ。Backrooms 滞在中なら新 ActiveChunkRadius を反映。
+    // streaming に移行したので full regen は不要 — UpdateStreaming(force:true) で
+    // 新 radius に応じた load/unload 差分だけ実行 (探索済 chunk の loss なし)
     public static void RegenerateIfActive()
     {
         if (!_inBackrooms) return;
         if (LobbyBehaviour.Instance == null || PlayerControl.LocalPlayer == null) return;
-        GenerateLobby(_lastSeed != 0u ? _lastSeed : 1u, byte.MaxValue, silent: true);
-        _lastVisionValid = false; // 新タイル AABB に対し vision rebuild
-        _cullValid = false; // 新 tile set に対し cull sweep
-        Logger.Info($"RegenerateIfActive: regen with GenerationRadius={GenerationRadius} tiles={SpawnedTiles.Count}", "BackroomsPerf");
+        if (_lastSeed == 0u) _lastSeed = 1u;
+        UpdateStreaming(force: true);
+        Logger.Info($"RegenerateIfActive: ActiveChunkRadius={ActiveChunkRadius} loadedChunks={_loadedChunks.Count} tiles={SpawnedTiles.Count}", "BackroomsPerf");
     }
 
     public static void UpdateVision()
@@ -1633,6 +1832,7 @@ internal static class BackroomsVisionUpdateHook
 {
     public static void Postfix()
     {
+        BackroomsLobby.UpdateStreaming(); // chunk 境界跨ぎで Load/Unload 差分。早期 return が普通
         BackroomsLobby.UpdateCulling();
         BackroomsLobby.UpdateVision();
     }
