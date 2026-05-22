@@ -9943,6 +9943,7 @@
   "CommandForms.BBVisDiag": "bbvisdiag",
   "CommandForms.BBCullInfo": "bbcullinfo",
   "CommandForms.BBShipDiag": "bbshipdiag",
+  "CommandForms.BBNoCDiag": "bbnocdiag",
   "CommandForms.TPIn": "tpin",
   "CommandForms.TPOut": "tpout",
   "CommandForms.Target": "target",

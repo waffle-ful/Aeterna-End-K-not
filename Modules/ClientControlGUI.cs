@@ -500,12 +500,20 @@ public class ClientControlGUI : MonoBehaviour
                 bool noclipOn = ControllerManagerUpdatePatch.NoClipEnabled;
                 Btn(ref y, noclipOn ? "No-clip: ON" : "No-clip: OFF", noclipOn ? _sHost : _sAction, () =>
                 {
-                    ControllerManagerUpdatePatch.NoClipEnabled = !ControllerManagerUpdatePatch.NoClipEnabled;
-                    if (OperatingSystem.IsAndroid()) PlayerControl.LocalPlayer.Collider.offset = ControllerManagerUpdatePatch.NoClipEnabled ? new Vector2(0f, 127f) : new Vector2(0f, -0.3636f);
+                    // Toggle flag + immediately write Collider.offset on ALL platforms.
+                    // 直書きしないと Windows では ControllerManager.Update Postfix が
+                    // menu open 中 早期 return ([[ControlPatch.cs:40]]) するため、
+                    // menu を閉じるまで no-clip が物理的に発動しない。
+                    bool newState = !ControllerManagerUpdatePatch.NoClipEnabled;
+                    ControllerManagerUpdatePatch.NoClipEnabled = newState;
+                    if (PlayerControl.LocalPlayer && PlayerControl.LocalPlayer.Collider)
+                        PlayerControl.LocalPlayer.Collider.offset = newState ? new Vector2(0f, 127f) : new Vector2(0f, -0.3636f);
+                    Logger.Info($"No-clip toggled via menu → {newState} (offset written directly)", "ClientControlGUI");
                 });
             }
-            else if (ControllerManagerUpdatePatch.NoClipEnabled && OperatingSystem.IsAndroid() && PlayerControl.LocalPlayer)
+            else if (ControllerManagerUpdatePatch.NoClipEnabled && PlayerControl.LocalPlayer)
             {
+                // Defensive cleanup — when canNoClip becomes false (game start), reset offset on any platform
                 PlayerControl.LocalPlayer.Collider.offset = new Vector2(0f, -0.3636f);
                 ControllerManagerUpdatePatch.NoClipEnabled = false;
             }

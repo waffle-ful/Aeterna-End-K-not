@@ -183,6 +183,16 @@ public static class BackroomsLobby
     // floor 色 (kind="floor" の GetTileColor と一致)。WallV cell 内側の床背景に使用
     private static readonly Color FloorBaseColor = new(0.35f, 0.22f, 0.10f);
 
+    // No-clip 中は Collider.offset が (0, 127) に書換えられて GetTruePosition() が
+    // 127u 上空を返す ([[Patches/ControlPatch.cs:51]])。Backrooms には vent が無いので
+    // transform.position から固定 body offset (-0.3636) を引いて足元を直接計算する。
+    // これで vision/streaming が no-clip ON/OFF に関係なく player 実位置で動く。
+    private static Vector2 LocalPlayerFeet()
+    {
+        Vector3 t = PlayerControl.LocalPlayer.transform.position;
+        return new Vector2(t.x, t.y - 0.3636f);
+    }
+
     // wall.png PNG ロード — Resources/Images/Backrooms/wall.png があれば優先使用、なければ null fallback
     private static Sprite _wallPngSprite;
     private static bool _wallPngTried;
@@ -196,6 +206,22 @@ public static class BackroomsLobby
             try { _wallPngSprite = Utils.LoadSprite("EndKnot.Resources.Images.Backrooms.wall.png", 1024f); }
             catch { _wallPngSprite = null; }
             return _wallPngSprite;
+        }
+    }
+
+    // floor.png PNG ロード — wall.png と同じパターン
+    private static Sprite _floorPngSprite;
+    private static bool _floorPngTried;
+    private static Sprite FloorPngSprite
+    {
+        get
+        {
+            if (_floorPngSprite != null) return _floorPngSprite;
+            if (_floorPngTried) return null;
+            _floorPngTried = true;
+            try { _floorPngSprite = Utils.LoadSprite("EndKnot.Resources.Images.Backrooms.floor.png", 1024f); }
+            catch { _floorPngSprite = null; }
+            return _floorPngSprite;
         }
     }
 
@@ -248,6 +274,20 @@ public static class BackroomsLobby
                 BuildWallV(go);
                 BoxCollider2D colV = go.AddComponent<BoxCollider2D>();
                 colV.size = new Vector2(0.45f, 1f); // body 0.4 + edges 0.025*2 = 0.45
+                break;
+            case "floor":
+                // floor.png PNG があれば tint 無しで texture そのまま、なければ procedural fallback
+                Sprite floorPng = FloorPngSprite;
+                if (floorPng != null)
+                {
+                    sr.sprite = floorPng;
+                    sr.color = Color.white;
+                }
+                else
+                {
+                    sr.sprite = BaselineSprite;
+                    sr.color = GetTileColor(kind);
+                }
                 break;
             default:
                 sr.sprite = BaselineSprite;
@@ -345,8 +385,17 @@ public static class BackroomsLobby
         floor.transform.SetParent(parent.transform, false);
         floor.transform.localPosition = Vector3.zero;
         SpriteRenderer sr = floor.AddComponent<SpriteRenderer>();
-        sr.sprite = BaselineSprite;
-        sr.color = FloorBaseColor;
+        Sprite floorPng = FloorPngSprite;
+        if (floorPng != null)
+        {
+            sr.sprite = floorPng;
+            sr.color = Color.white;
+        }
+        else
+        {
+            sr.sprite = BaselineSprite;
+            sr.color = FloorBaseColor;
+        }
         sr.sortingLayerName = "Default";
         sr.sortingOrder = sortingOrder;
     }
@@ -519,6 +568,51 @@ public static class BackroomsLobby
         Utils.SendMessage($"VisionDiag dumped to log (cell={pCell}, nearbyAabbs={_nearbyAabbs.Count}). See LogOutput.log", targetPid);
     }
 
+    // /bbnocdiag — no-clip ON 時に真っ暗になる症状の切り分け用。
+    //   transform.position / Collider.offset / GetTruePosition() / LocalPlayerFeet() / vision GO 位置 /
+    //   camera 位置 / streaming center を全部 dump して GetTruePosition と camera の相対関係を見る
+    public static void DumpNoClipDiag(byte targetPid)
+    {
+        if (PlayerControl.LocalPlayer == null)
+        {
+            Utils.SendMessage("LocalPlayer is null", targetPid);
+            return;
+        }
+
+        var lp = PlayerControl.LocalPlayer;
+        Vector3 tPos = lp.transform.position;
+        Vector2 colOffset = lp.Collider != null ? lp.Collider.offset : Vector2.zero;
+        Vector2 gtp = lp.GetTruePosition();
+        Vector2 feet = LocalPlayerFeet();
+        Vector3 visionPos = _visionGO != null ? _visionGO.transform.position : Vector3.zero;
+        bool noClipFlag = ControllerManagerUpdatePatch.NoClipEnabled;
+        bool ctrlHeld = Input.GetKey(KeyCode.LeftControl);
+
+        Camera cam = Camera.main;
+        Vector3 camPos = cam != null ? cam.transform.position : Vector3.zero;
+        float camOrtho = cam != null ? cam.orthographicSize : 0f;
+
+        StringBuilder sb = new();
+        sb.AppendLine("=== NoClip Diag ===");
+        sb.AppendLine($"  transform.position    = ({tPos.x:F3}, {tPos.y:F3}, {tPos.z:F3})");
+        sb.AppendLine($"  Collider.offset       = ({colOffset.x:F3}, {colOffset.y:F3})");
+        sb.AppendLine($"  GetTruePosition()     = ({gtp.x:F3}, {gtp.y:F3})  [transform + Collider.offset]");
+        sb.AppendLine($"  LocalPlayerFeet()     = ({feet.x:F3}, {feet.y:F3})  [transform - (0, 0.3636)]");
+        sb.AppendLine($"  _visionGO.transform   = ({visionPos.x:F3}, {visionPos.y:F3}, {visionPos.z:F3})");
+        sb.AppendLine($"  Camera.main.position  = ({camPos.x:F3}, {camPos.y:F3}, {camPos.z:F3}) orthoSize={camOrtho:F3}");
+        sb.AppendLine($"  noClipFlag={noClipFlag} ctrlHeld={ctrlHeld} inVent={lp.inVent}");
+        sb.AppendLine($"  _inBackrooms={_inBackrooms} _visionPaused={_visionPaused} _lastVisionValid={_lastVisionValid}");
+        sb.AppendLine($"  _streamCx={_streamCx} _streamCy={_streamCy} _streamValid={_streamValid} loadedChunks={_loadedChunks.Count} tiles={SpawnedTiles.Count}");
+        sb.AppendLine($"  _lastVisionPlayer=({_lastVisionPlayer.x:F3}, {_lastVisionPlayer.y:F3})");
+
+        // camera と feet の y 差。no-clip で camera が collider 追従なら +127 になっているはず
+        float camYDelta = camPos.y - feet.y;
+        sb.AppendLine($"  camera.y - feet.y     = {camYDelta:F3}  (>10 で camera が collider に引きずられている疑い)");
+
+        Logger.Info(sb.ToString(), "BackroomsNoClipDiag");
+        Utils.SendMessage($"NoClipDiag dumped. noclip={noClipFlag}, camDelta={camYDelta:F1}", targetPid);
+    }
+
     // Phase 2: Seeded chunk procgen
     // Backrooms 風: 部屋境界に決定論的 opening、それ以外は壁
 
@@ -585,7 +679,7 @@ public static class BackroomsLobby
 
         // spawn ループ前に cull center を 1 回だけ取得 (interop 削減)。
         // SpawnTile が圏外なら inactive で生成 → bulk sweep 回避
-        _spawnCullCenter = PlayerControl.LocalPlayer.GetTruePosition();
+        _spawnCullCenter = LocalPlayerFeet();
         _spawnCullCenterValid = true;
 
         int r = ActiveChunkRadius;
@@ -605,7 +699,7 @@ public static class BackroomsLobby
         // 詰まる事故が起きる (TP 廃止に伴い顕在化)。player + 4 cardinal cell を強制 floor 化。
         // origin は body center (Pos) で 0.36u 高い → cell が 1 ズレるので足元 (GetTruePosition)
         // で再取得。collision/vision と同じ cell に揃える ([[reference_pos_vs_gettrueposition]])
-        EnsureSpawnFloor(PlayerControl.LocalPlayer.GetTruePosition());
+        EnsureSpawnFloor(LocalPlayerFeet());
 
         int chunkCount = _loadedChunks.Count;
         int activeAfterSpawn = 0;
@@ -821,7 +915,9 @@ public static class BackroomsLobby
         if (!_inBackrooms) return;
         if (PlayerControl.LocalPlayer == null) return;
 
-        Vector2 p = PlayerControl.LocalPlayer.GetTruePosition();
+        // no-clip ON で GetTruePosition() が 127u 上空を返す罠を回避 ([[LocalPlayerFeet]])。
+        // streaming center が空中にズレると player 周囲の chunk が unload されて真っ暗になる。
+        Vector2 p = LocalPlayerFeet();
         int playerCx = Mathf.FloorToInt(p.x / ChunkSize);
         int playerCy = Mathf.FloorToInt(p.y / ChunkSize);
 
@@ -1225,7 +1321,7 @@ public static class BackroomsLobby
         _visionGO = new GameObject("BackroomsVision");
         _visionGO.transform.SetParent(null);
         // 初期位置は player 直下。UpdateVision の最初の非 skip フレームで上書きされる
-        Vector2 initPos = PlayerControl.LocalPlayer != null ? PlayerControl.LocalPlayer.GetTruePosition() : Vector2.zero;
+        Vector2 initPos = PlayerControl.LocalPlayer != null ? LocalPlayerFeet() : Vector2.zero;
         _visionGO.transform.position = new Vector3(initPos.x, initPos.y, 0f);
 
         _visionMF = _visionGO.AddComponent<MeshFilter>();
@@ -1391,10 +1487,10 @@ public static class BackroomsLobby
         if (_visionPaused) return;
         if (PlayerControl.LocalPlayer == null) return;
 
-        // GetTruePosition() = 足元位置。Pos() (=transform.position) は body center で
-        // ~0.36 unit 上 → wall_h AABB に body が被ると inside-AABB 判定が誤発動して vision が
-        // small box に縮む症状の元凶。視界は床レベル (足元) を基準に展開すべき。
-        Vector2 player = PlayerControl.LocalPlayer.GetTruePosition();
+        // 足元位置で vision 展開。GetTruePosition() ではなく LocalPlayerFeet() を使う:
+        // no-clip ON 時に Collider.offset が (0, 127) に書換わって GetTruePosition() が
+        // 127u 上空を返し vision の穴が空中に作られて player が真っ暗な空間に立つ症状を回避。
+        Vector2 player = LocalPlayerFeet();
 
         // Idle skip: player が動いていなければ rebuild も transform 更新も skip (transform 据置=最大効果)。
         // 閾値超えで初めて _lastVisionPlayer を更新 → 微小ドリフトの累積で誤更新を防ぐ
