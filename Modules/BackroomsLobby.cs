@@ -571,12 +571,15 @@ public static class BackroomsLobby
     }
 
     // Polus 風 outlined dark mass: floor bg + 0.4 wide dark body + 両端 0.025 wide lighter edge highlights
-    // sharp outline こそ Polus の壁が立体に見える核
+    // sharp outline こそ Polus の壁が立体に見える核。
+    // 下方向 AO はここでは出さない: 連続柱の各 cell 下方向 AO が次 cell の左右 AO と
+    // cell 境界で空間的に重なり alpha 加算でシミ化する (2026-05-23 修正)。
+    // 柱は床から生えるのではなく天井から床まで通る構造なので連続 cell に下方向 AO は不要。
+    // V 終端 cell (真下が floor) のみ AddWallVBottomCap 内で下方向 AO を生やす
     private static void BuildWallV(GameObject parent)
     {
         DrawFloorBackground(parent);
         BuildWallVOutline(parent);
-        AddWallContactShadow(parent, 0.5f); // 下方向 (柱の根本)
         AddWallVSideShadow(parent, isLeft: true);  // 左側面 AO
         AddWallVSideShadow(parent, isLeft: false); // 右側面 AO
     }
@@ -670,6 +673,10 @@ public static class BackroomsLobby
         bsr.color = WallDarkColor;
         bsr.sortingLayerName = "Default";
         bsr.sortingOrder = -3;
+
+        // 終端 cell は下に floor が来るので下方向 AO を生やす (柱が床に「ぶつかって終わる」根本)。
+        // 連続柱の中間 cell では生やさない (BuildWallV のコメント参照)
+        AddWallContactShadow(wallV, 0.5f);
     }
 
     private static void BuildWallVOutline(GameObject parent)
