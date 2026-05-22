@@ -548,7 +548,41 @@ public static class BackroomsLobby
     {
         DrawFloorBackground(parent);
         BuildWallVOutline(parent);
-        AddWallContactShadow(parent, 0.5f); // V は柱状なので影は控えめ
+        AddWallContactShadow(parent, 0.5f); // 下方向 (柱の根本)
+        AddWallVSideShadow(parent, isLeft: true);  // 左側面 AO
+        AddWallVSideShadow(parent, isLeft: false); // 右側面 AO
+    }
+
+    // WallV の左右側面に AO 影。柱が床に接する縦のラインを暗くして「柱が立ってる」感を強化。
+    // WallShadowGradientSprite を z=±90° 回転して使い回し、gradient の濃い側 (alpha 1) を
+    // body 側 (cell 内側) に向ける。body 外端 ±0.2125 から cell 外側に shadowWidth はみ出す
+    private static void AddWallVSideShadow(GameObject wallParent, bool isLeft)
+    {
+        const float shadowWidth = 0.18f;
+        const float bodyOuterEdge = 0.2125f; // body 半幅 0.2 + edge highlight 半幅 0.0125
+
+        GameObject shadow = new($"WallVSideShadow_{(isLeft ? "L" : "R")}");
+        shadow.transform.SetParent(wallParent.transform, false);
+
+        float sign = isLeft ? -1f : +1f;
+        // body 外端からさらに外 (cell 端側) へ shadowWidth/2 離した位置を中心に
+        float centerX = sign * (bodyOuterEdge + shadowWidth / 2f);
+        shadow.transform.localPosition = new Vector3(centerX, 0f, 0f);
+
+        // 左側: z=-90° で gradient 上端 (alpha 1) を +X (body 側) に向ける
+        // 右側: z=+90° で gradient 上端 (alpha 1) を -X (body 側) に向ける
+        shadow.transform.localRotation = Quaternion.Euler(0f, 0f, isLeft ? -90f : +90f);
+
+        // sprite world size 1×1u を z±90° 回転後の見え幅/高さに合わせる:
+        //   回転後 world 幅 = localScale.y (元 sprite の y 軸が world x に来る)
+        //   回転後 world 高さ = localScale.x (元 sprite の x 軸が world y に来る)
+        shadow.transform.localScale = new Vector3(1f, shadowWidth, 1f);
+
+        SpriteRenderer sr = shadow.AddComponent<SpriteRenderer>();
+        sr.sprite = WallShadowGradientSprite;
+        sr.color = new Color(0f, 0f, 0f, 0.45f);
+        sr.sortingLayerName = "Default";
+        sr.sortingOrder = -9; // floor (-10) より前、wall body (-5/-4/-3) より後
     }
 
     // 壁の下端から床側に soft な黒帯を伸ばして「物体が床に接触してる」影 (≒ AO) を表現。
