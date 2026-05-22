@@ -596,7 +596,9 @@ public static class BackroomsLobby
         // body 外端からさらに外 (cell 端側) へ shadowWidth/2 離した位置を中心に
         float centerX = sign * (bodyOuterEdge + shadowWidth / 2f);
         shadow.transform.localPosition = new Vector3(centerX, 0f, 0f);
-        shadow.transform.localScale = new Vector3(shadowWidth, 1f, 1f); // 幅 0.18u × 高さ 1.0u
+        // 縦方向 1u + 4% overlap で隣接 WallV cell との sub-pixel gap を埋める。
+        // alpha フラットな縦方向なので overlap 領域も blend で目に見える濃淡は出ない
+        shadow.transform.localScale = new Vector3(shadowWidth, 1.04f, 1f);
 
         SpriteRenderer sr = shadow.AddComponent<SpriteRenderer>();
         sr.sprite = WallShadowGradientHSprite;
