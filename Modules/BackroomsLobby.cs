@@ -201,6 +201,34 @@ public static class BackroomsLobby
         }
     }
 
+    // 壁側面 AO 用 horizontal gradient sprite。WallShadowGradientSprite を 90°回転で
+    // 使い回すと cell 境界でポツポツに見える症状が出た (2026-05-23) ので、横方向 gradient
+    // を専用に焼いて rotation を排除。左 alpha 1.0 (body 側) → 右 alpha 0 (cell 外側)、
+    // flipX で左右両対応。縦方向は全 col 同じ alpha なので隣 cell と境界ぴったり連続
+    private static Sprite _wallShadowGradientHSprite;
+    private static Sprite WallShadowGradientHSprite
+    {
+        get
+        {
+            if (_wallShadowGradientHSprite != null) return _wallShadowGradientHSprite;
+            const int N = 32;
+            Texture2D tex = new(N, N, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
+            Color[] px = new Color[N * N];
+            for (int x = 0; x < N; x++)
+            {
+                float t = 1f - x / (float)(N - 1); // x=0 で 1, x=N-1 で 0
+                float a = t * t;
+                for (int y = 0; y < N; y++)
+                    px[y * N + x] = new Color(1f, 1f, 1f, a);
+            }
+            tex.SetPixels(px);
+            tex.Apply();
+            _wallShadowGradientHSprite = Sprite.Create(tex, new Rect(0, 0, N, N), new Vector2(0.5f, 0.5f), N);
+            _wallShadowGradientHSprite.hideFlags |= HideFlags.HideAndDontSave;
+            return _wallShadowGradientHSprite;
+        }
+    }
+
     // 床シミ用のソフトエッジ円 sprite。procgen で 32×32 に距離フォールオフを焼く。
     // 中心 alpha 1.0 → 縁 alpha 0、a^2 で急峻化させてエッジを少しぼかし気味に。
     // 1 sprite を 3 サブブロブで重ねて回転＋楕円スケールすると amorphous なシミ形になる
@@ -554,8 +582,8 @@ public static class BackroomsLobby
     }
 
     // WallV の左右側面に AO 影。柱が床に接する縦のラインを暗くして「柱が立ってる」感を強化。
-    // WallShadowGradientSprite を z=±90° 回転して使い回し、gradient の濃い側 (alpha 1) を
-    // body 側 (cell 内側) に向ける。body 外端 ±0.2125 から cell 外側に shadowWidth はみ出す
+    // rotation 排除版 (2026-05-23): WallShadowGradientHSprite (横 gradient 専用) を flipX
+    // で左右両対応。回転すると cell 境界でポツポツに見える症状が出るので素直に横 sprite を別焼き
     private static void AddWallVSideShadow(GameObject wallParent, bool isLeft)
     {
         const float shadowWidth = 0.18f;
@@ -568,18 +596,14 @@ public static class BackroomsLobby
         // body 外端からさらに外 (cell 端側) へ shadowWidth/2 離した位置を中心に
         float centerX = sign * (bodyOuterEdge + shadowWidth / 2f);
         shadow.transform.localPosition = new Vector3(centerX, 0f, 0f);
-
-        // 左側: z=-90° で gradient 上端 (alpha 1) を +X (body 側) に向ける
-        // 右側: z=+90° で gradient 上端 (alpha 1) を -X (body 側) に向ける
-        shadow.transform.localRotation = Quaternion.Euler(0f, 0f, isLeft ? -90f : +90f);
-
-        // sprite world size 1×1u を z±90° 回転後の見え幅/高さに合わせる:
-        //   回転後 world 幅 = localScale.y (元 sprite の y 軸が world x に来る)
-        //   回転後 world 高さ = localScale.x (元 sprite の x 軸が world y に来る)
-        shadow.transform.localScale = new Vector3(1f, shadowWidth, 1f);
+        shadow.transform.localScale = new Vector3(shadowWidth, 1f, 1f); // 幅 0.18u × 高さ 1.0u
 
         SpriteRenderer sr = shadow.AddComponent<SpriteRenderer>();
-        sr.sprite = WallShadowGradientSprite;
+        sr.sprite = WallShadowGradientHSprite;
+        // 元 sprite は「左濃→右薄」。
+        //   左 AO: body 側=右 で濃が欲しい → flipX=true で「右濃←左薄」に
+        //   右 AO: body 側=左 で濃が欲しい → flipX=false でそのまま
+        sr.flipX = isLeft;
         sr.color = new Color(0f, 0f, 0f, 0.45f);
         sr.sortingLayerName = "Default";
         sr.sortingOrder = -9; // floor (-10) より前、wall body (-5/-4/-3) より後
