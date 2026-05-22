@@ -174,6 +174,33 @@ public static class BackroomsLobby
         }
     }
 
+    // 壁の根本 AO 用 vertical gradient sprite。32×32 だが横方向は全 row 同じ alpha で、
+    // 隣 cell と境界がぴったり連続する (= 一続きの影ラインになる)。
+    // alpha: 上端 1.0 (壁直下) → 下端 0 (床へ滲んで消える)、t² で上を急峻に
+    private static Sprite _wallShadowGradientSprite;
+    private static Sprite WallShadowGradientSprite
+    {
+        get
+        {
+            if (_wallShadowGradientSprite != null) return _wallShadowGradientSprite;
+            const int N = 32;
+            Texture2D tex = new(N, N, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
+            Color[] px = new Color[N * N];
+            for (int y = 0; y < N; y++)
+            {
+                float t = y / (float)(N - 1); // y=N-1 (top) で 1, y=0 (bottom) で 0
+                float a = t * t;
+                for (int x = 0; x < N; x++)
+                    px[y * N + x] = new Color(1f, 1f, 1f, a);
+            }
+            tex.SetPixels(px);
+            tex.Apply();
+            _wallShadowGradientSprite = Sprite.Create(tex, new Rect(0, 0, N, N), new Vector2(0.5f, 0.5f), N);
+            _wallShadowGradientSprite.hideFlags |= HideFlags.HideAndDontSave;
+            return _wallShadowGradientSprite;
+        }
+    }
+
     // 床シミ用のソフトエッジ円 sprite。procgen で 32×32 に距離フォールオフを焼く。
     // 中心 alpha 1.0 → 縁 alpha 0、a^2 で急峻化させてエッジを少しぼかし気味に。
     // 1 sprite を 3 サブブロブで重ねて回転＋楕円スケールすると amorphous なシミ形になる
@@ -526,18 +553,18 @@ public static class BackroomsLobby
 
     // 壁の下端から床側に soft な黒帯を伸ばして「物体が床に接触してる」影 (≒ AO) を表現。
     // 2D で「壁が浮いて見える」根本原因は地面との接地点に光が回り込まない部分の暗みが
-    // 無いこと。StainSprite (radial soft gradient) を縦に押しつぶして使うと両端が自然に
-    // フェードして安価に shadow gradient が作れる
+    // 無いこと。WallShadowGradientSprite は左右フラットなので隣 cell と境界 alpha が
+    // 一致 → 楕円ぽつぽつにならず連続した影ラインになる
     private static void AddWallContactShadow(GameObject wallParent, float widthScale)
     {
         GameObject shadow = new("WallContactShadow");
         shadow.transform.SetParent(wallParent.transform, false);
-        // cell 下端 (-0.5) から床側に 0.16u はみ出す → 中心 y = -0.5 - 0.08 = -0.58
-        shadow.transform.localPosition = new Vector3(0f, -0.58f, 0f);
-        shadow.transform.localScale = new Vector3(widthScale, 0.16f, 1f);
+        // 上端 (sprite alpha 1.0 側) を壁下端 (-0.5) にぴったり合わせる → 中心 y = -0.5 - 0.11
+        shadow.transform.localPosition = new Vector3(0f, -0.61f, 0f);
+        shadow.transform.localScale = new Vector3(widthScale, 0.22f, 1f);
         SpriteRenderer sr = shadow.AddComponent<SpriteRenderer>();
-        sr.sprite = StainSprite;
-        sr.color = new Color(0f, 0f, 0f, 0.55f);
+        sr.sprite = WallShadowGradientSprite;
+        sr.color = new Color(0f, 0f, 0f, 0.45f); // sprite alpha と掛けで実効平均 ~0.22
         sr.sortingLayerName = "Default";
         sr.sortingOrder = -9; // floor (-10) より前、wall body (-5/-4/-3) より後
     }
