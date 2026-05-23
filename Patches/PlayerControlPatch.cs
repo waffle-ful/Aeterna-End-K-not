@@ -2295,6 +2295,9 @@ internal static class EnterVentPatch
                 if (AmongUsClient.Instance.AmHost) pc.MyPhysics?.RpcBootFromVent(__instance.Id);
                 pc.ReportDeadBody(null);
                 break;
+            case CustomRoles.Vector when !AmongUsClient.Instance.AmHost:
+                Main.PlayerStates[pc.PlayerId].Role.OnEnterVent(pc, __instance);
+                break;
         }
 
         if (!AmongUsClient.Instance.AmHost) return;

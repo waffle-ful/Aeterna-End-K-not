@@ -1,10 +1,34 @@
-﻿using Hazel;
+﻿using System.Text;
+using Hazel;
 using UnityEngine;
 
 namespace EndKnot;
 
 public static class HazelExtensions
 {
+    // Hazel が PackedUInt32 として書き出すバイト長を 1 ずつ実機算出
+    public static int GetPackedUIntSize(uint value)
+    {
+        int count = 0;
+
+        do
+        {
+            value >>= 7;
+            count++;
+        }
+        while (value != 0);
+
+        return count;
+    }
+
+    // string を Hazel.Write(string) で書き出した時の実バイト数 (UTF-8 + PackedUInt32 prefix)
+    public static int GetStringWriteSize(string text)
+    {
+        if (text == null) return GetPackedUIntSize(0);
+        int byteCount = Encoding.UTF8.GetByteCount(text);
+        return GetPackedUIntSize((uint)byteCount) + byteCount;
+    }
+
     // -------------------------------------------------------------------------------------------------------------------------
 
     extension(MessageWriter writer)

@@ -1992,9 +1992,11 @@ public static class Utils
             if (RecipientIncludesVanillaClient(sendTo, receiver))
                 fullRpcSizeLimit = Math.Min(fullRpcSizeLimit, 700);
 
-            int textRpcSize = text.Length * 2;
-            int titleRpcSize = title.Length * 2 + 4;
-            int resetNameRpcSize = sender.Data.PlayerName.Length * 2 + 4;
+            // 旧版は length*2 (UTF-16 想定) で計算していたため、日本語は実 byte 数の 33% 過小評価。
+            // Hazel.Write(string) は UTF-8 + PackedUInt32 prefix で書き出すので、それに合わせて正確算出。
+            int textRpcSize = HazelExtensions.GetStringWriteSize(text);
+            int titleRpcSize = HazelExtensions.GetStringWriteSize(title) + 4;
+            int resetNameRpcSize = HazelExtensions.GetStringWriteSize(sender.Data.PlayerName) + 4;
             int fullRpcSize = textRpcSize + titleRpcSize + resetNameRpcSize;
 
             if (!noSplit)
@@ -2024,13 +2026,13 @@ public static class Utils
 
                     foreach (string line in lines)
                     {
-                        if (shortenedTitle.Length * 2 + line.Length * 2 + 4 < titleRpcSizeLimit)
+                        if (HazelExtensions.GetStringWriteSize(shortenedTitle + line + "\n") + 4 < titleRpcSizeLimit)
                         {
                             shortenedTitle += line + "\n";
                             continue;
                         }
 
-                        if (shortenedTitle.Length * 2 >= titleRpcSizeLimit - 4)
+                        if (HazelExtensions.GetStringWriteSize(shortenedTitle) >= titleRpcSizeLimit - 4)
                         {
                             foreach (char[] chars in shortenedTitle.Chunk(titleRpcSizeLimit - 4))
                                 writer = SendTempTitleMessage(new string(chars));
@@ -2097,7 +2099,7 @@ public static class Utils
                 }
             }
 
-            titleRpcSize = title.Length * 2 + 4;
+            titleRpcSize = HazelExtensions.GetStringWriteSize(title) + 4;
             int textRpcSizeLimit = fullRpcSizeLimit - titleRpcSize - resetNameRpcSize;
 
             if (textRpcSizeLimit < 1 && textRpcSize >= textRpcSizeLimit && !noSplit)
@@ -2114,13 +2116,13 @@ public static class Utils
 
                 foreach (string line in lines)
                 {
-                    if (shortenedText.Length * 2 + line.Length * 2 + 4 < textRpcSizeLimit)
+                    if (HazelExtensions.GetStringWriteSize(shortenedText + line + "\n") + 4 < textRpcSizeLimit)
                     {
                         shortenedText += line + "\n";
                         continue;
                     }
 
-                    writer = shortenedText.Length * 2 >= textRpcSizeLimit
+                    writer = HazelExtensions.GetStringWriteSize(shortenedText) >= textRpcSizeLimit
                         ? shortenedText.Chunk(textRpcSizeLimit).Aggregate(writer, (current, chunk) => SendMessage(new(chunk), sendTo, title, true, current, importance: importance))
                         : SendMessage(shortenedText, sendTo, title, true, writer, importance: importance);
 

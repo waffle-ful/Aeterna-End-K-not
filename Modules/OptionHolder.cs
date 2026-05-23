@@ -1797,7 +1797,7 @@ public static class Options
         AllCrewRolesHaveVanillaColor = new BooleanOptionItem(19424, "AllCrewRolesHaveVanillaColor", false, TabGroup.SystemSettings)
             .SetHeader(true);
 
-        MessageRpcSizeLimit = new IntegerOptionItem(19425, "MessageRpcSizeLimit", new(500, 100000, 100), 1400, TabGroup.SystemSettings)
+        MessageRpcSizeLimit = new IntegerOptionItem(19425, "MessageRpcSizeLimit", new(500, 100000, 100), 1200, TabGroup.SystemSettings)
             .SetHeader(true);
 
         KickSlowJoiningPlayers = new BooleanOptionItem(19428, "KickSlowJoiningPlayers", false, TabGroup.SystemSettings)

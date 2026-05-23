@@ -63,13 +63,13 @@ internal class Vector : RoleBase
         hud.AbilityButton.buttonLabelText.text = Translator.GetString("VectorVentButtonText");
     }
 
+    // EnterVentPatch から host だけでなく non-host modded client でも呼ばれる
     public override void OnEnterVent(PlayerControl pc, Vent vent)
     {
         VectorVentCount.TryAdd(pc.PlayerId, 0);
         VectorVentCount[pc.PlayerId]++;
-        Utils.SendRPC(CustomRPC.SyncRoleData, pc.PlayerId, pc.PlayerId);
-        Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
-        pc.RPCPlayCustomSound("MarioJump");
+        if (!pc.IsModdedClient()) Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
+        if (pc.AmOwner) CustomSoundsManager.Play("MarioJump");
 
         if (AmongUsClient.Instance.AmHost && VectorVentCount[pc.PlayerId] >= VectorVentNumWin)
         {
@@ -77,12 +77,5 @@ internal class Vector : RoleBase
             CustomWinnerHolder.ResetAndSetWinner(CustomWinner.Vector);
             CustomWinnerHolder.WinnerIds.Add(pc.PlayerId);
         }
-    }
-
-    public void ReceiveRPC(MessageReader reader)
-    {
-        byte id = reader.ReadByte();
-        VectorVentCount.TryAdd(id, 0);
-        VectorVentCount[id]++;
     }
 }
