@@ -1259,6 +1259,13 @@ public static class BackroomsLobby
         bool onLeftBorder = inRoomX == 0;
         bool onBottomBorder = inRoomY == 0;
 
+        // 部屋 merge: 隣接部屋と seeded で結合判定 → 壁ごと消滅して大きい部屋に
+        // (両側 Sector で同じ key を引くので両側 agree)。25% で merge → 6×6 単独 ≈ 56% / 12×6 等 ≈ 38% / 12×12 ≈ 6%
+        if (onLeftBorder && RoomsMergeHorizontal(roomX - 1, roomY, seed))
+            onLeftBorder = false;
+        if (onBottomBorder && RoomsMergeVertical(roomX, roomY - 1, seed))
+            onBottomBorder = false;
+
         if (!onLeftBorder && !onBottomBorder) return CellKind.Floor;
 
         if (onLeftBorder)
@@ -1278,6 +1285,22 @@ public static class BackroomsLobby
         // 横壁 (床と接する面) を優先 — 角もこちらで描画される
         if (onBottomBorder) return CellKind.WallH;
         return CellKind.WallV;
+    }
+
+    // 部屋 merge 判定 (2026-05-23 追加): 旧 6×6 一律から可変サイズへ。
+    // 確率は両側部屋で同じ hash key 引くので両側 agree、整合性破綻無し
+    private const uint MergeProbability = 25; // %
+
+    private static bool RoomsMergeHorizontal(int leftRoomX, int roomY, uint seed)
+    {
+        uint h = WallHash(leftRoomX, roomY, seed, 'M');
+        return (h % 100u) < MergeProbability;
+    }
+
+    private static bool RoomsMergeVertical(int roomX, int bottomRoomY, uint seed)
+    {
+        uint h = WallHash(roomX, bottomRoomY, seed, 'N');
+        return (h % 100u) < MergeProbability;
     }
 
     private static int Mod(int a, int n) => ((a % n) + n) % n;
@@ -1579,15 +1602,16 @@ public static class BackroomsLobby
     private static Vector2 _lastVisionPlayer;
     private static bool _lastVisionValid;
 
-    // ===== 距離 cull システム (2026-05-22) =====
+    // ===== 距離 cull システム (2026-05-22 / 2026-05-23 改) =====
     // 視界 (VisionRadius=8u) 外は dark mesh で必ず黒く塗られるので、cull radius は vision 同等で十分。
-    //   CullRadius=7u: vision 5u + safety 2u → walk 1 cycle (2u) 内に新タイル active 化、popup 不可視
-    //   active 領域 π×7² ≈ 154 cells (旧 314 の半分)
+    //   CullRadius=10u: vision 8u + safety 2u (CullMoveSqrThr=4 の cull center lag 吸収)
+    //   → camera diagonal ≈7.1u を全方向でカバー、進行方向 screen edge のタイル pop-in を抑止
+    //   active 領域 π×10² ≈ 314 cells
     // Wall AABB cache は SetActive 状態と独立に保持されるので視界 raycast は正しく occlude する。
     // CullMoveSqrThr=4 (sqrt=2u) — player 2u 進むまで cull 再判定 skip
     private static Vector2 _lastCullPlayer;
     private static bool _cullValid;
-    private const float CullRadius = 7f;
+    private const float CullRadius = 10f;
     private const float CullRadiusSqr = CullRadius * CullRadius;
     private const float CullMoveSqrThreshold = 4f;
     // SpawnTile 内 inline cull 用の cache。GenerateLobby が spawn ループ前に 1 度だけセット
