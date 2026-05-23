@@ -926,9 +926,21 @@ internal static class RPCHandlerPatch
                 }
                 case CustomRPC.SetCurrentDrawTarget:
                 {
-                    byte arsonistId1 = reader.ReadByte();
+                    byte revolutionistId = reader.ReadByte();
                     byte doTargetId = reader.ReadByte();
-                    if (PlayerControl.LocalPlayer.PlayerId == arsonistId1) Revolutionist.CurrentDrawTarget = doTargetId;
+
+                    if (PlayerControl.LocalPlayer.PlayerId == revolutionistId)
+                        Revolutionist.CurrentDrawTarget = doTargetId;
+
+                    break;
+                }
+                case CustomRPC.SetCurrentRevealTarget:
+                {
+                    byte investigatorId = reader.ReadByte();
+                    byte doTargetId = reader.ReadByte();
+
+                    if (PlayerControl.LocalPlayer.PlayerId == investigatorId)
+                        Investigator.CurrentRevealTarget = doTargetId;
 
                     break;
                 }
@@ -1658,27 +1670,27 @@ internal static class RPC
         }
     }
 
-    public static void SetCurrentDrawTarget(byte arsonistId, byte targetId)
+    public static void SetCurrentDrawTarget(byte revolutionistId, byte targetId)
     {
-        if (PlayerControl.LocalPlayer.PlayerId == arsonistId)
+        if (PlayerControl.LocalPlayer.PlayerId == revolutionistId)
             Revolutionist.CurrentDrawTarget = targetId;
         else
         {
             MessageWriter writer = AmongUsClient.Instance.StartRpcImmediately(PlayerControl.LocalPlayer.NetId, (byte)CustomRPC.SetCurrentDrawTarget, SendOption.Reliable);
-            writer.Write(arsonistId);
+            writer.Write(revolutionistId);
             writer.Write(targetId);
             AmongUsClient.Instance.FinishRpcImmediately(writer);
         }
     }
 
-    public static void SetCurrentRevealTarget(byte arsonistId, byte targetId)
+    public static void SetCurrentRevealTarget(byte investigatorId, byte targetId)
     {
-        if (PlayerControl.LocalPlayer.PlayerId == arsonistId)
-            Revolutionist.CurrentDrawTarget = targetId;
+        if (PlayerControl.LocalPlayer.PlayerId == investigatorId)
+            Investigator.CurrentRevealTarget = targetId;
         else
         {
             MessageWriter writer = AmongUsClient.Instance.StartRpcImmediately(PlayerControl.LocalPlayer.NetId, (byte)CustomRPC.SetCurrentRevealTarget, SendOption.Reliable);
-            writer.Write(arsonistId);
+            writer.Write(investigatorId);
             writer.Write(targetId);
             AmongUsClient.Instance.FinishRpcImmediately(writer);
         }
@@ -1689,14 +1701,14 @@ internal static class RPC
         SetCurrentDousingTarget(arsonistId, 255);
     }
 
-    public static void ResetCurrentDrawTarget(byte arsonistId)
+    public static void ResetCurrentDrawTarget(byte revolutionistId)
     {
-        SetCurrentDrawTarget(arsonistId, 255);
+        SetCurrentDrawTarget(revolutionistId, 255);
     }
 
-    public static void ResetCurrentRevealTarget(byte arsonistId)
+    public static void ResetCurrentRevealTarget(byte investigatorId)
     {
-        SetCurrentRevealTarget(arsonistId, 255);
+        SetCurrentRevealTarget(investigatorId, 255);
     }
 
     public static void SetRealKiller(byte targetId, byte killerId)

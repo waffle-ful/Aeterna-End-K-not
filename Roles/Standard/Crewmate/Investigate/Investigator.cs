@@ -16,6 +16,7 @@ public class Investigator : RoleBase
     private const string FontSize = "1.7";
     public static Dictionary<byte, (PlayerControl PLAYER, float TIMER)> InvestigatorTimer = [];
     public static Dictionary<(byte, byte), bool> IsRevealed = [];
+    public static byte CurrentRevealTarget = byte.MaxValue;
 
     private static OptionItem InvestigatorCooldown;
     private static OptionItem InvestigatorTime;
@@ -120,7 +121,7 @@ public class Investigator : RoleBase
 
                     InvestigatorTimer.Remove(player.PlayerId);
                     IsRevealed[(player.PlayerId, arTarget.PlayerId)] = true;
-                    player.RpcSetRevealtPlayer(arTarget, true);
+                    player.RpcSetRevealedPlayer(arTarget, true);
                     NotifyRoles(SpecifySeer: player, SpecifyTarget: arTarget);
                     RPC.ResetCurrentRevealTarget(player.PlayerId);
                 }

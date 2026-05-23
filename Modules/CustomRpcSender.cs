@@ -157,18 +157,28 @@ public class CustomRpcSender
 
     public void SendMessage(bool dispose = false)
     {
-        if (currentState == State.InRootMessage) EndMessage();
-        
-        if (currentState == State.InRootPackedMessage) EndMessage();
-
-        if (currentState != State.Ready && !dispose)
+        if (!dispose)
         {
-            var errorMsg = $"Tried to send RPC but State is not Ready (in: \"{name}\", state: {currentState})";
+            if (currentState == State.InRootMessage) EndMessage();
 
-            if (isUnsafe)
-                Logger.Warn(errorMsg, "CustomRpcSender.Warn");
-            else
-                throw new InvalidOperationException(errorMsg);
+            if (currentState == State.InRootPackedMessage)
+            {
+                // PackedMessage 中身が「GameId だけ書いた空状態」なら dispose 扱いに格上げ
+                if (1 + HazelExtensions.GetPackedUIntSize((uint)AmongUsClient.Instance.GameId) >= stream.Length)
+                    dispose = true;
+                else
+                    EndMessage();
+            }
+
+            if (currentState != State.Ready)
+            {
+                var errorMsg = $"Tried to send RPC but State is not Ready (in: \"{name}\", state: {currentState})";
+
+                if (isUnsafe)
+                    Logger.Warn(errorMsg, "CustomRpcSender.Warn");
+                else
+                    throw new InvalidOperationException(errorMsg);
+            }
         }
 
         if (stream.Length >= 1400 && sendOption == SendOption.Reliable && !dispose) Logger.Warn($"Large reliable packet \"{name}\" is sending ({stream.Length} bytes)", "CustomRpcSender");

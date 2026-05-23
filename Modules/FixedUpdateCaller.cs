@@ -79,7 +79,7 @@ public static class FixedUpdateCaller
                         }
                         : ExtendedPlayerControl.IsValidTargetForKillButton;
 
-                    PlayerControl closest = FastVector2.TryGetClosestPlayerInRangeTo(PlayerControl.LocalPlayer, GameManager.Instance.LogicOptions.GetKillDistance(), out PlayerControl closestPlayer, predicate) ? closestPlayer : null;
+                    PlayerControl closest = FastVector2.TryGetClosestPlayerInRangeTo(PlayerControl.LocalPlayer, PlayerControl.LocalPlayer.GetKillDistance(), out PlayerControl closestPlayer, predicate) ? closestPlayer : null;
 
                     KillButton killButton = HudManager.Instance.KillButton;
 

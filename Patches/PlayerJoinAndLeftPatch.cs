@@ -9,6 +9,7 @@ using AmongUs.GameOptions;
 using AmongUs.InnerNet.GameDataMessages;
 using EndKnot.Gamemodes;
 using EndKnot.Modules;
+using EndKnot.Modules.Extensions;
 using EndKnot.Patches;
 using EndKnot.Roles;
 using HarmonyLib;
@@ -471,6 +472,8 @@ internal static class DisconnectInternalPatch
 [HarmonyPatch(typeof(AmongUsClient), nameof(AmongUsClient.OnPlayerJoined))]
 internal static class OnPlayerJoinedPatch
 {
+    private static CountdownTimer RpcSetNameWaitTimer;
+
     public static bool IsDisconnected(this ClientData client)
     {
         foreach (ClientData clientData in AmongUsClient.Instance.allClients)
@@ -545,8 +548,15 @@ internal static class OnPlayerJoinedPatch
 
             if (GameStates.IsLobby && !OnGameJoinedPatch.JoiningGame)
                 LateTask.New(Options.AutoSetFactionMinMaxSettings, 2f, log: false);
-            
-            LateTask.New(() => Utils.DirtyName.Add(PlayerControl.LocalPlayer.PlayerId), 2f);
+
+            RpcSetNameWaitTimer?.Dispose();
+            RpcSetNameWaitTimer = new CountdownTimer(4f, () =>
+            {
+                RpcSetNameWaitTimer = null;
+                if (AmongUsClient.Instance.IsGameStarted) return;
+                Utils.ApplySuffix(PlayerControl.LocalPlayer, out string name);
+                PlayerControl.LocalPlayer.RpcSetName(name);
+            }, cancelOnMeeting: false, cancelOnGameEnd: false);
         }
     }
 }

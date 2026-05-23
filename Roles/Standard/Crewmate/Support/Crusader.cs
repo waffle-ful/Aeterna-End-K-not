@@ -6,7 +6,7 @@ namespace EndKnot.Roles;
 public class Crusader : RoleBase
 {
     private const int Id = 20050;
-    private static List<byte> PlayerIdList = [];
+    public static List<byte> PlayerIdList = [];
 
     public static List<byte> ForCrusade = [];
 

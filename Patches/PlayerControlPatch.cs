@@ -2031,8 +2031,8 @@ internal static class FixedUpdatePatch
 
                     break;
                 case CustomRoles.Investigator:
-                    if (Revolutionist.CurrentDrawTarget != byte.MaxValue &&
-                        Revolutionist.CurrentDrawTarget == target.PlayerId)
+                    if (Investigator.CurrentRevealTarget != byte.MaxValue &&
+                        Investigator.CurrentRevealTarget == target.PlayerId)
                         Mark.Append($"<color={GetRoleColorCode(CustomRoles.Investigator)}>○</color>");
 
                     break;
