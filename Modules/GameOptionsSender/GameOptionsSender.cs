@@ -161,7 +161,7 @@ public abstract class GameOptionsSender
                 {
                     yield return WaitFrameIfNecessary();
 
-                    if (PackedWriter != null && (PackedWriter.Length > 500 || PackedWriterMessages >= AmongUsClient.Instance.GetMaxMessagePackingLimit()))
+                    if (PackedWriter != null && (PackedWriter.Length > 1000 || PackedWriterMessages >= AmongUsClient.Instance.GetMaxMessagePackingLimit()))
                     {
                         PackedWriter.EndMessage();
                         var qa = DataFlagRateLimiter.Enqueue(() => AmongUsClient.Instance.SendOrDisconnect(PackedWriter));

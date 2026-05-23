@@ -438,7 +438,7 @@ public static class BedWars
 
         // Assign players to teams
         List<PlayerControl> players = Main.EnumerateAlivePlayerControls().Shuffle();
-        if (Main.GM.Value) players.RemoveAll(x => x.IsHost());
+        if (Main.GM.Value) players.RemoveAll(x => x.AmOwner);
         if (ChatCommands.Spectators.Count > 0) players.RemoveAll(x => ChatCommands.Spectators.Contains(x.PlayerId));
 
         Dictionary<byte, BedWarsTeam> playerTeams = players
@@ -485,7 +485,7 @@ public static class BedWars
                 sender.SendMessage();
             }
 
-            if (!pc.AmOwner)
+            if (!pc.AmOwner && pc.OwnerId >= 0)
             {
                 var sender = CustomRpcSender.Create($"BedWars OnGameStart ({pc.GetRealName()}) (2)", SendOption.Reliable);
                 sender.StartMessage(pc.OwnerId);

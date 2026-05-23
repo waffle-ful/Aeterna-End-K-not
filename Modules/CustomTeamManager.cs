@@ -77,6 +77,8 @@ internal static class CustomTeamManager
 
     public static void InitializeCustomTeamPlayers()
     {
+        WinnerTeam = null;
+        CustomTeamPlayerIds.Clear();
         UpdateEnabledTeams();
         if (EnabledCustomTeams.Count == 0) return;
 
