@@ -160,7 +160,7 @@ public class Thanos : RoleBase
     {
         if (CollectedStones.Count == Enum.GetValues<Stone>().Length && CanWinAfterCollectingAllStones.GetBool())
         {
-            CustomWinnerHolder.ResetAndSetWinner(CustomWinner.Thanos);
+            CustomWinnerHolder.ShiftWinnerAndSetWinner(CustomWinner.Thanos);
             CustomWinnerHolder.WinnerIds.Add(pc.PlayerId);
             return;
         }

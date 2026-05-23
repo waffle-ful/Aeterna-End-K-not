@@ -234,7 +234,7 @@ internal class Revolutionist : RoleBase
     {
         if (AmongUsClient.Instance.IsGameStarted && pc.IsDrawDone())
         {
-            CustomWinnerHolder.ResetAndSetWinner(CustomWinner.Revolutionist);
+            CustomWinnerHolder.SetWinnerOrAdditonalWinner(CustomWinner.Revolutionist);
             Utils.GetDrawPlayerCount(pc.PlayerId, out List<PlayerControl> x);
             CustomWinnerHolder.WinnerIds.Add(pc.PlayerId);
             foreach (PlayerControl apc in x) CustomWinnerHolder.WinnerIds.Add(apc.PlayerId);

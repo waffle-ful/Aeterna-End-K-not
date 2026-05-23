@@ -1719,7 +1719,7 @@ public static class Utils
                 else if (pc.IsAlive()) pc.Suicide(PlayerState.DeathReason.Bombed, terrorist.Object);
             }
 
-            CustomWinnerHolder.ResetAndSetWinner(CustomWinner.Terrorist);
+            CustomWinnerHolder.ShiftWinnerAndSetWinner(CustomWinner.Terrorist);
             CustomWinnerHolder.WinnerIds.Add(terrorist.PlayerId);
         }
     }
@@ -1936,32 +1936,45 @@ public static class Utils
 
                 IEnumerator TempReviveHost()
                 {
-                    TempReviveHostRunning = true;
-                    TempReviveHostRevertStopwatch = Stopwatch.StartNew();
-                    TempReviveHostTimeSinceRevivalStopwatch = Stopwatch.StartNew();
-                    
-                    Logger.Msg("Temporarily reviving host to send message....", "TempReviveHost");
+                    try
+                    {
+                        TempReviveHostRunning = true;
+                        TempReviveHostRevertStopwatch = Stopwatch.StartNew();
+                        TempReviveHostTimeSinceRevivalStopwatch = Stopwatch.StartNew();
 
-                    sender.Data.IsDead = false;
-                    sender.Data.SendGameData();
-                    
-                    while (TempReviveHostRevertStopwatch.ElapsedMilliseconds < 1000)
-                        yield return null;
-                    
-                    Logger.Msg("Re-killing host after message sent.", "TempReviveHost");
-                    
-                    TempReviveHostTimeSinceRevivalStopwatch.Reset();
-                    
-                    if (!AmongUsClient.Instance.AmHost || GameStates.IsEnded || GameStates.IsLobby)
+                        Logger.Msg("Temporarily reviving host to send message....", "TempReviveHost");
+
+                        sender.RpcSetRoleGlobal(RoleTypes.Crewmate);
+
+                        while (TempReviveHostRevertStopwatch.ElapsedMilliseconds < 1000)
+                            yield return null;
+
+                        Logger.Msg("Re-killing host after message sent.", "TempReviveHost");
+
+                        TempReviveHostTimeSinceRevivalStopwatch.Reset();
+
+                        if (!AmongUsClient.Instance.AmHost || GameStates.IsEnded || GameStates.IsLobby)
+                        {
+                            TempReviveHostRunning = false;
+                            yield break;
+                        }
+
+                        RoleTypes ghostRoleBasis = sender.GetGhostRoleBasis();
+
+                        if (ghostRoleBasis != RoleTypes.ImpostorGhost)
+                        {
+                            sender.RpcSetRoleGlobal(ghostRoleBasis);
+                        }
+                        else
+                        {
+                            sender.RpcSetRoleGlobal(RoleTypes.CrewmateGhost, setLocally: false);
+                            sender.SetRole(RoleTypes.ImpostorGhost);
+                        }
+                    }
+                    finally
                     {
                         TempReviveHostRunning = false;
-                        yield break;
                     }
-
-                    sender.Data.IsDead = true;
-                    sender.Data.SendGameData();
-                    
-                    TempReviveHostRunning = false;
                 }
             }
             

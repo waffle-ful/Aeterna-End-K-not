@@ -1138,7 +1138,7 @@ internal static class IntroCutsceneDestroyPatch
 
         Main.IntroDestroyed = true;
         PreventKill = true;
-        LateTask.New(() => PreventKill = false, 10f, "PreventKillReset");
+        LateTask.New(() => PreventKill = false, Options.StartingKillCooldown?.GetFloat() ?? 10f, "PreventKillReset");
 
         BGMManager.SetTaskBGM();
 

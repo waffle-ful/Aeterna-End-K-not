@@ -179,7 +179,7 @@ internal static class CustomTeamManager
                 PlayerControl lastPlayer = aapc[0];
                 CustomTeam lastTeam = GetCustomTeam(lastPlayer.PlayerId);
                 WinnerTeam = lastTeam;
-                CustomWinnerHolder.ResetAndSetWinner(CustomWinner.CustomTeam);
+                CustomWinnerHolder.SetWinnerOrAdditonalWinner(CustomWinner.CustomTeam);
                 CustomWinnerHolder.WinnerIds = [lastPlayer.PlayerId];
                 return true;
             }
@@ -205,7 +205,7 @@ internal static class CustomTeamManager
             }))
             {
                 WinnerTeam = team;
-                CustomWinnerHolder.ResetAndSetWinner(CustomWinner.CustomTeam);
+                CustomWinnerHolder.SetWinnerOrAdditonalWinner(CustomWinner.CustomTeam);
                 CustomWinnerHolder.WinnerIds = aliveTeamPlayers.Values.First();
                 return true;
             }

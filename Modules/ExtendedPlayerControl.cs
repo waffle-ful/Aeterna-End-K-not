@@ -174,7 +174,7 @@ internal static class ExtendedPlayerControl
         
             foreach (PlayerControl pc in Main.EnumerateAlivePlayerControls())
             {
-                if (pc == player || pc.AmOwner) continue;
+                if (pc == player || pc.AmOwner || pc.OwnerId < 0) continue;
                 CustomRpcSender sender = CustomRpcSender.Create($"SnapTo Freeze ({player.GetNameWithRole()})", SendOption.Reliable);
                 sender.StartMessage(pc.OwnerId);
                 sender.StartRpc(player.NetTransform.NetId, (byte)RpcCalls.SnapTo)
@@ -388,12 +388,12 @@ internal static class ExtendedPlayerControl
             }, 1f, log: false);
         }
 
-        public void RpcSetRoleGlobal(RoleTypes roleTypes, bool setRoleMap = false)
+        public void RpcSetRoleGlobal(RoleTypes roleTypes, bool setRoleMap = false, bool setLocally = true)
         {
             try
             {
                 if (!AmongUsClient.Instance.AmHost) return;
-                if (AmongUsClient.Instance.AmClient) try { player.SetRole(roleTypes); } catch { }
+                if (setLocally && AmongUsClient.Instance.AmClient) try { player.SetRole(roleTypes); } catch { }
                 MessageWriter writer = AmongUsClient.Instance.StartRpcImmediately(player.NetId, (byte)RpcCalls.SetRole, SendOption.Reliable);
                 writer.Write((ushort)roleTypes);
                 writer.Write(true);
@@ -1508,7 +1508,7 @@ internal static class ExtendedPlayerControl
 
             foreach (PlayerControl pc in PlayerControl.AllPlayerControls)
             {
-                if (pc.AmOwner || pc == player || (!phantom && pc.IsModdedClient()) || (phantom && pc.IsImpostor())) continue;
+                if (pc.AmOwner || pc.OwnerId < 0 || pc == player || (!phantom && pc.IsModdedClient()) || (phantom && pc.IsImpostor())) continue;
             
                 var sender = CustomRpcSender.Create("RpcMakeInvisible", SendOption.Reliable);
                 sender.StartMessage(pc.OwnerId);
@@ -1557,7 +1557,7 @@ internal static class ExtendedPlayerControl
 
             foreach (PlayerControl pc in PlayerControl.AllPlayerControls)
             {
-                if (pc.AmOwner || pc == player || (!phantom && pc.IsModdedClient()) || (phantom && pc.IsImpostor())) continue;
+                if (pc.AmOwner || pc.OwnerId < 0 || pc == player || (!phantom && pc.IsModdedClient()) || (phantom && pc.IsImpostor())) continue;
             
                 var sender = CustomRpcSender.Create("RpcMakeVisible", SendOption.Reliable);
                 sender.StartMessage(pc.OwnerId);
@@ -1590,7 +1590,7 @@ internal static class ExtendedPlayerControl
 
             foreach (PlayerControl pc in PlayerControl.AllPlayerControls)
             {
-                if (pc.AmOwner || pc == player || (!phantom && pc.IsModdedClient()) || (phantom && pc.IsImpostor())) continue;
+                if (pc.AmOwner || pc.OwnerId < 0 || pc == player || (!phantom && pc.IsModdedClient()) || (phantom && pc.IsImpostor())) continue;
             
                 var sender = CustomRpcSender.Create("RpcResetInvisibility", SendOption.Reliable);
                 sender.StartMessage(pc.OwnerId);

@@ -642,6 +642,9 @@ internal static class OnPlayerLeftPatch
 
                 Utils.AfterPlayerDeathTasks(data.Character, GameStates.IsMeeting, true);
 
+                try { state.Role.Remove(id); }
+                catch (Exception e) { Utils.ThrowException(e); }
+
                 NameNotifyManager.Notifies.Remove(id);
                 data.Character.RpcSetName(data.Character.GetRealName(true));
                 PlayerGameOptionsSender.RemoveSender(data.Character);

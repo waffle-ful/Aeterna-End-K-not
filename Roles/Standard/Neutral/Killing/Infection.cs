@@ -332,7 +332,7 @@ public class Infection : RoleBase
                 player.Suicide(PlayerState.DeathReason.Curse, pd);
             }
 
-            CustomWinnerHolder.ResetAndSetWinner(CustomWinner.Infection);
+            CustomWinnerHolder.SetWinnerOrAdditonalWinner(CustomWinner.Infection);
 
             foreach (PlayerControl infection in apc)
             {
