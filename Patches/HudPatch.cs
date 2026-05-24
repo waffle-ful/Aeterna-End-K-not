@@ -98,7 +98,7 @@ internal static class HudManagerPatch
                     {
                         PlayerControl pc = Utils.GetPlayerById(item.Key);
                         string prefix = first ? string.Empty : "\n";
-                        var text = $"{prefix}{(item.Key == 0 ? "Host" : $"{(!pc ? $"ID {item.Key}" : $"{pc.GetRealName()}")}")} - <color={Main.RoleColors.GetValueOrDefault(item.Value, "#ffffff")}>{GetString(item.Value.ToString())}</color>";
+                        var text = $"{prefix}{(item.Key == 0 ? "Host" : $"{(!pc ? $"ID {item.Key}" : $"{pc.GetRealName()}")}")} - <color={Utils.GetRoleColorCode(item.Value)}>{GetString(item.Value.ToString())}</color>";
                         resultText[item.Key] = text;
                         first = false;
                     }
@@ -113,13 +113,13 @@ internal static class HudManagerPatch
 
                             if (resultText.ContainsKey(item.Key))
                             {
-                                var text = $" <#ffffff>(</color><color={Main.RoleColors.GetValueOrDefault(role, "#ffffff")}>{GetString(role.ToString())}</color><#ffffff>)</color>";
+                                var text = $" <#ffffff>(</color><color={Utils.GetRoleColorCode(role)}>{GetString(role.ToString())}</color><#ffffff>)</color>";
                                 resultText[item.Key] += text;
                             }
                             else
                             {
                                 string prefix = first ? string.Empty : "\n";
-                                var text = $"{prefix}{(item.Key == 0 ? "Host" : $"{(!pc ? $"ID {item.Key}" : $"{pc.GetRealName()}")}")} - <#ffffff>(</color><color={Main.RoleColors.GetValueOrDefault(role, "#ffffff")}>{GetString(role.ToString())}</color><#ffffff>)</color>";
+                                var text = $"{prefix}{(item.Key == 0 ? "Host" : $"{(!pc ? $"ID {item.Key}" : $"{pc.GetRealName()}")}")} - <#ffffff>(</color><color={Utils.GetRoleColorCode(role)}>{GetString(role.ToString())}</color><#ffffff>)</color>";
                                 resultText[item.Key] = text;
                                 first = false;
                             }
@@ -875,7 +875,7 @@ internal static class SabotageMapPatch
 
         float perc = __instance.sabSystem.PercentCool;
         int total = __instance.sabSystem.initialCooldown ? 10 : 30;
-        if (SabotageSystemTypeRepairDamagePatch.IsCooldownModificationEnabled) total = (int)SabotageSystemTypeRepairDamagePatch.ModifiedCooldownSec;
+        if (SabotageSystemTypeUpdateSystemPatch.IsCooldownModificationEnabled) total = (int)SabotageSystemTypeUpdateSystemPatch.ModifiedCooldownSec;
 
         int remaining = Math.Clamp(total - (int)Math.Ceiling((1f - perc) * total) + 1, 0, total);
 

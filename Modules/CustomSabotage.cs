@@ -4,7 +4,7 @@ using System.Linq;
 using AmongUs.GameOptions;
 using UnityEngine;
 
-namespace EHR.Modules;
+namespace EndKnot.Modules;
 
 public abstract class CustomSabotage
 {

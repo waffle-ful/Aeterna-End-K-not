@@ -106,7 +106,7 @@ public class AntiReporter : RoleBase
         PlayerControl nearestTarget = null;
         float minDist = float.MaxValue;
 
-        foreach (PlayerControl p in Main.AllAlivePlayerControls)
+        foreach (PlayerControl p in Main.AllAlivePlayerControlsToList)
         {
             if (p.PlayerId == pc.PlayerId) continue;
             if (ReportCrashTimers.ContainsKey(p.PlayerId)) continue;

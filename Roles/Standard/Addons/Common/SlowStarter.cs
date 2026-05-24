@@ -31,7 +31,7 @@ internal class SlowStarter : IAddon
     {
         if (DayReached) return true;
 
-        int aliveImps = Main.AllAlivePlayerControls.Count(p => p.Is(CustomRoleTypes.Impostor));
+        int aliveImps = Main.AllAlivePlayerControlsToList.Count(p => p.Is(CustomRoleTypes.Impostor));
         return aliveImps <= AliveImpThreshold.GetInt();
     }
 

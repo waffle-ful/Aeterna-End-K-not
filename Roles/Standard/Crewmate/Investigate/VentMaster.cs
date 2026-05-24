@@ -47,7 +47,7 @@ public class VentMaster : RoleBase
         if (!AmongUsClient.Instance.AmHost) return;
         if (!GameStates.IsInTask) return;
 
-        foreach (PlayerControl vm in Main.AllAlivePlayerControls)
+        foreach (PlayerControl vm in Main.AllAlivePlayerControlsToList)
         {
             if (vm.PlayerId == pc.PlayerId) continue;
             if (!vm.Is(CustomRoles.VentMaster)) continue;

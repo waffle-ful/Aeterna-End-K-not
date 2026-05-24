@@ -79,7 +79,7 @@ public class Satellite : RoleBase
         if (!GameStates.IsInTask) return;
         if (Utils.IsActive(SystemTypes.Comms)) return;
 
-        foreach (PlayerControl player in Main.AllAlivePlayerControls)
+        foreach (PlayerControl player in Main.AllAlivePlayerControlsToList)
         {
             PlainShipRoom nowRoom = player.GetPlainShipRoom();
             if (!nowRoom) continue;

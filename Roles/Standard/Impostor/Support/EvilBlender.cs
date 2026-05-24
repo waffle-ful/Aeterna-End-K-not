@@ -112,7 +112,7 @@ public class EvilBlender : RoleBase
             .Where(r => r != SystemTypes.Hallway && r != SystemTypes.Outside && r != SystemTypes.Ventilation && !r.ToString().Contains("Decontamination"))
             .ToList();
 
-        foreach (PlayerControl player in Main.AllAlivePlayerControls)
+        foreach (PlayerControl player in Main.AllAlivePlayerControlsToList)
         {
             List<SystemTypes> rooms = new(allRooms);
             PlainShipRoom currentRoom = player.GetPlainShipRoom();

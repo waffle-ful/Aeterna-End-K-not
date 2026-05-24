@@ -1804,18 +1804,7 @@ internal static class CustomRolesHelper
         }
         public bool IsVanillaEHR()
         {
-            return role is
-                CustomRoles.CrewmateEHR or
-                CustomRoles.EngineerEHR or
-                CustomRoles.NoisemakerEHR or
-                CustomRoles.TrackerEHR or
-                CustomRoles.ScientistEHR or
-                CustomRoles.GuardianAngelEHR or
-                CustomRoles.ImpostorEHR or
-                CustomRoles.DetectiveEHR or
-                CustomRoles.ViperEHR or
-                CustomRoles.PhantomEHR or
-                CustomRoles.ShapeshifterEHR;
+            return role.ToString().EndsWith("EndKnot");
         }
 
         public CustomRoleTypes GetCustomRoleTypes()

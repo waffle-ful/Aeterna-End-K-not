@@ -25,7 +25,7 @@ internal class Twins : IAddon
 
         if (!AmongUsClient.Instance.AmHost) return;
 
-        List<PlayerControl> players = Main.AllPlayerControls
+        List<PlayerControl> players = Main.AllPlayerControlsToList
             .Where(p => p.Is(CustomRoles.Twins))
             .OrderBy(_ => Guid.NewGuid())
             .ToList();

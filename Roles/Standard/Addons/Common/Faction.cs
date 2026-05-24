@@ -22,11 +22,11 @@ internal class Faction : IAddon
         if (CustomWinnerHolder.WinnerTeam is CustomWinner.Default or CustomWinner.None or CustomWinner.Draw or CustomWinner.Crewmate) return;
 
         var winnerIds = CustomWinnerHolder.WinnerIds;
-        bool anyFactionWon = Main.AllPlayerControls.Any(p => p.Is(CustomRoles.Faction) && winnerIds.Contains(p.PlayerId));
+        bool anyFactionWon = Main.AllPlayerControlsToList.Any(p => p.Is(CustomRoles.Faction) && winnerIds.Contains(p.PlayerId));
 
         if (!anyFactionWon) return;
 
-        foreach (PlayerControl player in Main.AllPlayerControls.Where(p => p.Is(CustomRoles.Faction)))
+        foreach (PlayerControl player in Main.AllPlayerControlsToList.Where(p => p.Is(CustomRoles.Faction)))
         {
             if (Main.LoversPlayers.Exists(x => x.PlayerId == player.PlayerId)) continue;
             CustomWinnerHolder.WinnerIds.Add(player.PlayerId);

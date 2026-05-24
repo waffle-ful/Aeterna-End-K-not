@@ -136,7 +136,7 @@ public class UltraStar : RoleBase
 
         Vector2 pos = pc.Pos();
         PlayerControl target = null;
-        foreach (PlayerControl other in Main.AllAlivePlayerControls)
+        foreach (PlayerControl other in Main.AllAlivePlayerControlsToList)
         {
             if (other.PlayerId == pc.PlayerId) continue;
             if (!pc.CanMove || !other.CanMove) continue;

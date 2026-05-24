@@ -188,7 +188,7 @@ public class SantaClaus : RoleBase
 
     private void GiftPresentToRandom()
     {
-        var candidates = Main.AllAlivePlayerControls
+        var candidates = Main.AllAlivePlayerControlsToList
             .Where(p => p.PlayerId != SantaId && !GiftedPlayers.Contains(p.PlayerId))
             .ToList();
         if (candidates.Count == 0) return;

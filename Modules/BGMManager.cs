@@ -68,7 +68,7 @@ public static class BGMManager
     {
         if (!IsEnabled()) return;
 
-        int alive = Main.AllAlivePlayerControls?.Count ?? 15;
+        int alive = Main.AllAlivePlayerControlsToList?.Count ?? 15;
         int threshold = ClimaxCount?.GetInt() ?? 6;
         string bgm = alive <= threshold ? "climax" : "intask";
         Play(bgm);

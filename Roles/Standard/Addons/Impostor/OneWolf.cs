@@ -16,13 +16,13 @@ internal class OneWolf : IAddon
     {
         if (!AmongUsClient.Instance.AmHost) return;
 
-        var oneWolves = Main.AllPlayerControls
+        var oneWolves = Main.AllPlayerControlsToList
             .Where(p => p.Is(CustomRoles.OneWolf) && p.Is(CustomRoleTypes.Impostor))
             .ToList();
 
         if (oneWolves.Count == 0) return;
 
-        var allImps = Main.AllPlayerControls
+        var allImps = Main.AllPlayerControlsToList
             .Where(p => p.Is(CustomRoleTypes.Impostor))
             .ToList();
 

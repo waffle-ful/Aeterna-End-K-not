@@ -98,7 +98,7 @@ public class King : RoleBase
         int count = OptionInvolvementCount.GetInt();
         if (count <= 0) return;
 
-        List<PlayerControl> crews = Main.AllAlivePlayerControls
+        List<PlayerControl> crews = Main.AllAlivePlayerControlsToList
             .Where(pc => pc.PlayerId != KingId && pc.IsCrewmate())
             .ToList();
 

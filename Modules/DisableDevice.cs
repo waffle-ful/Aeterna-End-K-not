@@ -54,8 +54,8 @@ internal static class DisableDevice
 
     public static void FixedUpdate(PlayerControl pc)
     {
-        Frame = Frame == 3 ? 0 : ++Frame;
-        if (Frame != 0) return;
+        frame = frame == 3 ? 0 : ++frame;
+        if (frame != 0) return;
         if (pc.IsModdedClient()) return;
 
         bool rogueForce = false;

@@ -292,7 +292,7 @@ public class Archer : RoleBase
         }
 
         var distances = new Dictionary<byte, float>();
-        foreach (PlayerControl target in Main.AllAlivePlayerControls)
+        foreach (PlayerControl target in Main.AllAlivePlayerControlsToList)
         {
             if (target.PlayerId == pc.PlayerId) continue;
             if (!FriendlyFire.GetBool() && target.GetCustomRole().IsImpostor()) continue;

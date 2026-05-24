@@ -135,7 +135,7 @@ public class EvilTeller : RoleBase
         PlayerControl nearestTarget = null;
         float minDist = float.MaxValue;
 
-        foreach (PlayerControl p in Main.AllAlivePlayerControls)
+        foreach (PlayerControl p in Main.AllAlivePlayerControlsToList)
         {
             if (p.PlayerId == pc.PlayerId) continue;
             if (p.Is(CustomRoleTypes.Impostor)) continue;

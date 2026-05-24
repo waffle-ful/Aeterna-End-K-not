@@ -85,7 +85,7 @@ public class DummySpawner : RoleBase
 
         dummy.Despawn();
         dummies.Remove(dummy);
-        Main.AllAlivePlayerControls.Do(p => p.KillFlash());
+        Main.AllAlivePlayerControlsToList.Do(p => p.KillFlash());
         killer.SetKillCooldown(KillCooldownOpt.GetFloat());
         Utils.NotifyRoles(SpecifySeer: killer, SpecifyTarget: killer);
         return false;

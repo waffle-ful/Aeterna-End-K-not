@@ -216,7 +216,7 @@ public class EvilJumper : RoleBase
         float range = JumpRangeTable.TryGetValue(JumpRange.GetInt(), out float r) ? r : 0f;
         if (range <= 0f) return;
 
-        foreach (PlayerControl tg in Main.AllAlivePlayerControls)
+        foreach (PlayerControl tg in Main.AllAlivePlayerControlsToList)
         {
             if (tg.PlayerId == pc.PlayerId) continue;
             if (Pelican.IsEaten(tg.PlayerId) || Medic.ProtectList.Contains(tg.PlayerId) || tg.Is(CustomRoles.Pestilence)) continue;

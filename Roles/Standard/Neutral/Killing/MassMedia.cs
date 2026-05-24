@@ -132,7 +132,7 @@ public class MassMedia : RoleBase
 
             if (CriminalProfile.GetBool())
             {
-                foreach (var other in Main.AllAlivePlayerControls)
+                foreach (var other in Main.AllAlivePlayerControlsToList)
                 {
                     if (other.PlayerId == TargetId || other.PlayerId == MassMediaId) continue;
                     if (Suspects.Contains(other.PlayerId)) continue;

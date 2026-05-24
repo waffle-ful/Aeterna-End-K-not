@@ -69,7 +69,7 @@ public class QuickKiller : RoleBase
 
     public override void OnMurder(PlayerControl killer, PlayerControl target)
     {
-        if (AbilityCanUsePlayerCount.GetInt() > Main.AllAlivePlayerControls.Count) return;
+        if (AbilityCanUsePlayerCount.GetInt() > Main.AllAlivePlayerControlsToList.Count) return;
 
         Main.AllPlayerKillCooldown[killer.PlayerId] = 0.0001f;
 

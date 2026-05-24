@@ -161,7 +161,7 @@ public class Ballooner : RoleBase
         bool targetImpostor = TargetImpostor.GetBool();
         float radius = NowBoomDis;
 
-        foreach (PlayerControl tg in Main.AllAlivePlayerControls)
+        foreach (PlayerControl tg in Main.AllAlivePlayerControlsToList)
         {
             if (tg.PlayerId == pc.PlayerId && !suicideEnabled) continue;
             if (tg.PlayerId != pc.PlayerId && tg.Is(CustomRoleTypes.Impostor) && !targetImpostor) continue;

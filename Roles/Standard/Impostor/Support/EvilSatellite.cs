@@ -72,7 +72,7 @@ public class EvilSatellite : RoleBase
         if (!AmongUsClient.Instance.AmHost) return;
         if (!GameStates.IsInTask) return;
 
-        foreach (PlayerControl player in Main.AllAlivePlayerControls)
+        foreach (PlayerControl player in Main.AllAlivePlayerControlsToList)
         {
             PlainShipRoom nowRoom = player.GetPlainShipRoom();
             if (!nowRoom) continue;

@@ -107,7 +107,7 @@ public class ConnectSaver : RoleBase
         // silent return（消費するが何も起きない）していたため、プレイヤー側からは
         // 「self-vote で activate できたのにその後何も起きない＝壊れている」と見えていた
         int minCount = OptionMinimumPlayerCount.GetInt();
-        if (Main.AllAlivePlayerControls.Count < minCount)
+        if (Main.AllAlivePlayerControlsToList.Count < minCount)
         {
             if (target.PlayerId == ConnectSaverId)
                 Utils.SendMessage(string.Format(GetString("ConnectSaverInsufficientPlayers"), minCount), ConnectSaverId);
@@ -228,7 +228,7 @@ public class ConnectSaver : RoleBase
                 return $"<size=40%><color=#ff1919>{hint}</color></size>";
             }
 
-            if (!IsUsing && usedcount < OptionMax.GetInt() && Main.AllAlivePlayerControls.Count >= OptionMinimumPlayerCount.GetInt())
+            if (!IsUsing && usedcount < OptionMax.GetInt() && Main.AllAlivePlayerControlsToList.Count >= OptionMinimumPlayerCount.GetInt())
                 return $"<size=40%><color=#ff1919>{GetString("ConnectSaverSelfVoteHint")}</color></size>";
 
             return string.Empty;

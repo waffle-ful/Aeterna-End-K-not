@@ -128,7 +128,7 @@ public class EvilMagician : RoleBase
         PlayerControl nearestTarget = null;
         float minDist = float.MaxValue;
 
-        foreach (PlayerControl p in Main.AllAlivePlayerControls)
+        foreach (PlayerControl p in Main.AllAlivePlayerControlsToList)
         {
             if (p.PlayerId == pc.PlayerId) continue;
             if (p.GetCustomRole().IsImpostor()) continue;

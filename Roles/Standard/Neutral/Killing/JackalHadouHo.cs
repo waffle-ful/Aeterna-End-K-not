@@ -276,7 +276,7 @@ public class JackalHadouHo : RoleBase
 
     private static void FlashAll()
     {
-        foreach (PlayerControl p in Main.AllAlivePlayerControls)
+        foreach (PlayerControl p in Main.AllAlivePlayerControlsToList)
             p.KillFlash();
     }
 
@@ -471,7 +471,7 @@ public class JackalHadouHo : RoleBase
 
     private void ConsumeTama()
     {
-        foreach (PlayerControl p in Main.AllAlivePlayerControls)
+        foreach (PlayerControl p in Main.AllAlivePlayerControlsToList)
         {
             if (Main.PlayerStates[p.PlayerId].Role is Tama tama && tama.OwnerId == JhhId && tama.HasLoaded)
             {

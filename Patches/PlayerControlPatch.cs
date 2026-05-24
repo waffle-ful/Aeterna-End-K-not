@@ -1749,7 +1749,7 @@ internal static class FixedUpdatePatch
                 if (DoubleTrigger.FirstTriggerTimer.Count > 0)
                     DoubleTrigger.OnFixedUpdate(player);
 
-                SabotageSystemTypeRepairDamagePatch.SabotageDoubleTrigger.Update(Time.deltaTime);
+                SabotageSystemTypeUpdateSystemPatch.SabotageDoubleTrigger.Update(Time.deltaTime);
 
                 if (Main.PlayerStates.TryGetValue(playerId, out PlayerState s) && s.Role.IsEnable)
                     s.Role.OnFixedUpdate(player);
@@ -1849,7 +1849,7 @@ internal static class FixedUpdatePatch
                 FallFromLadder.FixedUpdate(player);
 
             if (inTask && self && Options.DisableDevices.GetBool())
-                DisableDevice.FixedUpdate();
+                DisableDevice.FixedUpdate(player);
 
             if (!Main.DoBlockNameChange && ApplySuffix(player, out var name))
                 player.RpcSetName(name);

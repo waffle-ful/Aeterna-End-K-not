@@ -93,7 +93,7 @@ public class NiceLogger : RoleBase
         if (Cooltime < OptionCoolTime.GetFloat()) return;
 
         Vector2 logPos = LogPos.Value;
-        foreach (PlayerControl player in Main.AllAlivePlayerControls)
+        foreach (PlayerControl player in Main.AllAlivePlayerControlsToList)
         {
             if (player.PlayerId == NiceLoggerId) continue;
             if (!player.CanMove) continue;

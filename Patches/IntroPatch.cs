@@ -1375,7 +1375,7 @@ internal static class IntroCutsceneDestroyPatch
                 {
                     if (!GameStates.IsInGame || MeetingHud.Instance || ExileController.Instance) return;
                     PlayerControl host = PlayerControl.LocalPlayer;
-                    if (!host || !host.IsAlive()) host = Main.AllAlivePlayerControls.FirstOrDefault();
+                    if (!host || !host.IsAlive()) host = Main.AllAlivePlayerControlsToList.FirstOrDefault();
                     if (host) host.NoCheckStartMeeting(null, force: true);
                 }, 5f, "FirstTurnMeetingTrigger");
             }

@@ -237,7 +237,7 @@ public class Missioneer : RoleBase
 
     public override void OnReportDeadBody()
     {
-        int maxMissions = Math.Min(MeetingAssignmentCount.GetInt(), Main.AllAlivePlayerControls.Count - 1);
+        int maxMissions = Math.Min(MeetingAssignmentCount.GetInt(), Main.AllAlivePlayerControlsToList.Count - 1);
         CurrentMissionList = BuildMissionList(maxMissions);
         HasSetMission = false;
         ProximityTimer = 0f;
@@ -247,7 +247,7 @@ public class Missioneer : RoleBase
     private Dictionary<byte, MissionKind> BuildMissionList(int count)
     {
         var result = new Dictionary<byte, MissionKind>();
-        var others = Main.AllAlivePlayerControls.Where(p => p.PlayerId != MissioneerId).ToList();
+        var others = Main.AllAlivePlayerControlsToList.Where(p => p.PlayerId != MissioneerId).ToList();
 
         for (int i = 0; i < count && i < others.Count; i++)
             result[others[i].PlayerId] = AllMissions[IRandom.Instance.Next(AllMissions.Length)];
@@ -268,12 +268,12 @@ public class Missioneer : RoleBase
 
             if (NowMission == MissionKind.MorePlayer)
             {
-                int nearby = Main.AllAlivePlayerControls.Count(p => Vector2.Distance(p.GetTruePosition(), myPos) < 2.5f);
+                int nearby = Main.AllAlivePlayerControlsToList.Count(p => Vector2.Distance(p.GetTruePosition(), myPos) < 2.5f);
                 if (nearby > 3) CompleteMission(); // self included, so >3 means 3+ others
             }
             else
             {
-                bool seeTarget = Main.AllAlivePlayerControls.Any(p => p.PlayerId == TargetPlayerId && Vector2.Distance(p.GetTruePosition(), myPos) < 2.5f);
+                bool seeTarget = Main.AllAlivePlayerControlsToList.Any(p => p.PlayerId == TargetPlayerId && Vector2.Distance(p.GetTruePosition(), myPos) < 2.5f);
                 if (seeTarget) CompleteMission();
             }
 
@@ -304,7 +304,7 @@ public class Missioneer : RoleBase
             if (target.PlayerId != MissioneerId) return false;
             IsSelectingMode = true;
             if (CurrentMissionList.Count == 0)
-                CurrentMissionList = BuildMissionList(Math.Min(MeetingAssignmentCount.GetInt(), Main.AllAlivePlayerControls.Count - 1));
+                CurrentMissionList = BuildMissionList(Math.Min(MeetingAssignmentCount.GetInt(), Main.AllAlivePlayerControlsToList.Count - 1));
             ShowMissionList();
             return true;
         }
@@ -360,7 +360,7 @@ public class Missioneer : RoleBase
 
         if (mission is MissionKind.KillPlayer or MissionKind.SeePlayer)
         {
-            var others = Main.AllAlivePlayerControls.Where(p => p.PlayerId != MissioneerId).ToArray();
+            var others = Main.AllAlivePlayerControlsToList.Where(p => p.PlayerId != MissioneerId).ToArray();
             if (others.Length > 0) TargetPlayerId = others[IRandom.Instance.Next(others.Length)].PlayerId;
         }
 
@@ -409,7 +409,7 @@ public class Missioneer : RoleBase
             // Make all other alive players appear as Crewmate to the Missioneer's client
             // so the kill button lights up regardless of their actual roles.
             // Without this, Impostor-team players can never be valid kill targets.
-            foreach (var other in Main.AllAlivePlayerControls)
+            foreach (var other in Main.AllAlivePlayerControlsToList)
             {
                 if (other.PlayerId != MissioneerId)
                     other.RpcSetRoleDesync(RoleTypes.Crewmate, pc.OwnerId);

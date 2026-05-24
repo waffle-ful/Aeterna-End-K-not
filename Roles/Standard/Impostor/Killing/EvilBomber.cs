@@ -110,7 +110,7 @@ public class EvilBomber : RoleBase
         PlayerControl nearestTarget = null;
         float minDist = float.MaxValue;
 
-        foreach (PlayerControl p in Main.AllAlivePlayerControls)
+        foreach (PlayerControl p in Main.AllAlivePlayerControlsToList)
         {
             if (p.PlayerId == pc.PlayerId) continue;
             if (PendingExplosions.ContainsKey(p.PlayerId)) continue;
@@ -156,7 +156,7 @@ public class EvilBomber : RoleBase
         CustomSoundsManager.RPCPlayCustomSoundAll("Boom");
         float range = BlastRange.GetFloat();
 
-        foreach (PlayerControl tg in Main.AllAlivePlayerControls)
+        foreach (PlayerControl tg in Main.AllAlivePlayerControlsToList)
         {
             if (tg.PlayerId == pc.PlayerId) continue;
             if (Pelican.IsEaten(tg.PlayerId) || Medic.ProtectList.Contains(tg.PlayerId) || tg.Is(CustomRoles.Pestilence)) continue;

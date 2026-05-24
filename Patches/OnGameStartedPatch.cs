@@ -427,7 +427,7 @@ internal static class ChangeRoleSettings
                 CustomWinnerHolder.Reset();
                 AntiBlackout.Reset();
                 NameNotifyManager.Reset();
-                SabotageSystemTypeRepairDamagePatch.Initialize();
+                SabotageSystemTypeUpdateSystemPatch.Initialize();
                 DoorsReset.Initialize();
                 GhostRolesManager.Initialize();
                 RoleBlockManager.Reset();

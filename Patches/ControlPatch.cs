@@ -480,7 +480,7 @@ public static class InGameRoleInfoMenu
         titleSb.Append($"{role.ToColoredString()} {Utils.GetRoleMode(role)}");
         sb.Append("<size=90%>");
         sb.Append(player.GetRoleInfo(true).TrimStart());
-        if (Options.CustomRoleSpawnChances.TryGetValue(role, out StringOptionItem opt)) Utils.ShowChildrenSettings(opt, ref settings, f1: true, disableColor: false);
+        if (Options.CustomRoleSpawnChances.TryGetValue(role, out StringOptionItem opt)) Utils.ShowChildrenSettings(opt, settings, f1: true, disableColor: false);
 
         settings.Append("</size>");
         if (settings.Length > 0) addons.Append($"{settings}\n\n");

@@ -112,7 +112,7 @@ public class CharismaStar : RoleBase
         if (GatherChoosePlayers.Count == 0)
         {
             if (!CanAllPlayerGather.GetBool()) return;
-            foreach (PlayerControl p in Main.AllAlivePlayerControls)
+            foreach (PlayerControl p in Main.AllAlivePlayerControlsToList)
                 GatherChoosePlayers.Add(p.PlayerId);
         }
         else

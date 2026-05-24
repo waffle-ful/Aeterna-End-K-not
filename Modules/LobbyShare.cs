@@ -195,7 +195,7 @@ internal static class LobbyShare
         if (inGame) return;
         if (!(Main.ShareLobbyToDiscord?.Value ?? false)) return;
 
-        int count = Main.AllPlayerControls?.Count ?? 0;
+        int count = Main.AllPlayerControlsToList?.Count ?? 0;
         if (count < 1) return;
         int max = Main.NormalOptions?.MaxPlayers ?? 15;
         if (max < 1 || max > 15) max = 15;
@@ -237,7 +237,7 @@ internal static class LobbyShare
         if (!local) { Logger.Info("skip: PlayerControl.LocalPlayer null", "LobbyShare"); return false; }
         fcHash = HashFriendCode(local.FriendCode ?? string.Empty);
 
-        players = Main.AllPlayerControls.Count;
+        players = Main.AllPlayerControlsToList.Count;
         max = Main.NormalOptions?.MaxPlayers ?? 15;
         if (players < 1) players = 1;
         if (max < 1 || max > 15) max = 15;

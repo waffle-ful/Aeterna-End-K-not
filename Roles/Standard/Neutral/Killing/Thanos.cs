@@ -58,7 +58,7 @@ public class Thanos : RoleBase
         CollectedStones = [];
         ActiveStone = null;
         MindStoneUsed = false;
-        PlayersWithStones = Main.EnumerateAlivePlayerControls().Select(x => x.PlayerId).TakeRandomToList(StoneEnum.Length);
+        PlayersWithStones = Main.EnumerateAlivePlayerControls().Shuffle().Take(StoneEnum.Length).Select(x => x.PlayerId).ToList();
         ThanosId = playerId;
         Instances.Add(this);
     }

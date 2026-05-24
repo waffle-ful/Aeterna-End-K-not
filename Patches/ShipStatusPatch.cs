@@ -1,8 +1,8 @@
 using AmongUs.GameOptions;
 using BepInEx;
-using EHR.Gamemodes;
-using EHR.Modules;
-using EHR.Roles;
+using EndKnot.Gamemodes;
+using EndKnot.Modules;
+using EndKnot.Roles;
 using HarmonyLib;
 using Hazel;
 using System;
@@ -11,10 +11,10 @@ using System.Diagnostics;
 using System.Linq;
 using UnityEngine;
 #if DEBUG
-using EHR.Patches;
+using EndKnot.Patches;
 #endif
 
-namespace EHR;
+namespace EndKnot;
 
 public static class ShipStatusSystem
 {

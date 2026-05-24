@@ -84,7 +84,7 @@ public class Limiter : RoleBase
 
         // 自爆：キル不発、範囲内の全員を爆殺してから自分も死ぬ
         float range = BlastRange.GetFloat();
-        foreach (PlayerControl pc in Main.AllAlivePlayerControls)
+        foreach (PlayerControl pc in Main.AllAlivePlayerControlsToList)
         {
             if (pc.PlayerId == killer.PlayerId) continue;
             if (Vector3.Distance(killer.transform.position, pc.transform.position) > range) continue;

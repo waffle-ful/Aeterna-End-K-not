@@ -86,7 +86,7 @@ public class Shyboy : RoleBase
         Vector2 pos = pc.Pos();
         bool nearOthers = false;
 
-        foreach (PlayerControl other in Main.AllAlivePlayerControls)
+        foreach (PlayerControl other in Main.AllAlivePlayerControlsToList)
         {
             if (other.PlayerId == ShyboyId) continue;
             if (Vector2.Distance(pos, other.Pos()) <= DetectionRadius)

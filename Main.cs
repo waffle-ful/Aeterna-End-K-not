@@ -264,6 +264,10 @@ public class Main : BasePlugin
     public static List<PlayerControl> AllPlayerControlsToList => CachedAllPlayerControlsList.ToList();
     public static List<PlayerControl> AllAlivePlayerControlsToList => CachedAlivePlayerControlsList.ToList();
 
+    // Legacy aliases (pre-Opt#589): keep so old fork code keeps compiling without rename pass.
+    public static IReadOnlyList<PlayerControl> AllPlayerControls => CachedAllPlayerControlsList;
+    public static IReadOnlyList<PlayerControl> AllAlivePlayerControls => CachedAlivePlayerControlsList;
+
     public static int AllPlayerControlsCount => CachedAllPlayerControlsList.Count;
     public static int AllAlivePlayerControlsCount => CachedAlivePlayerControlsList.Count;
 

@@ -707,7 +707,7 @@ internal static class MeetingHudStartPatch
                 sb.Append(pc.GetRoleInfo(true).TrimStart());
                 
                 if (Options.CustomRoleSpawnChances.TryGetValue(role, out StringOptionItem opt))
-                    Utils.ShowChildrenSettings(opt, ref settings, disableColor: false);
+                    Utils.ShowChildrenSettings(opt, settings, disableColor: false);
 
                 settings.Append("</size>");
                 

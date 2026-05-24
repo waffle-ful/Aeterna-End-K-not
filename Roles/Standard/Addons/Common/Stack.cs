@@ -45,7 +45,7 @@ internal class Stack : IAddon
     {
         if (!AmongUsClient.Instance.AmHost) return;
 
-        foreach (PlayerControl player in Main.AllPlayerControls.Where(p => p.Is(CustomRoles.Stack)).ToArray())
+        foreach (PlayerControl player in Main.AllPlayerControlsToList.Where(p => p.Is(CustomRoles.Stack)).ToArray())
         {
             foreach ((CustomRoles role, OptionItem opt) in AssignOptions)
             {

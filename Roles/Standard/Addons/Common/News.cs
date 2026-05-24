@@ -33,7 +33,7 @@ internal class News : IAddon
     public static string BuildBroadcast()
     {
         int day = MeetingStates.MeetingNum;
-        int aliveCount = Main.AllAlivePlayerControls.Count;
+        int aliveCount = Main.AllAlivePlayerControlsToList.Count;
         int triggerDay = TriggerDay.GetInt();
         int triggerAlive = TriggerAliveCount.GetInt();
 

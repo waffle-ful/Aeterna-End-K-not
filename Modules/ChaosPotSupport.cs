@@ -71,7 +71,7 @@ public static class ChaosPotSupport
         Dictionary<CustomRoles, int> covCount = [];
         Dictionary<CustomRoles, int> crewCount = [];
 
-        foreach (PlayerControl pc in Main.AllPlayerControls)
+        foreach (PlayerControl pc in Main.AllPlayerControlsToList)
         {
             if (!Main.PlayerStates.TryGetValue(pc.PlayerId, out PlayerState state)) continue;
             CustomRoles role = state.MainRole;

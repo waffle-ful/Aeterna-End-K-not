@@ -45,7 +45,7 @@ internal class Amnesia : IAddon
 
         LateTask.New(() =>
         {
-            foreach (PlayerControl pc in Main.AllAlivePlayerControls)
+            foreach (PlayerControl pc in Main.AllAlivePlayerControlsToList)
             {
                 if (pc.Is(CustomRoles.Amnesia))
                     PlayerIdList.Add(pc.PlayerId);

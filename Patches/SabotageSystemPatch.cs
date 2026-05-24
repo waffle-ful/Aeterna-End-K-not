@@ -1,11 +1,11 @@
 using System;
 using AmongUs.GameOptions;
-using EHR.Modules;
-using EHR.Roles;
+using EndKnot.Modules;
+using EndKnot.Roles;
 using HarmonyLib;
 using Hazel;
 
-namespace EHR;
+namespace EndKnot;
 // Based on:
 // https://github.com/Koke1024/Town-Of-Moss/blob/main/TownOfMoss/Patches/MeltDownBoost.cs
 [HarmonyPatch(typeof(ReactorSystemType))]
