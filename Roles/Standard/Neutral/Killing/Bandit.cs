@@ -30,6 +30,7 @@ public class Bandit : RoleBase
         "BanditStealMode.Instantly"
     ];
 
+    private static Color32 ShadeColor;
     public override bool IsEnable => On;
 
     public override void SetupCustomOption()
@@ -67,6 +68,7 @@ public class Bandit : RoleBase
         Targets = [];
         TotalSteals = [];
         On = false;
+        ShadeColor = Utils.GetRoleColor(CustomRoles.Bandit).ShadeColor(0.25f);
     }
 
     public override void Add(byte playerId)

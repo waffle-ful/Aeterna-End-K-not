@@ -344,7 +344,7 @@ public static class NaturalDisasters
                         .RandomElement();
                 }
 
-                var aapc = Main.AllAlivePlayerControls;
+                var aapc = Main.AllAlivePlayerControlsToList;
                 bool bc = disaster.Name == "BuildingCollapse";
                 bool spawnOnPlayer = aapc.Count > 0 && DisasterSpawnMode.GetValue() switch
                 {
@@ -507,7 +507,7 @@ public static class NaturalDisasters
 
             foreach (PlayerControl pc in Main.EnumerateAlivePlayerControls())
             {
-                float speed = (FastVector2.DistanceWithinRange(pc.Pos(), Position, Range)) switch
+                float speed = FastVector2.DistanceWithinRange(pc.Pos(), Position, Range) switch
                 {
                     true when AffectedPlayers.Add(pc.PlayerId) => Speed.GetFloat(),
                     false when AffectedPlayers.Remove(pc.PlayerId) => Main.RealOptionsData.GetFloat(FloatOptionNames.PlayerSpeedMod),

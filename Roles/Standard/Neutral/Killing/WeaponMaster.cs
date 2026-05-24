@@ -192,7 +192,7 @@ public class WeaponMaster : RoleBase
                 {
                     foreach (PlayerControl player in Main.EnumerateAlivePlayerControls())
                     {
-                        if (Pelican.IsEaten(player.PlayerId) || player == killer || target == player || player.Is(CustomRoles.Pestilence) || Veteran.VeteranInProtect.Contains(target.PlayerId)) continue;
+                        if (player == killer || target == player || player.Is(CustomRoles.Pestilence) || Veteran.VeteranInProtect.Contains(target.PlayerId)) continue;
 
                         if (FastVector2.DistanceWithinRange(killer.Pos(), player.Pos(), Radius.GetFloat()))
                             player.Suicide(PlayerState.DeathReason.Kill, killer);

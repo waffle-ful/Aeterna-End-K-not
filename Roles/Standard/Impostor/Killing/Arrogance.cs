@@ -151,7 +151,7 @@ public class Arrogance : RoleBase
     public override string GetProgressText(byte playerId, bool comms)
     {
         if (!ShowProgressTxt) return base.GetProgressText(playerId, comms);
-        
+
         double reduction = Math.Round(DefaultKCD - NowCooldown, 1);
         string nowKCD = string.Format(Translator.GetString("KCD"), Math.Round(NowCooldown, 1));
         return $"{base.GetProgressText(playerId, comms)} <#ffffff>-</color> {nowKCD} <#8B0000>(-{reduction}s)</color>";

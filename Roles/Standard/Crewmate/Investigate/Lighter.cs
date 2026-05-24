@@ -75,7 +75,6 @@ internal class Lighter : RoleBase
                 opt.SetFloat(FloatOptionNames.CrewLightMod, LighterVisionNormal.GetFloat());
         }
     }
-
     public override string GetProgressText(byte playerId, bool comms)
     {
         var progressText = new StringBuilder();

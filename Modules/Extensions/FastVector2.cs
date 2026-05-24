@@ -32,8 +32,10 @@ public static class FastVector2
         predicate ??= _ => true;
         float rangeSq = range * range;
 
-        foreach (PlayerControl pc in Main.EnumerateAlivePlayerControls())
+        var players = Main.CachedAlivePlayerControls();
+        for (byte playerIndex = 0; playerIndex < players.Count; playerIndex++)
         {
+            PlayerControl pc = players[playerIndex];
             if (pc.inVent || Akazukin.IsPseudoDead(pc.PlayerId) || !predicate(pc)) continue;
             
             Vector2 p = pc.Pos();
@@ -128,8 +130,10 @@ public static class FastVector2
         bool found = false;
         closest = null;
 
-        foreach (PlayerControl pc in Main.EnumerateAlivePlayerControls())
+        var players = Main.CachedAlivePlayerControls();
+        for (byte playerIndex = 0; playerIndex < players.Count; playerIndex++)
         {
+            PlayerControl pc = players[playerIndex];
             if (pc.inVent || Akazukin.IsPseudoDead(pc.PlayerId) || !predicate(pc)) continue;
             
             Vector2 p = pc.Pos();
@@ -164,8 +168,10 @@ public static class FastVector2
         bool found = false;
         closest = null;
 
-        foreach (PlayerControl pc in Main.EnumerateAlivePlayerControls())
+        var players = Main.CachedAlivePlayerControls();
+        for (byte playerIndex = 0; playerIndex < players.Count; playerIndex++)
         {
+            PlayerControl pc = players[playerIndex];
             if (pc.inVent || pc.PlayerId == source.PlayerId || Akazukin.IsPseudoDead(pc.PlayerId) || !predicate(pc)) continue;
             
             Vector2 p = pc.Pos();
@@ -202,8 +208,10 @@ public static class FastVector2
         bool found = false;
         closest = null;
 
-        foreach (PlayerControl pc in Main.EnumerateAlivePlayerControls())
+        var players = Main.CachedAlivePlayerControls();
+        for (byte playerIndex = 0; playerIndex < players.Count; playerIndex++)
         {
+            PlayerControl pc = players[playerIndex];
             if (pc.inVent || pc.PlayerId == source.PlayerId || Akazukin.IsPseudoDead(pc.PlayerId) || !predicate(pc)) continue;
             
             Vector2 p = pc.Pos();
@@ -241,8 +249,10 @@ public static class FastVector2
         bool found = false;
         closest = null;
 
-        foreach (PlayerControl pc in Main.EnumerateAlivePlayerControls())
+        var players = Main.CachedAlivePlayerControls();
+        for (byte playerIndex = 0; playerIndex < players.Count; playerIndex++)
         {
+            PlayerControl pc = players[playerIndex];
             if (pc.inVent || Akazukin.IsPseudoDead(pc.PlayerId) || !predicate(pc)) continue;
             
             Vector2 p = pc.Pos();

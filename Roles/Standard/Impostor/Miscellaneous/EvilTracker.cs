@@ -24,6 +24,7 @@ public class EvilTracker : RoleBase
     private static TargetMode CurrentTargetMode;
     private static RoleTypes RoleTypes;
     public static bool CanSeeLastRoomInMeeting;
+    private static Color32 ShadeColor;
 
     private static readonly string[] TargetModeText =
     [
@@ -61,6 +62,7 @@ public class EvilTracker : RoleBase
         Target = byte.MaxValue;
         CanSetTarget = false;
         EvilTrackerId = byte.MaxValue;
+        ShadeColor = Palette.ImpostorRed.ShadeColor(0.5f);
     }
 
     public override void Add(byte playerId)
@@ -212,7 +214,7 @@ public class EvilTracker : RoleBase
 
         if (imps.Length > 0)
         {
-            sb.Append($"<color={Utils.GetRoleColorCode(CustomRoles.Impostor)}>");
+            sb.Append(Utils.ColorPrefix(Utils.GetRoleColor(CustomRoles.Impostor)));
             foreach (byte impostorId in imps) sb.Append(TargetArrow.GetArrows(target, impostorId));
             sb.Append("</color>");
         }

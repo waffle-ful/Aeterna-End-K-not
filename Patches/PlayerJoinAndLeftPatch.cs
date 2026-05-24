@@ -84,22 +84,26 @@ internal static class OnGameJoinedPatch
             if (AURoleOptions.ShapeshifterCooldown == 0f) AURoleOptions.ShapeshifterCooldown = Main.LastShapeshifterCooldown.Value;
 
             LateTask.New(() =>
-            {
+            {                
                 JoiningGame = false;
 
                 Options.AutoSetFactionMinMaxSettings();
 
-                if (BanManager.CheckEACList(PlayerControl.LocalPlayer.FriendCode, PlayerControl.LocalPlayer.GetClient().GetHashedPuid()) && GameStates.IsOnlineGame)
+                try
                 {
-                    AmongUsClient.Instance.ExitGame(DisconnectReasons.Banned);
-                    SceneChanger.ChangeScene("MainMenu");
-                }
+                    ClientData client = PlayerControl.LocalPlayer?.GetClient();
 
-                ClientData client = PlayerControl.LocalPlayer.GetClient();
-                Logger.Info($"{client.PlayerName.RemoveHtmlTags()} (ClientID: {client.Id} / FriendCode: {client.FriendCode} / HashPuid: {client.GetHashedPuid()} / Platform: {client.PlatformData.Platform}) Hosted room (Server: {Utils.GetRegionName()})", "Session");
+                    if (BanManager.CheckEACList(PlayerControl.LocalPlayer.FriendCode, client.GetHashedPuid()) && GameStates.IsOnlineGame)
+                    {
+                        AmongUsClient.Instance.ExitGame(DisconnectReasons.Banned);
+                        SceneChanger.ChangeScene("MainMenu");
+                    }
+                    Logger.Info($"{client.PlayerName.RemoveHtmlTags()} (ClientID: {client.Id} / FriendCode: {client.FriendCode} / HashPuid: {client.GetHashedPuid()} / Platform: {client.PlatformData.Platform}) Hosted room (Server: {Utils.GetRegionName()})", "Session");
+                }
+                catch (Exception e) { Logger.Error($"ClientData null:{PlayerControl.LocalPlayer?.GetClient() == null}, PlayerControl.LocalPlayer null:{PlayerControl.LocalPlayer == null} - {e}", "OnGameJoinedPatch"); }
 
                 //Main.Instance.StartCoroutine(OptionShower.GetText());
-            }, 1f, "OnGameJoinedPatch");
+            }, 2f, "OnGameJoinedPatch");
 
             LateTask.New(() =>
             {
@@ -489,6 +493,7 @@ internal static class OnPlayerJoinedPatch
     {
         Logger.Info($"{client.PlayerName} (ClientID: {client.Id} / FriendCode: {client.FriendCode} / Hashed PUID: {client.GetHashedPuid()}) joined the lobby", "Session");
 
+        Main.SetDirtyRebuildPC();
         LateTask.New(() =>
         {
             try
@@ -575,8 +580,10 @@ internal static class OnPlayerLeftPatch
                 if (lobbyStateChanged) EndKnot.Modules.RPC.SyncLobbyState();
             }
 
+            Main.SetDirtyRebuildPC();
             if (AmongUsClient.Instance.AmHost && GameStates.IsInGame && data != null && data.Character)
             {
+
                 byte id = data.Character.PlayerId;
 
                 ExtendedPlayerControl.TempExiled.Remove(id);
@@ -687,6 +694,7 @@ internal static class OnPlayerLeftPatch
                     Options.AutoSetFactionMinMaxSettings();
             }
 
+            GameEndChecker.SetDirtyCheckEnd();
             Utils.CountAlivePlayers(true);
         }
         catch (NullReferenceException) { }
@@ -709,6 +717,7 @@ internal static class InnerNetClientSpawnPatch
         ClientData client = Utils.GetClientById(ownerId);
 
         Logger.Msg($"Spawn player data: ID {client?.Character?.PlayerId}: {client?.PlayerName}", "CreatePlayer");
+        Main.ForceRebuildCachesPlayerControls();
 
         if (client == null || !client.Character // client is null
                            || client.ColorId < 0 || Palette.PlayerColors.Length <= client.ColorId) // invalid client color

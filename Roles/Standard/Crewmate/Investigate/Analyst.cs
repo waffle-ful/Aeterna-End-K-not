@@ -19,7 +19,7 @@ internal class Analyst : RoleBase
     private static OptionItem SeeRoleBasis;
     public static OptionItem UsePet;
 
-    private static readonly Dictionary<string, string> ReplacementDict = new() { { "Analyze", Utils.ColorString(Utils.GetRoleColor(CustomRoles.Analyst), "Analyze") } };
+    private static readonly Dictionary<string, string> ReplacementDict = new() { { "Analyze", CustomRoles.Analyst.ColoredTextByRole("Analyze") } };
 
     public static Dictionary<byte, int> VentCount = [];
     public (byte ID, long TIME) CurrentTarget = (byte.MaxValue, Utils.TimeStamp);
@@ -73,16 +73,16 @@ internal class Analyst : RoleBase
         return SeeRoleBasis.GetBool()
             ? role.GetVNRole(true) switch
             {
-                CustomRoles.Impostor or CustomRoles.ImpostorEndKnot => Utils.ColorString(Utils.GetRoleColor(CustomRoles.Impostor), GetString("Impostor")),
-                CustomRoles.Shapeshifter or CustomRoles.ShapeshifterEndKnot => Utils.ColorString(Utils.GetRoleColor(CustomRoles.Speedrunner), GetString("Shapeshifter")),
-                CustomRoles.Phantom or CustomRoles.PhantomEndKnot => Utils.ColorString(Utils.GetRoleColor(CustomRoles.Witness), GetString("Specter")),
-                CustomRoles.Viper or CustomRoles.ViperEndKnot => Utils.ColorString(Utils.GetRoleColor(CustomRoles.Poisoner), GetString("Viper")),
-                CustomRoles.Crewmate or CustomRoles.CrewmateEndKnot => Utils.ColorString(Utils.GetRoleColor(CustomRoles.Crewmate), GetString("Crewmate")),
-                CustomRoles.Engineer or CustomRoles.EngineerEndKnot => Utils.ColorString(Utils.GetRoleColor(CustomRoles.Autocrat), GetString("Engineer")),
-                CustomRoles.Scientist or CustomRoles.ScientistEndKnot => Utils.ColorString(Utils.GetRoleColor(CustomRoles.Doctor), GetString("Scientist")),
-                CustomRoles.Noisemaker or CustomRoles.NoisemakerEndKnot => Utils.ColorString(Utils.GetRoleColor(CustomRoles.Bubble), GetString("Noisemaker")),
-                CustomRoles.Tracker or CustomRoles.TrackerEndKnot => Utils.ColorString(Utils.GetRoleColor(CustomRoles.Scout), GetString("Tracker")),
-                CustomRoles.Detective or CustomRoles.DetectiveEndKnot => Utils.ColorString(Utils.GetRoleColor(CustomRoles.Forensic), GetString("Detective")),
+                CustomRoles.Impostor or CustomRoles.ImpostorEndKnot => CustomRoles.Impostor.ColoredTextByRole(GetString("Impostor")),
+                CustomRoles.Shapeshifter or CustomRoles.ShapeshifterEndKnot => CustomRoles.Speedrunner.ColoredTextByRole(GetString("Shapeshifter")),
+                CustomRoles.Phantom or CustomRoles.PhantomEndKnot => CustomRoles.Witness.ColoredTextByRole(GetString("Specter")),
+                CustomRoles.Viper or CustomRoles.ViperEndKnot => CustomRoles.Poisoner.ColoredTextByRole(GetString("Viper")),
+                CustomRoles.Crewmate or CustomRoles.CrewmateEndKnot => CustomRoles.Crewmate.ColoredTextByRole(GetString("Crewmate")),
+                CustomRoles.Engineer or CustomRoles.EngineerEndKnot => CustomRoles.Autocrat.ColoredTextByRole(GetString("Engineer")),
+                CustomRoles.Scientist or CustomRoles.ScientistEndKnot => CustomRoles.Doctor.ColoredTextByRole(GetString("Scientist")),
+                CustomRoles.Noisemaker or CustomRoles.NoisemakerEndKnot => CustomRoles.Bubble.ColoredTextByRole(GetString("Noisemaker")),
+                CustomRoles.Tracker or CustomRoles.TrackerEndKnot => CustomRoles.Scout.ColoredTextByRole(GetString("Tracker")),
+                CustomRoles.Detective or CustomRoles.DetectiveEndKnot => CustomRoles.Forensic.ColoredTextByRole(GetString("Detective")),
                 _ => string.Empty
             }
             : string.Empty;
@@ -147,13 +147,12 @@ internal class Analyst : RoleBase
     public override void OnFixedUpdate(PlayerControl pc)
     {
         if (!IsEnable) return;
-        if (pc == null) return;
         if (CurrentTarget.ID == byte.MaxValue) return;
 
         PlayerControl target = Utils.GetPlayerById(CurrentTarget.ID);
         if (target == null) return;
 
-        if (!FastVector2.DistanceWithinRange(target.Pos(), pc.Pos(), (pc.Is(CustomRoles.Reach) ? 2.5f : 1.5f)))
+        if (!FastVector2.DistanceWithinRange(target.Pos(), pc.Pos(), pc.Is(CustomRoles.Reach) ? 2.5f : 1.5f))
         {
             CurrentTarget.ID = byte.MaxValue;
             Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: target);

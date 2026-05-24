@@ -241,12 +241,12 @@ public class Romantic : RoleBase
             if (!BetTargetKnowRomantic.GetBool()) return string.Empty;
 
             return target.Is(CustomRoles.Romantic) && RomanticId == target.PlayerId && PartnerId == seer.PlayerId
-                ? Utils.ColorString(Utils.GetRoleColor(CustomRoles.Romantic), "♥")
+                ? CustomRoles.Romantic.ColoredTextByRole("♥")
                 : string.Empty;
         }
 
         return PartnerId == target.PlayerId
-            ? Utils.ColorString(Utils.GetRoleColor(CustomRoles.Romantic), "♥")
+            ? CustomRoles.Romantic.ColoredTextByRole("♥")
             : string.Empty;
     }
 

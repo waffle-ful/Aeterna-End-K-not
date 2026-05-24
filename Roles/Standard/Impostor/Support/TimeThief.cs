@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
+using UnityEngine;
 
 namespace EndKnot.Roles;
 
@@ -12,6 +13,7 @@ public class TimeThief : RoleBase
     public static OptionItem LowerLimitVotingTime;
     public static OptionItem ReturnStolenTimeUponDeath;
 
+    private static Color32 ShadeColor;
     public override bool IsEnable => PlayerIdList.Count > 0;
 
     public override void SetupCustomOption()
@@ -37,6 +39,7 @@ public class TimeThief : RoleBase
     public override void Init()
     {
         PlayerIdList = [];
+        ShadeColor = Palette.ImpostorRed.ShadeColor(0.5f);
     }
 
     public override void Add(byte playerId)

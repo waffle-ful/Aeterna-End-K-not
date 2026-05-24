@@ -37,6 +37,7 @@ public class Doppelganger : RoleBase
     ];
 
     private byte DGId;
+    private static Color32 ShadeColor;
 
     public override bool IsEnable => PlayerIdList.Count > 0;
 
@@ -76,6 +77,8 @@ public class Doppelganger : RoleBase
         DGId = byte.MaxValue;
 
         LocalPlayerChangeSkinTimes = 0;
+
+        ShadeColor = Utils.GetRoleColor(CustomRoles.Doppelganger).ShadeColor(0.25f);
     }
 
     public override void Add(byte playerId)

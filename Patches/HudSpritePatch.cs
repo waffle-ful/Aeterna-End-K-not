@@ -504,8 +504,8 @@ public static class HudSpritePatch
                     break;
                 }
                 case CustomRoles.Arsonist:
-                {
-                    newKillButton = CustomButton.Get("Douse");
+                    {
+                        newKillButton = CustomButton.Get("Douse");
 
                     if (player.IsDouseDone() || (Arsonist.ArsonistCanIgniteAnytime.GetBool() && Utils.GetDousedPlayerCount(player.PlayerId).Item1 >= Arsonist.ArsonistMinPlayersToIgnite.GetInt()) && HudManager.Instance.KillButton.currentTarget && player.IsDousedPlayer(HudManager.Instance.KillButton.currentTarget))
                         newKillButton = CustomButton.Get("Ignite");
@@ -735,16 +735,13 @@ public static class HudSpritePatch
             __instance.PetButton.graphic.sprite = newPetButton;
             __instance.ReportButton.graphic.sprite = newReportButton;
 
-            new[]
-            {
-                __instance.KillButton.graphic,
-                __instance.AbilityButton.graphic,
-                __instance.ImpostorVentButton.graphic,
-                __instance.SabotageButton.graphic,
-                __instance.PetButton.graphic,
-                __instance.ReportButton.graphic,
-                __instance.SecondaryAbilityButton.graphic
-            }.Do(x => x.SetCooldownNormalizedUvs());
+            __instance.KillButton.graphic.SetCooldownNormalizedUvs();
+            __instance.AbilityButton.graphic.SetCooldownNormalizedUvs();
+            __instance.ImpostorVentButton.graphic.SetCooldownNormalizedUvs();
+            __instance.SabotageButton.graphic.SetCooldownNormalizedUvs();
+            __instance.PetButton.graphic.SetCooldownNormalizedUvs();
+            __instance.ReportButton.graphic.SetCooldownNormalizedUvs();
+            __instance.SecondaryAbilityButton.graphic.SetCooldownNormalizedUvs();
             
             ForceUpdate = false;
 

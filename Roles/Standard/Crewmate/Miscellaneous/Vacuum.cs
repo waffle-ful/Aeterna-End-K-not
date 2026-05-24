@@ -55,7 +55,7 @@ public class Vacuum : RoleBase
         sb.Append(Utils.GetTaskCount(playerId, comms));
         return sb.ToString();
     }
-    
+
     public override void ApplyGameOptions(IGameOptions opt, byte playerId)
     {
         if (Options.UsePets.GetBool()) return;

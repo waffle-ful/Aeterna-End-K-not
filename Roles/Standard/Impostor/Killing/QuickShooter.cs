@@ -17,6 +17,7 @@ internal class QuickShooter : RoleBase
 
     public static Dictionary<byte, int> ShotLimit = [];
 
+    private static Color32 ShadeColor;
     public override bool IsEnable => PlayerIdList.Count > 0;
 
     public override void SetupCustomOption()
@@ -40,6 +41,7 @@ internal class QuickShooter : RoleBase
     {
         PlayerIdList = [];
         ShotLimit = [];
+        ShadeColor = Utils.GetRoleColor(CustomRoles.QuickShooter).ShadeColor(0.25f);
     }
 
     public override void Add(byte playerId)

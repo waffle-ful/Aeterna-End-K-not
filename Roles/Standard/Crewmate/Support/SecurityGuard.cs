@@ -65,7 +65,7 @@ internal class SecurityGuard : RoleBase
 
         return progressText.ToString();
     }
-    
+
     // Revert this if needed, recommended to actually add a text called "SaboBlock" or something
     //public override void SetButtonTexts(HudManager hud, byte id)
     //{

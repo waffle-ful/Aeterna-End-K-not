@@ -174,7 +174,7 @@ internal class Ninja : RoleBase
 
     public override bool OnShapeshift(PlayerControl pc, PlayerControl t, bool shapeshifting)
     {
-        if (!pc.IsAlive() || Pelican.IsEaten(pc.PlayerId)) return false;
+        if (!pc.IsAliveWithConditions()) return false;
 
         if (!shapeshifting) return true;
 
@@ -185,7 +185,7 @@ internal class Ninja : RoleBase
 
     public override bool OnVanish(PlayerControl pc)
     {
-        if (pc == null || !pc.IsAlive() || Pelican.IsEaten(pc.PlayerId)) return false;
+        if (!pc.IsAliveWithConditions()) return false;
 
         if (!IsUndertaker)
         {

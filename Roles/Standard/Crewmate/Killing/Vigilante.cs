@@ -15,6 +15,7 @@ public class Vigilante : RoleBase
     private static OptionItem KCD;
     public static OptionItem CanKillRound1;
     public static OptionItem UsePet;
+    private static Color32 ShadeColor;
 
     public override bool IsEnable => PlayerIdList.Count > 0;
 
@@ -41,6 +42,7 @@ public class Vigilante : RoleBase
     {
         Killed = [];
         PlayerIdList = [];
+        ShadeColor = Utils.GetRoleColor(CustomRoles.Vigilante).ShadeColor(0.25f);
     }
 
     public override void Remove(byte playerId)

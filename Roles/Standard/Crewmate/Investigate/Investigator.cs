@@ -58,7 +58,7 @@ public class Investigator : RoleBase
     {
         On = true;
 
-        foreach (PlayerControl ar in Main.EnumeratePlayerControls()) IsRevealed[(playerId, ar.PlayerId)] = false;
+        foreach (PlayerControl ar in Main.CachedAllPlayerControls()) IsRevealed[(playerId, ar.PlayerId)] = false;
 
         RandomRole[playerId] = GetRandomCrewRoleString();
     }
@@ -99,7 +99,7 @@ public class Investigator : RoleBase
     {
         if (GameStates.IsInTask && InvestigatorTimer.ContainsKey(player.PlayerId))
         {
-            if (!player.IsAlive() || Pelican.IsEaten(player.PlayerId))
+            if (!player.IsAliveWithConditions())
             {
                 InvestigatorTimer.Remove(player.PlayerId);
                 NotifyRoles(SpecifySeer: player);

@@ -32,6 +32,7 @@ internal static class ExitGamePatch
 
         GameStates.InGame = false;
         Main.RealOptionsData?.Restore(GameOptionsManager.Instance.CurrentGameOptions);
+        DataFlagRateLimiter.DropQueue();
 
         if (SetUpRoleTextPatch.IsInIntro)
         {

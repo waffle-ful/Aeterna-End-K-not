@@ -113,6 +113,7 @@ internal static class LocateArrow
         return LocateArrows.FirstOrDefault(a => a.Key.Equals(arrowInfo)).Value ?? string.Empty;
     }
 
+    private static readonly List<ArrowInfo> ArrowList = [];
     /// <summary>
     ///     Check target arrow every FixedUpdate
     ///     Issue NotifyRoles when there are updates
@@ -124,13 +125,20 @@ internal static class LocateArrow
 
         bool seerIsDead = !seer.IsAlive();
 
-        List<ArrowInfo> arrowList = new(LocateArrows.Keys.Where(a => a.From == seer.PlayerId));
-        if (arrowList.Count == 0) return;
+        ArrowList.Clear();
+        foreach (var arrowInfo in LocateArrows.Keys)
+        {
+            if (arrowInfo.From == seer.PlayerId)
+                ArrowList.Add(arrowInfo);
+        }
+        int arrowCount = ArrowList.Count;
+        if (arrowCount == 0) return;
 
         var update = false;
 
-        foreach (ArrowInfo arrowInfo in arrowList.ToArray())
+        for (int arrowId = 0; arrowId < arrowCount; arrowId++)
         {
+            ArrowInfo arrowInfo = ArrowList[arrowId];
             Vector3 loc = arrowInfo.To;
 
             if (seerIsDead)

@@ -14,6 +14,7 @@ public class Collector : RoleBase
     public static Dictionary<byte, byte> CollectorVoteFor = [];
     public static Dictionary<byte, int> CollectVote = [];
 
+    private static Color32 ShadeColor;
     public override bool IsEnable => PlayerIdList.Count > 0;
 
     public override void SetupCustomOption()
@@ -30,6 +31,7 @@ public class Collector : RoleBase
         PlayerIdList = [];
         CollectorVoteFor = [];
         CollectVote = [];
+        ShadeColor = Utils.GetRoleColor(CustomRoles.Collector).ShadeColor(0.25f);
     }
 
     public override void Add(byte playerId)
@@ -69,6 +71,8 @@ public class Collector : RoleBase
         return Utils.ColorString(Utils.GetRoleColor(CustomRoles.Collector).ShadeColor(0.25f), $"({VoteAmount}/{CollectNum})");
     }
 
+
+
     public static bool CollectorWin(bool check = true)
     {
         PlayerControl[] pc = Main.EnumeratePlayerControls().Where(x => x.Is(CustomRoles.Collector) && x.IsAlive() && CollectDone(x)).ToArray();
@@ -106,7 +110,7 @@ public class Collector : RoleBase
 
     public static void CollectAmount(Dictionary<byte, int> VotingData, MeetingHud __instance) //得到集票者收集到的票
     {
-        foreach (PlayerVoteArea pva in __instance.playerStates.ToArray())
+        foreach (PlayerVoteArea pva in __instance.playerStates)
         {
             if (pva == null) continue;
 

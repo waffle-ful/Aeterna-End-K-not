@@ -12,6 +12,7 @@ internal class Asthmatic : IAddon
     private static readonly Dictionary<byte, Counter> Timers = [];
     private static readonly Dictionary<byte, string> LastSuffix = [];
     private static readonly Dictionary<byte, Vector2> LastPosition = [];
+    private static readonly List<byte> ToRemove = [];
     private static int MinRedTime;
     private static int MaxRedTime;
     private static int MinGreenTime;
@@ -69,7 +70,7 @@ internal class Asthmatic : IAddon
         {
             var r = IRandom.Instance;
 
-            foreach (PlayerControl pc in Main.EnumerateAlivePlayerControls())
+            foreach (PlayerControl pc in Main.CachedAlivePlayerControls())
             {
                 if (pc.Is(CustomRoles.Asthmatic))
                     Timers[pc.PlayerId] = new(30, r.Next(MinRedTime, MaxRedTime), '●', false, RandomRedTime, RandomGreenTime);
@@ -81,24 +82,24 @@ internal class Asthmatic : IAddon
     {
         if (Timers.Count == 0) return;
 
-        List<byte> toRemove = [];
-        
+        ToRemove.Clear();
+
         foreach ((byte id, Counter counter) in Timers)
         {
             PlayerState state = Main.PlayerStates[id];
 
             if (state.IsDead || !state.SubRoles.Contains(CustomRoles.Asthmatic) || state.MainRole == CustomRoles.Pestilence)
             {
-                toRemove.Add(id);
+                ToRemove.Add(id);
                 continue;
             }
 
             counter.Update();
         }
-        
-        if (toRemove.Count == 0) return;
 
-        foreach (byte id in toRemove)
+        if (ToRemove.Count == 0) return;
+
+        foreach (byte id in ToRemove)
         {
             Main.PlayerStates[id].RemoveSubRole(CustomRoles.Asthmatic);
             Timers.Remove(id);

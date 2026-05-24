@@ -11,6 +11,8 @@ namespace EndKnot.Roles;
 
 internal class Adventurer : RoleBase
 {
+    private static readonly Weapon[] AllWeapon = Enum.GetValues<Weapon>();
+    private static readonly Resource[] AllResource = Enum.GetValues<Resource>();
     public enum Resource
     {
         TaskCompletion,
@@ -82,7 +84,14 @@ internal class Adventurer : RoleBase
 
     private static void HideObject(Resource resource)
     {
-        CustomNetObject.AllObjects.FirstOrDefault(x => x is AdventurerItem a && a.Resource == resource)?.Despawn();
+        for (int objIndex = 0; objIndex < CustomNetObject.AllObjects.Count; objIndex++)
+        {
+            if (CustomNetObject.AllObjects[objIndex] is AdventurerItem item && item.Resource == resource)
+            {
+                item.Despawn();
+                break;
+            }
+        }
     }
 
     private static OptionItem CreateWeaponEnabledSetting(int id, Weapon weapon)
@@ -98,7 +107,7 @@ internal class Adventurer : RoleBase
             .SetParent(Options.CustomRoleSpawnChances[CustomRoles.Adventurer])
             .SetValueFormat(OptionFormat.Seconds);
 
-        foreach (Weapon weapon in Enum.GetValues<Weapon>()) WeaponEnabledSettings[weapon] = CreateWeaponEnabledSetting(11333 + (int)weapon, weapon);
+        foreach (Weapon weapon in AllWeapon) WeaponEnabledSettings[weapon] = CreateWeaponEnabledSetting(11333 + (int)weapon, weapon);
     }
 
     public override void Add(byte playerId)
@@ -118,7 +127,7 @@ internal class Adventurer : RoleBase
         LastGroupingResourceTimeStamp = Utils.TimeStamp + 30;
         ResourceLocations = [];
 
-        foreach (Resource resource in Enum.GetValues<Resource>()) ResourceCounts[resource] = 0;
+        foreach (Resource resource in AllResource) ResourceCounts[resource] = 0;
     }
 
     public override void Init()
@@ -213,8 +222,7 @@ internal class Adventurer : RoleBase
                     case Weapon.Wrench:
                         if (Utils.IsActive(SystemTypes.Electrical))
                         {
-                            var switchSystem = ShipStatus.Instance?.Systems?[SystemTypes.Electrical]?.CastFast<SwitchSystem>();
-
+                            var switchSystem = ShipStatusSystem.SwitchSystem;
                             if (switchSystem != null)
                             {
                                 switchSystem.ActualSwitches = 0;
@@ -420,7 +428,7 @@ internal class Adventurer : RoleBase
         if ((seer.IsModdedClient() && !hud) || seer.PlayerId != target.PlayerId || seer.PlayerId != AdventurerPC.PlayerId) return string.Empty;
 
         IEnumerable<string> resources =
-            from resource in Enum.GetValues<Resource>()
+            from resource in AllResource
             let displayData = ResourceDisplayData[resource]
             select $"{Utils.ColorString(displayData.Color, $"{displayData.Icon}")}{ResourceCounts[resource]}";
 

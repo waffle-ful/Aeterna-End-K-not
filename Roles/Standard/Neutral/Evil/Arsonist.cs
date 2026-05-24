@@ -23,6 +23,7 @@ internal class Arsonist : RoleBase
     public static OptionItem ArsonistHasImpostorVision;
 
     public static bool On;
+    private static Color32 ShadeColor;
     public override bool IsEnable => On;
 
     public override void SetupCustomOption()
@@ -59,7 +60,8 @@ internal class Arsonist : RoleBase
     public override void Add(byte playerId)
     {
         On = true;
-        foreach (PlayerControl ar in Main.EnumeratePlayerControls()) IsDoused.Add((playerId, ar.PlayerId), false);
+        ShadeColor = Utils.GetRoleColor(CustomRoles.Arsonist).ShadeColor(0.25f);
+        foreach (PlayerControl ar in Main.CachedAllPlayerControls()) IsDoused.Add((playerId, ar.PlayerId), false);
     }
 
     public override void Init()
@@ -92,6 +94,7 @@ internal class Arsonist : RoleBase
         (int, int) doused = Utils.GetDousedPlayerCount(playerId);
         return Utils.ColorString(Utils.GetRoleColor(CustomRoles.Arsonist).ShadeColor(0.25f), !ArsonistCanIgniteAnytime.GetBool() ? $"<color=#777777>-</color> {doused.Item1}/{doused.Item2}" : $"<color=#777777>-</color> {doused.Item1}/{ArsonistMaxPlayersToIgnite.GetInt()}");
     }
+
 
     public override bool OnCheckMurder(PlayerControl killer, PlayerControl target)
     {
@@ -171,7 +174,7 @@ internal class Arsonist : RoleBase
 
                     physics.myPlayer.KillFlash();
 
-                    int apc = Main.AllAlivePlayerControls.Count;
+                    int apc = Main.AllAlivePlayerControlsCount;
 
                     switch (apc)
                     {
@@ -203,7 +206,7 @@ internal class Arsonist : RoleBase
         {
             PlayerControl arTarget = value.Player;
 
-            if (!player.IsAlive() || Pelican.IsEaten(playerId))
+            if (!player.IsAliveWithConditions())
             {
                 ArsonistTimer.Remove(playerId);
                 Utils.NotifyRoles(SpecifySeer: player, SpecifyTarget: arTarget, ForceLoop: true);
