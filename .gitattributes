@@ -1,0 +1,34 @@
+# Normalize line endings for text files
+# upstream EHR uses CRLF; fork standardizes on LF for cleaner cherry-picks
+.gitattributes text eol=lf
+.gitignore     text eol=lf
+
+*.cs        text eol=lf
+*.csproj    text eol=lf
+*.props     text eol=lf
+*.targets   text eol=lf
+*.json      text eol=lf
+*.jsonc     text eol=lf
+*.md        text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.xml       text eol=lf
+*.sh        text eol=lf
+*.txt       text eol=lf
+
+*.sln       text eol=crlf
+
+# Binary assets — never touch line endings
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.ico       binary
+*.dll       binary
+*.exe       binary
+*.zip       binary
+*.ogg       binary
+*.mp3       binary
+*.wav       binary
+*.ttf       binary
+*.otf       binary
