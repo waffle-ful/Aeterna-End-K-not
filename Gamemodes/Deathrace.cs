@@ -81,11 +81,27 @@ public static class Deathrace
     public class PlayerData
     {
         public PlayerControl Player;
-        public SystemTypes NextRoom;
-        public SystemTypes LastRoom;
+        public int TrackIndex;
         public int Lap;
         public string LastSuffix;
         public readonly List<PowerUp> PowerUps = [];
+        
+        public SystemTypes GetCurrentRoom()
+        {
+            return Track[TrackIndex];
+        }
+
+        public int GetNextTrackIndex()
+        {
+            return Clockwise
+                ? (TrackIndex + 1) % Track.Count
+                : (TrackIndex - 1 + Track.Count) % Track.Count;
+        }
+
+        public SystemTypes GetNextRoom()
+        {
+            return Track[GetNextTrackIndex()];
+        }
     }
 
     public enum PowerUp
@@ -205,14 +221,13 @@ public static class Deathrace
         Logger.Info($"Track: {string.Join(" » ", Track)}", "Deathrace");
         
         List<PlayerControl> players = Main.EnumerateAlivePlayerControls().ToList();
-        if (Main.GM.Value) players.RemoveAll(x => x.IsHost());
+        if (Main.GM.Value) players.RemoveAll(x => x.AmOwner);
         if (ChatCommands.Spectators.Count > 0) players.RemoveAll(x => ChatCommands.Spectators.Contains(x.PlayerId));
         
         Data = players.ToDictionary(x => x.PlayerId, x => new PlayerData
         {
             Player = x,
-            NextRoom = Clockwise ? Track[0] : Track[^1],
-            LastRoom = Clockwise ? Track[^1] : Track[0],
+            TrackIndex = Clockwise ? Track.Count - 1 : 0,
             Lap = 0
         });
         
@@ -282,21 +297,35 @@ public static class Deathrace
         
         sb.AppendLine($"<#888888>{string.Format(Translator.GetString("Deathrace.Lap"), data.Lap + 1, LapsToWin)}</color>");
 
-        if (seer.IsInRoom(data.LastRoom))
-            sb.Append($"<u>{Translator.GetString(data.LastRoom.ToString())}</u> ");
-        
-        int index = Track.IndexOf(data.LastRoom);
-        bool coordinateCheck = CoordinateChecks.TryGetValue((int)data.NextRoom, out var coordinates);
-        string nextRoom = Translator.GetString(coordinateCheck ? "Deathrace.CoordinateCheck" : data.NextRoom.ToString());
-        SystemTypes nextNextRoom = Clockwise ? (index >= Track.Count - 2 ? Track[(index + 2) % Track.Count] : Track[index + 2]) : (index <= 1 ? Track[(index - 2 + Track.Count) % Track.Count] : Track[index - 2]);
+        SystemTypes currentRoom = data.GetCurrentRoom();
+        SystemTypes nextRoomType = data.GetNextRoom();
+
+        if (seer.IsInRoom(currentRoom))
+            sb.Append($"<u>{Translator.GetString(currentRoom.ToString())}</u> ");
+
+        bool coordinateCheck = CoordinateChecks.TryGetValue((int)nextRoomType, out var coordinates);
+
+        string nextRoom = Translator.GetString(
+            coordinateCheck
+                ? "Deathrace.CoordinateCheck"
+                : nextRoomType.ToString()
+        );
+
+        int nextIndex = data.GetNextTrackIndex();
+
+        int nextNextIndex = Clockwise
+            ? (nextIndex + 1) % Track.Count
+            : (nextIndex - 1 + Track.Count) % Track.Count;
+
+        SystemTypes nextNextRoom = Track[nextNextIndex];
 
         sb.Append($"» {nextRoom} » {Translator.GetString(nextNextRoom.ToString())} » ....");
         
-        if (UsableVentIDs.TryGetValue(Main.CurrentMap, out var dict) && dict.ContainsKey(data.NextRoom) && dict.ContainsKey(data.LastRoom))
+        if (UsableVentIDs.TryGetValue(Main.CurrentMap, out var dict) && dict.ContainsKey(nextRoomType) && dict.ContainsKey(currentRoom))
             sb.Append($"\n<#ffff44>{Translator.GetString("Deathrace.VentUse")}</color>");
 
         if (coordinateCheck)
-            sb.Append($"\n<#ffff44>{string.Format(Translator.GetString($"Deathrace.CoordinateCheckInfo.{(int)data.NextRoom}"), Math.Round(Vector2.Distance(coordinates, seer.Pos()), 1))}</color>");
+            sb.Append($"\n<#ffff44>{string.Format(Translator.GetString($"Deathrace.CoordinateCheckInfo.{(int)nextRoomType}"), Math.Round(Vector2.Distance(coordinates, seer.Pos()), 1))}</color>");
         
         if (data.PowerUps.Count > 0)
         {
@@ -387,7 +416,7 @@ public static class Deathrace
     public static bool CanUseVent(PlayerControl pc, int ventId)
     {
         if (!AmongUsClient.Instance.AmHost || (pc.inVent && pc.GetClosestVent()?.Id == ventId)) return true;
-        return Data.TryGetValue(pc.PlayerId, out var data) && UsableVentIDs.TryGetValue(Main.CurrentMap, out var dict) && dict.ContainsKey(data.NextRoom) && dict.TryGetValue(data.LastRoom, out var vents) && vents.Contains(ventId);
+        return Data.TryGetValue(pc.PlayerId, out var data) && UsableVentIDs.TryGetValue(Main.CurrentMap, out var dict) && dict.ContainsKey(data.GetNextRoom()) && dict.TryGetValue(data.GetCurrentRoom(), out var vents) && vents.Contains(ventId);
     }
 
     public static void UsePowerUp(PlayerControl pc)
@@ -524,26 +553,32 @@ public static class Deathrace
                 }
 
                 PlainShipRoom room = data.Player.GetPlainShipRoom();
-                bool coordinateCheck = CoordinateChecks.TryGetValue((int)data.NextRoom, out var coordinates);
+                SystemTypes nextRoom = data.GetNextRoom();
+                bool coordinateCheck = CoordinateChecks.TryGetValue((int)nextRoom, out var coordinates);
                 if (room && room.RoomId is SystemTypes.Hallway or SystemTypes.Outside or SystemTypes.Decontamination2 or SystemTypes.Decontamination3) room = null;
 
-                if ((!room && !coordinateCheck) || (room && room.RoomId == data.LastRoom))
+                SystemTypes currentRoom = data.GetCurrentRoom();
+
+                if ((!room && !coordinateCheck) || (room && room.RoomId == currentRoom))
                 {
                     CheckAndNotify(data);
                     continue;
                 }
 
-                if (coordinateCheck ? FastVector2.DistanceWithinRange(coordinates, data.Player.Pos(), 2f) : room.RoomId == data.NextRoom)
+                if (coordinateCheck ? FastVector2.DistanceWithinRange(coordinates, data.Player.Pos(), 2f) : room.RoomId == nextRoom)
                 {
-                    data.LastRoom = data.NextRoom;
-                    int index = Track.IndexOf(data.NextRoom);
-                    bool endOfTrack = Clockwise ? index == Track.Count - 1 : index == 0;
+                    data.TrackIndex = data.GetNextTrackIndex();
+
+                    bool endOfTrack = Clockwise
+                        ? data.TrackIndex == Track.Count - 1
+                        : data.TrackIndex == 0;
 
                     if (endOfTrack)
                     {
                         data.Lap++;
-                        RPC.PlaySoundRPC(id, Sounds.TaskComplete);
                         Utils.SendRPC(CustomRPC.DeathraceSync, id, data.Lap);
+                        
+                        RPC.PlaySoundRPC(id, Sounds.TaskComplete);
                         
                         if (data.Lap >= LapsToWin)
                         {
@@ -564,20 +599,17 @@ public static class Deathrace
                                 continue;
                             }
                         }
-
-                        data.NextRoom = Clockwise ? Track[0] : Track[^1];
                     }
                     else
                     {
-                        data.NextRoom = Clockwise ? Track[index + 1] : Track[index - 1];
                         RPC.PlaySoundRPC(id, Sounds.TaskUpdateSound);
                     }
 
-                    Logger.Info($"{Main.AllPlayerNames.GetValueOrDefault(id, $"ID {id}")} entered {data.LastRoom}, next is {data.NextRoom}", "Deathrace");
+                    Logger.Info($"{Main.AllPlayerNames.GetValueOrDefault(id, $"ID {id}")} entered {currentRoom}, next is {nextRoom}", "Deathrace");
                 }
                 else if (!coordinateCheck && InitialSpawnRoom[Main.CurrentMap] != room.RoomId)
                 {
-                    Logger.Info($"{Main.AllPlayerNames.GetValueOrDefault(id, $"ID {id}")} was supposed to enter {data.NextRoom}, but they've entered {room.RoomId}", "Deathrace");
+                    Logger.Info($"{Main.AllPlayerNames.GetValueOrDefault(id, $"ID {id}")} was supposed to enter {nextRoom}, but they've entered {room.RoomId}", "Deathrace");
                     data.Player.Suicide();
                     removeId = id;
                 }
