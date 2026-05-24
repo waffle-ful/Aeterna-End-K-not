@@ -2,7 +2,7 @@
 
 namespace EndKnot.Modules;
 
-internal class LogHandler(string tag) : ILogHandler
+internal class LogHandler(string tag)
 {
     public string Tag { get; } = tag;
 

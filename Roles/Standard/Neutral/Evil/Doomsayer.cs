@@ -2,7 +2,6 @@
 using AmongUs.GameOptions;
 using EndKnot.Modules;
 using Hazel;
-using UnityEngine;
 
 namespace EndKnot.Roles;
 

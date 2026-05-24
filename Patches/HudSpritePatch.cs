@@ -42,7 +42,7 @@ public static class HudSpritePatch
             Sprite newSabotageButton = DefaultIcons[3];
             Sprite newPetButton = DefaultIcons[4];
             Sprite newReportButton = DefaultIcons[5];
-            Sprite newSecondaryAbilityButton = DefaultIcons[6];
+            //Sprite newSecondaryAbilityButton = DefaultIcons[6];
 
             bool usesPetInsteadOfKill = player.UsesPetInsteadOfKill();
             bool shapeshifting = player.IsShifted();
@@ -244,7 +244,7 @@ public static class HudSpritePatch
                 case CustomRoles.Convener:
                 {
                     if (Options.UsePets.GetBool()) newPetButton = CustomButton.Get("Convener");
-                    else newPetButton = CustomButton.Get("Convener");
+                    else newAbilityButton = CustomButton.Get("Convener");
                     break;
                 }
                 case CustomRoles.Doorjammer:

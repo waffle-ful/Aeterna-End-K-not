@@ -6,7 +6,7 @@ namespace EndKnot.Roles;
 
 public abstract class CovenBase : RoleBase
 {
-    public enum NecronomiconReceivePriorities
+    protected enum NecronomiconReceivePriorities
     {
         First,
         Random,
