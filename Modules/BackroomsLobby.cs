@@ -1387,6 +1387,9 @@ public static class BackroomsLobby
         CreateVision();
         // 5. 不気味系 overlay (黄色フィルター + 蛍光灯フリッカー)
         CreateOverlay();
+        // 6. 不気味アンビエントサウンド (蛍光灯ハム) を BGM に重ねて流す。
+        // Stop は LobbyBehaviour.OnDestroy + ExitBackrooms で対応
+        BackroomsAmbient.Start();
         _visionPaused = false;
         _inBackrooms = true;
         _lastVisionValid = false; // idle skip cache invalidate — 次フレームで強制 rebuild
@@ -1405,13 +1408,14 @@ public static class BackroomsLobby
 
         if (PlayerControl.LocalPlayer == null) return;
 
-        // 0. custom mesh 視界システム停止
+        // 0. custom mesh 視界システム停止 + アンビエントも止める (/bbexit 経路用)
         _inBackrooms = false;
         _visionPaused = false;
         _lastVisionValid = false;
         _cullValid = false;
         DestroyVision();
         DestroyOverlay();
+        BackroomsAmbient.Stop();
 
         // 1. Backrooms タイル全消去
         int wiped = 0;
