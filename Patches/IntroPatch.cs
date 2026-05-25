@@ -1385,7 +1385,10 @@ internal static class IntroCutsceneDestroyPatch
         else
         {
             foreach (PlayerControl player in apc)
+            {
+                Main.PlayerStates.TryAdd(player.PlayerId, new(player.PlayerId));
                 Main.PlayerStates[player.PlayerId].InitTask(player);
+            }
 
             switch (Options.CurrentGameMode)
             {
@@ -1429,7 +1432,7 @@ internal static class IntroCutsceneDestroyPatch
             if (Options.CurrentGameMode is CustomGameMode.Standard or CustomGameMode.HideAndSeek && !Utils.HasTasks(PlayerControl.LocalPlayer.Data, forRecompute: false))
                 hud.TaskPanel.open = false;
             
-            if (!AmongUsClient.Instance.AmHost || !Lovers.PrivateChat.GetBool()) return;
+            if (!AmongUsClient.Instance.AmHost || !Lovers.PrivateChat.GetBool() || Options.ChatDuringGame.GetBool()) return;
             
             Main.LoversPlayers.ForEach(x => x.SetChatVisible(true));
         }, 1f, log: false);

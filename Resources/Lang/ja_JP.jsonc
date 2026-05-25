@@ -9396,6 +9396,7 @@
   "AutoMPollCommandCooldown": "ロビー参加後に /mpoll を自動実行するまでの遅延",
   "AutoMessageSendInterval": "自動メッセージの送信間隔",
   "DraftAffectedByRoleSpawnChances": "ドラフト候補の抽選時に 役職生成確率を加味する",
+  "DraftIncludesNonCrewRoles": "ドラフトに非クルー役職（インポスター・ニュートラル・コーヴン）を含める",
   "DraftChosen": "<size=80%>次のゲームでの役割で <b>{0}</b>を選びました。\\n<size=70%>再度 <b>/draft [index]</b>を入力することにより 選択はまだ変更できます。</size>",
   "DraftMaxRolesPerPlayer": "ドラフト時から 選択するための プレイヤーごとの 役割の最大",
   "DraftNotEnoughRoles": "<size=80%>選択する役割が十分ではないため、したがって ドラフトを開始できません。\\nより多くの役割を有効にして そして再度試してみたください。</size>",
@@ -9600,6 +9601,7 @@
   "DeathReason.PissedOff": "破壊",
   "DeathReason.Poison": "毒殺",
   "DeathReason.Quantization": "蒸発",
+  "DeathReason.RiptideKilled": "波に呑まれた",
   "DeathReason.RNG": "RNG",
   "DeathReason.Retribution": "Retribution",
   "DeathReason.Revenge": "復讐",
@@ -11838,6 +11840,22 @@
   "WaveCannon.FriendlyFire": "フレンドリーファイア",
   "WaveCannon.ButtonText": "発射",
   "WaveCannon.DirectionDetect": "発射方向に少し動いて。直後にチャージ開始するから",
+
+  /* --- Riptide --- */
+  "Riptide": "リップタイド",
+  "RiptideInfo": "会議のたびに波を起こし、プレイヤーを流して溺れさせる",
+  "RiptideInfoLong": "(<#ff1919>インポスター</color>):\n<size=80%>会議が終わるたびに、マップの外から波が押し寄せる。波の中にいると移動速度が落ち、長くいると溺れて死んでしまう。\n_____________________________________\n難易度: ★★★☆☆\n\n[アビリティ]\n・<b><color=#0073ff>波</color></b>\n初回会議を除き、毎ラウンド終わりにマップの端から波が発生する。波に入ると速度が低下し、その中に留まり続けると溺れて死亡。仲間のインポスターも例外ではない。\nラウンドが進むほど波の数と速さが上がっていく。\n\n・<b><color=#0073ff>キル</color></b>（オプション）\n設定によっては通常のキルボタンも使える。\n\n<i>波は待ってくれない。</i></size>",
+  "Riptide.BaseWaveSpeed": "波の速さ",
+  "Riptide.EnableAcceleration": "ラウンドごとに波が加速する",
+  "Riptide.AccelerationRate": "ラウンドあたりの加速率",
+  "Riptide.SlowMultiplier": "波の中での移動速度倍率",
+  "Riptide.DeathStaySeconds": "波の中にいると死ぬまでの秒数",
+  "Riptide.MaxConcurrentDirections": "1ラウンドの最大波数",
+  "Riptide.CanKillManually": "通常キルを使える",
+  "Riptide.KillCooldown": "キルのクールダウン",
+  "Riptide.WaveBandThickness": "波の判定の厚み（進行方向）",
+  "Riptide.WaveLateralExtent": "波の判定の横幅",
+  "Riptide.ShowPredictiveGhost": "波の予告表示をする",
 
   /* --- Banker --- */
   "Banker": "バンカー",

@@ -24,7 +24,6 @@ internal class TimeMaster : RoleBase
     public static OptionItem TimeMasterAbilityChargesWhenFinishedTasks;
     public static OptionItem TimeMasterAbilityUseGainWithEachTaskCompleted;
 
-    private static Dictionary<byte, Vector2> TargetPosition = [];
     private static Dictionary<long, Dictionary<byte, Vector2>> BackTrack = [];
     private static List<byte> RevivedPlayers = [];
     public static bool Rewinding;
@@ -217,16 +216,16 @@ internal class TimeMaster : RoleBase
         long now = Utils.TimeStamp;
         if (!BackTrack.TryAdd(now, null)) return;
 
-        TargetPosition.Clear();
+        var targetPosition = new Dictionary<byte, Vector2>();
         var alivePlayers = Main.CachedAlivePlayerControls();
 
         foreach (PlayerControl pc in alivePlayers)
         {
             if (pc.inVent || pc.onLadder || pc.inMovingPlat) continue;
 
-            TargetPosition[pc.PlayerId] = pc.Pos();
+            targetPosition[pc.PlayerId] = pc.Pos();
         }
-        BackTrack[now] = TargetPosition;
+        BackTrack[now] = targetPosition;
 
         if (TimeMasterCanUseVitals.GetBool()) return;
 

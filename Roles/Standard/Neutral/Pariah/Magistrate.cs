@@ -1,5 +1,6 @@
 ﻿using AmongUs.GameOptions;
 using EndKnot.Modules;
+using Hazel;
 using UnityEngine;
 
 namespace EndKnot.Roles;
@@ -55,6 +56,7 @@ public class Magistrate : RoleBase
     public override void AfterMeetingTasks()
     {
         CallCourtNextMeeting = false;
+        Utils.SendRPC(CustomRPC.SyncRoleData, MagistrateID, CallCourtNextMeeting);
         Main.EnumeratePlayerControls().Do(x => Camouflage.RpcSetSkin(x, notCommsOrCamo: true));
     }
 
@@ -99,6 +101,12 @@ public class Magistrate : RoleBase
         pc.RPCPlayCustomSound("Line");
         pc.RpcRemoveAbilityUse();
         CallCourtNextMeeting = true;
+        Utils.SendRPC(CustomRPC.SyncRoleData, pc.PlayerId, CallCourtNextMeeting);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        CallCourtNextMeeting = reader.ReadBoolean();
     }
 
     private enum AbilityTriggers

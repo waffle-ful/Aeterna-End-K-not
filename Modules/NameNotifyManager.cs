@@ -61,7 +61,7 @@ public static class NameNotifyManager
             if (toRemove.Count > 0) toNotify.Add(id);
         }
 
-        if (toNotify.Count == 0 || !AmongUsClient.Instance.AmHost) return;
+        if (toNotify.Count == 0) return;
 
         toNotify.ToValidPlayers().ForEach(x => Utils.NotifyRoles(SpecifySeer: x, SpecifyTarget: x));
     }

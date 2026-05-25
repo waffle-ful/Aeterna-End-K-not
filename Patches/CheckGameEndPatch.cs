@@ -697,43 +697,46 @@ internal static class GameEndChecker
 
             if (CustomTeamManager.CheckCustomTeamGameEnd()) return true;
 
-            bool allAliveAreLovers = true;
-            for (int aliveIndex = 0; aliveIndex < aapc.Count; aliveIndex++)
+            if (Main.LoversPlayers.Count > 0 && CustomRoles.Lovers.IsEnable())
             {
-                bool found = false;
-                int id = aapc[aliveIndex].PlayerId;
-                for (int loverIndex = 0; loverIndex < Main.LoversPlayers.Count; loverIndex++)
+                bool allAliveAreLovers = true;
+                for (int aliveIndex = 0; aliveIndex < aapc.Count; aliveIndex++)
                 {
-                    if (Main.LoversPlayers[loverIndex].PlayerId == id)
+                    bool found = false;
+                    int id = aapc[aliveIndex].PlayerId;
+                    for (int loverIndex = 0; loverIndex < Main.LoversPlayers.Count; loverIndex++)
                     {
-                        found = true;
+                        if (Main.LoversPlayers[loverIndex].PlayerId == id)
+                        {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found)
+                    {
+                        allAliveAreLovers = false;
                         break;
                     }
                 }
-                if (!found)
+                if (allAliveAreLovers)
                 {
-                    allAliveAreLovers = false;
-                    break;
-                }
-            }
-            if (allAliveAreLovers)
-            {
-                bool allCrew = true;
-                for (int loverIndex = 0; loverIndex < Main.LoversPlayers.Count; loverIndex++)
-                {
-                    if (!Main.LoversPlayers[loverIndex].Is(Team.Crewmate))
+                    bool allCrew = true;
+                    for (int loverIndex = 0; loverIndex < Main.LoversPlayers.Count; loverIndex++)
                     {
-                        allCrew = false;
-                        break;
+                        if (!Main.LoversPlayers[loverIndex].Is(Team.Crewmate))
+                        {
+                            allCrew = false;
+                            break;
+                        }
                     }
-                }
-                if (!allCrew || !Lovers.CrewLoversWinWithCrew.GetBool())
-                {
-                    ResetAndSetWinner(CustomWinner.Lovers);
-                    for (int i = 0; i < Main.LoversPlayers.Count; i++)
-                        WinnerIds.Add(Main.LoversPlayers[i].PlayerId);
+                    if (!allCrew || !Lovers.CrewLoversWinWithCrew.GetBool())
+                    {
+                        ResetAndSetWinner(CustomWinner.Lovers);
+                        for (int i = 0; i < Main.LoversPlayers.Count; i++)
+                            WinnerIds.Add(Main.LoversPlayers[i].PlayerId);
 
-                    return true;
+                        return true;
+                    }
                 }
             }
 
@@ -812,7 +815,8 @@ internal static class GameEndChecker
             RoleCounts.Clear();
             for (int aliveIndex = 0; aliveIndex < aapc.Count; aliveIndex++)
             {
-                var role = aapc[aliveIndex].GetCustomRole();
+                PlayerControl pc = aapc[aliveIndex];
+                var role = pc.Is(CustomRoles.Bloodlust) ? CustomRoles.Bloodlust : pc.GetCustomRole();
                 if ((!role.IsNK() && role is not CustomRoles.Bloodlust and not CustomRoles.Gaslighter) || role.IsMadmate() || role is CustomRoles.Sidekick) continue;
 
                 CountTypes countTypes = role.GetCountTypes();

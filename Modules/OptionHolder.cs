@@ -762,6 +762,7 @@ public static class Options
     public static OptionItem AutoMessageSendInterval;
     public static OptionItem DraftMaxRolesPerPlayer;
     public static OptionItem DraftAffectedByRoleSpawnChances;
+    public static OptionItem DraftIncludesNonCrewRoles;
     public static OptionItem LargerRoleTextSize;
     public static OptionItem DynamicTaskCountColor;
     public static OptionItem ShowTaskCountWhenAlive;
@@ -3086,6 +3087,10 @@ public static class Options
             .SetColor(new Color32(193, 255, 209, byte.MaxValue));
         
         DraftAffectedByRoleSpawnChances = new BooleanOptionItem(19435, "DraftAffectedByRoleSpawnChances", false, TabGroup.GameSettings)
+            .SetColor(new Color32(193, 255, 209, byte.MaxValue));
+
+        DraftIncludesNonCrewRoles = new BooleanOptionItem(19436, "DraftIncludesNonCrewRoles", false, TabGroup.GameSettings)
+            .SetGameMode(CustomGameMode.Standard)
             .SetColor(new Color32(193, 255, 209, byte.MaxValue));
 
         LargerRoleTextSize = new BooleanOptionItem(24451, "LargerRoleTextSize", false, TabGroup.GameSettings)

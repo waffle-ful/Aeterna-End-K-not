@@ -79,6 +79,7 @@ public class PlayerState(byte playerId)
         Tornado,
         Lightning,
         Drowned,
+        RiptideKilled,
         Sunken,
         Collapsed,
 
@@ -151,13 +152,6 @@ public class PlayerState(byte playerId)
 
             if (role.IsVanilla() || role.ToString().Contains("EndKnot"))
                 Main.AbilityUseLimit.Remove(PlayerId);
-        }
-
-        if (!AmongUsClient.Instance.AmHost) return;
-
-        if (Main.IntroDestroyed && GameStates.InGame)
-        {
-            Player.ResetKillCooldown();
 
             if (PlayerId == PlayerControl.LocalPlayer.PlayerId && GameStates.IsInTask)
             {
@@ -165,6 +159,13 @@ public class PlayerState(byte playerId)
                 RemoveDisableDevicesPatch.UpdateDisableDevices();
                 HudSpritePatch.ForceUpdate = true;
             }
+        }
+
+        if (!AmongUsClient.Instance.AmHost) return;
+
+        if (Main.IntroDestroyed && GameStates.InGame)
+        {
+            Player.ResetKillCooldown();
 
             if (Decryptor.On) Decryptor.Instances.ForEach(x => x.OnRoleChange(PlayerId));
 

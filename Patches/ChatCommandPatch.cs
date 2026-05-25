@@ -1532,6 +1532,7 @@ internal static class ChatCommands
         }
         
         bool rollSpawnChance = Options.DraftAffectedByRoleSpawnChances.GetBool();
+        bool includeNonCrew = Options.DraftIncludesNonCrewRoles.GetBool();
         List<CustomRoles> allRoles = Main.CustomRoleValues.Where(x => x < CustomRoles.NotAssigned && x.IsEnable() && !x.IsForOtherGameMode() && !CustomHnS.AllHnSRoles.Contains(x) && !x.IsVanilla() && x is not CustomRoles.GM && !ShouldNotSpawn(x) && (!rollSpawnChance || IRandom.Instance.Next(100) < x.GetMode())).Shuffle();
 
         if (allRoles.Count < allPlayerIds.Length)
@@ -1540,18 +1541,19 @@ internal static class ChatCommands
             return;
         }
 
-        IEnumerable<CustomRoles> impRoles = allRoles.Where(x => x.IsImpostor()).Shuffle().Take(Options.FactionMinMaxSettings[Team.Impostor].MaxSetting.GetInt());
-        IEnumerable<CustomRoles> nkRoles = allRoles.Where(x => x.IsNK()).Shuffle().Take(Math.Min(Options.FactionMinMaxSettings[Team.Neutral].MaxSetting.GetInt(), Options.RoleSubCategoryLimits[RoleOptionType.Neutral_Killing][2].GetInt()));
-        IEnumerable<CustomRoles> nnkRoles = allRoles.Where(x => x.IsNonNK()).Shuffle().Take(Math.Min(Options.FactionMinMaxSettings[Team.Neutral].MaxSetting.GetInt() - Options.RoleSubCategoryLimits[RoleOptionType.Neutral_Killing][2].GetInt(), Options.MaxNNKs.GetInt()));
-        IEnumerable<CustomRoles> covenRoles = allRoles.Where(x => x.IsCoven()).Shuffle().Take(Options.FactionMinMaxSettings[Team.Coven].MaxSetting.GetInt());
+        List<CustomRoles> impRoles = includeNonCrew ? allRoles.Where(x => x.IsImpostor()).Shuffle().Take(Options.FactionMinMaxSettings[Team.Impostor].MaxSetting.GetInt()).ToList() : [];
+        List<CustomRoles> nkRoles = includeNonCrew ? allRoles.Where(x => x.IsNK()).Shuffle().Take(Math.Min(Options.FactionMinMaxSettings[Team.Neutral].MaxSetting.GetInt(), Options.RoleSubCategoryLimits[RoleOptionType.Neutral_Killing][2].GetInt())).ToList() : [];
+        List<CustomRoles> nnkRoles = includeNonCrew ? allRoles.Where(x => x.IsNonNK()).Shuffle().Take(Math.Min(Options.FactionMinMaxSettings[Team.Neutral].MaxSetting.GetInt() - Options.RoleSubCategoryLimits[RoleOptionType.Neutral_Killing][2].GetInt(), Options.MaxNNKs.GetInt())).ToList() : [];
+        List<CustomRoles> covenRoles = includeNonCrew ? allRoles.Where(x => x.IsCoven()).Shuffle().Take(Options.FactionMinMaxSettings[Team.Coven].MaxSetting.GetInt()).ToList() : [];
 
         allRoles.RemoveAll(x => x.IsImpostor());
         allRoles.RemoveAll(x => x.IsNK());
         allRoles.RemoveAll(x => x.IsNonNK());
         allRoles.RemoveAll(x => x.IsCoven());
 
+        int factionCount = impRoles.Count + nkRoles.Count + nnkRoles.Count + covenRoles.Count;
         DraftRoles = allRoles
-            .Take(allPlayerIds.Length * maxRolesPerPlayer)
+            .Take(allPlayerIds.Length * maxRolesPerPlayer - factionCount)
             .CombineWith(impRoles, nkRoles, nnkRoles, covenRoles)
             .Shuffle()
             .Partition(allPlayerIds.Length)
