@@ -2036,14 +2036,11 @@ public static class Utils
 
             int fullRpcSizeLimit = Options.MessageRpcSizeLimit.GetInt();
 
-            // AU 2026 vanilla anti-cheat self-disconnects with reason=Hacking when it receives
-            // a single SetName+SendChat+SetName packet larger than ~1KB. The default 1400 ceiling
-            // sits squarely in the danger zone (the option description itself admits "Higher limit
-            // = increased risk of disconnects"). When the recipient is — or includes — a vanilla
-            // client, clamp the per-packet ceiling to a safe sub-1KB value so the line-by-line
-            // splitter in this method emits multiple ~500B packets instead of one ~1.2KB packet.
-            if (RecipientIncludesVanillaClient(sendTo, receiver))
-                fullRpcSizeLimit = Math.Min(fullRpcSizeLimit, 700);
+            // AU 2026 anti-cheat fires on the HOST when a single SetName+SendChat+SetName packet
+            // exceeds ~1KB — regardless of recipient mod status. Clamp the per-packet ceiling
+            // universally so the line-by-line splitter emits multiple ~500B packets instead of
+            // one ~1.2KB packet that would self-kick the host with reason=Hacking.
+            fullRpcSizeLimit = Math.Min(fullRpcSizeLimit, 700);
 
             // 旧版は length*2 (UTF-16 想定) で計算していたため、日本語は実 byte 数の 33% 過小評価。
             // Hazel.Write(string) は UTF-8 + PackedUInt32 prefix で書き出すので、それに合わせて正確算出。
@@ -2065,7 +2062,11 @@ public static class Utils
                 }
                 else
                 {
-                    titleRpcSizeLimit = (fullRpcSizeLimit - 8 - resetNameRpcSize) * 2;
+                    // `* 2` was leftover from the old UTF-16 length*2 accounting that 55234104 removed.
+                    // Now that GetStringWriteSize returns accurate UTF-8 byte counts, doubling the
+                    // chunk budget here lets ~2x oversized chunks slip through past the 1KB anti-cheat
+                    // threshold (real-world repro: 1250-byte JackalHadouHo title kick, 2026-05-25).
+                    titleRpcSizeLimit = fullRpcSizeLimit - 8 - resetNameRpcSize;
 
                     if (titleRpcSizeLimit - 4 < 1)
                     {
@@ -2104,7 +2105,18 @@ public static class Utils
                     }
 
                     if (shortenedTitle.Length > 0 && !shortenedTitle.IsNullOrWhiteSpace())
-                        writer = SendTempTitleMessage(shortenedTitle);
+                    {
+                        // Mirror the in-loop chunk-split (2088-2092): for single-block titles with
+                        // few newlines, the in-loop split never fires and the entire accumulated
+                        // shortenedTitle would be dumped here in one oversized packet.
+                        if (HazelExtensions.GetStringWriteSize(shortenedTitle) >= titleRpcSizeLimit - 4)
+                        {
+                            foreach (char[] chars in shortenedTitle.Chunk(titleRpcSizeLimit - 4))
+                                writer = SendTempTitleMessage(new string(chars));
+                        }
+                        else
+                            writer = SendTempTitleMessage(shortenedTitle);
+                    }
 
                     if (text == "\n") return writer;
 
