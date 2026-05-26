@@ -121,8 +121,14 @@ internal static class LobbyCorpses
     private static IEnumerator SpawnCoroutine()
     {
         PlayerControl lp = PlayerControl.LocalPlayer;
-        // host の真の名前を static に退避 (transient PC の Data.Serialize で巻き戻る + GameStart ガードで再利用)
-        SavedHostName = lp.Data.PlayerName;
+        // host の真の名前を static に退避。
+        // 注意: lp.Data.PlayerName を直接読むと ApplySuffix で適用された色 tag 付きの長い装飾名
+        // (`<color=#00ffa5>End K not - ホスト</color>...`) が入っていることがあり、それを outfit に
+        // 書き戻すと AU server anti-cheat が「outfit PlayerName 長すぎ/不正」で host を Hacking kick する
+        // (2026-05-26 再現)。Main.AllPlayerNames は装飾なしの生名を持つのでそちらを優先する。
+        SavedHostName = Main.AllPlayerNames.TryGetValue(lp.PlayerId, out string raw) && !string.IsNullOrEmpty(raw)
+            ? raw
+            : lp.Data.PlayerName;
         byte colorId = (byte)lp.Data.DefaultOutfit.ColorId;
         int spawned = 0;
 
@@ -158,19 +164,21 @@ internal static class LobbyCorpses
         }, calls: 2);
     }
 
-    // 復元の実体 — SpawnCoroutine 末尾と EnsureHostNameRestored() の両方から呼ぶ
+    // 復元の実体 — SpawnCoroutine 末尾と EnsureHostNameRestored() の両方から呼ぶ。
+    //
+    // 設計修正 (2026-05-26): 旧版は `DefaultOutfit.PlayerName = name + SetDirtyBit(uint.MaxValue)` で
+    // outfit を DataMessage 経由 sync していたが、これが AU server anti-cheat の検査対象で
+    // PlayerName が長い (`<color>End K not - ホスト</color>...` の装飾名等) と Hacking kick になる。
+    // 実際には host のローカル Data.PlayerName は corpse spawn で壊れない (クライアント側 NetObject だけが
+    // transient PC spawn でリセットされる) ので、outfit 書き込みは不要。
+    // `lp.RpcSetName(name)` 単独で十分 — RpcCalls.SetName 経由は EHR が NotifyRoles で常時使う安全な経路。
     private static void ApplyHostNameRestore(string name)
     {
         if (string.IsNullOrEmpty(name)) return;
         PlayerControl lp = PlayerControl.LocalPlayer;
         if (lp == null || lp.Data == null) return;
 
-        lp.Data.PlayerName = name;
-        lp.Data.DefaultOutfit.PlayerName = name;
-        lp.Data.IsDead = false;
-        lp.Data.SetDirtyBit(uint.MaxValue);
-        AmongUsClient.Instance.SendAllStreamedObjects();
-        // host 自身の HUD と他クライアントの label を即時更新
+        // クライアント側 host label を生名で再 sync するだけ。outfit / SetDirtyBit には触らない
         lp.RpcSetName(name);
     }
 

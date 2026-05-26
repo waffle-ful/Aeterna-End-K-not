@@ -5087,6 +5087,12 @@ public static class Utils
             writer.StartMessage(5);
             writer.WritePacked(playerControl.NetId);
             writer.EndMessage();
+            // transient PC の Data は registry から外さず、dirty bit だけクリアする。
+            // `RemoveNetObject(Data)` だと in-flight Spawn/Despawn が同じ NetId を参照中で host が
+            // 整合性違反 → DisconnectReasons.Hacking で self-disconnect する (2026-05-26 確定)。
+            // ClearDirtyBits なら参照は壊さず、dirty walk が拾わないので毎 frame の null PlayerName
+            // serialize 連発が止まり joiner sync 詰まりも回避できる。
+            if (playerControl.Data != null) playerControl.Data.ClearDirtyBits();
             AmongUsClient.Instance.RemoveNetObject(playerControl);
             Object.Destroy(playerControl.gameObject);
             sender.EndMessage();

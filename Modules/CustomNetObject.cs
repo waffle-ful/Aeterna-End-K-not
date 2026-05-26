@@ -183,6 +183,9 @@ namespace EndKnot
                     AmongUsClient.Instance.SendOrDisconnect(writer);
                     writer.Recycle();
 
+                    // transient PC の Data は registry から外さず、dirty bit だけクリアする
+                    // (RemoveNetObject(Data) は host self-disconnect を誘発する。詳細は Utils.cs 同箇所参照)
+                    if (playerControl.Data != null) playerControl.Data.ClearDirtyBits();
                     AmongUsClient.Instance.RemoveNetObject(playerControl);
                     Object.Destroy(playerControl.gameObject);
                 }
