@@ -150,8 +150,8 @@ public class Riptide : RoleBase
                 // CNO が TP() で動くようになった後 (2026-05-25 root cause fix) は、spawn を
                 // マップ外側に十分遠くしても波がプレイヤーに届く。マージン +20 + GetWaveStartPosition
                 // の -5 で spawn はマップ実端から 25 unit 外側 → 画面外から波が登場する演出。
-                MapMin = new Vector2(minX - 10f, minY - 10f);
-                MapMax = new Vector2(maxX + 10f, maxY + 10f);
+                MapMin = new Vector2(minX - 50f, minY - 50f);
+                MapMax = new Vector2(maxX + 50f, maxY + 50f);
                 MapCenter = new Vector2((minX + maxX) / 2f, (minY + maxY) / 2f);
                 MapBoundsValid = true;
             }
