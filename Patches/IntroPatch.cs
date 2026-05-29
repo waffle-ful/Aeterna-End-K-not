@@ -1241,8 +1241,8 @@ internal static class IntroCutsceneDestroyPatch
                     {
                         if (!GameStates.IsInGame) yield break;
                         if (pc == null || pc.Data == null || pc.Is(CustomRoles.GM)) continue;
-                        // desync 役職 (Impostor/Shapeshifter/Phantom basis) はネイティブボタンを持ち pet 不要。そこへ spoof した SetPetStr を送ると anti-cheat に弾かれて host が落ちるので配らない
-                        if (pc.HasDesyncRole() && !pc.GetCustomRole().PetActivatedAbility()) continue;
+                        // 公式サーバーでは非モッドの desync クライアントへ pet を spoof すると host が Hacking 切断される。該当者だけスキップ (カスタム鯖には anti-cheat が無いので desync 役職にも配布)
+                        if (pc.IsNonModdedDesyncOutfitTarget()) continue;
 
                         string petId = PetsHelper.GetPetId();
                         PetsHelper.SetPet(pc, petId);
@@ -1260,7 +1260,7 @@ internal static class IntroCutsceneDestroyPatch
                     {
                         if (!GameStates.IsInGame) yield break;
                         if (pc == null || pc.Data == null || pc.IsHost()) continue;
-                        if (pc.HasDesyncRole() && !pc.GetCustomRole().PetActivatedAbility()) continue; // pet を配らなかった desync 役職には表示用 shapeshift も送らない
+                        if (pc.IsNonModdedDesyncOutfitTarget()) continue; // 公式サーバーの非モッド desync クライアントへは表示用 shapeshift も送らない (送ると Hacking 切断)。カスタム鯖では送信
 
                         try
                         {

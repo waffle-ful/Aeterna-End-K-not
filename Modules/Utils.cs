@@ -2855,8 +2855,8 @@ public static class Utils
 
             if (SetUpRoleTextPatch.IsInIntro && (seerRole.IsDesyncRole() || seer.Is(CustomRoles.Bloodlust)) && Options.CurrentGameMode == CustomGameMode.Standard)
             {
-                const string iconTextLeft = "<color=#ffffff>\u21e8</color>";
-                const string iconTextRight = "<color=#ffffff>\u21e6</color>";
+                const string iconTextLeft = "<color=#ffffff>⇨</color>";
+                const string iconTextRight = "<color=#ffffff>⇦</color>";
                 const string roleNameUp = "</size><size=1450%>\n \n</size>";
 
                 var selfTeamName = $"<size=450%>{iconTextLeft} <font=\"VCR SDF\" material=\"VCR Black Outline\">{ColorString(seerTeam.GetColor(), $"{seerTeam}")}</font> {iconTextRight}</size><size=500%>\n \n</size>";
@@ -3639,7 +3639,9 @@ public static class Utils
     public static bool RpcChangeSkin(PlayerControl pc, NetworkedPlayerInfo.PlayerOutfit newOutfit, CustomRpcSender writer = null, SendOption sendOption = SendOption.Reliable)
     {
         if (!AmongUsClient.Instance.AmHost) return false;
-        
+
+        if (pc.IsNonModdedDesyncOutfitTarget()) return false;
+
         if (pc.Is(CustomRoles.BananaMan))
             newOutfit = BananaMan.GetOutfit(Main.AllPlayerNames.GetValueOrDefault(pc.PlayerId, "Banana"));
         
@@ -3650,6 +3652,16 @@ public static class Utils
         if (newOutfit.Compare(pc.Data.DefaultOutfit)) return false;
 
         CustomRpcSender sender = writer ?? CustomRpcSender.Create($"Utils.RpcChangeSkin({pc.Data.PlayerName})", sendOption);
+
+        NetworkedPlayerInfo.PlayerOutfit current = pc.Data.DefaultOutfit;
+        if (newOutfit.PlayerName == null || newOutfit.HatId == null || newOutfit.SkinId == null || newOutfit.VisorId == null || newOutfit.PetId == null || newOutfit.NamePlateId == null)
+            Logger.Warn($"Null outfit field for {pc.Data?.PlayerName}: Name={newOutfit.PlayerName == null}, Hat={newOutfit.HatId == null}, Skin={newOutfit.SkinId == null}, Visor={newOutfit.VisorId == null}, Pet={newOutfit.PetId == null}, NamePlate={newOutfit.NamePlateId == null}", "RpcChangeSkin");
+        newOutfit.PlayerName ??= current.PlayerName ?? pc.Data.PlayerName ?? string.Empty;
+        newOutfit.HatId ??= current.HatId ?? string.Empty;
+        newOutfit.SkinId ??= current.SkinId ?? string.Empty;
+        newOutfit.VisorId ??= current.VisorId ?? string.Empty;
+        newOutfit.PetId ??= current.PetId ?? string.Empty;
+        newOutfit.NamePlateId ??= current.NamePlateId ?? string.Empty;
 
         pc.SetName(newOutfit.PlayerName);
 
@@ -4860,6 +4872,21 @@ public static class Utils
             if (panelThing) panelThing.gameObject.GetComponent<TaskPanelBehaviour>().open = open;
         }
         catch (Exception e) { ThrowException(e); }
+    }
+
+    // 現在接続中のサーバーが Innersloth 公式サーバーかどうか。
+    // 公式サーバーだけが reason: Hacking の server-side anti-cheat を実行する。
+    // カスタム / モッドサーバー (aumods.org・duikbo.at・自前鯖など) には anti-cheat が無いので false。
+    // 判定不能時 (region null / 例外) は安全側で true → outfit spoof ガードを効かせて host 切断を防ぐ。
+    public static bool IsOfficialServer()
+    {
+        try
+        {
+            if (AmongUsClient.Instance.NetworkMode != NetworkModes.OnlineGame) return false; // ローカル / LAN は公式 anti-cheat 無し
+            var region = ServerManager.Instance.CurrentRegion;
+            return region == null || region.PingServer.EndsWith("among.us", StringComparison.Ordinal);
+        }
+        catch { return true; }
     }
 
     public static string GetRegionName(IRegionInfo region = null, bool ignoreNetworkMode = false)

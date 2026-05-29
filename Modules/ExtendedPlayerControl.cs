@@ -771,6 +771,24 @@ internal static class ExtendedPlayerControl
             return player.Is(CustomRoles.Bloodlust) || player.GetCustomRole().IsDesyncRole();
         }
 
+        // ── AU 2026 公式サーバー anti-cheat 対策 (※ desync 役職まわりの見た目変更は「カスタムサーバー専用」) ──
+        //
+        // 症状: host が「非モッド (Vanilla) クライアントに割り当てた desync 役職」の NetId を指定して
+        //       outfit 変更 RPC (SetPetStr / SetSkinStr / SetColor / SetHatStr / SetVisorStr / SetNamePlateStr / SetName) を
+        //       送信すると、その瞬間に host 自身が reason: Hacking で切断される。
+        // 原因: 2026 のアップデートで Innersloth の公式サーバーが outfit 系 RPC に「送信者所有権チェック」を追加したため、
+        //       他人 (= 非モッドクライアント) になりすました outfit RPC を不正と判定するようになった。
+        //       RpcSetRoleDesync 自体は通る (ゲームは進む) が、その後の見た目 spoof だけで host が落ちる。
+        //       EHR upstream でも同症状が報告されており (Issue #622)、執筆時点で未修正。
+        // 回避: 公式サーバーにいる時だけ、該当クライアント宛ての outfit spoof をスキップする (見た目だけ犠牲にして切断を防ぐ)。
+        //       カスタム / モッドサーバー (aumods.org・duikbo.at・自前鯖など) には公式 anti-cheat が無いため、
+        //       Utils.IsOfficialServer() が false を返してガードは無効化され、ペット・スキン・カモフラージュ等が完全に動作する。
+        //       → 公式サーバー側が修正されたら、このガードと各呼び出し箇所をまとめて撤去できる。
+        public bool IsNonModdedDesyncOutfitTarget()
+        {
+            return Utils.IsOfficialServer() && player != null && !player.IsModdedClient() && player.HasDesyncRole();
+        }
+
         public bool IsInsideMap()
         {
             if (!player) return false;

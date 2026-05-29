@@ -206,7 +206,19 @@ public class Skinwalker : RoleBase
     {
         if (!AmongUsClient.Instance.AmHost) return;
 
+        if (pc.IsNonModdedDesyncOutfitTarget()) return;
+
         var sender = CustomRpcSender.Create($"Skinwalker.RpcWearOutfit({pc.Data.PlayerName})", SendOption.Reliable);
+
+        NetworkedPlayerInfo.PlayerOutfit current = pc.Data.DefaultOutfit;
+        if (newOutfit.PlayerName == null || newOutfit.HatId == null || newOutfit.SkinId == null || newOutfit.VisorId == null || newOutfit.PetId == null || newOutfit.NamePlateId == null)
+            Logger.Warn($"Null outfit field for {pc.Data?.PlayerName}: Name={newOutfit.PlayerName == null}, Hat={newOutfit.HatId == null}, Skin={newOutfit.SkinId == null}, Visor={newOutfit.VisorId == null}, Pet={newOutfit.PetId == null}, NamePlate={newOutfit.NamePlateId == null}", "Skinwalker.RpcWearOutfit");
+        newOutfit.PlayerName ??= current.PlayerName ?? pc.Data.PlayerName ?? string.Empty;
+        newOutfit.HatId ??= current.HatId ?? string.Empty;
+        newOutfit.SkinId ??= current.SkinId ?? string.Empty;
+        newOutfit.VisorId ??= current.VisorId ?? string.Empty;
+        newOutfit.PetId ??= current.PetId ?? string.Empty;
+        newOutfit.NamePlateId ??= current.NamePlateId ?? string.Empty;
 
         pc.SetName(newOutfit.PlayerName);
         sender.AutoStartRpc(pc.NetId, RpcCalls.SetName)

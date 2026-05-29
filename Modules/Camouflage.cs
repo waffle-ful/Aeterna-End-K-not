@@ -167,6 +167,8 @@ public static class Camouflage
     {
         if (!AmongUsClient.Instance.AmHost || (!Options.CommsCamouflage.GetBool() && !Camouflager.On && !revive && !notCommsOrCamo) || target == null || (BlockCamouflage && !forceRevert && !revertToDefault && !gameEnd && !revive && !notCommsOrCamo)) return;
 
+        if (target.IsNonModdedDesyncOutfitTarget()) return;
+
         Logger.Info($"New outfit for {target.GetNameWithRole()}", "Camouflage.RpcSetSkin");
 
         byte id = target.PlayerId;
@@ -231,6 +233,14 @@ public static class Camouflage
 
     private static void WriteToSender(CustomRpcSender sender, PlayerControl target, NetworkedPlayerInfo.PlayerOutfit newOutfit)
     {
+        NetworkedPlayerInfo.PlayerOutfit current = target.Data.DefaultOutfit;
+        if (newOutfit.HatId == null || newOutfit.SkinId == null || newOutfit.VisorId == null || newOutfit.PetId == null)
+            Logger.Warn($"Null outfit field for {target.Data?.PlayerName}: Hat={newOutfit.HatId == null}, Skin={newOutfit.SkinId == null}, Visor={newOutfit.VisorId == null}, Pet={newOutfit.PetId == null}", "Camouflage.WriteToSender");
+        newOutfit.HatId ??= current.HatId ?? string.Empty;
+        newOutfit.SkinId ??= current.SkinId ?? string.Empty;
+        newOutfit.VisorId ??= current.VisorId ?? string.Empty;
+        newOutfit.PetId ??= current.PetId ?? string.Empty;
+
         target.SetColor(newOutfit.ColorId);
 
         sender.AutoStartRpc(target.NetId, RpcCalls.SetColor)

@@ -14,6 +14,8 @@ public static class PetsHelper
 
     public static void SetPet(PlayerControl pc, string petId)
     {
+        if (pc.IsNonModdedDesyncOutfitTarget()) return;
+
         var sender = CustomRpcSender.Create("PetsHelper.SetPet", SendOption.Reliable);
 
         try { pc.SetPet(petId); }

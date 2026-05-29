@@ -17,6 +17,10 @@ This mod is unofficial and is **not affiliated with or endorsed by Innersloth**.
 
 Supported Among Us version: **2026.3.31**
 
+> [!IMPORTANT]
+> **For the best experience, we recommend hosting on a custom (modded) server.**
+> On official servers, Innersloth's anti-cheat automatically limits some appearance changes (pets, skins, camouflage, etc.). On modded regions such as the `aumods.org` / `duikbo.at` families, every role works in full. See "Server notes (limitations on official servers)" below for details.
+
 ## Features
 
 - **EHR + TOHK role merge** — EHR's full role catalog plus a growing set of roles ported from TOHK and re-implemented on RoleBase
@@ -31,6 +35,18 @@ Supported Among Us version: **2026.3.31**
 2. Download the latest `EndKnot.dll` from [Releases](../../releases)
 3. Place `EndKnot.dll` in `Among Us/BepInEx/plugins/`
 4. Launch Among Us
+
+## Server notes (limitations on official servers)
+
+Many of End K not's added roles work by having the host rewrite each player's appearance (pet / skin / color, etc.) through the server. On **official Innersloth servers**, an anti-cheat change introduced in the 2026 update means that when the host tries to change the appearance of a **non-modded player who was assigned certain roles** (internally role-disguising *desync* roles), the **host itself is disconnected with `reason: Hacking`**.
+
+This is a server-side change, not a bug in the mod (the same symptom is reported on upstream EHR as well). Innersloth's behavior may change in a future update.
+
+To avoid this disconnect on official servers, End K not **automatically skips appearance changes (pet grants, skin changes, camouflage, etc.) for the affected players while on an official server**. The host will not be disconnected, but those cosmetic effects are limited as a trade-off.
+
+> [!IMPORTANT]
+> **To use every feature in full, hosting on a custom server (a "modded" region) is recommended.**
+> Modded regions (e.g. the `aumods.org` / `duikbo.at` families) and self-hosted servers do not run the official anti-cheat, so pets, skins, camouflage, and the like all work without the limitation above. See your server provider's instructions for how to add a region.
 
 ## BGM customization
 
