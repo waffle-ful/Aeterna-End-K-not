@@ -1234,34 +1234,38 @@ internal static class IntroCutsceneDestroyPatch
 
             if (Options.UsePets.GetBool() && Options.CurrentGameMode is CustomGameMode.Standard or CustomGameMode.HideAndSeek or CustomGameMode.CaptureTheFlag or CustomGameMode.BedWars or CustomGameMode.Snowdown)
             {
-                void GrantPetForEveryone()
+                // Pet 配布/表示の RPC は名前更新バーストと同フレームに集中させず、後ろにずらして 1 人ずつ分散送信する
+                System.Collections.IEnumerator GrantPetForEveryone()
                 {
                     foreach (PlayerControl pc in aapc)
                     {
-                        if (pc.Is(CustomRoles.GM)) continue;
+                        if (!GameStates.IsInGame) yield break;
+                        if (pc == null || pc.Data == null || pc.Is(CustomRoles.GM)) continue;
+                        // desync 役職 (Impostor/Shapeshifter/Phantom basis) はネイティブボタンを持ち pet 不要。そこへ spoof した SetPetStr を送ると anti-cheat に弾かれて host が落ちるので配らない
+                        if (pc.HasDesyncRole() && !pc.GetCustomRole().PetActivatedAbility()) continue;
 
                         string petId = PetsHelper.GetPetId();
                         PetsHelper.SetPet(pc, petId);
                         Logger.Info($"{pc.GetNameWithRole()} => {GetString(petId)} Pet", "PetAssign");
+
+                        yield return null;
                     }
                 }
 
-                Main.ProcessShapeshifts = false;
-
-                LateTask.New(GrantPetForEveryone, 3f, "Grant Pet For Everyone");
-
-                LateTask.New(() =>
+                System.Collections.IEnumerator ShowPetForEveryone()
                 {
                     lp.Notify(GetString("GLHF"), 2f);
 
                     foreach (PlayerControl pc in aapc)
                     {
-                        if (pc.IsHost()) continue; // Skip the host
+                        if (!GameStates.IsInGame) yield break;
+                        if (pc == null || pc.Data == null || pc.IsHost()) continue;
+                        if (pc.HasDesyncRole() && !pc.GetCustomRole().PetActivatedAbility()) continue; // pet を配らなかった desync 役職には表示用 shapeshift も送らない
 
                         try
                         {
                             var sender = CustomRpcSender.Create("Shapeshift After Pet Assign On Game Start", SendOption.Reliable);
-                            
+
                             if (AmongUsClient.Instance.AmClient)
                                 pc.Shapeshift(pc, false);
 
@@ -1275,8 +1279,15 @@ internal static class IntroCutsceneDestroyPatch
                             sender.SendMessage();
                         }
                         catch (Exception ex) { Logger.Fatal(ex.ToString(), "IntroPatch.RpcShapeshift"); }
+
+                        yield return null;
                     }
-                }, 4f, "Show Pet For Everyone");
+                }
+
+                Main.ProcessShapeshifts = false;
+
+                LateTask.New(() => Main.Instance.StartCoroutine(GrantPetForEveryone()), 4.5f, "Grant Pet For Everyone");
+                LateTask.New(() => Main.Instance.StartCoroutine(ShowPetForEveryone()), 6f, "Show Pet For Everyone");
 
                 LateTask.New(() => Main.ProcessShapeshifts = true, 2f, "Enable SS Processing");
             }
