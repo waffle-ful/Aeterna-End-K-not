@@ -771,6 +771,23 @@ internal static class ExtendedPlayerControl
             return player.Is(CustomRoles.Bloodlust) || player.GetCustomRole().IsDesyncRole();
         }
 
+        // outfit spoof (Camouflage / Camouflager 役職 / RpcChangeSkin / pet 配布) 専用の desync 判定。
+        // HasDesyncRole() はメイン役職しか見ないため、基底変更アドオン (Nimble→Engineer / Physicist→Scientist /
+        // Finder→Tracker / Noisy→Noisemaker / Examiner→Detective / Venom→Viper) 由来の desync を取りこぼし、
+        // 非モッドへの outfit spoof が公式鯖 anti-cheat で host を切断する穴になっていた (正準リスト: OnGameStartedPatch.cs:909)。
+        // Bloodlust(→Impostor) は HasDesyncRole() が既にカバー済。
+        // ※ kill cooldown / シールド演出にも使う HasDesyncRole() 自体は変えない (影響範囲を outfit 経路に限定するため別判定にする)。
+        public bool HasDesyncOutfitBasis()
+        {
+            return player.HasDesyncRole() || player.GetCustomSubRoles().Exists(x => x is
+                CustomRoles.Nimble or
+                CustomRoles.Physicist or
+                CustomRoles.Finder or
+                CustomRoles.Noisy or
+                CustomRoles.Examiner or
+                CustomRoles.Venom);
+        }
+
         // ── AU 2026 公式サーバー anti-cheat 対策 (※ desync 役職まわりの見た目変更は「カスタムサーバー専用」) ──
         //
         // 症状: host が「非モッド (Vanilla) クライアントに割り当てた desync 役職」の NetId を指定して
@@ -786,7 +803,7 @@ internal static class ExtendedPlayerControl
         //       → 公式サーバー側が修正されたら、このガードと各呼び出し箇所をまとめて撤去できる。
         public bool IsNonModdedDesyncOutfitTarget()
         {
-            return Utils.IsOfficialServer() && player != null && !player.IsModdedClient() && player.HasDesyncRole();
+            return Utils.IsOfficialServer() && player != null && !player.IsModdedClient() && player.HasDesyncOutfitBasis();
         }
 
         public bool IsInsideMap()
