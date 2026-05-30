@@ -283,6 +283,10 @@ public static class Options
     public static OptionItem LobbyCorpseCount;
     public static OptionItem LobbyCorpseSpreadRadius;
 
+    public static OptionItem ServerInviteEnabled;
+    public static OptionItem ServerInviteCommandEnabled;
+    public static OptionItem ServerInviteRegion;
+
     public static OptionItem DisableShieldAnimations;
     public static OptionItem DisableShapeshiftAnimations;
     public static OptionItem DisableAllShapeshiftAnimations;
@@ -2973,6 +2977,17 @@ public static class Options
             .SetParent(LobbyCorpseEnabled)
             .SetValueFormat(OptionFormat.Multiplier)
             .SetColor(new Color32(180, 60, 60, byte.MaxValue));
+
+        ServerInviteEnabled = new BooleanOptionItem(44456, "ServerInviteEnabled", true, TabGroup.SystemSettings)
+            .SetColor(new Color32(0, 165, 255, byte.MaxValue));
+
+        ServerInviteCommandEnabled = new BooleanOptionItem(44457, "ServerInviteCommandEnabled", true, TabGroup.SystemSettings)
+            .SetParent(ServerInviteEnabled)
+            .SetColor(new Color32(0, 165, 255, byte.MaxValue));
+
+        ServerInviteRegion = new StringOptionItem(44458, "ServerInviteRegion", ["Modded NA", "Modded EU", "Modded AS"], 0, TabGroup.SystemSettings, noTranslation: true)
+            .SetParent(ServerInviteEnabled)
+            .SetColor(new Color32(0, 165, 255, byte.MaxValue));
 
         ChaosPotSupport.SetupOptions(44445);
 

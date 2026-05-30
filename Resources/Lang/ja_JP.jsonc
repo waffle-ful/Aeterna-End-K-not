@@ -9371,6 +9371,8 @@
   "CommandForms.XOR": "xor",
   "CommandForms.YT": "yt,youtube",
   "CommandForms.Yaminabe": "yaminabe,yn,闇鍋,やみなべ,chaos",
+  "CommandForms.ServerInfo": "server,customserver,serverinfo,サーバー,鯖,カスタムサーバー",
+  "CommandDescription.ServerInfo": "推奨 Mod サーバーへの参加方法を表示します",
   // Command Access
   "CommandList": "★ コマンドリスト:",
   "Commands.ChangeSettingHelp": "<b><u>引数:</u></b><size=70%>\\n- map(マップ) (<#66a186>theskeld</color>/<#e84b56>mirahq</color>/<#a167c0>polus</color>/<#66a186>dlekseht</color>/<#ed0007>airship</color>/<#ffa646>thefungle</color>/custom)\\n- <#ff1919>impostors(インポスター数)</color> (数字)\\n- players(プレイヤー数) (数字)\\n- recommended(推奨設定) (on/off)\\n- confirmejects(追放確認) (on/off)\\n- emergencymeetings(緊急会議) (数字)\\n- anonymousvotes(匿名投票) (on/off)\\n- emergencycooldown(緊急会議のクールダウン) (数字)\\n- discussiontime(会議時間) (数字)\\n- votingtime(投票タイム) (数字)\\n- playerspeed(プレイヤーの速度) (float)\\n- <#8cffff>crewmatevision(クルーメイト ビジョン)</color> (float)\\n- <#ff1919>impostorvision(インポスター ビジョン)</color> (float)\\n- killcooldown(キルのクールダウン) (float)\\n- killdistance(キルの可能距離) (short/medium/long/custom)\\n- taskbarupdates(タスクバーのアップデート) (always(いつでも)/meetings(会議毎)/never(しない))\\n- visualtasks(視認タスク) (on/off)\\n- commontasks(通常タスク) (数字)\\n- longtasks(ロングタスク) (数字)\\n- shorttasks(ショートタスク) (数字)\\n- <#8cffff>scientistcount(科学者の数)</color> (数字)\\n- <#8cffff>scientistchance(科学者の確率)</color> (数字)\\n- <#8cffff>vitalsdisplaycooldown(バイタル画面のクールダウン)</color> (float)\\n- <#8cffff>batteryduration(バッテリーの持続時間)</color> (float)\\n- <#8cffff>engineercount(エンジニアの数)</color> (数字)\\n- <#8cffff>engineerchance(エンジニアの確率)</color> (数字)\\n- <#8cffff>ventusecooldown(通気口の使用のクールダウン)</color> (float)\\n- <#8cffff>maxtimeinvents(通気口内の最大時間)</color> (float)\\n- <#8cffff>guardianangelcount(守護天使の数)</color> (数字)\\n- <#8cffff>guardianangelchance(守護天使の確率)</color> (数字)\\n- <#8cffff>protectcooldown(保護のクールダウン)</color> (float)\\n- <#8cffff>protectduration(保護の継続時間)</color> (float)\\n- <#8cffff>protectvisibletoimpostors(保護は <#ff1919>インポスター</color>からも見える)</color> (on/off)\\n- <#ff1919>shapeshiftercount(シェイプシフターの数)</color> (数字)\\n- <#ff1919>shapeshifterchance(シェイプシフターの確率)</color> (数字)\\n- <#ff1919>shapeshiftduration(変身の持続時間)</color> (float)\\n- <#ff1919>shapeshiftcooldown(変身のクールダウン)</color> (float)\\n- <#ff1919>leaveshapeshiftevidence(変身の痕を残す)</color> (on/off)\\n- <#ff1919>phantomcount(亡霊の数)</color> (数字)\\n- <#ff1919>phantomchance(亡霊の確率)</color> (数字)\\n- <#ff1919>inviscooldown(消える クールダウン)</color> (float)\\n- <#ff1919>invisduration(消える 長さ)</color> (float)\\n- <#8cffff>noisemakercount(ノイズメーカーの数)</color> (数字)\\n- <#8cffff>noisemakerchance(ノイズメーカーの確率)</color> (数字)\\n- <#8cffff>noisemakerimpostoralert(<#ff1919>インポスター</color>にも警告する)</color> (on/off)\\n- <#8cffff>noisemakeralertduration(警告の長さ)</color> (数字)\\n- <#8cffff>trackercount(トラッカーの数)</color> (数字)\\n- <#8cffff>trackerchance(トラッカーの確率)</color> (数字)\\n- <#8cffff>trackduration(追跡の持続時間)</color> (float)\\n- <#8cffff>trackcooldown(追跡のクールダウン)</color> (float)\\n- <#8cffff>trackdelay(追跡の遅れ)</color> (float)\\n- ghostdotasks(幽霊のタスク) (on/off)\\n\\n<u><b>注意:</b></u>\\n1. 大文字 と 小文字は 重要\\n2. custom と書いているところは、当然ですが その後に 1つの数字の引数を置きます\\n3. float と書かれているところは 1.7 のような、1つの単精度浮動小数点です\\n4. 「ghostdotasks」を セットすると 問題が発生する。\\n5. 使用例:\\n   - \"/cs map <#a167c0>polus</color>\"\\n   - \"/cs killdistance custom 4\"\\n   - \"/cs <#8cffff>trackdelay</color> 1,7\"\\n   - \"/cs confirmejects on",
@@ -10453,6 +10455,9 @@
   "LobbyCorpseEnabled": "<size=90%>ロビーに死体を配置</size>",
   "LobbyCorpseCount": "<size=90%>┗ 死体の数</size>",
   "LobbyCorpseSpreadRadius": "<size=90%>┗ 死体の散らばり半径</size>",
+  "ServerInviteEnabled": "<size=90%>Modサーバー参加案内パネルを表示</size>",
+  "ServerInviteCommandEnabled": "<size=90%>┗ /server コマンドを有効化</size>",
+  "ServerInviteRegion": "<size=90%>┗ 推奨サーバーのリージョン</size>",
   "Message.HideGameSettings": "<size=90%>ゲーム設定は ホストによって秘匿されています。</size>",
   "Message.HostLeftGameInGame": "<size=80%>★警告★ ホストは ゲームに残り、次回のゲームが通常に開始しなくなります。\\nロビーを退出する または ホストがロビーを開くまで待機を、お願いします。</size>",
   "Message.HostLeftGameInLobby": "<size=80%>★警告★ ホストがゲームに残り、次のゲームが正常に開始しません。\\n新しいホストに End K not がある場合、通常通りプレイするにはロビーに再入室する必要があります。</size>",
@@ -11495,6 +11500,7 @@
   "Promt.ContinueWithQuickSetupAddons": "<size=80%><b><#00ffa5>あらゆる役割の セッティングアップが完了しました！</color></b>\\n属性の ダイアログのクイックセットアップ を続行しますか？</size>",
   "Promt.CopyPreset": "<size=80%>すべての設定の値を プリセット {0} から プリセット {1}まで コピーしでもよろしいですか？</size>",
   "Promt.DeleteOldLogs": "'EndKnot_Logs' ディレクトリに この MOD の 1 週間以上前のログが {0} ファイル と {1} フォルダ ある。容量を空けるために削除しますか？",
+  "Promt.PetsDisabledOnOfficialServer": "<size=80%>公式サーバーではペットボタン発動はオンにできません。\\nペットを非モッドのプレイヤーに送るとアンチチートでホストが切断されてしまうので、各役職はベント/変身ボタンでの発動に切り替わります。\\nペットを使いたいときはカスタムサーバーを使ってくださいね。</size>",
   "Promt.RequiresPets": "<size=80%>追加能力の発動に必要とする役割を有効にしました (ペット/消える ボタン)。\\nペットボタンの使用を有効にしますか (ゲームの修正の設定)？</size>",
   "Promt.SetRoleRequiresPets": "<size=80%>追加能力の発動に必要とする役割をセットしました (ペット/消える ボタン)。\\nペットボタンの使用を有効にしますか (ゲームの修正の設定)？</size>",
   "ProtectingOver": "シールドの効果が切れた",
@@ -12593,5 +12599,10 @@
   "ChaosPotSupport.HeaderCrewmate": "今回のクルーメイト陣営",
   "ChaosPotSupport.None": "(なし)",
   "ChaosPotSupport.Disabled": "ホストが闇鍋サポートを無効にしています。",
-  "ChaosPotSupport.NothingRevealed": "公開対象の陣営が一つも選ばれていません。"
+  "ChaosPotSupport.NothingRevealed": "公開対象の陣営が一つも選ばれていません。",
+  "ServerInvite.Title": "★[ Mod サーバー情報 ]★",
+  "ServerInvite.ButtonClosed": "サーバー参加方法 ▲",
+  "ServerInvite.ButtonOpen": "サーバー参加方法 ▼",
+  "ServerInvite.PanelText": "<b>Mod サーバー: {0}</b>\\n{1}\\n{2}\\n詳細は /server で",
+  "ServerInvite.Message": "<b>推奨 Mod サーバー: {0}</b>\\nドメイン: {1}\\n\\nサーバー登録ページ:\\n{2}\\n\\nディープリンク:\\n{3}\\n\\n参加手順:\\n1. {2} でサーバーを登録\\n2. Among Us で「オンライン」→「リージョン変更」\\n3. {0} を選んで遊ぼう！"
 }

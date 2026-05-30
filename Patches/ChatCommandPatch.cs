@@ -269,6 +269,7 @@ internal static class ChatCommands
             new("TimeLimit", "", Command.UsageLevels.Everyone, Command.UsageTimes.InGame, TimeLimitCommand, true, false),
             new("YT", "{action}", Command.UsageLevels.Host, Command.UsageTimes.Always, YTCommand, true, false, [GetString("CommandArgs.YT.Action")]),
             new("Yaminabe", "", Command.UsageLevels.Everyone, Command.UsageTimes.Always, YaminabeCommand, true, false),
+            new("ServerInfo", "", Command.UsageLevels.Everyone, Command.UsageTimes.AfterDeathOrLobby, ServerInfoCommand, true, false),
             
             // Commands with action handled elsewhere
             new("Guess", "{id} {role}", Command.UsageLevels.Everyone, Command.UsageTimes.InMeeting, (_, _, _) => { }, true, false, [GetString("CommandArgs.Guess.Id"), GetString("CommandArgs.Guess.Role")]),
@@ -673,6 +674,12 @@ internal static class ChatCommands
     private static void CovenInfoCommand(PlayerControl player, string text, string[] args)
     {
         Utils.SendMessage(GetString("CovenInfoDescription"), player.PlayerId);
+    }
+
+    private static void ServerInfoCommand(PlayerControl player, string text, string[] args)
+    {
+        if (!Options.ServerInviteCommandEnabled.GetBool()) return;
+        Utils.SendMessage(ServerInviteOverlay.GetServerInfoMessage(), player.PlayerId, GetString("ServerInvite.Title"));
     }
     
     public static void SummonCommand(PlayerControl player, string text, string[] args)

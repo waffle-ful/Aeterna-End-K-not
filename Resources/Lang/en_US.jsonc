@@ -9991,6 +9991,8 @@
   "CommandForms.XOR": "xor",
   "CommandForms.YT": "yt,youtube",
   "CommandForms.Yaminabe": "yaminabe,yn,chaos",
+  "CommandForms.ServerInfo": "server,customserver,serverinfo",
+  "CommandDescription.ServerInfo": "Show information on how to join the recommended modded server",
   // Command Access
   "CommandList": "★ Command list:",
   "Commands.ChangeSettingHelp": "<b><u>Arguments:</u></b><size=70%>\\n- map (theskeld/mirahq/polus/dlekseht/airship/thefungle/custom)\\n- impostors (number)\\n- players (number)\\n- recommended (on/off)\\n- confirmejects (on/off)\\n- emergencymeetings (number)\\n- anonymousvotes (on/off)\\n- emergencycooldown (number)\\n- discussiontime (number)\\n- votingtime (number)\\n- playerspeed (float)\\n- crewmatevision (float)\\n- impostorvision (float)\\n- killcooldown (float)\\n- killdistance (short/medium/long/custom)\\n- taskbarupdates (always/meetings/never)\\n- visualtasks (on/off)\\n- commontasks (number)\\n- longtasks (number)\\n- shorttasks (number)\\n- scientistcount (number)\\n- scientistchance (number)\\n- vitalsdisplaycooldown (float)\\n- batteryduration (float)\\n- engineercount (number)\\n- engineerchance (number)\\n- ventusecooldown (float)\\n- maxtimeinvents (float)\\n- guardianangelcount (number)\\n- guardianangelchance (number)\\n- protectcooldown (float)\\n- protectduration (float)\\n- protectvisibletoimpostors (on/off)\\n- shapeshiftercount (number)\\n- shapeshifterchance (number)\\n- shapeshiftduration (float)\\n- shapeshiftcooldown (float)\\n- leaveshapeshiftevidence (on/off)\\n- phantomcount (number)\\n- phantomchance (number)\\n- inviscooldown (float)\\n- invisduration (float)\\n- noisemakercount (number)\\n- noisemakerchance (number)\\n- noisemakerimpostoralert (on/off)\\n- noisemakeralertduration (number)\\n- trackercount (number)\\n- trackerchance (number)\\n- trackduration (float)\\n- trackcooldown (float)\\n- trackdelay (float)\\n- ghostdotasks (on/off)\\n\\n<u><b>Notes:</b></u>\\n1. Upper and lowercase matters\\n2. Where it says custom, you obviously put a number argument after it\\n3. A float is a single precision floating number, like 1.7\\n4. \"ghostdotasks\" causes issues if you set it\\n5. Example uses:\\n   - \"/cs map polus\"\\n   - \"/cs killdistance custom 4\"\\n   - \"/cs trackdelay 1,7\"\\n   - \"/cs confirmejects on\"",
@@ -11083,6 +11085,9 @@
   "LobbyCorpseEnabled": "Decorate Lobby with Corpses",
   "LobbyCorpseCount": "Corpse Count",
   "LobbyCorpseSpreadRadius": "Corpse Spread Radius",
+  "ServerInviteEnabled": "Show Modded Server Invite Panel",
+  "ServerInviteCommandEnabled": "Enable /server Command",
+  "ServerInviteRegion": "Recommended Server Region",
   "Message.HideGameSettings": "Game settings have been hidden by the host.",
   "Message.HostLeftGameInGame": "★Warning★ Host left the game, in next time game wouldn't start normally. Please, exit the lobby or wait until new Host opens a lobby.",
   "Message.HostLeftGameInLobby": "★Warning★ Host left the game, in next time game wouldn't start normally. If new host has End K not, you need to re-enter the lobby to play normally.",
@@ -12125,6 +12130,7 @@
   "Promt.ContinueWithQuickSetupAddons": "<b><#00ffa5>You've finished setting up every role!</color></b> Would you like to continue with the quick setup dialog of add-ons?",
   "Promt.CopyPreset": "Are you sure you want to copy all settings' values from preset {0} to preset {1}?",
   "Promt.DeleteOldLogs": "You have {0} files and {1} folders in the 'EndKnot_Logs' directory containing logs from this mod that are older than a week. Do you want to delete them to free up space?",
+  "Promt.PetsDisabledOnOfficialServer": "The Pet button option can't be enabled on official servers. The anti-cheat would disconnect the host when the pet is sent to non-modded clients, so roles fall back to their vent/shapeshift trigger instead. Use a custom server to enable pets.",
   "Promt.RequiresPets": "You've enabled a role that requires additional ability triggers (pet/vanish button). Would you like to enable the use of the Pet button (setting in Game Modifiers)?",
   "Promt.SetRoleRequiresPets": "You've set a role that requires additional ability triggers (pet/vanish button). Would you like to enable the use of the Pet button (setting in Game Modifiers)?",
   "ProtectingOver": "Shield expired",
@@ -12578,5 +12584,10 @@
   "ChaosPotSupport.HeaderCrewmate": "Crewmates in this game",
   "ChaosPotSupport.None": "(none)",
   "ChaosPotSupport.Disabled": "Chaos Pot Support is disabled by the host.",
-  "ChaosPotSupport.NothingRevealed": "No team is set to be revealed."
+  "ChaosPotSupport.NothingRevealed": "No team is set to be revealed.",
+  "ServerInvite.Title": "★[ Modded Server Info ]★",
+  "ServerInvite.ButtonClosed": "Server Info ▲",
+  "ServerInvite.ButtonOpen": "Server Info ▼",
+  "ServerInvite.PanelText": "<b>Modded Server: {0}</b>\\n{1}\\n{2}\\n/server for details",
+  "ServerInvite.Message": "<b>Recommended Modded Server: {0}</b>\\nDomain: {1}\\n\\nAdd the server at:\\n{2}\\n\\nDirect deep link:\\n{3}\\n\\nHow to join:\\n1. Go to {2} and register the server\\n2. In Among Us, select Online > Change Region\\n3. Choose {0} and play!"
 }
