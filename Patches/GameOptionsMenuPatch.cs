@@ -191,6 +191,21 @@ public static class GameOptionsMenuPatch
             return false;
         }
 
+        // New menu (kill-switch: NewRoleMenuState.Active). Role tabs -> two-pane master/detail.
+        // The three setting TabGroups (System/Mod/Task) -> one consolidated, sectioned column.
+        // PresetExplorer (handled above) is the only tab that still uses the original renderer.
+        if (NewRoleMenuState.Active && modTab is >= TabGroup.ImpostorRoles and <= TabGroup.OtherRoles)
+        {
+            NewRoleMenuView.Build(__instance, modTab);
+            return false;
+        }
+
+        if (NewRoleMenuState.Active && NewRoleMenuView.IsConsolidatedSettingsTab(modTab))
+        {
+            NewRoleMenuView.BuildSettings(__instance);
+            return false;
+        }
+
         __instance.scrollBar.SetYBoundsMax(CalculateScrollBarYBoundsMax());
 
         __instance.StartCoroutine(CoRoutine().WrapToIl2Cpp());
@@ -333,7 +348,7 @@ public static class GameOptionsMenuPatch
         }
     }
 
-    private static void OptionBehaviourSetSizeAndPosition(OptionBehaviour optionBehaviour, OptionItem option, OptionTypes type)
+    public static void OptionBehaviourSetSizeAndPosition(OptionBehaviour optionBehaviour, OptionItem option, OptionTypes type)
     {
         Vector3 positionOffset = new(0f, 0f, 0f);
         Vector3 scaleOffset = new(0f, 0f, 0f);
@@ -439,6 +454,20 @@ public static class GameOptionsMenuPatch
         if (ModGameOptionsMenu.TabIndex < 3) return;
 
         var modTab = (TabGroup)(ModGameOptionsMenu.TabIndex - 3);
+
+        // Mirror of the CreateSettings dispatch: ValueChanged/collapse re-layouts route through
+        // here too, so the new view must own reflow for its tabs or build/reflow desync.
+        if (NewRoleMenuState.Active && modTab is >= TabGroup.ImpostorRoles and <= TabGroup.OtherRoles)
+        {
+            NewRoleMenuView.Reflow(__instance, modTab);
+            return;
+        }
+
+        if (NewRoleMenuState.Active && NewRoleMenuView.IsConsolidatedSettingsTab(modTab))
+        {
+            NewRoleMenuView.ReflowSettings(__instance);
+            return;
+        }
 
         var num = 2.0f;
 
@@ -1166,6 +1195,7 @@ public static class GameSettingMenuPatch
             if (gmButton) ModGameOptionsMenu.Destroy(gmButton);
 
         ModSettingsButtons.Clear();
+        RoleMenuTabBar.Reset();
         ModSettingsTabs.Clear();
         GMButtons.Clear();
 
@@ -1191,6 +1221,7 @@ public static class GameSettingMenuPatch
         catch (Exception e) { Utils.ThrowException(e); }
 
         ModSettingsButtons.Clear();
+        RoleMenuTabBar.Reset();
         TabGroup[] tabGroups = Main.TabGroupValues;
 
         tabGroups = Options.CurrentGameMode switch
@@ -1200,27 +1231,71 @@ public static class GameSettingMenuPatch
             _ => tabGroups[..3]
         };
 
+        // New menu: one compact centered top row. Mod/Task tab buttons are folded into the System
+        // button (relabelled "設定"), which renders System+Mod+Task as one sectioned column.
+        // Display order: role tabs first, then the consolidated 設定, then preset.
+        bool active = NewRoleMenuState.Active;
+        System.Collections.Generic.List<TabGroup> orderedTabs = null;
+        if (active)
+        {
+            var shown = tabGroups.Where(t => t is not (TabGroup.GameSettings or TabGroup.TaskSettings));
+            orderedTabs = shown.Where(t => t is >= TabGroup.ImpostorRoles and <= TabGroup.OtherRoles)
+                .Concat(shown.Where(t => t is not (>= TabGroup.ImpostorRoles and <= TabGroup.OtherRoles)))
+                .ToList();
+        }
+
         foreach (TabGroup tab in tabGroups)
         {
+            // Fold the secondary setting tabs into the consolidated System ("設定") tab.
+            if (active && tab is TabGroup.GameSettings or TabGroup.TaskSettings) continue;
+
             PassiveButton button = ModGameOptionsMenu.Track(Object.Instantiate(TemplateGameSettingsButton, __instance.GameSettingsButton.transform.parent));
             button.gameObject.SetActive(true);
             button.name = "Button_" + tab;
             var label = button.GetComponentInChildren<TextMeshPro>();
             label.DestroyTranslator();
-            label.SetText(Translator.GetString($"TabGroup.{tab}"));
+            label.SetText(Translator.GetString(
+                active
+                    ? (tab == TabGroup.SystemSettings ? "TabGroup.Short.Settings" : $"TabGroup.Short.{tab}")
+                    : $"TabGroup.{tab}"));
             label.color = Color.white;
             button.activeTextColor = button.inactiveTextColor = Color.white;
             button.selectedTextColor = new(0.7f, 0.7f, 0.7f);
             Color color = tab.GetTabColor();
 
-            button.inactiveSprites.GetComponent<SpriteRenderer>().color = color;
-            button.activeSprites.GetComponent<SpriteRenderer>().color = color;
-            button.selectedSprites.GetComponent<SpriteRenderer>().color = color;
+            if (active)
+            {
+                // Flatten the pill backgrounds to invisible so only our chrome (dot/badge/underline) shows.
+                // Must use alpha=0 (not SetActive) because SelectButton() re-activates them internally.
+                var invisible = new Color(0f, 0f, 0f, 0f);
+                button.inactiveSprites.GetComponent<SpriteRenderer>().color = invisible;
+                button.activeSprites.GetComponent<SpriteRenderer>().color = invisible;
+                button.selectedSprites.GetComponent<SpriteRenderer>().color = invisible;
+            }
+            else
+            {
+                button.inactiveSprites.GetComponent<SpriteRenderer>().color = color;
+                button.activeSprites.GetComponent<SpriteRenderer>().color = color;
+                button.selectedSprites.GetComponent<SpriteRenderer>().color = color;
+            }
 
-            // ReSharper disable once PossibleLossOfFraction
-            Vector3 offset = new(0f, (0.3f * (((int)tab + 1) / 2)), 0f);
-            button.transform.localPosition = (((int)tab + 1) % 2 == 0 ? ButtonPositionLeft : ButtonPositionRight) - offset;
-            button.transform.localScale = ButtonSize;
+            if (active)
+            {
+                // New menu: one compact centered top row. Pure repositioning — ChangeTab/TabIndex unchanged.
+                int idx = orderedTabs.IndexOf(tab);
+                int n = orderedTabs.Count;
+                float x = (-(n - 1) * NewRoleMenuLayout.TopTabStepX / 2f) + (idx * NewRoleMenuLayout.TopTabStepX);
+                button.transform.localPosition = new(x, NewRoleMenuLayout.TopTabY, 0f);
+                button.transform.localScale = NewRoleMenuLayout.TopTabScale;
+                RoleMenuTabBar.Decorate(__instance, tab, button, orderedTabs, idx);
+            }
+            else
+            {
+                // ReSharper disable once PossibleLossOfFraction
+                Vector3 offset = new(0f, (0.3f * (((int)tab + 1) / 2)), 0f);
+                button.transform.localPosition = (((int)tab + 1) % 2 == 0 ? ButtonPositionLeft : ButtonPositionRight) - offset;
+                button.transform.localScale = ButtonSize;
+            }
 
             var buttonComponent = button.GetComponent<PassiveButton>();
             buttonComponent.OnClick = new();
@@ -1250,6 +1325,45 @@ public static class GameSettingMenuPatch
         HiddenBySearch.Clear();
 
         SetupExtendedUI(__instance);
+
+        if (NewRoleMenuState.Active)
+        {
+            // Diagnostic: dump the left-panel hierarchy (before hiding) so we can identify the dark
+            // occluding sprite / native chrome by exact name + sortingOrder + world bounds.
+            if (RoleMenuDiag.Enabled) RoleMenuDiag.DumpLeftPanel(__instance);
+
+            // Declutter the left panel for the new menu: hide the game-mode grid + its label
+            // (the mode buttons are parented to GameSettingsLabel). They'll be relocated to a
+            // top context row in a later step. Pure View-side hide — game-mode state untouched.
+            Transform gsl = __instance.GameSettingsButton.transform.parent.parent.FindChild("GameSettingsLabel");
+            if (gsl) gsl.gameObject.SetActive(false);
+
+            // Hide the leftover native "バニラの設定" (vanilla settings) button — it floats over the
+            // new master list. The relocated tabs use a separate Template clone, so hiding the
+            // original GameSettingsButton is safe. View-side only.
+            __instance.GameSettingsButton.gameObject.SetActive(false);
+
+            // Hide the dark left tint (PlayerOptionsMenu(Clone)/PanelSprite/LeftSideTint, RGBA 0.118,
+            // wx -6.67..-3.89) — identified via DumpLeftPanel as the sprite occluding the left ~30%
+            // and clipping the master role-name labels. Phase 2 renders our own pane backgrounds.
+            Transform leftRoot = __instance.GameSettingsButton.transform.parent.parent;
+            Transform leftTint = leftRoot.Find("PanelSprite/LeftSideTint");
+            if (leftTint) leftTint.gameObject.SetActive(false);
+
+            // Hide the preset ± UI injected by SetupExtendedUI (ModeValue clone + GamePresetsButton)
+            // — they float over the new master list when the two-pane menu is active.
+            __instance.GamePresetsButton.gameObject.SetActive(false);
+            Transform presetUIParent = __instance.GamePresetsButton.transform.parent;
+            Transform modeValueClone = presetUIParent.Find("ModeValue(Clone)");
+            if (modeValueClone) modeValueClone.gameObject.SetActive(false);
+
+            // Enable the underline for the currently active tab (TabIndex-3 maps to the TabGroup).
+            if (ModGameOptionsMenu.TabIndex >= 3)
+            {
+                var initialTab = (TabGroup)(ModGameOptionsMenu.TabIndex - 3);
+                RoleMenuTabBar.SetActiveTab(initialTab);
+            }
+        }
     }
 
     // Thanks: Drakos for the preset button and search bar code (https://github.com/0xDrMoe/TownofHost-Enhanced/pull/1115)
@@ -1545,6 +1659,13 @@ public static class GameSettingMenuPatch
                 if (ModSettingsButtons.TryGetValue(tab, out button) && button)
                     button.SelectButton(false);
             }
+
+            // Disable all underlines after deselect-all (active menu only; do not touch in preview-only hover path).
+            if (NewRoleMenuState.Active)
+            {
+                foreach (var kv in NewRoleMenuState.TabUnderlines)
+                    if (kv.Value) kv.Value.enabled = false;
+            }
         }
 
         if (tabNum < 3) return true;
@@ -1593,6 +1714,13 @@ public static class GameSettingMenuPatch
 
         if (ModSettingsButtons.TryGetValue(tabGroup, out button) && button) button.SelectButton(true);
 
+        // Enable the underline for the newly selected tab (active menu only; only on commit, not preview-only).
+        if (NewRoleMenuState.Active)
+        {
+            if (NewRoleMenuState.TabUnderlines.TryGetValue(tabGroup, out var underlineSr) && underlineSr)
+                underlineSr.enabled = true;
+        }
+
         return false;
     }
 
@@ -1600,6 +1728,10 @@ public static class GameSettingMenuPatch
     [HarmonyPrefix]
     private static bool OnEnablePrefix(GameSettingMenu __instance)
     {
+        // In the Backrooms lobby, hide the full-screen creepy overlay while the menu is open — its
+        // order-100 tint would otherwise paint the world-space menu yellow. No-op outside Backrooms.
+        BackroomsLobby.SetOverlaySuppressed(true);
+
         if (!TemplateGameOptionsMenu)
         {
             TemplateGameOptionsMenu = ModGameOptionsMenu.Track(Object.Instantiate(__instance.GameSettingsTab, __instance.GameSettingsTab.transform.parent));
@@ -1627,6 +1759,8 @@ public static class GameSettingMenuPatch
     [HarmonyPrefix]
     public static void Close_Prefix(GameSettingMenu __instance)
     {
+        BackroomsLobby.SetOverlaySuppressed(false); // restore the Backrooms overlay when the menu closes
+
         DestroySetting();
         ModGameOptionsMenu.DestroyOption();
 

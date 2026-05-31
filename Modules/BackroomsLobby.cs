@@ -1793,6 +1793,7 @@ public static class BackroomsLobby
 
     private static GameObject _overlayGO;
     private static SpriteRenderer _overlaySR;
+    private static bool _overlaySuppressed; // hidden while an options/role menu is open — see SetOverlaySuppressed
 
     // 黄色フィルター基本値。明るすぎを避けるため RGB を少し下げて alpha を上げ、
     // 全体に「暗く黄ばんだ蛍光灯下」感を出す (2026-05-23 明度下げチューニング)
@@ -1851,10 +1852,21 @@ public static class BackroomsLobby
         _overlaySR = null;
     }
 
+    // Hide/show the full-screen creepy overlay. The overlay is sortingOrder=100 (in front of player/
+    // walls/floor) and assumes only the AU UI Canvas (chat/settings buttons) renders above it. But the
+    // options/role menu is world-space SpriteRenderers on the Default layer, so the overlay tints it
+    // yellow ("the lobby is bleeding through" — it isn't; it's this tint). Suppress while a menu is open.
+    // No-op outside Backrooms (_overlayGO is null there).
+    public static void SetOverlaySuppressed(bool suppressed)
+    {
+        _overlaySuppressed = suppressed;
+        if (_overlayGO != null) _overlayGO.SetActive(!suppressed);
+    }
+
     // UpdateVision 頭から呼ばれる。idle skip の影響を受けず毎フレ走らせて flicker を維持
     private static void UpdateOverlay()
     {
-        if (_overlaySR == null) return;
+        if (_overlaySR == null || _overlaySuppressed) return;
 
         float now = Time.time;
 
