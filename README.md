@@ -6,7 +6,7 @@
 
 ## このMod について
 
-**End K not** は、[Endless Host Roles (EHR)](https://github.com/Gurge44/EndlessHostRoles) をベースとした Among Us の非公式個人フォークです。 **600+ の役職**の役職が現在あります。
+**End K not** は、[Endless Host Roles (EHR)](https://github.com/Gurge44/EndlessHostRoles) をベースとした Among Us の非公式個人フォークです。現在 **600+ の役職**を実装しています。
 
 ホストのクライアントに導入するだけで動作し、他のプレイヤーは Mod を導入せずに追加役職を楽しめます。
 
@@ -23,7 +23,6 @@
 
 ## End K not の特徴
 
-- **EHR + TOHK の役職統合** — EHR の役職セットに加えて、TOHK 由来の役職を RoleBase 化して移植中
 - **Calamity(Terraria) テーマのメインメニュー** *(開発中)* — Calamity 風カスタムメインメニュー UI を実装中（[CalamityModPublic](https://github.com/CalamityTeam/CalamityModPublic) を参考）
 - **BGM システム** — メニュー / ロビー / 任務中 / 会議 / 結果画面の BGM をホストが差し替え可能。デフォルト BGM 同梱
 - **外部通信の無効化** — EHR 上流が行っていた実績 API・オンラインプリセット・ニュース取得などの通信を無効化。自Mod の更新確認（GitHub API）と Bard・アナグラム等の一部役職ゲーム機能を除き、外部への通信は行いません
