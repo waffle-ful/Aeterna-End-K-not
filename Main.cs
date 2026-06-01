@@ -1050,6 +1050,7 @@ public class Main : BasePlugin
             CustomLogger.ClearLog();
 
             StartCoroutine(ModNewsFetcher.FetchNews());
+            ModNewsHistory.LoadLocalNotice();
 
             try { DevManager.StartFetchingTags(); }
             catch (Exception e) { Utils.ThrowException(e); }

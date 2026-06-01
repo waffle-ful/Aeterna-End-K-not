@@ -48,7 +48,13 @@ public static class OfficialServerNotice
     private static void ShowPopUp(string text)
     {
         if (!HudManager.InstanceExists) return;
-        try { HudManager.Instance.ShowPopUp(text); }
+        try { HudManager.Instance.ShowPopUp(Decorate(text)); }
         catch { }
+    }
+
+    // 地震速報風の赤い演出でラップする (モッドニュースの警告と同系色)。読み飛ばされないための着色。
+    private static string Decorate(string text)
+    {
+        return $"<color=#FF1A1A><b>⚠⚠⚠</b></color>\n<color=#FF2A2A>{text}</color>";
     }
 }

@@ -88,7 +88,10 @@ public static class VanillaSuppressor
         // overlaps the Calamity social buttons. EHR's PingTracker shows our own credentials.
         Object.FindObjectOfType<VersionShower>()?.gameObject.SetActive(false);
 
-        // All vanilla main-menu buttons
+        // All vanilla main-menu buttons.
+        // newsButton はあえて残す: 公式サーバー警告 ([[OfficialServerNotice]] / ModNews) を
+        // いつでも手動で開けるようにするため。vanilla 純正ハンドラなので安全にパネルを開ける
+        // (こちらから AnnouncementPopUp.Show() を直叩きすると内部リスト未構築でクラッシュする)。
         foreach (var btn in new[]
         {
             mm.playButton?.gameObject,
@@ -98,7 +101,6 @@ public static class VanillaSuppressor
             mm.quitButton?.gameObject,
             mm.inventoryButton?.gameObject,
             mm.shopButton?.gameObject,
-            mm.newsButton?.gameObject,
             mm.freePlayButton?.gameObject,
             mm.howToPlayButton?.gameObject,
         })

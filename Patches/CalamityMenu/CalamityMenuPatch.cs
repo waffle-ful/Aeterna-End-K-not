@@ -28,7 +28,7 @@ public static class CalamityMenuPatch
                 __instance.quitButton?.gameObject,
                 __instance.inventoryButton?.gameObject,
                 __instance.shopButton?.gameObject,
-                __instance.newsButton?.gameObject,
+                // newsButton はあえて残す (公式サーバー警告を手動で開けるように。[[VanillaSuppressor]] と対)
                 __instance.freePlayButton?.gameObject,
                 __instance.howToPlayButton?.gameObject,
             })
