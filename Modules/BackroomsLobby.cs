@@ -1346,6 +1346,7 @@ public static class BackroomsLobby
         {
             _lastVisionValid = false;
             _cullValid = false;
+            if (PerfLogEnabled) _perfStreamUpdates++;
             Logger.Info($"UpdateStreaming center=({playerCx},{playerCy}) loaded+={loadedNow} unloaded={toUnload?.Count ?? 0} totalChunks={_loadedChunks.Count} totalTiles={SpawnedTiles.Count}", "BackroomsGen");
         }
     }
@@ -1499,11 +1500,11 @@ public static class BackroomsLobby
         Logger.Info($"Entered Backrooms (no-TP) seed={seed} disabledCols={disabledCols} disabledRs={disabledRs} tiles={SpawnedTiles.Count}", "BackroomsGen");
     }
 
-    public static void ExitBackrooms(byte targetPid)
+    public static void ExitBackrooms(byte targetPid, bool silent = false)
     {
         if (LobbyBehaviour.Instance == null)
         {
-            Utils.SendMessage("Not in lobby", targetPid);
+            if (!silent) Utils.SendMessage("Not in lobby", targetPid);
             return;
         }
 
@@ -1559,8 +1560,33 @@ public static class BackroomsLobby
 
         DisabledRenderers.Clear();
 
-        Utils.SendMessage($"Exited Backrooms. Cleared {wiped} tiles, restored {restoredC} cols + {restoredR} SRs.", targetPid);
+        if (!silent) Utils.SendMessage($"Exited Backrooms. Cleared {wiped} tiles, restored {restoredC} cols + {restoredR} SRs.", targetPid);
         Logger.Info($"Exited Backrooms cleared={wiped} restoredC={restoredC} restoredR={restoredR}", "BackroomsGen");
+    }
+
+    // クライアント設定 (OptionsMenuBehaviour) の Backrooms ロビー トグル切替時に呼ばれる。
+    // ロビー滞在中なら即座に反映する: ON → 船を隠して入室 / OFF → 退室して船を復元。
+    // メインメニュー/ゲーム中 (LobbyBehaviour 不在) では次回ロビー入室時に LobbyPatch 側で効く
+    public static void OnEnabledToggled()
+    {
+        if (LobbyBehaviour.Instance == null || PlayerControl.LocalPlayer == null) return;
+
+        bool enabled = Main.BackroomsEnabled?.Value ?? true;
+
+        if (enabled)
+        {
+            if (_inBackrooms) return; // 既に入室済
+            uint seed = AmongUsClient.Instance != null ? unchecked((uint)AmongUsClient.Instance.GameId) : 0u;
+            if (seed == 0u) seed = _lastSeed != 0u ? _lastSeed : (uint)UnityEngine.Random.Range(1, int.MaxValue);
+            HideVanillaShipImmediate();
+            EnterBackrooms(seed, byte.MaxValue, silent: true);
+        }
+        else
+        {
+            // _inBackrooms でなくても HideVanillaShipImmediate で船が隠れている可能性があるので
+            // ExitBackrooms に復元させる (Disabled* リストが空なら no-op)
+            ExitBackrooms(byte.MaxValue, silent: true);
+        }
     }
 
     // ロビー→ゲーム遷移時の cleanup。root GO のタイル / visionGO を破壊。
@@ -2068,6 +2094,7 @@ public static class BackroomsLobby
 
         _lastCullPlayer = player;
         _cullValid = true;
+        if (PerfLogEnabled) _perfCullSweeps++;
 
         float px = player.x;
         float py = player.y;
@@ -2113,6 +2140,114 @@ public static class BackroomsLobby
         Logger.Info($"RegenerateIfActive: ActiveChunkRadius={ActiveChunkRadius} loadedChunks={_loadedChunks.Count} tiles={SpawnedTiles.Count}", "BackroomsPerf");
     }
 
+    // ─── Perf 診断 (/bbperf) ───────────────────────────────────────────────
+    // 「動いてないのに重い / 画面半分が読み込まれてない」の原因切り分け用。
+    // 1 秒ウィンドウごとに以下を "BackroomsPerf" タグでログに吐く:
+    //   - FPS / 平均フレーム時間 / 最悪フレーム時間 (unscaledDeltaTime ベース)
+    //   - Backrooms の per-frame CPU 時間 (Update{Streaming,Culling,Vision} を Stopwatch で計測)
+    //       → BB CPU が小さいのに FPS が低い = GPU fill (dark mesh 面積) が支配。CPU 律速ではない
+    //   - 視界 rebuild / cull sweep / streaming load の回数 (静止中=rebuild ≒ 0 を確認できる)
+    //   - active/total tile 数・loaded chunk 数・ray 本数・隠したバニラ renderer 数
+    //   - Camera.orthographicSize と CullRadius/DarkRadius の比較
+    //       → ズームアウトで可視幅が Cull/Dark 半径を超えていれば「画面端の空白」はバグでなく仕様
+    //         (タイルは 10u 圏外で SetActive(false)、dark mesh は 25u まで)
+    // 計測 OFF 時は完全素通しで一切オーバーヘッドなし。_inBackrooms ではなく PerfLogEnabled だけで
+    // 走るので、新オプションで Backrooms を ON/OFF した FPS を同じログで A/B 比較できる。
+    public static bool PerfLogEnabled;
+    private const float PerfLogInterval = 1f;
+    private static long _perfWorkTicks;
+    private static int _perfFrames;
+    private static float _perfDeltaSum;
+    private static float _perfMaxDelta;
+    private static int _perfVisionRebuilds;
+    private static int _perfCullSweeps;
+    private static int _perfStreamUpdates;
+    private static int _lastVisionRayCount;
+
+    public static void TogglePerfLog(byte targetPid)
+    {
+        PerfLogEnabled = !PerfLogEnabled;
+        ResetPerfCounters();
+        string state = PerfLogEnabled ? "ON" : "OFF";
+        Utils.SendMessage($"Backrooms perf logging = {state}. See log (tag: BackroomsPerf).", targetPid);
+        Logger.Info($"Perf logging toggled {state}", "BackroomsPerf");
+    }
+
+    private static void ResetPerfCounters()
+    {
+        _perfWorkTicks = 0;
+        _perfFrames = 0;
+        _perfDeltaSum = 0f;
+        _perfMaxDelta = 0f;
+        _perfVisionRebuilds = 0;
+        _perfCullSweeps = 0;
+        _perfStreamUpdates = 0;
+    }
+
+    // LobbyBehaviour.Update の per-frame hook から呼ぶ per-frame 更新の入口。
+    // 計測 ON の時だけ Stopwatch で Backrooms の CPU 時間を測る。
+    public static void RunPerFrameUpdates()
+    {
+        if (!PerfLogEnabled)
+        {
+            UpdateStreaming();
+            UpdateCulling();
+            UpdateVision();
+            return;
+        }
+
+        long start = System.Diagnostics.Stopwatch.GetTimestamp();
+        UpdateStreaming();
+        UpdateCulling();
+        UpdateVision();
+        _perfWorkTicks += System.Diagnostics.Stopwatch.GetTimestamp() - start;
+
+        _perfFrames++;
+        float dt = Time.unscaledDeltaTime;
+        _perfDeltaSum += dt;
+        if (dt > _perfMaxDelta) _perfMaxDelta = dt;
+
+        if (_perfDeltaSum >= PerfLogInterval) FlushPerfLog();
+    }
+
+    private static void FlushPerfLog()
+    {
+        int frames = _perfFrames;
+        if (frames <= 0) { ResetPerfCounters(); return; }
+
+        float avgFrameMs = _perfDeltaSum / frames * 1000f;
+        float fps = frames / _perfDeltaSum;
+        float worstMs = _perfMaxDelta * 1000f;
+        double bbCpuPerFrameMs = (double)_perfWorkTicks / System.Diagnostics.Stopwatch.Frequency * 1000.0 / frames;
+        double bbCpuPct = avgFrameMs > 0f ? bbCpuPerFrameMs / avgFrameMs * 100.0 : 0.0;
+
+        // active/total tile sweep — interop が走るが診断時のみ・1 秒に 1 回なので許容
+        int total = SpawnedTiles.Count;
+        int active = 0;
+        for (int i = 0; i < total; i++)
+            if (SpawnedTiles[i] != null && SpawnedTiles[i].activeSelf) active++;
+
+        Camera cam = Camera.main;
+        float ortho = cam != null ? cam.orthographicSize : 0f;        // 可視域の half-height
+        float aspect = cam != null ? cam.aspect : 16f / 9f;
+        float halfW = ortho * aspect;                                  // 可視域の half-width
+        bool viewBeyondCull = halfW > CullRadius;                      // 端にタイル消失帯が見える
+        bool viewBeyondDark = halfW > DarkRadius;                      // 端に dark mesh 外の素抜けが見える
+
+        Logger.Info(
+            $"[{PerfLogInterval:0.#}s] FPS={fps:0.0} (avg {avgFrameMs:0.0}ms, worst {worstMs:0.0}ms) | " +
+            $"BB CPU={bbCpuPerFrameMs:0.00}ms/f ({bbCpuPct:0.0}% of frame) | " +
+            $"rebuilds={_perfVisionRebuilds}/{frames} cull={_perfCullSweeps} stream={_perfStreamUpdates} | " +
+            $"tiles active={active}/{total} chunks={_loadedChunks.Count} rays={_lastVisionRayCount} renderersOff={DisabledRenderers.Count} | " +
+            $"cam ortho={ortho:0.0} halfW={halfW:0.0}u vs Cull={CullRadius}u Dark={DarkRadius}u" +
+            (viewBeyondCull ? " [VIEW>CULL: 端にタイル消失帯]" : string.Empty) +
+            (viewBeyondDark ? " [VIEW>DARK: 端に dark mesh 外の素抜け]" : string.Empty) +
+            $" | inBackrooms={_inBackrooms} paused={_visionPaused} reduceRays={Main.BackroomsReduceRays?.Value ?? false} throttle={Main.BackroomsThrottleVision?.Value ?? false} reduceProcgen={Main.BackroomsReduceProcgen?.Value ?? false}",
+            "BackroomsPerf");
+
+        ResetPerfCounters();
+    }
+
     public static void UpdateVision()
     {
         if (!_inBackrooms || _visionGO == null || _visionMesh == null) return;
@@ -2139,6 +2274,7 @@ public static class BackroomsLobby
 
         _lastVisionPlayer = player;
         _lastVisionValid = true;
+        if (PerfLogEnabled) _perfVisionRebuilds++;
 
         EnsureCosTable();
 
@@ -2218,6 +2354,7 @@ public static class BackroomsLobby
 
         // 4. Sort by angle — 明示 IComparer 渡し (IL2CPP default Comparer 不安定回避)
         Array.Sort(_rays, 0, count, _rayHitComparer);
+        _lastVisionRayCount = count; // perf 診断用 (base fan + corner rays の合計本数)
 
         // 5-8. Lower mesh build (corner ray 含む sharp donut)。
         //   vertex color gradient で Upper と同じ inner=0/outer=ShadowMaxAlpha の fade を作り、
@@ -2925,9 +3062,9 @@ internal static class BackroomsVisionUpdateHook
 {
     public static void Postfix()
     {
-        BackroomsLobby.UpdateStreaming(); // chunk 境界跨ぎで Load/Unload 差分。早期 return が普通
-        BackroomsLobby.UpdateCulling();
-        BackroomsLobby.UpdateVision();
+        // UpdateStreaming (chunk 境界跨ぎで Load/Unload 差分・早期 return が普通) → UpdateCulling → UpdateVision を
+        // まとめて呼ぶ。/bbperf ON 時はこの 3 つの CPU 時間を計測して 1 秒ごとにログ出力する
+        BackroomsLobby.RunPerFrameUpdates();
     }
 }
 

@@ -95,10 +95,16 @@ internal static class LobbyBehaviourStartPatch
         try { BackroomsLobby.OnLobbyReload(); }
         catch (Exception ex) { Logger.Warn($"OnLobbyReload failed: {ex.Message}", "BackroomsGen"); }
 
+        // BackroomsEnabled が OFF なら船隠し + 自動入室を全 skip (バニラロビーのまま)
+        bool backroomsEnabled = Main.BackroomsEnabled?.Value ?? true;
+
         // バニラ船を即時に隠す (LocalPlayer 非依存)。procgen + vision mesh は LocalPlayer 必須なので
         // LateTask に後置するが、「ロビー入室後にバニラ船が約 1 秒見える」ラグはこの即時 disable で消える (2026-05-22)
-        try { BackroomsLobby.HideVanillaShipImmediate(); }
-        catch (Exception ex) { Logger.Warn($"HideVanillaShipImmediate failed: {ex.Message}", "BackroomsGen"); }
+        if (backroomsEnabled)
+        {
+            try { BackroomsLobby.HideVanillaShipImmediate(); }
+            catch (Exception ex) { Logger.Warn($"HideVanillaShipImmediate failed: {ex.Message}", "BackroomsGen"); }
+        }
 
         if (AmongUsClient.Instance != null && AmongUsClient.Instance.AmHost)
         {
@@ -127,8 +133,15 @@ internal static class LobbyBehaviourStartPatch
         //
         // LocalPlayer の準備時刻は環境差があり (Start 直後〜数秒)、固定遅延だと外す。0.3s 毎に
         // 自己再スケジュールするポーリング方式で、LocalPlayer が揃った瞬間に発火 (最大 16 回 = 5s 試行)
-        _autoEnterAttempts = 0;
-        LateTask.New(TryAutoEnterBackrooms, 0.3f, log: false);
+        if (backroomsEnabled)
+        {
+            _autoEnterAttempts = 0;
+            LateTask.New(TryAutoEnterBackrooms, 0.3f, log: false);
+        }
+
+        // 転ばぬ先の杖: 公式サーバー (anti-cheat あり) でホストしていると役職機能が動かず Hacking 切断される。
+        // HUD が整うのを少し待ってからホストに 1 回だけ警告する (中身は host + 公式鯖判定でガード)。
+        LateTask.New(Modules.OfficialServerNotice.WarnInLobby, 2.5f, log: false);
 
         if (!(Main.EnableBGM?.Value ?? false)) return;
         SilencePending = true;
@@ -145,6 +158,7 @@ internal static class LobbyBehaviourStartPatch
         {
             _autoEnterAttempts++;
             if (LobbyBehaviour.Instance == null) return; // lobby を出た = 中止
+            if (!(Main.BackroomsEnabled?.Value ?? true)) return; // ポーリング中に OFF へ切替 = 中止
             if (PlayerControl.LocalPlayer == null)
             {
                 if (_autoEnterAttempts < MaxAutoEnterAttempts)

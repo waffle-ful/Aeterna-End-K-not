@@ -189,6 +189,7 @@ internal static class ChatCommands
             new("BBCullInfo", "", Command.UsageLevels.Host, Command.UsageTimes.InLobby, BBCullInfoCommand, true, true),
             new("BBShipDiag", "", Command.UsageLevels.Host, Command.UsageTimes.InLobby, BBShipDiagCommand, true, true),
             new("BBNoCDiag", "", Command.UsageLevels.Host, Command.UsageTimes.InLobby, BBNoCDiagCommand, true, true),
+            new("BBPerf", "", Command.UsageLevels.Host, Command.UsageTimes.InLobby, BBPerfCommand, true, true),
             new("Template", "{tag}", Command.UsageLevels.Everyone, Command.UsageTimes.Always, TemplateCommand, true, false, [GetString("CommandArgs.Template.Tag")]),
             new("MessageWait", "{duration}", Command.UsageLevels.Host, Command.UsageTimes.Always, MessageWaitCommand, true, false, [GetString("CommandArgs.MessageWait.Duration")]),
             new("Death", "[id]", Command.UsageLevels.Everyone, Command.UsageTimes.AfterDeath, DeathCommand, true, false, [GetString("CommandArgs.Death.Id")]),
@@ -2507,6 +2508,11 @@ internal static class ChatCommands
     private static void BBNoCDiagCommand(PlayerControl player, string text, string[] args)
     {
         BackroomsLobby.DumpNoClipDiag(player.PlayerId);
+    }
+
+    private static void BBPerfCommand(PlayerControl player, string text, string[] args)
+    {
+        BackroomsLobby.TogglePerfLog(player.PlayerId);
     }
 
     private static void MyRoleCommand(PlayerControl player, string text, string[] args)

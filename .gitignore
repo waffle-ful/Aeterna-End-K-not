@@ -472,3 +472,8 @@ Resources/Sounds/BGM/*.flac
 Resources/Sounds/Backrooms/*.wav
 Resources/Sounds/Backrooms/*.ogg
 Resources/Sounds/Backrooms/*.mp3
+
+# UI mockups / design drafts — internal only, not for the public repo
+mock_refined.html
+mockup_role_menu_planB.html
+mockups/

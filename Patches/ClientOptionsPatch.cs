@@ -37,6 +37,7 @@ public static class OptionsMenuBehaviourStartPatch
     private static ClientOptionItem TryFixStuttering;
     private static ClientOptionItem ShowClientControlGUI;
     private static ClientOptionItem ShareLobbyToDiscord;
+    private static ClientOptionItem BackroomsEnabled;
     private static ClientOptionItem BackroomsReduceRays;
     private static ClientOptionItem BackroomsThrottleVision;
     private static ClientOptionItem BackroomsReduceProcgen;
@@ -301,6 +302,9 @@ public static class OptionsMenuBehaviourStartPatch
 
         if ((ShareLobbyToDiscord == null || !ShareLobbyToDiscord.ToggleButton) && Modules.LobbyShare.IsConfigured)
             ShareLobbyToDiscord = ClientOptionItem.Create("ShareLobbyToDiscord", Main.ShareLobbyToDiscord, __instance);
+
+        if (BackroomsEnabled == null || !BackroomsEnabled.ToggleButton)
+            BackroomsEnabled = ClientOptionItem.Create("BackroomsEnabled", Main.BackroomsEnabled, __instance, Modules.BackroomsLobby.OnEnabledToggled);
 
         if (BackroomsReduceRays == null || !BackroomsReduceRays.ToggleButton)
             BackroomsReduceRays = ClientOptionItem.Create("BackroomsReduceRays", Main.BackroomsReduceRays, __instance, Modules.BackroomsLobby.InvalidatePerfCache);
