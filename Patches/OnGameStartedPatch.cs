@@ -537,6 +537,10 @@ internal static class StartGameHostPatch
 
     private static System.Collections.IEnumerator StartGameHost()
     {
+        // 転ばぬ先の杖: 公式サーバーでは役職機能が動かずホストが Hacking 切断される。開始の瞬間に警告。
+        try { Modules.OfficialServerNotice.WarnOnGameStart(); }
+        catch (Exception e) { Utils.ThrowException(e); }
+
         try { PlayerControl.LocalPlayer.RpcSetName(Main.AllPlayerNames[0]); }
         catch (Exception e) { Utils.ThrowException(e); }
         

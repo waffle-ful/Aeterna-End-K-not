@@ -30,6 +30,11 @@ internal static class ExitGamePatch
 
         Logger.Msg($"Exiting game - reason: {reason}", "ExitGamePatch.Prefix");
 
+        // 転ばぬ先の杖: 公式サーバーで「Hacking」切断されたら、着地画面で理由+対処をホストに知らせる。
+        // NetworkMode はこの Prefix 時点ではまだ OnlineGame なので IsOfficialServer() が正しく判定できる。
+        if (reason == DisconnectReasons.Hacking)
+            OfficialServerNotice.WarnAfterHackingKick();
+
         GameStates.InGame = false;
         Main.RealOptionsData?.Restore(GameOptionsManager.Instance.CurrentGameOptions);
         DataFlagRateLimiter.DropQueue();
