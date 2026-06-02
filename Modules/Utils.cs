@@ -451,9 +451,23 @@ public static class Utils
 
                     foreach (Il2CppSystem.Collections.Generic.KeyValuePair<string, Il2CppSystem.Collections.Generic.List<string>> pair in kvp.Value)
                     {
-                        var key = Enum.Parse<CustomRoles>(pair.Key);
+                        // Skip unknown / renamed role names per-entry, so one stale name (e.g. an upstream-only
+                        // role left in the saved combo file) no longer aborts loading EVERY combo in the file.
+                        if (!Enum.TryParse(pair.Key, out CustomRoles key))
+                        {
+                            Logger.Warn($"Unknown role \"{pair.Key}\" in combo file {path} - skipping this combo", "LoadComboInfo");
+                            continue;
+                        }
+
                         dict[kvp.Key][key] = [];
-                        foreach (string n in pair.Value) dict[kvp.Key][key].Add(Enum.Parse<CustomRoles>(n));
+
+                        foreach (string n in pair.Value)
+                        {
+                            if (Enum.TryParse(n, out CustomRoles value))
+                                dict[kvp.Key][key].Add(value);
+                            else
+                                Logger.Warn($"Unknown role \"{n}\" under {key} in combo file {path} - skipping", "LoadComboInfo");
+                        }
                     }
                 }
             }
