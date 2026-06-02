@@ -40,7 +40,11 @@ public class CustomRpcSender
     // -2: Not set
     private int currentRpcTarget;
 
-    private bool packed;
+    public bool packed;
+
+    // When false, the >500 byte auto-split in StartMessage/StartPackedMessage is skipped.
+    // RpcSetName sets this false and does its own accurate 1100-byte (UTF-8) chunking instead.
+    public bool checkLength = true;
 
     private State currentState = State.BeforeInit;
     public int messages;
@@ -164,7 +168,8 @@ public class CustomRpcSender
             if (currentState == State.InRootPackedMessage)
             {
                 // PackedMessage 中身が「GameId だけ書いた空状態」なら dispose 扱いに格上げ
-                if (1 + HazelExtensions.GetPackedUIntSize((uint)AmongUsClient.Instance.GameId) >= stream.Length)
+                // (StartMessage(26) ヘッダ tag1 + length2 = 3 byte + WritePacked(GameId) ぶんが「空」の実サイズ)
+                if (3 + HazelExtensions.GetPackedUIntSize((uint)AmongUsClient.Instance.GameId) >= stream.Length)
                     dispose = true;
                 else
                     EndMessage();
@@ -258,7 +263,7 @@ public class CustomRpcSender
                 throw new InvalidOperationException(errorMsg);
         }
 
-        if (stream.Length > 500)
+        if (checkLength && stream.Length > 500)
         {
             if (currentState == State.InRootPackedMessage)
             {
@@ -307,7 +312,7 @@ public class CustomRpcSender
                 throw new InvalidOperationException(errorMsg);
         }
 
-        if (stream.Length > 500)
+        if (checkLength && stream.Length > 500)
         {
             doneStreams.Add(stream);
             stream = MessageWriter.Get(sendOption);
@@ -516,6 +521,71 @@ public class CustomRpcSender
 
 public static class CustomRpcSenderExtensions
 {
+    // SetName を packed message に一括蓄積する。UTF-8 byte で正確に計算し、1100 byte を超える手前で
+    // 現 message を送って sender を作り直す (chunk 分割)。sender は ref で受けて差し替える。
+    // checkLength=false にして StartMessage/StartPackedMessage の 500 byte 自動分割は無効化し、ここで管理する。
+    public static void RpcSetName(ref CustomRpcSender sender, PlayerControl player, string name, PlayerControl seer = null)
+    {
+        bool seerIsNull = !seer;
+        int targetClientId = seerIsNull ? -1 : seer.OwnerId;
+
+        name = name.Replace("color=", string.Empty);
+
+        switch (seerIsNull)
+        {
+            case true when Main.LastNotifyNames.Where(x => x.Key.Item1 == player.PlayerId).All(x => x.Value == name):
+            case false when Main.LastNotifyNames[(player.PlayerId, seer.PlayerId)] == name:
+                return;
+            case true:
+                Main.EnumeratePlayerControls().Do(x => Main.LastNotifyNames[(player.PlayerId, x.PlayerId)] = name);
+                break;
+            default:
+                Main.LastNotifyNames[(player.PlayerId, seer.PlayerId)] = name;
+                break;
+        }
+
+        // packed message は per-client (GameDataTo) 専用で、-1 broadcast (GameData) を入れると
+        // AutoStartRpc の「InRootPackedMessage + targetClientId<0」ガードで throw する。
+        // Car/Tree/Magistrate 等「全員に見せる自分の名前」(seer=null) は単発の非 packed message で送る。
+        // ※この分岐は必ず上の dedup switch の「後」に置くこと。dedup が先にあるおかげで、
+        //   名前が実際に変化した時だけ単発送信され、毎 NotifyRoles tick の flood にならない。
+        if (seerIsNull && sender.packed)
+        {
+            CustomRpcSender broadcast = CustomRpcSender.Create(sender.name, sender.sendOption);
+            broadcast.AutoStartRpc(player.NetId, RpcCalls.SetName)
+                .Write(player.Data.NetId)
+                .Write(name)
+                .Write(false)
+                .EndRpc();
+            broadcast.SendMessage();
+            return;
+        }
+
+        sender.checkLength = false;
+
+        if (sender.stream.Length + GetSetNameRpcSize(player.NetId, name) > 1100)
+        {
+            bool packed = sender.packed;
+            sender.SendMessage();
+            sender = CustomRpcSender.Create(sender.name, sender.sendOption);
+            if (packed) sender.StartPackedMessage();
+            sender.checkLength = false;
+        }
+
+        sender.AutoStartRpc(player.NetId, RpcCalls.SetName, targetClientId)
+            .Write(player.Data.NetId)
+            .Write(name)
+            .Write(false)
+            .EndRpc();
+
+        return;
+
+        // SetName RPC 1 件の概算 byte: msg header(3) + WritePacked(netId) + callId(1) + Write(Data.NetId uint=4)
+        //   + 文字列(packed長さ prefix + UTF-8 bytes) + Write(bool=1)
+        static int GetSetNameRpcSize(uint netId, string playerName)
+            => 3 + HazelExtensions.GetPackedUIntSize(netId) + 1 + 4 + HazelExtensions.GetStringWriteSize(playerName) + 1;
+    }
+
     extension(CustomRpcSender sender)
     {
         public bool RpcSetRole(PlayerControl player, RoleTypes role, int targetClientId = -1, bool noRpcForSelf = true, bool changeRoleMap = false)
@@ -553,33 +623,6 @@ public static class CustomRpcSenderExtensions
             }
 
             return true;
-        }
-
-        public void RpcSetName(PlayerControl player, string name, PlayerControl seer = null)
-        {
-            bool seerIsNull = !seer;
-            int targetClientId = seerIsNull ? -1 : seer.OwnerId;
-
-            name = name.Replace("color=", string.Empty);
-
-            switch (seerIsNull)
-            {
-                case true when Main.LastNotifyNames.Where(x => x.Key.Item1 == player.PlayerId).All(x => x.Value == name):
-                case false when Main.LastNotifyNames[(player.PlayerId, seer.PlayerId)] == name:
-                    return;
-                case true:
-                    Main.EnumeratePlayerControls().Do(x => Main.LastNotifyNames[(player.PlayerId, x.PlayerId)] = name);
-                    break;
-                default:
-                    Main.LastNotifyNames[(player.PlayerId, seer.PlayerId)] = name;
-                    break;
-            }
-
-            sender.AutoStartRpc(player.NetId, RpcCalls.SetName, targetClientId)
-                .Write(player.Data.NetId)
-                .Write(name)
-                .Write(false)
-                .EndRpc();
         }
 
         public bool RpcGuardAndKill(PlayerControl killer, PlayerControl target = null, bool forObserver = false, bool fromSetKCD = false)

@@ -13,6 +13,10 @@ public static class CustomSoundsManager
     private static readonly string SoundsPath = $"{Environment.CurrentDirectory.Replace(@"\", "/")}/BepInEx/resources/";
     private static readonly string[] SupportedExtensions = [".wav", ".ogg", ".mp3"];
 
+    // PlaySoundRPC の broadcast を (player, sound) ごとに「同一秒に 1 回」へ間引く dedup 用。
+    // bare timestamp ではなくキー付きにして、同一秒に鳴る別々の音 (ダブルキル等) は落とさない。
+    public static readonly Dictionary<(byte PlayerId, Sounds Sound), long> LastSoundRPCTS = [];
+
     public static void RPCPlayCustomSound(this PlayerControl pc, string sound, float volume = 1f, float pitch = 1f, bool force = false)
     {
         try

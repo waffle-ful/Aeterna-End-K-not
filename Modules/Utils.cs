@@ -202,10 +202,20 @@ public static class Utils
         nt.SnapTo(location, (ushort)(nt.lastSequenceId + 328));
         nt.SetDirtyBit(uint.MaxValue);
 
-        if (NumSnapToCallsThisRound > 80)
+        // 公式/Vanilla 鯖のみ: SnapTo の送信を絞って anti-cheat の Hacking kick を防ぐ。
+        // カスタム鯖 (anti-cheat 無し) では機能を犠牲にしないので無制限。
+        bool isOfficialServer = GameStates.CurrentServerType == GameStates.ServerType.Vanilla;
+
+        if (isOfficialServer && NumSnapToCallsThisRound >= 80)
         {
             if (log) Logger.Warn($"Too many SnapTo calls this round ({NumSnapToCallsThisRound}) - Changed to SendOption.None", "TP");
             sendOption = SendOption.None;
+        }
+
+        if (isOfficialServer && NumSnapToCallsThisRound >= 100)
+        {
+            if (log) Logger.Warn($"Too many total SnapTo calls this round ({NumSnapToCallsThisRound}) - Canceled", "TP");
+            return false;
         }
 
         if (GameStates.CurrentServerType != GameStates.ServerType.Vanilla)
@@ -225,7 +235,7 @@ public static class Utils
             SubmergedCompatibility.CheckOutOfBoundsElevator(pc);
         }
 
-        if (sendOption == SendOption.Reliable) NumSnapToCallsThisRound++;
+        NumSnapToCallsThisRound++; // 全 snap をカウント (旧: Reliable のみ)。閾値判定は公式鯖でのみ作用。
         return true;
     }
 
@@ -2766,28 +2776,36 @@ public static class Utils
         if (!AmongUsClient.Instance.AmHost || GameStates.IsMeeting) yield break;
 
         const int frameBudget = 3; // milliseconds per frame
-        var stopwatch = new Stopwatch();
+        var stopwatch = Stopwatch.StartNew();
         var aapc = Main.CachedAlivePlayerControls();
+        var hasValue = false;
+        var sender = CustomRpcSender.Create("NotifyRoles", sendOption, log: false);
+        sender.StartPackedMessage();
 
+        // seer ごとに 1 回 WriteSetNameRpcsToSender を呼ぶ (内部で全 target をループ)。
+        // 全 SetName を 1 個の packed message に蓄積し、RpcSetName が 1100 byte で chunk 分割する。
         for (int seerIndex = 0; seerIndex < aapc.Count; seerIndex++)
         {
-            PlayerControl seer = aapc[seerIndex];
-            for (int targetIndex = 0; targetIndex < aapc.Count; targetIndex++)
+            // 会議が始まったら蓄積分だけ送って打ち切る (in-task 名の取りこぼし防止 + writer リーク回避)
+            if (GameStates.IsMeeting || ReportDeadBodyPatch.MeetingStarted)
             {
-                if (GameStates.IsMeeting || ReportDeadBodyPatch.MeetingStarted) yield break;
-                PlayerControl target = aapc[targetIndex];
-                var sender = CustomRpcSender.Create("Utils.NotifyEveryoneAsync", sendOption, log: false);
-                var hasValue = WriteSetNameRpcsToSender(ref sender, false, noCache, false, false, false, false, seer, [seer], [target], out bool senderWasCleared, sendOption) && !senderWasCleared;
-                sender.SendMessage(!hasValue || sender.stream.Length <= 3);
-                
-                if (stopwatch.ElapsedMilliseconds >= frameBudget)
-                {
-                    stopwatch.Reset();
-                    yield return null;
-                    stopwatch.Start();
-                }
+                sender.SendMessage(!hasValue || sender.stream.Length <= 11);
+                yield break;
+            }
+
+            PlayerControl seer = aapc[seerIndex];
+            hasValue |= WriteSetNameRpcsToSender(ref sender, false, noCache, false, false, false, false, seer, [seer], aapc, out bool senderWasCleared, sendOption);
+            if (senderWasCleared) hasValue = false;
+
+            if (stopwatch.ElapsedMilliseconds >= frameBudget)
+            {
+                stopwatch.Reset();
+                yield return null;
+                stopwatch.Start();
             }
         }
+
+        sender.SendMessage(!hasValue || sender.stream.Length <= 11);
     }
 
     [SuppressMessage("ReSharper", "InconsistentNaming")]
@@ -2803,24 +2821,20 @@ public static class Utils
             SeerList = SpecifySeer ? [SpecifySeer] : apc;
             TargetList = SpecifyTarget ? [SpecifyTarget] : apc;
 
-            var sender = CustomRpcSender.Create("NotifyRoles", SendOption, log: false);
             var hasValue = false;
+            var sender = CustomRpcSender.Create("NotifyRoles", SendOption, log: false);
+            sender.StartPackedMessage();
 
             for (byte seerIndex = 0; seerIndex < SeerList.Count; seerIndex++)
             {
                 PlayerControl seer = SeerList[seerIndex];
                 hasValue |= WriteSetNameRpcsToSender(ref sender, ForMeeting, NoCache, ForceLoop, CamouflageIsForMeeting, GuesserIsForMeeting, MushroomMixup, seer, SeerList, TargetList, out bool senderWasCleared, SendOption);
                 if (senderWasCleared) hasValue = false;
-
-                if (sender.stream.Length > 500)
-                {
-                    sender.SendMessage();
-                    sender = CustomRpcSender.Create("NotifyRoles", SendOption, log: false);
-                    hasValue = false;
-                }
             }
 
-            sender.SendMessage(!hasValue || sender.stream.Length <= 3);
+            // 500 byte ごとの手動分割は廃止。RpcSetName が内部で 1100 byte chunk を管理する。
+            // packed message ヘッダ + GameId ぶんで「空」の閾値が大きくなるため <= 3 → <= 11。
+            sender.SendMessage(!hasValue || sender.stream.Length <= 11);
 
             if (Options.CurrentGameMode != CustomGameMode.Standard) return;
 
@@ -2862,26 +2876,26 @@ public static class Utils
                 var selfTeamName = $"<size=450%>{iconTextLeft} <font=\"VCR SDF\" material=\"VCR Black Outline\">{ColorString(seerTeam.GetColor(), $"{seerTeam}")}</font> {iconTextRight}</size><size=500%>\n \n</size>";
                 selfName = $"{selfTeamName}\r\n<size=150%>{seerRole.ToColoredString()}</size>{roleNameUp}";
 
-                sender.RpcSetName(seer, selfName, seer);
+                CustomRpcSenderExtensions.RpcSetName(ref sender, seer, selfName, seer);
                 return true;
             }
 
             if (seer.Is(CustomRoles.Car) && !forMeeting && !GameStates.IsEnded)
             {
-                sender.RpcSetName(seer, Car.Name);
+                CustomRpcSenderExtensions.RpcSetName(ref sender, seer, Car.Name);
                 return true;
             }
             
             if (Main.PlayerStates.TryGetValue(seer.PlayerId, out var seerState) && seerState.Role is Tree { TreeSpriteActive: true } && !forMeeting && !GameStates.IsEnded) 
             {
-                sender.RpcSetName(seer, Tree.Sprite);
+                CustomRpcSenderExtensions.RpcSetName(ref sender, seer, Tree.Sprite);
                 return true;
             }
 
             if (forMeeting && Magistrate.CallCourtNextMeeting)
             {
                 selfName = seer.Is(CustomRoles.Magistrate) ? GetString("Magistrate.CourtName") : GetString("Magistrate.JuryName");
-                sender.RpcSetName(seer, selfName);
+                CustomRpcSenderExtensions.RpcSetName(ref sender, seer, selfName);
                 return true;
             }
 
@@ -3208,7 +3222,7 @@ public static class Utils
             if (selfName.EndsWith("</size>")) selfName = selfName.Remove(selfName.Length - 7);
             if (selfName.EndsWith("</color>")) selfName = selfName.Remove(selfName.Length - 8);
 
-            sender.RpcSetName(seer, selfName, seer);
+            CustomRpcSenderExtensions.RpcSetName(ref sender, seer, selfName, seer);
             hasValue = true;
 
             bool onlySelfNameUpdateRequired = Options.CurrentGameMode switch
@@ -3239,24 +3253,24 @@ public static class Utils
                         if (target.PlayerId == seer.PlayerId) continue;
 
                         if ((IsActive(SystemTypes.MushroomMixupSabotage) || mushroomMixup) && !forMeeting && target.IsAlive() && !seer.Is(CustomRoleTypes.Impostor) && seer.HasDesyncRole())
-                            sender.RpcSetName(target, "<size=0%>", seer);
+                            CustomRpcSenderExtensions.RpcSetName(ref sender, target, "<size=0%>", seer);
                         else
                         {
                             if (target.Is(CustomRoles.Car) && !forMeeting && !GameStates.IsEnded)
                             {
-                                sender.RpcSetName(target, Car.Name, seer);
+                                CustomRpcSenderExtensions.RpcSetName(ref sender, target, Car.Name, seer);
                                 continue;
                             }
             
                             if (Main.PlayerStates.TryGetValue(target.PlayerId, out var targetState) && targetState.Role is Tree { TreeSpriteActive: true } && !forMeeting && !GameStates.IsEnded) 
                             {
-                                sender.RpcSetName(target, Tree.Sprite, seer);
+                                CustomRpcSenderExtensions.RpcSetName(ref sender, target, Tree.Sprite, seer);
                                 continue;
                             }
 
                             if (forMeeting && Magistrate.CallCourtNextMeeting)
                             {
-                                sender.RpcSetName(target, GetString(target.Is(CustomRoles.Magistrate) ? "Magistrate.CourtName" : "Magistrate.JuryName"), seer);
+                                CustomRpcSenderExtensions.RpcSetName(ref sender, target, GetString(target.Is(CustomRoles.Magistrate) ? "Magistrate.CourtName" : "Magistrate.JuryName"), seer);
                                 return true;
                             }
                             
@@ -3540,17 +3554,10 @@ public static class Utils
                             if (targetName.EndsWith("</size>")) targetName = targetName.Remove(targetName.Length - 7);
                             if (targetName.EndsWith("</color>")) targetName = targetName.Remove(targetName.Length - 8);
 
-                            sender.RpcSetName(target, targetName, seer);
+                            CustomRpcSenderExtensions.RpcSetName(ref sender, target, targetName, seer);
                             hasValue = true;
                             senderWasCleared = false;
-
-                            if (sender.stream.Length > 500)
-                            {
-                                sender.SendMessage();
-                                sender = CustomRpcSender.Create(sender.name, sender.sendOption);
-                                hasValue = false;
-                                senderWasCleared = true;
-                            }
+                            // 500 byte 手動分割は廃止 (RpcSetName が 1100 byte chunk を内部管理)
                         }
                     }
                     catch (Exception ex)
@@ -5060,6 +5067,8 @@ public static class Utils
 
         DataFlagRateLimiter.Enqueue(() =>
         {
+            // rate limiter で遅延実行される間に deadBodyParent が破棄される可能性があるので再チェック
+            if (!deadBodyParent) return;
             CreateDeadBody(position, colorId, deadBodyParent);
             PlayerControl playerControl = Object.Instantiate(AmongUsClient.Instance.PlayerPrefab, Vector2.zero, Quaternion.identity);
             playerControl.PlayerId = deadBodyParent.PlayerId;

@@ -43,6 +43,11 @@ namespace EndKnot
 
         private int SnapToSendFrameCount;
 
+        // TP() 直後に立て、次の OnFixedUpdate で throttle を 1 回だけバイパスして即送信する。
+        // (旧 SnapToSendFrameCount=30 トリックは新しい動的閾値 Math.Max(10, AllObjects.Count) だと
+        //  AllObjects.Count>=32 で送信されず Riptide 等が凍結するため、明示フラグに置き換え)
+        private bool ForceSnapSend;
+
         private bool IsPooled;
 
         // true なら通常プレイヤーのように振る舞う CNO:
@@ -122,7 +127,7 @@ namespace EndKnot
         public void TP(Vector2 position)
         {
             Position = position;
-            SnapToSendFrameCount = 30;
+            ForceSnapSend = true; // 次フレームで throttle をバイパスして即 RpcSnapTo を送る
         }
         
         private bool TryReusePooledObject(string sprite, Vector2 position)
@@ -294,7 +299,10 @@ namespace EndKnot
             {
                 if (!AmongUsClient.Instance.AmHost) return;
                 
-                if (SnapToSendFrameCount++ < 5) return;
+                // 全 CNO 合計で最大 ~30 回/秒に絞る (CNO 数に応じてスケール)。
+                // TP() 直後 (ForceSnapSend) は throttle を 1 回だけ無視して即送信する。
+                if (!ForceSnapSend && ++SnapToSendFrameCount < Math.Max(10, AllObjects.Count)) return;
+                ForceSnapSend = false;
                 SnapToSendFrameCount = 0;
             
                 if (AmongUsClient.Instance.AmClient)

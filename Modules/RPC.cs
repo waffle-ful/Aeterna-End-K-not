@@ -1458,6 +1458,13 @@ internal static class RPC
     {
         if (AmongUsClient.Instance.AmHost) PlaySound(playerID, sound);
 
+        // 同一 (player, sound) を同一秒に二重 broadcast しない (パケット削減・弱回線保護)。
+        // ホストのローカル再生は上で無条件に済ませてあるので、ここでは broadcast だけ間引く。
+        long now = Utils.TimeStamp;
+        (byte playerID, Sounds sound) soundKey = (playerID, sound);
+        if (CustomSoundsManager.LastSoundRPCTS.TryGetValue(soundKey, out long lastTs) && lastTs == now) return;
+        CustomSoundsManager.LastSoundRPCTS[soundKey] = now;
+
         SendOption sendOption = SendOption.Reliable;
 
         if (GameStates.CurrentServerType == GameStates.ServerType.Vanilla && Options.CurrentGameMode != CustomGameMode.Standard)

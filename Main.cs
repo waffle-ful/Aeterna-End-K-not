@@ -190,6 +190,24 @@ public class Main : BasePlugin
 
     public Harmony Harmony { get; } = new(PluginGuid);
 
+    // BetterAmongUs (BAU) modded-support flags. BAU が reflection で「BasePlugin 派生の名前厳密一致な
+    // static フィールド BAUFlags」を走査して拾うため、この名前・型・配置を変えないこと。
+    // EndKnot が自前で持つ機能を BAU 側で無効化させ、二重処理/衝突を避ける。
+    // フラグ一覧: https://github.com/D1GQ/BetterAmongUs/blob/main/src/Modules/Support/BAUModdedSupportFlags.cs
+    public static string[] BAUFlags =
+    [
+        "gameoption.disable.allgameoptions",
+        "lobby.disable.customloadingbar",
+        "gameplay.disable.customcolorblindtext",
+        "client.disable.discordrp",
+        "lobby.disable.cancelstartinggame",
+        "gameplay.disable.betterrolealgorithm",
+        "gameplay.disable.nameoverride",
+        "gameplay.disable.chatnameoverride",
+        "gameplay.disable.playerinfo",
+        "gameplay.disable.playermeetinginfo"
+    ];
+
     public static NormalGameOptionsV10 NormalOptions => GameOptionsManager.Instance != null ? GameOptionsManager.Instance.currentNormalGameOptions : null;
 
     // Client Options
