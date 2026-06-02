@@ -470,6 +470,12 @@ internal static class ExtendedPlayerControl
             try { Logger.Info($" {player.GetNameWithRole()} => {role} - for {GetClientById(clientId)?.Character?.GetNameWithRole() ?? "Someone"}", "RpcSetRoleDesync"); }
             catch (Exception e) { ThrowException(e); }
 
+            // Assignment-burst instrumentation: SetRoleSelf / DoubleAgent / team-reveal override all flow
+            // through here (not CustomRpcSender.RpcSetRole), so the view table would be blind to self-roles
+            // without this hook. No-op unless RecordSetRoles is on during role assignment.
+            if (StartGameHostPatch.RpcSetRoleReplacer.RecordSetRoles)
+                StartGameHostPatch.RpcSetRoleReplacer.SetRoleLog.Add((player.PlayerId, (ushort)role, clientId));
+
             if (AmongUsClient.Instance.ClientId == clientId)
             {
                 player.SetRole(role);

@@ -601,6 +601,10 @@ public static class CustomRpcSenderExtensions
                 .Write(true)
                 .EndRpc();
 
+            // Assignment-burst instrumentation (no-op unless RecordSetRoles is on during role assignment).
+            if (StartGameHostPatch.RpcSetRoleReplacer.RecordSetRoles)
+                StartGameHostPatch.RpcSetRoleReplacer.SetRoleLog.Add((player.PlayerId, (ushort)role, targetClientId));
+
             if (changeRoleMap)
             {
                 try

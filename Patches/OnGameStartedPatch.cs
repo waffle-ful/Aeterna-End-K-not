@@ -1265,7 +1265,8 @@ internal static class StartGameHostPatch
 
                             RoleTypes roleType = roleMap.Item1;
                             CustomRpcSender sender = senders[seer.PlayerId];
-                            sender.RpcSetRole(seer, roleType, targetClientId);
+                            if (sender.RpcSetRole(seer, roleType, targetClientId))
+                                RpcSetRoleReplacer.SenderRpcCount[sender] = RpcSetRoleReplacer.SenderRpcCount.GetValueOrDefault(sender) + 1;
                         }
                     }
                     catch (Exception e) { Utils.ThrowException(e); }
@@ -1370,6 +1371,20 @@ internal static class StartGameHostPatch
         public static List<CustomRpcSender> OverriddenSenderList = [];
         public static Dictionary<byte, RoleTypes> OverriddenTeamRevealScreen = [];
 
+        // --- Assignment-burst instrumentation ---
+        // When RecordSetRoles is on (only during role assignment), every CustomRpcSender.RpcSetRole
+        // appends (player, role, targetClientId) here. Used to measure the assignment burst's RPC count
+        // and reconstruct each client's effective view (last-write-wins) for behavior-diffing builds.
+        // A passing 2-player local test is NOT evidence of a fix; this lets us read the actual count.
+        public static bool RecordSetRoles;
+        public static readonly List<(byte Player, ushort Role, int TargetClientId)> SetRoleLog = [];
+
+        // Per-sender SetRole RPC count, so Release() can pace each sender through DataFlagRateLimiter with
+        // the correct cost (calls). On the official server the assignment burst (hundreds of reliable
+        // GameDataTo RPCs in one frame) exceeds the ~23 RPC/sec rate limit and self-kicks the host;
+        // routing the flush through the limiter spreads it out. Identical RPCs/order = no behavior change.
+        public static readonly Dictionary<CustomRpcSender, int> SenderRpcCount = [];
+
         public static void Initialize()
         {
             BlockSetRole = true;
@@ -1391,6 +1406,10 @@ internal static class StartGameHostPatch
         {
             try
             {
+                SetRoleLog.Clear();
+                SenderRpcCount.Clear();
+                RecordSetRoles = true;
+
                 foreach (PlayerControl pc in Main.EnumeratePlayerControls())
                 {
                     try
@@ -1548,7 +1567,8 @@ internal static class StartGameHostPatch
                             int targetClientId = target.OwnerId;
                             if (targetClientId == -1) continue;
 
-                            sender.RpcSetRole(seer, roleType, targetClientId, false);
+                            if (sender.RpcSetRole(seer, roleType, targetClientId, false))
+                                SenderRpcCount[sender] = SenderRpcCount.GetValueOrDefault(sender) + 1;
                         }
                         catch (Exception e) { Utils.ThrowException(e); }
                     }
@@ -1565,11 +1585,79 @@ internal static class StartGameHostPatch
             {
                 BlockSetRole = false;
 
+                // Budget gate: the proven kick fires on THIS burst. Log its size (before SetRoleSelf adds
+                // the smaller self-role pass) so a real game can show whether it stays under the official
+                // server's ~23 reliable-RPC/sec budget without needing a full 13-player official lobby.
+                if (RecordSetRoles)
+                    Logger.Info($"Release burst = {SetRoleLog.Count} SetRole RPCs (broadcast={SetRoleLog.Count(x => x.TargetClientId < 0)}), server={GameStates.CurrentServerType}, clients={Main.EnumeratePlayerControls().Count(x => x.OwnerId >= 0)}", "SetRoleBurst");
+
                 foreach (CustomRpcSender sender in Senders.Values)
                 {
-                    try { sender.SendMessage(); }
+                    try
+                    {
+                        CustomRpcSender captured = sender;
+                        int calls = SenderRpcCount.GetValueOrDefault(captured);
+
+                        // Pace each flush through the rate limiter so the one-frame assignment burst spreads
+                        // under the official server's reliable-RPC/sec cap (the proven Hacking-kick trigger).
+                        // Same RPCs, same per-client views, same relative order — just sent later. No new role
+                        // state lands on any client, so the desync isolation (and team-reveal) is unaffected.
+                        // Enqueue gates on CurrentServerType: on custom/modded servers it runs immediately,
+                        // so behavior there is byte-for-byte identical to the previous direct SendMessage().
+                        DataFlagRateLimiter.Enqueue(() => captured.SendMessage(), SendOption.Reliable, calls);
+                    }
                     catch (Exception e) { Utils.ThrowException(e); }
                 }
+            }
+            catch (Exception e) { Utils.ThrowException(e); }
+        }
+
+        // Logs the assignment burst's SetRole RPC count (budget gate) and each client's reconstructed
+        // effective view (correctness gate). Reading these from a real multi-client game tells us
+        // whether the burst stays under the official-server ~23 RPC/sec budget and whether a later
+        // collapse change is behavior-preserving (diff the per-client views across builds).
+        private static void DumpAssignmentInstrumentation()
+        {
+            try
+            {
+                if (!RecordSetRoles) return;
+                RecordSetRoles = false;
+
+                int total = SetRoleLog.Count;
+                int broadcasts = SetRoleLog.Count(x => x.TargetClientId < 0);
+                int perClient = total - broadcasts;
+
+                Logger.Info($"total SetRole RPCs={total} (broadcast={broadcasts}, per-client={perClient}), server={GameStates.CurrentServerType}, clients={Main.EnumeratePlayerControls().Count(x => x.OwnerId >= 0)}", "SetRoleBurst");
+
+                // Reconstruct each client's effective view (last-write-wins, in send order).
+                var view = new Dictionary<int, Dictionary<byte, ushort>>();
+
+                foreach ((byte player, ushort role, int targetClientId) in SetRoleLog)
+                {
+                    if (targetClientId < 0)
+                    {
+                        foreach (PlayerControl pc in Main.EnumeratePlayerControls())
+                        {
+                            int cid = pc.OwnerId;
+                            if (cid < 0) continue;
+                            if (!view.TryGetValue(cid, out Dictionary<byte, ushort> m)) view[cid] = m = [];
+                            m[player] = role;
+                        }
+                    }
+                    else
+                    {
+                        if (!view.TryGetValue(targetClientId, out Dictionary<byte, ushort> m)) view[targetClientId] = m = [];
+                        m[player] = role;
+                    }
+                }
+
+                foreach ((int cid, Dictionary<byte, ushort> m) in view.OrderBy(x => x.Key))
+                {
+                    string s = string.Join(",", m.OrderBy(x => x.Key).Select(x => $"{x.Key}:{(RoleTypes)x.Value}"));
+                    Logger.Info($"client {cid} sees => {s}", "SetRoleBurst");
+                }
+
+                SetRoleLog.Clear();
             }
             catch (Exception e) { Utils.ThrowException(e); }
         }
@@ -1578,6 +1666,10 @@ internal static class StartGameHostPatch
         {
             try
             {
+                // Runs after SetRoleSelf (1174), so the log now holds the full assignment SetRole pass
+                // (Release burst + per-client desync + self-roles). Dump the reconstructed per-client views.
+                DumpAssignmentInstrumentation();
+
                 Senders = null;
                 OverriddenSenderList = null;
                 StoragedData = null;
