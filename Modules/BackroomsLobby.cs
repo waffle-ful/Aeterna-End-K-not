@@ -460,22 +460,16 @@ public static class BackroomsLobby
     private static readonly Color WallGhostColorH = new(0f, 0f, 0f, 0f);
     private static readonly Color WallGhostColorV = new(0f, 0f, 0f, 0f);
 
-    // 完全 occluded 時の overlay 最大 α。0.30 = 30% 黒 overlay で壁が薄暗い感。0.20-0.50 範囲で要調整
-    private const float WallGhostAlphaDarkZone = 0.30f;
+    // 完全 occluded 時の overlay 最大 α。A8 で Upper dark mesh を撤去したため、暗部の壁面暗化は
+    // この ghost overlay 単独が担う (旧: Upper 0.65〜0.95 gradient + ghost の合成)。0.55 = ghost 単独で
+    // Upper 相当の暗さを近似。0.50〜0.65 範囲で実機調整。
+    private const float WallGhostAlphaDarkZone = 0.55f;
 
     // overlay α が 0 → WallGhostAlphaDarkZone に smoothstep で上がりきるまでの距離 (u)。
     // CastRayFirstHit の hit dist から wall 中心がこの距離を超えると max alpha。
     // 大きいほど cell 境界での α 段差が滑らか (V 字抑制) 、小さいほど rapid な fade。
     // 0.5 = cell 1 個分の半分で fade 完了 (wall 内側まで影が浸透する形)
     private const float WallShadowThreshold = 0.5f;
-
-    // Directional shadow: player の南 (y < player.y) にある壁を darken。AU vanilla の
-    // 擬似 3D 視点 (camera は player のやや南からやや北向き) で「player の背中側 = 南側」
-    // の壁は見えにくいという見え方を再現する。
-    // user 観察 (2026-05-28): 「player より上の壁は見える、下の壁は見えない」
-    // 値は dy (= wall.cy - player.y) が -WallShadowYThreshold を超えると max alpha。
-    // 小さい値 (0.3-0.5) だと「player 真南から急に影」、大きい値 (1.5-2.0) だと緩やかな fade
-    private const float WallShadowYThreshold = 0.5f;
 
     // 壁の closest point がこの距離以内なら occluder 確定 (occlusion 判定をスキップ)。
     // wall center で ray test すると隣接壁の角を grazing して「後ろにいる」誤判定が出るため、
@@ -1724,6 +1718,11 @@ public static class BackroomsLobby
     // 真因 — corner ray が donut inner ring に notch を作り、Upper (壁の前面) では notch dark が
     // 壁の上面を覆って「cell 境界の黒い縦線」「top band 消失」の症状を出す ([[plans/image-1-h-h-glowing-haven]])。
     // Upper は base ray fan のみで smooth donut を構築し、Lower は従来通り corner ray ありで sharp に保つ。
+    // A8 (2026-06-02): Upper dark mesh を無効化。視界外 entity 隠蔽は UpdateEntityVisibility の hard-cut が、
+    // 壁面暗化は per-wall ghost(+60) が担うため Upper は冗長。二重影解消 + 1 層削減 + 毎フレ build 削減。
+    // 視界外 entity が透ける regression が実機で出たら true に戻すだけで即復旧 (可逆)。
+    private const bool EnableUpperVisionMesh = false;
+
     private static GameObject _upperVisionGO;
     private static MeshFilter _upperVisionMF;
     private static Mesh _upperVisionMesh;
@@ -1774,14 +1773,14 @@ public static class BackroomsLobby
     private static readonly Vector3[] _upperVertsBuf = new Vector3[2 * MaxRays];
     private static readonly int[] _upperTrisBuf = new int[6 * MaxRays];
     // Upper mesh の vertex color alpha gradient (2026-05-27 soft shadow 対応):
-    //   inner ring 頂点 α=0 (donut 穴側、透過) → outer ring 頂点 α=255 (DarkRadius 側、不透明)
+    //   inner ring 頂点 α=ShadowMinAlpha(0.65) → outer ring 頂点 α=ShadowMaxAlpha(0.95)
     //   donut の厚みを使って自然な fade を作る → 壁が「dark の中に浮く」感を解消
     //   shader 側は Sprites/Default 系 (vertex color × material color) で動くことを前提。
     //   borrowed shader が vertex color 非対応なら gradient は ignored になり旧動作 (hard edge) へ fallback
     private static readonly Color32[] _upperColorsBuf = new Color32[2 * MaxRays];
 
     // Lower mesh の vertex color alpha gradient (2026-05-28 影透明度調整):
-    //   Upper と同形状の gradient (inner=0 → outer=ShadowMaxAlpha) を Lower にも適用。
+    //   gradient (inner=ShadowMinAlpha → outer=ShadowMaxAlpha) を Lower に適用。
     //   視界境界で床と壁が同じスピードで fade するため、discontinuity (床いきなり覆われる) を防ぐ。
     //   Lower mesh は corner ray 含む sharp donut なので size は _vertsBuf と一致 (2*MaxRays)
     private static readonly Color32[] _lowerColorsBuf = new Color32[2 * MaxRays];
@@ -1973,6 +1972,8 @@ public static class BackroomsLobby
 
         Logger.Info($"Vision created: shader='{_visionMat.shader?.name}' sortingLayer='{mr.sortingLayerName}' order={mr.sortingOrder} worldPos={_visionGO.transform.position} layer={_visionGO.layer}", "BackroomsGen");
 
+        if (EnableUpperVisionMesh)
+        {
         // Upper dark mesh: mesh (_visionMesh) を Lower と共有。GO・renderer・material は別。
         // sortingOrder=+50 で player/DeadBody/cosmetic (sortingOrder ~0) を dark zone で覆う。
         // donut 形状なので donut hole (visible 領域) には triangle が無く local player は常に可視。
@@ -2000,6 +2001,7 @@ public static class BackroomsLobby
         umr.sortingOrder = 50;
 
         Logger.Info($"Upper vision created: sortingOrder={umr.sortingOrder}", "BackroomsGen");
+        }
     }
 
     // 既に画面に出ている (= 描画経路 OK な) SpriteRenderer から shared material を借りる fallback
@@ -2368,21 +2370,12 @@ public static class BackroomsLobby
         //    map (壁/床) は触らず Upper dark gradient のまま「薄く見える」を維持。
         UpdateEntityVisibility(player);
 
-        // 10. Per-wall ghost α 更新 (v8 2026-05-28 — directional + occlusion の二重判定)
-        //    各 wall に 2 種類の影要因を計算して max を取る:
-        //
-        //    (a) Directional: player の y より南 (dy < 0) にある壁を darken
-        //        擬似 3D 視点で「背中側 = 南側」の壁を見えにくくする (AU vanilla 風)
-        //    (b) Occlusion: `CastRayFirstHit` で別の壁の奥に隠れた壁を darken
-        //        per-ray な occluder 判定
-        //
-        //    targetAlpha = max(directional, occlusion) * WallGhostAlphaDarkZone
-        //    → 北側で occluder の壁: α=0 (明るい)
-        //    → 北側で occluded の壁: α 増 (薄暗い)
-        //    → 南側の壁: 全て darken (occlusion 不問)
+        // 10. Per-wall ghost α 更新 (occlusion only, A5 2026-06-02)
+        //    各 wall について `CastRayFirstHit` で「別の壁の奥に隠れているか」を判定し、
+        //    隠れている壁ほど α を上げて darken する (公式の視界遮蔽 fog と同型)。
+        //    → visible な壁 (occAlpha=0): α=0 (明るい) / occluded な壁: α 増 (暗い)
         if (!EnableWallGhost) return;
 
-        float darkR2 = DarkRadius * DarkRadius;
         int wallCount = WallAabbs.Count;
         for (int wi = 0; wi < wallCount; wi++)
         {
@@ -2394,8 +2387,8 @@ public static class BackroomsLobby
             float dy = w.cy - player.y;
             float d2 = dx * dx + dy * dy;
 
-            // DarkRadius 圏外: dark mesh の範囲外なので alpha 0 (camera 視野からも遠い)
-            if (d2 > darkR2)
+            // CullRadius(10u) 圏外: cull で壁タイル GO が SetActive(false) され ghost child も非描画なので計算不要 (A9)
+            if (d2 > CullRadiusSqr)
             {
                 if (ghost.color.a > 0.01f) ghost.color = SetAlpha(ghost.color, 0f);
                 continue;
@@ -2403,11 +2396,6 @@ public static class BackroomsLobby
 
             float dist = Mathf.Sqrt(d2);
             if (dist < 1e-4f) { ghost.color = SetAlpha(ghost.color, 0f); continue; }
-
-            // (a) Directional shadow: dy < 0 (南側) で α 増
-            //     -dy / threshold で 0→1 に smoothstep
-            float dirT = Mathf.Clamp01(-dy / WallShadowYThreshold);
-            float dirAlpha = dirT * dirT * (3f - 2f * dirT);
 
             // (b) Occlusion shadow: 別の壁の奥にいるか。
             //     center ray だけだと近接 wall の grazing で誤判定するので、壁の AABB の
@@ -2443,8 +2431,9 @@ public static class BackroomsLobby
                 occAlpha = occT * occT * (3f - 2f * occT);
             }
 
-            // max を取る (どちらかの条件が満たされれば darken)
-            float targetAlpha = Mathf.Max(dirAlpha, occAlpha) * WallGhostAlphaDarkZone;
+            // A5 (2026-06-02): occlusion (視界遮蔽) のみで darken。directional(南側暗化)は公式 fog に
+            // 無い mod 独自演出 (法線無視の二元論) だったため削除し、公式同型の fog 構造に寄せた。
+            float targetAlpha = occAlpha * WallGhostAlphaDarkZone;
 
             if (Mathf.Abs(ghost.color.a - targetAlpha) > 0.01f)
                 ghost.color = SetAlpha(ghost.color, targetAlpha);
@@ -2559,7 +2548,7 @@ public static class BackroomsLobby
     //   verts: 上限 2*MaxRays、未使用 slot は前 frame の stale data だが triangle が指さないので無害
     //   tris : 6*MaxRays、未使用 slot は全 index=0 (degenerate) で埋めて Mesh.Clear 回避
     //   colors: null なら vertex color を触らない (Lower mesh は solid 暗色)。
-    //           non-null なら inner ring α=0 (透過)、outer ring α=255 (不透明) で gradient (Upper mesh の soft edge)。
+    //           non-null なら inner ring α=ShadowMinAlpha(0.65)、outer ring α=ShadowMaxAlpha(0.95) で gradient。
     //   _rays は angle 昇順前提 (base ray のみなら自然順、corner ray 含むなら呼び出し前に Array.Sort)
     private static void BuildDonutMesh(int n, Vector3[] verts, int[] tris, Color32[] colors, Mesh mesh)
     {
@@ -2578,7 +2567,7 @@ public static class BackroomsLobby
             verts[i + n] = new Vector3(c * DarkRadius, s * DarkRadius, 0f);
             if (hasColors)
             {
-                colors[i] = innerCol;     // inner ring 透過
+                colors[i] = innerCol;     // inner ring α=ShadowMinAlpha(0.65)
                 colors[i + n] = outerCol; // outer ring 不透明
             }
         }
