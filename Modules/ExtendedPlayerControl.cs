@@ -903,7 +903,13 @@ internal static class ExtendedPlayerControl
             // Other Clients
             else
             {
-                MessageWriter writer = AmongUsClient.Instance.StartRpcImmediately(player.NetId, (byte)RpcCalls.MurderPlayer, SendOption.Reliable, player.OwnerId);
+                // SendOption.None (not Reliable) — proven kick fix (2026-06-02, /burst test: 800 Reliable=Hacking kick, 800 None=no kick).
+                // This shield is a client-authority forge onto another player's NetId. At intro the assignment window stacks many of
+                // these (+ SetRole/SyncSettings/NotifyRoles); on official servers the reliable-RPC-rate cap then self-kicks the host.
+                // None keeps it off the counted reliable channel (matches TOHP, which survives official servers this way). Safe: the
+                // cooldown value rides on SyncSettings (Reliable, set to 2x) and is re-asserted by ResetKillCooldown — a dropped None
+                // shield only makes the cooldown briefly too long, never too short / instant-kill.
+                MessageWriter writer = AmongUsClient.Instance.StartRpcImmediately(player.NetId, (byte)RpcCalls.MurderPlayer, SendOption.None, player.OwnerId);
                 writer.WriteNetObject(target);
                 writer.Write((int)MurderResultFlags.FailedProtected);
                 AmongUsClient.Instance.FinishRpcImmediately(writer);
@@ -1093,8 +1099,11 @@ internal static class ExtendedPlayerControl
             }
             else
             {
-                // If target is not host
-                MessageWriter writer = AmongUsClient.Instance.StartRpcImmediately(player.NetId, (byte)RpcCalls.ProtectPlayer, SendOption.Reliable, player.OwnerId);
+                // If target is not host. SendOption.None (not Reliable) — same intro reliable-rate-cap kick fix as the shield at
+                // RpcGuardAndKill above: IntroPatch:1211 fires this ProtectPlayer forge for EVERY player at assignment (the largest
+                // forge contributor), so it must stay off the counted reliable channel. ProtectPlayer only resets an ability
+                // cooldown (no game-critical state); a dropped None packet just means that one cooldown reset doesn't apply. Matches TOHP.
+                MessageWriter writer = AmongUsClient.Instance.StartRpcImmediately(player.NetId, (byte)RpcCalls.ProtectPlayer, SendOption.None, player.OwnerId);
                 writer.WriteNetObject(player);
                 writer.Write(0);
                 AmongUsClient.Instance.FinishRpcImmediately(writer);
@@ -1839,6 +1848,9 @@ internal static class ExtendedPlayerControl
                 // MurderPlayer RPC with FailedProtected flag sets a player's kill cooldown to half the set value.
                 // *2 /2 = the value we began with. This avoids syncing settings on every CheckMurder.
                 // This works if the kill cooldown is consistent throughout the entire game.
+                // NOTE: kept Reliable (unlike the intro shield at RpcGuardAndKill) — this NonSync path deliberately skips
+                // SyncSettings, so the 2x backstop is only a caller contract, not in-method; it is also mid-game-only
+                // (Snowdown/HotPotato/CTF/Missioneer), so it does not contribute to the intro reliable-rate-cap kick.
                 MessageWriter writer = AmongUsClient.Instance.StartRpcImmediately(player.NetId, (byte)RpcCalls.MurderPlayer, SendOption.Reliable, player.OwnerId);
                 writer.WriteNetObject(player);
                 writer.Write((int)MurderResultFlags.FailedProtected);

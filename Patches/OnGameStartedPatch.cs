@@ -1371,6 +1371,13 @@ internal static class StartGameHostPatch
         public static List<CustomRpcSender> OverriddenSenderList = [];
         public static Dictionary<byte, RoleTypes> OverriddenTeamRevealScreen = [];
 
+        // --- /burst intro-armed config (set from lobby chat; fires the client-authority forge burst at the next
+        // game's intro, which is the timing that matches the real kick — unlike an in-game /burst which fires now).
+        // Stays armed across games until /burst off. Takes precedence over debug_burst.txt. ---
+        public static int ArmedBurstCount;    // > 0 = armed
+        public static bool ArmedBurstProtect; // ProtectPlayer vs MurderPlayer/FailedProtected
+        public static bool ArmedBurstNone;    // SendOption.None vs Reliable
+
         // --- Assignment-burst instrumentation ---
         // When RecordSetRoles is on (only during role assignment), every CustomRpcSender.RpcSetRole
         // appends (player, role, targetClientId) here. Used to measure the assignment burst's RPC count
@@ -1614,23 +1621,49 @@ internal static class StartGameHostPatch
             catch (Exception e) { Utils.ThrowException(e); }
         }
 
-        // TEST AID — lets us validate the rate-limit fix with only 1-2 real clients instead of a full lobby.
-        // Reads EndKnot_DATA/debug_burst.txt (next to AlwaysCombos.json). Contents:
-        //   "<N>"          -> inject N harmless dummy SetRole RPCs through the rate limiter (confirm the throttle holds)
-        //   "<N> direct"   -> inject them with a direct flush, bypassing the limiter (reproduce the un-throttled kick)
-        //   absent / "0"   -> off (zero cost — File.Exists short-circuits)
-        // The dummies re-set the target's own role to itself (idempotent), so no real game state changes;
-        // only the reliable-RPC volume to a non-modded client goes up, which is exactly the kick's trigger.
+        // TEST AID — validate the kick fix with only 1-2 real clients instead of a full lobby.
+        // Reads EndKnot_DATA/debug_burst.txt (next to AlwaysCombos.json). First token = count N (>0).
+        // Remaining tokens (any order, case-insensitive) select what to fire:
+        //   (none)   -> N host-authority SetRole RPCs through the rate limiter (proven-exempt control: 203-burst did NOT kick)
+        //   direct   -> SetRole burst with a direct flush, bypassing the limiter
+        //   murder   -> N client-authority MurderPlayer(FailedProtected) forged onto the vanilla client's NetId (= the shield shape)
+        //   protect  -> N client-authority ProtectPlayer forged onto the vanilla client's NetId (= the intro ability-reset shape)
+        //   none     -> send the murder/protect burst on SendOption.None instead of Reliable (TOHP's channel)
+        //   absent / "0" -> off (zero cost — File.Exists short-circuits)
+        // DECISIVE EXPERIMENT (isolates Reliable-vs-None at fixed burst size, the one variable the 203-SetRole test couldn't move):
+        //   "200 murder"      => expect kick (if a Reliable client-authority burst is the trigger)
+        //   "200 murder none" => expect NO kick (validates the "downgrade to None" fix); same for "200 protect[ none]".
+        // All forges are harmless: FailedProtected = no real death; ProtectPlayer(self,0) = brief self-shield. SetRole dummies are idempotent.
         private static void InjectDebugBurst()
         {
             try
             {
+                // Source 1: /burst armed from lobby chat — fires the client-authority forge burst at intro (real-kick timing).
+                if (ArmedBurstCount > 0)
+                {
+                    Logger.Info($"DebugBurst: ARMED intro burst firing ({ArmedBurstCount} {(ArmedBurstProtect ? "Protect" : "Murder")} {(ArmedBurstNone ? "None" : "Reliable")})", "SetRoleBurst");
+                    FireClientAuthForgeBurst(ArmedBurstCount, ArmedBurstProtect, ArmedBurstNone ? SendOption.None : SendOption.Reliable);
+                    return;
+                }
+
+                // Source 2: debug_burst.txt (also supports the host-authority SetRole control path).
                 string path = $"{Main.DataPath}/EndKnot_DATA/debug_burst.txt";
                 if (!System.IO.File.Exists(path)) return;
 
                 string[] parts = System.IO.File.ReadAllText(path).Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
                 if (parts.Length == 0 || !int.TryParse(parts[0], out int count) || count <= 0) return;
-                bool bypassThrottle = parts.Length > 1 && parts[1].Equals("direct", StringComparison.OrdinalIgnoreCase);
+
+                HashSet<string> flags = parts.Skip(1).Select(p => p.ToLowerInvariant()).ToHashSet();
+                bool bypassThrottle = flags.Contains("direct");
+                bool useNone = flags.Contains("none");
+                bool protectMode = flags.Contains("protect");
+
+                // Client-authority forge test (= the /burst command's payload). See FireClientAuthForgeBurst.
+                if (flags.Contains("murder") || protectMode)
+                {
+                    FireClientAuthForgeBurst(count, protectMode, useNone ? SendOption.None : SendOption.Reliable);
+                    return;
+                }
 
                 PlayerControl target = Main.EnumeratePlayerControls().FirstOrDefault(p => p != null && !p.AmOwner && p.OwnerId >= 0 && !p.IsModdedClient());
                 if (target == null)
@@ -1652,6 +1685,31 @@ internal static class StartGameHostPatch
                     DataFlagRateLimiter.Enqueue(() => sender.SendMessage(), SendOption.Reliable, count); // paced; host should survive
             }
             catch (Exception e) { Utils.ThrowException(e); }
+        }
+
+        // Forges `count` client-authority RPCs onto the first non-modded (vanilla) client's own NetId:
+        // MurderPlayer/FailedProtected (the shield shape, ExtendedPlayerControl.cs:906) by default, or ProtectPlayer
+        // (the intro ability-reset shape, :1097) when protectMode. SendOption (Reliable vs None) is the one variable the
+        // host-authority 203-SetRole burst test could not move. Shared by debug_burst.txt and the /burst chat command.
+        // Both forges are harmless: FailedProtected = no real death, ProtectPlayer(self,0) = 0s self-shield. Returns a status string.
+        public static string FireClientAuthForgeBurst(int count, bool protectMode, SendOption sendOpt)
+        {
+            PlayerControl target = Main.EnumeratePlayerControls().FirstOrDefault(p => p != null && !p.AmOwner && p.OwnerId >= 0 && !p.IsModdedClient());
+            if (target == null) return "DebugBurst: no non-modded (vanilla) client connected to target";
+
+            byte rpc = (byte)(protectMode ? RpcCalls.ProtectPlayer : RpcCalls.MurderPlayer);
+            string channel = sendOpt == SendOption.None ? "None" : "Reliable";
+            Logger.Info($"DebugBurst: forging {count} {(protectMode ? "ProtectPlayer" : "MurderPlayer/FailedProtected")} RPCs onto client {target.OwnerId}'s NetId ({channel})", "SetRoleBurst");
+
+            for (var i = 0; i < count; i++)
+            {
+                MessageWriter writer = AmongUsClient.Instance.StartRpcImmediately(target.NetId, rpc, sendOpt, target.OwnerId);
+                writer.WriteNetObject(target);
+                writer.Write(protectMode ? 0 : (int)MurderResultFlags.FailedProtected);
+                AmongUsClient.Instance.FinishRpcImmediately(writer);
+            }
+
+            return $"DebugBurst: forged {count} {(protectMode ? "ProtectPlayer" : "MurderPlayer")} onto client {target.OwnerId} ({channel}). Watch for a Hacking kick.";
         }
 
         // Logs the assignment burst's SetRole RPC count (budget gate) and each client's reconstructed
