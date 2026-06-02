@@ -461,9 +461,11 @@ public static class BackroomsLobby
     private static readonly Color WallGhostColorV = new(0f, 0f, 0f, 0f);
 
     // 完全 occluded 時の overlay 最大 α。A8 で Upper dark mesh を撤去したため、暗部の壁面暗化は
-    // この ghost overlay 単独が担う (旧: Upper 0.65〜0.95 gradient + ghost の合成)。0.55 = ghost 単独で
-    // Upper 相当の暗さを近似。0.50〜0.65 範囲で実機調整。
-    private const float WallGhostAlphaDarkZone = 0.55f;
+    // この ghost overlay 単独が担う (旧: Upper 0.65〜0.95 gradient + ghost の合成)。
+    // 0.92 = 床 fog (ShadowMaxAlpha=0.95) にほぼ揃え、「見えない部屋」の壁を床と同じく黒く沈める
+    // (旧 0.55 だと遮蔽壁が灰色のまま暗い床に浮いた)。可視壁は occAlpha=0 で α0=明るいまま不変。
+    // /bbwalldark <0-1> で runtime 調整可 (リビルド無し実機 A/B 用)。
+    private static float WallGhostAlphaDarkZone = 0.92f;
 
     // overlay α が 0 → WallGhostAlphaDarkZone に smoothstep で上がりきるまでの距離 (u)。
     // CastRayFirstHit の hit dist から wall 中心がこの距離を超えると max alpha。
@@ -2174,6 +2176,21 @@ public static class BackroomsLobby
         Utils.SendMessage($"Backrooms perf logging = {state}. See log (tag: BackroomsPerf).", targetPid);
         Logger.Info($"Perf logging toggled {state}", "BackroomsPerf");
         if (PerfLogEnabled) LogHardwareInfo();
+    }
+
+    // /bbwalldark <0-1> — 遮蔽壁 ghost overlay の最大 α を runtime 調整。床 fog (ShadowMaxAlpha=0.95) に
+    // 合わせて見えない部屋の壁を黒く沈める用。可視壁は occAlpha=0 のままなので明るさ不変。
+    public static void SetWallDark(byte targetPid, string[] args)
+    {
+        if (args.Length >= 2 && float.TryParse(args[1], out float v))
+        {
+            WallGhostAlphaDarkZone = Mathf.Clamp01(v);
+            Utils.SendMessage($"WallGhostAlphaDarkZone = {WallGhostAlphaDarkZone:0.00}", targetPid);
+        }
+        else
+        {
+            Utils.SendMessage($"Usage: /bbwalldark <0.0-1.0>  (current = {WallGhostAlphaDarkZone:0.00})", targetPid);
+        }
     }
 
     // 計測 ON 時に 1 度だけマシン構成を吐く。FPS/BB CPU% の生値が「強PC/普通PC どちらの数字か」を

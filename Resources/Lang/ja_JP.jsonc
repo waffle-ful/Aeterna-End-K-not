@@ -9356,6 +9356,7 @@
   "CommandForms.BBShipDiag": "bbshipdiag",
   "CommandForms.BBNoCDiag": "bbnocdiag",
   "CommandForms.BBPerf": "bbperf",
+  "CommandForms.BBWallDark": "bbwalldark",
   "CommandForms.TPIn": "tpin",
   "CommandForms.TPOut": "tpout",
   "CommandForms.Target": "target,ターゲット",

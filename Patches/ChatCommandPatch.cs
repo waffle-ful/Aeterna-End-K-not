@@ -190,6 +190,7 @@ internal static class ChatCommands
             new("BBShipDiag", "", Command.UsageLevels.Host, Command.UsageTimes.InLobby, BBShipDiagCommand, true, true),
             new("BBNoCDiag", "", Command.UsageLevels.Host, Command.UsageTimes.InLobby, BBNoCDiagCommand, true, true),
             new("BBPerf", "", Command.UsageLevels.Host, Command.UsageTimes.InLobby, BBPerfCommand, true, true),
+            new("BBWallDark", "[value]", Command.UsageLevels.Host, Command.UsageTimes.InLobby, BBWallDarkCommand, true, true),
             new("Burst", "{count} [murder|protect] [none]", Command.UsageLevels.Host, Command.UsageTimes.Always, BurstCommand, true, true),
             new("Template", "{tag}", Command.UsageLevels.Everyone, Command.UsageTimes.Always, TemplateCommand, true, false, [GetString("CommandArgs.Template.Tag")]),
             new("MessageWait", "{duration}", Command.UsageLevels.Host, Command.UsageTimes.Always, MessageWaitCommand, true, false, [GetString("CommandArgs.MessageWait.Duration")]),
@@ -2514,6 +2515,11 @@ internal static class ChatCommands
     private static void BBPerfCommand(PlayerControl player, string text, string[] args)
     {
         BackroomsLobby.TogglePerfLog(player.PlayerId);
+    }
+
+    private static void BBWallDarkCommand(PlayerControl player, string text, string[] args)
+    {
+        BackroomsLobby.SetWallDark(player.PlayerId, args);
     }
 
     // /burst <N> [murder|protect] [none] | /burst off — client-authority forge burst kick test (host-only, hidden).

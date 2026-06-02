@@ -9976,6 +9976,7 @@
   "CommandForms.BBShipDiag": "bbshipdiag",
   "CommandForms.BBNoCDiag": "bbnocdiag",
   "CommandForms.BBPerf": "bbperf",
+  "CommandForms.BBWallDark": "bbwalldark",
   "CommandForms.Burst": "burst",
   "CommandForms.TPIn": "tpin",
   "CommandForms.TPOut": "tpout",
