@@ -192,6 +192,7 @@ internal static class ChatCommands
             new("BBPerf", "", Command.UsageLevels.Host, Command.UsageTimes.InLobby, BBPerfCommand, true, true),
             new("BBWallDark", "[value]", Command.UsageLevels.Host, Command.UsageTimes.InLobby, BBWallDarkCommand, true, true),
             new("Burst", "{count} [murder|protect] [none]", Command.UsageLevels.Host, Command.UsageTimes.Always, BurstCommand, true, true),
+            new("Rehost", "", Command.UsageLevels.Host, Command.UsageTimes.InLobby, RehostCommand, true, true),
             new("Template", "{tag}", Command.UsageLevels.Everyone, Command.UsageTimes.Always, TemplateCommand, true, false, [GetString("CommandArgs.Template.Tag")]),
             new("MessageWait", "{duration}", Command.UsageLevels.Host, Command.UsageTimes.Always, MessageWaitCommand, true, false, [GetString("CommandArgs.MessageWait.Duration")]),
             new("Death", "[id]", Command.UsageLevels.Everyone, Command.UsageTimes.AfterDeath, DeathCommand, true, false, [GetString("CommandArgs.Death.Id")]),
@@ -2561,6 +2562,25 @@ internal static class ChatCommands
 
         string status = StartGameHostPatch.RpcSetRoleReplacer.FireClientAuthForgeBurst(count, protectMode, sendOpt);
         Utils.SendMessage(status, player.PlayerId, "DebugBurst");
+    }
+
+    // /rehost — 実際に kick されなくても自動部屋立て直しの一連を試せるデバッグ用 (host-only, hidden)。
+    // 「キック/エラー切断」を疑似発火するだけ。AutoRehostAfterKick オプションが ON のときに動く。
+    private static void RehostCommand(PlayerControl player, string text, string[] args)
+    {
+        if (!AmongUsClient.Instance.AmHost) return;
+
+        if (!(Options.AutoRehostAfterKick?.GetBool() ?? false))
+        {
+            Utils.SendMessage("DebugRehost: AutoRehostAfterKick option is OFF — enable it first, then /rehost.", player.PlayerId, "DebugRehost");
+            return;
+        }
+
+        Utils.SendMessage("DebugRehost: forcing a real disconnect now. The lobby should re-host shortly.", player.PlayerId, "DebugRehost");
+        // 実際の kick と同じ経路を通すため、本物の ExitGame で切断する。
+        // ExitGamePatch.Prefix が自然に AutoRehost.OnDisconnect(Error) を呼ぶ (_pending ガードで二重発火しない)。
+        try { AmongUsClient.Instance.ExitGame(DisconnectReasons.Error); }
+        catch (Exception ex) { Logger.Warn($"/rehost ExitGame failed: {ex.Message}", "DebugRehost"); }
     }
 
     private static void MyRoleCommand(PlayerControl player, string text, string[] args)

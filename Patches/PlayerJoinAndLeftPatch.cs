@@ -32,6 +32,9 @@ internal static class OnGameJoinedPatch
 
         Logger.Info($"{__instance.GameId} joined lobby", "OnGameJoined");
 
+        // 自動部屋立て直し: 新しい部屋に join した = 成功シグナル (旧 GameId と比較。内部でガード)
+        Modules.AutoRehost.NotifyJoinedNewLobby();
+
         SetUpRoleTextPatch.IsInIntro = false;
 
         Main.PlayerVersion = [];

@@ -14,6 +14,13 @@ public static class OfficialServerNotice
     // ロビー案内はアプリ起動中 1 回だけ (毎ロビー再入室で出すとしつこいため)。
     private static bool _lobbyWarnedThisAppSession;
 
+    // 自動部屋立て直し中は警告ポップアップを出さない (公式で kick されると毎周期出てしまうため)。
+    // AutoRehost が立て直し開始〜完了の間 true にする。
+    public static bool SuppressWhileRehosting;
+
+    // 無人ホスト運用でモーダルが残り続けないよう、ポップアップは一定秒で自動的に閉じる。
+    private const float AutoDismissSeconds = 10f;
+
     // ロビー入室時に呼ぶ。公式鯖 + ホストのときだけ 1 回、対応状況を案内する。
     public static void WarnInLobby()
     {
@@ -39,8 +46,23 @@ public static class OfficialServerNotice
 
     private static void ShowPopUp(string text)
     {
+        if (SuppressWhileRehosting) return;
         if (!HudManager.InstanceExists) return;
-        try { HudManager.Instance.ShowPopUp(Decorate(text)); }
+        try
+        {
+            HudManager.Instance.ShowPopUp(Decorate(text));
+
+            // ShowPopUp は HudManager.Instance.Dialogue を使う共有ポップアップなので、N 秒後に閉じる。
+            LateTask.New(() =>
+            {
+                try
+                {
+                    DialogueBox dlg = HudManager.Instance != null ? HudManager.Instance.Dialogue : null;
+                    if (dlg != null) dlg.gameObject.SetActive(false);
+                }
+                catch { }
+            }, AutoDismissSeconds, log: false);
+        }
         catch { }
     }
 

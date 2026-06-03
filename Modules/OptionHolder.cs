@@ -454,6 +454,9 @@ public static class Options
 
     public static OptionItem AutoPlayAgain;
     public static OptionItem AutoPlayAgainCountdown;
+    public static OptionItem AutoRehostAfterKick;
+    public static OptionItem AutoRehostDelay;
+    public static OptionItem AutoRehostMaxAttempts;
     public static OptionItem AutoStartTimer;
     
     public static OptionItem EnterKeyToStartGame;
@@ -1689,6 +1692,15 @@ public static class Options
 
         AutoPlayAgainCountdown = new IntegerOptionItem(44425, "AutoPlayAgainCountdown", new(1, 90, 1), 10, TabGroup.SystemSettings)
             .SetParent(AutoPlayAgain);
+
+        AutoRehostAfterKick = new BooleanOptionItem(44459, "AutoRehostAfterKick", false, TabGroup.SystemSettings);
+
+        AutoRehostDelay = new IntegerOptionItem(44460, "AutoRehostDelay", new(3, 120, 1), 10, TabGroup.SystemSettings)
+            .SetParent(AutoRehostAfterKick)
+            .SetValueFormat(OptionFormat.Seconds);
+
+        AutoRehostMaxAttempts = new IntegerOptionItem(44461, "AutoRehostMaxAttempts", new(1, 10, 1), 3, TabGroup.SystemSettings)
+            .SetParent(AutoRehostAfterKick);
 
         AutoGMPollCommandAfterJoin = new BooleanOptionItem(19309, "AutoGMPollCommandAfterJoin", false, TabGroup.SystemSettings)
             .SetHeader(true);

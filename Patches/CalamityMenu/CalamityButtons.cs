@@ -48,14 +48,7 @@ public static class CalamityButtons
             // still no-op, so reverted to the direct OpenGameModeMenu call. Workaround
             // for users: click Multi twice. Real fix needs vanilla AU 2026 source review.
             (Translator.GetString("MainMenu.Calamity.Multiplayer"),  +0.4f,
-                () =>
-                {
-                    Logger.Info($"Multiplayer clicked. ShowingPanel={MainMenuManagerPatch.ShowingPanel}", "CalamityButtons");
-                    MultiplayerMapIdFix();
-                    CalamityVisibility.HideMenuContent();
-                    mm.OpenGameModeMenu();
-                    Logger.Info("OpenGameModeMenu returned", "CalamityButtons");
-                }),
+                () => GoToMultiplayer(mm)),
 
             (Translator.GetString("MainMenu.Calamity.Settings"),     -0.1f,
                 () => { CalamityVisibility.HideMenuContent(); mm.settingsButton.OnClick.Invoke(); }),
@@ -69,6 +62,18 @@ public static class CalamityButtons
 
         foreach (var (label, y, onClick) in defs)
             CreateTextButton(buttonLayer, label, new Vector3(0f, y, 0f), onClick);
+    }
+
+    // Calamity メニューから matchmaking へ抜ける実経路。Calamity ボタンと自動部屋立て直し
+    // (AutoRehost) の両方から呼ぶ。AU 2026 は OpenGameModeMenu の 1 回目で matchmaking に入って
+    // MainMenu に bounce back することがあるので、呼び側 (AutoRehost) は cooldown 付きで再試行する。
+    public static void GoToMultiplayer(MainMenuManager mm)
+    {
+        Logger.Info($"Multiplayer triggered. ShowingPanel={MainMenuManagerPatch.ShowingPanel}", "CalamityButtons");
+        MultiplayerMapIdFix();
+        CalamityVisibility.HideMenuContent();
+        mm.OpenGameModeMenu();
+        Logger.Info("OpenGameModeMenu returned", "CalamityButtons");
     }
 
     private static void CreateTextButton(Transform parent, string label, Vector3 pos, Action onClick)
