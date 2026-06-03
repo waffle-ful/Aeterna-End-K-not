@@ -24,9 +24,9 @@ public static class GuessManager
     public static HashSet<byte> Guessers = [];
     private static int Page;
     private static GameObject GuesserUI;
-    private static Dictionary<CustomRoleTypes, List<Transform>> RoleButtons;
-    private static Dictionary<CustomRoleTypes, SpriteRenderer> RoleSelectButtons;
-    private static List<SpriteRenderer> PageButtons;
+    private static Dictionary<CustomRoleTypes, List<Transform>> RoleButtons = [];
+    private static Dictionary<CustomRoleTypes, SpriteRenderer> RoleSelectButtons = [];
+    private static List<SpriteRenderer> PageButtons = [];
     private static CustomRoleTypes CurrentTeamType;
 
     public static TextMeshPro TextTemplate;
