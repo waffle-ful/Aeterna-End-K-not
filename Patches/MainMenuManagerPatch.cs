@@ -123,6 +123,7 @@ public static class MainMenuManagerPatch
 
                 if (!MenuBGMStarted)
                 {
+                    BGMManager.InvalidatePlaylist();
                     BGMManager.SetMenuBGM();
                     MenuBGMStarted = true;
                     // OGG 同期デコードで実再生まで 2-4 秒掛かる場合があるため、

@@ -185,11 +185,12 @@ internal static class LobbyBehaviourStartPatch
 
             if (!_bgmStarted)
             {
-                BGMManager.SetLobbyBGM();
                 _bgmStarted = true;
-                // OGG 同期デコードで実再生まで遅延が出る場合に備え、鳴った瞬間から
-                // 2.5 秒に張り直す。AU が遅れて再アームする MapTheme/ambient を潰す。
                 _silenceUntil = Time.realtimeSinceStartup + 2.5f;
+                // LobbyBehaviour.Start は OnGameJoined の初回 SetLobbyBGM より少し後に走るので、
+                // ここで鳴らし直す。BGMManager 側で「同スロットが鳴っていれば何もしない／
+                // 鳴っていなければ同じ曲を鳴らし直す」ので、二重抽選も無音化も起きない。
+                BGMManager.SetLobbyBGM();
             }
         }
 

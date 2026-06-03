@@ -101,10 +101,7 @@ public static class CalamityFadeIn
             // Re-trigger BGM credit display now that the menu is actually visible.
             // The original Show() fired during the blackout and finished before the player saw it.
             if (Main.ShowBGMInfo?.Value ?? true)
-            {
-                string bgm = BGMManager.CurrentBGMName;
-                if (!string.IsNullOrEmpty(bgm)) BGMInfoDisplay.Show(bgm);
-            }
+                BGMManager.RetryCurrentCredit();
 
             return;
         }

@@ -1,9 +1,5 @@
-﻿using System;
+using System;
 using System.Collections;
-using System.Collections.Generic;
-using System.IO;
-using System.Reflection;
-using System.Text.Json;
 using TMPro;
 using UnityEngine;
 
@@ -11,32 +7,37 @@ namespace EndKnot.Modules;
 
 public static class BGMInfoDisplay
 {
-    private const float FadeInDuration = 0.6f;
-    private const float HoldDuration = 4.0f;
+    private const float FadeInDuration  = 0.6f;
+    private const float HoldDuration    = 4.0f;
     private const float FadeOutDuration = 1.2f;
 
     private static TextMeshPro displayText;
     private static Coroutine activeFade;
-    private static Dictionary<string, BGMTitle> titleMap;
 
     public static bool HasDisplay => displayText != null && displayText.gameObject != null;
 
-    public class BGMTitle
-    {
-        public string title { get; set; }
-        public string author { get; set; }
-    }
-
-    public static void Show(string bgmFileName)
+    /// <summary>
+    /// BGMクレジットを表示する。
+    /// title/author がどちらも空の場合は fileNameFallback の " -" 分割を試みる。
+    /// それでも空なら表示しない。
+    /// </summary>
+    public static void Show(string title, string author, string fileNameFallback = "")
     {
         try
         {
-            (string title, string author) = ResolveTitle(bgmFileName);
-
-            // No credits prepared yet (both fields empty in bgm_titles.json) →
-            // skip the visual entirely so test builds don't ship a bare "♪ In-Task"
-            // placeholder. Filling in the JSON later automatically re-enables it.
-            if (string.IsNullOrEmpty(title) && string.IsNullOrEmpty(author)) return;
+            if (string.IsNullOrEmpty(title) && string.IsNullOrEmpty(author))
+            {
+                if (!string.IsNullOrEmpty(fileNameFallback))
+                {
+                    int sep = fileNameFallback.LastIndexOf(" -", StringComparison.Ordinal);
+                    if (sep > 0 && sep < fileNameFallback.Length - 2)
+                    {
+                        title  = fileNameFallback[..sep].Trim();
+                        author = fileNameFallback[(sep + 2)..].Trim();
+                    }
+                }
+                if (string.IsNullOrEmpty(title) && string.IsNullOrEmpty(author)) return;
+            }
 
             EnsureDisplay();
             if (displayText == null) return;
@@ -175,43 +176,5 @@ public static class BGMInfoDisplay
         displayText.alpha = 0f;
         displayText.gameObject.SetActive(false);
         activeFade = null;
-    }
-
-    private static (string title, string author) ResolveTitle(string bgmFileName)
-    {
-        EnsureTitleMap();
-        if (titleMap.TryGetValue(bgmFileName, out BGMTitle entry))
-            return (entry.title ?? bgmFileName, entry.author ?? string.Empty);
-
-        int sepIdx = bgmFileName.LastIndexOf(" -", StringComparison.Ordinal);
-        if (sepIdx > 0 && sepIdx < bgmFileName.Length - 2)
-            return (bgmFileName[..sepIdx].Trim(), bgmFileName[(sepIdx + 2)..].Trim());
-
-        return (bgmFileName, string.Empty);
-    }
-
-    private static void EnsureTitleMap()
-    {
-        if (titleMap != null) return;
-        titleMap = [];
-
-        try
-        {
-            Stream stream = Assembly.GetExecutingAssembly()
-                .GetManifestResourceStream("EndKnot.Resources.Sounds.BGM.bgm_titles.json");
-            if (stream == null)
-            {
-                Logger.Warn("Embedded bgm_titles.json not found", "BGMInfoDisplay");
-                return;
-            }
-
-            using var reader = new StreamReader(stream);
-            string json = reader.ReadToEnd();
-            titleMap = JsonSerializer.Deserialize<Dictionary<string, BGMTitle>>(json) ?? [];
-        }
-        catch (Exception ex)
-        {
-            Logger.Exception(ex, "BGMInfoDisplay.EnsureTitleMap");
-        }
     }
 }

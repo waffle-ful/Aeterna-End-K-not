@@ -1,26 +1,12 @@
 {
-  "menu": {
-    "title": "The Tale of a Cruel World",
-    "author": "DM Dokuro"
-  },
-  "lobby": {
-    "title": "0の部屋",
-    "author": "自称芸術家みーさん"
-  },
-  "intask": {
-    "title": "",
-    "author": ""
-  },
-  "climax": {
-    "title": "",
-    "author": ""
-  },
-  "meeting": {
-    "title": "",
-    "author": ""
-  },
-  "result": {
-    "title": "",
-    "author": ""
-  }
+  "menu": [
+    { "file": "menu", "weight": 1, "title": "The Tale of a Cruel World", "author": "DM Dokuro" }],
+  "lobby": [
+    { "file": "lobby", "weight": 1, "title": "0の部屋", "author": "自称芸術家みーさん" },
+    { "file": "lobby_alt", "weight": 1, "title": "時計仕掛けの歪なワルツ ", "author": "こおろぎ" }
+  ],
+  "intask": [],
+  "climax": [],
+  "meeting": [],
+  "result": [ { "file": "result", "weight": 1, "title": "The long spell of falling down,white", "author": "蒲鉾さちこ" } ]
 }
