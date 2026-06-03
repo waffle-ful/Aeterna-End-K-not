@@ -15,7 +15,8 @@ namespace EndKnot;
 //       refresh token 寿命をリセット。Epic Launcher 経由で silent に再 auth される。
 //   (2) Reactive: 万一 (1) が間に合わず GoOfflineFromPlatformSignout が呼ばれたら、
 //       Postfix で即 StartInitialLoginFlow() を呼んで復帰を試みる。
-//   (3) Telemetry: OnAuthExpirationCallback がいつ・どんな状況で呼ばれたかログる。
+//   (3) Telemetry: OnAuthExpirationCallback がいつ・どんな状況で呼ばれたかを Finalizer でログる
+//       (バニラ本体がこの定期コールで NRE を投げるので、Postfix だと skip される → Finalizer で確実に記録 + NRE 握りつぶし)。
 // ====================================================================
 
 [HarmonyPatch(typeof(EOSManager), nameof(EOSManager.Update))]
@@ -74,8 +75,12 @@ internal static class EOSReLoginReactivePatch
 [HarmonyPatch(typeof(EOSManager), nameof(EOSManager.OnAuthExpirationCallback))]
 internal static class EOSAuthExpirationTelemetryPatch
 {
-    public static void Postfix(EOSManager __instance)
+    // Finalizer なので original (バニラ) が NRE を投げても必ず走る。
+    // Postfix だと original throw 時に skip され、テレメトリが死にコードになっていた。
+    // __exception を返さず null を返すことでバニラ由来の NRE を握りつぶし、コンソールの赤を消す (auth 挙動は不変)。
+    public static System.Exception Finalizer(EOSManager __instance, System.Exception __exception)
     {
-        Logger.Info($"OnAuthExpirationCallback fired (lobby={GameStates.IsLobby}, online={GameStates.IsOnlineGame}, tryingToLogin={__instance.tryingToLogin})", "EOSReLogin");
+        Logger.Info($"OnAuthExpirationCallback fired (lobby={GameStates.IsLobby}, online={GameStates.IsOnlineGame}, tryingToLogin={__instance.tryingToLogin}, vanillaThrew={__exception != null})", "EOSReLogin");
+        return null;
     }
 }
