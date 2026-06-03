@@ -135,6 +135,38 @@ public static class BackroomsLobby
     // WallAabbs を mutate する全 site で同期維持必須
     private static readonly List<SpriteRenderer> WallGhostRenderers = [];
 
+    // ── レイキャスト専用 併合済み壁リスト (2026-06-03) ──────────────────────────
+    // WallAabbs は per-cell の 1-unit grid box (wall_h=1×1, wall_v=0.45×1)。これを最大矩形へ
+    // greedy merge (H→V 2-pass run-merge) して raycast の母集団だけ差し替える。狙いは
+    // 「nearby AABB 数」と「corner ray 数」の激減 (corner ray は nearby 1個ごとに 8 本生え、
+    // ChainExtensionDepth が全 ray に nested loop で乗る乗数になっていた = 歩行中 CPU 50〜64%)。
+    //   ・ghost overlay 用の WallAabbs / WallGhostRenderers は per-cell のまま不変 (描画は別経路)
+    //   ・vision polygon に対し幾何的に lossless: cell 間の内側エッジは元々どの ray にも silhouette
+    //     ではないので、消しても donut hole 形状は同一かより滑らか。chain も併合箱で自然短縮。
+    //   ・rebuild は cull/stream で WallAabbs が変わった時だけ (_occludersDirty)、per-frame ではない。
+    private static readonly List<(float cx, float cy, float halfX, float halfY)> _mergedOccluders = [];
+    // 2-pass merge の work buffer ((minX, maxX, minY, maxY) の box)。再利用で per-rebuild alloc を回避。
+    private static readonly List<(float minX, float maxX, float minY, float maxY)> _mergeBufA = [];
+    private static readonly List<(float minX, float maxX, float minY, float maxY)> _mergeBufB = [];
+    private static bool _occludersDirty = true; // WallAabbs 変更 (Add/RemoveAt) で立てる
+    // Pass1 (horizontal) sort: y-band 昇順 (minY, maxY) → その中で minX 昇順。
+    // IL2CPP default Comparer 不安定回避のため明示 Comparison を渡す ([[ray sort と同方針]])。
+    private static readonly Comparison<(float minX, float maxX, float minY, float maxY)> _occluderHSort = (a, b) =>
+    {
+        int c = a.minY.CompareTo(b.minY);
+        if (c != 0) return c;
+        c = a.maxY.CompareTo(b.maxY);
+        return c != 0 ? c : a.minX.CompareTo(b.minX);
+    };
+    // Pass2 (vertical) sort: x-band 昇順 (minX, maxX) → その中で minY 昇順
+    private static readonly Comparison<(float minX, float maxX, float minY, float maxY)> _occluderVSort = (a, b) =>
+    {
+        int c = a.minX.CompareTo(b.minX);
+        if (c != 0) return c;
+        c = a.maxX.CompareTo(b.maxX);
+        return c != 0 ? c : a.minY.CompareTo(b.minY);
+    };
+
     // Entity visibility cache (2026-05-28): DeadBody / 非 local PlayerControl の SR を
     // 視界内外で enabled toggle するため、毎フレ FindObjectsOfType + GetComponentsInChildren を
     // 走らせると IL2CPP interop が高い。0.5s ごとに refresh + parallel index で SR array を持つ。
@@ -435,6 +467,7 @@ public static class BackroomsLobby
                 WallAabbChunkKeys.Add(_currentChunkKey); // parallel cache for streaming unload
                 // ghost SR は BuildWallHComposite / wall_v case 内で生成済 (FindGhostInChildren で取得)
                 WallGhostRenderers.Add(FindGhostInChildren(go));
+                _occludersDirty = true; // raycast 用 merged occluder を次フレ rebuild
 
                 // (vanilla shadow hijack 路線は 2026-05-21 dead — caster 追加無し)
             }
@@ -861,6 +894,7 @@ public static class BackroomsLobby
         WallAabbs.Clear();
         WallAabbChunkKeys.Clear();
         WallGhostRenderers.Clear();
+        _occludersDirty = true; // WallAabbs 消去 → 次 UpdateVision で merged occluder を空に rebuild (幻壁防止)
         _loadedChunks.Clear();
         _streamValid = false;
         Utils.SendMessage($"Cleared {cleared} tiles.", targetPid);
@@ -1034,6 +1068,7 @@ public static class BackroomsLobby
         WallAabbs.Clear();
         WallAabbChunkKeys.Clear();
         WallGhostRenderers.Clear();
+        _occludersDirty = true; // WallAabbs 消去 → 次 UpdateVision で merged occluder を空に rebuild (幻壁防止)
         _loadedChunks.Clear();
         _streamValid = false;
 
@@ -1171,6 +1206,7 @@ public static class BackroomsLobby
                     WallAabbs.RemoveAt(j);
                     WallAabbChunkKeys.RemoveAt(j); // parallel
                     WallGhostRenderers.RemoveAt(j); // parallel
+                    _occludersDirty = true; // raycast 用 merged occluder を次フレ rebuild
                 }
             }
 
@@ -1342,6 +1378,7 @@ public static class BackroomsLobby
         {
             _lastVisionValid = false;
             _cullValid = false;
+            _occludersDirty = true; // chunk load/unload で WallAabbs が変わった → merged occluder を rebuild
             if (PerfLogEnabled) _perfStreamUpdates++;
             Logger.Info($"UpdateStreaming center=({playerCx},{playerCy}) loaded+={loadedNow} unloaded={toUnload?.Count ?? 0} totalChunks={_loadedChunks.Count} totalTiles={SpawnedTiles.Count}", "BackroomsGen");
         }
@@ -1531,6 +1568,7 @@ public static class BackroomsLobby
         WallAabbs.Clear();
         WallAabbChunkKeys.Clear();
         WallGhostRenderers.Clear();
+        _occludersDirty = true; // WallAabbs 消去 → 次 UpdateVision で merged occluder を空に rebuild (幻壁防止)
         _loadedChunks.Clear();
         _streamValid = false;
 
@@ -1613,6 +1651,7 @@ public static class BackroomsLobby
         WallAabbs.Clear();
         WallAabbChunkKeys.Clear();
         WallGhostRenderers.Clear();
+        _occludersDirty = true; // WallAabbs 消去 → 次 UpdateVision で merged occluder を空に rebuild (幻壁防止)
         _loadedChunks.Clear();
         _streamValid = false;
         DisabledColliders.Clear();
@@ -1651,6 +1690,7 @@ public static class BackroomsLobby
         WallAabbs.Clear();
         WallAabbChunkKeys.Clear();
         WallGhostRenderers.Clear();
+        _occludersDirty = true; // WallAabbs 消去 → 次 UpdateVision で merged occluder を空に rebuild (幻壁防止)
         _loadedChunks.Clear();
         _streamValid = false;
         // scene unload で entity 参照は dangling になるので cache だけクリア (SR 復元は不要)
@@ -2281,6 +2321,73 @@ public static class BackroomsLobby
         ResetPerfCounters();
     }
 
+    // WallAabbs (per-cell grid box) を最大矩形へ greedy merge して _mergedOccluders に詰める。
+    // 2-pass: ① 同じ y-band で x 方向に連続する box を横長に結合 → ② その結果を同じ x-band で
+    // y 方向に結合。grid は 1-unit 整数格子 + 半サイズ exact (0.5 / 0.225) なので float は厳密一致し、
+    // 連続セルの結合は union と完全一致 (lossless)。cull/stream で WallAabbs が変わった時のみ呼ぶ。
+    private static void RebuildMergedOccluders()
+    {
+        _mergedOccluders.Clear();
+        int n = WallAabbs.Count;
+        if (n == 0) return;
+
+        const float eps = 0.01f;
+
+        // WallAabbs → (minX, maxX, minY, maxY) box へ展開
+        _mergeBufA.Clear();
+        for (int i = 0; i < n; i++)
+        {
+            var w = WallAabbs[i];
+            _mergeBufA.Add((w.cx - w.halfX, w.cx + w.halfX, w.cy - w.halfY, w.cy + w.halfY));
+        }
+
+        // ── Pass 1: horizontal run merge ──
+        // y-band (minY, maxY) 昇順 + minX 昇順にソート → 同 band 内で x 連続する box を 1 本へ
+        _mergeBufA.Sort(_occluderHSort);
+        _mergeBufB.Clear();
+        for (int i = 0; i < _mergeBufA.Count;)
+        {
+            var cur = _mergeBufA[i];
+            float minX = cur.minX, maxX = cur.maxX, minY = cur.minY, maxY = cur.maxY;
+            int j = i + 1;
+            while (j < _mergeBufA.Count)
+            {
+                var nx = _mergeBufA[j];
+                // 同じ y-band かつ x が連続/重複 (nx.minX が現在の maxX に接触) なら結合
+                if (Mathf.Abs(nx.minY - minY) <= eps && Mathf.Abs(nx.maxY - maxY) <= eps && nx.minX <= maxX + eps)
+                {
+                    if (nx.maxX > maxX) maxX = nx.maxX;
+                    j++;
+                }
+                else break; // band 変化 or x ギャップ → run 終端
+            }
+            _mergeBufB.Add((minX, maxX, minY, maxY));
+            i = j;
+        }
+
+        // ── Pass 2: vertical run merge ──
+        // x-band (minX, maxX) 昇順 + minY 昇順にソート → 同 band 内で y 連続する box を 1 本へ
+        _mergeBufB.Sort(_occluderVSort);
+        for (int i = 0; i < _mergeBufB.Count;)
+        {
+            var cur = _mergeBufB[i];
+            float minX = cur.minX, maxX = cur.maxX, minY = cur.minY, maxY = cur.maxY;
+            int j = i + 1;
+            while (j < _mergeBufB.Count)
+            {
+                var nx = _mergeBufB[j];
+                if (Mathf.Abs(nx.minX - minX) <= eps && Mathf.Abs(nx.maxX - maxX) <= eps && nx.minY <= maxY + eps)
+                {
+                    if (nx.maxY > maxY) maxY = nx.maxY;
+                    j++;
+                }
+                else break;
+            }
+            _mergedOccluders.Add(((minX + maxX) * 0.5f, (minY + maxY) * 0.5f, (maxX - minX) * 0.5f, (maxY - minY) * 0.5f));
+            i = j;
+        }
+    }
+
     public static void UpdateVision()
     {
         if (!_inBackrooms || _visionGO == null || _visionMesh == null) return;
@@ -2314,12 +2421,22 @@ public static class BackroomsLobby
         _visionGO.transform.position = new Vector3(player.x, player.y, 0f);
         if (_upperVisionGO != null) _upperVisionGO.transform.position = _visionGO.transform.position;
 
-        // 1. VisionRadius 圏内の wall AABB を pre-filter
+        // WallAabbs が cull/stream で変わっていたら raycast 用の併合済みリストを作り直す
+        // (per-frame ではなく dirty 時のみ — O(N log N) on ~250 box を ~2/秒)
+        if (_occludersDirty)
+        {
+            RebuildMergedOccluders();
+            _occludersDirty = false;
+        }
+
+        // 1. VisionRadius 圏内の wall AABB を pre-filter (母集団は併合済み _mergedOccluders)
+        //    これにより corner ray 生成 / CastRayLength / CastRayFirstHit が全て併合箱を見る。
+        //    ghost overlay の per-cell α (下の wallCount ループ) は WallAabbs のまま不変。
         _nearbyAabbs.Clear();
         float r2 = VisionRadius * VisionRadius;
-        for (int wi = 0; wi < WallAabbs.Count; wi++)
+        for (int wi = 0; wi < _mergedOccluders.Count; wi++)
         {
-            var w = WallAabbs[wi];
+            var w = _mergedOccluders[wi];
             float dx = Mathf.Max(Mathf.Abs(w.cx - player.x) - w.halfX, 0f);
             float dy = Mathf.Max(Mathf.Abs(w.cy - player.y) - w.halfY, 0f);
             if (dx * dx + dy * dy > r2) continue;
