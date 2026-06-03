@@ -4486,7 +4486,10 @@ public static class Utils
     {
         try
         {
-            string name = Main.AllPlayerNames[id].RemoveHtmlTags().Replace("\r\n", string.Empty);
+            // GetValueOrDefault, not the [id] indexer: at game end the host's slot (id 0) can be missing
+            // from AllPlayerNames (same dict-cleared window as the blank-name bug), which threw
+            // KeyNotFoundException here and aborted the result summary. name is re-derived just below anyway.
+            string name = Main.AllPlayerNames.GetValueOrDefault(id, string.Empty).RemoveHtmlTags().Replace("\r\n", string.Empty);
 
             if (id == PlayerControl.LocalPlayer.PlayerId)
                 name = DataManager.player.Customization.Name;

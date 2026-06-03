@@ -96,6 +96,15 @@ internal static class OnGameJoinedPatch
                 {
                     ClientData client = PlayerControl.LocalPlayer?.GetClient();
 
+                    // The host can be torn down (e.g. DuplicateConnectionDetected on lobby return) before this
+                    // 2s-delayed task runs, leaving LocalPlayer/client null. Bail with a one-line breadcrumb
+                    // instead of NRE-ing through the EAC check + session log below.
+                    if (client == null)
+                    {
+                        Logger.Info("Skipped session log: host already disconnected (LocalPlayer/client null)", "OnGameJoinedPatch");
+                        return;
+                    }
+
                     if (BanManager.CheckEACList(PlayerControl.LocalPlayer.FriendCode, client.GetHashedPuid()) && GameStates.IsOnlineGame)
                     {
                         AmongUsClient.Instance.ExitGame(DisconnectReasons.Banned);
