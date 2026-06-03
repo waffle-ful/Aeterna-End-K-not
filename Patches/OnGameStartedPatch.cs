@@ -537,7 +537,14 @@ internal static class StartGameHostPatch
 
     private static System.Collections.IEnumerator StartGameHost()
     {
-        try { PlayerControl.LocalPlayer.RpcSetName(Main.AllPlayerNames[0]); }
+        // Restore the host's clean name for the game. Use TryGetValue (not the [0] indexer) and skip on a
+        // missing/empty entry so we never broadcast a null/empty name at game start — which would carry the
+        // blank-host-name bug into the round and can black-screen vanilla clients.
+        try
+        {
+            if (Main.AllPlayerNames.TryGetValue(PlayerControl.LocalPlayer.PlayerId, out string hostName) && !string.IsNullOrEmpty(hostName))
+                PlayerControl.LocalPlayer.RpcSetName(hostName);
+        }
         catch (Exception e) { Utils.ThrowException(e); }
         
         string loadingTextText1 = GetString("LoadingBarText.1");

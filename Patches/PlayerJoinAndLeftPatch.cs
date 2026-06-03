@@ -562,8 +562,12 @@ internal static class OnPlayerJoinedPatch
             {
                 RpcSetNameWaitTimer = null;
                 if (AmongUsClient.Instance.IsGameStarted) return;
-                Utils.ApplySuffix(PlayerControl.LocalPlayer, out string name);
-                PlayerControl.LocalPlayer.RpcSetName(name);
+                // ApplySuffix returns false (leaving name null/empty) when the host has no entry in
+                // Main.AllPlayerNames yet — exactly the window right after OnGameJoined clears the dict.
+                // Sending that empty/null name blanks the host label on every client, so only push when
+                // ApplySuffix actually produced a name (mirror of the guarded call at PlayerControlPatch.cs:1854).
+                if (Utils.ApplySuffix(PlayerControl.LocalPlayer, out string name))
+                    PlayerControl.LocalPlayer.RpcSetName(name);
             }, cancelOnMeeting: false, cancelOnGameEnd: false);
         }
     }

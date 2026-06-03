@@ -523,8 +523,10 @@ internal static class ChatCommands
 
             if (LastSetNameInLobby + 3 < now)
             {
-                Utils.ApplySuffix(PlayerControl.LocalPlayer, out string name);
-                PlayerControl.LocalPlayer.RpcSetName(name);
+                // Only broadcast when ApplySuffix produced a name; a false return leaves it null/empty
+                // and would blank the host label on every client (see PlayerJoinAndLeftPatch.cs guard).
+                if (Utils.ApplySuffix(PlayerControl.LocalPlayer, out string name))
+                    PlayerControl.LocalPlayer.RpcSetName(name);
                 LastSetNameInLobby = now;
             }
         }
