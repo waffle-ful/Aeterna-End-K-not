@@ -1,3 +1,4 @@
+using System.Linq;
 using static EndKnot.Translator;
 
 namespace EndKnot.Modules;
@@ -27,7 +28,29 @@ public static class OfficialServerNotice
         if (_lobbyWarnedThisAppSession) return;
         if (!ShouldWarn()) return;
         _lobbyWarnedThisAppSession = true;
-        ShowPopUp(GetString("OfficialServerWarning.Lobby"));
+
+        string text = GetString("OfficialServerWarning.Lobby");
+
+        // 公式鯖で出現禁止にした「ドラッグ系」役職のうち、ホストが有効にしているものを名指しで列挙する。
+        string disabledRoles = BuildDisabledRoleList();
+        if (disabledRoles.Length > 0)
+            text += "\n\n" + string.Format(GetString("OfficialServerWarning.RolesDisabled"), disabledRoles);
+
+        ShowPopUp(text);
+    }
+
+    // 公式鯖 anti-cheat のため自動で無効化される役職のうち、ホストが有効化しているものの一覧 (なければ空文字)。
+    // 現状は他プレイヤーを引きずる位置操作系 (CustomRoleSelector / ChatCommandPatch の出現禁止リストと一致)。
+    private static readonly CustomRoles[] OfficialDisabledRoles = [CustomRoles.Penguin, CustomRoles.Goose, CustomRoles.ProBowler];
+
+    private static string BuildDisabledRoleList()
+    {
+        try
+        {
+            var enabled = OfficialDisabledRoles.Where(r => r.GetMode() != 0).Select(r => Utils.GetRoleName(r)).ToList();
+            return enabled.Count > 0 ? string.Join("、", enabled) : string.Empty;
+        }
+        catch { return string.Empty; }
     }
 
     // ExitGamePatch から「Hacking 切断」のときに呼ぶ。kick 不具合は修正済みなので通常は発火しないが、

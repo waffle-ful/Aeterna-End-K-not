@@ -174,6 +174,7 @@ internal static class ExtendedPlayerControl
         public void RevertFreeze(Vector2 realPosition)
         {
             if (!AmongUsClient.Instance.AmHost) return;
+            if (player.IsNonModdedOnOfficial()) return; // 公式鯖: 非モッドプレイヤーの位置補正 SnapTo はスキップ (desync 防止)。詳細は Utils.TP のコメント参照
             player.NetTransform.SnapTo(realPosition, (ushort)(player.NetTransform.lastSequenceId + 128));
             CustomRpcSender sender = CustomRpcSender.Create($"Revert SnapTo Freeze ({player.GetNameWithRole()})", SendOption.Reliable);
             sender.StartMessage();
@@ -783,6 +784,19 @@ internal static class ExtendedPlayerControl
         // 非モッドへの outfit spoof が公式鯖 anti-cheat で host を切断する穴になっていた (正準リスト: OnGameStartedPatch.cs:909)。
         // Bloodlust(→Impostor) は HasDesyncRole() が既にカバー済。
         // ※ kill cooldown / シールド演出にも使う HasDesyncRole() 自体は変えない (影響範囲を outfit 経路に限定するため別判定にする)。
+        // ── AU 2026 公式サーバー anti-cheat 対策 (位置・見た目 共通の判定) ──
+        // host が「非モッド (Vanilla) クライアント」の状態 (NetTransform の SnapTo / outfit RPC) を操作すると、
+        // 公式鯖だけがそれを「他人になりすました不正」と判定し、位置 desync や reason: Hacking 切断を起こす
+        // (2026 アップデートで Innersloth が所有権チェックを追加したため)。
+        // → 公式鯖にいる非モッドプレイヤーが操作対象のとき true。呼出側でその操作をスキップする。
+        // host 自身やモッドクライアントは IsModdedClient()==true なので false (従来どおり全機能動作)。
+        // カスタム / モッドサーバー (aumods.org・duikbo.at・自前鯖など) には anti-cheat が無いため、
+        // IsOfficialServer()==false で常に false を返し、ペット・スキン・TP ドラッグ等が完全に動作する。
+        public bool IsNonModdedOnOfficial()
+        {
+            return Utils.IsOfficialServer() && player != null && !player.IsModdedClient();
+        }
+
         public bool HasDesyncOutfitBasis()
         {
             return player.HasDesyncRole() || player.GetCustomSubRoles().Exists(x => x is

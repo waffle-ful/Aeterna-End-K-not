@@ -1611,6 +1611,8 @@ internal static class ChatCommands
             {
                 CustomRoles.Ventriloquist when GameStates.CurrentServerType == GameStates.ServerType.Vanilla => true,
                 CustomRoles.Weatherman when Main.LIMap || GameStates.CurrentServerType == GameStates.ServerType.Vanilla => true,
+                CustomRoles.Penguin or CustomRoles.Goose or CustomRoles.ProBowler when Utils.IsOfficialServer() => true, // 公式鯖: ドラッグ系役職は位置 desync を起こすため /role でも割当不可
+
                 CustomRoles.RoomRusher when Main.LIMap => true,
                 CustomRoles.Doctor when Options.EveryoneSeesDeathReasons.GetBool() => true,
                 CustomRoles.Commander when Main.NormalOptions.NumImpostors <= 1 && Commander.CannotSpawnAsSoloImp.GetBool() => true,

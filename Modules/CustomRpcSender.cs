@@ -828,6 +828,9 @@ public static class CustomRpcSenderExtensions
         {
             if (!AmongUsClient.Instance.AmHost) return false;
 
+            // 公式鯖 anti-cheat 対策: 非モッドプレイヤーの位置操作は丸ごとスキップ (desync 防止)。詳細は Utils.TP のコメント参照。
+            if (pc != null && pc.IsNonModdedOnOfficial()) return false;
+
             CustomNetworkTransform nt = pc.NetTransform;
 
             if (!noCheckState)
