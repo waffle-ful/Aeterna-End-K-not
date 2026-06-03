@@ -964,6 +964,9 @@ internal static class ExtendedPlayerControl
                 case SchrodingersCat cat when realKiller:
                     cat.OnCheckMurderAsTarget(realKiller, player);
                     return;
+                case Akazukin when realKiller:
+                    Akazukin.EnterPseudoDeath(player, realKiller, deathReason);
+                    return;
                 case Veteran when Veteran.VeteranInProtect.Contains(player.PlayerId):
                 case Pestilence:
                     return;
