@@ -897,6 +897,7 @@ public static class BackroomsLobby
         _occludersDirty = true; // WallAabbs 消去 → 次 UpdateVision で merged occluder を空に rebuild (幻壁防止)
         _loadedChunks.Clear();
         _streamValid = false;
+        ResetStreamingQueues();
         Utils.SendMessage($"Cleared {cleared} tiles.", targetPid);
         Logger.Info($"Cleared {cleared} tiles", "BackroomsDiag");
     }
@@ -1035,6 +1036,23 @@ public static class BackroomsLobby
     private static int _streamCx, _streamCy;
     private static bool _streamValid;
 
+    // ── frame-spread streaming queue (2026-06-03) ──────────────────────────────
+    // チャンク境界を跨ぐ度に 3 chunk = 768 tile を 1 フレームで生成/破棄していたヒッチ
+    // (worst-frame 63ms + GC スパイク=ping 表示膨張) を解消するための予算分散キュー。
+    // 設計 = state reconciliation: `_loadedChunks` が「欲しい状態」(UpdateStreaming が即時更新)、
+    // このキューが「欲しい状態と実態のギャップ」。drain 時に `_loadedChunks.Contains` でガードするので、
+    // 高速移動で「load 予約 → radius 外」になったチャンクは単に生成されず、明示的キャンセル不要。
+    //   ・descriptor は ClassifyCell (純粋計算) の結果なので GameObject を作らず軽い。
+    //   ・新 tile はカリング済 (CullRadius 10u 外で SetActive(false)) で生成されるので段階生成は不可視。
+    //   ・初期 GenerateLobby は従来通り即時生成 (LoadChunk immediate:true)。歩行デルタのみキュー経由。
+    // connector: 0=なし / 1=AddWallHBottomConnector / 2=AddWallVBottomCap
+    private static readonly List<(string kind, Vector2 pos, long chunkKey, byte connector)> _spawnQueue = [];
+    private static int _spawnHead;                  // O(1) dequeue 用 head index (末尾到達で list ごと clear)
+    private static readonly List<GameObject> _destroyQueue = [];
+    private static int _destroyHead;
+    private const int StreamSpawnBudget = 64;       // spawn/frame 上限 (768 ÷ 64 ≈ 12f = 0.2s で消化)
+    private const int StreamDestroyBudget = 128;    // destroy は spawn より安いので多め
+
     private static long PackChunkKey(int cx, int cy) => ((long)cx << 32) | (uint)cy;
 
     private static void UnpackChunkKey(long key, out int cx, out int cy)
@@ -1071,6 +1089,7 @@ public static class BackroomsLobby
         _occludersDirty = true; // WallAabbs 消去 → 次 UpdateVision で merged occluder を空に rebuild (幻壁防止)
         _loadedChunks.Clear();
         _streamValid = false;
+        ResetStreamingQueues();
 
         _lastSeed = seed;
 
@@ -1086,7 +1105,7 @@ public static class BackroomsLobby
         int r = ActiveChunkRadius;
         for (int dx = -r; dx <= r; dx++)
         for (int dy = -r; dy <= r; dy++)
-            LoadChunk(centerCx + dx, centerCy + dy, seed);
+            LoadChunk(centerCx + dx, centerCy + dy, seed, immediate: true); // 入室時は即時生成
 
         _spawnCullCenterValid = false;
 
@@ -1278,11 +1297,44 @@ public static class BackroomsLobby
 
     // idempotent: 既ロード chunk は no-op。spawn cull center 設定は呼出側 (GenerateLobby /
     // UpdateStreaming) の責務 — まとめロード時の interop call を 1 回にまとめるため
-    private static void LoadChunk(int cx, int cy, uint seed)
+    private static void LoadChunk(int cx, int cy, uint seed, bool immediate)
     {
         long key = PackChunkKey(cx, cy);
         if (!_loadedChunks.Add(key)) return;
-        GenerateChunk(cx, cy, seed);
+        if (immediate) GenerateChunk(cx, cy, seed);   // 入室時: 即時生成 (一度きりの loading freeze は許容)
+        else EnqueueChunk(cx, cy, key, seed);          // 歩行デルタ: descriptor を queue へ (予算分散)
+    }
+
+    // GenerateChunk の純粋計算版: 16×16 の (kind, pos, connector) descriptor を _spawnQueue に積むだけ。
+    // GameObject は作らない (ClassifyCell は pure)。実生成は ProcessStreamingQueue が予算内で drain。
+    private static void EnqueueChunk(int cx, int cy, long key, uint seed)
+    {
+        int baseX = cx * ChunkSize;
+        int baseY = cy * ChunkSize;
+        for (int lx = 0; lx < ChunkSize; lx++)
+        for (int ly = 0; ly < ChunkSize; ly++)
+        {
+            int wx = baseX + lx;
+            int wy = baseY + ly;
+            CellKind cell = ClassifyCell(wx, wy, seed);
+            string kind = cell switch
+            {
+                CellKind.WallH => "wall_h",
+                CellKind.WallV => "wall_v",
+                _              => "floor"
+            };
+            // connector は南隣セルから算出 (GenerateChunk と同じ判定、ただし pure)
+            byte connector = 0;
+            if (cell == CellKind.WallH)
+            {
+                if (ClassifyCell(wx, wy - 1, seed) == CellKind.WallV) connector = 1; // L 字 connector
+            }
+            else if (cell == CellKind.WallV)
+            {
+                if (ClassifyCell(wx, wy - 1, seed) == CellKind.Floor) connector = 2; // 終端キャップ
+            }
+            _spawnQueue.Add((kind, new Vector2(wx, wy), key, connector));
+        }
     }
 
     // chunk 内の全 tile / WallAabb を flat list から逆順削除。_loadedChunks からも除去。
@@ -1294,12 +1346,26 @@ public static class BackroomsLobby
         if (key == NoChunkKey) return; // 防御: sentinel と衝突する key は無効化 (実機到達不能だが念のため)
         if (!_loadedChunks.Remove(key)) return;
 
+        // このチャンクの未 drain spawn descriptor を tombstone (chunkKey を無効化)。drain 窓 (~0.2s) 内に
+        // 同 chunk が unload→reload された時、古いバッチと新バッチが両方生成される二重生成を防ぐ。
+        // drain ガード (`!_loadedChunks.Contains`) が NoChunkKey を skip する。通常歩行では窓が空くので
+        // 無関係だが、no-clip / 超高速往復で到達しうるため防御。
+        for (int i = _spawnHead; i < _spawnQueue.Count; i++)
+        {
+            if (_spawnQueue[i].chunkKey != key) continue;
+            var d = _spawnQueue[i];
+            _spawnQueue[i] = (d.kind, d.pos, NoChunkKey, d.connector);
+        }
+
         int destroyed = 0;
         for (int i = SpawnedTiles.Count - 1; i >= 0; i--)
         {
             if (SpawnedTileChunkKeys[i] != key) continue;
             GameObject t = SpawnedTiles[i];
-            if (t != null) UnityEngine.Object.Destroy(t);
+            // アクティブリストからは即除外 (vision/cull は次フレ以降このタイルを無視) するが、
+            // GameObject の実破棄は destroy queue へ回して 1 フレームの Destroy 集中を防ぐ。
+            // 退避中も見えないよう SetActive(false) (radius 外なので既に inactive のはずだが念のため)
+            if (t != null) { t.SetActive(false); _destroyQueue.Add(t); }
             SpawnedTiles.RemoveAt(i);
             SpawnedTilePositions.RemoveAt(i);
             SpawnedTileChunkKeys.RemoveAt(i);
@@ -1353,21 +1419,17 @@ public static class BackroomsLobby
             }
         }
 
-        // 2. Load: radius 内の未ロード chunk を生成。spawn cull center をループ前に 1 回だけ取得
-        _spawnCullCenter = p;
-        _spawnCullCenterValid = true;
-
+        // 2. Load: radius 内の未ロード chunk を descriptor queue へ積む (実生成は ProcessStreamingQueue が
+        //    予算内で drain)。spawn cull center は生成時点 = drain 時に設定するのでここでは触らない。
         int loadedNow = 0;
         for (int dx = -r; dx <= r; dx++)
         for (int dy = -r; dy <= r; dy++)
         {
             long key = PackChunkKey(playerCx + dx, playerCy + dy);
             if (_loadedChunks.Contains(key)) continue;
-            LoadChunk(playerCx + dx, playerCy + dy, _lastSeed);
+            LoadChunk(playerCx + dx, playerCy + dy, _lastSeed, immediate: false);
             loadedNow++;
         }
-
-        _spawnCullCenterValid = false;
 
         _streamCx = playerCx;
         _streamCy = playerCy;
@@ -1382,6 +1444,81 @@ public static class BackroomsLobby
             if (PerfLogEnabled) _perfStreamUpdates++;
             Logger.Info($"UpdateStreaming center=({playerCx},{playerCy}) loaded+={loadedNow} unloaded={toUnload?.Count ?? 0} totalChunks={_loadedChunks.Count} totalTiles={SpawnedTiles.Count}", "BackroomsGen");
         }
+    }
+
+    // 毎フレ (RunPerFrameUpdates) 呼び。_destroyQueue / _spawnQueue を予算内で drain して、
+    // 1 フレームの GameObject 生成/破棄集中 (チャンク跨ぎ 768 tile = 63ms hitch) を平滑化する。
+    // spawn は `_loadedChunks.Contains` ガードで「もう radius 外になったチャンク」を skip (reconciliation)。
+    public static void ProcessStreamingQueue()
+    {
+        if (!_inBackrooms) return;
+
+        // 1. Destroy budget — UnloadChunk が退避した GO を予算内で実破棄。
+        //    これらは既にアクティブリストから除外済なので vision/cull には無影響。
+        int dBudget = StreamDestroyBudget;
+        while (_destroyHead < _destroyQueue.Count && dBudget-- > 0)
+        {
+            GameObject go = _destroyQueue[_destroyHead++];
+            if (go != null) UnityEngine.Object.Destroy(go);
+        }
+        if (_destroyHead >= _destroyQueue.Count && _destroyQueue.Count > 0)
+        {
+            _destroyQueue.Clear();
+            _destroyHead = 0;
+        }
+
+        // 2. Spawn budget — descriptor を予算内で実生成。
+        //    cull center は enqueue 時でなく「今」の player 足元 (enqueue 後に動いているため)。
+        if (_spawnHead < _spawnQueue.Count)
+        {
+            // null 窓 (drain 中の disconnect/kick/teardown で LocalPlayer が消えるが _inBackrooms は
+            // まだ立っている数フレーム) は spawn を次フレへ持ち越し。destroy drain は上で済んでいる。
+            if (PlayerControl.LocalPlayer == null) return;
+            bool spawned = false;
+            _spawnCullCenter = LocalPlayerFeet();
+            _spawnCullCenterValid = true;
+            int sBudget = StreamSpawnBudget;
+            while (_spawnHead < _spawnQueue.Count && sBudget-- > 0)
+            {
+                var d = _spawnQueue[_spawnHead++];
+                if (!_loadedChunks.Contains(d.chunkKey)) continue; // もう要らない chunk → 生成しない (skip)
+                long prevKey = _currentChunkKey;
+                _currentChunkKey = d.chunkKey; // SpawnTile が tile に正しい chunk key を付けるため
+                try
+                {
+                    GameObject go = SpawnTile(d.kind, d.pos);
+                    if (d.connector == 1) AddWallHBottomConnector(go);
+                    else if (d.connector == 2) AddWallVBottomCap(go);
+                }
+                finally { _currentChunkKey = prevKey; }
+                spawned = true;
+            }
+            _spawnCullCenterValid = false;
+            if (_spawnHead >= _spawnQueue.Count)
+            {
+                _spawnQueue.Clear();
+                _spawnHead = 0;
+            }
+            // 新タイルが増えたフレームは vision/cull を再評価 (_occludersDirty は SpawnTile が自動で立てる)
+            if (spawned)
+            {
+                _lastVisionValid = false;
+                _cullValid = false;
+            }
+        }
+    }
+
+    // reset (Exit / OnGameStart / OnLobbyReload / ClearTiles / GenerateLobby) で streaming queue を空に。
+    // 退避中 destroy GO は SpawnedTiles から既に外れているので、ここで破棄しないと leak する
+    // (`!= null` は Unity の destroyed-object semantics で scene unload 済 dangling ref を弾くので安全)。
+    private static void ResetStreamingQueues()
+    {
+        for (int i = _destroyHead; i < _destroyQueue.Count; i++)
+            if (_destroyQueue[i] != null) UnityEngine.Object.Destroy(_destroyQueue[i]);
+        _destroyQueue.Clear();
+        _destroyHead = 0;
+        _spawnQueue.Clear();
+        _spawnHead = 0;
     }
 
     private static CellKind ClassifyCell(int wx, int wy, uint seed)
@@ -1571,6 +1708,7 @@ public static class BackroomsLobby
         _occludersDirty = true; // WallAabbs 消去 → 次 UpdateVision で merged occluder を空に rebuild (幻壁防止)
         _loadedChunks.Clear();
         _streamValid = false;
+        ResetStreamingQueues();
 
         // 2. ロビー collider 復元
         int restoredC = 0;
@@ -1654,6 +1792,7 @@ public static class BackroomsLobby
         _occludersDirty = true; // WallAabbs 消去 → 次 UpdateVision で merged occluder を空に rebuild (幻壁防止)
         _loadedChunks.Clear();
         _streamValid = false;
+        ResetStreamingQueues();
         DisabledColliders.Clear();
         DisabledRenderers.Clear();
 
@@ -1693,6 +1832,7 @@ public static class BackroomsLobby
         _occludersDirty = true; // WallAabbs 消去 → 次 UpdateVision で merged occluder を空に rebuild (幻壁防止)
         _loadedChunks.Clear();
         _streamValid = false;
+        ResetStreamingQueues();
         // scene unload で entity 参照は dangling になるので cache だけクリア (SR 復元は不要)
         _entityBodies.Clear();
         _entityBodyRenderers.Clear();
@@ -2264,6 +2404,7 @@ public static class BackroomsLobby
         if (!PerfLogEnabled)
         {
             UpdateStreaming();
+            ProcessStreamingQueue();
             UpdateCulling();
             UpdateVision();
             return;
@@ -2271,6 +2412,7 @@ public static class BackroomsLobby
 
         long start = System.Diagnostics.Stopwatch.GetTimestamp();
         UpdateStreaming();
+        ProcessStreamingQueue();
         UpdateCulling();
         UpdateVision();
         _perfWorkTicks += System.Diagnostics.Stopwatch.GetTimestamp() - start;
