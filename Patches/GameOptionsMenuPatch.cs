@@ -838,6 +838,24 @@ public static class NumberOptionPatch
 
         return true;
     }
+
+    // 境界(最小/最大)に着地する一歩だけ上の prefix がバニラ Increase/Decrease に委譲する。
+    // その際バニラ AdjustButtonsActiveState が、EHR が使っていないネイティブ +/- ボタンの
+    // null SpriteRenderer に触れて NRE る (例: プリセットを最小まで下げた瞬間)。
+    // 値変更自体は完了済みなので握りつぶすが、別原因で投げたら気付けるよう WARN だけ残す。
+    [HarmonyPatch(nameof(NumberOption.Increase))]
+    [HarmonyFinalizer]
+    private static System.Exception IncreaseFinalizer(System.Exception __exception) => SwallowButtonStateNre(__exception, "Increase");
+
+    [HarmonyPatch(nameof(NumberOption.Decrease))]
+    [HarmonyFinalizer]
+    private static System.Exception DecreaseFinalizer(System.Exception __exception) => SwallowButtonStateNre(__exception, "Decrease");
+
+    private static System.Exception SwallowButtonStateNre(System.Exception ex, string method)
+    {
+        if (ex != null) Logger.Warn($"NumberOption.{method} threw (swallowed): {ex.Message}", "NumberOptionPatch");
+        return null;
+    }
 }
 
 [HarmonyPatch(typeof(StringOption))]
