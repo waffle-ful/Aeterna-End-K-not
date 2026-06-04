@@ -9357,6 +9357,7 @@
   "CommandForms.BBNoCDiag": "bbnocdiag",
   "CommandForms.BBPerf": "bbperf",
   "CommandForms.BBWallDark": "bbwalldark",
+  "CommandForms.BBStreamBudget": "bbstreambudget",
   "CommandForms.TPIn": "tpin",
   "CommandForms.TPOut": "tpout",
   "CommandForms.Target": "target,ターゲット",

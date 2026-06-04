@@ -9977,6 +9977,7 @@
   "CommandForms.BBNoCDiag": "bbnocdiag",
   "CommandForms.BBPerf": "bbperf",
   "CommandForms.BBWallDark": "bbwalldark",
+  "CommandForms.BBStreamBudget": "bbstreambudget",
   "CommandForms.Burst": "burst",
   "CommandForms.Rehost": "rehost",
   "CommandForms.TPIn": "tpin",

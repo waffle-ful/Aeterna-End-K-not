@@ -1050,8 +1050,11 @@ public static class BackroomsLobby
     private static int _spawnHead;                  // O(1) dequeue 用 head index (末尾到達で list ごと clear)
     private static readonly List<GameObject> _destroyQueue = [];
     private static int _destroyHead;
-    private const int StreamSpawnBudget = 64;       // spawn/frame 上限 (768 ÷ 64 ≈ 12f = 0.2s で消化)
-    private const int StreamDestroyBudget = 128;    // destroy は spawn より安いので多め
+    // /bbstreambudget で runtime 調整可 (リビルド無し実機 A/B 用)。弱 GPU (MX450 等) では生成バーストが
+    // 16.7ms 予算を超え「移動中一定ペースのカクカク」が出るので、薄く撒けるよう下げられる。
+    // タイルはカリング済 (不可視) で生成されるので消化時間が伸びても見た目はゼロ影響。
+    private static int StreamSpawnBudget = 32;      // spawn/frame 上限 (768 ÷ 32 ≈ 24f = 0.4s で消化、不可視)
+    private static int StreamDestroyBudget = 64;    // destroy は spawn より安いので多め
 
     private static long PackChunkKey(int cx, int cy) => ((long)cx << 32) | (uint)cy;
 
@@ -1474,7 +1477,6 @@ public static class BackroomsLobby
             // null 窓 (drain 中の disconnect/kick/teardown で LocalPlayer が消えるが _inBackrooms は
             // まだ立っている数フレーム) は spawn を次フレへ持ち越し。destroy drain は上で済んでいる。
             if (PlayerControl.LocalPlayer == null) return;
-            bool spawned = false;
             _spawnCullCenter = LocalPlayerFeet();
             _spawnCullCenterValid = true;
             int sBudget = StreamSpawnBudget;
@@ -1491,7 +1493,6 @@ public static class BackroomsLobby
                     else if (d.connector == 2) AddWallVBottomCap(go);
                 }
                 finally { _currentChunkKey = prevKey; }
-                spawned = true;
             }
             _spawnCullCenterValid = false;
             if (_spawnHead >= _spawnQueue.Count)
@@ -1499,12 +1500,12 @@ public static class BackroomsLobby
                 _spawnQueue.Clear();
                 _spawnHead = 0;
             }
-            // 新タイルが増えたフレームは vision/cull を再評価 (_occludersDirty は SpawnTile が自動で立てる)
-            if (spawned)
-            {
-                _lastVisionValid = false;
-                _cullValid = false;
-            }
+            // ★ ここで _cullValid=false / _lastVisionValid=false を立ててはいけない (2026-06-04)。
+            //   新タイルは生成時に _spawnCullCenter でカリング済なので即時再評価は不要。立てると毎 spawn
+            //   フレームに UpdateCulling が O(2300 tile) のフルスイープを走らせ、「移動中一定ペースのカクカク」
+            //   の主因になる (実機: 予算 32→8 に下げても変わらず=spawn 数非依存、ドレイン長で悪化と確定)。
+            //   cull は player 移動 (CullMoveSqrThreshold) + 跨ぎ時 UpdateStreaming の invalidate で、
+            //   vision は毎フレ移動で、merged occluder は SpawnTile の _occludersDirty で各々正しく再評価される。
         }
     }
 
@@ -2370,6 +2371,23 @@ public static class BackroomsLobby
         else
         {
             Utils.SendMessage($"Usage: /bbwalldark <0.0-1.0>  (current = {WallGhostAlphaDarkZone:0.00})", targetPid);
+        }
+    }
+
+    // /bbstreambudget <spawn> [destroy] — フレーム分散ストリーミングの 1 フレ当たり tile 生成/破棄上限を
+    // runtime 調整。下げるほどバーストが薄くなり「移動中一定ペースのカクカク」が減る (消化は長引くが不可視)。
+    public static void SetStreamBudget(byte targetPid, string[] args)
+    {
+        if (args.Length >= 2 && int.TryParse(args[1], out int sb) && sb > 0)
+        {
+            StreamSpawnBudget = sb;
+            if (args.Length >= 3 && int.TryParse(args[2], out int db) && db > 0)
+                StreamDestroyBudget = db;
+            Utils.SendMessage($"StreamSpawnBudget = {StreamSpawnBudget}, StreamDestroyBudget = {StreamDestroyBudget} (tile/frame)", targetPid);
+        }
+        else
+        {
+            Utils.SendMessage($"Usage: /bbstreambudget <spawn> [destroy]  (current spawn={StreamSpawnBudget} destroy={StreamDestroyBudget})", targetPid);
         }
     }
 

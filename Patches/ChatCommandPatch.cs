@@ -191,6 +191,7 @@ internal static class ChatCommands
             new("BBNoCDiag", "", Command.UsageLevels.Host, Command.UsageTimes.InLobby, BBNoCDiagCommand, true, true),
             new("BBPerf", "", Command.UsageLevels.Host, Command.UsageTimes.InLobby, BBPerfCommand, true, true),
             new("BBWallDark", "[value]", Command.UsageLevels.Host, Command.UsageTimes.InLobby, BBWallDarkCommand, true, true),
+            new("BBStreamBudget", "[spawn] [destroy]", Command.UsageLevels.Host, Command.UsageTimes.InLobby, BBStreamBudgetCommand, true, true),
             new("Burst", "{count} [murder|protect] [none]", Command.UsageLevels.Host, Command.UsageTimes.Always, BurstCommand, true, true),
             new("Rehost", "", Command.UsageLevels.Host, Command.UsageTimes.InLobby, RehostCommand, true, true),
             new("Template", "{tag}", Command.UsageLevels.Everyone, Command.UsageTimes.Always, TemplateCommand, true, false, [GetString("CommandArgs.Template.Tag")]),
@@ -2525,6 +2526,11 @@ internal static class ChatCommands
     private static void BBWallDarkCommand(PlayerControl player, string text, string[] args)
     {
         BackroomsLobby.SetWallDark(player.PlayerId, args);
+    }
+
+    private static void BBStreamBudgetCommand(PlayerControl player, string text, string[] args)
+    {
+        BackroomsLobby.SetStreamBudget(player.PlayerId, args);
     }
 
     // /burst <N> [murder|protect] [none] | /burst off — client-authority forge burst kick test (host-only, hidden).
