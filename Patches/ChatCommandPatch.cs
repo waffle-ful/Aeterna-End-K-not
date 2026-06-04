@@ -3839,7 +3839,15 @@ internal static class ChatCommands
     public static void OnReceiveChat(PlayerControl player, string text, out bool canceled)
     {
         canceled = false;
-        if (!AmongUsClient.Instance.AmHost || player.AmOwner) return;
+        if (player.AmOwner) return;
+
+        if (!AmongUsClient.Instance.AmHost)
+        {
+            // 非ホストモッドクライアント: 非モッド送信者の /command 生テキストを隠す
+            if (text.StartsWith('/') && !player.IsModdedClient())
+                canceled = true;
+            return;
+        }
 
         long now = Utils.TimeStamp;
 
