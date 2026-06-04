@@ -1795,7 +1795,7 @@ public static class GameSettingMenuPatch
             }
         }
 
-        __instance.StopAllCoroutines();
+        if (__instance) __instance.StopAllCoroutines(); // __instance が破棄済み(fake-null)だとネイティブ StopAllCoroutines が NRE るので Unity 暗黙 bool でガード
 
         Cleanup();
     }
