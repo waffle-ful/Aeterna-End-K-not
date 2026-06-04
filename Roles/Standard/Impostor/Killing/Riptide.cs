@@ -87,10 +87,10 @@ public class Riptide : RoleBase
     private static Vector2 MapCenter;
 
     // CNO 視覚オフセット (TMP bottom-center anchor 仕様):
-    //   FontSizeAbsolute=30 × 8 行で実機推定 ~40u 高さ → 半分 20u
-    private const float VisualVerticalOffset = 20f;
-    // スプライト視覚幅/高さ (size=30 で ~40u/CNO):
-    private const float VisualSpriteExtent = 40f;
+    //   FontSizeAbsolute=40 × 8 行 ≈ 53u 高さ → 半分 ~27u
+    private const float VisualVerticalOffset = 27f;
+    // スプライト視覚幅/高さ (size=40 で ~53u/CNO):
+    private const float VisualSpriteExtent = 53f;
 
     public override bool IsEnable => On;
 
@@ -265,7 +265,7 @@ public class Riptide : RoleBase
                 var wave = new RiptideWaveState(startPos, direction, capturedSpeed, capturedDir);
                 ActiveWaves.Add(wave);
 
-                // 6 個の sub-CNO を SubSpawnInterval 間隔でずらして spawn (packet 分散)。
+                // 2 個の sub-CNO を SubSpawnInterval 間隔でずらして spawn (packet 分散)。
                 // CombineSendTimeLowering は send timer を巻き戻して即時送信を促す副作用があり、
                 // ここでは逆効果なので使わない (CreateNetObject は内部で DataFlagRateLimiter を経由する)。
                 var capturedWave = wave;
@@ -286,7 +286,7 @@ public class Riptide : RoleBase
 
                 if (ShowPredictiveGhost)
                 {
-                    // Ghost sub-CNO は本体 6 個 spawn が終わった後から SubSpawnInterval 間隔で続けて spawn
+                    // Ghost sub-CNO は本体 2 個 spawn が終わった後から SubSpawnInterval 間隔で続けて spawn
                     float ghostStart = SubSpawnInterval * SubLayout.Length;
                     for (int j = 0; j < SubLayout.Length; j++)
                     {
@@ -638,25 +638,27 @@ public class Riptide : RoleBase
 
     // spawn 間隔 (anti-cheat バースト防止、2026-05-28 実機 Hacking kick の root cause):
     //   1 CNO spawn = Spawn/Hide-loop/Shapeshift-trick の 3 段 reliable packet。
-    //   6 個 × 4 方向を 0.05f 間隔で連射すると vanilla anti-cheat の rate limit を踏み抜く。
+    //   2 個 × 4 方向を 0.05f 間隔で連射すると vanilla anti-cheat の rate limit を踏み抜く。
     //   個別 spawn coroutine が yield する 0.55s より長めに取り、bursts を回避する。
     private const float SubSpawnInterval = 0.6f;
-    private const float DirectionSpawnInterval = 4.5f;  // 1 方向 = 6 sub × 0.6s = 3.6s + 余裕
+    private const float DirectionSpawnInterval = 4.5f;  // 1 方向 = 2 sub × 0.6s = 1.2s + 余裕
 
     // TP() を呼ぶ頻度 (anti-cheat の RPC rate limit 対策、2026-05-28 実機 Hacking kick で確定):
     //   CustomNetObject.TP() は SnapToSendFrameCount=30 を立てて次フレで RpcSnapTo 発射する。
     //   毎フレ TP() = 毎フレ RpcSnapTo (SendOption.None でも anti-cheat の rate にカウントされる)。
-    //   6 CNO × 50fps = 300 RPC/秒 を 6 × 10Hz = 60 RPC/秒 まで絞り、安全圏に収める。
-    private const float TPSyncInterval = 0.1f;
+    //   10Hz→5Hz に半減。SnapTo(None) の本数を減らし公式 anti-cheat のレート負荷を下げる。
+    //   非モッド側は前回 SnapTo から補間されるので視覚断裂は最小。
+    private const float TPSyncInterval = 0.2f;
 
-    // sub-CNO 2D レイアウト (2026-05-28):
+    // sub-CNO 2D レイアウト (2026-06-04 改: 公式 anti-cheat 対策で 6→2 に削減):
     //   各エントリ = (perp オフセット, parallel オフセット)
-    //   size=30 × 8×8 W ≈ 40u/CNO → perp ±20u 2行 × parallel ±40u 3列 = 6 sub-CNO
-    //   合計カバー: 並進方向 120u、垂直方向 80u でマップ全体を包む
+    //   size=40 の sub-CNO 2枚を perp 方向 (波の進行に垂直 = マップ断面) に ±10u で並べ、
+    //   重ね合わせて隙間のない連続した波として見せる。parallel 方向の展開は廃止 (motion 方向は薄い壁でよい)。
+    //   左右波なら縦2枚 / 上下波なら横2枚 に perp ベクトルで自動配置される。
     private static readonly Vector2[] SubLayout =
     {
-        new(-20f, -40f), new(-20f,   0f), new(-20f,  40f),
-        new( 20f, -40f), new( 20f,   0f), new( 20f,  40f),
+        new(-10f, 0f),
+        new( 10f, 0f),
     };
 
     // ============================================================

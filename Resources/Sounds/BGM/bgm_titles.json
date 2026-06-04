@@ -1,6 +1,9 @@
 {
   "menu": [
-    { "file": "menu", "weight": 1, "title": "The Tale of a Cruel World", "author": "DM Dokuro" }],
+    { "file": "menu",     "weight": 1, "title": "The Tale of a Cruel World", "author": "DM Dokuro" },
+    { "file": "menu_alt", "weight": 1, "title": "堕ちる", "author": "もっぴーさうんど" }
+  ],
+
   "lobby": [
     { "file": "lobby", "weight": 1, "title": "0の部屋", "author": "自称芸術家みーさん" },
     { "file": "lobby_alt", "weight": 1, "title": "時計仕掛けの歪なワルツ ", "author": "こおろぎ" }
