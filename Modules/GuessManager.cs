@@ -72,8 +72,8 @@ public static class GuessManager
         int operate; // 1: ID, 2: Guess
         msg = msg.ToLower().TrimStart().TrimEnd();
 
-        if (CheckCommand(ref msg, "id|guesslist|gl编号|玩家编号|玩家id|id列表|玩家列表|列表|所有id|全部id", true, out _)) operate = 1;
-        else if (CheckCommand(ref msg, "shoot|guess|bet|st|bt|猜|赌", false, out _)) operate = 2;
+        if (CheckCommand(ref msg, "id|guesslist|gl编号|玩家编号|玩家id|id列表|玩家列表|列表|所有id|全部id", true, out bool spamRequired)) operate = 1;
+        else if (CheckCommand(ref msg, "shoot|guess|bet|st|bt|猜|赌", false, out spamRequired)) operate = 2;
         else return false;
 
         Logger.Msg(msg, "Msg Guesser");
@@ -118,6 +118,13 @@ public static class GuessManager
                 }
 
                 SkipCheck:
+
+                if (!isUI && !ssMenu && spamRequired && (pc.GetCustomRole() is CustomRoles.Decryptor or CustomRoles.NecroGuesser ||
+                     pc.Is(CustomRoles.NiceGuesser) ||
+                     pc.Is(CustomRoles.EvilGuesser) ||
+                     pc.Is(CustomRoles.Doomsayer) ||
+                     pc.Is(CustomRoles.Guesser) || Options.GuesserMode.GetBool()))
+                    Utils.SendMessage("\n", pc.PlayerId, GetString("NoSpamAnymoreUseCmd"));
 
                 if (!MsgToPlayerAndRole(msg, out byte targetId, out CustomRoles role, out string error))
                 {

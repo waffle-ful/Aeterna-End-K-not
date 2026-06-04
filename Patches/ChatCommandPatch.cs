@@ -3912,7 +3912,18 @@ internal static class ChatCommands
 
         if (text.StartsWith('/') && !player.IsModdedClient() && (!GameStates.IsMeeting || MeetingHud.Instance.state is not MeetingHud.VoteStates.Results and not MeetingHud.VoteStates.Proceeding))
         {
-            Utils.CheckServerCommand(ref text, out _);
+            Utils.CheckServerCommand(ref text, out bool spamRequired); // spamRequired == true は /cmd 未使用
+
+            // ハイブリッド: /cmd 無し + 秘匿コマンド (Whisper 等の AlwaysHidden / AutoHidden) は
+            // 送信側 vanilla が既に生 broadcast 済みなので、旧来の flood-clear (巨大空白 + 履歴サマリー再表示) で画面外へ押し出す。
+            // /cmd 有りは +25 routing が他クライアントへ届けないので flood 不要 (巨大空白を出さない)。
+            // flood は command 実行 *前* に走らせる (後だと正規出力が履歴再送で塗り潰される)。
+            if (spamRequired && ShouldAutoHide(text))
+            {
+                canceled = true;
+                ChatManager.SendPreviousMessagesToAll();
+            }
+
             string[] args = text.Split(' ');
 
             foreach (Command command in Command.AllCommands)
