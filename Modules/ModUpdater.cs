@@ -122,7 +122,10 @@ public static class ModUpdater
     public static async Task<bool> CheckReleaseFromGithub(bool beta = false)
     {
         Logger.Msg("Checking GitHub Release", "CheckRelease");
-        const string url = URLGithub + "/releases/latest";
+        // End K not's releases are all marked pre-release, and GitHub's /releases/latest
+        // endpoint excludes pre-releases (returns 404 when there are only pre-releases).
+        // Use the list endpoint and take the most recent entry (sorted by created_at desc).
+        const string url = URLGithub + "/releases";
 
         try
         {
@@ -142,7 +145,18 @@ public static class ModUpdater
                 result = await response.Content.ReadAsStringAsync();
             }
 
-            JObject data = JObject.Parse(result);
+            // This IL2CPP Newtonsoft only surfaces JObject.Parse (not JArray/JToken.Parse),
+            // and /releases returns a top-level JSON array, so wrap it in an object first.
+            JObject wrapper = JObject.Parse("{\"releases\":" + result + "}");
+            JArray releases = wrapper["releases"].CastFast<JArray>();
+
+            if (releases.Count == 0)
+            {
+                Logger.Error("No releases found", "CheckRelease");
+                return false;
+            }
+
+            var data = releases[0];
 
             LatestTitleModName = data["name"].ToString();
 
@@ -154,13 +168,17 @@ public static class ModUpdater
             }
             else
             {
-                LatestVersion = new(data["tag_name"]?.ToString().TrimStart('v') ?? string.Empty);
+                // Strip the 'v' prefix and the '-alpha' suffix; Version.Parse can't handle the suffix
+                // (mirrors Main.Version = Version.Parse(PluginVersion.Split('-')[0])).
+                LatestVersion = new(data["tag_name"]?.ToString().TrimStart('v').Split('-')[0] ?? string.Empty);
                 LatestTitle = $"Ver. {LatestVersion}";
                 var assets = data["assets"].CastFast<JArray>();
 
                 for (var i = 0; i < assets.Count; i++)
                 {
-                    if (assets[i]["name"].ToString() == $"EndKnot.v{LatestVersion}_Steam.zip")
+                    // Match by suffix so we don't depend on the exact version naming in the asset
+                    // (actual asset name is "EndKnot-<version>_Steam.zip").
+                    if (assets[i]["name"].ToString().EndsWith("_Steam.zip"))
                     {
                         DownloadUrl = assets[i]["browser_download_url"].ToString();
                         break;
