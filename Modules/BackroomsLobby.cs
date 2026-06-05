@@ -2758,15 +2758,16 @@ public static class BackroomsLobby
         }
     }
 
-    // バニラ影モード時のみ (Phase 2a): 壁が cull/stream で変わっていたら merged occluder を作り直し、
-    // それを layer10 の輪郭線 caster (BackroomsCasters) へ反映する。_occludersDirty を消費する
-    // (UpdateVision は suppress 中で _visionPaused early-return のため dirty を消費しない → ここが消費点)。
+    // バニラ影モード時のみ (Phase 2b): 壁が cull/stream で変わっていたら per-cell WallAabbs から
+    // 壁の境界辺を辿る layer10 EdgeCollider2D 線分 caster (BackroomsCasters) を作り直す。
+    // _occludersDirty を消費する (UpdateVision は suppress 中で _visionPaused early-return のため
+    // dirty を消費しない → ここが消費点)。WallAabbs を直接渡す (BackroomsCasters が full-cell 占有格子に
+    // スナップして境界辺をキャンセル抽出するので、中心線方式の merged occluder は不要)。
     private static void MaintainWallCasters()
     {
         if (!_inBackrooms || !_occludersDirty) return;
-        RebuildMergedOccluders();
         _occludersDirty = false;
-        BackroomsCasters.Rebuild(_mergedOccluders);
+        BackroomsCasters.Rebuild(WallAabbs);
     }
 
     public static void UpdateVision()
