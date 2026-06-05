@@ -9978,6 +9978,8 @@
   "CommandForms.BBPerf": "bbperf",
   "CommandForms.BBWallDark": "bbwalldark",
   "CommandForms.BBStreamBudget": "bbstreambudget",
+  "CommandForms.BBShadow": "bbshadow",
+  "CommandForms.BBTestRoom": "bbtestroom",
   "CommandForms.Burst": "burst",
   "CommandForms.Rehost": "rehost",
   "CommandForms.TPIn": "tpin",

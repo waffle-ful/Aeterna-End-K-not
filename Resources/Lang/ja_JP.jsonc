@@ -9358,6 +9358,8 @@
   "CommandForms.BBPerf": "bbperf",
   "CommandForms.BBWallDark": "bbwalldark",
   "CommandForms.BBStreamBudget": "bbstreambudget",
+  "CommandForms.BBShadow": "bbshadow",
+  "CommandForms.BBTestRoom": "bbtestroom",
   "CommandForms.TPIn": "tpin",
   "CommandForms.TPOut": "tpout",
   "CommandForms.Target": "target,ターゲット",
