@@ -1105,6 +1105,18 @@ public static class BackroomsLobby
         _spawnCullCenter = LocalPlayerFeet();
         _spawnCullCenterValid = true;
 
+        // 厚い壁マップ (Phase 2b) の spawn-in-room 保証: マップ原点をずらして player の足元セルが
+        // 部屋の中心に来るようにする。旧 1 セル壁は床主体で滅多に壁に詰まらなかったが、厚い壁は
+        // ~56% が壁なので未対策だと頻繁に壁の中に spawn する。EnsureSpawnFloor は 5 セル床ポケットを
+        // 掘るだけ (壁帯に閉じ込められうる) ので、こちらで proper な 6x6 部屋に置く。
+        // TODO(マルチ): offset を player 由来にすると client 毎にマップがズレる。seed 由来 + ロビー部屋を
+        //   決定的に carve する方式に Phase 4 で変更 (今は solo テスト前提)。
+        if (BackroomsConfig.UseOutlineMap)
+        {
+            _outlineOffsetX = Mathf.RoundToInt(_spawnCullCenter.x) - RoomSize / 2;
+            _outlineOffsetY = Mathf.RoundToInt(_spawnCullCenter.y) - RoomSize / 2;
+        }
+
         int r = ActiveChunkRadius;
         for (int dx = -r; dx <= r; dx++)
         for (int dy = -r; dy <= r; dy++)
@@ -1522,7 +1534,64 @@ public static class BackroomsLobby
         _spawnHead = 0;
     }
 
+    // 新旧マップ切替: UseOutlineMap=true で厚い壁レイアウト (Phase 2b)、false で旧 1 セル壁 (ロールバック用)。
     private static CellKind ClassifyCell(int wx, int wy, uint seed)
+        => BackroomsConfig.UseOutlineMap ? ClassifyCellOutline(wx, wy, seed) : ClassifyCellLegacy(wx, wy, seed);
+
+    // 厚い壁マップの原点オフセット (GenerateLobby が player 足元セルを部屋中心に来るよう設定)。
+    private static int _outlineOffsetX;
+    private static int _outlineOffsetY;
+
+    // 厚い壁レイアウト (Phase 2b): 周期 P = RoomSize + WallThickness。各周期ブロックの先頭 RoomSize×RoomSize が
+    // 部屋(床)、残り WallThickness セルが壁帯。隣接部屋はドア(床通路)で繋ぐ。壁帯が厚い (>=3) ので caster を
+    // 壁中心 (interior) に置け、外側 1 セルが lit ring (見える壁の面)・中心が occluder (奥が暗い) になる。
+    private static CellKind ClassifyCellOutline(int wx, int wy, uint seed)
+    {
+        int period = RoomSize + BackroomsConfig.WallThickness;
+        int sx = wx - _outlineOffsetX; // 原点オフセット適用 (player を部屋中心に)
+        int sy = wy - _outlineOffsetY;
+        int px = Mod(sx, period);
+        int py = Mod(sy, period);
+        int roomX = (sx - px) / period;
+        int roomY = (sy - py) / period;
+
+        bool inRoomX = px < RoomSize; // 部屋の列範囲か (それ以外は右側の縦壁帯)
+        bool inRoomY = py < RoomSize; // 部屋の行範囲か (それ以外は上側の横壁帯)
+
+        // 部屋の中 = 床
+        if (inRoomX && inRoomY) return CellKind.Floor;
+
+        // 縦壁帯 (部屋 roomX と roomX+1 の間)。ドア = 横方向の床通路で貫通。band は roomX で一意 → 両側 agree。
+        if (!inRoomX && inRoomY)
+        {
+            int doorY = DoorOffset(roomX, roomY, seed, 'D');
+            if (py >= doorY && py < doorY + BackroomsConfig.DoorWidth) return CellKind.Floor; // ドア床
+            return CellKind.WallV; // 縦向きの壁面
+        }
+
+        // 横壁帯 (部屋 roomY と roomY+1 の間)。ドア = 縦方向の床通路で貫通。
+        if (inRoomX && !inRoomY)
+        {
+            int doorX = DoorOffset(roomX, roomY, seed, 'E');
+            if (px >= doorX && px < doorX + BackroomsConfig.DoorWidth) return CellKind.Floor; // ドア床
+            return CellKind.WallH; // 横向きの壁面
+        }
+
+        // 角ブロック (縦帯×横帯の交差) = 必ず壁。壁ラティスを連結させ interior を作る。視覚は WallH 既定。
+        return CellKind.WallH;
+    }
+
+    // ドア開口の開始オフセット [0, RoomSize-DoorWidth] を seeded で返す。両側部屋の床範囲に収める。
+    private static int DoorOffset(int roomX, int roomY, uint seed, char tag)
+    {
+        int span = RoomSize - BackroomsConfig.DoorWidth + 1; // 取りうる開始位置の数
+        if (span < 1) span = 1;
+        uint h = WallHash(roomX, roomY, seed, tag);
+        return (int)(h % (uint)span);
+    }
+
+    // 旧 1 セル壁レイアウト (Phase 2a まで)。UseOutlineMap=false でロールバック。
+    private static CellKind ClassifyCellLegacy(int wx, int wy, uint seed)
     {
         int inRoomX = Mod(wx, RoomSize);
         int inRoomY = Mod(wy, RoomSize);
