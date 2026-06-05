@@ -2151,6 +2151,65 @@ public static class BackroomsLobby
                 }
 
                 break;
+            case "quad":
+            {
+                // 実験: ShadowQuad の sortingOrder を前に出して、タイルに覆われてるかテスト
+                int q = args is { Length: >= 3 } && int.TryParse(args[2], out int qv) ? qv : 200;
+                if (HudManager.InstanceExists && HudManager.Instance.ShadowQuad != null)
+                {
+                    HudManager.Instance.ShadowQuad.sortingOrder = q;
+                    Utils.SendMessage($"ShadowQuad.sortingOrder = {q} (影が出れば sortingOrder で直る)", pid);
+                }
+                else Utils.SendMessage("ShadowQuad 不在", pid);
+
+                break;
+            }
+            case "hidetiles":
+            {
+                // 実験: Backrooms タイルの SR を全 toggle。隠して影が出れば「タイルが覆ってた」確定
+                int n = 0;
+                foreach (GameObject go in SpawnedTiles)
+                {
+                    if (go == null) continue;
+                    foreach (SpriteRenderer s in go.GetComponentsInChildren<SpriteRenderer>(true)) { s.enabled = !s.enabled; n++; }
+                }
+
+                Utils.SendMessage($"tile SR を {n} 個 toggle。影が出れば「タイルが影を覆ってた」確定 (もう一度で戻る)", pid);
+                break;
+            }
+            case "quadqueue":
+            {
+                // 実験: ShadowQuad の material.renderQueue を変える。高くするとタイルの後に描画→影が前に出る
+                if (HudManager.InstanceExists && HudManager.Instance.ShadowQuad != null && HudManager.Instance.ShadowQuad.material != null)
+                {
+                    Material m = HudManager.Instance.ShadowQuad.material;
+                    int cur = m.renderQueue;
+                    if (args is { Length: >= 3 } && int.TryParse(args[2], out int qv))
+                    {
+                        m.renderQueue = qv;
+                        Utils.SendMessage($"ShadowQuad renderQueue {cur} → {qv} (影が出れば renderQueue で直る)", pid);
+                    }
+                    else Utils.SendMessage($"ShadowQuad 現在 renderQueue = {cur}。変更は /bbshadow quadqueue <N> (例 5000)", pid);
+                }
+                else Utils.SendMessage("ShadowQuad/material 不在", pid);
+
+                break;
+            }
+            case "tilequeue":
+            {
+                // 実験: タイル material の renderQueue を変える。低くすると ShadowQuad より先に描画→影に覆われる
+                int q = args is { Length: >= 3 } && int.TryParse(args[2], out int qv2) ? qv2 : 1000;
+                int n = 0;
+                foreach (GameObject go in SpawnedTiles)
+                {
+                    if (go == null) continue;
+                    foreach (SpriteRenderer s in go.GetComponentsInChildren<SpriteRenderer>(true))
+                        if (s.material != null) { s.material.renderQueue = q; n++; }
+                }
+
+                Utils.SendMessage($"tile material renderQueue = {q} ({n}個)。影が出れば tile 側 renderQueue で直る", pid);
+                break;
+            }
             default:
                 BackroomsShadow.Status(pid);
                 break;

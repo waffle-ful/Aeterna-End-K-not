@@ -115,9 +115,22 @@ public static class BackroomsShadow
                 }
                 catch (Exception ex) { hitsInfo = $"hits EXC {ex.Message}"; }
 
+                // ★診断: Physics2D が occluder を検出できているか (plain ロビー vs Backrooms 比較用)
+                int omMask = -1, om10 = -1;
+                try { Il2CppReferenceArray<Collider2D> f = Physics2D.OverlapCircleAll(feet, ls.ViewDistance, Constants.ShadowMask); omMask = f != null ? f.Length : -2; } catch { omMask = -3; }
+                try { Il2CppReferenceArray<Collider2D> f10 = Physics2D.OverlapCircleAll(feet, ls.ViewDistance, 1 << BackroomsConfig.ShadowCasterLayer); om10 = f10 != null ? f10.Length : -2; } catch { om10 = -3; }
+
+                // ★診断: LightChild (光の円メッシュ) の layer/active/scale — layer!=10 なら ShadowCamera が撮れず影が出ない真因
+                string lcInfo = "LightChild=NULL";
+                try
+                {
+                    GameObject lc = ls.LightChild;
+                    if (lc != null) lcInfo = $"LightChild layer={lc.layer} active={lc.activeInHierarchy} scale={lc.transform.lossyScale}";
+                }
+                catch (Exception ex) { lcInfo = $"LightChild EXC {ex.Message}"; }
+
                 Logger.Info(
-                    $"[driver] feet=({feet.x:F2},{feet.y:F2}) mainCam={(mainCam != null ? mainCam.transform.position.ToString() : "null")} " +
-                    $"ortho={(mainCam != null ? mainCam.orthographicSize : 0):F1} shadowCam={(_shadowCam != null ? _shadowCam.transform.position.ToString() : "NULL")} | {hitsInfo}",
+                    $"[driver] feet=({feet.x:F2},{feet.y:F2}) ortho={(mainCam != null ? mainCam.orthographicSize : 0):F1} viewDist={ls.ViewDistance:F1} | {hitsInfo} | OverlapShadowMask={omMask} OverlapLayer10={om10} | {lcInfo}",
                     Tag);
             }
         }
