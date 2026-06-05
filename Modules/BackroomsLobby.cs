@@ -1668,6 +1668,13 @@ public static class BackroomsLobby
         _lastVisionValid = false; // idle skip cache invalidate — 次フレームで強制 rebuild
         _cullValid = false; // 距離 cull cache invalidate — 次フレで全 tile sweep
 
+        // バニラ GPU 影モード: custom 視界を抑制してドライバを arm (各クライアントが入場時に自動起動・コマンド不要)
+        if (BackroomsConfig.UseVanillaShadow)
+        {
+            SuppressCustomVision(true);
+            BackroomsShadow.Arm(BackroomsConfig.DefaultShadowRadius);
+        }
+
         Logger.Info($"Entered Backrooms (no-TP) seed={seed} disabledCols={disabledCols} disabledRs={disabledRs} tiles={SpawnedTiles.Count}", "BackroomsGen");
     }
 
@@ -1690,6 +1697,8 @@ public static class BackroomsLobby
         DestroyOverlay();
         BackroomsAmbient.Stop();
         RestoreEntityVisibility();
+        BackroomsShadow.Reset(); // バニラ影ドライバ停止 + 自前 renderer Dispose
+        _overlaySuppressed = false;
 
         // 1. Backrooms タイル全消去
         int wiped = 0;
@@ -1775,6 +1784,8 @@ public static class BackroomsLobby
         DestroyVision();
         DestroyOverlay();
         RestoreEntityVisibility();
+        BackroomsShadow.Reset(); // バニラ影ドライバ停止 + 自前 renderer Dispose
+        _overlaySuppressed = false;
 
         int wiped = 0;
         foreach (GameObject go in SpawnedTiles)
@@ -1813,6 +1824,8 @@ public static class BackroomsLobby
         _lastVisionValid = false;
         _cullValid = false;
         _spawnCullCenterValid = false;
+        BackroomsShadow.Reset(); // バニラ影ドライバ停止 + 自前 renderer Dispose (scene 跨ぎで stale 化を防ぐ)
+        _overlaySuppressed = false;
         _visionGO = null; // scene unload で destroy 済 — 参照だけクリア (DestroyVision 経由は不要)
         _visionMF = null;
         _visionMesh = null;
@@ -2069,6 +2082,86 @@ public static class BackroomsLobby
     {
         _overlaySuppressed = suppressed;
         if (_overlayGO != null) _overlayGO.SetActive(!suppressed);
+    }
+
+    // ========================================================================
+    // バニラ GPU 影モード (Phase 1) のオーケストレーション。
+    //   custom CPU 視界 (donut mesh + ghost overlay + 黄色 overlay + entity hard-cut) を
+    //   まるごと止めて二重暗化を防ぎ、BackroomsShadow ドライバに切り替える。
+    //   BackroomsConfig.UseVanillaShadow=false なら下は一切呼ばれず完全に従来挙動 (退行ガード)。
+    // ========================================================================
+
+    // custom 視界を suppress=true で停止 / false で復元。_visionPaused で UpdateVision を early-return
+    // させ CPU も回収する。退室時は GO が既に破棄/null でも全ガード済なので flag リセットとして安全に呼べる。
+    public static void SuppressCustomVision(bool suppress)
+    {
+        _visionPaused = suppress;
+        if (_visionGO != null) _visionGO.SetActive(!suppress);
+        if (_upperVisionGO != null) _upperVisionGO.SetActive(!suppress);
+        SetOverlaySuppressed(suppress);
+        if (suppress) RestoreEntityVisibility(); // hard-cut で消した body/player/cosmetic を戻す
+        _lastVisionValid = false;                // 解除後に強制 rebuild
+    }
+
+    // /bbshadow [on|off|radius <r>|dark <v> [blur]|status]
+    public static void ShadowCommand(string[] args, byte pid)
+    {
+        string sub = args is { Length: >= 2 } ? args[1].ToLowerInvariant() : "status";
+        switch (sub)
+        {
+            case "on":
+                BackroomsConfig.UseVanillaShadow = true;
+                SuppressCustomVision(true);
+                BackroomsShadow.Arm(BackroomsConfig.DefaultShadowRadius);
+                Utils.SendMessage("vanilla 影 ON (custom 視界抑制 + driver arm)。歩いて目視。OFF=/bbshadow off", pid);
+                break;
+            case "off":
+                BackroomsShadow.Disarm();
+                SuppressCustomVision(false);
+                BackroomsConfig.UseVanillaShadow = false;
+                Utils.SendMessage("vanilla 影 OFF (custom 視界復元)", pid);
+                break;
+            case "radius":
+                float r = args is { Length: >= 3 } && float.TryParse(args[2], out float rv) ? rv : BackroomsConfig.DefaultShadowRadius;
+                BackroomsConfig.UseVanillaShadow = true;
+                SuppressCustomVision(true);
+                BackroomsShadow.Arm(r);
+                Utils.SendMessage($"radius={r} で re-arm", pid);
+                break;
+            case "dark":
+                if (args is { Length: >= 3 } && args[2].Equals("off", StringComparison.OrdinalIgnoreCase))
+                {
+                    BackroomsShadow.SetDark(-1f, -1f);
+                    Utils.SendMessage("dark override 解除", pid);
+                }
+                else
+                {
+                    float v = args is { Length: >= 3 } && float.TryParse(args[2], out float dv) ? Mathf.Clamp01(dv) : 0.4f;
+                    float blur = args is { Length: >= 4 } && float.TryParse(args[3], out float bv) ? bv : -1f;
+                    BackroomsShadow.SetDark(v, blur);
+                    Utils.SendMessage($"dark=_Color({v:F2}) edgeBlur={(blur >= 0 ? blur.ToString("F2") : "据置")}", pid);
+                }
+
+                break;
+            default:
+                BackroomsShadow.Status(pid);
+                break;
+        }
+    }
+
+    // /bbtestroom [edge|box|both|off] — make-or-break 検証。layer10 EdgeCollider2D(滑らか想定) vs BoxCollider2D(blocky 想定)
+    public static void TestRoomCommand(string[] args, byte pid)
+    {
+        string variant = args is { Length: >= 2 } ? args[1].ToLowerInvariant() : "both";
+        if (variant is "off")
+        {
+            BackroomsShadow.SpawnTestRoom("off", pid);
+            return;
+        }
+
+        BackroomsConfig.UseVanillaShadow = true;
+        SuppressCustomVision(true);
+        BackroomsShadow.SpawnTestRoom(variant, pid);
     }
 
     // UpdateVision 頭から呼ばれる。idle skip の影響を受けず毎フレ走らせて flicker を維持
@@ -2419,6 +2512,9 @@ public static class BackroomsLobby
     // 計測 ON の時だけ Stopwatch で Backrooms の CPU 時間を測る。
     public static void RunPerFrameUpdates()
     {
+        // バニラ GPU 影ドライバ (armed 時のみ毎フレ Render を駆動。self-guard 済)
+        if (BackroomsConfig.UseVanillaShadow) BackroomsShadow.Drive();
+
         if (!PerfLogEnabled)
         {
             UpdateStreaming();
