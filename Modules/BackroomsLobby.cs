@@ -2658,6 +2658,10 @@ public static class BackroomsLobby
         if (BackroomsConfig.UseVanillaShadow)
         {
             MaintainWallCasters();
+            // 二重壁 far-face gating: プレイヤーが各壁のどちら側に居るかで遠い面だけ active に。
+            //   光源 (= body center) と同じアンカーを使う。壁全体を lit に保つため毎フレ更新が必須。
+            PlayerControl glp = PlayerControl.LocalPlayer;
+            if (glp != null) BackroomsCasters.UpdateGating(glp.transform.position.x, glp.transform.position.y);
             BackroomsShadow.Drive();
         }
 
