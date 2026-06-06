@@ -27,6 +27,10 @@ public static class BackroomsShadow
     private static Camera _shadowCamCam;              // 同 GO の Camera component (ortho 同期用)
     private static float _diagTimer;                  // 毎秒位置診断の throttle
 
+    // light origin (= body center) に足す微調整オフセット。/bbshadow origin <dx> <dy> で実機調整。
+    // 影発射位置のズレを実測で詰めるためのつまみ。既定 (0,0) で素の body center。
+    private static Vector2 _originOffset = Vector2.zero;
+
     private static float _darkLevel = -1f;            // >=0 で ShadowQuad._Color を (v,v,v,1) に毎フレ上書き
     private static float _edgeBlur = -1f;             // >=0 で LightCutaway._EdgeBlur を毎フレ上書き
     private static float _origShadowMask = float.NaN; // ShadowQuad._Mask の元値 (Restore 用、NaN=未保存)
@@ -98,13 +102,15 @@ public static class BackroomsShadow
                 if (_shadowCamCam != null) _shadowCamCam.orthographicSize = mainCam.orthographicSize;
             }
 
-            // light origin は body center (transform.position)。ShadowCamera は Camera.main(≒body center)に
-            // 追従するので、light origin も body center に合わせて両者のアンカーを一致させる。
+            // light origin は body center (transform.position) + 微調整オフセット (_originOffset)。
+            // ShadowCamera は Camera.main(≒body center)に追従するので body center を基準にアンカー一致。
             //   足元 (-0.3636) で描くと cutaway が composite frame に対し 0.36 下にズレ、影が
-            //   プレイヤーの少し下から発射されて見えた (V/H 等しくズレる症状)。
+            //   プレイヤーの少し下から発射されて見えた (V/H 等しくズレる症状) → body center で解消。
+            //   残る微ズレは /bbshadow origin <dx> <dy> で実機調整 (既定 0,0)。
             //   no-clip trap は GetTruePosition(collider.offset=127) の話で transform.position は無関係 → 安全。
             Vector3 body = lp.transform.position;
-            r.Render(new Vector2(body.x, body.y));
+            Vector2 origin = new(body.x + _originOffset.x, body.y + _originOffset.y);
+            r.Render(origin);
 
             ApplyDarkOverride();
             ApplyShadowMask(); // 毎フレ維持 (バニラが _Mask を戻す場合に備え)
@@ -114,7 +120,7 @@ public static class BackroomsShadow
             if (_diagTimer >= 1f)
             {
                 _diagTimer = 0f;
-                Vector2 origin = new(lp.transform.position.x, lp.transform.position.y); // light origin = body center (Render と一致)
+                // origin は Render で使った body center + _originOffset を再利用 (整合)
                 string hitsInfo = "hits=?";
                 try
                 {
@@ -138,8 +144,10 @@ public static class BackroomsShadow
                 }
                 catch (Exception ex) { lcInfo = $"LightChild EXC {ex.Message}"; }
 
+                // ★診断: body center / camera / origin の関係 (camera-vs-player の真のオフセットを実測)
+                Vector3 camPos = mainCam != null ? mainCam.transform.position : Vector3.zero;
                 Logger.Info(
-                    $"[driver] origin=({origin.x:F2},{origin.y:F2}) ortho={(mainCam != null ? mainCam.orthographicSize : 0):F1} viewDist={ls.ViewDistance:F1} | {hitsInfo} | OverlapShadowMask={omMask} OverlapLayer10={om10} | {lcInfo}",
+                    $"[driver] body=({body.x:F2},{body.y:F2}) cam=({camPos.x:F2},{camPos.y:F2}) off=({_originOffset.x:F2},{_originOffset.y:F2}) origin=({origin.x:F2},{origin.y:F2}) ortho={(mainCam != null ? mainCam.orthographicSize : 0):F1} viewDist={ls.ViewDistance:F1} | {hitsInfo} | OverlapShadowMask={omMask} OverlapLayer10={om10} | {lcInfo}",
                     Tag);
             }
         }
@@ -247,6 +255,12 @@ public static class BackroomsShadow
         _edgeBlur = edgeBlur;
         ApplyDarkOverride();
     }
+
+    // light origin の微調整オフセットをセット (/bbshadow origin <dx> <dy>)。次フレの Render から反映。
+    public static void SetOriginOffset(float dx, float dy) => _originOffset = new Vector2(dx, dy);
+
+    // status 表示用に現在のオフセットを返す。
+    public static Vector2 OriginOffset => _originOffset;
 
     private static void ApplyDarkOverride()
     {

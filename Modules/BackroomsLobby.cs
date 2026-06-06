@@ -2156,6 +2156,33 @@ public static class BackroomsLobby
                 _occludersDirty = true;
                 Utils.SendMessage("skeleton 方式に変更したため inset は無効です (caster は常に壁の中心線)", pid);
                 break;
+            case "origin":
+            {
+                // 影発射位置 (light origin) の微調整。body center に (dx,dy) を足す。
+                //   1 引数 = dy のみ (縦), 2 引数 = dx dy。"reset"/"off" で 0,0。
+                if (args is { Length: >= 3 } && (args[2].Equals("reset", StringComparison.OrdinalIgnoreCase) || args[2].Equals("off", StringComparison.OrdinalIgnoreCase)))
+                {
+                    BackroomsShadow.SetOriginOffset(0f, 0f);
+                    Utils.SendMessage("origin offset を (0,0) にリセット", pid);
+                }
+                else if (args is { Length: >= 4 } && float.TryParse(args[2], out float ox) && float.TryParse(args[3], out float oy))
+                {
+                    BackroomsShadow.SetOriginOffset(ox, oy);
+                    Utils.SendMessage($"origin offset = ({ox:F2},{oy:F2}) (body center に加算)。影発射位置を実機で確認", pid);
+                }
+                else if (args is { Length: >= 3 } && float.TryParse(args[2], out float oyOnly))
+                {
+                    BackroomsShadow.SetOriginOffset(0f, oyOnly);
+                    Utils.SendMessage($"origin offset = (0,{oyOnly:F2}) (縦のみ)。横も指定は /bbshadow origin <dx> <dy>", pid);
+                }
+                else
+                {
+                    Vector2 cur = BackroomsShadow.OriginOffset;
+                    Utils.SendMessage($"現在 origin offset = ({cur.x:F2},{cur.y:F2})。指定: /bbshadow origin <dy> または <dx> <dy>、解除=/bbshadow origin reset", pid);
+                }
+
+                break;
+            }
             case "quad":
             {
                 // 実験: ShadowQuad の sortingOrder を前に出して、タイルに覆われてるかテスト
