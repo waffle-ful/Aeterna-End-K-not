@@ -5,17 +5,18 @@ using UnityEngine;
 namespace EndKnot.Modules;
 
 // ============================================================================
-// Backrooms 壁のシャドウキャスター生成 (Phase 2b: 壁を囲む inset caster)
+// Backrooms 壁のシャドウキャスター生成 (Phase 2b: 壁中心線スケルトン)
 //
-// back-edge (壁の裏 1 辺) は「壁が全部光る」が、1 辺しか遮蔽しないため ①十字で光が漏れる
-// ②左右非対称 の 2 欠陥があった。これを直すため、壁の **床に面する 4 辺すべて** を caster にし、
-// かつ各辺を壁内部へ inset (壁の芯へ寄せる) する:
-//   ・閉じた囲い → 十字/角で透けない (full occlusion)。
-//   ・どの床側からも同じ → 左右対称。
-//   ・inset δ で「外側 δ ぶんの壁が光り、中心に幅 (1-2δ) の影の芯」。δ→0.5 で中心線(半分lit)。
+// inset で壁を囲む方式は ①角でグリッド頂点共有が外れ隙間 ②床両側壁で上下2本のズレ線 になり、
+// caster が「綺麗な壁の線」でなくなって影が歪んだ。これを直すため caster を壁の **中心線** にする:
+//   ・隣接する壁セルの中心どうしを結ぶ辺 (medial axis = skeleton) を出す。
+//   ・水平に連続する壁 → 中心を通る 1 本の水平線。垂直も同様。
+//   ・角/十字: 角セルが上隣の壁へ縦辺を出すので H 中心線と V 中心線が角セル中心で必ず交わる → 連続。
+//   ・run の端は壁の実端 (セル端 ±0.5) まで延長 → 壁の端でも遮蔽が途切れない。
+//   ・孤立壁セル (4 近傍全て床) は中心線が作れないので full-cell box で囲む。
 //
-// 床に面する辺だけ出す (隣が壁の内部辺は出さない) ので、壁同士の間で光は漏れない。
-// 「壁が全部光る (両面フル lit)」が欲しい場合は別途 壁スプライトの二重面化が要る (本家の二重壁方式)。
+// 中心線なので影は左右対称・十字も塞ぐ・連続で綺麗。壁は「プレイヤー側の半分が lit」(中心から影)。
+// 壁を両側フル lit にするには別途 壁スプライトの二重面化が要る (本家の二重壁方式)。
 //
 // per-segment 短 collider の理由: OverlapCircle は radius 圏内しか返さないので GPU の辺処理仕様に非依存。
 // ============================================================================
@@ -25,19 +26,12 @@ public static class BackroomsCasters
 
     private static readonly List<GameObject> _casters = [];
 
-    // 床に面する各辺を壁の芯へ寄せる量 (0..0.49)。大きいほど光る壁が太く・影の芯が細い。0.5 で中心線。
-    // H=上下辺 (WallH 用)、V=左右辺 (WallV 用)。/bbshadow inset <v> [h] で実機調整。
-    public static float HInset = 0.42f;
-    public static float VInset = 0.48f;
-
-    // 占有格子 + 4 方向の床面バッファ (再利用で alloc 回避。Rebuild は _occludersDirty 時のみ)。
+    // 占有格子 + skeleton 辺バッファ (再利用で alloc 回避。Rebuild は _occludersDirty 時のみ)。
     private static readonly HashSet<long> _cells = [];
-    private static readonly List<(int key, int cell)> _bottom = []; // 床が下: y=iy-0.5+HInset、x=cell 方向に連続
-    private static readonly List<(int key, int cell)> _top = [];    // 床が上: y=iy+0.5-HInset
-    private static readonly List<(int key, int cell)> _left = [];   // 床が左: x=ix-0.5+VInset、y=cell 方向に連続
-    private static readonly List<(int key, int cell)> _right = [];  // 床が右: x=ix+0.5-VInset
+    private static readonly List<(int key, int cell)> _hEdges = []; // 水平 skeleton 辺: key=y row, cell=x (辺は中心 ix→ix+1)
+    private static readonly List<(int key, int cell)> _vEdges = []; // 垂直 skeleton 辺: key=x col, cell=y (辺は中心 iy→iy+1)
 
-    // WallAabbs (per-cell grid box) から壁を囲む inset caster を作り直す。壁が cull/stream で変わった時だけ呼ぶ。
+    // WallAabbs (per-cell grid box) から壁中心線 skeleton caster を作り直す。壁が cull/stream で変わった時だけ呼ぶ。
     public static void Rebuild(List<(float cx, float cy, float halfX, float halfY)> wallCells)
     {
         Clear();
@@ -47,31 +41,35 @@ public static class BackroomsCasters
         _cells.Clear();
         foreach (var w in wallCells) _cells.Add(PackCell(Mathf.RoundToInt(w.cx), Mathf.RoundToInt(w.cy)));
 
-        // 床に面する辺のみ 4 方向バッファへ (隣が壁の内部辺は出さない = 壁同士の間で漏れない)
-        _bottom.Clear(); _top.Clear(); _left.Clear(); _right.Clear();
+        // 隣接壁セルの中心どうしを結ぶ skeleton 辺を出す (右隣・上隣だけ出して二重計上を防ぐ)
+        _hEdges.Clear();
+        _vEdges.Clear();
+        int isolated = 0;
         foreach (var w in wallCells)
         {
             int ix = Mathf.RoundToInt(w.cx), iy = Mathf.RoundToInt(w.cy);
-            if (!_cells.Contains(PackCell(ix, iy - 1))) _bottom.Add((iy, ix)); // 下が床
-            if (!_cells.Contains(PackCell(ix, iy + 1))) _top.Add((iy, ix));    // 上が床
-            if (!_cells.Contains(PackCell(ix - 1, iy))) _left.Add((ix, iy));   // 左が床
-            if (!_cells.Contains(PackCell(ix + 1, iy))) _right.Add((ix, iy));  // 右が床
+            bool right = _cells.Contains(PackCell(ix + 1, iy));
+            bool up = _cells.Contains(PackCell(ix, iy + 1));
+            if (right) _hEdges.Add((iy, ix)); // 中心 (ix,iy)→(ix+1,iy)
+            if (up) _vEdges.Add((ix, iy));     // 中心 (ix,iy)→(ix,iy+1)
+
+            // 孤立壁 (4 近傍全て床) は skeleton 辺が無いので full-cell box で囲う
+            if (!right && !up && !_cells.Contains(PackCell(ix - 1, iy)) && !_cells.Contains(PackCell(ix, iy - 1)))
+            {
+                SpawnBox(ix, iy);
+                isolated++;
+            }
         }
 
-        float h = Mathf.Clamp(HInset, 0f, 0.49f);
-        float v = Mathf.Clamp(VInset, 0f, 0.49f);
-        int r = 0;
-        r += EmitFaceRuns(_bottom, horizontal: true, lineOffset: -0.5f + h); // y = iy-0.5+h
-        r += EmitFaceRuns(_top, horizontal: true, lineOffset: 0.5f - h);     // y = iy+0.5-h
-        r += EmitFaceRuns(_left, horizontal: false, lineOffset: -0.5f + v);  // x = ix-0.5+v
-        r += EmitFaceRuns(_right, horizontal: false, lineOffset: 0.5f - v);  // x = ix+0.5-v
+        int hRuns = EmitSkeletonRuns(_hEdges, horizontal: true);
+        int vRuns = EmitSkeletonRuns(_vEdges, horizontal: false);
 
-        Logger.Info($"WallCasters rebuilt (inset H={h:F2} V={v:F2}): {_casters.Count} segs ({r} runs) from {_cells.Count} cells", Tag);
+        Logger.Info($"WallCasters rebuilt (skeleton): {_casters.Count} segs (hRun={hRuns} vRun={vRuns} iso={isolated}) from {_cells.Count} cells", Tag);
     }
 
-    // bucket: (key=固定軸セル index, cell=可変軸セル index)。固定軸 world = key + lineOffset、可変軸 span = cell±0.5。
-    // 同一 key 内で cell が連続する辺を最大長 run にマージ → per-segment EdgeCollider2D。
-    private static int EmitFaceRuns(List<(int key, int cell)> edges, bool horizontal, float lineOffset)
+    // skeleton 辺 (key=固定軸 integer 中心線, cell=可変軸の辺始点)。辺は cell→cell+1 (中心間)。
+    // 連続する cell をマージ → run は中心 [start..end+1] を覆う。端を ±0.5 延長して壁の実端まで届かせる。
+    private static int EmitSkeletonRuns(List<(int key, int cell)> edges, bool horizontal)
     {
         if (edges.Count == 0) return 0;
         edges.Sort((a, b) => a.key != b.key ? a.key.CompareTo(b.key) : a.cell.CompareTo(b.cell));
@@ -86,8 +84,10 @@ public static class BackroomsCasters
                 j++;
             }
 
-            float lineWorld = key + lineOffset;
-            float lo = start - 0.5f, hi = end + 0.5f;
+            // run は中心 start..end+1 を覆う。端を 0.5 延長 → 壁セルの外端 (start-0.5 .. end+1.5)
+            float lineWorld = key;            // 中心線 (integer 軸)
+            float lo = start - 0.5f;          // 始端 (先頭セルの外辺)
+            float hi = end + 1.5f;            // 終端 (末尾セル end+1 の外辺)
             if (horizontal) SpawnSegment(new Vector2(lo, lineWorld), new Vector2(hi, lineWorld));
             else SpawnSegment(new Vector2(lineWorld, lo), new Vector2(lineWorld, hi));
 
@@ -110,6 +110,25 @@ public static class BackroomsCasters
         {
             [0] = p0 - mid,
             [1] = p1 - mid
+        };
+        ec.points = arr;
+        _casters.Add(go);
+    }
+
+    // 孤立壁セルを囲う full-cell 閉ループ box (4 辺)。
+    private static void SpawnBox(int ix, int iy)
+    {
+        GameObject go = new("BBWallCasterBox");
+        go.transform.position = new Vector3(ix, iy, 0f);
+        go.layer = BackroomsConfig.ShadowCasterLayer;
+        EdgeCollider2D ec = go.AddComponent<EdgeCollider2D>();
+        Il2CppStructArray<Vector2> arr = new(5)
+        {
+            [0] = new Vector2(-0.5f, -0.5f),
+            [1] = new Vector2(0.5f, -0.5f),
+            [2] = new Vector2(0.5f, 0.5f),
+            [3] = new Vector2(-0.5f, 0.5f),
+            [4] = new Vector2(-0.5f, -0.5f)
         };
         ec.points = arr;
         _casters.Add(go);
