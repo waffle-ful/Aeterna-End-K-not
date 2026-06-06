@@ -2152,10 +2152,14 @@ public static class BackroomsLobby
 
                 break;
             case "inset":
-                // skeleton (壁中心線) 方式では inset つまみは廃止 (caster は常に壁中心)。互換のため受けるが no-op。
-                _occludersDirty = true;
-                Utils.SendMessage("skeleton 方式に変更したため inset は無効です (caster は常に壁の中心線)", pid);
+            {
+                // 二重壁 caster の面位置スケール。1.0=壁の可視面ぴったり、>1=影を壁から離す、<1=壁中心へ寄せる。
+                float sc = args is { Length: >= 3 } && float.TryParse(args[2], out float scv) ? Mathf.Max(0.05f, scv) : 1f;
+                BackroomsCasters.FaceScale = sc;
+                _occludersDirty = true; // 面位置は collider に焼くので rebuild が要る
+                Utils.SendMessage($"caster 面位置 scale = {sc:F2} (1.0=壁面ぴったり / >1=影を壁から離す / <1=壁中心へ)。rebuild しました", pid);
                 break;
+            }
             case "origin":
             {
                 // 影発射位置 (light origin) の微調整。body center に (dx,dy) を足す。

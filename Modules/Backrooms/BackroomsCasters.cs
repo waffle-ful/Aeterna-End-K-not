@@ -39,10 +39,15 @@ public static class BackroomsCasters
     private static readonly List<GameObject> _casters = [];
     private static readonly List<RunCaster> _runs = [];
 
+    // 面位置の微調整スケール (/bbshadow inset)。1.0=壁の可視面(AABB 半幅)ぴったり、>1=外へ離す、<1=壁中心へ寄せる。
+    // 既定 1.0 で「影が壁面から発射」。WallV(可視半幅0.225)を cell 端(0.5)に置くと影が壁から離れる問題の直し。
+    public static float FaceScale = 1f;
+
     // 占有格子 + run 候補バッファ (再利用で alloc 回避。Rebuild は _occludersDirty 時のみ)。
+    // half = run に垂直方向の可視半幅 (H run→halfY, V run→halfX)。面を cell 端でなく可視壁面に置くため。
     private static readonly HashSet<long> _cells = [];
-    private static readonly List<(int key, int cell)> _hCells = []; // 水平 run 候補: key=row iy, cell=ix
-    private static readonly List<(int key, int cell)> _vCells = []; // 垂直 run 候補: key=col ix, cell=iy
+    private static readonly List<(int key, int cell, float half)> _hCells = []; // 水平 run 候補: key=row iy, cell=ix, half=halfY
+    private static readonly List<(int key, int cell, float half)> _vCells = []; // 垂直 run 候補: key=col ix, cell=iy, half=halfX
 
     // WallAabbs (per-cell grid box) から二重壁 far-face caster を作り直す。壁が cull/stream で変わった時だけ呼ぶ。
     public static void Rebuild(List<(float cx, float cy, float halfX, float halfY)> wallCells)
@@ -55,6 +60,8 @@ public static class BackroomsCasters
         foreach (var w in wallCells) _cells.Add(PackCell(Mathf.RoundToInt(w.cx), Mathf.RoundToInt(w.cy)));
 
         // 各壁セルを「水平壁か / 垂直壁か」で run 候補に振り分ける (角は両方・直線は片方=ヒゲ防止)
+        // half = 面位置に使う可視半幅: 水平 run は y 方向 (halfY)、垂直 run は x 方向 (halfX)。
+        //   WallH は halfX=halfY=0.5 (cell 全面)、WallV は halfX=0.225 (薄い縦壁) → V 面が壁面に密着。
         _hCells.Clear();
         _vCells.Clear();
         foreach (var w in wallCells)
@@ -63,8 +70,8 @@ public static class BackroomsCasters
             bool hasH = _cells.Contains(PackCell(ix + 1, iy)) || _cells.Contains(PackCell(ix - 1, iy));
             bool hasV = _cells.Contains(PackCell(ix, iy + 1)) || _cells.Contains(PackCell(ix, iy - 1));
             bool isolated = !hasH && !hasV;
-            if (hasH || isolated) _hCells.Add((iy, ix)); // 水平 run へ
-            if (hasV || isolated) _vCells.Add((ix, iy)); // 垂直 run へ
+            if (hasH || isolated) _hCells.Add((iy, ix, w.halfY)); // 水平 run へ (面は y=iy±halfY)
+            if (hasV || isolated) _vCells.Add((ix, iy, w.halfX)); // 垂直 run へ (面は x=ix±halfX)
         }
 
         int hRuns = EmitRuns(_hCells, horizontal: true);
@@ -73,9 +80,10 @@ public static class BackroomsCasters
         Logger.Info($"WallCasters rebuilt (double-wall far-face): {_casters.Count} GOs / {_runs.Count} runs (h={hRuns} v={vRuns}) from {_cells.Count} cells", Tag);
     }
 
-    // run 候補 (key=固定軸 integer 中心, cell=可変軸セル)。連続 cell をマージして両面 caster を spawn。
-    // run は cell [start..end] を覆い、面は cell 端まで (start-0.5 .. end+0.5) = 角で隣 run と頂点一致。
-    private static int EmitRuns(List<(int key, int cell)> cells, bool horizontal)
+    // run 候補 (key=固定軸 integer 中心, cell=可変軸セル, half=垂直可視半幅)。連続 cell をマージして両面 caster を spawn。
+    // run-axis は cell 端 (start-0.5 .. end+0.5) = 角で隣 run と頂点一致。垂直方向の面は key ± half*FaceScale =
+    // 可視壁面 (cell 端でなく) に置く → 影が壁面から発射。half が違う cell (例 WallH 0.5 と WallV 0.225) は run を割る。
+    private static int EmitRuns(List<(int key, int cell, float half)> cells, bool horizontal)
     {
         if (cells.Count == 0) return 0;
         cells.Sort((a, b) => a.key != b.key ? a.key.CompareTo(b.key) : a.cell.CompareTo(b.cell));
@@ -84,27 +92,29 @@ public static class BackroomsCasters
         for (int i = 0; i < cells.Count;)
         {
             int key = cells[i].key, start = cells[i].cell, end = start, j = i + 1;
-            while (j < cells.Count && cells[j].key == key && cells[j].cell <= end + 1)
+            float half = cells[i].half;
+            while (j < cells.Count && cells[j].key == key && cells[j].cell <= end + 1 && Mathf.Abs(cells[j].half - half) < 0.01f)
             {
                 if (cells[j].cell > end) end = cells[j].cell;
                 j++;
             }
 
-            float lo = start - 0.5f;  // run の始端 (先頭セルの外辺)
-            float hi = end + 0.5f;     // run の終端 (末尾セルの外辺)
-            float gate = key;          // 中心線 (player < gate の側で Hi 面が遠面)
+            float lo = start - 0.5f;          // run の始端 (先頭セルの外辺)
+            float hi = end + 0.5f;             // run の終端 (末尾セルの外辺)
+            float gate = key;                  // 中心線 (player < gate の側で Hi 面が遠面)
+            float face = half * FaceScale;     // 中心からの面距離 (= 可視壁面)。既定 1.0 で AABB 半幅ぴったり。
 
-            // 両面を spawn (Lo=gate-0.5 面 / Hi=gate+0.5 面)。初期は両方 enabled、毎フレ gating で片方に絞る。
+            // 両面を spawn (Lo=gate-face 面 / Hi=gate+face 面)。初期は両方 enabled、毎フレ gating で片方に絞る。
             Collider2D loCol, hiCol;
             if (horizontal)
             {
-                loCol = SpawnSegment(new Vector2(lo, key - 0.5f), new Vector2(hi, key - 0.5f)); // 下面
-                hiCol = SpawnSegment(new Vector2(lo, key + 0.5f), new Vector2(hi, key + 0.5f)); // 上面
+                loCol = SpawnSegment(new Vector2(lo, key - face), new Vector2(hi, key - face)); // 下面
+                hiCol = SpawnSegment(new Vector2(lo, key + face), new Vector2(hi, key + face)); // 上面
             }
             else
             {
-                loCol = SpawnSegment(new Vector2(key - 0.5f, lo), new Vector2(key - 0.5f, hi)); // 左面
-                hiCol = SpawnSegment(new Vector2(key + 0.5f, lo), new Vector2(key + 0.5f, hi)); // 右面
+                loCol = SpawnSegment(new Vector2(key - face, lo), new Vector2(key - face, hi)); // 左面
+                hiCol = SpawnSegment(new Vector2(key + face, lo), new Vector2(key + face, hi)); // 右面
             }
 
             _runs.Add(new RunCaster { Lo = loCol, Hi = hiCol, Horizontal = horizontal, Gate = gate, State = 0 });
