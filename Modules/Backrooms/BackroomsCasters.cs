@@ -5,30 +5,22 @@ using UnityEngine;
 namespace EndKnot.Modules;
 
 // ============================================================================
-// Backrooms 壁の輪郭線シャドウキャスター生成 (Phase 2b)
+// Backrooms 壁のシャドウキャスター生成 (Phase 2b: back-edge 方式)
 //
-// 壁セル (BackroomsLobby.WallAabbs を整数セルにスナップした占有格子) の **境界辺** だけを
-// layer10 EdgeCollider2D 線分に変換する。バニラ GPU 影はこれを Physics2D で拾って遮蔽メッシュ化。
+// 「オブジェクトの作りの違い」= バニラは影 caster を壁の見える**面の「裏」**に置く。光が面に届いて
+// 面が照らされ、裏の caster がそこから奥を遮蔽する。我々が試した「前面/全周」caster は壁タイル全体を
+// 影の umbra に落とす (= 壁が真っ黒)。直し = caster を壁の**裏面 1 辺**だけにする。
+//   ・WallH (壁紙の面が下向き・上に dark band) → 裏面 = **上辺** (y=cy+0.5)。下の部屋から面が見え奥が暗い。
+//   ・WallV (0.45 幅・面が右向き) → 裏面 = **左辺** (x=cx-0.5)。右の部屋から面が見え奥が暗い。
+//   ・H/V は AABB の縦横比で判別 (WallH=正方 halfX>=halfY / WallV=0.45 幅 halfX<halfY)。
+//   ・裏面は全て半整数グリッド線上で端点がグリッド頂点一致 → 別 collider でも端点共有で角が連結。
+//   ・同一直線で連続する裏面を最大長 run にマージ → per-segment layer10 EdgeCollider2D。
 //
-// なぜ Phase 2a の「中心線」でなく「境界辺」か — 中心線方式の 2 つの欠陥を直す:
-//   ① 角で影が切れる: H 壁の水平中心線と V 壁の垂直中心線は端点を共有しない → 角に隙間。
-//      境界辺は全て半整数グリッド線上にあり端点がグリッド頂点で一致するので、別 collider でも
-//      端点共有で影が連続する (AU GPU 影は collider 跨ぎでも共有端点で繋がる)。
-//   ② 影が壁の中央から出る: 中心線はセル中央を通る。境界辺はセル境界 (= 壁の面) にあるので
-//      影が壁の面から出る。
+// ※これは「単面」: 壁は面側から見ると照らされ、裏側から見ると暗い (部屋は 2 面 lit + 2 面 dark)。
+//   バニラは部屋ごとに壁=2 枚背中合わせ (全周 lit) なので完全一致ではない。まず「面の裏に caster=面が光る」
+//   機構を最小コストで画面検証する版。OK なら単面 vs 二重壁 (バニラ正確) をユーザーが選ぶ。
 //
-// アルゴリズム (境界辺キャンセル → 共線マージ → per-segment collider):
-//   1. WallAabbs 中心を RoundToInt して full-cell 占有格子 HashSet を作る。薄い WallV (0.45 幅) も
-//      full-cell 扱い: 0.45 footprint を使うと H/V 幅不一致で角がズレる = 直したい不具合そのもの。
-//      full-cell だと薄い壁の手前に半セル弱の暗がりが出るが「壁が手前の床を少し暗くする」自然な見え方。
-//   2. 各壁セルの 4 面のうち隣セルが壁でない面だけを境界辺として出す。2 壁セル間の共有面は内部辺
-//      として自動キャンセル — これが旧 per-cell 塗り箱の blocky 黒バー (共有内辺の degenerate geometry) を消す。
-//   3. 同一直線上で連続する境界辺を最大長 run にマージ (collider 本数を ~20-40 に抑え GPU hits=100 に余裕)。
-//   4. 各 run を 2 点 layer10 EdgeCollider2D として出す。
-//
-// per-segment 短 collider にする理由: OverlapCircle は radius 圏内の collider しか返さないので、
-// GPU が collider の全辺を処理するか radius cull するか不明でも近傍辺しか pipeline に乗らない。
-// 巨大ループ 1 本だと OverlapCircle が必ず返す → 全辺処理に賭ける形になる。per-segment はその賭けが消える。
+// per-segment 短 collider の理由: OverlapCircle は radius 圏内しか返さないので GPU の辺処理仕様に依存しない。
 // ============================================================================
 public static class BackroomsCasters
 {
@@ -36,40 +28,40 @@ public static class BackroomsCasters
 
     private static readonly List<GameObject> _casters = [];
 
-    // 占有格子・境界辺の作業バッファ (再利用で alloc 回避。Rebuild は _occludersDirty 時のみで per-frame ではない)。
-    private static readonly HashSet<long> _cells = [];
+    // 裏面エッジの作業バッファ (再利用で alloc 回避。Rebuild は _occludersDirty 時のみで per-frame ではない)。
     private static readonly List<(int line, int cell)> _hEdges = []; // 水平辺: line=2*yWorld (整数化), cell=x column
     private static readonly List<(int line, int cell)> _vEdges = []; // 垂直辺: line=2*xWorld (整数化), cell=y row
 
-    // WallAabbs (per-cell grid box) から境界辺 caster を作り直す。壁が cull/stream で変わった時だけ呼ぶ。
-    // 引数は WallAabbs そのもの (cx,cy のみ使用。halfX/halfY は full-cell 占有のため無視)。
+    // WallAabbs (per-cell grid box) から壁の裏面 1 辺ずつ caster を作り直す。壁が cull/stream で変わった時だけ呼ぶ。
     public static void Rebuild(List<(float cx, float cy, float halfX, float halfY)> wallCells)
     {
         Clear();
         if (wallCells == null || wallCells.Count == 0) return;
 
-        // 1. full-cell 占有格子 (中心を整数セルにスナップ。collider offset は 0 なので RoundToInt が exact)
-        _cells.Clear();
-        foreach (var w in wallCells)
-            _cells.Add(PackCell(Mathf.RoundToInt(w.cx), Mathf.RoundToInt(w.cy)));
-
-        // 2. 境界辺抽出 — 隣セルが壁でない面のみ出す (共有内部辺は出さない = 自動キャンセル)
+        // 各壁セルの裏面 1 辺だけを出す。H/V は AABB 縦横比で判別。
         _hEdges.Clear();
         _vEdges.Clear();
+        int hCells = 0, vCells = 0;
         foreach (var w in wallCells)
         {
             int ix = Mathf.RoundToInt(w.cx), iy = Mathf.RoundToInt(w.cy);
-            if (!_cells.Contains(PackCell(ix, iy - 1))) _hEdges.Add((2 * iy - 1, ix)); // 下面 yWorld=iy-0.5
-            if (!_cells.Contains(PackCell(ix, iy + 1))) _hEdges.Add((2 * iy + 1, ix)); // 上面 yWorld=iy+0.5
-            if (!_cells.Contains(PackCell(ix - 1, iy))) _vEdges.Add((2 * ix - 1, iy)); // 左面 xWorld=ix-0.5
-            if (!_cells.Contains(PackCell(ix + 1, iy))) _vEdges.Add((2 * ix + 1, iy)); // 右面 xWorld=ix+0.5
+            if (w.halfX < w.halfY) // WallV (0.45 幅) → 裏面 = 左辺 x=ix-0.5
+            {
+                _vEdges.Add((2 * ix - 1, iy));
+                vCells++;
+            }
+            else // WallH (正方) → 裏面 = 上辺 y=iy+0.5
+            {
+                _hEdges.Add((2 * iy + 1, ix));
+                hCells++;
+            }
         }
 
-        // 3+4. 共線マージ → per-segment EdgeCollider2D
+        // 共線マージ → per-segment EdgeCollider2D
         int hRuns = EmitRuns(_hEdges, horizontal: true);
         int vRuns = EmitRuns(_vEdges, horizontal: false);
 
-        Logger.Info($"WallCasters rebuilt: {_casters.Count} segs (h={hRuns} v={vRuns}) from {wallCells.Count} cells / {_cells.Count} uniq", Tag);
+        Logger.Info($"WallCasters rebuilt (back-edge): {_casters.Count} segs (hRun={hRuns} vRun={vRuns}) from H={hCells} V={vCells} cells", Tag);
     }
 
     // 同一 line 上で cell index が連続する境界辺を最大長 run にマージし、各 run を EdgeCollider2D として出す。
@@ -126,9 +118,6 @@ public static class BackroomsCasters
         ec.points = arr;
         _casters.Add(go);
     }
-
-    // (x,y) 整数セルを long に詰める。x を上位 32bit、y を下位 32bit。
-    private static long PackCell(int x, int y) => ((long)x << 32) ^ (uint)y;
 
     public static int Clear()
     {

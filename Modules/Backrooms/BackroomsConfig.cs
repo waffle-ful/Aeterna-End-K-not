@@ -7,8 +7,10 @@ namespace EndKnot.Modules;
 // runtime でこのフラグを立て、custom 視界を抑制してバニラ影ドライバに切り替える。
 public static class BackroomsConfig
 {
-    // 新旧マスタゲート。true でバニラ GPU 影ドライバ起動 + custom 視界抑制、false で従来通り。
-    public static bool UseVanillaShadow;
+    // 新旧マスタゲート。true でバニラ GPU 影ドライバ起動 + custom 視界抑制、false で従来のカスタム視界。
+    // Phase 2b back-edge テスト中は true: 入場で自動的に「caster を壁の裏面に置く」版を画面検証。
+    // /bbshadow off で従来のカスタム視界に戻せる。
+    public static bool UseVanillaShadow = true;
 
     // 影 caster を載せるレイヤー (Constants.ShadowMask に含まれる Shadow レイヤー)。
     public const int ShadowCasterLayer = 10;
