@@ -39,9 +39,11 @@ public static class BackroomsCasters
     private static readonly List<GameObject> _casters = [];
     private static readonly List<RunCaster> _runs = [];
 
-    // 面位置の微調整スケール (/bbshadow inset)。1.0=壁の可視面(AABB 半幅)ぴったり、>1=外へ離す、<1=壁中心へ寄せる。
-    // 既定 1.0 で「影が壁面から発射」。WallV(可視半幅0.225)を cell 端(0.5)に置くと影が壁から離れる問題の直し。
-    public static float FaceScale = 1f;
+    // 面位置の微調整スケール (/bbshadow inset <V> [H])。V=垂直 run(縦壁の左右面)・H=水平 run(横壁の上下面) を個別に。
+    // 1.0=可視壁面(min 半幅)ぴったり、>1=影を壁から離す、<1=壁中心へ寄せる。
+    // 既定 V=0.6 / H=0.8 はユーザー実機較正値 (2026-06-09・影が壁に密着してちょうど良いと確認)。
+    public static float FaceScaleV = 0.6f;
+    public static float FaceScaleH = 0.8f;
 
     // 占有格子 + run 候補バッファ (再利用で alloc 回避。Rebuild は _occludersDirty 時のみ)。
     // half = run に垂直方向の可視半幅 (H run→halfY, V run→halfX)。面を cell 端でなく可視壁面に置くため。
@@ -61,7 +63,12 @@ public static class BackroomsCasters
 
         // 各壁セルを「水平壁か / 垂直壁か」で run 候補に振り分ける (角は両方・直線は片方=ヒゲ防止)
         // half = 面位置に使う可視半幅: 水平 run は y 方向 (halfY)、垂直 run は x 方向 (halfX)。
-        //   WallH は halfX=halfY=0.5 (cell 全面)、WallV は halfX=0.225 (薄い縦壁) → V 面が壁面に密着。
+        //   WallH は halfX=halfY=0.5 (cell 全面)、WallV は halfX=0.225 (薄い縦壁)。
+        // ★ジレンマと解 (min-half / no-split): 縦 run に角の WallH(0.5) が混じると、
+        //   ・半幅一致でマージ条件を割ると run が途切れて角に隙間 → 奥が透ける (旧 93020f88)
+        //   ・全部 0.5 にそろえると薄 V 柱の面が cell 端へ離れて見た目と影が分離 + 反対側の床が透ける (今朝の退行)
+        //   → EmitRuns で「半幅で run を割らず、run 内の最小可視半幅 (min) に面をそろえる」。
+        //     薄 V 柱は 0.225 に密着、角 WallH の far 端 ~0.28u だけ僅かに暗くなる (角なので目立たない)・透けは出ない。
         _hCells.Clear();
         _vCells.Clear();
         foreach (var w in wallCells)
@@ -81,8 +88,10 @@ public static class BackroomsCasters
     }
 
     // run 候補 (key=固定軸 integer 中心, cell=可変軸セル, half=垂直可視半幅)。連続 cell をマージして両面 caster を spawn。
-    // run-axis は cell 端 (start-0.5 .. end+0.5) = 角で隣 run と頂点一致。垂直方向の面は key ± half*FaceScale =
-    // 可視壁面 (cell 端でなく) に置く → 影が壁面から発射。half が違う cell (例 WallH 0.5 と WallV 0.225) は run を割る。
+    // run-axis は cell 端 (start-0.5 .. end+0.5) = 角で隣 run と頂点一致 (面位置を内へ寄せても run-axis は cell 端のまま)。
+    // ★half で run を割らない: 連続セルは隣接だけでマージし、面距離は run 内の最小可視半幅 (min) を使う。
+    //   → 薄 V 柱 (0.225) に角 WallH (0.5) が混じっても面は 0.225 に密着 (面ジャンプ=「3 種類目の壁」が消える)。
+    //   min は決して lit スリバーを残さない (面がセル可視半幅より内側=far 端を僅かに余計に暗くするだけ)。
     private static int EmitRuns(List<(int key, int cell, float half)> cells, bool horizontal)
     {
         if (cells.Count == 0) return 0;
@@ -92,29 +101,43 @@ public static class BackroomsCasters
         for (int i = 0; i < cells.Count;)
         {
             int key = cells[i].key, start = cells[i].cell, end = start, j = i + 1;
-            float half = cells[i].half;
-            while (j < cells.Count && cells[j].key == key && cells[j].cell <= end + 1 && Mathf.Abs(cells[j].half - half) < 0.01f)
+            float half = cells[i].half; // run 全体で共有する最小可視半幅 (以下のマージで min を取る)
+            while (j < cells.Count && cells[j].key == key && cells[j].cell <= end + 1)
             {
                 if (cells[j].cell > end) end = cells[j].cell;
+                half = Mathf.Min(half, cells[j].half); // 角 WallH 0.5 が混じっても薄 V 0.225 にそろえる
                 j++;
             }
 
             float lo = start - 0.5f;          // run の始端 (先頭セルの外辺)
             float hi = end + 0.5f;             // run の終端 (末尾セルの外辺)
             float gate = key;                  // 中心線 (player < gate の側で Hi 面が遠面)
-            float face = half * FaceScale;     // 中心からの面距離 (= 可視壁面)。既定 1.0 で AABB 半幅ぴったり。
+            float face = half * (horizontal ? FaceScaleH : FaceScaleV); // 中心からの面距離。H/V 個別スケール
 
-            // 両面を spawn (Lo=gate-face 面 / Hi=gate+face 面)。初期は両方 enabled、毎フレ gating で片方に絞る。
+            // 両面を spawn。初期は両方 enabled、毎フレ gating で片方に絞る。
+            // ★AU の GPU 影 caster は片面 (winding 依存): edge は light が「front 法線側」にある時だけ影を落とす
+            //   (= 法線が光を向く時だけ反対側へ影。実機検証で確定した規約)。
+            // ── 水平壁 (WallH): face は南向き。「裏から見ると壁が暗い」(バニラ AU 風・ユーザー選択 2026-06-10)。
+            //   遮蔽線を常に壁の北端 (key+face) に置く: 前(南)から見ると壁は線の手前=lit、裏(北)から見ると壁は
+            //   線の奥=影に沈む。両面とも北端に置き winding だけ反転して光の向きに応じ遠側へ影を出す:
+            //     Hi=表向き(法線 -y / player 南で active→影は北、壁 lit) ・ Lo=裏向き(法線 +y / player 北で active→影は南=壁を覆い暗く)。
+            //   → 旧 far-face の「南端に cyan 発射→明るい壁の真下に影が来て壁が浮く」を解消。
+            //   WallHDarkFromBehind=false で旧 far-face (Lo=南端=両側 lit) に戻せる (/bbshadow hback で live A/B)。
+            // ── 垂直壁 (WallV): 実機で漏れ報告無し・far-face のまま (Lo=左面 / Hi=右面)。V を反転すると壊れる (観察 > 理屈)。
+            // vis 色: Lo 面=シアン / Hi 面=マゼンタ (両 emission 線を区別して目視)
+            Color loVis = new(0f, 1f, 1f, 0.9f), hiVis = new(1f, 0f, 1f, 0.9f);
             Collider2D loCol, hiCol;
             if (horizontal)
             {
-                loCol = SpawnSegment(new Vector2(lo, key - face), new Vector2(hi, key - face)); // 下面
-                hiCol = SpawnSegment(new Vector2(lo, key + face), new Vector2(hi, key + face)); // 上面
+                // 裏暗モード=北端 (key+face)、旧 far-face=南端 (key-face)。winding は両方とも反転 (法線 +y) のまま。
+                float loY = BackroomsConfig.WallHDarkFromBehind ? key + face : key - face;
+                loCol = SpawnSegment(new Vector2(hi, loY), new Vector2(lo, loY), loVis);              // 裏向き面 (winding 反転→法線 +y)
+                hiCol = SpawnSegment(new Vector2(lo, key + face), new Vector2(hi, key + face), hiVis); // 表向き面・北端 (法線 -y)
             }
             else
             {
-                loCol = SpawnSegment(new Vector2(key - face, lo), new Vector2(key - face, hi)); // 左面
-                hiCol = SpawnSegment(new Vector2(key + face, lo), new Vector2(key + face, hi)); // 右面
+                loCol = SpawnSegment(new Vector2(key - face, lo), new Vector2(key - face, hi), loVis); // 左面
+                hiCol = SpawnSegment(new Vector2(key + face, lo), new Vector2(key + face, hi), hiVis); // 右面
             }
 
             _runs.Add(new RunCaster { Lo = loCol, Hi = hiCol, Horizontal = horizontal, Gate = gate, State = 0 });
@@ -125,8 +148,10 @@ public static class BackroomsCasters
         return runs;
     }
 
-    // プレイヤー位置に応じて各 run の「遠い面」だけ active にする (毎フレ RunPerFrameUpdates から)。
-    // player が gate より小さい側に居る → 遠い面は Hi 面 (gate+0.5)。逆は Lo 面。
+    // プレイヤー位置に応じて各 run の片面だけ active にする (毎フレ RunPerFrameUpdates から)。
+    // player が gate より小さい側に居る → Hi 面、逆は Lo 面。
+    //   V (far-face): Hi=遠い面 (壁を lit に保つ)。
+    //   H (裏暗モード): Hi=表向き(player 南=前)・Lo=裏向き(player 北=裏で壁を影に沈める)。両面とも北端。
     public static void UpdateGating(float px, float py)
     {
         foreach (RunCaster rc in _runs)
@@ -142,7 +167,7 @@ public static class BackroomsCasters
     }
 
     // 1 本の直線セグメントを layer10 の 2 点 EdgeCollider2D として spawn。GO は中点・点は local。
-    private static Collider2D SpawnSegment(Vector2 p0, Vector2 p1)
+    private static Collider2D SpawnSegment(Vector2 p0, Vector2 p1, Color visColor)
     {
         Vector2 mid = (p0 + p1) * 0.5f;
         GameObject go = new("BBWallCaster");
@@ -156,7 +181,45 @@ public static class BackroomsCasters
         };
         ec.points = arr;
         _casters.Add(go);
+
+        // 診断: 影 caster の「発射線」を可視化 (/bbshadow casters on)。emission 位置を実機で目視する用。
+        if (Visualize)
+        {
+            Vector2 d = p1 - p0;
+            float len = d.magnitude;
+            float ang = Mathf.Atan2(d.y, d.x) * Mathf.Rad2Deg;
+            GameObject vis = new("BBCasterVis");
+            vis.transform.SetParent(go.transform, false);
+            vis.transform.localPosition = Vector3.zero;
+            vis.transform.localRotation = Quaternion.Euler(0f, 0f, ang);
+            vis.transform.localScale = new Vector3(Mathf.Max(len, 0.05f), 0.07f, 1f);
+            SpriteRenderer sr = vis.AddComponent<SpriteRenderer>();
+            sr.sprite = LineSprite;
+            sr.color = visColor;
+            sr.sortingLayerName = "Default";
+            sr.sortingOrder = 120; // 全部の前に出す
+        }
+
         return ec;
+    }
+
+    // 影 caster 発射線の可視化フラグ (/bbshadow casters on|off)。トグル時は _occludersDirty で rebuild が要る。
+    public static bool Visualize;
+
+    private static Sprite _lineSprite;
+    private static Sprite LineSprite
+    {
+        get
+        {
+            if (_lineSprite != null) return _lineSprite;
+            Texture2D tex = new(2, 2, TextureFormat.RGBA32, false) { filterMode = FilterMode.Point };
+            Color[] px = [Color.white, Color.white, Color.white, Color.white];
+            tex.SetPixels(px);
+            tex.Apply();
+            _lineSprite = Sprite.Create(tex, new Rect(0, 0, 2, 2), new Vector2(0.5f, 0.5f), 2f);
+            _lineSprite.hideFlags |= HideFlags.HideAndDontSave;
+            return _lineSprite;
+        }
     }
 
     // 診断: 現在 active な遠面の本数 (Hi 面 / Lo 面)。dark-walls 報告時に「gating 未実行 vs 効いてない」を切り分け。

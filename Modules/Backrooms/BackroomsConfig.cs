@@ -28,4 +28,15 @@ public static class BackroomsConfig
     // 7 に広げると Backrooms タイル (Sprites/Default) も影を受ける (LevelImposter と同方式・実機確認済み)。
     // バニラ影は per-sprite 受信 (スクリーン overlay でなく _Mask gated) なので、これが Backrooms 影の鍵。
     public const float ShadowReceiveMask = 7f;
+
+    // WallH 上端 dark band (BuildWallHComposite の「立体感の源」20% band) の ON/OFF。
+    // 「壁が浮いて見える」因縁問題の切り分け用 (band は player 位置に依らず北端固定なので、北側から
+    // 見ると壁本体との間に暗い帯が入って浮いて見える疑い)。/bbshadow band on|off で実機 live トグル。
+    public static bool ShowWallHTopBand = true;
+
+    // 横壁(H)の「裏から見ると壁が暗い」(バニラ AU 風) モード。true=遮蔽線を壁の北端に置き、裏(北)から
+    // 見ると壁本体が影に沈む → 「壁が影の上に浮く」を解消 (ユーザー選択 2026-06-10)。
+    // false=旧 far-face (Lo を南端に置き両側から壁を lit に保つ・裏から見ると浮く)。
+    // /bbshadow hback on|off で live トグル (caster を rebuild)。WallV は対象外 (常に far-face)。
+    public static bool WallHDarkFromBehind = true;
 }

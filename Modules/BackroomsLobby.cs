@@ -562,7 +562,7 @@ public static class BackroomsLobby
         faceSr.sortingLayerName = "Default";
         faceSr.sortingOrder = -5;
 
-        // 上端 20% の dark band (立体感の源)
+        // 上端 20% の dark band (立体感の源)。ShowWallHTopBand で ON/OFF (「壁が浮く」切り分け用)。
         GameObject top = new("WallHTopBand");
         top.transform.SetParent(parent.transform, false);
         top.transform.localPosition = new Vector3(0f, 0.4f, 0f);
@@ -572,6 +572,7 @@ public static class BackroomsLobby
         topSr.color = WallDarkColor;
         topSr.sortingLayerName = "Default";
         topSr.sortingOrder = -3;
+        topSr.enabled = BackroomsConfig.ShowWallHTopBand;
 
         // 下端の contact shadow (壁が床に接する根本の AO 風暗み)
         AddWallContactShadow(parent, 1f);
@@ -2153,38 +2154,67 @@ public static class BackroomsLobby
                 break;
             case "inset":
             {
-                // 二重壁 caster の面位置スケール。1.0=壁の可視面ぴったり、>1=影を壁から離す、<1=壁中心へ寄せる。
-                float sc = args is { Length: >= 3 } && float.TryParse(args[2], out float scv) ? Mathf.Max(0.05f, scv) : 1f;
-                BackroomsCasters.FaceScale = sc;
-                _occludersDirty = true; // 面位置は collider に焼くので rebuild が要る
-                Utils.SendMessage($"caster 面位置 scale = {sc:F2} (1.0=壁面ぴったり / >1=影を壁から離す / <1=壁中心へ)。rebuild しました", pid);
+                // 二重壁 caster の面位置スケール。V=垂直 run(縦壁の左右面)・H=水平 run(横壁の上下面) を個別に。
+                // 1.0=可視壁面ぴったり、>1=影を壁から離す、<1=壁中心へ寄せる。/bbshadow inset <V> [H]
+                if (args is { Length: >= 3 } && float.TryParse(args[2], out float vScale))
+                {
+                    BackroomsCasters.FaceScaleV = Mathf.Max(0.05f, vScale);
+                    if (args is { Length: >= 4 } && float.TryParse(args[3], out float hScale))
+                        BackroomsCasters.FaceScaleH = Mathf.Max(0.05f, hScale);
+                    _occludersDirty = true; // 面位置は collider に焼くので rebuild が要る
+                    Utils.SendMessage($"caster 面位置 scale V={BackroomsCasters.FaceScaleV:F2} H={BackroomsCasters.FaceScaleH:F2} (1.0=壁面ぴったり / >1=離す / <1=中心へ)。rebuild しました", pid);
+                }
+                else
+                    Utils.SendMessage($"現在 V={BackroomsCasters.FaceScaleV:F2} H={BackroomsCasters.FaceScaleH:F2}。指定: /bbshadow inset <V> [H] (例: inset 1.0 0.8)", pid);
+
                 break;
             }
             case "origin":
+                // ★ロビーでは no-op (実機確定)。AU の GPU 光源はプレイヤーの transform から駆動され、
+                //   Render に渡す origin 引数を無視する。offset は set されてもログに出るだけで影は動かない。
+                //   影と壁のズレは「caster の面位置」(= /bbshadow inset) で詰める。origin はもう触らないこと。
+                Utils.SendMessage("origin はロビーでは無効です (AU が光源をプレイヤー固定で駆動し origin 引数を無視)。影の位置調整は /bbshadow inset を使ってください", pid);
+                break;
+            case "band":
             {
-                // 影発射位置 (light origin) の微調整。body center に (dx,dy) を足す。
-                //   1 引数 = dy のみ (縦), 2 引数 = dx dy。"reset"/"off" で 0,0。
-                if (args is { Length: >= 3 } && (args[2].Equals("reset", StringComparison.OrdinalIgnoreCase) || args[2].Equals("off", StringComparison.OrdinalIgnoreCase)))
+                // 「上端 dark band」を live トグル。WallH 用 (WallHTopBand) + WallV 終端キャップ用 (WallVBottomCapBand) 両方。
+                // contact shadow は「浮き防止 (接地影)」なので触らない (消すと逆に浮く)。
+                // 壁Vの終点キャップは上に柱が続くのに band を載せている → band が柱とキャップの間に暗い帯を作り
+                // キャップが浮く疑い。OFF で壁V終点の浮きが消えれば band が原因確定 → 本実装で band を条件付き除去。
+                bool on = !(args is { Length: >= 3 } && args[2].Equals("off", StringComparison.OrdinalIgnoreCase));
+                BackroomsConfig.ShowWallHTopBand = on;
+                int nh = 0, nv = 0;
+                foreach (GameObject go in SpawnedTiles)
                 {
-                    BackroomsShadow.SetOriginOffset(0f, 0f);
-                    Utils.SendMessage("origin offset を (0,0) にリセット", pid);
-                }
-                else if (args is { Length: >= 4 } && float.TryParse(args[2], out float ox) && float.TryParse(args[3], out float oy))
-                {
-                    BackroomsShadow.SetOriginOffset(ox, oy);
-                    Utils.SendMessage($"origin offset = ({ox:F2},{oy:F2}) (body center に加算)。影発射位置を実機で確認", pid);
-                }
-                else if (args is { Length: >= 3 } && float.TryParse(args[2], out float oyOnly))
-                {
-                    BackroomsShadow.SetOriginOffset(0f, oyOnly);
-                    Utils.SendMessage($"origin offset = (0,{oyOnly:F2}) (縦のみ)。横も指定は /bbshadow origin <dx> <dy>", pid);
-                }
-                else
-                {
-                    Vector2 cur = BackroomsShadow.OriginOffset;
-                    Utils.SendMessage($"現在 origin offset = ({cur.x:F2},{cur.y:F2})。指定: /bbshadow origin <dy> または <dx> <dy>、解除=/bbshadow origin reset", pid);
+                    if (go == null) continue;
+                    Transform bandH = go.transform.Find("WallHTopBand");
+                    if (bandH != null && bandH.GetComponent<SpriteRenderer>() is { } hsr) { hsr.enabled = on; nh++; }
+                    Transform bandV = go.transform.Find("WallVBottomCapBand");
+                    if (bandV != null && bandV.GetComponent<SpriteRenderer>() is { } vsr) { vsr.enabled = on; nv++; }
                 }
 
+                Utils.SendMessage($"上端 dark band = {(on ? "ON" : "OFF")} (WallH {nh} / WallV終点 {nv})。OFF で壁V終点の浮きが消えれば band が原因確定です", pid);
+                break;
+            }
+            case "hback":
+            {
+                // 横壁(H)の「裏から見ると壁が暗い」(バニラ AU 風) モードの live トグル。
+                // ON=遮蔽線を壁の北端に置き、裏(北)から壁が影に沈む (浮き解消)。OFF=旧 far-face (両側 lit・裏で浮く)。
+                bool on = !(args is { Length: >= 3 } && args[2].Equals("off", StringComparison.OrdinalIgnoreCase));
+                BackroomsConfig.WallHDarkFromBehind = on;
+                _occludersDirty = true; // caster の発射位置を焼き直すため rebuild
+                Utils.SendMessage($"横壁の裏=暗 (バニラ風) = {(on ? "ON" : "OFF (旧 far-face: 両側 lit)")}。rebuild しました。壁の裏に回って目視してください", pid);
+                break;
+            }
+            case "casters":
+            {
+                // 影 caster の「発射線」を可視化。シアン=Lo面(下/左) / マゼンタ=Hi面(上/右)。
+                // gating で active な面の collider が enable される (線は両方出るが影は active 面だけ)。
+                // 壁V終点の「浮き」が emission 線とどう対応するか実機で目視する用。
+                bool on = !(args is { Length: >= 3 } && args[2].Equals("off", StringComparison.OrdinalIgnoreCase));
+                BackroomsCasters.Visualize = on;
+                _occludersDirty = true; // 線は spawn 時に焼くので rebuild が要る
+                Utils.SendMessage($"caster 発射線の可視化 = {(on ? "ON (シアン=下/左面・マゼンタ=上/右面)" : "OFF")}。rebuild しました。壁V終点の浮きと線の位置をスクショで見せてください", pid);
                 break;
             }
             case "quad":
