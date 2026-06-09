@@ -193,6 +193,7 @@ internal static class ChatCommands
             new("BBWallDark", "[value]", Command.UsageLevels.Host, Command.UsageTimes.InLobby, BBWallDarkCommand, true, true),
             new("BBStreamBudget", "[spawn] [destroy]", Command.UsageLevels.Host, Command.UsageTimes.InLobby, BBStreamBudgetCommand, true, true),
             new("BBShadow", "[on|off|radius <r>|dark <v> [blur]|status]", Command.UsageLevels.Host, Command.UsageTimes.InLobby, BBShadowCommand, true, true),
+            new("BBZone", "[status|ratio <hall%> <gallery%>|merge <maze%> <hall%>|pillar <p%>]", Command.UsageLevels.Host, Command.UsageTimes.InLobby, BBZoneCommand, true, true),
             new("BBTestRoom", "[edge|box|both|off]", Command.UsageLevels.Host, Command.UsageTimes.InLobby, BBTestRoomCommand, true, true),
             new("Burst", "{count} [murder|protect] [none]", Command.UsageLevels.Host, Command.UsageTimes.Always, BurstCommand, true, true),
             new("Rehost", "", Command.UsageLevels.Host, Command.UsageTimes.InLobby, RehostCommand, true, true),
@@ -2488,6 +2489,11 @@ internal static class ChatCommands
     private static void BBShadowCommand(PlayerControl player, string text, string[] args)
     {
         BackroomsLobby.ShadowCommand(args, player.PlayerId);
+    }
+
+    private static void BBZoneCommand(PlayerControl player, string text, string[] args)
+    {
+        BackroomsLobby.ZoneCommand(args, player.PlayerId);
     }
 
     private static void BBTestRoomCommand(PlayerControl player, string text, string[] args)

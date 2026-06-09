@@ -1534,13 +1534,26 @@ public static class BackroomsLobby
         bool onBottomBorder = inRoomY == 0;
 
         // 部屋 merge: 隣接部屋と seeded で結合判定 → 壁ごと消滅して大きい部屋に
-        // (両側 Sector で同じ key を引くので両側 agree)。25% で merge → 6×6 単独 ≈ 56% / 12×6 等 ≈ 38% / 12×12 ≈ 6%
+        // (両側で同じ hash key を引くので両側 agree)。確率はマクロゾーン依存 (RoomsMerge* 参照):
+        // Maze=15% の密迷路 / Hall=88% の大広間 / Gallery=片方向 100% の回廊
         if (onLeftBorder && RoomsMergeHorizontal(roomX - 1, roomY, seed))
             onLeftBorder = false;
         if (onBottomBorder && RoomsMergeVertical(roomX, roomY - 1, seed))
             onBottomBorder = false;
 
-        if (!onLeftBorder && !onBottomBorder) return CellKind.Floor;
+        if (!onLeftBorder && !onBottomBorder)
+        {
+            // Hall ゾーンの部屋中心に柱: 孤立 WallH 1 セル = 見た目 (face+上端 band+contact shadow)・
+            // 衝突 (BoxCollider2D 1×1)・影 (BackroomsCasters の isolated 分岐) が全部自動成立。
+            // 部屋中心 (3,3) は境界から ≥2 セル → 残存壁ともドアとも隣接せず通行を塞がない。
+            // connector も不発 (南隣は常に部屋内部 Floor)。spawn 重なりは EnsureSpawnFloor が除去
+            if (inRoomX == PillarInRoomPos && inRoomY == PillarInRoomPos
+                && ClassifyZone(roomX, roomY, seed) == ZoneKind.Hall
+                && WallHash(roomX, roomY, seed, 'P') % 100u < PillarPercent)
+                return CellKind.WallH;
+
+            return CellKind.Floor;
+        }
 
         if (onLeftBorder)
         {
@@ -1561,21 +1574,66 @@ public static class BackroomsLobby
         return CellKind.WallV;
     }
 
-    // 部屋 merge 判定 (2026-05-23 追加): 旧 6×6 一律から可変サイズへ。
-    // 確率は両側部屋で同じ hash key 引くので両側 agree、整合性破綻無し
-    private const uint MergeProbability = 25; // %
+    // ── マクロゾーン (2026-06-10): 4×4 部屋 = 24×24 セル単位の構造バリエーション ──
+    // Maze=従来よりやや密な迷路 / Hall=内壁ほぼ消滅の大広間+柱 / GalleryH·V=6u 幅の長い回廊。
+    // ゾーンは merge 確率を変えるだけ (merge は壁を消す方向のみ) なので、merge しない境界には
+    // 現行のドア保証 (1 開口) が必ず残る → どのゾーン構成でも全体連結は構造的に保証される。
+    // /bbzone で実機 live 調整可 (マップ構造定数なので変更後は同 seed 全 regen が要る) のため
+    // 確率系は const でなく static。
+    private const int MacroSize = 4;             // ゾーン 1 個 = 4×4 部屋
+    private static uint ZoneHallPercent = 30;    // 大広間+柱
+    private static uint ZoneGalleryPercent = 25; // 回廊 (向きは hash 別ビットで H/V 半々)。残り 45% が Maze
+    private static uint MazeMergeProb = 15;      // %。旧一律 MergeProbability=25 より密な迷路
+    private static uint HallMergeProb = 88;      // %。内壁ほぼ消滅 → 柱フィールドの大広間
+    private static uint PillarPercent = 70;      // Hall の部屋中心に柱が立つ確率 %
+    private const int PillarInRoomPos = 3;       // 部屋中心 (境界から ≥2 セル → 残存壁・ドアと非隣接)
 
+    private enum ZoneKind { Maze, Hall, GalleryH, GalleryV }
+
+    // 部屋 merge 判定 (2026-05-23 追加 / 2026-06-10 ゾーン対応): 確率は境界両側の部屋ゾーンの
+    // h(v) 確率の平均。hash key は従来どおり境界固有なので決定性・両側 agree は不変。
+    // ゾーン境界では平均でなだらかに遷移 (例: Hall 88 × Maze 15 → 51%)
     private static bool RoomsMergeHorizontal(int leftRoomX, int roomY, uint seed)
     {
         uint h = WallHash(leftRoomX, roomY, seed, 'M');
-        return (h % 100u) < MergeProbability;
+        uint pa = ZoneMergeProbs(ClassifyZone(leftRoomX, roomY, seed)).h;
+        uint pb = ZoneMergeProbs(ClassifyZone(leftRoomX + 1, roomY, seed)).h;
+        return (h % 100u) < (pa + pb) / 2u;
     }
 
     private static bool RoomsMergeVertical(int roomX, int bottomRoomY, uint seed)
     {
         uint h = WallHash(roomX, bottomRoomY, seed, 'N');
-        return (h % 100u) < MergeProbability;
+        uint pa = ZoneMergeProbs(ClassifyZone(roomX, bottomRoomY, seed)).v;
+        uint pb = ZoneMergeProbs(ClassifyZone(roomX, bottomRoomY + 1, seed)).v;
+        return (h % 100u) < (pa + pb) / 2u;
     }
+
+    // マクロゾーン判定: 部屋座標 → 4×4 部屋ブロックの種別。純関数 (ClassifyCell の決定性の要)。
+    // roll (h%100) でゾーン種、Gallery の H/V は h/100 の偶奇 — roll とは独立したビットなので無相関
+    private static ZoneKind ClassifyZone(int roomX, int roomY, uint seed)
+    {
+        int macroX = FloorDiv(roomX, MacroSize);
+        int macroY = FloorDiv(roomY, MacroSize);
+        uint h = WallHash(macroX, macroY, seed, 'Z');
+        uint roll = h % 100u;
+        if (roll < ZoneHallPercent) return ZoneKind.Hall;
+        if (roll < ZoneHallPercent + ZoneGalleryPercent)
+            return ((h / 100u) & 1u) == 0u ? ZoneKind.GalleryH : ZoneKind.GalleryV;
+        return ZoneKind.Maze;
+    }
+
+    // ゾーン別 merge 確率 (h=左境界壁の消滅=東西結合 / v=下境界壁の消滅=南北結合)。
+    // GalleryH は h=100/v=0 → 24×6 の東西回廊 (隣ゾーンも GalleryH なら更に延伸)。GalleryV は逆
+    private static (uint h, uint v) ZoneMergeProbs(ZoneKind z) => z switch
+    {
+        ZoneKind.Hall     => (HallMergeProb, HallMergeProb),
+        ZoneKind.GalleryH => (100u, 0u),
+        ZoneKind.GalleryV => (0u, 100u),
+        _                 => (MazeMergeProb, MazeMergeProb)
+    };
+
+    private static int FloorDiv(int a, int n) => (a - Mod(a, n)) / n; // 負座標で floor (ClassifyCell の roomX 算出と同型)
 
     private static int Mod(int a, int n) => ((a % n) + n) % n;
 
@@ -2323,6 +2381,66 @@ public static class BackroomsLobby
                 BackroomsShadow.Status(pid);
                 break;
         }
+    }
+
+    // /bbzone [status|ratio <hall%> <gallery%>|merge <maze%> <hall%>|pillar <p%>]
+    // マクロゾーンの実機チューニング。マップ構造定数なので変更系は同 seed 全 regen を自動実行
+    // (RegenerateIfActive は streaming 差分のみでロード済み chunk を作り直さないため不可。
+    //  GenerateLobby = /bbgen 経路が wipe→全 regen→EnsureSpawnFloor まで面倒を見る)
+    public static void ZoneCommand(string[] args, byte pid)
+    {
+        string sub = args is { Length: >= 2 } ? args[1].ToLowerInvariant() : "status";
+        switch (sub)
+        {
+            case "ratio":
+                if (args is { Length: >= 4 } && uint.TryParse(args[2], out uint hp) && uint.TryParse(args[3], out uint gp) && hp + gp <= 100u)
+                {
+                    ZoneHallPercent = hp;
+                    ZoneGalleryPercent = gp;
+                    RegenSameSeed(pid);
+                }
+                else Utils.SendMessage($"指定: /bbzone ratio <hall%> <gallery%> (合計≤100。現在 hall={ZoneHallPercent} gallery={ZoneGalleryPercent} maze={100 - ZoneHallPercent - ZoneGalleryPercent})", pid);
+                break;
+            case "merge":
+                if (args is { Length: >= 4 } && uint.TryParse(args[2], out uint mm) && uint.TryParse(args[3], out uint hm) && mm <= 100u && hm <= 100u)
+                {
+                    MazeMergeProb = mm;
+                    HallMergeProb = hm;
+                    RegenSameSeed(pid);
+                }
+                else Utils.SendMessage($"指定: /bbzone merge <maze%> <hall%> (現在 maze={MazeMergeProb} hall={HallMergeProb})", pid);
+                break;
+            case "pillar":
+                if (args is { Length: >= 3 } && uint.TryParse(args[2], out uint pp) && pp <= 100u)
+                {
+                    PillarPercent = pp;
+                    RegenSameSeed(pid);
+                }
+                else Utils.SendMessage($"指定: /bbzone pillar <p%> (現在 {PillarPercent})", pid);
+                break;
+            default: // status: 現在パラメータ + 立ち位置のゾーン
+            {
+                Vector2 feet = LocalPlayerFeet();
+                int roomX = FloorDiv(Mathf.RoundToInt(feet.x), RoomSize);
+                int roomY = FloorDiv(Mathf.RoundToInt(feet.y), RoomSize);
+                ZoneKind z = _lastSeed != 0u ? ClassifyZone(roomX, roomY, _lastSeed) : ZoneKind.Maze;
+                Utils.SendMessage($"zone={z} @room({roomX},{roomY}) seed={_lastSeed} | ratio hall={ZoneHallPercent} gallery={ZoneGalleryPercent} maze={100 - ZoneHallPercent - ZoneGalleryPercent} | merge maze={MazeMergeProb} hall={HallMergeProb} | pillar={PillarPercent}", pid);
+                break;
+            }
+        }
+    }
+
+    // ゾーン定数変更後の反映: 同 seed で全 wipe→全 regen (プレイヤー現在位置中心・spawn 安全化込み)
+    private static void RegenSameSeed(byte pid)
+    {
+        if (!_inBackrooms)
+        {
+            Utils.SendMessage("適用しました (未入場 — 次の入場で反映)", pid);
+            return;
+        }
+        if (_lastSeed == 0u) _lastSeed = 1u;
+        GenerateLobby(_lastSeed, pid, silent: true);
+        Utils.SendMessage($"適用 + seed={_lastSeed} で全 regen しました", pid);
     }
 
     // /bbtestroom [edge|box|both|off] — make-or-break 検証。layer10 EdgeCollider2D(滑らか想定) vs BoxCollider2D(blocky 想定)
