@@ -9360,6 +9360,7 @@
   "CommandForms.BBStreamBudget": "bbstreambudget",
   "CommandForms.BBShadow": "bbshadow",
   "CommandForms.BBZone": "bbzone",
+  "CommandForms.BBRange": "bbrange",
   "CommandForms.BBTestRoom": "bbtestroom",
   "CommandForms.TPIn": "tpin",
   "CommandForms.TPOut": "tpout",

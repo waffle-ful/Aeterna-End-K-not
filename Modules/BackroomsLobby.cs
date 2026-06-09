@@ -1024,7 +1024,10 @@ public static class BackroomsLobby
     //   新方向 chunk を Load。world は実質無限、瞬間ロード量は baseline 据置。前回 GenRad=2
     //   一括生成 (6400 tiles = 11k 子 SR) は inactive scene 管理 overhead で FPS=60→30 になった
     //   経路 → streaming で「探索可能距離 10×」を実現
-    private const int BaselineActiveChunkRadius = 1;
+    // 既定 2 (2026-06-10): 旧「radius 2 = FPS 60→30」は streaming 前+カスタム暗メッシュ時代の話。
+    // 2026-05-22 実測で inactive タイルは殆ど無料と確定、バニラ影モードでは dark mesh も無い。
+    // マクロゾーン (24×24 セル) の構造テストに 3×3 chunk 窓は狭すぎた。/bbrange で実機調整可。
+    private static int BaselineActiveChunkRadius = 2;
     private const int ReducedActiveChunkRadius = 0;
     private static int ActiveChunkRadius => (Main.BackroomsReduceProcgen?.Value ?? false) ? ReducedActiveChunkRadius : BaselineActiveChunkRadius;
     private const int RoomSize = 6;
@@ -2058,8 +2061,10 @@ public static class BackroomsLobby
     // CullMoveSqrThr=4 (sqrt=2u) — player 2u 進むまで cull 再判定 skip
     private static Vector2 _lastCullPlayer;
     private static bool _cullValid;
-    private const float CullRadius = 10f;
-    private const float CullRadiusSqr = CullRadius * CullRadius;
+    // /bbrange で実機調整可 (ズームアウトでのマップ構造検証は cull を広げないと端にタイル消失帯が出る)。
+    // 変更は RangeCommand 経由のみ — CullRadiusSqr を必ず同時更新すること
+    private static float CullRadius = 10f;
+    private static float CullRadiusSqr = CullRadius * CullRadius;
     private const float CullMoveSqrThreshold = 4f;
     // SpawnTile 内 inline cull 用の cache。GenerateLobby が spawn ループ前に 1 度だけセット
     private static Vector2 _spawnCullCenter;
@@ -2427,6 +2432,40 @@ public static class BackroomsLobby
                 Utils.SendMessage($"zone={z} @room({roomX},{roomY}) seed={_lastSeed} | ratio hall={ZoneHallPercent} gallery={ZoneGalleryPercent} maze={100 - ZoneHallPercent - ZoneGalleryPercent} | merge maze={MazeMergeProb} hall={HallMergeProb} | pillar={PillarPercent}", pid);
                 break;
             }
+        }
+    }
+
+    // /bbrange [<chunkR> [cullR]] — ロード窓 (チャンク半径) と距離 cull 半径の実機調整。
+    // ゾーン構造のズームアウト検証用: ロードは streaming が自動追従 (regen 不要)、生成は
+    // spawn 予算 (StreamSpawnBudget/frame) で数秒かけて広がる。遅ければ /bbstreambudget で加速。
+    // 注意: ズームアウト時はバニラ ShadowQuad が ortho>3 で自動 OFF になるので全景が明るく見える (検証に好都合)
+    public static void RangeCommand(string[] args, byte pid)
+    {
+        if (args is { Length: >= 2 } && int.TryParse(args[1], out int chunkR))
+        {
+            BaselineActiveChunkRadius = Mathf.Clamp(chunkR, 0, 5); // 5 = 11×11 chunks ≈ 31k tiles (生成 ~16s)
+            if (args is { Length: >= 3 } && float.TryParse(args[2], out float cullR))
+            {
+                CullRadius = Mathf.Clamp(cullR, 5f, 150f);
+                CullRadiusSqr = CullRadius * CullRadius;
+            }
+
+            if (_inBackrooms)
+            {
+                UpdateStreaming(force: true); // 新半径で load/unload を即時再評価 (生成はキュー消化)
+                _cullValid = false;           // 次フレで全 tile sweep → 新 cull 半径で activate/deactivate
+                _occludersDirty = true;       // WallAabbs が増減する → caster/occluder rebuild
+            }
+
+            Utils.SendMessage($"ロード半径={BaselineActiveChunkRadius} chunks ({(BaselineActiveChunkRadius * 2 + 1) * ChunkSize}×{(BaselineActiveChunkRadius * 2 + 1) * ChunkSize} セル) / cull={CullRadius:F0}u。生成は数秒かけて広がります (queue 消化)", pid);
+        }
+        else
+        {
+            int total = SpawnedTiles.Count;
+            int active = 0;
+            for (int i = 0; i < total; i++)
+                if (SpawnedTiles[i] != null && SpawnedTiles[i].activeSelf) active++;
+            Utils.SendMessage($"現在: ロード半径={BaselineActiveChunkRadius} chunks / cull={CullRadius:F0}u | chunks={_loadedChunks.Count} tiles={total} (active {active})。指定: /bbrange <チャンク半径 0-5> [cull半径 5-150]", pid);
         }
     }
 
