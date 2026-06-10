@@ -1024,10 +1024,9 @@ public static class BackroomsLobby
     //   新方向 chunk を Load。world は実質無限、瞬間ロード量は baseline 据置。前回 GenRad=2
     //   一括生成 (6400 tiles = 11k 子 SR) は inactive scene 管理 overhead で FPS=60→30 になった
     //   経路 → streaming で「探索可能距離 10×」を実現
-    // 既定 2 (2026-06-10): 旧「radius 2 = FPS 60→30」は streaming 前+カスタム暗メッシュ時代の話。
-    // 2026-05-22 実測で inactive タイルは殆ど無料と確定、バニラ影モードでは dark mesh も無い。
-    // マクロゾーン (24×24 セル) の構造テストに 3×3 chunk 窓は狭すぎた。/bbrange で実機調整可。
-    private static int BaselineActiveChunkRadius = 2;
+    // 既定 1 (2026-06-10): 通常プレイの視界は halfW≈5.3u なので 3×3 chunk で十分。広域観察は
+    // /bbzoom がロード半径を視界適応で自動拡大する (UpdateStreaming 参照) ため、既定を太らせる必要は無い。
+    private static int BaselineActiveChunkRadius = 1;
     private const int ReducedActiveChunkRadius = 0;
     private static int ActiveChunkRadius => (Main.BackroomsReduceProcgen?.Value ?? false) ? ReducedActiveChunkRadius : BaselineActiveChunkRadius;
     private const int RoomSize = 6;
@@ -1408,9 +1407,15 @@ public static class BackroomsLobby
         int playerCx = Mathf.FloorToInt(p.x / ChunkSize);
         int playerCy = Mathf.FloorToInt(p.y / ChunkSize);
 
-        if (!force && _streamValid && playerCx == _streamCx && playerCy == _streamCy) return;
-
+        // 適応ロード半径: カメラに映る範囲 (視界半幅+4u) をロード窓が必ず覆う (/bbzoom 観察で void が
+        // 見えないように)。上限 6 = 13×13 chunks (暴走ガード・/bbzoom の ortho 上限 50 と整合)。
         int r = ActiveChunkRadius;
+        Camera cam = Camera.main;
+        if (cam != null)
+            r = Math.Min(Math.Max(r, Mathf.CeilToInt((cam.orthographicSize * cam.aspect + 4f) / ChunkSize)), 6);
+
+        // ズーム変化 (= r 変化) でも再評価が走るよう、chunk 一致だけでなく r も比較する
+        if (!force && _streamValid && playerCx == _streamCx && playerCy == _streamCy && r == _lastStreamRadius) return;
 
         // 1. Unload: radius 外の chunk を削除。foreach 中 mutate を避けるため一旦 list に集める
         List<long> toUnload = null;
@@ -1445,6 +1450,7 @@ public static class BackroomsLobby
         _streamCx = playerCx;
         _streamCy = playerCy;
         _streamValid = true;
+        _lastStreamRadius = r;
 
         // chunk set 変動時は vision / cull キャッシュを invalidate
         if (loadedNow > 0 || toUnload != null)
@@ -1665,6 +1671,13 @@ public static class BackroomsLobby
     private static bool _inBackrooms;
     private static uint _lastSeed; // /bbvisdiag で procgen 再現用
 
+    // /bbzoom のカメラ override (-1=off)。チャット開閉で Zoom.cs が ortho を 3 に戻すため毎フレ再適用する。
+    private static float _zoomOverride = -1f;
+    // 適応 cull の下限 (通常プレイの表示半径)。実効 cull = max(_cullBase, カメラ視界半幅+4u) を毎フレ計算
+    private static float _cullBase = 10f;
+    // UpdateStreaming の早期 return 用: 前回の実効ロード半径 (ズーム変化でも再評価が走るように)
+    private static int _lastStreamRadius = -1;
+
     // バニラ船 collider + Renderer を disable するだけの軽量パス。LocalPlayer 非依存なので
     // LobbyBehaviour.Start Postfix で即時に呼べる → 「ロビー入室後にバニラ船が数秒見える」ラグを消す。
     // procgen + vision は EnterBackrooms 側で LocalPlayer 揃ってから後置 (2026-05-22)
@@ -1759,6 +1772,11 @@ public static class BackroomsLobby
         _visionPaused = false;
         _lastVisionValid = false;
         _cullValid = false;
+        _zoomOverride = -1f;
+        Camera exitCam = Camera.main;
+        if (exitCam != null) exitCam.orthographicSize = 3f;
+        if (HudManager.InstanceExists && PlayerControl.LocalPlayer != null)
+            HudManager.Instance.ShadowQuad?.gameObject.SetActive(PlayerControl.LocalPlayer.IsAlive());
         DestroyVision();
         DestroyOverlay();
         BackroomsAmbient.Stop();
@@ -1846,6 +1864,7 @@ public static class BackroomsLobby
 
         _inBackrooms = false;
         _visionPaused = false;
+        _zoomOverride = -1f;
         _lastVisionValid = false;
         _cullValid = false;
         DestroyVision();
@@ -1891,6 +1910,7 @@ public static class BackroomsLobby
         _visionPaused = false;
         _lastVisionValid = false;
         _cullValid = false;
+        _zoomOverride = -1f;
         _spawnCullCenterValid = false;
         BackroomsShadow.Reset(); // バニラ影ドライバ停止 + 自前 renderer Dispose (scene 跨ぎで stale 化を防ぐ)
         BackroomsCasters.Clear(); // 壁の輪郭線 caster を破棄
@@ -2448,14 +2468,10 @@ public static class BackroomsLobby
         if (args is { Length: >= 2 } && int.TryParse(args[1], out int chunkR))
         {
             BaselineActiveChunkRadius = Mathf.Clamp(chunkR, 0, 5); // 5 = 11×11 chunks ≈ 31k tiles (生成 ~16s)
+            // cull は基本 /bbzoom の視界適応に任せる (ApplyZoomAndAdaptiveView が毎フレ max(_cullBase, 視界+4) を適用)。
+            // 明示指定時のみ基準値を引き上げる (実効値は適応側が毎フレ反映するのでここでは CullRadius を直接触らない)
             if (args is { Length: >= 3 } && float.TryParse(args[2], out float cullR))
-                CullRadius = Mathf.Clamp(cullR, 5f, 150f);
-            else
-                // 未指定ならロード窓いっぱいに自動連動 (「広げたのに見えない」事故防止。2026-06-10 実機で
-                // /bbrange 5 がロード済みなのに cull 10u のまま=広がって見えない、を踏んだ)
-                CullRadius = Mathf.Clamp((chunkR + 0.5f) * ChunkSize, 10f, 150f);
-
-            CullRadiusSqr = CullRadius * CullRadius;
+                _cullBase = Mathf.Clamp(cullR, 5f, 150f);
 
             if (_inBackrooms)
             {
@@ -2464,7 +2480,7 @@ public static class BackroomsLobby
                 _occludersDirty = true;       // WallAabbs が増減する → caster/occluder rebuild
             }
 
-            Utils.SendMessage($"ロード半径={BaselineActiveChunkRadius} chunks ({(BaselineActiveChunkRadius * 2 + 1) * ChunkSize}×{(BaselineActiveChunkRadius * 2 + 1) * ChunkSize} セル) / cull={CullRadius:F0}u。生成は数秒かけて広がります (queue 消化)", pid);
+            Utils.SendMessage($"ロード半径={BaselineActiveChunkRadius} chunks ({(BaselineActiveChunkRadius * 2 + 1) * ChunkSize}×{(BaselineActiveChunkRadius * 2 + 1) * ChunkSize} セル) / cull基準={_cullBase:F0}u (表示は /bbzoom の視界に自動追従)。生成は数秒かけて広がります (queue 消化)", pid);
         }
         else
         {
@@ -2472,7 +2488,29 @@ public static class BackroomsLobby
             int active = 0;
             for (int i = 0; i < total; i++)
                 if (SpawnedTiles[i] != null && SpawnedTiles[i].activeSelf) active++;
-            Utils.SendMessage($"現在: ロード半径={BaselineActiveChunkRadius} chunks / cull={CullRadius:F0}u | chunks={_loadedChunks.Count} tiles={total} (active {active})。指定: /bbrange <チャンク半径 0-5> [cull半径 5-150]", pid);
+            Utils.SendMessage($"現在: ロード半径={BaselineActiveChunkRadius} chunks / cull基準={_cullBase:F0}u (実効={CullRadius:F0}u) | chunks={_loadedChunks.Count} tiles={total} (active {active})。指定: /bbrange <チャンク半径 0-5> [cull基準 5-150]。広域観察は /bbzoom <3-50>", pid);
+        }
+    }
+
+    // /bbzoom [<3-50>|reset] — 広域観察用ズームアウト (ホスト限定・隠し)。Zoom.cs はロビーの zoom-out を
+    // dev 限定に封印している (世界観保護・2026-05-22) ため、観察はこのコマンドで明示的に行う。
+    // セットすると ApplyZoomAndAdaptiveView が毎フレ再適用し、表示 (cull) とロード窓も視界に自動追従する。
+    public static void ZoomCommand(string[] args, byte pid)
+    {
+        if (args is { Length: >= 2 } && float.TryParse(args[1], out float z))
+        {
+            _zoomOverride = Mathf.Clamp(z, 3f, 50f);
+            float aspect = Camera.main != null ? Camera.main.aspect : 16f / 9f;
+            Utils.SendMessage($"zoom = ortho {_zoomOverride:F0} (視界半幅 ≈ {_zoomOverride * aspect:F0}u)。表示/ロードは視界に自動追従、生成は数秒かけて広がります。戻す=/bbzoom reset。大ズームはタイル物量で重くなります", pid);
+        }
+        else
+        {
+            _zoomOverride = -1f;
+            Camera cam = Camera.main;
+            if (cam != null) cam.orthographicSize = 3f;
+            if (HudManager.InstanceExists && PlayerControl.LocalPlayer != null)
+                HudManager.Instance.ShadowQuad?.gameObject.SetActive(PlayerControl.LocalPlayer.IsAlive());
+            Utils.SendMessage("zoom 解除 (ortho 3)。/bbzoom <3-50> でズームアウト観察", pid);
         }
     }
 
@@ -2848,10 +2886,41 @@ public static class BackroomsLobby
         _perfStreamUpdates = 0;
     }
 
+    // /bbzoom 再適用 + 「視界内+αのみ描写」(ユーザー提案 2026-06-10) の毎フレ処理。
+    // ズームアウトすると表示 (cull) とロード (UpdateStreaming 側) が視界に自動追従し、戻すと 10u に縮んで軽くなる。
+    private static void ApplyZoomAndAdaptiveView()
+    {
+        Camera cam = Camera.main;
+        if (cam == null) return;
+
+        if (_zoomOverride > 0f)
+        {
+            // チャットを開くと Zoom.cs の !CanZoom 経路が ortho を 3 に戻すため毎フレ上書き。
+            // UICamera は触らない (HUD サイズ据置)。ShadowQuad は ortho≈3 のみ表示 (Zoom.cs L119/142 と同じ規約)
+            cam.orthographicSize = _zoomOverride;
+            if (HudManager.InstanceExists && PlayerControl.LocalPlayer != null)
+                HudManager.Instance.ShadowQuad?.gameObject.SetActive(Mathf.Approximately(cam.orthographicSize, 3f) && PlayerControl.LocalPlayer.IsAlive());
+        }
+
+        if (!_inBackrooms) return;
+
+        // 適応 cull: 実効表示半径 = max(基準値, カメラ視界半幅+4u)。1u 超の変化時のみ sweep を invalidate (churn 防止)
+        float halfW = cam.orthographicSize * cam.aspect;
+        float wantCull = Mathf.Max(_cullBase, halfW + 4f);
+        if (Mathf.Abs(wantCull - CullRadius) > 1f)
+        {
+            CullRadius = wantCull;
+            CullRadiusSqr = wantCull * wantCull;
+            _cullValid = false;
+        }
+    }
+
     // LobbyBehaviour.Update の per-frame hook から呼ぶ per-frame 更新の入口。
     // 計測 ON の時だけ Stopwatch で Backrooms の CPU 時間を測る。
     public static void RunPerFrameUpdates()
     {
+        ApplyZoomAndAdaptiveView();
+
         // バニラ GPU 影モード: 壁の輪郭線 caster を維持してからドライバを駆動 (どちらも self-guard 済)
         if (BackroomsConfig.UseVanillaShadow)
         {

@@ -9981,6 +9981,7 @@
   "CommandForms.BBShadow": "bbshadow",
   "CommandForms.BBZone": "bbzone",
   "CommandForms.BBRange": "bbrange",
+  "CommandForms.BBZoom": "bbzoom",
   "CommandForms.BBTestRoom": "bbtestroom",
   "CommandForms.Burst": "burst",
   "CommandForms.Rehost": "rehost",
