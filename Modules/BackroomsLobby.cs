@@ -1109,10 +1109,14 @@ public static class BackroomsLobby
         _spawnCullCenter = LocalPlayerFeet();
         _spawnCullCenterValid = true;
 
+        // 入室 freeze を 3×3 chunk (2304 tiles) に抑える: 中心 3×3 だけ即時、外周は queue 経由で
+        // 数秒かけて生成 (radius 2 既定化で 25 chunks=6400 tiles 一括は freeze ~2.8 倍だった)。
+        // 外周タイルは CullRadius 外で inactive 生成なので段階生成は見えない。
         int r = ActiveChunkRadius;
+        int ir = Math.Min(r, 1);
         for (int dx = -r; dx <= r; dx++)
         for (int dy = -r; dy <= r; dy++)
-            LoadChunk(centerCx + dx, centerCy + dy, seed, immediate: true); // 入室時は即時生成
+            LoadChunk(centerCx + dx, centerCy + dy, seed, immediate: Math.Abs(dx) <= ir && Math.Abs(dy) <= ir);
 
         _spawnCullCenterValid = false;
 
@@ -2445,10 +2449,13 @@ public static class BackroomsLobby
         {
             BaselineActiveChunkRadius = Mathf.Clamp(chunkR, 0, 5); // 5 = 11×11 chunks ≈ 31k tiles (生成 ~16s)
             if (args is { Length: >= 3 } && float.TryParse(args[2], out float cullR))
-            {
                 CullRadius = Mathf.Clamp(cullR, 5f, 150f);
-                CullRadiusSqr = CullRadius * CullRadius;
-            }
+            else
+                // 未指定ならロード窓いっぱいに自動連動 (「広げたのに見えない」事故防止。2026-06-10 実機で
+                // /bbrange 5 がロード済みなのに cull 10u のまま=広がって見えない、を踏んだ)
+                CullRadius = Mathf.Clamp((chunkR + 0.5f) * ChunkSize, 10f, 150f);
+
+            CullRadiusSqr = CullRadius * CullRadius;
 
             if (_inBackrooms)
             {
@@ -2990,11 +2997,23 @@ public static class BackroomsLobby
     // _occludersDirty を消費する (UpdateVision は suppress 中で _visionPaused early-return のため
     // dirty を消費しない → ここが消費点)。WallAabbs を直接渡す (BackroomsCasters が full-cell 占有格子に
     // スナップして境界辺をキャンセル抽出するので、中心線方式の merged occluder は不要)。
+    private static float _lastCasterRebuildTime; // 直近の caster rebuild 時刻 (Time.unscaledTime)
+
     private static void MaintainWallCasters()
     {
         if (!_inBackrooms || !_occludersDirty) return;
+
+        // streaming drain 中 (spawn/destroy queue 非空) は rebuild を保留 — SpawnTile が壁 1 枚ごとに
+        // _occludersDirty を立てるため、保留しないと毎フレ全 caster 破棄+再生成 (interop 嵐 = FPS 崩壊) になる
+        // (2026-06-10 実機ログで 831 回/セッションの暴走を確認)。drain 完了後に 1 回で済ませる。
+        // ただし歩き続けると queue が空かないことがあるので 2 秒ごとには 1 回通す (caster 鮮度保証 —
+        // CasterRadius 32u は光半径 5u + チャンク跨ぎ 16u に対し十分な余裕)。
+        bool draining = _spawnHead < _spawnQueue.Count || _destroyHead < _destroyQueue.Count;
+        if (draining && Time.unscaledTime - _lastCasterRebuildTime < 2f) return;
+
         _occludersDirty = false;
-        BackroomsCasters.Rebuild(WallAabbs);
+        _lastCasterRebuildTime = Time.unscaledTime;
+        BackroomsCasters.Rebuild(WallAabbs, LocalPlayerFeet());
     }
 
     public static void UpdateVision()

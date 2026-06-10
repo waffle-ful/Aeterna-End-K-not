@@ -45,6 +45,11 @@ public static class BackroomsCasters
     public static float FaceScaleV = 0.6f;
     public static float FaceScaleH = 0.8f;
 
+    // caster 生成範囲 (player 中心・チェビシェフ距離)。影に光学的に使われるのは光半径 5u 内の caster だけ
+    // なのに全壁分の GO を作ると /bbrange 5 (約3万タイル) で ~6000 GO の破棄+再生成が rebuild ごとに走り
+    // FPS が崩壊する。32u = 光半径 5u + チャンク跨ぎ rebuild 間隔 16u に十分な余裕。
+    private const float CasterRadius = 32f;
+
     // 占有格子 + run 候補バッファ (再利用で alloc 回避。Rebuild は _occludersDirty 時のみ)。
     // half = run に垂直方向の可視半幅 (H run→halfY, V run→halfX)。面を cell 端でなく可視壁面に置くため。
     private static readonly HashSet<long> _cells = [];
@@ -52,14 +57,18 @@ public static class BackroomsCasters
     private static readonly List<(int key, int cell, float half)> _vCells = []; // 垂直 run 候補: key=col ix, cell=iy, half=halfX
 
     // WallAabbs (per-cell grid box) から二重壁 far-face caster を作り直す。壁が cull/stream で変わった時だけ呼ぶ。
-    public static void Rebuild(List<(float cx, float cy, float halfX, float halfY)> wallCells)
+    public static void Rebuild(List<(float cx, float cy, float halfX, float halfY)> wallCells, Vector2 center)
     {
         Clear();
         if (wallCells == null || wallCells.Count == 0) return;
 
         // 占有格子 (中心を整数セルにスナップ。collider offset=0 なので RoundToInt が exact)
         _cells.Clear();
-        foreach (var w in wallCells) _cells.Add(PackCell(Mathf.RoundToInt(w.cx), Mathf.RoundToInt(w.cy)));
+        foreach (var w in wallCells)
+        {
+            if (Mathf.Abs(w.cx - center.x) > CasterRadius || Mathf.Abs(w.cy - center.y) > CasterRadius) continue; // player 周辺だけ caster 化
+            _cells.Add(PackCell(Mathf.RoundToInt(w.cx), Mathf.RoundToInt(w.cy)));
+        }
 
         // 各壁セルを「水平壁か / 垂直壁か」で run 候補に振り分ける (角は両方・直線は片方=ヒゲ防止)
         // half = 面位置に使う可視半幅: 水平 run は y 方向 (halfY)、垂直 run は x 方向 (halfX)。
@@ -73,6 +82,7 @@ public static class BackroomsCasters
         _vCells.Clear();
         foreach (var w in wallCells)
         {
+            if (Mathf.Abs(w.cx - center.x) > CasterRadius || Mathf.Abs(w.cy - center.y) > CasterRadius) continue; // player 周辺だけ caster 化
             int ix = Mathf.RoundToInt(w.cx), iy = Mathf.RoundToInt(w.cy);
             bool hasH = _cells.Contains(PackCell(ix + 1, iy)) || _cells.Contains(PackCell(ix - 1, iy));
             bool hasV = _cells.Contains(PackCell(ix, iy + 1)) || _cells.Contains(PackCell(ix, iy - 1));
