@@ -159,6 +159,81 @@ public static class EkmapLoader
         return TryLoad(ActiveSource.Filename, out errorMessage);
     }
 
+    // ── L1 自動リロード (エディタ往復ループ: 保存 → 約2秒で実機反映) ──────────────
+    // RunPerFrameUpdates から毎フレ TickAutoReload() を呼ぶ。true を返したら呼び出し側が
+    // 再入場 (再描画) する。BackroomsLobby への依存を作らないため bool 返しのコールバック方式。
+    private static float _arNextCheck;     // realtimeSinceStartup: 次に mtime を stat する時刻
+    private static long  _arBaselineTicks; // 最後に確定したファイル更新時刻 (Ticks)。0 = 未基準化
+    private static long  _arPendingTicks;  // デバウンス待ちの変化 mtime。0 = なし
+    private static float _arPendingSince;  // デバウンス開始時刻
+    private static string _arLastError;    // 同一エラーの連投ログ抑止
+
+    public static bool TickAutoReload()
+    {
+        CustomMapSource src = ActiveSource;
+        if (src == null)
+        {
+            // マップ未ロード: 状態リセット
+            _arBaselineTicks = 0;
+            _arPendingTicks = 0;
+            _arLastError = null;
+            return false;
+        }
+
+        float now = UnityEngine.Time.realtimeSinceStartup;
+
+        // 1) デバウンス確定判定 (毎フレ・安い)。最後の変化から 1 秒静止したら反映する
+        if (_arPendingTicks != 0 && now - _arPendingSince >= 1f)
+        {
+            long target = _arPendingTicks;
+            _arPendingTicks = 0;
+
+            if (TryReload(out string err))
+            {
+                _arBaselineTicks = target;
+                _arLastError = null;
+                Logger.Info($"Auto-reloaded custom map: {src.Filename}", "EkmapLoader");
+                return true; // 呼び出し側が再入場して再描画する
+            }
+
+            // 失敗時は baseline を進めない → 次の検出で無条件リトライ (書き込み途中での失敗対策)。
+            // 同一エラーの連投はログ抑止。
+            if (err != _arLastError)
+            {
+                Logger.Warn($"Auto-reload failed ({src.Filename}): {err}", "EkmapLoader");
+                _arLastError = err;
+            }
+            return false;
+        }
+
+        // 2) 約1秒間隔で mtime をチェック (単一 File.GetLastWriteTime は安価)
+        if (now < _arNextCheck) return false;
+        _arNextCheck = now + 1f;
+
+        string resolved = ResolveFilename(src.Filename);
+        if (resolved == null) return false;
+
+        long mtime;
+        try { mtime = File.GetLastWriteTimeUtc(resolved).Ticks; }
+        catch { return false; }
+
+        if (_arBaselineTicks == 0)
+        {
+            // ロード直後の初回基準化 (ここでは再読込しない)
+            _arBaselineTicks = mtime;
+            return false;
+        }
+
+        // baseline と違い、かつ現在の pending とも違う → 変化検出 (またはデバウンス延長)
+        if (mtime != _arBaselineTicks && mtime != _arPendingTicks)
+        {
+            _arPendingTicks = mtime;
+            _arPendingSince = now;
+        }
+
+        return false;
+    }
+
     // マップコード (EKM1.…) を取り込んでファイルに保存し、検証込みでロードする。
     // 成功時: savedFilename にファイル名、ActiveSource にセット (呼び出し側が EnterCustomMap する)。
     // 失敗時: false + errorMessage。検証に失敗した場合は書き込んだファイルを掃除する。
