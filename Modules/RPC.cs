@@ -180,7 +180,12 @@ public enum CustomRPC
     SyncLobbyState,
     SyncAkazukinPseudoDeath,
     LobbyDecorSpawn,
-    LobbyDecorClear
+    LobbyDecorClear,
+
+    // EKM (custom map system) — reserved 2026-06-12 (see docs/ekm-studio/ROADMAP.md D11).
+    // Network-zero by default; the explicit 251 keeps 246-250 free for future game-mode
+    // syncs, which grow by appending after LobbyDecorClear (245).
+    EkmSync = 251
 
     // The total number of RPCs must not exceed 255
     // Because HandleRpc accepts Rpc in byte (max 255) system, and it will be impossible to use int
@@ -255,7 +260,7 @@ internal static class RPCHandlerPatch
     {
         if (id == 115) return true;
         if (SubmergedCompatibility.IsSubmerged() && id is >= 120 and <= 124) return true;
-        return (CustomRPC)id is CustomRPC.VersionCheck or CustomRPC.RequestRetryVersionCheck or CustomRPC.AntiBlackout or CustomRPC.SyncNameNotify or CustomRPC.RequestCommandProcessing or CustomRPC.Judge or CustomRPC.SetSwapperVotes or CustomRPC.MeetingKill or CustomRPC.Guess or CustomRPC.NemesisRevenge or CustomRPC.BAU or CustomRPC.TMGSync or CustomRPC.InspectorCommand;
+        return (CustomRPC)id is CustomRPC.VersionCheck or CustomRPC.RequestRetryVersionCheck or CustomRPC.AntiBlackout or CustomRPC.SyncNameNotify or CustomRPC.RequestCommandProcessing or CustomRPC.Judge or CustomRPC.SetSwapperVotes or CustomRPC.MeetingKill or CustomRPC.Guess or CustomRPC.NemesisRevenge or CustomRPC.BAU or CustomRPC.TMGSync or CustomRPC.InspectorCommand or CustomRPC.EkmSync;
     }
 
     private static bool CheckRateLimit(PlayerControl __instance, RpcCalls rpcType)

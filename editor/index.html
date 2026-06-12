@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#1f1f26" />
+    <title>End K not マップエディタ</title>
+  </head>
+  <body>
+    <header>
+      <span class="brand">EKMap</span>
+      <input id="map-name" placeholder="マップ名 (1〜64 文字)" maxlength="64" autocomplete="off" />
+      <input id="map-author" placeholder="作者" maxlength="32" autocomplete="off" />
+      <div class="actions">
+        <button id="btn-new">新規</button>
+        <button id="btn-import">開く</button>
+        <button id="btn-export">保存</button>
+        <button id="btn-copy-code">コードコピー</button>
+        <button id="btn-load-code">コード読込</button>
+      </div>
+    </header>
+
+    <main id="viewport"></main>
+
+    <footer>
+      <div id="layer-tabs" hidden>
+        <button class="ltab active" data-layer="ground">下層</button>
+        <button class="ltab" data-layer="upper">上層</button>
+        <button class="ltab" data-layer="decor">装飾</button>
+        <button class="ltab" data-layer="spawn">スポーン</button>
+        <button id="btn-tileset" title="タイルセット設定 (通行/★/遮光/タグ)">チップ設定</button>
+      </div>
+      <div class="tools" id="tools">
+        <button class="tool" data-tool="wall">壁</button>
+        <button class="tool" data-tool="floor">床</button>
+        <button class="tool" data-tool="void">奈落</button>
+        <button class="tool" data-tool="spawn">スポーン</button>
+        <button class="tool" data-tool="light">灯り</button>
+        <button class="tool" data-tool="stain">シミ</button>
+        <button class="tool" data-tool="door">扉</button>
+        <button class="tool" data-tool="vent">ベント</button>
+        <button class="tool" data-tool="ceiling">天井</button>
+      </div>
+      <div class="tools" id="tools-v2" hidden>
+        <button class="tool2" data-tool2="pen">ペン</button>
+        <button class="tool2" data-tool2="erase">消去</button>
+        <button class="tool2" data-tool2="rect">矩形</button>
+        <button class="tool2" data-tool2="bucket">バケツ</button>
+        <button class="tool2" data-tool2="pick">スポイト</button>
+        <div id="tile-picker"><canvas id="picker-canvas"></canvas></div>
+      </div>
+      <div class="tools" id="tools-decor2" hidden>
+        <button class="tool2d" data-decor="light">灯り</button>
+        <button class="tool2d" data-decor="stain">シミ</button>
+        <button class="tool2d" data-decor="door">扉</button>
+        <button class="tool2d" data-decor="vent">ベント</button>
+        <button class="tool2d" data-decor="ceiling">天井</button>
+      </div>
+      <p class="note" id="spawn-hint" hidden>クリック / ドラッグでスポーン位置を移動します (エクスポート時に通行可セル上か検証されます)</p>
+      <div class="ops">
+        <button id="btn-drawer" title="パレットの開閉">▾</button>
+        <button id="btn-undo" title="元に戻す (Ctrl+Z)" disabled>↶</button>
+        <button id="btn-redo" title="やり直し (Ctrl+Y)" disabled>↷</button>
+        <button id="btn-overlay" title="通行○×オーバーレイ">○×</button>
+        <button id="btn-fit" title="全体表示">⤢</button>
+        <span id="status"></span>
+      </div>
+    </footer>
+
+    <input type="file" id="file-input" accept=".json,application/json" hidden />
+    <input type="file" id="png-input" accept=".png,image/png" hidden />
+    <div id="toast" hidden></div>
+
+    <dialog id="dlg-new">
+      <form method="dialog">
+        <h3>新規マップ</h3>
+        <div class="type-choice">
+          <label class="radio"><input type="radio" name="new-type" value="v1" checked /> Backrooms チップ (v1)</label>
+          <label class="radio"><input type="radio" name="new-type" value="v2" /> カスタムタイルセット (v2)</label>
+        </div>
+        <label>幅 (1〜256) <input id="new-w" type="number" min="1" max="256" value="32" /></label>
+        <label>高さ (1〜256) <input id="new-h" type="number" min="1" max="256" value="32" /></label>
+        <label>マップ名 <input id="new-name" maxlength="64" value="新しいマップ" /></label>
+        <label>作者 <input id="new-author" maxlength="32" /></label>
+        <div id="new-v2-section" hidden>
+          <div class="ts-import-row">
+            <button id="new-ts-choose" type="button">タイルセット PNG を選択…</button>
+            <span id="new-ts-info" class="note">未選択 (PNG ≤ 1 MB)</span>
+          </div>
+          <label>タイルサイズ(px, 8〜128)
+            <input id="new-ts-size" type="number" min="8" max="128" value="32" list="ts-presets" />
+          </label>
+          <datalist id="ts-presets">
+            <option value="16"></option>
+            <option value="32"></option>
+          </datalist>
+          <p class="note">画像幅は タイルサイズ の倍数が必要です (1 タイル = 1 ワールドユニット)。</p>
+        </div>
+        <p class="note">現在の編集内容は置き換えられます (自動保存スロットも上書きされます)。</p>
+        <menu>
+          <button value="ok">作成</button>
+          <button value="cancel" formnovalidate>キャンセル</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog id="dlg-tileset">
+      <h3>タイルセット設定</h3>
+      <div id="ts-modes">
+        <button class="ts-mode active" data-mode="pass">通行 ○/×/↓</button>
+        <button class="ts-mode" data-mode="over">上描画 ★</button>
+        <button class="ts-mode" data-mode="light">遮光</button>
+        <button class="ts-mode" data-mode="tag">タグ</button>
+      </div>
+      <p class="note" id="ts-hint"></p>
+      <div id="ts-grid-wrap"><canvas id="ts-canvas"></canvas></div>
+      <menu>
+        <button id="ts-replace" type="button">画像差し替え…</button>
+        <button id="ts-close" type="button">閉じる</button>
+      </menu>
+    </dialog>
+
+    <dialog id="dlg-code">
+      <h3 id="code-title">マップコードを貼り付けて読込</h3>
+      <textarea id="code-text" rows="6" placeholder="EKM1.…" spellcheck="false"></textarea>
+      <menu>
+        <button id="code-ok" type="button">読込</button>
+        <button id="code-cancel" type="button">閉じる</button>
+      </menu>
+    </dialog>
+
+    <dialog id="dlg-msg">
+      <h3 id="msg-title"></h3>
+      <ul id="msg-list"></ul>
+      <menu><button id="msg-close" type="button">閉じる</button></menu>
+    </dialog>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
