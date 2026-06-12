@@ -103,22 +103,56 @@
         <label>マップ名 <input id="new-name" maxlength="64" value="新しいマップ" /></label>
         <label>作者 <input id="new-author" maxlength="32" /></label>
         <div id="new-v2-section" hidden>
-          <div class="ts-import-row">
-            <button id="new-ts-choose" type="button">タイルセット PNG を選択…</button>
-            <span id="new-ts-info" class="note">未選択 (PNG ≤ 1 MB)</span>
+          <!-- Step 1: PNG 投入 -->
+          <div id="wiz-step1" class="wiz-step">
+            <div id="wiz-drop-zone" class="wiz-drop-zone" tabindex="0" role="button" aria-label="PNG をドロップまたはクリックして選択">
+              <div id="wiz-drop-inner">
+                <span class="wiz-drop-icon">🖼</span>
+                <span class="wiz-drop-label">PNG をここにドロップ</span>
+                <span class="wiz-drop-sub">クリックで選択 / Ctrl+V で貼り付け</span>
+                <span class="note" id="wiz-drop-limit">PNG ≤ 1 MB</span>
+              </div>
+            </div>
+            <div id="wiz-preview-wrap" class="wiz-preview-wrap" hidden>
+              <canvas id="wiz-preview-canvas" class="wiz-preview-canvas"></canvas>
+              <div id="wiz-preview-info" class="wiz-preview-info"></div>
+            </div>
           </div>
-          <label>タイルサイズ(px, 8〜128)
-            <input id="new-ts-size" type="number" min="8" max="128" value="32" list="ts-presets" />
-          </label>
-          <datalist id="ts-presets">
-            <option value="16"></option>
-            <option value="32"></option>
-          </datalist>
-          <p class="note">画像幅は タイルサイズ の倍数が必要です (1 タイル = 1 ワールドユニット)。</p>
+          <!-- Step 2/3: 推定・スライスプレビュー (PNG 投入後に表示) -->
+          <div id="wiz-step23" class="wiz-step" hidden>
+            <div class="wiz-section-label">タイルの分割設定</div>
+            <!-- 候補チップ -->
+            <div id="wiz-candidates" class="wiz-candidates"></div>
+            <!-- 手動3入力 -->
+            <div class="wiz-manual-row">
+              <label class="wiz-manual-label">
+                タイルの大きさ (px)
+                <input id="wiz-size" type="number" min="8" max="128" value="32" class="wiz-num-input" />
+              </label>
+              <label class="wiz-manual-label">
+                まわりの余白
+                <input id="wiz-margin" type="number" min="0" max="4" value="0" class="wiz-num-input" />
+              </label>
+              <label class="wiz-manual-label">
+                タイルの間隔
+                <input id="wiz-spacing" type="number" min="0" max="4" value="0" class="wiz-num-input" />
+              </label>
+            </div>
+            <!-- スライスプレビュー -->
+            <div id="wiz-slice-wrap" class="wiz-slice-wrap">
+              <canvas id="wiz-slice-canvas" class="wiz-slice-canvas"></canvas>
+            </div>
+            <!-- 統計 -->
+            <div id="wiz-stats" class="wiz-stats note"></div>
+            <!-- リベイク警告 (margin/spacing > 0 のとき) -->
+            <div id="wiz-rebake-note" class="wiz-rebake-note note" hidden>
+              余白/間隔あり: 作成時に「隙間なしアトラス」へ変換されます (保存する PNG は元の素材とは別物になります)
+            </div>
+          </div>
         </div>
         <p class="note">現在の編集内容は置き換えられます (自動保存スロットも上書きされます)。</p>
         <menu>
-          <button value="ok">作成</button>
+          <button id="new-ok-btn" value="ok" disabled>作成</button>
           <button value="cancel" formnovalidate>キャンセル</button>
         </menu>
       </form>

@@ -32,6 +32,14 @@ import {
     isV2Doc,
     tileCount,
 } from "./model";
+import {
+    type SliceCandidate,
+    type SliceParams,
+    detectTransparentTiles,
+    enumerateCandidates,
+    rebakeAtlas,
+    scoreCandidates,
+} from "./tileset-import";
 import { validateEkmapAny, validateTileset } from "./validate";
 import { PNG_DATA_URI_PREFIX, parsePngDataUri } from "./png";
 import { decodeMapCode, encodeMapCode } from "./mapcode";
@@ -935,16 +943,395 @@ function openCodeDialog(mode: "load" | "show", code = ""): void {
     else ta.focus();
 }
 
-/** 新規ダイアログで選択中の PNG (作成確定までの保持) */
-let pendingPng: File | null = null;
+// ================================================================
+// タイルセットインポートウィザード状態 (新規ダイアログ内)
+// ================================================================
 
-function refreshNewTsInfo(): void {
-    const info = $("new-ts-info");
-    if (!pendingPng) {
-        info.textContent = "未選択 (PNG ≤ 1 MB)";
+interface WizState {
+    file: File | null;
+    /** data:image/png;base64,… */
+    dataUri: string | null;
+    /** PNG の元の寸法 */
+    pngWidth: number;
+    pngHeight: number;
+    /** Canvas から取得した RGBA ピクセル (rebake/スコアリング用) */
+    rgba: Uint8ClampedArray | null;
+    /** スコアリング済み候補リスト (score 降順) */
+    scored: SliceCandidate[];
+    /** 現在選択中のパラメータ */
+    params: SliceParams;
+    /** 確定した後にリベイクが必要か */
+    needsRebake: boolean;
+}
+
+const wizState: WizState = {
+    file: null,
+    dataUri: null,
+    pngWidth: 0,
+    pngHeight: 0,
+    rgba: null,
+    scored: [],
+    params: { tileSize: 32, margin: 0, spacing: 0, cols: 8, rows: 8 },
+    needsRebake: false,
+};
+
+function wizReset(): void {
+    wizState.file = null;
+    wizState.dataUri = null;
+    wizState.pngWidth = 0;
+    wizState.pngHeight = 0;
+    wizState.rgba = null;
+    wizState.scored = [];
+    wizState.params = { tileSize: 32, margin: 0, spacing: 0, cols: 8, rows: 8 };
+    wizState.needsRebake = false;
+
+    $("wiz-drop-zone").hidden = false;
+    $("wiz-preview-wrap").hidden = true;
+    $("wiz-step23").hidden = true;
+    $<HTMLButtonElement>("new-ok-btn").disabled = true;
+}
+
+/** RGBA ピクセルを取得するためにオフスクリーン Canvas を使う (DOM 経路) */
+async function getPngRgba(dataUri: string): Promise<{ rgba: Uint8ClampedArray; width: number; height: number } | null> {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+            const cv = document.createElement("canvas");
+            cv.width = img.naturalWidth;
+            cv.height = img.naturalHeight;
+            const ctx = cv.getContext("2d");
+            if (!ctx) { resolve(null); return; }
+            ctx.drawImage(img, 0, 0);
+            try {
+                const data = ctx.getImageData(0, 0, cv.width, cv.height);
+                resolve({ rgba: data.data, width: cv.width, height: cv.height });
+            } catch {
+                resolve(null);
+            }
+        };
+        img.onerror = () => resolve(null);
+        img.src = dataUri;
+    });
+}
+
+/** オフスクリーン Canvas で RGBA → PNG data URI に変換 (リベイク後の再エンコード用) */
+function rgbaToPngDataUri(rgba: Uint8ClampedArray, width: number, height: number): string {
+    const cv = document.createElement("canvas");
+    cv.width = width;
+    cv.height = height;
+    const ctx = cv.getContext("2d")!;
+    // ImageData コンストラクタには Uint8ClampedArray with ArrayBuffer が必要
+    // rebakeAtlas は new Uint8ClampedArray() で確保するので buffer は ArrayBuffer
+    const imgData = ctx.createImageData(width, height);
+    imgData.data.set(rgba);
+    ctx.putImageData(imgData, 0, 0);
+    return cv.toDataURL("image/png");
+}
+
+/**
+ * PNG ファイルをウィザードに読み込む。
+ * - data URI 変換
+ * - RGBA 取得
+ * - 候補列挙 & スコアリング
+ * - UI 更新
+ */
+async function wizLoadPng(file: File): Promise<void> {
+    if (file.size > MAX_TILESET_IMAGE_BYTES) {
+        toast(`PNG が 1 MB を超えています (${(file.size / 1024).toFixed(1)} KB)`);
         return;
     }
-    info.textContent = `${pendingPng.name} (${(pendingPng.size / 1024).toFixed(1)} KB)`;
+    if (!file.type.includes("png") && !file.name.toLowerCase().endsWith(".png")) {
+        toast("PNG ファイルを選択してください");
+        return;
+    }
+
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const b64 = bytesToBase64(bytes);
+    const dataUri = PNG_DATA_URI_PREFIX + b64;
+
+    const pngInfo = parsePngDataUri(dataUri);
+    if (!pngInfo.ok) {
+        toast(`PNG エラー: ${pngInfo.error}`);
+        return;
+    }
+
+    // RGBA 取得 (Canvas DOM 経路)
+    const rgbaResult = await getPngRgba(dataUri);
+    if (!rgbaResult) {
+        toast("画像の読み込みに失敗しました");
+        return;
+    }
+
+    wizState.file = file;
+    wizState.dataUri = dataUri;
+    wizState.pngWidth = pngInfo.width;
+    wizState.pngHeight = pngInfo.height;
+    wizState.rgba = rgbaResult.rgba;
+
+    // 候補列挙 & スコアリング
+    const candidates = enumerateCandidates(pngInfo.width, pngInfo.height);
+    wizState.scored = scoreCandidates(rgbaResult.rgba, pngInfo.width, pngInfo.height, candidates);
+
+    // 最高スコア候補を初期選択
+    if (wizState.scored.length > 0) {
+        wizState.params = { ...wizState.scored[0].params };
+    } else {
+        // 整合候補なし → tileSize を画像幅に合わせて fallback
+        const fallbackSize = Math.min(pngInfo.width, TILESIZE_MAX);
+        wizState.params = {
+            tileSize: fallbackSize,
+            margin: 0,
+            spacing: 0,
+            cols: Math.floor(pngInfo.width / fallbackSize),
+            rows: Math.floor(pngInfo.height / fallbackSize),
+        };
+    }
+    wizState.needsRebake = wizState.params.margin > 0 || wizState.params.spacing > 0;
+
+    // UI 反映
+    wizUpdateDropZone();
+    wizUpdateCandidateChips();
+    wizSyncInputsFromParams();
+    wizUpdateSlicePreview();
+    wizUpdateStats();
+    $("wiz-step23").hidden = false;
+    $<HTMLButtonElement>("new-ok-btn").disabled = false;
+}
+
+/** ドロップゾーンとプレビューを更新 */
+function wizUpdateDropZone(): void {
+    const hasFile = wizState.dataUri !== null;
+    $("wiz-drop-zone").hidden = hasFile;
+    $("wiz-preview-wrap").hidden = !hasFile;
+
+    if (!hasFile) return;
+    // サムネイル表示
+    const cv = $<HTMLCanvasElement>("wiz-preview-canvas");
+    const img = new Image();
+    img.onload = () => {
+        const MAX_W = 300;
+        const scale = Math.min(1, MAX_W / img.naturalWidth);
+        cv.width = Math.round(img.naturalWidth * scale);
+        cv.height = Math.round(img.naturalHeight * scale);
+        cv.style.width = `${cv.width}px`;
+        cv.style.height = `${cv.height}px`;
+        const ctx = cv.getContext("2d");
+        if (!ctx) return;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(img, 0, 0, cv.width, cv.height);
+    };
+    img.src = wizState.dataUri!;
+    const info = $("wiz-preview-info");
+    info.textContent = `${wizState.file?.name ?? ""} — ${wizState.pngWidth}×${wizState.pngHeight}px (${((wizState.file?.size ?? 0) / 1024).toFixed(1)} KB)　[クリックで変更]`;
+}
+
+/** 候補チップを描画 */
+function wizUpdateCandidateChips(): void {
+    const container = $("wiz-candidates");
+    container.replaceChildren();
+
+    // 上位 4 件のみ表示 (同じ tileSize の best margin/spacing を代表として絞る)
+    const shown: SliceCandidate[] = [];
+    const seenSize = new Set<number>();
+    for (const c of wizState.scored) {
+        if (!seenSize.has(c.params.tileSize)) {
+            seenSize.add(c.params.tileSize);
+            shown.push(c);
+        }
+        if (shown.length >= 4) break;
+    }
+
+    for (const c of shown) {
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "wiz-chip";
+        if (c.params.tileSize === wizState.params.tileSize &&
+            c.params.margin === wizState.params.margin &&
+            c.params.spacing === wizState.params.spacing) {
+            chip.classList.add("active");
+        }
+        const sizeSpan = document.createElement("span");
+        sizeSpan.className = "wiz-chip-size";
+        sizeSpan.textContent = `${c.params.tileSize}px`;
+        const confSpan = document.createElement("span");
+        confSpan.className = "wiz-chip-conf";
+        const colsRows = `${c.params.cols}列×${c.params.rows}行`;
+        const marginInfo = c.params.margin > 0 || c.params.spacing > 0
+            ? ` 余白${c.params.margin} 間隔${c.params.spacing}`
+            : "";
+        confSpan.textContent = `${colsRows}${marginInfo} (${c.confidence})`;
+        chip.appendChild(sizeSpan);
+        chip.appendChild(confSpan);
+        chip.addEventListener("click", () => {
+            wizState.params = { ...c.params };
+            wizState.needsRebake = c.params.margin > 0 || c.params.spacing > 0;
+            wizUpdateCandidateChips();
+            wizSyncInputsFromParams();
+            wizUpdateSlicePreview();
+            wizUpdateStats();
+        });
+        container.appendChild(chip);
+    }
+}
+
+/** 手動入力欄に現在の params を反映 */
+function wizSyncInputsFromParams(): void {
+    $<HTMLInputElement>("wiz-size").value = String(wizState.params.tileSize);
+    $<HTMLInputElement>("wiz-margin").value = String(wizState.params.margin);
+    $<HTMLInputElement>("wiz-spacing").value = String(wizState.params.spacing);
+}
+
+/** 手動入力から params を更新し、UI を再描画 */
+function wizSyncParamsFromInputs(): void {
+    const size = Math.min(TILESIZE_MAX, Math.max(TILESIZE_MIN, Math.floor(Number($<HTMLInputElement>("wiz-size").value)) || TILESIZE_DEFAULT));
+    const margin = Math.min(4, Math.max(0, Math.floor(Number($<HTMLInputElement>("wiz-margin").value)) || 0));
+    const spacing = Math.min(4, Math.max(0, Math.floor(Number($<HTMLInputElement>("wiz-spacing").value)) || 0));
+
+    // W = 2m + c*s + (c-1)*g  →  c = (W - 2m + g) / (s + g)
+    const wNom = wizState.pngWidth - 2 * margin + spacing;
+    const wDen = size + spacing;
+    const cols = wDen > 0 && wNom > 0 && wNom % wDen === 0 ? wNom / wDen : Math.floor(wizState.pngWidth / size);
+    const hNom = wizState.pngHeight - 2 * margin + spacing;
+    const hDen = size + spacing;
+    const rows = hDen > 0 && hNom > 0 && hNom % hDen === 0 ? hNom / hDen : Math.floor(wizState.pngHeight / size);
+
+    wizState.params = {
+        tileSize: size,
+        margin,
+        spacing,
+        cols: Math.max(1, cols),
+        rows: Math.max(1, rows),
+    };
+    wizState.needsRebake = margin > 0 || spacing > 0;
+
+    wizUpdateCandidateChips();
+    wizUpdateSlicePreview();
+    wizUpdateStats();
+}
+
+const GRID_LINE_COLOR = "rgba(255, 100, 100, 0.85)";
+const GRID_LINE_WIDTH = 1;
+/** スライスプレビューキャンバスにグリッド線を重畳描画 */
+function wizUpdateSlicePreview(): void {
+    if (!wizState.dataUri) return;
+    const { tileSize, margin, spacing, cols, rows } = wizState.params;
+    const MAX_PREVIEW = 480;
+    const scale = Math.min(1, MAX_PREVIEW / Math.max(wizState.pngWidth, 1));
+    const dW = Math.round(wizState.pngWidth * scale);
+    const dH = Math.round(wizState.pngHeight * scale);
+
+    const cv = $<HTMLCanvasElement>("wiz-slice-canvas");
+    cv.width = dW;
+    cv.height = dH;
+    cv.style.width = `${dW}px`;
+    cv.style.height = `${dH}px`;
+
+    const ctx = cv.getContext("2d");
+    if (!ctx) return;
+
+    const img = new Image();
+    img.onload = () => {
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(img, 0, 0, dW, dH);
+
+        ctx.strokeStyle = GRID_LINE_COLOR;
+        ctx.lineWidth = GRID_LINE_WIDTH;
+
+        // 縦線: 各タイル列の左端 + spacing があれば右端も
+        for (let c = 0; c < cols; c++) {
+            const xL = Math.round((margin + c * (tileSize + spacing)) * scale) + 0.5;
+            ctx.beginPath(); ctx.moveTo(xL, 0); ctx.lineTo(xL, dH); ctx.stroke();
+            if (spacing > 0) {
+                const xR = Math.round((margin + c * (tileSize + spacing) + tileSize) * scale) + 0.5;
+                ctx.beginPath(); ctx.moveTo(xR, 0); ctx.lineTo(xR, dH); ctx.stroke();
+            }
+        }
+        // 右端の閉じ線 (spacing=0 のときだけ必要)
+        if (spacing === 0) {
+            const xFinal = Math.round((margin + cols * tileSize) * scale) + 0.5;
+            ctx.beginPath(); ctx.moveTo(xFinal, 0); ctx.lineTo(xFinal, dH); ctx.stroke();
+        }
+
+        // 横線: 各タイル行の上端 + spacing があれば下端も
+        for (let r = 0; r < rows; r++) {
+            const yT = Math.round((margin + r * (tileSize + spacing)) * scale) + 0.5;
+            ctx.beginPath(); ctx.moveTo(0, yT); ctx.lineTo(dW, yT); ctx.stroke();
+            if (spacing > 0) {
+                const yB = Math.round((margin + r * (tileSize + spacing) + tileSize) * scale) + 0.5;
+                ctx.beginPath(); ctx.moveTo(0, yB); ctx.lineTo(dW, yB); ctx.stroke();
+            }
+        }
+        if (spacing === 0) {
+            const yFinal = Math.round((margin + rows * tileSize) * scale) + 0.5;
+            ctx.beginPath(); ctx.moveTo(0, yFinal); ctx.lineTo(dW, yFinal); ctx.stroke();
+        }
+    };
+    img.src = wizState.dataUri;
+}
+
+/** 統計テキスト + リベイク警告を更新 */
+function wizUpdateStats(): void {
+    const { cols, rows, tileSize, margin, spacing } = wizState.params;
+    const total = cols * rows;
+
+    // 全透明タイル数 (m=0/g=0 のときのみ即座に検出。それ以外は空白)
+    let transparentTxt = "";
+    if (margin === 0 && spacing === 0 && wizState.rgba) {
+        const transparent = detectTransparentTiles(wizState.rgba, cols, rows, tileSize);
+        if (transparent.size > 0) {
+            transparentTxt = ` | 空タイル ${transparent.size} 個`;
+        }
+    }
+
+    const overLimit = total > 4096 ? " — 上限 4096 を超えています！" : "";
+    $("wiz-stats").textContent = `${cols} 列 × ${rows} 行 = ${total} チップ${transparentTxt}${overLimit}`;
+
+    const rebakeNote = $("wiz-rebake-note");
+    rebakeNote.hidden = !(margin > 0 || spacing > 0);
+}
+
+/**
+ * ウィザード状態から TilesetDoc を構築して返す。
+ * margin/spacing > 0 の場合は Canvas 経由でリベイク → 再エンコード。
+ * m=0/g=0 の場合は元の dataUri バイトを無変更で使用。
+ */
+async function wizBuildTileset(): Promise<TilesetImport> {
+    if (!wizState.dataUri || !wizState.rgba) {
+        return { ok: false, error: "PNG が読み込まれていません" };
+    }
+    const { tileSize, margin, spacing, cols, rows } = wizState.params;
+
+    if (tileSize < TILESIZE_MIN || tileSize > TILESIZE_MAX) {
+        return { ok: false, error: `タイルの大きさは ${TILESIZE_MIN}〜${TILESIZE_MAX} px が必要です` };
+    }
+    if (cols < 1 || rows < 1) {
+        return { ok: false, error: "列数・行数が 0 になっています。設定を確認してください" };
+    }
+    const total = cols * rows;
+    if (total > 4096) {
+        return { ok: false, error: `チップ数 (${total}) が上限 4096 を超えています` };
+    }
+
+    let finalUri = wizState.dataUri;
+
+    if (margin > 0 || spacing > 0) {
+        // リベイク: ピクセル操作 → Canvas で再エンコード
+        const rebaked = rebakeAtlas(wizState.rgba, wizState.params);
+        finalUri = rgbaToPngDataUri(rebaked.rgba, rebaked.width, rebaked.height);
+
+        // リベイク後サイズ検証 (base64 → バイト概算)
+        const b64Body = finalUri.slice(PNG_DATA_URI_PREFIX.length);
+        const approxBytes = Math.floor(b64Body.length * 3 / 4);
+        if (approxBytes > MAX_TILESET_IMAGE_BYTES) {
+            return { ok: false, error: `リベイク後の PNG が 1 MB を超えています (約 ${(approxBytes / 1024).toFixed(1)} KB)。元の画像をもっと小さくするか、より大きなタイルサイズを選択してください` };
+        }
+    }
+
+    const errors: string[] = [];
+    const ts = validateTileset({ tileSize, columns: cols, image: finalUri }, errors);
+    if (!ts) return { ok: false, error: errors[0] ?? "タイルセットを検証できません" };
+
+    return { ok: true, tileset: ts, pngWidth: cols * tileSize, pngHeight: rows * tileSize };
 }
 
 function wireUi(): void {
@@ -1072,17 +1459,12 @@ function wireUi(): void {
         pngTarget = "replace";
         pngInput.click();
     });
-    $("new-ts-choose").addEventListener("click", () => {
-        pngTarget = "new";
-        pngInput.click();
-    });
     pngInput.addEventListener("change", async () => {
         const f = pngInput.files?.[0];
         pngInput.value = "";
         if (!f) return;
         if (pngTarget === "new") {
-            pendingPng = f;
-            refreshNewTsInfo();
+            await wizLoadPng(f);
             return;
         }
         if (!isV2Doc(doc)) return;
@@ -1111,16 +1493,75 @@ function wireUi(): void {
     const refreshTypeUi = (): void => {
         const v2 = typeRadios.find((r) => r.checked)?.value === "v2";
         v2Section.hidden = !v2;
+        if (v2) {
+            // v2 選択時: PNG が未投入なら作成ボタン無効
+            $<HTMLButtonElement>("new-ok-btn").disabled = wizState.dataUri === null;
+        } else {
+            // v1 は常に有効
+            $<HTMLButtonElement>("new-ok-btn").disabled = false;
+        }
     };
     for (const r of typeRadios) r.addEventListener("change", refreshTypeUi);
     $("btn-new").addEventListener("click", () => {
         $<HTMLInputElement>("new-name").value = "新しいマップ";
         $<HTMLInputElement>("new-author").value = doc.author;
-        pendingPng = null;
-        refreshNewTsInfo();
+        wizReset();
         refreshTypeUi();
         dlgNew.showModal();
     });
+
+    // ドロップゾーン: クリックで file input を開く
+    $("wiz-drop-zone").addEventListener("click", () => {
+        pngTarget = "new";
+        pngInput.click();
+    });
+
+    // ドロップゾーン: ドラッグ&ドロップ
+    $("wiz-drop-zone").addEventListener("dragover", (e) => {
+        e.preventDefault();
+        $("wiz-drop-zone").classList.add("drag-over");
+    });
+    $("wiz-drop-zone").addEventListener("dragleave", () => {
+        $("wiz-drop-zone").classList.remove("drag-over");
+    });
+    $("wiz-drop-zone").addEventListener("drop", async (e) => {
+        e.preventDefault();
+        $("wiz-drop-zone").classList.remove("drag-over");
+        const file = e.dataTransfer?.files[0];
+        if (file) await wizLoadPng(file);
+    });
+
+    // プレビュー画像クリック: 別の PNG に差し替え
+    $("wiz-preview-info").addEventListener("click", () => {
+        pngTarget = "new";
+        pngInput.click();
+    });
+
+    // Ctrl+V クリップボード貼り付け (ダイアログが開いているときのみ)
+    document.addEventListener("paste", async (e) => {
+        if (!dlgNew.open) return;
+        const items = e.clipboardData?.items;
+        if (!items) return;
+        for (const item of items) {
+            if (item.type === "image/png") {
+                const file = item.getAsFile();
+                if (file) await wizLoadPng(file);
+                break;
+            }
+        }
+    });
+
+    // 手動入力変更時: params 更新 → プレビュー更新
+    const manualInputIds = ["wiz-size", "wiz-margin", "wiz-spacing"];
+    for (const id of manualInputIds) {
+        $<HTMLInputElement>(id).addEventListener("input", () => {
+            if (wizState.dataUri) wizSyncParamsFromInputs();
+        });
+        $<HTMLInputElement>(id).addEventListener("change", () => {
+            if (wizState.dataUri) wizSyncParamsFromInputs();
+        });
+    }
+
     dlgNew.addEventListener("close", () => {
         if (dlgNew.returnValue !== "ok") return;
         const w = clampInt($<HTMLInputElement>("new-w").value, MIN_DIM, MAX_DIM, 32);
@@ -1134,12 +1575,11 @@ function wireUi(): void {
             toast(`${w}×${h} の新規マップを作成しました (全セル奈落)`);
             return;
         }
-        if (!pendingPng) {
+        if (!wizState.dataUri) {
             showMessages("新規マップ (v2) を作成できません", ["タイルセット PNG が未選択です"], []);
             return;
         }
-        const tileSize = clampInt($<HTMLInputElement>("new-ts-size").value, TILESIZE_MIN, TILESIZE_MAX, TILESIZE_DEFAULT);
-        void importTilesetPng(pendingPng, tileSize).then((r) => {
+        void wizBuildTileset().then((r) => {
             if (!r.ok) {
                 showMessages("新規マップ (v2) を作成できません", [r.error], []);
                 return;
@@ -1147,7 +1587,8 @@ function wireUi(): void {
             selectedTile = 0;
             void backupAutosave();
             setDocument(createNewDocV2(w, h, name, author, r.tileset));
-            toast(`${w}×${h} の v2 マップを作成しました (チップ ${tileCount(r.tileset)} 個)`);
+            const rebakeInfo = wizState.needsRebake ? " (余白を正規化しました)" : "";
+            toast(`${w}×${h} の v2 マップを作成しました (チップ ${tileCount(r.tileset)} 個)${rebakeInfo}`);
         });
     });
 

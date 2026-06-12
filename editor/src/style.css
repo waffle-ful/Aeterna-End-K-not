@@ -494,6 +494,210 @@ dialog menu {
     color: var(--warn);
 }
 
+/* =============================================================
+   タイルセットインポートウィザード
+   ============================================================= */
+
+/* dialog を広めに取る (PNG プレビューのため) */
+dialog#dlg-new {
+    width: min(96vw, 640px);
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.wiz-step {
+    margin: var(--space-sm) 0;
+}
+
+/* Step1: ドロップゾーン */
+.wiz-drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius-md);
+    background: var(--bg-3);
+    padding: var(--space-lg);
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+}
+
+.wiz-drop-zone:hover,
+.wiz-drop-zone.drag-over {
+    border-color: var(--accent);
+    background: var(--bg-active-accent);
+}
+
+.wiz-drop-zone:focus-visible {
+    outline: 2px solid var(--focus);
+}
+
+.wiz-drop-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-xs);
+    pointer-events: none;
+}
+
+.wiz-drop-icon {
+    font-size: 32px;
+    line-height: 1;
+}
+
+.wiz-drop-label {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.wiz-drop-sub {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+/* PNG 投入後プレビュー */
+.wiz-preview-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    margin-top: var(--space-xs);
+}
+
+.wiz-preview-info {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+/* Step2/3: 推定・スライスプレビュー */
+.wiz-section-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: var(--space-xs);
+    margin-top: var(--space-sm);
+}
+
+/* 候補チップ群 */
+.wiz-candidates {
+    display: flex;
+    gap: var(--space-xs);
+    flex-wrap: wrap;
+    margin-bottom: var(--space-sm);
+}
+
+.wiz-chip {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: var(--space-xs) var(--space-sm);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--bg-2);
+    cursor: pointer;
+    font-size: 13px;
+    min-height: var(--touch-target);
+    transition: border-color 0.1s, background 0.1s;
+}
+
+.wiz-chip:hover {
+    background: #34343f;
+}
+
+.wiz-chip.active {
+    border-color: var(--accent);
+    background: var(--bg-active-accent);
+    color: var(--accent);
+}
+
+.wiz-chip-size {
+    font-weight: 700;
+    font-size: 14px;
+}
+
+.wiz-chip-conf {
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+.wiz-chip.active .wiz-chip-conf {
+    color: var(--accent);
+    opacity: 0.8;
+}
+
+/* 手動3入力行 */
+.wiz-manual-row {
+    display: flex;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+    margin-bottom: var(--space-sm);
+}
+
+.wiz-manual-label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--text-muted);
+    flex: 1 1 80px;
+}
+
+.wiz-num-input {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    border-radius: var(--radius-sm);
+    padding: var(--space-xs) var(--space-sm);
+    font-size: 14px;
+    width: 100%;
+    min-height: var(--touch-target);
+}
+
+.wiz-num-input:focus {
+    outline: 2px solid var(--focus);
+}
+
+/* スライスプレビューキャンバス */
+.wiz-slice-wrap {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--bg-3);
+    overflow: auto;
+    max-height: 220px;
+    line-height: 0;
+    margin-bottom: var(--space-xs);
+}
+
+.wiz-slice-canvas {
+    image-rendering: pixelated;
+    display: block;
+}
+
+.wiz-preview-canvas {
+    image-rendering: pixelated;
+    display: block;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-3);
+    max-width: 100%;
+    max-height: 120px;
+    object-fit: contain;
+}
+
+/* 統計表示 */
+.wiz-stats {
+    margin: var(--space-xs) 0;
+}
+
+/* リベイク警告 */
+.wiz-rebake-note {
+    margin-top: var(--space-xs);
+    padding: var(--space-xs) var(--space-sm);
+    border-left: 3px solid var(--warn);
+    color: var(--warn);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    background: rgba(255, 208, 122, 0.07);
+}
+
 @media (max-width: 600px) {
     .brand {
         display: none;
