@@ -3,9 +3,11 @@
 import { describe, expect, it } from "vitest";
 import {
     type SliceParams,
+    appendTileToAtlas,
     detectTransparentTiles,
     enumerateCandidates,
     rebakeAtlas,
+    resizeNearestNeighbor,
     scoreCandidates,
 } from "../src/tileset-import";
 
@@ -246,5 +248,157 @@ describe("rebakeAtlas", () => {
         const result = rebakeAtlas(src, params);
         expect(result.width).toBe(params.cols * params.tileSize);
         expect(result.height).toBe(params.rows * params.tileSize);
+    });
+});
+
+// ============================================================
+// appendTileToAtlas
+// ============================================================
+
+describe("appendTileToAtlas", () => {
+    const TS = 4; // tileSize
+
+    /** 全ピクセルを指定 RGBA 値で埋めた tileSize×tileSize バッファを作る */
+    function solidTile(r: number, g: number, b: number, a: number): Uint8ClampedArray {
+        const buf = new Uint8ClampedArray(TS * TS * 4);
+        for (let i = 0; i < TS * TS; i++) {
+            buf[i * 4] = r; buf[i * 4 + 1] = g; buf[i * 4 + 2] = b; buf[i * 4 + 3] = a;
+        }
+        return buf;
+    }
+
+    /** columns×rows アトラスで、指定スロットだけ色付き (alpha=255)、残りは透明 */
+    function atlasWithSolid(
+        columns: number,
+        rows: number,
+        solidSlots: number[],
+        color: [number, number, number] = [200, 200, 200],
+    ): Uint8ClampedArray {
+        const w = columns * TS;
+        const h = rows * TS;
+        const buf = new Uint8ClampedArray(w * h * 4);
+        for (const slot of solidSlots) {
+            const col = slot % columns;
+            const row = Math.floor(slot / columns);
+            for (let ty = 0; ty < TS; ty++) {
+                for (let tx = 0; tx < TS; tx++) {
+                    const idx = ((row * TS + ty) * w + (col * TS + tx)) * 4;
+                    buf[idx] = color[0]; buf[idx + 1] = color[1]; buf[idx + 2] = color[2]; buf[idx + 3] = 255;
+                }
+            }
+        }
+        return buf;
+    }
+
+    it("末尾に透明スロットがある場合は行を増やさずに書き込む", () => {
+        // 2列×1行、スロット0が使用中、スロット1が透明
+        const atlas = atlasWithSolid(2, 1, [0]);
+        const tile = solidTile(100, 0, 0, 255);
+        const { rgba, newRows, newTileIndex } = appendTileToAtlas(atlas, 2, 1, TS, tile);
+        expect(newRows).toBe(1);       // 行は増えない
+        expect(newTileIndex).toBe(1);  // スロット1に追記
+        // スロット1の先頭ピクセルが tile の色になっているか
+        const dstX = 1 * TS;
+        const dstY = 0;
+        const idx = (dstY * 2 * TS + dstX) * 4;
+        expect(rgba[idx]).toBe(100);
+        expect(rgba[idx + 3]).toBe(255);
+    });
+
+    it("末尾行が満杯なら新しい行を1行追加して先頭セルに配置する", () => {
+        // 2列×1行、スロット0・1両方使用中
+        const atlas = atlasWithSolid(2, 1, [0, 1]);
+        const tile = solidTile(77, 0, 0, 255);
+        const { rgba, newRows, newTileIndex } = appendTileToAtlas(atlas, 2, 1, TS, tile);
+        expect(newRows).toBe(2);       // 1行増える
+        expect(newTileIndex).toBe(2);  // 新行先頭 = インデックス 2
+        // 新行の先頭ピクセルが tile の色になっているか
+        const dstX = 0;
+        const dstY = 1 * TS;
+        const idx = (dstY * 2 * TS + dstX) * 4;
+        expect(rgba[idx]).toBe(77);
+        expect(rgba[idx + 3]).toBe(255);
+        // 新行の残り (スロット3) は透明のまま
+        const slot3X = 1 * TS;
+        const slot3Idx = (dstY * 2 * TS + slot3X) * 4;
+        expect(rgba[slot3Idx + 3]).toBe(0);
+    });
+
+    it("全スロット透明のアトラスでも先頭スロットに配置できる (1列×1行)", () => {
+        const atlas = new Uint8ClampedArray(TS * TS * 4); // 全透明
+        const tile = solidTile(55, 55, 55, 255);
+        const { rgba, newRows, newTileIndex } = appendTileToAtlas(atlas, 1, 1, TS, tile);
+        expect(newRows).toBe(1);
+        expect(newTileIndex).toBe(0);
+        expect(rgba[3]).toBe(255); // 先頭ピクセルの alpha
+    });
+
+    it("複数列で末尾から連続した透明スロットの先頭に書き込む", () => {
+        // 3列×1行、スロット0のみ使用中 → スロット1,2が透明 → スロット1に書き込む
+        const atlas = atlasWithSolid(3, 1, [0]);
+        const tile = solidTile(33, 33, 33, 255);
+        const { newRows, newTileIndex } = appendTileToAtlas(atlas, 3, 1, TS, tile);
+        expect(newRows).toBe(1);
+        expect(newTileIndex).toBe(1);
+    });
+
+    it("新行追加時に元データが保持されている", () => {
+        // 2列×1行、両スロット使用中
+        const atlas = atlasWithSolid(2, 1, [0, 1], [10, 20, 30]);
+        const tile = solidTile(99, 0, 0, 255);
+        const { rgba } = appendTileToAtlas(atlas, 2, 1, TS, tile);
+        // 元の行 (スロット0) のデータが変わっていないか
+        const idx = 0;
+        expect(rgba[idx]).toBe(10);
+        expect(rgba[idx + 1]).toBe(20);
+        expect(rgba[idx + 2]).toBe(30);
+        expect(rgba[idx + 3]).toBe(255);
+    });
+});
+
+// ============================================================
+// resizeNearestNeighbor
+// ============================================================
+
+describe("resizeNearestNeighbor", () => {
+    it("2×2 → 4×4 に拡大すると各ピクセルが 2×2 に伸びる", () => {
+        // 2×2 src: 左上=赤, 右上=緑, 左下=青, 右下=白
+        const src = new Uint8ClampedArray([
+            255, 0, 0, 255,   0, 255, 0, 255,
+            0, 0, 255, 255,   255, 255, 255, 255,
+        ]);
+        const dst = resizeNearestNeighbor(src, 2, 2, 4, 4);
+        // 左上 2×2 ブロックは赤
+        expect(dst[0]).toBe(255); // R
+        expect(dst[1]).toBe(0);   // G
+        expect(dst[2]).toBe(0);   // B
+        // 右上 2×2 ブロックの先頭 (x=2, y=0) は緑
+        const idx = (0 * 4 + 2) * 4;
+        expect(dst[idx]).toBe(0);
+        expect(dst[idx + 1]).toBe(255);
+    });
+
+    it("4×4 → 2×2 に縮小するとピクセルが間引かれる", () => {
+        const src = new Uint8ClampedArray(4 * 4 * 4);
+        // 左列 (x=0,1) を赤, 右列 (x=2,3) を青にする
+        for (let y = 0; y < 4; y++) {
+            for (let x = 0; x < 4; x++) {
+                const i = (y * 4 + x) * 4;
+                if (x < 2) { src[i] = 255; src[i + 3] = 255; }
+                else { src[i + 2] = 255; src[i + 3] = 255; }
+            }
+        }
+        const dst = resizeNearestNeighbor(src, 4, 4, 2, 2);
+        expect(dst.length).toBe(2 * 2 * 4);
+        // x=0 は赤 (src の x=0 から)
+        expect(dst[0]).toBe(255); expect(dst[2]).toBe(0);
+        // x=1 は青 (src の x=2 から)
+        expect(dst[4]).toBe(0); expect(dst[6]).toBe(255);
+    });
+
+    it("同一サイズで呼んだ場合は入力と同内容を返す", () => {
+        const src = new Uint8ClampedArray([1, 2, 3, 255, 4, 5, 6, 255, 7, 8, 9, 255, 10, 11, 12, 255]);
+        const dst = resizeNearestNeighbor(src, 2, 2, 2, 2);
+        expect([...dst]).toEqual([...src]);
     });
 });

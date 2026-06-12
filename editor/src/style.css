@@ -698,6 +698,65 @@ dialog#dlg-new {
     background: rgba(255, 208, 122, 0.07);
 }
 
+/* =============================================================
+   タイル1枚追加ダイアログ
+   ============================================================= */
+
+dialog#dlg-add-tile {
+    width: min(92vw, 420px);
+}
+
+/* パレット帯・オーバーレイの追加ボタン */
+.add-tile-btn {
+    flex: 0 0 auto;
+    padding: var(--space-xs) var(--space-sm);
+    min-height: var(--touch-target);
+    font-size: 13px;
+    color: var(--accent);
+    border-color: var(--accent);
+    white-space: nowrap;
+}
+
+.add-tile-btn:hover {
+    background: var(--bg-active-accent);
+}
+
+/* 追加ダイアログ: プレビューエリア */
+.add-tile-preview-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-xs);
+    margin-top: var(--space-sm);
+}
+
+.add-tile-preview-canvas {
+    image-rendering: pixelated;
+    display: block;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-3);
+    /* 最大 128px 表示 (tileSize 最大と同寸法まで) */
+    max-width: 128px;
+    max-height: 128px;
+}
+
+.add-tile-preview-info {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin: 0;
+    text-align: center;
+}
+
+#add-tile-size-note {
+    padding: var(--space-xs) var(--space-sm);
+    border-left: 3px solid var(--info);
+    color: var(--info);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    background: rgba(126, 200, 255, 0.07);
+    margin-top: var(--space-xs);
+}
+
 @media (max-width: 600px) {
     .brand {
         display: none;

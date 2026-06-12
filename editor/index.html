@@ -51,6 +51,7 @@
         <!-- コンパクト帯パレット: 選択中チップ + 近傍チップ数個 + 展開ボタン -->
         <div id="palette-strip">
           <canvas id="strip-canvas" title="クリックで別のチップを選択"></canvas>
+          <button id="btn-add-tile-strip" title="PNG を1枚追加してタイルセットに追記します" class="add-tile-btn">+</button>
           <button id="btn-palette-expand" title="チップ一覧を全画面で開く" aria-label="チップ一覧を開く">▲▲</button>
         </div>
       </div>
@@ -80,6 +81,7 @@
           <input type="checkbox" id="palette-used-only" />
           使用中のみ
         </label>
+        <button id="btn-add-tile-overlay" title="PNG を1枚追加してタイルセットに追記します" class="add-tile-btn">+ タイルを追加</button>
         <button id="btn-palette-collapse" title="帯に戻る" aria-label="閉じる">▼▼</button>
       </div>
       <div id="palette-grid-wrap">
@@ -89,6 +91,7 @@
 
     <input type="file" id="file-input" accept=".json,application/json" hidden />
     <input type="file" id="png-input" accept=".png,image/png" hidden />
+    <input type="file" id="add-tile-input" accept=".png,image/png" hidden />
     <div id="toast" hidden></div>
 
     <dialog id="dlg-new">
@@ -187,6 +190,27 @@
       <h3 id="msg-title"></h3>
       <ul id="msg-list"></ul>
       <menu><button id="msg-close" type="button">閉じる</button></menu>
+    </dialog>
+
+    <!-- タイル1枚追加ダイアログ (v2 マップ専用) -->
+    <dialog id="dlg-add-tile">
+      <h3>タイルを1枚追加</h3>
+      <div id="add-tile-drop-zone" class="wiz-drop-zone" tabindex="0" role="button" aria-label="PNG をドロップまたはクリックして選択">
+        <div id="add-tile-drop-inner">
+          <span class="wiz-drop-icon">🖼</span>
+          <span class="wiz-drop-label">PNG をここにドロップ</span>
+          <span class="wiz-drop-sub">クリックで選択 / Ctrl+V で貼り付け</span>
+        </div>
+      </div>
+      <div id="add-tile-preview-wrap" class="add-tile-preview-wrap" hidden>
+        <canvas id="add-tile-preview-canvas" class="add-tile-preview-canvas"></canvas>
+        <p id="add-tile-preview-info" class="add-tile-preview-info"></p>
+      </div>
+      <p class="note" id="add-tile-size-note" hidden></p>
+      <menu>
+        <button id="add-tile-ok" type="button" disabled>追加</button>
+        <button id="add-tile-cancel" type="button">キャンセル</button>
+      </menu>
     </dialog>
 
     <script type="module" src="/src/main.ts"></script>

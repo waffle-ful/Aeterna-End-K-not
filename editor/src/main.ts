@@ -15,6 +15,7 @@ import {
     MAX_JSON_BYTES,
     MAX_JSON_BYTES_V2,
     MAX_TILESET_IMAGE_BYTES,
+    MAX_TILECOUNT,
     MIN_DIM,
     type MapDocV2,
     NAME_MAX,
@@ -28,6 +29,7 @@ import {
     coordToCell,
     createNewDoc,
     createNewDocV2,
+    defaultTileAttr,
     docToJsonAny,
     isV2Doc,
     tileCount,
@@ -35,9 +37,11 @@ import {
 import {
     type SliceCandidate,
     type SliceParams,
+    appendTileToAtlas,
     detectTransparentTiles,
     enumerateCandidates,
     rebakeAtlas,
+    resizeNearestNeighbor,
     scoreCandidates,
 } from "./tileset-import";
 import { validateEkmapAny, validateTileset } from "./validate";
@@ -1334,6 +1338,205 @@ async function wizBuildTileset(): Promise<TilesetImport> {
     return { ok: true, tileset: ts, pngWidth: cols * tileSize, pngHeight: rows * tileSize };
 }
 
+// ================================================================
+// タイル1枚追加フロー (addTile*)
+// ================================================================
+
+/** addTile ダイアログの状態 */
+interface AddTileState {
+    /** data:image/png;base64,… */
+    dataUri: string | null;
+    rgba: Uint8ClampedArray | null;
+    srcW: number;
+    srcH: number;
+}
+
+const addTileState: AddTileState = { dataUri: null, rgba: null, srcW: 0, srcH: 0 };
+
+function addTileReset(): void {
+    addTileState.dataUri = null;
+    addTileState.rgba = null;
+    addTileState.srcW = 0;
+    addTileState.srcH = 0;
+    $("add-tile-drop-zone").hidden = false;
+    $("add-tile-preview-wrap").hidden = true;
+    $("add-tile-size-note").hidden = true;
+    $<HTMLButtonElement>("add-tile-ok").disabled = true;
+}
+
+function addTileUpdatePreview(): void {
+    if (!addTileState.dataUri || !isV2Doc(doc)) return;
+    const ts = doc.tileset;
+
+    $("add-tile-drop-zone").hidden = true;
+    $("add-tile-preview-wrap").hidden = false;
+
+    // サムネイル描画
+    const cv = $<HTMLCanvasElement>("add-tile-preview-canvas");
+    const img = new Image();
+    img.onload = () => {
+        const SZ = Math.min(img.naturalWidth, 128);
+        cv.width = SZ;
+        cv.height = SZ;
+        cv.style.width = `${SZ}px`;
+        cv.style.height = `${SZ}px`;
+        const ctx = cv.getContext("2d");
+        if (!ctx) return;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(img, 0, 0, SZ, SZ);
+    };
+    img.src = addTileState.dataUri;
+
+    // 寸法説明
+    const { srcW, srcH } = addTileState;
+    const note = $("add-tile-size-note");
+    if (srcW !== ts.tileSize || srcH !== ts.tileSize) {
+        note.textContent = `元のサイズ ${srcW}×${srcH}px → タイルの大きさ (${ts.tileSize}×${ts.tileSize}px) に合わせます`;
+        note.hidden = false;
+    } else {
+        note.hidden = true;
+    }
+
+    $("add-tile-preview-info").textContent = `${srcW}×${srcH}px`;
+    $<HTMLButtonElement>("add-tile-ok").disabled = false;
+}
+
+async function addTileLoadPng(file: File): Promise<void> {
+    if (!isV2Doc(doc)) return;
+
+    if (file.size > MAX_TILESET_IMAGE_BYTES) {
+        toast(`PNG が 1 MB を超えています (${(file.size / 1024).toFixed(1)} KB)`);
+        return;
+    }
+    if (!file.type.includes("png") && !file.name.toLowerCase().endsWith(".png")) {
+        toast("PNG ファイルを選択してください");
+        return;
+    }
+
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const dataUri = PNG_DATA_URI_PREFIX + bytesToBase64(bytes);
+    const pngInfo = parsePngDataUri(dataUri);
+    if (!pngInfo.ok) {
+        toast(`PNG エラー: ${pngInfo.error}`);
+        return;
+    }
+
+    const rgbaResult = await getPngRgba(dataUri);
+    if (!rgbaResult) {
+        toast("画像の読み込みに失敗しました");
+        return;
+    }
+
+    addTileState.dataUri = dataUri;
+    addTileState.rgba = rgbaResult.rgba;
+    addTileState.srcW = pngInfo.width;
+    addTileState.srcH = pngInfo.height;
+
+    addTileUpdatePreview();
+}
+
+/** タイル追加を確定して tileset を更新する。DOM 経路 (canvas) を使う */
+async function addTileCommit(): Promise<void> {
+    if (!isV2Doc(doc) || !addTileState.rgba) return;
+    const d = doc;
+    const ts = d.tileset;
+    const { tileSize, columns, rows } = ts;
+
+    // 上限チェック
+    const currentCount = tileCount(ts);
+    if (currentCount >= MAX_TILECOUNT) {
+        showMessages("タイルを追加できません", [`チップ数が上限 ${MAX_TILECOUNT} に達しています`], []);
+        return;
+    }
+
+    // 1. nearest-neighbor でタイルサイズに縮小/拡大
+    let tilePx: Uint8ClampedArray;
+    if (addTileState.srcW === tileSize && addTileState.srcH === tileSize) {
+        tilePx = addTileState.rgba;
+    } else {
+        tilePx = resizeNearestNeighbor(addTileState.rgba, addTileState.srcW, addTileState.srcH, tileSize, tileSize);
+    }
+
+    // 2. アトラスにアペンド (純関数)
+    const atlasRgbaResult = await getPngRgba(ts.image);
+    if (!atlasRgbaResult) {
+        toast("現在のタイルセット画像を読み込めませんでした");
+        return;
+    }
+
+    const { rgba: newRgba, newRows, newTileIndex } = appendTileToAtlas(
+        atlasRgbaResult.rgba,
+        columns,
+        rows,
+        tileSize,
+        tilePx,
+    );
+
+    // 3. RGBA → PNG data URI (DOM 経路)
+    const newImageUri = rgbaToPngDataUri(newRgba, columns * tileSize, newRows * tileSize);
+
+    // 4. PNG サイズ検証 (概算)
+    const b64Body = newImageUri.slice(PNG_DATA_URI_PREFIX.length);
+    const approxBytes = Math.floor(b64Body.length * 3 / 4);
+    if (approxBytes > MAX_TILESET_IMAGE_BYTES) {
+        showMessages("タイルを追加できません", [
+            `追加後のアトラス PNG が 1 MB を超えます (約 ${(approxBytes / 1024).toFixed(1)} KB)。タイルセットを小さくしてから追加してください。`
+        ], []);
+        return;
+    }
+
+    // 5. JSON サイズ概算検証 (v2 4MB 上限)
+    const newTileset: TilesetDoc = {
+        tileSize,
+        columns,
+        rows: newRows,
+        image: newImageUri,
+        tiles: [...ts.tiles],
+    };
+    // 新タイルの属性を追加 (必要なら中間スロットも dense に保つ)
+    while (newTileset.tiles.length < newTileIndex) {
+        newTileset.tiles.push(defaultTileAttr());
+    }
+    if (newTileset.tiles.length === newTileIndex) {
+        newTileset.tiles.push(defaultTileAttr());
+    }
+
+    // 粗い JSON サイズ見積もり
+    const roughJson = JSON.stringify({ image: newImageUri });
+    if (roughJson.length > MAX_JSON_BYTES_V2) {
+        showMessages("タイルを追加できません", [
+            `追加後のマップ JSON が 4 MB を超える見込みです。タイルセットを小さくしてから追加してください。`
+        ], []);
+        return;
+    }
+
+    // 6. tileset を差し替え (rows 以外は保持。history.clear を使う replaceTileset を流用)
+    //    Undo は非対応: タイルセット差し替えは既存の replaceTileset でも history.clear するため
+    d.tileset = newTileset;
+
+    // 7. 選択タイルを新しいタイルに移す + 再描画
+    history.clear();
+    refreshUndoButtons();
+    selectedTile = newTileIndex;
+    renderer.setDoc(d);
+    void rebuildPicker();
+    drawTilesetPanel();
+    scheduleSave();
+    updateStatus();
+
+    $<HTMLDialogElement>("dlg-add-tile").close();
+    toast(`タイル ${newTileIndex} を追加しました (計 ${tileCount(newTileset)} チップ)`);
+}
+
+function openAddTileDialog(): void {
+    if (!isV2Doc(doc)) {
+        toast("タイル追加は v2 マップのみ対応しています");
+        return;
+    }
+    addTileReset();
+    $<HTMLDialogElement>("dlg-add-tile").showModal();
+}
+
 function wireUi(): void {
     // v1 ツールパレット
     const toolButtons = [...document.querySelectorAll<HTMLButtonElement>("#tools .tool")];
@@ -1628,6 +1831,53 @@ function wireUi(): void {
     });
 
     $("msg-close").addEventListener("click", () => $<HTMLDialogElement>("dlg-msg").close());
+
+    // タイル1枚追加ボタン (オーバーレイ + 帯)
+    $("btn-add-tile-overlay").addEventListener("click", () => openAddTileDialog());
+    $("btn-add-tile-strip").addEventListener("click", () => openAddTileDialog());
+
+    // タイル追加ダイアログ: ファイル入力
+    const addTileInput = $<HTMLInputElement>("add-tile-input");
+    $("add-tile-drop-zone").addEventListener("click", () => addTileInput.click());
+    addTileInput.addEventListener("change", async () => {
+        const f = addTileInput.files?.[0];
+        addTileInput.value = "";
+        if (f) await addTileLoadPng(f);
+    });
+
+    // ドラッグ&ドロップ
+    $("add-tile-drop-zone").addEventListener("dragover", (e) => {
+        e.preventDefault();
+        $("add-tile-drop-zone").classList.add("drag-over");
+    });
+    $("add-tile-drop-zone").addEventListener("dragleave", () => {
+        $("add-tile-drop-zone").classList.remove("drag-over");
+    });
+    $("add-tile-drop-zone").addEventListener("drop", async (e) => {
+        e.preventDefault();
+        $("add-tile-drop-zone").classList.remove("drag-over");
+        const file = e.dataTransfer?.files[0];
+        if (file) await addTileLoadPng(file);
+    });
+
+    // Ctrl+V 貼り付け (dlg-add-tile が開いているときのみ)
+    const dlgAddTile = $<HTMLDialogElement>("dlg-add-tile");
+    document.addEventListener("paste", async (e) => {
+        if (!dlgAddTile.open) return;
+        const items = e.clipboardData?.items;
+        if (!items) return;
+        for (const item of items) {
+            if (item.type === "image/png") {
+                const file = item.getAsFile();
+                if (file) await addTileLoadPng(file);
+                break;
+            }
+        }
+    });
+
+    // 追加確定 / キャンセル
+    $("add-tile-ok").addEventListener("click", () => void addTileCommit());
+    $("add-tile-cancel").addEventListener("click", () => dlgAddTile.close());
 
     // 操作列
     $("btn-undo").addEventListener("click", doUndo);

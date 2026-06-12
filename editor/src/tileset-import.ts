@@ -314,3 +314,134 @@ export function rebakeAtlas(
 
     return { rgba: dst, width: dstWidth, height: dstHeight, reencoded: true };
 }
+
+// ============================================================
+// 単体タイル追記 (appendTileToAtlas)
+// ============================================================
+
+/**
+ * 単体タイル PNG の RGBA (tileSize×tileSize ぴったり) を既存の隙間なしアトラスに追記して
+ * 新しいアトラス RGBA と更新済み rows/newTileIndex を返す純関数。
+ *
+ * 追記ルール:
+ *   1. 「最後の行の末尾に全透明スロット」があればそこを上書き (columns は不変)
+ *   2. 無ければアトラスを tileSize 分だけ縦に伸ばして先頭セルに配置する (新行の残りは透明)
+ *
+ * 呼び出し元の責務:
+ *   - atlasTileRgba の寸法が tileSize×tileSize であることを事前確認してから呼ぶこと。
+ *   - 返された rgba を canvas → PNG data URI へ変換する DOM 操作は呼び出し元が担う。
+ *
+ * @param atlasRgba  既存アトラスの RGBA (columns×tileSize 幅, rows×tileSize 高さ)
+ * @param columns    アトラスの列数 (変更しない)
+ * @param rows       現在の行数
+ * @param tileSize   タイルサイズ (px)
+ * @param tilePx     追記する 1 タイル分の RGBA (tileSize×tileSize×4)
+ * @returns          { rgba, newRows, newTileIndex }
+ *   - rgba: 新しいアトラス RGBA (変更が加えられたコピー)
+ *   - newRows: 更新後の行数
+ *   - newTileIndex: 新しいタイルのインデックス (columns×行+列)
+ */
+export function appendTileToAtlas(
+    atlasRgba: Uint8Array | Uint8ClampedArray,
+    columns: number,
+    rows: number,
+    tileSize: number,
+    tilePx: Uint8Array | Uint8ClampedArray,
+): { rgba: Uint8ClampedArray; newRows: number; newTileIndex: number } {
+    const atlasWidth = columns * tileSize;
+
+    // 最後の行の末尾から空き透明スロットを探す (末尾側から逆順に走査)
+    // 透明スロット = 当該タイル内の全ピクセルの alpha が 0
+    let emptySlotIndex = -1;
+    const lastRowStart = (rows - 1) * columns;
+    for (let col = columns - 1; col >= 0; col--) {
+        const tileIdx = lastRowStart + col;
+        const tileX = col * tileSize;
+        const tileY = (rows - 1) * tileSize;
+        let allTransparent = true;
+        outer: for (let ty = 0; ty < tileSize; ty++) {
+            for (let tx = 0; tx < tileSize; tx++) {
+                const px = ((tileY + ty) * atlasWidth + (tileX + tx)) * 4;
+                if (atlasRgba[px + 3] > 0) {
+                    allTransparent = false;
+                    break outer;
+                }
+            }
+        }
+        if (allTransparent) {
+            emptySlotIndex = tileIdx;
+        } else {
+            // 最後の連続した透明ブロックの先頭を探しているので、不透明が出たら走査終了
+            break;
+        }
+    }
+
+    if (emptySlotIndex >= 0) {
+        // 既存スロットを上書き: アトラスをコピーしてから書き込む
+        const dst = new Uint8ClampedArray(atlasRgba);
+        const col = emptySlotIndex % columns;
+        const row = Math.floor(emptySlotIndex / columns);
+        const dstX = col * tileSize;
+        const dstY = row * tileSize;
+        for (let ty = 0; ty < tileSize; ty++) {
+            for (let tx = 0; tx < tileSize; tx++) {
+                const srcIdx = (ty * tileSize + tx) * 4;
+                const dstIdx = ((dstY + ty) * atlasWidth + (dstX + tx)) * 4;
+                dst[dstIdx] = tilePx[srcIdx];
+                dst[dstIdx + 1] = tilePx[srcIdx + 1];
+                dst[dstIdx + 2] = tilePx[srcIdx + 2];
+                dst[dstIdx + 3] = tilePx[srcIdx + 3];
+            }
+        }
+        return { rgba: dst, newRows: rows, newTileIndex: emptySlotIndex };
+    }
+
+    // 空きなし: 1 行追加
+    const newRows = rows + 1;
+    const newHeight = newRows * tileSize;
+    const dst = new Uint8ClampedArray(atlasWidth * newHeight * 4);
+    // 既存データをコピー
+    dst.set(atlasRgba, 0);
+    // 新行先頭 (列 0) にタイルを書き込む。残りセルは透明 (0 埋め済み)
+    const newTileIndex = rows * columns; // = 旧 tileCount
+    const dstX = 0;
+    const dstY = rows * tileSize;
+    for (let ty = 0; ty < tileSize; ty++) {
+        for (let tx = 0; tx < tileSize; tx++) {
+            const srcIdx = (ty * tileSize + tx) * 4;
+            const dstIdx = ((dstY + ty) * atlasWidth + (dstX + tx)) * 4;
+            dst[dstIdx] = tilePx[srcIdx];
+            dst[dstIdx + 1] = tilePx[srcIdx + 1];
+            dst[dstIdx + 2] = tilePx[srcIdx + 2];
+            dst[dstIdx + 3] = tilePx[srcIdx + 3];
+        }
+    }
+    return { rgba: dst, newRows, newTileIndex };
+}
+
+/**
+ * nearest-neighbor で src RGBA (srcW×srcH) を dstW×dstH に縮小/拡大する純関数。
+ * 出力は新しい Uint8ClampedArray。
+ */
+export function resizeNearestNeighbor(
+    src: Uint8Array | Uint8ClampedArray,
+    srcW: number,
+    srcH: number,
+    dstW: number,
+    dstH: number,
+): Uint8ClampedArray {
+    const dst = new Uint8ClampedArray(dstW * dstH * 4);
+    for (let dy = 0; dy < dstH; dy++) {
+        const sy = Math.floor((dy * srcH) / dstH);
+        for (let dx = 0; dx < dstW; dx++) {
+            const sx = Math.floor((dx * srcW) / dstW);
+            const si = (sy * srcW + sx) * 4;
+            const di = (dy * dstW + dx) * 4;
+            dst[di] = src[si];
+            dst[di + 1] = src[si + 1];
+            dst[di + 2] = src[si + 2];
+            dst[di + 3] = src[si + 3];
+        }
+    }
+    return dst;
+}
