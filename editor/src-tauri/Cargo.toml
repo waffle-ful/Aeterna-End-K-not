@@ -24,3 +24,11 @@ log = "0.4"
 tauri = { version = "2.11.2", features = [] }
 tauri-plugin-log = "2"
 tauri-plugin-fs = "2"
+
+# time 0.3.48 の `impl From<HourBase> for <HourBase as ModifierValue>::Type` (Self が
+# 関連型 projection) が rustc >= 1.88 の coherence で正規化されず、下流のあらゆる blanket
+# `From<T>` impl と E0119 衝突する (cookie / tauri-utils 等)。vendor/time に Self を具体型へ
+# 直したコピーを置き、全依存の time をそれに差し替えて根本解決する。
+# 上流 time が修正版を出したらこのブロックごと削除して通常解決に戻せる。
+[patch.crates-io]
+time = { path = "vendor/time" }
