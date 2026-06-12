@@ -196,10 +196,76 @@ export interface MapDocV2 {
     ambient: { visionRadius: number; [key: string]: unknown };
 }
 
-export type AnyDoc = MapDoc | MapDocV2;
+// ============================================================
+// EKM v3 — 4 レイヤー + 共有タイルセットプール (仕様 §19〜§24)
+// ============================================================
+
+export const MAX_TILESETS = 4;
+export const V3_LAYER_COUNT = 4;
+
+/** v3 の 1 レイヤー内部表現 */
+export interface LayerDocV3 {
+    /** tilesets[] へのインデックス (0〜MAX_TILESETS-1) */
+    tileset: number;
+    /** width*height のフラット int 配列。-1 = 空 */
+    cells: number[];
+    /** true = この層のタイルをプレイヤーより上に描画 (仕様 §21.4) */
+    above: boolean;
+}
+
+/** エディタ内部ドキュメント (v3) — layers は常に 4 要素にパディング済み */
+export interface MapDocV3 {
+    ekm: 3;
+    name: string;
+    author: string;
+    width: number;
+    height: number;
+    /** 共有タイルセットプール (1〜4 要素) */
+    tilesets: TilesetDoc[];
+    /** 常に 4 要素 (パディング済み) */
+    layers: [LayerDocV3, LayerDocV3, LayerDocV3, LayerDocV3];
+    decor: DecorEntry[];
+    spawn: SpawnPoint;
+    /** visionRadius は検証・クランプ済み。未知サブキーも保全する */
+    ambient: { visionRadius: number; [key: string]: unknown };
+    /** requires は対応 capability 集合 (v3 凍結時点では空 Set のみ対応)。保全して出力する */
+    requires?: string[];
+}
+
+export type AnyDoc = MapDoc | MapDocV2 | MapDocV3;
 
 export function isV2Doc(doc: AnyDoc): doc is MapDocV2 {
     return doc.ekm === 2;
+}
+
+export function isV3Doc(doc: AnyDoc): doc is MapDocV3 {
+    return doc.ekm === 3;
+}
+
+/** デフォルト (完全空) の LayerDocV3 を作る */
+function makeDefaultLayer(width: number, height: number): LayerDocV3 {
+    return { tileset: 0, cells: new Array(width * height).fill(-1), above: false };
+}
+
+/** 全セル空の新規 v3 マップ。tilesets[0] に渡した tileset を使う */
+export function createNewDocV3(width: number, height: number, name: string, author: string, tileset: TilesetDoc): MapDocV3 {
+    return {
+        ekm: 3,
+        name,
+        author,
+        width,
+        height,
+        tilesets: [tileset],
+        layers: [
+            makeDefaultLayer(width, height),
+            makeDefaultLayer(width, height),
+            makeDefaultLayer(width, height),
+            makeDefaultLayer(width, height),
+        ],
+        decor: [],
+        spawn: { x: Math.floor(width / 2), y: Math.floor(height / 2) },
+        ambient: { visionRadius: VISION_DEFAULT },
+    };
 }
 
 /** 全セル空 (-1) の新規 v2 マップ。spawn は中央セル */
@@ -250,7 +316,87 @@ export interface EkmapJsonV2 {
     ambient?: { visionRadius?: number; [key: string]: unknown };
 }
 
-export type AnyEkmapJson = EkmapJson | EkmapJsonV2;
+// ---------- v3 JSON (出力形) ----------
+
+export interface LayerJsonV3 {
+    tileset: number;
+    cells: number[];
+    above?: boolean; // false のとき省略しない (仕様: 読込時パディングはするが出力は明示)
+}
+
+export interface EkmapJsonV3 {
+    ekm: 3;
+    requires?: string[];
+    name: string;
+    author?: string;
+    width: number;
+    height: number;
+    tilesets: TilesetJson[];
+    layers: LayerJsonV3[];
+    decor?: DecorEntry[];
+    spawn: SpawnPoint;
+    ambient?: { visionRadius?: number; [key: string]: unknown };
+}
+
+export type AnyEkmapJson = EkmapJson | EkmapJsonV2 | EkmapJsonV3;
+
+/** TilesetDoc → TilesetJson (tiles 疎化ヘルパ) */
+function tilesetToJson(ts: TilesetDoc): TilesetJson {
+    const tiles: TileJsonEntry[] = [];
+    for (let id = 0; id < ts.tiles.length; id++) {
+        const t = ts.tiles[id];
+        if (!isDefaultTileAttr(t)) tiles.push({ id, pass: t.pass, over: t.over, light: t.light, tag: t.tag, dir: t.dir });
+    }
+    const json: TilesetJson = { tileSize: ts.tileSize, columns: ts.columns, image: ts.image };
+    if (tiles.length > 0) json.tiles = tiles;
+    return json;
+}
+
+/**
+ * 内部 v3 ドキュメント → .ekmap.json 構造。
+ * 保存省略規則 (§22.1): 末尾から「cells 全 -1 かつ above=false かつ tileset=0」の層のみ省略。
+ * layers[0] は常に出力。途中の層は省略不可。
+ */
+export function docToJsonV3(doc: MapDocV3): EkmapJsonV3 {
+    // tilesets 全セット疎化
+    const tilesetsJson: TilesetJson[] = doc.tilesets.map(tilesetToJson);
+
+    // layers: 末尾デフォルト層を省略 (layers[0] は常に残す)
+    const layersToWrite: LayerDocV3[] = [...doc.layers];
+    while (layersToWrite.length > 1) {
+        const last = layersToWrite[layersToWrite.length - 1];
+        if (last.tileset === 0 && !last.above && last.cells.every((v) => v < 0)) {
+            layersToWrite.pop();
+        } else {
+            break;
+        }
+    }
+
+    const layersJson: LayerJsonV3[] = layersToWrite.map((l) => {
+        const out: LayerJsonV3 = { tileset: l.tileset, cells: [...l.cells] };
+        if (l.above) out.above = true;
+        return out;
+    });
+
+    // 未知サブキーを保全しつつ visionRadius を上書き
+    const { visionRadius, ...ambientExtra } = doc.ambient;
+    const ambientOut: { visionRadius: number; [key: string]: unknown } = { ...ambientExtra, visionRadius };
+
+    const json: EkmapJsonV3 = {
+        ekm: 3,
+        name: doc.name,
+        author: doc.author,
+        width: doc.width,
+        height: doc.height,
+        tilesets: tilesetsJson,
+        layers: layersJson,
+        spawn: { x: doc.spawn.x, y: doc.spawn.y },
+        ambient: ambientOut,
+    };
+    if (doc.requires && doc.requires.length > 0) json.requires = [...doc.requires];
+    if (doc.decor.length > 0) json.decor = doc.decor.map((d) => ({ kind: d.kind, x: d.x, y: d.y }));
+    return json;
+}
 
 /** 内部 v2 ドキュメント → .ekmap.json 構造。tiles は疎 (デフォルト値のチップは省略) */
 export function docToJsonV2(doc: MapDocV2): EkmapJsonV2 {
@@ -285,9 +431,11 @@ export function docToJsonV2(doc: MapDocV2): EkmapJsonV2 {
     return json;
 }
 
-/** v1/v2 共通の JSON 化 */
+/** v1/v2/v3 共通の JSON 化 */
 export function docToJsonAny(doc: AnyDoc): AnyEkmapJson {
-    return isV2Doc(doc) ? docToJsonV2(doc) : docToJson(doc);
+    if (isV3Doc(doc)) return docToJsonV3(doc);
+    if (isV2Doc(doc)) return docToJsonV2(doc);
+    return docToJson(doc);
 }
 
 // ---------- v2 セル解決規則 (仕様 §15) ----------
@@ -297,6 +445,99 @@ export interface CellResolution {
     isVoid: boolean;
     passable: boolean;
     blocksLight: boolean;
+}
+
+/**
+ * 仕様 §21 — v3 セル解決規則:
+ * 1. T1 = -1 → void (通行不可+遮光)
+ * 2. 実効通行: レイヤー 4→1 走査で最初の「タイルあり && pass != "v"」の pass を採用。
+ *    全て空 or "v" → T1 の pass ("v" は "o" 扱い)
+ * 3. 実効遮光: 全層の light の OR、または void
+ * 5. グリッド外 = void
+ */
+export function resolveCellV3(doc: MapDocV3, x: number, y: number): CellResolution {
+    if (!inBounds(doc, x, y)) return { isVoid: true, passable: false, blocksLight: true };
+    const i = y * doc.width + x;
+
+    // T1 = layers[0]
+    const t1 = doc.layers[0].cells[i];
+    if (t1 < 0) return { isVoid: true, passable: false, blocksLight: true };
+
+    // 実効遮光: 全層の light OR
+    let blocksLight = false;
+    for (const layer of doc.layers) {
+        const tid = layer.cells[i];
+        if (tid < 0) continue;
+        const ts = doc.tilesets[layer.tileset];
+        if (ts && ts.tiles[tid]?.light) { blocksLight = true; break; }
+    }
+
+    // 実効通行: 層 4→1 走査 (index 3→0)
+    let effectivePass: PassValue | null = null;
+    for (let li = doc.layers.length - 1; li >= 0; li--) {
+        const layer = doc.layers[li];
+        const tid = layer.cells[i];
+        if (tid < 0) continue;
+        const ts = doc.tilesets[layer.tileset];
+        const attr = ts?.tiles[tid] ?? defaultTileAttr();
+        if (attr.pass !== "v") {
+            effectivePass = attr.pass;
+            break;
+        }
+    }
+    if (effectivePass === null) {
+        // 全て空 or "v" → T1 の pass ("v" は "o" 扱い)
+        const ts1 = doc.tilesets[doc.layers[0].tileset];
+        const t1attr = ts1?.tiles[t1] ?? defaultTileAttr();
+        effectivePass = t1attr.pass === "v" ? "o" : t1attr.pass;
+    }
+
+    return { isVoid: false, passable: effectivePass === "o", blocksLight };
+}
+
+/**
+ * セル i について「上帯に描画される層」のビットマスク (bit k = 1 ならば layer k が上帯)。
+ * layer.above = true または チップ over = true のいずれかで上帯扱い (仕様 §21.4)。
+ */
+export function cellAboveMask(doc: MapDocV3, i: number): number {
+    let mask = 0;
+    for (let li = 0; li < doc.layers.length; li++) {
+        const layer = doc.layers[li];
+        const tid = layer.cells[i];
+        if (layer.above) {
+            mask |= (1 << li);
+        } else if (tid >= 0) {
+            const ts = doc.tilesets[layer.tileset];
+            if (ts?.tiles[tid]?.over) mask |= (1 << li);
+        }
+    }
+    return mask;
+}
+
+/**
+ * v2 ドキュメントを v3 に変換する (仕様 §22.2 — 決定論的変換)。
+ * tileset → tilesets[0]、ground → layers[0]、upper → layers[1]、層3/4 パディング。
+ */
+export function upgradeV2DocToV3(docV2: MapDocV2): MapDocV3 {
+    const width = docV2.width;
+    const height = docV2.height;
+    return {
+        ekm: 3,
+        name: docV2.name,
+        author: docV2.author,
+        width,
+        height,
+        tilesets: [docV2.tileset],
+        layers: [
+            { tileset: 0, cells: [...docV2.ground], above: false },
+            { tileset: 0, cells: [...docV2.upper], above: false },
+            makeDefaultLayer(width, height),
+            makeDefaultLayer(width, height),
+        ],
+        decor: docV2.decor.map((d) => ({ ...d })),
+        spawn: { ...docV2.spawn },
+        ambient: { ...docV2.ambient },
+    };
 }
 
 /**

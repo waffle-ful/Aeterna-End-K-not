@@ -2635,7 +2635,7 @@ internal static class ChatCommands
                 }
 
                 Utils.SendMessage(string.Format(GetString("EkMap.Info"),
-                    src.Name, src.Author, src.Width, src.Height, src.IsV2 ? 2 : 1, src.Filename), pid);
+                    src.Name, src.Author, src.Width, src.Height, src.IsV3 ? 3 : src.IsV2 ? 2 : 1, src.Filename), pid);
                 return;
             }
 

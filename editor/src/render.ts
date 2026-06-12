@@ -1,9 +1,21 @@
 // PIXI.js v8 グリッド描画
 // v1: 床/壁/奈落 + 孤立柱導出プレビュー (仕様 §5.1) + 通行○×オーバーレイ + decor/spawn マーカー
-// v2: タイルセット切り出し描画 (ground/upper 2 層 + ★バッジ) + §15 解決規則の通行オーバーレイ
+// v3: タイルセット切り出し描画 (4 層昇順 + ★バッジ) + §21 解決規則の通行オーバーレイ
 
 import { Application, Container, Graphics, Sprite, Text, Texture } from "pixi.js";
-import { type AnyDoc, CELL_FLOOR, CELL_WALL, type DecorEntry, type MapDoc, type MapDocV2, getCell, isV2Doc, resolveCellV2 } from "./model";
+import {
+    type AnyDoc,
+    CELL_FLOOR,
+    CELL_WALL,
+    type DecorEntry,
+    type MapDoc,
+    type MapDocV3,
+    type TilesetDoc,
+    cellAboveMask,
+    getCell,
+    isV3Doc,
+    resolveCellV3,
+} from "./model";
 
 /** ワールド px / セル */
 export const CELL = 32;
@@ -107,10 +119,13 @@ export class MapRenderer {
     private readonly hover = new Graphics();
     private readonly rectPreview = new Graphics();
     private overlayOn = false;
-    /** テクスチャ px / セル (v1 固定 12 / v2 はマップ寸法に応じて適応) */
+    /** テクスチャ px / セル (v1 固定 12 / v3 はマップ寸法に応じて適応) */
     private texpx = TEXPX_V1;
-    /** v2 タイルセット画像 (非同期ロード完了後にセット) */
-    private tilesetImg: HTMLImageElement | null = null;
+    /**
+     * v3 タイルセット画像群 (非同期ロード完了後にセット)。
+     * インデックスは doc.tilesets に対応。
+     */
+    private tilesetImgs: (HTMLImageElement | null)[] = [];
     /** setDoc 世代 (非同期ロードの取り違え防止) */
     private docGen = 0;
 
@@ -133,7 +148,7 @@ export class MapRenderer {
     setDoc(doc: AnyDoc): void {
         this.doc = doc;
         this.docGen++;
-        this.tilesetImg = null;
+        this.tilesetImgs = [];
         this.world.removeChildren();
         if (this.baseSprite) {
             this.baseSprite.destroy();
@@ -152,8 +167,13 @@ export class MapRenderer {
             this.ovlTexture = null;
         }
 
-        // v2 はタイルの絵を保つため可能な範囲で高解像度に (キャンバス辺 4096px 以内)
-        this.texpx = isV2Doc(doc) ? Math.max(4, Math.min(doc.tileset.tileSize, Math.floor(MAX_CANVAS_EDGE / Math.max(doc.width, doc.height)))) : TEXPX_V1;
+        // v3 はタイルの絵を保つため可能な範囲で高解像度に (キャンバス辺 4096px 以内)
+        if (isV3Doc(doc)) {
+            const maxTileSize = Math.max(...doc.tilesets.map((ts: TilesetDoc) => ts.tileSize));
+            this.texpx = Math.max(4, Math.min(maxTileSize, Math.floor(MAX_CANVAS_EDGE / Math.max(doc.width, doc.height))));
+        } else {
+            this.texpx = TEXPX_V1;
+        }
 
         const base = document.createElement("canvas");
         base.width = doc.width * this.texpx;
@@ -179,18 +199,23 @@ export class MapRenderer {
         this.world.addChild(this.baseSprite, this.decorLayer, this.spawnMarker, this.ovlSprite, this.rectPreview, this.hover);
         this.rectPreview.visible = false;
 
-        if (isV2Doc(doc)) {
+        if (isV3Doc(doc)) {
             const gen = this.docGen;
-            void loadTilesetImage(doc.tileset.image)
-                .then((img) => {
-                    if (gen !== this.docGen) return; // doc が差し替わっていたら破棄
-                    this.tilesetImg = img;
-                    this.redrawAll();
-                    this.flush();
-                })
-                .catch(() => {
-                    // 画像破損 — 検証を通った doc では起きない想定。プレースホルダのまま
-                });
+            // 全タイルセット画像を並列ロード
+            this.tilesetImgs = new Array(doc.tilesets.length).fill(null);
+            for (let ti = 0; ti < doc.tilesets.length; ti++) {
+                const tsIndex = ti;
+                void loadTilesetImage(doc.tilesets[ti].image)
+                    .then((img) => {
+                        if (gen !== this.docGen) return; // doc が差し替わっていたら破棄
+                        this.tilesetImgs[tsIndex] = img;
+                        this.redrawAll();
+                        this.flush();
+                    })
+                    .catch(() => {
+                        // 画像破損 — 検証を通った doc では起きない想定。プレースホルダのまま
+                    });
+            }
         }
 
         this.redrawAll();
@@ -212,10 +237,10 @@ export class MapRenderer {
         const t = this.texpx;
         const px = x * t;
         const py = y * t;
-        if (isV2Doc(doc)) {
-            this.drawCellBaseV2(doc, ctx, x, y, px, py, t);
+        if (isV3Doc(doc)) {
+            this.drawCellBaseV3(doc, ctx, x, y, px, py, t);
         } else {
-            this.drawCellBaseV1(doc, ctx, x, y, px, py, t);
+            this.drawCellBaseV1(doc as MapDoc, ctx, x, y, px, py, t);
         }
         // グリッド線 (各セルの上辺・左辺)
         ctx.fillStyle = COLOR_GRID;
@@ -247,13 +272,23 @@ export class MapRenderer {
         }
     }
 
-    private drawTile(ctx: CanvasRenderingContext2D, doc: MapDocV2, id: number, px: number, py: number, t: number): void {
-        const img = this.tilesetImg;
-        const ts = doc.tileset.tileSize;
-        const sx = (id % doc.tileset.columns) * ts;
-        const sy = Math.floor(id / doc.tileset.columns) * ts;
+    /**
+     * タイル 1 枚を描画する。img がまだロード中なら placeholder を描く。
+     * ts: TilesetDoc、id: タイル id (0-based)
+     */
+    private drawTile(
+        ctx: CanvasRenderingContext2D,
+        ts: TilesetDoc,
+        img: HTMLImageElement | null,
+        id: number,
+        px: number,
+        py: number,
+        t: number,
+    ): void {
+        const sx = (id % ts.columns) * ts.tileSize;
+        const sy = Math.floor(id / ts.columns) * ts.tileSize;
         if (img) {
-            ctx.drawImage(img, sx, sy, ts, ts, px, py, t, t);
+            ctx.drawImage(img, sx, sy, ts.tileSize, ts.tileSize, px, py, t, t);
         } else {
             // 画像ロード中のプレースホルダ
             ctx.fillStyle = "#3a3a45";
@@ -261,17 +296,29 @@ export class MapRenderer {
         }
     }
 
-    private drawCellBaseV2(doc: MapDocV2, ctx: CanvasRenderingContext2D, x: number, y: number, px: number, py: number, t: number): void {
+    /**
+     * v3 セルの描画: 層 0〜3 昇順でタイルを重ねる (§21.4)。
+     * ★バッジ: cellAboveMask が非ゼロ (layer.above=true または チップ over=true) のセルに表示。
+     */
+    private drawCellBaseV3(doc: MapDocV3, ctx: CanvasRenderingContext2D, x: number, y: number, px: number, py: number, t: number): void {
         const i = y * doc.width + x;
         ctx.fillStyle = COLOR_VOID;
         ctx.fillRect(px, py, t, t);
-        const g = doc.ground[i];
-        if (g >= 0) this.drawTile(ctx, doc, g, px, py, t);
-        const u = doc.upper[i];
-        if (u >= 0) this.drawTile(ctx, doc, u, px, py, t);
-        // ★バッジ (over=true のタイルを含むセル、仕様 §17)
-        const over = (g >= 0 && doc.tileset.tiles[g]?.over) || (u >= 0 && doc.tileset.tiles[u]?.over);
-        if (over) {
+
+        // 層 0〜3 昇順で描画
+        for (let li = 0; li < doc.layers.length; li++) {
+            const layer = doc.layers[li];
+            const tid = layer.cells[i];
+            if (tid < 0) continue;
+            const ts = doc.tilesets[layer.tileset];
+            if (!ts) continue;
+            const img = this.tilesetImgs[layer.tileset] ?? null;
+            this.drawTile(ctx, ts, img, tid, px, py, t);
+        }
+
+        // ★バッジ (over=true のタイルを含むセル、または layer.above=true の層があるセル)
+        const aboveMask = cellAboveMask(doc, i);
+        if (aboveMask !== 0) {
             ctx.fillStyle = "rgba(0,0,0,0.55)";
             ctx.fillRect(px + t * 0.62, py, t * 0.38, t * 0.38);
             ctx.fillStyle = "#ffd75e";
@@ -291,8 +338,13 @@ export class MapRenderer {
         const px = x * t;
         const py = y * t;
         ctx.clearRect(px, py, t, t);
-        // 通行可否: v1 = 床のみ○ (仕様 §5.3) / v2 = §15 の解決規則 (upper の "v" 継承込み)
-        const passable = isV2Doc(doc) ? resolveCellV2(doc, x, y).passable : doc.grid[y * doc.width + x] === CELL_FLOOR;
+        // 通行可否: v1 = 床のみ○ (仕様 §5.3) / v3 = §21 の解決規則
+        let passable: boolean;
+        if (isV3Doc(doc)) {
+            passable = resolveCellV3(doc, x, y).passable;
+        } else {
+            passable = (doc as MapDoc).grid[y * doc.width + x] === CELL_FLOOR;
+        }
         if (passable) {
             ctx.strokeStyle = "rgba(96,230,140,0.95)";
             ctx.lineWidth = Math.max(1.4, t * 0.1);
@@ -325,7 +377,7 @@ export class MapRenderer {
     /** セル変更時の再描画。v1 の柱判定は近傍に波及するため 4 近傍も描き直す */
     cellChanged(x: number, y: number): void {
         this.drawCellBase(x, y);
-        if (this.doc && !isV2Doc(this.doc)) {
+        if (this.doc && !isV3Doc(this.doc)) {
             this.drawCellBase(x - 1, y);
             this.drawCellBase(x + 1, y);
             this.drawCellBase(x, y - 1);

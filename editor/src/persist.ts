@@ -12,16 +12,20 @@ import {
     type DecorEntry,
     MAX_DECOR,
     MAX_DIM,
+    MAX_TILESETS,
     MIN_DIM,
     type MapDocV2,
+    type MapDocV3,
+    type LayerDocV3,
     NAME_MAX,
     type SpawnPoint,
+    V3_LAYER_COUNT,
     VISION_DEFAULT,
     VISION_MAX,
     VISION_MIN,
     coordToCell,
 } from "./model";
-import { validateEkmap, validateEkmapV2, validateTileset } from "./validate";
+import { validateEkmap, validateEkmapV2, validateEkmapV3, validateTileset } from "./validate";
 
 const DB_NAME = "ekmap-editor";
 const STORE = "docs";
@@ -108,6 +112,13 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 
 /** 自動保存スロットからの復元。正規検証 → 駄目なら構造のみの lenient 復元 → 駄目なら null */
 export function tryRestoreDoc(value: unknown): AnyDoc | null {
+    // v3: 正規検証 → 駄目なら lenient 復元
+    if (isRecord(value) && value.ekm === 3) {
+        const r3 = validateEkmapV3(value);
+        if (r3.ok) return r3.doc;
+        return tryRestoreDocV3Lenient(value);
+    }
+
     // v2: 正規検証 → 駄目なら構造のみの lenient 復元 (spawn 不正・layer 値不正で作業を失わない)
     if (isRecord(value) && value.ekm === 2) {
         const r2 = validateEkmapV2(value);
@@ -167,6 +178,109 @@ export function tryRestoreDoc(value: unknown): AnyDoc | null {
     }
 
     return { ekm: 1, name, author, width: w, height: h, grid, decor, spawn, ambient: { ...ambientExtra, visionRadius: vision } };
+}
+
+/** v3 の lenient 復元。tilesets が全滅している場合のみ諦める (描画に必須のため) */
+function tryRestoreDocV3Lenient(value: Record<string, unknown>): MapDocV3 | null {
+    const w = value.width;
+    const h = value.height;
+    const dimOk = (v: unknown): v is number => Number.isInteger(v) && (v as number) >= MIN_DIM && (v as number) <= MAX_DIM;
+    if (!dimOk(w) || !dimOk(h)) return null;
+
+    // tilesets の lenient 復元 (最低 1 セット必要)
+    const rawTilesets = Array.isArray(value.tilesets) ? value.tilesets : [];
+    const tilesets: NonNullable<ReturnType<typeof validateTileset>>[] = [];
+    for (let i = 0; i < Math.min(rawTilesets.length, MAX_TILESETS); i++) {
+        const ts = validateTileset(rawTilesets[i], []);
+        if (ts) tilesets.push(ts);
+    }
+    if (tilesets.length === 0) return null;
+
+    const len = w * h;
+    const coerceLayerCells = (raw: unknown, tilecount: number): number[] => {
+        const out = new Array<number>(len).fill(-1);
+        if (Array.isArray(raw)) {
+            for (let i = 0; i < Math.min(len, raw.length); i++) {
+                const v = raw[i];
+                out[i] = Number.isInteger(v) && (v as number) >= -1 && (v as number) < tilecount ? (v as number) : -1;
+            }
+        }
+        return out;
+    };
+
+    // layers の lenient 復元
+    const rawLayers = Array.isArray(value.layers) ? value.layers : [];
+    const layers: LayerDocV3[] = [];
+    for (let i = 0; i < Math.min(rawLayers.length, V3_LAYER_COUNT); i++) {
+        const rl = rawLayers[i];
+        if (typeof rl !== "object" || rl === null) continue;
+        const rlRec = rl as Record<string, unknown>;
+        const tsIdx = Number.isInteger(rlRec.tileset) && (rlRec.tileset as number) >= 0 && (rlRec.tileset as number) < tilesets.length
+            ? (rlRec.tileset as number) : 0;
+        const tilecount = tilesets[tsIdx].columns * tilesets[tsIdx].rows;
+        const cells = coerceLayerCells(rlRec.cells, tilecount);
+        const above = rlRec.above === true;
+        layers.push({ tileset: tsIdx, cells, above });
+    }
+    // layers[0] は必須
+    if (layers.length === 0) {
+        layers.push({ tileset: 0, cells: new Array(len).fill(-1), above: false });
+    }
+    // 4 層にパディング
+    while (layers.length < V3_LAYER_COUNT) {
+        layers.push({ tileset: 0, cells: new Array(len).fill(-1), above: false });
+    }
+
+    const name = typeof value.name === "string" && value.name.length > 0 ? value.name.slice(0, NAME_MAX) : "新しいマップ";
+    const author = typeof value.author === "string" ? value.author.slice(0, AUTHOR_MAX) : "";
+
+    let spawn: SpawnPoint = { x: Math.floor(w / 2), y: Math.floor(h / 2) };
+    if (isRecord(value.spawn) && typeof value.spawn.x === "number" && typeof value.spawn.y === "number" && Number.isFinite(value.spawn.x) && Number.isFinite(value.spawn.y)) {
+        spawn = { x: value.spawn.x, y: value.spawn.y };
+    }
+
+    const decor: DecorEntry[] = [];
+    if (Array.isArray(value.decor)) {
+        for (const d of value.decor) {
+            if (decor.length >= MAX_DECOR) break;
+            if (!isRecord(d) || typeof d.kind !== "string" || typeof d.x !== "number" || typeof d.y !== "number") continue;
+            if (!(DECOR_KINDS as readonly string[]).includes(d.kind)) continue;
+            const cx = coordToCell(d.x);
+            const cy = coordToCell(d.y);
+            if (cx < 0 || cy < 0 || cx >= w || cy >= h) continue;
+            decor.push({ kind: d.kind, x: d.x, y: d.y });
+        }
+    }
+
+    let vision = VISION_DEFAULT;
+    const ambientExtra: Record<string, unknown> = {};
+    if (isRecord(value.ambient)) {
+        for (const [k, v] of Object.entries(value.ambient)) {
+            if (k !== "visionRadius") ambientExtra[k] = v;
+        }
+        if (typeof value.ambient.visionRadius === "number" && Number.isFinite(value.ambient.visionRadius)) {
+            vision = Math.min(VISION_MAX, Math.max(VISION_MIN, value.ambient.visionRadius));
+        }
+    }
+
+    const requires = Array.isArray(value.requires)
+        ? (value.requires.filter((c: unknown) => typeof c === "string") as string[])
+        : undefined;
+
+    const doc: MapDocV3 = {
+        ekm: 3,
+        name,
+        author,
+        width: w,
+        height: h,
+        tilesets,
+        layers: layers as [LayerDocV3, LayerDocV3, LayerDocV3, LayerDocV3],
+        decor,
+        spawn,
+        ambient: { ...ambientExtra, visionRadius: vision },
+    };
+    if (requires && requires.length > 0) doc.requires = requires;
+    return doc;
 }
 
 /** v2 の lenient 復元。tileset が壊れている場合のみ諦める (描画に必須のため) */

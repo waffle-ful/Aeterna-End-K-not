@@ -7,8 +7,8 @@ using UnityEngine;
 
 namespace EndKnot.Modules;
 
-// EKM v1/v2 カスタムマップローダー (Phase 0 / Phase B)
-// 仕様: docs/ekmap-spec.md (凍結 2026-06-10 v1 / 凍結 2026-06-11 v2)
+// EKM v1/v2/v3 カスタムマップローダー (Phase 0 / Phase B / Phase C)
+// 仕様: docs/ekmap-spec.md (凍結 2026-06-10 v1 / 凍結 2026-06-11 v2 / 凍結 2026-06-13 v3)
 public static class EkmapLoader
 {
     // BepInEx.Paths ベースで確実にゲームフォルダ配下を指す
@@ -360,13 +360,16 @@ public static class EkmapLoader
             return false;
         }
 
-        // バージョン分岐 (§18)
+        // バージョン分岐 (§18 / §19)
         if (raw.ekm == 2)
             return TryParseV2(json, raw, filename, out errorMessage);
 
+        if (raw.ekm == 3)
+            return TryParseV3(json, raw, filename, out errorMessage);
+
         if (raw.ekm != 1)
         {
-            errorMessage = $"Unsupported ekm version: {raw.ekm} (expected 1 or 2)";
+            errorMessage = $"Unsupported ekm version: {raw.ekm} (expected 1, 2 or 3)";
             return false;
         }
 
@@ -571,159 +574,56 @@ public static class EkmapLoader
             return false;
         }
 
-        // tileset 必須 (§14)
+        // tileset 必須 (§14) — TryBuildTilesetRuntime に委譲 (v2/v3 共用ヘルパー)
         if (raw.tilesetRaw == null)
         {
             errorMessage = "tileset is required for ekm:2";
             return false;
         }
 
-        EkmTilesetRaw ts = raw.tilesetRaw;
+        if (!TryBuildTilesetRuntime(raw.tilesetRaw, "tileset", out EkmTilesetRuntime v2Runtime, out errorMessage))
+            return false;
 
-        if (ts.tileSize < 8 || ts.tileSize > 128)
+        int tilecount = v2Runtime.TileProps.Length;
+
+        // layers 検証 (§13): layersRaw は JsonElement? — v2 では {ground, upper} オブジェクトとして Deserialize
+        if (raw.layersRaw == null || raw.layersRaw.Value.ValueKind != JsonValueKind.Object)
         {
-            errorMessage = $"tileset.tileSize out of range: {ts.tileSize} (must be 8-128)";
+            v2Runtime.Destroy();
+            errorMessage = "layers (object with ground/upper) is required for ekm:2";
             return false;
         }
 
-        if (ts.columns < 1)
-        {
-            errorMessage = $"tileset.columns must be >= 1 (got {ts.columns})";
-            return false;
-        }
-
-        if (string.IsNullOrEmpty(ts.image) || !ts.image.StartsWith("data:image/png;base64,"))
-        {
-            errorMessage = "tileset.image must be a data:image/png;base64, URI";
-            return false;
-        }
-
-        string b64 = ts.image.Substring("data:image/png;base64,".Length);
-        byte[] pngBytes;
-        try { pngBytes = Convert.FromBase64String(b64); }
+        EkmLayersRaw layersObj;
+        try { layersObj = raw.layersRaw.Value.Deserialize<EkmLayersRaw>(JsonOpts); }
         catch (Exception ex)
         {
-            errorMessage = $"tileset.image base64 decode error: {ex.Message}";
+            v2Runtime.Destroy();
+            errorMessage = $"layers parse error: {ex.Message}";
             return false;
         }
 
-        if (pngBytes.Length > 1024 * 1024)
+        if (layersObj == null || layersObj.ground == null)
         {
-            errorMessage = $"tileset.image decoded PNG too large ({pngBytes.Length} bytes > 1 MB)";
-            return false;
-        }
-
-        // Texture2D ロード (画像寸法検証はロード後に行う — §A)
-        // 注意: Il2CppStructArray はインデクサ 1 バイト代入だと LoadImage が false を返す (2026-06-11 実機)。
-        // Utils.LoadTextureFromResources (Utils.cs:4811) と同じ「データ領域へのポインタ直書き」方式を使う
-        // (オフセット IntPtr.Size*4 = Il2Cpp 配列オブジェクトヘッダ)。
-        Texture2D tex = new(2, 2, TextureFormat.ARGB32, false);
-        tex.filterMode = FilterMode.Point;
-        var il2cppBytes = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<byte>(pngBytes.Length);
-        System.Runtime.InteropServices.Marshal.Copy(pngBytes, 0, IntPtr.Add(il2cppBytes.Pointer, IntPtr.Size * 4), pngBytes.Length);
-        if (!tex.LoadImage(il2cppBytes, false))
-        {
-            UnityEngine.Object.Destroy(tex);
-            errorMessage = "tileset.image could not be decoded as PNG";
-            return false;
-        }
-
-        // 画像寸法検証 (§14)
-        int expectedWidth = ts.columns * ts.tileSize;
-        if (tex.width != expectedWidth)
-        {
-            UnityEngine.Object.Destroy(tex);
-            errorMessage = $"tileset image width {tex.width} != columns({ts.columns}) * tileSize({ts.tileSize}) = {expectedWidth}";
-            return false;
-        }
-
-        if (tex.height % ts.tileSize != 0)
-        {
-            UnityEngine.Object.Destroy(tex);
-            errorMessage = $"tileset image height {tex.height} is not a multiple of tileSize({ts.tileSize})";
-            return false;
-        }
-
-        int rows = tex.height / ts.tileSize;
-        int tilecount = ts.columns * rows;
-        if (tilecount > 4096)
-        {
-            UnityEngine.Object.Destroy(tex);
-            errorMessage = $"tilecount {tilecount} > 4096";
-            return false;
-        }
-
-        // per-tile 属性パース (§14.1)。疎配列: 未記載チップはデフォルト値
-        var tileProps = new EkmTileProp[tilecount]; // デフォルト = pass:"o" over:false light:false
-        for (int i = 0; i < tilecount; i++)
-            tileProps[i] = new EkmTileProp { pass = "o", over = false, light = false, tag = 0, dir = 15 };
-
-        if (ts.tiles != null)
-        {
-            var seenIds = new HashSet<int>();
-            foreach (EkmTileRaw t in ts.tiles)
-            {
-                if (t == null) continue;
-                if (t.id < 0 || t.id >= tilecount)
-                {
-                    errorMessage = $"tiles[].id={t.id} out of range (tilecount={tilecount})";
-                    return false;
-                }
-
-                if (!seenIds.Add(t.id))
-                {
-                    errorMessage = $"tiles[].id={t.id} is duplicated";
-                    return false;
-                }
-
-                if (t.pass is not ("o" or "x" or "v"))
-                {
-                    errorMessage = $"tiles[id={t.id}].pass '{t.pass}' is invalid (must be o/x/v)";
-                    return false;
-                }
-
-                if (t.tag < 0 || t.tag > 99)
-                {
-                    errorMessage = $"tiles[id={t.id}].tag={t.tag} out of range (0-99)";
-                    return false;
-                }
-
-                if (t.dir < 0 || t.dir > 15)
-                {
-                    errorMessage = $"tiles[id={t.id}].dir={t.dir} out of range (0-15)";
-                    return false;
-                }
-
-                tileProps[t.id] = new EkmTileProp
-                {
-                    pass  = t.pass ?? "o",
-                    over  = t.over,
-                    light = t.light,
-                    tag   = t.tag,
-                    dir   = t.dir,
-                };
-            }
-        }
-
-        // layers 検証 (§13)
-        if (raw.layersRaw == null || raw.layersRaw.ground == null)
-        {
+            v2Runtime.Destroy();
             errorMessage = "layers.ground is required for ekm:2";
             return false;
         }
 
         int expectedLen = raw.width * raw.height;
-        if (raw.layersRaw.ground.Count != expectedLen)
+        if (layersObj.ground.Count != expectedLen)
         {
-            errorMessage = $"layers.ground length {raw.layersRaw.ground.Count} != width*height ({expectedLen})";
+            v2Runtime.Destroy();
+            errorMessage = $"layers.ground length {layersObj.ground.Count} != width*height ({expectedLen})";
             return false;
         }
 
-        List<int> groundData = raw.layersRaw.ground;
-        List<int> upperData  = raw.layersRaw.upper; // null = 全 -1
+        List<int> groundData = layersObj.ground;
+        List<int> upperData  = layersObj.upper; // null = 全 -1
 
         if (upperData != null && upperData.Count != expectedLen)
         {
+            v2Runtime.Destroy();
             errorMessage = $"layers.upper length {upperData.Count} != width*height ({expectedLen})";
             return false;
         }
@@ -734,6 +634,7 @@ public static class EkmapLoader
             int g = groundData[i];
             if (g < -1 || g >= tilecount)
             {
+                v2Runtime.Destroy();
                 errorMessage = $"layers.ground[{i}]={g} out of range (-1 to {tilecount - 1})";
                 return false;
             }
@@ -743,30 +644,15 @@ public static class EkmapLoader
                 int u = upperData[i];
                 if (u < -1 || u >= tilecount)
                 {
+                    v2Runtime.Destroy();
                     errorMessage = $"layers.upper[{i}]={u} out of range (-1 to {tilecount - 1})";
                     return false;
                 }
             }
         }
 
-        // Sprite[] 構築 (§B: PNG 左上原点→Unity 左下原点の Y 反転)
-        // Unity Sprite.Create の Rect は左下原点。tile (col, row) の左下 Unity Y = texHeight - (row+1)*tileSize
-        int texH = tex.height;
-        var sprites = new Sprite[tilecount];
-        for (int tileId = 0; tileId < tilecount; tileId++)
-        {
-            int col = tileId % ts.columns;
-            int row = tileId / ts.columns;
-            float rx = col * ts.tileSize;
-            float ry = texH - (row + 1) * ts.tileSize; // PNG 行 → Unity bottom-up Y
-            sprites[tileId] = Sprite.Create(
-                tex,
-                new Rect(rx, ry, ts.tileSize, ts.tileSize),
-                new Vector2(0.5f, 0.5f),
-                ts.tileSize); // pixelsPerUnit = tileSize → 1 チップ = 1 ワールドユニット (§14)
-        }
-
         // v2 per-cell 解決 (§15)
+        EkmTileProp[] tileProps = v2Runtime.TileProps;
         var cells = new V2CellData[raw.width, raw.height];
         for (int gy = 0; gy < raw.height; gy++)
         for (int gx = 0; gx < raw.width; gx++)
@@ -810,6 +696,7 @@ public static class EkmapLoader
         // spawn 検証 (§16: 実効通行可セル基準)
         if (raw.spawn == null)
         {
+            v2Runtime.Destroy();
             errorMessage = "spawn is required";
             return false;
         }
@@ -819,6 +706,7 @@ public static class EkmapLoader
 
         if (spawnCellX < 0 || spawnCellX >= raw.width || spawnCellY < 0 || spawnCellY >= raw.height)
         {
+            v2Runtime.Destroy();
             errorMessage = $"spawn ({spawnCellX},{spawnCellY}) out of map range";
             return false;
         }
@@ -826,6 +714,7 @@ public static class EkmapLoader
         var spawnCell = cells[(int)spawnCellX, (int)spawnCellY];
         if (spawnCell.isSolid || spawnCell.isVoid)
         {
+            v2Runtime.Destroy();
             errorMessage = $"spawn ({spawnCellX},{spawnCellY}) is not a passable cell";
             return false;
         }
@@ -866,8 +755,6 @@ public static class EkmapLoader
         float spawnWorldX = OriginX + spawnCellX;
         float spawnWorldY = OriginY - spawnCellY;
 
-        var runtime = new EkmTilesetRuntime(tex, sprites, tileProps, ts.tileSize);
-
         ActiveSource = new CustomMapSource(
             filename, name, raw.author ?? "", raw.width, raw.height,
             null, null, // grid/visualGrid は v2 では不使用
@@ -875,7 +762,483 @@ public static class EkmapLoader
             new Vector2(spawnWorldX, spawnWorldY),
             visionRadius,
             cells,
-            runtime);
+            v2Runtime);
+
+        errorMessage = null;
+        return true;
+    }
+
+    // ── タイルセット構築ヘルパー (v2/v3 共用) ───────────────────────────────────
+    // EkmTilesetRaw → EkmTilesetRuntime の検証 + Texture2D/Sprite[] 生成。
+    // 失敗時は tex を Destroy して false を返す (呼び出し側が生成済み分の Destroy を担う)。
+    // label は "tileset" (v2) or "tilesets[i]" (v3) のエラー文言用
+    private static bool TryBuildTilesetRuntime(
+        EkmTilesetRaw ts, string label,
+        out EkmTilesetRuntime rt, out string error)
+    {
+        rt = null;
+
+        if (ts.tileSize < 8 || ts.tileSize > 128)
+        {
+            error = $"{label}.tileSize out of range: {ts.tileSize} (must be 8-128)";
+            return false;
+        }
+
+        if (ts.columns < 1)
+        {
+            error = $"{label}.columns must be >= 1 (got {ts.columns})";
+            return false;
+        }
+
+        if (string.IsNullOrEmpty(ts.image) || !ts.image.StartsWith("data:image/png;base64,"))
+        {
+            error = $"{label}.image must be a data:image/png;base64, URI";
+            return false;
+        }
+
+        string b64 = ts.image.Substring("data:image/png;base64,".Length);
+        byte[] pngBytes;
+        try { pngBytes = Convert.FromBase64String(b64); }
+        catch (Exception ex)
+        {
+            error = $"{label}.image base64 decode error: {ex.Message}";
+            return false;
+        }
+
+        if (pngBytes.Length > 1024 * 1024)
+        {
+            error = $"{label}.image decoded PNG too large ({pngBytes.Length} bytes > 1 MB)";
+            return false;
+        }
+
+        // Marshal.Copy 直書き方式 (Il2CppStructArray インデクサ罠回避 — MEMORY.md)
+        Texture2D tex = new(2, 2, TextureFormat.ARGB32, false);
+        tex.filterMode = FilterMode.Point;
+        var il2cppBytes = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<byte>(pngBytes.Length);
+        System.Runtime.InteropServices.Marshal.Copy(
+            pngBytes, 0, IntPtr.Add(il2cppBytes.Pointer, IntPtr.Size * 4), pngBytes.Length);
+        if (!tex.LoadImage(il2cppBytes, false))
+        {
+            UnityEngine.Object.Destroy(tex);
+            error = $"{label}.image could not be decoded as PNG";
+            return false;
+        }
+
+        int expectedWidth = ts.columns * ts.tileSize;
+        if (tex.width != expectedWidth)
+        {
+            UnityEngine.Object.Destroy(tex);
+            error = $"{label} image width {tex.width} != columns({ts.columns}) * tileSize({ts.tileSize}) = {expectedWidth}";
+            return false;
+        }
+
+        if (tex.height % ts.tileSize != 0)
+        {
+            UnityEngine.Object.Destroy(tex);
+            error = $"{label} image height {tex.height} is not a multiple of tileSize({ts.tileSize})";
+            return false;
+        }
+
+        int rows = tex.height / ts.tileSize;
+        int tilecount = ts.columns * rows;
+        if (tilecount > 4096)
+        {
+            UnityEngine.Object.Destroy(tex);
+            error = $"{label} tilecount {tilecount} > 4096";
+            return false;
+        }
+
+        // per-tile 属性パース (§14.1)。疎配列: 未記載チップはデフォルト値
+        var tileProps = new EkmTileProp[tilecount];
+        for (int i = 0; i < tilecount; i++)
+            tileProps[i] = new EkmTileProp { pass = "o", over = false, light = false, tag = 0, dir = 15 };
+
+        if (ts.tiles != null)
+        {
+            var seenIds = new HashSet<int>();
+            foreach (EkmTileRaw t in ts.tiles)
+            {
+                if (t == null) continue;
+                if (t.id < 0 || t.id >= tilecount)
+                {
+                    UnityEngine.Object.Destroy(tex);
+                    error = $"{label} tiles[].id={t.id} out of range (tilecount={tilecount})";
+                    return false;
+                }
+
+                if (!seenIds.Add(t.id))
+                {
+                    UnityEngine.Object.Destroy(tex);
+                    error = $"{label} tiles[].id={t.id} is duplicated";
+                    return false;
+                }
+
+                if (t.pass is not ("o" or "x" or "v"))
+                {
+                    UnityEngine.Object.Destroy(tex);
+                    error = $"{label} tiles[id={t.id}].pass '{t.pass}' is invalid (must be o/x/v)";
+                    return false;
+                }
+
+                if (t.tag < 0 || t.tag > 99)
+                {
+                    UnityEngine.Object.Destroy(tex);
+                    error = $"{label} tiles[id={t.id}].tag={t.tag} out of range (0-99)";
+                    return false;
+                }
+
+                if (t.dir < 0 || t.dir > 15)
+                {
+                    UnityEngine.Object.Destroy(tex);
+                    error = $"{label} tiles[id={t.id}].dir={t.dir} out of range (0-15)";
+                    return false;
+                }
+
+                tileProps[t.id] = new EkmTileProp
+                {
+                    pass  = t.pass ?? "o",
+                    over  = t.over,
+                    light = t.light,
+                    tag   = t.tag,
+                    dir   = t.dir,
+                };
+            }
+        }
+
+        // Sprite[] 構築 (PNG 左上原点→Unity 左下原点の Y 反転)
+        int texH = tex.height;
+        var sprites = new Sprite[tilecount];
+        for (int tileId = 0; tileId < tilecount; tileId++)
+        {
+            int col = tileId % ts.columns;
+            int row = tileId / ts.columns;
+            float rx = col * ts.tileSize;
+            float ry = texH - (row + 1) * ts.tileSize; // PNG 行 → Unity bottom-up Y
+            sprites[tileId] = Sprite.Create(
+                tex,
+                new Rect(rx, ry, ts.tileSize, ts.tileSize),
+                new Vector2(0.5f, 0.5f),
+                ts.tileSize); // pixelsPerUnit = tileSize → 1 チップ = 1 ワールドユニット
+        }
+
+        rt = new EkmTilesetRuntime(tex, sprites, tileProps, ts.tileSize);
+        error = null;
+        return true;
+    }
+
+    // ── v3 パース (§19〜§21) ─────────────────────────────────────────────────
+    // v3 対応 capability 集合: 空 (§20.1)
+    private static readonly HashSet<string> SupportedCapabilities = new(StringComparer.Ordinal);
+
+    private static bool TryParseV3(string json, EkmMapRaw raw, string filename, out string errorMessage)
+    {
+        // トップレベル cells / tileset(単数形) 禁止 (§20)
+        if (raw.cells != null)
+        {
+            errorMessage = "ekm:3 must not contain top-level 'cells' key";
+            return false;
+        }
+
+        if (raw.tilesetRaw != null)
+        {
+            errorMessage = "ekm:3 must not contain top-level 'tileset' key (use 'tilesets' array)";
+            return false;
+        }
+
+        // requires 検査 (§20.1)
+        if (raw.requires != null)
+        {
+            var unknown = new List<string>();
+            foreach (string cap in raw.requires)
+                if (!SupportedCapabilities.Contains(cap)) unknown.Add(cap);
+            if (unknown.Count > 0)
+            {
+                errorMessage = $"このマップを開くには新しいバージョンが必要です(必要機能: {string.Join(", ", unknown)})";
+                return false;
+            }
+        }
+
+        // 共通フィールド検証 (name/author/width/height は v2 と同規則)
+        string name = raw.name?.Trim() ?? "";
+        if (name.Length < 1 || name.Length > 64)
+        {
+            errorMessage = $"name must be 1-64 characters (got {name.Length})";
+            return false;
+        }
+
+        if (raw.author != null && raw.author.Length > 32)
+        {
+            errorMessage = $"author must be 0-32 characters (got {raw.author.Length})";
+            return false;
+        }
+
+        if (raw.width < 1 || raw.width > 256)
+        {
+            errorMessage = $"width out of range: {raw.width} (must be 1-256)";
+            return false;
+        }
+
+        if (raw.height < 1 || raw.height > 256)
+        {
+            errorMessage = $"height out of range: {raw.height} (must be 1-256)";
+            return false;
+        }
+
+        // tilesets 1〜4 個 (§20)
+        if (raw.tilesetsRaw == null || raw.tilesetsRaw.Count == 0)
+        {
+            errorMessage = "tilesets is required for ekm:3 and must have at least 1 entry";
+            return false;
+        }
+
+        if (raw.tilesetsRaw.Count > 4)
+        {
+            errorMessage = $"tilesets count {raw.tilesetsRaw.Count} exceeds maximum of 4";
+            return false;
+        }
+
+        // tilesets ビルド。途中失敗時は生成済み Texture を全 Destroy (§24)
+        var pool = new EkmTilesetRuntime[raw.tilesetsRaw.Count];
+        for (int i = 0; i < raw.tilesetsRaw.Count; i++)
+        {
+            if (!TryBuildTilesetRuntime(raw.tilesetsRaw[i], $"tilesets[{i}]", out pool[i], out errorMessage))
+            {
+                // 生成済み分を全破棄してリーク防止
+                for (int j = 0; j < i; j++) pool[j]?.Destroy();
+                return false;
+            }
+        }
+
+        // layers: JsonElement? → 配列として Deserialize (§24 多態)
+        if (raw.layersRaw == null || raw.layersRaw.Value.ValueKind != JsonValueKind.Array)
+        {
+            for (int j = 0; j < pool.Length; j++) pool[j]?.Destroy();
+            errorMessage = "layers must be an array for ekm:3";
+            return false;
+        }
+
+        List<EkmLayerRawV3> layersArr;
+        try { layersArr = raw.layersRaw.Value.Deserialize<List<EkmLayerRawV3>>(JsonOpts); }
+        catch (Exception ex)
+        {
+            for (int j = 0; j < pool.Length; j++) pool[j]?.Destroy();
+            errorMessage = $"layers parse error: {ex.Message}";
+            return false;
+        }
+
+        if (layersArr == null || layersArr.Count == 0)
+        {
+            for (int j = 0; j < pool.Length; j++) pool[j]?.Destroy();
+            errorMessage = "layers must have at least 1 entry";
+            return false;
+        }
+
+        if (layersArr.Count > 4)
+        {
+            for (int j = 0; j < pool.Length; j++) pool[j]?.Destroy();
+            errorMessage = $"layers count {layersArr.Count} exceeds maximum of 4";
+            return false;
+        }
+
+        int expectedLen = raw.width * raw.height;
+
+        // 各レイヤー検証
+        for (int i = 0; i < layersArr.Count; i++)
+        {
+            EkmLayerRawV3 lr = layersArr[i];
+            if (lr == null)
+            {
+                for (int j = 0; j < pool.Length; j++) pool[j]?.Destroy();
+                errorMessage = $"layers[{i}] is null";
+                return false;
+            }
+
+            if (lr.tileset < 0 || lr.tileset >= pool.Length)
+            {
+                for (int j = 0; j < pool.Length; j++) pool[j]?.Destroy();
+                errorMessage = $"layers[{i}].tileset={lr.tileset} out of range (0 to {pool.Length - 1})";
+                return false;
+            }
+
+            if (lr.cells == null || lr.cells.Count != expectedLen)
+            {
+                for (int j = 0; j < pool.Length; j++) pool[j]?.Destroy();
+                errorMessage = $"layers[{i}].cells length {lr.cells?.Count ?? 0} != width*height ({expectedLen})";
+                return false;
+            }
+
+            int tsCount = pool[lr.tileset].Sprites.Length;
+            for (int k = 0; k < expectedLen; k++)
+            {
+                int id = lr.cells[k];
+                if (id < -1 || id >= tsCount)
+                {
+                    for (int j = 0; j < pool.Length; j++) pool[j]?.Destroy();
+                    errorMessage = $"layers[{i}].cells[{k}]={id} out of range (-1 to {tsCount - 1})";
+                    return false;
+                }
+            }
+        }
+
+        // 4 層にパディング (tileset:0, above:false, 全 -1) (§22.1)
+        while (layersArr.Count < 4)
+        {
+            var padCells = new List<int>(expectedLen);
+            for (int k = 0; k < expectedLen; k++) padCells.Add(-1);
+            layersArr.Add(new EkmLayerRawV3 { tileset = 0, above = false, cells = padCells });
+        }
+
+        // V3CellData[,] を事前解決 (§21)
+        var v3cells = new V3CellData[raw.width, raw.height];
+        for (int gy = 0; gy < raw.height; gy++)
+        for (int gx = 0; gx < raw.width; gx++)
+        {
+            int idx = gy * raw.width + gx;
+
+            int id0 = layersArr[0].cells[idx];
+            int id1 = layersArr[1].cells[idx];
+            int id2 = layersArr[2].cells[idx];
+            int id3 = layersArr[3].cells[idx];
+
+            // §21.1: void = T1(layer0) == -1
+            bool isVoid = id0 == -1;
+
+            // §21.2: 実効通行: layer4→1(index 3→0) で最初の「タイルあり かつ pass != "v"」を採用
+            string effectivePass;
+            if (isVoid)
+            {
+                effectivePass = "x";
+            }
+            else
+            {
+                effectivePass = null;
+                for (int k = 3; k >= 0; k--)
+                {
+                    int kid = layersArr[k].cells[idx];
+                    if (kid < 0) continue;
+                    EkmTileProp kprop = pool[layersArr[k].tileset].TileProps[kid];
+                    if (kprop.pass != "v") { effectivePass = kprop.pass; break; }
+                }
+                // 全て空または "v" → T1 の pass ("v" は "o" 扱い)
+                if (effectivePass == null)
+                {
+                    EkmTileProp t1prop = pool[layersArr[0].tileset].TileProps[id0];
+                    effectivePass = (t1prop.pass == "v") ? "o" : t1prop.pass;
+                }
+            }
+
+            bool isSolid = effectivePass == "x";
+
+            // §21.3: 実効遮光 = 全層の light の OR または void
+            bool blocksLight = isVoid;
+            if (!blocksLight)
+            {
+                for (int k = 0; k < 4 && !blocksLight; k++)
+                {
+                    int kid = layersArr[k].cells[idx];
+                    if (kid < 0) continue;
+                    if (pool[layersArr[k].tileset].TileProps[kid].light) blocksLight = true;
+                }
+            }
+
+            // §21.4: aboveMask — 層 k のビット: layer.above=true OR そのチップの over=true
+            byte aboveMask = 0;
+            for (int k = 0; k < 4; k++)
+            {
+                int kid = layersArr[k].cells[idx];
+                bool layerAbove = layersArr[k].above;
+                bool chipOver   = kid >= 0 && pool[layersArr[k].tileset].TileProps[kid].over;
+                if (layerAbove || chipOver) aboveMask |= (byte)(1 << k);
+            }
+
+            v3cells[gx, gy] = new V3CellData
+            {
+                Id0        = id0,
+                Id1        = id1,
+                Id2        = id2,
+                Id3        = id3,
+                AboveMask  = aboveMask,
+                IsSolid    = isSolid,
+                IsVoid     = isVoid,
+                BlocksLight = blocksLight,
+            };
+        }
+
+        // LayerTilesetIdx (層 → プールindex)
+        var layerTsIdx = new byte[4];
+        for (int k = 0; k < 4; k++)
+            layerTsIdx[k] = (byte)layersArr[k].tileset;
+
+        // spawn 検証 (§20: 実効通行可セル基準)
+        if (raw.spawn == null)
+        {
+            for (int j = 0; j < pool.Length; j++) pool[j]?.Destroy();
+            errorMessage = "spawn is required";
+            return false;
+        }
+
+        float spawnCellX = raw.spawn.x;
+        float spawnCellY = raw.spawn.y;
+
+        if (spawnCellX < 0 || spawnCellX >= raw.width || spawnCellY < 0 || spawnCellY >= raw.height)
+        {
+            for (int j = 0; j < pool.Length; j++) pool[j]?.Destroy();
+            errorMessage = $"spawn ({spawnCellX},{spawnCellY}) out of map range";
+            return false;
+        }
+
+        var spawnCell = v3cells[(int)spawnCellX, (int)spawnCellY];
+        if (spawnCell.IsSolid || spawnCell.IsVoid)
+        {
+            for (int j = 0; j < pool.Length; j++) pool[j]?.Destroy();
+            errorMessage = $"spawn ({spawnCellX},{spawnCellY}) is not a passable cell";
+            return false;
+        }
+
+        // ambient
+        float visionRadius = 8f;
+        if (raw.ambient != null && raw.ambient.TryGetValue("visionRadius", out JsonElement vrElem))
+        {
+            if (vrElem.TryGetSingle(out float vr))
+                visionRadius = Math.Clamp(vr, 4f, 8f);
+        }
+
+        // decor (v2 と同規則)
+        var decors = new List<DecorEntry>();
+        if (raw.decor != null)
+        {
+            foreach (var d in raw.decor)
+            {
+                if (d == null) continue;
+                string kind = d.kind ?? "";
+                if (!IsKnownDecorKind(kind))
+                {
+                    Logger.Warn($"[EkmapLoader] Unknown decor kind '{kind}', skipping", "EkmapLoader");
+                    continue;
+                }
+
+                float dx = d.x, dy = d.y;
+                if (dx < 0 || dx >= raw.width || dy < 0 || dy >= raw.height)
+                {
+                    Logger.Warn($"[EkmapLoader] decor '{kind}' at ({dx},{dy}) out of range, skipping", "EkmapLoader");
+                    continue;
+                }
+
+                decors.Add(new DecorEntry(kind, dx, dy));
+            }
+        }
+
+        float spawnWorldX = OriginX + spawnCellX;
+        float spawnWorldY = OriginY - spawnCellY;
+
+        ActiveSource = new CustomMapSource(
+            filename, name, raw.author ?? "", raw.width, raw.height,
+            decors,
+            new Vector2(spawnWorldX, spawnWorldY),
+            visionRadius,
+            v3cells,
+            pool,
+            layerTsIdx);
 
         errorMessage = null;
         return true;
@@ -948,6 +1311,23 @@ public static class EkmapLoader
 
     public record DecorEntry(string Kind, float X, float Y);
 
+    // v3 per-cell 解決済みデータ (§21)
+    public struct V3CellData
+    {
+        public int  Id0, Id1, Id2, Id3; // 各層のタイル ID (-1 = 空)
+        public byte AboveMask;           // ビット k: 層 k が上帯 (layer.above OR chip.over)
+        public bool IsSolid;             // 実効通行不可
+        public bool IsVoid;              // T1 == -1
+        public bool BlocksLight;         // 実効遮光
+
+        // 層インデックス (0-origin) でタイル ID を取得
+        public int GetId(int layer) => layer switch
+        {
+            0 => Id0, 1 => Id1, 2 => Id2, 3 => Id3,
+            _ => -1,
+        };
+    }
+
     // v2 per-cell 解決済みデータ (§15)
     public struct V2CellData
     {
@@ -1006,11 +1386,17 @@ public static class EkmapLoader
         public EkmSpawnRaw       spawn  { get; set; }
         // ambient は任意キー混在なので Dictionary で受ける
         public Dictionary<string, JsonElement> ambient { get; set; }
-        // v2 フィールド
+        // v2 フィールド: tileset (単数形) — v3 では禁止キー
         [JsonPropertyName("tileset")]
         public EkmTilesetRaw tilesetRaw { get; set; }
+        // v2/v3 共用: layers は v2=オブジェクト {ground,upper} / v3=配列 → JsonElement? で多態受け (§24)
         [JsonPropertyName("layers")]
-        public EkmLayersRaw  layersRaw  { get; set; }
+        public JsonElement? layersRaw { get; set; }
+        // v3 フィールド
+        [JsonPropertyName("requires")]
+        public List<string> requires { get; set; }
+        [JsonPropertyName("tilesets")]
+        public List<EkmTilesetRaw> tilesetsRaw { get; set; }
     }
 
     private sealed class EkmTilesetRaw
@@ -1035,6 +1421,14 @@ public static class EkmapLoader
     {
         public List<int> ground { get; set; }
         public List<int> upper  { get; set; }
+    }
+
+    // v3 用: layers[] の各要素
+    private sealed class EkmLayerRawV3
+    {
+        public int       tileset { get; set; }
+        public List<int> cells   { get; set; }
+        public bool      above   { get; set; }
     }
 
     private sealed class EkmDecorRaw
@@ -1109,9 +1503,14 @@ public sealed class CustomMapSource
     // v2 専用 (v1 では null)
     public readonly EkmapLoader.V2CellData[,]        V2Cells;
     public readonly EkmapLoader.EkmTilesetRuntime    Tileset;
+    // v3 専用 (v1/v2 では null)
+    public readonly EkmapLoader.V3CellData[,]        V3Cells;
+    public readonly EkmapLoader.EkmTilesetRuntime[]  TilesetPool;
+    public readonly byte[]                           LayerTilesetIdx; // 層 (0-3) → TilesetPool index
 
-    // v2 か否か
+    // v2 / v3 か否か
     public bool IsV2 => V2Cells != null;
+    public bool IsV3 => V3Cells != null;
 
     // v1 コンストラクタ (既存互換)
     public CustomMapSource(
@@ -1163,6 +1562,30 @@ public sealed class CustomMapSource
         Tileset      = tileset;
     }
 
+    // v3 コンストラクタ (§19: 4層 + タイルセットプール。Grid/VisualGrid/V2Cells/Tileset は null)
+    public CustomMapSource(
+        string filename, string name, string author,
+        int width, int height,
+        List<EkmapLoader.DecorEntry> decors,
+        UnityEngine.Vector2 spawnWorld,
+        float visionRadius,
+        EkmapLoader.V3CellData[,] v3Cells,
+        EkmapLoader.EkmTilesetRuntime[] tilesetPool,
+        byte[] layerTilesetIdx)
+    {
+        Filename        = filename;
+        Name            = name;
+        Author          = author;
+        Width           = width;
+        Height          = height;
+        Decors          = decors;
+        SpawnWorld      = spawnWorld;
+        VisionRadius    = visionRadius;
+        V3Cells         = v3Cells;
+        TilesetPool     = tilesetPool;
+        LayerTilesetIdx = layerTilesetIdx;
+    }
+
     // ワールド座標 → セル座標逆変換 (§4: world = origin + (x, -y))
     // wx = OriginX + cellX  →  cellX = wx - OriginX
     // wy = OriginY - cellY  →  cellY = OriginY - wy
@@ -1182,7 +1605,28 @@ public sealed class CustomMapSource
             return EkmapLoader.VisualKind.Floor;
         }
 
+        if (IsV3)
+        {
+            var c = V3Cells[gx, gy];
+            if (c.IsVoid)   return EkmapLoader.VisualKind.Void;
+            if (c.IsSolid)  return EkmapLoader.VisualKind.WallH;
+            return EkmapLoader.VisualKind.Floor;
+        }
+
         return VisualGrid[gx, gy];
+    }
+
+    // v3 セル直接アクセス (BackroomsLobby v3 描画ブランチ用)
+    public bool TryGetV3Cell(int gx, int gy, out EkmapLoader.V3CellData cell)
+    {
+        if (!IsV3 || gx < 0 || gx >= Width || gy < 0 || gy >= Height)
+        {
+            cell = default;
+            return false;
+        }
+
+        cell = V3Cells[gx, gy];
+        return true;
     }
 
     // v2 セル直接アクセス (BackroomsLobby v2 描画ブランチ用)
@@ -1202,6 +1646,11 @@ public sealed class CustomMapSource
     public UnityEngine.Vector2 CellToWorld(int gx, int gy) =>
         new(EkmapLoader.OriginX + gx, EkmapLoader.OriginY - gy);
 
-    // v2 タイルセットリソース解放 (ExitBackrooms / OnGameStart から呼ぶ)
-    public void DestroyV2Tileset() => Tileset?.Destroy();
+    // v2/v3 タイルセットリソース解放 (ExitBackrooms / OnGameStart から呼ぶ。呼び出し 3 経路は不変)
+    public void DestroyV2Tileset()
+    {
+        Tileset?.Destroy();
+        if (TilesetPool != null)
+            foreach (var ts in TilesetPool) ts?.Destroy();
+    }
 }

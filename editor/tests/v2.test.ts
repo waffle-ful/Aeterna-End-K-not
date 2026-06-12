@@ -204,12 +204,14 @@ describe("v2 検証規則 (仕様 §16)", () => {
         }
     });
 
-    it("validateEkmapAny は ekm で振り分ける (ekm:2 → v2 / それ以外 → v1)", () => {
+    it("validateEkmapAny は ekm で振り分ける (ekm:2 → v3 昇格 / ekm:3 不正は拒否 / それ以外 → v1)", () => {
+        // ekm:2 は validateEkmapAny が v3 に自動昇格する (仕様 §22.2)
         const r2 = validateEkmapAny(makeV2());
         expect(r2.ok).toBe(true);
-        if (r2.ok) expect(r2.doc.ekm).toBe(2);
-        const r1 = validateEkmapAny({ ekm: 3 });
-        expect(r1.ok).toBe(false); // v1 パスで ekm != 1 拒否
+        if (r2.ok) expect(r2.doc.ekm).toBe(3); // v3 に昇格済み
+        // ekm:3 だが不正な v3 (tilesets 欠落 → 拒否)
+        const r3invalid = validateEkmapAny({ ekm: 3, name: "x", width: 4, height: 3, tilesets: [], layers: [] });
+        expect(r3invalid.ok).toBe(false);
     });
 
     it("docToJsonV2 → 再検証 のラウンドトリップが成立する (tiles は疎で出力)", () => {

@@ -1,5 +1,6 @@
 // エディタ本体: ツール/ストローク/Undo/Redo/入出力/自動保存の配線
-// v1 (Backrooms チップ) と v2 (カスタムタイルセット + 2 レイヤー) の両モードを扱う
+// v1 (Backrooms チップ) と v3 (カスタムタイルセット + 4 レイヤー) の両モードを扱う
+// ランタイム doc は MapDoc (ekm:1) | MapDocV3 (ekm:3) のみ — v2 は validateEkmapAny で自動昇格
 
 import "./style.css";
 import {
@@ -17,7 +18,7 @@ import {
     MAX_TILESET_IMAGE_BYTES,
     MAX_TILECOUNT,
     MIN_DIM,
-    type MapDocV2,
+    type MapDocV3,
     NAME_MAX,
     type PassValue,
     type SpawnPoint,
@@ -28,10 +29,10 @@ import {
     type TilesetDoc,
     coordToCell,
     createNewDoc,
-    createNewDocV2,
+    createNewDocV3,
     defaultTileAttr,
     docToJsonAny,
-    isV2Doc,
+    isV3Doc,
     tileCount,
 } from "./model";
 import {
@@ -93,12 +94,12 @@ const TOOL_HINTS_V1: Record<ToolV1, string> = {
 
 function updateRibbon(): void {
     const el = $("tool-ribbon");
-    const v2 = isV2Doc(doc);
-    if (!v2) {
+    const v3 = isV3Doc(doc);
+    if (!v3) {
         el.textContent = TOOL_HINTS_V1[tool] ?? "";
         return;
     }
-    // v2: レイヤー説明 + ツール説明
+    // v3: レイヤー説明 + ツール説明
     const layerHint = LAYER_HINTS_V2[activeLayer];
     if (activeLayer === "decor" || activeLayer === "spawn") {
         el.textContent = layerHint;
@@ -177,7 +178,7 @@ function updateStatus(): void {
     const zoom = Math.round(renderer.world.scale.x * 100);
     const inGrid = lastHover && lastHover.x >= 0 && lastHover.y >= 0 && lastHover.x < doc.width && lastHover.y < doc.height;
     const cellTxt = inGrid && lastHover ? `(${lastHover.x}, ${lastHover.y})` : "--";
-    const v2Txt = isV2Doc(doc) ? ` | ${layerLabel(activeLayer)} | チップ ${selectedTile}` : "";
+    const v2Txt = isV3Doc(doc) ? ` | ${layerLabel(activeLayer)} | チップ ${selectedTile}` : "";
     $("status").textContent = `${doc.width}×${doc.height} | セル ${cellTxt} | ${zoom}%${v2Txt} | decor ${doc.decor.length}/${MAX_DECOR}`;
 }
 
@@ -202,15 +203,15 @@ function scheduleSave(): void {
 // ---------- モード UI (v1 ツール列 ⇔ v2 レイヤータブ+ツール列) ----------
 
 function refreshModeUi(): void {
-    const v2 = isV2Doc(doc);
-    $("layer-tabs").hidden = !v2; // 旧フッタ横タブ (CSS で常時非表示だが状態は維持)
-    $("layer-vtabs").hidden = !v2; // 新縦タブ: v2 のみ表示
-    $("tools").hidden = v2;
-    $("tools-v2").hidden = !v2 || (activeLayer !== "ground" && activeLayer !== "upper");
-    $("tools-decor2").hidden = !v2 || activeLayer !== "decor";
-    $("spawn-hint").hidden = !v2 || activeLayer !== "spawn";
+    const v3 = isV3Doc(doc);
+    $("layer-tabs").hidden = !v3; // 旧フッタ横タブ (CSS で常時非表示だが状態は維持)
+    $("layer-vtabs").hidden = !v3; // 新縦タブ: v3 のみ表示
+    $("tools").hidden = v3;
+    $("tools-v2").hidden = !v3 || (activeLayer !== "ground" && activeLayer !== "upper");
+    $("tools-decor2").hidden = !v3 || activeLayer !== "decor";
+    $("spawn-hint").hidden = !v3 || activeLayer !== "spawn";
     updateRibbon();
-    if (v2) void rebuildPicker();
+    if (v3) void rebuildPicker();
 }
 
 function setActiveLayer(l: LayerTab): void {
@@ -249,9 +250,9 @@ const STRIP_NEIGHBORS = 7;
 
 /** 帯の canvas に選択中チップ + 近傍 STRIP_NEIGHBORS 個を描画 */
 async function rebuildPicker(): Promise<void> {
-    if (!isV2Doc(doc)) return;
+    if (!isV3Doc(doc)) return;
     const d = doc;
-    const ts = d.tileset;
+    const ts = activeTileset(d);
     const total = tileCount(ts);
 
     // 表示するチップid列: selectedTile を中心に前後 STRIP_NEIGHBORS/2 ずつ
@@ -311,17 +312,18 @@ async function rebuildPicker(): Promise<void> {
 
 /** 全画面グリッドの canvas を描画。filter が空でないとき id 文字列でマッチしたものだけ表示 */
 async function rebuildPaletteGrid(filterText: string, usedOnly: boolean): Promise<void> {
-    if (!isV2Doc(doc)) return;
+    if (!isV3Doc(doc)) return;
     const d = doc;
-    const ts = d.tileset;
+    const ts = activeTileset(d);
     const total = tileCount(ts);
 
-    // 使用中セル id セット (usedOnly のとき)
+    // 使用中セル id セット (usedOnly のとき) — アクティブレイヤーのみ走査
     let usedIds: Set<number> | null = null;
     if (usedOnly) {
         usedIds = new Set<number>();
-        for (const v of d.ground) if (v >= 0) usedIds.add(v);
-        for (const v of d.upper) if (v >= 0) usedIds.add(v);
+        for (const layer of d.layers) {
+            for (const v of layer.cells) if (v >= 0) usedIds.add(v);
+        }
     }
 
     // フィルタ適用: 番号が filterText を含むものだけ
@@ -423,8 +425,8 @@ let paletteFilterText = "";
 let paletteUsedOnly = false;
 
 function selectTile(id: number): void {
-    if (!isV2Doc(doc)) return;
-    selectedTile = Math.min(Math.max(0, id), tileCount(doc.tileset) - 1);
+    if (!isV3Doc(doc)) return;
+    selectedTile = Math.min(Math.max(0, id), tileCount(activeTileset(doc)) - 1);
     void rebuildPicker();
     // 全画面が開いていれば即時に閉じる (帯の再描画は rebuildPicker が担う)
     const overlay = $("palette-overlay");
@@ -461,15 +463,37 @@ function placeDecor(kind: DecorKind, x: number, y: number): void {
     renderer.rebuildDecor();
 }
 
-function activeLayerArr(d: MapDocV2): number[] {
-    return activeLayer === "upper" ? d.upper : d.ground;
+/**
+ * v3 アクティブレイヤーの cells 配列を返す。
+ * UI は現状 "ground"(index 0) / "upper"(index 1) の 2 タブのみ — 4 タブ化は次増分。
+ */
+function activeLayerArrV3(d: MapDocV3): number[] {
+    const idx = activeLayer === "upper" ? 1 : 0;
+    return d.layers[idx].cells;
 }
 
-/** v2 セルにタイル id (-1 = 空) を置く。stroke バッファに diff を積む */
-function paintCellV2(d: MapDocV2, x: number, y: number, value: number): void {
+/** v3 アクティブレイヤーの index (0〜3) を返す。現状は 0/1 のみ */
+function activeLayerIndexV3(): number {
+    return activeLayer === "upper" ? 1 : 0;
+}
+
+/**
+ * v3 アクティブレイヤーが使用するタイルセットを返す。
+ * 現状は layers[activeLayerIndexV3()].tileset が指す tilesets[i]。
+ * タイルセットが無い場合は tilesets[0] にフォールバック。
+ */
+function activeTileset(d: MapDocV3): TilesetDoc {
+    const li = activeLayerIndexV3();
+    const tsIdx = d.layers[li]?.tileset ?? 0;
+    return d.tilesets[tsIdx] ?? d.tilesets[0];
+}
+
+
+/** v3 セルにタイル id (-1 = 空) を置く。stroke バッファに diff を積む */
+function paintCellV3(d: MapDocV3, x: number, y: number, value: number): void {
     if (!stroke) return;
     const i = y * d.width + x;
-    const arr = activeLayerArr(d);
+    const arr = activeLayerArrV3(d);
     const before = arr[i];
     if (before === value) return;
     const ex = stroke.cells.get(i);
@@ -477,12 +501,12 @@ function paintCellV2(d: MapDocV2, x: number, y: number, value: number): void {
     else stroke.cells.set(i, { i, before, after: value });
     arr[i] = value;
     renderer.cellChanged(x, y);
-    // 下層を空にしたセルは void になるので decor も除去 (v1 の奈落と同じ扱い)
+    // 下層(layer 0)を空にしたセルは void 扱いなので decor も除去
     if (activeLayer === "ground" && value === -1) removeDecorAt(x, y);
 }
 
-function floodFillV2(d: MapDocV2, x: number, y: number, value: number): void {
-    const arr = activeLayerArr(d);
+function floodFillV3(d: MapDocV3, x: number, y: number, value: number): void {
+    const arr = activeLayerArrV3(d);
     const target = arr[y * d.width + x];
     if (target === value) return;
     const stack: number[] = [y * d.width + x];
@@ -491,7 +515,7 @@ function floodFillV2(d: MapDocV2, x: number, y: number, value: number): void {
         if (arr[i] !== target) continue;
         const cx = i % d.width;
         const cy = Math.floor(i / d.width);
-        paintCellV2(d, cx, cy, value);
+        paintCellV3(d, cx, cy, value);
         if (cx > 0) stack.push(i - 1);
         if (cx < d.width - 1) stack.push(i + 1);
         if (cy > 0) stack.push(i - d.width);
@@ -503,7 +527,8 @@ function clampCell(v: number, max: number): number {
     return Math.min(Math.max(0, v), max - 1);
 }
 
-function applyToolAtV2(d: MapDocV2, x: number, y: number, isStart: boolean): void {
+/** v3 ツール適用 (現状は ground/upper の 2 レイヤーのみ UI 対応 — 4 タブ化は次増分) */
+function applyToolAtV3(d: MapDocV3, x: number, y: number, isStart: boolean): void {
     if (!stroke) return;
     const inGrid = x >= 0 && y >= 0 && x < d.width && y < d.height;
 
@@ -515,20 +540,19 @@ function applyToolAtV2(d: MapDocV2, x: number, y: number, isStart: boolean): voi
         return;
     }
     if (activeLayer === "decor") {
-        if (!isStart || !inGrid) return; // クリック配置のみ
+        if (!isStart || !inGrid) return;
         placeDecor(decorKind2, x, y);
         return;
     }
 
     switch (toolV2) {
         case "pen":
-            if (inGrid) paintCellV2(d, x, y, selectedTile);
+            if (inGrid) paintCellV3(d, x, y, selectedTile);
             break;
         case "erase":
-            if (inGrid) paintCellV2(d, x, y, -1);
+            if (inGrid) paintCellV3(d, x, y, -1);
             break;
         case "rect": {
-            // ドラッグ中はプレビューのみ、確定は onStrokeEnd (範囲外はクランプ)
             const cx = clampCell(x, d.width);
             const cy = clampCell(y, d.height);
             if (isStart) rectDrag = { ax: cx, ay: cy, cx, cy };
@@ -540,13 +564,15 @@ function applyToolAtV2(d: MapDocV2, x: number, y: number, isStart: boolean): voi
             break;
         }
         case "bucket":
-            if (isStart && inGrid) floodFillV2(d, x, y, selectedTile);
+            if (isStart && inGrid) floodFillV3(d, x, y, selectedTile);
             break;
         case "pick": {
             if (!isStart || !inGrid) break;
             const i = y * d.width + x;
+            const arr = activeLayerArrV3(d);
             // アクティブ層を優先、空ならもう一方の層から拾う
-            const v = activeLayerArr(d)[i] >= 0 ? activeLayerArr(d)[i] : (activeLayer === "upper" ? d.ground : d.upper)[i];
+            const otherIdx = activeLayer === "upper" ? 0 : 1;
+            const v = arr[i] >= 0 ? arr[i] : d.layers[otherIdx].cells[i];
             if (v >= 0) {
                 selectTile(v);
                 setToolV2("pen");
@@ -559,22 +585,24 @@ function applyToolAtV2(d: MapDocV2, x: number, y: number, isStart: boolean): voi
 
 function applyToolAt(x: number, y: number, isStart: boolean): void {
     if (!stroke) return;
-    if (isV2Doc(doc)) {
-        applyToolAtV2(doc, x, y, isStart);
+    if (isV3Doc(doc)) {
+        applyToolAtV3(doc, x, y, isStart);
         renderer.flush();
         updateStatus();
         return;
     }
-    if (x < 0 || y < 0 || x >= doc.width || y >= doc.height) return;
+    // v1 分岐: ここでは doc が MapDoc であることが保証される
+    const docV1 = doc as import("./model").MapDoc;
+    if (x < 0 || y < 0 || x >= docV1.width || y >= docV1.height) return;
     const ch = TOOL_CHAR[tool];
     if (ch !== undefined) {
-        const i = y * doc.width + x;
-        const before = doc.grid[i];
+        const i = y * docV1.width + x;
+        const before = docV1.grid[i];
         if (before !== ch) {
             const ex = stroke.cells.get(i);
             if (ex) ex.after = ch;
             else stroke.cells.set(i, { i, before, after: ch });
-            doc.grid[i] = ch;
+            docV1.grid[i] = ch;
             renderer.cellChanged(x, y);
         }
         if (ch === CELL_VOID) removeDecorAt(x, y); // 奈落/消去で decor 除去
@@ -602,14 +630,14 @@ function onStrokeStep(x: number, y: number): void {
 function onStrokeEnd(): void {
     if (!stroke) return;
     // 矩形ツール: ドラッグ確定 → 範囲を一括ペイント
-    if (isV2Doc(doc) && rectDrag) {
+    if (isV3Doc(doc) && rectDrag) {
         const d = doc;
         const x0 = Math.min(rectDrag.ax, rectDrag.cx);
         const x1 = Math.max(rectDrag.ax, rectDrag.cx);
         const y0 = Math.min(rectDrag.ay, rectDrag.cy);
         const y1 = Math.max(rectDrag.ay, rectDrag.cy);
         for (let y = y0; y <= y1; y++) {
-            for (let x = x0; x <= x1; x++) paintCellV2(d, x, y, selectedTile);
+            for (let x = x0; x <= x1; x++) paintCellV3(d, x, y, selectedTile);
         }
         renderer.clearRectPreview();
         renderer.flush();
@@ -619,7 +647,7 @@ function onStrokeEnd(): void {
     const cells = [...stroke.cells.values()].filter((c) => c.before !== c.after);
     if (cells.length > 0) {
         patch.cells = cells;
-        if (isV2Doc(doc)) patch.layer = activeLayer === "upper" ? "upper" : "ground";
+        if (isV3Doc(doc)) patch.layer = activeLayerIndexV3();
     }
     if (stroke.decorBefore && JSON.stringify(stroke.decorBefore) !== JSON.stringify(doc.decor)) {
         patch.decorBefore = stroke.decorBefore;
@@ -645,10 +673,10 @@ function onStrokeCancel(): void {
         rectDrag = null;
     }
     for (const c of stroke.cells.values()) {
-        if (isV2Doc(doc)) {
-            activeLayerArr(doc)[c.i] = c.before as number;
+        if (isV3Doc(doc)) {
+            activeLayerArrV3(doc)[c.i] = c.before as number;
         } else {
-            doc.grid[c.i] = c.before as string;
+            (doc as import("./model").MapDoc).grid[c.i] = c.before as string;
         }
         renderer.cellChanged(c.i % doc.width, Math.floor(c.i / doc.width));
     }
@@ -700,9 +728,9 @@ function setDocument(next: AnyDoc): void {
     stroke = null;
     rectDrag = null;
     renderer.clearRectPreview();
-    if (isV2Doc(doc)) {
+    if (isV3Doc(doc)) {
         activeLayer = "ground";
-        selectedTile = Math.min(selectedTile, tileCount(doc.tileset) - 1);
+        selectedTile = Math.min(selectedTile, tileCount(activeTileset(doc)) - 1);
         setActiveLayer("ground");
         setToolV2(toolV2);
     }
@@ -763,9 +791,9 @@ const TS_HINTS: Record<TsMode, string> = {
 };
 
 function drawTilesetPanel(): void {
-    if (!isV2Doc(doc)) return;
+    if (!isV3Doc(doc)) return;
     const d = doc;
-    const ts = d.tileset;
+    const ts = activeTileset(d);
     const cv = $<HTMLCanvasElement>("ts-canvas");
     cv.width = ts.columns * TS_PX;
     cv.height = ts.rows * TS_PX;
@@ -830,8 +858,8 @@ function drawTilesetPanel(): void {
 const PASS_CYCLE: Record<PassValue, PassValue> = { o: "x", x: "v", v: "o" };
 
 function cycleTileAttr(id: number, dir: 1 | -1): void {
-    if (!isV2Doc(doc)) return;
-    const t = doc.tileset.tiles[id];
+    if (!isV3Doc(doc)) return;
+    const t = activeTileset(doc).tiles[id];
     if (!t) return;
     if (tsMode === "pass") t.pass = PASS_CYCLE[t.pass];
     else if (tsMode === "over") t.over = !t.over;
@@ -844,29 +872,34 @@ function cycleTileAttr(id: number, dir: 1 | -1): void {
 }
 
 function tsCanvasCellId(e: MouseEvent): number | null {
-    if (!isV2Doc(doc)) return null;
+    if (!isV3Doc(doc)) return null;
+    const ts = activeTileset(doc);
     const cv = $<HTMLCanvasElement>("ts-canvas");
     const r = cv.getBoundingClientRect();
     const x = Math.floor((e.clientX - r.left) / TS_PX);
     const y = Math.floor((e.clientY - r.top) / TS_PX);
-    if (x < 0 || y < 0 || x >= doc.tileset.columns || y >= doc.tileset.rows) return null;
-    return y * doc.tileset.columns + x;
+    if (x < 0 || y < 0 || x >= ts.columns || y >= ts.rows) return null;
+    return y * ts.columns + x;
 }
 
 /** タイルセット画像の差し替え。属性は id ベースで維持、範囲外になったレイヤー値は -1 に */
 function replaceTileset(ts: TilesetDoc): void {
-    if (!isV2Doc(doc)) return;
+    if (!isV3Doc(doc)) return;
     const d = doc;
-    const old = d.tileset;
+    const li = activeLayerIndexV3();
+    const tsIdx = d.layers[li].tileset;
+    const old = d.tilesets[tsIdx] ?? d.tilesets[0];
     const keep = Math.min(old.tiles.length, ts.tiles.length);
     for (let i = 0; i < keep; i++) ts.tiles[i] = { ...old.tiles[i] };
-    d.tileset = ts;
+    d.tilesets[tsIdx] = ts;
     const count = tileCount(ts);
     let cleared = 0;
-    for (const arr of [d.ground, d.upper]) {
-        for (let i = 0; i < arr.length; i++) {
-            if (arr[i] >= count) {
-                arr[i] = -1;
+    // このタイルセットを使う全レイヤーの範囲外セルをクリア
+    for (const layer of d.layers) {
+        if (layer.tileset !== tsIdx) continue;
+        for (let i = 0; i < layer.cells.length; i++) {
+            if (layer.cells[i] >= count) {
+                layer.cells[i] = -1;
                 cleared++;
             }
         }
@@ -911,7 +944,7 @@ function buildValidatedJson(pretty: boolean): string | null {
     const bytes = new TextEncoder().encode(text).length;
     const r = validateEkmapAny(json, bytes);
     if (!r.ok) {
-        showMessages(`検証エラー (仕様 §${isV2Doc(doc) ? "16" : "9"}) — 修正してから出力してください`, r.errors, []);
+        showMessages(`検証エラー (仕様 §${isV3Doc(doc) ? "20" : "9"}) — 修正してから出力してください`, r.errors, []);
         return null;
     }
     return text;
@@ -1422,8 +1455,8 @@ function addTileReset(): void {
 }
 
 function addTileUpdatePreview(): void {
-    if (!addTileState.dataUri || !isV2Doc(doc)) return;
-    const ts = doc.tileset;
+    if (!addTileState.dataUri || !isV3Doc(doc)) return;
+    const ts = activeTileset(doc);
 
     $("add-tile-drop-zone").hidden = true;
     $("add-tile-preview-wrap").hidden = false;
@@ -1459,7 +1492,7 @@ function addTileUpdatePreview(): void {
 }
 
 async function addTileLoadPng(file: File): Promise<void> {
-    if (!isV2Doc(doc)) return;
+    if (!isV3Doc(doc)) return;
 
     if (file.size > MAX_TILESET_IMAGE_BYTES) {
         toast(`PNG が 1 MB を超えています (${(file.size / 1024).toFixed(1)} KB)`);
@@ -1494,9 +1527,11 @@ async function addTileLoadPng(file: File): Promise<void> {
 
 /** タイル追加を確定して tileset を更新する。DOM 経路 (canvas) を使う */
 async function addTileCommit(): Promise<void> {
-    if (!isV2Doc(doc) || !addTileState.rgba) return;
+    if (!isV3Doc(doc) || !addTileState.rgba) return;
     const d = doc;
-    const ts = d.tileset;
+    const li = activeLayerIndexV3();
+    const tsIdx = d.layers[li].tileset;
+    const ts = d.tilesets[tsIdx] ?? d.tilesets[0];
     const { tileSize, columns, rows } = ts;
 
     // 上限チェック
@@ -1569,7 +1604,7 @@ async function addTileCommit(): Promise<void> {
 
     // 6. tileset を差し替え (rows 以外は保持。history.clear を使う replaceTileset を流用)
     //    Undo は非対応: タイルセット差し替えは既存の replaceTileset でも history.clear するため
-    d.tileset = newTileset;
+    d.tilesets[tsIdx] = newTileset;
 
     // 7. 選択タイルを新しいタイルに移す + 再描画
     history.clear();
@@ -1586,8 +1621,8 @@ async function addTileCommit(): Promise<void> {
 }
 
 function openAddTileDialog(): void {
-    if (!isV2Doc(doc)) {
-        toast("タイル追加は v2 マップのみ対応しています");
+    if (!isV3Doc(doc)) {
+        toast("タイル追加はタイルセットマップのみ対応しています");
         return;
     }
     addTileReset();
@@ -1616,7 +1651,7 @@ function wireUi(): void {
     }
     // 縦タブ内の「チップ設定」ボタン (フッタの btn-tileset と同じ動作)
     $("btn-tileset-vtab").addEventListener("click", () => {
-        if (!isV2Doc(doc)) return;
+        if (!isV3Doc(doc)) return;
         $("ts-hint").textContent = TS_HINTS[tsMode];
         $<HTMLDialogElement>("dlg-tileset").showModal();
         drawTilesetPanel();
@@ -1636,7 +1671,7 @@ function wireUi(): void {
 
     // コンパクト帯: クリックで近傍チップを選択
     $<HTMLCanvasElement>("strip-canvas").addEventListener("click", (e) => {
-        if (!isV2Doc(doc)) return;
+        if (!isV3Doc(doc)) return;
         const cv = $<HTMLCanvasElement>("strip-canvas");
         const r = cv.getBoundingClientRect();
         const idx = Math.floor((e.clientX - r.left) / STRIP_PX);
@@ -1649,7 +1684,7 @@ function wireUi(): void {
 
     // ▲▲ で全画面グリッドを開く
     $("btn-palette-expand").addEventListener("click", () => {
-        if (!isV2Doc(doc)) return;
+        if (!isV3Doc(doc)) return;
         openPaletteOverlay();
     });
 
@@ -1660,7 +1695,7 @@ function wireUi(): void {
 
     // 全画面グリッド: チップをクリックして選択
     $<HTMLCanvasElement>("palette-canvas").addEventListener("click", (e) => {
-        if (!isV2Doc(doc)) return;
+        if (!isV3Doc(doc)) return;
         const cv = $<HTMLCanvasElement>("palette-canvas");
         const r = cv.getBoundingClientRect();
         const cols = Number(cv.dataset.gridCols ?? "1");
@@ -1694,7 +1729,7 @@ function wireUi(): void {
     // タイルセット設定パネル
     const dlgTs = $<HTMLDialogElement>("dlg-tileset");
     $("btn-tileset").addEventListener("click", () => {
-        if (!isV2Doc(doc)) return;
+        if (!isV3Doc(doc)) return;
         $("ts-hint").textContent = TS_HINTS[tsMode];
         dlgTs.showModal();
         drawTilesetPanel();
@@ -1739,8 +1774,8 @@ function wireUi(): void {
             await wizLoadPng(f);
             return;
         }
-        if (!isV2Doc(doc)) return;
-        const r = await importTilesetPng(f, doc.tileset.tileSize);
+        if (!isV3Doc(doc)) return;
+        const r = await importTilesetPng(f, activeTileset(doc).tileSize);
         if (!r.ok) {
             showMessages("タイルセットを差し替えできません", [r.error], []);
             return;
@@ -1848,19 +1883,19 @@ function wireUi(): void {
             return;
         }
         if (!wizState.dataUri) {
-            showMessages("新規マップ (v2) を作成できません", ["タイルセット PNG が未選択です"], []);
+            showMessages("新規マップ (タイルセット) を作成できません", ["タイルセット PNG が未選択です"], []);
             return;
         }
         void wizBuildTileset().then((r) => {
             if (!r.ok) {
-                showMessages("新規マップ (v2) を作成できません", [r.error], []);
+                showMessages("新規マップ (タイルセット) を作成できません", [r.error], []);
                 return;
             }
             selectedTile = 0;
             void backupAutosave();
-            setDocument(createNewDocV2(w, h, name, author, r.tileset));
+            setDocument(createNewDocV3(w, h, name, author, r.tileset));
             const rebakeInfo = wizState.needsRebake ? " (余白を正規化しました)" : "";
-            toast(`${w}×${h} の v2 マップを作成しました (チップ ${tileCount(r.tileset)} 個)${rebakeInfo}`);
+            toast(`${w}×${h} のタイルセットマップを作成しました (チップ ${tileCount(r.tileset)} 個)${rebakeInfo}`);
         });
     });
 
