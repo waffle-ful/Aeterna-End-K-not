@@ -613,3 +613,59 @@ describe("v3 render-smoke: 描画駆動データ層の決定論ゲート", () =>
         expect(fnv1a(v3Descriptor(getDoc()))).toMatchInlineSnapshot(`"4f4d16e0"`);
     });
 });
+
+// ============================================================
+// §21.2 "v" チェーン → T1 フォールバック (契約監査 2026-06-13 で欠落指摘されたベクタ)
+// spec §23 の (5,4) 相当: 層4 "v" → 層3 空 → 層2 空 → 層1 "x" → 通行不可・遮光なし
+// ============================================================
+
+describe('v3 "v" チェーンのフォールバック (仕様 §21.2 / §23 (5,4) 相当)', () => {
+    function makeVChain(): any {
+        return {
+            ekm: 3,
+            name: "VChain",
+            author: "test",
+            width: 2,
+            height: 1,
+            tilesets: [
+                {
+                    tileSize: 32,
+                    columns: 8,
+                    image: IMG,
+                    tiles: [
+                        { id: 1, pass: "x", over: false, light: false, tag: 0, dir: 15 },
+                        { id: 2, pass: "v", over: false, light: false, tag: 0, dir: 15 },
+                    ],
+                },
+            ],
+            layers: [
+                { tileset: 0, cells: [2, 1] },   // (0,0)=T1 "v" / (1,0)=T1 "x"
+                { tileset: 0, cells: [-1, -1] },
+                { tileset: 0, cells: [-1, -1] },
+                { tileset: 0, cells: [-1, 2] },  // (1,0) の層4 = "v"
+            ],
+            decor: [],
+            spawn: { x: 0, y: 0 },
+            ambient: { visionRadius: 8 },
+        };
+    }
+
+    it('(1,0): 層4 "v" → 層3/2 空 → 層1 "x" → 通行不可・遮光なし', () => {
+        const r = validateEkmapV3(makeVChain());
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+        const c = resolveCellV3(r.doc, 1, 0);
+        expect(c.isVoid).toBe(false);
+        expect(c.passable).toBe(false);    // "v" は素通りして T1 の "x" が効く
+        expect(c.blocksLight).toBe(false); // どの層も light=false → 視界は通る
+    });
+
+    it('(0,0): 全層が "v" または空 → T1 の "v" は "o" 扱い = 通行可 (spawn 合格)', () => {
+        const r = validateEkmapV3(makeVChain());
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+        const c = resolveCellV3(r.doc, 0, 0);
+        expect(c.isVoid).toBe(false);
+        expect(c.passable).toBe(true);
+    });
+});

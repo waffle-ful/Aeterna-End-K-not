@@ -321,7 +321,7 @@ export interface EkmapJsonV2 {
 export interface LayerJsonV3 {
     tileset: number;
     cells: number[];
-    above?: boolean; // false のとき省略しない (仕様: 読込時パディングはするが出力は明示)
+    above?: boolean; // false のときはキーごと省略する (ローダー側 POCO の既定値 false で正しく読まれる)
 }
 
 export interface EkmapJsonV3 {

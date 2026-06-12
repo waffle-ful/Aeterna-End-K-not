@@ -389,8 +389,9 @@ public static class EkmapLoader
 
         if (raw.author != null && raw.author.Length > 32)
         {
-            errorMessage = $"author must be 0-32 characters (got {raw.author.Length})";
-            return false;
+            // spec §9: author 超過は拒否リストに無い → エディタと同じ「警告 + 切り詰め」(契約監査 2026-06-13)
+            Logger.Warn($"[EkmapLoader] author exceeds 32 characters ({raw.author.Length}), truncating", "EkmapLoader");
+            raw.author = raw.author.Substring(0, 32);
         }
 
         if (raw.width < 1 || raw.width > 256)
@@ -558,8 +559,9 @@ public static class EkmapLoader
 
         if (raw.author != null && raw.author.Length > 32)
         {
-            errorMessage = $"author must be 0-32 characters (got {raw.author.Length})";
-            return false;
+            // spec §9: author 超過は拒否リストに無い → エディタと同じ「警告 + 切り詰め」(契約監査 2026-06-13)
+            Logger.Warn($"[EkmapLoader] author exceeds 32 characters ({raw.author.Length}), truncating", "EkmapLoader");
+            raw.author = raw.author.Substring(0, 32);
         }
 
         if (raw.width < 1 || raw.width > 256)
@@ -855,6 +857,14 @@ public static class EkmapLoader
 
         if (ts.tiles != null)
         {
+            // spec §14: tiles[] は最大 tilecount 件 (エディタと対称。実際は id 重複/範囲外で先に弾かれるが文言追跡)
+            if (ts.tiles.Count > tilecount)
+            {
+                UnityEngine.Object.Destroy(tex);
+                error = $"{label} tiles[] count {ts.tiles.Count} exceeds tilecount {tilecount}";
+                return false;
+            }
+
             var seenIds = new HashSet<int>();
             foreach (EkmTileRaw t in ts.tiles)
             {
@@ -968,8 +978,9 @@ public static class EkmapLoader
 
         if (raw.author != null && raw.author.Length > 32)
         {
-            errorMessage = $"author must be 0-32 characters (got {raw.author.Length})";
-            return false;
+            // spec §9: author 超過は拒否リストに無い → エディタと同じ「警告 + 切り詰め」(契約監査 2026-06-13)
+            Logger.Warn($"[EkmapLoader] author exceeds 32 characters ({raw.author.Length}), truncating", "EkmapLoader");
+            raw.author = raw.author.Substring(0, 32);
         }
 
         if (raw.width < 1 || raw.width > 256)
