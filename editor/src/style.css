@@ -76,6 +76,7 @@ header {
     padding: var(--space-xs) var(--space-sm);
     background: var(--bg-1);
     border-bottom: 1px solid var(--border-bar);
+    flex-shrink: 0;
 }
 
 .brand {
@@ -145,9 +146,11 @@ button.primary:hover {
 }
 
 main#viewport {
-    flex: 1;
+    flex: 1 1 0;
     position: relative;
     min-height: 0;
+    /* キャンバスはこの枠内にクリップ。はみ出してフッタ (パレット帯) を押し出さない */
+    overflow: hidden;
 }
 
 main#viewport canvas {
@@ -163,6 +166,8 @@ footer {
     padding: var(--space-xs) var(--space-sm) calc(var(--space-xs) + env(safe-area-inset-bottom));
     background: var(--bg-1);
     border-top: 1px solid var(--border-bar);
+    /* フッタは縮めない。スペースが足りなければ main 側を縮める (パレット帯の見切れ防止) */
+    flex-shrink: 0;
 }
 
 .tools {
@@ -772,6 +777,7 @@ dialog#dlg-add-tile {
     text-overflow: ellipsis;
     min-height: 0;
     line-height: 1.6;
+    flex-shrink: 0;
     /* テキストが空のときは折りたたむ */
     transition: padding 0.15s, min-height 0.15s;
 }

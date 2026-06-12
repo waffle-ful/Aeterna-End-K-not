@@ -81,11 +81,17 @@ export async function saveForPlaytest(filename: string, text: string): Promise<P
     try {
         let dir = await loadHandle();
         if (!dir || !(await ensurePermission(dir))) {
-            // 初回 or 権限失効: フォルダを選び直してもらう (Documents/EndKnot/EKMaps を選ぶ)
-            dir = await (window as unknown as {
-                showDirectoryPicker(o: { id: string; mode: string }): Promise<FileSystemDirectoryHandle>;
-            }).showDirectoryPicker({ id: "ekmaps", mode: "readwrite" });
-            await ensurePermission(dir);
+            // 初回 or 権限失効: フォルダを選んでもらう。
+            // startIn:"documents" で必ずドキュメント直下から開く (Program Files 等の保護領域に
+            // 入り込んで「システムファイルがあるので開けません」になるのを防ぐ)。id は startIn を
+            // 優先させるため過去の記憶を引きずらない新しい値にする。
+            const picked = await (window as unknown as {
+                showDirectoryPicker(o: { id?: string; mode: string; startIn?: string }): Promise<FileSystemDirectoryHandle>;
+            }).showDirectoryPicker({ id: "ekmaps-docs", mode: "readwrite", startIn: "documents" });
+            await ensurePermission(picked);
+            // 選んだのが Documents でも EndKnot でも EKMaps でも、最終的に
+            // <選択>/…/EndKnot/EKMaps に解決して作成する (モッドの読み込み先と一致させる)。
+            dir = await resolveEkmapsDir(picked);
             await storeHandle(dir);
         }
 
@@ -101,6 +107,17 @@ export async function saveForPlaytest(filename: string, text: string): Promise<P
         }
         return { ok: false, reason: "error", message: (e as Error).message };
     }
+}
+
+// 選んだフォルダを「…/EndKnot/EKMaps」に解決する (無ければ作成)。
+// ユーザーが Documents を選べば Documents/EndKnot/EKMaps、EndKnot を選べばその下の EKMaps、
+// EKMaps 自体を選べばそのまま — どれを選んでもモッドの読み込み先に一致させる。
+async function resolveEkmapsDir(picked: FileSystemDirectoryHandle): Promise<FileSystemDirectoryHandle> {
+    if (picked.name === "EKMaps") return picked;
+    const endknot = picked.name === "EndKnot"
+        ? picked
+        : await picked.getDirectoryHandle("EndKnot", { create: true });
+    return endknot.getDirectoryHandle("EKMaps", { create: true });
 }
 
 // Tauri 経路: <Documents>/EndKnot/EKMaps/<filename> へ直書き。
