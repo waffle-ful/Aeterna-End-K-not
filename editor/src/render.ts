@@ -128,6 +128,11 @@ export class MapRenderer {
     private tilesetImgs: (HTMLImageElement | null)[] = [];
     /** setDoc 世代 (非同期ロードの取り違え防止) */
     private docGen = 0;
+    /**
+     * 薄表示: アクティブレイヤー index (0〜3)、null = 全層 100% (decor/spawn タブ時)。
+     * setActiveLayerIndex() から変更する。
+     */
+    private activeLayerIdx: number | null = null;
 
     async init(host: HTMLElement): Promise<void> {
         await this.app.init({
@@ -298,6 +303,7 @@ export class MapRenderer {
 
     /**
      * v3 セルの描画: 層 0〜3 昇順でタイルを重ねる (§21.4)。
+     * 薄表示: activeLayerIdx が null でないとき、非アクティブ層は α=0.35 で描く。
      * ★バッジ: cellAboveMask が非ゼロ (layer.above=true または チップ over=true) のセルに表示。
      */
     private drawCellBaseV3(doc: MapDocV3, ctx: CanvasRenderingContext2D, x: number, y: number, px: number, py: number, t: number): void {
@@ -305,7 +311,9 @@ export class MapRenderer {
         ctx.fillStyle = COLOR_VOID;
         ctx.fillRect(px, py, t, t);
 
-        // 層 0〜3 昇順で描画
+        const activeIdx = this.activeLayerIdx;
+
+        // 層 0〜3 昇順で描画 (薄表示対応)
         for (let li = 0; li < doc.layers.length; li++) {
             const layer = doc.layers[li];
             const tid = layer.cells[i];
@@ -313,7 +321,14 @@ export class MapRenderer {
             const ts = doc.tilesets[layer.tileset];
             if (!ts) continue;
             const img = this.tilesetImgs[layer.tileset] ?? null;
+            const alpha = (activeIdx === null || li === activeIdx) ? 1 : 0.35;
+            if (alpha !== 1) {
+                ctx.globalAlpha = alpha;
+            }
             this.drawTile(ctx, ts, img, tid, px, py, t);
+            if (alpha !== 1) {
+                ctx.globalAlpha = 1;
+            }
         }
 
         // ★バッジ (over=true のタイルを含むセル、または layer.above=true の層があるセル)
@@ -327,6 +342,18 @@ export class MapRenderer {
             ctx.textBaseline = "middle";
             ctx.fillText("★", px + t * 0.81, py + t * 0.21);
         }
+    }
+
+    /**
+     * アクティブレイヤー index を設定する。
+     * 値が変わったときのみ redrawAll+flush を実行する。
+     * null = 全層 100% (decor/spawn タブ時)。
+     */
+    setActiveLayerIndex(idx: number | null): void {
+        if (this.activeLayerIdx === idx) return;
+        this.activeLayerIdx = idx;
+        this.redrawAll();
+        this.flush();
     }
 
     private drawCellOvl(x: number, y: number): void {

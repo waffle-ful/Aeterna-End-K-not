@@ -27,8 +27,12 @@
     <main id="viewport">
       <!-- レイヤー縦タブ: canvas の右端にオーバーレイ (v2 マップ時のみ表示) -->
       <div id="layer-vtabs" hidden aria-label="レイヤー選択">
-        <button class="lvtab active" data-layer="ground">下層</button>
-        <button class="lvtab" data-layer="upper">上層</button>
+        <button class="lvtab active" data-layer="ground" title="レイヤー1">1</button>
+        <button class="lvtab" data-layer="upper" title="レイヤー2">2</button>
+        <button class="lvtab" data-layer="layer3" title="レイヤー3">3</button>
+        <button class="lvtab" data-layer="layer4" title="レイヤー4">4</button>
+        <!-- ⚙ レイヤー設定ボタン: アクティブなタイル層タブ時のみ表示 -->
+        <button id="btn-layer-settings" class="lvtab-gear" title="レイヤーの使うチップセット・上表示などを設定" hidden>⚙</button>
         <button class="lvtab" data-layer="decor">装飾</button>
         <button class="lvtab" data-layer="spawn">スポーン</button>
         <button id="btn-tileset-vtab" title="タイルセット設定 (通行/★/遮光/タグ)" class="lvtab-chip">チップ設定</button>
@@ -37,8 +41,10 @@
 
     <footer>
       <div id="layer-tabs" hidden>
-        <button class="ltab active" data-layer="ground">下層</button>
-        <button class="ltab" data-layer="upper">上層</button>
+        <button class="ltab active" data-layer="ground">レイヤー1</button>
+        <button class="ltab" data-layer="upper">レイヤー2</button>
+        <button class="ltab" data-layer="layer3">レイヤー3</button>
+        <button class="ltab" data-layer="layer4">レイヤー4</button>
         <button class="ltab" data-layer="decor">装飾</button>
         <button class="ltab" data-layer="spawn">スポーン</button>
         <button id="btn-tileset" title="タイルセット設定 (通行/★/遮光/タグ)">チップ設定</button>
@@ -222,6 +228,42 @@
       <menu>
         <button id="add-tile-ok" type="button" disabled>追加</button>
         <button id="add-tile-cancel" type="button">キャンセル</button>
+      </menu>
+    </dialog>
+
+    <!-- レイヤー設定ダイアログ -->
+    <dialog id="dlg-layer">
+      <h3 id="dlg-layer-title">レイヤーの設定</h3>
+      <label class="dlg-layer-above-row">
+        <input type="checkbox" id="dlg-layer-above" />
+        <span>このレイヤーをプレイヤーより上に表示</span>
+      </label>
+      <div class="dlg-layer-section-label">使うチップセット</div>
+      <div id="dlg-layer-ts-list" class="dlg-layer-ts-list"></div>
+      <menu>
+        <button id="dlg-layer-close" type="button">閉じる</button>
+      </menu>
+    </dialog>
+
+    <!-- タイルセット追加ウィザード (プールへの追加モード) -->
+    <dialog id="dlg-new-tileset">
+      <h3>タイルセットを追加</h3>
+      <p class="note" id="wiz-add-pool-note" hidden>現在のマップのタイルセットプールに新しいセットを追加します。</p>
+      <div id="new-ts-drop-zone" class="wiz-drop-zone" tabindex="0" role="button" aria-label="PNG をドロップまたはクリックして選択">
+        <div class="wiz-drop-inner">
+          <span class="wiz-drop-icon">🖼</span>
+          <span class="wiz-drop-label">PNG をここにドロップ</span>
+          <span class="wiz-drop-sub">クリックで選択 / Ctrl+V で貼り付け</span>
+          <span class="note">PNG ≤ 1 MB</span>
+        </div>
+      </div>
+      <div id="new-ts-preview-wrap" class="wiz-preview-wrap" hidden>
+        <canvas id="new-ts-preview-canvas" class="wiz-preview-canvas"></canvas>
+        <div id="new-ts-preview-info" class="wiz-preview-info"></div>
+      </div>
+      <menu>
+        <button id="new-ts-ok-btn" type="button" disabled>追加</button>
+        <button id="new-ts-cancel-btn" type="button">キャンセル</button>
       </menu>
     </dialog>
 

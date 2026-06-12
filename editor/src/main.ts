@@ -17,6 +17,7 @@ import {
     MAX_JSON_BYTES_V2,
     MAX_TILESET_IMAGE_BYTES,
     MAX_TILECOUNT,
+    MAX_TILESETS,
     MIN_DIM,
     type MapDocV3,
     NAME_MAX,
@@ -56,7 +57,7 @@ import { saveForPlaytest } from "./playtest";
 
 type ToolV1 = "floor" | "wall" | "void" | DecorKind | "spawn";
 type ToolV2 = "pen" | "erase" | "rect" | "bucket" | "pick";
-type LayerTab = "ground" | "upper" | "decor" | "spawn";
+type LayerTab = "ground" | "upper" | "layer3" | "layer4" | "decor" | "spawn";
 
 const TOOL_CHAR: Partial<Record<ToolV1, string>> = { floor: CELL_FLOOR, wall: CELL_WALL, void: CELL_VOID };
 
@@ -73,8 +74,10 @@ const TOOL_HINTS_V2: Record<ToolV2, string> = {
 
 /** v2 レイヤーのツールバー説明 */
 const LAYER_HINTS_V2: Record<LayerTab, string> = {
-    ground: "下層 — マップの土台となるタイルを配置します",
-    upper:  "上層 — プレイヤーの上に描画するタイル (屋根・梁など) を配置します",
+    ground: "レイヤー1 — マップの土台となるタイルを配置します",
+    upper:  "レイヤー2 — プレイヤーの上に描画するタイル (屋根・梁など) を配置します",
+    layer3: "レイヤー3 — 追加のタイル層です",
+    layer4: "レイヤー4 — 追加のタイル層です",
     decor:  "装飾 — 灯りやドアなど小物を1マスずつ置きます。クリックで配置 / 再クリックで除去",
     spawn:  "スポーン — プレイヤーの初期位置を設定します。クリック / ドラッグで移動できます",
 };
@@ -116,7 +119,8 @@ let doc: AnyDoc = createNewDoc(32, 32, "新しいマップ", "");
 let tool: ToolV1 = "wall";
 let toolV2: ToolV2 = "pen";
 let activeLayer: LayerTab = "ground";
-let selectedTile = 0;
+/** レイヤーごとの選択チップ id (layer0/1/2/3 に対応) */
+let selectedTilePerLayer: [number, number, number, number] = [0, 0, 0, 0];
 let decorKind2: DecorKind = "light";
 const history = new History();
 const renderer = new MapRenderer();
@@ -178,12 +182,34 @@ function updateStatus(): void {
     const zoom = Math.round(renderer.world.scale.x * 100);
     const inGrid = lastHover && lastHover.x >= 0 && lastHover.y >= 0 && lastHover.x < doc.width && lastHover.y < doc.height;
     const cellTxt = inGrid && lastHover ? `(${lastHover.x}, ${lastHover.y})` : "--";
-    const v2Txt = isV3Doc(doc) ? ` | ${layerLabel(activeLayer)} | チップ ${selectedTile}` : "";
+    const v2Txt = isV3Doc(doc) ? ` | ${layerLabel(activeLayer)} | チップ ${getSelectedTile()}` : "";
     $("status").textContent = `${doc.width}×${doc.height} | セル ${cellTxt} | ${zoom}%${v2Txt} | decor ${doc.decor.length}/${MAX_DECOR}`;
 }
 
 function layerLabel(l: LayerTab): string {
-    return l === "ground" ? "下層" : l === "upper" ? "上層" : l === "decor" ? "装飾" : "スポーン";
+    if (l === "ground") return "レイヤー1";
+    if (l === "upper") return "レイヤー2";
+    if (l === "layer3") return "レイヤー3";
+    if (l === "layer4") return "レイヤー4";
+    return l === "decor" ? "装飾" : "スポーン";
+}
+
+/** アクティブレイヤー index (0〜3) — decor/spawn は描画層に影響しない */
+function activeLayerIndex(): number {
+    if (activeLayer === "upper") return 1;
+    if (activeLayer === "layer3") return 2;
+    if (activeLayer === "layer4") return 3;
+    return 0;
+}
+
+/** アクティブレイヤーの選択チップ id を取得 */
+function getSelectedTile(): number {
+    return selectedTilePerLayer[activeLayerIndex()];
+}
+
+/** アクティブレイヤーの選択チップ id を更新 */
+function setSelectedTile(id: number): void {
+    selectedTilePerLayer[activeLayerIndex()] = id;
 }
 
 // ---------- 自動保存 (IndexedDB 単一スロット) ----------
@@ -202,16 +228,39 @@ function scheduleSave(): void {
 
 // ---------- モード UI (v1 ツール列 ⇔ v2 レイヤータブ+ツール列) ----------
 
+function isTileLayer(l: LayerTab): boolean {
+    return l === "ground" || l === "upper" || l === "layer3" || l === "layer4";
+}
+
 function refreshModeUi(): void {
     const v3 = isV3Doc(doc);
     $("layer-tabs").hidden = !v3; // 旧フッタ横タブ (CSS で常時非表示だが状態は維持)
     $("layer-vtabs").hidden = !v3; // 新縦タブ: v3 のみ表示
     $("tools").hidden = v3;
-    $("tools-v2").hidden = !v3 || (activeLayer !== "ground" && activeLayer !== "upper");
+    $("tools-v2").hidden = !v3 || !isTileLayer(activeLayer);
     $("tools-decor2").hidden = !v3 || activeLayer !== "decor";
     $("spawn-hint").hidden = !v3 || activeLayer !== "spawn";
+    // ⚙ ボタン: アクティブなタイル層タブにのみ表示
+    $("btn-layer-settings").hidden = !v3 || !isTileLayer(activeLayer);
+    // タブの「↑」バッジを更新
+    if (v3) updateLayerAboveBadges(doc as import("./model").MapDocV3);
     updateRibbon();
     if (v3) void rebuildPicker();
+}
+
+/** 各レイヤータブに above=true のバッジ (↑) を表示/非表示 */
+function updateLayerAboveBadges(d: import("./model").MapDocV3): void {
+    const mapping: [LayerTab, number][] = [
+        ["ground", 0], ["upper", 1], ["layer3", 2], ["layer4", 3],
+    ];
+    for (const [tabName, idx] of mapping) {
+        const btn = document.querySelector<HTMLButtonElement>(`#layer-vtabs .lvtab[data-layer="${tabName}"]`);
+        if (!btn) continue;
+        const above = d.layers[idx]?.above ?? false;
+        const baseLabel = tabName === "ground" ? "1" : tabName === "upper" ? "2" : tabName === "layer3" ? "3" : "4";
+        btn.textContent = above ? `${baseLabel} ↑` : baseLabel;
+        btn.title = above ? `レイヤー${baseLabel} (プレイヤーより上に描画)` : `レイヤー${baseLabel}`;
+    }
 }
 
 function setActiveLayer(l: LayerTab): void {
@@ -224,6 +273,8 @@ function setActiveLayer(l: LayerTab): void {
     for (const b of document.querySelectorAll<HTMLButtonElement>("#layer-vtabs .lvtab")) {
         b.classList.toggle("active", b.dataset.layer === l);
     }
+    // 薄表示: decor/spawn は全層 100%、タイル層はアクティブ層だけ 100%
+    renderer.setActiveLayerIndex(isTileLayer(l) ? activeLayerIndex() : null);
     refreshModeUi();
     updateRibbon();
     updateStatus();
@@ -255,9 +306,10 @@ async function rebuildPicker(): Promise<void> {
     const ts = activeTileset(d);
     const total = tileCount(ts);
 
-    // 表示するチップid列: selectedTile を中心に前後 STRIP_NEIGHBORS/2 ずつ
+    // 表示するチップid列: getSelectedTile() を中心に前後 STRIP_NEIGHBORS/2 ずつ
+    const selTile = getSelectedTile();
     const half = Math.floor(STRIP_NEIGHBORS / 2);
-    const start = Math.max(0, Math.min(selectedTile - half, total - STRIP_NEIGHBORS));
+    const start = Math.max(0, Math.min(selTile - half, total - STRIP_NEIGHBORS));
     const end = Math.min(total - 1, start + STRIP_NEIGHBORS - 1);
     const ids: number[] = [];
     for (let i = start; i <= end; i++) ids.push(i);
@@ -288,7 +340,7 @@ async function rebuildPicker(): Promise<void> {
     }
 
     // 選択中チップの強調枠
-    const selIdx = ids.indexOf(selectedTile);
+    const selIdx = ids.indexOf(selTile);
     if (selIdx >= 0) {
         ctx.strokeStyle = "#ffd75e";
         ctx.lineWidth = 3;
@@ -302,7 +354,7 @@ async function rebuildPicker(): Promise<void> {
         const id = ids[idx];
         ctx.fillStyle = "rgba(0,0,0,0.55)";
         ctx.fillRect(idx * STRIP_PX + 1, 1, 22, 13);
-        ctx.fillStyle = id === selectedTile ? "#ffd75e" : "rgba(255,255,255,0.7)";
+        ctx.fillStyle = id === selTile ? "#ffd75e" : "rgba(255,255,255,0.7)";
         ctx.fillText(String(id), idx * STRIP_PX + 3, 2);
     }
 
@@ -376,12 +428,13 @@ async function rebuildPaletteGrid(filterText: string, usedOnly: boolean): Promis
         }
 
         // セル枠
-        ctx.strokeStyle = id === selectedTile ? "#ffd75e" : "rgba(255,255,255,0.18)";
-        ctx.lineWidth = id === selectedTile ? 3 : 1;
+        const curSel = getSelectedTile();
+        ctx.strokeStyle = id === curSel ? "#ffd75e" : "rgba(255,255,255,0.18)";
+        ctx.lineWidth = id === curSel ? 3 : 1;
         ctx.strokeRect(gx + 0.5, gy + 0.5, GRID_PX - 1, GRID_PX - 1);
 
         // 選択中は背景ハイライト
-        if (id === selectedTile) {
+        if (id === curSel) {
             ctx.fillStyle = "rgba(255,215,94,0.18)";
             ctx.fillRect(gx + 1, gy + 1, GRID_PX - 2, GRID_PX - 2);
         }
@@ -391,7 +444,7 @@ async function rebuildPaletteGrid(filterText: string, usedOnly: boolean): Promis
         ctx.fillRect(gx + 1, gy + 1, 26, 14);
         ctx.font = "bold 11px sans-serif";
         ctx.textBaseline = "top";
-        ctx.fillStyle = id === selectedTile ? "#ffd75e" : "rgba(255,255,255,0.8)";
+        ctx.fillStyle = id === curSel ? "#ffd75e" : "rgba(255,255,255,0.8)";
         ctx.fillText(String(id), gx + 3, gy + 2);
     }
 
@@ -426,7 +479,7 @@ let paletteUsedOnly = false;
 
 function selectTile(id: number): void {
     if (!isV3Doc(doc)) return;
-    selectedTile = Math.min(Math.max(0, id), tileCount(activeTileset(doc)) - 1);
+    setSelectedTile(Math.min(Math.max(0, id), tileCount(activeTileset(doc)) - 1));
     void rebuildPicker();
     // 全画面が開いていれば即時に閉じる (帯の再描画は rebuildPicker が担う)
     const overlay = $("palette-overlay");
@@ -464,26 +517,24 @@ function placeDecor(kind: DecorKind, x: number, y: number): void {
 }
 
 /**
- * v3 アクティブレイヤーの cells 配列を返す。
- * UI は現状 "ground"(index 0) / "upper"(index 1) の 2 タブのみ — 4 タブ化は次増分。
+ * v3 アクティブレイヤーの cells 配列を返す (4 タブ対応)。
  */
 function activeLayerArrV3(d: MapDocV3): number[] {
-    const idx = activeLayer === "upper" ? 1 : 0;
-    return d.layers[idx].cells;
+    return d.layers[activeLayerIndex()].cells;
 }
 
-/** v3 アクティブレイヤーの index (0〜3) を返す。現状は 0/1 のみ */
+/** v3 アクティブレイヤーの index (0〜3) を返す */
 function activeLayerIndexV3(): number {
-    return activeLayer === "upper" ? 1 : 0;
+    return activeLayerIndex();
 }
 
 /**
  * v3 アクティブレイヤーが使用するタイルセットを返す。
- * 現状は layers[activeLayerIndexV3()].tileset が指す tilesets[i]。
+ * layers[activeLayerIndex()].tileset が指す tilesets[i]。
  * タイルセットが無い場合は tilesets[0] にフォールバック。
  */
 function activeTileset(d: MapDocV3): TilesetDoc {
-    const li = activeLayerIndexV3();
+    const li = activeLayerIndex();
     const tsIdx = d.layers[li]?.tileset ?? 0;
     return d.tilesets[tsIdx] ?? d.tilesets[0];
 }
@@ -547,7 +598,7 @@ function applyToolAtV3(d: MapDocV3, x: number, y: number, isStart: boolean): voi
 
     switch (toolV2) {
         case "pen":
-            if (inGrid) paintCellV3(d, x, y, selectedTile);
+            if (inGrid) paintCellV3(d, x, y, getSelectedTile());
             break;
         case "erase":
             if (inGrid) paintCellV3(d, x, y, -1);
@@ -564,19 +615,35 @@ function applyToolAtV3(d: MapDocV3, x: number, y: number, isStart: boolean): voi
             break;
         }
         case "bucket":
-            if (isStart && inGrid) floodFillV3(d, x, y, selectedTile);
+            if (isStart && inGrid) floodFillV3(d, x, y, getSelectedTile());
             break;
         case "pick": {
             if (!isStart || !inGrid) break;
             const i = y * d.width + x;
+            const curIdx = activeLayerIndex();
             const arr = activeLayerArrV3(d);
-            // アクティブ層を優先、空ならもう一方の層から拾う
-            const otherIdx = activeLayer === "upper" ? 0 : 1;
-            const v = arr[i] >= 0 ? arr[i] : d.layers[otherIdx].cells[i];
-            if (v >= 0) {
-                selectTile(v);
+            // アクティブ層を優先、空なら上の層→下の層の順で探す
+            let pickedTile = arr[i];
+            let pickedLayerIdx = curIdx;
+            if (pickedTile < 0) {
+                // 上の層から降りてくる順で検索 (上位層優先)
+                for (let li = d.layers.length - 1; li >= 0; li--) {
+                    if (li === curIdx) continue;
+                    const v = d.layers[li].cells[i];
+                    if (v >= 0) { pickedTile = v; pickedLayerIdx = li; break; }
+                }
+            }
+            if (pickedTile >= 0) {
+                // 別の層から拾った場合はタブを自動切替
+                if (pickedLayerIdx !== curIdx) {
+                    const tabNames: LayerTab[] = ["ground", "upper", "layer3", "layer4"];
+                    setActiveLayer(tabNames[pickedLayerIdx]);
+                    toast(`レイヤー${pickedLayerIdx + 1} のチップ ${pickedTile} を選択しました`);
+                } else {
+                    toast(`チップ ${pickedTile} を選択しました`);
+                }
+                selectTile(pickedTile);
                 setToolV2("pen");
-                toast(`チップ ${v} を選択しました`);
             }
             break;
         }
@@ -637,7 +704,7 @@ function onStrokeEnd(): void {
         const y0 = Math.min(rectDrag.ay, rectDrag.cy);
         const y1 = Math.max(rectDrag.ay, rectDrag.cy);
         for (let y = y0; y <= y1; y++) {
-            for (let x = x0; x <= x1; x++) paintCellV3(d, x, y, selectedTile);
+            for (let x = x0; x <= x1; x++) paintCellV3(d, x, y, getSelectedTile());
         }
         renderer.clearRectPreview();
         renderer.flush();
@@ -730,7 +797,13 @@ function setDocument(next: AnyDoc): void {
     renderer.clearRectPreview();
     if (isV3Doc(doc)) {
         activeLayer = "ground";
-        selectedTile = Math.min(selectedTile, tileCount(activeTileset(doc)) - 1);
+        // 各レイヤーの選択チップを tilecount にクランプ
+        for (let li = 0; li < 4; li++) {
+            const tsIdx = (doc as import("./model").MapDocV3).layers[li]?.tileset ?? 0;
+            const ts = (doc as import("./model").MapDocV3).tilesets[tsIdx] ?? (doc as import("./model").MapDocV3).tilesets[0];
+            const cnt = ts ? tileCount(ts) : 1;
+            selectedTilePerLayer[li] = Math.min(selectedTilePerLayer[li], cnt - 1);
+        }
         setActiveLayer("ground");
         setToolV2(toolV2);
     }
@@ -904,7 +977,12 @@ function replaceTileset(ts: TilesetDoc): void {
             }
         }
     }
-    selectedTile = Math.min(selectedTile, count - 1);
+    // このタイルセットを使う全レイヤーの選択チップもクランプ
+    for (let li = 0; li < d.layers.length; li++) {
+        if (d.layers[li].tileset === tsIdx) {
+            selectedTilePerLayer[li] = Math.min(selectedTilePerLayer[li], count - 1);
+        }
+    }
     history.clear(); // 旧 tilecount 前提のパッチは安全に適用できないため破棄
     refreshUndoButtons();
     renderer.setDoc(d);
@@ -914,6 +992,134 @@ function replaceTileset(ts: TilesetDoc): void {
     updateStatus();
     toast(cleared > 0 ? `差し替えました (範囲外になった ${cleared} セルを空にしました)` : "タイルセットを差し替えました");
 }
+
+// ---------- レイヤー設定ダイアログ (dlg-layer) ----------
+
+/** レイヤー設定ダイアログを開く (アクティブなタイル層専用) */
+async function openLayerDialog(): Promise<void> {
+    if (!isV3Doc(doc)) return;
+    const d = doc;
+    const li = activeLayerIndex();
+    const layer = d.layers[li];
+
+    $("dlg-layer-title").textContent = `レイヤー${li + 1} の設定`;
+
+    // above チェックボックス
+    ($<HTMLInputElement>("dlg-layer-above")).checked = layer.above;
+
+    // タイルセット選択 (サムネ + ラジオ)
+    await buildLayerTilesetPicker(d, li);
+
+    $<HTMLDialogElement>("dlg-layer").showModal();
+}
+
+/** dlg-layer のタイルセット選択UI を構築する */
+async function buildLayerTilesetPicker(d: MapDocV3, layerIdx: number): Promise<void> {
+    const container = $("dlg-layer-ts-list");
+    container.replaceChildren();
+
+    for (let ti = 0; ti < d.tilesets.length; ti++) {
+        const ts = d.tilesets[ti];
+        const isActive = d.layers[layerIdx].tileset === ti;
+
+        const label = document.createElement("label");
+        label.className = "layer-ts-item" + (isActive ? " active" : "");
+
+        const radio = document.createElement("input");
+        radio.type = "radio";
+        radio.name = "layer-ts-radio";
+        radio.value = String(ti);
+        radio.checked = isActive;
+        radio.className = "layer-ts-radio";
+
+        // サムネ canvas
+        const cv = document.createElement("canvas");
+        cv.width = 48;
+        cv.height = 48;
+        cv.className = "layer-ts-thumb";
+        const ctx = cv.getContext("2d");
+        if (ctx) {
+            ctx.imageSmoothingEnabled = false;
+            ctx.fillStyle = "#14141a";
+            ctx.fillRect(0, 0, 48, 48);
+            try {
+                const img = await loadTilesetImage(ts.image);
+                // 先頭タイルをサムネとして表示
+                ctx.drawImage(img, 0, 0, ts.tileSize, ts.tileSize, 0, 0, 48, 48);
+            } catch { /* 画像未ロードは placeholder */ }
+        }
+
+        const info = document.createElement("span");
+        info.className = "layer-ts-info";
+        info.textContent = `セット ${ti + 1}`;
+
+        label.appendChild(radio);
+        label.appendChild(cv);
+        label.appendChild(info);
+
+        radio.addEventListener("change", () => {
+            if (!isV3Doc(doc)) return;
+            const d2 = doc;
+            d2.layers[layerIdx].tileset = ti;
+            // 範囲外チップ数を警告
+            const newTs = d2.tilesets[ti];
+            const cnt = tileCount(newTs);
+            let outOfRange = 0;
+            for (const v of d2.layers[layerIdx].cells) if (v >= cnt) outOfRange++;
+            // 選択チップをクランプ
+            selectedTilePerLayer[layerIdx] = Math.min(selectedTilePerLayer[layerIdx], cnt - 1);
+            history.clear();
+            refreshUndoButtons();
+            renderer.setDoc(d2);
+            void rebuildPicker();
+            drawTilesetPanel();
+            refreshModeUi();
+            scheduleSave();
+            updateStatus();
+            // ラジオ全体の active クラスを更新
+            for (const el of container.querySelectorAll<HTMLElement>(".layer-ts-item")) {
+                el.classList.toggle("active", el.querySelector<HTMLInputElement>("input[type=radio]")?.checked ?? false);
+            }
+            if (outOfRange > 0) {
+                toast(`セットを変更しました。このレイヤーに新セットの範囲外チップが ${outOfRange} 個あります`);
+            } else {
+                toast(`レイヤー${layerIdx + 1} のタイルセットをセット${ti + 1}に変更しました`);
+            }
+        });
+
+        container.appendChild(label);
+    }
+
+    // 「新しいセットを追加…」ボタン
+    const addBtn = document.createElement("button");
+    addBtn.type = "button";
+    addBtn.className = "layer-ts-add-btn";
+    addBtn.textContent = d.tilesets.length >= MAX_TILESETS ? `セット上限 (${MAX_TILESETS}) に達しています` : "+ 新しいセットを追加…";
+    addBtn.disabled = d.tilesets.length >= MAX_TILESETS;
+    addBtn.addEventListener("click", () => {
+        // dlg-layer を閉じてウィザード (dlg-new) を開く → 新規ドキュメント作成ではなくプール追加モードで使う
+        $<HTMLDialogElement>("dlg-layer").close();
+        openAddTilesetWizard();
+    });
+    container.appendChild(addBtn);
+}
+
+/** タイルセット追加ウィザードをプールへの追加モードで開く */
+function openAddTilesetWizard(): void {
+    if (!isV3Doc(doc)) return;
+    if (doc.tilesets.length >= MAX_TILESETS) {
+        toast(`タイルセットは最大 ${MAX_TILESETS} 個までです`);
+        return;
+    }
+    // wizState をリセットしてダイアログを開く (addToPool フラグで完了時の動作を変える)
+    wizReset();
+    addTilesetToPool = true;
+    $("wiz-add-pool-note").hidden = false;
+    $<HTMLDialogElement>("dlg-new-tileset").showModal();
+}
+
+/** ウィザードをタイルセットプール追加モードで使うとき true */
+let addTilesetToPool = false;
 
 // ---------- 入出力 (検証は仕様 §9/§16。エクスポート/コード生成前に必ず実施) ----------
 
@@ -1217,6 +1423,32 @@ function wizUpdateDropZone(): void {
     img.src = wizState.dataUri!;
     const info = $("wiz-preview-info");
     info.textContent = `${wizState.file?.name ?? ""} — ${wizState.pngWidth}×${wizState.pngHeight}px (${((wizState.file?.size ?? 0) / 1024).toFixed(1)} KB)　[クリックで変更]`;
+}
+
+/** dlg-new-tileset のドロップゾーンをウィザード状態に合わせて更新 */
+function wizUpdateDropZoneForPool(): void {
+    const hasFile = wizState.dataUri !== null;
+    $("new-ts-drop-zone").hidden = hasFile;
+    $("new-ts-preview-wrap").hidden = !hasFile;
+    if (hasFile) {
+        const cv = $<HTMLCanvasElement>("new-ts-preview-canvas");
+        const img = new Image();
+        img.onload = () => {
+            const MAX_W = 200;
+            const scale = Math.min(1, MAX_W / img.naturalWidth);
+            cv.width = Math.round(img.naturalWidth * scale);
+            cv.height = Math.round(img.naturalHeight * scale);
+            cv.style.width = `${cv.width}px`;
+            cv.style.height = `${cv.height}px`;
+            const ctx = cv.getContext("2d");
+            if (!ctx) return;
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(img, 0, 0, cv.width, cv.height);
+        };
+        img.src = wizState.dataUri!;
+        $("new-ts-preview-info").textContent =
+            `${wizState.file?.name ?? ""} — ${wizState.pngWidth}×${wizState.pngHeight}px　[クリックで変更]`;
+    }
 }
 
 /** 候補チップを描画 */
@@ -1609,7 +1841,7 @@ async function addTileCommit(): Promise<void> {
     // 7. 選択タイルを新しいタイルに移す + 再描画
     history.clear();
     refreshUndoButtons();
-    selectedTile = newTileIndex;
+    setSelectedTile(newTileIndex);
     renderer.setDoc(d);
     void rebuildPicker();
     drawTilesetPanel();
@@ -1656,6 +1888,85 @@ function wireUi(): void {
         $<HTMLDialogElement>("dlg-tileset").showModal();
         drawTilesetPanel();
     });
+    // ⚙ レイヤー設定ボタン
+    $("btn-layer-settings").addEventListener("click", () => void openLayerDialog());
+
+    // dlg-layer: above チェックボックス
+    $<HTMLInputElement>("dlg-layer-above").addEventListener("change", (e) => {
+        if (!isV3Doc(doc)) return;
+        const li = activeLayerIndex();
+        doc.layers[li].above = (e.target as HTMLInputElement).checked;
+        updateLayerAboveBadges(doc);
+        renderer.redrawAll();
+        renderer.flush();
+        scheduleSave();
+    });
+    // dlg-layer: 閉じる
+    $("dlg-layer-close").addEventListener("click", () => {
+        $<HTMLDialogElement>("dlg-layer").close();
+    });
+
+    // dlg-new-tileset (タイルセット追加ウィザード)
+    const dlgNewTs = $<HTMLDialogElement>("dlg-new-tileset");
+    $("new-ts-drop-zone").addEventListener("click", () => {
+        addTilesetToPool = true;
+        (pngInput as HTMLInputElement).click();
+    });
+    $("new-ts-drop-zone").addEventListener("dragover", (e) => {
+        e.preventDefault();
+        $("new-ts-drop-zone").classList.add("drag-over");
+    });
+    $("new-ts-drop-zone").addEventListener("dragleave", () => {
+        $("new-ts-drop-zone").classList.remove("drag-over");
+    });
+    $("new-ts-drop-zone").addEventListener("drop", async (e) => {
+        e.preventDefault();
+        $("new-ts-drop-zone").classList.remove("drag-over");
+        const file = e.dataTransfer?.files[0];
+        if (file) await wizLoadPng(file);
+    });
+    $("new-ts-ok-btn").addEventListener("click", () => {
+        void wizBuildTileset().then((r) => {
+            if (!r.ok) {
+                showMessages("タイルセットを追加できません", [r.error], []);
+                return;
+            }
+            if (!isV3Doc(doc)) return;
+            if (doc.tilesets.length >= MAX_TILESETS) {
+                toast(`タイルセットは最大 ${MAX_TILESETS} 個までです`);
+                return;
+            }
+            doc.tilesets.push(r.tileset);
+            const newTsIdx = doc.tilesets.length - 1;
+            // 追加したセットをアクティブ層に割り当てる
+            const li = activeLayerIndex();
+            doc.layers[li].tileset = newTsIdx;
+            selectedTilePerLayer[li] = 0;
+            history.clear();
+            refreshUndoButtons();
+            renderer.setDoc(doc);
+            void rebuildPicker();
+            drawTilesetPanel();
+            refreshModeUi();
+            scheduleSave();
+            updateStatus();
+            dlgNewTs.close();
+            addTilesetToPool = false;
+            $("wiz-add-pool-note").hidden = true;
+            toast(`タイルセット${newTsIdx + 1}を追加しました (チップ ${tileCount(r.tileset)} 個)`);
+        });
+    });
+    $("new-ts-cancel-btn").addEventListener("click", () => {
+        dlgNewTs.close();
+        addTilesetToPool = false;
+        $("wiz-add-pool-note").hidden = true;
+    });
+    // プレビュー画像クリックで別の PNG に差し替え (pool モード)
+    $("new-ts-preview-info").addEventListener("click", () => {
+        addTilesetToPool = true;
+        (pngInput as HTMLInputElement).click();
+    });
+
     for (const b of document.querySelectorAll<HTMLButtonElement>("#tools-v2 .tool2")) {
         b.addEventListener("click", () => setToolV2(b.dataset.tool2 as ToolV2));
     }
@@ -1772,6 +2083,12 @@ function wireUi(): void {
         if (!f) return;
         if (pngTarget === "new") {
             await wizLoadPng(f);
+            // addTilesetToPool モード: ウィザード状態をセット選択UI に反映
+            if (addTilesetToPool) {
+                $<HTMLButtonElement>("new-ts-ok-btn").disabled = wizState.dataUri === null;
+                // サムネを dlg-new-tileset の drop zone に反映
+                wizUpdateDropZoneForPool();
+            }
             return;
         }
         if (!isV3Doc(doc)) return;
@@ -1844,15 +2161,19 @@ function wireUi(): void {
         pngInput.click();
     });
 
-    // Ctrl+V クリップボード貼り付け (ダイアログが開いているときのみ)
+    // Ctrl+V クリップボード貼り付け (dlg-new または dlg-new-tileset が開いているときのみ)
     document.addEventListener("paste", async (e) => {
-        if (!dlgNew.open) return;
+        const dlgNewTs = $<HTMLDialogElement>("dlg-new-tileset");
+        if (!dlgNew.open && !dlgNewTs.open) return;
         const items = e.clipboardData?.items;
         if (!items) return;
         for (const item of items) {
             if (item.type === "image/png") {
                 const file = item.getAsFile();
-                if (file) await wizLoadPng(file);
+                if (file) {
+                    await wizLoadPng(file);
+                    if (addTilesetToPool) wizUpdateDropZoneForPool();
+                }
                 break;
             }
         }
@@ -1891,7 +2212,7 @@ function wireUi(): void {
                 showMessages("新規マップ (タイルセット) を作成できません", [r.error], []);
                 return;
             }
-            selectedTile = 0;
+            selectedTilePerLayer = [0, 0, 0, 0];
             void backupAutosave();
             setDocument(createNewDocV3(w, h, name, author, r.tileset));
             const rebakeInfo = wizState.needsRebake ? " (余白を正規化しました)" : "";

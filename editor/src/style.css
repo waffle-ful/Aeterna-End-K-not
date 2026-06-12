@@ -843,6 +843,135 @@ dialog#dlg-add-tile {
     display: none !important;
 }
 
+/* ⚙ レイヤー設定ボタン (アクティブ時のみ表示) */
+.lvtab-gear {
+    min-width: 48px;
+    min-height: 28px;
+    padding: 3px 6px;
+    font-size: 14px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    border-radius: var(--radius-sm);
+    line-height: 1;
+    cursor: pointer;
+    text-align: center;
+}
+
+.lvtab-gear:hover {
+    background: #34343f;
+    color: var(--accent);
+    border-color: var(--accent);
+}
+
+.lvtab-gear[hidden] {
+    display: none;
+}
+
+/* =============================================================
+   レイヤー設定ダイアログ (dlg-layer)
+   ============================================================= */
+
+dialog#dlg-layer {
+    width: min(96vw, 480px);
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.dlg-layer-above-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    margin: var(--space-sm) 0 var(--space-md);
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.dlg-layer-above-row input[type=checkbox] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    flex: 0 0 auto;
+}
+
+.dlg-layer-section-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: var(--space-sm);
+}
+
+.dlg-layer-ts-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    margin-bottom: var(--space-sm);
+}
+
+/* タイルセット選択アイテム (ラジオ + サムネ + ラベル) */
+.layer-ts-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-xs) var(--space-sm);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--bg-2);
+    cursor: pointer;
+    transition: border-color 0.1s, background 0.1s;
+    min-height: var(--touch-target);
+}
+
+.layer-ts-item:hover {
+    background: #34343f;
+}
+
+.layer-ts-item.active {
+    border-color: var(--ok);
+    background: var(--bg-active-ok);
+}
+
+.layer-ts-radio {
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: var(--ok);
+}
+
+.layer-ts-thumb {
+    image-rendering: pixelated;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-3);
+    flex: 0 0 auto;
+}
+
+.layer-ts-info {
+    font-size: 13px;
+    color: var(--text-primary);
+}
+
+/* 「新しいセットを追加」ボタン */
+.layer-ts-add-btn {
+    width: 100%;
+    text-align: center;
+    color: var(--accent);
+    border-color: var(--accent);
+    min-height: var(--touch-target);
+}
+
+.layer-ts-add-btn:hover:not(:disabled) {
+    background: var(--bg-active-accent);
+}
+
+.layer-ts-add-btn:disabled {
+    color: var(--text-muted);
+    border-color: var(--border);
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
 /* =============================================================
    レスポンシブ: 狭幅では縦タブを縮小表示
    ============================================================= */
