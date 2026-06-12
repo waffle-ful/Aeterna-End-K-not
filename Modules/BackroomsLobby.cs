@@ -3297,6 +3297,14 @@ public static class BackroomsLobby
     {
         ApplyZoomAndAdaptiveView();
 
+        // L1 自動リロード: エディタがマップファイルを保存したら約2秒で再描画する (往復ループ)
+        if (EkmapLoader.TickAutoReload())
+        {
+            PlayerControl lp = PlayerControl.LocalPlayer;
+            if (lp != null) EnterCustomMap(lp.PlayerId);
+            return; // 再入場した同フレームは以降の更新をスキップ (EnterCustomMap が再構築済み)
+        }
+
         // バニラ GPU 影モード: 壁の輪郭線 caster を維持してからドライバを駆動 (どちらも self-guard 済)
         if (BackroomsConfig.UseVanillaShadow)
         {
