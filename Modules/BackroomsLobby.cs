@@ -1194,9 +1194,154 @@ public static class BackroomsLobby
         Logger.Info(sb.ToString(), "BackroomsShipDiag");
     }
 
+    // カスタムマップ専用 — void セルに不可視バリアを生成する (§5.2)。
+    // BoxCollider2D (layer 9) + WallAabbs 登録のみ、SpriteRenderer は disabled。
+    private static void SpawnVoidBarrier(Vector2 pos)
+    {
+        GameObject go = new("BackroomsTile_void_barrier");
+        go.transform.SetParent(null, false);
+        go.transform.position = new Vector3(pos.x, pos.y, 0f);
+
+        // SR は無効化 (不可視)
+        SpriteRenderer sr = go.AddComponent<SpriteRenderer>();
+        sr.enabled = false;
+
+        BoxCollider2D box = go.AddComponent<BoxCollider2D>();
+        box.size = Vector2.one; // 1×1 衝突 — void は通行不可 (§5.3)
+
+        SpawnedTiles.Add(go);
+        SpawnedTilePositions.Add(pos);
+        SpawnedTileChunkKeys.Add(_currentChunkKey);
+
+        // WallAabbs 登録 — 視界遮蔽 (void は BlocksLight: §5.3)
+        WallAabbs.Add((pos.x, pos.y, 0.5f, 0.5f));
+        WallAabbChunkKeys.Add(_currentChunkKey);
+        WallGhostRenderers.Add(null); // ghost なし
+        _occludersDirty = true;
+
+        // 即時カリング
+        if (_spawnCullCenterValid)
+        {
+            float ex = pos.x - _spawnCullCenter.x;
+            float ey = pos.y - _spawnCullCenter.y;
+            if (ex * ex + ey * ey >= CullRadiusSqr) go.SetActive(false);
+        }
+    }
+
+    // 4 近傍に Floor セルが 1 つでもあれば true (void バリア生成の条件: §5.2)
+    private static bool IsAdjacentToFloor(int wx, int wy, uint seed)
+    {
+        return ClassifyCell(wx - 1, wy, seed) == CellKind.Floor ||
+               ClassifyCell(wx + 1, wy, seed) == CellKind.Floor ||
+               ClassifyCell(wx, wy - 1, seed) == CellKind.Floor ||
+               ClassifyCell(wx, wy + 1, seed) == CellKind.Floor;
+    }
+
+    // v2 版 IsAdjacentToFloor: ClassifyCell(procgen) の代わりに CustomMapSource.TryGetV2Cell を使う
+    private static bool IsAdjacentToFloorV2(int wx, int wy, CustomMapSource src)
+    {
+        return IsFloorV2(wx - 1, wy, src) || IsFloorV2(wx + 1, wy, src) ||
+               IsFloorV2(wx, wy - 1, src) || IsFloorV2(wx, wy + 1, src);
+    }
+
+    private static bool IsFloorV2(int wx, int wy, CustomMapSource src)
+    {
+        int gx = Mathf.RoundToInt(wx - EkmapLoader.OriginX);
+        int gy = Mathf.RoundToInt(EkmapLoader.OriginY - wy);
+        if (!src.TryGetV2Cell(gx, gy, out EkmapLoader.V2CellData c)) return false;
+        return !c.isVoid && !c.isSolid;
+    }
+
+    // v2 セル 1 つ分の GameObject を生成する (§C)
+    // ①ground スプライト GO (sortingOrder -10)
+    // ②upper スプライト GO (over=false → -4 / over=true → 5 [player(0)より上・Upper dark(50)より下])
+    // ③solid セルに不可視バリア (BoxCollider2D 1×1)
+    // ④遮光セルに WallAabbs+WallAabbChunkKeys+WallGhostRenderers(null) 登録
+    // sortingOrder spec: floor=-10 < walls=-5/-4/-3 < player≈0 < over=+5 < Upper dark=+50 < ghost=+60 < overlay=+100
+    // over=true の値 5 は実測値 (BackroomsLobby.cs L2789 コメントで確認した降順リスト準拠、仕様書§15に追記済み)
+    private static void SpawnV2Cell(CustomMapSource src, int gx, int gy, EkmapLoader.V2CellData cell, Vector2 worldPos)
+    {
+        EkmapLoader.EkmTilesetRuntime tileset = src.Tileset;
+
+        // ground スプライト (sortingOrder = -10)
+        if (cell.groundId >= 0 && tileset != null)
+        {
+            GameObject gGo = new($"V2Ground_{gx}_{gy}");
+            gGo.transform.SetParent(null, false);
+            gGo.transform.position = new Vector3(worldPos.x, worldPos.y, 0f);
+            SpriteRenderer gSr = gGo.AddComponent<SpriteRenderer>();
+            gSr.sprite       = tileset.Sprites[cell.groundId];
+            gSr.sortingOrder = -10;
+            SpawnedTiles.Add(gGo);
+            SpawnedTilePositions.Add(worldPos);
+            SpawnedTileChunkKeys.Add(_currentChunkKey);
+            if (_spawnCullCenterValid)
+            {
+                float ex = worldPos.x - _spawnCullCenter.x;
+                float ey = worldPos.y - _spawnCullCenter.y;
+                if (ex * ex + ey * ey >= CullRadiusSqr) gGo.SetActive(false);
+            }
+        }
+
+        // upper スプライト
+        if (cell.upperId >= 0 && tileset != null)
+        {
+            // over=true → sortingOrder=5 (player より上、Upper dark より下)
+            int uOrder = cell.upperOver ? 5 : -4;
+            GameObject uGo = new($"V2Upper_{gx}_{gy}");
+            uGo.transform.SetParent(null, false);
+            uGo.transform.position = new Vector3(worldPos.x, worldPos.y, 0f);
+            SpriteRenderer uSr = uGo.AddComponent<SpriteRenderer>();
+            uSr.sprite       = tileset.Sprites[cell.upperId];
+            uSr.sortingOrder = uOrder;
+            SpawnedTiles.Add(uGo);
+            SpawnedTilePositions.Add(worldPos);
+            SpawnedTileChunkKeys.Add(_currentChunkKey);
+            if (_spawnCullCenterValid)
+            {
+                float ex = worldPos.x - _spawnCullCenter.x;
+                float ey = worldPos.y - _spawnCullCenter.y;
+                if (ex * ex + ey * ey >= CullRadiusSqr) uGo.SetActive(false);
+            }
+        }
+
+        // solid セルに不可視バリア (SpawnVoidBarrier と同パターン、ただし parent GO をここで生成)
+        if (cell.isSolid)
+        {
+            GameObject bGo = new($"V2Barrier_{gx}_{gy}");
+            bGo.transform.SetParent(null, false);
+            bGo.transform.position = new Vector3(worldPos.x, worldPos.y, 0f);
+            SpriteRenderer bSr = bGo.AddComponent<SpriteRenderer>();
+            bSr.enabled = false;
+            BoxCollider2D box = bGo.AddComponent<BoxCollider2D>();
+            box.size = Vector2.one;
+            SpawnedTiles.Add(bGo);
+            SpawnedTilePositions.Add(worldPos);
+            SpawnedTileChunkKeys.Add(_currentChunkKey);
+            if (_spawnCullCenterValid)
+            {
+                float ex = worldPos.x - _spawnCullCenter.x;
+                float ey = worldPos.y - _spawnCullCenter.y;
+                if (ex * ex + ey * ey >= CullRadiusSqr) bGo.SetActive(false);
+            }
+        }
+
+        // 遮光セルに WallAabbs 登録 (§15.3)
+        if (cell.blocksLight)
+        {
+            WallAabbs.Add((worldPos.x, worldPos.y, 0.5f, 0.5f));
+            WallAabbChunkKeys.Add(_currentChunkKey);
+            WallGhostRenderers.Add(null); // ghost なし (v2 はカスタム sprite なので ghost 非対応)
+            _occludersDirty = true;
+        }
+    }
+
     // spawn 周辺の wall を強制 floor 化。player + 上下左右 4 cell の計 5 cell
+    // カスタムマップは検証で spawn セルの床が保証済みなのでスキップ
     private static void EnsureSpawnFloor(Vector2 spawnPos)
     {
+        if (EkmapLoader.ActiveSource != null) return;
+
         int spx = Mathf.RoundToInt(spawnPos.x);
         int spy = Mathf.RoundToInt(spawnPos.y);
 
@@ -1253,10 +1398,15 @@ public static class BackroomsLobby
         return false;
     }
 
-    private enum CellKind { Floor, WallH, WallV }
+    private enum CellKind { Floor, WallH, WallV, Void }
 
     private static int GenerateChunk(int cx, int cy, uint seed)
     {
+        // v2 カスタムマップ分岐
+        CustomMapSource v2src = EkmapLoader.ActiveSource;
+        if (v2src != null && v2src.IsV2)
+            return GenerateChunkV2(cx, cy, v2src);
+
         int count = 0;
         int baseX = cx * ChunkSize;
         int baseY = cy * ChunkSize;
@@ -1271,6 +1421,14 @@ public static class BackroomsLobby
                 int wx = baseX + lx;
                 int wy = baseY + ly;
                 CellKind cell = ClassifyCell(wx, wy, seed);
+                if (cell == CellKind.Void)
+                {
+                    // void: タイル生成なし。床に隣接する void セルにのみ不可視バリアを張る (§5.2)
+                    if (IsAdjacentToFloor(wx, wy, seed))
+                        SpawnVoidBarrier(new Vector2(wx, wy));
+                    continue;
+                }
+
                 string kind = cell switch
                 {
                     CellKind.WallH => "wall_h",
@@ -1303,6 +1461,53 @@ public static class BackroomsLobby
         return count;
     }
 
+    // v2 カスタムマップ即時生成。V2CellData から直接タイルを生成する (§C)
+    private static int GenerateChunkV2(int cx, int cy, CustomMapSource src)
+    {
+        int count = 0;
+        int baseX = cx * ChunkSize;
+        int baseY = cy * ChunkSize;
+        long prevKey = _currentChunkKey;
+        _currentChunkKey = PackChunkKey(cx, cy);
+
+        try
+        {
+            for (int lx = 0; lx < ChunkSize; lx++)
+            for (int ly = 0; ly < ChunkSize; ly++)
+            {
+                int wx = baseX + lx;
+                int wy = baseY + ly;
+                // ワールド座標 → セル座標 (§4: cellX = wx - OriginX, cellY = OriginY - wy)
+                int gx = Mathf.RoundToInt(wx - EkmapLoader.OriginX);
+                int gy = Mathf.RoundToInt(EkmapLoader.OriginY - wy);
+
+                if (!src.TryGetV2Cell(gx, gy, out EkmapLoader.V2CellData cell))
+                {
+                    // マップ範囲外 = void と同扱い (§15.5)。床隣接なら不可視バリア
+                    if (IsAdjacentToFloorV2(wx, wy, src))
+                        SpawnVoidBarrier(new Vector2(wx, wy));
+                    continue;
+                }
+
+                if (cell.isVoid)
+                {
+                    if (IsAdjacentToFloorV2(wx, wy, src))
+                        SpawnVoidBarrier(new Vector2(wx, wy));
+                    continue;
+                }
+
+                SpawnV2Cell(src, gx, gy, cell, new Vector2(wx, wy));
+                count++;
+            }
+        }
+        finally
+        {
+            _currentChunkKey = prevKey;
+        }
+
+        return count;
+    }
+
     // === Streaming chunks API (2026-05-22) ===
 
     // idempotent: 既ロード chunk は no-op。spawn cull center 設定は呼出側 (GenerateLobby /
@@ -1319,6 +1524,14 @@ public static class BackroomsLobby
     // GameObject は作らない (ClassifyCell は pure)。実生成は ProcessStreamingQueue が予算内で drain。
     private static void EnqueueChunk(int cx, int cy, long key, uint seed)
     {
+        // v2 カスタムマップ分岐
+        CustomMapSource v2src = EkmapLoader.ActiveSource;
+        if (v2src != null && v2src.IsV2)
+        {
+            EnqueueChunkV2(cx, cy, key, v2src);
+            return;
+        }
+
         int baseX = cx * ChunkSize;
         int baseY = cy * ChunkSize;
         for (int lx = 0; lx < ChunkSize; lx++)
@@ -1327,6 +1540,14 @@ public static class BackroomsLobby
             int wx = baseX + lx;
             int wy = baseY + ly;
             CellKind cell = ClassifyCell(wx, wy, seed);
+            // void かつ床隣接: 不可視バリアをキューに積む (GenerateChunk immediate 経路と対称)
+            if (cell == CellKind.Void)
+            {
+                if (IsAdjacentToFloor(wx, wy, seed))
+                    _spawnQueue.Add(("void_barrier", new Vector2(wx, wy), key, 0));
+                continue;
+            }
+
             string kind = cell switch
             {
                 CellKind.WallH => "wall_h",
@@ -1344,6 +1565,37 @@ public static class BackroomsLobby
                 if (ClassifyCell(wx, wy - 1, seed) == CellKind.Floor) connector = 2; // 終端キャップ
             }
             _spawnQueue.Add((kind, new Vector2(wx, wy), key, connector));
+        }
+    }
+
+    // v2 カスタムマップ streaming 版。"v2_cell" descriptor を _spawnQueue に積む (GameObject は作らない)
+    private static void EnqueueChunkV2(int cx, int cy, long key, CustomMapSource src)
+    {
+        int baseX = cx * ChunkSize;
+        int baseY = cy * ChunkSize;
+        for (int lx = 0; lx < ChunkSize; lx++)
+        for (int ly = 0; ly < ChunkSize; ly++)
+        {
+            int wx = baseX + lx;
+            int wy = baseY + ly;
+            int gx = Mathf.RoundToInt(wx - EkmapLoader.OriginX);
+            int gy = Mathf.RoundToInt(EkmapLoader.OriginY - wy);
+
+            if (!src.TryGetV2Cell(gx, gy, out EkmapLoader.V2CellData cell))
+            {
+                if (IsAdjacentToFloorV2(wx, wy, src))
+                    _spawnQueue.Add(("void_barrier", new Vector2(wx, wy), key, 0));
+                continue;
+            }
+
+            if (cell.isVoid)
+            {
+                if (IsAdjacentToFloorV2(wx, wy, src))
+                    _spawnQueue.Add(("void_barrier", new Vector2(wx, wy), key, 0));
+                continue;
+            }
+
+            _spawnQueue.Add(("v2_cell", new Vector2(wx, wy), key, 0));
         }
     }
 
@@ -1499,12 +1751,31 @@ public static class BackroomsLobby
                 var d = _spawnQueue[_spawnHead++];
                 if (!_loadedChunks.Contains(d.chunkKey)) continue; // もう要らない chunk → 生成しない (skip)
                 long prevKey = _currentChunkKey;
-                _currentChunkKey = d.chunkKey; // SpawnTile が tile に正しい chunk key を付けるため
+                _currentChunkKey = d.chunkKey; // SpawnTile / SpawnVoidBarrier が正しい chunk key を付けるため
                 try
                 {
-                    GameObject go = SpawnTile(d.kind, d.pos);
-                    if (d.connector == 1) AddWallHBottomConnector(go);
-                    else if (d.connector == 2) AddWallVBottomCap(go);
+                    if (d.kind == "void_barrier")
+                    {
+                        SpawnVoidBarrier(d.pos);
+                    }
+                    else if (d.kind == "v2_cell")
+                    {
+                        // v2 streaming drain: pos → gx/gy 逆算して SpawnV2Cell
+                        CustomMapSource v2src = EkmapLoader.ActiveSource;
+                        if (v2src != null && v2src.IsV2)
+                        {
+                            int gx = Mathf.RoundToInt(d.pos.x - EkmapLoader.OriginX);
+                            int gy = Mathf.RoundToInt(EkmapLoader.OriginY - d.pos.y);
+                            if (v2src.TryGetV2Cell(gx, gy, out EkmapLoader.V2CellData cell))
+                                SpawnV2Cell(v2src, gx, gy, cell, d.pos);
+                        }
+                    }
+                    else
+                    {
+                        GameObject go = SpawnTile(d.kind, d.pos);
+                        if (d.connector == 1) AddWallHBottomConnector(go);
+                        else if (d.connector == 2) AddWallVBottomCap(go);
+                    }
                 }
                 finally { _currentChunkKey = prevKey; }
             }
@@ -1538,6 +1809,19 @@ public static class BackroomsLobby
 
     private static CellKind ClassifyCell(int wx, int wy, uint seed)
     {
+        // カスタムマップが有効なら procgen を完全バイパスして委譲
+        CustomMapSource src = EkmapLoader.ActiveSource;
+        if (src != null)
+        {
+            return src.GetCell(wx, wy) switch
+            {
+                EkmapLoader.VisualKind.Floor => CellKind.Floor,
+                EkmapLoader.VisualKind.WallH => CellKind.WallH,
+                EkmapLoader.VisualKind.WallV => CellKind.WallV,
+                _                            => CellKind.Void,
+            };
+        }
+
         int inRoomX = Mod(wx, RoomSize);
         int inRoomY = Mod(wy, RoomSize);
         int roomX = (wx - inRoomX) / RoomSize;
@@ -1718,6 +2002,85 @@ public static class BackroomsLobby
         return (disabledCols, disabledRs);
     }
 
+    // カスタムマップ decor 専用スポーン。SpawnTile の素の見た目は test pattern 用の
+    // 不透明カラー四角 (light は黄四角 sortingOrder+5 でプレイヤーの上に被る) なので、
+    // decor は全て player より背面 (sortingOrder ≤ -4) の馴染む見た目に整える。
+    private static void SpawnDecor(string kind, Vector2 pos)
+    {
+        GameObject go = SpawnTile(kind, pos);
+        if (go == null) return;
+
+        SpriteRenderer sr = go.GetComponent<SpriteRenderer>();
+        if (sr == null) return;
+
+        switch (kind)
+        {
+            case "light":
+                // 天井灯は「床に落ちる暖色の光だまり」として表現
+                sr.sprite = StainSprite;
+                sr.color = new Color(1.00f, 0.93f, 0.55f, 0.32f);
+                sr.sortingOrder = -9;
+                go.transform.localScale = new Vector3(1.9f, 1.9f, 1f);
+                break;
+            case "stain":
+                sr.sprite = StainSprite;
+                sr.color = new Color(0.22f, 0.13f, 0.05f, 0.55f);
+                sr.sortingOrder = -9;
+                go.transform.localScale = new Vector3(1.1f, 1.1f, 1f);
+                break;
+            case "vent":
+                sr.sortingOrder = -9;
+                go.transform.localScale = new Vector3(0.8f, 0.8f, 1f);
+                break;
+            case "door":
+                sr.sortingOrder = -4;
+                break;
+            case "ceiling":
+                sr.color = new Color(0.55f, 0.55f, 0.55f, 0.5f);
+                sr.sortingOrder = -6;
+                break;
+        }
+    }
+
+    // カスタムマップ入場: EkmapLoader.ActiveSource が設定済みの前提で呼ぶ。
+    // spawn セルへ TP してから EnterBackrooms を呼ぶことで
+    // GenerateLobby が spawn 周辺 chunk を正しくロードする。
+    public static void EnterCustomMap(byte targetPid)
+    {
+        if (LobbyBehaviour.Instance == null)
+        {
+            Utils.SendMessage("Not in lobby", targetPid);
+            return;
+        }
+
+        if (PlayerControl.LocalPlayer == null) return;
+
+        CustomMapSource src = EkmapLoader.ActiveSource;
+        if (src == null) return;
+
+        // 既存 Backrooms に入っていたら先に exit (タイル・状態クリア、ClearActiveSource も走る)
+        if (_inBackrooms) ExitBackrooms(targetPid, silent: true);
+
+        // ExitBackrooms が ClearActiveSource を呼ぶので、ここで src を再セットする
+        EkmapLoader.Activate(src);
+
+        // ambient.visionRadius を適用 (ExitBackrooms が null にした後に設定する)
+        _customVisionRadius = src.VisionRadius;
+
+        // spawn 座標へ TP (procgen は player 位置中心にチャンクを展開するため先に動かす)
+        PlayerControl.LocalPlayer.TP(src.SpawnWorld, log: false);
+
+        // 以降は通常 EnterBackrooms と同じパイプライン (seed 0 でよい — ClassifyCell は委譲)
+        EnterBackrooms(0u, targetPid, silent: true);
+
+        // decor スポーン (§6): EnterBackrooms 後に床の上へ配置。chunkKey=0 は streaming unload 対象外
+        foreach (var d in src.Decors)
+            SpawnDecor(d.Kind, new Vector2(EkmapLoader.OriginX + d.X, EkmapLoader.OriginY - d.Y));
+
+        Utils.SendMessage($"Loaded map: {src.Name}{(src.Author.Length > 0 ? $" by {src.Author}" : "")}", targetPid);
+        Logger.Info($"EnterCustomMap: {src.Filename} spawn=({src.SpawnWorld.x},{src.SpawnWorld.y})", "EkmapLoader");
+    }
+
     public static void EnterBackrooms(uint seed, byte targetPid, bool silent = false)
     {
         if (LobbyBehaviour.Instance == null)
@@ -1827,6 +2190,10 @@ public static class BackroomsLobby
 
         DisabledRenderers.Clear();
 
+        EkmapLoader.ActiveSource?.DestroyV2Tileset(); // v2 Texture/Sprite リソース解放
+        EkmapLoader.ClearActiveSource();
+        _customVisionRadius = null;
+
         if (!silent) Utils.SendMessage($"Exited Backrooms. Cleared {wiped} tiles, restored {restoredC} cols + {restoredR} SRs.", targetPid);
         Logger.Info($"Exited Backrooms cleared={wiped} restoredC={restoredC} restoredR={restoredR}", "BackroomsGen");
     }
@@ -1895,6 +2262,9 @@ public static class BackroomsLobby
         DisabledColliders.Clear();
         DisabledRenderers.Clear();
 
+        EkmapLoader.ActiveSource?.DestroyV2Tileset(); // v2 Texture リソース解放 (OnGameStart 経路)
+        EkmapLoader.ClearActiveSource();
+        _customVisionRadius = null;
         Logger.Info($"OnGameStart cleanup: wiped {wiped} tiles", "BackroomsGen");
     }
 
@@ -1945,6 +2315,9 @@ public static class BackroomsLobby
         DisabledColliders.Clear();
         DisabledRenderers.Clear();
 
+        EkmapLoader.ActiveSource?.DestroyV2Tileset(); // v2 Texture リソース解放 (OnLobbyReload 経路)
+        EkmapLoader.ClearActiveSource();
+        _customVisionRadius = null;
         Logger.Info("OnLobbyReload: stale Backrooms state cleared", "BackroomsGen");
     }
 
@@ -1963,6 +2336,9 @@ public static class BackroomsLobby
     // 2026-05-22 v5: streaming 実装後 perf 余裕が生まれたので VisionRadius を 8u に戻す
     //   camera diagonal ≈ sqrt(3.5^2 + 6.2^2) ≈ 7.1u なので 5u だと画面コーナーに dark boundary が見えてしまう
     private const float VisionRadius = 8f;
+    // カスタムマップの ambient.visionRadius で上書き可能な実効半径。null = procgen 既定 (= VisionRadius)
+    private static float? _customVisionRadius;
+    private static float EffectiveVisionRadius => _customVisionRadius ?? VisionRadius;
     // ray dist のフロア値 — 退化頂点 (distance≈0 で全方位 collapse) の防止だけが目的。
     // ここを player radius (~0.15) より大きくすると「触れた壁の先が見える」バグが発生する。
     // 0.05 は player collider が物理的に到達不可能な距離なので、実プレイ中は一度も clamp しない。
@@ -3130,7 +3506,7 @@ public static class BackroomsLobby
         //    これにより corner ray 生成 / CastRayLength / CastRayFirstHit が全て併合箱を見る。
         //    ghost overlay の per-cell α (下の wallCount ループ) は WallAabbs のまま不変。
         _nearbyAabbs.Clear();
-        float r2 = VisionRadius * VisionRadius;
+        float r2 = EffectiveVisionRadius * EffectiveVisionRadius;
         for (int wi = 0; wi < _mergedOccluders.Count; wi++)
         {
             var w = _mergedOccluders[wi];
@@ -3477,8 +3853,8 @@ public static class BackroomsLobby
         // --- Phase 1: 全壁の (tNear, tFar) を 1 度だけ計算してキャッシュ + first hit 確定 ---
         // chain traversal で同じ wall を 16 回 RayAabbIntersect し直すのを避けるため、
         // Phase 2 はキャッシュ参照だけで済む形にする (IL2CPP 関数呼び出しオーバーヘッド削減)
-        float bestHitDist = VisionRadius;
-        float bestExitDist = VisionRadius;
+        float bestHitDist = EffectiveVisionRadius;
+        float bestExitDist = EffectiveVisionRadius;
         int bestIdx = -1;
         for (int i = 0; i < count; i++)
         {
@@ -3537,7 +3913,7 @@ public static class BackroomsLobby
             }
         }
 
-        if (bestIdx < 0) return VisionRadius < MinHitDistance ? MinHitDistance : VisionRadius;
+        if (bestIdx < 0) return EffectiveVisionRadius < MinHitDistance ? MinHitDistance : EffectiveVisionRadius;
 
         // --- Phase 2: 隣接壁 chain を traverse して bestExitDist を伸ばす (キャッシュ参照のみ) ---
         // ある壁の tFar 出口点 = 別壁の tNear 入射点 (差 ≤ eps) なら、その壁を chain に取り込む。
@@ -3590,8 +3966,8 @@ public static class BackroomsLobby
         float invCos = useCosInv ? 1f / cos : 0f;
         float invSin = useSinInv ? 1f / sin : 0f;
 
-        float bestHitDist = VisionRadius;
-        float bestExitDist = VisionRadius;
+        float bestHitDist = EffectiveVisionRadius;
+        float bestExitDist = EffectiveVisionRadius;
         for (int i = 0; i < count; i++)
         {
             var w = _nearbyAabbs[i];

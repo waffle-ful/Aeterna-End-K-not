@@ -302,7 +302,8 @@ internal static class ChatCommands
             new("DummyFree", "", Command.UsageLevels.Host, Command.UsageTimes.InGame, DummyFreeCommand, true, true),
             new("SizeTest", "", Command.UsageLevels.Host, Command.UsageTimes.InGame, SizeTestCommand, true, true),
             new("SizeClean", "", Command.UsageLevels.Host, Command.UsageTimes.InGame, SizeCleanCommand, true, true),
-            new("RipSize", "[size]", Command.UsageLevels.Host, Command.UsageTimes.InGame, RipSizeCommand, true, true)
+            new("RipSize", "[size]", Command.UsageLevels.Host, Command.UsageTimes.InGame, RipSizeCommand, true, true),
+            new("Map", "[list|load <file>|reload|exit|import|export|info]", Command.UsageLevels.Host, Command.UsageTimes.InLobby, MapCommand, true, true)
         ];
     }
 
@@ -2467,6 +2468,9 @@ internal static class ChatCommands
 
     private static void BBGenCommand(PlayerControl player, string text, string[] args)
     {
+        // procgen 系コマンドはカスタムマップを自動解除してから動く (§11)
+        EkmapLoader.ClearActiveSource();
+
         uint seed = args.Length >= 2 && uint.TryParse(args[1], out uint parsedSeed)
             ? parsedSeed
             : (uint)UnityEngine.Random.Range(1, int.MaxValue);
@@ -2476,6 +2480,9 @@ internal static class ChatCommands
 
     private static void BBEnterCommand(PlayerControl player, string text, string[] args)
     {
+        // procgen 系コマンドはカスタムマップを自動解除してから動く (§11)
+        EkmapLoader.ClearActiveSource();
+
         uint seed = args.Length >= 2 && uint.TryParse(args[1], out uint parsedSeed)
             ? parsedSeed
             : (uint)UnityEngine.Random.Range(1, int.MaxValue);
@@ -2511,6 +2518,131 @@ internal static class ChatCommands
     private static void BBTestRoomCommand(PlayerControl player, string text, string[] args)
     {
         BackroomsLobby.TestRoomCommand(args, player.PlayerId);
+    }
+
+    private static void MapCommand(PlayerControl player, string text, string[] args)
+    {
+        string sub = args.Length >= 2 ? args[1].ToLower() : "";
+        byte pid = player.PlayerId;
+
+        switch (sub)
+        {
+            case "list":
+            {
+                var maps = EkmapLoader.ListMaps();
+                if (maps.Count == 0)
+                {
+                    Utils.SendMessage($"{GetString("EkMap.List.Empty")}\n<size=70%>{EkmapLoader.EKMapsPath}</size>", pid);
+                    return;
+                }
+
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine(GetString("EkMap.List.Header"));
+                sb.AppendLine($"<size=70%>{EkmapLoader.EKMapsPath}</size>");
+                foreach ((string fn, long bytes) in maps)
+                    sb.AppendLine($"  {fn}  ({bytes / 1024}KB)");
+                Utils.SendMessage(sb.ToString().TrimEnd(), pid);
+                return;
+            }
+
+            case "load":
+            {
+                if (args.Length < 3)
+                {
+                    Utils.SendMessage(GetString("EkMap.Usage"), pid);
+                    return;
+                }
+
+                // スペース含みファイル名に対応 (args[2..] を join)
+                string filename = string.Join(" ", args, 2, args.Length - 2);
+
+                if (!EkmapLoader.TryLoad(filename, out string err))
+                {
+                    Utils.SendMessage($"{GetString("EkMap.LoadError")}: {err}", pid);
+                    return;
+                }
+
+                // procgen Backrooms 滞在中なら exit→enter
+                BackroomsLobby.EnterCustomMap(pid);
+                return;
+            }
+
+            case "reload":
+            {
+                if (EkmapLoader.ActiveSource == null)
+                {
+                    Utils.SendMessage(GetString("EkMap.ReloadNone"), pid);
+                    return;
+                }
+
+                string filename = EkmapLoader.ActiveSource.Filename;
+
+                if (!EkmapLoader.TryLoad(filename, out string err))
+                {
+                    Utils.SendMessage($"{GetString("EkMap.LoadError")}: {err}", pid);
+                    return;
+                }
+
+                BackroomsLobby.EnterCustomMap(pid);
+                return;
+            }
+
+            case "exit":
+            {
+                EkmapLoader.ClearActiveSource();
+                BackroomsLobby.ExitBackrooms(pid, silent: true);
+                Utils.SendMessage(GetString("EkMap.Exit"), pid);
+                return;
+            }
+
+            case "import":
+            {
+                // クリップボード (EKM1.… コード) を直読みする。チャット欄は文字数上限で長大コードを受けられないため。
+                string code = UnityEngine.GUIUtility.systemCopyBuffer?.Trim() ?? "";
+                if (!EkmapLoader.TryImportCode(code, out string saved, out string impErr))
+                {
+                    Utils.SendMessage($"{GetString("EkMap.ImportError")}: {impErr}", pid);
+                    return;
+                }
+
+                BackroomsLobby.EnterCustomMap(pid);
+                Utils.SendMessage(string.Format(GetString("EkMap.Imported"), saved), pid);
+                return;
+            }
+
+            case "export":
+            {
+                if (!EkmapLoader.TryExportCurrentCode(out string code, out string expErr))
+                {
+                    Utils.SendMessage($"{GetString("EkMap.ExportError")}: {expErr}", pid);
+                    return;
+                }
+
+                UnityEngine.GUIUtility.systemCopyBuffer = code;
+                int kb = System.Text.Encoding.UTF8.GetByteCount(code) / 1024;
+                string warn = code.Length > 512 * 1024 ? "\n" + GetString("EkMap.ExportSizeWarn") : "";
+                Utils.SendMessage(string.Format(GetString("EkMap.Exported"), kb) + warn, pid);
+                return;
+            }
+
+            case "info":
+            {
+                var src = EkmapLoader.ActiveSource;
+                if (src == null)
+                {
+                    Utils.SendMessage(GetString("EkMap.ReloadNone"), pid);
+                    return;
+                }
+
+                Utils.SendMessage(string.Format(GetString("EkMap.Info"),
+                    src.Name, src.Author, src.Width, src.Height, src.IsV2 ? 2 : 1, src.Filename), pid);
+                return;
+            }
+
+            default:
+                Utils.SendMessage(GetString("EkMap.Usage"), pid);
+                return;
+        }
     }
 
     private static void BBShadowDiagCommand(PlayerControl player, string text, string[] args)

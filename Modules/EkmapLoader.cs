@@ -159,6 +159,111 @@ public static class EkmapLoader
         return TryLoad(ActiveSource.Filename, out errorMessage);
     }
 
+    // マップコード (EKM1.…) を取り込んでファイルに保存し、検証込みでロードする。
+    // 成功時: savedFilename にファイル名、ActiveSource にセット (呼び出し側が EnterCustomMap する)。
+    // 失敗時: false + errorMessage。検証に失敗した場合は書き込んだファイルを掃除する。
+    public static bool TryImportCode(string code, out string savedFilename, out string errorMessage)
+    {
+        savedFilename = null;
+
+        if (!EkmCodec.TryDecode(code, out string json, out errorMessage))
+            return false;
+
+        // 保存先: 書き込み可能な UserEKMapsPath を優先。無ければ primary。
+        string folder = UserEKMapsPath ?? EKMapsPath;
+        try
+        {
+            Directory.CreateDirectory(folder);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Could not create folder for import ({folder}): {ex.Message}";
+            return false;
+        }
+
+        // ファイル名は取り込んだマップの name から導出 (sanitize)。取れなければ "imported"。
+        string baseName = SanitizeFileName(PeekName(json) ?? "imported");
+        savedFilename = $"imported_{baseName}.ekmap.json";
+        string fullPath = folder + savedFilename;
+
+        try
+        {
+            File.WriteAllText(fullPath, json, new System.Text.UTF8Encoding(false));
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Could not write imported map ({fullPath}): {ex.Message}";
+            return false;
+        }
+
+        // TryLoad で本検証 (ResolveFilename が UserEKMapsPath を優先的に見つける)。
+        if (!TryLoad(savedFilename, out errorMessage))
+        {
+            // 不正なコードのファイルが残らないよう掃除する
+            try { File.Delete(fullPath); } catch { /* best-effort */ }
+            savedFilename = null;
+            return false;
+        }
+
+        return true;
+    }
+
+    // 現在ロード中のマップをマップコード (EKM1.…) に書き出す。
+    // CustomMapSource は raw JSON を保持しないため、元ファイルを読み直してエンコードする。
+    public static bool TryExportCurrentCode(out string code, out string errorMessage)
+    {
+        code = null;
+        if (ActiveSource == null)
+        {
+            errorMessage = "No map currently loaded";
+            return false;
+        }
+
+        string resolved = ResolveFilename(ActiveSource.Filename);
+        if (resolved == null)
+        {
+            errorMessage = $"Map file not found: {ActiveSource.Filename}";
+            return false;
+        }
+
+        string json;
+        try { json = File.ReadAllText(resolved, System.Text.Encoding.UTF8); }
+        catch (Exception ex)
+        {
+            errorMessage = $"Read error: {ex.Message}";
+            return false;
+        }
+
+        return EkmCodec.TryEncode(json, out code, out errorMessage);
+    }
+
+    // JSON の "name" フィールドだけを軽量に覗く (検証はしない)。失敗時 null。
+    private static string PeekName(string json)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind == JsonValueKind.Object &&
+                doc.RootElement.TryGetProperty("name", out JsonElement nameEl) &&
+                nameEl.ValueKind == JsonValueKind.String)
+                return nameEl.GetString();
+        }
+        catch { /* ignore — 呼び出し側でフォールバック名を使う */ }
+        return null;
+    }
+
+    // ファイル名に使えない文字を除去し、長さを制限する。
+    private static string SanitizeFileName(string name)
+    {
+        var sb = new System.Text.StringBuilder(name.Length);
+        foreach (char c in name)
+            sb.Append(Array.IndexOf(Path.GetInvalidFileNameChars(), c) >= 0 ? '_' : c);
+        string s = sb.ToString().Trim();
+        if (s.Length == 0) s = "imported";
+        if (s.Length > 40) s = s.Substring(0, 40);
+        return s;
+    }
+
     // ── JSON パース + 検証 ────────────────────────────────────────────────────
 
     private static bool TryParse(string json, string filename, out string errorMessage)

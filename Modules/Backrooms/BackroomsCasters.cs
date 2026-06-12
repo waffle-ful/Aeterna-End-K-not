@@ -136,26 +136,52 @@ public static class BackroomsCasters
             // ── 垂直壁 (WallV): 実機で漏れ報告無し・far-face のまま (Lo=左面 / Hi=右面)。V を反転すると壊れる (観察 > 理屈)。
             // vis 色: Lo 面=シアン / Hi 面=マゼンタ (両 emission 線を区別して目視)
             Color loVis = new(0f, 1f, 1f, 0.9f), hiVis = new(1f, 0f, 1f, 0.9f);
-            Collider2D loCol, hiCol;
             if (horizontal)
             {
                 // 裏暗モード=北端 (key+face)、旧 far-face=南端 (key-face)。winding は両方とも反転 (法線 +y) のまま。
                 float loY = BackroomsConfig.WallHDarkFromBehind ? key + face : key - face;
-                loCol = SpawnSegment(new Vector2(hi, loY), new Vector2(lo, loY), loVis);              // 裏向き面 (winding 反転→法線 +y)
-                hiCol = SpawnSegment(new Vector2(lo, key + face), new Vector2(hi, key + face), hiVis); // 表向き面・北端 (法線 -y)
+                Collider2D loCol = SpawnSegment(new Vector2(hi, loY), new Vector2(lo, loY), loVis);              // 裏向き面 (winding 反転→法線 +y)
+                Collider2D hiCol = SpawnSegment(new Vector2(lo, key + face), new Vector2(hi, key + face), hiVis); // 表向き面・北端 (法線 -y)
+                _runs.Add(new RunCaster { Lo = loCol, Hi = hiCol, Horizontal = true, Gate = gate, State = 0 });
+                runs++;
             }
             else
             {
-                loCol = SpawnSegment(new Vector2(key - face, lo), new Vector2(key - face, hi), loVis); // 左面
-                hiCol = SpawnSegment(new Vector2(key + face, lo), new Vector2(key + face, hi), hiVis); // 右面
+                // ★V 面は全面セル (WallH 角・junction・柱 = half≥0.45) の lit 帯をまたがない (2026-06-11):
+                //   全面セルの WallH 発射線は北端 (r + 0.5*FaceScaleH)。それより南は「明るく見える壁面」なのに、
+                //   旧実装は V 面がセル南端 (r-0.5) まで届いていて、横向きの影が lit 面/床を斜めに横切る
+                //   黒い楔 =「壁Hなのに横から発射」の正体だった (ユーザー仮説 2026-06-11 的中)。
+                //   → 全面セルの寄与区間を [r + 0.5*FaceScaleH, r+0.5] に切り詰め、途切れたら別セグメントに分割。
+                //   セグメント下端 (key±face, r+0.5*FaceScaleH) は H 発射線 (y=r+0.5*FaceScaleH, x はセル幅全域) 上に
+                //   乗るので角は頂点一致のまま = 透けは出ない。薄 V セルは従来どおり全高 [r-0.5, r+0.5]。
+                //   柱 (孤立 WallH) も同式で北端スリバーだけになり、lit 面に楔が落ちない。
+                float segLo = float.NaN, segHi = 0f;
+                for (int k = i; k < j; k++)
+                {
+                    float r = cells[k].cell;
+                    float cellLo = cells[k].half >= 0.45f ? r + 0.5f * FaceScaleH : r - 0.5f; // 全面セルは H 発射線から北だけ
+                    float cellHi = r + 0.5f;
+                    if (float.IsNaN(segLo)) { segLo = cellLo; segHi = cellHi; }
+                    else if (cellLo <= segHi + 0.001f) { segHi = cellHi; } // 連続 → 伸長
+                    else { SpawnVerticalPair(key, face, segLo, segHi, gate, loVis, hiVis); runs++; segLo = cellLo; segHi = cellHi; } // lit 帯ギャップ → 分割
+                }
+
+                if (!float.IsNaN(segLo)) { SpawnVerticalPair(key, face, segLo, segHi, gate, loVis, hiVis); runs++; }
             }
 
-            _runs.Add(new RunCaster { Lo = loCol, Hi = hiCol, Horizontal = horizontal, Gate = gate, State = 0 });
-            runs++;
             i = j;
         }
 
         return runs;
+    }
+
+    // 垂直 run の 1 セグメント分の両面 caster (左=Lo / 右=Hi) を spawn して gating に登録。
+    // lit 帯分割で 1 つの V run が複数セグメントになり得るため、セグメントごとに RunCaster を持つ (gate は run 共通)。
+    private static void SpawnVerticalPair(float key, float face, float lo, float hi, float gate, Color loVis, Color hiVis)
+    {
+        Collider2D loCol = SpawnSegment(new Vector2(key - face, lo), new Vector2(key - face, hi), loVis); // 左面
+        Collider2D hiCol = SpawnSegment(new Vector2(key + face, lo), new Vector2(key + face, hi), hiVis); // 右面
+        _runs.Add(new RunCaster { Lo = loCol, Hi = hiCol, Horizontal = false, Gate = gate, State = 0 });
     }
 
     // プレイヤー位置に応じて各 run の片面だけ active にする (毎フレ RunPerFrameUpdates から)。
