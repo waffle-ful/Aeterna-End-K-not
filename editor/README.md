@@ -9,9 +9,29 @@ IndexedDB 自動保存、`.ekmap.json` 入出力、マップコード (`EKM1.…
 ```
 npm install
 npm run dev      # 開発サーバ (http://localhost:5173)
-npm run build    # 型チェック + dist/ へ静的ビルド
+npm run build    # 型チェック + dist/ へ静的ビルド (PWA: SW + manifest 生成)
 npm test         # vitest (契約テスト)
 ```
+
+## デスクトップアプリ (Tauri exe) のビルド
+
+リリースは「ターミナルを使わずダブルクリックで起動できる exe」を本命とする (Tauri)。
+Web アプリを小さなネイティブ exe で包み、オフライン動作 + フル FS アクセス
+(「▶ ゲームで試す」が `Documents/EndKnot/EKMaps` へ直書き) になる。
+
+**前提: Rust ツールチェーン (一度だけ)** — https://rustup.rs から rustup を入れる。
+Windows は MSVC ビルドツール (Visual Studio C++ Build Tools) も必要。
+
+```
+npm run tauri:dev     # 開発: ネイティブウィンドウで起動 (vite dev を内包)
+npm run tauri:build   # リリース: src-tauri/target/release/bundle/ に exe + インストーラ
+```
+
+- 設定: `src-tauri/tauri.conf.json` (識別子 `net.endknot.ekmap`、ウィンドウ 1280×800)。
+- ファイル書込権限: `src-tauri/capabilities/default.json` で `Documents/EndKnot/EKMaps` 配下のみ許可。
+- アプリ側の保存ロジックは `src/playtest.ts` (Tauri 検出 → `@tauri-apps/plugin-fs` で直書き / ブラウザ → File System Access API / 未対応 → ダウンロード)。
+- アイコンは Tauri 既定のプレースホルダ。差し替えは `npm run tauri icon <png>`。
+- 注: ブラウザ版は PWA としてインストールも可能 (オフライン)。配布の暫定手段として `dist/` を静的ホスティングしても良い。
 
 ## 仕様準拠先
 
