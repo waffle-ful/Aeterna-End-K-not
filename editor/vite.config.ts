@@ -5,6 +5,11 @@ export default defineConfig({
     base: "./",
     plugins: [
         VitePWA({
+            // 配布は Tauri exe に決定したため Service Worker は不要。
+            // selfDestroying = 既に登録済みの SW を自己消去しキャッシュを掃除する SW を出力する
+            // (古い画面がキャッシュで残る事故を根絶。exe/ブラウザとも常に最新を表示)。
+            // manifest はインストール性のため残す。
+            selfDestroying: true,
             registerType: "autoUpdate",
             manifest: {
                 name: "EKMap エディタ",
