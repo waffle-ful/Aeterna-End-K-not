@@ -21,7 +21,19 @@
       </div>
     </header>
 
-    <main id="viewport"></main>
+    <!-- ツール説明リボン: ヘッダ直下に常駐。今選んでいるツールを一言で説明 -->
+    <div id="tool-ribbon" aria-live="polite"></div>
+
+    <main id="viewport">
+      <!-- レイヤー縦タブ: canvas の右端にオーバーレイ (v2 マップ時のみ表示) -->
+      <div id="layer-vtabs" hidden aria-label="レイヤー選択">
+        <button class="lvtab active" data-layer="ground">下層</button>
+        <button class="lvtab" data-layer="upper">上層</button>
+        <button class="lvtab" data-layer="decor">装飾</button>
+        <button class="lvtab" data-layer="spawn">スポーン</button>
+        <button id="btn-tileset-vtab" title="タイルセット設定 (通行/★/遮光/タグ)" class="lvtab-chip">チップ設定</button>
+      </div>
+    </main>
 
     <footer>
       <div id="layer-tabs" hidden>

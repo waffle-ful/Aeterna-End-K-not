@@ -59,6 +59,54 @@ type LayerTab = "ground" | "upper" | "decor" | "spawn";
 
 const TOOL_CHAR: Partial<Record<ToolV1, string>> = { floor: CELL_FLOOR, wall: CELL_WALL, void: CELL_VOID };
 
+// ---------- ツール説明リボン ----------
+
+/** v2 ツールの一言説明 */
+const TOOL_HINTS_V2: Record<ToolV2, string> = {
+    pen:    "ペン — タイルを描きます。クリック / ドラッグで塗れます",
+    erase:  "消去 — タイルを消します。ドラッグでまとめて消せます",
+    rect:   "矩形 — ドラッグで四角く塗ります",
+    bucket: "バケツ — つながった範囲をまとめて塗ります",
+    pick:   "スポイト — タイルを吸い取って選びます。吸ったあとはペンに切り替わります",
+};
+
+/** v2 レイヤーのツールバー説明 */
+const LAYER_HINTS_V2: Record<LayerTab, string> = {
+    ground: "下層 — マップの土台となるタイルを配置します",
+    upper:  "上層 — プレイヤーの上に描画するタイル (屋根・梁など) を配置します",
+    decor:  "装飾 — 灯りやドアなど小物を1マスずつ置きます。クリックで配置 / 再クリックで除去",
+    spawn:  "スポーン — プレイヤーの初期位置を設定します。クリック / ドラッグで移動できます",
+};
+
+/** v1 ツールの一言説明 */
+const TOOL_HINTS_V1: Record<ToolV1, string> = {
+    wall:    "壁 — 通行不可の壁を置きます",
+    floor:   "床 — 通行可能な床を置きます",
+    void:    "奈落 — 何もない空間 (落下) にします",
+    spawn:   "スポーン — プレイヤーの出現位置を設定します",
+    light:   "灯り — 光源を置きます",
+    stain:   "シミ — 床のシミ装飾を置きます",
+    door:    "扉 — 扉を置きます",
+    vent:    "ベント — 通気口を置きます",
+    ceiling: "天井 — 天井を置きます",
+};
+
+function updateRibbon(): void {
+    const el = $("tool-ribbon");
+    const v2 = isV2Doc(doc);
+    if (!v2) {
+        el.textContent = TOOL_HINTS_V1[tool] ?? "";
+        return;
+    }
+    // v2: レイヤー説明 + ツール説明
+    const layerHint = LAYER_HINTS_V2[activeLayer];
+    if (activeLayer === "decor" || activeLayer === "spawn") {
+        el.textContent = layerHint;
+    } else {
+        el.textContent = `${layerHint}  /  ${TOOL_HINTS_V2[toolV2]}`;
+    }
+}
+
 function $<T extends HTMLElement>(id: string): T {
     return document.getElementById(id) as T;
 }
@@ -155,20 +203,28 @@ function scheduleSave(): void {
 
 function refreshModeUi(): void {
     const v2 = isV2Doc(doc);
-    $("layer-tabs").hidden = !v2;
+    $("layer-tabs").hidden = !v2; // 旧フッタ横タブ (CSS で常時非表示だが状態は維持)
+    $("layer-vtabs").hidden = !v2; // 新縦タブ: v2 のみ表示
     $("tools").hidden = v2;
     $("tools-v2").hidden = !v2 || (activeLayer !== "ground" && activeLayer !== "upper");
     $("tools-decor2").hidden = !v2 || activeLayer !== "decor";
     $("spawn-hint").hidden = !v2 || activeLayer !== "spawn";
+    updateRibbon();
     if (v2) void rebuildPicker();
 }
 
 function setActiveLayer(l: LayerTab): void {
     activeLayer = l;
+    // 旧フッタ横タブ (CSS で非表示だが active 状態は維持)
     for (const b of document.querySelectorAll<HTMLButtonElement>("#layer-tabs .ltab")) {
         b.classList.toggle("active", b.dataset.layer === l);
     }
+    // 縦タブの active 表示を同期
+    for (const b of document.querySelectorAll<HTMLButtonElement>("#layer-vtabs .lvtab")) {
+        b.classList.toggle("active", b.dataset.layer === l);
+    }
     refreshModeUi();
+    updateRibbon();
     updateStatus();
 }
 
@@ -177,6 +233,7 @@ function setToolV2(t: ToolV2): void {
     for (const b of document.querySelectorAll<HTMLButtonElement>("#tools-v2 .tool2")) {
         b.classList.toggle("active", b.dataset.tool2 === t);
     }
+    updateRibbon();
 }
 
 // ---------- パレット (v2 チップ選択) ----------
@@ -1543,15 +1600,27 @@ function wireUi(): void {
     const selectTool = (b: HTMLButtonElement): void => {
         tool = b.dataset.tool as ToolV1;
         for (const x of toolButtons) x.classList.toggle("active", x === b);
+        updateRibbon();
     };
     for (const b of toolButtons) b.addEventListener("click", () => selectTool(b));
     const def = toolButtons.find((b) => b.dataset.tool === tool);
     if (def) selectTool(def);
 
-    // v2 レイヤータブ + ツール
+    // v2 レイヤータブ (旧フッタ横タブ — CSS 非表示だがイベントは維持)
     for (const b of document.querySelectorAll<HTMLButtonElement>("#layer-tabs .ltab")) {
         b.addEventListener("click", () => setActiveLayer(b.dataset.layer as LayerTab));
     }
+    // v2 レイヤー縦タブ (canvas 右端オーバーレイ)
+    for (const b of document.querySelectorAll<HTMLButtonElement>("#layer-vtabs .lvtab")) {
+        b.addEventListener("click", () => setActiveLayer(b.dataset.layer as LayerTab));
+    }
+    // 縦タブ内の「チップ設定」ボタン (フッタの btn-tileset と同じ動作)
+    $("btn-tileset-vtab").addEventListener("click", () => {
+        if (!isV2Doc(doc)) return;
+        $("ts-hint").textContent = TS_HINTS[tsMode];
+        $<HTMLDialogElement>("dlg-tileset").showModal();
+        drawTilesetPanel();
+    });
     for (const b of document.querySelectorAll<HTMLButtonElement>("#tools-v2 .tool2")) {
         b.addEventListener("click", () => setToolV2(b.dataset.tool2 as ToolV2));
     }
