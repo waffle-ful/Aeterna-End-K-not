@@ -132,6 +132,18 @@ button:disabled {
     cursor: default;
 }
 
+button.primary {
+    background: var(--accent);
+    color: #1a1a1f;
+    border-color: var(--accent);
+    font-weight: 700;
+}
+
+button.primary:hover {
+    filter: brightness(1.08);
+    background: var(--accent);
+}
+
 main#viewport {
     flex: 1;
     position: relative;

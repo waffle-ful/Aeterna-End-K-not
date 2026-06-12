@@ -39,6 +39,7 @@ import { type CellChange, History, type Patch, applyPatch } from "./history";
 import { backupAutosave, loadAutosave, saveAutosave, tryRestoreDoc } from "./persist";
 import { MapRenderer, loadTilesetImage } from "./render";
 import { InputController } from "./input";
+import { saveForPlaytest } from "./playtest";
 
 type ToolV1 = "floor" | "wall" | "void" | DecorKind | "spawn";
 type ToolV2 = "pen" | "erase" | "rect" | "bucket" | "pick";
@@ -712,6 +713,36 @@ function formatKb(n: number): string {
     return n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(2)} MB` : `${(n / 1024).toFixed(1)} KB`;
 }
 
+// ▶ ゲームで試す: マップを EKMaps フォルダへ直接保存する。モッド側 L1 自動リロードが約2秒で拾う。
+async function playInGame(): Promise<void> {
+    const text = buildValidatedJson(true);
+    if (text === null) return;
+
+    const filename = `${sanitizeFileName(doc.name)}.ekmap.json`;
+    const r = await saveForPlaytest(filename, text);
+
+    if (r.ok) {
+        // 自動リロードで反映される。初回や未ロード時のために /map load の案内も添える。
+        const base = filename.replace(/\.ekmap\.json$/, "");
+        toast(`保存しました → ${r.where}\nゲーム内で自動反映されます (初回は /map load ${base})`);
+        return;
+    }
+
+    if (r.reason === "cancelled") {
+        toast("キャンセルしました");
+        return;
+    }
+
+    if (r.reason === "unsupported") {
+        // FS 直書き未対応ブラウザ: ダウンロードに倒し、置き場所を案内
+        exportFile();
+        toast("このブラウザはフォルダ直接保存に未対応です。ダウンロードしたファイルを Documents/EndKnot/EKMaps に置いてください");
+        return;
+    }
+
+    toast(`保存に失敗しました: ${r.message}`);
+}
+
 async function copyMapCode(): Promise<void> {
     const text = buildValidatedJson(false); // §8: コードは minify
     if (text === null) return;
@@ -934,6 +965,7 @@ function wireUi(): void {
         loadFromJsonText(await f.text());
     });
     $("btn-export").addEventListener("click", exportFile);
+    $("btn-play").addEventListener("click", () => void playInGame());
 
     // マップコード
     $("btn-copy-code").addEventListener("click", () => void copyMapCode());
