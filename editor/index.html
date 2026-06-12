@@ -48,7 +48,11 @@
         <button class="tool2" data-tool2="rect">矩形</button>
         <button class="tool2" data-tool2="bucket">バケツ</button>
         <button class="tool2" data-tool2="pick">スポイト</button>
-        <div id="tile-picker"><canvas id="picker-canvas"></canvas></div>
+        <!-- コンパクト帯パレット: 選択中チップ + 近傍チップ数個 + 展開ボタン -->
+        <div id="palette-strip">
+          <canvas id="strip-canvas" title="クリックで別のチップを選択"></canvas>
+          <button id="btn-palette-expand" title="チップ一覧を全画面で開く" aria-label="チップ一覧を開く">▲▲</button>
+        </div>
       </div>
       <div class="tools" id="tools-decor2" hidden>
         <button class="tool2d" data-decor="light">灯り</button>
@@ -67,6 +71,21 @@
         <span id="status"></span>
       </div>
     </footer>
+
+    <!-- 全画面チップ選択オーバーレイ (▲▲ で開く、タイル選択 or ▼▼/Esc で閉じる) -->
+    <div id="palette-overlay" hidden aria-modal="true" role="dialog" aria-label="チップ一覧">
+      <div id="palette-overlay-header">
+        <input id="palette-search" type="search" placeholder="番号で絞り込み…" autocomplete="off" inputmode="numeric" />
+        <label id="palette-used-label">
+          <input type="checkbox" id="palette-used-only" />
+          使用中のみ
+        </label>
+        <button id="btn-palette-collapse" title="帯に戻る" aria-label="閉じる">▼▼</button>
+      </div>
+      <div id="palette-grid-wrap">
+        <canvas id="palette-canvas" title="チップをクリックして選択"></canvas>
+      </div>
+    </div>
 
     <input type="file" id="file-input" accept=".json,application/json" hidden />
     <input type="file" id="png-input" accept=".png,image/png" hidden />

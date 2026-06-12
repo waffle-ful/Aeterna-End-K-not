@@ -167,43 +167,199 @@ function setToolV2(t: ToolV2): void {
     }
 }
 
-// ---------- タイルピッカー (v2 パレット = チップ一覧) ----------
+// ---------- パレット (v2 チップ選択) ----------
+// ・コンパクト帯 (#palette-strip / strip-canvas): 常時表示。選択中+近傍チップを横一列
+// ・全画面グリッド (#palette-overlay / palette-canvas): ▲▲ で開く、選択で閉じる
 
-const PICK_PX = 36;
+/** 帯の1チップ表示サイズ (px) */
+const STRIP_PX = 44;
+/** 全画面グリッドの1チップ表示サイズ (px) */
+const GRID_PX = 56;
+/** 帯に表示する近傍チップ数 (選択中を中心とした前後合計) */
+const STRIP_NEIGHBORS = 7;
 
+/** 帯の canvas に選択中チップ + 近傍 STRIP_NEIGHBORS 個を描画 */
 async function rebuildPicker(): Promise<void> {
     if (!isV2Doc(doc)) return;
     const d = doc;
     const ts = d.tileset;
-    const cv = $<HTMLCanvasElement>("picker-canvas");
-    cv.width = ts.columns * PICK_PX;
-    cv.height = ts.rows * PICK_PX;
+    const total = tileCount(ts);
+
+    // 表示するチップid列: selectedTile を中心に前後 STRIP_NEIGHBORS/2 ずつ
+    const half = Math.floor(STRIP_NEIGHBORS / 2);
+    const start = Math.max(0, Math.min(selectedTile - half, total - STRIP_NEIGHBORS));
+    const end = Math.min(total - 1, start + STRIP_NEIGHBORS - 1);
+    const ids: number[] = [];
+    for (let i = start; i <= end; i++) ids.push(i);
+
+    const cv = $<HTMLCanvasElement>("strip-canvas");
+    cv.width = ids.length * STRIP_PX;
+    cv.height = STRIP_PX;
     cv.style.width = `${cv.width}px`;
     cv.style.height = `${cv.height}px`;
+
     const ctx = cv.getContext("2d");
     if (!ctx) return;
     ctx.imageSmoothingEnabled = false;
     ctx.fillStyle = "#14141a";
     ctx.fillRect(0, 0, cv.width, cv.height);
+
     try {
         const img = await loadTilesetImage(ts.image);
-        if (doc !== d) return; // doc が差し替わっていたら破棄
-        ctx.drawImage(img, 0, 0, ts.columns * ts.tileSize, ts.rows * ts.tileSize, 0, 0, cv.width, cv.height);
+        if (doc !== d) return;
+        for (let idx = 0; idx < ids.length; idx++) {
+            const id = ids[idx];
+            const srcX = (id % ts.columns) * ts.tileSize;
+            const srcY = Math.floor(id / ts.columns) * ts.tileSize;
+            ctx.drawImage(img, srcX, srcY, ts.tileSize, ts.tileSize, idx * STRIP_PX, 0, STRIP_PX, STRIP_PX);
+        }
     } catch {
         /* 画像破損時はプレースホルダのまま */
     }
-    // 選択中チップの枠
-    const sx = (selectedTile % ts.columns) * PICK_PX;
-    const sy = Math.floor(selectedTile / ts.columns) * PICK_PX;
-    ctx.strokeStyle = "#ffd75e";
-    ctx.lineWidth = 3;
-    ctx.strokeRect(sx + 1.5, sy + 1.5, PICK_PX - 3, PICK_PX - 3);
+
+    // 選択中チップの強調枠
+    const selIdx = ids.indexOf(selectedTile);
+    if (selIdx >= 0) {
+        ctx.strokeStyle = "#ffd75e";
+        ctx.lineWidth = 3;
+        ctx.strokeRect(selIdx * STRIP_PX + 1.5, 1.5, STRIP_PX - 3, STRIP_PX - 3);
+    }
+
+    // 各チップ番号ラベル (小さく左上)
+    ctx.font = "10px sans-serif";
+    ctx.textBaseline = "top";
+    for (let idx = 0; idx < ids.length; idx++) {
+        const id = ids[idx];
+        ctx.fillStyle = "rgba(0,0,0,0.55)";
+        ctx.fillRect(idx * STRIP_PX + 1, 1, 22, 13);
+        ctx.fillStyle = id === selectedTile ? "#ffd75e" : "rgba(255,255,255,0.7)";
+        ctx.fillText(String(id), idx * STRIP_PX + 3, 2);
+    }
+
+    // 帯のクリックハンドラに id 列を伝えるため data 属性に保存
+    cv.dataset.stripIds = ids.join(",");
 }
+
+/** 全画面グリッドの canvas を描画。filter が空でないとき id 文字列でマッチしたものだけ表示 */
+async function rebuildPaletteGrid(filterText: string, usedOnly: boolean): Promise<void> {
+    if (!isV2Doc(doc)) return;
+    const d = doc;
+    const ts = d.tileset;
+    const total = tileCount(ts);
+
+    // 使用中セル id セット (usedOnly のとき)
+    let usedIds: Set<number> | null = null;
+    if (usedOnly) {
+        usedIds = new Set<number>();
+        for (const v of d.ground) if (v >= 0) usedIds.add(v);
+        for (const v of d.upper) if (v >= 0) usedIds.add(v);
+    }
+
+    // フィルタ適用: 番号が filterText を含むものだけ
+    const norm = filterText.trim();
+    const filtered: number[] = [];
+    for (let id = 0; id < total; id++) {
+        if (norm && !String(id).includes(norm)) continue;
+        if (usedIds && !usedIds.has(id)) continue;
+        filtered.push(id);
+    }
+
+    // グリッド列数: ウィンドウ幅に合わせる
+    const wrap = $("palette-grid-wrap");
+    const wrapW = wrap.clientWidth || window.innerWidth;
+    const cols = Math.max(1, Math.floor(wrapW / GRID_PX));
+    const rows = Math.ceil(filtered.length / cols) || 1;
+
+    const cv = $<HTMLCanvasElement>("palette-canvas");
+    cv.width = cols * GRID_PX;
+    cv.height = rows * GRID_PX;
+    cv.style.width = `${cv.width}px`;
+    cv.style.height = `${cv.height}px`;
+    // フィルタ結果を data 属性に保存 (クリック → id 変換用)
+    cv.dataset.filteredIds = filtered.join(",");
+    cv.dataset.gridCols = String(cols);
+
+    const ctx = cv.getContext("2d");
+    if (!ctx) return;
+    ctx.imageSmoothingEnabled = false;
+    ctx.fillStyle = "#14141a";
+    ctx.fillRect(0, 0, cv.width, cv.height);
+
+    let img: HTMLImageElement | null = null;
+    try {
+        img = await loadTilesetImage(ts.image);
+        if (doc !== d) return;
+    } catch {
+        /* 画像破損時もラベルだけ出す */
+    }
+
+    for (let idx = 0; idx < filtered.length; idx++) {
+        const id = filtered[idx];
+        const gx = (idx % cols) * GRID_PX;
+        const gy = Math.floor(idx / cols) * GRID_PX;
+
+        if (img) {
+            const srcX = (id % ts.columns) * ts.tileSize;
+            const srcY = Math.floor(id / ts.columns) * ts.tileSize;
+            ctx.drawImage(img, srcX, srcY, ts.tileSize, ts.tileSize, gx, gy, GRID_PX, GRID_PX);
+        }
+
+        // セル枠
+        ctx.strokeStyle = id === selectedTile ? "#ffd75e" : "rgba(255,255,255,0.18)";
+        ctx.lineWidth = id === selectedTile ? 3 : 1;
+        ctx.strokeRect(gx + 0.5, gy + 0.5, GRID_PX - 1, GRID_PX - 1);
+
+        // 選択中は背景ハイライト
+        if (id === selectedTile) {
+            ctx.fillStyle = "rgba(255,215,94,0.18)";
+            ctx.fillRect(gx + 1, gy + 1, GRID_PX - 2, GRID_PX - 2);
+        }
+
+        // 番号ラベル
+        ctx.fillStyle = "rgba(0,0,0,0.6)";
+        ctx.fillRect(gx + 1, gy + 1, 26, 14);
+        ctx.font = "bold 11px sans-serif";
+        ctx.textBaseline = "top";
+        ctx.fillStyle = id === selectedTile ? "#ffd75e" : "rgba(255,255,255,0.8)";
+        ctx.fillText(String(id), gx + 3, gy + 2);
+    }
+
+    // 何も無い場合はプレースホルダ
+    if (filtered.length === 0) {
+        ctx.fillStyle = "rgba(255,255,255,0.3)";
+        ctx.font = "14px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("チップが見つかりません", cv.width / 2, cv.height / 2 || GRID_PX / 2);
+    }
+}
+
+/** 全画面グリッドを開く */
+function openPaletteOverlay(): void {
+    const overlay = $("palette-overlay");
+    overlay.hidden = false;
+    $<HTMLInputElement>("palette-search").value = paletteFilterText;
+    $<HTMLInputElement>("palette-used-only").checked = paletteUsedOnly;
+    void rebuildPaletteGrid(paletteFilterText, paletteUsedOnly);
+    // フォーカスを検索フィールドへ
+    $<HTMLInputElement>("palette-search").focus();
+}
+
+/** 全画面グリッドを閉じる */
+function closePaletteOverlay(): void {
+    $("palette-overlay").hidden = true;
+}
+
+let paletteFilterText = "";
+let paletteUsedOnly = false;
 
 function selectTile(id: number): void {
     if (!isV2Doc(doc)) return;
     selectedTile = Math.min(Math.max(0, id), tileCount(doc.tileset) - 1);
     void rebuildPicker();
+    // 全画面が開いていれば即時に閉じる (帯の再描画は rebuildPicker が担う)
+    const overlay = $("palette-overlay");
+    if (!overlay.hidden) closePaletteOverlay();
     updateStatus();
 }
 
@@ -819,16 +975,61 @@ function wireUi(): void {
     const defDecor = decorButtons.find((b) => b.dataset.decor === decorKind2);
     if (defDecor) selectDecor2(defDecor);
 
-    // タイルピッカー
-    $<HTMLCanvasElement>("picker-canvas").addEventListener("click", (e) => {
+    // コンパクト帯: クリックで近傍チップを選択
+    $<HTMLCanvasElement>("strip-canvas").addEventListener("click", (e) => {
         if (!isV2Doc(doc)) return;
-        const cv = $<HTMLCanvasElement>("picker-canvas");
+        const cv = $<HTMLCanvasElement>("strip-canvas");
         const r = cv.getBoundingClientRect();
-        const x = Math.floor((e.clientX - r.left) / PICK_PX);
-        const y = Math.floor((e.clientY - r.top) / PICK_PX);
-        if (x < 0 || y < 0 || x >= doc.tileset.columns || y >= doc.tileset.rows) return;
-        selectTile(y * doc.tileset.columns + x);
+        const idx = Math.floor((e.clientX - r.left) / STRIP_PX);
+        const raw = cv.dataset.stripIds ?? "";
+        const ids = raw.split(",").map(Number).filter((n) => Number.isFinite(n));
+        if (idx < 0 || idx >= ids.length) return;
+        selectTile(ids[idx]);
         if (toolV2 === "erase" || toolV2 === "pick") setToolV2("pen");
+    });
+
+    // ▲▲ で全画面グリッドを開く
+    $("btn-palette-expand").addEventListener("click", () => {
+        if (!isV2Doc(doc)) return;
+        openPaletteOverlay();
+    });
+
+    // ▼▼ で全画面グリッドを閉じる
+    $("btn-palette-collapse").addEventListener("click", () => {
+        closePaletteOverlay();
+    });
+
+    // 全画面グリッド: チップをクリックして選択
+    $<HTMLCanvasElement>("palette-canvas").addEventListener("click", (e) => {
+        if (!isV2Doc(doc)) return;
+        const cv = $<HTMLCanvasElement>("palette-canvas");
+        const r = cv.getBoundingClientRect();
+        const cols = Number(cv.dataset.gridCols ?? "1");
+        const ix = Math.floor((e.clientX - r.left) / GRID_PX);
+        const iy = Math.floor((e.clientY - r.top) / GRID_PX);
+        const idx = iy * cols + ix;
+        const raw = cv.dataset.filteredIds ?? "";
+        const ids = raw.split(",").map(Number).filter((n) => Number.isFinite(n));
+        if (idx < 0 || idx >= ids.length) return;
+        selectTile(ids[idx]);
+        if (toolV2 === "erase" || toolV2 === "pick") setToolV2("pen");
+    });
+
+    // 検索フィールド: 入力で即時絞り込み
+    $<HTMLInputElement>("palette-search").addEventListener("input", (e) => {
+        paletteFilterText = (e.target as HTMLInputElement).value;
+        void rebuildPaletteGrid(paletteFilterText, paletteUsedOnly);
+    });
+
+    // 使用中のみトグル
+    $<HTMLInputElement>("palette-used-only").addEventListener("change", (e) => {
+        paletteUsedOnly = (e.target as HTMLInputElement).checked;
+        void rebuildPaletteGrid(paletteFilterText, paletteUsedOnly);
+    });
+
+    // Esc で全画面グリッドを閉じる (既存 keydown ハンドラの外でシンプルに追加)
+    $("palette-overlay").addEventListener("keydown", (e) => {
+        if (e.key === "Escape") { closePaletteOverlay(); e.stopPropagation(); }
     });
 
     // タイルセット設定パネル
@@ -1005,11 +1206,18 @@ function wireUi(): void {
         $("tools-v2").classList.toggle("collapsed", collapsed);
         $("tools-decor2").classList.toggle("collapsed", collapsed);
         drawerBtn.textContent = collapsed ? "▴" : "▾";
+        // フッタを閉じたときは全画面グリッドも閉じる
+        if (collapsed) closePaletteOverlay();
     });
 
-    // キーボード: Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z
+    // キーボード: Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z / Esc (全画面パレットを閉じる)
     window.addEventListener("keydown", (e) => {
         const tag = (e.target as HTMLElement | null)?.tagName ?? "";
+        // Esc: 全画面パレットが開いていれば閉じる (入力欄内でも動作させる)
+        if (e.key === "Escape") {
+            const overlay = $("palette-overlay");
+            if (!overlay.hidden) { closePaletteOverlay(); e.preventDefault(); return; }
+        }
         if (tag === "INPUT" || tag === "TEXTAREA") return;
         if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
         const k = e.key.toLowerCase();
