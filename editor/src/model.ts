@@ -504,9 +504,10 @@ export function cellAboveMask(doc: MapDocV3, i: number): number {
     for (let li = 0; li < doc.layers.length; li++) {
         const layer = doc.layers[li];
         const tid = layer.cells[i];
+        if (tid < 0) continue; // タイルが無い層はビットを立てない (空セルに★が出ないように)
         if (layer.above) {
             mask |= (1 << li);
-        } else if (tid >= 0) {
+        } else {
             const ts = doc.tilesets[layer.tileset];
             if (ts?.tiles[tid]?.over) mask |= (1 << li);
         }
