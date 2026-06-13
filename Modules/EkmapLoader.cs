@@ -1152,13 +1152,14 @@ public static class EkmapLoader
                 }
             }
 
-            // §21.4: aboveMask — 層 k のビット: layer.above=true OR そのチップの over=true
+            // §21.4: aboveMask — タイルが存在する層 k のみ: layer.above=true OR そのチップの over=true
             byte aboveMask = 0;
             for (int k = 0; k < 4; k++)
             {
                 int kid = layersArr[k].cells[idx];
+                if (kid < 0) continue; // タイルが無い層はビットを立てない (エディタと同一契約)
                 bool layerAbove = layersArr[k].above;
-                bool chipOver   = kid >= 0 && pool[layersArr[k].tileset].TileProps[kid].over;
+                bool chipOver   = pool[layersArr[k].tileset].TileProps[kid].over;
                 if (layerAbove || chipOver) aboveMask |= (byte)(1 << k);
             }
 
