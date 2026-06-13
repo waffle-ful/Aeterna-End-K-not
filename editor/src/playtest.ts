@@ -31,23 +31,23 @@ function openFsDb(): Promise<IDBDatabase> {
     });
 }
 
-async function storeHandle(h: FileSystemDirectoryHandle): Promise<void> {
+async function storeHandle(h: FileSystemHandle, key: string = HANDLE_KEY): Promise<void> {
     const db = await openFsDb();
     await new Promise<void>((resolve, reject) => {
         const tx = db.transaction(FS_STORE, "readwrite");
-        tx.objectStore(FS_STORE).put(h, HANDLE_KEY);
+        tx.objectStore(FS_STORE).put(h, key);
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error);
     });
     db.close();
 }
 
-async function loadHandle(): Promise<FileSystemDirectoryHandle | null> {
+async function loadHandle<T extends FileSystemHandle>(key: string = HANDLE_KEY): Promise<T | null> {
     const db = await openFsDb();
-    const h = await new Promise<FileSystemDirectoryHandle | null>((resolve, reject) => {
+    const h = await new Promise<T | null>((resolve, reject) => {
         const tx = db.transaction(FS_STORE, "readonly");
-        const req = tx.objectStore(FS_STORE).get(HANDLE_KEY);
-        req.onsuccess = () => resolve((req.result as FileSystemDirectoryHandle) ?? null);
+        const req = tx.objectStore(FS_STORE).get(key);
+        req.onsuccess = () => resolve((req.result as T) ?? null);
         req.onerror = () => reject(req.error);
     });
     db.close();
@@ -60,7 +60,7 @@ interface PermissionableHandle {
     requestPermission?(opts: { mode: "readwrite" }): Promise<PermissionState>;
 }
 
-async function ensurePermission(h: FileSystemDirectoryHandle): Promise<boolean> {
+async function ensurePermission(h: FileSystemHandle): Promise<boolean> {
     const p = h as unknown as PermissionableHandle;
     const opts = { mode: "readwrite" as const };
     if (p.queryPermission && (await p.queryPermission(opts)) === "granted") return true;
@@ -78,32 +78,80 @@ export async function saveForPlaytest(filename: string, text: string): Promise<P
         return { ok: false, reason: "unsupported", message: "このブラウザはフォルダ直接保存に未対応です" };
     }
 
+    // 1) 過去に確保したフォルダハンドルがあれば無言で書く
     try {
-        let dir = await loadHandle();
-        if (!dir || !(await ensurePermission(dir))) {
-            // 初回 or 権限失効: フォルダを選んでもらう。
-            // startIn:"documents" で必ずドキュメント直下から開く (Program Files 等の保護領域に
-            // 入り込んで「システムファイルがあるので開けません」になるのを防ぐ)。id は startIn を
-            // 優先させるため過去の記憶を引きずらない新しい値にする。
-            const picked = await (window as unknown as {
-                showDirectoryPicker(o: { id?: string; mode: string; startIn?: string }): Promise<FileSystemDirectoryHandle>;
-            }).showDirectoryPicker({ id: "ekmaps-docs", mode: "readwrite", startIn: "documents" });
-            await ensurePermission(picked);
-            // 選んだのが Documents でも EndKnot でも EKMaps でも、最終的に
-            // <選択>/…/EndKnot/EKMaps に解決して作成する (モッドの読み込み先と一致させる)。
-            dir = await resolveEkmapsDir(picked);
-            await storeHandle(dir);
+        const dir = await loadHandle<FileSystemDirectoryHandle>();
+        if (dir && (await ensurePermission(dir))) {
+            const fh = await dir.getFileHandle(filename, { create: true });
+            const w = await fh.createWritable();
+            await w.write(text);
+            await w.close();
+            return { ok: true, where: `${dir.name}/${filename}` };
         }
+    } catch {
+        /* フォルダ経路が死んでいたら次の経路へ */
+    }
 
+    // 2) このファイル名の保存先ファイルハンドルがあれば無言で上書き (ファイル方式の2回目以降)
+    const fileKey = `ekmaps-file:${filename}`;
+    try {
+        const fh = await loadHandle<FileSystemFileHandle>(fileKey);
+        if (fh && (await ensurePermission(fh))) {
+            const w = await fh.createWritable();
+            await w.write(text);
+            await w.close();
+            return { ok: true, where: fh.name };
+        }
+    } catch {
+        /* 次の経路へ */
+    }
+
+    // 3) フォルダ選択を試す (成功すれば以後ずっと無言保存)。
+    //    一部環境 (ドキュメントが OneDrive 配下等) では Chrome がフォルダ選択を
+    //    「システムファイルがあるため開けません」でブロックする — その場合ユーザーは
+    //    キャンセルするしかないので、4) のファイル保存ダイアログへフォールバックする。
+    try {
+        const picked = await (window as unknown as {
+            showDirectoryPicker(o: { id?: string; mode: string; startIn?: string }): Promise<FileSystemDirectoryHandle>;
+        }).showDirectoryPicker({ id: "ekmaps-docs", mode: "readwrite", startIn: "documents" });
+        await ensurePermission(picked);
+        // どこを選んでも <選択>/EndKnot/EKMaps に解決して作成 (モッドの読み込み先と一致)
+        const dir = await resolveEkmapsDir(picked);
+        await storeHandle(dir);
         const fh = await dir.getFileHandle(filename, { create: true });
         const w = await fh.createWritable();
         await w.write(text);
         await w.close();
         return { ok: true, where: `${dir.name}/${filename}` };
+    } catch {
+        /* キャンセル or ブロック → ファイル保存ダイアログへ */
+    }
+
+    // 4) ファイル保存ダイアログ (フォルダ制限の回避路)。
+    //    初回だけ「ドキュメント > EndKnot > EKMaps」へ保存してもらい、ハンドルを記憶して
+    //    以降は同じファイルに無言で上書きする。
+    try {
+        const fh = await (window as unknown as {
+            showSaveFilePicker(o: {
+                suggestedName?: string; startIn?: string; id?: string;
+                types?: { description: string; accept: Record<string, string[]> }[];
+            }): Promise<FileSystemFileHandle>;
+        }).showSaveFilePicker({
+            suggestedName: filename,
+            startIn: "documents",
+            id: "ekmaps-file",
+            types: [{ description: "EKMap マップ", accept: { "application/json": [".json"] } }],
+        });
+        await ensurePermission(fh);
+        await storeHandle(fh, fileKey);
+        const w = await fh.createWritable();
+        await w.write(text);
+        await w.close();
+        return { ok: true, where: fh.name };
     } catch (e) {
         const err = e as DOMException;
         if (err && (err.name === "AbortError" || err.name === "NotAllowedError")) {
-            return { ok: false, reason: "cancelled", message: "フォルダ選択がキャンセルされました" };
+            return { ok: false, reason: "cancelled", message: "保存がキャンセルされました" };
         }
         return { ok: false, reason: "error", message: (e as Error).message };
     }
