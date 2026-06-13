@@ -1290,6 +1290,7 @@ public static class BackroomsLobby
             SpriteRenderer sr = go.AddComponent<SpriteRenderer>();
             sr.sprite       = tileset.Sprites[id];
             sr.sortingOrder = order;
+
             SpawnedTiles.Add(go);
             SpawnedTilePositions.Add(worldPos);
             SpawnedTileChunkKeys.Add(_currentChunkKey);
@@ -2138,6 +2139,9 @@ public static class BackroomsLobby
     private const int ShadowLayer = 10;
 
     private static bool _inBackrooms;
+    // 最後に EnterCustomMap で入場したカスタムマップ。テクスチャ解放で「実際に表示中のマップ」を
+    // 確実に指すために保持する (ActiveSource は load 中に新マップへ差し替わるため当てにできない)。
+    private static CustomMapSource _lastEnteredSource;
     private static uint _lastSeed; // /bbvisdiag で procgen 再現用
 
     // /bbzoom のカメラ override (-1=off)。チャット開閉で Zoom.cs が ortho を 3 に戻すため毎フレ再適用する。
@@ -2243,8 +2247,17 @@ public static class BackroomsLobby
         CustomMapSource src = EkmapLoader.ActiveSource;
         if (src == null) return;
 
+        // 退出する旧マップのテクスチャ参照を退避 (新マップ=src とは別物)。
+        // ExitBackrooms には destroyTileset:false を渡し、新マップ src のテクスチャを壊させない。
+        // 旧マップのテクスチャは下で明示破棄する (リーク防止 + 新マップ温存の両立)。
+        CustomMapSource outgoing = _lastEnteredSource;
+
         // 既存 Backrooms に入っていたら先に exit (タイル・状態クリア、ClearActiveSource も走る)
-        if (_inBackrooms) ExitBackrooms(targetPid, silent: true);
+        if (_inBackrooms) ExitBackrooms(targetPid, silent: true, destroyTileset: false);
+
+        // 旧マップ (src と別物のときだけ) のテクスチャを解放
+        if (outgoing != null && !ReferenceEquals(outgoing, src)) outgoing.DestroyV2Tileset();
+        _lastEnteredSource = src;
 
         // ExitBackrooms が ClearActiveSource を呼ぶので、ここで src を再セットする
         EkmapLoader.Activate(src);
@@ -2305,7 +2318,7 @@ public static class BackroomsLobby
         Logger.Info($"Entered Backrooms (no-TP) seed={seed} disabledCols={disabledCols} disabledRs={disabledRs} tiles={SpawnedTiles.Count}", "BackroomsGen");
     }
 
-    public static void ExitBackrooms(byte targetPid, bool silent = false)
+    public static void ExitBackrooms(byte targetPid, bool silent = false, bool destroyTileset = true)
     {
         if (LobbyBehaviour.Instance == null)
         {
@@ -2375,7 +2388,17 @@ public static class BackroomsLobby
 
         DisabledRenderers.Clear();
 
-        EkmapLoader.ActiveSource?.DestroyV2Tileset(); // v2 Texture/Sprite リソース解放
+        // v2/v3 Texture/Sprite リソース解放。
+        // ★重要: カスタムマップ再入場 (EnterCustomMap) からの呼び出しでは、ActiveSource は既に
+        //   「これから表示する新しいマップ」に差し替わっている。その場合に破棄すると今から使う
+        //   テクスチャを壊して真っ黒になる (2026-06-13 実機で確定) ので destroyTileset=false で скип。
+        //   退出側 (新マップを使わない) の解放は EnterCustomMap が outgoing を明示破棄する。
+        if (destroyTileset)
+        {
+            // ActiveSource は /map exit 等で先に null 化される場合があるので、実参照 _lastEnteredSource 優先
+            (_lastEnteredSource ?? EkmapLoader.ActiveSource)?.DestroyV2Tileset();
+            _lastEnteredSource = null;
+        }
         EkmapLoader.ClearActiveSource();
         _customVisionRadius = null;
 
@@ -2447,7 +2470,8 @@ public static class BackroomsLobby
         DisabledColliders.Clear();
         DisabledRenderers.Clear();
 
-        EkmapLoader.ActiveSource?.DestroyV2Tileset(); // v2 Texture リソース解放 (OnGameStart 経路)
+        (_lastEnteredSource ?? EkmapLoader.ActiveSource)?.DestroyV2Tileset(); // v2/v3 Texture 解放 (OnGameStart 経路)
+        _lastEnteredSource = null;
         EkmapLoader.ClearActiveSource();
         _customVisionRadius = null;
         Logger.Info($"OnGameStart cleanup: wiped {wiped} tiles", "BackroomsGen");
@@ -2500,7 +2524,8 @@ public static class BackroomsLobby
         DisabledColliders.Clear();
         DisabledRenderers.Clear();
 
-        EkmapLoader.ActiveSource?.DestroyV2Tileset(); // v2 Texture リソース解放 (OnLobbyReload 経路)
+        (_lastEnteredSource ?? EkmapLoader.ActiveSource)?.DestroyV2Tileset(); // v2/v3 Texture 解放 (OnLobbyReload 経路)
+        _lastEnteredSource = null;
         EkmapLoader.ClearActiveSource();
         _customVisionRadius = null;
         Logger.Info("OnLobbyReload: stale Backrooms state cleared", "BackroomsGen");
