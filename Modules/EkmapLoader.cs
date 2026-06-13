@@ -916,6 +916,10 @@ public static class EkmapLoader
         }
 
         // Sprite[] 構築 (PNG 左上原点→Unity 左下原点の Y 反転)
+        // 注意: アトラスの部分矩形スプライトは meshType を FullRect に明示しないと IL2CPP で
+        //       不可視になる (既定の Tight はメッシュ生成が silent fail する — 2026-06-13 実機)。
+        //       コードベース内の他の Sprite.Create は全て (0,0) フルテクスチャなので顕在化しなかった。
+        tex.hideFlags |= HideFlags.HideAndDontSave; // unload sweep からも保護 (MarkerSprite 前例)
         int texH = tex.height;
         var sprites = new Sprite[tilecount];
         for (int tileId = 0; tileId < tilecount; tileId++)
@@ -928,7 +932,10 @@ public static class EkmapLoader
                 tex,
                 new Rect(rx, ry, ts.tileSize, ts.tileSize),
                 new Vector2(0.5f, 0.5f),
-                ts.tileSize); // pixelsPerUnit = tileSize → 1 チップ = 1 ワールドユニット
+                ts.tileSize,      // pixelsPerUnit = tileSize → 1 チップ = 1 ワールドユニット
+                0,                // extrude
+                SpriteMeshType.FullRect);
+            sprites[tileId].hideFlags |= HideFlags.HideAndDontSave;
         }
 
         rt = new EkmTilesetRuntime(tex, sprites, tileProps, ts.tileSize);
