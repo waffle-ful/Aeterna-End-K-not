@@ -1216,10 +1216,14 @@ public static class EkmapLoader
 
         // ambient
         float visionRadius = 8f;
-        if (raw.ambient != null && raw.ambient.TryGetValue("visionRadius", out JsonElement vrElem))
+        float cellSize = 1f;
+        if (raw.ambient != null)
         {
-            if (vrElem.TryGetSingle(out float vr))
+            if (raw.ambient.TryGetValue("visionRadius", out JsonElement vrElem) && vrElem.TryGetSingle(out float vr))
                 visionRadius = Math.Clamp(vr, 4f, 8f);
+            // ambient.tileScale = 1 セルのワールドサイズ (0.5〜1.0 にクランプ、既定 1.0)
+            if (raw.ambient.TryGetValue("tileScale", out JsonElement tsElem) && tsElem.TryGetSingle(out float ts))
+                cellSize = Math.Clamp(ts, 0.5f, 1.0f);
         }
 
         // decor (v2 と同規則)
@@ -1247,8 +1251,9 @@ public static class EkmapLoader
             }
         }
 
-        float spawnWorldX = OriginX + spawnCellX;
-        float spawnWorldY = OriginY - spawnCellY;
+        // spawn ワールド座標も CellSize 倍 (CellToWorld と同式)
+        float spawnWorldX = OriginX + spawnCellX * cellSize;
+        float spawnWorldY = OriginY - spawnCellY * cellSize;
 
         ActiveSource = new CustomMapSource(
             filename, name, raw.author ?? "", raw.width, raw.height,
@@ -1257,7 +1262,8 @@ public static class EkmapLoader
             visionRadius,
             v3cells,
             pool,
-            layerTsIdx);
+            layerTsIdx,
+            cellSize);
 
         errorMessage = null;
         return true;
@@ -1519,6 +1525,9 @@ public sealed class CustomMapSource
     public readonly List<EkmapLoader.DecorEntry>     Decors;
     public readonly UnityEngine.Vector2              SpawnWorld;
     public readonly float                            VisionRadius;
+    // チップ表示倍率 = 1 セルのワールドサイズ (ambient.tileScale、既定 1.0、0.5〜1.0)。
+    // 小さくするとマップ全体が密に縮む (絵・当たり判定・視界・スポーンが一括で S 倍)。
+    public readonly float                            CellSize = 1f;
     // v2 専用 (v1 では null)
     public readonly EkmapLoader.V2CellData[,]        V2Cells;
     public readonly EkmapLoader.EkmTilesetRuntime    Tileset;
@@ -1590,7 +1599,8 @@ public sealed class CustomMapSource
         float visionRadius,
         EkmapLoader.V3CellData[,] v3Cells,
         EkmapLoader.EkmTilesetRuntime[] tilesetPool,
-        byte[] layerTilesetIdx)
+        byte[] layerTilesetIdx,
+        float cellSize)
     {
         Filename        = filename;
         Name            = name;
@@ -1600,6 +1610,7 @@ public sealed class CustomMapSource
         Decors          = decors;
         SpawnWorld      = spawnWorld;
         VisionRadius    = visionRadius;
+        CellSize        = cellSize;
         V3Cells         = v3Cells;
         TilesetPool     = tilesetPool;
         LayerTilesetIdx = layerTilesetIdx;
@@ -1611,8 +1622,7 @@ public sealed class CustomMapSource
     // v2 では solid/void を §15 解決済み V2CellData から返す
     public EkmapLoader.VisualKind GetCell(float wx, float wy)
     {
-        int gx = (int)Math.Round(wx - EkmapLoader.OriginX);
-        int gy = (int)Math.Round(EkmapLoader.OriginY - wy);
+        WorldToCell(wx, wy, out int gx, out int gy);
         if (gx < 0 || gx >= Width || gy < 0 || gy >= Height)
             return EkmapLoader.VisualKind.Void;
 
@@ -1661,9 +1671,16 @@ public sealed class CustomMapSource
         return true;
     }
 
-    // セル座標 → ワールド座標 (中心)
+    // セル座標 → ワールド座標 (中心)。CellSize<1 で密に縮む (§4 を S 倍に一般化)
     public UnityEngine.Vector2 CellToWorld(int gx, int gy) =>
-        new(EkmapLoader.OriginX + gx, EkmapLoader.OriginY - gy);
+        new(EkmapLoader.OriginX + gx * CellSize, EkmapLoader.OriginY - gy * CellSize);
+
+    // ワールド座標 → セル座標 (逆変換)。CellToWorld の逆。
+    public void WorldToCell(float wx, float wy, out int gx, out int gy)
+    {
+        gx = (int)Math.Round((wx - EkmapLoader.OriginX) / CellSize);
+        gy = (int)Math.Round((EkmapLoader.OriginY - wy) / CellSize);
+    }
 
     // v2/v3 タイルセットリソース解放 (ExitBackrooms / OnGameStart から呼ぶ。呼び出し 3 経路は不変)
     public void DestroyV2Tileset()
