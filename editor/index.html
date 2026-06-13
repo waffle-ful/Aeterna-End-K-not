@@ -11,6 +11,14 @@
       <span class="brand">EKMap</span>
       <input id="map-name" placeholder="マップ名 (1〜64 文字)" maxlength="64" autocomplete="off" />
       <input id="map-author" placeholder="作者" maxlength="32" autocomplete="off" />
+      <!-- チップの大きさ: v3 マップのみ表示 (hidden は main.ts が制御) -->
+      <div id="tile-scale-wrap" class="tile-scale-wrap" hidden
+           title="小さくするとマップが密になります(ゲーム内のみ・編集画面の見た目は変わりません)">
+        <label for="tile-scale" class="tile-scale-label">ゲーム中のチップの大きさ</label>
+        <input type="range" id="tile-scale" min="0.5" max="1.0" step="0.05"
+               aria-label="チップの大きさ (0.5〜1.0)" />
+        <span id="tile-scale-val" class="tile-scale-val">1.00x</span>
+      </div>
       <div class="actions">
         <button id="btn-new">新規</button>
         <button id="btn-import">開く</button>

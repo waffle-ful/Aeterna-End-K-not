@@ -787,6 +787,30 @@ function doRedo(): void {
     rerenderPatch(p);
 }
 
+// ---------- tileScale UI (v3 専用) ----------
+
+const TILE_SCALE_MIN = 0.5;
+const TILE_SCALE_MAX = 1.0;
+const TILE_SCALE_DEFAULT = 1.0;
+
+/** v3 ドキュメントの ambient.tileScale をスライダーに反映する。v1 は非表示 */
+function syncTileScaleUi(): void {
+    const wrap = $("tile-scale-wrap");
+    const slider = $<HTMLInputElement>("tile-scale");
+    const val = $("tile-scale-val");
+    if (!isV3Doc(doc)) {
+        wrap.hidden = true;
+        slider.disabled = true;
+        return;
+    }
+    const current = typeof doc.ambient.tileScale === "number" ? (doc.ambient.tileScale as number) : TILE_SCALE_DEFAULT;
+    const clamped = Math.min(TILE_SCALE_MAX, Math.max(TILE_SCALE_MIN, current));
+    slider.value = String(clamped);
+    val.textContent = clamped.toFixed(2) + "x";
+    wrap.hidden = false;
+    slider.disabled = false;
+}
+
 // ---------- ドキュメント切替 ----------
 
 function setDocument(next: AnyDoc): void {
@@ -811,6 +835,7 @@ function setDocument(next: AnyDoc): void {
     renderer.fitView();
     $<HTMLInputElement>("map-name").value = doc.name;
     $<HTMLInputElement>("map-author").value = doc.author;
+    syncTileScaleUi();
     refreshModeUi();
     refreshUndoButtons();
     updateStatus();
@@ -2107,6 +2132,21 @@ function wireUi(): void {
     });
     $<HTMLInputElement>("map-author").addEventListener("input", (e) => {
         doc.author = (e.target as HTMLInputElement).value.slice(0, AUTHOR_MAX);
+        scheduleSave();
+    });
+
+    // チップの大きさスライダー (v3 専用)
+    $<HTMLInputElement>("tile-scale").addEventListener("input", (e) => {
+        if (!isV3Doc(doc)) return;
+        const raw = parseFloat((e.target as HTMLInputElement).value);
+        const clamped = Math.min(TILE_SCALE_MAX, Math.max(TILE_SCALE_MIN, raw));
+        $("tile-scale-val").textContent = clamped.toFixed(2) + "x";
+        if (clamped === TILE_SCALE_DEFAULT) {
+            // 1.0 のときはキーを省略して JSON を綺麗に保つ
+            delete doc.ambient.tileScale;
+        } else {
+            doc.ambient.tileScale = clamped;
+        }
         scheduleSave();
     });
 

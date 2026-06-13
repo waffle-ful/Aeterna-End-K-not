@@ -669,3 +669,55 @@ describe('v3 "v" チェーンのフォールバック (仕様 §21.2 / §23 (5,4
         expect(c.passable).toBe(true);
     });
 });
+
+// ============================================================
+// §7 tileScale — ambient 経由 round-trip (v3 専用)
+// ============================================================
+
+describe("tileScale round-trip (仕様 §7)", () => {
+    it("tileScale=0.75 が docToJsonV3 経由で ambient に残る", () => {
+        const r = validateEkmapV3(makeV3());
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+        const d = r.doc;
+        // 直接 ambient に書き込む (エディタの slider input と同じ操作)
+        d.ambient.tileScale = 0.75;
+        const json = docToJsonV3(d);
+        expect((json.ambient as any).tileScale).toBe(0.75);
+    });
+
+    it("tileScale=1.0 はキーが省略される (既定値、JSON 省略設計)", () => {
+        const r = validateEkmapV3(makeV3());
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+        const d = r.doc;
+        // 1.0 のときはキーを削除する (エディタの挙動と同じ)
+        delete d.ambient.tileScale;
+        const json = docToJsonV3(d);
+        // tileScale キーが存在しないか、あっても 1.0
+        const ts = (json.ambient as any).tileScale;
+        expect(ts === undefined || ts === 1.0).toBe(true);
+    });
+
+    it("tileScale=0.5 が validateEkmapV3 を通過し ambient に保全される", () => {
+        const m = makeV3();
+        m.ambient = { visionRadius: 8, tileScale: 0.5 };
+        const r = validateEkmapV3(m);
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+        // 未知サブキー保全 (§9 黙って許容) — tileScale は generic 保全される
+        expect((r.doc.ambient as any).tileScale).toBe(0.5);
+    });
+
+    it("tileScale=0.5 は docToJsonV3 → validateEkmapV3 でラウンドトリップする", () => {
+        const r = validateEkmapV3(makeV3());
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+        r.doc.ambient.tileScale = 0.5;
+        const json = docToJsonV3(r.doc);
+        const r2 = validateEkmapV3(JSON.parse(JSON.stringify(json)));
+        expect(r2.ok).toBe(true);
+        if (!r2.ok) return;
+        expect((r2.doc.ambient as any).tileScale).toBe(0.5);
+    });
+});
