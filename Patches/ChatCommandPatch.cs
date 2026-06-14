@@ -2646,6 +2646,14 @@ internal static class ChatCommands
                 return;
             }
 
+            case "shadow": // 影レイヤーの遮蔽線をシアンで可視化トグル (placement vs 影本体の切り分け用)
+            {
+                EkmShadow.Visualize = !EkmShadow.Visualize;
+                if (EkmapLoader.ActiveSource != null) EkmShadow.Spawn(EkmapLoader.ActiveSource);
+                Utils.SendMessage($"Shadow line visualize: {(EkmShadow.Visualize ? "ON" : "OFF")} (lines={EkmShadow.Count})", pid);
+                return;
+            }
+
             default:
                 Utils.SendMessage(GetString("EkMap.Usage"), pid);
                 return;

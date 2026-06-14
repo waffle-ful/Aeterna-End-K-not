@@ -2046,6 +2046,9 @@ public static class BackroomsLobby
         for (int i = 0; i < _customMapBoundaryWalls.Count; i++)
             if (_customMapBoundaryWalls[i] != null) Object.Destroy(_customMapBoundaryWalls[i]);
         _customMapBoundaryWalls.Clear();
+
+        // 影レイヤーの caster も外周壁と同じライフサイクル (カスタムマップ専用・procgen/退出で破棄) なのでここで一掃
+        EkmShadow.Clear();
     }
 
     // LoadChunk の bool 返し版 (既ロードなら false)。EnsureWholeCustomMapLoaded の進捗ログ用。
@@ -2517,6 +2520,9 @@ public static class BackroomsLobby
 
         // マップ外周に見えない壁を張る (マップ外の虚無へ歩いて出られないように)
         SpawnCustomMapBoundaryWalls(src);
+
+        // 影レイヤー (ユーザーがエディタで引いた遮蔽線) を layer10 caster 化 → バニラ GPU 影が出る
+        EkmShadow.Spawn(src);
 
         // decor スポーン (§6): EnterBackrooms 後に床の上へ配置。chunkKey=0 は streaming unload 対象外
         foreach (var d in src.Decors)

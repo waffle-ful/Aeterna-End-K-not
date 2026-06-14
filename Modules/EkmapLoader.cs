@@ -362,10 +362,18 @@ public static class EkmapLoader
 
         // バージョン分岐 (§18 / §19)
         if (raw.ekm == 2)
-            return TryParseV2(json, raw, filename, out errorMessage);
+        {
+            if (!TryParseV2(json, raw, filename, out errorMessage)) return false;
+            if (ActiveSource != null) ActiveSource.ShadowLines = ParseShadowLines(raw.shadow);
+            return true;
+        }
 
         if (raw.ekm == 3)
-            return TryParseV3(json, raw, filename, out errorMessage);
+        {
+            if (!TryParseV3(json, raw, filename, out errorMessage)) return false;
+            if (ActiveSource != null) ActiveSource.ShadowLines = ParseShadowLines(raw.shadow);
+            return true;
+        }
 
         if (raw.ekm != 1)
         {
@@ -533,9 +541,49 @@ public static class EkmapLoader
             grid, visualGrid, decors,
             new UnityEngine.Vector2(spawnWorldX, spawnWorldY),
             visionRadius);
+        ActiveSource.ShadowLines = ParseShadowLines(raw.shadow);
 
         errorMessage = null;
         return true;
+    }
+
+    // ── 影レイヤー パース (任意・version 非依存) ──────────────────────────────
+    // shadow.lines[] の各折れ線を検証してフラット float[] に正規化する。
+    // 不正 (奇数長・点不足・非有限) はその折れ線だけ捨てる。上限超過は切り捨て。null/空 → null。
+    private const int ShadowMaxLines = 2048;       // マップ全体の折れ線本数上限
+    private const int ShadowMaxPointsPerLine = 64; // 1 折れ線あたりの点数上限 (= float 128 個)
+
+    private static List<float[]> ParseShadowLines(EkmShadowRaw shadow)
+    {
+        if (shadow?.lines == null || shadow.lines.Count == 0) return null;
+
+        var result = new List<float[]>();
+        foreach (List<float> line in shadow.lines)
+        {
+            if (result.Count >= ShadowMaxLines)
+            {
+                Logger.Warn($"[EkmapLoader] shadow.lines exceeds {ShadowMaxLines}, extra lines dropped", "EkmapLoader");
+                break;
+            }
+
+            if (line == null || line.Count < 4 || (line.Count & 1) != 0) continue; // 点ペアでない/2点未満は捨てる
+
+            int count = line.Count;
+            if (count > ShadowMaxPointsPerLine * 2) count = ShadowMaxPointsPerLine * 2; // 点数上限で切り詰め (偶数維持)
+
+            var arr = new float[count];
+            bool ok = true;
+            for (int i = 0; i < count; i++)
+            {
+                float v = line[i];
+                if (float.IsNaN(v) || float.IsInfinity(v)) { ok = false; break; }
+                arr[i] = v;
+            }
+
+            if (ok) result.Add(arr);
+        }
+
+        return result.Count > 0 ? result : null;
     }
 
     // ── v2 パース (§13〜§16) ─────────────────────────────────────────────────
@@ -1422,6 +1470,16 @@ public static class EkmapLoader
         public List<string> requires { get; set; }
         [JsonPropertyName("tilesets")]
         public List<EkmTilesetRaw> tilesetsRaw { get; set; }
+        // 影レイヤー (任意・version 非依存)。知らないローダーは黙って無視する飾りフィールド (requires には入れない)。
+        // 各 lines[i] = セル座標のフラット折れ線 [x1,y1,x2,y2,...]。ランタイムが layer10 EdgeCollider2D 化して
+        // バニラ GPU 影 caster にする。座標はタイルと同じセル系 (world = OriginX + x*CellSize, OriginY - y*CellSize)。
+        [JsonPropertyName("shadow")]
+        public EkmShadowRaw shadow { get; set; }
+    }
+
+    private sealed class EkmShadowRaw
+    {
+        public List<List<float>> lines { get; set; }
     }
 
     private sealed class EkmTilesetRaw
@@ -1535,6 +1593,11 @@ public sealed class CustomMapSource
     public readonly EkmapLoader.V3CellData[,]        V3Cells;
     public readonly EkmapLoader.EkmTilesetRuntime[]  TilesetPool;
     public readonly byte[]                           LayerTilesetIdx; // 層 (0-3) → TilesetPool index
+
+    // 影レイヤー (任意・version 非依存)。各要素 = セル座標のフラット折れ線 [x1,y1,x2,y2,...]。
+    // パース後に TryParse がセットする (3 コンストラクタを触らないため可変フィールド)。null/空 = 影なし。
+    // EkmShadow.Spawn が layer10 EdgeCollider2D 化 → バニラ GPU 影 caster にする。
+    public List<float[]> ShadowLines;
 
     // v2 / v3 か否か
     public bool IsV2 => V2Cells != null;
