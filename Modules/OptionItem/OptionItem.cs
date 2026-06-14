@@ -66,7 +66,6 @@ public abstract class OptionItem
     public bool IsText { get; protected set; }
 
     public TextOptionItem Header { get; set; }
-    public BaseGameSetting CachedSetting { get; set; }
 
     public Dictionary<string, string> ReplacementDictionary
     {
