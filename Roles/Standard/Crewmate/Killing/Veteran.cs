@@ -128,6 +128,7 @@ internal class Veteran : RoleBase
             if (!killer.Is(CustomRoles.Pestilence))
             {
                 killer.SetRealKiller(target);
+                Main.PlayerStates[killer.PlayerId].deathReason = PlayerState.DeathReason.Shot;
                 target.Kill(killer);
                 Logger.Info($"{target.GetRealName()} reverse killed: {killer.GetRealName()}", "Veteran Kill");
                 return false;

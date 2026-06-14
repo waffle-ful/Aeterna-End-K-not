@@ -24,7 +24,6 @@ public class RoomRusher : RoleBase
     private static OptionItem RoomsToWin;
 
     private int CompletedNum;
-    private long LastUpdate;
     private SystemTypes RoomGoal;
 
     private byte RoomRusherId;
@@ -58,7 +57,6 @@ public class RoomRusher : RoleBase
         RoomRusherId = playerId;
         VentsLeft = MaxVents.GetInt();
         CompletedNum = 0;
-        LastUpdate = Utils.TimeStamp;
         TimeLeft = 50;
         
         if (!AmongUsClient.Instance.AmHost) return;
@@ -193,9 +191,7 @@ public class RoomRusher : RoleBase
             StartNewRound();
         }
 
-        long now = Utils.TimeStamp;
-        if (LastUpdate == now) return;
-        LastUpdate = now;
+        if (!PerSecondUpdateScheduler.ShouldRunUpdate(pc.PlayerId)) return;
 
         TimeLeft--;
         Utils.SendRPC(CustomRPC.SyncRoleData, RoomRusherId, 4, TimeLeft);

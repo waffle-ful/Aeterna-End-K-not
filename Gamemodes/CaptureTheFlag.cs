@@ -329,6 +329,8 @@ public static class CaptureTheFlag
                         Utils.RpcChangeSkin(pc, outfit);
                 }
             });
+
+            DefaultOutfits = [];
         }
     }
 

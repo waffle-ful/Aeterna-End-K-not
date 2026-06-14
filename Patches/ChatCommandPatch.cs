@@ -1616,6 +1616,7 @@ internal static class ChatCommands
         {
             return role switch
             {
+                CustomRoles.Camouflager or CustomRoles.Magistrate or CustomRoles.Devourer or CustomRoles.Venerer or CustomRoles.Amogus or CustomRoles.MoonDancer or CustomRoles.Merchant or CustomRoles.Catalyst or CustomRoles.Doppelganger or CustomRoles.Echo when GameStates.CurrentServerType == GameStates.ServerType.Vanilla => true,
                 CustomRoles.Ventriloquist when GameStates.CurrentServerType == GameStates.ServerType.Vanilla => true,
                 CustomRoles.Weatherman when Main.LIMap || GameStates.CurrentServerType == GameStates.ServerType.Vanilla => true,
                 CustomRoles.Penguin or CustomRoles.Goose or CustomRoles.ProBowler when Utils.IsOfficialServer() => true, // 公式鯖: ドラッグ系役職は位置 desync を起こすため /role でも割当不可

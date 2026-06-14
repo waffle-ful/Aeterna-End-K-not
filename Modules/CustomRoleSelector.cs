@@ -103,6 +103,7 @@ internal static class CustomRoleSelector
 
             switch (role)
             {
+                case CustomRoles.Camouflager or CustomRoles.Magistrate or CustomRoles.Devourer or CustomRoles.Echo or CustomRoles.Venerer or CustomRoles.Amogus or CustomRoles.MoonDancer or CustomRoles.Merchant or CustomRoles.Catalyst or CustomRoles.Doppelganger when GameStates.CurrentServerType == GameStates.ServerType.Vanilla:
                 case CustomRoles.Ventriloquist when GameStates.CurrentServerType == GameStates.ServerType.Vanilla:
                 case CustomRoles.Weatherman when Main.LIMap || GameStates.CurrentServerType == GameStates.ServerType.Vanilla:
                 case CustomRoles.Penguin or CustomRoles.Goose or CustomRoles.ProBowler when Utils.IsOfficialServer(): // 公式鯖: 他プレイヤーを毎フレーム引きずる役職は anti-cheat が位置同期を拒否し相手が desync するため出現させない (詳細は Utils.TP のコメント参照)
@@ -568,6 +569,7 @@ internal static class CustomRoleSelector
 
             switch (role)
             {
+                case CustomRoles.Disco or CustomRoles.BananaMan or CustomRoles.Hidden or CustomRoles.Concealer when GameStates.CurrentServerType == GameStates.ServerType.Vanilla:
                 case CustomRoles.Concealer or CustomRoles.Hidden when Options.AnonymousBodies.GetBool():
                 case CustomRoles.Autopsy when Options.EveryoneSeesDeathReasons.GetBool():
                 case CustomRoles.Gravestone when Options.EveryoneSeesDeadPlayersRoles.GetBool():

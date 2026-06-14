@@ -125,6 +125,7 @@ internal static class EndGamePatch
         Main.LoversPlayers.Clear();
         Bloodmoon.OnMeetingStart();
         AFKDetector.ExemptedPlayers.Clear();
+        PerSecondUpdateScheduler.Reset();
 
         foreach (PlayerState state in Main.PlayerStates.Values)
             state.Role.Init();

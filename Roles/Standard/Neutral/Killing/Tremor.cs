@@ -22,7 +22,6 @@ public class Tremor : RoleBase
 
     private int Count;
     private int DoomTimer;
-    private long LastUpdate = Utils.TimeStamp;
     private int Timer;
     private byte TremorId;
 
@@ -104,14 +103,12 @@ public class Tremor : RoleBase
         if (!GameStates.IsInTask || ExileController.Instance || !pc.IsAlive()) return;
 
         bool wasDoom = IsDoom;
-        long now = Utils.TimeStamp;
 
-        if (!wasDoom && LastUpdate != now)
+        if (!wasDoom && PerSecondUpdateScheduler.ShouldRunUpdate(pc.PlayerId))
         {
             Timer--;
             Utils.SendRPC(CustomRPC.SyncRoleData, pc.PlayerId, Timer);
             Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
-            LastUpdate = now;
         }
 
         if (wasDoom != IsDoom)
@@ -142,8 +139,7 @@ public class Tremor : RoleBase
                 pc.Kill(target);
             }
 
-            if (LastUpdate == now) return;
-            LastUpdate = now;
+            if (!PerSecondUpdateScheduler.ShouldRunUpdate(pc.PlayerId)) return;
 
             DoomTimer--;
             Utils.SendRPC(CustomRPC.SyncRoleData, pc.PlayerId, DoomTimer);
