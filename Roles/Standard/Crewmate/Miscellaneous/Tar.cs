@@ -52,7 +52,7 @@ public class Tar : RoleBase
 
         Main.AllPlayerSpeed[pc.PlayerId] = Main.MinSpeed;
         Main.PlayerStates[pc.PlayerId].IsBlackOut = true;
-        pc.RpcSetColor(6);
+        if (!pc.IsNonModdedOnOfficial()) pc.RpcSetColor(6); // 公式鯖: 非モッドプレイヤーへの見た目変更は kick されるためスキップ (詳細は ExtendedPlayerControl.IsNonModdedOnOfficial)
         pc.MarkDirtySettings();
 
         Timer = new CountdownTimer(AbilityDuration.GetFloat(), () =>
@@ -61,7 +61,7 @@ public class Tar : RoleBase
             if (!pc || !pc.IsAlive()) return;
             Main.AllPlayerSpeed[pc.PlayerId] = Main.RealOptionsData.GetFloat(FloatOptionNames.PlayerSpeedMod);
             Main.PlayerStates[pc.PlayerId].IsBlackOut = false;
-            pc.RpcSetColor((byte)ColorId);
+            if (!pc.IsNonModdedOnOfficial()) pc.RpcSetColor((byte)ColorId); // 公式鯖: 非モッドプレイヤーへの見た目変更は kick されるためスキップ (詳細は ExtendedPlayerControl.IsNonModdedOnOfficial)
             pc.MarkDirtySettings();
         }, cancelOnMeeting: false, onCanceled: () =>
         {
@@ -93,7 +93,7 @@ public class Tar : RoleBase
             Timer = null;
             Main.AllPlayerSpeed[TarId] = Main.RealOptionsData.GetFloat(FloatOptionNames.PlayerSpeedMod);
             Main.PlayerStates[TarId].IsBlackOut = false;
-            TarId.GetPlayer()?.RpcSetColor((byte)ColorId);
+            if (TarId.GetPlayer() is { } tar && !tar.IsNonModdedOnOfficial()) tar.RpcSetColor((byte)ColorId); // 公式鯖: 非モッドプレイヤーへの見た目変更は kick されるためスキップ (詳細は ExtendedPlayerControl.IsNonModdedOnOfficial)
         }
     }
 }

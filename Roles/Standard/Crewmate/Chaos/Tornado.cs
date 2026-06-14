@@ -21,7 +21,6 @@ internal class Tornado : RoleBase
 
     private static RandomSpawn.SpawnMap Map;
     private static readonly Dictionary<(Vector2 Location, string RoomName), long> Tornados = [];
-    private static long LastNotify = TimeStamp;
     private static bool CanUseMap;
     private PlayerControl TornadoPC;
     private static int Id => 64420;
@@ -53,7 +52,6 @@ internal class Tornado : RoleBase
     {
         PlayerIdList.Clear();
         Tornados.Clear();
-        LastNotify = TimeStamp;
 
         try
         {
@@ -158,10 +156,10 @@ internal class Tornado : RoleBase
         }
         else
         {
-            if (LastNotify >= now || pc.HasAbilityCD()) return;
+            if (pc.HasAbilityCD()) return;
+            if (!PerSecondUpdateScheduler.ShouldRunUpdate(pc.PlayerId)) return;
 
             NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
-            LastNotify = now;
         }
     }
 

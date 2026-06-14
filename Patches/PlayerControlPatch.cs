@@ -1611,8 +1611,8 @@ internal static class FixedUpdatePatch
                         case Haunter haunter:
                             haunter.Update(__instance);
                             break;
-                        case Bloodmoon bloodmoon:
-                            Bloodmoon.Update(__instance, bloodmoon);
+                        case Bloodmoon:
+                            Bloodmoon.Update(__instance);
                             break;
                     }
                 }
@@ -1812,7 +1812,7 @@ internal static class FixedUpdatePatch
                     {
                         SendOption sendOption = SendOption.None;
                         
-                        if (timer.StartTimeStamp + timer.TotalCooldown < now || !alive)
+                        if (timer.StartTimeStamp + timer.TotalCooldown < now || (!alive && !player.HasGhostRole()))
                         {
                             player.RemoveAbilityCD();
                             sendOption = SendOption.Reliable;

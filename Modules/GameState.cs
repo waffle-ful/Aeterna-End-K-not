@@ -72,6 +72,11 @@ public class PlayerState(byte playerId)
         Patrolled,
         Misguess,
         LossOfBlood,
+        Bugged,
+        Destroyed,
+        Shot,
+        Diseased,
+        Stoned,
 
         // Natural Disasters
         Meteor,

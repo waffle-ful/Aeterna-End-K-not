@@ -271,6 +271,7 @@ public class CustomRpcSender
                 doneStreams.Add(stream);
                 stream = MessageWriter.Get(sendOption);
                 messages = 0;
+                currentState = State.Ready;
                 StartPackedMessage();
             }
             else

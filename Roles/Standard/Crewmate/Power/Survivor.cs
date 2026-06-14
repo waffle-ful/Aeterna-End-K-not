@@ -66,6 +66,14 @@ public class Survivor : RoleBase
         ShieldTimer = null;
         Killing = false;
         SurvivorId = playerId;
+
+        LateTask.New(() =>
+        {
+            PlayerControl player = Utils.GetPlayerById(playerId);
+            Killing = player.Is(CustomRoles.Bloodlust);
+            if (Killing)
+                player.RpcSetCustomRole(CustomRoles.Scanner);
+        }, 1f, log: false);
     }
 
     public override void ApplyGameOptions(IGameOptions opt, byte playerId)
@@ -116,7 +124,7 @@ public class Survivor : RoleBase
 
     public override void OnEnterVent(PlayerControl pc, Vent vent)
     {
-        if (!Killing) 
+        if (!Killing && !pc.Is(CustomRoles.Bloodlust))
             ShieldSelf(pc);
     }
 

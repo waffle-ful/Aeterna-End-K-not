@@ -135,7 +135,10 @@ public class Arrogance : RoleBase
         Utils.SendRPC(CustomRPC.SyncRoleData, ArroganceID, NowCooldown);
         killer?.ResetKillCooldown();
         killer?.SyncSettings();
-        
+
+        if (UsedRole == CustomRoles.Juggernaut && target != null)
+            Main.PlayerStates[target.PlayerId].deathReason = PlayerState.DeathReason.Destroyed;
+
         if (killer?.AmOwner == true && Mathf.Approximately(NowCooldown, MinKCD))
             Achievements.Type.Bloodthirsty.Complete();
     }
