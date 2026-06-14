@@ -898,6 +898,8 @@ public static class BackroomsLobby
         _occludersDirty = true; // WallAabbs 消去 → 次 UpdateVision で merged occluder を空に rebuild (幻壁防止)
         _loadedChunks.Clear();
         _streamValid = false;
+        _customMapLoadAllMode = false;
+        DestroyCustomMapBoundaryWalls(); // カスタムマップ外周壁を破棄
         ResetStreamingQueues();
         Utils.SendMessage($"Cleared {cleared} tiles.", targetPid);
         Logger.Info($"Cleared {cleared} tiles", "BackroomsDiag");
@@ -1039,6 +1041,25 @@ public static class BackroomsLobby
     private static int _streamCx, _streamCy;
     private static bool _streamValid;
 
+    // カスタムマップ (有限) は入場時に全チャンクをロードし、以降アンロードしない (歩行/ズームでロード切れ
+    // しない・大マップもズームアウトで全域映る)。procgen (無限) は従来どおり player 中心の半径ストリーミング。
+    // マップが大きすぎる (chunk 数 > cap) ときだけ半径ストリーミングに退避する (生成/cull の暴走ガード)。
+    private static bool _customMapLoadAllMode;
+    private static bool _customMapAllActive; // load-all モードで全タイル active 化が安定したか (UpdateCulling の毎フレ走査回避)
+    private const int CustomMapLoadAllChunkCap = 144; // 12×12 chunks ≈ 192u²。これ超は半径ストリーミング
+
+    // カスタムマップの外周を囲む見えない壁 (4 枚の長い BoxCollider2D)。マップ外周の void バリアは
+    // 1 セル幅 (CellSize<1 で 0.5u 等) で高速移動時にすり抜ける/取りこぼしがあり得るため、マップ境界の
+    // バウンディングボックスに沿って太い壁を 1 周張ってマップ外へ出られないようにする。SpawnedTiles とは
+    // 別管理 (cull で SetActive(false) されると衝突が消えるため) で、ExitBackrooms で破棄。
+    private static readonly List<GameObject> _customMapBoundaryWalls = [];
+
+    // カスタムマップのチップ由来の視界遮蔽 (影) は一旦廃止 (2026-06-14)。マップチップをそのまま
+    // occluder にすると端で破綻するため。将来はエディタでユーザーが「影ライン」を引いてそこから
+    // 影を出す方式に作り直す。それまで false = カスタムマップは影なし (視界の暗闇フォグ + 衝突は維持)。
+    // procgen Backrooms には影響しない (このフラグは custom 経路の WallAabbs 登録だけをゲートする)。
+    private const bool CustomMapCastShadows = false;
+
     // ── frame-spread streaming queue (2026-06-03) ──────────────────────────────
     // チャンク境界を跨ぐ度に 3 chunk = 768 tile を 1 フレームで生成/破棄していたヒッチ
     // (worst-frame 63ms + GC スパイク=ping 表示膨張) を解消するための予算分散キュー。
@@ -1095,6 +1116,9 @@ public static class BackroomsLobby
         _occludersDirty = true; // WallAabbs 消去 → 次 UpdateVision で merged occluder を空に rebuild (幻壁防止)
         _loadedChunks.Clear();
         _streamValid = false;
+        _customMapLoadAllMode = false; // procgen / 再生成では半径ストリーミング。custom は EnsureWholeCustomMapLoaded が後で true 化
+        _customMapAllActive = false;
+        DestroyCustomMapBoundaryWalls(); // 外周壁を破棄 (procgen には残さない。custom は後で再生成)
         ResetStreamingQueues();
 
         _lastSeed = seed;
@@ -1149,6 +1173,108 @@ public static class BackroomsLobby
         string msg = $"Cull: {active}/{total} active (radius={CullRadius}u, _inBackrooms={_inBackrooms}, _cullValid={_cullValid}, ActiveChunkRadius={ActiveChunkRadius}, loadedChunks={_loadedChunks.Count}, center=({_streamCx},{_streamCy}))";
         Utils.SendMessage(msg, targetPid);
         Logger.Info(msg, "BackroomsCull");
+    }
+
+    // streaming/可視性 診断 (/map diag)。タイルが出ない床の上で実行すると、どの段
+    // (chunk 未ロード / セル生成ゼロ / 生成済みだが inactive=cull / 視界外=黒) で詰まっているか特定する。
+    // procgen Backrooms でも動く (src==null 分岐)。読み取り専用 — state は一切変更しない。
+    public static void DumpEkmStreamDiag(byte targetPid)
+    {
+        if (!_inBackrooms)
+        {
+            Utils.SendMessage("[/map diag] Backrooms / カスタムマップに入っていません", targetPid);
+            return;
+        }
+
+        if (PlayerControl.LocalPlayer == null) return;
+
+        CustomMapSource src = EkmapLoader.ActiveSource;
+        bool custom = src != null && (src.IsV2 || src.IsV3);
+
+        Vector2 feet = LocalPlayerFeet();
+        int pcx = Mathf.FloorToInt(feet.x / ChunkSize);
+        int pcy = Mathf.FloorToInt(feet.y / ChunkSize);
+        long pkey = PackChunkKey(pcx, pcy);
+        bool playerChunkLoaded = _loadedChunks.Contains(pkey);
+
+        // UpdateStreaming と同じ実効半径 r を再計算 (camera 適応込み)
+        int r = ActiveChunkRadius;
+        Camera cam = Camera.main;
+        float halfW = 0f;
+        if (cam != null)
+        {
+            halfW = cam.orthographicSize * cam.aspect;
+            r = Math.Min(Math.Max(r, Mathf.CeilToInt((halfW + 4f) / ChunkSize)), 6);
+        }
+
+        // プレイヤー所属チャンクのセル内訳 (v3 のみ — CellsInChunkV3 の列挙を実測)
+        int cellsYielded = 0, cellsHit = 0, cellsVoid = 0, cellsMissing = 0;
+        if (custom && src.IsV3)
+        {
+            foreach ((int gx, int gy, Vector2 _) in CellsInChunkV3(pcx, pcy, src))
+            {
+                cellsYielded++;
+                if (!src.TryGetV3Cell(gx, gy, out EkmapLoader.V3CellData cell)) { cellsMissing++; continue; }
+                if (cell.IsVoid) cellsVoid++;
+                else cellsHit++;
+            }
+        }
+
+        // そのチャンクキーで実際に SpawnedTiles に存在する数 / active 数、および全体の active 数
+        int tilesInChunk = 0, tilesActiveInChunk = 0, totalActive = 0;
+        for (int i = 0; i < SpawnedTiles.Count; i++)
+        {
+            bool act = SpawnedTiles[i] != null && SpawnedTiles[i].activeSelf;
+            if (act) totalActive++;
+            if (SpawnedTileChunkKeys[i] != pkey) continue;
+            tilesInChunk++;
+            if (act) tilesActiveInChunk++;
+        }
+
+        // 隣接チャンクのロード状況 (3×3 で可視化)
+        StringBuilder grid = new();
+        for (int dy = -1; dy <= 1; dy++)
+        {
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                bool loaded = _loadedChunks.Contains(PackChunkKey(pcx + dx, pcy + dy));
+                grid.Append(dx == 0 && dy == 0 ? (loaded ? "[O]" : "[X]") : (loaded ? " O " : " X "));
+            }
+            grid.Append('|');
+        }
+
+        int spawnPending = _spawnQueue.Count - _spawnHead;
+        int destroyPending = _destroyQueue.Count - _destroyHead;
+
+        StringBuilder sb = new();
+        sb.AppendLine("=== EKM Stream/Visibility Diag ===");
+        if (custom)
+        {
+            float s = src.CellSize;
+            float wx0 = EkmapLoader.OriginX, wx1 = EkmapLoader.OriginX + src.Width * s;
+            float wy1 = EkmapLoader.OriginY, wy0 = EkmapLoader.OriginY - src.Height * s;
+            sb.AppendLine($"mode=custom v{(src.IsV3 ? 3 : 2)} | map {src.Width}x{src.Height} cells, CellSize={s:F3}, world x[{wx0:F1},{wx1:F1}] y[{wy0:F1},{wy1:F1}]");
+            sb.AppendLine($"customLoadAll={_customMapLoadAllMode} (true=全域ロード/false=半径ストリーミング)");
+        }
+        else
+        {
+            sb.AppendLine("mode=procgen (infinite)");
+        }
+
+        sb.AppendLine($"feet=({feet.x:F2},{feet.y:F2}) playerChunk=({pcx},{pcy}) loaded={playerChunkLoaded}");
+        sb.AppendLine($"stream: cx={_streamCx} cy={_streamCy} valid={_streamValid} lastR={_lastStreamRadius} effR={r} ActiveChunkRadius={ActiveChunkRadius}");
+        sb.AppendLine($"visibility: camHalfW={halfW:F1}u CullRadius={CullRadius:F1}u Vision={EffectiveVisionRadius:F1}u Dark={DarkRadius:F1}u visionPaused={_visionPaused}");
+        sb.AppendLine($"loadedChunks={_loadedChunks.Count} totalTiles={SpawnedTiles.Count} (active {totalActive}) spawnPending={spawnPending} destroyPending={destroyPending}");
+        if (custom && src.IsV3)
+            sb.AppendLine($"playerChunk cells: yielded={cellsYielded} floor/wall={cellsHit} void={cellsVoid} outOfMap={cellsMissing}");
+        sb.AppendLine($"playerChunk tiles in SpawnedTiles: {tilesInChunk} (active {tilesActiveInChunk})");
+        sb.AppendLine("3x3 around player (O=loaded X=not):");
+        sb.AppendLine($"  {grid}");
+
+        Logger.Info(sb.ToString(), "EkmStreamDiag");
+        Utils.SendMessage(
+            $"[/map diag] {(custom ? "custom" : "procgen")} chunk=({pcx},{pcy}) loaded={playerChunkLoaded} | tiles={tilesInChunk}(act {tilesActiveInChunk}) totalAct={totalActive} | Cull={CullRadius:F0}u Vis={EffectiveVisionRadius:F0}u | spawnQ={spawnPending} effR={r}\n{grid}\n詳細は log.html 参照",
+            targetPid);
     }
 
     // scene 全体 Renderer scan — vanilla lobby の何が EnterBackrooms 経路で disable されてないか診断
@@ -1214,11 +1340,16 @@ public static class BackroomsLobby
         SpawnedTilePositions.Add(pos);
         SpawnedTileChunkKeys.Add(_currentChunkKey);
 
-        // WallAabbs 登録 — 視界遮蔽 (void は BlocksLight: §5.3)
-        WallAabbs.Add((pos.x, pos.y, 0.5f * size, 0.5f * size));
-        WallAabbChunkKeys.Add(_currentChunkKey);
-        WallGhostRenderers.Add(null); // ghost なし
-        _occludersDirty = true;
+        // WallAabbs 登録 — 視界遮蔽 (void は BlocksLight: §5.3)。
+        // カスタムマップ滞在中 (ActiveSource != null) は影を出さない (CustomMapCastShadows=false)。
+        // procgen の void バリアは従来どおり遮蔽する。
+        if (EkmapLoader.ActiveSource == null || CustomMapCastShadows)
+        {
+            WallAabbs.Add((pos.x, pos.y, 0.5f * size, 0.5f * size));
+            WallAabbChunkKeys.Add(_currentChunkKey);
+            WallGhostRenderers.Add(null); // ghost なし
+            _occludersDirty = true;
+        }
 
         // 即時カリング
         if (_spawnCullCenterValid)
@@ -1327,7 +1458,7 @@ public static class BackroomsLobby
             }
         }
 
-        if (cell.BlocksLight)
+        if (CustomMapCastShadows && cell.BlocksLight)
         {
             WallAabbs.Add((worldPos.x, worldPos.y, 0.5f * s, 0.5f * s)); // 視界 AABB もセルサイズ
             WallAabbChunkKeys.Add(_currentChunkKey);
@@ -1410,8 +1541,8 @@ public static class BackroomsLobby
             }
         }
 
-        // 遮光セルに WallAabbs 登録 (§15.3)
-        if (cell.blocksLight)
+        // 遮光セルに WallAabbs 登録 (§15.3) — カスタムマップ影は一旦廃止 (CustomMapCastShadows=false)
+        if (CustomMapCastShadows && cell.blocksLight)
         {
             WallAabbs.Add((worldPos.x, worldPos.y, 0.5f, 0.5f));
             WallAabbChunkKeys.Add(_currentChunkKey);
@@ -1833,12 +1964,108 @@ public static class BackroomsLobby
             Logger.Info($"UnloadChunk ({cx},{cy}): destroyed {destroyed} tiles", "BackroomsGen");
     }
 
+    // カスタムマップ (有限) の全チャンクを 1 度だけロードする。マップ境界 + 1 チャンク余白
+    // (void バリア用) を覆う chunk 範囲を列挙して LoadChunk(immediate:false) でキューへ積む。
+    // chunk 数が cap を超える巨大マップは半径ストリーミング (_customMapLoadAllMode=false) に退避。
+    // EnterCustomMap から EnterBackrooms (= GenerateLobby が spawn 周辺を即時ロード) の直後に呼ぶ。
+    private static void EnsureWholeCustomMapLoaded(CustomMapSource src)
+    {
+        _customMapLoadAllMode = false;
+        if (src == null || !(src.IsV2 || src.IsV3)) return;
+
+        float s = src.CellSize;
+        // マップが占めるワールド範囲 + 1 セル (void バリア ring) の余白
+        float wx0 = EkmapLoader.OriginX - s, wx1 = EkmapLoader.OriginX + src.Width * s + s;
+        float wy0 = EkmapLoader.OriginY - src.Height * s - s, wy1 = EkmapLoader.OriginY + s;
+
+        int cxMin = Mathf.FloorToInt(wx0 / ChunkSize), cxMax = Mathf.FloorToInt(wx1 / ChunkSize);
+        int cyMin = Mathf.FloorToInt(wy0 / ChunkSize), cyMax = Mathf.FloorToInt(wy1 / ChunkSize);
+
+        long chunkCount = (long)(cxMax - cxMin + 1) * (cyMax - cyMin + 1);
+        if (chunkCount > CustomMapLoadAllChunkCap)
+        {
+            // 巨大マップ: 全域ロードは生成/cull が重すぎる。従来の半径ストリーミングに任せる。
+            Logger.Info($"EnsureWholeCustomMapLoaded: {chunkCount} chunks > cap {CustomMapLoadAllChunkCap} → 半径ストリーミング", "BackroomsGen");
+            return;
+        }
+
+        int loaded = 0;
+        for (int cx = cxMin; cx <= cxMax; cx++)
+        for (int cy = cyMin; cy <= cyMax; cy++)
+            if (LoadChunkReturning(cx, cy)) loaded++;
+
+        _customMapLoadAllMode = true;
+        _customMapAllActive = false; // drain 完了まで UpdateCulling が全タイルを active 化する
+        Logger.Info($"EnsureWholeCustomMapLoaded: range x[{cxMin},{cxMax}] y[{cyMin},{cyMax}] = {chunkCount} chunks, newly queued {loaded}, totalChunks={_loadedChunks.Count}", "BackroomsGen");
+    }
+
+    // カスタムマップの外周を囲む見えない壁を 4 枚張る。マップのバウンディングボックス
+    // (x[OriginX, OriginX+W*s], y[OriginY-H*s, OriginY]) のすぐ外側に厚い壁を配置し、
+    // プレイヤーがマップ外の虚無へ歩いて出るのを防ぐ。void バリア (1 セル幅) より確実。
+    private static void SpawnCustomMapBoundaryWalls(CustomMapSource src)
+    {
+        DestroyCustomMapBoundaryWalls();
+        if (src == null || !(src.IsV2 || src.IsV3)) return;
+
+        float s = src.CellSize;
+        // タイルは worldPos 中心 ± 0.5*s なので、マップの実際の縁はセル中心の外側 0.5*s
+        float left = EkmapLoader.OriginX - 0.5f * s;
+        float right = EkmapLoader.OriginX + (src.Width - 1) * s + 0.5f * s;
+        float top = EkmapLoader.OriginY + 0.5f * s;
+        float bottom = EkmapLoader.OriginY - (src.Height - 1) * s - 0.5f * s;
+        float w = right - left;
+        float h = top - bottom;
+        const float t = 2f; // 壁の厚み (すり抜け防止に太め)
+
+        // (中心, サイズ) の 4 枚: 上・下・左・右。角が確実に閉じるよう左右は縦方向に t だけはみ出させる。
+        (Vector2 center, Vector2 size)[] walls =
+        [
+            (new Vector2((left + right) * 0.5f, top + t * 0.5f), new Vector2(w + 2f * t, t)),       // 上
+            (new Vector2((left + right) * 0.5f, bottom - t * 0.5f), new Vector2(w + 2f * t, t)),    // 下
+            (new Vector2(left - t * 0.5f, (top + bottom) * 0.5f), new Vector2(t, h + 2f * t)),      // 左
+            (new Vector2(right + t * 0.5f, (top + bottom) * 0.5f), new Vector2(t, h + 2f * t)),     // 右
+        ];
+
+        foreach ((Vector2 center, Vector2 size) in walls)
+        {
+            GameObject go = new("CustomMapBoundaryWall");
+            go.transform.SetParent(null, false);
+            go.transform.position = new Vector3(center.x, center.y, 0f);
+            SpriteRenderer sr = go.AddComponent<SpriteRenderer>();
+            sr.enabled = false; // 不可視
+            BoxCollider2D box = go.AddComponent<BoxCollider2D>();
+            box.size = size;
+            _customMapBoundaryWalls.Add(go);
+        }
+
+        Logger.Info($"SpawnCustomMapBoundaryWalls: bbox x[{left:F1},{right:F1}] y[{bottom:F1},{top:F1}] (4 walls, t={t})", "EkmapLoader");
+    }
+
+    private static void DestroyCustomMapBoundaryWalls()
+    {
+        for (int i = 0; i < _customMapBoundaryWalls.Count; i++)
+            if (_customMapBoundaryWalls[i] != null) Object.Destroy(_customMapBoundaryWalls[i]);
+        _customMapBoundaryWalls.Clear();
+    }
+
+    // LoadChunk の bool 返し版 (既ロードなら false)。EnsureWholeCustomMapLoaded の進捗ログ用。
+    private static bool LoadChunkReturning(int cx, int cy)
+    {
+        if (_loadedChunks.Contains(PackChunkKey(cx, cy))) return false;
+        LoadChunk(cx, cy, _lastSeed, immediate: false);
+        return true;
+    }
+
     // 毎フレ呼び。player chunk が変わったら radius 内/外を再評価し、差分 load/unload。
     // force=true: 同 chunk でも強制再評価 (toggle / regen で呼ぶ)
     public static void UpdateStreaming(bool force = false)
     {
         if (!_inBackrooms) return;
         if (PlayerControl.LocalPlayer == null) return;
+
+        // カスタムマップ全域ロードモード: 入場時に全チャンクをロード済みで、アンロードもしない。
+        // 歩行/ズームに応じた load/unload は不要なので即 return (cull/vision は別系統で毎フレ走る)。
+        if (_customMapLoadAllMode) return;
 
         // no-clip ON で GetTruePosition() が 127u 上空を返す罠を回避 ([[LocalPlayerFeet]])。
         // streaming center が空中にズレると player 周囲の chunk が unload されて真っ暗になる。
@@ -2285,6 +2512,12 @@ public static class BackroomsLobby
         // 以降は通常 EnterBackrooms と同じパイプライン (seed 0 でよい — ClassifyCell は委譲)
         EnterBackrooms(0u, targetPid, silent: true);
 
+        // 有限マップは全チャンクをロード (歩行/ズームでロード切れしない)。大きすぎる場合のみ半径ストリーミング。
+        EnsureWholeCustomMapLoaded(src);
+
+        // マップ外周に見えない壁を張る (マップ外の虚無へ歩いて出られないように)
+        SpawnCustomMapBoundaryWalls(src);
+
         // decor スポーン (§6): EnterBackrooms 後に床の上へ配置。chunkKey=0 は streaming unload 対象外
         foreach (var d in src.Decors)
             SpawnDecor(d.Kind, new Vector2(EkmapLoader.OriginX + d.X * src.CellSize, EkmapLoader.OriginY - d.Y * src.CellSize));
@@ -2378,6 +2611,8 @@ public static class BackroomsLobby
         _occludersDirty = true; // WallAabbs 消去 → 次 UpdateVision で merged occluder を空に rebuild (幻壁防止)
         _loadedChunks.Clear();
         _streamValid = false;
+        _customMapLoadAllMode = false;
+        DestroyCustomMapBoundaryWalls(); // カスタムマップ外周壁を破棄
         ResetStreamingQueues();
 
         // 2. ロビー collider 復元
@@ -2480,6 +2715,8 @@ public static class BackroomsLobby
         _occludersDirty = true; // WallAabbs 消去 → 次 UpdateVision で merged occluder を空に rebuild (幻壁防止)
         _loadedChunks.Clear();
         _streamValid = false;
+        _customMapLoadAllMode = false;
+        DestroyCustomMapBoundaryWalls(); // カスタムマップ外周壁を破棄
         ResetStreamingQueues();
         DisabledColliders.Clear();
         DisabledRenderers.Clear();
@@ -2528,6 +2765,8 @@ public static class BackroomsLobby
         _occludersDirty = true; // WallAabbs 消去 → 次 UpdateVision で merged occluder を空に rebuild (幻壁防止)
         _loadedChunks.Clear();
         _streamValid = false;
+        _customMapLoadAllMode = false;
+        DestroyCustomMapBoundaryWalls(); // カスタムマップ外周壁を破棄
         ResetStreamingQueues();
         // scene unload で entity 参照は dangling になるので cache だけクリア (SR 復元は不要)
         _entityBodies.Clear();
@@ -3332,9 +3571,36 @@ public static class BackroomsLobby
     //   - 状態遷移時 (active↔inactive) だけ SetActive 呼び出し → 同状態 skip で interop コスト最小化
     public static void UpdateCulling()
     {
-        if (!_inBackrooms || _visionPaused) return;
+        if (!_inBackrooms) return;
         if (PlayerControl.LocalPlayer == null) return;
         if (SpawnedTiles.Count == 0) return;
+
+        // 「全部見せる」(距離 cull せず全タイル active) モードの判定:
+        //   ① 全域ロードのカスタムマップ (有限): 全タイルを active にしてマップ端まで描画。
+        //   ② ユーザーが手動で視界停止 (/bbvis) しただけ (= vanilla 影モードではない): 全部見せる。
+        // ★ vanilla 影モード (UseVanillaShadow) は SuppressCustomVision で _visionPaused=true を常時立てるが、
+        //    ここで「全部 active」にすると active スプライトが 310→2304+ に激増して AmongUs 本体が落ちる
+        //    (2026-06-14 実機クラッシュ)。vanilla 影モードでは下の通常の距離 cull を回し、タイルを player に
+        //    追従させる (bounded・無限歩行も維持。GPU 影が暗さを担当)。
+        // ※ かつて先頭で `if(!_inBackrooms || _visionPaused) return;` していたが、それだと vanilla 影モード中
+        //    cull が凍結し新規タイルが永久 inactive になっていた (procgen「切れる」/ custom「ぎざぎざ」の真因)。
+        bool showAll = _customMapLoadAllMode || (_visionPaused && !BackroomsConfig.UseVanillaShadow);
+        if (showAll)
+        {
+            if (_customMapLoadAllMode && _customMapAllActive) return; // load-all は安定後スキップ
+            bool anyInactive = false;
+            for (int i = 0; i < SpawnedTiles.Count; i++)
+            {
+                GameObject go = SpawnedTiles[i];
+                if (go != null && !go.activeSelf) { go.SetActive(true); anyInactive = true; }
+            }
+            // load-all は drain 完了で安定 (以後スキップ)。手動 paused はストリーミングで毎回変わるので毎フレ走査。
+            if (!anyInactive && _customMapLoadAllMode) _customMapAllActive = true;
+            return;
+        }
+
+        // 手動 /bbvis 停止中 (vanilla 影でない) は ForceActivateAllTiles 済みなので上で return 済み。
+        // ここに来るのは「通常視界」か「vanilla 影モード」。後者も含めて距離 cull を回す (凍結させない)。
 
         // no-clip ON 時に GetTruePosition() が 127u 上空を返す罠 ([[LocalPlayerFeet]])。
         // ここで GetTruePosition を使うと全 tile が「player から遠い」扱いになり SetActive(false)

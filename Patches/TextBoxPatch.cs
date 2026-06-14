@@ -23,6 +23,11 @@ public static class TextBoxPatch
     {
         if (Translator.GetUserTrueLang() == SupportedLangs.Russian || !__instance.gameObject.HasParentInHierarchy("ChatScreenRoot/ChatScreenContainer")) return true;
 
+        // 異常に長い入力 (巨大クリップボード貼付・履歴の暴走等) はこの先の per-char ループ + 巨大 string
+        // alloc + TMP ForceMeshUpdate でフリーズ / native クラッシュを起こす。チャット上限 (1200) の十分上
+        // (4096) を超える分は per-char 処理に入る前に切り捨てる安全弁 (全 SetText 経路を保護)。
+        if (input != null && input.Length > 4096) input = input[..4096];
+
         var flag = false;
         __instance.AdjustCaretPosition(input.Length - __instance.text.Length);
         var ch = ' ';

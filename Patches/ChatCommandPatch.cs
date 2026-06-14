@@ -2639,6 +2639,12 @@ internal static class ChatCommands
                 return;
             }
 
+            case "diag":
+            {
+                BackroomsLobby.DumpEkmStreamDiag(pid);
+                return;
+            }
+
             default:
                 Utils.SendMessage(GetString("EkMap.Usage"), pid);
                 return;
