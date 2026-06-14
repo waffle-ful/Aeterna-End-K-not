@@ -28,6 +28,9 @@ import {
     NAME_MAX,
     PASS_VALUES,
     type PassValue,
+    SHADOW_MAX_LINES,
+    SHADOW_MAX_POINTS_PER_LINE,
+    type ShadowData,
     TAG_MAX,
     TILESIZE_MAX,
     TILESIZE_MIN,
@@ -741,6 +744,9 @@ export function validateEkmapV3(value: unknown, jsonByteLength?: number): Valida
         });
     }
 
+    // §25 — shadow (任意・lenient)
+    const shadow = validateShadow(value, warnings);
+
     const doc: MapDocV3 = {
         ekm: 3,
         name: name as string,
@@ -754,6 +760,7 @@ export function validateEkmapV3(value: unknown, jsonByteLength?: number): Valida
         ambient: { ...ambientExtra, visionRadius: vision },
     };
     if (requires !== undefined) doc.requires = requires;
+    if (shadow && shadow.lines.length > 0) doc.shadow = shadow;
 
     // spawn: 実効通行可セル基準 (§20/§21)
     const sx = coordToCell(spawn!.x);
@@ -767,6 +774,72 @@ export function validateEkmapV3(value: unknown, jsonByteLength?: number): Valida
     }
 
     return { ok: true, doc, warnings };
+}
+
+// ============================================================
+// §25 — 影レイヤー検証 (version 非依存・任意フィールド)
+// ============================================================
+
+/**
+ * トップレベル `shadow` フィールドを lenient に検証して ShadowData を返す。
+ * - shadow が存在しない/配列でない → undefined (警告なし)
+ * - 個々の lines[i] が不正 (奇数長/点不足/非有限) → その 1 本だけ警告スキップ
+ * - 点数超過 → 末尾切り詰め (警告あり)
+ * - 本数超過 → 超過分を捨てる (警告あり)
+ */
+export function validateShadow(value: Record<string, unknown>, warnings: string[]): ShadowData | undefined {
+    const raw = value.shadow;
+    if (raw === undefined || raw === null) return undefined;
+    if (!isRecord(raw) || !Array.isArray(raw.lines)) {
+        warnings.push("shadow の形式が不正なため無視しました");
+        return undefined;
+    }
+
+    const lines: number[][] = [];
+    const rawLines = raw.lines as unknown[];
+
+    for (let i = 0; i < rawLines.length; i++) {
+        if (lines.length >= SHADOW_MAX_LINES) {
+            warnings.push(`shadow.lines が ${SHADOW_MAX_LINES} 本を超えるため残りをスキップしました`);
+            break;
+        }
+        const rl = rawLines[i];
+        if (!Array.isArray(rl)) {
+            warnings.push(`shadow.lines[${i}] が配列でないためスキップしました`);
+            continue;
+        }
+        // 偶数長チェック
+        if (rl.length % 2 !== 0) {
+            warnings.push(`shadow.lines[${i}] の要素数が奇数 (${rl.length}) のためスキップしました`);
+            continue;
+        }
+        // 最低 2 点 (= 4 要素)
+        if (rl.length < 4) {
+            warnings.push(`shadow.lines[${i}] の点数が不足 (最低 2 点 = 4 要素必要) のためスキップしました`);
+            continue;
+        }
+        // number 配列チェック + 非有限チェック
+        let hasInvalid = false;
+        for (let j = 0; j < rl.length; j++) {
+            if (typeof rl[j] !== "number" || !Number.isFinite(rl[j])) {
+                warnings.push(`shadow.lines[${i}][${j}] が有効な数値でないためスキップしました`);
+                hasInvalid = true;
+                break;
+            }
+        }
+        if (hasInvalid) continue;
+
+        // 点数上限チェック (点数 = rl.length / 2)
+        let line = rl as number[];
+        if (rl.length / 2 > SHADOW_MAX_POINTS_PER_LINE) {
+            warnings.push(`shadow.lines[${i}] の点数が ${SHADOW_MAX_POINTS_PER_LINE} を超えるため切り詰めました`);
+            line = rl.slice(0, SHADOW_MAX_POINTS_PER_LINE * 2) as number[];
+        }
+
+        lines.push([...line]);
+    }
+
+    return { lines };
 }
 
 /** ekm 値で v1/v2/v3 を振り分ける共通入口。v2 は成功後に v3 へ自動変換する */

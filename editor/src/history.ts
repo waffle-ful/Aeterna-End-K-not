@@ -2,7 +2,7 @@
 // v1 はセル値が文字 (./#/-)、v2/v3 はタイル id (number, -1 = 空)。
 // layer は v2/v3 で意味を持つ。v3 は 0〜3 の数値 index。
 
-import { type AnyDoc, type DecorEntry, type SpawnPoint, isV2Doc, isV3Doc } from "./model";
+import { type AnyDoc, type DecorEntry, type ShadowLine, type SpawnPoint, isV2Doc, isV3Doc } from "./model";
 
 export type LayerName = "ground" | "upper";
 
@@ -18,7 +18,6 @@ export interface Patch {
      * v2: "ground" | "upper" のレイヤー名。
      * v3: 0〜3 のレイヤー index。
      * v1: 未使用 (省略)。
-     * push ガード (cells/decorBefore/spawnBefore) は変更なし。
      */
     layer?: LayerName | number;
     cells?: CellChange[];
@@ -26,6 +25,13 @@ export interface Patch {
     decorAfter?: DecorEntry[];
     spawnBefore?: SpawnPoint;
     spawnAfter?: SpawnPoint;
+    /**
+     * §25 — 影線の Undo/Redo。
+     * shadowBefore/shadowAfter は v3 doc.shadow.lines の snapshot。
+     * push ガードと applyPatch の両方で扱う (ROADMAP §2-14)。
+     */
+    shadowBefore?: ShadowLine[];
+    shadowAfter?: ShadowLine[];
 }
 
 export const HISTORY_LIMIT = 300;
@@ -52,6 +58,16 @@ export function applyPatch(doc: AnyDoc, p: Patch, dir: "undo" | "redo"): void {
     if (p.spawnBefore && p.spawnAfter) {
         doc.spawn = { ...(dir === "undo" ? p.spawnBefore : p.spawnAfter) };
     }
+    if (p.shadowBefore && p.shadowAfter) {
+        const lines = (dir === "undo" ? p.shadowBefore : p.shadowAfter).map((l) => [...l]);
+        if (isV3Doc(doc)) {
+            if (lines.length > 0) {
+                doc.shadow = { lines };
+            } else {
+                delete doc.shadow;
+            }
+        }
+    }
 }
 
 export class History {
@@ -61,7 +77,7 @@ export class History {
     constructor(private readonly limit: number = HISTORY_LIMIT) {}
 
     push(p: Patch): void {
-        if (!p.cells?.length && !p.decorBefore && !p.spawnBefore) return;
+        if (!p.cells?.length && !p.decorBefore && !p.spawnBefore && !p.shadowBefore) return;
         this.undoStack.push(p);
         if (this.undoStack.length > this.limit) this.undoStack.shift();
         this.redoStack = [];

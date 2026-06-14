@@ -25,7 +25,7 @@ import {
     VISION_MIN,
     coordToCell,
 } from "./model";
-import { validateEkmap, validateEkmapV2, validateEkmapV3, validateTileset } from "./validate";
+import { validateEkmap, validateEkmapV2, validateEkmapV3, validateShadow, validateTileset } from "./validate";
 
 const DB_NAME = "ekmap-editor";
 const STORE = "docs";
@@ -267,6 +267,10 @@ function tryRestoreDocV3Lenient(value: Record<string, unknown>): MapDocV3 | null
         ? (value.requires.filter((c: unknown) => typeof c === "string") as string[])
         : undefined;
 
+    // §25 — shadow (lenient 復元: 不正線はスキップ)
+    const lenientWarnings: string[] = [];
+    const shadow = validateShadow(value, lenientWarnings);
+
     const doc: MapDocV3 = {
         ekm: 3,
         name,
@@ -280,6 +284,7 @@ function tryRestoreDocV3Lenient(value: Record<string, unknown>): MapDocV3 | null
         ambient: { ...ambientExtra, visionRadius: vision },
     };
     if (requires && requires.length > 0) doc.requires = requires;
+    if (shadow && shadow.lines.length > 0) doc.shadow = shadow;
     return doc;
 }
 

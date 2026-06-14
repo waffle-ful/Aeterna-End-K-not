@@ -43,6 +43,7 @@
         <button id="btn-layer-settings" class="lvtab-gear" title="レイヤーの使うチップセット・上表示などを設定" hidden>⚙</button>
         <button class="lvtab" data-layer="decor">装飾</button>
         <button class="lvtab" data-layer="spawn">スポーン</button>
+        <button class="lvtab" data-layer="shadow" title="影レイヤー — 遮蔽辺を引きます (影だけ・通行はふさがない)">影</button>
         <button id="btn-tileset-vtab" title="タイルセット設定 (通行/★/遮光/タグ)" class="lvtab-chip">チップ設定</button>
       </div>
     </main>
@@ -89,6 +90,13 @@
         <button class="tool2d" data-decor="ceiling">天井</button>
       </div>
       <p class="note" id="spawn-hint" hidden>クリック / ドラッグでスポーン位置を移動します (エクスポート時に通行可セル上か検証されます)</p>
+      <p class="note" id="shadow-hint" hidden>ドラッグで影線を追加 / クリックで選択 / 右クリックまたは Delete で削除。<strong>影だけ・通行はふさがないよ！</strong></p>
+      <div id="shadow-snap-wrap" class="shadow-snap-wrap" hidden>
+        <label class="shadow-snap-label">
+          <input type="checkbox" id="shadow-snap-toggle" checked />
+          0.5 グリッド吸着 (壁の辺・セルの角にぴったり)
+        </label>
+      </div>
       <div class="ops">
         <button id="btn-drawer" title="パレットの開閉">▾</button>
         <button id="btn-undo" title="元に戻す (Ctrl+Z)" disabled>↶</button>

@@ -230,7 +230,27 @@ export interface MapDocV3 {
     ambient: { visionRadius: number; [key: string]: unknown };
     /** requires は対応 capability 集合 (v3 凍結時点では空 Set のみ対応)。保全して出力する */
     requires?: string[];
+    /**
+     * §25 — 影レイヤー (任意・version 非依存)。
+     * requires には入れない。lines が空の場合はフィールドごと省略する。
+     */
+    shadow?: ShadowData;
 }
+
+// ============================================================
+// §25 — 影レイヤー (version 非依存・トップレベル任意フィールド)
+// ============================================================
+
+/** 1 本の影線 = セル座標フラット折れ線 [x1,y1,x2,y2,...] (偶数長 ≥ 4) */
+export type ShadowLine = number[];
+
+export interface ShadowData {
+    lines: ShadowLine[];
+}
+
+/** 影線の検証上限 (C# ローダーと一致) */
+export const SHADOW_MAX_LINES = 2048;
+export const SHADOW_MAX_POINTS_PER_LINE = 64; // 点数の上限 (float 配列では ×2 = 128)
 
 export type AnyDoc = MapDoc | MapDocV2 | MapDocV3;
 
@@ -336,6 +356,8 @@ export interface EkmapJsonV3 {
     decor?: DecorEntry[];
     spawn: SpawnPoint;
     ambient?: { visionRadius?: number; [key: string]: unknown };
+    /** §25 — 影レイヤー (任意)。lines が空の場合は省略 */
+    shadow?: ShadowData;
 }
 
 export type AnyEkmapJson = EkmapJson | EkmapJsonV2 | EkmapJsonV3;
@@ -395,6 +417,10 @@ export function docToJsonV3(doc: MapDocV3): EkmapJsonV3 {
     };
     if (doc.requires && doc.requires.length > 0) json.requires = [...doc.requires];
     if (doc.decor.length > 0) json.decor = doc.decor.map((d) => ({ kind: d.kind, x: d.x, y: d.y }));
+    // §25: shadow は lines が 1 本以上のときのみ出力
+    if (doc.shadow && doc.shadow.lines.length > 0) {
+        json.shadow = { lines: doc.shadow.lines.map((l) => [...l]) };
+    }
     return json;
 }
 

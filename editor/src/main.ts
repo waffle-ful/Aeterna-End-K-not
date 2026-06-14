@@ -22,6 +22,7 @@ import {
     type MapDocV3,
     NAME_MAX,
     type PassValue,
+    SHADOW_MAX_LINES,
     type SpawnPoint,
     TAG_MAX,
     TILESIZE_DEFAULT,
@@ -57,7 +58,7 @@ import { saveForPlaytest } from "./playtest";
 
 type ToolV1 = "floor" | "wall" | "void" | DecorKind | "spawn";
 type ToolV2 = "pen" | "erase" | "rect" | "bucket" | "pick";
-type LayerTab = "ground" | "upper" | "layer3" | "layer4" | "decor" | "spawn";
+type LayerTab = "ground" | "upper" | "layer3" | "layer4" | "decor" | "spawn" | "shadow";
 
 const TOOL_CHAR: Partial<Record<ToolV1, string>> = { floor: CELL_FLOOR, wall: CELL_WALL, void: CELL_VOID };
 
@@ -80,6 +81,7 @@ const LAYER_HINTS_V2: Record<LayerTab, string> = {
     layer4: "レイヤー4 — 追加のタイル層です",
     decor:  "装飾 — 灯りやドアなど小物を1マスずつ置きます。クリックで配置 / 再クリックで除去",
     spawn:  "スポーン — プレイヤーの初期位置を設定します。クリック / ドラッグで移動できます",
+    shadow: "影 — 遮蔽辺を引きます。ドラッグで線分を追加、クリックで既存線を選択・削除できます。影だけ・通行はふさがないことに注意！",
 };
 
 /** v1 ツールの一言説明 */
@@ -124,6 +126,15 @@ let selectedTilePerLayer: [number, number, number, number] = [0, 0, 0, 0];
 let decorKind2: DecorKind = "light";
 const history = new History();
 const renderer = new MapRenderer();
+
+// ---------- 影モード 状態 ----------
+
+/** 吸着 ON/OFF: 0.5 グリッド (セル角/辺/中心) にスナップ */
+let shadowSnap = true;
+/** ドラッグ中の始点 (セル座標 float) */
+let shadowDragStart: { x: number; y: number } | null = null;
+/** 選択中の影線インデックス (-1 = 未選択) */
+let shadowSelectedIdx = -1;
 
 interface StrokeBuf {
     cells: Map<number, CellChange>;
@@ -177,6 +188,8 @@ function refreshUndoButtons(): void {
 }
 
 let lastHover: { x: number; y: number } | null = null;
+/** float セル座標のホバー位置 (影モードで始点/終点に使う) */
+let lastHoverFloat: { x: number; y: number } | null = null;
 
 function updateStatus(): void {
     const zoom = Math.round(renderer.world.scale.x * 100);
@@ -191,7 +204,9 @@ function layerLabel(l: LayerTab): string {
     if (l === "upper") return "レイヤー2";
     if (l === "layer3") return "レイヤー3";
     if (l === "layer4") return "レイヤー4";
-    return l === "decor" ? "装飾" : "スポーン";
+    if (l === "decor") return "装飾";
+    if (l === "shadow") return "影";
+    return "スポーン";
 }
 
 /** アクティブレイヤー index (0〜3) — decor/spawn は描画層に影響しない */
@@ -232,6 +247,10 @@ function isTileLayer(l: LayerTab): boolean {
     return l === "ground" || l === "upper" || l === "layer3" || l === "layer4";
 }
 
+function isShadowLayer(l: LayerTab): boolean {
+    return l === "shadow";
+}
+
 function refreshModeUi(): void {
     const v3 = isV3Doc(doc);
     $("layer-tabs").hidden = !v3; // 旧フッタ横タブ (CSS で常時非表示だが状態は維持)
@@ -240,6 +259,8 @@ function refreshModeUi(): void {
     $("tools-v2").hidden = !v3 || !isTileLayer(activeLayer);
     $("tools-decor2").hidden = !v3 || activeLayer !== "decor";
     $("spawn-hint").hidden = !v3 || activeLayer !== "spawn";
+    $("shadow-hint").hidden = !v3 || !isShadowLayer(activeLayer);
+    $("shadow-snap-wrap").hidden = !v3 || !isShadowLayer(activeLayer);
     // ⚙ ボタン: アクティブなタイル層タブにのみ表示
     $("btn-layer-settings").hidden = !v3 || !isTileLayer(activeLayer);
     // タブの「↑」バッジを更新
@@ -273,8 +294,10 @@ function setActiveLayer(l: LayerTab): void {
     for (const b of document.querySelectorAll<HTMLButtonElement>("#layer-vtabs .lvtab")) {
         b.classList.toggle("active", b.dataset.layer === l);
     }
-    // 薄表示: decor/spawn は全層 100%、タイル層はアクティブ層だけ 100%
+    // 薄表示: decor/spawn/shadow は全層 100%、タイル層はアクティブ層だけ 100%
     renderer.setActiveLayerIndex(isTileLayer(l) ? activeLayerIndex() : null);
+    // 影モード: 影タブ時は影線を濃く表示
+    renderer.setShadowMode(isShadowLayer(l));
     refreshModeUi();
     updateRibbon();
     updateStatus();
@@ -685,16 +708,133 @@ function applyToolAt(x: number, y: number, isStart: boolean): void {
     updateStatus();
 }
 
+// ---------- 影レイヤー ツール ----------
+
+/** セル座標を 0.5 グリッドにスナップする (セル角/辺/中心) */
+function snapShadow(v: number): number {
+    return Math.round(v * 2) / 2;
+}
+
+/** 点 (px,py) から線分 (ax,ay)-(bx,by) までの距離の二乗 */
+function pointSegDistSq(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+    const dx = bx - ax;
+    const dy = by - ay;
+    const len2 = dx * dx + dy * dy;
+    if (len2 === 0) return (px - ax) ** 2 + (py - ay) ** 2;
+    const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2));
+    return (px - ax - t * dx) ** 2 + (py - ay - t * dy) ** 2;
+}
+
+/**
+ * クリック点 (セル座標 float) に最も近い影線のインデックスを返す。
+ * セル座標での距離が 0.5 以内なら選択対象。なければ -1。
+ */
+function findNearestShadowLine(cx: number, cy: number): number {
+    if (!isV3Doc(doc) || !doc.shadow) return -1;
+    const THRESHOLD_SQ = 0.5 * 0.5; // セル単位 0.5
+    let best = -1;
+    let bestDist = Infinity;
+    for (let i = 0; i < doc.shadow.lines.length; i++) {
+        const line = doc.shadow.lines[i];
+        for (let j = 0; j < line.length - 2; j += 2) {
+            const d = pointSegDistSq(cx, cy, line[j], line[j + 1], line[j + 2], line[j + 3]);
+            if (d < THRESHOLD_SQ && d < bestDist) {
+                bestDist = d;
+                best = i;
+            }
+        }
+    }
+    return best;
+}
+
+/** 影線を追加してヒストリに積む */
+function addShadowLine(sx: number, sy: number, ex: number, ey: number): void {
+    if (!isV3Doc(doc)) return;
+    if (Math.abs(ex - sx) < 0.01 && Math.abs(ey - sy) < 0.01) return; // 点なら追加しない
+    const before = (doc.shadow?.lines ?? []).map((l) => [...l]);
+    if (!doc.shadow) doc.shadow = { lines: [] };
+    if (doc.shadow.lines.length >= SHADOW_MAX_LINES) {
+        toast(`影線は最大 ${SHADOW_MAX_LINES} 本までです`);
+        return;
+    }
+    doc.shadow.lines.push([sx, sy, ex, ey]);
+    const after = doc.shadow.lines.map((l) => [...l]);
+    history.push({ shadowBefore: before, shadowAfter: after });
+    refreshUndoButtons();
+    renderer.rebuildShadow();
+    scheduleSave();
+    updateStatus();
+}
+
+/** 選択中の影線を削除 */
+function deleteSelectedShadowLine(): void {
+    if (!isV3Doc(doc) || !doc.shadow || shadowSelectedIdx < 0) return;
+    const before = doc.shadow.lines.map((l) => [...l]);
+    doc.shadow.lines.splice(shadowSelectedIdx, 1);
+    const after = doc.shadow.lines.map((l) => [...l]);
+    history.push({ shadowBefore: before, shadowAfter: after });
+    shadowSelectedIdx = -1;
+    refreshUndoButtons();
+    renderer.rebuildShadow();
+    scheduleSave();
+    updateStatus();
+}
+
 function onStrokeStart(x: number, y: number): void {
+    // 影モード: float 座標でドラッグ開始 (整数 x,y は使わない)
+    if (isV3Doc(doc) && activeLayer === "shadow") {
+        const fp = lastHoverFloat;
+        if (!fp) return;
+        const sx = shadowSnap ? snapShadow(fp.x) : fp.x;
+        const sy = shadowSnap ? snapShadow(fp.y) : fp.y;
+        shadowDragStart = { x: sx, y: sy };
+        renderer.setShadowPreview(sx, sy, sx, sy);
+        return;
+    }
     stroke = { cells: new Map(), decorBefore: null, spawnBefore: null };
     applyToolAt(x, y, true);
 }
 
 function onStrokeStep(x: number, y: number): void {
+    // 影モード: ドラッグ中プレビューを更新 (整数 x,y は使わない)
+    if (isV3Doc(doc) && activeLayer === "shadow") {
+        if (!shadowDragStart) return;
+        const fp = lastHoverFloat;
+        if (!fp) return;
+        const ex = shadowSnap ? snapShadow(fp.x) : fp.x;
+        const ey = shadowSnap ? snapShadow(fp.y) : fp.y;
+        renderer.setShadowPreview(shadowDragStart.x, shadowDragStart.y, ex, ey);
+        return;
+    }
     applyToolAt(x, y, false);
 }
 
 function onStrokeEnd(): void {
+    // 影モード: ドラッグ確定 → 影線追加 or クリックで選択/削除
+    if (isV3Doc(doc) && activeLayer === "shadow") {
+        renderer.clearShadowPreview();
+        if (!shadowDragStart) return;
+        const fp = lastHoverFloat;
+        const ex = fp ? (shadowSnap ? snapShadow(fp.x) : fp.x) : shadowDragStart.x;
+        const ey = fp ? (shadowSnap ? snapShadow(fp.y) : fp.y) : shadowDragStart.y;
+        const dx = ex - shadowDragStart.x;
+        const dy = ey - shadowDragStart.y;
+        const isDrag = dx * dx + dy * dy > 0.01; // 0.1 セル以上動いたらドラッグ
+        if (isDrag) {
+            addShadowLine(shadowDragStart.x, shadowDragStart.y, ex, ey);
+        } else {
+            // クリック: 近くの影線を選択/削除
+            const idx = findNearestShadowLine(shadowDragStart.x, shadowDragStart.y);
+            if (idx >= 0) {
+                shadowSelectedIdx = idx;
+                toast("影線を選択しました。Delete キーまたは右クリックで削除できます");
+            } else {
+                shadowSelectedIdx = -1;
+            }
+        }
+        shadowDragStart = null;
+        return;
+    }
     if (!stroke) return;
     // 矩形ツール: ドラッグ確定 → 範囲を一括ペイント
     if (isV3Doc(doc) && rectDrag) {
@@ -734,6 +874,12 @@ function onStrokeEnd(): void {
 }
 
 function onStrokeCancel(): void {
+    // 影モード: プレビュークリア
+    if (isV3Doc(doc) && activeLayer === "shadow") {
+        renderer.clearShadowPreview();
+        shadowDragStart = null;
+        return;
+    }
     if (!stroke) return;
     if (rectDrag) {
         renderer.clearRectPreview();
@@ -768,6 +914,7 @@ function rerenderPatch(p: Patch): void {
     }
     if (p.decorBefore) renderer.rebuildDecor();
     if (p.spawnBefore) renderer.updateSpawn();
+    if (p.shadowBefore) renderer.rebuildShadow();
     refreshUndoButtons();
     updateStatus();
     scheduleSave();
@@ -2387,6 +2534,41 @@ function wireUi(): void {
         }
     });
 
+    // Delete キーで選択中の影線を削除 (影モード時のみ)
+    window.addEventListener("keydown", (e) => {
+        const tag = (e.target as HTMLElement | null)?.tagName ?? "";
+        if (tag === "INPUT" || tag === "TEXTAREA") return;
+        if ((e.key === "Delete" || e.key === "Backspace") && isV3Doc(doc) && activeLayer === "shadow") {
+            if (shadowSelectedIdx >= 0) {
+                e.preventDefault();
+                deleteSelectedShadowLine();
+            }
+        }
+    });
+
+    // 影モード: 吸着トグル
+    $<HTMLInputElement>("shadow-snap-toggle").addEventListener("change", (e) => {
+        shadowSnap = (e.target as HTMLInputElement).checked;
+    });
+
+    // 影モード: 右クリックで近くの影線を削除
+    renderer.app.canvas.addEventListener("contextmenu", (e) => {
+        if (!isV3Doc(doc) || activeLayer !== "shadow") return;
+        e.preventDefault();
+        // float セル座標を取得
+        const r = renderer.app.canvas.getBoundingClientRect();
+        const cx = e.clientX - r.left;
+        const cy = e.clientY - r.top;
+        const s = renderer.world.scale.x;
+        const wx = (cx - renderer.world.x) / s / 32;
+        const wy = (cy - renderer.world.y) / s / 32;
+        const idx = findNearestShadowLine(wx, wy);
+        if (idx >= 0) {
+            shadowSelectedIdx = idx;
+            deleteSelectedShadowLine();
+        }
+    });
+
     // 終了時に保留中の自動保存を投げる (ベストエフォート)
     window.addEventListener("beforeunload", () => {
         if (savePending) void saveAutosave(docToJsonAny(doc));
@@ -2411,6 +2593,7 @@ async function boot(): Promise<void> {
         strokeEnd: onStrokeEnd,
         strokeCancel: onStrokeCancel,
         hover: (fx, fy) => {
+            lastHoverFloat = { x: fx, y: fy };
             lastHover = { x: Math.floor(fx), y: Math.floor(fy) };
             renderer.setHover(lastHover.x, lastHover.y);
             updateStatus();

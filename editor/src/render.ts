@@ -118,6 +118,12 @@ export class MapRenderer {
     private spawnMarker: Container | null = null;
     private readonly hover = new Graphics();
     private readonly rectPreview = new Graphics();
+    /** 影線オーバーレイ: baseSprite → decorLayer → spawnMarker → shadowLayer → ovlSprite → rectPreview → hover の順 */
+    private readonly shadowLayer = new Graphics();
+    /** 影モード中のドラッグプレビュー線 */
+    private readonly shadowPreview = new Graphics();
+    /** 影モード (true のとき影線を濃く表示) */
+    private shadowModeOn = false;
     private overlayOn = false;
     /** テクスチャ px / セル (v1 固定 12 / v3 はマップ寸法に応じて適応) */
     private texpx = TEXPX_V1;
@@ -201,7 +207,7 @@ export class MapRenderer {
         this.ovlSprite.visible = this.overlayOn;
 
         this.spawnMarker ??= buildSpawnMarker();
-        this.world.addChild(this.baseSprite, this.decorLayer, this.spawnMarker, this.ovlSprite, this.rectPreview, this.hover);
+        this.world.addChild(this.baseSprite, this.decorLayer, this.spawnMarker, this.shadowLayer, this.shadowPreview, this.ovlSprite, this.rectPreview, this.hover);
         this.rectPreview.visible = false;
 
         if (isV3Doc(doc)) {
@@ -226,6 +232,7 @@ export class MapRenderer {
         this.redrawAll();
         this.rebuildDecor();
         this.updateSpawn();
+        this.rebuildShadow();
         this.flush();
     }
 
@@ -424,6 +431,53 @@ export class MapRenderer {
         const doc = this.doc;
         if (!doc) return;
         for (const d of doc.decor) this.decorLayer.addChild(makeDecorIcon(d));
+    }
+
+    /**
+     * 影線オーバーレイを再描画する。
+     * 影モード時は濃いシアン (alpha 0.9)、それ以外は薄いシアン (alpha 0.35)。
+     */
+    rebuildShadow(): void {
+        this.shadowLayer.clear();
+        const doc = this.doc;
+        if (!doc || !isV3Doc(doc) || !doc.shadow || doc.shadow.lines.length === 0) return;
+        const alpha = this.shadowModeOn ? 0.9 : 0.35;
+        const width = this.shadowModeOn ? 2.5 : 1.5;
+        this.shadowLayer.setStrokeStyle({ width, color: 0x00e5ff, alpha });
+        for (const line of doc.shadow.lines) {
+            if (line.length < 4) continue;
+            this.shadowLayer.moveTo(line[0] * CELL, line[1] * CELL);
+            for (let j = 2; j < line.length; j += 2) {
+                this.shadowLayer.lineTo(line[j] * CELL, line[j + 1] * CELL);
+            }
+            this.shadowLayer.stroke();
+        }
+    }
+
+    /**
+     * ドラッグ中の影線プレビューを更新する。
+     * @param sx 始点 X (セル座標)
+     * @param sy 始点 Y (セル座標)
+     * @param ex 終点 X (セル座標)
+     * @param ey 終点 Y (セル座標)
+     */
+    setShadowPreview(sx: number, sy: number, ex: number, ey: number): void {
+        this.shadowPreview.clear();
+        this.shadowPreview.setStrokeStyle({ width: 2.5, color: 0x00e5ff, alpha: 0.75 });
+        // 始点と終点に小丸を描く
+        this.shadowPreview.circle(sx * CELL, sy * CELL, 4).fill({ color: 0x00e5ff, alpha: 0.8 });
+        this.shadowPreview.moveTo(sx * CELL, sy * CELL).lineTo(ex * CELL, ey * CELL).stroke();
+        this.shadowPreview.circle(ex * CELL, ey * CELL, 4).fill({ color: 0x00e5ff, alpha: 0.8 });
+    }
+
+    clearShadowPreview(): void {
+        this.shadowPreview.clear();
+    }
+
+    setShadowMode(on: boolean): void {
+        if (this.shadowModeOn === on) return;
+        this.shadowModeOn = on;
+        this.rebuildShadow();
     }
 
     updateSpawn(): void {
