@@ -16,6 +16,92 @@ internal static class ChatControllerUpdatePatch
 {
     public static int CurrentHistorySelection = -1;
 
+    // 分割ペースト送信の安全パラメータ。AU 2026 anti-cheat は 1 メッセージが ~1KB(1024byte) を超えると
+    // host 側で Hacking kick する (Utils.SendMessage が同理由で 700byte に clamp 済)。よって文字数ではなく
+    // UTF-8 バイト数で分割し、1 チャンク = 700byte 上限にする (base64 で 700 字 / 日本語で ~230 字)。
+    private const int ChatChunkByteBudget = 700;   // 1 メッセージの本文 UTF-8 上限 (~1KB 閾値に対し余裕)
+    private const int MaxPasteChunks = 10;          // 最大 10 チャンク = 約 7KB。超過分は破棄 (spam/flood 防止)
+    private const float PasteChunkInterval = 0.6f;  // 送信間隔 (10 個でも 5.4s = anti-cheat flood 閾値の遥か下)
+
+    // Ctrl+V ハンドラ。巨大クリップボード (EKM マップコード等 = 数十万文字) をそのままチャット欄へ流し込むと
+    // TMP のメッシュ化 + 巨大 string alloc でフリーズ / native クラッシュするため、安全バイト数 (700byte) 以内は
+    // フィールドへ、超過時はバイト分割して遅延送信する。
+    private static void HandleChatPaste(ChatController chat)
+    {
+        if (chat?.freeChatField?.textArea == null) return;
+
+        var area = chat.freeChatField.textArea;
+
+        string clip = (GUIUtility.systemCopyBuffer ?? string.Empty).Trim();
+        if (clip.Length == 0) return;
+
+        string combined = area.text + clip;
+
+        // 安全バイト数以内: 従来どおりフィールドへ (1 メッセージで送っても anti-cheat に引っかからない)
+        if (Utf8ByteCount(combined) <= ChatChunkByteBudget)
+        {
+            area.SetText(combined);
+            return;
+        }
+
+        // 超過: UTF-8 バイト基準で分割して遅延送信。上限チャンク数を超えた分は破棄。
+        PlayerControl lp = PlayerControl.LocalPlayer;
+        if (lp == null) return;
+
+        area.SetText(string.Empty); // フィールドはクリア (巨大文字列を TMP に残さない)
+
+        List<string> chunks = SplitByUtf8Bytes(combined, ChatChunkByteBudget);
+        bool truncated = chunks.Count > MaxPasteChunks;
+        int sendChunks = Math.Min(chunks.Count, MaxPasteChunks);
+
+        for (int i = 0; i < sendChunks; i++)
+        {
+            string chunk = chunks[i];
+            LateTask.New(() =>
+            {
+                PlayerControl p = PlayerControl.LocalPlayer;
+                if (p != null && !string.IsNullOrWhiteSpace(chunk)) p.RpcSendChat(chunk);
+            }, i * PasteChunkInterval, "ChatPasteChunk", log: false);
+        }
+
+        string notice = truncated
+            ? $"長文を {sendChunks} 個に分割して送信します（上限 {MaxPasteChunks} 個を超えた分は破棄しました）。"
+            : $"長文を {sendChunks} 個に分割して順次送信します。";
+        Utils.SendMessage(notice, lp.PlayerId);
+    }
+
+    // 文字列の UTF-8 バイト数 (サロゲートは 1 文字 3byte で概算=やや過大評価=安全側)。
+    private static int Utf8ByteCount(string s)
+    {
+        int bytes = 0;
+        foreach (char c in s) bytes += c < 0x80 ? 1 : c < 0x800 ? 2 : 3;
+        return bytes;
+    }
+
+    // UTF-8 バイト予算ごとに文字列を分割 (文字境界は割らない)。
+    private static List<string> SplitByUtf8Bytes(string s, int budget)
+    {
+        List<string> chunks = [];
+        System.Text.StringBuilder sb = new();
+        int bytes = 0;
+        foreach (char c in s)
+        {
+            int cb = c < 0x80 ? 1 : c < 0x800 ? 2 : 3;
+            if (bytes + cb > budget && sb.Length > 0)
+            {
+                chunks.Add(sb.ToString());
+                sb.Clear();
+                bytes = 0;
+            }
+
+            sb.Append(c);
+            bytes += cb;
+        }
+
+        if (sb.Length > 0) chunks.Add(sb.ToString());
+        return chunks;
+    }
+
     private static SpriteRenderer QuickChatIcon;
     private static SpriteRenderer OpenBanMenuIcon;
     private static SpriteRenderer OpenKeyboardIcon;
@@ -68,7 +154,7 @@ internal static class ChatControllerUpdatePatch
             ClipboardHelper.PutClipboardString(__instance.freeChatField.textArea.text);
 
         if ((Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) && Input.GetKeyDown(KeyCode.V))
-            __instance.freeChatField.textArea.SetText(__instance.freeChatField.textArea.text + GUIUtility.systemCopyBuffer.Trim());
+            HandleChatPaste(__instance);
 
         if ((Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) && Input.GetKeyDown(KeyCode.X))
         {
