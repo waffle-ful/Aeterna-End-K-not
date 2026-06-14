@@ -26,6 +26,7 @@ import {
     coordToCell,
 } from "./model";
 import { validateEkmap, validateEkmapV2, validateEkmapV3, validateShadow, validateTileset } from "./validate";
+import { v1ToV3 } from "./presets";
 
 const DB_NAME = "ekmap-editor";
 const STORE = "docs";
@@ -126,9 +127,11 @@ export function tryRestoreDoc(value: unknown): AnyDoc | null {
         return tryRestoreDocV2Lenient(value);
     }
 
+    // v1: 正規検証 → 成功なら v3 に変換して返す
     const r = validateEkmap(value);
-    if (r.ok) return r.doc;
+    if (r.ok) return v1ToV3(r.doc);
 
+    // v1 lenient 復元 → v3 変換
     if (!isRecord(value)) return null;
     const w = value.width;
     const h = value.height;
@@ -177,7 +180,9 @@ export function tryRestoreDoc(value: unknown): AnyDoc | null {
         }
     }
 
-    return { ekm: 1, name, author, width: w, height: h, grid, decor, spawn, ambient: { ...ambientExtra, visionRadius: vision } };
+    // lenient 復元した v1 doc を v3 に変換して返す
+    const lenientV1 = { ekm: 1 as const, name, author, width: w as number, height: h as number, grid, decor, spawn, ambient: { ...ambientExtra, visionRadius: vision } };
+    return v1ToV3(lenientV1);
 }
 
 /** v3 の lenient 復元。tilesets が全滅している場合のみ諦める (描画に必須のため) */

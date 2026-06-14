@@ -47,6 +47,7 @@ import {
     upgradeV2DocToV3,
 } from "./model";
 import { parsePngDataUri } from "./png";
+import { v1ToV3 } from "./presets";
 
 export type ValidationResult =
     | { ok: true; doc: MapDoc; warnings: string[] }
@@ -842,7 +843,7 @@ export function validateShadow(value: Record<string, unknown>, warnings: string[
     return { lines };
 }
 
-/** ekm 値で v1/v2/v3 を振り分ける共通入口。v2 は成功後に v3 へ自動変換する */
+/** ekm 値で v1/v2/v3 を振り分ける共通入口。v2 は成功後に v3 へ自動変換する。v1 も v3 へ変換する */
 export function validateEkmapAny(value: unknown, jsonByteLength?: number): ValidationResultAny {
     if (isRecord(value) && value.ekm === 3) return validateEkmapV3(value, jsonByteLength);
     if (isRecord(value) && value.ekm === 2) {
@@ -853,5 +854,10 @@ export function validateEkmapAny(value: unknown, jsonByteLength?: number): Valid
         const warnings = [...r2.warnings, "v2 マップを v3 形式に変換しました(次回保存から ekm:3)"];
         return { ok: true, doc: docV3, warnings };
     }
-    return validateEkmap(value, jsonByteLength);
+    // v1 → v3 自動変換 (タスク B: エディタは v3 に一本化)
+    const r1 = validateEkmap(value, jsonByteLength);
+    if (!r1.ok) return r1;
+    const docV3 = v1ToV3(r1.doc);
+    const warnings = [...r1.warnings, "v1 マップを Backrooms タイルセットで v3 形式に変換しました(次回保存から ekm:3)"];
+    return { ok: true, doc: docV3, warnings };
 }

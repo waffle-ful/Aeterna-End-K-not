@@ -30,7 +30,6 @@ import {
     TILESIZE_MIN,
     type TilesetDoc,
     coordToCell,
-    createNewDoc,
     createNewDocV3,
     defaultTileAttr,
     docToJsonAny,
@@ -55,6 +54,7 @@ import { backupAutosave, loadAutosave, saveAutosave, tryRestoreDoc } from "./per
 import { MapRenderer, loadTilesetImage } from "./render";
 import { InputController } from "./input";
 import { saveForPlaytest } from "./playtest";
+import { createBackroomsDoc } from "./presets";
 
 type ToolV1 = "floor" | "wall" | "void" | DecorKind | "spawn";
 type ToolV2 = "pen" | "erase" | "rect" | "bucket" | "pick";
@@ -117,7 +117,7 @@ function $<T extends HTMLElement>(id: string): T {
     return document.getElementById(id) as T;
 }
 
-let doc: AnyDoc = createNewDoc(32, 32, "新しいマップ", "");
+let doc: AnyDoc = createBackroomsDoc(32, 32, "新しいマップ", "");
 let tool: ToolV1 = "wall";
 let toolV2: ToolV2 = "pen";
 let activeLayer: LayerTab = "ground";
@@ -2302,13 +2302,14 @@ function wireUi(): void {
     const v2Section = $("new-v2-section");
     const typeRadios = [...document.querySelectorAll<HTMLInputElement>("input[name=new-type]")];
     const refreshTypeUi = (): void => {
-        const v2 = typeRadios.find((r) => r.checked)?.value === "v2";
-        v2Section.hidden = !v2;
-        if (v2) {
-            // v2 選択時: PNG が未投入なら作成ボタン無効
+        // "custom" = PNG カスタムタイルセット、それ以外 (backrooms) は Backrooms プリセット
+        const isCustom = typeRadios.find((r) => r.checked)?.value === "custom";
+        v2Section.hidden = !isCustom;
+        if (isCustom) {
+            // カスタム選択時: PNG が未投入なら作成ボタン無効
             $<HTMLButtonElement>("new-ok-btn").disabled = wizState.dataUri === null;
         } else {
-            // v1 は常に有効
+            // Backrooms は常に有効
             $<HTMLButtonElement>("new-ok-btn").disabled = false;
         }
     };
@@ -2383,27 +2384,29 @@ function wireUi(): void {
         const h = clampInt($<HTMLInputElement>("new-h").value, MIN_DIM, MAX_DIM, 32);
         const name = ($<HTMLInputElement>("new-name").value.trim() || "新しいマップ").slice(0, NAME_MAX);
         const author = $<HTMLInputElement>("new-author").value.slice(0, AUTHOR_MAX);
-        const isV2 = typeRadios.find((r) => r.checked)?.value === "v2";
-        if (!isV2) {
+        const isCustom = typeRadios.find((r) => r.checked)?.value === "custom";
+        if (!isCustom) {
+            // Backrooms プリセット: タイルセット内蔵なので PNG 不要
+            selectedTilePerLayer = [0, 0, 0, 0];
             void backupAutosave();
-            setDocument(createNewDoc(w, h, name, author));
-            toast(`${w}×${h} の新規マップを作成しました (全セル奈落)`);
+            setDocument(createBackroomsDoc(w, h, name, author));
+            toast(`${w}×${h} の Backrooms マップを作りました (床・壁・奈落がすぐ使えるよ！)`);
             return;
         }
         if (!wizState.dataUri) {
-            showMessages("新規マップ (タイルセット) を作成できません", ["タイルセット PNG が未選択です"], []);
+            showMessages("新規マップ (カスタムタイルセット) を作成できません", ["タイルセット PNG が未選択です"], []);
             return;
         }
         void wizBuildTileset().then((r) => {
             if (!r.ok) {
-                showMessages("新規マップ (タイルセット) を作成できません", [r.error], []);
+                showMessages("新規マップ (カスタムタイルセット) を作成できません", [r.error], []);
                 return;
             }
             selectedTilePerLayer = [0, 0, 0, 0];
             void backupAutosave();
             setDocument(createNewDocV3(w, h, name, author, r.tileset));
             const rebakeInfo = wizState.needsRebake ? " (余白を正規化しました)" : "";
-            toast(`${w}×${h} のタイルセットマップを作成しました (チップ ${tileCount(r.tileset)} 個)${rebakeInfo}`);
+            toast(`${w}×${h} のカスタムタイルセットマップを作りました (チップ ${tileCount(r.tileset)} 個)${rebakeInfo}`);
         });
     });
 
@@ -2584,7 +2587,7 @@ async function boot(): Promise<void> {
 
     const saved = await loadAutosave();
     const restored = saved === undefined || saved === null ? null : tryRestoreDoc(saved);
-    setDocument(restored ?? createNewDoc(32, 32, "新しいマップ", ""));
+    setDocument(restored ?? createBackroomsDoc(32, 32, "新しいマップ", ""));
     if (restored) toast("自動保存から復元しました");
 
     new InputController(renderer.app.canvas, renderer.world, {
