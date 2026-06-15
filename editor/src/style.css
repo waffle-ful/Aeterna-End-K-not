@@ -266,6 +266,25 @@ button.primary:hover {
     background: var(--bg-active-accent);
 }
 
+/* 右インスペクタ: レイヤー一覧 (縦タブの鏡写し) */
+.layer-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.layer-row {
+    width: 100%;
+    min-height: 32px;
+    padding: var(--space-xs) var(--space-sm);
+    text-align: left;
+}
+
+.layer-row.active {
+    outline: 2px solid var(--ok);
+    background: var(--bg-active-ok);
+}
+
 /* 右インスペクタ: マップ情報セクション */
 .inspector-section {
     margin-bottom: var(--space-md);

@@ -111,8 +111,10 @@ const TOOL_HINTS_V1: Record<ToolV1, string> = {
 };
 
 function updateRibbon(): void {
-    // 左レールの道具リモコンも同期 (フッタの active/hidden は呼び出し時点で確定済み)
+    // 左レールの道具リモコン・右レールのレイヤー一覧も同期
+    // (フッタ/縦タブの active/hidden は呼び出し時点で確定済み)
     refreshToolRail();
+    refreshLayerList();
     const el = $("tool-ribbon");
     const v3 = isV3Doc(doc);
     if (!v3) {
@@ -415,6 +417,7 @@ function wireShellPanes(): void {
             if (!nextCollapsed && paneId === "right-inspector") {
                 refreshInspector();
                 refreshInspectorValidation();
+                refreshLayerList();
             }
         });
     };
@@ -660,6 +663,35 @@ function refreshToolRail(): void {
         // refreshToolRail を呼んで active を更新する (自前同期は不要)。
         btn.addEventListener("click", () => src.click());
         rail.appendChild(btn);
+    }
+}
+
+// ---------- 右インスペクタ: レイヤー一覧 ----------
+// レイヤー縦タブ (#layer-vtabs .lvtab) を正本とし、右レールはそのリモコン。
+// v3 マップのみレイヤーを持つ (v1 はレイヤーなし)。
+
+/** レイヤー縦タブを右インスペクタに鏡写しする。updateRibbon から毎回呼ばれる。 */
+function refreshLayerList(): void {
+    const list = document.getElementById("right-layers");
+    if (!list) return;
+    list.innerHTML = "";
+    if (!isV3Doc(doc)) {
+        const note = document.createElement("p");
+        note.className = "pane-placeholder";
+        note.textContent = "このマップ形式にレイヤーはありません";
+        list.appendChild(note);
+        return;
+    }
+    for (const src of document.querySelectorAll<HTMLButtonElement>("#layer-vtabs .lvtab")) {
+        const layer = src.dataset.layer as LayerTab;
+        const row = document.createElement("button");
+        row.className = "layer-row";
+        // 縦タブは "1"/"装飾" など簡略表記なので、一覧では分かりやすい名前にする
+        row.textContent = src.classList.contains("above") ? `${layerLabel(layer)} ↑` : layerLabel(layer);
+        if (src.title) row.title = src.title;
+        row.classList.toggle("active", src.classList.contains("active"));
+        row.addEventListener("click", () => src.click());
+        list.appendChild(row);
     }
 }
 
