@@ -70,7 +70,19 @@
       <button class="pane-toggle" id="right-rail-toggle" type="button" aria-expanded="false"
               title="インスペクタを開く / 閉じる">情報</button>
       <div class="pane-body">
-        <p class="pane-placeholder">ここにレイヤー一覧とチップ属性が入ります。<br>準備中です。</p>
+        <section class="inspector-section">
+          <h3 class="inspector-h">マップ情報</h3>
+          <dl class="info-grid">
+            <dt>名前</dt><dd id="info-name">—</dd>
+            <dt>大きさ</dt><dd id="info-size">—</dd>
+            <dt>形式</dt><dd id="info-format">—</dd>
+            <dt>チップ</dt><dd id="info-tiles">—</dd>
+            <dt>装飾</dt><dd id="info-decor">—</dd>
+            <dt>スポーン</dt><dd id="info-spawn">—</dd>
+            <dt>検証</dt><dd id="info-valid">—</dd>
+          </dl>
+        </section>
+        <p class="pane-placeholder">レイヤー一覧とチップ属性は準備中です。</p>
       </div>
     </aside>
     </div>
@@ -435,12 +447,16 @@
         <div id="start-main-btns">
           <button id="start-new" class="start-main-btn primary">✨ 新規作成</button>
           <button id="start-library" class="start-main-btn">📂 書庫を開く</button>
+          <button id="start-minigame" class="start-main-btn">🎮 ミニゲーム</button>
         </div>
         <h2 id="start-tpl-heading">テンプレートから始める</h2>
         <div id="start-templates"></div>
         <button id="start-skip">✕ 何も選ばず始める</button>
       </div>
     </div>
+
+    <!-- ミニゲーム (Crew Run) オーバーレイ -->
+    <div id="minigame-overlay" hidden></div>
 
     <!-- コーチマークオーバーレイ -->
     <div id="coach-overlay" hidden>
