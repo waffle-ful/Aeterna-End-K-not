@@ -69,9 +69,10 @@ import { InputController } from "./input";
 import { saveForPlaytest } from "./playtest";
 import { createBackroomsDoc } from "./presets";
 import { EKM_TEMPLATES, type EkmTemplate } from "./templates";
+import { flipStampH, flipStampV, bresenhamLine, rectOutlineCells } from "./stamp-utils";
 
 type ToolV1 = "floor" | "wall" | "void" | DecorKind | "spawn";
-type ToolV2 = "pen" | "erase" | "rect" | "bucket" | "pick";
+type ToolV2 = "pen" | "erase" | "rect" | "bucket" | "pick" | "line";
 type LayerTab = "ground" | "upper" | "layer3" | "layer4" | "decor" | "spawn" | "shadow";
 
 const TOOL_CHAR: Partial<Record<ToolV1, string>> = { floor: CELL_FLOOR, wall: CELL_WALL, void: CELL_VOID };
@@ -82,9 +83,10 @@ const TOOL_CHAR: Partial<Record<ToolV1, string>> = { floor: CELL_FLOOR, wall: CE
 const TOOL_HINTS_V2: Record<ToolV2, string> = {
     pen:    "ペン — タイルを描きます。クリック / ドラッグで塗れます",
     erase:  "消去 — タイルを消します。ドラッグでまとめて消せます",
-    rect:   "矩形 — ドラッグで四角く塗ります",
+    rect:   "矩形 — ドラッグで四角く塗ります (「枠だけ」トグルで外周のみ)",
     bucket: "バケツ — つながった範囲をまとめて塗ります",
-    pick:   "スポイト — タイルを吸い取って選びます。吸ったあとはペンに切り替わります",
+    pick:   "スポイト — クリックでチップを吸い取り、ドラッグで範囲をコピーします",
+    line:   "直線 — ドラッグで直線を引きます",
 };
 
 /** v2 レイヤーのツールバー説明 */
@@ -169,6 +171,12 @@ interface StrokeBuf {
 let stroke: StrokeBuf | null = null;
 /** 矩形ツールのドラッグ状態 (セル座標、マップ範囲にクランプ済み) */
 let rectDrag: { ax: number; ay: number; cx: number; cy: number } | null = null;
+/** 直線ツールのドラッグ状態 (アンカー座標) */
+let lineDrag: { ax: number; ay: number } | null = null;
+/** 矩形の枠だけ描画トグル */
+let rectOutline = false;
+/** ランダムペイントトグル (pen ツールでスタンプのランダム1枚を置く) */
+let randomPaint = false;
 
 // ---------- 通知 UI ----------
 
@@ -1203,8 +1211,17 @@ function applyToolAtV3(d: MapDocV3, x: number, y: number, isStart: boolean): voi
                         toast("このレイヤーは別のチップセットです");
                     }
                 } else if (stampBlock && (stampBlock.w > 1 || stampBlock.h > 1)) {
-                    // ブロックスタンプ: 範囲選択したチップ群を配置順のまま設置 (top-left = クリック位置)
-                    stampBlockAt(d, x, y);
+                    if (randomPaint) {
+                        // ランダムペイント: スタンプの -1 以外からランダムに1枚選んで置く
+                        const nonEmpty = stampBlock.ids.filter(id => id >= 0);
+                        if (nonEmpty.length > 0) {
+                            const picked = nonEmpty[Math.floor(Math.random() * nonEmpty.length)];
+                            paintCellV3(d, x, y, picked);
+                        }
+                    } else {
+                        // ブロックスタンプ: 範囲選択したチップ群を配置順のまま設置 (top-left = クリック位置)
+                        stampBlockAt(d, x, y);
+                    }
                 } else {
                     paintCellV3(d, x, y, getSelectedTile());
                 }
@@ -1241,32 +1258,38 @@ function applyToolAtV3(d: MapDocV3, x: number, y: number, isStart: boolean): voi
             if (isStart && inGrid) floodFillV3(d, x, y, getSelectedTile());
             break;
         case "pick": {
-            if (!isStart || !inGrid) break;
-            const i = y * d.width + x;
-            const curIdx = activeLayerIndex();
-            const arr = activeLayerArrV3(d);
-            // アクティブ層を優先、空なら上の層→下の層の順で探す
-            let pickedTile = arr[i];
-            let pickedLayerIdx = curIdx;
-            if (pickedTile < 0) {
-                // 上の層から降りてくる順で検索 (上位層優先)
-                for (let li = d.layers.length - 1; li >= 0; li--) {
-                    if (li === curIdx) continue;
-                    const v = d.layers[li].cells[i];
-                    if (v >= 0) { pickedTile = v; pickedLayerIdx = li; break; }
-                }
+            // ドラッグ矩形で範囲コピー、単一クリックは onStrokeEnd で処理する
+            const cx2 = clampCell(x, d.width);
+            const cy2 = clampCell(y, d.height);
+            if (isStart) rectDrag = { ax: cx2, ay: cy2, cx: cx2, cy: cy2 };
+            else if (rectDrag) {
+                rectDrag.cx = cx2;
+                rectDrag.cy = cy2;
             }
-            if (pickedTile >= 0) {
-                // 別の層から拾った場合はタブを自動切替
-                if (pickedLayerIdx !== curIdx) {
-                    const tabNames: LayerTab[] = ["ground", "upper", "layer3", "layer4"];
-                    setActiveLayer(tabNames[pickedLayerIdx]);
-                    toast(`レイヤー${pickedLayerIdx + 1} のチップ ${pickedTile} を選択しました`);
-                } else {
-                    toast(`チップ ${pickedTile} を選択しました`);
+            if (rectDrag) renderer.setRectPreview(rectDrag.ax, rectDrag.ay, rectDrag.cx, rectDrag.cy);
+            break;
+        }
+        case "line": {
+            const cx3 = clampCell(x, d.width);
+            const cy3 = clampCell(y, d.height);
+            if (isStart) {
+                lineDrag = { ax: cx3, ay: cy3 };
+                // アンカー1点だけ即時描画
+                if (inGrid) paintCellV3(d, cx3, cy3, getSelectedTile());
+            } else if (lineDrag && stroke) {
+                // まず現在 stroke に積まれたセルを before に戻す
+                for (const c of stroke.cells.values()) {
+                    activeLayerArrV3(d)[c.i] = c.before as number;
+                    renderer.cellChanged(c.i % d.width, Math.floor(c.i / d.width));
                 }
-                selectTile(pickedTile);
-                setToolV2("pen");
+                stroke.cells.clear();
+                // ブレゼンハム直線を引く
+                const pts = bresenhamLine(lineDrag.ax, lineDrag.ay, cx3, cy3);
+                for (const p of pts) {
+                    if (p.x >= 0 && p.y >= 0 && p.x < d.width && p.y < d.height) {
+                        paintCellV3(d, p.x, p.y, getSelectedTile());
+                    }
+                }
             }
             break;
         }
@@ -1436,19 +1459,88 @@ function onStrokeEnd(): void {
         return;
     }
     if (!stroke) return;
-    // 矩形ツール: ドラッグ確定 → 範囲を一括ペイント
+    // 直線ツール確定: lineDrag をクリア (セルは既に stroke に積まれている)
+    if (lineDrag) {
+        lineDrag = null;
+    }
+    // 矩形/スポイト ツール: ドラッグ確定
     if (isV3Doc(doc) && rectDrag) {
         const d = doc;
         const x0 = Math.min(rectDrag.ax, rectDrag.cx);
         const x1 = Math.max(rectDrag.ax, rectDrag.cx);
         const y0 = Math.min(rectDrag.ay, rectDrag.cy);
         const y1 = Math.max(rectDrag.ay, rectDrag.cy);
-        for (let y = y0; y <= y1; y++) {
-            for (let x = x0; x <= x1; x++) paintCellV3(d, x, y, getSelectedTile());
+
+        if (toolV2 === "rect") {
+            // 矩形ペイント (枠のみ or 全塗り)
+            if (rectOutline) {
+                const pts = rectOutlineCells(x0, y0, x1, y1);
+                for (const p of pts) paintCellV3(d, p.x, p.y, getSelectedTile());
+            } else {
+                for (let y = y0; y <= y1; y++) {
+                    for (let x = x0; x <= x1; x++) paintCellV3(d, x, y, getSelectedTile());
+                }
+            }
+            renderer.clearRectPreview();
+            renderer.flush();
+            rectDrag = null;
+        } else if (toolV2 === "pick") {
+            renderer.clearRectPreview();
+            rectDrag = null;
+            if (x0 === x1 && y0 === y1) {
+                // 単一クリック → 従来のスポイト動作
+                const i = y0 * d.width + x0;
+                const curIdx = activeLayerIndex();
+                const arr = activeLayerArrV3(d);
+                let pickedTile = arr[i];
+                let pickedLayerIdx = curIdx;
+                if (pickedTile < 0) {
+                    for (let li = d.layers.length - 1; li >= 0; li--) {
+                        if (li === curIdx) continue;
+                        const v = d.layers[li].cells[i];
+                        if (v >= 0) { pickedTile = v; pickedLayerIdx = li; break; }
+                    }
+                }
+                if (pickedTile >= 0) {
+                    if (pickedLayerIdx !== curIdx) {
+                        const tabNames: LayerTab[] = ["ground", "upper", "layer3", "layer4"];
+                        setActiveLayer(tabNames[pickedLayerIdx]);
+                        toast(`レイヤー${pickedLayerIdx + 1} のチップ ${pickedTile} を選択しました`);
+                    } else {
+                        toast(`チップ ${pickedTile} を選択しました`);
+                    }
+                    selectTile(pickedTile);
+                    setToolV2("pen");
+                }
+                // stroke.cells は空のはずなので Patch は生成されない
+                stroke = null;
+                return;
+            } else {
+                // 複数セル → アクティブ層の該当セルで stampBlock を作る
+                const w = x1 - x0 + 1;
+                const h = y1 - y0 + 1;
+                const arr = activeLayerArrV3(d);
+                const ids: number[] = [];
+                for (let r = 0; r < h; r++) {
+                    for (let c = 0; c < w; c++) {
+                        ids.push(arr[(y0 + r) * d.width + (x0 + c)]);
+                    }
+                }
+                stampBlock = { w, h, ids };
+                activeAutotileIdx = null;
+                rebuildAutotileBrushSelect();
+                setToolV2("pen");
+                toast(`${w}×${h} のマップ範囲を持ち上げました (クリックで貼り付け)`);
+                updateStatus();
+                // pick はマップを塗らないので stroke は空 → Patch 無し
+                stroke = null;
+                return;
+            }
+        } else {
+            // その他ツールが rectDrag を残した場合 (通常はあり得ないが安全に処理)
+            renderer.clearRectPreview();
+            rectDrag = null;
         }
-        renderer.clearRectPreview();
-        renderer.flush();
-        rectDrag = null;
     }
     const patch: Patch = {};
     const cells = [...stroke.cells.values()].filter((c) => c.before !== c.after);
@@ -1484,6 +1576,9 @@ function onStrokeCancel(): void {
     if (rectDrag) {
         renderer.clearRectPreview();
         rectDrag = null;
+    }
+    if (lineDrag) {
+        lineDrag = null;
     }
     for (const c of stroke.cells.values()) {
         if (isV3Doc(doc)) {
@@ -3521,6 +3616,18 @@ function wireUi(): void {
     }
     setToolV2(toolV2);
 
+    // ランダムペイントトグル
+    $("btn-random-paint").addEventListener("click", () => {
+        randomPaint = !randomPaint;
+        $("btn-random-paint").classList.toggle("active", randomPaint);
+    });
+
+    // 矩形枠だけトグル
+    $("btn-rect-outline").addEventListener("click", () => {
+        rectOutline = !rectOutline;
+        $("btn-rect-outline").classList.toggle("active", rectOutline);
+    });
+
     // ── オートタイルブラシ select ──
     $<HTMLSelectElement>("at-brush-select").addEventListener("change", (e) => {
         const val = (e.target as HTMLSelectElement).value;
@@ -4208,6 +4315,25 @@ function wireUi(): void {
                 e.preventDefault();
                 deleteSelectedShadowLine();
             }
+        }
+    });
+
+    // h / v キー: スタンプの左右/上下反転 (入力欄中は無視)
+    window.addEventListener("keydown", (e) => {
+        const tag = (e.target as HTMLElement | null)?.tagName ?? "";
+        if (tag === "INPUT" || tag === "TEXTAREA") return;
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+        if (!stampBlock || (stampBlock.w === 1 && stampBlock.h === 1)) return;
+        if (e.key === "h" || e.key === "H") {
+            e.preventDefault();
+            stampBlock = flipStampH(stampBlock);
+            toast("スタンプを左右反転しました");
+            updateStatus();
+        } else if (e.key === "v" || e.key === "V") {
+            e.preventDefault();
+            stampBlock = flipStampV(stampBlock);
+            toast("スタンプを上下反転しました");
+            updateStatus();
         }
     });
 

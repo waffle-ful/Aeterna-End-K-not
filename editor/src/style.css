@@ -438,6 +438,32 @@ footer {
     background: var(--bg-active-accent);
 }
 
+/* トグルボタン (ランダムペイント・矩形枠のみ) — レール非対象 */
+.tool2-toggle {
+    flex: 0 0 auto;
+    padding: var(--space-xs) var(--space-sm);
+    min-height: var(--touch-target);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-2);
+    color: var(--fg);
+    cursor: pointer;
+    font-size: 12px;
+    white-space: nowrap;
+    opacity: 0.7;
+}
+
+.tool2-toggle:hover {
+    background: var(--bg-3);
+    opacity: 1;
+}
+
+.tool2-toggle.active {
+    outline: 2px solid var(--accent);
+    background: var(--bg-active-accent);
+    opacity: 1;
+}
+
 /* ---------- コンパクト帯パレット ---------- */
 #palette-strip {
     display: flex;
