@@ -344,6 +344,30 @@ function hideStartScreen(): void {
     }
 }
 
+// ---------- ミニゲーム (Crew Run) ----------
+// 重いゲームコードは動的 import で本体バンドルから切り離す。
+let minigameHandle: { destroy(): void } | null = null;
+async function openMinigame(): Promise<void> {
+    if (minigameHandle) return;
+    const overlay = $("minigame-overlay");
+    overlay.hidden = false;
+    try {
+        const { launchCrewRun } = await import("./minigame/crewrun");
+        minigameHandle = await launchCrewRun(overlay, closeMinigame);
+    } catch (err) {
+        console.error("ミニゲームの起動に失敗しました", err);
+        toast("ミニゲームを起動できませんでした");
+        closeMinigame();
+    }
+}
+function closeMinigame(): void {
+    minigameHandle?.destroy();
+    minigameHandle = null;
+    const overlay = $("minigame-overlay");
+    overlay.replaceChildren();
+    overlay.hidden = true;
+}
+
 async function loadTemplate(t: EkmTemplate): Promise<void> {
     await backupAutosave();
     const author = doc.author ?? "";
@@ -385,6 +409,11 @@ function wireShellPanes(): void {
             // viewport の幅が変わったので PIXI canvas を追従させる
             // (resizeTo は window resize でしか発火しないため明示的に再計算)
             renderer.app.resize();
+            // 右インスペクタを開いたら最新状態に更新
+            if (!nextCollapsed && paneId === "right-inspector") {
+                refreshInspector();
+                refreshInspectorValidation();
+            }
         });
     };
     setup("left-rail", "left-rail-toggle", "ekm.leftRail");
@@ -465,12 +494,46 @@ let savePending = false;
 
 function scheduleSave(): void {
     savePending = true;
+    refreshInspector(); // 安価なフィールドは即時更新
     window.clearTimeout(saveTimer);
     saveTimer = window.setTimeout(() => {
         savePending = false;
         void saveAutosave(docToJsonAny(doc));
         void saveAutotiles(autotiles);
+        refreshInspectorValidation(); // 検証はデバウンス内で
     }, 500);
+}
+
+// ---------- 右インスペクタ: マップ情報 ----------
+
+/** マップ情報パネルの軽量フィールドを更新する (編集ごとに呼べる安価な処理)。 */
+function refreshInspector(): void {
+    $("info-name").textContent = doc.name || "(名前なし)";
+    $("info-size").textContent = `${doc.width} × ${doc.height}`;
+    $("info-format").textContent = isV3Doc(doc) ? "タイルセット式 (v3)" : "Backrooms式 (v1)";
+    if (isV3Doc(doc)) {
+        const tiles = doc.tilesets.reduce((sum, ts) => sum + tileCount(ts), 0);
+        $("info-tiles").textContent = `${tiles} 個 / セット ${doc.tilesets.length}`;
+    } else {
+        $("info-tiles").textContent = "—";
+    }
+    $("info-decor").textContent = `${doc.decor.length} / ${MAX_DECOR}`;
+    $("info-spawn").textContent = `(${doc.spawn.x}, ${doc.spawn.y})`;
+}
+
+/** 検証ステータスを更新する (やや重いので setDocument / 自動保存デバウンス内で呼ぶ)。 */
+function refreshInspectorValidation(): void {
+    const json = docToJsonAny(doc);
+    const bytes = new TextEncoder().encode(JSON.stringify(json)).length;
+    const r = validateEkmapAny(json, bytes);
+    const el = $("info-valid");
+    if (r.ok) {
+        el.textContent = "OK";
+        el.className = "info-valid-ok";
+    } else {
+        el.textContent = `NG: ${r.errors[0] ?? "エラー"}`;
+        el.className = "info-valid-ng";
+    }
 }
 
 // ---------- モード UI (v1 ツール列 ⇔ v2 レイヤータブ+ツール列) ----------
@@ -3905,6 +3968,7 @@ function wireUi(): void {
         void openLibraryDialog();
     });
     $("start-skip").addEventListener("click", () => hideStartScreen());
+    $("start-minigame").addEventListener("click", () => void openMinigame());
 
     // コーチマークボタン配線
     $("coach-next").addEventListener("click", () => showCoachStep(coachStep + 1));

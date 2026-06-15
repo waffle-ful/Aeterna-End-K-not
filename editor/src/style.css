@@ -244,6 +244,50 @@ button.primary:hover {
     margin: var(--space-sm) 0;
 }
 
+/* 右インスペクタ: マップ情報セクション */
+.inspector-section {
+    margin-bottom: var(--space-md);
+}
+
+.inspector-h {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: none;
+    margin: 0 0 var(--space-sm);
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--border-bar);
+}
+
+.info-grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 4px var(--space-sm);
+    margin: 0;
+    font-size: 12px;
+}
+
+.info-grid dt {
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.info-grid dd {
+    margin: 0;
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
+    font-variant-numeric: tabular-nums;
+}
+
+#info-valid.info-valid-ok {
+    color: var(--ok);
+    font-weight: 700;
+}
+
+#info-valid.info-valid-ng {
+    color: var(--danger);
+}
+
 /* 狭い画面ではレールを隠す (モバイルは従来の footer 操作のまま) */
 @media (max-width: 720px) {
     .shell-pane {
@@ -1592,6 +1636,24 @@ dialog#dlg-library {
     width: 100%;
     max-width: 720px;
     text-align: center;
+}
+
+/* ミニゲーム (Crew Run) 全画面オーバーレイ */
+#minigame-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 260; /* スタート画面 (200) より上 */
+    background: #0d1b2a;
+    overflow: hidden;
+    touch-action: none;
+}
+#minigame-overlay[hidden] {
+    display: none;
+}
+#minigame-overlay canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
 }
 
 #start-title {
