@@ -177,6 +177,80 @@ button.primary:hover {
     background: var(--accent);
 }
 
+/* =============================================================
+   3ペインシェルの土台 (#shell-body)
+   header / [左レール | viewport | 右インスペクタ] / footer の中段。
+   レールは折りたたみ式の足場。後で Svelte island を .pane-body に差す。
+   ============================================================= */
+
+#shell-body {
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: row;
+    min-height: 0;
+}
+
+.shell-pane {
+    flex: 0 0 auto;
+    display: flex;
+    background: var(--bg-1);
+    overflow: hidden;
+}
+
+.shell-pane[data-side="left"] {
+    flex-direction: row;
+    border-right: 1px solid var(--border-bar);
+}
+
+.shell-pane[data-side="right"] {
+    flex-direction: row-reverse;
+    border-left: 1px solid var(--border-bar);
+}
+
+/* 折りたたみ開閉バー: 縦書きの細い帯 */
+.pane-toggle {
+    flex: 0 0 auto;
+    width: 26px;
+    min-height: 0;
+    border: none;
+    border-radius: 0;
+    background: var(--bg-1);
+    color: var(--text-muted);
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    letter-spacing: 2px;
+    padding: var(--space-sm) 2px;
+}
+
+.pane-toggle:hover {
+    background: var(--bg-2);
+    color: var(--text-primary);
+}
+
+.pane-body {
+    width: 210px;
+    overflow-y: auto;
+    padding: var(--space-sm);
+}
+
+.shell-pane.collapsed .pane-body {
+    display: none;
+}
+
+.pane-placeholder {
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.7;
+    margin: var(--space-sm) 0;
+}
+
+/* 狭い画面ではレールを隠す (モバイルは従来の footer 操作のまま) */
+@media (max-width: 720px) {
+    .shell-pane {
+        display: none;
+    }
+}
+
 main#viewport {
     flex: 1 1 0;
     position: relative;

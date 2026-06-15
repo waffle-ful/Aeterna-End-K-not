@@ -35,6 +35,17 @@
     <!-- ツール説明リボン: ヘッダ直下に常駐。今選んでいるツールを一言で説明 -->
     <div id="tool-ribbon" aria-live="polite"></div>
 
+    <!-- 3ペインシェルの土台: 左レール | ビューポート | 右インスペクタ。
+         今は折りたたみ式の足場 (素DOM)。後で Svelte island をこの枠に差し込む。 -->
+    <div id="shell-body">
+    <aside id="left-rail" class="shell-pane collapsed" data-side="left" aria-label="道具パネル">
+      <button class="pane-toggle" id="left-rail-toggle" type="button" aria-expanded="false"
+              title="道具パネルを開く / 閉じる">道具</button>
+      <div class="pane-body">
+        <p class="pane-placeholder">ここに道具レール (壁 / 床 / 消しゴムなど) が入ります。<br>準備中です。</p>
+      </div>
+    </aside>
+
     <main id="viewport">
       <!-- レイヤー縦タブ: canvas の右端にオーバーレイ (v2 マップ時のみ表示) -->
       <div id="layer-vtabs" hidden aria-label="レイヤー選択">
@@ -54,6 +65,16 @@
         <button id="btn-tileset-vtab" title="タイルセット設定 (通行/★/遮光/タグ)" class="lvtab-chip">チップ設定</button>
       </div>
     </main>
+
+    <aside id="right-inspector" class="shell-pane collapsed" data-side="right" aria-label="インスペクタ">
+      <button class="pane-toggle" id="right-rail-toggle" type="button" aria-expanded="false"
+              title="インスペクタを開く / 閉じる">情報</button>
+      <div class="pane-body">
+        <p class="pane-placeholder">ここにレイヤー一覧とチップ属性が入ります。<br>準備中です。</p>
+      </div>
+    </aside>
+    </div>
+    <!-- /#shell-body -->
 
     <footer>
       <div id="layer-tabs" hidden>
