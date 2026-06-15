@@ -420,6 +420,72 @@ export function appendTileToAtlas(
 }
 
 /**
+ * 既存アトラス (columns 幅・rows 高さ) の末尾に、別シートの全タイルを密に追記する純関数。
+ * 「チップセット合体」用 — 複数素材を 1 つのタイルセットに束ねて 1 レイヤーで混在ペイントできるようにする。
+ *
+ * 不変条件:
+ *   - 両者は同じ tileSize 前提。
+ *   - columns は変えない。必要な行数だけ増やす。
+ *   - **既存タイルの id は不変** (base atlas をそのまま先頭にコピー) → 既存セルの参照が壊れない。
+ *   - シートのタイルは base のスロット数 (columns*rows) の直後から row-major に並ぶ。
+ *
+ * @param atlasRgba 既存アトラス RGBA (columns*tileSize 幅・rows*tileSize 高さ)
+ * @param columns   既存アトラスの列数 (不変)
+ * @param rows      既存アトラスの行数
+ * @param tileSize  タイルサイズ (px)
+ * @param sheetRgba 追記するシートの RGBA (sheetCols*tileSize 幅・sheetRows*tileSize 高さ)
+ * @param sheetCols シートの列数
+ * @param sheetRows シートの行数
+ * @returns { rgba, columns(=入力と同じ), rows(新), addedCount }
+ */
+export function appendSheetToAtlas(
+    atlasRgba: Uint8Array | Uint8ClampedArray,
+    columns: number,
+    rows: number,
+    tileSize: number,
+    sheetRgba: Uint8Array | Uint8ClampedArray,
+    sheetCols: number,
+    sheetRows: number,
+): { rgba: Uint8ClampedArray; columns: number; rows: number; addedCount: number } {
+    const baseTiles = columns * rows;
+    const addedCount = sheetCols * sheetRows;
+    const total = baseTiles + addedCount;
+    const outRows = Math.ceil(total / columns);
+
+    const atlasWidth = columns * tileSize;
+    const outHeight = outRows * tileSize;
+    const dst = new Uint8ClampedArray(atlasWidth * outHeight * 4);
+
+    // base アトラスをそのまま先頭にコピー (既存 id 不変。残りは透明 0 のまま)
+    dst.set(atlasRgba.subarray(0, Math.min(atlasRgba.length, dst.length)), 0);
+
+    const sheetWidth = sheetCols * tileSize;
+    for (let k = 0; k < addedCount; k++) {
+        const srcCol = k % sheetCols;
+        const srcRow = Math.floor(k / sheetCols);
+        const dstSlot = baseTiles + k;
+        const dstCol = dstSlot % columns;
+        const dstRow = Math.floor(dstSlot / columns);
+        const sx = srcCol * tileSize;
+        const sy = srcRow * tileSize;
+        const dx = dstCol * tileSize;
+        const dy = dstRow * tileSize;
+        for (let ty = 0; ty < tileSize; ty++) {
+            for (let tx = 0; tx < tileSize; tx++) {
+                const si = ((sy + ty) * sheetWidth + (sx + tx)) * 4;
+                const di = ((dy + ty) * atlasWidth + (dx + tx)) * 4;
+                dst[di] = sheetRgba[si];
+                dst[di + 1] = sheetRgba[si + 1];
+                dst[di + 2] = sheetRgba[si + 2];
+                dst[di + 3] = sheetRgba[si + 3];
+            }
+        }
+    }
+
+    return { rgba: dst, columns, rows: outRows, addedCount };
+}
+
+/**
  * nearest-neighbor で src RGBA (srcW×srcH) を dstW×dstH に縮小/拡大する純関数。
  * 出力は新しい Uint8ClampedArray。
  */

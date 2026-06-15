@@ -3,6 +3,7 @@
 import { describe, expect, it } from "vitest";
 import {
     type SliceParams,
+    appendSheetToAtlas,
     appendTileToAtlas,
     detectTransparentTiles,
     enumerateCandidates,
@@ -400,5 +401,80 @@ describe("resizeNearestNeighbor", () => {
         const src = new Uint8ClampedArray([1, 2, 3, 255, 4, 5, 6, 255, 7, 8, 9, 255, 10, 11, 12, 255]);
         const dst = resizeNearestNeighbor(src, 2, 2, 2, 2);
         expect([...dst]).toEqual([...src]);
+    });
+});
+
+// ============================================================
+// appendSheetToAtlas (チップセット合体)
+// ============================================================
+
+describe("appendSheetToAtlas", () => {
+    const TS = 4;
+
+    /** columns×rows のアトラスを作り、各スロットを (slot+1) の R 値で塗る (id 識別用) */
+    function makeAtlas(columns: number, rows: number): Uint8ClampedArray {
+        const w = columns * TS;
+        const buf = new Uint8ClampedArray(w * rows * TS * 4);
+        for (let slot = 0; slot < columns * rows; slot++) {
+            const col = slot % columns;
+            const row = Math.floor(slot / columns);
+            for (let ty = 0; ty < TS; ty++) {
+                for (let tx = 0; tx < TS; tx++) {
+                    const idx = ((row * TS + ty) * w + (col * TS + tx)) * 4;
+                    buf[idx] = slot + 1; buf[idx + 3] = 255;
+                }
+            }
+        }
+        return buf;
+    }
+
+    /** スロットの先頭ピクセル R 値を読む (id 確認用) */
+    function slotR(rgba: Uint8ClampedArray, columns: number, slot: number): number {
+        const w = columns * TS;
+        const col = slot % columns;
+        const row = Math.floor(slot / columns);
+        return rgba[((row * TS) * w + col * TS) * 4];
+    }
+
+    it("2×1 アトラスに 2×1 シートを合体 → 列不変・rows=2・addedCount=2", () => {
+        const atlas = makeAtlas(2, 1);   // base スロット 0,1 (R=1,2)
+        const sheet = makeAtlas(2, 1);   // sheet スロット 0,1 (R=1,2)
+        const r = appendSheetToAtlas(atlas, 2, 1, TS, sheet, 2, 1);
+        expect(r.columns).toBe(2);
+        expect(r.rows).toBe(2);
+        expect(r.addedCount).toBe(2);
+        // 既存 id 不変
+        expect(slotR(r.rgba, 2, 0)).toBe(1);
+        expect(slotR(r.rgba, 2, 1)).toBe(2);
+        // シートタイルは slot 2,3 に並ぶ (sheet の R=1,2)
+        expect(slotR(r.rgba, 2, 2)).toBe(1);
+        expect(slotR(r.rgba, 2, 3)).toBe(2);
+    });
+
+    it("満杯でない総数は ceil で行数を決める (base4 + sheet1 → 3行)", () => {
+        const atlas = makeAtlas(2, 2);   // 4 タイル
+        const sheet = makeAtlas(1, 1);   // 1 タイル (R=1)
+        const r = appendSheetToAtlas(atlas, 2, 2, TS, sheet, 1, 1);
+        expect(r.columns).toBe(2);
+        expect(r.rows).toBe(3);          // ceil(5/2)
+        expect(r.addedCount).toBe(1);
+        // base 4 タイル不変
+        for (let s = 0; s < 4; s++) expect(slotR(r.rgba, 2, s)).toBe(s + 1);
+        // シートタイルは slot 4 (row2,col0)
+        expect(slotR(r.rgba, 2, 4)).toBe(1);
+    });
+
+    it("複数行シートを合体しても base id が保たれる", () => {
+        const atlas = makeAtlas(3, 1);   // 3 タイル (R=1,2,3)
+        const sheet = makeAtlas(3, 2);   // 6 タイル
+        const r = appendSheetToAtlas(atlas, 3, 1, TS, sheet, 3, 2);
+        expect(r.rows).toBe(3);          // ceil(9/3)
+        expect(r.addedCount).toBe(6);
+        expect(slotR(r.rgba, 3, 0)).toBe(1);
+        expect(slotR(r.rgba, 3, 2)).toBe(3);
+        // sheet 先頭タイル (R=1) は slot 3
+        expect(slotR(r.rgba, 3, 3)).toBe(1);
+        // sheet 末尾タイル (R=6) は slot 8
+        expect(slotR(r.rgba, 3, 8)).toBe(6);
     });
 });

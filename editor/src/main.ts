@@ -39,6 +39,7 @@ import {
 import {
     type SliceCandidate,
     type SliceParams,
+    appendSheetToAtlas,
     appendTileToAtlas,
     detectTransparentTiles,
     enumerateCandidates,
@@ -2523,6 +2524,99 @@ function openAddTileDialog(): void {
     $<HTMLDialogElement>("dlg-add-tile").showModal();
 }
 
+/**
+ * 別の PNG シートを「現在アクティブな層のタイルセット」へまるごと合体する (チップセット合体)。
+ * 複数素材を 1 セットに束ねて 1 レイヤーで自由に混在ペイントできるようにするための機能。
+ * - 現在のタイルサイズで PNG をスライス (割り切れなければ中止)。
+ * - appendSheetToAtlas で末尾に密に追記 → 既存タイル id は不変。
+ * - 上限 (チップ数 / PNG バイト / JSON バイト) を検証してから差し替える。
+ */
+async function mergeSheetFromFile(file: File): Promise<void> {
+    if (!isV3Doc(doc)) {
+        toast("チップセット合体はタイルセットマップのみ対応しています");
+        return;
+    }
+    if (!file.type.includes("png") && !file.name.toLowerCase().endsWith(".png")) {
+        toast("PNG ファイルを選択してください");
+        return;
+    }
+    const d = doc;
+    const tsIdx = d.layers[activeLayerIndexV3()].tileset;
+    const ts = d.tilesets[tsIdx] ?? d.tilesets[0];
+    const { tileSize, columns, rows } = ts;
+
+    // 1. PNG を読み込む
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const dataUri = PNG_DATA_URI_PREFIX + bytesToBase64(bytes);
+    const pngInfo = parsePngDataUri(dataUri);
+    if (!pngInfo.ok) {
+        toast(`PNG エラー: ${pngInfo.error}`);
+        return;
+    }
+    // 2. 現在のタイルサイズで割り切れるか
+    if (pngInfo.width % tileSize !== 0 || pngInfo.height % tileSize !== 0) {
+        showMessages("チップセットを合体できません", [
+            `合体するには現在のセットと同じタイルサイズ (${tileSize}px) で割り切れる PNG が必要です。`,
+            `このPNGは ${pngInfo.width}×${pngInfo.height}px で ${tileSize}px の格子に乗りません。`,
+        ], []);
+        return;
+    }
+    const sheetCols = pngInfo.width / tileSize;
+    const sheetRows = pngInfo.height / tileSize;
+    const addedCount = sheetCols * sheetRows;
+
+    // 3. 上限チェック (チップ数)
+    if (tileCount(ts) + addedCount > MAX_TILECOUNT) {
+        showMessages("チップセットを合体できません", [
+            `合体後のチップ数 ${tileCount(ts) + addedCount} が上限 ${MAX_TILECOUNT} を超えます。`,
+        ], []);
+        return;
+    }
+
+    const sheetRgba = await getPngRgba(dataUri);
+    const atlasRgba = await getPngRgba(ts.image);
+    if (!sheetRgba || !atlasRgba) {
+        toast("画像の読み込みに失敗しました");
+        return;
+    }
+
+    // 4. 合体 (純関数) → PNG data URI 再エンコード
+    const merged = appendSheetToAtlas(atlasRgba.rgba, columns, rows, tileSize, sheetRgba.rgba, sheetCols, sheetRows);
+    const newImageUri = rgbaToPngDataUri(merged.rgba, columns * tileSize, merged.rows * tileSize);
+
+    // 5. PNG / JSON サイズ検証
+    const approxBytes = Math.floor((newImageUri.length - PNG_DATA_URI_PREFIX.length) * 3 / 4);
+    if (approxBytes > MAX_TILESET_IMAGE_BYTES) {
+        showMessages("チップセットを合体できません", [
+            `合体後のアトラス PNG が 1 MB を超えます (約 ${(approxBytes / 1024).toFixed(1)} KB)。素材を減らすか小さくしてください。`,
+        ], []);
+        return;
+    }
+    if (JSON.stringify({ image: newImageUri }).length > MAX_JSON_BYTES_V2) {
+        showMessages("チップセットを合体できません", [
+            `合体後のマップ JSON が 4 MB を超える見込みです。素材を減らしてください。`,
+        ], []);
+        return;
+    }
+
+    // 6. tiles[] を addedCount 分だけデフォルト属性で拡張して差し替え
+    const newTiles = [...ts.tiles];
+    while (newTiles.length < columns * merged.rows) newTiles.push(defaultTileAttr());
+    const newTileset: TilesetDoc = { tileSize, columns, rows: merged.rows, image: newImageUri, tiles: newTiles };
+    d.tilesets[tsIdx] = newTileset;
+
+    // 7. 反映 (タイルセット差し替えは Undo 非対応 = 既存パターンどおり history.clear)
+    history.clear();
+    refreshUndoButtons();
+    renderer.setDoc(d);
+    void rebuildPicker();
+    drawTilesetPanel();
+    refreshModeUi();
+    scheduleSave();
+    updateStatus();
+    toast(`シートを合体しました (+${addedCount} チップ → 計 ${tileCount(newTileset)} チップ)`);
+}
+
 function wireUi(): void {
     // v1 ツールパレット
     const toolButtons = [...document.querySelectorAll<HTMLButtonElement>("#tools .tool")];
@@ -3101,6 +3195,18 @@ function wireUi(): void {
     // タイル1枚追加ボタン (オーバーレイ + 帯)
     $("btn-add-tile-overlay").addEventListener("click", () => openAddTileDialog());
     $("btn-add-tile-strip").addEventListener("click", () => openAddTileDialog());
+
+    // チップセット合体: 別シートをまるごと現在のセットへ
+    const mergeSheetInput = $<HTMLInputElement>("merge-sheet-input");
+    $("btn-merge-sheet-overlay").addEventListener("click", () => {
+        if (!isV3Doc(doc)) { toast("チップセット合体はタイルセットマップのみ対応しています"); return; }
+        mergeSheetInput.click();
+    });
+    mergeSheetInput.addEventListener("change", async () => {
+        const f = mergeSheetInput.files?.[0];
+        mergeSheetInput.value = "";
+        if (f) await mergeSheetFromFile(f);
+    });
 
     // タイル追加ダイアログ: ファイル入力
     const addTileInput = $<HTMLInputElement>("add-tile-input");

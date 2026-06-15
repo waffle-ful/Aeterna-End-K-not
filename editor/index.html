@@ -127,6 +127,7 @@
           使用中のみ
         </label>
         <button id="btn-add-tile-overlay" title="PNG を1枚追加してタイルセットに追記します" class="add-tile-btn">+ タイルを追加</button>
+        <button id="btn-merge-sheet-overlay" title="別の PNG シートをまるごとこのセットに合体します (複数素材を1パレットに束ねる)" class="add-tile-btn">🧩 シートを合体</button>
         <button id="btn-palette-collapse" title="帯に戻る" aria-label="閉じる">▼▼</button>
       </div>
       <div id="palette-grid-wrap">
@@ -137,6 +138,7 @@
     <input type="file" id="file-input" accept=".json,application/json" hidden />
     <input type="file" id="png-input" accept=".png,image/png" hidden />
     <input type="file" id="add-tile-input" accept=".png,image/png" hidden />
+    <input type="file" id="merge-sheet-input" accept=".png,image/png" hidden />
     <div id="toast" hidden></div>
 
     <dialog id="dlg-new">
