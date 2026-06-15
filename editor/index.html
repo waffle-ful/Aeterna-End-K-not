@@ -35,12 +35,16 @@
     <main id="viewport">
       <!-- レイヤー縦タブ: canvas の右端にオーバーレイ (v2 マップ時のみ表示) -->
       <div id="layer-vtabs" hidden aria-label="レイヤー選択">
+        <!-- レイヤータブ群 (1-4) と 👤区切り行は refreshModeUi() で above フラグ順に並べ替える -->
         <button class="lvtab active" data-layer="ground" title="レイヤー1">1</button>
         <button class="lvtab" data-layer="upper" title="レイヤー2">2</button>
         <button class="lvtab" data-layer="layer3" title="レイヤー3">3</button>
         <button class="lvtab" data-layer="layer4" title="レイヤー4">4</button>
+        <!-- 👤 プレイヤー区切り行: この上のレイヤーがプレイヤーの前面に描画される -->
+        <div id="vtab-player" class="lvtab-player" title="この線より上のレイヤーはプレイヤーの前に表示されます" hidden>👤</div>
         <!-- ⚙ レイヤー設定ボタン: アクティブなタイル層タブ時のみ表示 -->
         <button id="btn-layer-settings" class="lvtab-gear" title="レイヤーの使うチップセット・上表示などを設定" hidden>⚙</button>
+        <button id="btn-ghost" class="lvtab-ghost active" title="プレイヤー人形を表示して前後関係を確認 (ドラッグで移動)">人形</button>
         <button class="lvtab" data-layer="decor">装飾</button>
         <button class="lvtab" data-layer="spawn">スポーン</button>
         <button class="lvtab" data-layer="shadow" title="影レイヤー — 遮蔽辺を引きます (影だけ・通行はふさがない)">影</button>

@@ -14,9 +14,18 @@ export interface GestureHandlers {
     /** float セル座標のホバー通知 */
     hover(x: number, y: number): void;
     viewChanged(): void;
+    /**
+     * ゴーストプレイヤー人形の掴み判定 (float セル座標)。
+     * true を返すと塗りではなくゴーストドラッグに入る。
+     */
+    tryGrabGhost(x: number, y: number): boolean;
+    /** ゴーストドラッグ中の移動 (float セル座標) */
+    ghostDragTo(x: number, y: number): void;
+    /** ゴーストドラッグ終了 */
+    ghostDragEnd(): void;
 }
 
-type Mode = "idle" | "stroke" | "pan" | "pinch";
+type Mode = "idle" | "stroke" | "pan" | "pinch" | "ghostdrag";
 
 interface Pt {
     x: number;
@@ -68,6 +77,18 @@ export class InputController {
         this.h.strokeStart(Math.floor(c.x), Math.floor(c.y));
     }
 
+    /**
+     * ゴースト人形の上で押下したらドラッグモードに入る。掴めたら true。
+     * 掴めなかったときだけ通常の beginStroke を呼ぶこと。
+     */
+    private tryBeginGhost(id: number, p: Pt): boolean {
+        const c = this.toCell(p);
+        if (!this.h.tryGrabGhost(c.x, c.y)) return false;
+        this.mode = "ghostdrag";
+        this.strokeId = id;
+        return true;
+    }
+
     private startPinch(): void {
         const [a, b] = [...this.pointers.values()];
         this.mode = "pinch";
@@ -97,7 +118,7 @@ export class InputController {
                 return;
             }
             if (this.pointers.size > 2) return;
-            if (this.mode === "idle") this.beginStroke(e.pointerId, p);
+            if (this.mode === "idle" && !this.tryBeginGhost(e.pointerId, p)) this.beginStroke(e.pointerId, p);
         } else {
             if (e.button === 1 || (e.button === 0 && this.spaceDown)) {
                 e.preventDefault();
@@ -105,7 +126,7 @@ export class InputController {
                 this.lastPan = p;
                 this.canvas.style.cursor = "grabbing";
             } else if (e.button === 0 && this.mode === "idle") {
-                this.beginStroke(e.pointerId, p);
+                if (!this.tryBeginGhost(e.pointerId, p)) this.beginStroke(e.pointerId, p);
             }
         }
     };
@@ -134,6 +155,8 @@ export class InputController {
                 }
             }
             this.lastCell = c;
+        } else if (this.mode === "ghostdrag" && e.pointerId === this.strokeId) {
+            this.h.ghostDragTo(c.x, c.y);
         } else if (this.mode === "pan" && this.pointers.size >= 1) {
             this.world.position.x += p.x - this.lastPan.x;
             this.world.position.y += p.y - this.lastPan.y;
@@ -160,6 +183,10 @@ export class InputController {
             this.mode = "idle";
             this.lastCell = null;
             this.strokeId = -1;
+        } else if (this.mode === "ghostdrag" && e.pointerId === this.strokeId) {
+            this.h.ghostDragEnd();
+            this.mode = "idle";
+            this.strokeId = -1;
         } else if (this.mode === "pinch") {
             if (this.pointers.size === 1) {
                 // ピンチ → 残り 1 本指はパン継続
@@ -180,6 +207,9 @@ export class InputController {
         if (this.mode === "stroke" && e.pointerId === this.strokeId) {
             this.h.strokeCancel();
             this.lastCell = null;
+            this.strokeId = -1;
+        } else if (this.mode === "ghostdrag" && e.pointerId === this.strokeId) {
+            this.h.ghostDragEnd();
             this.strokeId = -1;
         }
         if (this.pointers.size === 0) this.mode = "idle";

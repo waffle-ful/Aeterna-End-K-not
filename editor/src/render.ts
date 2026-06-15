@@ -103,6 +103,30 @@ function buildSpawnMarker(): Container {
     return c;
 }
 
+/**
+ * ドラッグ可能なゴーストプレイヤー人形 (前後関係プレビュー用)。
+ * クルーメイト風シルエット: 半透明の胴体 + バイザー + 接地影。中心が原点。
+ */
+function buildGhost(): Container {
+    const c = new Container();
+    const bw = CELL * 0.52; // 体の幅
+    const bh = CELL * 0.62; // 体の高さ
+    const g = new Graphics();
+    // 接地影
+    g.ellipse(0, bh * 0.46, bw * 0.5, CELL * 0.1).fill({ color: 0x000000, alpha: 0.28 });
+    // バックパック
+    g.roundRect(bw * 0.26, -bh * 0.28, bw * 0.26, bh * 0.5, bw * 0.12).fill({ color: 0xc0413f, alpha: 0.85 });
+    // 胴体 (カプセル)
+    g.roundRect(-bw * 0.5, -bh * 0.5, bw, bh, bw * 0.32).fill({ color: 0xe0524f, alpha: 0.9 }).stroke({ width: 1.5, color: 0x3a0d0c, alpha: 0.6 });
+    // 脚
+    g.roundRect(-bw * 0.34, bh * 0.34, bw * 0.26, bh * 0.22, bw * 0.08).fill({ color: 0xc0413f, alpha: 0.9 });
+    g.roundRect(bw * 0.08, bh * 0.34, bw * 0.26, bh * 0.22, bw * 0.08).fill({ color: 0xc0413f, alpha: 0.9 });
+    // バイザー
+    g.roundRect(-bw * 0.12, -bh * 0.22, bw * 0.5, bh * 0.28, bh * 0.12).fill({ color: 0x9fdcef, alpha: 0.92 }).stroke({ width: 1.5, color: 0x2a5663, alpha: 0.6 });
+    c.addChild(g);
+    return c;
+}
+
 export class MapRenderer {
     readonly app = new Application();
     readonly world = new Container();
@@ -114,8 +138,23 @@ export class MapRenderer {
     private ovlTexture: Texture | null = null;
     private baseSprite: Sprite | null = null;
     private ovlSprite: Sprite | null = null;
+    /**
+     * over キャンバス: ghostVisible 時、プレイヤーより前面 (cellAboveMask のビットが立つ) タイルだけを描く。
+     * ゴースト人形の z 上に重ねることで「プレイヤーの前に出るタイル」を実描画でプレビューする。
+     * base + over の 2 枚構成 (罠15 のメモリ予算「2 枚 + over はスパース」の上限内)。
+     */
+    private overCtx: CanvasRenderingContext2D | null = null;
+    private overTexture: Texture | null = null;
+    private overSprite: Sprite | null = null;
     private readonly decorLayer = new Container();
     private spawnMarker: Container | null = null;
+    /** ドラッグ可能なゴーストプレイヤー人形 (前後関係プレビュー用、.ekmap には保存しない) */
+    private ghostPlayer: Container | null = null;
+    /** ゴースト表示中か (v3 既定 ON)。false で従来のフラット描画にフォールバック */
+    private ghostVisible = true;
+    /** ゴースト中心のセル座標 (float)。setDoc で spawn 中央にリセット */
+    private ghostX = 0;
+    private ghostY = 0;
     private readonly hover = new Graphics();
     private readonly rectPreview = new Graphics();
     /** 影線オーバーレイ: baseSprite → decorLayer → spawnMarker → shadowLayer → ovlSprite → rectPreview → hover の順 */
@@ -177,6 +216,14 @@ export class MapRenderer {
             this.ovlTexture.destroy(true);
             this.ovlTexture = null;
         }
+        if (this.overSprite) {
+            this.overSprite.destroy();
+            this.overSprite = null;
+        }
+        if (this.overTexture) {
+            this.overTexture.destroy(true);
+            this.overTexture = null;
+        }
 
         // v3 はタイルの絵を保つため可能な範囲で高解像度に (キャンバス辺 4096px 以内)
         if (isV3Doc(doc)) {
@@ -206,8 +253,33 @@ export class MapRenderer {
         this.ovlSprite.alpha = 0.95;
         this.ovlSprite.visible = this.overlayOn;
 
+        // over キャンバス (base と同寸法・NEAREST)。前面タイルだけを描く透過レイヤー。
+        // v3 のときだけ確保する (v1/v2 は層/above 概念が無く無駄なので作らない = メモリ予算節約)。
+        const v3 = isV3Doc(doc);
+        if (v3) {
+            const over = document.createElement("canvas");
+            over.width = doc.width * this.texpx;
+            over.height = doc.height * this.texpx;
+            this.overCtx = over.getContext("2d");
+            if (this.overCtx) this.overCtx.imageSmoothingEnabled = false;
+            this.overTexture = Texture.from(over);
+            this.overTexture.source.scaleMode = "nearest";
+            this.overSprite = new Sprite(this.overTexture);
+            this.overSprite.scale.set(CELL / this.texpx);
+            this.overSprite.visible = this.ghostVisible;
+        }
+
         this.spawnMarker ??= buildSpawnMarker();
-        this.world.addChild(this.baseSprite, this.decorLayer, this.spawnMarker, this.shadowLayer, this.shadowPreview, this.ovlSprite, this.rectPreview, this.hover);
+        this.ghostPlayer ??= buildGhost();
+        // ゴーストを spawn 中央へ。v3 のときだけ表示する。
+        this.ghostX = doc.spawn.x + 0.5;
+        this.ghostY = doc.spawn.y + 0.5;
+        this.ghostPlayer.visible = v3 && this.ghostVisible;
+        this.updateGhost();
+        // z 順: base(背面) → 装飾 → spawn → 影 → 👤ゴースト → over(前面) → 通行overlay → 矩形 → ホバー
+        this.world.addChild(this.baseSprite, this.decorLayer, this.spawnMarker, this.shadowLayer, this.shadowPreview, this.ghostPlayer);
+        if (this.overSprite) this.world.addChild(this.overSprite);
+        this.world.addChild(this.ovlSprite, this.rectPreview, this.hover);
         this.rectPreview.visible = false;
 
         if (isV3Doc(doc)) {
@@ -319,8 +391,12 @@ export class MapRenderer {
         ctx.fillRect(px, py, t, t);
 
         const activeIdx = this.activeLayerIdx;
+        const aboveMask = cellAboveMask(doc, i);
+        // ghostVisible 時は前面タイルを over キャンバスへ分離。over の同セルは先に消す。
+        const split = this.ghostVisible && this.overCtx != null;
+        if (split) this.overCtx?.clearRect(px, py, t, t);
 
-        // 層 0〜3 昇順で描画 (薄表示対応)
+        // 層 0〜3 昇順で描画 (薄表示対応)。前面タイルは over、それ以外は base へ。
         for (let li = 0; li < doc.layers.length; li++) {
             const layer = doc.layers[li];
             const tid = layer.cells[i];
@@ -329,17 +405,19 @@ export class MapRenderer {
             if (!ts) continue;
             const img = this.tilesetImgs[layer.tileset] ?? null;
             const alpha = (activeIdx === null || li === activeIdx) ? 1 : 0.35;
+            const isAbove = split && (aboveMask & (1 << li)) !== 0;
+            const target = isAbove ? (this.overCtx as CanvasRenderingContext2D) : ctx;
             if (alpha !== 1) {
-                ctx.globalAlpha = alpha;
+                target.globalAlpha = alpha;
             }
-            this.drawTile(ctx, ts, img, tid, px, py, t);
+            this.drawTile(target, ts, img, tid, px, py, t);
             if (alpha !== 1) {
-                ctx.globalAlpha = 1;
+                target.globalAlpha = 1;
             }
         }
 
-        // ★バッジ (over=true のタイルを含むセル、または layer.above=true の層があるセル)
-        const aboveMask = cellAboveMask(doc, i);
+        // ★バッジ (over=true のタイルを含むセル、または layer.above=true の層があるセル)。
+        // ゴースト表示中は実際に前面描画されるので冗長だが、ゴースト OFF 時の静的ヒントとして残す。
         if (aboveMask !== 0) {
             ctx.fillStyle = "rgba(0,0,0,0.55)";
             ctx.fillRect(px + t * 0.62, py, t * 0.38, t * 0.38);
@@ -361,6 +439,52 @@ export class MapRenderer {
         this.activeLayerIdx = idx;
         this.redrawAll();
         this.flush();
+    }
+
+    // ---- ゴーストプレイヤー (前後関係プレビュー) ----------------------------
+
+    /** ゴースト人形の位置を現在の ghostX/ghostY に同期 */
+    private updateGhost(): void {
+        if (this.ghostPlayer) this.ghostPlayer.position.set(this.ghostX * CELL, this.ghostY * CELL);
+    }
+
+    getGhostVisible(): boolean {
+        return this.ghostVisible;
+    }
+
+    /** ゴースト表示を切り替える。OFF で従来のフラット描画 (全タイルを base) に戻る */
+    setGhostVisible(on: boolean): void {
+        if (this.ghostVisible === on) return;
+        this.ghostVisible = on;
+        const v3 = this.doc != null && isV3Doc(this.doc);
+        if (this.ghostPlayer) this.ghostPlayer.visible = v3 && on;
+        if (this.overSprite) this.overSprite.visible = v3 && on;
+        // base/over の振り分けが変わるので全再描画
+        this.redrawAll();
+        this.flush();
+    }
+
+    /** float セル座標がゴースト人形の当たり判定内か (掴み判定) */
+    ghostHitTest(fx: number, fy: number): boolean {
+        if (!this.ghostVisible || this.doc == null || !isV3Doc(this.doc)) return false;
+        return Math.abs(fx - this.ghostX) <= 0.5 && Math.abs(fy - this.ghostY) <= 0.6;
+    }
+
+    /** ゴーストをドラッグ移動 (float セル座標、マップ内にクランプ) */
+    setGhostCellFloat(fx: number, fy: number): void {
+        const doc = this.doc;
+        if (!doc) return;
+        this.ghostX = Math.max(0.5, Math.min(doc.width - 0.5, fx));
+        this.ghostY = Math.max(0.5, Math.min(doc.height - 0.5, fy));
+        this.updateGhost();
+    }
+
+    beginGhostDrag(): void {
+        this.app.canvas.style.cursor = "grabbing";
+    }
+
+    endGhostDrag(): void {
+        this.app.canvas.style.cursor = "crosshair";
     }
 
     private drawCellOvl(x: number, y: number): void {
@@ -424,6 +548,7 @@ export class MapRenderer {
     flush(): void {
         this.baseTexture?.source.update();
         this.ovlTexture?.source.update();
+        this.overTexture?.source.update();
     }
 
     rebuildDecor(): void {

@@ -269,11 +269,15 @@ function refreshModeUi(): void {
     if (v3) void rebuildPicker();
 }
 
-/** 各レイヤータブに above=true のバッジ (↑) を表示/非表示 */
+/**
+ * 各レイヤータブに above=true のバッジ (↑) を付け、ゴースト表示中は
+ * 👤 区切り行を境に「前面 (above) を上 / 背面を下」に並べ替える。
+ */
 function updateLayerAboveBadges(d: import("./model").MapDocV3): void {
     const mapping: [LayerTab, number][] = [
         ["ground", 0], ["upper", 1], ["layer3", 2], ["layer4", 3],
     ];
+    const tabs = new Map<LayerTab, HTMLButtonElement>();
     for (const [tabName, idx] of mapping) {
         const btn = document.querySelector<HTMLButtonElement>(`#layer-vtabs .lvtab[data-layer="${tabName}"]`);
         if (!btn) continue;
@@ -281,7 +285,25 @@ function updateLayerAboveBadges(d: import("./model").MapDocV3): void {
         const baseLabel = tabName === "ground" ? "1" : tabName === "upper" ? "2" : tabName === "layer3" ? "3" : "4";
         btn.textContent = above ? `${baseLabel} ↑` : baseLabel;
         btn.title = above ? `レイヤー${baseLabel} (プレイヤーより上に描画)` : `レイヤー${baseLabel}`;
+        btn.classList.toggle("above", above);
+        tabs.set(tabName, btn);
     }
+
+    // 👤 区切り行を含めた並べ替え。ゴースト表示中だけ前後で分け、それ以外は素直に 1→4。
+    const divider = $("vtab-player");
+    const anchor = $("btn-layer-settings"); // 区切り行・タブ群はこのボタンの直前にまとめる
+    const container = $("layer-vtabs");
+    const ghostOn = renderer.getGhostVisible();
+    const above: HTMLElement[] = [];
+    const below: HTMLElement[] = [];
+    for (const [tabName, idx] of mapping) {
+        const btn = tabs.get(tabName);
+        if (!btn) continue;
+        (ghostOn && (d.layers[idx]?.above ?? false) ? above : below).push(btn);
+    }
+    divider.hidden = !ghostOn;
+    const order: HTMLElement[] = ghostOn ? [...above, divider, ...below] : [...above, ...below];
+    for (const el of order) container.insertBefore(el, anchor);
 }
 
 function setActiveLayer(l: LayerTab): void {
@@ -2063,6 +2085,14 @@ function wireUi(): void {
     // ⚙ レイヤー設定ボタン
     $("btn-layer-settings").addEventListener("click", () => void openLayerDialog());
 
+    // 👤 人形トグル: プレイヤー前後関係プレビューの表示切替
+    $("btn-ghost").addEventListener("click", () => {
+        const on = !renderer.getGhostVisible();
+        renderer.setGhostVisible(on);
+        $("btn-ghost").classList.toggle("active", on);
+        if (isV3Doc(doc)) updateLayerAboveBadges(doc);
+    });
+
     // dlg-layer: above チェックボックス
     $<HTMLInputElement>("dlg-layer-above").addEventListener("change", (e) => {
         if (!isV3Doc(doc)) return;
@@ -2602,6 +2632,14 @@ async function boot(): Promise<void> {
             updateStatus();
         },
         viewChanged: updateStatus,
+        // ゴーストプレイヤー (前後関係プレビュー): v3 のみ・人形の上で押下したら掴む
+        tryGrabGhost: (fx, fy) => {
+            if (!isV3Doc(doc) || !renderer.ghostHitTest(fx, fy)) return false;
+            renderer.beginGhostDrag();
+            return true;
+        },
+        ghostDragTo: (fx, fy) => renderer.setGhostCellFloat(fx, fy),
+        ghostDragEnd: () => renderer.endGhostDrag(),
     });
 
     updateStatus();

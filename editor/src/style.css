@@ -906,6 +906,64 @@ dialog#dlg-add-tile {
     display: none;
 }
 
+/* 👤 プレイヤー区切り行: この線より上のレイヤーがプレイヤーの前面 */
+.lvtab-player {
+    min-width: 48px;
+    min-height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    font-size: 13px;
+    color: var(--text-muted);
+    border-top: 2px dashed var(--accent);
+    border-bottom: 2px dashed var(--accent);
+    background: rgba(255, 224, 102, 0.08);
+    user-select: none;
+    pointer-events: none;
+}
+
+.lvtab-player[hidden] {
+    display: none;
+}
+
+/* 前面 (above) レイヤーのタブ: 前に出ることを色で示す */
+.lvtab.above {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+/* 👤 人形トグルボタン */
+.lvtab-ghost {
+    min-width: 48px;
+    min-height: 26px;
+    padding: 3px 6px;
+    font-size: 11px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    border-radius: var(--radius-sm);
+    line-height: 1;
+    cursor: pointer;
+    text-align: center;
+}
+
+.lvtab-ghost::before {
+    content: "👤 ";
+}
+
+.lvtab-ghost:hover {
+    background: #34343f;
+    color: var(--accent);
+    border-color: var(--accent);
+}
+
+.lvtab-ghost.active {
+    outline: 2px solid var(--ok);
+    background: var(--bg-active-ok);
+    color: var(--ok);
+}
+
 /* =============================================================
    レイヤー設定ダイアログ (dlg-layer)
    ============================================================= */
