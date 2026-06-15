@@ -127,8 +127,11 @@
         <button class="tool2" data-tool2="pen">ペン</button>
         <button class="tool2" data-tool2="erase">消去</button>
         <button class="tool2" data-tool2="rect">矩形</button>
+        <button class="tool2" data-tool2="line" title="直線 — ドラッグで直線を引きます">直線</button>
         <button class="tool2" data-tool2="bucket">バケツ</button>
-        <button class="tool2" data-tool2="pick">スポイト</button>
+        <button class="tool2" data-tool2="pick" title="スポイト — クリックでチップを吸い取り、ドラッグで範囲コピーします">スポイト</button>
+        <button id="btn-rect-outline" class="tool2-toggle" title="矩形の枠だけ描く (「矩形」ツール選択時に有効)">□ 枠だけ</button>
+        <button id="btn-random-paint" class="tool2-toggle" title="スタンプからランダムに1枚選んで置く (複数チップ選択時に有効)">🎲 ランダム</button>
         <!-- オートタイルブラシ選択 + 設定ボタン -->
         <div id="autotile-strip" class="autotile-strip">
           <select id="at-brush-select" title="自動つなぎブラシを選択 (通常=1枚タイルペン)">
