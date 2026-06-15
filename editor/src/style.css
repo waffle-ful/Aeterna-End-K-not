@@ -1431,3 +1431,61 @@ dialog#dlg-layer {
     color: var(--text-primary);
     margin-bottom: var(--space-sm);
 }
+
+/* =============================================================
+   書庫ダイアログ (dlg-library)
+   ============================================================= */
+
+dialog#dlg-library {
+    width: min(96vw, 560px);
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+#library-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    margin: var(--space-sm) 0;
+    min-height: 40px;
+}
+
+.library-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+}
+
+.library-info {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    overflow: hidden;
+}
+
+.library-name {
+    font-weight: bold;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.library-meta {
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.library-btns {
+    display: flex;
+    gap: var(--space-xs);
+    flex-shrink: 0;
+}

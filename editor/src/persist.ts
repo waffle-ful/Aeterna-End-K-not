@@ -30,21 +30,105 @@ import { v1ToV3 } from "./presets";
 
 const DB_NAME = "ekmap-editor";
 const STORE = "docs";
+const LIBRARY_STORE = "library";
 const KEY = "autosave";
 /** 新規作成・ファイル読込・コード読込の直前に退避するバックアップスロット */
 const KEY_BACKUP = "autosave-backup";
 /** オートタイル定義 (エディタ専用・.ekmap には出さない) の保存キー */
 const KEY_AUTOTILES = "autosave-autotiles";
 
+/** 書庫の1エントリ */
+export interface LibraryEntry {
+    id: string;
+    name: string;
+    author: string;
+    updatedAt: number;
+    doc: unknown;
+}
+
 function openDb(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
-        const req = indexedDB.open(DB_NAME, 1);
+        const req = indexedDB.open(DB_NAME, 2);
         req.onupgradeneeded = () => {
-            req.result.createObjectStore(STORE);
+            const db = req.result;
+            if (!db.objectStoreNames.contains(STORE)) {
+                db.createObjectStore(STORE);
+            }
+            if (!db.objectStoreNames.contains(LIBRARY_STORE)) {
+                db.createObjectStore(LIBRARY_STORE);
+            }
         };
         req.onsuccess = () => resolve(req.result);
         req.onerror = () => reject(req.error);
     });
+}
+
+// ---------- 書庫 (library store) API ----------
+
+/** 書庫の全エントリを updatedAt 降順で返す。失敗時は [] */
+export async function listLibrary(): Promise<LibraryEntry[]> {
+    try {
+        const db = await openDb();
+        try {
+            const entries = await new Promise<LibraryEntry[]>((resolve, reject) => {
+                const tx = db.transaction(LIBRARY_STORE, "readonly");
+                const req = tx.objectStore(LIBRARY_STORE).getAll();
+                req.onsuccess = () => resolve(req.result as LibraryEntry[]);
+                req.onerror = () => reject(req.error);
+            });
+            entries.sort((a, b) => b.updatedAt - a.updatedAt);
+            return entries;
+        } finally {
+            db.close();
+        }
+    } catch {
+        return [];
+    }
+}
+
+/** 書庫にエントリを保存 (key = entry.id) */
+export async function putLibrary(entry: LibraryEntry): Promise<void> {
+    const db = await openDb();
+    try {
+        await new Promise<void>((resolve, reject) => {
+            const tx = db.transaction(LIBRARY_STORE, "readwrite");
+            tx.objectStore(LIBRARY_STORE).put(entry, entry.id);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+        });
+    } finally {
+        db.close();
+    }
+}
+
+/** 書庫から1エントリを取得。存在しない場合 undefined */
+export async function getLibrary(id: string): Promise<LibraryEntry | undefined> {
+    const db = await openDb();
+    try {
+        return await new Promise<LibraryEntry | undefined>((resolve, reject) => {
+            const tx = db.transaction(LIBRARY_STORE, "readonly");
+            const req = tx.objectStore(LIBRARY_STORE).get(id);
+            req.onsuccess = () => resolve(req.result as LibraryEntry | undefined);
+            req.onerror = () => reject(req.error);
+        });
+    } finally {
+        db.close();
+    }
+}
+
+/** 書庫からエントリを削除 */
+export async function deleteLibrary(id: string): Promise<void> {
+    const db = await openDb();
+    try {
+        await new Promise<void>((resolve, reject) => {
+            const tx = db.transaction(LIBRARY_STORE, "readwrite");
+            tx.objectStore(LIBRARY_STORE).delete(id);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+        });
+    } finally {
+        db.close();
+    }
 }
 
 /**
