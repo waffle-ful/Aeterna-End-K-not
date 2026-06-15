@@ -87,7 +87,16 @@
           <h3 class="inspector-h">レイヤー</h3>
           <div id="right-layers" class="layer-list"></div>
         </section>
-        <p class="pane-placeholder">チップ属性は準備中です。</p>
+        <section class="inspector-section">
+          <h3 class="inspector-h">チップ属性</h3>
+          <div id="tileattr-controls" class="tileattr-controls" hidden>
+            <p class="tileattr-which">選択中: チップ <span id="tileattr-id">0</span></p>
+            <button class="tileattr-btn" id="tileattr-pass" type="button">通行: —</button>
+            <button class="tileattr-btn" id="tileattr-over" type="button">★ 上に描画: —</button>
+            <button class="tileattr-btn" id="tileattr-light" type="button">遮光: —</button>
+          </div>
+          <p class="pane-placeholder" id="tileattr-note">タイルのレイヤーを選ぶと、選択中チップの属性をここで変えられます。</p>
+        </section>
       </div>
     </aside>
     </div>

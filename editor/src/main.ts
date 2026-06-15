@@ -28,6 +28,7 @@ import {
     TILESIZE_DEFAULT,
     TILESIZE_MAX,
     TILESIZE_MIN,
+    type TileAttr,
     type TilesetDoc,
     coordToCell,
     createNewDocV3,
@@ -111,10 +112,11 @@ const TOOL_HINTS_V1: Record<ToolV1, string> = {
 };
 
 function updateRibbon(): void {
-    // 左レールの道具リモコン・右レールのレイヤー一覧も同期
+    // 左レールの道具リモコン・右レールのレイヤー一覧/チップ属性も同期
     // (フッタ/縦タブの active/hidden は呼び出し時点で確定済み)
     refreshToolRail();
     refreshLayerList();
+    refreshTileAttrs();
     const el = $("tool-ribbon");
     const v3 = isV3Doc(doc);
     if (!v3) {
@@ -418,6 +420,7 @@ function wireShellPanes(): void {
                 refreshInspector();
                 refreshInspectorValidation();
                 refreshLayerList();
+                refreshTileAttrs();
             }
         });
     };
@@ -695,6 +698,55 @@ function refreshLayerList(): void {
     }
 }
 
+// ---------- 右インスペクタ: チップ属性 (常駐編集) ----------
+// 選択中チップの通行/上描画/遮光を、チップ設定ダイアログを開かずに編集する。
+// 正本はタイルセットの TileAttr。cycleTileAttr と同じ副作用を踏襲する。
+
+/** 選択中チップの属性を mutate し、描画・保存・各パネルへ反映する。 */
+function applyTileAttrChange(mutate: (t: TileAttr) => void): void {
+    if (!isV3Doc(doc) || !isTileLayer(activeLayer)) return;
+    const id = getSelectedTile();
+    const t = activeTileset(doc).tiles[id];
+    if (!t) return;
+    mutate(t);
+    if ($<HTMLDialogElement>("dlg-tileset").open) drawTilesetPanel(); // ダイアログ併用時は同期
+    renderer.redrawAll(); // ★バッジ / 通行オーバーレイに反映
+    renderer.flush();
+    scheduleSave();
+    refreshTileAttrs();
+}
+
+/** チップ属性パネルを選択中チップの状態に更新する。updateRibbon / rebuildPicker から呼ばれる。 */
+function refreshTileAttrs(): void {
+    const controls = document.getElementById("tileattr-controls");
+    const note = document.getElementById("tileattr-note");
+    if (!controls || !note) return;
+    // タイル層以外 (v1 / 装飾 / スポーン / 影) は編集不可 → 説明文のみ
+    if (!isV3Doc(doc) || !isTileLayer(activeLayer)) {
+        controls.hidden = true;
+        note.hidden = false;
+        return;
+    }
+    const id = getSelectedTile();
+    const t = activeTileset(doc).tiles[id];
+    if (!t) {
+        controls.hidden = true;
+        note.hidden = false;
+        return;
+    }
+    controls.hidden = false;
+    note.hidden = true;
+    $("tileattr-id").textContent = String(id);
+    const passLabel = t.pass === "o" ? "○ 通れる" : t.pass === "x" ? "× 壁" : "↓ 下層に従う";
+    $("tileattr-pass").textContent = `通行: ${passLabel}`;
+    const over = $("tileattr-over");
+    over.textContent = `★ 上に描画: ${t.over ? "する" : "しない"}`;
+    over.classList.toggle("on", t.over);
+    const light = $("tileattr-light");
+    light.textContent = `遮光: ${t.light ? "する" : "しない"}`;
+    light.classList.toggle("on", t.light);
+}
+
 // ---------- パレット (v2 チップ選択) ----------
 // ・コンパクト帯 (#palette-strip / strip-canvas): 常時表示。選択中+近傍チップを横一列
 // ・全画面グリッド (#palette-overlay / palette-canvas): ▲▲ で開く、選択で閉じる
@@ -708,6 +760,7 @@ const STRIP_NEIGHBORS = 7;
 
 /** 帯の canvas に選択中チップ + 近傍 STRIP_NEIGHBORS 個を描画 */
 async function rebuildPicker(): Promise<void> {
+    refreshTileAttrs(); // 選択チップが変わったので属性パネルを更新
     if (!isV3Doc(doc)) return;
     const d = doc;
     const ts = activeTileset(d);
@@ -4018,6 +4071,11 @@ function wireUi(): void {
 
     // 3ペインシェルの折りたたみレール
     wireShellPanes();
+
+    // 右インスペクタ: チップ属性の編集ボタン (選択中チップに直接適用)
+    $("tileattr-pass").addEventListener("click", () => applyTileAttrChange((t) => { t.pass = PASS_CYCLE[t.pass]; }));
+    $("tileattr-over").addEventListener("click", () => applyTileAttrChange((t) => { t.over = !t.over; }));
+    $("tileattr-light").addEventListener("click", () => applyTileAttrChange((t) => { t.light = !t.light; }));
 
     // スタート画面ボタン配線
     $("btn-home").addEventListener("click", () => showStartScreen());

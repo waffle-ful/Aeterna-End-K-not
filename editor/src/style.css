@@ -285,6 +285,34 @@ button.primary:hover {
     background: var(--bg-active-ok);
 }
 
+/* 右インスペクタ: チップ属性 (常駐編集) */
+.tileattr-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.tileattr-which {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin: 0 0 2px;
+}
+
+.tileattr-btn {
+    width: 100%;
+    min-height: 34px;
+    padding: var(--space-xs) var(--space-sm);
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tileattr-btn.on {
+    outline: 2px solid var(--info);
+    background: var(--bg-active-info);
+}
+
 /* 右インスペクタ: マップ情報セクション */
 .inspector-section {
     margin-bottom: var(--space-md);
