@@ -20,6 +20,8 @@
         <span id="tile-scale-val" class="tile-scale-val">1.00x</span>
       </div>
       <div class="actions">
+        <button id="btn-home" title="スタート画面を開く">🏠</button>
+        <button id="btn-help" title="使い方ガイドをもう一度見る">?</button>
         <button id="btn-new">新規</button>
         <button id="btn-import" title="保存したマップの一覧を開きます">開く</button>
         <button id="btn-export" title="マップを書庫に保存します (Ctrl+S)。OneDrive でも失敗しません">保存</button>
@@ -403,6 +405,35 @@
         <button id="new-ts-cancel-btn" type="button">キャンセル</button>
       </menu>
     </dialog>
+
+    <!-- スタート画面 (初回訪問時 / btn-home で表示) -->
+    <div id="start-screen" hidden>
+      <div id="start-inner">
+        <h1 id="start-title">EKMap マップエディタ</h1>
+        <p id="start-sub">Among Us のマップをノーコードで作ろう</p>
+        <div id="start-main-btns">
+          <button id="start-new" class="start-main-btn primary">✨ 新規作成</button>
+          <button id="start-library" class="start-main-btn">📂 書庫を開く</button>
+        </div>
+        <h2 id="start-tpl-heading">テンプレートから始める</h2>
+        <div id="start-templates"></div>
+        <button id="start-skip">✕ 何も選ばず始める</button>
+      </div>
+    </div>
+
+    <!-- コーチマークオーバーレイ -->
+    <div id="coach-overlay" hidden>
+      <div id="coach-highlight"></div>
+      <div id="coach-tip">
+        <div id="coach-title"></div>
+        <div id="coach-body"></div>
+        <div id="coach-step"></div>
+        <div id="coach-btns">
+          <button id="coach-skip">スキップ</button>
+          <button id="coach-next" class="primary">次へ</button>
+        </div>
+      </div>
+    </div>
 
     <script type="module" src="/src/main.ts"></script>
   </body>
