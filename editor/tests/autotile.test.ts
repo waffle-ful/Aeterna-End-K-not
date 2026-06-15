@@ -14,6 +14,7 @@ import {
     createEdge4Def,
     edge4Code,
     filledSlotCount,
+    generateEdge4WallSheet,
     isLutEmpty,
     membershipSet,
     resolveEdge4,
@@ -170,5 +171,61 @@ describe("computeAutotileEdits: 境界条件", () => {
         const g = makeGrid(5, 5);
         expect(computeAutotileEdits(makeDef(), g, -1, 2, "paint")).toEqual([]);
         expect(computeAutotileEdits(makeDef(), g, 5, 2, "paint")).toEqual([]);
+    });
+});
+
+describe("generateEdge4WallSheet: 色を選ぶだけ生成", () => {
+    const T = 32;
+    const COLOR = { r: 200, g: 170, b: 60 };
+
+    function sheet() {
+        return generateEdge4WallSheet(T, COLOR);
+    }
+    /** code タイル内の (lx,ly) ピクセルの alpha を読む */
+    function alphaAt(rgba: Uint8ClampedArray, W: number, code: number, lx: number, ly: number): number {
+        const ox = (code % 4) * T;
+        const oy = Math.floor(code / 4) * T;
+        return rgba[((oy + ly) * W + (ox + lx)) * 4 + 3];
+    }
+
+    it("4×4 で 16 タイル・寸法は 4T×4T", () => {
+        const r = sheet();
+        expect(r.cols).toBe(4);
+        expect(r.rows).toBe(4);
+        expect(r.rgba.length).toBe(4 * T * 4 * T * 4);
+    });
+
+    it("code 0 (孤立) は中央が不透明・四辺の端は透明", () => {
+        const { rgba } = sheet();
+        const W = 4 * T;
+        expect(alphaAt(rgba, W, 0, T / 2, T / 2)).toBe(255); // 中央
+        expect(alphaAt(rgba, W, 0, T / 2, 1)).toBe(0);       // 上端 (つながらない)
+        expect(alphaAt(rgba, W, 0, 1, T / 2)).toBe(0);       // 左端
+    });
+
+    it("N ビット(code1) は上端中央が不透明になる", () => {
+        const { rgba } = sheet();
+        const W = 4 * T;
+        expect(alphaAt(rgba, W, 1, T / 2, 1)).toBe(255);     // 上へバー
+        expect(alphaAt(rgba, W, 1, 1, T / 2)).toBe(0);       // 左はつながらない
+    });
+
+    it("全方向(code15) は四辺の端すべて不透明", () => {
+        const { rgba } = sheet();
+        const W = 4 * T;
+        expect(alphaAt(rgba, W, 15, T / 2, 1)).toBe(255);        // 上
+        expect(alphaAt(rgba, W, 15, T / 2, T - 1)).toBe(255);    // 下
+        expect(alphaAt(rgba, W, 15, 1, T / 2)).toBe(255);        // 左
+        expect(alphaAt(rgba, W, 15, T - 1, T / 2)).toBe(255);    // 右
+    });
+
+    it("壁の色が反映される (中央ピクセルが指定色)", () => {
+        const { rgba } = sheet();
+        const W = 4 * T;
+        const ox = 0, oy = 0;
+        const i = ((oy + T / 2) * W + (ox + T / 2)) * 4;
+        expect(rgba[i]).toBe(200);
+        expect(rgba[i + 1]).toBe(170);
+        expect(rgba[i + 2]).toBe(60);
     });
 });

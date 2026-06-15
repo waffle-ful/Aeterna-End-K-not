@@ -59,6 +59,7 @@ import {
     computeAutotileEdits,
     createEdge4Def,
     edge4Code,
+    generateEdge4WallSheet,
     isLutEmpty,
     resolveEdge4,
 } from "./autotile";
@@ -1293,6 +1294,82 @@ function bakeAutotileAttrs(d: MapDocV3, def: AutotileDef): void {
     const ts = d.tilesets[def.tileset];
     if (!ts) return;
     bakeAutotileTileAttrs(ts.tiles, def);
+}
+
+/** "#rrggbb" → {r,g,b}。失敗時はグレー */
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+    const m = /^#?([0-9a-fA-F]{6})$/.exec(hex.trim());
+    if (!m) return { r: 160, g: 160, b: 160 };
+    const n = parseInt(m[1], 16);
+    return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+}
+
+/**
+ * 「色を選ぶだけ」自動つなぎ壁ジェネレータ。シート用意・サイズ合わせ・16スロット理解を全部スキップする。
+ * 16通りのつなぎ目壁を**マップと同じタイルサイズで生成** → 現在のダイアログ選択セットに合体 →
+ * LUT を連番で自動割当 → light/over をベイク → 自動つなぎブラシとして登録してすぐ使える状態にする。
+ */
+async function createWallAutotileFromColor(hex: string, name: string): Promise<void> {
+    if (!isV3Doc(doc)) return;
+    const d = doc;
+    const tsIdx = Math.max(0, Math.min(atWorkDef.tileset, d.tilesets.length - 1));
+    const ts = d.tilesets[tsIdx];
+    if (!ts) return;
+    const { tileSize, columns, rows } = ts;
+
+    // 上限チェック (16 枚追加)
+    if (tileCount(ts) + EDGE4_SLOTS > MAX_TILECOUNT) {
+        showMessages("自動つなぎ壁を作れません", [
+            `チップ数が上限 ${MAX_TILECOUNT} を超えます。別の (空きのある) セットを選んでください。`,
+        ], []);
+        return;
+    }
+
+    // 1. マップと同じ tileSize で 16 タイルを生成
+    const sheet = generateEdge4WallSheet(tileSize, hexToRgb(hex));
+
+    // 2. 現セットへ合体 (既存 id 不変・末尾に 16 枚)
+    const atlasRgba = await getPngRgba(ts.image);
+    if (!atlasRgba) { toast("タイルセット画像を読み込めませんでした"); return; }
+    const baseCount = columns * rows;
+    const merged = appendSheetToAtlas(atlasRgba.rgba, columns, rows, tileSize, sheet.rgba, sheet.cols, sheet.rows);
+    const newImageUri = rgbaToPngDataUri(merged.rgba, columns * tileSize, merged.rows * tileSize);
+
+    // 3. サイズ検証
+    const approxBytes = Math.floor((newImageUri.length - PNG_DATA_URI_PREFIX.length) * 3 / 4);
+    if (approxBytes > MAX_TILESET_IMAGE_BYTES || JSON.stringify({ image: newImageUri }).length > MAX_JSON_BYTES_V2) {
+        showMessages("自動つなぎ壁を作れません", ["生成後のタイルセットが容量上限を超えます。別のセットを使うか素材を減らしてください。"], []);
+        return;
+    }
+
+    // 4. tileset 差し替え (tiles[] を dense に拡張)
+    const newTiles = [...ts.tiles];
+    while (newTiles.length < columns * merged.rows) newTiles.push(defaultTileAttr());
+    d.tilesets[tsIdx] = { tileSize, columns, rows: merged.rows, image: newImageUri, tiles: newTiles };
+
+    // 5. 自動つなぎ定義を作る (tile index == code なので lut[code]=baseCount+code で一発)
+    const def = createEdge4Def(name.trim() || "壁", tsIdx);
+    def.blocksLight = true;
+    def.band = "ground";
+    for (let code = 0; code < EDGE4_SLOTS; code++) def.lut[code] = baseCount + code;
+    def.fallback = baseCount;
+    bakeAutotileAttrs(d, def);
+
+    // 6. 登録 + アクティブ化 + 反映
+    autotiles.push(def);
+    activeAutotileIdx = autotiles.length - 1;
+    history.clear();
+    refreshUndoButtons();
+    renderer.setDoc(d);
+    void rebuildPicker();
+    drawTilesetPanel();
+    rebuildAutotileBrushSelect();
+    $<HTMLSelectElement>("at-brush-select").value = String(activeAutotileIdx);
+    refreshModeUi();
+    scheduleSave();
+    updateStatus();
+    $<HTMLDialogElement>("dlg-autotile").close();
+    toast(`自動つなぎ壁「${def.name}」を作りました。ペンで塗るとつながります！`);
 }
 
 // ── オートタイルダイアログ内部状態 ──
@@ -2874,6 +2951,13 @@ function wireUi(): void {
     // ── キャンセルボタン ──
     $("at-btn-cancel").addEventListener("click", () => {
         $<HTMLDialogElement>("dlg-autotile").close();
+    });
+
+    // ── かんたん作成「この色で作る」 ──
+    $("at-easy-make").addEventListener("click", () => {
+        const hex = $<HTMLInputElement>("at-easy-color").value;
+        const name = $<HTMLInputElement>("at-easy-name").value;
+        void createWallAutotileFromColor(hex, name);
     });
 
     // ── 脱出ボタン「オートタイルを使わない」 ──

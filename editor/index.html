@@ -277,6 +277,20 @@
     <!-- オートタイル設定ダイアログ (edge-4 スマートブラシ MVP) -->
     <dialog id="dlg-autotile">
       <h3 id="dlg-autotile-title">自動つなぎブラシの設定</h3>
+
+      <!-- かんたん作成: 色を選ぶだけで16通りの壁を自動生成 (シート不要・サイズ合わせ不要) -->
+      <div class="at-easy-box">
+        <div class="at-easy-title">🪄 かんたん作成（おすすめ）</div>
+        <p class="note">壁の色を選んで「作る」を押すだけ。16通りのつなぎ目を自動で作って、すぐ塗れる状態にします。<strong>素材シートは要りません。</strong></p>
+        <div class="at-easy-row">
+          <label>色 <input type="color" id="at-easy-color" value="#c9a93f" /></label>
+          <label>名前 <input type="text" id="at-easy-name" maxlength="32" value="壁" class="at-name-input" /></label>
+          <button id="at-easy-make" type="button" class="primary">この色で作る</button>
+        </div>
+      </div>
+
+      <details class="at-advanced">
+        <summary>くわしい設定（自分で用意した16枚シートを使う）</summary>
       <p class="note">
         壁は上下左右の隣の有無で見た目が変わります。その<strong>16通り</strong>それぞれに絵を割り当てると、
         ペンで塗るだけで自動で正しいつなぎ目を選んでくれます。
@@ -318,8 +332,12 @@
         <label>ブラシ名: <input type="text" id="at-name-input" maxlength="32" placeholder="壁" class="at-name-input" /></label>
       </div>
       <menu>
-        <button id="at-btn-save" type="button" class="primary">保存して使う</button>
-        <button id="at-btn-cancel" type="button">キャンセル</button>
+        <button id="at-btn-save" type="button" class="primary">この設定で保存して使う</button>
+      </menu>
+      </details>
+
+      <menu>
+        <button id="at-btn-cancel" type="button">閉じる</button>
       </menu>
     </dialog>
 

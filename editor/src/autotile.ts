@@ -96,6 +96,78 @@ export interface TileLightOver {
     over: boolean;
 }
 
+/** RGB 色 (0-255) */
+export interface Rgb {
+    r: number;
+    g: number;
+    b: number;
+}
+
+/**
+ * edge-4 の 16 通りの「つなぎ目壁」タイルを RGBA で自動生成する (色を選ぶだけジェネレータの心臓部)。
+ * 4×4 レイアウト・**タイル index == 接続コード** なので、生成後に lut[code]=code で一発割当できる。
+ * 各タイル: 中央ブロック + つながる方向 (N/E/S/W) へバーを伸ばす + 上端に暗バンド (立体感)。
+ * 背景は透過。マップと同じ tileSize で作るので**サイズ不一致が起きない**。
+ *
+ * @param tileSize タイルサイズ (px)。マップの現行セットに合わせて渡すこと。
+ * @param color    壁の色
+ * @returns { rgba, cols: 4, rows: 4 } (rgba は 4*tileSize × 4*tileSize の RGBA)
+ */
+export function generateEdge4WallSheet(tileSize: number, color: Rgb): { rgba: Uint8ClampedArray; cols: number; rows: number } {
+    const T = Math.max(4, Math.floor(tileSize));
+    const cols = 4;
+    const rows = 4;
+    const W = cols * T;
+    const H = rows * T;
+    const rgba = new Uint8ClampedArray(W * H * 4); // 透過 (0 埋め)
+
+    const wall = { r: clamp255(color.r), g: clamp255(color.g), b: clamp255(color.b) };
+    const dark = { r: Math.round(wall.r * 0.62), g: Math.round(wall.g * 0.62), b: Math.round(wall.b * 0.62) };
+
+    const q = Math.max(1, Math.floor(T / 4));   // バー/中央の太さ基準 (T=32 → 8)
+    const h = Math.floor(T / 2);                 // 半セル (T=32 → 16)
+    const band = Math.max(1, Math.floor(T / 8)); // 上暗バンド (T=32 → 4)
+
+    for (let code = 0; code < EDGE4_SLOTS; code++) {
+        const ox = (code % cols) * T;
+        const oy = Math.floor(code / cols) * T;
+        const n = (code & EDGE4_N) !== 0;
+        const e = (code & EDGE4_E) !== 0;
+        const s = (code & EDGE4_S) !== 0;
+        const w = (code & EDGE4_W) !== 0;
+
+        // 中央ブロック (常時)
+        fillRect(rgba, W, ox + q, oy + q, h, h, wall);
+        // つながる方向へバー
+        if (n) fillRect(rgba, W, ox + q, oy + 0, h, h, wall);
+        if (s) fillRect(rgba, W, ox + q, oy + h, h, h, wall);
+        if (w) fillRect(rgba, W, ox + 0, oy + q, h, h, wall);
+        if (e) fillRect(rgba, W, ox + h, oy + q, h, h, wall);
+        // 上端の暗バンド (上につながる時は天辺、そうでなければ中央上端)
+        if (n) fillRect(rgba, W, ox + q, oy + 0, h, band, dark);
+        else fillRect(rgba, W, ox + q, oy + q, h, band, dark);
+    }
+
+    return { rgba, cols, rows };
+}
+
+function clamp255(v: number): number {
+    return Math.max(0, Math.min(255, Math.round(v)));
+}
+
+/** rgba(W幅) の矩形 (x,y,w,h) を不透明色で塗る */
+function fillRect(rgba: Uint8ClampedArray, W: number, x: number, y: number, w: number, h: number, c: Rgb): void {
+    for (let py = y; py < y + h; py++) {
+        for (let px = x; px < x + w; px++) {
+            const i = (py * W + px) * 4;
+            rgba[i] = c.r;
+            rgba[i + 1] = c.g;
+            rgba[i + 2] = c.b;
+            rgba[i + 3] = 255;
+        }
+    }
+}
+
 /**
  * def の LUT 出力 tileId 全件 (+ fallback) の tiles[] に blocksLight/band を焼き込む (§3 H2/H3)。
  * 焼かないと: 拾い物シートに light メタが無く影 occluder に穴が空く / over が混在して z バンドがちらつく。

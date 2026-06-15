@@ -1391,3 +1391,43 @@ dialog#dlg-layer {
     font-size: 13px;
     width: 200px;
 }
+
+/* 自動つなぎブラシ: かんたん作成ボックス */
+.at-easy-box {
+    border: 1px solid var(--accent);
+    background: var(--bg-active-accent);
+    border-radius: var(--radius-md);
+    padding: var(--space-sm) var(--space-md);
+    margin-bottom: var(--space-md);
+}
+.at-easy-title {
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 4px;
+}
+.at-easy-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    flex-wrap: wrap;
+    margin-top: var(--space-sm);
+}
+.at-easy-row input[type="color"] {
+    width: 44px;
+    height: 32px;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    vertical-align: middle;
+}
+.at-advanced > summary {
+    cursor: pointer;
+    color: var(--text-muted);
+    padding: var(--space-xs) 0;
+    user-select: none;
+}
+.at-advanced[open] > summary {
+    color: var(--text-primary);
+    margin-bottom: var(--space-sm);
+}
