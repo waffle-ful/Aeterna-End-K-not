@@ -365,6 +365,32 @@ async function loadTemplate(t: EkmTemplate): Promise<void> {
     }
 }
 
+// ---------- 3ペインシェルの折りたたみレール ----------
+
+/** 左レール / 右インスペクタの開閉を配線する。状態は localStorage に記憶 (既定は折りたたみ)。 */
+function wireShellPanes(): void {
+    const setup = (paneId: string, toggleId: string, key: string): void => {
+        const pane = $(paneId);
+        const toggle = $<HTMLButtonElement>(toggleId);
+        const apply = (collapsed: boolean): void => {
+            pane.classList.toggle("collapsed", collapsed);
+            toggle.setAttribute("aria-expanded", String(!collapsed));
+        };
+        // 保存値が "open" のときだけ開く。未保存・"closed" は折りたたみ。
+        apply(localStorage.getItem(key) !== "open");
+        toggle.addEventListener("click", () => {
+            const nextCollapsed = !pane.classList.contains("collapsed");
+            apply(nextCollapsed);
+            localStorage.setItem(key, nextCollapsed ? "closed" : "open");
+            // viewport の幅が変わったので PIXI canvas を追従させる
+            // (resizeTo は window resize でしか発火しないため明示的に再計算)
+            renderer.app.resize();
+        });
+    };
+    setup("left-rail", "left-rail-toggle", "ekm.leftRail");
+    setup("right-inspector", "right-rail-toggle", "ekm.rightRail");
+}
+
 function showMessages(title: string, errors: string[], warnings: string[]): void {
     $("msg-title").textContent = title;
     const ul = $("msg-list");
@@ -3861,6 +3887,9 @@ function wireUi(): void {
     window.addEventListener("beforeunload", () => {
         if (savePending) void saveAutosave(docToJsonAny(doc));
     });
+
+    // 3ペインシェルの折りたたみレール
+    wireShellPanes();
 
     // スタート画面ボタン配線
     $("btn-home").addEventListener("click", () => showStartScreen());
