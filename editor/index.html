@@ -337,6 +337,37 @@
         <canvas id="new-ts-preview-canvas" class="wiz-preview-canvas"></canvas>
         <div id="new-ts-preview-info" class="wiz-preview-info"></div>
       </div>
+      <!-- スライス設定ステップ (PNG 投入後に表示) -->
+      <div id="nts-slice-section" hidden>
+        <div class="wiz-section-label">タイルの分割設定</div>
+        <!-- 候補チップ -->
+        <div id="nts-candidates" class="wiz-candidates"></div>
+        <!-- 手動3入力 -->
+        <div class="wiz-manual-row">
+          <label class="wiz-manual-label">
+            タイルの大きさ (px)
+            <input id="nts-size" type="number" min="8" max="128" value="32" class="wiz-num-input" />
+          </label>
+          <label class="wiz-manual-label">
+            まわりの余白
+            <input id="nts-margin" type="number" min="0" max="4" value="0" class="wiz-num-input" />
+          </label>
+          <label class="wiz-manual-label">
+            タイルの間隔
+            <input id="nts-spacing" type="number" min="0" max="4" value="0" class="wiz-num-input" />
+          </label>
+        </div>
+        <!-- スライスプレビュー -->
+        <div class="wiz-slice-wrap">
+          <canvas id="nts-slice-canvas" class="wiz-slice-canvas"></canvas>
+        </div>
+        <!-- 統計 -->
+        <div id="nts-stats" class="wiz-stats note"></div>
+        <!-- リベイク警告 (margin/spacing > 0 のとき) -->
+        <div id="nts-rebake-note" class="wiz-rebake-note note" hidden>
+          余白/間隔あり: 作成時に「隙間なしアトラス」へ変換されます (保存する PNG は元の素材とは別物になります)
+        </div>
+      </div>
       <menu>
         <button id="new-ts-ok-btn" type="button" disabled>追加</button>
         <button id="new-ts-cancel-btn" type="button">キャンセル</button>

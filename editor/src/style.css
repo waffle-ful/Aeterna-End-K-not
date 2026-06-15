@@ -542,6 +542,13 @@ dialog#dlg-new {
     overflow-y: auto;
 }
 
+/* タイルセット追加ダイアログ: スライスUI が入るので幅を広げる */
+dialog#dlg-new-tileset {
+    width: min(96vw, 580px);
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
 .wiz-step {
     margin: var(--space-sm) 0;
 }

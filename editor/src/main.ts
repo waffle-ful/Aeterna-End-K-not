@@ -1876,6 +1876,22 @@ function openCodeDialog(mode: "load" | "show", code = ""): void {
 // タイルセットインポートウィザード状態 (新規ダイアログ内)
 // ================================================================
 
+/**
+ * スライス UI のスコープ識別子。
+ * "new"  = dlg-new (wiz- プレフィックス)
+ * "pool" = dlg-new-tileset (nts- プレフィックス)
+ */
+type WizScope = "new" | "pool";
+
+/**
+ * スコープに応じたスライス UI 要素の id を返す小ヘルパー。
+ * key は "size" | "margin" | "spacing" | "candidates" |
+ *        "slice-canvas" | "stats" | "rebake-note"
+ */
+function wizEl(scope: WizScope, key: string): string {
+    return scope === "pool" ? `nts-${key}` : `wiz-${key}`;
+}
+
 interface WizState {
     file: File | null;
     /** data:image/png;base64,… */
@@ -1918,6 +1934,12 @@ function wizReset(): void {
     $("wiz-preview-wrap").hidden = true;
     $("wiz-step23").hidden = true;
     $<HTMLButtonElement>("new-ok-btn").disabled = true;
+
+    // プール側 (dlg-new-tileset) のスライスセクションも隠す
+    $("new-ts-drop-zone").hidden = false;
+    $("new-ts-preview-wrap").hidden = true;
+    $("nts-slice-section").hidden = true;
+    $<HTMLButtonElement>("new-ts-ok-btn").disabled = true;
 }
 
 /** RGBA ピクセルを取得するためにオフスクリーン Canvas を使う (DOM 経路) */
@@ -2025,6 +2047,17 @@ async function wizLoadPng(file: File): Promise<void> {
     wizUpdateStats();
     $("wiz-step23").hidden = false;
     $<HTMLButtonElement>("new-ok-btn").disabled = false;
+
+    // プール追加モード: dlg-new-tileset 側のスライス UI も更新する
+    if (addTilesetToPool) {
+        wizUpdateDropZoneForPool();
+        $<HTMLButtonElement>("new-ts-ok-btn").disabled = false;
+        wizUpdateCandidateChips("pool");
+        wizSyncInputsFromParams("pool");
+        wizUpdateSlicePreview("pool");
+        wizUpdateStats("pool");
+        $("nts-slice-section").hidden = false;
+    }
 }
 
 /** ドロップゾーンとプレビューを更新 */
@@ -2080,9 +2113,9 @@ function wizUpdateDropZoneForPool(): void {
     }
 }
 
-/** 候補チップを描画 */
-function wizUpdateCandidateChips(): void {
-    const container = $("wiz-candidates");
+/** 候補チップを描画 (scope: "new"=dlg-new, "pool"=dlg-new-tileset) */
+function wizUpdateCandidateChips(scope: WizScope = "new"): void {
+    const container = $(wizEl(scope, "candidates"));
     container.replaceChildren();
 
     // 上位 4 件のみ表示 (同じ tileSize の best margin/spacing を代表として絞る)
@@ -2120,27 +2153,27 @@ function wizUpdateCandidateChips(): void {
         chip.addEventListener("click", () => {
             wizState.params = { ...c.params };
             wizState.needsRebake = c.params.margin > 0 || c.params.spacing > 0;
-            wizUpdateCandidateChips();
-            wizSyncInputsFromParams();
-            wizUpdateSlicePreview();
-            wizUpdateStats();
+            wizUpdateCandidateChips(scope);
+            wizSyncInputsFromParams(scope);
+            wizUpdateSlicePreview(scope);
+            wizUpdateStats(scope);
         });
         container.appendChild(chip);
     }
 }
 
-/** 手動入力欄に現在の params を反映 */
-function wizSyncInputsFromParams(): void {
-    $<HTMLInputElement>("wiz-size").value = String(wizState.params.tileSize);
-    $<HTMLInputElement>("wiz-margin").value = String(wizState.params.margin);
-    $<HTMLInputElement>("wiz-spacing").value = String(wizState.params.spacing);
+/** 手動入力欄に現在の params を反映 (scope: "new"=dlg-new, "pool"=dlg-new-tileset) */
+function wizSyncInputsFromParams(scope: WizScope = "new"): void {
+    $<HTMLInputElement>(wizEl(scope, "size")).value = String(wizState.params.tileSize);
+    $<HTMLInputElement>(wizEl(scope, "margin")).value = String(wizState.params.margin);
+    $<HTMLInputElement>(wizEl(scope, "spacing")).value = String(wizState.params.spacing);
 }
 
-/** 手動入力から params を更新し、UI を再描画 */
-function wizSyncParamsFromInputs(): void {
-    const size = Math.min(TILESIZE_MAX, Math.max(TILESIZE_MIN, Math.floor(Number($<HTMLInputElement>("wiz-size").value)) || TILESIZE_DEFAULT));
-    const margin = Math.min(4, Math.max(0, Math.floor(Number($<HTMLInputElement>("wiz-margin").value)) || 0));
-    const spacing = Math.min(4, Math.max(0, Math.floor(Number($<HTMLInputElement>("wiz-spacing").value)) || 0));
+/** 手動入力から params を更新し、UI を再描画 (scope: "new"=dlg-new, "pool"=dlg-new-tileset) */
+function wizSyncParamsFromInputs(scope: WizScope = "new"): void {
+    const size = Math.min(TILESIZE_MAX, Math.max(TILESIZE_MIN, Math.floor(Number($<HTMLInputElement>(wizEl(scope, "size")).value)) || TILESIZE_DEFAULT));
+    const margin = Math.min(4, Math.max(0, Math.floor(Number($<HTMLInputElement>(wizEl(scope, "margin")).value)) || 0));
+    const spacing = Math.min(4, Math.max(0, Math.floor(Number($<HTMLInputElement>(wizEl(scope, "spacing")).value)) || 0));
 
     // W = 2m + c*s + (c-1)*g  →  c = (W - 2m + g) / (s + g)
     const wNom = wizState.pngWidth - 2 * margin + spacing;
@@ -2159,15 +2192,15 @@ function wizSyncParamsFromInputs(): void {
     };
     wizState.needsRebake = margin > 0 || spacing > 0;
 
-    wizUpdateCandidateChips();
-    wizUpdateSlicePreview();
-    wizUpdateStats();
+    wizUpdateCandidateChips(scope);
+    wizUpdateSlicePreview(scope);
+    wizUpdateStats(scope);
 }
 
 const GRID_LINE_COLOR = "rgba(255, 100, 100, 0.85)";
 const GRID_LINE_WIDTH = 1;
-/** スライスプレビューキャンバスにグリッド線を重畳描画 */
-function wizUpdateSlicePreview(): void {
+/** スライスプレビューキャンバスにグリッド線を重畳描画 (scope: "new"=dlg-new, "pool"=dlg-new-tileset) */
+function wizUpdateSlicePreview(scope: WizScope = "new"): void {
     if (!wizState.dataUri) return;
     const { tileSize, margin, spacing, cols, rows } = wizState.params;
     const MAX_PREVIEW = 480;
@@ -2175,7 +2208,7 @@ function wizUpdateSlicePreview(): void {
     const dW = Math.round(wizState.pngWidth * scale);
     const dH = Math.round(wizState.pngHeight * scale);
 
-    const cv = $<HTMLCanvasElement>("wiz-slice-canvas");
+    const cv = $<HTMLCanvasElement>(wizEl(scope, "slice-canvas"));
     cv.width = dW;
     cv.height = dH;
     cv.style.width = `${dW}px`;
@@ -2224,8 +2257,8 @@ function wizUpdateSlicePreview(): void {
     img.src = wizState.dataUri;
 }
 
-/** 統計テキスト + リベイク警告を更新 */
-function wizUpdateStats(): void {
+/** 統計テキスト + リベイク警告を更新 (scope: "new"=dlg-new, "pool"=dlg-new-tileset) */
+function wizUpdateStats(scope: WizScope = "new"): void {
     const { cols, rows, tileSize, margin, spacing } = wizState.params;
     const total = cols * rows;
 
@@ -2239,9 +2272,9 @@ function wizUpdateStats(): void {
     }
 
     const overLimit = total > 4096 ? " — 上限 4096 を超えています！" : "";
-    $("wiz-stats").textContent = `${cols} 列 × ${rows} 行 = ${total} チップ${transparentTxt}${overLimit}`;
+    $(wizEl(scope, "stats")).textContent = `${cols} 列 × ${rows} 行 = ${total} チップ${transparentTxt}${overLimit}`;
 
-    const rebakeNote = $("wiz-rebake-note");
+    const rebakeNote = $(wizEl(scope, "rebake-note"));
     rebakeNote.hidden = !(margin > 0 || spacing > 0);
 }
 
@@ -2560,7 +2593,10 @@ function wireUi(): void {
         e.preventDefault();
         $("new-ts-drop-zone").classList.remove("drag-over");
         const file = e.dataTransfer?.files[0];
-        if (file) await wizLoadPng(file);
+        if (file) {
+            addTilesetToPool = true;
+            await wizLoadPng(file);
+        }
     });
     $("new-ts-ok-btn").addEventListener("click", () => {
         void wizBuildTileset().then((r) => {
@@ -2863,13 +2899,8 @@ function wireUi(): void {
         pngInput.value = "";
         if (!f) return;
         if (pngTarget === "new") {
+            // wizLoadPng 内で addTilesetToPool フラグを見てプール側 UI を更新する
             await wizLoadPng(f);
-            // addTilesetToPool モード: ウィザード状態をセット選択UI に反映
-            if (addTilesetToPool) {
-                $<HTMLButtonElement>("new-ts-ok-btn").disabled = wizState.dataUri === null;
-                // サムネを dlg-new-tileset の drop zone に反映
-                wizUpdateDropZoneForPool();
-            }
             return;
         }
         if (!isV3Doc(doc)) return;
@@ -2968,15 +2999,15 @@ function wireUi(): void {
             if (item.type === "image/png") {
                 const file = item.getAsFile();
                 if (file) {
+                    // wizLoadPng 内で addTilesetToPool フラグを見てプール側 UI を更新する
                     await wizLoadPng(file);
-                    if (addTilesetToPool) wizUpdateDropZoneForPool();
                 }
                 break;
             }
         }
     });
 
-    // 手動入力変更時: params 更新 → プレビュー更新
+    // 手動入力変更時: params 更新 → プレビュー更新 (new スコープ)
     const manualInputIds = ["wiz-size", "wiz-margin", "wiz-spacing"];
     for (const id of manualInputIds) {
         $<HTMLInputElement>(id).addEventListener("input", () => {
@@ -2984,6 +3015,17 @@ function wireUi(): void {
         });
         $<HTMLInputElement>(id).addEventListener("change", () => {
             if (wizState.dataUri) wizSyncParamsFromInputs();
+        });
+    }
+
+    // 手動入力変更時: params 更新 → プレビュー更新 (pool スコープ)
+    const poolInputIds = ["nts-size", "nts-margin", "nts-spacing"];
+    for (const id of poolInputIds) {
+        $<HTMLInputElement>(id).addEventListener("input", () => {
+            if (wizState.dataUri) wizSyncParamsFromInputs("pool");
+        });
+        $<HTMLInputElement>(id).addEventListener("change", () => {
+            if (wizState.dataUri) wizSyncParamsFromInputs("pool");
         });
     }
 
