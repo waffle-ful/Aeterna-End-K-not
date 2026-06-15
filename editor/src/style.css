@@ -539,12 +539,20 @@ footer {
     border-radius: var(--radius-md);
     background: var(--bg-3);
     line-height: 0;
+    position: relative;
+}
+
+#palette-spacer {
+    position: relative;
 }
 
 #palette-canvas {
     image-rendering: pixelated;
     cursor: pointer;
     display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
 }
 
 #ts-modes {

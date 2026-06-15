@@ -822,6 +822,126 @@ async function rebuildPicker(): Promise<void> {
     cv.dataset.stripIds = ids.join(",");
 }
 
+// ---------- 仮想スクロール パレット グリッド ----------
+// これらの変数は rebuildPaletteGrid と drawPaletteWindow が共有するモジュールスコープの状態。
+// rebuildPaletteGrid が async で画像ロード後に更新し、drawPaletteWindow (同期) が参照する。
+let _palFiltered: number[] = [];
+let _palCols = 1;
+let _palRows = 1;
+let _palPreserveLayout = false;
+let _palImg: HTMLImageElement | null = null;
+let _palTsColumns = 1;
+let _palTsTileSize = 1;
+/** scroll イベントで rAF をまとめるフラグ */
+let _palRafPending = false;
+
+const PAL_SCROLL_BUFFER = 2; // 可視ウィンドウの上下に追加描画する行数
+
+/** 仮想スクロール: 可視ウィンドウ分だけ palette-canvas に描画する (同期・何度でも呼べる) */
+function drawPaletteWindow(): void {
+    const cv = $<HTMLCanvasElement>("palette-canvas");
+    const wrap = $("palette-grid-wrap");
+    const spacer = $("palette-spacer");
+    const filtered = _palFiltered;
+    const cols = _palCols;
+    const rows = _palRows;
+    const preserveLayout = _palPreserveLayout;
+    const img = _palImg;
+
+    const contentW = cols * GRID_PX;
+    const totalH = rows * GRID_PX;
+
+    // spacer がスクロール範囲全体を担う
+    spacer.style.width = `${contentW}px`;
+    spacer.style.height = `${totalH}px`;
+
+    const scrollTop = wrap.scrollTop;
+    const wrapH = wrap.clientHeight || window.innerHeight;
+
+    // 描画開始行 (バッファ付き、0 以上)
+    const firstRow = Math.max(0, Math.floor(scrollTop / GRID_PX) - PAL_SCROLL_BUFFER);
+    // 描画行数 (バッファ付き、rows を超えない)
+    const winRows = Math.ceil(wrapH / GRID_PX) + PAL_SCROLL_BUFFER * 2;
+    const drawRows = Math.min(winRows, rows - firstRow);
+
+    // canvas を可視ウィンドウサイズに設定
+    const newH = Math.max(1, drawRows) * GRID_PX;
+    if (cv.width !== contentW || cv.height !== newH) {
+        cv.width = contentW;
+        cv.height = newH;
+    }
+    cv.style.width = `${contentW}px`;
+    cv.style.height = `${newH}px`;
+    // absolute 配置で行境界に合わせる
+    cv.style.top = `${firstRow * GRID_PX}px`;
+    // firstRow を dataset に保存 (クリック座標変換用)
+    cv.dataset.firstRow = String(firstRow);
+
+    const ctx = cv.getContext("2d");
+    if (!ctx) return;
+    ctx.imageSmoothingEnabled = false;
+    ctx.fillStyle = "#14141a";
+    ctx.fillRect(0, 0, cv.width, cv.height);
+
+    if (filtered.length === 0) {
+        // プレースホルダ
+        ctx.fillStyle = "rgba(255,255,255,0.3)";
+        ctx.font = "14px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("チップが見つかりません", cv.width / 2, cv.height / 2 || GRID_PX / 2);
+    } else {
+        const idxStart = firstRow * cols;
+        const idxEnd = Math.min((firstRow + drawRows) * cols, filtered.length);
+        const curSel = getSelectedTile();
+        for (let idx = idxStart; idx < idxEnd; idx++) {
+            const id = filtered[idx];
+            const gx = (idx % cols) * GRID_PX;
+            const gy = (Math.floor(idx / cols) - firstRow) * GRID_PX;
+
+            if (img) {
+                const srcX = (id % _palTsColumns) * _palTsTileSize;
+                const srcY = Math.floor(id / _palTsColumns) * _palTsTileSize;
+                ctx.drawImage(img, srcX, srcY, _palTsTileSize, _palTsTileSize, gx, gy, GRID_PX, GRID_PX);
+            }
+
+            // セル枠
+            ctx.strokeStyle = id === curSel ? "#ffd75e" : "rgba(255,255,255,0.18)";
+            ctx.lineWidth = id === curSel ? 3 : 1;
+            ctx.strokeRect(gx + 0.5, gy + 0.5, GRID_PX - 1, GRID_PX - 1);
+
+            // 選択中は背景ハイライト
+            if (id === curSel) {
+                ctx.fillStyle = "rgba(255,215,94,0.18)";
+                ctx.fillRect(gx + 1, gy + 1, GRID_PX - 2, GRID_PX - 2);
+            }
+
+            // 番号ラベル — レイアウト保持モードでは絵を隠さないよう控えめに (選択中のみ強調)
+            if (preserveLayout && id !== curSel) {
+                ctx.font = "9px sans-serif";
+                ctx.textBaseline = "top";
+                ctx.fillStyle = "rgba(0,0,0,0.55)";
+                ctx.fillText(String(id), gx + 3, gy + 3);
+                ctx.fillStyle = "rgba(255,255,255,0.55)";
+                ctx.fillText(String(id), gx + 2, gy + 2);
+            } else {
+                ctx.fillStyle = "rgba(0,0,0,0.6)";
+                ctx.fillRect(gx + 1, gy + 1, 26, 14);
+                ctx.font = "bold 11px sans-serif";
+                ctx.textBaseline = "top";
+                ctx.fillStyle = id === curSel ? "#ffd75e" : "rgba(255,255,255,0.8)";
+                ctx.fillText(String(id), gx + 3, gy + 2);
+            }
+        }
+    }
+
+    // 範囲選択ドラッグの選択枠を毎フレーム重ねるためのスナップショットを保持 (可視ウィンドウ分)
+    paletteSnapshot ??= document.createElement("canvas");
+    paletteSnapshot.width = cv.width;
+    paletteSnapshot.height = cv.height;
+    paletteSnapshot.getContext("2d")?.drawImage(cv, 0, 0);
+}
+
 /** 全画面グリッドの canvas を描画。filter が空でないとき id 文字列でマッチしたものだけ表示 */
 async function rebuildPaletteGrid(filterText: string, usedOnly: boolean): Promise<void> {
     if (!isV3Doc(doc)) return;
@@ -863,83 +983,32 @@ async function rebuildPaletteGrid(filterText: string, usedOnly: boolean): Promis
     const rows = Math.ceil(filtered.length / cols) || 1;
 
     const cv = $<HTMLCanvasElement>("palette-canvas");
-    cv.width = cols * GRID_PX;
-    cv.height = rows * GRID_PX;
-    cv.style.width = `${cv.width}px`;
-    cv.style.height = `${cv.height}px`;
-    // フィルタ結果を data 属性に保存 (クリック → id 変換用)
+    // フィルタ結果を data 属性に保存 (クリック → id 変換用・全件)
     cv.dataset.filteredIds = filtered.join(",");
     cv.dataset.gridCols = String(cols);
 
-    const ctx = cv.getContext("2d");
-    if (!ctx) return;
-    ctx.imageSmoothingEnabled = false;
-    ctx.fillStyle = "#14141a";
-    ctx.fillRect(0, 0, cv.width, cv.height);
-
+    // 画像ロード (async)
     let img: HTMLImageElement | null = null;
     try {
         img = await loadTilesetImage(ts.image);
-        if (doc !== d) return;
+        if (doc !== d) return; // ロード中に doc が差し替わった場合は破棄
     } catch {
         /* 画像破損時もラベルだけ出す */
     }
 
-    for (let idx = 0; idx < filtered.length; idx++) {
-        const id = filtered[idx];
-        const gx = (idx % cols) * GRID_PX;
-        const gy = Math.floor(idx / cols) * GRID_PX;
+    // モジュールスコープ変数に保存 → drawPaletteWindow が参照する
+    _palFiltered = filtered;
+    _palCols = cols;
+    _palRows = rows;
+    _palPreserveLayout = preserveLayout;
+    _palImg = img;
+    _palTsColumns = ts.columns;
+    _palTsTileSize = ts.tileSize;
 
-        if (img) {
-            const srcX = (id % ts.columns) * ts.tileSize;
-            const srcY = Math.floor(id / ts.columns) * ts.tileSize;
-            ctx.drawImage(img, srcX, srcY, ts.tileSize, ts.tileSize, gx, gy, GRID_PX, GRID_PX);
-        }
+    // スクロールを先頭に戻す (フィルタ変更時に途中位置が残ると firstRow がずれる)
+    $("palette-grid-wrap").scrollTop = 0;
 
-        // セル枠
-        const curSel = getSelectedTile();
-        ctx.strokeStyle = id === curSel ? "#ffd75e" : "rgba(255,255,255,0.18)";
-        ctx.lineWidth = id === curSel ? 3 : 1;
-        ctx.strokeRect(gx + 0.5, gy + 0.5, GRID_PX - 1, GRID_PX - 1);
-
-        // 選択中は背景ハイライト
-        if (id === curSel) {
-            ctx.fillStyle = "rgba(255,215,94,0.18)";
-            ctx.fillRect(gx + 1, gy + 1, GRID_PX - 2, GRID_PX - 2);
-        }
-
-        // 番号ラベル — レイアウト保持モードでは絵を隠さないよう控えめに (選択中のみ強調)
-        if (preserveLayout && id !== curSel) {
-            ctx.font = "9px sans-serif";
-            ctx.textBaseline = "top";
-            ctx.fillStyle = "rgba(0,0,0,0.55)";
-            ctx.fillText(String(id), gx + 3, gy + 3);
-            ctx.fillStyle = "rgba(255,255,255,0.55)";
-            ctx.fillText(String(id), gx + 2, gy + 2);
-        } else {
-            ctx.fillStyle = "rgba(0,0,0,0.6)";
-            ctx.fillRect(gx + 1, gy + 1, 26, 14);
-            ctx.font = "bold 11px sans-serif";
-            ctx.textBaseline = "top";
-            ctx.fillStyle = id === curSel ? "#ffd75e" : "rgba(255,255,255,0.8)";
-            ctx.fillText(String(id), gx + 3, gy + 2);
-        }
-    }
-
-    // 何も無い場合はプレースホルダ
-    if (filtered.length === 0) {
-        ctx.fillStyle = "rgba(255,255,255,0.3)";
-        ctx.font = "14px sans-serif";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText("チップが見つかりません", cv.width / 2, cv.height / 2 || GRID_PX / 2);
-    }
-
-    // 範囲選択ドラッグの選択枠を毎フレーム重ねるためのスナップショットを保持
-    paletteSnapshot ??= document.createElement("canvas");
-    paletteSnapshot.width = cv.width;
-    paletteSnapshot.height = cv.height;
-    paletteSnapshot.getContext("2d")?.drawImage(cv, 0, 0);
+    drawPaletteWindow();
 }
 
 /** 全画面グリッドを開く */
@@ -3646,8 +3715,10 @@ function wireUi(): void {
             const cols = Number(palCv.dataset.gridCols ?? "1");
             const ids = (palCv.dataset.filteredIds ?? "").split(",").map(Number).filter((n) => Number.isFinite(n));
             const rows = Math.max(1, Math.ceil(ids.length / cols));
+            // 仮想スクロール: canvas は可視ウィンドウ分だけなので firstRow オフセットを加える
+            const firstRow = Number(palCv.dataset.firstRow ?? "0");
             const col = Math.min(cols - 1, Math.max(0, Math.floor((e.clientX - r.left) / GRID_PX)));
-            const row = Math.min(rows - 1, Math.max(0, Math.floor((e.clientY - r.top) / GRID_PX)));
+            const row = Math.min(rows - 1, Math.max(0, firstRow + Math.floor((e.clientY - r.top) / GRID_PX)));
             return { col, row, cols, rows, ids };
         };
 
@@ -3655,8 +3726,10 @@ function wireUi(): void {
             const ctx = palCv.getContext("2d");
             if (!ctx || !paletteSnapshot) return;
             ctx.drawImage(paletteSnapshot, 0, 0); // ベースに戻してから枠を描く
+            // ac/ar/bc/br はコンテンツ座標 (全行) なので firstRow を引いてローカル canvas 座標に変換
+            const firstRow = Number(palCv.dataset.firstRow ?? "0");
             const x = Math.min(ac, bc) * GRID_PX;
-            const y = Math.min(ar, br) * GRID_PX;
+            const y = (Math.min(ar, br) - firstRow) * GRID_PX;
             const w = (Math.abs(bc - ac) + 1) * GRID_PX;
             const h = (Math.abs(br - ar) + 1) * GRID_PX;
             ctx.fillStyle = "rgba(255,215,94,0.22)";
@@ -3725,6 +3798,17 @@ function wireUi(): void {
         paletteUsedOnly = (e.target as HTMLInputElement).checked;
         void rebuildPaletteGrid(paletteFilterText, paletteUsedOnly);
     });
+
+    // 仮想スクロール: スクロール時に可視ウィンドウを再描画 (rAF で間引き)
+    // wireUi は 1 回しか呼ばれないのでリスナは 1 度だけ登録される
+    $("palette-grid-wrap").addEventListener("scroll", () => {
+        if (_palRafPending) return;
+        _palRafPending = true;
+        requestAnimationFrame(() => {
+            _palRafPending = false;
+            drawPaletteWindow();
+        });
+    }, { passive: true });
 
     // Esc で全画面グリッドを閉じる (既存 keydown ハンドラの外でシンプルに追加)
     $("palette-overlay").addEventListener("keydown", (e) => {
