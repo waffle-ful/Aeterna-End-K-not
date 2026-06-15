@@ -1270,7 +1270,7 @@ function rebuildAutotileBrushSelect(): void {
     for (let i = 0; i < autotiles.length; i++) {
         const opt = document.createElement("option");
         opt.value = String(i);
-        opt.textContent = `スマート: ${autotiles[i].name}`;
+        opt.textContent = `自動つなぎ: ${autotiles[i].name}`;
         sel.appendChild(opt);
     }
     // 選択を復元 (消えたブラシは null に戻す)
@@ -1538,7 +1538,7 @@ async function openAutotileDialog(editIdx = -1): Promise<void> {
     await drawAtTilePickerPanel();
     await drawAutotilePreview();
 
-    $("dlg-autotile-title").textContent = editIdx >= 0 ? `オートタイル「${atWorkDef.name}」を編集` : "オートタイルを新規作成";
+    $("dlg-autotile-title").textContent = editIdx >= 0 ? `自動つなぎブラシ「${atWorkDef.name}」を編集` : "自動つなぎブラシを新規作成";
     $<HTMLDialogElement>("dlg-autotile").showModal();
 }
 
@@ -1548,13 +1548,36 @@ function assignTileToActiveSlot(tileId: number): void {
         atWorkDef.fallback = tileId;
         atFallbackSelected = false;
     } else if (atSelectedSlot !== null) {
-        atWorkDef.lut[atSelectedSlot] = tileId;
-        atSelectedSlot = null;
+        const assigned = atSelectedSlot;
+        atWorkDef.lut[assigned] = tileId;
+        // 連続割当を楽にするため、割り当てたら自動で次のスロットへ進む (16 個目で解除)
+        atSelectedSlot = assigned + 1 < EDGE4_SLOTS ? assigned + 1 : null;
     } else {
         return;
     }
     void drawAutotileSlotPanel();
     void drawAutotilePreview();
+}
+
+/**
+ * チップ 0〜15 をコード 0〜15 にそのまま順番割当する時短 (コード順に並んだ専用シート向け)。
+ * 拾い物シートで並びが違う場合は、そのあと個別スロットを直せばよい。
+ */
+function fillSequentialLut(): void {
+    if (!isV3Doc(doc)) return;
+    const ts = doc.tilesets[atWorkDef.tileset];
+    if (!ts) return;
+    const total = tileCount(ts);
+    if (total < EDGE4_SLOTS) {
+        toast(`このチップセットは ${total} 枚です。連番割当には 16 枚必要です`);
+        return;
+    }
+    for (let code = 0; code < EDGE4_SLOTS; code++) atWorkDef.lut[code] = code;
+    if (atWorkDef.fallback < 0) atWorkDef.fallback = 0;
+    atSelectedSlot = null;
+    void drawAutotileSlotPanel();
+    void drawAutotilePreview();
+    toast("チップ 0〜15 を順番に割り当てました (違う所は個別に直せます)");
 }
 
 /** ダイアログ内のタイル選択パネル (ts-canvas 流用) */
@@ -2639,6 +2662,9 @@ function wireUi(): void {
         void drawAutotilePreview();
     });
 
+    // ── 連番で一括割当 (時短) ──
+    $("at-btn-fill-seq").addEventListener("click", () => fillSequentialLut());
+
     // ── fallback スロット ──
     $<HTMLCanvasElement>("at-fallback-canvas").addEventListener("click", () => {
         atFallbackSelected = !atFallbackSelected;
@@ -2711,7 +2737,7 @@ function wireUi(): void {
 
         rebuildAutotileBrushSelect();
         scheduleSave();
-        toast(`スマートブラシ「${name}」を保存しました`);
+        toast(`自動つなぎブラシ「${name}」を保存しました`);
         $<HTMLDialogElement>("dlg-autotile").close();
     });
 

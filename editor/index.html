@@ -81,10 +81,10 @@
         <button class="tool2" data-tool2="pick">スポイト</button>
         <!-- オートタイルブラシ選択 + 設定ボタン -->
         <div id="autotile-strip" class="autotile-strip">
-          <select id="at-brush-select" title="スマートブラシを選択 (通常=1枚タイルペン)">
+          <select id="at-brush-select" title="自動つなぎブラシを選択 (通常=1枚タイルペン)">
             <option value="-1">通常</option>
           </select>
-          <button id="btn-autotile-open" title="オートタイル設定を開く" class="at-open-btn">スマートブラシ設定</button>
+          <button id="btn-autotile-open" title="自動つなぎブラシの設定を開く" class="at-open-btn">自動つなぎブラシ</button>
         </div>
         <!-- コンパクト帯パレット: 選択中チップ + 近傍チップ数個 + 展開ボタン -->
         <div id="palette-strip">
@@ -274,14 +274,22 @@
 
     <!-- オートタイル設定ダイアログ (edge-4 スマートブラシ MVP) -->
     <dialog id="dlg-autotile">
-      <h3 id="dlg-autotile-title">オートタイル設定</h3>
+      <h3 id="dlg-autotile-title">自動つなぎブラシの設定</h3>
+      <p class="note">
+        壁は上下左右の隣の有無で見た目が変わります。その<strong>16通り</strong>それぞれに絵を割り当てると、
+        ペンで塗るだけで自動で正しいつなぎ目を選んでくれます。
+        スロットを選んで下のチップをクリック → <strong>自動で次のスロットへ進みます</strong>。
+      </p>
       <p class="note at-escape-note">
-        <strong>オートタイルを使わない場合:</strong>
-        <button id="at-btn-skip" type="button" class="at-escape-btn">オートタイルを使わない (1 枚タイル)</button>
+        <strong>つなぎ目が要らない (1 枚で塗る) 場合:</strong>
+        <button id="at-btn-skip" type="button" class="at-escape-btn">自動つなぎを使わない (1 枚タイル)</button>
       </p>
       <div class="at-section-label">チップセット</div>
       <select id="at-tileset-select" class="at-tileset-select"></select>
-      <div class="at-section-label">接続設定 (16 スロット) — スロットをクリック → チップを選択</div>
+      <div class="at-section-label">
+        つなぎ方 (16 スロット) — スロットを選んで下のチップをクリック
+        <button id="at-btn-fill-seq" type="button" class="at-clear-btn" title="チップ0〜15をそのままコード順に割り当て（この用途向けに並んだシートなら一発）">連番で一括割当</button>
+      </div>
       <div id="at-slot-panel" class="at-slot-panel"></div>
       <div class="at-section-label">フォールバックチップ (未割当スロット用)</div>
       <div id="at-fallback-row" class="at-fallback-row">
