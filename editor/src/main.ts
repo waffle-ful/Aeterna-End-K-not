@@ -213,7 +213,10 @@ function updateStatus(): void {
     const zoom = Math.round(renderer.world.scale.x * 100);
     const inGrid = lastHover && lastHover.x >= 0 && lastHover.y >= 0 && lastHover.x < doc.width && lastHover.y < doc.height;
     const cellTxt = inGrid && lastHover ? `(${lastHover.x}, ${lastHover.y})` : "--";
-    const v2Txt = isV3Doc(doc) ? ` | ${layerLabel(activeLayer)} | チップ ${getSelectedTile()}` : "";
+    const chipTxt = stampBlock && (stampBlock.w > 1 || stampBlock.h > 1)
+        ? `ブロック ${stampBlock.w}×${stampBlock.h}`
+        : `チップ ${getSelectedTile()}`;
+    const v2Txt = isV3Doc(doc) ? ` | ${layerLabel(activeLayer)} | ${chipTxt}` : "";
     $("status").textContent = `${doc.width}×${doc.height} | セル ${cellTxt} | ${zoom}%${v2Txt} | decor ${doc.decor.length}/${MAX_DECOR}`;
 }
 
@@ -540,6 +543,12 @@ async function rebuildPaletteGrid(filterText: string, usedOnly: boolean): Promis
         ctx.textBaseline = "middle";
         ctx.fillText("チップが見つかりません", cv.width / 2, cv.height / 2 || GRID_PX / 2);
     }
+
+    // 範囲選択ドラッグの選択枠を毎フレーム重ねるためのスナップショットを保持
+    paletteSnapshot ??= document.createElement("canvas");
+    paletteSnapshot.width = cv.width;
+    paletteSnapshot.height = cv.height;
+    paletteSnapshot.getContext("2d")?.drawImage(cv, 0, 0);
 }
 
 /** 全画面グリッドを開く */
@@ -560,9 +569,14 @@ function closePaletteOverlay(): void {
 
 let paletteFilterText = "";
 let paletteUsedOnly = false;
+/** パレットで範囲選択した「ブロックスタンプ」(複数チップを配置順のまま設置)。null = 単一チップ */
+let stampBlock: { w: number; h: number; ids: number[] } | null = null;
+/** 範囲選択ドラッグ中の選択枠を高速再描画するためのスナップショット */
+let paletteSnapshot: HTMLCanvasElement | null = null;
 
 function selectTile(id: number): void {
     if (!isV3Doc(doc)) return;
+    stampBlock = null; // 単一チップを選んだらブロックスタンプは解除
     setSelectedTile(Math.min(Math.max(0, id), tileCount(activeTileset(doc)) - 1));
     void rebuildPicker();
     // 全画面が開いていれば即時に閉じる (帯の再描画は rebuildPicker が担う)
@@ -667,6 +681,24 @@ function clampCell(v: number, max: number): number {
  * computeAutotileEdits が返す全セル (self + 影響を受けた近傍) を
  * paintCellV3 経由で適用 → Patch に全編集が記録され Undo で全セルが巻き戻る (§5.1)。
  */
+/**
+ * ブロックスタンプを (x,y) を左上に設置する。各セルは既存の paintCellV3 経由なので
+ * Patch にまとめて記録され、Undo でブロック全体が一度に戻る。空きスロット (-1) は上書きしない。
+ */
+function stampBlockAt(d: MapDocV3, x: number, y: number): void {
+    const blk = stampBlock;
+    if (!blk) return;
+    for (let r = 0; r < blk.h; r++) {
+        for (let c = 0; c < blk.w; c++) {
+            const id = blk.ids[r * blk.w + c];
+            if (id < 0) continue;
+            const tx = x + c, ty = y + r;
+            if (tx < 0 || ty < 0 || tx >= d.width || ty >= d.height) continue;
+            paintCellV3(d, tx, ty, id);
+        }
+    }
+}
+
 function paintAutotileV3(d: MapDocV3, x: number, y: number, mode: "paint" | "erase"): void {
     const def = activeAutotileIdx !== null ? autotiles[activeAutotileIdx] : null;
     if (!def) return;
@@ -710,6 +742,9 @@ function applyToolAtV3(d: MapDocV3, x: number, y: number, isStart: boolean): voi
                         // タイルセット不一致: 塗らない (誤操作防止)。ドラッグ中の連続トーストは避ける
                         toast("このレイヤーは別のチップセットです");
                     }
+                } else if (stampBlock && (stampBlock.w > 1 || stampBlock.h > 1)) {
+                    // ブロックスタンプ: 範囲選択したチップ群を配置順のまま設置 (top-left = クリック位置)
+                    stampBlockAt(d, x, y);
                 } else {
                     paintCellV3(d, x, y, getSelectedTile());
                 }
@@ -1073,6 +1108,7 @@ function setDocument(next: AnyDoc): void {
     renderer.clearRectPreview();
     // 別マップに切り替わったので保存先ハンドルを破棄 (前のマップに誤って上書きしない)
     currentMapHandle = null;
+    stampBlock = null; // 別マップのブロックスタンプは無効化
     // ドキュメント切替時にオートタイル状態をリセット
     autotiles = [];
     activeAutotileIdx = null;
@@ -2894,6 +2930,7 @@ function wireUi(): void {
         const val = (e.target as HTMLSelectElement).value;
         const idx = parseInt(val, 10);
         activeAutotileIdx = idx >= 0 ? idx : null;
+        if (activeAutotileIdx !== null) stampBlock = null; // オートタイルを選んだらブロックスタンプ解除
         updateStatus();
     });
 
@@ -3072,21 +3109,83 @@ function wireUi(): void {
         closePaletteOverlay();
     });
 
-    // 全画面グリッド: チップをクリックして選択
-    $<HTMLCanvasElement>("palette-canvas").addEventListener("click", (e) => {
-        if (!isV3Doc(doc)) return;
-        const cv = $<HTMLCanvasElement>("palette-canvas");
-        const r = cv.getBoundingClientRect();
-        const cols = Number(cv.dataset.gridCols ?? "1");
-        const ix = Math.floor((e.clientX - r.left) / GRID_PX);
-        const iy = Math.floor((e.clientY - r.top) / GRID_PX);
-        const idx = iy * cols + ix;
-        const raw = cv.dataset.filteredIds ?? "";
-        const ids = raw.split(",").map(Number).filter((n) => Number.isFinite(n));
-        if (idx < 0 || idx >= ids.length) return;
-        selectTile(ids[idx]);
-        if (toolV2 === "erase" || toolV2 === "pick") setToolV2("pen");
-    });
+    // 全画面グリッド: クリックで1チップ選択 / ドラッグで範囲選択 (= ブロックスタンプ)
+    {
+        const palCv = $<HTMLCanvasElement>("palette-canvas");
+        let palDrag: { c0: number; r0: number } | null = null;
+
+        const palCell = (e: PointerEvent): { col: number; row: number; cols: number; rows: number; ids: number[] } => {
+            const r = palCv.getBoundingClientRect();
+            const cols = Number(palCv.dataset.gridCols ?? "1");
+            const ids = (palCv.dataset.filteredIds ?? "").split(",").map(Number).filter((n) => Number.isFinite(n));
+            const rows = Math.max(1, Math.ceil(ids.length / cols));
+            const col = Math.min(cols - 1, Math.max(0, Math.floor((e.clientX - r.left) / GRID_PX)));
+            const row = Math.min(rows - 1, Math.max(0, Math.floor((e.clientY - r.top) / GRID_PX)));
+            return { col, row, cols, rows, ids };
+        };
+
+        const drawPalSel = (ac: number, ar: number, bc: number, br: number): void => {
+            const ctx = palCv.getContext("2d");
+            if (!ctx || !paletteSnapshot) return;
+            ctx.drawImage(paletteSnapshot, 0, 0); // ベースに戻してから枠を描く
+            const x = Math.min(ac, bc) * GRID_PX;
+            const y = Math.min(ar, br) * GRID_PX;
+            const w = (Math.abs(bc - ac) + 1) * GRID_PX;
+            const h = (Math.abs(br - ar) + 1) * GRID_PX;
+            ctx.fillStyle = "rgba(255,215,94,0.22)";
+            ctx.fillRect(x, y, w, h);
+            ctx.strokeStyle = "#ffd75e";
+            ctx.lineWidth = 2;
+            ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
+        };
+
+        palCv.addEventListener("pointerdown", (e) => {
+            if (!isV3Doc(doc)) return;
+            const { col, row } = palCell(e);
+            palDrag = { c0: col, r0: row };
+            palCv.setPointerCapture(e.pointerId);
+        });
+        palCv.addEventListener("pointermove", (e) => {
+            if (!palDrag) return;
+            const { col, row } = palCell(e);
+            drawPalSel(palDrag.c0, palDrag.r0, col, row);
+        });
+        palCv.addEventListener("pointerup", (e) => {
+            const start = palDrag;
+            palDrag = null;
+            if (!start || !isV3Doc(doc)) return;
+            const { col, row, cols, ids } = palCell(e);
+            const c0 = Math.min(start.c0, col), c1 = Math.max(start.c0, col);
+            const r0 = Math.min(start.r0, row), r1 = Math.max(start.r0, row);
+
+            if (c0 === c1 && r0 === r1) {
+                // 単一クリック → 従来どおり 1 チップ選択 (selectTile が overlay も閉じる)
+                const idx = r0 * cols + c0;
+                if (idx >= 0 && idx < ids.length) {
+                    selectTile(ids[idx]);
+                    if (toolV2 === "erase" || toolV2 === "pick") setToolV2("pen");
+                }
+                return;
+            }
+
+            // 範囲選択 → ブロックスタンプを作る (配置順そのまま、空きスロットは -1)
+            const w = c1 - c0 + 1, h = r1 - r0 + 1;
+            const block: number[] = [];
+            for (let r = r0; r <= r1; r++) {
+                for (let c = c0; c <= c1; c++) {
+                    const idx = r * cols + c;
+                    block.push(idx >= 0 && idx < ids.length ? ids[idx] : -1);
+                }
+            }
+            stampBlock = { w, h, ids: block };
+            activeAutotileIdx = null; // スタンプ中はオートタイル解除
+            rebuildAutotileBrushSelect();
+            if (toolV2 !== "pen") setToolV2("pen");
+            closePaletteOverlay();
+            toast(`${w}×${h} のチップブロックを選びました (クリックで設置・ドラッグで連続)`);
+            updateStatus();
+        });
+    }
 
     // 検索フィールド: 入力で即時絞り込み
     $<HTMLInputElement>("palette-search").addEventListener("input", (e) => {
