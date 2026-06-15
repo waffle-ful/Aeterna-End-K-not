@@ -444,19 +444,28 @@ async function rebuildPaletteGrid(filterText: string, usedOnly: boolean): Promis
         }
     }
 
-    // フィルタ適用: 番号が filterText を含むものだけ
     const norm = filterText.trim();
-    const filtered: number[] = [];
-    for (let id = 0; id < total; id++) {
-        if (norm && !String(id).includes(norm)) continue;
-        if (usedIds && !usedIds.has(id)) continue;
-        filtered.push(id);
-    }
+    // 既定 (検索もフィルタも無し) は「元レイアウト保持」モード = BitGM 風。
+    // 素材本来の列数・位置のまま全タイルを並べるので、窓などの複数マス物が崩れずに見える。
+    const preserveLayout = norm === "" && !usedOnly;
 
-    // グリッド列数: ウィンドウ幅に合わせる
-    const wrap = $("palette-grid-wrap");
-    const wrapW = wrap.clientWidth || window.innerWidth;
-    const cols = Math.max(1, Math.floor(wrapW / GRID_PX));
+    let filtered: number[];
+    let cols: number;
+    if (preserveLayout) {
+        filtered = Array.from({ length: total }, (_, id) => id); // 全タイルを素材順のまま
+        cols = Math.max(1, ts.columns);                          // 素材の列数で並べる (= 元の配置を再現)
+    } else {
+        // 検索 / 使用中フィルタ時は一覧性優先でコンパクトに詰める (探す用途)
+        filtered = [];
+        for (let id = 0; id < total; id++) {
+            if (norm && !String(id).includes(norm)) continue;
+            if (usedIds && !usedIds.has(id)) continue;
+            filtered.push(id);
+        }
+        const wrap = $("palette-grid-wrap");
+        const wrapW = wrap.clientWidth || window.innerWidth;
+        cols = Math.max(1, Math.floor(wrapW / GRID_PX));
+    }
     const rows = Math.ceil(filtered.length / cols) || 1;
 
     const cv = $<HTMLCanvasElement>("palette-canvas");
@@ -505,13 +514,22 @@ async function rebuildPaletteGrid(filterText: string, usedOnly: boolean): Promis
             ctx.fillRect(gx + 1, gy + 1, GRID_PX - 2, GRID_PX - 2);
         }
 
-        // 番号ラベル
-        ctx.fillStyle = "rgba(0,0,0,0.6)";
-        ctx.fillRect(gx + 1, gy + 1, 26, 14);
-        ctx.font = "bold 11px sans-serif";
-        ctx.textBaseline = "top";
-        ctx.fillStyle = id === curSel ? "#ffd75e" : "rgba(255,255,255,0.8)";
-        ctx.fillText(String(id), gx + 3, gy + 2);
+        // 番号ラベル — レイアウト保持モードでは絵を隠さないよう控えめに (選択中のみ強調)
+        if (preserveLayout && id !== curSel) {
+            ctx.font = "9px sans-serif";
+            ctx.textBaseline = "top";
+            ctx.fillStyle = "rgba(0,0,0,0.55)";
+            ctx.fillText(String(id), gx + 3, gy + 3);
+            ctx.fillStyle = "rgba(255,255,255,0.55)";
+            ctx.fillText(String(id), gx + 2, gy + 2);
+        } else {
+            ctx.fillStyle = "rgba(0,0,0,0.6)";
+            ctx.fillRect(gx + 1, gy + 1, 26, 14);
+            ctx.font = "bold 11px sans-serif";
+            ctx.textBaseline = "top";
+            ctx.fillStyle = id === curSel ? "#ffd75e" : "rgba(255,255,255,0.8)";
+            ctx.fillText(String(id), gx + 3, gy + 2);
+        }
     }
 
     // 何も無い場合はプレースホルダ
