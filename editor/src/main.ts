@@ -1666,6 +1666,71 @@ function tsCanvasCellId(e: MouseEvent): number | null {
     return y * ts.columns + x;
 }
 
+// ---------- チップ設定: 矩形ドラッグで属性を一括適用 ----------
+// アンカー (ドラッグ開始セル) を1回巡回させた値を、ドラッグした矩形内の全チップに適用する。
+// クリック (移動なし) は1セルだけ = 従来の巡回と同じ。右クリックは別途1セル逆巡回。
+
+type TsAttrValue = TileAttr["pass"] | boolean | number;
+
+function currentTsValue(t: TileAttr): TsAttrValue {
+    if (tsMode === "pass") return t.pass;
+    if (tsMode === "over") return t.over;
+    if (tsMode === "light") return t.light;
+    return t.tag;
+}
+
+function nextTsValue(t: TileAttr, dir: 1 | -1): TsAttrValue {
+    if (tsMode === "pass") return PASS_CYCLE[t.pass];
+    if (tsMode === "over") return !t.over;
+    if (tsMode === "light") return !t.light;
+    return (t.tag + dir + (TAG_MAX + 1)) % (TAG_MAX + 1);
+}
+
+function setTsValue(t: TileAttr, v: TsAttrValue): void {
+    if (tsMode === "pass") t.pass = v as TileAttr["pass"];
+    else if (tsMode === "over") t.over = v as boolean;
+    else if (tsMode === "light") t.light = v as boolean;
+    else t.tag = v as number;
+}
+
+/** アンカーセルと現在セルの外接矩形に含まれる全チップ id を返す。 */
+function tsRectIds(anchorId: number, curId: number): number[] {
+    if (!isV3Doc(doc)) return [];
+    const cols = activeTileset(doc).columns;
+    const ax = anchorId % cols, ay = Math.floor(anchorId / cols);
+    const bx = curId % cols, by = Math.floor(curId / cols);
+    const ids: number[] = [];
+    for (let y = Math.min(ay, by); y <= Math.max(ay, by); y++) {
+        for (let x = Math.min(ax, bx); x <= Math.max(ax, bx); x++) ids.push(y * cols + x);
+    }
+    return ids;
+}
+
+/** 矩形ドラッグ中の状態。orig は「元に戻す」ため touch したセルの元値を保持。 */
+let tsRectDrag: { anchorId: number; value: TsAttrValue; orig: Map<number, TsAttrValue> } | null = null;
+
+/** 現在セルまでの矩形を再計算し、外れたセルは元に戻し・含むセルへ value を適用する。 */
+function tsRectApply(curId: number): void {
+    if (!tsRectDrag || !isV3Doc(doc)) return;
+    const ts = activeTileset(doc);
+    const want = new Set(tsRectIds(tsRectDrag.anchorId, curId));
+    // 矩形から外れたセルを元値に戻す
+    for (const [id, ov] of [...tsRectDrag.orig]) {
+        if (want.has(id)) continue;
+        const t = ts.tiles[id];
+        if (t) setTsValue(t, ov);
+        tsRectDrag.orig.delete(id);
+    }
+    // 矩形内セルへ適用 (初回 touch 時に元値を退避)
+    for (const id of want) {
+        const t = ts.tiles[id];
+        if (!t) continue;
+        if (!tsRectDrag.orig.has(id)) tsRectDrag.orig.set(id, currentTsValue(t));
+        setTsValue(t, tsRectDrag.value);
+    }
+    drawTilesetPanel(); // ダイアログのグリッドだけ軽量に再描画 (マップ再描画は mouseup で1回)
+}
+
 /** タイルセット画像の差し替え。属性は id ベースで維持、範囲外になったレイヤー値は -1 に */
 function replaceTileset(ts: TilesetDoc): void {
     if (!isV3Doc(doc)) return;
@@ -3689,9 +3754,30 @@ function wireUi(): void {
         });
     }
     const tsCanvas = $<HTMLCanvasElement>("ts-canvas");
-    tsCanvas.addEventListener("click", (e) => {
+    // 左ドラッグ: アンカーを1回巡回させた値を矩形内へ一括適用 (クリックは1セル = 従来と同じ)
+    tsCanvas.addEventListener("mousedown", (e) => {
+        if (e.button !== 0 || !isV3Doc(doc)) return;
         const id = tsCanvasCellId(e);
-        if (id !== null) cycleTileAttr(id, 1);
+        if (id === null) return;
+        const t = activeTileset(doc).tiles[id];
+        if (!t) return;
+        e.preventDefault();
+        tsRectDrag = { anchorId: id, value: nextTsValue(t, 1), orig: new Map() };
+        tsRectApply(id);
+    });
+    tsCanvas.addEventListener("mousemove", (e) => {
+        if (!tsRectDrag) return;
+        const id = tsCanvasCellId(e);
+        if (id !== null) tsRectApply(id);
+    });
+    // mouseup は canvas 外で離しても拾えるよう window に張る。確定時にマップ再描画＋保存を1回。
+    window.addEventListener("mouseup", () => {
+        if (!tsRectDrag) return;
+        tsRectDrag = null;
+        renderer.redrawAll(); // ★バッジ / 通行オーバーレイに反映
+        renderer.flush();
+        scheduleSave();
+        refreshTileAttrs();
     });
     tsCanvas.addEventListener("contextmenu", (e) => {
         e.preventDefault();
