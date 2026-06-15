@@ -1489,3 +1489,201 @@ dialog#dlg-library {
     gap: var(--space-xs);
     flex-shrink: 0;
 }
+
+/* =============================================================
+   スタート画面 (#start-screen)
+   ============================================================= */
+
+#start-screen {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: var(--bg-1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow-y: auto;
+    padding: var(--space-lg);
+}
+
+#start-screen[hidden] {
+    display: none;
+}
+
+#start-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-md);
+    width: 100%;
+    max-width: 720px;
+    text-align: center;
+}
+
+#start-title {
+    font-size: clamp(20px, 4vw, 32px);
+    font-weight: 700;
+    color: var(--accent);
+    margin: 0;
+}
+
+#start-sub {
+    font-size: 14px;
+    color: var(--text-muted);
+    margin: 0;
+}
+
+#start-main-btns {
+    display: flex;
+    gap: var(--space-md);
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.start-main-btn {
+    font-size: 16px;
+    padding: var(--space-md) var(--space-lg);
+    min-width: 160px;
+    font-weight: 600;
+    border-radius: var(--radius-md);
+}
+
+#start-tpl-heading {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin: var(--space-md) 0 0;
+}
+
+#start-templates {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-md);
+    justify-content: center;
+    width: 100%;
+}
+
+.start-tpl-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-xs);
+    padding: var(--space-md) var(--space-lg);
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    min-width: 160px;
+    flex: 1 1 160px;
+    max-width: 240px;
+    transition: border-color 0.15s, background 0.15s;
+    text-align: center;
+}
+
+.start-tpl-card:hover {
+    border-color: var(--accent);
+    background: var(--bg-active-accent);
+}
+
+.start-tpl-emoji {
+    font-size: 28px;
+    line-height: 1;
+}
+
+.start-tpl-name {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.start-tpl-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+#start-skip {
+    margin-top: var(--space-sm);
+    font-size: 12px;
+    color: var(--text-muted);
+    background: transparent;
+    border: none;
+    min-height: unset;
+    padding: var(--space-xs) var(--space-sm);
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+#start-skip:hover {
+    color: var(--text-primary);
+    background: transparent;
+}
+
+/* =============================================================
+   コーチマーク (#coach-overlay)
+   ============================================================= */
+
+#coach-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 190;
+    pointer-events: none; /* 基本透過 */
+}
+
+#coach-overlay[hidden] {
+    display: none;
+}
+
+#coach-highlight {
+    position: absolute;
+    border: 2px solid var(--accent);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 0 0 4px rgba(255, 215, 94, 0.18);
+    pointer-events: none;
+}
+
+#coach-tip {
+    position: absolute;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: var(--space-md) var(--space-lg);
+    max-width: 320px;
+    min-width: 220px;
+    pointer-events: all; /* 吹き出しはクリック可能 */
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+}
+
+#coach-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--accent);
+}
+
+#coach-body {
+    font-size: 13px;
+    color: var(--text-primary);
+    line-height: 1.5;
+}
+
+#coach-step {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+#coach-btns {
+    display: flex;
+    gap: var(--space-xs);
+    justify-content: flex-end;
+    margin-top: var(--space-xs);
+}
+
+#coach-btns button {
+    font-size: 13px;
+    padding: var(--space-xs) var(--space-md);
+    min-height: unset;
+}
+

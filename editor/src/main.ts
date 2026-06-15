@@ -67,6 +67,7 @@ import { MapRenderer, loadTilesetImage } from "./render";
 import { InputController } from "./input";
 import { saveForPlaytest } from "./playtest";
 import { createBackroomsDoc } from "./presets";
+import { EKM_TEMPLATES, type EkmTemplate } from "./templates";
 
 type ToolV1 = "floor" | "wall" | "void" | DecorKind | "spawn";
 type ToolV2 = "pen" | "erase" | "rect" | "bucket" | "pick";
@@ -179,6 +180,181 @@ function toast(msg: string): void {
             el.hidden = true;
         }, 350);
     }, 2400);
+}
+
+// ---------- スタート画面 ----------
+
+const COACH_DONE_KEY = "ekm.coachDone";
+let startScreenShown = false;
+let coachStep = 0;
+
+/** コーチマークの5ステップ定義 */
+const COACH_STEPS: { targetId: string; title: string; body: string }[] = [
+    {
+        targetId: "tools",
+        title: "① 道具をえらぶ",
+        body: "壁・床・灯りなど、置きたいものをここで選びます",
+    },
+    {
+        targetId: "viewport",
+        title: "② マップに描く",
+        body: "えらんだ道具で、ここをドラッグして描きます",
+    },
+    {
+        targetId: "btn-export",
+        title: "③ 保存する",
+        body: "作ったマップは書庫に保存。Ctrl+S でもサッと保存できます",
+    },
+    {
+        targetId: "btn-play",
+        title: "④ ゲームで試す",
+        body: "ゲームのフォルダに出して、約2秒で実機に反映されます",
+    },
+    {
+        targetId: "btn-import",
+        title: "⑤ また開く",
+        body: "保存したマップは「開く」からいつでも呼び出せます",
+    },
+];
+
+/** コーチオーバーレイを指定ステップで表示する */
+function showCoachStep(step: number): void {
+    const overlay = $("coach-overlay");
+    const steps = COACH_STEPS;
+
+    // ステップ完了
+    if (step >= steps.length) {
+        endCoach();
+        return;
+    }
+
+    // 対象要素の存在チェック (hidden/サイズ0 なら次へスキップ)
+    const def = steps[step];
+    const target = document.getElementById(def.targetId);
+    if (!target) {
+        showCoachStep(step + 1);
+        return;
+    }
+    const rect = target.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) {
+        showCoachStep(step + 1);
+        return;
+    }
+
+    coachStep = step;
+    overlay.hidden = false;
+
+    // ハイライト位置
+    const pad = 6;
+    const hl = $("coach-highlight");
+    hl.style.left = `${rect.left - pad}px`;
+    hl.style.top = `${rect.top - pad}px`;
+    hl.style.width = `${rect.width + pad * 2}px`;
+    hl.style.height = `${rect.height + pad * 2}px`;
+
+    // テキスト更新
+    $("coach-title").textContent = def.title;
+    $("coach-body").textContent = def.body;
+    $("coach-step").textContent = `${step + 1} / ${steps.length}`;
+
+    // 次へ/完了ボタン
+    const nextBtn = $<HTMLButtonElement>("coach-next");
+    nextBtn.textContent = step === steps.length - 1 ? "完了" : "次へ";
+
+    // 吹き出し位置: 対象の下、画面内に収まらなければ上
+    const tip = $("coach-tip");
+    tip.style.left = "";
+    tip.style.right = "";
+    tip.style.top = "";
+    tip.style.bottom = "";
+
+    const TIP_W = 320;
+    const TIP_H = 160; // 概算
+    const GAP = 12;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    // 水平: 対象の左端に揃える (はみ出せば右端に寄せる)
+    let tipLeft = rect.left;
+    if (tipLeft + TIP_W > vw - 8) tipLeft = vw - TIP_W - 8;
+    if (tipLeft < 8) tipLeft = 8;
+    tip.style.left = `${tipLeft}px`;
+
+    // 垂直: 対象の下優先、収まらなければ上
+    const belowY = rect.bottom + pad + GAP;
+    if (belowY + TIP_H <= vh - 8) {
+        tip.style.top = `${belowY}px`;
+    } else {
+        const aboveY = rect.top - pad - GAP - TIP_H;
+        tip.style.top = `${Math.max(8, aboveY)}px`;
+    }
+}
+
+function startCoach(): void {
+    showCoachStep(0);
+}
+
+function endCoach(): void {
+    $("coach-overlay").hidden = true;
+    localStorage.setItem(COACH_DONE_KEY, "1");
+}
+
+function maybeAutoCoach(): void {
+    if (localStorage.getItem(COACH_DONE_KEY)) return;
+    startCoach();
+}
+
+/** スタート画面の「テンプレートカード」を再描画する */
+function renderStartTemplates(): void {
+    const container = $("start-templates");
+    container.innerHTML = "";
+    for (const t of EKM_TEMPLATES) {
+        const card = document.createElement("button");
+        card.className = "start-tpl-card";
+        card.innerHTML = `
+            <span class="start-tpl-emoji">${t.emoji}</span>
+            <span class="start-tpl-name">${t.name}</span>
+            <span class="start-tpl-desc">${t.description}</span>
+        `;
+        card.addEventListener("click", () => void loadTemplate(t));
+        container.appendChild(card);
+    }
+}
+
+function showStartScreen(): void {
+    renderStartTemplates();
+    $("start-screen").hidden = false;
+    startScreenShown = true;
+}
+
+function hideStartScreen(): void {
+    $("start-screen").hidden = true;
+    // 初回 dismiss 時にコーチを起動 (初回フラグを再利用)
+    if (startScreenShown) {
+        startScreenShown = false;
+        maybeAutoCoach();
+    }
+}
+
+async function loadTemplate(t: EkmTemplate): Promise<void> {
+    await backupAutosave();
+    const author = doc.author ?? "";
+    const json = t.buildJson(t.name, author);
+    // 空の Backrooms は全セルが空 (-1) なので validateEkmapAny の spawn チェックで
+    // ok=false になる。その場合は createBackroomsDoc 直呼びで setDocument する。
+    if (t.id === "empty-backrooms") {
+        selectedTilePerLayer = [0, 0, 0, 0];
+        setDocument(createBackroomsDoc(32, 32, t.name, author));
+        currentLibraryId = null;
+        hideStartScreen();
+        toast(`テンプレートから作りました: ${t.name}`);
+        return;
+    }
+    if (loadFromJsonText(JSON.stringify(json))) {
+        currentLibraryId = null;
+        hideStartScreen();
+        toast(`テンプレートから作りました: ${t.name}`);
+    }
 }
 
 function showMessages(title: string, errors: string[], warnings: string[]): void {
@@ -3677,6 +3853,25 @@ function wireUi(): void {
     window.addEventListener("beforeunload", () => {
         if (savePending) void saveAutosave(docToJsonAny(doc));
     });
+
+    // スタート画面ボタン配線
+    $("btn-home").addEventListener("click", () => showStartScreen());
+    $("btn-help").addEventListener("click", () => startCoach());
+
+    // スタート画面内ボタン
+    $("start-new").addEventListener("click", () => {
+        hideStartScreen();
+        $("btn-new").click();
+    });
+    $("start-library").addEventListener("click", () => {
+        hideStartScreen();
+        void openLibraryDialog();
+    });
+    $("start-skip").addEventListener("click", () => hideStartScreen());
+
+    // コーチマークボタン配線
+    $("coach-next").addEventListener("click", () => showCoachStep(coachStep + 1));
+    $("coach-skip").addEventListener("click", () => endCoach());
 }
 
 // ---------- 起動 ----------
@@ -3688,7 +3883,13 @@ async function boot(): Promise<void> {
 
     const saved = await loadAutosave();
     const restored = saved === undefined || saved === null ? null : tryRestoreDoc(saved);
-    setDocument(restored ?? createBackroomsDoc(32, 32, "新しいマップ", ""));
+
+    if (restored === null) {
+        // 初回 / 自動保存なし: 白紙を裏に置いてからスタート画面を表示
+        setDocument(createBackroomsDoc(32, 32, "新しいマップ", ""));
+    } else {
+        setDocument(restored);
+    }
 
     // オートタイル定義を復元 (緩い型チェック: Array かつ各要素が scheme==="edge4" && Array.isArray(lut))
     const savedAt = await loadAutotiles();
@@ -3709,7 +3910,12 @@ async function boot(): Promise<void> {
         }
     }
 
-    if (restored) toast("自動保存から復元しました");
+    if (restored) {
+        toast("自動保存から復元しました");
+        maybeAutoCoach();
+    } else {
+        showStartScreen();
+    }
 
     new InputController(renderer.app.canvas, renderer.world, {
         strokeStart: onStrokeStart,
