@@ -21,8 +21,9 @@
       </div>
       <div class="actions">
         <button id="btn-new">新規</button>
-        <button id="btn-import">開く</button>
-        <button id="btn-export" title="マップを保存 / 上書き保存 (Ctrl+S)。初回だけ保存先を選び、以降は同じファイルに上書きします">保存</button>
+        <button id="btn-import" title="保存したマップの一覧を開きます">開く</button>
+        <button id="btn-export" title="マップを書庫に保存します (Ctrl+S)。OneDrive でも失敗しません">保存</button>
+        <button id="btn-export-file" title="マップを .ekmap.json ファイルとしてダウンロードします">ファイル書出</button>
         <button id="btn-copy-code">コードコピー</button>
         <button id="btn-load-code">コード読込</button>
         <button id="btn-play" class="primary" title="マップを EKMaps フォルダへ保存してゲームに反映します">▶ ゲームで試す</button>
@@ -221,6 +222,15 @@
       <menu>
         <button id="ts-replace" type="button">画像差し替え…</button>
         <button id="ts-close" type="button">閉じる</button>
+      </menu>
+    </dialog>
+
+    <dialog id="dlg-library">
+      <h3>マップ書庫</h3>
+      <div id="library-list"></div>
+      <menu>
+        <button id="library-import" type="button">ファイルから読込</button>
+        <button id="library-close" type="button">閉じる</button>
       </menu>
     </dialog>
 

@@ -51,7 +51,7 @@ import { validateEkmapAny, validateTileset } from "./validate";
 import { PNG_DATA_URI_PREFIX, parsePngDataUri } from "./png";
 import { decodeMapCode, encodeMapCode } from "./mapcode";
 import { type CellChange, History, type Patch, applyPatch } from "./history";
-import { backupAutosave, loadAutosave, loadAutotiles, saveAutosave, saveAutotiles, tryRestoreDoc } from "./persist";
+import { backupAutosave, deleteLibrary, getLibrary, listLibrary, loadAutosave, loadAutotiles, putLibrary, saveAutosave, saveAutotiles, tryRestoreDoc } from "./persist";
 import {
     type AutotileDef,
     EDGE4_SLOTS,
@@ -1106,8 +1106,8 @@ function setDocument(next: AnyDoc): void {
     stroke = null;
     rectDrag = null;
     renderer.clearRectPreview();
-    // 別マップに切り替わったので保存先ハンドルを破棄 (前のマップに誤って上書きしない)
-    currentMapHandle = null;
+    // 別マップに切り替わったので書庫IDを破棄 (前のマップに誤って上書きしない)
+    currentLibraryId = null;
     stampBlock = null; // 別マップのブロックスタンプは無効化
     // ドキュメント切替時にオートタイル状態をリセット
     autotiles = [];
@@ -1936,56 +1936,127 @@ function exportFile(): void {
     toast("エクスポートしました (.ekmap.json)");
 }
 
-/** 現在編集中のマップの保存先ファイルハンドル (FS Access)。Ctrl+S / 保存ボタンの上書き先 */
-let currentMapHandle: FileSystemFileHandle | null = null;
+/** 現在編集中のマップが書庫に保存されている場合の書庫 ID。Ctrl+S / 保存ボタンの上書き先 */
+let currentLibraryId: string | null = null;
 
 /**
- * マップを保存する。FS Access 対応ブラウザでは「上書き保存」を実現する。
- * - 保存先ハンドルが既にあれば無言で上書き (毎回新規にならない)。
- * - 無ければ一度だけ保存先を尋ね、以後そのファイルに上書きし続ける。
- * - 未対応ブラウザ (Firefox/Safari) はダウンロードに倒す。
- * 新規作成・ファイル/コード読込時 (setDocument) にハンドルはリセットされる。
- * @param forceSaveAs true で必ず保存先を尋ね直す (名前を付けて保存)
+ * マップを書庫 (IndexedDB) に保存する。
+ * - currentLibraryId があり !forceNew なら無言で上書き。
+ * - 無ければプロンプトで名前を聞いて新規保存。
+ * @param forceNew true で必ず新規として名前を聞く
  */
-async function saveMap(forceSaveAs: boolean): Promise<void> {
-    const text = buildValidatedJson(true);
-    if (text === null) return; // 検証 NG はメッセージ済み
-    const filename = `${sanitizeFileName(doc.name)}.ekmap.json`;
+async function saveToLibrary(forceNew: boolean): Promise<void> {
+    // 検証: buildValidatedJson が null なら NG (メッセージ済み)
+    if (buildValidatedJson(true) === null) return;
 
-    // FS Access 非対応 → 従来どおりダウンロード
-    if (!("showSaveFilePicker" in window)) {
-        exportFile();
-        return;
-    }
+    let id: string;
+    let name: string;
+    const isOverwrite = currentLibraryId !== null && !forceNew;
 
-    const reuse = currentMapHandle !== null && !forceSaveAs;
-    try {
-        if (!reuse) {
-            currentMapHandle = await (window as unknown as {
-                showSaveFilePicker(o: {
-                    suggestedName?: string; startIn?: string; id?: string;
-                    types?: { description: string; accept: Record<string, string[]> }[];
-                }): Promise<FileSystemFileHandle>;
-            }).showSaveFilePicker({
-                suggestedName: filename,
-                startIn: "documents",
-                id: "ekmap-source",
-                types: [{ description: "EKMap マップ", accept: { "application/json": [".json"] } }],
-            });
-        }
-        const handle = currentMapHandle;
-        if (!handle) return;
-        const w = await handle.createWritable();
-        await w.write(text);
-        await w.close();
-        toast(reuse ? `上書き保存しました (${handle.name})` : `保存しました (${handle.name})`);
-    } catch (e) {
-        const err = e as DOMException;
-        if (err && (err.name === "AbortError" || err.name === "NotAllowedError")) {
+    if (isOverwrite) {
+        // 既存スロットへの上書き
+        id = currentLibraryId!;
+        name = doc.name;
+    } else {
+        // 新規: 名前を聞く
+        const input = window.prompt("書庫に保存する名前", doc.name);
+        if (input === null || input.trim() === "") {
             toast("保存をキャンセルしました");
             return;
         }
-        toast(`保存に失敗しました: ${(e as Error).message}`);
+        name = input.trim();
+        id = crypto.randomUUID();
+    }
+
+    try {
+        await putLibrary({ id, name, author: doc.author ?? "", updatedAt: Date.now(), doc: docToJsonAny(doc) });
+        currentLibraryId = id;
+        toast(isOverwrite ? "書庫に保存しました" : `書庫に保存しました (${name})`);
+    } catch (e) {
+        toast(`書庫への保存に失敗しました: ${(e as Error).message}`);
+    }
+}
+
+/** 書庫ダイアログを開き、保存済みマップの一覧を表示する */
+async function openLibraryDialog(): Promise<void> {
+    const dlg = $<HTMLDialogElement>("dlg-library");
+    await renderLibraryList();
+    dlg.showModal();
+}
+
+/** 書庫一覧を再描画する */
+async function renderLibraryList(): Promise<void> {
+    const container = $("library-list");
+    const entries = await listLibrary();
+    container.innerHTML = "";
+
+    if (entries.length === 0) {
+        const empty = document.createElement("p");
+        empty.className = "note";
+        empty.textContent = "保存されたマップはありません";
+        container.appendChild(empty);
+        return;
+    }
+
+    for (const entry of entries) {
+        const row = document.createElement("div");
+        row.className = "library-row";
+
+        const info = document.createElement("div");
+        info.className = "library-info";
+
+        const title = document.createElement("span");
+        title.className = "library-name";
+        title.textContent = entry.name;
+        info.appendChild(title);
+
+        const meta = document.createElement("span");
+        meta.className = "library-meta";
+        const authorPart = entry.author ? ` / ${entry.author}` : "";
+        meta.textContent = `${new Date(entry.updatedAt).toLocaleString()}${authorPart}`;
+        info.appendChild(meta);
+
+        const btns = document.createElement("div");
+        btns.className = "library-btns";
+
+        const loadBtn = document.createElement("button");
+        loadBtn.textContent = "読込";
+        loadBtn.addEventListener("click", () => void (async () => {
+            const e = await getLibrary(entry.id);
+            if (!e) { toast("エントリが見つかりません"); return; }
+            await backupAutosave();
+            if (loadFromJsonText(JSON.stringify(e.doc))) {
+                currentLibraryId = e.id;
+                $<HTMLDialogElement>("dlg-library").close();
+                toast(`読み込みました: ${e.name}`);
+            }
+        })());
+
+        const dupBtn = document.createElement("button");
+        dupBtn.textContent = "複製";
+        dupBtn.addEventListener("click", () => void (async () => {
+            const e = await getLibrary(entry.id);
+            if (!e) { toast("エントリが見つかりません"); return; }
+            await putLibrary({ id: crypto.randomUUID(), name: `${e.name} のコピー`, author: e.author, updatedAt: Date.now(), doc: e.doc });
+            await renderLibraryList();
+            toast(`複製しました: ${e.name} のコピー`);
+        })());
+
+        const delBtn = document.createElement("button");
+        delBtn.textContent = "削除";
+        delBtn.addEventListener("click", () => void (async () => {
+            if (!window.confirm(`「${entry.name}」を書庫から削除しますか?`)) return;
+            await deleteLibrary(entry.id);
+            if (currentLibraryId === entry.id) currentLibraryId = null;
+            await renderLibraryList();
+        })());
+
+        btns.appendChild(loadBtn);
+        btns.appendChild(dupBtn);
+        btns.appendChild(delBtn);
+        row.appendChild(info);
+        row.appendChild(btns);
+        container.appendChild(row);
     }
 }
 
@@ -3413,7 +3484,8 @@ function wireUi(): void {
 
     // ファイル入出力
     const fileInput = $<HTMLInputElement>("file-input");
-    $("btn-import").addEventListener("click", () => fileInput.click());
+    // "開く" → 書庫ダイアログ
+    $("btn-import").addEventListener("click", () => void openLibraryDialog());
     fileInput.addEventListener("change", async () => {
         const f = fileInput.files?.[0];
         fileInput.value = "";
@@ -3425,8 +3497,18 @@ function wireUi(): void {
         await backupAutosave();
         loadFromJsonText(await f.text());
     });
-    $("btn-export").addEventListener("click", () => void saveMap(false));
+    // "保存" → 書庫に保存
+    $("btn-export").addEventListener("click", () => void saveToLibrary(false));
+    // "ファイル書出" → ダウンロード
+    $("btn-export-file").addEventListener("click", () => exportFile());
     $("btn-play").addEventListener("click", () => void playInGame());
+
+    // 書庫ダイアログ
+    $("library-import").addEventListener("click", () => {
+        $<HTMLDialogElement>("dlg-library").close();
+        fileInput.click();
+    });
+    $("library-close").addEventListener("click", () => $<HTMLDialogElement>("dlg-library").close());
 
     // マップコード
     $("btn-copy-code").addEventListener("click", () => void copyMapCode());
@@ -3537,10 +3619,10 @@ function wireUi(): void {
             const overlay = $("palette-overlay");
             if (!overlay.hidden) { closePaletteOverlay(); e.preventDefault(); return; }
         }
-        // Ctrl+S / Cmd+S: マップを上書き保存 (ブラウザの「ページを保存」を抑止)。入力欄内でも有効。
+        // Ctrl+S / Cmd+S: マップを書庫に上書き保存 (ブラウザの「ページを保存」を抑止)。入力欄内でも有効。
         if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "s") {
             e.preventDefault();
-            void saveMap(false);
+            void saveToLibrary(false);
             return;
         }
         if (tag === "INPUT" || tag === "TEXTAREA") return;
