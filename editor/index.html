@@ -79,6 +79,13 @@
         <button class="tool2" data-tool2="rect">矩形</button>
         <button class="tool2" data-tool2="bucket">バケツ</button>
         <button class="tool2" data-tool2="pick">スポイト</button>
+        <!-- オートタイルブラシ選択 + 設定ボタン -->
+        <div id="autotile-strip" class="autotile-strip">
+          <select id="at-brush-select" title="スマートブラシを選択 (通常=1枚タイルペン)">
+            <option value="-1">通常</option>
+          </select>
+          <button id="btn-autotile-open" title="オートタイル設定を開く" class="at-open-btn">スマートブラシ設定</button>
+        </div>
         <!-- コンパクト帯パレット: 選択中チップ + 近傍チップ数個 + 展開ボタン -->
         <div id="palette-strip">
           <canvas id="strip-canvas" title="クリックで別のチップを選択"></canvas>
@@ -262,6 +269,47 @@
       <div id="dlg-layer-ts-list" class="dlg-layer-ts-list"></div>
       <menu>
         <button id="dlg-layer-close" type="button">閉じる</button>
+      </menu>
+    </dialog>
+
+    <!-- オートタイル設定ダイアログ (edge-4 スマートブラシ MVP) -->
+    <dialog id="dlg-autotile">
+      <h3 id="dlg-autotile-title">オートタイル設定</h3>
+      <p class="note at-escape-note">
+        <strong>オートタイルを使わない場合:</strong>
+        <button id="at-btn-skip" type="button" class="at-escape-btn">オートタイルを使わない (1 枚タイル)</button>
+      </p>
+      <div class="at-section-label">チップセット</div>
+      <select id="at-tileset-select" class="at-tileset-select"></select>
+      <div class="at-section-label">接続設定 (16 スロット) — スロットをクリック → チップを選択</div>
+      <div id="at-slot-panel" class="at-slot-panel"></div>
+      <div class="at-section-label">フォールバックチップ (未割当スロット用)</div>
+      <div id="at-fallback-row" class="at-fallback-row">
+        <canvas id="at-fallback-canvas" class="at-slot-thumb" title="クリックして選択"></canvas>
+        <button id="at-fallback-clear" type="button" class="at-clear-btn">クリア</button>
+      </div>
+      <div class="at-section-label">テレイン設定</div>
+      <label class="at-flag-row">
+        <input type="checkbox" id="at-blocks-light" />
+        壁として扱う (影を落とす)
+      </label>
+      <div class="at-band-row">
+        <span class="at-band-label">表示バンド:</span>
+        <label class="at-radio"><input type="radio" name="at-band" value="ground" checked /> 床 (通常)</label>
+        <label class="at-radio"><input type="radio" name="at-band" value="above" /> 上面 (プレイヤーより前)</label>
+      </div>
+      <div class="at-section-label">チップを選択 (スロットをクリックしてから選択)</div>
+      <div id="at-tile-picker-wrap" class="at-tile-picker-wrap">
+        <canvas id="at-tile-picker-canvas" class="at-tile-picker-canvas" title="クリックで選択中のスロットに割当"></canvas>
+      </div>
+      <div class="at-section-label">ライブプレビュー</div>
+      <canvas id="at-preview-canvas" class="at-preview-canvas" title="現在の LUT で描画したプレビュー"></canvas>
+      <div class="at-name-row">
+        <label>ブラシ名: <input type="text" id="at-name-input" maxlength="32" placeholder="壁" class="at-name-input" /></label>
+      </div>
+      <menu>
+        <button id="at-btn-save" type="button" class="primary">保存して使う</button>
+        <button id="at-btn-cancel" type="button">キャンセル</button>
       </menu>
     </dialog>
 

@@ -33,6 +33,8 @@ const STORE = "docs";
 const KEY = "autosave";
 /** 新規作成・ファイル読込・コード読込の直前に退避するバックアップスロット */
 const KEY_BACKUP = "autosave-backup";
+/** オートタイル定義 (エディタ専用・.ekmap には出さない) の保存キー */
+const KEY_AUTOTILES = "autosave-autotiles";
 
 function openDb(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
@@ -86,6 +88,44 @@ export async function saveAutosave(value: unknown): Promise<void> {
         }
     } catch {
         // IndexedDB 不可の環境 (プライベートモード等) では自動保存なしで続行
+    }
+}
+
+/** オートタイル定義リストを別キーで保存する (失敗は握りつぶす) */
+export async function saveAutotiles(value: unknown): Promise<void> {
+    try {
+        const db = await openDb();
+        try {
+            await new Promise<void>((resolve, reject) => {
+                const tx = db.transaction(STORE, "readwrite");
+                tx.objectStore(STORE).put(value, KEY_AUTOTILES);
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => reject(tx.error);
+            });
+        } finally {
+            db.close();
+        }
+    } catch {
+        // IndexedDB 不可の環境では無視
+    }
+}
+
+/** オートタイル定義リストを読み込む (失敗時は undefined) */
+export async function loadAutotiles(): Promise<unknown> {
+    try {
+        const db = await openDb();
+        try {
+            return await new Promise<unknown>((resolve, reject) => {
+                const tx = db.transaction(STORE, "readonly");
+                const req = tx.objectStore(STORE).get(KEY_AUTOTILES);
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => reject(req.error);
+            });
+        } finally {
+            db.close();
+        }
+    } catch {
+        return undefined;
     }
 }
 

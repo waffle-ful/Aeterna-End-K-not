@@ -50,7 +50,17 @@ import { validateEkmapAny, validateTileset } from "./validate";
 import { PNG_DATA_URI_PREFIX, parsePngDataUri } from "./png";
 import { decodeMapCode, encodeMapCode } from "./mapcode";
 import { type CellChange, History, type Patch, applyPatch } from "./history";
-import { backupAutosave, loadAutosave, saveAutosave, tryRestoreDoc } from "./persist";
+import { backupAutosave, loadAutosave, loadAutotiles, saveAutosave, saveAutotiles, tryRestoreDoc } from "./persist";
+import {
+    type AutotileDef,
+    EDGE4_SLOTS,
+    bakeAutotileTileAttrs,
+    computeAutotileEdits,
+    createEdge4Def,
+    edge4Code,
+    isLutEmpty,
+    resolveEdge4,
+} from "./autotile";
 import { MapRenderer, loadTilesetImage } from "./render";
 import { InputController } from "./input";
 import { saveForPlaytest } from "./playtest";
@@ -121,6 +131,12 @@ let doc: AnyDoc = createBackroomsDoc(32, 32, "新しいマップ", "");
 let tool: ToolV1 = "wall";
 let toolV2: ToolV2 = "pen";
 let activeLayer: LayerTab = "ground";
+
+// ---------- オートタイル状態 ----------
+/** 現マップの autotile 定義リスト (エディタ専用・.ekmap には出さない) */
+let autotiles: AutotileDef[] = [];
+/** null = 通常ペイント / 数値 = そのブラシを使用 */
+let activeAutotileIdx: number | null = null;
 /** レイヤーごとの選択チップ id (layer0/1/2/3 に対応) */
 let selectedTilePerLayer: [number, number, number, number] = [0, 0, 0, 0];
 let decorKind2: DecorKind = "light";
@@ -238,6 +254,7 @@ function scheduleSave(): void {
     saveTimer = window.setTimeout(() => {
         savePending = false;
         void saveAutosave(docToJsonAny(doc));
+        void saveAutotiles(autotiles);
     }, 500);
 }
 
@@ -263,6 +280,8 @@ function refreshModeUi(): void {
     $("shadow-snap-wrap").hidden = !v3 || !isShadowLayer(activeLayer);
     // ⚙ ボタン: アクティブなタイル層タブにのみ表示
     $("btn-layer-settings").hidden = !v3 || !isTileLayer(activeLayer);
+    // オートタイルブラシ帯: v3 タイル層のみ表示
+    $("autotile-strip").hidden = !v3 || !isTileLayer(activeLayer);
     // タブの「↑」バッジを更新
     if (v3) updateLayerAboveBadges(doc as import("./model").MapDocV3);
     updateRibbon();
@@ -623,6 +642,22 @@ function clampCell(v: number, max: number): number {
     return Math.min(Math.max(0, v), max - 1);
 }
 
+/**
+ * オートタイルスマートブラシで (x,y) を塗る/消す。
+ * computeAutotileEdits が返す全セル (self + 影響を受けた近傍) を
+ * paintCellV3 経由で適用 → Patch に全編集が記録され Undo で全セルが巻き戻る (§5.1)。
+ */
+function paintAutotileV3(d: MapDocV3, x: number, y: number, mode: "paint" | "erase"): void {
+    const def = activeAutotileIdx !== null ? autotiles[activeAutotileIdx] : null;
+    if (!def) return;
+    const layer = d.layers[activeLayerIndex()];
+    const view = { width: d.width, height: d.height, cells: layer.cells };
+    const edits = computeAutotileEdits(def, view, x, y, mode);
+    for (const e of edits) {
+        paintCellV3(d, e.x, e.y, e.id);
+    }
+}
+
 /** v3 ツール適用 (現状は ground/upper の 2 レイヤーのみ UI 対応 — 4 タブ化は次増分) */
 function applyToolAtV3(d: MapDocV3, x: number, y: number, isStart: boolean): void {
     if (!stroke) return;
@@ -643,10 +678,38 @@ function applyToolAtV3(d: MapDocV3, x: number, y: number, isStart: boolean): voi
 
     switch (toolV2) {
         case "pen":
-            if (inGrid) paintCellV3(d, x, y, getSelectedTile());
+            if (inGrid) {
+                // オートタイルブラシが選択中かつアクティブ層のタイルセットが一致する場合はスマートブラシ
+                // rect/bucket は通常動作のまま (autotile 中の rect/bucket は 1枚ペイントで据え置き)
+                const atDef = activeAutotileIdx !== null ? autotiles[activeAutotileIdx] : null;
+                if (atDef) {
+                    const layerTsIdx = d.layers[activeLayerIndex()].tileset;
+                    if (layerTsIdx === atDef.tileset) {
+                        paintAutotileV3(d, x, y, "paint");
+                    } else if (isStart) {
+                        // タイルセット不一致: 塗らない (誤操作防止)。ドラッグ中の連続トーストは避ける
+                        toast("このレイヤーは別のチップセットです");
+                    }
+                } else {
+                    paintCellV3(d, x, y, getSelectedTile());
+                }
+            }
             break;
         case "erase":
-            if (inGrid) paintCellV3(d, x, y, -1);
+            if (inGrid) {
+                // オートタイルブラシ中の消去も近傍を再解決する
+                const atDefErase = activeAutotileIdx !== null ? autotiles[activeAutotileIdx] : null;
+                if (atDefErase) {
+                    const layerTsIdx = d.layers[activeLayerIndex()].tileset;
+                    if (layerTsIdx === atDefErase.tileset) {
+                        paintAutotileV3(d, x, y, "erase");
+                    } else {
+                        paintCellV3(d, x, y, -1);
+                    }
+                } else {
+                    paintCellV3(d, x, y, -1);
+                }
+            }
             break;
         case "rect": {
             const cx = clampCell(x, d.width);
@@ -988,6 +1051,11 @@ function setDocument(next: AnyDoc): void {
     stroke = null;
     rectDrag = null;
     renderer.clearRectPreview();
+    // ドキュメント切替時にオートタイル状態をリセット
+    autotiles = [];
+    activeAutotileIdx = null;
+    // DOM が存在する場合のみ更新 (boot 前にも呼ばれる可能性があるため getElementById チェック)
+    if (document.getElementById("at-brush-select")) rebuildAutotileBrushSelect();
     if (isV3Doc(doc)) {
         activeLayer = "ground";
         // 各レイヤーの選択チップを tilecount にクランプ
@@ -1185,6 +1253,350 @@ function replaceTileset(ts: TilesetDoc): void {
     scheduleSave();
     updateStatus();
     toast(cleared > 0 ? `差し替えました (範囲外になった ${cleared} セルを空にしました)` : "タイルセットを差し替えました");
+}
+
+// ---------- オートタイル UI ----------
+
+/** ブラシ select を autotiles[] に合わせて再構築する */
+function rebuildAutotileBrushSelect(): void {
+    const sel = $<HTMLSelectElement>("at-brush-select");
+    // 現在の選択を保存
+    const prev = activeAutotileIdx;
+    sel.replaceChildren();
+    const opt0 = document.createElement("option");
+    opt0.value = "-1";
+    opt0.textContent = "通常";
+    sel.appendChild(opt0);
+    for (let i = 0; i < autotiles.length; i++) {
+        const opt = document.createElement("option");
+        opt.value = String(i);
+        opt.textContent = `スマート: ${autotiles[i].name}`;
+        sel.appendChild(opt);
+    }
+    // 選択を復元 (消えたブラシは null に戻す)
+    if (prev !== null && prev < autotiles.length) {
+        sel.value = String(prev);
+        activeAutotileIdx = prev;
+    } else {
+        sel.value = "-1";
+        activeAutotileIdx = null;
+    }
+}
+
+/**
+ * オートタイル定義の LUT 出力タイル全件 (+ fallback) に対して
+ * blocksLight と band を tiles[] に焼き込む (§3 H2/H3)。
+ * C# ローダーはこれを読んで BlocksLight OR と AboveMask を計算する。
+ */
+function bakeAutotileAttrs(d: MapDocV3, def: AutotileDef): void {
+    const ts = d.tilesets[def.tileset];
+    if (!ts) return;
+    bakeAutotileTileAttrs(ts.tiles, def);
+}
+
+// ── オートタイルダイアログ内部状態 ──
+
+/** ダイアログ編集中の作業コピー */
+let atWorkDef: AutotileDef = createEdge4Def("壁", 0);
+/** 編集中のオートタイルインデックス (-1 = 新規追加) */
+let atEditIdx = -1;
+/** 現在クリックで選択中のスロットインデックス (null = 未選択) */
+let atSelectedSlot: number | null = null;
+/** fallbackスロットが選択されているか */
+let atFallbackSelected = false;
+
+const AT_SLOT_PX = 52; // スロットサムネサイズ
+const AT_THUMB_PX = 40; // サムネ内タイル描画サイズ
+
+/** 16 スロットパネルを再描画する */
+async function drawAutotileSlotPanel(): Promise<void> {
+    if (!isV3Doc(doc)) return;
+    const d = doc;
+    const ts = d.tilesets[atWorkDef.tileset];
+    if (!ts) return;
+
+    const panel = $("at-slot-panel");
+    // 既存のボタンを再利用 or 生成
+    if (panel.children.length !== EDGE4_SLOTS) {
+        panel.replaceChildren();
+        for (let code = 0; code < EDGE4_SLOTS; code++) {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "at-slot-btn";
+            btn.dataset.slotCode = String(code);
+            panel.appendChild(btn);
+        }
+    }
+
+    let img: HTMLImageElement | null = null;
+    try { img = await loadTilesetImage(ts.image); } catch { /* placeholder */ }
+    if (doc !== d) return;
+
+    for (let code = 0; code < EDGE4_SLOTS; code++) {
+        const btn = panel.children[code] as HTMLButtonElement;
+        const tileId = atWorkDef.lut[code];
+        const isSelected = atSelectedSlot === code && !atFallbackSelected;
+
+        // スロット背景
+        btn.innerHTML = "";
+        btn.className = "at-slot-btn" + (isSelected ? " at-slot-selected" : "");
+
+        // 接続方向ピクトグラム (SVG インライン)
+        const n = (code & 1) !== 0;
+        const e = (code & 2) !== 0;
+        const s = (code & 4) !== 0;
+        const w = (code & 8) !== 0;
+        const picto = buildConnectionPicto(n, e, s, w, AT_SLOT_PX);
+        btn.appendChild(picto);
+
+        // タイルサムネ (割当済みの場合)
+        if (tileId >= 0 && img) {
+            const cv = document.createElement("canvas");
+            cv.width = AT_THUMB_PX;
+            cv.height = AT_THUMB_PX;
+            cv.className = "at-slot-tile-thumb";
+            const ctx = cv.getContext("2d");
+            if (ctx) {
+                ctx.imageSmoothingEnabled = false;
+                const sx = (tileId % ts.columns) * ts.tileSize;
+                const sy = Math.floor(tileId / ts.columns) * ts.tileSize;
+                ctx.drawImage(img, sx, sy, ts.tileSize, ts.tileSize, 0, 0, AT_THUMB_PX, AT_THUMB_PX);
+            }
+            btn.appendChild(cv);
+        }
+
+        // スロット番号
+        const lbl = document.createElement("span");
+        lbl.className = "at-slot-code";
+        lbl.textContent = String(code);
+        btn.appendChild(lbl);
+    }
+
+    // fallback スロット
+    const fbCv = $<HTMLCanvasElement>("at-fallback-canvas");
+    fbCv.width = AT_THUMB_PX;
+    fbCv.height = AT_THUMB_PX;
+    fbCv.style.width = `${AT_THUMB_PX}px`;
+    fbCv.style.height = `${AT_THUMB_PX}px`;
+    fbCv.className = "at-slot-thumb" + (atFallbackSelected ? " at-slot-selected" : "");
+    const fbCtx = fbCv.getContext("2d");
+    if (fbCtx) {
+        fbCtx.fillStyle = "#14141a";
+        fbCtx.fillRect(0, 0, AT_THUMB_PX, AT_THUMB_PX);
+        if (atWorkDef.fallback >= 0 && img) {
+            const sx = (atWorkDef.fallback % ts.columns) * ts.tileSize;
+            const sy = Math.floor(atWorkDef.fallback / ts.columns) * ts.tileSize;
+            fbCtx.imageSmoothingEnabled = false;
+            fbCtx.drawImage(img, sx, sy, ts.tileSize, ts.tileSize, 0, 0, AT_THUMB_PX, AT_THUMB_PX);
+        } else {
+            fbCtx.fillStyle = "rgba(255,255,255,0.2)";
+            fbCtx.font = "10px sans-serif";
+            fbCtx.textAlign = "center";
+            fbCtx.textBaseline = "middle";
+            fbCtx.fillText("なし", AT_THUMB_PX / 2, AT_THUMB_PX / 2);
+        }
+    }
+}
+
+/**
+ * 接続方向 (N/E/S/W) を示す矢印ピクトグラム SVG を生成する。
+ * 接続あり → 太い実線、接続なし → 薄い点線で視覚的に区別。
+ */
+function buildConnectionPicto(n: boolean, e: boolean, s: boolean, w: boolean, size: number): SVGSVGElement {
+    const svgNS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(svgNS, "svg");
+    svg.setAttribute("width", String(size));
+    svg.setAttribute("height", String(size));
+    svg.setAttribute("viewBox", `0 0 ${size} ${size}`);
+    svg.classList.add("at-picto");
+    const cx = size / 2;
+    const cy = size / 2;
+    const r = size * 0.12;
+
+    // 中心円
+    const circle = document.createElementNS(svgNS, "circle");
+    circle.setAttribute("cx", String(cx));
+    circle.setAttribute("cy", String(cy));
+    circle.setAttribute("r", String(r));
+    circle.setAttribute("fill", "#8888aa");
+    svg.appendChild(circle);
+
+    // 方向線
+    const dirs: Array<[boolean, number, number, number, number]> = [
+        [n, cx, cy - r, cx, size * 0.08],
+        [e, cx + r, cy, size * 0.92, cy],
+        [s, cx, cy + r, cx, size * 0.92],
+        [w, cx - r, cy, size * 0.08, cy],
+    ];
+    for (const [on, x1, y1, x2, y2] of dirs) {
+        const line = document.createElementNS(svgNS, "line");
+        line.setAttribute("x1", String(x1));
+        line.setAttribute("y1", String(y1));
+        line.setAttribute("x2", String(x2));
+        line.setAttribute("y2", String(y2));
+        line.setAttribute("stroke", on ? "#ffd75e" : "rgba(255,255,255,0.18)");
+        line.setAttribute("stroke-width", on ? "3" : "1");
+        line.setAttribute("stroke-dasharray", on ? "none" : "3,3");
+        svg.appendChild(line);
+    }
+    return svg;
+}
+
+/** オートタイルプレビュー canvas を更新する (中央+上下左右の 5 パターン) */
+async function drawAutotilePreview(): Promise<void> {
+    if (!isV3Doc(doc)) return;
+    const d = doc;
+    const ts = d.tilesets[atWorkDef.tileset];
+    if (!ts) return;
+    const cv = $<HTMLCanvasElement>("at-preview-canvas");
+    const CELL = 36;
+    const COLS = 5;
+    const ROWS = 5;
+    cv.width = COLS * CELL;
+    cv.height = ROWS * CELL;
+    cv.style.width = `${cv.width}px`;
+    cv.style.height = `${cv.height}px`;
+    const ctx = cv.getContext("2d");
+    if (!ctx) return;
+    ctx.imageSmoothingEnabled = false;
+    ctx.fillStyle = "#14141a";
+    ctx.fillRect(0, 0, cv.width, cv.height);
+
+    // プレビュー用 5×5 グリッド: 中央 3×3 に壁を置いてみる
+    const previewCells = new Array(COLS * ROWS).fill(-1);
+    // 中央 3×3 をメンバーとして置く
+    const positions = [[1,1],[2,1],[3,1],[1,2],[2,2],[3,2],[1,3],[2,3],[3,3]];
+    for (const [px, py] of positions) {
+        const n2 = py > 0 && positions.some(([a,b]) => a === px && b === py - 1);
+        const e2 = px < COLS-1 && positions.some(([a,b]) => a === px+1 && b === py);
+        const s2 = py < ROWS-1 && positions.some(([a,b]) => a === px && b === py + 1);
+        const w2 = px > 0 && positions.some(([a,b]) => a === px-1 && b === py);
+        const tileId = resolveEdge4(atWorkDef, edge4Code(n2, e2, s2, w2));
+        previewCells[py * COLS + px] = tileId;
+    }
+
+    let img: HTMLImageElement | null = null;
+    try { img = await loadTilesetImage(ts.image); } catch { /* placeholder */ }
+    if (doc !== d) return;
+
+    for (let i = 0; i < COLS * ROWS; i++) {
+        const id = previewCells[i];
+        if (id < 0 || !img) continue;
+        const gx = (i % COLS) * CELL;
+        const gy = Math.floor(i / COLS) * CELL;
+        const sx = (id % ts.columns) * ts.tileSize;
+        const sy = Math.floor(id / ts.columns) * ts.tileSize;
+        ctx.drawImage(img, sx, sy, ts.tileSize, ts.tileSize, gx, gy, CELL, CELL);
+    }
+    // グリッド線
+    ctx.strokeStyle = "rgba(255,255,255,0.1)";
+    ctx.lineWidth = 1;
+    for (let c = 0; c <= COLS; c++) { ctx.beginPath(); ctx.moveTo(c * CELL, 0); ctx.lineTo(c * CELL, cv.height); ctx.stroke(); }
+    for (let r = 0; r <= ROWS; r++) { ctx.beginPath(); ctx.moveTo(0, r * CELL); ctx.lineTo(cv.width, r * CELL); ctx.stroke(); }
+}
+
+/** ダイアログ内のチップセット select を再構築する */
+function rebuildAtTilesetSelect(): void {
+    if (!isV3Doc(doc)) return;
+    const d = doc;
+    const sel = $<HTMLSelectElement>("at-tileset-select");
+    sel.replaceChildren();
+    for (let i = 0; i < d.tilesets.length; i++) {
+        const opt = document.createElement("option");
+        opt.value = String(i);
+        opt.textContent = `セット ${i + 1} (${tileCount(d.tilesets[i])} チップ)`;
+        sel.appendChild(opt);
+    }
+    sel.value = String(Math.min(atWorkDef.tileset, d.tilesets.length - 1));
+}
+
+/** オートタイル設定ダイアログを開く (新規 or 既存編集) */
+async function openAutotileDialog(editIdx = -1): Promise<void> {
+    if (!isV3Doc(doc)) return;
+    atEditIdx = editIdx;
+    atSelectedSlot = null;
+    atFallbackSelected = false;
+
+    if (editIdx >= 0 && editIdx < autotiles.length) {
+        // 既存定義の編集: ディープコピー
+        const src = autotiles[editIdx];
+        atWorkDef = { ...src, lut: [...src.lut] };
+    } else {
+        // 新規作成
+        const li = activeLayerIndex();
+        const tsIdx = (doc as import("./model").MapDocV3).layers[li]?.tileset ?? 0;
+        atWorkDef = createEdge4Def("壁", tsIdx);
+    }
+
+    $<HTMLInputElement>("at-name-input").value = atWorkDef.name;
+    $<HTMLInputElement>("at-blocks-light").checked = atWorkDef.blocksLight;
+    const bandInputs = document.querySelectorAll<HTMLInputElement>("input[name='at-band']");
+    for (const inp of bandInputs) inp.checked = inp.value === atWorkDef.band;
+
+    rebuildAtTilesetSelect();
+    await drawAutotileSlotPanel();
+    await drawAtTilePickerPanel();
+    await drawAutotilePreview();
+
+    $("dlg-autotile-title").textContent = editIdx >= 0 ? `オートタイル「${atWorkDef.name}」を編集` : "オートタイルを新規作成";
+    $<HTMLDialogElement>("dlg-autotile").showModal();
+}
+
+/** パレット canvas のクリックで LUT スロット or fallback に tileId を割当 */
+function assignTileToActiveSlot(tileId: number): void {
+    if (atFallbackSelected) {
+        atWorkDef.fallback = tileId;
+        atFallbackSelected = false;
+    } else if (atSelectedSlot !== null) {
+        atWorkDef.lut[atSelectedSlot] = tileId;
+        atSelectedSlot = null;
+    } else {
+        return;
+    }
+    void drawAutotileSlotPanel();
+    void drawAutotilePreview();
+}
+
+/** ダイアログ内のタイル選択パネル (ts-canvas 流用) */
+async function drawAtTilePickerPanel(): Promise<void> {
+    if (!isV3Doc(doc)) return;
+    const d = doc;
+    const ts = d.tilesets[atWorkDef.tileset];
+    if (!ts) return;
+    // dlg-tileset の ts-canvas を流用して描画
+    // 代わりに専用 canvas を使う (at-tile-picker-canvas)
+    const cv = $<HTMLCanvasElement>("at-tile-picker-canvas");
+    if (!cv) return;
+    const PX = 40;
+    const total = tileCount(ts);
+    const cols = ts.columns;
+    const rows = ts.rows;
+    cv.width = cols * PX;
+    cv.height = rows * PX;
+    cv.style.width = `${cv.width}px`;
+    cv.style.height = `${cv.height}px`;
+    const ctx = cv.getContext("2d");
+    if (!ctx) return;
+    ctx.imageSmoothingEnabled = false;
+    ctx.fillStyle = "#14141a";
+    ctx.fillRect(0, 0, cv.width, cv.height);
+
+    let img: HTMLImageElement | null = null;
+    try { img = await loadTilesetImage(ts.image); } catch { /* placeholder */ }
+    if (doc !== d) return;
+
+    for (let id = 0; id < total; id++) {
+        const gx = (id % cols) * PX;
+        const gy = Math.floor(id / cols) * PX;
+        if (img) {
+            const sx = (id % ts.columns) * ts.tileSize;
+            const sy = Math.floor(id / ts.columns) * ts.tileSize;
+            ctx.drawImage(img, sx, sy, ts.tileSize, ts.tileSize, gx, gy, PX, PX);
+        }
+        ctx.strokeStyle = "rgba(255,255,255,0.18)";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(gx + 0.5, gy + 0.5, PX - 1, PX - 1);
+    }
 }
 
 // ---------- レイヤー設定ダイアログ (dlg-layer) ----------
@@ -2173,6 +2585,147 @@ function wireUi(): void {
         b.addEventListener("click", () => setToolV2(b.dataset.tool2 as ToolV2));
     }
     setToolV2(toolV2);
+
+    // ── オートタイルブラシ select ──
+    $<HTMLSelectElement>("at-brush-select").addEventListener("change", (e) => {
+        const val = (e.target as HTMLSelectElement).value;
+        const idx = parseInt(val, 10);
+        activeAutotileIdx = idx >= 0 ? idx : null;
+        updateStatus();
+    });
+
+    // ── オートタイル設定ダイアログを開くボタン ──
+    $("btn-autotile-open").addEventListener("click", () => {
+        // アクティブなブラシがあればそれを編集、なければ新規
+        void openAutotileDialog(activeAutotileIdx ?? -1);
+    });
+
+    // ── ダイアログ内のチップセット変更 ──
+    $<HTMLSelectElement>("at-tileset-select").addEventListener("change", (e) => {
+        const idx = parseInt((e.target as HTMLSelectElement).value, 10);
+        atWorkDef.tileset = idx;
+        atSelectedSlot = null;
+        atFallbackSelected = false;
+        void drawAutotileSlotPanel();
+        void drawAtTilePickerPanel();
+        void drawAutotilePreview();
+    });
+
+    // ── スロットボタンのクリック (event delegation) ──
+    $("at-slot-panel").addEventListener("click", (e) => {
+        const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".at-slot-btn");
+        if (!btn) return;
+        const code = parseInt(btn.dataset.slotCode ?? "-1", 10);
+        if (code < 0 || code >= EDGE4_SLOTS) return;
+        if (atSelectedSlot === code) {
+            // 再クリックで選択解除
+            atSelectedSlot = null;
+        } else {
+            atSelectedSlot = code;
+            atFallbackSelected = false;
+        }
+        void drawAutotileSlotPanel();
+    });
+    $("at-slot-panel").addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".at-slot-btn");
+        if (!btn) return;
+        const code = parseInt(btn.dataset.slotCode ?? "-1", 10);
+        if (code < 0 || code >= EDGE4_SLOTS) return;
+        // 右クリックでスロットをクリア
+        atWorkDef.lut[code] = -1;
+        atSelectedSlot = null;
+        void drawAutotileSlotPanel();
+        void drawAutotilePreview();
+    });
+
+    // ── fallback スロット ──
+    $<HTMLCanvasElement>("at-fallback-canvas").addEventListener("click", () => {
+        atFallbackSelected = !atFallbackSelected;
+        atSelectedSlot = null;
+        void drawAutotileSlotPanel();
+    });
+    $("at-fallback-clear").addEventListener("click", () => {
+        atWorkDef.fallback = -1;
+        atFallbackSelected = false;
+        void drawAutotileSlotPanel();
+        void drawAutotilePreview();
+    });
+
+    // ── タイルピッカー canvas クリック ──
+    $<HTMLCanvasElement>("at-tile-picker-canvas").addEventListener("click", (e) => {
+        if (!isV3Doc(doc)) return;
+        if (atSelectedSlot === null && !atFallbackSelected) {
+            toast("先にスロットをクリックして選択してください");
+            return;
+        }
+        const ts = (doc as import("./model").MapDocV3).tilesets[atWorkDef.tileset];
+        if (!ts) return;
+        const cv = $<HTMLCanvasElement>("at-tile-picker-canvas");
+        const r = cv.getBoundingClientRect();
+        const PX = 40;
+        const col = Math.floor((e.clientX - r.left) / PX);
+        const row = Math.floor((e.clientY - r.top) / PX);
+        if (col < 0 || col >= ts.columns || row < 0 || row >= ts.rows) return;
+        const tileId = row * ts.columns + col;
+        assignTileToActiveSlot(tileId);
+    });
+
+    // ── blocksLight チェックボックス ──
+    $<HTMLInputElement>("at-blocks-light").addEventListener("change", (e) => {
+        atWorkDef.blocksLight = (e.target as HTMLInputElement).checked;
+    });
+
+    // ── band ラジオ ──
+    for (const inp of document.querySelectorAll<HTMLInputElement>("input[name='at-band']")) {
+        inp.addEventListener("change", () => {
+            if (inp.checked) atWorkDef.band = inp.value as "ground" | "above";
+        });
+    }
+
+    // ── 名前入力 ──
+    $<HTMLInputElement>("at-name-input").addEventListener("input", (e) => {
+        atWorkDef.name = (e.target as HTMLInputElement).value.trim() || "壁";
+    });
+
+    // ── 保存ボタン ──
+    $("at-btn-save").addEventListener("click", () => {
+        if (!isV3Doc(doc)) return;
+        if (isLutEmpty(atWorkDef) && atWorkDef.fallback < 0) {
+            toast("スロットを 1 つ以上割り当ててください");
+            return;
+        }
+        const name = $<HTMLInputElement>("at-name-input").value.trim() || "壁";
+        atWorkDef.name = name;
+
+        // LUT ベイク: blocksLight / band を tiles[] に焼く (§3 H2/H3)
+        bakeAutotileAttrs(doc as import("./model").MapDocV3, atWorkDef);
+
+        if (atEditIdx >= 0 && atEditIdx < autotiles.length) {
+            autotiles[atEditIdx] = { ...atWorkDef, lut: [...atWorkDef.lut] };
+            activeAutotileIdx = atEditIdx;
+        } else {
+            autotiles.push({ ...atWorkDef, lut: [...atWorkDef.lut] });
+            activeAutotileIdx = autotiles.length - 1;
+        }
+
+        rebuildAutotileBrushSelect();
+        scheduleSave();
+        toast(`スマートブラシ「${name}」を保存しました`);
+        $<HTMLDialogElement>("dlg-autotile").close();
+    });
+
+    // ── キャンセルボタン ──
+    $("at-btn-cancel").addEventListener("click", () => {
+        $<HTMLDialogElement>("dlg-autotile").close();
+    });
+
+    // ── 脱出ボタン「オートタイルを使わない」 ──
+    $("at-btn-skip").addEventListener("click", () => {
+        activeAutotileIdx = null;
+        rebuildAutotileBrushSelect();
+        $<HTMLDialogElement>("dlg-autotile").close();
+    });
     const decorButtons = [...document.querySelectorAll<HTMLButtonElement>("#tools-decor2 .tool2d")];
     const selectDecor2 = (b: HTMLButtonElement): void => {
         decorKind2 = b.dataset.decor as DecorKind;
@@ -2618,6 +3171,26 @@ async function boot(): Promise<void> {
     const saved = await loadAutosave();
     const restored = saved === undefined || saved === null ? null : tryRestoreDoc(saved);
     setDocument(restored ?? createBackroomsDoc(32, 32, "新しいマップ", ""));
+
+    // オートタイル定義を復元 (緩い型チェック: Array かつ各要素が scheme==="edge4" && Array.isArray(lut))
+    const savedAt = await loadAutotiles();
+    if (Array.isArray(savedAt)) {
+        const loaded: AutotileDef[] = [];
+        for (const item of savedAt) {
+            if (
+                typeof item === "object" && item !== null &&
+                (item as Record<string, unknown>).scheme === "edge4" &&
+                Array.isArray((item as Record<string, unknown>).lut)
+            ) {
+                loaded.push(item as AutotileDef);
+            }
+        }
+        if (loaded.length > 0) {
+            autotiles = loaded;
+            rebuildAutotileBrushSelect();
+        }
+    }
+
     if (restored) toast("自動保存から復元しました");
 
     new InputController(renderer.app.canvas, renderer.world, {

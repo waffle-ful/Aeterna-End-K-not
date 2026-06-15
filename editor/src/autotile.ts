@@ -90,6 +90,28 @@ export function isLutEmpty(def: AutotileDef): boolean {
     return def.fallback < 0 && def.lut.every((id) => id < 0);
 }
 
+/** light/over だけを持つタイル属性の構造的最小型 (model.ts に依存しないための decouple) */
+export interface TileLightOver {
+    light: boolean;
+    over: boolean;
+}
+
+/**
+ * def の LUT 出力 tileId 全件 (+ fallback) の tiles[] に blocksLight/band を焼き込む (§3 H2/H3)。
+ * 焼かないと: 拾い物シートに light メタが無く影 occluder に穴が空く / over が混在して z バンドがちらつく。
+ * tiles はタイル id で添字する dense 配列 (穴は undefined 許容)。この関数は tiles を破壊的に変更する。
+ */
+export function bakeAutotileTileAttrs(tiles: (TileLightOver | undefined)[], def: AutotileDef): void {
+    const over = def.band === "above";
+    for (const id of membershipSet(def)) {
+        if (id < 0 || id >= tiles.length) continue;
+        const t = tiles[id];
+        if (!t) continue;
+        t.light = def.blocksLight;
+        t.over = over;
+    }
+}
+
 /** 割り当て済みスロット数 (ダウングレード判定・完成度表示用) */
 export function filledSlotCount(def: AutotileDef): number {
     return def.lut.reduce((n, id) => n + (id >= 0 ? 1 : 0), 0);
