@@ -1071,6 +1071,8 @@ function setDocument(next: AnyDoc): void {
     stroke = null;
     rectDrag = null;
     renderer.clearRectPreview();
+    // 別マップに切り替わったので保存先ハンドルを破棄 (前のマップに誤って上書きしない)
+    currentMapHandle = null;
     // ドキュメント切替時にオートタイル状態をリセット
     autotiles = [];
     activeAutotileIdx = null;
@@ -1896,6 +1898,59 @@ function exportFile(): void {
     a.click();
     window.setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     toast("エクスポートしました (.ekmap.json)");
+}
+
+/** 現在編集中のマップの保存先ファイルハンドル (FS Access)。Ctrl+S / 保存ボタンの上書き先 */
+let currentMapHandle: FileSystemFileHandle | null = null;
+
+/**
+ * マップを保存する。FS Access 対応ブラウザでは「上書き保存」を実現する。
+ * - 保存先ハンドルが既にあれば無言で上書き (毎回新規にならない)。
+ * - 無ければ一度だけ保存先を尋ね、以後そのファイルに上書きし続ける。
+ * - 未対応ブラウザ (Firefox/Safari) はダウンロードに倒す。
+ * 新規作成・ファイル/コード読込時 (setDocument) にハンドルはリセットされる。
+ * @param forceSaveAs true で必ず保存先を尋ね直す (名前を付けて保存)
+ */
+async function saveMap(forceSaveAs: boolean): Promise<void> {
+    const text = buildValidatedJson(true);
+    if (text === null) return; // 検証 NG はメッセージ済み
+    const filename = `${sanitizeFileName(doc.name)}.ekmap.json`;
+
+    // FS Access 非対応 → 従来どおりダウンロード
+    if (!("showSaveFilePicker" in window)) {
+        exportFile();
+        return;
+    }
+
+    const reuse = currentMapHandle !== null && !forceSaveAs;
+    try {
+        if (!reuse) {
+            currentMapHandle = await (window as unknown as {
+                showSaveFilePicker(o: {
+                    suggestedName?: string; startIn?: string; id?: string;
+                    types?: { description: string; accept: Record<string, string[]> }[];
+                }): Promise<FileSystemFileHandle>;
+            }).showSaveFilePicker({
+                suggestedName: filename,
+                startIn: "documents",
+                id: "ekmap-source",
+                types: [{ description: "EKMap マップ", accept: { "application/json": [".json"] } }],
+            });
+        }
+        const handle = currentMapHandle;
+        if (!handle) return;
+        const w = await handle.createWritable();
+        await w.write(text);
+        await w.close();
+        toast(reuse ? `上書き保存しました (${handle.name})` : `保存しました (${handle.name})`);
+    } catch (e) {
+        const err = e as DOMException;
+        if (err && (err.name === "AbortError" || err.name === "NotAllowedError")) {
+            toast("保存をキャンセルしました");
+            return;
+        }
+        toast(`保存に失敗しました: ${(e as Error).message}`);
+    }
 }
 
 function formatKb(n: number): string {
@@ -3271,7 +3326,7 @@ function wireUi(): void {
         await backupAutosave();
         loadFromJsonText(await f.text());
     });
-    $("btn-export").addEventListener("click", exportFile);
+    $("btn-export").addEventListener("click", () => void saveMap(false));
     $("btn-play").addEventListener("click", () => void playInGame());
 
     // マップコード
@@ -3382,6 +3437,12 @@ function wireUi(): void {
         if (e.key === "Escape") {
             const overlay = $("palette-overlay");
             if (!overlay.hidden) { closePaletteOverlay(); e.preventDefault(); return; }
+        }
+        // Ctrl+S / Cmd+S: マップを上書き保存 (ブラウザの「ページを保存」を抑止)。入力欄内でも有効。
+        if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "s") {
+            e.preventDefault();
+            void saveMap(false);
+            return;
         }
         if (tag === "INPUT" || tag === "TEXTAREA") return;
         if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
