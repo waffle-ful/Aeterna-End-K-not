@@ -188,30 +188,31 @@ const COACH_DONE_KEY = "ekm.coachDone";
 let startScreenShown = false;
 let coachStep = 0;
 
-/** コーチマークの5ステップ定義 */
-const COACH_STEPS: { targetId: string; title: string; body: string }[] = [
+/** コーチマークの5ステップ定義。targetId は候補列で、最初に表示されている要素を指す。 */
+const COACH_STEPS: { targetId: string[]; title: string; body: string }[] = [
     {
-        targetId: "tools",
+        // v3 マップは #tools-v2、v1 マップは #tools が表示される (どちらか可視な方を指す)
+        targetId: ["tools-v2", "tools"],
         title: "① 道具をえらぶ",
         body: "壁・床・灯りなど、置きたいものをここで選びます",
     },
     {
-        targetId: "viewport",
+        targetId: ["viewport"],
         title: "② マップに描く",
         body: "えらんだ道具で、ここをドラッグして描きます",
     },
     {
-        targetId: "btn-export",
+        targetId: ["btn-export"],
         title: "③ 保存する",
         body: "作ったマップは書庫に保存。Ctrl+S でもサッと保存できます",
     },
     {
-        targetId: "btn-play",
+        targetId: ["btn-play"],
         title: "④ ゲームで試す",
         body: "ゲームのフォルダに出して、約2秒で実機に反映されます",
     },
     {
-        targetId: "btn-import",
+        targetId: ["btn-import"],
         title: "⑤ また開く",
         body: "保存したマップは「開く」からいつでも呼び出せます",
     },
@@ -228,9 +229,16 @@ function showCoachStep(step: number): void {
         return;
     }
 
-    // 対象要素の存在チェック (hidden/サイズ0 なら次へスキップ)
+    // 対象要素の解決: 候補列から最初に表示されている (サイズ>0) 要素を選ぶ。
+    // どれも非表示なら そのステップはスキップして次へ。
     const def = steps[step];
-    const target = document.getElementById(def.targetId);
+    let target: HTMLElement | null = null;
+    for (const id of def.targetId) {
+        const el = document.getElementById(id);
+        if (!el) continue;
+        const r = el.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) { target = el; break; }
+    }
     if (!target) {
         showCoachStep(step + 1);
         return;
