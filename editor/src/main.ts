@@ -111,6 +111,8 @@ const TOOL_HINTS_V1: Record<ToolV1, string> = {
 };
 
 function updateRibbon(): void {
+    // 左レールの道具リモコンも同期 (フッタの active/hidden は呼び出し時点で確定済み)
+    refreshToolRail();
     const el = $("tool-ribbon");
     const v3 = isV3Doc(doc);
     if (!v3) {
@@ -628,6 +630,37 @@ function setToolV2(t: ToolV2): void {
         b.classList.toggle("active", b.dataset.tool2 === t);
     }
     updateRibbon();
+}
+
+// ---------- 左レール: 道具リモコン ----------
+// フッタの道具ボタン (.tool / .tool2 / .tool2d) を正本とし、左レールはその
+// 「リモコン」として代理クリック + active ミラーするだけ。選択ロジックは二重化しない。
+
+/** 現在フッタに表示されている道具群を左レールに鏡写しする。updateRibbon から毎回呼ばれる。 */
+function refreshToolRail(): void {
+    const rail = document.getElementById("left-rail-tools");
+    if (!rail) return;
+    // 表示中のフッタ道具セットを収集 (hidden でないものだけ)
+    const srcButtons: HTMLButtonElement[] = [];
+    for (const setId of ["tools", "tools-v2", "tools-decor2"]) {
+        const set = document.getElementById(setId);
+        if (!set || (set as HTMLElement).hidden) continue;
+        for (const b of set.querySelectorAll<HTMLButtonElement>(".tool, .tool2, .tool2d")) {
+            srcButtons.push(b);
+        }
+    }
+    rail.innerHTML = "";
+    for (const src of srcButtons) {
+        const btn = document.createElement("button");
+        btn.className = "rail-tool";
+        btn.textContent = src.textContent;
+        if (src.title) btn.title = src.title;
+        btn.classList.toggle("active", src.classList.contains("active"));
+        // 本物のフッタボタンを叩く → 正本ロジックが走り、updateRibbon が再び
+        // refreshToolRail を呼んで active を更新する (自前同期は不要)。
+        btn.addEventListener("click", () => src.click());
+        rail.appendChild(btn);
+    }
 }
 
 // ---------- パレット (v2 チップ選択) ----------

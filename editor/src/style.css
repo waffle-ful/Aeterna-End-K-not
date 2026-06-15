@@ -244,6 +244,28 @@ button.primary:hover {
     margin: var(--space-sm) 0;
 }
 
+/* 左レール: 道具リモコン (フッタ道具の鏡写し) */
+.rail-tools {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.rail-tool {
+    width: 100%;
+    min-height: 36px;
+    padding: var(--space-xs) var(--space-sm);
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.rail-tool.active {
+    outline: 2px solid var(--accent);
+    background: var(--bg-active-accent);
+}
+
 /* 右インスペクタ: マップ情報セクション */
 .inspector-section {
     margin-bottom: var(--space-md);
