@@ -102,6 +102,28 @@
     </div>
     <!-- /#shell-body -->
 
+    <!-- 下パレット ドック (旧 全画面オーバーレイ): ▲▲ で展開すると shell-body と footer の
+         間に挟まる in-flow ドック。展開中は viewport が縮んでマップとチップ一覧を同時に
+         見られる (BitGM 風)。▼▼/Esc/チップ選択で閉じる。狭い画面では背高ドックになる。 -->
+    <section id="palette-overlay" hidden role="region" aria-label="チップ一覧">
+      <div id="palette-resize-grip" title="ドラッグでパレットの高さを変えられます" aria-hidden="true"></div>
+      <div id="palette-overlay-header">
+        <input id="palette-search" type="search" placeholder="番号で絞り込み…" autocomplete="off" inputmode="numeric" />
+        <label id="palette-used-label">
+          <input type="checkbox" id="palette-used-only" />
+          使用中のみ
+        </label>
+        <button id="btn-add-tile-overlay" title="PNG を1枚追加してタイルセットに追記します" class="add-tile-btn">+ タイルを追加</button>
+        <button id="btn-merge-sheet-overlay" title="別の PNG シートをまるごとこのセットに合体します (複数素材を1パレットに束ねる)" class="add-tile-btn">🧩 シートを合体</button>
+        <button id="btn-palette-collapse" title="帯に戻る" aria-label="閉じる">▼▼</button>
+      </div>
+      <div id="palette-grid-wrap">
+        <div id="palette-spacer">
+          <canvas id="palette-canvas" title="チップをクリックして選択"></canvas>
+        </div>
+      </div>
+    </section>
+
     <footer>
       <div id="layer-tabs" hidden>
         <button class="ltab active" data-layer="ground">レイヤー1</button>
@@ -170,25 +192,6 @@
         <span id="status"></span>
       </div>
     </footer>
-
-    <!-- 全画面チップ選択オーバーレイ (▲▲ で開く、タイル選択 or ▼▼/Esc で閉じる) -->
-    <div id="palette-overlay" hidden aria-modal="true" role="dialog" aria-label="チップ一覧">
-      <div id="palette-overlay-header">
-        <input id="palette-search" type="search" placeholder="番号で絞り込み…" autocomplete="off" inputmode="numeric" />
-        <label id="palette-used-label">
-          <input type="checkbox" id="palette-used-only" />
-          使用中のみ
-        </label>
-        <button id="btn-add-tile-overlay" title="PNG を1枚追加してタイルセットに追記します" class="add-tile-btn">+ タイルを追加</button>
-        <button id="btn-merge-sheet-overlay" title="別の PNG シートをまるごとこのセットに合体します (複数素材を1パレットに束ねる)" class="add-tile-btn">🧩 シートを合体</button>
-        <button id="btn-palette-collapse" title="帯に戻る" aria-label="閉じる">▼▼</button>
-      </div>
-      <div id="palette-grid-wrap">
-        <div id="palette-spacer">
-          <canvas id="palette-canvas" title="チップをクリックして選択"></canvas>
-        </div>
-      </div>
-    </div>
 
     <input type="file" id="file-input" accept=".json,application/json" hidden />
     <input type="file" id="png-input" accept=".png,image/png" hidden />

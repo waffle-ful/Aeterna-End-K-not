@@ -1019,10 +1019,70 @@ async function rebuildPaletteGrid(filterText: string, usedOnly: boolean): Promis
     drawPaletteWindow();
 }
 
-/** 全画面グリッドを開く */
+/** ドック高さ CSS 変数のクランプ範囲 (px) */
+function clampDockHeight(px: number): number {
+    return Math.min(window.innerHeight * 0.72, Math.max(120, px));
+}
+
+/** 下パレット ドックの上端つまみ: ドラッグで高さを変える。値は localStorage に記憶。 */
+function wirePaletteDockResize(): void {
+    const grip = $("palette-resize-grip");
+    const root = document.documentElement;
+
+    // 起動時に保存値を復元
+    const saved = localStorage.getItem("ekm.paletteDockH");
+    if (saved) root.style.setProperty("--palette-dock-h", saved);
+
+    let startY = 0;
+    let startH = 0;
+    let dragging = false;
+
+    const onMove = (e: PointerEvent): void => {
+        if (!dragging) return;
+        // 上方向にドラッグすると拡大 (clientY が小さくなる = dy が正)
+        const h = clampDockHeight(startH + (startY - e.clientY));
+        root.style.setProperty("--palette-dock-h", `${Math.round(h)}px`);
+        renderer.app.resize();
+        drawPaletteWindow();
+    };
+
+    const onUp = (e: PointerEvent): void => {
+        if (!dragging) return;
+        dragging = false;
+        try {
+            grip.releasePointerCapture(e.pointerId);
+        } catch {
+            /* capture 未取得時は無視 */
+        }
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        const cur = root.style.getPropertyValue("--palette-dock-h").trim();
+        if (cur) localStorage.setItem("ekm.paletteDockH", cur);
+    };
+
+    grip.addEventListener("pointerdown", (e) => {
+        dragging = true;
+        startY = e.clientY;
+        startH = $("palette-overlay").getBoundingClientRect().height;
+        try {
+            grip.setPointerCapture(e.pointerId);
+        } catch {
+            /* 一部環境で失敗しても window リスナーで継続 */
+        }
+        window.addEventListener("pointermove", onMove);
+        window.addEventListener("pointerup", onUp);
+        e.preventDefault();
+    });
+}
+
+/** 下パレット ドックを展開する */
 function openPaletteOverlay(): void {
     const overlay = $("palette-overlay");
+    if (!overlay.hidden) return;
     overlay.hidden = false;
+    // ドックが開いて viewport が縮んだので PIXI canvas を追従させる
+    // (resizeTo は window resize でしか発火しないため明示的に再計算)
+    renderer.app.resize();
     $<HTMLInputElement>("palette-search").value = paletteFilterText;
     $<HTMLInputElement>("palette-used-only").checked = paletteUsedOnly;
     void rebuildPaletteGrid(paletteFilterText, paletteUsedOnly);
@@ -1030,9 +1090,13 @@ function openPaletteOverlay(): void {
     $<HTMLInputElement>("palette-search").focus();
 }
 
-/** 全画面グリッドを閉じる */
+/** 下パレット ドックを畳む */
 function closePaletteOverlay(): void {
-    $("palette-overlay").hidden = true;
+    const overlay = $("palette-overlay");
+    if (overlay.hidden) return;
+    overlay.hidden = true;
+    // ドックが畳まれて viewport が広がったので PIXI canvas を追従させる
+    renderer.app.resize();
 }
 
 let paletteFilterText = "";
@@ -3807,10 +3871,13 @@ function wireUi(): void {
         openPaletteOverlay();
     });
 
-    // ▼▼ で全画面グリッドを閉じる
+    // ▼▼ で下パレット ドックを畳む
     $("btn-palette-collapse").addEventListener("click", () => {
         closePaletteOverlay();
     });
+
+    // ドック上端つまみのドラッグで高さを変える (localStorage 記憶)
+    wirePaletteDockResize();
 
     // 全画面グリッド: クリックで1チップ選択 / ドラッグで範囲選択 (= ブロックスタンプ)
     {

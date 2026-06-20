@@ -493,18 +493,23 @@ footer {
     white-space: nowrap;
 }
 
-/* ---------- 全画面チップ選択オーバーレイ ---------- */
+/* ---------- 下パレット ドック (旧 全画面オーバーレイ) ----------
+   shell-body と footer の間に挟まる in-flow ドック。展開すると flex:1 の
+   shell-body が縮み、viewport (マップ) とチップ一覧を同時に見られる。
+   高さは --palette-dock-h (つまみドラッグで変更・localStorage 記憶)。 */
 #palette-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 100;
+    flex: 0 0 auto;
+    height: var(--palette-dock-h, 40vh);
+    min-height: 120px;
+    max-height: 72vh;
     background: var(--bg-1);
+    border-top: 2px solid var(--border-bar);
     display: flex;
     flex-direction: column;
-    gap: var(--space-sm);
-    padding: var(--space-sm);
+    gap: var(--space-xs);
+    padding: 0 var(--space-sm) var(--space-sm);
     /* 表示アニメーション */
-    animation: palette-slide-up 0.18s ease-out;
+    animation: palette-slide-up 0.16s ease-out;
 }
 
 #palette-overlay[hidden] {
@@ -512,8 +517,45 @@ footer {
 }
 
 @keyframes palette-slide-up {
-    from { transform: translateY(12px); opacity: 0; }
+    from { transform: translateY(16px); opacity: 0; }
     to   { transform: translateY(0);    opacity: 1; }
+}
+
+/* 上端のドラッグつまみ: ドックの高さを変える */
+#palette-resize-grip {
+    flex: 0 0 auto;
+    height: 11px;
+    margin: 0 calc(-1 * var(--space-sm));
+    position: relative;
+    cursor: ns-resize;
+    touch-action: none;
+}
+
+#palette-resize-grip::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 48px;
+    height: 4px;
+    transform: translate(-50%, -50%);
+    border-radius: 2px;
+    background: var(--border-bar);
+}
+
+#palette-resize-grip:hover::after {
+    background: var(--accent);
+}
+
+/* 狭い画面: 3ペインは隠れる (line 361) ので、ドックは背高にしてマップ上 + 一覧下で使う */
+@media (max-width: 720px) {
+    #palette-overlay {
+        height: var(--palette-dock-h, 58vh);
+        max-height: 82vh;
+    }
+    #palette-resize-grip {
+        display: none;
+    }
 }
 
 #palette-overlay-header {
