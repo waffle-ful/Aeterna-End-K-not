@@ -366,7 +366,7 @@ async function openMinigame(): Promise<void> {
     const overlay = $("minigame-overlay");
     overlay.hidden = false;
     try {
-        const { launchCrewRun } = await import("./minigame/crewrun");
+        const { launchCrewRun } = await import("./minigame/crewrun3d");
         minigameHandle = await launchCrewRun(overlay, closeMinigame);
     } catch (err) {
         console.error("ミニゲームの起動に失敗しました", err);
