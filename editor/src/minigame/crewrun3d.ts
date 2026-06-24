@@ -182,7 +182,7 @@ function saveBest(score: number): number {
 // ---------- 装備テーマアーマー ----------
 // クルーが装甲を着る装備システム。既存の数値アーマーLv(0-5の％軽減)に「装備レイヤー」を上乗せするハイブリッド方式。
 // 種類ごとに見た目(プレート色/発光/オーラ)＋固有効果。解放は localStorage で永続(ボス撃破/Level!生還/レアドロップ等)。
-type ArmorAura = "none" | "fire" | "dark";
+type ArmorAura = "none" | "fire" | "dark" | "gold";
 interface ArmorDef {
     id: string;
     name: string;
@@ -198,14 +198,17 @@ interface ArmorDef {
     firePower: number; // 火力倍率 (1=等倍)
     drainFrac: number; // 装備中に毎秒失うクルー割合 (闇のトレードオフ)
     burn: number; // 前方近接の敵を毎秒焼くダメージ係数 (炎)
+    desc: string; // 効果の説明 (ショップUIに表示)
     unlockHint: string; // 未解放時にUIへ出す解放条件
 }
 const ARMORS: ArmorDef[] = [
-    { id: "none", name: "標準アーマー", icon: "🛡", body: 0x6fa6c8, metal: 0.45, rough: 0.5, plate: 0x9fc2dd, accent: 0xe2f2ff, emissive: 0x000000, aura: "none", extraArmor: 0, firePower: 1, drainFrac: 0, burn: 0, unlockHint: "" },
-    { id: "tech", name: "テックアーマー", icon: "🤖", body: 0x8a9bb0, metal: 0.85, rough: 0.28, plate: 0x596b80, accent: 0x46e0ff, emissive: 0x0e2030, aura: "none", extraArmor: 2, firePower: 1, drainFrac: 0, burn: 0, unlockHint: "ステージ3クリアで解放" },
-    { id: "blaze", name: "燃えさかるアーマー", icon: "🔥", body: 0xc23e14, metal: 0.5, rough: 0.4, plate: 0xff5a1e, accent: 0xffd23b, emissive: 0xff3400, aura: "fire", extraArmor: 1, firePower: 1.1, drainFrac: 0, burn: 1.0, unlockHint: "ドラゴンを撃破で解放" },
-    { id: "dark", name: "闇のアーマー", icon: "🌑", body: 0x2a2140, metal: 0.6, rough: 0.35, plate: 0x3a2a60, accent: 0x9b4bff, emissive: 0x5a18d6, aura: "dark", extraArmor: 3, firePower: 1.3, drainFrac: 0.01, burn: 0, unlockHint: "Level! を生還で解放" },
-    { id: "aegis", name: "黄金のイージス", icon: "⭐", body: 0xffcf4a, metal: 0.92, rough: 0.24, plate: 0xffd75e, accent: 0xfff0b0, emissive: 0x4a3500, aura: "none", extraArmor: 2, firePower: 1.15, drainFrac: 0, burn: 0, unlockHint: "レアドロップで入手" },
+    { id: "none", name: "標準アーマー", icon: "🛡", body: 0x6fa6c8, metal: 0.45, rough: 0.5, plate: 0x9fc2dd, accent: 0xe2f2ff, emissive: 0x000000, aura: "none", extraArmor: 0, firePower: 1, drainFrac: 0, burn: 0, desc: "基本の装甲。クセのないバランス型。", unlockHint: "" },
+    { id: "tech", name: "テックアーマー", icon: "🤖", body: 0x8a9bb0, metal: 0.9, rough: 0.25, plate: 0x4c5d72, accent: 0x46e0ff, emissive: 0x0a2838, aura: "none", extraArmor: 2, firePower: 1, drainFrac: 0, burn: 0, desc: "重装甲メカ。被弾を大きく軽減 (実効アーマー +2)。", unlockHint: "ステージ5クリアで解放" },
+    { id: "blaze", name: "燃えさかるアーマー", icon: "🔥", body: 0xc23e14, metal: 0.5, rough: 0.4, plate: 0xff5a1e, accent: 0xffe24b, emissive: 0xff3400, aura: "fire", extraArmor: 1, firePower: 1.15, drainFrac: 0, burn: 1.4, desc: "前方の敵を炎で焼き続ける＋火力×1.15。攻めの装甲。", unlockHint: "終盤のドラゴン(2巡目)撃破で解放" },
+    { id: "dark", name: "闇のアーマー", icon: "🌑", body: 0x241a3a, metal: 0.62, rough: 0.34, plate: 0x352552, accent: 0xb060ff, emissive: 0x6a1ff0, aura: "dark", extraArmor: 3, firePower: 1.3, drainFrac: 0.016, burn: 0, desc: "防御+3・火力×1.3の最強格。だが装備中クルーが毎秒溶けて減る。ハイリスク・終盤も通用。", unlockHint: "Level! を生還で解放" },
+    { id: "aegis", name: "黄金のイージス", icon: "⭐", body: 0xffcf4a, metal: 0.95, rough: 0.2, plate: 0xffd75e, accent: 0xfff4c0, emissive: 0x6a4d00, aura: "gold", extraArmor: 2, firePower: 1.15, drainFrac: 0, burn: 0, desc: "万能の黄金装甲。防御+2・火力×1.15、欠点なし。終盤のご褒美。", unlockHint: "終盤(S8+)の激レアドロップで入手" },
+    // パーティゴアアーマー: 見た目がパーティゴアに変身・世界が白黒・パーティゴアが寝返る。だが超低耐久＆援軍なしのベテラン専用。
+    { id: "party", name: "パーティゴアアーマー", icon: "🎭", body: 0xc8c8c8, metal: 0.2, rough: 0.7, plate: 0x999999, accent: 0xcccccc, emissive: 0x000000, aura: "none", extraArmor: -5, firePower: 1, drainFrac: 0, burn: 0, desc: "パーティゴアに変身。世界が白黒になり、彼らは襲わず逆に仲間に加わる。だが耐久ペラペラでロボ/タレット等の援軍も付かない。ベテラン向け。", unlockHint: "最終盤(S10+)の激レアドロップで入手" },
 ];
 function armorById(id: string): ArmorDef { return ARMORS.find((a) => a.id === id) ?? ARMORS[0]; }
 const ARMOR_UNLOCKS_KEY = "ekm_crewrun_armors";
@@ -236,10 +239,41 @@ function buildWornArmorGeometry(def: ArmorDef): THREE.BufferGeometry {
     }
     // 腰当て (タセット)
     const skirt = new THREE.BoxGeometry(0.52, 0.22, 0.38); skirt.translate(0, 0.62, 0); parts.push(paint(skirt, P));
-    // 兜 (ヘルム): 頭を覆うドーム + トサカ + バイザースリット
+    // 兜 (ヘルム): 頭を覆うドーム + バイザースリット
     const helm = new THREE.BoxGeometry(0.38, 0.32, 0.38); helm.translate(0, 1.42, 0); parts.push(paint(helm, P));
-    const crest = new THREE.BoxGeometry(0.07, 0.2, 0.34); crest.translate(0, 1.62, 0); parts.push(paint(crest, A));
     const slit = new THREE.BoxGeometry(0.32, 0.05, 0.06); slit.translate(0, 1.4, 0.19); parts.push(paint(slit, A));
+
+    // --- 装備ごとの個性パーツ (シルエットで一目で分かるように派手めに) ---
+    const spike = (w: number, h: number, x: number, y: number, z: number, rotZ: number, col: number): void => {
+        const s = new THREE.BoxGeometry(w, h, w); s.rotateZ(rotZ); s.translate(x, y, z); parts.push(paint(s, col));
+    };
+    switch (def.id) {
+        case "none": { // 控えめなトサカ
+            const crest = new THREE.BoxGeometry(0.07, 0.18, 0.34); crest.translate(0, 1.62, 0); parts.push(paint(crest, A));
+            break;
+        }
+        case "tech": { // アンテナ2本 + 胸の発光コア + 角ばった肩スパイク
+            for (const sx of [-1, 1]) { const ant = new THREE.BoxGeometry(0.03, 0.34, 0.03); ant.translate(sx * 0.12, 1.72, -0.05); parts.push(paint(ant, A)); }
+            const core = new THREE.BoxGeometry(0.16, 0.16, 0.06); core.translate(0, 0.96, 0.24); parts.push(paint(core, A));
+            for (const sx of [-1, 1]) spike(0.12, 0.26, sx * 0.5, 1.22, 0, sx * -0.5, P);
+            break;
+        }
+        case "blaze": { // 炎の角(斜め上のスパイク3本) + 肩の炎
+            spike(0.1, 0.4, 0, 1.78, 0, 0, A);
+            for (const sx of [-1, 1]) { spike(0.09, 0.34, sx * 0.16, 1.74, 0, sx * 0.5, A); spike(0.1, 0.3, sx * 0.46, 1.34, 0, sx * 0.35, A); }
+            break;
+        }
+        case "dark": { // 禍々しい湾曲ホーン(左右) + 棘の肩
+            for (const sx of [-1, 1]) { spike(0.11, 0.4, sx * 0.18, 1.74, 0, sx * 0.7, A); spike(0.12, 0.28, sx * 0.52, 1.3, 0, sx * 0.6, P); }
+            const thorn = new THREE.BoxGeometry(0.08, 0.3, 0.08); thorn.translate(0, 1.76, -0.08); parts.push(paint(thorn, A));
+            break;
+        }
+        case "aegis": { // 王冠(3つの尖り) + 肩のウィング
+            for (const dx of [-0.13, 0, 0.13]) { const p = new THREE.BoxGeometry(0.07, dx === 0 ? 0.26 : 0.18, 0.07); p.translate(dx, 1.66, 0); parts.push(paint(p, A)); }
+            for (const sx of [-1, 1]) { const wing = new THREE.BoxGeometry(0.06, 0.18, 0.5); wing.rotateX(0.3); wing.translate(sx * 0.48, 1.24, -0.12); parts.push(paint(wing, A)); }
+            break;
+        }
+    }
     return mergeGeometries(parts, false)!;
 }
 
@@ -280,6 +314,7 @@ const REGEN_FRAC = 0.015; // 現クルー比例の追加回復/秒 (大群でも
 // 「放置すると痛いが撃てば十分取り返せる」バランス (数値は後で調整しやすいよう定数化)。
 const PARTY_RECRUIT_CD = 0.7; // クルーを連れ去る間隔 (秒) — まとめて連れ去るので少し短め
 const PARTY_RECRUIT_MAX = 24; // 1 体が連れ去れる上限 (倒すまで列はどんどん伸びる)
+const PARTY_JOIN_CREW = 8; // パーティゴアアーマー装備中、1 体が寝返るたびに増える味方クルー数
 const PARTY_CONGA_GAP = 1.1; // コンガ figure の前後間隔 (本体軌跡上の距離)
 const PARTY_HOLD_Z = CROWD_Z + 16; // 前線のずっと手前でこの z に居座る (プレイヤーには近寄らない)
 
@@ -360,7 +395,7 @@ function clamp01(x: number): number {
     return x < 0 ? 0 : x > 1 ? 1 : x;
 }
 
-type ItemKind = "gun" | "minigun" | "armor" | "robot" | "bonus" | "heal" | "shield" | "cannon" | "weapon" | "rocket" | "homing" | "turret" | "drones" | "rarearmor";
+type ItemKind = "gun" | "minigun" | "armor" | "robot" | "bonus" | "heal" | "shield" | "cannon" | "weapon" | "rocket" | "homing" | "turret" | "drones" | "rarearmor" | "partyarmor";
 const ITEM_META: Record<ItemKind, { label: string; color: number }> = {
     gun: { label: "GUN", color: 0xffd75e },
     minigun: { label: "MINIGUN", color: 0xff9f43 },
@@ -376,6 +411,7 @@ const ITEM_META: Record<ItemKind, { label: string; color: number }> = {
     turret: { label: "360°タレット", color: 0xffd24a }, // 全方位 auto タレット — 背後/周回の敵の答え (耐久制)
     drones: { label: "ガンドローン", color: 0x6fe0ff }, // 群衆を旋回して外向きに撃つ飛行ドローン (台数制)
     rarearmor: { label: "✦レアアーマー", color: 0xffd75e }, // 黄金のイージスを解放する特殊レアドロップ
+    partyarmor: { label: "🎭ゴアの仮面", color: 0xff5ec0 }, // パーティゴアアーマーを解放する最終盤の激レアドロップ
 };
 const SHIELD_GRANT = 3; // シールド 1 個で追加される「完全ブロック回数」
 const CANNON_MAX_STOCK = 3; // 波動砲のストック上限 (取得で +1・召喚で -1)
@@ -1468,6 +1504,7 @@ function buildItemModel(item: ItemKind): THREE.Object3D {
             return buildMinigunModel();
         case "armor":
         case "rarearmor":
+        case "partyarmor":
             return buildArmorModel();
         case "shield":
             return buildShieldModel();
@@ -2824,6 +2861,8 @@ class CrewRun3D {
     private readonly armorMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.35, metalness: 0.5, envMapIntensity: 0.9 });
     private armorDrainCarry = 0; // 闇アーマーのクルー消費の端数繰り越し
     private armorBurnT = 0; // 炎アーマーの焼き判定タイマー
+    private partyCrewMesh: THREE.InstancedMesh | null = null; // パーティゴアアーマー時、クルーをパーティゴアモデルで描く (素体は隠す)
+    private get isPartyArmor(): boolean { return this.equippedArmorId === "party"; }
     private get equippedArmorDef(): ArmorDef { return armorById(this.equippedArmorId); }
     private get effectiveArmor(): number { return this.armor + this.equippedArmorDef.extraArmor; } // ％軽減式に使う実効アーマー
     private shieldHits = 0; // 残りの「完全ブロック回数」。被弾を 1 回まるごと無効化して消費し、0 で割れる。
@@ -3795,7 +3834,9 @@ class CrewRun3D {
         this.clearEnemyMissiles(); // 敵ミサイルの THREE 資産を解放
         this.clearZoneModifiers(); // C/D のビュー反転を戻す
         if (this.armorMesh) { this.scene.remove(this.armorMesh); this.armorMesh.geometry.dispose(); this.armorMesh = null; }
+        if (this.partyCrewMesh) { this.scene.remove(this.partyCrewMesh); this.partyCrewMesh.geometry.dispose(); this.partyCrewMesh = null; } // マテリアルは template 共有なので dispose しない
         this.armorMat.dispose();
+        this.renderer.domElement.style.filter = ""; // パーティゴア/時間停止のモノクロを念のため解除
         // C/D ティント板はカメラ子で scene.traverse が届かないので明示破棄
         if (this.invertTint) {
             this.invertTint.geometry.dispose();
@@ -3961,7 +4002,16 @@ class CrewRun3D {
         if (adef.drainFrac > 0 && this.crew > 2) {
             this.armorDrainCarry += this.crew * adef.drainFrac * dt;
             const d = Math.floor(this.armorDrainCarry);
-            if (d > 0) { this.armorDrainCarry -= d; this.changeCrew(-Math.min(d, this.crew - 2)); }
+            if (d > 0) {
+                this.armorDrainCarry -= d;
+                this.changeCrew(-Math.min(d, this.crew - 2));
+                // クルーが「溶けていく」演出: ランダムなクルーの足元から紫の雫が滴り落ちる
+                const ev = Math.min(d, 4, this.members.length);
+                for (let q = 0; q < ev; q++) {
+                    const m = this.members[(Math.floor(this.clock.elapsedTime * 50) + q * 5) % this.members.length];
+                    this.p_emit(new THREE.Vector3(this.centroidX + m.rx, 0.85, CROWD_Z + m.rz), { tex: "soft", col0: 0x8b3dff, col1: 0x16062e, size0: 0.32, size1: 0.58, life: 0.6, vy: -1.6, grav: -2.4, add: true });
+                }
+            }
         }
         if (adef.burn > 0) {
             this.armorBurnT -= dt;
@@ -4306,11 +4356,24 @@ class CrewRun3D {
                 }
 
                 // --- 勧誘(コア): 前線に居座っている間、クールダウンごとにクルーを 1 人連れ去る ---
+                // パーティゴアアーマー装備中は逆転: 攻撃されず、向こうが踊りながら味方に加わる。
                 if (atFront && !e.recruitDone) {
-                    e.recruitCd = (e.recruitCd ?? PARTY_RECRUIT_CD) - dt;
-                    if (e.recruitCd <= 0 && this.crew > 0) {
-                        e.recruitCd = PARTY_RECRUIT_CD;
-                        this.recruitOne(e);
+                    if (this.isPartyArmor) {
+                        e.recruitCd = (e.recruitCd ?? PARTY_RECRUIT_CD) - dt;
+                        if (e.recruitCd <= 0) {
+                            e.recruitCd = 0.6;
+                            this.returnRecruited(e); // 連れ去られていた分があれば取り返す
+                            this.changeCrew(PARTY_JOIN_CREW); // 仲間が加わる
+                            this.popWorld("仲間になった！", e.wx, "#ffe27a");
+                            this.spark(new THREE.Vector3(e.wx, 1.2, e.z), 0xff5ec0);
+                            e.resolved = true; e.z = -100; // 退場 (撤去ループが片付ける)
+                        }
+                    } else {
+                        e.recruitCd = (e.recruitCd ?? PARTY_RECRUIT_CD) - dt;
+                        if (e.recruitCd <= 0 && this.crew > 0) {
+                            e.recruitCd = PARTY_RECRUIT_CD;
+                            this.recruitOne(e);
+                        }
                     }
                 }
                 // コンガの列を毎フレーム本体の背後に追従させる (少し遅延/うねり)。
@@ -4494,7 +4557,8 @@ class CrewRun3D {
         // コンボで火力も微増 (最大 ×1.4)。コインほど効かせず、戦闘テンポを少しだけ後押し。
         const comboFp = 1 + Math.min(this.combo, 20) * 0.02;
         const buff = this.fireBuffT > 0 ? FIRE_BUFF_MULT : 1; // G11 火力テンプレの一時バフ
-        return (this.crew * mult + this.robots * 45) * comboFp * buff * this.equippedArmorDef.firePower; // 装備アーマーの火力倍率
+        const robotFp = this.isPartyArmor ? 0 : this.robots * 45; // パーティゴアアーマー中は援軍ロボの火力寄与なし
+        return (this.crew * mult + robotFp) * comboFp * buff * this.equippedArmorDef.firePower; // 装備アーマーの火力倍率
     }
     private get lossMult(): number {
         // 走行ハザードもアーマーで軽減 (当たった列の一部が生き残る)。実効アーマー(数値Lv＋装備)で計算。armor=0 なら 1。
@@ -4546,6 +4610,8 @@ class CrewRun3D {
     private layoutCrowd(dt: number): void {
         const t = this.clock.elapsedTime;
         const n = this.members.length;
+        // パーティゴアアーマー装備でモデルがまだ用意できていない (起動直後は GLTF 未ロード) なら、読めた時点で一度だけ変身させる。
+        if (this.isPartyArmor && !this.partyCrewMesh && partygoerModel) this.rebuildArmorMesh();
         const k = Math.min(1, dt * 6); // 隊列スロットへ詰め直す速さ (生き残りが滑らかに寄る)
         // 走りクリップの連続位相を進める。ケイデンスはスピード連動 (速いほど足が速く回る)。
         // battle/clear は穏やかな足踏み。位相は個体ごとに phaseOffset でずらしロックステップを解消。
@@ -4571,6 +4637,7 @@ class CrewRun3D {
             for (let bj = 0; bj < bones.length; bj++) bones[bj].matrixWorld.copy(snap[bj]);
             this.crowdMesh.setBonesAt(i, false); // matrix 再計算せず現在の bone.matrixWorld を採用
             if (this.armorMesh) this.armorMesh.setMatrixAt(i, this.dummy.matrix); // 素体と同じ姿勢で装甲を重ねる (weapon の前に・基準行列のまま)
+            if (this.partyCrewMesh) this.partyCrewMesh.setMatrixAt(i, this.dummy.matrix); // パーティゴア変身: 素体の姿勢でモデルを置く
             if (this.weaponMesh) {
                 // 構えポーズ (両腕前方) の手の中央前方に銃を置く。geometry は前方 z+・胸高 y0.6 基準。
                 // 構えた両手 (肩高・前方) の位置に銃を上げて前へ出す (geo は y0.62/z0.45 基準)。
@@ -4592,20 +4659,26 @@ class CrewRun3D {
             this.armorMesh.count = n;
             this.armorMesh.instanceMatrix.needsUpdate = true;
         }
-        // 炎/闇アーマーのオーラ粒子 (数体からだけ・プール予算を食い潰さないよう少量)
+        if (this.partyCrewMesh) {
+            this.partyCrewMesh.count = n;
+            this.partyCrewMesh.instanceMatrix.needsUpdate = true;
+        }
+        // アーマーのオーラ粒子 (数体からだけ・プール予算を食い潰さないよう少量・装備ごとに表情を変える)
         const adef = this.equippedArmorDef;
         if (adef.aura !== "none" && n > 0) {
-            const col = adef.aura === "fire" ? 0xff7a1e : 0x9b4bff;
             const cnt = Math.min(3, n);
             for (let q = 0; q < cnt; q++) {
                 const m = this.members[(Math.floor(t * 30) + q * 7) % n];
-                this.p_emit(new THREE.Vector3(this.centroidX + m.rx, 0.5 + Math.random() * 0.9, CROWD_Z + m.rz), {
-                    tex: "glow", col0: col, col1: col, size0: 0.16, size1: 0.42, life: 0.4, vy: adef.aura === "fire" ? 1.2 : 0.3, add: true,
-                });
+                const px = this.centroidX + m.rx, pz = CROWD_Z + m.rz;
+                if (adef.aura === "fire") this.p_emit(new THREE.Vector3(px, 0.6 + Math.random() * 0.9, pz), { tex: "glow", col0: 0xffd23b, col1: 0xff4a10, size0: 0.18, size1: 0.52, life: 0.4, vy: 1.8, add: true }); // 立ち昇る炎
+                else if (adef.aura === "dark") this.p_emit(new THREE.Vector3(px, 1.0 + Math.random() * 0.5, pz), { tex: "soft", col0: 0xa050ff, col1: 0x1a0830, size0: 0.22, size1: 0.5, life: 0.5, vy: -0.7, add: true }); // 滴り落ちる闇
+                else if (adef.aura === "gold") this.p_emit(new THREE.Vector3(px, 0.6 + Math.random() * 1.0, pz), { tex: "glow", col0: 0xfff4c0, col1: 0xffd75e, size0: 0.07, size1: 0.2, life: 0.5, vy: 0.9, add: true }); // 舞う金粉
             }
         }
         // ロボット: 両脇後方をジェットでホバリング。バウンド + 前傾/バンク + ゆっくりヨーで「飛んでる」感。
-        if (this.robotMesh) {
+        // パーティゴアアーマー中は援軍が付かない設定 → 描画も止める。
+        if (this.robotMesh) this.robotMesh.visible = !this.isPartyArmor;
+        if (this.robotMesh && !this.isPartyArmor) {
             const rn = this.members.length > 0 ? Math.min(6, this.robots) : 0;
             let jetBudget = 4; // ジェット炎のフレーム予算 (パーティクルプール保護)
             for (let i = 0; i < rn; i++) {
@@ -4996,12 +5069,19 @@ class CrewRun3D {
 
     /** 装備中アーマーの装甲プレートメッシュ＋素体マテリアルを作り直す (全クルー共通の1装備＝共有1色)。 */
     private rebuildArmorMesh(): void {
-        if (this.armorMesh) {
-            this.scene.remove(this.armorMesh);
-            this.armorMesh.geometry.dispose();
-            this.armorMesh = null;
-        }
+        // 旧メッシュを破棄
+        if (this.armorMesh) { this.scene.remove(this.armorMesh); this.armorMesh.geometry.dispose(); this.armorMesh = null; }
+        if (this.partyCrewMesh) { this.scene.remove(this.partyCrewMesh); this.partyCrewMesh.geometry.dispose(); this.partyCrewMesh = null; }
         const def = this.equippedArmorDef;
+        if (def.id === "party") {
+            // パーティゴアに変身: クルーをパーティゴアモデルで描き、素体メッシュを隠す
+            this.partyCrewMesh = this.buildPartyCrewMesh(); // モデル未ロード時は null → 素体にフォールバック
+            if (this.crowdMesh) this.crowdMesh.visible = !this.partyCrewMesh;
+            this.applyArmorBodyLook(); // フォールバック(素体表示)時の見た目
+            this.updateMonochrome();
+            return;
+        }
+        if (this.crowdMesh) this.crowdMesh.visible = true;
         this.applyArmorBodyLook(); // 素体(全身)をアーマーの質感に塗り替える
         this.armorMat.emissive.setHex(def.emissive);
         this.armorMat.emissiveIntensity = def.aura === "none" ? 0.3 : 0.85;
@@ -5010,6 +5090,35 @@ class CrewRun3D {
         mesh.count = 0;
         this.scene.add(mesh);
         this.armorMesh = mesh;
+        this.updateMonochrome();
+    }
+
+    /** パーティゴア GLTF (単一メッシュ) からクルー用 InstancedMesh を作る (クルー身長に合わせて縮小)。未ロードなら null。 */
+    private buildPartyCrewMesh(): THREE.InstancedMesh | null {
+        if (!partygoerModel) return null;
+        partygoerModel.updateWorldMatrix(true, true);
+        let src: THREE.Mesh | null = null;
+        partygoerModel.traverse((c) => { const m = c as THREE.Mesh; if (!src && m.isMesh && m.geometry) src = m; });
+        if (!src) return null;
+        const srcMesh = src as THREE.Mesh;
+        const geo = srcMesh.geometry.clone();
+        geo.applyMatrix4(srcMesh.matrixWorld); // 正規化(高さ2.2・足元y=0・正面-Z)を焼き込む
+        const f = 1.5 / 2.2; // モデル高さ2.2 → クルー相当 ~1.5 へ縮小
+        geo.scale(f, f, f);
+        const mat = Array.isArray(srcMesh.material) ? srcMesh.material[0] : srcMesh.material; // テクスチャ付きマテリアル共有 (dispose しない)
+        const mesh = new THREE.InstancedMesh(geo, mat, MAX_INSTANCES);
+        mesh.frustumCulled = false;
+        mesh.count = 0;
+        this.scene.add(mesh);
+        return mesh;
+    }
+
+    /** canvas のモノクロ filter を一元管理 (時間停止 or パーティゴアアーマーで白黒に)。 */
+    private updateMonochrome(): void {
+        const on = this.timeStop > 0 || this.isPartyArmor;
+        if (on === this.timeStopFilterOn) return;
+        this.timeStopFilterOn = on;
+        this.renderer.domElement.style.filter = on ? "grayscale(1) contrast(1.06) brightness(0.97)" : "";
     }
 
     /** 素体メッシュのマテリアル (crewSkinMat) を装備アーマーの色・金属感・発光に塗り替える (全身が装甲化)。 */
@@ -5028,6 +5137,12 @@ class CrewRun3D {
         this.equippedArmorId = id;
         saveArmorEquip(id);
         this.rebuildArmorMesh();
+        this.updateMonochrome(); // パーティゴアアーマーの白黒を反映/解除
+        // 着替えの一閃: クルーを覆うリング + アクセント色のスパーク
+        const def = this.equippedArmorDef;
+        this.shockRing(new THREE.Vector3(this.centroidX, 1.0, CROWD_Z), def.accent || 0x9fd0ff, 3.6, 0.5);
+        this.spark(new THREE.Vector3(this.centroidX, 1.2, CROWD_Z), def.accent || 0x9fd0ff);
+        this.sfx.play("shield");
     }
 
     /** アーマーを新規解放する (既に解放済みなら何もしない)。解放を永続化しバナー表示。 */
@@ -6150,11 +6265,12 @@ class CrewRun3D {
         if (this.stage >= 5) kinds.push("robot");
         if (this.stage >= 2) kinds.push("shield"); // S2 から: 被弾を完全ブロックするバリア
         if (this.stage >= 7 && this.cannonStock < CANNON_MAX_STOCK) kinds.push("cannon"); // S7 から: ストック制波動砲
-        if (this.stage >= 5 && !this.unlockedArmors.has("aegis") && Math.random() < 0.5) kinds.push("rarearmor"); // 稀: 黄金のイージスを解放する特殊ドロップ
+        if (this.stage >= 8 && !this.unlockedArmors.has("aegis") && Math.random() < 0.25) kinds.push("rarearmor"); // 終盤の激レア: 黄金のイージスを解放する特殊ドロップ
+        if (this.stage >= 10 && !this.unlockedArmors.has("party") && Math.random() < 0.18) kinds.push("partyarmor"); // 最終盤の超激レア: パーティゴアアーマーを解放
         if (kinds.length === 0) kinds.push("armor"); // 次の強化が未解禁の序盤・武器最大化後はアーマー
         const item = kinds[Math.floor(Math.random() * kinds.length)];
         // 耐久 tier: 報酬が強いほど固い。たまに爆発する樽 (リスク&リワード)。
-        let stand: StandTier = item === "robot" || item === "cannon" || item === "rocket" || item === "homing" || item === "turret" || item === "drones" || item === "rarearmor" ? "vault" : item === "minigun" ? "steel" : "crate";
+        let stand: StandTier = item === "robot" || item === "cannon" || item === "rocket" || item === "homing" || item === "turret" || item === "drones" || item === "rarearmor" || item === "partyarmor" ? "vault" : item === "minigun" ? "steel" : "crate";
         if (Math.random() < 0.18) stand = "barrel";
         const x = this.laneX();
         const meta = ITEM_META[item];
@@ -7041,6 +7157,8 @@ class CrewRun3D {
             else this.changeCrew(Math.ceil(this.crew * 0.05) + 2);
         } else if (item === "rarearmor") {
             this.unlockArmor("aegis"); // 特殊レアドロップ → 黄金のイージス解放
+        } else if (item === "partyarmor") {
+            this.unlockArmor("party"); // 最終盤の超激レア → パーティゴアアーマー解放
         } else if (item === "shield") {
             this.shieldHits += SHIELD_GRANT; // 被弾完全ブロックを 3 回分チャージ
             this.sfx.play("shield");
@@ -7963,6 +8081,7 @@ class CrewRun3D {
      * 対象なし (非戦闘) では撃たない。走行/ボス両フェーズで飛ばす。
      */
     private updateRobotMissiles(dt: number): void {
+        if (this.isPartyArmor) return; // パーティゴアアーマー中は援軍ミサイルなし
         const rn = this.members.length > 0 ? Math.min(6, this.robots) : 0;
         // --- 発射: タイマーが切れて最前の対象があれば 1 発撃つ (機体数で間隔を前倒し) ---
         if (rn > 0 && this.missiles.length < rn) {
@@ -8257,6 +8376,8 @@ class CrewRun3D {
     private updateTurret(dt: number): void {
         const tr = this.turret;
         if (!tr) return;
+        if (this.isPartyArmor) { tr.obj.visible = false; return; } // パーティゴアアーマー中は援軍タレットを止める
+        tr.obj.visible = true;
         // 群衆へ横追従 (操作に従って移動)。
         tr.obj.position.x += (this.centroidX - tr.obj.position.x) * Math.min(1, dt * 8);
         tr.obj.position.z = CROWD_Z - 0.4;
@@ -8362,8 +8483,10 @@ class CrewRun3D {
     /** ドローンの毎フレーム: 群衆を旋回しながら各機が最寄りの敵へ旋回 → 周期射撃。 */
     private updateDrones(dt: number): void {
         if (this.droneRig.length === 0) return;
+        if (this.isPartyArmor) { for (const d of this.droneRig) d.obj.visible = false; return; } // 援軍ドローンを止める
         const t = this.clock.elapsedTime;
         const n = this.droneRig.length;
+        for (const d of this.droneRig) d.obj.visible = true;
         for (let i = 0; i < n; i++) {
             const d = this.droneRig[i];
             const a = t * 1.0 + (i / n) * Math.PI * 2; // 群れで等間隔に周回
@@ -9928,12 +10051,8 @@ class CrewRun3D {
         }
     }
 
-    /** 時間停止中のモノクロ表現 (canvas に CSS filter を当てる。状態遷移時のみ書換)。 */
-    private setMonochrome(on: boolean): void {
-        if (on === this.timeStopFilterOn) return;
-        this.timeStopFilterOn = on;
-        this.renderer.domElement.style.filter = on ? "grayscale(1) contrast(1.08) brightness(0.95)" : "";
-    }
+    /** 時間停止のモノクロ切替 (実体は updateMonochrome に一元化。パーティゴアアーマーのモノクロと両立させる)。 */
+    private setMonochrome(_on: boolean): void { this.updateMonochrome(); }
 
     /** 時間停止状態を完全に解除 (ステージ遷移/敗北/リスタートで安全側に倒す)。 */
     private clearTimeStop(): void {
@@ -9963,9 +10082,9 @@ class CrewRun3D {
         this.pulseLanding(true); // 一斉のお祝いジャンプ
         this.shake = Math.max(this.shake, 0.25);
         this.showBanner(`✨ STAGE ${this.stage} CLEAR! ✨`, "クルー +10%");
-        // アーマー解放: 進行(S3クリア)でテック / ドラゴン撃破で炎
-        if (this.stage >= 3) this.unlockArmor("tech");
-        if (bossKind === "dragon") this.unlockArmor("blaze");
+        // アーマー解放: 進行(S5クリア)でテック / 終盤(S8+)のドラゴン撃破で炎
+        if (this.stage >= 5) this.unlockArmor("tech");
+        if (bossKind === "dragon" && this.stage >= 8) this.unlockArmor("blaze");
     }
 
     // ---------- ステージ間ショップ ----------
@@ -10036,12 +10155,18 @@ class CrewRun3D {
                     `</button>`
                 );
             }).join("");
+            // 装備中アーマーの説明 (チップを選ぶと再描画されてここも切り替わる)
+            const eqDef = this.equippedArmorDef;
+            const descBlock =
+                `<div style="font-size:12px;color:#cfe3f5;margin-top:8px;min-height:46px;line-height:1.35;padding:6px 8px;background:#0a1a2a;border-radius:8px;">` +
+                `<b style="color:#ffe27a;">${eqDef.icon} ${eqDef.name}</b><br>${eqDef.desc}</div>`;
             el.innerHTML =
                 `<div style="background:#0e2236;border:3px solid #ffd75e;border-radius:16px;padding:20px 22px;text-align:center;color:#fff;width:min(92%,380px);">` +
                 `<div style="font-size:24px;font-weight:800;color:#ffe27a;">🛒 ショップ</div>` +
                 `<div style="font-size:16px;margin-top:4px;">所持コイン: <b style="color:#ffd75e;">🪙 ${this.coins}</b></div>` +
                 `<div style="font-size:14px;font-weight:800;color:#9fd0ff;margin-top:14px;">🛡 アーマー</div>` +
                 `<div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:6px;">${armorChips}</div>` +
+                descBlock +
                 `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:14px;">${cards}</div>` +
                 `<button id="shop-next" style="margin-top:16px;width:100%;padding:12px;border:none;border-radius:10px;background:#2f6fed;color:#fff;font-weight:800;font-size:16px;cursor:pointer;">▶ 次のステージへ</button>` +
                 `</div>`;
