@@ -139,10 +139,6 @@ internal static class LobbyBehaviourStartPatch
             LateTask.New(TryAutoEnterBackrooms, 0.3f, log: false);
         }
 
-        // 転ばぬ先の杖: 公式サーバー (anti-cheat あり) でホストしていると役職機能が動かず Hacking 切断される。
-        // HUD が整うのを少し待ってからホストに 1 回だけ警告する (中身は host + 公式鯖判定でガード)。
-        LateTask.New(Modules.OfficialServerNotice.WarnInLobby, 2.5f, log: false);
-
         if (!(Main.EnableBGM?.Value ?? false)) return;
         SilencePending = true;
         _bgmStarted = false;
