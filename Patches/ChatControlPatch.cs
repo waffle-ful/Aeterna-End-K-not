@@ -389,7 +389,8 @@ public static class ChatManager
     public static void ClearChat(params IReadOnlyList<PlayerControl> targets)
     {
         if (!AmongUsClient.Instance.AmHost) return;
-        PlayerControl player = GameStates.CurrentServerType == GameStates.ServerType.Vanilla ? PlayerControl.LocalPlayer : Main.EnumerateAlivePlayerControls().MinBy(x => x.PlayerId) ?? Main.EnumeratePlayerControls().MinBy(x => x.PlayerId) ?? PlayerControl.LocalPlayer;
+        // 公式鯖でも他プレイヤー名義の発言が許可されたため、vanilla 特例 (host 名義固定) を撤去
+        PlayerControl player = Main.EnumerateAlivePlayerControls().MinBy(x => x.PlayerId) ?? Main.EnumeratePlayerControls().MinBy(x => x.PlayerId) ?? PlayerControl.LocalPlayer;
         if (!player) return;
         if (targets.Count == 0 || targets.Count >= Main.AllAlivePlayerControlsCount) SendEmptyMessage(null);
         else targets.Do(SendEmptyMessage);
@@ -402,18 +403,10 @@ public static class ChatManager
             if (HudManager.InstanceExists && (toLocalPlayer || toEveryone)) HudManager.Instance.Chat.AddChat(player, "<size=32767>.");
             if (toLocalPlayer) return;
 
-            if (GameStates.CurrentServerType == GameStates.ServerType.Vanilla)
-            {
-                byte to = toEveryone ? byte.MaxValue : receiver.PlayerId;
-                Utils.SendMessage("<size=32767>.", to, "\n", force: true, addToHistory: false, importance: MessageImportance.High);
-            }
-            else
-            {
-                MessageWriter writer = AmongUsClient.Instance.StartRpcImmediately(player.NetId, (byte)RpcCalls.SendChat, SendOption.Reliable, toEveryone ? -1 : receiver.OwnerId);
-                writer.Write("<size=32767>.");
-                writer.Write(true);
-                AmongUsClient.Instance.FinishRpcImmediately(writer);
-            }
+            MessageWriter writer = AmongUsClient.Instance.StartRpcImmediately(player.NetId, (byte)RpcCalls.SendChat, SendOption.Reliable, toEveryone ? -1 : receiver.OwnerId);
+            writer.Write("<size=32767>.");
+            writer.Write(true);
+            AmongUsClient.Instance.FinishRpcImmediately(writer);
         }
     }
 }
