@@ -1966,7 +1966,8 @@ public static class Utils
                     title = "\u27a1" + title.Replace("\u2605", "") + "\u2b05";
             }
 
-            PlayerControl sender = !addToHistory || vanilla ? PlayerControl.LocalPlayer : Main.EnumerateAlivePlayerControls().MinBy(x => x.PlayerId) ?? Main.EnumeratePlayerControls().MinBy(x => x.PlayerId) ?? PlayerControl.LocalPlayer;
+            // 公式鯖でも他プレイヤー名義の発言が許可されたため、vanilla 特例 (host 名義固定) を撤去
+            PlayerControl sender = !addToHistory ? PlayerControl.LocalPlayer : Main.EnumerateAlivePlayerControls().MinBy(x => x.PlayerId) ?? Main.EnumeratePlayerControls().MinBy(x => x.PlayerId) ?? PlayerControl.LocalPlayer;
 
             if (sendTo != byte.MaxValue && receiver.AmOwner)
             {
