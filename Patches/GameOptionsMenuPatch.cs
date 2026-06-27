@@ -979,14 +979,6 @@ public static class StringOptionPatch
         {
             OptionItem item = OptionItem.AllOptions[index];
 
-            // 公式サーバーではペットボタン発動はオンにできない (desync 役職へのペット spoof が anti-cheat で host を切断するため)。即 Off へ戻して理由を通知。
-            if (item.Name == "UsePets" && __instance.GetInt() != 0 && Utils.IsOfficialServer())
-            {
-                item.SetValue(0); // Refresh() が ValueText と __instance.Value を Off に同期する (UpdateValue を再呼びしないので再帰しない)
-                Prompt.Show(Translator.GetString("Promt.PetsDisabledOnOfficialServer"), () => { }, () => { });
-                return false;
-            }
-
             item.SetValue(__instance.GetInt());
             string name = item.GetName();
 

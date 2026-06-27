@@ -166,12 +166,6 @@ public static class Utils
         
         PlayerControl pc = nt.myPlayer;
 
-        // 公式鯖 anti-cheat 対策: host が非モッドプレイヤーの NetTransform を SnapTo すると、その相手だけ
-        // 位置が同期されなくなる (host 側では動かせるが公式鯖/相手クライアントが拒否 → desync)。該当者への TP は
-        // local snap も RPC も両方スキップして整合性を保つ (Penguin/Goose のドラッグや各種 swap/pull 役職が安全になる)。
-        // host 自身・モッドクライアント・カスタム鯖では IsNonModdedOnOfficial()==false なので従来どおり全機能動作。
-        if (pc != null && pc.IsNonModdedOnOfficial()) return false;
-
         var sendOption = SendOption.Reliable;
         bool submerged = SubmergedCompatibility.IsSubmerged();
 
