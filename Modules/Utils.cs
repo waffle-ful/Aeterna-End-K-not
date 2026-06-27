@@ -3666,9 +3666,11 @@ public static class Utils
 
     public static bool RpcChangeSkin(PlayerControl pc, NetworkedPlayerInfo.PlayerOutfit newOutfit, CustomRpcSender writer = null, SendOption sendOption = SendOption.Reliable)
     {
-        if (!AmongUsClient.Instance.AmHost) return false;
+        // 公式鯖では spoof RPC ではなく正規 serialize で見た目を同期 (anti-cheat 修正後)
+        if (GameStates.CurrentServerType == GameStates.ServerType.Vanilla)
+            return pc.RpcChangeOutfitByData(newOutfit, writer?.stream, sendOption);
 
-        if (pc.IsNonModdedOnOfficial()) return false;
+        if (!AmongUsClient.Instance.AmHost) return false;
 
         if (pc.Is(CustomRoles.BananaMan))
             newOutfit = BananaMan.GetOutfit(Main.AllPlayerNames.GetValueOrDefault(pc.PlayerId, "Banana"));
@@ -4113,8 +4115,13 @@ public static class Utils
                             if (GameStates.IsEnded) return;
                             string petId = PetsHelper.GetPetId();
                             PetsHelper.SetPet(pc, petId);
-                            pc.Data.DefaultOutfit.PetSequenceId += 10;
-                            pc.RpcSetPet(petId);
+
+                            // 公式鯖では SetPet が正規 serialize で完結するため、追加の spoof RpcSetPet は不要 (送ると kick)
+                            if (GameStates.CurrentServerType != GameStates.ServerType.Vanilla)
+                            {
+                                pc.Data.DefaultOutfit.PetSequenceId += 10;
+                                pc.RpcSetPet(petId);
+                            }
                         }, 3f, "No Pet Reassign");
 
                         pc.AddAbilityCD(false);

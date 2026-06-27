@@ -19,25 +19,10 @@ internal class Disco : IAddon
 
     public static void ChangeColor(PlayerControl pc)
     {
-        if (pc.IsNonModdedOnOfficial()) return; // 公式鯖: 非モッドプレイヤーへの色変更 RPC は host が kick されるためスキップ (詳細は ExtendedPlayerControl.IsNonModdedOnOfficial)
-
         int colorId = IRandom.Instance.Next(0, 18);
 
-        pc.SetColor(colorId);
-
-        if (GameStates.CurrentServerType != GameStates.ServerType.Vanilla)
-            pc.RpcSetColor((byte)colorId);
-        else
-        {
-            var sender = CustomRpcSender.Create($"Disco.ChangeColor({pc.Data.PlayerName})");
-
-            sender.AutoStartRpc(pc.NetId, RpcCalls.SetColor)
-                .Write(pc.Data.NetId)
-                .Write((byte)colorId)
-                .EndRpc();
-
-            sender.SendMessage();
-        }
+        // 公式鯖では spoof RPC ではなく正規 serialize で色を同期 (anti-cheat 修正後)
+        pc.RpcChangeColor((byte)colorId);
     }
 
     public static void OnFixedUpdate(PlayerControl pc)

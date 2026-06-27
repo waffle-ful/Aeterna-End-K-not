@@ -851,6 +851,10 @@ internal static class CmdCheckShapeshiftPatch
 [HarmonyPatch(typeof(PlayerControl), nameof(PlayerControl.Shapeshift))]
 internal static class ShapeshiftPatch
 {
+    // SyncOutfitData の見た目リフレッシュ用 self-Shapeshift 呼び出し中は true。
+    // 本物の変身/解除ではなく単なる外見更新なので、Prefix の Shiftguard 通知・Sentry/Adventurer ループを発火させない。
+    public static bool SuppressSideEffects;
+
     public static bool ProcessShapeshift(PlayerControl shapeshifter, PlayerControl target)
     {
         if (MeetingHud.Instance && MeetingHud.Instance.state == MeetingHud.VoteStates.Results) return true;
@@ -963,6 +967,9 @@ internal static class ShapeshiftPatch
     // Tasks that should run when someone performs a shapeshift (with the egg animation) should be here.
     public static void Prefix(PlayerControl __instance, [HarmonyArgument(0)] PlayerControl target, [HarmonyArgument(1)] bool shouldAnimate)
     {
+        // SyncOutfitData の見た目リフレッシュ中は副作用 (Shiftguard 通知/Sentry/Adventurer ループ) をスキップ
+        if (SuppressSideEffects) return;
+
         if (!Main.ProcessShapeshifts || !GameStates.IsInTask || !__instance || !target) return;
 
         if (AmongUsClient.Instance.AmHost && shouldAnimate)

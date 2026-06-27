@@ -373,8 +373,7 @@ public static class CaptureTheFlag
             players.Remove(player);
             PlayerTeams[player.PlayerId] = CTFTeam.Blue;
             bluePlayers.Add(player.PlayerId);
-            // 公式鯖: 非モッドプレイヤーへの見た目変更は kick されるためスキップ (詳細は ExtendedPlayerControl.IsNonModdedOnOfficial)
-            if (!player.IsNonModdedOnOfficial()) player.RpcSetColor(1);
+            player.RpcChangeColor(1);
             yield return WaitFrameIfNecessary();
         }
 
@@ -382,8 +381,7 @@ public static class CaptureTheFlag
         {
             PlayerTeams[player.PlayerId] = CTFTeam.Yellow;
             yellowPlayers.Add(player.PlayerId);
-            // 公式鯖: 非モッドプレイヤーへの見た目変更は kick されるためスキップ (詳細は ExtendedPlayerControl.IsNonModdedOnOfficial)
-            if (!player.IsNonModdedOnOfficial()) player.RpcSetColor(5);
+            player.RpcChangeColor(5);
             yield return WaitFrameIfNecessary();
         }
 

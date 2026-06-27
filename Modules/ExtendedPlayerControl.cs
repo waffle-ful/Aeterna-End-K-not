@@ -792,6 +792,86 @@ internal static class ExtendedPlayerControl
             return Utils.IsOfficialServer() && player != null && !player.IsModdedClient();
         }
 
+        // ── 公式サーバー向け 正規 outfit 同期 API (AU 2026 anti-cheat 修正後) ──
+        // Innersloth が「host が他人の見た目を変える」を Hacking と誤判定していた問題を修正したため、
+        // なりすまし spoof RPC ではなく NetworkedPlayerInfo.Serialize (message type 5/1 = 正規 GameData 更新) で
+        // outfit を同期する。公式鯖でも kick されずにペット/色/見た目を変更できる。
+        public void RpcChangePet(string petId)
+        {
+            if (player.Data.DefaultOutfit.PetId == petId) return;
+
+            player.Data.DefaultOutfit.PetId = petId;
+            player.SyncOutfitData();
+        }
+
+        public void RpcChangeColor(byte colorId)
+        {
+            if (player.Data.DefaultOutfit.ColorId == colorId) return;
+
+            player.Data.DefaultOutfit.ColorId = colorId;
+            player.SyncOutfitData();
+        }
+
+        public bool RpcChangeOutfitByData(NetworkedPlayerInfo.PlayerOutfit outfit, MessageWriter writer = null, SendOption sendOption = SendOption.Reliable, bool revertShapeshiftIfAlreadyShifted = true)
+        {
+            if (!AmongUsClient.Instance.AmHost) return false;
+            if (player.Is(CustomRoles.BananaMan)) outfit = BananaMan.GetOutfit(Main.AllPlayerNames.GetValueOrDefault(player.PlayerId, "Banana"));
+            if (outfit.Compare(player.Data.DefaultOutfit)) return false;
+            Camouflage.SetPetForOutfitIfNecessary(outfit);
+            if (outfit.Compare(player.Data.DefaultOutfit)) return false;
+
+            player.Data.Outfits[PlayerOutfitType.Default] = outfit;
+            player.SyncOutfitData(writer, sendOption, revertShapeshiftIfAlreadyShifted);
+            return true;
+        }
+
+        public void SyncOutfitData(MessageWriter writer = null, SendOption sendOption = SendOption.Reliable, bool revertShapeshiftIfAlreadyShifted = true)
+        {
+            // 見た目リフレッシュのための self-Shapeshift。ShapeshiftPatch.Prefix の副作用 (Shiftguard 通知/Sentry ループ) は抑止する
+            ShapeshiftPatch.SuppressSideEffects = true;
+            try { player.Shapeshift(player, false); }
+            catch { }
+            finally { ShapeshiftPatch.SuppressSideEffects = false; }
+
+            MessageWriter stream;
+
+            if (writer == null)
+            {
+                stream = MessageWriter.Get(sendOption);
+                stream.StartMessage(5);
+                stream.Write(AmongUsClient.Instance.GameId);
+            }
+            else
+            {
+                stream = writer;
+            }
+
+            stream.StartMessage(1);
+            stream.WritePacked(player.Data.NetId);
+            player.Data.Serialize(stream, false);
+            stream.EndMessage();
+
+            if (revertShapeshiftIfAlreadyShifted || !player.IsShifted())
+            {
+                stream.StartMessage(2);
+                stream.WritePacked(player.NetId);
+                stream.Write((byte)RpcCalls.Shapeshift);
+                stream.WriteNetObject(player);
+                stream.Write(false);
+                stream.EndMessage();
+            }
+
+            if (writer == null)
+            {
+                stream.EndMessage();
+                DataFlagRateLimiter.Enqueue(() =>
+                {
+                    AmongUsClient.Instance.SendOrDisconnect(stream);
+                    stream.Recycle();
+                }, channel: sendOption, cleanup: stream.Recycle);
+            }
+        }
+
         public bool IsInsideMap()
         {
             if (!player) return false;
@@ -1562,7 +1642,7 @@ internal static class ExtendedPlayerControl
             if (phantom && Options.CurrentGameMode != CustomGameMode.Standard) return;
             if (!Main.Invisible.Add(player.PlayerId)) return;
 
-            if (!player.IsNonModdedOnOfficial()) player.RpcSetPet(""); // 公式鯖: 非モッドへの pet 変更は kick されるためスキップ (透明化自体は MakeInvisible 側で行う)
+            player.RpcChangePet(""); // 公式鯖では spoof RPC ではなく正規 serialize でペットを同期 (anti-cheat 修正後)
 
             if (!(phantom && PlayerControl.LocalPlayer.IsImpostor()))
                 player.MakeInvisible();

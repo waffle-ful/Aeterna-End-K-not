@@ -206,10 +206,6 @@ public class Skinwalker : RoleBase
     {
         if (!AmongUsClient.Instance.AmHost) return;
 
-        if (pc.IsNonModdedOnOfficial()) return;
-
-        var sender = CustomRpcSender.Create($"Skinwalker.RpcWearOutfit({pc.Data.PlayerName})", SendOption.Reliable);
-
         NetworkedPlayerInfo.PlayerOutfit current = pc.Data.DefaultOutfit;
         if (newOutfit.PlayerName == null || newOutfit.HatId == null || newOutfit.SkinId == null || newOutfit.VisorId == null || newOutfit.PetId == null || newOutfit.NamePlateId == null)
             Logger.Warn($"Null outfit field for {pc.Data?.PlayerName}: Name={newOutfit.PlayerName == null}, Hat={newOutfit.HatId == null}, Skin={newOutfit.SkinId == null}, Visor={newOutfit.VisorId == null}, Pet={newOutfit.PetId == null}, NamePlate={newOutfit.NamePlateId == null}", "Skinwalker.RpcWearOutfit");
@@ -219,6 +215,16 @@ public class Skinwalker : RoleBase
         newOutfit.VisorId ??= current.VisorId ?? string.Empty;
         newOutfit.PetId ??= current.PetId ?? string.Empty;
         newOutfit.NamePlateId ??= current.NamePlateId ?? string.Empty;
+
+        // 公式鯖では spoof RPC ではなく正規 serialize で見た目を同期 (anti-cheat 修正後)
+        if (GameStates.CurrentServerType == GameStates.ServerType.Vanilla)
+        {
+            Main.AllPlayerNames[pc.PlayerId] = newOutfit.PlayerName;
+            pc.RpcChangeOutfitByData(newOutfit);
+            return;
+        }
+
+        var sender = CustomRpcSender.Create($"Skinwalker.RpcWearOutfit({pc.Data.PlayerName})", SendOption.Reliable);
 
         pc.SetName(newOutfit.PlayerName);
         sender.AutoStartRpc(pc.NetId, RpcCalls.SetName)
