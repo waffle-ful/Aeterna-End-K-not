@@ -329,8 +329,7 @@ public static class TheMindGame
                 foreach (PlayerControl pc in players)
                 {
                     Groups[pc.PlayerId] = group;
-                    // 公式鯖: 非モッドプレイヤーへの見た目変更は kick されるためスキップ (詳細は ExtendedPlayerControl.IsNonModdedOnOfficial)
-                    if (!pc.IsNonModdedOnOfficial()) pc.RpcSetColor(group.GetColorId());
+                    pc.RpcChangeColor(group.GetColorId());
                     pc.TP(location);
                     ids.Add(pc.PlayerId);
                 }
@@ -405,8 +404,8 @@ public static class TheMindGame
 
         Round = 2;
 
-        // 公式鯖: 非モッドプレイヤーへの見た目変更は kick されるためスキップ (詳細は ExtendedPlayerControl.IsNonModdedOnOfficial)
-        DefaultColorIds.DoIf(x => x.Key && x.Value is >= byte.MinValue and <= byte.MaxValue && !x.Key.IsNonModdedOnOfficial(), x => x.Key.RpcSetColor((byte)x.Value));
+        // 公式鯖では spoof RPC ではなく正規 serialize で色を同期 (anti-cheat 修正後)
+        DefaultColorIds.DoIf(x => x.Key && x.Value is >= byte.MinValue and <= byte.MaxValue, x => x.Key.RpcChangeColor((byte)x.Value));
 
         yield return NotifyEveryone("TMG.Notify.Round", 2, 2);
         if (Stop) yield break;

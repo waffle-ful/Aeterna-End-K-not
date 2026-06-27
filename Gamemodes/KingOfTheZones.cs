@@ -350,8 +350,6 @@ public static class KingOfTheZones
             yield return null;
         }
 
-        var sender = CustomRpcSender.Create("KOTZ.GameStart.TeamAssignmentNotifies", SendOption.Reliable);
-
         foreach ((byte id, KOTZTeam team) in PlayerTeams)
         {
             try
@@ -359,24 +357,13 @@ public static class KingOfTheZones
                 PlayerControl player = id.GetPlayer();
                 if (!player) continue;
 
-                byte colorId = team.GetColorId();
-                // 公式鯖: 非モッドプレイヤーへの見た目変更は kick されるためスキップ (詳細は ExtendedPlayerControl.IsNonModdedOnOfficial)
-                if (!player.IsNonModdedOnOfficial())
-                {
-                    player.SetColor(colorId);
-
-                    sender.AutoStartRpc(player.NetId, RpcCalls.SetColor)
-                        .Write(player.Data.NetId)
-                        .Write(colorId)
-                        .EndRpc();
-                }
+                // 公式鯖では spoof RPC ではなく正規 serialize で色を同期 (anti-cheat 修正後)
+                player.RpcChangeColor(team.GetColorId());
             }
             catch (Exception e) { Utils.ThrowException(e); }
 
             yield return null;
         }
-
-        sender.SendMessage();
 
         yield return new WaitForSecondsRealtime(showTutorial ? 8f : 2f);
         NameNotifyManager.Reset();
@@ -928,11 +915,8 @@ public static class KingOfTheZones
                 {
                     try
                     {
-                        byte colorId = PlayerTeams[player.PlayerId].GetColorId();
-                        if (player.CurrentOutfit.ColorId == colorId) continue;
-
-                        // 公式鯖: 非モッドプレイヤーへの見た目変更は kick されるためスキップ (詳細は ExtendedPlayerControl.IsNonModdedOnOfficial)
-                        if (!player.IsNonModdedOnOfficial()) player.RpcSetColor(colorId);
+                        // 公式鯖では spoof RPC ではなく正規 serialize で色を同期 (anti-cheat 修正後)
+                        player.RpcChangeColor(PlayerTeams[player.PlayerId].GetColorId());
                     }
                     catch (Exception e) { Utils.ThrowException(e); }
                 }

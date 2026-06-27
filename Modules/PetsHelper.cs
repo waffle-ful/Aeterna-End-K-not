@@ -14,7 +14,12 @@ public static class PetsHelper
 
     public static void SetPet(PlayerControl pc, string petId)
     {
-        if (pc.IsNonModdedOnOfficial()) return;
+        // 公式鯖では spoof RPC ではなく正規 serialize でペットを同期 (anti-cheat 修正後)
+        if (GameStates.CurrentServerType == GameStates.ServerType.Vanilla)
+        {
+            pc.RpcChangePet(petId);
+            return;
+        }
 
         var sender = CustomRpcSender.Create("PetsHelper.SetPet", SendOption.Reliable);
 
