@@ -103,7 +103,6 @@ internal static class CustomRoleSelector
 
             switch (role)
             {
-                case CustomRoles.Ventriloquist when GameStates.CurrentServerType == GameStates.ServerType.Vanilla:
                 case CustomRoles.Weatherman when Main.LIMap || GameStates.CurrentServerType == GameStates.ServerType.Vanilla:
                 case CustomRoles.Penguin or CustomRoles.Goose or CustomRoles.ProBowler when Utils.IsOfficialServer(): // 公式鯖: 他プレイヤーを毎フレーム引きずる役職は anti-cheat が位置同期を拒否し相手が desync するため出現させない (詳細は Utils.TP のコメント参照)
                 case CustomRoles.RoomRusher when Main.LIMap:

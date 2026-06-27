@@ -1616,7 +1616,6 @@ internal static class ChatCommands
         {
             return role switch
             {
-                CustomRoles.Ventriloquist when GameStates.CurrentServerType == GameStates.ServerType.Vanilla => true,
                 CustomRoles.Weatherman when Main.LIMap || GameStates.CurrentServerType == GameStates.ServerType.Vanilla => true,
                 CustomRoles.Penguin or CustomRoles.Goose or CustomRoles.ProBowler when Utils.IsOfficialServer() => true, // 公式鯖: ドラッグ系役職は位置 desync を起こすため /role でも割当不可
 
@@ -4243,7 +4242,8 @@ internal static class ChatUpdatePatch
 
     internal static bool SendLastMessages(ref CustomRpcSender sender)
     {
-        PlayerControl player = GameStates.CurrentServerType == GameStates.ServerType.Vanilla ? PlayerControl.LocalPlayer : GameStates.IsLobby ? Main.EnumeratePlayerControls().Without(PlayerControl.LocalPlayer).RandomElement() : Main.EnumerateAlivePlayerControls().MinBy(x => x.PlayerId) ?? Main.EnumeratePlayerControls().MinBy(x => x.PlayerId) ?? PlayerControl.LocalPlayer;
+        // 公式鯖でも他プレイヤー名義の発言が許可されたため、vanilla 特例 (host 名義固定) を撤去
+        PlayerControl player = GameStates.IsLobby ? Main.EnumeratePlayerControls().Without(PlayerControl.LocalPlayer).RandomElement() : Main.EnumerateAlivePlayerControls().MinBy(x => x.PlayerId) ?? Main.EnumeratePlayerControls().MinBy(x => x.PlayerId) ?? PlayerControl.LocalPlayer;
         if (player == null) return false;
 
         bool wasCleared = false;
