@@ -3149,7 +3149,7 @@ public static class Options
             .SetColor(new Color32(193, 255, 209, byte.MaxValue))
             .SetParent(EnableGameTimeLimit);
 
-        OverrideVisionInVents = new BooleanOptionItem(19436, "OverrideVisionInVents", false, TabGroup.GameSettings)
+        OverrideVisionInVents = new BooleanOptionItem(19437, "OverrideVisionInVents", false, TabGroup.GameSettings)
             .SetColor(new Color32(193, 255, 209, byte.MaxValue));
 
         InVentVision = Main.TeamValues[1..].ToDictionary(x => x, x => new FloatOptionItem(19437 + (int)x, "InVentVisionForTeam", new(0f, 1.3f, 0.05f), x == Team.Crewmate ? 0f : 0.5f, TabGroup.GameSettings)
