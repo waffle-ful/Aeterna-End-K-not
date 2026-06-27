@@ -480,16 +480,8 @@ public static class BedWars
 
                 byte colorId = team.GetColorId();
 
-                // 公式鯖: 非モッドプレイヤーへの見た目変更は kick されるためスキップ (詳細は ExtendedPlayerControl.IsNonModdedOnOfficial)
-                if (!pc.IsNonModdedOnOfficial())
-                {
-                    pc.SetColor(colorId);
-
-                    sender.AutoStartRpc(pc.NetId, RpcCalls.SetColor)
-                        .Write(pc.Data.NetId)
-                        .Write(colorId)
-                        .EndRpc();
-                }
+                // 公式鯖では spoof RPC ではなく正規 serialize で色を同期 (anti-cheat 修正後)
+                pc.RpcChangeColor(colorId);
 
                 sender.SendMessage();
             }
@@ -855,8 +847,7 @@ public static class BedWars
             NameNotifyManager.Notifies.Remove(pc.PlayerId);
             RPC.PlaySoundRPC(pc.PlayerId, Sounds.TaskComplete);
             pc.ReviveFromTemporaryExile();
-            // 公式鯖: 非モッドプレイヤーへの見た目変更は kick されるためスキップ (詳細は ExtendedPlayerControl.IsNonModdedOnOfficial)
-            if (!pc.IsNonModdedOnOfficial()) pc.RpcSetColor(Team.GetColorId());
+            pc.RpcChangeColor(Team.GetColorId());
             pc.TP(Base.SpawnPosition);
             pc.SetChatVisible(true);
             Utils.NotifyRoles(SpecifyTarget: pc, SendOption: SendOption.None);

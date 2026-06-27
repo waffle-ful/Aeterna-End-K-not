@@ -202,10 +202,6 @@ public abstract class OptionItem
     {
         return (Parent == null || Parent.GetBool()) && Name switch
         {
-            // 公式サーバーではペットボタン発動を強制 OFF。desync 役職へのペット spoof が anti-cheat で host を切断するため、
-            // IsNonModdedOnOfficial() と同じ IsOfficialServer() を条件にして「ペット無効」を「spoof スキップ」の上位集合にする。
-            // → 役職基底決定・ペット配布・HUD すべてがベント/シェイプ発動へ一貫フォールバック。カスタム鯖では従来どおり。
-            "UsePets" when Utils.IsOfficialServer() => false,
             "LoverDieConsequence" => GetValue() == 1,
             "Bargainer.LensOfTruth.DurationSwitch" => GetValue() == 3,
             "BlackHoleDespawnMode" => GetValue() == 1,

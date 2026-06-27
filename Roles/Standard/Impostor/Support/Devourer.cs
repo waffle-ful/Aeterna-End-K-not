@@ -138,10 +138,15 @@ public class Devourer : RoleBase
 
     private static void SetSkin(PlayerControl target, NetworkedPlayerInfo.PlayerOutfit outfit)
     {
-        // 公式鯖: 非モッドプレイヤーへの見た目変更は kick されるためスキップ (詳細は ExtendedPlayerControl.IsNonModdedOnOfficial)
-        if (target.IsNonModdedOnOfficial()) return;
         if (UsePets.GetBool()) outfit.PetId = PetsHelper.GetPetId();
-        
+
+        // 公式鯖では spoof RPC ではなく正規 serialize で見た目を同期 (anti-cheat 修正後)
+        if (GameStates.CurrentServerType == GameStates.ServerType.Vanilla)
+        {
+            target.RpcChangeOutfitByData(outfit);
+            return;
+        }
+
         var sender = CustomRpcSender.Create($"Devourer.RpcSetSkin({target.Data.PlayerName})", SendOption.Reliable);
 
         target.SetColor(outfit.ColorId);

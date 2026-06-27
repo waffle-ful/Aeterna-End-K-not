@@ -66,7 +66,7 @@ public class UltraStar : RoleBase
 
     public override void Remove(byte playerId)
     {
-        if (playerId.GetPlayer() is { } pc && !pc.IsNonModdedOnOfficial()) pc.RpcSetColor((byte)OriginalColorId); // 公式鯖: 非モッドプレイヤーへの見た目変更は kick されるためスキップ (詳細は ExtendedPlayerControl.IsNonModdedOnOfficial)
+        if (playerId.GetPlayer() is { } pc) pc.RpcChangeColor((byte)OriginalColorId); // 公式鯖では spoof RPC ではなく正規 serialize で色を同期 (anti-cheat 修正後)
     }
 
     public override void OnPet(PlayerControl pc)
@@ -79,7 +79,7 @@ public class UltraStar : RoleBase
         }
         else
         {
-            if (!pc.IsNonModdedOnOfficial()) pc.RpcSetColor((byte)OriginalColorId); // 公式鯖: 非モッドプレイヤーへの見た目変更は kick されるためスキップ (詳細は ExtendedPlayerControl.IsNonModdedOnOfficial)
+            pc.RpcChangeColor((byte)OriginalColorId); // 公式鯖では spoof RPC ではなく正規 serialize で色を同期 (anti-cheat 修正後)
             LastColorId = OriginalColorId;
         }
 
@@ -123,7 +123,7 @@ public class UltraStar : RoleBase
 
         if (colorId != LastColorId)
         {
-            if (!pc.IsNonModdedOnOfficial()) pc.RpcSetColor((byte)colorId); // 公式鯖: 非モッドプレイヤーへの見た目変更は kick されるためスキップ (詳細は ExtendedPlayerControl.IsNonModdedOnOfficial)
+            pc.RpcChangeColor((byte)colorId); // 公式鯖では spoof RPC ではなく正規 serialize で色を同期 (anti-cheat 修正後)
             LastColorId = colorId;
         }
 
@@ -156,7 +156,7 @@ public class UltraStar : RoleBase
     public override void OnReportDeadBody()
     {
         StarActive = false;
-        if (UltraStarId.GetPlayer() is { } pc && !pc.IsNonModdedOnOfficial()) pc.RpcSetColor((byte)OriginalColorId); // 公式鯖: 非モッドプレイヤーへの見た目変更は kick されるためスキップ (詳細は ExtendedPlayerControl.IsNonModdedOnOfficial)
+        if (UltraStarId.GetPlayer() is { } pc) pc.RpcChangeColor((byte)OriginalColorId); // 公式鯖では spoof RPC ではなく正規 serialize で色を同期 (anti-cheat 修正後)
         LastColorId = OriginalColorId;
     }
 

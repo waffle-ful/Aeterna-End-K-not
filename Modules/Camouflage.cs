@@ -4,6 +4,7 @@ using AmongUs.Data;
 using EndKnot.Modules;
 using EndKnot.Roles;
 using Hazel;
+using UnityEngine;
 
 namespace EndKnot;
 
@@ -157,17 +158,16 @@ public static class Camouflage
 
             RpcSetSkin(pc);
 
-            yield return null;
+            yield return new WaitForSecondsRealtime(0.1f);
         }
 
+        yield return new WaitForSecondsRealtime(0.5f);
         yield return Utils.NotifyEveryoneAsync();
     }
 
     public static void RpcSetSkin(PlayerControl target, bool forceRevert = false, bool revertToDefault = false, bool gameEnd = false, bool revive = false, bool notCommsOrCamo = false, CustomRpcSender sender = null)
     {
         if (!AmongUsClient.Instance.AmHost || (!Options.CommsCamouflage.GetBool() && !Camouflager.On && !revive && !notCommsOrCamo) || target == null || (BlockCamouflage && !forceRevert && !revertToDefault && !gameEnd && !revive && !notCommsOrCamo)) return;
-
-        if (target.IsNonModdedOnOfficial()) return;
 
         Logger.Info($"New outfit for {target.GetNameWithRole()}", "Camouflage.RpcSetSkin");
 
@@ -224,6 +224,13 @@ public static class Camouflage
         }
 
         Logger.Info($"Setting new outfit: {newOutfit.GetString()}", "Camouflage.RpcSetSkin");
+
+        // 公式鯖では spoof RPC ではなく正規 serialize で見た目を同期 (anti-cheat 修正後)
+        if (GameStates.CurrentServerType == GameStates.ServerType.Vanilla)
+        {
+            target.RpcChangeOutfitByData(newOutfit);
+            return;
+        }
 
         bool noSender = sender == null;
         if (noSender) sender = CustomRpcSender.Create($"Camouflage.RpcSetSkin({target.Data.PlayerName})", SendOption.Reliable);
