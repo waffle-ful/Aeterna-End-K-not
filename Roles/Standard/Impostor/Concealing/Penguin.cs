@@ -32,6 +32,13 @@ public class Penguin : RoleBase
     private byte PenguinId = byte.MaxValue;
     private float SpeedDuringDrag;
 
+    // ドラッグの SnapTo 間引き用。毎 FixedUpdate (~50/s) で TP すると公式鯖の per-round SnapTo 上限
+    // (Utils.NumSnapToCallsThisRound, >=80 で None 降格・>=100 で送信中止) を ~2 秒で使い切り、以降ホスト
+    // 以外に victim の位置が届かず desync する。一定間隔 + penguin が動いた時だけ snap してブロードキャストを上限内に保つ。
+    private float LastDragSnapTime;
+    private Vector2 LastDragSnapPos;
+    private const float DragSnapInterval = 0.2f; // ~5 snaps/s
+
     private bool stopCount;
     private bool VictimCanUseAbilities;
 
@@ -150,6 +157,8 @@ public class Penguin : RoleBase
         else
         {
             AbductVictim = Utils.GetPlayerById(victim);
+            LastDragSnapTime = 0f;
+            LastDragSnapPos = new Vector2(-9999f, -9999f); // 新規アブダクトは初回フレームで必ず victim を penguin へ snap
             AbductTimer = AbductTimerLimit;
         }
     }
@@ -166,6 +175,8 @@ public class Penguin : RoleBase
         if (Thanos.IsImmune(target)) return;
 
         AbductVictim = target;
+        LastDragSnapTime = 0f;
+        LastDragSnapPos = new Vector2(-9999f, -9999f); // 新規アブダクトは初回フレームで必ず victim を penguin へ snap
         AbductTimer = AbductTimerLimit;
         Main.AllPlayerSpeed[PenguinId] = SpeedDuringDrag;
         Penguin_.MarkDirtySettings();
@@ -384,14 +395,22 @@ public class Penguin : RoleBase
             {
                 Vector3 position = Penguin_.Pos();
 
-                if (!Penguin_.IsHost())
-                    Utils.TP(AbductVictim.NetTransform, position, log: false);
-                else
+                // 毎フレーム TP すると公式鯖の per-round SnapTo 上限を ~2 秒で使い切り desync する。
+                // 一定間隔 (DragSnapInterval) かつ penguin が動いた時だけ snap し、ブロードキャストを上限内に保つ。
+                if (Time.time - LastDragSnapTime >= DragSnapInterval && Vector2.Distance(position, LastDragSnapPos) > 0.3f)
                 {
-                    LateTask.New(() =>
+                    LastDragSnapTime = Time.time;
+                    LastDragSnapPos = position;
+
+                    if (!Penguin_.IsHost())
+                        Utils.TP(AbductVictim.NetTransform, position, log: false);
+                    else
                     {
-                        if (AbductVictim != null) Utils.TP(AbductVictim.NetTransform, position, log: false);
-                    }, 0.25f, log: false);
+                        LateTask.New(() =>
+                        {
+                            if (AbductVictim != null) Utils.TP(AbductVictim.NetTransform, position, log: false);
+                        }, 0.25f, log: false);
+                    }
                 }
             }
         }
