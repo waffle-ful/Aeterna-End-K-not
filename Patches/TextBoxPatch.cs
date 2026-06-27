@@ -397,7 +397,13 @@ public static class TextBoxPatch
         if (!__instance.gameObject.HasParentInHierarchy("ChatScreenRoot/ChatScreenContainer")) return true;
 
         if (!__instance.enabled || !__instance.hasFocus) return false;
-        __instance.MoveCaret();
+
+        // caretPos がテキスト長/TMP メッシュの文字数を超えると MoveCaret→CursorPos が毎フレーム
+        // IndexOutOfRange を投げてチャットが固まる。範囲内へクランプし、念のため try でも保護する。
+        __instance.caretPos = Math.Clamp(__instance.caretPos, 0, __instance.text?.Length ?? 0);
+        try { __instance.MoveCaret(); }
+        catch { }
+
         string inputString = Input.inputString;
 
         if (inputString.Length > 0 || __instance.compoText != Input.compositionString)
