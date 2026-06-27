@@ -1466,16 +1466,12 @@ public static class GuessManager
                     writer.Write(false);
                     writer.EndMessage();
 
-                    // 公式鯖: 非モッドプレイヤーへの見た目変更は kick されるためスキップ (詳細は ExtendedPlayerControl.IsNonModdedOnOfficial)
-                    if (!pc.IsNonModdedOnOfficial())
-                    {
-                        writer.StartMessage(2);
-                        writer.WritePacked(pc.NetId);
-                        writer.Write((byte)RpcCalls.SetNamePlateStr);
-                        writer.Write(namePlateId);
-                        writer.Write(pc.GetNextRpcSequenceId(RpcCalls.SetNamePlateStr));
-                        writer.EndMessage();
-                    }
+                    writer.StartMessage(2);
+                    writer.WritePacked(pc.NetId);
+                    writer.Write((byte)RpcCalls.SetNamePlateStr);
+                    writer.Write(namePlateId);
+                    writer.Write(pc.GetNextRpcSequenceId(RpcCalls.SetNamePlateStr));
+                    writer.EndMessage();
 
                     messages += 2;
                 }

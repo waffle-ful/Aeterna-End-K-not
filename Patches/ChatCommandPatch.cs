@@ -1617,7 +1617,6 @@ internal static class ChatCommands
             return role switch
             {
                 CustomRoles.Weatherman when Main.LIMap || GameStates.CurrentServerType == GameStates.ServerType.Vanilla => true,
-                CustomRoles.Penguin or CustomRoles.Goose or CustomRoles.ProBowler when Utils.IsOfficialServer() => true, // 公式鯖: ドラッグ系役職は位置 desync を起こすため /role でも割当不可
 
                 CustomRoles.RoomRusher when Main.LIMap => true,
                 CustomRoles.Doctor when Options.EveryoneSeesDeathReasons.GetBool() => true,
