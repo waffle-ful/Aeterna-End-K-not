@@ -433,7 +433,7 @@ internal static class RPCHandlerPatch
                 {
                     try
                     {
-                        Version version = Version.Parse(reader.ReadString());
+                        Version version = Version.Parse(reader.ReadString().Split('-')[0]); // suffix ("-alpha" 等) を落としてから Parse (FormatException 回避)
                         string tag = reader.ReadString();
                         string forkId = reader.ReadString();
 

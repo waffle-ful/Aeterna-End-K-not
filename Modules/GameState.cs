@@ -539,7 +539,9 @@ public class PlayerVersion(Version ver, string tagStr, string forkId)
     public readonly string tag = tagStr;
     public readonly Version version = ver;
 
-    public PlayerVersion(string ver, string tagStr, string forkId) : this(Version.Parse(ver), tagStr, forkId) { }
+    // PluginVersion は "0.7.8-alpha" のように suffix 付きで来るため、Version.Parse 前に "-" 以降を落とす
+    // (suffix が付いたまま Parse すると FormatException でクラッシュ。Main.Version と同じ Split('-')[0] 方式)。
+    public PlayerVersion(string ver, string tagStr, string forkId) : this(Version.Parse(ver.Split('-')[0]), tagStr, forkId) { }
 
     public override bool Equals(object obj)
     {
