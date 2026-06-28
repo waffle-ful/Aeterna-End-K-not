@@ -45,7 +45,7 @@ public class PortalMaker : RoleBase
         {
             if (!PetToRemovePortals.GetBool()) return;
             Marks.Clear();
-            CustomNetObject.AllObjects.OfType<Portal>().Do(x => x.Despawn());
+            CustomNetObject.AllObjects.ToArray().OfType<Portal>().Do(x => x.Despawn());
             pc.Notify(Translator.GetString("MarksCleared"));
             return;
         }

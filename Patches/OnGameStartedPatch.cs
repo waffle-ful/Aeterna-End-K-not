@@ -447,6 +447,7 @@ internal static class ChangeRoleSettings
             
             GC.Collect();
             Resources.UnloadUnusedAssets();
+            GC.Collect();
         }
         catch (Exception ex)
         {

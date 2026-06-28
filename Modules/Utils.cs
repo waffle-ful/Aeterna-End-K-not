@@ -1285,7 +1285,7 @@ public static class Utils
         if (Options.SyncButtonMode.GetBool()) messages.Add(new(GetString("SyncButtonModeInfo"), playerId));
         if (Options.SabotageTimeControl.GetBool()) messages.Add(new(GetString("SabotageTimeControlInfo"), playerId));
         if (Options.RandomMapsMode.GetBool()) messages.Add(new(GetString("RandomMapsModeInfo"), playerId));
-        if (Main.GM.Value) messages.Add(new(GetRoleName(CustomRoles.GM) + GetString("GMInfoLong"), playerId));
+        if (Main.GM.Value) messages.Add(new(GetRoleName(CustomRoles.GM) + GetString("GMInfoLong").FixRoleName(CustomRoles.GM), playerId));
         messages.AddRange(from role in Main.CustomRoleValues where role.IsEnable() && !role.IsVanilla() select new Message(GetRoleName(role) + GetRoleMode(role) + GetString($"{role}InfoLong").FixRoleName(role), playerId));
         if (Options.NoGameEnd.GetBool()) messages.Add(new(GetString("NoGameEndInfo"), playerId));
         messages.SendMultipleMessages();
@@ -3999,6 +3999,7 @@ public static class Utils
         {
             var kcd = (int)Math.Round(Main.AllPlayerKillCooldown.TryGetValue(playerId, out float killCd) ? killCd : Options.AdjustedDefaultKillCooldown);
             Main.AbilityCD[playerId] = (TimeStamp, kcd);
+            if (playerId == 0 || !playerId.IsPlayerModdedClient()) return;
             SendRPC(CustomRPC.SyncAbilityCD, 1, playerId, kcd);
             return;
         }
@@ -4090,6 +4091,7 @@ public static class Utils
             cd -= (int)ExileControllerWrapUpPatch.Stopwatch.Elapsed.TotalSeconds;
 
         Main.AbilityCD[playerId] = (TimeStamp, cd);
+        if (playerId == 0 || !playerId.IsPlayerModdedClient()) return;
         SendRPC(CustomRPC.SyncAbilityCD, 1, playerId, cd);
     }
 
@@ -4968,49 +4970,57 @@ public static class Utils
 
     public static string GetRegionName(IRegionInfo region = null, bool ignoreNetworkMode = false)
     {
-        region ??= ServerManager.Instance.CurrentRegion;
-
-        string name = region.Name;
-
-        if (!ignoreNetworkMode && AmongUsClient.Instance.NetworkMode != NetworkModes.OnlineGame)
+        try
         {
-            name = "Local Game";
-            return name;
-        }
+            region ??= ServerManager.Instance.CurrentRegion;
 
-        if (region.PingServer.EndsWith("among.us", StringComparison.Ordinal))
-        {
-            // Official server
-            name = name switch
+            string name = region.Name;
+
+            if (!ignoreNetworkMode && AmongUsClient.Instance.NetworkMode != NetworkModes.OnlineGame)
             {
-                "North America" => "NA",
-                "Europe" => "EU",
-                "Asia" => "AS",
-                _ => name
-            };
+                name = "Local Game";
+                return name;
+            }
+
+            if (region.PingServer.EndsWith("among.us", StringComparison.Ordinal))
+            {
+                // Official server
+                name = name switch
+                {
+                    "North America" => "NA",
+                    "Europe" => "EU",
+                    "Asia" => "AS",
+                    _ => name
+                };
+
+                return name;
+            }
+
+            string ip = region.Servers.FirstOrDefault()?.Ip ?? string.Empty;
+
+            if (ip.Contains("aumods.org", StringComparison.Ordinal) || ip.Contains("duikbo.at", StringComparison.Ordinal))
+            {
+                // Official Modded Server
+                if (ip.Contains("au-eu"))
+                    name = "MEU";
+                else if (ip.Contains("au-as"))
+                    name = "MAS";
+                else
+                    name = "MNA";
+
+                return name;
+            }
+
+            if (name.Contains("Niko", StringComparison.OrdinalIgnoreCase))
+                name = name.Replace("233(", "-").Replace("233 (", "-").TrimEnd(')');
 
             return name;
         }
-
-        string ip = region.Servers.FirstOrDefault()?.Ip ?? string.Empty;
-
-        if (ip.Contains("aumods.org", StringComparison.Ordinal) || ip.Contains("duikbo.at", StringComparison.Ordinal))
+        catch
         {
-            // Official Modded Server
-            if (ip.Contains("au-eu"))
-                name = "MEU";
-            else if (ip.Contains("au-as"))
-                name = "MAS";
-            else
-                name = "MNA";
-
-            return name;
+            try { return (region ?? ServerManager.Instance.CurrentRegion).Name; }
+            catch { return string.Empty; }
         }
-
-        if (name.Contains("Niko", StringComparison.OrdinalIgnoreCase))
-            name = name.Replace("233(", "-").Replace("233 (", "-").TrimEnd(')');
-
-        return name;
     }
 
     private static (int AddonsProgress, int RolesProgress) QuickSetupProgress;

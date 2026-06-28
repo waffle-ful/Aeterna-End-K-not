@@ -196,7 +196,7 @@ public static class Mingle
             if (hud) Suffix.Append("</size></b>");
         }
         
-        if (!plainShipRoom || !RequiredPlayerCount.ContainsKey(plainShipRoom.RoomId))
+        if (GameGoing && pc.IsAlive() && (!plainShipRoom || !RequiredPlayerCount.ContainsKey(plainShipRoom.RoomId)))
         {
             Suffix.Append('\n')
                 .Append("<#ffff00><size=70%>")

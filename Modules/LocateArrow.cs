@@ -149,7 +149,7 @@ internal static class LocateArrow
             }
 
             // Take the direction vector of the target
-            Vector3 dir = loc - seer.transform.position;
+            Vector3 dir = loc - seer.Pos3();
             int index;
 
             if (dir.magnitude < 2)

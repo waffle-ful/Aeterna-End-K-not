@@ -1122,7 +1122,7 @@
   "MeetingManager": "Meeting Manager",
   "MeetingManagerInfo": "Receive Additional Info About Guesses",
   "MeetingManagerInfoLong": "(Crewmates):\\nAs the Meeting Manager, you know the roles of guessed players, and if someone misguesses, you'll see that.",
-  "MeetingManagerMessageAboutCommand": "Someone used the <b>{1}</b> command.",
+  "MeetingManagerMessageAboutCommand": "Someone used the <b>{0}</b> command.",
   "MeetingManagerMessageAboutCompare": "The <b>{0}</b> compared <b>{1}</b> and <b>{2}</b>.",
   "MeetingManagerMessageAboutGuessedRole": "A szerepük <b>{0}</b> volt",
   "MeetingManagerMessageAboutJudgeSuicide": "<b>{0}</b> suicided as a <b>{1}</b>.",

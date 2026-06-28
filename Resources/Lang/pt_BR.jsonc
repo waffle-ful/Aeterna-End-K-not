@@ -1122,7 +1122,7 @@
   "MeetingManager": "Mestre Apostador",
   "MeetingManagerInfo": "Receba informações adicionais sobre adivinhações",
   "MeetingManagerInfoLong": "(Tripulantes):\\nComo Mestre Apostador, você receberá informações sobre cada tentativa de adivinhação feita durante uma reunião. Você será informado sobre a função que o adivinhador tentou adivinhar e também será notificado em caso de uma adivinhação errada.",
-  "MeetingManagerMessageAboutCommand": "Alguém usou o comando <b>{1}</b>.",
+  "MeetingManagerMessageAboutCommand": "Alguém usou o comando <b>{0}</b>.",
   "MeetingManagerMessageAboutCompare": "O <b>{0}</b> comparou <b>{1}</b> e <b>{2}</b>.",
   "MeetingManagerMessageAboutGuessedRole": "A função dele era <b>{0}</b>",
   "MeetingManagerMessageAboutJudgeSuicide": "<b>{0}</b> Suicidou como <b>{1}</b>.",
