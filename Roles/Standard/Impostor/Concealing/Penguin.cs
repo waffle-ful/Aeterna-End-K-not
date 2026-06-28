@@ -339,7 +339,10 @@ public class Penguin : RoleBase
         {
             if (!Penguin_.IsAlive() || Pelican.IsEaten(PenguinId) || !AbductVictim.IsAlive())
             {
-                RemoveVictim();
+                // allowDelay=false で AbductVictim を即 null 化する。遅延 (LateTask) で null 化すると
+                // この分岐が次フレーム以降も真のまま毎フレーム再突入し、MarkDirtySettings/NotifyRoles/
+                // LateTask/RPC が ~1 秒間 50 連発して公式鯖のレート上限を踏む (ペンギンが獲物をキルした瞬間に発症)。
+                RemoveVictim(false);
                 return;
             }
 
