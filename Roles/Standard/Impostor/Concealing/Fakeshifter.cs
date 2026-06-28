@@ -1,4 +1,6 @@
 ﻿using AmongUs.GameOptions;
+using Hazel;
+using InnerNet;
 
 namespace EndKnot.Roles;
 
@@ -47,17 +49,33 @@ public class Fakeshifter : RoleBase
         {
             MarkedId = target.PlayerId;
             PlayerControl randomPlayer = Main.CachedAlivePlayerControls().Without(target).RandomElement();
+            bool hasValue = false;
+            CustomRpcSender sender = CustomRpcSender.Create("Fakeshifter", SendOption.Reliable);
+            sender.StartPackedMessage();
             foreach (var pc in Main.CachedAlivePlayerControls())
             {
-                if (pc.PlayerId == target.PlayerId) continue;
-                target.RpcShapeshiftDesync(randomPlayer, pc, false);
+                if (pc.PlayerId == target.PlayerId || pc.OwnerId < 0) continue;
+
+                if (pc.AmOwner)
+                {
+                    try { target.Shapeshift(randomPlayer, false); } catch { }
+                    continue;
+                }
+
+                sender.AutoStartRpc(target.NetId, RpcCalls.Shapeshift, pc.OwnerId)
+                    .WriteNetObject(randomPlayer)
+                    .Write(false)
+                    .EndRpc();
+
+                hasValue = true;
             }
+            sender.SendMessage(dispose: !hasValue);
             shapeshifter.RpcRemoveAbilityUse();
             LateTask.New(() =>
             {
                 if (target.IsAlive())
                 {
-                    target.RpcShapeshift(target, true);
+                    target.RpcShapeshift(target, false);
                     MarkedId = byte.MaxValue;
                 }
             }, AbilityDuration.GetFloat(), "Fakeshifter Ability Finish");

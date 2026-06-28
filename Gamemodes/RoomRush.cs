@@ -35,7 +35,7 @@ public static class RoomRush
     private static long TimeLimitEndTS;
     private static HashSet<byte> DonePlayers = [];
 
-    private static bool GameGoing;
+    public static bool GameGoing;
     private static DateTime GameStartDateTime;
 
     private static RandomSpawn.SpawnMap Map;
@@ -301,7 +301,14 @@ public static class RoomRush
         }
 
         if (ventLimit > 0)
-            aapc.Do(x => x.RpcSetRoleGlobal(RoleTypes.Engineer));
+        {
+            for (int i = 0; i < aapc.Count; i++)
+            {
+                var pc = aapc[i];
+                if (!pc || !pc.IsAlive()) continue;
+                pc.RpcSetRoleGlobal(RoleTypes.Engineer);
+            }
+        }
 
         Utils.SendRPC(CustomRPC.RoomRushDataSync, 1);
 

@@ -98,7 +98,7 @@ public class Demon : RoleBase
 
         MessageWriter writer = AmongUsClient.Instance.StartRpcImmediately(PlayerControl.LocalPlayer.NetId, (byte)CustomRPC.SetDemonHealth, SendOption.Reliable);
         writer.Write(playerId);
-        writer.Write(DemonHealth.TryGetValue(playerId, out int value) ? value : PlayerHealth[playerId]);
+        writer.Write(DemonHealth.TryGetValue(playerId, out int value) ? value : PlayerHealth.GetValueOrDefault(playerId, HealthMax.GetInt()));
         AmongUsClient.Instance.FinishRpcImmediately(writer);
     }
 

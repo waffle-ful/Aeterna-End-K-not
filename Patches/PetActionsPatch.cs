@@ -258,7 +258,7 @@ internal static class ExternalRpcPetPatch
         return target;
     }
 
-    private static IEnumerator FlashCooldownTimer()
+    public static IEnumerator FlashCooldownTimer()
     {
         var yellow = false;
 

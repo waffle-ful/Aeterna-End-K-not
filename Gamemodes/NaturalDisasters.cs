@@ -167,7 +167,11 @@ public static class NaturalDisasters
         var collapsedRooms = BuildingCollapse.CollapsedRooms;
         string cb;
 
-        if (allRooms.Count / 2 <= collapsedRooms.Count)
+        if (DisasterSpawnChances["BuildingCollapse"].GetInt() == 0)
+        {
+            cb = string.Empty;
+        }
+        else if (allRooms.Count / 2 <= collapsedRooms.Count)
         {
             SystemTypes[] remainingRooms = allRooms.Select(x => x.RoomId).Where(x => x is not (SystemTypes.Hallway or SystemTypes.Outside) && !x.ToString().Contains("Decontamination")).Except(collapsedRooms.ConvertAll(x => x.RoomId)).ToArray();
             cb = string.Format(Translator.GetString("AvailableBuildings"), remainingRooms.Length > 0
@@ -253,7 +257,7 @@ public static class NaturalDisasters
                     CustomGameMode.BedWars => (30, BedWars.IsGracePeriod),
                     CustomGameMode.HideAndSeek => (0, CustomHnS.IsBlindTime),
                     CustomGameMode.KingOfTheZones => (0, !KingOfTheZones.GameGoing),
-                    CustomGameMode.RoomRush => (40, false),
+                    CustomGameMode.RoomRush => (0, !RoomRush.GameGoing),
                     CustomGameMode.Deathrace => (0, !Deathrace.GameGoing),
                     CustomGameMode.Mingle => (60, !Mingle.GameGoing),
                     _ => (0, false)

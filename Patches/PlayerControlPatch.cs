@@ -25,6 +25,14 @@ internal static class CheckProtectPatch
 
         Logger.Info($"CheckProtect: {__instance.GetNameWithRole().RemoveHtmlTags()} => {target.GetNameWithRole().RemoveHtmlTags()}", "CheckProtect");
 
+        if (__instance.HasAbilityCD())
+        {
+            if (!__instance.AmOwner) __instance.Notify(GetString("AbilityOnCooldown"));
+            else Main.Instance.StartCoroutine(ExternalRpcPetPatch.FlashCooldownTimer());
+
+            return true;
+        }
+
         if (__instance.Is(CustomRoles.EvilSpirit))
         {
             if (target.Is(CustomRoles.Spiritcaller))
@@ -32,14 +40,14 @@ internal static class CheckProtectPatch
             else
                 Spiritcaller.HauntPlayer(target);
 
-            __instance.RpcResetAbilityCooldown();
+            __instance.AddAbilityCD(Spiritcaller.SpiritAbilityCooldown.GetInt());
             return true;
         }
 
         if (GhostRolesManager.AssignedGhostRoles.TryGetValue(__instance.PlayerId, out (CustomRoles Role, IGhostRole Instance) ghostRole))
         {
+            __instance.AddAbilityCD(ghostRole.Instance.Cooldown);
             ghostRole.Instance.OnProtect(__instance, target);
-            __instance.RpcResetAbilityCooldown();
             return true;
         }
 
@@ -1050,8 +1058,12 @@ internal static class ReportDeadBodyPatch
 
         Logger.Info($"{__instance.GetNameWithRole().RemoveHtmlTags()} => {target?.Object?.GetNameWithRole() ?? "null"}", "ReportDeadBody");
 
-        foreach (KeyValuePair<byte, PlayerState> kvp in Main.PlayerStates)
-            kvp.Value.LastRoom = GetPlayerById(kvp.Key).GetPlainShipRoom();
+        try
+        {
+            foreach (KeyValuePair<byte, PlayerState> kvp in Main.PlayerStates)
+                kvp.Value.LastRoom = GetPlayerById(kvp.Key)?.GetPlainShipRoom();
+        }
+        catch (Exception e) { ThrowException(e); }
 
         if (!AmongUsClient.Instance.AmHost) return true;
 
@@ -1627,7 +1639,7 @@ internal static class FixedUpdatePatch
                     GhostRolesManager.AssignGhostRole(__instance);
             }
 
-            if (GameStates.InGame && Options.DontUpdateDeadPlayers.GetBool() && !(__instance.IsHost() && __instance.AmOwner) && !__instance.IsAlive() && !__instance.GetCustomRole().NeedsUpdateAfterDeath() && Options.CurrentGameMode is not CustomGameMode.RoomRush and not CustomGameMode.Quiz)
+            if (GameStates.InGame && Options.DontUpdateDeadPlayers.GetBool() && !(__instance.IsHost() && __instance.AmOwner) && !__instance.IsAlive() && !__instance.GetCustomRole().NeedsUpdateAfterDeath() && !__instance.HasAbilityCD() && Options.CurrentGameMode is not CustomGameMode.RoomRush and not CustomGameMode.Quiz)
             {
                 int buffer = Options.DeepLowLoad.GetBool() ? 150 : 60;
                 DeadBufferTime.TryAdd(id, buffer);

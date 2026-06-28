@@ -146,7 +146,7 @@ internal static class ChatControllerUpdatePatch
 
         if (!__instance.freeChatField.textArea.hasFocus) return;
 
-        __instance.freeChatField.textArea.characterLimit = 1200;
+        __instance.freeChatField.textArea.characterLimit = 1000;
 
         if (Input.GetKeyDown(KeyCode.Tab)) TextBoxPatch.OnTabPress(__instance);
 
@@ -184,6 +184,18 @@ internal static class UrlFinderPatch
         __result = false;
         return false;
     }
+}
+
+[HarmonyPatch(typeof(ChatController), nameof(ChatController.ForceClosed))]
+internal static class ChatControllerForceClosedPatch
+{
+    public static bool Prefix() => !Utils.TempReviveHostRunning || GameStates.IsEnded || !GameStates.InGame;
+}
+
+[HarmonyPatch(typeof(ChatController), nameof(ChatController.SetVisible))]
+internal static class ChatControllerSetVisiblePatch
+{
+    public static bool Prefix([HarmonyArgument(0)] bool visible) => visible || !Utils.TempReviveHostRunning || GameStates.IsEnded || !GameStates.InGame;
 }
 
 public static class ChatManager

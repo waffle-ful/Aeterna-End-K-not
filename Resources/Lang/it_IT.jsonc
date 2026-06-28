@@ -1122,7 +1122,7 @@
   "MeetingManager": "Moderatore",
   "MeetingManagerInfo": "Ricevi Informazioni Aggiuntive Sui Comandi Riunione",
   "MeetingManagerInfoLong": "(Astronauti):\\nIn qualità di Moderatore, conosci i ruoli dei giocatori indovinati e, se qualcuno sbaglia a indovinare, lo verrai a sapere. Vedi anche se vengono usati altri comandi riunione che altrimenti rimarrebbero nascosti.",
-  "MeetingManagerMessageAboutCommand": "Qualcuno ha usato il comando <b>{1}</b>.",
+  "MeetingManagerMessageAboutCommand": "Qualcuno ha usato il comando <b>{0}</b>.",
   "MeetingManagerMessageAboutCompare": "<b>{0}</b> ha confrontato <b>{1}</b> e <b>{2}</b>.",
   "MeetingManagerMessageAboutGuessedRole": "Il suo ruolo era <b>{0}</b>",
   "MeetingManagerMessageAboutJudgeSuicide": "<b>{0}</b> si è suicidato da <b>{1}</b>.",
