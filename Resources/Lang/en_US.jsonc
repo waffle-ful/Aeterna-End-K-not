@@ -1130,7 +1130,7 @@
   "MeetingManager": "Meeting Manager",
   "MeetingManagerInfo": "Receive Additional Info About Meeting Commands",
   "MeetingManagerInfoLong": "(<#8cffff>Crewmates</color>):\n<size=80%>Receive secret information about meeting commands and guesses.\n_____________________________________\nDifficulty: ★★☆☆☆\n\n[Skills]\n・<b><color=#8cffff>Meeting Intelligence</color></b>\nSee the roles of guessed players. Know when someone misguesses, and observe other hidden meeting commands (swaps, comparisons, judgments, etc.).\n\n<i>In a meeting full of secrets, you know the most.</i></size>",
-  "MeetingManagerMessageAboutCommand": "Someone used the <b>{1}</b> command.",
+  "MeetingManagerMessageAboutCommand": "Someone used the <b>{0}</b> command.",
   "MeetingManagerMessageAboutCompare": "The <b>{0}</b> compared <b>{1}</b> and <b>{2}</b>.",
   "MeetingManagerMessageAboutGuessedRole": "Their role was <b>{0}</b>",
   "MeetingManagerMessageAboutJudgeSuicide": "<b>{0}</b> suicided as a <b>{1}</b>.",

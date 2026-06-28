@@ -546,7 +546,7 @@ internal static class CheckForEndVotingPatch
     {
         if (playerIds.Length == 0) return;
         Logger.Info($"{playerIds.Join(x => Main.AllPlayerNames[x])} - died with the reason: {deathReason}", "TryAddAfterMeetingDeathPlayers");
-        byte[] addedIdList = playerIds.Where(playerId => Main.AfterMeetingDeathPlayers.TryAdd(playerId, deathReason)).ToArray();
+        byte[] addedIdList = playerIds.Where(id => (!Main.PlayerStates.TryGetValue(id, out PlayerState state) || state.MainRole != CustomRoles.Pestilence) && Main.AfterMeetingDeathPlayers.TryAdd(id, deathReason)).ToArray();
         CheckForDeathOnExile(deathReason, addedIdList);
     }
 
@@ -1382,6 +1382,11 @@ internal static class MeetingHudOnDestroyPatch
         }
 
         if (Main.LIMap) Main.Instance.StartCoroutine(WaitForExileFinish());
+
+        GC.Collect();
+        Resources.UnloadUnusedAssets();
+        GC.Collect();
+
         return;
 
         IEnumerator WaitForExileFinish()

@@ -64,7 +64,11 @@ public class Cantankerous : RoleBase
         foreach (KeyValuePair<byte, PlayerState> state in Main.PlayerStates)
         {
             if (state.Value.Role is Cantankerous)
-                Utils.GetPlayerById(state.Key).RpcIncreaseAbilityUseLimitBy(value);
+            {
+                var pc = Utils.GetPlayerById(state.Key);
+                if (!pc || !pc.IsAlive()) continue;
+                pc.RpcIncreaseAbilityUseLimitBy(value);
+            }
         }
     }
 

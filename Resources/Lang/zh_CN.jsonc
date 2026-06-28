@@ -1122,7 +1122,7 @@
   "MeetingManager": "会议管理者",
   "MeetingManagerInfo": "获取有关会议指令的更多信息",
   "MeetingManagerInfoLong": "(船员职业):\\n会议管理者可以知道被猜测的玩家的职业，如果有人猜错了，会议管理者也会知晓。根据房主设置，会议管理者或许还可以查看其他被使用的指令。",
-  "MeetingManagerMessageAboutCommand": "有人使用 <b>{1}</b> 命令。",
+  "MeetingManagerMessageAboutCommand": "有人使用 <b>{0}</b> 命令。",
   "MeetingManagerMessageAboutCompare": "<b>{0}</b> 比较了 <b>{1}</b> 和 <b>{2}</b> 的阵营。",
   "MeetingManagerMessageAboutGuessedRole": "他们的职业是<b>{0}</b>",
   "MeetingManagerMessageAboutJudgeSuicide": "<b>{0}</b> 作为 <b>{1}</b> 自杀。",

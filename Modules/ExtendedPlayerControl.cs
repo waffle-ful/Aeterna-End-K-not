@@ -984,12 +984,13 @@ internal static class ExtendedPlayerControl
         public void AddAbilityCD(int cd)
         {
             Main.AbilityCD[player.PlayerId] = (TimeStamp, cd);
+            if (!player.IsNonHostModdedClient()) return;
             SendRPC(CustomRPC.SyncAbilityCD, 1, player.PlayerId, cd);
         }
 
         public void RemoveAbilityCD()
         {
-            if (Main.AbilityCD.Remove(player.PlayerId)) SendRPC(CustomRPC.SyncAbilityCD, 3, player.PlayerId);
+            if (Main.AbilityCD.Remove(player.PlayerId) && player.IsNonHostModdedClient()) SendRPC(CustomRPC.SyncAbilityCD, 3, player.PlayerId);
         }
 
         public float GetAbilityUseLimit()
@@ -1587,6 +1588,12 @@ internal static class ExtendedPlayerControl
             catch (Exception e) { ThrowException(e); }
 
             return player.transform.position;
+        }
+
+        public Vector3 Pos3()
+        {
+            Vector2 pos = player.Pos();
+            return new Vector3(pos.x, pos.y, player.transform.position.z);
         }
 
         // Next 5: https://github.com/Rabek009/MoreGamemodes/blob/master/Modules/ExtendedPlayerControl.cs

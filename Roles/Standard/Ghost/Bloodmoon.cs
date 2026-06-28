@@ -35,6 +35,7 @@ internal class Bloodmoon : IGhostRole
         ScheduledDeaths.TryAdd(target.PlayerId, (Utils.TimeStamp, pc.PlayerId));
         Main.AllPlayerSpeed[pc.PlayerId] = Speed.GetFloat();
         pc.MarkDirtySettings();
+        pc.AddAbilityCD(Cooldown + Duration.GetInt());
     }
 
     public void SetupCustomOption()
@@ -68,10 +69,17 @@ internal class Bloodmoon : IGhostRole
 
         long now = Utils.TimeStamp;
 
+        List<byte> toRemove = null;
+
         foreach (KeyValuePair<byte, (long Value, byte KillerId)> death in ScheduledDeaths)
         {
             PlayerControl player = Utils.GetPlayerById(death.Key);
-            if (!player || !player.IsAlive()) continue;
+            if (!player || !player.IsAlive())
+            {
+                toRemove ??= [];
+                toRemove.Add(death.Key);
+                continue;
+            }
 
             if (now - death.Value.Value < Duration.GetInt())
             {
@@ -79,8 +87,15 @@ internal class Bloodmoon : IGhostRole
                 continue;
             }
 
-            if (pc.RpcCheckAndMurder(player, true)) player.Suicide(PlayerState.DeathReason.LossOfBlood, pc);
+            if (pc.RpcCheckAndMurder(player, true))
+            {
+                player.Suicide(PlayerState.DeathReason.LossOfBlood, Utils.GetPlayerById(death.Value.KillerId));
+                toRemove ??= [];
+                toRemove.Add(death.Key);
+            }
         }
+
+        toRemove?.ForEach(x => ScheduledDeaths.Remove(x));
 
         var alivePlayers = Main.CachedAlivePlayerControls();
         for (int index = 0; index < alivePlayers.Count; index++)

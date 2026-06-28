@@ -1130,7 +1130,7 @@
   "MeetingManager": "会議マネージャー",
   "MeetingManagerInfo": "会議コマンドについての 追加情報を受け取れる",
   "MeetingManagerInfoLong": "(<#8cffff>クルーメイト</color>):\n<size=80%>会議の裏で動く、情報の番人。\n_____________________________________\n難易度：★★☆☆☆\n\n[スキル]\n・<b><color=#8cffff>会議情報収集</color></b>\n推測されたプレイヤーの役職を把握でき、誰かが推測を誤った場合もそれを確認できる。会議中に使用された隠しコマンドも確認できる。\n\n<i>すべての動きを把握する者が、会議を制する。</i></size>",
-  "MeetingManagerMessageAboutCommand": "<size=80%><b>{1}</b> コマンドを 誰が使用した。</size>",
+  "MeetingManagerMessageAboutCommand": "<size=80%><b>{0}</b> コマンドを 誰が使用した。</size>",
   "MeetingManagerMessageAboutCompare": "<size=80%><b>{0}</b>は <b>{1}</b> と <b>{2}</b>を 比較した。</size>",
   "MeetingManagerMessageAboutGuessedRole": "<size=80%>役職は <b>{0}</b> だった</size>",
   "MeetingManagerMessageAboutJudgeSuicide": "<size=80%><b>{0}</b>は <b>{1}</b>として 自殺した。</size>",

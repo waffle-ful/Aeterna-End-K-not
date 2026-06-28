@@ -3422,6 +3422,8 @@ internal static class ChatCommands
                 Main.NickName = name;
             else
             {
+                if (BanManager.CheckDenyNamePlayer(player, name)) return;
+
                 if (!Options.PlayerCanSetName.GetBool() && !IsPlayerVIP(player.FriendCode) && !player.FriendCode.GetDevUser().up && !player.FriendCode.IsLocalDev())
                 {
                     Utils.SendMessage(GetString("Message.OnlyVIPCanUse"), player.PlayerId, importance: MessageImportance.Low);
@@ -4311,8 +4313,8 @@ internal static class UpdateCharCountPatch
 
         __instance.charCountText.color = length switch
         {
-            < 1000 => Color.black,
-            < 1200 => new(1f, 1f, 0f, 1f),
+            < 800 => Color.black,
+            < 1000 => new(1f, 1f, 0f, 1f),
             _ => Color.red
         };
     }

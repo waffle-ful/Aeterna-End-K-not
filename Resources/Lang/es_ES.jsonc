@@ -1122,7 +1122,7 @@
   "MeetingManager": "Gerente de Adivinanzas",
   "MeetingManagerInfo": "Recibe Información Adicional Sobre Adivinanzas",
   "MeetingManagerInfoLong": "(Tripulantes):\\n Como el Gerente de Adivinanzas, sabes los roles de jugadores adivinados, y si alguien adivina mal, lo verás.",
-  "MeetingManagerMessageAboutCommand": "Alguien usó el comando <b>{1}</b>.",
+  "MeetingManagerMessageAboutCommand": "Alguien usó el comando <b>{0}</b>.",
   "MeetingManagerMessageAboutCompare": "Él <b>{0}</b> comparó <b>{1}</b> y <b>{2}</b>.",
   "MeetingManagerMessageAboutGuessedRole": "Su rol era <b>{0}</b>",
   "MeetingManagerMessageAboutJudgeSuicide": "<b>{0}</b> Se suicidó como <b>{1}</b>.",

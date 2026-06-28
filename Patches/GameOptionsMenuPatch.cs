@@ -599,7 +599,7 @@ public static class ToggleOptionPatch
         {
             __instance.CheckMark.enabled = !__instance.CheckMark.enabled;
             OptionItem item = OptionItem.AllOptions[index];
-            item.SetValue(__instance.GetBool() ? 1 : 0);
+            item.SetValue(__instance.GetBool() ? 1 : 0, doSync: false);
             __instance.OnValueChanged.Invoke(__instance);
             NotificationPopperPatch.AddSettingsChangeMessage(item, true);
             return false;
@@ -691,10 +691,10 @@ public static class NumberOptionPatch
             switch (item)
             {
                 case IntegerOptionItem integerOptionItem:
-                    integerOptionItem.SetValue(integerOptionItem.Rule.GetNearestIndex(__instance.GetInt()));
+                    integerOptionItem.SetValue(integerOptionItem.Rule.GetNearestIndex(__instance.GetInt()), doSync: false);
                     break;
                 case FloatOptionItem floatOptionItem:
-                    floatOptionItem.SetValue(floatOptionItem.Rule.GetNearestIndex(__instance.GetFloat()));
+                    floatOptionItem.SetValue(floatOptionItem.Rule.GetNearestIndex(__instance.GetFloat()), doSync: false);
                     break;
                 case PresetOptionItem presetOptionItem:
                     presetOptionItem.SetValue(presetOptionItem.Rule.GetNearestIndex(__instance.GetInt()));
@@ -979,7 +979,7 @@ public static class StringOptionPatch
         {
             OptionItem item = OptionItem.AllOptions[index];
 
-            item.SetValue(__instance.GetInt());
+            item.SetValue(__instance.GetInt(), doSync: false);
             string name = item.GetName();
 
             string name1 = name;
@@ -1795,6 +1795,8 @@ public static class GameSettingMenuPatch
         
         Options.AutoSetFactionMinMaxSettings();
 
+        OptionItem.SyncAllOptions();
+
         //Main.Instance.StartCoroutine(OptionShower.GetText());
     }
 
@@ -1833,14 +1835,5 @@ public static class FixDarkThemeForSearchBar
             field.textArea.compoText.Color(Color.white);
             field.textArea.outputText.color = Color.white;
         }
-    }
-}
-
-[HarmonyPatch(typeof(PlayerControl), nameof(PlayerControl.RpcSyncSettings))]
-public static class RpcSyncSettingsPatch
-{
-    public static void Postfix()
-    {
-        OptionItem.SyncAllOptions();
     }
 }
