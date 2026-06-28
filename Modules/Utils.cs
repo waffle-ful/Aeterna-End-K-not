@@ -1880,26 +1880,70 @@ public static class Utils
 
         if (list.Count == 0) return;
 
-        if (list.Count == 1)
-        {
-            Message single = list[0];
-            SendMessage(single.Text, single.SendTo, single.Title, importance: importance);
-            return;
-        }
-
         Main.Instance.StartCoroutine(SendMultipleMessagesThrottled(list, importance));
     }
 
+    // A single long Message is split by SendMessage into several title-bearing chunks that all hit the
+    // wire on the SAME frame. AU 2026 anti-cheat kicks the host (reason=Hacking) at 3+ title-bearing
+    // SetName RPCs/frame to a vanilla client, so the per-message MultiMessageGapSeconds gap is not enough
+    // on its own — one 30-role draft list (or a long /r entry) bursts ~6 chunks per recipient by itself
+    // (draft host kick repro, 2026-06-28). Pre-split long text along line boundaries here so EVERY chunk
+    // that reaches a vanilla client is spaced. Modded-only recipients are immune, so they keep the fast path.
+    // Budget stays well under the ~700B vanilla RPC cap (minus title/name overhead) so each piece is a
+    // single sub-1KB send that SendMessage won't re-split on one frame.
+    private const int SpacedChunkTextByteBudget = 450;
+
     private static IEnumerator SendMultipleMessagesThrottled(IList<Message> messages, MessageImportance importance)
     {
-        for (var i = 0; i < messages.Count; i++)
-        {
-            Message msg = messages[i];
-            SendMessage(msg.Text, msg.SendTo, msg.Title, importance: importance);
+        var sends = new List<(string Text, byte SendTo, string Title)>();
 
-            if (i < messages.Count - 1)
+        foreach (Message msg in messages)
+        {
+            PlayerControl receiver = GetPlayerById(msg.SendTo, GameStates.InGame);
+
+            if (RecipientIncludesVanillaClient(msg.SendTo, receiver) && HazelExtensions.GetStringWriteSize(msg.Text) + 4 >= SpacedChunkTextByteBudget)
+                foreach (string piece in SplitTextForSpacedSending(msg.Text))
+                    sends.Add((piece, msg.SendTo, msg.Title));
+            else
+                sends.Add((msg.Text, msg.SendTo, msg.Title));
+        }
+
+        for (var i = 0; i < sends.Count; i++)
+        {
+            (string text, byte sendTo, string title) = sends[i];
+            SendMessage(text, sendTo, title, importance: importance);
+
+            if (i < sends.Count - 1)
                 yield return new WaitForSecondsRealtime(MultiMessageGapSeconds);
         }
+    }
+
+    // Group lines into pieces that each stay under SpacedChunkTextByteBudget. Mirrors the core split's
+    // open-<size> carry-over (SendMessage line ~2223) so rich-text rows that wrap keep their sizing.
+    private static List<string> SplitTextForSpacedSending(string text)
+    {
+        var pieces = new List<string>();
+        var current = string.Empty;
+
+        foreach (string line in text.Split('\n'))
+        {
+            string candidate = current.Length == 0 ? line : current + "\n" + line;
+
+            if (current.Length > 0 && HazelExtensions.GetStringWriteSize(candidate) + 4 >= SpacedChunkTextByteBudget)
+            {
+                pieces.Add(current);
+
+                if (Regex.Matches(current, "<size").Count > Regex.Matches(current, "</size>").Count)
+                    current = Regex.Matches(current, @"<size=\d+\.?\d*%?>")[^1].Value + line;
+                else
+                    current = line;
+            }
+            else current = candidate;
+        }
+
+        if (!current.IsNullOrWhiteSpace()) pieces.Add(current);
+
+        return pieces.Count == 0 ? [text] : pieces;
     }
 
     private static bool RecipientIncludesVanillaClient(byte sendTo, PlayerControl receiver)
