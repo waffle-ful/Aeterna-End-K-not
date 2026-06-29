@@ -160,11 +160,21 @@ public static class Utils
 
     public static int NumSnapToCallsThisRound;
 
-    public static bool TP(CustomNetworkTransform nt, Vector2 location, bool noCheckState = false, bool log = true)
+    public static readonly Dictionary<byte, float> LastRateLimitedTPTime = new();
+
+    public static bool TP(CustomNetworkTransform nt, Vector2 location, bool noCheckState = false, bool log = true, float minInterval = 0f)
     {
         if (!AmongUsClient.Instance.AmHost) return false;
         
         PlayerControl pc = nt.myPlayer;
+
+        // 毎フレ TP する呼び出し元は minInterval(秒)>0 を渡すと、ここで間引く(各役職でゲートを copy-paste しない)。
+        // 単発 TP(vent/会議/能力)は minInterval=0 で即時。per-round cap(NumSnapToCallsThisRound 80/100)の枯渇=他者 desync を防ぐ。
+        if (minInterval > 0f && pc != null)
+        {
+            if (LastRateLimitedTPTime.TryGetValue(pc.PlayerId, out float lastTp) && Time.time - lastTp < minInterval) return false;
+            LastRateLimitedTPTime[pc.PlayerId] = Time.time;
+        }
 
         var sendOption = SendOption.Reliable;
         bool submerged = SubmergedCompatibility.IsSubmerged();
