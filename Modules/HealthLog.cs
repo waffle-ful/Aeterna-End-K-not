@@ -15,7 +15,7 @@ public static class HealthLog
     private const long MaxFileBytes = 3 * 1024 * 1024; // .prev 退避に失敗した時のサイズ上限
 
     private static bool Inited;
-    private static string FilePath;
+    public static string FilePath { get; private set; } // ライブ本体(EndKnot_Logs 直下の固定ファイル)。DumpLog がセッションフォルダへ同梱する時に参照。
     private static long StartTs;
     private static long LastBeatTs;
     private static long LastNormalLogTs;
