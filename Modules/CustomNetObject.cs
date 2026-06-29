@@ -612,10 +612,10 @@ namespace EndKnot
         private readonly long SpawnTimeStamp;
         private bool Gone;
 
-        public TornadoObject(Vector2 position, PlayerControl tornado)
+        public TornadoObject(Vector2 position)
         {
             SpawnTimeStamp = Utils.TimeStamp;
-            CreateNetObject("<line-height=97%><cspace=0.16em><#0000>WW</color><mark=#bababa>WWWW</mark><#0000>WW\nW</color><mark=#bababa>WW</mark><mark=#8c8c8c>WW</mark><mark=#bababa>WW</mark><#0000>W</color>\n<mark=#bababa>WW</mark><mark=#8c8c8c>WWWW</mark><mark=#bababa>WW</mark>\n<mark=#bababa>W</mark><mark=#8c8c8c>WW</mark><mark=#636363>WW</mark><mark=#8c8c8c>WW</mark><mark=#bababa>W</mark>\n<mark=#bababa>W</mark><mark=#8c8c8c>WW</mark><mark=#636363>WW</mark><mark=#8c8c8c>WW</mark><mark=#bababa>W</mark>\n<mark=#bababa>WW</mark><mark=#8c8c8c>WWWW</mark><mark=#bababa>WW</mark>\n<#0000>W</color><mark=#bababa>WW</mark><mark=#8c8c8c>WW</mark><mark=#bababa>WW</mark><#0000>W\nWW</color><mark=#bababa>WWWW</mark><#0000>WW", position, onlyVisibleTo: tornado);
+            CreateNetObject("<line-height=97%><cspace=0.16em><#0000>WW</color><mark=#bababa>WWWW</mark><#0000>WW\nW</color><mark=#bababa>WW</mark><mark=#8c8c8c>WW</mark><mark=#bababa>WW</mark><#0000>W</color>\n<mark=#bababa>WW</mark><mark=#8c8c8c>WWWW</mark><mark=#bababa>WW</mark>\n<mark=#bababa>W</mark><mark=#8c8c8c>WW</mark><mark=#636363>WW</mark><mark=#8c8c8c>WW</mark><mark=#bababa>W</mark>\n<mark=#bababa>W</mark><mark=#8c8c8c>WW</mark><mark=#636363>WW</mark><mark=#8c8c8c>WW</mark><mark=#bababa>W</mark>\n<mark=#bababa>WW</mark><mark=#8c8c8c>WWWW</mark><mark=#bababa>WW</mark>\n<#0000>W</color><mark=#bababa>WW</mark><mark=#8c8c8c>WW</mark><mark=#bababa>WW</mark><#0000>W\nWW</color><mark=#bababa>WWWW</mark><#0000>WW", position);
         }
 
         protected override void OnFixedUpdate()
@@ -1010,6 +1010,9 @@ namespace EndKnot
         private Vector2 Direction;
         public bool Active;
 
+        private float LastSyncTime;
+        private const float SyncInterval = 0.2f; // 毎フレ TP は ForceSnapSend で base throttle をバイパスし ~50 SnapTo/s を連射→公式 anti-cheat の kick 経路(Riptide と同じ)。間引きで防ぐ
+
         public Snowball(Vector2 from, Vector2 direction, PlayerControl thrower)
         {
             Thrower = thrower;
@@ -1033,7 +1036,14 @@ namespace EndKnot
                 return;
             }
 
-            TP(newPos);
+            // 軌道は毎フレ進める(ローカル field のみ・送信しない)が、RpcSnapTo は 0.2 秒に間引く。
+            // base throttle は object 数が増えると凍結する(ForceSnapSend の存在理由)ので、明示間引きで ~5/s を保証する。
+            Position = newPos;
+            if (Time.time - LastSyncTime >= SyncInterval)
+            {
+                LastSyncTime = Time.time;
+                TP(newPos);
+            }
         }
 
         public void SetInactive()
