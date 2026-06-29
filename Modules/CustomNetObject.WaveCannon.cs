@@ -14,6 +14,9 @@ namespace EndKnot
 
     internal sealed class WaveCannonBeamSegment : CustomNetObject
     {
+        // ビームは Firing 中ずっと毎フレ TP で揺らす→ ForceSnapSend 連射になるので base の opt-in 間引きで 10Hz 固定(揺れを滑らかに保ちつつ anti-cheat 安全)。
+        protected override float ForceSnapMinInterval => 0.1f;
+
         public WaveCannonBeamSegment(Vector2 position, string sprite)
         {
             CreateNetObject(sprite, position);
