@@ -21,9 +21,9 @@ using Il2CppInterop.Runtime.Injection;
 using UnityEngine;
 using UnityEngine.Networking;
 
-[assembly: AssemblyFileVersion("0.7.8.0")]
+[assembly: AssemblyFileVersion("0.8.0.0")]
 [assembly: AssemblyInformationalVersion(Main.PluginVersion)]
-[assembly: AssemblyVersion("0.7.8.0")]
+[assembly: AssemblyVersion("0.8.0.0")]
 
 namespace EndKnot;
 
@@ -45,7 +45,7 @@ public class Main : BasePlugin
     // EHR's reverse-domain GUID `com.gurge44.endlesshostroles` appears to be grandfathered
     // in; a fresh fork needs a fresh UUID.
     public const string PluginGuid = "cf13a94a-1671-41f1-85a8-3e32770cf09e";
-    public const string PluginVersion = "0.7.8-alpha";
+    public const string PluginVersion = "0.8.0-alpha";
     public const string PluginDisplayVersion = "0.4.0";
     public const bool TestBuild = false;
 
