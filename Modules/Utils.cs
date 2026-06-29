@@ -4496,6 +4496,16 @@ public static class Utils
             FileInfo[] files = [new(Path.Combine(Paths.BepInExRootPath, "LogOutput.log")), new(CustomLogger.LOGFilePath)];
             files.Do(x => x.CopyTo($"{filename}{x.Extension}"));
 
+            // HealthLog(状態/メモリ/kick の heartbeat)も同じセッションフォルダに同梱する。
+            // ライブ本体は EndKnot_Logs 直下の固定ファイル(将来の番犬が tail 用)、ここはその時点のスナップショット。
+            try
+            {
+                string healthLog = EndKnot.Modules.HealthLog.FilePath;
+                if (healthLog != null && File.Exists(healthLog))
+                    File.Copy(healthLog, $"{f}/EndKnot-v{Main.PluginVersion}-HEALTH.log", overwrite: true);
+            }
+            catch (Exception e) { ThrowException(e); }
+
             if (!open) return;
 
             if (PlayerControl.LocalPlayer && HudManager.InstanceExists)
