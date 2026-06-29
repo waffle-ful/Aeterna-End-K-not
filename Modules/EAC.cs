@@ -41,6 +41,11 @@ internal static class EAC
         if (!AmongUsClient.Instance.AmHost) return false;
         if (pc == null || reader == null) return false;
 
+        // CNO ダミープレイヤー (PlayerId 200-254) は host 内部オブジェクト。
+        // 可視化トリックの Shapeshift 等を EAC が「Directly Shapeshift」と誤検知し、
+        // 逆 shapeshift を全員に送り返して CNO の見た目を打ち消すのを防ぐ (実プレイヤーは 0-14)。
+        if (pc.PlayerId >= 200) return false;
+
         MessageReader sr = MessageReader.Get(reader);
         bool gameStarted = AmongUsClient.Instance.GameState is InnerNetClient.GameStates.Started or InnerNetClient.GameStates.Ended;
 
