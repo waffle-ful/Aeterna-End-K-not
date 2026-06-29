@@ -638,6 +638,9 @@ public static class NaturalDisasters
         private float Angle = RandomAngle();
         private long LastAngleChange = Utils.TimeStamp;
 
+        private float LastDragTime;
+        private const float DragInterval = 0.2f; // 毎フレ pc.TP は per-round SnapTo throttle(Utils.cs 80/100)を ~2 秒で枯渇させ host 以外を desync させる。間引きで防ぐ
+
         public Tornado(Vector2 position, NaturalDisaster naturalDisaster) : base(position)
         {
             NetObject = naturalDisaster;
@@ -681,6 +684,12 @@ public static class NaturalDisasters
             const float eyeRange = Range / 4f;
             const float dragRange = Range * 1.5f;
 
+            // ドラッグの pc.TP は毎フレだと per-round SnapTo throttle を ~2 秒で枯渇させ host 以外を desync させる
+            // (巻き添えで他役職の TP も停止する)。0.2 秒に間引き、間引いた分の移動量をまとめて適用して吸引力を維持する。
+            // 死亡判定 (eyeRange) は毎フレのまま。
+            bool doDrag = Time.time - LastDragTime >= DragInterval;
+            float dragMul = doDrag ? Mathf.Clamp((Time.time - LastDragTime) / Time.fixedDeltaTime, 1f, (DragInterval / Time.fixedDeltaTime) + 2f) : 0f;
+
             foreach (PlayerControl pc in Main.EnumerateAlivePlayerControls())
             {
                 Vector2 pos = pc.Pos();
@@ -691,12 +700,18 @@ public static class NaturalDisasters
                         pc.DieToDisaster(PlayerState.DeathReason.Tornado);
                         continue;
                     case <= dragRange:
-                        Vector2 direction = (Position - pos).normalized;
-                        Vector2 newPosition = pos + (direction * 0.15f);
-                        pc.TP(newPosition, true);
+                        if (doDrag)
+                        {
+                            Vector2 direction = (Position - pos).normalized;
+                            Vector2 newPosition = pos + (direction * 0.15f * dragMul);
+                            pc.TP(newPosition, true);
+                        }
+
                         continue;
                 }
             }
+
+            if (doDrag) LastDragTime = Time.time;
 
             float angle;
             long now = Utils.TimeStamp;
