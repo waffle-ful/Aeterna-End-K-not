@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using AmongUs.GameOptions;
+using UnityEngine;
 using static EndKnot.Translator;
 
 namespace EndKnot.Roles;
@@ -13,6 +14,13 @@ public class Tama : RoleBase
     public byte OwnerId;
     public bool HasLoaded;
     private bool IsLoading;
+
+    // 装填中の追従 TP 間引き用。毎フレ TP は公式鯖の per-round SnapTo 上限
+    // (Utils.NumSnapToCallsThisRound, 80でNone降格/100で停止) を枯渇させ desync する。
+    // ガチョウ/ペンギンと同様、一定間隔 + オーナーが動いた時だけ snap する。
+    private float LastFollowSnapTime;
+    private Vector2 LastFollowSnapPos = new(-9999f, -9999f);
+    private const float FollowSnapInterval = 0.2f; // ~5 snaps/s
 
     public override bool IsEnable => Instances.Count > 0;
 
@@ -117,7 +125,13 @@ public class Tama : RoleBase
         // 装填済みの間、オーナーに追従
         if (HasLoaded && owner != null && owner.IsAlive())
         {
-            tamaPlayer.TP(owner.GetTruePosition(), log: false);
+            Vector2 pos = owner.GetTruePosition();
+            if (Time.time - LastFollowSnapTime >= FollowSnapInterval && Vector2.Distance(pos, LastFollowSnapPos) > 0.3f)
+            {
+                LastFollowSnapTime = Time.time;
+                LastFollowSnapPos = pos;
+                tamaPlayer.TP(pos, log: false);
+            }
         }
     }
 
