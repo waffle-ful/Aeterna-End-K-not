@@ -2030,9 +2030,9 @@ internal static class ExtendedPlayerControl
             return Utils.TP(player.NetTransform, target.Pos(), noCheckState, log);
         }
 
-        public bool TP(Vector2 location, bool noCheckState = false, bool log = true)
+        public bool TP(Vector2 location, bool noCheckState = false, bool log = true, float minInterval = 0f)
         {
-            return Utils.TP(player.NetTransform, location, noCheckState, log);
+            return Utils.TP(player.NetTransform, location, noCheckState, log, minInterval);
         }
 
         public bool TPToRandomVent(bool log = true)

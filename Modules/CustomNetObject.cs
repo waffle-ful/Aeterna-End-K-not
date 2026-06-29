@@ -48,6 +48,12 @@ namespace EndKnot
         //  AllObjects.Count>=32 で送信されず Riptide 等が凍結するため、明示フラグに置き換え)
         private bool ForceSnapSend;
 
+        // 毎フレ TP する CNO が ForceSnapSend で count throttle を素通りして ~50 SnapTo/s を連射すると
+        // 公式 anti-cheat の Hacking kick 経路(Riptide/Snowball)に乗る。>0 を返すと強制送信をこの間隔(秒)に間引く。
+        // 既定 0 = 間引かない(毎フレ送信で滑らかさが要る Riptide 等はそのまま)。
+        protected virtual float ForceSnapMinInterval => 0f;
+        private float LastForcedSendTime;
+
         private bool IsPooled;
 
         // true なら通常プレイヤーのように振る舞う CNO:
@@ -301,7 +307,10 @@ namespace EndKnot
                 
                 // 全 CNO 合計で最大 ~30 回/秒に絞る (CNO 数に応じてスケール)。
                 // TP() 直後 (ForceSnapSend) は throttle を 1 回だけ無視して即送信する。
+                // ForceSnapMinInterval>0 を返す CNO は、毎フレ TP の強制送信をその間隔に間引く(保留して次の gap で最新 Position を送る)。
+                if (ForceSnapSend && ForceSnapMinInterval > 0f && Time.time - LastForcedSendTime < ForceSnapMinInterval) return;
                 if (!ForceSnapSend && ++SnapToSendFrameCount < Math.Max(10, AllObjects.Count)) return;
+                if (ForceSnapSend && ForceSnapMinInterval > 0f) LastForcedSendTime = Time.time;
                 ForceSnapSend = false;
                 SnapToSendFrameCount = 0;
             
@@ -740,6 +749,10 @@ namespace EndKnot
 
     public sealed class NaturalDisaster : CustomNetObject
     {
+        // Tornado/Tsunami は Update() で毎フレ TP(Position) して移動する→ ForceSnapSend が ~50 SnapTo/s を連射し公式 anti-cheat kick 経路に乗る。
+        // base の opt-in 間引きに委譲(0.2s=~5/s)。静的災害(Earthquake/Meteor 等)は TP を呼ばないので影響なし。
+        protected override float ForceSnapMinInterval => 0.2f;
+
         public NaturalDisaster(Vector2 position, int time, string sprite, string disasterName, SystemTypes? room)
         {
             string name = Translator.GetString($"ND_{disasterName}");
@@ -1010,8 +1023,9 @@ namespace EndKnot
         private Vector2 Direction;
         public bool Active;
 
-        private float LastSyncTime;
-        private const float SyncInterval = 0.2f; // 毎フレ TP は ForceSnapSend で base throttle をバイパスし ~50 SnapTo/s を連射→公式 anti-cheat の kick 経路(Riptide と同じ)。間引きで防ぐ
+        // 毎フレ TP は ForceSnapSend で base throttle をバイパスし ~50 SnapTo/s を連射→公式 anti-cheat の kick 経路(Riptide と同じ)。
+        // base の opt-in 間引き(ForceSnapMinInterval)に委譲する(役職側でゲートを持たない)。
+        protected override float ForceSnapMinInterval => 0.2f;
 
         public Snowball(Vector2 from, Vector2 direction, PlayerControl thrower)
         {
@@ -1036,14 +1050,8 @@ namespace EndKnot
                 return;
             }
 
-            // 軌道は毎フレ進める(ローカル field のみ・送信しない)が、RpcSnapTo は 0.2 秒に間引く。
-            // base throttle は object 数が増えると凍結する(ForceSnapSend の存在理由)ので、明示間引きで ~5/s を保証する。
-            Position = newPos;
-            if (Time.time - LastSyncTime >= SyncInterval)
-            {
-                LastSyncTime = Time.time;
-                TP(newPos);
-            }
+            // 軌道は毎フレ進める。送信(RpcSnapTo)は base が ForceSnapMinInterval(0.2s) に間引く。
+            TP(newPos);
         }
 
         public void SetInactive()
