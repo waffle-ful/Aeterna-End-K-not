@@ -1352,11 +1352,12 @@ public static class GameSettingMenuPatch
 
             minus.OnClick.AddListener((Action)(() =>
             {
-                if (!PresetBehaviour)
-                    __instance.ChangeTab(3, false);
-
+                // Drive the always-valid Preset model directly. The per-menu PresetBehaviour NumberOption can be
+                // null/stale after the cached-UI reopen flow, and the null fallback ChangeTab(3) opens ImpostorRoles
+                // (not the SystemSettings tab the Preset lives in), so +/- went unresponsive. RepeatIndex wraps.
                 LastPresetChange = Utils.TimeStamp;
-                PresetBehaviour.Decrease();
+                Options.Preset.SetValue(OptionItem.CurrentPreset - 1);
+                GameOptionsMenuPatch.ReloadUI();
                 Logger.Info($"Current preset: {OptionItem.CurrentPreset + 1}", "GameOptionsMenuPatch");
             }));
 
@@ -1390,11 +1391,10 @@ public static class GameSettingMenuPatch
 
             plus.OnClick.AddListener((Action)(() =>
             {
-                if (!PresetBehaviour)
-                    __instance.ChangeTab(3, false);
-
+                // See the minus handler: drive the Preset model directly instead of the fragile PresetBehaviour.
                 LastPresetChange = Utils.TimeStamp;
-                PresetBehaviour.Increase();
+                Options.Preset.SetValue(OptionItem.CurrentPreset + 1);
+                GameOptionsMenuPatch.ReloadUI();
                 Logger.Info($"Current preset: {OptionItem.CurrentPreset + 1}", "GameOptionsMenuPatch");
             }));
 
