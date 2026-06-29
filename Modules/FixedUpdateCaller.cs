@@ -23,6 +23,9 @@ public static class FixedUpdateCaller
         {
             PerSecondUpdateScheduler.OnFixedUpdate();
 
+            try { HealthLog.Tick(); }
+            catch (Exception e) { Utils.ThrowException(e); }
+
             var amongUsClient = AmongUsClient.Instance;
             var lobbyBehaviour = LobbyBehaviour.Instance;
 
