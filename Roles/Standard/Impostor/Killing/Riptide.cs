@@ -648,7 +648,7 @@ public class Riptide : RoleBase
     //   毎フレ TP() = 毎フレ RpcSnapTo (SendOption.None でも anti-cheat の rate にカウントされる)。
     //   10Hz→5Hz に半減。SnapTo(None) の本数を減らし公式 anti-cheat のレート負荷を下げる。
     //   非モッド側は前回 SnapTo から補間されるので視覚断裂は最小。
-    private const float TPSyncInterval = 0.2f;
+    private const float TPSyncInterval = 0.18f; // 2026-06-30: 0.2f→0.18f に 1 フレーム(50fps)ぶん短縮し波を少し滑らかに。送信増は約11%で anti-cheat 閾値の遥か下
 
     // sub-CNO 2D レイアウト (2026-06-04 改: 公式 anti-cheat 対策で 6→2 に削減):
     //   各エントリ = (perp オフセット, parallel オフセット)
