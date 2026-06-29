@@ -446,7 +446,7 @@ public class JackalHadouHo : RoleBase
                     int thick = IsSuperShot ? SuperBeamThickness.GetInt() : NormalBeamThickness.GetInt();
                     float amp = BeamHalfWidthUnit * thick * 0.2f;
                     Vector2 perp = new(-Direction.y, Direction.x);
-                    BeamCNO.Position = BeamCNOPosition() + perp * (wave * amp);
+                    BeamCNO.TP(BeamCNOPosition() + perp * (wave * amp)); // 揺れを毎フレ TP→base が 10Hz(ForceSnapMinInterval)に間引いて滑らかに同期(WaveCannon 双子)
                 }
 
                 CheckBeamKills(pc);

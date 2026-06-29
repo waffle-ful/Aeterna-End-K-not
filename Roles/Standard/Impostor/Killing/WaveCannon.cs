@@ -309,7 +309,7 @@ public class WaveCannon : RoleBase
                     // 振幅も halfWidth と同じスケール (BeamHalfWidthUnit 比例) に追従
                     float amp = BeamHalfWidthUnit * BeamThickness.GetInt() * 0.2f;
                     Vector2 perp = new(-Direction.y, Direction.x);
-                    BeamCNO.Position = BeamCNOPosition() + perp * (wave * amp);
+                    BeamCNO.TP(BeamCNOPosition() + perp * (wave * amp)); // 揺れを毎フレ TP→base が 10Hz(ForceSnapMinInterval)に間引いて滑らかに同期
                 }
 
                 CheckBeamKills(pc);
