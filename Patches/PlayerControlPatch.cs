@@ -2135,6 +2135,7 @@ internal static class FixedUpdatePatch
                 additionalSuffixes.Add(DemonicTracker.GetSuffix(seer));
                 additionalSuffixes.Add(GhostReseter.GetSuffix(seer));
                 additionalSuffixes.Add(Ghostbuttoner.GetSuffix(seer));
+                additionalSuffixes.Add(DemonicCrusher.GetSuffix(seer));
                 if (seer.Is(CustomRoles.Asthmatic)) additionalSuffixes.Add(Asthmatic.GetSuffixText(lpId));
                 if (seer.Is(CustomRoles.Sonar)) additionalSuffixes.Add(Sonar.GetSuffix(seer, GameStates.IsMeeting));
                 if (seer.Is(CustomRoles.Deadlined)) additionalSuffixes.Add(Deadlined.GetSuffix(seer));
