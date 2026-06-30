@@ -386,6 +386,13 @@ internal static class HudManagerPatch
                     __instance.AbilityButton?.Show();
                     __instance.AbilityButton?.SetEnabled();
                     __instance.AbilityButton?.OverrideText(GetString(player.GetRoleTypes() == RoleTypes.GuardianAngel ? StringNames.ProtectAbility : StringNames.HauntAbilityName));
+
+                    if (DemonicSupporter.IsAssigned(player.PlayerId))
+                    {
+                        __instance.AbilityButton?.Hide();
+                        __instance.SabotageButton?.ToggleVisible(GameStates.IsInTask);
+                        __instance.SabotageButton?.OverrideText(GetString("SabotageButtonText"));
+                    }
                 }
             }
 
@@ -858,7 +865,7 @@ internal static class MapBehaviourShowPatch
         }
         else if (opts.Mode is MapOptions.Modes.Normal or MapOptions.Modes.Sabotage)
         {
-            if (player.Is(CustomRoleTypes.Impostor) || player.CanUseSabotage() || player.Is(CustomRoles.Glitch) || player.Is(CustomRoles.WeaponMaster) || player.Is(CustomRoles.Magician) || player.Is(CustomRoles.Parasite) || player.Is(CustomRoles.Renegade) || (player.Is(CustomRoles.Jackal) && Jackal.CanSabotage.GetBool()) || (player.Is(CustomRoles.Traitor) && Traitor.CanSabotage.GetBool()))
+            if (player.Is(CustomRoleTypes.Impostor) || player.CanUseSabotage() || player.Is(CustomRoles.Glitch) || player.Is(CustomRoles.WeaponMaster) || player.Is(CustomRoles.Magician) || player.Is(CustomRoles.Parasite) || player.Is(CustomRoles.Renegade) || (player.Is(CustomRoles.Jackal) && Jackal.CanSabotage.GetBool()) || (player.Is(CustomRoles.Traitor) && Traitor.CanSabotage.GetBool()) || DemonicSupporter.IsAssigned(player.PlayerId))
                 opts.Mode = MapOptions.Modes.Sabotage;
             else
                 opts.Mode = MapOptions.Modes.Normal;
