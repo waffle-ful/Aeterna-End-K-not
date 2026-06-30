@@ -528,6 +528,10 @@ public static class SabotageSystemTypeUpdateSystemPatch
 
         if (player.Is(CustomRoles.Mischievous)) return true;
 
+        // DemonicSupporter (dead Mad ghost) keeps the impostor sabotage button — allow it past the
+        // dead/non-impostor cancel checks below.
+        if (DemonicSupporter.IsAssigned(player.PlayerId)) return true;
+
         if (player.Is(Team.Impostor) && !player.IsAlive() && Options.DeadImpCantSabotage.GetBool()) return false;
         if (!player.Is(Team.Impostor) && !player.IsAlive()) return false;
 

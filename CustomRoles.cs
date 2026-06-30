@@ -722,5 +722,6 @@ public enum CustomRoles
     Reroll,
     GhostRumour, // Ghost role
     Ghostbuttoner, // Ghost role
-    GhostNoiseSender // Ghost role
+    GhostNoiseSender, // Ghost role
+    DemonicSupporter // Ghost role
 }
