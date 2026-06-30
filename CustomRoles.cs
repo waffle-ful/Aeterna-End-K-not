@@ -564,6 +564,17 @@ public enum CustomRoles
     Convict,
     Survivor,
 
+    // Upstream EHR catchup (main roles)
+    Butcher,
+    Chainbinder,
+    Exorcist,
+    Frightener,
+    Obstructer,
+    Operative,
+    Blockade,
+    Jackpot,
+    Shadow,
+
 
     // Sub-role after 1000 (buffer reserved for ~500 future main roles)
     NotAssigned = 1000,
@@ -703,5 +714,10 @@ public enum CustomRoles
     MeetingAngel, // Ghost role
     DemonicVenter, // Ghost role
     DemonicTracker, // Ghost role
-    GhostReseter // Ghost role
+    GhostReseter, // Ghost role
+
+    // Upstream EHR catchup (add-ons)
+    Dizzy,
+    Entombed,
+    Reroll
 }

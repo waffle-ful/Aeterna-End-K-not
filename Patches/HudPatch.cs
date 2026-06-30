@@ -291,6 +291,7 @@ internal static class HudManagerPatch
                             CustomRoles.Deadlined => Deadlined.GetSuffix(player, true),
                             CustomRoles.Introvert => Introvert.GetSelfSuffix(player),
                             CustomRoles.Blessed => Blessed.GetSuffix(player),
+                            CustomRoles.Entombed => Entombed.GetSelfSuffix(player),
                             _ => string.Empty
                         }).Where(x => !string.IsNullOrWhiteSpace(x)).ToArray();
 

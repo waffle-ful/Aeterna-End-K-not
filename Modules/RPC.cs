@@ -185,7 +185,10 @@ public enum CustomRPC
     // EKM (custom map system) — reserved 2026-06-12 (see docs/ekm-studio/ROADMAP.md D11).
     // Network-zero by default; the explicit 251 keeps 246-250 free for future game-mode
     // syncs, which grow by appending after LobbyDecorClear (245).
-    EkmSync = 251
+    EkmSync = 251,
+
+    // Upstream EHR catchup
+    Entombed = 252
 
     // The total number of RPCs must not exceed 255
     // Because HandleRpc accepts Rpc in byte (max 255) system, and it will be impossible to use int
@@ -1195,6 +1198,11 @@ internal static class RPCHandlerPatch
                 case CustomRPC.SetTrackerTarget:
                 {
                     Scout.ReceiveRPC(reader);
+                    break;
+                }
+                case CustomRPC.Entombed:
+                {
+                    Entombed.ReceiveRPC(reader);
                     break;
                 }
                 case CustomRPC.RoomRushDataSync:

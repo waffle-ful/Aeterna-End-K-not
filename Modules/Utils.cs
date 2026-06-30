@@ -891,6 +891,8 @@ public static class Utils
             case CustomRoles.Eclipse:
             case CustomRoles.Pyromaniac:
             case CustomRoles.SerialKiller:
+            case CustomRoles.Blockade:
+            case CustomRoles.Jackpot:
             case CustomRoles.Quarry:
             case CustomRoles.Spider:
             case CustomRoles.SoulCollector:
@@ -3065,6 +3067,7 @@ public static class Utils
                     if (seer.Is(CustomRoles.Introvert)) AdditionalSuffixes.Add(Introvert.GetSelfSuffix(seer));
                     if (seer.Is(CustomRoles.Allergic)) AdditionalSuffixes.Add(Allergic.GetSelfSuffix(seer));
                     if (seer.Is(CustomRoles.Blessed)) AdditionalSuffixes.Add(Blessed.GetSuffix(seer));
+                    if (seer.Is(CustomRoles.Entombed)) AdditionalSuffixes.Add(Entombed.GetSelfSuffix(seer));
 
                     AdditionalSuffixes.Add(Bloodmoon.GetSuffix(seer));
                     AdditionalSuffixes.Add(Haunter.GetSuffix(seer));
@@ -4020,7 +4023,9 @@ public static class Utils
         {
             CustomRoles.Farmer => 2,
             CustomRoles.Thanos => 5,
+            CustomRoles.Blockade => 5,
             CustomRoles.Mole => Mole.CD.GetInt(),
+            CustomRoles.Operative => Operative.AbilityCooldown.GetInt(),
             CustomRoles.PortalMaker => PortalMaker.AbilityCooldown.GetInt(),
             CustomRoles.Telecommunication => Telecommunication.VentCooldown.GetInt(),
             CustomRoles.Tether => Tether.VentCooldown.GetInt(),
@@ -4229,9 +4234,11 @@ public static class Utils
             Circumvent.AfterMeetingTasks();
             Deadlined.AfterMeetingTasks();
             Blessed.AfterMeetingTasks();
+            Entombed.AfterMeeting();
             Amnesia.AfterMeetingTasks();
             Sandbox.OnAfterMeetingTasks();
             Tired.Reset();
+            Reroll.ResolveAfterMeeting(ExileControllerWrapUpPatch.LastExiled);
         }
         catch (Exception e) { ThrowException(e); }
 
