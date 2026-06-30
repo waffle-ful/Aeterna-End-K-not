@@ -58,7 +58,7 @@ internal class GhostNoiseSender : IGhostRole
             .SetParent(Options.CustomRoleSpawnChances[CustomRoles.GhostNoiseSender])
             .SetValueFormat(OptionFormat.Seconds);
 
-        Duration = new IntegerOptionItem(650603, "GhostNoiseSenderTime", new(1, 180, 1), 7, TabGroup.OtherRoles)
+        Duration = new IntegerOptionItem(650603, "GhostNoiseSenderTime", new(1, 180, 1), 15, TabGroup.OtherRoles)
             .SetParent(Options.CustomRoleSpawnChances[CustomRoles.GhostNoiseSender])
             .SetValueFormat(OptionFormat.Seconds);
 
@@ -76,6 +76,7 @@ internal class GhostNoiseSender : IGhostRole
         if (target == null || !AmongUsClient.Instance.AmHost) return;
 
         bool bugged = GhostRolesManager.AssignedGhostRoles.Values.Any(g => g.Instance is GhostNoiseSender gns && gns.MarkedTargets.Contains(target.PlayerId));
+        Logger.Info($"OnTargetMurdered: victim={target.PlayerId} bugged={bugged} alertForced={AnyAssigned}", "GhostNoiseSender");
         if (!bugged) return;
 
         // The victim dies one RPC later, so overriding their (now irrelevant) per-client RoleBehaviour is harmless.
@@ -84,5 +85,9 @@ internal class GhostNoiseSender : IGhostRole
             if (seer == null || seer.OwnerId < 0) continue;
             target.RpcSetRoleDesync(RoleTypes.Noisemaker, seer.OwnerId);
         }
+
+        // Make sure the forced Noisemaker-alert option is current for the victim before the kill lands.
+        target.MarkDirtySettings();
+        Logger.Info($"Converted victim {target.PlayerId} to Noisemaker for the death ping", "GhostNoiseSender");
     }
 }
