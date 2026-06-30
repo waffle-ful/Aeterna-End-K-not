@@ -701,5 +701,7 @@ public enum CustomRoles
     LastNeutral,
     Stack,
     MeetingAngel, // Ghost role
-    DemonicVenter // Ghost role
+    DemonicVenter, // Ghost role
+    DemonicTracker, // Ghost role
+    GhostReseter // Ghost role
 }
