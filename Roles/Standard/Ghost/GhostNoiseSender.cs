@@ -1,17 +1,16 @@
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using AmongUs.GameOptions;
 using EndKnot.Modules;
-using UnityEngine;
 
 namespace EndKnot.Roles;
 
 // Crewmate ghost. The protect button "bugs" a living player for a timed window.
-// If a bugged player is later murdered (a real kill that leaves a corpse), a loud noise plays for
-// everyone and a directional arrow to the kill location is shown to every living player for a few
-// seconds — reliably revealing where the kill happened. (We do NOT rely on the vanilla Noisemaker
-// alert, which is an off-by-default, impostor-only option.)
+// If a bugged player is later murdered (a real kill that leaves a corpse), the victim is desync-converted
+// to a vanilla Noisemaker on every client right before the kill, so the vanilla Noisemaker death-ping
+// reveals the kill location to everyone — exactly the "Noisy" addon's mechanism (RoleTypes.Noisemaker +
+// the death alert), but the alert is FORCED on for everyone via PlayerGameOptionsSender so it works
+// regardless of the host's vanilla Noisemaker settings.
 internal class GhostNoiseSender : IGhostRole
 {
     private static OptionItem CD;
@@ -21,13 +20,14 @@ internal class GhostNoiseSender : IGhostRole
     // Per-instance set of currently-bugged target PlayerIds (a managed object, safe to capture in closures).
     public HashSet<byte> MarkedTargets = [];
 
-    // Kill locations currently being revealed to everyone (shown via GetSuffix arrows). Static because
-    // the reveal is global; each entry is removed by its own LateTask after AlertDuration.
-    private static readonly List<Vector2> ActiveAlerts = [];
-
     public Team Team => Team.Crewmate;
     public RoleTypes RoleTypes => RoleTypes.GuardianAngel;
     public int Cooldown => CD.GetInt();
+
+    // True while any GhostNoiseSender is assigned — read by PlayerGameOptionsSender to force the vanilla
+    // Noisemaker death alert ON for every client, so the kill-time conversion actually pings for everyone.
+    public static bool AnyAssigned => GhostRolesManager.AssignedGhostRoles.Values.Any(g => g.Role == CustomRoles.GhostNoiseSender);
+    public static float AlertDurationValue => AlertDuration?.GetFloat() ?? 10f;
 
     public void OnProtect(PlayerControl pc, PlayerControl target)
     {
@@ -46,6 +46,8 @@ internal class GhostNoiseSender : IGhostRole
     public void OnAssign(PlayerControl pc)
     {
         MarkedTargets = [];
+        // Push the forced Noisemaker-alert option (applied in PlayerGameOptionsSender) to every client now.
+        Utils.MarkEveryoneDirtySettings();
     }
 
     public void SetupCustomOption()
@@ -67,7 +69,8 @@ internal class GhostNoiseSender : IGhostRole
 
     // Called from CheckMurderPatch IMMEDIATELY BEFORE a confirmed, corpse-leaving kill (the real kill-button
     // path — note the host /kill command bypasses CheckMurder, so it won't trigger this). If the victim is
-    // bugged, blast a noise to everyone and point every living player to the kill spot for AlertDuration secs.
+    // bugged, desync-convert them to a vanilla Noisemaker on every client so the (forced-on) Noisemaker death
+    // ping fires for everyone the instant they die.
     public static void OnTargetMurdered(PlayerControl target)
     {
         if (target == null || !AmongUsClient.Instance.AmHost) return;
@@ -75,36 +78,11 @@ internal class GhostNoiseSender : IGhostRole
         bool bugged = GhostRolesManager.AssignedGhostRoles.Values.Any(g => g.Instance is GhostNoiseSender gns && gns.MarkedTargets.Contains(target.PlayerId));
         if (!bugged) return;
 
-        Vector2 pos = target.Pos();
-        ActiveAlerts.Add(pos);
-
-        CustomSoundsManager.RPCPlayCustomSoundAll("FlashBang");
-        foreach (PlayerControl pc in Main.AllAlivePlayerControls)
-            if (pc != null)
-                LocateArrow.Add(pc.PlayerId, pos);
-
-        Utils.NotifyRoles();
-
-        LateTask.New(() =>
+        // The victim dies one RPC later, so overriding their (now irrelevant) per-client RoleBehaviour is harmless.
+        foreach (PlayerControl seer in Main.AllPlayerControlsToArray)
         {
-            ActiveAlerts.Remove(pos);
-            foreach (PlayerControl pc in Main.AllPlayerControlsToArray)
-                if (pc != null)
-                    LocateArrow.Remove(pc.PlayerId, pos);
-
-            Utils.NotifyRoles();
-        }, AlertDuration.GetInt(), "GhostNoiseSender Alert");
-    }
-
-    // Shows the kill-location arrow(s) to EVERY seer while an alert is active (not gated on the seer's role).
-    public static string GetSuffix(PlayerControl seer)
-    {
-        if (seer == null || GameStates.IsMeeting || ActiveAlerts.Count == 0) return string.Empty;
-
-        var sb = new StringBuilder();
-        foreach (Vector2 pos in ActiveAlerts)
-            sb.Append(LocateArrow.GetArrow(seer, pos));
-
-        return sb.ToString();
+            if (seer == null || seer.OwnerId < 0) continue;
+            target.RpcSetRoleDesync(RoleTypes.Noisemaker, seer.OwnerId);
+        }
     }
 }

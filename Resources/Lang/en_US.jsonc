@@ -4606,7 +4606,7 @@
   "GhostNoiseSenderInfo": "Bug a Living Player",
   "GhostNoiseSenderInfoLong": "(<#8cffff>Crew Ghost</color>):\n<size=80%>Use your protect button on a living player to plant a listening bug on them for a short time. If that bugged player is murdered while the bug is active, a Noisemaker-style alert reveals the kill location to everyone.</size>",
   "GhostNoiseSenderTime": "Bug Duration",
-  "GhostNoiseSenderAlertDuration": "Kill-Reveal Duration",
+  "GhostNoiseSenderAlertDuration": "Noise Alert Duration",
   "GhostNoiseSenderMarked": "<#5fd0e0>You planted a bug on your target!</color>",
   "Prefix.GhostNoiseSender": "Ghost Noise Sender",
   "DemonicSupporter": "Demonic Supporter",

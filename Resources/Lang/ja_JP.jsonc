@@ -4119,7 +4119,7 @@
   "GhostNoiseSenderInfo": "生存者に盗聴器を仕掛ける",
   "GhostNoiseSenderInfoLong": "(<#8cffff>クルー幽霊</color>):\n<size=80%>守るボタンを生存者に使うと、一定時間その相手に盗聴器を仕掛ける。仕掛けている間にその相手が殺されると、ノイズメーカーと同じ警報が鳴り、キルされた場所が全員に知らされる。</size>",
   "GhostNoiseSenderTime": "盗聴器の効果時間",
-  "GhostNoiseSenderAlertDuration": "キル地点を知らせる時間",
+  "GhostNoiseSenderAlertDuration": "警報が鳴る長さ",
   "GhostNoiseSenderMarked": "<#5fd0e0>ターゲットに盗聴器を仕掛けた！</color>",
   "Prefix.GhostNoiseSender": "ゴーストノイズセンダー",
   "DemonicSupporter": "デーモンサポーター",
