@@ -586,6 +586,15 @@ public sealed class PlayerGameOptionsSender(PlayerControl player) : GameOptionsS
             else
                 AURoleOptions.NoisemakerImpostorAlert = CrewmateVanillaRoles.NoiseMakerImpostorAlert.GetBool();
 
+            // A GhostNoiseSender is in play: force the vanilla Noisemaker death alert ON for everyone, so a
+            // bugged victim that is desync-converted to a Noisemaker at kill time actually pings the location
+            // for all players, independent of the host's Noisemaker role settings.
+            if (GhostNoiseSender.AnyAssigned)
+            {
+                AURoleOptions.NoisemakerImpostorAlert = true;
+                AURoleOptions.NoisemakerAlertDuration = GhostNoiseSender.AlertDurationValue;
+            }
+
             try
             {
                 if (Shifter.WasShifter.Contains(player.PlayerId) && role.IsImpostor()) opt.SetVision(true);
