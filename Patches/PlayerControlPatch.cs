@@ -371,6 +371,7 @@ internal static class CheckMurderPatch
             }
 
             //==Kill processing==
+            GhostNoiseSender.OnTargetMurdered(target);
             __instance.Kill(target);
             //===================
         }
