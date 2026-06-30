@@ -390,6 +390,20 @@ public static class TextBoxPatch
         if (AdditionalInfoText) AdditionalInfoText.transform.SetAsLastSibling();
     }
 
+    // Drop the lazily-created command-autocomplete TMP clones whenever a new HudManager starts (= new game /
+    // scene reload). They live in the game scene, so a new game destroys the old instances — but these STATIC
+    // fields keep pointing at the destroyed IL2CPP objects. Reading .text / .enabled on such a dangling object
+    // returns freed-or-adjacent heap memory: that is exactly why the literal GameObject name "PlaceHolderText"
+    // leaks into the chat input, and why TextBoxTMP.get_text() intermittently dies with the uncatchable
+    // "Internal CLR error (0x80131506)". Nulling here forces a clean rebuild for the new HudManager lifetime.
+    public static void Reset()
+    {
+        PlaceHolderText = null;
+        CommandInfoText = null;
+        AdditionalInfoText = null;
+        IsInvalidCommand = false;
+    }
+
     [HarmonyPatch(typeof(TextBoxTMP), nameof(TextBoxTMP.Update))]
     [HarmonyPrefix]
     public static bool UpdatePatch(TextBoxTMP __instance)

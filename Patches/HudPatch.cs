@@ -761,6 +761,11 @@ internal static class HudManagerStartPatch
 {
     public static void Postfix()
     {
+        // New HudManager (new game / scene reload) → drop stale static refs to destroyed chat-autocomplete
+        // TMP clones so they rebuild cleanly. Prevents dangling-reference reads that leak "PlaceHolderText"
+        // into the chat field and crash at TextBoxTMP.get_text with "Internal CLR error (0x80131506)".
+        TextBoxPatch.Reset();
+
         Main.Instance.StartCoroutine(CoResizeUI());
     }
 

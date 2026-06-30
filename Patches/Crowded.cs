@@ -286,7 +286,14 @@ internal static class Crowded
         [SuppressMessage("ReSharper", "UnusedMember.Global")]
         public static void Postfix(ref SecurityLogger __instance)
         {
-            __instance.Timers = new Il2CppStructArray<float>(127);
+            // Vanilla door-log code indexes Timers[playerControl.PlayerId]. Every CustomNetObject is a real
+            // PlayerControl whose PlayerId is 200-254 (see CustomNetObject.AllocateNextPlayerId) and whose
+            // NetworkedPlayerInfo deliberately stays in GameData.AllPlayers — so a CNO reaching the door log
+            // writes Timers[254] etc. A 127-element array makes that a ~500-byte OUT-OF-BOUNDS write into the
+            // IL2CPP GC heap, smashing a random neighbor object's header and crashing minutes later with the
+            // uncatchable "Internal CLR error (0x80131506)" when the marshaler next reads the clobbered string.
+            // Size for the full byte PlayerId range (0-255) so Timers[anyPlayerId] is always in bounds.
+            __instance.Timers = new Il2CppStructArray<float>(256);
         }
     }
 
