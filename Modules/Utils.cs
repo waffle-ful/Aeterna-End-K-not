@@ -3068,6 +3068,8 @@ public static class Utils
 
                     AdditionalSuffixes.Add(Bloodmoon.GetSuffix(seer));
                     AdditionalSuffixes.Add(Haunter.GetSuffix(seer));
+                    AdditionalSuffixes.Add(DemonicTracker.GetSuffix(seer));
+                    AdditionalSuffixes.Add(GhostReseter.GetSuffix(seer));
 
                     switch (seerRole)
                     {
