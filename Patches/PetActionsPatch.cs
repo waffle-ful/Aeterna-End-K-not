@@ -1,5 +1,6 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using AmongUs.GameOptions;
 using EndKnot.Gamemodes;
 using EndKnot.Modules;
@@ -234,6 +235,20 @@ internal static class ExternalRpcPetPatch
 
         if (target)
         {
+            if (pc.Is(CustomRoles.Dizzy))
+            {
+                Vector2 pos = pc.Pos();
+                float range = pc.GetKillDistance();
+                PlayerControl[] allInRange = FastVector2.GetPlayersInRange(pos, range, x => x.PlayerId != pc.PlayerId).ToArray();
+
+                if (allInRange.Length > 1)
+                {
+                    PlayerControl tempTarget = target;
+                    target = allInRange.RandomElement();
+                    Logger.Info($"Target was {tempTarget.GetNameWithRole()}, new target is {target.GetNameWithRole()}", "Dizzy");
+                }
+            }
+
             if (target.Is(CustomRoles.Detour) && target.GetAbilityUseLimit() >= 1f)
             {
                 target.RpcRemoveAbilityUse();

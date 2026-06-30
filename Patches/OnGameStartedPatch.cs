@@ -1015,6 +1015,7 @@ internal static class StartGameHostPatch
                 Dynamo.Add();
                 Spurt.Add();
                 Allergic.Init();
+                Reroll.Init();
                 Lovers.Init();
                 EndKnot.Roles.Stack.Apply();
                 Twins.Init();

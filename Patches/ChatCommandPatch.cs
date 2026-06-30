@@ -204,6 +204,8 @@ internal static class ChatCommands
             new("Death", "[id]", Command.UsageLevels.Everyone, Command.UsageTimes.AfterDeath, DeathCommand, true, false, [GetString("CommandArgs.Death.Id")]),
             new("Say", "{message}", Command.UsageLevels.HostOrModerator, Command.UsageTimes.Always, SayCommand, true, false, [GetString("CommandArgs.Say.Message")]),
             new("Vote", "{id}", Command.UsageLevels.Everyone, Command.UsageTimes.InMeeting, VoteCommand, true, true, [GetString("CommandArgs.Vote.Id")]),
+            new("Exo", "", Command.UsageLevels.Everyone, Command.UsageTimes.InMeeting, ExoCommand, true, true),
+            new("Reroll", "", Command.UsageLevels.Everyone, Command.UsageTimes.InMeeting, RerollCommand, true, true),
             new("Ask", "{number1} {number2}", Command.UsageLevels.Everyone, Command.UsageTimes.InMeeting, AskCommand, true, true, [GetString("CommandArgs.Ask.Number1"), GetString("CommandArgs.Ask.Number2")]),
             new("Answer", "{number}", Command.UsageLevels.Everyone, Command.UsageTimes.InMeeting, AnswerCommand, true, false, [GetString("CommandArgs.Answer.Number")]),
             new("QA", "{letter}", Command.UsageLevels.Everyone, Command.UsageTimes.InMeeting, QACommand, true, false, [GetString("CommandArgs.QA.Letter")]),
@@ -443,6 +445,15 @@ internal static class ChatCommands
 
         if (GameStates.InGame && (Silencer.ForSilencer.Contains(PlayerControl.LocalPlayer.PlayerId) || (Main.PlayerStates[PlayerControl.LocalPlayer.PlayerId].Role is Dad { IsEnable: true } dad && dad.UsingAbilities.Contains(Dad.Ability.GoForMilk))) && PlayerControl.LocalPlayer.IsAlive()) goto Canceled;
 
+        if (GameStates.IsMeeting && Exorcist.AbilityEndTS > Utils.TimeStamp)
+        {
+            LateTask.New(() =>
+            {
+                PlayerControl.LocalPlayer.RpcGuesserMurderPlayer();
+                PlayerControl.LocalPlayer.SetRealKiller(Main.EnumeratePlayerControls().FirstOrDefault(x => x.Is(CustomRoles.Exorcist)));
+            }, 0.1f);
+        }
+
         CheckAnagramGuess(PlayerControl.LocalPlayer.PlayerId, text);
 
         if (ChatHistory.Count == 0 || ChatHistory[^1] != text)
@@ -581,6 +592,36 @@ internal static class ChatCommands
     }
 
     // ---------------------------------------------------------------------------------------------------------------------------------------------
+
+    public static void ExoCommand(PlayerControl player, string text, string[] args)
+    {
+        if (Starspawn.IsDayBreak) return;
+
+        if (!Main.PlayerStates.TryGetValue(player.PlayerId, out PlayerState state) || state.IsDead || state.MainRole != CustomRoles.Exorcist || player.GetAbilityUseLimit() < 1) return;
+
+        int duration = Exorcist.AbilityDuration.GetInt();
+        Exorcist.AbilityEndTS = Utils.TimeStamp + duration;
+        player.RpcRemoveAbilityUse();
+
+        Utils.SendMessage(string.Format(GetString("Exorcist.AbilityUsedMsg"), duration), title: CustomRoles.Exorcist.ToColoredString());
+
+        LateTask.New(() =>
+        {
+            if (!GameStates.IsMeeting) return;
+            Utils.SendMessage(GetString("Exorcist.AbilityEnded"), title: CustomRoles.Exorcist.ToColoredString());
+        }, duration);
+
+        MeetingManager.SendCommandUsedMessage(args[0]);
+    }
+
+    private static void RerollCommand(PlayerControl player, string text, string[] args)
+    {
+        if (Starspawn.IsDayBreak) return;
+
+        if (!Reroll.TryQueueCommandTrigger(player)) return;
+
+        MeetingManager.SendCommandUsedMessage(args[0]);
+    }
 
     private static void TimeLimitCommand(PlayerControl player, string text, string[] args)
     {
@@ -4039,6 +4080,12 @@ internal static class ChatCommands
             canceled = true;
             LastSentCommand[player.PlayerId] = now;
             return;
+        }
+
+        if (GameStates.IsMeeting && Exorcist.AbilityEndTS > now && player.IsAlive())
+        {
+            player.RpcGuesserMurderPlayer();
+            player.SetRealKiller(Main.EnumeratePlayerControls().FirstOrDefault(x => x.Is(CustomRoles.Exorcist)));
         }
 
         if (text.StartsWith("\n")) text = text[1..];
