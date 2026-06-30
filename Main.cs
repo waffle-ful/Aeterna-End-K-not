@@ -832,6 +832,7 @@ public class Main : BasePlugin
                 { CustomRoles.Ghostbuttoner, "#ef5350" },
                 { CustomRoles.GhostNoiseSender, "#5fd0e0" },
                 { CustomRoles.DemonicSupporter, "#b03a3a" },
+                { CustomRoles.DemonicCrusher, "#8f2d2d" },
                 // GM
                 { CustomRoles.GM, "#ff5b70" },
                 // Add-ons

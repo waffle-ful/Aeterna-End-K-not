@@ -3074,6 +3074,7 @@ public static class Utils
                     AdditionalSuffixes.Add(DemonicTracker.GetSuffix(seer));
                     AdditionalSuffixes.Add(GhostReseter.GetSuffix(seer));
                     AdditionalSuffixes.Add(Ghostbuttoner.GetSuffix(seer));
+                    AdditionalSuffixes.Add(DemonicCrusher.GetSuffix(seer));
 
                     switch (seerRole)
                     {
