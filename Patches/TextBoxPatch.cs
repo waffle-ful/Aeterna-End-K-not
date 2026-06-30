@@ -17,6 +17,26 @@ public static class TextBoxPatch
 
     public static bool IsInvalidCommand;
 
+    // Managed mirror of the focused chat field's IME composition string. We are the only writer of the chat
+    // field's compoText (vanilla Update/SetText are skipped), so this faithfully tracks it — and lets us stop
+    // re-reading the IL2CPP compoText field every frame, which under Japanese IME intermittently marshals
+    // freed memory and dies with the uncatchable "Internal CLR error (0x80131506)".
+    private static string LastCompoText = "";
+
+    // Managed snapshot of the current command-autocomplete suggestion. OnTabPress injects THIS instead of
+    // reading the stale-prone PlaceHolderText.text (a freed/reused IL2CPP TMP returns its GameObject name).
+    private static string LastSuggestion = "";
+
+    // The mod-settings search box (GameSettingMenuPatch.InputField) is an Object.Instantiate clone of the live
+    // chat field, so it is a fully-alive TextBoxTMP that lives OUTSIDE "ChatScreenRoot/..." — every other gate
+    // here intentionally ignores it. But its Update must still get our caretPos clamp, otherwise vanilla
+    // TextBoxTMP.Update runs `text.Insert(caretPos, ...)` with a stale caret (e.g. after Clear() leaves the
+    // caret non-zero on now-empty text) and spams ArgumentOutOfRangeException. So UpdatePatch alone also
+    // accepts the clone; the chat-only patches (autocomplete / char filter / char limit) keep ignoring it.
+    private static bool IsChatOrSearchTextBox(TextBoxTMP textBox) =>
+        textBox.gameObject.HasParentInHierarchy("ChatScreenRoot/ChatScreenContainer")
+        || (GameSettingMenuPatch.InputField && GameSettingMenuPatch.InputField.textArea == textBox);
+
     [HarmonyPatch(typeof(TextBoxTMP), nameof(TextBoxTMP.SetText))]
     [HarmonyPrefix]
     public static bool AllowAllCharacters(TextBoxTMP __instance, [HarmonyArgument(0)] string input, [HarmonyArgument(1)] string inputCompo = "")
@@ -75,12 +95,13 @@ public static class TextBoxPatch
 
         input = __instance.tempTxt.ToString();
 
-        if (!input.Equals(__instance.text) || !inputCompo.Equals(__instance.compoText))
+        if (!input.Equals(__instance.text) || !inputCompo.Equals(LastCompoText))
         {
             __instance.text = input;
             __instance.compoText = inputCompo;
+            LastCompoText = inputCompo;
             string str = __instance.text;
-            string compoText = __instance.compoText;
+            string compoText = inputCompo;
 
             if (__instance.Hidden)
             {
@@ -185,7 +206,6 @@ public static class TextBoxPatch
                 Destroy();
                 IsInvalidCommand = true;
                 Color textColor = input is "/c" or "/cm" or "/cmd" ? Palette.Orange : Color.red;
-                __instance.compoText.Color(textColor);
                 __instance.outputText.color = textColor;
                 return;
             }
@@ -331,6 +351,7 @@ public static class TextBoxPatch
             additionalInfo += startsWithCmd && AmongUsClient.Instance.AmHost ? $"\n\n<#00a5ff>ⓘ <b>{Translator.GetString("HostMayOmitCmdPrefix")}</b></color>" : string.Empty;
 
             PlaceHolderText.text = text;
+            LastSuggestion = text;
             CommandInfoText.text = info;
             AdditionalInfoText.text = additionalInfo;
 
@@ -348,6 +369,7 @@ public static class TextBoxPatch
 
         void Destroy()
         {
+            LastSuggestion = "";
             if (PlaceHolderText) PlaceHolderText.enabled = false;
             if (CommandInfoText) CommandInfoText.enabled = false;
 
@@ -362,9 +384,13 @@ public static class TextBoxPatch
 
     public static void OnTabPress(ChatController __instance)
     {
-        if (!PlaceHolderText || PlaceHolderText.text == "") return;
+        // Inject our managed snapshot of the suggestion, NOT PlaceHolderText.text. If the static TMP clone has
+        // gone stale (its IL2CPP object freed/reused), get_text returns the literal GameObject name
+        // "PlaceHolderText" (or garbage) — which is exactly how that string leaked into the chat input. We set
+        // the suggestion text ourselves in ShowCommandHelp, so LastSuggestion is the safe source of truth.
+        if (LastSuggestion == "") return;
 
-        __instance.freeChatField.textArea.SetText(PlaceHolderText.text);
+        __instance.freeChatField.textArea.SetText(LastSuggestion);
         __instance.freeChatField.textArea.compoText = "";
 
         /*if (AdditionalInfoText && AdditionalInfoText.text != "")
@@ -376,9 +402,11 @@ public static class TextBoxPatch
         try
         {
             bool open = HudManager.InstanceExists && (HudManager.Instance?.Chat?.IsOpenOrOpening ?? false);
-            PlaceHolderText?.gameObject.SetActive(open);
-            CommandInfoText?.gameObject.SetActive(open);
-            AdditionalInfoText?.gameObject.SetActive(open);
+            // Use Unity's null check (if (x)), NOT C# `?.`: `?.` is a pure reference-null test that bypasses
+            // Unity's fake-null, so it would dereference a destroyed-but-non-null IL2CPP wrapper every frame.
+            if (PlaceHolderText) PlaceHolderText.gameObject.SetActive(open);
+            if (CommandInfoText) CommandInfoText.gameObject.SetActive(open);
+            if (AdditionalInfoText) AdditionalInfoText.gameObject.SetActive(open);
         }
         catch { }
     }
@@ -402,13 +430,15 @@ public static class TextBoxPatch
         CommandInfoText = null;
         AdditionalInfoText = null;
         IsInvalidCommand = false;
+        LastCompoText = "";
+        LastSuggestion = "";
     }
 
     [HarmonyPatch(typeof(TextBoxTMP), nameof(TextBoxTMP.Update))]
     [HarmonyPrefix]
     public static bool UpdatePatch(TextBoxTMP __instance)
     {
-        if (!__instance.gameObject.HasParentInHierarchy("ChatScreenRoot/ChatScreenContainer")) return true;
+        if (!IsChatOrSearchTextBox(__instance)) return true;
 
         if (!__instance.enabled || !__instance.hasFocus) return false;
 
@@ -419,12 +449,20 @@ public static class TextBoxPatch
         catch { }
 
         string inputString = Input.inputString;
+        string composition = Input.compositionString;
 
-        if (inputString.Length > 0 || __instance.compoText != Input.compositionString)
+        // Compare against our managed snapshot (see LastCompoText) instead of re-reading __instance.compoText:
+        // that per-frame IL2CPP read is what fatally crashes at get_compoText under IME composition.
+        // IMPORTANT: update LastCompoText AFTER SetText. The SetText below runs AllowAllCharacters, which reads
+        // LastCompoText to decide whether the composition changed and must be re-rendered — it needs the OLD
+        // value during that call. Setting it before would make AllowAllCharacters think nothing changed and
+        // silently skip drawing the in-progress IME (Japanese) text into the field.
+        if (inputString.Length > 0 || composition != LastCompoText)
         {
             if (__instance.text is null or "Enter Name") __instance.text = "";
             int startIndex = Math.Clamp(__instance.caretPos, 0, __instance.text.Length);
-            __instance.SetText(__instance.text.Insert(startIndex, inputString), Input.compositionString);
+            __instance.SetText(__instance.text.Insert(startIndex, inputString), composition);
+            LastCompoText = composition;
         }
 
         if (!__instance.Pipe || !__instance.hasFocus) return false;

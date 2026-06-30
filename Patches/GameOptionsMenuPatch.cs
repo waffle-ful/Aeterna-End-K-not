@@ -1492,6 +1492,15 @@ public static class GameSettingMenuPatch
         {
             FreeChatInputField freeChatField = HudManager.Instance.Chat.freeChatField;
             field = ModGameOptionsMenu.Track(Object.Instantiate(freeChatField, parentLeftPanel.parent));
+
+            // Object.Instantiate deep-clones the whole chat field. If the chat command-autocomplete ghost
+            // (TextBoxPatch.PlaceHolderText, a child of the live freeChatField subtree) happens to exist when
+            // Settings is opened, the clone copies it → a "PlaceHolderText(Clone)" that ends up cached in the
+            // DontDestroyOnLoad UI root and accumulates on every reopen, leaking its GameObject name into the
+            // UI. Strip any such ghost out of this clone so the search box only carries its own text field.
+            foreach (TextMeshPro ghost in field.GetComponentsInChildren<TextMeshPro>(true))
+                if (ghost.name.StartsWith("PlaceHolderText"))
+                    Object.Destroy(ghost.gameObject);
         }
         field.transform.localScale = new(0.3f, 0.59f, 1);
         field.transform.localPosition = new(-0.7f, -2.5f, -5f);
@@ -1832,7 +1841,6 @@ public static class FixDarkThemeForSearchBar
         if (field && field.gameObject.activeSelf)
         {
             field.background.color = new Color32(40, 40, 40, byte.MaxValue);
-            field.textArea.compoText.Color(Color.white);
             field.textArea.outputText.color = Color.white;
         }
     }

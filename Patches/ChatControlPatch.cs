@@ -119,10 +119,7 @@ internal static class ChatControllerUpdatePatch
             __instance.freeChatField.background.color = new Color32(40, 40, 40, byte.MaxValue);
 
             if (!TextBoxPatch.IsInvalidCommand)
-            {
-                __instance.freeChatField.textArea.compoText.Color(Color.white);
                 __instance.freeChatField.textArea.outputText.color = Color.white;
-            }
 
             __instance.quickChatField.background.color = new Color32(40, 40, 40, byte.MaxValue);
             __instance.quickChatField.text.color = Color.white;
