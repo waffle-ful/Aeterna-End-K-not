@@ -245,6 +245,7 @@ internal static class CheckForEndVotingPatch
             Blackmailer.ManipulateVotingResult(votingData, states);
             Swapper.ManipulateVotingResult(votingData, states);
             Assumer.OnVotingEnd(votingData);
+            MeetingAngel.NegateVotes(votingData, states);
             
             var exileId = byte.MaxValue;
             var max = 0;
