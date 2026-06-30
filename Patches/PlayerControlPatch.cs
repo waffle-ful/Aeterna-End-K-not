@@ -630,6 +630,7 @@ internal static class CheckMurderPatch
             return false;
         }
 
+        if (!check) GhostNoiseSender.OnTargetMurdered(target);
         if (!check) killer.Kill(target);
 
         if (killer.Is(CustomRoles.Doppelganger)) Doppelganger.OnCheckMurderEnd(killer, target);
@@ -2133,6 +2134,7 @@ internal static class FixedUpdatePatch
                 additionalSuffixes.Add(Haunter.GetSuffix(seer));
                 additionalSuffixes.Add(DemonicTracker.GetSuffix(seer));
                 additionalSuffixes.Add(GhostReseter.GetSuffix(seer));
+                additionalSuffixes.Add(Ghostbuttoner.GetSuffix(seer));
                 if (seer.Is(CustomRoles.Asthmatic)) additionalSuffixes.Add(Asthmatic.GetSuffixText(lpId));
                 if (seer.Is(CustomRoles.Sonar)) additionalSuffixes.Add(Sonar.GetSuffix(seer, GameStates.IsMeeting));
                 if (seer.Is(CustomRoles.Deadlined)) additionalSuffixes.Add(Deadlined.GetSuffix(seer));

@@ -1018,6 +1018,7 @@ internal static class MeetingHudStartPatch
             }, 8f, log: false);
 
             NotifyRoleSkillOnMeetingStart();
+            GhostRumour.SendReveals();
 
             LateTask.New(() =>
             {
