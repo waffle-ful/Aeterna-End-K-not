@@ -141,6 +141,20 @@ internal static class CheckMurderPatch
                 return false;
             }
 
+            if (killer.Is(CustomRoles.Dizzy))
+            {
+                Vector2 pos = killer.Pos();
+                float range = killer.GetKillDistance();
+                PlayerControl[] allInRange = FastVector2.GetPlayersInRange(pos, range, x => x.PlayerId != killer.PlayerId).ToArray();
+
+                if (allInRange.Length > 1)
+                {
+                    PlayerControl tempTarget = target;
+                    target = allInRange.RandomElement();
+                    Logger.Info($"Target was {tempTarget.GetNameWithRole()}, new target is {target.GetNameWithRole()}", "Dizzy");
+                }
+            }
+
             if (target.Is(CustomRoles.Detour) && target.GetAbilityUseLimit() >= 1f)
             {
                 target.RpcRemoveAbilityUse();
@@ -1483,6 +1497,7 @@ internal static class ReportDeadBodyPatch
             Bloodmoon.OnMeetingStart();
             Deadlined.OnMeetingStart();
             Commited.OnMeetingStart();
+            Reroll.OnMeetingStart();
         }
         catch (Exception e) { ThrowException(e); }
 
@@ -1819,6 +1834,7 @@ internal static class FixedUpdatePatch
                         if (subRoles.Contains(CustomRoles.Sleep)) Sleep.CheckGlowNearby(player);
                         if (subRoles.Contains(CustomRoles.Introvert)) Introvert.OnFixedUpdate(player);
                         if (subRoles.Contains(CustomRoles.Allergic)) Allergic.OnFixedUpdate(player);
+                        if (subRoles.Contains(CustomRoles.Entombed)) Entombed.OnFixedUpdate(player);
                     }
                 }
                 

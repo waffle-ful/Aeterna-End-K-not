@@ -171,6 +171,10 @@ internal static class CustomRolesHelper
                 CustomRoles.Centralizer => UsePets ? CustomRoles.Impostor : CustomRoles.Shapeshifter,
                 CustomRoles.Venerer => UsePets ? CustomRoles.Impostor : CustomRoles.Shapeshifter,
                 CustomRoles.Kidnapper => CustomRoles.Shapeshifter,
+                CustomRoles.Frightener => CustomRoles.Shapeshifter,
+                CustomRoles.Chainbinder => UsePets ? CustomRoles.Impostor : CustomRoles.Shapeshifter,
+                CustomRoles.Exorcist => CustomRoles.Impostor,
+                CustomRoles.Obstructer => CustomRoles.Impostor,
                 CustomRoles.Ambusher => UsePets ? CustomRoles.Impostor : CustomRoles.Shapeshifter,
                 CustomRoles.Stasis => UsePets ? CustomRoles.Impostor : CustomRoles.Shapeshifter,
                 CustomRoles.Fabricator => CustomRoles.Impostor,
@@ -244,6 +248,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Tornado => CustomRoles.Crewmate,
                 CustomRoles.Druid => UsePets ? CustomRoles.Crewmate : CustomRoles.Engineer,
                 CustomRoles.Catcher => UsePets ? CustomRoles.Crewmate : CustomRoles.Engineer,
+                CustomRoles.Operative => UsePets ? CustomRoles.Crewmate : CustomRoles.Engineer,
                 CustomRoles.Insight => CustomRoles.Crewmate,
                 CustomRoles.Tunneler => CustomRoles.Crewmate,
                 CustomRoles.Detour => CustomRoles.Crewmate,
@@ -370,6 +375,7 @@ internal static class CustomRolesHelper
                 CustomRoles.QuickKiller => UsePets ? CustomRoles.Impostor : CustomRoles.Shapeshifter,
                 CustomRoles.QuickShooter => UsePets ? CustomRoles.Impostor : CustomRoles.Shapeshifter,
                 CustomRoles.EvilEraser => CustomRoles.Impostor,
+                CustomRoles.Butcher => CustomRoles.Impostor,
                 CustomRoles.Overkiller => CustomRoles.Impostor,
                 CustomRoles.Hangman => CustomRoles.Shapeshifter,
                 CustomRoles.Sunnyboy => CustomRoles.Scientist,
@@ -556,6 +562,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Glitch => RoleTypes.Shapeshifter,
                 CustomRoles.Jailor => UsePets && Jailor.UsePet.GetBool() ? RoleTypes.GuardianAngel : RoleTypes.Impostor,
                 CustomRoles.Juggernaut => RoleTypes.Impostor,
+                CustomRoles.Jackpot => RoleTypes.Shapeshifter,
                 CustomRoles.Jinx => RoleTypes.Impostor,
                 CustomRoles.Stalker => RoleTypes.Impostor,
                 CustomRoles.Provocateur => RoleTypes.Impostor,
@@ -564,6 +571,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Duality => RoleTypes.Impostor,
                 CustomRoles.Berserker => RoleTypes.Impostor,
                 CustomRoles.SerialKiller => RoleTypes.Impostor,
+                CustomRoles.Blockade => RoleTypes.Shapeshifter,
                 CustomRoles.Quarry => RoleTypes.Shapeshifter,
                 CustomRoles.SoulCollector => RoleTypes.Impostor,
                 CustomRoles.Spider => UsePets ? RoleTypes.Impostor : RoleTypes.Shapeshifter,
@@ -663,6 +671,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Wyrd => RoleTypes.Shapeshifter,
                 CustomRoles.MoonDancer => RoleTypes.Phantom,
                 CustomRoles.Empress => RoleTypes.Phantom,
+                CustomRoles.Shadow => RoleTypes.Phantom,
 
                 _ => RoleTypes.GuardianAngel
             };
@@ -762,7 +771,9 @@ internal static class CustomRolesHelper
                 CustomRoles.CurseMaker or
                 CustomRoles.JackalHadouHo or
                 CustomRoles.Tama or
-                CustomRoles.MassMedia;
+                CustomRoles.MassMedia or
+                CustomRoles.Blockade or
+                CustomRoles.Jackpot;
         }
 
         public bool IsGhostRole()
@@ -912,7 +923,12 @@ internal static class CustomRolesHelper
                 CustomRoles.Perplexer or
                 CustomRoles.DummySpawner or
                 CustomRoles.Skinwalker or
-                CustomRoles.Riptide;
+                CustomRoles.Riptide or
+                CustomRoles.Chainbinder or
+                CustomRoles.Exorcist or
+                CustomRoles.Frightener or
+                CustomRoles.Obstructer or
+                CustomRoles.Butcher;
         }
 
         public bool IsNeutral(bool check = false)
@@ -1178,6 +1194,7 @@ internal static class CustomRolesHelper
                              or CustomRoles.Wizard
                              or CustomRoles.AntiAdminer
                              or CustomRoles.Stasis
+                             or CustomRoles.Chainbinder
                              or CustomRoles.Occultist
                              or CustomRoles.Overheat
                              or CustomRoles.Warlock
@@ -1455,6 +1472,11 @@ internal static class CustomRolesHelper
                 CustomRoles.Hypocrite => RoleOptionType.Impostor_Madmate,
                 CustomRoles.Crewpostor => RoleOptionType.Impostor_Madmate,
                 CustomRoles.Renegade => RoleOptionType.Impostor_Madmate,
+                CustomRoles.Butcher => RoleOptionType.Impostor_Killing,
+                CustomRoles.Chainbinder => RoleOptionType.Impostor_Support,
+                CustomRoles.Exorcist => RoleOptionType.Impostor_Miscellaneous,
+                CustomRoles.Frightener => RoleOptionType.Impostor_Miscellaneous,
+                CustomRoles.Obstructer => RoleOptionType.Impostor_Miscellaneous,
                 _ => role.IsCrewmate() ? RoleOptionType.Crewmate_Miscellaneous : RoleOptionType.Neutral_Benign
             };
         }
@@ -1642,6 +1664,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Tree => RoleOptionType.Crewmate_Chaos,
                 CustomRoles.ForceFielder => RoleOptionType.Crewmate_Chaos,
                 CustomRoles.Sandbox => RoleOptionType.Crewmate_Chaos,
+                CustomRoles.Operative => RoleOptionType.Crewmate_Support,
                 _ => role.IsImpostor() ? RoleOptionType.Impostor_Miscellaneous : RoleOptionType.Neutral_Benign
             };
         }
@@ -1700,7 +1723,8 @@ internal static class CustomRolesHelper
                 CustomRoles.Wyrd or
                 CustomRoles.Empress or
                 CustomRoles.Summoner or
-                CustomRoles.MoonDancer;
+                CustomRoles.MoonDancer or
+                CustomRoles.Shadow;
         }
 
         public bool IncompatibleWithVenom()
@@ -1721,6 +1745,7 @@ internal static class CustomRolesHelper
                     CustomRoles.Fireworker or
                     CustomRoles.Ninja or
                     CustomRoles.Overkiller or
+                    CustomRoles.Butcher or
                     CustomRoles.Postponer or
                     CustomRoles.Sapper or
                     CustomRoles.Scavenger or
@@ -2007,9 +2032,9 @@ internal static class CustomRolesHelper
         };
     }
 
-    public static bool CheckAddonConflict(CustomRoles role, PlayerControl pc)
+    public static bool CheckAddonConflict(CustomRoles role, PlayerControl pc, bool validateExistingState = false)
     {
-        return role.IsAdditionRole() && !(role.IsGhostRole() && pc.IsAlive()) && (!Main.NeverSpawnTogetherCombos.TryGetValue(OptionItem.CurrentPreset, out Dictionary<CustomRoles, List<CustomRoles>> neverList) || !neverList.TryGetValue(pc.GetCustomRole(), out List<CustomRoles> bannedAddonList) || !bannedAddonList.Contains(role)) && pc.GetCustomRole() is not CustomRoles.GuardianAngelEndKnot and not CustomRoles.God && !pc.Is(CustomRoles.Madmate) && !pc.Is(CustomRoles.GM) && role is not CustomRoles.Lovers && !pc.Is(CustomRoles.LazyGuy) && ((Main.IntroDestroyed && Options.AddonAssigningRolesIgnoreMaxAddonsLimit.GetBool()) || !pc.HasSubRole() || pc.GetCustomSubRoles().Count < Options.NoLimitAddonsNumMax.GetInt()) && (!Options.AddonCanBeSettings.TryGetValue(role, out (OptionItem Imp, OptionItem Neutral, OptionItem Crew, OptionItem Coven) o) || ((o.Imp.GetBool() || !pc.GetCustomRole().IsImpostor()) && (o.Neutral.GetBool() || !pc.GetCustomRole().IsNeutral()) && (o.Crew.GetBool() || !pc.IsCrewmate()) && (o.Coven.GetBool() || !pc.Is(Team.Coven)))) && (!role.IsImpOnlyAddon() || (pc.IsImpostor() && !pc.Is(CustomRoles.DoubleAgent)) || (pc.Is(CustomRoles.Traitor) && Traitor.CanGetImpostorOnlyAddons.GetBool())) && role switch
+        return role.IsAdditionRole() && !(role.IsGhostRole() && pc.IsAlive()) && (!Main.NeverSpawnTogetherCombos.TryGetValue(OptionItem.CurrentPreset, out Dictionary<CustomRoles, List<CustomRoles>> neverList) || !neverList.TryGetValue(pc.GetCustomRole(), out List<CustomRoles> bannedAddonList) || !bannedAddonList.Contains(role)) && pc.GetCustomRole() is not CustomRoles.GuardianAngelEndKnot and not CustomRoles.God && !pc.Is(CustomRoles.Madmate) && !pc.Is(CustomRoles.GM) && (validateExistingState || role is not CustomRoles.Lovers) && !pc.Is(CustomRoles.LazyGuy) && (validateExistingState || (Main.IntroDestroyed && Options.AddonAssigningRolesIgnoreMaxAddonsLimit.GetBool()) || !pc.HasSubRole() || pc.GetCustomSubRoles().Count < Options.NoLimitAddonsNumMax.GetInt()) && (!Options.AddonCanBeSettings.TryGetValue(role, out (OptionItem Imp, OptionItem Neutral, OptionItem Crew, OptionItem Coven) o) || ((o.Imp.GetBool() || !pc.GetCustomRole().IsImpostor()) && (o.Neutral.GetBool() || !pc.GetCustomRole().IsNeutral()) && (o.Crew.GetBool() || !pc.IsCrewmate()) && (o.Coven.GetBool() || !pc.Is(Team.Coven)))) && (!role.IsImpOnlyAddon() || (pc.IsImpostor() && !pc.Is(CustomRoles.DoubleAgent)) || (pc.Is(CustomRoles.Traitor) && Traitor.CanGetImpostorOnlyAddons.GetBool())) && role switch
         {
             CustomRoles.Blind when pc.Is(CustomRoles.Sensor) => false,
             CustomRoles.Composter when float.IsNaN(pc.GetAbilityUseLimit()) => false,

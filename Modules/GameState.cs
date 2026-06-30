@@ -88,6 +88,10 @@ public class PlayerState(byte playerId)
         Sunken,
         Collapsed,
 
+        // Upstream EHR catchup
+        Bankrupt,
+        Frightened,
+
         etc = -1
     }
 
