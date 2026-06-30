@@ -723,5 +723,6 @@ public enum CustomRoles
     GhostRumour, // Ghost role
     Ghostbuttoner, // Ghost role
     GhostNoiseSender, // Ghost role
-    DemonicSupporter // Ghost role
+    DemonicSupporter, // Ghost role
+    DemonicCrusher // Ghost role
 }
