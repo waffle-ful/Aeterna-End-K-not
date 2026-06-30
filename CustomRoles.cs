@@ -719,5 +719,8 @@ public enum CustomRoles
     // Upstream EHR catchup (add-ons)
     Dizzy,
     Entombed,
-    Reroll
+    Reroll,
+    GhostRumour, // Ghost role
+    Ghostbuttoner, // Ghost role
+    GhostNoiseSender // Ghost role
 }

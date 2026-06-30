@@ -828,6 +828,9 @@ public class Main : BasePlugin
                 { CustomRoles.DemonicVenter, "#635963" },
                 { CustomRoles.DemonicTracker, "#824880" },
                 { CustomRoles.GhostReseter, "#a87a71" },
+                { CustomRoles.GhostRumour, "#707cab" },
+                { CustomRoles.Ghostbuttoner, "#ef5350" },
+                { CustomRoles.GhostNoiseSender, "#5fd0e0" },
                 // GM
                 { CustomRoles.GM, "#ff5b70" },
                 // Add-ons
