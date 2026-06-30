@@ -699,5 +699,6 @@ public enum CustomRoles
     Twins,
     Faction,
     LastNeutral,
-    Stack
+    Stack,
+    MeetingAngel // Ghost role
 }
