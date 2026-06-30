@@ -3075,6 +3075,7 @@ public static class Utils
                     AdditionalSuffixes.Add(GhostReseter.GetSuffix(seer));
                     AdditionalSuffixes.Add(Ghostbuttoner.GetSuffix(seer));
                     AdditionalSuffixes.Add(DemonicCrusher.GetSuffix(seer));
+                    AdditionalSuffixes.Add(GhostNoiseSender.GetSuffix(seer));
 
                     switch (seerRole)
                     {
