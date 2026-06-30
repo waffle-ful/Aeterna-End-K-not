@@ -813,6 +813,8 @@ public class Main : BasePlugin
                 { CustomRoles.Shade, "#060270" },
                 { CustomRoles.MeetingAngel, "#a7e8b5" },
                 { CustomRoles.DemonicVenter, "#635963" },
+                { CustomRoles.DemonicTracker, "#824880" },
+                { CustomRoles.GhostReseter, "#a87a71" },
                 // GM
                 { CustomRoles.GM, "#ff5b70" },
                 // Add-ons
