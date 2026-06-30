@@ -812,6 +812,7 @@ public class Main : BasePlugin
                 { CustomRoles.Facilitator, CovenColor },
                 { CustomRoles.Shade, "#060270" },
                 { CustomRoles.MeetingAngel, "#a7e8b5" },
+                { CustomRoles.DemonicVenter, "#635963" },
                 // GM
                 { CustomRoles.GM, "#ff5b70" },
                 // Add-ons

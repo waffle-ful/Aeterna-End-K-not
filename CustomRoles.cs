@@ -700,5 +700,6 @@ public enum CustomRoles
     Faction,
     LastNeutral,
     Stack,
-    MeetingAngel // Ghost role
+    MeetingAngel, // Ghost role
+    DemonicVenter // Ghost role
 }
