@@ -107,10 +107,17 @@ sufficient for a determined attacker.
 - `/api/end` flips the embed BACK to blurple "🎫 Lobby Open". The KV entry
   stays alive — the lobby is still in memory and rejoinable. This is what
   allows Play-Again to look correct in Discord without spamming new messages.
-- `/api/close` is the actual terminal: DELETE Discord message + DELETE KV
+- `/api/close` is the actual terminal: DELETE Discord message, then DELETE KV
   entry. The DLL fires this only when the host destroys the lobby (returns
-  to MainMenu). Abandoned lobbies that never see /api/close are eventually
-  swept by the KV TTL (`ANNOUNCE_TTL_SECONDS`, default 3h).
+  to MainMenu). The Discord DELETE is retried (429 honoring Retry-After, 5xx with
+  backoff). If it still fails, the KV entry is **kept** (so its `messageId` isn't
+  lost) and the relay responds `502` — it never deletes KV on a failed Discord
+  delete, because that would orphan the embed permanently.
+- Abandoned lobbies that never receive `/api/close` (host crash / hard-quit, or a
+  close that never reached the relay) only have their **KV entry** expire at the
+  TTL (`ANNOUNCE_TTL_SECONDS`, default 3h) — the Discord message itself is **not**
+  swept (there is no scheduled handler). Those embeds are orphaned until a future
+  scheduled-sweep is added (see Phase 2) or are removed by hand.
 
 ## Responses
 
@@ -127,14 +134,14 @@ All responses are JSON. Status codes:
 | `200 {"status":"lobby-resumed"}` | end: embed flipped back to "open" (Play-Again ready) |
 | `200 {"status":"closed"}` | close: Discord message + KV entry deleted |
 | `200 {"status":"no-op"}` | start/end/close called for an unknown code (already expired or never announced) |
-| `200 {"status":"kv-cleared","warn":"..."}` | close: KV cleared but Discord delete failed; UI should treat as success |
 | `400 {"error":"..."}` | malformed body |
 | `401 {"error":"bad signature"}` | HMAC/timestamp invalid |
 | `403 {"error":"fcHash mismatch"}` | start/end called by wrong host |
 | `409 {"error":"code already announced by another host"}` | someone else owns this code |
 | `426 {"error":"version blocked — upgrade required"}` | `modVersion` listed in `BLOCKED_VERSIONS`; DLL should surface as "please update" |
 | `429 {"error":"rate limited (ip\|host)"}` | DLL should back off ~RATE_LIMIT_SECONDS |
-| `502 {"error":"discord post failed: ..."}` | upstream Discord error; retry later |
+| `502 {"error":"discord post failed: ..."}` | announce: upstream Discord post error; retry later |
+| `502 {"error":"discord delete failed: ..."}` | close: Discord delete still failing after retries; KV kept (messageId retained), embed not yet removed |
 
 ## DLL-side behavior expectations (Phase 2 must implement)
 
