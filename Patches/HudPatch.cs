@@ -559,7 +559,7 @@ internal static class LobbyKillButtonHudPatch
         PlayerControl localPlayer = PlayerControl.LocalPlayer;
         KillButton killButton = __instance.KillButton;
 
-        if (!Options.LobbyKillEnabled.GetBool() || localPlayer.Data.IsDead || Main.LobbyDead.Contains(localPlayer.PlayerId))
+        if (Options.LobbyKillEnabled?.GetBool() != true || localPlayer.Data.IsDead || Main.LobbyDead.Contains(localPlayer.PlayerId))
         {
             killButton.gameObject.SetActive(false);
             return;

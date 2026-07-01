@@ -122,7 +122,7 @@ public static class BanManager
 
     public static bool CheckDenyNamePlayer(PlayerControl player, string name)
     {
-        if (!AmongUsClient.Instance.AmHost || !Options.ApplyDenyNameList.GetBool()) return false;
+        if (!AmongUsClient.Instance.AmHost || Options.ApplyDenyNameList?.GetBool() != true) return false;
 
         try
         {

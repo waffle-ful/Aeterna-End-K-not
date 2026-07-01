@@ -214,7 +214,7 @@ internal static class ExternalRpcPetPatch
     {
         if (killer == null || killer.Data == null) return false;
         if (!AmongUsClient.Instance.AmHost) return false;
-        if (!Options.LobbyKillEnabled.GetBool()) return false;
+        if (Options.LobbyKillEnabled?.GetBool() != true) return false;
         if (killer.Data.IsDead || Main.LobbyDead.Contains(killer.PlayerId)) return false;
 
         if (LobbyKillLastProcess.TryGetValue(killer.PlayerId, out long last) && last + 1 >= Utils.TimeStamp)
