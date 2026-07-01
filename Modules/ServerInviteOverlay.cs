@@ -86,7 +86,7 @@ public static class ServerInviteOverlay
     // LobbyBehaviour.Update Postfix から毎フレーム
     public static void Tick()
     {
-        if (!GameStates.IsLobby || !Options.ServerInviteEnabled.GetBool() || !AmongUsClient.Instance.AmHost)
+        if (!GameStates.IsLobby || Options.ServerInviteEnabled?.GetBool() != true || !AmongUsClient.Instance.AmHost)
         {
             HideAll();
             return;
