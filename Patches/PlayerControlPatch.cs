@@ -30,7 +30,11 @@ internal static class CheckProtectPatch
             if (!__instance.AmOwner) __instance.Notify(GetString("AbilityOnCooldown"));
             else Main.Instance.StartCoroutine(ExternalRpcPetPatch.FlashCooldownTimer());
 
-            return true;
+            // On cooldown: skip vanilla CheckProtect (return false) so it does NOT broadcast a ProtectPlayer
+            // shield animation. Returning true played the green GA shield even though the ghost-role OnProtect
+            // dispatch below never runs while on cooldown — misleading players (esp. shield roles like
+            // AsistingAngel/GA/Shade) into thinking a protect/shield was applied when nothing happened.
+            return false;
         }
 
         if (__instance.Is(CustomRoles.EvilSpirit))

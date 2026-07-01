@@ -24,6 +24,7 @@ internal class AsistingAngel : IGhostRole
     public byte ArrowTarget = byte.MaxValue;
     public int UseCount;
     public bool Guard;
+    private int GuardGen;
     private int AssignedMeetingNum;
 
     public int DaysElapsed => MeetingStates.MeetingNum - AssignedMeetingNum;
@@ -66,8 +67,11 @@ internal class AsistingAngel : IGhostRole
         if (target.PlayerId == BoundTarget)
         {
             // Shield the bound target: a timed kill-immunity window (consumed in OnCheckMurder).
+            // Generation-guard the timer so an earlier shield's expiry can't clear a fresher re-shield
+            // (which would otherwise happen when GuardTime is longer than the current ability cooldown).
             Guard = true;
-            LateTask.New(() => Guard = false, GuardTime.GetInt(), "AsistingAngel Guard");
+            int gen = ++GuardGen;
+            LateTask.New(() => { if (gen == GuardGen) Guard = false; }, GuardTime.GetInt(), "AsistingAngel Guard");
         }
         else
         {
