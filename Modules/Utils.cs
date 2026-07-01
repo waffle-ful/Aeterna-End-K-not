@@ -3013,6 +3013,7 @@ public static class Utils
 
                 SelfMark.Append(Medic.GetMark(seer, seer));
                 SelfMark.Append(Gaslighter.GetMark(seer, seer, forMeeting));
+                SelfMark.Append(AsistingAngel.GetMark(seer, seer, forMeeting));
                 SelfMark.Append(Demon.TargetMark(seer, seer));
                 SelfMark.Append(Sniper.GetShotNotify(seer.PlayerId));
                 
@@ -3075,6 +3076,7 @@ public static class Utils
                     AdditionalSuffixes.Add(GhostReseter.GetSuffix(seer));
                     AdditionalSuffixes.Add(Ghostbuttoner.GetSuffix(seer));
                     AdditionalSuffixes.Add(DemonicCrusher.GetSuffix(seer));
+                    AdditionalSuffixes.Add(AsistingAngel.GetSuffix(seer));
 
                     switch (seerRole)
                     {
@@ -3527,6 +3529,7 @@ public static class Utils
                             TargetMark.Append(Demon.TargetMark(seer, target));
                             TargetMark.Append(Medic.GetMark(seer, target));
                             TargetMark.Append(Gaslighter.GetMark(seer, target, forMeeting));
+                            TargetMark.Append(AsistingAngel.GetMark(seer, target, forMeeting));
                             TargetMark.Append(Follower.TargetMark(seer, target));
                             TargetMark.Append(Romantic.TargetMark(seer, target));
                             TargetMark.Append(Lawyer.LawyerMark(seer, target));
