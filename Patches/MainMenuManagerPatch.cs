@@ -67,6 +67,9 @@ public static class MainMenuManagerPatch
     [HarmonyPrefix]
     public static void Start_Prefix(MainMenuManager __instance)
     {
+        // 番犬による(再)起動なら前回設定で自動ホスト (Calamity 有無に関わらず走らせたいので Prefix で呼ぶ)。
+        AutoRehost.OnMainMenuStart();
+
         if (Template == null) Template = __instance.quitButton;
 
         if (Template == null) return;
