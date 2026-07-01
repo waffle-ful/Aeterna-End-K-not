@@ -530,6 +530,12 @@ internal static class CheckMurderPatch
             return false;
         }
 
+        if (AsistingAngel.IsShielding(target.PlayerId))
+        {
+            Notify("GAGuarded");
+            return false;
+        }
+
         if (SoulHunter.IsSoulHunterTarget(killer.PlayerId) && target.Is(CustomRoles.SoulHunter))
         {
             Notify("SoulHunterTargetNotifyNoKill");
@@ -2119,6 +2125,7 @@ internal static class FixedUpdatePatch
 
             Mark.Append(Medic.GetMark(seer, target));
             Mark.Append(Gaslighter.GetMark(seer, target));
+            Mark.Append(AsistingAngel.GetMark(seer, target));
             Mark.Append(Snitch.GetWarningArrow(seer, target));
             Mark.Append(Snitch.GetWarningMark(seer, target));
             Mark.Append(Deathpact.GetDeathpactMark(seer, target));
@@ -2137,6 +2144,7 @@ internal static class FixedUpdatePatch
                 additionalSuffixes.Add(GhostReseter.GetSuffix(seer));
                 additionalSuffixes.Add(Ghostbuttoner.GetSuffix(seer));
                 additionalSuffixes.Add(DemonicCrusher.GetSuffix(seer));
+                additionalSuffixes.Add(AsistingAngel.GetSuffix(seer));
                 if (seer.Is(CustomRoles.Asthmatic)) additionalSuffixes.Add(Asthmatic.GetSuffixText(lpId));
                 if (seer.Is(CustomRoles.Sonar)) additionalSuffixes.Add(Sonar.GetSuffix(seer, GameStates.IsMeeting));
                 if (seer.Is(CustomRoles.Deadlined)) additionalSuffixes.Add(Deadlined.GetSuffix(seer));

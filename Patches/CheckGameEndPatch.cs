@@ -313,6 +313,18 @@ internal static class GameEndChecker
                     }
                 }
 
+                // AsistingAngel: parasitic ghost — wins iff its bound assist target is among the winners.
+                // Evaluated after the "roles depending on other winners" loop so it catches any way the target won.
+                foreach (KeyValuePair<byte, (CustomRoles Role, IGhostRole Instance)> aaKvp in GhostRolesManager.AssignedGhostRoles)
+                {
+                    if (aaKvp.Value.Instance is not AsistingAngel aa || aa.BoundTarget == byte.MaxValue || WinnerIds.Contains(aaKvp.Key)) continue;
+                    if (WinnerIds.Contains(aa.BoundTarget) || (Main.PlayerStates.TryGetValue(aa.BoundTarget, out PlayerState aaPs) && WinnerRoles.Contains(aaPs.MainRole)))
+                    {
+                        WinnerIds.Add(aaKvp.Key);
+                        AdditionalWinnerTeams.Add(AdditionalWinners.AsistingAngel);
+                    }
+                }
+
                 Faction.OnGameEnd();
 
                 if (WinnerTeam == CustomWinner.Impostor)
