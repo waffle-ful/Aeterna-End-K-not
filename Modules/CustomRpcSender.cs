@@ -197,6 +197,8 @@ public class CustomRpcSender
 
         if (!dispose)
         {
+            HealthLog.RecordHostAction(name, stream.Length, sendOption.ToString());
+
             if (doneStreams.Count > 0)
             {
                 var sb = new StringBuilder(" + Lengths: ");
