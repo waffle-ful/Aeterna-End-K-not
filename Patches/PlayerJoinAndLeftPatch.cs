@@ -84,7 +84,7 @@ internal static class OnGameJoinedPatch
             if (Main.NormalOptions?.KillCooldown == 0f) Main.NormalOptions.KillCooldown = Main.LastKillCooldown.Value;
 
             AURoleOptions.SetOpt(Main.NormalOptions?.CastFast<IGameOptions>());
-            if (AURoleOptions.ShapeshifterCooldown == 0f) AURoleOptions.ShapeshifterCooldown = Main.LastShapeshifterCooldown.Value;
+            if (Main.NormalOptions != null && AURoleOptions.ShapeshifterCooldown == 0f) AURoleOptions.ShapeshifterCooldown = Main.LastShapeshifterCooldown.Value;
 
             LateTask.New(() =>
             {                
@@ -857,14 +857,14 @@ internal static class PlayerControlCheckNamePatch
 
         string name = playerName;
 
-        if (Options.FormatNameMode.GetInt() == 2 && __instance.Data.ClientId != AmongUsClient.Instance.ClientId)
+        if (Options.FormatNameMode?.GetInt() == 2 && __instance.Data.ClientId != AmongUsClient.Instance.ClientId)
             name = Main.Get_TName_Snacks;
         else
         {
             name = name.RemoveHtmlTags().Replace(@"\", string.Empty).Replace("/", string.Empty).Replace("\n", string.Empty).Replace("\r", string.Empty).Replace("<", string.Empty).Replace(">", string.Empty);
             if (name.Length > 10) name = name[..10];
 
-            if (Options.DisableEmojiName.GetBool()) name = Regex.Replace(name, @"\p{Cs}", string.Empty);
+            if (Options.DisableEmojiName?.GetBool() == true) name = Regex.Replace(name, @"\p{Cs}", string.Empty);
 
             if (Regex.Replace(Regex.Replace(name, @"\s", string.Empty), @"[\x01-\x1F,\x7F]", string.Empty).Length < 1) name = Main.Get_TName_Snacks;
         }
