@@ -1102,15 +1102,18 @@ internal static class ReportDeadBodyPatch
             // Next, check whether this meeting is allowed
             //=============================================
 
-            if (!target && Main.NumEmergencyMeetingsUsed.TryGetValue(__instance.PlayerId, out int used))
+            if (!target)
             {
+                // fail-closed: 辞書未登録でも 0 とみなして必ず上限チェック＆加算する (旧 TryGetValue ガードだと
+                // 未登録プレイヤーがチェックも加算もされず、緊急会議を無限に撃てる穴になっていた)。
+                int used = Main.NumEmergencyMeetingsUsed.GetValueOrDefault(__instance.PlayerId);
                 if (used >= Main.RealOptionsData.GetInt(Int32OptionNames.NumEmergencyMeetings))
                 {
                     Notify("NoMoreEmergencyMeetingsLeft");
                     return false;
                 }
 
-                Main.NumEmergencyMeetingsUsed[__instance.PlayerId]++;
+                Main.NumEmergencyMeetingsUsed[__instance.PlayerId] = used + 1;
             }
 
             PlayerControl killer = target?.Object?.GetRealKiller();

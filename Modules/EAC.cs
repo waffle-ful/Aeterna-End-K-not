@@ -19,6 +19,8 @@ internal static class EAC
     public static int DeNum;
     public static readonly HashSet<string> InvalidReports = [];
     public static readonly Dictionary<byte, Stopwatch> TimeSinceLastTaskCompletion = [];
+    // 通報/緊急会議 RPC の連打スロットル (対 Hydra 系フラッド)。正規通報は会議を挟むので秒未満連打は起きない。
+    public static readonly Dictionary<byte, Stopwatch> TimeSinceLastReport = [];
 
     public static void WarnHost(int denum = 1)
     {
@@ -93,6 +95,16 @@ internal static class EAC
                 {
                     byte targetId = sr.ReadByte();
 
+                    // 通報/緊急会議の連打スロットル (対 Hydra 系フラッド)。正規通報は会議を挟むため数十秒間隔=誤検知しない。
+                    if (TimeSinceLastReport.TryGetValue(pc.PlayerId, out Stopwatch reportTimer) && reportTimer.ElapsedMilliseconds < 1000)
+                    {
+                        WarnHost();
+                        Report(pc, "Report/meeting spam");
+                        Logger.Fatal($"Player [{pc.OwnerId}:{pc.GetRealName()}] sent ReportDeadBody too fast (spam), rejected", "EAC");
+                        sr.Recycle();
+                        return true;
+                    }
+
                     if (GameStates.IsMeeting && MeetingHud.Instance.state != MeetingHud.VoteStates.Animating && !pc.IsHost())
                     {
                         WarnHost();
@@ -133,6 +145,7 @@ internal static class EAC
                         }
                     }
 
+                    TimeSinceLastReport[pc.PlayerId] = Stopwatch.StartNew();
                     break;
                 }
                 case RpcCalls.SendQuickChat:
