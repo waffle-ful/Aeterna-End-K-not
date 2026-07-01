@@ -833,6 +833,7 @@ public class Main : BasePlugin
                 { CustomRoles.GhostNoiseSender, "#5fd0e0" },
                 { CustomRoles.DemonicSupporter, "#b03a3a" },
                 { CustomRoles.DemonicCrusher, "#8f2d2d" },
+                { CustomRoles.AsistingAngel, "#8da0b6" },
                 // GM
                 { CustomRoles.GM, "#ff5b70" },
                 // Add-ons
@@ -1380,6 +1381,7 @@ public enum AdditionalWinners
     // -------------
     Phantasm = CustomRoles.Phantasm,
     Shade = CustomRoles.Shade,
+    AsistingAngel = CustomRoles.AsistingAngel,
     Lovers = CustomRoles.Lovers,
     Executioner = CustomRoles.Executioner,
     Opportunist = CustomRoles.Opportunist,
