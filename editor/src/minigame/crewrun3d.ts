@@ -1692,6 +1692,11 @@ function biomePropA(biome: number): THREE.BufferGeometry {
         it.push([at(new THREE.SphereGeometry(0.75, 8, 6), 0, 1.05), 0x4f8f54]);
         it.push([at(new THREE.SphereGeometry(0.55, 8, 6), 0.32, 1.55), 0x5fa564]);
         it.push([at(new THREE.SphereGeometry(0.5, 8, 6), -0.3, 1.45), 0x3d7a44]);
+    } else if (biome === 9) {
+        // Level 0: 黄色い支柱 + てっぺんの蛍光灯 (室内ロビー)
+        it.push([at(new THREE.BoxGeometry(0.7, 3.4, 0.7), 0, 1.7), 0xc9b85e]); // 黄色い角柱
+        it.push([at(new THREE.BoxGeometry(0.82, 0.22, 0.82), 0, 3.5), 0xa8983f]); // 柱頭
+        it.push([at(new THREE.BoxGeometry(0.92, 0.12, 0.42), 0, 3.92), 0xfff8e0]); // 蛍光灯 (明るい白)
     } else {
         // 予備 (未定義バイオーム) — 森の木で代替
         it.push([at(new THREE.CylinderGeometry(0.18, 0.26, 2.2, 6), 0, 1.1), 0x6b4a2a]);
@@ -1770,6 +1775,10 @@ function biomePropB(biome: number): THREE.BufferGeometry {
         it.push([at(new THREE.BoxGeometry(1.2, 0.5, 0.6), 0, 0.25), 0xb09878]); // 木箱プランター
         it.push([at(new THREE.SphereGeometry(0.5, 8, 6).scale(1, 0.6, 1) as THREE.BufferGeometry, 0, 0.6), 0x5fa564]); // 植栽
         it.push([at(new THREE.SphereGeometry(0.3, 8, 6), 0.3, 0.85), 0x4f8f54]);
+    } else if (biome === 9) {
+        // Level 0: 床に転がる黄ばんだ段ボール箱 (ロビーの散乱物)
+        it.push([at(new THREE.BoxGeometry(0.7, 0.6, 0.7), 0, 0.3), 0xc2b05a]);
+        it.push([at(new THREE.BoxGeometry(0.5, 0.4, 0.5), 0.45, 0.2), 0xb0a04e]);
     } else {
         it.push([at(new THREE.IcosahedronGeometry(0.5, 0), 0, 0.4), 0x6f7d7a]); // 予備の岩
     }
@@ -1863,6 +1872,12 @@ function biomePropC(biome: number): THREE.BufferGeometry {
             it.push([at(rail, dx, 1.9), 0x2a2e34]);
         }
         it.push([at(new THREE.BoxGeometry(1.6, 0.6, 1.0), 0, 0.3, -1.6), 0x8a7a60]); // 下り口
+    } else if (biome === 9) {
+        // Level 0: 黄色い壁にぽっかり空いた暗い出入口フレーム (バックルームの象徴)
+        it.push([at(new THREE.BoxGeometry(0.3, 3.2, 0.4), -1.0, 1.6), 0xc9b85e]); // 左枠
+        it.push([at(new THREE.BoxGeometry(0.3, 3.2, 0.4), 1.0, 1.6), 0xc9b85e]); // 右枠
+        it.push([at(new THREE.BoxGeometry(2.3, 0.3, 0.4), 0, 3.05), 0xc9b85e]); // 上枠
+        it.push([at(new THREE.BoxGeometry(1.7, 2.9, 0.1), 0, 1.45, -0.1), 0x161208]); // 暗い奥
     } else {
         it.push([at(new THREE.BoxGeometry(2, 1.2, 1.6), 0, 0.6), 0xb5743f]); // 予備のメサ
     }
@@ -1986,7 +2001,7 @@ function makeBiomeLaneTexture(i: number): THREE.CanvasTexture {
         x.strokeStyle = "#7a8692"; x.lineWidth = 2;
         for (let k = 0; k <= 128; k += 32) { x.beginPath(); x.moveTo(0, k); x.lineTo(128, k); x.stroke(); x.beginPath(); x.moveTo(k, 0); x.lineTo(k, 128); x.stroke(); }
         for (let k = 0; k < 60; k++) { x.fillStyle = "rgba(255,255,255,0.12)"; x.fillRect(Math.random() * 128, Math.random() * 128, 2, 2); } // テカリ
-    } else {
+    } else if (i === 8) {
         // モール (深夜): 暗い市松タイル + ネオンの薄い反射
         for (let r = 0; r < 4; r++) for (let cc = 0; cc < 4; cc++) {
             x.fillStyle = (r + cc) % 2 ? "#322a32" : "#262028";
@@ -1995,6 +2010,18 @@ function makeBiomeLaneTexture(i: number): THREE.CanvasTexture {
         x.strokeStyle = "rgba(10,8,12,0.6)"; x.lineWidth = 1;
         for (let k = 0; k <= 128; k += 32) { x.beginPath(); x.moveTo(0, k); x.lineTo(128, k); x.stroke(); x.beginPath(); x.moveTo(k, 0); x.lineTo(k, 128); x.stroke(); }
         for (let k = 0; k < 16; k++) { x.fillStyle = Math.random() < 0.5 ? "rgba(255,106,208,0.12)" : "rgba(120,210,255,0.1)"; x.fillRect(Math.random() * 128, Math.random() * 128, 4, 4); } // ネオンの床反射
+    } else {
+        // Level 0: 黄ばんだモノクロカーペット (バックルーム) — くすんだ黄 + 繊維のざらつき + 薄いシミ
+        x.fillStyle = "#bcae5c";
+        x.fillRect(0, 0, 128, 128);
+        for (let k = 0; k < 420; k++) { // カーペットの繊維
+            x.fillStyle = Math.random() < 0.5 ? "rgba(166,152,70,0.42)" : "rgba(210,198,122,0.34)";
+            x.fillRect(Math.random() * 128, Math.random() * 128, 1, 2);
+        }
+        for (let k = 0; k < 9; k++) { // 経年の薄汚れ
+            x.fillStyle = "rgba(116,104,48,0.16)";
+            x.beginPath(); x.arc(Math.random() * 128, Math.random() * 128, 6 + Math.random() * 11, 0, 6.28); x.fill();
+        }
     }
     const tex = new THREE.CanvasTexture(c);
     tex.wrapS = THREE.RepeatWrapping;
@@ -2024,7 +2051,9 @@ function makeBiomeFenceTexture(i: number): THREE.CanvasTexture {
                   ? { rail: "#c6ced8", shade: "#9aa6b0", post: "#aab4be", postDark: "#7a8692" } // 空港=金属手すり
                   : i === 8
                     ? { rail: "#d0bfa4", shade: "#a89878", post: "#c0ac8c", postDark: "#90805f" } // モール=木目バリア
-                    : { rail: "#8a9aa6", shade: "#6a7a86", post: "#7a8a96", postDark: "#5a6a76" }; // 海=灰青のドック
+                    : i === 9
+                      ? { rail: "#cbbb62", shade: "#a8983f", post: "#d6c66e", postDark: "#9a8a3a" } // Level 0=黄色い壁(壁紙)
+                      : { rail: "#8a9aa6", shade: "#6a7a86", post: "#7a8a96", postDark: "#5a6a76" }; // 海=灰青のドック
     for (const [y0, h] of [[34, 20], [78, 20]] as [number, number][]) {
         x.fillStyle = palette.rail;
         x.fillRect(0, y0, 128, h);
@@ -2162,7 +2191,7 @@ function makeBiomeBackdropTexture(i: number): THREE.CanvasTexture {
         for (let px = 6; px < 512; px += 26) x.fillRect(px, 76, 18, 44);
         x.fillStyle = "rgba(90,105,120,0.5)"; // 桟
         for (let px = 0; px < 512; px += 26) x.fillRect(px, 70, 4, 58);
-    } else {
+    } else if (i === 8) {
         // モール (深夜): 暗い店舗ファサード + 点いたままのネオン看板だけが光る
         x.fillStyle = "rgba(30,24,32,0.7)";
         x.fillRect(0, 60, 512, 68);
@@ -2172,6 +2201,16 @@ function makeBiomeBackdropTexture(i: number): THREE.CanvasTexture {
             x.fillStyle = neon[(px / 48 | 0) % 3]; x.fillRect(px + 4, 70, 32, 8); // 光る看板
             x.fillStyle = "rgba(255,255,255,0.15)"; x.fillRect(px + 6, 90, 28, 30); // 薄いショーウィンドウ
         }
+    } else {
+        // Level 0: 果てしない黄色い壁紙の回廊 + 等間隔の暗い出入口 (バックルーム)
+        x.fillStyle = "rgba(190,174,90,0.9)"; // 黄ばんだ壁面
+        x.fillRect(0, 38, 512, 90);
+        x.fillStyle = "rgba(168,152,68,0.7)"; // 壁紙の縦ストライプ
+        for (let px = 0; px < 512; px += 16) x.fillRect(px, 38, 2, 90);
+        x.fillStyle = "rgba(112,100,48,0.7)"; // 奥へ続く暗い出入口
+        for (let px = 26; px < 512; px += 86) x.fillRect(px, 62, 42, 66);
+        x.fillStyle = "rgba(214,200,124,0.55)"; // 巾木 (下端の明るい帯)
+        x.fillRect(0, 120, 512, 6);
     }
     const tex = new THREE.CanvasTexture(c);
     tex.wrapS = THREE.RepeatWrapping;
