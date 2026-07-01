@@ -318,7 +318,7 @@ internal static class GameEndChecker
                 foreach (KeyValuePair<byte, (CustomRoles Role, IGhostRole Instance)> aaKvp in GhostRolesManager.AssignedGhostRoles)
                 {
                     if (aaKvp.Value.Instance is not AsistingAngel aa || aa.BoundTarget == byte.MaxValue || WinnerIds.Contains(aaKvp.Key)) continue;
-                    if (WinnerIds.Contains(aa.BoundTarget) || (Main.PlayerStates.TryGetValue(aa.BoundTarget, out PlayerState aaPs) && WinnerRoles.Contains(aaPs.MainRole)))
+                    if (WinnerIds.Contains(aa.BoundTarget) || (Main.PlayerStates.TryGetValue(aa.BoundTarget, out PlayerState aaPs) && (WinnerRoles.Contains(aaPs.MainRole) || (WinnerTeam == CustomWinner.Bloodlust && aaPs.SubRoles.Contains(CustomRoles.Bloodlust)))))
                     {
                         WinnerIds.Add(aaKvp.Key);
                         AdditionalWinnerTeams.Add(AdditionalWinners.AsistingAngel);
