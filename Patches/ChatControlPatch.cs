@@ -40,7 +40,7 @@ internal static class ChatControllerUpdatePatch
         // 安全バイト数以内: 従来どおりフィールドへ (1 メッセージで送っても anti-cheat に引っかからない)
         if (Utf8ByteCount(combined) <= ChatChunkByteBudget)
         {
-            area.SetText(combined);
+            TextBoxPatch.SetChatFieldText(area, combined);
             return;
         }
 
@@ -48,7 +48,7 @@ internal static class ChatControllerUpdatePatch
         PlayerControl lp = PlayerControl.LocalPlayer;
         if (lp == null) return;
 
-        area.SetText(string.Empty); // フィールドはクリア (巨大文字列を TMP に残さない)
+        TextBoxPatch.SetChatFieldText(area, string.Empty); // フィールドはクリア (巨大文字列を TMP に残さない)
 
         List<string> chunks = SplitByUtf8Bytes(combined, ChatChunkByteBudget);
         bool truncated = chunks.Count > MaxPasteChunks;
@@ -148,27 +148,27 @@ internal static class ChatControllerUpdatePatch
         if (Input.GetKeyDown(KeyCode.Tab)) TextBoxPatch.OnTabPress(__instance);
 
         if ((Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) && Input.GetKeyDown(KeyCode.C))
-            ClipboardHelper.PutClipboardString(__instance.freeChatField.textArea.text);
+            ClipboardHelper.PutClipboardString(TextBoxPatch.SafeChatText(__instance.freeChatField.textArea));
 
         if ((Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) && Input.GetKeyDown(KeyCode.V))
             HandleChatPaste(__instance);
 
         if ((Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) && Input.GetKeyDown(KeyCode.X))
         {
-            ClipboardHelper.PutClipboardString(__instance.freeChatField.textArea.text);
-            __instance.freeChatField.textArea.SetText("");
+            ClipboardHelper.PutClipboardString(TextBoxPatch.SafeChatText(__instance.freeChatField.textArea));
+            TextBoxPatch.SetChatFieldText(__instance.freeChatField.textArea, "");
         }
 
         if (Input.GetKeyDown(KeyCode.UpArrow) && ChatCommands.ChatHistory.Count > 0)
         {
             CurrentHistorySelection = Mathf.Clamp(--CurrentHistorySelection, 0, ChatCommands.ChatHistory.Count - 1);
-            __instance.freeChatField.textArea.SetText(ChatCommands.ChatHistory[CurrentHistorySelection]);
+            TextBoxPatch.SetChatFieldText(__instance.freeChatField.textArea, ChatCommands.ChatHistory[CurrentHistorySelection]);
         }
 
         if (Input.GetKeyDown(KeyCode.DownArrow) && ChatCommands.ChatHistory.Count > 0)
         {
             CurrentHistorySelection++;
-            __instance.freeChatField.textArea.SetText(CurrentHistorySelection < ChatCommands.ChatHistory.Count ? ChatCommands.ChatHistory[CurrentHistorySelection] : string.Empty);
+            TextBoxPatch.SetChatFieldText(__instance.freeChatField.textArea, CurrentHistorySelection < ChatCommands.ChatHistory.Count ? ChatCommands.ChatHistory[CurrentHistorySelection] : string.Empty);
         }
     }
 }

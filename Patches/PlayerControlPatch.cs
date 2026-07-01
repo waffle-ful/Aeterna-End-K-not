@@ -113,7 +113,7 @@ internal static class CheckMurderPatch
 
             if (GameStates.IsLobby)
             {
-                if (target != null && Options.LobbyKillEnabled.GetBool()) LobbyKillSystem.ProcessLobbyKill(__instance, target.PlayerId);
+                if (target != null && Options.LobbyKillEnabled?.GetBool() == true) LobbyKillSystem.ProcessLobbyKill(__instance, target.PlayerId);
                 return false;
             }
 
@@ -1707,7 +1707,6 @@ internal static class FixedUpdatePatch
         {
             CustomSabotage.UpdateAll();
             Zoom.OnFixedUpdate();
-            TextBoxPatch.CheckChatOpen();
 
             if (!lowLoad)
             {

@@ -27,6 +27,16 @@ public static class TextBoxPatch
     // reading the stale-prone PlaceHolderText.text (a freed/reused IL2CPP TMP returns its GameObject name).
     private static string LastSuggestion = "";
 
+    // Managed mirror of the chat field's current text. Typed-character path reads this instead of
+    // re-reading IL2CPP get_text (which on a freed/reused slot returns a valid-but-wrong interned string
+    // and can permanently corrupt the field content on the next write-back).
+    private static string LastText = "";
+
+    // GetInstanceID() of each overlay, recorded at creation time when the object is guaranteed live.
+    // Used as the identity guard: Valid(tmp, id) rejects stale IL2CPP wrappers that Unity's fake-null
+    // operator cannot detect (freed-then-reused slot still passes `if (!tmp)`).
+    private static int PlaceHolderId, CommandInfoId, AdditionalInfoId;
+
     // The mod-settings search box (GameSettingMenuPatch.InputField) is an Object.Instantiate clone of the live
     // chat field, so it is a fully-alive TextBoxTMP that lives OUTSIDE "ChatScreenRoot/..." — every other gate
     // here intentionally ignores it. But its Update must still get our caretPos clamp, otherwise vanilla
@@ -36,6 +46,33 @@ public static class TextBoxPatch
     private static bool IsChatOrSearchTextBox(TextBoxTMP textBox) =>
         textBox.gameObject.HasParentInHierarchy("ChatScreenRoot/ChatScreenContainer")
         || (GameSettingMenuPatch.InputField && GameSettingMenuPatch.InputField.textArea == textBox);
+
+    // True for the live chat field only (not the settings-menu clone). Only these boxes use LastText mirror.
+    private static bool WeManageText(TextBoxTMP tb) => Translator.GetUserTrueLang() != SupportedLangs.Russian && tb.gameObject.HasParentInHierarchy("ChatScreenRoot/ChatScreenContainer");
+
+    // Identity guard: checks both Unity fake-null AND that the IL2CPP instance ID matches what we recorded
+    // at creation time. A freed-then-reused slot passes Unity's fake-null but will have a different ID.
+    private static bool Valid(TextMeshPro tmp, int wantId) { if (!tmp || wantId == 0) return false; try { return tmp.GetInstanceID() == wantId; } catch { return false; } }
+
+    // True when the string looks like one of our overlay GameObject names — used to blacklist garbage
+    // that leaked into the chat field from a stale wrapper before it reaches the network.
+    public static bool IsOverlayLeakName(string s) => !string.IsNullOrEmpty(s) && (s.StartsWith("PlaceHolderText", System.StringComparison.Ordinal) || s == "CommandInfoText" || s == "AdditionalInfoText");
+
+    // Wholesale replacement that parks the caret at the end. Use this instead of bare SetText() for any
+    // history/tab/paste path where the caret position from the previous content is meaningless.
+    public static void SetChatFieldText(TextBoxTMP area, string text) { if (!area) return; text ??= ""; if (text.Length > 4096) text = text[..4096]; area.SetText(text); area.compoText = ""; LastCompoText = ""; int cap = area.characterLimit > 0 ? area.characterLimit : text.Length; area.caretPos = Math.Clamp(text.Length, 0, cap); try { area.MoveCaret(); } catch { } area.SetPipePosition(); }
+
+    // Crash-safe read of a chat-style field's text. For the live chat field we NEVER call IL2CPP get_text
+    // (its `text` field can hold a dangling String* from a freed/reused slot, which get_text marshals into
+    // either garbage like "ChatScreenContainer" or a fatal 0x80131506) — we return the managed mirror instead.
+    // For non-managed fields (settings search box / Russian) fall back to a best-effort try-guarded get_text.
+    public static string SafeChatText(TextBoxTMP area)
+    {
+        if (area && WeManageText(area)) return LastText ?? "";
+        if (!area) return "";
+        try { return area.text ?? ""; }
+        catch { return ""; }
+    }
 
     [HarmonyPatch(typeof(TextBoxTMP), nameof(TextBoxTMP.SetText))]
     [HarmonyPrefix]
@@ -49,7 +86,7 @@ public static class TextBoxPatch
         if (input != null && input.Length > 4096) input = input[..4096];
 
         var flag = false;
-        __instance.AdjustCaretPosition(input.Length - __instance.text.Length);
+        __instance.AdjustCaretPosition(input.Length - LastText.Length);
         var ch = ' ';
         __instance.tempTxt.Clear();
 
@@ -95,23 +132,24 @@ public static class TextBoxPatch
 
         input = __instance.tempTxt.ToString();
 
-        if (!input.Equals(__instance.text) || !inputCompo.Equals(LastCompoText))
+        if (!input.Equals(LastText) || !inputCompo.Equals(LastCompoText))
         {
             __instance.text = input;
+            LastText = input;
             __instance.compoText = inputCompo;
             LastCompoText = inputCompo;
-            string str = __instance.text;
+            string str = input;
             string compoText = inputCompo;
 
             if (__instance.Hidden)
             {
                 str = "";
-                for (var index = 0; index < __instance.text.Length; ++index) str += "*";
+                for (var index = 0; index < input.Length; ++index) str += "*";
             }
 
             __instance.outputText.text = str + compoText;
             __instance.outputText.ForceMeshUpdate(true, true);
-            __instance.keyboard?.text = __instance.text;
+            __instance.keyboard?.text = input;
             __instance.OnChange.Invoke();
 
             if (__instance.tempTxt.Length == __instance.characterLimit && __instance.SendOnFullChars)
@@ -213,15 +251,17 @@ public static class TextBoxPatch
             IsInvalidCommand = false;
             HudManager hud = HudManager.Instance;
 
-            if (!PlaceHolderText)
+            if (!Valid(PlaceHolderText, PlaceHolderId))
             {
                 PlaceHolderText = Object.Instantiate(__instance.outputText, __instance.outputText.transform.parent);
                 PlaceHolderText.name = "PlaceHolderText";
                 PlaceHolderText.color = new(0.7f, 0.7f, 0.7f, 0.7f);
                 PlaceHolderText.transform.localPosition = __instance.outputText.transform.localPosition;
+                PlaceHolderId = PlaceHolderText.GetInstanceID();
+                Modules.UiAnomalyWatch.RecordCreation("PlaceHolderText", PlaceHolderId);
             }
 
-            if (!CommandInfoText)
+            if (!Valid(CommandInfoText, CommandInfoId))
             {
                 CommandInfoText = Object.Instantiate(hud.KillButton.cooldownTimerText, hud.transform.parent, true);
                 CommandInfoText.name = "CommandInfoText";
@@ -234,9 +274,11 @@ public static class TextBoxPatch
                 CommandInfoText.fontSize = CommandInfoText.fontSizeMax = CommandInfoText.fontSizeMin = 1.8f;
                 CommandInfoText.sortingOrder = 1000;
                 CommandInfoText.transform.SetAsLastSibling();
+                CommandInfoId = CommandInfoText.GetInstanceID();
+                Modules.UiAnomalyWatch.RecordCreation("CommandInfoText", CommandInfoId);
             }
 
-            if (!AdditionalInfoText)
+            if (!Valid(AdditionalInfoText, AdditionalInfoId))
             {
                 AdditionalInfoText = Object.Instantiate(hud.KillButton.cooldownTimerText, hud.transform.parent, true);
                 AdditionalInfoText.name = "AdditionalInfoText";
@@ -249,6 +291,8 @@ public static class TextBoxPatch
                 AdditionalInfoText.fontSize = AdditionalInfoText.fontSizeMax = AdditionalInfoText.fontSizeMin = 1.8f;
                 AdditionalInfoText.sortingOrder = 1000;
                 AdditionalInfoText.transform.SetAsLastSibling();
+                AdditionalInfoId = AdditionalInfoText.GetInstanceID();
+                Modules.UiAnomalyWatch.RecordCreation("AdditionalInfoText", AdditionalInfoId);
             }
 
             string inputForm = input.TrimStart('/');
@@ -370,15 +414,17 @@ public static class TextBoxPatch
         void Destroy()
         {
             LastSuggestion = "";
-            if (PlaceHolderText) PlaceHolderText.enabled = false;
-            if (CommandInfoText) CommandInfoText.enabled = false;
+            if (Valid(PlaceHolderText, PlaceHolderId)) { PlaceHolderText.text = ""; PlaceHolderText.enabled = false; } else { PlaceHolderText = null; PlaceHolderId = 0; }
+            if (Valid(CommandInfoText, CommandInfoId)) { CommandInfoText.text = ""; CommandInfoText.enabled = false; } else { CommandInfoText = null; CommandInfoId = 0; }
 
-            if (AdditionalInfoText)
+            if (Valid(AdditionalInfoText, AdditionalInfoId))
             {
                 bool showLobbyCode = HudManager.Instance?.Chat?.IsOpenOrOpening == true && GameStates.IsLobby && Options.GetSuffixMode() == SuffixModes.Streaming && !Options.HideGameSettings.GetBool() && !DataManager.Settings.Gameplay.StreamerMode;
                 AdditionalInfoText.enabled = showLobbyCode;
                 if (showLobbyCode) AdditionalInfoText.text = $"\n\n{Translator.GetString("LobbyCode")}:\n<size=250%><b>{GameCode.IntToGameName(AmongUsClient.Instance.GameId)}</b></size>";
+                if (!showLobbyCode) AdditionalInfoText.text = "";
             }
+            else { AdditionalInfoText = null; AdditionalInfoId = 0; }
         }
     }
 
@@ -390,8 +436,7 @@ public static class TextBoxPatch
         // the suggestion text ourselves in ShowCommandHelp, so LastSuggestion is the safe source of truth.
         if (LastSuggestion == "") return;
 
-        __instance.freeChatField.textArea.SetText(LastSuggestion);
-        __instance.freeChatField.textArea.compoText = "";
+        SetChatFieldText(__instance.freeChatField.textArea, LastSuggestion);
 
         /*if (AdditionalInfoText && AdditionalInfoText.text != "")
             OptionShower.CurrentPage = 0;*/
@@ -402,20 +447,25 @@ public static class TextBoxPatch
         try
         {
             bool open = HudManager.InstanceExists && (HudManager.Instance?.Chat?.IsOpenOrOpening ?? false);
-            // Use Unity's null check (if (x)), NOT C# `?.`: `?.` is a pure reference-null test that bypasses
-            // Unity's fake-null, so it would dereference a destroyed-but-non-null IL2CPP wrapper every frame.
-            if (PlaceHolderText) PlaceHolderText.gameObject.SetActive(open);
-            if (CommandInfoText) CommandInfoText.gameObject.SetActive(open);
-            if (AdditionalInfoText) AdditionalInfoText.gameObject.SetActive(open);
+            ToggleOverlay(ref PlaceHolderText, ref PlaceHolderId, open);
+            ToggleOverlay(ref CommandInfoText, ref CommandInfoId, open);
+            ToggleOverlay(ref AdditionalInfoText, ref AdditionalInfoId, open);
         }
         catch { }
     }
 
+    private static void ToggleOverlay(ref TextMeshPro tmp, ref int id, bool open)
+    {
+        if (!Valid(tmp, id)) { tmp = null; id = 0; return; }
+        tmp.gameObject.SetActive(open);
+        if (!open) { tmp.enabled = false; tmp.text = ""; }
+    }
+
     public static void OnMeetingStart()
     {
-        if (PlaceHolderText) PlaceHolderText.transform.SetAsLastSibling();
-        if (CommandInfoText) CommandInfoText.transform.SetAsLastSibling();
-        if (AdditionalInfoText) AdditionalInfoText.transform.SetAsLastSibling();
+        if (Valid(PlaceHolderText, PlaceHolderId)) PlaceHolderText.transform.SetAsLastSibling();
+        if (Valid(CommandInfoText, CommandInfoId)) CommandInfoText.transform.SetAsLastSibling();
+        if (Valid(AdditionalInfoText, AdditionalInfoId)) AdditionalInfoText.transform.SetAsLastSibling();
     }
 
     // Drop the lazily-created command-autocomplete TMP clones whenever a new HudManager starts (= new game /
@@ -426,12 +476,21 @@ public static class TextBoxPatch
     // "Internal CLR error (0x80131506)". Nulling here forces a clean rebuild for the new HudManager lifetime.
     public static void Reset()
     {
-        PlaceHolderText = null;
-        CommandInfoText = null;
-        AdditionalInfoText = null;
+        DestroyOverlay(ref PlaceHolderText, ref PlaceHolderId);
+        DestroyOverlay(ref CommandInfoText, ref CommandInfoId);
+        DestroyOverlay(ref AdditionalInfoText, ref AdditionalInfoId);
         IsInvalidCommand = false;
         LastCompoText = "";
         LastSuggestion = "";
+        LastText = "";
+        Modules.UiAnomalyWatch.OnReset();
+    }
+
+    private static void DestroyOverlay(ref TextMeshPro tmp, ref int id)
+    {
+        try { if (Valid(tmp, id)) Object.Destroy(tmp.gameObject); } catch { }
+        tmp = null;
+        id = 0;
     }
 
     [HarmonyPatch(typeof(TextBoxTMP), nameof(TextBoxTMP.Update))]
@@ -442,9 +501,15 @@ public static class TextBoxPatch
 
         if (!__instance.enabled || !__instance.hasFocus) return false;
 
+        bool weManage = WeManageText(__instance);
+
         // caretPos がテキスト長/TMP メッシュの文字数を超えると MoveCaret→CursorPos が毎フレーム
         // IndexOutOfRange を投げてチャットが固まる。範囲内へクランプし、念のため try でも保護する。
-        __instance.caretPos = Math.Clamp(__instance.caretPos, 0, __instance.text?.Length ?? 0);
+        // For the managed chat field read LastText (not IL2CPP get_text) to avoid freed-slot reads.
+        int curLen;
+        if (weManage) curLen = LastText.Length;
+        else { try { curLen = __instance.text?.Length ?? 0; } catch { curLen = 0; } }
+        __instance.caretPos = Math.Clamp(__instance.caretPos, 0, curLen);
         try { __instance.MoveCaret(); }
         catch { }
 
@@ -459,9 +524,12 @@ public static class TextBoxPatch
         // silently skip drawing the in-progress IME (Japanese) text into the field.
         if (inputString.Length > 0 || composition != LastCompoText)
         {
-            if (__instance.text is null or "Enter Name") __instance.text = "";
-            int startIndex = Math.Clamp(__instance.caretPos, 0, __instance.text.Length);
-            __instance.SetText(__instance.text.Insert(startIndex, inputString), composition);
+            string cur;
+            if (weManage) cur = LastText;
+            else { try { cur = __instance.text; } catch { cur = ""; } }
+            if (cur is null or "Enter Name") { cur = ""; if (!weManage) __instance.text = ""; }
+            int startIndex = Math.Clamp(__instance.caretPos, 0, cur.Length);
+            __instance.SetText(cur.Insert(startIndex, inputString), composition);
             LastCompoText = composition;
         }
 
@@ -479,5 +547,12 @@ public static class TextBoxPatch
     {
         if (!__instance.gameObject.HasParentInHierarchy("ChatScreenRoot/ChatScreenContainer")) return;
         __instance.characterLimit = 1000;
+    }
+
+    [HarmonyPatch(typeof(TextBoxTMP), nameof(TextBoxTMP.Clear))]
+    [HarmonyPostfix]
+    public static void OnClear(TextBoxTMP __instance)
+    {
+        if (__instance.gameObject.HasParentInHierarchy("ChatScreenRoot/ChatScreenContainer")) LastText = "";
     }
 }
