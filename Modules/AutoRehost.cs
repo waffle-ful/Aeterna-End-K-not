@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Reflection;
 using EndKnot.Modules.CalamityMenu;
 using EndKnot.Patches.CalamityMenu;
@@ -92,8 +93,89 @@ public static class AutoRehost
         LateTask.New(StartAttempt, delay, "AutoRehost.StartAttempt", log: false);
     }
 
+    // ── 起動時 (番犬による再起動後) の自動ホスト handoff ──
+    // 番犬は AU を (再)起動する際に <Desktop>/EndKnot_Logs/autohost_request.flag を置く。
+    // メインメニュー読込時にそれを見つけたら、設定ロード完了を待って前回設定 (region/map/EHR設定は
+    // ディスクから自動復元される) で新しいオンライン部屋を立てる。マーカーは一度読んだら消す (再発火防止)。
+    public static void OnMainMenuStart()
+    {
+        try
+        {
+            string marker = StartupHostMarkerPath();
+            if (!File.Exists(marker)) return;
+
+            DateTime writeTime;
+            try { writeTime = File.GetLastWriteTime(marker); }
+            catch { writeTime = DateTime.MinValue; }
+
+            try { File.Delete(marker); } catch { } // 一度で消費 (再発火防止)
+
+            if ((DateTime.Now - writeTime).TotalMinutes > 10)
+            {
+                Logger.Info("Auto-rehost: startup host marker is stale (>10min); ignoring", "AutoRehost");
+                return;
+            }
+
+            Logger.Info("Auto-rehost: startup host marker found (watchdog handoff); will host once options are loaded", "AutoRehost");
+            WaitForLoadThenHost(0);
+        }
+        catch (Exception e) { Utils.ThrowException(e); }
+    }
+
+    private static string StartupHostMarkerPath()
+    {
+        string baseP = OperatingSystem.IsAndroid() ? Main.DataPath : Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+        return Path.Combine(baseP, "EndKnot_Logs", "autohost_request.flag");
+    }
+
+    // 設定ロード完了 + クリーンなメニューになるまで待ってから起動時ホストを開始 (オプション未ロードレース回避)。
+    private static void WaitForLoadThenHost(int tries)
+    {
+        if (tries > 90)
+        {
+            Logger.Warn("Auto-rehost: startup host aborted (not ready within ~90s)", "AutoRehost");
+            return;
+        }
+
+        bool ready = Options.IsLoaded
+                  && GameStates.IsNotJoined
+                  && UnityEngine.Object.FindObjectOfType<MainMenuManager>() != null;
+
+        if (!ready)
+        {
+            LateTask.New(() => WaitForLoadThenHost(tries + 1), 1f, "AutoRehost.StartupWait", log: false);
+            return;
+        }
+
+        RequestStartupHost();
+    }
+
+    // 起動時ホストの開始 (切断起因でなく、番犬の再起動 handoff から)。前ゲームが無いので oldGameId=-1 に
+    // して「実 GameId を持つ部屋に入れたら成功」とする。既に MainMenu に居るので ChangeScene しない。
+    public static void RequestStartupHost()
+    {
+        if (_pending) return; // 既に立て直し/起動ホスト進行中
+
+        _pending = true;
+        OfficialServerNotice.SuppressWhileRehosting = true;
+        _oldGameId = -1;
+        try { _oldMapId = GameOptionsManager.Instance.normalGameHostOptions.MapId; }
+        catch { _oldMapId = 0; }
+        _attempts = 0;
+
+        Logger.Info("Auto-rehost: startup auto-host starting (region/map/settings restored from disk)", "AutoRehost");
+        BeginAttempt(false); // 既にメインメニューなので scene 切替不要
+    }
+
     // ── 待機満了 → この試行を開始。リトライの起点でもある ──
     private static void StartAttempt()
+    {
+        BeginAttempt(true);
+    }
+
+    // 1 回の試行を開始。changeScene=true で MainMenu へ戻ってから (切断rehost/リトライ)、
+    // false で現在のメインメニューのまま (起動時ホスト) 開始する。
+    private static void BeginAttempt(bool changeScene)
     {
         if (!_pending) return;
 
@@ -112,9 +194,12 @@ public static class AutoRehost
         _nextWaitLogAt = 0f;
         _deadline = Time.realtimeSinceStartup + WatchdogSeconds;
 
-        Logger.Info($"Auto-rehost attempt {_attempts}/{MaxAttempts}: leaving to MainMenu", "AutoRehost");
-        try { SceneChanger.ChangeScene("MainMenu"); }
-        catch (Exception ex) { Logger.Warn($"ChangeScene(MainMenu) failed: {ex.Message}", "AutoRehost"); }
+        Logger.Info($"Auto-rehost attempt {_attempts}/{MaxAttempts}: {(changeScene ? "leaving to MainMenu" : "hosting from current MainMenu")}", "AutoRehost");
+        if (changeScene)
+        {
+            try { SceneChanger.ChangeScene("MainMenu"); }
+            catch (Exception ex) { Logger.Warn($"ChangeScene(MainMenu) failed: {ex.Message}", "AutoRehost"); }
+        }
 
         LateTask.New(() => Tick(mySeq), 1f, "AutoRehost.Tick", log: false);
     }
@@ -150,7 +235,8 @@ public static class AutoRehost
                 bool lobbyNull = LobbyBehaviour.Instance == null;
                 bool atMenu = UnityEngine.Object.FindObjectOfType<MainMenuManager>() != null;
                 bool noMatchmaking = UnityEngine.Object.FindObjectOfType<MMOnlineManager>() == null;
-                bool clean = notJoined && lobbyNull && atMenu && noMatchmaking;
+                bool optsLoaded = Options.IsLoaded; // 起動時ホストで未ロード設定を参照しないためのゲート (切断rehost時は常にtrue)
+                bool clean = notJoined && lobbyNull && atMenu && noMatchmaking && optsLoaded;
 
                 if (!clean)
                 {
@@ -160,7 +246,7 @@ public static class AutoRehost
                     if (now >= _nextWaitLogAt)
                     {
                         _nextWaitLogAt = now + 2f;
-                        Logger.Info($"Auto-rehost WaitClean: not clean yet (IsNotJoined={notJoined} LobbyNull={lobbyNull} MainMenu={atMenu} NoMatchmaking={noMatchmaking})", "AutoRehost");
+                        Logger.Info($"Auto-rehost WaitClean: not clean yet (IsNotJoined={notJoined} LobbyNull={lobbyNull} MainMenu={atMenu} NoMatchmaking={noMatchmaking} OptsLoaded={optsLoaded})", "AutoRehost");
                     }
                     return;
                 }

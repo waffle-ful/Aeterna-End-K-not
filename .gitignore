@@ -436,6 +436,9 @@ CLAUDE.local.md
 # Internal planning / migration docs (not for upstream)
 docs/
 
+# External ops tooling — local crash-recovery watchdog etc. (not for public repo)
+tools/
+
 # Build output (custom -o build/)
 build/
 
