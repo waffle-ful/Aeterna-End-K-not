@@ -420,12 +420,21 @@ internal static class ChatCommands
     {
         if (__instance.quickChatField.visible) return true;
 
-        __instance.freeChatField.textArea.text = __instance.freeChatField.textArea.text.Replace("\b", string.Empty).Replace("\r", string.Empty).Replace("<size=-", "<size=");
-        
+        // Read via the crash-safe mirror (never IL2CPP get_text, which fatally 0x80131506's on the chat
+        // field's dangling `text` String*), then write the cleaned value back as a FRESH managed string so
+        // vanilla SendChat's own get_text read that follows is also safe.
+        TextBoxTMP chatArea = __instance.freeChatField.textArea;
+        string cleaned = TextBoxPatch.SafeChatText(chatArea).Replace("\b", string.Empty).Replace("\r", string.Empty).Replace("<size=-", "<size=");
+        if (chatArea) chatArea.text = cleaned;
+
         __instance.timeSinceLastMessage = 3f;
 
-        string text = __instance.freeChatField.textArea.text.Trim();
+        string text = cleaned.Trim();
         var cancelVal = string.Empty;
+
+        // Reject leaked overlay names before they reach the network. A stale IL2CPP wrapper's get_text()
+        // can return the literal GameObject name ("PlaceHolderText" etc.) which would otherwise be sent as chat.
+        if (TextBoxPatch.IsOverlayLeakName(text)) goto Canceled;
 
         switch (Options.CurrentGameMode)
         {
@@ -4354,7 +4363,7 @@ internal static class UpdateCharCountPatch
 {
     public static void Postfix(FreeChatInputField __instance)
     {
-        int length = __instance.textArea.text.Length;
+        int length = TextBoxPatch.SafeChatText(__instance.textArea).Length;
         __instance.charCountText.SetText(length <= 0 ? GetString("ThankYouForUsingEndKnot") : $"{length}/{__instance.textArea.characterLimit}");
         __instance.charCountText.enableWordWrapping = false;
 

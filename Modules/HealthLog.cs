@@ -144,6 +144,14 @@ public static class HealthLog
         catch (Exception e) { Utils.ThrowException(e); }
     }
 
+    // 観測レイヤーの外部利用者(UiAnomalyWatch 等)が EndKnot-Health.log に 1 行追記するための公開窓口。
+    // クラッシュ/切断行のすぐ隣に異常行を並べてウォッチドッグが tail できるようにする。
+    public static void Note(string line)
+    {
+        EnsureInit();
+        Write(line);
+    }
+
     private static string GetState()
     {
         try

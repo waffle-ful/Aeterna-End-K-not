@@ -26,6 +26,16 @@ public static class FixedUpdateCaller
             try { HealthLog.Tick(); }
             catch (Exception e) { Utils.ThrowException(e); }
 
+            // UI/テキスト異常(stale/重複/別オブジェクト混線した補助 TMP)をクラッシュなしで観測・記録する。
+            // HUD/ローカルプレイヤー非依存にここで回す(メニュー画面の DDOL 蓄積もサンプルする)。1/sec ゲート。
+            try { if (PerSecondUpdateScheduler.ShouldRunUpdate("ui-anomaly")) UiAnomalyWatch.Scan(); }
+            catch (Exception e) { Utils.ThrowException(e); }
+
+            // チャット open/close 状態を毎フレーム overlay に反映。ローカルプレイヤー非依存で回す
+            // (メニュー・非ゲーム中でもチャットが開くため、LocalPlayer ガードの中では遅すぎる)。
+            try { TextBoxPatch.CheckChatOpen(); }
+            catch (Exception e) { Utils.ThrowException(e); }
+
             var amongUsClient = AmongUsClient.Instance;
             var lobbyBehaviour = LobbyBehaviour.Instance;
 
