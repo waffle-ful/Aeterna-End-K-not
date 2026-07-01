@@ -197,7 +197,6 @@ internal static class ChatCommands
             new("BBRange", "[<chunkR> [cullR]]", Command.UsageLevels.Host, Command.UsageTimes.InLobby, BBRangeCommand, true, true),
             new("BBZoom", "[<3-50>|reset]", Command.UsageLevels.Host, Command.UsageTimes.InLobby, BBZoomCommand, true, true),
             new("BBTestRoom", "[edge|box|both|off]", Command.UsageLevels.Host, Command.UsageTimes.InLobby, BBTestRoomCommand, true, true),
-            new("Burst", "{count} [murder|protect] [none]", Command.UsageLevels.Host, Command.UsageTimes.Always, BurstCommand, true, true),
             new("Rehost", "", Command.UsageLevels.Host, Command.UsageTimes.InLobby, RehostCommand, true, true),
             new("Template", "{tag}", Command.UsageLevels.Everyone, Command.UsageTimes.Always, TemplateCommand, true, false, [GetString("CommandArgs.Template.Tag")]),
             new("MessageWait", "{duration}", Command.UsageLevels.Host, Command.UsageTimes.Always, MessageWaitCommand, true, false, [GetString("CommandArgs.MessageWait.Duration")]),
@@ -2755,47 +2754,6 @@ internal static class ChatCommands
     private static void BBStreamBudgetCommand(PlayerControl player, string text, string[] args)
     {
         BackroomsLobby.SetStreamBudget(player.PlayerId, args);
-    }
-
-    // /burst <N> [murder|protect] [none] | /burst off — client-authority forge burst kick test (host-only, hidden).
-    // In LOBBY it ARMS the next game's intro (the timing that matches the real kick): "/burst 100 murder" then start a game,
-    //   observe, back in lobby "/burst 50 murder", start again — sweep the intro threshold without editing files or restarting.
-    //   Stays armed across games until "/burst off". Channel test at a kicking count C: "/burst C murder" vs "/burst C murder none".
-    // IN-GAME it fires immediately onto the first vanilla client's NetId (looser cap than intro — for quick checks only).
-    private static void BurstCommand(PlayerControl player, string text, string[] args)
-    {
-        if (!AmongUsClient.Instance.AmHost) return;
-
-        if (args.Length >= 2 && args[1].Equals("off", StringComparison.OrdinalIgnoreCase))
-        {
-            StartGameHostPatch.RpcSetRoleReplacer.ArmedBurstCount = 0;
-            Utils.SendMessage("DebugBurst: disarmed — no intro burst.", player.PlayerId, "DebugBurst");
-            return;
-        }
-
-        if (args.Length < 2 || !int.TryParse(args[1], out int count) || count <= 0)
-        {
-            Utils.SendMessage("Usage: /burst 200 murder  (a NUMBER first; optional: protect, none) | /burst off — in lobby ARMS the next intro; in-game fires now.", player.PlayerId, "DebugBurst");
-            return;
-        }
-
-        HashSet<string> flags = args.Skip(2).Select(a => a.ToLowerInvariant()).ToHashSet();
-        bool protectMode = flags.Contains("protect");
-        bool useNone = flags.Contains("none");
-        SendOption sendOpt = useNone ? SendOption.None : SendOption.Reliable;
-
-        // Lobby: arm the intro burst (real-kick timing). In-game: fire immediately.
-        if (GameStates.IsLobby)
-        {
-            StartGameHostPatch.RpcSetRoleReplacer.ArmedBurstCount = count;
-            StartGameHostPatch.RpcSetRoleReplacer.ArmedBurstProtect = protectMode;
-            StartGameHostPatch.RpcSetRoleReplacer.ArmedBurstNone = useNone;
-            Utils.SendMessage($"DebugBurst ARMED: {count} {(protectMode ? "ProtectPlayer" : "MurderPlayer")} {(useNone ? "None" : "Reliable")} will fire at the next game's intro. Stays armed across games; /burst off to stop.", player.PlayerId, "DebugBurst");
-            return;
-        }
-
-        string status = StartGameHostPatch.RpcSetRoleReplacer.FireClientAuthForgeBurst(count, protectMode, sendOpt);
-        Utils.SendMessage(status, player.PlayerId, "DebugBurst");
     }
 
     // /rehost — 実際に kick されなくても自動部屋立て直しの一連を試せるデバッグ用 (host-only, hidden)。
