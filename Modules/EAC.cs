@@ -137,9 +137,13 @@ internal static class EAC
                     {
                         bool bodyExists = Object.FindObjectsOfType<DeadBody>().Any(deadBody => deadBody.ParentId == targetId);
 
-                        if (!bodyExists && targetId != pc.PlayerId && (!MeetingHud.Instance || MeetingHud.Instance.state != MeetingHud.VoteStates.Animating))
+                        // 死体が存在しない通報は自己通報(targetId==自分)も含めて拒否する。生存プレイヤーを対象にした
+                        // 通報を弾き、緊急回数を消費しない「自己通報→無限会議」スパム(進行不能の主因)を塞ぐ。自分の
+                        // 死体は通報者死亡ガード(ReportDeadBodyPatch:1099)で別処理されるため、生存中の自己通報に正当な
+                        // 用途は無い。Animating 中だけは会議開始アニメの正当なレースなので従来どおり通す。
+                        if (!bodyExists && (!MeetingHud.Instance || MeetingHud.Instance.state != MeetingHud.VoteStates.Animating))
                         {
-                            Logger.Warn($"Player [{pc.OwnerId}:{pc.GetRealName()}] attempted to report a body that does't exist D", "EAC");
+                            Logger.Warn($"Player [{pc.OwnerId}:{pc.GetRealName()}] attempted to report a nonexistent body (incl. self), rejected", "EAC");
                             sr.Recycle();
                             return true;
                         }
