@@ -31,13 +31,13 @@ public static class CalamityVisibility
     private static bool _prevPopExists;
     private static bool _prevContentExists;
 
-    public static void HideMenuContent()
+    public static void HideMenuContent(bool showBack = true)
     {
         if (_menuHidden) return;
         SetLayerActive("ButtonLayer", false);
         SetLayerActive("LogoLayer", false);
         SetLayerActive("OverlayLayer", false);
-        ShowBackButton();
+        if (showBack) ShowBackButton();
         _menuHidden = true;
     }
 
@@ -105,6 +105,11 @@ public static class CalamityVisibility
             _prevPopExists = false;
             _prevContentExists = false;
         }
+
+        // 自前の閉じ手段を持つモーダル(切断/エラー・更新・お知らせ)が突然湧いたら、Calamity ボタン経由で
+        // なくても能動的に隠す。BACK ボタンは出さない(モーダル自身に閉じるボタンがあるので不要・邪魔)。
+        if (!_menuHidden && IsSelfContainedModalOpen())
+            HideMenuContent(showBack: false);
 
         if (!_menuHidden) return;
 
@@ -239,6 +244,23 @@ public static class CalamityVisibility
 
         var cre = Object.FindObjectOfType<CreditsScreenPopUp>(true);
         if (cre != null && cre.gameObject.activeInHierarchy) return true;
+
+        if (IsSelfContainedModalOpen()) return true;
+
+        return false;
+    }
+
+    // 自前の閉じ手段(OK/キャンセル/閉じる)を持つモーダル。BACK ボタン不要。Calamity ボタン経由でなく
+    // 突然湧くので Tick() が能動的に隠す必要がある: DisconnectPopup(切断/エラー/kick/BAN)、更新の
+    // InfoPopup/InfoPopupV2、AnnouncementPopUp(お知らせ/公式鯖警告)。
+    private static bool IsSelfContainedModalOpen()
+    {
+        if (Object.FindObjectOfType<DisconnectPopup>(true) is { } dp && dp.gameObject.activeInHierarchy) return true;
+        if (Object.FindObjectOfType<AnnouncementPopUp>(true) is { } ap && ap.gameObject.activeInHierarchy) return true;
+
+        // GenericPopup は更新以外(Twitch 等)のクローンも拾うので name で絞る。開いている物だけ=active を確認。
+        foreach (var gp in Object.FindObjectsOfType<GenericPopup>())
+            if (gp != null && (gp.name == "InfoPopup" || gp.name == "InfoPopupV2") && gp.gameObject.activeInHierarchy) return true;
 
         return false;
     }
