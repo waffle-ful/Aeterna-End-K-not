@@ -308,10 +308,17 @@ async function handleLifecycle(env: Env, raw: string, phase: "start" | "end" | "
         return ok({ status: "lobby-resumed" });
     }
 
-    // phase === "close" — lobby truly destroyed (host left). DELETE message + KV.
+    // phase === "close" — lobby truly destroyed (host left). DELETE message, THEN KV.
     const r = await deleteDiscordMessage(env.DISCORD_WEBHOOK_URL, entry.messageId);
+    if (!r.ok) {
+        // Discord delete still failing after retries. Do NOT delete KV — keeping the
+        // entry preserves messageId so a later close retry / scheduled sweep can finish
+        // the job. The old code deleted KV here and returned 2xx ("kv-cleared"), which
+        // permanently orphaned the embed AND made the client log it as success. Surface
+        // 502 instead so the failure is observable and the handle is retained.
+        return err(502, `discord delete failed: ${r.error}`);
+    }
     await env.STATE.delete(`code:${code}`);
-    if (!r.ok) return ok({ status: "kv-cleared", warn: r.error });
     return ok({ status: "closed" });
 }
 
@@ -457,9 +464,25 @@ async function editDiscordMessage(webhook: string, messageId: string, embed: unk
 }
 
 async function deleteDiscordMessage(webhook: string, messageId: string): Promise<DiscordOpResult> {
-    const r = await fetch(`${webhook}/messages/${messageId}`, { method: "DELETE" });
-    if (!r.ok && r.status !== 404) return { ok: false, error: `${r.status} ${await safeText(r)}` };
-    return { ok: true };
+    // Discord rate-limits message deletes aggressively and occasionally returns a
+    // transient 5xx. A single failed DELETE used to orphan the embed forever, so
+    // retry 429 (honoring Retry-After) and 5xx with bounded backoff. 404 = the
+    // message is already gone, which is success for our purposes.
+    const maxAttempts = 4;
+    let lastError = "";
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        const r = await fetch(`${webhook}/messages/${messageId}`, { method: "DELETE" });
+        if (r.ok || r.status === 404) return { ok: true };
+
+        lastError = `${r.status} ${await safeText(r)}`;
+        if (attempt === maxAttempts) break;
+
+        if (r.status === 429) { await sleep(retryAfterMs(r, 1000)); continue; }
+        if (r.status >= 500) { await sleep(attempt * 500); continue; }
+        // Other 4xx (401/403/etc.) are not transient — retrying won't help.
+        break;
+    }
+    return { ok: false, error: lastError };
 }
 
 // ─── helpers ───────────────────────────────────────────────────────────────────
@@ -488,6 +511,21 @@ async function safeJson<T>(req: Request): Promise<T | null> {
 
 async function safeText(r: Response): Promise<string> {
     try { return (await r.text()).slice(0, 200); } catch { return ""; }
+}
+
+// Bounded sleep for retry backoff. Clamped to [0, 5000]ms so a hostile/garbage
+// Retry-After can't stall the Worker (the client also has an 8s HTTP timeout).
+function sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, Math.max(0, Math.min(ms, 5000))));
+}
+
+// Discord 429 carries Retry-After (seconds, may be fractional). Fall back to
+// x-ratelimit-reset-after, then to the caller's default. +100ms jitter pad.
+function retryAfterMs(r: Response, fallbackMs: number): number {
+    const ra = r.headers.get("retry-after") ?? r.headers.get("x-ratelimit-reset-after");
+    const secs = ra ? Number(ra) : NaN;
+    if (Number.isFinite(secs) && secs >= 0) return secs * 1000 + 100;
+    return fallbackMs;
 }
 
 function num(v: string | undefined, fallback: number): number {
