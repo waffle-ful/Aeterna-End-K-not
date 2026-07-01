@@ -449,6 +449,7 @@ gitignore.txt
 picture/
 screenshots/
 *.screenshot.png
+editor/conga.png
 
 # Logs not covered by [Ll]og/ glob
 log1.txt
