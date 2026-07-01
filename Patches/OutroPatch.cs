@@ -23,6 +23,22 @@ internal static class EndGamePatch
 
     public static void Postfix()
     {
+        try
+        {
+            bool allDead = Main.PlayerStates.Values.All(s => s.IsDead);
+            HealthLog.RecordGameEnd(
+                Options.CurrentGameMode,
+                CustomWinnerHolder.WinnerTeam,
+                CustomWinnerHolder.WinnerIds,
+                CustomWinnerHolder.WinnerRoles,
+                CustomWinnerHolder.AdditionalWinnerTeams,
+                MeetingStates.MeetingNum,
+                Main.PlayerStates.Count,
+                allDead,
+                Main.GameEndDueToTimer);
+        }
+        catch (Exception ex) { Utils.ThrowException(ex); }
+
         GameStates.InGame = false;
 
         Logger.Info("-----------Game over-----------", "Phase");
