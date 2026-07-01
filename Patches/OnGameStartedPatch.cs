@@ -1136,6 +1136,14 @@ internal static class StartGameHostPatch
             Main.ResetCamPlayerList.UnionWith(Main.PlayerStates.Where(p => (p.Value.MainRole.IsDesyncRole() && !p.Key.GetPlayer().UsesPetInsteadOfKill()) || p.Value.SubRoles.Contains(CustomRoles.Bloodlust)).Select(p => p.Key));
             Utils.CountAlivePlayers(true);
 
+            try
+            {
+                string rolesStr = string.Join(",", Main.PlayerStates.Select(kv =>
+                    $"{Main.AllPlayerNames.GetValueOrDefault(kv.Key, kv.Key.ToString()).RemoveHtmlTags()}:{kv.Value.MainRole}"));
+                HealthLog.RecordGameStart(Options.CurrentGameMode, Main.PlayerStates.Count, rolesStr);
+            }
+            catch (Exception ex) { Utils.ThrowException(ex); }
+
             LateTask.New(() =>
             {
                 Main.SetRoles = [];

@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using EndKnot.Modules;
@@ -22,6 +23,8 @@ internal static class Logger
 #endif
 
     private static readonly Dictionary<string, DateTime> NowDetailedErrorLog = [];
+
+    private static readonly Dictionary<string, int> ExceptionTags = [];
 
     public static void Enable()
     {
@@ -81,6 +84,9 @@ internal static class Logger
 
         LogText.Clear();
         DateTime now = DateTime.Now;
+
+        if (level is LogLevel.Error or LogLevel.Fatal)
+            ExceptionTags[tag] = ExceptionTags.GetValueOrDefault(tag) + 1;
 
         if (level is LogLevel.Error or LogLevel.Fatal && !multiLine && (!NowDetailedErrorLog.TryGetValue(tag, out DateTime dt) || dt.AddSeconds(3) < now))
         {
@@ -152,6 +158,23 @@ internal static class Logger
     public static LogHandler Handler(string tag)
     {
         return new(tag);
+    }
+
+    public static void ResetExceptionTags() => ExceptionTags.Clear();
+
+    public static string GetExceptionTagsSummary()
+    {
+        if (ExceptionTags.Count == 0) return string.Empty;
+        return string.Join(",", ExceptionTags
+            .OrderByDescending(kv => kv.Value)
+            .Take(10)
+            .Select(kv => $"{kv.Key}:{kv.Value}"));
+    }
+
+    public static void FlushNow()
+    {
+        try { CustomLogger.Instance.Finish(false); }
+        catch { }
     }
 }
 
