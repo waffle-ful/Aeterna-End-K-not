@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#1f1f26" />
+    <title>End K not マップエディタ</title>
+  </head>
+  <body>
+    <header>
+      <span class="brand">EKMap</span>
+      <input id="map-name" placeholder="マップ名 (1〜64 文字)" maxlength="64" autocomplete="off" />
+      <input id="map-author" placeholder="作者" maxlength="32" autocomplete="off" />
+      <!-- チップの大きさ: v3 マップのみ表示 (hidden は main.ts が制御) -->
+      <div id="tile-scale-wrap" class="tile-scale-wrap" hidden
+           title="小さくするとマップが密になります(ゲーム内のみ・編集画面の見た目は変わりません)">
+        <label for="tile-scale" class="tile-scale-label">ゲーム中のチップの大きさ</label>
+        <input type="range" id="tile-scale" min="0.5" max="1.0" step="0.05"
+               aria-label="チップの大きさ (0.5〜1.0)" />
+        <span id="tile-scale-val" class="tile-scale-val">1.00x</span>
+      </div>
+      <div class="actions">
+        <button id="btn-home" title="スタート画面を開く">🏠</button>
+        <button id="btn-help" title="使い方ガイドをもう一度見る">?</button>
+        <button id="btn-new">新規</button>
+        <button id="btn-import" title="保存したマップの一覧を開きます">開く</button>
+        <button id="btn-export" title="マップを書庫に保存します (Ctrl+S)。OneDrive でも失敗しません">保存</button>
+        <button id="btn-export-file" title="マップを .ekmap.json ファイルとしてダウンロードします">ファイル書出</button>
+        <button id="btn-copy-code">コードコピー</button>
+        <button id="btn-load-code">コード読込</button>
+        <button id="btn-play" class="primary" title="マップを EKMaps フォルダへ保存してゲームに反映します">▶ ゲームで試す</button>
+      </div>
+    </header>
+
+    <!-- ツール説明リボン: ヘッダ直下に常駐。今選んでいるツールを一言で説明 -->
+    <div id="tool-ribbon" aria-live="polite"></div>
+
+    <!-- 3ペインシェルの土台: 左レール | ビューポート | 右インスペクタ。
+         今は折りたたみ式の足場 (素DOM)。後で Svelte island をこの枠に差し込む。 -->
+    <div id="shell-body">
+    <aside id="left-rail" class="shell-pane collapsed" data-side="left" aria-label="道具パネル">
+      <button class="pane-toggle" id="left-rail-toggle" type="button" aria-expanded="false"
+              title="道具パネルを開く / 閉じる">道具</button>
+      <div class="pane-body">
+        <h3 class="inspector-h">道具</h3>
+        <div id="left-rail-tools" class="rail-tools"></div>
+      </div>
+    </aside>
+
+    <main id="viewport">
+      <!-- レイヤー縦タブ: canvas の右端にオーバーレイ (v2 マップ時のみ表示) -->
+      <div id="layer-vtabs" hidden aria-label="レイヤー選択">
+        <!-- レイヤータブ群 (1-4) と 👤区切り行は refreshModeUi() で above フラグ順に並べ替える -->
+        <button class="lvtab active" data-layer="ground" title="レイヤー1">1</button>
+        <button class="lvtab" data-layer="upper" title="レイヤー2">2</button>
+        <button class="lvtab" data-layer="layer3" title="レイヤー3">3</button>
+        <button class="lvtab" data-layer="layer4" title="レイヤー4">4</button>
+        <!-- 👤 プレイヤー区切り行: この上のレイヤーがプレイヤーの前面に描画される -->
+        <div id="vtab-player" class="lvtab-player" title="この線より上のレイヤーはプレイヤーの前に表示されます" hidden>👤</div>
+        <!-- ⚙ レイヤー設定ボタン: アクティブなタイル層タブ時のみ表示 -->
+        <button id="btn-layer-settings" class="lvtab-gear" title="レイヤーの使うチップセット・上表示などを設定" hidden>⚙</button>
+        <button id="btn-ghost" class="lvtab-ghost active" title="プレイヤー人形を表示して前後関係を確認 (ドラッグで移動)">人形</button>
+        <button class="lvtab" data-layer="decor">装飾</button>
+        <button class="lvtab" data-layer="spawn">スポーン</button>
+        <button class="lvtab" data-layer="shadow" title="影レイヤー — 遮蔽辺を引きます (影だけ・通行はふさがない)">影</button>
+        <button id="btn-tileset-vtab" title="タイルセット設定 (通行/★/遮光/タグ)" class="lvtab-chip">チップ設定</button>
+      </div>
+    </main>
+
+    <aside id="right-inspector" class="shell-pane collapsed" data-side="right" aria-label="インスペクタ">
+      <button class="pane-toggle" id="right-rail-toggle" type="button" aria-expanded="false"
+              title="インスペクタを開く / 閉じる">情報</button>
+      <div class="pane-body">
+        <section class="inspector-section">
+          <h3 class="inspector-h">マップ情報</h3>
+          <dl class="info-grid">
+            <dt>名前</dt><dd id="info-name">—</dd>
+            <dt>大きさ</dt><dd id="info-size">—</dd>
+            <dt>形式</dt><dd id="info-format">—</dd>
+            <dt>チップ</dt><dd id="info-tiles">—</dd>
+            <dt>装飾</dt><dd id="info-decor">—</dd>
+            <dt>スポーン</dt><dd id="info-spawn">—</dd>
+            <dt>検証</dt><dd id="info-valid">—</dd>
+          </dl>
+        </section>
+        <section class="inspector-section">
+          <h3 class="inspector-h">レイヤー</h3>
+          <div id="right-layers" class="layer-list"></div>
+        </section>
+        <section class="inspector-section">
+          <h3 class="inspector-h">チップ属性</h3>
+          <div id="tileattr-controls" class="tileattr-controls" hidden>
+            <p class="tileattr-which">選択中: チップ <span id="tileattr-id">0</span></p>
+            <button class="tileattr-btn" id="tileattr-pass" type="button">通行: —</button>
+            <button class="tileattr-btn" id="tileattr-over" type="button">★ 上に描画: —</button>
+            <button class="tileattr-btn" id="tileattr-light" type="button">遮光: —</button>
+          </div>
+          <p class="pane-placeholder" id="tileattr-note">タイルのレイヤーを選ぶと、選択中チップの属性をここで変えられます。</p>
+        </section>
+      </div>
+    </aside>
+    </div>
+    <!-- /#shell-body -->
+
+    <!-- 下パレット ドック (旧 全画面オーバーレイ): ▲▲ で展開すると shell-body と footer の
+         間に挟まる in-flow ドック。展開中は viewport が縮んでマップとチップ一覧を同時に
+         見られる (BitGM 風)。▼▼/Esc/チップ選択で閉じる。狭い画面では背高ドックになる。 -->
+    <section id="palette-overlay" hidden role="region" aria-label="チップ一覧">
+      <div id="palette-resize-grip" title="ドラッグでパレットの高さを変えられます" aria-hidden="true"></div>
+      <div id="palette-overlay-header">
+        <input id="palette-search" type="search" placeholder="番号で絞り込み…" autocomplete="off" inputmode="numeric" />
+        <label id="palette-used-label">
+          <input type="checkbox" id="palette-used-only" />
+          使用中のみ
+        </label>
+        <button id="btn-add-tile-overlay" title="PNG を1枚追加してタイルセットに追記します" class="add-tile-btn">+ タイルを追加</button>
+        <button id="btn-merge-sheet-overlay" title="別の PNG シートをまるごとこのセットに合体します (複数素材を1パレットに束ねる)" class="add-tile-btn">🧩 シートを合体</button>
+        <button id="btn-palette-collapse" title="帯に戻る" aria-label="閉じる">▼▼</button>
+      </div>
+      <div id="palette-grid-wrap">
+        <div id="palette-spacer">
+          <canvas id="palette-canvas" title="チップをクリックして選択"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <div id="layer-tabs" hidden>
+        <button class="ltab active" data-layer="ground">レイヤー1</button>
+        <button class="ltab" data-layer="upper">レイヤー2</button>
+        <button class="ltab" data-layer="layer3">レイヤー3</button>
+        <button class="ltab" data-layer="layer4">レイヤー4</button>
+        <button class="ltab" data-layer="decor">装飾</button>
+        <button class="ltab" data-layer="spawn">スポーン</button>
+        <button id="btn-tileset" title="タイルセット設定 (通行/★/遮光/タグ)">チップ設定</button>
+      </div>
+      <div class="tools" id="tools">
+        <button class="tool" data-tool="wall">壁</button>
+        <button class="tool" data-tool="floor">床</button>
+        <button class="tool" data-tool="void">奈落</button>
+        <button class="tool" data-tool="spawn">スポーン</button>
+        <button class="tool" data-tool="light">灯り</button>
+        <button class="tool" data-tool="stain">シミ</button>
+        <button class="tool" data-tool="door">扉</button>
+        <button class="tool" data-tool="vent">ベント</button>
+        <button class="tool" data-tool="ceiling">天井</button>
+      </div>
+      <div class="tools" id="tools-v2" hidden>
+        <button class="tool2" data-tool2="pen">ペン</button>
+        <button class="tool2" data-tool2="erase">消去</button>
+        <button class="tool2" data-tool2="rect">矩形</button>
+        <button class="tool2" data-tool2="line" title="直線 — ドラッグで直線を引きます">直線</button>
+        <button class="tool2" data-tool2="bucket">バケツ</button>
+        <button class="tool2" data-tool2="pick" title="スポイト — クリックでチップを吸い取り、ドラッグで範囲コピーします">スポイト</button>
+        <button id="btn-rect-outline" class="tool2-toggle" title="矩形の枠だけ描く (「矩形」ツール選択時に有効)">□ 枠だけ</button>
+        <button id="btn-random-paint" class="tool2-toggle" title="スタンプからランダムに1枚選んで置く (複数チップ選択時に有効)">🎲 ランダム</button>
+        <!-- オートタイルブラシ選択 + 設定ボタン -->
+        <div id="autotile-strip" class="autotile-strip">
+          <select id="at-brush-select" title="自動つなぎブラシを選択 (通常=1枚タイルペン)">
+            <option value="-1">通常</option>
+          </select>
+          <button id="btn-autotile-open" title="自動つなぎブラシの設定を開く" class="at-open-btn">自動つなぎブラシ</button>
+        </div>
+        <!-- コンパクト帯パレット: 選択中チップ + 近傍チップ数個 + 展開ボタン -->
+        <div id="palette-strip">
+          <canvas id="strip-canvas" title="クリックで別のチップを選択"></canvas>
+          <button id="btn-add-tile-strip" title="PNG を1枚追加してタイルセットに追記します" class="add-tile-btn">+</button>
+          <button id="btn-palette-expand" title="チップ一覧を全画面で開く" aria-label="チップ一覧を開く">▲▲</button>
+        </div>
+      </div>
+      <div class="tools" id="tools-decor2" hidden>
+        <button class="tool2d" data-decor="light">灯り</button>
+        <button class="tool2d" data-decor="stain">シミ</button>
+        <button class="tool2d" data-decor="door">扉</button>
+        <button class="tool2d" data-decor="vent">ベント</button>
+        <button class="tool2d" data-decor="ceiling">天井</button>
+      </div>
+      <p class="note" id="spawn-hint" hidden>クリック / ドラッグでスポーン位置を移動します (エクスポート時に通行可セル上か検証されます)</p>
+      <p class="note" id="shadow-hint" hidden>ドラッグで影線を追加 / クリックで選択 / 右クリックまたは Delete で削除。<strong>影だけ・通行はふさがないよ！</strong></p>
+      <div id="shadow-snap-wrap" class="shadow-snap-wrap" hidden>
+        <label class="shadow-snap-label">
+          <input type="checkbox" id="shadow-snap-toggle" checked />
+          0.5 グリッド吸着 (壁の辺・セルの角にぴったり)
+        </label>
+      </div>
+      <div class="ops">
+        <button id="btn-drawer" title="パレットの開閉">▾</button>
+        <button id="btn-undo" title="元に戻す (Ctrl+Z)" disabled>↶</button>
+        <button id="btn-redo" title="やり直し (Ctrl+Y)" disabled>↷</button>
+        <button id="btn-overlay" title="通行○×オーバーレイ">○×</button>
+        <button id="btn-fit" title="全体表示">⤢</button>
+        <span id="status"></span>
+      </div>
+    </footer>
+
+    <input type="file" id="file-input" accept=".json,application/json" hidden />
+    <input type="file" id="png-input" accept=".png,image/png" hidden />
+    <input type="file" id="add-tile-input" accept=".png,image/png" hidden />
+    <input type="file" id="merge-sheet-input" accept=".png,image/png" hidden />
+    <div id="toast" hidden></div>
+
+    <dialog id="dlg-new">
+      <form method="dialog">
+        <h3>新規マップ</h3>
+        <div class="type-choice">
+          <label class="radio"><input type="radio" name="new-type" value="backrooms" checked /> Backrooms (おすすめ) — 床・壁・奈落がすぐ使えるよ！</label>
+          <label class="radio"><input type="radio" name="new-type" value="custom" /> PNG から自作タイルセット</label>
+        </div>
+        <label>幅 (1〜256) <input id="new-w" type="number" min="1" max="256" value="32" /></label>
+        <label>高さ (1〜256) <input id="new-h" type="number" min="1" max="256" value="32" /></label>
+        <label>マップ名 <input id="new-name" maxlength="64" value="新しいマップ" /></label>
+        <label>作者 <input id="new-author" maxlength="32" /></label>
+        <div id="new-v2-section" hidden>
+          <!-- Step 1: PNG 投入 -->
+          <div id="wiz-step1" class="wiz-step">
+            <div id="wiz-drop-zone" class="wiz-drop-zone" tabindex="0" role="button" aria-label="PNG をドロップまたはクリックして選択">
+              <div id="wiz-drop-inner">
+                <span class="wiz-drop-icon">🖼</span>
+                <span class="wiz-drop-label">PNG をここにドロップ</span>
+                <span class="wiz-drop-sub">クリックで選択 / Ctrl+V で貼り付け</span>
+                <span class="note" id="wiz-drop-limit">PNG ≤ 1 MB</span>
+              </div>
+            </div>
+            <div id="wiz-preview-wrap" class="wiz-preview-wrap" hidden>
+              <canvas id="wiz-preview-canvas" class="wiz-preview-canvas"></canvas>
+              <div id="wiz-preview-info" class="wiz-preview-info"></div>
+            </div>
+          </div>
+          <!-- Step 2/3: 推定・スライスプレビュー (PNG 投入後に表示) -->
+          <div id="wiz-step23" class="wiz-step" hidden>
+            <div class="wiz-section-label">タイルの分割設定</div>
+            <!-- 候補チップ -->
+            <div id="wiz-candidates" class="wiz-candidates"></div>
+            <!-- 手動3入力 -->
+            <div class="wiz-manual-row">
+              <label class="wiz-manual-label">
+                タイルの大きさ (px)
+                <input id="wiz-size" type="number" min="8" max="128" value="32" class="wiz-num-input" />
+              </label>
+              <label class="wiz-manual-label">
+                まわりの余白
+                <input id="wiz-margin" type="number" min="0" max="4" value="0" class="wiz-num-input" />
+              </label>
+              <label class="wiz-manual-label">
+                タイルの間隔
+                <input id="wiz-spacing" type="number" min="0" max="4" value="0" class="wiz-num-input" />
+              </label>
+            </div>
+            <!-- スライスプレビュー -->
+            <div id="wiz-slice-wrap" class="wiz-slice-wrap">
+              <canvas id="wiz-slice-canvas" class="wiz-slice-canvas"></canvas>
+            </div>
+            <!-- 統計 -->
+            <div id="wiz-stats" class="wiz-stats note"></div>
+            <!-- リベイク警告 (margin/spacing > 0 のとき) -->
+            <div id="wiz-rebake-note" class="wiz-rebake-note note" hidden>
+              余白/間隔あり: 作成時に「隙間なしアトラス」へ変換されます (保存する PNG は元の素材とは別物になります)
+            </div>
+          </div>
+        </div>
+        <p class="note">現在の編集内容は置き換えられます (自動保存スロットも上書きされます)。</p>
+        <menu>
+          <button id="new-ok-btn" value="ok" disabled>作成</button>
+          <button value="cancel" formnovalidate>キャンセル</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog id="dlg-tileset">
+      <h3>タイルセット設定</h3>
+      <div id="ts-modes">
+        <button class="ts-mode active" data-mode="pass">通行 ○/×/↓</button>
+        <button class="ts-mode" data-mode="over">上描画 ★</button>
+        <button class="ts-mode" data-mode="light">遮光</button>
+        <button class="ts-mode" data-mode="tag">タグ</button>
+      </div>
+      <p class="note" id="ts-hint"></p>
+      <div id="ts-grid-wrap"><canvas id="ts-canvas"></canvas></div>
+      <menu>
+        <button id="ts-replace" type="button">画像差し替え…</button>
+        <button id="ts-close" type="button">閉じる</button>
+      </menu>
+    </dialog>
+
+    <dialog id="dlg-library">
+      <h3>マップ書庫</h3>
+      <div id="library-list"></div>
+      <menu>
+        <button id="library-import" type="button">ファイルから読込</button>
+        <button id="library-close" type="button">閉じる</button>
+      </menu>
+    </dialog>
+
+    <dialog id="dlg-code">
+      <h3 id="code-title">マップコードを貼り付けて読込</h3>
+      <textarea id="code-text" rows="6" placeholder="EKM1.…" spellcheck="false"></textarea>
+      <menu>
+        <button id="code-ok" type="button">読込</button>
+        <button id="code-cancel" type="button">閉じる</button>
+      </menu>
+    </dialog>
+
+    <dialog id="dlg-msg">
+      <h3 id="msg-title"></h3>
+      <ul id="msg-list"></ul>
+      <menu><button id="msg-close" type="button">閉じる</button></menu>
+    </dialog>
+
+    <!-- タイル1枚追加ダイアログ (v2 マップ専用) -->
+    <dialog id="dlg-add-tile">
+      <h3>タイルを1枚追加</h3>
+      <div id="add-tile-drop-zone" class="wiz-drop-zone" tabindex="0" role="button" aria-label="PNG をドロップまたはクリックして選択">
+        <div id="add-tile-drop-inner">
+          <span class="wiz-drop-icon">🖼</span>
+          <span class="wiz-drop-label">PNG をここにドロップ</span>
+          <span class="wiz-drop-sub">クリックで選択 / Ctrl+V で貼り付け</span>
+        </div>
+      </div>
+      <div id="add-tile-preview-wrap" class="add-tile-preview-wrap" hidden>
+        <canvas id="add-tile-preview-canvas" class="add-tile-preview-canvas"></canvas>
+        <p id="add-tile-preview-info" class="add-tile-preview-info"></p>
+      </div>
+      <p class="note" id="add-tile-size-note" hidden></p>
+      <menu>
+        <button id="add-tile-ok" type="button" disabled>追加</button>
+        <button id="add-tile-cancel" type="button">キャンセル</button>
+      </menu>
+    </dialog>
+
+    <!-- レイヤー設定ダイアログ -->
+    <dialog id="dlg-layer">
+      <h3 id="dlg-layer-title">レイヤーの設定</h3>
+      <label class="dlg-layer-above-row">
+        <input type="checkbox" id="dlg-layer-above" />
+        <span>このレイヤーをプレイヤーより上に表示</span>
+      </label>
+      <div class="dlg-layer-section-label">使うチップセット</div>
+      <div id="dlg-layer-ts-list" class="dlg-layer-ts-list"></div>
+      <menu>
+        <button id="dlg-layer-close" type="button">閉じる</button>
+      </menu>
+    </dialog>
+
+    <!-- オートタイル設定ダイアログ (edge-4 スマートブラシ MVP) -->
+    <dialog id="dlg-autotile">
+      <h3 id="dlg-autotile-title">自動つなぎブラシの設定</h3>
+
+      <!-- かんたん作成: 色を選ぶだけで16通りの壁を自動生成 (シート不要・サイズ合わせ不要) -->
+      <div class="at-easy-box">
+        <div class="at-easy-title">🪄 かんたん作成（おすすめ）</div>
+        <p class="note">壁の色を選んで「作る」を押すだけ。16通りのつなぎ目を自動で作って、すぐ塗れる状態にします。<strong>素材シートは要りません。</strong></p>
+        <div class="at-easy-row">
+          <label>色 <input type="color" id="at-easy-color" value="#c9a93f" /></label>
+          <label>名前 <input type="text" id="at-easy-name" maxlength="32" value="壁" class="at-name-input" /></label>
+          <button id="at-easy-make" type="button" class="primary">この色で作る</button>
+        </div>
+      </div>
+
+      <details class="at-advanced">
+        <summary>くわしい設定（自分で用意した16枚シートを使う）</summary>
+      <p class="note">
+        壁は上下左右の隣の有無で見た目が変わります。その<strong>16通り</strong>それぞれに絵を割り当てると、
+        ペンで塗るだけで自動で正しいつなぎ目を選んでくれます。
+        スロットを選んで下のチップをクリック → <strong>自動で次のスロットへ進みます</strong>。
+      </p>
+      <p class="note at-escape-note">
+        <strong>つなぎ目が要らない (1 枚で塗る) 場合:</strong>
+        <button id="at-btn-skip" type="button" class="at-escape-btn">自動つなぎを使わない (1 枚タイル)</button>
+      </p>
+      <div class="at-section-label">チップセット</div>
+      <select id="at-tileset-select" class="at-tileset-select"></select>
+      <div class="at-section-label">
+        つなぎ方 (16 スロット) — スロットを選んで下のチップをクリック
+        <button id="at-btn-fill-seq" type="button" class="at-clear-btn" title="チップ0〜15をそのままコード順に割り当て（この用途向けに並んだシートなら一発）">連番で一括割当</button>
+      </div>
+      <div id="at-slot-panel" class="at-slot-panel"></div>
+      <div class="at-section-label">フォールバックチップ (未割当スロット用)</div>
+      <div id="at-fallback-row" class="at-fallback-row">
+        <canvas id="at-fallback-canvas" class="at-slot-thumb" title="クリックして選択"></canvas>
+        <button id="at-fallback-clear" type="button" class="at-clear-btn">クリア</button>
+      </div>
+      <div class="at-section-label">テレイン設定</div>
+      <label class="at-flag-row">
+        <input type="checkbox" id="at-blocks-light" />
+        壁として扱う (影を落とす)
+      </label>
+      <div class="at-band-row">
+        <span class="at-band-label">表示バンド:</span>
+        <label class="at-radio"><input type="radio" name="at-band" value="ground" checked /> 床 (通常)</label>
+        <label class="at-radio"><input type="radio" name="at-band" value="above" /> 上面 (プレイヤーより前)</label>
+      </div>
+      <div class="at-section-label">チップを選択 (スロットをクリックしてから選択)</div>
+      <div id="at-tile-picker-wrap" class="at-tile-picker-wrap">
+        <canvas id="at-tile-picker-canvas" class="at-tile-picker-canvas" title="クリックで選択中のスロットに割当"></canvas>
+      </div>
+      <div class="at-section-label">ライブプレビュー</div>
+      <canvas id="at-preview-canvas" class="at-preview-canvas" title="現在の LUT で描画したプレビュー"></canvas>
+      <div class="at-name-row">
+        <label>ブラシ名: <input type="text" id="at-name-input" maxlength="32" placeholder="壁" class="at-name-input" /></label>
+      </div>
+      <menu>
+        <button id="at-btn-save" type="button" class="primary">この設定で保存して使う</button>
+      </menu>
+      </details>
+
+      <menu>
+        <button id="at-btn-cancel" type="button">閉じる</button>
+      </menu>
+    </dialog>
+
+    <!-- タイルセット追加ウィザード (プールへの追加モード) -->
+    <dialog id="dlg-new-tileset">
+      <h3>タイルセットを追加</h3>
+      <p class="note" id="wiz-add-pool-note" hidden>現在のマップのタイルセットプールに新しいセットを追加します。</p>
+      <div id="new-ts-drop-zone" class="wiz-drop-zone" tabindex="0" role="button" aria-label="PNG をドロップまたはクリックして選択">
+        <div class="wiz-drop-inner">
+          <span class="wiz-drop-icon">🖼</span>
+          <span class="wiz-drop-label">PNG をここにドロップ</span>
+          <span class="wiz-drop-sub">クリックで選択 / Ctrl+V で貼り付け</span>
+          <span class="note">PNG ≤ 1 MB</span>
+        </div>
+      </div>
+      <div id="new-ts-preview-wrap" class="wiz-preview-wrap" hidden>
+        <canvas id="new-ts-preview-canvas" class="wiz-preview-canvas"></canvas>
+        <div id="new-ts-preview-info" class="wiz-preview-info"></div>
+      </div>
+      <!-- スライス設定ステップ (PNG 投入後に表示) -->
+      <div id="nts-slice-section" hidden>
+        <div class="wiz-section-label">タイルの分割設定</div>
+        <!-- 候補チップ -->
+        <div id="nts-candidates" class="wiz-candidates"></div>
+        <!-- 手動3入力 -->
+        <div class="wiz-manual-row">
+          <label class="wiz-manual-label">
+            タイルの大きさ (px)
+            <input id="nts-size" type="number" min="8" max="128" value="32" class="wiz-num-input" />
+          </label>
+          <label class="wiz-manual-label">
+            まわりの余白
+            <input id="nts-margin" type="number" min="0" max="4" value="0" class="wiz-num-input" />
+          </label>
+          <label class="wiz-manual-label">
+            タイルの間隔
+            <input id="nts-spacing" type="number" min="0" max="4" value="0" class="wiz-num-input" />
+          </label>
+        </div>
+        <!-- スライスプレビュー -->
+        <div class="wiz-slice-wrap">
+          <canvas id="nts-slice-canvas" class="wiz-slice-canvas"></canvas>
+        </div>
+        <!-- 統計 -->
+        <div id="nts-stats" class="wiz-stats note"></div>
+        <!-- リベイク警告 (margin/spacing > 0 のとき) -->
+        <div id="nts-rebake-note" class="wiz-rebake-note note" hidden>
+          余白/間隔あり: 作成時に「隙間なしアトラス」へ変換されます (保存する PNG は元の素材とは別物になります)
+        </div>
+      </div>
+      <menu>
+        <button id="new-ts-ok-btn" type="button" disabled>追加</button>
+        <button id="new-ts-cancel-btn" type="button">キャンセル</button>
+      </menu>
+    </dialog>
+
+    <!-- スタート画面 (初回訪問時 / btn-home で表示) -->
+    <div id="start-screen" hidden>
+      <div id="start-inner">
+        <h1 id="start-title">EKMap マップエディタ</h1>
+        <p id="start-sub">Among Us のマップをノーコードで作ろう</p>
+        <div id="start-main-btns">
+          <button id="start-new" class="start-main-btn primary">✨ 新規作成</button>
+          <button id="start-library" class="start-main-btn">📂 書庫を開く</button>
+          <button id="start-minigame" class="start-main-btn">🎮 ミニゲーム</button>
+        </div>
+        <h2 id="start-tpl-heading">テンプレートから始める</h2>
+        <div id="start-templates"></div>
+        <button id="start-skip">✕ 何も選ばず始める</button>
+      </div>
+    </div>
+
+    <!-- ミニゲーム (Crew Run) オーバーレイ -->
+    <div id="minigame-overlay" hidden></div>
+
+    <!-- コーチマークオーバーレイ -->
+    <div id="coach-overlay" hidden>
+      <div id="coach-highlight"></div>
+      <div id="coach-tip">
+        <div id="coach-title"></div>
+        <div id="coach-body"></div>
+        <div id="coach-step"></div>
+        <div id="coach-btns">
+          <button id="coach-skip">スキップ</button>
+          <button id="coach-next" class="primary">次へ</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

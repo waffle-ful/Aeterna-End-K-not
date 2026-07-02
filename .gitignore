@@ -486,6 +486,3 @@ Resources/Sounds/Backrooms/*.mp3
 mock_refined.html
 mockup_role_menu_planB.html
 mockups/
-
-# EKM map editor (standalone tool) — kept local only, not published
-editor/
