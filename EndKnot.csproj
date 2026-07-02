@@ -74,6 +74,12 @@
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
     </ItemGroup>
+    <!-- Option-Id 衝突をコンパイル前に検出してビルドを止める (ローカル Windows のみ。
+         CI Linux は build.yml の pwsh ステップで別途実行)。id 衝突は役職/オプションを
+         メニューから無言で消すため、ここで exit 1 → ビルド失敗にする。 -->
+    <Target Name="CheckOptionIds" BeforeTargets="BeforeCompile" Condition="'$(OS)' == 'Windows_NT'">
+        <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\tools\check-option-ids.ps1&quot;" />
+    </Target>
     <Target Name="Roles" AfterTargets="Build">
         <Copy SourceFiles="CustomRoles.cs" DestinationFolder="CTA/CustomTeamAssigner/"/>
     </Target>

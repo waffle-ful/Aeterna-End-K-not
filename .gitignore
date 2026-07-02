@@ -437,7 +437,9 @@ CLAUDE.local.md
 docs/
 
 # External ops tooling — local crash-recovery watchdog etc. (not for public repo)
-tools/
+tools/*
+# ...except the option-Id collision checker, which the build & CI depend on.
+!tools/check-option-ids.ps1
 
 # Build output (custom -o build/)
 build/
