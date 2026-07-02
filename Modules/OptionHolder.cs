@@ -1075,7 +1075,7 @@ public static class Options
                         string arg = args[i];
                         string argName = arg.Trim('{', '}').Trim('[', ']');
                         bool required = arg.StartsWith("{") && arg.EndsWith("}");
-                        string argDesc = command.ArgsDescriptions[i];
+                        string argDesc = i < command.ArgsDescriptions.Length ? command.ArgsDescriptions[i] : string.Empty;
                         string type = required ? "&#x1F538;" : "&#x1F539;";
                         argumentsMarkdown += $"{type} **{argName}** – {argDesc}<br>";
                     }
