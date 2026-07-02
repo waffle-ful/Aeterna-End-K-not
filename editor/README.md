@@ -36,7 +36,7 @@ npm run tauri:build   # リリース: src-tauri/target/release/bundle/ に exe +
 ## 仕様準拠先
 
 マップ形式・検証規則・マップコード (`EKM1.` + base64url(deflate-raw))・壁/柱の導出は
-**EKM v1 仕様 (リポジトリ内部文書 `docs/ekmap-spec.md`、凍結 2026-06-10)** に厳密準拠。
+**EKM v1 仕様 (内部仕様、凍結 2026-06-10)** に厳密準拠。
 エンコードや検証の挙動を変えるときは仕様側・モッド側ローダー・golden テストを同時に更新すること。
 
 ## TODO (仕様の曖昧点 — 仕様側で要確認)

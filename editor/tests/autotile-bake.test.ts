@@ -1,5 +1,5 @@
 // オートタイル UI 統合テスト (autotile-bake.test.ts)
-// 設計の正典: docs/ekm-studio/design_autotile.md §7 MVP 項目 5/6/8
+// 設計の正典: 内部設計仕様 (MVP 項目 5/6/8)
 //
 // テスト対象:
 //   1. golden round-trip: edge-4 で焼いたセルを持つ v3 マップが

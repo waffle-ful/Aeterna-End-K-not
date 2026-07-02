@@ -1,4 +1,4 @@
-// EKM v1/v2 データモデル (docs/ekmap-spec.md 準拠)
+// EKM v1/v2 データモデル (内部仕様準拠)
 
 export const CELL_FLOOR = ".";
 export const CELL_WALL = "#";

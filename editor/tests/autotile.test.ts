@@ -1,5 +1,5 @@
 // オートタイル (edge-4 スマートブラシ) 純関数層のテスト
-// 設計: docs/ekm-studio/design_autotile.md §7 MVP (項目 1/3/4 のコア)
+// 設計: 内部設計仕様 (MVP 項目 1/3/4 のコア)
 
 import { describe, expect, it } from "vitest";
 import {
