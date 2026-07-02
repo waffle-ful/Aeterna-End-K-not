@@ -1322,33 +1322,48 @@ internal static class ChatCommands
             Utils.SendMessage("\n", player.PlayerId, GetString("SpectateCommand.Success"));
     }
 
+    // 公式(Vanilla)鯖: ロビー whisper の unicast パケットが flood-clear の ClearChat broadcast と
+    // 同一フレームで飛ぶと、host 発の broadcast + unicast = 2 reliable パケット/1frame を anti-cheat が
+    // Hacking と誤検知して蹴る (2026-07-02 実測: 非モッドの単発 /w でホスト自身が落ちる)。flood title と
+    // 同じ発想で共有タイムラインに乗せ、最低 0.2s ずらして ClearBroadcast のフレームから必ず外し、
+    // 複数宛先 (/w 0,1,2) も 0.3s 間隔に直列化して 1frame 集中を防ぐ。
+    private const float LobbyWhisperGapSeconds = 0.3f;
+    private static float _nextLobbyWhisperSlot;
+
     private static void SendLobbyWhisper(byte targetId, string title, string msg)
     {
-        PlayerControl target = Utils.GetPlayerById(targetId);
-        if (target == null || target.Data == null) return;
-        int targetClientId = target.OwnerId;
-        if (targetClientId < 0) return;
+        float slot = Math.Max(Time.realtimeSinceStartup + 0.2f, _nextLobbyWhisperSlot);
+        float delay = Math.Max(0.05f, slot - Time.realtimeSinceStartup);
+        _nextLobbyWhisperSlot = slot + LobbyWhisperGapSeconds;
 
-        PlayerControl sender = PlayerControl.LocalPlayer;
-        if (sender == null || sender.Data == null) return;
-
-        try
+        LateTask.New(() =>
         {
-            CustomRpcSender w = CustomRpcSender.Create("WhisperCommand.Lobby", SendOption.Reliable);
-            w.AutoStartRpc(sender.NetId, (byte)RpcCalls.SetName, targetClientId)
-                .Write(sender.Data.NetId)
-                .Write(title)
-                .EndRpc();
-            w.AutoStartRpc(sender.NetId, (byte)RpcCalls.SendChat, targetClientId)
-                .Write(msg)
-                .EndRpc();
-            w.AutoStartRpc(sender.NetId, (byte)RpcCalls.SetName, targetClientId)
-                .Write(sender.Data.NetId)
-                .Write(Main.AllPlayerNames.GetValueOrDefault(sender.PlayerId, string.Empty))
-                .EndRpc();
-            w.SendMessage();
-        }
-        catch (Exception ex) { Logger.Warn($"SendLobbyWhisper failed: {ex.Message}", "Whisper"); }
+            PlayerControl target = Utils.GetPlayerById(targetId);
+            if (target == null || target.Data == null) return;
+            int targetClientId = target.OwnerId;
+            if (targetClientId < 0) return;
+
+            PlayerControl sender = PlayerControl.LocalPlayer;
+            if (sender == null || sender.Data == null) return;
+
+            try
+            {
+                CustomRpcSender w = CustomRpcSender.Create("WhisperCommand.Lobby", SendOption.Reliable);
+                w.AutoStartRpc(sender.NetId, (byte)RpcCalls.SetName, targetClientId)
+                    .Write(sender.Data.NetId)
+                    .Write(title)
+                    .EndRpc();
+                w.AutoStartRpc(sender.NetId, (byte)RpcCalls.SendChat, targetClientId)
+                    .Write(msg)
+                    .EndRpc();
+                w.AutoStartRpc(sender.NetId, (byte)RpcCalls.SetName, targetClientId)
+                    .Write(sender.Data.NetId)
+                    .Write(Main.AllPlayerNames.GetValueOrDefault(sender.PlayerId, string.Empty))
+                    .EndRpc();
+                w.SendMessage();
+            }
+            catch (Exception ex) { Logger.Warn($"SendLobbyWhisper failed: {ex.Message}", "Whisper"); }
+        }, delay, "SendLobbyWhisper", log: false);
     }
 
     private static void WhisperCommand(PlayerControl player, string text, string[] args)

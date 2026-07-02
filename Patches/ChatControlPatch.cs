@@ -459,9 +459,12 @@ public static class ChatManager
             if (HudManager.InstanceExists && (toLocalPlayer || toEveryone)) HudManager.Instance.Chat.AddChat(player, "<size=32767>.");
             if (toLocalPlayer) return;
 
+            // 公式(Vanilla)鯖 anti-cheat は SendChat(RpcCalls 13) を「文字列1個」ちょうどで検証する。
+            // MoreGamemodes 由来の余分な `Write(true)` は payload に1バイト余計に載り、2026 の deserializer が
+            // 想定より長い SendChat を Hacking と誤検知してホストを蹴る (2026-07-02 実測: 非モッドの単発 /w)。
+            // mod 側の読取 (RPC.cs / EAC.cs) も他の全 SendChat 送信も文字列1個なので、余分な bool を撤去して合わせる。
             MessageWriter writer = AmongUsClient.Instance.StartRpcImmediately(player.NetId, (byte)RpcCalls.SendChat, SendOption.Reliable, toEveryone ? -1 : receiver.OwnerId);
             writer.Write("<size=32767>.");
-            writer.Write(true);
             AmongUsClient.Instance.FinishRpcImmediately(writer);
         }
     }
