@@ -457,6 +457,7 @@ public static class Options
     public static OptionItem AutoRehostAfterKick;
     public static OptionItem AutoRehostDelay;
     public static OptionItem AutoRehostMaxAttempts;
+    public static OptionItem CrashWatchdog;
     public static OptionItem AutoStartTimer;
     
     public static OptionItem EnterKeyToStartGame;
@@ -1701,6 +1702,10 @@ public static class Options
 
         AutoRehostMaxAttempts = new IntegerOptionItem(44461, "AutoRehostMaxAttempts", new(1, 10, 1), 3, TabGroup.SystemSettings)
             .SetParent(AutoRehostAfterKick);
+
+        // クラッシュ復帰の番犬(外部ウォッチドッグ)。ON にするとゲーム外の監視プロセスが起動し、
+        // AU がクラッシュ/ハングしたら自動で立て直す。Windows のみ有効(Android は PowerShell 非搭載)。
+        CrashWatchdog = new BooleanOptionItem(44462, "CrashWatchdog", false, TabGroup.SystemSettings);
 
         AutoGMPollCommandAfterJoin = new BooleanOptionItem(19309, "AutoGMPollCommandAfterJoin", false, TabGroup.SystemSettings)
             .SetHeader(true);

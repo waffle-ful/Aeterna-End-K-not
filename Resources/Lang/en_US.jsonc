@@ -12031,6 +12031,7 @@
   "AutoRehostAfterKick": "Auto Re-Host New Lobby After Kick/Error (for streamers)",
   "AutoRehostDelay": "Delay Before Auto Re-Host",
   "AutoRehostMaxAttempts": "Max Consecutive Auto Re-Host Attempts",
+  "CrashWatchdog": "Auto-Restart on Crash/Hang (Watchdog, Windows only)",
   "AutoRehost.Success": "The lobby was automatically re-hosted. A new room code has been issued.",
   "AutoRehost.GaveUp": "Auto re-host stopped after repeated failures. Please host manually.",
   "AutoWarnStopWords": "Warning to those who write banned words",

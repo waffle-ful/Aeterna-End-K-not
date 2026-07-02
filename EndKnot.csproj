@@ -60,6 +60,8 @@
     <ItemGroup>
         <EmbeddedResource Include="$(PkgNVorbis)\lib\netstandard2.0\NVorbis.dll" LogicalName="EndKnot.Resources.Libs.NVorbis.dll" />
         <EmbeddedResource Include="$(PkgNLayer)\lib\netstandard2.0\NLayer.dll" LogicalName="EndKnot.Resources.Libs.NLayer.dll" />
+        <!-- 外部ウォッチドッグ(番犬)スクリプト。ゲーム内ボタンから起動時にディスクへ書き出して使う。 -->
+        <EmbeddedResource Include="tools\EndKnotWatchdog.ps1" LogicalName="EndKnot.Resources.EndKnotWatchdog.ps1" />
     </ItemGroup>
 
     <ItemGroup>
