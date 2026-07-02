@@ -6,9 +6,9 @@
 
 ## About this mod
 
-**End K not** is an unofficial personal fork of [Endless Host Roles (EHR)](https://github.com/Gurge44/EndlessHostRoles) for Among Us. It currently implements **600+ roles**.
+**End K not** is an unofficial personal fork of [Endless Host Roles (EHR)](https://github.com/Gurge44/EndlessHostRoles) for Among Us. It currently implements **650+ roles**.
 
-Only the lobby host needs to install the mod — other players can join and enjoy the additional roles without installing anything.
+Only the lobby host needs to install the mod — other players can join and enjoy the additional roles without installing anything. It works fully on both official and custom servers.
 
 This mod is unofficial and is **not affiliated with or endorsed by Innersloth**. **Please do not contact Innersloth regarding any issues with this mod.**
 
@@ -16,10 +16,6 @@ This mod is unofficial and is **not affiliated with or endorsed by Innersloth**.
 > End K not is in **alpha**. Some roles are untested and several features are works-in-progress. Please report bugs and suggestions on [GitHub Issues](../../issues) or our [Discord](https://discord.gg/sEYAFzD3a).
 
 Supported Among Us version: **2026.3.31**
-
-> [!IMPORTANT]
-> **For the best experience, we recommend hosting on a custom (modded) server.**
-> On official servers, Innersloth's anti-cheat automatically limits some appearance changes (pets, skins, camouflage, etc.). On modded regions such as the `aumods.org` / `duikbo.at` families, every role works in full. See "Server notes (limitations on official servers)" below for details.
 
 ## Features
 
@@ -30,17 +26,17 @@ Supported Among Us version: **2026.3.31**
 
 ## Role list
 
-**614 roles + 114 sub-roles** (add-ons) are implemented, organized by faction.
+**658 roles in total** (512 faction roles + 146 sub-roles/add-ons), organized by faction.
 
 | Faction | Count |
 |---------|-------|
-| Impostor | 154 (vanilla 4 + remake 4 + custom 146) |
-| Crewmate | 165 (vanilla 6 + remake 7 + custom 152) |
-| Neutral | 129 |
-| Coven | 20 |
+| Impostor | 161 (vanilla 4 + remake 4 + custom 153) |
+| Crewmate | 170 (vanilla 6 + remake 7 + custom 157) |
+| Neutral | 131 |
+| Coven | 21 |
 | Game mode exclusive | 27 |
 | Other | 2 (GM / Convict) |
-| Sub-roles (add-ons) | 114 |
+| Sub-roles (add-ons) | 146 |
 
 > [!TIP]
 > ### Featured role: WaveCannon
@@ -48,7 +44,7 @@ Supported Among Us version: **2026.3.31**
 
 Use `/r <role name>` or `/myrole` in-game to check each role's effects and settings.
 
-### Impostor (154)
+### Impostor (161)
 
 |   |   |   |   |
 |---|---|---|---|
@@ -90,9 +86,11 @@ Use `/r <role name>` or `/myrole` in-game to check each role's effects and setti
 | Balancer | **WaveCannon** | Consort | Renegade |
 | Councillor | Ventriloquist | Pathologist | Witch |
 | Nullifier | Kidnapper | Mercenary | Lightning |
-| ShrineMaiden | Devourer |  |  |
+| ShrineMaiden | Devourer | Butcher | Chainbinder |
+| Exorcist | Frightener | Obstructer | Skinwalker |
+| Riptide |  |  |  |
 
-### Crewmate (165)
+### Crewmate (170)
 
 |   |   |   |   |
 |---|---|---|---|
@@ -137,9 +135,10 @@ Use `/r <role name>` or `/myrole` in-game to check each role's effects and setti
 | Deputy | Analyst | Unshifter | Retributionist |
 | Forensic | Adventurer | Imitator | Tree |
 | Soothsayer | Psychic | LovingCrewmate | Alchemist |
-| WolfBoy | ForceFielder | Akazukin | ??? |
+| WolfBoy | ForceFielder | Akazukin | Sandbox |
+| Operative | Survivor |  |  |
 
-### Neutral (129)
+### Neutral (131)
 
 |   |   |   |   |
 |---|---|---|---|
@@ -175,9 +174,9 @@ Use `/r <role name>` or `/myrole` in-game to check each role's effects and setti
 | Lawyer | Pyromaniac | Beehive | Auditor |
 | RuthlessRomantic | Reckless | Pulse | Postman |
 | Traitor | Predator | Werewolf | Strawdoll |
-| Innocent |  |  |  |
+| Innocent | Blockade | Jackpot |  |
 
-### Coven (20)
+### Coven (21)
 
 |   |   |   |   |
 |---|---|---|---|
@@ -186,6 +185,7 @@ Use `/r <role name>` or `/myrole` in-game to check each role's effects and setti
 | Summoner | SpellCaster | Siren | Timelord |
 | Banshee | VoodooMaster | Poache | PotionMaster |
 | Reaper | Death | Goddess | Dreamweaver |
+| Shadow |  |  |  |
 
 ### Game mode exclusive (27)
 
@@ -205,7 +205,7 @@ Use `/r <role name>` or `/myrole` in-game to check each role's effects and setti
 |---|---|---|---|
 | GM | Convict |  |  |
 
-### Sub-roles / Add-ons (114)
+### Sub-roles / Add-ons (146)
 
 |   |   |   |   |
 |---|---|---|---|
@@ -237,7 +237,15 @@ Use `/r <role name>` or `/myrole` in-game to check each role's effects and setti
 | Haunter | Haste | Cleansed | Examiner |
 | Circumvent | Stealer | Contagious | Schizophrenic |
 | Hidden | Truant | Physicist | Gravestone |
-| Charmed | Phantasm |  |  |
+| Charmed | Phantasm | Amanojaku | AsistingAngel |
+| Connecting | DemonicCrusher | DemonicSupporter | DemonicTracker |
+| DemonicVenter | Dizzy | Elector | Entombed |
+| Faction | GhostNoiseSender | Ghostbuttoner | GhostReseter |
+| GhostRumour | InfoPoor | LastNeutral | MagicHand |
+| MeetingAngel | Moon | News | NonReport |
+| Notvoter | OneWolf | Opener | Reroll |
+| Serial | SlowStarter | Stack | Transparent |
+| Twins | Water |  |  |
 
 ## Commands
 
@@ -249,18 +257,6 @@ Over 110 chat commands are available for hosts, moderators, and all players. See
 2. Download the latest `EndKnot.dll` from [Releases](../../releases)
 3. Place `EndKnot.dll` in `Among Us/BepInEx/plugins/`
 4. Launch Among Us
-
-## Server notes (limitations on official servers)
-
-Many of End K not's added roles work by having the host rewrite each player's appearance (pet / skin / color, etc.) through the server. On **official Innersloth servers**, an anti-cheat change introduced in the 2026 update means that when the host tries to change the appearance of a **non-modded player who was assigned certain roles** (internally role-disguising *desync* roles), the **host itself is disconnected with `reason: Hacking`**.
-
-This is a server-side change, not a bug in the mod (the same symptom is reported on upstream EHR as well). Innersloth's behavior may change in a future update.
-
-To avoid this disconnect on official servers, End K not **automatically skips appearance changes (pet grants, skin changes, camouflage, etc.) for the affected players while on an official server**. The host will not be disconnected, but those cosmetic effects are limited as a trade-off.
-
-> [!IMPORTANT]
-> **To use every feature in full, hosting on a custom server (a "modded" region) is recommended.**
-> Modded regions (e.g. the `aumods.org` / `duikbo.at` families) and self-hosted servers do not run the official anti-cheat, so pets, skins, camouflage, and the like all work without the limitation above. See your server provider's instructions for how to add a region.
 
 ## BGM customization
 

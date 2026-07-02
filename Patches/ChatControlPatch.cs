@@ -322,6 +322,11 @@ public static class ChatManager
     }
 
     private static readonly StringBuilder TitleText = new();
+
+    // 公式(Vanilla)鯖の flood-clear title 送信を時間分散するための共有タイムライン (フレーム内 RPC 集中回避)。
+    private const float FloodTitleGapSeconds = 0.4f;
+    private static float _nextFloodTitleSlot;
+
     public static void SendPreviousMessagesToAll()
     {
         if (!AmongUsClient.Instance.AmHost || !HudManager.InstanceExists) return;
@@ -346,8 +351,25 @@ public static class ChatManager
                     .Append(' ')
                     .AppendLine(msg);
             });
-            LateTask.New(() => Utils.SendMessage("\n", title: TitleText.ToString().Trim()), 0.2f);
-            
+            // 公式(Vanilla)鯖: 履歴を 1 タイトルに詰めて 1 発で送ると Utils.SendMessage 内部の title 分割が
+            // 同フレームで SendTempTitleMessage を複数回発火し 9+ RPC/frame → anti-cheat が Hacking kick。
+            // (1) static StringBuilder を即値スナップショット (後続の TitleText.Clear と分離 = closure 遅延評価バグ回避)
+            // (2) ≤600B チャンクに分割し、複数の flood-clear が重なっても共有タイムラインで 0.4s 間隔に直列化。
+            string snapshot = TitleText.ToString().Trim();
+            if (snapshot.Length == 0) return;
+
+            float slot = Math.Max(Time.realtimeSinceStartup + 0.2f, _nextFloodTitleSlot);
+
+            foreach (string chunk in SplitByBytes(snapshot, 600))
+            {
+                string body = chunk;
+                float delay = Math.Max(0.05f, slot - Time.realtimeSinceStartup);
+                LateTask.New(() => Utils.SendMessage("\n", title: body), delay, "FloodClearTitleChunk", log: false);
+                slot += FloodTitleGapSeconds;
+            }
+
+            _nextFloodTitleSlot = slot;
+
             return;
         }
 
@@ -392,6 +414,31 @@ public static class ChatManager
         writer.AutoStartRpc(senderPlayer.NetId, RpcCalls.SendChat, targetClientId)
             .Write(senderMessage)
             .EndRpc();
+    }
+
+    // UTF-8 バイト予算ごとに文字列を分割 (各チャンク ≤ budget を保証)。title flood-clear の 1 発 9RPC バースト回避用。
+    private static List<string> SplitByBytes(string text, int budget)
+    {
+        List<string> chunks = [];
+        StringBuilder sb = new();
+        int bytes = 0;
+
+        foreach (char c in text)
+        {
+            int cb = c < 0x80 ? 1 : c < 0x800 ? 2 : 3;
+            if (bytes + cb > budget && sb.Length > 0)
+            {
+                chunks.Add(sb.ToString());
+                sb.Clear();
+                bytes = 0;
+            }
+
+            sb.Append(c);
+            bytes += cb;
+        }
+
+        if (sb.Length > 0) chunks.Add(sb.ToString());
+        return chunks;
     }
 
     // Base from https://github.com/Rabek009/MoreGamemodes/blob/master/Modules/Utils.cs

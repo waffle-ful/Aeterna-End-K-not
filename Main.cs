@@ -239,6 +239,11 @@ public class Main : BasePlugin
     public static ConfigEntry<bool> AutoHaunt { get; private set; }
     public static ConfigEntry<string> YouTubeStreamUrl { get; private set; }
     public static ConfigEntry<bool> YouTubeChatWarned { get; private set; }
+    public static ConfigEntry<bool> EnableVoiceVox { get; private set; }
+    public static ConfigEntry<string> VoiceVoxEngineUrl { get; private set; }
+    public static ConfigEntry<float> VoiceVoxVolume { get; private set; }
+    public static ConfigEntry<bool> VoiceVoxReadHostOwnChat { get; private set; }
+    public static ConfigEntry<int> VoiceVoxMaxChars { get; private set; }
     public static ConfigEntry<bool> ButtonCooldownInDecimalUnder10s { get; private set; }
     public static ConfigEntry<bool> CancelPetAnimation { get; private set; }
     public static ConfigEntry<bool> TryFixStuttering { get; private set; }
@@ -435,6 +440,12 @@ public class Main : BasePlugin
         AutoHaunt = Config.Bind("Client Options", "AutoHaunt", false);
         YouTubeStreamUrl = Config.Bind("Client Options", "YouTubeStreamUrl", "");
         YouTubeChatWarned = Config.Bind("Client Options", "YouTubeChatWarned", false);
+        EnableVoiceVox = Config.Bind("Client Options", "EnableVoiceVox", false);
+        VoiceVoxEngineUrl = Config.Bind("Client Options", "VoiceVoxEngineUrl", "http://127.0.0.1:50021");
+        VoiceVoxVolume = Config.Bind("Client Options", "VoiceVoxVolume", 1.0f);
+        VoiceVoxReadHostOwnChat = Config.Bind("Client Options", "VoiceVoxReadHostOwnChat", false);
+        VoiceVoxMaxChars = Config.Bind("Client Options", "VoiceVoxMaxChars", 120);
+        EndKnot.Modules.VoiceVox.VoiceVoxManager.Init();
         ButtonCooldownInDecimalUnder10s = Config.Bind("Client Options", "ButtonCooldownInDecimalUnder10s", false);
         CancelPetAnimation = Config.Bind("Client Options", "CancelPetAnimation", true);
         TryFixStuttering = Config.Bind("Client Options", "TryFixStuttering", true);
@@ -1007,7 +1018,27 @@ public class Main : BasePlugin
                 { CustomRoles.Venter, "#694141" },
                 { CustomRoles.Agent, "#ff8f8f" },
                 { CustomRoles.Taskinator, "#561dd1" },
-                { CustomRoles.Akazukin, "#ff4d4d" }
+                { CustomRoles.Akazukin, "#ff4d4d" },
+                // Ported TOHK Crewmate roles (End K not) — head-name colors (no entry = white name)
+                { CustomRoles.AmateurTeller, "#c9a0dc" },
+                { CustomRoles.PonkotuTeller, "#d7a0dc" },
+                { CustomRoles.Teller, "#b39ddb" },
+                { CustomRoles.Gasp, "#9be8d8" },
+                { CustomRoles.NiceLogger, "#6fa8dc" },
+                { CustomRoles.Pathologist, "#a2d9a0" },
+                { CustomRoles.Satellite, "#5fbcd3" },
+                { CustomRoles.ShrineMaiden, "#f7b5c4" },
+                { CustomRoles.VentMaster, "#7fbf7f" },
+                { CustomRoles.VentOpener, "#9ccf9c" },
+                { CustomRoles.Comebacker, "#e8a87c" },
+                { CustomRoles.GuardMaster, "#c0a062" },
+                { CustomRoles.InSender, "#8fb9d9" },
+                { CustomRoles.Shyboy, "#d9b8e0" },
+                { CustomRoles.Snowman, "#bfeaff" },
+                { CustomRoles.Balancer, "#d4c07a" },
+                { CustomRoles.King, "#ffd700" },
+                { CustomRoles.UltraStar, "#ffe14d" },
+                { CustomRoles.WolfBoy, "#8a6d5c" }
             };
 
             CustomRoleValues.Where(x => x.GetCustomRoleTypes() == CustomRoleTypes.Impostor).Do(x => RoleHtmlColors.TryAdd(x, ImpostorColor));
