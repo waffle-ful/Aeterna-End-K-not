@@ -1,5 +1,9 @@
 # End K not
 
+<p align="center">
+  <img src=".github/join-us-banner.png" alt="End K not — JOIN US..." width="70%">
+</p>
+
 [English](README-EN.md)
 
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/sEYAFzD3a)
