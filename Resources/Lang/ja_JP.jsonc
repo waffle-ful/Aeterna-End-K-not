@@ -11397,6 +11397,7 @@
   "AutoRehostAfterKick": "キック・エラーで切断されたら部屋を自動で立て直す（配信者向け）",
   "AutoRehostDelay": "自動立て直しまでの待機時間",
   "AutoRehostMaxAttempts": "自動立て直しの連続リトライ上限",
+  "CrashWatchdog": "クラッシュ・フリーズしたら自動で立て直す（番犬・Windows専用）",
   "AutoRehost.Success": "部屋を自動で立て直しました。新しい部屋コードになっています。",
   "AutoRehost.GaveUp": "立て直しに何度も失敗したので自動立て直しを止めました。手動でホストしてください。",
   "AutoWarnStopWords": "禁止ワードを書く人への警告",
