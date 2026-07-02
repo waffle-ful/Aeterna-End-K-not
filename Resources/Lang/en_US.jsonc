@@ -2550,7 +2550,6 @@
   "VentMaster": "Vent Master",
   "VentMasterInfo": "Sense when anyone enters a vent",
   "VentMasterInfoLong": "(<#8cffff>Crewmates</color>):\n<size=80%>Get a kill flash every time anyone enters a vent.\n_____________________________________\nDifficulty: ★☆☆☆☆\n\n[Skills]\n・<b><color=#8cffff>Vent Alert</color></b>\nWhenever any player enters a vent, you receive an immediate kill flash notification. Use this to track suspicious movement patterns across the round.\n\n<i>Every vent use leaves a flash in your mind.</i></size>",
-  "CanVent": "Can Use Vents",
   "VentOpener": "Vent Opener",
   "VentOpenerInfo": "Enter a vent to expel players hiding inside",
   "VentOpenerInfoLong": "(<#8cffff>Crewmates</color>):\n<size=80%>Force players out of vents — expose whoever's hiding inside.\n_____________________________________\nDifficulty: ★★★☆☆\n\n[Skills]\n・<b><color=#8cffff>Vent Eject</color></b>\nUse your Engineer-style vent ability to forcibly expel players currently hiding in vents. Configurable by team (Impostors, Madmates, Crewmates). Optionally requires tasks to unlock. Expelled players may be blocked from killing you afterward.\n\n<i>Nowhere to hide when someone can reach in and pull you out.</i></size>",
@@ -9504,7 +9503,6 @@
   "CamouflageMode.Waffle": "Waffle",
   "CamouflageMode.ToraHouse": "ToraHouse",
   "CamouflageMode.WarmTea": "WarmTea",
-  "CamouflageMode.BlackCatSquid": "BlackCatSquid",
 
   /* ==============================
     Meeting Settings
@@ -9972,7 +9970,7 @@
   "CommandForms.Fix": "fix,blackscreenfix,fixblackscreen",
   "CommandForms.Forge": "forge",
   "CommandForms.GiveKill": "givekill,gk",
-  "CommandForms.LobbyKillAction": "lobbyKillAction",
+  "CommandForms.LobbyKillAction": "lobbykillaction",
   "CommandDescription.LobbyKillAction": "",
   "CommandForms.GNO": "gno",
   "CommandForms.GameModeList": "gm,gml,gamemodes,gamemodelist",

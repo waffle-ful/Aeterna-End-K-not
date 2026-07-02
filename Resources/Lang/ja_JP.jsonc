@@ -8933,7 +8933,6 @@
   "CamouflageMode.Waffle": "國産わっふる",
   "CamouflageMode.ToraHouse": "トラくんの家",
   "CamouflageMode.WarmTea": "温かいお茶",
-  "CamouflageMode.BlackCatSquid": "黒猫のイカ",
 
   /* ==============================
     Meeting Settings
@@ -9330,7 +9329,7 @@
   "CommandForms.Chat": "chat",
   "CommandForms.Check": "check",
   "CommandForms.Choose": "choose,pick",
-  "CommandForms.Colour": "colour,color",
+  "CommandForms.Colour": "colour,color,cor",
   "CommandForms.Combo": "combo",
   "CommandForms.Compare": "compare,cp,cmp",
   "CommandForms.ConfirmAuth": "confirmauth,認証確認",
@@ -12606,9 +12605,11 @@
   "CommandForms.DevTp": "devtp",
   "CommandForms.DevTpTo": "devtpto",
   "CommandForms.GiveKill": "givekill,gk",
-  "CommandForms.LobbyKillAction": "lobbyKillAction",
+  "CommandForms.LobbyKillAction": "lobbykillaction",
   "CommandDescription.LobbyKillAction": "",
   "CommandForms.Inspect": "inspect",
+  "CommandForms.Burst": "burst",
+  "CommandForms.Rehost": "rehost",
   "CommandForms.ImpostorChat": "ic,impct,impstorchat",
   "CommandForms.JackalChat": "jc,jacct,jackalchat",
   "CommandForms.LoversChat": "lc,loverchat,loverschat",

@@ -186,8 +186,7 @@ public static class Options
         "CamouflageMode.TommyXL",
         "CamouflageMode.Waffle",
         "CamouflageMode.ToraHouse",
-        "CamouflageMode.WarmTea",
-        "CamouflageMode.BlackCatSquid"
+        "CamouflageMode.WarmTea"
     ];
 
     public static readonly string[] PetToAssign =

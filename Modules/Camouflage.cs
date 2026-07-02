@@ -75,7 +75,6 @@ public static class Camouflage
             5 => new NetworkedPlayerInfo.PlayerOutfit().Set("", 3, "hat_wolf_grey", "skin_screamghostface", "visor_EmptyVisor", "pet_EmptyPet", ""), // Waffle
             6 => new NetworkedPlayerInfo.PlayerOutfit().Set("", 13, "hat_pusheenSleepHat", "skin_bsb2_scarfYellowGreen", "visor_pusheenYaaaaaayVisor", "pet_Pusheen", "nameplatepusheen04"), // ToraHouse
             7 => new NetworkedPlayerInfo.PlayerOutfit().Set("", 15, "", "", "", "", ""), // WarmTea
-            8 => new NetworkedPlayerInfo.PlayerOutfit().Set("", 5, "hat_pkHW01_CatEyes", "skin_bsb2_pompous", "visor_Blush", "pet_EmptyPet", "nameplate_paimonstars"), // BlackCatSquid
             _ => CamouflageOutfit
         };
 
