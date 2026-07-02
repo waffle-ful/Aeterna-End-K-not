@@ -71,7 +71,6 @@ public static class FixedUpdateCaller
                 HudManagerPatch.Postfix(hudManager);
                 Zoom.Postfix();
                 HudSpritePatch.Postfix(hudManager);
-                YouTubeChatOverlay.Tick();
             }
 
             // YouTube chat polling は HUD の有無と無関係に進める（ロビーから動かす前提）
