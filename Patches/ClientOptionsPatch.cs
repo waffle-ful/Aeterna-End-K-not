@@ -41,6 +41,8 @@ public static class OptionsMenuBehaviourStartPatch
     private static ClientOptionItem BackroomsReduceRays;
     private static ClientOptionItem BackroomsThrottleVision;
     private static ClientOptionItem BackroomsReduceProcgen;
+    private static ClientOptionItem EnableVoiceVox;
+    private static ClientOptionItem VoiceVoxReadHostOwnChat;
 #if DEBUG
     private static ClientOptionItem GodMode;
 #endif
@@ -314,6 +316,19 @@ public static class OptionsMenuBehaviourStartPatch
 
         if (BackroomsReduceProcgen == null || !BackroomsReduceProcgen.ToggleButton)
             BackroomsReduceProcgen = ClientOptionItem.Create("BackroomsReduceProcgen", Main.BackroomsReduceProcgen, __instance, Modules.BackroomsLobby.RegenerateIfActive);
+
+        if (EnableVoiceVox == null || !EnableVoiceVox.ToggleButton)
+        {
+            EnableVoiceVox = ClientOptionItem.Create("VoiceVoxEnable", Main.EnableVoiceVox, __instance, VoiceVoxEnableToggle);
+
+            static void VoiceVoxEnableToggle()
+            {
+                if (Main.EnableVoiceVox.Value) Modules.VoiceVox.VoiceVoxManager.RefreshSpeakers();
+            }
+        }
+
+        if (VoiceVoxReadHostOwnChat == null || !VoiceVoxReadHostOwnChat.ToggleButton)
+            VoiceVoxReadHostOwnChat = ClientOptionItem.Create("VoiceVoxReadHostOwnChat", Main.VoiceVoxReadHostOwnChat, __instance);
 
 #if DEBUG
         if ((GodMode == null || GodMode.ToggleButton == null) && DebugModeManager.AmDebugger)

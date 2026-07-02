@@ -430,6 +430,7 @@ internal static class ChangeRoleSettings
                 GhostRolesManager.Initialize();
                 RoleBlockManager.Reset();
                 ChatManager.ResetHistory();
+                EndKnot.Modules.VoiceVox.VoiceVoxManager.Reset();
                 PerSecondUpdateScheduler.Reset();
             }
             catch (Exception e) { Utils.ThrowException(e); }

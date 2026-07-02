@@ -72,6 +72,10 @@ public static class FixedUpdateCaller
             // YouTube chat polling は HUD の有無と無関係に進める（ロビーから動かす前提）
             YouTubeChatManager.Tick(UnityEngine.Time.fixedDeltaTime);
 
+            // ホストローカルの読み上げ (VoiceVox TTS)。メインスレッド必須なのでここで drain する。
+            try { EndKnot.Modules.VoiceVox.VoiceVoxManager.Tick(); }
+            catch (Exception e) { Utils.ThrowException(e); }
+
             try { DataFlagRateLimiter.OnFixedUpdate(); }
             catch (Exception e) { Utils.ThrowException(e); }
 

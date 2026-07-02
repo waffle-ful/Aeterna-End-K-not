@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using Il2CppInterop.Runtime;
 using TMPro;
 using UnityEngine;
 
@@ -15,11 +17,136 @@ namespace EndKnot.Modules;
 //
 // このウォッチャは「stale な可能性のある static wrapper から文字列を一切読まない」ことで自分自身が
 // 0x80131506 で落ちないようにしつつ、シーングラフを 1 秒に 1 回走査して異常を検出し記録する。
-// - 文字列(.text/.name)を読むのは「今フレーム live 列挙で返ってきた要素」と「生きている vanilla チャット欄」だけ。
+// - 文字列(.text/.name)を読むのは「今フレーム live 列挙で返ってきた要素」のみ。vanilla チャット欄の text フィールドは
+//   live でも dangling String* を持ちうる（実クラッシュ実績あり）ため、検証付き生読み取り(SafeReadChatText)でのみ読む。
 // - static フィールドには Unity fake-null の bool 判定と、生成時(=確実に live)に控えた GetInstanceID()(純 int)しか触らない。
 // ネットワーク送信ゼロ(AC 安全)。1/sec ゲート + 立ち上がりエッジ de-dup で低負荷・低ノイズ。
 public static class UiAnomalyWatch
 {
+    // ---- VirtualQuery helpers (Windows only; Android path は SafeReadChatText 冒頭でガード) ----
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MEMORY_BASIC_INFORMATION
+    {
+        public IntPtr BaseAddress;
+        public IntPtr AllocationBase;
+        public uint AllocationProtect;
+        public uint __alignment1;   // x64 パディング
+        public IntPtr RegionSize;
+        public uint State;
+        public uint Protect;
+        public uint Type;
+        public uint __alignment2;
+    }
+
+    [DllImport("kernel32.dll")]
+    private static extern IntPtr VirtualQuery(IntPtr lpAddress, out MEMORY_BASIC_INFORMATION lpBuffer, IntPtr dwLength);
+
+    private static bool IsReadable(IntPtr addr, int size)
+    {
+        if (addr == IntPtr.Zero) return false;
+        try
+        {
+            long cur = addr.ToInt64();
+            long end = cur + size;
+            IntPtr mbiSize = (IntPtr)Marshal.SizeOf<MEMORY_BASIC_INFORMATION>();
+            while (cur < end)
+            {
+                if (VirtualQuery((IntPtr)cur, out MEMORY_BASIC_INFORMATION mbi, mbiSize) == IntPtr.Zero) return false;
+                if (mbi.State != 0x1000) return false;          // MEM_COMMIT
+                if ((mbi.Protect & 0x101) != 0) return false;   // PAGE_NOACCESS | PAGE_GUARD
+                if ((mbi.Protect & 0xEE) == 0) return false;    // 読取権限なし
+                cur = mbi.BaseAddress.ToInt64() + mbi.RegionSize.ToInt64();
+            }
+            return true;
+        }
+        catch { return false; }
+    }
+
+    // ---- 検証付き il2cpp 文字列読み取り ----
+    // TextFieldOffset: -1=未解決, -2=恒久無効(解決失敗 or Android)
+    private static int TextFieldOffset = -1;
+    private static IntPtr StringKlass;
+
+    private static unsafe string SafeReadChatText(TextBoxTMP area, out string bad)
+    {
+        // Android では VirtualQuery が存在しないため SafeReadChatText 全体を無効化
+        if (OperatingSystem.IsAndroid())
+        {
+            TextFieldOffset = -2;
+            bad = null;
+            return null;
+        }
+
+        if (TextFieldOffset == -2) { bad = null; return null; }
+
+        // フィールドオフセット解決（初回のみ）
+        if (TextFieldOffset == -1)
+        {
+            IntPtr klass = Il2CppClassPointerStore<TextBoxTMP>.NativeClassPtr;
+            IntPtr field = IL2CPP.GetIl2CppField(klass, "text");
+            if (field == IntPtr.Zero)
+            {
+                TextFieldOffset = -2;
+                Logger.Warn("SafeReadChatText: failed to resolve TextBoxTMP.text field offset", "UIAnomaly");
+            }
+            else
+            {
+                TextFieldOffset = (int)IL2CPP.il2cpp_field_get_offset(field);
+            }
+        }
+
+        if (TextFieldOffset == -2) { bad = null; return null; }
+
+        // StringKlass 解決（初回のみ）
+        if (StringKlass == IntPtr.Zero)
+        {
+            IntPtr probe = IL2CPP.ManagedStringToIl2Cpp("x");
+            if (probe != IntPtr.Zero)
+                StringKlass = *(IntPtr*)probe;
+        }
+
+        // Step 2: wrapper から native ポインタを取得
+        IntPtr objPtr;
+        try { objPtr = area.Pointer; }
+        catch { bad = "wrapper"; return null; }
+        if (objPtr == IntPtr.Zero) { bad = "objnull"; return null; }
+
+        // Step 3: text フィールドスロットが読取可能か
+        if (!IsReadable(objPtr + TextFieldOffset, 8)) { bad = "objmem"; return null; }
+
+        // Step 4: String* を読み取る
+        IntPtr strPtr = *(IntPtr*)((byte*)objPtr + TextFieldOffset);
+        if (strPtr == IntPtr.Zero) { bad = null; return null; } // フィールドが null = 正常
+
+        // Step 5: アライメント確認（有効な il2cpp ヒープポインタは 8 バイトアラインド）
+        if (((long)strPtr & 7) != 0) { bad = "align"; return null; }
+
+        // Step 6: String オブジェクト先頭 24 バイトが読取可能か
+        if (!IsReadable(strPtr, 24)) { bad = "unmapped"; return null; }
+
+        // Step 7: klass ポインタが String klass と一致するか（遊離スロットの直接証拠）
+        if (StringKlass != IntPtr.Zero)
+        {
+            IntPtr k = *(IntPtr*)(byte*)strPtr;
+            if (k != StringKlass) { bad = "klass"; return null; }
+        }
+
+        // Step 8: length フィールド（x64: klass 8 + monitor 8 + int32 length @16）
+        int len = *(int*)((byte*)strPtr + 16);
+        if (len < 0 || len > 4096) { bad = $"len:{len}"; return null; }
+        if (len == 0) { bad = null; return ""; }
+
+        // Step 9: UTF-16 文字データが読取可能か（chars @20）
+        if (!IsReadable(strPtr + 20, len * 2)) { bad = "chars"; return null; }
+
+        // Step 10: マネージド文字列を構築して返す
+        bad = null;
+        return new string((char*)((byte*)strPtr + 20), 0, len);
+    }
+
+    // ---- 定数・共有状態 ----
+
     private const char Sentinel = '￫';   // AdditionalInfoText の ID リスト区切り。実行時ほぼ専用の高精度カナリア
     private const int ScanCap = 800;          // 列挙上限(GC 暴走防止)
     private const long RewarnSeconds = 30;    // 同一署名の再記録抑制(立ち上がりエッジで一度だけ)
@@ -151,7 +278,8 @@ public static class UiAnomalyWatch
         catch (Exception e) { Utils.ThrowException(e); }
     }
 
-    // 生のチャット入力欄(vanilla 管理の live 参照, ?. 厳禁で Unity-null チェーン)に補助 TMP の中身が漏れていないか。
+    // 生のチャット入力欄(vanilla 管理の live 参照, ?. 厳禁)に補助 TMP の中身が漏れていないか。
+    // text フィールドは SafeReadChatText で検証付き読み取りし、dangling String* によるクラッシュを防ぐ。
     private static void ScanLiveChatInput(string state, System.Collections.Generic.HashSet<string> liveNames)
     {
         try
@@ -179,9 +307,17 @@ public static class UiAnomalyWatch
             foreach (KeyValuePair<string, int> kv in CreatedIds)
                 if (kv.Value == fid) { alias = kv.Key; break; }
 
-            string ct;
-            try { ct = area.text; } // live vanilla オブジェクト → 安全
-            catch { return; }
+            string ct = SafeReadChatText(area, out string bad);
+
+            if (bad != null)
+            {
+                // 旧実装はここで area.text を直接 marshal しており、dangling String* で 0x80131506 即死した
+                // (TextBoxPatch.SafeChatText のコメント参照)。クラッシュの代わりに証拠を記録して撤退する。
+                Emit($"kind=CHATINPUT-BADSTR why={bad} fieldName={fname} fieldId={fid}", state);
+                return;
+            }
+
+            if (ct == null) return;
 
             if (string.IsNullOrEmpty(ct)) return;
 

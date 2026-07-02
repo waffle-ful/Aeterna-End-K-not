@@ -1,57 +1,22 @@
-using System.Linq;
 using static EndKnot.Translator;
 
 namespace EndKnot.Modules;
 
-// 公式 Among Us サーバーでのお知らせ。役職割当の reliable forge を None 化した commit (da55e7de) で
-// 「ホストが Hacking 切断される」不具合は解消したため、現在は「公式鯖でほぼ動く / ただしスキン等の
-// 見た目変更だけは非対応」という前向きな案内に変えてある。万一大人数で切断された場合のフォールバック
-// 通知 (WarnAfterHackingKick) だけは残す。
+// 公式 Among Us サーバーでのお知らせ。位置操作/見た目変更/ペットの残っていた制限も ebdde4b9 で
+// 全撤廃済みで、現在は公式鯖でも End K not はフル機能で動く。ロビー入室時の「一部制限あり」案内
+// (旧 WarnInLobby) はその撤廃と同時に呼び出し側から外され、以降は不要になったため削除済み。
+// 万一 (大人数ロビー等の未検証ケースで) Hacking 切断された場合のフォールバック通知だけ残す。
 //
 // 表示は全て LOCAL の ShowPopUp のみ。公式鯖で networked SendMessage を足すと、それ自体が
 // anti-cheat を誘発しかねない ([[project_au2026_sendmessage_burst_kick]]) ので絶対にネットワーク送信しない。
 public static class OfficialServerNotice
 {
-    // ロビー案内はアプリ起動中 1 回だけ (毎ロビー再入室で出すとしつこいため)。
-    private static bool _lobbyWarnedThisAppSession;
-
     // 自動部屋立て直し中は警告ポップアップを出さない (公式で kick されると毎周期出てしまうため)。
     // AutoRehost が立て直し開始〜完了の間 true にする。
     public static bool SuppressWhileRehosting;
 
     // 無人ホスト運用でモーダルが残り続けないよう、ポップアップは一定秒で自動的に閉じる。
     private const float AutoDismissSeconds = 10f;
-
-    // ロビー入室時に呼ぶ。公式鯖 + ホストのときだけ 1 回、対応状況を案内する。
-    public static void WarnInLobby()
-    {
-        if (_lobbyWarnedThisAppSession) return;
-        if (!ShouldWarn()) return;
-        _lobbyWarnedThisAppSession = true;
-
-        string text = GetString("OfficialServerWarning.Lobby");
-
-        // 公式鯖で出現禁止にした「ドラッグ系」役職のうち、ホストが有効にしているものを名指しで列挙する。
-        string disabledRoles = BuildDisabledRoleList();
-        if (disabledRoles.Length > 0)
-            text += "\n\n" + string.Format(GetString("OfficialServerWarning.RolesDisabled"), disabledRoles);
-
-        ShowPopUp(text);
-    }
-
-    // 公式鯖 anti-cheat のため自動で無効化される役職のうち、ホストが有効化しているものの一覧 (なければ空文字)。
-    // 現状は他プレイヤーを引きずる位置操作系 (CustomRoleSelector / ChatCommandPatch の出現禁止リストと一致)。
-    private static readonly CustomRoles[] OfficialDisabledRoles = [CustomRoles.Penguin, CustomRoles.Goose, CustomRoles.ProBowler];
-
-    private static string BuildDisabledRoleList()
-    {
-        try
-        {
-            var enabled = OfficialDisabledRoles.Where(r => r.GetMode() != 0).Select(r => Utils.GetRoleName(r)).ToList();
-            return enabled.Count > 0 ? string.Join("、", enabled) : string.Empty;
-        }
-        catch { return string.Empty; }
-    }
 
     // ExitGamePatch から「Hacking 切断」のときに呼ぶ。kick 不具合は修正済みなので通常は発火しないが、
     // 大人数など未検証ケースで万一切断された場合のフォールバック通知として残す。
@@ -60,11 +25,6 @@ public static class OfficialServerNotice
     {
         if (!Utils.IsOfficialServer()) return;
         LateTask.New(() => ShowPopUp(GetString("OfficialServerWarning.Kicked")), 1.9f, log: false);
-    }
-
-    private static bool ShouldWarn()
-    {
-        return AmongUsClient.Instance != null && AmongUsClient.Instance.AmHost && Utils.IsOfficialServer();
     }
 
     private static void ShowPopUp(string text)
