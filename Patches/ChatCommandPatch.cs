@@ -4210,16 +4210,19 @@ internal static class ChatCommands
         string title = Utils.ColorString(factionColor, $"{mark}{sender.GetRealName()}{mark}");
         string body = Utils.ColorString(factionColor, message);
 
-        CustomRpcSender batchWriter = null;
+        // 宛先は「生存派閥員 + 全死者(霊界傍聴)」。同期 batchWriter ループだと 500B ごとの flush が
+        // 多人数の終盤で 1 フレームに複数 reliable パケットを連射し、9-12 RPC/frame の burst 閾値を
+        // 超えてホストが公式鯖で Hacking kick される。実績ある throttle 経路 (SendMultipleMessages =
+        // 0.4s 間引き + vanilla 宛は事前行分割) に載せて 1frame 集中を根絶する。
+        List<Message> messages = [];
 
         foreach (PlayerControl pc in Main.EnumeratePlayerControls())
         {
             if (pc.IsAlive() && !isInFaction(pc)) continue;
-            batchWriter = Utils.SendMessage(body, pc.PlayerId, title, writer: batchWriter, multiple: true);
+            messages.Add(new Message(body, pc.PlayerId, title));
         }
 
-        if (batchWriter != null && batchWriter.CurrentState != CustomRpcSender.State.Finished)
-            batchWriter.SendMessage();
+        messages.SendMultipleMessages();
     }
 
     private static void ImpostorChatCommand(PlayerControl player, string text, string[] args)
