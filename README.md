@@ -6,9 +6,9 @@
 
 ## このMod について
 
-**End K not** は、[Endless Host Roles (EHR)](https://github.com/Gurge44/EndlessHostRoles) をベースとした Among Us の非公式個人フォークです。現在 **600+ の役職**を実装しています。
+**End K not** は、[Endless Host Roles (EHR)](https://github.com/Gurge44/EndlessHostRoles) をベースとした Among Us の非公式個人フォークです。現在 **650+ の役職**を実装しています。
 
-ホストのクライアントに導入するだけで動作し、他のプレイヤーは Mod を導入せずに追加役職を楽しめます。
+ホストのクライアントに導入するだけで動作し、他のプレイヤーは Mod を導入せずに追加役職を楽しめます。公式サーバー・カスタムサーバーのどちらでもフルに動作します。
 
 このMod は非公式のものであり、Among Us の開発元である Innersloth は一切関与していません。**このMod の問題に関して Innersloth へ問い合わせないでください。**
 
@@ -16,10 +16,6 @@
 > End K not は **alpha 段階**です。未テスト役職や WIP 機能を含みます。不具合報告や提案は [GitHub Issues](../../issues) または [Discord](https://discord.gg/sEYAFzD3a) へお願いします。
 
 対応 Among Us バージョン : **2026.3.31**
-
-> [!IMPORTANT]
-> **快適に遊ぶには、カスタムサーバー（Modded リージョン）でのプレイを推奨します。**
-> 公式サーバーでは Innersloth の anti-cheat により、一部の見た目変更（ペット・スキン・カモフラージュ等）が自動的に制限されます。`aumods.org` / `duikbo.at` 系などの Modded リージョンなら、すべての役職をフルに楽しめます（詳細は下記「サーバーについて（公式サーバーでの制限）」を参照）。
 
 ## End K not の特徴
 
@@ -30,17 +26,17 @@
 
 ## 役職一覧
 
-実装済みは **614 役職 + 114 サブ役職** （アドオン）。陣営ごとに整理しています。
+実装済みは合計 **658 役職**（陣営別役職512 + サブ役職・アドオン146）。陣営ごとに整理しています。
 
 | 陣営 | 役職数 |
 |------|-------|
-| インポスター | 154 (ヴァニラ4 + リメイク4 + カスタム146) |
-| クルーメイト | 165 (ヴァニラ6 + リメイク7 + カスタム152) |
-| ニュートラル | 129 |
-| カバン (Coven) | 20 |
+| インポスター | 161 (ヴァニラ4 + リメイク4 + カスタム153) |
+| クルーメイト | 170 (ヴァニラ6 + リメイク7 + カスタム157) |
+| ニュートラル | 131 |
+| カバン (Coven) | 21 |
 | ゲームモード専用 | 27 |
 | その他 | 2 (GM / Convict) |
-| サブ役職（アドオン） | 114 |
+| サブ役職（アドオン） | 146 |
 
 > [!TIP]
 > ### 注目役職: 波動砲 (WaveCannon)
@@ -48,7 +44,7 @@
 
 各役職の効果や設定はゲーム内で `/r <役職名>` または `/myrole` で確認できます。
 
-### インポスター系 (154)
+### インポスター系 (161)
 
 |   |   |   |   |
 |---|---|---|---|
@@ -90,9 +86,11 @@
 | 天秤 (Balancer) | **波動砲 (WaveCannon)** | 配偶者 (Consort) | 反逆者 (Renegade) |
 | 評議員 (Councillor) | 腹話術師 (Ventriloquist) | 法医 (Pathologist) | 魔女 (Witch) |
 | 無効主義者 (Nullifier) | 誘拐犯 (Kidnapper) | 傭兵 (Mercenary) | 落雷 (Lightning) |
-| 巫女 (ShrineMaiden) | 貪食者 (Devourer) |  |  |
+| 巫女 (ShrineMaiden) | 貪食者 (Devourer) | ブッチャー (Butcher) | チェインバインダー (Chainbinder) |
+| エクソシスト (Exorcist) | フライトナー (Frightener) | オブストラクター (Obstructer) | スキンウォーカー (Skinwalker) |
+| リップタイド (Riptide) |  |  |  |
 
-### クルーメイト系 (165)
+### クルーメイト系 (170)
 
 |   |   |   |   |
 |---|---|---|---|
@@ -137,9 +135,10 @@
 | 副官 (Deputy) | 分析者 (Analyst) | 変身解除者 (Unshifter) | 報復者 (Retributionist) |
 | 法医学者 (Forensic) | 冒険者 (Adventurer) | 模倣者 (Imitator) | 木 (Tree) |
 | 預言者 (Soothsayer) | 霊能者 (Psychic) | 恋人 (LovingCrewmate) | 錬金術師 (Alchemist) |
-| 狼少年 (WolfBoy) | フォースフィールダー(ForceFielder) | あかづきん (Akazukin) | ???(???) |
+| 狼少年 (WolfBoy) | フォースフィールダー(ForceFielder) | あかづきん (Akazukin) | サンドボックス (Sandbox) |
+| オペレーティブ (Operative) | サバイバー (Survivor) |  |  |
 
-### ニュートラル系 (129)
+### ニュートラル系 (131)
 
 |   |   |   |   |
 |---|---|---|---|
@@ -175,9 +174,9 @@
 | 弁護士 (Lawyer) | 放火狂 (Pyromaniac) | 蜂の巣 (Beehive) | 傍聴人 (Auditor) |
 | 無慈悲で冷酷なロマンチック (RuthlessRomantic) | 無謀者 (Reckless) | 模倣者 (Pulse) | 郵便配達員 (Postman) |
 | 裏切り者 (Traitor) | 略奪者 (Predator) | 狼男 (Werewolf) | 藁人形 (Strawdoll) |
-| 冤罪師 (Innocent) |  |  |  |
+| 冤罪師 (Innocent) | ブロケード (Blockade) | ジャックポット (Jackpot) |  |
 
-### カバン (Coven) (20)
+### カバン (Coven) (21)
 
 |   |   |   |   |
 |---|---|---|---|
@@ -186,6 +185,7 @@
 | サモナー (Summoner) | スペルキャスター (SpellCaster) | セイレーン (Siren) | タイムロード (Timelord) |
 | バンシー (Banshee) | ブードゥーマスター (VoodooMaster) | ポウチ (Poache) | ポーションマスター (PotionMaster) |
 | リーパー (Reaper) | 死神 (Death) | 女神 (Goddess) | 夢織師 (Dreamweaver) |
+| シャドウ (Shadow) |  |  |  |
 
 ### ゲームモード専用 (27)
 
@@ -205,7 +205,7 @@
 |---|---|---|---|
 | ゲームマスター (GM) | 犯罪者 (Convict) |  |  |
 
-### サブ役職・アドオン (114)
+### サブ役職・アドオン (146)
 
 |   |   |   |   |
 |---|---|---|---|
@@ -237,7 +237,15 @@
 | 呪霊 (Haunter) | 焦る (Haste) | 浄化 (Cleansed) | 調査官 (Examiner) |
 | 通気阻止 (Circumvent) | 泥棒 (Stealer) | 伝染病 (Contagious) | 統合失調症 (Schizophrenic) |
 | 匿名 (Hidden) | 不登校 (Truant) | 物理学者 (Physicist) | 墓石 (Gravestone) |
-| 魅了した (Charmed) | 妖怪 (Phantasm) |  |  |
+| 魅了した (Charmed) | 妖怪 (Phantasm) | 天邪鬼 (Amanojaku) | アシストエンジェル (AsistingAngel) |
+| コネクティング (Connecting) | デーモンクラッシャー (DemonicCrusher) | デーモンサポーター (DemonicSupporter) | デーモントラッカー (DemonicTracker) |
+| デーモンベンター (DemonicVenter) | ディジー (Dizzy) | イレクター (Elector) | エントゥームド (Entombed) |
+| 徒党 (Faction) | ゴーストノイズセンダー (GhostNoiseSender) | ゴーストボタナー (Ghostbuttoner) | ゴーストリセッター (GhostReseter) |
+| ゴーストルーマー (GhostRumour) | 情報弱者 (InfoPoor) | ラストニュートラル (LastNeutral) | 魔の手 (MagicHand) |
+| ミーティングエンジェル (MeetingAngel) | 月光 (Moon) | 情報屋 (News) | ノンレポート (NonReport) |
+| ノットヴォウター (Notvoter) | 一匹狼 (OneWolf) | オープナー (Opener) | リロール (Reroll) |
+| シリアル (Serial) | スロースターター (SlowStarter) | スタック (Stack) | 透明人間 (Transparent) |
+| 双子 (Twins) | 水浸し (Water) |  |  |
 
 ## コマンド一覧
 
@@ -249,18 +257,6 @@
 2. [Releases](../../releases) から最新の `EndKnot.dll` をダウンロード
 3. `Among Us/BepInEx/plugins/` に配置
 4. Among Us を起動
-
-## サーバーについて（公式サーバーでの制限）
-
-End K not の追加役職の多くは、ホストが各プレイヤーの見た目（ペット・スキン・色など）をサーバー経由で書き換えることで成立しています。**Innersloth 公式サーバー**では、2026 年のアップデートで導入された anti-cheat により、ホストが「Mod を入れていないプレイヤーに割り当てた一部の役職（内部的に役職を偽装する *desync 役職*）」の見た目を書き換えようとすると、**ホスト自身が `reason: Hacking` で切断**されてしまいます。
-
-これはサーバー側の仕様変更であり、Mod 側のバグではありません（ベースである EHR 上流でも同じ症状が報告されています）。将来 Innersloth 側で挙動が変わる可能性があります。
-
-公式サーバーでのこの切断を防ぐため、End K not は **公式サーバーにいる間だけ、該当プレイヤーへの見た目変更（ペット付与・スキン変更・カモフラージュなど）を自動的にスキップ**します。切断は起きませんが、その分だけ見た目に制限が出ます。
-
-> [!IMPORTANT]
-> **すべての機能をフルに使うには、カスタムサーバー（Modded リージョン）でのホストを推奨します。**
-> Modded リージョン（例: `aumods.org` / `duikbo.at` 系）や自前サーバーには公式の anti-cheat が無いため、上記の制限なくペット・スキン・カモフラージュ等がそのまま動作します。リージョンの追加方法は各サーバー提供元の案内を参照してください。
 
 ## BGM のカスタマイズ
 
