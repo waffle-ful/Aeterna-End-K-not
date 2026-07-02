@@ -47,3 +47,14 @@ npm run tauri:build   # リリース: src-tauri/target/release/bundle/ に exe +
 - decor/spawn の float 座標 → セルの対応は「セル中心基準」から **四捨五入** (±0.5 がセル境界) と解釈。
 - 同一セルへの複数 decor は仕様上可能だが、エディタの配置 UI は 1 セル 1 個
   (別種を置くと置換、同種の再クリックで除去。インポートした複数 decor は保持・表示する)。
+
+## クレジット (3Dモデル・音声素材)
+
+同梱ミニゲーム「Crew Run 3D」では、以下のサードパーティ素材を使用しています。
+3Dモデルはいずれも [Creative Commons Attribution 4.0 (CC-BY 4.0)](http://creativecommons.org/licenses/by/4.0/) ライセンスです。
+
+- **"Bacteria - Kane Pixels Backrooms"** by **Roman Trace** — CC-BY 4.0 ([Source](https://skfb.ly/pBZ8p))
+- **"Backrooms partygoer"** by **wilderberry5150** — CC-BY 4.0 ([Source](https://skfb.ly/oJuCJ))
+- 効果音素材: **[ポケットサウンド / 効果音素材](https://pocket-se.info/)**
+
+詳細な帰属表記は [`ASSET_CREDITS.md`](./ASSET_CREDITS.md) を参照してください。
