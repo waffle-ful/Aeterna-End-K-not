@@ -22,8 +22,9 @@ namespace EndKnot;
 [HarmonyPatch(typeof(EOSManager), nameof(EOSManager.Update))]
 internal static class EOSReLoginProactivePatch
 {
-    // 安全マージン: refresh token 寿命 8h より十分手前
-    private const float ReLoginIntervalSeconds = 5f * 3600f;
+    // 発火間隔。実測ログアウトが約5hなので、それより手前(3h)で先回りして
+    // refresh token 寿命をリセットする（実機検証 2026-07-02: 発火・実ログイン成功・ロビー非破壊を確認）。
+    private const float ReLoginIntervalSeconds = 3f * 3600f;
 
     private static float lastReLoginTime = Time.realtimeSinceStartup;
 
