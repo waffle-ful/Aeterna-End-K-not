@@ -113,23 +113,31 @@ public class NiceLogger : RoleBase
         PlayerControl logger = NiceLoggerId.GetPlayer();
         if (logger == null || !logger.IsAlive()) return;
 
-        string send = "<size=70%>";
+        string title = Utils.ColorString(Utils.GetRoleColor(CustomRoles.NiceLogger), Translator.GetString("NiceLoggerTitle"));
+        var messages = new List<Message>();
+
         if (Log.Count != 0)
         {
+            // ログ行を ~300 字ごとに区切って複数メッセージにし、SendMultipleMessages の 0.4s 間引きで送る。
+            // 全ログを 1 本にして Utils.SendMessage を直呼びすると、オーバーサイズ分岐が同一フレームで
+            // 複数チャンクを flush して公式鯖 Hacking kick を踏むため (ドラフト flood と同型の兄弟)。
+            string chunk = "<size=70%>";
             foreach (byte id in Log)
             {
-                string coloredName = id.ColoredPlayerName();
-                send += string.Format(Translator.GetString("NiceLoggerAbility"), coloredName, SetRoom);
+                chunk += string.Format(Translator.GetString("NiceLoggerAbility"), id.ColoredPlayerName(), SetRoom);
+                if (chunk.Length > 300)
+                {
+                    messages.Add(new Message(chunk, NiceLoggerId, title));
+                    chunk = "<size=70%>";
+                }
             }
+
+            if (chunk.Length > "<size=70%>".Length) messages.Add(new Message(chunk, NiceLoggerId, title));
         }
         else
-        {
-            send += string.Format(Translator.GetString("NiceLoggerAbility2"), SetRoom);
-        }
+            messages.Add(new Message("<size=70%>" + string.Format(Translator.GetString("NiceLoggerAbility2"), SetRoom), NiceLoggerId, title));
 
-        LateTask.New(() => Utils.SendMessage(send, NiceLoggerId,
-            Utils.ColorString(Utils.GetRoleColor(CustomRoles.NiceLogger), Translator.GetString("NiceLoggerTitle"))),
-            4f, "NiceLoggerSend");
+        LateTask.New(() => messages.SendMultipleMessages(), 4f, "NiceLoggerSend");
     }
 
     public override void AfterMeetingTasks()
