@@ -97,6 +97,14 @@ public class ClientControlGUI : MonoBehaviour
         SceneManager.remove_sceneLoaded((Action<Scene, LoadSceneMode>)OnSceneLoaded);
     }
 
+    // ゲームを正常終了(×ボタン等)した時に番犬へ停止を指示する。これがないと、ユーザーが自分で
+    // 終了したのに番犬が「AU が落ちた」と誤認して蘇生させる無限ループになる。
+    // クラッシュ/強制終了では OnApplicationQuit は呼ばれないので、そちらは番犬が正しく立て直す。
+    private void OnApplicationQuit()
+    {
+        WatchdogLauncher.OnGameQuit();
+    }
+
     // Resets HUD visibility flag on scene change; HudManager is recreated each load so its new instance is always active
     // Textures use HideFlags.HideAndDontSave so they survive scene transitions without any rebuild needed
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
@@ -458,6 +466,20 @@ public class ClientControlGUI : MonoBehaviour
                     InGameRoleInfoMenu.Show();
                 }
             });
+
+        // クラッシュ自動復帰の番犬(外部ウォッチドッグ)。ホスト or メニュー時のみ・Windows のみ表示。
+        // ボタンはオプション(CrashWatchdog)を反転するだけ。実際の起動/停止は FixedUpdateCaller の
+        // ReconcileWithOption が追従して行うので、オプション画面のトグルと常に一致する。
+        if (WatchdogLauncher.IsSupported && (notJoined || amHost) && Options.CrashWatchdog != null)
+        {
+            Section(ref y, "Auto-Restart");
+            bool wdOn = Options.CrashWatchdog.GetBool();
+            // doSave=true / doSync=false: ローカルに保存だけする。番犬設定はホスト専用なので
+            // クライアントへ RPC 同期する必要はなく、メニュー中(非ロビー)の同期による事故も避ける。
+            Btn(ref y, wdOn ? "Crash Watchdog: ON" : "Crash Watchdog: OFF", wdOn ? _sHost : _sAction, () =>
+                Options.CrashWatchdog.SetValue(wdOn ? 0 : 1, true, false)
+            );
+        }
 
         bool canZoom = Zoom.CanZoom;
         bool canToggleHud = Main.IntroDestroyed && !inMeeting && !ExileController.Instance && !ReportDeadBodyPatch.MeetingStarted;

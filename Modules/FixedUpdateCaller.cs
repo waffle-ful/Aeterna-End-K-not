@@ -31,6 +31,11 @@ public static class FixedUpdateCaller
             try { if (PerSecondUpdateScheduler.ShouldRunUpdate("ui-anomaly")) UiAnomalyWatch.Scan(); }
             catch (Exception e) { Utils.ThrowException(e); }
 
+            // クラッシュ復帰の番犬(外部ウォッチドッグ)を CrashWatchdog オプションに追従させる。
+            // HUD/ローカルプレイヤー非依存でメニューからも武装できるようここで回す。1/sec ゲート。
+            try { if (PerSecondUpdateScheduler.ShouldRunUpdate("watchdog-reconcile")) WatchdogLauncher.ReconcileWithOption(); }
+            catch (Exception e) { Utils.ThrowException(e); }
+
             // チャット open/close 状態を毎フレーム overlay に反映。ローカルプレイヤー非依存で回す
             // (メニュー・非ゲーム中でもチャットが開くため、LocalPlayer ガードの中では遅すぎる)。
             try { TextBoxPatch.CheckChatOpen(); }
