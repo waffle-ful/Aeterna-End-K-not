@@ -98,10 +98,27 @@ public static class CalamityButtons
         tmp.characterSpacing   = -3f;
         CalamityFonts.Apply(tmp);
 
-        // Collider for mouse events
+        // Collider for mouse events — sized to the ACTUAL rendered glyph bounds so the
+        // hover/click zone hugs the visible text. A previous fixed 5×0.65 box triggered
+        // hover several units left/right of the label. ForceMeshUpdate makes textBounds
+        // current (ButtonLayer is active-in-hierarchy here); pad slightly for easy aiming.
+        const float PadX = 0.35f;
+        const float PadY = 0.30f;
+        tmp.ForceMeshUpdate();
+        var b = tmp.textBounds;
+
         var col = go.AddComponent<BoxCollider2D>();
-        col.size   = new Vector2(5f, 0.65f);
-        col.offset = Vector2.zero;
+        if (b.size.x > 0.01f && b.size.y > 0.01f)
+        {
+            col.size   = new Vector2(b.size.x + PadX, b.size.y + PadY);
+            col.offset = new Vector2(b.center.x, b.center.y);
+        }
+        else
+        {
+            // Fallback if the mesh hasn't been generated yet — approximate from font size.
+            col.size   = new Vector2(label.Length * FontSize * 0.5f, FontSize * 0.7f);
+            col.offset = Vector2.zero;
+        }
 
         var btn         = go.AddComponent<PassiveButton>();
         btn.OnClick     = new();
