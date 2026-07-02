@@ -244,6 +244,8 @@ internal static class CheckForEndVotingPatch
 
             Blackmailer.ManipulateVotingResult(votingData, states);
             Swapper.ManipulateVotingResult(votingData, states);
+            King.ManipulateVotingResult(votingData, states);
+            Balancer.ManipulateVotingResult(votingData, states);
             Assumer.OnVotingEnd(votingData);
             MeetingAngel.NegateVotes(votingData, states);
             
@@ -1475,6 +1477,16 @@ internal static class MeetingHudCastVotePatch
             ShouldCancelVoteList.TryAdd(srcPlayerId, (__instance, pvaSrc, pcSrc));
             Utils.SendMessage(Translator.GetString("FirstTurnMeetingNoVoteMessage"), srcPlayerId);
             Logger.Info($"{pcSrc.GetNameWithRole()} vote blocked by FirstTurnMeetingNoVote", "Vote");
+            return false;
+        }
+
+        // Balancer 会議中は T1/T2 以外 (スキップ含む) への投票を cast 時に拒否する (TOHK CheckVoteAsVoter 準拠)。
+        // tally 側の Balancer.ManipulateVotingResult がリダイレクトで結果は担保するが、投票拒否のフィードバックを出すため。
+        if (Balancer.ShouldCancelVote(pcTarget))
+        {
+            ShouldCancelVoteList.TryAdd(srcPlayerId, (__instance, pvaSrc, pcSrc));
+            Utils.SendMessage(Translator.GetString("BalancerVoteRestricted"), srcPlayerId);
+            Logger.Info($"{pcSrc.GetNameWithRole()} vote restricted by Balancer meeting", "Vote");
             return false;
         }
 

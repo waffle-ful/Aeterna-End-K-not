@@ -81,7 +81,7 @@ public class Snowman : RoleBase
     public override void OnFixedUpdate(PlayerControl pc)
     {
         if (!AmongUsClient.Instance.AmHost || !pc.IsAlive()) return;
-        if (GameStates.IsLobby) return;
+        if (GameStates.IsLobby || GameStates.IsMeeting) return; // 会議中は Pos() が凍結し静止判定が誤発火 → ビジョン融解が進むため除外
         if (pc.GetTaskState().IsTaskFinished) return;
         if (Utils.IsActive(SystemTypes.Electrical) && ElectricalIgnoreMelt) return;
 
