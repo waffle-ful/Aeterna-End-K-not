@@ -19,10 +19,27 @@ Supported Among Us version: **2026.3.31**
 
 ## Features
 
-- **Calamity-themed main menu** *(work in progress)* — A custom Calamity-style title screen
-- **BGM system** — Replaceable background music for menu / lobby / in-task / climax / meeting / result. Default tracks bundled
-- **External communication reduced** — Achievements API, online presets, news fetching, and other upstream EHR network calls are disabled. Exceptions: update checks against this mod's GitHub releases, and gameplay features such as Bard and the anagram command that fetch public data from third-party APIs
-- **GPL-3.0 open source** — Full source available; you may study, modify, and redistribute under GPL-3.0
+On top of EHR's 650+ role engine, End K not adds its own original feature set for **streaming, long-running hosting, and original content.**
+
+### 🎥 Streaming & long-running hosting
+
+- **Per-crew text-to-speech (VOICEVOX integration)** — Reads each player's chat aloud in a distinct voice. It drives a locally-installed copy of [VOICEVOX](https://voicevox.hiroshiba.jp/); the audio plays only on the host's machine (your stream) and is never sent to the game. Voices can also be pinned per player name or friend code. *(See [Credits](#credits) for the attribution required when streaming.)*
+- **Auto re-host & crash self-recovery** — If the host is kicked or dropped by the official server, End K not automatically re-creates a new lobby with the same region and settings. And if Among Us itself crashes or hangs, the bundled external watchdog detects it and relaunches the game to restore the lobby — so it keeps running unattended through 24-hour soaks and long streams.
+- **BGM system** — Replaceable background music for menu / lobby / in-task / climax / meeting / result. Default tracks bundled.
+- **YouTube live chat overlay** — Displays your YouTube live chat on top of the game screen while streaming.
+
+### 🏚️ Original content
+
+- **Backrooms lobby** — A special Backrooms-themed lobby presentation, with asymmetric rendering that looks different for the modded host versus non-modded joiners.
+- **EKM custom map editor** — A dedicated editor for building your own custom maps is bundled ([`editor/`](./editor)); maps you create can be loaded in-game *(work in progress)*.
+- **WaveCannon / Riptide** — Signature, over-the-top original roles that unleash a huge map-sweeping beam or wave.
+- **Lobby decorations** — Place decorations such as hot springs and portals in the lobby.
+
+### 🎨 UI & policy
+
+- **Calamity-themed main menu** *(work in progress)* — A custom Calamity-style title screen (referencing [CalamityModPublic](https://github.com/CalamityTeam/CalamityModPublic)).
+- **External communication reduced** — Achievements API, online presets, news fetching, and other upstream EHR network calls are disabled. Exceptions: update checks against this mod's GitHub releases, and gameplay features such as Bard and the anagram command that fetch public data from third-party APIs.
+- **GPL-3.0 open source** — Full source available; you may study, modify, and redistribute under GPL-3.0.
 
 ## Role list
 
@@ -298,6 +315,19 @@ BGM by **DM DOKURO**
 
 BGM by **自称芸術家みーさん (Miisan)**
 - [HURT RECORD](https://www.hurtrecord.com/bgm/46/zero-no-heya.html)
+
+### VOICEVOX (text-to-speech)
+
+The per-crew read-aloud feature uses **[VOICEVOX](https://voicevox.hiroshiba.jp/)**, a free Japanese text-to-speech software. End K not bundles no voice data — it synthesizes at runtime through the VOICEVOX installed on the host's PC.
+
+> [!IMPORTANT]
+> **If you publish the generated audio in a stream or recording, you must credit both VOICEVOX and the character(s) used.**
+> Example: `VOICEVOX:ずんだもん (Zundamon)`
+> Each character has its own individual terms of use, so please review the [VOICEVOX terms](https://voicevox.hiroshiba.jp/term/) and each character's terms.
+
+Which characters are used depends on the VOICEVOX voices the host has installed (the installed voices and their IDs are written to `BepInEx/config/EndKnot_VoiceVox_Speakers.txt`). Credits for all VOICEVOX characters are listed below:
+
+四国めたん (Shikoku Metan) / ずんだもん (Zundamon) / 春日部つむぎ (Kasukabe Tsumugi) / 雨晴はう (Amehare Hau) / 波音リツ (Namine Ritsu) / 玄野武宏 (Kurono Takehiro) / 白上虎太郎 (Shirakami Kotaro) / 青山龍星 (Aoyama Ryusei) / 冥鳴ひまり (Meimei Himari) / 九州そら (Kyushu Sora) / もち子さん (Mochiko-san) / 剣崎雌雄 (Kenzaki Mesuo) / WhiteCUL / 後鬼 (Goki) / No.7 / ちび式じい (Chibishiki-jii) / 櫻歌ミコ (Ouka Miko) / 小夜/SAYO / ナースロボ＿タイプＴ (Nurserobo Type-T) / †聖騎士 紅桜† (Holy Knight Benizakura) / 雀松朱司 (Suzumatsu Akashi) / 麒ヶ島宗麟 (Kigashima Sorin) / 春歌ナナ (Haruka Nana) / 猫使アル (Nekotsuka Aru) / 猫使ビィ (Nekotsuka Bii) / 中国うさぎ (Chugoku Usagi) / 栗田まろん (Kurita Maron) / あいえるたん (Aierutan) / 満別花丸 (Manbetsu Hanamaru) / 琴詠ニア (Kotoyomi Nia) / Voidoll / ぞん子 (Zonko) / 中部つるぎ (Chubu Tsurugi) / 離途 (Rito) / 黒沢冴白 (Kurosawa Saehaku) / ユーレイちゃん (Yurei-chan) / 東北ずん子 (Tohoku Zunko) / 東北きりたん (Tohoku Kiritan) / 東北イタコ (Tohoku Itako) / あんこもん (Ankomon) / 夜語トバリ (Yogatari Tobari) / 暁記ミタマ (Akatsuki Mitama) / 里石ユカ (Satoishi Yuka)
 
 For per-role porting credits, see [`CHANGELOG.md`](./CHANGELOG.md) and individual commit messages.
 
