@@ -256,6 +256,10 @@ public class Main : BasePlugin
     public static ConfigEntry<bool> BackroomsReduceProcgen { get; private set; }
     public static ConfigEntry<float> UIScaleFactor { get; private set; }
     public static ConfigEntry<bool> EnableEarlyWarningNotify { get; private set; }
+    public static ConfigEntry<bool> EnableClaudeBridge { get; private set; }
+    public static ConfigEntry<bool> ClaudeBridgeAutoScreenshot { get; private set; }
+    public static ConfigEntry<int> ClaudeBridgeScreenshotInterval { get; private set; }
+    public static ConfigEntry<int> ClaudeBridgeScreenshotKeep { get; private set; }
 
     // Preset Name Options
     public static ConfigEntry<string> Preset1 { get; private set; }
@@ -459,6 +463,10 @@ public class Main : BasePlugin
         BackroomsReduceProcgen = Config.Bind("Client Options", "BackroomsReduceProcgen", false);
         UIScaleFactor = Config.Bind("Client Options", "UIScaleFactor", 1f);
         EnableEarlyWarningNotify = Config.Bind("Client Options", "EnableEarlyWarningNotify", true, "Show an in-game host notification when early-warning telemetry detects a critical anomaly (packet near kick threshold, SnapTo exhaustion, exception flood). Logging to EndKnot-Health.log always happens regardless of this setting.");
+        EnableClaudeBridge = Config.Bind("Client Options", "EnableClaudeBridge", false, "Enable the ClaudeBridge remote test bridge: polls <Desktop>/EndKnot_Logs/claude-cmd.txt for chat-command directives and writes results to claude-out.log. Windows-only, host-only. Default off.");
+        ClaudeBridgeAutoScreenshot = Config.Bind("Client Options", "ClaudeBridgeAutoScreenshot", false, "When ClaudeBridge is enabled, also capture a screenshot on a fixed interval (see ClaudeBridgeScreenshotInterval) in addition to the manual 'screenshot' directive.");
+        ClaudeBridgeScreenshotInterval = Config.Bind("Client Options", "ClaudeBridgeScreenshotInterval", 20, "Seconds between automatic screenshots when ClaudeBridgeAutoScreenshot is on.");
+        ClaudeBridgeScreenshotKeep = Config.Bind("Client Options", "ClaudeBridgeScreenshotKeep", 30, "Max number of screenshots to keep under EndKnot_Logs/Screens (oldest deleted first).");
 
         AddComponent<ClientControlGUI>();
         Log.LogInfo("ClientControlGUI registered");

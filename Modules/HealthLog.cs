@@ -396,7 +396,7 @@ public static class HealthLog
         Timeline(line);
     }
 
-    private static string GetState()
+    public static string GetState()
     {
         try
         {

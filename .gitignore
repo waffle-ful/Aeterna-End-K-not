@@ -447,6 +447,8 @@ tools/*
 !tools/番犬スタート.cmd
 # ...and the log diagnosis tool (log-doctor), which users run to self-diagnose issues.
 !tools/log-doctor.ps1
+# ...and the post-stream retrospective report tool (stream-report).
+!tools/stream-report.ps1
 
 # Build output (custom -o build/)
 build/

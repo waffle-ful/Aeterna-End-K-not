@@ -36,6 +36,10 @@ public static class FixedUpdateCaller
             try { if (PerSecondUpdateScheduler.ShouldRunUpdate("watchdog-reconcile")) WatchdogLauncher.ReconcileWithOption(); }
             catch (Exception e) { Utils.ThrowException(e); }
 
+            // Claude 遠隔テストブリッジ(既定OFF)。コマンドファイルのポーリング+自動スクショを 1/sec ゲートで回す。
+            try { if (PerSecondUpdateScheduler.ShouldRunUpdate("claude-bridge")) ClaudeBridge.Tick(); }
+            catch (Exception e) { Utils.ThrowException(e); }
+
             // チャット open/close 状態を毎フレーム overlay に反映。ローカルプレイヤー非依存で回す
             // (メニュー・非ゲーム中でもチャットが開くため、LocalPlayer ガードの中では遅すぎる)。
             try { TextBoxPatch.CheckChatOpen(); }

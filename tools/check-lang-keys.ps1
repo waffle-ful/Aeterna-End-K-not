@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Lang key sync checker (End K not) - deterministic, JSON-parser-free.
 
@@ -23,10 +23,17 @@
           or is empty (input is ToLower'ed, so it could never match).
       r4  duplicate keys inside one file (last write silently wins).
           Checked for every parsed file.
+      r5  a command registered in Patches/ChatCommandPatch.cs has no
+          CommandForms.<Key> in en_US at all. The en<->ja sync rules can
+          never catch a key that exists in NO language; without the forms
+          key IsThisCommand never matches and the command silently dies
+          in every language (found live via /exo //reroll on 2026-07-03).
 
     WARN rules (exit 0, or exit 1 with -Strict):
       - keys present in en_US but missing from ja_JP (non-CommandForms)
       - keys present only in ja_JP (orphans)
+      - r5w: a registered command has no CommandDescription.<Key> in en_US
+        (the raw "*CommandDescription.<Key>" placeholder shows up in /help)
 
 .PARAMETER Strict
     Treat WARN findings as failures (exit 1).
@@ -201,6 +208,53 @@ if ($r3.Count -gt 0) {
 }
 else {
     Write-Host ("$MARK_OK r3: en_US CommandForms hygiene ({0} keys clean)" -f $en.CmdForms.Count)
+}
+
+# ---------------- r5: code-referenced command keys must exist in en_US
+# ChatCommandPatch.cs resolves CommandForms.<Key> / CommandDescription.<Key>
+# for every registered command. A key missing from ALL languages is invisible
+# to the en<->ja sync rules, so check code -> en_US here.
+$cmdPatchPath = Join-Path (Split-Path -Parent $PSScriptRoot) 'Patches\ChatCommandPatch.cs'
+if (Test-Path -LiteralPath $cmdPatchPath) {
+    $regRegex = [regex]::new('new\("([A-Za-z0-9_]+)"\s*,.*Command\.UsageLevels\.', [System.Text.RegularExpressions.RegexOptions]::Compiled)
+    $cmdKeys = New-Object 'System.Collections.Generic.List[string]'
+    foreach ($srcLine in [System.IO.File]::ReadAllLines($cmdPatchPath)) {
+        $m = $regRegex.Match($srcLine)
+        if ($m.Success) { $cmdKeys.Add($m.Groups[1].Value) }
+    }
+
+    $r5  = New-Object 'System.Collections.Generic.List[string]'   # FAIL: no CommandForms.<Key>
+    $r5w = New-Object 'System.Collections.Generic.List[string]'   # WARN: no CommandDescription.<Key>
+    foreach ($k in $cmdKeys) {
+        if (-not $en.Keys.ContainsKey('CommandForms.' + $k)) {
+            $r5.Add(('CommandForms.{0} (command "{0}" is silently dead in every language)' -f $k))
+        }
+        if (-not $en.Keys.ContainsKey('CommandDescription.' + $k)) {
+            $r5w.Add(('CommandDescription.{0}' -f $k))
+        }
+    }
+
+    if ($r5.Count -gt 0) {
+        $failCount += $r5.Count
+        Write-Host ("$MARK_FAIL r5: registered commands without CommandForms in en_US - {0} key(s)" -f $r5.Count)
+        Write-KeyList -Items $r5 -Max 100
+    }
+    else {
+        Write-Host ("$MARK_OK r5: all {0} registered commands have CommandForms in en_US" -f $cmdKeys.Count)
+    }
+
+    if ($r5w.Count -gt 0) {
+        $warnCount += $r5w.Count
+        Write-Host ("$MARK_WARN r5w: registered commands without CommandDescription in en_US - {0} key(s)" -f $r5w.Count)
+        Write-KeyList -Items $r5w -Max 100
+    }
+    else {
+        Write-Host ("$MARK_OK r5w: all registered commands have CommandDescription in en_US")
+    }
+}
+else {
+    $warnCount += 1
+    Write-Host ("$MARK_WARN r5: ChatCommandPatch.cs not found, skipped: {0}" -f $cmdPatchPath)
 }
 
 # --------------------------------- r4: duplicate keys (every parsed file)

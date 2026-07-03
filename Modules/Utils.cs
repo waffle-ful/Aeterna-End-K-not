@@ -2425,6 +2425,7 @@ public static class Utils
                 string pureText = text.RemoveHtmlTags();
                 string pureTitle = title.RemoveHtmlTags();
                 Logger.Info($" Message: {pureText[..(pureText.Length <= 300 ? pureText.Length : 300)]} - To: {PlayerControl.LocalPlayer.GetRealName()} - Title: {pureTitle[..(pureTitle.Length <= 300 ? pureTitle.Length : 300)]}", "SendMessage");
+                try { ClaudeBridge.OnHostSystemMessage(pureTitle, pureText); } catch { }
             }
             catch { Logger.Info(" Message sent", "SendMessage"); }
         }
