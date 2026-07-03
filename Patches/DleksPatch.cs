@@ -14,32 +14,36 @@ internal static class AllMapIconsPatch
     [HarmonyPrefix]
     public static void GameStartManagerStart_Prefix(GameStartManager __instance)
     {
-        // AllMapIcons is null in the freeplay/tutorial-scene flavor of GameStartManager
-        // (this Start fires there too). Without this guard the NRE breaks the rest of
-        // GameStartManager.Start initialization and produces a UpdateMapImage NRE storm
-        // when vanilla animation/Update calls UpdateMapImage on partially-initialized
-        // fields.
-        if (__instance == null || __instance.AllMapIcons == null) return;
+        try
+        {
+            // AllMapIcons is null in the freeplay/tutorial-scene flavor of GameStartManager
+            // (this Start fires there too). Without this guard the NRE breaks the rest of
+            // GameStartManager.Start initialization and produces a UpdateMapImage NRE storm
+            // when vanilla animation/Update calls UpdateMapImage on partially-initialized
+            // fields.
+            if (__instance == null || __instance.AllMapIcons == null) return;
 
-        if (!__instance.AllMapIcons.ToArray().Any(x => x.Name == MapNames.Dleks))
-        {
-            __instance.AllMapIcons.Insert((int)MapNames.Dleks, new MapIconByName
+            if (!__instance.AllMapIcons.ToArray().Any(x => x.Name == MapNames.Dleks))
             {
-                Name = MapNames.Dleks,
-                MapIcon = Utils.LoadSprite("EndKnot.Resources.Images.DleksBanner-Wordart.png", 160f),
-            });
-        }
-        if (SubmergedCompatibility.Loaded)
-        {
-            if (!__instance.AllMapIcons.ToArray().Any(x => x.Name == (MapNames)6))
-            {
-                __instance.AllMapIcons.Insert((int)(MapNames)6, new MapIconByName
+                __instance.AllMapIcons.Insert((int)MapNames.Dleks, new MapIconByName
                 {
-                    Name = (MapNames)6,
-                    MapIcon = Utils.LoadSprite("EndKnot.Resources.Images.Submerged-Wordart.png", 380f),
+                    Name = MapNames.Dleks,
+                    MapIcon = Utils.LoadSprite("EndKnot.Resources.Images.DleksBanner-Wordart.png", 160f),
                 });
             }
+            if (SubmergedCompatibility.Loaded)
+            {
+                if (!__instance.AllMapIcons.ToArray().Any(x => x.Name == (MapNames)6))
+                {
+                    __instance.AllMapIcons.Insert((int)(MapNames)6, new MapIconByName
+                    {
+                        Name = (MapNames)6,
+                        MapIcon = Utils.LoadSprite("EndKnot.Resources.Images.Submerged-Wordart.png", 380f),
+                    });
+                }
+            }
         }
+        catch { }
     }
     [HarmonyPatch(nameof(GameStartManager.Start))]
     [HarmonyPostfix]

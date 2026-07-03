@@ -60,6 +60,9 @@ public static class ModGameOptionsMenu
 [HarmonyPatch(typeof(GameOptionsMenu))]
 public static class GameOptionsMenuPatch
 {
+    private static readonly Dictionary<GameOptionsMenu, Coroutine> BuildCoroutines = new();
+    private static readonly Dictionary<GameOptionsMenu, int> BuildGenerations = new();
+
     [HarmonyPatch(nameof(GameOptionsMenu.Initialize))]
     [HarmonyPrefix]
     private static bool InitializePrefix(GameOptionsMenu __instance)
@@ -153,12 +156,24 @@ public static class GameOptionsMenuPatch
             return false;
         }
 
+        if (!__instance.gameObject.activeInHierarchy) return false;
+
         __instance.scrollBar.SetYBoundsMax(CalculateScrollBarYBoundsMax());
 
-        __instance.StartCoroutine(CoRoutine().WrapToIl2Cpp());
+        if (BuildCoroutines.TryGetValue(__instance, out Coroutine existing) && existing != null)
+        {
+            __instance.StopCoroutine(existing);
+            BuildCoroutines.Remove(__instance);
+        }
+
+        BuildGenerations.TryGetValue(__instance, out int currentGen);
+        currentGen++;
+        BuildGenerations[__instance] = currentGen;
+
+        BuildCoroutines[__instance] = __instance.StartCoroutine(CoRoutine(currentGen).WrapToIl2Cpp());
         return false;
 
-        IEnumerator CoRoutine()
+        IEnumerator CoRoutine(int gen)
         {
             var num = 2.0f;
             const float posX = 0.952f;
@@ -261,10 +276,19 @@ public static class GameOptionsMenuPatch
                 if (index % 100 == 0) yield return null;
             }
 
+            // Bail if a newer build coroutine was started on this instance while we were running
+            if (!BuildGenerations.TryGetValue(__instance, out int latestGen) || latestGen != gen)
+            {
+                BuildCoroutines.Remove(__instance);
+                yield break;
+            }
+
             __instance.ControllerSelectable.Clear();
 
             foreach (UiElement x in __instance.scrollBar.GetComponentsInChildren<UiElement>())
                 __instance.ControllerSelectable.Add(x);
+
+            BuildCoroutines.Remove(__instance);
         }
 
         float CalculateScrollBarYBoundsMax()
@@ -401,9 +425,50 @@ public static class GameOptionsMenuPatch
         return false;
     }
 
+    internal static int ReCreateGeneration;
+    internal static Coroutine ReCreateAllCoroutine;
+
+    public static void ReCreateAllSettings()
+    {
+        ReCreateGeneration++;
+        int generation = ReCreateGeneration;
+
+        if (ReCreateAllCoroutine != null)
+        {
+            Main.Instance.StopCoroutine(ReCreateAllCoroutine);
+            ReCreateAllCoroutine = null;
+        }
+
+        ReCreateAllCoroutine = Main.Instance.StartCoroutine(CoReCreateAll(generation));
+        return;
+
+        IEnumerator CoReCreateAll(int gen)
+        {
+            var tabs = GameSettingMenuPatch.GetModSettingsTabs();
+            foreach (var (tab, menu) in tabs)
+            {
+                if (gen != ReCreateGeneration) yield break;
+                if (!menu) { yield return null; continue; }
+
+                while (BuildCoroutines.TryGetValue(menu, out Coroutine existing) && existing != null)
+                {
+                    if (gen != ReCreateGeneration) yield break;
+                    yield return null;
+                }
+
+                if (gen != ReCreateGeneration) yield break;
+
+                ReCreateSettings(menu);
+                yield return null;
+            }
+            ReCreateAllCoroutine = null;
+        }
+    }
+
     public static void ReCreateSettings(GameOptionsMenu __instance)
     {
         if (ModGameOptionsMenu.TabIndex < 3) return;
+        if (!__instance) return;
 
         var modTab = (TabGroup)(ModGameOptionsMenu.TabIndex - 3);
 
@@ -431,7 +496,7 @@ public static class GameOptionsMenuPatch
             bool enabledOrNotCollapsed = !option.IsCurrentlyHidden() && AllParentsEnabledAndVisible(option.Parent);
             bool enabled = !option.IsCurrentlyHidden(checkCollapsedSection: false) && AllParentsEnabledAndVisible(option.Parent, checkCollapsedSection: false);
 
-            if (ModGameOptionsMenu.CategoryHeaderList.TryGetValue(index, out CategoryHeaderMasked categoryHeaderMasked))
+            if (ModGameOptionsMenu.CategoryHeaderList.TryGetValue(index, out CategoryHeaderMasked categoryHeaderMasked) && categoryHeaderMasked)
             {
                 categoryHeaderMasked.transform.localPosition = new(-0.903f, num, -2f);
                 categoryHeaderMasked.gameObject.SetActive(enabled);
@@ -439,7 +504,7 @@ public static class GameOptionsMenuPatch
             }
             else if (option.IsHeader && enabledOrNotCollapsed) num -= 0.18f;
 
-            if (ModGameOptionsMenu.BehaviourList.TryGetValue(index, out OptionBehaviour optionBehaviour))
+            if (ModGameOptionsMenu.BehaviourList.TryGetValue(index, out OptionBehaviour optionBehaviour) && optionBehaviour)
             {
                 optionBehaviour.transform.localPosition = new(0.952f, num, -2f);
                 optionBehaviour.gameObject.SetActive(enabledOrNotCollapsed);
@@ -447,6 +512,7 @@ public static class GameOptionsMenuPatch
             }
         }
 
+        if (!__instance.scrollBar) return;
         __instance.ControllerSelectable.Clear();
 
         foreach (UiElement x in __instance.scrollBar.GetComponentsInChildren<UiElement>())
@@ -600,7 +666,7 @@ public static class ToggleOptionPatch
             __instance.CheckMark.enabled = !__instance.CheckMark.enabled;
             OptionItem item = OptionItem.AllOptions[index];
             item.SetValue(__instance.GetBool() ? 1 : 0, doSync: false);
-            __instance.OnValueChanged.Invoke(__instance);
+            __instance.OnValueChanged?.Invoke(__instance);
             NotificationPopperPatch.AddSettingsChangeMessage(item, true);
             return false;
         }
@@ -745,7 +811,7 @@ public static class NumberOptionPatch
         {
             __instance.Value = __instance.ValidRange.min;
             __instance.UpdateValue();
-            __instance.OnValueChanged.Invoke(__instance);
+            __instance.OnValueChanged?.Invoke(__instance);
             return false;
         }
 
@@ -755,7 +821,7 @@ public static class NumberOptionPatch
         {
             __instance.Value += increment;
             __instance.UpdateValue();
-            __instance.OnValueChanged.Invoke(__instance);
+            __instance.OnValueChanged?.Invoke(__instance);
             return false;
         }
 
@@ -770,7 +836,7 @@ public static class NumberOptionPatch
         {
             __instance.Value = __instance.ValidRange.max;
             __instance.UpdateValue();
-            __instance.OnValueChanged.Invoke(__instance);
+            __instance.OnValueChanged?.Invoke(__instance);
             return false;
         }
 
@@ -780,7 +846,7 @@ public static class NumberOptionPatch
         {
             __instance.Value -= increment;
             __instance.UpdateValue();
-            __instance.OnValueChanged.Invoke(__instance);
+            __instance.OnValueChanged?.Invoke(__instance);
             return false;
         }
 
@@ -1751,9 +1817,27 @@ public static class GameSettingMenuPatch
             TempParent = go.transform;
         }
 
+        GameOptionsMenuPatch.ReCreateGeneration++;
+
+        if (GameOptionsMenuPatch.ReCreateAllCoroutine != null)
+        {
+            Main.Instance.StopCoroutine(GameOptionsMenuPatch.ReCreateAllCoroutine);
+            GameOptionsMenuPatch.ReCreateAllCoroutine = null;
+        }
+
         foreach (var x in ModSettingsTabs.Values) SetTempParent(x.gameObject);
         foreach (var x in ModSettingsButtons.Values) SetTempParent(x.gameObject);
-        foreach (var x in GMButtons) SetTempParent(x);
+
+        // Clear GMButton listeners before hiding them so they can't fire stale callbacks
+        foreach (var x in GMButtons)
+        {
+            if (x)
+            {
+                var pb = x.GetComponent<PassiveButton>();
+                if (pb) pb.OnClick.RemoveAllListeners();
+            }
+            SetTempParent(x);
+        }
         if (InputField) SetTempParent(InputField.gameObject);
         SetTempParent(PresetSelector); // preset selector trio — kept alive so it isn't re-created (and re-Tracked) each open
         if (TemplateGameOptionsMenu) SetTempParent(TemplateGameOptionsMenu.gameObject);

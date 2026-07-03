@@ -60,9 +60,17 @@ public static class EndGameManagerPatch
         if (seconds == 0)
         {
             navigation.NextGame();
-            CountdownText.transform.DestroyChildren();
+            CleanupText();
         }
         else LateTask.New(() => { BeginAutoPlayAgainCountdown(endGameManager, seconds - 1); }, 1f, log: false);
+    }
+
+    private static void CleanupText()
+    {
+        IsRestarting = false;
+        if (CountdownText == null) return;
+        Object.Destroy(CountdownText);
+        CountdownText = null;
     }
 }
 

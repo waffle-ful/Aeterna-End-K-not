@@ -60,6 +60,12 @@ public class ClientControlGUI : MonoBehaviour
     /// </summary>
     private float _zoomValue = 3.0f;
 
+    /// <summary>
+    /// Whether the next /r command sent will broadcast to all players
+    /// <remarks>Deactivates automatically after being used</remarks>
+    /// </summary>
+    internal static bool BroadcastRoleInfo;
+
     // Scale helpers - everything is relative to a 1080px-wide reference screen
     // On PC the UI is scaled down to 50% but on Android we keep it slightly larger (60%) for better readability
     private static float PlatformScale  => OperatingSystem.IsAndroid() ? 0.6f : 0.5f;
@@ -449,6 +455,11 @@ public class ClientControlGUI : MonoBehaviour
         Btn(ref y, Label("Fix Button Positions", "ALT + ENTER"), _sAction, () =>
             LateTask.New(SetResolutionManager.Postfix, 0.01f, "Fix Button Position")
         );
+
+        Btn(ref y, BroadcastRoleInfo ? "Broadcast Role Info: ON" : "Broadcast Role Info: OFF", BroadcastRoleInfo ? _sHost : _sAction, () =>
+        {
+            BroadcastRoleInfo = !BroadcastRoleInfo;
+        });
 
         if (inGame || inMeeting)
             Btn(ref y, Label("Fix Blackscreen", "SHIFT + CTRL + X"), _sAction, () =>

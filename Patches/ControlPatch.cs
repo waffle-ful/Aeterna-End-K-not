@@ -211,8 +211,11 @@ internal static class ControllerManagerUpdatePatch
 
                         OptionItem.SyncAllOptions();
                         OptionSaver.Save();
-                        
+
                         IsResetting = false;
+
+                        GameOptionsMenuPatch.ReCreateAllSettings();
+                        GameOptionsMenuPatch.RefreshSettingValues();
                     }
                 }
             }

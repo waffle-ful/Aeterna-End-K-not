@@ -574,6 +574,7 @@ public enum CustomRoles
     Blockade,
     Jackpot,
     Shadow,
+    Revenant,
 
 
     // Sub-role after 1000 (buffer reserved for ~500 future main roles)

@@ -86,6 +86,7 @@ public class Main : BasePlugin
     public static readonly MapNames[] MapNamesValues = Enum.GetValues<MapNames>();
     public static readonly RoleTypes[] RoleTypesValues = Enum.GetValues<RoleTypes>();
 
+    public static bool Loaded;
     public static IntPtr? OriginalAffinity;
     public static Dictionary<byte, PlayerVersion> PlayerVersion = [];
     public static OptionBackupData RealOptionsData;
@@ -665,6 +666,7 @@ public class Main : BasePlugin
                 { CustomRoles.Deputy, "#df9026" },
                 { CustomRoles.Bestower, "#4C4FE4" },
                 { CustomRoles.Retributionist, "#cfc999" },
+                { CustomRoles.Revenant, "#811a7a" },
                 { CustomRoles.Cleanser, "#98FF98" },
                 { CustomRoles.Swapper, "#922348" },
                 { CustomRoles.Ignitor, "#ffffa5" },
@@ -1125,6 +1127,7 @@ public class Main : BasePlugin
         IL2CPPChainloader.Instance.Finished += () =>
         {
             CustomLogger.ClearLog();
+            Loaded = true;
 
             StartCoroutine(ModNewsFetcher.FetchNews());
 

@@ -1403,6 +1403,63 @@ internal static class StartGameHostPatchEAC
     }
 }
 
+// https://github.com/D1GQ/BetterAmongUs/blob/v1.3.3-dev/src/Patches/Gameplay/Anticheat/InitializePlayerTimeoutPatch.cs
+[HarmonyPatch]
+internal static class InitializePlayerTimeoutPatch
+{
+    [HarmonyPatch(typeof(PlayerControl), nameof(PlayerControl.ClientInitialize))]
+    [HarmonyPostfix]
+    private static void PlayerControl_ClientInitialize_Postfix(PlayerControl __instance, ref Il2CppSystem.Collections.IEnumerator __result)
+    {
+        __result = CoClientInitialize(__instance, __result).WrapToIl2Cpp();
+    }
+
+    private static IEnumerator CoClientInitialize(PlayerControl player, Il2CppSystem.Collections.IEnumerator original)
+    {
+        player.Visible = false;
+        bool exit = false;
+        AssertWithTimeoutPatch.AllowCall = true;
+        yield return player.AssertWithTimeout((Func<bool>)(() => GameData.Instance != null && player.Data != null && !player.Data.IsIncomplete), (Action)(() =>
+        {
+            if (player == null || player.Pointer == IntPtr.Zero)
+            {
+                exit = true;
+                return;
+            }
+
+            if (AmongUsClient.Instance.AmHost)
+            {
+                AmongUsClient.Instance.KickPlayer(player.OwnerId, true);
+                Logger.SendInGame(string.Format(GetString("EAC.ClientTimeout"), player.FriendCode, player.GetClient()?.GetHashedPuid()), Color.yellow);
+                exit = true;
+            }
+            else
+            {
+                if (GameData.Instance != null && player.Data != null && player.Data.Pointer != IntPtr.Zero)
+                {
+                    var outfit = player.Data.DefaultOutfit;
+                    outfit.PlayerName = "???";
+                    outfit.HatId = HatData.EmptyId;
+                    outfit.VisorId = VisorData.EmptyId;
+                    outfit.SkinId = SkinData.EmptyId;
+                    outfit.PetId = PetData.EmptyId;
+                    outfit.NamePlateId = NamePlateData.EmptyId;
+                    outfit.ColorId = 18;
+                    player.Data.PlayerLevel = 1;
+                }
+                else
+                {
+                    exit = true;
+                }
+            }
+        }), 25f);
+
+        if (exit) yield break;
+
+        yield return original;
+    }
+}
+
 //[HarmonyPatch(typeof(PlayerControl), nameof(PlayerControl.FixedUpdate))]
 internal static class CheckInvalidMovementPatch
 {

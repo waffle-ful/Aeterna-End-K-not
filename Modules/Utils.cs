@@ -1146,6 +1146,7 @@ public static class Utils
                Main.PlayerStates.Values.Any(x => x.Role.KnowRole(PlayerControl.LocalPlayer, __instance)) ||
                PlayerControl.LocalPlayer.IsRevealedPlayer(__instance) ||
                (PlayerControl.LocalPlayer.Is(CustomRoles.God) && God.KnowInfo.GetValue() == 2) ||
+               (PlayerControl.LocalPlayer.Is(CustomRoles.Revenant) && Revenant.KnowInfo.GetValue() == 1) ||
                PlayerControl.LocalPlayer.Is(CustomRoles.GM) ||
                Markseeker.PlayerIdList.Any(x => Main.PlayerStates[x].Role is Markseeker { IsEnable: true, TargetRevealed: true } ms && ms.MarkedId == __instance.PlayerId) ||
                Main.GodMode.Value;
@@ -3707,6 +3708,7 @@ public static class Utils
                (Options.CurrentGameMode == CustomGameMode.HideAndSeek && CustomHnS.IsRoleTextEnabled(seer, target)) ||
                (seer.IsRevealedPlayer(target) && !target.Is(CustomRoles.Trickster)) ||
                (seer.Is(CustomRoles.God) && God.KnowInfo.GetValue() == 2) ||
+               (seer.Is(CustomRoles.Revenant) && Revenant.KnowInfo.GetValue() == 1) ||
                target.Is(CustomRoles.GM);
     }
 
@@ -4503,38 +4505,34 @@ public static class Utils
 
     public static void DumpLog(bool open = true, bool finish = true)
     {
+        if (finish) CustomLogger.Instance.Finish();
+
+        var t = DateTime.Now.ToString("yyyy-MM-dd_HH.mm.ss");
+        var basePath = OperatingSystem.IsAndroid() ? Main.DataPath : Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+        var f = Path.Combine(basePath, "EndKnot_Logs", t);
+        if (!Directory.Exists(f)) Directory.CreateDirectory(f);
+
+        var filename = $"{f}/EndKnot-v{Main.PluginVersion}-LOG";
+
+        FileInfo[] files = [new(Path.Combine(Paths.BepInExRootPath, "LogOutput.log")), new(CustomLogger.LOGFilePath)];
+        files.Do(x => x.CopyTo($"{filename}{x.Extension}"));
+
+        // HealthLog(状態/メモリ/kick の heartbeat)も同じセッションフォルダに同梱する。
+        // ライブ本体は EndKnot_Logs 直下の固定ファイル(将来の番犬が tail 用)、ここはその時点のスナップショット。
         try
         {
-            if (finish) CustomLogger.Instance.Finish();
-
-            var t = DateTime.Now.ToString("yyyy-MM-dd_HH.mm.ss");
-            var basePath = OperatingSystem.IsAndroid() ? Main.DataPath : Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
-            var f = Path.Combine(basePath, "EndKnot_Logs", t);
-            if (!Directory.Exists(f)) Directory.CreateDirectory(f);
-
-            var filename = $"{f}/EndKnot-v{Main.PluginVersion}-LOG";
-            
-            FileInfo[] files = [new(Path.Combine(Paths.BepInExRootPath, "LogOutput.log")), new(CustomLogger.LOGFilePath)];
-            files.Do(x => x.CopyTo($"{filename}{x.Extension}"));
-
-            // HealthLog(状態/メモリ/kick の heartbeat)も同じセッションフォルダに同梱する。
-            // ライブ本体は EndKnot_Logs 直下の固定ファイル(将来の番犬が tail 用)、ここはその時点のスナップショット。
-            try
-            {
-                string healthLog = EndKnot.Modules.HealthLog.FilePath;
-                if (healthLog != null && File.Exists(healthLog))
-                    File.Copy(healthLog, $"{f}/EndKnot-v{Main.PluginVersion}-HEALTH.log", overwrite: true);
-            }
-            catch (Exception e) { ThrowException(e); }
-
-            if (!open) return;
-
-            if (PlayerControl.LocalPlayer && HudManager.InstanceExists)
-                HudManager.Instance?.Chat?.AddChat(PlayerControl.LocalPlayer, string.Format(GetString("Message.DumpfileSaved"), "EndKnot" + filename.Split("EndKnot")[1]));
-
-            if (OperatingSystem.IsWindows()) Process.Start("explorer.exe", f.Replace("/", "\\"));
+            string healthLog = EndKnot.Modules.HealthLog.FilePath;
+            if (healthLog != null && File.Exists(healthLog))
+                File.Copy(healthLog, $"{f}/EndKnot-v{Main.PluginVersion}-HEALTH.log", overwrite: true);
         }
         catch (Exception e) { ThrowException(e); }
+
+        if (!open) return;
+
+        if (PlayerControl.LocalPlayer && HudManager.InstanceExists)
+            HudManager.Instance?.Chat?.AddChat(PlayerControl.LocalPlayer, string.Format(GetString("Message.DumpfileSaved"), "EndKnot" + filename.Split("EndKnot")[1]));
+
+        if (OperatingSystem.IsWindows()) Process.Start("explorer.exe", f.Replace("/", "\\"));
     }
 
     public static (int Doused, int All) GetDousedPlayerCount(byte playerId)

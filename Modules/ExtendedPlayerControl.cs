@@ -246,6 +246,7 @@ internal static class ExtendedPlayerControl
                 return;
             }
 
+            if (!player || player.Pointer == IntPtr.Zero) return;
             bool dead = player.Data.IsDead;
             MessageWriter writer = MessageWriter.Get(SendOption.Reliable);
             writer.StartMessage(6);
@@ -2621,6 +2622,7 @@ internal static class ExtendedPlayerControl
 
         public void SendGameData()
         {
+            if (!player || player.Pointer == IntPtr.Zero) return;
             MessageWriter writer = MessageWriter.Get(SendOption.Reliable);
             writer.StartMessage(5);
             writer.Write(AmongUsClient.Instance.GameId);

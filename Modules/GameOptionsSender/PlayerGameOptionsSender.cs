@@ -55,6 +55,8 @@ public sealed class PlayerGameOptionsSender(PlayerControl player) : GameOptionsS
 
     public static void SendAllImmediately()
     {
+        if (AntiBlackout.SkipTasks) return;
+
         ForceWaitFrame = true;
         
         if (PackedWriterMessages > 0 && PackedWriter != null)
@@ -219,6 +221,8 @@ public sealed class PlayerGameOptionsSender(PlayerControl player) : GameOptionsS
     
     protected override void SendOptionsArray(Il2CppStructArray<byte> optionArray, byte logicOptionsIndex)
     {
+        if (AntiBlackout.SkipTasks) return;
+
         if (PackedWriter == null)
         {
             DataFlagRateLimiter.Enqueue(() =>

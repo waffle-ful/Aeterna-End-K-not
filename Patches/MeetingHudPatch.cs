@@ -935,6 +935,7 @@ internal static class MeetingHudStartPatch
                 Markseeker.PlayerIdList.Any(x => Main.PlayerStates[x].Role is Markseeker { IsEnable: true, TargetRevealed: true } ms && ms.MarkedId == target.PlayerId) ||
                 seer.IsRevealedPlayer(target) ||
                 (seer.Is(CustomRoles.God) && God.KnowInfo.GetValue() == 2) ||
+                (seer.Is(CustomRoles.Revenant) && Revenant.KnowInfo.GetValue() == 1) ||
                 seer.Is(CustomRoles.GM) ||
                 Main.GodMode.Value;
 
@@ -1191,6 +1192,8 @@ internal static class MeetingHudStartPatch
         Retributionist.StartMeetingPatch.Postfix(__instance);
         Starspawn.StartMeetingPatch.Postfix(__instance);
         Ventriloquist.StartMeetingPatch.Postfix(__instance);
+        Changeling.StartMeetingPatch.Postfix(__instance);
+        Markseeker.StartMeetingPatch.Postfix(__instance);
         ShowHostMeetingPatch.Setup_Postfix(__instance);
         Crowded.MeetingHudStartPatch.Postfix(__instance);
 
