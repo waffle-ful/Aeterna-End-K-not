@@ -32,7 +32,7 @@ On top of EHR's 650+ role engine, End K not adds its own original feature set fo
 
 - **Backrooms lobby** — A special Backrooms-themed lobby presentation, with asymmetric rendering that looks different for the modded host versus non-modded joiners.
 - **EKM custom map editor** — A dedicated editor for building your own custom maps is bundled ([`editor/`](./editor)); maps you create can be loaded in-game *(work in progress)*.
-- **WaveCannon / Riptide** — Signature, over-the-top original roles that unleash a huge map-sweeping beam or wave.
+- **Riptide** — An original End K not Impostor role: a giant wave sweeps across the entire map and anyone caught in it is wiped out, accelerating with every meeting.
 - **Lobby decorations** — Place decorations such as hot springs and portals in the lobby.
 
 ### 🎨 UI & policy
