@@ -199,6 +199,16 @@ public class CustomRpcSender
         {
             HealthLog.RecordHostAction(name, stream.Length, sendOption.ToString());
 
+            // 早期警報: 分割送信された全チャンクの合計論理サイズと最大チャンク長を見て kick 閾値接近を検知する。
+            int totalLen = stream.Length;
+            int maxChunkLen = stream.Length;
+            foreach (MessageWriter ds in doneStreams)
+            {
+                totalLen += ds.Length;
+                if (ds.Length > maxChunkLen) maxChunkLen = ds.Length;
+            }
+            EarlyWarning.OnPacket(name, totalLen, maxChunkLen, sendOption.ToString());
+
             if (doneStreams.Count > 0)
             {
                 var sb = new StringBuilder(" + Lengths: ");

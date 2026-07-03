@@ -84,6 +84,7 @@ public static class NameNotifyManager
         writer.Write(text);
         writer.Write(expireTS.ToString());
         writer.Write(overrideAll);
+        EarlyWarning.OnPacket("SyncNameNotify", writer.Length, writer.Length, sendOption.ToString());
         AmongUsClient.Instance.FinishRpcImmediately(writer);
     }
 

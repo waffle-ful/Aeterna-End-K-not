@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!-- 純ロジック向けユニットテスト (ソース共有方式)。
+         本体 EndKnot.csproj は IL2CPP/BepInEx 参照だらけなので ProjectReference は不可 —
+         Unity 依存ゼロの .cs だけを Compile Include で直接コンパイルする。
+         ゲーム/BepInEx 型への参照 (Logger / HashRandom) は Support/GameShims.cs のスタブで解決。 -->
+    <PropertyGroup>
+        <TargetFramework>net6.0</TargetFramework>
+        <!-- .NET 6 ランタイムが無いマシン (8/10 のみ等) でもテストホストを起動できるようにする -->
+        <RollForward>LatestMajor</RollForward>
+        <LangVersion>preview</LangVersion>
+        <Nullable>disable</Nullable>
+        <IsPackable>false</IsPackable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+        <PackageReference Include="xunit" Version="2.9.2" />
+        <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+    </ItemGroup>
+
+    <!-- 本体からソース共有するテスト対象 (Unity/Il2Cpp/BepInEx import ゼロのファイルのみ)。
+         HashRandomWrapper.cs はゲーム側 HashRandom を呼ぶため、テストではシムに委譲される
+         (コンパイル成立のために含める。挙動テストの対象外)。 -->
+    <ItemGroup>
+        <Compile Include="..\..\Modules\EkmCodec.cs" Link="src\EkmCodec.cs" />
+        <Compile Include="..\..\Modules\Random\IRandom.cs" Link="src\Random\IRandom.cs" />
+        <Compile Include="..\..\Modules\Random\MersenneTwister.cs" Link="src\Random\MersenneTwister.cs" />
+        <Compile Include="..\..\Modules\Random\Xorshift.cs" Link="src\Random\Xorshift.cs" />
+        <Compile Include="..\..\Modules\Random\NetRandomWrapper.cs" Link="src\Random\NetRandomWrapper.cs" />
+        <Compile Include="..\..\Modules\Random\HashRandomWrapper.cs" Link="src\Random\HashRandomWrapper.cs" />
+    </ItemGroup>
+
+</Project>

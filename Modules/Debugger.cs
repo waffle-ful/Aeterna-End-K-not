@@ -171,6 +171,13 @@ internal static class Logger
             .Select(kv => $"{kv.Key}:{kv.Value}"));
     }
 
+    // 全タグ合計(top10 に入らない新規タグの増分も含む)。例外洪水検知のトリガー用。
+    public static int GetExceptionTagsTotal()
+    {
+        try { return ExceptionTags.Sum(kv => kv.Value); }
+        catch { return 0; }
+    }
+
     public static void FlushNow()
     {
         try { CustomLogger.Instance.Finish(false); }

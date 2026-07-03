@@ -24,11 +24,18 @@ jobs:
         shell: pwsh
         run: pwsh tools/check-option-ids.ps1
 
+      - name: Check lang key sync
+        shell: pwsh
+        run: pwsh tools/check-lang-keys.ps1
+
       - name: Restore dependencies
         run: dotnet restore EndKnot.csproj
 
       - name: Build (Release)
         run: dotnet build EndKnot.csproj -c Release -o build/ --no-restore
+
+      - name: Run unit tests
+        run: dotnet test tests/EndKnot.Tests/EndKnot.Tests.csproj -c Release
 
       - name: Upload EndKnot.dll artifact
         uses: actions/upload-artifact@v4

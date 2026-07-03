@@ -30,6 +30,10 @@
         <Compile Remove="CTA\**"/>
         <EmbeddedResource Remove="CTA\**"/>
         <None Remove="CTA\**"/>
+        <!-- 純ロジック向けユニットテスト (tests/EndKnot.Tests) は別プロジェクト — 本体ビルドから除外 -->
+        <Compile Remove="tests\**"/>
+        <EmbeddedResource Remove="tests\**"/>
+        <None Remove="tests\**"/>
     </ItemGroup>
 
     <!-- LobbyShare secrets: if the operator has filled in Modules/LobbyShareSecrets.cs
@@ -81,6 +85,11 @@
          メニューから無言で消すため、ここで exit 1 → ビルド失敗にする。 -->
     <Target Name="CheckOptionIds" BeforeTargets="BeforeCompile" Condition="'$(OS)' == 'Windows_NT'">
         <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\tools\check-option-ids.ps1&quot;" />
+    </Target>
+    <!-- 翻訳キー同期ゲート: CommandForms の英語形欠落/キー重複 (exit 1) はコマンドが
+         無音で死ぬためビルド失敗にする。en⇔ja のキー差分は警告のみ (exit 0)。 -->
+    <Target Name="CheckLangKeys" BeforeTargets="BeforeCompile" Condition="'$(OS)' == 'Windows_NT'">
+        <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\tools\check-lang-keys.ps1&quot;" />
     </Target>
     <Target Name="Roles" AfterTargets="Build">
         <Copy SourceFiles="CustomRoles.cs" DestinationFolder="CTA/CustomTeamAssigner/"/>

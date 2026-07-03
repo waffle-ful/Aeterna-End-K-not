@@ -254,6 +254,7 @@ public class Main : BasePlugin
     public static ConfigEntry<bool> BackroomsThrottleVision { get; private set; }
     public static ConfigEntry<bool> BackroomsReduceProcgen { get; private set; }
     public static ConfigEntry<float> UIScaleFactor { get; private set; }
+    public static ConfigEntry<bool> EnableEarlyWarningNotify { get; private set; }
 
     // Preset Name Options
     public static ConfigEntry<string> Preset1 { get; private set; }
@@ -456,6 +457,7 @@ public class Main : BasePlugin
         BackroomsThrottleVision = Config.Bind("Client Options", "BackroomsThrottleVision", false);
         BackroomsReduceProcgen = Config.Bind("Client Options", "BackroomsReduceProcgen", false);
         UIScaleFactor = Config.Bind("Client Options", "UIScaleFactor", 1f);
+        EnableEarlyWarningNotify = Config.Bind("Client Options", "EnableEarlyWarningNotify", true, "Show an in-game host notification when early-warning telemetry detects a critical anomaly (packet near kick threshold, SnapTo exhaustion, exception flood). Logging to EndKnot-Health.log always happens regardless of this setting.");
 
         AddComponent<ClientControlGUI>();
         Log.LogInfo("ClientControlGUI registered");

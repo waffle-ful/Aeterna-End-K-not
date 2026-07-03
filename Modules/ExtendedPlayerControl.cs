@@ -849,6 +849,7 @@ internal static class ExtendedPlayerControl
             if (writer == null)
             {
                 stream.EndMessage();
+                EarlyWarning.OnPacket("SyncOutfitData", stream.Length, stream.Length, sendOption.ToString());
                 DataFlagRateLimiter.Enqueue(() =>
                 {
                     AmongUsClient.Instance.SendOrDisconnect(stream);

@@ -1,3 +1,4 @@
+using EndKnot.Modules;
 using HarmonyLib;
 using UnityEngine;
 
@@ -48,6 +49,7 @@ internal static class EOSReLoginProactivePatch
         catch (System.Exception ex)
         {
             Logger.Error($"LoginWithCorrectPlatform threw: {ex}", "EOSReLogin");
+            HealthLog.NoteAnom($"ANOM live kind=eos stage=proactivefail msg=\"{ex.Message}\"");
         }
     }
 
@@ -60,6 +62,9 @@ internal static class EOSReLoginReactivePatch
     public static void Postfix(EOSManager __instance)
     {
         Logger.Warn("GoOfflineFromPlatformSignout fired — attempting silent re-login", "EOSReLogin");
+        // signout 自体が「proactive re-login が間に合わずトークン失効した」証拠なので live に残す
+        HealthLog.NoteAnom("ANOM live kind=eos stage=signout");
+
         try
         {
             // 名前通り「リトライ」用途。GoOffline 後の cleanup 後に呼ぶのに最も自然
@@ -69,6 +74,7 @@ internal static class EOSReLoginReactivePatch
         catch (System.Exception ex)
         {
             Logger.Error($"RetryAuthAndLoginImpl threw: {ex}", "EOSReLogin");
+            HealthLog.NoteAnom($"ANOM live kind=eos stage=retryfail msg=\"{ex.Message}\"");
         }
     }
 }
@@ -82,6 +88,10 @@ internal static class EOSAuthExpirationTelemetryPatch
     public static System.Exception Finalizer(EOSManager __instance, System.Exception __exception)
     {
         Logger.Info($"OnAuthExpirationCallback fired (lobby={GameStates.IsLobby}, online={GameStates.IsOnlineGame}, tryingToLogin={__instance.tryingToLogin}, vanillaThrew={__exception != null})", "EOSReLogin");
+
+        if (__exception != null)
+            HealthLog.NoteAnom($"ANOM live kind=eos stage=expircallback lobby={GameStates.IsLobby} online={GameStates.IsOnlineGame}");
+
         return null;
     }
 }

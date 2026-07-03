@@ -225,6 +225,7 @@ namespace EndKnot
             writer.Write(playerControl.Data.NetId);
             writer.Write(name);
             writer.Write(false);
+            EarlyWarning.OnPacket("RpcSetCnoName", writer.Length, writer.Length, "Reliable");
             AmongUsClient.Instance.FinishRpcImmediately(writer);
         }
 

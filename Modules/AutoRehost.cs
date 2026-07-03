@@ -211,6 +211,7 @@ public static class AutoRehost
         if (Time.realtimeSinceStartup > _deadline)
         {
             Logger.Warn($"Auto-rehost: attempt {_attempts} timed out (phase {_phase}); retrying", "AutoRehost");
+            HealthLog.NoteAnom($"ANOM live kind=rehost stage=timeout attempt={_attempts} phase={_phase}");
             StartAttempt();
             return;
         }
@@ -401,6 +402,7 @@ public static class AutoRehost
     private static void GiveUp()
     {
         Logger.Warn($"Auto-rehost: reached max attempts ({MaxAttempts}); stopping", "AutoRehost");
+        HealthLog.NoteAnom($"ANOM live kind=rehost stage=giveup attempts={MaxAttempts}");
         ShowAutoDismissPopup(GetSafeString("AutoRehost.GaveUp", "Auto-rehost stopped after repeated failures."), 10f);
         ResetState();
     }

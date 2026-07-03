@@ -4377,6 +4377,7 @@ internal static class RpcSendChatPatch
 
         MessageWriter messageWriter = AmongUsClient.Instance.StartRpcImmediately(__instance.NetId, (byte)RpcCalls.SendChat, SendOption.Reliable);
         messageWriter.Write(chatText);
+        EarlyWarning.OnPacket("RpcSendChat", messageWriter.Length, messageWriter.Length, "Reliable");
         AmongUsClient.Instance.FinishRpcImmediately(messageWriter);
         __result = true;
         return false;

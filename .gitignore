@@ -440,9 +440,13 @@ docs/
 tools/*
 # ...except the option-Id collision checker, which the build & CI depend on.
 !tools/check-option-ids.ps1
+# ...and the lang-key sync checker, which the build & CI depend on.
+!tools/check-lang-keys.ps1
 # ...and the crash-recovery watchdog, which is embedded into the DLL & shipped as a feature.
 !tools/EndKnotWatchdog.ps1
 !tools/番犬スタート.cmd
+# ...and the log diagnosis tool (log-doctor), which users run to self-diagnose issues.
+!tools/log-doctor.ps1
 
 # Build output (custom -o build/)
 build/

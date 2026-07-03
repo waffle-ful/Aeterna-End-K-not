@@ -38,6 +38,14 @@ public static class HealthLog
     private static readonly HostActionEntry[] SendRing = new HostActionEntry[16];
     private static int SendRingIndex; // 次の書き込み位置
 
+    // --- phase3 判定層(早期警報)の状態。SESSION 開始(EnsureInit)でリセット ---
+    private static long _sessionStartWsMB; // セッション先頭の wsMB(mem 増分の基準)
+    private static bool _hadDisconnectThisSession; // セッション中に DC 記録があったか(stuck-menu 判定の前提条件)
+    private static long _continuousMenuSinceTs; // 非ホスト Menu 状態が連続している開始 t(0=非連続)
+    private static long _lastStuckMenuNoteTs;
+    private static long _lastMemNoteTs;
+    private static long _lastAbnormalDcTs; // 直近の異常切断 t(回復判定の猶予に使用)
+
     private static void EnsureInit()
     {
         if (Inited) return;
@@ -90,6 +98,12 @@ public static class HealthLog
             try { Proc = System.Diagnostics.Process.GetCurrentProcess(); }
             catch { }
 
+            _sessionStartWsMB = 0;
+            _hadDisconnectThisSession = false;
+            _continuousMenuSinceTs = 0;
+            _lastStuckMenuNoteTs = 0;
+            _lastMemNoteTs = 0;
+
             string sessionLine = $"SESSION start ver={Main.PluginVersion} t={StartTs}";
             Write(sessionLine);
             Timeline(sessionLine);
@@ -110,6 +124,13 @@ public static class HealthLog
         {
             Write($"STATE {LastState}->{state} t={now}");
             LastState = state;
+        }
+
+        // 早期警報テレメトリは HB の 5 秒 grid を待たず 1/sec で回す(SnapTo 枯渇・例外洪水はより早い検知が要る)。
+        if (PerSecondUpdateScheduler.ShouldRunUpdate("earlywarning-tick"))
+        {
+            try { EarlyWarning.Tick(); }
+            catch (Exception e) { Utils.ThrowException(e); }
         }
 
         if (now - LastBeatTs < HeartbeatIntervalSeconds) return;
@@ -160,6 +181,41 @@ public static class HealthLog
                 LastNormalLogTs = now;
                 Logger.Info(hb, "Health");
             }
+
+            // phase3 判定: 非ホストで Menu 状態が長時間連続 + セッション中に DC 記録あり = 復帰失敗の疑い。
+            if (state == "Menu" && !host)
+            {
+                if (_continuousMenuSinceTs == 0) _continuousMenuSinceTs = now;
+                long menuDurSec = now - _continuousMenuSinceTs;
+
+                if (menuDurSec >= 120 && _hadDisconnectThisSession && now - _lastStuckMenuNoteTs >= 300)
+                {
+                    _lastStuckMenuNoteTs = now;
+                    NoteAnom($"ANOM live kind=stuckmenu durSec={menuDurSec} t={now}");
+                }
+            }
+            else
+            {
+                _continuousMenuSinceTs = 0;
+
+                // ロビー/ゲームへ復帰できた = 切断から回復済みとみなし、以後の Menu 滞在を正常系へ戻す。
+                // DC 直後の 1 tick に古い state 読みが残っても誤リセットしないよう 15 秒の猶予を置く。
+                if (state != "Menu" && _hadDisconnectThisSession && now - _lastAbnormalDcTs > 15)
+                    _hadDisconnectThisSession = false;
+            }
+
+            // phase3 判定: メモリがセッション先頭比で大きく増えた、または絶対値が高い。
+            if (wsMB > 0)
+            {
+                if (_sessionStartWsMB == 0) _sessionStartWsMB = wsMB;
+
+                long deltaMB = wsMB - _sessionStartWsMB;
+                if ((deltaMB > 800 || wsMB > 2200) && now - _lastMemNoteTs >= 300)
+                {
+                    _lastMemNoteTs = now;
+                    NoteAnom($"ANOM live kind=mem ws={wsMB} base={_sessionStartWsMB} t={now}");
+                }
+            }
         }
         catch (Exception e) { Utils.ThrowException(e); }
     }
@@ -185,6 +241,13 @@ public static class HealthLog
                 or DisconnectReasons.Banned or DisconnectReasons.IncorrectVersion;
 
             long now = Utils.TimeStamp;
+
+            if (!intentional)
+            {
+                // stuck-menu 判定の前提は「異常切断の後の長時間 Menu 滞在」のみ。意図的な退出後のメニュー滞在は正常系。
+                _hadDisconnectThisSession = true;
+                _lastAbnormalDcTs = now;
+            }
 
             if (!intentional)
             {
@@ -322,6 +385,15 @@ public static class HealthLog
     {
         EnsureInit();
         Write(line);
+    }
+
+    // phase3 判定層(EarlyWarning 等)専用の窓口。Note() と違い Health + Timeline の両方に書く
+    // (ウォッチドッグは Timeline を横断 tail するので、live 判定の異常は Timeline にも残す)。
+    public static void NoteAnom(string line)
+    {
+        EnsureInit();
+        Write(line);
+        Timeline(line);
     }
 
     private static string GetState()

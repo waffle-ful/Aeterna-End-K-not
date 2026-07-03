@@ -677,6 +677,13 @@ public static class Utils
 
     public static void EndRPC(MessageWriter writer)
     {
+        // 早期警報: CustomRpcSender を経由しない生 RPC パスもパケットサイズ監視の対象に含める。
+        string opt = "n/a";
+        try { opt = writer.SendOption.ToString(); }
+        catch { }
+        HealthLog.RecordHostAction("RawRPC", writer.Length, opt);
+        EarlyWarning.OnPacket("RawRPC", writer.Length, writer.Length, opt);
+
         AmongUsClient.Instance.FinishRpcImmediately(writer);
     }
 
