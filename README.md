@@ -69,10 +69,10 @@ End K not は EHR の 650+ 役職エンジンの上に、**配信・長時間運
 
 |   |   |   |   |
 |---|---|---|---|
-| Ambusher | Catalyst | Centralizer | Clock Blocker (ClockBlocker) |
-| Exclusionary | Fabricator | Fakeshifter | Loner |
-| Perplexer | Postponer | Psychopath | Venerer |
-| Viper | Viper (ViperEndKnot) | アーチャー (Archer) | アーネストウルフ (EarnestWolf) |
+| アンブッシャー (Ambusher) | カタリスト (Catalyst) | セントラライザー (Centralizer) | クロックブロッカー (ClockBlocker) |
+| エクスクルージョナリー (Exclusionary) | ファブリケーター (Fabricator) | フェイクシフター (Fakeshifter) | ローナー (Loner) |
+| パープレクサー (Perplexer) | ポストポナー (Postponer) | サイコパス (Psychopath) | ヴェネラー (Venerer) |
+| ヴァイパー (Viper) | ヴァイパー (ViperEndKnot) | アーチャー (Archer) | アーネストウルフ (EarnestWolf) |
 | アノニマス (Anonymous) | アビスブリンガー (Abyssbringer) | アロガンス (Arrogance) | アンダーテイカー (Undertaker) |
 | アンチアドミナー (AntiAdminer) | アンチリポーター (AntiReporter) | アンドロイド (Android) | イービルギャンブラー (EvilGambler) |
 | イービルサテライト (EvilSatellite) | イービルジャンパー (EvilJumper) | イービルテラー (EvilTeller) | イービルブレンダー (EvilBlender) |
@@ -163,10 +163,10 @@ End K not は EHR の 650+ 役職エンジンの上に、**配信・長時間運
 
 |   |   |   |   |
 |---|---|---|---|
-| <size=75%>シリアルキラー</size> (SerialKiller) | Accumulator | Berserker | Clerk |
-| Duality | Explosivist | MassMedia | Quarry |
-| Sharpshooter | Slenderman | Soul Collector (SoulCollector) | Spider |
-| Thanos | Thief | アーソニスト (Arsonist) | アジテーター (Agitator) |
+| <size=75%>シリアルキラー</size> (SerialKiller) | アキュムレーター (Accumulator) | バーサーカー (Berserker) | クラーク (Clerk) |
+| デュアリティ (Duality) | エクスプロシビスト (Explosivist) | マスメディア (MassMedia) | クォーリー (Quarry) |
+| シャープシューター (Sharpshooter) | スレンダーマン (Slenderman) | ソウルコレクター (SoulCollector) | スパイダー (Spider) |
+| サノス (Thanos) | シーフ (Thief) | アーソニスト (Arsonist) | アジテーター (Agitator) |
 | アモガス (Amogus) | インパーシャル (Impartial) | ヴァルチャー (Vulture) | ウイルス (Virus) |
 | ウェポンマスター (WeaponMaster) | エクリプス (Eclipse) | エボルバー (Evolver) | エンダーマン (Enderman) |
 | オポチュニスト (Opportunist) | カーサー (Curser) | カースメーカー (CurseMaker) | ガスライター (Gaslighter) |
@@ -201,7 +201,7 @@ End K not は EHR の 650+ 役職エンジンの上に、**配信・長時間運
 
 |   |   |   |   |
 |---|---|---|---|
-| Empress | Moon Dancer (MoonDancer) | イリュージョニスト (Illusionist) | ウルド (Wyrd) |
+| エンプレス (Empress) | ムーンダンサー (MoonDancer) | イリュージョニスト (Illusionist) | ウルド (Wyrd) |
 | エンチャーター (Enchanter) | オーガー (Augur) | カヴンメンバー (CovenMember) | カヴンリーダー (CovenLeader) |
 | サモナー (Summoner) | スペルキャスター (SpellCaster) | セイレーン (Siren) | タイムロード (Timelord) |
 | バンシー (Banshee) | ブードゥーマスター (VoodooMaster) | ポウチ (Poache) | ポーションマスター (PotionMaster) |
@@ -230,7 +230,7 @@ End K not は EHR の 650+ 役職エンジンの上に、**配信・長時間運
 
 |   |   |   |   |
 |---|---|---|---|
-| Task Master (TaskMaster) | Venom | アブソーバー (Absorber) | アベンジャー (Avenger) |
+| タスクマスター (TaskMaster) | ヴェノム (Venom) | アブソーバー (Absorber) | アベンジャー (Avenger) |
 | アムネジア (Amnesia) | アレルギー (Allergic) | アンカー (Anchor) | アンチテレポート (AntiTP) |
 | アンチドーテ (Antidote) | アンデッド (Undead) | アンバウンド (Unbound) | アンラッキー (Unlucky) |
 | いたずら好き (Mischievous) | インセイン (Insane) | ウォーデン (Warden) | ウォッチャー (Watcher) |
