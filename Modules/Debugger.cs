@@ -112,7 +112,7 @@ internal static class Logger
 
         if (!Main.Loaded)
         {
-            LateTask.New(() => CustomLogger.Instance.Log(level.ToString(), LogText, multiLine), 1f, "Log Retry");
+            LateTask.New(() => CustomLogger.Instance.Log(level.ToString(), LogText, multiLine), 1f, "Log Retry", log: false);
             return;
         }
 
