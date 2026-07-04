@@ -35,6 +35,9 @@ internal class Godfather : RoleBase
         if (voter == null || target == null || voter.PlayerId == target.PlayerId || Main.DontCancelVoteList.Contains(voter.PlayerId)) return false;
 
         GodfatherTarget = target.PlayerId;
+
+        Utils.SendMessage("\n", voter.PlayerId, string.Format(Translator.GetString("GodfatherVoteSet"), target.PlayerId.ColoredPlayerName()));
+
         Main.DontCancelVoteList.Add(voter.PlayerId);
         return true;
     }

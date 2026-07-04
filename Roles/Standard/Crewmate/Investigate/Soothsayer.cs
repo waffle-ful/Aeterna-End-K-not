@@ -48,6 +48,8 @@ public class Soothsayer : RoleBase
 
         Target = target.PlayerId;
 
+        Utils.SendMessage("\n", player.PlayerId, string.Format(Translator.GetString("SoothsayerVoteSet"), target.PlayerId.ColoredPlayerName()));
+
         Main.DontCancelVoteList.Add(player.PlayerId);
         return true;
     }

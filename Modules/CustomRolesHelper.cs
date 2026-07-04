@@ -1047,6 +1047,8 @@ internal static class CustomRolesHelper
                 CustomRoles.Captain when Captain.CancelVote.GetBool() => true,
 
                 CustomRoles.President => true,
+                CustomRoles.Empress => true,
+                CustomRoles.Inquisitor => true,
                 CustomRoles.EvilSatellite => true,
                 CustomRoles.ConnectSaver => true,
                 CustomRoles.Missioneer => true,

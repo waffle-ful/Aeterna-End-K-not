@@ -106,6 +106,7 @@ public class Socialite : RoleBase
         if (GuestList.Add(target.PlayerId))
         {
             Utils.SendRPC(CustomRPC.SyncRoleData, SocialiteId, 2, target.PlayerId);
+            Utils.SendMessage("\n", pc.PlayerId, string.Format(Translator.GetString("SocialiteVoteSet"), target.PlayerId.ColoredPlayerName()));
             Main.DontCancelVoteList.Add(pc.PlayerId);
             return true;
         }
