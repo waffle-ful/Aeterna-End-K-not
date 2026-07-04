@@ -196,7 +196,7 @@ public static class TemplateManager
                     : "English";
 
                 Logger.Warn($"Creating new template file: {fileName}", "TemplateManager");
-                File.WriteAllText(TemplateFilePath, GetResourcesTxt($"EHR.Resources.Config.template.{fileName}.txt"));
+                File.WriteAllText(TemplateFilePath, GetResourcesTxt($"EndKnot.Resources.Config.template.{fileName}.txt"));
             }
         }
         catch (Exception ex) { Logger.Exception(ex, "TemplateManager"); }

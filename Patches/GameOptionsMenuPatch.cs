@@ -1513,6 +1513,7 @@ public static class GameSettingMenuPatch
             var gmButton = cachedGM ? GMButtons[index] : ModGameOptionsMenu.Track(Object.Instantiate(gMinus, gameSettingsLabel.transform, true));
             if (cachedGM)
                 gmButton.transform.SetParent(gameSettingsLabel.transform, false);
+            gmButton.SetActive(true);
             gmButton.transform.localPosition = new Vector3((((index / 8) - ((totalCols - 1) / 2f)) * 1.4f) + 0.86f, gameSettingsLabelPos.y - 1.9f - (0.22f * (index % 8)), -1f);
 
             gmButton.transform.localScale = new(0.4f, 0.3f, 1f);
