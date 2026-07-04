@@ -180,7 +180,7 @@ public class Abyssbringer : RoleBase
                     blackHole.Position = newPosition;
                 }
 
-                if (FastVector2.DistanceWithinRange(pos, blackHole.Position, BlackHoleRadius.GetFloat()) && !nearestPlayer.Is(CustomRoles.Pestilence))
+                if (GameStates.IsInTask && !ExileController.Instance && FastVector2.DistanceWithinRange(pos, blackHole.Position, BlackHoleRadius.GetFloat()) && !nearestPlayer.Is(CustomRoles.Pestilence))
                 {
                     nearestPlayer.RpcExileV2();
                     RPC.PlaySoundRPC(pc.PlayerId, Sounds.KillSound);

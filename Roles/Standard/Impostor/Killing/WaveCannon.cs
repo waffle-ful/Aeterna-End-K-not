@@ -223,6 +223,7 @@ public class WaveCannon : RoleBase
 
     public override void OnFixedUpdate(PlayerControl pc)
     {
+        if (!AmongUsClient.Instance.AmHost) return;
         if (!GameStates.IsInTask) return;
 
         if (!pc.IsAlive())

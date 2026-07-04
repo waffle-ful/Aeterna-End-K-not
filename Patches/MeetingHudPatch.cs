@@ -103,7 +103,6 @@ internal static class CheckForEndVotingPatch
                     }
                     else if (voteTarget && !pc.GetCustomRole().CancelsVote() && !pc.UsesMeetingShapeshift())
                         Main.PlayerStates[pc.PlayerId].Role.OnVote(pc, voteTarget);
-                    else if (pc.Is(CustomRoles.Godfather)) Godfather.GodfatherTarget = byte.MaxValue;
                 }
             }
 
@@ -248,6 +247,9 @@ internal static class CheckForEndVotingPatch
             Balancer.ManipulateVotingResult(votingData, states);
             Assumer.OnVotingEnd(votingData);
             MeetingAngel.NegateVotes(votingData, states);
+
+            foreach (MeetingHud.VoterState voteState in states)
+                Missioneer.TrackVoteReceived(voteState.VotedForId);
             
             var exileId = byte.MaxValue;
             var max = 0;

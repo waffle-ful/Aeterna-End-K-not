@@ -14,14 +14,15 @@ internal class GA : IGhostRole
     public RoleTypes RoleTypes => RoleTypes.GuardianAngel;
     public int Cooldown => CD.GetInt();
 
-    public void OnProtect(PlayerControl pc, PlayerControl target)
+    public bool OnProtect(PlayerControl pc, PlayerControl target)
     {
-        if (ProtectionList.Add(target.PlayerId))
-        {
-            int duration = ProtectDuration.GetInt();
-            LateTask.New(() => ProtectionList.Remove(target.PlayerId), duration);
-            pc.AddAbilityCD(Cooldown + duration);
-        }
+        byte targetId = target.PlayerId;
+        if (!ProtectionList.Add(targetId)) return false;
+
+        int duration = ProtectDuration.GetInt();
+        LateTask.New(() => ProtectionList.Remove(targetId), duration);
+        pc.AddAbilityCD(Cooldown + duration);
+        return true;
     }
 
     public void OnAssign(PlayerControl pc)

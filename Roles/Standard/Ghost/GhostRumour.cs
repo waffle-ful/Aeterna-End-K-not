@@ -23,14 +23,15 @@ internal class GhostRumour : IGhostRole
     public RoleTypes RoleTypes => RoleTypes.GuardianAngel;
     public int Cooldown => CD.GetInt();
 
-    public void OnProtect(PlayerControl pc, PlayerControl target)
+    public bool OnProtect(PlayerControl pc, PlayerControl target)
     {
-        if (Used || QueuedTarget != byte.MaxValue) return;
-        if (target == null || !target.IsAlive()) return;
+        if (Used || QueuedTarget != byte.MaxValue) return false;
+        if (target == null || !target.IsAlive()) return false;
 
         QueuedTarget = target.PlayerId;
         pc.AddAbilityCD(Cooldown);
         Utils.NotifyRoles(SpecifySeer: pc);
+        return true;
     }
 
     public void OnAssign(PlayerControl pc)

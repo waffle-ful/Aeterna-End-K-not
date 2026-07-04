@@ -32,7 +32,8 @@ internal class Phantasm : IGhostRole
         }, 1f, "Phantasm Assign");
     }
 
-    public void OnProtect(PlayerControl pc, PlayerControl target) { }
+    // No GA protect button on this role type (RoleTypes.CrewmateGhost); never invoked in practice.
+    public bool OnProtect(PlayerControl pc, PlayerControl target) => false;
 
     public void SetupCustomOption()
     {

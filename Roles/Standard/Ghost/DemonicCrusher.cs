@@ -24,10 +24,10 @@ internal class DemonicCrusher : IGhostRole
     public RoleTypes RoleTypes => RoleTypes.GuardianAngel;
     public int Cooldown => CD.GetInt();
 
-    public void OnProtect(PlayerControl pc, PlayerControl target)
+    public bool OnProtect(PlayerControl pc, PlayerControl target)
     {
         // The protected target is intentionally ignored — this is a map-wide effect. One jam at a time.
-        if (pc == null || Active || ShipStatus.Instance == null) return;
+        if (pc == null || Active || ShipStatus.Instance == null) return false;
 
         Active = true;
         pc.AddAbilityCD(Cooldown);
@@ -44,6 +44,8 @@ internal class DemonicCrusher : IGhostRole
             if (p != null) Utils.NotifyRoles(SpecifySeer: p);
             else Utils.NotifyRoles();
         }, AbilityTime.GetInt(), "DemonicCrusher");
+
+        return true;
     }
 
     // Desync a "comms down" state to every alive non-modded player (jam=true) or restore it (jam=false),

@@ -690,6 +690,9 @@ namespace EndKnot
 
     internal sealed class BlackHole : CustomNetObject
     {
+        // Abyssbringer が3ティック周期でTPして吸い込む→base の opt-in 間引きに委譲(0.2s)。
+        protected override float ForceSnapMinInterval => 0.2f;
+
         internal BlackHole(Vector2 position)
         {
             CreateNetObject("<line-height=97%><cspace=0.16em><#0000>WW</color><mark=#000000>WWWW</mark><#0000>WW\nW</color><mark=#000000>WWWWWW</mark><#0000>W</color>\n<mark=#000000>WWWWWWWW\nWWWWWWWW\nWWWWWWWW\nWWWWWWWW</mark>\n<#0000>W</color><mark=#000000>WWWWWW</mark><#0000>W\nWW</color><mark=#000000>WWWW</mark><#0000>WW", position);
@@ -896,6 +899,9 @@ namespace EndKnot
 
     internal sealed class TNT : CustomNetObject
     {
+        // Explosivist が毎ティックTPして追従させる→base の opt-in 間引きに委譲(0.2s)。BedWars の静止TNTは無影響。
+        protected override float ForceSnapMinInterval => 0.2f;
+
         private readonly Vector2 Location;
         private float timer;
 

@@ -15,7 +15,7 @@ internal class DemonicTracker : IGhostRole
     public RoleTypes RoleTypes => RoleTypes.GuardianAngel;
     public int Cooldown => CD.GetInt();
 
-    public void OnProtect(PlayerControl pc, PlayerControl target)
+    public bool OnProtect(PlayerControl pc, PlayerControl target)
     {
         PlayerControl[] impostors = Main.EnumerateAlivePlayerControls().Where(x => x.GetCustomRole().IsImpostor()).ToArray();
 
@@ -30,6 +30,7 @@ internal class DemonicTracker : IGhostRole
 
         pc.AddAbilityCD(Cooldown);
         Utils.NotifyRoles();
+        return true;
     }
 
     public void OnAssign(PlayerControl pc)

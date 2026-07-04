@@ -158,7 +158,9 @@ public class Archer : RoleBase
 
         if (dir.sqrMagnitude < 0.5f)
         {
-            IsSetting = false;
+            // IsSetting はここで即falseにせず、フレームワークのCD免除判定(Utils.ShouldNotApplyAbilityCooldownのArcher{IsSetting:true})が
+            // 済んだ後に落とす。即時falseだと判定に引っかからずフルCDが課される。
+            LateTask.New(() => IsSetting = false, 0.05f, log: false);
             if (ArrowsLeft.HasValue) ArrowsLeft++;
             if (MyArrow.GetBool())
             {

@@ -12,9 +12,9 @@ internal class DemonicVenter : IGhostRole
     public RoleTypes RoleTypes => RoleTypes.GuardianAngel;
     public int Cooldown => CD.GetInt();
 
-    public void OnProtect(PlayerControl pc, PlayerControl target)
+    public bool OnProtect(PlayerControl pc, PlayerControl target)
     {
-        if (pc == null || target == null || ShipStatus.Instance == null || pc.MyPhysics == null) return;
+        if (pc == null || target == null || ShipStatus.Instance == null || pc.MyPhysics == null) return false;
 
         byte ghostId = pc.PlayerId;
         Vector2 targetPos = target.Pos();
@@ -34,7 +34,7 @@ internal class DemonicVenter : IGhostRole
             }
         }
 
-        if (nearestVent == null) return;
+        if (nearestVent == null) return false;
 
         // Capture only value types in the delayed tasks (never a stale Il2Cpp object), and re-fetch the
         // ghost by id each time.
@@ -63,6 +63,8 @@ internal class DemonicVenter : IGhostRole
             if (p == null || p.NetTransform == null) return;
             Utils.TP(p.NetTransform, originalPos, noCheckState: true, log: false);
         }, 0.6f, "DemonicVenter Return");
+
+        return true;
     }
 
     public void OnAssign(PlayerControl pc) { }

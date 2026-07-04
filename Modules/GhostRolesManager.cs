@@ -51,6 +51,8 @@ internal static class GhostRolesManager
         IGhostRole instance = CreateGhostRoleInstance(role);
         if (set) pc.RpcSetRoleDesync(instance.RoleTypes, pc.OwnerId);
 
+        // Match AssignGhostRole: seed the initial ability cooldown so this ghost isn't immediately usable.
+        pc.AddAbilityCD(instance.Cooldown);
         instance.OnAssign(pc);
         Main.ResetCamPlayerList.Add(pc.PlayerId);
         AssignedGhostRoles[id] = (role, instance);

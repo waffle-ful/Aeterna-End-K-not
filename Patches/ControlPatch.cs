@@ -293,7 +293,9 @@ internal static class ControllerManagerUpdatePatch
             if (Input.GetKeyDown(KeyCode.C) && !GameStates.IsMeeting && !HudManager.Instance.Chat.IsOpenOrOpening)
             {
                 foreach (PlayerControl pc in PlayerControl.AllPlayerControls)
-                    if (!pc.AmOwner)
+                    // Dead players must never enter a real vent state — RpcEnterVent on a corpse corrupts
+                    // the native/IL2CPP heap (intermittent CLR crash). Alive check is required here.
+                    if (!pc.AmOwner && pc.IsAlive())
                         pc.MyPhysics.RpcEnterVent(2);
             }
 

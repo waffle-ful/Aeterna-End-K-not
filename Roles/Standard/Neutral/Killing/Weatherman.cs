@@ -85,6 +85,8 @@ public class Weatherman : RoleBase
 
     public override void OnFixedUpdate(PlayerControl pc)
     {
+        if (!GameStates.IsInTask) return;
+
         NaturalDisasters.FixedUpdatePatch.UpdatePreparingDisasters();
         NaturalDisasters.GetActiveDisasters().ToArray().Do(x => x.Update());
         NaturalDisasters.Sinkhole.OnFixedUpdate();

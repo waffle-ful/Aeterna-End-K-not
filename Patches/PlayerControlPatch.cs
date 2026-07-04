@@ -51,7 +51,16 @@ internal static class CheckProtectPatch
         if (GhostRolesManager.AssignedGhostRoles.TryGetValue(__instance.PlayerId, out (CustomRoles Role, IGhostRole Instance) ghostRole))
         {
             __instance.AddAbilityCD(ghostRole.Instance.Cooldown);
-            ghostRole.Instance.OnProtect(__instance, target);
+
+            if (!ghostRole.Instance.OnProtect(__instance, target))
+            {
+                // OnProtect was an internal-validation no-op (charges exhausted / invalid target / jammed /
+                // already-protected): undo the speculatively pre-loaded cooldown above and skip the
+                // vanilla shield broadcast, so a no-op press doesn't burn a full CD or fake a protect.
+                __instance.RemoveAbilityCD();
+                return false;
+            }
+
             return true;
         }
 

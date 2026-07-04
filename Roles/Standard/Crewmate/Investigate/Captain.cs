@@ -11,7 +11,7 @@ public class Captain : RoleBase
 
     public override bool IsEnable => On;
 
-    private static OptionItem CancelVote;
+    public static OptionItem CancelVote;
 
     private string LastNotify;
     private byte CaptainId;

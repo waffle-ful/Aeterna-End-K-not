@@ -19,9 +19,9 @@ public class MeetingAngel : IGhostRole
     private int LastUsedAtMeetingNum = int.MinValue;
     public byte TargetId = 252;
 
-    public void OnProtect(PlayerControl pc, PlayerControl target)
+    public bool OnProtect(PlayerControl pc, PlayerControl target)
     {
-        if (LastUsedAtMeetingNum + NumMeetingsCooldown.GetInt() > MeetingStates.MeetingNum) return;
+        if (LastUsedAtMeetingNum + NumMeetingsCooldown.GetInt() > MeetingStates.MeetingNum) return false;
 
         TeamOptions targetTeam = target.GetTeam() switch
         {
@@ -38,10 +38,11 @@ public class MeetingAngel : IGhostRole
             },
             _ => default(TeamOptions)
         };
-        if (CanProtectOptions.TryGetValue(targetTeam, out OptionItem optionItem) && !optionItem.GetBool()) return;
+        if (CanProtectOptions.TryGetValue(targetTeam, out OptionItem optionItem) && !optionItem.GetBool()) return false;
 
         LastUsedAtMeetingNum = MeetingStates.MeetingNum;
         TargetId = target.PlayerId;
+        return true;
     }
 
     public void OnAssign(PlayerControl pc)

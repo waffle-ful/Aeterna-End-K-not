@@ -103,7 +103,7 @@ public class Blockade : RoleBase
         float radius = BlockadeRadius.GetFloat();
 
         if (Blockades.Exists(x => FastVector2.DistanceWithinRange(pos, x, radius)))
-            pc.TP(LastPosition.GetValueOrDefault(pc.PlayerId, pc.transform.position));
+            pc.TP(LastPosition.GetValueOrDefault(pc.PlayerId, pc.transform.position), minInterval: 0.2f);
         else
             LastPosition[pc.PlayerId] = pc.transform.position;
     }

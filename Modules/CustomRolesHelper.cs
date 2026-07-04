@@ -1044,6 +1044,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Socialite when Socialite.CancelVote.GetBool() => true,
                 CustomRoles.Negotiator when Negotiator.CancelVote.GetBool() => true,
                 CustomRoles.Clerk when Clerk.CancelVote.GetBool() => true,
+                CustomRoles.Captain when Captain.CancelVote.GetBool() => true,
 
                 CustomRoles.President => true,
                 CustomRoles.EvilSatellite => true,

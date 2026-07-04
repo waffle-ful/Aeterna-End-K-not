@@ -134,6 +134,7 @@ public class Wizard : RoleBase
 
     public override void ApplyGameOptions(IGameOptions opt, byte playerId)
     {
+        AURoleOptions.PhantomCooldown = AbilityCooldown.GetFloat();
         AURoleOptions.ShapeshifterCooldown = 1f;
         AURoleOptions.ShapeshifterDuration = 1f;
 

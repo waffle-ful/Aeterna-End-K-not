@@ -17,10 +17,10 @@ internal class GhostReseter : IGhostRole
     public RoleTypes RoleTypes => RoleTypes.GuardianAngel;
     public int Cooldown => CD.GetInt();
 
-    public void OnProtect(PlayerControl pc, PlayerControl target)
+    public bool OnProtect(PlayerControl pc, PlayerControl target)
     {
         if (!Counts.ContainsKey(pc.PlayerId)) Counts[pc.PlayerId] = MaxCount.GetInt();
-        if (Counts[pc.PlayerId] <= 0) return;
+        if (Counts[pc.PlayerId] <= 0) return false;
 
         Counts[pc.PlayerId]--;
 
@@ -30,6 +30,7 @@ internal class GhostReseter : IGhostRole
 
         Utils.NotifyRoles(SpecifySeer: pc);
         pc.AddAbilityCD(Cooldown);
+        return true;
     }
 
     public void OnAssign(PlayerControl pc)

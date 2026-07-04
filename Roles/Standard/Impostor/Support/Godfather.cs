@@ -22,6 +22,13 @@ internal class Godfather : RoleBase
         On = false;
     }
 
+    public override void OnReportDeadBody()
+    {
+        // The mark only lives for the round right after the meeting it was set in;
+        // clear it at the start of the next meeting so a stale mark can't trigger a promotion.
+        GodfatherTarget = byte.MaxValue;
+    }
+
     public override bool OnVote(PlayerControl voter, PlayerControl target)
     {
         if (Starspawn.IsDayBreak) return false;

@@ -41,7 +41,6 @@ public class Scanner : RoleBase
     public override void Add(byte playerId)
     {
         On = true;
-        AURoleOptions.PhantomCooldown = AbilityCooldown.GetFloat();
     }
 
     public override bool CanUseKillButton(PlayerControl pc)
@@ -52,6 +51,7 @@ public class Scanner : RoleBase
     public override void ApplyGameOptions(IGameOptions opt, byte playerId)
     {
         opt.SetVision(false);
+        AURoleOptions.PhantomCooldown = AbilityCooldown.GetFloat();
     }
 
     public override bool OnVanish(PlayerControl pc)

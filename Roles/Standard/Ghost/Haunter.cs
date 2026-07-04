@@ -31,7 +31,8 @@ internal class Haunter : IGhostRole
     public RoleTypes RoleTypes => RoleTypes.CrewmateGhost;
     public int Cooldown => 900;
 
-    public void OnProtect(PlayerControl pc, PlayerControl target) { }
+    // No GA protect button on this role type (RoleTypes.CrewmateGhost); never invoked in practice.
+    public bool OnProtect(PlayerControl pc, PlayerControl target) => false;
 
     public void OnAssign(PlayerControl pc)
     {
@@ -81,8 +82,6 @@ internal class Haunter : IGhostRole
     {
         if (WarnedImps.Count > 0) return;
 
-        WarnedImps.Clear();
-
         IEnumerable<PlayerControl> filtered = Main.EnumerateAlivePlayerControls().Where(x =>
         {
             return x.GetTeam() switch
@@ -112,7 +111,7 @@ internal class Haunter : IGhostRole
         List<byte> targets = [];
         int numOfReveals = NumberOfReveals.GetInt();
 
-        for (var i = 0; i < numOfReveals; i++)
+        for (var i = 0; i < numOfReveals && WarnedImps.Count > 0; i++)
         {
             int index = IRandom.Instance.Next(WarnedImps.Count);
             byte target = WarnedImps[index];

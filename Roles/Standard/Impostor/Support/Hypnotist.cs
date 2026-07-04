@@ -56,8 +56,13 @@ public class Hypnotist : RoleBase
 
     public override void ApplyGameOptions(IGameOptions opt, byte playerId)
     {
-        AURoleOptions.ShapeshifterCooldown = AbilityCooldown.GetInt();
-        AURoleOptions.ShapeshifterDuration = 1f;
+        if (Options.UsePhantomBasis.GetBool())
+            AURoleOptions.PhantomCooldown = AbilityCooldown.GetInt();
+        else if (!Options.UsePets.GetBool())
+        {
+            AURoleOptions.ShapeshifterCooldown = AbilityCooldown.GetInt();
+            AURoleOptions.ShapeshifterDuration = 1f;
+        }
     }
 
     public static bool OnAnyoneReport()

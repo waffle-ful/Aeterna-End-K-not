@@ -18,19 +18,20 @@ internal class Warden : IGhostRole
     public RoleTypes RoleTypes => RoleTypes.GuardianAngel;
     public int Cooldown => CD.GetInt();
 
-    public void OnProtect(PlayerControl pc, PlayerControl target)
+    public bool OnProtect(PlayerControl pc, PlayerControl target)
     {
-        if (SpeedList.ContainsKey(target.PlayerId)) return;
+        if (SpeedList.ContainsKey(target.PlayerId)) return false;
 
         float speed = Main.AllPlayerSpeed[target.PlayerId];
         float targetSpeed = speed + ExtraSpeed.GetFloat();
-        if (Math.Abs(speed - targetSpeed) < 0.1f || speed > targetSpeed) return;
+        if (Math.Abs(speed - targetSpeed) < 0.1f || speed > targetSpeed) return false;
 
         Main.AllPlayerSpeed[target.PlayerId] += ExtraSpeed.GetFloat();
         target.MarkDirtySettings();
         if (NotifyTarget.GetBool()) target.Notify(Translator.GetString("WardenNotify"));
 
         SpeedList[target.PlayerId] = (Utils.TimeStamp, speed);
+        return true;
     }
 
     public void OnAssign(PlayerControl pc) { }

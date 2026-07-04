@@ -38,20 +38,20 @@ internal class AsistingAngel : IGhostRole
         ? (DaysElapsed > LimitDay.GetInt() ? 255 : FirstCD.GetInt())
         : FirstCD.GetInt() + (AddCD.GetInt() * UseCount);
 
-    public void OnProtect(PlayerControl pc, PlayerControl target)
+    public bool OnProtect(PlayerControl pc, PlayerControl target)
     {
-        if (pc == null || target == null) return;
+        if (pc == null || target == null) return false;
 
         if (BoundTarget == byte.MaxValue)
         {
             // 1st press: bind to the target (unless the deadline to bind has already passed).
-            if (DaysElapsed > LimitDay.GetInt()) return;
+            if (DaysElapsed > LimitDay.GetInt()) return false;
 
             BoundTarget = target.PlayerId;
             pc.AddAbilityCD(Cooldown);
             Utils.NotifyRoles(SpecifySeer: pc);
             Utils.NotifyRoles(SpecifyTarget: target);
-            return;
+            return true;
         }
 
         // Already bound: every later press escalates the cooldown.
@@ -61,7 +61,7 @@ internal class AsistingAngel : IGhostRole
         if (bound == null || !bound.IsAlive())
         {
             pc.AddAbilityCD(Cooldown);
-            return;
+            return true;
         }
 
         if (target.PlayerId == BoundTarget)
@@ -84,6 +84,7 @@ internal class AsistingAngel : IGhostRole
 
         pc.AddAbilityCD(Cooldown);
         Utils.NotifyRoles();
+        return true;
     }
 
     public void OnAssign(PlayerControl pc)

@@ -15,19 +15,27 @@ internal class Minion : IGhostRole
     public RoleTypes RoleTypes => RoleTypes.GuardianAngel;
     public int Cooldown => CD.GetInt();
 
-    public void OnProtect(PlayerControl pc, PlayerControl target)
+    public bool OnProtect(PlayerControl pc, PlayerControl target)
     {
-        if (!BlindPlayers.Add(target.PlayerId)) return;
+        if (!BlindPlayers.Add(target.PlayerId)) return false;
 
         target.RPCPlayCustomSound("FlashBang");
         target.MarkDirtySettings();
         int duration = BlindDuration.GetInt();
+
+        // Capture ONLY the value-type id (never an Il2Cpp PlayerControl) and re-fetch it inside the task.
+        byte targetId = target.PlayerId;
         LateTask.New(() =>
         {
-            if (BlindPlayers.Remove(target.PlayerId)) target.MarkDirtySettings();
-            RPC.PlaySoundRPC(target.PlayerId, Sounds.TaskComplete);
+            if (BlindPlayers.Remove(targetId))
+            {
+                PlayerControl p = Utils.GetPlayerById(targetId);
+                if (p != null) p.MarkDirtySettings();
+            }
+            RPC.PlaySoundRPC(targetId, Sounds.TaskComplete);
         }, duration, "Remove Minion Blindness");
         pc.AddAbilityCD(Cooldown + duration);
+        return true;
     }
 
     public void OnAssign(PlayerControl pc) { }

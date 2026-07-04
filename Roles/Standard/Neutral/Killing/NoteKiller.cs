@@ -105,6 +105,14 @@ public class NoteKiller : RoleBase
     public override void ApplyGameOptions(IGameOptions opt, byte id)
     {
         opt.SetVision(ImpostorVision.GetBool());
+
+        if (Options.UsePhantomBasis.GetBool())
+            AURoleOptions.PhantomCooldown = AbilityCooldown.GetFloat();
+        else if (!Options.UsePets.GetBool())
+        {
+            AURoleOptions.ShapeshifterCooldown = AbilityCooldown.GetFloat();
+            AURoleOptions.ShapeshifterDuration = 1f;
+        }
     }
 
     public override bool CanUseImpostorVentButton(PlayerControl pc)

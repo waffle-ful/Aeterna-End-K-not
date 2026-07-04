@@ -29,9 +29,9 @@ internal class GhostNoiseSender : IGhostRole
     public static bool AnyAssigned => GhostRolesManager.AssignedGhostRoles.Values.Any(g => g.Role == CustomRoles.GhostNoiseSender);
     public static float AlertDurationValue => AlertDuration?.GetFloat() ?? 10f;
 
-    public void OnProtect(PlayerControl pc, PlayerControl target)
+    public bool OnProtect(PlayerControl pc, PlayerControl target)
     {
-        if (pc == null || target == null) return;
+        if (pc == null || target == null) return false;
 
         byte targetId = target.PlayerId;
         MarkedTargets.Add(targetId);
@@ -41,6 +41,7 @@ internal class GhostNoiseSender : IGhostRole
 
         pc.AddAbilityCD(Cooldown);
         pc.Notify(Translator.GetString("GhostNoiseSenderMarked"), 5f);
+        return true;
     }
 
     public void OnAssign(PlayerControl pc)

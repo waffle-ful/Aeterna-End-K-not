@@ -16,7 +16,7 @@ internal class DemonicSupporter : IGhostRole
     public int Cooldown => 0;
 
     // Passive role: there is no protect button, so nothing fires here.
-    public void OnProtect(PlayerControl pc, PlayerControl target) { }
+    public bool OnProtect(PlayerControl pc, PlayerControl target) => false;
 
     // GhostRolesManager.AssignGhostRole already does RpcSetRoleDesync(RoleTypes == ImpostorGhost),
     // which gives the dead Madmate the vanilla impostor-ghost sabotage UI. Nothing extra to do.

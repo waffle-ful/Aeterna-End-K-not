@@ -13,9 +13,10 @@ public class Shade : IGhostRole
     public RoleTypes RoleTypes => RoleTypes.GuardianAngel;
     public int Cooldown => CD.GetInt();
     
-    public void OnProtect(PlayerControl pc, PlayerControl target)
+    public bool OnProtect(PlayerControl pc, PlayerControl target)
     {
         Protected.Add(target.PlayerId);
+        return true;
     }
     
     public void OnAssign(PlayerControl pc)

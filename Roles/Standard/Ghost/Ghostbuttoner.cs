@@ -22,7 +22,7 @@ internal class Ghostbuttoner : IGhostRole
     public RoleTypes RoleTypes => RoleTypes.GuardianAngel;
     public int Cooldown => CD.GetInt();
 
-    public void OnProtect(PlayerControl pc, PlayerControl target)
+    public bool OnProtect(PlayerControl pc, PlayerControl target)
     {
         // The target is irrelevant — any living player works as a "button".
         // Block while a critical sabotage is running (mirrors the TOHK check list).
@@ -32,10 +32,10 @@ internal class Ghostbuttoner : IGhostRole
             || Utils.IsActive(SystemTypes.Comms)
             || Utils.IsActive(SystemTypes.LifeSupp)
             || Utils.IsActive(SystemTypes.HeliSabotage))
-            return;
+            return false;
 
         if (!Counts.ContainsKey(pc.PlayerId)) Counts[pc.PlayerId] = MaxCount.GetInt();
-        if (Counts[pc.PlayerId] <= 0) return;
+        if (Counts[pc.PlayerId] <= 0) return false;
 
         Counts[pc.PlayerId]--;
         Utils.NotifyRoles(SpecifySeer: pc);
@@ -49,6 +49,8 @@ internal class Ghostbuttoner : IGhostRole
             if (p == null) return;
             p.NoCheckStartMeeting(null, force: true);
         }, 0.2f, "Ghostbuttoner Emergency Meeting");
+
+        return true;
     }
 
     public void OnAssign(PlayerControl pc)

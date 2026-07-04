@@ -29,13 +29,14 @@ internal class Bloodmoon : IGhostRole
         BloodmoonID = pc.PlayerId;
     }
 
-    public void OnProtect(PlayerControl pc, PlayerControl target)
+    public bool OnProtect(PlayerControl pc, PlayerControl target)
     {
-        if (target.Is(CustomRoles.Pestilence) || (target.Is(Team.Impostor) && pc.Is(Team.Impostor)) || !pc.RpcCheckAndMurder(target, true)) return;
+        if (target.Is(CustomRoles.Pestilence) || (target.Is(Team.Impostor) && pc.Is(Team.Impostor)) || !pc.RpcCheckAndMurder(target, true)) return false;
         ScheduledDeaths.TryAdd(target.PlayerId, (Utils.TimeStamp, pc.PlayerId));
         Main.AllPlayerSpeed[pc.PlayerId] = Speed.GetFloat();
         pc.MarkDirtySettings();
         pc.AddAbilityCD(Cooldown + Duration.GetInt());
+        return true;
     }
 
     public void SetupCustomOption()
