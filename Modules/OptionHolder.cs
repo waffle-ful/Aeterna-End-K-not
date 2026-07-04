@@ -453,6 +453,7 @@ public static class Options
 
     public static OptionItem AutoPlayAgain;
     public static OptionItem AutoPlayAgainCountdown;
+    public static OptionItem StreamerMode;
     public static OptionItem AutoRehostAfterKick;
     public static OptionItem AutoRehostDelay;
     public static OptionItem AutoRehostMaxAttempts;
@@ -1687,6 +1688,19 @@ public static class Options
 
         AutoStartTimer = new IntegerOptionItem(44423, "AutoStartTimer", new(10, 600, 1), 20, TabGroup.SystemSettings)
             .SetValueFormat(OptionFormat.Seconds);
+
+        // 配信者向けワンスイッチ: OFF→ON で以下 4 設定 (AutoRehost/CrashWatchdog/AutoPlayAgain/YouTubeChat) を
+        // 一括 ON にする片方向マスター。カスケード配線は Modules/StreamerMode.cs (メニュー表示時に登録)。
+        StreamerMode = new BooleanOptionItem(44463, "StreamerMode", false, TabGroup.SystemSettings)
+            .SetHeader(true)
+            .SetColor(Color.magenta);
+
+        // OFF→ON で 4 設定を一括 ON にする片方向カスケード。ここ (オプション生成時) で登録することで、
+        // メニュー表示タイミングに依存せず必ず配線される。load 時は before==after で来るため誤発火しない。
+        StreamerMode.RegisterUpdateValueEvent((_, before, after) =>
+        {
+            if (before == 0 && after == 1) EndKnot.Modules.StreamerMode.Apply();
+        });
 
         AutoPlayAgain = new BooleanOptionItem(44424, "AutoPlayAgain", false, TabGroup.SystemSettings);
 

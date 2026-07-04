@@ -240,6 +240,7 @@ public class Main : BasePlugin
     public static ConfigEntry<bool> AutoHaunt { get; private set; }
     public static ConfigEntry<string> YouTubeStreamUrl { get; private set; }
     public static ConfigEntry<bool> YouTubeChatWarned { get; private set; }
+    public static ConfigEntry<bool> StreamerModeAsked { get; private set; }
     public static ConfigEntry<bool> EnableVoiceVox { get; private set; }
     public static ConfigEntry<string> VoiceVoxEngineUrl { get; private set; }
     public static ConfigEntry<float> VoiceVoxVolume { get; private set; }
@@ -446,6 +447,7 @@ public class Main : BasePlugin
         AutoHaunt = Config.Bind("Client Options", "AutoHaunt", false);
         YouTubeStreamUrl = Config.Bind("Client Options", "YouTubeStreamUrl", "");
         YouTubeChatWarned = Config.Bind("Client Options", "YouTubeChatWarned", false);
+        StreamerModeAsked = Config.Bind("Client Options", "StreamerModeAsked", false);
         EnableVoiceVox = Config.Bind("Client Options", "EnableVoiceVox", false);
         VoiceVoxEngineUrl = Config.Bind("Client Options", "VoiceVoxEngineUrl", "http://127.0.0.1:50021");
         VoiceVoxVolume = Config.Bind("Client Options", "VoiceVoxVolume", 1.0f);

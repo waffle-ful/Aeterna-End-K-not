@@ -126,6 +126,9 @@ internal static class LobbyBehaviourStartPatch
                 }
                 catch (Exception ex) { Logger.Warn($"LobbyBehaviour.Start reset failed: {ex.Message}", "LobbyKill"); }
             }, 1.0f, log: false);
+
+            // 配信者モードを一括 ON した直後なら、コメント取得の URL 設定を促す案内を 1 度だけ出す。
+            LateTask.New(StreamerMode.ConsumeUrlHintIfHost, 2f, "StreamerMode.UrlHint", log: false);
         }
 
         // Auto-enter Backrooms — モッドクライアント全員 (host も guest も) ローカル視界が Backrooms に置き換わる。

@@ -259,8 +259,9 @@ public static class CalamityVisibility
         if (Object.FindObjectOfType<AnnouncementPopUp>(true) is { } ap && ap.gameObject.activeInHierarchy) return true;
 
         // GenericPopup は更新以外(Twitch 等)のクローンも拾うので name で絞る。開いている物だけ=active を確認。
+        // StreamerModePopup = 配信者モードの初回勧誘 2 択 (Modules/StreamerMode.cs)。
         foreach (var gp in Object.FindObjectsOfType<GenericPopup>())
-            if (gp != null && (gp.name == "InfoPopup" || gp.name == "InfoPopupV2") && gp.gameObject.activeInHierarchy) return true;
+            if (gp != null && gp.name is "InfoPopup" or "InfoPopupV2" or "StreamerModePopup" && gp.gameObject.activeInHierarchy) return true;
 
         return false;
     }
