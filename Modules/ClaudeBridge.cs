@@ -1,10 +1,12 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
+using TMPro;
 using UnityEngine;
 
 namespace EndKnot.Modules;
@@ -23,6 +25,7 @@ public static class ClaudeBridge
     private static string _dir;
     private static string _cmdPath;
     private static string _outPath;
+    private static string _statePath;
     private static string _screensDir;
 
     private static bool _captureInFlight;
@@ -46,6 +49,7 @@ public static class ClaudeBridge
 
             _cmdPath = Path.Combine(_dir, "claude-cmd.txt");
             _outPath = Path.Combine(_dir, "claude-out.log");
+            _statePath = Path.Combine(_dir, "claude-state.json");
             _screensDir = Path.Combine(_dir, "Screens");
             Directory.CreateDirectory(_screensDir);
         }
@@ -147,6 +151,22 @@ public static class ClaudeBridge
         if (directive.Equals("screenshot", StringComparison.OrdinalIgnoreCase))
         {
             if (!RequestScreenshot("manual")) WriteOut("ERR screenshot busy");
+            return;
+        }
+
+        // Layer 1: 構造化スナップショット。Menu 画面でも動く(host 非依存)。
+        if (directive.Equals("state", StringComparison.OrdinalIgnoreCase))
+        {
+            try { WriteState(); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR state failed"); }
+            return;
+        }
+
+        // Layer 3: PassiveButton クリック。selector はスナップショットの handle または `label:<text>`。
+        if (directive.StartsWith("click ", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecuteClick(directive[6..].Trim()); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR click failed"); }
             return;
         }
 
@@ -330,6 +350,295 @@ public static class ClaudeBridge
         byte[] managed = new byte[len];
         new Span<byte>(IntPtr.Add(arr.Pointer, IntPtr.Size * 4).ToPointer(), len).CopyTo(managed);
         return managed;
+    }
+
+    // ── Layer 1: 構造化スナップショット ─────────────────────────────────
+
+    // シーン上の PassiveButton を「列挙順に依存しない安定 handle」付きで返す。
+    // (name, x, y) でソートしてから採番するので、snapshot と click で同じ handle になる。
+    private sealed class BtnRec
+    {
+        public PassiveButton Pb;
+        public string Name;
+        public string Label;
+        public bool Active;
+        public float X;
+        public float Y;
+        public string Handle;
+    }
+
+    private static List<BtnRec> EnumerateButtons()
+    {
+        var list = new List<BtnRec>();
+
+        Il2CppArrayBase<PassiveButton> all;
+        try { all = Object.FindObjectsOfType<PassiveButton>(true); }
+        catch { return list; }
+
+        if (all == null) return list;
+
+        foreach (PassiveButton pb in all)
+        {
+            if (!pb) continue;
+
+            try
+            {
+                bool active = pb.gameObject.activeInHierarchy && pb.isActiveAndEnabled;
+
+                string label = "";
+                try
+                {
+                    var tmp = pb.GetComponentInChildren<TMP_Text>(true);
+                    if (tmp != null) label = CleanLabel(tmp.text);
+                }
+                catch { }
+
+                Vector3 wp = pb.transform.position;
+                list.Add(new BtnRec { Pb = pb, Name = pb.name ?? "", Label = label, Active = active, X = wp.x, Y = wp.y });
+            }
+            catch { }
+        }
+
+        list.Sort((a, b) =>
+        {
+            int c = string.CompareOrdinal(a.Name, b.Name);
+            if (c != 0) return c;
+            c = a.X.CompareTo(b.X);
+            return c != 0 ? c : a.Y.CompareTo(b.Y);
+        });
+
+        var counts = new Dictionary<string, int>();
+        foreach (BtnRec r in list)
+        {
+            string basis = Sanitize(r.Name);
+            if (basis.Length == 0) basis = "btn";
+
+            if (counts.TryGetValue(basis, out int n))
+            {
+                counts[basis] = n + 1;
+                r.Handle = $"{basis}~{n + 1}";
+            }
+            else
+            {
+                counts[basis] = 1;
+                r.Handle = basis;
+            }
+        }
+
+        return list;
+    }
+
+    private static void WriteState()
+    {
+        List<BtnRec> buttons = EnumerateButtons();
+
+        var sb = new StringBuilder(8192);
+        sb.Append('{');
+        sb.Append("\"ts\":").Append(Utils.TimeStamp.ToString(CultureInfo.InvariantCulture)).Append(',');
+        sb.Append("\"phase\":").Append(JStr(SafeState())).Append(',');
+        sb.Append("\"local\":"); AppendLocal(sb); sb.Append(',');
+        sb.Append("\"players\":["); int np = AppendPlayers(sb); sb.Append("],");
+        sb.Append("\"ui\":["); int nb = AppendButtons(sb, buttons); sb.Append(']');
+        sb.Append('}');
+
+        File.WriteAllText(_statePath, sb.ToString());
+        WriteOut($"OK state ({np} players, {nb} buttons) -> claude-state.json");
+    }
+
+    private static void AppendLocal(StringBuilder sb)
+    {
+        PlayerControl lp = PlayerControl.LocalPlayer;
+        if (!lp) { sb.Append("null"); return; }
+
+        Vector2 p = SafePos(lp);
+        float kt = 0f;
+        try { kt = lp.killTimer; } catch { }
+
+        sb.Append('{');
+        sb.Append("\"id\":").Append(lp.PlayerId).Append(',');
+        sb.Append("\"name\":").Append(JStr(SafeName(lp))).Append(',');
+        sb.Append("\"role\":").Append(JStr(SafeRole(lp))).Append(',');
+        sb.Append("\"alive\":").Append(SafeAlive(lp) ? "true" : "false").Append(',');
+        sb.Append("\"pos\":[").Append(F(p.x)).Append(',').Append(F(p.y)).Append("],");
+        sb.Append("\"killTimer\":").Append(F(kt));
+        sb.Append('}');
+    }
+
+    private static int AppendPlayers(StringBuilder sb)
+    {
+        IReadOnlyList<PlayerControl> all;
+        try { all = Main.AllPlayerControls; } catch { all = null; }
+        if (all == null) return 0;
+
+        int count = 0;
+        foreach (PlayerControl pc in all)
+        {
+            if (!pc) continue;
+
+            Vector2 p = SafePos(pc);
+            if (count > 0) sb.Append(',');
+
+            sb.Append('{');
+            sb.Append("\"id\":").Append(pc.PlayerId).Append(',');
+            sb.Append("\"name\":").Append(JStr(SafeName(pc))).Append(',');
+            sb.Append("\"role\":").Append(JStr(SafeRole(pc))).Append(',');
+            sb.Append("\"alive\":").Append(SafeAlive(pc) ? "true" : "false").Append(',');
+            sb.Append("\"color\":").Append(SafeColorId(pc)).Append(',');
+            sb.Append("\"pos\":[").Append(F(p.x)).Append(',').Append(F(p.y)).Append(']');
+            sb.Append('}');
+            count++;
+        }
+
+        return count;
+    }
+
+    private static int AppendButtons(StringBuilder sb, List<BtnRec> buttons)
+    {
+        const int cap = 250;
+        int count = 0;
+
+        for (int i = 0; i < buttons.Count && count < cap; i++)
+        {
+            BtnRec b = buttons[i];
+            if (count > 0) sb.Append(',');
+
+            sb.Append('{');
+            sb.Append("\"h\":").Append(JStr(b.Handle)).Append(',');
+            sb.Append("\"name\":").Append(JStr(b.Name)).Append(',');
+            sb.Append("\"label\":").Append(JStr(b.Label)).Append(',');
+            sb.Append("\"active\":").Append(b.Active ? "true" : "false").Append(',');
+            sb.Append("\"pos\":[").Append(F(b.X)).Append(',').Append(F(b.Y)).Append(']');
+            sb.Append('}');
+            count++;
+        }
+
+        return count;
+    }
+
+    // ── Layer 3: PassiveButton クリック ────────────────────────────────
+
+    private static void ExecuteClick(string selector)
+    {
+        if (string.IsNullOrEmpty(selector)) { WriteOut("ERR click needs a handle"); return; }
+
+        List<BtnRec> buttons = EnumerateButtons();
+        BtnRec target;
+
+        if (selector.StartsWith("label:", StringComparison.OrdinalIgnoreCase))
+        {
+            string want = selector[6..].Trim();
+            target = buttons.FirstOrDefault(b => b.Active && string.Equals(b.Label, want, StringComparison.OrdinalIgnoreCase));
+        }
+        else
+        {
+            target = buttons.FirstOrDefault(b => string.Equals(b.Handle, selector, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (target == null) { WriteOut($"ERR click no match: {selector}"); return; }
+        if (!target.Active) { WriteOut($"ERR click inactive: {selector}"); return; }
+        if (!target.Pb) { WriteOut($"ERR click destroyed: {selector}"); return; }
+
+        try
+        {
+            target.Pb.OnClick.Invoke();
+            WriteOut($"OK click {target.Handle} ({target.Label})");
+        }
+        catch (Exception e)
+        {
+            Utils.ThrowException(e);
+            WriteOut("ERR click invoke threw");
+        }
+    }
+
+    // ── safe accessors / JSON helpers ─────────────────────────────────
+
+    private static string SafeState()
+    {
+        try { string s = HealthLog.GetState(); return string.IsNullOrEmpty(s) ? "?" : s; }
+        catch { return "?"; }
+    }
+
+    private static string SafeName(PlayerControl pc)
+    {
+        try { return pc.Data?.PlayerName ?? ""; }
+        catch { return ""; }
+    }
+
+    private static string SafeRole(PlayerControl pc)
+    {
+        try { return Utils.GetRoleName(pc.GetCustomRole(), false); }
+        catch { return "?"; }
+    }
+
+    private static bool SafeAlive(PlayerControl pc)
+    {
+        try { return pc.Data is { IsDead: false }; }
+        catch { return true; }
+    }
+
+    private static int SafeColorId(PlayerControl pc)
+    {
+        try { return pc.Data?.DefaultOutfit?.ColorId ?? -1; }
+        catch { return -1; }
+    }
+
+    private static Vector2 SafePos(PlayerControl pc)
+    {
+        try { return pc.GetTruePosition(); }
+        catch { return Vector2.zero; }
+    }
+
+    private static string CleanLabel(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return "";
+        s = s.Replace('\r', ' ').Replace('\n', ' ').Trim();
+        return s.Length > 80 ? s[..80] + "…" : s;
+    }
+
+    private static string Sanitize(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return "";
+
+        var sb = new StringBuilder(s.Length);
+        foreach (char c in s)
+        {
+            if (char.IsLetterOrDigit(c) || c is '_' or '-' or '.') sb.Append(c);
+            else if (c == ' ') sb.Append('_');
+        }
+
+        return sb.ToString();
+    }
+
+    private static string F(float v)
+    {
+        if (float.IsNaN(v) || float.IsInfinity(v)) return "0";
+        return v.ToString("0.##", CultureInfo.InvariantCulture);
+    }
+
+    private static string JStr(string s)
+    {
+        if (s == null) return "\"\"";
+
+        var sb = new StringBuilder(s.Length + 2);
+        sb.Append('"');
+        foreach (char c in s)
+        {
+            switch (c)
+            {
+                case '"': sb.Append("\\\""); break;
+                case '\\': sb.Append("\\\\"); break;
+                case '\n': sb.Append("\\n"); break;
+                case '\r': sb.Append("\\r"); break;
+                case '\t': sb.Append("\\t"); break;
+                default:
+                    if (c < 0x20) sb.Append("\\u").Append(((int)c).ToString("x4"));
+                    else sb.Append(c);
+                    break;
+            }
+        }
+
+        sb.Append('"');
+        return sb.ToString();
     }
 
     private static void WriteOut(string line)
