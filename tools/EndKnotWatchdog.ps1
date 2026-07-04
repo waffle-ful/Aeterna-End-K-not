@@ -184,7 +184,7 @@ function Get-HealthStatus {
             $res.AgeSec = ((Get-Date) - $lw).TotalSeconds
             $res.Fresh  = ($res.AgeSec -lt $StaleSeconds)
         } catch { }
-        try { $res.LastLine = (Get-Content -Path $HealthLog -Tail 1 -ErrorAction SilentlyContinue) } catch { }
+        try { $res.LastLine = (Get-Content -Path $HealthLog -Tail 1 -Encoding utf8 -ErrorAction SilentlyContinue) } catch { }
     }
     return $res
 }

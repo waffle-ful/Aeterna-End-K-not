@@ -107,7 +107,7 @@ foreach ($dir in $scanDirs) {
     if (-not (Test-Path $dir)) { continue }
     Get-ChildItem -Path $dir -Recurse -Filter *.cs | ForEach-Object {
         $file = $_
-        $text = Get-Content -LiteralPath $file.FullName -Raw
+        $text = Get-Content -LiteralPath $file.FullName -Raw -Encoding UTF8
         $fileCount++
         $rel = $file.FullName.Substring($repoRoot.Length).TrimStart('\', '/')
 
