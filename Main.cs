@@ -56,7 +56,7 @@ public class Main : BasePlugin
 
     public const float MinSpeed = 0.0001f;
 
-    // == 繝励Ο繧ｰ繝ｩ繝險ｭ螳・/ Program Config ==
+    // == プログラム設定 / Program Config ==
     public const string ModName = "End K not";
     public const string ModColor = "#00ffff";
     public const bool AllowPublicRoom = true;
@@ -183,16 +183,18 @@ public class Main : BasePlugin
 
     public static readonly Dictionary<byte, List<int>> GuessNumber = [];
 
-    private static readonly List<string> NameSnacksCn = ["蜀ｰ豼蜃・, "螂ｶ闌ｶ", "蟾ｧ蜈句鴨", "陋狗ｳ・, "逕懃莫蝨・, "蜿ｯ荵・, "譟讙ｬ豌ｴ", "蜀ｰ邉冶足闃ｦ", "譫懷・", "邉匁棡", "迚帛･ｶ", "謚ｹ闌ｶ", "辜ｧ莉呵拷", "闖關晏桁", "蟶・ｸ・, "讀ｰ蟄仙・", "譖ｲ螂・, "郤｢雎・悄蜿ｸ", "荳牙ｽｩ蝗｢蟄・, "濶ｾ闕牙屬蟄・, "豕｡闃・, "蜿ｯ荳ｽ鬣ｼ", "譯・・", "鮗ｻ阮ｯ", "鮑｡陋倶ｻ・, "鬩ｬ蜊｡鮴・, "髮ｪ譴・ｨ・, "轤帝・螂ｶ", "陋区捲", "譚ｾ鬣ｼ", "隘ｿ邀ｳ髴ｲ", "螂ｶ蜀ｻ", "螂ｶ驟･", "蜿ｯ鬚・, "螂ｶ邉・];
+    private static readonly List<string> NameSnacksCn = ["冰激凌", "奶茶", "巧克力", "蛋糕", "甜甜圈", "可乐", "柠檬水", "冰糖葫芦", "果冻", "糖果", "牛奶", "抹茶", "烧仙草", "菠萝包", "布丁", "椰子冻", "曲奇", "红豆土司", "三彩团子", "艾草团子", "泡芙", "可丽饼", "桃酥", "麻薯", "鸡蛋仔", "马卡龙", "雪梅娘", "炒酸奶", "蛋挞", "松饼", "西米露", "奶冻", "奶酥", "可颂", "奶糖"];
 
     // ReSharper disable once StringLiteralTypo
-    private static readonly List<string> NameSnacksEn = ["Ice cream", "Milk tea", "Chocolate", "Cake", "Donut", "Coke", "Lemonade", "Candied haws", "Jelly", "Candy", "Milk", "Matcha", "Burning Grass Jelly", "Pineapple Bun", "Pudding", "Coconut Jelly", "Cookies", "Red Bean Toast", "Three Color Dumplings", "Wormwood Dumplings", "Puffs", "Can be Crepe", "Peach Crisp", "Mochi", "Egg Waffle", "Macaron", "Snow Plum Niang", "Fried Yogurt", "Egg Tart", "Muffin", "Sago Dew", "panna cotta", "soufflﾃｩ", "croissant", "toffee"];
+    private static readonly List<string> NameSnacksEn = ["Ice cream", "Milk tea", "Chocolate", "Cake", "Donut", "Coke", "Lemonade", "Candied haws", "Jelly", "Candy", "Milk", "Matcha", "Burning Grass Jelly", "Pineapple Bun", "Pudding", "Coconut Jelly", "Cookies", "Red Bean Toast", "Three Color Dumplings", "Wormwood Dumplings", "Puffs", "Can be Crepe", "Peach Crisp", "Mochi", "Egg Waffle", "Macaron", "Snow Plum Niang", "Fried Yogurt", "Egg Tart", "Muffin", "Sago Dew", "panna cotta", "soufflé", "croissant", "toffee"];
     private Coroutines coroutines;
 
     public Harmony Harmony { get; } = new(PluginGuid);
 
-    // BetterAmongUs (BAU) modded-support flags. BAU 縺・reflection 縺ｧ縲沓asePlugin 豢ｾ逕溘・蜷榊燕蜴ｳ蟇・ｸ閾ｴ縺ｪ
-    // static 繝輔ぅ繝ｼ繝ｫ繝・BAUFlags縲阪ｒ襍ｰ譟ｻ縺励※諡ｾ縺・◆繧√√％縺ｮ蜷榊燕繝ｻ蝙九・驟咲ｽｮ繧貞､峨∴縺ｪ縺・％縺ｨ縲・    // EndKnot 縺瑚・蜑阪〒謖√▽讖溯・繧・BAU 蛛ｴ縺ｧ辟｡蜉ｹ蛹悶＆縺帙∽ｺ碁㍾蜃ｦ逅・陦晉ｪ√ｒ驕ｿ縺代ｋ縲・    // 繝輔Λ繧ｰ荳隕ｧ: https://github.com/D1GQ/BetterAmongUs/blob/main/src/Modules/Support/BAUModdedSupportFlags.cs
+    // BetterAmongUs (BAU) modded-support flags. BAU が reflection で「BasePlugin 派生の名前厳密一致な
+    // static フィールド BAUFlags」を走査して拾うため、この名前・型・配置を変えないこと。
+    // EndKnot が自前で持つ機能を BAU 側で無効化させ、二重処理/衝突を避ける。
+    // フラグ一覧: https://github.com/D1GQ/BetterAmongUs/blob/main/src/Modules/Support/BAUModdedSupportFlags.cs
     public static string[] BAUFlags =
     [
         "gameoption.disable.allgameoptions",
@@ -1032,7 +1034,7 @@ public class Main : BasePlugin
                 { CustomRoles.Agent, "#ff8f8f" },
                 { CustomRoles.Taskinator, "#561dd1" },
                 { CustomRoles.Akazukin, "#ff4d4d" },
-                // Ported TOHK Crewmate roles (End K not) 窶・head-name colors (no entry = white name)
+                // Ported TOHK Crewmate roles (End K not) — head-name colors (no entry = white name)
                 { CustomRoles.AmateurTeller, "#c9a0dc" },
                 { CustomRoles.PonkotuTeller, "#d7a0dc" },
                 { CustomRoles.Teller, "#b39ddb" },
