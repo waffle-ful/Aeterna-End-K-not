@@ -742,7 +742,10 @@ static class AbilityButtonSetFromSettingsPatch
 {
     public static Exception Finalizer(Exception __exception)
     {
-        if (__exception != null)
+        // NRE は CNO/ペット付与時の Shapeshift 外見トリック(SyncOutfitData 経由)で
+        // ability settings が未確定のまま呼ばれるための良性例外。swallow するのが目的なので
+        // ログにも出さない(毎ゲーム 1 回スパムしていた)。想定外の他例外だけ記録する。
+        if (__exception is not null and not NullReferenceException)
             Utils.ThrowException(__exception);
 
         return null;

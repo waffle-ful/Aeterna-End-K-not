@@ -4889,6 +4889,7 @@ public static class Utils
             if (CachedSprites.TryGetValue(path + pixelsPerUnit, out Sprite sprite)) return sprite;
 
             Texture2D texture = LoadTextureFromResources(path);
+            if (texture == null) return null; // リソース欠落(例: 未用意の EHR-Icon.png)。LoadTextureFromResources 側で記録済みなので静かに返す
             sprite = Sprite.Create(texture, new(0, 0, texture.width, texture.height), new(0.5f, 0.5f), pixelsPerUnit);
             sprite.hideFlags |= HideFlags.HideAndDontSave | HideFlags.DontSaveInEditor;
             return CachedSprites[path + pixelsPerUnit] = sprite;
@@ -4905,7 +4906,16 @@ public static class Utils
             Texture2D texture = new(2, 2, TextureFormat.ARGB32, true);
             Assembly assembly = Assembly.GetExecutingAssembly();
             Stream stream = assembly.GetManifestResourceStream(path);
-            var length = stream!.Length; // Assuming all resource paths are valid and exist, so we can skip null check here
+
+            // リソースが埋め込まれていない(例: ロゴ未用意の EHR-Icon.png)場合は NRE を投げず静かにスキップ。
+            // 以前は stream!.Length で NRE→Error 二連打していた(2026-07-05 ログの LoadImage エラー)。
+            if (stream == null)
+            {
+                Logger.Info($"Resource not found (skipped): {path}", "LoadImage");
+                return null;
+            }
+
+            var length = stream.Length;
             var byteTexture = new Il2CppStructArray<byte>(length);
             // ReSharper disable once MustUseReturnValue - we know how many bytes we need to read, so we can skip the returned value check
             stream.Read(new Span<byte>(IntPtr.Add(byteTexture.Pointer, IntPtr.Size * 4).ToPointer(), (int)length));

@@ -13,6 +13,7 @@ public static class HealthLog
 {
     private const long HeartbeatIntervalSeconds = 5; // 専用ファイルへの heartbeat 間隔
     private const long NormalLogIntervalSeconds = 60; // 通常ログへの要約間隔(普段見る場所・低ノイズ)
+    private const long FrameStallThresholdSeconds = 3; // Tick 間の実時間ギャップがこれを超えたらフレームストールとして記録
     private const long MaxFileBytes = 3 * 1024 * 1024; // .prev 退避に失敗した時のサイズ上限
     private const long MaxTimelineBytes = 8 * 1024 * 1024; // Timeline は 8MB で .prev ローテート
 
@@ -21,6 +22,7 @@ public static class HealthLog
     private static string TimelinePath; // 横断セッション時系列ログ(EndKnot-Timeline.log)
     private static long StartTs;
     private static long LastBeatTs;
+    private static long LastTickTs; // 直近 Tick の実時間(フレームストール検出用。heartbeat grid とは独立に毎フレーム更新)
     private static long LastNormalLogTs;
     private static string LastState = "?";
     private static System.Diagnostics.Process Proc;
@@ -126,6 +128,15 @@ public static class HealthLog
             LastState = state;
         }
 
+        // フレームストール検出: Tick は毎フレーム呼ばれる。前回 Tick から実時間で大きく空いた =
+        // メインスレッド(FixedUpdate)が停止していた証拠。停止直前の送信コンテキストを添えて記録し、
+        // 「フォーカス中に起きる真ハングか / フォーカス喪失で消えるか」の切り分け材料にする。
+        // 状態遷移(シーンロード)でも数秒空くため state を併記して区別できるようにする。
+        if (LastTickTs != 0 && now - LastTickTs >= FrameStallThresholdSeconds)
+            NoteAnom($"ANOM live kind=framestall gapSec={now - LastTickTs} state={state}{GetLastSendSuffix(now)} t={now}");
+
+        LastTickTs = now;
+
         // 早期警報テレメトリは HB の 5 秒 grid を待たず 1/sec で回す(SnapTo 枯渇・例外洪水はより早い検知が要る)。
         if (PerSecondUpdateScheduler.ShouldRunUpdate("earlywarning-tick"))
         {
@@ -159,18 +170,7 @@ public static class HealthLog
             catch { }
 
             // 直近送信リングから最新エントリを取得して HB に添付
-            string lastSendSuffix = string.Empty;
-            try
-            {
-                // SendRingIndex は「次に書く場所」なので、最新 = (SendRingIndex + 15) % 16
-                ref HostActionEntry latest = ref SendRing[(SendRingIndex + 15) % 16];
-                if (latest.Tag != null)
-                {
-                    long ageSec = now - latest.Ts;
-                    lastSendSuffix = $" lastSend=\"{latest.Tag}\" lastLen={latest.Len} lastAgeSec={ageSec}";
-                }
-            }
-            catch { }
+            string lastSendSuffix = GetLastSendSuffix(now);
 
             string hb = $"t={now} up={now - StartTs} state={state} host={(host ? 1 : 0)} server={server} players={players} wsMB={wsMB} gcMB={gcMB} gc2={gen2}{lastSendSuffix}";
             Write($"HB {hb}");
@@ -237,8 +237,18 @@ public static class HealthLog
             string str = (stringReason ?? string.Empty).Replace("\r", " ").Replace("\n", " ");
             if (str.Length > 200) str = str[..200];
 
+            // intentional = 「異常ではない」= DCTX ダンプ / stuck-menu 判定の対象外。ユーザーの意図的退出に加え、
+            // 再ホスト/シーン切替中に正常に起きる接続の張り替え (NewConnection) や、フォーカス喪失、意図的離脱も
+            // ここに含める (穴4: これらを異常扱いすると DCTX 大量ダンプ + _hadDisconnectThisSession 誤セットで
+            // stuck-menu/rehost を誤発火しうる)。DuplicateConnectionDetected (別所ログイン) は本物の異常なので除外。
             bool intentional = reason is DisconnectReasons.ExitGame or DisconnectReasons.Destroy
-                or DisconnectReasons.Banned or DisconnectReasons.IncorrectVersion;
+                or DisconnectReasons.Banned or DisconnectReasons.IncorrectVersion
+                or DisconnectReasons.NewConnection or DisconnectReasons.IntentionalLeaving
+                or DisconnectReasons.FocusLost or DisconnectReasons.FocusLostBackground;
+
+            // 認証/サーバー死は「その場では回復不能」なので、AutoRehost の 3×リトライを待たず即プロセス再起動へ (穴1+穴5)。
+            try { AutoRestart.OnDisconnect(reason); }
+            catch (Exception e) { Utils.ThrowException(e); }
 
             long now = Utils.TimeStamp;
 
@@ -278,6 +288,40 @@ public static class HealthLog
                 Logger.Warn($"HACKING kick detected: {line}", "Health");
             else
                 Logger.Info($"disconnect: {line}", "Health");
+        }
+        catch (Exception e) { Utils.ThrowException(e); }
+    }
+
+    /// <summary>直近送信リングの最新エントリを " lastSend=... lastLen=... lastAgeSec=..." 形式で返す(なければ空文字列)。</summary>
+    private static string GetLastSendSuffix(long now)
+    {
+        try
+        {
+            // SendRingIndex は「次に書く場所」なので、最新 = (SendRingIndex + 15) % 16
+            HostActionEntry latest = SendRing[(SendRingIndex + 15) % 16];
+            if (latest.Tag != null)
+                return $" lastSend=\"{latest.Tag}\" lastLen={latest.Len} lastAgeSec={now - latest.Ts}";
+        }
+        catch { }
+
+        return string.Empty;
+    }
+
+    /// <summary>ユーザー向けポップアップ/メッセージを捕捉して記録する (MessageCapture から)。
+    /// 「ログに拾えないメッセージがある」= 検知の穴を塞ぐための観測窓口。Health + Timeline + log.html の三点に残す。</summary>
+    public static void RecordMessage(string source, string text)
+    {
+        EnsureInit();
+
+        try
+        {
+            string flat = (text ?? string.Empty).Replace("\r", " ").Replace("\n", " ").Trim();
+            if (flat.Length > 300) flat = flat[..300];
+
+            string line = $"MSG src={source} text=\"{flat}\"";
+            Write(line);
+            Timeline(line);
+            Logger.Info($"[{source}] {flat}", "MessageCapture");
         }
         catch (Exception e) { Utils.ThrowException(e); }
     }

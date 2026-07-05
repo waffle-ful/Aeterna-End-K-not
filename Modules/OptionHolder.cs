@@ -117,7 +117,9 @@ public static class Options
     public static bool AutoGMRotationRecompileOnClose;
     public static int AutoGMRotationIndex;
 
-    public static bool AutoGMRotationEnabled => EnableAutoGMRotation.GetBool() && AutoGMRotationCompiled.Count >= 2;
+    // EnableAutoGMRotation はオプション構築が終わるまで null。ロビー生成中に HUD 更新から
+    // 参照されると NRE を撒く(2026-07-05 ログの FixedUpdateCaller:247 / HudPatch:444 NRE 群)ため null ガードする。
+    public static bool AutoGMRotationEnabled => EnableAutoGMRotation != null && EnableAutoGMRotation.GetBool() && AutoGMRotationCompiled.Count >= 2;
 
     public enum AutoGMRoationSlotOptions
     {

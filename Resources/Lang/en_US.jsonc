@@ -12090,6 +12090,8 @@
   "CrashWatchdog": "Auto-Restart on Crash/Hang (Watchdog, Windows only)",
   "AutoRehost.Success": "The lobby was automatically re-hosted. A new room code has been issued.",
   "AutoRehost.GaveUp": "Auto re-host stopped after repeated failures. Please host manually.",
+  "AutoRehost.Restarting": "Cannot recover the connection. Restarting the game to re-host automatically.",
+  "AutoRehost.ManualRestartNeeded": "Cannot recover the connection automatically. Please restart the game.",
   "StreamerMode": "Streamer Mode (turn ON to enable all of the below at once)",
   "StreamerMode.Description": "Master switch for unattended 24/7 streaming. Turning this ON enables all four in one go: Auto Re-Host after kick/error, Auto-Restart on crash (Windows), Auto Re-Enter lobby after each game, and the YouTube live-chat overlay. One-way: turning it back OFF leaves the four as they are, so you can fine-tune them individually. Comment fetching still needs a stream URL set with /yt <url> in the lobby.",
   "StreamerMode.PromptBody": "Try the streamer features?\n\nThis enables auto re-host, crash recovery, auto re-match, and live-chat comment display all at once — perfect for unattended 24/7 streaming.",

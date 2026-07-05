@@ -73,6 +73,14 @@ public static class AutoRehost
             return;
         }
 
+        // 認証/サーバー死は同プロセスでの立て直し不能。AutoRestart が直接プロセス再起動へ回すので、
+        // ここで無駄な 3×リトライ (~145s) を始めない (穴1)。進行中の立て直しがあれば畳む。
+        if (AutoRestart.IsFatalConnectionDeath(reason))
+        {
+            if (_pending) Cancel($"fatal connection death ({reason}) -> handing to AutoRestart");
+            return;
+        }
+
         // 本物の kick では AmHost が切断処理中に倒れることがあるので、live AmHost に加えて
         // OnGameJoined で記録したラッチも見る (どちらかが「オンラインホストだった」と言えば対象)。
         bool wasHostingOnline = _hostingOnlineLatch
@@ -126,6 +134,19 @@ public static class AutoRehost
     {
         string baseP = OperatingSystem.IsAndroid() ? Main.DataPath : Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
         return Path.Combine(baseP, "EndKnot_Logs", "autohost_request.flag");
+    }
+
+    // AutoRestart (プロセス再起動エスカレーション) が終了前に置く。再起動後の OnMainMenuStart が
+    // これを見つけて前回設定で自動ホストする。番犬も再起動時に置くが、依存しないよう二重で保険する。
+    internal static void EnsureStartupHostMarker()
+    {
+        try
+        {
+            string marker = StartupHostMarkerPath();
+            Directory.CreateDirectory(Path.GetDirectoryName(marker));
+            File.WriteAllText(marker, DateTime.Now.ToString("o"));
+        }
+        catch (Exception e) { Logger.Warn($"EnsureStartupHostMarker failed: {e.Message}", "AutoRehost"); }
     }
 
     // 設定ロード完了 + クリーンなメニューになるまで待ってから起動時ホストを開始 (オプション未ロードレース回避)。
@@ -403,8 +424,12 @@ public static class AutoRehost
     {
         Logger.Warn($"Auto-rehost: reached max attempts ({MaxAttempts}); stopping", "AutoRehost");
         HealthLog.NoteAnom($"ANOM live kind=rehost stage=giveup attempts={MaxAttempts}");
-        ShowAutoDismissPopup(GetSafeString("AutoRehost.GaveUp", "Auto-rehost stopped after repeated failures."), 10f);
         ResetState();
+
+        // その場立て直しが尽きた = 認証/回線が死んでいる可能性が高い。番犬が居ればプロセスごと再起動して
+        // EOS ログイン+接続をやり直す (その場では戻れない「認証不能」からの唯一の回復パス)。
+        // 番犬が居なければ EscalateFromRehostGiveUp が手動再起動を促す通知だけ出す。
+        AutoRestart.EscalateFromRehostGiveUp();
     }
 
     private static void Cancel(string why)

@@ -185,6 +185,14 @@ public static class WatchdogLauncher
     // クラッシュ/強制終了では OnApplicationQuit が呼ばれないので、この経路は「意図的な終了」だけを拾う。
     public static void OnGameQuit()
     {
+        // AutoRestart 由来の終了 (プロセス再起動) は「意図的終了」ではない。ここで stop-flag を書くと
+        // 番犬が止まって蘇生されなくなるので、再起動進行中は番犬を触らない。
+        if (AutoRestart.RestartInProgress)
+        {
+            Logger.Info("Watchdog: game quitting for auto-restart; leaving watchdog running to relaunch", "WatchdogLauncher");
+            return;
+        }
+
         if (IsRunning) Stop();
     }
 

@@ -418,6 +418,12 @@ public class Main : BasePlugin
         EmbeddedDeps.Install();
         Instance = this;
 
+        // ホスト専用 mod として、ウィンドウが非フォーカス/最小化でもゲームループを止めない。
+        // これを怠ると配信者が OBS 等へ alt-tab した瞬間 FixedUpdate が停止し、
+        // サーバーへの ping が途切れて "Sent 6 pings that remote has not responded to" で切断される
+        // (2026-07-05 の Dossun テスト連続 DC / 24 秒フレームストール事件の一次対策)。
+        Application.runInBackground = true;
+
         //Client Options
         HideName = Config.Bind("Client Options", "Hide Game Code Name", "EndKnot");
         HideColor = Config.Bind("Client Options", "Hide Game Code Color", $"{ModColor}");
