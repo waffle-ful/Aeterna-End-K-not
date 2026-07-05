@@ -107,6 +107,10 @@ public static class AutoRestart
         // (OnMainMenuStart が一度で消費するので二重でも無害)。
         AutoRehost.EnsureStartupHostMarker();
 
+        // 意図的終了なので番犬に「grace/cooldown 窓を無視して即立て直せ」と伝える (穴2)。番犬が直前に
+        // 起動した直後だと grace(150s)/cooldown(120s) に落ちて再launchされず一時的に無人死する空振りを塞ぐ。
+        WatchdogLauncher.RequestRestart();
+
         ShowPopup(GetSafeString("AutoRehost.Restarting", "Cannot recover the connection. Restarting the game to re-host automatically."), QuitDelaySeconds + 2f);
 
         // ポップアップ表示とマーカー書き込みを着地させてから終了。番犬が「プロセス消失」を検知して立て直す。

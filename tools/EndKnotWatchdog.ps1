@@ -73,6 +73,9 @@ $WatchLog = Join-Path $HealthDir 'EndKnot-Watchdog.log'
 $MarkerFile = Join-Path $HealthDir 'autohost_request.flag'
 # ゲーム内トグル/正常終了フック（EndKnot 本体）がこのファイルを置くと、番犬は次の巡回で自滅する。
 $StopFlag = Join-Path $HealthDir 'watchdog-stop.flag'
+# AutoRestart が認証/回線死からの復帰でプロセスを終了する直前に置く「意図的な再起動要求」。
+# 番犬自身のブートループ抑止（grace/cooldown）の対象外なので、これを見たら窓を無視して即立て直す。
+$RestartFlag = Join-Path $HealthDir 'restart_request.flag'
 $script:RelaunchTimes = New-Object System.Collections.Generic.List[datetime]
 $script:LastRelaunch  = [datetime]::MinValue
 $script:GraceUntil    = [datetime]::MinValue
@@ -240,6 +243,34 @@ while ($true) {
 
     # 動いている AU の exe パスを随時更新（次回フォールバック用）
     if ($proc -and -not $script:CapturedExe) { try { $script:CapturedExe = $proc.Path } catch { } }
+
+    # --- ゲーム側からの意図的な再起動要求 (穴2) ---
+    # AutoRestart が認証/回線死からの復帰でプロセスを終了する直前に restart_request.flag を置く。
+    # これは番犬自身のブートループ抑止(grace/cooldown)の対象外の「明示要求」なので、それらの窓を無視して
+    # 即座に立て直す。さもないと直前に番犬が(再)起動していた場合、grace(150s)/cooldown(120s)の窓に落ちて
+    # 意図的終了後に一時的に無人死する空振りが起きる。per-hour 上限だけは最後の暴走ベルトとして残す。
+    if (Test-Path $RestartFlag) {
+        try { $reqAge = ((Get-Date) - (Get-Item $RestartFlag).LastWriteTime).TotalSeconds } catch { $reqAge = 99999 }
+        if ($reqAge -gt 300) {
+            # 古すぎる要求 = quit も hard-kill も着地しなかった異常系。誤発火防止に消して通常監視へ戻す。
+            try { Remove-Item $RestartFlag -Force -ErrorAction SilentlyContinue } catch { }
+            Write-WatchLog ("再起動要求フラグが古い({0:N0}s)ため無視して削除しました。" -f $reqAge) 'DarkGray'
+        } elseif ($proc) {
+            # プロセスがまだ生存 = 終了(quit)の着地待ち。フラグは残したまま待つ。
+            Write-WatchLog "再起動要求を検出。ゲーム終了の着地を待っています... (proc=生存)" 'Yellow'
+            continue
+        } else {
+            # プロセス消失を確認 = 意図的終了が完了 → grace/cooldown を飛ばして即立て直し。
+            try { Remove-Item $RestartFlag -Force -ErrorAction SilentlyContinue } catch { }
+            if (Test-RelaunchAllowed) {
+                Write-WatchLog "ゲームからの再起動要求により即座に立て直します (grace/cooldown をスキップ)。" 'Cyan'
+                Start-Au | Out-Null
+            } else {
+                Write-WatchLog "再起動要求ですが直近1時間の再起動が上限(${MaxRelaunchPerHour})に到達。暴走防止のため保留します。" 'Magenta'
+            }
+            continue
+        }
+    }
 
     # --- 正常表示 (コンソールには毎回、ファイルへは5分毎だけ書いてログを異常中心に保つ) ---
     if ($proc -and $health.Fresh) {

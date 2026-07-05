@@ -1,8 +1,6 @@
 using System;
 using System.IO;
 using System.Reflection;
-using EndKnot.Modules.CalamityMenu;
-using EndKnot.Patches.CalamityMenu;
 using InnerNet;
 using UnityEngine;
 
@@ -23,8 +21,10 @@ namespace EndKnot.Modules;
 //     (実機ログ: 19 Confirm に対し kick は 2 回だけ、いずれも前部屋 OnLobbyDestroyed の 1〜2 秒後の最初の Confirm)。
 //     よって AC 対策の本丸は **SETTLE GATE**: 完全にクリーンな MainMenu 状態が SettleSeconds 継続するまでホストしない。
 //     1 回だけ Confirm するのは念のためのベルト (本丸ではない)。
-//   ・作成は (1) mm.OpenCreateGame() を reflection で試行 (in-scene、scene-connect を避け MultiplayerMapIdFix も通らない)、
-//     ダメなら (2) 実機実績のある CalamityButtons.GoToMultiplayer フォールバック。
+//   ・作成は mm.OpenCreateGame() を reflection で呼ぶ (in-scene、scene-connect を避け MultiplayerMapIdFix も通らない)。
+//     開かなければ同じ OpenCreateGame を再試行する。OpenGameModeMenu 系のフォールバックは使わない —
+//     あれは create ダイアログではなく matchmaking へ遷移し、その残留状態が次試行の WaitClean を汚染して
+//     全滅させる (実機ログで確認)。開けないまま WatchdogSeconds を超えたら StartAttempt がクリーンにリトライ。
 //   ・リージョン/EHR 設定/ゲームモードは disconnect+ChangeScene を跨いで自動保持される (再適用不要)。MapId(Dleks=3)だけ
 //     フォールバック経路で MultiplayerMapIdFix にリセットされうるので、念のため捕捉して再適用する。
 public static class AutoRehost
@@ -55,7 +55,7 @@ public static class AutoRehost
     private const float PollInterval = 0.5f;
     private const float WatchdogSeconds = 45f;  // 新部屋に到達できなければリトライ
     private const float SettleSeconds = 3f;     // クリーン状態がこの秒数続いてからホスト (AC 対策の本丸)
-    private const float DialogTimeout = 8f;     // OpenCreateGame が効かない時にフォールバックへ
+    private const float DialogTimeout = 8f;     // ダイアログが開かなければ OpenCreateGame を再試行する猶予
     private const float StabilizeSeconds = 60f; // 新部屋がこの秒数もてば成功確定 → attempts リセット
     private const float SuccessPopupSeconds = 6f;
     // ===================
@@ -292,13 +292,14 @@ public static class AutoRehost
                 MainMenuManager mm = UnityEngine.Object.FindObjectOfType<MainMenuManager>();
                 if (mm == null) { _phase = Phase.WaitClean; _cleanSince = 0f; return; }
 
+                // OpenCreateGame() は in-scene で create ダイアログを開く (matchmaking scene-connect を回避)。
+                // ここで OpenGameModeMenu 系のフォールバックは使わない — あれは create ダイアログではなく
+                // matchmaking 画面へ遷移させ、その残留状態 (IsNotJoined=False) が次の試行の WaitClean を
+                // 永久に汚染して全滅させる (実機ログで確認済み)。開かなければ WaitDialog から再試行する。
                 if (TryOpenCreateGame(mm))
                     Logger.Info("Auto-rehost: opening create dialog via OpenCreateGame()", "AutoRehost");
                 else
-                {
-                    Logger.Info("Auto-rehost: OpenCreateGame unavailable; using GoToMultiplayer", "AutoRehost");
-                    GoToMultiplayer(mm);
-                }
+                    Logger.Warn("Auto-rehost: OpenCreateGame unavailable on this build; will keep retrying (no unsafe fallback)", "AutoRehost");
 
                 _openedAt = now;
                 _phase = Phase.WaitDialog;
@@ -317,13 +318,12 @@ public static class AutoRehost
                     return;
                 }
 
-                // OpenCreateGame が握り潰された場合 (Calamity の VanillaSuppressor 等) は実績ある経路へ
+                // ダイアログが開かなかった場合は OpenCreateGame を再試行する (in-scene なので状態を汚さない)。
+                // 全体は WatchdogSeconds で頭打ちされ、超えれば StartAttempt がクリーンにリトライする。
                 if (now - _openedAt > DialogTimeout)
                 {
-                    Logger.Warn("Auto-rehost: create dialog never activated; falling back to GoToMultiplayer", "AutoRehost");
-                    MainMenuManager mm = UnityEngine.Object.FindObjectOfType<MainMenuManager>();
-                    if (mm != null) GoToMultiplayer(mm);
-                    _openedAt = now; // ダイアログ待ちを再武装
+                    Logger.Warn("Auto-rehost: create dialog never activated; re-opening via OpenCreateGame", "AutoRehost");
+                    _phase = Phase.OpenDialog;
                 }
                 return;
             }
@@ -350,18 +350,6 @@ public static class AutoRehost
             Logger.Warn($"OpenCreateGame reflection failed: {ex.Message}", "AutoRehost");
             return false;
         }
-    }
-
-    private static void GoToMultiplayer(MainMenuManager mm)
-    {
-        try
-        {
-            if (CalamityMenuState.Active)
-                CalamityButtons.GoToMultiplayer(mm);
-            else
-                mm.OpenGameModeMenu();
-        }
-        catch (Exception ex) { Logger.Warn($"GoToMultiplayer failed: {ex.Message}", "AutoRehost"); }
     }
 
     // 切断前の MapId を再適用 (リージョン/設定/ゲームモードは自動保持だが、Dleks=3 だけはフォールバック経路で

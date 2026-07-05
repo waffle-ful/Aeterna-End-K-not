@@ -30,6 +30,7 @@ public static class WatchdogLauncher
     private static string ScriptPath => Path.Combine(BaseDir, "EndKnotWatchdog.ps1");
     private static string TaskXmlPath => Path.Combine(BaseDir, "watchdog-task.xml");
     private static string StopFlagPath => Path.Combine(BaseDir, "watchdog-stop.flag");
+    private static string RestartRequestPath => Path.Combine(BaseDir, "restart_request.flag");
 
     // 番犬は Windows の PowerShell + タスクスケジューラ前提。Android ホストには存在しない。
     public static bool IsSupported => OperatingSystem.IsWindows();
@@ -178,6 +179,23 @@ public static class WatchdogLauncher
             }
         }
         catch (Exception e) { Utils.ThrowException(e); }
+    }
+
+    // AutoRestart がプロセスを意図的に終了する直前に呼ぶ (穴2)。番犬はこのフラグを見ると、番犬自身の
+    // ブートループ抑止窓 (grace 150s / cooldown 120s) を無視して即座に立て直す。番犬が直前に (再)起動して
+    // いた場合、意図的終了がこれらの窓に落ちて再launchされず一時的に無人死する空振りを塞ぐ。
+    // (per-hour 上限だけは番犬側で最後の暴走ベルトとして残る)。
+    public static void RequestRestart()
+    {
+        if (!IsSupported) return;
+
+        try
+        {
+            Directory.CreateDirectory(BaseDir);
+            File.WriteAllText(RestartRequestPath, DateTime.Now.ToString("o"));
+            Logger.Info("Watchdog: restart-request flag written (relaunch will bypass grace/cooldown)", "WatchdogLauncher");
+        }
+        catch (Exception e) { Logger.Warn($"RequestRestart failed: {e.Message}", "WatchdogLauncher"); }
     }
 
     // ゲームの正常終了時(OnApplicationQuit)に呼ぶ。ユーザーが自分で×を押して終わったのに
