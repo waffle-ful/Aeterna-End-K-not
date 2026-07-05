@@ -5,7 +5,9 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using HarmonyLib;
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
+using InnerNet;
 using TMPro;
 using UnityEngine;
 
@@ -167,6 +169,91 @@ public static class ClaudeBridge
         {
             try { ExecuteClick(directive[6..].Trim()); }
             catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR click failed"); }
+            return;
+        }
+
+        // Layer A: mod オプション操作(OptionItem ツリー直アクセス。/changesetting は vanilla 設定専用)。
+        if (directive.StartsWith("getopt ", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecuteGetOpt(directive[7..].Trim()); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR getopt failed"); }
+            return;
+        }
+
+        if (directive.StartsWith("setopt ", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecuteSetOpt(directive[7..].Trim()); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR setopt failed"); }
+            return;
+        }
+
+        // Layer A: 役職の事前指定。翻訳名パース(/setrole)を経由せず CustomRoles enum 名で直接書く。
+        if (directive.StartsWith("forcerole ", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecuteForceRole(directive[10..].Trim()); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR forcerole failed"); }
+            return;
+        }
+
+        // Layer B: カウントダウン無しの即時ゲーム開始。
+        if (directive.Equals("start", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecuteStart(); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR start failed"); }
+            return;
+        }
+
+        // Layer C: ホストの TP と HUD アクションボタン押下。
+        if (directive.StartsWith("tp ", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecuteTp(directive[3..].Trim()); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR tp failed"); }
+            return;
+        }
+
+        if (directive.StartsWith("use ", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecuteUse(directive[4..].Trim()); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR use failed"); }
+            return;
+        }
+
+        // Layer C2: 歩行移動。tp と違い通常の移動パケット(client-authoritative)を出すので、
+        // 公式サーバーの anticheat が見るものと同じ「本物の挙動」でマルチプレイ in-task テストができる。
+        if (directive.StartsWith("walk ", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecuteWalk(directive[5..].Trim()); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR walk failed"); }
+            return;
+        }
+
+        // Layer C3: 会議投票。
+        if (directive.StartsWith("vote ", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecuteVote(directive[5..].Trim()); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR vote failed"); }
+            return;
+        }
+
+        // Layer C4: 実チャット送信(SYS のホストローカル表示でなく、他クライアントにも見える通常チャット)。
+        if (directive.StartsWith("chat ", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecuteChat(directive[5..].Trim()); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR chat failed"); }
+            return;
+        }
+
+        // Layer D: 直近のエラー/例外を out.log へ転写(in-proc リングバッファ)。
+        if (directive.Equals("errors", StringComparison.OrdinalIgnoreCase) || directive.StartsWith("errors ", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecuteErrors(directive.Length > 6 ? directive[7..].Trim() : ""); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR errors failed"); }
+            return;
+        }
+
+        if (directive.Equals("help", StringComparison.OrdinalIgnoreCase))
+        {
+            WriteOut("HELP directives: state | screenshot | click <h|label:x> | getopt <pattern> | setopt <name> <idx|on|off|~real> | forcerole <id|host|clear> [EnumName] | start | tp <x> <y> | tp <playerId> | walk <x> <y> | walk <playerId> | walk stop | vote <playerId|skip> | chat <text> | use <kill|vent|pet|ability|report|sabotage> | errors [n] | /<chatcommand>");
             return;
         }
 
@@ -436,13 +523,19 @@ public static class ClaudeBridge
         sb.Append('{');
         sb.Append("\"ts\":").Append(Utils.TimeStamp.ToString(CultureInfo.InvariantCulture)).Append(',');
         sb.Append("\"phase\":").Append(JStr(SafeState())).Append(',');
+        sb.Append("\"gameMode\":").Append(JStr(SafeGameMode())).Append(',');
+        sb.Append("\"errorsTotal\":").Append(TotalErrorsRecorded).Append(',');
         sb.Append("\"local\":"); AppendLocal(sb); sb.Append(',');
         sb.Append("\"players\":["); int np = AppendPlayers(sb); sb.Append("],");
+        sb.Append("\"cnos\":["); int nc = AppendCnos(sb); sb.Append("],");
+        sb.Append("\"hud\":"); AppendHud(sb); sb.Append(',');
+        sb.Append("\"walk\":"); AppendWalk(sb); sb.Append(',');
+        sb.Append("\"lastDisconnect\":"); AppendLastDisconnect(sb); sb.Append(',');
         sb.Append("\"ui\":["); int nb = AppendButtons(sb, buttons); sb.Append(']');
         sb.Append('}');
 
         File.WriteAllText(_statePath, sb.ToString());
-        WriteOut($"OK state ({np} players, {nb} buttons) -> claude-state.json");
+        WriteOut($"OK state ({np} players, {nc} cnos, {nb} buttons) -> claude-state.json");
     }
 
     private static void AppendLocal(StringBuilder sb)
@@ -492,24 +585,124 @@ public static class ClaudeBridge
         return count;
     }
 
+    // CNO 観測: 「CNO が host 側で spawn したか」の機械判定用。
+    // Sprite は private なので reflection で長さだけ覗く(state 呼び出し時のみ、常時コストなし)。
+    private static readonly System.Reflection.FieldInfo CnoSpriteField =
+        typeof(CustomNetObject).GetField("Sprite", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+    private static int AppendCnos(StringBuilder sb)
+    {
+        List<CustomNetObject> all;
+        try { all = [.. CustomNetObject.AllObjects]; } catch { return 0; }
+
+        const int cap = 100;
+        int count = 0;
+
+        foreach (CustomNetObject cno in all)
+        {
+            if (count >= cap) break;
+            if (cno == null) continue;
+
+            try
+            {
+                int spriteLen = -1;
+                try { spriteLen = (CnoSpriteField?.GetValue(cno) as string)?.Length ?? -1; } catch { }
+
+                bool hasPc = false;
+                uint netId = 0;
+                byte pcId = 0;
+
+                try
+                {
+                    hasPc = cno.playerControl;
+                    if (hasPc)
+                    {
+                        netId = cno.playerControl.NetId;
+                        pcId = cno.playerControl.PlayerId;
+                    }
+                }
+                catch { }
+
+                if (count > 0) sb.Append(',');
+                sb.Append('{');
+                sb.Append("\"type\":").Append(JStr(cno.GetType().Name)).Append(',');
+                sb.Append("\"pos\":[").Append(F(cno.Position.x)).Append(',').Append(F(cno.Position.y)).Append("],");
+                sb.Append("\"alive\":").Append(hasPc ? "true" : "false").Append(',');
+                sb.Append("\"netId\":").Append(netId).Append(',');
+                sb.Append("\"playerId\":").Append(pcId).Append(',');
+                sb.Append("\"spriteLen\":").Append(spriteLen);
+                sb.Append('}');
+                count++;
+            }
+            catch { }
+        }
+
+        return count;
+    }
+
+    private static void AppendWalk(StringBuilder sb)
+    {
+        if (_walkTarget is not { } t) { sb.Append("null"); return; }
+        sb.Append("{\"target\":[").Append(F(t.x)).Append(',').Append(F(t.y)).Append("],\"elapsed\":").Append(F(_walkTotalTime)).Append('}');
+    }
+
+    private static void AppendLastDisconnect(StringBuilder sb)
+    {
+        if (_lastDisconnect == null) { sb.Append("null"); return; }
+        sb.Append("{\"reason\":").Append(JStr(_lastDisconnect)).Append(",\"ts\":").Append(_lastDisconnectTs.ToString(CultureInfo.InvariantCulture)).Append('}');
+    }
+
+    private static void AppendHud(StringBuilder sb)
+    {
+        if (!HudManager.InstanceExists) { sb.Append("null"); return; }
+
+        HudManager hud = HudManager.Instance;
+
+        sb.Append('{');
+        AppendHudButton(sb, "kill", hud.KillButton); sb.Append(',');
+        AppendHudButton(sb, "vent", hud.ImpostorVentButton); sb.Append(',');
+        AppendHudButton(sb, "pet", hud.PetButton); sb.Append(',');
+        AppendHudButton(sb, "ability", hud.AbilityButton); sb.Append(',');
+        AppendHudButton(sb, "report", hud.ReportButton); sb.Append(',');
+        AppendHudButton(sb, "sabotage", hud.SabotageButton);
+        sb.Append('}');
+    }
+
+    private static void AppendHudButton(StringBuilder sb, string key, ActionButton btn)
+    {
+        bool usable = false;
+        try { usable = btn && btn.isActiveAndEnabled; } catch { }
+        sb.Append('"').Append(key).Append("\":").Append(usable ? "true" : "false");
+    }
+
     private static int AppendButtons(StringBuilder sb, List<BtnRec> buttons)
     {
+        // Menu シーン等はボタン総数が cap を超える(2026-07-05 実測 250+)。ナイーブに先頭から
+        // 出すと active なボタン(=click 対象)が JSON から切り落とされるため、active を先に出す。
+        // handle は全数ソート済みリストで採番済みなので、出力順を変えても click との対応は不変。
         const int cap = 250;
         int count = 0;
 
-        for (int i = 0; i < buttons.Count && count < cap; i++)
+        for (int pass = 0; pass < 2 && count < cap; pass++)
         {
-            BtnRec b = buttons[i];
-            if (count > 0) sb.Append(',');
+            bool wantActive = pass == 0;
 
-            sb.Append('{');
-            sb.Append("\"h\":").Append(JStr(b.Handle)).Append(',');
-            sb.Append("\"name\":").Append(JStr(b.Name)).Append(',');
-            sb.Append("\"label\":").Append(JStr(b.Label)).Append(',');
-            sb.Append("\"active\":").Append(b.Active ? "true" : "false").Append(',');
-            sb.Append("\"pos\":[").Append(F(b.X)).Append(',').Append(F(b.Y)).Append(']');
-            sb.Append('}');
-            count++;
+            for (int i = 0; i < buttons.Count && count < cap; i++)
+            {
+                BtnRec b = buttons[i];
+                if (b.Active != wantActive) continue;
+
+                if (count > 0) sb.Append(',');
+
+                sb.Append('{');
+                sb.Append("\"h\":").Append(JStr(b.Handle)).Append(',');
+                sb.Append("\"name\":").Append(JStr(b.Name)).Append(',');
+                sb.Append("\"label\":").Append(JStr(b.Label)).Append(',');
+                sb.Append("\"active\":").Append(b.Active ? "true" : "false").Append(',');
+                sb.Append("\"pos\":[").Append(F(b.X)).Append(',').Append(F(b.Y)).Append(']');
+                sb.Append('}');
+                count++;
+            }
         }
 
         return count;
@@ -550,11 +743,605 @@ public static class ClaudeBridge
         }
     }
 
+    // ── Layer A: mod オプション操作 ────────────────────────────────────
+
+    // OptionItem の実 SetValue は「選択肢 index」を取る。ここでは index を主インターフェースにし、
+    // 実値指定は `~30` / `~0.5` 形式(Rule.GetNearestIndex 変換)だけサポートする。
+    private static int MaxIndexOf(OptionItem opt)
+    {
+        return opt switch
+        {
+            BooleanOptionItem => 1,
+            StringOptionItem s => Math.Max(0, s.Selections.Count - 1),
+            IntegerOptionItem i => (i.Rule.MaxValue - i.Rule.MinValue) / i.Rule.Step,
+            FloatOptionItem f => (int)((f.Rule.MaxValue - f.Rule.MinValue) / f.Rule.Step),
+            _ => int.MaxValue
+        };
+    }
+
+    private static void ExecuteGetOpt(string pattern)
+    {
+        if (pattern.Length < 2) { WriteOut("ERR getopt pattern too short (min 2 chars)"); return; }
+
+        List<OptionItem> matches = OptionItem.AllOptions
+            .Where(o => o.Name != null && o.Name.Contains(pattern, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        const int cap = 120;
+        var sb = new StringBuilder(8192);
+        sb.Append('{');
+        sb.Append("\"ts\":").Append(Utils.TimeStamp.ToString(CultureInfo.InvariantCulture)).Append(',');
+        sb.Append("\"pattern\":").Append(JStr(pattern)).Append(',');
+        sb.Append("\"total\":").Append(matches.Count).Append(',');
+        sb.Append("\"options\":[");
+
+        for (int i = 0; i < matches.Count && i < cap; i++)
+        {
+            OptionItem o = matches[i];
+            if (i > 0) sb.Append(',');
+
+            sb.Append('{');
+            sb.Append("\"id\":").Append(o.Id).Append(',');
+            sb.Append("\"name\":").Append(JStr(o.Name)).Append(',');
+            sb.Append("\"type\":").Append(JStr(o.GetType().Name.Replace("OptionItem", ""))).Append(',');
+            sb.Append("\"index\":").Append(o.CurrentValue).Append(',');
+
+            string display;
+            try { display = o.GetString(); } catch { display = "?"; }
+            sb.Append("\"value\":").Append(JStr(CleanLabel(display))).Append(',');
+
+            switch (o)
+            {
+                case StringOptionItem s:
+                    sb.Append("\"selections\":[");
+                    for (int k = 0; k < s.Selections.Count; k++)
+                    {
+                        if (k > 0) sb.Append(',');
+                        sb.Append(JStr(CleanLabel(s.Selections[k])));
+                    }
+                    sb.Append("],");
+                    break;
+                case IntegerOptionItem n:
+                    sb.Append("\"min\":").Append(n.Rule.MinValue).Append(",\"max\":").Append(n.Rule.MaxValue).Append(",\"step\":").Append(n.Rule.Step).Append(',');
+                    break;
+                case FloatOptionItem f:
+                    sb.Append("\"min\":").Append(F(f.Rule.MinValue)).Append(",\"max\":").Append(F(f.Rule.MaxValue)).Append(",\"step\":").Append(F(f.Rule.Step)).Append(',');
+                    break;
+            }
+
+            sb.Append("\"tab\":").Append(JStr(o.Tab.ToString())).Append(',');
+            sb.Append("\"parent\":").Append(JStr(o.Parent?.Name ?? ""));
+            sb.Append('}');
+        }
+
+        sb.Append("]}");
+
+        string optsPath = Path.Combine(_dir, "claude-opts.json");
+        File.WriteAllText(optsPath, sb.ToString());
+        WriteOut($"OK getopt {Math.Min(matches.Count, cap)}/{matches.Count} matches -> claude-opts.json");
+    }
+
+    private static void ExecuteSetOpt(string rest)
+    {
+        int sp = rest.LastIndexOf(' ');
+        if (sp <= 0) { WriteOut("ERR setopt usage: setopt <name> <index|on|off|~realValue>"); return; }
+
+        string name = rest[..sp].Trim();
+        string valueArg = rest[(sp + 1)..].Trim();
+
+        // 完全一致優先、なければ一意な部分一致で解決。
+        List<OptionItem> exact = OptionItem.AllOptions.Where(o => string.Equals(o.Name, name, StringComparison.OrdinalIgnoreCase)).ToList();
+
+        if (exact.Count == 0)
+        {
+            List<OptionItem> partial = OptionItem.AllOptions.Where(o => o.Name != null && o.Name.Contains(name, StringComparison.OrdinalIgnoreCase)).ToList();
+
+            switch (partial.Count)
+            {
+                case 0:
+                    WriteOut($"ERR setopt no option named: {name}");
+                    return;
+                case 1:
+                    exact = partial;
+                    break;
+                default:
+                    WriteOut($"ERR setopt ambiguous ({partial.Count}): {string.Join(", ", partial.Take(5).Select(o => o.Name))}{(partial.Count > 5 ? ", ..." : "")}");
+                    return;
+            }
+        }
+
+        OptionItem opt = exact[0];
+
+        // PresetOptionItem は全インスタンスが Name=="Preset" で、SetValue が SwitchPreset(全オプション
+        // Refresh + 全体同期)に化ける。単一オプション操作の意図と食い違うので明示ブロック。
+        // TextOptionItem は見出し行で値を持たないためこれも弾く。
+        if (opt is PresetOptionItem) { WriteOut("ERR setopt refuses Preset (would switch ALL options to another preset)"); return; }
+        if (opt is TextOptionItem) { WriteOut($"ERR setopt {opt.Name} is a text header, not a value option"); return; }
+
+        int index;
+
+        if (valueArg.Equals("on", StringComparison.OrdinalIgnoreCase) || valueArg.Equals("true", StringComparison.OrdinalIgnoreCase))
+            index = 1;
+        else if (valueArg.Equals("off", StringComparison.OrdinalIgnoreCase) || valueArg.Equals("false", StringComparison.OrdinalIgnoreCase))
+            index = 0;
+        else if (valueArg.StartsWith('~'))
+        {
+            string real = valueArg[1..];
+
+            switch (opt)
+            {
+                case IntegerOptionItem n when int.TryParse(real, NumberStyles.Integer, CultureInfo.InvariantCulture, out int iv):
+                    index = n.Rule.GetNearestIndex(iv);
+                    break;
+                case FloatOptionItem f when float.TryParse(real, NumberStyles.Float, CultureInfo.InvariantCulture, out float fv):
+                    index = f.Rule.GetNearestIndex(fv);
+                    break;
+                default:
+                    WriteOut($"ERR setopt ~real only valid for Integer/Float options: {opt.Name} is {opt.GetType().Name}");
+                    return;
+            }
+        }
+        else if (!int.TryParse(valueArg, NumberStyles.Integer, CultureInfo.InvariantCulture, out index))
+        {
+            WriteOut($"ERR setopt bad value: {valueArg}");
+            return;
+        }
+
+        index = Math.Clamp(index, 0, MaxIndexOf(opt));
+
+        int before = opt.CurrentValue;
+        opt.SetValue(index); // save + modded クライアントへの sync 込み(OptionItem.SetValue 既定経路)
+
+        string display;
+        try { display = opt.GetString(); } catch { display = "?"; }
+
+        WriteOut($"OK setopt {opt.Name}: {before} -> {index} ({CleanLabel(display)})");
+    }
+
+    private static void ExecuteForceRole(string rest)
+    {
+        // clear はローカル状態(Main.SetRoles/SetAddOns)の掃除だけなので host 不要 — メニューからでも通す
+        // (実機テストで「テスト後の掃除がメニューに戻ってからだと弾かれる」ことが判明した対処)。
+        if (rest.Equals("clear", StringComparison.OrdinalIgnoreCase))
+        {
+            int n = Main.SetRoles.Count + Main.SetAddOns.Count;
+            Main.SetRoles.Clear();
+            Main.SetAddOns.Clear();
+            WriteOut($"OK forcerole cleared {n} presets");
+            return;
+        }
+
+        if (AmongUsClient.Instance == null || !AmongUsClient.Instance.AmHost)
+        {
+            WriteOut("ERR not host");
+            return;
+        }
+
+        string[] parts = rest.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 2) { WriteOut("ERR forcerole usage: forcerole <playerId|host|clear> <CustomRolesEnumName>"); return; }
+
+        byte targetId;
+
+        if (parts[0].Equals("host", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!PlayerControl.LocalPlayer) { WriteOut("ERR no local player"); return; }
+            targetId = PlayerControl.LocalPlayer.PlayerId;
+        }
+        else if (!byte.TryParse(parts[0], out targetId))
+        {
+            WriteOut($"ERR forcerole bad player id: {parts[0]}");
+            return;
+        }
+
+        if (!Enum.TryParse(parts[1], true, out CustomRoles role))
+        {
+            WriteOut($"ERR forcerole unknown role enum: {parts[1]}");
+            return;
+        }
+
+        if (role.IsAdditionRole())
+        {
+            if (!Main.SetAddOns.ContainsKey(targetId)) Main.SetAddOns[targetId] = [];
+
+            if (Main.SetAddOns[targetId].Contains(role))
+            {
+                Main.SetAddOns[targetId].Remove(role);
+                WriteOut($"OK forcerole addon removed: {role} from {targetId}");
+            }
+            else
+            {
+                Main.SetAddOns[targetId].Add(role);
+                WriteOut($"OK forcerole addon added: {role} to {targetId}");
+            }
+        }
+        else
+        {
+            Main.SetRoles[targetId] = role;
+            WriteOut($"OK forcerole {targetId} = {role} (applies at next game start)");
+        }
+    }
+
+    // ── Layer B: ゲームフロー ─────────────────────────────────────────
+
+    private static void ExecuteStart()
+    {
+        if (AmongUsClient.Instance == null || !AmongUsClient.Instance.AmHost) { WriteOut("ERR not host"); return; }
+        if (!GameStates.IsLobby) { WriteOut("ERR start only works in lobby"); return; }
+        if (!GameStartManager.InstanceExists) { WriteOut("ERR no GameStartManager"); return; }
+
+        GameStartManager gsm = GameStartManager.Instance;
+
+        if (gsm.startState == GameStartManager.StartingStates.Countdown)
+        {
+            gsm.countDownTimer = 0; // 既にカウントダウン中ならスキップだけ
+            WriteOut("OK start (countdown skipped)");
+            return;
+        }
+
+        gsm.BeginGame();
+        gsm.countDownTimer = 0;
+        WriteOut("OK start");
+    }
+
+    // ── Layer C: TP / HUD アクションボタン ─────────────────────────────
+
+    private static void ExecuteTp(string rest)
+    {
+        PlayerControl lp = PlayerControl.LocalPlayer;
+        if (!lp) { WriteOut("ERR no local player"); return; }
+        if (AmongUsClient.Instance == null || !AmongUsClient.Instance.AmHost) { WriteOut("ERR not host"); return; }
+
+        string[] parts = rest.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        Vector2 dest;
+
+        if (parts.Length == 1 && byte.TryParse(parts[0], out byte pid))
+        {
+            PlayerControl target = Utils.GetPlayerById(pid);
+            if (!target) { WriteOut($"ERR tp no player with id {pid}"); return; }
+            dest = target.GetTruePosition();
+        }
+        else if (parts.Length == 2 &&
+                 float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float x) &&
+                 float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float y))
+            dest = new(x, y);
+        else
+        {
+            WriteOut("ERR tp usage: tp <x> <y> | tp <playerId>");
+            return;
+        }
+
+        bool ok = Utils.TP(lp.NetTransform, dest, true);
+        WriteOut(ok ? $"OK tp -> [{F(dest.x)}, {F(dest.y)}]" : "ERR tp rejected (state check)");
+    }
+
+    private static void ExecuteUse(string button)
+    {
+        if (!HudManager.InstanceExists) { WriteOut("ERR no HudManager"); return; }
+
+        HudManager hud = HudManager.Instance;
+
+        ActionButton target = button.ToLowerInvariant() switch
+        {
+            "kill" => hud.KillButton,
+            "vent" => hud.ImpostorVentButton,
+            "pet" => hud.PetButton,
+            "ability" => hud.AbilityButton,
+            "report" => hud.ReportButton,
+            "sabotage" => hud.SabotageButton,
+            _ => null
+        };
+
+        if (target == null) { WriteOut($"ERR use unknown button: {button} (kill|vent|pet|ability|report|sabotage)"); return; }
+        if (!target.isActiveAndEnabled) { WriteOut($"ERR use {button}: button inactive"); return; }
+
+        target.DoClick();
+        WriteOut($"OK use {button}");
+    }
+
+    // ── Layer C2: 歩行移動 ─────────────────────────────────────────────
+    // tp(ホスト権限ワープ)と違い、PlayerPhysics.FixedUpdate の Postfix から毎物理 tick
+    // SetNormalizedVelocity で速度を上書きする = vanilla の歩行と同じ client-authoritative な
+    // 移動パケットが出る。anticheat テスト(公式サーバーでキックされないか)はこちらを使う。
+    // 経路探索はしない(壁に当たったら stuck 検知で自動停止して報告する)。
+
+    private static Vector2? _walkTarget;
+    private static float _walkBestDist;
+    private static float _walkNoProgressTime;
+    private static float _walkTotalTime;
+
+    private const float WalkArriveDist = 0.3f;       // 到着判定
+    private const float WalkNoProgressLimit = 5f;    // 距離が縮まらないまま経過したら stuck
+    private const float WalkHardTimeLimit = 60f;     // 全体の打ち切り
+
+    private static void ExecuteWalk(string rest)
+    {
+        PlayerControl lp = PlayerControl.LocalPlayer;
+        if (!lp) { WriteOut("ERR no local player"); return; }
+
+        if (rest.Equals("stop", StringComparison.OrdinalIgnoreCase))
+        {
+            bool was = _walkTarget.HasValue;
+            StopWalk(true);
+            WriteOut(was ? "OK walk stopped" : "OK walk (was not walking)");
+            return;
+        }
+
+        string[] parts = rest.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        Vector2 dest;
+
+        if (parts.Length == 1 && byte.TryParse(parts[0], out byte pid))
+        {
+            PlayerControl target = Utils.GetPlayerById(pid);
+            if (!target) { WriteOut($"ERR walk no player with id {pid}"); return; }
+            dest = target.GetTruePosition();
+        }
+        else if (parts.Length == 2 &&
+                 float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float x) &&
+                 float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float y))
+            dest = new(x, y);
+        else
+        {
+            WriteOut("ERR walk usage: walk <x> <y> | walk <playerId> | walk stop");
+            return;
+        }
+
+        _walkTarget = dest;
+        _walkBestDist = float.MaxValue;
+        _walkNoProgressTime = 0f;
+        _walkTotalTime = 0f;
+        WriteOut($"OK walk -> [{F(dest.x)}, {F(dest.y)}] (dist {F(Vector2.Distance(lp.GetTruePosition(), dest))})");
+    }
+
+    private static void StopWalk(bool zeroVelocity)
+    {
+        _walkTarget = null;
+        if (!zeroVelocity) return;
+
+        try
+        {
+            PlayerControl lp = PlayerControl.LocalPlayer;
+            if (lp && lp.MyPhysics) lp.MyPhysics.SetNormalizedVelocity(Vector2.zero);
+        }
+        catch { }
+    }
+
+    // ClaudeBridgeWalkPatch(毎物理 tick)から呼ばれる。先頭の _walkTarget null チェックで
+    // 非使用時のコストは実質ゼロ。到着/stuck/timeout の終端イベントだけ out.log に書く。
+    internal static void OnPlayerPhysicsFixedUpdate(PlayerPhysics physics)
+    {
+        if (_walkTarget == null) return;
+        if (Main.EnableClaudeBridge is not { Value: true }) { _walkTarget = null; return; }
+
+        try
+        {
+            PlayerControl lp = PlayerControl.LocalPlayer;
+            if (!lp || !physics || physics.myPlayer != lp) return; // 自分の物理更新のときだけ動かす
+
+            if (MeetingHud.Instance || ExileController.Instance)
+            {
+                StopWalk(false);
+                WriteOut("ERR walk canceled (meeting)");
+                return;
+            }
+
+            Vector2 pos = lp.GetTruePosition();
+            Vector2 dest = _walkTarget.Value;
+            float dist = Vector2.Distance(pos, dest);
+
+            if (dist <= WalkArriveDist)
+            {
+                StopWalk(true);
+                WriteOut($"OK walk arrived [{F(pos.x)}, {F(pos.y)}]");
+                return;
+            }
+
+            float dt = Time.fixedDeltaTime;
+            _walkTotalTime += dt;
+
+            if (dist < _walkBestDist - 0.05f)
+            {
+                _walkBestDist = dist;
+                _walkNoProgressTime = 0f;
+            }
+            else
+                _walkNoProgressTime += dt;
+
+            if (_walkNoProgressTime > WalkNoProgressLimit)
+            {
+                StopWalk(true);
+                WriteOut($"ERR walk stuck at [{F(pos.x)}, {F(pos.y)}] (remaining {F(dist)})");
+                return;
+            }
+
+            if (_walkTotalTime > WalkHardTimeLimit)
+            {
+                StopWalk(true);
+                WriteOut($"ERR walk timeout at [{F(pos.x)}, {F(pos.y)}] (remaining {F(dist)})");
+                return;
+            }
+
+            if (!lp.CanMove || lp.inVent) return; // 移動不能中は待機(縮まらなければ stuck 判定が拾う)
+
+            physics.SetNormalizedVelocity((dest - pos).normalized);
+        }
+        catch (Exception e)
+        {
+            _walkTarget = null;
+            Utils.ThrowException(e);
+        }
+    }
+
+    // ── Layer C3: 会議投票 ─────────────────────────────────────────────
+
+    private static void ExecuteVote(string rest)
+    {
+        MeetingHud meeting = MeetingHud.Instance;
+        if (!meeting) { WriteOut("ERR vote no meeting"); return; }
+
+        PlayerControl lp = PlayerControl.LocalPlayer;
+        if (!lp) { WriteOut("ERR no local player"); return; }
+
+        byte suspect;
+
+        if (rest.Equals("skip", StringComparison.OrdinalIgnoreCase))
+            suspect = 253; // vanilla の skip vote id
+        else if (!byte.TryParse(rest, out suspect))
+        {
+            WriteOut("ERR vote usage: vote <playerId|skip>");
+            return;
+        }
+
+        try
+        {
+            if (meeting.DidVote(lp.PlayerId)) { WriteOut("ERR vote already voted"); return; }
+        }
+        catch { }
+
+        // CmdCastVote はホストなら CastVote 直行 = EHR の MeetingHudCastVotePatch(OnVote 等)を通る通常経路。
+        // ただし CancelsVote 系役職/死亡ガードは Prefix 内でサイレントに投票を握り潰すので、
+        // 呼び出し後に DidVote で「実際に反映されたか」を検証してから OK/ERR を出し分ける。
+        meeting.CmdCastVote(lp.PlayerId, suspect);
+
+        bool landed;
+        try { landed = meeting.DidVote(lp.PlayerId); }
+        catch { landed = true; } // 検証不能時は楽観扱い(SYS 写しで役職側の拒否メッセージは別途見える)
+
+        string targetStr = suspect == 253 ? "skip" : suspect.ToString();
+        WriteOut(landed ? $"OK vote {targetStr}" : $"ERR vote {targetStr} silently canceled (role logic / dead)");
+    }
+
+    // ── Layer C4: 実チャット ───────────────────────────────────────────
+
+    private static void ExecuteChat(string text)
+    {
+        if (text.Length == 0) { WriteOut("ERR chat empty"); return; }
+
+        PlayerControl lp = PlayerControl.LocalPlayer;
+        if (!lp) { WriteOut("ERR no local player"); return; }
+
+        if (text.Length > 100) text = text[..100]; // vanilla チャット長制限側で切られる前に丸める
+
+        bool ok = lp.RpcSendChat(text);
+        WriteOut(ok ? "OK chat" : "ERR chat rejected");
+    }
+
+    // ── 接続イベント(キック検知)──────────────────────────────────────
+    // HealthLogDisconnectPatch / OnPlayerJoinedPatch / OnPlayerLeftPatch から呼ばれる軽量フック。
+    // 「ホストがキックされたか」「Android サブ端末が落ちたか」をポーリング無しの push 通知で判定する。
+
+    private static string _lastDisconnect;
+    private static long _lastDisconnectTs;
+
+    public static void OnDisconnect(DisconnectReasons reason, string stringReason)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        if (Main.EnableClaudeBridge is not { Value: true }) return;
+
+        EnsureInit();
+        if (_dir == null) return;
+
+        try
+        {
+            string str = (stringReason ?? string.Empty).Replace('\r', ' ').Replace('\n', ' ').Trim();
+            _lastDisconnect = str.Length > 0 ? $"{reason} ({str})" : reason.ToString();
+            _lastDisconnectTs = Utils.TimeStamp;
+            StopWalk(false); // 切断後に velocity を触らない
+            WriteOut($"DISCONNECTED {_lastDisconnect}");
+        }
+        catch { }
+    }
+
+    public static void OnPlayerJoined(ClientData client)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        if (Main.EnableClaudeBridge is not { Value: true }) return;
+
+        EnsureInit();
+        if (_dir == null) return;
+
+        try
+        {
+            string name = client?.PlayerName ?? "?";
+            WriteOut($"PLAYERJOINED {name} (client {client?.Id ?? -1})");
+        }
+        catch { }
+    }
+
+    public static void OnPlayerLeft(ClientData data, DisconnectReasons reason)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        if (Main.EnableClaudeBridge is not { Value: true }) return;
+
+        EnsureInit();
+        if (_dir == null) return;
+
+        try
+        {
+            var pid = 255;
+            try { if (data != null && data.Character) pid = data.Character.PlayerId; }
+            catch { }
+
+            WriteOut($"PLAYERLEFT {(pid == 255 ? "?" : pid.ToString())} {data?.PlayerName ?? "?"} ({reason})");
+        }
+        catch { }
+    }
+
+    // ── Layer D: エラーリングバッファ ─────────────────────────────────
+
+    private const int ErrorRingCap = 50;
+    private static readonly Queue<string> ErrorRing = new(ErrorRingCap);
+    private static int TotalErrorsRecorded;
+
+    // Logger(Debugger.cs)の Error/Fatal 経路から呼ばれる。ファイル I/O 無し・超軽量必須。
+    public static void RecordError(string tag, string text)
+    {
+        if (Main.EnableClaudeBridge is not { Value: true }) return;
+
+        try
+        {
+            string t = (text ?? "").Replace("\r\n", "\n").Replace('\r', '\n').Replace("\n", "\\n");
+            if (t.Length > 500) t = t[..500] + "...";
+
+            lock (ErrorRing)
+            {
+                TotalErrorsRecorded++;
+                if (ErrorRing.Count >= ErrorRingCap) ErrorRing.Dequeue();
+                ErrorRing.Enqueue($"[{Utils.TimeStamp}] [{tag}] {t}");
+            }
+        }
+        catch { }
+    }
+
+    private static void ExecuteErrors(string arg)
+    {
+        int n = 10;
+        if (arg.Length > 0 && int.TryParse(arg, out int parsed)) n = Math.Clamp(parsed, 1, ErrorRingCap);
+
+        string[] snapshot;
+        int total;
+
+        lock (ErrorRing)
+        {
+            snapshot = ErrorRing.ToArray();
+            total = TotalErrorsRecorded;
+        }
+
+        WriteOut($"OK errors ({total} total since launch, showing last {Math.Min(n, snapshot.Length)})");
+        for (int i = Math.Max(0, snapshot.Length - n); i < snapshot.Length; i++) WriteOut($"E {snapshot[i]}");
+    }
+
     // ── safe accessors / JSON helpers ─────────────────────────────────
 
     private static string SafeState()
     {
         try { string s = HealthLog.GetState(); return string.IsNullOrEmpty(s) ? "?" : s; }
+        catch { return "?"; }
+    }
+
+    private static string SafeGameMode()
+    {
+        try { return Options.CurrentGameMode.ToString(); }
         catch { return "?"; }
     }
 
@@ -666,5 +1453,16 @@ public static class ClaudeBridge
             File.AppendAllText(_outPath, $"[{Utils.TimeStamp}] {line}\n");
         }
         catch { }
+    }
+}
+
+// walk ディレクティブの駆動源。vanilla が入力から velocity を書いた「後」に上書きするため Postfix。
+// FixedUpdate は private なので nameof でなく文字列指定。
+[HarmonyPatch(typeof(PlayerPhysics), "FixedUpdate")]
+internal static class ClaudeBridgeWalkPatch
+{
+    public static void Postfix(PlayerPhysics __instance)
+    {
+        ClaudeBridge.OnPlayerPhysicsFixedUpdate(__instance);
     }
 }

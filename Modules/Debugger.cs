@@ -86,7 +86,10 @@ internal static class Logger
         DateTime now = DateTime.Now;
 
         if (level is LogLevel.Error or LogLevel.Fatal)
+        {
             ExceptionTags[tag] = ExceptionTags.GetValueOrDefault(tag) + 1;
+            ClaudeBridge.RecordError(tag, text); // ブリッジ OFF 時は即 return する軽量フック
+        }
 
         if (level is LogLevel.Error or LogLevel.Fatal && !multiLine && (!NowDetailedErrorLog.TryGetValue(tag, out DateTime dt) || dt.AddSeconds(3) < now))
         {

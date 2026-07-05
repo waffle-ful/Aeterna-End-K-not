@@ -1220,7 +1220,11 @@ internal static class StartGameHostPatch
 
             Main.PlayerStates[player.PlayerId].SetMainRole(role);
 
-            RoleTypes selfRole = isHost ? baseRole == RoleTypes.Shapeshifter ? RoleTypes.Shapeshifter : hostBaseRole : baseRole;
+            // Shapeshifter/Phantom はホスト自身も実基底が必要 (変身/Vanish ボタンは vanilla の
+            // RoleBehaviour からしか生えないため、Crewmate に落とすとホストだけ能力ボタンが消える —
+            // WaveCannon 実機テスト 2026-07-05 で発覚。selfRole はローカル適用のみで他クライアントへの
+            // RPC には乗らない (othersRole は不変) ので anticheat 面の変化はない)。
+            RoleTypes selfRole = isHost ? baseRole is RoleTypes.Shapeshifter or RoleTypes.Phantom ? baseRole : hostBaseRole : baseRole;
             RoleTypes othersRole = isHost ? RoleTypes.Crewmate : RoleTypes.Scientist;
 
             // Set Desync role for self and for others

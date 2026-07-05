@@ -2762,7 +2762,8 @@ public static class Utils
 
         if (fast && GameStates.InGame && Main.PlayerStates.TryGetValue((byte)playerId, out PlayerState state) && state.Player) return state.Player;
 
-        if (playerId == PlayerControl.LocalPlayer.PlayerId) return PlayerControl.LocalPlayer;
+        // LocalPlayer はロビー初期化完了前(自動開始が早すぎる場合)や切断遷移中に null になり得る
+        if (PlayerControl.LocalPlayer && playerId == PlayerControl.LocalPlayer.PlayerId) return PlayerControl.LocalPlayer;
 
         foreach (var pc in PlayerControl.AllPlayerControls)
         {

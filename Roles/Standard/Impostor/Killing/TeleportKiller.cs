@@ -250,7 +250,10 @@ public class TeleportKiller : RoleBase
             AnimT += Time.fixedDeltaTime / 2f;
             if (AnimT > 1f) AnimT = 1f;
 
-            pc.TP(Vector2.Lerp(AnimStart, AnimGoal, AnimT), log: false);
+            // minInterval: 0.1f — キルアニメ中の毎フレ TP を 10Hz に間引く。無指定だと 1 キルで約 100 回連射し、
+            // Utils.TP の共有 per-round cap(80/100)を食い潰して他役職の TP まで巻き添え desync する
+            // (WaveCannon/Archer と同じキャデンス)。
+            pc.TP(Vector2.Lerp(AnimStart, AnimGoal, AnimT), log: false, minInterval: 0.1f);
 
             if (AnimT >= 1f)
             {

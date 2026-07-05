@@ -505,6 +505,8 @@ internal static class OnPlayerJoinedPatch
     {
         Logger.Info($"{client.PlayerName} (ClientID: {client.Id} / FriendCode: {client.FriendCode} / Hashed PUID: {client.GetHashedPuid()}) joined the lobby", "Session");
 
+        try { EndKnot.Modules.ClaudeBridge.OnPlayerJoined(client); } catch { } // ブリッジ OFF 時は即 return する軽量フック
+
         Main.SetDirtyRebuildPC();
         LateTask.New(() =>
         {
@@ -571,6 +573,9 @@ internal static class OnPlayerJoinedPatch
             {
                 RpcSetNameWaitTimer = null;
                 if (AmongUsClient.Instance.IsGameStarted) return;
+                // dirty-check キャッシュをクリアして、新規参加者にも全員の装飾名が 1 度再送されるようにする
+                // (クリアしないと、既に送信済みの名前は FixedUpdatePatch でスキップされ参加者に届かない)。
+                FixedUpdatePatch.LastBroadcastName.Clear();
                 // ApplySuffix returns false (leaving name null/empty) when the host has no entry in
                 // Main.AllPlayerNames yet — exactly the window right after OnGameJoined clears the dict.
                 // Sending that empty/null name blanks the host label on every client, so only push when
@@ -587,6 +592,8 @@ internal static class OnPlayerLeftPatch
 {
     public static void Postfix(AmongUsClient __instance, [HarmonyArgument(0)] ClientData data, [HarmonyArgument(1)] DisconnectReasons reason)
     {
+        try { EndKnot.Modules.ClaudeBridge.OnPlayerLeft(data, reason); } catch { } // ブリッジ OFF 時は即 return する軽量フック
+
         try
         {
             if (AmongUsClient.Instance.AmHost && data != null && data.Character)

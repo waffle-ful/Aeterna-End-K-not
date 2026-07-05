@@ -1633,6 +1633,13 @@ internal static class FixedUpdatePatch
     private static readonly Dictionary<byte, int> DeadBufferTime = [];
     private static readonly Dictionary<byte, long> LastUpdate = [];
     private static readonly Dictionary<byte, long> LastAddAbilityTime = [];
+
+    // 直近に RpcSetName でブロードキャストした装飾名を PlayerId ごとにキャッシュ。
+    // 名前が変わっていない限り再送しない(dirty check)。ApplySuffix はホスト/タグ持ちに対し
+    // 毎 tick 必ず名前を返すため、これが無いと同一名を ~1.67 回/秒 × クライアント数で Reliable 再送し、
+    // 上り帯域を食い潰して公式サーバーの ping timeout 切断を誘発する。
+    // 新規参加者が装飾名を取り損ねないよう、参加時に OnPlayerJoinedPatch がこれをクリアする。
+    public static readonly Dictionary<byte, string> LastBroadcastName = [];
     private static long LastErrorTS;
     private static long LastSelfNameUpdateTS;
 
@@ -1909,8 +1916,12 @@ internal static class FixedUpdatePatch
             if (inTask && self && Options.DisableDevices.GetBool())
                 DisableDevice.FixedUpdate(player);
 
-            if (!Main.DoBlockNameChange && ApplySuffix(player, out var name))
+            if (!Main.DoBlockNameChange && ApplySuffix(player, out var name)
+                && (!LastBroadcastName.TryGetValue(playerId, out var lastBroadcast) || lastBroadcast != name))
+            {
+                LastBroadcastName[playerId] = name;
                 player.RpcSetName(name);
+            }
         }
 
         if (GameStates.IsEnded || !Main.IntroDestroyed || GameStates.IsMeeting || ExileController.Instance || AntiBlackout.SkipTasks) return;
