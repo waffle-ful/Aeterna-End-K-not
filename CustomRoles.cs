@@ -561,6 +561,7 @@ public enum CustomRoles
     Akazukin,
     Skinwalker,
     Riptide,
+    Dossun,
     Convict,
     Survivor,
 

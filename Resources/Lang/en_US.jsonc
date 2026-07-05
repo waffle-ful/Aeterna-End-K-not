@@ -2823,6 +2823,17 @@
   "Riptide.WaveLateralExtentOpt": "Wave Hit Width",
   "Riptide.ShowPredictiveGhostOpt": "Show Wave Preview",
 
+  /* --- Dossun --- */
+  "Dossun": "Dossun",
+  "DossunInfo": "Place a giant block, then move remotely to crush or knock back victims",
+  "DossunInfoLong": "(<#ff1919>Impostors</color>):\n<size=80%>Press the pet button to place an invisible anchor at your position. Press again to spawn a giant block there, visible to everyone. From then on, your own movement remotely drags the block along the same path — use it to crush victims against walls or knock them away.\n_____________________________________\nDifficulty: ★★★★☆\n\n[Skills]\n・<b><color=#ff1919>Place Block</color></b>\nPress the pet button once to mark your current spot. Press it again nearby to spawn the block there.\n\n・<b><color=#ff1919>Remote Control</color></b>\nOnce the block is active, walk anywhere on the map — the block copies your movement relative to where you activated it. Anyone caught in the moving block's path is hit.\n\n・<b><color=#ff1919>Crush or Knockback</color></b>\nIf a victim is pinned against a wall by the block, they die instantly. Otherwise, they're knocked back in the direction of impact.\n\n・<b><color=#ff1919>Recall</color></b>\nPress the pet button a third time to despawn the block and start over.\n\n<i>What goes around, comes around.</i></size>",
+  "Dossun.KnockbackDistance": "Knockback Distance",
+  "Dossun.BlockDuration": "Block Duration",
+  "Dossun.Placed": "Anchor placed in {0}. Press the pet button again to spawn the block.",
+  "Dossun.Activated": "Block spawned in {0}. The arrow points to the block. Move around to drag it remotely.",
+  "Dossun.Recalled": "Block recalled.",
+  "Dossun.Expired": "The block timed out and vanished.",
+
   "Wildling": "Wildling",
   "WildlingInfo": "Killing gives you a temporary shield",
   "WildlingInfoLong": "(<#ff1919>Impostors</color>):\n<size=80%>Killing temporarily makes you immune to attacks.\n_____________________________________\nDifficulty: ★★☆☆☆\n\n[Skills]\n・<b><color=#ff1919>Kill Shield</color></b>\nYou can shapeshift but cannot vent. After each kill, you are temporarily immune to being killed.\n\n<i>The hunter becomes untouchable.</i></size>",
@@ -10338,6 +10349,7 @@
   "DeathReason.Collapsed": "Collapsed",
   "DeathReason.Bankrupt": "Bankrupted",
   "DeathReason.Frightened": "Frightened",
+  "DeathReason.Crushed": "Crushed",
   "DeathReason.Consumed": "Consumed",
   "DeathReason.Curse": "Cursed",
   "DeathReason.Cursed": "Cursed",

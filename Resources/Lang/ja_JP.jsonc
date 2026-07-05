@@ -9706,6 +9706,7 @@
   "DeathReason.Collapsed": "崩落",
   "DeathReason.Bankrupt": "破産",
   "DeathReason.Frightened": "恐怖",
+  "DeathReason.Crushed": "圧死",
   "DeathReason.Consumed": "消失",
   "DeathReason.Curse": "呪われた",
   "DeathReason.Cursed": "呪殺",
@@ -12037,6 +12038,17 @@
   "Riptide.WaveBandThicknessOpt": "波の判定の厚み（進行方向）",
   "Riptide.WaveLateralExtentOpt": "波の判定の横幅",
   "Riptide.ShowPredictiveGhostOpt": "波の予告表示をする",
+
+  /* --- Dossun --- */
+  "Dossun": "ドッスン",
+  "DossunInfo": "巨大ブロックを設置し、自分の移動で遠隔操作して轢いたり吹き飛ばしたりする",
+  "DossunInfoLong": "(<#ff1919>インポスター</color>):\n<size=80%>ペットボタンを押すと今いる場所に見えないアンカーを記憶する。もう一度押すとそこに全員から見える巨大ブロックが出現する。以降は自分の移動がそのままブロックの動きに変換され、同じ軌跡でブロックを間接操作できる。壁際に相手を追い込んで圧死させたり、吹き飛ばしたりしよう。\n_____________________________________\n難易度: ★★★★☆\n\n[アビリティ]\n・<b><color=#ff1919>設置</color></b>\nペットボタンを1回押すと、今の位置を記憶する。\n\n・<b><color=#ff1919>起動</color></b>\nもう一度ペットボタンを押すと、記憶した位置に巨大ブロックが出現する。\n\n・<b><color=#ff1919>遠隔操作</color></b>\nブロック起動後はマップのどこを歩いても、起動した位置からの相対移動がブロックにそのまま反映される。動いているブロックに当たったプレイヤーはダメージを受ける。\n\n・<b><color=#ff1919>圧死とノックバック</color></b>\nブロックで壁際に追い込まれたプレイヤーは即死する。壁が無ければ衝突方向へ吹き飛ばされるだけで済む。\n\n・<b><color=#ff1919>回収</color></b>\nペットボタンを3回目押すとブロックを回収し、最初からやり直せる。\n\n<i>因果応報。</i></size>",
+  "Dossun.KnockbackDistance": "ノックバック距離",
+  "Dossun.BlockDuration": "ブロックの持続時間",
+  "Dossun.Placed": "{0}にアンカーを設置しました。もう一度ペットボタンを押すとブロックが出現します。",
+  "Dossun.Activated": "{0}にブロックが出現しました。矢印がブロックの方向です。移動して遠隔操作しましょう。",
+  "Dossun.Recalled": "ブロックを回収しました。",
+  "Dossun.Expired": "ブロックは時間切れで消滅しました。",
 
   /* --- Banker --- */
   "Banker": "バンカー",

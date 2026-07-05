@@ -92,6 +92,9 @@ public class PlayerState(byte playerId)
         Bankrupt,
         Frightened,
 
+        // Dossun
+        Crushed,
+
         etc = -1
     }
 

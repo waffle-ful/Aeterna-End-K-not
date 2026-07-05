@@ -47,6 +47,7 @@ internal static class CustomRolesHelper
         CustomRoles.UltraStar,
         CustomRoles.WaveCannon,
         CustomRoles.Sandbox,
+        CustomRoles.Dossun,
 
         // Add-ons
         CustomRoles.Energetic,
@@ -925,6 +926,7 @@ internal static class CustomRolesHelper
                 CustomRoles.DummySpawner or
                 CustomRoles.Skinwalker or
                 CustomRoles.Riptide or
+                CustomRoles.Dossun or
                 CustomRoles.Chainbinder or
                 CustomRoles.Exorcist or
                 CustomRoles.Frightener or
@@ -1386,6 +1388,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Wasp => RoleOptionType.Impostor_Killing,
                 CustomRoles.WaveCannon => RoleOptionType.Impostor_Killing,
                 CustomRoles.Riptide => RoleOptionType.Impostor_Killing,
+                CustomRoles.Dossun => RoleOptionType.Impostor_Killing,
                 CustomRoles.Wiper => RoleOptionType.Impostor_Killing,
                 CustomRoles.Witch => RoleOptionType.Impostor_Killing,
                 CustomRoles.Zombie => RoleOptionType.Impostor_Killing,

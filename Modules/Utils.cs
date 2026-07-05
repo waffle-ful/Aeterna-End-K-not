@@ -3994,6 +3994,7 @@ public static class Utils
             Sniper { IsAim: true } => true,
             Archer { IsSetting: true } => true,
             Centralizer { MarkedPosition: not null } => true,
+            Dossun { CurrentPhase: Dossun.Phase.Placed } => true,
             Escapist { EscapistLocation: null } => true,
             Silencer when Silencer.ForSilencer.Count == 0 => true,
             _ => false
@@ -4111,6 +4112,7 @@ public static class Utils
             CustomRoles.ToiletFan => (int)ToiletFan.Cooldown.GetFloat(),
             CustomRoles.UltraStar => (int)UltraStar.PetCooldownOpt.GetFloat(),
             CustomRoles.Sandbox => (int)Sandbox.PlaceCooldown.GetFloat(),
+            CustomRoles.Dossun => Dossun.AbilityCooldown.GetInt(),
             _ => -1
         };
 
