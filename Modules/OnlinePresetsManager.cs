@@ -114,7 +114,7 @@ public static class OnlinePresetsManager
                 {
                     bool b = plusText.text == "ⓘ";
                     GameObject.Find("PlayerOptionsMenu(Clone)").transform.FindChild("What Is This?").gameObject.SetActive(b);
-                    GameSettingMenuPatch.GMButtons.ForEach(x => x.gameObject.SetActive(!b));
+                    GameSettingMenuPatch.GMButtons.ForEach(x => { if (x) x.gameObject.SetActive(!b); });
                     if (b) GameSettingMenu.Instance.MenuDescriptionText.text = preset.description;
                     plusText.text = b ? "∅" : "ⓘ";
                 }));

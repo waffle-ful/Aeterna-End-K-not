@@ -1640,6 +1640,13 @@ internal static class FixedUpdatePatch
     // 上り帯域を食い潰して公式サーバーの ping timeout 切断を誘発する。
     // 新規参加者が装飾名を取り損ねないよう、参加時に OnPlayerJoinedPatch がこれをクリアする。
     public static readonly Dictionary<byte, string> LastBroadcastName = [];
+
+    // 計器(AC 送信ゼロ・純カウンタ)。dirty-check が実際に flood を止めているかを HealthLog の HB に
+    // 毎秒デルタで載せて可視化する。RpcSetName は vanilla raw writer で DCTX リングに写らないため、
+    // 修正の効き目を確認できる唯一の直接証拠になる。修正効き=NameSkip だけ伸びて NameSent はほぼ 0。
+    public static long NameSent;
+    public static long NameSkip;
+
     private static long LastErrorTS;
     private static long LastSelfNameUpdateTS;
 
@@ -1916,11 +1923,15 @@ internal static class FixedUpdatePatch
             if (inTask && self && Options.DisableDevices.GetBool())
                 DisableDevice.FixedUpdate(player);
 
-            if (!Main.DoBlockNameChange && ApplySuffix(player, out var name)
-                && (!LastBroadcastName.TryGetValue(playerId, out var lastBroadcast) || lastBroadcast != name))
+            if (!Main.DoBlockNameChange && ApplySuffix(player, out var name))
             {
-                LastBroadcastName[playerId] = name;
-                player.RpcSetName(name);
+                if (!LastBroadcastName.TryGetValue(playerId, out var lastBroadcast) || lastBroadcast != name)
+                {
+                    LastBroadcastName[playerId] = name;
+                    player.RpcSetName(name);
+                    NameSent++;
+                }
+                else NameSkip++;
             }
         }
 

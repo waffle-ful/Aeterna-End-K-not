@@ -25,20 +25,11 @@ public static class ModGameOptionsMenu
     public static readonly Dictionary<int, CategoryHeaderMasked> CategoryHeaderList = new();
     public static readonly System.Collections.Generic.Dictionary<CustomRoles, Transform> HelpIconList = [];
     public static readonly System.Collections.Generic.Dictionary<OptionItem, BaseGameSetting> BaseGameSettingCache = [];
-    public static readonly HashSet<GameObject> SpawnedUI = new();
 
+    // Nothing reads the tracked set since DestroyOption was removed; keeping one would only pin
+    // references to destroyed GameObjects for the lifetime of the process.
     public static T Track<T>(T obj) where T : Object
     {
-        switch (obj)
-        {
-            case GameObject go:
-                SpawnedUI.Add(go);
-                break;
-            case Component c:
-                SpawnedUI.Add(c.gameObject);
-                break;
-        }
-
         return obj;
     }
 
@@ -193,7 +184,11 @@ public static class GameOptionsMenuPatch
 
                     if (option is TextOptionItem toi)
                     {
-                        CategoryHeaderMasked categoryHeaderMasked = ModGameOptionsMenu.CategoryHeaderList.TryGetValue(index, out CategoryHeaderMasked cacheCHM) ? cacheCHM : ModGameOptionsMenu.Track(Object.Instantiate(__instance.categoryHeaderOrigin, Vector3.zero, Quaternion.identity, __instance.settingsContainer));
+                        // Reuse the cached header only if it hasn't been destroyed (a scene reload / rehost destroys
+                        // the GameObjects but leaves this static dict pointing at them). A stale destroyed ref must
+                        // fall through to a fresh Instantiate, otherwise SetHeader below throws and the item vanishes.
+                        bool freshCHM = !(ModGameOptionsMenu.CategoryHeaderList.TryGetValue(index, out CategoryHeaderMasked cacheCHM) && cacheCHM);
+                        CategoryHeaderMasked categoryHeaderMasked = freshCHM ? ModGameOptionsMenu.Track(Object.Instantiate(__instance.categoryHeaderOrigin, Vector3.zero, Quaternion.identity, __instance.settingsContainer)) : cacheCHM;
                         categoryHeaderMasked.SetHeader(StringNames.RolesCategory, 20);
                         categoryHeaderMasked.Title.SetText(option.GetName(disableColor: true).Trim('★', ' '));
                         categoryHeaderMasked.Background.color = categoryHeaderMasked.Divider.color = option.NameColor;
@@ -203,19 +198,24 @@ public static class GameOptionsMenuPatch
                         chmText.fontStyle = FontStyles.Bold | FontStyles.SmallCaps;
                         chmText.fontWeight = FontWeight.Black;
                         chmText.outlineWidth = 0.17f;
-                        var chmCollider = categoryHeaderMasked.gameObject.AddComponent<BoxCollider2D>();
-                        chmCollider.size = new Vector2(7, 0.7f);
-                        chmCollider.offset = new Vector2(1.5f, -0.3f);
-                        var chmButton = categoryHeaderMasked.gameObject.AddComponent<PassiveButton>();
-                        chmButton.ClickSound = __instance.BackButton.GetComponent<PassiveButton>().ClickSound;
-                        chmButton.OnMouseOver = new();
-                        chmButton.OnMouseOut = new();
-                        chmButton.OnClick.AddListener((UnityAction)(() =>
+                        // Collider + click handler only on a freshly-instantiated header; re-running AddComponent and
+                        // AddListener on a reused header stacks duplicate colliders/buttons/handlers every rebuild.
+                        if (freshCHM)
                         {
-                            toi.CollapsesSection = !toi.CollapsesSection;
-                            ReCreateSettings(__instance);
-                        }));
-                        chmButton.SetButtonEnableState(true);
+                            var chmCollider = categoryHeaderMasked.gameObject.AddComponent<BoxCollider2D>();
+                            chmCollider.size = new Vector2(7, 0.7f);
+                            chmCollider.offset = new Vector2(1.5f, -0.3f);
+                            var chmButton = categoryHeaderMasked.gameObject.AddComponent<PassiveButton>();
+                            chmButton.ClickSound = __instance.BackButton.GetComponent<PassiveButton>().ClickSound;
+                            chmButton.OnMouseOver = new();
+                            chmButton.OnMouseOut = new();
+                            chmButton.OnClick.AddListener((UnityAction)(() =>
+                            {
+                                toi.CollapsesSection = !toi.CollapsesSection;
+                                ReCreateSettings(__instance);
+                            }));
+                            chmButton.SetButtonEnableState(true);
+                        }
                         categoryHeaderMasked.gameObject.SetActive(enabled);
                         ModGameOptionsMenu.CategoryHeaderList[index] = categoryHeaderMasked;
 
@@ -232,7 +232,10 @@ public static class GameOptionsMenuPatch
                     BaseGameSetting baseGameSetting = GetSetting(option);
                     if (!baseGameSetting) continue;
 
-                    if (!ModGameOptionsMenu.BehaviourList.TryGetValue(index, out OptionBehaviour optionBehaviour))
+                    // `|| !optionBehaviour`: a cached behaviour destroyed by a scene reload / rehost must be treated
+                    // as absent and re-instantiated, or the reuse branch below touches a destroyed object and throws
+                    // (per-item catch then swallows it → the row silently vanishes). Mirrors the L505/L513 guards.
+                    if (!ModGameOptionsMenu.BehaviourList.TryGetValue(index, out OptionBehaviour optionBehaviour) || !optionBehaviour)
                     {
                         try
                         {
@@ -288,6 +291,7 @@ public static class GameOptionsMenuPatch
             foreach (UiElement x in __instance.scrollBar.GetComponentsInChildren<UiElement>())
                 __instance.ControllerSelectable.Add(x);
 
+            Canvas.ForceUpdateCanvases();
             BuildCoroutines.Remove(__instance);
         }
 
@@ -613,6 +617,32 @@ public static class GameOptionsMenuPatch
             OptionItem item = OptionItem.AllOptions[kv.Value];
             if (item == null) continue;
             ob.gameObject.SetActive(!item.IsCurrentlyHidden() && AllParentsEnabledAndVisible(item.Parent));
+
+            // Re-apply the displayed value from the option's current value. Rows are reused across preset
+            // switches without a rebuild, so without this the checkmarks / value texts keep showing the
+            // previous preset's values. Values are written directly (no UpdateValue) so no change
+            // notifications fire and nothing is synced from here.
+            switch (item)
+            {
+                case BooleanOptionItem when ob is ToggleOption toggleOption:
+                    if (toggleOption.CheckMark) toggleOption.CheckMark.enabled = item.GetBool();
+                    break;
+                case StringOptionItem stringOptionItem when ob is StringOption stringOption:
+                    stringOption.Value = stringOption.oldValue = stringOptionItem.GetInt();
+                    string selection = stringOptionItem.Selections[stringOptionItem.Rule.GetValueByIndex(stringOption.Value)];
+                    if (!stringOptionItem.noTranslation) selection = Translator.GetString(selection);
+                    stringOption.ValueText.SetText(selection);
+                    // Restore the styled title (role color band / pet indicator) — reused rows can end up
+                    // showing the plain unstyled name after preset switches (upstream #637 NameCache fix).
+                    if (!StringOptionPatch.NameCache.TryGetValue(stringOption, out string cachedName))
+                        stringOption.Initialize();
+                    else
+                        stringOption.TitleText.SetText(cachedName);
+                    break;
+                case FloatOptionItem or IntegerOptionItem when ob is NumberOption numberOption:
+                    numberOption.Value = item.GetFloat();
+                    break;
+            }
         }
 
         // Do NOT touch activeTab.scrollBar here: ReloadUI already ran ReCreateSettings on every tab, which sets
@@ -877,6 +907,12 @@ public static class StringOptionPatch
 {
     private static long HelpShowEndTS;
 
+    // Final styled title (role color band / pet indicator / size wrap) per row. Rows are reused across
+    // preset switches and menu reopens without re-running Initialize, so anything that resets TitleText
+    // in between leaves the plain unstyled name on screen. RefreshSettingValues restores from this cache
+    // (upstream #637 "Use NameCache to update name of StringOption").
+    internal static readonly Dictionary<StringOption, string> NameCache = new();
+
     private static bool IsVanillaServer => GameStates.CurrentServerType == GameStates.ServerType.Vanilla;
 
     private static void ClampOfficialStringOption(StringOption option)
@@ -935,6 +971,7 @@ public static class StringOptionPatch
             }
 
             __instance.TitleText.SetText(name);
+            NameCache[__instance] = name;
             return false;
         }
 
@@ -944,8 +981,16 @@ public static class StringOptionPatch
     private static void SetupHelpIcon(CustomRoles role, StringOption option)
     {
         Transform template = option.MinusBtn.transform;
-        Transform icon = ModGameOptionsMenu.Track(Object.Instantiate(template, template.parent, true));
-        icon.name = $"{role}HelpIcon";
+
+        // Reuse a cached "?" icon; only instantiate a fresh one when none exists or it was destroyed (scene reload /
+        // rehost). Instantiating unconditionally stacked another icon onto the reused option row on every rebuild.
+        if (!(ModGameOptionsMenu.HelpIconList.TryGetValue(role, out Transform icon) && icon))
+        {
+            icon = ModGameOptionsMenu.Track(Object.Instantiate(template, template.parent, true));
+            icon.name = $"{role}HelpIcon";
+            ModGameOptionsMenu.HelpIconList[role] = icon;
+        }
+
         var text = icon.GetComponentInChildren<TextMeshPro>();
         text.SetText("?");
         text.color = Color.white;
@@ -970,7 +1015,7 @@ public static class StringOptionPatch
                     catch { infoLong = str; }
 
                     GameObject.Find("PlayerOptionsMenu(Clone)").transform.FindChild("What Is This?").gameObject.SetActive(true);
-                    GameSettingMenuPatch.GMButtons.ForEach(x => x.gameObject.SetActive(false));
+                    GameSettingMenuPatch.GMButtons.ForEach(x => { if (x) x.gameObject.SetActive(false); });
 
                     var info = $"{value.ToColoredString()}: {infoLong}";
                     GameSettingMenu.Instance.MenuDescriptionText.SetText(info);
@@ -994,7 +1039,7 @@ public static class StringOptionPatch
                             if (findChild) findChild.gameObject.SetActive(false);
                         }
 
-                        GameSettingMenuPatch.GMButtons.ForEach(x => x.gameObject.SetActive(true));
+                        GameSettingMenuPatch.GMButtons.ForEach(x => { if (x) x.gameObject.SetActive(true); });
                     }
                 }
             }
@@ -1002,7 +1047,7 @@ public static class StringOptionPatch
 
         gameOptionButton.interactableColor = Color.black;
         gameOptionButton.interactableHoveredColor = new Color32(0, 165, 255, 255);
-        icon.localPosition += new Vector3(-0.8f, 0f, 0f);
+        icon.localPosition = template.localPosition + new Vector3(-0.8f, 0f, 0f);
         icon.SetAsLastSibling();
     }
 
@@ -1083,6 +1128,7 @@ public static class StringOptionPatch
                 NotificationPopperPatch.AddSettingsChangeMessage(item, true);
 
             __instance.TitleText.SetText(name);
+            NameCache[__instance] = name;
             return false;
         }
 

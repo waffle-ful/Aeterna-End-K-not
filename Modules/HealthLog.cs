@@ -42,6 +42,8 @@ public static class HealthLog
 
     // --- phase3 判定層(早期警報)の状態。SESSION 開始(EnsureInit)でリセット ---
     private static long _sessionStartWsMB; // セッション先頭の wsMB(mem 増分の基準)
+    private static long _lastNameSent; // 前回 HB 時点の FixedUpdatePatch.NameSent(HB デルタ算出用)
+    private static long _lastNameSkip; // 前回 HB 時点の FixedUpdatePatch.NameSkip
     private static bool _hadDisconnectThisSession; // セッション中に DC 記録があったか(stuck-menu 判定の前提条件)
     private static long _continuousMenuSinceTs; // 非ホスト Menu 状態が連続している開始 t(0=非連続)
     private static long _lastStuckMenuNoteTs;
@@ -172,7 +174,19 @@ public static class HealthLog
             // 直近送信リングから最新エントリを取得して HB に添付
             string lastSendSuffix = GetLastSendSuffix(now);
 
-            string hb = $"t={now} up={now - StartTs} state={state} host={(host ? 1 : 0)} server={server} players={players} wsMB={wsMB} gcMB={gcMB} gc2={gen2}{lastSendSuffix}";
+            // RpcSetName の送信/スキップ回数を前回 HB からのデルタで載せる(dirty-check の効き目計器)。
+            long nmSent = 0, nmSkip = 0;
+            try
+            {
+                long s = FixedUpdatePatch.NameSent, k = FixedUpdatePatch.NameSkip;
+                nmSent = s - _lastNameSent;
+                nmSkip = k - _lastNameSkip;
+                _lastNameSent = s;
+                _lastNameSkip = k;
+            }
+            catch { }
+
+            string hb = $"t={now} up={now - StartTs} state={state} host={(host ? 1 : 0)} server={server} players={players} wsMB={wsMB} gcMB={gcMB} gc2={gen2} nmSent={nmSent} nmSkip={nmSkip}{lastSendSuffix}";
             Write($"HB {hb}");
 
             // 普段見る通常ログにもメモリ + 状態の要約を低頻度で(最適化余地の把握用)。
