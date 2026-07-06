@@ -1431,7 +1431,18 @@ internal static class ExtendedPlayerControl
             }
             catch (NullReferenceException nullReferenceException)
             {
-                Logger.Error($"{nullReferenceException.Message} - player is null? {!player}", "GetRealName");
+                // player / player.name / player.Data can be null or destroyed (e.g. a player who
+                // disconnected before game end). Recover the cached name kept per PlayerId instead of
+                // showing a blank. Only the truly-unrecoverable case (the wrapper itself is gone) is
+                // logged, so a genuine null bug still leaves a host-log breadcrumb.
+                try
+                {
+                    if (Main.AllPlayerNames.TryGetValue(player.PlayerId, out string cached) && !string.IsNullOrEmpty(cached))
+                        return cached.RemoveHtmlTags();
+                }
+                catch { /* player wrapper itself is gone — fall through to the breadcrumb below */ }
+
+                Logger.Warn($"{nullReferenceException.Message} - player is null? {player == null}", "GetRealName");
                 return string.Empty;
             }
             catch (Exception exception)
