@@ -42,8 +42,12 @@ public class CustomRpcSender
 
     public bool packed;
 
+    // 公式鯖 anti-cheat の kick 上限 (~1024 byte/パケット) に対する安全マージン込みの分割閾値。
+    // これを超えて蓄積した stream は次の分割ポイントで別パケットに切り出す。
+    public const int SafeChunkLength = 800;
+
     // When false, the >500 byte auto-split in StartMessage/StartPackedMessage is skipped.
-    // RpcSetName sets this false and does its own accurate 1100-byte (UTF-8) chunking instead.
+    // RpcSetName sets this false and does its own accurate SafeChunkLength (UTF-8) chunking instead.
     public bool checkLength = true;
 
     private State currentState = State.BeforeInit;
@@ -347,6 +351,29 @@ public class CustomRpcSender
         return this;
     }
 
+    // 現在の stream を doneStreams へ退避して新しい stream を開始する (送信順は保たれる)。
+    // SyncSettings / RpcChangeOutfitByData のように state machine を経由せず stream へ直書きする経路が、
+    // 蓄積済みの stream に relaying して単一チャンクを kick 上限超えに膨らませるのを防ぐための分割ポイント。
+    // Ready / InRootPackedMessage のときだけ有効 (message 途中では何もしない)。
+    public void FlushCurrentStream()
+    {
+        if (currentState == State.InRootPackedMessage)
+        {
+            stream.EndMessage();
+            doneStreams.Add(stream);
+            stream = MessageWriter.Get(sendOption);
+            messages = 0;
+            currentState = State.Ready;
+            StartPackedMessage();
+        }
+        else if (currentState == State.Ready && stream.Length > 0)
+        {
+            doneStreams.Add(stream);
+            stream = MessageWriter.Get(sendOption);
+            messages = 0;
+        }
+    }
+
     public CustomRpcSender EndMessage(bool startNew = false)
     {
         if (currentState is not State.InRootMessage and not State.InRootPackedMessage)
@@ -540,8 +567,13 @@ public class CustomRpcSender
 
 public static class CustomRpcSenderExtensions
 {
-    // SetName を packed message に一括蓄積する。UTF-8 byte で正確に計算し、1100 byte を超える手前で
-    // 現 message を送って sender を作り直す (chunk 分割)。sender は ref で受けて差し替える。
+    // 公式鯖 anti-cheat の kick 上限は ~1024 byte/パケット。seer 切替ごとの GameDataTo ヘッダ等
+    // (GetSetNameRpcSize に載らない分) が chunk あたり 100 byte 強積み上がるため、余裕を持って 800 で切る。
+    // (旧値 1100 は上限超えで、実測 1221 byte の単一チャンクが Hacking キックを引き起こした)
+    private const int SetNameChunkFlushThreshold = CustomRpcSender.SafeChunkLength;
+
+    // SetName を packed message に一括蓄積する。UTF-8 byte で正確に計算し、SetNameChunkFlushThreshold を
+    // 超える手前で現 message を送って sender を作り直す (chunk 分割)。sender は ref で受けて差し替える。
     // checkLength=false にして StartMessage/StartPackedMessage の 500 byte 自動分割は無効化し、ここで管理する。
     public static void RpcSetName(ref CustomRpcSender sender, PlayerControl player, string name, PlayerControl seer = null)
     {
@@ -582,14 +614,8 @@ public static class CustomRpcSenderExtensions
 
         sender.checkLength = false;
 
-        if (sender.stream.Length + GetSetNameRpcSize(player.NetId, name) > 1100)
-        {
-            bool packed = sender.packed;
-            sender.SendMessage();
-            sender = CustomRpcSender.Create(sender.name, sender.sendOption);
-            if (packed) sender.StartPackedMessage();
-            sender.checkLength = false;
-        }
+        if (sender.stream.Length + GetSetNameRpcSize(player.NetId, name) > SetNameChunkFlushThreshold)
+            FlushAndRecreate(ref sender);
 
         sender.AutoStartRpc(player.NetId, RpcCalls.SetName, targetClientId)
             .Write(player.Data.NetId)
@@ -597,7 +623,21 @@ public static class CustomRpcSenderExtensions
             .Write(false)
             .EndRpc();
 
+        // 後段ガード: 見積もりに載らないヘッダや、RpcSetName 以外から同じ sender に書かれた分の
+        // 積み上がりで実測長が閾値を超えていたら、次の書込を待たずここで送ってしまう。
+        if (sender.stream.Length > SetNameChunkFlushThreshold)
+            FlushAndRecreate(ref sender);
+
         return;
+
+        static void FlushAndRecreate(ref CustomRpcSender sender)
+        {
+            bool packed = sender.packed;
+            sender.SendMessage();
+            sender = CustomRpcSender.Create(sender.name, sender.sendOption);
+            if (packed) sender.StartPackedMessage();
+            sender.checkLength = false;
+        }
 
         // SetName RPC 1 件の概算 byte: msg header(3) + WritePacked(netId) + callId(1) + Write(Data.NetId uint=4)
         //   + 文字列(packed長さ prefix + UTF-8 bytes) + Write(bool=1)
@@ -940,6 +980,10 @@ public static class CustomRpcSenderExtensions
             var id = GameManager.Instance.LogicComponents.IndexOf(logicOptions);
 
             if (sender.CurrentState == CustomRpcSender.State.InRootMessage) sender.EndMessage();
+
+            // ここから下は state machine を通さず stream へ直書きするため checkLength の分割が効かない。
+            // 蓄積済みの stream に相乗りして単一チャンクが kick 上限を超えないよう、書込前に切り出しておく。
+            if (sender.stream.Length > CustomRpcSender.SafeChunkLength) sender.FlushCurrentStream();
 
             var writer = sender.stream;
 

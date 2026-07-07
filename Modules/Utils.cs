@@ -2865,7 +2865,7 @@ public static class Utils
         sender.StartPackedMessage();
 
         // seer ごとに 1 回 WriteSetNameRpcsToSender を呼ぶ (内部で全 target をループ)。
-        // 全 SetName を 1 個の packed message に蓄積し、RpcSetName が 1100 byte で chunk 分割する。
+        // 全 SetName を 1 個の packed message に蓄積し、RpcSetName が kick 上限より手前で chunk 分割する。
         for (int seerIndex = 0; seerIndex < aapc.Count; seerIndex++)
         {
             // 会議が始まったら蓄積分だけ送って打ち切る (in-task 名の取りこぼし防止 + writer リーク回避)
@@ -2914,7 +2914,7 @@ public static class Utils
                 if (senderWasCleared) hasValue = false;
             }
 
-            // 500 byte ごとの手動分割は廃止。RpcSetName が内部で 1100 byte chunk を管理する。
+            // 500 byte ごとの手動分割は廃止。RpcSetName が内部で kick 上限より手前の chunk 分割を管理する。
             // packed message ヘッダ + GameId ぶんで「空」の閾値が大きくなるため <= 3 → <= 11。
             sender.SendMessage(!hasValue || sender.stream.Length <= 11);
 
@@ -3738,7 +3738,12 @@ public static class Utils
     {
         // 公式鯖では spoof RPC ではなく正規 serialize で見た目を同期 (anti-cheat 修正後)
         if (GameStates.CurrentServerType == GameStates.ServerType.Vanilla)
+        {
+            // RpcChangeOutfitByData は sender の state machine を通さず stream に直書きするため、
+            // 蓄積済み stream に相乗りして単一チャンクが kick 上限 (~1024 byte) を超えないよう先に切り出す。
+            if (writer != null && writer.stream.Length > CustomRpcSender.SafeChunkLength) writer.FlushCurrentStream();
             return pc.RpcChangeOutfitByData(newOutfit, writer?.stream, sendOption);
+        }
 
         if (!AmongUsClient.Instance.AmHost) return false;
 

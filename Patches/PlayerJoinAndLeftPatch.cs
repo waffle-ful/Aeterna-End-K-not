@@ -30,6 +30,11 @@ internal static class OnGameJoinedPatch
     {
         JoiningGame = true;
 
+        // 自動再ホスト直後などシーン再構築中は AmongUsClient.Instance / Main.GameTimer / SoundManager 等が
+        // 一過性に null (fake-null) になり、無ガードの raw deref (例: L`if (AmongUsClient.Instance.AmHost)`) が
+        // NRE を投げて OnGameJoined の残り初期化を丸ごと中断する。他のシーン系パッチと同様に本体全体をガードする。
+        try
+        {
         Logger.Info($"{__instance.GameId} joined lobby", "OnGameJoined");
 
         // 自動部屋立て直し: 新しい部屋に join した = 成功シグナル (旧 GameId と比較。内部でガード)
@@ -264,6 +269,8 @@ internal static class OnGameJoinedPatch
         }
         //else
         //    LateTask.New(() => Main.Instance.StartCoroutine(OptionShower.GetText()), 10f, "OptionShower.GetText on client");
+        }
+        catch (Exception e) { Utils.ThrowException(e); }
     }
 
     // Written with AI because I don't want it to delete the wrong files

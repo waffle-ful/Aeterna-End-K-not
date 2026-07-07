@@ -53,6 +53,29 @@ $RelaunchCooldownSec  = 120
 # 1時間あたりの再起動上限。超えたら暴走とみなして自動再起動を一時停止し、人の対応を待つ。
 $MaxRelaunchPerHour   = 12
 
+# ブート死(起動したのに心拍を一度も出さずにプロセス消失=EOS 認証切れ等の「再起動では直らない」状態)が
+# この回数連続したら、連射再起動をやめて長い間隔の再試行だけに切り替える(ホールドモード)。
+$BootDeathHoldThreshold = 3
+
+# ホールドモード中の再試行間隔(秒)。人手で EOS 認証が復旧された場合に自動で拾い直すための保険。
+$BootDeathRetrySec      = 1800
+
+# ブート死ホールドの定期再試行の前に Epic Games Launcher をフル再起動して EOS トークンの
+# 自動リフレッシュを試みるか (実験枠)。EpicWebHelper の再起動だけでは回復しないことは実測済み。
+$RestartEglOnBootDeathRetry = $true
+
+# 回線死活プローブ: 異常時(再起動する前)に回線が生きているかを TCP 443 接続で確認する。
+# 回線が死んでいる間は AU を起動しても必ずブート死する (EGL 自体が「接続エラー」になる実測あり) ので、
+# 再起動予算(12/h)を燃やさず回復を待ち、回線が戻った瞬間に即座に立て直す。
+$NetProbeEnabled = $true
+$NetProbeHosts   = @('1.1.1.1', '8.8.8.8')
+
+# ゾンビ検知: プロセス生存+心拍新鮮でも、部屋が立たないまま state=Menu がこの秒数続いたら
+# 「部屋立てが詰まったゾンビ」とみなして強制再起動する。0 で無効。
+# (認証死ポップアップが起動60秒以内に出ると mod 側の quit-storm ガードで Escalate されず
+#  メニューに座り続ける等、mtime 鮮度だけでは拾えない実在の詰まり経路を塞ぐ。)
+$ZombieMenuSeconds      = 600
+
 # AU が最初から起動していない場合に番犬が起動するか
 $LaunchIfNotRunning   = $true
 
@@ -82,6 +105,15 @@ $script:GraceUntil    = [datetime]::MinValue
 $script:CapturedExe   = $null
 $script:LastOkFileLog = [datetime]::MinValue
 $script:StartedAt     = Get-Date
+# ブート死ループ検知: 直近の(再)起動が心拍を出したかを launch 1回につき1回だけ判定するための状態。
+$script:BootDeaths    = 0
+$script:LaunchJudged  = $true
+$script:LastHoldLog   = [datetime]::MinValue
+# ゾンビ検知: state=Menu の継続開始時刻 (Menu 以外の state を見たらリセット)。
+$script:MenuSince     = [datetime]::MinValue
+# 回線死活: 直前の巡回で回線死を観測していたか (復帰エッジ検出用) と、net-down ログの間引き。
+$script:NetWasDown    = $false
+$script:LastNetLog    = [datetime]::MinValue
 
 function Write-WatchLog {
     param([string]$Msg, [string]$Color = 'Gray', [switch]$ConsoleOnly)
@@ -151,10 +183,64 @@ function Start-Au {
         $script:LastRelaunch = $now
         $script:GraceUntil   = $now.AddSeconds($BootGraceSec)
         $script:RelaunchTimes.Add($now)
+        $script:LaunchJudged = $false   # この launch の生死(心拍が出たか)を後で1回だけ判定する
+        $script:MenuSince    = [datetime]::MinValue   # ゾンビ検知タイマーは launch ごとに仕切り直す
         return $true
     } catch {
         Write-WatchLog "起動に失敗: $($_.Exception.Message)" 'Red'
         return $false
+    }
+}
+
+# 回線が生きているか。TCP 443 への実接続で判定する (ICMP はブロックされうるので使わない)。
+# 2ホストとも失敗した時だけ「回線死」と判定し、プローブ自体の誤検知で番犬を止めないようにする。
+function Test-InternetAlive {
+    if (-not $NetProbeEnabled) { return $true }
+    foreach ($h in $NetProbeHosts) {
+        $c = $null
+        try {
+            $c = New-Object System.Net.Sockets.TcpClient
+            $ar = $c.BeginConnect($h, 443, $null, $null)
+            if ($ar.AsyncWaitHandle.WaitOne(3000) -and $c.Connected) { $c.Close(); return $true }
+        } catch { }
+        finally { if ($c) { try { $c.Close() } catch { } } }
+    }
+    return $false
+}
+
+# Epic Games Launcher をフル再起動して EOS トークンの自動リフレッシュを試みる (実験枠)。
+# 実測済みの前提: EpicWebHelper の再起動だけでは回復しない / EGL が「開いているだけ」では不十分。
+# EGL 本体の再起動でリフレッシュトークンから静かに再認証されるかは未検証 — 効けば bootdeath-hold
+# からの復帰が全自動になる。効かなくても現状 (手動サインイン待ち) より悪くはならない。
+function Restart-EpicLauncher {
+    try {
+        $exe = $null
+        $egl = Get-Process -Name 'EpicGamesLauncher' -ErrorAction SilentlyContinue
+        if ($egl) {
+            try { $exe = @($egl)[0].Path } catch { }
+            Write-WatchLog "EGL 再起動 [egl-restart]: 既存の Epic Games Launcher を終了します..." 'Yellow'
+            Stop-Process -Name 'EpicGamesLauncher' -Force -ErrorAction SilentlyContinue
+            Stop-Process -Name 'EpicWebHelper' -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 5
+        }
+        if (-not $exe) {
+            $pf86 = ${env:ProgramFiles(x86)}
+            if ($pf86) {
+                $cand = Join-Path $pf86 'Epic Games\Launcher\Portal\Binaries\Win64\EpicGamesLauncher.exe'
+                if (Test-Path $cand) { $exe = $cand }
+            }
+        }
+        if ($exe) {
+            Write-WatchLog "EGL 再起動 [egl-restart]: $exe を -silent で起動し、再認証を待ちます (30s)..." 'Yellow'
+            Start-Process -FilePath $exe -ArgumentList '-silent'
+        } else {
+            Write-WatchLog "EGL 再起動 [egl-restart]: exe が特定できないためプロトコル URL で起動します..." 'Yellow'
+            Start-Process 'com.epicgames.launcher://'
+        }
+        # EGL の起動〜バックグラウンド再認証の猶予。この後すぐ AU を立てるので短すぎると意味がない。
+        Start-Sleep -Seconds 30
+    } catch {
+        Write-WatchLog "EGL 再起動に失敗: $($_.Exception.Message)" 'Red'
     }
 }
 
@@ -177,13 +263,14 @@ function Test-RelaunchAllowed {
     return ($script:RelaunchTimes.Count -lt $MaxRelaunchPerHour)
 }
 
-# 心拍ログの鮮度。@{ Exists; AgeSec; Fresh; LastLine }
+# 心拍ログの鮮度。@{ Exists; AgeSec; Fresh; LastLine; LastWrite }
 function Get-HealthStatus {
-    $res = @{ Exists = $false; AgeSec = [double]::PositiveInfinity; Fresh = $false; LastLine = '' }
+    $res = @{ Exists = $false; AgeSec = [double]::PositiveInfinity; Fresh = $false; LastLine = ''; LastWrite = [datetime]::MinValue }
     if (Test-Path $HealthLog) {
         $res.Exists = $true
         try {
             $lw = (Get-Item $HealthLog).LastWriteTime
+            $res.LastWrite = $lw
             $res.AgeSec = ((Get-Date) - $lw).TotalSeconds
             $res.Fresh  = ($res.AgeSec -lt $StaleSeconds)
         } catch { }
@@ -206,7 +293,7 @@ try { if (Test-Path $StopFlag) { Remove-Item $StopFlag -Force -ErrorAction Silen
 
 Write-WatchLog "===== End K not ウォッチドッグ起動 =====" 'Cyan'
 Write-WatchLog "監視ログ: $HealthLog" 'DarkGray'
-Write-WatchLog "設定: stale=${StaleSeconds}s / 巡回=${CheckIntervalSec}s / 起動猶予=${BootGraceSec}s / 再起動上限=${MaxRelaunchPerHour}/h" 'DarkGray'
+Write-WatchLog "設定: stale=${StaleSeconds}s / 巡回=${CheckIntervalSec}s / 起動猶予=${BootGraceSec}s / 再起動上限=${MaxRelaunchPerHour}/h / ブート死ホールド=${BootDeathHoldThreshold}回→${BootDeathRetrySec}s間隔 / EGL再起動実験=$RestartEglOnBootDeathRetry / ゾンビ検知=${ZombieMenuSeconds}s" 'DarkGray'
 
 # 起動時に AU が動いていれば、その実行ファイルパスをフォールバック用に捕捉。
 $startProc = Get-AuProcess
@@ -274,6 +361,33 @@ while ($true) {
 
     # --- 正常表示 (コンソールには毎回、ファイルへは5分毎だけ書いてログを異常中心に保つ) ---
     if ($proc -and $health.Fresh) {
+        # 心拍が出ている = ブートは成功している。ブート死ループの疑いを解除する。
+        if ($script:BootDeaths -gt 0) { Write-WatchLog "心拍を確認。ブート死ループの疑いを解除します (連続カウントをリセット)。" 'Green' }
+        $script:BootDeaths   = 0
+        $script:LaunchJudged = $true
+
+        # --- ゾンビ検知: 心拍は新鮮なのに部屋が立たないまま Menu に座り続けている ---
+        # 最終行が state= を含む時だけ判定を更新する (ANOM 等 state 無し行でタイマーを壊さない)。
+        if ($ZombieMenuSeconds -gt 0 -and $health.LastLine -match 'state=([A-Za-z]+)') {
+            if ($Matches[1] -eq 'Menu') {
+                if ($script:MenuSince -eq [datetime]::MinValue) { $script:MenuSince = $now }
+                $menuFor = ($now - $script:MenuSince).TotalSeconds
+                $cool    = ($now - $script:LastRelaunch).TotalSeconds
+                if ($menuFor -ge $ZombieMenuSeconds -and -not $inGrace -and $cool -ge $RelaunchCooldownSec) {
+                    if (Test-RelaunchAllowed) {
+                        Write-WatchLog ("異常 [zombie]: 心拍は新鮮ですが state=Menu が {0:N0}s 継続 — 部屋立てが詰まっています。強制再起動します。" -f $menuFor) 'Red'
+                        Stop-Au
+                        Start-Au | Out-Null
+                        continue
+                    } else {
+                        Write-WatchLog ("ゾンビ疑い (state=Menu {0:N0}s 継続) ですが、直近1時間の再起動が上限(${MaxRelaunchPerHour})のため保留します。" -f $menuFor) 'Magenta'
+                    }
+                }
+            } else {
+                $script:MenuSince = [datetime]::MinValue
+            }
+        }
+
         $summary = if ($health.LastLine) { $health.LastLine } else { '(心拍待ち)' }
         $okMsg = "OK  proc=生存 心拍={0:N0}s前  {1}" -f $health.AgeSec, $summary
         if (((Get-Date) - $script:LastOkFileLog).TotalSeconds -ge 300) {
@@ -288,7 +402,9 @@ while ($true) {
     # --- 起動猶予中はどんな状態でも待つ ---
     if ($inGrace) {
         $left = [int]($script:GraceUntil - $now).TotalSeconds
-        Write-WatchLog "起動猶予中... 残り ${left}s (proc=$([bool]$proc) 心拍鮮度=$([int]$health.AgeSec)s)" 'DarkGray'
+        # 心拍ログ未存在時は AgeSec が ∞ (PositiveInfinity) で [int] キャストが例外になるため文字列で逃がす。
+        $ageStr = if ($health.Exists) { "$([int]$health.AgeSec)s" } else { 'なし' }
+        Write-WatchLog "起動猶予中... 残り ${left}s (proc=$([bool]$proc) 心拍鮮度=$ageStr)" 'DarkGray'
         continue
     }
 
@@ -304,6 +420,70 @@ while ($true) {
         Write-WatchLog "異常: AU プロセスが見つかりません（クラッシュ/終了）。" 'Red'
     } elseif (-not $health.Fresh) {
         Write-WatchLog ("異常: AU は生存だが心拍が {0:N0}s 途切れています（ハング疑い）。" -f $health.AgeSec) 'Red'
+    }
+
+    # --- ブート死判定 (launch 1回につき1回だけ) ---
+    # 番犬が起動した AU が、心拍を一度も出さずにプロセス消失した = EOS 認証切れ等で起動中に自己 exit する
+    # 「再起動しても直らない」状態のサイン。連射しても無駄打ちなので回数を数えてホールドに繋げる。
+    if (-not $script:LaunchJudged -and -not $proc -and $script:LastRelaunch -ne [datetime]::MinValue) {
+        $script:LaunchJudged = $true
+        $hbSeen = $health.Exists -and ($health.LastWrite -gt $script:LastRelaunch)
+        if ($hbSeen) {
+            $script:BootDeaths = 0
+        } else {
+            $script:BootDeaths++
+            Write-WatchLog ("ブート死を検出 [bootdeath]: 起動後に心拍が一度も出ないままプロセスが消えました (連続 {0} 回目 / しきい値 {1})。" -f $script:BootDeaths, $BootDeathHoldThreshold) 'Red'
+            # ブート死の典型 (FATAL ERROR: Unable to get Epic Account ID / EGL 接続エラー) は
+            # EGL の再起動で直る一過性のことが実測で多い。3連ホールドまで待たず、1回目から
+            # 次の立て直しの前に EGL をリフレッシュして即復帰を狙う (2026-07-07 実機知見)。
+            if ($RestartEglOnBootDeathRetry -and $script:BootDeaths -lt $BootDeathHoldThreshold) {
+                Restart-EpicLauncher
+            }
+        }
+    }
+
+    # --- 回線死活ゲート: 回線が死んでいる間は再起動しても必ずブート死するので、予算を燃やさず待つ ---
+    # (EGL 自体が「接続エラー: サーバーに接続できません」になる実測 2026-07-07。この状態では
+    #  Epic の手動サインインし直しも効かない = 認証切れではなく到達不能。回復待ちが唯一の正解。)
+    if (-not (Test-InternetAlive)) {
+        $script:NetWasDown = $true
+        $netMsg = "回線死を検出 [net-down]: インターネット (TCP 443) へ到達できません。再起動してもブート死するだけなので、回線回復を待ちます (AU/EGL の立て直しは保留)。"
+        if (((Get-Date) - $script:LastNetLog).TotalSeconds -ge 300) {
+            $script:LastNetLog = Get-Date
+            Write-WatchLog $netMsg 'Magenta'
+        } else {
+            Write-WatchLog $netMsg 'Magenta' -ConsoleOnly
+        }
+        continue
+    }
+    if ($script:NetWasDown) {
+        $script:NetWasDown = $false
+        Write-WatchLog "回線復帰を検出 [net-recovered]: 立て直しを再開します。" 'Cyan'
+        if ($script:BootDeaths -gt 0) {
+            # 直前までのブート死は回線死で説明がつく (認証切れの証拠ではない) ので、ホールドに
+            # 落とさず仕切り直す。EOS セッションを確実にリフレッシュするため EGL も再起動しておく。
+            $script:BootDeaths = 0
+            if ($RestartEglOnBootDeathRetry) { Restart-EpicLauncher }
+        }
+    }
+
+    # --- ブート死ホールド: 連射をやめて長周期の再試行だけにする ---
+    if ($script:BootDeaths -ge $BootDeathHoldThreshold) {
+        $sinceLaunch = ($now - $script:LastRelaunch).TotalSeconds
+        if ($sinceLaunch -lt $BootDeathRetrySec) {
+            $leftSec = [int]($BootDeathRetrySec - $sinceLaunch)
+            $holdMsg = "ブート死ループ検知 [bootdeath-hold]: 回線は生きているのにブート死が続く = EOS/Epic 認証切れの疑い。再起動では直りません。Epic Games Launcher をサインアウト→サインインし、AU を手動起動してメインメニュー到達を確認してください。自動再試行まで残り ${leftSec}s。"
+            if (((Get-Date) - $script:LastHoldLog).TotalSeconds -ge 300) {
+                $script:LastHoldLog = Get-Date
+                Write-WatchLog $holdMsg 'Magenta'
+            } else {
+                Write-WatchLog $holdMsg 'Magenta' -ConsoleOnly
+            }
+            continue
+        }
+        Write-WatchLog "ブート死ホールド中の定期再試行を行います (認証が復旧していれば心拍確認で自動復帰します)。" 'Yellow'
+        # 再試行の前に EGL をフル再起動して EOS トークンの自動リフレッシュを試みる (実験枠)。
+        if ($RestartEglOnBootDeathRetry) { Restart-EpicLauncher }
     }
 
     # --- 再起動上限チェック ---

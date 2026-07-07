@@ -85,6 +85,7 @@ public static class LobbyDecor
         writer.Write((byte)(d.Color.r * 255));
         writer.Write((byte)(d.Color.g * 255));
         writer.Write((byte)(d.Color.b * 255));
+        EarlyWarning.OnPacket("LobbyDecorSpawn", writer.Length, writer.Length, "Reliable");
         AmongUsClient.Instance.FinishRpcImmediately(writer);
     }
 

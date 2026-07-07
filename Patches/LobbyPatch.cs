@@ -219,40 +219,50 @@ internal static class LobbyBehaviourUpdatePatch
     private static ISoundPlayer MapThemeSound;
     public static void Postfix(LobbyBehaviour __instance)
     {
-        // When custom BGM is active, keep MapTheme suppressed via the Start-initiated window.
-        if (Main.EnableBGM?.Value ?? false)
+        // 自動再ホスト直後などシーン再構築中は SoundManager.Instance / soundPlayers が
+        // 一過性に null になり、無ガードだと毎フレーム NRE が FixedUpdateCaller まで伝播して
+        // 残りの毎フレーム処理を丸ごと中断する。他のロビー系パッチと同様に必ずガードする。
+        try
         {
-            LobbyBehaviourStartPatch.Tick();
-
-            // Tick's silence window closes after 2.5s — but AU 2026.3.31 can
-            // re-arm MapTheme later (post player-spawn handshake). Mirror the
-            // Ambience GO idempotent-every-frame pattern: target MapTheme only
-            // so we don't kill our own AudioSource sitting in soundPlayers.
-            SoundManager sm = SoundManager.Instance;
-            if (sm?.soundPlayers != null)
+            // When custom BGM is active, keep MapTheme suppressed via the Start-initiated window.
+            if (Main.EnableBGM?.Value ?? false)
             {
-                Func<ISoundPlayer, bool> isMapTheme = x => x.Name.Equals("MapTheme");
-                if (sm.soundPlayers.Find(isMapTheme) != null)
-                    sm.StopNamedSound("MapTheme");
+                LobbyBehaviourStartPatch.Tick();
+
+                // Tick's silence window closes after 2.5s — but AU 2026.3.31 can
+                // re-arm MapTheme later (post player-spawn handshake). Mirror the
+                // Ambience GO idempotent-every-frame pattern: target MapTheme only
+                // so we don't kill our own AudioSource sitting in soundPlayers.
+                SoundManager sm = SoundManager.Instance;
+                if (sm?.soundPlayers != null)
+                {
+                    Func<ISoundPlayer, bool> isMapTheme = x => x != null && x.Name.Equals("MapTheme");
+                    if (sm.soundPlayers.Find(isMapTheme) != null)
+                        sm.StopNamedSound("MapTheme");
+                }
+
+                return;
             }
 
-            return;
-        }
+            // BGM disabled: honour the vanilla LobbyMusic option.
+            SoundManager soundManager = SoundManager.Instance;
+            if (soundManager?.soundPlayers == null) return;
 
-        // BGM disabled: honour the vanilla LobbyMusic option.
-        // ReSharper disable once ConvertToLocalFunction
-        Lobbybgm = x => x.Name.Equals("MapTheme");
-        MapThemeSound = SoundManager.Instance.soundPlayers.Find(Lobbybgm);
+            // ReSharper disable once ConvertToLocalFunction
+            Lobbybgm = x => x != null && x.Name.Equals("MapTheme");
+            MapThemeSound = soundManager.soundPlayers.Find(Lobbybgm);
 
-        if (!Main.LobbyMusic.Value)
-        {
-            if (MapThemeSound == null) return;
-            SoundManager.Instance.StopNamedSound("MapTheme");
+            if (!Main.LobbyMusic.Value)
+            {
+                if (MapThemeSound == null) return;
+                soundManager.StopNamedSound("MapTheme");
+            }
+            else
+            {
+                if (MapThemeSound != null) return;
+                soundManager.CrossFadeSound("MapTheme", __instance.MapTheme, 0.5f);
+            }
         }
-        else
-        {
-            if (MapThemeSound != null) return;
-            SoundManager.Instance.CrossFadeSound("MapTheme", __instance.MapTheme, 0.5f);
-        }
+        catch (Exception e) { Utils.ThrowException(e); }
     }
 }

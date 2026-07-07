@@ -27,8 +27,9 @@ public static class FixedUpdateCaller
             catch (Exception e) { Utils.ThrowException(e); }
 
             // UI/テキスト異常(stale/重複/別オブジェクト混線した補助 TMP)をクラッシュなしで観測・記録する。
-            // HUD/ローカルプレイヤー非依存にここで回す(メニュー画面の DDOL 蓄積もサンプルする)。1/sec ゲート。
-            try { if (PerSecondUpdateScheduler.ShouldRunUpdate("ui-anomaly")) UiAnomalyWatch.Scan(); }
+            // 既定OFF: シーン全体の FindObjectsOfType<TMP_Text> 走査が長時間で native working set を単調に
+            // 押し上げる(IL2CPP プロキシ churn)ため、UI 破損の診断時のみ EnableUiAnomalyWatch で有効化する。1/sec ゲート。
+            try { if (Main.EnableUiAnomalyWatch.Value && PerSecondUpdateScheduler.ShouldRunUpdate("ui-anomaly")) UiAnomalyWatch.Scan(); }
             catch (Exception e) { Utils.ThrowException(e); }
 
             // クラッシュ復帰の番犬(外部ウォッチドッグ)を CrashWatchdog オプションに追従させる。

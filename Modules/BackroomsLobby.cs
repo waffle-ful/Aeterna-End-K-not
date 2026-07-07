@@ -3053,7 +3053,7 @@ public static class BackroomsLobby
             case "on":
                 BackroomsConfig.UseVanillaShadow = true;
                 SuppressCustomVision(true);
-                BackroomsShadow.Arm(BackroomsConfig.DefaultShadowRadius);
+                BackroomsShadow.Arm(BackroomsConfig.DefaultShadowRadius, diag: true);
                 Utils.SendMessage("vanilla 影 ON (custom 視界抑制 + driver arm)。歩いて目視。OFF=/bbshadow off", pid);
                 break;
             case "off":
@@ -3066,7 +3066,7 @@ public static class BackroomsLobby
                 float r = args is { Length: >= 3 } && float.TryParse(args[2], out float rv) ? rv : BackroomsConfig.DefaultShadowRadius;
                 BackroomsConfig.UseVanillaShadow = true;
                 SuppressCustomVision(true);
-                BackroomsShadow.Arm(r);
+                BackroomsShadow.Arm(r, diag: true);
                 Utils.SendMessage($"radius={r} で re-arm", pid);
                 break;
             case "dark":

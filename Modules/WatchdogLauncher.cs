@@ -38,6 +38,12 @@ public static class WatchdogLauncher
     // 起動処理中フラグ。1秒ごとの reconcile が Mutex 取得前に二重起動を仕掛けないためのガード。
     private static volatile bool _startInFlight;
 
+    // このプロセスがメインメニューに一度でも到達したか (MainMenuManagerPatch.Start_Prefix が立てる)。
+    // EOS 認証切れ等の「ブート死」(起動→メニュー前に自己終了) でも graceful exit だと OnApplicationQuit が
+    // 発火することがあり、これを「ユーザーの意図的終了」と誤認して stop-flag を書くと番犬ごと死んで
+    // 無人化する (2026-07-07 配信で実測)。メニュー未到達の終了ではユーザーの意思は介在しえない。
+    public static bool MainMenuReached;
+
     // 番犬が現在動いているか。名前付き Mutex で見るので、AU がクラッシュ→再起動して
     // プロセスハンドルを失った後の新セッションからでも「既に番犬が動いている」を正しく検出できる。
     public static bool IsRunning
@@ -208,6 +214,14 @@ public static class WatchdogLauncher
         if (AutoRestart.RestartInProgress)
         {
             Logger.Info("Watchdog: game quitting for auto-restart; leaving watchdog running to relaunch", "WatchdogLauncher");
+            return;
+        }
+
+        // メニュー未到達での終了 = ユーザーの意思ではなくブート死 (EOS 認証切れ等での起動中自己終了)。
+        // ここで stop-flag を書くと番犬まで止まって配信ループが完全停止するので、番犬は生かしたままにする。
+        if (!MainMenuReached)
+        {
+            Logger.Warn("Watchdog: game quitting before ever reaching the main menu (boot death?); leaving watchdog running", "WatchdogLauncher");
             return;
         }
 

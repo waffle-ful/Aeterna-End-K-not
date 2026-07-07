@@ -128,6 +128,11 @@ public static class HealthLog
         {
             Write($"STATE {LastState}->{state} t={now}");
             LastState = state;
+
+            // ロビー復帰毎に 1 回、型別オブジェクト census を残す (per-game 破棄漏れの犯人型特定計器)
+            if (state == "Lobby")
+                try { MemCensus.ScheduleAfterLobbyEnter(); }
+                catch { }
         }
 
         // フレームストール検出: Tick は毎フレーム呼ばれる。前回 Tick から実時間で大きく空いた =

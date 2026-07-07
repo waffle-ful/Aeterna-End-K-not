@@ -70,6 +70,9 @@ public static class MainMenuManagerPatch
         // 番犬による(再)起動なら前回設定で自動ホスト (Calamity 有無に関わらず走らせたいので Prefix で呼ぶ)。
         AutoRehost.OnMainMenuStart();
 
+        // メニュー到達 = ブートは成功。以降の OnApplicationQuit は「ユーザーの意図的終了」として扱ってよい。
+        WatchdogLauncher.MainMenuReached = true;
+
         if (Template == null) Template = __instance.quitButton;
 
         if (Template == null) return;

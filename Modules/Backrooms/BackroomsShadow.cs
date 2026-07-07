@@ -23,6 +23,7 @@ public static class BackroomsShadow
     private static LightSourceRenderer _ownRenderer;  // ls.renderer が null の時だけ自前生成 (Dispose 用)
     private static bool _driveActive;                 // 毎フレ手動 Render driver の ON/OFF
     private static bool _loggedThrow;                 // driver throw の log-once フラグ
+    private static bool _diagEnabled;                 // 毎秒診断 (OverlapCircleAll+ログ) の ON/OFF。既定 OFF (デバッグ時のみ)
     private static ShadowCamera _shadowCam;           // Camera.main に追従させる ShadowCamera (キャッシュ)
     private static Camera _shadowCamCam;              // 同 GO の Camera component (ortho 同期用)
     private static float _diagTimer;                  // 毎秒位置診断の throttle
@@ -39,8 +40,11 @@ public static class BackroomsShadow
 
     // 冪等。ls.renderer (素のロビーで既に非null) を使う。null の時だけ自前 renderer を生成。
     // ls.renderer に自前 renderer を *注入しない* (注入するとバニラ Update が NRE flood)。
-    public static void Arm(float radius)
+    // diag=true で毎秒の位置診断 (OverlapCircleAll×2 + 長文ログ) を有効化。il2cpp 側の確保が毎秒積もり
+    // 長時間セッションで native working set を押し上げるため、影バグ調査時 (/bbshadow, /bbtestroom) のみ ON。
+    public static void Arm(float radius, bool diag = false)
     {
+        _diagEnabled = diag;
         PlayerControl lp = PlayerControl.LocalPlayer;
         if (lp == null) return;
 
@@ -111,7 +115,11 @@ public static class BackroomsShadow
             ApplyDarkOverride();
             ApplyShadowMask(); // 毎フレ維持 (バニラが _Mask を戻す場合に備え)
 
-            // 毎秒位置診断 + caster query の hits 本数 (EdgeCollider2D が拾われているかの確証)
+            // 毎秒位置診断 + caster query の hits 本数 (EdgeCollider2D が拾われているかの確証)。
+            // 既定 OFF: OverlapCircleAll×2 + il2cpp プロパティ大量読み + 長文ログが毎秒 il2cpp 側に確保を積み、
+            // 長時間セッションの native メモリ膨張に寄与するため、影デバッグ時 (Arm(diag:true)) のみ実行。
+            if (!_diagEnabled) return;
+
             _diagTimer += Time.unscaledDeltaTime;
             if (_diagTimer >= 1f)
             {
@@ -159,6 +167,7 @@ public static class BackroomsShadow
     public static void Disarm()
     {
         _driveActive = false;
+        _diagEnabled = false;
         _shadowCam = null;
         _shadowCamCam = null;
         _diagTimer = 0f;
@@ -326,7 +335,7 @@ public static class BackroomsShadow
 
         // 半径は画面(±5u)より大きめに取りテスト物を内包 → 影ウェッジを明るい領域に出す。
         // 半径5は ortho3 画面をほぼ照らし「暗部=影ウェッジだけ」が見える状態 (= blocky vs 滑らか の判別に最適)。
-        Arm(5f);
+        Arm(5f, diag: true);
 
         Logger.Info($"SpawnTestRoom({variant}) at feet=({feet.x:F1},{feet.y:F1}) casters={_testCasters.Count}", Tag);
         Utils.SendMessage($"test '{variant}' spawned + driver armed(半径5)。ログ(BBShadow)の [driver] hits=N で caster 検出を確認。除去 /bbtestroom off", targetPid);

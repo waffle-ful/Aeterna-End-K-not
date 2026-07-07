@@ -154,6 +154,12 @@ public static class UiAnomalyWatch
     private static readonly Dictionary<string, int> CreatedIds = new();  // 生成時(=live)に控えた instance id
     private static readonly Dictionary<string, long> LastWarned = new();
 
+    // FindObjectsOfType<TMP_Text>(true) はシーン全体を走査し IL2CPP プロキシを大量に確保するため native ws を
+    // 押し上げる。既定はモジュールごと OFF(Main.EnableUiAnomalyWatch)だが、診断で有効化した時も churn を抑えるよう
+    // 実走査は 10s に1回へ間引く(全体ゲートとの二重防御)。
+    private static long LastScanTs;
+    private const long ScanThrottleSeconds = 10;
+
     // ShowCommandHelp の各 Object.Instantiate 直後(オブジェクトは確実に live)に呼ぶ。
     public static void RecordCreation(string name, int instanceId)
     {
@@ -173,6 +179,11 @@ public static class UiAnomalyWatch
     {
         try
         {
+            // 実走査は 10s に1回(native churn 抑制の二重防御。全体の有効化は Main.EnableUiAnomalyWatch)。
+            long nowTs = Utils.TimeStamp;
+            if (nowTs - LastScanTs < ScanThrottleSeconds) return;
+            LastScanTs = nowTs;
+
             // BackroomsLobby が Renderer(抽象)で実証済みのシグネチャ。基底 TMP_Text で TextMeshPro と
             // TextMeshProUGUI の両方を拾い、(true) で非アクティブ overlay / DontDestroyOnLoad キャッシュも対象に。
             // FindObjectsOfType はシーン上のオブジェクトのみ返す(prefab/asset は含まない)ので読み取りは安全。
