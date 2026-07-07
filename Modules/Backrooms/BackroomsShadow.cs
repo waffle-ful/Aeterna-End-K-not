@@ -28,6 +28,8 @@ public static class BackroomsShadow
     private static Camera _shadowCamCam;              // 同 GO の Camera component (ortho 同期用)
     private static float _diagTimer;                  // 毎秒位置診断の throttle
 
+    private static float _pendingArmRadius = float.NaN; // Arm 時に lightSource 未生成だった場合の遅延完了用 (NaN=なし)
+
     private static float _darkLevel = -1f;            // >=0 で ShadowQuad._Color を (v,v,v,1) に毎フレ上書き
     private static float _edgeBlur = -1f;             // >=0 で LightCutaway._EdgeBlur を毎フレ上書き
     private static float _origShadowMask = float.NaN; // ShadowQuad._Mask の元値 (Restore 用、NaN=未保存)
@@ -49,7 +51,20 @@ public static class BackroomsShadow
         if (lp == null) return;
 
         LightSource ls = lp.lightSource;
-        if (ls == null) { Logger.Warn("Arm: lightSource null (AdjustLighting 未呼び出し)", Tag); return; }
+        if (ls == null)
+        {
+            // GAMEEND→ロビー復帰直後は vanilla AdjustLighting 前で lightSource が未生成のことがある (フレーム運)。
+            // ここで諦めると driver が二度と起動せず影が恒久に消えるため、driver だけ起動して
+            // Drive() 側で lightSource 出現を待って遅延完了させる (自己修復)。
+            Logger.Warn("Arm: lightSource null (AdjustLighting 未呼び出し) — Drive 側で遅延完了します", Tag);
+            _pendingArmRadius = radius;
+            _driveActive = true;
+            _loggedThrow = false;
+            _diagTimer = 0f;
+            return;
+        }
+
+        _pendingArmRadius = float.NaN;
 
         if (ls.renderer == null && _ownRenderer == null)
         {
@@ -85,6 +100,14 @@ public static class BackroomsShadow
 
             LightSource ls = lp.lightSource;
             if (ls == null) return;
+
+            // Arm 時に lightSource 未生成だった場合の遅延完了 (自己修復): 出現した今、フルセットアップを実行
+            if (!float.IsNaN(_pendingArmRadius))
+            {
+                float pendingRadius = _pendingArmRadius;
+                _pendingArmRadius = float.NaN;
+                Arm(pendingRadius, _diagEnabled);
+            }
 
             LightSourceRenderer r = _ownRenderer != null ? _ownRenderer : ls.renderer;
             if (r == null) return;
@@ -159,7 +182,29 @@ public static class BackroomsShadow
         }
         catch (Exception ex)
         {
-            if (!_loggedThrow) { _loggedThrow = true; Logger.Warn($"[driver] throw: {ex}", Tag); }
+            if (!_loggedThrow)
+            {
+                _loggedThrow = true;
+                Logger.Warn($"[driver] throw: {ex}", Tag);
+
+                // 前ゲームの stale ls.renderer (シーン unload で内部 RT 破棄済みでも null 判定にならない) が
+                // 毎フレ throw し続けるケースの自己修復: 初回 throw 時に一度だけ自前 renderer へ切り替える。
+                if (_ownRenderer == null)
+                {
+                    try
+                    {
+                        LightSource ls2 = PlayerControl.LocalPlayer != null ? PlayerControl.LocalPlayer.lightSource : null;
+                        if (ls2 != null)
+                        {
+                            LightSourceRenderer nr = LightSourceRenderer.Create(LightSourceRenderer.GetPlatformType(), ls2);
+                            nr.Initialize();
+                            _ownRenderer = nr;
+                            Logger.Warn("[driver] stale ls.renderer を見限り自前 renderer へ切替", Tag);
+                        }
+                    }
+                    catch (Exception ex2) { Logger.Warn($"[driver] renderer 再生成失敗 {ex2.Message}", Tag); }
+                }
+            }
         }
     }
 
@@ -168,6 +213,7 @@ public static class BackroomsShadow
     {
         _driveActive = false;
         _diagEnabled = false;
+        _pendingArmRadius = float.NaN;
         _shadowCam = null;
         _shadowCamCam = null;
         _diagTimer = 0f;
@@ -237,6 +283,7 @@ public static class BackroomsShadow
     {
         _driveActive = false;
         _loggedThrow = false;
+        _pendingArmRadius = float.NaN;
         _shadowCam = null;
         _shadowCamCam = null;
         _diagTimer = 0f;

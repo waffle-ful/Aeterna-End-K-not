@@ -1611,9 +1611,11 @@ public static class GameSettingMenuPatch
             // Settings is opened, the clone copies it → a "PlaceHolderText(Clone)" that ends up cached in the
             // DontDestroyOnLoad UI root and accumulates on every reopen, leaking its GameObject name into the
             // UI. Strip any such ghost out of this clone so the search box only carries its own text field.
+            // DestroyImmediate: 遅延 Destroy だとフレーム末まで実体が残り、その間の UiAnomalyWatch スキャンに
+            // live=2 (DUP) と映るため即時破棄する。
             foreach (TextMeshPro ghost in field.GetComponentsInChildren<TextMeshPro>(true))
                 if (ghost.name.StartsWith("PlaceHolderText"))
-                    Object.Destroy(ghost.gameObject);
+                    Object.DestroyImmediate(ghost.gameObject);
         }
         field.transform.localScale = new(0.3f, 0.59f, 1);
         field.transform.localPosition = new(-0.7f, -2.5f, -5f);

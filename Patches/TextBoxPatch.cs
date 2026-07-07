@@ -265,6 +265,9 @@ public static class TextBoxPatch
             {
                 CommandInfoText = Object.Instantiate(hud.KillButton.cooldownTimerText, hud.transform.parent, true);
                 CommandInfoText.name = "CommandInfoText";
+                // クローン元 (KillButton timer) から継承した AspectPosition を除去しないと、SetActive のたびに
+                // localPosition を上書きしてキルボタン位置へ再ピン留めされる (BGMInfoDisplay と同じ罠)
+                { var ap = CommandInfoText.GetComponent<AspectPosition>(); if (ap != null) Object.Destroy(ap); }
                 CommandInfoText.alignment = TextAlignmentOptions.Left;
                 CommandInfoText.verticalAlignment = VerticalAlignmentOptions.Top;
                 CommandInfoText.transform.localPosition = new(-3.2f, -2.35f, 0f);
@@ -282,6 +285,7 @@ public static class TextBoxPatch
             {
                 AdditionalInfoText = Object.Instantiate(hud.KillButton.cooldownTimerText, hud.transform.parent, true);
                 AdditionalInfoText.name = "AdditionalInfoText";
+                { var ap = AdditionalInfoText.GetComponent<AspectPosition>(); if (ap != null) Object.Destroy(ap); }
                 AdditionalInfoText.alignment = TextAlignmentOptions.Left;
                 AdditionalInfoText.verticalAlignment = VerticalAlignmentOptions.Top;
                 AdditionalInfoText.transform.localPosition = new(-5f, 0f, 0f);
@@ -414,8 +418,8 @@ public static class TextBoxPatch
         void Destroy()
         {
             LastSuggestion = "";
-            if (Valid(PlaceHolderText, PlaceHolderId)) { PlaceHolderText.text = ""; PlaceHolderText.enabled = false; } else { PlaceHolderText = null; PlaceHolderId = 0; }
-            if (Valid(CommandInfoText, CommandInfoId)) { CommandInfoText.text = ""; CommandInfoText.enabled = false; } else { CommandInfoText = null; CommandInfoId = 0; }
+            if (Valid(PlaceHolderText, PlaceHolderId)) { PlaceHolderText.text = ""; PlaceHolderText.enabled = false; } else { Modules.UiAnomalyWatch.RecordDestruction("PlaceHolderText"); PlaceHolderText = null; PlaceHolderId = 0; }
+            if (Valid(CommandInfoText, CommandInfoId)) { CommandInfoText.text = ""; CommandInfoText.enabled = false; } else { Modules.UiAnomalyWatch.RecordDestruction("CommandInfoText"); CommandInfoText = null; CommandInfoId = 0; }
 
             if (Valid(AdditionalInfoText, AdditionalInfoId))
             {
@@ -424,7 +428,7 @@ public static class TextBoxPatch
                 if (showLobbyCode) AdditionalInfoText.text = $"\n\n{Translator.GetString("LobbyCode")}:\n<size=250%><b>{GameCode.IntToGameName(AmongUsClient.Instance.GameId)}</b></size>";
                 if (!showLobbyCode) AdditionalInfoText.text = "";
             }
-            else { AdditionalInfoText = null; AdditionalInfoId = 0; }
+            else { Modules.UiAnomalyWatch.RecordDestruction("AdditionalInfoText"); AdditionalInfoText = null; AdditionalInfoId = 0; }
         }
     }
 
@@ -447,16 +451,23 @@ public static class TextBoxPatch
         try
         {
             bool open = HudManager.InstanceExists && (HudManager.Instance?.Chat?.IsOpenOrOpening ?? false);
-            ToggleOverlay(ref PlaceHolderText, ref PlaceHolderId, open);
-            ToggleOverlay(ref CommandInfoText, ref CommandInfoId, open);
-            ToggleOverlay(ref AdditionalInfoText, ref AdditionalInfoId, open);
+            ToggleOverlay(ref PlaceHolderText, ref PlaceHolderId, open, "PlaceHolderText");
+            ToggleOverlay(ref CommandInfoText, ref CommandInfoId, open, "CommandInfoText");
+            ToggleOverlay(ref AdditionalInfoText, ref AdditionalInfoId, open, "AdditionalInfoText");
         }
         catch { }
     }
 
-    private static void ToggleOverlay(ref TextMeshPro tmp, ref int id, bool open)
+    private static void ToggleOverlay(ref TextMeshPro tmp, ref int id, bool open, string watchName)
     {
-        if (!Valid(tmp, id)) { tmp = null; id = 0; return; }
+        if (!Valid(tmp, id))
+        {
+            // 破棄検知で static を捨てる時は watcher の帳簿も落とす (残すと偽 DANGLE が鳴り続ける)
+            if (id != 0) Modules.UiAnomalyWatch.RecordDestruction(watchName);
+            tmp = null;
+            id = 0;
+            return;
+        }
         tmp.gameObject.SetActive(open);
         if (!open) { tmp.enabled = false; tmp.text = ""; }
     }
@@ -553,6 +564,17 @@ public static class TextBoxPatch
     [HarmonyPostfix]
     public static void OnClear(TextBoxTMP __instance)
     {
-        if (__instance.gameObject.HasParentInHierarchy("ChatScreenRoot/ChatScreenContainer")) LastText = "";
+        if (!__instance.gameObject.HasParentInHierarchy("ChatScreenRoot/ChatScreenContainer")) return;
+        LastText = "";
+
+        // vanilla の Clear() は SetText を経由しないため ShowCommandHelp が走らず、
+        // 直前のグレー予測 (PlaceHolderText) が送信後も残り続ける → ここで掃除する。
+        LastSuggestion = "";
+        try
+        {
+            if (Valid(PlaceHolderText, PlaceHolderId)) { PlaceHolderText.text = ""; PlaceHolderText.enabled = false; }
+            if (Valid(CommandInfoText, CommandInfoId)) { CommandInfoText.text = ""; CommandInfoText.enabled = false; }
+        }
+        catch { }
     }
 }

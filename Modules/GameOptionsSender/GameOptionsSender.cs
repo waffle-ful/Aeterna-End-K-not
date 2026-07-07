@@ -53,23 +53,31 @@ public abstract class GameOptionsSender
 
     private void SendOptionsArray(Il2CppStructArray<byte> optionArray)
     {
-        int count = GameManager.Instance.LogicComponents.Count;
+        // ロビー/セッション起動直後は GameManager.Instance / LogicComponents が未構築の瞬間がある (NRE 源)
+        GameManager gm = GameManager.Instance;
+        if (gm == null || gm.LogicComponents == null) return;
+        int count = gm.LogicComponents.Count;
 
         for (byte i = 0; i < count; i++)
         {
-            Il2CppSystem.Object logicComponent = GameManager.Instance.LogicComponents[i];
-            if (logicComponent.TryCast<LogicOptions>(out _)) SendOptionsArray(optionArray, i);
+            Il2CppSystem.Object logicComponent = gm.LogicComponents[i];
+            if (logicComponent != null && logicComponent.TryCast<LogicOptions>(out _)) SendOptionsArray(optionArray, i);
         }
     }
 
     private IEnumerator SendOptionsArrayAsync(Il2CppStructArray<byte> optionArray)
     {
-        int count = GameManager.Instance.LogicComponents.Count;
+        GameManager gm = GameManager.Instance;
+        if (gm == null || gm.LogicComponents == null) yield break;
+        int count = gm.LogicComponents.Count;
 
         for (byte i = 0; i < count; i++)
         {
-            Il2CppSystem.Object logicComponent = GameManager.Instance.LogicComponents[i];
-            if (logicComponent.TryCast<LogicOptions>(out _)) SendOptionsArray(optionArray, i);
+            // yield を跨ぐため毎周で取り直す (シーン遷移で破棄されうる)
+            gm = GameManager.Instance;
+            if (gm == null || gm.LogicComponents == null || i >= gm.LogicComponents.Count) yield break;
+            Il2CppSystem.Object logicComponent = gm.LogicComponents[i];
+            if (logicComponent != null && logicComponent.TryCast<LogicOptions>(out _)) SendOptionsArray(optionArray, i);
             yield return WaitFrameIfNecessary();
         }
     }
@@ -161,9 +169,12 @@ public abstract class GameOptionsSender
                 {
                     yield return WaitFrameIfNecessary();
 
-                    if (PackedWriter != null && (PackedWriter.Length > 1000 || PackedWriterMessages >= AmongUsClient.Instance.GetMaxMessagePackingLimit()))
+                    // 分割閾値は公式鯖 kick 上限 (~1024) に対するヘッダ余裕込みで SafeChunkLength (800) に揃える
+                    // (旧値 1000 は RPC.cs SyncCustomSettingsRPC と同じ独立マジックナンバーの兄弟だった)
+                    if (PackedWriter != null && (PackedWriter.Length > CustomRpcSender.SafeChunkLength || PackedWriterMessages >= AmongUsClient.Instance.GetMaxMessagePackingLimit()))
                     {
                         PackedWriter.EndMessage();
+                        EarlyWarning.OnPacket("GameOptionsSender.PackedFlush", PackedWriter.Length, PackedWriter.Length, "Reliable");
                         var qa = DataFlagRateLimiter.Enqueue(() => AmongUsClient.Instance.SendOrDisconnect(PackedWriter));
                         yield return qa.Wait();
                         PackedWriterMessages = 0;
@@ -196,6 +207,7 @@ public abstract class GameOptionsSender
                 if (PackedWriterMessages > 0 && PackedWriter != null)
                 {
                     PackedWriter.EndMessage();
+                    EarlyWarning.OnPacket("GameOptionsSender.PackedFlush", PackedWriter.Length, PackedWriter.Length, "Reliable");
                     yield return DataFlagRateLimiter.Enqueue(() => AmongUsClient.Instance.SendOrDisconnect(PackedWriter)).Wait();
                 }
 

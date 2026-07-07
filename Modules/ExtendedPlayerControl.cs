@@ -1429,12 +1429,14 @@ internal static class ExtendedPlayerControl
                 string name = isMeeting ? player.Data.PlayerName : player.name;
                 return name.RemoveHtmlTags();
             }
-            catch (NullReferenceException nullReferenceException)
+            catch (Exception nullReferenceException) when (nullReferenceException is NullReferenceException || nullReferenceException.Message.Contains("NullReferenceException"))
             {
                 // player / player.name / player.Data can be null or destroyed (e.g. a player who
                 // disconnected before game end). Recover the cached name kept per PlayerId instead of
                 // showing a blank. Only the truly-unrecoverable case (the wrapper itself is gone) is
                 // logged, so a genuine null bug still leaves a host-log breadcrumb.
+                // 注意: IL2CPP 側で投げられた NRE は managed には Il2CppException として届き型チェックを
+                // 素通りするため (HudPatch.cs Finalizer と同じ)、メッセージでも判定してキャッシュ復元を通す。
                 try
                 {
                     if (Main.AllPlayerNames.TryGetValue(player.PlayerId, out string cached) && !string.IsNullOrEmpty(cached))

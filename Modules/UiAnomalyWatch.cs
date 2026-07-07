@@ -167,6 +167,14 @@ public static class UiAnomalyWatch
         catch { }
     }
 
+    // TextBoxPatch 側が破棄済みオブジェクトを検知して static 参照を捨てた時に呼ぶ。
+    // 帳簿を落とさないと「実体は死んだが記帳だけ残る」偽 DANGLE が世代境界まで鳴り続ける。
+    public static void RecordDestruction(string name)
+    {
+        try { CreatedIds.Remove(name); }
+        catch { }
+    }
+
     // TextBoxPatch.Reset()(新しい HudManager ごと)で呼ぶ。世代境界で baseline と de-dup をクリア。
     public static void OnReset()
     {

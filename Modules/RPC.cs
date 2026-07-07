@@ -1421,7 +1421,10 @@ internal static class RPCHandlerPatch
 
 internal static class RPC
 {
-    const int MaxBytesPerRPC = 1000;
+    // 公式鯖 anti-cheat の kick 上限 (~1024 byte/パケット) に対し、GameData/GameDataTo ラップの
+    // ヘッダ未計上分 (+100 byte 超) が乗るため、分割閾値は CustomRpcSender.SafeChunkLength (800) に揃える。
+    // (旧値 1000 は独立マジックナンバーで、ヘッダ込み実測が 1024 を超え Hacking キックを引き起こしうる)
+    const int MaxBytesPerRPC = CustomRpcSender.SafeChunkLength;
 
     public static void SyncLobbyState()
     {
@@ -1458,11 +1461,13 @@ internal static class RPC
             if (writer.Position >= MaxBytesPerRPC && idx < OptionItem.AllOptions.Count)
             {
                 writer.WritePacked(-1); // Stop indicator
+                EarlyWarning.OnPacket("SyncCustomSettingsRPC", writer.Position, writer.Position, "Reliable");
                 AmongUsClient.Instance.FinishRpcImmediately(writer);
                 writer = AmongUsClient.Instance.StartRpcImmediately(PlayerControl.LocalPlayer.NetId, (byte)CustomRPC.SyncCustomSettings, SendOption.Reliable, targetId);
             }
         }
         writer.WritePacked(-1); // Stop indicator
+        EarlyWarning.OnPacket("SyncCustomSettingsRPC", writer.Position, writer.Position, "Reliable");
         AmongUsClient.Instance.FinishRpcImmediately(writer);
     }
 

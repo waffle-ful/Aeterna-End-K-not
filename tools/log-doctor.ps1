@@ -297,7 +297,7 @@ foreach ($sess in $healthSessions) {
         Add-Finding -Severity critical -Rule 'rule2' -Title ('公式 anti-cheat kick (DC reason=Hacking) [{0}]' -f $sess.Source) -Time $timeStr `
             -Evidence $ev -NoCap $true `
             -Cause '公式サーバーの anti-cheat による切断。~1KB 単一パケット閾値超過 / 不正 GUID / ロビーでの PlayerControl 系 CNO などが引き金。' `
-            -Advice '対処: (1) len>=900 マークの送信を縮小する(sprite圧縮・分割送信) (2) PluginGuid は V4 UUID 必須 (3) PlayerControl-based CNO はロビーで出さない。memory 参照: project_au2026_1kb_packet_threshold / project_innersloth_uuid_pluginguid_required / project_cno_lobby_anticheat_kick。'
+            -Advice '対処: (1) len>=900 マークの送信を縮小する(sprite圧縮・分割送信) (2) PluginGuid は V4 UUID 必須 (3) PlayerControl-based CNO はロビーで出さない。2026-07-07 以降のビルドは SyncCustomSettingsRPC / GameOptionsSender.PackedFlush / PlayerGameOptionsSender.PackedFlush / GuessManager.SetNameChunk にも EarlyWarning 計装済み — DC 近傍の WARN kind=packet にこれらの name が出たら bug-inbox BUG-20260706-05 の真因確定/反証に直結する。memory 参照: project_official_kick_packet_cap_chunking / project_innersloth_uuid_pluginguid_required / project_cno_lobby_anticheat_kick。'
     }
 }
 

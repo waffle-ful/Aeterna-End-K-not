@@ -141,6 +141,8 @@ public static class BGMInfoDisplay
 
     private static void AnchorToCamera()
     {
+        // FadeRoutine はシーン遷移を跨ぐため、下地 TMP が破棄済みのことがある (Unity fake-null 判定必須)
+        if (displayText == null) return;
         Camera cam = Camera.main;
         if (cam == null) return;
         Vector3 offset = new(0.4f, 0.9f, cam.nearClipPlane + 0.1f);
@@ -154,25 +156,31 @@ public static class BGMInfoDisplay
 
         for (float t = 0f; t < FadeInDuration; t += Time.deltaTime)
         {
+            // シーン遷移で displayText が破棄されたら stale コルーチンを打ち切る
+            if (displayText == null) { activeFade = null; yield break; }
             AnchorToCamera();
             displayText.alpha = t / FadeInDuration;
             yield return null;
         }
 
+        if (displayText == null) { activeFade = null; yield break; }
         displayText.alpha = 1f;
         for (float t = 0f; t < HoldDuration; t += Time.deltaTime)
         {
+            if (displayText == null) { activeFade = null; yield break; }
             AnchorToCamera();
             yield return null;
         }
 
         for (float t = 0f; t < FadeOutDuration; t += Time.deltaTime)
         {
+            if (displayText == null) { activeFade = null; yield break; }
             AnchorToCamera();
             displayText.alpha = 1f - (t / FadeOutDuration);
             yield return null;
         }
 
+        if (displayText == null) { activeFade = null; yield break; }
         displayText.alpha = 0f;
         displayText.gameObject.SetActive(false);
         activeFade = null;

@@ -63,6 +63,7 @@ public sealed class PlayerGameOptionsSender(PlayerControl player) : GameOptionsS
         {
             PackedWriter.EndMessage();
             var capturedWriter = PackedWriter;
+            EarlyWarning.OnPacket("PlayerGameOptionsSender.PackedFlush", capturedWriter.Length, capturedWriter.Length, "Reliable");
             DataFlagRateLimiter.Enqueue(() =>
             {
                 AmongUsClient.Instance.SendOrDisconnect(capturedWriter);
@@ -85,6 +86,7 @@ public sealed class PlayerGameOptionsSender(PlayerControl player) : GameOptionsS
                 {
                     PackedWriter.EndMessage();
                     var capturedWriter = PackedWriter;
+                    EarlyWarning.OnPacket("PlayerGameOptionsSender.PackedFlush", capturedWriter.Length, capturedWriter.Length, "Reliable");
                     DataFlagRateLimiter.Enqueue(() =>
                     {
                         AmongUsClient.Instance.SendOrDisconnect(capturedWriter);
@@ -107,6 +109,7 @@ public sealed class PlayerGameOptionsSender(PlayerControl player) : GameOptionsS
             {
                 PackedWriter.EndMessage();
                 var capturedWriter = PackedWriter;
+                EarlyWarning.OnPacket("PlayerGameOptionsSender.PackedFlush", capturedWriter.Length, capturedWriter.Length, "Reliable");
                 DataFlagRateLimiter.Enqueue(() =>
                 {
                     AmongUsClient.Instance.SendOrDisconnect(capturedWriter);

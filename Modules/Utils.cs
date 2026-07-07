@@ -4482,7 +4482,7 @@ public static class Utils
                 Logger.Info(ContAliveLog.ToString(), "CountAlivePlayers");
             }
 
-            if (AmongUsClient.Instance.AmHost && Main.IntroDestroyed)
+            if (AmongUsClient.Instance != null && AmongUsClient.Instance.AmHost && Main.IntroDestroyed)
                 GameEndChecker.CheckCustomEndCriteria();
         }
         catch (Exception e) { ThrowException(e); }
@@ -5155,6 +5155,8 @@ public static class Utils
         var count = 0;
         foreach (var pc in Main.CachedAlivePlayerControls())
         {
+            // GAMEEND 直後や途中離脱直後は破棄済みネイティブの stale ラッパーが混ざりうる (Il2Cpp NRE 源)
+            if (!pc) continue;
             if (pc.Is(countTypes))
                 count++;
         }

@@ -1452,6 +1452,7 @@ public static class GuessManager
                     {
                         messages = 0;
                         writer.EndMessage();
+                        EarlyWarning.OnPacket("GuessManager.SetNameChunk", writer.Length, writer.Length, "Reliable");
                         AmongUsClient.Instance.SendOrDisconnect(writer);
                         writer.Clear(SendOption.Reliable);
                         writer.StartMessage(6);
@@ -1478,6 +1479,7 @@ public static class GuessManager
                 }
 
                 writer.EndMessage();
+                EarlyWarning.OnPacket("GuessManager.SetNameChunk", writer.Length, writer.Length, "Reliable");
                 AmongUsClient.Instance.SendOrDisconnect(writer);
                 writer.Recycle();
 

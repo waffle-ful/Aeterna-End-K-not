@@ -230,7 +230,7 @@ internal static class FriendsListUIOpenPatch
                     return false;
 
                 __instance.friendBars = new();
-                __instance.lobbyBars = new();
+                // lobbyBars は現行 AU ビルドで削除済み (触ると JIT 時に MissingMethodException で Prefix ごと死ぬ)
                 __instance.notifBars = new();
                 __instance.platformFriendBars = new();
                 __instance.viewingAllFriends = true;
@@ -274,12 +274,6 @@ internal static class FriendsListUIOpenPatch
                     foreach (FriendsListBar notifBar in __instance.notifBars)
                     {
                         foreach (PassiveButton passiveButton in notifBar.ControllerSelectable)
-                            ControllerManager.Instance.AddSelectableUiElement(passiveButton);
-                    }
-
-                    foreach (FriendsListBar lobbyBar in __instance.lobbyBars)
-                    {
-                        foreach (PassiveButton passiveButton in lobbyBar.ControllerSelectable)
                             ControllerManager.Instance.AddSelectableUiElement(passiveButton);
                     }
 

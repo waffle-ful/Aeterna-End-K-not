@@ -1084,9 +1084,14 @@ internal static class ReportDeadBodyPatch
         if (Options.DisableReportWhenCC.GetBool() && Camouflage.IsCamouflage) return false;
         if (target && AlreadyReportedBodies.Contains(target.PlayerId)) return false;
 
-        if (!CanReport[__instance.PlayerId] || __instance.IsRoleBlocked())
+        // CanReport/WaitReport はゲーム開始時に初期化されるため、開始前の一過性ウィンドウや
+        // 途中参加者は null/未登録がありうる (NRE/KeyNotFound 源)。未登録は「通報可」として扱う。
+        bool canReport = CanReport == null || CanReport.GetValueOrDefault(__instance.PlayerId, true);
+        if (!canReport || __instance.IsRoleBlocked())
         {
-            WaitReport[__instance.PlayerId].Add(target);
+            if (!WaitReport.TryGetValue(__instance.PlayerId, out List<NetworkedPlayerInfo> waitList))
+                WaitReport[__instance.PlayerId] = waitList = [];
+            waitList.Add(target);
             Logger.Warn($"{__instance.GetNameWithRole().RemoveHtmlTags()}: Reporting is currently prohibited, so we will wait until it becomes possible.", "ReportDeadBody");
             return false;
         }
@@ -1663,10 +1668,10 @@ internal static class FixedUpdatePatch
 
             byte id = __instance.PlayerId;
 
-            if (AmongUsClient.Instance.AmHost && GameStates.IsInTask && ReportDeadBodyPatch.CanReport[id] && !id.IsPlayerRoleBlocked() && ReportDeadBodyPatch.WaitReport[id].Count > 0)
+            if (AmongUsClient.Instance.AmHost && GameStates.IsInTask && ReportDeadBodyPatch.CanReport != null && ReportDeadBodyPatch.CanReport.GetValueOrDefault(id, true) && !id.IsPlayerRoleBlocked() && ReportDeadBodyPatch.WaitReport.TryGetValue(id, out List<NetworkedPlayerInfo> waitReports) && waitReports.Count > 0)
             {
-                NetworkedPlayerInfo info = ReportDeadBodyPatch.WaitReport[id][0];
-                ReportDeadBodyPatch.WaitReport[id].Clear();
+                NetworkedPlayerInfo info = waitReports[0];
+                waitReports.Clear();
                 Logger.Info($"{__instance.GetNameWithRole().RemoveHtmlTags()}: Now that it is possible to report, we will process the report.", "ReportDeadBody");
                 __instance.ReportDeadBody(info);
             }
