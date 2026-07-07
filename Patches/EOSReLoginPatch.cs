@@ -82,15 +82,43 @@ internal static class EOSReLoginReactivePatch
 [HarmonyPatch(typeof(EOSManager), nameof(EOSManager.OnAuthExpirationCallback))]
 internal static class EOSAuthExpirationTelemetryPatch
 {
+    // vanillaThrew 後の能動再ログインの連射防止 (コールバックが短時間に複数回来ても1回だけ)
+    private const float RecoveryThrottleSeconds = 600f;
+
+    private static float lastRecoveryTime = float.NegativeInfinity;
+
     // Finalizer なので original (バニラ) が NRE を投げても必ず走る。
     // Postfix だと original throw 時に skip され、テレメトリが死にコードになっていた。
-    // __exception を返さず null を返すことでバニラ由来の NRE を握りつぶし、コンソールの赤を消す (auth 挙動は不変)。
+    // __exception を返さず null を返すことでバニラ由来の NRE を握りつぶし、コンソールの赤を消す。
+    // ⚠️ vanillaThrew = バニラのトークン更新ハンドラが途中死 = 放置すると 8〜14 分後に
+    // トークン実失効 → サーバがホストを落とす (6pings / Hacking) → "User is not logged in"
+    // (2026-07-07/08 実測相関 n=3)。握りつぶすだけでは済まないので能動再ログインで回復する。
     public static System.Exception Finalizer(EOSManager __instance, System.Exception __exception)
     {
         Logger.Info($"OnAuthExpirationCallback fired (lobby={GameStates.IsLobby}, online={GameStates.IsOnlineGame}, tryingToLogin={__instance.tryingToLogin}, vanillaThrew={__exception != null})", "EOSReLogin");
 
         if (__exception != null)
+        {
             HealthLog.NoteAnom($"ANOM live kind=eos stage=expircallback lobby={GameStates.IsLobby} online={GameStates.IsOnlineGame}");
+
+            float now = Time.realtimeSinceStartup;
+            if (!__instance.tryingToLogin && !GameStates.InGame && now - lastRecoveryTime >= RecoveryThrottleSeconds)
+            {
+                lastRecoveryTime = now;
+                try
+                {
+                    Logger.Warn("vanilla OnAuthExpirationCallback threw — forcing re-login to avert token death", "EOSReLogin");
+                    HealthLog.NoteAnom("ANOM live kind=eos stage=expirrecover");
+                    __instance.LoginWithCorrectPlatform();
+                    EOSReLoginProactivePatch.ResetTimer();
+                }
+                catch (System.Exception ex)
+                {
+                    Logger.Error($"LoginWithCorrectPlatform threw: {ex}", "EOSReLogin");
+                    HealthLog.NoteAnom($"ANOM live kind=eos stage=expirrecoverfail msg=\"{ex.Message}\"");
+                }
+            }
+        }
 
         return null;
     }
