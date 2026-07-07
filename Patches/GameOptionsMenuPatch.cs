@@ -823,6 +823,28 @@ public static class NumberOptionPatch
             return false;
         }
 
+        // 投票時間/キルクールダウン等の他バニラ数値は InitializePrefix で広げた ValidRange がそのまま効くが、
+        // タスク数3種だけはバニラが FixedUpdate ごとに自前の狭いタスク範囲へ ValidRange を再上書きし、
+        // AdjustButtonsActiveState が境界で +/- ボタンをグレーアウトさせてしまう。mod オプションと同じく
+        // 範囲(0,90)を毎フレーム再表明しボタンを強制有効化して、Increase/Decrease prefix に委ねる。
+        switch (__instance.Title)
+        {
+            case StringNames.GameShortTasks:
+            case StringNames.GameLongTasks:
+            case StringNames.GameCommonTasks:
+                __instance.ValidRange = new(0, 90);
+                __instance.MinusBtn.SetInteractable(true);
+                __instance.PlusBtn.SetInteractable(true);
+
+                if (!Mathf.Approximately(__instance.oldValue, __instance.Value))
+                {
+                    __instance.oldValue = __instance.Value;
+                    __instance.ValueText.SetText(GetValueString(__instance, __instance.Value, null));
+                }
+
+                return false;
+        }
+
         return true;
     }
 

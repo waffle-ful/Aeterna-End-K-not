@@ -241,6 +241,11 @@ internal static class FriendsListUIOpenPatch
 
                 __instance.StartCoroutine(FriendsListManager.Instance.RefreshFriendsList((Action)(() =>
                 {
+                    // このコールバックは後続フレームで IL2CPP コルーチンランナー経由=下の Prefix try/catch の外で走る。
+                    // 現行 AU ビルドで削除/null 化されたバニラ UI フィールドを RefreshRecentlyPlayed 等が触ると NRE が
+                    // トランポリンに Il2CppException として漏れる (log: <Prefix>b__1)。ここで個別に握る。
+                    try
+                    {
                     __instance.ClearNotifs();
 
                     if (EOSManager.Instance.IsFriendsListAllowed())
@@ -278,6 +283,8 @@ internal static class FriendsListUIOpenPatch
                     }
 
                     ControllerManager.Instance.PickTopSelectable();
+                    }
+                    catch (Exception e) { Utils.ThrowException(e); }
                 })));
 
                 if (__instance.currentSceneName == "OnlineGame")

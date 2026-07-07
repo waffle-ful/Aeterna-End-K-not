@@ -2178,8 +2178,8 @@ public static class Utils
 
                         if (HazelExtensions.GetStringWriteSize(shortenedTitle) >= titleRpcSizeLimit - 4)
                         {
-                            foreach (char[] chars in shortenedTitle.Chunk(titleRpcSizeLimit - 4))
-                                writer = SendTempTitleMessage(new string(chars));
+                            foreach (string chunk in ChunkByByteSize(shortenedTitle, titleRpcSizeLimit - 4))
+                                writer = SendTempTitleMessage(chunk);
                         }
                         else
                             writer = SendTempTitleMessage(shortenedTitle);
@@ -2201,8 +2201,8 @@ public static class Utils
                         // shortenedTitle would be dumped here in one oversized packet.
                         if (HazelExtensions.GetStringWriteSize(shortenedTitle) >= titleRpcSizeLimit - 4)
                         {
-                            foreach (char[] chars in shortenedTitle.Chunk(titleRpcSizeLimit - 4))
-                                writer = SendTempTitleMessage(new string(chars));
+                            foreach (string chunk in ChunkByByteSize(shortenedTitle, titleRpcSizeLimit - 4))
+                                writer = SendTempTitleMessage(chunk);
                         }
                         else
                             writer = SendTempTitleMessage(shortenedTitle);
@@ -2278,7 +2278,7 @@ public static class Utils
                     }
 
                     writer = HazelExtensions.GetStringWriteSize(shortenedText) >= textRpcSizeLimit
-                        ? shortenedText.Chunk(textRpcSizeLimit).Aggregate(writer, (current, chunk) => SendMessage(new(chunk), sendTo, title, true, current, importance: importance))
+                        ? ChunkByByteSize(shortenedText, textRpcSizeLimit).Aggregate(writer, (current, chunk) => SendMessage(chunk, sendTo, title, true, current, importance: importance))
                         : SendMessage(shortenedText, sendTo, title, true, writer, importance: importance);
 
                     string sentText = shortenedText;
@@ -2329,9 +2329,23 @@ public static class Utils
                     .EndRpc();
             }
 
-            writer.AutoStartRpc(sender.NetId, RpcCalls.SendChat, targetClientId)
-                .Write(text)
-                .EndRpc();
+            // AU 2026 anti-cheat kicks the host on any single chunk > ~1KB. A newline-less long
+            // body (or a noSplit caller) funnels to here as one giant SendChat RPC because the
+            // splitter above only breaks on '\n'. Break the body on UTF-8 codepoint boundaries
+            // into <= textRpcSizeLimit pieces and flush between them so no single packet exceeds
+            // the cap. A body that already fits yields exactly one chunk = original behavior.
+            List<string> chatChunks = ChunkByByteSize(text, textRpcSizeLimit);
+            for (int ci = 0; ci < chatChunks.Count; ci++)
+            {
+                writer.AutoStartRpc(sender.NetId, RpcCalls.SendChat, targetClientId)
+                    .Write(chatChunks[ci])
+                    .EndRpc();
+
+                // Flush between chunks (never after the last one, so the trailing SetName-reset
+                // below can share its packet exactly as before for the common single-chunk case).
+                if (ci < chatChunks.Count - 1)
+                    RestartMessageIfTooLong(sendOption);
+            }
 
             if (sendTo == byte.MaxValue && HudManager.InstanceExists)
             {
@@ -2402,6 +2416,46 @@ public static class Utils
 
                 if (char.IsDigit(c))
                     digitCount++;
+            }
+
+            if (sb.Length > 0)
+                result.Add(sb.ToString());
+
+            return result;
+        }
+
+        // Split a string into pieces whose UTF-8 byte size each stays within byteLimit,
+        // never cutting a Unicode codepoint (surrogate pair) in half. The old .Chunk(limit)
+        // sites used the byte budget as a *character* count, so CJK text (3 bytes/char in
+        // UTF-8) produced chunks ~3x the intended byte size — big enough to breach the ~1KB
+        // official-server anti-cheat cap and self-kick the host with reason=Hacking.
+        static List<string> ChunkByByteSize(string text, int byteLimit)
+        {
+            if (byteLimit < 1) byteLimit = 1;
+
+            List<string> result = [];
+            if (System.Text.Encoding.UTF8.GetByteCount(text) <= byteLimit)
+            {
+                result.Add(text);
+                return result;
+            }
+
+            StringBuilder sb = new();
+            int size = 0;
+
+            foreach (System.Text.Rune rune in text.EnumerateRunes())
+            {
+                int runeSize = rune.Utf8SequenceLength;
+
+                if (size + runeSize > byteLimit && sb.Length > 0)
+                {
+                    result.Add(sb.ToString());
+                    sb.Clear();
+                    size = 0;
+                }
+
+                sb.Append(rune.ToString());
+                size += runeSize;
             }
 
             if (sb.Length > 0)
