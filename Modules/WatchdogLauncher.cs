@@ -31,6 +31,7 @@ public static class WatchdogLauncher
     private static string TaskXmlPath => Path.Combine(BaseDir, "watchdog-task.xml");
     private static string StopFlagPath => Path.Combine(BaseDir, "watchdog-stop.flag");
     private static string RestartRequestPath => Path.Combine(BaseDir, "restart_request.flag");
+    private static string EglRefreshRequestPath => Path.Combine(BaseDir, "egl_refresh_request.flag");
 
     // 番犬は Windows の PowerShell + タスクスケジューラ前提。Android ホストには存在しない。
     public static bool IsSupported => OperatingSystem.IsWindows();
@@ -202,6 +203,23 @@ public static class WatchdogLauncher
             Logger.Info("Watchdog: restart-request flag written (relaunch will bypass grace/cooldown)", "WatchdogLauncher");
         }
         catch (Exception e) { Logger.Warn($"RequestRestart failed: {e.Message}", "WatchdogLauncher"); }
+    }
+
+    // 認証死 (EOS「User is not logged in」/ NotAuthorized) 起因の再起動でだけ呼ぶ。プレーン再起動は EOS
+    // トークン未リフレッシュのため必ずブート死し、番犬が 150s の起動猶予を空費してから egl-restart に至る
+    // (BUG-17)。この旗を置いておくと、番犬は 1回目の Start-Au の前に EGL をリフレッシュして即復帰する。
+    // ※ ping/kick タイムアウトや rehost 枯渇では呼ばない (EGL 再起動は無関係で復帰を ~35s 遅くするだけ)。
+    public static void RequestEglRefresh()
+    {
+        if (!IsSupported) return;
+
+        try
+        {
+            Directory.CreateDirectory(BaseDir);
+            File.WriteAllText(EglRefreshRequestPath, DateTime.Now.ToString("o"));
+            Logger.Info("Watchdog: egl-refresh flag written (first relaunch will restart EGL to revive EOS auth)", "WatchdogLauncher");
+        }
+        catch (Exception e) { Logger.Warn($"RequestEglRefresh failed: {e.Message}", "WatchdogLauncher"); }
     }
 
     // ゲームの正常終了時(OnApplicationQuit)に呼ぶ。ユーザーが自分で×を押して終わったのに

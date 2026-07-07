@@ -47,6 +47,15 @@ public static class AutoRestart
         or DisconnectReasons.InternalConnectionToken
         or DisconnectReasons.InternalNonceFailure;
 
+    // ── EOS 認証トークン死の判定 ──
+    // IsFatalConnectionDeath の部分集合。これらは「EOS ログイントークンが失効した」種別で、EGL 本体の
+    // 再起動でトークンがリフレッシュされて復帰しうる。サーバー到達不能 (NoServersAvailable/ServerNotFound/
+    // MatchmakerInactivity) は EGL 再起動では直らないので含めない (BUG-17: EGL 先行再起動は authfail 限定)。
+    private static bool IsAuthTokenDeath(DisconnectReasons reason) => reason is
+        DisconnectReasons.NotAuthorized
+        or DisconnectReasons.InternalConnectionToken
+        or DisconnectReasons.InternalNonceFailure;
+
     // 切断フック (HealthLogDisconnectPatch から reason 付きで呼ばれる)。認証/サーバー死なら
     // AutoRehost の 3×リトライ (~145s の無駄) を飛ばして即プロセス再起動へエスカレーションする (穴1+穴5)。
     public static void OnDisconnect(DisconnectReasons reason)
@@ -55,7 +64,7 @@ public static class AutoRestart
         if (!(Options.AutoRehostAfterKick?.GetBool() ?? false)) return;
 
         Logger.Warn($"Auto-restart: fatal connection death (reason: {reason}); escalating straight to process restart (skipping in-place rehost)", "AutoRestart");
-        Escalate($"fatal disconnect: {reason}");
+        Escalate($"fatal disconnect: {reason}", authDeath: IsAuthTokenDeath(reason));
     }
 
     // 認証失敗ポップアップ検知 (MessageCapture から)。DisconnectReasons を伴わず GenericPopup だけで
@@ -67,17 +76,19 @@ public static class AutoRestart
 
         Logger.Warn($"Auto-restart: authentication-failure message detected [{source}]: {text}", "AutoRestart");
         HealthLog.NoteAnom($"ANOM live kind=authfail src={source}");
-        Escalate($"auth-failure popup: {source}");
+        Escalate($"auth-failure popup: {source}", authDeath: true);
     }
 
     // AutoRehost が全リトライ失敗 (GiveUp) したときに呼ぶ。番犬が居ればプロセス再起動へエスカレーションする。
+    // rehost 枯渇は ping/kick タイムアウト側の死なので認証死ではない (EGL 先行再起動はしない)。
     public static void EscalateFromRehostGiveUp()
     {
-        Escalate("rehost exhausted");
+        Escalate("rehost exhausted", authDeath: false);
     }
 
     // 再起動エスカレーションの共通コア。呼び出し元 (rehost giveup / 認証死切断 / 認証死ポップアップ) を why に受ける。
-    private static void Escalate(string why)
+    // authDeath=true (EOS トークン死) のときだけ egl-refresh 旗を置き、番犬に 1回目の再起動前の EGL 再起動を促す。
+    private static void Escalate(string why, bool authDeath)
     {
         // Windows + 番犬前提。Android や番犬未起動では終了させない (無人締め出し回避)。
         if (!WatchdogLauncher.IsSupported || !WatchdogLauncher.IsRunning)
@@ -110,6 +121,11 @@ public static class AutoRestart
         // 意図的終了なので番犬に「grace/cooldown 窓を無視して即立て直せ」と伝える (穴2)。番犬が直前に
         // 起動した直後だと grace(150s)/cooldown(120s) に落ちて再launchされず一時的に無人死する空振りを塞ぐ。
         WatchdogLauncher.RequestRestart();
+
+        // 認証死 (EOS トークン失効) 起因のときだけ egl-refresh を要求する (BUG-17)。プレーン再起動は
+        // トークン未リフレッシュで必ずブート死し、番犬が 150s の起動猶予を空費してから egl-restart に至る。
+        // この旗があると番犬は 1回目の再起動前に EGL をリフレッシュして即復帰する。ping/kick 死では呼ばない。
+        if (authDeath) WatchdogLauncher.RequestEglRefresh();
 
         ShowPopup(GetSafeString("AutoRehost.Restarting", "Cannot recover the connection. Restarting the game to re-host automatically."), QuitDelaySeconds + 2f);
 

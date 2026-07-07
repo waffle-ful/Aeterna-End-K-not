@@ -99,6 +99,10 @@ $StopFlag = Join-Path $HealthDir 'watchdog-stop.flag'
 # AutoRestart が認証/回線死からの復帰でプロセスを終了する直前に置く「意図的な再起動要求」。
 # 番犬自身のブートループ抑止（grace/cooldown）の対象外なので、これを見たら窓を無視して即立て直す。
 $RestartFlag = Join-Path $HealthDir 'restart_request.flag'
+# 認証死(EOS トークン失効)起因の再起動でだけ AutoRestart が置く「起動前に EGL を再認証して」の依頼。
+# プレーン再起動はトークン未リフレッシュで必ずブート死し 150s の起動猶予を空費するため(BUG-17)、
+# Start-Au はこの旗を見たら起動の前に Restart-EpicLauncher を先行実行して 1回目から復帰させる。
+$EglRefreshFlag = Join-Path $HealthDir 'egl_refresh_request.flag'
 $script:RelaunchTimes = New-Object System.Collections.Generic.List[datetime]
 $script:LastRelaunch  = [datetime]::MinValue
 $script:GraceUntil    = [datetime]::MinValue
@@ -168,6 +172,27 @@ function Start-Au {
         Write-WatchLog "起動手段が見つかりません。設定の EpicLaunchUrl か AuExePathOverride を入れてください。" 'Red'
         return $false
     }
+
+    # 認証死起因の再起動要求 (egl_refresh_request.flag)。プレーン再起動は EOS トークン未リフレッシュで
+    # 必ずブート死し、番犬が 150s の起動猶予を空費してから egl-restart に至る (BUG-17)。ゲーム側が
+    # authfail のときだけ置くこの旗を見て、起動の前に EGL を再認証しておき 1回目から復帰させる。
+    # 旗は 1回で消費する (以降の立て直しは通常のブート死ラダーに委ねる)。マスタースイッチ
+    # $RestartEglOnBootDeathRetry を尊重し、古い旗(誤発火防止)は無視して消す。
+    if (Test-Path $EglRefreshFlag) {
+        try { $eglAge = ((Get-Date) - (Get-Item $EglRefreshFlag).LastWriteTime).TotalSeconds } catch { $eglAge = 99999 }
+        try { Remove-Item $EglRefreshFlag -Force -ErrorAction SilentlyContinue } catch { }
+        if ($eglAge -le 300) {
+            if ($RestartEglOnBootDeathRetry) {
+                Write-WatchLog "認証死起因の再起動要求 [egl-refresh]: プレーン再起動はブート死するため、起動前に EGL を再認証します。" 'Yellow'
+                Restart-EpicLauncher
+            } else {
+                Write-WatchLog "egl-refresh 要求を検出しましたが RestartEglOnBootDeathRetry=無効のためスキップします。" 'DarkGray'
+            }
+        } else {
+            Write-WatchLog ("egl-refresh フラグが古い({0:N0}s)ため無視して削除しました。" -f $eglAge) 'DarkGray'
+        }
+    }
+
     try {
         if ($AutoHostOnRelaunch) {
             try { Set-Content -Path $MarkerFile -Value ([DateTime]::Now.ToString('o')) -Encoding utf8; Write-WatchLog "自動ホスト依頼マーカー作成: $MarkerFile" 'DarkGray' } catch { }
