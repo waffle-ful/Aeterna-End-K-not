@@ -443,10 +443,16 @@ public class CustomRpcSender
                 throw new InvalidOperationException(errorMsg);
         }
 
-        if (messages >= AmongUsClient.Instance.GetMaxMessagePackingLimit())
+        // 公式鯖 anti-cheat は単一チャンク ~1024 byte 超で host を Hacking キックする。個数上限だけだと、
+        // 同一宛先へ長い SetName 等を数個積んだだけで byte 上限を越える単一チャンクに合体してしまう
+        // (StartMessage/StartPackedMessage の 500 byte 分割は宛先が変わる時しか再入しないため素通り)。
+        // ここで byte でも分割する。※ EndMessage が currentRpcTarget を -2 に戻す前に宛先を退避すること
+        // (退避しないと desync=特定クライアント宛の続きが broadcast(tag 5) で再開し内容が漏れる)。
+        if (messages >= AmongUsClient.Instance.GetMaxMessagePackingLimit() || (checkLength && stream.Length > 500))
         {
+            int splitTarget = currentRpcTarget;
             EndMessage(startNew: true);
-            StartMessage(currentRpcTarget);
+            StartMessage(splitTarget);
         }
 
         messages++;
