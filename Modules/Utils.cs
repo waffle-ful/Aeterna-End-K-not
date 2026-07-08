@@ -3897,7 +3897,7 @@ public static class Utils
     {
         int messages = 0;
         int packingLimit = AmongUsClient.Instance.GetMaxMessagePackingLimit();
-        
+
         MessageWriter writer = MessageWriter.Get(SendOption.Reliable);
         writer.StartMessage(5);
         writer.Write(AmongUsClient.Instance.GameId);
@@ -3906,45 +3906,11 @@ public static class Utils
         {
             if (writer.Length > 500 || messages >= packingLimit)
             {
-                messages = 0;
-                writer.EndMessage();
-                AmongUsClient.Instance.SendOrDisconnect(writer);
-                writer.Clear(SendOption.Reliable);
+                FlushWriter();
+                writer = MessageWriter.Get(SendOption.Reliable);
                 writer.StartMessage(5);
                 writer.Write(AmongUsClient.Instance.GameId);
             }
-
-            writer.StartMessage(1);
-            writer.WritePacked(playerinfo.NetId);
-            playerinfo.Serialize(writer, false);
-            writer.EndMessage();
-            
-            messages++;
-        }
-
-        writer.EndMessage();
-        AmongUsClient.Instance.SendOrDisconnect(writer);
-        writer.Recycle();
-
-        AmongUsClient.Instance.timer -= AmongUsClient.Instance.MinSendInterval;
-    }
-
-    // Ported from upstream EHR 7650ac30: route SendGameDataTo through DataFlagRateLimiter
-    // (each FlushWriter consumes `messages` slots of the per-second budget).
-    public static void SendGameDataTo(int targetClientId)
-    {
-        int messages = 0;
-        int packingLimit = AmongUsClient.Instance.GetMaxMessagePackingLimit();
-
-        MessageWriter writer = MessageWriter.Get(SendOption.Reliable);
-        writer.StartMessage(6);
-        writer.Write(AmongUsClient.Instance.GameId);
-        writer.WritePacked(targetClientId);
-
-        foreach (NetworkedPlayerInfo playerinfo in GameData.Instance.AllPlayers)
-        {
-            if (writer.Length > 500 || messages >= packingLimit)
-                FlushWriter();
 
             writer.StartMessage(1);
             writer.WritePacked(playerinfo.NetId);
@@ -3964,17 +3930,69 @@ public static class Utils
             // IMPORTANT: capture this specific writer instance
             var capturedWriter = writer;
 
+            // 公式鯖 anti-cheat 対策: 兄弟 SendGameDataTo と同じくレート制限(DataFlagRateLimiter)に載せ、
+            // ゲーム開始/死亡時の全員データ一括ブロードキャストが単一フレームに Reliable を溢れさせないようにする。
+            // 併せて EarlyWarning で計装し、これまで無計装で不可視だったこの経路をログに可視化する。
+            EarlyWarning.OnPacket("Utils.SendGameData", capturedWriter.Length, capturedWriter.Length, "Reliable");
+
+            // cleanup: rate-limit 待ち中に drop された場合でも pooled writer を返却する (リーク防止)
             DataFlagRateLimiter.Enqueue(() =>
             {
                 AmongUsClient.Instance.SendOrDisconnect(capturedWriter);
                 capturedWriter.Recycle();
-            }, calls: messages);
+            }, calls: messages, cleanup: () => capturedWriter.Recycle());
 
-            // Create a NEW writer (do NOT reuse the old one)
-            writer = MessageWriter.Get(SendOption.Reliable);
-            writer.StartMessage(6);
-            writer.Write(AmongUsClient.Instance.GameId);
-            writer.WritePacked(targetClientId);
+            messages = 0;
+        }
+    }
+
+    // Ported from upstream EHR 7650ac30: route SendGameDataTo through DataFlagRateLimiter
+    // (each FlushWriter consumes `messages` slots of the per-second budget).
+    public static void SendGameDataTo(int targetClientId)
+    {
+        int messages = 0;
+        int packingLimit = AmongUsClient.Instance.GetMaxMessagePackingLimit();
+
+        MessageWriter writer = MessageWriter.Get(SendOption.Reliable);
+        writer.StartMessage(6);
+        writer.Write(AmongUsClient.Instance.GameId);
+        writer.WritePacked(targetClientId);
+
+        foreach (NetworkedPlayerInfo playerinfo in GameData.Instance.AllPlayers)
+        {
+            if (writer.Length > 500 || messages >= packingLimit)
+            {
+                FlushWriter();
+                writer = MessageWriter.Get(SendOption.Reliable);
+                writer.StartMessage(6);
+                writer.Write(AmongUsClient.Instance.GameId);
+                writer.WritePacked(targetClientId);
+            }
+
+            writer.StartMessage(1);
+            writer.WritePacked(playerinfo.NetId);
+            playerinfo.Serialize(writer, false);
+            writer.EndMessage();
+
+            messages++;
+        }
+
+        FlushWriter();
+        return;
+
+        void FlushWriter()
+        {
+            writer.EndMessage();
+
+            // IMPORTANT: capture this specific writer instance
+            var capturedWriter = writer;
+
+            // cleanup: rate-limit 待ち中に drop された場合でも pooled writer を返却する (リーク防止)
+            DataFlagRateLimiter.Enqueue(() =>
+            {
+                AmongUsClient.Instance.SendOrDisconnect(capturedWriter);
+                capturedWriter.Recycle();
+            }, calls: messages, cleanup: () => capturedWriter.Recycle());
 
             messages = 0;
         }

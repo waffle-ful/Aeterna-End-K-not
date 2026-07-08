@@ -2636,6 +2636,7 @@ internal static class ExtendedPlayerControl
         public void SendGameData()
         {
             if (!player || player.Pointer == IntPtr.Zero) return;
+
             MessageWriter writer = MessageWriter.Get(SendOption.Reliable);
             writer.StartMessage(5);
             writer.Write(AmongUsClient.Instance.GameId);
@@ -2644,11 +2645,19 @@ internal static class ExtendedPlayerControl
             player.Serialize(writer, false);
             writer.EndMessage();
             writer.EndMessage();
-            AmongUsClient.Instance.SendOrDisconnect(writer);
-            writer.Recycle();
 
-            if (DontLowerSendTimer) return;
-            AmongUsClient.Instance.timer -= AmongUsClient.Instance.MinSendInterval;
+            // 公式鯖 anti-cheat 対策: Utils.SendGameData と同様、単体プレイヤーデータの再ブロードキャストも
+            // レート制限(DataFlagRateLimiter)に載せる。ゲーム開始の全員 Disconnected 化や死亡時の再同期で
+            // 連投しても単一フレームに Reliable を溢れさせない。無計装だったこの経路を EarlyWarning で可視化する。
+            EarlyWarning.OnPacket("ExtendedPlayerControl.SendGameData", writer.Length, writer.Length, "Reliable");
+
+            var capturedWriter = writer;
+            // cleanup: rate-limit 待ち中に drop された場合でも pooled writer を返却する (リーク防止)
+            DataFlagRateLimiter.Enqueue(() =>
+            {
+                AmongUsClient.Instance.SendOrDisconnect(capturedWriter);
+                capturedWriter.Recycle();
+            }, calls: 1, cleanup: () => capturedWriter.Recycle());
         }
     }
 

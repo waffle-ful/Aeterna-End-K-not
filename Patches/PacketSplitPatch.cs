@@ -37,10 +37,14 @@ internal static class PacketSplitPatch
             while (reader.Position < reader.Length)
             {
                 var partMsg = reader.ReadMessage();
-                bool divide = partMsg.Tag is 5 or 6 && partMsg.Length > CustomRpcSender.SafeChunkLength;
+                bool divide5Or6 = partMsg.Tag is 5 or 6 && partMsg.Length > CustomRpcSender.SafeChunkLength;
+                // Tag26 = GameOptions の message-packing エンベロープ (WritePacked(gameId) + N 個の Tag6/5)。
+                // 内部を Flag/サブメッセージ境界で刻めないと GameOptionsSender の一括 flush が閾値超で公式 kick を招く。
+                bool divide26 = partMsg.Tag is 26 && partMsg.Length > CustomRpcSender.SafeChunkLength;
+                bool divide = divide5Or6 || divide26;
 
                 // 書き込む前にフラッシュ判定 (post-write だと最大 2×閾値まで膨らむため)。
-                // 分割対象は DivideLargeMessage を空 writer から始めたいので、先に溜まりを吐く。
+                // 分割対象は Divide* を空 writer から始めたいので、先に溜まりを吐く。
                 if (writer.Length > 0 && (divide || writer.Length + MsgHeader + partMsg.Length > CustomRpcSender.SafeChunkLength))
                 {
                     Send(__instance, writer);
@@ -48,7 +52,9 @@ internal static class PacketSplitPatch
                     writer.Clear(writer.SendOption);
                 }
 
-                if (divide)
+                if (divide26)
+                    sentAny |= DividePackedMessage(__instance, writer, partMsg);
+                else if (divide5Or6)
                     sentAny |= DivideLargeMessage(__instance, writer, partMsg);
                 else
                     WriteMessage(writer, partMsg);
@@ -124,6 +130,81 @@ internal static class PacketSplitPatch
         }
 
         writer.EndMessage();
+        return sentAny;
+    }
+
+    // partMsg (Tag26 の GameOptions パッキングエンベロープ) を内部サブメッセージ境界で再パックして送る。
+    // 構造: WritePacked(gameId) の後に、閉じた Tag6/Tag5 メッセージが N 個並ぶ。gameId は Tag5/6 と違い
+    // packed 書き込みなので ReadPackedInt32 / WritePacked で扱う。各出力 Tag26 が SafeChunkLength を超えない
+    // よう内部メッセージ単位で刻む。単一の内部 Tag5/6 が単体で閾値超なら、その 1 件だけ包装を解いて
+    // DivideLargeMessage で Flag 分割する (単一 Flag が閾値超のケースは分割不能 = 既知の残課題)。
+    // 呼び出し前に writer は空である前提。最後のエンベロープは writer に残して呼び出し元のフラッシュに委ねる。
+    private static bool DividePackedMessage(InnerNetClient __instance, MessageWriter writer, MessageReader partMsg)
+    {
+        var gameId = partMsg.ReadPackedInt32();
+        var sentAny = false;
+        var envelopeOpen = false; // writer に Tag26 が開いているか
+        var hasSub = false;       // 開いている Tag26 に 1 件以上入っているか
+
+        while (partMsg.Position < partMsg.Length)
+        {
+            var subMsg = partMsg.ReadMessage();
+
+            // 内部 Tag5/6 が単体で閾値超 → 現エンベロープを吐き、包装を解いて Flag 分割
+            if (subMsg.Tag is 5 or 6 && subMsg.Length > CustomRpcSender.SafeChunkLength)
+            {
+                if (envelopeOpen)
+                {
+                    writer.EndMessage();
+                    Send(__instance, writer);
+                    sentAny = true;
+                    writer.Clear(writer.SendOption);
+                    envelopeOpen = false;
+                    hasSub = false;
+                }
+
+                sentAny |= DivideLargeMessage(__instance, writer, subMsg);
+                if (writer.Length > 0)
+                {
+                    Send(__instance, writer);
+                    sentAny = true;
+                    writer.Clear(writer.SendOption);
+                }
+
+                subMsg.Recycle();
+                continue;
+            }
+
+            if (!envelopeOpen)
+            {
+                writer.StartMessage(26);
+                writer.WritePacked(gameId);
+                envelopeOpen = true;
+                hasSub = false;
+            }
+
+            // 現エンベロープに最低 1 件入っている時だけ分割 (空 Tag26 送信を避ける)。
+            if (hasSub && writer.Length + MsgHeader + subMsg.Length > CustomRpcSender.SafeChunkLength)
+            {
+                writer.EndMessage();
+                Send(__instance, writer);
+                sentAny = true;
+                writer.Clear(writer.SendOption);
+                writer.StartMessage(26);
+                writer.WritePacked(gameId);
+                hasSub = false;
+            }
+
+            WriteMessage(writer, subMsg);
+            hasSub = true;
+            subMsg.Recycle();
+        }
+
+        // 最後のエンベロープは閉じて writer に残す (呼び出し元がフラッシュ)。
+        // 直前が単体超過ケースで終わった場合は envelopeOpen=false のまま = writer 空で安全。
+        if (envelopeOpen)
+            writer.EndMessage();
+
         return sentAny;
     }
 

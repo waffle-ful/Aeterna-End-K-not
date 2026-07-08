@@ -29,12 +29,67 @@ internal static class EOSReLoginProactivePatch
 
     private static float lastReLoginTime = Time.realtimeSinceStartup;
 
+    // ゲーム中に OnAuthExpirationCallback が途中死したとき、即時再ログインは接続を壊すかも
+    // しれないので、このフラグを立てておき、ゲームを抜けた最初のフレームで回収して遅延再ログインする。
+    internal static bool PendingRecovery;
+    internal static float PendingRecoveryArmedTime;
+
+    // ゲームが LastResort 秒以内に終わらなければゲーム中でも再ログインを強行する。
+    // 実測 (BUG-20260707-10 相関 n=4) で expircallback の 8〜14 分後にトークン実失効 →
+    // ホスト確定切断なので、5 分待ってもゲーム続行中なら「どうせ死ぬ接続」— 賭けて再ログインする方が期待値が高い。
+    private const float LastResortDelaySeconds = 300f;
+
     public static void Postfix(EOSManager __instance)
     {
         if (!__instance.loginFlowFinished) return;
         if (__instance.tryingToLogin) return;
-        // メニュー/ロビー両方で発火させる。アクティブな試合中だけブロック
-        if (GameStates.InGame) return;
+
+        // メニュー/ロビー両方で発火させる。アクティブな試合中は原則ブロックだが、
+        // 据え置いた再ログインが LastResort 期限を超えたらゲーム中でも強行する (放置=確実な認証死のため)。
+        if (GameStates.InGame)
+        {
+            if (PendingRecovery && Time.realtimeSinceStartup - PendingRecoveryArmedTime >= LastResortDelaySeconds)
+            {
+                Logger.Warn($"Deferred EOS re-login still pending after {LastResortDelaySeconds:F0}s in-game — token death is imminent, attempting last-resort re-login mid-game", "EOSReLogin");
+                HealthLog.NoteAnom("ANOM live kind=eos stage=expirrecoverlastresort");
+                try
+                {
+                    PendingRecovery = false;
+                    __instance.LoginWithCorrectPlatform();
+                    lastReLoginTime = Time.realtimeSinceStartup;
+                }
+                catch (System.Exception ex)
+                {
+                    Logger.Error($"Last-resort LoginWithCorrectPlatform threw: {ex}", "EOSReLogin");
+                    HealthLog.NoteAnom($"ANOM live kind=eos stage=expirrecoverfail msg=\"{ex.Message}\"");
+                    // 失敗時は pending を維持しつつ期限を仕切り直す (ゲーム終了時の回収パスは即発火する)
+                    PendingRecovery = true;
+                    PendingRecoveryArmedTime = Time.realtimeSinceStartup;
+                }
+            }
+
+            return;
+        }
+
+        // ゲーム中に据え置かれた再ログイン要求をゲーム外へ出た時点で回収する
+        if (PendingRecovery)
+        {
+            PendingRecovery = false;
+            Logger.Warn("Executing deferred EOS re-login (expircallback fired mid-game) now that we're out of game", "EOSReLogin");
+            HealthLog.NoteAnom("ANOM live kind=eos stage=expirrecoverdeferred");
+            try
+            {
+                __instance.LoginWithCorrectPlatform();
+                lastReLoginTime = Time.realtimeSinceStartup;
+            }
+            catch (System.Exception ex)
+            {
+                Logger.Error($"Deferred LoginWithCorrectPlatform threw: {ex}", "EOSReLogin");
+                HealthLog.NoteAnom($"ANOM live kind=eos stage=expirrecoverfail msg=\"{ex.Message}\"");
+            }
+
+            return;
+        }
 
         float now = Time.realtimeSinceStartup;
         float elapsed = now - lastReLoginTime;
@@ -102,7 +157,17 @@ internal static class EOSAuthExpirationTelemetryPatch
             HealthLog.NoteAnom($"ANOM live kind=eos stage=expircallback lobby={GameStates.IsLobby} online={GameStates.IsOnlineGame}");
 
             float now = Time.realtimeSinceStartup;
-            if (!__instance.tryingToLogin && !GameStates.InGame && now - lastRecoveryTime >= RecoveryThrottleSeconds)
+            if (GameStates.InGame)
+            {
+                // ゲーム中に即 LoginWithCorrectPlatform() すると接続を壊すおそれがあるので即時実行しない。
+                // pending を立てて、ゲーム終了後に proactive Postfix が回収する（トークン失効前にゲームが終われば救済成功）。
+                // ゲームが LastResortDelaySeconds 以内に終わらなければ proactive 側がゲーム中でも強行する。
+                EOSReLoginProactivePatch.PendingRecovery = true;
+                EOSReLoginProactivePatch.PendingRecoveryArmedTime = now;
+                Logger.Warn("vanilla OnAuthExpirationCallback threw during a game — deferring re-login until the game ends (or last-resort deadline)", "EOSReLogin");
+                HealthLog.NoteAnom("ANOM live kind=eos stage=expirdeferarmed");
+            }
+            else if (!__instance.tryingToLogin && now - lastRecoveryTime >= RecoveryThrottleSeconds)
             {
                 lastRecoveryTime = now;
                 try
