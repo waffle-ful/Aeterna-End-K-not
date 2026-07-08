@@ -8510,6 +8510,8 @@
   "YouTubeChatPollingInterval": "取得間隔",
   "YouTubeChatHideDuringMeetings": "会議中はオーバーレイを隠す",
   "YouTubeChatShowAuthor": "投稿者名を表示",
+  "YouTubeChatPanelWidth": "コメント欄の横幅",
+  "YouTubeChatPanelHeight": "コメント欄の高さ",
   "YouTubeChat.NotEnabled": "YouTubeチャット表示が無効になっています。先にシステム設定で「YouTubeライブチャットをHUDに表示」をONにしてください。",
   "YouTubeChat.Usage": "使い方: /yt <配信URL>  |  /yt off  |  /yt status  |  /yt clear",
   "YouTubeChat.Started": "video {0} のYouTubeチャット取得を開始しました。",

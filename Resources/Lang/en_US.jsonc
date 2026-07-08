@@ -9091,6 +9091,8 @@
   "YouTubeChatPollingInterval": "Polling interval",
   "YouTubeChatHideDuringMeetings": "Hide overlay during meetings",
   "YouTubeChatShowAuthor": "Show author name",
+  "YouTubeChatPanelWidth": "Comment panel width",
+  "YouTubeChatPanelHeight": "Comment panel height",
   "YouTubeChat.NotEnabled": "YouTube chat overlay is disabled. Turn on \"Show YouTube live chat in HUD\" in System Settings first.",
   "YouTubeChat.Usage": "Usage: /yt <stream-url>  |  /yt off  |  /yt status  |  /yt clear",
   "YouTubeChat.Started": "YouTube chat polling started for video {0}.",

@@ -23,7 +23,17 @@ public class YouTubeChatBubble : MonoBehaviour
     // ---- ドラッグ ----
     private bool _dragging;
     private bool _didDrag;
+    private bool _dragFromBubble;    // ドラッグの起点。バブル起点のみ MouseUp でトグル判定
     private Vector2 _dragOffset;
+
+    // ---- パネル geometry (ComputePanelGeometry が毎フレーム確定させ、HandleBubbleInput / DrawPanel で共有) ----
+    private Rect _panelRect;
+    private Rect _panelDragZone;     // _panelRect からスクロールバー列を除いた、ドラッグ対象領域
+
+    // ---- スクロール ----
+    private Vector2 _scroll;
+    private float _contentH;
+    private bool _stickToBottom = true; // 最下部にいる間は新着に自動追従
 
     // ---- スタイル ----
     private GUIStyle _bubbleStyle, _panelBg, _textStyle, _hintStyle;
@@ -34,6 +44,7 @@ public class YouTubeChatBubble : MonoBehaviour
     private readonly StringBuilder _sb = new();
 
     private static float Scale => Screen.width / 1080f * 0.5f;
+    private static float ScrollbarColumnWidth => (OperatingSystem.IsAndroid() ? 42f : 22f) * Scale;
 
     private void Awake()
     {
@@ -74,6 +85,7 @@ public class YouTubeChatBubble : MonoBehaviour
 
             EnsureStyles();
             EnsureDefaultPos();
+            ComputePanelGeometry();
 
             HandleBubbleInput();
             DrawBubble();
@@ -94,7 +106,9 @@ public class YouTubeChatBubble : MonoBehaviour
         _bubblePos = new Vector2(14f * Scale, Screen.height * 0.34f);
     }
 
-    // バブルをドラッグで移動 / クリックでトグル。gameplay へイベントが漏れないよう e.Use()。
+    // バブルをドラッグで移動 / クリックでトグル。パネルが開いていればパネル本体
+    // (スクロールバー列を除く) を掴んでも同じくバブル位置を動かせる。
+    // gameplay へイベントが漏れないよう e.Use()。
     private void HandleBubbleInput()
     {
         Event e = Event.current;
@@ -103,6 +117,14 @@ public class YouTubeChatBubble : MonoBehaviour
             case EventType.MouseDown when BubbleRect.Contains(e.mousePosition):
                 _dragging = true;
                 _didDrag = false;
+                _dragFromBubble = true;
+                _dragOffset = e.mousePosition - _bubblePos;
+                e.Use();
+                break;
+            case EventType.MouseDown when _isOpen && _panelDragZone.Contains(e.mousePosition):
+                _dragging = true;
+                _didDrag = false;
+                _dragFromBubble = false;
                 _dragOffset = e.mousePosition - _bubblePos;
                 e.Use();
                 break;
@@ -116,7 +138,7 @@ public class YouTubeChatBubble : MonoBehaviour
                 break;
             case EventType.MouseUp when _dragging:
                 _dragging = false;
-                if (!_didDrag) _isOpen = !_isOpen; // 動かさず離した = クリック
+                if (_dragFromBubble && !_didDrag) _isOpen = !_isOpen; // バブルを動かさず離した = クリック
                 e.Use();
                 break;
         }
@@ -130,27 +152,68 @@ public class YouTubeChatBubble : MonoBehaviour
         GUI.Box(BubbleRect, _isOpen ? "▲" : "▶", _bubbleStyle);
     }
 
-    private void DrawPanel()
+    // パネルの数フレーム前から一定の rect と、本体ドラッグ用ゾーン (スクロールバー列を除く)
+    // を確定させる。HandleBubbleInput と DrawPanel の両方がこの結果を参照する。
+    private const int BaseVisibleLines = 5; // PanelHeight=100% のときの可視行数
+    private const float BasePanelWidth = 240f;
+
+    private void ComputePanelGeometry()
     {
-        int maxLines = Mathf.Clamp(YouTubeChatOptions.DisplayCount?.GetInt() ?? 5, 1, 10);
+        if (!_isOpen)
+        {
+            _panelRect = default;
+            _panelDragZone = default;
+            return;
+        }
+
         float pad = 8f * Scale;
         float lineH = 20f * Scale;
-        float pw = 240f * Scale;
-        float ph = maxLines * lineH + pad * 2f;
+        float widthPct = (YouTubeChatOptions.PanelWidth?.GetInt() ?? 100) / 100f;
+        float heightPct = (YouTubeChatOptions.PanelHeight?.GetInt() ?? 100) / 100f;
+
+        float pw = BasePanelWidth * Scale * widthPct;
+        int visibleLines = Mathf.Max(1, Mathf.RoundToInt(BaseVisibleLines * heightPct));
+        float ph = visibleLines * lineH + pad * 2f;
 
         // バブルの右側に出す。画面外へはみ出すなら左へ回す。下端も画面内へクランプ。
         float px = _bubblePos.x + BubbleSize + 6f * Scale;
         if (px + pw > Screen.width) px = _bubblePos.x - pw - 6f * Scale;
         if (px < 0f) px = 0f;
         float py = Mathf.Clamp(_bubblePos.y, 0f, Screen.height - ph);
-        var panelRect = new Rect(px, py, pw, ph);
 
-        GUI.Box(panelRect, GUIContent.none, _panelBg);
+        _panelRect = new Rect(px, py, pw, ph);
+        _panelDragZone = new Rect(px, py, Mathf.Max(0f, pw - ScrollbarColumnWidth), ph);
+    }
 
-        var inner = new Rect(px + pad, py + pad, pw - pad * 2f, ph - pad * 2f);
+    private void DrawPanel()
+    {
+        if (_panelRect.width <= 0f) return;
+
+        float pad = 8f * Scale;
+        GUI.Box(_panelRect, GUIContent.none, _panelBg);
+
+        var outerRect = new Rect(_panelRect.x + pad, _panelRect.y + pad, _panelRect.width - pad * 2f, _panelRect.height - pad * 2f);
+        float contentW = Mathf.Max(1f, outerRect.width - ScrollbarColumnWidth - 1f);
 
         string body = BuildBody();
-        GUI.Label(inner, body, _textStyle);
+        float measuredH = _textStyle.CalcHeight(new GUIContent(body), contentW);
+        _contentH = measuredH;
+
+        var innerRect = new Rect(0, 0, contentW, _contentH);
+        float maxScroll = Mathf.Max(0f, _contentH - outerRect.height);
+
+        GUI.skin.verticalScrollbar.fixedWidth = ScrollbarColumnWidth;
+        GUI.skin.verticalScrollbarThumb.fixedWidth = ScrollbarColumnWidth;
+
+        if (_stickToBottom) _scroll.y = maxScroll;
+
+        // 横スクロールは無効。縦は内容が溢れたときだけ自動的に出る (alwaysShow=false)
+        _scroll = GUI.BeginScrollView(outerRect, _scroll, innerRect, false, false);
+        GUI.Label(innerRect, body, _textStyle);
+        GUI.EndScrollView();
+
+        // 最下部付近にいれば追従継続、上へスクロール中なら追従停止
+        _stickToBottom = _scroll.y >= maxScroll - 2f;
     }
 
     private string BuildBody()
