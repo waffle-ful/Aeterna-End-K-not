@@ -1224,6 +1224,16 @@ internal static class MeetingHudStartPatch
         }
 
         TextBoxPatch.OnMeetingStart();
+
+        if (AmongUsClient.Instance.AmHost && Options.MeetingAutoOpenChat.GetBool())
+            LateTask.New(() =>
+            {
+                if (!HudManager.InstanceExists || !HudManager.Instance.Chat) return;
+                ChatController chat = HudManager.Instance.Chat;
+                chat.SetVisible(true);
+                // SetVisible はチャットUIを可視化するだけでパネルは開かない。閉じていれば Toggle で展開する。
+                if (chat.IsClosedOrClosing) chat.Toggle();
+            }, 0.5f, "StreamerAutoChat", log: false);
     }
 }
 

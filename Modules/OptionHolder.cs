@@ -456,6 +456,9 @@ public static class Options
     public static OptionItem AutoPlayAgain;
     public static OptionItem AutoPlayAgainCountdown;
     public static OptionItem StreamerMode;
+    public static OptionItem SpectatorAutoCam;
+    public static OptionItem SpectatorAutoCamInterval;
+    public static OptionItem MeetingAutoOpenChat;
     public static OptionItem AutoRehostAfterKick;
     public static OptionItem AutoRehostDelay;
     public static OptionItem AutoRehostMaxAttempts;
@@ -1703,6 +1706,14 @@ public static class Options
         {
             if (before == 0 && after == 1) EndKnot.Modules.StreamerMode.Apply();
         });
+
+        SpectatorAutoCam = new BooleanOptionItem(44464, "SpectatorAutoCam", false, TabGroup.SystemSettings);
+
+        SpectatorAutoCamInterval = new IntegerOptionItem(44465, "SpectatorAutoCamInterval", new(3, 30, 1), 8, TabGroup.SystemSettings)
+            .SetParent(SpectatorAutoCam)
+            .SetValueFormat(OptionFormat.Seconds);
+
+        MeetingAutoOpenChat = new BooleanOptionItem(44466, "MeetingAutoOpenChat", false, TabGroup.SystemSettings);
 
         AutoPlayAgain = new BooleanOptionItem(44424, "AutoPlayAgain", false, TabGroup.SystemSettings);
 

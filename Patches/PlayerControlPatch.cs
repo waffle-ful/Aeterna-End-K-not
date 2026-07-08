@@ -1742,6 +1742,7 @@ internal static class FixedUpdatePatch
         {
             CustomSabotage.UpdateAll();
             Zoom.OnFixedUpdate();
+            StreamerCamera.OnFixedUpdate();
 
             if (!lowLoad)
             {

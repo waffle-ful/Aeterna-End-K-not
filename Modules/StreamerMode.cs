@@ -35,6 +35,8 @@ public static class StreamerMode
             changed |= SetOn(Options.CrashWatchdog);
             changed |= SetOn(Options.AutoPlayAgain);
             changed |= SetOn(YouTubeChatOptions.Enabled);
+            changed |= SetOn(Options.SpectatorAutoCam);
+            changed |= SetOn(Options.MeetingAutoOpenChat);
             if (changed) OptionItem.SyncAllOptions();
 
             // 子オプション行の表示/位置は ReloadUI で並べ直す (閉じていれば即 return)。
@@ -45,6 +47,8 @@ public static class StreamerMode
             RepaintToggle(Options.CrashWatchdog);
             RepaintToggle(Options.AutoPlayAgain);
             RepaintToggle(YouTubeChatOptions.Enabled);
+            RepaintToggle(Options.SpectatorAutoCam);
+            RepaintToggle(Options.MeetingAutoOpenChat);
 
             PendingUrlHint = true;
             Logger.Info("Streamer mode applied (auto-rehost / crash-watchdog / auto-play-again / youtube-chat ON)", "StreamerMode");
