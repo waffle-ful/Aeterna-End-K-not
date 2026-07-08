@@ -88,6 +88,9 @@ public static class FixedUpdateCaller
             try { DataFlagRateLimiter.OnFixedUpdate(); }
             catch (Exception e) { Utils.ThrowException(e); }
 
+            try { PacketRateGate.OnFixedUpdate(); }
+            catch (Exception e) { Utils.ThrowException(e); }
+
             if (!PlayerControl.LocalPlayer) return;
 
             if (amongUsClient.IsGameStarted)

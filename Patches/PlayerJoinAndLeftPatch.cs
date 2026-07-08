@@ -489,6 +489,10 @@ internal static class DisconnectInternalPatch
         }
 
         BGMManager.Stop();
+
+        // キック事後解析用: 直近の送信履歴を1行に集約してログへ残す (null ガード徹底、失敗しても切断処理を止めない)。
+        try { Logger.Warn($"reason={reason} stringReason={stringReason} {PacketRateGate.DumpRecent()}", "PacketRateGate"); }
+        catch { }
     }
 }
 

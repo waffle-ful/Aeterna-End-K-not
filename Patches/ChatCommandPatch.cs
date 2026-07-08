@@ -305,6 +305,7 @@ internal static class ChatCommands
             new("SizeTest", "", Command.UsageLevels.Host, Command.UsageTimes.InGame, SizeTestCommand, true, true),
             new("SizeClean", "", Command.UsageLevels.Host, Command.UsageTimes.InGame, SizeCleanCommand, true, true),
             new("RipSize", "[size]", Command.UsageLevels.Host, Command.UsageTimes.InGame, RipSizeCommand, true, true),
+            new("Burst", "{count} [direct]", Command.UsageLevels.Host, Command.UsageTimes.Always, BurstCommand, true, true, [GetString("CommandArgs.Burst.Count"), GetString("CommandArgs.Burst.Direct")]),
             new("Map", "[list|load <file>|reload|exit|import|export|info]", Command.UsageLevels.Host, Command.UsageTimes.InLobby, MapCommand, true, true)
         ];
     }
@@ -3326,6 +3327,45 @@ internal static class ChatCommands
         int spawned = RiptideWaveSizeTestCNO.SpawnRow(origin, RiptideWaveSizeTestCNO.Mode.Absolute);
         Logger.Info($"DevCmd /ripsize absolute row: spawned={spawned}", "DevCmd");
         Utils.SendMessage($"[ripsize] Spawned {spawned} Riptide sprites at sizes 20/30/40/50/80 absolute (30u apart). Try '/ripsize percent' or '/ripsize default' too. /sizeclean to remove.", player.PlayerId);
+    }
+
+    // 公式鯖 anti-cheat のレート閾値がゲームフェーズで変わるかの実験、および PacketRateGate の実機検証用。
+    // 非モッドクライアント1名へ idempotent なダミー SetRole RPC を N 発撃つ (実ゲーム状態は変えない)。
+    // 'direct' は DataFlagRateLimiter の事前スロットルだけを迂回する (旧 InjectDebugBurst と同じ意味)。
+    // PacketSplitPatch の関所 (グローバル Reliable レートゲート) は SendOrDisconnect を通る全パケットに
+    // 効くため、direct 指定でもそちらは素通りできない — 旧版との挙動差そのものが今回のゲート検証の目的。
+    private static void BurstCommand(PlayerControl player, string text, string[] args)
+    {
+        if (!player.FriendCode.GetDevUser().up && !player.FriendCode.IsLocalDev()) return;
+
+        if (args.Length < 2 || !int.TryParse(args[1], out int count) || count <= 0)
+        {
+            Utils.SendMessage("[burst] Usage: /burst <count> [direct]", player.PlayerId);
+            return;
+        }
+
+        bool direct = args.Length >= 3 && args[2].Equals("direct", System.StringComparison.OrdinalIgnoreCase);
+
+        PlayerControl target = Main.EnumeratePlayerControls().FirstOrDefault(p => p != null && !p.AmOwner && p.OwnerId >= 0 && !p.IsModdedClient());
+        if (target == null)
+        {
+            Utils.SendMessage("[burst] No non-modded client found to target (need a vanilla joiner).", player.PlayerId);
+            return;
+        }
+
+        RoleTypes role = target.GetRoleTypes();
+        Logger.Info($"DevCmd /burst: injecting {count} dummy SetRole RPCs to client {target.OwnerId} (direct={direct})", "PacketRateGate");
+
+        CustomRpcSender sender = CustomRpcSender.Create("Burst", SendOption.Reliable, log: false).StartMessage(target.OwnerId);
+        for (var i = 0; i < count; i++) sender.RpcSetRole(target, role, target.OwnerId, noRpcForSelf: false);
+        sender.EndMessage();
+
+        if (direct)
+            sender.SendMessage();
+        else
+            DataFlagRateLimiter.Enqueue(() => sender.SendMessage(), SendOption.Reliable, count);
+
+        Utils.SendMessage($"[burst] Sent {count} dummy SetRole RPC(s) to {target.GetRealName()} ({(direct ? "direct" : "throttled")}).", player.PlayerId);
     }
 
     private static void KCountCommand(PlayerControl player, string text, string[] args)

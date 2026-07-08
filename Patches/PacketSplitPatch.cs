@@ -1,6 +1,7 @@
 // The chokepoint packet-splitting approach here is adapted, with thanks, from
 // Town Of Host-K by KYMario (GPL-3.0) — https://github.com/KYMario/TownOfHost-K
 using System;
+using EndKnot.Modules;
 using HarmonyLib;
 using Hazel;
 using InnerNet;
@@ -23,7 +24,10 @@ internal static class PacketSplitPatch
 
     public static bool Prefix(InnerNetClient __instance, MessageWriter msg)
     {
-        if (msg.Length <= DetectThreshold) return true;
+        PacketRateGate.RecordInstrumentation(msg);
+
+        if (msg.Length <= DetectThreshold)
+            return !PacketRateGate.TryGate(__instance, msg);
 
         Logger.Info($"Large Packet({msg.Length}), SendOption:{msg.SendOption}", "PacketSplitPatch");
 
@@ -42,6 +46,10 @@ internal static class PacketSplitPatch
                 // 内部を Flag/サブメッセージ境界で刻めないと GameOptionsSender の一括 flush が閾値超で公式 kick を招く。
                 bool divide26 = partMsg.Tag is 26 && partMsg.Length > CustomRpcSender.SafeChunkLength;
                 bool divide = divide5Or6 || divide26;
+
+                // Tag が未知 (5/6/26 以外) で閾値超の場合は分割不能な構造なのでそのまま書くが、警告だけ出す。
+                if (!divide && partMsg.Tag is not (5 or 6 or 26) && partMsg.Length > CustomRpcSender.SafeChunkLength)
+                    Logger.Warn($"undividable tag={partMsg.Tag} len={partMsg.Length}", "PacketSplitPatch");
 
                 // 書き込む前にフラッシュ判定 (post-write だと最大 2×閾値まで膨らむため)。
                 // 分割対象は Divide* を空 writer から始めたいので、先に溜まりを吐く。
@@ -217,6 +225,10 @@ internal static class PacketSplitPatch
 
     private static void Send(InnerNetClient __instance, MessageWriter writer)
     {
+        // 分割済みチャンクも小型パケットと同じ単一ゲート (FIFO+単一予算) を通す。キューに積んだ場合は
+        // 「送信責任をゲートへ引き受けた」ことになるので、呼び出し元は sentAny=true のまま扱ってよい。
+        if (PacketRateGate.TryGate(__instance, writer)) return;
+
         var err = __instance.connection.Send(writer);
         if (err != SendErrors.None)
             Logger.Info($"SendMessage Error={err}", "PacketSplitPatch");
