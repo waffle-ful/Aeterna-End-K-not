@@ -519,6 +519,15 @@ public static class Utils
         mode = mode.Replace("color=", string.Empty);
         return parentheses ? $"({mode})" : mode;
     }
+    public static bool IsRelevant(this TabGroup tab, CustomGameMode? gm = null)
+    {
+        return (gm ?? Options.CurrentGameMode) switch
+        {
+            CustomGameMode.Standard => true,
+            CustomGameMode.HideAndSeek => tab <= TabGroup.NeutralRoles,
+            _ => tab <= TabGroup.TaskSettings
+        };
+    }
     public static Color GetTabColor(this TabGroup tab)
     {
         return tab switch

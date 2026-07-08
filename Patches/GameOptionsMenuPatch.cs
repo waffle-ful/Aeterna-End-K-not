@@ -462,19 +462,19 @@ public static class GameOptionsMenuPatch
 
                 if (gen != ReCreateGeneration) yield break;
 
-                ReCreateSettings(menu);
+                ReCreateSettings(menu, tab);
                 yield return null;
             }
             ReCreateAllCoroutine = null;
         }
     }
 
-    public static void ReCreateSettings(GameOptionsMenu __instance)
+    public static void ReCreateSettings(GameOptionsMenu __instance, TabGroup? modTabOverride = null)
     {
-        if (ModGameOptionsMenu.TabIndex < 3) return;
+        if (!modTabOverride.HasValue && ModGameOptionsMenu.TabIndex < 3) return;
         if (!__instance) return;
 
-        var modTab = (TabGroup)(ModGameOptionsMenu.TabIndex - 3);
+        TabGroup modTab = modTabOverride ?? (TabGroup)(ModGameOptionsMenu.TabIndex - 3);
 
         // Mirror of the CreateSettings dispatch: ValueChanged/collapse re-layouts route through
         // here too, so the new view must own reflow for its tabs or build/reflow desync.
@@ -594,8 +594,8 @@ public static class GameOptionsMenuPatch
     {
         if (!GameSettingMenu.Instance) return;
 
-        foreach (var tab in GameSettingMenuPatch.GetModSettingsTabs().Values)
-            ReCreateSettings(tab);
+        foreach (var (tab, menu) in GameSettingMenuPatch.GetModSettingsTabs())
+            ReCreateSettings(menu, tab);
 
         RefreshSettingValues();
 
@@ -603,6 +603,14 @@ public static class GameOptionsMenuPatch
         // Since ReloadUI no longer rebuilds the menu, refresh the label here so the displayed preset matches CurrentPreset.
         if (GameSettingMenuPatch.PresetValueText)
             GameSettingMenuPatch.PresetValueText.SetText(Translator.GetString($"Preset_{OptionItem.CurrentPreset + 1}"));
+
+        // Game-mode switches and preset switches (presets carry a game mode) can both change CurrentGameMode,
+        // so every ReloadUI must also re-assert the mode-dependent chrome: tab button visibility, checkmark
+        // theme colors and the mode label — these used to refresh only on menu reopen.
+        RefreshTabButtons();
+        RefreshCheckMarkColors();
+        if (GameSettingMenuPatch.GameModeLabelText)
+            GameSettingMenuPatch.GameModeLabelText.SetText($"<size=50%>{Translator.GetString($"Mode{Options.CurrentGameMode}")}</size>\n");
     }
 
     public static void RefreshSettingValues()
@@ -648,6 +656,25 @@ public static class GameOptionsMenuPatch
         // Do NOT touch activeTab.scrollBar here: ReloadUI already ran ReCreateSettings on every tab, which sets
         // each scrollbar's bound from its real content height. A fixed bound here would clamp the active tab's
         // scroll to nothing (scrollbar disappears) — that was the "System Settings can't scroll" bug.
+    }
+
+    public static void RefreshTabButtons()
+    {
+        foreach (var (tab, button) in GameSettingMenuPatch.GetModSettingsButtons())
+            if (button) button.gameObject.SetActive(tab.IsRelevant());
+    }
+
+    public static void RefreshCheckMarkColors()
+    {
+        foreach (var kvp in ModGameOptionsMenu.OptionList)
+        {
+            if (kvp.Key is ToggleOption toggleOption && toggleOption)
+            {
+                Color color = ModGameOptionsMenu.GetCurrentThemeColor(OptionItem.AllOptions[kvp.Value].Tab);
+                toggleOption.CheckMark.color = color;
+                toggleOption.CheckMark.transform.parent.FindChild("ActiveSprite").GetComponent<SpriteRenderer>().color = color;
+            }
+        }
     }
 }
 
@@ -1238,6 +1265,7 @@ public static class GameSettingMenuPatch
     public static NumberOption PresetBehaviour;
     public static long LastPresetChange;
     public static TextMeshPro PresetValueText;
+    public static TextMeshPro GameModeLabelText; // mode name label on the left panel; refreshed by ReloadUI
     private static GameObject PresetSelector;
     private static GameObject PresetMinusButton;
     private static GameObject PresetPlusButton;
@@ -1273,14 +1301,10 @@ public static class GameSettingMenuPatch
         catch (Exception e) { Utils.ThrowException(e); }
 
         RoleMenuTabBar.Reset();
+        // Create buttons/tabs for every TabGroup and gate visibility with IsRelevant instead of
+        // filtering the list — an in-menu game-mode switch can then reveal tabs that were
+        // irrelevant when the menu opened (upstream parity; RefreshTabButtons flips visibility).
         TabGroup[] tabGroups = Main.TabGroupValues;
-
-        tabGroups = Options.CurrentGameMode switch
-        {
-            CustomGameMode.Standard => tabGroups,
-            CustomGameMode.HideAndSeek => tabGroups[..6],
-            _ => tabGroups[..3]
-        };
 
         // New menu: one compact centered top row. Mod/Task tab buttons are folded into the System
         // button (relabelled "設定"), which renders System+Mod+Task as one sectioned column.
@@ -1305,7 +1329,7 @@ public static class GameSettingMenuPatch
                 button = ModGameOptionsMenu.Track(Object.Instantiate(TemplateGameSettingsButton, __instance.GameSettingsButton.transform.parent));
             else
                 button.transform.SetParent(__instance.GameSettingsButton.transform.parent, false);
-            button.gameObject.SetActive(true);
+            button.gameObject.SetActive(tab.IsRelevant());
             button.name = "Button_" + tab;
             var label = button.GetComponentInChildren<TextMeshPro>();
             label.DestroyTranslator();
@@ -1546,6 +1570,7 @@ public static class GameSettingMenuPatch
         var gameSettingsLabel = __instance.GameSettingsButton.transform.parent.parent.FindChild("GameSettingsLabel").GetComponent<TextMeshPro>();
         gameSettingsLabel.DestroyTranslator();
         gameSettingsLabel.SetText($"<size=50%>{Translator.GetString($"Mode{Options.CurrentGameMode}")}</size>\n");
+        GameModeLabelText = gameSettingsLabel;
         gameSettingsLabel.transform.localPosition += new Vector3(0f, 0.1f, 0f);
 
         if (russian)
@@ -1597,6 +1622,11 @@ public static class GameSettingMenuPatch
             gmPassiveButton.OnClick.RemoveAllListeners();
             gmPassiveButton.OnClick.AddListener((Action)(() =>
             {
+                // If the currently open tab doesn't exist in the new game mode, escape to Game Settings
+                // before switching, or the user is left staring at a dead tab.
+                if (GameSettingMenu.Instance && ModGameOptionsMenu.TabIndex >= 3 && !((TabGroup)(ModGameOptionsMenu.TabIndex - 3)).IsRelevant(gm))
+                    GameSettingMenu.Instance.ChangeTab((int)TabGroup.GameSettings + 3, false);
+
                 Options.GameMode.SetValue((int)gm - 1);
                 GameOptionsMenuPatch.ReloadUI();
             }));
@@ -1965,6 +1995,7 @@ public static class GameSettingMenuPatch
     }
 
     public static System.Collections.Generic.Dictionary<TabGroup, GameOptionsMenu> GetModSettingsTabs() => ModSettingsTabs;
+    public static System.Collections.Generic.Dictionary<TabGroup, PassiveButton> GetModSettingsButtons() => ModSettingsButtons;
 }
 
 [HarmonyPatch(typeof(FreeChatInputField), nameof(FreeChatInputField.UpdateCharCount))]
