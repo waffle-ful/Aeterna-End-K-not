@@ -2139,6 +2139,18 @@ public static class Utils
             int resetNameRpcSize = HazelExtensions.GetStringWriteSize(sender.Data.PlayerName) + 4;
             int fullRpcSize = textRpcSize + titleRpcSize + resetNameRpcSize;
 
+            // 累積型の穴 (BUG-20260708-01/-04): StartRpc の分割チェックも RestartMessageIfTooLong も
+            // 「累積<500 の writer に大きな1書込みが乗る」合体を防げない (pre-write は書く前の長さしか
+            // 見ず、post-write は溢れたまま送る)。前回呼び出しの残りが writer に溜まった状態でこの分を
+            // 追記すると単一チャンクが SafeChunkLength を超える場合、書く前に見積りでフラッシュする。
+            // (実測: SetName+SendChat ペア ~450B×2 が 902B 単一チャンクに合体、公式 kick 閾値 ~1024 に肉薄)
+            // Length>10 は「裸の GameData エンベロープ (ヘッダ7B のみ)」を空ブロードキャストしない保険。
+            if (writer.stream.Length > 10 && writer.stream.Length + fullRpcSize > CustomRpcSender.SafeChunkLength)
+            {
+                writer.SendMessage();
+                writer = CustomRpcSender.Create("Utils.SendMessage(1)", sendOption);
+            }
+
             if (!noSplit)
             {
                 int titleRpcSizeLimit = fullRpcSizeLimit - textRpcSize - resetNameRpcSize;

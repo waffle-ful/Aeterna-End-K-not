@@ -92,6 +92,25 @@ public static class NameNotifyManager
     {
         if (!AmongUsClient.Instance.AmHost || player.OwnerId < 0) return;
 
+        // pre-write 見積り分割 (BUG-20260708-01 の双子): text は任意長 (チャット全文+装飾タグ) で、
+        // StartRpc の分割チェックは書く前の累積長しか見ないため「累積<500 + 大きい text」が単一チャンク
+        // ~1024 (公式 kick 閾値) 超に合体し得る。さらに RpcSetName が sender.checkLength=false にした後は
+        // そのチェックすら効かない。書く前に見積りで溢れるなら現 stream を doneStreams へ退避して分割する。
+        int estimatedSize = 16 + HazelExtensions.GetStringWriteSize(text) + HazelExtensions.GetStringWriteSize(expireTS.ToString());
+        if (sender.stream.Length > 10 && sender.stream.Length + estimatedSize > CustomRpcSender.SafeChunkLength)
+        {
+            switch (sender.CurrentState)
+            {
+                case CustomRpcSender.State.InRootMessage:
+                case CustomRpcSender.State.InRootPackedMessage:
+                    sender.EndMessage(startNew: true);
+                    break;
+                case CustomRpcSender.State.Ready:
+                    sender.FlushCurrentStream();
+                    break;
+            }
+        }
+
         sender.AutoStartRpc(PlayerControl.LocalPlayer.NetId, (byte)CustomRPC.SyncNameNotify, sender.packed || sender.currentRpcTarget >= 0 ? player.OwnerId : -1);
         sender.Write(player.PlayerId);
         sender.Write(text);
