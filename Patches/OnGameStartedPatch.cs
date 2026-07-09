@@ -540,6 +540,22 @@ internal static class StartGameHostPatch
 
     private static System.Collections.IEnumerator StartGameHost()
     {
+        // Close the settings / customization menus if the host started the game with one still open. The
+        // custom CoStartGame path closes them (see ChangeRoleSettings) only for local games — its early
+        // return skips that for ONLINE hosts, so without this the settings menu's whole UI subtree
+        // (game-mode buttons + every option row's TMP mesh) is never handed back to the DontDestroyOnLoad
+        // cache root, leaking into the game / results screen and ballooning object & material counts.
+        // For local games these are already closed before CoStartGameHost runs, so this is a null no-op.
+        try
+        {
+            var customizationMenu = Object.FindObjectOfType<PlayerCustomizationMenu>();
+            if (customizationMenu) customizationMenu.Close(false);
+
+            var settingMenu = Object.FindObjectOfType<GameSettingMenu>();
+            if (settingMenu) settingMenu.Close();
+        }
+        catch (Exception e) { Utils.ThrowException(e); }
+
         // Restore the host's clean name for the game. Use TryGetValue (not the [0] indexer) and skip on a
         // missing/empty entry so we never broadcast a null/empty name at game start — which would carry the
         // blank-host-name bug into the round and can black-screen vanilla clients.
