@@ -1392,6 +1392,10 @@ internal static class ChatCommands
                     .Write(Main.AllPlayerNames.GetValueOrDefault(sender.PlayerId, string.Empty))
                     .EndRpc();
                 w.SendMessage();
+
+                // 生名戻しで消えた装飾名 (ホストタグ/虹色 Developer★) を flush 後に決定論的に再送して復元
+                // する (Utils.SendMessage と同型の穴・同じ経路で対処)。
+                Utils.ScheduleDecoratedNameRestore(sender);
             }
             catch (Exception ex) { Logger.Warn($"SendLobbyWhisper failed: {ex.Message}", "Whisper"); }
         }, delay, "SendLobbyWhisper", log: false);

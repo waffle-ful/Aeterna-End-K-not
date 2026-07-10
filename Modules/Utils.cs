@@ -2145,7 +2145,11 @@ public static class Utils
             // Hazel.Write(string) は UTF-8 + PackedUInt32 prefix で書き出すので、それに合わせて正確算出。
             int textRpcSize = HazelExtensions.GetStringWriteSize(text);
             int titleRpcSize = HazelExtensions.GetStringWriteSize(title) + 4;
-            int resetNameRpcSize = HazelExtensions.GetStringWriteSize(sender.Data.PlayerName) + 4;
+            // 見積りは「実際に書き込む戻し名」と同じソースを使う。reset write (2260/2320/2383) は
+            // 装飾ゼロの素名 Main.AllPlayerNames を書くのに、ここで装飾込みの Data.PlayerName を測ると
+            // 虹色 Developer★ タグ (~500B) の分だけ過大見積りになり、textRpcSizeLimit がマイナスに振れて
+            // 分割前に MessageTooLong 誤爆する (実測: テンプレ全送信が中止, 2026-07-10)。
+            int resetNameRpcSize = HazelExtensions.GetStringWriteSize(Main.AllPlayerNames.GetValueOrDefault(sender.PlayerId, string.Empty)) + 4;
             int fullRpcSize = textRpcSize + titleRpcSize + resetNameRpcSize;
 
             // 累積型の穴 (BUG-20260708-01/-04): StartRpc の分割チェックも RestartMessageIfTooLong も
@@ -2260,6 +2264,8 @@ public static class Utils
                             .Write(Main.AllPlayerNames.GetValueOrDefault(sender.PlayerId, string.Empty))
                             .EndRpc();
 
+                        ScheduleDecoratedNameRestore(sender);
+
                         writer.SendMessage();
 
                         try
@@ -2319,6 +2325,8 @@ public static class Utils
                         .Write(sender.Data.NetId)
                         .Write(Main.AllPlayerNames.GetValueOrDefault(sender.PlayerId, string.Empty))
                         .EndRpc();
+
+                    ScheduleDecoratedNameRestore(sender);
 
                     if (!multiple) writer.SendMessage();
                     else RestartMessageIfTooLong(sendOption);
@@ -2383,6 +2391,8 @@ public static class Utils
                     .Write(Main.AllPlayerNames.GetValueOrDefault(sender.PlayerId, string.Empty))
                     .EndRpc();
 
+                ScheduleDecoratedNameRestore(sender);
+
                 if (!multiple) writer.SendMessage();
                 else RestartMessageIfTooLong(sendOption);
             }
@@ -2402,7 +2412,7 @@ public static class Utils
                 writer = CustomRpcSender.Create("Utils.SendMessage", sendOption);
             }
         }
-        
+
         static List<string> SplitByNumberLimit(string text)
         {
             List<string> result = [];
@@ -2641,6 +2651,56 @@ public static class Utils
 
     public static HashSet<byte> DirtyName = [];
 
+    // システムメッセージ / whisper の名前戻し (reset SetName) は帯域節約のため装飾ゼロの素名を書く。
+    // 装飾名 (~500B の虹色 Developer★/ホストタグ) を毎メッセージのパケットに載せると公式鯖のサイズ
+    // 上限に触れて kick されるため、素名に戻すのは意図的。その副作用として非モッド視点では、overhead 名が
+    // タイトル (「∞ System Message ∞」) や素名のまま固定される (reset SetName が公式鯖のレートゲートで
+    // 落ちる/最終チャンクで書かれない等で届かないと、タイトルのまま張り付く)。FixedUpdate の dirty-check は
+    // LastBroadcastName=装飾名 のまま「送信済み」と誤判定して自力再送しない。
+    //
+    // 対策: メッセージ活動が完全に止んだ後に、装飾名 (無ければ素名) を1回だけ独立した RpcSetName で
+    // ブロードキャストし、stuck したタイトルを確実に上書きする。テンプレは 0.4s 間隔で多数のチャンクを
+    // 撒く (MultiMessageGapSeconds) ので、touch のたびにトークンを進めて後発タスクだけが実行する
+    // デバウンス方式にする (0.5s > 0.4s なので、最後のチャンクの後にだけ1回発火する)。即時のキャッシュ
+    // 突きは遅延 flush と競合して永久 stuck を生む罠があったため使わない。
+    private static readonly Dictionary<byte, int> NameRestoreToken = [];
+
+    internal static void ScheduleDecoratedNameRestore(PlayerControl who)
+    {
+        if (who == null || who.Data == null) return;
+        byte id = who.PlayerId;
+        int token = NameRestoreToken.GetValueOrDefault(id) + 1;
+        NameRestoreToken[id] = token;
+
+        LateTask.New(() =>
+        {
+            // より新しい touch に追い越されていたら、その最新タスクに復元を任せて何もしない。
+            if (NameRestoreToken.GetValueOrDefault(id) != token) return;
+            NameRestoreToken.Remove(id);
+
+            PlayerControl pc = GetPlayerById(id);
+            if (pc == null || pc.Data == null) return;
+
+            // 勝敗演出中は名前をロックする経路 (CheckGameEndPatch 等) を邪魔しない。FixedUpdate 通常経路と同ガード。
+            if (Main.DoBlockNameChange) return;
+
+            // 装飾名があればそれで、無ければ素名で overhead を確実に上書き (stuck タイトルの解消優先)。
+            string restore = ApplySuffix(pc, out string decorated) && !string.IsNullOrEmpty(decorated)
+                ? decorated
+                : Main.AllPlayerNames.GetValueOrDefault(id, pc.Data.PlayerName ?? string.Empty);
+
+            if (string.IsNullOrEmpty(restore)) return;
+
+            // RpcSetName 経由なので RpcSetNameMirrorCachePatch が cache もミラー同期し、次 tick の
+            // FixedUpdate 側の再送はゼロ (restore == cache で dirty-check スキップ)。
+            FixedUpdatePatch.LastBroadcastName[id] = restore;
+            pc.RpcSetName(restore);
+            Logger.Info($"restored overhead name for {pc.GetRealName()} (decorated={restore.Length > 40})", "NameRestoreAfterMessage");
+            // 窓 0.7s は MultiMessageGapSeconds(0.4s) より十分広く、テンプレの連続チャンクを跨いで
+            // 必ず最後の touch の後にだけ発火させる (途中発火→次チャンクで clobber を防ぐ)。
+        }, 0.7f, "RestoreDecoratedNameAfterMessage", log: false);
+    }
+
     public static bool ApplySuffix(PlayerControl player, out string name)
     {
         name = string.Empty;
@@ -2673,6 +2733,9 @@ public static class Utils
         else
         {
             if (!GameStates.IsLobby) return false;
+
+            // Local devs get their name body rendered in the Developer★ font + rainbow (lobby only).
+            if (localDev) name = DevTag.BuildRainbowName(name);
 
             if (player.AmOwner)
             {

@@ -53,10 +53,13 @@ public static class CalamityButtons
             (Translator.GetString("MainMenu.Calamity.Settings"),     -0.1f,
                 () => { CalamityVisibility.HideMenuContent(); mm.settingsButton.OnClick.Invoke(); }),
 
-            (Translator.GetString("MainMenu.Calamity.Credits"),      -0.6f,
+            (Translator.GetString("MainMenu.Calamity.MyAccount"),    -0.6f,
+                () => OpenMyAccount(mm)),
+
+            (Translator.GetString("MainMenu.Calamity.Credits"),      -1.1f,
                 () => { CalamityVisibility.HideMenuContent(); mm.creditsButton.OnClick.Invoke(); }),
 
-            (Translator.GetString("MainMenu.Calamity.Quit"),         -1.1f,
+            (Translator.GetString("MainMenu.Calamity.Quit"),         -1.6f,
                 () => mm.quitButton.OnClick.Invoke()),
         };
 
@@ -74,6 +77,26 @@ public static class CalamityButtons
         CalamityVisibility.HideMenuContent();
         mm.OpenGameModeMenu();
         Logger.Info("OpenGameModeMenu returned", "CalamityButtons");
+    }
+
+    // AccountManager is left disabled at boot by VanillaSuppressor (keeping it alive there
+    // slowed the menu boot noticeably). Re-enable it lazily on click so the vanilla account /
+    // display-name window can open, then fire the vanilla My Account button's OnClick.
+    private static void OpenMyAccount(MainMenuManager mm)
+    {
+        Logger.Info("MyAccount clicked", "CalamityButtons");
+        try
+        {
+            var am = Object.FindObjectOfType<AccountManager>(true);
+            if (am != null && !am.gameObject.activeSelf) am.gameObject.SetActive(true);
+
+            if (mm.myAccountButton != null) mm.myAccountButton.OnClick.Invoke();
+
+            // Hide the Calamity buttons behind it, show a BACK button, and let
+            // CalamityVisibility track the window so it closes cleanly (BACK or auto-detect).
+            CalamityVisibility.BeginAccountWindow(am);
+        }
+        catch (Exception ex) { Logger.Exception(ex, "OpenMyAccount"); }
     }
 
     private static void CreateTextButton(Transform parent, string label, Vector3 pos, Action onClick)

@@ -39,20 +39,12 @@ public static class VanillaSuppressor
         DisableByName("FriendsButton");
         DisableByName("NewRequest");
 
-        // AccountTab (top-left FriendCode/EOS name widget) is a child of AccountManager.
-        // Reparent it out before AccountManager is disabled, otherwise it disappears with
-        // its parent. Also kill its AccountWindow popup so the sign-in dialog can't open.
-        var accountManager = Object.FindObjectOfType<AccountManager>();
-        if (accountManager != null)
-        {
-            var accountTab = accountManager.transform.FindChild("AccountTab");
-            if (accountTab != null)
-            {
-                accountTab.FindChild("AccountWindow")?.gameObject.SetActive(false);
-                accountTab.SetParent(accountManager.transform.parent);
-            }
-            accountManager.gameObject.SetActive(false);
-        }
+        // AccountManager (top-left account widget + the FriendCode/name/sign-in window) is
+        // disabled wholesale — keeping it active slows the menu boot noticeably. The vanilla
+        // subtree (AccountTab → AccountWindow) is left INTACT (no reparent, no child disable)
+        // so the Calamity "My Account" button can re-enable it on demand and the window opens
+        // and closes through its normal vanilla wiring. CalamityVisibility tracks/closes it.
+        Object.FindObjectOfType<AccountManager>()?.gameObject.SetActive(false);
 
         // StoreMenu (vanilla cosmetics store) sits behind the menu and bleeds
         // through with the Calamity background.
@@ -92,6 +84,8 @@ public static class VanillaSuppressor
         // newsButton はあえて残す: 公式サーバー警告 ([[OfficialServerNotice]] / ModNews) を
         // いつでも手動で開けるようにするため。vanilla 純正ハンドラなので安全にパネルを開ける
         // (こちらから AnnouncementPopUp.Show() を直叩きすると内部リスト未構築でクラッシュする)。
+        // mm.myAccountButton is SetActive(false) like the rest; the Calamity "My Account"
+        // button invokes its OnClick (UnityEvent fires regardless of activeInHierarchy).
         foreach (var btn in new[]
         {
             mm.playButton?.gameObject,

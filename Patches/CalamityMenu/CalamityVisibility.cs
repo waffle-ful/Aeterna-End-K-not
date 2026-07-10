@@ -31,6 +31,41 @@ public static class CalamityVisibility
     private static bool _prevPopExists;
     private static bool _prevContentExists;
 
+    // The vanilla account / display-name window, opened on demand by the Calamity "My Account"
+    // button. AccountManager is disabled at boot, so we re-enable it, show the window, keep the
+    // Calamity menu hidden while it's up, and disable AccountManager again when it closes.
+    private static bool _accountWindowActive;
+    private static bool _accountWindowSeenActive;
+    private static GameObject _accountWindow;
+    private static AccountManager _accountManager;
+
+    // Called by CalamityButtons.OpenMyAccount right after enabling AccountManager and firing
+    // the vanilla My Account OnClick. Locates the AccountWindow so we can detect/close it.
+    public static void BeginAccountWindow(AccountManager am)
+    {
+        _accountManager = am;
+        _accountWindow = null;
+        if (am != null)
+        {
+            var tab = am.transform.FindChild("AccountTab");
+            if (tab != null) _accountWindow = tab.FindChild("AccountWindow")?.gameObject;
+        }
+
+        _accountWindowActive = true;
+        _accountWindowSeenActive = false;
+        HideMenuContent(showBack: true);
+    }
+
+    private static void EndAccountWindow()
+    {
+        if (_accountWindow != null && _accountWindow.activeSelf) _accountWindow.SetActive(false);
+        if (_accountManager != null) _accountManager.gameObject.SetActive(false);
+        _accountWindow = null;
+        _accountManager = null;
+        _accountWindowActive = false;
+        _accountWindowSeenActive = false;
+    }
+
     public static void HideMenuContent(bool showBack = true)
     {
         if (_menuHidden) return;
@@ -132,6 +167,10 @@ public static class CalamityVisibility
         _prevShouldStayOpen = false;
         _prevPopExists = false;
         _prevContentExists = false;
+        _accountWindowActive = false;
+        _accountWindowSeenActive = false;
+        _accountWindow = null;
+        _accountManager = null;
     }
 
     private static void ShowBackButton()
@@ -194,6 +233,8 @@ public static class CalamityVisibility
             return;
         }
 
+        if (_accountWindowActive) { EndAccountWindow(); return; }
+
         var pop = Object.FindObjectOfType<FreeplayPopover>(true);
         if (pop != null && IsFreeplayOpen(pop))
         {
@@ -228,6 +269,19 @@ public static class CalamityVisibility
 
     private static bool IsAnyPopoverOpen()
     {
+        // Account / display-name window. Keep the menu hidden while it's up; if it gets
+        // closed by any means (BACK, or a future vanilla close path), tear our state down
+        // so the menu re-appears. A "seen active" latch avoids a one-frame race where the
+        // window hasn't activated yet right after BeginAccountWindow.
+        if (_accountWindowActive)
+        {
+            if (_accountWindow == null) return true; // can't auto-detect; BACK closes it
+            if (_accountWindow.activeInHierarchy) { _accountWindowSeenActive = true; return true; }
+            if (!_accountWindowSeenActive) return true; // grace: not activated yet this frame
+            EndAccountWindow();
+            return false;
+        }
+
         // RightPanel (Multiplayer): keep menu hidden while ShowingPanel is true OR while
         // the panel is still mid-slide off-screen. RightPanel.x ~ Op.x means slid in,
         // ~ Op.x+10 means fully off-screen.

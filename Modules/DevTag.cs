@@ -20,7 +20,31 @@ public static class DevTag
 
         var sb = new StringBuilder();
         sb.Append("<font=\"VCR SDF\" material=\"VCR Black Outline\"><size=1.7>");
+        AppendRainbow(sb, text);
+        sb.Append("<color=#ff2d2d>★</color></size></font>\r\n");
+        return sb.ToString();
+    }
 
+    // Renders the name body itself in the same VCR font + static rainbow as the tag (no star, no newline),
+    // so a local dev's Among-Us name is overwritten to match the Developer★ look.
+    // VCR SDF is Latin-only: any non-ASCII char would tofu, so such names are left undecorated.
+    public static string BuildRainbowName(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return name;
+
+        foreach (char ch in name)
+            if (ch > 0x7F) return name;
+
+        var sb = new StringBuilder();
+        sb.Append("<font=\"VCR SDF\" material=\"VCR Black Outline\">");
+        AppendRainbow(sb, name);
+        sb.Append("</font>");
+        return sb.ToString();
+    }
+
+    // Static (non-animated) per-letter hue sweep — no per-frame recolor, so it adds no RpcSetName traffic.
+    private static void AppendRainbow(StringBuilder sb, string text)
+    {
         int n = text.Length;
         for (int i = 0; i < n; i++)
         {
@@ -28,8 +52,5 @@ public static class DevTag
             Color c = Color.HSVToRGB(hue, 0.85f, 1f);
             sb.Append($"<color=#{ColorUtility.ToHtmlStringRGB(c)}>{text[i]}</color>");
         }
-
-        sb.Append("<color=#ff2d2d>★</color></size></font>\r\n");
-        return sb.ToString();
     }
 }

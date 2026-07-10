@@ -121,6 +121,9 @@ internal class Spiritualist : RoleBase
 
             writer.EndMessage();
             writer.SendMessage();
+
+            // 素名 reset で消えた装飾名 (ホストタグ等) を flush 後に復元 (Utils.SendMessage と同型の穴)。
+            Utils.ScheduleDecoratedNameRestore(PlayerControl.LocalPlayer);
         }
     }
 
