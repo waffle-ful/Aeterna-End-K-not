@@ -12336,6 +12336,7 @@
   "SKPromotesToJackal": "<color=#00b4eb>Sidekick</color> gets promoted to <color=#00b4eb>Jackal</color> on <color=#00b4eb>Jackal</color> death",
   "Scientist": "Scientist",
   "SearchNoResult": "No results found",
+  "SearchResultTabs": "Matches found in: {0}",
   "SeeMedic": "<color=#00ff97>Medic</color>",
   "SeeMedicAndTarget": "<color=#00ff97>Medic</color>+<color=#8cffff>Shielded</color>",
   "SeeNoone": "Nothing",

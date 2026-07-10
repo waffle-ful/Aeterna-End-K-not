@@ -11689,6 +11689,7 @@
   "SKPromotesToJackal": "<color=#00b4eb>ジャッカル</color>の死亡時 <color=#00b4eb>サイドキック</color>が<color=#00b4eb>ジャッカル</color>に昇進する",
   "Scientist": "科学者",
   "SearchNoResult": "結果が見つからなかった",
+  "SearchResultTabs": "ヒットしたタブ: {0}",
   "SeeMedic": "<color=#00ff97>メディック</color>",
   "SeeMedicAndTarget": "<color=#00ff97>メディック</color>+<color=#8cffff>保有者</color>",
   "SeeNoone": "なし",

@@ -1286,8 +1286,58 @@ public static class GameSettingMenuPatch
     private static GameObject PresetPlusButton;
 
     public static FreeChatInputField InputField;
-    private static System.Collections.Generic.List<OptionItem> HiddenBySearch = [];
+    private static Coroutine ScrollToHitCoroutine;
     public static Action SearchForOptionsAction;
+
+    // Waits until the search hit's row exists (tabs build their rows over several frames), then
+    // scrolls the tab so the hit sits at the top of the view. Nothing is hidden by the search.
+    private static System.Collections.IEnumerator CoScrollToOption(TabGroup displayTab, int optionIndex)
+    {
+        GameOptionsMenu menu = null;
+        Transform row = null;
+
+        for (var frame = 0; frame < 300; frame++)
+        {
+            if (ModSettingsTabs.TryGetValue(displayTab, out menu) && menu && menu.gameObject.activeInHierarchy)
+            {
+                if (ModGameOptionsMenu.BehaviourList.TryGetValue(optionIndex, out OptionBehaviour ob) && ob && ob.gameObject.activeInHierarchy) row = ob.transform;
+                else if (ModGameOptionsMenu.CategoryHeaderList.TryGetValue(optionIndex, out CategoryHeaderMasked chm) && chm && chm.gameObject.activeInHierarchy) row = chm.transform;
+
+                if (row) break;
+            }
+
+            yield return null;
+        }
+
+        if (!menu || !row) yield break;
+
+        yield return null; // one more frame so the build pass that placed the row is done positioning it
+        if (!menu || !row || !menu.scrollBar) yield break;
+
+        // Offset from the tab's topmost row down to the hit = how far to scroll so the hit lands on top.
+        bool SameView(int idx)
+        {
+            if (idx < 0 || idx >= OptionItem.AllOptions.Count) return false;
+            TabGroup t = OptionItem.AllOptions[idx].Tab;
+            return NewRoleMenuState.Active && NewRoleMenuView.IsConsolidatedSettingsTab(displayTab) ? NewRoleMenuView.IsConsolidatedSettingsTab(t) : t == displayTab;
+        }
+
+        var topY = float.MinValue;
+        foreach (var kv in ModGameOptionsMenu.BehaviourList)
+            if (kv.Value && kv.Value.gameObject.activeInHierarchy && SameView(kv.Key))
+                topY = Math.Max(topY, kv.Value.transform.localPosition.y);
+        foreach (var kv in ModGameOptionsMenu.CategoryHeaderList)
+            if (kv.Value && kv.Value.gameObject.activeInHierarchy && SameView(kv.Key))
+                topY = Math.Max(topY, kv.Value.transform.localPosition.y);
+
+        if (topY == float.MinValue) yield break;
+
+        Scroller scroller = menu.scrollBar;
+        float offset = Mathf.Clamp(topY - row.localPosition.y, 0f, Math.Max(0f, scroller.ContentYBounds.max));
+        scroller.ScrollToTop();
+        Transform inner = scroller.Inner;
+        inner.localPosition = new(inner.localPosition.x, inner.localPosition.y + offset, inner.localPosition.z);
+    }
 
     private static int NumImpsOnOpen = 1;
     private static int MinImpsOnOpen = 1;
@@ -1420,9 +1470,6 @@ public static class GameSettingMenuPatch
             if (ModSettingsButtons.TryGetValue(tab, out PassiveButton button))
                 __instance.ControllerSelectable.Add(button);
         }
-
-        HiddenBySearch.Do(x => x.SetHidden(false));
-        HiddenBySearch.Clear();
 
         SetupExtendedUI(__instance);
 
@@ -1734,29 +1781,62 @@ public static class GameSettingMenuPatch
 
         return;
 
-        static void SearchForOptions(FreeChatInputField textField)
+        void SearchForOptions(FreeChatInputField textField)
         {
             if (ModGameOptionsMenu.TabIndex < 3) return;
 
-            HiddenBySearch.Do(x => x.SetHidden(false));
             string text = textField.textArea.text.Trim().ToLower();
-            var modTab = (TabGroup)(ModGameOptionsMenu.TabIndex - 3);
-            OptionItem[] optionItems = Options.GroupedOptions[modTab];
-            System.Collections.Generic.List<OptionItem> result = optionItems.Where(x => x.Parent == null && !x.IsCurrentlyHidden() && !Translator.GetString($"{x.Name}").Contains(text, StringComparison.OrdinalIgnoreCase)).ToList();
-            HiddenBySearch = result;
-            System.Collections.Generic.List<OptionItem> searchWinners = optionItems.Where(x => x.Parent == null && !x.IsCurrentlyHidden() && !result.Contains(x)).ToList();
+            if (text.Length == 0) return;
 
-            if (searchWinners.Count == 0 || !ModSettingsTabs.TryGetValue(modTab, out GameOptionsMenu gameSettings) || !gameSettings)
+            var currentTab = (TabGroup)(ModGameOptionsMenu.TabIndex - 3);
+
+            // Locate-mode search across every relevant tab: nothing is hidden — the first hit's tab is
+            // opened and scrolled so the hit sits at the top of the view (in the new menu's role tabs
+            // the hit role is also selected, filling the detail pane with its options).
+            System.Collections.Generic.HashSet<TabGroup> relevantTabs = Main.TabGroupValues.Where(t => t.IsRelevant() && Options.GroupedOptions.ContainsKey(t)).ToHashSet();
+            var hits = new System.Collections.Generic.List<(TabGroup Tab, int Index)>();
+
+            for (var index = 0; index < OptionItem.AllOptions.Count; index++)
             {
-                HiddenBySearch.Clear();
+                OptionItem option = OptionItem.AllOptions[index];
+                if (option.Parent != null || !relevantTabs.Contains(option.Tab) || option.IsCurrentlyHidden()) continue;
+                if (Translator.GetString($"{option.Name}").Contains(text, StringComparison.OrdinalIgnoreCase)) hits.Add((option.Tab, index));
+            }
+
+            if (hits.Count == 0)
+            {
                 Logger.SendInGame(Translator.GetString("SearchNoResult"), Palette.Orange);
                 return;
             }
 
-            result.ForEach(x => x.SetHidden(true));
+            // In the consolidated new menu, System+Mod+Task render as one tab — treat any of them as System.
+            TabGroup DisplayTab(TabGroup t) => NewRoleMenuState.Active && NewRoleMenuView.IsConsolidatedSettingsTab(t) ? TabGroup.SystemSettings : t;
 
-            gameSettings.scrollBar.ScrollToTop();
-            GameOptionsMenuPatch.ReCreateSettings(gameSettings);
+            // Prefer a hit on the tab that is already open; otherwise take the first hit overall.
+            int currentTabHit = hits.FindIndex(h => DisplayTab(h.Tab) == DisplayTab(currentTab));
+            (TabGroup Tab, int Index) target = hits[Math.Max(currentTabHit, 0)];
+            TabGroup displayTab = DisplayTab(target.Tab);
+            OptionItem targetOption = OptionItem.AllOptions[target.Index];
+
+            // New-menu role tab: select the hit role so the detail pane shows its options.
+            bool selectionChanged = false;
+            if (NewRoleMenuState.Active && target.Tab is >= TabGroup.ImpostorRoles and <= TabGroup.OtherRoles && NewRoleMenuView.IsSelectableMaster(targetOption) && NewRoleMenuState.SelectedIndex != target.Index)
+            {
+                NewRoleMenuState.SelectedIndex = target.Index;
+                selectionChanged = true;
+            }
+
+            if (displayTab != DisplayTab(currentTab))
+                __instance.ChangeTab((int)displayTab + 3, false);
+            else if (selectionChanged && ModSettingsTabs.TryGetValue(displayTab, out GameOptionsMenu gameSettings) && gameSettings)
+                GameOptionsMenuPatch.ReCreateSettings(gameSettings);
+
+            if (ScrollToHitCoroutine != null) Main.Instance.StopCoroutine(ScrollToHitCoroutine);
+            ScrollToHitCoroutine = Main.Instance.StartCoroutine(CoScrollToOption(displayTab, target.Index));
+
+            if (hits.Count > 1 || displayTab != DisplayTab(currentTab))
+                Logger.SendInGame(string.Format(Translator.GetString("SearchResultTabs"), string.Join(", ", hits.GroupBy(h => h.Tab).Select(g => $"{Translator.GetString($"TabGroup.{g.Key}")} ({g.Count()})"))));
+
             textField.Clear();
         }
     }
@@ -1793,16 +1873,6 @@ public static class GameSettingMenuPatch
     [HarmonyPrefix]
     public static bool ChangeTabPrefix(GameSettingMenu __instance, ref int tabNum, [HarmonyArgument(1)] bool previewOnly)
     {
-        if (HiddenBySearch.Count > 0)
-        {
-            HiddenBySearch.Do(x => x.SetHidden(false));
-
-            if (ModSettingsTabs.TryGetValue((TabGroup)(ModGameOptionsMenu.TabIndex - 3), out GameOptionsMenu gameSettings) && gameSettings)
-                GameOptionsMenuPatch.ReCreateSettings(gameSettings);
-
-            HiddenBySearch.Clear();
-        }
-
         if (!previewOnly || tabNum != 1) ModGameOptionsMenu.TabIndex = tabNum;
 
         GameOptionsMenu settingsTab;
@@ -1924,6 +1994,13 @@ public static class GameSettingMenuPatch
     public static void Close_Prefix()
     {
         BackroomsLobby.SetOverlaySuppressed(false); // restore the Backrooms overlay when the menu closes
+
+        // A pending search scroll must not fire against a reparented/cached tab after the menu closes.
+        if (ScrollToHitCoroutine != null)
+        {
+            Main.Instance.StopCoroutine(ScrollToHitCoroutine);
+            ScrollToHitCoroutine = null;
+        }
 
         if (TempParent == null)
         {
