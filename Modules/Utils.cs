@@ -2650,7 +2650,8 @@ public static class Utils
         bool admin = ChatCommands.IsPlayerAdmin(player.FriendCode);
         bool mod = ChatCommands.IsPlayerModerator(player.FriendCode);
         bool vip = !mod && ChatCommands.IsPlayerVIP(player.FriendCode);
-        bool hasTag = devUser.HasTag();
+        bool localDev = player.FriendCode.IsLocalDev();
+        bool hasTag = devUser.HasTag() || localDev;
         bool hasPrivateTag = PrivateTagManager.Tags.TryGetValue(player.FriendCode, out string privateTag);
         bool hasTagInUserData = Main.UserData.TryGetValue(player.FriendCode, out Options.UserData userData) && !string.IsNullOrWhiteSpace(userData.Tag) && userData.Tag.Length > 0;
 
@@ -2705,7 +2706,7 @@ public static class Utils
             if (hasTag || mod || vip || hasPrivateTag || hasTagInUserData)
             {
                 string pTag = hasPrivateTag ? privateTag : hasTagInUserData ? userData.Tag : string.Empty;
-                string tag = hasTag ? devUser.GetTag() : string.Empty;
+                string tag = localDev ? DevTag.LocalDev : hasTag ? devUser.GetTag() : string.Empty;
                 if (tag == "null") tag = string.Empty;
 
                 bool host = player.IsHost();
