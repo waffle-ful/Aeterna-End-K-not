@@ -240,7 +240,12 @@ internal static class GameEndChecker
                             ResetAndSetWinner(CustomWinner.Monochromer);
                             WinnerIds.Add(pc.PlayerId);
                             break;
+                        case CustomRoles.Supernova when pc.IsAlive() && WinnerTeam != CustomWinner.Supernova:
+                            ResetAndSetWinner(CustomWinner.Supernova);
+                            WinnerIds.Add(pc.PlayerId);
+                            break;
                         case CustomRoles.Opportunist when pc.IsAlive():
+                        case CustomRoles.Maguro when pc.IsAlive():
                         case CustomRoles.Pursuer when pc.IsAlive() && WinnerTeam is not CustomWinner.Jester and not CustomWinner.Lovers and not CustomWinner.Terrorist and not CustomWinner.Executioner and not CustomWinner.Collector and not CustomWinner.Innocent and not CustomWinner.Youtuber:
                         case CustomRoles.Sunnyboy when !pc.IsAlive():
                         case CustomRoles.Maverick when pc.IsAlive() && roleBase is Maverick mr && mr.NumOfKills >= Maverick.MinKillsToWin.GetInt():
@@ -527,6 +532,8 @@ internal static class GameEndChecker
                 case CustomRoles.VengefulRomantic when VengefulRomantic.HasKilledKiller:
                 case CustomRoles.SchrodingersCat when !state.SubRoles.Any(x => x.IsConverted()):
                 case CustomRoles.Opportunist when !state.IsDead:
+                case CustomRoles.Maguro when !state.IsDead:
+                case CustomRoles.Supernova when !state.IsDead:
                 case CustomRoles.Sunnyboy when state.IsDead:
                 case CustomRoles.Maverick when !state.IsDead && state.Role is Maverick mr && mr.NumOfKills >= Maverick.MinKillsToWin.GetInt():
                 case CustomRoles.Provocateur when Provocateur.Provoked.TryGetValue(state.Player.PlayerId, out byte tar) && !WinnerIds.Contains(tar):

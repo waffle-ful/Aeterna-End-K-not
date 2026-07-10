@@ -713,6 +713,8 @@ public class Main : BasePlugin
                 { CustomRoles.Lawyer, "#008080" },
                 { CustomRoles.God, "#f96464" },
                 { CustomRoles.Opportunist, "#4dff4d" },
+                { CustomRoles.Maguro, "#00ffff" },
+                { CustomRoles.Supernova, "#ff4500" },
                 { CustomRoles.Vector, "#ff6201" },
                 { CustomRoles.Jackal, "#00b4eb" },
                 { CustomRoles.Sidekick, "#00b4eb" },
@@ -1419,6 +1421,7 @@ public enum CustomWinner
     SantaClaus = CustomRoles.SantaClaus,
     MassMedia = CustomRoles.MassMedia,
     Monochromer = CustomRoles.Monochromer,
+    Supernova = CustomRoles.Supernova,
 
     Coven = CustomRoles.CovenLeader,
 
@@ -1442,6 +1445,7 @@ public enum AdditionalWinners
     Lovers = CustomRoles.Lovers,
     Executioner = CustomRoles.Executioner,
     Opportunist = CustomRoles.Opportunist,
+    Maguro = CustomRoles.Maguro,
     Lawyer = CustomRoles.Lawyer,
     Hater = CustomRoles.Hater,
     Provocateur = CustomRoles.Provocateur,

@@ -713,6 +713,8 @@ internal static class BeginCrewmatePatch
                 CustomRoles.Hater or
                     CustomRoles.Lawyer or
                     CustomRoles.Opportunist or
+                    CustomRoles.Maguro or
+                    CustomRoles.Supernova or
                     CustomRoles.Revolutionist
                     => GetIntroSound(RoleTypes.Crewmate),
 

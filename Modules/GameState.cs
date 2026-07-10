@@ -95,6 +95,9 @@ public class PlayerState(byte playerId)
         // Dossun
         Crushed,
 
+        // Maguro
+        Stopped,
+
         etc = -1
     }
 

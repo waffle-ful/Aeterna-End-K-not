@@ -562,6 +562,8 @@ public enum CustomRoles
     Skinwalker,
     Riptide,
     Dossun,
+    Maguro,
+    Supernova,
     Convict,
     Survivor,
 

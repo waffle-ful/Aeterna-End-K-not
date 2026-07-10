@@ -1271,6 +1271,8 @@ internal static class CustomRolesHelper
             {
                 CustomRoles.NecroGuesser => RoleOptionType.Neutral_Benign,
                 CustomRoles.Opportunist => RoleOptionType.Neutral_Benign,
+                CustomRoles.Maguro => RoleOptionType.Neutral_Benign,
+                CustomRoles.Supernova => RoleOptionType.Neutral_Benign,
                 CustomRoles.Lawyer => RoleOptionType.Neutral_Benign,
                 CustomRoles.Amnesiac => RoleOptionType.Neutral_Benign,
                 CustomRoles.Pawn => RoleOptionType.Neutral_Benign,
