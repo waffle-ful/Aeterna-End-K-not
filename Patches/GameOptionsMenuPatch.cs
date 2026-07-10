@@ -1966,6 +1966,13 @@ public static class GameSettingMenuPatch
         // order-100 tint would otherwise paint the world-space menu yellow. No-op outside Backrooms.
         BackroomsLobby.SetOverlaySuppressed(true);
 
+        // Opening the settings menu while the Among Us chat is still open is an abnormal state (normally
+        // unreachable): the chat input field is left over the menu, and — since the mod's search box is a
+        // clone of that chat field — the two coexist and role "?" help clicks stop resolving. Force the chat
+        // closed on open so the menu is always the only active surface.
+        if (HudManager.InstanceExists && HudManager.Instance.Chat && HudManager.Instance.Chat.IsOpenOrOpening)
+            HudManager.Instance.Chat.ForceClosed();
+
         if (!TemplateGameOptionsMenu)
         {
             TemplateGameOptionsMenu = ModGameOptionsMenu.Track(Object.Instantiate(__instance.GameSettingsTab, __instance.GameSettingsTab.transform.parent));
