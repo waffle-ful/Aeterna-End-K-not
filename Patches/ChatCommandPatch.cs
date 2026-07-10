@@ -3363,7 +3363,7 @@ internal static class ChatCommands
         if (direct)
             sender.SendMessage();
         else
-            DataFlagRateLimiter.Enqueue(() => sender.SendMessage(), SendOption.Reliable, count);
+            DataFlagRateLimiter.Enqueue(() => sender.SendMessage(), SendOption.Reliable, count, cleanup: () => sender.SendMessage(dispose: true));
 
         Utils.SendMessage($"[burst] Sent {count} dummy SetRole RPC(s) to {target.GetRealName()} ({(direct ? "direct" : "throttled")}).", player.PlayerId);
     }

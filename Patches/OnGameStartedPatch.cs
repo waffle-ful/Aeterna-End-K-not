@@ -1639,7 +1639,8 @@ internal static class StartGameHostPatch
                         // state lands on any client, so the desync isolation (and team-reveal) is unaffected.
                         // Enqueue gates on CurrentServerType: on custom/modded servers it runs immediately,
                         // so behavior there is byte-for-byte identical to the previous direct SendMessage().
-                        DataFlagRateLimiter.Enqueue(() => captured.SendMessage(), SendOption.Reliable, calls);
+                        // cleanup: drop 時 (切断等) は送信せず pooled writer だけ回収する (memory: writer-leak 型(b))
+                        DataFlagRateLimiter.Enqueue(() => captured.SendMessage(), SendOption.Reliable, calls, cleanup: () => captured.SendMessage(dispose: true));
                     }
                     catch (Exception e) { Utils.ThrowException(e); }
                 }

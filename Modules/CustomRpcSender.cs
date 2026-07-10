@@ -235,6 +235,13 @@ public class CustomRpcSender
             onSendDelegate();
         }
 
+        if (dispose && doneStreams.Count > 0)
+        {
+            // dispose 時も分割チャンクとして退避済みの writer を回収しないとプールが漏れる
+            doneStreams.ForEach(x => x.Recycle());
+            doneStreams.Clear();
+        }
+
         packed = false;
         currentRpcTarget = -2;
         messages = 0;

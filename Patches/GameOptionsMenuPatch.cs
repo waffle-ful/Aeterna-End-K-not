@@ -33,6 +33,19 @@ public static class ModGameOptionsMenu
         return obj;
     }
 
+    // OptionList は OptionBehaviour インスタンス自体がキーのため、メニュー再構築のたびに
+    // 破棄済み個体のエントリが積み残る。生きている他タブの項目は消せないので、死んだキーだけ間引く。
+    public static void PruneDeadEntries()
+    {
+        System.Collections.Generic.List<OptionBehaviour> dead = null;
+        foreach (OptionBehaviour key in OptionList.Keys)
+            if (!key)
+                (dead ??= new()).Add(key);
+
+        if (dead == null) return;
+        foreach (OptionBehaviour key in dead) OptionList.Remove(key);
+    }
+
     public static Color32 GetCurrentThemeColor(TabGroup? tab = null)
     {
         CustomGameMode gm = Options.CurrentGameMode;
@@ -58,6 +71,8 @@ public static class GameOptionsMenuPatch
     [HarmonyPrefix]
     private static bool InitializePrefix(GameOptionsMenu __instance)
     {
+        ModGameOptionsMenu.PruneDeadEntries();
+
         if (ModGameOptionsMenu.TabIndex < 3) return true;
 
         if (__instance.Children == null || __instance.Children.Count == 0)
