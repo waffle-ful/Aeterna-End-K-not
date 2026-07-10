@@ -178,7 +178,15 @@ internal static class LobbyCorpses
         PlayerControl lp = PlayerControl.LocalPlayer;
         if (lp == null || lp.Data == null) return;
 
-        // クライアント側 host label を生名で再 sync するだけ。outfit / SetDirtyBit には触らない
+        // 直近ブロードキャスト済みの装飾名 (ホストタグ等) があればそちらで復元する。
+        // 生名で上書きすると表示が素の名前に戻る一方、FixedUpdatePatch.LastBroadcastName には
+        // 装飾名が残ったままなので dirty-check が「送信済み」と誤判定し、チャット送信まで
+        // タグが消えたままになる。RpcSetName 経由の装飾名は FixedUpdate が常用する安全経路
+        // (kick を誘発した 2026-05-26 の outfit PlayerName 書込みとは別物)。
+        if (FixedUpdatePatch.LastBroadcastName.TryGetValue(lp.PlayerId, out string decorated) && !string.IsNullOrEmpty(decorated))
+            name = decorated;
+
+        // クライアント側 host label を再 sync するだけ。outfit / SetDirtyBit には触らない
         lp.RpcSetName(name);
     }
 

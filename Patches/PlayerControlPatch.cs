@@ -1929,7 +1929,11 @@ internal static class FixedUpdatePatch
             if (inTask && self && Options.DisableDevices.GetBool())
                 DisableDevice.FixedUpdate(player);
 
-            if (!Main.DoBlockNameChange && ApplySuffix(player, out var name))
+            // IsShifted ガード: タグ持ち (dev/mod/vip) プレイヤーは ApplySuffix が変装中も生名を
+            // 返し続けるため、RpcSetNameMirrorCachePatch のキャッシュ同期と組み合わさると
+            // Shapeshift の変装名 (:1025 Force Name) を次 tick で本名に戻してしまう。
+            // 変装中は再送を止め、変装名を保持する (ロビーでは誰も変装しないので影響なし)。
+            if (!Main.DoBlockNameChange && !player.IsShifted() && ApplySuffix(player, out var name))
             {
                 if (!LastBroadcastName.TryGetValue(playerId, out var lastBroadcast) || lastBroadcast != name)
                 {
@@ -2751,6 +2755,22 @@ internal static class ShouldProcessRpcPatch
     {
         __result = true;
         return false;
+    }
+}
+
+// 装飾名 dirty-check (FixedUpdatePatch.LastBroadcastName) のミラー同期フック。
+// LobbyCorpses の名前復元や Camouflage 解除などが生名を RpcSetName すると、実際の表示は
+// 素の名前に戻るのにキャッシュには装飾名が残り、FixedUpdate が「送信済み」と誤判定して
+// 二度と再送しない (チャット送信までホストタグが消えたままになる)。
+// どの経路の RpcSetName でもキャッシュを「実際に送った名前」で上書きすることで、
+// ApplySuffix の望む名前と実表示がズレた時だけ次 tick に1回再送される。
+// 逆に送った名前が ApplySuffix と一致していれば再送ゼロ (破棄方式と違い重複送信しない)。
+[HarmonyPatch(typeof(PlayerControl), nameof(PlayerControl.RpcSetName))]
+internal static class RpcSetNameMirrorCachePatch
+{
+    public static void Postfix(PlayerControl __instance, [HarmonyArgument(0)] string name)
+    {
+        FixedUpdatePatch.LastBroadcastName[__instance.PlayerId] = name;
     }
 }
 
