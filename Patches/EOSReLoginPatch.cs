@@ -39,10 +39,83 @@ internal static class EOSReLoginProactivePatch
     // ホスト確定切断なので、5 分待ってもゲーム続行中なら「どうせ死ぬ接続」— 賭けて再ログインする方が期待値が高い。
     private const float LastResortDelaySeconds = 300f;
 
+    // ── 再ログインスタック検出 ──
+    // 実測 (2026-07-10 sid=1783672562): 壊れた認証状態で LoginWithCorrectPlatform() を呼ぶと完了コールバックが
+    // 二度と来ず tryingToLogin=true のまま 59 分以上スタックし、下の tryingToLogin ガードが全回復パス
+    // (据え置き回収 / lastresort / proactive) を封鎖したままトークン実失効 → ゲーム中の Hacking キック → 認証死に至った。
+    // 正常ログインは数秒で完了するため、オンライン接続中に 180 秒続く tryingToLogin は「不発弾」と断定して
+    // フラグを強制クリアし、pending を立て直して再試行させる。2 回連続で不発ならプロセス内回復は不可能と判定し、
+    // トークン実失効を待たず安全窓 (ゲーム外、期限超過で強行) でプロセス再起動へエスカレーションする。
+    private const float LoginStuckSeconds = 180f;
+    private const float EscalateForceDelaySeconds = 300f;
+
+    private static float tryingSince = float.NaN;
+    private static int stuckStrikes; // 連続不発回数 (自然完了で 0 に戻る)
+    private static bool escalatePending;
+    private static float escalateArmedTime;
+
     public static void Postfix(EOSManager __instance)
     {
         if (!__instance.loginFlowFinished) return;
-        if (__instance.tryingToLogin) return;
+
+        if (__instance.tryingToLogin)
+        {
+            // メニューでの手動ログイン等は対象外 — 救う対象はオンライン接続中のセッションのみ
+            if (!GameStates.IsOnlineGame)
+            {
+                tryingSince = float.NaN;
+                return;
+            }
+
+            float t = Time.realtimeSinceStartup;
+            if (float.IsNaN(tryingSince)) { tryingSince = t; }
+            else if (t - tryingSince >= LoginStuckSeconds)
+            {
+                stuckStrikes++;
+                tryingSince = float.NaN;
+                Logger.Warn($"EOS login flow stuck for {LoginStuckSeconds:F0}s (strike {stuckStrikes}) — force-clearing tryingToLogin to unblock recovery paths", "EOSReLogin");
+                HealthLog.NoteAnom($"ANOM live kind=eos stage=loginstuck n={stuckStrikes}");
+                __instance.tryingToLogin = false; // 不発弾の除去 (これで回復パスの封鎖が解ける)
+
+                if (stuckStrikes >= 2)
+                {
+                    // 2 連続不発 = プロセス内で EOS 認証を回復できない壊れ方。放置してもトークン実失効で
+                    // ゲーム中に突然死する (実測 19:56 InTask 中の Hacking キック) ので、先回り再起動をアームする。
+                    escalatePending = true;
+                    escalateArmedTime = t;
+                    HealthLog.NoteAnom("ANOM live kind=eos stage=stuckescalatearmed");
+                }
+                else
+                {
+                    // 即再試行をアーム: ゲーム外なら次フレームの回収パス、ゲーム中なら lastresort 期限で発火する
+                    PendingRecovery = true;
+                    PendingRecoveryArmedTime = t;
+                }
+            }
+
+            return;
+        }
+
+        if (!float.IsNaN(tryingSince))
+        {
+            // 180 秒以内にフラグが自然に降りた = ログインフローが正常完了した。不発カウントをリセット。
+            tryingSince = float.NaN;
+            stuckStrikes = 0;
+        }
+
+        if (escalatePending)
+        {
+            // 安全窓 (ゲーム外) で先回り再起動。ゲームが長引く場合は期限超過で強行する
+            // (どのみちトークン実失効の突然死が来るため、待ち続ける方が期待値が低い)。
+            if (!GameStates.InGame || Time.realtimeSinceStartup - escalateArmedTime >= EscalateForceDelaySeconds)
+            {
+                escalatePending = false;
+                AutoRestart.OnEosLoginStuck();
+            }
+
+            // エスカレーション待機中は回復パスを走らせない (不発と確定した弾を撃ち続けない)
+            return;
+        }
 
         // メニュー/ロビー両方で発火させる。アクティブな試合中は原則ブロックだが、
         // 据え置いた再ログインが LastResort 期限を超えたらゲーム中でも強行する (放置=確実な認証死のため)。

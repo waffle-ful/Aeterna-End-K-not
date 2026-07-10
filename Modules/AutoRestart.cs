@@ -79,6 +79,17 @@ public static class AutoRestart
         Escalate($"auth-failure popup: {source}", authDeath: true);
     }
 
+    // EOS 再ログインの 2 連続スタック検知 (EOSReLoginPatch) から呼ばれる。プロセス内で認証を回復できない
+    // 壊れ方なので、トークン実失効によるゲーム中の Hacking キック突然死を待たず先回りで立て直す。
+    // EOS トークン系の死なので egl-refresh 付き (プレーン再起動はブート死する)。
+    public static void OnEosLoginStuck()
+    {
+        if (!(Options.AutoRehostAfterKick?.GetBool() ?? false)) return;
+
+        Logger.Warn("Auto-restart: EOS re-login stuck twice in a row — in-process auth recovery is impossible; restarting pre-emptively", "AutoRestart");
+        Escalate("eos re-login stuck", authDeath: true);
+    }
+
     // AutoRehost が全リトライ失敗 (GiveUp) したときに呼ぶ。番犬が居ればプロセス再起動へエスカレーションする。
     // rehost 枯渇は ping/kick タイムアウト側の死なので認証死ではない (EGL 先行再起動はしない)。
     public static void EscalateFromRehostGiveUp()

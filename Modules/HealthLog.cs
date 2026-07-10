@@ -191,7 +191,12 @@ public static class HealthLog
             }
             catch { }
 
-            string hb = $"t={now} up={now - StartTs} state={state} host={(host ? 1 : 0)} server={server} players={players} wsMB={wsMB} gcMB={gcMB} gc2={gen2} nmSent={nmSent} nmSkip={nmSkip}{lastSendSuffix}";
+            // EOS ログインフローの進行中フラグ (再ログインスタック監視の計器 — 1 が 180 秒続くと不発弾)
+            int eosTry = 0;
+            try { eosTry = EOSManager.Instance != null && EOSManager.Instance.tryingToLogin ? 1 : 0; }
+            catch { }
+
+            string hb = $"t={now} up={now - StartTs} state={state} host={(host ? 1 : 0)} server={server} players={players} wsMB={wsMB} gcMB={gcMB} gc2={gen2} nmSent={nmSent} nmSkip={nmSkip} eosTry={eosTry}{lastSendSuffix}";
             Write($"HB {hb}");
 
             // 普段見る通常ログにもメモリ + 状態の要約を低頻度で(最適化余地の把握用)。
