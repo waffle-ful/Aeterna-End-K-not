@@ -721,15 +721,15 @@ internal static class VentilationSystemDeterioratePatch
 
                     foreach (Vent vent in pc.GetVentsFromClosest())
                     {
+                        if (blockedVents >= maxVents)
+                            break;
+
                         if (!pc.CanUseVent(vent.Id))
                         {
                             writer.Write(allPlayers[blockedVents].PlayerId);
                             writer.Write((byte)vent.Id);
                             ++blockedVents;
                         }
-
-                        if (blockedVents >= maxVents)
-                            break;
                     }
 
                     writer.WritePacked(__instance.PlayersInsideVents.Count);
