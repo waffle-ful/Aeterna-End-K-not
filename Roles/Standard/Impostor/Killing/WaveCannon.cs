@@ -22,6 +22,10 @@ public class WaveCannon : RoleBase
     private static OptionItem FiringDuration;
     private static OptionItem BeamThickness;
     private static OptionItem FriendlyFire;
+    private static OptionItem LastImpostorSuperCannon;
+    private static OptionItem SuperCannonType;
+    private static OptionItem SuperChargeDuration;
+    private static OptionItem SuperBeamThickness;
 
     private const int BeamCharCount = 20;
     private const int BeamSizeUnit = 30; // 1 thickness 単位あたりのフォントサイズ
@@ -58,6 +62,8 @@ public class WaveCannon : RoleBase
     private WaveCannonBeamSegment BeamCNO;
     private WaveCannonGate GateCNO;
     private PlayerControl WaveCannonPC;
+    private bool IsSuperShot;
+    private SuperCannonShot Super;
 
     public override bool IsEnable => On;
 
@@ -70,7 +76,11 @@ public class WaveCannon : RoleBase
             .AutoSetupOption(ref WarningDuration, 1, new IntegerValueRule(1, 5, 1), OptionFormat.Seconds)
             .AutoSetupOption(ref FiringDuration, 3, new IntegerValueRule(1, 10, 1), OptionFormat.Seconds)
             .AutoSetupOption(ref BeamThickness, 2, new IntegerValueRule(1, 8, 1), OptionFormat.Times)
-            .AutoSetupOption(ref FriendlyFire, false);
+            .AutoSetupOption(ref FriendlyFire, false)
+            .AutoSetupOption(ref LastImpostorSuperCannon, true, overrideName: "WaveCannon.LastImpostorSuperCannon")
+            .AutoSetupOption(ref SuperCannonType, 0, SuperCannonShot.TypeOptionNames, overrideName: "WaveCannon.SuperCannonType", overrideParent: LastImpostorSuperCannon)
+            .AutoSetupOption(ref SuperChargeDuration, 5, new IntegerValueRule(1, 15, 1), OptionFormat.Seconds, overrideName: "WaveCannon.SuperChargeDuration", overrideParent: LastImpostorSuperCannon)
+            .AutoSetupOption(ref SuperBeamThickness, 4, new IntegerValueRule(1, 8, 1), OptionFormat.Times, overrideName: "WaveCannon.SuperBeamThickness", overrideParent: LastImpostorSuperCannon);
     }
 
     public override void Init()
@@ -103,6 +113,7 @@ public class WaveCannon : RoleBase
         OriginalSpeed = 0f;
         AlreadyKilled.Clear();
         PhaseEntryDone = false;
+        IsSuperShot = false;
         DespawnAllCNOs();
     }
 
@@ -114,6 +125,8 @@ public class WaveCannon : RoleBase
         BeamCNO = null;
         GateCNO?.Despawn();
         GateCNO = null;
+        Super?.Despawn();
+        Super = null;
     }
 
     // 発動はファントムボタン (vanish) のみに統一する。
@@ -132,9 +145,17 @@ public class WaveCannon : RoleBase
         return false;
     }
 
+    // 公式鯖 Hacking キック切り分け用 (BUG-20260711-02)。/wcdbg {mask} で設定。
+    // bit1=発射シーケンス全体スキップ(ボタン押下のみ) bit2=チャージ外見スキップ bit4=gate CNO スキップ bit8=速度ロックスキップ
+    public static int DebugSkipMask;
+
     private void TriggerCharge(PlayerControl pc)
     {
+        if ((DebugSkipMask & 1) != 0) return;
         if (!pc.IsAlive() || CurrentPhase != Phase.Idle || !GameStates.IsInTask) return;
+
+        // ラストインポスター (Last- prefix 付与中) は超波動砲を放てる
+        IsSuperShot = LastImpostorSuperCannon.GetBool() && LastImpostor.CurrentId == pc.PlayerId;
 
         // Sniper 風方向確定 phase に入る。この秒数だけ自由に動けて発射方向を
         // 微調整できる。cosmetics.flipX はホスト側で同期されない仕様のため、
@@ -156,7 +177,7 @@ public class WaveCannon : RoleBase
     private void EnterCharging(PlayerControl pc)
     {
         CurrentPhase = Phase.Charging;
-        PhaseEndTS = Utils.TimeStamp + ChargeDuration.GetInt();
+        PhaseEndTS = Utils.TimeStamp + (IsSuperShot ? SuperChargeDuration.GetInt() : ChargeDuration.GetInt());
         PhaseEntryDone = false;
 
         byte id = pc.PlayerId;
@@ -166,11 +187,14 @@ public class WaveCannon : RoleBase
         // ushort overflow → 以降ホスト側で非モッドからの位置 update を「古い sid」
         // 判定で取りこぼし、非モッドが動いても止まって見える同期破綻が発生した。
         // 速度を Main.MinSpeed (0.0001) に落とすことで TP 不要でロックする。
-        OriginalSpeed = Main.AllPlayerSpeed[id];
-        Main.AllPlayerSpeed[id] = Main.MinSpeed;
-        pc.MarkDirtySettings();
+        if ((DebugSkipMask & 8) == 0)
+        {
+            OriginalSpeed = Main.AllPlayerSpeed[id];
+            Main.AllPlayerSpeed[id] = Main.MinSpeed;
+            pc.MarkDirtySettings();
+        }
 
-        if (Camouflage.PlayerSkins.TryGetValue(id, out var original))
+        if ((DebugSkipMask & 2) == 0 && Camouflage.PlayerSkins.TryGetValue(id, out var original))
         {
             OriginalOutfit = original;
             var chargeOutfit = new NetworkedPlayerInfo.PlayerOutfit()
@@ -181,11 +205,52 @@ public class WaveCannon : RoleBase
                 Utils.RpcChangeSkin(pc, chargeOutfit);
         }
 
-        Vector2 gatePos = GatePosition();
-        Utils.CombineSendTimeLowering(() =>
+        // 超発射で変種が選ばれていれば共有エンジンへ委譲 (Classic / 発動不能時は従来経路の赤太ビーム)
+        if (IsSuperShot)
         {
-            GateCNO = new WaveCannonGate(gatePos);
-        });
+            SuperCannonShot.Variant? variant = SuperCannonShot.PickVariant(SuperCannonType.GetValue());
+            if (variant != null)
+            {
+                Super = new SuperCannonShot(pc, variant.Value, SuperBeamThickness.GetInt(),
+                    t => !FriendlyFire.GetBool() && t.GetCustomRole().IsImpostor());
+                if (!Super.Begin(StartPosition, Direction)) Super = null;
+            }
+        }
+
+        if (Super == null && (DebugSkipMask & 4) == 0)
+        {
+            Vector2 gatePos = GatePosition();
+            Utils.CombineSendTimeLowering(() =>
+            {
+                GateCNO = new WaveCannonGate(gatePos);
+            });
+        }
+
+        // 超チャージは全プレイヤーへ周期キルフラッシュで予告 (JackalHadouHo 双子)。
+        // KillFlash は per-player の Reliable RPC → 0.1s 周期だと 10×N msg/s で PacketRateGate (25/s)
+        // を持続超過するため 0.5s 周期。PhaseEndTS キャプチャで中断→再発射時の旧タスク混入も防ぐ。
+        if (IsSuperShot)
+        {
+            FlashAll();
+            long chargeEndTS = PhaseEndTS;
+            const float flashInterval = 0.5f;
+            int count = (int)(SuperChargeDuration.GetFloat() / flashInterval);
+            for (int i = 1; i <= count; i++)
+            {
+                float t = i * flashInterval;
+                LateTask.New(() =>
+                {
+                    if (CurrentPhase != Phase.Charging || PhaseEndTS != chargeEndTS || !IsSuperShot || !pc.IsAlive()) return;
+                    FlashAll();
+                }, t, log: false);
+            }
+        }
+    }
+
+    private static void FlashAll()
+    {
+        foreach (PlayerControl p in Main.AllAlivePlayerControlsToList)
+            p.KillFlash();
     }
 
     private void RestoreSkin(PlayerControl pc)
@@ -271,6 +336,7 @@ public class WaveCannon : RoleBase
         switch (CurrentPhase)
         {
             case Phase.Charging:
+                Super?.UpdateCharging();
                 if (Utils.TimeStamp >= PhaseEndTS)
                 {
                     CurrentPhase = Phase.Warning;
@@ -282,9 +348,11 @@ public class WaveCannon : RoleBase
             case Phase.Warning:
                 if (!PhaseEntryDone)
                 {
-                    SpawnWarning();
+                    if (Super != null) Super.EnterWarning();
+                    else SpawnWarning();
                     PhaseEntryDone = true;
                 }
+                Super?.UpdateWarning();
                 if (Utils.TimeStamp >= PhaseEndTS)
                 {
                     CurrentPhase = Phase.Firing;
@@ -297,23 +365,38 @@ public class WaveCannon : RoleBase
             case Phase.Firing:
                 if (!PhaseEntryDone)
                 {
-                    DespawnWarning();
-                    SpawnBeam();
+                    if (Super != null)
+                    {
+                        Super.EnterFiring(FiringDuration.GetFloat());
+                    }
+                    else
+                    {
+                        DespawnWarning();
+                        SpawnBeam();
+                    }
                     AlreadyKilled.Clear();
                     PhaseEntryDone = true;
                 }
 
-                if (BeamCNO != null)
+                if (Super != null)
                 {
-                    float t = Time.time + ShakePhaseOffset;
-                    float wave = Mathf.Sin(t * 47f) * 0.7f + Mathf.Sin(t * 113f + 1.3f) * 0.3f;
-                    // 振幅も halfWidth と同じスケール (BeamHalfWidthUnit 比例) に追従
-                    float amp = BeamHalfWidthUnit * BeamThickness.GetInt() * 0.2f;
-                    Vector2 perp = new(-Direction.y, Direction.x);
-                    BeamCNO.TP(BeamCNOPosition() + perp * (wave * amp)); // 揺れを毎フレ TP→base が 10Hz(ForceSnapMinInterval)に間引いて滑らかに同期
+                    Super.UpdateFiring();
+                }
+                else
+                {
+                    if (BeamCNO != null)
+                    {
+                        float t = Time.time + ShakePhaseOffset;
+                        float wave = Mathf.Sin(t * 47f) * 0.7f + Mathf.Sin(t * 113f + 1.3f) * 0.3f;
+                        // 振幅も halfWidth と同じスケール (BeamHalfWidthUnit 比例) に追従
+                        float amp = BeamHalfWidthUnit * CurrentThickness() * 0.2f;
+                        Vector2 perp = new(-Direction.y, Direction.x);
+                        BeamCNO.TP(BeamCNOPosition() + perp * (wave * amp)); // 揺れを毎フレ TP→base が 10Hz(ForceSnapMinInterval)に間引いて滑らかに同期
+                    }
+
+                    CheckBeamKills(pc);
                 }
 
-                CheckBeamKills(pc);
                 if (Utils.TimeStamp >= PhaseEndTS)
                 {
                     DespawnAllCNOs();
@@ -322,6 +405,7 @@ public class WaveCannon : RoleBase
                     pc.SetKillCooldown();
                     // Phantom cooldown が AU 側で自動でかかるので AddAbilityCD 不要
                     CurrentPhase = Phase.Idle;
+                    IsSuperShot = false;
                 }
                 break;
         }
@@ -353,6 +437,7 @@ public class WaveCannon : RoleBase
 
     private void SpawnWarning()
     {
+        if ((DebugSkipMask & 4) != 0) return;
         Vector2 pos = WarningCNOPosition();
         string sprite = WarningSprite();
         Utils.CombineSendTimeLowering(() =>
@@ -369,6 +454,7 @@ public class WaveCannon : RoleBase
 
     private void SpawnBeam()
     {
+        if ((DebugSkipMask & 4) != 0) return;
         Vector2 pos = BeamCNOPosition();
         string sprite = BeamSprite();
         Utils.CombineSendTimeLowering(() =>
@@ -377,10 +463,17 @@ public class WaveCannon : RoleBase
         });
     }
 
+    // 超発射 (Classic) は太さとビーム色だけ差し替えて従来経路で撃つ
+    private int CurrentThickness()
+    {
+        return IsSuperShot ? SuperBeamThickness.GetInt() : BeamThickness.GetInt();
+    }
+
     private string WarningSprite()
     {
         // padding パターンで発射方向側のみに ⚠ を表示 (反対側は <alpha=#00> で透明)
-        string chars = string.Join("     ", Enumerable.Repeat("⚠", WarningCharCount));
+        // 区切りは 3 スペース: 5 だとスプライトが 370B になり公式鯖の ~680B パケット制限 (チャンク≈343B+sprite) を超えてキックされる
+        string chars = string.Join("   ", Enumerable.Repeat("⚠", WarningCharCount));
         bool firingRight = Direction.x > 0;
         return firingRight
             ? $"<size=16><alpha=#00>{chars}<color=#FFFF00FF>{chars}</color></size>"
@@ -393,9 +486,9 @@ public class WaveCannon : RoleBase
         // padding 透明化は Tree.cs 流の <alpha=#00> を使用 → font outline も含めて完全透明
         string row = new('━', BeamCharCount);
         bool firingRight = Direction.x > 0;
-        int size = BeamThickness.GetInt() * BeamSizeUnit;
+        int size = CurrentThickness() * BeamSizeUnit;
         string transparent = $"<alpha=#00>{row}";
-        string visible = $"<color=#FF6600FF>{row}</color>";
+        string visible = IsSuperShot ? $"<color=#ff0000>{row}</color>" : $"<color=#FF6600FF>{row}</color>";
         return firingRight
             ? $"<size={size}>{transparent}{visible}</size>"
             : $"<size={size}>{visible}{transparent}</size>";
@@ -403,13 +496,16 @@ public class WaveCannon : RoleBase
 
     private void CheckBeamKills(PlayerControl shooter)
     {
-        int thick = BeamThickness.GetInt();
+        int thick = CurrentThickness();
         int size = thick * BeamSizeUnit;
         // visible 開始点 (ゲート前端) と一致 → 視覚と判定がぴったり揃う
         Vector2 eyePos = BeamStartPoint();
         // プレイヤー本体半径 + ゲート垂直オフセット を吸収するマージン
         float halfWidth = BeamHalfWidthUnit * thick + BeamHitboxMargin;
         float beamLength = BeamLengthUnit * size * BeamCharCount;
+
+        // /hitbox 可視化: 下の判定式と同じ値をそのまま描く (ホストローカルのみ)
+        HitboxDebug.DrawBeamRect($"WaveCannon.{shooter.PlayerId}", eyePos, Direction, BeamBackwardReach, beamLength + BeamHitboxMargin, halfWidth);
 
         foreach (PlayerControl target in Main.EnumerateAlivePlayerControls())
         {
@@ -454,6 +550,7 @@ public class WaveCannon : RoleBase
         CurrentPhase = Phase.Idle;
         PhaseEntryDone = false;
         AlreadyKilled.Clear();
+        IsSuperShot = false;
     }
 
     public override void ApplyGameOptions(IGameOptions opt, byte playerId)
@@ -462,9 +559,13 @@ public class WaveCannon : RoleBase
         // PhantomDuration は 0.1s (実質瞬間 vanish→appear) にして可視性を維持。
         // PhantomCooldown は (charge+warning+firing) 全体時間 + AbilityCooldown にして、
         // 発射シーケンス終了後におよそ AbilityCooldown 秒の待機が残るようにする。
+        // 超波動砲解禁時はチャージの長い方を上限として確保する。
+        float charge = LastImpostorSuperCannon.GetBool()
+            ? Math.Max(ChargeDuration.GetFloat(), SuperChargeDuration.GetFloat())
+            : ChargeDuration.GetFloat();
         AURoleOptions.PhantomDuration = 0.1f;
         AURoleOptions.PhantomCooldown =
-            ChargeDuration.GetFloat() + WarningDuration.GetFloat() + FiringDuration.GetFloat()
+            charge + WarningDuration.GetFloat() + FiringDuration.GetFloat()
             + AbilityCooldown.GetFloat();
         Logger.Info($"id={playerId} ability={AbilityCooldown.GetFloat()} charge={ChargeDuration.GetFloat()} warn={WarningDuration.GetFloat()} fire={FiringDuration.GetFloat()} → PhantomCD={AURoleOptions.PhantomCooldown}", "WaveCannon.ApplyGameOptions");
     }

@@ -34,6 +34,7 @@ public class JackalHadouHo : RoleBase
     private static OptionItem CanMakeSidekickOpt;
     private static OptionItem SidekickCooldownOpt;
     private static OptionItem BeamColorModeOpt;
+    private static OptionItem SuperCannonTypeOpt;
     public static OptionItem TamaCanLoad;
     public static OptionItem TamaLoadCooldown;
 
@@ -71,6 +72,7 @@ public class JackalHadouHo : RoleBase
     private WaveCannonWarning WarningCNO;
     private WaveCannonBeamSegment BeamCNO;
     private WaveCannonGate GateCNO;
+    private SuperCannonShot Super;
 
     public bool IsLoaded;
     public bool CanSideKick;
@@ -134,6 +136,8 @@ public class JackalHadouHo : RoleBase
         TamaLoadCooldown = new FloatOptionItem(Id + 26, "TamaLoadCooldown", new(0f, 60f, 0.5f), 10f, TabGroup.NeutralRoles)
             .SetParent(TamaCanLoad)
             .SetValueFormat(OptionFormat.Seconds);
+        SuperCannonTypeOpt = new StringOptionItem(Id + 28, "JackalHadouHoSuperCannonType", SuperCannonShot.TypeOptionNames, 0, TabGroup.NeutralRoles)
+            .SetParent(CustomRoleSpawnChances[CustomRoles.JackalHadouHo]);
     }
 
     public override void Init()
@@ -249,25 +253,44 @@ public class JackalHadouHo : RoleBase
                 Utils.RpcChangeSkin(pc, chargeOutfit);
         }
 
-        Vector2 gatePos = GatePosition();
-        Utils.CombineSendTimeLowering(() =>
+        // 超発射で変種が選ばれていれば共有エンジンへ委譲 (Classic / 発動不能時は従来経路)
+        if (IsSuperShot)
         {
-            GateCNO = new WaveCannonGate(gatePos);
-        });
+            SuperCannonShot.Variant? variant = SuperCannonShot.PickVariant(SuperCannonTypeOpt.GetValue());
+            if (variant != null)
+            {
+                Super = new SuperCannonShot(pc, variant.Value, SuperBeamThickness.GetInt(),
+                    t => !KillJackalOpt.GetBool() && t.GetCountTypes() == CountTypes.Jackal);
+                if (!Super.Begin(StartPosition, Direction)) Super = null;
+            }
+        }
+
+        if (Super == null)
+        {
+            Vector2 gatePos = GatePosition();
+            Utils.CombineSendTimeLowering(() =>
+            {
+                GateCNO = new WaveCannonGate(gatePos);
+            });
+        }
 
         // 全プレイヤーにキルフラッシュ
         FlashAll();
 
-        // 超チャージ中は 0.1s 周期でキルフラッシュ連打
+        // 超チャージ中は周期キルフラッシュで予告。
+        // KillFlash は per-player の Reliable RPC → 0.1s 周期だと 10×N msg/s で PacketRateGate (25/s)
+        // を持続超過するため 0.5s 周期。PhaseEndTS キャプチャで中断→再発射時の旧タスク混入も防ぐ。
         if (IsSuperShot)
         {
-            int count = (int)(SuperChargeDuration.GetFloat() / 0.1f);
+            long chargeEndTS = PhaseEndTS;
+            const float flashInterval = 0.5f;
+            int count = (int)(SuperChargeDuration.GetFloat() / flashInterval);
             for (int i = 1; i <= count; i++)
             {
-                float t = i * 0.1f;
+                float t = i * flashInterval;
                 LateTask.New(() =>
                 {
-                    if (CurrentPhase != Phase.Charging || !IsSuperShot || !pc.IsAlive()) return;
+                    if (CurrentPhase != Phase.Charging || PhaseEndTS != chargeEndTS || !IsSuperShot || !pc.IsAlive()) return;
                     FlashAll();
                 }, t, log: false);
             }
@@ -320,6 +343,8 @@ public class JackalHadouHo : RoleBase
         BeamCNO = null;
         GateCNO?.Despawn();
         GateCNO = null;
+        Super?.Despawn();
+        Super = null;
     }
 
     public override void OnFixedUpdate(PlayerControl pc)
@@ -405,6 +430,7 @@ public class JackalHadouHo : RoleBase
         switch (CurrentPhase)
         {
             case Phase.Charging:
+                Super?.UpdateCharging();
                 if (Utils.TimeStamp >= PhaseEndTS)
                 {
                     CurrentPhase = Phase.Warning;
@@ -416,9 +442,11 @@ public class JackalHadouHo : RoleBase
             case Phase.Warning:
                 if (!PhaseEntryDone)
                 {
-                    SpawnWarning();
+                    if (Super != null) Super.EnterWarning();
+                    else SpawnWarning();
                     PhaseEntryDone = true;
                 }
+                Super?.UpdateWarning();
                 if (Utils.TimeStamp >= PhaseEndTS)
                 {
                     CurrentPhase = Phase.Firing;
@@ -431,25 +459,40 @@ public class JackalHadouHo : RoleBase
             case Phase.Firing:
                 if (!PhaseEntryDone)
                 {
-                    DespawnWarning();
-                    SpawnBeam();
+                    if (Super != null)
+                    {
+                        Super.EnterFiring(FiringDuration.GetFloat());
+                    }
+                    else
+                    {
+                        DespawnWarning();
+                        SpawnBeam();
+                    }
                     AlreadyKilled.Clear();
                     HasHit = false;
                     if (IsSuperShot) ConsumeTama();
                     PhaseEntryDone = true;
                 }
 
-                if (BeamCNO != null)
+                if (Super != null)
                 {
-                    float t = Time.time + ShakePhaseOffset;
-                    float wave = Mathf.Sin(t * 47f) * 0.7f + Mathf.Sin(t * 113f + 1.3f) * 0.3f;
-                    int thick = IsSuperShot ? SuperBeamThickness.GetInt() : NormalBeamThickness.GetInt();
-                    float amp = BeamHalfWidthUnit * thick * 0.2f;
-                    Vector2 perp = new(-Direction.y, Direction.x);
-                    BeamCNO.TP(BeamCNOPosition() + perp * (wave * amp)); // 揺れを毎フレ TP→base が 10Hz(ForceSnapMinInterval)に間引いて滑らかに同期(WaveCannon 双子)
+                    Super.UpdateFiring();
+                    HasHit |= Super.HasHit;
                 }
+                else
+                {
+                    if (BeamCNO != null)
+                    {
+                        float t = Time.time + ShakePhaseOffset;
+                        float wave = Mathf.Sin(t * 47f) * 0.7f + Mathf.Sin(t * 113f + 1.3f) * 0.3f;
+                        int thick = IsSuperShot ? SuperBeamThickness.GetInt() : NormalBeamThickness.GetInt();
+                        float amp = BeamHalfWidthUnit * thick * 0.2f;
+                        Vector2 perp = new(-Direction.y, Direction.x);
+                        BeamCNO.TP(BeamCNOPosition() + perp * (wave * amp)); // 揺れを毎フレ TP→base が 10Hz(ForceSnapMinInterval)に間引いて滑らかに同期(WaveCannon 双子)
+                    }
 
-                CheckBeamKills(pc);
+                    CheckBeamKills(pc);
+                }
 
                 if (Utils.TimeStamp >= PhaseEndTS)
                 {
@@ -510,7 +553,8 @@ public class JackalHadouHo : RoleBase
 
     private string WarningSprite()
     {
-        string chars = string.Join("     ", Enumerable.Repeat("⚠", WarningCharCount));
+        // 区切り 3 スペース: 5 だと公式鯖の ~680B パケット制限を超えてキック (WaveCannon 側と同じ)
+        string chars = string.Join("   ", Enumerable.Repeat("⚠", WarningCharCount));
         bool firingRight = Direction.x > 0;
         int thick = IsSuperShot ? SuperBeamThickness.GetInt() : NormalBeamThickness.GetInt();
         int size = thick * BeamSizeUnit;
@@ -563,6 +607,9 @@ public class JackalHadouHo : RoleBase
         Vector2 eyePos = BeamStartPoint();
         float halfWidth = BeamHalfWidthUnit * thick + BeamHitboxMargin;
         float beamLength = BeamLengthUnit * size * BeamCharCount;
+
+        // /hitbox 可視化: 下の判定式と同じ値をそのまま描く (ホストローカルのみ)
+        HitboxDebug.DrawBeamRect($"JackalHadouHo.{shooter.PlayerId}", eyePos, Direction, BeamBackwardReach, beamLength + BeamHitboxMargin, halfWidth);
 
         foreach (PlayerControl target in Main.EnumerateAlivePlayerControls())
         {

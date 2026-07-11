@@ -69,10 +69,42 @@ namespace EndKnot
         // player-like CNO はここで Utils.RpcChangeSkin 等で個別 outfit を適用する。
         protected virtual void OnAfterCreate() { }
 
+        // /wcdbg gate プローブ用: 公式鯖キック境界の計測時のみ true にしてクランプを外す
+        internal static bool SpriteBudgetBypass;
+
+        // 公式鯖 (ServerType.Vanilla) は NetworkedPlayerInfo.Data シリアライズ入り Reliable パケットが
+        // ~680B (実測 673B 可 / 696B 不可、2026-07-11 /wcdbg 二分探索) を超えると reason=Hacking で即切断する。
+        // CNO の spawn / sprite 書換チャンクは ≈343B + スプライト byte 数なので、スプライトを 330B までに制限する。
+        // 超過はキックより視覚劣化がマシなのでクランプ + Logger.Error で呼び出し元の修正を促す。
+        private static string ClampSpriteForOfficial(string sprite)
+        {
+            const int MaxBytes = 330;
+            if (SpriteBudgetBypass || GameStates.CurrentServerType != GameStates.ServerType.Vanilla || string.IsNullOrEmpty(sprite)) return sprite;
+
+            int total = System.Text.Encoding.UTF8.GetByteCount(sprite);
+            if (total <= MaxBytes) return sprite;
+
+            Logger.Error($"CNO sprite exceeds official-server budget ({total}B > {MaxBytes}B) — clamped to avoid Hacking kick. Shrink the caller's sprite! (docs/wavecannon-official-kick-resume.md)", "CNO.SpriteBudget");
+
+            var sb = new System.Text.StringBuilder();
+            var bytes = 0;
+
+            foreach (System.Text.Rune rune in sprite.EnumerateRunes())
+            {
+                int rb = rune.Utf8SequenceLength;
+                if (bytes + rb > MaxBytes) break;
+                sb.Append(rune.ToString());
+                bytes += rb;
+            }
+
+            return sb.ToString();
+        }
+
         public void RpcChangeSprite(string sprite)
         {
             if (!AmongUsClient.Instance.AmHost) return;
             if (IsPlayerLike) return; // sprite-text 戦略は player-like CNO には適用不可
+            sprite = ClampSpriteForOfficial(sprite);
             if (this is not NaturalDisaster nd || !nd.SpawnTimer.IsRunning) Logger.Info($" Change Custom Net Object {GetType().Name} (ID {Id}) sprite", "CNO.RpcChangeSprite");
 
             bool notImportant = this is BedWarsItemGenerator || (this is NaturalDisaster n && n.SpawnTimer.Elapsed.TotalSeconds < n.TotalWarningTime - 1 && Options.CurrentGameMode != CustomGameMode.NaturalDisasters && GameStates.CurrentServerType == GameStates.ServerType.Vanilla);
@@ -334,6 +366,7 @@ namespace EndKnot
 
         protected void CreateNetObject(string sprite, Vector2 position, IEnumerable<PlayerControl> hideFrom = null, PlayerControl onlyVisibleTo = null)
         {
+            sprite = ClampSpriteForOfficial(sprite);
             if (GameStates.IsEnded || !AmongUsClient.Instance.AmHost || TryReusePooledObject(sprite, position)) return;
             
             Logger.Info($" Create Custom Net Object {GetType().Name} (ID {MaxId + 1}) at {position} - Time since game start: {Utils.TimeStamp - IntroCutsceneDestroyPatch.IntroDestroyTS}s", "CNO.CreateNetObject");

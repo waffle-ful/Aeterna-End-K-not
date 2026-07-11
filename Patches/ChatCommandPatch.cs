@@ -303,6 +303,8 @@ internal static class ChatCommands
             new("UnDummy", "", Command.UsageLevels.Host, Command.UsageTimes.InGame, UnDummyCommand, true, true),
             new("DummyFree", "", Command.UsageLevels.Host, Command.UsageTimes.InGame, DummyFreeCommand, true, true),
             new("SizeTest", "", Command.UsageLevels.Host, Command.UsageTimes.InGame, SizeTestCommand, true, true),
+            new("Hitbox", "", Command.UsageLevels.Host, Command.UsageTimes.InGame, HitboxCommand, true, true),
+            new("WcDbg", "[mask]", Command.UsageLevels.Host, Command.UsageTimes.Always, WcDbgCommand, true, true),
             new("SizeClean", "", Command.UsageLevels.Host, Command.UsageTimes.InGame, SizeCleanCommand, true, true),
             new("RipSize", "[size]", Command.UsageLevels.Host, Command.UsageTimes.InGame, RipSizeCommand, true, true),
             new("Burst", "{count} [direct]", Command.UsageLevels.Host, Command.UsageTimes.Always, BurstCommand, true, true, [GetString("CommandArgs.Burst.Count"), GetString("CommandArgs.Burst.Direct")]),
@@ -3268,6 +3270,102 @@ internal static class ChatCommands
         string sizes = absolute ? "20/40/60/80/100 (absolute)" : "600/800/1000/1200/1500% (percent)";
         Logger.Info($"DevCmd /sizetest absolute={absolute}: spawned={spawned} at {origin}", "DevCmd");
         Utils.SendMessage($"[sizetest] Spawned {spawned} ○ at sizes {sizes}. Walk right to see each.", player.PlayerId);
+    }
+
+    private static void HitboxCommand(PlayerControl player, string text, string[] args)
+    {
+        if (!player.FriendCode.GetDevUser().up && !player.FriendCode.IsLocalDev()) return;
+
+        HitboxDebug.Enabled = !HitboxDebug.Enabled;
+        if (!HitboxDebug.Enabled) HitboxDebug.Clear();
+        Logger.Info($"DevCmd /hitbox: Enabled={HitboxDebug.Enabled}", "DevCmd");
+        Utils.SendMessage($"[hitbox] Hitbox visualization: {(HitboxDebug.Enabled ? "ON" : "OFF")} (host-local only)", player.PlayerId);
+    }
+
+    private static WaveCannonWarning WcDbgProbeCno;
+
+    private static void WcDbgCommand(PlayerControl player, string text, string[] args)
+    {
+        if (!player.FriendCode.GetDevUser().up && !player.FriendCode.IsLocalDev()) return;
+
+        // 判別プローブ: /wcdbg rawname <chars> — 既存プローブCNOへ生 SetName RPC 1本だけ (outfit 無し・最小パケット・長い名前)
+        if (args.Length >= 3 && args[1].Equals("rawname", StringComparison.OrdinalIgnoreCase) && int.TryParse(args[2], out int rawChars))
+        {
+            if (WcDbgProbeCno?.playerControl == null)
+            {
+                Utils.SendMessage("[wcdbg] no probe CNO — run /wcdbg gate <n> first", player.PlayerId);
+                return;
+            }
+
+            rawChars = Math.Clamp(rawChars, 1, 2000);
+            string rawName = "<size=252%><color=#7a00ff>" + new string('█', rawChars);
+            MessageWriter w = AmongUsClient.Instance.StartRpcImmediately(WcDbgProbeCno.playerControl.NetId, (byte)RpcCalls.SetName, SendOption.Reliable);
+            w.Write(WcDbgProbeCno.playerControl.Data.NetId);
+            w.Write(rawName);
+            w.Write(false);
+            int rawLen = w.Length;
+            AmongUsClient.Instance.FinishRpcImmediately(w);
+            Logger.Info($"DevCmd /wcdbg rawname: SetName-raw {rawChars} chars, packet {rawLen}B", "DevCmd");
+            Utils.SendMessage($"[wcdbg] raw SetName sent: {rawChars} chars, packet {rawLen}B", player.PlayerId);
+            return;
+        }
+
+        // 判別プローブ: /wcdbg name <chars> — 既存プローブCNOへ SetName 単独送信 (spawn 無し・小パケット・長い名前)
+        if (args.Length >= 3 && args[1].Equals("name", StringComparison.OrdinalIgnoreCase) && int.TryParse(args[2], out int nameChars))
+        {
+            if (WcDbgProbeCno == null)
+            {
+                Utils.SendMessage("[wcdbg] no probe CNO — run /wcdbg gate <n> first", player.PlayerId);
+                return;
+            }
+
+            nameChars = Math.Clamp(nameChars, 1, 2000);
+            CustomNetObject.SpriteBudgetBypass = true;
+            try { WcDbgProbeCno.RpcChangeSprite("<size=252%><color=#00ff7a>" + new string('█', nameChars)); }
+            finally { CustomNetObject.SpriteBudgetBypass = false; }
+            Logger.Info($"DevCmd /wcdbg name: SetName-only {nameChars} chars", "DevCmd");
+            Utils.SendMessage($"[wcdbg] SetName-only sent: {nameChars} chars", player.PlayerId);
+            return;
+        }
+
+        // 公式鯖キック閾値の二分探索プローブ: /wcdbg gate <chars> で指定文字数の █ 名前を持つ CNO をその場にスポーン
+        if (args.Length >= 3 && args[1].Equals("gate", StringComparison.OrdinalIgnoreCase) && int.TryParse(args[2], out int chars))
+        {
+            chars = Math.Clamp(chars, 1, 2000);
+            Vector2 pos = player.GetTruePosition() + new Vector2(2f, 0f);
+            // split モード: 同じ総量を 2 CNO に割って 1 パケットで送る (チャンク総量制限 vs 名前単体長制限の判別用)
+            bool split = args.Length >= 4 && args[3].Equals("split", StringComparison.OrdinalIgnoreCase);
+            CustomNetObject.SpriteBudgetBypass = true; // 境界計測用プローブなので公式鯖クランプを外す
+            try
+            {
+                if (split)
+                {
+                    int half = Math.Max(1, chars / 2);
+                    string s1 = "<size=252%><color=#ff7a00>" + new string('█', half);
+                    Utils.CombineSendTimeLowering(() =>
+                    {
+                        _ = new WaveCannonWarning(pos, s1);
+                        _ = new WaveCannonWarning(pos + new Vector2(0f, 1.5f), s1);
+                    });
+                }
+                else
+                {
+                    string sprite = "<size=252%><color=#ff7a00>" + new string('█', chars);
+                    Utils.CombineSendTimeLowering(() => WcDbgProbeCno = new WaveCannonWarning(pos, sprite));
+                }
+            }
+            finally { CustomNetObject.SpriteBudgetBypass = false; }
+            Logger.Info($"DevCmd /wcdbg gate: probe CNO {chars} chars split={split}", "DevCmd");
+            Utils.SendMessage($"[wcdbg] probe CNO spawned: {chars} chars split={split}", player.PlayerId);
+            return;
+        }
+
+        if (args.Length >= 2 && int.TryParse(args[1], out int mask))
+            WaveCannon.DebugSkipMask = mask;
+
+        int m = WaveCannon.DebugSkipMask;
+        Logger.Info($"DevCmd /wcdbg: DebugSkipMask={m}", "DevCmd");
+        Utils.SendMessage($"[wcdbg] WaveCannon DebugSkipMask={m} (1=sequence off, 2=skin off, 4=CNO off, 8=speed off)", player.PlayerId);
     }
 
     private static void SizeCleanCommand(PlayerControl player, string text, string[] args)
