@@ -56,7 +56,17 @@ internal static class EOSReLoginProactivePatch
 
     public static void Postfix(EOSManager __instance)
     {
-        if (!__instance.loginFlowFinished) return;
+        // 早期ブート (メインシーン前) は AmongUsClient がまだ無く GameStates が NRE るので触らない
+        if (AmongUsClient.Instance == null) return;
+
+        // ⚠️ スタック検出〜リカバリの状態機械を loginFlowFinished ガードの外に置くこと。
+        // LoginWithCorrectPlatform() での再ログインが vanilla のフローを再スタートさせ
+        // loginFlowFinished=false に戻す — 壊れた認証ではフローが完了せず false のまま
+        // スタックするため、ガードの内側に検出器を置くと自分自身を封鎖して全回復パスが
+        // 死ぬ (2026-07-11 実測: expirrecover 後 tryingToLogin=true が 40 分沈黙 → token
+        // 実失効 → InTask 中に Hacking キック。BUG-20260711-03 の真因)。
+        // loginFlowFinished は初回起動ログイン完了前の proactive 再ログイン抑止 (メソッド
+        // 末尾) にのみ使う。
 
         if (__instance.tryingToLogin)
         {
@@ -163,6 +173,10 @@ internal static class EOSReLoginProactivePatch
 
             return;
         }
+
+        // 初回起動のログインフロー完了前は proactive タイマー再ログインを撃たない
+        // (スタック検出/pending 回収は上で処理済み — このガードはここより下にしか効かない)
+        if (!__instance.loginFlowFinished) return;
 
         float now = Time.realtimeSinceStartup;
         float elapsed = now - lastReLoginTime;

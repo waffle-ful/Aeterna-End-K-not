@@ -192,11 +192,18 @@ public static class HealthLog
             catch { }
 
             // EOS ログインフローの進行中フラグ (再ログインスタック監視の計器 — 1 が 180 秒続くと不発弾)
+            // eosFlow=0 が online 中に続く場合は「再ログインでフローが再スタートしたまま未完了」の直接証拠
+            // (BUG-20260711-03 の 1-bit 分離用。正常時は起動ログイン完了後ずっと 1)
             int eosTry = 0;
-            try { eosTry = EOSManager.Instance != null && EOSManager.Instance.tryingToLogin ? 1 : 0; }
+            int eosFlow = 0;
+            try
+            {
+                eosTry = EOSManager.Instance != null && EOSManager.Instance.tryingToLogin ? 1 : 0;
+                eosFlow = EOSManager.Instance != null && EOSManager.Instance.loginFlowFinished ? 1 : 0;
+            }
             catch { }
 
-            string hb = $"t={now} up={now - StartTs} state={state} host={(host ? 1 : 0)} server={server} players={players} wsMB={wsMB} gcMB={gcMB} gc2={gen2} nmSent={nmSent} nmSkip={nmSkip} eosTry={eosTry}{lastSendSuffix}";
+            string hb = $"t={now} up={now - StartTs} state={state} host={(host ? 1 : 0)} server={server} players={players} wsMB={wsMB} gcMB={gcMB} gc2={gen2} nmSent={nmSent} nmSkip={nmSkip} eosTry={eosTry} eosFlow={eosFlow}{lastSendSuffix}";
             Write($"HB {hb}");
 
             // 普段見る通常ログにもメモリ + 状態の要約を低頻度で(最適化余地の把握用)。
