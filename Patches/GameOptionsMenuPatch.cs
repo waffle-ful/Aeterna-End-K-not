@@ -67,6 +67,11 @@ public static class GameOptionsMenuPatch
     private static readonly Dictionary<GameOptionsMenu, Coroutine> BuildCoroutines = new();
     private static readonly Dictionary<GameOptionsMenu, int> BuildGenerations = new();
 
+    // メモリリーク計器 (BUG-20260706-01): 一度ビルドした index が再ビルドされたら、その option 名と
+    // 「dict 欠落 / Unity-dead キャッシュ」のどちらが原因かを記録する。初回ビルドは記録しない (スパム防止)。
+    private static readonly System.Collections.Generic.HashSet<int> EverBuiltRows = new();
+    private static readonly System.Collections.Generic.HashSet<int> EverBuiltHeaders = new();
+
     [HarmonyPatch(nameof(GameOptionsMenu.Initialize))]
     [HarmonyPrefix]
     private static bool InitializePrefix(GameOptionsMenu __instance)
@@ -202,7 +207,11 @@ public static class GameOptionsMenuPatch
                         // Reuse the cached header only if it hasn't been destroyed (a scene reload / rehost destroys
                         // the GameObjects but leaves this static dict pointing at them). A stale destroyed ref must
                         // fall through to a fresh Instantiate, otherwise SetHeader below throws and the item vanishes.
-                        bool freshCHM = !(ModGameOptionsMenu.CategoryHeaderList.TryGetValue(index, out CategoryHeaderMasked cacheCHM) && cacheCHM);
+                        bool chmHadEntry = ModGameOptionsMenu.CategoryHeaderList.TryGetValue(index, out CategoryHeaderMasked cacheCHM);
+                        bool freshCHM = !(chmHadEntry && cacheCHM);
+                        if (freshCHM && !EverBuiltHeaders.Add(index))
+                            Logger.Info($"header rebuild: {option.Name} idx={index} tab={modTab} reason={(chmHadEntry ? "dead-cache" : "no-entry")}", "MenuLeak");
+                        else EverBuiltHeaders.Add(index);
                         CategoryHeaderMasked categoryHeaderMasked = freshCHM ? ModGameOptionsMenu.Track(Object.Instantiate(__instance.categoryHeaderOrigin, Vector3.zero, Quaternion.identity, __instance.settingsContainer)) : cacheCHM;
                         categoryHeaderMasked.SetHeader(StringNames.RolesCategory, 20);
                         categoryHeaderMasked.Title.SetText(option.GetName(disableColor: true).Trim('★', ' '));
@@ -250,8 +259,12 @@ public static class GameOptionsMenuPatch
                     // `|| !optionBehaviour`: a cached behaviour destroyed by a scene reload / rehost must be treated
                     // as absent and re-instantiated, or the reuse branch below touches a destroyed object and throws
                     // (per-item catch then swallows it → the row silently vanishes). Mirrors the L505/L513 guards.
-                    if (!ModGameOptionsMenu.BehaviourList.TryGetValue(index, out OptionBehaviour optionBehaviour) || !optionBehaviour)
+                    bool rowHadEntry = ModGameOptionsMenu.BehaviourList.TryGetValue(index, out OptionBehaviour optionBehaviour);
+                    if (!rowHadEntry || !optionBehaviour)
                     {
+                        if (!EverBuiltRows.Add(index))
+                            Logger.Info($"row rebuild: {option.Name} idx={index} tab={modTab} reason={(rowHadEntry ? "dead-cache" : "no-entry")}", "MenuLeak");
+
                         try
                         {
                             optionBehaviour = baseGameSetting.Type switch
@@ -281,6 +294,7 @@ public static class GameOptionsMenuPatch
                     optionBehaviour.gameObject.SetActive(enabledOrNotCollapsed);
                     optionBehaviour.OnValueChanged = new Action<OptionBehaviour>(__instance.ValueChanged);
 
+                    EverBuiltRows.Add(index);
                     ModGameOptionsMenu.OptionList[optionBehaviour] = index;
                     ModGameOptionsMenu.BehaviourList[index] = optionBehaviour;
 

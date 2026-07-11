@@ -305,6 +305,7 @@ internal static class ChatCommands
             new("SizeTest", "", Command.UsageLevels.Host, Command.UsageTimes.InGame, SizeTestCommand, true, true),
             new("Hitbox", "", Command.UsageLevels.Host, Command.UsageTimes.InGame, HitboxCommand, true, true),
             new("WcDbg", "[mask]", Command.UsageLevels.Host, Command.UsageTimes.Always, WcDbgCommand, true, true),
+            new("Census", "", Command.UsageLevels.Host, Command.UsageTimes.Always, CensusCommand, true, true),
             new("SizeClean", "", Command.UsageLevels.Host, Command.UsageTimes.InGame, SizeCleanCommand, true, true),
             new("RipSize", "[size]", Command.UsageLevels.Host, Command.UsageTimes.InGame, RipSizeCommand, true, true),
             new("Burst", "{count} [direct]", Command.UsageLevels.Host, Command.UsageTimes.Always, BurstCommand, true, true, [GetString("CommandArgs.Burst.Count"), GetString("CommandArgs.Burst.Direct")]),
@@ -3366,6 +3367,16 @@ internal static class ChatCommands
         int m = WaveCannon.DebugSkipMask;
         Logger.Info($"DevCmd /wcdbg: DebugSkipMask={m}", "DevCmd");
         Utils.SendMessage($"[wcdbg] WaveCannon DebugSkipMask={m} (1=sequence off, 2=skin off, 4=CNO off, 8=speed off)", player.PlayerId);
+    }
+
+    // メモリリーク調査用: 任意タイミングで Unity オブジェクト census を Health.log に記録 (BUG-20260706-01)
+    private static void CensusCommand(PlayerControl player, string text, string[] args)
+    {
+        if (!player.FriendCode.GetDevUser().up && !player.FriendCode.IsLocalDev()) return;
+
+        MemCensus.RunNow("manual");
+        Logger.Info("DevCmd /census: snapshot requested", "DevCmd");
+        Utils.SendMessage("[census] snapshot written to Health.log (CENSUS/CENSUSTOP)", player.PlayerId);
     }
 
     private static void SizeCleanCommand(PlayerControl player, string text, string[] args)

@@ -10016,6 +10016,8 @@
   "CommandDescription.Hitbox": "Toggle host-local hitbox visualization (beam/band/circle kill zones drawn as translucent red) [dev]",
   "CommandForms.WcDbg": "wcdbg",
   "CommandDescription.WcDbg": "Set WaveCannon debug skip mask for official-server kick bisection (1=sequence, 2=skin, 4=CNO, 8=speed) [dev]",
+  "CommandForms.Census": "census",
+  "CommandDescription.Census": "Write a Unity object census snapshot (CENSUS/CENSUSTOP) to Health.log for memory-leak attribution [dev]",
   "CommandForms.SizeClean": "sizeclean",
   "CommandDescription.SizeClean": "Despawn all size-test markers [dev]",
   "CommandForms.RipSize": "ripsize",
