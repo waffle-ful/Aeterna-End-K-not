@@ -1103,7 +1103,12 @@ public static class StringOptionPatch
                             if (findChild) findChild.gameObject.SetActive(false);
                         }
 
-                        GameSettingMenuPatch.GMButtons.ForEach(x => { if (x) x.gameObject.SetActive(true); });
+                        // メニューが既に閉じている場合は再点灯しない: このコルーチンは Main.Instance 上で走るため
+                        // メニュー close 後も生存し、close 時に DontDestroyOnLoad の「EHR Settings UI Cache Root」
+                        // (world 原点) へ退避・消灯済みの GMButtons を無条件に SetActive(true) すると、モードボタン列が
+                        // ロビーのワールド空間や結果画面に浮遊するゴーストとして残留する (次のメニュー再オープンまで回収されない)。
+                        if (GameSettingMenu.Instance)
+                            GameSettingMenuPatch.GMButtons.ForEach(x => { if (x) x.gameObject.SetActive(true); });
                     }
                 }
             }
@@ -2025,8 +2030,12 @@ public static class GameSettingMenuPatch
             GameOptionsMenuPatch.ReCreateAllCoroutine = null;
         }
 
-        foreach (var x in ModSettingsTabs.Values) SetTempParent(x.gameObject);
-        foreach (var x in ModSettingsButtons.Values) SetTempParent(x.gameObject);
+        // Unity-null ガード必須: rehost/シーン再ロードで破棄された個体が dict に残ると、SetTempParent 内の
+        // !go ガードに届く前に引数評価 x.gameObject が Il2CppException を投げ、この時点で退避ループ全体が
+        // アボート → 以降の GMButtons(モード名ラベル)等が非表示・退避されず active のままシーンに残留する
+        // (結果画面への漏れ + 次オープンで再生成され旧個体が回収されず累積)。直下の GMButtons ループと同形。
+        foreach (var x in ModSettingsTabs.Values) if (x) SetTempParent(x.gameObject);
+        foreach (var x in ModSettingsButtons.Values) if (x) SetTempParent(x.gameObject);
 
         // Clear GMButton listeners before hiding them so they can't fire stale callbacks
         foreach (var x in GMButtons)

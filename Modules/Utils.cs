@@ -3989,7 +3989,18 @@ public static class Utils
 
         foreach (NetworkedPlayerInfo playerinfo in GameData.Instance.AllPlayers)
         {
-            if (writer.Length > 500 || messages >= packingLimit)
+            // 1人分の Data ブロックは装飾名込みで ~700B に達し得るため、書いてから溢れに気付いても分割できない
+            // (単一 Flag は PacketSplitPatch でも割れない)。先に scratch writer へ実測シリアライズし、
+            // 現在のチャンクに収まらないならフラッシュしてから転写する (pre-write 見積り。実測1215B チャンク対策)。
+            MessageWriter item = MessageWriter.Get(SendOption.Reliable);
+            item.StartMessage(1);
+            item.WritePacked(playerinfo.NetId);
+            playerinfo.Serialize(item, false);
+            item.EndMessage();
+            var itemBytes = item.ToByteArray(false);
+            item.Recycle();
+
+            if ((messages > 0 && writer.Length + itemBytes.Length > CustomRpcSender.SafeChunkLength) || messages >= packingLimit)
             {
                 FlushWriter();
                 writer = MessageWriter.Get(SendOption.Reliable);
@@ -3997,10 +4008,7 @@ public static class Utils
                 writer.Write(AmongUsClient.Instance.GameId);
             }
 
-            writer.StartMessage(1);
-            writer.WritePacked(playerinfo.NetId);
-            playerinfo.Serialize(writer, false);
-            writer.EndMessage();
+            writer.Write(itemBytes);
 
             messages++;
         }
@@ -4045,7 +4053,17 @@ public static class Utils
 
         foreach (NetworkedPlayerInfo playerinfo in GameData.Instance.AllPlayers)
         {
-            if (writer.Length > 500 || messages >= packingLimit)
+            // 兄弟 SendGameData と同処方: 1人分を実測してから収まらないチャンクを先にフラッシュする
+            // (書いた後では単一 Flag を分割できず、蓄積+巨大 Data ブロックで >1024B の kick 級チャンクになる)。
+            MessageWriter item = MessageWriter.Get(SendOption.Reliable);
+            item.StartMessage(1);
+            item.WritePacked(playerinfo.NetId);
+            playerinfo.Serialize(item, false);
+            item.EndMessage();
+            var itemBytes = item.ToByteArray(false);
+            item.Recycle();
+
+            if ((messages > 0 && writer.Length + itemBytes.Length > CustomRpcSender.SafeChunkLength) || messages >= packingLimit)
             {
                 FlushWriter();
                 writer = MessageWriter.Get(SendOption.Reliable);
@@ -4054,10 +4072,7 @@ public static class Utils
                 writer.WritePacked(targetClientId);
             }
 
-            writer.StartMessage(1);
-            writer.WritePacked(playerinfo.NetId);
-            playerinfo.Serialize(writer, false);
-            writer.EndMessage();
+            writer.Write(itemBytes);
 
             messages++;
         }
