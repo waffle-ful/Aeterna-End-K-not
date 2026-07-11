@@ -41,6 +41,10 @@ public static class FixedUpdateCaller
             try { if (PerSecondUpdateScheduler.ShouldRunUpdate("claude-bridge")) ClaudeBridge.Tick(); }
             catch (Exception e) { Utils.ThrowException(e); }
 
+            // 当たり判定可視化 (/hitbox・既定OFF) の TTL 掃除。Enabled でなくても残存形状の破棄が要るため無条件で回す。
+            try { HitboxDebug.Tick(); }
+            catch (Exception e) { Utils.ThrowException(e); }
+
             // チャット open/close 状態を毎フレーム overlay に反映。ローカルプレイヤー非依存で回す
             // (メニュー・非ゲーム中でもチャットが開くため、LocalPlayer ガードの中では遅すぎる)。
             try { TextBoxPatch.CheckChatOpen(); }
@@ -49,37 +53,61 @@ public static class FixedUpdateCaller
             var amongUsClient = AmongUsClient.Instance;
             var lobbyBehaviour = LobbyBehaviour.Instance;
 
-            if (lobbyBehaviour)
+            // ゲーム join の瞬間(シーン再構築中)は lobbyBehaviour/HudManager 配下のフィールドが一過性に
+            // fake-null になり、無ガードの deref が数フレーム連続 NRE を吐く(exflood 警告の主因)。各ブロックを
+            // 個別 try/catch で包み、join 窓のスパムを黙らせる(窓が抜ければ自然に正常化する)。
+            try
             {
-                LobbyFixedUpdatePatch.Postfix();
-                LobbyBehaviourUpdatePatch.Postfix(lobbyBehaviour);
-
-                long now = Utils.TimeStamp;
-
-                if (now - LastFileLoadTS > 10)
+                if (lobbyBehaviour)
                 {
-                    LastFileLoadTS = now;
-                    Options.LoadUserData();
-                }
+                    LobbyFixedUpdatePatch.Postfix();
+                    LobbyBehaviourUpdatePatch.Postfix(lobbyBehaviour);
 
-                if (Options.EnableAutoMessage.GetBool() && now - LastAutoMessageSendTS > Options.AutoMessageSendInterval.GetInt())
-                {
-                    LastAutoMessageSendTS = now;
-                    TemplateManager.SendTemplate("Notification", noErr: true, importance: MessageImportance.Low);
+                    long now = Utils.TimeStamp;
+
+                    if (now - LastFileLoadTS > 10)
+                    {
+                        LastFileLoadTS = now;
+                        Options.LoadUserData();
+                    }
+
+                    if (Options.EnableAutoMessage.GetBool() && now - LastAutoMessageSendTS > Options.AutoMessageSendInterval.GetInt())
+                    {
+                        LastAutoMessageSendTS = now;
+                        TemplateManager.SendTemplate("Notification", noErr: true, importance: MessageImportance.Low);
+                    }
                 }
             }
-
-            if (HudManager.InstanceExists)
+            catch (Exception e)
             {
-                HudManager hudManager = HudManager.Instance;
+                if (OnGameJoinedPatch.JoiningGame && e is NullReferenceException) { /* join 窓の transient fake-null は黙殺 */ }
+                else Utils.ThrowException(e);
+            }
 
-                HudManagerPatch.Postfix(hudManager);
-                Zoom.Postfix();
-                HudSpritePatch.Postfix(hudManager);
+            try
+            {
+                if (HudManager.InstanceExists)
+                {
+                    HudManager hudManager = HudManager.Instance;
+
+                    HudManagerPatch.Postfix(hudManager);
+                    Zoom.Postfix();
+                    HudSpritePatch.Postfix(hudManager);
+                }
+            }
+            catch (Exception e)
+            {
+                if (OnGameJoinedPatch.JoiningGame && e is NullReferenceException) { /* join 窓の transient fake-null は黙殺 */ }
+                else Utils.ThrowException(e);
             }
 
             // YouTube chat polling は HUD の有無と無関係に進める（ロビーから動かす前提）
-            YouTubeChatManager.Tick(UnityEngine.Time.fixedDeltaTime);
+            try { YouTubeChatManager.Tick(UnityEngine.Time.fixedDeltaTime); }
+            catch (Exception e)
+            {
+                if (OnGameJoinedPatch.JoiningGame && e is NullReferenceException) { /* join 窓の transient fake-null は黙殺 */ }
+                else Utils.ThrowException(e);
+            }
 
             // ホストローカルの読み上げ (VoiceVox TTS)。メインスレッド必須なのでここで drain する。
             try { EndKnot.Modules.VoiceVox.VoiceVoxManager.Tick(); }
@@ -248,6 +276,10 @@ public static class FixedUpdateCaller
                 catch (Exception e) { Utils.ThrowException(e); }
             }
         }
-        catch (Exception e) { Utils.ThrowException(e); }
+        catch (Exception e)
+        {
+            if (OnGameJoinedPatch.JoiningGame && e is NullReferenceException) return; // join 窓の transient fake-null は黙殺
+            Utils.ThrowException(e);
+        }
     }
 }
