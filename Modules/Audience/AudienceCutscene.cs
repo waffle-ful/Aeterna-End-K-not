@@ -44,9 +44,10 @@ public class AudienceCutscene : MonoBehaviour
         _startTime = Time.realtimeSinceStartup;
         _active = true;
 
-        // 会議スティンガーではなくサボタージュ警報を使う (本物の会議招集と音でも区別が付くように)。
-        if (ShipStatus.Instance && ShipStatus.Instance.SabotageSound && SoundManager.Instance)
-            SoundManager.Instance.PlaySound(ShipStatus.Instance.SabotageSound, false, 1f);
+        // 干渉専用のショック効果音をホストローカル再生する (本物の会議招集と音でも区別が付くように)。
+        // 既存のカスタム効果音基盤 (Modules/CustomSounds.cs) に相乗り — 埋込リソース
+        // EndKnot.Resources.Sounds.AudienceShock.ogg を読んで SoundManager で鳴らす (送信ゼロ)。
+        CustomSoundsManager.Play("AudienceShock");
     }
 
     private static string Sanitize(string s)
