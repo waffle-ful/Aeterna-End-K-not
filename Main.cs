@@ -490,6 +490,9 @@ public class Main : BasePlugin
         AddComponent<EndKnot.Modules.StreamOverlay.AudienceInfoBubble>();
         Log.LogInfo("AudienceInfoBubble registered");
 
+        AddComponent<EndKnot.Modules.Audience.AudienceCutscene>();
+        Log.LogInfo("AudienceCutscene registered");
+
         coroutines = AddComponent<Coroutines>();
         Logger.Enable();
         Logger.Disable("NotifyRoles");

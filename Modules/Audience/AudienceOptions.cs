@@ -1,6 +1,6 @@
 namespace EndKnot.Modules.Audience;
 
-// オプション一式。SystemSettings タブ配下、ID 範囲 44710〜44732。
+// オプション一式。SystemSettings タブ配下、ID 範囲 44710〜44733。
 // Enabled は default OFF。YouTubeChatOptions/LobbyCodeBubbleOptions 隣接に並べる想定。
 public static class AudienceOptions
 {
@@ -16,6 +16,7 @@ public static class AudienceOptions
 
     public static OptionItem ShowInfoOverlay;
     public static OptionItem InfoOverlayScale;
+    public static OptionItem InterventionCutscene;
 
     public static OptionItem BlackoutEnabled;
     public static OptionItem BlackoutPrice;
@@ -67,6 +68,10 @@ public static class AudienceOptions
         InfoOverlayScale = new IntegerOptionItem(OptionIdBase + 22, "AudienceInfoOverlayScale", new(50, 400, 10), 150, TabGroup.SystemSettings)
             .SetParent(ShowInfoOverlay)
             .SetValueFormat(OptionFormat.Percent);
+
+        // 干渉発動時にホスト画面へ緊急会議風カットシーンをローカル再生する(画面を覆うのでオフ可)。
+        InterventionCutscene = new BooleanOptionItem(OptionIdBase + 23, "AudienceInterventionCutscene", true, TabGroup.SystemSettings)
+            .SetParent(Enabled);
 
         BlackoutEnabled = new BooleanOptionItem(OptionIdBase + 7, "AudienceBlackoutEnabled", true, TabGroup.SystemSettings)
             .SetParent(Enabled);

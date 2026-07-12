@@ -235,6 +235,8 @@ public static class AudienceManager
 
         if (isTargeted) TargetCooldownUntil[item.TargetId] = Utils.TimeStamp + (long)AudienceOptions.TargetCooldown.GetFloat();
 
+        AudienceCutscene.Play(item.Kind.ToString(), item.Author, item.TargetId);
+
         Logger.Info($"Audience intervention executed: {item.Kind} (author={item.Author}, price={price})", "Audience");
         return true;
     }
