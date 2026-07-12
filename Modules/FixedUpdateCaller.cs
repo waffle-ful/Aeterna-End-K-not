@@ -109,6 +109,14 @@ public static class FixedUpdateCaller
                 else Utils.ThrowException(e);
             }
 
+            // 視聴者干渉 (Audience)。queue drain + キュー消化はメインスレッド専用。
+            try { EndKnot.Modules.Audience.AudienceManager.Tick(); }
+            catch (Exception e)
+            {
+                if (OnGameJoinedPatch.JoiningGame && e is NullReferenceException) { /* join 窓の transient fake-null は黙殺 */ }
+                else Utils.ThrowException(e);
+            }
+
             // ホストローカルの読み上げ (VoiceVox TTS)。メインスレッド必須なのでここで drain する。
             try { EndKnot.Modules.VoiceVox.VoiceVoxManager.Tick(); }
             catch (Exception e) { Utils.ThrowException(e); }

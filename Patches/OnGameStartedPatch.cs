@@ -203,6 +203,9 @@ internal static class ChangeRoleSettings
 
             Main.HasJustStarted = true;
 
+            EndKnot.Modules.Audience.AudienceManager.ResetForNewGame();
+            EndKnot.Modules.Audience.AudienceInterventions.ResetForNewGame();
+
             Main.AllPlayerKillCooldown = [];
             Main.AllPlayerSpeed = [];
             Main.KillTimers = [];

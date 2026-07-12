@@ -655,6 +655,7 @@ public sealed class PlayerGameOptionsSender(PlayerControl player) : GameOptionsS
             Auditor.OnAnyoneApplyGameOptions(opt, player.PlayerId);
             Clerk.OnAnyoneApplyGameOptions(opt, player.PlayerId);
             Spider.OnAnyoneApplyGameOptions(opt, player.PlayerId);
+            Audience.AudienceInterventions.OnAnyoneApplyGameOptions(opt, player.PlayerId);
 
             if (Sprayer.LowerVisionList.Contains(player.PlayerId))
             {

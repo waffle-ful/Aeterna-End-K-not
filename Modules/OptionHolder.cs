@@ -1666,6 +1666,8 @@ public static class Options
 
         Modules.StreamOverlay.LobbyCodeBubbleOptions.SetupCustomOption();
 
+        Modules.Audience.AudienceOptions.SetupCustomOption();
+
         LoadingPercentage = 61;
 
         AutoKickStart = new BooleanOptionItem(19310, "AutoKickStart", false, TabGroup.SystemSettings);

@@ -280,6 +280,7 @@ internal static class ChatCommands
             new("PlayerInfo", "[id]", Command.UsageLevels.Everyone, Command.UsageTimes.Always, PlayerInfoCommand, true, false, [GetString("CommandArgs.PlayerInfo.Id")]),
             new("TimeLimit", "", Command.UsageLevels.Everyone, Command.UsageTimes.InGame, TimeLimitCommand, true, false),
             new("YT", "{action}", Command.UsageLevels.Host, Command.UsageTimes.Always, YTCommand, true, false, [GetString("CommandArgs.YT.Action")]),
+            new("Audience", "{action} [args]", Command.UsageLevels.Host, Command.UsageTimes.Always, AudienceCommand, true, false, [GetString("CommandArgs.Audience.Action")]),
             new("Yaminabe", "", Command.UsageLevels.Everyone, Command.UsageTimes.Always, YaminabeCommand, true, false),
             new("ServerInfo", "", Command.UsageLevels.Everyone, Command.UsageTimes.AfterDeathOrLobby, ServerInfoCommand, true, false),
             
@@ -703,6 +704,80 @@ internal static class ChatCommands
 
         Utils.SendMessage(string.Format(GetString("YouTubeChat.Started"), YouTubeChatManager.CurrentVideoId), player.PlayerId);
         YouTubeChatOverlay.EnsureSubscribed();
+    }
+
+    private static void AudienceCommand(PlayerControl player, string text, string[] args)
+    {
+        // /audience ban <author>       -> BAN
+        // /audience unban <author>     -> BAN 解除
+        // /audience points <author> <n> -> ポイント付与(負数で減算)
+        // /audience status             -> 稼働状態 + キュー長 + 上位ポイント
+        if (args.Length < 2)
+        {
+            Utils.SendMessage(GetString("Audience.Usage"), player.PlayerId);
+            return;
+        }
+
+        string sub = args[1].Trim().ToLowerInvariant();
+
+        switch (sub)
+        {
+            case "ban":
+            {
+                if (args.Length < 3)
+                {
+                    Utils.SendMessage(GetString("Audience.Usage"), player.PlayerId);
+                    return;
+                }
+
+                string author = string.Join(' ', args, 2, args.Length - 2).Trim();
+                EndKnot.Modules.Audience.AudienceEconomy.Ban(author);
+                Utils.SendMessage(string.Format(GetString("Audience.Banned"), author), player.PlayerId);
+                return;
+            }
+
+            case "unban":
+            {
+                if (args.Length < 3)
+                {
+                    Utils.SendMessage(GetString("Audience.Usage"), player.PlayerId);
+                    return;
+                }
+
+                string author = string.Join(' ', args, 2, args.Length - 2).Trim();
+                EndKnot.Modules.Audience.AudienceEconomy.Unban(author);
+                Utils.SendMessage(string.Format(GetString("Audience.Unbanned"), author), player.PlayerId);
+                return;
+            }
+
+            case "points":
+            {
+                if (args.Length < 4 || !int.TryParse(args[^1], out int amount))
+                {
+                    Utils.SendMessage(GetString("Audience.Usage"), player.PlayerId);
+                    return;
+                }
+
+                string author = string.Join(' ', args, 2, args.Length - 3).Trim();
+                EndKnot.Modules.Audience.AudienceEconomy.AddPoints(author, amount);
+                Utils.SendMessage(string.Format(GetString("Audience.PointsGranted"), amount, author, EndKnot.Modules.Audience.AudienceEconomy.GetPoints(author)), player.PlayerId);
+                return;
+            }
+
+            case "status":
+            {
+                bool enabled = EndKnot.Modules.Audience.AudienceOptions.Enabled != null && EndKnot.Modules.Audience.AudienceOptions.Enabled.GetBool();
+                string top = string.Join('\n', EndKnot.Modules.Audience.AudienceEconomy.TopPoints(5).Select(kvp => $"{kvp.Key}: {kvp.Value}"));
+                if (string.IsNullOrEmpty(top)) top = GetString("Audience.Status.NoPoints");
+
+                Utils.SendMessage(string.Format(GetString("Audience.Status"), enabled ? GetString("Audience.Status.On") : GetString("Audience.Status.Off"), EndKnot.Modules.Audience.AudienceManager.QueuedInterventionCount, top), player.PlayerId);
+                return;
+            }
+
+            default:
+                Utils.SendMessage(GetString("Audience.Usage"), player.PlayerId);
+                return;
+        }
     }
 
     private static void PlayerInfoCommand(PlayerControl player, string text, string[] args)
