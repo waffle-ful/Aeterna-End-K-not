@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text.Json.Nodes;
 
 namespace EndKnot.Modules.YouTubeChat;
@@ -13,6 +14,8 @@ internal class ChatPayload
 
     public int? PollingIntervalMillis { get; private set; }
 
+    private bool warnedUnknownContinuation;
+
     public ChatPayload(string key, string continuation, string visitorData, string clientVersion)
     {
         Key = key;
@@ -24,19 +27,33 @@ internal class ChatPayload
     public void UpdateContinuation(string postResult)
     {
         var node = JsonNode.Parse(postResult);
-        var contRoot = node?["continuationContents"]?["liveChatContinuation"]?["continuations"]?[0];
-        if (contRoot == null) return;
+        var continuations = node?["continuationContents"]?["liveChatContinuation"]?["continuations"]?.AsArray();
+        if (continuations == null) return;
 
-        var contNode = contRoot["invalidationContinuationData"] ?? contRoot["timedContinuationData"];
-        if (contNode == null) return;
+        // continuation が更新されないと以降のフェッチが同じ応答を返し続け、dedup で新着ゼロの無音停止になる。
+        // 既知3型を全要素から探し、どれにも当たらなければ一度だけ実型名を警告して次回調査の手がかりを残す。
+        foreach (var contRoot in continuations)
+        {
+            if (contRoot == null) continue;
 
-        var newCont = contNode["continuation"]?.ToString();
-        if (!string.IsNullOrEmpty(newCont)) Continuation = newCont;
+            var contNode = contRoot["invalidationContinuationData"] ?? contRoot["timedContinuationData"] ?? contRoot["reloadContinuationData"];
+            if (contNode == null) continue;
 
-        // YouTube 側から「これ以下で叩くな」と返ってくる timeoutMs を尊重する。
-        // exists in both invalidation/timed continuations as "timeoutMs".
-        var timeoutMs = contNode["timeoutMs"]?.GetValue<int?>();
-        if (timeoutMs is > 0) PollingIntervalMillis = timeoutMs;
+            var newCont = contNode["continuation"]?.ToString();
+            if (!string.IsNullOrEmpty(newCont)) Continuation = newCont;
+
+            // YouTube 側から「これ以下で叩くな」と返ってくる timeoutMs を尊重する。
+            var timeoutMs = contNode["timeoutMs"]?.GetValue<int?>();
+            if (timeoutMs is > 0) PollingIntervalMillis = timeoutMs;
+            return;
+        }
+
+        if (!warnedUnknownContinuation)
+        {
+            warnedUnknownContinuation = true;
+            string kinds = string.Join(",", continuations.Select(c => c is JsonObject obj ? string.Join("/", obj.Select(kvp => kvp.Key)) : "null"));
+            Logger.Warn($"UpdateContinuation: no known continuation type in response (found: {kinds})", "YouTubeChatFetcher");
+        }
     }
 
     public string Build()

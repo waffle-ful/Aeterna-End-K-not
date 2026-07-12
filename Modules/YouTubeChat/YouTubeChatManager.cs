@@ -172,6 +172,9 @@ public static class YouTubeChatManager
             int? hint = snapshot.PollingIntervalMillis;
             if (hint is > 0) lastHintSeconds = hint.Value / 1000f;
 
+            // 新着ゼロが延々続く無音停止 (continuation 更新失敗など) を後からログで切り分けられるよう、新着があった時だけ件数を残す。
+            if (result.Messages.Count > 0) Logger.Info($"Fetched {result.Messages.Count} new chat message(s)", "YouTubeChatManager");
+
             foreach (var msg in result.Messages)
             {
                 try { OnMessage?.Invoke(msg.Author, msg.Text); }

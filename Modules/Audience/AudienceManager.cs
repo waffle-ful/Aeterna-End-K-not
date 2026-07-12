@@ -39,6 +39,9 @@ public static class AudienceManager
     // ゲーム跨ぎで残ると前ゲームの PlayerId が次ゲームの別人に誤爆するため、新ゲーム開始時に必ず呼ぶ。
     public static void ResetForNewGame()
     {
+        // ロビー中に積まれたコマンドはここで破棄される。無言で消えると「機能していない」に見えるため件数を残す。
+        if (InterventionQueue.Count > 0) Logger.Info($"Audience queue discarded on game start: {InterventionQueue.Count} pending", "Audience");
+
         InterventionQueue.Clear();
         TargetCooldownUntil.Clear();
     }
@@ -112,7 +115,8 @@ public static class AudienceManager
 
         AudienceEconomy.TryGrantForMessage(author);
 
-        text = text.Trim();
+        // 日本語IMEの視聴者は「！停電」「!呪い　名前」のように全角の ! / スペースで打ちがちなので半角に正規化する。
+        text = text.Trim().Replace('！', '!').Replace('　', ' ');
         if (!text.StartsWith('!')) return;
 
         string[] parts = text[1..].Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -128,7 +132,12 @@ public static class AudienceManager
                 if (parts.Length < 2) return;
                 string nameQuery = string.Join(' ', parts, 1, parts.Length - 1);
                 PlayerControl target = FindPlayerByNamePart(nameQuery);
-                if (!target) return;
+
+                if (!target)
+                {
+                    Logger.Info($"Audience command ignored: target not found (author={author}, cmd={kind}, query={nameQuery})", "Audience");
+                    return;
+                }
 
                 InterventionQueue.Enqueue(new QueuedIntervention(kind, author, target.PlayerId));
                 break;
@@ -137,6 +146,8 @@ public static class AudienceManager
                 InterventionQueue.Enqueue(new QueuedIntervention(kind, author, byte.MaxValue));
                 break;
         }
+
+        Logger.Info($"Audience intervention queued: {kind} (author={author}, queue={InterventionQueue.Count})", "Audience");
     }
 
     private static PlayerControl FindPlayerByNamePart(string namePart)
@@ -224,6 +235,7 @@ public static class AudienceManager
 
         if (isTargeted) TargetCooldownUntil[item.TargetId] = Utils.TimeStamp + (long)AudienceOptions.TargetCooldown.GetFloat();
 
+        Logger.Info($"Audience intervention executed: {item.Kind} (author={item.Author}, price={price})", "Audience");
         return true;
     }
 }
