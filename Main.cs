@@ -487,6 +487,9 @@ public class Main : BasePlugin
         AddComponent<EndKnot.Modules.StreamOverlay.LobbyCodeBubble>();
         Log.LogInfo("LobbyCodeBubble registered");
 
+        AddComponent<EndKnot.Modules.StreamOverlay.AudienceInfoBubble>();
+        Log.LogInfo("AudienceInfoBubble registered");
+
         coroutines = AddComponent<Coroutines>();
         Logger.Enable();
         Logger.Disable("NotifyRoles");

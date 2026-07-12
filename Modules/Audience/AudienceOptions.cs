@@ -1,6 +1,6 @@
 namespace EndKnot.Modules.Audience;
 
-// オプション一式。SystemSettings タブ配下、ID 範囲 44710〜44730。
+// オプション一式。SystemSettings タブ配下、ID 範囲 44710〜44732。
 // Enabled は default OFF。YouTubeChatOptions/LobbyCodeBubbleOptions 隣接に並べる想定。
 public static class AudienceOptions
 {
@@ -13,6 +13,9 @@ public static class AudienceOptions
     public static OptionItem TargetCooldown;
     public static OptionItem CurseDuration;
     public static OptionItem BlessDuration;
+
+    public static OptionItem ShowInfoOverlay;
+    public static OptionItem InfoOverlayScale;
 
     public static OptionItem BlackoutEnabled;
     public static OptionItem BlackoutPrice;
@@ -56,6 +59,14 @@ public static class AudienceOptions
         BlessDuration = new FloatOptionItem(OptionIdBase + 6, "AudienceBlessDuration", new(1f, 60f, 1f), 10f, TabGroup.SystemSettings)
             .SetParent(Enabled)
             .SetValueFormat(OptionFormat.Seconds);
+
+        // 配信画面に「!コマンドで参加できる」旨を周知する回転バナー。Audience 有効時は既定 ON。
+        ShowInfoOverlay = new BooleanOptionItem(OptionIdBase + 21, "AudienceShowInfoOverlay", true, TabGroup.SystemSettings)
+            .SetParent(Enabled);
+
+        InfoOverlayScale = new IntegerOptionItem(OptionIdBase + 22, "AudienceInfoOverlayScale", new(50, 400, 10), 150, TabGroup.SystemSettings)
+            .SetParent(ShowInfoOverlay)
+            .SetValueFormat(OptionFormat.Percent);
 
         BlackoutEnabled = new BooleanOptionItem(OptionIdBase + 7, "AudienceBlackoutEnabled", true, TabGroup.SystemSettings)
             .SetParent(Enabled);
