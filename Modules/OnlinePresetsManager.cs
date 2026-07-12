@@ -26,7 +26,11 @@ public static class OnlinePresetsManager
         float y = 2.0f;
 
         {
-            CategoryHeaderMasked header = HeaderCache.TryGetValue(0, out CategoryHeaderMasked cacheH0) ? cacheH0 : ModGameOptionsMenu.Track(Object.Instantiate(
+            // Fresh/dead-cache guard mirroring GameOptionsMenuPatch (BUG-20260706-01 round9 sibling sweep):
+            // SetHeader/SetUpFromData (native) re-instance masked materials on every call, so they must only
+            // run on freshly instantiated objects, and a scene-reload-destroyed cache entry must be rebuilt.
+            bool freshH0 = !(HeaderCache.TryGetValue(0, out CategoryHeaderMasked cacheH0) && cacheH0);
+            CategoryHeaderMasked header = !freshH0 ? cacheH0 : ModGameOptionsMenu.Track(Object.Instantiate(
                 menu.categoryHeaderOrigin,
                 Vector3.zero,
                 Quaternion.identity,
@@ -34,7 +38,7 @@ public static class OnlinePresetsManager
             ));
             HeaderCache[0] = header;
 
-            header.SetHeader(StringNames.RolesCategory, 20);
+            if (freshH0) header.SetHeader(StringNames.RolesCategory, 20);
             header.Title.DestroyTranslator();
             header.Title.text = Translator.GetString("UploadPresetHeader");
             header.transform.localScale = Vector3.one * 0.63f;
@@ -42,13 +46,14 @@ public static class OnlinePresetsManager
 
             y -= 0.8f;
 
-            StringOption upload = OptionBehaviourCache.TryGetValue(-1, out StringOption uploadCache) ? uploadCache : ModGameOptionsMenu.Track(Object.Instantiate(menu.stringOptionOrigin, Vector3.zero, Quaternion.identity, menu.settingsContainer));
+            bool freshUpload = !(OptionBehaviourCache.TryGetValue(-1, out StringOption uploadCache) && uploadCache);
+            StringOption upload = !freshUpload ? uploadCache : ModGameOptionsMenu.Track(Object.Instantiate(menu.stringOptionOrigin, Vector3.zero, Quaternion.identity, menu.settingsContainer));
             upload.name = nameof(OnlinePresetsManager) + ";" + Translator.GetString("UploadPreset");
             upload.transform.localPosition = new Vector3(0.952f, y, -2f);
             upload.SetClickMask(menu.ButtonClickMask);
-            upload.SetUpFromData(null, 20);
+            if (freshUpload) upload.SetUpFromData(null, 20);
 
-            if (uploadCache == null)
+            if (freshUpload)
             {
                 Object.Destroy(upload.transform.FindChild("Value_TMP (1)").gameObject);
                 Object.Destroy(upload.transform.FindChild("ValueBox").gameObject);
@@ -71,7 +76,8 @@ public static class OnlinePresetsManager
         }
 
         {
-            CategoryHeaderMasked header = HeaderCache.TryGetValue(1, out CategoryHeaderMasked cacheH1) ? cacheH1 : ModGameOptionsMenu.Track(Object.Instantiate(
+            bool freshH1 = !(HeaderCache.TryGetValue(1, out CategoryHeaderMasked cacheH1) && cacheH1);
+            CategoryHeaderMasked header = !freshH1 ? cacheH1 : ModGameOptionsMenu.Track(Object.Instantiate(
                 menu.categoryHeaderOrigin,
                 Vector3.zero,
                 Quaternion.identity,
@@ -79,7 +85,7 @@ public static class OnlinePresetsManager
             ));
             HeaderCache[1] = header;
 
-            header.SetHeader(StringNames.RolesCategory, 20);
+            if (freshH1) header.SetHeader(StringNames.RolesCategory, 20);
             header.Title.DestroyTranslator();
             header.Title.text = Translator.GetString("TabGroup.PresetExplorer");
             header.transform.localScale = Vector3.one * 0.63f;
@@ -91,13 +97,14 @@ public static class OnlinePresetsManager
         for (var index = 0; index < CachedPresets.Count; index++)
         {
             PresetMeta preset = CachedPresets[index];
-            StringOption row = OptionBehaviourCache.TryGetValue(index, out StringOption cacheRow) ? cacheRow : ModGameOptionsMenu.Track(Object.Instantiate(menu.stringOptionOrigin, Vector3.zero, Quaternion.identity, menu.settingsContainer));
+            bool freshRow = !(OptionBehaviourCache.TryGetValue(index, out StringOption cacheRow) && cacheRow);
+            StringOption row = !freshRow ? cacheRow : ModGameOptionsMenu.Track(Object.Instantiate(menu.stringOptionOrigin, Vector3.zero, Quaternion.identity, menu.settingsContainer));
             row.name = $"{nameof(OnlinePresetsManager)};{string.Format(Translator.GetString("OnlinePresetInfo"), preset.name, preset.author, (Utils.TimeStamp - (long)preset.created_at) / 86400, preset.downloads)}";
             row.transform.localPosition = new Vector3(0.952f, y, -2f);
             row.SetClickMask(menu.ButtonClickMask);
-            row.SetUpFromData(null, 20);
+            if (freshRow) row.SetUpFromData(null, 20);
 
-            if (cacheRow == null)
+            if (freshRow)
             {
                 Object.Destroy(row.transform.FindChild("Value_TMP (1)").gameObject);
                 Object.Destroy(row.transform.FindChild("ValueBox").gameObject);

@@ -811,13 +811,24 @@ public static class GuessManager
 
         try
         {
+            // GameObject.Find can't see the PhoneUI template while it's inactive, and Instantiate(null) NREs —
+            // the outer catch then swallowed it, so the guesser UI just silently never opened. Walk the
+            // MeetingHud hierarchy first (FindChild works on inactive objects; same path as MeetingHudPatch).
+            Transform phoneUI = __instance.meetingContents ? __instance.meetingContents.transform.FindChild("PhoneUI") : null;
+            if (!phoneUI) phoneUI = GameObject.Find("PhoneUI")?.transform;
+            if (!phoneUI)
+            {
+                Logger.Warn("PhoneUI template not found — guesser UI unavailable", "GuessManager");
+                return;
+            }
+
             Page = 1;
             RoleButtons = [];
             RoleSelectButtons = [];
             PageButtons = [];
             __instance.playerStates.ToList().ForEach(x => x.gameObject.SetActive(false));
 
-            Transform container = Object.Instantiate(GameObject.Find("PhoneUI").transform, __instance.transform);
+            Transform container = Object.Instantiate(phoneUI, __instance.transform);
             container.transform.localPosition = new Vector3(0, 0, -200f);
             GuesserUI = container.gameObject;
 

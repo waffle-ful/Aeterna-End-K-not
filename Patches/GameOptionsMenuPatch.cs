@@ -213,15 +213,22 @@ public static class GameOptionsMenuPatch
                             Logger.Info($"header rebuild: {option.Name} idx={index} tab={modTab} reason={(chmHadEntry ? "dead-cache" : "no-entry")}", "MenuLeak");
                         else EverBuiltHeaders.Add(index);
                         CategoryHeaderMasked categoryHeaderMasked = freshCHM ? ModGameOptionsMenu.Track(Object.Instantiate(__instance.categoryHeaderOrigin, Vector3.zero, Quaternion.identity, __instance.settingsContainer)) : cacheCHM;
-                        categoryHeaderMasked.SetHeader(StringNames.RolesCategory, 20);
+                        // SetHeader (native) re-instances the masked sprite/font materials on every call — running it
+                        // on a cached header leaked Material instances (DepthMaskedTexture/SDF "(Instance)") each menu
+                        // open (BUG-20260706-01 round8 ③). Mask setup and the one-time font styling (outlineWidth also
+                        // touches fontMaterial) only need to happen when the header is freshly instantiated.
+                        if (freshCHM)
+                        {
+                            categoryHeaderMasked.SetHeader(StringNames.RolesCategory, 20);
+                            var chmText = categoryHeaderMasked.transform.FindChild("HeaderText").GetComponent<TextMeshPro>();
+                            chmText.fontStyle = FontStyles.Bold | FontStyles.SmallCaps;
+                            chmText.fontWeight = FontWeight.Black;
+                            chmText.outlineWidth = 0.17f;
+                        }
                         categoryHeaderMasked.Title.SetText(option.GetName(disableColor: true).Trim('★', ' '));
                         categoryHeaderMasked.Background.color = categoryHeaderMasked.Divider.color = option.NameColor;
                         categoryHeaderMasked.transform.localScale = Vector3.one * 0.63f;
                         categoryHeaderMasked.transform.localPosition = new(-0.903f, num, posZ);
-                        var chmText = categoryHeaderMasked.transform.FindChild("HeaderText").GetComponent<TextMeshPro>();
-                        chmText.fontStyle = FontStyles.Bold | FontStyles.SmallCaps;
-                        chmText.fontWeight = FontWeight.Black;
-                        chmText.outlineWidth = 0.17f;
                         // Collider + click handler only on a freshly-instantiated header; re-running AddComponent and
                         // AddListener on a reused header stacks duplicate colliders/buttons/handlers every rebuild.
                         if (freshCHM)
@@ -260,7 +267,8 @@ public static class GameOptionsMenuPatch
                     // as absent and re-instantiated, or the reuse branch below touches a destroyed object and throws
                     // (per-item catch then swallows it → the row silently vanishes). Mirrors the L505/L513 guards.
                     bool rowHadEntry = ModGameOptionsMenu.BehaviourList.TryGetValue(index, out OptionBehaviour optionBehaviour);
-                    if (!rowHadEntry || !optionBehaviour)
+                    bool freshRow = !rowHadEntry || !optionBehaviour;
+                    if (freshRow)
                     {
                         if (!EverBuiltRows.Add(index))
                             Logger.Info($"row rebuild: {option.Name} idx={index} tab={modTab} reason={(rowHadEntry ? "dead-cache" : "no-entry")}", "MenuLeak");
@@ -290,13 +298,18 @@ public static class GameOptionsMenuPatch
 
                     optionBehaviour.transform.localPosition = new(0.952f, num, -2f);
                     optionBehaviour.SetClickMask(__instance.ButtonClickMask);
-                    optionBehaviour.SetUpFromData(baseGameSetting, 20);
+                    // SetUpFromData (native) re-instances the masked materials of every renderer/TMP in the row on
+                    // each call — this was the steady +380〜905 Material/(open+close) leak (BUG-20260706-01 round8 ③).
+                    // Only fresh rows need it (mask + data binding); reused rows get the same managed value refresh
+                    // that preset switches already rely on (RefreshSettingValues path), which touches no materials.
+                    if (freshRow) optionBehaviour.SetUpFromData(baseGameSetting, 20);
                     optionBehaviour.gameObject.SetActive(enabledOrNotCollapsed);
                     optionBehaviour.OnValueChanged = new Action<OptionBehaviour>(__instance.ValueChanged);
 
                     EverBuiltRows.Add(index);
                     ModGameOptionsMenu.OptionList[optionBehaviour] = index;
                     ModGameOptionsMenu.BehaviourList[index] = optionBehaviour;
+                    if (!freshRow) ReassertRowValue(optionBehaviour, option);
 
                     __instance.Children.Add(optionBehaviour);
                     option.OptionBehaviour = optionBehaviour;
@@ -321,6 +334,9 @@ public static class GameOptionsMenuPatch
                 __instance.ControllerSelectable.Add(x);
 
             Canvas.ForceUpdateCanvases();
+            // Cached toggle rows no longer pass through SetUpFromData→Initialize on reopen, so re-assert the
+            // theme colors here (a game-mode change while the menu was closed would otherwise leave them stale).
+            RefreshCheckMarkColors();
             BuildCoroutines.Remove(__instance);
         }
 
@@ -657,34 +673,41 @@ public static class GameOptionsMenuPatch
 
             // Re-apply the displayed value from the option's current value. Rows are reused across preset
             // switches without a rebuild, so without this the checkmarks / value texts keep showing the
-            // previous preset's values. Values are written directly (no UpdateValue) so no change
-            // notifications fire and nothing is synced from here.
-            switch (item)
-            {
-                case BooleanOptionItem when ob is ToggleOption toggleOption:
-                    if (toggleOption.CheckMark) toggleOption.CheckMark.enabled = item.GetBool();
-                    break;
-                case StringOptionItem stringOptionItem when ob is StringOption stringOption:
-                    stringOption.Value = stringOption.oldValue = stringOptionItem.GetInt();
-                    string selection = stringOptionItem.Selections[stringOptionItem.Rule.GetValueByIndex(stringOption.Value)];
-                    if (!stringOptionItem.noTranslation) selection = Translator.GetString(selection);
-                    stringOption.ValueText.SetText(selection);
-                    // Restore the styled title (role color band / pet indicator) — reused rows can end up
-                    // showing the plain unstyled name after preset switches (upstream #637 NameCache fix).
-                    if (!StringOptionPatch.NameCache.TryGetValue(stringOption, out string cachedName))
-                        stringOption.Initialize();
-                    else
-                        stringOption.TitleText.SetText(cachedName);
-                    break;
-                case FloatOptionItem or IntegerOptionItem when ob is NumberOption numberOption:
-                    numberOption.Value = item.GetFloat();
-                    break;
-            }
+            // previous preset's values.
+            ReassertRowValue(ob, item);
         }
 
         // Do NOT touch activeTab.scrollBar here: ReloadUI already ran ReCreateSettings on every tab, which sets
         // each scrollbar's bound from its real content height. A fixed bound here would clamp the active tab's
         // scroll to nothing (scrollbar disappears) — that was the "System Settings can't scroll" bug.
+    }
+
+    // Managed-only display refresh for a reused row. Shared by RefreshSettingValues (preset switches) and the
+    // cached-row path in CreateSettings (menu reopen) — must never touch native SetUpFromData/materials.
+    // Values are written directly (no UpdateValue) so no change notifications fire and nothing is synced from here.
+    public static void ReassertRowValue(OptionBehaviour ob, OptionItem item)
+    {
+        switch (item)
+        {
+            case BooleanOptionItem when ob is ToggleOption toggleOption:
+                if (toggleOption.CheckMark) toggleOption.CheckMark.enabled = item.GetBool();
+                break;
+            case StringOptionItem stringOptionItem when ob is StringOption stringOption:
+                stringOption.Value = stringOption.oldValue = stringOptionItem.GetInt();
+                string selection = stringOptionItem.Selections[stringOptionItem.Rule.GetValueByIndex(stringOption.Value)];
+                if (!stringOptionItem.noTranslation) selection = Translator.GetString(selection);
+                stringOption.ValueText.SetText(selection);
+                // Restore the styled title (role color band / pet indicator) — reused rows can end up
+                // showing the plain unstyled name after preset switches (upstream #637 NameCache fix).
+                if (!StringOptionPatch.NameCache.TryGetValue(stringOption, out string cachedName))
+                    stringOption.Initialize();
+                else
+                    stringOption.TitleText.SetText(cachedName);
+                break;
+            case FloatOptionItem or IntegerOptionItem or PresetOptionItem when ob is NumberOption numberOption:
+                numberOption.Value = item.GetFloat();
+                break;
+        }
     }
 
     public static void RefreshTabButtons()
@@ -1490,7 +1513,16 @@ public static class GameSettingMenuPatch
                 __instance.ControllerSelectable.Add(button);
         }
 
-        SetupExtendedUI(__instance);
+        // Isolated: an exception inside the extended UI (e.g. BUG-20260712-01's template NRE) must not
+        // abort the rest of the menu build. XuiStage pinpoints the failing section — the native get_name
+        // NRE (2026-07-12 12:42 実機) erases line info at the IL2CPP boundary, so a breadcrumb is the
+        // only way to attribute it.
+        try { SetupExtendedUI(__instance); }
+        catch (Exception e)
+        {
+            Logger.Warn($"SetupExtendedUI failed at stage '{XuiStage}': {e.Message}", "MenuLeak");
+            Utils.ThrowException(e);
+        }
 
         if (NewRoleMenuState.Active)
         {
@@ -1532,30 +1564,47 @@ public static class GameSettingMenuPatch
         }
     }
 
+    // Breadcrumb for the StartPostfix catch — which SetupExtendedUI section was running when it threw.
+    private static string XuiStage = "-";
+
     // Thanks: Drakos for the preset button and search bar code (https://github.com/0xDrMoe/TownofHost-Enhanced/pull/1115)
     private static void SetupExtendedUI(GameSettingMenu __instance)
     {
+        XuiStage = "enter";
         Transform parentLeftPanel = __instance.GamePresetsButton.transform.parent;
         bool russian = TranslationController.Instance.currentLanguage.languageID == SupportedLangs.Russian;
 
         // The preset selector (ModeValue clone + - / + buttons) is created once and cached, then reattached
         // on every reopen — mirroring the GMButtons / InputField caching below — so it no longer leaks per open.
-        GameObject preset, gMinus, plusFab;
-        TextMeshPro plusLabel;
+        GameObject preset = null, gMinus = null, plusFab = null;
+        TextMeshPro plusLabel = null;
 
         if (PresetSelector)
         {
+            XuiStage = "preset-cached";
             preset = PresetSelector;
             preset.transform.SetParent(parentLeftPanel, false);
             preset.SetActive(true);
             gMinus = PresetMinusButton;
             plusFab = PresetPlusButton;
-            plusLabel = plusFab.transform.Find("FontPlacer/Text_TMP").GetComponent<TextMeshPro>();
+            plusLabel = plusFab ? plusFab.transform.Find("FontPlacer/Text_TMP").GetComponent<TextMeshPro>() : null;
             if (PresetValueText) PresetValueText.SetText(Translator.GetString($"Preset_{OptionItem.CurrentPreset + 1}"));
         }
         else
         {
-            preset = ModGameOptionsMenu.Track(Object.Instantiate(GameObject.Find("ModeValue"), parentLeftPanel));
+            // BUG-20260712-01: the vanilla "ModeValue"/"MinusButton" templates aren't always findable
+            // (GameObject.Find only sees active objects) and Instantiate(null) NREs inside get_name,
+            // killing the rest of the menu build. Isolate the whole preset build: on any failure, drop
+            // the half-built selector and carry on without a preset UI for this open (next open retries).
+            try
+            {
+            XuiStage = "preset-fresh";
+            GameObject modeValueTemplate = GameObject.Find("ModeValue");
+            GameObject minusTemplate = GameObject.Find("MinusButton");
+            if (!modeValueTemplate || !minusTemplate)
+                throw new InvalidOperationException($"vanilla templates missing (ModeValue={(bool)modeValueTemplate}, MinusButton={(bool)minusTemplate})");
+
+            preset = ModGameOptionsMenu.Track(Object.Instantiate(modeValueTemplate, parentLeftPanel));
 
             preset.transform.localPosition = new(-1.8f, 0f, -2f);
             preset.transform.localScale = new(0.65f, 0.63f, 1f);
@@ -1572,7 +1621,7 @@ public static class GameSettingMenuPatch
             presetTmp.fontSizeMax = presetTmp.fontSizeMin = size;
 
 
-            GameObject tempMinus = GameObject.Find("MinusButton").gameObject;
+            GameObject tempMinus = minusTemplate;
             gMinus = ModGameOptionsMenu.Track(Object.Instantiate(__instance.GamePresetsButton.gameObject, preset.transform));
             gMinus.gameObject.SetActive(true);
             gMinus.transform.localScale = new(0.08f, 0.4f, 1f);
@@ -1643,12 +1692,31 @@ public static class GameSettingMenuPatch
             PresetSelector = preset;
             PresetMinusButton = gMinus;
             PresetPlusButton = plusFab;
+            }
+            catch (Exception e)
+            {
+                Logger.Warn($"preset selector build failed — skipping preset UI this open: {e.Message}", "MenuLeak");
+                if (preset) Object.Destroy(preset); // don't leave a half-built selector in the scene
+                preset = null;
+                gMinus = null;
+                plusFab = null;
+                plusLabel = null;
+            }
         }
 
 
-        GameObject.Find("PlayerOptionsMenu(Clone)").transform.FindChild("What Is This?").gameObject.SetActive(false);
+        XuiStage = "what-is-this";
+        Transform whatIsThis = GameObject.Find("PlayerOptionsMenu(Clone)")?.transform.FindChild("What Is This?");
+        if (whatIsThis) whatIsThis.gameObject.SetActive(false);
 
-        var gameSettingsLabel = __instance.GameSettingsButton.transform.parent.parent.FindChild("GameSettingsLabel").GetComponent<TextMeshPro>();
+        XuiStage = "mode-label";
+        Transform gslTf = __instance.GameSettingsButton.transform.parent.parent.FindChild("GameSettingsLabel");
+        if (!gslTf)
+        {
+            Logger.Warn("GameSettingsLabel not found — skipping mode label + game-mode buttons", "MenuLeak");
+            return;
+        }
+        var gameSettingsLabel = gslTf.GetComponent<TextMeshPro>();
         gameSettingsLabel.DestroyTranslator();
         gameSettingsLabel.SetText($"<size=50%>{Translator.GetString($"Mode{Options.CurrentGameMode}")}</size>\n");
         GameModeLabelText = gameSettingsLabel;
@@ -1683,8 +1751,12 @@ public static class GameSettingMenuPatch
         {
             CustomGameMode gm = gms[index];
 
+            XuiStage = $"gm-buttons[{index}]";
             bool cachedGM = index < GMButtons.Count && GMButtons[index];
-            var gmButton = cachedGM ? GMButtons[index] : ModGameOptionsMenu.Track(Object.Instantiate(gMinus, gameSettingsLabel.transform, true));
+            // gMinus can be null when the preset-selector build was skipped above; fall back to the raw
+            // GamePresetsButton so the game-mode buttons still exist (slightly plainer look, never an NRE).
+            GameObject gmTemplate = gMinus ? gMinus : __instance.GamePresetsButton.gameObject;
+            var gmButton = cachedGM ? GMButtons[index] : ModGameOptionsMenu.Track(Object.Instantiate(gmTemplate, gameSettingsLabel.transform, true));
             if (cachedGM)
                 gmButton.transform.SetParent(gameSettingsLabel.transform, false);
             gmButton.SetActive(true);
@@ -1713,8 +1785,11 @@ public static class GameSettingMenuPatch
             }));
             gmPassiveButton.activeTextColor = gmPassiveButton.inactiveTextColor = gmPassiveButton.disabledTextColor = gmPassiveButton.selectedTextColor = Main.GameModeColors[gm];
 
-            if (!cachedGM) GMButtons.Add(gmButton);
-            else GMButtons[index] = gmButton;
+            // dead-cache slot must be REPLACED in place. Appending instead grew the list past gms.Count, and
+            // the trim loop below then destroyed the freshly-created buttons from the tail while the dead
+            // entries stayed — the "menu empty after DC→rehost" state (BUG-20260706-01 round8 ②/⑤).
+            if (index < GMButtons.Count) GMButtons[index] = gmButton;
+            else GMButtons.Add(gmButton);
         }
 
         while (GMButtons.Count > gms.Count)
@@ -1726,6 +1801,7 @@ public static class GameSettingMenuPatch
 
         if (!HudManager.InstanceExists) return;
 
+        XuiStage = "search-field";
         bool cachedInputField = InputField;
         FreeChatInputField field;
         if (cachedInputField)
@@ -1737,6 +1813,11 @@ public static class GameSettingMenuPatch
         else
         {
             FreeChatInputField freeChatField = HudManager.Instance.Chat.freeChatField;
+            if (!freeChatField)
+            {
+                Logger.Warn("freeChatField unavailable — skipping the option search box this open", "MenuLeak");
+                return;
+            }
             field = ModGameOptionsMenu.Track(Object.Instantiate(freeChatField, parentLeftPanel.parent));
 
             // Object.Instantiate deep-clones the whole chat field. If the chat command-autocomplete ghost
@@ -1753,7 +1834,7 @@ public static class GameSettingMenuPatch
         field.transform.localScale = new(0.3f, 0.59f, 1);
         field.transform.localPosition = new(-0.7f, -2.5f, -5f);
         field.textArea.outputText.transform.localScale = new(3.5f, 2f, 1f);
-        field.textArea.outputText.font = plusLabel.font;
+        if (plusLabel) field.textArea.outputText.font = plusLabel.font;
 
         InputField = field;
 
@@ -2044,34 +2125,73 @@ public static class GameSettingMenuPatch
             GameOptionsMenuPatch.ReCreateAllCoroutine = null;
         }
 
-        // Unity-null ガード必須: rehost/シーン再ロードで破棄された個体が dict に残ると、SetTempParent 内の
-        // !go ガードに届く前に引数評価 x.gameObject が Il2CppException を投げ、この時点で退避ループ全体が
-        // アボート → 以降の GMButtons(モード名ラベル)等が非表示・退避されず active のままシーンに残留する
-        // (結果画面への漏れ + 次オープンで再生成され旧個体が回収されず累積)。直下の GMButtons ループと同形。
-        foreach (var x in ModSettingsTabs.Values) if (x) SetTempParent(x.gameObject);
-        foreach (var x in ModSettingsButtons.Values) if (x) SetTempParent(x.gameObject);
+        // Unity-null ガード + each-item 例外隔離 (BUG-20260706-01 round8 ①): rehost/シーン再ロードで
+        // 破棄された個体が dict に残ると、`if (x)` の生存チェック後でも IL2CPP 側の破棄タイミング次第で
+        // 引数評価 x.gameObject が Il2CppException を投げ得る。1個の失敗で退避ループ全体がアボートすると、
+        // 以降の GMButtons(モード名ラベル)等が非表示・退避されず active のままシーンに残留する
+        // (結果画面への漏れ + 次オープンで再生成され旧個体が回収されず累積)。項目単位で隔離する。
+        foreach (var x in ModSettingsTabs.Values) StashSafely(() => x ? x.gameObject : null, "ModSettingsTabs");
+        foreach (var x in ModSettingsButtons.Values) StashSafely(() => x ? x.gameObject : null, "ModSettingsButtons");
 
         // Clear GMButton listeners before hiding them so they can't fire stale callbacks
         foreach (var x in GMButtons)
         {
-            if (x)
+            StashSafely(() =>
             {
-                var pb = x.GetComponent<PassiveButton>();
-                if (pb) pb.OnClick.RemoveAllListeners();
-            }
-            SetTempParent(x);
+                if (x)
+                {
+                    var pb = x.GetComponent<PassiveButton>();
+                    if (pb) pb.OnClick.RemoveAllListeners();
+                }
+                return x;
+            }, "GMButtons");
         }
-        if (InputField) SetTempParent(InputField.gameObject);
-        SetTempParent(PresetSelector); // preset selector trio — kept alive so it isn't re-created (and re-Tracked) each open
-        if (TemplateGameOptionsMenu) SetTempParent(TemplateGameOptionsMenu.gameObject);
-        if (TemplateGameSettingsButton) SetTempParent(TemplateGameSettingsButton.gameObject);
+        StashSafely(() => InputField ? InputField.gameObject : null, "InputField");
+        StashSafely(() => PresetSelector, "PresetSelector"); // preset selector trio — kept alive so it isn't re-created (and re-Tracked) each open
+        StashSafely(() => TemplateGameOptionsMenu ? TemplateGameOptionsMenu.gameObject : null, "TemplateGameOptionsMenu");
+        StashSafely(() => TemplateGameSettingsButton ? TemplateGameSettingsButton.gameObject : null, "TemplateGameSettingsButton");
+
+        // 行/ヘッダを含む退避 UI にはこれまで Destroy 経路が存在せず、キャッシュ dict から外れた世代が
+        // TempParent 配下に孤児として永久残留していた (round8 ④の +2万GO級ジャンプの受け皿)。close の
+        // たびに TempParent 直下を白リスト照合し、どの cache からも参照されない個体を破棄する。
+        try
+        {
+            System.Collections.Generic.HashSet<int> keep = [];
+            foreach (var x in ModSettingsTabs.Values) if (x) keep.Add(x.gameObject.GetInstanceID());
+            foreach (var x in ModSettingsButtons.Values) if (x) keep.Add(x.gameObject.GetInstanceID());
+            foreach (var x in GMButtons) if (x) keep.Add(x.GetInstanceID());
+            if (InputField) keep.Add(InputField.gameObject.GetInstanceID());
+            if (PresetSelector) keep.Add(PresetSelector.GetInstanceID());
+            if (TemplateGameOptionsMenu) keep.Add(TemplateGameOptionsMenu.gameObject.GetInstanceID());
+            if (TemplateGameSettingsButton) keep.Add(TemplateGameSettingsButton.gameObject.GetInstanceID());
+
+            var orphans = 0;
+            for (int i = TempParent.childCount - 1; i >= 0; i--)
+            {
+                GameObject child = TempParent.GetChild(i).gameObject;
+                if (!keep.Contains(child.GetInstanceID()))
+                {
+                    orphans++;
+                    Object.Destroy(child);
+                }
+            }
+
+            if (orphans > 0) Logger.Info($"orphan sweep: destroyed {orphans} unreferenced cached object(s)", "MenuLeak");
+        }
+        catch (Exception e) { Logger.Warn($"orphan sweep failed: {e.Message}", "MenuLeak"); }
+
         return;
 
-        void SetTempParent(GameObject go)
+        void StashSafely(Func<GameObject> resolve, string what)
         {
-            if (!go) return;
-            go.transform.SetParent(TempParent, false);
-            go.SetActive(false);
+            try
+            {
+                GameObject go = resolve();
+                if (!go) return;
+                go.transform.SetParent(TempParent, false);
+                go.SetActive(false);
+            }
+            catch (Exception e) { Logger.Warn($"stash {what} failed: {e.Message}", "MenuLeak"); }
         }
     }
     [HarmonyPatch(nameof(GameSettingMenu.Close))]
@@ -2101,6 +2221,21 @@ public static class GameSettingMenuPatch
                 Options.FallBackKillCooldownValue.SetValue((int)Math.Round((Math.Round(vanillaKillCooldown, 1) / 0.5f) - 1));
         }
         catch (Exception e) { Utils.ThrowException(e); }
+
+        // Each menu open+close orphans material instances (the vanilla menu masks its own panels with
+        // fresh "(Instance)" materials and is then destroyed — destroying a renderer never destroys its
+        // instanced material). They are only reclaimed by Resources.UnloadUnusedAssets, which used to run
+        // no earlier than the next game start / meeting, so lobby-idle menu fiddling accumulated
+        // ~+400-1000 mat per cycle (BUG-20260706-01 round9 実測)。 Reclaim right after the close instead.
+        // Same GC trio as OnGameStartedPatch/MeetingHudPatch; cached sprites are HideAndDontSave-protected.
+        LateTask.New(() =>
+        {
+            if (GameSettingMenu.Instance || !GameStates.IsLobby) return; // reopened quickly / not idling in lobby
+            GC.Collect();
+            Resources.UnloadUnusedAssets();
+            GC.Collect();
+            Logger.Info("post-close unload of orphaned UI assets", "MenuLeak");
+        }, 1.5f, log: false);
 
         try
         {
