@@ -484,6 +484,9 @@ public class Main : BasePlugin
         AddComponent<EndKnot.Modules.YouTubeChat.YouTubeChatBubble>();
         Log.LogInfo("YouTubeChatBubble registered");
 
+        AddComponent<EndKnot.Modules.StreamOverlay.LobbyCodeBubble>();
+        Log.LogInfo("LobbyCodeBubble registered");
+
         coroutines = AddComponent<Coroutines>();
         Logger.Enable();
         Logger.Disable("NotifyRoles");

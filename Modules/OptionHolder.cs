@@ -1664,6 +1664,8 @@ public static class Options
 
         Modules.YouTubeChat.YouTubeChatOptions.SetupCustomOption();
 
+        Modules.StreamOverlay.LobbyCodeBubbleOptions.SetupCustomOption();
+
         LoadingPercentage = 61;
 
         AutoKickStart = new BooleanOptionItem(19310, "AutoKickStart", false, TabGroup.SystemSettings);
