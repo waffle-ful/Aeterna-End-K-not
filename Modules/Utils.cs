@@ -5064,7 +5064,8 @@ public static class Utils
     {
         try
         {
-            if (CachedSprites.TryGetValue(path + pixelsPerUnit, out Sprite sprite)) return sprite;
+            // 破棄済み (fake-null) はキャッシュミス扱いで再生成する (CustomSounds.audioCache と同じ罠への二重安全弁)。
+            if (CachedSprites.TryGetValue(path + pixelsPerUnit, out Sprite sprite) && sprite) return sprite;
 
             Texture2D texture = LoadTextureFromResources(path);
             if (texture == null) return null; // リソース欠落(例: 未用意の EHR-Icon.png)。LoadTextureFromResources 側で記録済みなので静かに返す

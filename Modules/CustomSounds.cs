@@ -142,9 +142,13 @@ public static class CustomSoundsManager
     }
 
     // path 単位でデコード結果をキャッシュしつつ AudioClip を返す (初回のみデコード)。
+    // シーン遷移 (ゲーム終了→ロビー等) の暗黙 UnloadUnusedAssets は、managed dict からしか参照されていない
+    // AudioClip をネイティブ側で破棄する。破棄済みクリップは Play 側の `if (clip)` が黙って false になり
+    // 「ログは出るのに無音」になる (2026-07-14 実機確認) ため、fake-null を検出して再デコードし、
+    // 以後は DontUnloadUnusedAsset で保護する。
     private static AudioClip LoadClip(string path)
     {
-        if (!audioCache.TryGetValue(path, out var clip))
+        if (!audioCache.TryGetValue(path, out var clip) || !clip)
         {
             string ext = Path.GetExtension(path).ToLowerInvariant();
             clip = ext switch
@@ -153,6 +157,7 @@ public static class CustomSoundsManager
                 ".mp3" => LoadMP3(path),
                 _ => LoadWAV(path)
             };
+            if (clip) clip.hideFlags |= HideFlags.DontUnloadUnusedAsset;
             audioCache[path] = clip;
         }
 
