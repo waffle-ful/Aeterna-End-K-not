@@ -131,6 +131,8 @@ internal static class EndGamePatch
             Main.WinnerNameList.Add(pc.GetRealName());
         }
 
+        try { EndKnot.Modules.Companion.CompanionEventEmitter.OnGameEnd(CustomWinnerHolder.WinnerTeam, Main.WinnerNameList); } catch { } // AI実況相棒アプリ向けイベント (OFF 時は即 return)
+
         Arsonist.IsDoused = [];
         Revolutionist.IsDraw = [];
         Investigator.IsRevealed = [];

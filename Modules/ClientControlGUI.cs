@@ -109,6 +109,9 @@ public class ClientControlGUI : MonoBehaviour
     private void OnApplicationQuit()
     {
         WatchdogLauncher.OnGameQuit();
+
+        // 相棒アプリ (AI実況) は AU の子プロセスなので、正常終了時はここで明示的に畳む。
+        EndKnot.Modules.Companion.CompanionLauncher.OnGameQuit();
     }
 
     // Resets HUD visibility flag on scene change; HudManager is recreated each load so its new instance is always active

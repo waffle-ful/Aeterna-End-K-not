@@ -66,6 +66,9 @@
         <EmbeddedResource Include="$(PkgNLayer)\lib\netstandard2.0\NLayer.dll" LogicalName="EndKnot.Resources.Libs.NLayer.dll" />
         <!-- 外部ウォッチドッグ(番犬)スクリプト。ゲーム内ボタンから起動時にディスクへ書き出して使う。 -->
         <EmbeddedResource Include="tools\EndKnotWatchdog.ps1" LogicalName="EndKnot.Resources.EndKnotWatchdog.ps1" />
+        <!-- AI実況相棒アプリ。EnableAICommentary ON でディスクへ書き出して子プロセス起動する。 -->
+        <EmbeddedResource Include="tools\companion\companion.py" LogicalName="EndKnot.Resources.Companion.companion.py" />
+        <EmbeddedResource Include="tools\companion\requirements.txt" LogicalName="EndKnot.Resources.Companion.requirements.txt" />
     </ItemGroup>
 
     <ItemGroup>

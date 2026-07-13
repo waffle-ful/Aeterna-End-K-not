@@ -451,6 +451,12 @@ tools/*
 !tools/stream-report.ps1
 # ...and the AI commentary companion app, which streamers run alongside the mod (API key stays in each user's env).
 !tools/companion/
+# ...but not its runtime artifacts (subtitles / speaking flag / per-user persona / bytecode).
+tools/companion/subtitle.txt
+tools/companion/speaking.txt
+tools/companion/companion-log.jsonl
+tools/companion/persona.txt
+tools/companion/__pycache__/
 
 # Build output (custom -o build/)
 build/

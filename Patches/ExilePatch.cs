@@ -17,7 +17,9 @@ internal static class ExileControllerWrapUpPatch
     public static void WrapUpPostfix(NetworkedPlayerInfo exiled)
     {
         if (!AmongUsClient.Instance.AmHost) return;
-        
+
+        try { EndKnot.Modules.Companion.CompanionEventEmitter.OnEject(exiled); } catch { } // AI実況相棒アプリ向けイベント (OFF 時は即 return)
+
         var decidedWinner = false;
 
         if (!Collector.CollectorWin(false) && exiled != null)
