@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using UnityEngine;
 
 namespace EndKnot.Modules.Audience;
@@ -10,6 +11,11 @@ namespace EndKnot.Modules.Audience;
 public class AudienceCutscene : MonoBehaviour
 {
     private const float Duration = 3.4f;
+
+    // 大地震の効果音は地震 (カメラシェイク) の長さに合わせて鳴らし、末尾を絞って揺れの終息とほぼ同時に消す。
+    // EarthquakeSoundDuration は AudienceInterventions.QuakeCameraShakeDuration (6s) に対応させている。
+    private const float EarthquakeSoundDuration = 6f; // これを過ぎたら確実に停止する上限
+    private const float EarthquakeSoundFade = 2.5f;   // 終了 2.5 秒前から線形フェードアウト
 
     // ---- 再生中の表示状態 (Play で一括構築し OnGUI では描くだけ — 毎フレ文字列生成禁止) ----
     private static bool _active;
@@ -45,10 +51,69 @@ public class AudienceCutscene : MonoBehaviour
         _active = true;
 
         // 干渉専用のショック効果音をホストローカル再生する (本物の会議招集と音でも区別が付くように)。
-        // 既存のカスタム効果音基盤 (Modules/CustomSounds.cs) に相乗り — 埋込リソース
-        // EndKnot.Resources.Sounds.AudienceShock.ogg を読んで SoundManager で鳴らす (送信ゼロ)。
-        CustomSoundsManager.Play("AudienceShock");
+        // 既存のカスタム効果音基盤 (Modules/CustomSounds.cs) に相乗り — 埋込リソースを
+        // 読んで SoundManager で鳴らす (送信ゼロ)。干渉種別ごとに専用の効果音を割り当てる。
+        string sound = SoundFor(kindKey);
+        if (kindKey == "Earthquake")
+            // 大地震だけは地震演出 (6s) に合わせて末尾をフェードアウトさせたいので AudioSource 制御経路で鳴らす。
+            PlayFadingSound(sound, EarthquakeSoundDuration, EarthquakeSoundFade);
+        else
+            CustomSoundsManager.Play(sound);
     }
+
+    // 干渉種別ごとの効果音名 (Resources/Sounds/<name>.{ogg,mp3,wav} に対応)。
+    // 大地震は土砂崩れの専用音、それ以外は共通のショック音。
+    private static string SoundFor(string kindKey) => kindKey switch
+    {
+        "Earthquake" => "Earthquake",
+        _ => "AudienceShock"
+    };
+
+    // AudioSource を掴んで鳴らし、末尾 fade 秒をかけて音量を 0 に絞ってから停止する。
+    // ワンショット (PlaySoundImmediate) だと地震演出が終わっても土砂崩れ音が鳴り続けるための対策。
+    private static void PlayFadingSound(string sound, float duration, float fade)
+    {
+        AudioSource src = CustomSoundsManager.PlayControllable(sound);
+        if (src == null) return;
+
+        if (Main.Instance != null)
+            Main.Instance.StartCoroutine(FadeSoundRoutine(src, duration, fade));
+    }
+
+    private static IEnumerator FadeSoundRoutine(AudioSource src, float duration, float fade)
+    {
+        if (src == null) yield break;
+
+        // SoundManager.PlaySound はプール済み AudioSource を再利用するため、フェード中にこの source が
+        // 別の効果音 (キル音・他の干渉音など) に採用されることがある。そのまま絞り続けると無関係な音を
+        // 巻き添えで無音化してしまう (BGMManager.IsAdoptedAsCurrent と同じ罠) ので、掴んだ時点のクリップから
+        // 変わっていたら以降は一切触らない。
+        AudioClip startClip = src.clip;
+        float startVol = src.volume;
+        for (float t = 0f; t < duration; t += Time.deltaTime)
+        {
+            if (src == null || !IsStillOurSound(src, startClip)) yield break;
+
+            // 会議割込・追放・ゲーム終了で即打ち切り (カメラシェイクの停止条件と揃える — 本編の裏で鳴らし続けない)。
+            if (!GameStates.InGame || GameStates.IsMeeting || ExileController.Instance)
+            {
+                src.Stop();
+                yield break;
+            }
+
+            // 残り fade 秒に入ったら線形で 0 まで絞る。それより前は原音量を保つ。
+            float remaining = duration - t;
+            src.volume = remaining >= fade ? startVol : startVol * Mathf.Clamp01(remaining / fade);
+            yield return null;
+        }
+
+        if (src != null && IsStillOurSound(src, startClip)) { src.volume = 0f; src.Stop(); }
+    }
+
+    // フェード対象の AudioSource が、掴んだ時点と同じクリップを鳴らし続けているか (プール再利用で別の音に
+    // 差し替わっていないか) を判定する。差し替わっていたら以降は volume/Stop を触ってはいけない。
+    private static bool IsStillOurSound(AudioSource src, AudioClip startClip)
+        => startClip != null && src.clip != null && src.clip.Pointer == startClip.Pointer;
 
     // ---- ホストローカルのカメラシェイク ----
     // バニラ FollowerCamera.ShakeScreen は設定の「画面シェイク」OFF だと OverrideScreenShakeEnabled を
