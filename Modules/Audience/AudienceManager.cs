@@ -21,10 +21,14 @@ public static class AudienceManager
         Doors,
         Curse,
         Bless,
-        Meteor
+        Meteor,
+        Earthquake,
+        Voice,
+        FakeBody
     }
 
-    private readonly record struct QueuedIntervention(InterventionKind Kind, string Author, byte TargetId);
+    // Text は !天の声 のメッセージ本文にのみ使う (他コマンドは null)。
+    private readonly record struct QueuedIntervention(InterventionKind Kind, string Author, byte TargetId, string Text = null);
 
     private static readonly ConcurrentQueue<QueuedChatMessage> IncomingMessages = new();
     private static readonly Queue<QueuedIntervention> InterventionQueue = new();
@@ -62,7 +66,15 @@ public static class AudienceManager
         ["祝福"] = InterventionKind.Bless,
         ["bless"] = InterventionKind.Bless,
         ["隕石"] = InterventionKind.Meteor,
-        ["meteor"] = InterventionKind.Meteor
+        ["meteor"] = InterventionKind.Meteor,
+        ["大地震"] = InterventionKind.Earthquake,
+        ["地震"] = InterventionKind.Earthquake,
+        ["earthquake"] = InterventionKind.Earthquake,
+        ["quake"] = InterventionKind.Earthquake,
+        ["天の声"] = InterventionKind.Voice,
+        ["voice"] = InterventionKind.Voice,
+        ["偽死体"] = InterventionKind.FakeBody,
+        ["fakebody"] = InterventionKind.FakeBody
     };
 
     public static void EnsureSubscribed()
@@ -91,6 +103,9 @@ public static class AudienceManager
             try { HandleIncomingMessage(msg.Author, msg.Text); }
             catch (Exception ex) { Logger.Exception(ex, "AudienceManager.HandleIncomingMessage"); }
         }
+
+        // 地震の分散 TP ドレイン。無効時もキュー破棄のために呼ぶ。
+        AudienceInterventions.OnTick(enabled);
 
         if (!enabled)
         {
@@ -142,6 +157,13 @@ public static class AudienceManager
                 InterventionQueue.Enqueue(new QueuedIntervention(kind, author, target.PlayerId));
                 break;
             }
+            case InterventionKind.Voice:
+            {
+                if (parts.Length < 2) return;
+                string message = string.Join(' ', parts, 1, parts.Length - 1);
+                InterventionQueue.Enqueue(new QueuedIntervention(kind, author, byte.MaxValue, message));
+                break;
+            }
             default:
                 InterventionQueue.Enqueue(new QueuedIntervention(kind, author, byte.MaxValue));
                 break;
@@ -186,6 +208,9 @@ public static class AudienceManager
             InterventionKind.Curse => (AudienceOptions.CurseEnabled, AudienceOptions.CursePrice),
             InterventionKind.Bless => (AudienceOptions.BlessEnabled, AudienceOptions.BlessPrice),
             InterventionKind.Meteor => (AudienceOptions.MeteorEnabled, AudienceOptions.MeteorPrice),
+            InterventionKind.Earthquake => (AudienceOptions.EarthquakeEnabled, AudienceOptions.EarthquakePrice),
+            InterventionKind.Voice => (AudienceOptions.VoiceEnabled, AudienceOptions.VoicePrice),
+            InterventionKind.FakeBody => (AudienceOptions.FakeBodyEnabled, AudienceOptions.FakeBodyPrice),
             _ => (null, null)
         };
 
@@ -222,6 +247,9 @@ public static class AudienceManager
             InterventionKind.Curse => AudienceInterventions.DoCurse(item.TargetId),
             InterventionKind.Bless => AudienceInterventions.DoBless(item.TargetId),
             InterventionKind.Meteor => AudienceInterventions.DoMeteor(),
+            InterventionKind.Earthquake => AudienceInterventions.DoEarthquake(),
+            InterventionKind.Voice => AudienceInterventions.DoVoice(item.Author, item.Text),
+            InterventionKind.FakeBody => AudienceInterventions.DoFakeBody(),
             _ => false
         };
 

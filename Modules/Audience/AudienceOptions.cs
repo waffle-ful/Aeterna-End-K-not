@@ -1,6 +1,6 @@
 namespace EndKnot.Modules.Audience;
 
-// オプション一式。SystemSettings タブ配下、ID 範囲 44710〜44733。
+// オプション一式。SystemSettings タブ配下、ID 範囲 44710〜44739。
 // Enabled は default OFF。YouTubeChatOptions/LobbyCodeBubbleOptions 隣接に並べる想定。
 public static class AudienceOptions
 {
@@ -32,6 +32,12 @@ public static class AudienceOptions
     public static OptionItem BlessPrice;
     public static OptionItem MeteorEnabled;
     public static OptionItem MeteorPrice;
+    public static OptionItem EarthquakeEnabled;
+    public static OptionItem EarthquakePrice;
+    public static OptionItem VoiceEnabled;
+    public static OptionItem VoicePrice;
+    public static OptionItem FakeBodyEnabled;
+    public static OptionItem FakeBodyPrice;
 
     public static void SetupCustomOption()
     {
@@ -114,5 +120,23 @@ public static class AudienceOptions
 
         MeteorPrice = new IntegerOptionItem(OptionIdBase + 20, "AudienceMeteorPrice", new(0, 10000, 10), 200, TabGroup.SystemSettings)
             .SetParent(MeteorEnabled);
+
+        EarthquakeEnabled = new BooleanOptionItem(OptionIdBase + 24, "AudienceEarthquakeEnabled", true, TabGroup.SystemSettings)
+            .SetParent(Enabled);
+
+        EarthquakePrice = new IntegerOptionItem(OptionIdBase + 25, "AudienceEarthquakePrice", new(0, 10000, 10), 300, TabGroup.SystemSettings)
+            .SetParent(EarthquakeEnabled);
+
+        VoiceEnabled = new BooleanOptionItem(OptionIdBase + 26, "AudienceVoiceEnabled", true, TabGroup.SystemSettings)
+            .SetParent(Enabled);
+
+        VoicePrice = new IntegerOptionItem(OptionIdBase + 27, "AudienceVoicePrice", new(0, 10000, 10), 150, TabGroup.SystemSettings)
+            .SetParent(VoiceEnabled);
+
+        FakeBodyEnabled = new BooleanOptionItem(OptionIdBase + 28, "AudienceFakeBodyEnabled", true, TabGroup.SystemSettings)
+            .SetParent(Enabled);
+
+        FakeBodyPrice = new IntegerOptionItem(OptionIdBase + 29, "AudienceFakeBodyPrice", new(0, 10000, 10), 250, TabGroup.SystemSettings)
+            .SetParent(FakeBodyEnabled);
     }
 }
