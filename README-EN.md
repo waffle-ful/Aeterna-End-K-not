@@ -316,6 +316,11 @@ BGM by **DM DOKURO**
 BGM by **自称芸術家みーさん (Miisan)**
 - [HURT RECORD](https://www.hurtrecord.com/bgm/46/zero-no-heya.html)
 
+### Sound Effect Credits
+
+Some sound effects use material from:
+- On-Jin ～音人～ ([https://on-jin.com/](https://on-jin.com/))
+
 ### VOICEVOX (text-to-speech)
 
 The per-crew read-aloud feature uses **[VOICEVOX](https://voicevox.hiroshiba.jp/)**, a free Japanese text-to-speech software. End K not bundles no voice data — it synthesizes at runtime through the VOICEVOX installed on the host's PC.

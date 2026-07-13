@@ -319,6 +319,11 @@ DM DOKURO様のBGMが使われています
 自称芸術家みーさん様のBGMが使われています
 - [HURT RECORD](https://www.hurtrecord.com/bgm/46/zero-no-heya.html)
 
+### 効果音クレジット
+
+一部の効果音に以下の素材を使用しています。
+- On-Jin ～音人～ ([https://on-jin.com/](https://on-jin.com/))
+
 ### VOICEVOX（音声読み上げ）
 
 クルーごとの読み上げ機能は、無料のテキスト読み上げソフト **[VOICEVOX](https://voicevox.hiroshiba.jp/)** を利用しています。End K not は音声データを同梱しておらず、ホストのパソコンにインストールされた VOICEVOX に実行時に喋らせています。
