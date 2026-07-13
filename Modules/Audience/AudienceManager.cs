@@ -266,6 +266,9 @@ public static class AudienceManager
         AudienceCutscene.Play(item.Kind.ToString(), item.Author, item.TargetId);
 
         Logger.Info($"Audience intervention executed: {item.Kind} (author={item.Author}, price={price})", "Audience");
+        // 投稿層の例外が intervention の bookkeeping (return true 到達) を壊さないよう隔離する。
+        try { YouTubeChatPoster.AnnounceIntervention(item.Author, item.Kind.ToString()); }
+        catch (Exception ex) { Logger.Warn($"AnnounceIntervention failed: {ex.Message}", "Audience"); }
         return true;
     }
 }

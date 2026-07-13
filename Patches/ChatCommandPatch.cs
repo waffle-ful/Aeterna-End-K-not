@@ -280,6 +280,7 @@ internal static class ChatCommands
             new("PlayerInfo", "[id]", Command.UsageLevels.Everyone, Command.UsageTimes.Always, PlayerInfoCommand, true, false, [GetString("CommandArgs.PlayerInfo.Id")]),
             new("TimeLimit", "", Command.UsageLevels.Everyone, Command.UsageTimes.InGame, TimeLimitCommand, true, false),
             new("YT", "{action}", Command.UsageLevels.Host, Command.UsageTimes.Always, YTCommand, true, false, [GetString("CommandArgs.YT.Action")]),
+            new("YTPost", "{text}", Command.UsageLevels.Host, Command.UsageTimes.Always, YTPostCommand, true, false, [GetString("CommandArgs.YTPost.Text")]),
             new("Audience", "{action} [args]", Command.UsageLevels.Host, Command.UsageTimes.Always, AudienceCommand, true, false, [GetString("CommandArgs.Audience.Action")]),
             new("Yaminabe", "", Command.UsageLevels.Everyone, Command.UsageTimes.Always, YaminabeCommand, true, false),
             new("ServerInfo", "", Command.UsageLevels.Everyone, Command.UsageTimes.AfterDeathOrLobby, ServerInfoCommand, true, false),
@@ -704,6 +705,20 @@ internal static class ChatCommands
 
         Utils.SendMessage(string.Format(GetString("YouTubeChat.Started"), YouTubeChatManager.CurrentVideoId), player.PlayerId);
         YouTubeChatOverlay.EnsureSubscribed();
+    }
+
+    private static void YTPostCommand(PlayerControl player, string text, string[] args)
+    {
+        // /ytpost <text> -> YouTube ライブチャットへの手動投稿（疎通テスト用）
+        if (args.Length < 2)
+        {
+            Utils.SendMessage(GetString("YouTubePost.Usage"), player.PlayerId);
+            return;
+        }
+
+        string message = string.Join(' ', args, 1, args.Length - 1).Trim();
+        YouTubeChatPoster.PostRaw(message);
+        Utils.SendMessage(GetString("YouTubePost.Posted"), player.PlayerId);
     }
 
     private static void AudienceCommand(PlayerControl player, string text, string[] args)
