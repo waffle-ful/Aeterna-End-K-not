@@ -42,7 +42,7 @@ public static class CompanionEventEmitter
     }
 
     // ---- Tick 駆動 (main thread, FixedUpdateCaller 経由) ----
-    private static bool WasLobby, WasInGame, WasMeeting, WasEnded;
+    private static string LastPhase;
     private static bool PhaseInitialized;
 
     private static long NextDemoTime;
@@ -70,31 +70,21 @@ public static class CompanionEventEmitter
 
     private static void TickPhase()
     {
-        bool isLobby = GameStates.IsLobby;
-        bool inGame = GameStates.InGame;
-        bool isMeeting = GameStates.IsMeeting;
-        bool isEnded = GameStates.IsEnded;
+        // 重複判定は phase 文字列で行う。bool 4つの組で見ると、同じ phase のまま
+        // bool が段階的に変わるケース (試合終了処理中など) で同一 phase を連発してしまう。
+        string phase = GameStates.IsEnded ? "ended" : GameStates.IsMeeting ? "meeting" : GameStates.InGame ? "ingame" : GameStates.IsLobby ? "lobby" : null;
 
         if (!PhaseInitialized)
         {
             PhaseInitialized = true;
-            WasLobby = isLobby;
-            WasInGame = inGame;
-            WasMeeting = isMeeting;
-            WasEnded = isEnded;
+            LastPhase = phase;
             return;
         }
 
-        if (isLobby == WasLobby && inGame == WasInGame && isMeeting == WasMeeting && isEnded == WasEnded) return;
+        if (phase == null || phase == LastPhase) return;
 
-        string phase = isEnded ? "ended" : isMeeting ? "meeting" : inGame ? "ingame" : isLobby ? "lobby" : null;
-
-        WasLobby = isLobby;
-        WasInGame = inGame;
-        WasMeeting = isMeeting;
-        WasEnded = isEnded;
-
-        if (phase == null) return;
+        bool resumed = phase == "ingame" && LastPhase == "meeting";
+        LastPhase = phase;
 
         Emit("phase", w =>
         {
@@ -102,6 +92,8 @@ public static class CompanionEventEmitter
 
             if (phase != "ingame") return;
 
+            // 会議明けの再開は「試合開始」と区別する (companion.py はこのフラグで実況を変える)
+            if (resumed) w.WriteBoolean("resumed", true);
             w.WriteString("map", GetString(Main.CurrentMap.ToString()).RemoveHtmlTags());
             w.WriteNumber("playerCount", Main.PlayerStates.Count);
             w.WriteString("mode", StripLabelPrefix(GetString($"Mode{Options.CurrentGameMode}")));
@@ -209,8 +201,13 @@ public static class CompanionEventEmitter
 
         string winnerTeamName = GetWinnerTeamName(winnerTeam);
 
+        // 勝者がいない終了 (ホスト中断/全滅/タイマー/エラー) は winnerTeam に「理由の文言」が入る。
+        // companion.py はこのフラグで「勝利したのは〜」の文型を避ける。
+        bool noVictors = winnerTeam is CustomWinner.Draw or CustomWinner.None or CustomWinner.Error;
+
         Emit("gameEnd", w =>
         {
+            if (noVictors) w.WriteBoolean("noVictors", true);
             w.WriteString("winnerTeam", winnerTeamName);
             w.WriteStartArray("winners");
             foreach (string winnerName in winners) w.WriteStringValue(winnerName.RemoveHtmlTags());
