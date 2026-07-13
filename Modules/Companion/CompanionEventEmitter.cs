@@ -53,6 +53,8 @@ public static class CompanionEventEmitter
     {
         NextDemoTime = 0;
         DemoRotationIndex = 0;
+        LastSabotageKind = null;
+        LastSabotageEmitTime = 0;
     }
 
     public static void Tick()
@@ -94,7 +96,16 @@ public static class CompanionEventEmitter
 
         if (phase == null) return;
 
-        Emit("phase", w => w.WriteString("phase", phase));
+        Emit("phase", w =>
+        {
+            w.WriteString("phase", phase);
+
+            if (phase != "ingame") return;
+
+            w.WriteString("map", GetString(Main.CurrentMap.ToString()).RemoveHtmlTags());
+            w.WriteNumber("playerCount", Main.PlayerStates.Count);
+            w.WriteString("mode", StripLabelPrefix(GetString($"Mode{Options.CurrentGameMode}")));
+        });
     }
 
     // ロビー放置画面を「動いてる」ように見せるホストローカル演出。実サボタージュ/RPC は撃たない。
@@ -139,6 +150,13 @@ public static class CompanionEventEmitter
         catch { return key; }
     }
 
+    // "Gamemode: Standard" / "ゲームモード: 標準" のようなラベル付き文言からモード名だけを取り出す
+    private static string StripLabelPrefix(string text)
+    {
+        int idx = text.LastIndexOfAny([':', '：']);
+        return idx >= 0 ? text[(idx + 1)..].Trim() : text.Trim();
+    }
+
     // ---- join/leave/intervention フック (Patches/*.cs から呼ぶ) ----
     public static void OnPlayerJoin(string name)
     {
@@ -160,6 +178,104 @@ public static class CompanionEventEmitter
             w.WriteString("kind", kind);
             w.WriteString("kindName", kindName);
             w.WriteString("author", author);
+        });
+    }
+
+    // 追放は全プレイヤーに公開済みの結果のみ載せる (役職名は CEMode==2 で画面に実際に表示される場合のみ)
+    public static void OnEject(NetworkedPlayerInfo exiled)
+    {
+        if (!Enabled) return;
+
+        if (exiled == null)
+        {
+            Emit("eject", w => w.WriteBoolean("skipped", true));
+            return;
+        }
+
+        string name = exiled.Object ? exiled.Object.GetRealName(true).RemoveHtmlTags() : Main.AllPlayerNames.TryGetValue(exiled.PlayerId, out string cachedName) ? cachedName : null;
+        bool showRole = Options.CEMode.GetInt() == 2;
+        string roleName = showRole ? Utils.GetRoleName(exiled.GetCustomRole()) : null;
+
+        Emit("eject", w =>
+        {
+            w.WriteString("name", name);
+            if (roleName != null) w.WriteString("roleName", roleName);
+        });
+    }
+
+    public static void OnGameEnd(CustomWinner winnerTeam, System.Collections.Generic.List<string> winners)
+    {
+        if (!Enabled) return;
+
+        string winnerTeamName = GetWinnerTeamName(winnerTeam);
+
+        Emit("gameEnd", w =>
+        {
+            w.WriteString("winnerTeam", winnerTeamName);
+            w.WriteStartArray("winners");
+            foreach (string winnerName in winners) w.WriteStringValue(winnerName.RemoveHtmlTags());
+            w.WriteEndArray();
+        });
+    }
+
+    // SetEverythingUpPatch (Patches/OutroPatch.cs) の勝敗画面と同じ lang キー規則を再利用。
+    // 負値の特殊勝敗 (Draw/Neutrals/None/Error/CustomTeam) は CustomRoles に対応が無いため専用文言 (OutroPatch の switch と同じキー)。
+    private static string GetWinnerTeamName(CustomWinner winnerTeam)
+    {
+        switch (winnerTeam)
+        {
+            case CustomWinner.Draw:
+                return GetString("ForceEndText").RemoveHtmlTags();
+            case CustomWinner.Neutrals:
+                return GetString("NeutralsLeftText").RemoveHtmlTags();
+            case CustomWinner.None:
+                return GetString(Main.GameEndDueToTimer ? "GameTimerEnded" : "EveryoneDied").RemoveHtmlTags();
+            case CustomWinner.Error:
+                return GetString("ErrorEndTextDescription").RemoveHtmlTags();
+            case CustomWinner.CustomTeam:
+                try { return string.Format(GetString("CustomWinnerText"), CustomTeamManager.WinnerTeam.TeamName).RemoveHtmlTags(); }
+                catch { return GetString("CustomWinnerText").RemoveHtmlTags(); }
+        }
+
+        var winnerRole = (CustomRoles)winnerTeam;
+        string name = GetString($"WinnerRoleText.{winnerRole}");
+        if (name == string.Empty || name.StartsWith("*") || name.StartsWith("<INVALID"))
+            name = string.Format(GetString("WinnerRoleText.Default"), GetString($"{winnerRole}"));
+
+        return name.RemoveHtmlTags();
+    }
+
+    private static long LastSabotageEmitTime;
+    private static string LastSabotageKind;
+
+    // 発動者は載せない (誰がサボしたかは公開情報ではない)
+    public static void OnSabotageStart(SystemTypes systemTypes)
+    {
+        if (!Enabled) return;
+
+        string kind = systemTypes switch
+        {
+            SystemTypes.Reactor or SystemTypes.Laboratory or SystemTypes.HeliSabotage => "Reactor",
+            SystemTypes.LifeSupp => "O2",
+            SystemTypes.Electrical => "Lights",
+            SystemTypes.Comms => "Comms",
+            SystemTypes.MushroomMixupSabotage => "MushroomMixup",
+            _ => null
+        };
+
+        if (kind == null) return;
+
+        long now = Utils.TimeStamp;
+        if (kind == LastSabotageKind && now - LastSabotageEmitTime < 5) return;
+
+        LastSabotageKind = kind;
+        LastSabotageEmitTime = now;
+
+        string kindName = GetString($"Companion.Sabotage.{kind}");
+        Emit("sabotage", w =>
+        {
+            w.WriteString("kind", kind);
+            w.WriteString("kindName", kindName);
         });
     }
 
