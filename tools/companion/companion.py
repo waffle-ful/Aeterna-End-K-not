@@ -276,6 +276,12 @@ def format_event(ev: dict, state: StreamState, quiet_meeting: bool) -> str | Non
     if t == "gameEnd":
         team = ev.get("winnerTeam", "?")
         winners = ev.get("winners") or []
+        if ev.get("noVictors"):
+            # 勝者なし終了 (ホスト中断/全滅/タイマー等)。winnerTeam には「理由の文言」が入っているので
+            # 「勝利したのは〜」の文型にすると意味不明になる
+            state.note(f"試合終了 ({team})")
+            return (f"【イベント】試合はここで終了。理由は「{team}」。勝者はいない。"
+                    f"勝利宣言はせず、仕切り直しの一言で軽く締めて。")
         state.note(f"試合終了: {team} の勝利")
         names = "、".join(str(w) for w in winners[:8])
         extra = f" 勝者は {names}。名前を呼んで讃えて。" if names else ""
@@ -286,8 +292,16 @@ def format_event(ev: dict, state: StreamState, quiet_meeting: bool) -> str | Non
                 f"ただし誰の仕業かの推測はしない。")
     if t == "phase":
         phase = ev.get("phase")
+        prev_phase = state.phase
         if phase:
+            if phase == prev_phase:
+                return None  # mod 再起動などで同じ phase が重複して届いた場合の保険
             state.phase = phase
+        if phase == "ingame" and (ev.get("resumed") or prev_phase == "meeting"):
+            # 会議明けの試合再開。直後に eject (追放結果) の実況が来るので、
+            # ここで「試合が始まった」と言わせると開始実況の繰り返しになる。黙って通す。
+            state.note("会議が終わり試合再開")
+            return None
         if phase == "ingame":
             map_name = ev.get("map")
             count = ev.get("playerCount")
@@ -334,7 +348,10 @@ def format_merged_joins(ev: dict, state: StreamState) -> str:
 
 
 FILLER_PROMPT = ("【場繋ぎ】しばらく何も起きていない。配信を見ている人に向けて、"
-                 "参加募集か !コマンドの紹介か雑談を、1文だけ短く。")
+                 "参加募集か !コマンドの紹介か雑談を、1文だけ短く。"
+                 "実在する !コマンドは「!大地震」「!隕石」「!停電」「!リアクター」「!通信」"
+                 "「!ドア」「!呪い」「!祝福」「!天の声」「!偽死体」だけ。"
+                 "この中から紹介し、存在しないコマンド名を作らないこと。")
 GREETING_PROMPT = "【イベント】配信の実況を開始した。視聴者に向けて短くオープニングの挨拶をして。"
 
 
