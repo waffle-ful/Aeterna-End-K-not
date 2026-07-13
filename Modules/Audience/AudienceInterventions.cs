@@ -35,8 +35,8 @@ public static class AudienceInterventions
     private const float QuakeOffsetMin = 0.5f;
     private const float QuakeOffsetMax = 0.8f;
     private const int QuakeSnapToBudgetFloor = 60; // ラウンド消費がここを超えていたら TP 部分ごと諦める (他役職の分を残す)
-    private const float QuakeCameraShakeDuration = 3.5f; // TP ドレイン (最大 12人×0.3s≈3.6s) とほぼ同じ長さ
-    private const float QuakeCameraShakeSeverity = 0.2f;
+    private const float QuakeCameraShakeDuration = 6f; // TP ドレイン (最大 12人×0.3s≈3.6s) を包み込み、余韻まで揺らす
+    private const float QuakeCameraShakeSeverity = 0.35f; // ワールド座標の振幅 (カメラ orthoSize≈3 に対して十分派手)
 
     // ---- !偽死体 の状態 (通報インターセプト用) ----
     private static readonly HashSet<byte> FakeBodyIds = [];
@@ -47,6 +47,7 @@ public static class AudienceInterventions
         BlessedVisionUntil.Clear();
         PendingQuakeShakes.Clear();
         FakeBodyIds.Clear();
+        AudienceCutscene.StopCameraShake();
         GameGeneration++;
     }
 
@@ -202,18 +203,11 @@ public static class AudienceInterventions
         // 停電は既に発生中なら黙ってスキップ (ドア+揺れだけでも地震としては成立する)。
         if (!Utils.IsActive(SystemTypes.Electrical)) TrySabotage(SystemTypes.Electrical);
 
-        // ホスト画面ローカルのカメラシェイク (バニラ FollowerCamera.ShakeScreen、送信ゼロ)。
+        // ホスト画面ローカルのカメラシェイク (送信ゼロ)。
         // 位置ジャンプ (0.5-0.8u × 1回) は体感的にほぼ見えないため、ホストの「揺れ」はこちらが主演出。
-        // OverrideScreenShakeEnabled はアクセシビリティ設定で画面揺れ無効でも演出を通すバニラ側フラグ。
-        try
-        {
-            if (HudManager.InstanceExists && HudManager.Instance.PlayerCam)
-            {
-                HudManager.Instance.PlayerCam.OverrideScreenShakeEnabled = true;
-                HudManager.Instance.PlayerCam.ShakeScreen(QuakeCameraShakeDuration, QuakeCameraShakeSeverity);
-            }
-        }
-        catch (Exception ex) { Logger.Warn($"Earthquake camera shake failed: {ex.Message}", "Audience"); }
+        // バニラ ShakeScreen は設定の「画面シェイク」OFF だと OverrideScreenShakeEnabled を立てても
+        // 揺れない (2026-07-13 実機確認) ため、AudienceCutscene の自前シェイクを使う。
+        AudienceCutscene.ShakeCamera(QuakeCameraShakeDuration, QuakeCameraShakeSeverity);
 
         PendingQuakeShakes.Clear();
 

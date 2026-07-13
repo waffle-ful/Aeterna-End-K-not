@@ -50,6 +50,59 @@ public class AudienceCutscene : MonoBehaviour
         CustomSoundsManager.Play("AudienceShock");
     }
 
+    // ---- ホストローカルのカメラシェイク ----
+    // バニラ FollowerCamera.ShakeScreen は設定の「画面シェイク」OFF だと OverrideScreenShakeEnabled を
+    // 立てても揺れない (2026-07-13 実機確認)。設定に依存せず揺らすため、LateUpdate で毎フレーム
+    // カメラ位置に減衰ジッターを加算する自前実装。FollowerCamera.Update が毎フレーム位置を
+    // ターゲット基準で再設定するので、ここでの加算はフレームを跨いで蓄積しない (送信ゼロ)。
+    private static float _shakeStart = -1f;
+    private static float _shakeDuration;
+    private static float _shakeAmplitude;
+
+    public static void ShakeCamera(float duration, float amplitude)
+    {
+        _shakeStart = Time.time;
+        _shakeDuration = duration;
+        _shakeAmplitude = amplitude;
+    }
+
+    public static void StopCameraShake() => _shakeStart = -1f;
+
+    private void LateUpdate()
+    {
+        if (_shakeStart < 0f) return;
+
+        try
+        {
+            float t = Time.time - _shakeStart;
+
+            // 会議開始・ゲーム終了で即打ち切り (会議 UI の裏でカメラを揺らし続けない)。
+            if (t >= _shakeDuration || !GameStates.InGame || GameStates.IsMeeting || ExileController.Instance || !HudManager.InstanceExists)
+            {
+                _shakeStart = -1f;
+                return;
+            }
+
+            FollowerCamera cam = HudManager.Instance.PlayerCam;
+            if (!cam) return;
+
+            // 序盤は全力、残り時間に応じて振幅を減衰させる (最後は自然に収束)。
+            float decay = Mathf.Clamp01((_shakeDuration - t) / _shakeDuration);
+            float amp = _shakeAmplitude * ((0.35f + (0.65f * decay)) * Mathf.Clamp01(t / 0.1f));
+
+            // 非整合な2周波の sin/cos で疑似ランダムな揺れにする (タイトルスラムのジッターと同手法)。
+            Vector3 pos = cam.transform.position;
+            pos.x += Mathf.Sin(t * 39f) * amp;
+            pos.y += Mathf.Cos(t * 31f) * amp;
+            cam.transform.position = pos;
+        }
+        catch (Exception e)
+        {
+            _shakeStart = -1f;
+            Utils.ThrowException(e);
+        }
+    }
+
     private static string Sanitize(string s)
     {
         if (string.IsNullOrEmpty(s)) return s;
