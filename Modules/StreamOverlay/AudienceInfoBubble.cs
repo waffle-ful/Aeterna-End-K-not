@@ -128,6 +128,9 @@ public class AudienceInfoBubble : MonoBehaviour
         AddCommand(slides, AudienceOptions.DoorsEnabled, "AudienceCmdDoors", AudienceOptions.DoorsPrice);
         AddCommand(slides, AudienceOptions.CurseEnabled, "AudienceCmdCurse", AudienceOptions.CursePrice);
         AddCommand(slides, AudienceOptions.BlessEnabled, "AudienceCmdBless", AudienceOptions.BlessPrice);
+        AddCommand(slides, AudienceOptions.EarthquakeEnabled, "AudienceCmdEarthquake", AudienceOptions.EarthquakePrice);
+        AddCommand(slides, AudienceOptions.VoiceEnabled, "AudienceCmdVoice", AudienceOptions.VoicePrice);
+        AddCommand(slides, AudienceOptions.FakeBodyEnabled, "AudienceCmdFakeBody", AudienceOptions.FakeBodyPrice);
 
         // 隕石は災害系モードでしか実行できない(それ以外では実行失敗しポイント返却されるだけ)ので、
         // 実際に効くときだけ案内に含める。

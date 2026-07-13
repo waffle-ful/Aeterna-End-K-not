@@ -1217,6 +1217,7 @@ internal static class ReportDeadBodyPatch
 
                 if (!Librarian.OnAnyoneReport(__instance)) return false; // Player dies, no notify needed
                 if (!Trapster.OnAnyoneCheckReportDeadBody(__instance, target)) return false; // Player dies, no notify needed
+                if (!EndKnot.Modules.Audience.AudienceInterventions.OnAnyoneCheckReportDeadBody(__instance, target)) return false; // Fake body prank - report canceled, reporter notified inside
 
                 if (!Hypnotist.OnAnyoneReport())
                 {

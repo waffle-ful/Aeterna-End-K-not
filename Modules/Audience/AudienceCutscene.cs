@@ -65,6 +65,9 @@ public class AudienceCutscene : MonoBehaviour
         "Curse" => new Color(0.65f, 0.2f, 0.95f),
         "Bless" => new Color(1f, 0.8f, 0.1f),
         "Meteor" => new Color(1f, 0.3f, 0.05f),
+        "Earthquake" => new Color(0.75f, 0.5f, 0.15f),
+        "Voice" => new Color(1f, 0.85f, 0.35f),
+        "FakeBody" => new Color(0.55f, 0.6f, 0.68f),
         _ => new Color(1f, 0.2f, 0.2f)
     };
 
