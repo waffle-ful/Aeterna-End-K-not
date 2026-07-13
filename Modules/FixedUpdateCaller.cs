@@ -109,6 +109,14 @@ public static class FixedUpdateCaller
                 else Utils.ThrowException(e);
             }
 
+            // YouTube ライブチャットへの自動投稿 (ホストローカル・HTTPのみ、RPCなし)
+            try { YouTubeChatPoster.Tick(UnityEngine.Time.fixedDeltaTime); }
+            catch (Exception e)
+            {
+                if (OnGameJoinedPatch.JoiningGame && e is NullReferenceException) { /* join 窓の transient fake-null は黙殺 */ }
+                else Utils.ThrowException(e);
+            }
+
             // 視聴者干渉 (Audience)。queue drain + キュー消化はメインスレッド専用。
             try { EndKnot.Modules.Audience.AudienceManager.Tick(); }
             catch (Exception e)

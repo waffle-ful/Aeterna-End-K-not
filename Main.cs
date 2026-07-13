@@ -240,6 +240,11 @@ public class Main : BasePlugin
     public static ConfigEntry<bool> AutoHaunt { get; private set; }
     public static ConfigEntry<string> YouTubeStreamUrl { get; private set; }
     public static ConfigEntry<bool> YouTubeChatWarned { get; private set; }
+    public static ConfigEntry<string> YouTubePostClientId { get; private set; }
+    public static ConfigEntry<string> YouTubePostClientSecret { get; private set; }
+    public static ConfigEntry<string> YouTubePostRefreshToken { get; private set; }
+    public static ConfigEntry<string> YouTubePostMessages { get; private set; }
+    public static ConfigEntry<bool> YouTubePostExplained { get; private set; }
     public static ConfigEntry<bool> StreamerModeAsked { get; private set; }
     public static ConfigEntry<bool> EnableVoiceVox { get; private set; }
     public static ConfigEntry<string> VoiceVoxEngineUrl { get; private set; }
@@ -454,6 +459,11 @@ public class Main : BasePlugin
         AutoHaunt = Config.Bind("Client Options", "AutoHaunt", false);
         YouTubeStreamUrl = Config.Bind("Client Options", "YouTubeStreamUrl", "");
         YouTubeChatWarned = Config.Bind("Client Options", "YouTubeChatWarned", false);
+        YouTubePostClientId = Config.Bind("Client Options", "YouTubePostClientId", "", "OAuth client ID for the YouTube Data API, used only to auto-post chat messages (join code / player count / rotation) to your own live chat. Obtained via an external setup helper; leave empty (with the secret/refresh token) to disable posting entirely.");
+        YouTubePostClientSecret = Config.Bind("Client Options", "YouTubePostClientSecret", "", "OAuth client secret paired with YouTubePostClientId. Leave empty to disable posting.");
+        YouTubePostRefreshToken = Config.Bind("Client Options", "YouTubePostRefreshToken", "", "OAuth refresh token used to mint short-lived access tokens for posting to YouTube live chat. Leave empty to disable posting.");
+        YouTubePostMessages = Config.Bind("Client Options", "YouTubePostMessages", "", "Newline-separated rotation of promotional messages that the stream-rotation post option cycles through.");
+        YouTubePostExplained = Config.Bind("Client Options", "YouTubePostExplained", false, "Internal: whether the one-time in-game setup explanation for YouTube auto-post has been shown.");
         StreamerModeAsked = Config.Bind("Client Options", "StreamerModeAsked", false);
         EnableVoiceVox = Config.Bind("Client Options", "EnableVoiceVox", false);
         VoiceVoxEngineUrl = Config.Bind("Client Options", "VoiceVoxEngineUrl", "http://127.0.0.1:50021");
