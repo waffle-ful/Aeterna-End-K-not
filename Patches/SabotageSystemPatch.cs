@@ -438,6 +438,7 @@ public static class SabotageSystemTypeUpdateSystemPatch
                         new GrabOxygenMaskSabotage().Deteriorate();
                         __instance.Timer = IsCooldownModificationEnabled ? ModifiedCooldownSec : 30f;
                         __instance.IsDirty = true;
+                        try { EndKnot.Modules.Companion.CompanionEventEmitter.OnSabotageStart(SystemTypes.Comms); } catch { } // カスタムサボは CheckSabotage を通らないため個別にAI実況イベントを発火
                     });
                     return false;
                 }
@@ -552,6 +553,8 @@ public static class SabotageSystemTypeUpdateSystemPatch
 
         if (allow)
         {
+            try { EndKnot.Modules.Companion.CompanionEventEmitter.OnSabotageStart(systemTypes); } catch { } // AI実況相棒アプリ向けイベント (OFF 時は即 return)
+
             if (QuizMaster.On) QuizMaster.Data.NumSabotages++;
 
             if (Main.CurrentMap == MapNames.Skeld)

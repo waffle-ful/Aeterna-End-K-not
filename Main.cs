@@ -268,6 +268,7 @@ public class Main : BasePlugin
     public static ConfigEntry<int> ClaudeBridgeScreenshotInterval { get; private set; }
     public static ConfigEntry<int> ClaudeBridgeScreenshotKeep { get; private set; }
     public static ConfigEntry<bool> EnableAICommentary { get; private set; }
+    public static ConfigEntry<string> AICommentaryArgs { get; private set; }
 
     // Preset Name Options
     public static ConfigEntry<string> Preset1 { get; private set; }
@@ -488,7 +489,8 @@ public class Main : BasePlugin
         ClaudeBridgeAutoScreenshot = Config.Bind("Client Options", "ClaudeBridgeAutoScreenshot", false, "When ClaudeBridge is enabled, also capture a screenshot on a fixed interval (see ClaudeBridgeScreenshotInterval) in addition to the manual 'screenshot' directive.");
         ClaudeBridgeScreenshotInterval = Config.Bind("Client Options", "ClaudeBridgeScreenshotInterval", 20, "Seconds between automatic screenshots when ClaudeBridgeAutoScreenshot is on.");
         ClaudeBridgeScreenshotKeep = Config.Bind("Client Options", "ClaudeBridgeScreenshotKeep", 30, "Max number of screenshots to keep under EndKnot_Logs/Screens (oldest deleted first).");
-        EnableAICommentary = Config.Bind("Client Options", "EnableAICommentary", false, "Enable the AI commentary companion event layer: writes host-local JSON Lines events (join/leave/chat/intervention/phase/demo) to EndKnot_DATA/companion-events.jsonl for an external companion app to tail. No network sending. Also enables a lobby-idle auto demo of the viewer-intervention cutscene. Default off.");
+        EnableAICommentary = Config.Bind("Client Options", "EnableAICommentary", false, "Enable the AI commentary companion event layer: writes host-local JSON Lines events (join/leave/chat/intervention/phase/demo) to EndKnot_DATA/companion-events.jsonl for an external companion app to tail. No network sending. Also enables a lobby-idle auto demo of the viewer-intervention cutscene. When on, the companion app itself is also auto-launched as a child process (requires Python and the GEMINI_API_KEY environment variable; see EndKnot_DATA/companion/README). Default off.");
+        AICommentaryArgs = Config.Bind("Client Options", "AICommentaryArgs", "", "Extra command-line arguments passed to the auto-launched AI commentary companion app (e.g. --voice Kore --quiet-meeting --audio-device \"CABLE Input\").");
 
         AddComponent<ClientControlGUI>();
         Log.LogInfo("ClientControlGUI registered");

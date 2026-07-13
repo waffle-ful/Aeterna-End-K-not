@@ -37,6 +37,10 @@ public static class FixedUpdateCaller
             try { if (PerSecondUpdateScheduler.ShouldRunUpdate("watchdog-reconcile")) WatchdogLauncher.ReconcileWithOption(); }
             catch (Exception e) { Utils.ThrowException(e); }
 
+            // AI実況相棒アプリを EnableAICommentary オプションに追従させる (ON=子プロセス起動 / OFF=停止)。1/sec ゲート。
+            try { if (PerSecondUpdateScheduler.ShouldRunUpdate("companion-reconcile")) Companion.CompanionLauncher.ReconcileWithOption(); }
+            catch (Exception e) { Utils.ThrowException(e); }
+
             // Claude 遠隔テストブリッジ(既定OFF)。コマンドファイルのポーリング+自動スクショを 1/sec ゲートで回す。
             try { if (PerSecondUpdateScheduler.ShouldRunUpdate("claude-bridge")) ClaudeBridge.Tick(); }
             catch (Exception e) { Utils.ThrowException(e); }
