@@ -129,6 +129,14 @@ public static class FixedUpdateCaller
             try { EndKnot.Modules.VoiceVox.VoiceVoxManager.Tick(); }
             catch (Exception e) { Utils.ThrowException(e); }
 
+            // AI実況相棒アプリ向けイベント出力層 (join/leave/chat/intervention/phase/demo)。送信ゼロ・ホストローカルのみ。
+            try { EndKnot.Modules.Companion.CompanionEventEmitter.Tick(); }
+            catch (Exception e)
+            {
+                if (OnGameJoinedPatch.JoiningGame && e is NullReferenceException) { /* join 窓の transient fake-null は黙殺 */ }
+                else Utils.ThrowException(e);
+            }
+
             try { DataFlagRateLimiter.OnFixedUpdate(); }
             catch (Exception e) { Utils.ThrowException(e); }
 

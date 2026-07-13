@@ -30,7 +30,8 @@ public class AudienceCutscene : MonoBehaviour
     private Texture2D _fillTex;
     private int _builtHeight = -1;
 
-    // AudienceManager.TryExecute の成功直後 (InGame && !IsMeeting 保証下、メインスレッド) からのみ呼ばれる。
+    // AudienceManager.TryExecute の成功直後 (InGame && !IsMeeting 保証下)、または
+    // CompanionEventEmitter.TickLobbyDemo (IsLobby 保証下) から呼ばれる。どちらもメインスレッド。
     // kindKey は "Blackout" 等の InterventionKind 名で、lang キー "Audience.Cutscene.<kindKey>" に対応する。
     public static void Play(string kindKey, string author, byte targetId)
     {
@@ -95,7 +96,8 @@ public class AudienceCutscene : MonoBehaviour
             if (src == null || !IsStillOurSound(src, startClip)) yield break;
 
             // 会議割込・追放・ゲーム終了で即打ち切り (カメラシェイクの停止条件と揃える — 本編の裏で鳴らし続けない)。
-            if (!GameStates.InGame || GameStates.IsMeeting || ExileController.Instance)
+            // ロビー中はロビー自動デモ (CompanionEventEmitter) の再生を許可する。
+            if ((!GameStates.InGame && !GameStates.IsLobby) || GameStates.IsMeeting || ExileController.Instance)
             {
                 src.Stop();
                 yield break;
@@ -141,8 +143,8 @@ public class AudienceCutscene : MonoBehaviour
         {
             float t = Time.time - _shakeStart;
 
-            // 会議開始・ゲーム終了で即打ち切り (会議 UI の裏でカメラを揺らし続けない)。
-            if (t >= _shakeDuration || !GameStates.InGame || GameStates.IsMeeting || ExileController.Instance || !HudManager.InstanceExists)
+            // 会議開始・ゲーム終了で即打ち切り (会議 UI の裏でカメラを揺らし続けない)。ロビーは自動デモ用に許可。
+            if (t >= _shakeDuration || (!GameStates.InGame && !GameStates.IsLobby) || GameStates.IsMeeting || ExileController.Instance || !HudManager.InstanceExists)
             {
                 _shakeStart = -1f;
                 return;
@@ -195,8 +197,8 @@ public class AudienceCutscene : MonoBehaviour
         {
             if (!_active) return;
 
-            // 本物の会議が始まった / ゲームが終わったら即座に演出を打ち切る (会議画面の上に被せない)。
-            if (!GameStates.InGame || GameStates.IsMeeting)
+            // 本物の会議が始まった / ゲームが終わったら即座に演出を打ち切る (会議画面の上に被せない)。ロビーは自動デモ用に許可。
+            if ((!GameStates.InGame && !GameStates.IsLobby) || GameStates.IsMeeting)
             {
                 _active = false;
                 return;
