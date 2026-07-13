@@ -66,36 +66,11 @@ public static class CustomSoundsManager
         {
             if (!Constants.ShouldPlaySfx() || !Main.EnableCustomSoundEffect.Value || !OperatingSystem.IsWindows()) return;
 
-            if (!Directory.Exists(SoundsPath)) Directory.CreateDirectory(SoundsPath);
-
-            DirectoryInfo folder = new(SoundsPath);
-            if ((folder.Attributes & FileAttributes.Hidden) != FileAttributes.Hidden) folder.Attributes = FileAttributes.Hidden;
-
-            string foundPath = null;
-            foreach (string ext in SupportedExtensions)
-            {
-                string candidate = SoundsPath + sound + ext;
-                if (File.Exists(candidate)) { foundPath = candidate; break; }
-            }
-
+            string foundPath = ResolveSoundPath(sound);
             if (foundPath == null)
             {
-                foreach (string ext in SupportedExtensions)
-                {
-                    Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("EndKnot.Resources.Sounds." + sound + ext);
-                    if (stream == null) continue;
-
-                    foundPath = SoundsPath + sound + ext;
-                    using FileStream fileStream = File.Create(foundPath);
-                    stream.CopyTo(fileStream);
-                    break;
-                }
-
-                if (foundPath == null)
-                {
-                    Logger.Warn($"Could not find sound: {sound}", "CustomSounds");
-                    return;
-                }
+                Logger.Warn($"Could not find sound: {sound}", "CustomSounds");
+                return;
             }
 
             StartPlay(foundPath, volume, pitch);
@@ -104,9 +79,70 @@ public static class CustomSoundsManager
         catch (Exception e) { Utils.ThrowException(e); }
     }
 
+    // Play と同じ解決経路で鳴らすが、再生中の AudioSource を返してフェード等を外部から制御できるようにする。
+    // PlaySoundImmediate は void なので、音量を時間変化させたい呼び出し側 (大地震のフェードアウト等) はこちらを使う。
+    // 見つからない / 無効設定なら null を返す。ホストローカル・送信ゼロ。
+    public static AudioSource PlayControllable(string sound, float volume = 1f)
+    {
+        try
+        {
+            if (!Constants.ShouldPlaySfx() || !Main.EnableCustomSoundEffect.Value || !OperatingSystem.IsWindows()) return null;
+
+            string foundPath = ResolveSoundPath(sound);
+            if (foundPath == null)
+            {
+                Logger.Warn($"Could not find sound: {sound}", "CustomSounds");
+                return null;
+            }
+
+            AudioClip clip = LoadClip(foundPath);
+            if (clip == null) return null;
+
+            Logger.Msg($"Playing sound (controllable): {sound} ({Path.GetExtension(foundPath)})", "CustomSounds");
+            return SoundManager.Instance.PlaySound(clip, false, volume);
+        }
+        catch (Exception e) { Utils.ThrowException(e); return null; }
+    }
+
+    // BepInEx/resources 内の実ファイル → 埋込リソース展開 の順で音源パスを解決する (無ければ null)。
+    private static string ResolveSoundPath(string sound)
+    {
+        if (!Directory.Exists(SoundsPath)) Directory.CreateDirectory(SoundsPath);
+
+        DirectoryInfo folder = new(SoundsPath);
+        if ((folder.Attributes & FileAttributes.Hidden) != FileAttributes.Hidden) folder.Attributes = FileAttributes.Hidden;
+
+        foreach (string ext in SupportedExtensions)
+        {
+            string candidate = SoundsPath + sound + ext;
+            if (File.Exists(candidate)) return candidate;
+        }
+
+        foreach (string ext in SupportedExtensions)
+        {
+            Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("EndKnot.Resources.Sounds." + sound + ext);
+            if (stream == null) continue;
+
+            string foundPath = SoundsPath + sound + ext;
+            using FileStream fileStream = File.Create(foundPath);
+            stream.CopyTo(fileStream);
+            return foundPath;
+        }
+
+        return null;
+    }
+
     private static readonly Dictionary<string, AudioClip> audioCache = [];
 
     private static void StartPlay(string path, float volume = 1f, float pitch = 1f)
+    {
+        AudioClip clip = LoadClip(path);
+        if (clip)
+            SoundManager.Instance.PlaySoundImmediate(clip, false, volume);
+    }
+
+    // path 単位でデコード結果をキャッシュしつつ AudioClip を返す (初回のみデコード)。
+    private static AudioClip LoadClip(string path)
     {
         if (!audioCache.TryGetValue(path, out var clip))
         {
@@ -120,8 +156,7 @@ public static class CustomSoundsManager
             audioCache[path] = clip;
         }
 
-        if (clip)
-            SoundManager.Instance.PlaySoundImmediate(clip, false, volume);
+        return clip;
     }
 
     internal static AudioClip LoadWAV(string path)
