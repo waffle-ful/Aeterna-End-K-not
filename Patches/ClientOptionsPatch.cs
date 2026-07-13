@@ -43,6 +43,7 @@ public static class OptionsMenuBehaviourStartPatch
     private static ClientOptionItem BackroomsReduceProcgen;
     private static ClientOptionItem EnableVoiceVox;
     private static ClientOptionItem VoiceVoxReadHostOwnChat;
+    private static ClientOptionItem EnableAICommentary;
 #if DEBUG
     private static ClientOptionItem GodMode;
 #endif
@@ -329,6 +330,9 @@ public static class OptionsMenuBehaviourStartPatch
 
         if (VoiceVoxReadHostOwnChat == null || !VoiceVoxReadHostOwnChat.ToggleButton)
             VoiceVoxReadHostOwnChat = ClientOptionItem.Create("VoiceVoxReadHostOwnChat", Main.VoiceVoxReadHostOwnChat, __instance);
+
+        if (EnableAICommentary == null || !EnableAICommentary.ToggleButton)
+            EnableAICommentary = ClientOptionItem.Create("EnableAICommentary", Main.EnableAICommentary, __instance);
 
 #if DEBUG
         if ((GodMode == null || GodMode.ToggleButton == null) && DebugModeManager.AmDebugger)

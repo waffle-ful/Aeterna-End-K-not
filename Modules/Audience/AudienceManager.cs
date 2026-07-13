@@ -269,6 +269,10 @@ public static class AudienceManager
         // 投稿層の例外が intervention の bookkeeping (return true 到達) を壊さないよう隔離する。
         try { YouTubeChatPoster.AnnounceIntervention(item.Author, item.Kind.ToString()); }
         catch (Exception ex) { Logger.Warn($"AnnounceIntervention failed: {ex.Message}", "Audience"); }
+
+        try { EndKnot.Modules.Companion.CompanionEventEmitter.OnIntervention(item.Kind.ToString(), Translator.GetString($"Audience.Cutscene.{item.Kind}"), item.Author); }
+        catch (Exception ex) { Logger.Warn($"CompanionEventEmitter.OnIntervention failed: {ex.Message}", "Audience"); }
+
         return true;
     }
 }

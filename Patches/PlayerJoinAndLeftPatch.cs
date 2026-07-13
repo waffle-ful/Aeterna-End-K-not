@@ -517,6 +517,7 @@ internal static class OnPlayerJoinedPatch
         Logger.Info($"{client.PlayerName} (ClientID: {client.Id} / FriendCode: {client.FriendCode} / Hashed PUID: {client.GetHashedPuid()}) joined the lobby", "Session");
 
         try { EndKnot.Modules.ClaudeBridge.OnPlayerJoined(client); } catch { } // ブリッジ OFF 時は即 return する軽量フック
+        try { EndKnot.Modules.Companion.CompanionEventEmitter.OnPlayerJoin(client.PlayerName); } catch { } // AI実況相棒アプリ向けイベント (OFF 時は即 return)
 
         Main.SetDirtyRebuildPC();
         LateTask.New(() =>
@@ -604,6 +605,7 @@ internal static class OnPlayerLeftPatch
     public static void Postfix(AmongUsClient __instance, [HarmonyArgument(0)] ClientData data, [HarmonyArgument(1)] DisconnectReasons reason)
     {
         try { EndKnot.Modules.ClaudeBridge.OnPlayerLeft(data, reason); } catch { } // ブリッジ OFF 時は即 return する軽量フック
+        try { EndKnot.Modules.Companion.CompanionEventEmitter.OnPlayerLeave(data?.PlayerName); } catch { } // AI実況相棒アプリ向けイベント (OFF 時は即 return)
 
         try
         {

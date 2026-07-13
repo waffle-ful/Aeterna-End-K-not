@@ -449,6 +449,8 @@ tools/*
 !tools/log-doctor.ps1
 # ...and the post-stream retrospective report tool (stream-report).
 !tools/stream-report.ps1
+# ...and the AI commentary companion app, which streamers run alongside the mod (API key stays in each user's env).
+!tools/companion/
 
 # Build output (custom -o build/)
 build/
