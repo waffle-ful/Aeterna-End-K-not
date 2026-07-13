@@ -1664,6 +1664,8 @@ public static class Options
 
         Modules.YouTubeChat.YouTubeChatOptions.SetupCustomOption();
 
+        Modules.YouTubeChat.YouTubePostOptions.SetupCustomOption();
+
         Modules.StreamOverlay.LobbyCodeBubbleOptions.SetupCustomOption();
 
         Modules.Audience.AudienceOptions.SetupCustomOption();
