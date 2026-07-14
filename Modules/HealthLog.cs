@@ -23,6 +23,7 @@ public static class HealthLog
     private static long StartTs;
     private static long LastBeatTs;
     private static long LastTickTs; // 直近 Tick の実時間(フレームストール検出用。heartbeat grid とは独立に毎フレーム更新)
+    private static int _lastGc0Count, _lastGc2Count; // 直近 Tick 時点の GC 回数 (framestall の GC 帰属計器)
     private static long LastNormalLogTs;
     private static string LastState = "?";
     private static System.Diagnostics.Process Proc;
@@ -139,10 +140,15 @@ public static class HealthLog
         // メインスレッド(FixedUpdate)が停止していた証拠。停止直前の送信コンテキストを添えて記録し、
         // 「フォーカス中に起きる真ハングか / フォーカス喪失で消えるか」の切り分け材料にする。
         // 状態遷移(シーンロード)でも数秒空くため state を併記して区別できるようにする。
+        // gc0d/gc2d = ストール窓内の GC 回数 (帰属計器): ≥1 なら GC/ヒープ churn 起因の疑い、
+        // 0 なら GC 外 (同期 I/O / アセット操作 / native)。ログはストール解除フレームに一斉 flush
+        // されるため「ANOM と同秒のログ行」は原因でなく症状 (2026-07-14 の教訓・逆因果に注意)。
         if (LastTickTs != 0 && now - LastTickTs >= FrameStallThresholdSeconds)
-            NoteAnom($"ANOM live kind=framestall gapSec={now - LastTickTs} state={state}{GetLastSendSuffix(now)} t={now}");
+            NoteAnom($"ANOM live kind=framestall gapSec={now - LastTickTs} state={state} gc0d={GC.CollectionCount(0) - _lastGc0Count} gc2d={GC.CollectionCount(2) - _lastGc2Count}{GetLastSendSuffix(now)} t={now}");
 
         LastTickTs = now;
+        _lastGc0Count = GC.CollectionCount(0);
+        _lastGc2Count = GC.CollectionCount(2);
 
         // 早期警報テレメトリは HB の 5 秒 grid を待たず 1/sec で回す(SnapTo 枯渇・例外洪水はより早い検知が要る)。
         if (PerSecondUpdateScheduler.ShouldRunUpdate("earlywarning-tick"))

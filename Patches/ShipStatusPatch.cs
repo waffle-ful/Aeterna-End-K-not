@@ -498,7 +498,13 @@ internal static class ShipStatusSpawnPlayerPatch
         Vector2 direction = Vector2.up.Rotate((player.PlayerId - 1) * (360f / numPlayers));
         Vector2 position = __instance.MeetingSpawnCenter + (direction * __instance.SpawnRadius) + new Vector2(0.0f, 0.3636f);
 
-        LateTask.New(() => player.TP(position, true, false), 1.5f, log: false);
+        // 1.5 秒の遅延中にプレイヤーが切断・破棄されると SnapTo が NRE になる (noCheckState=true で
+        // Utils.TP のガードも通らない) ため、発火時に生存確認する。実例: 2026-07-14 19:25 ExitGame 直後の発火。
+        LateTask.New(() =>
+        {
+            if (player && player.Data != null && !player.Data.Disconnected) player.TP(position, true, false);
+        }, 1.5f, log: false);
+
         return false;
     }
 }
@@ -521,7 +527,11 @@ internal static class PolusShipStatusSpawnPlayerPatch
             ? __instance.MeetingSpawnCenter2 + (Vector2.right * (num2 - num1) * 0.6f)
             : __instance.MeetingSpawnCenter + (Vector2.right * num2 * 0.6f);
 
-        LateTask.New(() => player.TP(position, true, false), 1.5f, log: false);
+        // ShipStatusSpawnPlayerPatch と同じ生存ガード (遅延中の切断で SnapTo NRE)。
+        LateTask.New(() =>
+        {
+            if (player && player.Data != null && !player.Data.Disconnected) player.TP(position, true, false);
+        }, 1.5f, log: false);
         return false;
     }
 }

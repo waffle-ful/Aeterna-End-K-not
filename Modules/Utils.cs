@@ -2158,7 +2158,10 @@ public static class Utils
             // 追記すると単一チャンクが SafeChunkLength を超える場合、書く前に見積りでフラッシュする。
             // (実測: SetName+SendChat ペア ~450B×2 が 902B 単一チャンクに合体、公式 kick 閾値 ~1024 に肉薄)
             // Length>10 は「裸の GameData エンベロープ (ヘッダ7B のみ)」を空ブロードキャストしない保険。
-            if (writer.stream.Length > 10 && writer.stream.Length + fullRpcSize > CustomRpcSender.SafeChunkLength)
+            // 閾値は SetName 系チャンクの実測キック境界 (787B 通過 / 817B キック, 2026-07-14 BUG-20260714-04) に
+            // 合わせて SetNameChunkFlushThreshold (750) を使う。fullRpcSize は GameDataTo ラッパ / RPC ヘッダを
+            // 含まない過小見積もりのため、3 RPC ぶんのラッパ相当をマージンとして上乗せする。
+            if (writer.stream.Length > 10 && writer.stream.Length + fullRpcSize + (CustomRpcSenderExtensions.SetNameWrapperOverhead * 3) > CustomRpcSenderExtensions.SetNameChunkFlushThreshold)
             {
                 writer.SendMessage();
                 writer = CustomRpcSender.Create("Utils.SendMessage(1)", sendOption);

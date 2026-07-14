@@ -34,9 +34,11 @@ public static class EarlyWarning
             bool isOfficialServer = GameStates.CurrentServerType == GameStates.ServerType.Vanilla;
             if (!isOfficialServer) return;
 
-            if (maxChunkLen >= 1000)
+            // 実測: SetName 系 GameDataTo チャンクは 817B/838B で reason=Hacking キック (2026-07-11/07-14)。
+            // 旧閾値 900/1000 では 838B キックが無音で通過したため、危険帯 (~800) に合わせて引き下げ。
+            if (maxChunkLen >= 800)
                 Warn("packet", $"kind=packet name=\"{name}\" total={totalLen} maxChunk={maxChunkLen} opt={sendOption}", critical: true, "EarlyWarning.PacketNearKick");
-            else if (maxChunkLen >= 900)
+            else if (maxChunkLen >= 760)
                 Warn("packet", $"kind=packet name=\"{name}\" total={totalLen} maxChunk={maxChunkLen} opt={sendOption}", critical: false, null);
         }
         catch { }
