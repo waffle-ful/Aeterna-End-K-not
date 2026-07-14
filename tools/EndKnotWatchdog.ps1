@@ -118,6 +118,8 @@ $script:MenuSince     = [datetime]::MinValue
 # 回線死活: 直前の巡回で回線死を観測していたか (復帰エッジ検出用) と、net-down ログの間引き。
 $script:NetWasDown    = $false
 $script:LastNetLog    = [datetime]::MinValue
+# WER ダンプ待機: WerFault がこの AU のクラッシュダンプを書いている間の kill 保留開始時刻。
+$script:WerWaitSince  = [datetime]::MinValue
 
 function Write-WatchLog {
     param([string]$Msg, [string]$Color = 'Gray', [switch]$ConsoleOnly)
@@ -444,6 +446,23 @@ while ($true) {
     if (-not $proc) {
         Write-WatchLog "異常: AU プロセスが見つかりません（クラッシュ/終了）。" 'Red'
     } elseif (-not $health.Fresh) {
+        # WerFault がこの AU のクラッシュダンプを書いている間はプロセスがサスペンドされ心拍が止まり
+        # 「ハング」に見える。ここで Stop-Au すると書き込み途中のダンプが破棄され、LocalDumps 計器が
+        # 永遠に空振りする (2026-07-14 22:41 実証: coreclr AV → フルダンプ書込中に番犬 kill → CrashDumps 空)。
+        # WerFault (この AU の PID 宛) が生きている間は kill を保留する。上限 900s で通常フローに復帰。
+        $wer = $null
+        try { $wer = Get-CimInstance Win32_Process -Filter "Name='WerFault.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match ('-p\s+{0}(\s|$)' -f $proc.Id) } } catch { }
+        if ($wer) {
+            if ($script:WerWaitSince -eq [datetime]::MinValue) { $script:WerWaitSince = $now }
+            $werWait = ($now - $script:WerWaitSince).TotalSeconds
+            if ($werWait -lt 900) {
+                Write-WatchLog ("WER がクラッシュダンプを書き込み中のため AU の kill を保留します (経過 {0:N0}s / 900s)。ダンプ完了後に通常の再起動フローへ戻ります。" -f $werWait) 'Yellow'
+                continue
+            }
+            Write-WatchLog "WER ダンプ待機が 900s を超えました。通常のハング処理に進みます。" 'Red'
+        } else {
+            $script:WerWaitSince = [datetime]::MinValue
+        }
         Write-WatchLog ("異常: AU は生存だが心拍が {0:N0}s 途切れています（ハング疑い）。" -f $health.AgeSec) 'Red'
     }
 

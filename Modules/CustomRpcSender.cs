@@ -580,10 +580,15 @@ public class CustomRpcSender
 
 public static class CustomRpcSenderExtensions
 {
-    // 公式鯖 anti-cheat の kick 上限は ~1024 byte/パケット。seer 切替ごとの GameDataTo ヘッダ等
-    // (GetSetNameRpcSize に載らない分) が chunk あたり 100 byte 強積み上がるため、余裕を持って 800 で切る。
-    // (旧値 1100 は上限超えで、実測 1221 byte の単一チャンクが Hacking キックを引き起こした)
-    private const int SetNameChunkFlushThreshold = CustomRpcSender.SafeChunkLength;
+    // 公式鯖 anti-cheat の kick 上限は SetName 系 GameDataTo チャンクでは ~800 byte 帯にある
+    // (実測: 787B は通過 / 817B・838B・903B は reason=Hacking キック — 2026-07-11 / 2026-07-14 会議後 NotifyRoles)。
+    // 旧値 800 (SafeChunkLength) は「800 超過を書込後に検知して flush」だったため 800 台のチャンクが日常的に漏れていた。
+    // 750 を書込前見積もり (GetSetNameRpcSize = ラッパ込みの上限見積もり) で強制し、チャンクを 750 以下に保つ。
+    public const int SetNameChunkFlushThreshold = 750;
+
+    // seer 切替毎に積まれる GameDataTo ラッパの最大 byte (msg header 3 + packed GameId ≤5 + packed clientId ≤5)。
+    // 毎件の見積もりに含めて過大側に倒す = チャンク実測が閾値を超えないことを保証する。
+    public const int SetNameWrapperOverhead = 13;
 
     // SetName を packed message に一括蓄積する。UTF-8 byte で正確に計算し、SetNameChunkFlushThreshold を
     // 超える手前で現 message を送って sender を作り直す (chunk 分割)。sender は ref で受けて差し替える。
@@ -606,6 +611,34 @@ public static class CustomRpcSenderExtensions
             default:
                 Main.LastNotifyNames[(player.PlayerId, seer.PlayerId)] = name;
                 break;
+        }
+
+        // 分割不可能な単発超過ガード: 装飾名 1 件だけで安全上限を超えると chunk 分割では防げず、
+        // 公式鯖に単一チャンク超過で reason=Hacking キックされる (実測: 単発 SetName 903B でキック、2026-07-14)。
+        // キックより表示劣化がマシなので rune 境界でクランプ + Logger.Error で呼び出し元の修正を促す。
+        // ※dedup (LastNotifyNames) の後に置くこと — 先にクランプすると元の名前と一致せず毎 tick 再送 flood になる。
+        if (GameStates.CurrentServerType == GameStates.ServerType.Vanilla)
+        {
+            const int nameBudget = SetNameChunkFlushThreshold - SetNameWrapperOverhead - 32; // RPC ヘッダ類の余白込み
+            int nameBytes = System.Text.Encoding.UTF8.GetByteCount(name);
+
+            if (nameBytes > nameBudget)
+            {
+                Logger.Error($"SetName for player {player.PlayerId} is {nameBytes}B > {nameBudget}B — clamped to avoid official-server Hacking kick. Shrink the name decoration (role text / addons / suffix)!", "RpcSetName.NameBudget");
+
+                var sb = new System.Text.StringBuilder();
+                var bytes = 0;
+
+                foreach (System.Text.Rune rune in name.EnumerateRunes())
+                {
+                    int rb = rune.Utf8SequenceLength;
+                    if (bytes + rb > nameBudget) break;
+                    sb.Append(rune.ToString());
+                    bytes += rb;
+                }
+
+                name = sb.ToString();
+            }
         }
 
         // packed message は per-client (GameDataTo) 専用で、-1 broadcast (GameData) を入れると
@@ -652,10 +685,13 @@ public static class CustomRpcSenderExtensions
             sender.checkLength = false;
         }
 
-        // SetName RPC 1 件の概算 byte: msg header(3) + WritePacked(netId) + callId(1) + Write(Data.NetId uint=4)
-        //   + 文字列(packed長さ prefix + UTF-8 bytes) + Write(bool=1)
+        // SetName RPC 1 件の上限見積もり byte: GameDataTo ラッパ (SetNameWrapperOverhead)
+        //   + msg header(3) + WritePacked(netId) + callId(1) + Write(Data.NetId uint=4)
+        //   + 文字列(packed長さ prefix + UTF-8 bytes) + Write(bool=1)。
+        // ラッパは seer が変わらない連続書込では実際には積まれないが、過大見積もり側に倒して
+        // 「pre-check を通った書込でチャンクが閾値を超える」ことが起きないようにする。
         static int GetSetNameRpcSize(uint netId, string playerName)
-            => 3 + HazelExtensions.GetPackedUIntSize(netId) + 1 + 4 + HazelExtensions.GetStringWriteSize(playerName) + 1;
+            => SetNameWrapperOverhead + 3 + HazelExtensions.GetPackedUIntSize(netId) + 1 + 4 + HazelExtensions.GetStringWriteSize(playerName) + 1;
     }
 
     extension(CustomRpcSender sender)

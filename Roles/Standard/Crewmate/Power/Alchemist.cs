@@ -184,7 +184,11 @@ public class Alchemist : RoleBase
             case 3: // TP to random player
                 LateTask.New(() =>
                 {
-                    player.TP(Main.EnumerateAlivePlayerControls().Without(player).Where(x => !x.inVent && !x.onLadder).ToList().RandomElement());
+                    // 遅延中の切断で stale player を TP すると SnapTo が NRE (BUG-20260714-03 兄弟)。TP 先の候補ゼロも防ぐ。
+                    if (!player || player.Data == null || player.Data.Disconnected) return;
+                    PlayerControl tpTarget = Main.EnumerateAlivePlayerControls().Without(player).Where(x => !x.inVent && !x.onLadder).ToList().RandomElement();
+                    if (tpTarget == null) return;
+                    player.TP(tpTarget);
                     player.RPCPlayCustomSound("Teleport");
                 }, !isPet ? 2f : 0.1f, "AlchemistTPToRandomPlayer");
                 break;

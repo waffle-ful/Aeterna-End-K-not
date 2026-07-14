@@ -61,6 +61,8 @@ public class Comebacker : RoleBase
             int storedVentId = OldVentId;
             LateTask.New(() =>
             {
+                // 遅延中の切断で stale player を TP すると SnapTo が NRE (BUG-20260714-03 兄弟)。
+                if (!pc || pc.Data == null || pc.Data.Disconnected) return;
                 pc.TP(tp + new Vector2(0f, 0.1f), log: false);
                 if (pc.inVent) pc.MyPhysics?.RpcExitVent(storedVentId);
             }, 0.5f, "Comebacker.TP");

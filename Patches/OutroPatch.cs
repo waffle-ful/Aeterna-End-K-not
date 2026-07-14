@@ -162,7 +162,7 @@ internal static class EndGamePatch
             switch (Options.CurrentGameMode)
             {
                 case CustomGameMode.Standard:
-                    if (GameStates.CurrentServerType == GameStates.ServerType.Vanilla) Main.GamesPlayed.AddRange(Main.EnumeratePlayerControls().ToDictionary(x => x.FriendCode, _ => 0), false);
+                    if (GameStates.CurrentServerType == GameStates.ServerType.Vanilla) Main.GamesPlayed.AddRange(Main.EnumeratePlayerControls().GroupBy(x => x.FriendCode).ToDictionary(g => g.Key, _ => 0), false);
                     Main.GamesPlayed.AdjustAllValues(x => ++x);
                     Main.GotShieldAnimationInfoThisGame.Clear();
                     if (Main.GM.Value) Main.PlayerStates[PlayerControl.LocalPlayer.PlayerId].SetAlive();
