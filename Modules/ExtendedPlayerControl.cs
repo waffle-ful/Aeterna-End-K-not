@@ -1360,6 +1360,10 @@ internal static class ExtendedPlayerControl
 
             LateTask.New(() =>
             {
+                // 遅延中 (~1-1.3秒) にプレイヤーが切断・破棄されると SnapTo / GetNameWithRole が NRE
+                // (ShipStatusSpawnPlayerPatch と同型の stale-player 窓、BUG-20260714-03 兄弟)。
+                if (!player || player.Data == null || player.Data.Disconnected) return;
+
                 sender = CustomRpcSender.Create($"Fix Black Screen For {player.GetNameWithRole()} (2)", SendOption.Reliable);
 
                 sender.RpcDesyncUpdateSystem(player, systemtype, 16);

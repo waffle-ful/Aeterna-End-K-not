@@ -367,6 +367,9 @@ public class Penguin : RoleBase
                     {
                         if (IsGoose) return;
 
+                        // 遅延中に被害者/ペンギンが切断・破棄されると SnapTo が NRE (BUG-20260714-03 兄弟)。
+                        if (!abductVictim || abductVictim.Data == null || abductVictim.Data.Disconnected || !Penguin_) return;
+
                         int sId = abductVictim.NetTransform.lastSequenceId + 5;
                         abductVictim.NetTransform.SnapTo(Penguin_.Pos(), (ushort)sId);
                         Penguin_.MurderPlayer(abductVictim, MurderResultFlags.Succeeded);

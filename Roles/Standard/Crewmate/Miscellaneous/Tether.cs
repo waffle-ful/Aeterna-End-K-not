@@ -101,7 +101,11 @@ public class Tether : RoleBase
         {
             LateTask.New(() =>
             {
-                if (GameStates.IsInTask) pc.TP(Utils.GetPlayerById(Target).Pos());
+                // 遅延中の切断で pc / Target が stale 化すると SnapTo / Pos() が NRE (BUG-20260714-03 兄弟)。
+                if (!pc || pc.Data == null || pc.Data.Disconnected) return;
+                PlayerControl target = Utils.GetPlayerById(Target);
+                if (target == null) return;
+                if (GameStates.IsInTask) pc.TP(target.Pos());
             }, isPet ? 0.1f : 2f, "Tether TP");
         }
     }
