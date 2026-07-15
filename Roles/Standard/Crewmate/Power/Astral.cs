@@ -25,7 +25,7 @@ public class Astral : RoleBase
     public override void SetupCustomOption()
     {
         StartSetup(651400)
-            .AutoSetupOption(ref AbilityCooldown, 30, new IntegerValueRule(0, 120, 1), OptionFormat.Seconds)
+            .AutoSetupOption(ref AbilityCooldown, 15, new IntegerValueRule(0, 120, 1), OptionFormat.Seconds)
             .AutoSetupOption(ref AbilityDuration, 10, new IntegerValueRule(1, 30, 1), OptionFormat.Seconds)
             .AutoSetupOption(ref AbilityUseLimit, 1f, new FloatValueRule(0, 20, 0.05f), OptionFormat.Times)
             .AutoSetupOption(ref AbilityUseGainWithEachTaskCompleted, 0.3f, new FloatValueRule(0f, 5f, 0.05f), OptionFormat.Times)
