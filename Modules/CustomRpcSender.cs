@@ -46,8 +46,14 @@ public class CustomRpcSender
     // これを超えて蓄積した stream は次の分割ポイントで別パケットに切り出す。
     public const int SafeChunkLength = 800;
 
-    // When false, the >500 byte auto-split in StartMessage/StartPackedMessage is skipped.
+    // When false, the >500 byte auto-split in StartMessage/StartPackedMessage/StartRpc is skipped.
     // RpcSetName sets this false and does its own accurate SafeChunkLength (UTF-8) chunking instead.
+    //
+    // ⚠️ **`sender.stream` をローカル変数にキャッシュする経路は必ず false にすること** (BUG-20260711-02 の真因)。
+    // 分割 (StartRpc:458 → EndMessage(startNew:true):412-413) は `stream` を新しい writer に**差し替える**ため、
+    // キャッシュ済みの参照は閉じた古い stream を指したままになり、以降の直書きが壊れたパケットを作って
+    // 公式鯖に reason=Hacking で蹴られる。該当経路: CustomNetObject (2箇所) / Utils.RpcCreateDeadBody / DummySpawner。
+    // これらは分割を送信後の関所 (PacketSplitPatch) に委ねる。
     public bool checkLength = true;
 
     private State currentState = State.BeforeInit;
@@ -637,7 +643,10 @@ public static class CustomRpcSenderExtensions
                     bytes += rb;
                 }
 
-                name = sb.ToString();
+                // 予算値はここでは動かさない (実測の裏付けあり: 単発 SetName 903B でキック)。
+                // ただし rune 切りは TMP タグの途中に落ちうるので、閉じていない末尾タグを捨てる
+                // (BUG-20260715-09 の CNO スプライトと同型の壊れ方。こちらは毎分 15〜27 回発火している)。
+                name = CustomNetObject.DropUnterminatedTag(sb.ToString());
             }
         }
 
