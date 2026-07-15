@@ -2217,6 +2217,9 @@ internal static class ExtendedPlayerControl
         public void NoCheckStartMeeting(NetworkedPlayerInfo target, bool force = false)
         {
             if (!HudManager.InstanceExists) return;
+            // ロビー等ゲーム外で会議を開始すると操作不能 + 会議端末表示 + BGM 停止になる (2026-07-15 実測)。
+            // ReportDeadBodyPatch 側のガードを迂回する経路 (GUI/ホットキー/チャットコマンド) もここで遮断する
+            if (!GameStates.InGame || GameStates.IsLobby) return;
             if (Options.DisableMeeting.GetBool() && !force) return;
 
             ReportDeadBodyPatch.AfterReportTasks(player, target);

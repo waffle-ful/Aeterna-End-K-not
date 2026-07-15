@@ -1079,6 +1079,12 @@ internal static class ReportDeadBodyPatch
     public static bool Prefix(PlayerControl __instance, [HarmonyArgument(0)] NetworkedPlayerInfo target)
     {
         if (GameStates.IsMeeting || MeetingStarted) return false;
+
+        // ロビー装飾死体 (LobbyCorpses) は vanilla DeadBody なので通報可能 — ロビーで通報が通ると
+        // StartMeeting がロビーで走り、操作不能 + 会議端末表示 + BGM 停止になる (2026-07-15 実測)。
+        // ゲーム外の通報はここで全て遮断する
+        if (!GameStates.InGame || GameStates.IsLobby) return false;
+
         if (Options.DisableMeeting.GetBool()) return false;
         if (Options.CurrentGameMode != CustomGameMode.Standard) return false;
         if (Options.DisableReportWhenCC.GetBool() && Camouflage.IsCamouflage) return false;
