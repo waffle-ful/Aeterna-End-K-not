@@ -147,7 +147,9 @@ public static class AntiBlackout
         LateTask.New(() =>
         {
             var elapsedSeconds = (int)ExileControllerWrapUpPatch.Stopwatch.Elapsed.TotalSeconds;
-            
+            var sender = CustomRpcSender.Create("Exile Dead Players After Meeting", SendOption.Reliable);
+            var hasValue = false;
+
             foreach (PlayerControl pc in Main.EnumeratePlayerControls())
             {
                 try
@@ -171,7 +173,8 @@ public static class AntiBlackout
                         if (pc.AmOwner && Utils.TempReviveHostRunning) continue;
 
                         // Ensure that the players who are considered dead by the mod are actually dead in the game.
-                        pc.RpcExiled();
+                        sender.RpcExiled(pc);
+                        hasValue = true;
 
                         if (GhostRolesManager.AssignedGhostRoles.TryGetValue(pc.PlayerId, out var ghostRole) && ghostRole.Instance.RoleTypes == RoleTypes.GuardianAngel)
                             pc.AddAbilityCD(ghostRole.Instance.Cooldown);
@@ -180,13 +183,15 @@ public static class AntiBlackout
                 catch (Exception e) { Utils.ThrowException(e); }
             }
 
+            sender.SendMessage(dispose: !hasValue);
+
             // Only execute AfterMeetingTasks after everything is reset.
             LateTask.New(() =>
             {
                 SkipTasks = false;
                 ExileControllerWrapUpPatch.AfterMeetingTasks();
             }, 1f, "Reset SkipTasks after SetRealPlayerRoles");
-        }, 0.2f, "SetRealPlayerRoles - Reset Cooldowns");
+        }, 0.4f, "SetRealPlayerRoles - Reset Cooldowns");
     }
 
     public static void Reset()
