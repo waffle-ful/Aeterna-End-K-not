@@ -51,6 +51,19 @@ public static class HealthLog
     private static long _lastMemNoteTs;
     private static long _lastAbnormalDcTs; // 直近の異常切断 t(回復判定の猶予に使用)
 
+    // --- Innersloth UserIDToken 死 + メニュー落ちゾンビの検出 (BUG-20260715-05) ---
+    // TokenGrant 401 (外部 JWT 失効) で UserIDToken が失われても接続中のロビーは動き続け、次のロビー遷移で
+    // DisconnectPopup も DC イベントも無しにメインメニューへ落ちる (GameState=Ended のまま数時間ゾンビ化)。
+    // 検出は2段: ①トークン消失 (計器+フラグのみ、再起動しない) ②Ended スタック+メニュー実在 (=実際に壊れた確定) で初めて再起動。
+    private const long TokenDeadSustainSeconds = 120; // トークン null がこの秒数続いたら死と判定 (瞬断除け)
+    private const long EndedStuckSeconds = 300; // state=Ended がこの秒数続いたら異常 (正常時は outro の数秒〜数十秒)
+    private static bool _sawUserIdToken; // 一度でも非空トークンを観測した (ブート時の未ログイン null と区別するラッチ)
+    private static long _tokenNullSinceTs; // トークン null が連続している開始 t (0=非連続)
+    private static bool _tokenDeadNoted; // idtokendead ANOM 発行済み (回復で解除)
+    private static long _endedSinceTs; // state=Ended が連続している開始 t (0=非連続)
+    private static bool _zombieHandled; // menufall エスカレーション発行済み (state が Ended を離れたら解除)
+    private static long _lastEndedStuckNoteTs; // endedstuck ANOM のスロットル
+
     private static void EnsureInit()
     {
         if (Inited) return;
@@ -108,6 +121,12 @@ public static class HealthLog
             _continuousMenuSinceTs = 0;
             _lastStuckMenuNoteTs = 0;
             _lastMemNoteTs = 0;
+            _sawUserIdToken = false;
+            _tokenNullSinceTs = 0;
+            _tokenDeadNoted = false;
+            _endedSinceTs = 0;
+            _zombieHandled = false;
+            _lastEndedStuckNoteTs = 0;
 
             string sessionLine = $"SESSION start ver={Main.PluginVersion} t={StartTs}";
             Write(sessionLine);
@@ -209,7 +228,13 @@ public static class HealthLog
             }
             catch { }
 
-            string hb = $"t={now} up={now - StartTs} state={state} host={(host ? 1 : 0)} server={server} players={players} wsMB={wsMB} gcMB={gcMB} gc2={gen2} nmSent={nmSent} nmSkip={nmSkip} eosTry={eosTry} eosFlow={eosFlow}{lastSendSuffix}";
+            // Innersloth UserIDToken の生存 (BUG-20260715-05 計器)。TokenGrant 401 で失われると 0 に落ちたまま
+            // 戻らず、次のロビー遷移で無音メニュー落ちする。field 直読みなので EOSReLoginPatch の cfg 状態と無関係に生きる。
+            int idTok = 0;
+            try { idTok = EOSManager.Instance != null && !string.IsNullOrEmpty(EOSManager.Instance.UserIDToken) ? 1 : 0; }
+            catch { }
+
+            string hb = $"t={now} up={now - StartTs} state={state} host={(host ? 1 : 0)} server={server} players={players} wsMB={wsMB} gcMB={gcMB} gc2={gen2} nmSent={nmSent} nmSkip={nmSkip} eosTry={eosTry} eosFlow={eosFlow} idTok={idTok}{lastSendSuffix}";
             Write($"HB {hb}");
 
             // 普段見る通常ログにもメモリ + 状態の要約を低頻度で(最適化余地の把握用)。
@@ -252,6 +277,68 @@ public static class HealthLog
                     _lastMemNoteTs = now;
                     NoteAnom($"ANOM live kind=mem ws={wsMB} base={_sessionStartWsMB} t={now}");
                 }
+            }
+
+            // ── 段1: UserIDToken 死の検出 (BUG-20260715-05)。ここでは再起動しない — 接続中のロビーは
+            // トークン無しでも動き続けるため、計器 (ANOM) と AutoRestart へのフラグ通知のみ。
+            // 実際の再起動は段2 (実害=メニュー落ち) が確定してから (ユーザー方針: 再起動は最終手段)。
+            if (idTok == 1)
+            {
+                _sawUserIdToken = true;
+                _tokenNullSinceTs = 0;
+
+                if (_tokenDeadNoted)
+                {
+                    _tokenDeadNoted = false;
+                    AutoRestart.UserIdTokenDead = false;
+                    NoteAnom($"ANOM live kind=eos stage=idtokenrecovered t={now}");
+                }
+            }
+            else if (_sawUserIdToken && eosFlow == 1 && !_tokenDeadNoted)
+            {
+                if (_tokenNullSinceTs == 0) _tokenNullSinceTs = now;
+
+                if (now - _tokenNullSinceTs >= TokenDeadSustainSeconds)
+                {
+                    _tokenDeadNoted = true;
+                    AutoRestart.UserIdTokenDead = true;
+                    NoteAnom($"ANOM live kind=eos stage=idtokendead nullSec={now - _tokenNullSinceTs} t={now}");
+                }
+            }
+
+            // ── 段2: メニュー落ちゾンビの検出。state=Ended は正常なら outro の数秒〜数十秒で抜ける。
+            // これが EndedStuckSeconds 以上続き、かつ MainMenuManager が実在する (=outro でなくメニューへ
+            // 落ちている矛盾状態) なら、プロセス内では回復不能 (GameState=Ended 残留で AutoRehost の
+            // WaitClean も永久に通らない) と確定 → AutoRestart へエスカレーション。
+            // メニュー不在 (本物の outro に人間が座っているだけ等) なら ANOM 記録のみで再起動しない。
+            if (state == "Ended")
+            {
+                if (_endedSinceTs == 0) _endedSinceTs = now;
+                long endedDur = now - _endedSinceTs;
+
+                if (endedDur >= EndedStuckSeconds && !_zombieHandled)
+                {
+                    bool atMenu = false;
+                    try { atMenu = UnityEngine.Object.FindObjectOfType<MainMenuManager>() != null; }
+                    catch { }
+
+                    if (atMenu)
+                    {
+                        _zombieHandled = true;
+                        NoteAnom($"ANOM live kind=zombie stage=menufall durSec={endedDur} idTok={idTok} t={now}");
+                        AutoRestart.OnMainMenuZombie(endedDur);
+                    }
+                    else if (now - _lastEndedStuckNoteTs >= 300)
+                    {
+                        _lastEndedStuckNoteTs = now;
+                        NoteAnom($"ANOM live kind=zombie stage=endedstuck durSec={endedDur} idTok={idTok} t={now}");
+                    }
+                }
+            }
+            else
+            {
+                _endedSinceTs = 0;
+                _zombieHandled = false;
             }
         }
         catch (Exception e) { Utils.ThrowException(e); }

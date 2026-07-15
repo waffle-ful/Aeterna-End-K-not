@@ -23,6 +23,11 @@ namespace EndKnot;
 [HarmonyPatch(typeof(EOSManager), nameof(EOSManager.Update))]
 internal static class EOSReLoginProactivePatch
 {
+    // A/B ゲート (毎時 EOS 認証死ループの犯人切り分け用)。false を返すと Harmony がこのクラスの
+    // パッチ適用自体をスキップする = EOSManager に DMD detour が一切入らない素の状態になる。
+    // Finalizer 内 early-return では detour (by-ref 引数の marshaling 往復) が残るため不十分。
+    internal static bool Prepare() => Main.EnableEosReloginPatch.Value;
+
     // 発火間隔。実測ログアウトが約5hなので、それより手前(3h)で先回りして
     // refresh token 寿命をリセットする（実機検証 2026-07-02: 発火・実ログイン成功・ロビー非破壊を確認）。
     private const float ReLoginIntervalSeconds = 3f * 3600f;
@@ -201,6 +206,8 @@ internal static class EOSReLoginProactivePatch
 [HarmonyPatch(typeof(EOSManager), nameof(EOSManager.GoOfflineFromPlatformSignout))]
 internal static class EOSReLoginReactivePatch
 {
+    internal static bool Prepare() => Main.EnableEosReloginPatch.Value;
+
     public static void Postfix(EOSManager __instance)
     {
         Logger.Warn("GoOfflineFromPlatformSignout fired — attempting silent re-login", "EOSReLogin");
@@ -224,6 +231,8 @@ internal static class EOSReLoginReactivePatch
 [HarmonyPatch(typeof(EOSManager), nameof(EOSManager.OnAuthExpirationCallback))]
 internal static class EOSAuthExpirationTelemetryPatch
 {
+    internal static bool Prepare() => Main.EnableEosReloginPatch.Value;
+
     // vanillaThrew 後の能動再ログインの連射防止 (コールバックが短時間に複数回来ても1回だけ)
     private const float RecoveryThrottleSeconds = 600f;
 
@@ -241,6 +250,9 @@ internal static class EOSAuthExpirationTelemetryPatch
 
         if (__exception != null)
         {
+            // 握りつぶす例外の正体を必ず残す (毎時1回なのでスパムしない)。NRE の発生箇所が
+            // バニラ側トークン更新処理か、パッチ由来の引数破壊かを切り分ける一次証拠になる。
+            Logger.Warn($"vanilla OnAuthExpirationCallback exception detail: {__exception}", "EOSReLogin");
             HealthLog.NoteAnom($"ANOM live kind=eos stage=expircallback lobby={GameStates.IsLobby} online={GameStates.IsOnlineGame}");
 
             float now = Time.realtimeSinceStartup;

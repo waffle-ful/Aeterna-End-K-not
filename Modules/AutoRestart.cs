@@ -34,6 +34,11 @@ public static class AutoRestart
     // stop-flag 書き込みをスキップする (でないと再起動のはずが番犬を止めて蘇生されなくなる)。
     public static bool RestartInProgress { get; private set; }
 
+    // Innersloth UserIDToken が死んでいる (HealthLog 段1検出、BUG-20260715-05)。これ単体では再起動しない —
+    // 接続中のロビーはトークン無しでも動き続けるため、実害 (メニュー落ちゾンビ) の確定を待つ。
+    // ゾンビ確定時に authDeath (egl-refresh 要求) を付けるかどうかの判定にだけ使う。
+    public static bool UserIdTokenDead { get; set; }
+
     // ── 認証/サーバー死の判定 ──
     // これらの理由での切断は「その場では二度とオンライン部屋を立てられない」種別。EOS 認証トークンや
     // マッチメイカー経路が死んでおり、AutoRehost (同プロセスでの立て直し) では回復できない。
@@ -88,6 +93,18 @@ public static class AutoRestart
 
         Logger.Warn("Auto-restart: EOS re-login stuck twice in a row — in-process auth recovery is impossible; restarting pre-emptively", "AutoRestart");
         Escalate("eos re-login stuck", authDeath: true);
+    }
+
+    // メニュー落ちゾンビ検知 (HealthLog 段2、BUG-20260715-05) から呼ばれる。GameState=Ended のまま
+    // メインメニューに落ちた矛盾状態は DisconnectPopup も DC イベントも出さず、AutoRehost の WaitClean
+    // (IsNotJoined 必須) も永久に通らないため、プロセス再起動が唯一の回復パス。トークン死が先に検出されて
+    // いれば egl-refresh 付き (外部 JWT 失効なので EGL から新しい exchange code が要る)。
+    public static void OnMainMenuZombie(long endedDurSec)
+    {
+        if (!(Options.AutoRehostAfterKick?.GetBool() ?? false)) return;
+
+        Logger.Warn($"Auto-restart: main-menu zombie detected (GameState=Ended for {endedDurSec}s with MainMenu present, tokenDead={UserIdTokenDead}); silent fall from online session — restarting", "AutoRestart");
+        Escalate("main-menu zombie (silent fall)", authDeath: UserIdTokenDead);
     }
 
     // AutoRehost が全リトライ失敗 (GiveUp) したときに呼ぶ。番犬が居ればプロセス再起動へエスカレーションする。
