@@ -9163,6 +9163,8 @@
   "YouTubePost.Welcome": "Join the game! Type the lobby code {0} in Among Us to play with us.",
   "YouTubePost.Countdown": "{0}/{1} players — join now to help us start!",
   "YouTubePost.InterventionAnnounce": "{0} triggered !{1}!",
+  "YouTubePost.UsageHint": "{0}, that command needs more: type \"{1}\"",
+  "YouTubePost.TargetNotFound": "{0}, no player named \"{1}\" is here!",
   "YouTubePost.SetupGuide": "<color=#66ccff>YouTube auto-post is ON.</color> A one-time setup is needed before it can actually post:\n1) In Google Cloud, enable YouTube Data API v3 and create an OAuth client (type: TVs and Limited Input devices).\n2) Run the youtube-token-helper tool to get a refresh token.\n3) Put ClientId / ClientSecret / RefreshToken into the config file.\n4) Point it at your stream with /yt <url>.\n<color=#ff8866>Important:</color> set the OAuth consent screen to 'In production', or the token expires in 7 days. See the setup guide for details. (Shown once.)",
   "AudienceEnable": "Enable viewer interference (Audience)",
   "AudienceEnable.Description": "Lets YouTube live chat viewers interfere with the game using !commands (sabotages, doors, curse/bless, meteor), paid for with points earned by chatting. Requires \"Show YouTube live chat in HUD\" stream to be started via /yt. Host-only, never broadcast to other clients.",

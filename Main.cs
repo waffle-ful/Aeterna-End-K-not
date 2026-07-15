@@ -263,6 +263,7 @@ public class Main : BasePlugin
     public static ConfigEntry<float> UIScaleFactor { get; private set; }
     public static ConfigEntry<bool> EnableEarlyWarningNotify { get; private set; }
     public static ConfigEntry<bool> EnableUiAnomalyWatch { get; private set; }
+    public static ConfigEntry<bool> EnableEosReloginPatch { get; private set; }
     public static ConfigEntry<bool> EnableClaudeBridge { get; private set; }
     public static ConfigEntry<bool> ClaudeBridgeAutoScreenshot { get; private set; }
     public static ConfigEntry<int> ClaudeBridgeScreenshotInterval { get; private set; }
@@ -485,6 +486,7 @@ public class Main : BasePlugin
         UIScaleFactor = Config.Bind("Client Options", "UIScaleFactor", 1f);
         EnableEarlyWarningNotify = Config.Bind("Client Options", "EnableEarlyWarningNotify", true, "Show an in-game host notification when early-warning telemetry detects a critical anomaly (packet near kick threshold, SnapTo exhaustion, exception flood). Logging to EndKnot-Health.log always happens regardless of this setting.");
         EnableUiAnomalyWatch = Config.Bind("Client Options", "EnableUiAnomalyWatch", false, "Enable the per-second UI-anomaly scan (UiAnomalyWatch): FindObjectsOfType<TMP_Text> to detect menu-truncation / stale / duplicated auxiliary TMP objects. Default OFF because the scene-wide scan steadily grows the native working set (IL2CPP proxy churn) over a long session. Turn on only when diagnosing a UI-corruption bug.");
+        EnableEosReloginPatch = Config.Bind("Client Options", "EnableEosReloginPatch", true, "Enable the EOS re-login rescue patches (EOSReLoginPatch: proactive re-login / auth-expiration recovery / stuck-login escalation). Set to false for the A/B test of the hourly EOS auth-death loop: when false the three Harmony patches are not applied at all (no DMD detour on EOSManager), reproducing stock-EHR behavior. eosTry/eosFlow heartbeat telemetry keeps working either way.");
         EnableClaudeBridge = Config.Bind("Client Options", "EnableClaudeBridge", false, "Enable the ClaudeBridge remote test bridge: polls <Desktop>/EndKnot_Logs/claude-cmd.txt for chat-command directives and writes results to claude-out.log. Windows-only, host-only. Default off.");
         ClaudeBridgeAutoScreenshot = Config.Bind("Client Options", "ClaudeBridgeAutoScreenshot", false, "When ClaudeBridge is enabled, also capture a screenshot on a fixed interval (see ClaudeBridgeScreenshotInterval) in addition to the manual 'screenshot' directive.");
         ClaudeBridgeScreenshotInterval = Config.Bind("Client Options", "ClaudeBridgeScreenshotInterval", 20, "Seconds between automatic screenshots when ClaudeBridgeAutoScreenshot is on.");

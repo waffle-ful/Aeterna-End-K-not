@@ -120,6 +120,56 @@ public static class YouTubeChatPoster
         Dispatch(videoId, text);
     }
 
+    // 視聴者が !コマンドを打ち間違えたとき (引数なし / 対象不在) に使い方を1行返す。
+    // AudienceManager のパース失敗点から呼ばれる。放っておくと視聴者には「打っても無反応」に
+    // しか見えず、機能不全と誤解されて離脱する (2026-07-14 配信で実害を確認)。
+    //
+    // API クォータ (1投稿=50ユニット/既定枠1万=200投稿/日) を守るため、種別ごとに
+    // クールダウンを敷く。複数の視聴者が同じ打ち間違いを連発しても1回しか返さない。
+    // ポイント不足は意図的に対象外 (発生頻度が読めずクォータを食い潰すため)。
+    // キーは "usage:/notfound:" × Curse/Bless/Voice の最大5種で固定なので増え続けない。
+    // ゲーム跨ぎのリセットも不要 (PlayerId キーではないので別人に誤爆しない。次ゲームへ
+    // 持ち越しても最大60秒ヒントが1回抑制されるだけ)。
+    private static readonly Dictionary<string, long> UsageHintCooldownUntil = [];
+    private const int UsageHintCooldownSeconds = 60;
+
+    public static void AnnounceUsageHint(string author, string kindKey)
+    {
+        // 使い方は既存のコマンド表記キー ("!祝福 <名前>") をそのまま流用する
+        string usage = Translator.GetString($"AudienceCmd{kindKey}");
+        PostHint($"usage:{kindKey}", "YouTubePost.UsageHint", author, usage);
+    }
+
+    // nameQuery は視聴者の生入力。これを**ホストのアカウント名義で**ライブチャットへ再投稿するので、
+    // 長文スパム/暴言をそのまま垂れ流さないよう短くクランプする (プレイヤー名の照合用なので短くて足りる)。
+    private const int EchoedQueryMaxLength = 20;
+
+    public static void AnnounceTargetNotFound(string author, string kindKey, string nameQuery)
+    {
+        string safe = nameQuery.Length > EchoedQueryMaxLength
+            ? nameQuery[..EchoedQueryMaxLength] + "…"
+            : nameQuery;
+        PostHint($"notfound:{kindKey}", "YouTubePost.TargetNotFound", author, safe);
+    }
+
+    private static void PostHint(string cooldownKey, string langKey, string author, string arg)
+    {
+        if (YouTubePostOptions.Enabled == null || !YouTubePostOptions.Enabled.GetBool()) return;
+        if (YouTubePostOptions.InterventionAnnounceEnabled?.GetBool() != true) return;
+        if (!IsConfigured || postGate != 0) return;
+
+        long now = Utils.TimeStamp;
+        if (UsageHintCooldownUntil.TryGetValue(cooldownKey, out long until) && now < until) return;
+
+        string videoId = ResolveVideoId();
+        if (string.IsNullOrEmpty(videoId)) return;
+
+        // クールダウンは実際に投稿できたときだけ焼く。連投下限で捨てられた分まで数えると、
+        // ヒントが無言で消えたうえ 60 秒沈黙する (直そうとしている症状そのものになる)。
+        if (Dispatch(videoId, string.Format(Translator.GetString(langKey), author, arg)))
+            UsageHintCooldownUntil[cooldownKey] = now + UsageHintCooldownSeconds;
+    }
+
     // オンにした最初のロビー内 tick で、ホストのチャットへセットアップ手順を1回だけ送る。
     // /yt 初回警告 (ChatCommandPatch) と同じ Utils.SendMessage + config フラグ方式。
     private static void MaybeShowSetupGuide()
@@ -175,8 +225,12 @@ public static class YouTubeChatPoster
     private static string BuildCountdownMessage()
     {
         if (!GameStartManager.InstanceExists) return null;
+        if (Options.PlayerAutoStart == null) return null;
         int current = GameData.Instance != null ? GameData.Instance.PlayerCount : 0;
-        int needed = GameStartManager.Instance.MinPlayers;
+        // しきい値は EHR 側の自動開始オプションを見る。バニラの GameStartManager.MinPlayers は
+        // GameStartManagerPatch が毎フレーム 1 に固定している (ホストが常に開始できるように) ため、
+        // 募集文言のしきい値としては使えず「現在5/1人」のような無意味な表示になる。
+        int needed = Options.PlayerAutoStart.GetInt();
         return string.Format(Translator.GetString("YouTubePost.Countdown"), current, needed);
     }
 
@@ -193,12 +247,14 @@ public static class YouTubeChatPoster
         return line;
     }
 
-    private static void Dispatch(string videoId, string text)
+    // 戻り値: 実際に投稿へ送り出せたか (連投下限や in-flight で捨てた場合は false)。
+    // 呼び出し側がクールダウンを焼くかどうかの判断に使う。
+    private static bool Dispatch(string videoId, string text)
     {
         long now = Utils.TimeStamp;
-        if (now - lastPostTs < MinPostGapSeconds) return; // 連投下限: バースト・重複投稿を捨てる
+        if (now - lastPostTs < MinPostGapSeconds) return false; // 連投下限: バースト・重複投稿を捨てる
         // 原子的に投稿スロットを確保。既に投稿中なら諦める (レースで複数通過させない)。
-        if (System.Threading.Interlocked.CompareExchange(ref postGate, 1, 0) != 0) return;
+        if (System.Threading.Interlocked.CompareExchange(ref postGate, 1, 0) != 0) return false;
         lastPostTs = now;
 
         Task.Run(async () =>
@@ -217,6 +273,8 @@ public static class YouTubeChatPoster
                 System.Threading.Interlocked.Exchange(ref postGate, 0);
             }
         });
+
+        return true;
     }
 
     private static async Task<bool> PostAsync(string videoId, string text)

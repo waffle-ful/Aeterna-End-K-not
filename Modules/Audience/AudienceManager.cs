@@ -144,12 +144,20 @@ public static class AudienceManager
             case InterventionKind.Curse:
             case InterventionKind.Bless:
             {
-                if (parts.Length < 2) return;
+                if (parts.Length < 2)
+                {
+                    // 名前を省いた打ち間違い。無言で捨てると視聴者には壊れて見えるので使い方を返す
+                    YouTubeChatPoster.AnnounceUsageHint(author, kind.ToString());
+                    Logger.Info($"Audience command ignored: missing target name (author={author}, cmd={kind})", "Audience");
+                    return;
+                }
+
                 string nameQuery = string.Join(' ', parts, 1, parts.Length - 1);
                 PlayerControl target = FindPlayerByNamePart(nameQuery);
 
                 if (!target)
                 {
+                    YouTubeChatPoster.AnnounceTargetNotFound(author, kind.ToString(), nameQuery);
                     Logger.Info($"Audience command ignored: target not found (author={author}, cmd={kind}, query={nameQuery})", "Audience");
                     return;
                 }
@@ -159,7 +167,13 @@ public static class AudienceManager
             }
             case InterventionKind.Voice:
             {
-                if (parts.Length < 2) return;
+                if (parts.Length < 2)
+                {
+                    YouTubeChatPoster.AnnounceUsageHint(author, kind.ToString());
+                    Logger.Info($"Audience command ignored: missing message (author={author}, cmd={kind})", "Audience");
+                    return;
+                }
+
                 string message = string.Join(' ', parts, 1, parts.Length - 1);
                 InterventionQueue.Enqueue(new QueuedIntervention(kind, author, byte.MaxValue, message));
                 break;
@@ -231,6 +245,13 @@ public static class AudienceManager
             }
         }
 
+        // ここから下の reject 群 (無効化 / 対象クールダウン / ポイント不足 / 実行失敗) は
+        // 意図的に無言のまま。理由は2つ:
+        //   - YouTube 投稿はクォータが有限 (1投稿=50ユニット/既定枠1万=200投稿/日) で、
+        //     ポイント不足のような高頻度 reject に返すと成功時の実況投稿まで枯渇する。
+        //   - ここはキュー消化時 (受信の数秒〜interval 秒後) なので、返しても元コマンドから
+        //     時間的に離れてチャット上で対応が取れない。
+        // 使い方ヒントを返すのはパース段階の打ち間違いだけ (HandleIncomingMessage 参照)。
         int price = priceOpt.GetInt();
         if (!AudienceEconomy.TrySpend(item.Author, price))
         {
