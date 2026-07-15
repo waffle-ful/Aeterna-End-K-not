@@ -5393,6 +5393,7 @@ public static class Utils
             playerControl.NetTransform.SnapTo(position);
             AmongUsClient.Instance.NetIdCnt += 1U;
             var sender = CustomRpcSender.Create("Utils.RpcCreateDeadBody", sendOption, true, false);
+            sender.checkLength = false; // ⚠️ writer キャッシュ + StartRpc 後の raw 直書き = CNO と同型 (BUG-20260711-02)。分割は PacketSplitPatch に任せる
             MessageWriter writer = sender.stream;
             sender.StartMessage();
             writer.StartMessage(4);

@@ -208,6 +208,7 @@ public class DummySpawner : RoleBase
         string origVisor = localOutfit.VisorId;
 
         var sender = CustomRpcSender.Create("DummySpawner.ApplyOutfit", SendOption.Reliable, log: false);
+        sender.checkLength = false; // ⚠️ writer キャッシュ + 後続 StartRpc = CNO と同型 (BUG-20260711-02)。分割は PacketSplitPatch に任せる
         var writer = sender.stream;
         sender.StartMessage();
 

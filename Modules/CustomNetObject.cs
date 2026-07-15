@@ -72,19 +72,23 @@ namespace EndKnot
         // /wcdbg gate プローブ用: 公式鯖キック境界の計測時のみ true にしてクランプを外す
         internal static bool SpriteBudgetBypass;
 
-        // 公式鯖 (ServerType.Vanilla) は NetworkedPlayerInfo.Data シリアライズ入り Reliable パケットが
-        // ~680B (実測 673B 可 / 696B 不可、2026-07-11 /wcdbg 二分探索) を超えると reason=Hacking で即切断する。
-        // CNO の spawn / sprite 書換チャンクは ≈343B + スプライト byte 数なので、スプライトを 330B までに制限する。
-        // 超過はキックより視覚劣化がマシなのでクランプ + Logger.Error で呼び出し元の修正を促す。
+        // これは anti-cheat のキック閾値でも、プロトコル上限 (1 メッセージ = 1200B) の保証でもない。
+        // 単に「病的に巨大なスプライトを弾く粗い上限」。**この値は何も保証しない**:
+        // 1000B + 実測オーバーヘッド ~328B ≈ 1328B で 1200B 上限を割りうるし、逆にオーバーヘッドは
+        // ホスト名とコスメ ID の長さで変動する (sprite-apply メッセージは2回目の Data シリアライズでそれらを復元する)。
+        // **1200B に対する実効ガードは実メッセージ長を見る WarnPacketSize の方**であって、ここではない。
+        // ⚠️ この値を「1200 − オーバーヘッド」の引き算で下げ直さないこと — それが 330B (BUG-20260715-09) を生み、
+        // 出荷中の9個の CNO スプライトを切り刻んで壊した誤りそのもの。上流実績: PlayerDetector の 869B は
+        // 公式鯖で無クランプのまま正常に描画される (2026-07-16 実機確認) = サイズ由来のキックは反証済み。
         private static string ClampSpriteForOfficial(string sprite)
         {
-            const int MaxBytes = 330;
+            const int MaxBytes = 1000;
             if (SpriteBudgetBypass || GameStates.CurrentServerType != GameStates.ServerType.Vanilla || string.IsNullOrEmpty(sprite)) return sprite;
 
             int total = System.Text.Encoding.UTF8.GetByteCount(sprite);
             if (total <= MaxBytes) return sprite;
 
-            Logger.Error($"CNO sprite exceeds official-server budget ({total}B > {MaxBytes}B) — clamped to avoid Hacking kick. Shrink the caller's sprite! (docs/wavecannon-official-kick-resume.md)", "CNO.SpriteBudget");
+            Logger.Error($"CNO sprite exceeds the coarse protocol backstop ({total}B > {MaxBytes}B) — clamped. Shrink the caller's sprite!", "CNO.SpriteBudget");
 
             var sb = new System.Text.StringBuilder();
             var bytes = 0;
@@ -97,7 +101,30 @@ namespace EndKnot
                 bytes += rb;
             }
 
-            return sb.ToString();
+            return DropUnterminatedTag(sb.ToString());
+        }
+
+        // rune 単位の機械的な切り詰めは TMP タグの途中に落ちうる (BUG-20260715-09: Portal 358B を 330B で切ると
+        // 末尾が `<mark=#2b006b` になり TMP のパースが壊れて色が飛んだ)。閉じていない末尾タグは丸ごと捨てる。
+        // ⚠️ **末尾を捨てて予算に収める切り詰め専用**。CustomRpcSender の RpcSetName.NameBudget も同じ用途で使う。
+        // 全文を保つ**分割**器 (Utils.ChunkByByteSize 等) に流用してはいけない — そちらで末尾を捨てると
+        // その文字が次チャンクに回らず消滅する (正しくは `<` の手前まで巻き戻して次チャンクへ持ち越す)。
+        internal static string DropUnterminatedTag(string s)
+        {
+            int lastOpen = s.LastIndexOf('<');
+            if (lastOpen < 0) return s;
+            return s.IndexOf('>', lastOpen) < 0 ? s[..lastOpen] : s;
+        }
+
+        // 恒久ガード (BUG-20260715-09): 予算はスプライト byte 数では保証できないので、実メッセージ長を監視する。
+        // 実測オーバーヘッド 328B (2026-07-16 /wcdbg gate 50) だが、ホスト名とコスメ ID の長さで変動する。
+        private static void WarnPacketSize(string where, string sprite, int messageLength)
+        {
+            const int WarnBytes = 1100;
+            if (messageLength <= WarnBytes) return;
+
+            int spriteBytes = System.Text.Encoding.UTF8.GetByteCount(sprite ?? string.Empty);
+            Logger.Error($"{where}: msgLen={messageLength}B nears the 1200B protocol cap (spriteBytes={spriteBytes}B overhead={messageLength - spriteBytes}B)", "CNO.PacketSize");
         }
 
         public void RpcChangeSprite(string sprite)
@@ -123,6 +150,7 @@ namespace EndKnot
                 string petId = PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].PetId;
                 string visorId = PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].VisorId;
                 var sender = CustomRpcSender.Create("CustomNetObject.RpcChangeSprite", channel, log: false);
+                sender.checkLength = false; // ⚠️ 下の writer キャッシュを壊さないため必須 — 理由は CreateNetObject 側の同コメント参照
                 MessageWriter writer = sender.stream;
                 sender.StartMessage();
                 PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].PlayerName = "<size=14><br></size>" + sprite;
@@ -160,6 +188,7 @@ namespace EndKnot
                 writer.EndMessage();
 
                 sender.EndMessage();
+                WarnPacketSize($"RpcChangeSprite({GetType().Name})", sprite, sender.stream.Length);
                 sender.SendMessage();
             }, channel);
         }
@@ -426,6 +455,8 @@ namespace EndKnot
                     }
 
                     msg.EndMessage();
+                    // このメッセージは spawn 本体でスプライトを含まない (スプライトは後段の Shapeshift-text ブロックで送る)。
+                    WarnPacketSize($"CreateNetObject({GetType().Name}) spawn-only", null, msg.Length);
                     AmongUsClient.Instance.SendOrDisconnect(msg);
                     msg.Recycle();
                 });
@@ -526,6 +557,19 @@ namespace EndKnot
                         string petId = PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].PetId;
                         string visorId = PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].VisorId;
                         var sender = CustomRpcSender.Create("CustomNetObject.CreateNetObject", SendOption.Reliable, log: false);
+
+                        // ⚠️ checkLength=false は必須 (BUG-20260711-02 の真因)。この経路は下で `sender.stream` を
+                        // ローカル変数 `writer` にキャッシュし、state machine を通さず raw sub-message を直書きする。
+                        // checkLength=true のままだと StartRpc (CustomRpcSender.cs:458) が「stream.Length > 500」で
+                        // EndMessage(startNew:true) を呼び、`sender.stream` を**新しい writer に差し替える** (:412-413)。
+                        // キャッシュ済みの `writer` は閉じた古い stream を指したままなので、以降の名前復元 Data は
+                        // root 直下に書かれて壊れたパケットになり、公式鯖に reason=Hacking で蹴られる。
+                        // スプライトが大きいほど 500 を跨ぐので「サイズ上限」に見えていたが、上限はサイズではない
+                        // (上流は StartRpc に byte 分割が無く、同じコードで 1197B を無事に流している)。
+                        // sprite-Data → Shapeshift → 名前復元 Data → SnapTo は 1 パケットで不可分。分割は
+                        // 送信後の関所 (PacketSplitPatch) に任せる。RpcSetName が同じ理由で同じことをしている。
+                        sender.checkLength = false;
+
                         MessageWriter writer = sender.stream;
                         sender.StartMessage(onlyVisibleTo ? onlyVisibleTo.OwnerId : -1);
                         PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].PlayerName = "<size=14><br></size>" + sprite;
@@ -571,6 +615,7 @@ namespace EndKnot
                             .EndRpc();
 
                         sender.EndMessage();
+                        WarnPacketSize($"CreateNetObject({GetType().Name}) sprite-apply", sprite, sender.stream.Length);
                         sender.SendMessage();
                     }).Wait();
                 }
