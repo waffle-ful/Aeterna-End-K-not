@@ -1041,6 +1041,12 @@ public static class BackroomsLobby
     private static int _streamCx, _streamCy;
     private static bool _streamValid;
 
+    // unload ヒステリシス (2026-07-15): load 窓 (≤r) と unload 境界 (>r) が同一だと、チャンク境界
+    // 直上をうろつくだけで 3 chunk=768 tile の破棄+再生成+WallCasters 再構築が毎フリップ走り、
+    // native メモリが数百 MB/10s 単位で膨張する (2026-07-15 配信 20:54 / 21:35 の ws 急騰と一致)。
+    // unload を r+1 まで保持することで境界往復の churn をゼロにする (直進歩行の総 churn は不変・遅延解放のみ)。
+    private const int StreamUnloadHysteresisChunks = 1;
+
     // カスタムマップ (有限) は入場時に全チャンクをロードし、以降アンロードしない (歩行/ズームでロード切れ
     // しない・大マップもズームアウトで全域映る)。procgen (無限) は従来どおり player 中心の半径ストリーミング。
     // マップが大きすぎる (chunk 数 > cap) ときだけ半径ストリーミングに退避する (生成/cull の暴走ガード)。
@@ -2086,12 +2092,15 @@ public static class BackroomsLobby
         // ズーム変化 (= r 変化) でも再評価が走るよう、chunk 一致だけでなく r も比較する
         if (!force && _streamValid && playerCx == _streamCx && playerCy == _streamCy && r == _lastStreamRadius) return;
 
-        // 1. Unload: radius 外の chunk を削除。foreach 中 mutate を避けるため一旦 list に集める
+        // 1. Unload: radius+ヒステリシス外の chunk を削除。foreach 中 mutate を避けるため一旦 list に集める。
+        //    unload 境界を load 窓より 1 chunk 外に置くことで、境界直上の往復による破棄/再生成の
+        //    ピンポン churn を防ぐ (StreamUnloadHysteresisChunks 参照)。
+        int unloadR = r + StreamUnloadHysteresisChunks;
         List<long> toUnload = null;
         foreach (long key in _loadedChunks)
         {
             UnpackChunkKey(key, out int kcx, out int kcy);
-            if (Math.Abs(kcx - playerCx) > r || Math.Abs(kcy - playerCy) > r)
+            if (Math.Abs(kcx - playerCx) > unloadR || Math.Abs(kcy - playerCy) > unloadR)
                 (toUnload ??= []).Add(key);
         }
 

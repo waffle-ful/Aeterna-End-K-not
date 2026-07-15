@@ -83,16 +83,59 @@ public static class AntiBlackout
         //}
 
         // Reset the role types for all players.
-        foreach (((byte seerId, byte targetId), (RoleTypes roleType, CustomRoles _)) in CachedRoleMap)
+        // First group all entries by target.
+        foreach (var targetGroup in CachedRoleMap.GroupBy(x => x.Key.TargetID))
         {
             try
             {
-                PlayerControl seer = seerId.GetPlayer();
+                byte targetId = targetGroup.Key;
                 PlayerControl target = targetId.GetPlayer();
-                if (!seer || !target || (seerId == targetId && seer.AmOwner && Utils.TempReviveHostRunning)) continue;
+                if (!target) continue;
 
-                if (target.IsAlive() && !Main.AfterMeetingDeathPlayers.ContainsKey(targetId) && Main.LastVotedPlayerInfo != target.Data) target.RpcSetRoleDesync(roleType, seer.OwnerId);
-                else target.RpcSetRoleDesync(GhostRolesManager.AssignedGhostRoles.TryGetValue(targetId, out var ghostRole) ? ghostRole.Instance.RoleTypes : seerId == targetId && !(target.Is(CustomRoleTypes.Impostor) && Options.DeadImpCantSabotage.GetBool()) && Main.PlayerStates.TryGetValue(targetId, out var state) && state.Role.CanUseSabotage(target) ? RoleTypes.ImpostorGhost : RoleTypes.CrewmateGhost, seer.OwnerId);
+                // Compute the role every seer should see.
+                Dictionary<byte, RoleTypes> rolesForSeers = [];
+
+                foreach (var entry in targetGroup)
+                {
+                    byte seerId = entry.Key.SeerID;
+
+                    RoleTypes role = target.IsAlive() && !Main.AfterMeetingDeathPlayers.ContainsKey(targetId) && Main.LastVotedPlayerInfo != target.Data
+                        ? entry.Value.RoleType
+                        : GhostRolesManager.AssignedGhostRoles.TryGetValue(targetId, out var ghostRole)
+                            ? ghostRole.Instance.RoleTypes
+                            : seerId == targetId &&
+                              !(target.Is(CustomRoleTypes.Impostor) && Options.DeadImpCantSabotage.GetBool()) &&
+                              Main.PlayerStates.TryGetValue(targetId, out var state) &&
+                              state.Role.CanUseSabotage(target)
+                                ? RoleTypes.ImpostorGhost
+                                : RoleTypes.CrewmateGhost;
+
+                    rolesForSeers[seerId] = role;
+                }
+
+                // First set them to the role they're most commonly seen as.
+                RoleTypes globalRole = rolesForSeers.GroupBy(x => x.Value).MaxBy(g => g.Count()).Key;
+                target.RpcSetRoleGlobal(globalRole);
+
+                LateTask.New(() =>
+                {
+                    // Only send desync RPCs where needed. Often this will just be 1 additional RPC or none.
+                    foreach ((byte seerId, RoleTypes roleTypes) in rolesForSeers)
+                    {
+                        try
+                        {
+                            if (roleTypes == globalRole) continue;
+
+                            PlayerControl seer = seerId.GetPlayer();
+
+                            if (!seer || (seerId == targetId && seer.AmOwner && Utils.TempReviveHostRunning))
+                                continue;
+
+                            target.RpcSetRoleDesync(roleTypes, seer.OwnerId);
+                        }
+                        catch (Exception e) { Utils.ThrowException(e); }
+                    }
+                }, 0.2f, "Set Desync Roles");
             }
             catch (Exception e) { Utils.ThrowException(e); }
         }

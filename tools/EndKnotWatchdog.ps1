@@ -134,6 +134,136 @@ function Get-AuProcess {
     return $null
 }
 
+# --- 死因識別 (2026-07-15) ---------------------------------------------------
+# 「プロセスが消えた」だけでは crash / clean exit / 外部kill を区別できない。番犬の
+# 「異常: AU プロセスが見つかりません（クラッシュ/終了）」は文言どおり両方を含むため、
+# 2026-07-15 22:58 の無音死ではイベントログもダンプも無く容疑者を切れなかった。
+# ExitCode が読めればこれが1発で割れる: 0 = 行儀よく終了 (Application.Quit 等 /
+# AutoRestart は既存の番犬蘇生パスを Application.Quit で流用している = Modules/AutoRestart.cs:15)、
+# 0xC0000005 等の非0 = 本物のクラッシュ。
+# ⚠️ ExitCode は「プロセスが消えてから Get-Process」では絶対に読めない。生きているうちに
+# 掴んだ Process オブジェクト (ハンドル) を保持し続ける必要がある。$p.Handle を一度読むと
+# .NET がハンドルを保持し、終了後も ExitCode を読めるようになる。
+$script:AuProcHandle = $null
+$script:AuProcPid    = 0
+
+function Register-AuProcessHandle {
+    param($Proc)
+    if (-not $Proc) { return }
+    if ($script:AuProcHandle -and $script:AuProcPid -eq $Proc.Id) { return }  # 既に同一PIDを掴み済み
+    try {
+        $null = $Proc.Handle   # ハンドルを実体化して保持 (これをやらないと終了後 ExitCode が読めない)
+        $script:AuProcHandle = $Proc
+        $script:AuProcPid    = $Proc.Id
+    } catch {
+        $script:AuProcHandle = $null
+        $script:AuProcPid    = 0
+    }
+}
+
+# プロセス消失時に「どう死んだか」を1行で返す。読めない場合も理由を明示する。
+function Get-AuExitDiagnosis {
+    if (-not $script:AuProcHandle) { return "ExitCode=不明 (プロセスハンドル未保持 — 番犬起動前から動いていた等)" }
+    try {
+        if (-not $script:AuProcHandle.HasExited) { return "ExitCode=不明 (ハンドル上はまだ終了扱いでない)" }
+        $code = $script:AuProcHandle.ExitCode
+        $hex  = "0x{0:X8}" -f $code
+        $verdict = switch ($code) {
+            0          { "★正常終了 (clean exit) — クラッシュではない。Application.Quit / AutoRestart / 手動終了の系統" }
+            -1073741819 { "★アクセス違反 (0xC0000005) — 本物のクラッシュ。coreclr/GameAssembly AV の既知系統" }
+            -1073740791 { "★スタックバッファ破損 (0xC0000409)" }
+            -1073740940 { "★ヒープ破損 (0xC0000374) — GCヒープ破損説と整合" }
+            -1073741510 { "★Ctrl+C/外部終了 (0xC000013A)" }
+            default    { "★異常終了 (要調査)" }
+        }
+        $exited = try { $script:AuProcHandle.ExitTime.ToString('HH:mm:ss') } catch { "?" }
+        return "ExitCode=$code ($hex) 終了時刻=$exited : $verdict"
+    } catch {
+        return "ExitCode=読み取り失敗: $($_.Exception.Message)"
+    }
+}
+
+# --- 死亡時スナップショット (2026-07-15) -------------------------------------
+# ログは放置すると消える: log.html は数時間でロール、Health.log は次セッション起動時に
+# .prev へ退避され *その次* の起動で上書き消滅、Windows イベントログは保持期間で消える。
+# 自動再起動が 63 秒で走る運用では「2回目の死」が1回目の証拠を消すため、死亡を検知した
+# 番犬 (プロセス外で生き残っている唯一の観測者) がその場で全部を固めて逃がす。
+function Save-CrashSnapshot {
+    param([string]$Reason, [string]$ExitDiag)
+    try {
+        $stamp = (Get-Date).ToString('yyyy-MM-dd_HH.mm.ss')
+        $dest  = Join-Path $HealthDir "CrashSnapshots\$stamp"
+        New-Item -ItemType Directory -Force -Path $dest | Out-Null
+
+        # 1) 死因サマリ (最初に書く — 以降が失敗しても死因だけは残る)
+        $summary = @(
+            "reason   : $Reason",
+            "exit     : $ExitDiag",
+            "pid      : $script:AuProcPid",
+            "detected : $((Get-Date).ToString('yyyy-MM-dd HH:mm:ss'))",
+            "note     : ExitCode=0 は clean exit (AutoRestart/Application.Quit 系) で crash ではない。非0 なら本物のクラッシュ。"
+        )
+        $summary | Out-File -FilePath (Join-Path $dest 'CAUSE.txt') -Encoding utf8
+
+        # 2) MOD 側ログ一式 (Health.prev = 死んだセッションの心拍。これが最重要)
+        foreach ($f in @('EndKnot-Health.log','EndKnot-Health.prev.log','EndKnot-Timeline.log','EndKnot-Timeline.prev.log','EndKnot-Watchdog.log')) {
+            $src = Join-Path $HealthDir $f
+            if (Test-Path $src) { Copy-Item $src -Destination $dest -Force -ErrorAction SilentlyContinue }
+        }
+
+        # 3) 直近のセッション dump (log.html) — 死んだセッション本体のログ
+        try {
+            Get-ChildItem $HealthDir -Directory -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -match '^\d{4}-\d{2}-\d{2}_\d{2}\.\d{2}\.\d{2}$' } |
+                Sort-Object LastWriteTime | Select-Object -Last 2 |
+                ForEach-Object { Copy-Item $_.FullName -Destination (Join-Path $dest $_.Name) -Recurse -Force -ErrorAction SilentlyContinue }
+        } catch { }
+
+        # 4) BepInEx 側 (起動時ログ + 未捕捉例外。MOD ログには出ない層がここに出る)
+        if ($script:CapturedExe) {
+            $bep = Join-Path (Split-Path $script:CapturedExe -Parent) 'BepInEx\LogOutput.log'
+            if (Test-Path $bep) { Copy-Item $bep -Destination $dest -Force -ErrorAction SilentlyContinue }
+        }
+
+        # 5) Windows イベントログ (保持期間で消えるため、鮮度のあるうちに固める)
+        try {
+            $from = (Get-Date).AddMinutes(-10); $to = (Get-Date).AddMinutes(1)
+            $ev = @()
+            foreach ($ln in @('Application','System')) {
+                try { $ev += Get-WinEvent -FilterHashtable @{LogName=$ln; StartTime=$from; EndTime=$to} -ErrorAction Stop } catch { }
+            }
+            if ($ev.Count -gt 0) {
+                $ev | Sort-Object TimeCreated | Format-List TimeCreated, LogName, ProviderName, Id, LevelDisplayName, Message |
+                    Out-File -FilePath (Join-Path $dest 'WinEvents.txt') -Encoding utf8
+            } else {
+                "(±10分に Application/System イベントは1件も無し = OS はクラッシュを記録していない)" |
+                    Out-File -FilePath (Join-Path $dest 'WinEvents.txt') -Encoding utf8
+            }
+        } catch { }
+
+        # 6) クラッシュダンプの在処 (コピーは巨大なので一覧だけ)
+        try {
+            $dmp = Join-Path $HealthDir 'CrashDumps'
+            if (Test-Path $dmp) {
+                Get-ChildItem $dmp -Filter *.dmp -ErrorAction SilentlyContinue | Sort-Object LastWriteTime |
+                    Select-Object -Last 5 FullName, Length, LastWriteTime |
+                    Format-List | Out-File -FilePath (Join-Path $dest 'CrashDumps.txt') -Encoding utf8
+            }
+        } catch { }
+
+        # 7) 保持数の上限 (1件 約2〜3MB)。ブート死ループ等で溜まり続けて本物の証拠が埋もれる/ディスクを食うのを防ぐ。
+        try {
+            Get-ChildItem (Join-Path $HealthDir 'CrashSnapshots') -Directory -ErrorAction SilentlyContinue |
+                Sort-Object Name | Select-Object -SkipLast 20 |
+                ForEach-Object { Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue }
+        } catch { }
+
+        Write-WatchLog "死亡スナップショットを保全しました: $dest" 'Cyan'
+    } catch {
+        Write-WatchLog "スナップショット保全に失敗: $($_.Exception.Message)" 'Yellow'
+    }
+}
+
 # Epic マニフェストから Among Us の起動URLを自動検出する。
 function Find-EpicLaunchUrl {
     try {
@@ -358,6 +488,9 @@ while ($true) {
     # 動いている AU の exe パスを随時更新（次回フォールバック用）
     if ($proc -and -not $script:CapturedExe) { try { $script:CapturedExe = $proc.Path } catch { } }
 
+    # 生きているうちにハンドルを掴んでおく (消えてからでは ExitCode を読めない = 死因識別の生命線)
+    if ($proc) { Register-AuProcessHandle $proc }
+
     # --- ゲーム側からの意図的な再起動要求 (穴2) ---
     # AutoRestart が認証/回線死からの復帰でプロセスを終了する直前に restart_request.flag を置く。
     # これは番犬自身のブートループ抑止(grace/cooldown)の対象外の「明示要求」なので、それらの窓を無視して
@@ -444,7 +577,20 @@ while ($true) {
 
     # --- 異常判定 ---
     if (-not $proc) {
-        Write-WatchLog "異常: AU プロセスが見つかりません（クラッシュ/終了）。" 'Red'
+        # ExitCode を読んで crash / clean exit を切り分ける。「プロセスが見つかりません」だけでは
+        # AutoRestart の Application.Quit も本物のクラッシュも同じ顔をする (2026-07-15 22:58 の教訓)。
+        $exitDiag = Get-AuExitDiagnosis
+        Write-WatchLog "異常: AU プロセスが見つかりません（クラッシュ/終了）。$exitDiag" 'Red'
+
+        # 意図的な再起動要求 (restart_request.flag) が既に処理済みで来ている場合を除き、証拠を固める。
+        # 再起動は 1 秒後に走り、その次の死が今回の証拠 (.prev / log.html / イベントログ) を上書きするため
+        # ここで逃がさないと永久に失われる。
+        Save-CrashSnapshot -Reason 'AU プロセス消失 (クラッシュ/終了)' -ExitDiag $exitDiag
+
+        # ハンドルは使い切ったので解放 (次のプロセスを掴み直す)
+        try { if ($script:AuProcHandle) { $script:AuProcHandle.Dispose() } } catch { }
+        $script:AuProcHandle = $null
+        $script:AuProcPid    = 0
     } elseif (-not $health.Fresh) {
         # WerFault がこの AU のクラッシュダンプを書いている間はプロセスがサスペンドされ心拍が止まり
         # 「ハング」に見える。ここで Stop-Au すると書き込み途中のダンプが破棄され、LocalDumps 計器が
@@ -464,6 +610,8 @@ while ($true) {
             $script:WerWaitSince = [datetime]::MinValue
         }
         Write-WatchLog ("異常: AU は生存だが心拍が {0:N0}s 途切れています（ハング疑い）。" -f $health.AgeSec) 'Red'
+        # ハングは番犬が Stop-Au で殺すため、殺す前の状態を固める (殺した後では心拍途絶の前後関係が読めない)。
+        Save-CrashSnapshot -Reason ("ハング疑い (心拍 {0:N0}s 途絶・プロセスは生存)" -f $health.AgeSec) -ExitDiag 'N/A (まだ生存中 — この後 番犬が強制終了する)'
     }
 
     # --- ブート死判定 (launch 1回につき1回だけ) ---
