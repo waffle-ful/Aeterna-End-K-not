@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using AmongUs.GameOptions;
 using EndKnot.Modules;
+using EndKnot.Modules.Extensions;
 using Hazel;
 
 namespace EndKnot.Roles;
@@ -33,6 +34,10 @@ public class Entombed : IAddon
         
         MeetingEndTS = Utils.TimeStamp;
         GracePeriodLength = 5 + 5 / Main.RealOptionsData.GetFloat(FloatOptionNames.PlayerSpeedMod);
+
+        // 計器 (BUG-20260715-07)
+        foreach ((byte id, SystemTypes room) in BlockedRoom)
+            Logger.Info($"Assigned {room} to {Utils.GetPlayerById(id)?.GetRealName() ?? id.ToString()} (grace {GracePeriodLength:F1}s from TS {MeetingEndTS})", "Entombed");
 
         if (Utils.DoRPC)
         {
@@ -72,7 +77,36 @@ public class Entombed : IAddon
         }
 
         if (pc.IsInRoom(blockedRoom))
+        {
+            Logger.Info($"{pc.GetRealName()} entered blocked room {blockedRoom} - suicide", "Entombed");
             pc.Suicide();
+            return;
+        }
+
+        LogNearMiss(pc, blockedRoom, now);
+    }
+
+    // 計器 (BUG-20260715-07): 「指定部屋に入ったのに自殺しない」の切り分け用。
+    // 部屋の bounds には入っているのに IsInRoom() が false を返した = 「死ぬはずが死ななかった」瞬間だけを
+    // 1 秒に 1 回記録する (OnFixedUpdate は毎 tick 呼ばれるため無throttleだとログが溢れる)。
+    // IsTouching=false なら Check() の非矩形部屋パス (ExtendedPlayerControl.cs:2730) が犯人、
+    // colliderOffset.y が 127 付近なら no-clip ([[project_noclip_collider_offset_shadow_loss]]) が犯人。
+    private static readonly Dictionary<byte, long> LastNearMissLog = [];
+
+    private static void LogNearMiss(PlayerControl pc, SystemTypes blockedRoom, long now)
+    {
+        PlainShipRoom room = blockedRoom.GetRoomClass();
+        if (!room || !room.roomArea) return;
+
+        Vector2 pos = pc.Pos();
+        if (!room.roomArea.bounds.Contains2D(pos)) return;
+
+        if (LastNearMissLog.TryGetValue(pc.PlayerId, out long last) && last == now) return;
+        LastNearMissLog[pc.PlayerId] = now;
+
+        Vector2 colliderOffset = pc.Collider ? pc.Collider.offset : Vector2.zero;
+        bool touching = pc.Collider && pc.Collider.IsTouching(room.roomArea);
+        Logger.Warn($"NEAR-MISS: {pc.GetRealName()} is inside {blockedRoom} bounds at ({pos.x:F2}, {pos.y:F2}) but IsInRoom()=false - colliderOffset=({colliderOffset.x:F2}, {colliderOffset.y:F2}) IsTouching={touching}", "Entombed");
     }
 
     public static string GetSelfSuffix(PlayerControl seer)
