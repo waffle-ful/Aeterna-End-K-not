@@ -12259,6 +12259,8 @@
   "StreamerMode.PromptYes": "Turn ON",
   "StreamerMode.PromptNo": "Not now",
   "StreamerMode.SetUrlHint": "Streamer mode is ON! To show live-chat comments, set your stream with /yt <url> here in the lobby.",
+  "GcUafHeal.AppliedBody": "Applied a fix for a crash that could suddenly end the game.\nThe affected component will be rebuilt automatically the next time you launch.\n(That next launch may take a few minutes longer than usual.)",
+  "GcUafHeal.FailedBody": "The automatic fix for a crash-causing bug was attempted twice but didn't take effect.\nPlease manually delete the \"BepInEx\\interop\" folder and restart the game.",
   "EarlyWarning.PacketNearKick": "Warning: an outgoing packet is close to the anti-cheat size limit. If a kick happens, check EndKnot-Health.log.",
   "EarlyWarning.SnapToExhausted": "Warning: the round's position-sync budget is nearly exhausted. Other players may start desyncing soon.",
   "EarlyWarning.ExceptionFlood": "Warning: errors are occurring in a burst. Check EndKnot-Health.log or log.html for details.",

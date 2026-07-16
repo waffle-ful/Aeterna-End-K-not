@@ -132,7 +132,11 @@ public static class HealthLog
             try { gcInc = GcUafProbe.IsIncrementalGc() ? 1 : 0; }
             catch { }
 
-            string sessionLine = $"SESSION start ver={Main.PluginVersion} t={StartTs} gcInc={gcInc}";
+            string gcUafState = "none";
+            try { gcUafState = GcUafSelfHeal.GetMarkerState(); }
+            catch { }
+
+            string sessionLine = $"SESSION start ver={Main.PluginVersion} t={StartTs} gcInc={gcInc} gcUafState={gcUafState}";
             Write(sessionLine);
             Timeline(sessionLine);
         }

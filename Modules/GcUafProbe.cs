@@ -9,7 +9,8 @@ namespace EndKnot.Modules;
 // incremental GC のマークサイクル中に interop フィールド setter (write barrier 無し) で書いた
 // il2cpp string が、後続のサイクルで回収されてしまうかを起動時に決定的に判定する。
 // interop 再生成 (barrier 有効化) の前後で VULNERABLE→SAFE に変わることを確認する 1-bit テスト器。
-// フラグ Debug.GcUafBootProbe が true の時だけメインメニュー到達後に一度呼ばれる。
+// RunOnce() (手動診断ログ用) はフラグ Debug.GcUafBootProbe が true の時だけメインメニュー到達後に一度呼ばれる。
+// Probe() 本体は GcUafSelfHeal (自己修復オーケストレータ) からもフラグ無条件で呼ばれる — 通常運用の主経路はこちら。
 //
 // v2: v1 (書き込みと判定を同一フレーム・同一ラウンドで完結させる方式) は2つの理由で再現に失敗した:
 //   1. 保守的スタックスキャン — strPtr/weak のローカルがスタック/レジスタに残ったまま GC を回すと
@@ -44,6 +45,13 @@ public static class GcUafProbe
         if (_done) return;
         _done = true;
 
+        Probe();
+    }
+
+    // v2 probe 本体。GcUafSelfHeal (自己修復オーケストレータ) から結果を判定に使うため
+    // RunOnce から切り出したもの — アルゴリズム自体は無変更、戻り値 (collected 数 / 失敗時 null) を追加しただけ。
+    internal static int? Probe()
+    {
         try
         {
             Logger.Info($"gcIncremental={il2cpp_gc_is_incremental()} sliceNs={il2cpp_gc_get_max_time_slice_ns()}", "GcUafProbe");
@@ -95,10 +103,13 @@ public static class GcUafProbe
             il2cpp_gc_collect(2); // 後始末 (評価は終わっているので安全)
 
             Logger.Warn($"GCUAF-PROBE: {(collected > 0 ? "VULNERABLE" : "SAFE")} collected={collected}/{Batch} (strategyA={a}, strategyB={b})", "GcUafProbe");
+
+            return collected;
         }
         catch (Exception e)
         {
             Logger.Error($"GcUafProbe failed: {e.Message}", "GcUafProbe");
+            return null;
         }
     }
 

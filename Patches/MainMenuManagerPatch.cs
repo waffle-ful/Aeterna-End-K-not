@@ -75,6 +75,8 @@ public static class MainMenuManagerPatch
 
         if (Main.GcUafBootProbe.Value) LateTask.New(GcUafProbe.RunOnce, 3f, "GcUafProbe.RunOnce");
 
+        LateTask.New(GcUafSelfHeal.RunOnce, 3f, "GcUafSelfHeal.RunOnce");
+
         if (Template == null) Template = __instance.quitButton;
 
         if (Template == null) return;
