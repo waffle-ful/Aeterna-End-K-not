@@ -45,6 +45,7 @@ public static class HealthLog
     private static long _sessionStartWsMB; // セッション先頭の wsMB(mem 増分の基準)
     private static long _lastNameSent; // 前回 HB 時点の FixedUpdatePatch.NameSent(HB デルタ算出用)
     private static long _lastNameSkip; // 前回 HB 時点の FixedUpdatePatch.NameSkip
+    private static int _lastNetResent; // 前回 HB 時点の Hazel MessagesResent(wire 再送ストーム弁別計器 — BUG-20260716-06)
     private static bool _hadDisconnectThisSession; // セッション中に DC 記録があったか(stuck-menu 判定の前提条件)
     private static long _continuousMenuSinceTs; // 非ホスト Menu 状態が連続している開始 t(0=非連続)
     private static long _lastStuckMenuNoteTs;
@@ -242,7 +243,20 @@ public static class HealthLog
             try { idTok = EOSManager.Instance != null && !string.IsNullOrEmpty(EOSManager.Instance.UserIDToken) ? 1 : 0; }
             catch { }
 
-            string hb = $"t={now} up={now - StartTs} state={state} host={(host ? 1 : 0)} server={server} players={players} wsMB={wsMB} gcMB={gcMB} gc2={gen2} nmSent={nmSent} nmSkip={nmSkip} eosTry={eosTry} eosFlow={eosFlow} idTok={idTok}{lastSendSuffix}";
+            // Hazel connection の wire 統計 (BUG-20260716-06 計器)。mod 送信層の計測では既知4機序が全て
+            // シロだったため、送信層から見えない再送ストーム (回線ヒカップで Reliable 再送が実ワイヤレートを
+            // 数倍化) を弁別する。rsndD=前回HBからの再送デルタ / unack=未ACKの Reliable 在庫 / pNoAck=ACK
+            // 無しに連続した ping 数 (リンク死の直接signal)。
+            int rsndD = 0, unack = 0, pNoAck = 0, ping = 0;
+            if (TryGetNetStats(out int rsnd, out int relSent, out int ackd, out pNoAck, out ping))
+            {
+                rsndD = rsnd - _lastNetResent;
+                if (rsndD < 0) rsndD = rsnd; // 接続張り替えでカウンタが 0 から再スタートした
+                _lastNetResent = rsnd;
+                unack = relSent - ackd;
+            }
+
+            string hb = $"t={now} up={now - StartTs} state={state} host={(host ? 1 : 0)} server={server} players={players} wsMB={wsMB} gcMB={gcMB} gc2={gen2} nmSent={nmSent} nmSkip={nmSkip} eosTry={eosTry} eosFlow={eosFlow} idTok={idTok} ping={ping} rsndD={rsndD} unack={unack} pNoAck={pNoAck}{lastSendSuffix}";
             Write($"HB {hb}");
 
             // 普段見る通常ログにもメモリ + 状態の要約を低頻度で(最適化余地の把握用)。
@@ -393,6 +407,12 @@ public static class HealthLog
 
             if (!intentional)
             {
+                // wire 統計の最終スナップショット (BUG-20260716-06)。再送ストーム説なら resent が直近 HB の
+                // rsndD 帯から跳ね、pNoAck が積み上がっているはず。切断後は connection が既に死んでいる
+                // ことがあるので取れたときだけ書く。
+                if (TryGetNetStats(out int rsnd, out int relSent, out int ackd, out int pNoAck, out int ping))
+                    Write($"DCNET resent={rsnd} relSent={relSent} ackd={ackd} unack={relSent - ackd} pNoAck={pNoAck} ping={ping}");
+
                 // 異常切断: リングバッファを DCTX としてダンプ (crash前の最終送信コンテキスト)
                 try
                 {
@@ -422,6 +442,38 @@ public static class HealthLog
                 Logger.Info($"disconnect: {line}", "Health");
         }
         catch (Exception e) { Utils.ThrowException(e); }
+    }
+
+    /// <summary>
+    /// Hazel connection の wire 統計スナップショット (BUG-20260716-06 計器)。読み取り専用・送信ゼロ。
+    /// resent=Reliable 再送の累計 / relSent=Reliable 送信累計 / ackd=ACK 済み累計 /
+    /// pingsNoAck=ACK を受けずに連続した keepalive ping 数 / ping=AU 報告の RTT(ms)。
+    /// connection 未確立・切断済みなどで取れなければ false。
+    /// </summary>
+    private static bool TryGetNetStats(out int resent, out int relSent, out int ackd, out int pingsNoAck, out int ping)
+    {
+        resent = relSent = ackd = pingsNoAck = ping = 0;
+
+        try
+        {
+            AmongUsClient client = AmongUsClient.Instance;
+            var conn = client != null ? client.connection : null;
+            if (conn == null) return false;
+
+            Hazel.ConnectionStatistics st = conn.Statistics;
+            if (st == null) return false;
+
+            resent = st.MessagesResent;
+            relSent = st.reliableMessagesSent;
+            ackd = st.reliablePacketsAcknowledged;
+            ping = client.Ping;
+
+            var udp = conn.TryCast<Hazel.Udp.UdpConnection>();
+            if (udp != null) pingsNoAck = udp.pingsSinceAck;
+
+            return true;
+        }
+        catch { return false; }
     }
 
     /// <summary>直近送信リングの最新エントリを " lastSend=... lastLen=... lastAgeSec=..." 形式で返す(なければ空文字列)。</summary>
