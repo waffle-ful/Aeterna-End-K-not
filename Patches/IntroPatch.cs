@@ -1276,7 +1276,7 @@ internal static class IntroCutsceneDestroyPatch
                             sender.Write(false);
                             sender.EndRpc();
 
-                            sender.Notify(pc, GetString("GLHF"), 2f);
+                            sender.Notify(pc, GetString("GLHF"), out sender, 2f);
 
                             sender.SendMessage();
                         }

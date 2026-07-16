@@ -783,8 +783,10 @@ public static class CustomRpcSenderExtensions
                 sender.Write((int)MurderResultFlags.FailedProtected);
                 sender.EndRpc();
 
+                // ここで sender.Notify を使うと flush 発火時に swap した sender をこのメソッドの呼び出し元へ
+                // 返せない (RpcGuardAndKill 自体は sender を返さない) ので、独立送信の PlayerControl.Notify を使う。
                 if (Options.CurrentGameMode == CustomGameMode.Standard && !MeetingStates.FirstMeeting && !AntiBlackout.SkipTasks && !ExileController.Instance && GameStates.IsInTask && killer.IsBeginner() && Main.GotShieldAnimationInfoThisGame.Add(killer.PlayerId))
-                    sender.Notify(killer, Translator.GetString("PleaseStopBeingDumb"), 10f);
+                    killer.Notify(Translator.GetString("PleaseStopBeingDumb"), 10f);
 
                 returnValue = true;
             }
@@ -908,8 +910,11 @@ public static class CustomRpcSenderExtensions
             sender.EndRpc();
         }
 
-        public bool Notify(PlayerControl pc, string text, float time = 6f, bool overrideAll = false, bool log = true, bool setName = true)
+        // setName=true の場合、内部の WriteSetNameRpcsToSender がチャンク分割で sender を flush+再生成することがある。
+        // 呼び出し元は必ず newSender で握り直すこと (旧 sender は Finished 化されて以降の書込が throw する)。
+        public bool Notify(PlayerControl pc, string text, out CustomRpcSender newSender, float time = 6f, bool overrideAll = false, bool log = true, bool setName = true)
         {
+            newSender = sender;
             if (!AmongUsClient.Instance.AmHost || !pc) return false;
             if (!GameStates.IsInTask) return false;
             if (!text.Contains("<color=") && !text.Contains("</color>")) text = Utils.ColorString(Color.white, text);
@@ -935,7 +940,12 @@ public static class CustomRpcSenderExtensions
                 return returnValue;
             }
 
-            if (setName) returnValue |= Utils.WriteSetNameRpcsToSender(ref sender, false, false, false, false, false, false, pc, [pc], [], out bool senderWasCleared) && !senderWasCleared;
+            if (setName)
+            {
+                returnValue |= Utils.WriteSetNameRpcsToSender(ref sender, false, false, false, false, false, false, pc, [pc], [], out bool senderWasCleared) && !senderWasCleared;
+                newSender = sender;
+            }
+
             if (log) Logger.Info($"New name notify for {pc.GetNameWithRole().RemoveHtmlTags()}: {text} ({time}s)", "Name Notify");
 
             return returnValue;

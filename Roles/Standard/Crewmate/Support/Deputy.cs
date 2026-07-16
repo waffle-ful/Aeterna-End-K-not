@@ -91,7 +91,7 @@ public class Deputy : RoleBase
                     var sender = CustomRpcSender.Create("Deputy.OnCheckMurder", SendOption.Reliable);
                     var hasValue = false;
                     hasValue |= sender.SetKillCooldown(target, DeputyHandcuffCDForTarget.GetFloat());
-                    hasValue |= sender.Notify(target, CustomRoles.Deputy.ColoredTextByRole(GetString("HandcuffedByDeputy")));
+                    hasValue |= sender.Notify(target, CustomRoles.Deputy.ColoredTextByRole(GetString("HandcuffedByDeputy")), out sender);
 
                     if (target.IsModdedClient()) hasValue |= sender.RpcResetAbilityCooldown(target);
                     else hasValue |= sender.RpcGuardAndKill(target, target);
