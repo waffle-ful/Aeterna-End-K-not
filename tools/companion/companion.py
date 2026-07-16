@@ -556,6 +556,59 @@ async def main_async(args: argparse.Namespace) -> None:
         await asyncio.sleep(backoff)
 
 
+def _start_parent_watchdog() -> None:
+    """親 (Among Us) が死んだら自分も即終了する見張り。
+
+    相棒は ShellExecute (cmd) 起動でジョブオブジェクトの外に出てしまうため、ホスト (AU) が
+    ウォッチドッグの強制 kill / auto-rehost で落ちても道連れにならず孤児として残り続ける。
+    その状態で AU が再起動すると新しい相棒が別プロセスで立ち上がるので、再起動のたびに増殖し、
+    複数インスタンスが同じイベントファイルを読んで実況が被り合う (配信終盤に壊れる原因)。
+    起動時に渡された親 PID (EK_COMPANION_PARENT_PID) を監視し、消えたら os._exit で確実に落ちる。
+    """
+    raw = os.environ.get("EK_COMPANION_PARENT_PID", "").strip()
+    if not raw:
+        return
+    try:
+        parent_pid = int(raw)
+    except ValueError:
+        return
+    if parent_pid <= 0:
+        return
+
+    def _pid_alive(pid: int) -> bool:
+        if os.name == "nt":
+            import ctypes
+            PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+            STILL_ACTIVE = 259
+            k = ctypes.windll.kernel32
+            h = k.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+            if not h:
+                return False  # 開けない = ほぼ消滅
+            try:
+                code = ctypes.c_ulong()
+                ok = k.GetExitCodeProcess(h, ctypes.byref(code))
+                return bool(ok) and code.value == STILL_ACTIVE
+            finally:
+                k.CloseHandle(h)
+        try:
+            os.kill(pid, 0)  # 非 Windows (開発用フォールバック)
+            return True
+        except OSError:
+            return False
+
+    def _watch() -> None:
+        seen_alive = False  # 一度でも生存を確認してから監視 (起動直後の取りこぼし・誤爆防止)
+        while True:
+            if _pid_alive(parent_pid):
+                seen_alive = True
+            elif seen_alive:
+                print(f"[watchdog] 親プロセス (PID {parent_pid}) が終了したので相棒も終了します")
+                os._exit(0)
+            time.sleep(3.0)
+
+    threading.Thread(target=_watch, name="parent-watchdog", daemon=True).start()
+
+
 def main() -> None:
     # --list-audio-devices は --events 必須チェックより先に処理する (単体で使えるように)
     if "--list-audio-devices" in sys.argv:
@@ -594,6 +647,7 @@ def main() -> None:
     parser.add_argument("--list-audio-devices", action="store_true",
                         help="音声デバイスの一覧を表示して終了")
     args = parser.parse_args()
+    _start_parent_watchdog()  # 親 AU が死んだら道連れで終了 (孤児プロセスの増殖防止)
     try:
         asyncio.run(main_async(args))
     except KeyboardInterrupt:
