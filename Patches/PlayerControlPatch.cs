@@ -1076,6 +1076,14 @@ internal static class ReportDeadBodyPatch
     public static readonly Dictionary<byte, List<NetworkedPlayerInfo>> WaitReport = [];
     public static bool MeetingStarted;
 
+    // 会議安全窓 (BUG-20260716-09): ゲーム開始直後、役職 RPC バーストの排水が終わる前に会議が
+    // 始まると、まだ intro 中のクライアントは MeetingHud の初期化ごと壊れる (暗転+投票不能+
+    // チャット凍結)。強制初手会議だけでなく通報/緊急ボタン発の会議も同じ窓で保留する。
+    // 時刻ベース (realtimeSinceStartup 比較) なのでコルーチン死亡等で永久封鎖になる事故はない。
+    // IntroCutscene 終了時にハードキャップ (+17秒) で武装し、排水完了+マージンで前倒し開放される。
+    public static float MeetingSafeAt;
+    public static bool MeetingSafeWindowOpen => UnityEngine.Time.realtimeSinceStartup >= MeetingSafeAt;
+
     public static bool Prefix(PlayerControl __instance, [HarmonyArgument(0)] NetworkedPlayerInfo target)
     {
         if (GameStates.IsMeeting || MeetingStarted) return false;
@@ -1093,7 +1101,7 @@ internal static class ReportDeadBodyPatch
         // CanReport/WaitReport はゲーム開始時に初期化されるため、開始前の一過性ウィンドウや
         // 途中参加者は null/未登録がありうる (NRE/KeyNotFound 源)。未登録は「通報可」として扱う。
         bool canReport = CanReport == null || CanReport.GetValueOrDefault(__instance.PlayerId, true);
-        if (!canReport || __instance.IsRoleBlocked())
+        if (!canReport || __instance.IsRoleBlocked() || !MeetingSafeWindowOpen)
         {
             if (!WaitReport.TryGetValue(__instance.PlayerId, out List<NetworkedPlayerInfo> waitList))
                 WaitReport[__instance.PlayerId] = waitList = [];
@@ -1675,7 +1683,7 @@ internal static class FixedUpdatePatch
 
             byte id = __instance.PlayerId;
 
-            if (AmongUsClient.Instance.AmHost && GameStates.IsInTask && ReportDeadBodyPatch.CanReport != null && ReportDeadBodyPatch.CanReport.GetValueOrDefault(id, true) && !id.IsPlayerRoleBlocked() && ReportDeadBodyPatch.WaitReport.TryGetValue(id, out List<NetworkedPlayerInfo> waitReports) && waitReports.Count > 0)
+            if (AmongUsClient.Instance.AmHost && GameStates.IsInTask && ReportDeadBodyPatch.MeetingSafeWindowOpen && ReportDeadBodyPatch.CanReport != null && ReportDeadBodyPatch.CanReport.GetValueOrDefault(id, true) && !id.IsPlayerRoleBlocked() && ReportDeadBodyPatch.WaitReport.TryGetValue(id, out List<NetworkedPlayerInfo> waitReports) && waitReports.Count > 0)
             {
                 NetworkedPlayerInfo info = waitReports[0];
                 waitReports.Clear();

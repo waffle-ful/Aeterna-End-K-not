@@ -28,6 +28,10 @@ public static class PacketRateGate
     }
 
     private static readonly Queue<QueuedPacket> PendingReliableQueue = new();
+
+    /// <summary>ゲート待ちの Reliable パケット数。ゲーム開始バースト (役職テーブル N² 本) の
+    /// 排水完了を外から判定する用途 (FirstTurnMeetingTrigger が会議を早く始めすぎない為のシグナル)。</summary>
+    public static int PendingCount => PendingReliableQueue.Count;
     private static readonly Stopwatch WindowTimer = Stopwatch.StartNew();
     private static int SentThisWindow;
     private static int LastPingMs;

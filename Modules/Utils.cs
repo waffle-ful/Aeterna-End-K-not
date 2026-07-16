@@ -4030,9 +4030,14 @@ public static class Utils
         return true;
     }
     
-    public static void SendGameData()
+    // Returns the LAST enqueued QueuedAction so callers can yield on qa.Wait() when later sends
+    // depend on this data having hit the wire (DataFlagRateLimiter is FIFO, so last done = all done).
+    // Upstream waits per-player (qa.Wait() in StartGameHost); this keeps that ordering guarantee
+    // while preserving the fork's batched chunking.
+    public static DataFlagRateLimiter.QueuedAction SendGameData()
     {
         int messages = 0;
+        DataFlagRateLimiter.QueuedAction lastQueued = null;
         int packingLimit = AmongUsClient.Instance.GetMaxMessagePackingLimit();
 
         MessageWriter writer = MessageWriter.Get(SendOption.Reliable);
@@ -4066,7 +4071,7 @@ public static class Utils
         }
 
         FlushWriter();
-        return;
+        return lastQueued;
 
         void FlushWriter()
         {
@@ -4081,7 +4086,7 @@ public static class Utils
             EarlyWarning.OnPacket("Utils.SendGameData", capturedWriter.Length, capturedWriter.Length, "Reliable");
 
             // cleanup: rate-limit 待ち中に drop された場合でも pooled writer を返却する (リーク防止)
-            DataFlagRateLimiter.Enqueue(() =>
+            lastQueued = DataFlagRateLimiter.Enqueue(() =>
             {
                 AmongUsClient.Instance.SendOrDisconnect(capturedWriter);
                 capturedWriter.Recycle();
