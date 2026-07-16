@@ -35,7 +35,9 @@ internal static class ChatControllerUpdatePatch
         string clip = (GUIUtility.systemCopyBuffer ?? string.Empty).Trim();
         if (clip.Length == 0) return;
 
-        string combined = area.text + clip;
+        // 生の get_text は禁止 (TextBoxPatch.SafeChatText 参照): 解放後に再利用されたスロットからは
+        // GameObject 名などのゴミ文字列が返り、それがそのまま下の SetChatFieldText で入力欄へ書き戻される。
+        string combined = TextBoxPatch.SafeChatText(area) + clip;
 
         // 安全バイト数以内: 従来どおりフィールドへ (1 メッセージで送っても anti-cheat に引っかからない)
         if (Utf8ByteCount(combined) <= ChatChunkByteBudget)

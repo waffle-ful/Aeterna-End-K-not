@@ -73,6 +73,8 @@ public static class MainMenuManagerPatch
         // メニュー到達 = ブートは成功。以降の OnApplicationQuit は「ユーザーの意図的終了」として扱ってよい。
         WatchdogLauncher.MainMenuReached = true;
 
+        if (Main.GcUafBootProbe.Value) LateTask.New(GcUafProbe.RunOnce, 3f, "GcUafProbe.RunOnce");
+
         if (Template == null) Template = __instance.quitButton;
 
         if (Template == null) return;
