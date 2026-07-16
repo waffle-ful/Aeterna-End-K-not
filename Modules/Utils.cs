@@ -2381,10 +2381,22 @@ public static class Utils
 
             if (sendTo == byte.MaxValue && HudManager.InstanceExists)
             {
-                string name = sender.Data.PlayerName;
-                sender.SetName(title);
-                HudManager.Instance.Chat.AddChat(sender, text);
-                sender.SetName(name);
+                // 生の Data.PlayerName 読みは禁止 (BUG-20260710-05) — SafePlayerName 参照。
+                // ここはブロードキャスト経路で、mod のチャット送信のうち最頻。
+                string name = SafePlayerName(sender);
+
+                // ミラーが空ならローカル表示ごと諦める。AddChat は内部で sender.Data.PlayerName を native
+                // 読みして吹き出しの名前にする (= この SetName 往復が効く理由そのもの) ので、差し替えだけ
+                // 省いて AddChat を呼ぶと結局同じ dangling フィールドを marshal して AV になる。
+                // ブロードキャストは下の RPC で全員に届くため、失うのはホストのローカルエコーだけ。
+                if (name.Length > 0)
+                {
+                    sender.SetName(title);
+                    HudManager.Instance.Chat.AddChat(sender, text);
+                    sender.SetName(name);
+                }
+                else
+                    Logger.Warn($"Skipped local echo: no managed name mirror for sender {sender.PlayerId} (would have required an unsafe Data.PlayerName read)", "SendMessage");
             }
 
             if ((noSplit && final) || (!noSplit && (!noNumberSplit || numberSplitFinal)))
@@ -2502,10 +2514,23 @@ public static class Utils
         {
             if (HudManager.InstanceExists)
             {
-                string name = sender.Data.PlayerName;
-                sender.SetName(title);
-                HudManager.Instance.Chat.AddChat(sender, text);
-                sender.SetName(name);
+                // 生の Data.PlayerName 読みは禁止 (BUG-20260710-05): このフィールドは解放済みの il2cpp string を
+                // 保持することがあり、marshal した瞬間に AV でプロセスごと即死する (fail-fast で try/catch 不可)。
+                // ここは差し替え「前」の最初の読みで、mod のシステムメッセージ全部が通る = 最頻の地雷だった。
+                string name = SafePlayerName(sender);
+
+                // ミラーが空ならこのメッセージの表示自体を諦める。AddChat は内部で sender.Data.PlayerName を
+                // native 読みして吹き出しの名前にする (= この SetName 往復が効く理由そのもの) ので、差し替え
+                // だけ省いて AddChat を呼ぶと結局同じ dangling フィールドを marshal して AV になる。
+                // ここはホスト宛て個別メッセージなので、ホストがこの1通を見逃す (ログには下で残る)。
+                if (name.Length > 0)
+                {
+                    sender.SetName(title);
+                    HudManager.Instance.Chat.AddChat(sender, text);
+                    sender.SetName(name);
+                }
+                else
+                    Logger.Warn($"Skipped local message: no managed name mirror for sender {sender.PlayerId} (would have required an unsafe Data.PlayerName read)", "SendMessage");
             }
 
             try
@@ -2688,9 +2713,12 @@ public static class Utils
             if (Main.DoBlockNameChange) return;
 
             // 装飾名があればそれで、無ければ素名で overhead を確実に上書き (stuck タイトルの解消優先)。
+            // GetValueOrDefault の第2引数はキーが在っても必ず評価されるため、ここに生の Data.PlayerName を
+            // 置くとシステムメッセージのたびに毎回読まれる = BUG-20260710-05 の地雷だった。ミラーが無ければ
+            // 空にして下の早期 return に任せる (生読みするくらいなら復元を諦める)。
             string restore = ApplySuffix(pc, out string decorated) && !string.IsNullOrEmpty(decorated)
                 ? decorated
-                : Main.AllPlayerNames.GetValueOrDefault(id, pc.Data.PlayerName ?? string.Empty);
+                : Main.AllPlayerNames.GetValueOrDefault(id, string.Empty);
 
             if (string.IsNullOrEmpty(restore)) return;
 
@@ -2702,6 +2730,25 @@ public static class Utils
             // 窓 0.7s は MultiMessageGapSeconds(0.4s) より十分広く、テンプレの連続チャンクを跨いで
             // 必ず最後の touch の後にだけ発火させる (途中発火→次チャンクで clobber を防ぐ)。
         }, 0.7f, "RestoreDecoratedNameAfterMessage", log: false);
+    }
+
+    // BUG-20260710-05: `pc.Data.PlayerName` の生読みは禁止。このフィールドは解放済みの il2cpp string を
+    // 保持することがあり、managed へ marshal した瞬間に「再利用先の boxed Color の r(=1.0f=0x3F800000)」を
+    // 文字列長と誤読して約2.13GB の memmove が AV → プロセスごと即死する (fail-fast なので try/catch 不可)。
+    // 代わりに managed ミラーを返す (Patches/TextBoxPatch.cs の SafeChatText と同じ「生読みをやめて鏡を返す」型)。
+    //
+    // LastBroadcastName を先に見るのは、RpcSetName の Postfix (RpcSetNameMirrorCachePatch) で常時同期される
+    // = Data.PlayerName の正確な鏡だから。ここで素名 (AllPlayerNames) を先に返すと、装飾名を持つホストの
+    // 名前が素名に化けたまま FixedUpdate の dirty-check に「送信済み」と誤判定されて永久固定される
+    // ([[project_name_tag_dirty_cache_mirror]] の罠)。両方無ければ空 — 呼び出し側で書き戻しを諦めること
+    // (空名で SetName すると名前が消えるため)。
+    internal static string SafePlayerName(PlayerControl player)
+    {
+        if (player == null) return string.Empty;
+
+        return FixedUpdatePatch.LastBroadcastName.TryGetValue(player.PlayerId, out string decorated) && !string.IsNullOrEmpty(decorated)
+            ? decorated
+            : Main.AllPlayerNames.GetValueOrDefault(player.PlayerId, string.Empty);
     }
 
     public static bool ApplySuffix(PlayerControl player, out string name)
@@ -3898,7 +3945,9 @@ public static class Utils
 
         if (newOutfit.Compare(pc.Data.DefaultOutfit)) return false;
 
-        CustomRpcSender sender = writer ?? CustomRpcSender.Create($"Utils.RpcChangeSkin({pc.Data.PlayerName})", sendOption);
+        // デバッグラベルを作るためだけに生の Data.PlayerName を読むと、それだけで AV 即死の目が出る
+        // (BUG-20260710-05) — SafePlayerName 参照。ラベルなのでミラーで十分。
+        CustomRpcSender sender = writer ?? CustomRpcSender.Create($"Utils.RpcChangeSkin({SafePlayerName(pc)})", sendOption);
 
         NetworkedPlayerInfo.PlayerOutfit current = pc.Data.DefaultOutfit;
         if (newOutfit.PlayerName == null || newOutfit.HatId == null || newOutfit.SkinId == null || newOutfit.VisorId == null || newOutfit.PetId == null || newOutfit.NamePlateId == null)
