@@ -167,8 +167,12 @@ public class Vulture : RoleBase
         }, onTick: () => Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc, SendOption: SendOption.None), onCanceled: () => CooldownTimer = null);
         Utils.SendRPC(CustomRPC.SyncRoleData, pc.PlayerId);
 
-        Vector2 bodyPos = Object.FindObjectsOfType<DeadBody>().First(x => x.ParentId == target.PlayerId).TruePosition;
-        foreach (byte seerId in Main.PlayerStates.Keys) LocateArrow.Remove(seerId, bodyPos);
+        DeadBody vultureBody = Object.FindObjectsOfType<DeadBody>().FirstOrDefault(x => x.ParentId == target.PlayerId);
+        if (vultureBody != null)
+        {
+            Vector2 bodyPos = vultureBody.TruePosition;
+            foreach (byte seerId in Main.PlayerStates.Keys) LocateArrow.Remove(seerId, bodyPos);
+        }
 
         pc.Notify(GetString("VultureBodyReported"));
         UnreportablePlayers.Add(target.PlayerId);

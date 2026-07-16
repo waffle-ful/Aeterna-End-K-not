@@ -1373,7 +1373,6 @@ internal static class ExtendedPlayerControl
                 {
                     sender.TP(player, pcPos, noCheckState: true);
                     sender.SetKillCooldown(player, timer);
-                    sender.Notify(player, GetString("BlackScreenFixCompleteNotify"));
 
                     dummyGhost.NetTransform.SnapTo(ghostPos, (ushort)(dummyGhost.NetTransform.lastSequenceId + 328));
                     dummyGhost.NetTransform.SetDirtyBit(uint.MaxValue);
@@ -1382,6 +1381,8 @@ internal static class ExtendedPlayerControl
                     sender.WriteVector2(ghostPos);
                     sender.Write((ushort)(dummyGhost.NetTransform.lastSequenceId + 8));
                     sender.EndRpc();
+
+                    sender.Notify(player, GetString("BlackScreenFixCompleteNotify"), out sender);
                 }
 
                 sender.SendMessage();
@@ -2191,8 +2192,10 @@ internal static class ExtendedPlayerControl
 
                 LateTask.New(() =>
                 {
-                    if (ReportDeadBodyPatch.MeetingStarted || GameStates.IsMeeting) return;
-                    Vector2 pos = Object.FindObjectsOfType<DeadBody>().First(x => x.ParentId == target.PlayerId).TruePosition;
+                    if (ReportDeadBodyPatch.MeetingStarted || GameStates.IsMeeting || GameStates.IsEnded) return;
+                    DeadBody body = Object.FindObjectsOfType<DeadBody>().FirstOrDefault(x => x.ParentId == target.PlayerId);
+                    if (body == null) return;
+                    Vector2 pos = body.TruePosition;
 
                     if (!FastVector2.DistanceWithinRange(pos, Pelican.GetBlackRoomPS(), 2f))
                     {
