@@ -119,6 +119,9 @@ public static class CompanionLauncher
             Environment.SetEnvironmentVariable("GEMINI_API_KEY", apiKey);
             Environment.SetEnvironmentVariable("EK_COMPANION_EVENTS", EventsPath);
             Environment.SetEnvironmentVariable("EK_COMPANION_ARGS", Main.AICommentaryArgs?.Value ?? "");
+            // 相棒はこの AU プロセスの生死に縛る (ShellExecute でジョブ外に出るため道連れ死が効かず、
+            // ウォッチドッグ強制 kill / auto-rehost の再起動で孤児が増殖する — 自身の PID を渡して自死させる)。
+            Environment.SetEnvironmentVariable("EK_COMPANION_PARENT_PID", Process.GetCurrentProcess().Id.ToString());
 
             var psi = new ProcessStartInfo
             {
