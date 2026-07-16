@@ -17,7 +17,7 @@ namespace EndKnot;
 [HarmonyPatch]
 public static class ModUpdater
 {
-    private const string URLGithub = "https://api.github.com/repos/waffle-ful/End-K-not";
+    private const string URLGithub = "https://api.github.com/repos/waffle-ful/Aeterna-End-K-not";
     public const bool ForceUpdate = false;
     public static bool HasUpdate;
     public static bool UpdatePopupPending;
