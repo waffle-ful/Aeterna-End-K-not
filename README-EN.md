@@ -292,6 +292,26 @@ Edit `bgm_titles.json` to control title / author display while a BGM plays. File
 - **Issues**: [GitHub Issues](../../issues) — may take a while to respond
 - [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md) | [`CONTRIBUTING.md`](./CONTRIBUTING.md) | [`SECURITY.md`](./SECURITY.md) | [`SUPPORT.md`](./SUPPORT.md)
 
+## Team
+
+End K not is run by the following members.
+
+| Member | Role | Link |
+|---|---|---|
+| Chinese-made Waffle (中国産わっふる) | Development & maintenance | [YouTube](https://www.youtube.com/@wafflewafflewafflewafflewaffle) |
+| Tora-kun no Ie (トラ君の家) | Outreach & PR | [YouTube](https://www.youtube.com/@taizen-q3j) |
+| Chaco (チャコ) | Outreach & PR | — |
+
+> The code modification history can be traced through this repository's git log and [`CHANGELOG.md`](./CHANGELOG.md).
+
+## Funding & Donations
+
+End K not is a **free, GPL-3.0 mod**. All features are and will remain free, and donations are never required.
+
+Any donations are **not personal income for the developers** — they are used solely for the mod's actual running costs (server, domain, API usage, commissioned assets, and so on). The spending rules and monthly finances are published for transparency.
+
+▶ **[Funding rules and financial reports (`FUNDING.md`)](./FUNDING.md)**
+
 ## License
 
 This project is licensed under the **GNU General Public License v3.0**. See [`LICENSE`](./LICENSE) for details.
