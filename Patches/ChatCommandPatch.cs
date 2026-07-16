@@ -258,6 +258,7 @@ internal static class ChatCommands
             new("DeleteTag", "{id}", Command.UsageLevels.Host, Command.UsageTimes.InLobby, DeleteTagCommand, true, false, [GetString("CommandArgs.DeleteTag.Id")]),
             new("DayBreak", "", Command.UsageLevels.Everyone, Command.UsageTimes.InMeeting, DayBreakCommand, true, true),
             new("Fix", "{id}", Command.UsageLevels.HostOrModerator, Command.UsageTimes.InGame, FixCommand, true, false, [GetString("CommandArgs.Fix.Id")]),
+            new("KillFlash", "", Command.UsageLevels.HostOrModerator, Command.UsageTimes.InGame, KillFlashCommand, true, false),
             new("XOR", "{role} {role}", Command.UsageLevels.Everyone, Command.UsageTimes.Always, XORCommand, true, false, [GetString("CommandArgs.XOR.Role"), GetString("CommandArgs.XOR.Role")]),
             new("ChemistInfo", "", Command.UsageLevels.Everyone, Command.UsageTimes.Always, ChemistInfoCommand, true, false),
             new("Forge", "{id} {role}", Command.UsageLevels.Everyone, Command.UsageTimes.InMeeting, ForgeCommand, true, true, [GetString("CommandArgs.Forge.Id"), GetString("CommandArgs.Forge.Role")]),
@@ -1214,6 +1215,20 @@ internal static class ChatCommands
 
         if (Main.EnumeratePlayerControls().All(x => x.IsAlive()))
             Logger.SendInGame(GetString("FixBlackScreenWaitForDead"), Color.yellow);
+    }
+
+    // TOHK の /kf 相当: 全バニラクライアントへリアクター desync フラッシュを撃ち、固まった
+    // 黒画面を HUD 再構築で強制復帰させる (BUG-20260716-09 の手動レスキュー)。/fix {id} と違い
+    // FixBlackScreen の会議ゲートを通らないので、いつでも即座に全員へ撃てる。
+    private static void KillFlashCommand(PlayerControl player, string text, string[] args)
+    {
+        Logger.Info($"/kf manual all-player reactor flash requested by {player.GetNameWithRole()}", "KillFlash");
+
+        foreach (PlayerControl pc in Main.EnumeratePlayerControls())
+        {
+            if (!pc || pc.IsModdedClient()) continue;
+            pc.ReactorFlash();
+        }
     }
 
     public static void DayBreakCommand(PlayerControl player, string text, string[] args)

@@ -1198,8 +1198,18 @@ internal static class StartGameHostPatch
 
             pc.Data.Disconnected = true;
         }
-        
-        Utils.SendGameData();
+
+        // Upstream yields on qa.Wait() here so the Disconnected=true data is on the wire BEFORE
+        // SetRoleSelf below — without the wait, the immediate self-role RPCs can overtake this
+        // still-queued GameData (same ordering-inversion class as the Release() pacing bug).
+        {
+            var qa = Utils.SendGameData();
+            if (qa != null)
+            {
+                yield return qa.Wait();
+                if (qa.Dropped) yield break;
+            }
+        }
 
         Logger.Info("Successfully set everyone's data as Disconnected", "StartGameHost");
 
@@ -1220,8 +1230,11 @@ internal static class StartGameHostPatch
             bool disconnected = Main.PlayerStates.TryGetValue(pc.PlayerId, out var state) && state.IsDead && state.deathReason == PlayerState.DeathReason.Disconnected;
             pc.Data.Disconnected = disconnected;
         }
-        
-        Utils.SendGameData();
+
+        {
+            var qa = Utils.SendGameData();
+            if (qa != null) yield return qa.Wait();
+        }
     }
 
     private static bool IsBasisChangingPlayer(byte id, CustomRoles role)
@@ -1630,26 +1643,43 @@ internal static class StartGameHostPatch
                 if (RecordSetRoles)
                     Logger.Info($"Release burst = {SetRoleLog.Count} SetRole RPCs (broadcast={SetRoleLog.Count(x => x.TargetClientId < 0)}), server={GameStates.CurrentServerType}, clients={Main.EnumeratePlayerControls().Count(x => x.OwnerId >= 0)}", "SetRoleBurst");
 
+                // Default: flush every sender in this frame, like upstream. Pacing this burst through
+                // DataFlagRateLimiter stretched the flushes over ~N²/23 seconds, so at 10+ players
+                // SetRoleSelf (sent ~2s later, bypassing the limiter) overtook the still-queued role
+                // tables on the wire — vanilla clients that receive their own role before everyone
+                // else's black-screen before the intro (10人以上で必ず暗転, 2026-07-16). The packet-rate
+                // kick theory behind the pacing was refuted the same day (no-kick windows at 258 pkts/10s),
+                // and PacketRateGate now smooths all reliable sends in one FIFO without reordering.
+                // Rollback bit: create EndKnot_DATA/pace_setrole.txt to restore the old pacing.
+                bool pace = PaceReleaseBurst();
+
                 foreach (CustomRpcSender sender in Senders.Values)
                 {
                     try
                     {
-                        CustomRpcSender captured = sender;
-                        int calls = SenderRpcCount.GetValueOrDefault(captured);
+                        if (pace)
+                        {
+                            CustomRpcSender captured = sender;
+                            int calls = SenderRpcCount.GetValueOrDefault(captured);
 
-                        // Pace each flush through the rate limiter so the one-frame assignment burst spreads
-                        // under the official server's reliable-RPC/sec cap (the proven Hacking-kick trigger).
-                        // Same RPCs, same per-client views, same relative order — just sent later. No new role
-                        // state lands on any client, so the desync isolation (and team-reveal) is unaffected.
-                        // Enqueue gates on CurrentServerType: on custom/modded servers it runs immediately,
-                        // so behavior there is byte-for-byte identical to the previous direct SendMessage().
-                        // cleanup: drop 時 (切断等) は送信せず pooled writer だけ回収する (memory: writer-leak 型(b))
-                        DataFlagRateLimiter.Enqueue(() => captured.SendMessage(), SendOption.Reliable, calls, cleanup: () => captured.SendMessage(dispose: true));
+                            // cleanup: drop 時 (切断等) は送信せず pooled writer だけ回収する (memory: writer-leak 型(b))
+                            DataFlagRateLimiter.Enqueue(() => captured.SendMessage(), SendOption.Reliable, calls, cleanup: () => captured.SendMessage(dispose: true));
+                        }
+                        else
+                            sender.SendMessage();
                     }
                     catch (Exception e) { Utils.ThrowException(e); }
                 }
+
+                if (pace) Logger.Warn("pace_setrole.txt present: Release burst is being paced through DataFlagRateLimiter (known to black-screen 10+ player lobbies)", "SetRoleBurst");
             }
             catch (Exception e) { Utils.ThrowException(e); }
+        }
+
+        private static bool PaceReleaseBurst()
+        {
+            try { return System.IO.File.Exists($"{Main.DataPath}/EndKnot_DATA/pace_setrole.txt"); }
+            catch { return false; }
         }
 
         // Logs the assignment burst's SetRole RPC count (budget gate) and each client's reconstructed
