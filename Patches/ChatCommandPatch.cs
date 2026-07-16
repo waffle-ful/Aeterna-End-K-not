@@ -4566,7 +4566,13 @@ internal static class ChatUpdatePatch
     {
         int clientId = sendTo == byte.MaxValue ? -1 : Utils.GetPlayerById(sendTo).OwnerId;
 
-        string name = player.Data.PlayerName;
+        // 生の Data.PlayerName 読みは禁止 (BUG-20260710-05) — Utils.SafePlayerName 参照。
+        // ここはロビーでホストを除いたランダムなプレイヤーが sender になる経路 (:4554) なので、
+        // 「解放済みの名前を持つプレイヤー」を引く確率が構造的に一番高い。
+        // ミラーが無いときは名前を安全に書き戻せないため、このメッセージの再送自体を諦める
+        // (空名で SetName / RPC を書くと相手の名前が消えてしまう)。
+        string name = Utils.SafePlayerName(player);
+        if (name.Length == 0) return false;
 
         if (clientId == -1 && HudManager.InstanceExists)
         {
@@ -4586,7 +4592,7 @@ internal static class ChatUpdatePatch
 
         sender.AutoStartRpc(player.NetId, RpcCalls.SetName, clientId)
             .Write(player.Data.NetId)
-            .Write(player.Data.PlayerName)
+            .Write(name)
             .EndRpc();
 
         if (sender.stream.Length > 500)

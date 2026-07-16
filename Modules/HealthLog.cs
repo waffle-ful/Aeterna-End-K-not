@@ -128,7 +128,11 @@ public static class HealthLog
             _zombieHandled = false;
             _lastEndedStuckNoteTs = 0;
 
-            string sessionLine = $"SESSION start ver={Main.PluginVersion} t={StartTs}";
+            int gcInc = 0;
+            try { gcInc = GcUafProbe.IsIncrementalGc() ? 1 : 0; }
+            catch { }
+
+            string sessionLine = $"SESSION start ver={Main.PluginVersion} t={StartTs} gcInc={gcInc}";
             Write(sessionLine);
             Timeline(sessionLine);
         }
