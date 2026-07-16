@@ -314,8 +314,9 @@ public static class CalamityVisibility
 
         // GenericPopup は更新以外(Twitch 等)のクローンも拾うので name で絞る。開いている物だけ=active を確認。
         // StreamerModePopup = 配信者モードの初回勧誘 2 択 (Modules/StreamerMode.cs)。
+        // GcUafHealPopup = GC UAF 自己修復の結果通知 (Modules/GcUafSelfHeal.cs)。
         foreach (var gp in Object.FindObjectsOfType<GenericPopup>())
-            if (gp != null && gp.name is "InfoPopup" or "InfoPopupV2" or "StreamerModePopup" && gp.gameObject.activeInHierarchy) return true;
+            if (gp != null && gp.name is "InfoPopup" or "InfoPopupV2" or "StreamerModePopup" or "GcUafHealPopup" && gp.gameObject.activeInHierarchy) return true;
 
         return false;
     }

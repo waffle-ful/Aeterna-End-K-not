@@ -11601,6 +11601,8 @@
   "StreamerMode.PromptYes": "オンにする",
   "StreamerMode.PromptNo": "今はしない",
   "StreamerMode.SetUrlHint": "配信者モードをオンにしました！ コメントを表示するには、このロビーで /yt <url> を実行して配信URLを設定してください。",
+  "GcUafHeal.AppliedBody": "ゲームが突然終了する不具合への対策を適用しました。\n次回起動時に自動で部品を作り直します。\n(次回の起動は普段より数分ほど余分にかかることがあります)",
+  "GcUafHeal.FailedBody": "クラッシュの原因となる不具合の自動修復を2回試みましたが、うまくいきませんでした。\nお手数ですが「BepInEx\\interop」フォルダを手動で削除してから、ゲームを再起動してください。",
   "EarlyWarning.PacketNearKick": "送信中のパケットがアンチチートの上限サイズに近づいています。切断が起きたら EndKnot-Health.log を確認してください。",
   "EarlyWarning.SnapToExhausted": "今ラウンドの位置同期の残り枠がほとんどありません。もうすぐ他プレイヤーの表示がズレ始めるかもしれません。",
   "EarlyWarning.ExceptionFlood": "エラーが立て続けに発生しています。詳しくは EndKnot-Health.log か log.html を確認してください。",
