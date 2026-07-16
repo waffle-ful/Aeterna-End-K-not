@@ -1,0 +1,9 @@
+# GitHub リポジトリ上部の「Sponsor」ボタン設定。
+# 集金先が決まったら、該当する行のコメント（先頭の # ）を外してユーザー名を記入してください。
+# 全行コメントのままなら、ボタンは表示されません（＝有効化されません）。
+# 参考: https://docs.github.com/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/displaying-a-sponsor-button-in-your-repository
+
+# ko_fi: your-ko-fi-username
+# github: [your-github-username]
+# patreon: your-patreon-username
+# custom: ["https://example.com/donate"]
