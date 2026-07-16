@@ -142,13 +142,30 @@ internal static class ExileControllerWrapUpPatch
         if (AmongUsClient.Instance.AmHost)
         {
             Stopwatch = Stopwatch.StartNew();
-            
+
             LateTask.New(() =>
             {
                 if (GameStates.IsEnded) return;
                 AntiBlackout.RevertToActualRoleTypes();
             }, 2f, "Revert AntiBlackout Measures");
-            
+
+            // TOHK の AftermeetingFlash 方式 (BUG-20260716-09 の修復側): ゲーム開始で暗転したまま
+            // 初手会議を終えたバニラクライアントに、リアクター desync フラッシュ (128→16) を撃って
+            // HUD を強制再構築させる。AntiBlackout の役職 revert (2s) が落ち着いた後に発火する。
+            if (MeetingStates.MeetingNum == 1 && Options.CurrentGameMode == CustomGameMode.Standard)
+            {
+                LateTask.New(() =>
+                {
+                    if (GameStates.IsEnded || GameStates.IsMeeting) return;
+
+                    foreach (PlayerControl pc in Main.EnumeratePlayerControls())
+                    {
+                        if (!pc || pc.IsModdedClient()) continue;
+                        pc.ReactorFlash();
+                    }
+                }, 3f, "First Meeting Blackout Buster");
+            }
+
             if (Options.EnableGameTimeLimit.GetBool() && !Options.GameTimeLimitRunsDuringMeetings.GetBool())
                 Main.GameTimer.Start();
         }

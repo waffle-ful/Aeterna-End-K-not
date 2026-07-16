@@ -1382,16 +1382,14 @@ internal static class IntroCutsceneDestroyPatch
             LateTask.New(Utils.MarkEveryoneDirtySettings, 0.5f, "SyncAllSettings On Game Start");
             LateTask.New(() => Main.Instance.StartCoroutine(ShipStatusFixedUpdatePatch.Postfix()), 5f, "ShipStatusFixedUpdatePatch Postfix Start");
 
+            // 会議安全窓を武装 (BUG-20260716-09): まずハードキャップ (+17秒) を置き、役職 RPC バーストの
+            // 排水完了+マージンで前倒し開放する。窓が閉じている間は通報/緊急ボタン発の会議も
+            // ReportDeadBodyPatch 側で保留される (強制会議か否かではなく「タイミング」が問題のため)。
+            ReportDeadBodyPatch.MeetingSafeAt = Time.realtimeSinceStartup + 17f;
+            Main.Instance.StartCoroutine(OpenMeetingSafeWindow());
+
             if (Options.CurrentGameMode == CustomGameMode.Standard && Options.FirstTurnMeeting.GetBool())
-            {
-                LateTask.New(() =>
-                {
-                    if (!GameStates.IsInGame || MeetingHud.Instance || ExileController.Instance) return;
-                    PlayerControl host = PlayerControl.LocalPlayer;
-                    if (!host || !host.IsAlive()) host = Main.AllAlivePlayerControlsToList.FirstOrDefault();
-                    if (host) host.NoCheckStartMeeting(null, force: true);
-                }, 5f, "FirstTurnMeetingTrigger");
-            }
+                Main.Instance.StartCoroutine(FirstTurnMeetingTrigger());
 
             Utils.CheckAndSetVentInteractions();
         }
@@ -1455,5 +1453,39 @@ internal static class IntroCutsceneDestroyPatch
             if (Main.CurrentMap == MapNames.Airship && FastVector2.DistanceWithinRange(PlayerControl.LocalPlayer.Pos(), new Vector2(-25f, 40f), 8f) && PlayerControl.LocalPlayer.Is(CustomRoles.GM))
                 PlayerControl.LocalPlayer.NetTransform.SnapTo(new(15.5f, 0.0f), (ushort)(PlayerControl.LocalPlayer.NetTransform.lastSequenceId + 8));
         }, 4f, "Airship Spawn FailSafe");
+    }
+
+    // ゲーム開始の役職 RPC バースト (N² 本) を PacketRateGate が 25本/秒で排水し終える前に会議が
+    // 始まると、自分役職の受信が遅いクライアントは intro 中/前に会議 RPC を受けて MeetingHud の
+    // 初期化ごと壊れる (BUG-20260716-09)。ゲートのキューが空になるのを待ってからクライアント側の
+    // intro 尺ぶんのマージンを取り、会議安全窓 (ReportDeadBodyPatch.MeetingSafeAt) を前倒し開放する。
+    private static System.Collections.IEnumerator OpenMeetingSafeWindow()
+    {
+        float drained = 0f;
+
+        while (PacketRateGate.PendingCount > 0 && drained < 10f)
+        {
+            drained += Time.deltaTime;
+            yield return null;
+        }
+
+        Logger.Info($"MeetingSafeWindow: waited {drained:0.0}s for the packet gate to drain (pending={PacketRateGate.PendingCount})", "FirstTurnMeeting");
+
+        yield return new WaitForSecondsRealtime(7f);
+
+        ReportDeadBodyPatch.MeetingSafeAt = 0f;
+    }
+
+    // FirstTurnMeeting (旧実装は intro 終了+5秒固定)。会議安全窓が開くのを待ってから強制会議を起こす。
+    private static System.Collections.IEnumerator FirstTurnMeetingTrigger()
+    {
+        while (!ReportDeadBodyPatch.MeetingSafeWindowOpen)
+            yield return null;
+
+        if (!GameStates.IsInGame || MeetingHud.Instance || ExileController.Instance) yield break;
+
+        PlayerControl host = PlayerControl.LocalPlayer;
+        if (!host || !host.IsAlive()) host = Main.AllAlivePlayerControlsToList.FirstOrDefault();
+        if (host) host.NoCheckStartMeeting(null, force: true);
     }
 }
