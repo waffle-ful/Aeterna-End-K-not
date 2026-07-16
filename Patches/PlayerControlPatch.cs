@@ -628,7 +628,7 @@ internal static class CheckMurderPatch
             target.RpcSetCustomRole(CustomRoles.Madmate);
             ExtendedPlayerControl.RpcSetCustomRole(target.PlayerId, CustomRoles.Madmate);
             var sender = CustomRpcSender.Create("RpcCheckAndMurder - Madmate", SendOption.Reliable);
-            sender.Notify(target, ColorString(GetRoleColor(CustomRoles.Madmate), GetString("BecomeMadmateCuzMadmateMode")));
+            sender.Notify(target, ColorString(GetRoleColor(CustomRoles.Madmate), GetString("BecomeMadmateCuzMadmateMode")), out sender);
             sender.RpcGuardAndKill(target, killer);
             sender.RpcGuardAndKill(target, target);
             sender.RpcGuardAndKill(killer, target);
@@ -2564,6 +2564,7 @@ static class RoleManagerAssignRoleOnDeathPatch
 {
     public static bool Prefix([HarmonyArgument(0)] PlayerControl player)
     {
+        if (GameStates.IsEnded) return false; // GAMEEND teardown: skip vanilla AssignRoleOnDeath, which NREs iterating destroyed native objects
         return ReportDeadBodyPatch.MeetingStarted || GameStates.IsMeeting || !Main.PlayerStates.Values.Any(x => x.Role is SoulCollector sc && sc.ToExile.Contains(player.PlayerId));
     }
 }

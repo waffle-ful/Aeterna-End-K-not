@@ -12,7 +12,7 @@
       2) ゲーム側   : <GameDir>\BepInEx\log.html / LogOutput.log
          GameDir は -GameDir > local.props の <AmongUsPath> > 既定候補 の順で解決。
 
-    13ルール(🔴critical 1-3 / 🟡warn 4-10 / 🟢info 11-13)で検査し、
+    14ルール(🔴critical 1-3 / 🟡warn 4-10,14 / 🟢info 11-13)で検査し、
     各検出は 証拠行 + 推定原因 + 対処 を表示します。
     診断ツールなので常に exit 0 です(ログが無くても診断結果として報告)。
 
@@ -586,6 +586,28 @@ if ($r13.Count -gt 0) {
         -Evidence $r13 `
         -Cause 'EOS 認証トークンの失効 / 再ログイン失敗。予防再ログインは3時間毎に走る設計。' `
         -Advice '頻発しているなら再ログイン間隔の見直し。memory 参照: project_h1_eos_relogin_patch_implemented。'
+}
+
+# =================================================================
+# 🟡 rule 14: プレイヤー発話バグ報告 (チャット内の症状ワード)
+# =================================================================
+# ログ計器に何も出ないバグ (例: 非モッドクライアントだけの暗転) はプレイヤーの
+# チャット発言が唯一の検知器 (2026-07-17 制定 — 暗転を Discord 指摘で初めて知った教訓)。
+# 対象は ReceiveChat (他プレイヤーの発言。RPC.cs で全受信チャットが log.html に記録される)。
+# SendChat (ホスト側送信) は mod 自動投稿・コマンド応答が混ざりノイズ源なので対象外。
+# 強シグナルのみで運用開始 (弱シグナル「おかしい/重い/ラグ」は取りこぼしが見えたら追加)。
+$r14Regex = '暗転|真っ暗|まっくら|黒い画面|画面.{0,3}(黒|くら|暗)|動けな|うごけな|固まっ|かたまっ|フリーズ|ふりーず|始まらな|はじまらな|進まな|すすまな|戻れな|もどれな|バグ|ばぐ'
+$r14 = New-Object 'System.Collections.Generic.List[string]'
+foreach ($e in $htmlEntries) {
+    if ($e.Text -notmatch '\[ReceiveChat\]') { continue }
+    if ($e.Text -match '\)\s*:\s*/') { continue }   # "(fc|puid) Name(Role): /cmd" = コマンドは除外
+    if ($e.Text -match $r14Regex) { $r14.Add((Cap-Text $e.Text 250)) }
+}
+if ($r14.Count -gt 0) {
+    Add-Finding -Severity warn -Rule 'rule14' -Title ('プレイヤー発話によるバグ報告疑い ({0}件)' -f $r14.Count) -Time '' `
+        -Evidence $r14 `
+        -Cause 'プレイヤーがチャットで不具合症状 (暗転/固まった/動けない/バグ 等) を発話。ログ計器に出ないバグの唯一の検知器の可能性がある。' `
+        -Advice '発言時刻±2分の log.html error / LogOutput 例外 / Timeline DC と突き合わせる。ログ側が無症状でも bug-inbox に kind=player-report で記帳する (ログ無症状こそ価値が高い)。暗転系の緩和は /fix {id} (個別) または /kf (全員リアクターフラッシュ・即時)。複数人が同種症状なら CRITICAL 扱い。'
 }
 
 # ---------------------------------------------------------------- 結果出力

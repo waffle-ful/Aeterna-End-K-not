@@ -122,10 +122,10 @@ public class Agitator : RoleBase
         var sender = CustomRpcSender.Create("Agitator.OnCheckMurder", SendOption.Reliable);
         var hasValue = false;
         hasValue |= sender.RpcGuardAndKill(killer, killer);
-        hasValue |= sender.Notify(killer, GetString("AgitatorPassNotify"));
+        hasValue |= sender.Notify(killer, GetString("AgitatorPassNotify"), out sender);
         killer.ResetKillCooldown();
         hasValue |= sender.SetKillCooldown(killer);
-        hasValue |= sender.Notify(target, GetString("AgitatorTargetNotify"));
+        hasValue |= sender.Notify(target, GetString("AgitatorTargetNotify"), out sender);
         AgitatorHasBombed = true;
         sender.SendMessage(!hasValue);
 

@@ -114,12 +114,12 @@ public class EvilMaker : RoleBase
         bool hasValue = false;
 
         pc.ResetKillCooldown();
-        hasValue |= sender.Notify(pc, Utils.ColorString(Utils.GetRoleColor(CustomRoles.Madmate), GetString("EvilMakerConverted")), setName: false);
+        hasValue |= sender.Notify(pc, Utils.ColorString(Utils.GetRoleColor(CustomRoles.Madmate), GetString("EvilMakerConverted")), out sender, setName: false);
         hasValue |= sender.SyncSettings(pc);
         hasValue |= sender.NotifyRolesSpecific(pc, convTarget, out sender, out bool cleared);
         if (cleared) hasValue = false;
 
-        hasValue |= sender.Notify(convTarget, Utils.ColorString(Utils.GetRoleColor(CustomRoles.Madmate), GetString("EvilMakerBeConverted")), setName: false);
+        hasValue |= sender.Notify(convTarget, Utils.ColorString(Utils.GetRoleColor(CustomRoles.Madmate), GetString("EvilMakerBeConverted")), out sender, setName: false);
         hasValue |= sender.RpcGuardAndKill(convTarget, pc);
         hasValue |= sender.RpcGuardAndKill(convTarget, convTarget);
         hasValue |= sender.NotifyRolesSpecific(convTarget, pc, out sender, out cleared);
