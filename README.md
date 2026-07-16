@@ -296,6 +296,26 @@ End K not は EHR の 650+ 役職エンジンの上に、**配信・長時間運
 - **Issues** : [GitHub Issues](../../issues) — 確認が遅れる場合があります
 - [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md) | [`CONTRIBUTING.md`](./CONTRIBUTING.md) | [`SECURITY.md`](./SECURITY.md) | [`SUPPORT.md`](./SUPPORT.md)
 
+## 開発チーム
+
+End K not は以下のメンバーで運営しています。
+
+| メンバー | 担当 | リンク |
+|---|---|---|
+| 中国産わっふる | 開発・メンテナンス | [YouTube](https://www.youtube.com/@wafflewafflewafflewafflewaffle) |
+| トラ君の家 | 渉外・広報 | [YouTube](https://www.youtube.com/@taizen-q3j) |
+| チャコ | 渉外・広報 | — |
+
+> コード改変の履歴は本リポジトリの git log および [`CHANGELOG.md`](./CHANGELOG.md) で追跡できます。
+
+## 運営費・寄付について
+
+End K not は **GPL-3.0 の無料 Mod** です。全機能は今後も無料で、寄付は一切必須ではありません。
+
+いただいた寄付は開発者個人の収入ではなく、**Mod の運営にかかる実費のみ**（サーバー・ドメイン・API 利用料・素材外注 など）に使わせていただきます。使途のルールと毎月の収支は、透明性のため公開します。
+
+▶ **[運営費のルールと収支報告 (`FUNDING.md`)](./FUNDING.md)**
+
 ## ライセンス
 
 このプロジェクトは **GNU General Public License v3.0** の下で公開されています。詳細は [`LICENSE`](./LICENSE) を参照してください。
