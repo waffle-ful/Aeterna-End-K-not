@@ -22,6 +22,12 @@
         <RepositoryUrl>https://github.com/waffle-ful/Aeterna-End-K-not</RepositoryUrl>
     </PropertyGroup>
 
+    <!-- Android ビルドは VideoModule 参照を持たない AmongUs.GameLibs.Android を使うため、
+         VideoPlayer に触れるコード (ローディング動画) をコンパイル自体からも除外する。 -->
+    <PropertyGroup Condition="'$(Configuration)' == 'Android'">
+        <DefineConstants>$(DefineConstants);ANDROID</DefineConstants>
+    </PropertyGroup>
+
     <ItemGroup>
         <EmbeddedResource Include=".\Resources\**"/>
     </ItemGroup>

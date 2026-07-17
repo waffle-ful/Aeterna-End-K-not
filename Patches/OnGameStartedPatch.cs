@@ -29,6 +29,10 @@ internal static class ChangeRoleSettings
 
     public static bool Prefix(AmongUsClient __instance, ref IEnumerator __result)
     {
+        // オンラインでは下のガードで vanilla CoStartGame に流れるため、ローディング動画の
+        // 表示はガードより前に置く (Show は内部で HudManager 不在時 no-op)。
+        EndKnot.Modules.Media.LoadingScreenVideo.Show();
+
         if (!GameStates.IsLocalGame || !HudManager.InstanceExists) return true;
 
         __result = CoStartGame().WrapToIl2Cpp();
