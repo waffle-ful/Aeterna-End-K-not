@@ -35,6 +35,9 @@ static class ShowRoleMoveNextPatch
         if (wrapper.GetField<int>("__1__state") != 1 || !__result) return;
 
         GameStates.InGame = true;
+        // イントロ (役職リビール) 開始 = ロード完了。全クライアント共通で通る唯一のフックなので
+        // ここでローディング動画を閉じる (ホスト側 CoShowIntro 内の Hide と冪等に共存)。
+        EndKnot.Modules.Media.LoadingScreenVideo.Hide();
         SetUpRoleTextPatch.Postfix(wrapper.Instance);
     }
 }
@@ -93,6 +96,7 @@ static class CoShowIntroPatch
 
             yield return ShipStatus.Instance.PrespawnStep();
             PlayerControl.LocalPlayer.AdjustLighting();
+            EndKnot.Modules.Media.LoadingScreenVideo.Hide();
             yield return __instance.CoFadeFullScreen(Color.black, Color.clear);
             __instance.FullScreen.transform.localPosition = new Vector3(0.0f, 0.0f, -500f);
             __instance.IsIntroDisplayed = false;

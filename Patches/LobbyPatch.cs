@@ -90,6 +90,8 @@ internal static class LobbyBehaviourStartPatch
 
     public static void Postfix()
     {
+        EndKnot.Modules.Media.LoadingScreenVideo.Hide();
+
         // 新 LobbyBehaviour 起動 → 前 session の stale Backrooms state を捨てる
         // (main menu 経由で復帰した時に dead Unity ref が残るバグ対応 — 2026-05-22 v3)
         try { BackroomsLobby.OnLobbyReload(); }
