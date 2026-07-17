@@ -79,6 +79,8 @@ internal static class EndGameNavigationNextGamePatch
 {
     public static void Postfix()
     {
+        EndKnot.Modules.Media.LoadingScreenVideo.Show();
+
         if (!AmongUsClient.Instance.AmHost || !Options.KickSlowJoiningPlayers.GetBool()) return;
 
         LateTask.New(() =>

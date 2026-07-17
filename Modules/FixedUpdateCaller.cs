@@ -147,6 +147,11 @@ public static class FixedUpdateCaller
             try { PacketRateGate.OnFixedUpdate(); }
             catch (Exception e) { Utils.ThrowException(e); }
 
+            // ローディング画面動画 (ホストローカル描画のみ)。シーン遷移中も生き延びる HudManager 配下なので
+            // InGame/AmHost に依存せず無条件で回す。
+            try { EndKnot.Modules.Media.LoadingScreenVideo.Tick(); }
+            catch (Exception e) { Utils.ThrowException(e); }
+
             if (!PlayerControl.LocalPlayer) return;
 
             if (amongUsClient.IsGameStarted)
