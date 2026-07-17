@@ -1876,7 +1876,7 @@ public static class GameSettingMenuPatch
 
         SearchForOptionsAction = () =>
         {
-            if (field.textArea.text != string.Empty) SearchForOptions(field);
+            if (TextBoxPatch.SafeChatText(field.textArea).Length != 0) SearchForOptions(field);
         };
 
         return;
@@ -1885,7 +1885,7 @@ public static class GameSettingMenuPatch
         {
             if (ModGameOptionsMenu.TabIndex < 3) return;
 
-            string text = textField.textArea.text.Trim().ToLower();
+            string text = TextBoxPatch.SafeChatText(textField.textArea).Trim().ToLower();
             if (text.Length == 0) return;
 
             var currentTab = (TabGroup)(ModGameOptionsMenu.TabIndex - 3);
