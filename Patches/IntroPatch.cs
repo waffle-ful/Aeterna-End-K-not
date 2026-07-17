@@ -1200,6 +1200,10 @@ internal static class IntroCutsceneDestroyPatch
 
             PlayerControl lp = PlayerControl.LocalPlayer;
 
+            // 【診断ロールバック 2026-07-17 19:55 (BUG-20260717-05)】+6秒遅延化 (17:41 デプロイ) の後から
+            // 「入場失敗型」暗転が出現したため、発生側変更を 17:41 以前の形 (+0.1秒) へ全て戻して 1-bit 分離する。
+            // 戻したもの: RpcChangeRoleBasis / SetActualSelfRolesAfterOverride / DoubleAgent の +6s 遅延、
+            // ゲーム開始 +8s の予防 ReactorFlash、会議安全窓の +9.5s フロア。
             LateTask.New(() =>
             {
                 lp.RpcChangeRoleBasis(lp.GetCustomRole());
@@ -1207,7 +1211,7 @@ internal static class IntroCutsceneDestroyPatch
                 LateTask.New(() =>
                 {
                     lp.SetKillCooldown(10f);
-                    
+
                     foreach (PlayerControl pc in aapc)
                     {
                         pc.RpcResetAbilityCooldown();
@@ -1220,7 +1224,7 @@ internal static class IntroCutsceneDestroyPatch
                 }, 0.8f, log: false);
 
                 StartGameHostPatch.RpcSetRoleReplacer.SetActualSelfRolesAfterOverride();
-                
+
                 var doubleAgents = aapc.Where(x => x.Is(CustomRoles.DoubleAgent)).ToList();
 
                 if (doubleAgents.Count > 0)
@@ -1382,14 +1386,11 @@ internal static class IntroCutsceneDestroyPatch
             LateTask.New(Utils.MarkEveryoneDirtySettings, 0.5f, "SyncAllSettings On Game Start");
             LateTask.New(() => Main.Instance.StartCoroutine(ShipStatusFixedUpdatePatch.Postfix()), 5f, "ShipStatusFixedUpdatePatch Postfix Start");
 
-            // 会議安全窓を武装 (BUG-20260716-09): まずハードキャップ (+17秒) を置き、役職 RPC バーストの
-            // 排水完了+マージンで前倒し開放する。窓が閉じている間は通報/緊急ボタン発の会議も
-            // ReportDeadBodyPatch 側で保留される (強制会議か否かではなく「タイミング」が問題のため)。
-            ReportDeadBodyPatch.MeetingSafeAt = Time.realtimeSinceStartup + 17f;
-            Main.Instance.StartCoroutine(OpenMeetingSafeWindow());
-
+            // 【TOHK 統一 2026-07-17】暗転対策のフォーク独自タイミング機構 (会議安全窓/+8s予防フラッシュ/
+            // +6s遅延) は全撤去し、TOHK 実戦形 (毎会議後 AftermeetingFlash + /kf + intro終了+1秒の初手会議)
+            // に統一した。経緯は docs/bug-inbox.md BUG-20260717-05 / BUG-20260716-09。
             if (Options.CurrentGameMode == CustomGameMode.Standard && Options.FirstTurnMeeting.GetBool())
-                Main.Instance.StartCoroutine(FirstTurnMeetingTrigger());
+                LateTask.New(FirstTurnMeetingTrigger, 1f, "FirstTurnMeetingTrigger");
 
             Utils.CheckAndSetVentInteractions();
         }
@@ -1455,34 +1456,10 @@ internal static class IntroCutsceneDestroyPatch
         }, 4f, "Airship Spawn FailSafe");
     }
 
-    // ゲーム開始の役職 RPC バースト (N² 本) を PacketRateGate が 25本/秒で排水し終える前に会議が
-    // 始まると、自分役職の受信が遅いクライアントは intro 中/前に会議 RPC を受けて MeetingHud の
-    // 初期化ごと壊れる (BUG-20260716-09)。ゲートのキューが空になるのを待ってからクライアント側の
-    // intro 尺ぶんのマージンを取り、会議安全窓 (ReportDeadBodyPatch.MeetingSafeAt) を前倒し開放する。
-    private static System.Collections.IEnumerator OpenMeetingSafeWindow()
+    // FirstTurnMeeting: TOHK 同等の intro 終了+1秒 (TOHK は IntroCutscene.OnDestroy + 0.7f + LagTime ≒ 1秒)。
+    private static void FirstTurnMeetingTrigger()
     {
-        float drained = 0f;
-
-        while (PacketRateGate.PendingCount > 0 && drained < 10f)
-        {
-            drained += Time.deltaTime;
-            yield return null;
-        }
-
-        Logger.Info($"MeetingSafeWindow: waited {drained:0.0}s for the packet gate to drain (pending={PacketRateGate.PendingCount})", "FirstTurnMeeting");
-
-        yield return new WaitForSecondsRealtime(7f);
-
-        ReportDeadBodyPatch.MeetingSafeAt = 0f;
-    }
-
-    // FirstTurnMeeting (旧実装は intro 終了+5秒固定)。会議安全窓が開くのを待ってから強制会議を起こす。
-    private static System.Collections.IEnumerator FirstTurnMeetingTrigger()
-    {
-        while (!ReportDeadBodyPatch.MeetingSafeWindowOpen)
-            yield return null;
-
-        if (!GameStates.IsInGame || MeetingHud.Instance || ExileController.Instance) yield break;
+        if (!GameStates.IsInGame || MeetingHud.Instance || ExileController.Instance) return;
 
         PlayerControl host = PlayerControl.LocalPlayer;
         if (!host || !host.IsAlive()) host = Main.AllAlivePlayerControlsToList.FirstOrDefault();

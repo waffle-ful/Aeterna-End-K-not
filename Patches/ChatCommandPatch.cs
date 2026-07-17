@@ -259,6 +259,7 @@ internal static class ChatCommands
             new("DayBreak", "", Command.UsageLevels.Everyone, Command.UsageTimes.InMeeting, DayBreakCommand, true, true),
             new("Fix", "{id}", Command.UsageLevels.HostOrModerator, Command.UsageTimes.InGame, FixCommand, true, false, [GetString("CommandArgs.Fix.Id")]),
             new("KillFlash", "", Command.UsageLevels.HostOrModerator, Command.UsageTimes.InGame, KillFlashCommand, true, false),
+            new("Abort", "", Command.UsageLevels.HostOrModerator, Command.UsageTimes.InGame, AbortCommand, true, false),
             new("XOR", "{role} {role}", Command.UsageLevels.Everyone, Command.UsageTimes.Always, XORCommand, true, false, [GetString("CommandArgs.XOR.Role"), GetString("CommandArgs.XOR.Role")]),
             new("ChemistInfo", "", Command.UsageLevels.Everyone, Command.UsageTimes.Always, ChemistInfoCommand, true, false),
             new("Forge", "{id} {role}", Command.UsageLevels.Everyone, Command.UsageTimes.InMeeting, ForgeCommand, true, true, [GetString("CommandArgs.Forge.Id"), GetString("CommandArgs.Forge.Role")]),
@@ -1229,6 +1230,15 @@ internal static class ChatCommands
             if (!pc || pc.IsModdedClient()) continue;
             pc.ReactorFlash();
         }
+    }
+
+    // 廃村 (Shift+L+Enter 相当) のチャット版: ホスト画面が固まっている/ホスト不在でも
+    // モデレーターがチャットからゲームを引き分けで畳めるようにする (2026-07-17 配信中の要望)
+    private static void AbortCommand(PlayerControl player, string text, string[] args)
+    {
+        Logger.Info($"/abort force end game (廃村) requested by {player.GetNameWithRole()}", "Abort");
+        CustomWinnerHolder.ResetAndSetWinner(CustomWinner.Draw);
+        GameEndChecker.CheckCustomEndCriteria();
     }
 
     public static void DayBreakCommand(PlayerControl player, string text, string[] args)
