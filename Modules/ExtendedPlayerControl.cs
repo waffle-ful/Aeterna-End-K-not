@@ -834,7 +834,10 @@ internal static class ExtendedPlayerControl
 
             stream.StartMessage(1);
             stream.WritePacked(player.Data.NetId);
-            player.Data.Serialize(stream, false);
+            // 会議中 write-barrier (NetworkedPlayerInfoSerializePatch) を意図的送信として通過する囲い
+            NetworkedPlayerInfoSerializePatch.IntentionalSends++;
+            try { player.Data.Serialize(stream, false); }
+            finally { NetworkedPlayerInfoSerializePatch.IntentionalSends--; }
             stream.EndMessage();
 
             if (revertShapeshiftIfAlreadyShifted || !player.IsShifted())
@@ -2652,7 +2655,10 @@ internal static class ExtendedPlayerControl
             writer.Write(AmongUsClient.Instance.GameId);
             writer.StartMessage(1);
             writer.WritePacked(player.NetId);
-            player.Serialize(writer, false);
+            // 会議中 write-barrier (NetworkedPlayerInfoSerializePatch) を意図的送信として通過する囲い
+            NetworkedPlayerInfoSerializePatch.IntentionalSends++;
+            try { player.Serialize(writer, false); }
+            finally { NetworkedPlayerInfoSerializePatch.IntentionalSends--; }
             writer.EndMessage();
             writer.EndMessage();
 
