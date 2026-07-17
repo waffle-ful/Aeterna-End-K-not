@@ -2757,10 +2757,11 @@ public static class Utils
         if (!AmongUsClient.Instance.AmHost || !player) return false;
 
         DevManager.TagInfo devUser = player.FriendCode.GetDevUser();
-        bool admin = ChatCommands.IsPlayerAdmin(player.FriendCode);
-        bool mod = ChatCommands.IsPlayerModerator(player.FriendCode);
-        bool vip = !mod && ChatCommands.IsPlayerVIP(player.FriendCode);
         bool localDev = player.FriendCode.IsLocalDev();
+        bool isDev = localDev || devUser.up;
+        bool admin = !isDev && ChatCommands.IsPlayerAdmin(player.FriendCode);
+        bool mod = !isDev && ChatCommands.IsPlayerModerator(player.FriendCode);
+        bool vip = !isDev && !mod && ChatCommands.IsPlayerVIP(player.FriendCode);
         bool hasTag = devUser.HasTag() || localDev;
         bool hasPrivateTag = PrivateTagManager.Tags.TryGetValue(player.FriendCode, out string privateTag);
         bool hasTagInUserData = Main.UserData.TryGetValue(player.FriendCode, out Options.UserData userData) && !string.IsNullOrWhiteSpace(userData.Tag) && userData.Tag.Length > 0;
