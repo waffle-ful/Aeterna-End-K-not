@@ -221,7 +221,10 @@ public class DummySpawner : RoleBase
 
         writer.StartMessage(1);
         writer.WritePacked(PlayerControl.LocalPlayer.Data.NetId);
-        PlayerControl.LocalPlayer.Data.Serialize(writer, false);
+        // 会議中 write-barrier (NetworkedPlayerInfoSerializePatch) を意図的送信として通過する囲い
+        NetworkedPlayerInfoSerializePatch.IntentionalSends++;
+        try { PlayerControl.LocalPlayer.Data.Serialize(writer, false); }
+        finally { NetworkedPlayerInfoSerializePatch.IntentionalSends--; }
         writer.EndMessage();
 
         try { cnoPC.Shapeshift(PlayerControl.LocalPlayer, false); }
@@ -241,7 +244,10 @@ public class DummySpawner : RoleBase
 
         writer.StartMessage(1);
         writer.WritePacked(PlayerControl.LocalPlayer.Data.NetId);
-        PlayerControl.LocalPlayer.Data.Serialize(writer, false);
+        // 会議中 write-barrier (NetworkedPlayerInfoSerializePatch) を意図的送信として通過する囲い
+        NetworkedPlayerInfoSerializePatch.IntentionalSends++;
+        try { PlayerControl.LocalPlayer.Data.Serialize(writer, false); }
+        finally { NetworkedPlayerInfoSerializePatch.IntentionalSends--; }
         writer.EndMessage();
 
         sender.EndMessage();

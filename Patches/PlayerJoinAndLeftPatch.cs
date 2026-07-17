@@ -622,6 +622,9 @@ internal static class OnPlayerLeftPatch
 
                 byte id = data.Character.PlayerId;
 
+                // ジャグリング窓中にダミーインポスター役が切断した場合の即応 (TOHK AntiBlackout.OnDisconnect 相当)
+                AntiBlackout.OnDisconnect(data.Character);
+
                 ExtendedPlayerControl.TempExiled.Remove(id);
 
                 switch (Options.CurrentGameMode)

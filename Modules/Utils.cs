@@ -4044,31 +4044,38 @@ public static class Utils
         writer.StartMessage(5);
         writer.Write(AmongUsClient.Instance.GameId);
 
-        foreach (NetworkedPlayerInfo playerinfo in GameData.Instance.AllPlayers)
+        // 会議中 write-barrier (NetworkedPlayerInfoSerializePatch) を意図的送信として通過する囲い
+        NetworkedPlayerInfoSerializePatch.IntentionalSends++;
+
+        try
         {
-            // 1人分の Data ブロックは装飾名込みで ~700B に達し得るため、書いてから溢れに気付いても分割できない
-            // (単一 Flag は PacketSplitPatch でも割れない)。先に scratch writer へ実測シリアライズし、
-            // 現在のチャンクに収まらないならフラッシュしてから転写する (pre-write 見積り。実測1215B チャンク対策)。
-            MessageWriter item = MessageWriter.Get(SendOption.Reliable);
-            item.StartMessage(1);
-            item.WritePacked(playerinfo.NetId);
-            playerinfo.Serialize(item, false);
-            item.EndMessage();
-            var itemBytes = item.ToByteArray(false);
-            item.Recycle();
-
-            if ((messages > 0 && writer.Length + itemBytes.Length > CustomRpcSender.SafeChunkLength) || messages >= packingLimit)
+            foreach (NetworkedPlayerInfo playerinfo in GameData.Instance.AllPlayers)
             {
-                FlushWriter();
-                writer = MessageWriter.Get(SendOption.Reliable);
-                writer.StartMessage(5);
-                writer.Write(AmongUsClient.Instance.GameId);
+                // 1人分の Data ブロックは装飾名込みで ~700B に達し得るため、書いてから溢れに気付いても分割できない
+                // (単一 Flag は PacketSplitPatch でも割れない)。先に scratch writer へ実測シリアライズし、
+                // 現在のチャンクに収まらないならフラッシュしてから転写する (pre-write 見積り。実測1215B チャンク対策)。
+                MessageWriter item = MessageWriter.Get(SendOption.Reliable);
+                item.StartMessage(1);
+                item.WritePacked(playerinfo.NetId);
+                playerinfo.Serialize(item, false);
+                item.EndMessage();
+                var itemBytes = item.ToByteArray(false);
+                item.Recycle();
+
+                if ((messages > 0 && writer.Length + itemBytes.Length > CustomRpcSender.SafeChunkLength) || messages >= packingLimit)
+                {
+                    FlushWriter();
+                    writer = MessageWriter.Get(SendOption.Reliable);
+                    writer.StartMessage(5);
+                    writer.Write(AmongUsClient.Instance.GameId);
+                }
+
+                writer.Write(itemBytes);
+
+                messages++;
             }
-
-            writer.Write(itemBytes);
-
-            messages++;
         }
+        finally { NetworkedPlayerInfoSerializePatch.IntentionalSends--; }
 
         FlushWriter();
         return lastQueued;
@@ -4108,31 +4115,38 @@ public static class Utils
         writer.Write(AmongUsClient.Instance.GameId);
         writer.WritePacked(targetClientId);
 
-        foreach (NetworkedPlayerInfo playerinfo in GameData.Instance.AllPlayers)
+        // 会議中 write-barrier (NetworkedPlayerInfoSerializePatch) を意図的送信として通過する囲い
+        NetworkedPlayerInfoSerializePatch.IntentionalSends++;
+
+        try
         {
-            // 兄弟 SendGameData と同処方: 1人分を実測してから収まらないチャンクを先にフラッシュする
-            // (書いた後では単一 Flag を分割できず、蓄積+巨大 Data ブロックで >1024B の kick 級チャンクになる)。
-            MessageWriter item = MessageWriter.Get(SendOption.Reliable);
-            item.StartMessage(1);
-            item.WritePacked(playerinfo.NetId);
-            playerinfo.Serialize(item, false);
-            item.EndMessage();
-            var itemBytes = item.ToByteArray(false);
-            item.Recycle();
-
-            if ((messages > 0 && writer.Length + itemBytes.Length > CustomRpcSender.SafeChunkLength) || messages >= packingLimit)
+            foreach (NetworkedPlayerInfo playerinfo in GameData.Instance.AllPlayers)
             {
-                FlushWriter();
-                writer = MessageWriter.Get(SendOption.Reliable);
-                writer.StartMessage(6);
-                writer.Write(AmongUsClient.Instance.GameId);
-                writer.WritePacked(targetClientId);
+                // 兄弟 SendGameData と同処方: 1人分を実測してから収まらないチャンクを先にフラッシュする
+                // (書いた後では単一 Flag を分割できず、蓄積+巨大 Data ブロックで >1024B の kick 級チャンクになる)。
+                MessageWriter item = MessageWriter.Get(SendOption.Reliable);
+                item.StartMessage(1);
+                item.WritePacked(playerinfo.NetId);
+                playerinfo.Serialize(item, false);
+                item.EndMessage();
+                var itemBytes = item.ToByteArray(false);
+                item.Recycle();
+
+                if ((messages > 0 && writer.Length + itemBytes.Length > CustomRpcSender.SafeChunkLength) || messages >= packingLimit)
+                {
+                    FlushWriter();
+                    writer = MessageWriter.Get(SendOption.Reliable);
+                    writer.StartMessage(6);
+                    writer.Write(AmongUsClient.Instance.GameId);
+                    writer.WritePacked(targetClientId);
+                }
+
+                writer.Write(itemBytes);
+
+                messages++;
             }
-
-            writer.Write(itemBytes);
-
-            messages++;
         }
+        finally { NetworkedPlayerInfoSerializePatch.IntentionalSends--; }
 
         FlushWriter();
         return;
@@ -5489,7 +5503,10 @@ public static class Utils
                 .EndRpc();
             writer.StartMessage(1);
             writer.WritePacked(playerControl.Data.NetId);
-            playerControl.Data.Serialize(writer, false);
+            // 会議中 write-barrier (NetworkedPlayerInfoSerializePatch) を意図的送信として通過する囲い
+            NetworkedPlayerInfoSerializePatch.IntentionalSends++;
+            try { playerControl.Data.Serialize(writer, false); }
+            finally { NetworkedPlayerInfoSerializePatch.IntentionalSends--; }
             writer.EndMessage();
             writer.StartMessage(5);
             writer.WritePacked(playerControl.NetId);
