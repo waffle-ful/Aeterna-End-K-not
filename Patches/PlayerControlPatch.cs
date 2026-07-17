@@ -1076,14 +1076,7 @@ internal static class ReportDeadBodyPatch
     public static readonly Dictionary<byte, List<NetworkedPlayerInfo>> WaitReport = [];
     public static bool MeetingStarted;
 
-    // 会議安全窓 (BUG-20260716-09): ゲーム開始直後、役職 RPC バーストの排水が終わる前に会議が
-    // 始まると、まだ intro 中のクライアントは MeetingHud の初期化ごと壊れる (暗転+投票不能+
-    // チャット凍結)。強制初手会議だけでなく通報/緊急ボタン発の会議も同じ窓で保留する。
-    // 時刻ベース (realtimeSinceStartup 比較) なのでコルーチン死亡等で永久封鎖になる事故はない。
-    // IntroCutscene 終了時にハードキャップ (+17秒) で武装し、排水完了+マージンで前倒し開放される。
-    public static float MeetingSafeAt;
-    public static bool MeetingSafeWindowOpen => UnityEngine.Time.realtimeSinceStartup >= MeetingSafeAt;
-
+    // (会議安全窓 MeetingSafeAt は 2026-07-17 の TOHK 統一で撤去 — 経緯は docs/bug-inbox.md BUG-20260717-05)
     public static bool Prefix(PlayerControl __instance, [HarmonyArgument(0)] NetworkedPlayerInfo target)
     {
         if (GameStates.IsMeeting || MeetingStarted) return false;
@@ -1098,10 +1091,20 @@ internal static class ReportDeadBodyPatch
         if (Options.DisableReportWhenCC.GetBool() && Camouflage.IsCamouflage) return false;
         if (target && AlreadyReportedBodies.Contains(target.PlayerId)) return false;
 
+        // GM ホスト/観戦者の死体はゲーム内に存在しない (RpcExileV2 は死体を残さない)。これを target にした
+        // 通報は、ロビー装飾死体 (LobbyCorpses — host が parent) をロード遅延クライアントが持ち越して押した
+        // 偽通報 (2026-07-17 18:28/18:52 実測 — 保留窓経由で会議が開き、intro 中の他クライアントを壊した)。
+        // WaitReport に積まれる前にここで完全遮断する
+        if (target && (target.Object?.Is(CustomRoles.GM) == true || ChatCommands.Spectators.Contains(target.PlayerId) || Main.GM.Value && target.PlayerId == 0))
+        {
+            Logger.Warn($"{__instance.GetNameWithRole().RemoveHtmlTags()} tried to report GM/spectator body (stale lobby corpse) — blocked", "ReportDeadBody");
+            return false;
+        }
+
         // CanReport/WaitReport はゲーム開始時に初期化されるため、開始前の一過性ウィンドウや
         // 途中参加者は null/未登録がありうる (NRE/KeyNotFound 源)。未登録は「通報可」として扱う。
         bool canReport = CanReport == null || CanReport.GetValueOrDefault(__instance.PlayerId, true);
-        if (!canReport || __instance.IsRoleBlocked() || !MeetingSafeWindowOpen)
+        if (!canReport || __instance.IsRoleBlocked())
         {
             if (!WaitReport.TryGetValue(__instance.PlayerId, out List<NetworkedPlayerInfo> waitList))
                 WaitReport[__instance.PlayerId] = waitList = [];
@@ -1683,7 +1686,7 @@ internal static class FixedUpdatePatch
 
             byte id = __instance.PlayerId;
 
-            if (AmongUsClient.Instance.AmHost && GameStates.IsInTask && ReportDeadBodyPatch.MeetingSafeWindowOpen && ReportDeadBodyPatch.CanReport != null && ReportDeadBodyPatch.CanReport.GetValueOrDefault(id, true) && !id.IsPlayerRoleBlocked() && ReportDeadBodyPatch.WaitReport.TryGetValue(id, out List<NetworkedPlayerInfo> waitReports) && waitReports.Count > 0)
+            if (AmongUsClient.Instance.AmHost && GameStates.IsInTask && ReportDeadBodyPatch.CanReport != null && ReportDeadBodyPatch.CanReport.GetValueOrDefault(id, true) && !id.IsPlayerRoleBlocked() && ReportDeadBodyPatch.WaitReport.TryGetValue(id, out List<NetworkedPlayerInfo> waitReports) && waitReports.Count > 0)
             {
                 NetworkedPlayerInfo info = waitReports[0];
                 waitReports.Clear();

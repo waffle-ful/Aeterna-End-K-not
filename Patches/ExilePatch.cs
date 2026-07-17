@@ -149,10 +149,12 @@ internal static class ExileControllerWrapUpPatch
                 AntiBlackout.RevertToActualRoleTypes();
             }, 2f, "Revert AntiBlackout Measures");
 
-            // TOHK の AftermeetingFlash 方式 (BUG-20260716-09 の修復側): ゲーム開始で暗転したまま
-            // 初手会議を終えたバニラクライアントに、リアクター desync フラッシュ (128→16) を撃って
-            // HUD を強制再構築させる。AntiBlackout の役職 revert (2s) が落ち着いた後に発火する。
-            if (MeetingStates.MeetingNum == 1 && Options.CurrentGameMode == CustomGameMode.Standard)
+            // TOHK の AftermeetingFlash 方式 (BUG-20260716-09 の修復側): 暗転したまま会議を終えた
+            // バニラクライアントに、リアクター desync フラッシュ (128→16) を撃って HUD を強制再構築させる。
+            // AntiBlackout の役職 revert (2s) が落ち着いた後に発火する。
+            // 【TOHK 統一 2026-07-17】初手会議限定 → TOHK と同じ毎会議後に拡大 (18:52 ゲームで
+            // 2回目以降の会議明けに自動修復の機会が無かった実害を受けて)。
+            if (Options.CurrentGameMode == CustomGameMode.Standard)
             {
                 LateTask.New(() =>
                 {
@@ -163,7 +165,7 @@ internal static class ExileControllerWrapUpPatch
                         if (!pc || pc.IsModdedClient()) continue;
                         pc.ReactorFlash();
                     }
-                }, 3f, "First Meeting Blackout Buster");
+                }, 3f, "Aftermeeting Blackout Buster");
             }
 
             if (Options.EnableGameTimeLimit.GetBool() && !Options.GameTimeLimitRunsDuringMeetings.GetBool())
