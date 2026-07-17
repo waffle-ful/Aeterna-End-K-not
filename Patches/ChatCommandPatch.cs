@@ -395,6 +395,9 @@ internal static class ChatCommands
     // Function to check if a player is an Admin
     public static bool IsPlayerAdmin(string friendCode)
     {
+        // Devs sit at the top of the chain (Dev > Admin > Moderator > VIP), regardless of the list options.
+        if (friendCode.GetDevUser().up || friendCode.IsLocalDev()) return true;
+
         friendCode = friendCode.Replace(':', '#');
 
         if (friendCode == "" || friendCode == string.Empty || !Options.ApplyAdminList.GetBool()) return false;
