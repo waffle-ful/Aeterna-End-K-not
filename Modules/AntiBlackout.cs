@@ -13,6 +13,9 @@ public static class AntiBlackout
     public static bool SkipTasks;
     private static Dictionary<(byte SeerID, byte TargetID), (RoleTypes RoleType, CustomRoles CustomRole)> CachedRoleMap = [];
 
+    // 役職ジャグリング窓 (SkipTasks) 中にダミーインポスター役を務めているプレイヤー (TOHK: dummyImpostorPlayer 相当)
+    private static byte DummyImpId = byte.MaxValue;
+
     // Optimally, there's 1 living impostor and at least 2 living crewmates in everyone's POV.
     // We force this to prevent black screens after meetings.
     public static void SetOptimalRoleTypes()
@@ -48,6 +51,7 @@ public static class AntiBlackout
             revived.RpcSetRoleGlobal(RoleTypes.Crewmate);
         }
 
+        DummyImpId = dummyImp ? dummyImp.PlayerId : byte.MaxValue;
         dummyImp.RpcSetRoleGlobal(RoleTypes.Impostor);
         players.Without(dummyImp).Where(x => x.GetCustomRole() is not (CustomRoles.DetectiveEndKnot or CustomRoles.Detective) && !x.Is(CustomRoles.Examiner)).Do(x => x.RpcSetRoleGlobal(RoleTypes.Crewmate));
         
@@ -60,6 +64,7 @@ public static class AntiBlackout
         if (CachedRoleMap.Count == 0 || GameStates.IsEnded)
         {
             SkipTasks = false;
+            DummyImpId = byte.MaxValue;
             ExileControllerWrapUpPatch.AfterMeetingTasks();
             return;
         }
@@ -189,9 +194,38 @@ public static class AntiBlackout
             LateTask.New(() =>
             {
                 SkipTasks = false;
+                DummyImpId = byte.MaxValue;
                 ExileControllerWrapUpPatch.AfterMeetingTasks();
             }, 1f, "Reset SkipTasks after SetRealPlayerRoles");
         }, 0.4f, "SetRealPlayerRoles - Reset Cooldowns");
+    }
+
+    // TOHK AntiBlackout.OnDisconnect 移植: 役職ジャグリング窓 (SkipTasks) 中にダミーインポスター役が
+    // 切断すると、vanilla クライアント視点の生存インポスターが消えて追放画面明けに全滅判定 → 暗転する。
+    // 切断を検知したら即座に別の生存者へダミーインポスターを付け直す。
+    public static void OnDisconnect(PlayerControl player)
+    {
+        if (NetworkedPlayerInfoSerializePatch.KillSwitchActive) return;
+        if (!AmongUsClient.Instance.AmHost || !SkipTasks || !player || player.PlayerId != DummyImpId) return;
+        if (CustomWinnerHolder.WinnerTeam != CustomWinner.Default) return;
+
+        DummyImpId = byte.MaxValue;
+
+        var players = Main.AllAlivePlayerControlsToArray.Where(x => x.PlayerId != player.PlayerId).ToArray();
+        if (CheckForEndVotingPatch.TempExiledPlayer) players = players.Where(x => x.PlayerId != CheckForEndVotingPatch.TempExiledPlayer.PlayerId).ToArray();
+
+        // MinBy は手前の OrderBy を無視して全体から最小を取るため使わない (Detective/Examiner 除外を保ったまま PlayerId で tie-break)
+        PlayerControl newDummy = players.OrderByDescending(x => x.GetCustomRole() is not (CustomRoles.DetectiveEndKnot or CustomRoles.Detective) && !x.Is(CustomRoles.Examiner)).ThenByDescending(x => x.IsModdedClient()).ThenBy(x => x.PlayerId).FirstOrDefault();
+
+        if (!newDummy)
+        {
+            Logger.Warn("Dummy impostor disconnected during the juggling window, but no replacement is available", "AntiBlackout");
+            return;
+        }
+
+        DummyImpId = newDummy.PlayerId;
+        newDummy.RpcSetRoleGlobal(RoleTypes.Impostor);
+        Logger.Warn($"Dummy impostor disconnected during the juggling window — reassigned to {newDummy.GetRealName()} (ID {newDummy.PlayerId})", "AntiBlackout");
     }
 
     public static void Reset()
@@ -199,5 +233,6 @@ public static class AntiBlackout
         Logger.Info("==Reset==", "AntiBlackout");
         CachedRoleMap = [];
         SkipTasks = false;
+        DummyImpId = byte.MaxValue;
     }
 }

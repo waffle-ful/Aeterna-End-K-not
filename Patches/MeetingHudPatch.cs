@@ -1362,6 +1362,9 @@ internal static class MeetingHudOnDestroyPatch
         ReportDeadBodyPatch.MeetingStarted = false;
         CheckForEndVotingPatch.ShouldSkip = false;
 
+        // 会議中 write-barrier 解放 (保留された Data はバニラの dirty 自動送信でこの直後にフラッシュされる)
+        NetworkedPlayerInfoSerializePatch.OnMeetingEnd();
+
         if (!GameStates.InGame) return;
 
         BGMManager.SetTaskBGM();
