@@ -584,15 +584,9 @@ internal static class StartGameHostPatch
             loadingBarManager.loadingBar.loadingText.DestroyTranslator();
             loadingBarManager.loadingBar.loadingText.text = loadingTextText1;
 
-            var loadingBarLogo = GameObject.Find("Loading Bar Manager/Loading Bar/Canvas/Logo")?.GetComponent<Image>();
-
-            if (loadingBarLogo)
-            {
-                // TODO: drop a PNG at Resources/Images/EHR-Icon.png (or rename and update this path) once an End K not logo is ready.
-                // While the asset is missing, LoadSprite logs one error and returns null — the loading bar renders without a logo.
-                loadingBarLogo.sprite = Utils.LoadSprite("EndKnot.Resources.Images.EHR-Icon.png", 390f);
-                loadingBarLogo.SetNativeSize();
-            }
+            // ローディング動画に切り替えたため、バー上のロゴは表示しない (Canvas overlay は動画より前面に描画される)。
+            var loadingBarLogo = GameObject.Find("Loading Bar Manager/Loading Bar/Canvas/Logo");
+            if (loadingBarLogo) loadingBarLogo.SetActive(false);
 
             var fillImage = GameObject.Find("Loading Bar Manager/Loading Bar/Canvas/Bar/Fill")?.GetComponent<Image>();
             if (fillImage) fillImage.color = new Color(0f, 0.647f, 1f, 1f);
