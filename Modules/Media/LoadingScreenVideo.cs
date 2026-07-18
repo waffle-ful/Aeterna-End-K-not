@@ -24,31 +24,39 @@ public static class LoadingScreenVideo
 
     public static void Show()
     {
-        if (!VideoSurface.IsSupported) return;
-        if (Main.LoadingVideoEnabled is not { Value: true }) return;
+        // 計装ログ: 無音早期 return がどこで起きたかを実機ログで特定できるようにする (host-local のみ)。
+        if (!VideoSurface.IsSupported) { Logger.Info("Show skipped: VideoPlayer type unavailable", "LoadingScreenVideo"); return; }
+        if (Main.LoadingVideoEnabled is not { Value: true }) { Logger.Info("Show skipped: disabled by config", "LoadingScreenVideo"); return; }
         if (IsShowing) return; // 二重呼びは no-op
 
         try
         {
-            if (!HudManager.InstanceExists) return;
+            if (!HudManager.InstanceExists) { Logger.Info("Show skipped: no HudManager", "LoadingScreenVideo"); return; }
 
             string path = ResolveVideoPath();
-            if (string.IsNullOrWhiteSpace(path)) return;
+            if (string.IsNullOrWhiteSpace(path)) { Logger.Info("Show skipped: no video file", "LoadingScreenVideo"); return; }
 
             HudManager hud = HudManager.Instance;
-            if (!hud.FullScreen) return;
+            if (!hud.FullScreen) { Logger.Info("Show skipped: no FullScreen sprite", "LoadingScreenVideo"); return; }
 
             _container = new GameObject("EndKnotLoadingScreenVideo");
             _container.transform.SetParent(hud.transform, false);
             Vector3 basePos = hud.FullScreen.transform.localPosition;
-            _container.transform.localPosition = new Vector3(basePos.x, basePos.y, -260f);
+            // z は FullScreen の直前 (独自の遠距離 z はカメラのクリップ範囲外になり映らない)。
+            _container.transform.localPosition = new Vector3(basePos.x, basePos.y, basePos.z - 1f);
+            // 新規 GameObject は親と無関係に layer=Default になり HUD カメラの culling から外れるため、
+            // 実際に描画されている FullScreen と同じ layer を明示継承する (FlashColor の clone 方式と等価)。
+            _container.layer = hud.FullScreen.gameObject.layer;
 
             _surface = new VideoSurface();
             if (!_surface.TryCreate(path, _container.transform))
             {
+                Logger.Info("Show aborted: TryCreate failed", "LoadingScreenVideo");
                 Hide();
                 return;
             }
+
+            Logger.Info($"Show: video created, path={path}", "LoadingScreenVideo");
 
             // z だけでは同一 sorting layer/order 内の順序にしか効かない。hud.FullScreen (画面全体の
             // 暗転スプライト) より確実に前面へ出すため、sorting layer/order 自体を追随させる。
@@ -64,8 +72,12 @@ public static class LoadingScreenVideo
         }
     }
 
-    public static void Hide()
+    public static void Hide([System.Runtime.CompilerServices.CallerFilePath] string callerFile = "", [System.Runtime.CompilerServices.CallerMemberName] string callerMember = "")
     {
+        // 表示中に誰が消したかを特定できるようにする (Show 直後に Hide フックが誤発火するケースの検出用)。
+        if (_surface != null)
+            Logger.Info($"Hide called by {System.IO.Path.GetFileName(callerFile)}:{callerMember} (prepared={_surface.Prepared}, shownFor={Time.realtimeSinceStartup - _shownAtRealtime:F1}s)", "LoadingScreenVideo");
+
         try { _surface?.Dispose(); }
         catch (Exception e) { Utils.ThrowException(e); }
         _surface = null;

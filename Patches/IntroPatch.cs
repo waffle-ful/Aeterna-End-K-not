@@ -49,6 +49,10 @@ static class CoShowIntroPatch
 {
     public static bool Prefix(HudManager __instance, ref IEnumerator __result)
     {
+        // CoShowIntro 開始 = ロード完了。「シーッ」(ShowEmblem) が動画に覆われないよう、
+        // ホスト/非ホスト共通で通るガード前のここで閉じる (後続の Hide は冪等な安全網)。
+        EndKnot.Modules.Media.LoadingScreenVideo.Hide();
+
         if (!AmongUsClient.Instance.AmHost || !GameStates.IsModHost) return true;
 
         Utils.SetupLongRoleDescriptions();

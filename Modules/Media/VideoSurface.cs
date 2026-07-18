@@ -32,6 +32,9 @@ public sealed class VideoSurface
     private Texture2D _videoTexture;
     private Sprite _videoSprite;
     private VideoPlayer.ErrorEventHandler _errorHandler;
+    private float _createdAtRealtime;
+    private bool _pendingLogged;
+    private bool _firstCopyLogged;
 
     public bool TryCreate(string absolutePath, Transform parent)
     {
@@ -40,10 +43,13 @@ public sealed class VideoSurface
 
         try
         {
-            string videoUrl = new Uri(Path.GetFullPath(absolutePath)).AbsoluteUri;
+            // file:// URI にすると空白が %20 エスケープされ、Windows/WMF が "Cannot read file" で
+            // 拒否する (Epic 版の C:\Program Files\... で必発)。素のフルパスなら Unity が内部処理する。
+            string videoUrl = Path.GetFullPath(absolutePath);
 
             GameObject = new GameObject("EndKnotLoadingVideo");
             GameObject.transform.SetParent(parent, false);
+            GameObject.layer = parent.gameObject.layer; // 子も明示継承 (SetParent は layer を継がない)
 
             Renderer = GameObject.AddComponent<SpriteRenderer>();
             var shader = Shader.Find("Sprites/Default");
@@ -67,6 +73,7 @@ public sealed class VideoSurface
             _player.errorReceived += _errorHandler;
 
             _player.Prepare();
+            _createdAtRealtime = Time.realtimeSinceStartup;
             IsActive = true;
             return true;
         }
@@ -87,9 +94,20 @@ public sealed class VideoSurface
         {
             if (!Prepared)
             {
-                if (!_player.isPrepared) return;
+                if (!_player.isPrepared)
+                {
+                    // 計装: prepare が無音で終わらないケース (WMF 側スタック) を実機ログで検出する。
+                    if (!_pendingLogged && Time.realtimeSinceStartup - _createdAtRealtime > 5f)
+                    {
+                        _pendingLogged = true;
+                        Logger.Info("still not prepared after 5s (WMF stuck?)", "LoadingScreenVideo");
+                    }
+                    return;
+                }
+
                 OnPrepared();
                 if (!Prepared) return;
+                Logger.Info($"prepared: {_videoTexture.width}x{_videoTexture.height}, playing", "LoadingScreenVideo");
             }
 
             // SNR の毎フレームコピー機構と同じ二段構え: CopyTexture が使えればそちら優先、
@@ -97,6 +115,11 @@ public sealed class VideoSurface
             if (SystemInfo.copyTextureSupport != CopyTextureSupport.None)
             {
                 Graphics.CopyTexture(_renderTexture, _videoTexture);
+                if (!_firstCopyLogged)
+                {
+                    _firstCopyLogged = true;
+                    Logger.Info($"first frame copied (CopyTexture), renderer.enabled={Renderer.enabled}, sorting={Renderer.sortingLayerID}/{Renderer.sortingOrder}, scale={Renderer.transform.localScale.x:F2}, layer={GameObject.layer}, worldPos={Renderer.transform.position}", "LoadingScreenVideo");
+                }
                 return;
             }
 
