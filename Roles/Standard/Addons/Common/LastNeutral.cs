@@ -55,7 +55,7 @@ internal class LastNeutral : IAddon
         PlayerControl pc = aliveNeutrals[0];
         if (!CanBeLastNeutral(pc)) return;
 
-        Main.PlayerStates[pc.PlayerId].SetSubRole(CustomRoles.LastNeutral);
+        pc.RpcSetCustomRole(CustomRoles.LastNeutral);
         CurrentId = pc.PlayerId;
         SetKillCooldown();
         pc.SyncSettings();

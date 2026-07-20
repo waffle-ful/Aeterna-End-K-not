@@ -284,7 +284,7 @@ internal static class EffectExtenstions
                             CustomRoles addon = addons.RandomElement();
                             if (Main.PlayerStates[pc.PlayerId].SubRoles.Contains(addon)) break;
 
-                            Main.PlayerStates[pc.PlayerId].SetSubRole(addon);
+                            pc.RpcSetCustomRole(addon);
                             pc.MarkDirtySettings();
                             NotifyAboutRNG(pc);
                         }
