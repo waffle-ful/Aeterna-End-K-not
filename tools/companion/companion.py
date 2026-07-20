@@ -42,6 +42,22 @@ except ImportError:
     print("sounddevice が見つかりません。 pip install -r requirements.txt を実行してください。")
     sys.exit(1)
 
+# アバター(立ち絵)配信サーバ用。未導入でも音声実況は動くので必須にはしない。
+# websockets 13+ の新しい asyncio サーバ API を使う (requirements で >=13 を要求)。
+try:
+    from websockets.asyncio.server import serve as _ws_serve
+    from websockets.http11 import Response as _WsResponse
+    from websockets.datastructures import Headers as _WsHeaders
+    _HAS_WS = True
+except Exception:
+    _ws_serve = None
+    _HAS_WS = False
+
+import array
+import math
+import mimetypes
+from urllib.parse import unquote, urlparse
+
 # ---- 設定 (CLI/環境変数で上書き可) ----
 
 DEFAULT_MODEL = os.environ.get("GEMINI_LIVE_MODEL", "gemini-2.5-flash-native-audio-preview-09-2025")
@@ -100,11 +116,36 @@ class StreamState:
 
 # ---- 音声再生 (専用スレッド。async ループをブロックしない) ----
 
+def _rms01(pcm: bytes) -> float:
+    """16bit mono PCM チャンクの音量を 0..1 で返す (アバターの口の開き用)。numpy 非依存・安価。"""
+    if not pcm:
+        return 0.0
+    a = array.array("h")  # 'h' = int16 (Windows/x86 はリトルエンディアン = Live API の PCM と一致)
+    try:
+        a.frombytes(pcm if len(pcm) % 2 == 0 else pcm[:-1])
+    except Exception:
+        return 0.0
+    n = len(a)
+    if n == 0:
+        return 0.0
+    step = max(1, n // 1024)  # 最大 ~1024 サンプルで十分 (毎チャンク全走査は無駄)
+    s = 0
+    c = 0
+    for i in range(0, n, step):
+        v = a[i]
+        s += v * v
+        c += 1
+    if c == 0:
+        return 0.0
+    return math.sqrt(s / c) / 32768.0
+
+
 class AudioPlayer:
     def __init__(self, device: int | str | None = None) -> None:
         self._q: queue.Queue[bytes | None] = queue.Queue()
         self._device = device  # None = 既定デバイス。仮想ケーブル (VB-Audio 等) に出すと立ち絵アプリへ直結できる
         self.last_audio_time = 0.0  # monotonic。実況が「喋っている」判定に使う
+        self.level = 0.0  # 直近チャンクの音量 (0..1)。アバターサーバが読んで口パクに使う
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
 
@@ -132,6 +173,7 @@ class AudioPlayer:
             try:
                 stream.write(chunk)
                 self.last_audio_time = time.monotonic()
+                self.level = max(self.level, _rms01(chunk))  # アタックは即時、減衰はサーバ側で
             except Exception as ex:  # デバイス断などで実況全体を殺さない
                 print(f"[audio] 再生エラー: {ex}")
                 time.sleep(0.5)
@@ -191,6 +233,10 @@ class ObsFiles:
                 and time.monotonic() - self._last_transcript_time > SUBTITLE_CLEAR_AFTER_SEC):
             self._subtitle_text = ""
             self._write(self.subtitle_path, "")
+
+    def current_subtitle(self) -> str:
+        """アバターサーバ用: 現在の字幕テキスト (畳み済み)。ファイル出力の有無に関係なく取れる。"""
+        return sanitize_subtitle(self._subtitle_text).strip()
 
 
 # ---- 会話ログ (デバッグ用: 「何を送って何を喋ったか」を文脈ごと残す) ----
@@ -508,6 +554,102 @@ async def run_session(client: genai.Client, args: argparse.Namespace, events: as
             flush_say()
 
 
+# ---- アバター(立ち絵)配信サーバ ----
+
+class AvatarServer:
+    """avatar/ を静的配信しつつ /ws で口パク情報 (mouth/speaking/subtitle) を配信する軽量サーバ。
+
+    static も WebSocket も同一ポートで出すので、OBS のブラウザソースは 1 つの URL
+    (http://127.0.0.1:<port>/) を指すだけで立ち絵が出る。ローカル専用 (既定 127.0.0.1)。
+    websockets 未導入なら黙って無効化し、音声実況側は通常どおり動く。
+    """
+
+    def __init__(self, root: Path, host: str, port: int) -> None:
+        self.root = root
+        self.host = host
+        self.port = port
+        self.clients: set = set()
+        self._server = None
+
+    async def start(self) -> None:
+        if not _HAS_WS:
+            print("[avatar] websockets(>=13) 未導入のためアバターサーバは起動しません "
+                  "(pip install -r requirements.txt でリップシンク配信が有効になります)")
+            return
+        if not self.root.exists():
+            print(f"[avatar] avatar フォルダが見つかりません: {self.root} "
+                  "(mod が実体化するまでページは 404 になります)")
+        try:
+            self._server = await _ws_serve(
+                self._ws_handler, self.host, self.port,
+                process_request=self._process_request)
+            print(f"[avatar] アバターサーバ起動: http://{self.host}:{self.port}/  "
+                  "← OBS のブラウザソースにこの URL を設定してください")
+        except Exception as ex:
+            print(f"[avatar] アバターサーバを起動できませんでした ({self.host}:{self.port}): {ex}")
+
+    async def _ws_handler(self, ws):
+        # websockets 13+: ハンドラ引数は接続のみ。パスは ws.request.path で取れる。
+        self.clients.add(ws)
+        try:
+            async for _ in ws:  # クライアントからの受信は使わないが、接続維持のため回す
+                pass
+        except Exception:
+            pass
+        finally:
+            self.clients.discard(ws)
+
+    def _reply(self, status, reason, body: bytes, ctype: str = "text/plain; charset=utf-8"):
+        headers = _WsHeaders()
+        headers["Content-Type"] = ctype
+        headers["Content-Length"] = str(len(body))
+        headers["Cache-Control"] = "no-store"
+        return _WsResponse(status, reason, headers, body)
+
+    def _process_request(self, connection, request):
+        # /ws は WebSocket ハンドシェイクへ通す (None を返すと websockets 側が処理)
+        try:
+            p = urlparse(request.path).path
+        except Exception:
+            return self._reply(400, "Bad Request", b"bad request")
+        if p == "/ws":
+            return None
+        # それ以外は静的ファイル配信 (パストラバーサル防止)
+        rel = unquote(p).lstrip("/")
+        if rel == "":
+            rel = "index.html"
+        try:
+            root_resolved = self.root.resolve()
+            target = (root_resolved / rel).resolve()
+            if target != root_resolved and root_resolved not in target.parents:
+                return self._reply(403, "Forbidden", b"forbidden")
+        except Exception:
+            return self._reply(404, "Not Found", b"not found")
+        if not target.is_file():
+            return self._reply(404, "Not Found", b"not found")
+        try:
+            body = target.read_bytes()
+        except Exception:
+            return self._reply(404, "Not Found", b"not found")
+        ctype = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
+        if target.suffix == ".js":
+            ctype = "text/javascript"  # ESM は正しい MIME でないとブラウザが実行を拒否する
+        return self._reply(200, "OK", body, ctype)
+
+    async def broadcast(self, payload: dict) -> None:
+        if not self.clients:
+            return
+        msg = json.dumps(payload, ensure_ascii=False)
+        dead = []
+        for ws in list(self.clients):
+            try:
+                await ws.send(msg)
+            except Exception:
+                dead.append(ws)
+        for ws in dead:
+            self.clients.discard(ws)
+
+
 async def main_async(args: argparse.Namespace) -> None:
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
@@ -539,6 +681,29 @@ async def main_async(args: argparse.Namespace) -> None:
     obs = ObsFiles(subtitle, speaking)
     state = StreamState()
     asyncio.create_task(tail_events(events_path, events))
+
+    # アバター(立ち絵)配信サーバ + 口パク情報のブロードキャスト (~30Hz)
+    avatar = AvatarServer(Path(__file__).with_name("avatar"), args.avatar_host, args.avatar_port)
+    if not args.no_avatar:
+        await avatar.start()
+
+        async def avatar_ticker() -> None:
+            while True:
+                try:
+                    is_speaking = player.is_speaking()
+                    level = player.level
+                    player.level *= 0.82  # 緩やかに減衰: 連続発話中は口が開いた状態を保つ (0.55 だと谷が深すぎて口パクが疎らに見えた)
+                    mouth = min(1.0, level * 4.0) if is_speaking else 0.0
+                    await avatar.broadcast({
+                        "mouth": round(mouth, 3),
+                        "speaking": is_speaking,
+                        "subtitle": obs.current_subtitle(),
+                    })
+                except Exception:
+                    pass
+                await asyncio.sleep(0.033)
+
+        asyncio.create_task(avatar_ticker())
 
     first = True
     backoff = 2.0
@@ -646,6 +811,13 @@ def main() -> None:
                              "空なら既定デバイス")
     parser.add_argument("--list-audio-devices", action="store_true",
                         help="音声デバイスの一覧を表示して終了")
+    parser.add_argument("--avatar-port", type=int, default=int(os.environ.get("EK_AVATAR_PORT", "8777")),
+                        help="アバター(立ち絵)配信サーバのポート (default: 8777)。"
+                             "OBS のブラウザソースに http://127.0.0.1:<port>/ を設定する")
+    parser.add_argument("--avatar-host", default=os.environ.get("EK_AVATAR_HOST", "127.0.0.1"),
+                        help="アバターサーバの待受ホスト (default: 127.0.0.1 = ローカルのみ)")
+    parser.add_argument("--no-avatar", action="store_true",
+                        help="アバター配信サーバを起動しない (音声実況のみ)")
     args = parser.parse_args()
     _start_parent_watchdog()  # 親 AU が死んだら道連れで終了 (孤児プロセスの増殖防止)
     try:
