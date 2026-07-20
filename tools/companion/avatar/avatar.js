@@ -210,8 +210,9 @@ function applyExpressions(vrm, delta) {
     emotionCurrent[p] = cur;
     faceDriver.set(p, cur);
   }
-  // 感情はしゃべり終えると自然に薄れる
-  if (!speaking) emotionValue = Math.max(0, emotionValue - delta * 0.15);
+  // 感情は数秒で自然に薄れる。しゃべり続けていても表情ロックしないよう発話中も減衰し
+  // (長文でも約3秒で戻り始める)、無音になったら速めにスッと戻す。
+  emotionValue = Math.max(0, emotionValue - delta * (speaking ? 0.22 : 0.5));
 }
 
 // アイドル: ごく浅い呼吸 (上下) と左右の揺れで棒立ち感を消す。
