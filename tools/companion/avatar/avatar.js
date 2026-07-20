@@ -140,7 +140,7 @@ const MORPH_FALLBACK_MAP = {
   angry: ['怒り眉'],
   sad: ['困り眉'],
   relaxed: ['ジト目'],
-  surprised: ['〇〇目'],
+  surprised: ['瞳小さく'],  // 〇〇目は白目サークル化する (目のテクスチャ差し替え用) ので使わない
 };
 
 function makeFaceDriver(vrm) {
