@@ -27,6 +27,9 @@ public static class LoadingScreenVideo
         // 計装ログ: 無音早期 return がどこで起きたかを実機ログで特定できるようにする (host-local のみ)。
         if (!VideoSurface.IsSupported) { Logger.Info("Show skipped: VideoPlayer type unavailable", "LoadingScreenVideo"); return; }
         if (Main.LoadingVideoEnabled is not { Value: true }) { Logger.Info("Show skipped: disabled by config", "LoadingScreenVideo"); return; }
+        // kill switch (再ビルド・再起動不要の A/B 手段): EndKnot_DATA/disable_star_video.txt が存在する間は再生しない。
+        // Show() はゲーム開始/終了時にしか呼ばれないため毎回素直にファイルを見る (barrier の 30 秒キャッシュは不要)。
+        if (File.Exists($"{Main.DataPath}/EndKnot_DATA/disable_star_video.txt")) { Logger.Warn("Show skipped: kill switch ENGAGED (disable_star_video.txt)", "LoadingScreenVideo"); return; }
         if (IsShowing) return; // 二重呼びは no-op
 
         try
