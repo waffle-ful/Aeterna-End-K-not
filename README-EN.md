@@ -2,6 +2,10 @@
 
 [日本語](README.md)
 
+<p align="center">
+  <a href="../../releases/latest"><img src="https://img.shields.io/badge/%E2%AC%87%20Download-Latest-2ea44f?style=for-the-badge&logo=github&logoColor=white" alt="Download the latest version" height="42"></a>
+</p>
+
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/sEYAFzD3a)
 
 ## About this mod
