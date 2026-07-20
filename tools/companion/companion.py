@@ -62,9 +62,10 @@ from urllib.parse import unquote, urlparse
 # ---- 設定 (CLI/環境変数で上書き可) ----
 
 DEFAULT_MODEL = os.environ.get("GEMINI_LIVE_MODEL", "gemini-2.5-flash-native-audio-preview-09-2025")
-# --tts voicevox 時は音声をこちらで作るのでテキスト生成だけでよい。Live API のモデルは全て
-# 音声応答専用 (TEXT モダリティ拒否を実測) なので、通常の generate_content ストリーミングを使う。
-# 将来 Claude 等の他社 API に載せ替える場合もこのターン制テキスト経路が差し替え点になる。
+# --tts voicevox-text 用 (通常 generate_content のターン制テキスト経路)。ただし無料枠は
+# audio dialog 系が太くテキスト系は極端に細いので、現状の主役は「Live native-audio の音声を
+# 捨てて文字起こしをずん子合成に回す」--tts voicevox の方 (非効率だが枠の実態に合う)。
+# 有料 API (Claude 等) へ移行できる状態になったらこのテキスト経路が差し替え点になる。
 DEFAULT_TEXT_MODEL = os.environ.get("GEMINI_TEXT_MODEL", "gemini-2.5-flash")
 DEFAULT_VOICE = os.environ.get("GEMINI_VOICE", "")  # 空 = モデル既定ボイス
 AUDIO_SAMPLE_RATE = 24000  # Live API の出力 PCM は 24kHz 16bit mono
@@ -787,7 +788,12 @@ async def commentary_loop(events: asyncio.Queue, args: argparse.Namespace, state
 
 async def run_session(client: genai.Client, args: argparse.Namespace, events: asyncio.Queue,
                       player: AudioPlayer, obs: ObsFiles, state: StreamState,
-                      first_connect: bool, conv: ConvLog) -> None:
+                      first_connect: bool, conv: ConvLog, tts: VoiceVoxTts | None = None) -> None:
+    """Live native-audio セッション。tts 指定時は Gemini の音声を捨て、文字起こしをずん子ボイスで読む。
+
+    (音声を作らせて捨てるのは非効率だが、無料枠が audio dialog 系にしか無いための割り切り。
+    文字起こしは「びっくりマーク大地震」のような読み形で届くので VoiceVox の入力に都合が良い。)
+    """
     system = load_persona()
     recap_used = ""
     # 再接続だけでなく初回接続でも recap があれば引き継ぐ (recap.txt 永続化により、
@@ -808,7 +814,10 @@ async def run_session(client: genai.Client, args: argparse.Namespace, events: as
                 prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=args.voice)))
 
     async with client.aio.live.connect(model=args.model, config=config) as session:
-        print(f"[live] 接続完了 (model={args.model}" + (f", voice={args.voice}" if args.voice else "") + ")")
+        print(f"[live] 接続完了 (model={args.model}"
+              + (f", voice={args.voice}" if args.voice else "")
+              + (f", 声はVoiceVox styleId={tts.style_id} (Gemini音声は破棄)" if tts is not None else "")
+              + ")")
         # 再接続は文脈喪失 (=意味不明発言) の第一容疑なので、引き継いだあらすじごと区切りを記録する
         conv.log("session", first=first_connect, model=args.model, recap=recap_used)
         gate = TurnGate()
@@ -833,19 +842,31 @@ async def run_session(client: genai.Client, args: argparse.Namespace, events: as
             gate.open = True
             gate.last_send = time.monotonic()
 
+        tts_buf = ""  # VoiceVox モード: 文の切れ目待ちの文字起こし
+
         async def receiver() -> None:
-            nonlocal say_buf
+            nonlocal say_buf, tts_buf
             while True:
                 async for resp in session.receive():
-                    if resp.data:
-                        player.feed(resp.data)
+                    if resp.data and tts is None:
+                        player.feed(resp.data)  # VoiceVox モードでは Gemini の声は捨てる
                     sc = getattr(resp, "server_content", None)
                     if sc is not None:
                         tr = getattr(sc, "output_transcription", None)
                         if tr is not None and getattr(tr, "text", None):
-                            obs.feed_transcript(tr.text)
                             say_buf += tr.text
+                            if tts is None:
+                                obs.feed_transcript(tr.text)
+                            else:
+                                # 字幕は VoiceVox 側が PCM 投入と同時に書く (音声とのズレ防止)
+                                tts_buf += tr.text
+                                done, tts_buf = split_sentences(tts_buf)
+                                for s in done:
+                                    tts.speak(s)
                         if getattr(sc, "turn_complete", False):
+                            if tts is not None and tts_buf.strip():
+                                tts.speak(tts_buf)  # 切れ目が来ないまま終わった残りも読む
+                            tts_buf = ""
                             gate.open = False
                             flush_say()
 
@@ -857,7 +878,7 @@ async def run_session(client: genai.Client, args: argparse.Namespace, events: as
         recv_task = asyncio.create_task(receiver())
         obs_task = asyncio.create_task(obs_ticker())
         try:
-            await commentary_loop(events, args, state, player, None, gate, send_text, first_connect)
+            await commentary_loop(events, args, state, player, tts, gate, send_text, first_connect)
         finally:
             recv_task.cancel()
             obs_task.cancel()
@@ -1056,7 +1077,7 @@ async def main_async(args: argparse.Namespace) -> None:
     obs = ObsFiles(subtitle, speaking)
 
     tts: VoiceVoxTts | None = None
-    if args.tts == "voicevox":
+    if args.tts in ("voicevox", "voicevox-text"):
         resolved = resolve_voicevox_style(args.voicevox_url, args.voicevox_speaker, args.voicevox_style)
         if resolved is None:
             print("[voicevox] VoiceVox が使えないため Gemini 音声にフォールバックします "
@@ -1109,10 +1130,10 @@ async def main_async(args: argparse.Namespace) -> None:
     while True:
         started = time.monotonic()
         try:
-            if tts is not None:
+            if tts is not None and args.tts == "voicevox-text":
                 await run_text_session(client, args, events, player, obs, state, first, conv, tts)
             else:
-                await run_session(client, args, events, player, obs, state, first, conv)
+                await run_session(client, args, events, player, obs, state, first, conv, tts)
         except Exception as ex:
             print(f"[live] セッション終了/エラー: {ex}")
             conv.log("session_end", error=str(ex))
@@ -1188,13 +1209,16 @@ def main() -> None:
     parser.add_argument("--events", required=True,
                         help="companion-events.jsonl のパス (Among Us フォルダ/EndKnot_DATA/ 配下)")
     parser.add_argument("--model", default="",
-                        help=f"Gemini Live モデル名 (default: {DEFAULT_MODEL}、--tts voicevox 時は {DEFAULT_TEXT_MODEL}。"
-                             "環境変数 GEMINI_LIVE_MODEL / GEMINI_LIVE_TEXT_MODEL でも上書き可)")
-    parser.add_argument("--tts", choices=["gemini", "voicevox"],
+                        help=f"モデル名 (default: {DEFAULT_MODEL}、--tts voicevox-text 時は {DEFAULT_TEXT_MODEL}。"
+                             "環境変数 GEMINI_LIVE_MODEL / GEMINI_TEXT_MODEL でも上書き可)")
+    parser.add_argument("--tts", choices=["gemini", "voicevox", "voicevox-text"],
                         default=os.environ.get("EK_COMPANION_TTS", "gemini"),
-                        help="実況の声の作り方。gemini = Live API のネイティブ音声 (現行)。"
-                             "voicevox = Gemini はテキストだけ書き、ローカル VOICEVOX エンジンでずん子ボイス合成 "
-                             "(要: VOICEVOX 0.19+ 起動中。アバターの見た目と声が一致する)")
+                        help="実況の声の作り方。gemini = Live API のネイティブ音声。"
+                             "voicevox = Live native-audio セッションはそのまま (無料枠が太い)、"
+                             "Gemini の音声は捨てて文字起こしをローカル VOICEVOX のずん子ボイスで読む "
+                             "(要: VOICEVOX 0.19+ 起動中。アバターの見た目と声が一致する)。"
+                             "voicevox-text = 声は同じくずん子だが、テキスト生成を通常 Gemini API のターン制で行う "
+                             "(テキスト系の利用枠が確保できたとき/他社 LLM へ移行するとき用)")
     parser.add_argument("--voicevox-url", default=VOICEVOX_DEFAULT_URL,
                         help=f"VOICEVOX エンジンの URL (default: {VOICEVOX_DEFAULT_URL}、環境変数 EK_VOICEVOX_URL でも可)")
     parser.add_argument("--voicevox-speaker", default=VOICEVOX_DEFAULT_SPEAKER,
@@ -1242,7 +1266,7 @@ def main() -> None:
     args = parser.parse_args()
     args.model_explicit = bool(args.model)  # VoiceVox フォールバック時のモデル巻き戻し判定に使う
     if not args.model:
-        args.model = DEFAULT_TEXT_MODEL if args.tts == "voicevox" else DEFAULT_MODEL
+        args.model = DEFAULT_TEXT_MODEL if args.tts == "voicevox-text" else DEFAULT_MODEL
     _start_parent_watchdog()  # 親 AU が死んだら道連れで終了 (孤児プロセスの増殖防止)
     try:
         asyncio.run(main_async(args))
