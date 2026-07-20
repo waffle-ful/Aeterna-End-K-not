@@ -7,7 +7,7 @@
 [English](README-EN.md)
 
 <p align="center">
-  <a href="../../releases/latest"><img src="https://img.shields.io/badge/%E2%AC%87%20%E3%83%80%E3%82%A6%E3%83%B3%E3%83%AD%E3%83%BC%E3%83%89-%E6%9C%80%E6%96%B0%E7%89%88-2ea44f?style=for-the-badge&logo=github&logoColor=white" alt="最新版をダウンロード" height="42"></a>
+  <a href="../../releases/latest"><img src="https://img.shields.io/badge/%E2%AC%87%20%E3%83%80%E3%82%A6%E3%83%B3%E3%83%AD%E3%83%BC%E3%83%89-%E6%9C%80%E6%96%B0%E7%89%88-2ea44f?style=for-the-badge&logo=github&logoColor=white" alt="最新版をダウンロード" height="200"></a>
 </p>
 
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/sEYAFzD3a)
