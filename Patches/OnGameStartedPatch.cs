@@ -986,6 +986,10 @@ internal static class StartGameHostPatch
                     state.SubRoles.FindAll(x => x.IncompatibleWithVenom()).ForEach(state.RemoveSubRole);
             }
 
+            // Must run before the sync loop below: sub-roles it adds are only broadcast to clients there
+            try { EndKnot.Roles.Stack.Apply(); }
+            catch (Exception e) { Utils.ThrowException(e); }
+
             foreach (KeyValuePair<byte, PlayerState> pair in Main.PlayerStates)
             {
                 ExtendedPlayerControl.RpcSetCustomRole(pair.Key, pair.Value.MainRole);
@@ -1036,8 +1040,9 @@ internal static class StartGameHostPatch
                 Allergic.Init();
                 Reroll.Init();
                 Lovers.Init();
-                EndKnot.Roles.Stack.Apply();
                 Twins.Init();
+                Connecting.Init();
+                Faction.Init();
                 LastNeutral.Init();
                 SlowStarter.Init();
                 LateTask.New(Tired.Reset, 7f, log: false);
@@ -1188,6 +1193,10 @@ internal static class StartGameHostPatch
         LoadingBarManager loadingBarManager = LoadingBarManager.Instance;
         yield return loadingBarManager.WaitAndSmoothlyUpdate(90f, 95f, 1f, GetString("LoadingBarText.1"));
 
+        // BlackoutProbe: v3 機序 (Disconnected 復元がクライアント intro に間に合わない疑い) の
+        // wire 時刻計器。ホストローカルログのみ・送信への影響ゼロ。
+        float probeSetStart = Time.realtimeSinceStartup;
+
         foreach (PlayerControl pc in PlayerControl.AllPlayerControls)
         {
             if (!pc.Data)
@@ -1210,16 +1219,30 @@ internal static class StartGameHostPatch
         }
 
         Logger.Info("Successfully set everyone's data as Disconnected", "StartGameHost");
+        Logger.Info($"BlackoutProbe: Disconnected=true wired {Time.realtimeSinceStartup - probeSetStart:F2}s after set start (gateQueue={PacketRateGate.PendingCount}, video={Modules.Media.LoadingScreenVideo.IsShowing})", "BlackoutProbe");
 
         yield return loadingBarManager.WaitAndSmoothlyUpdate(95f, 100f, 1f, GetString("LoadingBarText.1"));
         loadingBarManager.ToggleLoadingBar(false);
 
+        float probeRolesStart = Time.realtimeSinceStartup;
         Main.EnumeratePlayerControls().Do(SetRoleSelf);
 
         RpcSetRoleReplacer.EndReplace();
 
+        // ここが v3 の急所: この時点で SetRole 系はクライアントへ発ち、クライアントは intro 構築を
+        // 始められる。復元 (下の Disconnected=false) がこれよりどれだけ遅れて wire に乗るかを測る。
+        Logger.Info($"BlackoutProbe: roles dispatched {Time.realtimeSinceStartup - probeRolesStart:F2}s after roles start (gateQueue={PacketRateGate.PendingCount})", "BlackoutProbe");
 
-        yield return new WaitForSecondsRealtime(1.2f);
+        // v3 根治 (2026-07-20): この 1.2s 固定待ち (初回コミット由来=EHR上流設計) が「復元がクライアントの
+        // intro 構築に間に合わない」危険窓の正体 (BlackoutProbe 実測: 復元 wire は常に roles+1.24s で、
+        // 暗転/クリーンの差はクライアント側ロードのレースのみ)。TOHK の契約「イントロが始まるまでに戻す」
+        // (StandardIntro.cs:140) に合わせ、roles dispatch 直後に即復元する。
+        // Rollback bit: create EndKnot_DATA/delay_disconnected_restore.txt to restore the old 1.2s wait.
+        if (DelayDisconnectedRestore())
+        {
+            Logger.Warn("delay_disconnected_restore.txt present: restoring old 1.2s wait before Disconnected restore (known to lose the client-intro race)", "BlackoutProbe");
+            yield return new WaitForSecondsRealtime(1.2f);
+        }
 
         foreach (PlayerControl pc in PlayerControl.AllPlayerControls)
         {
@@ -1229,10 +1252,20 @@ internal static class StartGameHostPatch
             pc.Data.Disconnected = disconnected;
         }
 
+        float probeRestoreQueued = Time.realtimeSinceStartup;
+
         {
             var qa = Utils.SendGameData();
             if (qa != null) yield return qa.Wait();
         }
+
+        Logger.Info($"BlackoutProbe: restore wired +{Time.realtimeSinceStartup - probeRolesStart:F2}s after roles dispatch start (queue-drain {Time.realtimeSinceStartup - probeRestoreQueued:F2}s, gateQueue={PacketRateGate.PendingCount}, video={Modules.Media.LoadingScreenVideo.IsShowing})", "BlackoutProbe");
+    }
+
+    private static bool DelayDisconnectedRestore()
+    {
+        try { return System.IO.File.Exists($"{Main.DataPath}/EndKnot_DATA/delay_disconnected_restore.txt"); }
+        catch { return false; }
     }
 
     private static bool IsBasisChangingPlayer(byte id, CustomRoles role)
