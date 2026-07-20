@@ -26,7 +26,10 @@ On top of EHR's 650+ role engine, End K not adds its own original feature set fo
 - **Per-crew text-to-speech (VOICEVOX integration)** — Reads each player's chat aloud in a distinct voice. It drives a locally-installed copy of [VOICEVOX](https://voicevox.hiroshiba.jp/); the audio plays only on the host's machine (your stream) and is never sent to the game. Voices can also be pinned per player name or friend code. *(See [Credits](#credits) for the attribution required when streaming.)*
 - **Auto re-host & crash self-recovery** — If the host is kicked or dropped by the official server, End K not automatically re-creates a new lobby with the same region and settings. And if Among Us itself crashes or hangs, the bundled external watchdog detects it and relaunches the game to restore the lobby — so it keeps running unattended through 24-hour soaks and long streams.
 - **BGM system** — Replaceable background music for menu / lobby / in-task / climax / meeting / result. Default tracks bundled.
-- **YouTube live chat overlay** — Displays your YouTube live chat on top of the game screen while streaming.
+- **YouTube live chat overlay & auto-posting** — Displays your YouTube live chat on top of the game screen while streaming, and auto-posts in-game commentary events (kills, meetings, wins, etc.) back to that live chat to keep viewers engaged.
+- **Viewer intervention system** — Lets viewers interfere with the game via `!`-prefixed live chat commands, gated by a point economy. Includes `!大地震` (big earthquake — closes all doors, cuts power, and randomly teleports players), `!天の声` (voice of heaven — broadcasts a viewer's message to all players), and `!偽死体` (fake corpse — spawns a fake dead body near a living player).
+- **AI commentary companion** — A separate AI process (Gemini Live) receives live game events and provides real-time commentary through a 2D portrait / 3D avatar with lip-sync. Topic rotation and repetition suppression keep the commentary fresh during long streams.
+- **On-screen lobby code bubble** — A draggable IMGUI overlay that keeps your lobby code visible on stream at all times.
 
 ### 🏚️ Original content
 
