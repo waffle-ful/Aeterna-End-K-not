@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>EndKnot AI Commentary Avatar</title>
+<style>
+  /* 背景は完全透過 (OBS ブラウザソースで立ち絵だけを重ねる) */
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
+  #canvas-wrap { position: fixed; inset: 0; }
+  canvas { display: block; }
+
+  /* モデル未配置 / 読み込みエラー時の案内 (OBS では出したくないので半透明の小さめ) */
+  #notice {
+    position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    max-width: 80%; padding: 16px 20px; border-radius: 10px;
+    background: rgba(20, 22, 30, 0.82); color: #f2f4ff;
+    font-family: "Segoe UI", "Yu Gothic UI", sans-serif; font-size: 15px; line-height: 1.6;
+    text-align: center; box-shadow: 0 4px 24px rgba(0,0,0,0.4); display: none;
+  }
+  #notice code { background: rgba(255,255,255,0.12); padding: 1px 6px; border-radius: 4px; }
+
+  /* 字幕 (任意)。?nosub でオフ。OBS 側テキストソース (subtitle.txt) を使う人は付けなくてよい */
+  #subtitle {
+    position: fixed; left: 50%; bottom: 4%; transform: translateX(-50%);
+    max-width: 90%; padding: 6px 16px; border-radius: 8px;
+    background: rgba(0,0,0,0.55); color: #fff;
+    font-family: "Yu Gothic UI", "Segoe UI", sans-serif; font-size: 22px; font-weight: 600;
+    text-align: center; white-space: pre-wrap; text-shadow: 0 2px 4px rgba(0,0,0,0.7);
+    display: none; pointer-events: none;
+  }
+  /* 接続状態ドット (左上・デバッグ用。?nostatus で消せる) */
+  #status {
+    position: fixed; left: 8px; top: 8px; width: 10px; height: 10px; border-radius: 50%;
+    background: #e0503a; box-shadow: 0 0 6px rgba(0,0,0,0.5); opacity: 0.6;
+  }
+  #status.connected { background: #47c86a; }
+</style>
+
+<!-- CDN は使わない。three は importmap でローカル vendor に解決する (完全オフライン動作) -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three.module.js"
+  }
+}
+</script>
+</head>
+<body>
+  <div id="canvas-wrap"></div>
+  <div id="status"></div>
+  <div id="subtitle"></div>
+  <div id="notice"></div>
+  <script type="module" src="./avatar.js"></script>
+</body>
+</html>
