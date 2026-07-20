@@ -76,6 +76,7 @@ MIN_SEND_GAP_SEC = 3.0      # 連続送信の最小間隔
 BATCH_WINDOW_SEC = 1.0      # イベントをまとめる窓
 CHAT_EVENT_MAX_AGE_SEC = 30.0  # 古すぎるチャットは実況しない
 SUBTITLE_CLEAR_AFTER_SEC = 8.0  # 発話終了からこれだけ経ったら字幕を消す
+TURN_STALL_TIMEOUT_SEC = 45.0  # 応答ターンが開いたまま無音・無合成がこれだけ続いたら取りこぼしとみなして進む
 SUMMARY_MAX_LINES = 12  # 再接続時に引き継ぐ「あらすじ」の行数
 RECENT_SAY_KEEP = 5     # 反復禁止用に覚えておく直近発話の数
 RECAP_STALE_SEC = 6 * 3600  # recap.txt がこれより古ければ前回配信の残骸とみなして捨てる
@@ -314,6 +315,11 @@ class VoiceVoxTts:
             self._pending += 1
         self._q.put(text)
 
+    # 口パクは AudioPlayer がチャンク毎に RMS を出す仕組みなので、文まるごとの巨大 PCM を
+    # 1回で feed すると「文全体の平均が1文に1回」しか出ず口がほぼ動かない。Gemini ストリーミング
+    # と同じ粒度になるよう 50ms 刻みに割って流す (再生は stream.write のブロッキングが自然に刻む)。
+    _FEED_CHUNK_BYTES = int(AUDIO_SAMPLE_RATE * 2 * 0.05)  # 16bit mono 50ms
+
     def _worker(self) -> None:
         while True:
             text = self._q.get()
@@ -321,7 +327,8 @@ class VoiceVoxTts:
                 pcm = self._synth(text)
                 if pcm:
                     self.obs.feed_transcript(text)
-                    self.player.feed(pcm)
+                    for i in range(0, len(pcm), self._FEED_CHUNK_BYTES):
+                        self.player.feed(pcm[i:i + self._FEED_CHUNK_BYTES])
             except Exception as ex:  # 1文の失敗で実況全体を殺さない
                 print(f"[voicevox] 合成エラー ({text[:20]}…): {ex}")
             finally:
@@ -732,8 +739,25 @@ async def commentary_loop(events: asyncio.Queue, args: argparse.Namespace, state
     def output_busy() -> bool:
         return gate.open or player.is_speaking() or (tts is not None and tts.busy())
 
+    # turn_complete の取りこぼし (まれに text/thought だけのターンや切断で来ない) で gate が
+    # 開きっぱなしになると、以降イベントも場繋ぎも一切送れず「実況が黙り込む」。
+    # 無音・無合成のままゲートだけ開いている時間を測り、閾値で強制的に閉じて自己回復する。
+    stall_since: list[float | None] = [None]
+
+    def recover_stall(now: float) -> None:
+        if gate.open and not player.is_speaking() and not (tts is not None and tts.busy()):
+            if stall_since[0] is None:
+                stall_since[0] = now
+            elif now - stall_since[0] > TURN_STALL_TIMEOUT_SEC:
+                print(f"[live] 応答が {TURN_STALL_TIMEOUT_SEC:.0f} 秒来ないため次へ進みます (turn 取りこぼし回復)")
+                gate.open = False
+                stall_since[0] = None
+        else:
+            stall_since[0] = None
+
     last_activity = time.monotonic()
     while True:
+        recover_stall(time.monotonic())
         # イベントを最大 BATCH_WINDOW 秒ぶんまとめる
         raw: list[dict] = []
         try:
@@ -771,6 +795,7 @@ async def commentary_loop(events: asyncio.Queue, args: argparse.Namespace, state
             while output_busy() or (now - gate.last_send) < MIN_SEND_GAP_SEC:
                 await asyncio.sleep(0.3)
                 now = time.monotonic()
+                recover_stall(now)
             if batch_emotion:
                 state.pending_emotion = batch_emotion  # 発話開始時に avatar_ticker が1回だけ載せる
             await send_text("\n".join(batch[-5:]))  # 溜まりすぎたら新しい5件だけ
@@ -842,18 +867,23 @@ async def run_session(client: genai.Client, args: argparse.Namespace, events: as
             gate.open = True
             gate.last_send = time.monotonic()
 
-        tts_buf = ""  # VoiceVox モード: 文の切れ目待ちの文字起こし
+        tts_buf = ""        # VoiceVox モード: 文の切れ目待ちの文字起こし
+        turn_had_transcript = False  # このターンで文字起こしが1回でも来たか
+        turn_text_parts = ""         # 音声の代わりに text パーツで返ってきた本文 (thought は除外)
 
         async def receiver() -> None:
-            nonlocal say_buf, tts_buf
+            nonlocal say_buf, tts_buf, turn_had_transcript, turn_text_parts
             while True:
                 async for resp in session.receive():
-                    if resp.data and tts is None:
-                        player.feed(resp.data)  # VoiceVox モードでは Gemini の声は捨てる
+                    # VoiceVox モードでは resp.data プロパティ自体に触らない (音声は捨てる上、
+                    # text/thought パーツ混在時に SDK が warning を吐くのはこのプロパティ内)
+                    if tts is None and resp.data:
+                        player.feed(resp.data)
                     sc = getattr(resp, "server_content", None)
                     if sc is not None:
                         tr = getattr(sc, "output_transcription", None)
                         if tr is not None and getattr(tr, "text", None):
+                            turn_had_transcript = True
                             say_buf += tr.text
                             if tts is None:
                                 obs.feed_transcript(tr.text)
@@ -863,10 +893,28 @@ async def run_session(client: genai.Client, args: argparse.Namespace, events: as
                                 done, tts_buf = split_sentences(tts_buf)
                                 for s in done:
                                     tts.speak(s)
+                        # まれにモデルが音声でなく text (+thought) パーツで返すターンがある。
+                        # 音声が無いと文字起こしも来ない = 無音ターンになるので、本文を拾っておき
+                        # turn_complete 時のフォールバック読み上げに使う (thought = 内心は読まない)。
+                        if tts is not None:
+                            mt = getattr(sc, "model_turn", None)
+                            for part in (getattr(mt, "parts", None) or []):
+                                if getattr(part, "thought", False):
+                                    continue
+                                t = getattr(part, "text", None)
+                                if t:
+                                    turn_text_parts += t
                         if getattr(sc, "turn_complete", False):
-                            if tts is not None and tts_buf.strip():
-                                tts.speak(tts_buf)  # 切れ目が来ないまま終わった残りも読む
+                            if tts is not None:
+                                if not turn_had_transcript and turn_text_parts.strip():
+                                    print("[live] 音声なしターンを text パーツから読み上げます")
+                                    say_buf += turn_text_parts
+                                    tts_buf += turn_text_parts
+                                if tts_buf.strip():
+                                    tts.speak(tts_buf)  # 切れ目が来ないまま終わった残りも読む
                             tts_buf = ""
+                            turn_had_transcript = False
+                            turn_text_parts = ""
                             gate.open = False
                             flush_say()
 
@@ -1114,8 +1162,10 @@ async def main_async(args: argparse.Namespace) -> None:
                         "subtitle": obs.current_subtitle(),
                     }
                     # 表情タグは発話開始の最初の tick で1回だけ載せる (avatar.js は受信のたびに
-                    # emotionValue をリセットするので、毎 tick 載せると表情が固まったままになる)
-                    if is_speaking and state.pending_emotion:
+                    # emotionValue をリセットするので、毎 tick 載せると表情が固まったままになる)。
+                    # VoiceVox モードは合成 HTTP のぶん再生開始が数秒遅れるので、合成開始 (busy) を
+                    # 発話開始とみなして発火する (表情がイベントから遅れて見える問題の対策)
+                    if state.pending_emotion and (is_speaking or (tts is not None and tts.busy())):
                         payload["emotion"] = state.pending_emotion
                         state.pending_emotion = None
                     await avatar.broadcast(payload)
