@@ -193,7 +193,9 @@ public static class CompanionLauncher
         if (!WriteResource(ScriptResource, Path.Combine(BaseDir, "companion.py"))) return false;
         if (!WriteResource(RequirementsResource, Path.Combine(BaseDir, "requirements.txt"))) return false;
 
-        // 依存の自動インストール (初回のみ、deps-ok.flag で判定) → 本体起動。メッセージは cmd の
+        MaterializeAvatar();
+
+        // 依存の自動インストール (初回のみ、deps-ok-v2.flag で判定) → 本体起動。メッセージは cmd の
         // コードページ事故を避けるため ASCII のみ。ゲーム内向けの日本語案内は lang キー側で行う。
         const string cmd =
             "@echo off\r\n" +
@@ -207,7 +209,9 @@ public static class CompanionLauncher
             "  pause\r\n" +
             "  exit /b 1\r\n" +
             ")\r\n" +
-            "if not exist deps-ok.flag (\r\n" +
+            // flag はバージョン付き。requirements に依存を足したら番号を上げると既存ユーザーでも一度だけ再インストールが走る
+            // (v2 で websockets を追加 — 立ち絵アバター配信用)。
+            "if not exist deps-ok-v2.flag (\r\n" +
             "  echo Installing dependencies [first run only]...\r\n" +
             "  python -m pip install -r requirements.txt\r\n" +
             "  if errorlevel 1 (\r\n" +
@@ -215,12 +219,43 @@ public static class CompanionLauncher
             "    pause\r\n" +
             "    exit /b 1\r\n" +
             "  )\r\n" +
-            "  echo ok> deps-ok.flag\r\n" +
+            "  echo ok> deps-ok-v2.flag\r\n" +
             ")\r\n" +
             "python companion.py --events \"%EK_COMPANION_EVENTS%\" %EK_COMPANION_ARGS%\r\n";
 
         File.WriteAllText(RunCmdPath, cmd);
         return true;
+    }
+
+    // 立ち絵(アバター)Webページ一式を EndKnot_DATA/companion/avatar/ へ復元する。
+    // csproj で "EndKnot.Resources.Companion.Avatar.<相対パス>" として埋め込んであるので、
+    // プレフィックスを剥がした残りをそのままサブディレクトリ付きで書き出す。
+    // model.vrm はユーザーが置くファイルなので同梱しておらず、ここでも触らない (上書きしない)。
+    private const string AvatarPrefix = "EndKnot.Resources.Companion.Avatar.";
+
+    private static void MaterializeAvatar()
+    {
+        try
+        {
+            string avatarDir = Path.Combine(BaseDir, "avatar");
+            Directory.CreateDirectory(avatarDir);
+
+            var asm = Assembly.GetExecutingAssembly();
+            int count = 0;
+            foreach (string name in asm.GetManifestResourceNames())
+            {
+                if (!name.StartsWith(AvatarPrefix, StringComparison.Ordinal)) continue;
+
+                string rel = name.Substring(AvatarPrefix.Length).Replace('/', Path.DirectorySeparatorChar);
+                string dest = Path.Combine(avatarDir, rel);
+                Directory.CreateDirectory(Path.GetDirectoryName(dest));
+                if (WriteResource(name, dest)) count++;
+            }
+
+            if (count == 0)
+                Logger.Warn("Avatar web files not embedded in this build; avatar server will 404", "CompanionLauncher");
+        }
+        catch (Exception e) { Logger.Warn($"Avatar materialize failed: {e.Message}", "CompanionLauncher"); }
     }
 
     private static bool WriteResource(string resourceName, string path)
