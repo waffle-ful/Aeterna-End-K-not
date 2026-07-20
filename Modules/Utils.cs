@@ -2488,6 +2488,8 @@ public static class Utils
 
             StringBuilder sb = new();
             int size = 0;
+            int tagStart = -1; // char index in sb of the last '<' with no '>' seen yet
+            int tagStartSize = 0; // UTF-8 byte size of sb content before that '<'
 
             foreach (System.Text.Rune rune in text.EnumerateRunes())
             {
@@ -2495,10 +2497,27 @@ public static class Utils
 
                 if (size + runeSize > byteLimit && sb.Length > 0)
                 {
-                    result.Add(sb.ToString());
+                    // Never flush in the middle of a TMP tag: rewind to the last unterminated '<'
+                    // and carry it into the next chunk. Dropping it instead would delete those
+                    // characters outright, as their runes are already consumed. If the chunk is a
+                    // single unterminated tag longer than the whole budget, hard-split as before.
+                    int cut = tagStart > 0 ? tagStart : sb.Length;
+                    result.Add(sb.ToString(0, cut));
+                    string carry = sb.ToString(cut, sb.Length - cut);
                     sb.Clear();
-                    size = 0;
+                    sb.Append(carry);
+                    size = tagStart > 0 ? size - tagStartSize : 0;
+                    tagStart = carry.Length > 0 ? 0 : -1;
+                    tagStartSize = 0;
                 }
+
+                if (rune.Value == '<')
+                {
+                    tagStart = sb.Length;
+                    tagStartSize = size;
+                }
+                else if (rune.Value == '>')
+                    tagStart = -1;
 
                 sb.Append(rune.ToString());
                 size += runeSize;

@@ -168,6 +168,7 @@ public static class ChaosPotSupport
 
     public static void SendChatBroadcastOnMeetingStart()
     {
+        if (!AmongUsClient.Instance.AmHost || !GameStates.InGame || GameStates.IsEnded) return;
         if (!Enable.GetBool()) return;
         if (Options.CurrentGameMode != CustomGameMode.Standard) return;
 

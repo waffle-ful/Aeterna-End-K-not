@@ -1160,7 +1160,12 @@ internal static class IntroCutsceneDestroyPatch
 
         if (AmongUsClient.Instance.AmHost)
         {
-            LateTask.New(() => apc.DoIf(x => x && ((x.AmOwner && Main.GM.Value) || ChatCommands.Spectators.Contains(x.PlayerId)), x => x.RpcSetCustomRole(CustomRoles.GM)), 8f);
+            LateTask.New(() =>
+            {
+                if (!GameStates.InGame || GameStates.IsEnded) return;
+
+                apc.DoIf(x => x && ((x.AmOwner && Main.GM.Value) || ChatCommands.Spectators.Contains(x.PlayerId)), x => x.RpcSetCustomRole(CustomRoles.GM));
+            }, 8f);
             
             var aapc = Main.AllAlivePlayerControlsToList;
 

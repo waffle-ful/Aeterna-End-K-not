@@ -4509,6 +4509,7 @@
   "TalkativeInfoLong": "(<#ffab1b>Harmful</color> <#ff9ace>Add-on</color>):\n<size=80%>If you send more chat messages in a meeting than the host-set limit, you suicide.</size>",
   "Talkative.MaxMessagesPerMeeting": "Max Messages Per Meeting",
   "Talkative.Died": "{0} talked too much and died.",
+  "Talkative.Remaining": "Remaining chat messages: {0}",
   "Urgent": "Urgent",
   "UrgentInfo": "You Have +1 Emergency Meeting",
   "UrgentInfoLong": "(<#8cffff>Helpful</color> <#ff9ace>Add-on</color>):\n<size=80%>You have one extra emergency meeting button use.</size>",

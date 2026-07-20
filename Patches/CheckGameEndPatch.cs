@@ -1031,7 +1031,10 @@ internal static class GameEndChecker
 
             if (SoloPVP.RoundTimer.IsRunning && SoloPVP.RoundTimer.Elapsed.TotalSeconds < SoloPVP.GameTime) return false;
 
-            HashSet<byte> winners = [Main.EnumeratePlayerControls().FirstOrDefault(x => !x.Is(CustomRoles.GM) && SoloPVP.GetRankFromScore(x.PlayerId) == 1)?.PlayerId ?? Main.EnumerateAlivePlayerControls().First().PlayerId];
+            byte? winnerId = Main.EnumeratePlayerControls().FirstOrDefault(x => !x.Is(CustomRoles.GM) && SoloPVP.GetRankFromScore(x.PlayerId) == 1)?.PlayerId ?? Main.EnumerateAlivePlayerControls().FirstOrDefault()?.PlayerId;
+            if (winnerId == null) return false;
+
+            HashSet<byte> winners = [winnerId.Value];
             int kills = SoloPVP.PlayerScore[winners.First()];
             winners.UnionWith(SoloPVP.PlayerScore.Where(x => x.Value == kills).Select(x => x.Key));
 
