@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 
 namespace EndKnot.Roles;
@@ -9,6 +10,23 @@ internal class Faction : IAddon
     public void SetupCustomOption()
     {
         Options.SetupAdtRoleOptions(20460, CustomRoles.Faction, canSetNum: true, teamSpawnOptions: true);
+    }
+
+    public static void Init()
+    {
+        if (!AmongUsClient.Instance.AmHost) return;
+
+        List<PlayerControl> holders = Main.AllPlayerControlsToList
+            .Where(p => p.Is(CustomRoles.Faction))
+            .ToList();
+
+        // Faction is a mutual-ally group; a lone holder gains nothing from it (Twins-style cleanup)
+        if (holders.Count == 1)
+        {
+            PlayerControl lone = holders[0];
+            Main.PlayerStates[lone.PlayerId].RemoveSubRole(CustomRoles.Faction);
+            Logger.Info($"Faction removed (lone holder): {lone.GetRealName()}", "Faction");
+        }
     }
 
     public static bool AreAllies(PlayerControl seer, PlayerControl target)

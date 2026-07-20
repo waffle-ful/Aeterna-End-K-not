@@ -21,6 +21,7 @@ import asyncio
 import json
 import os
 import queue
+import random
 import re
 import sys
 import threading
@@ -69,6 +70,8 @@ BATCH_WINDOW_SEC = 1.0      # イベントをまとめる窓
 CHAT_EVENT_MAX_AGE_SEC = 30.0  # 古すぎるチャットは実況しない
 SUBTITLE_CLEAR_AFTER_SEC = 8.0  # 発話終了からこれだけ経ったら字幕を消す
 SUMMARY_MAX_LINES = 12  # 再接続時に引き継ぐ「あらすじ」の行数
+RECENT_SAY_KEEP = 5     # 反復禁止用に覚えておく直近発話の数
+RECAP_STALE_SEC = 6 * 3600  # recap.txt がこれより古ければ前回配信の残骸とみなして捨てる
 
 PERSONA_FILE = Path(__file__).with_name("persona.txt")
 
@@ -84,6 +87,9 @@ DEFAULT_PERSONA = """\
 - イベント情報は【イベント】などのタグ付きテキストで届く。【】で囲まれたタグ自体は
   読み上げず、内容に自然にリアクションだけする。
 - 同じ挨拶や同じ宣伝文句を繰り返さない。言い回しを毎回変える。
+- 一方的なアナウンスの読み上げではなく、直前の出来事や自分がさっき言ったことを
+  踏まえた「続きのおしゃべり」のように話す。
+- 必ず日本語だけで話す。韓国語・英語など他の言語の文を混ぜない。
 - 技術的な話 (API、ファイル、エラー) は絶対に口にしない。
 - 下品な言葉や攻撃的な言葉は使わない。
 - 特定のプレイヤーを「怪しい」と決めつけて疑わない (ゲームの公平性を守る)。
@@ -99,14 +105,41 @@ def load_persona() -> str:
 # ---- 共有状態 (phase 追跡・あらすじ・活動時刻) ----
 
 class StreamState:
-    def __init__(self) -> None:
+    def __init__(self, recap_file: Path | None = None) -> None:
         self.phase = "lobby"           # 最後に受けた phase イベント
         self.recap: deque[str] = deque(maxlen=SUMMARY_MAX_LINES)  # 再接続用あらすじ
         self.last_real_event = time.monotonic()  # filler 休眠判定 (実イベントのみ更新)
+        self.recent_says: deque[str] = deque(maxlen=RECENT_SAY_KEEP)  # 反復禁止用の直近発話
+        self.last_filler_topic = ""    # 場繋ぎのお題が連続しないように前回を覚える
+        self.last_demo_idx = -1        # デモ実況テンプレの前回インデックス
+        self.recap_file = recap_file
+        self.restored = False          # 起動時に前プロセスの recap を復元できたか
+        # プロセス再起動 (auto-rehost 等) をまたいで記憶を引き継ぐ。os._exit で落ちても
+        # note() のたびに書いてあるので取りこぼさない。古すぎるファイルは前回配信の残骸。
+        if recap_file is not None and recap_file.exists():
+            try:
+                if time.time() - recap_file.stat().st_mtime <= RECAP_STALE_SEC:
+                    lines = [l.strip() for l in recap_file.read_text(encoding="utf-8").splitlines() if l.strip()]
+                    for l in lines[-SUMMARY_MAX_LINES:]:
+                        self.recap.append(l)
+                    self.restored = bool(self.recap)
+            except Exception as ex:
+                print(f"[recap] 復元エラー (無視して続行): {ex}")
 
     def note(self, line: str) -> None:
-        """あらすじ用の1行メモ (【】タグは付けない素の日本語)。"""
+        """あらすじ用の1行メモ (【】タグは付けない素の日本語)。書くたびにディスクへも保存する。"""
         self.recap.append(line)
+        if self.recap_file is not None:
+            try:
+                self.recap_file.write_text("\n".join(self.recap) + "\n", encoding="utf-8")
+            except Exception as ex:
+                print(f"[recap] 保存エラー: {ex}")
+
+    def remember_say(self, text: str) -> None:
+        """自分の発話を反復禁止プロンプト用に短く記憶する。"""
+        t = text.strip()
+        if t:
+            self.recent_says.append(t[:60])
 
     def recap_text(self) -> str:
         if not self.recap:
@@ -316,8 +349,11 @@ def format_event(ev: dict, state: StreamState, quiet_meeting: bool) -> str | Non
                 f"「{ev.get('kindName', ev.get('kind', '?'))}」を発動した！大きくリアクションして、"
                 f"発動した視聴者の名前を呼んで褒めて。")
     if t == "demo":
-        return (f"【イベント】自動デモで「{ev.get('kindName', ev.get('kind', '?'))}」の演出が再生された。"
-                f"視聴者もチャットに !コマンドを打てば同じことを起こせると宣伝して。")
+        kind = ev.get("kindName", ev.get("kind", "?"))
+        # 毎回同じ指示だと毎回同じ宣伝文句になるので、切り口をローテーションする
+        idx = random.choice([i for i in range(len(DEMO_TEMPLATES)) if i != state.last_demo_idx])
+        state.last_demo_idx = idx
+        return DEMO_TEMPLATES[idx].format(kind=kind) + anti_repeat_block(state)
     if t == "chat":
         if quiet_meeting and state.phase == "meeting":
             return None  # 会議中はプレイヤーの議論が主役。チャット読みで被せない
@@ -414,16 +450,94 @@ def format_merged_joins(ev: dict, state: StreamState) -> str:
     return f"【イベント】プレイヤー「{listed}」たち{len(names)}人が続けてロビーに参加した！まとめて歓迎して。"
 
 
-FILLER_PROMPT = ("【場繋ぎ】しばらく何も起きていない。配信を見ている人に向けて、"
-                 "参加募集か !コマンドの紹介か雑談を、1文だけ短く。"
-                 "そのまま打てばいい !コマンドは「!大地震」「!隕石」「!停電」「!リアクター」"
-                 "「!通信」「!ドア」「!偽死体」。"
-                 "後ろに指定が要る !コマンドは「!呪い <名前>」「!祝福 <名前>」「!天の声 <メッセージ>」で、"
-                 "この3つを紹介するときは名前やメッセージまで必ずセットで説明すること"
-                 "(「びっくりマーク祝福のあとに助けたい人の名前」のように)。"
-                 "後ろの指定を省いて打つと何も起きないので、コマンド名だけを紹介してはいけない。"
-                 "この10種以外のコマンドは存在しないので、名前を変えたり新しく作ったりしないこと。")
+# ---- 場繋ぎ / デモのバリエーション生成 ----
+# 「毎回同じセリフ」の主犯は毎回同一の場繋ぎプロンプトだった (2026-07-20 ログ分析:
+# 送信の48%が場繋ぎで、1セッション内に同一文が最大87回)。お題を毎回変えて渡す。
+
+SIMPLE_CMDS = ["!大地震", "!隕石", "!停電", "!リアクター", "!通信", "!ドア", "!偽死体"]
+ARG_CMDS = [
+    ("!呪い", "びっくりマーク呪いのあとに対象プレイヤーの名前"),
+    ("!祝福", "びっくりマーク祝福のあとに助けたい人の名前"),
+    ("!天の声", "びっくりマーク天の声のあとに画面に出したいメッセージ"),
+]
+CMD_RULE = ("なお、この配信の視聴者コマンドは決まった10種だけなので、"
+            "名前を変えたり存在しないコマンドを作ったりしないこと。")
+
+CHITCHAT_TOPICS = [
+    "Among Us のマップの好きな場所や思い出をひとこと雑談する",
+    "インポスターを見破るコツをひとつ、もったいぶらずに軽く語る",
+    "自分がクルーだったらどのタスクが好きか、理由つきで話す",
+    "視聴者に「どのマップが一番好き?」のような答えやすい質問を投げかける",
+    "緊急会議での言い訳あるあるをひとつ挙げて笑いにする",
+    "この配信にはたくさんの特殊役職が出ることを、ワクワク感を込めて紹介する",
+    "「もし自分が宇宙船に乗ったら」の妄想ネタでひとボケする",
+    "視聴者に「今日はどんな試合が見たい?」と軽く聞いてみる",
+    "インポスターにバレずにキルする緊張感について、視聴者と共感トークをする",
+    "初めて Among Us を見る人向けに、このゲームの面白さをひとことで表現する",
+]
+
+RECRUIT_ANGLES = [
+    "ゲームへの参加をゆるく募集する。",
+    "初見さんに向けて、誰でも今から参加できることを伝える。",
+    "今のロビーの様子に触れながら参加を誘う。",
+    "「観てるだけでも、参加しても楽しいよ」というスタンスで誘う。",
+]
+
+DEMO_TEMPLATES = [
+    "【イベント】自動デモで「{kind}」の演出が再生された。視聴者もチャットに !コマンドを打てば同じことを起こせると宣伝して。",
+    "【イベント】画面で「{kind}」の演出が再生された。今の演出がどんな見た目・雰囲気だったかを楽しそうに実況して。",
+    "【イベント】デモ演出「{kind}」が再生された。初めて見る視聴者向けに、これは視聴者自身がチャットの !コマンドで起こせるものだと短く説明して。",
+    "【イベント】演出「{kind}」が再生された。「次はどの演出が見たい?」のように視聴者へ軽く問いかけて。",
+]
+
+
+def anti_repeat_block(state: StreamState) -> str:
+    """直近の自分の発話を提示して「同じ話をするな」を実弾で伝える。
+
+    ペルソナの抽象的な「繰り返すな」だけではセッション内の言い回し固着を止められなかった
+    (既知現象)。具体的な直近発話を見せるのが効く。
+    """
+    if not state.recent_says:
+        return ""
+    quoted = " / ".join(f"「{s}」" for s in state.recent_says)
+    return ("\n【重要】あなたの直近の発言: " + quoted +
+            " — これらと同じ言い回し・同じ話題の蒸し返しは禁止。別の切り口で話すこと。")
+
+
+def build_filler_prompt(state: StreamState) -> str:
+    """場繋ぎのお題を毎回ローテーションで選んで具体的な指示を作る。"""
+    topics = ["recruit", "command", "chitchat", "chitchat"]  # 雑談を厚めに (会話感の主成分)
+    if state.recap:
+        topics.append("recap")
+    pool = [t for t in topics if t != state.last_filler_topic] or topics
+    topic = random.choice(pool)
+    state.last_filler_topic = topic
+
+    if topic == "recruit":
+        body = random.choice(RECRUIT_ANGLES)
+    elif topic == "command":
+        if random.random() < 0.3:
+            cmd, how = random.choice(ARG_CMDS)
+            body = (f"視聴者コマンド「{cmd}」を紹介する。使い方は「{how}」をチャットに打つ、"
+                    f"というところまで必ずセットで説明すること (後ろの指定を省くと何も起きない)。{CMD_RULE}")
+        else:
+            cmds = random.sample(SIMPLE_CMDS, k=random.choice([1, 2]))
+            body = ("視聴者コマンド「" + "」「".join(cmds) + "」を紹介して、"
+                    f"チャットに打つだけでゲームに干渉できることを楽しそうに宣伝する。{CMD_RULE}")
+    elif topic == "recap":
+        recent = "、".join(list(state.recap)[-3:])
+        body = f"さっきの出来事 ({recent}) のどれか1つに軽く触れて、感想やこの後への期待を話す。"
+    else:
+        body = random.choice(CHITCHAT_TOPICS) + "。"
+
+    return ("【場繋ぎ】しばらく何も起きていない。次のお題で、配信を見ている人に向けて1〜2文だけ短く話して。\n"
+            f"お題: {body}" + anti_repeat_block(state))
+
+
 GREETING_PROMPT = "【イベント】配信の実況を開始した。視聴者に向けて短くオープニングの挨拶をして。"
+REJOIN_PROMPT = ("【イベント】実況の音声が一時中断から復帰した。配信自体はさっきから続いているので、"
+                 "初めましての挨拶やオープニングはやり直さず、「実況再開」程度の短い一言から"
+                 "自然に続きへ入って。")
 
 
 # ---- Gemini Live セッション本体 ----
@@ -433,11 +547,12 @@ async def run_session(client: genai.Client, args: argparse.Namespace, events: as
                       first_connect: bool, conv: ConvLog) -> None:
     system = load_persona()
     recap_used = ""
-    if not first_connect:
-        recap = state.recap_text()
-        if recap:
-            system = system + "\n\n" + recap  # 再接続の記憶喪失対策 (読み上げさせない為 system 側に載せる)
-            recap_used = recap
+    # 再接続だけでなく初回接続でも recap があれば引き継ぐ (recap.txt 永続化により、
+    # プロセス再起動後の初回接続 = 「配信の続き」になったため)。読み上げ回避で system 側に載せる。
+    recap = state.recap_text()
+    if recap:
+        system = system + "\n\n" + recap
+        recap_used = recap
 
     config = types.LiveConnectConfig(
         response_modalities=["AUDIO"],
@@ -461,6 +576,7 @@ async def run_session(client: genai.Client, args: argparse.Namespace, events: as
             nonlocal say_buf
             if say_buf.strip():
                 conv.log("say", text=say_buf.strip())
+                state.remember_say(say_buf)  # 反復禁止プロンプトの材料
             say_buf = ""
 
         async def send_text(text: str) -> None:
@@ -501,7 +617,8 @@ async def run_session(client: genai.Client, args: argparse.Namespace, events: as
         obs_task = asyncio.create_task(obs_ticker())
         try:
             if first_connect:
-                await send_text(GREETING_PROMPT)
+                # recap を復元できた新プロセスは「配信の続き」なのでオープニングをやり直さない
+                await send_text(REJOIN_PROMPT if state.restored else GREETING_PROMPT)
 
             last_activity = time.monotonic()
             while True:
@@ -546,7 +663,7 @@ async def run_session(client: genai.Client, args: argparse.Namespace, events: as
                         continue  # 会議中は場繋ぎしない
                     if (now - state.last_real_event) > args.dormant_after:
                         continue  # 誰も居ない・何も起きない時間帯はトークンを焼かない (休眠)
-                    await send_text(FILLER_PROMPT)
+                    await send_text(build_filler_prompt(state))
                     last_activity = now
         finally:
             recv_task.cancel()
@@ -679,7 +796,10 @@ async def main_async(args: argparse.Namespace) -> None:
     events: asyncio.Queue = asyncio.Queue()
     player = AudioPlayer(device)
     obs = ObsFiles(subtitle, speaking)
-    state = StreamState()
+    recap_file = None if args.no_recap_file else Path(args.recap_file)
+    state = StreamState(recap_file)
+    if state.restored:
+        print(f"[recap] 前プロセスのあらすじを復元しました ({len(state.recap)}行): {recap_file}")
     asyncio.create_task(tail_events(events_path, events))
 
     # アバター(立ち絵)配信サーバ + 口パク情報のブロードキャスト (~30Hz)
@@ -805,6 +925,11 @@ def main() -> None:
                              "(default: スクリプトと同じフォルダの companion-log.jsonl)")
     parser.add_argument("--no-conv-log", action="store_true",
                         help="会話ログを残さない")
+    parser.add_argument("--recap-file", default=str(here / "recap.txt"),
+                        help="あらすじの永続化先。プロセス再起動 (auto-rehost 等) をまたいで記憶を引き継ぎ、"
+                             "オープニング挨拶のやり直しを防ぐ (default: スクリプトと同じフォルダの recap.txt)")
+    parser.add_argument("--no-recap-file", action="store_true",
+                        help="あらすじをディスクに残さない (再起動ごとに記憶リセット)")
     parser.add_argument("--audio-device", default=os.environ.get("COMPANION_AUDIO_DEVICE", ""),
                         help="実況音声の出力先デバイス (名前の一部か番号)。仮想ケーブル (VB-Audio 等) を指定すると"
                              "アバターアプリのリップシンクに直結できる。--list-audio-devices で一覧表示。"

@@ -745,11 +745,17 @@ internal static class MeetingHudStartPatch
 
             LateTask.New(() =>
             {
+                if (!AmongUsClient.Instance.AmHost || !GameStates.InGame || GameStates.IsEnded) return;
+
                 roleDescMsgs.SendMultipleMessages(MessageImportance.Low);
 
                 LateTask.New(() =>
                 {
+                    if (!AmongUsClient.Instance.AmHost || !GameStates.InGame || GameStates.IsEnded) return;
+
                     PlayerControl player = Main.EnumerateAlivePlayerControls().MinBy(x => x.PlayerId);
+                    if (player == null || player.Data == null) return;
+
                     var sender = CustomRpcSender.Create("Fix Sender Name", SendOption.Reliable);
                     {
                         sender.AutoStartRpc(player.NetId, 6);
@@ -850,7 +856,15 @@ internal static class MeetingHudStartPatch
             }
         }
 
-        if (msgToSend.Count > 0) LateTask.New(() => msgToSend.Do(x => Utils.SendMessage(x.Text, x.SendTo, x.Title, importance: MessageImportance.High)), 9f, "Meeting Start Notify");
+        if (msgToSend.Count > 0)
+        {
+            LateTask.New(() =>
+            {
+                if (!AmongUsClient.Instance.AmHost || !GameStates.InGame || GameStates.IsEnded) return;
+
+                msgToSend.Do(x => Utils.SendMessage(x.Text, x.SendTo, x.Title, importance: MessageImportance.High));
+            }, 9f, "Meeting Start Notify");
+        }
 
         Main.SuperStarDead.Clear();
         Forensic.ForensicNotify.Clear();
@@ -1012,6 +1026,8 @@ internal static class MeetingHudStartPatch
         {
             LateTask.New(() =>
             {
+                if (!AmongUsClient.Instance.AmHost || !GameStates.InGame || GameStates.IsEnded) return;
+
                 if (Options.SyncButtonMode.GetBool())
                 {
                     Utils.SendMessage(string.Format(GetString("Message.SyncButtonLeft"), Options.SyncedButtonCount.GetFloat() - Options.UsedButtonCount));
@@ -1027,6 +1043,8 @@ internal static class MeetingHudStartPatch
 
             LateTask.New(() =>
             {
+                if (!AmongUsClient.Instance.AmHost || !GameStates.InGame || GameStates.IsEnded) return;
+
                 var sender = CustomRpcSender.Create("RpcSetNameEx on meeting start", SendOption.Reliable);
 
                 foreach (PlayerControl pc in Main.EnumeratePlayerControls())
@@ -1198,6 +1216,7 @@ internal static class MeetingHudStartPatch
         Markseeker.StartMeetingPatch.Postfix(__instance);
         ShowHostMeetingPatch.Setup_Postfix(__instance);
         Crowded.MeetingHudStartPatch.Postfix(__instance);
+        Talkative.StartMeetingPatch.Postfix();
 
         ChaosPotSupport.BuildRoleListFromCurrentGame();
         if (ChaosPotSupport.Enable.GetBool() && Options.CurrentGameMode == CustomGameMode.Standard)

@@ -27,7 +27,13 @@ public class Talkative : IAddon
             Utils.SendMessage(string.Format(Translator.GetString("Talkative.Died"), player.PlayerId.ColoredPlayerName()), title: CustomRoles.Talkative.ToColoredString());
             return;
         }
-        
+
         NumMessagesThisMeeting[player.PlayerId] = ++sent;
+        Utils.SendMessage(string.Format(Translator.GetString("Talkative.Remaining"), MaxMessagesPerMeeting.GetInt() - sent), player.PlayerId, importance: MessageImportance.Low);
+    }
+
+    public static class StartMeetingPatch
+    {
+        public static void Postfix() => NumMessagesThisMeeting.Clear();
     }
 }

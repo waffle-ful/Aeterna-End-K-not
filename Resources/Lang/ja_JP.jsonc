@@ -12728,6 +12728,7 @@
   "TalkativeInfoLong": "(<#ffab1b>有害な</color> <#ff9ace>属性</color>):\\n<size=80%>会議中に設定メッセージ数を超えて発言すると死亡する。\\n_____________________________________\\n会議中に設定されたメッセージ上限を超えて発言すると、その場で死亡する。</size>",
   "Talkative.MaxMessagesPerMeeting": "会議あたりの最大メッセージ数",
   "Talkative.Died": "{0}はしゃべりすぎて死亡しました。",
+  "Talkative.Remaining": "残りしゃべれる回数: {0}",
   "Urgent": "緊急",
   "UrgentInfo": "緊急会議が+1回増える",
   "UrgentInfoLong": "(<#8cffff>役に立つ</color> <#ff9ace>属性</color>):\\n<size=80%>緊急会議ボタンの使用回数が1回増える。\\n_____________________________________\\n通常の使用回数に加えて、緊急会議を追加で1回呼べるようになる。</size>",
