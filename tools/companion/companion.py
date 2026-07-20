@@ -112,6 +112,7 @@ class StreamState:
         self.recent_says: deque[str] = deque(maxlen=RECENT_SAY_KEEP)  # 反復禁止用の直近発話
         self.last_filler_topic = ""    # 場繋ぎのお題が連続しないように前回を覚える
         self.last_demo_idx = -1        # デモ実況テンプレの前回インデックス
+        self.pending_emotion: str | None = None  # 次の発話開始時にアバターへ1回だけ送る表情タグ
         self.recap_file = recap_file
         self.restored = False          # 起動時に前プロセスの recap を復元できたか
         # プロセス再起動 (auto-rehost 等) をまたいで記憶を引き継ぐ。os._exit で落ちても
@@ -335,6 +336,32 @@ async def tail_events(path: Path, out: asyncio.Queue) -> None:
 
 
 # ---- イベント → 実況指示テキスト ----
+
+def emotion_for_event(ev: dict) -> str | None:
+    """イベント種別 → アバター表情タグ (avatar.js の EMOTION_PRESETS)。None は表情変更なし。
+
+    テキスト感情推定はしない — イベント駆動の静的マッピングが最小構成 (過剰設計回避)。
+    """
+    t = ev.get("type")
+    if t in ("intervention", "eject"):
+        return "surprised"
+    if t == "sabotage":
+        return "angry"
+    if t in ("join", "_joins"):
+        return "happy"
+    if t == "leave":
+        return "sad"
+    if t == "gameEnd":
+        return "sad" if ev.get("noVictors") else "happy"
+    if t == "phase":
+        return {
+            "ingame": "happy",
+            "meeting": "surprised",
+            "lobby": "relaxed",
+            "ended": "relaxed",
+        }.get(ev.get("phase"))
+    return None  # chat / demo / filler 等は表情そのまま
+
 
 def format_event(ev: dict, state: StreamState, quiet_meeting: bool) -> str | None:
     t = ev.get("type")
@@ -640,13 +667,16 @@ async def run_session(client: genai.Client, args: argparse.Namespace, events: as
                     pass
 
                 batch: list[str] = []
+                batch_emotion: str | None = None
                 for ev in merge_joins(raw):
                     if ev.get("type") == "_joins":
                         batch.append(format_merged_joins(ev, state))
-                        continue
-                    line = format_event(ev, state, args.quiet_meeting)
-                    if line:
+                    else:
+                        line = format_event(ev, state, args.quiet_meeting)
+                        if not line:
+                            continue  # 実況しないイベントは表情も動かさない
                         batch.append(line)
+                    batch_emotion = emotion_for_event(ev) or batch_emotion
                 if raw:
                     state.last_real_event = time.monotonic()  # filler 休眠の解除 (chat/join 含む全実イベント)
 
@@ -656,6 +686,8 @@ async def run_session(client: genai.Client, args: argparse.Namespace, events: as
                     while turn_open or player.is_speaking() or (now - last_send) < MIN_SEND_GAP_SEC:
                         await asyncio.sleep(0.3)
                         now = time.monotonic()
+                    if batch_emotion:
+                        state.pending_emotion = batch_emotion  # 発話開始時に avatar_ticker が1回だけ載せる
                     await send_text("\n".join(batch[-5:]))  # 溜まりすぎたら新しい5件だけ
                     last_activity = now
                 elif (now - last_activity) > FILLER_INTERVAL_SEC and not turn_open and not player.is_speaking():
@@ -814,11 +846,17 @@ async def main_async(args: argparse.Namespace) -> None:
                     level = player.level
                     player.level *= 0.82  # 緩やかに減衰: 連続発話中は口が開いた状態を保つ (0.55 だと谷が深すぎて口パクが疎らに見えた)
                     mouth = min(1.0, level * 4.0) if is_speaking else 0.0
-                    await avatar.broadcast({
+                    payload = {
                         "mouth": round(mouth, 3),
                         "speaking": is_speaking,
                         "subtitle": obs.current_subtitle(),
-                    })
+                    }
+                    # 表情タグは発話開始の最初の tick で1回だけ載せる (avatar.js は受信のたびに
+                    # emotionValue をリセットするので、毎 tick 載せると表情が固まったままになる)
+                    if is_speaking and state.pending_emotion:
+                        payload["emotion"] = state.pending_emotion
+                        state.pending_emotion = None
+                    await avatar.broadcast(payload)
                 except Exception:
                     pass
                 await asyncio.sleep(0.033)
