@@ -458,10 +458,14 @@ internal static class ChangeRoleSettings
             GameStates.AlreadyDied = false;
 
             Main.Instance.StartCoroutine(PopulateSkinItems());
-            
-            GC.Collect();
-            Resources.UnloadUnusedAssets();
-            GC.Collect();
+
+            // ゲーム終了/会議終了と同じ強制GC三連打 (フレームストール源・回収実績ほぼゼロ) — 既定OFF
+            if (Main.EnableAggressiveGcCleanup.Value)
+            {
+                GC.Collect();
+                Resources.UnloadUnusedAssets();
+                GC.Collect();
+            }
         }
         catch (Exception ex)
         {
