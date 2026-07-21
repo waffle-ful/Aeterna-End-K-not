@@ -24,6 +24,14 @@ public static class DataFlagRateLimiter
 
     private static int LastPingMs;
 
+    /// <summary>両チャンネルの待機件数 (ゲーム開始直送窓の実ドレイン判定用)。</summary>
+    public static int PendingCount => ReliableQueue.Count + UnreliableQueue.Count;
+
+    /// <summary>ゲーム開始の fake Disconnected→roles→復元シーケンス専用の直送窓 (v4 暗転根治)。
+    /// true の間、キューが空なら予算を無視して即実行する — qa.Wait() 完了が実ワイヤ送出と一致する。
+    /// キュー非空時は追い越し防止のため通常キューに落ちる。PacketRateGate.StartWindowBypass と対で使う。</summary>
+    public static bool StartWindowBypass;
+
     // =========================
     // RELIABLE
     // =========================
@@ -104,7 +112,7 @@ public static class DataFlagRateLimiter
         QueuedAction qa)
     {
         // Try immediate execution if no backlog
-        if (queue.Count == 0 && sent + qa.Cost <= limit)
+        if (queue.Count == 0 && (sent + qa.Cost <= limit || StartWindowBypass))
         {
             Execute(qa);
             sent += qa.Cost;

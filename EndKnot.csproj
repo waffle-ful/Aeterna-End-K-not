@@ -78,7 +78,7 @@
         <!-- AI実況の立ち絵(アバター)Webページ一式。companion がローカル配信し OBS ブラウザソースで取り込む。
              LogicalName に相対パスを '/' 区切りで畳み込み、CompanionLauncher が avatar/ 配下へ復元する。
              model.vrm はユーザーが各自置くので同梱しない。 -->
-        <EmbeddedResource Include="tools\companion\avatar\**\*" Exclude="tools\companion\avatar\model.vrm">
+        <EmbeddedResource Include="tools\companion\avatar\**\*" Exclude="tools\companion\avatar\model.vrm;tools\companion\avatar\model2.vrm">
             <LogicalName>EndKnot.Resources.Companion.Avatar.$([System.String]::Copy('%(RecursiveDir)%(Filename)%(Extension)').Replace('\','/'))</LogicalName>
         </EmbeddedResource>
     </ItemGroup>

@@ -29,6 +29,12 @@ public static class PacketRateGate
 
     private static readonly Queue<QueuedPacket> PendingReliableQueue = new();
 
+    /// <summary>ゲーム開始の fake Disconnected→roles→復元シーケンス専用の直送窓 (v4 暗転根治)。
+    /// true の間、キューが空であることを条件に予算チェックを免除して素通しする — 復元 Data が
+    /// roles 直後にワイヤに乗ることを構造保証する (TOHK の直送契約と同型)。キュー非空時は
+    /// 追い越し (順序逆転 = 既知の暗転原因型) を作らないため通常ゲートに落ちる。</summary>
+    public static bool StartWindowBypass;
+
     /// <summary>ゲート待ちの Reliable パケット数。ゲーム開始バースト (役職テーブル N² 本) の
     /// 排水完了を外から判定する用途 (FirstTurnMeetingTrigger が会議を早く始めすぎない為のシグナル)。</summary>
     public static int PendingCount => PendingReliableQueue.Count;
@@ -95,7 +101,7 @@ public static class PacketRateGate
             DetectReconnect(instance);
             ResetWindowIfNeeded();
 
-            if (PendingReliableQueue.Count == 0 && SentThisWindow < GateLimitPerSecond)
+            if (PendingReliableQueue.Count == 0 && (SentThisWindow < GateLimitPerSecond || StartWindowBypass))
             {
                 SentThisWindow++;
                 return false;
@@ -178,10 +184,13 @@ public static class PacketRateGate
         if (ReferenceEquals(conn, LastConnection)) return;
 
         // 接続が変わった (再接続/切断) ので、宛先不明の待機パケットは捨てる。
+        // 直送窓フラグも強制クリア (StartGameHost コルーチンが中断されて finally が走らなかった場合の保険)。
         LastConnection = conn;
         PendingReliableQueue.Clear();
         SentThisWindow = 0;
         SafetyValveActive = false;
+        StartWindowBypass = false;
+        DataFlagRateLimiter.StartWindowBypass = false;
         WindowTimer.Restart();
     }
 

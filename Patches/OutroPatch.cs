@@ -41,6 +41,11 @@ internal static class EndGamePatch
 
         GameStates.InGame = false;
 
+        // ゲーム開始直送窓の第3の後始末経路 (StartGameHost コルーチンが finally を経ずに死んだ場合の保険。
+        // DetectReconnect は同一コネクションのままの強制終了/廃村では発火しないためここで明示クリア)。
+        PacketRateGate.StartWindowBypass = false;
+        DataFlagRateLimiter.StartWindowBypass = false;
+
         Logger.Info("-----------Game over-----------", "Phase");
 
         ChatCommands.DraftResult = [];
