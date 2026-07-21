@@ -690,6 +690,12 @@ public static class NaturalDisasters
             bool doDrag = Time.time - LastDragTime >= DragInterval;
             float dragMul = doDrag ? Mathf.Clamp((Time.time - LastDragTime) / Time.fixedDeltaTime, 1f, (DragInterval / Time.fixedDeltaTime) + 2f) : 0f;
 
+            // interval 間引きは1人あたりの頻度制御であって人数ファンアウトは青天井 —
+            // 密集地帯では 1 tick で N 人ぶん TP が飛び SnapTo cap (80/100) を食い尽くす。
+            // SuperCannonShot.PullTick と同じ per-tick 人数上限で合計消費を抑える (死亡判定は無制限のまま)。
+            const int dragPlayersPerTick = 5;
+            var dragged = 0;
+
             foreach (PlayerControl pc in Main.EnumerateAlivePlayerControls())
             {
                 Vector2 pos = pc.Pos();
@@ -700,11 +706,11 @@ public static class NaturalDisasters
                         pc.DieToDisaster(PlayerState.DeathReason.Tornado);
                         continue;
                     case <= dragRange:
-                        if (doDrag)
+                        if (doDrag && dragged < dragPlayersPerTick)
                         {
                             Vector2 direction = (Position - pos).normalized;
                             Vector2 newPosition = pos + (direction * 0.15f * dragMul);
-                            pc.TP(newPosition, true);
+                            if (pc.TP(newPosition, true)) dragged++;
                         }
 
                         continue;

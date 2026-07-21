@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using AmongUs.GameOptions;
 using EndKnot.Modules;
 using Hazel;
@@ -129,7 +130,8 @@ public class Tremor : RoleBase
 
             Count = 0;
 
-            var aliveTargets = Main.CachedAlivePlayerControls();
+            // Kill → SetDead → ForceRebuildCachesPlayerControls が生きキャッシュを再構築するため、スナップショットで回す
+            var aliveTargets = new List<PlayerControl>(Main.CachedAlivePlayerControls());
             for (int index = 0; index < aliveTargets.Count; index++)
             {
                 PlayerControl target = aliveTargets[index];
