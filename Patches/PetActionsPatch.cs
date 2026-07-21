@@ -87,6 +87,15 @@ internal static class ExternalRpcPetPatch
 
         AFKDetector.SetNotAFK(pc.PlayerId);
 
+        if (!LastProcess.ContainsKey(pc.PlayerId)) LastProcess.TryAdd(pc.PlayerId, Utils.TimeStamp - 2);
+        if (LastProcess[pc.PlayerId] + 1 >= Utils.TimeStamp) return;
+
+        LastProcess[pc.PlayerId] = Utils.TimeStamp;
+
+        // CancelPet 送信 (Reliable 即時+0.4s の2発) は必ず上の1秒スロットルの後に置くこと。
+        // ゲート前にあると Pet RPC 受信ごとに2発送る増幅構造になり、しかもキャンセルで
+        // クライアントのペットアニメが即解除されて連打がさらに加速する (2026-07-21 実測: 2秒間に28発)。
+        // ホスト自身の経路 (LocalPetPatch.Prefix L43) は元からゲート通過後に呼ばれるためこれで対称になる。
         if (!pc.inVent
             && !pc.inMovingPlat
             && !pc.walkingToVent
@@ -108,11 +117,6 @@ internal static class ExternalRpcPetPatch
                 AmongUsClient.Instance.FinishRpcImmediately(w);
             }
         }
-
-        if (!LastProcess.ContainsKey(pc.PlayerId)) LastProcess.TryAdd(pc.PlayerId, Utils.TimeStamp - 2);
-        if (LastProcess[pc.PlayerId] + 1 >= Utils.TimeStamp) return;
-
-        LastProcess[pc.PlayerId] = Utils.TimeStamp;
 
         Logger.Info($"Player {pc.GetNameWithRole().RemoveHtmlTags()} petted their pet", "PetActionTrigger");
 

@@ -1053,9 +1053,17 @@ internal static class MeetingHudStartPatch
 
                     foreach (PlayerControl seerPc in Main.EnumeratePlayerControls())
                     {
-                        try { Main.LastNotifyNames[(pc.PlayerId, seerPc.PlayerId)] = name; }
+                        // 直書きリセットで実表示が素名に変わるため、クランプ後 dedup のキャッシュも無効化する
+                        // (残すと会議後の装飾名再送が「同一クランプ名」と誤判定されて素名スタックする)
+                        try
+                        {
+                            Main.LastNotifyNames[(pc.PlayerId, seerPc.PlayerId)] = name;
+                            Main.LastSentClampedNames.Remove((pc.PlayerId, seerPc.PlayerId));
+                        }
                         catch { }
                     }
+
+                    Main.LastSentClampedNames.Remove((pc.PlayerId, byte.MaxValue));
 
                     sender.AutoStartRpc(pc.NetId, 6);
                     sender.Write(pc.Data.NetId);

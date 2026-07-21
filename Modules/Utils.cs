@@ -2741,6 +2741,10 @@ public static class Utils
 
             if (string.IsNullOrEmpty(restore)) return;
 
+            // 公式鯖の NameBudget クランプ。cache 代入の前に掛けること — クランプ前の値を cache に
+            // 入れると実送信名 (クランプ後) とズレて FixedUpdate 側の再送ループを誘発する。
+            restore = CustomRpcSenderExtensions.ClampNameForOfficialServer(restore, out _);
+
             // RpcSetName 経由なので RpcSetNameMirrorCachePatch が cache もミラー同期し、次 tick の
             // FixedUpdate 側の再送はゼロ (restore == cache で dirty-check スキップ)。
             FixedUpdatePatch.LastBroadcastName[id] = restore;
