@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using AmongUs.GameOptions;
+using UnityEngine;
 
 namespace EndKnot.Roles;
 
@@ -95,6 +96,13 @@ public class Blockade : RoleBase
         pc.Notify(Translator.GetString("MarkDone"));
     }
 
+    // per-player の minInterval は1人あたりの頻度制御であって合計消費を制御しない —
+    // 複数人が同時にバリケードへ押し続けると N人×5回/秒 で SnapTo cap (80/100) を食い尽くす。
+    // 全員共有の秒間トークンで合計を制限する (トークン切れの瞬間は素通りしても次の許可 TP で押し戻される)。
+    private const int BouncesPerSecond = 10;
+    private float BounceWindowStart;
+    private int BounceCount;
+
     public override void OnCheckPlayerPosition(PlayerControl pc)
     {
         if (pc.Is(CustomRoles.Blockade)) return;
@@ -103,7 +111,16 @@ public class Blockade : RoleBase
         float radius = BlockadeRadius.GetFloat();
 
         if (Blockades.Exists(x => FastVector2.DistanceWithinRange(pos, x, radius)))
-            pc.TP(LastPosition.GetValueOrDefault(pc.PlayerId, pc.transform.position), minInterval: 0.2f);
+        {
+            if (Time.time - BounceWindowStart >= 1f)
+            {
+                BounceWindowStart = Time.time;
+                BounceCount = 0;
+            }
+
+            if (BounceCount >= BouncesPerSecond) return;
+            if (pc.TP(LastPosition.GetValueOrDefault(pc.PlayerId, pc.transform.position), minInterval: 0.2f)) BounceCount++;
+        }
         else
             LastPosition[pc.PlayerId] = pc.transform.position;
     }

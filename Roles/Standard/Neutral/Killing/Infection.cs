@@ -320,7 +320,8 @@ public class Infection : RoleBase
         if (CustomWinnerHolder.WinnerTeam != CustomWinner.Default) return;
 
         var apc = Main.CachedAllPlayerControls();
-        var aapc = Main.CachedAlivePlayerControls();
+        // 下のフィナーレ一斉 Suicide がループ中に生きキャッシュを再構築するため、スナップショットで回す
+        var aapc = new List<PlayerControl>(Main.CachedAlivePlayerControls());
 
         bool allInfected = true;
         for (int i = 0; i < aapc.Count; i++)

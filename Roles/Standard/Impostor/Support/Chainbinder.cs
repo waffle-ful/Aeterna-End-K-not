@@ -13,7 +13,11 @@ public class Chainbinder : RoleBase
 {
     public static bool On;
 
-    private const float PullInterval = 0.1f;
+    // 0.2s = 周期TPの既存慣習 (Tornado/Snowball と同じ)。0.1s だとラウンド共有 SnapTo cap (80/100) の消費が倍速になる
+    private const float PullInterval = 0.2f;
+
+    // 1リンクあたりの TP 総予算 (SuperCannonShot.PullTick と同じ予算哲学 — cap 枯渇 = 他役職 TP の無音失敗を防ぐ)
+    private const int PullBudget = 60;
 
     private static OptionItem AbilityCooldown;
     private static OptionItem LinkDuration;
@@ -27,6 +31,7 @@ public class Chainbinder : RoleBase
     private byte SecondTarget = byte.MaxValue;
     private float RemainingDuration;
     private float PullTimer;
+    private int PullSpent;
 
     public override bool IsEnable => On;
 
@@ -142,11 +147,13 @@ public class Chainbinder : RoleBase
         Vector2 direction = (second.Pos() - first.Pos()).normalized;
         if (direction == Vector2.zero) return;
 
+        if (PullSpent >= PullBudget) return;
+
         PullTimer = PullInterval;
         Vector2 adjustment = direction * ((currentDistance - maxDistance) / 2f);
 
-        first.TP(first.Pos() + adjustment, log: false);
-        second.TP(second.Pos() - adjustment, log: false);
+        if (first.TP(first.Pos() + adjustment, log: false)) PullSpent++;
+        if (second.TP(second.Pos() - adjustment, log: false)) PullSpent++;
     }
 
     public override void OnReportDeadBody()
@@ -186,6 +193,7 @@ public class Chainbinder : RoleBase
 
         FirstTarget = first.PlayerId;
         SecondTarget = second.PlayerId;
+        PullSpent = 0;
         RemainingDuration = LinkDuration.GetFloat();
         PullTimer = 0f;
 
@@ -280,6 +288,7 @@ public class Chainbinder : RoleBase
         SecondTarget = byte.MaxValue;
         RemainingDuration = 0f;
         PullTimer = 0f;
+        PullSpent = 0;
     }
 
     private void SyncState()

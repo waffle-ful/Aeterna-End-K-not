@@ -160,6 +160,9 @@ public static class Utils
 
     public static int NumSnapToCallsThisRound;
 
+    // /tpdbg 実験用: true でローカル/カスタム鯖でも公式鯖の SnapTo cap (80/100) 経路を発火させる
+    public static bool TpCapDebugForceOfficial;
+
     public static readonly Dictionary<byte, float> LastRateLimitedTPTime = new();
 
     public static bool TP(CustomNetworkTransform nt, Vector2 location, bool noCheckState = false, bool log = true, float minInterval = 0f)
@@ -215,7 +218,8 @@ public static class Utils
 
         // 公式/Vanilla 鯖のみ: SnapTo の送信を絞って anti-cheat の Hacking kick を防ぐ。
         // カスタム鯖 (anti-cheat 無し) では機能を犠牲にしないので無制限。
-        bool isOfficialServer = GameStates.CurrentServerType == GameStates.ServerType.Vanilla;
+        // TpCapDebugForceOfficial (/tpdbg official 1) はローカル鯖で cap 挙動を実験するための計器。
+        bool isOfficialServer = GameStates.CurrentServerType == GameStates.ServerType.Vanilla || TpCapDebugForceOfficial;
 
         if (isOfficialServer && NumSnapToCallsThisRound >= 80)
         {
@@ -229,7 +233,7 @@ public static class Utils
             return false;
         }
 
-        if (GameStates.CurrentServerType != GameStates.ServerType.Vanilla)
+        if (!isOfficialServer)
             sendOption = SendOption.Reliable;
 
         var newSid = (ushort)(nt.lastSequenceId + 8);
