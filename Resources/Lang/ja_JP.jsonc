@@ -12835,6 +12835,8 @@
   "CommandDescription.Hitbox": "当たり判定の可視化をトグル (ビーム/帯/円のキル判定域を半透明の赤で描画、ホスト画面のみ) [dev]",
   "CommandForms.WcDbg": "wcdbg",
   "CommandDescription.WcDbg": "波動砲の公式鯖キック切り分け用スキップマスク設定 (1=シーケンス全体, 2=外見, 4=CNO, 8=速度) [dev]",
+  "CommandForms.TpDbg": "tpdbg",
+  "CommandDescription.TpDbg": "SnapTo cap 実験計器: カウンタの表示/直接セット、ローカル鯖での公式 cap 経路の強制発火 [dev]",
   "CommandForms.Census": "census",
   "CommandDescription.Census": "メモリリーク調査用の Unity オブジェクト census を Health.log に記録 (CENSUS/CENSUSTOP) [dev]",
   "CommandForms.SizeClean": "sizeclean",

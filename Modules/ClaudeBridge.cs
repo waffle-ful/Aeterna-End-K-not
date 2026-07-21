@@ -1220,6 +1220,20 @@ public static class ClaudeBridge
         PlayerControl lp = PlayerControl.LocalPlayer;
         if (!lp) { WriteOut("ERR no local player"); return; }
 
+        // "/" 始まりはチャット送信でなくホストのチャットコマンドとして実行する
+        // (RpcSendChat はコマンド解釈パッチ (ChatController.SendChat Prefix) を通らず生テキストが全員に流れる)。
+        if (text.StartsWith('/'))
+        {
+            string[] args = text.Split(' ');
+            Command cmd = Command.AllCommands.Find(c => c.IsThisCommand(text));
+            if (cmd == null) { WriteOut($"ERR chatcmd unknown: {args[0]}"); return; }
+            if (!cmd.CanUseCommand(lp, sendErrorMessage: true)) { WriteOut($"ERR chatcmd denied: {args[0]}"); return; }
+
+            cmd.Action(lp, text, args);
+            WriteOut($"OK chatcmd {args[0]}");
+            return;
+        }
+
         if (text.Length > 100) text = text[..100]; // vanilla チャット長制限側で切られる前に丸める
 
         bool ok = lp.RpcSendChat(text);

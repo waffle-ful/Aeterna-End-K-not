@@ -184,7 +184,8 @@ public class Dossun : RoleBase
         long now = Utils.TimeStamp;
         Vector2 dir = BlockVelocity.normalized;
 
-        foreach (PlayerControl target in Main.AllAlivePlayerControls)
+        // 轢殺の SetDead → ForceRebuildCachesPlayerControls が生きキャッシュを Clear するため、スナップショットで列挙する
+        foreach (PlayerControl target in Main.AllAlivePlayerControlsToArray)
         {
             if (target.PlayerId == dossun.PlayerId) continue;
             if (target.PlayerId >= 200) continue; // CNO 除外

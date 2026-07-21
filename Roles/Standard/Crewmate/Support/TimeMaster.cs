@@ -28,6 +28,13 @@ internal class TimeMaster : RoleBase
     private static List<byte> RevivedPlayers = [];
     public static bool Rewinding;
 
+    // 巻き戻しの全員 TP はラウンド共有の SnapTo cap (Utils.NumSnapToCallsThisRound 80/100) を消費する。
+    // 素通しだと 1 発動 = 履歴秒数×人数 (既定 15×13≈195) で cap を2倍使い切り、そのラウンドの
+    // 他役職 TP (Engineer vent 等) まで無音失敗する — SuperCannonShot.PullTick と同じ予算方式で総量管理。
+    // 中間ウェーブは演出なので予算制、終着点 (最終ウェーブ) はゲーム的に意味があるので予算外で必ず送る。
+    private const int RewindSnapToBudget = 30;
+    private const float RewindSkipDistance = 0.5f;
+
     public override bool IsEnable => On;
 
     private bool DesyncCommsActive;
@@ -155,16 +162,33 @@ internal class TimeMaster : RoleBase
 
             yield return new WaitForSecondsRealtime(0.55f);
 
+            long oldest = long.MaxValue;
+            for (long i = now - 1; i >= now - length; i--)
+                if (BackTrack.ContainsKey(i)) oldest = i;
+
+            int budget = RewindSnapToBudget;
+
             for (long i = now - 1; i >= now - length; i--)
             {
                 if (!BackTrack.TryGetValue(i, out Dictionary<byte, Vector2> track)) continue;
+
+                bool finalWave = i == oldest;
 
                 foreach ((byte playerId, Vector2 pos) in track)
                 {
                     PlayerControl player = playerId.GetPlayer();
                     if (!player || !player.IsAlive()) continue;
 
-                    player.TP(pos);
+                    if (finalWave)
+                    {
+                        player.TP(pos);
+                        continue;
+                    }
+
+                    if (budget <= 0) continue;
+                    // 動いていない区間は送らない (too-close の None 降格送信でも cap は減る)
+                    if (FastVector2.DistanceWithinRange(player.Pos(), pos, RewindSkipDistance)) continue;
+                    if (player.TP(pos, log: false)) budget--;
                 }
 
                 yield return new WaitForSecondsRealtime(delay);

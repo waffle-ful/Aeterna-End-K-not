@@ -309,6 +309,7 @@ internal static class ChatCommands
             new("SizeTest", "", Command.UsageLevels.Host, Command.UsageTimes.InGame, SizeTestCommand, true, true),
             new("Hitbox", "", Command.UsageLevels.Host, Command.UsageTimes.InGame, HitboxCommand, true, true),
             new("WcDbg", "[mask]", Command.UsageLevels.Host, Command.UsageTimes.Always, WcDbgCommand, true, true),
+            new("TpDbg", "[set <n>|official <0|1>]", Command.UsageLevels.Host, Command.UsageTimes.Always, TpDbgCommand, true, true),
             new("Census", "", Command.UsageLevels.Host, Command.UsageTimes.Always, CensusCommand, true, true),
             new("SizeClean", "", Command.UsageLevels.Host, Command.UsageTimes.InGame, SizeCleanCommand, true, true),
             new("RipSize", "[size]", Command.UsageLevels.Host, Command.UsageTimes.InGame, RipSizeCommand, true, true),
@@ -3404,6 +3405,26 @@ internal static class ChatCommands
         if (!HitboxDebug.Enabled) HitboxDebug.Clear();
         Logger.Info($"DevCmd /hitbox: Enabled={HitboxDebug.Enabled}", "DevCmd");
         Utils.SendMessage($"[hitbox] Hitbox visualization: {(HitboxDebug.Enabled ? "ON" : "OFF")} (host-local only)", player.PlayerId);
+    }
+
+    // SnapTo cap 実験計器: /tpdbg = 現在値表示, /tpdbg set <n> = カウンタ直接セット,
+    // /tpdbg official <0|1> = ローカル鯖でも公式鯖の cap 経路 (80/100) を発火させる。送信ゼロ・ホストローカル。
+    private static void TpDbgCommand(PlayerControl player, string text, string[] args)
+    {
+        if (!player.FriendCode.GetDevUser().up && !player.FriendCode.IsLocalDev()) return;
+
+        if (args.Length >= 3 && args[1].Equals("set", StringComparison.OrdinalIgnoreCase) && int.TryParse(args[2], out int newCount))
+        {
+            Utils.NumSnapToCallsThisRound = newCount;
+            Logger.Info($"DevCmd /tpdbg set: NumSnapToCallsThisRound={newCount}", "DevCmd");
+        }
+        else if (args.Length >= 3 && args[1].Equals("official", StringComparison.OrdinalIgnoreCase))
+        {
+            Utils.TpCapDebugForceOfficial = args[2] == "1";
+            Logger.Info($"DevCmd /tpdbg official: ForceOfficial={Utils.TpCapDebugForceOfficial}", "DevCmd");
+        }
+
+        Utils.SendMessage($"[tpdbg] count={Utils.NumSnapToCallsThisRound} forceOfficial={Utils.TpCapDebugForceOfficial} server={GameStates.CurrentServerType}", player.PlayerId);
     }
 
     private static WaveCannonWarning WcDbgProbeCno;
