@@ -1300,6 +1300,8 @@ internal static class MeetingHudUpdatePatch
     {
         try
         {
+            MeetingStuckProbe.Update(__instance);
+
             // Meeting Skip with vote counting on keystroke (F6)
             if (AmongUsClient.Instance.AmHost && Input.GetKeyDown(KeyCode.F6)) __instance.CheckForEndVoting();
 
