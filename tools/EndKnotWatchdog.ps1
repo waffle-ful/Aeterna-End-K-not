@@ -264,6 +264,35 @@ function Save-CrashSnapshot {
     }
 }
 
+# ハング時のプロセスダンプ (BUG-20260721-02)。ハングは WER が発火しないため LocalDumps 計器では
+# 何も残らない — kill する前に comsvcs.dll MiniDump でフルダンプを取り、メインスレッドの詰まり先
+# スタックを事後解析 (dotnet-dump/windbg) に残す。フルダンプは数GBになるため保持は最新2件のみ。
+function Save-HangDump {
+    param([int]$TargetPid)
+    try {
+        if (-not $TargetPid) { return }
+        $dir = Join-Path $HealthDir 'CrashSnapshots\HangDumps'
+        New-Item -ItemType Directory -Force -Path $dir | Out-Null
+        $path = Join-Path $dir ("hang_{0}_pid{1}.dmp" -f (Get-Date).ToString('yyyy-MM-dd_HH.mm.ss'), $TargetPid)
+        Write-WatchLog ("ハングダンプを採取します (kill はダンプ完了まで保留・上限 300s): {0}" -f $path) 'Yellow'
+        # comsvcs の MiniDump は第3引数 full でフルダンプ。ハング中プロセスでもスレッドを suspend して取れる。
+        $p = Start-Process -FilePath "$env:SystemRoot\System32\rundll32.exe" -ArgumentList ("C:\Windows\System32\comsvcs.dll, MiniDump {0} `"{1}`" full" -f $TargetPid, $path) -PassThru -WindowStyle Hidden
+        if (-not $p.WaitForExit(300000)) {
+            try { $p.Kill() } catch { }
+            Write-WatchLog "ハングダンプが 300s で完了しなかったため中断しました。" 'Red'
+        } elseif (Test-Path $path) {
+            Write-WatchLog ("ハングダンプ完了: {0:N0} MB" -f ((Get-Item $path).Length / 1MB)) 'Cyan'
+        } else {
+            Write-WatchLog "ハングダンプの出力ファイルが生成されませんでした (rundll32 失敗)。" 'Red'
+        }
+        # 保持は最新2件 (1件数GB。スナップショット20件保持とは別枠で数える)
+        Get-ChildItem $dir -Filter *.dmp -ErrorAction SilentlyContinue | Sort-Object LastWriteTime |
+            Select-Object -SkipLast 2 | ForEach-Object { Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue }
+    } catch {
+        Write-WatchLog "ハングダンプ採取に失敗: $($_.Exception.Message)" 'Yellow'
+    }
+}
+
 # Epic マニフェストから Among Us の起動URLを自動検出する。
 function Find-EpicLaunchUrl {
     try {
@@ -612,6 +641,8 @@ while ($true) {
         Write-WatchLog ("異常: AU は生存だが心拍が {0:N0}s 途切れています（ハング疑い）。" -f $health.AgeSec) 'Red'
         # ハングは番犬が Stop-Au で殺すため、殺す前の状態を固める (殺した後では心拍途絶の前後関係が読めない)。
         Save-CrashSnapshot -Reason ("ハング疑い (心拍 {0:N0}s 途絶・プロセスは生存)" -f $health.AgeSec) -ExitDiag 'N/A (まだ生存中 — この後 番犬が強制終了する)'
+        # 詰まり先スタックの唯一の証拠。kill してからでは取れないので必ずスナップショットの直後・kill の前。
+        Save-HangDump -TargetPid $proc.Id
     }
 
     # --- ブート死判定 (launch 1回につき1回だけ) ---
