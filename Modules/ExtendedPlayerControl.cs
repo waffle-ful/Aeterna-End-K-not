@@ -1269,6 +1269,20 @@ internal static class ExtendedPlayerControl
 
             if (player.IsModdedClient()) return;
 
+            // 会議の投票フェーズ中は偽キル式の本修復が使えないが、AntiBlackout の役職ジャグリング
+            // (SkipTasks 窓 = 投票終了後〜追放画面明け) はまだ始まっていないため、初回会議と同じ
+            // 自己役職再送が RoleMap と矛盾なく打てる。併せて Data 一式を対象クライアントへ再送し、
+            // 壊れたロスター (IsDead/Disconnected ズレ) も修復する (BUG-20260715-11:
+            // 従来は会議終了までポーリング待機のみで「今の会議」の暗転は直せなかった)。
+            if (GameStates.IsMeeting && !ExileController.Instance && !AntiBlackout.SkipTasks)
+            {
+                Logger.Msg($"Fixing black screen for {player.GetNameWithRole()} during a meeting (role + game data resend)", "FixBlackScreen");
+                player.RpcSetRoleDesync(player.GetRoleTypes(), player.OwnerId);
+                Utils.SendGameDataTo(player.OwnerId);
+                player.ResendDesyncedRoles();
+                return;
+            }
+
             if (GameStates.IsMeeting || ExileController.Instance || AntiBlackout.SkipTasks || player.inVent || player.inMovingPlat || player.onLadder || !Main.EnumeratePlayerControls().FindFirst(x => !x.IsAlive(), out var dummyGhost))
             {
                 if (BlackScreenWaitingPlayers.Add(player.PlayerId))
@@ -1390,6 +1404,29 @@ internal static class ExtendedPlayerControl
 
                 sender.SendMessage();
             }, 1f + (AmongUsClient.Instance.Ping / 1000f), log: false);
+        }
+
+        // SendGameDataTo が送る Data.RoleType はホスト seer 視点の共有フィールドで、対象 seer 固有の
+        // desync 役職 (RoleMap) を上書きしてしまう (インポスター仲間表示の消失/正体漏れ)。
+        // Data 再送の後追いとして、seer 視点とズレたエントリだけ AntiBlackout.RevertToActualRoleTypes
+        // と同型の targeted desync で復元する。死亡ターゲットは RoleMap が生前役職のままなので触らない。
+        public void ResendDesyncedRoles()
+        {
+            if (!player || !AmongUsClient.Instance.AmHost) return;
+
+            foreach (KeyValuePair<(byte SeerID, byte TargetID), (RoleTypes RoleType, CustomRoles CustomRole)> entry in StartGameHostPatch.RpcSetRoleReplacer.RoleMap)
+            {
+                try
+                {
+                    if (entry.Key.SeerID != player.PlayerId || entry.Key.TargetID == player.PlayerId) continue;
+
+                    PlayerControl target = entry.Key.TargetID.GetPlayer();
+                    if (!target || !target.IsAlive() || target.Data == null || target.Data.RoleType == entry.Value.RoleType) continue;
+
+                    target.RpcSetRoleDesync(entry.Value.RoleType, player.OwnerId);
+                }
+                catch (Exception e) { Utils.ThrowException(e); }
+            }
         }
 
         public void ReactorFlash(float delay = 0f, float flashDuration = float.NaN, bool canBlind = true)
