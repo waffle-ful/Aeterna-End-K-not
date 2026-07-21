@@ -1330,6 +1330,8 @@ internal static class ReportDeadBodyPatch
         MeetingStarted = true;
         LateTask.New(() => MeetingStarted = false, 1f, "ResetMeetingStarted");
 
+        MeetingStuckProbe.OnMeetingStart(player, target);
+
         if (ClientControlGUI.HudHidden)
         {
             ClientControlGUI.HudHidden = false;
