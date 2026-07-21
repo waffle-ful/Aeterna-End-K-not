@@ -95,6 +95,7 @@ public class Main : BasePlugin
     public static Dictionary<byte, string> AllPlayerNames = [];
     public static Dictionary<int, string> AllClientRealNames = [];
     public static Dictionary<(byte, byte), string> LastNotifyNames = [];
+    public static Dictionary<(byte, byte), string> LastSentClampedNames = []; // RpcSetName.NameBudget クランプ後の実送信名 (seer=255 は broadcast)
     public static Dictionary<byte, Color32> PlayerColors = [];
     public static Dictionary<byte, PlayerState.DeathReason> AfterMeetingDeathPlayers = [];
     public static Dictionary<CustomRoles, string> RoleHtmlColors = [];

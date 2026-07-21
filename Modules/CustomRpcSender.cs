@@ -596,6 +596,35 @@ public static class CustomRpcSenderExtensions
     // 毎件の見積もりに含めて過大側に倒す = チャンク実測が閾値を超えないことを保証する。
     public const int SetNameWrapperOverhead = 13;
 
+    // 公式鯖の単発 SetName 超過キック対策の名前予算 (RPC ヘッダ類の余白込み。実測の裏付け: 単発 SetName 903B でキック)
+    public const int NameBudget = SetNameChunkFlushThreshold - SetNameWrapperOverhead - 32;
+
+    // NameBudget クランプの共有ヘルパ: 公式鯖のみ、予算超過時に rune 境界で末尾を切り捨て、
+    // 閉じていない末尾タグを除去した文字列を返す (BUG-20260715-09 の CNO スプライトと同型の壊れ方対策)。
+    // ⚠️ vanilla PlayerControl.RpcSetName 直呼び経路 (FixedUpdate タグ再送 / ScheduleDecoratedNameRestore) も
+    // 必ずこれを通し、dirty-check はクランプ後の値で行うこと — クランプ前の値で比較すると
+    // ミラー (=実送信名) と永遠に一致せず毎 tick 再送ループになる。
+    public static string ClampNameForOfficialServer(string name, out bool clamped)
+    {
+        clamped = false;
+        if (GameStates.CurrentServerType != GameStates.ServerType.Vanilla || string.IsNullOrEmpty(name)) return name;
+        if (System.Text.Encoding.UTF8.GetByteCount(name) <= NameBudget) return name;
+
+        var sb = new System.Text.StringBuilder();
+        var bytes = 0;
+
+        foreach (System.Text.Rune rune in name.EnumerateRunes())
+        {
+            int rb = rune.Utf8SequenceLength;
+            if (bytes + rb > NameBudget) break;
+            sb.Append(rune.ToString());
+            bytes += rb;
+        }
+
+        clamped = true;
+        return CustomNetObject.DropUnterminatedTag(sb.ToString());
+    }
+
     // SetName を packed message に一括蓄積する。UTF-8 byte で正確に計算し、SetNameChunkFlushThreshold を
     // 超える手前で現 message を送って sender を作り直す (chunk 分割)。sender は ref で受けて差し替える。
     // checkLength=false にして StartMessage/StartPackedMessage の 500 byte 自動分割は無効化し、ここで管理する。
@@ -623,30 +652,30 @@ public static class CustomRpcSenderExtensions
         // 公式鯖に単一チャンク超過で reason=Hacking キックされる (実測: 単発 SetName 903B でキック、2026-07-14)。
         // キックより表示劣化がマシなので rune 境界でクランプ + Logger.Error で呼び出し元の修正を促す。
         // ※dedup (LastNotifyNames) の後に置くこと — 先にクランプすると元の名前と一致せず毎 tick 再送 flood になる。
-        if (GameStates.CurrentServerType == GameStates.ServerType.Vanilla)
         {
-            const int nameBudget = SetNameChunkFlushThreshold - SetNameWrapperOverhead - 32; // RPC ヘッダ類の余白込み
             int nameBytes = System.Text.Encoding.UTF8.GetByteCount(name);
+            (byte, byte) clampKey = (player.PlayerId, seerIsNull ? byte.MaxValue : seer.PlayerId);
+            string clamped = ClampNameForOfficialServer(name, out bool wasClamped);
 
-            if (nameBytes > nameBudget)
+            if (wasClamped)
             {
-                Logger.Error($"SetName for player {player.PlayerId} is {nameBytes}B > {nameBudget}B — clamped to avoid official-server Hacking kick. Shrink the name decoration (role text / addons / suffix)!", "RpcSetName.NameBudget");
+                name = clamped;
 
-                var sb = new System.Text.StringBuilder();
-                var bytes = 0;
+                // クランプ後 dedup: 変わったのが切り捨てられる末尾 (Sonar 矢印等の毎秒動く suffix) だけなら
+                // クライアントに届く文字列は前回と完全同一 = 送るだけ帯域とレートゲート予算の無駄。
+                // 上の dedup は intended 名で比較するためここをすり抜ける (2026-07-21 実測: 同一クランプ名の
+                // 毎秒再送で Reliable burst が 101→425/10s まで単調増加)。タグ復元系は vanilla RpcSetName の
+                // 別経路 (ScheduleDecoratedNameRestore / FixedUpdate ミラー) なのでこのスキップの影響を受けない。
+                if (Main.LastSentClampedNames.TryGetValue(clampKey, out string lastClamped) && lastClamped == name) return;
 
-                foreach (System.Text.Rune rune in name.EnumerateRunes())
-                {
-                    int rb = rune.Utf8SequenceLength;
-                    if (bytes + rb > nameBudget) break;
-                    sb.Append(rune.ToString());
-                    bytes += rb;
-                }
-
-                // 予算値はここでは動かさない (実測の裏付けあり: 単発 SetName 903B でキック)。
-                // ただし rune 切りは TMP タグの途中に落ちうるので、閉じていない末尾タグを捨てる
-                // (BUG-20260715-09 の CNO スプライトと同型の壊れ方。こちらは毎分 15〜27 回発火している)。
-                name = CustomNetObject.DropUnterminatedTag(sb.ToString());
+                Main.LastSentClampedNames[clampKey] = name;
+                Logger.Error($"SetName for player {player.PlayerId} is {nameBytes}B > {NameBudget}B — clamped to avoid official-server Hacking kick. Shrink the name decoration (role text / addons / suffix)!", "RpcSetName.NameBudget");
+            }
+            else
+            {
+                // 予算内に戻ったら (装飾が減った等) クランプ dedup を無効化 — 次に再超過した時、
+                // 直前にクライアントへ届いたのは完全名なので、同一クランプ名でも1回は送り直す必要がある。
+                Main.LastSentClampedNames.Remove(clampKey);
             }
         }
 

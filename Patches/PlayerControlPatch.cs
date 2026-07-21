@@ -1953,6 +1953,10 @@ internal static class FixedUpdatePatch
             // 変装中は再送を止め、変装名を保持する (ロビーでは誰も変装しないので影響なし)。
             if (!Main.DoBlockNameChange && !player.IsShifted() && ApplySuffix(player, out var name))
             {
+                // 公式鯖の NameBudget クランプ (単発 SetName 超過キック対策)。必ず dirty-check の前に
+                // 掛けること — クランプ前の値で比較するとミラー (=実送信名) と永遠に一致せず毎 tick 再送ループになる。
+                name = CustomRpcSenderExtensions.ClampNameForOfficialServer(name, out _);
+
                 if (!LastBroadcastName.TryGetValue(playerId, out var lastBroadcast) || lastBroadcast != name)
                 {
                     LastBroadcastName[playerId] = name;
