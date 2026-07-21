@@ -107,10 +107,12 @@ internal static class EAC
 
                     if (GameStates.IsMeeting && MeetingHud.Instance.state != MeetingHud.VoteStates.Animating && !pc.IsHost())
                     {
+                        // ban しない: 会議開始RPCをロード/イントロ中に取りこぼして InTask のまま取り残された
+                        // 正規クライアントが通報/緊急ボタンを押すとここに来る (2026-07-21 に2名誤BAN)。
+                        // RPC は reject 済みでチート実害は無いため、記録+拒否に留める。
                         WarnHost();
                         Report(pc, "Report dead body in meeting");
-                        HandleCheat(pc, "Report dead body in meeting");
-                        Logger.Fatal($"Player [{pc.OwnerId}:{pc.GetRealName()}] attempted to report a body in a meeting, rejected", "EAC");
+                        Logger.Fatal($"Player [{pc.OwnerId}:{pc.GetRealName()}] attempted to report a body in a meeting, rejected (likely stuck outside meeting — no ban)", "EAC");
                         sr.Recycle();
                         return true;
                     }
@@ -911,9 +913,9 @@ internal static class EAC
 
                     if ((MeetingHud.Instance && MeetingHud.Instance.state != MeetingHud.VoteStates.Animating) || ExileController.Instance)
                     {
+                        // ban しない: 会議に入れず取り残されたクライアントの正規操作でも到達する (reject のみで無害化済み)
                         WarnHost();
                         Report(player, "Venting during meeting");
-                        HandleCheat(player, "Venting during meeting");
                         Logger.Fatal($"【{player.OwnerId}:{player.GetRealName()}】 attempted to vent during a meeting.", "EAC_physics");
                         subReader.Recycle();
                         return true;
@@ -1143,9 +1145,9 @@ internal static class EAC
 
         if (GameStates.IsMeeting && MeetingHud.Instance.state is MeetingHud.VoteStates.Voted or MeetingHud.VoteStates.NotVoted or MeetingHud.VoteStates.Discussion or MeetingHud.VoteStates.Proceeding)
         {
+            // ban しない: 会議に入れず取り残されたクライアントの正規操作でも到達する (reject のみで無害化済み)
             WarnHost();
             Report(player, "Bad Sabotage D : In Meeting");
-            HandleCheat(player, "Bad Sabotage D : In Meeting");
             Logger.Fatal($"Player [{player.OwnerId}:{player.GetRealName()}] Bad Sabotage D, rejected", "EAC");
             return true;
         }
