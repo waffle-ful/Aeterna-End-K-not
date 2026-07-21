@@ -1387,7 +1387,7 @@ internal static class ChatCommands
             {
                 foreach (RoleOptionType subCategory in subCategories)
                 {
-                    if (Options.RoleSubCategoryLimits.TryGetValue(subCategory, out OptionItem[] limits) && (team == Team.Neutral || limits[0].GetBool()))
+                    if (Options.RoleSubCategoryLimits.TryGetValue(subCategory, out OptionItem[] limits) && limits[0].GetBool())
                     {
                         int min = limits[1].GetInt();
                         int max = limits[2].GetInt();
@@ -1782,9 +1782,14 @@ internal static class ChatCommands
             return;
         }
 
+        // NK サブカテゴリ上限は Enable 時のみ効かせる (無効時は Neutral 陣営 Max のみで制御)。
+        OptionItem[] nkLimits = Options.RoleSubCategoryLimits[RoleOptionType.Neutral_Killing];
+        int neutralFactionMax = Options.FactionMinMaxSettings[Team.Neutral].MaxSetting.GetInt();
+        int nkReserved = nkLimits[0].GetBool() ? nkLimits[2].GetInt() : 0;
+
         List<CustomRoles> impRoles = includeNonCrew ? allRoles.Where(x => x.IsImpostor()).Shuffle().Take(Options.FactionMinMaxSettings[Team.Impostor].MaxSetting.GetInt()).ToList() : [];
-        List<CustomRoles> nkRoles = includeNonCrew ? allRoles.Where(x => x.IsNK()).Shuffle().Take(Math.Min(Options.FactionMinMaxSettings[Team.Neutral].MaxSetting.GetInt(), Options.RoleSubCategoryLimits[RoleOptionType.Neutral_Killing][2].GetInt())).ToList() : [];
-        List<CustomRoles> nnkRoles = includeNonCrew ? allRoles.Where(x => x.IsNonNK()).Shuffle().Take(Math.Min(Options.FactionMinMaxSettings[Team.Neutral].MaxSetting.GetInt() - Options.RoleSubCategoryLimits[RoleOptionType.Neutral_Killing][2].GetInt(), Options.MaxNNKs.GetInt())).ToList() : [];
+        List<CustomRoles> nkRoles = includeNonCrew ? allRoles.Where(x => x.IsNK()).Shuffle().Take(Math.Min(neutralFactionMax, Options.GetNeutralKillingMaxLimit())).ToList() : [];
+        List<CustomRoles> nnkRoles = includeNonCrew ? allRoles.Where(x => x.IsNonNK()).Shuffle().Take(Math.Min(neutralFactionMax - nkReserved, Options.MaxNNKs.GetInt())).ToList() : [];
         List<CustomRoles> covenRoles = includeNonCrew ? allRoles.Where(x => x.IsCoven()).Shuffle().Take(Options.FactionMinMaxSettings[Team.Coven].MaxSetting.GetInt()).ToList() : [];
 
         allRoles.RemoveAll(x => x.IsImpostor());

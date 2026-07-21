@@ -304,7 +304,11 @@ internal static class ChangeRoleSettings
             try
             {
                 (OptionItem MinSetting, OptionItem MaxSetting) impLimits = Options.FactionMinMaxSettings[Team.Impostor];
-                int optImpNum = IRandom.Instance.Next(impLimits.MinSetting.GetInt(), impLimits.MaxSetting.GetInt() + 1);
+                // Min > Max の設定 (ホストが Min を先に上げた等) で Next が ArgumentException を投げ、
+                // catch に落ちて NumImpostors が更新されず vanilla 値 (=1) のまま開始する事故のクランプ。
+                int impMin = impLimits.MinSetting.GetInt();
+                int impMax = Math.Max(impLimits.MaxSetting.GetInt(), impMin);
+                int optImpNum = IRandom.Instance.Next(impMin, impMax + 1);
                 if (GameStates.CurrentServerType == GameStates.ServerType.Vanilla) optImpNum = Math.Clamp(optImpNum, 1, 3);
                 GameOptionsManager.Instance.currentNormalGameOptions.NumImpostors = optImpNum;
                 GameOptionsManager.Instance.CurrentGameOptions.SetInt(Int32OptionNames.NumImpostors, optImpNum);
@@ -727,7 +731,7 @@ internal static class StartGameHostPatch
 
             if (Options.CurrentGameMode == CustomGameMode.Standard)
             {
-                bool bloodlustSpawn = random.Next(100) < (Options.CustomAdtRoleSpawnRate.TryGetValue(CustomRoles.Bloodlust, out IntegerOptionItem option0) ? option0.GetFloat() : 0) && CustomRoles.Bloodlust.IsEnable() && Options.RoleSubCategoryLimits[RoleOptionType.Neutral_Killing][2].GetInt() > 0;
+                bool bloodlustSpawn = random.Next(100) < (Options.CustomAdtRoleSpawnRate.TryGetValue(CustomRoles.Bloodlust, out IntegerOptionItem option0) ? option0.GetFloat() : 0) && CustomRoles.Bloodlust.IsEnable() && Options.GetNeutralKillingMaxLimit() > 0;
                 bool physicistSpawn = random.Next(100) < (Options.CustomAdtRoleSpawnRate.TryGetValue(CustomRoles.Physicist, out IntegerOptionItem option1) ? option1.GetFloat() : 0) && CustomRoles.Physicist.IsEnable();
                 bool nimbleSpawn = random.Next(100) < (Options.CustomAdtRoleSpawnRate.TryGetValue(CustomRoles.Nimble, out IntegerOptionItem option2) ? option2.GetFloat() : 0) && CustomRoles.Nimble.IsEnable();
                 bool finderSpawn = random.Next(100) < (Options.CustomAdtRoleSpawnRate.TryGetValue(CustomRoles.Finder, out IntegerOptionItem option3) ? option3.GetFloat() : 0) && CustomRoles.Finder.IsEnable();
@@ -1193,6 +1197,41 @@ internal static class StartGameHostPatch
         LoadingBarManager loadingBarManager = LoadingBarManager.Instance;
         yield return loadingBarManager.WaitAndSmoothlyUpdate(90f, 95f, 1f, GetString("LoadingBarText.1"));
 
+        // v4 暗転根治 (2026-07-21): A案 (1.2s待ち撤去) 後も大人数ゲームで暗転が再発した真因は二層レートゲート。
+        // qa.Wait() は DataFlagRateLimiter が SendOrDisconnect を呼ぶまでしか待たず、その先の PacketRateGate
+        // (25/s FIFO) はキュー非空だと実送信せず自キューへ積み直す (TryGate) ため、開始バースト (∝N²) の後ろに
+        // 並んだ復元 Data はワイヤ上で roles の 1.8s+ 後になり、クライアント intro が全員 Disconnected のまま
+        // 構築されて死ぬ (BlackoutProbe 2026-07-21 15:09 暗転ゲームのみ gateQueue=44〜57・クリーンゲームは 0)。
+        // 対策 = TOHK パリティ: 先に両層の実ドレイン完了を待ち、fake→roles→復元は直送窓でワイヤ直行させる
+        // (復元が roles 直後に乗ることの構造保証)。ドレインがタイムアウトした場合は追い越し (順序逆転 =
+        // 既知の暗転原因型) を作らないよう直送せず従来のゲート経由に fallback する。
+        // Rollback bit: create EndKnot_DATA/disable_start_direct_window.txt to skip drain+direct window.
+        bool directWindow = !DisableStartDirectWindow();
+
+        if (directWindow)
+        {
+            float drainStart = Time.realtimeSinceStartup;
+
+            while ((PacketRateGate.PendingCount > 0 || DataFlagRateLimiter.PendingCount > 0) && Time.realtimeSinceStartup - drainStart < 6f)
+                yield return null;
+
+            if (PacketRateGate.PendingCount > 0 || DataFlagRateLimiter.PendingCount > 0)
+            {
+                directWindow = false;
+                Logger.Error($"BlackoutProbe: pre-start drain timed out after 6s (gateQueue={PacketRateGate.PendingCount}, dataQueue={DataFlagRateLimiter.PendingCount}) — falling back to gated sends for this game", "BlackoutProbe");
+            }
+            else
+                Logger.Info($"BlackoutProbe: rate-gate queues drained in {Time.realtimeSinceStartup - drainStart:F2}s — opening direct-send window for fake/roles/restore", "BlackoutProbe");
+        }
+        else
+            Logger.Warn("disable_start_direct_window.txt present: keeping gated sends (known to delay the Disconnected restore behind big-game bursts)", "BlackoutProbe");
+
+        PacketRateGate.StartWindowBypass = directWindow;
+        DataFlagRateLimiter.StartWindowBypass = directWindow;
+
+        try
+        {
+
         // BlackoutProbe: v3 機序 (Disconnected 復元がクライアント intro に間に合わない疑い) の
         // wire 時刻計器。ホストローカルログのみ・送信への影響ゼロ。
         float probeSetStart = Time.realtimeSinceStartup;
@@ -1221,9 +1260,8 @@ internal static class StartGameHostPatch
         Logger.Info("Successfully set everyone's data as Disconnected", "StartGameHost");
         Logger.Info($"BlackoutProbe: Disconnected=true wired {Time.realtimeSinceStartup - probeSetStart:F2}s after set start (gateQueue={PacketRateGate.PendingCount}, video={Modules.Media.LoadingScreenVideo.IsShowing})", "BlackoutProbe");
 
-        yield return loadingBarManager.WaitAndSmoothlyUpdate(95f, 100f, 1f, GetString("LoadingBarText.1"));
-        loadingBarManager.ToggleLoadingBar(false);
-
+        // v4 監査反映: ローディングバー演出 (旧: ここで 95→100 の1秒) は直送窓の外 (restore 完了後) へ移動。
+        // 窓中の実時間 yield を無くし、無関係な送信が予算免除を受ける露出を数フレームに縮める。
         float probeRolesStart = Time.realtimeSinceStartup;
         Main.EnumeratePlayerControls().Do(SetRoleSelf);
 
@@ -1260,11 +1298,32 @@ internal static class StartGameHostPatch
         }
 
         Logger.Info($"BlackoutProbe: restore wired +{Time.realtimeSinceStartup - probeRolesStart:F2}s after roles dispatch start (queue-drain {Time.realtimeSinceStartup - probeRestoreQueued:F2}s, gateQueue={PacketRateGate.PendingCount}, video={Modules.Media.LoadingScreenVideo.IsShowing})", "BlackoutProbe");
+
+        // restore がワイヤに乗ったら窓は即クローズ (finally は中断時の保険として残す)。
+        PacketRateGate.StartWindowBypass = false;
+        DataFlagRateLimiter.StartWindowBypass = false;
+
+        }
+        finally
+        {
+            PacketRateGate.StartWindowBypass = false;
+            DataFlagRateLimiter.StartWindowBypass = false;
+        }
+
+        // 窓の外へ移したローディングバー演出 (95→100)。送信には無関係な純演出。
+        yield return loadingBarManager.WaitAndSmoothlyUpdate(95f, 100f, 1f, GetString("LoadingBarText.1"));
+        loadingBarManager.ToggleLoadingBar(false);
     }
 
     private static bool DelayDisconnectedRestore()
     {
         try { return System.IO.File.Exists($"{Main.DataPath}/EndKnot_DATA/delay_disconnected_restore.txt"); }
+        catch { return false; }
+    }
+
+    private static bool DisableStartDirectWindow()
+    {
+        try { return System.IO.File.Exists($"{Main.DataPath}/EndKnot_DATA/disable_start_direct_window.txt"); }
         catch { return false; }
     }
 

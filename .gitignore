@@ -457,9 +457,11 @@ tools/companion/speaking.txt
 tools/companion/companion-log.jsonl
 tools/companion/recap.txt
 tools/companion/persona.txt
+tools/companion/persona2.txt
 tools/companion/__pycache__/
 # アバターのモデルはユーザーが各自置く (VRoid 自作等・ライセンス的にも同梱しない)。
 tools/companion/avatar/model.vrm
+tools/companion/avatar/model2.vrm
 
 # Build output (custom -o build/)
 build/

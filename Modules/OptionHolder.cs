@@ -108,6 +108,14 @@ public static class Options
     public static readonly Dictionary<Team, (OptionItem MinSetting, OptionItem MaxSetting)> FactionMinMaxSettings = [];
     public static readonly Dictionary<RoleOptionType, OptionItem[]> RoleSubCategoryLimits = [];
 
+    /// <summary>NK の実効上限。サブカテゴリ上限が有効ならその Max、無効なら Neutral 陣営全体の Max。
+    /// (サブカテゴリ上限は Enable トグル尊重に変更 — 無効時に Max=1 デフォルトが密かに効く事故防止。)</summary>
+    public static int GetNeutralKillingMaxLimit()
+    {
+        OptionItem[] limits = RoleSubCategoryLimits[RoleOptionType.Neutral_Killing];
+        return limits[0].GetBool() ? limits[2].GetInt() : FactionMinMaxSettings[Team.Neutral].MaxSetting.GetInt();
+    }
+
 
     public static OptionItem EnableAutoGMRotation;
     public static readonly Dictionary<int, Dictionary<CustomGameMode, OptionItem>> AutoGMRotationRandomGroups = [];
@@ -1383,11 +1391,12 @@ public static class Options
             Color roleOptionTypeColor = roleOptionType.GetRoleOptionTypeColor();
             var options = new OptionItem[3];
 
+            // Neutral タブも他タブと同じく Enable トグルを表示する (旧: hidden で常時適用扱い →
+            // OFF のままロールされ第三陣営が湧かない事故の温床だった)。
             options[0] = new BooleanOptionItem(id++, $"RoleSubCategoryLimitOptions.{roleOptionType}.EnableLimit", false, tab)
                 .SetGameMode(CustomGameMode.Standard)
                 .SetHeader(doneTabs.Add(tab))
-                .SetColor(roleOptionTypeColor)
-                .SetHidden(tab == TabGroup.NeutralRoles);
+                .SetColor(roleOptionTypeColor);
 
             options[1] = new IntegerOptionItem(id++, $"RoleSubCategoryLimitOptions.{roleOptionType}.Min", new(0, 15, 1), 0, tab)
                 .SetGameMode(CustomGameMode.Standard)
@@ -1399,8 +1408,7 @@ public static class Options
                 .SetValueFormat(OptionFormat.Players)
                 .SetColor(roleOptionTypeColor);
 
-            if (tab != TabGroup.NeutralRoles) options[1..].Do(x => x.SetParent(options[0]));
-            else options[1].SetHeader(true);
+            options[1..].Do(x => x.SetParent(options[0]));
 
             RoleSubCategoryLimits[roleOptionType] = options;
         }
