@@ -170,6 +170,7 @@ function Get-AuExitDiagnosis {
         $hex  = "0x{0:X8}" -f $code
         $verdict = switch ($code) {
             0          { "★正常終了 (clean exit) — クラッシュではない。Application.Quit / AutoRestart / 手動終了の系統" }
+            1          { "★外部強制終了の疑い (ExitCode=1) — taskkill /F・タスクマネージャの典型コード。クラッシュなら例外コード(0xC…)になる (2026-07-21 23:15 実証: bridge-test の taskkill がこれだった)" }
             -1073741819 { "★アクセス違反 (0xC0000005) — 本物のクラッシュ。coreclr/GameAssembly AV の既知系統" }
             -1073740791 { "★スタックバッファ破損 (0xC0000409)" }
             -1073740940 { "★ヒープ破損 (0xC0000374) — GCヒープ破損説と整合" }
@@ -201,7 +202,7 @@ function Save-CrashSnapshot {
             "exit     : $ExitDiag",
             "pid      : $script:AuProcPid",
             "detected : $((Get-Date).ToString('yyyy-MM-dd HH:mm:ss'))",
-            "note     : ExitCode=0 は clean exit (AutoRestart/Application.Quit 系) で crash ではない。非0 なら本物のクラッシュ。"
+            "note     : ExitCode=0 は clean exit (AutoRestart/Application.Quit 系)。ExitCode=1 は taskkill/タスクマネージャ等の外部強制終了の疑い (クラッシュなら 0xC… の例外コード)。"
         )
         $summary | Out-File -FilePath (Join-Path $dest 'CAUSE.txt') -Encoding utf8
 
