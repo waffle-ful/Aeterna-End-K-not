@@ -19,7 +19,7 @@ internal class Revenant : RoleBase
     ];
 
     public bool TaskDone;
-    private bool StillAlive;
+    public bool StillAlive;
     private bool IsExposed;
     private byte RevenantId;
 

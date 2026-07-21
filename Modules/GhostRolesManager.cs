@@ -98,6 +98,11 @@ internal static class GhostRolesManager
 
             if (pc.IsAlive() || pc.GetCountTypes() is CountTypes.None or CountTypes.OutOfGame || pc.Is(CustomRoles.EvilSpirit) || pc.Is(CustomRoles.Anchor)) return false;
 
+            // 蘇生予約中のレヴナント (会議での仮死 → 会議明け2秒で RpcRevive) を除外。配ってしまうと
+            // 蘇生時の役職再送が GuardianAngel desync を2秒で上書きし、「ゴースト役職と告知されたのに
+            // ボタンが出ない」状態だけが残る (BUG-20260721-10)
+            if (Main.PlayerStates[pc.PlayerId].Role is Revenant { StillAlive: true }) return false;
+
             switch (pc.GetCustomRole())
             {
                 case CustomRoles.GM:
