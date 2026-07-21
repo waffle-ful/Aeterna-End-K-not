@@ -211,8 +211,11 @@ internal static class CustomRoleSelector
 
         try
         {
+            // Neutral のサブカテゴリ上限も他タブと同様に Enable トグルを尊重する。
+            // 旧: Neutral タブは無条件適用 → OFF のまま min0/max1 のロールで頻繁に 0 が出て
+            // NK/NNK 候補プールが全滅し、FactionLimits の Neutral min を設定していても第三陣営が湧かない。
             subCategoryLimits = Options.RoleSubCategoryLimits
-                .Where(x => x.Key.GetTabFromOptionType() == TabGroup.NeutralRoles || x.Value[0].GetBool())
+                .Where(x => x.Value[0].GetBool())
                 .ToDictionary(x => x.Key, x => rd.Next(x.Value[1].GetInt(), x.Value[2].GetInt() + 1));
         }
         catch { subCategoryLimits = []; }
@@ -228,7 +231,8 @@ internal static class CustomRoleSelector
 
         if (subCategoryLimits.Count > 0) Logger.Info($"Sub-Category Limits: {string.Join(", ", subCategoryLimits.Select(x => $"{x.Key}: {x.Value}"))}", "SubCategoryLimits");
 
-        int nkLimit = subCategoryLimits[RoleOptionType.Neutral_Killing];
+        // サブカテゴリ上限が無効なら NK は全体の Neutral 数 (numNeutrals) のみで制御する。
+        int nkLimit = subCategoryLimits.TryGetValue(RoleOptionType.Neutral_Killing, out int nkCap) ? nkCap : numNeutrals;
         int nnkLimit;
 
         try { nnkLimit = rd.Next(Options.MinNNKs.GetInt(), Options.MaxNNKs.GetInt() + 1); }
@@ -305,6 +309,11 @@ internal static class CustomRoleSelector
 
         allPlayers.RemoveAll(x => ChatCommands.Spectators.Contains(x.PlayerId));
         RoleResult.AddRange(ChatCommands.Spectators.ToDictionary(x => x, _ => CustomRoles.GM));
+
+        // GM ホスト/観戦者は finalRolesList から役職を受け取らないため、以降の割当予算は実際に
+        // 役職を配る人数に合わせる。ここを playerCount のままにすると余剰役職が生成され、
+        // 最後の Zip が余りをランダムに切り捨てる (選出済みインポスターが無音消失する実害)。
+        playerCount = allPlayers.Count;
 
         Dictionary<byte, CustomRoles> preSetRoles = Main.SetRoles.AddRange(ChatCommands.DraftResult, false);
 
