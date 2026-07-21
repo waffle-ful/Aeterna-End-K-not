@@ -1432,9 +1432,13 @@ internal static class MeetingHudOnDestroyPatch
 
         if (Main.LIMap) Main.Instance.StartCoroutine(WaitForExileFinish());
 
-        GC.Collect();
-        Resources.UnloadUnusedAssets();
-        GC.Collect();
+        // 毎会議終了の強制GC三連打はゲーム中の音声スタッター源 (回収実績ほぼゼロ) — 既定OFF
+        if (Main.EnableAggressiveGcCleanup.Value)
+        {
+            GC.Collect();
+            Resources.UnloadUnusedAssets();
+            GC.Collect();
+        }
 
         return;
 

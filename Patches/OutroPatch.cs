@@ -500,7 +500,9 @@ internal static class SetEverythingUpPatch
         LastWinsText = winnerText.text /*.RemoveHtmlTags()*/;
 
         // Cleam up memory for objects that are no longer referenced
-        GC.Collect();
+        // ズドドド音の真因: この強制GCは毎ゲーム終了で3-4秒のフレームストール(音声スタック)を起こすのに
+        // ほぼ何も回収しない(CENSUS実測)ため、既定OFF (Main.EnableAggressiveGcCleanup)
+        if (Main.EnableAggressiveGcCleanup.Value) GC.Collect();
         return;
 
         IEnumerator SetupPoolablePlayers()
@@ -510,10 +512,14 @@ internal static class SetEverythingUpPatch
 
             yield return null;
 
-            // Clear unused assets
-            GC.Collect();
-            Resources.UnloadUnusedAssets();
-            GC.Collect();
+            // Clear unused assets (既定OFF — 上と同じ理由。framestall gc2d=3 の残り2回はここ)
+            if (Main.EnableAggressiveGcCleanup.Value)
+            {
+                GC.Collect();
+                Resources.UnloadUnusedAssets();
+                GC.Collect();
+            }
+
             yield return null;
 
             Vector3 pos = main.ViewportToWorldPoint(new(0f, 1f, main.nearClipPlane));
