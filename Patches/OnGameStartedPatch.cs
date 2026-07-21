@@ -340,6 +340,7 @@ internal static class ChangeRoleSettings
             Main.DefaultImpostorVision = Main.RealOptionsData.GetFloat(FloatOptionNames.ImpostorLightMod);
 
             Main.LastNotifyNames = [];
+            Main.LastSentClampedNames = [];
             Main.NumEmergencyMeetingsUsed = [];
 
             CheckForEndVotingPatch.EjectionText = string.Empty;
