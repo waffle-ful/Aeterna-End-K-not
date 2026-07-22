@@ -11566,6 +11566,7 @@
   "AllowConsole": "コンソール",
   "AmOblivious": "<color=#424242>鈍感</color>状態のため死体を通報できない",
   "Anagram": "<size=80%>並び替えられたワードは <b>{0}</b>です！\\n元のワードを推測しましょう！\\n(ヒント: それは 文字 <b>{1}</b> で始まる！)</size>",
+  "AnagramDisabled": "<size=80%><#ff0000>X</color> /anagram コマンドは このロビーでは無効です。</size>",
   "AnalyzeCD": "分析のクールダウン",
   "AnalyzeDur": "分析の継続時間",
   "AnalyzerCD": "分析のクールダウン",
@@ -12792,6 +12793,7 @@
   "MassMediaGuessCorrect": "正解！スクープを世に放った！",
   "MassMediaGuessWrong": "外れ……記事は崩れ去った。",
   "EightballCommandIndexes": "/8ballコマンドの応答数（カスタム翻訳ファイルを使って追加の応答をインポートできます。これらの応答は以下の既存の応答に追加されます）",
+  "EnableAnagramCommand": "/anagramコマンドを使えるようにする",
   "EnableImpostorChat": "インポスター陣営チャットを有効化（/ic）",
   "EnableJackalChat": "ジャッカル陣営チャットを有効化（/jc）",
   "EnableLoversChat": "ラバーズチャットを有効化（/lc）",
@@ -13010,7 +13012,7 @@
 
   "Blockade": "ブロケード",
   "BlockadeInfo": "バリケードを設置する",
-  "BlockadeInfoLong": "(<#ffab1b>ニュートラル</color>):\\n消える/ペット/シェイプシフトでバリケードを設置できる。自分以外は通り抜けられない。会議が始まると全て消える。",
+  "BlockadeInfoLong": "(<#ffab1b>ニュートラル</color>):\\n消える/ペット/シェイプシフトでバリケードを設置できる。自分以外は通り抜けられない。会議が始まると全て消える。\\n全員をキルすれば勝利！",
   "Blockade.BlockadeRadius": "バリケードの半径",
 
   "Jackpot": "ジャックポット",

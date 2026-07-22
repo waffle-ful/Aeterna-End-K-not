@@ -188,7 +188,8 @@ public enum CustomRPC
     EkmSync = 251,
 
     // Upstream EHR catchup
-    Entombed = 252
+    Entombed = 252,
+    Haunter = 253
 
     // The total number of RPCs must not exceed 255
     // Because HandleRpc accepts Rpc in byte (max 255) system, and it will be impossible to use int
@@ -1203,6 +1204,11 @@ internal static class RPCHandlerPatch
                 case CustomRPC.Entombed:
                 {
                     Entombed.ReceiveRPC(reader);
+                    break;
+                }
+                case CustomRPC.Haunter:
+                {
+                    Haunter.ReceiveRPC(reader);
                     break;
                 }
                 case CustomRPC.RoomRushDataSync:

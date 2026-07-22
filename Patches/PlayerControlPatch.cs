@@ -21,7 +21,7 @@ internal static class CheckProtectPatch
 {
     public static bool Prefix(PlayerControl __instance, [HarmonyArgument(0)] PlayerControl target)
     {
-        if (!AmongUsClient.Instance.AmHost || target.Data.IsDead || !target.IsAlive()) return false;
+        if (!AmongUsClient.Instance.AmHost || AntiBlackout.SkipTasks || target.Data.IsDead || !target.IsAlive()) return false;
 
         Logger.Info($"CheckProtect: {__instance.GetNameWithRole().RemoveHtmlTags()} => {target.GetNameWithRole().RemoveHtmlTags()}", "CheckProtect");
 
@@ -1315,7 +1315,16 @@ internal static class ReportDeadBodyPatch
 
         AfterReportTasks(__instance, target);
 
-        return true;
+        // TOHK パリティ (2026-07-22): vanilla に続行させると StartMeeting RPC がグローバルレートゲートの
+        // FIFO 最後尾に載り、会議直前バースト (NotifyRoles/名前再送) の後ろで数秒遅れる = 遅いクライアント
+        // だけ会議 UI が出ない (BUG-20260721-09 系)。TOHK と同じくホストを先に会議へ入れ、RPC は
+        // MeetingStartWire がドレイン後に直送する (../TOHK/Patches/PlayerContorols/ReportDeadBodyPatch.cs:296-311)
+        MeetingRoomManager.Instance.AssignSelf(__instance, target);
+        HudManager.Instance.OpenMeetingRoom(__instance);
+        __instance.StartMeeting(target);
+        MeetingStartWire.SendStartMeeting(__instance, target);
+
+        return false;
 
         void Notify(string str) => __instance.Notify(ColorString(Color.yellow, GetString("CheckReportFail") + GetString(str)), 15f);
     }
@@ -1329,8 +1338,6 @@ internal static class ReportDeadBodyPatch
         if (MeetingStarted) return;
         MeetingStarted = true;
         LateTask.New(() => MeetingStarted = false, 1f, "ResetMeetingStarted");
-
-        MeetingStuckProbe.OnMeetingStart(player, target);
 
         if (ClientControlGUI.HudHidden)
         {
@@ -1920,7 +1927,7 @@ internal static class FixedUpdatePatch
                         
                         if (!player.IsModdedClient() && remaining <= 30)
                         {
-                            if (remaining % 5 == 0) sendOption = SendOption.Reliable;
+                            if (remaining % 10 == 0 || remaining == 5) sendOption = SendOption.Reliable;
                             NotifyRoles(SpecifySeer: player, SpecifyTarget: player, SendOption: sendOption);
                         }
 
@@ -2736,13 +2743,9 @@ internal static class PlayerControlLocalSetRolePatch
 [HarmonyPatch(typeof(PlayerControl), nameof(PlayerControl.AssertWithTimeout))]
 internal static class AssertWithTimeoutPatch
 {
-    public static bool AllowCall;
-
     public static bool Prefix()
     {
-        bool allow = AllowCall;
-        AllowCall = false;
-        return allow;
+        return false;
     }
 }
 

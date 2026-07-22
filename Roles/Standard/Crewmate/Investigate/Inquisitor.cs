@@ -39,14 +39,14 @@ public class Inquisitor : RoleBase
     public override bool OnVote(PlayerControl voter, PlayerControl target)
     {
         if (Starspawn.IsDayBreak) return false;
-        if (voter == null || target == null || voter.PlayerId == target.PlayerId || Main.DontCancelVoteList.Contains(voter.PlayerId)) return false;
+        if (!voter || !target || voter.PlayerId == target.PlayerId || Main.DontCancelVoteList.Contains(voter.PlayerId)) return false;
 
         var players = ExcludeDeadPlayers.GetBool() ? Main.EnumerateAlivePlayerControls() : Main.EnumeratePlayerControls();
         List<(byte Id, CustomRoles Role)> knownRoles = [.. from pc in players where Utils.KnowsTargetRole(target, pc) select (pc.PlayerId, pc.GetCustomRole())];
-        
+
         string result;
-        
-        if (knownRoles.Count == 0)
+
+        if (knownRoles.Count <= 1)
             result = Translator.GetString("InquisitorNoInfo");
         else if (KnowExactRolesAfterTasksFinished.GetBool() && voter.GetTaskState().IsTaskFinished)
             result = string.Join('\n', knownRoles.Select(x => $"{x.Id.ColoredPlayerName()}: {x.Role.ToColoredString()}"));

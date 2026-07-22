@@ -2,6 +2,7 @@
 using System.Linq;
 using AmongUs.GameOptions;
 using EndKnot.Modules;
+using Hazel;
 
 namespace EndKnot.Roles;
 
@@ -113,8 +114,7 @@ internal class Haunter : IGhostRole
 
         for (var i = 0; i < numOfReveals && WarnedImps.Count > 0; i++)
         {
-            int index = IRandom.Instance.Next(WarnedImps.Count);
-            byte target = WarnedImps[index];
+            byte target = WarnedImps.RandomElement();
             targets.Add(target);
             WarnedImps.Remove(target);
             TargetArrow.Remove(target, pc.PlayerId);
@@ -124,10 +124,18 @@ internal class Haunter : IGhostRole
 
         var targetPcs = targets.ToValidPlayers();
 
-        targetPcs.ForEach(x => x.Notify(Translator.GetString("HaunterRevealedYou"), 10f));
-        WarnedImps.ToValidPlayers().ForEach(x => x.Notify(Translator.GetString("HaunterFinishedTasks"), 10f));
+        targetPcs.NotifyPlayers(Translator.GetString("HaunterRevealedYou"), 10f, setName: false);
+        WarnedImps.ToValidPlayers().NotifyPlayers(Translator.GetString("HaunterFinishedTasks"), 10f);
 
         targetPcs.ForEach(x => Utils.NotifyRoles(SpecifyTarget: x));
+
+        if (Utils.DoRPC)
+        {
+            var writer = Utils.CreateRPC(CustomRPC.Haunter);
+            writer.WritePacked(targets.Count);
+            Loop.Times(targets.Count, i => writer.Write(targets[i]));
+            Utils.EndRPC(writer);
+        }
     }
 
     public void Update(PlayerControl pc)
@@ -170,8 +178,6 @@ internal class Haunter : IGhostRole
         {
             if (role.Instance is not Haunter haunter) continue;
 
-            if (!haunter.WarnedImps.Contains(seer.PlayerId)) continue;
-
             return TargetArrow.GetArrows(seer, haunter.HaunterId);
         }
 
@@ -186,5 +192,10 @@ internal class Haunter : IGhostRole
             1 => pc.GetTaskState().IsTaskFinished,
             _ => true
         };
+    }
+
+    public static void ReceiveRPC(MessageReader reader)
+    {
+        Loop.Times(reader.ReadPackedInt32(), _ => AllHauntedPlayers.Add(reader.ReadByte()));
     }
 }

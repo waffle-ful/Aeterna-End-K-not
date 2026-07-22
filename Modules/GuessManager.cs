@@ -1280,12 +1280,7 @@ public static class GuessManager
                 ExistingCNOs.Clear();
                 NetIdToRawDisplay.Clear();
                 PlayerControl pc = guesserId.GetPlayer();
-                if (pc)
-                {
-                    Utils.SendGameDataTo(pc.OwnerId);
-                    // Data.RoleType はホスト視点の共有値のため、guesser 視点の desync 役職を後追いで復元する
-                    pc.ResendDesyncedRoles();
-                }
+                if (pc) Utils.SendGameDataTo(pc.OwnerId);
                 Logger.Msg($"Reset Meeting Shapeshift Menu For Guessing ({Main.AllPlayerNames.GetValueOrDefault(guesserId, "Someone")})", "Meeting Shapeshift For Guessing");
             }
             catch (Exception e) { Utils.ThrowException(e); }
