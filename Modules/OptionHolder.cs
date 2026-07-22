@@ -265,6 +265,7 @@ public static class Options
     public static OptionItem DisableSpectateCommand;
     public static OptionItem Disable8ballCommand;
     public static OptionItem EightballCommandIndexes;
+    public static OptionItem EnableAnagramCommand;
     public static OptionItem DisableVoteStartCommand;
     public static OptionItem DisableVentingOn1v1;
     public static OptionItem DisableSabotagingOn1v1;
@@ -3115,6 +3116,9 @@ public static class Options
 
         EightballCommandIndexes = new IntegerOptionItem(23820, "EightballCommandIndexes", new(1, 100, 1), 20, TabGroup.GameSettings)
             .SetColor(new Color32(255, 153, 153, byte.MaxValue));
+
+        EnableAnagramCommand = new BooleanOptionItem(23821, "EnableAnagramCommand", true, TabGroup.GameSettings)
+            .SetColor(new Color32(100, 220, 255, byte.MaxValue));
 
         LoadingPercentage = 97;
 

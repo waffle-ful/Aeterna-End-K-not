@@ -1155,6 +1155,7 @@ internal static class ChatCommands
         ms.MarkedId = args.Length < 2 ? byte.MaxValue : byte.TryParse(args[1], out byte targetId) ? targetId : byte.MaxValue;
 
         player.RPCPlayCustomSound("Line");
+        Utils.SendRPC(CustomRPC.SyncRoleData, player.PlayerId, ms.MarkedId);
 
         MeetingManager.SendCommandUsedMessage(args[0]);
     }
@@ -1426,6 +1427,12 @@ internal static class ChatCommands
 
     private static void AnagramCommand(PlayerControl player, string text, string[] args)
     {
+        if (!Options.EnableAnagramCommand.GetBool())
+        {
+            Utils.SendMessage("\n", player.PlayerId, GetString("AnagramDisabled"), importance: MessageImportance.Low);
+            return;
+        }
+
         Main.Instance.StartCoroutine(Main.GetRandomWord(CreateAnagram));
         return;
 
@@ -4224,17 +4231,6 @@ internal static class ChatCommands
         return true;
     }
 
-    private static string FixRoleNameInput(string text)
-    {
-        text = text.Replace("着", "者").Trim().ToLower();
-
-        return text switch
-        {
-            "schrodingers cat" or "schrodingerscat" or "cat" => "Schrödinger's Cat",
-            _ => text
-        };
-    }
-
     public static bool GetRoleByName(string name, out CustomRoles role)
     {
         role = new();
@@ -4253,7 +4249,7 @@ internal static class ChatCommands
                 result += mc[i]; //匹配结果是完整的数字，此处可以不做拼接的
             }
 
-            name = FixRoleNameInput(result.Replace("是", string.Empty).Trim());
+            name = result.Replace("是", string.Empty).Trim().Replace("着", "者");
         }
         else
             name = name.Trim().ToLower();
@@ -4286,10 +4282,6 @@ internal static class ChatCommands
         }
 
         role = role.Trim().ToLower();
-        if (role.StartsWith("/r")) _ = role.Replace("/r", string.Empty);
-        if (role.StartsWith("/up")) _ = role.Replace("/up", string.Empty);
-        if (role.EndsWith("\r\n")) _ = role.Replace("\r\n", string.Empty);
-        if (role.EndsWith("\n")) _ = role.Replace("\n", string.Empty);
 
         if (role == "")
         {
@@ -4297,7 +4289,8 @@ internal static class ChatCommands
             return;
         }
 
-        role = FixRoleNameInput(role).ToLower().Trim().Replace(" ", string.Empty);
+        string originalInput = role;
+        role = role.Replace("着", "者").ToLower().Trim().Replace(" ", string.Empty);
 
         foreach (CustomRoles rl in Main.CustomRoleValues)
         {
@@ -4305,7 +4298,7 @@ internal static class ChatCommands
 
             string roleName = Regex.Replace(GetString(rl.ToString()).RemoveHtmlTags().ToLower().Trim().TrimStart('*'), @"[^\p{L}-]+", string.Empty);
 
-            if (role == roleName)
+            if (role == roleName || (originalInput is "schrodingers cat" or "schrodingerscat" or "cat" && rl == CustomRoles.SchrodingersCat))
             {
                 if ((isDev || isUp) && GameStates.IsLobby)
                 {
@@ -4598,8 +4591,16 @@ internal static class ChatUpdatePatch
             chatBubble.Background.color = new(0.1f, 0.1f, 0.1f, 1f);
         }
 
-        long now = Utils.TimeStamp;
-        LastMessages.RemoveAll(x => now - x.SendTimeStamp > 10);
+        try
+        {
+            long now = Utils.TimeStamp;
+            LastMessages.RemoveAll(x => now - x.SendTimeStamp > 10);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"LastMessages cleanup failed, clearing list: {ex.Message}", "ChatUpdatePatch");
+            LastMessages.Clear();
+        }
     }
 
     internal static bool SendLastMessages(ref CustomRpcSender sender)

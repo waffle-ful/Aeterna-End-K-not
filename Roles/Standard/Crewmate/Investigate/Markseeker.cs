@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Hazel;
 using UnityEngine;
 
 namespace EndKnot.Roles;
@@ -36,6 +37,11 @@ internal class Markseeker : RoleBase
     {
         On = false;
         PlayerIdList = [];
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        MarkedId = reader.ReadByte();
     }
 
 /*
