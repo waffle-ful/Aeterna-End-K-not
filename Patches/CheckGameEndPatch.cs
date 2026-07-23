@@ -498,15 +498,22 @@ internal static class GameEndChecker
         if (playersToRevive.Count > 0)
         {
             // Resuscitation Resuscitate one person per transmission to prevent the packet from swelling up and dying
-            foreach (byte playerId in playersToRevive)
+            // 会議中に勝敗確定した場合、write-barrier が dirty 送信を破棄するため IntentionalSends 囲いで明示的に通す
+            NetworkedPlayerInfoSerializePatch.IntentionalSends++;
+
+            try
             {
-                NetworkedPlayerInfo playerInfo = GameData.Instance.GetPlayerById(playerId);
-                // resuscitation
-                playerInfo.IsDead = false;
-                // transmission
-                playerInfo.SetDirtyBit(0b_1u << playerId);
-                self.SendAllStreamedObjects();
+                foreach (byte playerId in playersToRevive)
+                {
+                    NetworkedPlayerInfo playerInfo = GameData.Instance.GetPlayerById(playerId);
+                    // resuscitation
+                    playerInfo.IsDead = false;
+                    // transmission
+                    playerInfo.SetDirtyBit(0b_1u << playerId);
+                    self.SendAllStreamedObjects();
+                }
             }
+            finally { NetworkedPlayerInfoSerializePatch.IntentionalSends--; }
 
             // Delay to ensure that the end of the game is delivered at the end of the game
             yield return new WaitForSecondsRealtime(EndGameDelay);

@@ -1315,16 +1315,20 @@ internal static class ReportDeadBodyPatch
 
         AfterReportTasks(__instance, target);
 
-        // TOHK パリティ (2026-07-22): vanilla に続行させると StartMeeting RPC がグローバルレートゲートの
-        // FIFO 最後尾に載り、会議直前バースト (NotifyRoles/名前再送) の後ろで数秒遅れる = 遅いクライアント
-        // だけ会議 UI が出ない (BUG-20260721-09 系)。TOHK と同じくホストを先に会議へ入れ、RPC は
-        // MeetingStartWire がドレイン後に直送する (../TOHK/Patches/PlayerContorols/ReportDeadBodyPatch.cs:296-311)
-        MeetingRoomManager.Instance.AssignSelf(__instance, target);
-        HudManager.Instance.OpenMeetingRoom(__instance);
-        __instance.StartMeeting(target);
-        MeetingStartWire.SendStartMeeting(__instance, target);
+        // TOHK パリティのワイヤ方式 (ホスト先行入室+RPC遅延直送) は BUG-20260723-01 のキック疑いにより
+        // 既定無効 — enable_meeting_wire.txt を置いたときだけ通る (詳細は Modules/MeetingStartWire.cs)。
+        // 既定は vanilla 続行 (AssignSelf/OpenMeetingRoom/RpcStartMeeting を vanilla が実行する従来経路)
+        if (MeetingStartWire.WireEnabled)
+        {
+            MeetingRoomManager.Instance.AssignSelf(__instance, target);
+            HudManager.Instance.OpenMeetingRoom(__instance);
+            __instance.StartMeeting(target);
+            MeetingStartWire.SendStartMeeting(__instance, target);
 
-        return false;
+            return false;
+        }
+
+        return true;
 
         void Notify(string str) => __instance.Notify(ColorString(Color.yellow, GetString("CheckReportFail") + GetString(str)), 15f);
     }
