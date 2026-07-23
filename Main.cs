@@ -275,6 +275,7 @@ public class Main : BasePlugin
     public static ConfigEntry<bool> GcUafBootProbe { get; private set; }
     public static ConfigEntry<bool> LoadingVideoEnabled { get; private set; }
     public static ConfigEntry<string> LoadingVideoFile { get; private set; }
+    public static ConfigEntry<bool> MenuFireEnabled { get; private set; }
 
     // Preset Name Options
     public static ConfigEntry<string> Preset1 { get; private set; }
@@ -502,6 +503,7 @@ public class Main : BasePlugin
         GcUafBootProbe = Config.Bind("Debug", "GcUafBootProbe", false, "Run a one-time boot-time probe (GcUafProbe) that deterministically tests whether the incremental GC collects a freshly-written interop string field before the field is read back (see docs/coreclr-av-chat-uaf-resume.md §1e). Logs GCUAF-PROBE: VULNERABLE or SAFE. Default off; only meant for diagnosing the coreclr AV bug.");
         LoadingVideoEnabled = Config.Bind("Client Options", "LoadingVideoEnabled", true, "Play a short loading-screen video (host-local, no network traffic) over the fade-to-black during scene transitions (game start / next game). Falls back silently to no video if no file is available.");
         LoadingVideoFile = Config.Bind("Client Options", "LoadingVideoFile", "", "Optional file name (relative to BepInEx/plugins/EndKnot/Media/) or absolute path of a custom loading-screen video (.mp4) to use instead of the bundled default.");
+        MenuFireEnabled = Config.Bind("Client Options", "MenuFireEnabled", true, "Show the animated fire effect on the main menu background (host-local, no network traffic).");
 
         AddComponent<ClientControlGUI>();
         Log.LogInfo("ClientControlGUI registered");

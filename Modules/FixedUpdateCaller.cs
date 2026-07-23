@@ -152,6 +152,10 @@ public static class FixedUpdateCaller
             try { EndKnot.Modules.Media.LoadingScreenVideo.Tick(); }
             catch (Exception e) { Utils.ThrowException(e); }
 
+            // メニュー背景の火エフェクト (ホストローカル描画のみ)。メニュー以外では即 return する。
+            try { EndKnot.Patches.CalamityMenu.CalamityFire.Tick(); }
+            catch (Exception e) { Utils.ThrowException(e); }
+
             if (!PlayerControl.LocalPlayer) return;
 
             if (amongUsClient.IsGameStarted)
