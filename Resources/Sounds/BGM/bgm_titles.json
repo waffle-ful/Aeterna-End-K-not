@@ -8,7 +8,9 @@
     { "file": "lobby", "weight": 1, "title": "0の部屋", "author": "自称芸術家みーさん" },
     { "file": "lobby_alt", "weight": 1, "title": "時計仕掛けの歪なワルツ ", "author": "こおろぎ" }
   ],
-  "intask": [],
+  "intask": [
+    { "file": "climax", "weight": 1, "title": "04. The Filthy Mind (ft. SixteenInMono)", "author": "DM Dokuro(ft. SixteenInMono)" },
+  ],
   "climax": [],
   "meeting": [],
   "result": [ { "file": "result", "weight": 1, "title": "The long spell of falling down,white", "author": "蒲鉾さちこ" } ]

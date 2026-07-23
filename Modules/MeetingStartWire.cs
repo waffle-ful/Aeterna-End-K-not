@@ -15,6 +15,31 @@ namespace EndKnot.Modules;
 // Rollback bit: create EndKnot_DATA/disable_meeting_direct_window.txt (会議毎に素読み・再ビルド不要)
 public static class MeetingStartWire
 {
+    // 2026-07-23: ワイヤ方式の初実戦2ゲームで、mod起点会議のクローズ瞬間に公式鯖 Hacking キックが2連発
+    // (BUG-20260723-01)。機序は未確定だが唯一の一貫相関のため、既定を従来の vanilla RpcStartMeeting 経路へ
+    // 戻し、本ワイヤ方式は EndKnot_DATA/enable_meeting_wire.txt を置いたときだけ有効 (A/B 用・再起動不要)。
+    // 有効化すると会議取り残し (BUG-20260721-09) の修復が戻る代わりにキック疑いを再導入する。
+    private static bool _wireEnabled;
+    private static float _wireCheckedAt = float.MinValue;
+
+    public static bool WireEnabled
+    {
+        get
+        {
+            if (Time.realtimeSinceStartup - _wireCheckedAt > 30f)
+            {
+                _wireCheckedAt = Time.realtimeSinceStartup;
+                bool exists;
+                try { exists = System.IO.File.Exists($"{Main.DataPath}/EndKnot_DATA/enable_meeting_wire.txt"); }
+                catch { exists = false; }
+                if (exists != _wireEnabled) Logger.Warn($"Meeting start wire {(exists ? "ENABLED (enable_meeting_wire.txt present) — host enters meeting first, RPC wired after drain" : "disabled — vanilla RpcStartMeeting flow")}", "MeetingStartWire");
+                _wireEnabled = exists;
+            }
+
+            return _wireEnabled;
+        }
+    }
+
     /// <summary>ホスト側の会議入り (AssignSelf/OpenMeetingRoom/StartMeeting) を済ませた直後に呼ぶ。</summary>
     public static void SendStartMeeting(PlayerControl reporter, NetworkedPlayerInfo target)
     {
