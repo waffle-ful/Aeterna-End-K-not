@@ -1391,7 +1391,7 @@ internal static class MeetingHudOnDestroyPatch
         ReportDeadBodyPatch.MeetingStarted = false;
         CheckForEndVotingPatch.ShouldSkip = false;
 
-        // 会議中 write-barrier 解放 (保留された Data はバニラの dirty 自動送信でこの直後にフラッシュされる)
+        // 会議中 write-barrier 解放 (会議中の自動 Data は TOHK 式に破棄済み — ここでのフラッシュは無い)
         NetworkedPlayerInfoSerializePatch.OnMeetingEnd();
 
         if (!GameStates.InGame) return;
@@ -1632,19 +1632,49 @@ static class MeetingHud_Start
 internal static class MeetingHudRpcClosePatch
 {
     public static bool AllowClose;
-    
+
+    // 2026-07-23 (BUG-20260723-01): 会議クローズと同一秒の公式鯖 Hacking キックの最有力機序 =
+    // この EHR 式カスタム close パケット (CloseMeeting RPC への EjectionText ペイロード付加 +
+    // 追放者への SetName 偽装同梱)。RpcClose 無パッチの TOHK/TOHP は同時間帯の公式鯖で無事、
+    // 上流 EHR には同症状の複数報告あり。既定を vanilla パリティ (素通し) に変更し、
+    // 旧 EHR 式は EndKnot_DATA/enable_ehr_close.txt を置いたときだけ通る (A/B 用・再起動不要)。
+    // vanilla close 時の劣化 = 非モッドクライアントの追放画面が素の文言になる
+    // (styled 文は従来どおり追放画面明けの 13 秒 Notify で全員に出る)。
+    private static bool _ehrClose;
+    private static float _ehrCloseCheckedAt = float.MinValue;
+
+    private static bool EhrCloseEnabled
+    {
+        get
+        {
+            if (Time.realtimeSinceStartup - _ehrCloseCheckedAt > 30f)
+            {
+                _ehrCloseCheckedAt = Time.realtimeSinceStartup;
+                bool exists;
+                try { exists = System.IO.File.Exists($"{Main.DataPath}/EndKnot_DATA/enable_ehr_close.txt"); }
+                catch { exists = false; }
+                if (exists != _ehrClose) Logger.Warn($"EHR-style meeting close {(exists ? "ENABLED (enable_ehr_close.txt present) — EjectionText payload + SetName spoof in close packet" : "disabled — vanilla-parity RpcClose (TOHK parity)")}", "MeetingHudRpcClosePatch");
+                _ehrClose = exists;
+            }
+
+            return _ehrClose;
+        }
+    }
+
     public static bool Prefix(MeetingHud __instance)
     {
         Logger.Info("MeetingHud.RpcClose is being called", "MeetingHudRpcClosePatch");
-        
-        if (!AllowClose) 
+
+        if (!AllowClose)
         {
             Logger.Fatal("MeetingHud.RpcClose called when AllowClose is false!", "MeetingHudRpcClosePatch");
             EAC.WarnHost(4);
             return false;
         }
-        
+
         AllowClose = false;
+
+        if (!EhrCloseEnabled) return true;
 
         if (Options.CurrentGameMode is CustomGameMode.Standard or CustomGameMode.TheMindGame)
         {

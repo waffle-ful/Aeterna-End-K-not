@@ -2231,11 +2231,15 @@ internal static class ExtendedPlayerControl
             ReportDeadBodyPatch.AfterReportTasks(player, target);
             MeetingRoomManager.Instance.AssignSelf(player, target);
             HudManager.Instance.OpenMeetingRoom(player);
-            // TOHK パリティ (2026-07-22): RpcStartMeeting はグローバルレートゲート FIFO の最後尾に載り
-            // 会議直前バーストの後ろで数秒遅れる。ホストを先に会議へ入れ、RPC は MeetingStartWire が
-            // ドレイン後に直送する (詳細は Modules/MeetingStartWire.cs)
-            player.StartMeeting(target);
-            MeetingStartWire.SendStartMeeting(player, target);
+            // ワイヤ方式 (ホスト先行入室+RPC遅延直送) は BUG-20260723-01 のキック疑いにより既定無効 —
+            // enable_meeting_wire.txt を置いたときだけ通る (詳細は Modules/MeetingStartWire.cs)
+            if (MeetingStartWire.WireEnabled)
+            {
+                player.StartMeeting(target);
+                MeetingStartWire.SendStartMeeting(player, target);
+            }
+            else
+                player.RpcStartMeeting(target);
         }
 
         public bool UsesPetInsteadOfKill()
