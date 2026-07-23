@@ -59,6 +59,7 @@ public static class CalamityMenuPatch
         SafeStep("FadeIn",      () => CalamityFadeIn.Build(CalamityMenuState.Root.transform));
         SafeStep("Suppressor",  () => VanillaSuppressor.Apply(__instance));
         SafeStep("Background",  () => CalamityBackground.Build(MenuRoot.GetLayer("BackgroundLayer")));
+        SafeStep("Fire",        () => CalamityFire.Build(MenuRoot.GetLayer("BackgroundLayer")));
         SafeStep("Particles",   () => CalamityParticles.Init(MenuRoot.GetLayer("ParticleLayer")));
         SafeStep("Logo",        () => CalamityLogo.Build(MenuRoot.GetLayer("LogoLayer")));
         SafeStep("Buttons",     () => CalamityButtons.Build(__instance, MenuRoot.GetLayer("ButtonLayer")));
