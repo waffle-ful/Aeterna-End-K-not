@@ -207,6 +207,11 @@ public static class YouTubeChatPoster
         if (YouTubePostOptions.RotationEnabled?.GetBool() == true)
             candidates.Add(BuildRotationTextMessage);
 
+        // GitHub 宣伝リンク。ローテの1候補として足すだけなので投稿間隔(=総送出数)は変わらず、
+        // 既存メッセージと枠を分け合うぶんそれぞれの出現頻度が下がる。
+        if (YouTubePostOptions.PromoEnabled?.GetBool() == true)
+            candidates.Add(BuildPromoMessage);
+
         if (candidates.Count == 0) return null;
 
         // 先に読んでからインクリメント（初回に candidates[0] を飛ばさない）。
@@ -245,6 +250,12 @@ public static class YouTubeChatPoster
         string line = lines[messageLineCursor % lines.Length];
         messageLineCursor++;
         return line;
+    }
+
+    // GitHub リポジトリの宣伝。URL は lang キーに含める (ローカライズ可能・DLL 埋込)。
+    private static string BuildPromoMessage()
+    {
+        return Translator.GetString("YouTubePost.Promo");
     }
 
     // 戻り値: 実際に投稿へ送り出せたか (連投下限や in-flight で捨てた場合は false)。
