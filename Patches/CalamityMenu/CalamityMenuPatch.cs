@@ -61,6 +61,7 @@ public static class CalamityMenuPatch
         SafeStep("Background",  () => CalamityBackground.Build(MenuRoot.GetLayer("BackgroundLayer")));
         SafeStep("Fire",        () => CalamityFire.Build(MenuRoot.GetLayer("BackgroundLayer")));
         SafeStep("Particles",   () => CalamityParticles.Init(MenuRoot.GetLayer("ParticleLayer")));
+        SafeStep("Sky",         () => CalamitySky.Init(MenuRoot.GetLayer("ParticleLayer")));
         SafeStep("Logo",        () => CalamityLogo.Build(MenuRoot.GetLayer("LogoLayer")));
         SafeStep("Buttons",     () => CalamityButtons.Build(__instance, MenuRoot.GetLayer("ButtonLayer")));
         SafeStep("FeatureBridge", () => EndKnotFeatureBridge.Init(__instance, MenuRoot.GetLayer("OverlayLayer")));
@@ -101,6 +102,7 @@ public static class CalamityMenuPatch
     {
         if (!CalamityMenuState.Active) return;
         CalamityParticles.UpdateAll(Time.deltaTime);
+        CalamitySky.UpdateAll(Time.deltaTime);
         EndKnotFeatureBridge.Tick();
         CalamityVisibility.Tick();
         CalamityFadeIn.Tick();

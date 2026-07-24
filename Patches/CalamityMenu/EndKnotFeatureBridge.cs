@@ -13,11 +13,10 @@ namespace EndKnot.Patches.CalamityMenu;
 /// </summary>
 public static class EndKnotFeatureBridge
 {
-    // Social URLs — fill these in when the official EndKnot destinations are decided.
-    // Empty string = button is no-op (still visible as a placeholder).
-    private const string DiscordUrl = "";
-    private const string GitHubUrl  = "";
-    private const string WebsiteUrl = "";
+    // Social destinations, shown as official-brand logo buttons along the bottom.
+    private const string DiscordUrl = "https://discord.gg/s5J8c23Dms";
+    private const string GitHubUrl  = "https://github.com/waffle-ful/Aeterna-End-K-not";
+    private const string YouTubeUrl = "https://www.youtube.com/@wafflewafflewafflewafflewaffle";
 
     // BGM state (mirrors MainMenuManagerPatch private fields)
     private static bool _bgmInitPending;
@@ -56,13 +55,9 @@ public static class EndKnotFeatureBridge
         CreateSpecialMessage(overlayLayer);
 
         // VanillaSuppressor hides VersionShower in Calamity mode, so social buttons reclaim
-        // their bottom-of-screen slot without overlap.
-        CreateTextButton(overlayLayer, "Discord", new Vector3(-1.5f, -2.1f, 0f),
-            new Color(0.55f, 0.63f, 0.95f, 1f), new Color(0.75f, 0.80f, 1.00f, 1f), 1.8f, () => OpenUrlIfSet(DiscordUrl));
-        CreateTextButton(overlayLayer, "GitHub", new Vector3(0.0f, -2.1f, 0f),
-            new Color(0.60f, 0.60f, 0.60f, 1f), new Color(0.85f, 0.85f, 0.85f, 1f), 1.8f, () => OpenUrlIfSet(GitHubUrl));
-        CreateTextButton(overlayLayer, "Website", new Vector3(1.5f, -2.1f, 0f),
-            new Color(0.80f, 0.40f, 0.30f, 1f), new Color(0.95f, 0.60f, 0.45f, 1f), 1.8f, () => OpenUrlIfSet(WebsiteUrl));
+        // their bottom-of-screen slot. EHR/TOHForE-style brand-colored buttons, cloned from the
+        // vanilla quit button (the vanilla Start_Postfix skips its own Template in Calamity mode).
+        CreateSocialRow(mm.quitButton, overlayLayer, -2.1f);
 
         LateTask.New(() => ModUpdater.ShowAvailableUpdate(), 0.5f, "ShowUpdatePopupCalamity");
     }
@@ -152,6 +147,74 @@ public static class EndKnotFeatureBridge
         int month = (h + k - 7 * l + 114) / 31;
         int day   = ((h + k - 7 * l + 114) % 31) + 1;
         return new DateTime(year, month, day);
+    }
+
+    // ── Social buttons (EHR/TOHForE-style brand-colored vanilla buttons) ─
+
+    private static void CreateSocialRow(PassiveButton template, Transform parent, float y)
+    {
+        if (template == null) return;
+
+        // Cloned vanilla buttons tinted to each service's brand color — the familiar EHR /
+        // TOHForE main-menu look. Fixed size + even center-to-center spacing = a tidy row.
+        // Tints are boosted above the raw brand values to counter the button sprite's shading.
+        var size = new Vector2(1.6f, 0.5f);
+        const float step = 1.9f;
+
+        CreateVanillaButton(template, parent, "DiscordButton", new Vector3(-step, y, 0f),
+            new Color32(110, 126, 255, 255), new Color32(160, 172, 255, 255), size, "Discord", () => OpenUrlIfSet(DiscordUrl));
+        CreateVanillaButton(template, parent, "GitHubButton", new Vector3(0f, y, 0f),
+            new Color32(188, 188, 188, 255), new Color32(224, 224, 224, 255), size, "GitHub", () => OpenUrlIfSet(GitHubUrl));
+        CreateVanillaButton(template, parent, "YouTubeButton", new Vector3(step, y, 0f),
+            new Color32(236, 58, 52, 255), new Color32(255, 90, 82, 255), size, "YouTube", () => OpenUrlIfSet(YouTubeUrl));
+    }
+
+    /// <summary>
+    /// Clones a vanilla PassiveButton (e.g. quitButton) into the Calamity overlay, tints its
+    /// sliced sprite to a brand color and relabels it — the EHR / TOHForE social-button style.
+    /// </summary>
+    private static void CreateVanillaButton(PassiveButton template, Transform parent, string name, Vector3 pos,
+        Color32 normalColor, Color32 hoverColor, Vector2 size, string label, Action onClick)
+    {
+        PassiveButton button = UnityEngine.Object.Instantiate(template, parent);
+        // Cloned TMP inherits the template's "Quit" mesh; hide until reconfigured to avoid a 1-frame flash.
+        button.gameObject.SetActive(false);
+        button.name = name;
+        UnityEngine.Object.Destroy(button.GetComponent<AspectPosition>());
+        button.transform.localPosition = pos;
+
+        button.OnClick = new();
+        button.OnClick.AddListener((UnityAction)onClick);
+
+        var buttonText = button.transform.Find("FontPlacer/Text_TMP").GetComponent<TMP_Text>();
+        buttonText.DestroyTranslator();
+        buttonText.fontSize = buttonText.fontSizeMax = buttonText.fontSizeMin = 2.9f;
+        buttonText.enableWordWrapping = false;
+        buttonText.text = label;
+
+        var normalSprite = button.inactiveSprites.GetComponent<SpriteRenderer>();
+        var hoverSprite  = button.activeSprites.GetComponent<SpriteRenderer>();
+        normalSprite.color = normalColor;
+        hoverSprite.color  = hoverColor;
+        normalSprite.size  = hoverSprite.size = size;
+        normalSprite.sortingOrder = hoverSprite.sortingOrder = 10;
+
+        // Re-center the label inside the resized button (drop the vanilla AspectPosition offsets).
+        Transform container = buttonText.transform.parent;
+        UnityEngine.Object.Destroy(container.GetComponent<AspectPosition>());
+        UnityEngine.Object.Destroy(buttonText.GetComponent<AspectPosition>());
+        Vector3 cp = container.localPosition;            container.localPosition = new Vector3(0f, cp.y, cp.z);
+        Vector3 tp = buttonText.transform.localPosition; buttonText.transform.localPosition = new Vector3(0f, tp.y, tp.z);
+        buttonText.horizontalAlignment = HorizontalAlignmentOptions.Center;
+        var tmpRenderer = buttonText.GetComponent<MeshRenderer>();
+        if (tmpRenderer != null) tmpRenderer.sortingOrder = 12;
+
+        var col    = button.GetComponent<BoxCollider2D>();
+        col.size   = size;
+        col.offset = Vector2.zero;
+
+        button.gameObject.SetActive(true);
+        buttonText.ForceMeshUpdate();
     }
 
     // ── Generic TMP text button ─────────────────────────────────────────

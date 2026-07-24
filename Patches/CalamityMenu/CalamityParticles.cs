@@ -17,13 +17,13 @@ public static class CalamityParticles
         public float breathSpeed;
         public float phase;
         public Color baseColor;
+        public bool ember;   // true = 火の粉 (crackle flicker + 横揺れ)、false = 灰
     }
 
     private static readonly List<Particle> Active = [];
     private static Transform _particleLayer;
     private static Sprite _fireflySprite;
     private static Sprite _ashSprite;
-    private static Sprite _glowSprite;
     private static Camera _cam;
 
     // bounds derived from camera; refreshed on Init
@@ -35,16 +35,20 @@ public static class CalamityParticles
         _cam = Camera.main;
         RefreshBounds();
 
-        _fireflySprite = MakeCircleSprite(8,  new Color(1.0f, 0.95f, 0.5f, 1f));
+        // 火の粉は「白熱コア + 長く滲むグロー」= 点光源に見えるスプライトにする。
+        // 均一な円盤 (MakeCircleSprite) だと塗り潰しの玉に見えてしまうため置き換え。
+        // 白基調にして色は SpriteRenderer.color 側で個体ごとに暖色へ振る。
+        _fireflySprite = MakeGlowSprite(16);
         _ashSprite     = MakeCircleSprite(4,  new Color(0.85f, 0.85f, 0.85f, 1f));
-        _glowSprite    = MakeCircleSprite(16, new Color(0.7f, 0.65f, 1.0f, 1f));
 
         Active.Clear();
 
-        // Pre-spawn all particles at random positions so the screen isn't empty at start
+        // Pre-spawn all particles at random positions so the screen isn't empty at start.
+        // The purple glow orbs were ambient mood for the old dark abstract background; against
+        // the photoreal galaxy + city-night image they read as random floating bubbles, so
+        // they're no longer spawned. Fireflies (embers) and ash blend with the city/fire.
         for (int i = 0; i < 70; i++) SpawnFirefly(randomY: true);
         for (int i = 0; i < 35; i++) SpawnAsh(randomY: true);
-        for (int i = 0; i < 12; i++) SpawnGlow(randomY: true);
     }
 
     public static void UpdateAll(float dt)
@@ -73,11 +77,25 @@ public static class CalamityParticles
             if (p.pos.x > _right + 0.5f) p.pos.x = _left  - 0.5f;
             if (p.pos.x < _left  - 0.5f) p.pos.x = _right + 0.5f;
 
-            // alpha breathing
-            float t = (Mathf.Sin(Time.time * p.breathSpeed + p.phase) + 1f) * 0.5f;
             float lifeRatio = p.life / p.maxLife;
             float fade = lifeRatio < 0.15f ? lifeRatio / 0.15f : 1f; // fade out near end
-            float alpha = Mathf.Lerp(0.35f, 1.0f, t) * fade;
+
+            float alpha;
+            if (p.ember)
+            {
+                // ゆっくりした息づかい × 速いチラつきを重ねて「燃えさし」のクラックル明滅にする。
+                float slow = (Mathf.Sin(Time.time * p.breathSpeed + p.phase) + 1f) * 0.5f;
+                float fast = (Mathf.Sin(Time.time * p.breathSpeed * 4.7f + p.phase * 2.1f) + 1f) * 0.5f;
+                float flick = 0.6f * slow + 0.4f * fast;
+                alpha = Mathf.Lerp(0.12f, 1.0f, flick) * fade;
+                // まっすぐ登らず、ゆらゆら横に編むように揺らす。
+                p.pos.x += Mathf.Sin(Time.time * 0.9f + p.phase) * 0.15f * dt;
+            }
+            else
+            {
+                float t = (Mathf.Sin(Time.time * p.breathSpeed + p.phase) + 1f) * 0.5f;
+                alpha = Mathf.Lerp(0.35f, 1.0f, t) * fade;
+            }
             p.sr.color = new Color(p.baseColor.r, p.baseColor.g, p.baseColor.b, alpha);
 
             p.go.transform.localPosition = p.pos;
@@ -96,10 +114,14 @@ public static class CalamityParticles
         float x = Random.Range(_left, _right);
         float y = randomY ? Random.Range(_bottom, _top) : _bottom - Random.Range(0.2f, 1f);
         float life = Random.Range(12f, 22f);
+        // 暖色を個体ごとに散らす: 白熱の黄 ⇔ 深い橙。全部同じ色だと均質で単調に見える。
+        Color warm = Color.Lerp(new Color(1f, 0.92f, 0.6f), new Color(1f, 0.5f, 0.18f), Random.value);
+        // 大小を混ぜる: 細かな火の粉 (多) と少し大きめの燃えさし (少)。
+        float scale = Random.Range(0.02f, 0.055f);
         Spawn(_fireflySprite, new Vector3(x, y, 0f),
-              new Vector3(Random.Range(-0.15f, 0.15f), Random.Range(0.08f, 0.22f), 0f),
-              life, Random.Range(0.8f, 1.6f), Random.Range(0f, 6.28f),
-              new Color(1.0f, 0.95f, 0.5f, 1f), scale: 0.04f);
+              new Vector3(Random.Range(-0.15f, 0.15f), Random.Range(0.1f, 0.28f), 0f),
+              life, Random.Range(1.4f, 2.6f), Random.Range(0f, 6.28f),
+              warm, scale: scale, ember: true);
     }
 
     private static void SpawnAsh(bool randomY = false)
@@ -113,20 +135,8 @@ public static class CalamityParticles
               new Color(0.85f, 0.85f, 0.85f, 1f), scale: 0.025f);
     }
 
-    private static void SpawnGlow(bool randomY = false)
-    {
-        float x = Random.Range(_left, _right);
-        float y = randomY ? Random.Range(_bottom, _top) : (Random.value > 0.5f ? _bottom - 1f : _top + 1f);
-        float life = Random.Range(20f, 40f);
-        float vy = Random.value > 0.5f ? Random.Range(0.03f, 0.07f) : Random.Range(-0.07f, -0.03f);
-        Spawn(_glowSprite, new Vector3(x, y, 0f),
-              new Vector3(Random.Range(-0.02f, 0.02f), vy, 0f),
-              life, Random.Range(0.3f, 0.6f), Random.Range(0f, 6.28f),
-              new Color(0.7f, 0.65f, 1.0f, 1f), scale: 0.12f);
-    }
-
     private static void Spawn(Sprite sprite, Vector3 pos, Vector3 vel, float life,
-                              float breathSpeed, float phase, Color color, float scale)
+                              float breathSpeed, float phase, Color color, float scale, bool ember = false)
     {
         var go = new GameObject("Particle");
         go.transform.SetParent(_particleLayer);
@@ -142,7 +152,7 @@ public static class CalamityParticles
         {
             go = go, sr = sr, pos = pos, vel = vel,
             life = life, maxLife = life,
-            breathSpeed = breathSpeed, phase = phase, baseColor = color
+            breathSpeed = breathSpeed, phase = phase, baseColor = color, ember = ember
         });
     }
 
@@ -192,6 +202,28 @@ public static class CalamityParticles
             }
         }
 
+        tex.SetPixels(pixels);
+        tex.Apply();
+        return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), size);
+    }
+
+    // 火の粉用グロー: 中心に締まった白熱コア、そこから縁へ滑らかに滲んで透明へ。
+    // 高い指数で中心に光を集中させることで「塗り潰しの玉」でなく「点光源」に見せる。
+    // white 基調 (色は SpriteRenderer.color で暖色に着色)。
+    private static Sprite MakeGlowSprite(int radius)
+    {
+        int size = radius * 2;
+        var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+        float c = (size - 1) * 0.5f;
+        var pixels = new Color[size * size];
+        for (int y = 0; y < size; y++)
+        for (int x = 0; x < size; x++)
+        {
+            float dx = x - c, dy = y - c;
+            float d = Mathf.Clamp01(Mathf.Sqrt(dx * dx + dy * dy) / radius); // 0(中心)→1(縁)
+            float a = Mathf.Pow(1f - d, 2.4f); // コアを鋭く・裾を長く
+            pixels[y * size + x] = new Color(1f, 1f, 1f, a);
+        }
         tex.SetPixels(pixels);
         tex.Apply();
         return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), size);
