@@ -1,6 +1,6 @@
 namespace EndKnot.Modules.YouTubeChat;
 
-// オプション一式。SystemSettings タブ配下、ID 範囲 44740〜44745。
+// オプション一式。SystemSettings タブ配下、ID 範囲 44740〜44746。
 // Enabled は default OFF。YouTubeChatOptions/AudienceOptions 隣接に並べる想定。
 // OAuth 認証情報 (ClientId/ClientSecret/RefreshToken) は Option ではなく Main.cs の
 // Config.Bind (cfg ファイル直接編集/外部ヘルパー) 経由。ここには出さない。
@@ -13,6 +13,7 @@ public static class YouTubePostOptions
     public static OptionItem WelcomeEnabled;
     public static OptionItem CountdownEnabled;
     public static OptionItem RotationEnabled;
+    public static OptionItem PromoEnabled;
     public static OptionItem InterventionAnnounceEnabled;
 
     public static void SetupCustomOption()
@@ -34,6 +35,9 @@ public static class YouTubePostOptions
             .SetParent(Enabled);
 
         InterventionAnnounceEnabled = new BooleanOptionItem(OptionIdBase + 5, "YouTubePostInterventionAnnounceEnabled", true, TabGroup.SystemSettings)
+            .SetParent(Enabled);
+
+        PromoEnabled = new BooleanOptionItem(OptionIdBase + 6, "YouTubePostPromoEnabled", true, TabGroup.SystemSettings)
             .SetParent(Enabled);
     }
 }
