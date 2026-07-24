@@ -1633,15 +1633,21 @@ internal static class MeetingHudRpcClosePatch
 {
     public static bool AllowClose;
 
-    // 2026-07-23 (BUG-20260723-01): 会議クローズと同一秒の公式鯖 Hacking キックの最有力機序 =
-    // この EHR 式カスタム close パケット (CloseMeeting RPC への EjectionText ペイロード付加 +
-    // 追放者への SetName 偽装同梱)。RpcClose 無パッチの TOHK/TOHP は同時間帯の公式鯖で無事、
-    // 上流 EHR には同症状の複数報告あり。既定を vanilla パリティ (素通し) に変更し、
-    // 旧 EHR 式は EndKnot_DATA/enable_ehr_close.txt を置いたときだけ通る (A/B 用・再起動不要)。
-    // vanilla close 時の劣化 = 非モッドクライアントの追放画面が素の文言になる
-    // (styled 文は従来どおり追放画面明けの 13 秒 Notify で全員に出る)。
-    private static bool _ehrClose;
+    // 2026-07-23〜25 (BUG-20260723-01): 会議クローズと同一秒の公式鯖 Hacking キックの機序を実機 1-bit で確定。
+    //   犯人 = vanilla CloseMeeting RPC への trailing EjectionText ペイロード付加 (これ単独でキック)。
+    //   無罪 = 追放者への SetName 偽装 (色付き長名)。trailing だけ除いた追放クローズ×2 が無キック通過。
+    // ⇒ trailing を送らなければ追放演出 (色付き名前) は公式鯖でも出せる。以下はその形 (実機検証済みのワイヤ)。
+    // 上流 EHR の PR #657/#658 は ServerType 判定で演出ごと無効化する下位互換解 (SetName 偽装も捨てている)。
+    // ⚠️ 上流 #658 の RpcSetName 化は採用しない — 会議中 Data write-barrier に discard され、
+    //    かつ RpcSetName Postfix の名前キャッシュミラーで偽装文が「本名」として残るため。
+    // 切り戻し: EndKnot_DATA/disable_ehr_close.txt を置くと vanilla パリティ (素通し) に戻る (再起動不要)。
+    private static bool _ehrCloseDisabled;
     private static float _ehrCloseCheckedAt = float.MinValue;
+
+    // SetName 偽装に載せられる EjectionText の上限 (UTF-8 バイト)。SetName の公式鯖上限は
+    // タグ依存で ~800B 実測。長い役職名 + アドオン + 日本語で後日超えるのを避けるため安全側に置く。
+    // 超過時は偽装を丸ごとスキップ (そのラウンドだけ vanilla 追放画面に劣化) — 途中クランプはタグを壊す。
+    private const int MaxEjectionNameBytes = 500;
 
     private static bool EhrCloseEnabled
     {
@@ -1651,32 +1657,14 @@ internal static class MeetingHudRpcClosePatch
             {
                 _ehrCloseCheckedAt = Time.realtimeSinceStartup;
                 bool exists;
-                try { exists = System.IO.File.Exists($"{Main.DataPath}/EndKnot_DATA/enable_ehr_close.txt"); }
+                try { exists = System.IO.File.Exists($"{Main.DataPath}/EndKnot_DATA/disable_ehr_close.txt"); }
                 catch { exists = false; }
-                if (exists != _ehrClose) Logger.Warn($"EHR-style meeting close {(exists ? "ENABLED (enable_ehr_close.txt present) — EjectionText payload + SetName spoof in close packet" : "disabled — vanilla-parity RpcClose (TOHK parity)")}", "MeetingHudRpcClosePatch");
-                _ehrClose = exists;
+                if (exists != _ehrCloseDisabled) Logger.Warn($"EHR-style meeting close {(exists ? "DISABLED (disable_ehr_close.txt present) — vanilla-parity RpcClose (TOHK parity)" : "enabled — SetName spoof only, no CloseMeeting trailing payload")}", "MeetingHudRpcClosePatch");
+                _ehrCloseDisabled = exists;
             }
 
-            return _ehrClose;
+            return !_ehrCloseDisabled;
         }
-    }
-
-    // 会議クローズ Hacking キックの機序 1-bit 分離用テストトグル (EndKnot_DATA/ に置く・実機 A/B 用)。
-    // EHR 式 close (enable_ehr_close.txt) 有効時のみ効く。会議クローズは低頻度なのでキャッシュ不要。
-    private static bool TestToggle(string fileName)
-    {
-        try { return System.IO.File.Exists($"{Main.DataPath}/EndKnot_DATA/{fileName}"); }
-        catch { return false; }
-    }
-
-    // 追放者 SetName 偽装の名前を公式鯖で通る形にクランプ (rich-text タグ全除去 + vanilla name 長 10 まで短縮)。
-    // 容疑(A)「色付き長名でキック」を潰すためのテスト用。演出は壊れる (テスト専用)。
-    private static string ClampNameForOfficial(string s)
-    {
-        if (string.IsNullOrEmpty(s)) return s;
-        string plain = System.Text.RegularExpressions.Regex.Replace(s, "<[^>]*>", string.Empty).Trim();
-        if (plain.Length > 10) plain = plain[..10];
-        return plain;
     }
 
     public static bool Prefix(MeetingHud __instance)
@@ -1692,19 +1680,17 @@ internal static class MeetingHudRpcClosePatch
 
         AllowClose = false;
 
-        if (!EhrCloseEnabled) return true;
+        // 既定が EHR 式になったので、どちらの経路を通ったかは毎クローズ記録する
+        // (差分検知の Warn だけだと既定側が無記録になり、実機検証で読むものが無くなる)。
+        bool ehrClose = EhrCloseEnabled;
+        Logger.Info($"Meeting close path: {(ehrClose ? "EHR (SetName spoof, no trailing payload)" : "vanilla passthrough (disable_ehr_close.txt)")}", "MeetingHudRpcClosePatch");
+
+        if (!ehrClose) return true;
 
         if (Options.CurrentGameMode is CustomGameMode.Standard or CustomGameMode.TheMindGame)
         {
             if (AmongUsClient.Instance.AmClient)
                 __instance.Close();
-
-            // V1 = 追放者 SetName の名前を公式上限にクランプ (容疑(A)潰し)。
-            // V2 = vanilla CloseMeeting への trailing EjectionText を除去 (容疑(B)潰し)。
-            bool clampName = TestToggle("ehr_close_clamp_name.txt");
-            bool dropMeetingPayload = TestToggle("ehr_close_no_meeting_payload.txt");
-            if (clampName || dropMeetingPayload)
-                Logger.Warn($"EHR close TEST variant active: clampName={clampName} dropMeetingPayload={dropMeetingPayload}", "MeetingHudRpcClosePatch");
 
             MessageWriter writer = MessageWriter.Get(SendOption.Reliable);
 
@@ -1718,20 +1704,29 @@ internal static class MeetingHudRpcClosePatch
 
                 if (player != null)
                 {
-                    writer.StartMessage(2);
-                    writer.WritePacked(player.NetId);
-                    writer.Write((byte)RpcCalls.SetName);
-                    writer.Write(info.NetId);
-                    writer.Write(clampName ? ClampNameForOfficial(CheckForEndVotingPatch.EjectionText) : CheckForEndVotingPatch.EjectionText);
-                    writer.EndMessage();
+                    string ejectionText = CheckForEndVotingPatch.EjectionText;
+                    int bytes = string.IsNullOrEmpty(ejectionText) ? 0 : System.Text.Encoding.UTF8.GetByteCount(ejectionText);
+                    Logger.Info($"Ejection name spoof: {bytes}B (limit {MaxEjectionNameBytes}B)", "MeetingHudRpcClosePatch");
+
+                    if (bytes > MaxEjectionNameBytes)
+                        Logger.Warn($"Ejection name spoof SKIPPED — EjectionText is {bytes}B (> {MaxEjectionNameBytes}B); falling back to the vanilla ejection screen for this round", "MeetingHudRpcClosePatch");
+                    else
+                    {
+                        writer.StartMessage(2);
+                        writer.WritePacked(player.NetId);
+                        writer.Write((byte)RpcCalls.SetName);
+                        writer.Write(info.NetId);
+                        writer.Write(ejectionText);
+                        writer.EndMessage();
+                    }
                 }
             }
 
+            // ⚠️ ここに EjectionText を trailing で付けてはならない (公式鯖 Hacking 即キックの真因・実機確定)。
+            // vanilla と byte 等価な CloseMeeting を送る。
             writer.StartMessage(2);
             writer.WritePacked(__instance.NetId);
             writer.Write((byte)RpcCalls.CloseMeeting);
-            if (!dropMeetingPayload)
-                writer.Write(CheckForEndVotingPatch.EjectionText);
             writer.EndMessage();
 
             writer.EndMessage();
