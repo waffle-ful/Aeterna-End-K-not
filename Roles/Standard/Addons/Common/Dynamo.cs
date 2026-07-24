@@ -62,6 +62,11 @@ public class Dynamo : IAddon
         bool moving = !FastVector2.DistanceWithinRange(pos, LastPos[player.PlayerId], 0.1f) || player.MyPhysics.Animations.IsPlayingRunAnimation();
         LastPos[player.PlayerId] = pos;
 
+        // ForceFielder のフィールド展開中は減速が意図的トレードオフ。Dynamo が毎フレーム AllPlayerSpeed を
+        // 上書きすると ForceFielder の一発減速が塗り潰されて機能しない (BUG-20260723-06)。フィールド中は
+        // 速度制御を ForceFielder に譲る (LastPos は上で更新済み=フィールド解除後の初回判定が正しくなる)。
+        if (Main.PlayerStates[player.PlayerId].Role is ForceFielder { FieldActive: true }) return;
+
         float modulator = Modulator.GetFloat();
         float increaseBy = Mathf.Clamp(modulator / 20 * 1.5f, 0.05f, 0.6f);
 

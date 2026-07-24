@@ -30,7 +30,10 @@ public class ForceFielder : RoleBase
     };
 
     private byte ForceFielderId;
-    private bool FieldActive;
+
+    // Dynamo など毎フレーム AllPlayerSpeed を書き換えるアドオンに「フィールド展開中は速度制御を譲る」
+    // 判定をさせるため internal。展開中の減速 (意図的トレードオフ) が毎フレーム上書きで塗り潰されるのを防ぐ。
+    internal bool FieldActive;
     private ForceFieldCNO FieldCNO;
     private float LastToggleTime;
     private float OriginalSpeed;
