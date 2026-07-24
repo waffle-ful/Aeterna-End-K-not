@@ -870,7 +870,7 @@ public static class Utils
         if (!p.Role) return false;
 
         var hasTasks = true;
-        PlayerState state = Main.PlayerStates[p.PlayerId];
+        if (!Main.PlayerStates.TryGetValue(p.PlayerId, out PlayerState state)) return false; // ロビー途中Joinで PlayerStates 未登録の窓 (KeyNotFoundException スパム防止)
         if (p.Disconnected) return false;
         if (p.Role.IsImpostor) hasTasks = false;
 
@@ -4795,7 +4795,9 @@ public static class Utils
         var filename = $"{f}/EndKnot-v{Main.PluginVersion}-LOG";
 
         FileInfo[] files = [new(Path.Combine(Paths.BepInExRootPath, "LogOutput.log")), new(CustomLogger.LOGFilePath)];
-        files.Do(x => x.CopyTo($"{filename}{x.Extension}"));
+        // log.html / LogOutput.log が別ハンドルに握られている瞬間の排他違反 (IOException) を握りつぶす (下の healthLog コピーと同型ガード)
+        try { files.Do(x => x.CopyTo($"{filename}{x.Extension}")); }
+        catch (Exception e) { ThrowException(e); }
 
         // HealthLog(状態/メモリ/kick の heartbeat)も同じセッションフォルダに同梱する。
         // ライブ本体は EndKnot_Logs 直下の固定ファイル(将来の番犬が tail 用)、ここはその時点のスナップショット。
