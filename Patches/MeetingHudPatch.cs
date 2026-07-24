@@ -1661,6 +1661,24 @@ internal static class MeetingHudRpcClosePatch
         }
     }
 
+    // 会議クローズ Hacking キックの機序 1-bit 分離用テストトグル (EndKnot_DATA/ に置く・実機 A/B 用)。
+    // EHR 式 close (enable_ehr_close.txt) 有効時のみ効く。会議クローズは低頻度なのでキャッシュ不要。
+    private static bool TestToggle(string fileName)
+    {
+        try { return System.IO.File.Exists($"{Main.DataPath}/EndKnot_DATA/{fileName}"); }
+        catch { return false; }
+    }
+
+    // 追放者 SetName 偽装の名前を公式鯖で通る形にクランプ (rich-text タグ全除去 + vanilla name 長 10 まで短縮)。
+    // 容疑(A)「色付き長名でキック」を潰すためのテスト用。演出は壊れる (テスト専用)。
+    private static string ClampNameForOfficial(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return s;
+        string plain = System.Text.RegularExpressions.Regex.Replace(s, "<[^>]*>", string.Empty).Trim();
+        if (plain.Length > 10) plain = plain[..10];
+        return plain;
+    }
+
     public static bool Prefix(MeetingHud __instance)
     {
         Logger.Info("MeetingHud.RpcClose is being called", "MeetingHudRpcClosePatch");
@@ -1681,6 +1699,13 @@ internal static class MeetingHudRpcClosePatch
             if (AmongUsClient.Instance.AmClient)
                 __instance.Close();
 
+            // V1 = 追放者 SetName の名前を公式上限にクランプ (容疑(A)潰し)。
+            // V2 = vanilla CloseMeeting への trailing EjectionText を除去 (容疑(B)潰し)。
+            bool clampName = TestToggle("ehr_close_clamp_name.txt");
+            bool dropMeetingPayload = TestToggle("ehr_close_no_meeting_payload.txt");
+            if (clampName || dropMeetingPayload)
+                Logger.Warn($"EHR close TEST variant active: clampName={clampName} dropMeetingPayload={dropMeetingPayload}", "MeetingHudRpcClosePatch");
+
             MessageWriter writer = MessageWriter.Get(SendOption.Reliable);
 
             writer.StartMessage(5);
@@ -1697,7 +1722,7 @@ internal static class MeetingHudRpcClosePatch
                     writer.WritePacked(player.NetId);
                     writer.Write((byte)RpcCalls.SetName);
                     writer.Write(info.NetId);
-                    writer.Write(CheckForEndVotingPatch.EjectionText);
+                    writer.Write(clampName ? ClampNameForOfficial(CheckForEndVotingPatch.EjectionText) : CheckForEndVotingPatch.EjectionText);
                     writer.EndMessage();
                 }
             }
@@ -1705,7 +1730,8 @@ internal static class MeetingHudRpcClosePatch
             writer.StartMessage(2);
             writer.WritePacked(__instance.NetId);
             writer.Write((byte)RpcCalls.CloseMeeting);
-            writer.Write(CheckForEndVotingPatch.EjectionText);
+            if (!dropMeetingPayload)
+                writer.Write(CheckForEndVotingPatch.EjectionText);
             writer.EndMessage();
 
             writer.EndMessage();
