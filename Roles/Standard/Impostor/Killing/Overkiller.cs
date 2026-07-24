@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using EndKnot.Modules;
 using Hazel;
+using UnityEngine;
 
 namespace EndKnot.Roles;
 
@@ -78,14 +79,20 @@ internal class Overkiller : RoleBase
 
                 IEnumerator SpawnFakeDeadBodies()
                 {
-                    for (var i = 0; i < 30; i++)
+                    // 公式鯖 anti-cheat 緩和: 偽死体の数とペースを FakeBodyBurst で絞る (サイズ/分割は無罪・
+                    // 高速 spawn 自体が host を reason=Hacking で落とすため)。kill switch で旧挙動に戻せる。
+                    int count = FakeBodyBurst.BodyCount;
+                    FakeBodyBurst.LogBurst("Overkiller", count);
+
+                    for (var i = 0; i < count; i++)
                     {
                         Vector2 location = new(ops.x + ((float)(rd.Next(0, 201) - 100) / 100), ops.y + ((float)(rd.Next(0, 201) - 100) / 100));
                         location += new Vector2(0, 0.3636f);
 
                         Utils.RpcCreateDeadBody(location, (byte)target.CurrentOutfit.ColorId, target, SendOption.None);
 
-                        if (i % 4 == 0) yield return null;
+                        if (FakeBodyBurst.Gentle) yield return new WaitForSecondsRealtime(FakeBodyBurst.SpacingSeconds);
+                        else if (i % 4 == 0) yield return null;
                     }
 
                     yield return null;

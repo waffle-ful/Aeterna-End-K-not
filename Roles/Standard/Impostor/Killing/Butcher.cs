@@ -1,5 +1,6 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
+using EndKnot.Modules;
 using UnityEngine;
 
 namespace EndKnot.Roles;
@@ -73,14 +74,19 @@ internal class Butcher : RoleBase
 
                 IEnumerator SpawnFakeDeadBodies()
                 {
-                    for (var i = 0; i < 30; i++)
+                    // Overkiller と同じ役職 (上流改名の重複移植)。ペースは元から安全 (0.2s/体) だが、
+                    // 体数だけ FakeBodyBurst で揃える (公式鯖 anti-cheat 緩和・kill switch で旧挙動に戻せる)。
+                    int count = FakeBodyBurst.BodyCount;
+                    FakeBodyBurst.LogBurst("Butcher", count);
+
+                    for (var i = 0; i < count; i++)
                     {
                         Vector2 location = new(ops.x + ((float)(rd.Next(0, 201) - 100) / 100), ops.y + ((float)(rd.Next(0, 201) - 100) / 100));
                         location += new Vector2(0, 0.3636f);
 
                         Utils.RpcCreateDeadBody(location, (byte)target.CurrentOutfit.ColorId, target);
 
-                        yield return new WaitForSecondsRealtime(0.2f);
+                        yield return new WaitForSecondsRealtime(FakeBodyBurst.SpacingSeconds);
                     }
                 }
             }, 0.05f, "Butcher Murder");

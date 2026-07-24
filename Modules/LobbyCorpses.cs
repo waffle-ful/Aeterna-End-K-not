@@ -132,7 +132,9 @@ internal static class LobbyCorpses
         byte colorId = (byte)lp.Data.DefaultOutfit.ColorId;
         int spawned = 0;
 
-        // Overkiller パターン: 4 個ごとに 1 フレーム待って RPC バースト緩和
+        // 公式鯖 anti-cheat 緩和: 偽死体の高速 spawn は host を reason=Hacking で落とすため、
+        // 1 体ずつ間隔を空けて撒く (FakeBodyBurst.Gentle)。体数はホスト設定 (LobbyCorpseCount) を尊重し
+        // レートのみ絞る。kill switch (disable_overkill_body_cap.txt) で旧 4 体/フレームに戻せる。
         for (int i = 0; i < CurrentPositions.Count; i++)
         {
             Utils.RpcCreateDeadBody(
@@ -141,7 +143,8 @@ internal static class LobbyCorpses
                 lp,
                 SendOption.Reliable);
             spawned++;
-            if (i % 4 == 3) yield return null;
+            if (FakeBodyBurst.Gentle) yield return new WaitForSecondsRealtime(FakeBodyBurst.SpacingSeconds);
+            else if (i % 4 == 3) yield return null;
         }
 
         // 復元 Action を同じ rate limiter キューに積む → 5 体 spawn の直後に必ず実行される。
