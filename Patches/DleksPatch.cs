@@ -58,7 +58,10 @@ internal static class AllMapIconsPatch
                 if (Main.NormalOptions.MapId == 3)
                 {
                     Main.NormalOptions.MapId = 0;
-                    __instance.UpdateMapImage(MapNames.Skeld);
+
+                    // This runs 1-4s later, by which time the GameStartManager may be gone
+                    // (scene change) or still be the freeplay flavor with a null MapImage.
+                    if (__instance && __instance.MapImage) __instance.UpdateMapImage(MapNames.Skeld);
 
                     if (!Options.RandomMapsMode.GetBool()) GameOptionsMapPickerPatch.SetDleks = true;
                 }
