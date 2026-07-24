@@ -177,7 +177,9 @@ public class Deathpact : RoleBase
 
     public static bool CheckCancelDeathpact(PlayerControl deathpact)
     {
-        if (Main.PlayerStates[deathpact.PlayerId].Role is not Deathpact { IsEnable: true } dp) return true;
+        // ゲーム終了/ロビー遷移の1tick窓で onTick が破棄前に走ると GameManager.Instance が fake-null 化しうる (NRE 防止)
+        if (deathpact == null || GameManager.Instance == null || GameStates.IsEnded) return true;
+        if (!Main.PlayerStates.TryGetValue(deathpact.PlayerId, out PlayerState ps) || ps.Role is not Deathpact { IsEnable: true } dp) return true;
 
         if (dp.PlayersInDeathpact.Any(a => a.Data.Disconnected || !a.IsAlive()))
         {

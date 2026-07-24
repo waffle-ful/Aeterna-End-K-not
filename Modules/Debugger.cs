@@ -320,7 +320,8 @@ public class CustomLogger
         var append = Builder.ToString();
         if (string.IsNullOrWhiteSpace(append)) return;
         if (dump) append += HtmlFooter;
-        File.AppendAllText(LOGFilePath, append);
+        try { File.AppendAllText(LOGFilePath, append); }
+        catch (IOException) { return; } // log.html が別ハンドルに握られている瞬間の排他違反は握りつぶす (Builder 温存で次回 flush に持ち越し)
         Builder.Clear();
         PrivateInstance = null;
 #if DEBUG
