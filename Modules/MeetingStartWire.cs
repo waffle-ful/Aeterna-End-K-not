@@ -44,6 +44,13 @@ public static class MeetingStartWire
     public static void SendStartMeeting(PlayerControl reporter, NetworkedPlayerInfo target)
     {
         if (!AmongUsClient.Instance.AmHost || !reporter) return;
+
+        // 計器 (2026-07-24 Family A 検証): クライアントが会議 UI を構築するのは explicit StartMeeting RPC ではなく
+        // ホスト会議入りで生成される MeetingHud (InnerNetObject) の spawn 複製メッセージ。この spawn は次 FixedUpdate で
+        // PacketRateGate FIFO に載るため、ここで記録する backlog 深度がそのまま spawn の遅延量になる。取り残し
+        // (Switch) が出たゲームでこの値が高ければ「spawn が会議開始バーストの後ろで遅延」= Family A が確定する。
+        Logger.Info($"BlackoutProbe: host entered meeting — MeetingHud spawn will queue behind gateQueue={PacketRateGate.PendingCount}, dataQueue={DataFlagRateLimiter.PendingCount} (spawn is the packet clients build the meeting UI from, NOT the explicit RPC probed below)", "BlackoutProbe");
+
         Main.Instance.StartCoroutine(CoSendStartMeeting(reporter, target?.PlayerId ?? byte.MaxValue));
     }
 
