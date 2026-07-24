@@ -5,8 +5,7 @@ namespace EndKnot.Patches.CalamityMenu;
 
 public static class CalamityBackground
 {
-    // Placeholder: deep Calamity-style dark purple-black.
-    // Replace sprite loading when Resources/Images/MainMenu/bg_main.png is ready.
+    // Fallback color if the sprite fails to load.
     private static readonly Color PlaceholderColor = new(0.05f, 0.04f, 0.10f);
 
     public static void Build(Transform backgroundLayer)
