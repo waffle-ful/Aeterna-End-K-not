@@ -12,10 +12,16 @@ public static class CalamityLogo
     private static Vector3   _logoBasePos;
     private static float     _shakeTime;
 
+    // 炎色の背後グロー (ゆっくり明滅)。
+    private static SpriteRenderer _glowSr;
+    private static float          _glowTime;
+
     public static void Build(Transform logoLayer)
     {
         _logoTransform = null;
         _shakeTime     = 0f;
+        _glowSr        = null;
+        _glowTime      = 0f;
 
         Logger.Info($"Build start, logoLayer={(logoLayer != null ? logoLayer.name : "NULL")}", "CalamityLogo");
 
@@ -68,6 +74,19 @@ public static class CalamityLogo
         _logoTransform = logoGo.transform;
         _logoBasePos   = basePos;
 
+        // ── 炎色の背後グロー ─────────────────────────────────────────────
+        // ロゴのすぐ後ろ (sortingOrder = ロゴ-1) に大きめのソフト光球を敷き、Tick で明滅させる。
+        // ロゴの描画順を実測してから一段下げることで、素材差でロゴ前に被るのを防ぐ。
+        int logoOrder = logoGo.GetComponent<Renderer>() is { } r ? r.sortingOrder : 20;
+        var glowGo = new GameObject("CalamityLogoGlow");
+        glowGo.transform.SetParent(logoLayer);
+        glowGo.transform.localPosition = new Vector3(0f, basePos.y, 0.01f);
+        glowGo.transform.localScale    = new Vector3(6.5f, 3.2f, 1f);
+        _glowSr = glowGo.AddComponent<SpriteRenderer>();
+        _glowSr.sprite       = MakeSoftGlowSprite();
+        _glowSr.sortingOrder = logoOrder - 1;
+        _glowSr.color        = new Color(1f, 0.45f, 0.12f, 0.18f);
+
         // Hide the original LOGO-AU to avoid a duplicate on screen.
         if (auLogo != null) auLogo.SetActive(false);
 
@@ -115,6 +134,38 @@ public static class CalamityLogo
         float ox = Mathf.Sin(_shakeTime * 11.0f) * 0.020f + Mathf.Sin(_shakeTime * 7.3f) * 0.008f;
         float oy = Mathf.Sin(_shakeTime *  8.0f + 0.7f) * 0.012f + Mathf.Sin(_shakeTime * 14.1f) * 0.005f;
         _logoTransform.localPosition = _logoBasePos + new Vector3(ox, oy, 0f);
+
+        // 炎色グローの明滅 (二周波でゆらぎを出す)。
+        if (_glowSr != null)
+        {
+            _glowTime += dt;
+            float pulse = (Mathf.Sin(_glowTime * 1.1f) + 1f) * 0.5f;          // 0→1
+            float flicker = Mathf.Sin(_glowTime * 6.7f) * 0.03f;             // 細かな揺らぎ
+            float alpha = Mathf.Lerp(0.12f, 0.34f, pulse) + flicker;
+            _glowSr.color = new Color(1f, 0.45f, 0.12f, Mathf.Clamp01(alpha));
+        }
+    }
+
+    // 中央が明るく縁へ滑らかに消える光球 (加算不可のためアルファ合成用)。
+    private static Sprite MakeSoftGlowSprite()
+    {
+        const int size = 128;
+        var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+        float c = (size - 1) * 0.5f;
+        float maxDist = c;
+        var pixels = new Color[size * size];
+        for (int y = 0; y < size; y++)
+        for (int x = 0; x < size; x++)
+        {
+            float dx = x - c, dy = y - c;
+            float dist = Mathf.Sqrt(dx * dx + dy * dy) / maxDist; // 0(中央)→1(縁)
+            float a = Mathf.Clamp01(1f - dist);
+            a = a * a; // 中央に寄せた柔らかい減衰
+            pixels[y * size + x] = new Color(1f, 0.55f, 0.2f, a);
+        }
+        tex.SetPixels(pixels);
+        tex.Apply();
+        return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), size);
     }
 
     private static GameObject FindAULogo()
