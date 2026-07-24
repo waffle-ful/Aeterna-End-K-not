@@ -254,6 +254,11 @@ public class CustomLogger
 
     public static void ClearLog(bool check = true)
     {
+        // The log directory may not exist yet (Android / first launch); writing into it here
+        // throws out of the chainloader-Finished handler. The CustomLogger constructor creates
+        // it later, so simply skipping is safe.
+        if (!Directory.Exists(Path.GetDirectoryName(LOGFilePath))) return;
+
         if (!check || (File.Exists(LOGFilePath) && new FileInfo(LOGFilePath).Length > 0))
         {
             PrivateInstance?.Finish();
