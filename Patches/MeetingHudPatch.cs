@@ -1301,6 +1301,7 @@ internal static class MeetingHudUpdatePatch
         try
         {
             MeetingStuckProbe.Update(__instance);
+            MeetingSilentProbe.Update(__instance);
 
             // Meeting Skip with vote counting on keystroke (F6)
             if (AmongUsClient.Instance.AmHost && Input.GetKeyDown(KeyCode.F6)) __instance.CheckForEndVoting();
@@ -1393,6 +1394,7 @@ internal static class MeetingHudOnDestroyPatch
 
         // 会議中 write-barrier 解放 (会議中の自動 Data は TOHK 式に破棄済み — ここでのフラッシュは無い)
         NetworkedPlayerInfoSerializePatch.OnMeetingEnd();
+        MeetingSilentProbe.OnMeetingEnd();
 
         if (!GameStates.InGame) return;
 
@@ -1471,6 +1473,8 @@ internal static class MeetingHudCastVotePatch
     public static bool Prefix(MeetingHud __instance, [HarmonyArgument(0)] byte srcPlayerId, [HarmonyArgument(1)] byte suspectPlayerId)
     {
         if (!AmongUsClient.Instance.AmHost) return true;
+
+        MeetingSilentProbe.OnCastVote(srcPlayerId);
 
         PlayerVoteArea pvaSrc = null;
         PlayerVoteArea pvaTarget = null;
