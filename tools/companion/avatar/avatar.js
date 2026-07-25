@@ -1,6 +1,7 @@
 // EndKnot AI 実況相棒アバター — three-vrm でVRMを描き、companion.py の WebSocket から
 // {mouth, speaking, subtitle, emotion, speaker} を受けて口パク/表情、まばたき・アイドルはローカルのタイマー駆動。
 // model2.vrm を置くと2体並び (--duo の掛け合い実況用) になり、speaker タグで口パク/表情を振り分ける。
+// ?as=a|b を付けると「1体だけ・その話者専用」モードになり、OBS で立ち絵を2ソースに分けられる。
 // 背景透過で描くので OBS ブラウザソースにそのまま重ねられる。CDN は使わず vendor/ のローカルESMだけで動く。
 
 import * as THREE from 'three';
@@ -8,7 +9,14 @@ import { GLTFLoader } from './vendor/jsm/loaders/GLTFLoader.js';
 import { VRMLoaderPlugin, VRMUtils } from './vendor/three-vrm.module.js';
 
 const params = new URLSearchParams(location.search);
-const SHOW_SUBTITLE = !params.has('nosub');
+// ?as=a|b : このページは1体だけを描き、その話者タグの発話にしか反応しない (立ち絵を OBS の
+// 別ソースに分けるとき用)。a = 主役 (model.vrm)、b = 相方 (model2.vrm)。
+const MY_TAG = ['a', 'b'].includes((params.get('as') || '').toLowerCase())
+  ? params.get('as').toLowerCase() : null;
+// ?face=left|right : 立ち絵を内側 (相方の方) へ少し向ける。左下に置く子は right、右下は left。
+const FACE_ROT = { left: -0.10, right: 0.10 }[(params.get('face') || '').toLowerCase()] || 0;
+// 2ソースに分けると内蔵字幕が二重に出るので、?as 指定時は既定オフ (?sub で復活)。
+const SHOW_SUBTITLE = MY_TAG ? params.has('sub') : !params.has('nosub');
 const SHOW_STATUS = !params.has('nostatus');
 const MODEL_URL = params.get('model') || './model.vrm';
 const MODEL2_URL = params.get('model2') || './model2.vrm'; // 無ければ黙って1体モード
@@ -112,7 +120,7 @@ function loadModel(url, slot, required) {
         console.warn('[avatar] VRM load failed', err);
         showNotice(
           'アバターのモデルがまだありません。<br>' +
-          'このフォルダに <code>model.vrm</code> を置いてください。<br>' +
+          `このフォルダに <code>${url.split('/').pop()}</code> を置いてください。<br>` +
           '<small>(VRoid Studio 等で作った VRM をそのままリネームで OK)</small>'
         );
       } else {
@@ -122,8 +130,13 @@ function loadModel(url, slot, required) {
   );
 }
 
-loadModel(MODEL_URL, 0, true);
-loadModel(MODEL2_URL, 1, false);
+// ?as=b のときは相方を slot 0 に載せる (1体モードの中央フレーミングをそのまま使うため)。
+// ?as 指定時は model= / model2= のどちらでもそのページのモデルを指せる (片方だけ書けば済む)。
+const SOLO_URL = MY_TAG === 'b'
+  ? (params.get('model2') || params.get('model') || './model2.vrm')
+  : MODEL_URL;
+loadModel(MY_TAG ? SOLO_URL : MODEL_URL, 0, true);
+if (!MY_TAG) loadModel(MODEL2_URL, 1, false);
 
 // VRM は初期状態が T ポーズ (両腕が真横=はりつけ状態) なので、上腕を下ろして自然な立ち姿にする。
 // normalized ボーン空間で操作する (VRM0/VRM1 差を three-vrm が吸収してくれる)。
@@ -154,7 +167,7 @@ function layoutScene() {
     av.vrm.scene.position.x = x;
     av.baseY = 0;
     // 少しだけ内側 (相方の方) を向かせて「並んでいる」感を出す
-    av.baseRotY = duo ? (slot === 0 ? -0.10 : 0.10) : 0;
+    av.baseRotY = duo ? (slot === 0 ? -0.10 : 0.10) : FACE_ROT;
     av.vrm.scene.rotation.y = av.baseRotY;
   }
   frameShot(active.map((a) => a.vrm));
@@ -318,6 +331,12 @@ function connectWs() {
   ws.onmessage = (ev) => {
     let m;
     try { m = JSON.parse(ev.data); } catch (_) { return; }
+    // ?as=a|b のページは相方の発話を丸ごと無視する。これが無いと、2ソースに分けたとき
+    // avatars[1] が居ないぶん宛先が常に slot 0 へ落ちて、両方の立ち絵が相手の台詞で口パクする。
+    if (MY_TAG && typeof m.speaker === 'string' && m.speaker !== MY_TAG) {
+      for (const av of avatars) { if (av) av.mouthTarget = 0; }
+      return;
+    }
     // speaker タグで口パク/表情の宛先を選ぶ (2体目が無い/タグ不明なら主役へ)
     const idx = (m.speaker === 'b' && avatars[1]) ? 1 : 0;
     const target = avatars[idx];
