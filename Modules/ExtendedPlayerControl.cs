@@ -247,6 +247,12 @@ internal static class ExtendedPlayerControl
             }
 
             if (!player || player.Pointer == IntPtr.Zero) return;
+
+            // 非モッド客のチャット解禁は「偽 MeetingHud を spawn → CloseMeeting → despawn」で行うが、
+            // この CloseMeeting は客側で本物の会議まで閉じてしまう (HUD 復帰+移動解除+チャットだけ残る =
+            // 「会議に入れない」報告の正体)。会議中はどのみち全員チャットできるので解禁は不要。
+            if (visible && MeetingHud.Instance) return;
+
             bool dead = player.Data.IsDead;
             MessageWriter writer = MessageWriter.Get(SendOption.Reliable);
             writer.StartMessage(6);
