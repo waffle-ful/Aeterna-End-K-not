@@ -334,6 +334,9 @@ namespace EndKnot
         private bool Hide(PlayerControl player, MessageWriter packedWriter)
         {
             if (!AmongUsClient.Instance.AmHost) return false;
+            // CreateNetObject コルーチンは spawn 前に複数フレーム yield するため、
+            // hideFrom スナップショットが破棄済み/切断済みの PlayerControl を含みうる
+            if (!player || !player.Data) return false;
             Logger.Info($" Hide Custom Net Object {GetType().Name} (ID {Id}) from {player.GetNameWithRole()}", "CNO.Hide");
 
             if (player.AmOwner)

@@ -271,7 +271,9 @@ public class Deathpact : RoleBase
             {
                 if (!ActiveDeathpacts.Contains(dp.DeathPactId) || dp.PlayersInDeathpact.All(b => b.PlayerId != player.PlayerId)) continue;
 
-                string otherPlayerNames = dp.PlayersInDeathpact.Where(a => a.PlayerId != player.PlayerId).Aggregate(string.Empty, (current, otherPlayerInPact) => current + otherPlayerInPact.name.ToUpper() + ",");
+                // 相方が死亡/切断で破棄済み (fake-null) だと .name の取得で NRE になるため除外する
+                string otherPlayerNames = dp.PlayersInDeathpact.Where(a => a && a.PlayerId != player.PlayerId).Aggregate(string.Empty, (current, otherPlayerInPact) => current + otherPlayerInPact.name.ToUpper() + ",");
+                if (otherPlayerNames.Length == 0) continue;
                 otherPlayerNames = otherPlayerNames.Remove(otherPlayerNames.Length - 1);
 
                 var countdown = (int)(dp.DeathpactTime.Remaining.TotalSeconds);

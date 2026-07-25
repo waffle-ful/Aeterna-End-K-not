@@ -4435,7 +4435,9 @@ public static class Utils
         }
         catch (Exception e) { ThrowException(e); }
 
-        foreach (PlayerControl pc in Main.EnumeratePlayerControls())
+        // ToArray() で固定する: ループ中の役職 AfterMeetingTasks が CreateNetObject を同期実行すると
+        // PlayerControl.AllPlayerControls への Add/Remove で親 enumerator が壊れる
+        foreach (PlayerControl pc in Main.EnumeratePlayerControls().ToArray())
         {
             try
             {
@@ -4796,7 +4798,8 @@ public static class Utils
 
         FileInfo[] files = [new(Path.Combine(Paths.BepInExRootPath, "LogOutput.log")), new(CustomLogger.LOGFilePath)];
         // log.html / LogOutput.log が別ハンドルに握られている瞬間の排他違反 (IOException) を握りつぶす (下の healthLog コピーと同型ガード)
-        try { files.Do(x => x.CopyTo($"{filename}{x.Extension}")); }
+        // 同一秒内に2回 DumpLog が走ると同名フォルダ+同名ファイルになるので overwrite 必須 (下の healthLog と同型)
+        try { files.Do(x => File.Copy(x.FullName, $"{filename}{x.Extension}", overwrite: true)); }
         catch (Exception e) { ThrowException(e); }
 
         // HealthLog(状態/メモリ/kick の heartbeat)も同じセッションフォルダに同梱する。

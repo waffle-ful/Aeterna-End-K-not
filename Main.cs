@@ -334,7 +334,7 @@ public class Main : BasePlugin
         for (int index = PlayerControl.AllPlayerControls.Count - 1; index >= 0; index--)
         {
             PlayerControl pc = PlayerControl.AllPlayerControls[index];
-            if (!pc.IsAliveWithConditions() || pc.PlayerId >= 254) continue;
+            if (!pc || pc.PlayerId >= 200 || !pc.IsAliveWithConditions()) continue;
             yield return pc;
         }
     }
@@ -365,7 +365,9 @@ public class Main : BasePlugin
         for (byte playerIndex = 0; playerIndex < count; playerIndex++)
         {
             PlayerControl pc = players[playerIndex];
-            if (!pc || pc.PlayerId >= 254) continue;
+            // CNO は 254→200 の循環 ID を使うので境界は 200 (254 のままだと 200-253 の CNO が
+            // キャッシュに混ざり Main.PlayerStates[id] を叩く全経路が KeyNotFoundException になる)
+            if (!pc || pc.PlayerId >= 200) continue;
 
             CachedAllPlayerControlsList.Add(pc);
             if (pc.IsAliveWithConditions())
