@@ -239,7 +239,10 @@ internal static class CheckMurderPatch
 
             if (killer.Is(CustomRoles.SlowStarter) && !SlowStarter.CanKill())
             {
-                killer.Notify(Translator.GetString("SlowStarterCannotKill"));
+                int slowStarterDay = SlowStarter.ActivationDay.GetInt();
+                killer.Notify(slowStarterDay > 0
+                    ? string.Format(Translator.GetString("SlowStarterCannotKillWithDay"), SlowStarter.AliveImpThreshold.GetInt(), slowStarterDay)
+                    : string.Format(Translator.GetString("SlowStarterCannotKill"), SlowStarter.AliveImpThreshold.GetInt()));
                 Logger.Info(killer.GetNameWithRole().RemoveHtmlTags() + " is SlowStarter and cannot kill yet", "CheckMurder");
                 return false;
             }
