@@ -31,7 +31,9 @@ public static class AudienceManager
     private readonly record struct QueuedIntervention(InterventionKind Kind, string Author, byte TargetId, string Text = null);
 
     private static readonly ConcurrentQueue<QueuedChatMessage> IncomingMessages = new();
-    private static readonly Queue<QueuedIntervention> InterventionQueue = new();
+    // Queue でなく List: 天の声はロビー/会議中も即時発動対象なので、先頭がまだ発動不可 (例: 会議中の大地震待ち)
+    // でも後続の天の声を素通りさせたい。FindIndex で先頭から「今すぐ発動できる最初の1件」を探して抜き取る。
+    private static readonly List<QueuedIntervention> InterventionQueue = [];
     private static readonly Dictionary<byte, long> TargetCooldownUntil = [];
 
     private static bool Subscribed;
@@ -162,7 +164,7 @@ public static class AudienceManager
                     return;
                 }
 
-                InterventionQueue.Enqueue(new QueuedIntervention(kind, author, target.PlayerId));
+                InterventionQueue.Add(new QueuedIntervention(kind, author, target.PlayerId));
                 break;
             }
             case InterventionKind.Voice:
@@ -175,11 +177,11 @@ public static class AudienceManager
                 }
 
                 string message = string.Join(' ', parts, 1, parts.Length - 1);
-                InterventionQueue.Enqueue(new QueuedIntervention(kind, author, byte.MaxValue, message));
+                InterventionQueue.Add(new QueuedIntervention(kind, author, byte.MaxValue, message));
                 break;
             }
             default:
-                InterventionQueue.Enqueue(new QueuedIntervention(kind, author, byte.MaxValue));
+                InterventionQueue.Add(new QueuedIntervention(kind, author, byte.MaxValue));
                 break;
         }
 
@@ -197,17 +199,36 @@ public static class AudienceManager
             .FirstOrDefault(pc => pc);
     }
 
+    // Kind ごとに「今すぐ発動できる状態か」を判定する。
+    // - 天の声: チャット文言なので ShipStatus/タスク進行に無依存 — ロビー/会議中も即時発動可
+    // - 大地震: ロビーは ShipStatus.Instance が null (演出専用の軽量版に DoEarthquake 側で分岐) なので
+    //   ロビーも許可。会議中はドア/停電/TP がその場では意味を持たないため、従来どおりタスク再開待ち。
+    // - それ以外: 従来どおりタスク進行中のみ。
+    private static bool CanProcessNow(InterventionKind kind)
+    {
+        bool inTask = GameStates.InGame && !GameStates.IsMeeting;
+
+        return kind switch
+        {
+            InterventionKind.Voice => true,
+            InterventionKind.Earthquake => inTask || GameStates.IsLobby,
+            _ => inTask
+        };
+    }
+
     private static void ProcessInterventionQueue()
     {
-        // 会議中はキューを保持したまま何もしない。ゲーム進行中のみ 1 件ずつ実行。
-        if (!GameStates.InGame || GameStates.IsMeeting) return;
         if (InterventionQueue.Count == 0) return;
 
         long now = Utils.TimeStamp;
         float interval = AudienceOptions.GlobalInterventionInterval.GetFloat();
         if (now - LastInterventionTS < (long)interval) return;
 
-        QueuedIntervention item = InterventionQueue.Dequeue();
+        int idx = InterventionQueue.FindIndex(i => CanProcessNow(i.Kind));
+        if (idx < 0) return;
+
+        QueuedIntervention item = InterventionQueue[idx];
+        InterventionQueue.RemoveAt(idx);
         if (TryExecute(item)) LastInterventionTS = now;
     }
 

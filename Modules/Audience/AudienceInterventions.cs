@@ -196,6 +196,14 @@ public static class AudienceInterventions
 
     public static bool DoEarthquake()
     {
+        // ロビーは ShipStatus.Instance が null (BackroomsLobby 実機ダンプで確認済み) でドア閉鎖/停電/TP は
+        // 発動不能。CompanionEventEmitter.TickLobbyDemo の自動デモと同じ「カメラシェイクのみの軽量版」で代替する。
+        if (GameStates.IsLobby)
+        {
+            AudienceCutscene.ShakeCamera(QuakeCameraShakeDuration, QuakeCameraShakeSeverity);
+            return true;
+        }
+
         if (!ShipStatus.Instance) return false;
 
         DoorsReset.CloseAllDoors();
@@ -331,6 +339,8 @@ public static class AudienceInterventions
 
         // バニラクライアントはタスク中チャットを開けないため、頭上 Notify (全員) を主表示にし、
         // チャット送信は記録用 (次の会議でログとして読める) として併用する。
+        // 注意: pc.Notify は !GameStates.IsInTask で無言no-op (NameNotifyManager.Notify) なので、
+        // ロビー/会議中はチャット送信のみが実際に届く — どちらもチャットが見えている場面なのでこれで足りる。
         string title = Utils.ColorString(new Color32(255, 215, 0, 255), Translator.GetString("Audience.VoiceTitle"));
         string notifyText = Utils.ColorString(new Color32(255, 215, 0, 255), $"{Translator.GetString("Audience.VoiceTitle")}: {message}");
 
