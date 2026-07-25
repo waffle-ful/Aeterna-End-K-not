@@ -1458,7 +1458,11 @@ internal static class IntroCutsceneDestroyPatch
                 hud.TaskPanel.open = false;
             
             if (!AmongUsClient.Instance.AmHost || !Lovers.PrivateChat.GetBool() || Options.ChatDuringGame.GetBool()) return;
-            
+
+            // 初手強制会議 (FirstTurnMeetingTrigger) も intro 終了+1秒で走るため同一フレームで衝突する。
+            // ここでの解禁は見送り、その会議が終わったあとの Utils.AfterMeetingTasks 側の解禁に任せる。
+            if (Options.CurrentGameMode == CustomGameMode.Standard && Options.FirstTurnMeeting.GetBool()) return;
+
             Main.LoversPlayers.ForEach(x => x.SetChatVisible(true));
         }, 1f, log: false);
 
