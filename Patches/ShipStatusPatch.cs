@@ -99,6 +99,10 @@ internal static class UpdateSystemPatch
 
         if (!AmongUsClient.Instance.AmHost) return true; // Execute the following only on the host
 
+        // コンソール操作は「動かない活動」なので、位置だけ見る AFK 判定では誤検知になる
+        // (リアクターの2コンソール協調は10秒の Detection を平気で超える)。pet/kill と同じ扱いで活動とみなす。
+        AFKDetector.SetNotAFK(player.PlayerId);
+
         if ((Options.CurrentGameMode is not (CustomGameMode.Standard or CustomGameMode.Snowdown) || Options.DisableSabotage.GetBool()) && systemType == SystemTypes.Sabotage) return false;
         if (player.Is(CustomRoles.Fool) && systemType is SystemTypes.Comms or SystemTypes.Electrical) return false;
 
@@ -215,6 +219,10 @@ internal static class UpdateSystemPatch
             case SystemTypes.HeliSabotage:
             case SystemTypes.Electrical when !Utils.IsActive(SystemTypes.Electrical):
             {
+                // コンソールへの出入り (Reactor の 32/64 等) でもここへ来るので、
+                // 実際に解除されていない限り「修理した」報酬を渡さない (Electrical だけ元から guard 済みだった)。
+                if (Utils.IsActive(systemType)) break;
+
                 if (player.Is(CustomRoles.Damocles) && Damocles.CountRepairSabotage)
                     Damocles.OnRepairSabotage(player.PlayerId);
 

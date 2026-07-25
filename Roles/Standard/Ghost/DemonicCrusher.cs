@@ -54,6 +54,10 @@ internal class DemonicCrusher : IGhostRole
     {
         if (ShipStatus.Instance == null) return;
 
+        // 本物のコミュサボタージュ稼働中に fake の 128/16 を重ねるとホストと状態が矛盾する
+        // (DisableDevice.cs:88 / TimeMaster.cs:257 は同じガードを持っている)。
+        if (Utils.IsActive(SystemTypes.Comms)) return;
+
         PlayerControl[] targets = Main.AllAlivePlayerControls.Where(x => x != null && !x.IsModdedClient()).ToArray();
         if (targets.Length == 0) return;
 

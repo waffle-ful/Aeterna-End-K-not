@@ -1269,7 +1269,17 @@ internal static class ExtendedPlayerControl
 
             if (player.IsModdedClient()) return;
 
-            if (GameStates.IsMeeting || ExileController.Instance || AntiBlackout.SkipTasks || player.inVent || player.inMovingPlat || player.onLadder || !Main.EnumeratePlayerControls().FindFirst(x => !x.IsAlive(), out var dummyGhost))
+            SystemTypes systemtype = Main.CurrentMap switch
+            {
+                MapNames.Polus => SystemTypes.Laboratory,
+                MapNames.Airship => SystemTypes.HeliSabotage,
+                _ => SystemTypes.Reactor
+            };
+
+            // 本物のサボタージュ稼働中に desync 128→16 を撃つと、その1人だけ「直った」状態になり
+            // ホストと矛盾してコンソール操作が収束しなくなる (ReactorFlash:1408 は同じ理由で guard 済み)。
+            // 会議中/vent 中と同じ「今は無理だから待つ」既存経路に相乗りさせる。
+            if (GameStates.IsMeeting || ExileController.Instance || AntiBlackout.SkipTasks || player.inVent || player.inMovingPlat || player.onLadder || IsActive(systemtype) || !Main.EnumeratePlayerControls().FindFirst(x => !x.IsAlive(), out var dummyGhost))
             {
                 if (BlackScreenWaitingPlayers.Add(player.PlayerId))
                     Main.Instance.StartCoroutine(Wait());
@@ -1280,7 +1290,7 @@ internal static class ExtendedPlayerControl
                 {
                     Logger.Warn($"FixBlackScreen was called for {player.GetNameWithRole()}, but the conditions are not met to execute this code right now, waiting until it becomes possible to do so", "FixBlackScreen");
 
-                    while (GameStates.InGame && !GameStates.IsEnded && !CancelBlackScreenFix.Contains(player.PlayerId) && (GameStates.IsMeeting || ExileController.Instance || AntiBlackout.SkipTasks || Main.EnumeratePlayerControls().All(x => x.IsAlive())))
+                    while (GameStates.InGame && !GameStates.IsEnded && !CancelBlackScreenFix.Contains(player.PlayerId) && (GameStates.IsMeeting || ExileController.Instance || AntiBlackout.SkipTasks || IsActive(systemtype) || Main.EnumeratePlayerControls().All(x => x.IsAlive())))
                         yield return null;
 
                     if (CancelBlackScreenFix.Remove(player.PlayerId))
@@ -1311,13 +1321,6 @@ internal static class ExtendedPlayerControl
                     player.FixBlackScreen();
                 }
             }
-
-            SystemTypes systemtype = Main.CurrentMap switch
-            {
-                MapNames.Polus => SystemTypes.Laboratory,
-                MapNames.Airship => SystemTypes.HeliSabotage,
-                _ => SystemTypes.Reactor
-            };
 
             var sender = CustomRpcSender.Create($"Fix Black Screen For {player.GetNameWithRole()}", SendOption.Reliable);
 
