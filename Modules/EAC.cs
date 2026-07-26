@@ -61,10 +61,13 @@ internal static class EAC
                 {
                     if (!GameStates.IsLobby)
                     {
+                        // ban しない: 新規参加者は入室直後に必ず CheckName を送るため、ホストの
+                        // GameState がゲーム開始/終了レースで一時的に Joined でない窓に当たると
+                        // 正規プレイヤーが誤検知される (BUG-20260722-04)。RPC は reject 済みで
+                        // チート実害は無いため、記録+拒否に留める。
                         WarnHost();
                         Report(pc, "CheckName out of Lobby");
-                        HandleCheat(pc, "CheckName out of Lobby");
-                        Logger.Fatal($"Player [{pc.OwnerId}:{pc.GetRealName()}] CheckName out of lobby, rejected", "EAC");
+                        Logger.Fatal($"Player [{pc.OwnerId}:{pc.GetRealName()}] CheckName out of lobby, rejected (no ban)", "EAC");
                         sr.Recycle();
                         return true;
                     }
@@ -214,10 +217,10 @@ internal static class EAC
                 {
                     if (!GameStates.IsLobby)
                     {
+                        // ban しない: CheckName と同じ理由 (BUG-20260722-04)。
                         WarnHost();
                         Report(pc, "CheckColor out of Lobby");
-                        HandleCheat(pc, "CheckColor out of Lobby");
-                        Logger.Fatal($"Player [{pc.OwnerId}:{pc.GetRealName()}] check color out of lobby, rejected", "EAC");
+                        Logger.Fatal($"Player [{pc.OwnerId}:{pc.GetRealName()}] check color out of lobby, rejected (no ban)", "EAC");
                         sr.Recycle();
                         return true;
                     }
