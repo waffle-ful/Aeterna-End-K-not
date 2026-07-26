@@ -2353,7 +2353,21 @@ internal static class FixedUpdatePatch
 
         Main.IsLoversDead = true;
         
-        if (Main.PlayerStates.TryGetValue(deathId, out var deadState) && deadState.deathReason == PlayerState.DeathReason.Disconnected) return;
+        // periodic 呼び出し (FixedUpdateCaller.cs) は deathId を渡さず 0x7f のセンチネルで来るため、
+        // Main.PlayerStates[0x7f] は必ず引けず、下の「切断なら後追いさせない」ガードが素通りしていた。
+        // さらにイントロ中の離脱は OnPlayerLeftPatch 自体が GameStates.IsInGame ガードで丸ごと飛ぶので
+        // deathReason も Disconnected にならない。よって離脱は PlayerControl/Data 側からも判定する。
+        byte deadLoverId = deathId;
+
+        if (!Main.PlayerStates.ContainsKey(deadLoverId))
+        {
+            PlayerControl deadLover = Main.LoversPlayers.FirstOrDefault(x => x && x.PlayerId != partnerPlayer.PlayerId);
+            if (!deadLover || !deadLover.Data || deadLover.Data.Disconnected) return;
+
+            deadLoverId = deadLover.PlayerId;
+        }
+
+        if (Main.PlayerStates.TryGetValue(deadLoverId, out var deadState) && deadState.deathReason == PlayerState.DeathReason.Disconnected) return;
 
         if (Lovers.LoverDieConsequence.GetValue() == 2)
         {
