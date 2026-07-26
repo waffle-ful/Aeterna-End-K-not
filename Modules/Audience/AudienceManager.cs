@@ -185,7 +185,9 @@ public static class AudienceManager
                 break;
         }
 
-        Logger.Info($"Audience intervention queued: {kind} (author={author}, queue={InterventionQueue.Count})", "Audience");
+        // 「queued」だけだと実行済みと誤読され調査を狂わせる (実績あり) ので、未実行であることと
+        // 残ポイントを行内に出す。実行の確定は "executed" / 却下は "rejected" の行だけが名乗る。
+        Logger.Info($"Audience intervention queued (pending, not executed): {kind} (author={author}, queue={InterventionQueue.Count}, points={AudienceEconomy.GetPoints(author)})", "Audience");
     }
 
     private static PlayerControl FindPlayerByNamePart(string namePart)
@@ -276,7 +278,7 @@ public static class AudienceManager
         int price = priceOpt.GetInt();
         if (!AudienceEconomy.TrySpend(item.Author, price))
         {
-            Logger.Info($"Audience intervention rejected: insufficient points (author={item.Author}, cmd={item.Kind})", "Audience");
+            Logger.Info($"Audience intervention rejected: insufficient points (author={item.Author}, cmd={item.Kind}, price={price}, points={AudienceEconomy.GetPoints(item.Author)})", "Audience");
             return false;
         }
 
