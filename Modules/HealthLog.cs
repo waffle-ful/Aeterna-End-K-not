@@ -41,6 +41,18 @@ public static class HealthLog
     private static readonly HostActionEntry[] SendRing = new HostActionEntry[16];
     private static int SendRingIndex; // 次の書き込み位置
 
+    // --- 送信タグ別ヒストグラム用の広いリング (BUG-20260706-05 の弁別計器) ---
+    // DCTX の直近16本は「キック時に何を送っていたか」しか答えられず、無傷の窓と比較できないため
+    // キックの弁別に3回連続で失敗した (量の指標=Reliable burst / CNO burst はどちらも負の対照で棄却済み)。
+    // そこで「直近 N 秒に送ったメッセージをタグ別に集計」した同一書式のサマリを、
+    // (a) 異常切断時 (DCTAG) と (b) ゲーム中は定期的に (TAGWIN) の両方で吐き、初めて kick 窓 vs 無傷窓の
+    // 差分を取れるようにする。ホストローカルのログのみ・送信は一切増えない。
+    private const int TagWindowSeconds = 10; // 集計窓 (Utils.TimeStamp が秒精度なので実効 10〜11 秒)
+    private const long TagWindowLogIntervalSeconds = 30; // 平常時サンプルの出力間隔
+    private static readonly HostActionEntry[] TagRing = new HostActionEntry[1024]; // 約20送信/秒で50秒分
+    private static int TagRingIndex;
+    private static long _lastTagWindowLogTs;
+
     // --- phase3 判定層(早期警報)の状態。SESSION 開始(EnsureInit)でリセット ---
     private static long _sessionStartWsMB; // セッション先頭の wsMB(mem 増分の基準)
     private static long _lastNameSent; // 前回 HB 時点の FixedUpdatePatch.NameSent(HB デルタ算出用)
@@ -118,6 +130,9 @@ public static class HealthLog
             catch { }
 
             _sessionStartWsMB = 0;
+            _lastTagWindowLogTs = 0;
+            Array.Clear(TagRing, 0, TagRing.Length);
+            TagRingIndex = 0;
             _hadDisconnectThisSession = false;
             _continuousMenuSinceTs = 0;
             _lastStuckMenuNoteTs = 0;
@@ -258,6 +273,21 @@ public static class HealthLog
 
             string hb = $"t={now} up={now - StartTs} state={state} host={(host ? 1 : 0)} server={server} players={players} wsMB={wsMB} gcMB={gcMB} gc2={gen2} nmSent={nmSent} nmSkip={nmSkip} eosTry={eosTry} eosFlow={eosFlow} idTok={idTok} ping={ping} rsndD={rsndD} unack={unack} pNoAck={pNoAck}{lastSendSuffix}";
             Write($"HB {hb}");
+
+            // 平常時のタグ別送信サマリ。ゲーム中だけ出す (Menu/Lobby は比較対象にならないうえ無駄に嵩む)。
+            // これが無いと DCTAG に「比較すべき無傷の窓」が存在せず、また相関止まりの結論になる。
+            if ((state == "InTask" || state == "Meeting") && now - _lastTagWindowLogTs >= TagWindowLogIntervalSeconds)
+            {
+                _lastTagWindowLogTs = now;
+
+                try
+                {
+                    string tagLine = $"TAGWIN state={state} players={players} {BuildTagWindow(now, TagWindowSeconds)} t={now}";
+                    Write(tagLine);
+                    Timeline(tagLine);
+                }
+                catch (Exception e) { Utils.ThrowException(e); }
+            }
 
             // 普段見る通常ログにもメモリ + 状態の要約を低頻度で(最適化余地の把握用)。
             if (now - LastNormalLogTs >= NormalLogIntervalSeconds)
@@ -427,6 +457,15 @@ public static class HealthLog
                 }
                 catch { }
 
+                // タグ別ヒストグラム: 平常時の TAGWIN と同一書式なので、そのまま無傷窓と比較できる。
+                try
+                {
+                    string tagLine = $"DCTAG {BuildTagWindow(now, TagWindowSeconds)}";
+                    Write(tagLine);
+                    Timeline(tagLine);
+                }
+                catch { }
+
                 // log.html のバッファも flush (crash前の詳細ログを保全)
                 Logger.FlushNow();
             }
@@ -510,6 +549,38 @@ public static class HealthLog
         catch (Exception e) { Utils.ThrowException(e); }
     }
 
+    /// <summary>
+    /// 直近 windowSec 秒に送ったメッセージをタグ別に集計した1行サマリを作る。
+    /// DCTAG (切断時) と TAGWIN (平常時) で同一書式を使い、kick 窓 vs 無傷窓を直接 diff できるようにする。
+    /// 捕捉範囲は CustomRpcSender / Utils.RawRPC 経由のモッド送信のみ (バニラ自身の送信は含まない)。
+    /// </summary>
+    private static string BuildTagWindow(long now, int windowSec)
+    {
+        var counts = new System.Collections.Generic.Dictionary<string, (int N, int Bytes)>(32);
+        int total = 0, totalBytes = 0, reliable = 0, maxLen = 0;
+        long oldest = now;
+
+        for (int i = 0; i < TagRing.Length; i++)
+        {
+            ref HostActionEntry e = ref TagRing[i];
+            if (e.Tag == null || e.Ts > now || now - e.Ts > windowSec) continue;
+
+            if (e.Ts < oldest) oldest = e.Ts;
+            total++;
+            totalBytes += e.Len;
+            if (e.Len > maxLen) maxLen = e.Len;
+            if (e.Opt == "Reliable") reliable++;
+
+            counts.TryGetValue(e.Tag, out (int N, int Bytes) cur);
+            counts[e.Tag] = (cur.N + 1, cur.Bytes + e.Len);
+        }
+
+        string top = string.Join(",", counts.OrderByDescending(x => x.Value.N).Take(8).Select(x => $"{x.Key}:{x.Value.N}/{x.Value.Bytes}"));
+        // span < win はリングが1周したサイン = 集計は「窓全体の実数」ではなく下限値。
+        // まさに追いたいバースト時ほど飽和しやすいので、飽和の有無を必ず添える。
+        return $"win={windowSec}s span={now - oldest}s n={total} b={totalBytes} rel={reliable} maxLen={maxLen} tags={counts.Count} top=[{top}]";
+    }
+
     /// <summary>ホストが送信した RPC/パケットをゼロ I/O でリングバッファに記録。</summary>
     public static void RecordHostAction(string tag, int len, string opt)
     {
@@ -519,12 +590,21 @@ public static class HealthLog
         // 送信ホットパス(CustomRpcSender.SendMessage)から呼ばれるので、観測が送信を絶対に壊さないよう全体を包む。
         try
         {
+            long ts = Utils.TimeStamp;
+
             ref HostActionEntry entry = ref SendRing[SendRingIndex];
             entry.Tag = tag;
             entry.Len = len;
             entry.Opt = opt;
-            entry.Ts = Utils.TimeStamp;
+            entry.Ts = ts;
             SendRingIndex = (SendRingIndex + 1) % SendRing.Length;
+
+            ref HostActionEntry wide = ref TagRing[TagRingIndex];
+            wide.Tag = tag;
+            wide.Len = len;
+            wide.Opt = opt;
+            wide.Ts = ts;
+            TagRingIndex = (TagRingIndex + 1) % TagRing.Length;
         }
         catch { }
     }
