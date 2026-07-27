@@ -292,13 +292,13 @@ public class Deathpact : RoleBase
         dp.DeathpactTime?.Dispose();
         dp.DeathpactTime = null;
         ActiveDeathpacts.Remove(deathpact);
-        dp.PlayersInDeathpact.Clear();
 
+        // 視界/矢印の復帰はリストを空にする前に行う (破棄済み fake-null は除外)
         if (ReduceVisionWhileInPact.GetBool())
         {
-            foreach (PlayerControl player in dp.PlayersInDeathpact)
+            foreach (PlayerControl player in dp.PlayersInDeathpact.Where(a => a))
             {
-                foreach (PlayerControl otherPlayerInPact in dp.PlayersInDeathpact.Where(a => a.PlayerId != player.PlayerId))
+                foreach (PlayerControl otherPlayerInPact in dp.PlayersInDeathpact.Where(a => a && a.PlayerId != player.PlayerId))
                 {
                     if (ShowArrowsToOtherPlayersInPact.GetBool()) TargetArrow.Remove(player.PlayerId, otherPlayerInPact.PlayerId);
 
@@ -311,14 +311,18 @@ public class Deathpact : RoleBase
 
     public override void OnReportDeadBody()
     {
-        foreach (byte deathpact in ActiveDeathpacts)
+        // ClearDeathpact() がループ内で ActiveDeathpacts.Remove() するため、スナップショットを回す
+        foreach (byte deathpact in ActiveDeathpacts.ToArray())
         {
             if (KillDeathpactPlayersOnMeeting.GetBool())
             {
                 PlayerControl deathpactPlayer = Main.EnumeratePlayerControls().FirstOrDefault(a => a.PlayerId == deathpact);
                 if (deathpactPlayer == null || !deathpactPlayer.IsAlive()) continue;
 
-                foreach (PlayerControl player in PlayersInDeathpact) KillPlayerInDeathpact(deathpactPlayer, player);
+                // ActiveDeathpacts は static なので、自分の契約相手ではなくこの契約の持ち主のリストを使う
+                if (Main.PlayerStates[deathpact].Role is not Deathpact owner) continue;
+
+                foreach (PlayerControl player in owner.PlayersInDeathpact) KillPlayerInDeathpact(deathpactPlayer, player);
             }
 
             ClearDeathpact(deathpact);
