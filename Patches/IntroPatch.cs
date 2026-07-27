@@ -1402,8 +1402,12 @@ internal static class IntroCutsceneDestroyPatch
             // 【TOHK 統一 2026-07-17】暗転対策のフォーク独自タイミング機構 (会議安全窓/+8s予防フラッシュ/
             // +6s遅延) は全撤去し、TOHK 実戦形 (毎会議後 AftermeetingFlash + /kf + intro終了+1秒の初手会議)
             // に統一した。経緯は docs/bug-inbox.md BUG-20260717-05 / BUG-20260716-09。
+            // 【2026-07-28】固定 +1s は GM ホストの短縮 intro と遅いクライアントのレースを残す
+            // (BUG-20260727-01) ため、クライアント入場完了確認方式 (ClientEntryProbe) に置換。
+            // 全リモートクライアントの NetTransform seq 前進 (= intro 明けの証拠) を待ってから発火する。
+            // 最短 +1s (従来互換)・最大 +8s。Rollback bit: EndKnot_DATA/disable_entry_gate.txt
             if (Options.CurrentGameMode == CustomGameMode.Standard && Options.FirstTurnMeeting.GetBool())
-                LateTask.New(FirstTurnMeetingTrigger, 1f, "FirstTurnMeetingTrigger");
+                ClientEntryProbe.StartGate(FirstTurnMeetingTrigger);
 
             Utils.CheckAndSetVentInteractions();
         }
@@ -1459,7 +1463,7 @@ internal static class IntroCutsceneDestroyPatch
             
             if (!AmongUsClient.Instance.AmHost || !Lovers.PrivateChat.GetBool() || Options.ChatDuringGame.GetBool()) return;
 
-            // 初手強制会議 (FirstTurnMeetingTrigger) も intro 終了+1秒で走るため同一フレームで衝突する。
+            // 初手強制会議 (FirstTurnMeetingTrigger) が intro 終了+1〜8秒 (ClientEntryProbe ゲート) で走るため、
             // ここでの解禁は見送り、その会議が終わったあとの Utils.AfterMeetingTasks 側の解禁に任せる。
             if (Options.CurrentGameMode == CustomGameMode.Standard && Options.FirstTurnMeeting.GetBool()) return;
 
