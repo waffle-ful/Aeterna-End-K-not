@@ -30,7 +30,8 @@ internal class Command(string key, string arguments, Command.UsageLevels usageLe
         Modded,
         Host,
         HostOrModerator,
-        HostOrAdmin
+        HostOrAdmin,
+        HostOrDev
     }
 
     public enum UsageTimes
@@ -76,6 +77,7 @@ internal class Command(string key, string arguments, Command.UsageLevels usageLe
             case UsageLevels.Modded when !pc.IsModdedClient():
             case UsageLevels.HostOrModerator when !pc.IsHost() && (AmongUsClient.Instance.AmHost && !ChatCommands.IsPlayerModerator(pc.FriendCode)):
             case UsageLevels.HostOrAdmin when !pc.IsHost() && AmongUsClient.Instance.AmHost && !ChatCommands.IsPlayerAdmin(pc.FriendCode):
+            case UsageLevels.HostOrDev when !pc.IsHost() && AmongUsClient.Instance.AmHost && !pc.FriendCode.GetDevUser().up && !pc.FriendCode.IsLocalDev():
                 if (sendErrorMessage) Utils.SendMessage("\n", pc.PlayerId, GetString($"Commands.NoAccess.Level.{UsageLevel}"));
                 return false;
         }
@@ -161,7 +163,7 @@ internal static class ChatCommands
             new("Disconnect", "{team}", Command.UsageLevels.Host, Command.UsageTimes.InGame, DisconnectCommand, true, false, [GetString("CommandArgs.Disconnect.Team")]),
             new("R", "[role]", Command.UsageLevels.Everyone, Command.UsageTimes.Always, RCommand, true, false, [GetString("CommandArgs.R.Role")]),
             new("Up", "{role}", Command.UsageLevels.Host, Command.UsageTimes.InLobby, UpCommand, true, false, [GetString("CommandArgs.Up.Role")]),
-            new("SetRole", "{id} {role}", Command.UsageLevels.Host, Command.UsageTimes.InLobby, SetRoleCommand, true, false, [GetString("CommandArgs.SetRole.Id"), GetString("CommandArgs.SetRole.Role")]),
+            new("SetRole", "{id} {role}", Command.UsageLevels.HostOrDev, Command.UsageTimes.InLobby, SetRoleCommand, true, false, [GetString("CommandArgs.SetRole.Id"), GetString("CommandArgs.SetRole.Role")]),
             new("Help", "", Command.UsageLevels.Everyone, Command.UsageTimes.Always, HelpCommand, true, false),
             new("KCount", "", Command.UsageLevels.Everyone, Command.UsageTimes.InGame, KCountCommand, true, false),
             new("AddMod", "{id}", Command.UsageLevels.Host, Command.UsageTimes.Always, AddModCommand, true, false, [GetString("CommandArgs.AddMod.Id")]),
@@ -271,7 +273,7 @@ internal static class ChatCommands
             new("VoteStart", "", Command.UsageLevels.Everyone, Command.UsageTimes.InLobby, VoteStartCommand, true, false),
             new("Imitate", "{id}", Command.UsageLevels.Everyone, Command.UsageTimes.InMeeting, ImitateCommand, true, true, [GetString("CommandArgs.Imitate.Id")]),
             new("Retribute", "{id}", Command.UsageLevels.Everyone, Command.UsageTimes.InMeeting, RetributeCommand, true, true, [GetString("CommandArgs.Retribute.Id")]),
-            new("Revive", "{id}", Command.UsageLevels.Host, Command.UsageTimes.Always, ReviveCommand, true, false, [GetString("CommandArgs.Revive.Id")]),
+            new("Revive", "{id}", Command.UsageLevels.HostOrDev, Command.UsageTimes.Always, ReviveCommand, true, false, [GetString("CommandArgs.Revive.Id")]),
             new("Select", "{id} {role}", Command.UsageLevels.Everyone, Command.UsageTimes.InMeeting, SelectCommand, true, true, [GetString("CommandArgs.Select.Id"), GetString("CommandArgs.Select.Role")]),
             new("UIScale", "{scale}", Command.UsageLevels.Modded, Command.UsageTimes.Always, UIScaleCommand, true, false, [GetString("CommandArgs.UIScale.Scale")]),
             new("Fabricate", "{deathreason}", Command.UsageLevels.Everyone, Command.UsageTimes.InMeeting, FabricateCommand, true, true, [GetString("CommandArgs.Fabricate.DeathReason")]),
