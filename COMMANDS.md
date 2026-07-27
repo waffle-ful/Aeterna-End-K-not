@@ -19,7 +19,34 @@ End K not で使えるチャットコマンドを権限別にまとめました�
   - ホスト — ロビーホストのみ
   - ホスト / モデレーター — ホストおよび `Moderators.txt` 登録ユーザー
   - ホスト / 管理者 — ホストおよび `Admins.txt` 登録ユーザー
+  - ホスト / 開発者 — ホストおよび開発者タグ保持者(管理者・モデレーターであっても非ホストでは使用不可)
   - 役職コマンド・隠しコマンド — 特定の役職時のみ機能、または開発用 (`[dev]`)
+
+## 権限早見表
+
+:heavy_check_mark: 常に使用可 / :x: 使用不可 / :question: ホスト設定次第
+
+権限は開発者(Dev) > 管理者(Admin) > モデレーター(Moderator) > VIP の順に上位を含みます(開発者は管理者・モデレーター・VIP 向けコマンドもすべて使えます)。ただし `/setrole` `/revive` はこの継承の外側にある独立した判定で、開発者タグの有無だけを見ます。
+
+| コマンド | 一般プレイヤー | VIP | モデレーター | 管理者 | 開発者 | ホスト |
+|---|---|---|---|---|---|---|
+| /color, /rename, /tpin, /tpout | :question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+| /ban, /kick | :x: | :x: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+| /say | :x: | :x: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+| /start | :x: | :x: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+| /poll | :x: | :x: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+| /mute | :x: | :x: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+| /ds(draftstart) | :x: | :x: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+| /gmpoll, /mpoll | :x: | :x: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+| /fix | :x: | :x: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+| /readycheck | :x: | :x: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+| /exe | :x: | :x: | :x: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+| /end | :x: | :x: | :x: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+| /afkexempt | :x: | :x: | :x: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+| /os(optionset) | :x: | :x: | :x: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+| /unmute | :x: | :x: | :x: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+| **/setrole, /revive** | :x: | :x: | :x: | :x: | :heavy_check_mark: | :heavy_check_mark: |
+| /cs(changesetting), /kill, /addmod, /addvip, /addadmin など | :x: | :x: | :x: | :x: | :x: | :heavy_check_mark: |
 
 ## 全員が使用可能
 
@@ -104,12 +131,10 @@ End K not の DLL を導入したクライアントだけで使えるコマン�
 | /givekill / /gk | `{id}` | ロビー | ロビーでプレイヤーにキル能力を付与する。 |
 | /hn / /hidename | — | ロビー | あなたの名前を隠す |
 | /hw / /hwhisper | `{id} {message}` | 常時 | ホストとして 1人のプレイヤーに 1つの助けを乞うメッセージをささやく。 |
-| /暗殺 | `{id}` | 常時 | 1人のプレイヤーを殺害する |
+| /kill / /暗殺 | `{id}` | 常時 | 1人のプレイヤーを殺害する |
 | /level | `{level}` | ロビー | あなたのレベルを変更する |
 | /mw / /messagewait | `{duration}` | 常時 | システムメッセージの バッファ時間をセットする |
 | /mt / /hy | — | ゲーム中 | 会議を呼ぶ あるいは 現在の会議を終了する |
-| /復活 | `{id}` | ゲーム中 | Revives a dead player. Requires special access or No Game End enabled. |
-| /setrole / /setaddon | `{id} {role}` | ロビー | 次のゲームでの プレイヤーの 役割/属性をセット |
 | /up | `{role}` | ロビー | [非推奨] 代わりに /setrole または /setaddon を使用しましょう |
 
 ## ホスト / モデレーター
@@ -140,6 +165,15 @@ End K not の DLL を導入したクライアントだけで使えるコマン�
 | /exe | `{id}` | 常時 | 1人のプレイヤーを処刑する |
 | /os / /optionset | `{chance} {role}` | ロビー | 1つの役割の出現確率をセットする |
 | /unmute | `{id}` | 常時 | 誰かのミュートを解除する。 |
+
+## ホスト / 開発者
+
+ホスト、または開発者タグを持つプレイヤーが使えるコマンド。管理者・モデレーターであっても非ホストでは使用不可。
+
+| コマンド | 引数 | タイミング | 説明 |
+|----------|------|-----------|------|
+| /revive / /復活 | `{id}` | 常時 | 死亡プレイヤーを蘇生する。特別権限 もしくは ゲーム終了無効 が必要。 |
+| /setrole / /setaddon | `{id} {role}` | ロビー | 次のゲームでの プレイヤーの 役割/属性をセット |
 
 ## 役職コマンド・隠しコマンド
 
