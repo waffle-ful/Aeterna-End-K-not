@@ -1035,6 +1035,24 @@ namespace EndKnot
         }
     }
 
+    // MapExtender 専用のポータル。見た目は Portal と同じだが、以下2点のために別クラスにしている:
+    //   1. 基底の OnMeeting() は「会議で Despawn → 会議終了後に同じ座標で自動再生成」する。
+    //      毎ラウンド張り直す MapExtender ではこの再生成が役職側のどのフィールドからも
+    //      参照されないゾンビ CNO になり、会議のたびに積み上がる。Tornado と同じく消えたきりにする。
+    //   2. PortalMaker の OfType<Portal>() 一括 Despawn に巻き込まれない (別クラスなのでマッチしない)。
+    internal sealed class MapExtenderPortal : CustomNetObject
+    {
+        public MapExtenderPortal(Vector2 position)
+        {
+            CreateNetObject("<size=70%><line-height=97%><cspace=0.16em><mark=#2b006b>WWWW</mark>\n<mark=#2b006b>W</mark><mark=#fa69ff>WW</mark><mark=#2b006b>W</mark>\n<mark=#2b006b>W</mark><mark=#fa69ff>WW</mark><mark=#2b006b>W</mark>\n<mark=#2b006b>W</mark><mark=#fa69ff>WW</mark><mark=#2b006b>W</mark>\n<mark=#2b006b>W</mark><mark=#fa69ff>WW</mark><mark=#2b006b>W</mark>\n<mark=#2b006b>WWWW", position);
+        }
+
+        public override void OnMeeting()
+        {
+            Despawn();
+        }
+    }
+
     internal sealed class Plant : CustomNetObject
     {
         public bool Spawned;

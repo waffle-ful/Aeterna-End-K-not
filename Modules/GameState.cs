@@ -98,6 +98,9 @@ public class PlayerState(byte playerId)
         // Maguro
         Stopped,
 
+        // MapExtender
+        Erased,
+
         etc = -1
     }
 
