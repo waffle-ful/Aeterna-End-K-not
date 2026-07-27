@@ -17,6 +17,8 @@ import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import bacteriaUrl from "./assets/Bacteria.fbx?url";
+import crewGlbUrl from "./assets/crew.glb?url"; // Blender 製クルー素体 (リグ + 走りループ同梱)
+import enemyGlbUrl from "./assets/enemy.glb?url"; // Blender 製の敵ブロブ (静的・頂点カラー)
 import levelAmbientUrl from "./assets/level-ambient.mp3?url"; // Level! のアンビエント (ポケットサウンド素材を基にユーザー作成)
 import { applyGate, type GateOp, gateLabel, MAX_CREW } from "./gate";
 
@@ -224,53 +226,59 @@ function saveArmorEquip(id: string): void { localStorage.setItem(ARMOR_EQUIP_KEY
  * クルーが着る装甲プレート (騎士のシルエット: 兜＋キュイラス＋肩当て＋腰当て)。
  * 素体は別途マテリアルで装甲化するので、ここは「低可動部 (胴・肩・頭)」だけに固める＝走っても浮かない。
  * 手足は素体の金属化で表現 (剛体プレートを四肢に付けると振りに追従できず分離するため付けない)。
+ *
+ * 【採寸の基準】crew.glb の素体実寸に合わせてある。座標系は素体と同じ (足元 y=0・前方 z+)。
+ *   全高 1.4056 / 頭 中心 y1.16・半径 0.244 / 胸 中心 y0.86・半径 0.214 / 腰 中心 y0.59・半径 0.204
+ *   肩関節 x±0.253 y0.86 / 前腕の内側面 x±0.230 (胸甲がこれを超えると腕を飲み込む)
+ * 素体を作り直したらここも measure し直すこと。ズレると装甲が体より大きくなって全身を飲み込む。
  */
 function buildWornArmorGeometry(def: ArmorDef): THREE.BufferGeometry {
     const parts: THREE.BufferGeometry[] = [];
     const P = def.plate, A = def.accent;
-    // 胴 (キュイラス): 前後に厚い胸甲 + 中央リッジ + 鎖骨ガード
-    const cuir = new THREE.BoxGeometry(0.54, 0.54, 0.42); cuir.translate(0, 0.92, 0); parts.push(paint(cuir, P));
-    const collar = new THREE.BoxGeometry(0.34, 0.16, 0.44); collar.translate(0, 1.12, 0); parts.push(paint(collar, A));
-    const ridge = new THREE.BoxGeometry(0.08, 0.42, 0.08); ridge.translate(0, 0.92, 0.23); parts.push(paint(ridge, A));
-    // 肩当て (パルドロン): 左右の大きな丸み + 縁取り
+    // 胴 (キュイラス): 胸半径 0.214 に薄く乗せる。半幅 0.22 は前腕の内側面 0.230 の内側に収める
+    const cuir = new THREE.BoxGeometry(0.44, 0.40, 0.44); cuir.translate(0, 0.86, 0); parts.push(paint(cuir, P));
+    const collar = new THREE.BoxGeometry(0.30, 0.10, 0.38); collar.translate(0, 1.05, 0); parts.push(paint(collar, A));
+    const ridge = new THREE.BoxGeometry(0.07, 0.32, 0.07); ridge.translate(0, 0.86, 0.23); parts.push(paint(ridge, A));
+    // 肩当て (パルドロン): 肩関節 (x±0.253 y0.86) に被せる。外端 0.37 は素体の最大半幅 0.437 の内側
     for (const sx of [-1, 1]) {
-        const pad = new THREE.BoxGeometry(0.3, 0.28, 0.42); pad.translate(sx * 0.35, 1.16, 0); parts.push(paint(pad, P));
-        const trim = new THREE.BoxGeometry(0.33, 0.07, 0.45); trim.translate(sx * 0.35, 1.03, 0); parts.push(paint(trim, A));
+        const pad = new THREE.BoxGeometry(0.20, 0.20, 0.30); pad.translate(sx * 0.27, 0.95, 0); parts.push(paint(pad, P));
+        const trim = new THREE.BoxGeometry(0.22, 0.05, 0.32); trim.translate(sx * 0.27, 0.845, 0); parts.push(paint(trim, A));
     }
     // 腰当て (タセット)
-    const skirt = new THREE.BoxGeometry(0.52, 0.22, 0.38); skirt.translate(0, 0.62, 0); parts.push(paint(skirt, P));
-    // 兜 (ヘルム): 頭を覆うドーム + バイザースリット
-    const helm = new THREE.BoxGeometry(0.38, 0.32, 0.38); helm.translate(0, 1.42, 0); parts.push(paint(helm, P));
-    const slit = new THREE.BoxGeometry(0.32, 0.05, 0.06); slit.translate(0, 1.4, 0.19); parts.push(paint(slit, A));
+    const skirt = new THREE.BoxGeometry(0.44, 0.18, 0.40); skirt.translate(0, 0.60, 0); parts.push(paint(skirt, P));
+    // 兜 (ヘルム): 頭 (半径 0.244) にちょうど被さる椀。天面 1.43 が素体頭頂 1.406 を少しだけ超える
+    const helm = new THREE.BoxGeometry(0.51, 0.34, 0.51); helm.translate(0, 1.26, 0); parts.push(paint(helm, P));
+    const slit = new THREE.BoxGeometry(0.36, 0.05, 0.06); slit.translate(0, 1.20, 0.25); parts.push(paint(slit, A));
 
     // --- 装備ごとの個性パーツ (シルエットで一目で分かるように派手めに) ---
     const spike = (w: number, h: number, x: number, y: number, z: number, rotZ: number, col: number): void => {
         const s = new THREE.BoxGeometry(w, h, w); s.rotateZ(rotZ); s.translate(x, y, z); parts.push(paint(s, col));
     };
+    // 個性パーツも兜の天面 (y1.43) と肩当て (x±0.27 y0.95) を基準に採寸してある。
     switch (def.id) {
         case "none": { // 控えめなトサカ
-            const crest = new THREE.BoxGeometry(0.07, 0.18, 0.34); crest.translate(0, 1.62, 0); parts.push(paint(crest, A));
+            const crest = new THREE.BoxGeometry(0.07, 0.16, 0.32); crest.translate(0, 1.47, 0); parts.push(paint(crest, A));
             break;
         }
         case "tech": { // アンテナ2本 + 胸の発光コア + 角ばった肩スパイク
-            for (const sx of [-1, 1]) { const ant = new THREE.BoxGeometry(0.03, 0.34, 0.03); ant.translate(sx * 0.12, 1.72, -0.05); parts.push(paint(ant, A)); }
-            const core = new THREE.BoxGeometry(0.16, 0.16, 0.06); core.translate(0, 0.96, 0.24); parts.push(paint(core, A));
-            for (const sx of [-1, 1]) spike(0.12, 0.26, sx * 0.5, 1.22, 0, sx * -0.5, P);
+            for (const sx of [-1, 1]) { const ant = new THREE.BoxGeometry(0.03, 0.28, 0.03); ant.translate(sx * 0.10, 1.57, -0.04); parts.push(paint(ant, A)); }
+            const core = new THREE.BoxGeometry(0.15, 0.15, 0.06); core.translate(0, 0.90, 0.23); parts.push(paint(core, A));
+            for (const sx of [-1, 1]) spike(0.10, 0.22, sx * 0.37, 1.02, 0, sx * -0.5, P);
             break;
         }
         case "blaze": { // 炎の角(斜め上のスパイク3本) + 肩の炎
-            spike(0.1, 0.4, 0, 1.78, 0, 0, A);
-            for (const sx of [-1, 1]) { spike(0.09, 0.34, sx * 0.16, 1.74, 0, sx * 0.5, A); spike(0.1, 0.3, sx * 0.46, 1.34, 0, sx * 0.35, A); }
+            spike(0.09, 0.32, 0, 1.60, 0, 0, A);
+            for (const sx of [-1, 1]) { spike(0.08, 0.28, sx * 0.13, 1.56, 0, sx * 0.5, A); spike(0.09, 0.24, sx * 0.35, 1.06, 0, sx * 0.35, A); }
             break;
         }
         case "dark": { // 禍々しい湾曲ホーン(左右) + 棘の肩
-            for (const sx of [-1, 1]) { spike(0.11, 0.4, sx * 0.18, 1.74, 0, sx * 0.7, A); spike(0.12, 0.28, sx * 0.52, 1.3, 0, sx * 0.6, P); }
-            const thorn = new THREE.BoxGeometry(0.08, 0.3, 0.08); thorn.translate(0, 1.76, -0.08); parts.push(paint(thorn, A));
+            for (const sx of [-1, 1]) { spike(0.10, 0.32, sx * 0.15, 1.56, 0, sx * 0.7, A); spike(0.10, 0.22, sx * 0.38, 1.02, 0, sx * 0.6, P); }
+            const thorn = new THREE.BoxGeometry(0.07, 0.24, 0.07); thorn.translate(0, 1.58, -0.07); parts.push(paint(thorn, A));
             break;
         }
         case "aegis": { // 王冠(3つの尖り) + 肩のウィング
-            for (const dx of [-0.13, 0, 0.13]) { const p = new THREE.BoxGeometry(0.07, dx === 0 ? 0.26 : 0.18, 0.07); p.translate(dx, 1.66, 0); parts.push(paint(p, A)); }
-            for (const sx of [-1, 1]) { const wing = new THREE.BoxGeometry(0.06, 0.18, 0.5); wing.rotateX(0.3); wing.translate(sx * 0.48, 1.24, -0.12); parts.push(paint(wing, A)); }
+            for (const dx of [-0.11, 0, 0.11]) { const p = new THREE.BoxGeometry(0.06, dx === 0 ? 0.22 : 0.15, 0.06); p.translate(dx, 1.52, 0); parts.push(paint(p, A)); }
+            for (const sx of [-1, 1]) { const wing = new THREE.BoxGeometry(0.05, 0.15, 0.42); wing.rotateX(0.3); wing.translate(sx * 0.36, 1.05, -0.10); parts.push(paint(wing, A)); }
             break;
         }
     }
@@ -704,6 +712,8 @@ const CREW_BONE_NAMES = [
     "upperArmR", "foreArmR", "handR",
 ] as const;
 type CrewBoneName = (typeof CREW_BONE_NAMES)[number];
+// 武装中に走りの腕ポンプを潰して構えポーズへ差し替えるボーン。
+const CREW_AIM_BONES: string[] = ["upperArmL", "foreArmL", "upperArmR", "foreArmR"];
 
 // 各ボーンの rest ワールド座標 (足元 y=0・前方 +z・現クルーと同程度の身長)。
 // メタボール配置・スキンウェイト・ボーン rest 位置の三者で同じ値を使い整合させる。
@@ -840,11 +850,19 @@ function attachCrewSkinWeights(geo: THREE.BufferGeometry, segs: BoneSeg[], boneI
     geo.setAttribute("skinWeight", new THREE.Float32BufferAttribute(skinWeight, 4));
 }
 
-// 素体方式の切替 (優先順: SDF > メタボール > プリミティブ)。
-// USE_SDF_BODY=true(既定): カプセル距離関数を smooth-min で結合し Marching Cubes で一枚皮化。
-//   関節だけ滑らかにフィレットされ、肢は管の形を保つ (Mob Control 風の理想)。
-// USE_METABALL_BODY=true: 旧メタボール (肢が胴に吸収されのっぺり)。素体研究用に残置。
-// 両 false: 太い連続プリミティブ (カプセル・継ぎ目は出るが確実)。
+// 素体方式の切替 (優先順: GLB > SDF > メタボール > プリミティブ)。
+// USE_GLB_BODY=true(既定): Blender で作った素体 (crew.glb) を使う。スキンウェイト・走りクリップ
+//   ともにモデル同梱。これが本番の見た目。
+//
+// ⚠️ 下の手続き生成 3 種は **素体研究用の経路であって、見た目の等価なフォールバックではない**。
+//   これらは CREW_BONE_REST の旧「スリム体型」で組まれているのに対し、buildWornArmorGeometry は
+//   crew.glb の実寸 (ずんぐり体型) に採寸してある。手続き経路に落ちると装甲が素体より大きく、
+//   兜と胸甲が体を丸ごと飲み込む。装甲と素体は必ずセットで採寸すること。
+//   crew.glb はバンドル同梱アセットなので、読めない = ビルドが壊れている状況。
+// USE_SDF_BODY=true: カプセル距離関数を smooth-min で結合し Marching Cubes で一枚皮化。
+// USE_METABALL_BODY=true: 旧メタボール (肢が胴に吸収されのっぺり)。
+// 全 false: 太い連続プリミティブ (カプセル・継ぎ目は出るが確実)。
+const USE_GLB_BODY: boolean = true;
 const USE_SDF_BODY: boolean = true;
 const USE_METABALL_BODY: boolean = false;
 
@@ -1132,6 +1150,191 @@ function buildCrewRunClip(): { clip: THREE.AnimationClip; duration: number } {
     push("foreArmL", (ph) => el(ph));
     const clip = new THREE.AnimationClip("crewRun", duration, tracks);
     return { clip, duration };
+}
+
+// =============================================================
+//  Blender 製クルー素体 (crew.glb) — 遅延シングルトン
+//  1 メッシュ / 1 マテリアル / 13 ボーン。スキンウェイトと走りクリップはモデル同梱で、
+//  上の SDF + attachCrewSkinWeights + buildCrewRunClip の一式を置き換える。
+//  buildCrowdMesh() は同期なので launchCrewRun() が await して先にキャッシュを埋める。
+//  失敗時は crewModel=null のまま → 従来の手続き生成へフォールバック (ゲームは壊さない)。
+// =============================================================
+// ロード結果はモジュール単位のテンプレート。ゲーム 1 回ぶんの実体は instantiateCrewModel() で
+// SkeletonUtils.clone して作る。ボーンは bakeCrewBuckets が姿勢を書き換えるうえ initSkeleton が
+// matrixAutoUpdate を落とすので、テンプレートを直に使うとミニゲームを開き直したとき前回の姿勢が
+// 残ったまま boneInverses が計算され、素体が歪む。
+type CrewModel = {
+    scene: THREE.Group; // 検証済みテンプレート (clone 元・描画には使わない)
+    clip: THREE.AnimationClip; // 走りループ
+    aimPose: Map<string, THREE.Quaternion>; // crewAim クリップ先頭コマの腕ボーン local 回転
+};
+/** ゲーム 1 回ぶんの実体。geometry は clone 間で共有されるので dispose してはいけない。 */
+type CrewInstance = {
+    geometry: THREE.BufferGeometry; // skinIndex/skinWeight 付き・bind 空間 (bindMatrix=単位)
+    bones: THREE.Bone[]; // 親→子順 (bakeCrewBuckets が親の matrixWorld を先に確定させる前提)
+    root: THREE.Bone;
+};
+let crewModel: CrewModel | null = null;
+let crewModelStarted = false;
+let crewModelPromise: Promise<CrewModel | null> | null = null;
+
+/** テンプレートから SkinnedMesh を取り出す (検証は extractCrewModel 側で済んでいる前提)。 */
+function findSkinned(root: THREE.Object3D): THREE.SkinnedMesh | null {
+    let hit: THREE.SkinnedMesh | null = null;
+    root.traverse((o) => {
+        if (!hit && (o as THREE.SkinnedMesh).isSkinnedMesh) hit = o as THREE.SkinnedMesh;
+    });
+    return hit;
+}
+
+/** ゲーム 1 回ぶんの素体+ボーンを作る。ボーンは毎回新品 (前回の姿勢を持ち越さない)。 */
+function instantiateCrewModel(model: CrewModel): CrewInstance {
+    const clone = cloneSkeleton(model.scene) as THREE.Group;
+    const mesh = findSkinned(clone)!;
+    clone.updateMatrixWorld(true);
+    const bones = mesh.skeleton.bones.slice() as THREE.Bone[];
+    const boneSet = new Set<THREE.Object3D>(bones);
+    const root = bones.find((b) => !b.parent || !boneSet.has(b.parent))!;
+    return { geometry: mesh.geometry, bones, root };
+}
+
+/** GLTF の中身を InstancedMesh2 が食える形に取り出す。契約違反は例外にして呼び出し元で握る。 */
+function extractCrewModel(scene: THREE.Group, clips: THREE.AnimationClip[]): CrewModel {
+    let skinned: THREE.SkinnedMesh | null = null;
+    scene.traverse((o) => {
+        if (!skinned && (o as THREE.SkinnedMesh).isSkinnedMesh) skinned = o as THREE.SkinnedMesh;
+    });
+    if (!skinned) throw new Error("crew.glb に SkinnedMesh がありません");
+    const mesh = skinned as THREE.SkinnedMesh;
+    scene.updateMatrixWorld(true);
+
+    // initSkeleton() は bindMatrix を単位行列で作り直すので、GLB 側も単位でないと skinning がずれる。
+    const bindEls = mesh.bindMatrix.elements;
+    const ident = new THREE.Matrix4().elements;
+    if (bindEls.some((v, i) => Math.abs(v - ident[i]) > 1e-5)) {
+        throw new Error("crew.glb の bindMatrix が単位行列ではありません (メッシュに変換が乗っています)");
+    }
+
+    const bones = mesh.skeleton.bones.slice() as THREE.Bone[];
+    // skinIndex は skin.joints の並びを指すので、並べ替えずに親先行であることだけを検証する。
+    // (違反すると bakeCrewBuckets が親の未更新な matrixWorld を掛けて全バケットが崩れる)
+    const posOf = new Map<THREE.Object3D, number>(bones.map((b, i) => [b as THREE.Object3D, i]));
+    for (let i = 0; i < bones.length; i++) {
+        const p = bones[i].parent;
+        if (p && posOf.has(p) && posOf.get(p)! > i) {
+            throw new Error(`crew.glb のボーン順が親先行ではありません: ${bones[i].name}`);
+        }
+    }
+    const boneIndexOf: Record<string, number> = {};
+    bones.forEach((b, i) => { boneIndexOf[b.name] = i; });
+    for (const need of CREW_BONE_NAMES) {
+        if (!(need in boneIndexOf)) throw new Error(`crew.glb にボーン ${need} がありません`);
+    }
+
+    // root ボーン (親がボーンでないもの) を GLB の階層から切り離す。
+    // setBonesAt が bone.parent.matrixWorld を無条件に読むため、親は呼び出し元で必ず付け直す。
+    const root = bones.find((b) => !b.parent || !posOf.has(b.parent));
+    if (!root) throw new Error("crew.glb の root ボーンが特定できません");
+
+    const geometry = mesh.geometry;
+    if (!geometry.getAttribute("skinIndex") || !geometry.getAttribute("skinWeight")) {
+        throw new Error("crew.glb にスキンウェイトがありません");
+    }
+
+    const findClip = (name: string) => clips.find((c) => c.name === name);
+    const clip = findClip("crewRun") ?? clips[0];
+    if (!clip) throw new Error("crew.glb に走りクリップがありません");
+    clip.trim();          // 先頭キーが t>0 だと setTime(0) が食い違うので 0 起点へ寄せる
+    clip.resetDuration();
+
+    // 構えポーズ: crewAim の先頭コマから腕ボーンの local 回転だけ拾う。
+    // (手打ち Euler は GLB のボーン local 軸と噛み合わないので、ポーズも Blender 側を正典にする)
+    const aimPose = new Map<string, THREE.Quaternion>();
+    const aim = findClip("crewAim");
+    if (aim) {
+        for (const track of aim.tracks) {
+            if (!(track instanceof THREE.QuaternionKeyframeTrack)) continue;
+            const boneName = track.name.slice(0, track.name.lastIndexOf("."));
+            if (!CREW_AIM_BONES.includes(boneName)) continue;
+            const v = track.values;
+            aimPose.set(boneName, new THREE.Quaternion(v[0], v[1], v[2], v[3]));
+        }
+    }
+    void geometry; void root; void boneIndexOf; // 検証のためだけに取り出している (実体は clone 側)
+    return { scene, clip, aimPose };
+}
+
+function loadCrewModel(): Promise<CrewModel | null> {
+    if (crewModelStarted) return crewModelPromise!;
+    crewModelStarted = true;
+    crewModelPromise = new Promise<CrewModel | null>((resolve) => {
+        try {
+            new GLTFLoader().load(
+                crewGlbUrl,
+                (gltf) => {
+                    try {
+                        crewModel = extractCrewModel(gltf.scene, gltf.animations);
+                    } catch (e) {
+                        console.error(
+                            "[crewrun] crew.glb を使えません。旧スリム素体へ落ちますが、装甲は crew.glb の"
+                            + "実寸で採寸されているため装甲が体を飲み込んだ見た目になります:", e);
+                        crewModel = null;
+                    }
+                    resolve(crewModel);
+                },
+                undefined,
+                (e) => { console.error("[crewrun] crew.glb のロードに失敗 (装甲の採寸が合わなくなります):", e); resolve(null); },
+            );
+        } catch (e) {
+            console.warn("[crewrun] crew.glb のロードに失敗:", e);
+            resolve(null);
+        }
+    });
+    return crewModelPromise;
+}
+
+// =============================================================
+//  Blender 製の敵ブロブ (enemy.glb) — 遅延シングルトン
+//  ボーンもアニメも無い静的メッシュ 1 個。頂点カラー (COLOR_0) で 胴/トゲ/目 を塗り分けてある。
+//  【敵を人型にしないのは意図的】味方=人型/青、敵=塊/赤 のシルエット差が乱戦の視認性そのもの。
+//  揃えるのは「滑らかな一枚皮 + ツヤのあるプラ質感」という描画の言語の方だけ。
+//  失敗時は enemyGeoModel=null のまま → 従来の手続きブロブ (カクカク) へフォールバック。
+// =============================================================
+let enemyGeoModel: THREE.BufferGeometry | null = null;
+let enemyModelStarted = false;
+let enemyModelPromise: Promise<THREE.BufferGeometry | null> | null = null;
+
+function loadEnemyModel(): Promise<THREE.BufferGeometry | null> {
+    if (enemyModelStarted) return enemyModelPromise!;
+    enemyModelStarted = true;
+    enemyModelPromise = new Promise<THREE.BufferGeometry | null>((resolve) => {
+        try {
+            new GLTFLoader().load(
+                enemyGlbUrl,
+                (gltf) => {
+                    let found: THREE.BufferGeometry | null = null;
+                    gltf.scene.traverse((o) => {
+                        const m = o as THREE.Mesh;
+                        if (!found && m.isMesh && m.geometry?.getAttribute("position")) found = m.geometry;
+                    });
+                    if (!found) console.warn("[crewrun] enemy.glb にメッシュがありません");
+                    else if (!(found as THREE.BufferGeometry).getAttribute("color")) {
+                        // 頂点カラーが無いと単色になってトゲも目も潰れるので、手続き版に任せる
+                        console.warn("[crewrun] enemy.glb に頂点カラーがありません");
+                        found = null;
+                    }
+                    enemyGeoModel = found;
+                    resolve(found);
+                },
+                undefined,
+                (e) => { console.warn("[crewrun] enemy.glb のロードに失敗:", e); resolve(null); },
+            );
+        } catch (e) {
+            console.warn("[crewrun] enemy.glb のロードに失敗:", e);
+            resolve(null);
+        }
+    });
+    return enemyModelPromise;
 }
 
 /** 雑魚モンスター (人型でないトゲ団子)。クルーと一目で区別できる赤い塊。 */
@@ -2611,6 +2814,9 @@ export interface CrewRunHandle {
 
 /** Crew Run 3D を host 内に起動。onExit は「もどる」/閉じるで呼ぶ。 */
 export async function launchCrewRun(host: HTMLElement, onExit: () => void): Promise<CrewRunHandle> {
+    // buildCrowdMesh() は同期なので、素体 GLB はここで待ってからゲームを組む。
+    // 失敗しても null が返るだけで、その場合は手続き素体で起動する。
+    if (USE_GLB_BODY) await Promise.all([loadCrewModel(), loadEnemyModel()]);
     const game = new CrewRun3D(host, onExit);
     game.start();
     // 開発時のみ: バランス検証 (F2 デバッグ表示 / 自動テスト) から内部状態へ触れるフック。
@@ -2782,8 +2988,15 @@ class CrewRun3D {
     private gaitPhase = 0; // 連続歩行サイクル位相 (0..1) — スピード連動で進み、体の沈みとクリップ時刻を駆動
     private readonly enemyGeo = buildCrewGeometry(C_ENEMY);
     private readonly archerGeo = buildCrewGeometry(C_ARCHER);
-    private readonly blobGeo = buildBlobGeometry();
+    // 敵ブロブ: Blender 製 (enemy.glb) が読めていればそれを、駄目なら従来の手続きブロブ。
+    // launchCrewRun が構築前に await 済みなのでフィールド初期化子から参照して良い。
+    private readonly blobGeo = (USE_GLB_BODY ? enemyGeoModel : null) ?? buildBlobGeometry();
     private readonly crewMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+    // 敵の共通質感: 味方の crewSkinMat と同じツヤのプラ質感を頂点カラー版で。
+    // 味方が滑らか＋ツヤになったのに敵だけ Lambert のマット塗りだと画風が割れる。
+    private readonly enemyMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.34, metalness: 0.0, envMapIntensity: 0.85 });
+    // 王ボスの護衛: 味方素体をそのまま赤く塗って流用 (静的なのでレスト姿勢で立つ)。
+    private readonly guardMat = new THREE.MeshStandardMaterial({ color: C_ENEMY.body, roughness: 0.34, metalness: 0.0, envMapIntensity: 0.85 });
     private readonly woodMat: THREE.MeshLambertMaterial;
     private readonly dummy = new THREE.Object3D();
 
@@ -2792,6 +3005,7 @@ class CrewRun3D {
     // crewSkinMat: vertexColors を使わない単色 (青) スキニング用マテリアル。
     private crowdMesh!: InstancedMesh2;
     private crewBodyGeo!: THREE.BufferGeometry;
+    private crewGeoOwned = true; // 手続き生成なら破棄する / GLB 由来なら共有なので破棄しない
     // おもちゃプラスチック質感: 低 roughness + 環境マップ反射で艶を出す (Mob Control 風)。
     private readonly crewSkinMat = new THREE.MeshStandardMaterial({ color: C_ALLY.body, roughness: 0.32, metalness: 0.0, envMapIntensity: 0.85 });
     // 巨大ロボ (ガンダム風): 金属メカ。vertexColors + 高 metalness + 環境マップで反射。
@@ -2805,6 +3019,9 @@ class CrewRun3D {
     private crewVisibleCount = 0; // 現在 visible にしているインスタンス数 (差分トグル用)
     private crewArmed = false; // 武器所持中 (weaponMesh あり) → 腕を前方の構えポーズにする (第二弾)
     // 構え (両手で前方に銃を抱える) の腕ボーン回転。bakeCrewBuckets で走りの腕に上書きする。
+    // 構えポーズの差し替え表: ボーン添字 -> local 回転。GLB 経路では crewAim クリップ由来、
+    // 手続き経路では下の AIM_* 由来。ボーン順がリグの出所で変わるので添字直書きはしない。
+    private crewAimIndex = new Map<number, THREE.Quaternion>();
     private static readonly AIM_UPPER_L = new THREE.Quaternion().setFromEuler(new THREE.Euler(-1.5, 0.3, 0));
     private static readonly AIM_FORE_L = new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.2, 0.28, 0));
     private static readonly AIM_UPPER_R = new THREE.Quaternion().setFromEuler(new THREE.Euler(-1.5, -0.3, 0));
@@ -3501,33 +3718,67 @@ class CrewRun3D {
     }
 
     private buildCrowdMesh(): void {
-        // 1) スケルトンを組み、boneIndex を確定
-        const { skeleton, bones, root, boneIndexOf } = this.buildCrewSkeleton();
-        this.crewSkeleton = skeleton;
-        this.crewBones = bones;
-        // 2) 素体生成。優先順: SDF+smin (一枚皮・関節フィレット) > メタボール > プリミティブ。
+        // 1) 素体・スケルトン・走りクリップを用意する。
+        //    GLB (Blender 製) が読めていればそれを丸ごと使い、駄目なら従来の手続き生成へ落ちる。
+        const model = USE_GLB_BODY ? crewModel : null;
+        const bones: THREE.Bone[] = [];
+        let root: THREE.Bone;
         let geo: THREE.BufferGeometry;
-        const implicit = USE_SDF_BODY ? buildCrewBodySDF() : (USE_METABALL_BODY ? buildCrewBodyMetaball() : null);
-        if (implicit) {
-            attachCrewSkinWeights(implicit, crewBoneSegments(), boneIndexOf);
-            geo = implicit;
+        let clip: THREE.AnimationClip;
+        let aimPose: Map<string, THREE.Quaternion>;
+        if (model) {
+            // clone してゲーム 1 回ぶんのボーンを作る (テンプレートを直に使うと開き直しで姿勢が残る)。
+            const inst = instantiateCrewModel(model);
+            bones.push(...inst.bones);
+            root = inst.root;
+            geo = inst.geometry; // clone 間で共有 → dispose 禁止
+            clip = model.clip;
+            aimPose = model.aimPose;
         } else {
-            geo = buildCrewBodyPrimitive(boneIndexOf);
+            const built = this.buildCrewSkeleton();
+            bones.push(...built.bones);
+            root = built.root;
+            const boneIndexOf = built.boneIndexOf;
+            // 優先順: SDF+smin (一枚皮・関節フィレット) > メタボール > プリミティブ。
+            const implicit = USE_SDF_BODY ? buildCrewBodySDF() : (USE_METABALL_BODY ? buildCrewBodyMetaball() : null);
+            if (implicit) {
+                attachCrewSkinWeights(implicit, crewBoneSegments(), boneIndexOf);
+                geo = implicit;
+            } else {
+                geo = buildCrewBodyPrimitive(boneIndexOf);
+            }
+            clip = buildCrewRunClip().clip;
+            // 手続きリグはボーン local 軸 = ワールド軸なので、手打ち Euler の構えポーズがそのまま使える。
+            aimPose = new Map([
+                ["upperArmL", CrewRun3D.AIM_UPPER_L], ["foreArmL", CrewRun3D.AIM_FORE_L],
+                ["upperArmR", CrewRun3D.AIM_UPPER_R], ["foreArmR", CrewRun3D.AIM_FORE_R],
+            ]);
         }
         this.crewBodyGeo = geo;
-        // 3) root bone の親 (matrixWorld=identity) を用意。AnimationMixer のターゲットにもする。
+        this.crewGeoOwned = !model; // GLB 由来のジオメトリは clone 間で共有なので dispose しない
+        this.crewBones = bones;
+        // 2) root bone の親 (matrixWorld=identity) を用意。AnimationMixer のターゲットにもする。
         //    bone は scene には足さない (描画は InstancedMesh2 が boneTexture で行う)。
+        //    GLB 経路では root を gltf.scene から切り離す効果も兼ねる。
         this.crewRigRoot = new THREE.Object3D();
         this.crewRigRoot.add(root);
         this.crewRigRoot.updateMatrixWorld(true);
         this.crewMixerRoot = this.crewRigRoot;
-        // 4) 走りクリップを作り、mixer に載せる
-        const { clip, duration } = buildCrewRunClip();
-        this.crewClipDur = duration;
+        // 3) skeleton は rest 姿勢のまま組む (boneInverses が rest から計算される = bindMatrix 単位と整合)。
+        this.crewSkeleton = new THREE.Skeleton(bones);
+        // 4) 構えポーズの差し替え先をボーン名から引く。
+        //    GLB のボーン順は CREW_BONE_NAMES 順ではないので、添字直書きは使えない。
+        this.crewAimIndex = new Map();
+        bones.forEach((b, i) => {
+            const q = aimPose.get(b.name);
+            if (q) this.crewAimIndex.set(i, q);
+        });
+        // 5) 走りクリップを mixer に載せる
+        this.crewClipDur = clip.duration;
         this.crewMixer = new THREE.AnimationMixer(this.crewMixerRoot);
         const action = this.crewMixer.clipAction(clip);
         action.play();
-        // 5) InstancedMesh2 を生成し skeleton を初期化。全 capacity 分のインスタンスを確保し、
+        // 6) InstancedMesh2 を生成し skeleton を初期化。全 capacity 分のインスタンスを確保し、
         //    可視は毎フレーム n に合わせて差分トグルする。
         this.crowdMesh = new InstancedMesh2(geo, this.crewSkinMat, { capacity: MAX_INSTANCES, renderer: this.renderer });
         this.crowdMesh.frustumCulled = false;
@@ -3558,13 +3809,12 @@ class CrewRun3D {
             // 親の matrixWorld から手動合成する (これを怠ると全バケットがレスト姿勢になりアニメが死ぬ)。
             for (let bi = 0; bi < bones.length; bi++) {
                 const bone = bones[bi];
-                // 武装中は腕ボーン (7=upperArmL 8=foreArmL 10=upperArmR 11=foreArmR) を構えポーズに上書き。
-                // 走りの腕ポンプを潰し、両腕を前方に上げて銃を抱える形に。脚は走りのまま。
+                // 武装中は腕ボーンを構えポーズに上書き。走りの腕ポンプを潰し、両腕を前方に上げて
+                // 銃を抱える形に。脚は走りのまま。添字はボーン順に依存するので名前から引いた表を使う
+                // (GLB のボーン順は CREW_BONE_NAMES 順ではない)。
                 if (this.crewArmed) {
-                    if (bi === 7) bone.quaternion.copy(CrewRun3D.AIM_UPPER_L);
-                    else if (bi === 8) bone.quaternion.copy(CrewRun3D.AIM_FORE_L);
-                    else if (bi === 10) bone.quaternion.copy(CrewRun3D.AIM_UPPER_R);
-                    else if (bi === 11) bone.quaternion.copy(CrewRun3D.AIM_FORE_R);
+                    const aim = this.crewAimIndex.get(bi);
+                    if (aim) bone.quaternion.copy(aim);
                 }
                 bone.updateMatrix(); // local quaternion → bone.matrix
                 if (bone.parent) bone.matrixWorld.multiplyMatrices(bone.parent.matrixWorld, bone.matrix);
@@ -3615,7 +3865,7 @@ class CrewRun3D {
             this.members.push({
                 rx: p.x, ry: p.y - 0.25, rz: p.z - 1.5, ph: Math.random() * 6.28,
                 spd: 0.85 + Math.random() * 0.3, amp: 0.85 + Math.random() * 0.35, swy: Math.random() * 6.28,
-                lean: 0.16 + Math.random() * 0.12, land: 0.18, sc: 0.9 + Math.random() * 0.22,
+                lean: 0.10 + Math.random() * 0.07, land: 0.18, sc: 0.9 + Math.random() * 0.22,
                 phaseOffset: Math.random(),
             });
         }
@@ -3931,8 +4181,13 @@ class CrewRun3D {
         // 連続素体クルー: InstancedMesh2 の GPU 資産 (matrices/colors/bone テクスチャ等)・
         // 素体ジオメトリ・スキニング用マテリアル・スケルトンを破棄。mixer は uncache で解放。
         this.crowdMesh?.dispose();
-        this.crewBodyGeo?.dispose();
+        // GLB 由来の素体/ブロブはモジュールキャッシュの共有物。破棄するとミニゲームを開き直したとき
+        // 破棄済みジオメトリを描くことになるので、自前で作ったときだけ破棄する。
+        if (this.crewGeoOwned) this.crewBodyGeo?.dispose();
+        if (this.blobGeo !== enemyGeoModel) this.blobGeo.dispose();
         this.crewSkinMat?.dispose();
+        this.enemyMat.dispose();
+        this.guardMat.dispose();
         this.giantMat?.dispose();
         this.crewSkeleton?.dispose();
         if (this.crewMixer) this.crewMixer.uncacheRoot(this.crewMixerRoot);
@@ -4666,7 +4921,9 @@ class CrewRun3D {
         const swF = run ? 5 : clear ? 4 : 1.5;
         const sway = swyK * Math.sin(t * swF + m.swy);
         const twist = (run ? 0.14 : clear ? 0.08 : 0.04) * Math.sin(t * swF + m.swy + 1.0);
-        const lean = m.lean + (run ? 0.14 : 0) + (run ? 0.1 : 0) * bo; // 走りは前傾ベース + ストライドで上下
+        // 走りは前傾ベース + ストライドで上下。最大 0.32rad(≈18度) — 以前の 0.52rad(30度) は
+        // 前のめりが強すぎて、上から見ると走るというより倒れ込んで見えていた。
+        const lean = m.lean + (run ? 0.09 : 0) + (run ? 0.06 : 0) * bo;
         // D 重力反転中はクルーを天井へ持ち上げる (視覚のみ・当たり判定 m.ry/m.rx は不変)。
         this.dummy.position.set(this.centroidX + m.rx + sway, m.ry + bob + this.gravRoll * CEIL_H, CROWD_Z + m.rz);
         this.dummy.rotation.set(lean, twist * 0.5, twist); // 足元中心に回る (geometry 原点が足元) → 接地は保つ
@@ -5394,7 +5651,7 @@ class CrewRun3D {
         }
         const halfW = ((cols - 1) / 2) * 0.5 + 0.32;
         const grp = new THREE.Group();
-        const im = new THREE.InstancedMesh(this.blobGeo, this.crewMat, show);
+        const im = new THREE.InstancedMesh(this.blobGeo, this.enemyMat, show);
         for (let i = 0; i < show; i++) {
             const col = i % cols;
             const row = Math.floor(i / cols);
@@ -5423,23 +5680,22 @@ class CrewRun3D {
         const x = (Math.random() < 0.5 ? -1 : 1) * (LANE * (0.6 + Math.random() * 0.3));
         const hp = Math.ceil((10 + this.diff * 18) * this.stageMul * (bomber ? 1.25 : spread ? 1.15 : 1));
         const grp = new THREE.Group();
+        // 味方/敵ブロブと同じツヤのプラ質感に揃える (Lambert のマット塗り + 低セグメントだと画風が割れる)。
+        const shiny = (color: number) => new THREE.MeshStandardMaterial({ color, roughness: 0.34, metalness: 0.1, envMapIntensity: 0.85 });
         // 砲台ベース＋ターレット
-        const base = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.42, 0.52, 0.5, 10),
-            new THREE.MeshLambertMaterial({ color: 0x4a4f57 }),
-        );
+        const base = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.52, 0.5, 24), shiny(0x4a4f57));
         base.position.y = 0.25;
         grp.add(base);
         const turret = new THREE.Mesh(
-            new THREE.SphereGeometry(0.36, 10, 8),
-            new THREE.MeshLambertMaterial({ color: bomber ? 0x7a3030 : spread ? 0x5a2f8f : 0x2f6a3d }),
+            new THREE.SphereGeometry(0.36, 20, 14),
+            shiny(bomber ? 0x7a3030 : spread ? 0x5a2f8f : 0x2f6a3d),
         );
         turret.position.y = 0.6;
         grp.add(turret);
         if (spread) {
             // 扇状シューター: 3 連の砲身を前方に開く
             for (const ang of [-0.5, 0, 0.5]) {
-                const b3 = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.7, 6), new THREE.MeshLambertMaterial({ color: 0x9a60d0 }));
+                const b3 = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.7, 14), shiny(0x9a60d0));
                 b3.rotation.x = Math.PI / 2;
                 b3.rotation.y = ang;
                 b3.position.set(Math.sin(ang) * 0.3, 0.62, 0.4);
@@ -5448,8 +5704,8 @@ class CrewRun3D {
         } else {
             // 砲身: 迫撃砲は上向き / 通常は前向き
             const barrel = new THREE.Mesh(
-                new THREE.CylinderGeometry(bomber ? 0.16 : 0.08, bomber ? 0.16 : 0.08, bomber ? 0.5 : 0.8, 8),
-                new THREE.MeshLambertMaterial({ color: 0x23262c }),
+                new THREE.CylinderGeometry(bomber ? 0.16 : 0.08, bomber ? 0.16 : 0.08, bomber ? 0.5 : 0.8, 16),
+                shiny(0x23262c),
             );
             if (bomber) {
                 barrel.position.set(0, 0.95, 0);
@@ -8880,13 +9136,19 @@ class CrewRun3D {
         const gold = new THREE.MeshLambertMaterial({ color: 0xcaa23a });
         // 護衛 16 体 (背後の弧・ゆっくり回る spin[1])
         const guards = new THREE.Group();
-        const im = new THREE.InstancedMesh(this.enemyGeo, this.crewMat, 16);
+        // 素体は味方と同じ crewBodyGeo を赤マテリアルで流用する (画風を揃えるため)。
+        // スキン属性は付いたままだが非スキン InstancedMesh では無視され、レスト姿勢で立つ＝棒立ちの護衛。
+        // crewBodyGeo は buildCrowdMesh がコンストラクタで先に用意している。
+        const guardGeo = this.crewBodyGeo ?? this.enemyGeo;
+        const im = new THREE.InstancedMesh(guardGeo, guardGeo === this.enemyGeo ? this.crewMat : this.guardMat, 16);
         for (let i = 0; i < 16; i++) {
             const a = (i / 16) * Math.PI * 2;
             const r = 5.0 + (i % 2) * 0.7;
             this.dummy.position.set(Math.cos(a) * r, 0, Math.sin(a) * r + 1.5);
             this.dummy.rotation.set(0, Math.PI, 0);
-            this.dummy.scale.setScalar(0.9);
+            // 旧 enemyGeo (全高 ~1.21 × scale 0.9 = ~1.09) より意図的に大きい ~1.62。
+            // 新素体はずんぐりで手足が短く、同じ全高でも小さく見えるため。boss-king の絵で確認済み。
+            this.dummy.scale.setScalar(1.15);
             this.dummy.updateMatrix();
             im.setMatrixAt(i, this.dummy.matrix);
         }
@@ -10637,7 +10899,8 @@ class CrewRun3D {
                 m.geometry.dispose();
             }
             const mat = (c as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined;
-            if (mat && mat !== this.crewMat && mat !== this.woodMat && mat !== this.propMat && mat !== this.giantMat) {
+            if (mat && mat !== this.crewMat && mat !== this.woodMat && mat !== this.propMat && mat !== this.giantMat
+                && mat !== this.enemyMat && mat !== this.guardMat) {
                 if (Array.isArray(mat)) mat.forEach((x) => x.dispose());
                 else mat.dispose();
             }
