@@ -1827,38 +1827,62 @@ public static class GameSettingMenuPatch
             // UI. Strip any such ghost out of this clone so the search box only carries its own text field.
             // DestroyImmediate: 遅延 Destroy だとフレーム末まで実体が残り、その間の UiAnomalyWatch スキャンに
             // live=2 (DUP) と映るため即時破棄する。
+            // ただし clone 自身の outputText は絶対に巻き込まない。チャット側で参照すり替わり (UiAnomalyWatch の
+            // DRIFT 状態) が起きていると textArea.outputText が "PlaceHolderText" 名の個体を指しており、名前だけ
+            // で消すと clone の本体テキストごと消えて以降の styling が NRE → 検索欄が生チャットのまま残る。
+            TextMeshPro clonedOutput = field.textArea ? field.textArea.outputText : null;
+
             foreach (TextMeshPro ghost in field.GetComponentsInChildren<TextMeshPro>(true))
-                if (ghost.name.StartsWith("PlaceHolderText"))
+                if (ghost.name.StartsWith("PlaceHolderText") && ghost != clonedOutput)
                     Object.DestroyImmediate(ghost.gameObject);
         }
         field.transform.localScale = new(0.3f, 0.59f, 1);
         field.transform.localPosition = new(-0.7f, -2.5f, -5f);
-        field.textArea.outputText.transform.localScale = new(3.5f, 2f, 1f);
-        if (plusLabel) field.textArea.outputText.font = plusLabel.font;
 
-        InputField = field;
+        if (field.textArea && field.textArea.outputText)
+        {
+            field.textArea.outputText.transform.localScale = new(3.5f, 2f, 1f);
+            if (plusLabel) field.textArea.outputText.font = plusLabel.font;
+        }
+        else Logger.Warn("search box clone has no outputText — text styling skipped (BUG-20260725-02)", "MenuLeak");
 
         Transform button = field.transform.FindChild("ChatSendButton");
+        if (!button) { BailSearchField("no ChatSendButton in the clone"); return; }
 
         Transform buttonNormal = button.FindChild("Normal");
         Transform buttonHover = button.FindChild("Hover");
         Transform buttonDisabled = button.FindChild("Disabled");
+        if (!buttonNormal || !buttonHover || !buttonDisabled) { BailSearchField("ChatSendButton is missing a state child"); return; }
 
-        if (!cachedInputField)
+        // 送信ボタンの Icon/Text 破棄 (チャット欄→検索欄の再スキン) は以前「新規 clone のときだけ」走らせて
+        // いた。この区間で例外が飛ぶと未スキンの個体が InputField にキャッシュされ、以降は毎回キャッシュ経路
+        // を通って再スキンが二度と走らない → 「設定の検索欄が生のチャット入力欄のまま」がアプリ再起動まで
+        // 固定される (BUG-20260725-02)。毎回・冪等 (存在チェック付き) に走らせて自己修復させる。
+        int stripped = StripChatIcon(buttonNormal) + StripChatIcon(buttonHover) + StripChatIcon(buttonDisabled);
+
+        Transform buttonText = button.FindChild("Text");
+        if (buttonText)
         {
-            Object.Destroy(buttonNormal.FindChild("Icon").GetComponent<SpriteRenderer>());
-            Object.Destroy(buttonHover.FindChild("Icon").GetComponent<SpriteRenderer>());
-            Object.Destroy(buttonDisabled.FindChild("Icon").GetComponent<SpriteRenderer>());
-            Object.Destroy(button.transform.FindChild("Text").GetComponent<TextMeshPro>());
+            var textTmp = buttonText.GetComponent<TextMeshPro>();
+            if (textTmp) { Object.Destroy(textTmp); stripped++; }
         }
+
+        // キャッシュ済み個体に生チャットの部品が残っていた = 汚染状態の直接観測。真因特定用の唯一の証拠。
+        if (cachedInputField && stripped > 0)
+            Logger.Warn($"cached search box still carried {stripped} raw chat-skin part(s) — re-stripped (BUG-20260725-02)", "MenuLeak");
 
         Transform buttonNormalBackground = buttonNormal.FindChild("Background");
         Transform buttonHoverBackground = buttonHover.FindChild("Background");
         Transform buttonDisabledBackground = buttonDisabled.FindChild("Background");
+        if (!buttonNormalBackground || !buttonHoverBackground || !buttonDisabledBackground) { BailSearchField("ChatSendButton state has no Background"); return; }
 
-        buttonNormalBackground.GetComponent<SpriteRenderer>().sprite = Utils.LoadSprite("EndKnot.Resources.Images.SearchIconActive.png", 100f);
-        buttonHoverBackground.GetComponent<SpriteRenderer>().sprite = Utils.LoadSprite("EndKnot.Resources.Images.SearchIconHover.png", 100f);
-        buttonDisabledBackground.GetComponent<SpriteRenderer>().sprite = Utils.LoadSprite("EndKnot.Resources.Images.SearchIcon.png", 100f);
+        SetSearchIcon(buttonNormalBackground, "EndKnot.Resources.Images.SearchIconActive.png");
+        SetSearchIcon(buttonHoverBackground, "EndKnot.Resources.Images.SearchIconHover.png");
+        SetSearchIcon(buttonDisabledBackground, "EndKnot.Resources.Images.SearchIcon.png");
+
+        // 再スキンを最後まで通した個体だけをキャッシュする。途中で落ちた個体を掴んだままにすると、次回以降
+        // キャッシュ経路に入って永久に未スキンのままになる (上のコメントの汚染そのもの)。
+        InputField = field;
 
         if (russian)
         {
@@ -1880,6 +1904,35 @@ public static class GameSettingMenuPatch
         };
 
         return;
+
+        // 検索欄の組み立てを途中で諦める共通経路。新規 clone なら破棄する (放置すると開くたびに増える)。
+        void BailSearchField(string why)
+        {
+            Logger.Warn($"search box: {why} — skipping the option search box this open", "MenuLeak");
+            if (!cachedInputField && field) Object.Destroy(field.gameObject);
+        }
+
+        // 既に剥がされていれば何もしない冪等版。Destroy(null) を interop 境界に投げない。
+        static int StripChatIcon(Transform state)
+        {
+            Transform icon = state.FindChild("Icon");
+            if (!icon) return 0;
+
+            var sr = icon.GetComponent<SpriteRenderer>();
+            if (!sr) return 0;
+
+            Object.Destroy(sr);
+            return 1;
+        }
+
+        static void SetSearchIcon(Transform background, string resource)
+        {
+            var sr = background.GetComponent<SpriteRenderer>();
+            if (!sr) return;
+
+            Sprite sprite = Utils.LoadSprite(resource, 100f);
+            if (sprite) sr.sprite = sprite;
+        }
 
         void SearchForOptions(FreeChatInputField textField)
         {
