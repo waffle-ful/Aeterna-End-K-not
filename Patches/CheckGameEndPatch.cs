@@ -403,7 +403,8 @@ internal static class GameEndChecker
                     WinnerIds.UnionWith(Main.EnumeratePlayerControls().Where(x => x.GetCustomRole().IsNeutral()).Select(x => x.PlayerId));
                 else if (Options.NeutralRoleWinTogether.GetBool())
                 {
-                    foreach (byte id in WinnerIds)
+                    // ループ内で WinnerIds.Add() するため、スナップショットを回す
+                    foreach (byte id in WinnerIds.ToArray())
                     {
                         PlayerControl pc = GetPlayerById(id);
                         if (!pc || !pc.GetCustomRole().IsNeutral()) continue;
