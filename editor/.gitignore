@@ -1,4 +1,7 @@
 node_modules/
 dist/
 .playwright-mcp/
+e2e/.artifacts/
+e2e/shots/
+playwright-report/
 local.props
