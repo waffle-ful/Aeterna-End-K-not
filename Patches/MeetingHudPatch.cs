@@ -1280,6 +1280,11 @@ internal static class MeetingHudUpdatePatch
     {
         if (__instance.CurrentState != MeetingHud.VoteStates.Results) return true;
 
+        // Results 遷移直後の残り投票秒を one-shot でラッチ (2026-07-28 監査指摘)。
+        // 直下の UpdateTimerText(MeetingProceeds) が VotingTimeLeft を 5→0 で上書きするため、
+        // MeetingHud.OnDestroy 時点の値では「時間切れ終了か全員投票の早期終了か」を区別できない。
+        MeetingSilentProbe.OnResultsPhase();
+
         __instance.discussionTimer += Time.deltaTime;
 
         float num4 = __instance.discussionTimer - __instance.resultsStartedAt;
