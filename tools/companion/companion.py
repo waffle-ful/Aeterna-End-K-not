@@ -156,6 +156,7 @@ class StreamState:
         self.last_filler_topic = ""    # 場繋ぎのお題が連続しないように前回を覚える
         self.last_demo_idx = -1        # デモ実況テンプレの前回インデックス
         self.pending_emotion: str | None = None  # 次の発話開始時にアバターへ1回だけ送る表情タグ
+        self.pending_gesture: str | None = None  # 同上・身振りクリップ名 (avatar.js の GESTURES)
         self.recap_file = recap_file
         self.restored = False          # 起動時に前プロセスの recap を復元できたか
         # プロセス再起動 (auto-rehost 等) をまたいで記憶を引き継ぐ。os._exit で落ちても
@@ -520,30 +521,70 @@ async def tail_events(path: Path, out: asyncio.Queue) -> None:
 
 # ---- イベント → 実況指示テキスト ----
 
+# イベント種別 → 表情の候補。同じイベントで毎回同じ顔になると単調なので、候補から1つ選ぶ。
+# 拡張表情 (excited/laugh/shy/pale/doubt/wink) はモデルが素材を持たなければ
+# avatar.js 側が近い標準表情へ落とすので、ここでは気にせず使ってよい。
+EMOTION_CHOICES = {
+    "intervention": ("surprised", "excited", "laugh"),
+    "eject": ("surprised", "pale", "doubt"),
+    "sabotage": ("angry", "pale", "doubt"),
+    "join": ("happy", "excited", "wink"),
+    "_joins": ("happy", "excited"),
+    "leave": ("sad", "shy"),
+    "demo": ("excited", "happy", "laugh"),
+}
+PHASE_EMOTION_CHOICES = {
+    "ingame": ("happy", "excited"),
+    "meeting": ("surprised", "doubt", "pale"),
+    "lobby": ("relaxed", "shy"),
+    "ended": ("relaxed", "laugh"),
+}
+
+
 def emotion_for_event(ev: dict) -> str | None:
     """イベント種別 → アバター表情タグ (avatar.js の EMOTION_PRESETS)。None は表情変更なし。
 
-    テキスト感情推定はしない — イベント駆動の静的マッピングが最小構成 (過剰設計回避)。
+    テキスト感情推定はしない — イベント駆動のマッピングが最小構成 (過剰設計回避)。
+    ただし候補からランダムに選ぶことで、同じ出来事でも毎回同じ顔にならないようにする。
     """
     t = ev.get("type")
-    if t in ("intervention", "eject"):
-        return "surprised"
-    if t == "sabotage":
-        return "angry"
-    if t in ("join", "_joins"):
-        return "happy"
-    if t == "leave":
-        return "sad"
     if t == "gameEnd":
-        return "sad" if ev.get("noVictors") else "happy"
+        return random.choice(("sad", "pale") if ev.get("noVictors") else ("happy", "excited", "laugh"))
+    if t == "phase":
+        choices = PHASE_EMOTION_CHOICES.get(ev.get("phase"))
+        return random.choice(choices) if choices else None
+    choices = EMOTION_CHOICES.get(t)
+    return random.choice(choices) if choices else None  # chat / filler 等は表情そのまま
+
+
+def gesture_for_event(ev: dict) -> str | None:
+    """イベント種別 → アバターの身振りクリップ名 (avatar.js の GESTURES)。None は身振りなし。
+
+    表情 (emotion_for_event) と同じイベント駆動の静的マッピング。テキストからの推定はしない。
+    """
+    t = ev.get("type")
+    if t in ("join", "_joins"):
+        return "wave"        # 手を振って歓迎
+    if t == "intervention":
+        return "point"       # 発動した視聴者を指差す
+    if t == "sabotage":
+        return "arms_cross"  # 腕組みでむくれる
+    if t == "leave":
+        return "slump"       # うなだれて見送る
+    if t == "eject":
+        return "startle"     # のけぞって驚く
+    if t == "gameEnd":
+        return "slump" if ev.get("noVictors") else "cheer"
     if t == "phase":
         return {
-            "ingame": "happy",
-            "meeting": "surprised",
-            "lobby": "relaxed",
-            "ended": "relaxed",
+            "ingame": "cheer",     # 試合開始でバンザイ
+            "meeting": "startle",  # 会議開始でのけぞる
         }.get(ev.get("phase"))
-    return None  # chat / demo / filler 等は表情そのまま
+    return None  # chat / demo は身振りそのまま (常時モーションに任せる)
+
+
+# 場繋ぎトークで軽く挟む相槌。決め所のクリップと違い、頻度が高いので小さい仕草だけ。
+FILLER_GESTURES = ("nod", "think", "nod", None)
 
 
 def format_event(ev: dict, state: StreamState, quiet_meeting: bool) -> str | None:
@@ -818,6 +859,7 @@ async def commentary_loop(events: asyncio.Queue, args: argparse.Namespace, state
 
         batch: list[str] = []
         batch_emotion: str | None = None
+        batch_gesture: str | None = None
         for ev in merge_joins(raw):
             if ev.get("type") == "_joins":
                 batch.append(format_merged_joins(ev, state))
@@ -827,6 +869,7 @@ async def commentary_loop(events: asyncio.Queue, args: argparse.Namespace, state
                     continue  # 実況しないイベントは表情も動かさない
                 batch.append(line)
             batch_emotion = emotion_for_event(ev) or batch_emotion
+            batch_gesture = gesture_for_event(ev) or batch_gesture
         if raw:
             state.last_real_event = time.monotonic()  # filler 休眠の解除 (chat/join 含む全実イベント)
 
@@ -839,6 +882,8 @@ async def commentary_loop(events: asyncio.Queue, args: argparse.Namespace, state
                 recover_stall(now)
             if batch_emotion:
                 state.pending_emotion = batch_emotion  # 発話開始時に avatar_ticker が1回だけ載せる
+            if batch_gesture:
+                state.pending_gesture = batch_gesture
             await send_text("\n".join(batch[-5:]))  # 溜まりすぎたら新しい5件だけ
             last_activity = now
         elif (now - last_activity) > FILLER_INTERVAL_SEC and not output_busy():
@@ -846,6 +891,7 @@ async def commentary_loop(events: asyncio.Queue, args: argparse.Namespace, state
                 continue  # 会議中は場繋ぎしない
             if (now - state.last_real_event) > args.dormant_after:
                 continue  # 誰も居ない・何も起きない時間帯はトークンを焼かない (休眠)
+            state.pending_gesture = random.choice(FILLER_GESTURES)
             await send_text(build_filler_prompt(state))
             last_activity = now
 
@@ -1227,6 +1273,7 @@ async def duo_loop(events: asyncio.Queue, args: argparse.Namespace, state: Strea
 
         batch: list[str] = []
         batch_emotion: str | None = None
+        batch_gesture: str | None = None
         for ev in merge_joins(raw):
             if ev.get("type") == "_joins":
                 batch.append(format_merged_joins(ev, state))
@@ -1236,6 +1283,7 @@ async def duo_loop(events: asyncio.Queue, args: argparse.Namespace, state: Strea
                     continue
                 batch.append(line)
             batch_emotion = emotion_for_event(ev) or batch_emotion
+            batch_gesture = gesture_for_event(ev) or batch_gesture
         if raw:
             state.last_real_event = time.monotonic()
 
@@ -1246,6 +1294,8 @@ async def duo_loop(events: asyncio.Queue, args: argparse.Namespace, state: Strea
                 now = time.monotonic()
             if batch_emotion:
                 state.pending_emotion = batch_emotion
+            if batch_gesture:
+                state.pending_gesture = batch_gesture
             await exchange(a, b, "\n".join(batch[-5:]), duo_should_reply(raw, state, args))
             last_send = last_activity = time.monotonic()
         elif (now - last_activity) > FILLER_INTERVAL_SEC and not (a.busy() or b.busy() or self_speaking(a, b)):
@@ -1255,6 +1305,7 @@ async def duo_loop(events: asyncio.Queue, args: argparse.Namespace, state: Strea
                 continue
             initiator, responder = (b, a) if filler_flip else (a, b)
             filler_flip = not filler_flip
+            state.pending_gesture = random.choice(FILLER_GESTURES)
             await exchange(initiator, responder, build_filler_prompt(state), want_reply=True)
             last_send = last_activity = time.monotonic()
 
@@ -1510,13 +1561,18 @@ async def main_async(args: argparse.Namespace) -> None:
                         "subtitle": obs.current_subtitle(),
                         "speaker": player.active_tag,  # --duo でアバター2体の口パク/表情の振り分け先
                     }
-                    # 表情タグは発話開始の最初の tick で1回だけ載せる (avatar.js は受信のたびに
-                    # emotionValue をリセットするので、毎 tick 載せると表情が固まったままになる)。
+                    # 表情/身振りタグは発話開始の最初の tick で1回だけ載せる (avatar.js は受信のたびに
+                    # emotionValue をリセットし、身振りはクリップを先頭へ巻き戻すので、毎 tick 載せると
+                    # 表情が固まったまま・身振りが動かないままになる)。
                     # VoiceVox モードは合成 HTTP のぶん再生開始が数秒遅れるので、合成開始 (busy) を
                     # 発話開始とみなして発火する (表情がイベントから遅れて見える問題の対策)
-                    if state.pending_emotion and (is_speaking or (tts is not None and tts.busy())):
+                    started = is_speaking or (tts is not None and tts.busy())
+                    if state.pending_emotion and started:
                         payload["emotion"] = state.pending_emotion
                         state.pending_emotion = None
+                    if state.pending_gesture and started:
+                        payload["gesture"] = state.pending_gesture
+                        state.pending_gesture = None
                     await avatar.broadcast(payload)
                 except Exception:
                     pass
@@ -1597,16 +1653,27 @@ def _start_parent_watchdog() -> None:
         except OSError:
             return False
 
+    # 親を一度も生存確認できないまま、この秒数を過ぎたら諦めて終了する。
+    # ⚠️ この上限が無いと「不死の孤児」が生まれる: 相棒の起動には google.genai 等の重い import で
+    # 数秒かかるため、その間に親 (AU) が落ちると seen_alive が一度も立たず、以降どれだけ親が
+    # 死んでいても `elif seen_alive` に入れないので永久に生き残る。実際に 11 時間生き延びて
+    # 実況を続ける個体が発生した (2026-07-27)。親は自分を起動した側なので、起動直後に生きて
+    # いないなら「もう居ない」と判断してよい。
+    GRACE_SEC = 30.0
+
     def _watch() -> None:
         seen_alive = False  # 一度でも生存を確認してから監視 (起動直後の取りこぼし・誤爆防止)
+        started = time.monotonic()
         while True:
             if _pid_alive(parent_pid):
                 seen_alive = True
-            elif seen_alive:
-                print(f"[watchdog] 親プロセス (PID {parent_pid}) が終了したので相棒も終了します")
+            elif seen_alive or (time.monotonic() - started) >= GRACE_SEC:
+                why = "が終了した" if seen_alive else f"を起動から {GRACE_SEC:.0f} 秒間 確認できなかった"
+                print(f"[watchdog] 親プロセス (PID {parent_pid}) {why}ので相棒も終了します")
                 os._exit(0)
             time.sleep(3.0)
 
+    print(f"[watchdog] 親プロセス (PID {parent_pid}) の生存を監視します")
     threading.Thread(target=_watch, name="parent-watchdog", daemon=True).start()
 
 
