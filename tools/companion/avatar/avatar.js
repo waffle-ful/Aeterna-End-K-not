@@ -141,6 +141,12 @@ function loadModel(url, slot, required) {
           av.gesture = name; av.gestureT = 0;
           return true;
         };
+        // デバッグ用: アイドル仕草の一覧とクリップ長 (検証スクリプトが総当たりするのに使う)
+        window.__idleNames = IDLE_GESTURES.slice();
+        window.__gestureDur = (name) => (GESTURES[name] ? GESTURES[name].dur : 0);
+        // デバッグ用: クリップ表そのもの。腕の畳み方向はモデル依存で数値から見た目が読めないので、
+        // ここへ試作クリップを差し込んで実描画のスクショで詰める (ボーンを直接書いても animate に潰される)
+        window.__gestures = GESTURES;
       }
       console.log(`[avatar] VRM loaded (slot ${slot})`);
     },
@@ -379,7 +385,7 @@ const GESTURES = {
         spine: [-0.05 * up, 0, 0],
       };
     },
-    body: (u) => ({ y: Math.sin(u * Math.PI) * 0.025 }),
+    // body の上下は入れない (アイドル仕草の不変条件 — IDLE_GESTURES のコメント参照)
   },
   // 体重を片足へ移す (立ち姿の重心移動)
   weight_shift: {
@@ -412,12 +418,97 @@ const GESTURES = {
       };
     },
   },
+  // 肩を回してほぐす (肩は上げると左が +z / 右が -z。slump の肩落としと逆向き)
+  // ⚠️ 肩ボーンを回すと腕がまるごと付いてくる。上腕に逆向きを入れて打ち消さないと
+  //    「肩を回す」ではなく「両腕を横に広げる」に見える (実描画で確認して修正した)。
+  shoulder_roll: {
+    dur: 2.8, fadeIn: 0.25, fadeOut: 0.3,
+    pose: (u) => {
+      const a = u * Math.PI * 2;            // ぐるっと1周
+      const up = (1 - Math.cos(a)) * 0.5;   // 0 → 1 → 0 (持ち上げ)
+      const fwd = Math.sin(a);              // 前 → 後ろ
+      return {
+        leftShoulder: [0, fwd * 0.20, up * 0.36],
+        rightShoulder: [0, -fwd * 0.20, -up * 0.36],
+        leftUpperArm: [0, fwd * 0.12, -up * 0.26],
+        rightUpperArm: [0, -fwd * 0.12, up * 0.26],
+        chest: [-up * 0.07, 0, 0],
+        head: [-up * 0.08, 0, 0],
+      };
+    },
+  },
+  // 深呼吸 (ゆっくり胸を張って、ゆっくり戻す)
+  deep_breath: {
+    dur: 3.6, fadeIn: 0.4, fadeOut: 0.45,
+    pose: (u) => {
+      const s = Math.sin(u * Math.PI);      // 吸う → 吐く
+      return {
+        chest: [-s * 0.16, 0, 0],
+        spine: [-s * 0.08, 0, 0],
+        neck: [-s * 0.06, 0, 0],
+        head: [-s * 0.16, 0, 0],
+        // 肩を持ち上げるぶん、上腕は逆にわずかに下げて脇が開きすぎないようにする
+        leftShoulder: [0, 0, s * 0.18],
+        rightShoulder: [0, 0, -s * 0.18],
+        leftUpperArm: [0, -0.05 * s, -0.04 * s],
+        rightUpperArm: [0, 0.05 * s, 0.04 * s],
+      };
+    },
+  },
+  // ふと上を見上げる (考えごと)
+  gaze_up: {
+    dur: 2.6, fadeIn: 0.25, fadeOut: 0.3,
+    pose: (u) => {
+      const s = Math.sin(u * Math.PI);
+      const drift = Math.sin(u * Math.PI * 2) * 0.10; // 視線が少し泳ぐ
+      return {
+        head: [-s * 0.34, drift, s * 0.09],
+        neck: [-s * 0.12, drift * 0.4, 0],
+        chest: [-s * 0.05, 0, 0],
+      };
+    },
+  },
+  // 頬に手を当てる (hair_touch の逆の手)。
+  // ⚠️ 前腕を胸の前へ畳む軸は **y** (左は負・右は正)。z で畳むと hair_touch のように
+  //    肘が外へ張り出して「手を挙げている」に見える — 数値では判別できないので実描画で決めた。
+  //    腕の短いモデルでは手が頬まで届かず鎖骨あたりに来るが、それでも自然な仕草に読める。
+  hand_to_cheek: {
+    dur: 2.8, fadeIn: 0.25, fadeOut: 0.3,
+    pose: (u) => {
+      const settle = Math.sin(u * Math.PI * 2) * 0.06;
+      return {
+        leftUpperArm: [0, -0.70, 0.15],
+        leftLowerArm: [0, -2.55 + settle, 0],
+        leftHand: [0, 0, -settle],
+        head: [0.08, 0.10, 0.16],
+        neck: [0.03, 0.04, 0.06],
+      };
+    },
+  },
+  // 首をゆっくり回してほぐす
+  neck_roll: {
+    dur: 3.0, fadeIn: 0.3, fadeOut: 0.35,
+    pose: (u) => {
+      const a = u * Math.PI * 2;
+      const env = Math.sin(u * Math.PI); // 出入りをなだらかに (u=0/1 で必ず 0)
+      return {
+        head: [Math.cos(a) * 0.16 * env, Math.sin(a) * 0.15 * env, Math.sin(a) * 0.26 * env],
+        neck: [Math.cos(a) * 0.06 * env, Math.sin(a) * 0.05 * env, Math.sin(a) * 0.10 * env],
+      };
+    },
+  },
 };
 
 // 黙っている間に勝手に出る仕草。決め所のクリップ (wave/cheer 等) は混ぜない。
 // nod は入れない — 1 秒の小さなうなずきは単体で出ても「動いた」と分からず、
 // 出番だけ食って他の仕草の頻度を下げてしまう (相槌としては FILLER_GESTURES 側で使う)。
-const IDLE_GESTURES = ['look_around', 'weight_shift', 'think', 'stretch', 'hair_touch'];
+// ⚠️ 不変条件: アイドル仕草のクリップは body の上下 (y) / 前後 (z) を使わない。
+//    バストアップの画角では体全体が動くと「立ち絵がふわふわする」と見えるため、
+//    黙っている間の動きは回転 (+ 左右の重心移動) だけで作る。
+const IDLE_GESTURES = [
+  'look_around', 'weight_shift', 'think', 'stretch', 'hair_touch',
+  'shoulder_roll', 'deep_breath', 'gaze_up', 'hand_to_cheek', 'neck_roll',
+];
 // 間隔。クリップ自体が 1.8〜3.4 秒あるので、これより短くすると常時動きっぱなしになる。
 const IDLE_MIN_SEC = 4;
 const IDLE_MAX_SEC = 10;
@@ -753,13 +844,15 @@ function applyExpressions(av, delta) {
   av.driver.commit();
 }
 
-// 体全体の移動ぶん: ごく浅い呼吸 (上下) と左右の揺れ + 身振りのオフセット (跳ねる/のけぞる)。
+// 体全体の移動ぶん: 左右の揺れ + 身振りのオフセット (跳ねる/のけぞる)。
+// ⚠️ 常時の上下平行移動は入れない。以前ここに呼吸ぶんの ±0.005 を足していたが、バストアップの
+// 画角では画面高の約1%になり「立ち絵がふわふわ上下する」と見える。呼吸は addAmbientMotion の
+// 胸/背骨のピッチ回転で表現する (回転は頭を前後に動かすだけで、上下成分は二次の微小量)。
 function applyIdle(av, t) {
   const tp = t + av.idlePhase;
   const gain = 0.6 + av.speakLevel * 1.2;
-  const breathe = Math.sin(tp * 1.6) * 0.005;
   av.vrm.scene.position.x = av.baseX + av.bodyX;
-  av.vrm.scene.position.y = av.baseY + breathe + av.bodyY;
+  av.vrm.scene.position.y = av.baseY + av.bodyY;
   av.vrm.scene.position.z = av.bodyZ;
   av.vrm.scene.rotation.y = av.baseRotY + Math.sin(tp * 0.5) * 0.045 * gain;
 }
