@@ -318,6 +318,22 @@ public static class ChatManager
 
     public static void AddChatHistory(PlayerControl player, string message)
     {
+        // 履歴は flood-clear のサマリーとして全員へ再送されるので、コマンド行は絶対に入れない。
+        // /cmd 付きのコマンドは ChatCommandPatch 側で flood-clear をスキップする代わりに canceled が
+        // 立たないまま ChatManager.SendMessage までフォールスルーしてくるため、ChatHistory への
+        // 書き込み口であるここで落とす (AddChatHistory が ChatHistory の唯一の writer)。
+        // (/cmd で秘匿したはずのコマンドが後続サマリーに再掲されて匿名化が破れる)
+        // /cmd 付きは呼び出し元の Utils.CheckServerCommand で "/xxx" に正規化済み。
+        // 先頭の改行は SendRPC の詰め物や ReceiveChat の 1 個剥がしで残り得るので TrimStart してから判定する。
+        string trimmed = message.TrimStart();
+
+        if (trimmed.StartsWith('/'))
+        {
+            // 本文はホストのログにも残さない (秘匿コマンドの中身が漏れる)。先頭トークンだけ記録する。
+            Logger.Info($"Command excluded from chat history: sender={player.GetRealName()} head={trimmed.Split(' ')[0]}", "AddChatHistory");
+            return;
+        }
+
         var chatEntry = $"{player.PlayerId}: {message}";
         ChatHistory.Add(chatEntry);
         if (ChatHistory.Count > MaxHistorySize) ChatHistory.RemoveAt(0);
