@@ -191,6 +191,7 @@ public static class HudSpritePatch
                     break;
                 }
                 case CustomRoles.PortalMaker:
+                case CustomRoles.MapExtender:
                 {
                     newPetButton = CustomButton.Get("PortalMaker");
                     break;

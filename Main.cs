@@ -650,6 +650,7 @@ public class Main : BasePlugin
                 { CustomRoles.Inquisitor, "#7726B6" },
                 { CustomRoles.Imitator, "#c99e28" },
                 { CustomRoles.PortalMaker, "#700078" },
+                { CustomRoles.MapExtender, "#3FA7D6" },
                 { CustomRoles.Ankylosaurus, "#7FE44C" },
                 { CustomRoles.Leery, "#32a852" },
                 { CustomRoles.Wizard, "#FD05CC" },

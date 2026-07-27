@@ -564,6 +564,7 @@ public enum CustomRoles
     Dossun,
     Maguro,
     Supernova,
+    MapExtender,
     Convict,
     Survivor,
 
