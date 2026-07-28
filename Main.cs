@@ -878,6 +878,7 @@ public class Main : BasePlugin
                 { CustomRoles.Tama, "#00b4eb" },
                 { CustomRoles.ForceFielder, "#4488ff" },
                 { CustomRoles.Riptide, "#0073ff" },
+                { CustomRoles.Crosswind, "#7ec8e3" },
                 // Upstream EHR catchup
                 { CustomRoles.Butcher, "#b3261e" },
                 { CustomRoles.Chainbinder, "#8a7f6d" },

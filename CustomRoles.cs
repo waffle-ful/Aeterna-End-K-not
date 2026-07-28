@@ -566,6 +566,7 @@ public enum CustomRoles
     Supernova,
     MapExtender,
     Safecracker,
+    Crosswind,
     Convict,
     Survivor,
 
