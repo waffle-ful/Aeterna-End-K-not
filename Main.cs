@@ -651,6 +651,8 @@ public class Main : BasePlugin
                 { CustomRoles.Imitator, "#c99e28" },
                 { CustomRoles.PortalMaker, "#700078" },
                 { CustomRoles.MapExtender, "#3FA7D6" },
+                { CustomRoles.PortalButton, "#e74c3c" },
+                { CustomRoles.WordKiller, "#8e2f4a" },
                 { CustomRoles.Ankylosaurus, "#7FE44C" },
                 { CustomRoles.Leery, "#32a852" },
                 { CustomRoles.Wizard, "#FD05CC" },

@@ -246,6 +246,7 @@ internal static class ChatCommands
             new("EnableAllRoles", "", Command.UsageLevels.Host, Command.UsageTimes.InLobby, EnableAllRolesCommand, true, false),
             new("Achievements", "", Command.UsageLevels.Modded, Command.UsageTimes.Always, AchievementsCommand, true, false),
             new("DeathNote", "{name}", Command.UsageLevels.Everyone, Command.UsageTimes.InMeeting, DeathNoteCommand, true, true, [GetString("CommandArgs.DeathNote.Name")]),
+            new("Word", "{word}", Command.UsageLevels.Everyone, Command.UsageTimes.InMeeting, WordCommand, true, true, [GetString("CommandArgs.Word.Word")]),
             new("Whisper", "{ids} {message}", Command.UsageLevels.Everyone, Command.UsageTimes.Always, WhisperCommand, true, true, [GetString("CommandArgs.Whisper.Ids"), GetString("CommandArgs.Whisper.Message")]),
             new("HWhisper", "{id} {message}", Command.UsageLevels.Host, Command.UsageTimes.Always, HWhisperCommand, true, false, [GetString("CommandArgs.HWhisper.Id"), GetString("CommandArgs.HWhisper.Message")]),
             new("Spectate", "[id]", Command.UsageLevels.Everyone, Command.UsageTimes.InLobby, SpectateCommand, false, false, [GetString("CommandArgs.Spectate.Id")]),
@@ -476,6 +477,8 @@ internal static class ChatCommands
                 PlayerControl.LocalPlayer.SetRealKiller(Main.EnumeratePlayerControls().FirstOrDefault(x => x.Is(CustomRoles.Exorcist)));
             }, 0.1f);
         }
+
+        if (AmongUsClient.Instance.AmHost) WordKiller.OnAnyoneChat(PlayerControl.LocalPlayer, text);
 
         CheckAnagramGuess(PlayerControl.LocalPlayer.PlayerId, text);
 
@@ -1618,6 +1621,12 @@ internal static class ChatCommands
 
         Utils.SendMessage(msg, targetId, title, importance: MessageImportance.High);
         ChatUpdatePatch.LastMessages.Add((msg, targetId, title, Utils.TimeStamp));
+    }
+
+    private static void WordCommand(PlayerControl player, string text, string[] args)
+    {
+        if (Starspawn.IsDayBreak) return;
+        WordKiller.SetWord(player, args);
     }
 
     private static void DeathNoteCommand(PlayerControl player, string text, string[] args)
@@ -4382,6 +4391,12 @@ internal static class ChatCommands
         }
 
         long now = Utils.TimeStamp;
+
+        // 禁止ワード判定は以降のどの早期 return よりも先に通す。下のコマンド連投スロットル (2秒) は
+        // 非モッド送信者にだけ効くため、ここより後ろに置くと「直前に何かコマンドを打っておけば
+        // 禁止ワードを言っても死なない」という抜け道になる (逆にモッド客だけ死ぬ非対称も生む)。
+        // 判定は文字列の Contains のみで送信を伴わないので、スロットルの目的 (スパム抑制) とも衝突しない。
+        WordKiller.OnAnyoneChat(player, text);
 
         if (LastSentCommand.TryGetValue(player.PlayerId, out long ts) && ts + 2 >= now && !player.IsModdedClient())
         {

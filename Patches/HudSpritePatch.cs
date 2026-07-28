@@ -196,6 +196,11 @@ public static class HudSpritePatch
                     newPetButton = CustomButton.Get("PortalMaker");
                     break;
                 }
+                case CustomRoles.PortalButton:
+                {
+                    newPetButton = CustomButton.Get("EmergencyButton");
+                    break;
+                }
                 case CustomRoles.Tether:
                 {
                     if (Options.UsePets.GetBool()) newPetButton = CustomButton.Get("TPToLoca");

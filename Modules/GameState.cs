@@ -101,6 +101,9 @@ public class PlayerState(byte playerId)
         // MapExtender
         Erased,
 
+        // WordKiller
+        Censored,
+
         etc = -1
     }
 

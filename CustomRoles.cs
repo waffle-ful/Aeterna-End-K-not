@@ -568,6 +568,8 @@ public enum CustomRoles
     Safecracker,
     Crosswind,
     Shuffler,
+    PortalButton,
+    WordKiller,
     Convict,
     Survivor,
 
