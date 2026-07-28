@@ -158,7 +158,60 @@ public static class Utils
             SetAllVentInteractions();
     }
 
-    public static int NumSnapToCallsThisRound;
+    // SnapTo 予算のトークンバケット化 (2026-07-28): 閾値 80(None降格)/100(停止) は不変のまま、
+    // カウンタが SnapToRefillSecondsPerToken 秒ごとに 1 ずつ時間回復する。従来は会議境界でしか
+    // リセットされず、会議なしモード/長ラウンドで予算枯渇 famine が起きていた。
+    // 公式 anti-cheat のレート仕様は未公表 (80/100 も上流由来の自主規制) のため、
+    // レートは /tpdbg refill <sec> で実験調整できる。0 以下 = 回復無効 (旧挙動)。
+    // getter/setter 経由の lazy refill なので既存の ++ / += / 代入サイトは全て無改変で動く。
+    public static float SnapToRefillSecondsPerToken = 1.5f;
+
+    private static int _snapToCount;
+    private static float _lastSnapToRefillTime;
+
+    // 回復なしの累積消費カウンタ。リセットはラウンド境界の明示代入 (=0 / =aapc.Count) のみ。
+    // EarlyWarning の per-frame TP リーク検知床を回復導入前と同じに保つための観測専用値 (送信判定には使わない)。
+    public static int NumSnapToGrossThisRound;
+
+    public static int NumSnapToCallsThisRound
+    {
+        get
+        {
+            RefillSnapToBudget();
+            return _snapToCount;
+        }
+        set
+        {
+            // 代入前にも回復を清算する (基準時刻は RefillSnapToBudget が端数保持で前進させる)。
+            // ここで基準時刻を now にリセットすると「1.5秒未満間隔の消費が続く間は回復ゼロ」になり、
+            // 持続消費シナリオ (famine の本丸) で回復が無効化される — 監査 2026-07-28 の指摘。
+            RefillSnapToBudget();
+
+            // 増加方向の代入 = 消費 (++/+=)、減少・同値方向 = ラウンド境界等の明示リセットとみなす
+            if (value > _snapToCount) NumSnapToGrossThisRound += value - _snapToCount;
+            else NumSnapToGrossThisRound = value;
+
+            _snapToCount = value;
+        }
+    }
+
+    private static void RefillSnapToBudget()
+    {
+        float now = Time.time;
+
+        if (SnapToRefillSecondsPerToken <= 0f)
+        {
+            _lastSnapToRefillTime = now;
+            return;
+        }
+
+        // 整数トークン単位で回復し、端数は基準時刻の繰り越しで保持する (float truncation による消費の取りこぼし防止)
+        var tokens = (int)((now - _lastSnapToRefillTime) / SnapToRefillSecondsPerToken);
+        if (tokens <= 0) return;
+
+        _snapToCount = Math.Max(0, _snapToCount - tokens);
+        _lastSnapToRefillTime += tokens * SnapToRefillSecondsPerToken;
+    }
 
     // /tpdbg 実験用: true でローカル/カスタム鯖でも公式鯖の SnapTo cap (80/100) 経路を発火させる
     public static bool TpCapDebugForceOfficial;

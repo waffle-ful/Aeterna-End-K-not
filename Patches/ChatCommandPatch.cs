@@ -3418,6 +3418,7 @@ internal static class ChatCommands
 
     // SnapTo cap 実験計器: /tpdbg = 現在値表示, /tpdbg set <n> = カウンタ直接セット,
     // /tpdbg official <0|1> = ローカル鯖でも公式鯖の cap 経路 (80/100) を発火させる。送信ゼロ・ホストローカル。
+    // /tpdbg refill <sec> = トークン回復レート (秒/1回復) の実験変更。0 = 回復無効 (旧・会議境界リセットのみ)。
     private static void TpDbgCommand(PlayerControl player, string text, string[] args)
     {
         if (!player.FriendCode.GetDevUser().up && !player.FriendCode.IsLocalDev()) return;
@@ -3432,8 +3433,16 @@ internal static class ChatCommands
             Utils.TpCapDebugForceOfficial = args[2] == "1";
             Logger.Info($"DevCmd /tpdbg official: ForceOfficial={Utils.TpCapDebugForceOfficial}", "DevCmd");
         }
+        else if (args.Length >= 3 && args[1].Equals("refill", StringComparison.OrdinalIgnoreCase) && float.TryParse(args[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float newRate))
+        {
+            // 旧レートで回復を清算し基準時刻を now 側へ寄せてからレート変更 (無効→有効切替時の巨大まとめ回復を防ぐ)
+            _ = Utils.NumSnapToCallsThisRound;
+            // 0 以下 = 回復無効 (旧挙動への切り戻し)。正の極小値は cap 実質無効化になるため 0.1s を下限にクランプ
+            Utils.SnapToRefillSecondsPerToken = newRate <= 0f ? 0f : Math.Max(newRate, 0.1f);
+            Logger.Info($"DevCmd /tpdbg refill: SnapToRefillSecondsPerToken={Utils.SnapToRefillSecondsPerToken}", "DevCmd");
+        }
 
-        Utils.SendMessage($"[tpdbg] count={Utils.NumSnapToCallsThisRound} forceOfficial={Utils.TpCapDebugForceOfficial} server={GameStates.CurrentServerType}", player.PlayerId);
+        Utils.SendMessage($"[tpdbg] count={Utils.NumSnapToCallsThisRound} gross={Utils.NumSnapToGrossThisRound} refill={Utils.SnapToRefillSecondsPerToken}s/token forceOfficial={Utils.TpCapDebugForceOfficial} server={GameStates.CurrentServerType}", player.PlayerId);
     }
 
     private static WaveCannonWarning WcDbgProbeCno;
