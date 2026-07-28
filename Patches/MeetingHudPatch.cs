@@ -263,6 +263,7 @@ internal static class CheckForEndVotingPatch
                 {
                     voteLog.Info($"{data.Key} has higher votes ({data.Value})");
                     if (Dad.OnVotedOut(data.Key)) continue;
+                    if (Safecracker.OnVotedOut(data.Key)) continue;
 
                     exileId = data.Key;
                     max = data.Value;

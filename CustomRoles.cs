@@ -565,6 +565,7 @@ public enum CustomRoles
     Maguro,
     Supernova,
     MapExtender,
+    Safecracker,
     Convict,
     Survivor,
 
