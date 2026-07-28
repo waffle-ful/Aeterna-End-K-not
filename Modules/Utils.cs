@@ -1035,6 +1035,7 @@ public static class Utils
             case CustomRoles.Amnesiac:
             case CustomRoles.Dad when ((Dad)state.Role).DoneTasks:
             case CustomRoles.Workaholic:
+            case CustomRoles.Safecracker:
             case CustomRoles.Terrorist:
             case CustomRoles.Sunnyboy:
             case CustomRoles.Convict:

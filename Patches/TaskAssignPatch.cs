@@ -149,6 +149,26 @@ internal static class RpcSetTasksPatch
 
         CustomRoles role = GhostRolesManager.AssignedGhostRoles.TryGetValue(pc.PlayerId, out (CustomRoles Role, IGhostRole Instance) gr) && gr.Instance is Phantasm or Haunter ? gr.Role : pc.GetCustomRole();
 
+        // Safecracker: 金庫タスクだけを設定個数だけ持たせる。
+        // 同じ Index を並べる配り方はバニラの AddTasksFromList では作れないので、
+        // ここで taskTypeIds を丸ごと差し替える (共通タスクも渡さない)。
+        if (role == CustomRoles.Safecracker && Options.CurrentGameMode == CustomGameMode.Standard)
+        {
+            NormalPlayerTask safeTask = Safecracker.GetSafeTask();
+
+            if (safeTask != null)
+            {
+                int num = Safecracker.TaskCount.GetInt();
+                taskTypeIds = new(num);
+                for (var i = 0; i < num; i++) taskTypeIds[i] = (byte)safeTask.Index;
+
+                Logger.Info($"Assigned {num}x {safeTask.TaskType}", pc.GetRealName());
+                return;
+            }
+
+            Logger.Warn("Safe task not found on this map - falling back to normal task assignment", "Safecracker");
+        }
+
         // Default number of tasks
         var hasCommonTasks = true;
         int numLongTasks = Main.NormalOptions.NumLongTasks;

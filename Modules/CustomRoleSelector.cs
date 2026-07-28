@@ -113,6 +113,7 @@ internal static class CustomRoleSelector
                 case CustomRoles.Battery when Main.CurrentMap == MapNames.Fungle:
                 case CustomRoles.Beacon when Main.CurrentMap == MapNames.Fungle:
                 case CustomRoles.Stalker when Main.CurrentMap == MapNames.Fungle:
+                case CustomRoles.Safecracker when Main.LIMap || Main.CurrentMap != MapNames.Airship: // 金庫タスクは Airship にしか存在しない
                 case CustomRoles.Pelican when roles[RoleAssignType.Impostor].Any(x => x.Role == CustomRoles.Duellist):
                 case CustomRoles.Duellist when roles[RoleAssignType.NeutralKilling].Any(x => x.Role == CustomRoles.Pelican):
                 case CustomRoles.VengefulRomantic:

@@ -754,6 +754,7 @@ public class Main : BasePlugin
                 { CustomRoles.Opportunist, "#4dff4d" },
                 { CustomRoles.Maguro, "#00ffff" },
                 { CustomRoles.Supernova, "#ff4500" },
+                { CustomRoles.Safecracker, "#f8d958" },
                 { CustomRoles.Vector, "#ff6201" },
                 { CustomRoles.Jackal, "#00b4eb" },
                 { CustomRoles.Sidekick, "#00b4eb" },
@@ -1461,6 +1462,7 @@ public enum CustomWinner
     MassMedia = CustomRoles.MassMedia,
     Monochromer = CustomRoles.Monochromer,
     Supernova = CustomRoles.Supernova,
+    Safecracker = CustomRoles.Safecracker,
 
     Coven = CustomRoles.CovenLeader,
 
