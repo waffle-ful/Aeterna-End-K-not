@@ -111,5 +111,8 @@
     </Target>
     <Target Name="Copy" AfterTargets="Build" Condition="'$(AmongUs)' != '' And '$(Configuration)' != 'Android'">
         <Copy SourceFiles="$(OutputPath)$(AssemblyName).dll" DestinationFolder="$(AmongUs)/BepInEx/plugins/"/>
+        <!-- PDB も一緒に配置する。DLL だけ更新すると配置済み PDB が古いまま残り、GUID/age 不一致で
+             例外スタックトレースの file:line が解決できなくなる (握りつぶし例外の発生源が特定不能になる)。 -->
+        <Copy SourceFiles="$(OutputPath)$(AssemblyName).pdb" DestinationFolder="$(AmongUs)/BepInEx/plugins/" Condition="Exists('$(OutputPath)$(AssemblyName).pdb')"/>
     </Target>
 </Project>

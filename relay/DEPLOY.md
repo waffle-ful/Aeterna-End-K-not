@@ -176,6 +176,8 @@ dotnet build EndKnot.csproj -c Release -o build/
 ```
 
 Copy `build/EndKnot.dll` to `<AmongUs>/BepInEx/plugins/EndKnot.dll`.
+Copy `build/EndKnot.pdb` alongside it — copying the DLL on its own leaves a stale PDB behind,
+and the mismatch strips file/line info from exception stack traces.
 
 Launch AU as host:
 1. Open Client Options → toggle **Share Lobby Code to Discord** ON
