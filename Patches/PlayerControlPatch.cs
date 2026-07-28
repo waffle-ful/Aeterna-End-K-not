@@ -132,6 +132,11 @@ internal static class CheckMurderPatch
 
             PlayerControl killer = __instance;
 
+            // CNO (PlayerId >= 200) は host の AllPlayerControls からは外してあるが、非モッド客のローカルには
+            // 残るため client のキルボタンの対象になりうる。Main.PlayerStates に登録が無いので以降の参照が
+            // KeyNotFoundException になる (BUG-20260728-05 と同型) — キルごと無効化する
+            if (target.PlayerId >= 200) return false;
+
             AFKDetector.SetNotAFK(killer.PlayerId);
 
             Logger.Info($"{killer.GetNameWithRole().RemoveHtmlTags()} => {target.GetNameWithRole().RemoveHtmlTags()}", "CheckMurder");
@@ -916,12 +921,24 @@ internal static class ShapeshiftPatch
 
         if (!shapeshifter || !target) return true;
 
+        // CNO (PlayerId >= 200) は Main.PlayerStates に登録が無い。CNO はホストの AllPlayerControls からは
+        // 外れるが非モッド客のローカルには残るため、客の変身メニューの対象として選べてしまい、以降の
+        // PlayerStates 参照が KeyNotFoundException になる (bug-inbox BUG-20260728-05)。
+        // 装飾オブジェクトへの変身に正当な用途は無いので、素通し (return true) ではなく拒否する
+        // — 通すと RpcShapeshift 経由で Main.CheckShapeshift / AllPlayerNames 側へ問題が移るだけ
+        if (target.PlayerId >= 200)
+        {
+            shapeshifter.RpcRejectShapeshift();
+            return false;
+        }
+
         Logger.Info($"{shapeshifter.GetNameWithRole()} => {target.GetNameWithRole()}", "Shapeshift");
 
         if (AmongUsClient.Instance.AmHost && meetingSS)
         {
-            if (MeetingHud.Instance.state is MeetingHud.VoteStates.Discussion or MeetingHud.VoteStates.Voted or MeetingHud.VoteStates.NotVoted)
-                Main.PlayerStates[shapeshifter.PlayerId].Role.OnMeetingShapeshift(shapeshifter, target);
+            if ((MeetingHud.Instance.state is MeetingHud.VoteStates.Discussion or MeetingHud.VoteStates.Voted or MeetingHud.VoteStates.NotVoted)
+                && Main.PlayerStates.TryGetValue(shapeshifter.PlayerId, out PlayerState meetingShapeshifterState))
+                meetingShapeshifterState.Role.OnMeetingShapeshift(shapeshifter, target);
 
             shapeshifter.RpcRejectShapeshift();
             return false;
@@ -959,13 +976,13 @@ internal static class ShapeshiftPatch
             PlagueBearer.CheckAndSpreadInfection(target, shapeshifter);
         }
 
-        if (Main.PlayerStates[target.PlayerId].Role is Veteran veteran && Veteran.VeteranAlertActivatesOnNonKillingInteractions.GetBool())
+        if (Main.PlayerStates.TryGetValue(target.PlayerId, out PlayerState targetState) && targetState.Role is Veteran veteran && Veteran.VeteranAlertActivatesOnNonKillingInteractions.GetBool())
             veteran.OnCheckMurderAsTarget(shapeshifter, target);
 
         var isSSneeded = shapeshifter.IsAlive();
 
-        if (!Pelican.IsEaten(shapeshifter.PlayerId) && !GameStates.IsVoting && isSSneeded)
-            isSSneeded = Main.PlayerStates[shapeshifter.PlayerId].Role.OnShapeshift(shapeshifter, target, shapeshifting);
+        if (!Pelican.IsEaten(shapeshifter.PlayerId) && !GameStates.IsVoting && isSSneeded && Main.PlayerStates.TryGetValue(shapeshifter.PlayerId, out PlayerState shapeshifterState))
+            isSSneeded = shapeshifterState.Role.OnShapeshift(shapeshifter, target, shapeshifting);
 
         bool forceCancel = role.ForceCancelShapeshift() || !shapeshifter.IsAlive();
 

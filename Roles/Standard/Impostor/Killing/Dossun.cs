@@ -52,7 +52,8 @@ public class Dossun : RoleBase
     {
         StartSetup(Id)
             .AutoSetupOption(ref AbilityCooldown, 15, new IntegerValueRule(1, 60, 1), OptionFormat.Seconds)
-            .AutoSetupOption(ref KnockbackDistance, 3, new IntegerValueRule(1, 10, 1), OptionFormat.Multiplier)
+            // 最小値は 2 (1 だと全フォールバック段が MinReliableTpDistance 未満になり、ノックバックが一切発生しない)
+            .AutoSetupOption(ref KnockbackDistance, 3, new IntegerValueRule(2, 10, 1), OptionFormat.Multiplier)
             .AutoSetupOption(ref BlockDuration, 30, new IntegerValueRule(5, 120, 1), OptionFormat.Seconds);
     }
 
