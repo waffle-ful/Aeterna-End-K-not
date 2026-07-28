@@ -26,6 +26,11 @@ public class Dossun : RoleBase
     private const long PerVictimHitCooldownSeconds = 1;
     private static readonly float[] KnockbackFallbackMultipliers = [1f, 0.66f, 0.33f];
 
+    // Utils.TP は移動距離が 1.5u 未満だと SendOption.None へ降格する (Utils.cs:255-260) = クライアントに届かない
+    // 可能性がある一方、NumSnapToCallsThisRound は降格後も加算される (:310)。届かない TP でラウンド共有の
+    // SnapTo 予算だけ削るのを避けるため、短すぎるフォールバック段は最初から撃たない (Crosswind と同じ扱い)。
+    private const float MinReliableTpDistance = 1.6f;
+
     public enum Phase { None, Placed, Active }
 
     // Utils.ShouldNotApplyAbilityCooldown が参照するため public (設置直後は CD 免除で即起動できるようにする)
@@ -196,7 +201,10 @@ public class Dossun : RoleBase
 
             LastHitTimestamp[target.PlayerId] = now;
 
+            // 壁チェックは足元 (GetTruePosition = transform + Collider.offset) から、TP 先は body center (Pos) を基準にする。
+            // Utils.TP → SnapTo は transform 空間に書くので、足元基準の座標をそのまま渡すと横移動に加えて毎回 0.36u 沈む
             Vector2 victimPos = target.GetTruePosition();
+            Vector2 tpBase = target.Pos();
             bool crushed = PhysicsHelpers.AnyNonTriggersBetween(victimPos, dir, CrushCheckDistance, Constants.ShipAndObjectsMask);
 
             if (crushed)
@@ -219,9 +227,13 @@ public class Dossun : RoleBase
             foreach (float mult in KnockbackFallbackMultipliers)
             {
                 float dist = knockDist * mult;
+
+                // 倍率は降順なので、ここで短くなったら以降の段も全て短い = 押し出しを諦める
+                if (dist < MinReliableTpDistance) break;
+
                 if (!PhysicsHelpers.AnyNonTriggersBetween(victimPos, dir, dist, Constants.ShipAndObjectsMask))
                 {
-                    target.TP(victimPos + dir * dist);
+                    target.TP(tpBase + dir * dist);
                     break;
                 }
             }

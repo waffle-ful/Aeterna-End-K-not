@@ -266,6 +266,8 @@ public static class Utils
         AFKDetector.TempIgnoredPlayers.Add(pc.PlayerId);
         LateTask.New(() => AFKDetector.TempIgnoredPlayers.Remove(pc.PlayerId), 0.2f + CalculatePingDelay(), log: false);
 
+        Vector2 preTpPosition = pc.Pos(); // TP着弾検証 (TpDeliveryProbe) 用: SnapTo 適用前のクライアント実位置
+
         nt.SnapTo(location, (ushort)(nt.lastSequenceId + 328));
         nt.SetDirtyBit(uint.MaxValue);
 
@@ -294,6 +296,8 @@ public static class Utils
         NetHelpers.WriteVector2(location, messageWriter);
         messageWriter.Write(newSid);
         AmongUsClient.Instance.FinishRpcImmediately(messageWriter);
+
+        TpDeliveryProbe.Arm(pc, preTpPosition, location, sendOption);
 
         if (log) Logger.Info($"{pc.GetNameWithRole().RemoveHtmlTags()} => {location}", "TP");
 

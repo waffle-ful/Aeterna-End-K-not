@@ -49,6 +49,7 @@ public static class EarlyWarning
     {
         try { TickSnapTo(); } catch { }
         try { TickExceptionFlood(); } catch { }
+        try { TpDeliveryProbe.Tick(); } catch { }
     }
 
     private static void TickSnapTo()
