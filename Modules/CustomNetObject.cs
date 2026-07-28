@@ -1069,6 +1069,40 @@ namespace EndKnot
         }
     }
 
+    // Shuffler が撒く赤い丸。踏んだ生存者が会議を起こす。
+    //
+    // グリッドは Portal / MapExtenderPortal と同じ 4 列 × 6 行を維持すること:
+    // Shuffler.MarkerTriggerRange (1f) はこの footprint 前提で調整されており、
+    // 幅を変えると描画された縁の上に立っても反応しない。
+    //
+    // onlyVisibleTo は付けない — 踏むか避けるかの駆け引きが能力の本体なので全員に見せる。
+    // 基底の OnMeeting() は「会議で Despawn → 会議後に同じ座標で自動再生成」する。この丸は
+    // 踏まれると会議を起こすので、再生成すると 会議 → 復活 → 踏む → 会議 の無限ループになる。
+    // MapExtenderPortal と同じく消えたきりにする (張り直しは Shuffler の能力発動時のみ)。
+    internal sealed class ShuffleMarker : CustomNetObject
+    {
+        // 透明セルは TNT と同じ `<#0000>W</color>`、塗りセルは Portal/Riptide と同じ素の `<mark>` のみ
+        // (色付き W との併用は repo 内に前例が無いので使わない — TMP のバージョン差で描画が飛ぶ)。
+        private const string RedCircleSprite =
+            "<size=70%><line-height=97%><cspace=0.16em>" +
+            "<#0000>W</color><mark=#c0392b>WW</mark><#0000>W</color>\n" +
+            "<mark=#c0392b>W</mark><mark=#e74c3c>WW</mark><mark=#c0392b>W</mark>\n" +
+            "<mark=#c0392b>W</mark><mark=#e74c3c>WW</mark><mark=#c0392b>W</mark>\n" +
+            "<mark=#c0392b>W</mark><mark=#e74c3c>WW</mark><mark=#c0392b>W</mark>\n" +
+            "<mark=#c0392b>W</mark><mark=#e74c3c>WW</mark><mark=#c0392b>W</mark>\n" +
+            "<#0000>W</color><mark=#c0392b>WW</mark><#0000>W</color>";
+
+        public ShuffleMarker(Vector2 position)
+        {
+            CreateNetObject(RedCircleSprite, position);
+        }
+
+        public override void OnMeeting()
+        {
+            Despawn();
+        }
+    }
+
     internal sealed class Plant : CustomNetObject
     {
         public bool Spawned;

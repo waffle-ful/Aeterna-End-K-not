@@ -4322,6 +4322,7 @@ public static class Utils
             CustomRoles.Operative => Operative.AbilityCooldown.GetInt(),
             CustomRoles.PortalMaker => PortalMaker.AbilityCooldown.GetInt(),
             CustomRoles.MapExtender => MapExtender.AbilityCooldown.GetInt(),
+            CustomRoles.Shuffler => Shuffler.AbilityCooldown.GetInt(),
             CustomRoles.Telecommunication => Telecommunication.VentCooldown.GetInt(),
             CustomRoles.Tether => Tether.VentCooldown.GetInt(),
             CustomRoles.Gardener => Gardener.AbilityCooldown.GetInt(),

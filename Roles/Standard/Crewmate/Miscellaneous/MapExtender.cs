@@ -161,6 +161,11 @@ public class MapExtender : RoleBase
     {
         if (EntryPos == null || ExitPos == null) return;
 
+        // Shuffler の void 落下地点は出口ポータルと同じ「上端の外」に置かれるため、
+        // 除外しないと落ちた直後にこのポータルが拾って入口へ TP し戻してしまう
+        // (void なのにマップ内を歩けるのに投票と発言だけ封じられた状態になる)。
+        if (Shuffler.IsInVoid(pc.PlayerId)) return;
+
         Vector2 entry = EntryPos.Value;
         Vector2 exit = ExitPos.Value;
         Vector2 pos = pc.Pos();
@@ -209,6 +214,14 @@ public class MapExtender : RoleBase
     {
         if (lowLoad || !MapBoundsValid) return;
         if (!Main.IntroDestroyed || !GameStates.InGame || GameStates.IsMeeting || ExileController.Instance || AntiBlackout.SkipTasks || !pc.IsAlive()) return;
+
+        // Shuffler に void 送りされた人は同じ「上端の外」に居るが、あちらは会議で戻る前提の
+        // 一時的な追放なので、こちらの滞在計時に載せると抹消死してしまう。計時対象から外す。
+        if (Shuffler.IsInVoid(pc.PlayerId))
+        {
+            OutsideSince.Remove(pc.PlayerId);
+            return;
+        }
 
         bool outside = pc.Pos().y >= OutsideLine;
 
