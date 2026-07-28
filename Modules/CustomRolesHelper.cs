@@ -658,6 +658,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Carrier => RoleTypes.Shapeshifter,
                 CustomRoles.WaveCannon => RoleTypes.Phantom,
                 CustomRoles.Crosswind => RoleTypes.Phantom,
+                CustomRoles.Shuffler => RoleTypes.Phantom,
 
                 CustomRoles.CovenLeader => RoleTypes.Impostor,
                 CustomRoles.SpellCaster => RoleTypes.Impostor,
@@ -931,6 +932,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Riptide or
                 CustomRoles.Dossun or
                 CustomRoles.Crosswind or
+                CustomRoles.Shuffler or
                 CustomRoles.Chainbinder or
                 CustomRoles.Exorcist or
                 CustomRoles.Frightener or
@@ -1428,6 +1430,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Occultist => RoleOptionType.Impostor_Support,
                 CustomRoles.Perplexer => RoleOptionType.Impostor_Support,
                 CustomRoles.Crosswind => RoleOptionType.Impostor_Support,
+                CustomRoles.Shuffler => RoleOptionType.Impostor_Support,
                 CustomRoles.Silencer => RoleOptionType.Impostor_Support,
                 CustomRoles.Skinwalker => RoleOptionType.Impostor_Support,
                 CustomRoles.Swapster => RoleOptionType.Impostor_Support,

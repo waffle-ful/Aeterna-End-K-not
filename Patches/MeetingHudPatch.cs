@@ -108,7 +108,7 @@ internal static class CheckForEndVotingPatch
 
             if (!ShouldSkip && !__instance.playerStates.All(ps =>
             {
-                if (!ps || Silencer.ForSilencer.Contains(ps.TargetPlayerId) || !Main.PlayerStates.TryGetValue(ps.TargetPlayerId, out PlayerState st) || st.IsDead || ps.AmDead || ps.DidVote) return true;
+                if (!ps || Silencer.ForSilencer.Contains(ps.TargetPlayerId) || Shuffler.IsInVoid(ps.TargetPlayerId) || !Main.PlayerStates.TryGetValue(ps.TargetPlayerId, out PlayerState st) || st.IsDead || ps.AmDead || ps.DidVote) return true;
                 PlayerControl targetPlayer = Utils.GetPlayerById(ps.TargetPlayerId);
                 return !targetPlayer || !targetPlayer.Data || targetPlayer.Data.Disconnected;
             })) return false;
@@ -1564,6 +1564,15 @@ internal static class MeetingHudCastVotePatch
         if (Silencer.ForSilencer.Contains(srcPlayerId))
         {
             ShouldCancelVoteList.TryAdd(srcPlayerId, (__instance, pvaSrc, pcSrc));
+            voteCanceled = true;
+        }
+
+        // void に落とされた人はこの会議のあいだ投票できない。理由を返さないと
+        // 「票が黙って消える」だけになりバグに見えるため、必ずメッセージを出す。
+        if (Shuffler.IsInVoid(srcPlayerId))
+        {
+            ShouldCancelVoteList.TryAdd(srcPlayerId, (__instance, pvaSrc, pcSrc));
+            Utils.SendMessage(Translator.GetString("Shuffler.VoteBlocked"), srcPlayerId);
             voteCanceled = true;
         }
 

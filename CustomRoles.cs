@@ -567,6 +567,7 @@ public enum CustomRoles
     MapExtender,
     Safecracker,
     Crosswind,
+    Shuffler,
     Convict,
     Survivor,
 
