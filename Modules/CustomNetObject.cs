@@ -1035,16 +1035,32 @@ namespace EndKnot
         }
     }
 
-    // MapExtender 専用のポータル。見た目は Portal と同じだが、以下2点のために別クラスにしている:
+    // MapExtender 専用のポータル。以下2点のために Portal とは別クラスにしている:
     //   1. 基底の OnMeeting() は「会議で Despawn → 会議終了後に同じ座標で自動再生成」する。
     //      毎ラウンド張り直す MapExtender ではこの再生成が役職側のどのフィールドからも
     //      参照されないゾンビ CNO になり、会議のたびに積み上がる。Tornado と同じく消えたきりにする。
     //   2. PortalMaker の OfType<Portal>() 一括 Despawn に巻き込まれない (別クラスなのでマッチしない)。
+    //
+    // 見た目は「虚無に空いた穴」— 外周の薄紫グローから深紫を挟んで中心が純黒、という同心円グラデーション。
+    // マップ外(虚無)へ飛ばす役職なので、PortalMaker の紫の四角とは意図的に別物にしている。
+    // グリッドは Portal と同じ 4 列 × 6 行を維持すること: MapExtender.TriggerRange (1f) は
+    // この footprint 前提で調整されており、幅を広げると描画された縁の上に立っても反応しない。
     internal sealed class MapExtenderPortal : CustomNetObject
     {
+        // 透明セルは TNT と同じ `<#0000>W</color>`、塗りセルは Portal/Riptide と同じ素の `<mark>` のみ
+        // (色付き W との併用は repo 内に前例が無いので使わない — TMP のバージョン差で描画が飛ぶ)。
+        private const string VoidHoleSprite =
+            "<size=70%><line-height=97%><cspace=0.16em>" +
+            "<#0000>W</color><mark=#7b2cbf>WW</mark><#0000>W</color>\n" +
+            "<mark=#7b2cbf>W</mark><mark=#2a0845>WW</mark><mark=#7b2cbf>W</mark>\n" +
+            "<mark=#2a0845>W</mark><mark=#000000>WW</mark><mark=#2a0845>W</mark>\n" +
+            "<mark=#2a0845>W</mark><mark=#000000>WW</mark><mark=#2a0845>W</mark>\n" +
+            "<mark=#7b2cbf>W</mark><mark=#2a0845>WW</mark><mark=#7b2cbf>W</mark>\n" +
+            "<#0000>W</color><mark=#7b2cbf>WW</mark><#0000>W</color>";
+
         public MapExtenderPortal(Vector2 position)
         {
-            CreateNetObject("<size=70%><line-height=97%><cspace=0.16em><mark=#2b006b>WWWW</mark>\n<mark=#2b006b>W</mark><mark=#fa69ff>WW</mark><mark=#2b006b>W</mark>\n<mark=#2b006b>W</mark><mark=#fa69ff>WW</mark><mark=#2b006b>W</mark>\n<mark=#2b006b>W</mark><mark=#fa69ff>WW</mark><mark=#2b006b>W</mark>\n<mark=#2b006b>W</mark><mark=#fa69ff>WW</mark><mark=#2b006b>W</mark>\n<mark=#2b006b>WWWW", position);
+            CreateNetObject(VoidHoleSprite, position);
         }
 
         public override void OnMeeting()
