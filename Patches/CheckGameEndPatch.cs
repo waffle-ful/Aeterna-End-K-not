@@ -230,7 +230,7 @@ internal static class GameEndChecker
                         case CustomRoles.SchrodingersCat when !pc.IsConverted():
                             WinnerIds.Remove(pc.PlayerId);
                             break;
-                        case CustomRoles.WolfBoy when WinnerTeam == CustomWinner.Crewmate && roleBase is WolfBoy wb && WolfBoy.OptionWinKillCount != null && WolfBoy.OptionWinKillCount.GetInt() > 0 && wb.GetKillCount() < WolfBoy.OptionWinKillCount.GetInt():
+                        case CustomRoles.WolfBoy when WinnerTeam == CustomWinner.Crewmate && roleBase is WolfBoy wb && WolfBoy.OptionWinKillCount != null && WolfBoy.OptionWinKillCount.GetInt() > 0 && (!pc.IsAlive() || wb.GetKillCount() < WolfBoy.OptionWinKillCount.GetInt()):
                             WinnerIds.Remove(pc.PlayerId);
                             break;
                         case CustomRoles.Walker when WinnerTeam == CustomWinner.Crewmate && pc.IsAlive() && !Walker.HasCompletedTour(pc.PlayerId) && !pc.GetTaskState().IsTaskFinished:

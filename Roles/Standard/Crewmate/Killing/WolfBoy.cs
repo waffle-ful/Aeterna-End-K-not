@@ -105,25 +105,32 @@ public class WolfBoy : RoleBase
     {
         if (shotLimit <= 0) return false;
 
-        shotLimit--;
         SetKillCooldown(killer.PlayerId);
+        return true;
+    }
+
+    public override void OnMurder(PlayerControl killer, PlayerControl target)
+    {
+        if (killer.PlayerId == target.PlayerId) return;
+
+        shotLimit--;
+        Main.PlayerStates[target.PlayerId].deathReason = PlayerState.DeathReason.Shot;
 
         // Count kill toward win condition
         if (OptionWinKillCount.GetInt() > 0)
         {
-            bool count = target.GetCustomRoleTypes() switch
-            {
-                CustomRoleTypes.Crewmate => OptionCountCrew.GetBool(),
-                CustomRoleTypes.Impostor => OptionCountImpostor.GetBool(),
-                CustomRoleTypes.Neutral => OptionCountNeutral.GetBool(),
-                _ => false
-            };
+            bool count = target.IsMadmate()
+                ? OptionCountMadmate.GetBool()
+                : target.GetCustomRoleTypes() switch
+                {
+                    CustomRoleTypes.Crewmate => OptionCountCrew.GetBool(),
+                    CustomRoleTypes.Impostor => OptionCountImpostor.GetBool(),
+                    CustomRoleTypes.Neutral => OptionCountNeutral.GetBool(),
+                    _ => false
+                };
 
-            if (!count && target.IsMadmate()) count = OptionCountMadmate.GetBool();
             if (count) killCount++;
         }
-
-        return true;
     }
 
     public int GetKillCount() => killCount;
