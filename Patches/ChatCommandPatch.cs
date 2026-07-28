@@ -3442,7 +3442,7 @@ internal static class ChatCommands
             Logger.Info($"DevCmd /tpdbg refill: SnapToRefillSecondsPerToken={Utils.SnapToRefillSecondsPerToken}", "DevCmd");
         }
 
-        Utils.SendMessage($"[tpdbg] count={Utils.NumSnapToCallsThisRound} gross={Utils.NumSnapToGrossThisRound} refill={Utils.SnapToRefillSecondsPerToken}s/token forceOfficial={Utils.TpCapDebugForceOfficial} server={GameStates.CurrentServerType}", player.PlayerId);
+        Utils.SendMessage($"[tpdbg] count={Utils.NumSnapToCallsThisRound} gross={Utils.NumSnapToGrossThisRound} refill={Utils.SnapToRefillSecondsPerToken}s/token forceOfficial={Utils.TpCapDebugForceOfficial} server={GameStates.CurrentServerType} {TpDeliveryProbe.GetStatsForTpDbg()}", player.PlayerId);
     }
 
     private static WaveCannonWarning WcDbgProbeCno;
