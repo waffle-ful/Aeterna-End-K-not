@@ -55,7 +55,10 @@ public static class EarlyWarning
     {
         if (GameStates.CurrentServerType != GameStates.ServerType.Vanilla) return; // 公式鯖のみ意味を持つ閾値
 
-        int cur = Utils.NumSnapToCallsThisRound;
+        // 検知は回復なしの累積消費 (Gross) で行う — 回復付きの実効値 (net) を見ると、時間回復導入
+        // (2026-07-28) 以降は 0.67/s 未満のリークが永久に閾値へ届かず検知床が上がってしまうため。
+        int cur = Utils.NumSnapToGrossThisRound;
+        int net = Utils.NumSnapToCallsThisRound;
         long now = Utils.TimeStamp;
 
         int perSec = 0;
@@ -71,9 +74,9 @@ public static class EarlyWarning
         string suspect = perSec >= 10 ? " suspect=frame-tp-throttle-missing" : string.Empty;
 
         if (cur >= 80)
-            Warn("snapto", $"kind=snapto count={cur} perSec={perSec} threshold=80{suspect}", critical: true, "EarlyWarning.SnapToExhausted");
+            Warn("snapto", $"kind=snapto gross={cur} net={net} perSec={perSec} threshold=80{suspect}", critical: true, "EarlyWarning.SnapToExhausted");
         else
-            Warn("snapto", $"kind=snapto count={cur} perSec={perSec} threshold=60{suspect}", critical: false, null);
+            Warn("snapto", $"kind=snapto gross={cur} net={net} perSec={perSec} threshold=60{suspect}", critical: false, null);
     }
 
     private static void TickExceptionFlood()
