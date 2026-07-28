@@ -1218,39 +1218,60 @@ internal static class IntroCutsceneDestroyPatch
             // 「入場失敗型」暗転が出現したため、発生側変更を 17:41 以前の形 (+0.1秒) へ全て戻して 1-bit 分離する。
             // 戻したもの: RpcChangeRoleBasis / SetActualSelfRolesAfterOverride / DoubleAgent の +6s 遅延、
             // ゲーム開始 +8s の予防 ReactorFlash、会議安全窓の +9.5s フロア。
-            LateTask.New(() =>
+            //
+            // 【T2退避 2026-07-29】この三点セットは vanilla SetRole (canOverride=true) で、+0.1s 発火では
+            // まだ intro 中のクライアント (GM ホスト intro 7-9s < 客 10-11s+) に毎ゲーム着弾する (暗転容疑 🔴#1)。
+            // FirstTurnMeeting ON のときは初手会議トリガーの直前 (= entry gate で全客 confirm 済み・
+            // 会議送信より前) まで退避する。会議中への遅延は厳禁 — vanilla クライアントは MeetingHud 表示中に
+            // SetRole を受けると会議 UI 状態が壊れる (07-17 の +6s 版が重症入場失敗型を生んだ機序)。
+            // AntiBlackout のジャグリング (SetOptimalRoleTypes) は会議クローズ時 (MeetingHud.OnDestroy) 発火なので、
+            // 追放画面〜SkipTasks 窓への着弾も watchdog 側の条件で回避する。
+            // TOHK の「初手会議があるなら役職復元の最終波を送らない」設計 (StandardIntro.cs:308) と同型。
+            // Rollback bit: EndKnot_DATA/disable_t2_meeting_deferral.txt → 従来 +0.1s 固定。
+            T2RoleClusterFired = false;
+            bool deferT2Cluster;
+
+            try
             {
-                lp.RpcChangeRoleBasis(lp.GetCustomRole());
+                deferT2Cluster = Options.CurrentGameMode == CustomGameMode.Standard &&
+                                 Options.FirstTurnMeeting.GetBool() &&
+                                 !System.IO.File.Exists($"{Main.DataPath}/EndKnot_DATA/disable_t2_meeting_deferral.txt");
+            }
+            catch { deferT2Cluster = false; }
 
-                LateTask.New(() =>
+            if (deferT2Cluster)
+            {
+                // 通常経路は FirstTurnMeetingTrigger 側で発火。保険: 15s 経っても未発火なら、
+                // 会議/ジャグリング窓 (SkipTasks) の外に出て 2 秒静定してから単独発火する
+                // (SkipTasks=false と同フレームで走る AfterMeetingTasks バースト = 既知 kick 形状 との合流回避)。
+                System.Collections.IEnumerator T2ClusterWatchdog()
                 {
-                    lp.SetKillCooldown(10f);
+                    yield return new WaitForSecondsRealtime(15f);
 
-                    foreach (PlayerControl pc in aapc)
+                    while (!T2RoleClusterFired)
                     {
-                        pc.RpcResetAbilityCooldown();
+                        if (!GameStates.IsInGame || AmongUsClient.Instance.IsGameOver || GameStates.IsLobby) yield break;
 
-                        if (pc.GetCustomRole().UsesPetInsteadOfKill())
-                            pc.AddAbilityCD(10);
-                        else
-                            pc.AddAbilityCD(false);
+                        if (!GameStates.IsMeeting && !AntiBlackout.SkipTasks)
+                        {
+                            yield return new WaitForSecondsRealtime(2f);
+                            if (!GameStates.IsInGame || AmongUsClient.Instance.IsGameOver || GameStates.IsLobby) yield break;
+
+                            if (!GameStates.IsMeeting && !AntiBlackout.SkipTasks)
+                            {
+                                FireT2RoleCluster("watchdog +15s");
+                                yield break;
+                            }
+                        }
+
+                        yield return null;
                     }
-                }, 0.8f, log: false);
-
-                StartGameHostPatch.RpcSetRoleReplacer.SetActualSelfRolesAfterOverride();
-
-                var doubleAgents = aapc.Where(x => x.Is(CustomRoles.DoubleAgent)).ToList();
-
-                if (doubleAgents.Count > 0)
-                {
-                    aapc.DoIf(x => x.Is(Team.Impostor), x =>
-                    {
-                        var sender = CustomRpcSender.Create("Double Agent", SendOption.Reliable);
-                        doubleAgents.ForEach(da => sender.RpcSetRole(da, RoleTypes.Impostor, x.OwnerId, changeRoleMap: true));
-                        sender.SendMessage();
-                    });
                 }
-            }, 0.1f, log: false);
+
+                Main.Instance.StartCoroutine(T2ClusterWatchdog());
+            }
+            else
+                LateTask.New(() => FireT2RoleCluster("immediate +0.1s"), 0.1f, log: false);
 
             if (Options.UsePets.GetBool() && Options.CurrentGameMode is CustomGameMode.Standard or CustomGameMode.HideAndSeek or CustomGameMode.CaptureTheFlag or CustomGameMode.BedWars or CustomGameMode.Snowdown)
             {
@@ -1322,6 +1343,9 @@ internal static class IntroCutsceneDestroyPatch
                     x.RpcExileV2();
                     Main.PlayerStates[x.PlayerId].SetDead();
                 });
+
+                // T2Probe: この Exiled broadcast はクライアント intro 中に着弾する (暗転容疑 🔴#2 の計器)
+                if (spectators.Count > 0) Logger.Info($"T2 anchor: spectator/GM ghosting Exiled broadcast x{spectators.Count}", "T2Probe");
             }
             catch (Exception e) { Utils.ThrowException(e); }
 
@@ -1329,6 +1353,7 @@ internal static class IntroCutsceneDestroyPatch
             {
                 var map = RandomSpawn.SpawnMap.GetSpawnMap();
                 aapc.Do(map.RandomTeleport);
+                Logger.Info($"T2 anchor: RandomSpawn SnapTo burst x{aapc.Count}", "T2Probe");
             }
 
             try
@@ -1483,8 +1508,65 @@ internal static class IntroCutsceneDestroyPatch
     {
         if (!GameStates.IsInGame || MeetingHud.Instance || ExileController.Instance) return;
 
+        // 【T2退避 2026-07-29】三点セットは会議送信より前に発火させる (会議中の vanilla クライアントに
+        // SetRole を撃つと MeetingHud 状態が壊れる — 07-17 +6s 版の事故機序)。SetRole 群は StartMeeting と
+        // 同じ PacketRateGate FIFO に載るため受信順は役職→会議で保たれ、MeetingStartWire 有効時は
+        // ドレイン待ちが本バーストも吸収してから StartMeeting を直送する。
+        FireT2RoleCluster("pre-first-meeting");
+
         PlayerControl host = PlayerControl.LocalPlayer;
         if (!host || !host.IsAlive()) host = Main.AllAlivePlayerControlsToList.FirstOrDefault();
         if (host) host.NoCheckStartMeeting(null, force: true);
+    }
+
+    private static bool T2RoleClusterFired;
+
+    // ホスト intro 明けの SetRole 三点セット (RpcChangeRoleBasis / SetActualSelfRolesAfterOverride / DoubleAgent)。
+    // 全て vanilla SetRole (canOverride=true) を書き、intro 構築中の vanilla クライアントに当てると
+    // RoleBehaviour 再構築でイントロコルーチンを壊す暗転容疑がある。発火タイミングは Postfix 側の
+    // T2退避ディスパッチ (immediate +0.1s / pre-first-meeting / watchdog) が決める。
+    private static void FireT2RoleCluster(string mode)
+    {
+        if (T2RoleClusterFired || !GameStates.IsInGame || !AmongUsClient.Instance.AmHost) return;
+
+        T2RoleClusterFired = true;
+
+        PlayerControl lp = PlayerControl.LocalPlayer;
+        var aapc = Main.AllAlivePlayerControlsToList;
+
+        lp.RpcChangeRoleBasis(lp.GetCustomRole());
+
+        LateTask.New(() =>
+        {
+            lp.SetKillCooldown(10f);
+
+            foreach (PlayerControl pc in aapc)
+            {
+                if (!pc) continue;
+
+                pc.RpcResetAbilityCooldown();
+
+                if (pc.GetCustomRole().UsesPetInsteadOfKill())
+                    pc.AddAbilityCD(10);
+                else
+                    pc.AddAbilityCD(false);
+            }
+        }, 0.8f, log: false);
+
+        StartGameHostPatch.RpcSetRoleReplacer.SetActualSelfRolesAfterOverride();
+
+        var doubleAgents = aapc.Where(x => x.Is(CustomRoles.DoubleAgent)).ToList();
+
+        if (doubleAgents.Count > 0)
+        {
+            aapc.DoIf(x => x.Is(Team.Impostor), x =>
+            {
+                var sender = CustomRpcSender.Create("Double Agent", SendOption.Reliable);
+                doubleAgents.ForEach(da => sender.RpcSetRole(da, RoleTypes.Impostor, x.OwnerId, changeRoleMap: true));
+                sender.SendMessage();
+            });
+        }
+
+        Logger.Info($"T2 role cluster fired ({mode}): ChangeRoleBasis(host={lp.GetCustomRole()}), doubleAgents={doubleAgents.Count}", "T2Probe");
     }
 }

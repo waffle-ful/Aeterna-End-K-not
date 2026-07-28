@@ -1844,6 +1844,8 @@ internal static class StartGameHostPatch
 
         public static void SetActualSelfRolesAfterOverride()
         {
+            List<string> resent = [];
+
             foreach ((byte id, RoleTypes roleTypes) in OverriddenTeamRevealScreen)
             {
                 PlayerControl pc = id.GetPlayer();
@@ -1867,6 +1869,7 @@ internal static class StartGameHostPatch
                     : roleTypes;
 
                 pc.RpcSetRoleDesync(actualRoleType, targetClientId);
+                resent.Add($"{pc.GetRealName()}(id {id})→{actualRoleType}");
 
                 LateTask.New(() =>
                 {
@@ -1874,6 +1877,9 @@ internal static class StartGameHostPatch
                     pc.SetKillCooldown(10f);
                 }, 0.2f, log: false);
             }
+
+            // T2Probe: intro の陣営発表画面で表示用役職に差し替えられていたプレイヤーへの実役職再送 (暗転被害者との突合用)
+            Logger.Info($"self-role override resend: {(resent.Count > 0 ? string.Join(", ", resent) : "(none)")}", "T2Probe");
 
             OverriddenTeamRevealScreen = null;
         }
