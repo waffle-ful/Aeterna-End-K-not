@@ -19,9 +19,13 @@ public class Crosswind : RoleBase
 
     // 距離の先が壁ならより近い距離へ段階的にフォールバック (Dossun.CheckBlockHits と同じノックバック処理)
     private static readonly float[] KnockbackFallbackMultipliers = [1f, 0.66f, 0.33f];
+
+    // Utils.TP は移動距離が 1.5u 未満だと SendOption.None へ降格する (Utils.cs:202-207) = クライアントに届かない
+    // 可能性がある一方、NumSnapToCallsThisRound は降格後も加算される (:253)。届かない TP でラウンド共有の
+    // SnapTo 予算だけ削るのを避けるため、短すぎるフォールバック段は最初から撃たない。
+    private const float MinReliableTpDistance = 1.6f;
     private const float DirectionTrackThreshold = 0.05f;
 
-    private byte CrosswindId;
     private Vector2 Direction;
     private Vector2 LastTrackedPos;
 
@@ -45,7 +49,6 @@ public class Crosswind : RoleBase
     public override void Add(byte playerId)
     {
         On = true;
-        CrosswindId = playerId;
         Direction = Vector2.right;
         LastTrackedPos = Vector2.zero;
         playerId.SetAbilityUseLimit(AbilityUseLimit.GetFloat());
@@ -125,14 +128,26 @@ public class Crosswind : RoleBase
             if (target.PlayerId >= 200) continue; // CNO 除外
             if (!target.IsAlive()) continue;
 
+            // 被食者は IsAlive() のまま黒部屋に固定されており、吹き飛ばしても Pelican.OnFixedUpdate が
+            // 引き戻すだけの二重 TP になる (WaveCannon/EvilBomber と同じ除外)
+            if (Pelican.IsEaten(target.PlayerId)) continue;
+
+            // 壁チェックは足元 (GetTruePosition = transform + Collider.offset) から、TP 先は body center (Pos) を基準にする。
+            // Utils.TP → SnapTo は transform 空間に書くので、足元基準の座標をそのまま渡すと横移動に加えて毎回 0.36u 沈み、
+            // 発動のたびに累積する (壁チェックした高さより下へ着地して地形にめり込む)
             Vector2 victimPos = target.GetTruePosition();
+            Vector2 tpBase = target.Pos();
 
             foreach (float mult in KnockbackFallbackMultipliers)
             {
                 float dist = knockDist * mult;
+
+                // 倍率は降順なので、ここで短くなったら以降の段も全て短い = 押し出しを諦める
+                if (dist < MinReliableTpDistance) break;
+
                 if (!PhysicsHelpers.AnyNonTriggersBetween(victimPos, dir, dist, Constants.ShipAndObjectsMask))
                 {
-                    target.TP(victimPos + dir * dist);
+                    target.TP(tpBase + dir * dist);
                     break;
                 }
             }
