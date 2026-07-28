@@ -799,6 +799,11 @@ public sealed class PlayerGameOptionsSender(PlayerControl player) : GameOptionsS
             if (Options.SyncButtonMode.GetBool() && Options.SyncedButtonCount.GetValue() <= Options.UsedButtonCount)
                 opt.SetInt(Int32OptionNames.EmergencyCooldown, 3600);
 
+            // PortalButton がボタンを持ち上げたら、元の場所のボタンはクールタイムで死んで見せる
+            // (SyncButtonMode の「回数切れ」と同じ手)。実際の遮断は ReportDeadBodyPatch 側。
+            if (PortalButton.RealButtonDisabled)
+                opt.SetInt(Int32OptionNames.EmergencyCooldown, 3600);
+
             MeetingTimeManager.ApplyGameOptions(opt);
 
             AURoleOptions.ShapeshifterCooldown = Mathf.Max(1f, AURoleOptions.ShapeshifterCooldown);

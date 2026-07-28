@@ -36,6 +36,7 @@ internal static class CustomRolesHelper
         CustomRoles.Wiper,
         CustomRoles.PortalMaker,
         CustomRoles.MapExtender,
+        CustomRoles.PortalButton,
         CustomRoles.Gardener,
         CustomRoles.Farmer,
         CustomRoles.Tree,
@@ -271,6 +272,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Imitator => CustomRoles.Crewmate,
                 CustomRoles.PortalMaker => CustomRoles.Crewmate,
                 CustomRoles.MapExtender => CustomRoles.Crewmate,
+                CustomRoles.PortalButton => CustomRoles.Crewmate,
                 CustomRoles.Vacuum => UsePets ? CustomRoles.Crewmate : CustomRoles.Engineer,
                 CustomRoles.Astral => UsePets ? CustomRoles.Crewmate : CustomRoles.Engineer,
                 CustomRoles.Helper => CustomRoles.Crewmate,
@@ -386,6 +388,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Specter => Options.PhantomCanVent.GetBool() ? CustomRoles.Engineer : CustomRoles.Crewmate,
                 CustomRoles.Judge => CustomRoles.Crewmate,
                 CustomRoles.Councillor => CustomRoles.Impostor,
+                CustomRoles.WordKiller => CustomRoles.Impostor,
                 CustomRoles.Mortician => CustomRoles.Crewmate,
                 CustomRoles.Medium => CustomRoles.Crewmate,
                 CustomRoles.Bard => CustomRoles.Impostor,
@@ -885,6 +888,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Mastermind or
                 CustomRoles.Gambler or
                 CustomRoles.Councillor or
+                CustomRoles.WordKiller or
                 CustomRoles.Saboteur or
                 CustomRoles.Puppeteer or
                 CustomRoles.TimeThief or
@@ -1371,6 +1375,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Cantankerous => RoleOptionType.Impostor_Killing,
                 CustomRoles.Chronomancer => RoleOptionType.Impostor_Killing,
                 CustomRoles.Councillor => RoleOptionType.Impostor_Killing,
+                CustomRoles.WordKiller => RoleOptionType.Impostor_Killing,
                 CustomRoles.EvilGuesser => RoleOptionType.Impostor_Killing,
                 CustomRoles.Fireworker => RoleOptionType.Impostor_Killing,
                 CustomRoles.Greedy => RoleOptionType.Impostor_Killing,
@@ -1529,6 +1534,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Paranoid => RoleOptionType.Crewmate_Miscellaneous,
                 CustomRoles.PortalMaker => RoleOptionType.Crewmate_Miscellaneous,
                 CustomRoles.MapExtender => RoleOptionType.Crewmate_Miscellaneous,
+                CustomRoles.PortalButton => RoleOptionType.Crewmate_Miscellaneous,
                 CustomRoles.Ricochet => RoleOptionType.Crewmate_Miscellaneous,
                 CustomRoles.Safeguard => RoleOptionType.Crewmate_Miscellaneous,
                 CustomRoles.SuperStar => RoleOptionType.Crewmate_Miscellaneous,

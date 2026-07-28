@@ -1155,6 +1155,16 @@ internal static class ReportDeadBodyPatch
 
             if (!target)
             {
+                // PortalButton が本物のボタンを持ち上げたあとは、その試合中ずっと元の場所では押せない。
+                // オプション側 (EmergencyCooldown 3600) は表示の担保にしかならない (ラウンド途中の変更が
+                // 非モッド客の表示へ即反映されるかは未検証) ので、遮断の実体はここが持つ。
+                // target 有りの通報 (死体通報) と Mayor の携帯ボタンには一切影響しない。
+                if (PortalButton.RealButtonDisabled)
+                {
+                    Notify("PortalButton.ButtonMoved");
+                    return false;
+                }
+
                 // fail-closed: 辞書未登録でも 0 とみなして必ず上限チェック＆加算する (旧 TryGetValue ガードだと
                 // 未登録プレイヤーがチェックも加算もされず、緊急会議を無限に撃てる穴になっていた)。
                 int used = Main.NumEmergencyMeetingsUsed.GetValueOrDefault(__instance.PlayerId);

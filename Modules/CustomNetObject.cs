@@ -1103,6 +1103,43 @@ namespace EndKnot
         }
     }
 
+    // PortalButton が置く「移設された緊急ボタン」。踏んだ生存者が会議を起こす。
+    //
+    // グリッドは Portal / MapExtenderPortal / ShuffleMarker と同じ 4 列 × 6 行を維持すること:
+    // PortalButton.TriggerRange (1f) はこの footprint 前提で調整されており、
+    // 幅を変えると描画された縁の上に立っても反応しない。
+    //
+    // 白い縁 + 赤い芯にしてあるのは、全面赤の ShuffleMarker (Shuffler が撒く罠) と
+    // 見分けられるようにするため。どちらも踏むと会議が起きるので、同じ見た目だと
+    // 「押していいボタン」と「踏まされる罠」の区別がつかなくなる。
+    //
+    // onlyVisibleTo は付けない — 移設したボタンは全員が押せるのが役職の本体。
+    // 基底の OnMeeting() の自動再生成 (会議 → 復活 → 踏む → 会議 の無限ループになる) は使わず、
+    // 会議で消えたきりにして、張り直しは PortalButton.AfterMeetingTasks が明示的に行う。
+    internal sealed class PortalButtonMarker : CustomNetObject
+    {
+        // 透明セルは TNT と同じ `<#0000>W</color>`、塗りセルは Portal/Riptide と同じ素の `<mark>` のみ
+        // (色付き W との併用は repo 内に前例が無いので使わない — TMP のバージョン差で描画が飛ぶ)。
+        private const string EmergencyButtonSprite =
+            "<size=70%><line-height=97%><cspace=0.16em>" +
+            "<#0000>W</color><mark=#ecf0f1>WW</mark><#0000>W</color>\n" +
+            "<mark=#ecf0f1>W</mark><mark=#c0392b>WW</mark><mark=#ecf0f1>W</mark>\n" +
+            "<mark=#ecf0f1>W</mark><mark=#e74c3c>WW</mark><mark=#ecf0f1>W</mark>\n" +
+            "<mark=#ecf0f1>W</mark><mark=#e74c3c>WW</mark><mark=#ecf0f1>W</mark>\n" +
+            "<mark=#ecf0f1>W</mark><mark=#c0392b>WW</mark><mark=#ecf0f1>W</mark>\n" +
+            "<#0000>W</color><mark=#ecf0f1>WW</mark><#0000>W</color>";
+
+        public PortalButtonMarker(Vector2 position)
+        {
+            CreateNetObject(EmergencyButtonSprite, position);
+        }
+
+        public override void OnMeeting()
+        {
+            Despawn();
+        }
+    }
+
     internal sealed class Plant : CustomNetObject
     {
         public bool Spawned;
