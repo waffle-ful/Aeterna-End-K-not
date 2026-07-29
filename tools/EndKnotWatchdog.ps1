@@ -41,6 +41,12 @@ $HealthLog            = Join-Path $HealthDir 'EndKnot-Health.log'
 # 心拍(5秒毎)がこの秒数途切れたら「ハング/クラッシュ」とみなす。GCやロードの一時停止で誤検知しない余裕を持たせる。
 $StaleSeconds         = 90
 
+# ハングダンプの先行採取しきい値 (BUG-20260721-02)。WER の AppHang 強制クローズは最終心拍から
+# 実測 ~84s で発火し、stale=90s の検出を待つとダンプを取る前にプロセスが消える (2026-07-29 22:31 実測)。
+# kill 判定は $StaleSeconds のままにして、ダンプだけこの秒数で先に取る。正当な一時停止の実測最長は
+# 14s (BUG-20260707-09) なので 35s は誤検知余裕 2.5 倍。ダンプ採取はプロセスを殺さない (suspend のみ)。
+$HangDumpSeconds      = 35
+
 # 番犬の巡回間隔（秒）
 $CheckIntervalSec     = 20
 
@@ -115,11 +121,19 @@ $script:LaunchJudged  = $true
 $script:LastHoldLog   = [datetime]::MinValue
 # ゾンビ検知: state=Menu の継続開始時刻 (Menu 以外の state を見たらリセット)。
 $script:MenuSince     = [datetime]::MinValue
+# ゾンビ検知の武装状態。監視対象プロセスが替わった瞬間に1回だけ決める (下の「武装判定」参照)。
+# 番犬自身が(再)起動した = 自動ホストを依頼した相手だけを武装し、それ以外は撃たない。
+$script:ZombiePid     = 0
+$script:ZombieArmed   = $false
+# この launch 以降に Menu 以外の state を一度でも観測したか (= 部屋立てには成功した)。
+$script:SawNonMenu    = $false
 # 回線死活: 直前の巡回で回線死を観測していたか (復帰エッジ検出用) と、net-down ログの間引き。
 $script:NetWasDown    = $false
 $script:LastNetLog    = [datetime]::MinValue
 # WER ダンプ待機: WerFault がこの AU のクラッシュダンプを書いている間の kill 保留開始時刻。
 $script:WerWaitSince  = [datetime]::MinValue
+# ハングダンプの先行採取を同一エピソードで1回に抑えるフラグ (数GB/回。心拍回復でリセット)。
+$script:HangDumpDone  = $false
 
 function Write-WatchLog {
     param([string]$Msg, [string]$Color = 'Gray', [switch]$ConsoleOnly)
@@ -266,29 +280,85 @@ function Save-CrashSnapshot {
 }
 
 # ハング時のプロセスダンプ (BUG-20260721-02)。ハングは WER が発火しないため LocalDumps 計器では
-# 何も残らない — kill する前に comsvcs.dll MiniDump でフルダンプを取り、メインスレッドの詰まり先
-# スタックを事後解析 (dotnet-dump/windbg) に残す。フルダンプは数GBになるため保持は最新2件のみ。
+# 何も残らない — kill する前にフルダンプを取り、メインスレッドの詰まり先スタックを事後解析
+# (dotnet-dump/windbg) に残す。フルダンプは数GBになるため保持は最新2件のみ。
+# ⚠️ rundll32 comsvcs.dll MiniDump は使わない (2026-07-29 実測: 引用符付きパスは ERROR_INVALID_NAME で
+# 即死し、引用符を外しても第3引数 full が無視されて 0.6MB のミニダンプしか出ない = SOS/managed 解析に
+# 必要なヒープが落ちる)。dbghelp の MiniDumpWriteDump を子 PowerShell の P/Invoke で直接叩く。
+# MiniDumpWriteDump を子プロセスで1回だけ実行する。成功したら $true。
+# 子プロセスで実行する理由: MiniDumpWriteDump は完了までブロックし、in-process では打ち切れない。
+# -EncodedCommand なら日本語パスも引用符地獄も無縁。
+function Invoke-MiniDump {
+    param([int]$TargetPid, [string]$Path, [int]$DumpType, [int]$TimeoutMs)
+    $childSrc = @'
+$ErrorActionPreference = 'Stop'
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public static class EkMiniDump {
+    [DllImport("Dbghelp.dll", SetLastError = true)]
+    public static extern bool MiniDumpWriteDump(IntPtr hProcess, uint ProcessId, IntPtr hFile, int DumpType, IntPtr ExceptionParam, IntPtr UserStreamParam, IntPtr CallbackParam);
+}
+"@
+$targetPid = @@PID@@
+$proc = Get-Process -Id $targetPid
+$fs = [System.IO.File]::Create('@@PATH@@')
+try {
+    $ok = [EkMiniDump]::MiniDumpWriteDump($proc.Handle, [uint32]$targetPid, $fs.SafeFileHandle.DangerousGetHandle(), @@TYPE@@, [IntPtr]::Zero, [IntPtr]::Zero, [IntPtr]::Zero)
+} finally { $fs.Close() }
+if ($ok) { exit 0 } else { exit 1 }
+'@
+    $childSrc = $childSrc.Replace('@@PID@@', "$TargetPid").Replace('@@PATH@@', $Path).Replace('@@TYPE@@', "$DumpType")
+    $enc = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($childSrc))
+    $p = Start-Process -FilePath 'powershell.exe' -ArgumentList "-NoProfile -ExecutionPolicy Bypass -EncodedCommand $enc" -PassThru -WindowStyle Hidden
+    if (-not $p.WaitForExit($TimeoutMs)) {
+        try { $p.Kill() } catch { }
+        return $false
+    }
+    return ($p.ExitCode -eq 0 -and (Test-Path $Path))
+}
+
+# ハングダンプを2段構えで採る。
+# 理由: WER の AppHang 強制クローズは心拍途絶から約83秒で走る (2026-07-29 実測: 最後の心拍
+# 22:30:17 → プロセス消滅 22:31:40) のに対し、ここへ到達するのは早くて T+35s、巡回20秒刻みなので
+# 遅いと T+55s。数GB のフルダンプは書き切る前に殺されうるが、MiniDumpWriteDump は途中で対象を
+# 失うと丸ごと失敗するので、フル一本勝負だと手ぶらで終わる。そこで先に「メインスレッドがどこで
+# 詰まっているか」だけを1秒未満で確保してから、フルに挑む。
 function Save-HangDump {
     param([int]$TargetPid)
     try {
         if (-not $TargetPid) { return }
         $dir = Join-Path $HealthDir 'CrashSnapshots\HangDumps'
         New-Item -ItemType Directory -Force -Path $dir | Out-Null
-        $path = Join-Path $dir ("hang_{0}_pid{1}.dmp" -f (Get-Date).ToString('yyyy-MM-dd_HH.mm.ss'), $TargetPid)
-        Write-WatchLog ("ハングダンプを採取します (kill はダンプ完了まで保留・上限 300s): {0}" -f $path) 'Yellow'
-        # comsvcs の MiniDump は第3引数 full でフルダンプ。ハング中プロセスでもスレッドを suspend して取れる。
-        $p = Start-Process -FilePath "$env:SystemRoot\System32\rundll32.exe" -ArgumentList ("C:\Windows\System32\comsvcs.dll, MiniDump {0} `"{1}`" full" -f $TargetPid, $path) -PassThru -WindowStyle Hidden
-        if (-not $p.WaitForExit(300000)) {
-            try { $p.Kill() } catch { }
-            Write-WatchLog "ハングダンプが 300s で完了しなかったため中断しました。" 'Red'
-        } elseif (Test-Path $path) {
-            Write-WatchLog ("ハングダンプ完了: {0:N0} MB" -f ((Get-Item $path).Length / 1MB)) 'Cyan'
+        $stamp = (Get-Date).ToString('yyyy-MM-dd_HH.mm.ss')
+
+        # 段1: 速報 (0x1920 = ThreadInfo|FullMemoryInfo|ProcessThreadData|UnloadedModules)。
+        # スタックとモジュール一覧は最小ダンプにも必ず入るので、これだけで詰まり先は読める。数十MB。
+        $quick = Join-Path $dir ("hang_{0}_pid{1}_quick.dmp" -f $stamp, $TargetPid)
+        Write-WatchLog "ハングダンプ(速報)を採取します: $quick" 'Yellow'
+        if (Invoke-MiniDump -TargetPid $TargetPid -Path $quick -DumpType 0x1920 -TimeoutMs 60000) {
+            Write-WatchLog ("ハングダンプ(速報)完了: {0:N0} MB" -f ((Get-Item $quick).Length / 1MB)) 'Cyan'
         } else {
-            Write-WatchLog "ハングダンプの出力ファイルが生成されませんでした (rundll32 失敗)。" 'Red'
+            Write-WatchLog "ハングダンプ(速報)の採取に失敗しました。" 'Red'
+            try { Remove-Item $quick -Force -ErrorAction SilentlyContinue } catch { }
         }
-        # 保持は最新2件 (1件数GB。スナップショット20件保持とは別枠で数える)
-        Get-ChildItem $dir -Filter *.dmp -ErrorAction SilentlyContinue | Sort-Object LastWriteTime |
-            Select-Object -SkipLast 2 | ForEach-Object { Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue }
+
+        # 段2: フル (0x1826 = FullMemory|HandleData|UnloadedModules|FullMemoryInfo|ThreadInfo、
+        # procdump -ma 相当)。WER に先を越されて落ちても段1が残っているので解析は始められる。
+        $full = Join-Path $dir ("hang_{0}_pid{1}_full.dmp" -f $stamp, $TargetPid)
+        Write-WatchLog "ハングダンプ(フル)を採取します (上限 300s): $full" 'Yellow'
+        if (Invoke-MiniDump -TargetPid $TargetPid -Path $full -DumpType 0x1826 -TimeoutMs 300000) {
+            Write-WatchLog ("ハングダンプ(フル)完了: {0:N0} MB" -f ((Get-Item $full).Length / 1MB)) 'Cyan'
+        } else {
+            Write-WatchLog "ハングダンプ(フル)は失敗/中断しました (WER に先を越された可能性)。速報ダンプで解析してください。" 'Red'
+            try { Remove-Item $full -Force -ErrorAction SilentlyContinue } catch { }
+        }
+
+        # 保持は種別ごとに最新2件 (フルは1件数GB。スナップショット20件保持とは別枠で数える)。
+        foreach ($pat in @('*_quick.dmp', '*_full.dmp')) {
+            Get-ChildItem $dir -Filter $pat -ErrorAction SilentlyContinue | Sort-Object LastWriteTime |
+                Select-Object -SkipLast 2 | ForEach-Object { Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue }
+        }
     } catch {
         Write-WatchLog "ハングダンプ採取に失敗: $($_.Exception.Message)" 'Yellow'
     }
@@ -480,7 +550,7 @@ try { if (Test-Path $StopFlag) { Remove-Item $StopFlag -Force -ErrorAction Silen
 
 Write-WatchLog "===== End K not ウォッチドッグ起動 =====" 'Cyan'
 Write-WatchLog "監視ログ: $HealthLog" 'DarkGray'
-Write-WatchLog "設定: stale=${StaleSeconds}s / 巡回=${CheckIntervalSec}s / 起動猶予=${BootGraceSec}s / 再起動上限=${MaxRelaunchPerHour}/h / ブート死ホールド=${BootDeathHoldThreshold}回→${BootDeathRetrySec}s間隔 / EGL再起動実験=$RestartEglOnBootDeathRetry / ゾンビ検知=${ZombieMenuSeconds}s" 'DarkGray'
+Write-WatchLog "設定: stale=${StaleSeconds}s / ダンプ先行=${HangDumpSeconds}s / 巡回=${CheckIntervalSec}s / 起動猶予=${BootGraceSec}s / 再起動上限=${MaxRelaunchPerHour}/h / ブート死ホールド=${BootDeathHoldThreshold}回→${BootDeathRetrySec}s間隔 / EGL再起動実験=$RestartEglOnBootDeathRetry / ゾンビ検知=${ZombieMenuSeconds}s" 'DarkGray'
 
 # 起動時に AU が動いていれば、その実行ファイルパスをフォールバック用に捕捉。
 $startProc = Get-AuProcess
@@ -517,6 +587,27 @@ while ($true) {
 
     # 動いている AU の exe パスを随時更新（次回フォールバック用）
     if ($proc -and -not $script:CapturedExe) { try { $script:CapturedExe = $proc.Path } catch { } }
+
+    # --- ゾンビ検知の武装判定 (監視対象プロセスが替わった瞬間に1回だけ) ---
+    # ゾンビ検知が守るのは「番犬が立て直して自動ホストを依頼したのに、部屋が立たないままメニューに
+    # 座り込んでいる」1点だけ。番犬が起動済みの AU を捕捉しただけ / 人が手で起動しただけのプロセスは、
+    # メニューに何分座っていても正当な待機なので絶対に撃たない (実測: 誤爆 6/6 が全て捕捉パターン)。
+    # 判定材料はプロセスの実開始時刻: 直近の Start-Au から起動猶予以内に現れた個体だけを「番犬の子」と見る
+    # (Epic の URL 起動では Start-Process から PID を取れないため、時刻での同定が唯一の手段)。
+    # 読めないときは武装しない = 健全なゲームを殺さない側に倒す。
+    if ($proc -and $script:ZombiePid -ne $proc.Id) {
+        $script:ZombiePid   = $proc.Id
+        $script:MenuSince   = [datetime]::MinValue
+        $script:SawNonMenu  = $false
+        $script:ZombieArmed = $false
+        if ($script:LastRelaunch -ne [datetime]::MinValue) {
+            try {
+                $sinceLaunch = ($proc.StartTime - $script:LastRelaunch).TotalSeconds
+                $script:ZombieArmed = ($sinceLaunch -ge 0 -and $sinceLaunch -le $BootGraceSec)
+            } catch { }
+        }
+        if (-not $script:ZombieArmed) { Write-WatchLog "ゾンビ検知: 番犬が起動した個体ではないため無効 (pid=$($proc.Id)) — メニュー滞在では再起動しません。" 'DarkGray' }
+    }
 
     # 生きているうちにハンドルを掴んでおく (消えてからでは ExitCode を読めない = 死因識別の生命線)
     if ($proc) { Register-AuProcessHandle $proc }
@@ -556,6 +647,20 @@ while ($true) {
         $script:BootDeaths   = 0
         $script:LaunchJudged = $true
 
+        # --- ハングダンプの先行採取 (BUG-20260721-02) ---
+        # Fresh (age < 90s) のまま WER の AppHang クローズ (~84s) に殺されるとダンプが永遠に取れないため、
+        # 35s 途絶の時点でダンプだけ先に取る。kill はしない (回復すればそのまま続行、ダンプは証拠として残る)。
+        # 起動猶予中は前セッションの古い心拍を新プロセスのハングと誤認しうるので撃たない。
+        if ($health.AgeSec -ge $HangDumpSeconds -and -not $inGrace) {
+            if (-not $script:HangDumpDone) {
+                $script:HangDumpDone = $true
+                Write-WatchLog ("警戒: 心拍が {0:N0}s 途絶 (プロセスは生存) — WER に閉じられる前にハングダンプを先行採取します。" -f $health.AgeSec) 'Yellow'
+                Save-HangDump -TargetPid $proc.Id
+            }
+        } elseif ($health.AgeSec -lt $HangDumpSeconds) {
+            $script:HangDumpDone = $false
+        }
+
         # --- ゾンビ検知: 心拍は新鮮なのに部屋が立たないまま Menu に座り続けている ---
         # 最終行が state= を含む時だけ判定を更新する (ANOM 等 state 無し行でタイマーを壊さない)。
         if ($ZombieMenuSeconds -gt 0 -and $health.LastLine -match 'state=([A-Za-z]+)') {
@@ -563,9 +668,20 @@ while ($true) {
                 if ($script:MenuSince -eq [datetime]::MinValue) { $script:MenuSince = $now }
                 $menuFor = ($now - $script:MenuSince).TotalSeconds
                 $cool    = ($now - $script:LastRelaunch).TotalSeconds
-                if ($menuFor -ge $ZombieMenuSeconds -and -not $inGrace -and $cool -ge $RelaunchCooldownSec) {
+                # 撃つのは次の2経路だけ。
+                #  (A) 番犬が立てた個体 (武装済み) が、一度も Menu を出られないまま座り込んでいる。
+                #  (B) 一度は部屋を立てた個体が、UserIdToken を失った状態でメニューに落ちている
+                #      (認証死の無音メニュー落ち。モッド側 HealthLog の menufall は state=Ended ゲートなので
+                #       state=Menu で落ちたこの形は拾えない = ここが唯一のカバー)。
+                # 人がメニューで待機しているだけのケースは idTok=1 なので (B) には掛からない
+                # (実測: 誤爆6件は6件とも idTok=1)。ブート直後の未ログイン idTok=0 は
+                # SawNonMenu 未成立なので (B) に入らない。
+                $authFall = ($script:SawNonMenu -and $health.LastLine -match 'idTok=0')
+                $fire     = ($script:ZombieArmed -and -not $script:SawNonMenu) -or $authFall
+                if ($fire -and $menuFor -ge $ZombieMenuSeconds -and -not $inGrace -and $cool -ge $RelaunchCooldownSec) {
                     if (Test-RelaunchAllowed) {
-                        Write-WatchLog ("異常 [zombie]: 心拍は新鮮ですが state=Menu が {0:N0}s 継続 — 部屋立てが詰まっています。強制再起動します。" -f $menuFor) 'Red'
+                        $why = if ($authFall) { '認証トークンを失ったままメニューに落ちています (無音メニュー落ち)' } else { '部屋立てが詰まっています' }
+                        Write-WatchLog ("異常 [zombie]: 心拍は新鮮ですが state=Menu が {0:N0}s 継続 — {1}。強制再起動します。" -f $menuFor, $why) 'Red'
                         Stop-Au
                         Start-Au | Out-Null
                         continue
@@ -574,7 +690,8 @@ while ($true) {
                     }
                 }
             } else {
-                $script:MenuSince = [datetime]::MinValue
+                $script:MenuSince  = [datetime]::MinValue
+                $script:SawNonMenu = $true
             }
         }
 
@@ -643,7 +760,13 @@ while ($true) {
         # ハングは番犬が Stop-Au で殺すため、殺す前の状態を固める (殺した後では心拍途絶の前後関係が読めない)。
         Save-CrashSnapshot -Reason ("ハング疑い (心拍 {0:N0}s 途絶・プロセスは生存)" -f $health.AgeSec) -ExitDiag 'N/A (まだ生存中 — この後 番犬が強制終了する)'
         # 詰まり先スタックの唯一の証拠。kill してからでは取れないので必ずスナップショットの直後・kill の前。
-        Save-HangDump -TargetPid $proc.Id
+        # 35s の先行採取 (HangDumpSeconds) が既に取っていれば重ね録りしない (数GB/回・保持2件を無駄に消費する)。
+        if (-not $script:HangDumpDone) {
+            $script:HangDumpDone = $true
+            Save-HangDump -TargetPid $proc.Id
+        } else {
+            Write-WatchLog "ハングダンプは先行採取済みのためスキップします。" 'DarkGray'
+        }
     }
 
     # --- ブート死判定 (launch 1回につき1回だけ) ---
