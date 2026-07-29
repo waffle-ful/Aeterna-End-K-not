@@ -113,13 +113,20 @@ public class Fireworker : RoleBase
     public override void OnPet(PlayerControl pc)
     {
         FireworkerState beforeState = state;
-        if (CanIgniteBeforePlacingAllFireworks.GetBool()) state = FireworkerState.ReadyFire;
+
+        // ReadyFire への一時昇格を行ったときだけ巻き戻す。昇格していないのに巻き戻すと
+        // UseAbility が進めた state だけが戻り、設置済みの fireworksPosition / 減算済みの
+        // nowFireworksCount / 送信済み RPC と食い違う (ペット連打で残数が際限なく負に進み、
+        // WaitTime/ReadyFire に到達できず点火できなくなる)。
+        bool promoted = CanIgniteBeforePlacingAllFireworks.GetBool() && beforeState != FireworkerState.ReadyFire;
+        if (promoted) state = FireworkerState.ReadyFire;
 
         OnShapeshift(pc, null, true);
 
-        if (beforeState == FireworkerState.ReadyFire) return;
+        if (!promoted) return;
 
         state = beforeState;
+        SendRPC(pc.PlayerId); // UseAbility が送った state は巻き戻し前の値なので再同期する
     }
 
     public override bool OnShapeshift(PlayerControl pc, PlayerControl _, bool shapeshifting)
@@ -180,6 +187,7 @@ public class Fireworker : RoleBase
                     if (totalAlive != 1) pc.Suicide();
                 }
 
+                fireworksPosition.Clear(); // 爆発した花火は消費される (残すと同じ座標で何度でも再爆発する)
                 state = FireworkerState.FireEnd;
                 break;
         }
