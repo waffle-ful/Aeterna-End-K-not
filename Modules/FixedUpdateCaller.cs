@@ -49,6 +49,10 @@ public static class FixedUpdateCaller
             try { HitboxDebug.Tick(); }
             catch (Exception e) { Utils.ThrowException(e); }
 
+            // BGM の番犬。死亡/GM ホストへのスロット切替と、外部要因で音源を失った時の復帰。1/sec ゲート。
+            try { if (PerSecondUpdateScheduler.ShouldRunUpdate("bgm-watchdog")) BGMManager.Tick(); }
+            catch (Exception e) { Utils.ThrowException(e); }
+
             // チャット open/close 状態を毎フレーム overlay に反映。ローカルプレイヤー非依存で回す
             // (メニュー・非ゲーム中でもチャットが開くため、LocalPlayer ガードの中では遅すぎる)。
             try { TextBoxPatch.CheckChatOpen(); }
