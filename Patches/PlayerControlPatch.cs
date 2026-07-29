@@ -1038,7 +1038,13 @@ internal static class ShapeshiftPatch
         // SyncOutfitData の見た目リフレッシュ中は副作用 (Shiftguard 通知/Sentry/Adventurer ループ) をスキップ
         if (SuppressSideEffects) return;
 
-        if (!Main.ProcessShapeshifts || !GameStates.IsInTask || !__instance || !target) return;
+        // CNO (PlayerId >= 200) の変身は CreateNetObject が見た目を入れるための内部トリックであって
+        // 本物の変身ではない。ここを通すと Adventurer.OnAnyoneShapeshiftLoop が CNO を「変身した誰か」と
+        // 誤認して新しい AdventurerItem (= 別の CNO) を生成し、その生成がまた Shapeshift を撃つ、という
+        // 自己増殖ループになり毎秒数十体の PlayerControl スポーンで公式鯖に Hacking キックされる
+        // (2026-07-30 実機: 生成位置が全て CNO のマップ外座標 (50,50) だったことで確定)。
+        // ProcessShapeshift (同クラス L918) は既に同じ境界で弾いており、こちらが取り残されていた。
+        if (!Main.ProcessShapeshifts || !GameStates.IsInTask || !__instance || !target || __instance.PlayerId >= 200) return;
 
         if (AmongUsClient.Instance.AmHost && shouldAnimate)
         {
