@@ -3,6 +3,8 @@
 // まばたき・呼吸・常時の揺れはローカルのタイマー駆動。
 // 体の動きは3層 (常時モーション + 感情の姿勢 + 単発の身振りクリップ) を毎フレーム
 // 「休めポーズ + 各層の差分」の絶対値としてボーンに書く (下の buildPose 参照)。
+// motions/ フォルダに外部モーション (Mixamo の FBX) を置くと、それが土台の姿勢になり
+// 上記3層はその上へ乗る (下の「外部モーション」節を参照)。
 // model2.vrm を置くと2体並び (--duo の掛け合い実況用) になり、speaker タグで口パク/表情を振り分ける。
 // ?as=a|b を付けると「1体だけ・その話者専用」モードになり、OBS で立ち絵を2ソースに分けられる。
 // 背景透過で描くので OBS ブラウザソースにそのまま重ねられる。CDN は使わず vendor/ のローカルESMだけで動く。
@@ -10,6 +12,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from './vendor/jsm/loaders/GLTFLoader.js';
 import { VRMLoaderPlugin, VRMUtils } from './vendor/three-vrm.module.js';
+import { loadMixamoMotion, fetchMotionIndex } from './motion.js';
 
 const params = new URLSearchParams(location.search);
 // ?as=a|b : このページは1体だけを描き、その話者タグの発話にしか反応しない (立ち絵を OBS の
@@ -23,6 +26,16 @@ const SHOW_SUBTITLE = MY_TAG ? params.has('sub') : !params.has('nosub');
 const SHOW_STATUS = !params.has('nostatus');
 const MODEL_URL = params.get('model') || './model.vrm';
 const MODEL2_URL = params.get('model2') || './model2.vrm'; // 無ければ黙って1体モード
+// ?nomotion : motions/ の外部モーションを読まない (従来どおり手続き的な動きだけにする)
+// ?motion=<url> : 索引を無視してその1本だけを待機モーションとして再生する (検証用)
+const MOTION_ENABLED = !params.has('nomotion');
+const MOTION_FORCE_URL = params.get('motion') || null;
+// 黙っている間の仕草のうち、外部クリップ (motions/clip/) から選ぶ割合。既定 0.5 = 半分。
+// 内蔵仕草と同確率にすると 10 種に埋もれて出番が来ないので別枠にしてある。?extidle=0.2 で調整可。
+const EXT_IDLE_SHARE = (() => {
+  const v = parseFloat(params.get('extidle'));
+  return Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 0.5;
+})();
 
 const noticeEl = document.getElementById('notice');
 const subtitleEl = document.getElementById('subtitle');
@@ -96,12 +109,32 @@ function makeAvatarState(vrm) {
     bodyZ: 0,                // 同・前後 (のけぞり)
     bones: {},               // 正規化ボーンのキャッシュ (毎フレーム引くのを避ける)
     pose: {},                // 毎フレーム組み立てる姿勢 (bone -> [x,y,z])
+    // --- 外部モーション (motions/ の FBX) ---
+    mixer: null,             // AnimationMixer (正規化ボーンのルートに張る)
+    extLoops: [],            // 常時再生する待機モーション (複数あれば順に切り替える)
+    extClips: new Map(),     // 単発で呼べる外部クリップ (name -> entry)
+    extCur: null,            // 今 mixer に載っているエントリ
+    extWant: null,           // 載せたいエントリ名 (違えばフェードして差し替える)
+    extW: 0,                 // 外部モーションの重み 0..1 (0 = 完全に従来どおり)
+    extOnce: null,           // 再生中の単発外部クリップ名
+    extLoopIdx: 0,
+    extLoopTimer: LOOP_SWITCH_SEC,
+    extExtraNodes: [],       // クリップが動かす POSE_BONES 以外のボーン (腰・脚など)
+    clipQuat: {},            // mixer が書いた POSE_BONES の回転 (writePose で混ぜる)
   };
   for (const b of POSE_BONES) {
     av.pose[b] = [0, 0, 0];
     av.bones[b] = vrm.humanoid ? vrm.humanoid.getNormalizedBoneNode(b) : null;
+    av.clipQuat[b] = new THREE.Quaternion();
   }
   return av;
+}
+
+// このページのこのスロットが「どちらの話者ぶんか」。?as=b は相方を slot 0 に載せるので、
+// スロット番号ではなくタグで motions/ のフォルダを選ぶ (でないと分離ソースで主役のモーションが
+// 相方に付いてしまう)。
+function tagForSlot(slot) {
+  return MY_TAG || (slot === 0 ? 'a' : 'b');
 }
 
 function loadModel(url, slot, required) {
@@ -127,6 +160,8 @@ function loadModel(url, slot, required) {
       avatars[slot] = makeAvatarState(vrm);
       scene.add(vrm.scene);
       layoutScene();
+      // motions/ に外部モーションがあれば読む (非同期・失敗しても立ち絵の表示は続く)
+      setupMotions(avatars[slot], slot).catch((e) => console.warn('[avatar] motion setup failed', e));
       if (required) hideNotice();
       window.__avatars = avatars; // デバッグ用フック
       if (slot === 0) {
@@ -147,6 +182,20 @@ function loadModel(url, slot, required) {
         // デバッグ用: クリップ表そのもの。腕の畳み方向はモデル依存で数値から見た目が読めないので、
         // ここへ試作クリップを差し込んで実描画のスクショで詰める (ボーンを直接書いても animate に潰される)
         window.__gestures = GESTURES;
+        // デバッグ用: 外部モーションの読み込み結果と再生状態
+        window.__playMotion = (name, s = 0) => playExtClip(avatars[s], name);
+        window.__motionState = (s = 0) => {
+          const a = avatars[s];
+          if (!a) return null;
+          return {
+            loops: a.extLoops.map((e) => e.name),
+            clips: [...a.extClips.keys()],
+            cur: a.extCur ? a.extCur.name : null,
+            want: a.extWant,
+            w: a.extW,
+            extraBones: a.extExtraNodes.map((n) => n.name),
+          };
+        };
       }
       console.log(`[avatar] VRM loaded (slot ${slot})`);
     },
@@ -227,12 +276,30 @@ function addPose(av, bone, x, y, z) {
   p[0] += x; p[1] += y; p[2] += z;
 }
 
+// 外部モーションと混ぜるときの作業用 (毎フレーム new しない)
+const _qRest = new THREE.Quaternion();
+const _qProc = new THREE.Quaternion();
+const _qDelta = new THREE.Quaternion();
+const _euler = new THREE.Euler();
+
 function writePose(av) {
+  const w = av.extW;
   for (const b of POSE_BONES) {
     const n = av.bones[b];
     if (!n) continue; // モデルに無いボーン (upperChest / shoulder は省略されることがある)
     const p = av.pose[b];
-    n.rotation.set(p[0], p[1], p[2]);
+    if (w <= 0.001) {
+      n.rotation.set(p[0], p[1], p[2]); // 外部モーションが無いときは従来どおり (完全に同一)
+      continue;
+    }
+    // 外部モーション再生中は「クリップの姿勢」を土台にして、手続き的な3層を休めポーズからの
+    // 差分として上へ乗せる。⚠️ オイラー角のまま補間すると腕 (z = ±1.10) が最短でない経路で
+    // 振り回されるので、混ぜるのはクォータニオンで行う。
+    const r = REST_POSE[b];
+    _qRest.setFromEuler(_euler.set(r ? r[0] : 0, r ? r[1] : 0, r ? r[2] : 0));
+    _qProc.setFromEuler(_euler.set(p[0], p[1], p[2]));
+    _qDelta.copy(_qRest).invert().multiply(_qProc); // 休めポーズからの差分
+    n.quaternion.copy(_qRest).slerp(av.clipQuat[b], w).multiply(_qDelta);
   }
 }
 
@@ -517,6 +584,9 @@ const IDLE_MAX_SEC = 10;
 // ⚠️ 発話イベント由来の身振り (pending_gesture) は発話開始時に上書きで割り込む。決め所の身振りを
 // 優先させたいので、その割り込みは意図どおり (アイドル仕草の途中で切り替わる)。
 function updateIdleGesture(av, delta) {
+  // motions/ に待機モーションが置かれているなら、そちらが「黙っている間の動き」そのものなので
+  // 手続き的なアイドル仕草は出さない (二重に動いて見えるため)。
+  if (av.extLoops.length > 0 || av.extOnce) return;
   if (av.speakLevel >= 0.05 || av.gesture) {
     // 喋っている間 / 何か再生中は溜めない。喋り終わった直後に即発火しないよう間を空ける。
     av.idleTimer = Math.max(av.idleTimer, IDLE_MIN_SEC * 0.5);
@@ -524,12 +594,19 @@ function updateIdleGesture(av, delta) {
   }
   av.idleTimer -= delta;
   if (av.idleTimer > 0) return;
-  const pool = IDLE_GESTURES.filter((g) => g !== av.lastIdle);
+  // 外部の単発クリップ (motions/clip/) も候補に混ぜる。ただし内蔵仕草と同じ確率で抽選すると
+  // 10 種の中に埋もれて滅多に出番が来ない (わざわざ置いたのに見えない = Phase 6 と同じ失敗)。
+  // なので「外部クリップから選ぶ確率」を別枠で持たせる。
+  const extNames = [...av.extClips.keys()].filter((g) => g !== av.lastIdle);
+  const builtIn = IDLE_GESTURES.filter((g) => g !== av.lastIdle);
+  const useExt = extNames.length > 0 && (builtIn.length === 0 || Math.random() < EXT_IDLE_SHARE);
+  const pool = useExt ? extNames : builtIn;
   const pick = pool[Math.floor(Math.random() * pool.length)];
   av.lastIdle = pick;
+  av.idleTimer = IDLE_MIN_SEC + Math.random() * (IDLE_MAX_SEC - IDLE_MIN_SEC);
+  if (av.extClips.has(pick)) { playExtClip(av, pick); return; }
   av.gesture = pick;
   av.gestureT = 0;
-  av.idleTimer = IDLE_MIN_SEC + Math.random() * (IDLE_MAX_SEC - IDLE_MIN_SEC);
 }
 
 function addGesture(av, delta) {
@@ -553,6 +630,148 @@ function addGesture(av, delta) {
     av.bodyX = (b.x || 0) * w;
     av.bodyY = (b.y || 0) * w;
     av.bodyZ = (b.z || 0) * w;
+  }
+}
+
+// ---- 土台の層: 外部モーション (motions/ に置いた Mixamo の FBX 等) ----
+// companion が返す索引 (/motions.json) を読み、VRM のボーンへ載せ替えて AnimationMixer で再生する。
+//   motions/loop/*.fbx  … 常時再生する待機モーション (これがあれば手続き的なアイドル仕草は止める)
+//   motions/clip/*.fbx  … 単発の身振り (WS の gesture 名 / アイドル仕草の候補として呼べる)
+//   motions/a|b/...     … 話者ごとに分けたいとき (a = 主役 / b = 相方)
+// 再生中は「クリップの姿勢」を土台に、呼吸/感情/身振りの3層をその上へ差分として乗せる (writePose)。
+// 何も置かれていなければ extW = 0 のままなので、従来の挙動と完全に同じになる。
+const EXT_FADE_SEC = 0.45;   // 差し替え時のフェード
+const LOOP_SWITCH_SEC = 30;  // 待機モーションが複数あるときの切り替え間隔
+
+const IDENTITY_Q = new THREE.Quaternion();
+
+async function setupMotions(av, slot) {
+  if (!MOTION_ENABLED || !av.vrm.humanoid) return;
+  const root = av.vrm.humanoid.normalizedHumanBonesRoot;
+  if (!root) return;
+  av.mixer = new THREE.AnimationMixer(root);
+
+  const tag = tagForSlot(slot);
+  let index;
+  if (MOTION_FORCE_URL) {
+    index = [{ tag: null, kind: 'loop', name: 'forced', url: MOTION_FORCE_URL }];
+  } else {
+    index = await fetchMotionIndex();
+  }
+  // 自分のタグぶんを優先。待機モーションはタグ指定があればそれだけを使い (共通ぶんは無視)、
+  // 単発クリップは共通ぶんと混ぜる (同名はタグ指定が勝つ)。
+  const mine = index.filter((e) => e.tag === tag);
+  const shared = index.filter((e) => !e.tag);
+  const loops = mine.filter((e) => e.kind === 'loop');
+  const useLoops = loops.length ? loops : shared.filter((e) => e.kind === 'loop');
+  const clips = [...shared.filter((e) => e.kind === 'clip'), ...mine.filter((e) => e.kind === 'clip')];
+
+  for (const e of [...useLoops, ...clips]) {
+    try {
+      const { clip, bones, duration } = await loadMixamoMotion(e.url, av.vrm);
+      const entry = { name: e.name, kind: e.kind, clip, bones, duration, action: null };
+      if (e.kind === 'loop') av.extLoops.push(entry);
+      else av.extClips.set(e.name, entry);
+      console.log(`[avatar] motion loaded (${tag}/${e.kind}): ${e.name} ${duration.toFixed(2)}s / ${bones.size} bones`);
+    } catch (err) {
+      console.warn(`[avatar] motion load failed: ${e.url}`, err);
+    }
+  }
+}
+
+// クリップが動かすボーンのうち POSE_BONES に無いもの (腰・脚など)。writePose が触らないので、
+// フェードアウト時にここで素の姿勢へ戻さないと最後の姿勢のまま固まる。
+function extraNodesFor(av, entry) {
+  const out = [];
+  for (const b of entry.bones) {
+    if (POSE_BONES.includes(b)) continue;
+    const n = av.vrm.humanoid.getNormalizedBoneNode(b);
+    if (n) out.push(n);
+  }
+  return out;
+}
+
+function startExt(av, entry) {
+  const action = entry.action || (entry.action = av.mixer.clipAction(entry.clip));
+  action.reset();
+  if (entry.kind === 'loop') {
+    action.setLoop(THREE.LoopRepeat, Infinity);
+  } else {
+    action.setLoop(THREE.LoopOnce, 1);
+    action.clampWhenFinished = true;
+  }
+  action.play();
+  av.extCur = entry;
+  av.extExtraNodes = extraNodesFor(av, entry);
+}
+
+function stopExt(av) {
+  if (av.extCur?.action) av.extCur.action.stop();
+  for (const n of av.extExtraNodes) n.quaternion.copy(IDENTITY_Q);
+  av.extExtraNodes = [];
+  av.extCur = null;
+  av.extW = 0;
+}
+
+// 単発の外部クリップを予約する (WS の gesture / アイドル仕草の抽選から呼ばれる)
+function playExtClip(av, name) {
+  if (!av || !av.extClips.has(name)) return false;
+  av.extOnce = name;
+  return true;
+}
+
+function chooseExtWant(av, delta) {
+  if (av.extOnce) {
+    const cur = av.extCur;
+    // 単発クリップが終わったら待機モーションへ戻す
+    if (cur && cur.name === av.extOnce && cur.action && cur.action.time >= cur.duration - 1e-3) {
+      av.extOnce = null;
+    } else {
+      av.extWant = av.extOnce;
+      return;
+    }
+  }
+  if (av.extLoops.length === 0) { av.extWant = null; return; }
+  if (av.extLoops.length > 1) {
+    av.extLoopTimer -= delta;
+    if (av.extLoopTimer <= 0) {
+      av.extLoopIdx = (av.extLoopIdx + 1) % av.extLoops.length;
+      av.extLoopTimer = LOOP_SWITCH_SEC;
+    }
+  }
+  av.extWant = av.extLoops[av.extLoopIdx].name;
+}
+
+function findExtEntry(av, name) {
+  return av.extClips.get(name) || av.extLoops.find((e) => e.name === name) || null;
+}
+
+// 毎フレーム: 再生対象を決め、mixer を進め、重みを出す。buildPose より先に呼ぶ
+// (writePose がこのフレームのクリップ姿勢を読むため)。
+function updateExtMotion(av, delta) {
+  if (!av.mixer) return;
+  chooseExtWant(av, delta);
+  if (av.extCur && av.extCur.name !== av.extWant) {
+    av.extW -= delta / EXT_FADE_SEC;
+    if (av.extW <= 0.001) stopExt(av);
+  } else if (av.extCur) {
+    av.extW = Math.min(1, av.extW + delta / EXT_FADE_SEC);
+  }
+  if (!av.extCur && av.extWant) {
+    const entry = findExtEntry(av, av.extWant);
+    if (entry) { startExt(av, entry); av.extW = 0; }
+    else { av.extWant = null; av.extOnce = null; return; }
+  }
+  if (!av.extCur) return;
+
+  av.mixer.update(delta);
+  for (const b of POSE_BONES) {
+    const n = av.bones[b];
+    if (n) av.clipQuat[b].copy(n.quaternion);
+  }
+  // 腰・脚などは重みぶんだけ素の姿勢へ寄せる (完全に抜けたら stopExt が identity に戻す)
+  if (av.extW < 0.999) {
+    for (const n of av.extExtraNodes) n.quaternion.slerp(IDENTITY_Q, 1 - av.extW);
   }
 }
 
@@ -866,6 +1085,7 @@ function animate() {
   for (const av of avatars) {
     if (!av) continue;
     applyExpressions(av, delta);
+    updateExtMotion(av, delta); // 外部モーションを先に進める (buildPose がその姿勢を土台に混ぜる)
     buildPose(av, t, delta);
     applyIdle(av, t);
     av.vrm.update(delta); // 表情/ボーンを実際のメッシュへ反映
@@ -928,8 +1148,11 @@ function connectWs() {
       target.emotionValue = 0.7;
     }
     // 身振りは emotion と同じワンショット契約 (毎 tick 載せるとクリップが先頭へ巻き戻り続けて固まる)
-    if (typeof m.gesture === 'string' && GESTURES[m.gesture] && target) {
-      target.gesture = m.gesture; target.gestureT = 0;
+    // 同名の外部クリップ (motions/clip/<name>.fbx) があればそちらを優先する = 差し替え可能。
+    if (typeof m.gesture === 'string' && target) {
+      if (!playExtClip(target, m.gesture) && GESTURES[m.gesture]) {
+        target.gesture = m.gesture; target.gestureT = 0;
+      }
     }
     if (SHOW_SUBTITLE && subtitleEl && typeof m.subtitle === 'string') {
       const s = m.subtitle.trim();

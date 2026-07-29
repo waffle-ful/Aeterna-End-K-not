@@ -462,6 +462,8 @@ tools/companion/__pycache__/
 # アバターのモデルはユーザーが各自置く (VRoid 自作等・ライセンス的にも同梱しない)。
 tools/companion/avatar/model.vrm
 tools/companion/avatar/model2.vrm
+# 外部モーション (Mixamo の FBX 等) も各自で用意するもの。DLL にも同梱しない。
+tools/companion/avatar/motions/
 
 # Build output (custom -o build/)
 build/
