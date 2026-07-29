@@ -162,6 +162,15 @@ internal static class ExternalRpcPetPatch
             return;
         }
 
+        // 移設された緊急ボタンの上でのペットは「ボタンを押す」= 緊急会議。誰でも押せなければならないので
+        // 役職のクールタイム (HasAbilityCD) や Phantom 基底の早期 return より手前で判定する。
+        // ただしペットがキル操作になっている役職が獲物ごとボタンの上に居るときはキルを優先する。
+        if (PortalButton.IsOnButton(pc) && !PetIsKillAction(pc))
+        {
+            PortalButton.PressByPet(pc);
+            return;
+        }
+
         if (pc.HasAbilityCD())
         {
             if (!pc.IsHost()) pc.Notify(Translator.GetString("AbilityOnCooldown"));
@@ -210,6 +219,24 @@ internal static class ExternalRpcPetPatch
         if (pc.HasAbilityCD() || Utils.ShouldNotApplyAbilityCooldown(roleBase)) return;
 
         pc.AddAbilityCD();
+    }
+
+    // このペット押下がキルボタン代わりとして消費されるか (下の UsesPetInsteadOfKill 分岐と同じ条件)。
+    // クールタイム中はそもそもキルにならないので false = ボタンを押させる (でないと
+    // 「キルも起きず会議も起きない」無反応になる)。
+    // 対象の有無は SelectKillButtonTarget ではなく素の距離判定で見ること — あちらは Detour の
+    // 使用回数消費や Dizzy の再抽選という副作用を持つので、ここで呼ぶと1回のペットで二重発火する。
+    private static bool PetIsKillAction(PlayerControl pc)
+    {
+        CustomRoles role = pc.GetCustomRole();
+        if (!role.UsesPetInsteadOfKill()) return false;
+
+        bool alwaysPetRole = role is CustomRoles.Necromancer or CustomRoles.Deathknight or CustomRoles.Renegade or CustomRoles.Sidekick;
+        if (pc.Data.RoleType == RoleTypes.Impostor && !alwaysPetRole) return false;
+        if (!pc.CanUseKillButton() && !alwaysPetRole) return false;
+        if (pc.HasAbilityCD()) return false;
+
+        return FastVector2.TryGetClosestPlayerInRangeTo(pc, 3.5f, out _);
     }
 
     private static readonly Dictionary<byte, long> LobbyKillLastProcess = [];
