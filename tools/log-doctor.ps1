@@ -275,10 +275,12 @@ foreach ($sess in $healthSessions) {
         if ($lines[$i] -notmatch '^DC reason=Hacking\b') { continue }
 
         $ev = New-Object 'System.Collections.Generic.List[string]'
-        # 直前の連続 DCTX 行(送信リングのダンプ)を全部拾う
+        # 直前の切断ダンプブロック(DCNET 集計 / DCTX 送信リング / DCTAG タグ別ヒストグラム)を拾う。
+        # ⚠️ DC 行の直前に来るのは DCTAG であって DCTX ではない。DCTX だけを見て後ろ向きに歩くと
+        #    1行目(DCTAG)で即打ち切られ、リング全体を取りこぼす(2026-07-29 に実ログで確認)。
         $j = $i - 1
         $dctxBlock = New-Object 'System.Collections.Generic.List[string]'
-        while ($j -ge 0 -and $lines[$j].StartsWith('DCTX ')) {
+        while ($j -ge 0 -and ($lines[$j].StartsWith('DCTX ') -or $lines[$j].StartsWith('DCTAG ') -or $lines[$j].StartsWith('DCNET '))) {
             $dctxBlock.Insert(0, $lines[$j])
             $j--
         }
