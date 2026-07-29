@@ -77,7 +77,8 @@ public class Swapper : RoleBase
 
         if (GuessManager.CheckCommand(ref msg, "id|guesslist|gl编号|玩家编号|玩家id|id列表|玩家列表|列表|所有id|全部id", true, out bool spamRequired))
             operate = 1;
-        else if (GuessManager.CheckCommand(ref msg, "sw|换票|换|swap|st", false, out spamRequired))
+        // st は推理側 (GuesserMsg の "shoot|...|st|bt") が先に食うため此処では永久に到達しない。Swapper も推理可能役職なので綴りを推理側へ寄せる
+        else if (GuessManager.CheckCommand(ref msg, "sw|换票|换|swap", false, out spamRequired))
             operate = 2;
         else
             return false;
