@@ -652,6 +652,7 @@ public class Main : BasePlugin
                 { CustomRoles.PortalMaker, "#700078" },
                 { CustomRoles.MapExtender, "#3FA7D6" },
                 { CustomRoles.PortalButton, "#e74c3c" },
+                { CustomRoles.Gemini, "#7fd8ff" },
                 { CustomRoles.WordKiller, "#8e2f4a" },
                 { CustomRoles.Ankylosaurus, "#7FE44C" },
                 { CustomRoles.Leery, "#32a852" },

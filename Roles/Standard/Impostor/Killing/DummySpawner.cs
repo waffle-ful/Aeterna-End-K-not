@@ -194,8 +194,13 @@ public class DummySpawner : RoleBase
     // LocalPlayer.Outfits を一時的に dummy outfit に書換 → Shapeshift RPC → 復元
     // CachedPlayerData は LocalPlayer.Data 共有なので Utils.RpcChangeSkin は使えない
     // (host の Data NetId に書き込んでしまうため)
+    // playerName: 非モッド客に見せる名前。null なら従来どおりホストの名前が載る。
+    // ⚠️ 客側のダミーの名前はこの Shapeshift スナップショットの PlayerName で決まる
+    // (CustomNetObject.CreateNetObject がスプライト文字を PlayerName に載せて届けているのと同じ経路)。
+    // RpcSetCnoName はホスト画面の nameText を直接書くだけで客には届かないため、
+    // ここで名前を載せないと全ダミーがホストの名前で表示される。
     internal static void ApplyOutfitToCNO(PlayerControl cnoPC, int colorId,
-        string skinId, string hatId, string visorId, string petId)
+        string skinId, string hatId, string visorId, string petId, string playerName = null)
     {
         if (!AmongUsClient.Instance.AmHost || cnoPC == null) return;
 
@@ -212,7 +217,7 @@ public class DummySpawner : RoleBase
         var writer = sender.stream;
         sender.StartMessage();
 
-        // TOHP-style: PlayerName は維持して見た目だけ書き換える
+        if (playerName != null) localOutfit.PlayerName = playerName;
         localOutfit.ColorId = colorId;
         localOutfit.HatId = hatId ?? "";
         localOutfit.SkinId = skinId ?? "";
@@ -326,11 +331,12 @@ internal sealed class RandomDummy : CustomNetObject
         }
         catch (Exception e) { Utils.ThrowException(e); }
 
-        // 非モッドへの outfit 同期: Shapeshift trick (LocalPlayer outfit 一時書換 + Shapeshift RPC)
-        DummySpawner.ApplyOutfitToCNO(playerControl, _colorId, _skinId, _hatId, _visorId, _petId);
+        // 非モッドへの outfit + 名前の同期: Shapeshift trick (LocalPlayer outfit 一時書換 + Shapeshift RPC)。
+        // 名前を渡さないと客側では全ダミーがホストの名前で表示される (ジェミニで発覚した同一機序の双子)。
+        // 空文字列だと Among Us 側で「player 非表示」扱いされる挙動を引いた経験があるため TOHP に合わせて "Dummy"。
+        DummySpawner.ApplyOutfitToCNO(playerControl, _colorId, _skinId, _hatId, _visorId, _petId, "Dummy");
 
-        // 空文字列だと Among Us 側で「player 非表示」扱いされる挙動を引いた経験あり。
-        // TOHP に合わせて "Dummy" を使う
+        // ホスト画面側の名札
         RpcSetCnoName("Dummy");
     }
 

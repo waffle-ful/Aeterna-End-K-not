@@ -570,6 +570,7 @@ public enum CustomRoles
     Shuffler,
     PortalButton,
     WordKiller,
+    Gemini,
     Convict,
     Survivor,
 
