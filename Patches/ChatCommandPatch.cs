@@ -3738,11 +3738,12 @@ internal static class ChatCommands
 
     private static void DisconnectCommand(PlayerControl player, string text, string[] args)
     {
-        string subArgs = args.Length < 2 ? string.Empty : args[1];
+        string subArgs = args.Length < 2 ? string.Empty : args[1].ToLower();
 
         switch (subArgs)
         {
             case "crew":
+            case "crewmate": // TOHK 形
                 GameManager.Instance.enabled = false;
                 GameManager.Instance.ShouldCheckForGameEnd = false;
                 MessageWriter msg = AmongUsClient.Instance.StartEndGame();
@@ -3752,6 +3753,7 @@ internal static class ChatCommands
                 break;
 
             case "imp":
+            case "impostor": // TOHK 形
                 GameManager.Instance.enabled = false;
                 GameManager.Instance.ShouldCheckForGameEnd = false;
                 MessageWriter msg2 = AmongUsClient.Instance.StartEndGame();
@@ -3762,7 +3764,7 @@ internal static class ChatCommands
 
             default:
                 if (!HudManager.InstanceExists) break;
-                HudManager.Instance.Chat.AddChat(player, "crew | imp");
+                HudManager.Instance.Chat.AddChat(player, "crew(crewmate) | imp(impostor)");
                 break;
         }
 
