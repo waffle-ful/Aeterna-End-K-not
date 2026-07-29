@@ -67,11 +67,13 @@ internal static class OnGameJoinedPatch
 
                 if (result.Files > 0 || result.Folders > 0)
                 {
+                    // Nobody is watching the host screen during a stream / unattended auto-rehost, and this
+                    // prompt blocks DialogueBox.Hide until answered -> it would sit there forever. Time it out.
                     Prompt.Show(string.Format(GetString("Promt.DeleteOldLogs"), result.Files, result.Folders), () =>
                     {
                         result = CleanOldItems(false);
                         LateTask.New(() => HudManager.Instance.ShowPopUp(string.Format(GetString("LogDeletionResults"), result.Files, result.Folders)), 0.01f);
-                    }, () => { });
+                    }, () => { }, autoDismissSeconds: 15f);
                 }
 
                 ClearedLogs = true;
