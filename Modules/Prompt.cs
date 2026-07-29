@@ -7,14 +7,19 @@ namespace EndKnot.Modules;
 
 public static class Prompt
 {
-    private static readonly List<(string Question, Action OnYes, Action OnNo)> Queue = [];
+    private static readonly List<(string Question, Action OnYes, Action OnNo, float AutoDismiss)> Queue = [];
 
     private static SimpleButton YesButton;
     private static SimpleButton NoButton;
     private static string CurrentQuestion = string.Empty;
     private static bool ShowBackButton;
 
-    public static void Show(string question, Action onYes, Action onNo, bool showBackButton = false)
+    // Incremented for every prompt actually put on screen, so a pending auto-dismiss timer can tell
+    // "still my prompt" from "the user already answered and the next queued prompt took over".
+    private static int Serial;
+
+    /// <param name="autoDismissSeconds">If &gt; 0, the prompt closes itself through the "No" path after this many seconds (unattended hosts).</param>
+    public static void Show(string question, Action onYes, Action onNo, bool showBackButton = false, float autoDismissSeconds = 0f)
     {
         try
         {
@@ -24,13 +29,14 @@ public static class Prompt
             if (CurrentQuestion != string.Empty || !hud)
             {
                 if (Queue.All(x => x.Question != question) && CurrentQuestion != question)
-                    Queue.Add((question, onYes, onNo));
+                    Queue.Add((question, onYes, onNo, autoDismissSeconds));
 
                 return;
             }
 
             CurrentQuestion = question;
             ShowBackButton = showBackButton;
+            int serial = ++Serial;
             hud.ShowPopUp(question);
             if (!ShowBackButton) hud.Dialogue.BackButton.gameObject.SetActive(false);
 
@@ -44,9 +50,9 @@ public static class Prompt
 
                 if (Queue.Count > 0)
                 {
-                    (string q, Action y, Action n) = Queue[0];
+                    (string q, Action y, Action n, float dismiss) = Queue[0];
                     Queue.RemoveAt(0);
-                    LateTask.New(() => Show(q, y, n), 0.01f, log: false);
+                    LateTask.New(() => Show(q, y, n, autoDismissSeconds: dismiss), 0.01f, log: false);
                 }
             };
 
@@ -70,6 +76,20 @@ public static class Prompt
                 new(0, 255, 255, 255),
                 onNo,
                 Translator.GetString("No"));
+
+            if (autoDismissSeconds > 0f)
+            {
+                Action dismiss = onNo;
+
+                LateTask.New(() =>
+                {
+                    // Answered already (or a queued prompt took the screen) -> the timer is stale.
+                    if (Serial != serial || CurrentQuestion != question) return;
+
+                    try { dismiss(); }
+                    catch (Exception e) { Utils.ThrowException(e); }
+                }, autoDismissSeconds, log: false);
+            }
         }
         catch (Exception e) { Utils.ThrowException(e); }
     }
