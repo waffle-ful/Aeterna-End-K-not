@@ -219,17 +219,13 @@ public class Deathpact : RoleBase
 
     public override string GetSuffix(PlayerControl seer, PlayerControl target, bool hud = false, bool meeting = false)
     {
-        if (meeting || hud || !ShowArrowsToOtherPlayersInPact.GetBool() || target != null && seer.PlayerId != target.PlayerId || !IsInActiveDeathpact(seer)) return string.Empty;
+        if (meeting || hud || !ShowArrowsToOtherPlayersInPact.GetBool() || target != null && seer.PlayerId != target.PlayerId) return string.Empty;
 
-        var arrows = string.Empty;
+        // BuildSuffix は Deathpact インスタンスごとに GetSuffix を呼ぶため、ここで全インスタンスを回すと矢印が人数分重複する。
+        // 自分のこの契約に seer が入っているときだけ、この契約の相手への矢印を出す。
+        if (!ActiveDeathpacts.Contains(DeathPactId) || !PlayersInDeathpact.Exists(a => a && a.PlayerId == seer.PlayerId)) return string.Empty;
 
-        foreach (KeyValuePair<byte, PlayerState> state in Main.PlayerStates)
-        {
-            if (state.Value.Role is Deathpact { IsEnable: true } dp)
-                arrows = dp.PlayersInDeathpact.Where(a => a.PlayerId != seer.PlayerId).Select(otherPlayerInPact => TargetArrow.GetArrows(seer, otherPlayerInPact.PlayerId)).Aggregate(arrows, (current, arrow) => current + ColorString(GetRoleColor(CustomRoles.Crewmate), arrow));
-        }
-
-        return arrows;
+        return PlayersInDeathpact.Where(a => a && a.PlayerId != seer.PlayerId).Select(otherPlayerInPact => TargetArrow.GetArrows(seer, otherPlayerInPact.PlayerId)).Aggregate(string.Empty, (current, arrow) => current + ColorString(GetRoleColor(CustomRoles.Crewmate), arrow));
     }
 
     public static string GetDeathpactMark(PlayerControl seer, PlayerControl target)
@@ -294,19 +290,28 @@ public class Deathpact : RoleBase
         ActiveDeathpacts.Remove(deathpact);
 
         // 視界/矢印の復帰はリストを空にする前に行う (破棄済み fake-null は除外)
-        if (ReduceVisionWhileInPact.GetBool())
+        bool restoreVision = ReduceVisionWhileInPact.GetBool();
+        bool removeArrows = ShowArrowsToOtherPlayersInPact.GetBool();
+
+        if (restoreVision || removeArrows)
         {
             foreach (PlayerControl player in dp.PlayersInDeathpact.Where(a => a))
             {
                 foreach (PlayerControl otherPlayerInPact in dp.PlayersInDeathpact.Where(a => a && a.PlayerId != player.PlayerId))
                 {
-                    if (ShowArrowsToOtherPlayersInPact.GetBool()) TargetArrow.Remove(player.PlayerId, otherPlayerInPact.PlayerId);
+                    if (removeArrows) TargetArrow.Remove(player.PlayerId, otherPlayerInPact.PlayerId);
 
-                    otherPlayerInPact.MarkDirtySettings();
-                    player.MarkDirtySettings();
+                    if (restoreVision)
+                    {
+                        otherPlayerInPact.MarkDirtySettings();
+                        player.MarkDirtySettings();
+                    }
                 }
             }
         }
+
+        // 契約メンバーを空にしないと次の契約に前回のメンバーが混ざる (7900217f で移動し損ねた行)
+        dp.PlayersInDeathpact.Clear();
     }
 
     public override void OnReportDeadBody()
