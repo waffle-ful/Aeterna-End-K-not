@@ -266,7 +266,7 @@ public class Infection : RoleBase
 
     public override string GetSuffix(PlayerControl seer, PlayerControl target, bool hud = false, bool meeting = false)
     {
-        if (seer.PlayerId != target.PlayerId && seer.IsAlive() || !seer.Is(CustomRoles.Infection) && seer.IsAlive() || !hud && seer.IsModdedClient() || Main.PlayerStates[seer.PlayerId].Role is not Infection { IsEnable: true } pd) return string.Empty;
+        if (seer.PlayerId != target.PlayerId && seer.IsAlive() || !seer.Is(CustomRoles.Infection) && seer.IsAlive() || !hud && seer.IsModdedClient() || Main.PlayerStates[seer.PlayerId].Role is not Infection { IsEnable: true } pd || pd != this) return string.Empty;
 
         var str = new StringBuilder(40);
 

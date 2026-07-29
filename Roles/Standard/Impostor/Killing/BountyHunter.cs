@@ -205,6 +205,11 @@ public class BountyHunter : RoleBase
     public override string GetSuffix(PlayerControl seer, PlayerControl target, bool hud = false, bool meeting = false)
     {
         if (seer.IsModdedClient() && !hud) return string.Empty;
+
+        // BuildSuffix は BountyHunter インスタンスごとに GetSuffix を呼ぶ。下の2つのヘルパーは static で
+        // seer の役職を引き直すため、ここで this 限定にしないと2人以上いるとき人数分重複する。
+        if (Main.PlayerStates[seer.PlayerId].Role != this) return string.Empty;
+
         return GetTargetText(seer, target, hud) + GetTargetArrow(seer, target);
     }
 

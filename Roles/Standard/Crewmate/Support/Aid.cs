@@ -124,6 +124,13 @@ public class Aid : RoleBase
 
         if (TargetKnowsShield.GetBool() && ShieldedPlayers.TryGetValue(seer.PlayerId, out CountdownTimer timer))
         {
+            // ShieldedPlayers は全 Aid で共有する static。BuildSuffix は Aid インスタンスごとに GetSuffix を
+            // 呼ぶので、そのまま返すと Aid が2人以上いるとき同じ文言が人数分並ぶ。代表インスタンスだけが返す。
+            // seer 自身が Aid なら必ずその個体を代表にする — HudPatch/MeetingHudPatch は seer 自身の
+            // インスタンスを1回だけ呼ぶ経路なので、ここで他個体を選ぶと自分のシールド表示が消える。
+            Aid rep = Main.PlayerStates[seer.PlayerId].Role as Aid ?? Main.PlayerStates.Values.Select(x => x.Role).OfType<Aid>().MinBy(x => x.AidId);
+            if (rep != this) return string.Empty;
+
             int timeLeft = (int)Math.Ceiling(timer.Remaining.TotalSeconds);
             return string.Format(Translator.GetString("AidCounterSelf"), timeLeft);
         }

@@ -159,7 +159,7 @@ public class Overheat : RoleBase
 
     public override string GetSuffix(PlayerControl seer, PlayerControl target, bool hud = false, bool meeting = false)
     {
-        if (Main.PlayerStates[seer.PlayerId].Role is not Overheat oh || seer.IsModdedClient() && !hud || seer.PlayerId != target.PlayerId) return string.Empty;
+        if (Main.PlayerStates[seer.PlayerId].Role is not Overheat oh || oh != this || seer.IsModdedClient() && !hud || seer.PlayerId != target.PlayerId) return string.Empty;
 
         Color color = GetTemperatureColor(oh.Temperature);
         string str = Translator.GetString("Overheat.Suffix");
