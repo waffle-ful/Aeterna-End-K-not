@@ -87,11 +87,16 @@ public class Gemini : RoleBase
         GeminiId = playerId;
         Dummies.Clear();
         ResetStillClock();
+
+        // 静止し続けるのが能力なので AFK 検知から外す (静止3秒×ラッチ待ちで簡単に
+        // 10秒静止を超え、AFK 警告カウントダウン+毎秒 NotifyRoles を浴びる)。
+        AFKDetector.ExemptedPlayers.Add(playerId);
     }
 
     // 切断・役職剥奪で抜けたら自分の分身は全部片付ける (誰も回収できない CNO を残さない)
     public override void Remove(byte playerId)
     {
+        AFKDetector.ExemptedPlayers.Remove(playerId);
         DespawnAll();
     }
 
