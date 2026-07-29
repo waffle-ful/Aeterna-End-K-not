@@ -208,7 +208,7 @@ public class Simon : RoleBase
 
     public override string GetSuffix(PlayerControl seer, PlayerControl target, bool hud = false, bool meeting = false)
     {
-        if (Main.PlayerStates[seer.PlayerId].Role is not Simon simon) return string.Empty;
+        if (Main.PlayerStates[seer.PlayerId].Role is not Simon simon || simon != this) return string.Empty;
 
         bool self = seer.PlayerId == target.PlayerId;
         if (seer.IsModdedClient() && !hud && self) return string.Empty;

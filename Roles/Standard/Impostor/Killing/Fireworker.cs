@@ -190,20 +190,24 @@ public class Fireworker : RoleBase
     public override string GetSuffix(PlayerControl seer, PlayerControl target, bool hud = false, bool meeting = false)
     {
         var retText = string.Empty;
-        if (seer == null || !seer.IsAlive() || seer.PlayerId != target.PlayerId || Main.PlayerStates[seer.PlayerId].Role is not Fireworker fw) return retText;
+        if (seer == null || !seer.IsAlive() || seer.PlayerId != target.PlayerId) return retText;
 
-        if (fw.state == FireworkerState.WaitTime && Main.EnumerateAlivePlayerControls().Count(pc => pc.Is(CustomRoleTypes.Impostor)) <= 1)
+        // BuildSuffix は Fireworker インスタンスごとに GetSuffix を呼ぶため、seer の役職を引き直すと
+        // Fireworker が2人以上いるとき同じ文字列が人数分連結される。this 限定で判定する。
+        if (Main.PlayerStates[seer.PlayerId].Role != this) return retText;
+
+        if (state == FireworkerState.WaitTime && Main.EnumerateAlivePlayerControls().Count(pc => pc.Is(CustomRoleTypes.Impostor)) <= 1)
         {
-            fw.state = FireworkerState.ReadyFire;
-            fw.SendRPC(seer.PlayerId);
+            state = FireworkerState.ReadyFire;
+            SendRPC(seer.PlayerId);
             Utils.NotifyRoles(SpecifySeer: seer, SpecifyTarget: seer);
         }
 
-        switch (fw.state)
+        switch (state)
         {
             case FireworkerState.Initial:
             case FireworkerState.SettingFireworks:
-                retText = string.Format(GetString("FireworkerPutPhase"), fw.nowFireworksCount);
+                retText = string.Format(GetString("FireworkerPutPhase"), nowFireworksCount);
                 break;
             case FireworkerState.WaitTime:
                 retText = GetString("FireworkerWaitPhase");

@@ -133,7 +133,7 @@ public class YinYanger : RoleBase
     {
         if ((seer.IsModdedClient() && !hud) || meeting) return string.Empty;
 
-        if (Main.PlayerStates[seer.PlayerId].Role is YinYanger { IsEnable: true } yy)
+        if (Main.PlayerStates[seer.PlayerId].Role is YinYanger { IsEnable: true } yy && yy == this)
         {
             if (seer.PlayerId == target.PlayerId) return yy.YinYangedPlayers.Count == 2 ? $"<color=#00ffa5>{Translator.GetString("Mode")}:</color> {Translator.GetString("YinYangModeNormal")}" : $"<color=#00ffa5>{Translator.GetString("Mode")}:</color> {Translator.GetString("YinYangMode")} ({yy.YinYangedPlayers.Count}/2)";
             if (yy.YinYangedPlayers.Contains(target.PlayerId)) return "\u262f";

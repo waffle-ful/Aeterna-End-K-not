@@ -388,6 +388,9 @@ internal class AntiAdminer : RoleBase
     {
         if (Main.PlayerStates[seer.PlayerId].Role is AntiAdminer self && seer.PlayerId == target.PlayerId && self.AntiAdminerId == seer.PlayerId)
         {
+            // BuildSuffix は AntiAdminer インスタンスごとに GetSuffix を呼ぶため、本人のインスタンス以外は何も返さない (人数分の重複防止)
+            if (self != this) return string.Empty;
+
             return self.ExtraAbilityTimer != null
                 ? $"<#ffffff>▩ {(int)Math.Ceiling(self.ExtraAbilityTimer.Remaining.TotalSeconds)}</color>"
                 : string.Empty;
@@ -406,7 +409,8 @@ internal class AntiAdminer : RoleBase
             aa = x;
         }
 
-        return aa == null ? string.Empty : $"<#ffff00>\u26a0 {(int)aa.ExtraAbilityTimer.Remaining.TotalSeconds}</color>";
+        // \u6b8b\u308a\u6642\u9593\u304c\u6700\u5c0f\u306e\u500b\u4f53\u3092\u9078\u3076\u30b0\u30ed\u30fc\u30d0\u30eb\u96c6\u8a08\u306f\u610f\u56f3\u3069\u304a\u308a\u3060\u304c\u3001\u8fd4\u3059\u306e\u306f\u9078\u3070\u308c\u305f\u500b\u4f531\u3064\u3060\u3051\u306b\u3059\u308b (\u4eba\u6570\u5206\u306e\u91cd\u8907\u9632\u6b62)
+        return aa != this ? string.Empty : $"<#ffff00>\u26a0 {(int)aa.ExtraAbilityTimer.Remaining.TotalSeconds}</color>";
     }
 
     public override void SetButtonTexts(HudManager hud, byte id)

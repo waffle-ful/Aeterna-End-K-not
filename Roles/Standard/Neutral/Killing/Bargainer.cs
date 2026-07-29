@@ -471,7 +471,7 @@ internal class Bargainer : RoleBase
 
     public override string GetSuffix(PlayerControl seer, PlayerControl target, bool hud = false, bool meeting = false)
     {
-        if (seer.PlayerId != target.PlayerId || Main.PlayerStates[seer.PlayerId].Role is not Bargainer bg) return string.Empty;
+        if (seer.PlayerId != target.PlayerId || Main.PlayerStates[seer.PlayerId].Role is not Bargainer bg || bg != this) return string.Empty;
 
         var result = string.Empty;
 

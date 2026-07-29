@@ -129,9 +129,9 @@ public class Hitman : RoleBase
 
     public override string GetSuffix(PlayerControl seer, PlayerControl target, bool hud = false, bool meeting = false)
     {
-        if (seer.PlayerId != target.PlayerId) return string.Empty;
+        if (seer.PlayerId != target.PlayerId || Main.PlayerStates[seer.PlayerId].Role != this) return string.Empty;
 
-        byte id = (Main.PlayerStates[seer.PlayerId].Role as Hitman)?.TargetId ?? byte.MaxValue;
+        byte id = TargetId;
         return id == byte.MaxValue ? string.Empty : $"<color=#00ffa5>{Translator.GetString("Target")}:</color> <color=#ffffff>{GetPlayerById(id).GetRealName().RemoveHtmlTags()}</color>";
     }
 }
