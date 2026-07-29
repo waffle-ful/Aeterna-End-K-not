@@ -61,6 +61,8 @@ public class Leery : RoleBase
 
         if (nearestPlayer.PlayerId != CurrentTarget)
         {
+            if (!ShouldSwitchTarget(pc, nearestPlayer)) return;
+
             CurrentTarget = nearestPlayer.PlayerId;
             InvestigationEndTS = Utils.TimeStamp + Duration.GetInt();
             SendRPC();
@@ -72,6 +74,27 @@ public class Leery : RoleBase
         InvestigationEndTS = 0;
         SendRPC();
         if (!nearestPlayer.IsCrewmate()) pc.Notify(Translator.GetString("LeeryNotify"));
+    }
+
+    // ほぼ等距離の2人が圏内にいると最近傍判定が評価のたびに反転し、そのたびに InvestigationEndTS が
+    // リセットされて調査が永久に完了しない。現ターゲットより明確に近いときだけ乗り換える。
+    // マージンは Radius 設定に比例させる (固定値だと半径 0.1 と 10 のどちらかで破綻するため)。
+    private bool ShouldSwitchTarget(PlayerControl pc, PlayerControl candidate)
+    {
+        if (CurrentTarget == byte.MaxValue) return true;
+
+        PlayerControl current = Utils.GetPlayerById(CurrentTarget);
+
+        // 現ターゲットが死亡・退出・ベント内・擬似死亡なら最近傍探索の対象外なので即座に乗り換える
+        if (current == null || !current.IsAlive() || current.inVent || Akazukin.IsPseudoDead(CurrentTarget)) return true;
+
+        float radius = Radius.GetFloat();
+        Vector2 origin = pc.Pos();
+        float distToCurrent = Vector2.Distance(origin, current.Pos());
+
+        if (distToCurrent > radius) return true; // 現ターゲットが圏外に出たなら維持しない
+
+        return Vector2.Distance(origin, candidate.Pos()) + (radius * 0.3f) <= distToCurrent;
     }
 
     private void SendRPC()
