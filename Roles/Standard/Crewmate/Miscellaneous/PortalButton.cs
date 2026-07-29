@@ -14,9 +14,15 @@ namespace EndKnot.Roles;
 //   本物の緊急ボタンの前でペットを押すと「ボタンを持ち上げる」。持ち上げた時点で
 //   本物のボタンは試合中ずっと使えなくなり、別の場所でペットを押すとそこに
 //   移設されたボタン (PortalButtonMarker = 白縁+赤芯の丸) が置かれる。
-//   踏んだ生存者がその場で緊急会議を起こす (実体はホストがその人の名義で
-//   NoCheckStartMeeting を呼ぶ)。設置済みのボタンの前でペットを押すと拾い直せる
-//   ので、何度でも移設できる (使用回数の続く限り)。
+//   設置されたボタンの上 (PressRange) でペットを押した生存者が緊急会議を起こす
+//   (実体はホストがその人の名義で NoCheckStartMeeting を呼ぶ)。設置済みのボタンの
+//   少し手前 (PressRange 外・PickupRange 内) でペットを押すと拾い直せるので、
+//   何度でも移設できる (使用回数の続く限り)。
+//
+// 「押す」は保持者だけでなく全員 (非モッド客を含む) ができなければならないので、
+// 役職の OnPet ではなく全プレイヤーのペットが通る PetActionsPatch.OnPetUse から
+// IsOnButton / PressByPet を呼ぶ。踏んだだけでは何も起きない (誤爆で会議が多発した
+// ため 2026-07-29 に踏む判定を撤去、範囲内では「ペットで会議」の案内だけ出す)。
 //
 // 本物のボタンを潰す手段は二段構え:
 //   ①  ReportDeadBodyPatch の緊急会議分岐でホスト側から拒否する (実体・即時)
@@ -25,20 +31,17 @@ namespace EndKnot.Roles;
 //   (GameLibs がスタブで vanilla の実装を読めない) ため、遮断の責任は①が持つ。
 //   ②が効くまでの間は「パネルは開くが押しても何も起きない」になる。
 //
-// 会議を跨ぐと CNO は必ず消える (基底の自動再生成は使わない — 会議 → 復活 → 踏む →
-// 会議 の無限ループになるため)。張り直しは AfterMeetingTasks から LateTask 経由で行い、
-// 張り直し直後は ArmDelay 秒だけ反応しない。会議明けは全員がスポーン地点へワープするので、
-// スポーン付近に置かれていると armed 直後に誰かが乗って即会議になるのを防ぐ。
+// 会議を跨ぐと CNO は必ず消える (基底の自動再生成は使わない)。張り直しは AfterMeetingTasks
+// から LateTask 経由で行う。
 // ============================================================
 public class PortalButton : RoleBase
 {
     private const int Id = 705700;
 
-    private const float PickupRange = 2.5f;      // 本物のボタン / 設置済みボタンを拾える距離
-    private const float TriggerRange = 1f;       // 踏んだ判定 (PortalButtonMarker の footprint 前提)
-    private const float LatchReleaseRange = 2f;  // ここまで離れて初めて再び踏んだ判定が効く
-    private const int ArmDelay = 5;              // 設置・張り直し後に反応しない秒数
-    private const float RespawnDelay = 1.5f; // AfterMeetingTasks から CNO 生成までの遅延
+    private const float PickupRange = 2.5f;       // 本物のボタン / 設置済みボタンを拾える距離
+    private const float PressRange = 1.5f;        // ボタンの上でペット = 押した判定。拾える距離より内側であること
+    private const float PromptResetRange = 2.5f;  // ここまで離れて初めて案内をもう一度出す
+    private const float RespawnDelay = 1.5f;      // AfterMeetingTasks から CNO 生成までの遅延
 
     public static bool On;
 
@@ -59,15 +62,9 @@ public class PortalButton : RoleBase
     // 会議はラウンドに1回しか起きないので static で共有する。
     private static bool MeetingTriggered;
 
-    // 踏んだのに何も起きない理由 (サボタージュ中 / 緊急会議の回数切れ) を伝える通知は、
-    // OnCheckPlayerPosition が毎 fixed update 走る以上ラッチしないと連射になる。
-    private static readonly HashSet<byte> RefusalNotified = [];
-
     // 移設されたボタンも「緊急ボタン」なので、本物と同じクールタイムを共有する。
-    // ラウンド開始・会議明けからの経過時間で見るため、起点の時刻だけを持つ
-    // (ArmedAt に混ぜてはいけない — 会議明けの張り直しで SpawnMarkerAt が ArmedAt を +ArmDelay に上書きする)。
+    // ラウンド開始・会議明けからの経過時間で見るため、起点の時刻だけを持つ。
     private static long EmergencyClockStartTS;
-    private static readonly HashSet<byte> CooldownNotified = [];
 
     // ---- 移設されたボタンそのもの (static = 保持者全員で共有) ----
     // ゲーム内に緊急ボタンは物理的に1個しか無いので、instance 単位で持ってはいけない。
@@ -78,19 +75,16 @@ public class PortalButton : RoleBase
     // 設置直後に読むと (0,0) を返す)。
     private static PortalButtonMarker Marker;
     private static Vector2? MarkerPos;
-    private static long ArmedAt;
 
     // 今ボタンを持ち歩いている人 (居なければ null)。保持者が複数居るとき、他人が持ち歩いている最中に
     // ペットを押した人へ「設置したボタンの上に立て」という的外れな案内を出さないために持つ。
     private static byte? CarrierId;
 
-    // ボタンを置いた瞬間にその上に立っていた人 (会議明けなら「スポーン地点に降ってきた全員」)。
-    // 一度 LatchReleaseRange まで離れないと踏んだ判定を出さない。
-    // これが無いと、このボタンをスポーン地点に置く = 会議明けに全員が上に乗る、という
-    // この役職で最も自然な使い方が「会議 → 張り直し → ArmDelay 秒後にまた会議」の連鎖になる
-    // (各人の緊急会議回数が尽きるまで止まらない)。ArmDelay だけでは足りない — 会議明けは
-    // その場から動かない人が普通に居るため。MapExtender のポータル往復対策と同じ形。
-    private static readonly HashSet<byte> TriggerLatched = [];
+    // 「ペットで会議発動！」の案内を既に見せた人。一度 PromptResetRange まで離れないと出し直さない
+    // (Notify は名前ブロードキャストなので、毎 fixed update の連射は公式鯖で危険)。
+    // ボタンを生やした瞬間に近くに居た人は最初から入れておく — スポーン地点に置いた場合、
+    // 会議明けに降ってきた全員へ同時に Notify が飛ぶバーストになるため。
+    private static readonly HashSet<byte> PromptShown = [];
 
     // 会議明けの張り直しも共有物に対する1回の処理なので、保持者の人数ぶん走らせない。
     // AfterMeetingTasks は保持者ごとに呼ばれるうえ、同一会議に対して複数回呼ばれる経路もある
@@ -123,16 +117,13 @@ public class PortalButton : RoleBase
         ButtonPosResolved = false;
         ButtonPosValid = false;
         MeetingTriggered = false;
-        RefusalNotified.Clear();
-        CooldownNotified.Clear();
-        TriggerLatched.Clear();
+        PromptShown.Clear();
         EmergencyClockStartTS = Utils.TimeStamp;
 
         // 共有物の初期化は Init だけで行う (Add は保持者ごとに走るので、2人目の Add で
         // 1人目が置いたボタンを消してしまう)。前のゲームの CNO は基盤側が始末するので参照を捨てるだけ。
         Marker = null;
         MarkerPos = null;
-        ArmedAt = 0;
         CarrierId = null;
         LastRespawnMeetingNum = -1;
     }
@@ -226,6 +217,8 @@ public class PortalButton : RoleBase
             return;
         }
 
+        // ボタンの真上 (PressRange 内) でのペットは PetActionsPatch が「押した」として先に食べるので、
+        // ここに来るのは PressRange の外・PickupRange の内 = 少し手前に立っている場合だけ。
         bool fromMarker = MarkerPos != null && FastVector2.DistanceWithinRange(MarkerPos.Value, pc.Pos(), PickupRange);
         bool fromRealButton = !fromMarker && !RealButtonDisabled && TryGetRealButtonPos(out Vector2 buttonPos) && FastVector2.DistanceWithinRange(buttonPos, pc.Pos(), PickupRange);
 
@@ -278,21 +271,20 @@ public class PortalButton : RoleBase
     }
 
     // ボタンを実際に生やす唯一の経路。設置・落下・会議明けの張り直しで必ずここを通し、
-    // 生やした瞬間に上に立っている人を全員ラッチしておく (置いた本人がその場で自分に会議をかけたり、
-    // 会議明けにスポーンへ降ってきた全員が連鎖で会議を起こしたりするのを断ち切る)。
+    // 生やした瞬間に近くに立っている人を全員ラッチしておく (会議明けにスポーンへ降ってきた
+    // 全員へ案内 Notify が同時に飛ぶバーストを断ち切る)。
     private static void SpawnMarkerAt(Vector2 pos)
     {
         MarkerPos = pos;
         Marker = new PortalButtonMarker(pos);
-        ArmedAt = Utils.TimeStamp + ArmDelay;
 
-        TriggerLatched.Clear();
+        PromptShown.Clear();
 
         foreach (PlayerControl pc in Main.AllAlivePlayerControlsToArray)
         {
             if (pc.PlayerId >= 200) continue;
-            if (FastVector2.DistanceWithinRange(pos, pc.Pos(), LatchReleaseRange))
-                TriggerLatched.Add(pc.PlayerId);
+            if (FastVector2.DistanceWithinRange(pos, pc.Pos(), PromptResetRange))
+                PromptShown.Add(pc.PlayerId);
         }
     }
 
@@ -312,6 +304,7 @@ public class PortalButton : RoleBase
         PlaceMarker(pc, Translator.GetString("PortalButton.AutoDropped"));
     }
 
+    // 踏んだだけでは何も起きない。範囲に入った人へ「ペットで会議発動！」の案内を1回だけ出す。
     public override void OnCheckPlayerPosition(PlayerControl pc)
     {
         if (MarkerPos == null || MeetingTriggered) return;
@@ -324,18 +317,43 @@ public class PortalButton : RoleBase
         Vector2 markerPos = MarkerPos.Value;
         Vector2 pos = pc.Pos();
 
-        if (!FastVector2.DistanceWithinRange(markerPos, pos, TriggerRange))
+        if (!FastVector2.DistanceWithinRange(markerPos, pos, PressRange))
         {
-            // 一度ボタンから十分離れて初めてラッチを解く。ボタンの上に立ちっぱなしの人が
-            // 会議のたびに再発火させるのを断ち切るための最後の関所。
-            if (!FastVector2.DistanceWithinRange(markerPos, pos, LatchReleaseRange))
-                TriggerLatched.Remove(pc.PlayerId);
+            // 一度ボタンから十分離れて初めて案内を出し直す (境界上での往復連射を防ぐヒステリシス)。
+            if (!FastVector2.DistanceWithinRange(markerPos, pos, PromptResetRange))
+                PromptShown.Remove(pc.PlayerId);
 
             return;
         }
 
-        if (TriggerLatched.Contains(pc.PlayerId)) return;
-        if (Utils.TimeStamp < ArmedAt) return;
+        if (!PromptShown.Add(pc.PlayerId)) return;
+
+        pc.Notify(Translator.GetString("PortalButton.PetToCall"));
+    }
+
+    // 移設されたボタンの上に立っているか。押下は保持者以外 (非モッド客を含む) もできなければ
+    // ならないので、役職の OnPet ではなく全員が通る PetActionsPatch.OnPetUse から呼ばれる。
+    public static bool IsOnButton(PlayerControl pc)
+    {
+        if (!On || MarkerPos == null || !GameStates.IsInTask || GameStates.IsMeeting) return false;
+
+        // 会議中は CNO が消えている (PortalButtonMarker.OnMeeting) のに MarkerPos は生きたままなので、
+        // 座標ではなく CNO の実在を正とする。効いてほしいのは AfterMeetingTasks が Marker=null に
+        // してから LateTask (RespawnDelay) で張り直すまでの窓 — ここは追放も会議も終わっていて
+        // 他のゲートが全部開くため、これが無いと「見えないボタンを押して即会議」が通ってしまう。
+        // ExileController は追放カットシーン中の押下除け (OnCheckPlayerPosition 側と同じ関所)。
+        if (Marker == null || ExileController.Instance) return false;
+
+        if (!pc || pc.PlayerId >= 200 || !pc.IsAlive()) return false;
+
+        return FastVector2.DistanceWithinRange(MarkerPos.Value, pc.Pos(), PressRange);
+    }
+
+    // ボタンを押した = 緊急会議を起こす。押せない理由はその都度伝える (押下自体が
+    // PetActionsPatch 側で1秒スロットルされているので連射にはならない)。
+    public static void PressByPet(PlayerControl pc)
+    {
+        if (MeetingTriggered) return;
 
         // クリティカルサボタージュ中は緊急会議を起こせない (Ghostbuttoner と同じ判定リスト)。
         if (Utils.IsActive(SystemTypes.Reactor)
@@ -345,12 +363,12 @@ public class PortalButton : RoleBase
             || Utils.IsActive(SystemTypes.LifeSupp)
             || Utils.IsActive(SystemTypes.HeliSabotage))
         {
-            NotifyRefusalOnce(pc, "PortalButton.SabotageActive");
+            pc.Notify(Translator.GetString("PortalButton.SabotageActive"));
             return;
         }
 
         // 本物と同じくホストの緊急ボタンクールタイム設定に従う
-        // (ラウンド開始・会議明けから設定秒数のあいだは踏んでも反応しない)。値は per-player の
+        // (ラウンド開始・会議明けから設定秒数のあいだは押しても反応しない)。値は per-player の
         // オプションからではなく素のホスト設定 (RealOptionsData) から引く — ボタンを持ち上げたあとは
         // per-player 側の EmergencyCooldown が 3600 に上書きされているため (PlayerGameOptionsSender)。
         int emergencyCooldown = Main.RealOptionsData?.GetInt(Int32OptionNames.EmergencyCooldown) ?? 0;
@@ -358,9 +376,7 @@ public class PortalButton : RoleBase
 
         if (elapsed < emergencyCooldown)
         {
-            if (CooldownNotified.Add(pc.PlayerId))
-                pc.Notify(string.Format(Translator.GetString("PortalButton.OnCooldown"), emergencyCooldown - elapsed));
-
+            pc.Notify(string.Format(Translator.GetString("PortalButton.OnCooldown"), emergencyCooldown - elapsed));
             return;
         }
 
@@ -370,36 +386,20 @@ public class PortalButton : RoleBase
         int used = Main.NumEmergencyMeetingsUsed.GetValueOrDefault(pc.PlayerId);
         if (used >= Main.RealOptionsData.GetInt(Int32OptionNames.NumEmergencyMeetings))
         {
-            NotifyRefusalOnce(pc, "NoMoreEmergencyMeetingsLeft");
+            pc.Notify(Translator.GetString("NoMoreEmergencyMeetingsLeft"));
             return;
         }
 
         Main.NumEmergencyMeetingsUsed[pc.PlayerId] = used + 1;
 
-        // 会議が何らかの理由で流れてもその場で連射しないよう、踏んだ人はラッチしておく。
-        TriggerLatched.Add(pc.PlayerId);
         MeetingTriggered = true;
-        Logger.Info($"{pc.GetNameWithRole().RemoveHtmlTags()} が移設された緊急ボタンを踏んだため会議を開始", "PortalButton");
+        Logger.Info($"{pc.GetNameWithRole().RemoveHtmlTags()} が移設された緊急ボタンを押したため会議を開始", "PortalButton");
         pc.NoCheckStartMeeting(null, true);
-    }
-
-    private static void NotifyRefusalOnce(PlayerControl pc, string key)
-    {
-        if (!RefusalNotified.Add(pc.PlayerId)) return;
-        pc.Notify(Translator.GetString(key));
-    }
-
-    public override void OnReportDeadBody()
-    {
-        RefusalNotified.Clear();
-        CooldownNotified.Clear();
     }
 
     public override void AfterMeetingTasks()
     {
         MeetingTriggered = false;
-        RefusalNotified.Clear();
-        CooldownNotified.Clear();
 
         // 張り直しは共有物に対する処理なので1会議1回に絞る。ここを絞らないと、保持者が複数居るときと
         // 同一会議で AfterMeetingTasks が複数回走る経路で、同じ座標に CNO が重複生成される。
@@ -418,11 +418,6 @@ public class PortalButton : RoleBase
         if (MarkerPos == null) return;
 
         Vector2 pos = MarkerPos.Value;
-
-        // 張り直しまでの 1.5 秒は「CNO は無いが MarkerPos は生きている」窓になる。
-        // その間に座標の上に立っている人が見えないボタンを踏まないよう、先に armed 時刻を伸ばしておく
-        // (SpawnMarkerAt が生成時に改めて引き直す)。
-        ArmedAt = Utils.TimeStamp + (long)RespawnDelay + ArmDelay;
 
         LateTask.New(() =>
         {
