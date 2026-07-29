@@ -259,17 +259,22 @@ internal class Commander : RoleBase
     {
         if (seer == null || !seer.Is(Team.Impostor)) return string.Empty;
 
-        if (seer.PlayerId == target.PlayerId && Main.PlayerStates[seer.PlayerId].Role is Commander { IsEnable: true } cm)
+        // GetSuffix is an override, so BuildSuffix calls it once per Commander instance.
+        // Everything below must therefore be judged from this instance only — reading the
+        // static PlayerList here would repeat the same text once per Commander in the game.
+        if (seer.PlayerId == target.PlayerId && seer.PlayerId == CommanderId && IsEnable)
         {
             if (seer.IsModdedClient() && !hud) return string.Empty;
 
-            string whistlingText = cm.IsWhistling ? $"\n<size=70%>{Translator.GetString("CommanderWhistling")}</size>" : string.Empty;
-            return $"{string.Format(Translator.GetString("WMMode"), Translator.GetString($"Commander{cm.CurrentMode}Mode"))}{whistlingText}";
+            string whistlingText = IsWhistling ? $"\n<size=70%>{Translator.GetString("CommanderWhistling")}</size>" : string.Empty;
+            return $"{string.Format(Translator.GetString("WMMode"), Translator.GetString($"Commander{CurrentMode}Mode"))}{whistlingText}";
         }
 
-        bool isTargetTarget = PlayerList.Any(x => x.MarkedPlayer == target.PlayerId);
-        bool isTargetDontKill = PlayerList.Any(x => x.DontKillMarks.Contains(target.PlayerId));
-        string arrowToCommander = PlayerList.Aggregate(string.Empty, (result, commander) => result + TargetArrow.GetArrows(seer, commander.CommanderId));
+        if (!PlayerList.Contains(this)) return string.Empty;
+
+        bool isTargetTarget = MarkedPlayer == target.PlayerId;
+        bool isTargetDontKill = DontKillMarks.Contains(target.PlayerId);
+        string arrowToCommander = TargetArrow.GetArrows(seer, CommanderId);
 
         if (seer.PlayerId == target.PlayerId)
         {

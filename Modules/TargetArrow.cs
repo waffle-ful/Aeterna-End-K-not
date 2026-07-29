@@ -72,6 +72,12 @@ internal static class TargetArrow
     {
         ArrowInfo arrowInfo = new(seer, target);
         List<ArrowInfo> removeList = new(TargetArrows.Keys.Where(k => k.Equals(arrowInfo)));
+
+        // Symmetric with Add: only talk to the clients when local state actually changed.
+        // Clients only ever add on our RPC, so "nothing here" means "nothing there" too,
+        // and callers that loop Remove over a whole team would otherwise send one RPC per player.
+        if (removeList.Count == 0) return;
+
         foreach (ArrowInfo a in removeList.ToArray()) TargetArrows.Remove(a);
 
         Utils.SendRPC(CustomRPC.Arrow, true, 2, seer, target);
@@ -85,6 +91,8 @@ internal static class TargetArrow
     public static void RemoveAllTarget(byte seer)
     {
         List<ArrowInfo> removeList = new(TargetArrows.Keys.Where(k => k.From == seer));
+        if (removeList.Count == 0) return;
+
         foreach (ArrowInfo arrowInfo in removeList.ToArray()) TargetArrows.Remove(arrowInfo);
 
         Utils.SendRPC(CustomRPC.Arrow, true, 3, seer);
