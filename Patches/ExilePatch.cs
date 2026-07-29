@@ -238,7 +238,13 @@ internal static class ExileControllerWrapUpPatch
         Utils.CheckAndSetVentInteractions();
 
         Main.Instance.StartCoroutine(Utils.NotifyEveryoneAsync());
-        
+
+        // 生存数に応じた BGM (通常/クライマックス) をここで再評価する。MeetingHud.OnDestroy 側の
+        // SetTaskBGM は追放カットシーンより前に走るため、追放者と AfterMeetingDeathPlayers がまだ
+        // 生存扱いのまま数えられ、クライマックスの発火が1会議ぶん遅れる。上の SetDead() は
+        // ForceRebuildCachesPlayerControls() を即呼ぶので、この時点の生存キャッシュは最新。
+        BGMManager.SetTaskBGM();
+
         Stopwatch.Reset();
     }
 
