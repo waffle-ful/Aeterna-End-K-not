@@ -2209,6 +2209,8 @@ internal static class ChatCommands
 
     private static void HelpCommand(PlayerControl player, string text, string[] args)
     {
+        if (TryRoleSearchSubCommand(player, args)) return;
+
         Utils.ShowHelp(player.PlayerId);
     }
 
@@ -3701,11 +3703,37 @@ internal static class ChatCommands
 
     private static void RCommand(PlayerControl player, string text, string[] args)
     {
-        string subArgs = text.Remove(0, 2);
-        byte to = player.AmOwner && ((Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) || ClientControlGUI.BroadcastRoleInfo)
-            ? byte.MaxValue : player.PlayerId;
-        ClientControlGUI.BroadcastRoleInfo = false;
+        // 先頭 2 文字決め打ち (text.Remove(0, 2)) だと 1 文字以外の別名を足した瞬間に壊れるので args 基準で読む
+        SendRoleInfo(player, args.Length < 2 ? string.Empty : string.Join(' ', args[1..]));
+    }
+
+    private static void SendRoleInfo(PlayerControl player, string subArgs)
+    {
+        byte to = player.PlayerId;
+
+        // トグルの消費はホスト本人の入力に限る (他人の /r ・ /n r ・ /h r がホストの Broadcast 予約を無音で食い潰さないように)
+        if (player.AmOwner)
+        {
+            if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl) || ClientControlGUI.BroadcastRoleInfo) to = byte.MaxValue;
+            ClientControlGUI.BroadcastRoleInfo = false;
+        }
+
         SendRolesInfo(subArgs, to);
+    }
+
+    // TOHK 出身プレイヤーの指クセ救済: /n r <役職名> ・ /h r <役職名> も /r <役職名> と同じ役職検索として扱う。
+    // 役職名が付いていない素の /n r ・ /h r は従来通りの動作を維持する — SendRolesInfo は非 Standard モードで
+    // モード説明を返して早期 return するため、無条件に流すと有効役職一覧が出なくなる。
+    private static bool TryRoleSearchSubCommand(PlayerControl player, string[] args)
+    {
+        string[] parts = args.Where(x => x.Length > 0).ToArray(); // 「/n  r ○○」のような連続スペースで空要素が挟まっても拾えるように
+        if (parts.Length < 3 || parts[1].ToLower() is not ("r" or "roles")) return false;
+
+        string role = string.Join(' ', parts[2..]).Trim();
+        if (role.Length == 0) return false;
+
+        SendRoleInfo(player, role);
+        return true;
     }
 
     private static void DisconnectCommand(PlayerControl player, string text, string[] args)
@@ -3743,7 +3771,9 @@ internal static class ChatCommands
 
     private static void NowCommand(PlayerControl player, string text, string[] args)
     {
-        string subArgs = args.Length < 2 ? string.Empty : args[1];
+        if (TryRoleSearchSubCommand(player, args)) return;
+
+        string subArgs = args.Length < 2 ? string.Empty : args[1].ToLower();
 
         switch (subArgs)
         {
