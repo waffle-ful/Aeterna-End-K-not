@@ -53,7 +53,11 @@ public static class BGMManager
         return _playlist;
     }
 
-    public static void InvalidatePlaylist() => _playlist = null;
+    public static void InvalidatePlaylist()
+    {
+        _playlist = null;
+        ResetWatchdog();
+    }
 
     private static Dictionary<string, List<BGMEntry>> LoadPlaylist()
     {
@@ -143,7 +147,12 @@ public static class BGMManager
     }
 
     public static void SetMenuBGM()    => Play("menu");
-    public static void SetLobbyBGM()   => Play("lobby");
+    public static void SetLobbyBGM()
+    {
+        // ロビーに戻る = 次のゲームの入口。前ゲームで諦めたスロットをここで再挑戦可能にする。
+        ResetWatchdog();
+        Play("lobby");
+    }
     public static void SetMeetingBGM() => Play("meeting");
     public static void SetEndingBGM()  => Play("result");
 
@@ -188,11 +197,91 @@ public static class BGMManager
     public static void SetTaskBGM()
     {
         if (!IsEnabled()) return;
+        Play(GetTaskSlot());
+    }
+
+    // タスク中に鳴らすべきスロットを決める。死亡専用 BGM は「dead スロットに曲がある時だけ」有効で、
+    // 無い場合は従来の intask/climax に落ちる。ここでフォールバックしないと PickTrack→null→Stop() で
+    // 死亡後が無音になり、「死んだら BGM が止まる」という直したい症状そのものを作ってしまう。
+    private static string GetTaskSlot()
+    {
+        // WatchdogFailedSlots も見る。エントリはあるがファイルが読めない (タイポ/欠落) 場合、
+        // Play("dead") が LoadBGM 失敗 → Stop() で「今鳴っている intask/climax まで道連れ」になり、
+        // 直したかった無音がユーザーの設定ミス経由で復活してしまう。
+        if (IsLocalPlayerDead() && HasTracks("dead") && !WatchdogFailedSlots.Contains("dead")) return "dead";
 
         int alive = Main.AllAlivePlayerControlsToList?.Count ?? 15;
         int threshold = ClimaxCount?.GetInt() ?? 6;
-        string bgm = alive <= threshold ? "climax" : "intask";
-        Play(bgm);
+        return alive <= threshold ? "climax" : "intask";
+    }
+
+    private static bool HasTracks(string slot)
+        => EnsurePlaylist().TryGetValue(slot, out List<BGMEntry> entries) && entries is { Count: > 0 };
+
+    // ローカル(=ホスト)の生死のみを見る。BGM はホストの手元でしか鳴らないので、EHR の IsAlive() ではなく
+    // バニラの Data.IsDead が正しい真実 (IsAlive() はゲーム後ロビーで GM/観戦ホストが常に false になる)。
+    private static bool IsLocalPlayerDead()
+    {
+        PlayerControl lp = PlayerControl.LocalPlayer;
+        return lp != null && lp.Data != null && lp.Data.IsDead;
+    }
+
+    // 1秒に1回の番犬。SetTaskBGM の発火点は intro 終了・会議クローズ・追放後の3箇所しかないため、
+    // (a) ラウンド中に死亡してもスロットが切り替わらない (b) 何らかの外部要因で AudioSource を失うと
+    // 次の会議まで無音のまま、という2つの穴がある。ここで毎秒あるべき状態へ寄せ直す。
+    private static int stoppedTicks;
+
+    // Play() が失敗したスロット (曲ファイル欠落等) を覚えておく。覚えないと毎秒 LoadBGM を叩き直し、
+    // OGG の同期デコードは実測 1〜2 秒かかる (climax.ogg) ためフレームレートが落ちる。
+    private static readonly HashSet<string> WatchdogFailedSlots = [];
+
+    public static void ResetWatchdog()
+    {
+        WatchdogFailedSlots.Clear();
+        stoppedTicks = 0;
+    }
+
+    public static void Tick()
+    {
+        if (!IsEnabled() || !OperatingSystem.IsWindows()) return;
+
+        if (!Main.IntroDestroyed || !GameStates.InGame || GameStates.IsEnded || GameStates.IsMeeting
+            || ExileController.Instance || AntiBlackout.SkipTasks) return;
+
+        // リザルト BGM は OutroPatch が鳴らす。GameEndChecker.Ended が立つ前に outro が始まる窓が
+        // あっても番犬が result を intask で潰さないようにする。
+        if (currentSlot == "result") return;
+
+        if (PlayerControl.LocalPlayer == null) return;
+
+        string want = GetTaskSlot();
+
+        if (currentSlot != want)
+        {
+            stoppedTicks = 0;
+            if (WatchdogFailedSlots.Contains(want)) return;
+
+            Logger.Info($"BGM watchdog: slot {(currentSlot.Length == 0 ? "(none)" : currentSlot)} -> {want}", "BGMManager");
+            Play(want);
+
+            if (currentSlot != want)
+            {
+                WatchdogFailedSlots.Add(want);
+                Logger.Warn($"BGM watchdog: could not start slot '{want}' - giving up until next game", "BGMManager");
+            }
+
+            return;
+        }
+
+        if (currentSource != null && currentSource.isPlaying) { stoppedTicks = 0; return; }
+
+        // 1 tick だけの停止は SoundManager のプール入れ替え等で一過性に起きうる。2 tick 連続で
+        // 止まっている時だけ鳴らし直す (毎秒 0:00 から鳴り直す吃音ループを避ける)。
+        if (++stoppedTicks < 2) return;
+
+        stoppedTicks = 0;
+        Logger.Warn($"BGM stopped unexpectedly (slot={want}) - restarting", "BGMManager");
+        Play(want);
     }
 
     public static void Stop()
@@ -396,6 +485,7 @@ public static class BGMManager
             "//   lobby   ... ロビー / Lobby\n" +
             "//   intask  ... ゲーム中（通常）/ In-game (normal)\n" +
             "//   climax  ... ゲーム中（クライマックス）/ In-game (climax, few players remaining)\n" +
+            "//   dead    ... 自分が死亡中 / While you are dead (falls back to intask/climax if empty)\n" +
             "//   meeting ... 会議中 / During meeting\n" +
             "//   result  ... リザルト画面 / Results screen\n" +
             "//\n" +
@@ -412,6 +502,9 @@ public static class BGMManager
             "  ],\n" +
             "  \"climax\": [\n" +
             "    { \"file\": \"my_climax\",       \"weight\": 1, \"title\": \"Final Countdown\", \"author\": \"Artist C\" }\n" +
+            "  ],\n" +
+            "  \"dead\": [\n" +
+            "    { \"file\": \"my_dead\",         \"weight\": 1, \"title\": \"Ghost Waltz\",     \"author\": \"Artist D\" }\n" +
             "  ]\n" +
             "}\n";
 
