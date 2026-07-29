@@ -1298,6 +1298,7 @@
   "PortalButton.SomeoneElseHasIt": "今は別の誰かがボタンを持ち歩いている",
   "PortalButton.NoUsesLeft": "もうボタンを動かせない",
   "PortalButton.SabotageActive": "サボタージュ中は会議を開けない",
+  "PortalButton.OnCooldown": "緊急ボタンはまだクールタイム中（あと{0}秒）",
   "PortalButton.ButtonMoved": "緊急ボタンは別の場所へ移動している",
   "President": "プレジデント",
   "PresidentInfo": "ゲームを支配しよう",

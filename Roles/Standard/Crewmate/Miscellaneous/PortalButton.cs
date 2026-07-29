@@ -63,6 +63,12 @@ public class PortalButton : RoleBase
     // OnCheckPlayerPosition が毎 fixed update 走る以上ラッチしないと連射になる。
     private static readonly HashSet<byte> RefusalNotified = [];
 
+    // 移設されたボタンも「緊急ボタン」なので、本物と同じクールタイムを共有する。
+    // ラウンド開始・会議明けからの経過時間で見るため、起点の時刻だけを持つ
+    // (ArmedAt に混ぜてはいけない — 会議明けの張り直しで SpawnMarkerAt が ArmedAt を +ArmDelay に上書きする)。
+    private static long EmergencyClockStartTS;
+    private static readonly HashSet<byte> CooldownNotified = [];
+
     // ---- 移設されたボタンそのもの (static = 保持者全員で共有) ----
     // ゲーム内に緊急ボタンは物理的に1個しか無いので、instance 単位で持ってはいけない。
     // instance 単位にすると、A が本物のボタンを持ち上げた時点で RealButtonDisabled (static) が立ち、
@@ -118,7 +124,9 @@ public class PortalButton : RoleBase
         ButtonPosValid = false;
         MeetingTriggered = false;
         RefusalNotified.Clear();
+        CooldownNotified.Clear();
         TriggerLatched.Clear();
+        EmergencyClockStartTS = Utils.TimeStamp;
 
         // 共有物の初期化は Init だけで行う (Add は保持者ごとに走るので、2人目の Add で
         // 1人目が置いたボタンを消してしまう)。前のゲームの CNO は基盤側が始末するので参照を捨てるだけ。
@@ -341,6 +349,21 @@ public class PortalButton : RoleBase
             return;
         }
 
+        // 本物と同じくホストの緊急ボタンクールタイム設定に従う
+        // (ラウンド開始・会議明けから設定秒数のあいだは踏んでも反応しない)。値は per-player の
+        // オプションからではなく素のホスト設定 (RealOptionsData) から引く — ボタンを持ち上げたあとは
+        // per-player 側の EmergencyCooldown が 3600 に上書きされているため (PlayerGameOptionsSender)。
+        int emergencyCooldown = Main.RealOptionsData?.GetInt(Int32OptionNames.EmergencyCooldown) ?? 0;
+        long elapsed = Utils.TimeStamp - EmergencyClockStartTS;
+
+        if (elapsed < emergencyCooldown)
+        {
+            if (CooldownNotified.Add(pc.PlayerId))
+                pc.Notify(string.Format(Translator.GetString("PortalButton.OnCooldown"), emergencyCooldown - elapsed));
+
+            return;
+        }
+
         // 移設されたボタンも「緊急ボタン」なので、ホストの緊急会議回数設定を消費する。
         // NoCheckStartMeeting は ReportDeadBody を通らないので加算は自前で行う
         // (ReportDeadBodyPatch:1160 と同じく未登録は 0 とみなす fail-closed)。
@@ -369,18 +392,23 @@ public class PortalButton : RoleBase
     public override void OnReportDeadBody()
     {
         RefusalNotified.Clear();
+        CooldownNotified.Clear();
     }
 
     public override void AfterMeetingTasks()
     {
         MeetingTriggered = false;
         RefusalNotified.Clear();
+        CooldownNotified.Clear();
 
         // 張り直しは共有物に対する処理なので1会議1回に絞る。ここを絞らないと、保持者が複数居るときと
         // 同一会議で AfterMeetingTasks が複数回走る経路で、同じ座標に CNO が重複生成される。
         int meetingNum = MeetingStates.MeetingNum;
         if (LastRespawnMeetingNum == meetingNum) return;
         LastRespawnMeetingNum = meetingNum;
+
+        // 本物の緊急ボタンと同じく、会議明けからクールタイムを数え直す。
+        EmergencyClockStartTS = Utils.TimeStamp;
 
         // 会議で CNO は Despawn 済み (PortalButtonMarker.OnMeeting)。移設されたボタンは
         // ラウンドを跨いで残る契約なので同じ座標へ張り直す。AfterMeetingTasks は

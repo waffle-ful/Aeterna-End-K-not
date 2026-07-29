@@ -1302,6 +1302,7 @@
   "PortalButton.SomeoneElseHasIt": "Someone else is carrying the button right now",
   "PortalButton.NoUsesLeft": "You can't move the button any more times",
   "PortalButton.SabotageActive": "You can't call a meeting during a sabotage",
+  "PortalButton.OnCooldown": "The emergency button is still cooling down ({0}s left)",
   "PortalButton.ButtonMoved": "The emergency button was moved somewhere else",
   "President": "President",
   "PresidentInfo": "Control The Game",
