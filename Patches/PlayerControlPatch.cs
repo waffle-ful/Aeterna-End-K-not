@@ -135,7 +135,12 @@ internal static class CheckMurderPatch
             // CNO (PlayerId >= 200) は host の AllPlayerControls からは外してあるが、非モッド客のローカルには
             // 残るため client のキルボタンの対象になりうる。Main.PlayerStates に登録が無いので以降の参照が
             // KeyNotFoundException になる (BUG-20260728-05 と同型) — キルごと無効化する
-            if (target.PlayerId >= 200) return false;
+            if (target.PlayerId >= 200)
+            {
+                // ジェミニの分身だけは「キルを吸収して消える」(それ以外の CNO は従来どおり完全に無反応)
+                Gemini.TryAbsorbKill(killer, target);
+                return false;
+            }
 
             AFKDetector.SetNotAFK(killer.PlayerId);
 

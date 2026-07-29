@@ -56,18 +56,47 @@ namespace EndKnot
 
         private bool IsPooled;
 
-        // true なら通常プレイヤーのように振る舞う CNO:
-        //   - AllPlayerControls 残存（vanilla キル対象になる）
-        //   - BodySprite を表示
-        //   - 標準の Shapeshift-text outfit 設定をスキップ
-        //   - MurderPlayer FailedError による非モッド隠蔽をスキップ
-        //   - CachedPlayerData の LocalPlayer 共有をスキップ（自前 Data を使う）
-        // outfit / 名前等は派生クラスの OnAfterCreate で設定する
+        // true なら見た目が通常プレイヤーのように振る舞う CNO:
+        //   - BodySprite を表示 (Color.clear で潰さない)
+        //   - 標準の Shapeshift-text outfit 設定をスキップ (派生が自前 outfit を入れる)
+        //   - EnsureHostVisible でホスト画面の renderer を起こす
+        // outfit / 名前等は派生クラスの OnAfterCreate で設定する。
+        //
+        // ⚠️ 「AllPlayerControls に残るので vanilla のキル対象になる」という記述が以前ここにあったが誤り。
+        // CreateNetObject は IsPlayerLike に関係なく**ホストの** AllPlayerControls から必ず除去する (下記参照)。
+        // そのためホスト権威のキル判定は分身を拾わない。分身をキルさせたい役職は DummySpawner のように
+        // 自前の近接プロキシ判定を持つ必要がある。
+        // (なお非モッド客のローカル AllPlayerControls には残るため、客のキルボタンは分身に反応しうる。
+        //  その要求は CheckMurderPatch の `target.PlayerId >= 200` で拒否される = 空振りする。)
         protected virtual bool IsPlayerLike => false;
 
         // CreateNetObject 完了後に呼ばれる派生クラス用 hook。
         // player-like CNO はここで Utils.RpcChangeSkin 等で個別 outfit を適用する。
         protected virtual void OnAfterCreate() { }
+
+        // Hide() でホスト自身から明示的に隠された CNO は EnsureHostVisible の対象外にする
+        private bool HiddenFromHost;
+
+        // player-like CNO が「非モッド客からは見えるのにホスト画面にだけ映らない」機序への対処。
+        // 2026-07-29 実測 (DummyProbe): body renderer は色もスプライトも正しく、GameObject も active、
+        // 座標もホストから 3.7u の至近なのに `rendererEnabled=False` / `Visible=False` で固定されていた。
+        // CNO は vanilla の spawn 経路を通らない (ホストは自前 Instantiate + AllPlayerControls から除去) ため
+        // ホスト側では Visible が prefab 既定の false のまま残る。非モッド客は spawn 電文を通常処理するので
+        // true になる = 「客には見えてホストだけ見えない」の非対称の正体。
+        // ホストローカルの描画状態を戻すだけなので送信は一切発生しない。
+        protected void EnsureHostVisible()
+        {
+            if (!playerControl || HiddenFromHost) return;
+
+            try
+            {
+                if (!playerControl.Visible) playerControl.Visible = true;
+
+                SpriteRenderer body = playerControl.cosmetics.currentBodySprite.BodySprite;
+                if (body && !body.enabled) body.enabled = true;
+            }
+            catch (Exception e) { Utils.ThrowException(e); }
+        }
 
         // /wcdbg gate プローブ用: 公式鯖キック境界の計測時のみ true にしてクランプを外す
         internal static bool SpriteBudgetBypass;
@@ -342,6 +371,7 @@ namespace EndKnot
             if (player.AmOwner)
             {
                 LateTask.New(() => playerControl.transform.FindChild("Names").FindChild("NameText_TMP").gameObject.SetActive(false), 0.1f);
+                HiddenFromHost = true;
                 playerControl.Visible = false;
                 return false;
             }
@@ -660,6 +690,9 @@ namespace EndKnot
                             snapSender.EndMessage();
                             snapSender.SendMessage();
                         }
+
+                        // outfit 適用 (Shapeshift) の後に置く — SetOutfit が renderer を触りうるため
+                        EnsureHostVisible();
                     }, 0.5f, "CustomNetObject.OnAfterCreate");
                 }
             }

@@ -95,6 +95,11 @@ public class PortalButton : RoleBase
     private bool Holding;
     private long HoldStartTS;
 
+    // このインスタンスの持ち主。GetSuffix で必須 — Utils.BuildSuffix (Modules/Utils.cs:3119-3121) は
+    // 全プレイヤーの役職インスタンスを舐めて GetSuffix を呼ぶので、seer==target と Holding だけでは
+    // 「保持者以外の全員が自分の名前の横に保持者の残り時間を見る」ことになる。
+    private byte OwnerId = byte.MaxValue;
+
     public override bool IsEnable => On;
 
     public override void SetupCustomOption()
@@ -127,6 +132,7 @@ public class PortalButton : RoleBase
     public override void Add(byte playerId)
     {
         On = true;
+        OwnerId = playerId;
         Holding = false;
         HoldStartTS = 0;
         playerId.SetAbilityUseLimit(AbilityUseLimit.GetFloat());
@@ -410,7 +416,8 @@ public class PortalButton : RoleBase
     public override string GetSuffix(PlayerControl seer, PlayerControl target, bool hud = false, bool meeting = false)
     {
         if (meeting) return string.Empty;
-        if (seer.PlayerId != target.PlayerId) return string.Empty;
+        // seer がこのインスタンスの持ち主本人であることまで確認する (BuildSuffix は全インスタンスを舐めるため)
+        if (seer.PlayerId != OwnerId || seer.PlayerId != target.PlayerId) return string.Empty;
         if (!Holding) return string.Empty;
 
         long remain = HoldTimeLimit.GetInt() - (Utils.TimeStamp - HoldStartTS);
