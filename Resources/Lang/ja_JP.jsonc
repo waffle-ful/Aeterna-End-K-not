@@ -9655,7 +9655,7 @@
   "CommandForms.Spectate": "spectate",
   "CommandForms.Start": "start",
   "CommandForms.Summon": "summon",
-  "CommandForms.Swap": "sw,swap,st",
+  "CommandForms.Swap": "sw,swap",
   "CommandForms.TimeLimit": "til,timelimit",
   "CommandForms.BBDiag": "bbdiag",
   "CommandDescription.BBDiag": "(Backroomsデバッグ) ロビー内の全コライダーと ShipOnly レイヤー情報をログに出力する",

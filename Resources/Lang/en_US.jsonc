@@ -10303,7 +10303,7 @@
   "CommandForms.Spectate": "spectate",
   "CommandForms.Start": "start",
   "CommandForms.Summon": "summon",
-  "CommandForms.Swap": "sw,swap,st",
+  "CommandForms.Swap": "sw,swap",
   "CommandForms.TimeLimit": "til,timelimit",
   "CommandForms.BBDiag": "bbdiag",
   "CommandDescription.BBDiag": "(Backrooms debug) Dump every collider under the Backrooms lobby and its ShipOnly layer info to the log",
