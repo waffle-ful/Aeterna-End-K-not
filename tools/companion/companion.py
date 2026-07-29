@@ -1425,6 +1425,40 @@ class AvatarServer:
         headers["Cache-Control"] = "no-store"
         return _WsResponse(status, reason, headers, body)
 
+    # avatar/motions/ に置かれた外部モーション (Mixamo の FBX 等) の索引を作る。
+    # ブラウザからフォルダの中身は覗けないので、サーバ側で列挙して JSON で渡す
+    # (ユーザーはファイルを放り込むだけでよく、一覧ファイルの手編集が要らない)。
+    #   motions/loop/*.fbx   … 常時再生する待機モーション (両方の立ち絵に適用)
+    #   motions/clip/*.fbx   … 単発の身振り
+    #   motions/a/... b/...  … 話者ごと (a = 主役 / b = 相方) に分けたいとき
+    MOTION_EXTS = (".fbx",)
+
+    def _motion_index(self) -> list:
+        root = self.root / "motions"
+        out: list = []
+        if not root.is_dir():
+            return out
+
+        def scan(base: Path, tag) -> None:
+            for kind in ("loop", "clip"):
+                d = base / kind
+                if not d.is_dir():
+                    continue
+                for f in sorted(d.iterdir()):
+                    if f.is_file() and f.suffix.lower() in self.MOTION_EXTS:
+                        out.append({
+                            "tag": tag,
+                            "kind": kind,
+                            "name": f.stem,
+                            "url": f.relative_to(self.root).as_posix(),
+                        })
+
+        scan(root, None)
+        for tag in ("a", "b"):
+            if (root / tag).is_dir():
+                scan(root / tag, tag)
+        return out
+
     def _process_request(self, connection, request):
         # /ws は WebSocket ハンドシェイクへ通す (None を返すと websockets 側が処理)
         try:
@@ -1433,6 +1467,12 @@ class AvatarServer:
             return self._reply(400, "Bad Request", b"bad request")
         if p == "/ws":
             return None
+        if p == "/motions.json":
+            try:
+                body = json.dumps({"motions": self._motion_index()}, ensure_ascii=False).encode("utf-8")
+            except Exception:
+                body = b'{"motions": []}'
+            return self._reply(200, "OK", body, "application/json; charset=utf-8")
         # それ以外は静的ファイル配信 (パストラバーサル防止)
         rel = unquote(p).lstrip("/")
         if rel == "":

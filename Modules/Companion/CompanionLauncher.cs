@@ -254,6 +254,11 @@ public static class CompanionLauncher
 
             if (count == 0)
                 Logger.Warn("Avatar web files not embedded in this build; avatar server will 404", "CompanionLauncher");
+
+            // 外部モーション (Mixamo の FBX 等) の置き場所。中身は同梱しないが、どこに置けばよいか
+            // 分かるよう空フォルダだけ作っておく (loop = 常時再生の待機モーション / clip = 単発の身振り)。
+            foreach (string sub in new[] { "loop", "clip", @"a\loop", @"a\clip", @"b\loop", @"b\clip" })
+                Directory.CreateDirectory(Path.Combine(avatarDir, "motions", sub));
         }
         catch (Exception e) { Logger.Warn($"Avatar materialize failed: {e.Message}", "CompanionLauncher"); }
     }
