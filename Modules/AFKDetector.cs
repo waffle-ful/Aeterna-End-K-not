@@ -42,7 +42,8 @@ public static class AFKDetector
 
     public static void RecordPosition(PlayerControl pc)
     {
-        if (!EnableDetector.GetBool() || !GameStates.IsInTask || !pc || ExemptedPlayers.Contains(pc.PlayerId) || Options.CurrentGameMode is CustomGameMode.SoloPVP or CustomGameMode.FFA or CustomGameMode.HotPotato or CustomGameMode.Speedrun or CustomGameMode.RoomRush or CustomGameMode.Quiz or CustomGameMode.Deathrace) return;
+        // StopAndGo は赤信号中の静止が正規のゲーム性なので他のミニゲーム系モードと同様に除外
+        if (!EnableDetector.GetBool() || !GameStates.IsInTask || !pc || ExemptedPlayers.Contains(pc.PlayerId) || Options.CurrentGameMode is CustomGameMode.SoloPVP or CustomGameMode.FFA or CustomGameMode.HotPotato or CustomGameMode.Speedrun or CustomGameMode.RoomRush or CustomGameMode.Quiz or CustomGameMode.Deathrace or CustomGameMode.StopAndGo) return;
 
         var waitingTime = 10f;
         if (!pc.IsAlive()) waitingTime += 5f;
@@ -63,6 +64,11 @@ public static class AFKDetector
         if (EnableDetector == null || MinPlayersToActivate == null) return;
 
         if (!EnableDetector.GetBool() || !GameStates.IsInTask || ExileController.Instance || Main.AllAlivePlayerControlsCount < MinPlayersToActivate.GetInt() || !PlayerData.TryGetValue(pc.PlayerId, out Data data)) return;
+
+        // 速度が MinSpeed に固定されている間は本人の意思で動けない (Stasis の全員凍結 / Freezer の
+        // 単体凍結など)。動けない人を AFK と数えるとタイマー切れで警告ストームが一斉に走るので、
+        // 凍結中は判定ごと止める (タイマーは進めない)。
+        if (Main.AllPlayerSpeed.TryGetValue(pc.PlayerId, out float speed) && speed <= Main.MinSpeed) return;
 
         if (!FastVector2.DistanceWithinRange(pc.Pos(), data.LastPosition, 0.1f) && !TempIgnoredPlayers.Contains(pc.PlayerId))
         {
@@ -104,7 +110,10 @@ public static class AFKDetector
             }
         }
 
-        if (data.CurrentPhase == Data.Phase.Warning && lastTimer != currentTimer)
+        // 毎秒の刻み直しは AFK 者が複数居ると公式鯖行きの NotifyRoles ストームになる
+        // (2026-07-29 22:30 Hacking キック窓の実体 = 3人同時 Warning ×毎秒2本×19秒)。
+        // カウントダウン表示は5秒刻み+残り3秒のみ毎秒に間引く。
+        if (data.CurrentPhase == Data.Phase.Warning && lastTimer != currentTimer && (currentTimer <= 3 || currentTimer % 5 == 0))
             Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
     }
 
@@ -115,7 +124,14 @@ public static class AFKDetector
             if (ExtendedPlayerControl.BlackScreenWaitingPlayers.Contains(id))
                 ExtendedPlayerControl.CancelBlackScreenFix.Add(id);
 
-            if (PlayerData.Remove(id) | ShieldedPlayers.Remove(id))
+            // Detection フェーズのうちは GetSuffix が空文字 = 全員の画面に何も出ていないので、
+            // 追跡から外すだけで名前の再ブロードキャストはしない (会議明けは全員が RecordPosition
+            // 済みのため、各自の最初の一歩ごとに全員宛て NotifyRoles が N 本流れていた)。
+            bool visibleSuffix = (PlayerData.TryGetValue(id, out Data data) && data.CurrentPhase > Data.Phase.Detection) || ShieldedPlayers.Contains(id);
+            PlayerData.Remove(id);
+            ShieldedPlayers.Remove(id);
+
+            if (visibleSuffix)
                 Utils.NotifyRoles(SpecifyTarget: id.GetPlayer());
         }
         catch (Exception e) { Utils.ThrowException(e); }

@@ -1,4 +1,5 @@
 using AmongUs.GameOptions;
+using EndKnot.Modules;
 using UnityEngine;
 
 namespace EndKnot.Roles;
@@ -30,6 +31,14 @@ internal class Maguro : RoleBase
         GraceTimer = GraceTime.GetFloat();
         IsMoving = true;
         MoveStarted = false;
+
+        // 静止し続けるのが能力なので AFK 検知から外す (Gemini と同じ衝突)
+        AFKDetector.ExemptedPlayers.Add(playerId);
+    }
+
+    public override void Remove(byte playerId)
+    {
+        AFKDetector.ExemptedPlayers.Remove(playerId);
     }
 
     public override void AfterMeetingTasks()
