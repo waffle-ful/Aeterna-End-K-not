@@ -25,19 +25,46 @@ namespace EndKnot
         // vanilla 2026 の GameData PlayerInfo cache は PlayerId をキーに管理。
         // 全 CNO を 254 固定にすると Sandbox のような multi-instance per-player CNO で衝突し、
         // 2 体目以降の Shapeshift-text trick が非モッド受信側で間欠的に反映されない (memory: cno_vanilla_2026_solutions)。
-        // 254→253→...→200→254 と循環させ各 CNO に固有 PlayerId を割り当てる。
         // 範囲 200-254 は実プレイヤー (0-14) と衝突せず、EHR の filter は既に `>= 200` で対応済み。
-        private static byte NextPlayerId = 254;
+        // Despawn 時に Id を返却する解放式リサイクル: 55 枠の上限は「累計 55 回の生成」ではなく
+        // 「同時生存 55 体」。プール中の NaturalDisaster は playerControl が生きているので返却しない。
+        private const byte MinCnoPlayerId = 200;
+        private const byte MaxCnoPlayerId = 254;
+        private const int PlayerIdSlots = MaxCnoPlayerId - MinCnoPlayerId + 1;
+        private static byte NextPlayerId = MaxCnoPlayerId;
+        private static readonly HashSet<byte> UsedPlayerIds = [];
 
         private static byte AllocateNextPlayerId()
         {
-            byte allocated = NextPlayerId;
-            NextPlayerId = NextPlayerId <= 200 ? (byte)254 : (byte)(NextPlayerId - 1);
-            return allocated;
+            for (int i = 0; i < PlayerIdSlots; i++)
+            {
+                byte candidate = NextPlayerId;
+                NextPlayerId = NextPlayerId <= MinCnoPlayerId ? MaxCnoPlayerId : (byte)(NextPlayerId - 1);
+
+                if (UsedPlayerIds.Add(candidate))
+                {
+                    if (UsedPlayerIds.Count >= PlayerIdSlots - 5)
+                        Logger.Warn($"CNO PlayerId running low: {UsedPlayerIds.Count}/{PlayerIdSlots} in use", "CNO.PlayerId");
+
+                    return candidate;
+                }
+            }
+
+            // 55 枠すべて生存中の CNO が保持 = 枯渇。旧来の盲目的循環に退行し、衝突覚悟で払い出す
+            // (非モッド客側で Shapeshift-text の見た目が同 Id の CNO と混線しうるが、spawn 自体は成立する)。
+            byte fallback = NextPlayerId;
+            NextPlayerId = NextPlayerId <= MinCnoPlayerId ? MaxCnoPlayerId : (byte)(NextPlayerId - 1);
+            Logger.Error($"CNO PlayerId exhausted: all {PlayerIdSlots} ids ({MinCnoPlayerId}-{MaxCnoPlayerId}) held by live CNOs, reusing {fallback} (sprite mixups possible on unmodded clients)", "CNO.PlayerId");
+            return fallback;
         }
 
         protected int Id;
         public PlayerControl playerControl;
+
+        // この CNO が保持している循環 PlayerId。Despawn での返却は playerControl の生死に依存させない
+        // (シーン遷移で Unity 側が先に破壊すると playerControl は fake-null になり、
+        //  playerControl.PlayerId 経由の返却では枠がリークするため自前で持つ)。
+        private byte? AllocatedPlayerId;
         public Vector2 Position;
         private string Sprite;
 
@@ -247,6 +274,8 @@ namespace EndKnot
 
                 playerControl = pooled.playerControl;
                 Id = pooled.Id;
+                AllocatedPlayerId = pooled.AllocatedPlayerId;
+                pooled.AllocatedPlayerId = null;
                 IsPooled = false;
 
                 AllObjects.Remove(pooled);
@@ -300,6 +329,12 @@ namespace EndKnot
                 }
                 
                 AllObjects.Remove(this);
+
+                if (AllocatedPlayerId is { } pid)
+                {
+                    UsedPlayerIds.Remove(pid);
+                    AllocatedPlayerId = null;
+                }
             }
             catch (Exception e) { Utils.ThrowException(e); }
         }
@@ -461,7 +496,8 @@ namespace EndKnot
                 var qa = DataFlagRateLimiter.Enqueue(() =>
                 {
                     playerControl = Object.Instantiate(AmongUsClient.Instance.PlayerPrefab, Vector2.zero, Quaternion.identity);
-                    playerControl.PlayerId = AllocateNextPlayerId();
+                    AllocatedPlayerId = AllocateNextPlayerId();
+                    playerControl.PlayerId = AllocatedPlayerId.Value;
                     playerControl.isNew = false;
                     playerControl.notRealPlayer = true;
 
@@ -736,6 +772,7 @@ namespace EndKnot
             {
                 AllObjects.ToArray().Do(x => x.Despawn(canPool: false));
                 AllObjects.Clear();
+                UsedPlayerIds.Clear(); // Despawn を経ずに破壊された CNO の枠リークをゲーム境界で必ず回収する
             }
             catch (Exception e) { Utils.ThrowException(e); }
         }
