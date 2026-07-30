@@ -380,6 +380,9 @@ namespace EndKnot
                 {
                     messages = 0;
                     packedWriter.EndMessage();
+                    // ⚠️ この経路も CustomRpcSender を通らないので、自力で登録しないと切断診断の
+                    // 送信内訳 (DCTX/DCTAG) から丸ごと消える (RpcSetCnoName と同じ罠)。
+                    HealthLog.RecordHostAction("CNO.Hide", packedWriter.Length, "Reliable");
                     AmongUsClient.Instance.SendOrDisconnect(packedWriter);
                     packedWriter.Clear(SendOption.Reliable);
                     packedWriter.StartMessage(26);
@@ -393,6 +396,7 @@ namespace EndKnot
             if (messages > 0)
             {
                 packedWriter.EndMessage();
+                HealthLog.RecordHostAction("CNO.Hide", packedWriter.Length, "Reliable");
                 AmongUsClient.Instance.SendOrDisconnect(packedWriter);
             }
             
@@ -559,6 +563,7 @@ namespace EndKnot
                     msg.EndMessage();
                     // このメッセージは spawn 本体でスプライトを含まない (スプライトは後段の Shapeshift-text ブロックで送る)。
                     WarnPacketSize($"CreateNetObject({GetType().Name}) spawn-only", null, msg.Length);
+                    HealthLog.RecordHostAction("CNO.Spawn", msg.Length, "Reliable");
                     AmongUsClient.Instance.SendOrDisconnect(msg);
                     msg.Recycle();
                 });
@@ -587,6 +592,12 @@ namespace EndKnot
                 if (PlayerControl.AllPlayerControls.Count > 1)
                 {
                     int messages = 0;
+                    // ⚠️ 計器 (BUG-20260730-11): このループは「非ホスト人数ぶんの tag6」を 1 つの t26 エンベロープに
+                    // 詰めるため、players=2 でも players=9 でも **パケット本数もバイト数もほとんど変わらない**
+                    // (8人でも ~360B で :603 の 500B 閾値に届かない)。人数比例で唯一増えるのが下の targets
+                    // なので、キック有無を分けている変数を実測で残しておく。
+                    int targets = 0;
+                    int envelopes = 1;
                     MessageWriter stream = MessageWriter.Get(SendOption.Reliable);
                     stream.StartMessage(26);
                     stream.WritePacked(AmongUsClient.Instance.GameId);
@@ -598,10 +609,15 @@ namespace EndKnot
                         if (stream.Length > 500 || messages + 3 > AmongUsClient.Instance.GetMaxMessagePackingLimit())
                         {
                             stream.EndMessage();
-                            qa = DataFlagRateLimiter.Enqueue(() => AmongUsClient.Instance.SendOrDisconnect(stream), cleanup: stream.Recycle);
+                            qa = DataFlagRateLimiter.Enqueue(() =>
+                            {
+                                HealthLog.RecordHostAction("CNO.SpawnVisibility", stream.Length, "Reliable");
+                                AmongUsClient.Instance.SendOrDisconnect(stream);
+                            }, cleanup: stream.Recycle);
                             yield return qa.Wait();
                             if (qa.Dropped) yield break;
                             messages = 0;
+                            envelopes++;
                             stream.Clear(SendOption.Reliable);
                             stream.StartMessage(26);
                             stream.WritePacked(AmongUsClient.Instance.GameId);
@@ -627,10 +643,16 @@ namespace EndKnot
                         stream.EndMessage();
 
                         messages += 3;
+                        targets++;
                     }
 
                     stream.EndMessage();
-                    qa = DataFlagRateLimiter.Enqueue(() => AmongUsClient.Instance.SendOrDisconnect(stream));
+                    Logger.Info($"CNO.SpawnVisibility {GetType().Name}: targets={targets} envelopes={envelopes} lastLen={stream.Length} packingLimit={AmongUsClient.Instance.GetMaxMessagePackingLimit()}", "CNO.CreateNetObject");
+                    qa = DataFlagRateLimiter.Enqueue(() =>
+                    {
+                        HealthLog.RecordHostAction("CNO.SpawnVisibility", stream.Length, "Reliable");
+                        AmongUsClient.Instance.SendOrDisconnect(stream);
+                    });
                     yield return qa.Wait();
                     stream.Recycle();
                     if (qa.Dropped) yield break;
