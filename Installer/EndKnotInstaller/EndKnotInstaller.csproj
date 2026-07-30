@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>WinExe</OutputType>
+        <TargetFramework>net8.0-windows</TargetFramework>
+        <UseWPF>true</UseWPF>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <AssemblyName>EndKnotInstaller</AssemblyName>
+        <RootNamespace>EndKnotInstaller</RootNamespace>
+        <ApplicationManifest>app.manifest</ApplicationManifest>
+        <Version>1.0.0</Version>
+        <!-- 配布用: dotnet publish -c Release -r win-x64 (self-contained, PublishSingleFile=true) -->
+        <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+        <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+        <!-- InvariantGlobalization は WPF 非対応 — 有効にすると ComboBox 操作で
+             "Cannot find non-neutral culture related to 'en-us'" の即死クラッシュ (2026-07-31 実機再現) -->
+    </PropertyGroup>
+
+</Project>

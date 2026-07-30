@@ -36,6 +36,10 @@
         <Compile Remove="CTA\**"/>
         <EmbeddedResource Remove="CTA\**"/>
         <None Remove="CTA\**"/>
+        <!-- インストーラー (Installer/EndKnotInstaller) は別 WPF アプリ — 本体ビルドから除外 -->
+        <Compile Remove="Installer\**"/>
+        <EmbeddedResource Remove="Installer\**"/>
+        <None Remove="Installer\**"/>
         <!-- 純ロジック向けユニットテスト (tests/EndKnot.Tests) は別プロジェクト — 本体ビルドから除外 -->
         <Compile Remove="tests\**"/>
         <EmbeddedResource Remove="tests\**"/>
