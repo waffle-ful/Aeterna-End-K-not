@@ -286,11 +286,11 @@ public class ToiletMaster : RoleBase
         catch { PlayersUsingToilet.Remove(playerId); }
     }
 
-    public override void AfterMeetingTasks()
-    {
-        if (ToiletVisible == ToiletVisibilityOptions.AfterMeeting)
-            Toilets.Values.Do(x => x.NetObject = new(Toilets.GetKeyByValue((x.NetObject, x.Uses, x.PlaceTimeStamp)), []));
-    }
+    // AfterMeeting 表示のための張り直しはここでは行わない。基底 CustomNetObject.OnMeeting() が
+    // 会議で Despawn したあと hideFrom 無し (= 全員に見える) で同じ座標に再生成するので、
+    // それだけで「会議のあとに見えるようになる」という設定の意図は満たされる。
+    // 以前ここにあった Toilets.Values.Do(x => x.NetObject = new(...)) は、ValueTuple が値コピーで
+    // 渡るため辞書には書き戻らず、追跡されない重複トイレを生むだけだった (基底との二重再生成)。
 
     private static Color GetPoopColor(Poop poop)
     {

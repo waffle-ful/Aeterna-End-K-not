@@ -72,7 +72,12 @@ public class Entombed : IAddon
         
         if (now - MeetingEndTS <= GracePeriodLength)
         {
-            Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
+            // 猶予の残り秒数は整数表示なので毎秒だけ送る。以前は毎 tick 呼んでいて、
+            // 実質1本/秒に収まっていたのは CustomRpcSender 側の LastNotifyNames 内容 dedup
+            // という別モジュールの実装詳細に依存していただけだった (明示のガードにしておく)。
+            if (PerSecondUpdateScheduler.ShouldRunUpdate(pc.PlayerId))
+                Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
+
             return;
         }
 

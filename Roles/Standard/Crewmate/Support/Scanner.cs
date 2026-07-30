@@ -1,6 +1,7 @@
 ﻿using AmongUs.GameOptions;
 using System.Collections.Generic;
 using System.Diagnostics;
+using EndKnot.Modules;
 using EndKnot.Modules.Extensions;
 using UnityEngine;
 using static EndKnot.Translator;
@@ -83,7 +84,12 @@ public class Scanner : RoleBase
                     InRangeTimers[apc.PlayerId] = Stopwatch.StartNew();
 
                 float time = TimeLimit.GetFloat();
-                apc.Notify(string.Format(GetString("ScannerWarningInRange"), Mathf.Round(InRangeTimers[apc.PlayerId].GetRemainingTime((int)time))), time: 1f, overrideAll: true);
+
+                // 残り秒数は整数表示なので毎 tick 送る必要が無い (兄弟の Spider / Catcher / Druid は
+                // 同じ「距離判定 → Notify」構造で既に間引き済み)。表示時間はゲートの周期 (~0.6s) を
+                // 下回ると通知が瞬くので 1f → 2f に伸ばす。
+                if (PerSecondUpdateScheduler.ShouldRunUpdate(apc.PlayerId))
+                    apc.Notify(string.Format(GetString("ScannerWarningInRange"), Mathf.Round(InRangeTimers[apc.PlayerId].GetRemainingTime((int)time))), time: 2f, overrideAll: true);
 
                 if (InRangeTimers[apc.PlayerId].Elapsed.TotalSeconds >= time)
                 {
