@@ -713,7 +713,7 @@ public class AudienceCutscene : MonoBehaviour
         {
             _fillTex = new Texture2D(1, 1, TextureFormat.RGBA32, false) { filterMode = FilterMode.Point };
             _fillTex.SetPixel(0, 0, Color.white);
-            _fillTex.Apply();
+            _fillTex.Apply(true, true);
             _fillTex.hideFlags |= HideFlags.HideAndDontSave;
         }
 

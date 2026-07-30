@@ -164,8 +164,8 @@ public static class CalamityLogo
             pixels[y * size + x] = new Color(1f, 0.55f, 0.2f, a);
         }
         tex.SetPixels(pixels);
-        tex.Apply();
-        return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), size);
+        tex.Apply(true, true);
+        return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), size, 0, SpriteMeshType.FullRect);
     }
 
     private static GameObject FindAULogo()

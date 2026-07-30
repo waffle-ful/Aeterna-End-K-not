@@ -463,9 +463,9 @@ public static class CalamitySky
             pixels[y * w + x] = new Color(1f, 0.85f, 0.6f, alpha);
         }
         tex.SetPixels(pixels);
-        tex.Apply();
+        tex.Apply(true, true);
         // ppu=w → 自然幅=1unit・高さ=0.25unit。pivot 右端中央。
-        return Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(1f, 0.5f), w);
+        return Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(1f, 0.5f), w, 0, SpriteMeshType.FullRect);
     }
 
     private static Sprite MakeCircleSprite(int radius, Color color)
@@ -486,8 +486,8 @@ public static class CalamitySky
             }
         }
         tex.SetPixels(pixels);
-        tex.Apply();
-        return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), size);
+        tex.Apply(true, true);
+        return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), size, 0, SpriteMeshType.FullRect);
     }
 
     private static Sprite MakeSolidSprite(Color tint)
@@ -496,8 +496,8 @@ public static class CalamitySky
         var pixels = new Color[16];
         for (int i = 0; i < 16; i++) pixels[i] = tint;
         tex.SetPixels(pixels);
-        tex.Apply();
-        return Sprite.Create(tex, new Rect(0, 0, 4, 4), new Vector2(0.5f, 0.5f), 4);
+        tex.Apply(true, true);
+        return Sprite.Create(tex, new Rect(0, 0, 4, 4), new Vector2(0.5f, 0.5f), 4, 0, SpriteMeshType.FullRect);
     }
 
     // 火球/煙用のふわっとした塊: 中心が濃く縁へ滑らかに消える (white 基調・色は SpriteRenderer で着色)。
@@ -517,8 +517,8 @@ public static class CalamitySky
             pixels[y * size + x] = new Color(1f, 1f, 1f, a);
         }
         tex.SetPixels(pixels);
-        tex.Apply();
-        return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), size);
+        tex.Apply(true, true);
+        return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), size, 0, SpriteMeshType.FullRect);
     }
 
     // 衝撃波リング: 中間半径にピークを持つ環。内外へ滑らかに 0 へ落ちる。
@@ -540,7 +540,7 @@ public static class CalamitySky
             pixels[y * size + x] = new Color(1f, 1f, 1f, a);
         }
         tex.SetPixels(pixels);
-        tex.Apply();
-        return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), size);
+        tex.Apply(true, true);
+        return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), size, 0, SpriteMeshType.FullRect);
     }
 }

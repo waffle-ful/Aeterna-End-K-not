@@ -230,7 +230,7 @@ public class AudienceInfoBubble : MonoBehaviour
     {
         var tex = new Texture2D(1, 1, TextureFormat.RGBA32, false) { filterMode = FilterMode.Point };
         tex.SetPixel(0, 0, c);
-        tex.Apply();
+        tex.Apply(true, true);
         tex.hideFlags |= HideFlags.HideAndDontSave;
         return tex;
     }

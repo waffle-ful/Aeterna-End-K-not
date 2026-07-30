@@ -112,8 +112,8 @@ public static class HitboxDebug
             Color[] pixels = new Color[16];
             for (var i = 0; i < 16; i++) pixels[i] = Color.white;
             tex.SetPixels(pixels);
-            tex.Apply();
-            _markerSprite = Sprite.Create(tex, new Rect(0, 0, 4, 4), new Vector2(0.5f, 0.5f), 4f);
+            tex.Apply(true, true);
+            _markerSprite = Sprite.Create(tex, new Rect(0, 0, 4, 4), new Vector2(0.5f, 0.5f), 4f, 0, SpriteMeshType.FullRect);
             _markerSprite.hideFlags |= HideFlags.HideAndDontSave;
             return _markerSprite;
         }

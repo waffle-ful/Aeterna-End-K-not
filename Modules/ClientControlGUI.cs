@@ -257,7 +257,7 @@ public class ClientControlGUI : MonoBehaviour
                 tex.SetPixel(px, py, c);
             }
         }
-        tex.Apply();
+        tex.Apply(true, true);
         tex.hideFlags = HideFlags.HideAndDontSave;
         return tex;
     }

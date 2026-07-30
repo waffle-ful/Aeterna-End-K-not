@@ -23,9 +23,9 @@ public static class RoleMenuTabBar
         if (_solidSprite != null) return _solidSprite;
         var tex = new Texture2D(1, 1, TextureFormat.RGBA32, false) { filterMode = FilterMode.Point };
         tex.SetPixel(0, 0, Color.white);
-        tex.Apply();
+        tex.Apply(true, true);
         tex.hideFlags = HideFlags.HideAndDontSave;
-        _solidSprite = Sprite.Create(tex, new Rect(0f, 0f, 1f, 1f), new Vector2(0.5f, 0.5f), 1f);
+        _solidSprite = Sprite.Create(tex, new Rect(0f, 0f, 1f, 1f), new Vector2(0.5f, 0.5f), 1f, 0, SpriteMeshType.FullRect);
         _solidSprite.hideFlags = HideFlags.HideAndDontSave;
         return _solidSprite;
     }
@@ -45,9 +45,9 @@ public static class RoleMenuTabBar
                 tex.SetPixel(px, py, new Color(1f, 1f, 1f, a));
             }
         }
-        tex.Apply();
+        tex.Apply(true, true);
         tex.hideFlags = HideFlags.HideAndDontSave;
-        var spr = Sprite.Create(tex, new Rect(0f, 0f, w, h), new Vector2(0.5f, 0.5f), Mathf.Max(w, h));
+        var spr = Sprite.Create(tex, new Rect(0f, 0f, w, h), new Vector2(0.5f, 0.5f), Mathf.Max(w, h), 0, SpriteMeshType.FullRect);
         spr.hideFlags = HideFlags.HideAndDontSave;
         return spr;
     }

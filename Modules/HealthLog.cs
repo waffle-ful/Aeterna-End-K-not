@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using HarmonyLib;
 using InnerNet;
+using UnityEngine;
 
 namespace EndKnot.Modules;
 
@@ -24,6 +25,8 @@ public static class HealthLog
     private static long LastBeatTs;
     private static long LastTickTs; // 直近 Tick の実時間(フレームストール検出用。heartbeat grid とは独立に毎フレーム更新)
     private static int _lastGc0Count, _lastGc2Count; // 直近 Tick 時点の GC 回数 (framestall の GC 帰属計器)
+    private static bool _lastFullScreen;
+    private static int _lastScreenW, _lastScreenH; // 直近 Tick 時点の画面モード (reschg⇔framestall 相関計器)
     private static long LastNormalLogTs;
     private static string LastState = "?";
     private static System.Diagnostics.Process Proc;
@@ -192,6 +195,19 @@ public static class HealthLog
         LastTickTs = now;
         _lastGc0Count = GC.CollectionCount(0);
         _lastGc2Count = GC.CollectionCount(2);
+
+        // フルスクリーン切替/解像度変更の帰属計器 (BUG-20260729-17 系: ユーザー仮説「全画面切替→3-4秒スタッター」の
+        // 1-bit 検証用)。切替ストール中は Tick 自体が止まるため、切替検知行は解除フレームで framestall ANOM と
+        // 同時に flush される — reschg 行と framestall 行の t= 一致/近接が「切替起因」の判定条件。
+        if (Screen.fullScreen != _lastFullScreen || Screen.width != _lastScreenW || Screen.height != _lastScreenH)
+        {
+            if (_lastScreenW != 0)
+                NoteAnom($"ANOM live kind=reschg fs={_lastFullScreen}->{Screen.fullScreen} res={_lastScreenW}x{_lastScreenH}->{Screen.width}x{Screen.height} t={now}");
+
+            _lastFullScreen = Screen.fullScreen;
+            _lastScreenW = Screen.width;
+            _lastScreenH = Screen.height;
+        }
 
         // 早期警報テレメトリは HB の 5 秒 grid を待たず 1/sec で回す(SnapTo 枯渇・例外洪水はより早い検知が要る)。
         if (PerSecondUpdateScheduler.ShouldRunUpdate("earlywarning-tick"))

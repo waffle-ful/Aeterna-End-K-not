@@ -196,8 +196,8 @@ public static class BackroomsLobby
             Color[] pixels = new Color[16];
             for (int i = 0; i < 16; i++) pixels[i] = Color.white;
             tex.SetPixels(pixels);
-            tex.Apply();
-            _baselineSprite = Sprite.Create(tex, new Rect(0, 0, 4, 4), new Vector2(0.5f, 0.5f), 4f);
+            tex.Apply(true, true);
+            _baselineSprite = Sprite.Create(tex, new Rect(0, 0, 4, 4), new Vector2(0.5f, 0.5f), 4f, 0, SpriteMeshType.FullRect);
             _baselineSprite.hideFlags |= HideFlags.HideAndDontSave;
             return _baselineSprite;
         }
@@ -218,8 +218,8 @@ public static class BackroomsLobby
             for (int x = 0; x < N; x++)
                 pixels[y * N + x] = y >= N - 3 ? depth : body; // 上 3 列を厚みに
             tex.SetPixels(pixels);
-            tex.Apply();
-            _wallSpriteH = Sprite.Create(tex, new Rect(0, 0, N, N), new Vector2(0.5f, 0.5f), N);
+            tex.Apply(true, true);
+            _wallSpriteH = Sprite.Create(tex, new Rect(0, 0, N, N), new Vector2(0.5f, 0.5f), N, 0, SpriteMeshType.FullRect);
             _wallSpriteH.hideFlags |= HideFlags.HideAndDontSave;
             return _wallSpriteH;
         }
@@ -245,8 +245,8 @@ public static class BackroomsLobby
                     px[y * N + x] = new Color(1f, 1f, 1f, a);
             }
             tex.SetPixels(px);
-            tex.Apply();
-            _wallShadowGradientSprite = Sprite.Create(tex, new Rect(0, 0, N, N), new Vector2(0.5f, 0.5f), N);
+            tex.Apply(true, true);
+            _wallShadowGradientSprite = Sprite.Create(tex, new Rect(0, 0, N, N), new Vector2(0.5f, 0.5f), N, 0, SpriteMeshType.FullRect);
             _wallShadowGradientSprite.hideFlags |= HideFlags.HideAndDontSave;
             return _wallShadowGradientSprite;
         }
@@ -273,8 +273,8 @@ public static class BackroomsLobby
                     px[y * N + x] = new Color(1f, 1f, 1f, a);
             }
             tex.SetPixels(px);
-            tex.Apply();
-            _wallShadowGradientHSprite = Sprite.Create(tex, new Rect(0, 0, N, N), new Vector2(0.5f, 0.5f), N);
+            tex.Apply(true, true);
+            _wallShadowGradientHSprite = Sprite.Create(tex, new Rect(0, 0, N, N), new Vector2(0.5f, 0.5f), N, 0, SpriteMeshType.FullRect);
             _wallShadowGradientHSprite.hideFlags |= HideFlags.HideAndDontSave;
             return _wallShadowGradientHSprite;
         }
@@ -305,8 +305,8 @@ public static class BackroomsLobby
                 px[y * N + x] = new Color(1f, 1f, 1f, a);
             }
             tex.SetPixels(px);
-            tex.Apply();
-            _stainSprite = Sprite.Create(tex, new Rect(0, 0, N, N), new Vector2(0.5f, 0.5f), N);
+            tex.Apply(true, true);
+            _stainSprite = Sprite.Create(tex, new Rect(0, 0, N, N), new Vector2(0.5f, 0.5f), N, 0, SpriteMeshType.FullRect);
             _stainSprite.hideFlags |= HideFlags.HideAndDontSave;
             return _stainSprite;
         }
