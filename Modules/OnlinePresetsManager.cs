@@ -106,6 +106,15 @@ public static class OnlinePresetsManager
 
             if (freshRow)
             {
+                // 行の組み立ては行単位で隔離する。FindChild が null を返せば .gameObject で NRE、PlusBtn/
+                // MinusBtn に TMP が無ければ DestroyTranslator で NRE — どれもループごと中断させ、この index
+                // 以降の行が一切作られないまま抜けてしまう。しかも OptionBehaviourCache への登録はループ末尾
+                // (:180) なので失敗した index はキャッシュされず、**毎回同じ所で落ち続ける** (= 一覧の途中
+                // から先がアプリ再起動まで永久欠落)。さらにループ後の scrollBar 範囲と ControllerSelectable
+                // 登録も飛ぶ。BUG-20260725-02 (設定検索欄) と同型の「付随処理の失敗が本処理を道連れにする」
+                // 構造なので、壊れた行だけ捨てて次の行へ進む。
+                try
+                {
                 Object.Destroy(row.transform.FindChild("Value_TMP (1)").gameObject);
                 Object.Destroy(row.transform.FindChild("ValueBox").gameObject);
 
@@ -173,6 +182,13 @@ public static class OnlinePresetsManager
                 minusText.DestroyTranslator();
                 minusText.text = "▶";
                 row.TitleText.DestroyTranslator();
+                }
+                catch (Exception e)
+                {
+                    Logger.Warn($"preset row [{index}] build failed ({e.Message}) — dropping this row and continuing", "OnlinePresets");
+                    if (row) Object.Destroy(row.gameObject);
+                    continue;
+                }
             }
             row.gameObject.SetActive(true);
 
