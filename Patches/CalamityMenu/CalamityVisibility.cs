@@ -173,10 +173,42 @@ public static class CalamityVisibility
         _accountManager = null;
     }
 
+    // メニュー構築時に BACK ボタンを先に作って非表示で置いておく。
+    //
+    // 以前はクリックされて初めて生成していたが、その CreateBackButton 内の
+    // AddComponent<TextMeshPro>() でメインスレッドが native 側 (IL2CPP/TMP 初期化) に
+    // 入ったまま戻らず、ゲームが丸ごと固まることがあった (2026-07-30 のハングダンプで
+    // スタック確定。番犬が心拍途絶で強制終了・再起動していた症状の正体)。
+    // メニュー構築中の AddComponent<TextMeshPro>() はロゴ・各ボタン・フェードインなどで
+    // 常時8箇所走って毎回無事に完走しているので、生成をその安全な時点へ寄せて、
+    // クリック経路には SetActive しか残さない。
+    public static void PrepareBackButton()
+    {
+        if (_backButton != null) return;
+
+        CreateBackButton();
+        if (_backButton == null) return;
+
+        // TMP のメッシュ再構築は LateUpdate まで遅延されるので、伏せる前に一度作らせておく
+        // (repo の既存作法 — 遅延表示する TMP は ForceMeshUpdate を明示する)
+        ForceBackButtonMesh();
+        _backButton.SetActive(false);
+    }
+
     private static void ShowBackButton()
     {
+        // 構築時に作れていなかった場合の保険。通常は PrepareBackButton で既に存在する。
         if (_backButton == null) CreateBackButton();
-        else _backButton.SetActive(true);
+        if (_backButton == null) return;
+
+        if (!_backButton.activeSelf) ForceBackButtonMesh();
+        _backButton.SetActive(true);
+    }
+
+    private static void ForceBackButtonMesh()
+    {
+        var tmp = _backButton.GetComponent<TextMeshPro>();
+        if (tmp != null) tmp.ForceMeshUpdate();
     }
 
     private static void CreateBackButton()
