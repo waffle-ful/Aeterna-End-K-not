@@ -518,6 +518,8 @@ internal static class OnPlayerJoinedPatch
     {
         Logger.Info($"{client.PlayerName} (ClientID: {client.Id} / FriendCode: {client.FriendCode} / Hashed PUID: {client.GetHashedPuid()}) joined the lobby", "Session");
 
+        GameStartManagerPatch.ClientJoinTime[client.Id] = Time.time;
+
         try { EndKnot.Modules.ClaudeBridge.OnPlayerJoined(client); } catch { } // ブリッジ OFF 時は即 return する軽量フック
         try { EndKnot.Modules.Companion.CompanionEventEmitter.OnPlayerJoin(client.PlayerName); } catch { } // AI実況相棒アプリ向けイベント (OFF 時は即 return)
 
@@ -611,6 +613,8 @@ internal static class OnPlayerLeftPatch
 
         try
         {
+            if (data != null) GameStartManagerPatch.ClientJoinTime.Remove(data.Id);
+
             if (AmongUsClient.Instance.AmHost && data != null && data.Character)
             {
                 byte leftId = data.Character.PlayerId;

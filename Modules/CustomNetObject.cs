@@ -359,6 +359,10 @@ namespace EndKnot
             writer.Write(name);
             writer.Write(false);
             EarlyWarning.OnPacket("RpcSetCnoName", writer.Length, writer.Length, "Reliable");
+            // ⚠️ この経路は CustomRpcSender を通らないので、切断診断の送信内訳 (DCTX/DCTAG) に
+            // 自力で名前を登録しないと丸ごと見えない。CNO 1 体につき 1 本出るため、
+            // 内訳の合計が実測本数に届かない原因になっていた。
+            HealthLog.RecordHostAction("RpcSetCnoName", writer.Length, "Reliable");
             AmongUsClient.Instance.FinishRpcImmediately(writer);
         }
 
@@ -473,6 +477,13 @@ namespace EndKnot
             if (GameStates.IsEnded || !AmongUsClient.Instance.AmHost || TryReusePooledObject(sprite, position)) return;
             
             Logger.Info($" Create Custom Net Object {GetType().Name} (ID {MaxId + 1}) at {position} - Time since game start: {Utils.TimeStamp - IntroCutsceneDestroyPatch.IntroDestroyTS}s", "CNO.CreateNetObject");
+
+            // spawn コルーチンは開始待ち + 順送りで 20 秒超ブロックしうる。その間 Position が既定の
+            // (0,0) のままだと呼出側の距離判定がマップ原点を見る (BedWars のショップ/資源生成器/ベッド
+            // 範囲、CTF の旗拾いが全て機能しない)。フィールドだけは同期的に確定させておく。
+            Position = position;
+            Sprite = sprite;
+
             Main.Instance.StartCoroutine(CoRoutine());
             return;
             
@@ -480,18 +491,34 @@ namespace EndKnot
             {
                 bool tooEarly = !Main.IntroDestroyed || Utils.TimeStamp - IntroCutsceneDestroyPatch.IntroDestroyTS < 10;
 
-                if (Options.CurrentGameMode == CustomGameMode.Standard && (!GameStates.InGame || tooEarly))
+                // ⚠️ 「開始直後は出さない」待ちは**全ゲームモード**に効かせる (2026-07-30)。上流はこの安全弁を
+                // Standard 限定にしていたため、BedWars はマップ設置物 (Polus でベッド4+ショップ8+資源生成器14 =
+                // 26 体) を intro 終了 5 秒後に一斉スポーンし、公式鯖に reason=Hacking で蹴られていた。
+                if (GameStates.InGame && tooEarly)
                 {
-                    if (GameStates.InGame && tooEarly)
-                    {
-                        Logger.Info("Delaying CNO Spawn", "CustomNetObject.CreateNetObject");
-                        while (GameStates.InGame && !GameStates.IsEnded && (!Main.IntroDestroyed || Utils.TimeStamp - IntroCutsceneDestroyPatch.IntroDestroyTS < 10)) yield return null;
-                        yield return new WaitForSecondsRealtime(3f);
-                        if (!GameStates.InGame || GameStates.IsEnded || GameStates.IsMeeting || ExileController.Instance || AntiBlackout.SkipTasks) yield break;
-                    }
-                    else
-                        yield break;
+                    Logger.Info("Delaying CNO Spawn", "CustomNetObject.CreateNetObject");
+                    while (GameStates.InGame && !GameStates.IsEnded && (!Main.IntroDestroyed || Utils.TimeStamp - IntroCutsceneDestroyPatch.IntroDestroyTS < 10)) yield return null;
+                    yield return new WaitForSecondsRealtime(3f);
+                    // 待ちが明けると溜まっていた生成要求が同一フレームで揃って走るので、会議明けの
+                    // 復活 (RespawnSlot) と同じく順送りにして 1 秒あたりの spawn 本数を平す。
+                    yield return new WaitForSecondsRealtime(StartSpawnSlot++ % StartSpawnStaggerSlots * StartSpawnStaggerStep);
+
+                    // ⚠️ ここで会議を理由に yield break してはいけない。BedWars の AllNetObjects /
+                    // CTF の TeamData は「生成要求を出した時点」でラッパーを保持しているので、中断すると
+                    // playerControl を持たないまま永久放置される (AllObjects に一度も載らないため
+                    // OnMeeting() の復活対象にも入らない = そのベッド/ショップ/旗が試合中ずっと出ない)。
+                    // 中断ではなく会議明けまで延期するのが正しい。
+                    // 待ちは必ず有限にする: ExileController.Instance は追放画面が上書きされた経路で
+                    // null に戻らないことがあり、無限 spin にすると「永久に出ない」を別の扉から作り直す。
+                    // 時間切れ時は会議中でもスポーンを通す (会議中スポーンより永久欠落の方が重い)。
+                    float waitDeadline = Time.realtimeSinceStartup + 30f;
+                    while (GameStates.InGame && !GameStates.IsEnded && Time.realtimeSinceStartup < waitDeadline &&
+                           (GameStates.IsMeeting || ExileController.Instance || AntiBlackout.SkipTasks)) yield return null;
+
+                    if (!GameStates.InGame || GameStates.IsEnded) yield break;
                 }
+                else if (Options.CurrentGameMode == CustomGameMode.Standard && !GameStates.InGame)
+                    yield break;
 
                 var qa = DataFlagRateLimiter.Enqueue(() =>
                 {
@@ -744,6 +771,24 @@ namespace EndKnot
         private const float RespawnStaggerStep = 0.15f;
         private const int RespawnStaggerSlots = 20;
 
+        // ゲーム開始直後の一斉スポーン用の順送りスロット (会議明けの RespawnSlot と同じ役目)。
+        // BedWars は Polus で 26 体を 1 フレームで要求するため、20 スロットでは巻き戻って
+        // 先頭と重なる。40 枠 × 0.2s = 最大 8 秒に伸ばして 1 秒あたり 5 本に抑える。
+        private static int StartSpawnSlot;
+
+        private const float StartSpawnStaggerStep = 0.2f;
+        private const int StartSpawnStaggerSlots = 40;
+
+        // 会議明けフック (AfterMeetingTasks) から遅延生成される CNO (Plant/Seed/SoulObject) 用の
+        // 順送りスロット。役職フックは保持者ごとに呼ばれるため、per-instance の連番だと Maximum>1 で
+        // 「各保持者の i 体目」が同じティックに重なる (DummySpawner で潰したのと同じ罠)。
+        // static で保持者を跨いで通し番号にし、会議サイクルごとに AfterMeeting() で振り直す。
+        private static int DeferredSpawnSlot;
+
+        private const float DeferredSpawnStaggerStep = 0.05f;
+
+        internal static float NextDeferredSpawnDelay() => DeferredSpawnSlot++ * DeferredSpawnStaggerStep;
+
         public virtual void OnMeeting()
         {
             if (!AmongUsClient.Instance.AmHost) return;
@@ -789,6 +834,8 @@ namespace EndKnot
                 AllObjects.ToArray().Do(x => x.Despawn(canPool: false));
                 AllObjects.Clear();
                 RespawnSlot = 0;
+                StartSpawnSlot = 0;
+                DeferredSpawnSlot = 0;
                 UsedPlayerIds.Clear(); // Despawn を経ずに破壊された CNO の枠リークをゲーム境界で必ず回収する
             }
             catch (Exception e) { Utils.ThrowException(e); }
@@ -796,6 +843,7 @@ namespace EndKnot
 
         public static void AfterMeeting()
         {
+            DeferredSpawnSlot = 0; // 役職フック全走査の後に呼ばれる — 次の会議サイクルへ向けて振り直し
             AllObjects.OfType<ShapeshiftMenuElement>().ToArray().Do(x => x.Despawn());
         }
     }
@@ -1229,7 +1277,8 @@ namespace EndKnot
 
     internal sealed class Plant : CustomNetObject
     {
-        public bool Spawned;
+        public bool Spawned; // 実際に生成済みか (役職側が「対象に選べるか」の判定にも使う — 予約段階で立てない)
+        private bool SpawnScheduled;
 
         public Plant(Vector2 position)
         {
@@ -1239,15 +1288,27 @@ namespace EndKnot
 
         public void SpawnIfNotSpawned()
         {
-            if (Spawned) return;
-            CreateNetObject("<line-height=67%><alpha=#00>█<#00ff15>█<alpha=#00>█<#00ff15>█<alpha=#00>█<#00ff15>█<br><alpha=#00>█<#00ff15>█<alpha=#00>█<#00ff15>█<alpha=#00>█<#00ff15>█<br><#00ff15>█<#00ff15>█<alpha=#00>█<#00ff15>█<alpha=#00>█<#00ff15>█<br><#00ff15>█<alpha=#00>█<alpha=#00>█<#00ff15>█<alpha=#00>█<#00ff15>█<br><#00ff15>█<alpha=#00>█<#00ff15>█<#00ff15>█<alpha=#00>█<#00ff15>█<br><#00ff15>█<alpha=#00>█<#00ff15>█<alpha=#00>█<alpha=#00>█<#00ff15>█", Position);
-            Spawned = true;
+            if (Spawned || SpawnScheduled) return;
+            SpawnScheduled = true;
+
+            // 会議明けに溜まった未生成分が保持者の ForEach で同一フレームに揃うので順送りにする。
+            LateTask.New(() =>
+            {
+                SpawnScheduled = false;
+                if (GameStates.IsEnded || !GameStates.InGame) return;
+                // 会議に被ったら Spawned=false のまま帰り、次の会議明けの SpawnIfNotSpawned に再試行を委ねる
+                if (GameStates.IsMeeting || ExileController.Instance) return;
+
+                CreateNetObject("<line-height=67%><alpha=#00>█<#00ff15>█<alpha=#00>█<#00ff15>█<alpha=#00>█<#00ff15>█<br><alpha=#00>█<#00ff15>█<alpha=#00>█<#00ff15>█<alpha=#00>█<#00ff15>█<br><#00ff15>█<#00ff15>█<alpha=#00>█<#00ff15>█<alpha=#00>█<#00ff15>█<br><#00ff15>█<alpha=#00>█<alpha=#00>█<#00ff15>█<alpha=#00>█<#00ff15>█<br><#00ff15>█<alpha=#00>█<#00ff15>█<#00ff15>█<alpha=#00>█<#00ff15>█<br><#00ff15>█<alpha=#00>█<#00ff15>█<alpha=#00>█<alpha=#00>█<#00ff15>█", Position);
+                Spawned = true;
+            }, NextDeferredSpawnDelay(), log: false);
         }
     }
 
     internal sealed class Seed : CustomNetObject
     {
-        public bool Spawned;
+        public bool Spawned; // 実際に生成済みか (Farmer 側が対象判定にも使う — 予約段階で立てない)
+        private bool SpawnScheduled;
         private readonly string Color;
 
         public Seed(Vector2 position, string color)
@@ -1259,9 +1320,20 @@ namespace EndKnot
 
         public void SpawnIfNotSpawned()
         {
-            if (Spawned) return;
-            CreateNetObject($"<size=100%><line-height=67%><alpha=#00>█<#{Color}>█<alpha=#00>█<#{Color}>█<alpha=#00>█<#{Color}>█<br><alpha=#00>█<#{Color}>█<alpha=#00>█<#{Color}>█<alpha=#00>█<#{Color}>█<br><#{Color}>█<#{Color}>█<alpha=#00>█<#{Color}>█<alpha=#00>█<#{Color}>█<br><#{Color}>█<alpha=#00>█<alpha=#00>█<#{Color}>█<alpha=#00>█<#{Color}>█<br><#{Color}>█<alpha=#00>█<#{Color}>█<#{Color}>█<alpha=#00>█<#{Color}>█<br><#{Color}>█<alpha=#00>█<#{Color}>█<alpha=#00>█<alpha=#00>█<#{Color}>█<br></line-height></size>", Position);
-            Spawned = true;
+            if (Spawned || SpawnScheduled) return;
+            SpawnScheduled = true;
+
+            // Plant と同型: 会議明けの一斉 ForEach を順送りにする。
+            LateTask.New(() =>
+            {
+                SpawnScheduled = false;
+                if (GameStates.IsEnded || !GameStates.InGame) return;
+                // 会議に被ったら Spawned=false のまま帰り、次の会議明けの SpawnIfNotSpawned に再試行を委ねる
+                if (GameStates.IsMeeting || ExileController.Instance) return;
+
+                CreateNetObject($"<size=100%><line-height=67%><alpha=#00>█<#{Color}>█<alpha=#00>█<#{Color}>█<alpha=#00>█<#{Color}>█<br><alpha=#00>█<#{Color}>█<alpha=#00>█<#{Color}>█<alpha=#00>█<#{Color}>█<br><#{Color}>█<#{Color}>█<alpha=#00>█<#{Color}>█<alpha=#00>█<#{Color}>█<br><#{Color}>█<alpha=#00>█<alpha=#00>█<#{Color}>█<alpha=#00>█<#{Color}>█<br><#{Color}>█<alpha=#00>█<#{Color}>█<#{Color}>█<alpha=#00>█<#{Color}>█<br><#{Color}>█<alpha=#00>█<#{Color}>█<alpha=#00>█<alpha=#00>█<#{Color}>█<br></line-height></size>", Position);
+                Spawned = true;
+            }, NextDeferredSpawnDelay(), log: false);
         }
     }
 

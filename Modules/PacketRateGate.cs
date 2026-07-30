@@ -50,6 +50,10 @@ public static class PacketRateGate
         public long UnixSec;
         public int Length;
         public byte Tag;
+
+        /// <summary>tag 5 (GameData) の中の先頭サブメッセージ tag。4=Spawn / 1=Data / 2=RPC。
+        /// これが無いと「CNO の spawn 連射」と「通常の GameData 更新」がダンプ上で区別できない。</summary>
+        public byte InnerTag;
         public SendOption Option;
         public bool Gated;
     }
@@ -74,9 +78,11 @@ public static class PacketRateGate
             if (msg.SendOption == SendOption.Reliable)
             {
                 byte tag = 0;
+                byte innerTag = 0;
                 try { tag = PeekTopTagZeroCopy(msg); } catch { /* best-effort */ }
+                try { if (tag == 5) innerTag = PeekGameDataInnerTagZeroCopy(msg); } catch { /* best-effort */ }
 
-                AppendRing(msg.Length, tag, msg.SendOption, gated: false);
+                AppendRing(msg.Length, tag, innerTag, msg.SendOption, gated: false);
                 TickSecondMeter();
             }
 
@@ -240,13 +246,14 @@ public static class PacketRateGate
         }
     }
 
-    private static void AppendRing(int length, byte tag, SendOption option, bool gated)
+    private static void AppendRing(int length, byte tag, byte innerTag, SendOption option, bool gated)
     {
         Ring[RingPos] = new Record
         {
             UnixSec = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
             Length = length,
             Tag = tag,
+            InnerTag = innerTag,
             Option = option,
             Gated = gated
         };
@@ -277,6 +284,24 @@ public static class PacketRateGate
         return tag;
     }
 
+    // tag 5 (GameData) の中の先頭サブメッセージ tag をコピー無しで覗く。レイアウトは
+    // [subLength u16][tag=5][gameId int32][innerLength u16][innerTag] で固定なので、
+    // 上の PeekTopTagZeroCopy と同じ整合性チェック付きの best-effort で読む。
+    // 4=Spawn (CNO の生成)、1=Data (NetworkedPlayerInfo 更新)、2=RPC。
+    private static byte PeekGameDataInnerTagZeroCopy(MessageWriter msg)
+    {
+        int headerLen = msg.SendOption == SendOption.Reliable ? 3 : 1;
+        const int InnerTagOffset = 3 /* subLength+tag */ + 4 /* gameId */ + 2 /* innerLength */;
+
+        byte[] buffer = msg.Buffer;
+        if (buffer == null) return 0;
+
+        int pos = headerLen + InnerTagOffset;
+        if (msg.Length <= pos || buffer.Length <= pos) return 0;
+
+        return buffer[pos];
+    }
+
     /// <summary>切断時にキック事後解析用に呼ぶ。直近リングバッファを 1 行のヒストグラムに集約して返す。</summary>
     public static string DumpRecent()
     {
@@ -285,6 +310,10 @@ public static class PacketRateGate
             if (RingCount == 0) return "PacketRateGate: no recent packets recorded";
 
             var bySec = new SortedDictionary<long, (int count, int bytes)>();
+            // 秒ごとの「先頭サブメッセージ tag」内訳。本数とバイト数だけでは、キック直前のバーストが
+            // 何の送信だったのか (tag5=GameData/spawn か、tag6=GameDataTo か、別物か) が分からない。
+            // BUG-20260730-06 の rate 説を 1-bit で決着させるための計器。
+            var tagsBySec = new SortedDictionary<long, SortedDictionary<string, int>>();
 
             int start = RingCount < RingBufferSize ? 0 : RingPos;
             for (int i = 0; i < RingCount; i++)
@@ -294,6 +323,11 @@ public static class PacketRateGate
                 agg.count++;
                 agg.bytes += rec.Length;
                 bySec[rec.UnixSec] = agg;
+
+                if (!tagsBySec.TryGetValue(rec.UnixSec, out var tags)) tagsBySec[rec.UnixSec] = tags = new SortedDictionary<string, int>();
+                string key = rec.Tag == 5 ? $"t5.{rec.InnerTag}" : $"t{rec.Tag}";
+                tags.TryGetValue(key, out int n);
+                tags[key] = n + 1;
             }
 
             var sb = new StringBuilder();
@@ -305,6 +339,20 @@ public static class PacketRateGate
                 if (!first) sb.Append(", ");
                 first = false;
                 sb.Append($"{now - kv.Key}s:{kv.Value.count}/{kv.Value.bytes}B");
+
+                if (tagsBySec.TryGetValue(kv.Key, out var tags) && tags.Count > 0)
+                {
+                    sb.Append('[');
+                    bool firstTag = true;
+                    foreach (var t in tags)
+                    {
+                        if (!firstTag) sb.Append(' ');
+                        firstTag = false;
+                        sb.Append($"{t.Key}x{t.Value}");
+                    }
+
+                    sb.Append(']');
+                }
             }
 
             return sb.ToString();

@@ -23,6 +23,10 @@ public static class GameStartManagerPatch
     public static bool UpdateSpriteStartButton;
     public static float Timer => Math.Max(0, 597f - (Utils.TimeStamp - TimerStartTS));
 
+    // ClientId => join 時刻 (Time.time)。低速回線の joiner は SetName/SetColor 到着まで数秒かかるため、
+    // 不正色キックはこの時刻から猶予を置いて判定する (BUG-20260730-13)
+    public static readonly Dictionary<int, float> ClientJoinTime = [];
+
     [HarmonyPatch(typeof(TimerTextTMP), nameof(TimerTextTMP.UpdateText))]
     public static class TimerTextTMPUpdateTextPatch
     {
@@ -125,6 +129,7 @@ public static class GameStartManagerPatch
     public static class GameStartManagerUpdatePatch
     {
         public static float ExitTimer = -1f;
+        private const float InvalidColorKickGraceSeconds = 10f;
         private static float MinWait, MaxWait;
         private static int MinPlayer;
         private static SpriteRenderer LobbyTimerBg;
@@ -196,14 +201,16 @@ public static class GameStartManagerPatch
             if (invalidColor.Length > 0)
             {
                 Main.UpdateTime = -100;
-                
-                Main.EnumeratePlayerControls()
-                    .Where(p => p.Data.DefaultOutfit.ColorId < 0 || Palette.PlayerColors.Length <= p.Data.DefaultOutfit.ColorId)
-                    .Do(p => AmongUsClient.Instance.KickPlayer(p.OwnerId, false));
+
+                // join 直後は SetName/SetColor が未着なだけの可能性があるため、猶予内のプレイヤーは蹴らず開始だけ遅らせる (BUG-20260730-13)
+                PlayerControl[] overdue = invalidColor.Where(p => !GameStartManagerPatch.ClientJoinTime.TryGetValue(p.OwnerId, out float joinTime) || Time.time - joinTime >= InvalidColorKickGraceSeconds).ToArray();
+                if (overdue.Length == 0) return;
+
+                overdue.Do(p => AmongUsClient.Instance.KickPlayer(p.OwnerId, false));
 
                 Logger.SendInGame(GetString("Error.InvalidColorPreventStart"), Color.yellow);
                 string msg = GetString("Error.InvalidColor");
-                msg += "\n" + string.Join(",", invalidColor.Select(p => $"{p.GetRealName()}"));
+                msg += "\n" + string.Join(",", overdue.Select(p => $"{p.GetRealName()}"));
                 Utils.SendMessage(msg, importance: MessageImportance.Low);
             }
 
