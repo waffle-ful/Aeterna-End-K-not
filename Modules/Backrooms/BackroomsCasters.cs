@@ -251,8 +251,8 @@ public static class BackroomsCasters
             Texture2D tex = new(2, 2, TextureFormat.RGBA32, false) { filterMode = FilterMode.Point };
             Color[] px = [Color.white, Color.white, Color.white, Color.white];
             tex.SetPixels(px);
-            tex.Apply();
-            _lineSprite = Sprite.Create(tex, new Rect(0, 0, 2, 2), new Vector2(0.5f, 0.5f), 2f);
+            tex.Apply(true, true);
+            _lineSprite = Sprite.Create(tex, new Rect(0, 0, 2, 2), new Vector2(0.5f, 0.5f), 2f, 0, SpriteMeshType.FullRect);
             _lineSprite.hideFlags |= HideFlags.HideAndDontSave;
             return _lineSprite;
         }

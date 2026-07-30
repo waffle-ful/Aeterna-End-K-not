@@ -203,8 +203,8 @@ public static class CalamityParticles
         }
 
         tex.SetPixels(pixels);
-        tex.Apply();
-        return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), size);
+        tex.Apply(true, true);
+        return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), size, 0, SpriteMeshType.FullRect);
     }
 
     // 火の粉用グロー: 中心に締まった白熱コア、そこから縁へ滑らかに滲んで透明へ。
@@ -225,7 +225,7 @@ public static class CalamityParticles
             pixels[y * size + x] = new Color(1f, 1f, 1f, a);
         }
         tex.SetPixels(pixels);
-        tex.Apply();
-        return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), size);
+        tex.Apply(true, true);
+        return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), size, 0, SpriteMeshType.FullRect);
     }
 }

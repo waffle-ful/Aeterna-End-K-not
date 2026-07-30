@@ -5238,7 +5238,8 @@ public static class Utils
 
             Texture2D texture = LoadTextureFromResources(path);
             if (texture == null) return null; // リソース欠落(例: 未用意の EHR-Icon.png)。LoadTextureFromResources 側で記録済みなので静かに返す
-            sprite = Sprite.Create(texture, new(0, 0, texture.width, texture.height), new(0.5f, 0.5f), pixelsPerUnit);
+            // FullRect 明示: markNonReadable テクスチャに既定の Tight メッシュ生成 (要ピクセル読み) を走らせない
+            sprite = Sprite.Create(texture, new(0, 0, texture.width, texture.height), new(0.5f, 0.5f), pixelsPerUnit, 0, SpriteMeshType.FullRect);
             sprite.hideFlags |= HideFlags.HideAndDontSave | HideFlags.DontSaveInEditor;
             return CachedSprites[path + pixelsPerUnit] = sprite;
         }
@@ -5267,7 +5268,9 @@ public static class Utils
             var byteTexture = new Il2CppStructArray<byte>(length);
             // ReSharper disable once MustUseReturnValue - we know how many bytes we need to read, so we can skip the returned value check
             stream.Read(new Span<byte>(IntPtr.Add(byteTexture.Pointer, IntPtr.Size * 4).ToPointer(), (int)length));
-            texture.LoadImage(byteTexture, false);
+            // markNonReadable=true: GPU アップロード後に CPU 側ピクセルコピーを解放 (常駐テクスチャメモリ半減)。
+            // このテクスチャは以後 GetPixels/EncodeToPNG 等のピクセル読みが不可 (全 repo で消費者ゼロを確認済み)。
+            texture.LoadImage(byteTexture, true);
             return texture;
         }
         catch { Logger.Error($"Error loading texture: {path}", "LoadImage"); }

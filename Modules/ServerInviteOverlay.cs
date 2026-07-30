@@ -261,8 +261,8 @@ public static class ServerInviteOverlay
         {
             var tex = new Texture2D(1, 1, TextureFormat.RGBA32, false) { filterMode = FilterMode.Point };
             tex.SetPixel(0, 0, Color.white);
-            tex.Apply();
-            _solidSprite = Sprite.Create(tex, new Rect(0f, 0f, 1f, 1f), new Vector2(0.5f, 0.5f), 1f);
+            tex.Apply(true, true);
+            _solidSprite = Sprite.Create(tex, new Rect(0f, 0f, 1f, 1f), new Vector2(0.5f, 0.5f), 1f, 0, SpriteMeshType.FullRect);
             _solidSprite.hideFlags |= HideFlags.HideAndDontSave | HideFlags.DontSaveInEditor;
         }
         catch (Exception e) { Logger.Warn($"ServerInviteOverlay: solid sprite failed ({e.Message})", "ServerInviteOverlay"); }

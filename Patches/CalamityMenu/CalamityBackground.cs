@@ -60,7 +60,7 @@ public static class CalamityBackground
         var pixels = new Color[16];
         for (int i = 0; i < 16; i++) pixels[i] = tint;
         tex.SetPixels(pixels);
-        tex.Apply();
-        return Sprite.Create(tex, new Rect(0, 0, 4, 4), new Vector2(0.5f, 0.5f), 100f);
+        tex.Apply(true, true);
+        return Sprite.Create(tex, new Rect(0, 0, 4, 4), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect);
     }
 }

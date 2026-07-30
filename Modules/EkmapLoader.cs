@@ -867,7 +867,8 @@ public static class EkmapLoader
         var il2cppBytes = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<byte>(pngBytes.Length);
         System.Runtime.InteropServices.Marshal.Copy(
             pngBytes, 0, IntPtr.Add(il2cppBytes.Pointer, IntPtr.Size * 4), pngBytes.Length);
-        if (!tex.LoadImage(il2cppBytes, false))
+        // markNonReadable=true: GPU 転送後に CPU 側コピー解放 (以後 width/height 等メタデータ参照のみ可・ピクセル読み不可)
+        if (!tex.LoadImage(il2cppBytes, true))
         {
             UnityEngine.Object.Destroy(tex);
             error = $"{label}.image could not be decoded as PNG";

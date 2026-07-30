@@ -205,9 +205,9 @@ public static class RoleMenuDiag
         if (_cachedSolidSprite != null) return _cachedSolidSprite;
         var tex = new Texture2D(1, 1, TextureFormat.RGBA32, false) { filterMode = FilterMode.Point };
         tex.SetPixel(0, 0, Color.white);
-        tex.Apply();
+        tex.Apply(true, true);
         tex.hideFlags = HideFlags.HideAndDontSave;
-        _cachedSolidSprite = Sprite.Create(tex, new Rect(0f, 0f, 1f, 1f), new Vector2(0.5f, 0.5f), 1f);
+        _cachedSolidSprite = Sprite.Create(tex, new Rect(0f, 0f, 1f, 1f), new Vector2(0.5f, 0.5f), 1f, 0, SpriteMeshType.FullRect);
         _cachedSolidSprite.hideFlags = HideFlags.HideAndDontSave;
         return _cachedSolidSprite;
     }
