@@ -1229,6 +1229,7 @@ internal static class IntroCutsceneDestroyPatch
             // TOHK の「初手会議があるなら役職復元の最終波を送らない」設計 (StandardIntro.cs:308) と同型。
             // Rollback bit: EndKnot_DATA/disable_t2_meeting_deferral.txt → 従来 +0.1s 固定。
             T2RoleClusterFired = false;
+            NameBroadcastHold = false;
             bool deferT2Cluster;
 
             try
@@ -1238,6 +1239,11 @@ internal static class IntroCutsceneDestroyPatch
                                  !System.IO.File.Exists($"{Main.DataPath}/EndKnot_DATA/disable_t2_meeting_deferral.txt");
             }
             catch { deferT2Cluster = false; }
+
+            // 【T2残党退避 2026-07-31】毎フレ SetName broadcast の保留を初手会議明けまで延長する
+            // (解除は Utils.AfterMeetingTasks / watchdog 発火時)。intro 中の保留自体は無条件
+            // (PlayerControlPatch 側の !Main.IntroDestroyed 判定)。
+            NameBroadcastHold = deferT2Cluster;
 
             if (deferT2Cluster)
             {
@@ -1338,6 +1344,9 @@ internal static class IntroCutsceneDestroyPatch
                 System.Collections.Generic.List<PlayerControl> spectators = ChatCommands.Spectators.ToList().ToValidPlayers();
                 if (Main.GM.Value) spectators.Add(PlayerControl.LocalPlayer);
 
+                // 【2026-07-31 監査裁定】Exiled broadcast の T2 アンカー退避は不採用 — 削減量が数パケットに対し、
+                // 退避窓中の vanilla-alive 露出 + 組織的早期会議 (通報/緊急はゲート対象外) で保留分が凍結し
+                // GM/観戦者が投票名簿に載る抜け道のリスクが上回る (pitfall/anticheat 両監査一致)。即時発火を維持。
                 spectators.ForEach(x =>
                 {
                     x.RpcExileV2();
@@ -1351,9 +1360,16 @@ internal static class IntroCutsceneDestroyPatch
 
             if (Options.RandomSpawn.GetBool() && Main.CurrentMap != MapNames.Airship && AmongUsClient.Instance.AmHost && Options.CurrentGameMode is not CustomGameMode.CaptureTheFlag and not CustomGameMode.KingOfTheZones and not CustomGameMode.BedWars and not CustomGameMode.Deathrace)
             {
-                var map = RandomSpawn.SpawnMap.GetSpawnMap();
-                aapc.Do(map.RandomTeleport);
-                Logger.Info($"T2 anchor: RandomSpawn SnapTo burst x{aapc.Count}", "T2Probe");
+                // 【T2残党退避 2026-07-31】FTM 退避時はこの一斉 SnapTo を出さない — 初手会議明けの
+                // ExilePatch.WrapUp (RandomSpawn 再散布) が同じ仕事をするため、intro 窓では純粋な無駄弾。
+                if (deferT2Cluster)
+                    Logger.Info($"T2 anchor: RandomSpawn SnapTo burst skipped (FTM deferral; ExilePatch re-scatter covers) x{aapc.Count}", "T2Probe");
+                else
+                {
+                    var map = RandomSpawn.SpawnMap.GetSpawnMap();
+                    aapc.Do(map.RandomTeleport);
+                    Logger.Info($"T2 anchor: RandomSpawn SnapTo burst x{aapc.Count}", "T2Probe");
+                }
             }
 
             try
@@ -1521,6 +1537,10 @@ internal static class IntroCutsceneDestroyPatch
 
     private static bool T2RoleClusterFired;
 
+    // 毎フレ SetName broadcast (PlayerControlPatch) を初手会議明けまで保留するフラグ。
+    // 解除: Utils.AfterMeetingTasks (どの会議明けでも) / watchdog・immediate モードの FireT2RoleCluster / 次ゲームの Postfix。
+    public static bool NameBroadcastHold { get; internal set; }
+
     // ホスト intro 明けの SetRole 三点セット (RpcChangeRoleBasis / SetActualSelfRolesAfterOverride / DoubleAgent)。
     // 全て vanilla SetRole (canOverride=true) を書き、intro 構築中の vanilla クライアントに当てると
     // RoleBehaviour 再構築でイントロコルーチンを壊す暗転容疑がある。発火タイミングは Postfix 側の
@@ -1530,6 +1550,10 @@ internal static class IntroCutsceneDestroyPatch
         if (T2RoleClusterFired || !GameStates.IsInGame || !AmongUsClient.Instance.AmHost) return;
 
         T2RoleClusterFired = true;
+
+        // 会議アンカーが来なかった (watchdog / immediate) 場合は SetName 保留をここで解く —
+        // 会議明けの NotifyRoles 張り直しが無いまま丸ラウンド保留するのを防ぐ。
+        if (mode != "pre-first-meeting") NameBroadcastHold = false;
 
         PlayerControl lp = PlayerControl.LocalPlayer;
         var aapc = Main.AllAlivePlayerControlsToList;
