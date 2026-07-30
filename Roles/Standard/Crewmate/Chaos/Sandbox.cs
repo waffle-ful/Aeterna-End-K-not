@@ -169,6 +169,10 @@ public class Sandbox : RoleBase
             if (MeetingStates.MeetingNum != meetingNum) return;
             if (GameStates.IsMeeting || ExileController.Instance) return;
 
+            // ブロック1個の張り直しごとに CreateNetObject (多段 Reliable) が飛ぶので、
+            // 保持者数 × MaxBlocks (最大15) を同一フレームで作らないよう順送りにずらす。
+            var index = 0;
+
             foreach ((byte owner, var positions) in SavedBlockPositions)
             {
                 if (positions.Count == 0) continue;
@@ -179,9 +183,19 @@ public class Sandbox : RoleBase
                 }
 
                 float visualRadius = BlockRadius.GetFloat() + PlayerColliderRadius;
+                byte blockOwner = owner;
+
                 foreach (Vector2 pos in positions)
                 {
-                    list.Add(new SandboxBlock(pos, owner, visualRadius));
+                    Vector2 blockPos = pos;
+
+                    LateTask.New(() =>
+                    {
+                        if (MeetingStates.MeetingNum != meetingNum) return;
+                        if (GameStates.IsMeeting || ExileController.Instance || GameStates.IsEnded || !GameStates.InGame) return;
+
+                        list.Add(new SandboxBlock(blockPos, blockOwner, visualRadius));
+                    }, index++ * 0.05f, log: false);
                 }
             }
 

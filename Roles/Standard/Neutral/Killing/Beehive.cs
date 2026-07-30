@@ -114,9 +114,15 @@ public class Beehive : RoleBase
                     if (pc.AmOwner)
                         Achievements.Type.OutOfTime.Complete();
                 }
+
+                Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc); // suffix を消すので即時
+                return;
             }
 
-            Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
+            // 残り秒数は整数表示なので毎秒だけ送る。刺されている人数ぶん毎 tick 出ていたので
+            // 同時に複数人刺されていると人数×毎 tick に膨らんでいた (Scanner / Magician と同型)。
+            if (PerSecondUpdateScheduler.ShouldRunUpdate(pc.PlayerId))
+                Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
         }
     }
 

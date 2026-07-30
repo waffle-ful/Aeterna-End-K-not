@@ -1,4 +1,5 @@
 ﻿using AmongUs.GameOptions;
+using System.Linq;
 using EndKnot.Modules;
 using Hazel;
 using UnityEngine;
@@ -57,7 +58,23 @@ public class Magistrate : RoleBase
     {
         CallCourtNextMeeting = false;
         Utils.SendRPC(CustomRPC.SyncRoleData, MagistrateID, CallCourtNextMeeting);
-        Main.EnumeratePlayerControls().Do(x => Camouflage.RpcSetSkin(x, notCommsOrCamo: true));
+
+        // outfit が同じなら RpcSetSkin は即 return するので平時はほぼ無送信だが、
+        // 偽装が掛かっていた会議明けは全員ぶん実送信になる。同一フレームに固めない。
+        var index = 0;
+
+        foreach (PlayerControl pc in Main.EnumeratePlayerControls().ToArray())
+        {
+            PlayerControl target = pc;
+
+            LateTask.New(() =>
+            {
+                if (GameStates.IsMeeting || GameStates.IsEnded) return;
+                if (target == null || target.Data == null) return; // stagger 中に抜けた客を踏まない
+
+                Camouflage.RpcSetSkin(target, notCommsOrCamo: true);
+            }, index++ * 0.05f, log: false);
+        }
     }
 
     public override void ApplyGameOptions(IGameOptions opt, byte playerId)

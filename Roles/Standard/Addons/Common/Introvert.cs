@@ -70,9 +70,14 @@ public class Introvert : IAddon
             pc.TPToRandomVent();
             TeleportAwayDelays.Remove(pc.PlayerId);
             Utils.SendRPC(CustomRPC.SyncIntrovert, 1, pc.PlayerId);
+            Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc); // suffix を消すので即時
+            return;
         }
 
-        Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
+        // カウントダウン suffix は整数秒表示なので毎秒だけ送る (毎 tick 呼んでも実質1本/秒に
+        // 収まっていたのは LastNotifyNames の内容 dedup 任せだったので、依存を明示に変える)。
+        if (PerSecondUpdateScheduler.ShouldRunUpdate(pc.PlayerId))
+            Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
     }
 
     public static void ReceiveRPC(MessageReader reader)

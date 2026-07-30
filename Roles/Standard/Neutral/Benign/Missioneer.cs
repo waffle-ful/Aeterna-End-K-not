@@ -14,6 +14,10 @@ namespace EndKnot.Roles;
 public class Missioneer : RoleBase
 {
     private const int Id = 704300;
+
+    // 会議明けの RpcSetRoleDesync を1人ぶんずつずらす間隔
+    private const float DesyncStaggerStep = 0.05f;
+
     public static bool On;
 
     private static OptionItem KillCooldown;
@@ -406,19 +410,37 @@ public class Missioneer : RoleBase
         if (IsKillMission())
         {
             pc.RpcSetRoleDesync(RoleTypes.Impostor, pc.OwnerId);
+
             // Make all other alive players appear as Crewmate to the Missioneer's client
             // so the kill button lights up regardless of their actual roles.
             // Without this, Impostor-team players can never be valid kill targets.
-            foreach (var other in Main.AllAlivePlayerControlsToList)
+            //
+            // 生存者数ぶんの RpcSetRoleDesync を会議終了と同時に連射すると PacketRateGate の
+            // 予算を1フレームで食うので 0.05 秒ずつずらす。キル CD の書き込みは最後の送信より
+            // 後ろに置く (先に走るとボタンが点く前に CD を設定することになる)。
+            int meetingNum = MeetingStates.MeetingNum;
+            List<PlayerControl> targets = Main.AllAlivePlayerControlsToList.Where(x => x.PlayerId != MissioneerId).ToList();
+
+            for (var i = 0; i < targets.Count; i++)
             {
-                if (other.PlayerId != MissioneerId)
-                    other.RpcSetRoleDesync(RoleTypes.Crewmate, pc.OwnerId);
+                PlayerControl other = targets[i];
+
+                LateTask.New(() =>
+                {
+                    if (MeetingStates.MeetingNum != meetingNum || GameStates.IsMeeting || GameStates.IsEnded) return;
+
+                    PlayerControl m = Utils.GetPlayerById(MissioneerId);
+                    if (m == null || !m.IsAlive()) return;
+
+                    other.RpcSetRoleDesync(RoleTypes.Crewmate, m.OwnerId);
+                }, DesyncStaggerStep * (i + 1), log: false);
             }
+
             LateTask.New(() =>
             {
                 PlayerControl p = Utils.GetPlayerById(MissioneerId);
                 if (p != null && p.IsAlive()) p.SetKillCooldownNonSync(KillCooldown.GetFloat());
-            }, 0.2f, log: false);
+            }, DesyncStaggerStep * (targets.Count + 1) + 0.2f, log: false);
         }
 
         SendRPC();

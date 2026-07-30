@@ -80,7 +80,9 @@ public class Allergic : IAddon
             AllergyMaxTS.Remove(pc.PlayerId);
             pc.Suicide(PlayerState.DeathReason.Allergy, target);
         }
-        else
+        // カウントダウン suffix は整数秒表示なので毎秒だけ送る (毎 tick 呼んでも実質1本/秒に
+        // 収まっていたのは LastNotifyNames の内容 dedup 任せだったので、依存を明示に変える)。
+        else if (PerSecondUpdateScheduler.ShouldRunUpdate(pc.PlayerId))
             Utils.NotifyRoles(SpecifyTarget: pc, SpecifySeer: pc);
     }
 

@@ -734,20 +734,36 @@ namespace EndKnot
             }
         }
 
+        // 会議明けの自動再生成をずらすための順送りスロット。PlayerControlPatch は全 CNO の
+        // OnMeeting() を同一フレームで呼ぶため、素朴に書くと全インスタンスが同じ長さのタイマーを
+        // 揃って終えて CreateNetObject を一斉送信する (1本 ~423B の Reliable で、名前 RPC と違い
+        // 内容 dedup が効かない)。PacketRateGate の予算を1フレームで食い潰さないよう順にずらす。
+        // メインスレッドのコルーチンからしか触らないので素の ++ でよい。
+        private static int RespawnSlot;
+
+        private const float RespawnStaggerStep = 0.15f;
+        private const int RespawnStaggerSlots = 20;
+
         public virtual void OnMeeting()
         {
             if (!AmongUsClient.Instance.AmHost) return;
-            
+
             Despawn();
-            
+
+            float stagger = RespawnSlot++ % RespawnStaggerSlots * RespawnStaggerStep;
+
             Main.Instance.StartCoroutine(WaitForMeetingEnd());
             return;
 
+            // ⚠️ MeetingStates.MeetingNum で「別会議が始まったら中止」する Sandbox 式のガードは
+            // ここでは使えない。Despawn() が this を AllObjects から外す (:331) ので、待機中の
+            // インスタンスは次の会議のバッチに入らず、中止するとそのまま永久に復活しなくなる。
+            // 下の while で待ち続けるのが正しい (再入は「後の会議の終了後に出る」に収束する)。
             IEnumerator WaitForMeetingEnd()
             {
                 yield return new WaitForSecondsRealtime(10f);
                 while (ReportDeadBodyPatch.MeetingStarted || GameStates.IsMeeting || ExileController.Instance || AntiBlackout.SkipTasks) yield return null;
-                yield return new WaitForSecondsRealtime(3f);
+                yield return new WaitForSecondsRealtime(3f + stagger);
                 while (ReportDeadBodyPatch.MeetingStarted || GameStates.IsMeeting || ExileController.Instance || AntiBlackout.SkipTasks) yield return null;
                 if (GameStates.IsEnded || !GameStates.InGame || GameStates.IsLobby) yield break;
 
@@ -772,6 +788,7 @@ namespace EndKnot
             {
                 AllObjects.ToArray().Do(x => x.Despawn(canPool: false));
                 AllObjects.Clear();
+                RespawnSlot = 0;
                 UsedPlayerIds.Clear(); // Despawn を経ずに破壊された CNO の枠リークをゲーム境界で必ず回収する
             }
             catch (Exception e) { Utils.ThrowException(e); }

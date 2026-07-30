@@ -28,6 +28,7 @@ public class Sniper : RoleBase
 
     public static bool On;
     private float AimTime;
+    private bool LastAimMarkVisible;
     private int bulletCount;
     public bool IsAim;
     private Vector3 LastPosition;
@@ -77,6 +78,7 @@ public class Sniper : RoleBase
         shotNotify = [];
         IsAim = false;
         AimTime = 0f;
+        LastAimMarkVisible = false;
         MeetingReset = false;
     }
 
@@ -97,6 +99,7 @@ public class Sniper : RoleBase
         shotNotify = [];
         IsAim = false;
         AimTime = 0f;
+        LastAimMarkVisible = false;
         MeetingReset = false;
     }
 
@@ -222,12 +225,14 @@ public class Sniper : RoleBase
             LastPosition = sniper.transform.position;
             IsAim = true;
             AimTime = 0f;
+            LastAimMarkVisible = false;
 
             return false;
         }
 
         IsAim = false;
         AimTime = 0f;
+        LastAimMarkVisible = false;
 
         if (MeetingReset)
         {
@@ -308,12 +313,38 @@ public class Sniper : RoleBase
         {
             AimTime = 0f;
             LastPosition = pos;
+
+            // 動いた瞬間に照準が外れるので、出ていた ◎ はここで消す
+            if (LastAimMarkVisible)
+            {
+                LastAimMarkVisible = false;
+                Utils.NotifyRoles(SpecifySeer: sniper, SpecifyTarget: sniper);
+            }
         }
         else
         {
             AimTime += Time.fixedDeltaTime;
-            Utils.NotifyRoles(SpecifySeer: sniper, SpecifyTarget: sniper);
+
+            // 表示されるのは「◎ が出ているか」の二値なので、状態が切り替わった tick だけ送る。
+            // 毎秒への間引きだと AimAssistOneshot の 0.5〜1.0 秒しかない表示窓を丸ごと
+            // 取りこぼすため、ここは間引きではなくラッチで直す。
+            bool showMark = IsAimMarkVisible(sniper);
+
+            if (showMark != LastAimMarkVisible)
+            {
+                LastAimMarkVisible = showMark;
+                Utils.NotifyRoles(SpecifySeer: sniper, SpecifyTarget: sniper);
+            }
         }
+    }
+
+    // AimAssist の照準マーク (◎) が出ている状態かどうか = GetShotNotify の表示条件そのもの。
+    // OnFixedUpdate のラッチと表示側で条件が食い違わないよう1箇所にまとめている。
+    private bool IsAimMarkVisible(PlayerControl sniper)
+    {
+        if (AimTime <= 0.5f || (AimAssistOneshot && AimTime >= 1.0f)) return false;
+
+        return sniper != null && GetSnipeTargets(sniper).Count > 0;
     }
 
     public override void OnReportDeadBody()
@@ -321,6 +352,7 @@ public class Sniper : RoleBase
         MeetingReset = true;
         IsAim = false;
         AimTime = 0f;
+        LastAimMarkVisible = false;
     }
 
     public static bool TryGetSniper(byte targetId, ref PlayerControl sniper)
@@ -346,11 +378,8 @@ public class Sniper : RoleBase
         {
             if (Main.PlayerStates[seerId].Role is not Sniper sp) return string.Empty;
 
-            if (0.5f < sp.AimTime && (!AimAssistOneshot || sp.AimTime < 1.0f))
-            {
-                if (sp.GetSnipeTargets(Utils.GetPlayerById(seerId)).Count > 0)
-                    return "<size=200%>" + Utils.ColorString(Palette.ImpostorRed, "◎") + "</size>";
-            }
+            if (sp.IsAimMarkVisible(Utils.GetPlayerById(seerId)))
+                return "<size=200%>" + Utils.ColorString(Palette.ImpostorRed, "◎") + "</size>";
         }
         else
         {

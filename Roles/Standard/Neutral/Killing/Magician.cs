@@ -369,10 +369,15 @@ public class Magician : RoleBase
                 pc.Notify(GetString("MagicianBombExploded"));
             }
 
-            Notify.Clear();
-            foreach (long x in Bombs.Values) Notify.AppendFormat(GetString("MagicianBombExlodesIn"), BombDelay.GetInt() - (now - x) + 1);
+            // 残り秒数は整数表示なので毎 tick 送る必要が無い。毎秒に間引く
+            // (爆発そのものの通知は上の即時 Notify なので間引きの影響を受けない)。
+            if (PerSecondUpdateScheduler.ShouldRunUpdate(pc.PlayerId))
+            {
+                Notify.Clear();
+                foreach (long x in Bombs.Values) Notify.AppendFormat(GetString("MagicianBombExlodesIn"), BombDelay.GetInt() - (now - x) + 1);
 
-            pc.Notify(Notify.ToString());
+                pc.Notify(Notify.ToString());
+            }
         }
     }
 
