@@ -2005,7 +2005,14 @@ internal static class FixedUpdatePatch
             // 返し続けるため、RpcSetNameMirrorCachePatch のキャッシュ同期と組み合わさると
             // Shapeshift の変装名 (:1025 Force Name) を次 tick で本名に戻してしまう。
             // 変装中は再送を止め、変装名を保持する (ロビーでは誰も変装しないので影響なし)。
-            if (!Main.DoBlockNameChange && !player.IsShifted() && ApplySuffix(player, out var name))
+            // introQuiet: intro 中は全員がイントロ画面で名前が見えないため、装飾名 broadcast を
+            // クライアントの intro 構築窓に着弾させない (暗転サーガ・T2残党退避 2026-07-31)。
+            // FTM 退避時は初手会議明けまで延長。解除時の flush は、ApplySuffix が既定設定では
+            // host/タグ持ち/DirtyName 登録者しか通さないため通常 0〜数件。FormatNameMode=1 (色名モード)
+            // の部屋のみ全員分が解除フレームに載るが、PacketRateGate 経由なので kick には直結しない。
+            bool introQuiet = GameStates.InGame && (!Main.IntroDestroyed || IntroCutsceneDestroyPatch.NameBroadcastHold);
+
+            if (!introQuiet && !Main.DoBlockNameChange && !player.IsShifted() && ApplySuffix(player, out var name))
             {
                 // 公式鯖の NameBudget クランプ (単発 SetName 超過キック対策)。必ず dirty-check の前に
                 // 掛けること — クランプ前の値で比較するとミラー (=実送信名) と永遠に一致せず毎 tick 再送ループになる。

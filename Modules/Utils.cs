@@ -4476,6 +4476,9 @@ public static class Utils
 
     public static void AfterMeetingTasks()
     {
+        // T2残党退避 (2026-07-31): FTM 退避で保留していた毎フレ SetName broadcast をここで解禁。
+        IntroCutsceneDestroyPatch.NameBroadcastHold = false;
+
         LateTask.New(() => GameEndChecker.ShouldNotCheck = false, 0.1f, "Enable GameEndChecker");
 
         try
