@@ -51,12 +51,29 @@ public static class PacketRateGate
         public int Length;
         public byte Tag;
 
-        /// <summary>tag 5 (GameData) の中の先頭サブメッセージ tag。4=Spawn / 1=Data / 2=RPC。
-        /// これが無いと「CNO の spawn 連射」と「通常の GameData 更新」がダンプ上で区別できない。</summary>
+        /// <summary>そのパケットを一番よく識別する「奥の tag」。
+        /// tag 5 (GameData) なら先頭サブメッセージ tag (4=Spawn / 1=Data / 2=RPC)、
+        /// tag 6 (GameDataTo) なら先頭サブメッセージ tag、
+        /// tag 26 (packing エンベロープ) なら先頭 tag6/5 の中の先頭 leaf tag。
+        /// これが無いと「CNO の spawn 連射」と「通常の GameData 更新」がダンプ上で区別できない。
+        /// t26 では特に CNO の per-player ループ (leaf=1 Data) / Hide (leaf=5 Despawn) /
+        /// GameOptionsSender (leaf=2 RPC) が同じ t26 に潰れて見分けられなかった。</summary>
         public byte InnerTag;
+
+        /// <summary>tag 5/6/26 の直下にぶら下がるサブメッセージ数。
+        /// ⚠️ このフィールドが本命の計器。CNO の per-player ループ (CustomNetObject.cs:587-637) は
+        /// 1体あたり「非ホスト人数ぶんの tag6」を **1 つの t26 エンベロープ** に詰めて送るため、
+        /// players=2 でも players=9 でも **パケット本数もバイト数もほぼ変わらない** (8人でも ~360B < 500B の
+        /// フラッシュ閾値)。つまり本数/バイト数のメータは、キック有無を分けている当の変数に構造的に
+        /// 盲目である。人数比例で唯一増えるのがこのネスト数なので、ここを記録しないと
+        /// 「内容クラスのうち人数に比例する部分」仮説を実測で殴れない。</summary>
+        public byte NestedCount;
         public SendOption Option;
         public bool Gated;
     }
+
+    /// <summary>ネスト走査の打ち切り上限 (計装が送信ホットパスを重くしないための保険)。</summary>
+    private const int NestedScanCap = 64;
 
     private static readonly Record[] Ring = new Record[RingBufferSize];
     private static int RingPos;
@@ -79,10 +96,11 @@ public static class PacketRateGate
             {
                 byte tag = 0;
                 byte innerTag = 0;
+                byte nested = 0;
                 try { tag = PeekTopTagZeroCopy(msg); } catch { /* best-effort */ }
-                try { if (tag == 5) innerTag = PeekGameDataInnerTagZeroCopy(msg); } catch { /* best-effort */ }
+                try { if (tag is 5 or 6 or 26) PeekInnerZeroCopy(msg, tag, out innerTag, out nested); } catch { /* best-effort */ }
 
-                AppendRing(msg.Length, tag, innerTag, msg.SendOption, gated: false);
+                AppendRing(msg.Length, tag, innerTag, nested, msg.SendOption, gated: false);
                 TickSecondMeter();
             }
 
@@ -246,7 +264,7 @@ public static class PacketRateGate
         }
     }
 
-    private static void AppendRing(int length, byte tag, byte innerTag, SendOption option, bool gated)
+    private static void AppendRing(int length, byte tag, byte innerTag, byte nestedCount, SendOption option, bool gated)
     {
         Ring[RingPos] = new Record
         {
@@ -254,6 +272,7 @@ public static class PacketRateGate
             Length = length,
             Tag = tag,
             InnerTag = innerTag,
+            NestedCount = nestedCount,
             Option = option,
             Gated = gated
         };
@@ -284,22 +303,96 @@ public static class PacketRateGate
         return tag;
     }
 
-    // tag 5 (GameData) の中の先頭サブメッセージ tag をコピー無しで覗く。レイアウトは
-    // [subLength u16][tag=5][gameId int32][innerLength u16][innerTag] で固定なので、
-    // 上の PeekTopTagZeroCopy と同じ整合性チェック付きの best-effort で読む。
-    // 4=Spawn (CNO の生成)、1=Data (NetworkedPlayerInfo 更新)、2=RPC。
-    private static byte PeekGameDataInnerTagZeroCopy(MessageWriter msg)
+    // tag 5/6/26 の中身をコピー無しで覗き、(a) 一番識別力のある奥の tag と (b) 直下のサブメッセージ数を返す。
+    // レイアウト:
+    //   tag 5  (GameData)   : [subLen u16][tag=5][gameId int32]        [sub...]
+    //   tag 6  (GameDataTo) : [subLen u16][tag=6][gameId int32][packed targetId][sub...]
+    //   tag 26 (packing)    : [subLen u16][tag=26][packed gameId]      [tag6/tag5 エンベロープ...]
+    // gameId が tag26 だけ packed (可変長) なのは呼び出し側の実装差 (CustomNetObject / GameOptionsSender が
+    // WritePacked、Tag5/6 本体が Write(int)) に合わせたもの。PacketSplitPatch.DividePackedMessage と同じ前提。
+    // 想定外レイアウトなら整合性チェックで諦めて 0 を返す best-effort な診断用途。
+    private static void PeekInnerZeroCopy(MessageWriter msg, byte topTag, out byte innerTag, out byte nestedCount)
     {
-        int headerLen = msg.SendOption == SendOption.Reliable ? 3 : 1;
-        const int InnerTagOffset = 3 /* subLength+tag */ + 4 /* gameId */ + 2 /* innerLength */;
+        innerTag = 0;
+        nestedCount = 0;
 
         byte[] buffer = msg.Buffer;
-        if (buffer == null) return 0;
+        if (buffer == null) return;
 
-        int pos = headerLen + InnerTagOffset;
-        if (msg.Length <= pos || buffer.Length <= pos) return 0;
+        int headerLen = msg.SendOption == SendOption.Reliable ? 3 : 1;
+        int limit = Math.Min(msg.Length, buffer.Length);
+        int pos = headerLen;
+        if (pos + 3 > limit) return;
 
-        return buffer[pos];
+        int subLength = buffer[pos] | (buffer[pos + 1] << 8);
+        pos += 3; // u16 length + byte tag
+        int end = pos + subLength;
+        if (subLength < 0 || end > limit) return;
+
+        switch (topTag)
+        {
+            case 26:
+                if (!TryReadPacked(buffer, end, ref pos)) return;
+                break;
+            case 5:
+                pos += 4; // gameId (int32)
+                break;
+            case 6:
+                pos += 4; // gameId (int32)
+                if (!TryReadPacked(buffer, end, ref pos)) return;
+                break;
+        }
+
+        int count = 0;
+        int firstSubPos = -1;
+        int firstSubEnd = -1;
+        byte firstSubTag = 0;
+
+        while (pos + 3 <= end && count < NestedScanCap)
+        {
+            int len = buffer[pos] | (buffer[pos + 1] << 8);
+            byte t = buffer[pos + 2];
+            int body = pos + 3;
+            if (len < 0 || body + len > end) break; // レイアウト不整合 → そこまでの数で打ち切る
+
+            if (count == 0)
+            {
+                firstSubTag = t;
+                firstSubPos = body;
+                firstSubEnd = body + len;
+            }
+
+            pos = body + len;
+            count++;
+        }
+
+        nestedCount = (byte)Math.Min(count, byte.MaxValue);
+        innerTag = firstSubTag;
+
+        // tag26 は中身が tag6/tag5 のエンベロープなので、もう一段潜って leaf tag を取る。
+        // これが CNO の per-player ループ (leaf=1 Data) / Hide (leaf=5 Despawn) /
+        // GameOptionsSender (leaf=2 RPC) を見分ける唯一の識別子。
+        // 境界は「外側の end」ではなく「先頭エンベロープ自身の末尾」で締める — 緩めると
+        // 短いエンベロープのとき次のエンベロープのヘッダを leaf tag と誤読する。
+        if (topTag == 26 && firstSubPos >= 0 && firstSubTag is 5 or 6)
+        {
+            int p = firstSubPos + 4; // gameId (int32)
+            if (firstSubTag == 6 && !TryReadPacked(buffer, firstSubEnd, ref p)) return;
+            if (p + 3 <= firstSubEnd) innerTag = buffer[p + 2];
+        }
+    }
+
+    // Hazel の WritePacked (7bit varint, 継続ビット 0x80) を読み飛ばす。値は使わないので位置だけ進める。
+    private static bool TryReadPacked(byte[] buffer, int end, ref int pos)
+    {
+        for (int i = 0; i < 5; i++)
+        {
+            if (pos >= end) return false;
+            byte b = buffer[pos++];
+            if ((b & 0x80) == 0) return true;
+        }
+
+        return false;
     }
 
     /// <summary>切断時にキック事後解析用に呼ぶ。直近リングバッファを 1 行のヒストグラムに集約して返す。</summary>
@@ -313,7 +406,9 @@ public static class PacketRateGate
             // 秒ごとの「先頭サブメッセージ tag」内訳。本数とバイト数だけでは、キック直前のバーストが
             // 何の送信だったのか (tag5=GameData/spawn か、tag6=GameDataTo か、別物か) が分からない。
             // BUG-20260730-06 の rate 説を 1-bit で決着させるための計器。
-            var tagsBySec = new SortedDictionary<long, SortedDictionary<string, int>>();
+            // 値は (パケット本数, 直下サブメッセージ総数)。後者が無いと、人数比例で膨らむ
+            // t26 の中身 (CNO の per-player 配信) がパケット本数のメータ上で完全に不可視になる。
+            var tagsBySec = new SortedDictionary<long, SortedDictionary<string, (int packets, int nested)>>();
 
             int start = RingCount < RingBufferSize ? 0 : RingPos;
             for (int i = 0; i < RingCount; i++)
@@ -324,10 +419,10 @@ public static class PacketRateGate
                 agg.bytes += rec.Length;
                 bySec[rec.UnixSec] = agg;
 
-                if (!tagsBySec.TryGetValue(rec.UnixSec, out var tags)) tagsBySec[rec.UnixSec] = tags = new SortedDictionary<string, int>();
-                string key = rec.Tag == 5 ? $"t5.{rec.InnerTag}" : $"t{rec.Tag}";
-                tags.TryGetValue(key, out int n);
-                tags[key] = n + 1;
+                if (!tagsBySec.TryGetValue(rec.UnixSec, out var tags)) tagsBySec[rec.UnixSec] = tags = new SortedDictionary<string, (int, int)>();
+                string key = rec.Tag is 5 or 6 or 26 ? $"t{rec.Tag}.{rec.InnerTag}" : $"t{rec.Tag}";
+                tags.TryGetValue(key, out var agg2);
+                tags[key] = (agg2.packets + 1, agg2.nested + rec.NestedCount);
             }
 
             var sb = new StringBuilder();
@@ -348,7 +443,9 @@ public static class PacketRateGate
                     {
                         if (!firstTag) sb.Append(' ');
                         firstTag = false;
-                        sb.Append($"{t.Key}x{t.Value}");
+                        sb.Append($"{t.Key}x{t.Value.packets}");
+                        // ネスト数はパケット本数と乖離する時だけ出す (人数比例ぶんが見える形)。
+                        if (t.Value.nested > 0) sb.Append($"/n{t.Value.nested}");
                     }
 
                     sb.Append(']');
