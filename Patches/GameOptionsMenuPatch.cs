@@ -1587,7 +1587,12 @@ public static class GameSettingMenuPatch
             preset.SetActive(true);
             gMinus = PresetMinusButton;
             plusFab = PresetPlusButton;
-            plusLabel = plusFab ? plusFab.transform.Find("FontPlacer/Text_TMP").GetComponent<TextMeshPro>() : null;
+            // Find が null を返すと GetComponent で NRE → SetupExtendedUI ごと中断し、末尾の検索欄構築まで
+            // 道連れになる (BUG-20260725-02 と同型)。しかもここはキャッシュ経路なので、一度テンプレート階層が
+            // ズレると以後の全リオープンで同じ所で落ち続ける。plusLabel は font 差替にしか使わず、利用側
+            // (`if (plusLabel)`) が null 許容なので、取れなければ黙って null のまま進める。
+            Transform plusLabelTf = plusFab ? plusFab.transform.Find("FontPlacer/Text_TMP") : null;
+            plusLabel = plusLabelTf ? plusLabelTf.GetComponent<TextMeshPro>() : null;
             if (PresetValueText) PresetValueText.SetText(Translator.GetString($"Preset_{OptionItem.CurrentPreset + 1}"));
         }
         else
@@ -1713,7 +1718,9 @@ public static class GameSettingMenuPatch
         Transform gslTf = __instance.GameSettingsButton.transform.parent.parent.FindChild("GameSettingsLabel");
         if (!gslTf)
         {
-            Logger.Warn("GameSettingsLabel not found — skipping mode label + game-mode buttons", "MenuLeak");
+            // ⚠️ この return は SetupExtendedUI を抜けるので、末尾の**検索欄構築もまとめてスキップ**される
+            // (旧ログ文言はモードラベルとモードボタンしか挙げておらず、検索欄が消えた回の原因が読めなかった)。
+            Logger.Warn("GameSettingsLabel not found — skipping mode label + game-mode buttons + the option search box", "MenuLeak");
             return;
         }
         var gameSettingsLabel = gslTf.GetComponent<TextMeshPro>();
@@ -1763,13 +1770,21 @@ public static class GameSettingMenuPatch
             gmButton.transform.localPosition = new Vector3((((index / 8) - ((totalCols - 1) / 2f)) * 1.4f) + 0.86f, gameSettingsLabelPos.y - 1.9f - (0.22f * (index % 8)), -1f);
 
             gmButton.transform.localScale = new(0.4f, 0.3f, 1f);
-            var gmButtonTmp = gmButton.transform.Find("FontPlacer/Text_TMP").GetComponent<TextMeshPro>();
-            gmButtonTmp.alignment = TextAlignmentOptions.Center;
-            gmButtonTmp.DestroyTranslator();
-            gmButtonTmp.SetText(Translator.GetString(gm.ToString()).ToUpper());
-            gmButtonTmp.color = Main.GameModeColors[gm];
-            gmButtonTmp.transform.localPosition = new(gameSettingsLabelPos.x + 3.35f, gameSettingsLabelPos.y - 1.62f, gameSettingsLabelPos.z);
-            gmButtonTmp.transform.localScale = new(1f, 1f, 1f);
+            // ラベルの化粧は「取れなければ諦めてよい」処理。無ガードの Find(...).GetComponent で NRE を出すと
+            // SetupExtendedUI ごと中断し、後続のモードボタンも末尾の検索欄構築も丸ごと消える (BUG-20260725-02
+            // と同型の道連れ)。ボタン自体のクリック配線は下でそのまま続行させる。
+            Transform gmButtonTextTf = gmButton.transform.Find("FontPlacer/Text_TMP");
+            var gmButtonTmp = gmButtonTextTf ? gmButtonTextTf.GetComponent<TextMeshPro>() : null;
+            if (gmButtonTmp)
+            {
+                gmButtonTmp.alignment = TextAlignmentOptions.Center;
+                gmButtonTmp.DestroyTranslator();
+                gmButtonTmp.SetText(Translator.GetString(gm.ToString()).ToUpper());
+                gmButtonTmp.color = Main.GameModeColors[gm];
+                gmButtonTmp.transform.localPosition = new(gameSettingsLabelPos.x + 3.35f, gameSettingsLabelPos.y - 1.62f, gameSettingsLabelPos.z);
+                gmButtonTmp.transform.localScale = new(1f, 1f, 1f);
+            }
+            else Logger.Warn($"game-mode button [{index}] has no FontPlacer/Text_TMP — label styling skipped", "MenuLeak");
 
             var gmPassiveButton = gmButton.GetComponent<PassiveButton>();
             gmPassiveButton.OnClick.RemoveAllListeners();
@@ -1818,24 +1833,14 @@ public static class GameSettingMenuPatch
                 Logger.Warn("freeChatField unavailable — skipping the option search box this open", "MenuLeak");
                 return;
             }
+            XuiStage = "search-field/clone";
             field = ModGameOptionsMenu.Track(Object.Instantiate(freeChatField, parentLeftPanel.parent));
 
-            // Object.Instantiate deep-clones the whole chat field. If the chat command-autocomplete ghost
-            // (TextBoxPatch.PlaceHolderText, a child of the live freeChatField subtree) happens to exist when
-            // Settings is opened, the clone copies it → a "PlaceHolderText(Clone)" that ends up cached in the
-            // DontDestroyOnLoad UI root and accumulates on every reopen, leaking its GameObject name into the
-            // UI. Strip any such ghost out of this clone so the search box only carries its own text field.
-            // DestroyImmediate: 遅延 Destroy だとフレーム末まで実体が残り、その間の UiAnomalyWatch スキャンに
-            // live=2 (DUP) と映るため即時破棄する。
-            // ただし clone 自身の outputText は絶対に巻き込まない。チャット側で参照すり替わり (UiAnomalyWatch の
-            // DRIFT 状態) が起きていると textArea.outputText が "PlaceHolderText" 名の個体を指しており、名前だけ
-            // で消すと clone の本体テキストごと消えて以降の styling が NRE → 検索欄が生チャットのまま残る。
-            TextMeshPro clonedOutput = field.textArea ? field.textArea.outputText : null;
-
-            foreach (TextMeshPro ghost in field.GetComponentsInChildren<TextMeshPro>(true))
-                if (ghost.name.StartsWith("PlaceHolderText") && ghost != clonedOutput)
-                    Object.DestroyImmediate(ghost.gameObject);
+            XuiStage = "search-field/ghost-strip";
+            StripPlaceHolderGhosts(field);
         }
+
+        XuiStage = "search-field/skin";
         field.transform.localScale = new(0.3f, 0.59f, 1);
         field.transform.localPosition = new(-0.7f, -2.5f, -5f);
 
@@ -1893,6 +1898,7 @@ public static class GameSettingMenuPatch
         }
 
 
+        XuiStage = "search-field/wire";
         var passiveButton = button.GetComponent<PassiveButton>();
 
         passiveButton.OnClick = new();
@@ -1910,6 +1916,47 @@ public static class GameSettingMenuPatch
         {
             Logger.Warn($"search box: {why} — skipping the option search box this open", "MenuLeak");
             if (!cachedInputField && field) Object.Destroy(field.gameObject);
+        }
+
+        // Object.Instantiate deep-clones the whole chat field. If the chat command-autocomplete ghost
+        // (TextBoxPatch.PlaceHolderText, a child of the live freeChatField subtree) happens to exist when
+        // Settings is opened, the clone copies it → a "PlaceHolderText(Clone)" that ends up cached in the
+        // DontDestroyOnLoad UI root and accumulates on every reopen, leaking its GameObject name into the
+        // UI. Strip any such ghost out of this clone so the search box only carries its own text field.
+        // DestroyImmediate: 遅延 Destroy だとフレーム末まで実体が残り、その間の UiAnomalyWatch スキャンに
+        // live=2 (DUP) と映るため即時破棄する。
+        // ただし clone 自身の outputText は絶対に巻き込まない。チャット側で参照すり替わり (UiAnomalyWatch の
+        // DRIFT 状態) が起きていると textArea.outputText が "PlaceHolderText" 名の個体を指しており、名前だけ
+        // で消すと clone の本体テキストごと消えて以降の styling が NRE → 検索欄が生チャットのまま残る。
+        //
+        // ⚠️ この掃除は**リーク衛生であって必須処理ではない**。ゴーストが1個残る損害より、ここで例外が出て
+        // 以降の再スキン (scale/位置/アイコン差替/OnClick 配線/InputField キャッシュ) が丸ごと飛ぶ損害の方が
+        // 遥かに大きい — clone だけが生のチャット入力欄の姿で設定画面に残り、InputField にも載らないので
+        // 開き直しても毎回同じ経路で落ちて直らない (BUG-20260725-02 の「まんまチャット欄・検索も効かない・
+        // 部屋を建て直すまで固定」がこれ)。ghost.name は IL2CPP の native get_name で、解放済み/再利用
+        // スロットの TMP を掴むと NRE を投げうる (2026-07-12 実機の get_name NRE と同型)。よって probe /
+        // scan / 各要素をそれぞれ隔離し、失敗しても必ず再スキンへ抜ける。
+        static void StripPlaceHolderGhosts(FreeChatInputField field)
+        {
+            TextMeshPro clonedOutput;
+            try { clonedOutput = field.textArea ? field.textArea.outputText : null; }
+            catch (Exception e) { Logger.Warn($"search box: outputText probe failed ({e.Message}) — ghost strip skipped (BUG-20260725-02)", "MenuLeak"); return; }
+
+            Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppArrayBase<TextMeshPro> ghosts;
+            try { ghosts = field.GetComponentsInChildren<TextMeshPro>(true); }
+            catch (Exception e) { Logger.Warn($"search box: ghost scan failed ({e.Message}) — ghost strip skipped (BUG-20260725-02)", "MenuLeak"); return; }
+
+            if (ghosts == null) return;
+
+            foreach (TextMeshPro ghost in ghosts)
+            {
+                try
+                {
+                    if (ghost && ghost.name.StartsWith("PlaceHolderText") && ghost != clonedOutput)
+                        Object.DestroyImmediate(ghost.gameObject);
+                }
+                catch (Exception e) { Logger.Warn($"search box: skipped one ghost ({e.Message}) (BUG-20260725-02)", "MenuLeak"); }
+            }
         }
 
         // 既に剥がされていれば何もしない冪等版。Destroy(null) を interop 境界に投げない。
@@ -2313,7 +2360,10 @@ public static class FixInputChatField
 {
     public static bool Prefix(FreeChatInputField __instance)
     {
-        if (GameSettingMenuPatch.InputField && __instance == GameSettingMenuPatch.InputField && __instance.gameObject.activeSelf)
+        // textArea/Background 欠損の個体でも InputField にキャッシュされうる (ゴースト掃除を非致命化した結果、
+        // "search box clone has no outputText" の Warn を出した clone もキャッシュまで到達する)。無ガードだと
+        // ここが毎フレーム NRE になり、しかも return false 済みでバニラの UpdateCharCount まで止まる。
+        if (GameSettingMenuPatch.InputField && __instance == GameSettingMenuPatch.InputField && __instance.gameObject.activeSelf && __instance.Background && __instance.textArea)
         {
             Vector2 size = __instance.Background.size;
             size.y = Math.Max(0.62f, __instance.textArea.TextHeight + 0.2f);
@@ -2334,10 +2384,12 @@ public static class FixDarkThemeForSearchBar
 
         FreeChatInputField field = GameSettingMenuPatch.InputField;
 
-        if (field && field.gameObject.activeSelf)
-        {
-            field.background.color = new Color32(40, 40, 40, byte.MaxValue);
-            field.textArea.outputText.color = Color.white;
-        }
+        if (!field || !field.gameObject.activeSelf) return;
+
+        if (field.background) field.background.color = new Color32(40, 40, 40, byte.MaxValue);
+
+        // outputText を欠いた clone もキャッシュされうる (FixInputChatField 側のコメント参照)。ここは
+        // ChatController.Update ごとに走るので、無ガードだと毎フレーム NRE になる。
+        if (field.textArea && field.textArea.outputText) field.textArea.outputText.color = Color.white;
     }
 }
