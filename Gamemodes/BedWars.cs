@@ -533,6 +533,11 @@ public static class BedWars
 
         foreach ((BedWarsTeam team, (Vector2 bedPos, SystemTypes room, Vector2 itemShopPos, Vector2 upgradeShopPos, _)) in bases)
         {
+            // 誰も居ないチームのベッド/ショップは建てない。少人数ロビーでも常に4チーム分
+            // (ベッド+ショップ2 = 12体) の CNO を開始直後に生成していた。勝敗 (CheckForGameEnd)・
+            // HUD・ショップ/ベッド判定は全て AllNetObjects の存在ベースの走査なので、欠けても安全。
+            if (!playerTeams.ContainsValue(team)) continue;
+
             Bed bed = team switch
             {
                 BedWarsTeam.Blue => new BlueBed(bedPos),

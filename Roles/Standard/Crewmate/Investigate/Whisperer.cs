@@ -218,9 +218,25 @@ public class Whisperer : RoleBase
         foreach (Soul soul in Souls)
         {
             soul.QuestioningTime = 0f;
-            soul.NetObject ??= new(soul.Position, WhispererId.GetPlayer());
             soul.IsQuestionAble = true;
             Utils.SendRPC(CustomRPC.SyncRoleData, WhispererId, 3, soul.Player.PlayerId, soul.QuestioningTime);
+
+            if (soul.NetObject != null) continue;
+
+            // 新規ソウルの CNO 生成を同一フレームに固めない (会議明け一斉生成の Magistrate と同型)。
+            // スロットは CustomNetObject 側の static 通し番号 — このフックは保持者ごとに呼ばれるため、
+            // ローカル連番だと Whisperer 複数保持時に各自の i 体目が同じティックに重なる。
+            Soul target = soul;
+
+            LateTask.New(() =>
+            {
+                if (GameStates.IsMeeting || GameStates.IsEnded) return;
+
+                PlayerControl whisperer = WhispererId.GetPlayer();
+                if (whisperer == null) return; // SoulObject は onlyVisibleTo 前提 — 不在なら全員に見えてしまう
+
+                target.NetObject ??= new(target.Position, whisperer);
+            }, CustomNetObject.NextDeferredSpawnDelay(), log: false);
         }
     }
 

@@ -66,10 +66,11 @@ namespace EndKnot
 
         protected override void OnFixedUpdate()
         {
-            if (!playerControl || !AmongUsClient.Instance.AmHost || !AmongUsClient.Instance.AmClient) return;
-            if (!LockPosition) return;
-            try { playerControl.NetTransform.SnapTo(Position, (ushort)(playerControl.NetTransform.lastSequenceId + 1U)); }
-            catch { }
+            // snap-back は base の共有 throttle (全 CNO 合算で ~30 回/秒) に委譲する。ここで
+            // NetTransform.SnapTo を毎フレ直呼びすると throttle を丸ごと迂回し、N 体分の毎フレ
+            // Data 同期が SnapTo cap を食い潰す (公式鯖では /dummy 20 で 400-800/s 連射になる)。
+            if (!playerControl || !LockPosition) return;
+            base.OnFixedUpdate();
         }
 
         public override void OnMeeting()

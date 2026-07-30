@@ -19,6 +19,9 @@ public class DummySpawner : RoleBase
 
     private static int LastSpawnedMeeting = -1;
 
+    /// <summary>ダミー 1 体ごとの生成間隔。TOHK/TOHP の SpawnQueue と同じ 0.4 秒。</summary>
+    private const float SpawnGapSeconds = 0.4f;
+
     public override bool IsEnable => PlayerIdList.Count > 0;
 
     public override void SetupCustomOption()
@@ -29,7 +32,9 @@ public class DummySpawner : RoleBase
             .SetParent(Options.CustomRoleSpawnChances[CustomRoles.DummySpawner])
             .SetValueFormat(OptionFormat.Seconds);
 
-        DummyCountOpt = new IntegerOptionItem(Id + 11, "DummySpawnerDummyCount", new(1, 200, 1), 10, TabGroup.ImpostorRoles)
+        // 上限 30 はパフォーマンス基準。ダミーは 1 体ずつ PlayerControl を丸ごと生成するため、
+        // これを超えるとホストの動作が実用にならない (送信は SpawnGapSeconds で平してある)。
+        DummyCountOpt = new IntegerOptionItem(Id + 11, "DummySpawnerDummyCount", new(1, 30, 1), 10, TabGroup.ImpostorRoles)
             .SetParent(Options.CustomRoleSpawnChances[CustomRoles.DummySpawner])
             .SetValueFormat(OptionFormat.Times);
 
@@ -121,6 +126,11 @@ public class DummySpawner : RoleBase
         if (!AmongUsClient.Instance.AmHost) return;
         if (GameStates.IsEnded || GameStates.IsMeeting) return;
 
+        // 順送りスロットは DummySpawner 保持者をまたいで通し番号にする。役職の Maximum は 15 まで
+        // 設定できるため、保持者ごとに 0 から振り直すと「全員の i 体目」が同じティックに重なり、
+        // ピークの送信密度が保持者数の倍数になる (会議明けに一斉に走るので必ず重なる)。
+        int slot = 0;
+
         foreach (byte id in PlayerIdList.ToArray())
         {
             var pc = Utils.GetPlayerById(id);
@@ -141,10 +151,15 @@ public class DummySpawner : RoleBase
             // 50 個一気バーストは Among Us server の rate limit に引っかかり、
             // 非モッド側で FailedError 復元 step (CNO.PlayerId を 254 へ戻す) のパケットが drop する。
             // → CNO.PlayerId が非モッド自身の値で stuck し全 dummy が非モッドとしてレンダリング。
-            // TOHP の SpawnQueue (0.4s gap) に倣い、staggered LateTask で burst を解消する
+            // TOHP の SpawnQueue に倣い、staggered LateTask で burst を解消する。
+            // ⚠️ 間隔は SpawnGapSeconds (0.4s) から縮めないこと。1体につき Reliable 送信が
+            // spawn / outfit 適用 / 名札 / 位置合わせの 4 本、さらに他プレイヤーへの個別配信が
+            // 人数分ぶら下がるので、間隔を詰めると人数の多いロビーでだけ送信が山になる。
+            // 生成完了から 0.5 秒後に outfit 適用が走る (CustomNetObject の OnAfterCreate) ため、
+            // 間隔がこれより短いと「新規 spawn」と「前の体への outfit 適用」が定常的に重なる。
             for (int i = 0; i < count; i++)
             {
-                int idx = i;
+                int idx = slot++;
                 LateTask.New(() =>
                 {
                     if (GameStates.IsEnded || GameStates.IsMeeting) return;
@@ -152,7 +167,7 @@ public class DummySpawner : RoleBase
                     if (owner == null || !owner.IsAlive()) return;
                     if (!SpawnedDummies.TryGetValue(capturedId, out var current) || current != capturedList) return;
                     capturedList.Add(new RandomDummy(GetRandomMapPosition()));
-                }, idx * 0.05f, "DummySpawner.Spawn", log: false);
+                }, idx * SpawnGapSeconds, "DummySpawner.Spawn", log: false);
             }
         }
     }
