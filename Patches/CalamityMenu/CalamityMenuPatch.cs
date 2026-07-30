@@ -64,6 +64,8 @@ public static class CalamityMenuPatch
         SafeStep("Sky",         () => CalamitySky.Init(MenuRoot.GetLayer("ParticleLayer")));
         SafeStep("Logo",        () => CalamityLogo.Build(MenuRoot.GetLayer("LogoLayer")));
         SafeStep("Buttons",     () => CalamityButtons.Build(__instance, MenuRoot.GetLayer("ButtonLayer")));
+        // BACK ボタンはここで先に作って伏せておく (クリック時生成は固まる — 詳細は PrepareBackButton)
+        SafeStep("BackButton",  () => CalamityVisibility.PrepareBackButton());
         SafeStep("FeatureBridge", () => EndKnotFeatureBridge.Init(__instance, MenuRoot.GetLayer("OverlayLayer")));
 
         // RightPanel fallback init: if TitleLogoPatch.Postfix returned early (LeftPanel was
