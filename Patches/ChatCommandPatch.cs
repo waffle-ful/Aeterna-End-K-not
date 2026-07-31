@@ -3692,7 +3692,7 @@ internal static class ChatCommands
 
         if (args.Length < 2 || !int.TryParse(args[1], out int total) || total <= 0)
         {
-            Utils.SendMessage("[nest] Usage: /nest <total> [real|safe|thin|none] [via=t6self|t5|bare6] [tgt=self|cno] [dst=self|real|spread] [per=<k>] [pad=<chars>] [raw] [force]  |  /nest limit", player.PlayerId);
+            Utils.SendMessage("[nest] Usage: /nest <total> [real|safe|thin|none] [via=t6self|t5|bare6] [tgt=self|cno|other|selfdata] [dst=self|real|spread] [per=<k>] [pad=<chars>] [spoof] [raw] [force]  |  /nest limit", player.PlayerId);
             return;
         }
 
@@ -3703,8 +3703,14 @@ internal static class ChatCommands
         var via = "t6self";
         // Data の対象 NetObject。thin/none は既定で自分の PlayerControl、real/safe は常にプローブ CNO。
         // `tgt=cno` で thin もプローブ CNO を対象にできる (「Data 1枚が違法」か「自分宛 Data が違法」かの分離用)。
+        // `tgt=other` は**実在する他プレイヤーの PlayerControl** を対象にする (2026-08-01 追加)。
+        // 既に取れている 2 本 (self=100%キック / CNO=無傷) は「自分のか否か」と「実プレイヤーのか否か」が
+        // 交絡したままなので、この 3 本目で分離する:
+        //   蹴られる → 実プレイヤーの PlayerControl 全般が保護対象 (自分固有ではない)
+        //   無傷     → 自分固有の詐称防止ルール (自分の netId / 自クライアント所有の netId)
+        // ⚠️ 対象は tag1 の中身であって宛先ではない。`dst=self` 固定なのでパケットは他人の端末へ飛ばない。
         var tgt = "self";
-        // 宛先の配り方 — 2026-08-01 時点で生き残っている唯一の軸「宛先が相異なる数 (fan-out 幅)」用。
+        // 宛先の配り方 — 残る2軸のうち「宛先が相異なる数 (fan-out 幅)」用 (もう1軸は spoof のマスカレード)。
         //   self   = 全子が自分の OwnerId (幅1。個数だけを動かす既定)
         //   real   = 実在する非ホストクライアントへ順に配る (実 fan-out と同じ形。実プレイヤーが要る)
         //   spread = 存在しない client id を1つずつずらして配る (ソロで幅だけを動かす。
@@ -3715,6 +3721,10 @@ internal static class ChatCommands
         var pad = 0;
         var raw = false;
         var force = false;
+        // spoof: 各子の先頭 Data に「その子の宛先プレイヤーの実 PlayerId」を書く (最後の Data で CNO 自身の値へ復元)。
+        // = 本番の CNO per-player fan-out (`CustomNetObject.cs:647-660` の可視性マスカレード) と完全同形。
+        // これが無いと「幅」アームは本番と形が違い、真犯人がマスカレードだった場合に偽陰性を出す (2026-08-01 に発見)。
+        var spoof = false;
 
         for (var i = 2; i < args.Length; i++)
         {
@@ -3726,6 +3736,7 @@ internal static class ChatCommands
             else if (a.StartsWith("via=", StringComparison.OrdinalIgnoreCase)) via = a[4..].ToLowerInvariant();
             else if (a.StartsWith("tgt=", StringComparison.OrdinalIgnoreCase)) tgt = a[4..].ToLowerInvariant();
             else if (a.StartsWith("dst=", StringComparison.OrdinalIgnoreCase)) dst = a[4..].ToLowerInvariant();
+            else if (a.Equals("spoof", StringComparison.OrdinalIgnoreCase)) spoof = true;
             else if (a.Equals("raw", StringComparison.OrdinalIgnoreCase)) raw = true;
             else if (a.Equals("force", StringComparison.OrdinalIgnoreCase)) force = true;
             else if (a.StartsWith("per=", StringComparison.OrdinalIgnoreCase) && int.TryParse(a[4..], out int p)) per = Math.Clamp(p, 1, total);
@@ -3739,6 +3750,30 @@ internal static class ChatCommands
         // (現行の thin ペイロードは冪等で無害だが、それは偶然であって設計ではない)。
         var needsProbe = payload is "real" or "safe" || tgt == "cno" || dst != "self";
         PlayerControl probe = null;
+        PlayerControl otherPc = null;
+
+        if (tgt is "other" or "selfdata")
+        {
+            // 既存キックアーム (`/nest 1 thin`) との差分を「対象 NetObject」1点だけに保つため、
+            // 乗り物・宛先・ペイロードは固定する。real/safe は RPC 本体がプローブ CNO を参照するので対象がぶれる。
+            if (payload != "thin" || dst != "self")
+            {
+                Utils.SendMessage($"[nest] tgt={tgt} is restricted to 'thin' with dst=self (keeps the diff against /nest 1 thin minimal, and keeps another player's Data off the wire to third parties).", player.PlayerId);
+                return;
+            }
+
+            if (tgt == "other")
+            {
+                // PlayerId>=200 は CNO なので「実プレイヤー」から除外する (それは既に取れている tgt=cno アーム)。
+                otherPc = Main.EnumeratePlayerControls().FirstOrDefault(pc => !pc.AmOwner && pc.OwnerId >= 0 && pc.PlayerId < 200 && pc.Data != null);
+
+                if (otherPc == null)
+                {
+                    Utils.SendMessage("[nest] tgt=other needs at least one other real client in the lobby.", player.PlayerId);
+                    return;
+                }
+            }
+        }
 
         if (needsProbe)
         {
@@ -3775,9 +3810,17 @@ internal static class ChatCommands
         PlayerControl self = PlayerControl.LocalPlayer;
         int gameId = AmongUsClient.Instance.GameId;
         int selfClient = self.OwnerId;
-        uint probeNetId = needsProbe ? probe.NetId : self.NetId;
-        uint probeDataNetId = needsProbe ? probe.Data.NetId : self.Data.NetId;
-        byte probeId = needsProbe ? probe.PlayerId : self.PlayerId;
+        // ⚠️ 対象 NetObject は `needsProbe` ではなく `tgt` で明示的に選ぶこと。
+        // needsProbe 経由にすると tgt=other が黙って self.NetId (= 既知の 100% キックアーム) に落ち、
+        // 「他人の PlayerControl も違法」という偽陽性を掴む (しかもログにも tgt=self としか出ない)。
+        PlayerControl tgtPc = tgt == "other" ? otherPc : needsProbe ? probe : self;
+        // tgt=selfdata: 自分の **NetworkedPlayerInfo** への tag1 = 本番 (Utils.SendGameData / RpcChangeOutfitByData) と
+        // 同一クラスの送信。PlayerControl 宛が違法なのが「netId のクラス」由来か「tag1 Data 一般」由来かを、
+        // CNO もプレイヤーも要らずに分離する陰性コントロール (期待: 無傷)。
+        var dataOnPlayerInfo = tgt == "selfdata";
+        uint probeNetId = tgtPc.NetId;
+        uint probeDataNetId = tgtPc.Data.NetId;
+        byte probeId = tgtPc.PlayerId;
         var real = payload == "real";
         var thin = payload == "thin";
         var empty = payload == "none";
@@ -3786,13 +3829,18 @@ internal static class ChatCommands
         string padName = pad > 0 ? new string('█', pad) : string.Empty;
 
         var dests = new List<int>();
+        // dests と同じ添字で「その宛先プレイヤーの実 PlayerId」を保持する (spoof 用)。dst=real のときだけ埋まる。
+        var destPlayerIds = new List<byte>();
 
         switch (dst)
         {
             case "real":
                 foreach (PlayerControl pc in Main.EnumeratePlayerControls())
                     if (!pc.AmOwner && pc.OwnerId >= 0)
+                    {
                         dests.Add(pc.OwnerId);
+                        destPlayerIds.Add(pc.PlayerId);
+                    }
 
                 if (dests.Count == 0)
                 {
@@ -3842,6 +3890,10 @@ internal static class ChatCommands
 
             for (var c = 0; c < childCount; c++)
             {
+                int di = (startIndex + c) % dests.Count;
+                // spoof 時は本番同様「この子の宛先プレイヤーの PlayerId」を先頭 Data に書く (末尾 Data で復元)
+                byte firstDataId = spoof && destPlayerIds.Count > 0 ? destPlayerIds[di % destPlayerIds.Count] : probeId;
+
                 if (broadcast)
                 {
                     s.StartMessage(5);
@@ -3851,7 +3903,7 @@ internal static class ChatCommands
                 {
                     s.StartMessage(6);
                     s.Write(gameId);
-                    s.WritePacked(dests[(startIndex + c) % dests.Count]);
+                    s.WritePacked(dests[di]);
                 }
 
                 if (empty)
@@ -3861,8 +3913,21 @@ internal static class ChatCommands
                 }
 
                 s.StartMessage(1);
-                s.WritePacked(probeNetId);
-                s.Write(probeId);
+
+                if (dataOnPlayerInfo)
+                {
+                    s.WritePacked(self.Data.NetId);
+                    // 会議中 write-barrier を意図的送信として通過する囲い (本番経路と同じ作法)
+                    NetworkedPlayerInfoSerializePatch.IntentionalSends++;
+                    try { self.Data.Serialize(s, false); }
+                    finally { NetworkedPlayerInfoSerializePatch.IntentionalSends--; }
+                }
+                else
+                {
+                    s.WritePacked(probeNetId);
+                    s.Write(firstDataId);
+                }
+
                 s.EndMessage();
 
                 if (thin)
@@ -3891,8 +3956,21 @@ internal static class ChatCommands
                 s.EndMessage();
 
                 s.StartMessage(1);
-                s.WritePacked(probeNetId);
-                s.Write(probeId);
+
+                if (dataOnPlayerInfo)
+                {
+                    s.WritePacked(self.Data.NetId);
+                    // 会議中 write-barrier を意図的送信として通過する囲い (本番経路と同じ作法)
+                    NetworkedPlayerInfoSerializePatch.IntentionalSends++;
+                    try { self.Data.Serialize(s, false); }
+                    finally { NetworkedPlayerInfoSerializePatch.IntentionalSends--; }
+                }
+                else
+                {
+                    s.WritePacked(probeNetId);
+                    s.Write(probeId);
+                }
+
                 s.EndMessage();
 
                 s.EndMessage();
@@ -3961,7 +4039,10 @@ internal static class ChatCommands
         int msgsPerEnvelope = Math.Min(per, total) * msgsPerChild;
 
         // 事後解析は恒久チャネル (Health + Timeline) に残す — log.html は約10分でローテートするため
-        string line = $"NEST probe total={total} per={per} msgsPerEnv={msgsPerEnvelope} envelopes={envelopes} payload={payload} via={via} tgt={(needsProbe ? "cno" : "self")} dst={dst} distinct={distinct} pad={pad} raw={raw} maxLen={maxLen} queued={pendingBefore}->{pendingAfter} packing={packingLimit} players={playerCount} phase={(GameStates.IsLobby ? "lobby" : "ingame")} server={GameStates.CurrentServerType}{warn}";
+        // tgt は生の指定値 + 実際に書いた netId を出す (どのアームを撃ったかを事後に取り違えないため)。
+        string tgtLabel = dataOnPlayerInfo ? "selfdata" : tgt == "other" ? $"other:{probeId}" : needsProbe ? "cno" : "self";
+        string tgtNetIdLabel = dataOnPlayerInfo ? $"{self.Data.NetId}(NetworkedPlayerInfo)" : $"{probeNetId}(PlayerControl)";
+        string line = $"NEST probe total={total} per={per} msgsPerEnv={msgsPerEnvelope} envelopes={envelopes} payload={payload} via={via} tgt={tgtLabel} tgtNetId={tgtNetIdLabel} dst={dst} spoof={spoof} distinct={distinct} pad={pad} raw={raw} maxLen={maxLen} queued={pendingBefore}->{pendingAfter} packing={packingLimit} players={playerCount} phase={(GameStates.IsLobby ? "lobby" : "ingame")} server={GameStates.CurrentServerType}{warn}";
         HealthLog.NoteAnom(line);
         Logger.Info(line, "DevCmd");
         Utils.SendMessage($"[nest] submitted {sentChildren} children ({msgsPerEnvelope} msgs/envelope) in {envelopes} envelope(s), maxLen={maxLen}B, payload={payload}/{via}{(pad > 0 ? $", pad={pad}" : string.Empty)}{(raw ? ", raw" : string.Empty)}, queued={pendingBefore}->{pendingAfter}. packing limit={packingLimit}{warn}", player.PlayerId);
