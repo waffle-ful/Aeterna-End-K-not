@@ -317,6 +317,7 @@ internal static class ChatCommands
             new("SizeClean", "", Command.UsageLevels.Host, Command.UsageTimes.InGame, SizeCleanCommand, true, true),
             new("RipSize", "[size]", Command.UsageLevels.Host, Command.UsageTimes.InGame, RipSizeCommand, true, true),
             new("Burst", "{count} [direct]", Command.UsageLevels.Host, Command.UsageTimes.Always, BurstCommand, true, true, [GetString("CommandArgs.Burst.Count"), GetString("CommandArgs.Burst.Direct")]),
+            new("Nest", "{total} [options]", Command.UsageLevels.Host, Command.UsageTimes.Always, NestCommand, true, true, [GetString("CommandArgs.Nest.Total"), GetString("CommandArgs.Nest.Options")]),
             new("Map", "[list|load <file>|reload|exit|import|export|info]", Command.UsageLevels.Host, Command.UsageTimes.InLobby, MapCommand, true, true)
         ];
     }
@@ -3652,6 +3653,267 @@ internal static class ChatCommands
             DataFlagRateLimiter.Enqueue(() => sender.SendMessage(), SendOption.Reliable, count, cleanup: () => sender.SendMessage(dispose: true));
 
         Utils.SendMessage($"[burst] Sent {count} dummy SetRole RPC(s) to {target.GetRealName()} ({(direct ? "direct" : "throttled")}).", player.PlayerId);
+    }
+
+    // 公式鯖 anti-cheat の「1パケットに詰めた子メッセージの個数が効いている」説の検証プローブ。
+    // CNO の per-player fan-out (CustomNetObject.cs:606-678) と同じ形の t26 エンベロープを合成し、
+    // 宛先を自分自身の client id にして送る。ソロ(1人ホスト)でも撃てるのが本コマンドの存在意義 —
+    // 実 fan-out は「ホスト以外の全員」をループするのでソロでは 1 本も出ず、実経路では再現できない。
+    // バニラ自身が GetMaxMessagePackingLimit() を人数比例で持っている (= サーバ側に per-packet の
+    // メッセージ数上限が存在する状況証拠) ため、人数が少ないほど予算が小さく感度が高い。
+    //
+    // 実験行列 (バイト数をほぼ一定に保って1変数ずつ動かす):
+    //   A 個数 vs サイズ      : /nest 30 safe   ←→ /nest 3 safe pad=200
+    //   B パケット内 vs 秒あたり: /nest 30 per=30 ←→ /nest 30 per=1 raw
+    //   C 個数 vs 内容クラス   : /nest 20 real   ←→ /nest 20 safe   (中央の RPC だけ入れ替え)
+    //
+    // ⚠️ 自分宛の複製なので「宛先が異なる N クライアント」は模擬できない。陰性の意味は
+    //    「per-packet の個数単独では不十分」であって仮説の否定ではない。
+    //    実在しない client id を宛先にするとそれ自体が別のキック要因になるので使わない。
+    private static void NestCommand(PlayerControl player, string text, string[] args)
+    {
+        if (!player.FriendCode.GetDevUser().up && !player.FriendCode.IsLocalDev()) return;
+
+        // PacketSplitPatch の DetectThreshold(1000B) 未満に保ち、サイズ交絡と関所の再分割を排除する
+        const int SizeCap = 900;
+
+        int packingLimit = AmongUsClient.Instance.GetMaxMessagePackingLimit();
+        int playerCount = GameData.Instance ? GameData.Instance.PlayerCount : -1;
+
+        // /nest limit — バニラ側の per-packet メッセージ数上限を実測する (梯子の基準値)
+        if (args.Length >= 2 && args[1].Equals("limit", StringComparison.OrdinalIgnoreCase))
+        {
+            string limitLine = $"NEST limit packing={packingLimit} players={playerCount} pcs={PlayerControl.AllPlayerControls.Count} phase={(GameStates.IsLobby ? "lobby" : "ingame")} server={GameStates.CurrentServerType}";
+            HealthLog.NoteAnom(limitLine);
+            Logger.Info(limitLine, "DevCmd");
+            Utils.SendMessage($"[nest] GetMaxMessagePackingLimit()={packingLimit} (players={playerCount}, pcs={PlayerControl.AllPlayerControls.Count})", player.PlayerId);
+            return;
+        }
+
+        if (args.Length < 2 || !int.TryParse(args[1], out int total) || total <= 0)
+        {
+            Utils.SendMessage("[nest] Usage: /nest <total> [real|safe|thin|none] [via=t6self|t5|bare6] [tgt=self|cno] [per=<k>] [pad=<chars>] [raw] [force]  |  /nest limit", player.PlayerId);
+            return;
+        }
+
+        total = Math.Clamp(total, 1, 200);
+        var payload = "real";
+        // 子の「乗り物」— 2026-07-31 実測で t6self は子1個・26B でも即 Hacking キックされることが判明したので、
+        // 個数軸を測るには合法な乗り物 (t5=ブロードキャスト GameData) が要る。bare6 は t26 包装の有無の切り分け用。
+        var via = "t6self";
+        // Data の対象 NetObject。thin/none は既定で自分の PlayerControl、real/safe は常にプローブ CNO。
+        // `tgt=cno` で thin もプローブ CNO を対象にできる (「Data 1枚が違法」か「自分宛 Data が違法」かの分離用)。
+        var tgt = "self";
+        int per = total;
+        var pad = 0;
+        var raw = false;
+        var force = false;
+
+        for (var i = 2; i < args.Length; i++)
+        {
+            string a = args[i];
+            if (a.Equals("real", StringComparison.OrdinalIgnoreCase)) payload = "real";
+            else if (a.Equals("safe", StringComparison.OrdinalIgnoreCase)) payload = "safe";
+            else if (a.Equals("thin", StringComparison.OrdinalIgnoreCase)) payload = "thin";
+            else if (a.Equals("none", StringComparison.OrdinalIgnoreCase)) payload = "none";
+            else if (a.StartsWith("via=", StringComparison.OrdinalIgnoreCase)) via = a[4..].ToLowerInvariant();
+            else if (a.StartsWith("tgt=", StringComparison.OrdinalIgnoreCase)) tgt = a[4..].ToLowerInvariant();
+            else if (a.Equals("raw", StringComparison.OrdinalIgnoreCase)) raw = true;
+            else if (a.Equals("force", StringComparison.OrdinalIgnoreCase)) force = true;
+            else if (a.StartsWith("per=", StringComparison.OrdinalIgnoreCase) && int.TryParse(a[4..], out int p)) per = Math.Clamp(p, 1, total);
+            else if (a.StartsWith("pad=", StringComparison.OrdinalIgnoreCase) && int.TryParse(a[4..], out int pd)) pad = Math.Clamp(pd, 0, 400);
+        }
+
+        // real/safe の子メッセージの参照先はプローブ CNO に固定する (自分の PlayerControl を書き換えないため)。
+        // thin は自分自身の Data を冪等に書くだけなので CNO 不要 = ロビーでも撃てる。
+        var needsProbe = payload is "real" or "safe" || tgt == "cno";
+        PlayerControl probe = null;
+
+        if (needsProbe)
+        {
+            probe = WcDbgProbeCno?.playerControl;
+
+            // ⚠️ 「まだ生成コルーチンが走っている (playerControl が真の null)」と「Despawn 済み (fake-null)」を
+            // 区別しないと、案内に従って早く撃ち直したときに 2 体目を生やし、1 体目が誰にも Despawn されない
+            // 孤児 CNO として残る (定期 SnapTo 再送で計測窓にノイズを足す)。ReferenceEquals で生成中を弾く。
+            if (WcDbgProbeCno != null && ReferenceEquals(probe, null))
+            {
+                Utils.SendMessage("[nest] probe CNO is still spawning — wait a moment and run the same command again.", player.PlayerId);
+                return;
+            }
+
+            if (probe == null || probe.Data == null)
+            {
+                // ⚠️ Standard モードのロビーでは CreateNetObject のコルーチンが即 yield break する
+                // (CustomNetObject.cs:538) → いつまでも "still spawning" になる。先に弾いて理由を出す。
+                if (!GameStates.InGame && Options.CurrentGameMode == CustomGameMode.Standard)
+                {
+                    Utils.SendMessage("[nest] 'real'/'safe' need a probe CNO, which cannot spawn in a Standard-mode lobby. Start a solo game first, or use 'thin' (needs no CNO).", player.PlayerId);
+                    return;
+                }
+
+                // 生成はコルーチンで netId が非同期に決まるので、スポーン通信を計測窓に混ぜないためにも
+                // 「スポーンして戻る → 撃ち直し」の2段構えにする。
+                Vector2 probePos = player.GetTruePosition() + new Vector2(2f, 0f);
+                WcDbgProbeCno = new WaveCannonWarning(probePos, "<size=100%><color=#00c8ff>█");
+                Utils.SendMessage("[nest] probe CNO spawned — run the same command again (spawn traffic is kept out of the probe window).", player.PlayerId);
+                return;
+            }
+        }
+
+        PlayerControl self = PlayerControl.LocalPlayer;
+        int gameId = AmongUsClient.Instance.GameId;
+        int selfClient = self.OwnerId;
+        uint probeNetId = needsProbe ? probe.NetId : self.NetId;
+        uint probeDataNetId = needsProbe ? probe.Data.NetId : self.Data.NetId;
+        byte probeId = needsProbe ? probe.PlayerId : self.PlayerId;
+        var real = payload == "real";
+        var thin = payload == "thin";
+        var empty = payload == "none";
+        var packed = via != "bare6";
+        var broadcast = via == "t5";
+        string padName = pad > 0 ? new string('█', pad) : string.Empty;
+
+        // real/safe は実 fan-out と同じ [Data / RPC / Data] の3枚構成で、中央の RPC だけを
+        // real=MurderPlayer(FailedError, 実物と同一) / safe=SetName(無害) で入れ替える。
+        // thin は Data 1枚だけ = 「子(tag6)の個数」と「葉メッセージの個数」を分離するためのアーム
+        // (例: 12 thin と 4 safe はどちらも 12 メッセージだが、子の数は 12 と 4 で違う)。
+        // Data の PlayerId は回転させず自分の値を書くので、自分宛にエコーバックしても局所的に無害。
+        MessageWriter BuildEnvelope(int childCount)
+        {
+            MessageWriter s = MessageWriter.Get(SendOption.Reliable);
+
+            if (packed)
+            {
+                s.StartMessage(26);
+                s.WritePacked(gameId);
+            }
+
+            for (var c = 0; c < childCount; c++)
+            {
+                if (broadcast)
+                {
+                    s.StartMessage(5);
+                    s.Write(gameId);
+                }
+                else
+                {
+                    s.StartMessage(6);
+                    s.Write(gameId);
+                    s.WritePacked(selfClient);
+                }
+
+                if (empty)
+                {
+                    s.EndMessage();
+                    continue;
+                }
+
+                s.StartMessage(1);
+                s.WritePacked(probeNetId);
+                s.Write(probeId);
+                s.EndMessage();
+
+                if (thin)
+                {
+                    s.EndMessage();
+                    continue;
+                }
+
+                s.StartMessage(2);
+                s.WritePacked(probeNetId);
+
+                if (real)
+                {
+                    s.Write((byte)RpcCalls.MurderPlayer);
+                    s.WriteNetObject(probe);
+                    s.Write((int)MurderResultFlags.FailedError);
+                }
+                else
+                {
+                    s.Write((byte)RpcCalls.SetName);
+                    s.Write(probeDataNetId);
+                    s.Write(padName);
+                    s.Write(false);
+                }
+
+                s.EndMessage();
+
+                s.StartMessage(1);
+                s.WritePacked(probeNetId);
+                s.Write(probeId);
+                s.EndMessage();
+
+                s.EndMessage();
+            }
+
+            if (packed) s.EndMessage();
+            return s;
+        }
+
+        MessageWriter first = BuildEnvelope(Math.Min(per, total));
+
+        if (first.Length > SizeCap && !force)
+        {
+            int rejected = first.Length;
+            first.Recycle();
+            Utils.SendMessage($"[nest] aborted before sending: envelope would be {rejected}B (cap {SizeCap}B). Lower per=/pad=, or add 'force'.", player.PlayerId);
+            return;
+        }
+
+        var envelopes = 0;
+        var sentChildren = 0;
+        var maxLen = 0;
+        // ⚠️ SendOrDisconnect は TryGate がキューに積んだだけでも戻る = 「送った」≠「ワイヤに出た」。
+        // キック時刻との時間相関を取るために、ゲート待ち本数を前後で測って結果に併記する。
+        int pendingBefore = PacketRateGate.PendingCount;
+
+        // ⚠️ StartWindowBypass は「ゲーム開始の復元シーケンス専用」の単一グローバル bool で、
+        // 既存の消費者 (OnGameStartedPatch / MeetingStartWire) は無条件 false で閉じている。
+        // それはフェーズ上お互い排他だから成立している規約で、任意タイミングで撃てる dev コマンドは
+        // その前提を満たさない — 呼び出し前の値を保存/復元して、他窓を早期クローズしないようにする。
+        // (DataFlagRateLimiter 側は触らない: 本コマンドは SendOrDisconnect 直呼びで Enqueue を通らないため無効)
+        bool prevBypass = PacketRateGate.StartWindowBypass;
+
+        try
+        {
+            if (raw) PacketRateGate.StartWindowBypass = true;
+
+            for (var i = 0; i < total; i += per)
+            {
+                int childCount = Math.Min(per, total - i);
+                MessageWriter s = i == 0 ? first : BuildEnvelope(childCount);
+                maxLen = Math.Max(maxLen, s.Length);
+                HealthLog.RecordHostAction("NestProbe", s.Length, "Reliable");
+                AmongUsClient.Instance.SendOrDisconnect(s);
+                s.Recycle();
+                envelopes++;
+                sentChildren += childCount;
+            }
+        }
+        finally
+        {
+            if (raw) PacketRateGate.StartWindowBypass = prevBypass;
+        }
+
+        int pendingAfter = PacketRateGate.PendingCount;
+
+        // 実験を無効化しうる条件は結果に明示する (陰性を「証拠」と誤読しないため)
+        var warn = string.Empty;
+        if (raw && pendingBefore > 0) warn += $" ⚠ gate queue was not empty ({pendingBefore}) — 'raw' only bypasses while the queue is empty.";
+        if (maxLen > 1000) warn += " ⚠ envelope exceeded 1000B — PacketSplitPatch re-split it into ≤800B chunks, so this is NOT a single large packet.";
+        if (pendingAfter > 0) warn += $" ⚠ {pendingAfter} packet(s) still queued — not on the wire yet.";
+
+        // 梯子の基準は「子の個数」ではなく「葉メッセージの個数」— 実 fan-out も messages += 3 で数え、
+        // GetMaxMessagePackingLimit() と比較している (CustomNetObject.cs:626,663)。両方出す。
+        int msgsPerChild = empty ? 0 : thin ? 1 : 3;
+        int msgsPerEnvelope = Math.Min(per, total) * msgsPerChild;
+
+        // 事後解析は恒久チャネル (Health + Timeline) に残す — log.html は約10分でローテートするため
+        string line = $"NEST probe total={total} per={per} msgsPerEnv={msgsPerEnvelope} envelopes={envelopes} payload={payload} via={via} tgt={(needsProbe ? "cno" : "self")} pad={pad} raw={raw} maxLen={maxLen} queued={pendingBefore}->{pendingAfter} packing={packingLimit} players={playerCount} phase={(GameStates.IsLobby ? "lobby" : "ingame")} server={GameStates.CurrentServerType}{warn}";
+        HealthLog.NoteAnom(line);
+        Logger.Info(line, "DevCmd");
+        Utils.SendMessage($"[nest] submitted {sentChildren} children ({msgsPerEnvelope} msgs/envelope) in {envelopes} envelope(s), maxLen={maxLen}B, payload={payload}/{via}{(pad > 0 ? $", pad={pad}" : string.Empty)}{(raw ? ", raw" : string.Empty)}, queued={pendingBefore}->{pendingAfter}. packing limit={packingLimit}{warn}", player.PlayerId);
     }
 
     private static void KCountCommand(PlayerControl player, string text, string[] args)
