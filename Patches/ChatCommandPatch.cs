@@ -3670,6 +3670,45 @@ internal static class ChatCommands
     // ⚠️ 自分宛の複製なので「宛先が異なる N クライアント」は模擬できない。陰性の意味は
     //    「per-packet の個数単独では不十分」であって仮説の否定ではない。
     //    実在しない client id を宛先にするとそれ自体が別のキック要因になるので使わない。
+    // ── 実験用 spawn プローブ (2026-08-01) ────────────────────────────────────────
+    // 「実プレイヤーの PlayerControl 宛 Data だけが違法・CNO の PlayerControl は合法」を説明できる
+    // 単一変数モデルが3つあり、どれも「CNO の spawn」と「実プレイヤーの spawn」の差でしか動かせない:
+    //   M-owner  : spawn の ownerId が実クライアント id か -2 か
+    //   M-slot   : spawn 本体に書く PlayerId が実スロット (<200) か CNO 枠 (>=200) か
+    //   M-retype : spawn 直後の「3本の再登録 spawn」(CustomNetObject.cs:563-575 / Vanilla 鯖限定) の有無
+    // CustomNetObject 経由ではこの3つが全部固定されているので、ここで手組みして1つずつ振る。
+    // 副次利得: DataFlagRateLimiter 待ちと `Standard && !InGame` の yield break を通らないので**ロビーで撃てる**。
+    private static PlayerControl NestXProbe;
+    private static string NestXProbeSpec = string.Empty;
+
+    // GameData に登録されていない PlayerControl (手組み spawn / CNO) では `PlayerControl.Data` の
+    // ゲッターが例外を投げる。プローブ系は必ずこれを通す。
+    private static uint SafeDataNetId(PlayerControl pc)
+    {
+        try { return pc.Data != null ? pc.Data.NetId : 0U; }
+        catch (Exception) { return 0U; }
+    }
+
+    /// <summary>その netId が「生きているプレイヤーの持ち物」(PlayerControl / NetworkedPlayerInfo /
+    /// PlayerPhysics / CustomNetworkTransform) かどうか。/nest の破壊的アームの事故防止ゲート用。</summary>
+    private static bool NestIsLivePlayerNetId(uint netId)
+    {
+        foreach (PlayerControl pc in Main.EnumeratePlayerControls())
+        {
+            if (!pc || pc.OwnerId < 0) continue;
+            if (pc.NetId == netId || SafeDataNetId(pc) == netId) return true;
+
+            try
+            {
+                if (pc.MyPhysics && pc.MyPhysics.NetId == netId) return true;
+                if (pc.NetTransform && pc.NetTransform.NetId == netId) return true;
+            }
+            catch (Exception) { /* best-effort */ }
+        }
+
+        return false;
+    }
+
     private static void NestCommand(PlayerControl player, string text, string[] args)
     {
         if (!player.FriendCode.GetDevUser().up && !player.FriendCode.IsLocalDev()) return;
@@ -3690,9 +3729,278 @@ internal static class ChatCommands
             return;
         }
 
+        // /nest info — netId / ownerId / spawnId の実測ダンプ。パケットは 1 本も出さない。
+        // 「実プレイヤーの PlayerControl 宛 Data だけが違法」を説明する候補モデルのうち、
+        // 所有権 (M-owner) が原理的に成立しうるかを、実験を撃つ前に実値で絞るための計器。
+        if (args.Length >= 2 && args[1].Equals("info", StringComparison.OrdinalIgnoreCase))
+        {
+            PlayerControl me = PlayerControl.LocalPlayer;
+            var sb = new StringBuilder();
+
+            void Describe(string label, InnerNetObject ino)
+            {
+                if (!ino) sb.Append($" | {label}=<null>");
+                else sb.Append($" | {label} net={ino.NetId} own={ino.OwnerId} spawn={ino.SpawnId}");
+            }
+
+            sb.Append($"NEST info client={AmongUsClient.Instance.ClientId} host={AmongUsClient.Instance.HostId} game={AmongUsClient.Instance.GameId} netIdCnt={AmongUsClient.Instance.NetIdCnt} server={GameStates.CurrentServerType} phase={(GameStates.IsLobby ? "lobby" : "ingame")}");
+            Describe("self.pc", me);
+            Describe("self.data", me.Data);
+            Describe("self.nt", me.NetTransform);
+            Describe("self.phys", me.MyPhysics);
+
+            foreach (PlayerControl pc in Main.EnumeratePlayerControls())
+            {
+                if (pc.AmOwner) continue;
+
+                Describe($"other{pc.PlayerId}.pc", pc);
+                Describe($"other{pc.PlayerId}.data", pc.Data);
+            }
+
+            PlayerControl cno = WcDbgProbeCno?.playerControl;
+
+            if (cno)
+            {
+                Describe($"cno(pid{cno.PlayerId}).pc", cno);
+                Describe("cno.nt", cno.NetTransform);
+                sb.Append($" | cno.dataNet={SafeDataNetId(cno)}");
+            }
+
+            if (NestXProbe)
+            {
+                Describe($"xprobe(pid{NestXProbe.PlayerId}).pc", NestXProbe);
+                Describe("xprobe.nt", NestXProbe.NetTransform);
+                sb.Append($" | xprobe.dataNet={SafeDataNetId(NestXProbe)} xprobeSpec={NestXProbeSpec}");
+            }
+
+            string info = sb.ToString();
+            HealthLog.NoteAnom(info);
+            Logger.Info(info, "DevCmd");
+            // チャットは 1 通の上限があるので 2 通に割る (self 系 / プローブ系)。
+            // `.Data` は GameData 未登録だとゲッターが投げるので、チャット表示側も SafeDataNetId を通す
+            // (LocalPlayer なら実害は無いが、診断ツール自身が例外で落ちるのは本末転倒)。
+            Utils.SendMessage($"[nest] self pc=net{me.NetId}/own{me.OwnerId}/pid{me.PlayerId} data=net{SafeDataNetId(me)} nt=net{me.NetTransform.NetId}/own{me.NetTransform.OwnerId} phys=net{me.MyPhysics.NetId}/own{me.MyPhysics.OwnerId} | client={AmongUsClient.Instance.ClientId} netIdCnt={AmongUsClient.Instance.NetIdCnt}", player.PlayerId);
+            Utils.SendMessage($"[nest] cno={(cno ? $"net{cno.NetId}/own{cno.OwnerId}/pid{cno.PlayerId}" : "-")} xprobe={(NestXProbe ? $"net{NestXProbe.NetId}/own{NestXProbe.OwnerId}/pid{NestXProbe.PlayerId} [{NestXProbeSpec}]" : "-")} (full dump in Health/Timeline)", player.PlayerId);
+            return;
+        }
+
+        // /nest xspawn [owner=none|self|<int>] [pid=<0-255>|self] [noreg]
+        // CustomNetObject を通さずに PlayerControl プレハブを手組み spawn する。CNO と唯一違うのは
+        // 「ownerId」「spawn 本体の PlayerId」「3本の再登録 spawn の有無」を任意に振れる点だけ。
+        // ⚠️ 再登録 spawn (`noreg` を付けない既定) は CNO / 偽死体と**バイト単位で同形**にするために要る。
+        //    省いた形を既定にすると全アームが「CNO 無傷」セルとの1ビット分離でなくなる。
+        if (args.Length >= 2 && args[1].Equals("xspawn", StringComparison.OrdinalIgnoreCase))
+        {
+            if (NestXProbe)
+            {
+                Utils.SendMessage($"[nest] xprobe already exists ({NestXProbeSpec}, net={NestXProbe.NetId}) — run '/nest xdespawn' first.", player.PlayerId);
+                return;
+            }
+
+            int spawnOwner = -2;
+            byte spawnPid = 201;
+            var noReg = false;
+
+            for (var i = 2; i < args.Length; i++)
+            {
+                string a = args[i];
+
+                if (a.Equals("noreg", StringComparison.OrdinalIgnoreCase)) noReg = true;
+                else if (a.StartsWith("owner=", StringComparison.OrdinalIgnoreCase))
+                {
+                    string v = a[6..];
+                    if (v.Equals("self", StringComparison.OrdinalIgnoreCase)) spawnOwner = PlayerControl.LocalPlayer.OwnerId;
+                    else if (v.Equals("none", StringComparison.OrdinalIgnoreCase)) spawnOwner = -2;
+                    else if (int.TryParse(v, out int o)) spawnOwner = o;
+                }
+                else if (a.StartsWith("pid=", StringComparison.OrdinalIgnoreCase))
+                {
+                    string v = a[4..];
+                    if (v.Equals("self", StringComparison.OrdinalIgnoreCase)) spawnPid = PlayerControl.LocalPlayer.PlayerId;
+                    else if (byte.TryParse(v, out byte p)) spawnPid = p;
+                }
+            }
+
+            PlayerControl xpc = UnityEngine.Object.Instantiate(AmongUsClient.Instance.PlayerPrefab, Vector2.zero, Quaternion.identity);
+            xpc.PlayerId = spawnPid;
+            xpc.isNew = false;
+            xpc.notRealPlayer = true;
+
+            try { xpc.NetTransform.SnapTo(new Vector2(50f, 50f)); }
+            catch (Exception e) { Utils.ThrowException(e); }
+
+            AmongUsClient.Instance.NetIdCnt += 1U;
+            MessageWriter spawn = MessageWriter.Get(SendOption.Reliable);
+            spawn.StartMessage(5);
+            spawn.Write(AmongUsClient.Instance.GameId);
+            spawn.StartMessage(4);
+            var spawnMsg = AmongUsClient.Instance.CreateSpawnMessage(xpc, spawnOwner, SpawnFlags.None);
+            spawnMsg.SerializeValues(spawn);
+            spawn.EndMessage();
+
+            if (!noReg && GameStates.CurrentServerType == GameStates.ServerType.Vanilla)
+            {
+                // CustomNetObject.cs:563-575 / Utils.cs:5575-5586 と同一。直前に払い出した3つの netId
+                // (PlayerControl / PlayerPhysics / CustomNetworkTransform) を spawnId=2・ownerId=-2 の
+                // 別 spawn として再宣言する。**公式鯖 (Vanilla) のときだけ**送っている点が重要な手掛かり。
+                for (uint i = 1; i <= 3; ++i)
+                {
+                    spawn.StartMessage(4);
+                    spawn.WritePacked(2U);
+                    spawn.WritePacked(-2);
+                    spawn.Write((byte)SpawnFlags.None);
+                    spawn.WritePacked(1);
+                    spawn.WritePacked(AmongUsClient.Instance.NetIdCnt - i);
+                    spawn.StartMessage(1);
+                    spawn.EndMessage();
+                    spawn.EndMessage();
+                }
+            }
+
+            spawn.EndMessage();
+            HealthLog.RecordHostAction("NestXSpawn", spawn.Length, "Reliable");
+            AmongUsClient.Instance.SendOrDisconnect(spawn);
+            int spawnLen = spawn.Length;
+            spawn.Recycle();
+
+            // CNO と同じ後始末。PlayerId が実スロット (<200) のアームでは、これを怠ると
+            // Main.EnumeratePlayerControls() が偽物を「実プレイヤー」として拾い、他系統が壊れる。
+            if (PlayerControl.AllPlayerControls.Contains(xpc)) PlayerControl.AllPlayerControls.Remove(xpc);
+            xpc.cosmetics.colorBlindText.color = Color.clear;
+
+            // ⚠️ owner=self アームの交絡除去: ローカルの OwnerId をそのままにすると AmOwner=true になり、
+            // PlayerControl.FixedUpdate のローカルプレイヤー分岐とエンジン側 dirty walk の送信が走る。
+            // 実験対象は「ワイヤに書いた ownerId」なので、ローカルは CNO と同じ -2 に戻して挙動を揃える。
+            xpc.OwnerId = -2;
+
+            NestXProbe = xpc;
+            NestXProbeSpec = $"owner={spawnOwner} pid={spawnPid} reg={!noReg}";
+            string xline = $"NEST xspawn {NestXProbeSpec} pcNet={xpc.NetId} physNet={xpc.MyPhysics.NetId} ntNet={xpc.NetTransform.NetId} dataNet={SafeDataNetId(xpc)} len={spawnLen} phase={(GameStates.IsLobby ? "lobby" : "ingame")} server={GameStates.CurrentServerType}";
+            HealthLog.NoteAnom(xline);
+            Logger.Info(xline, "DevCmd");
+            Utils.SendMessage($"[nest] xprobe spawned: {NestXProbeSpec} net={xpc.NetId} ({spawnLen}B). Now fire e.g. '/nest 1 thin tgt=xprobe'.", player.PlayerId);
+            return;
+        }
+
+        if (args.Length >= 2 && args[1].Equals("xdespawn", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!NestXProbe)
+            {
+                NestXProbe = null;
+                Utils.SendMessage("[nest] no xprobe to despawn.", player.PlayerId);
+                return;
+            }
+
+            PlayerControl dead = NestXProbe;
+            uint deadNet = dead.NetId;
+            MessageWriter dsp = MessageWriter.Get(SendOption.Reliable);
+            dsp.StartMessage(5);
+            dsp.Write(AmongUsClient.Instance.GameId);
+            dsp.StartMessage(5);
+            dsp.WritePacked(deadNet);
+            dsp.EndMessage();
+            dsp.EndMessage();
+            AmongUsClient.Instance.SendOrDisconnect(dsp);
+            dsp.Recycle();
+
+            // Utils.RpcCreateDeadBody と同じ後始末 (RemoveNetObject(Data) は in-flight 参照を壊すので使わない)
+            try
+            {
+                if (dead.Data != null) dead.Data.ClearDirtyBits();
+            }
+            catch (Exception) { /* GameData 未登録のプローブでは Data ゲッターが投げる */ }
+
+            AmongUsClient.Instance.RemoveNetObject(dead);
+            UnityEngine.Object.Destroy(dead.gameObject);
+            NestXProbe = null;
+            HealthLog.NoteAnom($"NEST xdespawn net={deadNet} spec={NestXProbeSpec}");
+            Utils.SendMessage($"[nest] xprobe despawned (net={deadNet}).", player.PlayerId);
+            NestXProbeSpec = string.Empty;
+            return;
+        }
+
+        // /nest retype <netId|self|selfnt|selfphys|xprobe>
+        // CNO / 偽死体が spawn 直後に送っている「再登録 spawn」(spawnId=2 / ownerId=-2 / 1コンポーネント /
+        // 本体 0 バイト) を**任意の netId に対して単発で**送る。M-retype の**逆向き**テスト:
+        //   `/nest retype self` → その後 `/nest 1 thin` が**無傷になったら M-retype 確定**
+        //   (100% 蹴られていたアームが、対象 netId の種別を上書きしただけで通るということ)。
+        if (args.Length >= 2 && args[1].Equals("retype", StringComparison.OrdinalIgnoreCase))
+        {
+            PlayerControl me = PlayerControl.LocalPlayer;
+            string what = args.Length >= 3 ? args[2].ToLowerInvariant() : "self";
+            uint target;
+
+            switch (what)
+            {
+                case "self":
+                    target = me.NetId;
+                    break;
+                case "selfnt":
+                    target = me.NetTransform.NetId;
+                    break;
+                case "selfphys":
+                    target = me.MyPhysics.NetId;
+                    break;
+                case "xprobe":
+                    if (!NestXProbe)
+                    {
+                        Utils.SendMessage("[nest] retype xprobe needs '/nest xspawn' first.", player.PlayerId);
+                        return;
+                    }
+
+                    target = NestXProbe.NetId;
+                    break;
+                default:
+                    if (!uint.TryParse(what, out target))
+                    {
+                        Utils.SendMessage("[nest] Usage: /nest retype <netId|self|selfnt|selfphys|xprobe>", player.PlayerId);
+                        return;
+                    }
+
+                    break;
+            }
+
+            // ⚠️ 既知の 100% 自爆ターゲット: 生きているプレイヤーの 4 オブジェクト
+            // (PlayerControl / PlayerPhysics / CustomNetworkTransform / NetworkedPlayerInfo)。
+            // これらの再宣言は P3 = 25B で即 Hacking キック。`op=despawn tgt=self` が force を要求するのに
+            // こちらが素通りだと、事故で 1 ロビー潰す非対称ができるので同じゲートを張る。
+            // ⚠️ 自分だけでなく**全プレイヤー**を見る。`/nest info` が他人の netId をダンプするので、
+            // 「info で他人の netId を調べる → retype で狙う」の2手経路が無警告で通ってしまう (2026-08-01 監査)。
+            bool lethal = NestIsLivePlayerNetId(target);
+
+            if (lethal && !args.Any(a => a.Equals("force", StringComparison.OrdinalIgnoreCase)))
+            {
+                Utils.SendMessage($"[nest] retype netId={target} is a LIVE player object — this is a known 100% Hacking kick (P3). Add 'force' if that is intended.", player.PlayerId);
+                return;
+            }
+
+            MessageWriter rt = MessageWriter.Get(SendOption.Reliable);
+            rt.StartMessage(5);
+            rt.Write(AmongUsClient.Instance.GameId);
+            rt.StartMessage(4);
+            rt.WritePacked(2U);
+            rt.WritePacked(-2);
+            rt.Write((byte)SpawnFlags.None);
+            rt.WritePacked(1);
+            rt.WritePacked(target);
+            rt.StartMessage(1);
+            rt.EndMessage();
+            rt.EndMessage();
+            rt.EndMessage();
+            int retypeLen = rt.Length;
+            HealthLog.RecordHostAction("NestRetype", retypeLen, "Reliable");
+            AmongUsClient.Instance.SendOrDisconnect(rt);
+            rt.Recycle();
+            string rline = $"NEST retype target={what} netId={target} len={retypeLen} phase={(GameStates.IsLobby ? "lobby" : "ingame")} server={GameStates.CurrentServerType}";
+            HealthLog.NoteAnom(rline);
+            Logger.Info(rline, "DevCmd");
+            Utils.SendMessage($"[nest] retype sent for netId={target} ({what}, {retypeLen}B). Wait ~15s, then re-fire the arm you want to test.", player.PlayerId);
+            return;
+        }
+
         if (args.Length < 2 || !int.TryParse(args[1], out int total) || total <= 0)
         {
-            Utils.SendMessage("[nest] Usage: /nest <total> [real|safe|thin|none] [via=t6self|t5|bare6] [tgt=self|cno|other|selfdata] [dst=self|real|spread] [per=<k>] [pad=<chars>] [spoof] [raw] [force]  |  /nest limit", player.PlayerId);
+            Utils.SendMessage("[nest] Usage: /nest <total> [real|safe|thin|none] [via=t6self|t5|bare6] [tgt=self|cno|other|selfdata|xprobe|bogus|selfnt|selfphys] [dst=self|real|spread] [op=data|despawn] [body=<0-255>] [per=<k>] [pad=<chars>] [spoof] [raw] [force]  |  /nest limit|info|xspawn|xdespawn", player.PlayerId);
             return;
         }
 
@@ -3727,6 +4035,12 @@ internal static class ChatCommands
         // = 本番の CNO per-player fan-out (`CustomNetObject.cs:647-660` の可視性マスカレード) と完全同形。
         // これが無いと「幅」アームは本番と形が違い、真犯人がマスカレードだった場合に偽陰性を出す (2026-08-01 に発見)。
         var spoof = false;
+        // Data 本体に書く 1 バイト (= その PlayerControl が指すプレイヤー枠)。既定 -1 は「対象の実 PlayerId」。
+        // spawn 本体の PlayerId (`xspawn pid=`) と本体バイトは**別の変数**なので、明示的に固定できないと
+        // Arm S (spawn の PlayerId を振る) が「本体バイトも一緒に動いた」で交絡する。
+        var body = -1;
+        // op=despawn : Data(tag1) ではなく Despawn(tag5 inner) を撃つ。「保護は Data 限定か、netId 全体か」の判別用。
+        var op = "data";
 
         for (var i = 2; i < args.Length; i++)
         {
@@ -3747,6 +4061,8 @@ internal static class ChatCommands
             else if (a.Equals("force", StringComparison.OrdinalIgnoreCase)) force = true;
             else if (a.StartsWith("per=", StringComparison.OrdinalIgnoreCase) && int.TryParse(a[4..], out int p)) per = Math.Clamp(p, 1, total);
             else if (a.StartsWith("pad=", StringComparison.OrdinalIgnoreCase) && int.TryParse(a[4..], out int pd)) pad = Math.Clamp(pd, 0, 400);
+            else if (a.StartsWith("body=", StringComparison.OrdinalIgnoreCase) && int.TryParse(a[5..], out int bd)) body = Math.Clamp(bd, 0, 255);
+            else if (a.StartsWith("op=", StringComparison.OrdinalIgnoreCase)) op = a[3..].ToLowerInvariant();
         }
 
         // real/safe の子メッセージの参照先はプローブ CNO に固定する (自分の PlayerControl を書き換えないため)。
@@ -3765,17 +4081,32 @@ internal static class ChatCommands
         //   無傷 → 同じロビーで `/nest 1 thin` を撃ち、蹴られることを確認する (アームの生存確認)。
         //          そこも無傷ならビルドかサーバ側規則が変わっている。
         var spreadSelfControl = tgtExplicit && tgt == "self" && dst == "spread" && payload == "thin";
-        var needsProbe = !spreadSelfControl && (payload is "real" or "safe" || tgt == "cno" || dst != "self");
+        // 対象 NetObject を明示指定するアーム群。プローブ CNO を必要とせず、既存キックアーム
+        // (`/nest 1 thin`) との差分を「対象 netId (と、その netId の作られ方)」1点だけに保つ。
+        var explicitTarget = tgt is "other" or "selfdata" or "xprobe" or "bogus" or "selfnt" or "selfphys";
+        var needsProbe = !spreadSelfControl && !explicitTarget && (payload is "real" or "safe" || tgt == "cno" || dst != "self");
         PlayerControl probe = null;
         PlayerControl otherPc = null;
 
-        if (tgt is "other" or "selfdata")
+        if (explicitTarget)
         {
-            // 既存キックアーム (`/nest 1 thin`) との差分を「対象 NetObject」1点だけに保つため、
             // 乗り物・宛先・ペイロードは固定する。real/safe は RPC 本体がプローブ CNO を参照するので対象がぶれる。
-            if (payload != "thin" || dst != "self")
+            if (payload is not ("thin" or "none") || dst != "self")
             {
-                Utils.SendMessage($"[nest] tgt={tgt} is restricted to 'thin' with dst=self (keeps the diff against /nest 1 thin minimal, and keeps another player's Data off the wire to third parties).", player.PlayerId);
+                Utils.SendMessage($"[nest] tgt={tgt} is restricted to 'thin'/'none' with dst=self (keeps the diff against /nest 1 thin minimal, and keeps another player's Data off the wire to third parties).", player.PlayerId);
+                return;
+            }
+
+            // ⚠️ `via` も固定しないと不変条件が破れる (2026-08-01 監査で発見)。
+            // `dst=self` を強制しても `via=t5` にすると BuildEnvelope が dests を無視して
+            // **真のブロードキャスト**を組むので、`tgt=other` では他プレイヤーの netId が第三者の配線に乗る。
+            // しかもログ上は「対象 netId だけを変えた1変数アーム」に見えるのに乗り物も動いている
+            // (`dst=spread` が7アーム分の偽陰性を生んだのと同型の罠)。
+            // 自分の物 / 未使用 netId を対象にするアーム (selfdata/selfnt/selfphys/bogus/xprobe) は
+            // 第三者に何も晒さないので via を振ってよい — P5 の発見はまさに `tgt=bogus via=t5` だった。
+            if (tgt == "other" && via != "t6self")
+            {
+                Utils.SendMessage("[nest] tgt=other requires via=t6self — any other vehicle broadcasts another player's netId to third parties and silently makes this a 2-variable arm.", player.PlayerId);
                 return;
             }
 
@@ -3790,6 +4121,26 @@ internal static class ChatCommands
                     return;
                 }
             }
+
+            if (tgt == "xprobe" && !NestXProbe)
+            {
+                Utils.SendMessage("[nest] tgt=xprobe needs a probe — run '/nest xspawn [owner=..] [pid=..] [noreg]' first.", player.PlayerId);
+                return;
+            }
+        }
+
+        // ⚠️ tgt= はタイポを既定値に落とさない。未知の値を黙って握り潰すと、三項演算子チェーンの
+        // 末尾にある `self` (= 既知の 100% キックアーム) が引かれる = 計器としても事故防止としても最悪。
+        if (tgt is not ("self" or "cno" or "other" or "selfdata" or "xprobe" or "bogus" or "selfnt" or "selfphys"))
+        {
+            Utils.SendMessage($"[nest] unknown tgt={tgt}. Valid: self|cno|other|selfdata|xprobe|bogus|selfnt|selfphys", player.PlayerId);
+            return;
+        }
+
+        if (op is not ("data" or "despawn"))
+        {
+            Utils.SendMessage($"[nest] unknown op={op}. Valid: data|despawn", player.PlayerId);
+            return;
         }
 
         if (needsProbe)
@@ -3830,14 +4181,84 @@ internal static class ChatCommands
         // ⚠️ 対象 NetObject は `needsProbe` ではなく `tgt` で明示的に選ぶこと。
         // needsProbe 経由にすると tgt=other が黙って self.NetId (= 既知の 100% キックアーム) に落ち、
         // 「他人の PlayerControl も違法」という偽陽性を掴む (しかもログにも tgt=self としか出ない)。
-        PlayerControl tgtPc = tgt == "other" ? otherPc : needsProbe ? probe : self;
-        // tgt=selfdata: 自分の **NetworkedPlayerInfo** への tag1 = 本番 (Utils.SendGameData / RpcChangeOutfitByData) と
-        // 同一クラスの送信。PlayerControl 宛が違法なのが「netId のクラス」由来か「tag1 Data 一般」由来かを、
-        // CNO もプレイヤーも要らずに分離する陰性コントロール (期待: 無傷)。
-        var dataOnPlayerInfo = tgt == "selfdata";
+        PlayerControl tgtPc = tgt == "other" ? otherPc : tgt == "xprobe" ? NestXProbe : needsProbe ? probe : self;
         uint probeNetId = tgtPc.NetId;
-        uint probeDataNetId = tgtPc.Data.NetId;
+        // ⚠️ xprobe は GameData に登録されないので `PlayerControl.Data` の**ゲッター自体が例外を投げる**
+        // (2026-08-01 実測: `!= null` では防げない — 参照比較の前に落ちる)。try/catch が要る。
+        // probeDataNetId は `safe` ペイロード (SetName) 専用で、explicitTarget 系は thin/none 限定なので 0 で足りる。
+        uint probeDataNetId = SafeDataNetId(tgtPc);
         byte probeId = tgtPc.PlayerId;
+
+        // 本体の書き方と対象 netId をアームごとに確定する。
+        //   pid   : tag1{ packed netId, byte PlayerId } — 非初期 PlayerControl Data の**バニラと同形**の本体 (既定)
+        //   npi   : 自分の NetworkedPlayerInfo を丸ごと (tgt=selfdata。本番 Utils.SendGameData と同クラス・期待は無傷)
+        //   nt    : 自分の CustomNetworkTransform をゲーム自身のシリアライザで (tgt=selfnt。バニラが毎 tick 出す種別)
+        //   empty : 本体 0 バイト (tgt=selfphys。PlayerPhysics は Serialize が常に false = 合法な本体が存在しない
+        //           ⇒ 蹴られても「保護対象」と「本体不正」を区別できない交絡アーム。モデル構築に使わないこと)
+        var bodyKind = "pid";
+        var tgtNetIdDesc = "PlayerControl";
+
+        switch (tgt)
+        {
+            case "selfdata":
+                bodyKind = "npi";
+                probeNetId = self.Data.NetId;
+                tgtNetIdDesc = "NetworkedPlayerInfo";
+                break;
+            case "selfnt":
+                bodyKind = "nt";
+                probeNetId = self.NetTransform.NetId;
+                tgtNetIdDesc = "CustomNetworkTransform";
+                break;
+            case "selfphys":
+                bodyKind = "empty";
+                probeNetId = self.MyPhysics.NetId;
+                tgtNetIdDesc = "PlayerPhysics(confounded)";
+                break;
+            case "bogus":
+                // 一度も spawn していない netId。サーバの表が「保護集合に載っていたら切る」型か
+                // 「既知の安全集合に無ければ切る」型かを分ける (前者なら無傷・後者ならキック)。
+                probeNetId = AmongUsClient.Instance.NetIdCnt + 5000U;
+                tgtNetIdDesc = "never-spawned";
+                break;
+        }
+
+        // 本体バイトの明示指定。spawn 本体の PlayerId (`xspawn pid=`) とは別変数なので、
+        // これが無いと Arm S (spawn の PlayerId を振る) が本体バイトと一緒に動いて交絡する。
+        if (body >= 0) probeId = (byte)body;
+
+        // ⚠️ Despawn の事故防止ゲートは **netId が確定してから** 掛ける。
+        // 旧版は `tgt == "self"` だけを見ていたため、`tgt=other op=despawn` が
+        // **実在プレイヤーの PlayerControl を無確認で Despawn** できてしまっていた
+        // (`selfdata`/`selfnt`/`selfphys` も同様に素通り)。対象 netId で判定すれば全アームを一様に守れる。
+        if (op == "despawn" && !force && NestIsLivePlayerNetId(probeNetId))
+        {
+            Utils.SendMessage($"[nest] op=despawn targets netId={probeNetId}, which belongs to a LIVE player — it destroys that object (and is a confirmed Hacking kick for PlayerControl/NetworkedPlayerInfo). Add 'force' if that is intended.", player.PlayerId);
+            return;
+        }
+
+        // tgt=selfnt はゲーム自身に本体を書かせる。dirty でないと Serialize が false を返して
+        // 0 バイト本体になり、意図せず「空 Data」アームを撃つことになるので先に dirty にする。
+        var ntSerialized = true;
+
+        if (bodyKind == "nt")
+        {
+            // ⚠️ Serialize は dirty を書き出すと同時に消費するので、1 発の SetDirtyBit で作れる
+            // 「本物の CNT 本体」は 1 個だけ。total>1 だと 2 個目以降が 0 バイト本体に化けて
+            // アームの意味が変わる (ntSerialized 警告は出るが、読み飛ばすと誤解釈する)。構造的に禁じる。
+            if (total > 1)
+            {
+                Utils.SendMessage("[nest] tgt=selfnt is restricted to total=1 (Serialize consumes the dirty bit, so later copies would silently become 0-byte bodies).", player.PlayerId);
+                return;
+            }
+
+            try
+            {
+                self.NetTransform.SnapTo(self.transform.position);
+                self.NetTransform.SetDirtyBit(uint.MaxValue);
+            }
+            catch (Exception e) { Utils.ThrowException(e); }
+        }
         var real = payload == "real";
         var thin = payload == "thin";
         var empty = payload == "none";
@@ -3895,6 +4316,47 @@ internal static class ChatCommands
         // thin は Data 1枚だけ = 「子(tag6)の個数」と「葉メッセージの個数」を分離するためのアーム
         // (例: 12 thin と 4 safe はどちらも 12 メッセージだが、子の数は 12 と 4 で違う)。
         // Data の PlayerId は回転させず自分の値を書くので、自分宛にエコーバックしても局所的に無害。
+        // 対象 NetObject への 1 メッセージを書く。op=data なら tag1(Data)、op=despawn なら tag5(Despawn)。
+        void WriteTargetMessage(MessageWriter w, byte bodyByte)
+        {
+            if (op == "despawn")
+            {
+                w.StartMessage(5);
+                w.WritePacked(probeNetId);
+                w.EndMessage();
+                return;
+            }
+
+            w.StartMessage(1);
+
+            switch (bodyKind)
+            {
+                case "npi":
+                    w.WritePacked(probeNetId);
+                    // 会議中 write-barrier を意図的送信として通過する囲い (本番経路と同じ作法)
+                    NetworkedPlayerInfoSerializePatch.IntentionalSends++;
+                    try { self.Data.Serialize(w, false); }
+                    finally { NetworkedPlayerInfoSerializePatch.IntentionalSends--; }
+
+                    break;
+                case "nt":
+                    w.WritePacked(probeNetId);
+                    // ⚠️ false なら 1 バイトも書いていない = 意図せず「0 バイト本体」アームに化ける。必ず判定する。
+                    if (!self.NetTransform.Serialize(w, false)) ntSerialized = false;
+
+                    break;
+                case "empty":
+                    w.WritePacked(probeNetId);
+                    break;
+                default:
+                    w.WritePacked(probeNetId);
+                    w.Write(bodyByte);
+                    break;
+            }
+
+            w.EndMessage();
+        }
+
         MessageWriter BuildEnvelope(int startIndex, int childCount)
         {
             MessageWriter s = MessageWriter.Get(SendOption.Reliable);
@@ -3929,23 +4391,7 @@ internal static class ChatCommands
                     continue;
                 }
 
-                s.StartMessage(1);
-
-                if (dataOnPlayerInfo)
-                {
-                    s.WritePacked(self.Data.NetId);
-                    // 会議中 write-barrier を意図的送信として通過する囲い (本番経路と同じ作法)
-                    NetworkedPlayerInfoSerializePatch.IntentionalSends++;
-                    try { self.Data.Serialize(s, false); }
-                    finally { NetworkedPlayerInfoSerializePatch.IntentionalSends--; }
-                }
-                else
-                {
-                    s.WritePacked(probeNetId);
-                    s.Write(firstDataId);
-                }
-
-                s.EndMessage();
+                WriteTargetMessage(s, firstDataId);
 
                 if (thin)
                 {
@@ -3972,23 +4418,7 @@ internal static class ChatCommands
 
                 s.EndMessage();
 
-                s.StartMessage(1);
-
-                if (dataOnPlayerInfo)
-                {
-                    s.WritePacked(self.Data.NetId);
-                    // 会議中 write-barrier を意図的送信として通過する囲い (本番経路と同じ作法)
-                    NetworkedPlayerInfoSerializePatch.IntentionalSends++;
-                    try { self.Data.Serialize(s, false); }
-                    finally { NetworkedPlayerInfoSerializePatch.IntentionalSends--; }
-                }
-                else
-                {
-                    s.WritePacked(probeNetId);
-                    s.Write(probeId);
-                }
-
-                s.EndMessage();
+                WriteTargetMessage(s, probeId);
 
                 s.EndMessage();
             }
@@ -4057,12 +4487,15 @@ internal static class ChatCommands
 
         // 事後解析は恒久チャネル (Health + Timeline) に残す — log.html は約10分でローテートするため
         // tgt は生の指定値 + 実際に書いた netId を出す (どのアームを撃ったかを事後に取り違えないため)。
-        string tgtLabel = dataOnPlayerInfo ? "selfdata" : tgt == "other" ? $"other:{probeId}" : needsProbe ? "cno" : "self";
-        string tgtNetIdLabel = dataOnPlayerInfo ? $"{self.Data.NetId}(NetworkedPlayerInfo)" : $"{probeNetId}(PlayerControl)";
-        string line = $"NEST probe total={total} per={per} msgsPerEnv={msgsPerEnvelope} envelopes={envelopes} payload={payload} via={via} tgt={tgtLabel} tgtNetId={tgtNetIdLabel} dst={dst} spoof={spoof} distinct={distinct} pad={pad} raw={raw} maxLen={maxLen} queued={pendingBefore}->{pendingAfter} packing={packingLimit} players={playerCount} phase={(GameStates.IsLobby ? "lobby" : "ingame")} server={GameStates.CurrentServerType}{warn}";
+        if (bodyKind == "nt" && !ntSerialized) warn += " ⚠ NetTransform.Serialize returned false — the body was 0 bytes, so this arm is NOT the CNT arm.";
+
+        string tgtLabel = tgt == "other" ? $"other:{probeId}" : explicitTarget ? tgt : needsProbe ? "cno" : "self";
+        string tgtNetIdLabel = $"{probeNetId}({tgtNetIdDesc})";
+        string xspec = tgt == "xprobe" ? $" xspec=[{NestXProbeSpec}]" : string.Empty;
+        string line = $"NEST probe total={total} per={per} msgsPerEnv={msgsPerEnvelope} envelopes={envelopes} payload={payload} op={op} via={via} tgt={tgtLabel} tgtNetId={tgtNetIdLabel} body={(body >= 0 ? body.ToString() : $"auto:{probeId}")} bodyKind={bodyKind}{xspec} dst={dst} spoof={spoof} distinct={distinct} pad={pad} raw={raw} maxLen={maxLen} queued={pendingBefore}->{pendingAfter} packing={packingLimit} players={playerCount} phase={(GameStates.IsLobby ? "lobby" : "ingame")} server={GameStates.CurrentServerType}{warn}";
         HealthLog.NoteAnom(line);
         Logger.Info(line, "DevCmd");
-        Utils.SendMessage($"[nest] submitted {sentChildren} children ({msgsPerEnvelope} msgs/envelope) in {envelopes} envelope(s), maxLen={maxLen}B, payload={payload}/{via}{(pad > 0 ? $", pad={pad}" : string.Empty)}{(raw ? ", raw" : string.Empty)}, queued={pendingBefore}->{pendingAfter}. packing limit={packingLimit}{warn}", player.PlayerId);
+        Utils.SendMessage($"[nest] submitted {sentChildren} children ({msgsPerEnvelope} msgs/envelope) in {envelopes} envelope(s), maxLen={maxLen}B, payload={payload}/{op}/{via}, tgt={tgtLabel}→net{probeNetId}({tgtNetIdDesc}){xspec}{(pad > 0 ? $", pad={pad}" : string.Empty)}{(raw ? ", raw" : string.Empty)}, queued={pendingBefore}->{pendingAfter}. packing limit={packingLimit}{warn}", player.PlayerId);
     }
 
     private static void KCountCommand(PlayerControl player, string text, string[] args)
