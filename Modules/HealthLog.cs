@@ -298,7 +298,9 @@ public static class HealthLog
 
                 try
                 {
-                    string tagLine = $"TAGWIN state={state} players={players} {BuildTagWindow(now, TagWindowSeconds)} t={now}";
+                    // nest=[...] は PacketRateGate のリング由来 (tag/leaf tag 別のネスト総数)。BuildTagWindow が
+                    // 拾えるのは CustomRpcSender 経由の per-name だけで、人数比例で膨らむ t26 の中身は見えないため。
+                    string tagLine = $"TAGWIN state={state} players={players} {BuildTagWindow(now, TagWindowSeconds)} {PacketRateGate.SummarizeRecent(TagWindowSeconds)} t={now}";
                     Write(tagLine);
                     Timeline(tagLine);
                 }
@@ -476,7 +478,8 @@ public static class HealthLog
                 // タグ別ヒストグラム: 平常時の TAGWIN と同一書式なので、そのまま無傷窓と比較できる。
                 try
                 {
-                    string tagLine = $"DCTAG {BuildTagWindow(now, TagWindowSeconds)}";
+                    // TAGWIN と同一書式を保つ (nest=[...] 込み) — そのまま無傷窓と diff できるのが存在理由。
+                    string tagLine = $"DCTAG {BuildTagWindow(now, TagWindowSeconds)} {PacketRateGate.SummarizeRecent(TagWindowSeconds)}";
                     Write(tagLine);
                     Timeline(tagLine);
                 }

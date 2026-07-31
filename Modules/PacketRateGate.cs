@@ -44,6 +44,15 @@ public static class PacketRateGate
     private static object LastConnection;
     private static bool SafetyValveActive;
 
+    /// <summary>TryGate の例外は同一原因で毎パケット発火しうるので、恒久チャネルへは1セッション1回だけ出す。</summary>
+    private static bool TryGateFailureNoted;
+
+    /// <summary>burst エピソードの恒久チャネル出力の抑制状態 (閾値付近の振動でディスク I/O を撒かないため)。</summary>
+    private const long BurstNoteCooldownSeconds = 30;
+
+    private static long _lastBurstNoteTs;
+    private static bool _burstEpisodeNoted;
+
     // --- リングバッファ (キック事後解析用) ---
     private struct Record
     {
@@ -139,6 +148,14 @@ public static class PacketRateGate
         catch (Exception e)
         {
             Logger.Error($"PacketRateGate.TryGate failed, falling back to immediate send: {e}", "PacketRateGate");
+            // ゲートが例外で無効化された = レート制御が丸ごと外れた窓。キック診断では決定的なので
+            // 恒久チャネルにも残すが、毎パケット発火しうるため1セッション1回に絞る。
+            if (!TryGateFailureNoted)
+            {
+                TryGateFailureNoted = true;
+                HealthLog.NoteAnom($"WARN kind=gatefail ex={e.GetType().Name} t={Utils.TimeStamp}");
+            }
+
             return false;
         }
     }
@@ -163,6 +180,9 @@ public static class PacketRateGate
                 {
                     SafetyValveActive = true;
                     Logger.Error($"PacketRateGate queue exceeded safety valve ({PendingReliableQueue.Count} > {QueueSafetyValve}); pacing at {SafetyValveDrainPerFrame}/frame ignoring budget", "PacketRateGate");
+                    // 安全弁発動 = キック直前の異常バーストを最も直接示す一次証拠。発動ごとに1回だけなので
+                    // 恒久チャネルへ出しても量は増えない (log.html だけだと10分で消える)。
+                    HealthLog.NoteAnom($"WARN kind=gatevalve queued={PendingReliableQueue.Count} valve={QueueSafetyValve} t={Utils.TimeStamp}");
                 }
 
                 int n = Math.Min(SafetyValveDrainPerFrame, PendingReliableQueue.Count);
@@ -255,11 +275,32 @@ public static class PacketRateGate
 
         if (total > WarnThresholdCount && total > PeakWarned)
         {
+            // 恒久チャネルへはエピソード開始の1回だけに絞る。log.html 側は従来どおり峰の更新ごとに出すが、
+            // 07-31 実測で1分に79行出たので、そのまま Health.log へ流すと台帳が埋まって使い物にならない。
+            // ⚠️ NoteAnom は Write + Timeline = 無バッファ File.AppendAllText ×2 で、しかもここは
+            // 全 SendOrDisconnect が通るホットパス。閾値付近で total が振動すると start/end が交互に連発して
+            // バースト計測窓のど真ん中でディスク I/O を撒くので、クールダウンで必ず抑える。
+            if (PeakWarned == 0 && Utils.TimeStamp - _lastBurstNoteTs >= BurstNoteCooldownSeconds)
+            {
+                _lastBurstNoteTs = Utils.TimeStamp;
+                _burstEpisodeNoted = true;
+                HealthLog.NoteAnom($"WARN kind=burst phase=start n={total} threshold={WarnThresholdCount} t={Utils.TimeStamp}");
+            }
+
             PeakWarned = total;
             Logger.Warn($"Reliable packet burst: {total} packets in last {WarnWindowSeconds}s (threshold {WarnThresholdCount})", "PacketRateGate");
         }
         else if (total <= WarnThresholdCount)
         {
+            // エピソード終了時に峰値を1行だけ残す。キックで落ちた場合はこの行が出ないが、
+            // 代わりに切断時の DCRING がリングバッファごと残すので窓は復元できる。
+            // start を出したエピソードに対してのみ end を出す (クールダウンで start を抑えた分に end だけ出ると対応が狂う)。
+            if (PeakWarned > 0 && _burstEpisodeNoted)
+            {
+                _burstEpisodeNoted = false;
+                HealthLog.NoteAnom($"WARN kind=burst phase=end peak={PeakWarned} threshold={WarnThresholdCount} t={Utils.TimeStamp}");
+            }
+
             PeakWarned = 0;
         }
     }
@@ -393,6 +434,49 @@ public static class PacketRateGate
         }
 
         return false;
+    }
+
+    /// <summary>直近 windowSec 秒ぶんを tag 別に集約した compact な1行を返す (TAGWIN 併記用)。
+    /// ⚠️ これが無いと本命の計器 (NestedCount) は **切断時にしか出ない**。キックされずに生き残った窓こそが
+    /// 比較対象の対照群なので、無傷の窓でもネスト数が取れないと「人数比例の内容クラス」仮説は検証できない
+    /// (2026-07-31: 小人数×ダミー最大の対照セルは生存が濃厚 = DumpRecent だけでは一生データが出ない)。
+    /// TAGWIN は既に state= と players= を持っているので、そこに併記すれば人数軸の比較が直接取れる。</summary>
+    public static string SummarizeRecent(int windowSec)
+    {
+        try
+        {
+            if (RingCount == 0) return "nest=[]";
+
+            long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            var tags = new SortedDictionary<string, (int packets, int nested, int bytes)>();
+            int start = RingCount < RingBufferSize ? 0 : RingPos;
+
+            for (int i = 0; i < RingCount; i++)
+            {
+                Record rec = Ring[(start + i) % RingBufferSize];
+                if (rec.UnixSec > now || now - rec.UnixSec > windowSec) continue;
+
+                string key = rec.Tag is 5 or 6 or 26 ? $"t{rec.Tag}.{rec.InnerTag}" : $"t{rec.Tag}";
+                tags.TryGetValue(key, out (int packets, int nested, int bytes) agg);
+                tags[key] = (agg.packets + 1, agg.nested + rec.NestedCount, agg.bytes + rec.Length);
+            }
+
+            if (tags.Count == 0) return "nest=[]";
+
+            var sb = new StringBuilder("nest=[");
+            bool first = true;
+
+            foreach (KeyValuePair<string, (int packets, int nested, int bytes)> t in tags)
+            {
+                if (!first) sb.Append(' ');
+                first = false;
+                sb.Append($"{t.Key}x{t.Value.packets}/n{t.Value.nested}/{t.Value.bytes}B");
+            }
+
+            sb.Append(']');
+            return sb.ToString();
+        }
+        catch { return "nest=?"; }
     }
 
     /// <summary>切断時にキック事後解析用に呼ぶ。直近リングバッファを 1 行のヒストグラムに集約して返す。</summary>
