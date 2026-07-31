@@ -23,15 +23,38 @@ public class GameInstall(string path, GamePlatform platform, string? epicAppName
     public bool IsModded => System.IO.File.Exists(PluginDllPath);
     public bool IsDoorstopEnabled => System.IO.File.Exists(WinhttpPath);
 
+    /// <summary>表示用のバージョン文字列。ProductVersion = AssemblyInformationalVersion なので "0.9.0-dev" のようにサフィックス付きで取れる</summary>
     public string? ModVersion
     {
         get
         {
             if (!IsModded) return null;
-            try { return System.Diagnostics.FileVersionInfo.GetVersionInfo(PluginDllPath).FileVersion; }
+            try
+            {
+                var info = System.Diagnostics.FileVersionInfo.GetVersionInfo(PluginDllPath);
+                return string.IsNullOrWhiteSpace(info.ProductVersion) ? info.FileVersion : info.ProductVersion;
+            }
             catch { return null; }
         }
     }
+
+    /// <summary>比較用の数値バージョン (FileVersion 由来)。開発ビルドは次の公開版の番号を名乗るので公開版より大きくなる</summary>
+    public Version? ModNumericVersion
+    {
+        get
+        {
+            if (!IsModded) return null;
+            try
+            {
+                var raw = System.Diagnostics.FileVersionInfo.GetVersionInfo(PluginDllPath).FileVersion;
+                return Version.TryParse(raw, out var parsed) ? parsed : null;
+            }
+            catch { return null; }
+        }
+    }
+
+    /// <summary>開発ビルド (release.ps1 が公開時に -alpha へ確定するまでの間の版)</summary>
+    public bool IsDevBuild => ModVersion?.EndsWith("-dev", StringComparison.OrdinalIgnoreCase) == true;
 
     public override string ToString()
     {

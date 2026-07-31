@@ -21,9 +21,9 @@ using Il2CppInterop.Runtime.Injection;
 using UnityEngine;
 using UnityEngine.Networking;
 
-[assembly: AssemblyFileVersion("0.8.10.0")]
+[assembly: AssemblyFileVersion("0.9.0.0")]
 [assembly: AssemblyInformationalVersion(Main.PluginVersion)]
-[assembly: AssemblyVersion("0.8.10.0")]
+[assembly: AssemblyVersion("0.9.0.0")]
 
 namespace EndKnot;
 
@@ -45,9 +45,19 @@ public class Main : BasePlugin
     // EHR's reverse-domain GUID `com.gurge44.endlesshostroles` appears to be grandfathered
     // in; a fresh fork needs a fresh UUID.
     public const string PluginGuid = "cf13a94a-1671-41f1-85a8-3e32770cf09e";
-    public const string PluginVersion = "0.8.10-alpha";
-    public const string PluginDisplayVersion = "0.4.0";
+    // 開発中は「次に出す公開版の番号 + -dev」を名乗る (公開版は release.ps1 が -alpha へ確定し、
+    // finalize 後に自動で次の -dev へ戻す)。数値が常に公開版より大きいので、インストーラーは
+    // 番号比較だけで「開発ビルドを配布版で上書きしようとしている」を検出できる。
+    public const string PluginVersion = "0.9.0-dev";
+    // ロビー名サフィックス (Utils.GetSuffix) / Discord RPC / チャットテンプレの {ModVersion} の表示用。
+    // 別管理にすると更新漏れで古い番号が出続けるため PluginVersion に追従させる
+    // (実際 0.4.0 のまま長期間ズレていた)。開発ビルドは "-dev" が名前に出るので、
+    // 配布版で上書きされて巻き戻ったことにロビー画面で気付ける。
+    public const string PluginDisplayVersion = PluginVersion;
     public const bool TestBuild = false;
+
+    /// <summary>未公開の開発ビルド (PluginVersion が "-dev")。画面上部の告知バナー表示に使う</summary>
+    public static readonly bool IsDevBuild = PluginVersion.EndsWith("-dev", StringComparison.Ordinal);
 
     public const string NeutralColor = "#ffab1b";
     public const string ImpostorColor = "#ff1919";
@@ -521,6 +531,9 @@ public class Main : BasePlugin
 
         AddComponent<EndKnot.Modules.Audience.AudienceCutscene>();
         Log.LogInfo("AudienceCutscene registered");
+
+        AddComponent<EndKnot.Modules.StreamOverlay.DevBuildBanner>();
+        Log.LogInfo("DevBuildBanner registered");
 
         coroutines = AddComponent<Coroutines>();
         Logger.Enable();
