@@ -3710,6 +3710,8 @@ internal static class ChatCommands
         //   無傷     → 自分固有の詐称防止ルール (自分の netId / 自クライアント所有の netId)
         // ⚠️ 対象は tag1 の中身であって宛先ではない。`dst=self` 固定なのでパケットは他人の端末へ飛ばない。
         var tgt = "self";
+        // `tgt=` が明示指定されたか (既定の "self" と区別する)。`dst=spread` の陽性コントロール専用。
+        var tgtExplicit = false;
         // 宛先の配り方 — 残る2軸のうち「宛先が相異なる数 (fan-out 幅)」用 (もう1軸は spoof のマスカレード)。
         //   self   = 全子が自分の OwnerId (幅1。個数だけを動かす既定)
         //   real   = 実在する非ホストクライアントへ順に配る (実 fan-out と同じ形。実プレイヤーが要る)
@@ -3734,7 +3736,11 @@ internal static class ChatCommands
             else if (a.Equals("thin", StringComparison.OrdinalIgnoreCase)) payload = "thin";
             else if (a.Equals("none", StringComparison.OrdinalIgnoreCase)) payload = "none";
             else if (a.StartsWith("via=", StringComparison.OrdinalIgnoreCase)) via = a[4..].ToLowerInvariant();
-            else if (a.StartsWith("tgt=", StringComparison.OrdinalIgnoreCase)) tgt = a[4..].ToLowerInvariant();
+            else if (a.StartsWith("tgt=", StringComparison.OrdinalIgnoreCase))
+            {
+                tgt = a[4..].ToLowerInvariant();
+                tgtExplicit = true;
+            }
             else if (a.StartsWith("dst=", StringComparison.OrdinalIgnoreCase)) dst = a[4..].ToLowerInvariant();
             else if (a.Equals("spoof", StringComparison.OrdinalIgnoreCase)) spoof = true;
             else if (a.Equals("raw", StringComparison.OrdinalIgnoreCase)) raw = true;
@@ -3748,7 +3754,18 @@ internal static class ChatCommands
         // ⚠️ 宛先が自分以外のときは必ずプローブ CNO を参照先にする — 自分以外へ飛ぶパケットの中身が
         // 「使い捨てのプローブ」以外を指すことが構造的に起きないようにするための不変条件
         // (現行の thin ペイロードは冪等で無害だが、それは偶然であって設計ではない)。
-        var needsProbe = payload is "real" or "safe" || tgt == "cno" || dst != "self";
+        // `dst=spread` の**陽性コントロール**専用の例外 (2026-08-01)。
+        // 通常 `dst != "self"` では Data の対象をプローブ CNO へ強制的に差し替えるが、それだと
+        // spread アームは合法な中身しか運べず、「サーバは存在しない宛先の子をそもそもパースしているのか」を
+        // 判定できない = 幅の梯子が全部偽陰性になりうる (2026-08-01 に実際に詰まった)。
+        // spread の宛先は selfClient+100000 起点で接続中 id を明示除外した**存在しないクライアント**であり、
+        // thin の中身は自分の Data を冪等に書くだけなので、実在の第三者へ意味のある中身が飛ぶことはない
+        // = 3748-3750 の不変条件は保たれる。
+        //   `/nest 1 thin tgt=self dst=spread` が蹴られる → 無効宛先の子も検査されている = 梯子は有効
+        //   無傷 → 同じロビーで `/nest 1 thin` を撃ち、蹴られることを確認する (アームの生存確認)。
+        //          そこも無傷ならビルドかサーバ側規則が変わっている。
+        var spreadSelfControl = tgtExplicit && tgt == "self" && dst == "spread" && payload == "thin";
+        var needsProbe = !spreadSelfControl && (payload is "real" or "safe" || tgt == "cno" || dst != "self");
         PlayerControl probe = null;
         PlayerControl otherPc = null;
 
