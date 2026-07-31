@@ -493,7 +493,15 @@ internal static class DisconnectInternalPatch
         BGMManager.Stop();
 
         // キック事後解析用: 直近の送信履歴を1行に集約してログへ残す (null ガード徹底、失敗しても切断処理を止めない)。
-        try { Logger.Warn($"reason={reason} stringReason={stringReason} {PacketRateGate.DumpRecent()}", "PacketRateGate"); }
+        // ⚠️ Logger.Warn の行き先 (log.html) は約10分でローテーションするため、これだけだとキック当時の
+        // ダンプが調査開始前に消える (2026-07-31: Hacking キック3件ぶんの t26 ネスト内訳が全て消失し、
+        // 前夜に入れた NestedCount 計器が一度も読めなかった)。恒久チャネル (Health + Timeline) にも残す。
+        try
+        {
+            string dump = PacketRateGate.DumpRecent();
+            Logger.Warn($"reason={reason} stringReason={stringReason} {dump}", "PacketRateGate");
+            HealthLog.NoteAnom($"DCRING reason={reason} {dump}");
+        }
         catch { }
     }
 }

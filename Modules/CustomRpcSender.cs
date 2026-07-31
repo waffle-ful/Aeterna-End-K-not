@@ -202,7 +202,13 @@ public class CustomRpcSender
             }
         }
 
-        if (stream.Length >= 1400 && sendOption == SendOption.Reliable && !dispose) Logger.Warn($"Large reliable packet \"{name}\" is sending ({stream.Length} bytes)", "CustomRpcSender");
+        // ⚠️ 1400B 超の単発 Reliable は「分割関所を素通りしたオーバーサイズ RPC」= Hacking キックの直行便。
+        // log.html は約10分でローテーションするので、恒久チャネルにも残さないとキック時には消えている。
+        if (stream.Length >= 1400 && sendOption == SendOption.Reliable && !dispose)
+        {
+            Logger.Warn($"Large reliable packet \"{name}\" is sending ({stream.Length} bytes)", "CustomRpcSender");
+            HealthLog.NoteAnom($"WARN kind=oversize name=\"{name}\" len={stream.Length} opt=Reliable t={Utils.TimeStamp}");
+        }
         else if (log || stream.Length > 3) Logger.Info($"\"{name}\" is finished (Length: {stream.Length}, dispose: {dispose}, sendOption: {sendOption})", "CustomRpcSender");
 
         if (!dispose)
@@ -225,7 +231,11 @@ public class CustomRpcSender
 
                 doneStreams.ForEach(x =>
                 {
-                    if (x.Length >= 1400 && sendOption == SendOption.Reliable) Logger.Warn($"Large reliable packet \"{name}\" is sending ({x.Length} bytes)", "CustomRpcSender");
+                    if (x.Length >= 1400 && sendOption == SendOption.Reliable)
+                    {
+                        Logger.Warn($"Large reliable packet \"{name}\" is sending ({x.Length} bytes)", "CustomRpcSender");
+                        HealthLog.NoteAnom($"WARN kind=oversize name=\"{name}\" len={x.Length} opt=Reliable chunk=1 t={Utils.TimeStamp}");
+                    }
                     else if (log || x.Length > 3) sb.Append($" | {x.Length}");
 
                     AmongUsClient.Instance.SendOrDisconnect(x);
@@ -670,6 +680,9 @@ public static class CustomRpcSenderExtensions
 
                 Main.LastSentClampedNames[clampKey] = name;
                 Logger.Error($"SetName for player {player.PlayerId} is {nameBytes}B > {NameBudget}B — clamped to avoid official-server Hacking kick. Shrink the name decoration (role text / addons / suffix)!", "RpcSetName.NameBudget");
+                // 分割不能な単発超過に対する唯一の防波堤が発動した記録。log.html 限定だと
+                // 「クランプが効いていたのに別経路でキックされた」のか切り分けられなくなる (上の dedup 済み)。
+                HealthLog.NoteAnom($"WARN kind=namebudget pid={player.PlayerId} bytes={nameBytes} budget={NameBudget} t={Utils.TimeStamp}");
             }
             else
             {
