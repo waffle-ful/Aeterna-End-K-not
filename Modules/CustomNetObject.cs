@@ -28,6 +28,16 @@ namespace EndKnot
         // 範囲 200-254 は実プレイヤー (0-14) と衝突せず、EHR の filter は既に `>= 200` で対応済み。
         // Despawn 時に Id を返却する解放式リサイクル: 55 枠の上限は「累計 55 回の生成」ではなく
         // 「同時生存 55 体」。プール中の NaturalDisaster は playerControl が生きているので返却しない。
+        /// <summary>spawn 可視化の t26 エンベロープ 1 つに詰める宛先の上限 (人数に依らない固定値)。
+        /// ⚠️ 既存の 2 つの分割ガード (`stream.Length > 500` / `messages + 3 > GetMaxMessagePackingLimit()`) は
+        /// **13人以下では一度も成立しない実質デッドコード**である。2026-07-31 の実測で
+        /// `GetMaxMessagePackingLimit()` 自体が人数比例で増える (targets=6→24 / targets=7→26 = +2/人) 一方、
+        /// こちらは 3/target でしか増えないため右辺に追いつけず、バイト側も 13人で約463B と 500B に届かない。
+        /// 結果、非ホスト全員ぶんの tag6 が常に単一エンベロープへ同梱され (7人=6子 / 13人=12子)、
+        /// これが CNO 生成シーケンスで**人数比例に膨らむ唯一の量**だった (公式鯖 Hacking キックの最有力容疑)。
+        /// 固定上限を入れて、この量を人数によらず定数に押さえる。</summary>
+        private const int MaxTargetsPerVisibilityEnvelope = 4;
+
         private const byte MinCnoPlayerId = 200;
         private const byte MaxCnoPlayerId = 254;
         private const int PlayerIdSlots = MaxCnoPlayerId - MinCnoPlayerId + 1;
@@ -376,7 +386,11 @@ namespace EndKnot
             
             foreach (PlayerControl player in players)
             {
-                if (packedWriter.Length > 500 || messages >= AmongUsClient.Instance.GetMaxMessagePackingLimit())
+                // ⚠️ CreateNetObject の per-player ループと同型の双子。既存2ガードはここでも実質デッドコード
+                // (1人あたり tag6→tag5(NetId) だけで ~10-15B なので、公式鯖の上限14人でも 500B に届かない。
+                // packingLimit 側も人数比例で増えるので messages が追いつけない)。
+                // → 人数に依らない固定上限で子数を定数化する (MaxTargetsPerVisibilityEnvelope の説明を参照)。
+                if (packedWriter.Length > 500 || messages >= AmongUsClient.Instance.GetMaxMessagePackingLimit() || messages >= MaxTargetsPerVisibilityEnvelope)
                 {
                     messages = 0;
                     packedWriter.EndMessage();
@@ -592,12 +606,15 @@ namespace EndKnot
                 if (PlayerControl.AllPlayerControls.Count > 1)
                 {
                     int messages = 0;
-                    // ⚠️ 計器 (BUG-20260730-11): このループは「非ホスト人数ぶんの tag6」を 1 つの t26 エンベロープに
-                    // 詰めるため、players=2 でも players=9 でも **パケット本数もバイト数もほとんど変わらない**
-                    // (8人でも ~360B で :603 の 500B 閾値に届かない)。人数比例で唯一増えるのが下の targets
-                    // なので、キック有無を分けている変数を実測で残しておく。
+                    // ⚠️ BUG-20260730-11: 2026-07-31 まで、このループは「非ホスト人数ぶんの tag6」を
+                    // **1 つの t26 エンベロープに全部**詰めていた (既存2ガードが13人以下で成立しないため)。
+                    // パケット本数もバイト数も人数でほぼ変わらないので、本数/バイト数のメータは
+                    // キック有無を分けている当の変数に構造的に盲目だった。現在は
+                    // MaxTargetsPerVisibilityEnvelope で子数を人数によらず定数に固定している。
+                    // targets / envelopes は「上限が実際に効いているか」を実測で残すための計器。
                     int targets = 0;
                     int envelopes = 1;
+                    int targetsInEnvelope = 0;
                     MessageWriter stream = MessageWriter.Get(SendOption.Reliable);
                     stream.StartMessage(26);
                     stream.WritePacked(AmongUsClient.Instance.GameId);
@@ -606,7 +623,7 @@ namespace EndKnot
                     {
                         if (pc.AmOwner) continue;
 
-                        if (stream.Length > 500 || messages + 3 > AmongUsClient.Instance.GetMaxMessagePackingLimit())
+                        if (stream.Length > 500 || messages + 3 > AmongUsClient.Instance.GetMaxMessagePackingLimit() || targetsInEnvelope >= MaxTargetsPerVisibilityEnvelope)
                         {
                             stream.EndMessage();
                             qa = DataFlagRateLimiter.Enqueue(() =>
@@ -617,6 +634,7 @@ namespace EndKnot
                             yield return qa.Wait();
                             if (qa.Dropped) yield break;
                             messages = 0;
+                            targetsInEnvelope = 0;
                             envelopes++;
                             stream.Clear(SendOption.Reliable);
                             stream.StartMessage(26);
@@ -644,6 +662,7 @@ namespace EndKnot
 
                         messages += 3;
                         targets++;
+                        targetsInEnvelope++;
                     }
 
                     stream.EndMessage();
