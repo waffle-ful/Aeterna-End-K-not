@@ -3692,7 +3692,7 @@ internal static class ChatCommands
 
         if (args.Length < 2 || !int.TryParse(args[1], out int total) || total <= 0)
         {
-            Utils.SendMessage("[nest] Usage: /nest <total> [real|safe|thin|none] [via=t6self|t5|bare6] [tgt=self|cno] [per=<k>] [pad=<chars>] [raw] [force]  |  /nest limit", player.PlayerId);
+            Utils.SendMessage("[nest] Usage: /nest <total> [real|safe|thin|none] [via=t6self|t5|bare6] [tgt=self|cno] [dst=self|real|spread] [per=<k>] [pad=<chars>] [raw] [force]  |  /nest limit", player.PlayerId);
             return;
         }
 
@@ -3704,6 +3704,13 @@ internal static class ChatCommands
         // Data の対象 NetObject。thin/none は既定で自分の PlayerControl、real/safe は常にプローブ CNO。
         // `tgt=cno` で thin もプローブ CNO を対象にできる (「Data 1枚が違法」か「自分宛 Data が違法」かの分離用)。
         var tgt = "self";
+        // 宛先の配り方 — 2026-08-01 時点で生き残っている唯一の軸「宛先が相異なる数 (fan-out 幅)」用。
+        //   self   = 全子が自分の OwnerId (幅1。個数だけを動かす既定)
+        //   real   = 実在する非ホストクライアントへ順に配る (実 fan-out と同じ形。実プレイヤーが要る)
+        //   spread = 存在しない client id を1つずつずらして配る (ソロで幅だけを動かす。
+        //            ⚠️ 使う前に必ず N=1 の陰性コントロールを撃つこと — 存在しない宛先自体が
+        //            違法なら幅の測定にならない)
+        var dst = "self";
         int per = total;
         var pad = 0;
         var raw = false;
@@ -3718,6 +3725,7 @@ internal static class ChatCommands
             else if (a.Equals("none", StringComparison.OrdinalIgnoreCase)) payload = "none";
             else if (a.StartsWith("via=", StringComparison.OrdinalIgnoreCase)) via = a[4..].ToLowerInvariant();
             else if (a.StartsWith("tgt=", StringComparison.OrdinalIgnoreCase)) tgt = a[4..].ToLowerInvariant();
+            else if (a.StartsWith("dst=", StringComparison.OrdinalIgnoreCase)) dst = a[4..].ToLowerInvariant();
             else if (a.Equals("raw", StringComparison.OrdinalIgnoreCase)) raw = true;
             else if (a.Equals("force", StringComparison.OrdinalIgnoreCase)) force = true;
             else if (a.StartsWith("per=", StringComparison.OrdinalIgnoreCase) && int.TryParse(a[4..], out int p)) per = Math.Clamp(p, 1, total);
@@ -3726,7 +3734,10 @@ internal static class ChatCommands
 
         // real/safe の子メッセージの参照先はプローブ CNO に固定する (自分の PlayerControl を書き換えないため)。
         // thin は自分自身の Data を冪等に書くだけなので CNO 不要 = ロビーでも撃てる。
-        var needsProbe = payload is "real" or "safe" || tgt == "cno";
+        // ⚠️ 宛先が自分以外のときは必ずプローブ CNO を参照先にする — 自分以外へ飛ぶパケットの中身が
+        // 「使い捨てのプローブ」以外を指すことが構造的に起きないようにするための不変条件
+        // (現行の thin ペイロードは冪等で無害だが、それは偶然であって設計ではない)。
+        var needsProbe = payload is "real" or "safe" || tgt == "cno" || dst != "self";
         PlayerControl probe = null;
 
         if (needsProbe)
@@ -3774,12 +3785,52 @@ internal static class ChatCommands
         var broadcast = via == "t5";
         string padName = pad > 0 ? new string('█', pad) : string.Empty;
 
+        var dests = new List<int>();
+
+        switch (dst)
+        {
+            case "real":
+                foreach (PlayerControl pc in Main.EnumeratePlayerControls())
+                    if (!pc.AmOwner && pc.OwnerId >= 0)
+                        dests.Add(pc.OwnerId);
+
+                if (dests.Count == 0)
+                {
+                    Utils.SendMessage("[nest] dst=real needs at least one other client in the lobby. Use dst=self or dst=spread.", player.PlayerId);
+                    return;
+                }
+
+                break;
+            case "spread":
+                // ⚠️ 実在クライアントの id と衝突させない。AU の client id は小さい整数が近接して割り当てられる
+                // ため `selfClient + 1 + i` だと人が居るロビーで本物に当たりうる = 「存在しない宛先を試す」
+                // という前提そのものが壊れ、陰性コントロールの解釈も交絡する。十分遠くへ飛ばした上で
+                // 現に接続中の id を明示的に除外する。
+                var live = new HashSet<int> { selfClient };
+                foreach (PlayerControl pc in Main.EnumeratePlayerControls())
+                    if (pc.OwnerId >= 0)
+                        live.Add(pc.OwnerId);
+
+                for (var i = 0; dests.Count < total && i < total * 4; i++)
+                {
+                    int candidate = selfClient + 100000 + i;
+                    if (!live.Contains(candidate)) dests.Add(candidate);
+                }
+
+                break;
+            default:
+                dests.Add(selfClient);
+                break;
+        }
+
+        int distinct = Math.Min(dests.Count, total);
+
         // real/safe は実 fan-out と同じ [Data / RPC / Data] の3枚構成で、中央の RPC だけを
         // real=MurderPlayer(FailedError, 実物と同一) / safe=SetName(無害) で入れ替える。
         // thin は Data 1枚だけ = 「子(tag6)の個数」と「葉メッセージの個数」を分離するためのアーム
         // (例: 12 thin と 4 safe はどちらも 12 メッセージだが、子の数は 12 と 4 で違う)。
         // Data の PlayerId は回転させず自分の値を書くので、自分宛にエコーバックしても局所的に無害。
-        MessageWriter BuildEnvelope(int childCount)
+        MessageWriter BuildEnvelope(int startIndex, int childCount)
         {
             MessageWriter s = MessageWriter.Get(SendOption.Reliable);
 
@@ -3800,7 +3851,7 @@ internal static class ChatCommands
                 {
                     s.StartMessage(6);
                     s.Write(gameId);
-                    s.WritePacked(selfClient);
+                    s.WritePacked(dests[(startIndex + c) % dests.Count]);
                 }
 
                 if (empty)
@@ -3851,7 +3902,7 @@ internal static class ChatCommands
             return s;
         }
 
-        MessageWriter first = BuildEnvelope(Math.Min(per, total));
+        MessageWriter first = BuildEnvelope(0, Math.Min(per, total));
 
         if (first.Length > SizeCap && !force)
         {
@@ -3882,7 +3933,7 @@ internal static class ChatCommands
             for (var i = 0; i < total; i += per)
             {
                 int childCount = Math.Min(per, total - i);
-                MessageWriter s = i == 0 ? first : BuildEnvelope(childCount);
+                MessageWriter s = i == 0 ? first : BuildEnvelope(i, childCount);
                 maxLen = Math.Max(maxLen, s.Length);
                 HealthLog.RecordHostAction("NestProbe", s.Length, "Reliable");
                 AmongUsClient.Instance.SendOrDisconnect(s);
@@ -3910,7 +3961,7 @@ internal static class ChatCommands
         int msgsPerEnvelope = Math.Min(per, total) * msgsPerChild;
 
         // 事後解析は恒久チャネル (Health + Timeline) に残す — log.html は約10分でローテートするため
-        string line = $"NEST probe total={total} per={per} msgsPerEnv={msgsPerEnvelope} envelopes={envelopes} payload={payload} via={via} tgt={(needsProbe ? "cno" : "self")} pad={pad} raw={raw} maxLen={maxLen} queued={pendingBefore}->{pendingAfter} packing={packingLimit} players={playerCount} phase={(GameStates.IsLobby ? "lobby" : "ingame")} server={GameStates.CurrentServerType}{warn}";
+        string line = $"NEST probe total={total} per={per} msgsPerEnv={msgsPerEnvelope} envelopes={envelopes} payload={payload} via={via} tgt={(needsProbe ? "cno" : "self")} dst={dst} distinct={distinct} pad={pad} raw={raw} maxLen={maxLen} queued={pendingBefore}->{pendingAfter} packing={packingLimit} players={playerCount} phase={(GameStates.IsLobby ? "lobby" : "ingame")} server={GameStates.CurrentServerType}{warn}";
         HealthLog.NoteAnom(line);
         Logger.Info(line, "DevCmd");
         Utils.SendMessage($"[nest] submitted {sentChildren} children ({msgsPerEnvelope} msgs/envelope) in {envelopes} envelope(s), maxLen={maxLen}B, payload={payload}/{via}{(pad > 0 ? $", pad={pad}" : string.Empty)}{(raw ? ", raw" : string.Empty)}, queued={pendingBefore}->{pendingAfter}. packing limit={packingLimit}{warn}", player.PlayerId);
