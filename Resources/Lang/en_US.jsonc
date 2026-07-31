@@ -10225,7 +10225,7 @@
   "CommandForms.Nest": "nest",
   "CommandDescription.Nest": "Send a synthetic packed (t26) envelope holding N self-addressed child messages, to test whether the official-server anti-cheat keys on the number of messages packed into one packet. Works solo. '/nest limit' prints the vanilla per-packet packing limit [dev]",
   "CommandArgs.Nest.Total": "Total number of child messages to send",
-  "CommandArgs.Nest.Options": "[real|safe|thin|none] payload class (thin = 1 message per child, none = empty child; neither needs a probe CNO), via=t6self|t5|bare6 child vehicle, tgt=self|cno Data target object, per=<k> children per envelope, pad=<chars> child padding (safe only), 'raw' to bypass the rate gate, 'force' to allow oversized envelopes (optional)",
+  "CommandArgs.Nest.Options": "[real|safe|thin|none] payload class (thin = 1 message per child, none = empty child; neither needs a probe CNO), via=t6self|t5|bare6 child vehicle, tgt=self|cno Data target object, dst=self|real|spread destination spread (fan-out width), per=<k> children per envelope, pad=<chars> child padding (safe only), 'raw' to bypass the rate gate, 'force' to allow oversized envelopes (optional)",
   "CommandForms.DayBreak": "daybreak,db",
   "CommandForms.Death": "death,d",
   "CommandForms.DeathNote": "dn,deathnote",
