@@ -15,7 +15,7 @@ public static class ModInstaller
 
     public static bool IsGameRunning() => Process.GetProcessesByName("Among Us").Length > 0;
 
-    public static async Task InstallAsync(GameInstall install, string zipUrl, IProgress<double> progress, Action<string> log, CancellationToken ct)
+    public static async Task InstallAsync(GameInstall install, string zipUrl, IProgress<double> progress, Action<string> log, CancellationToken ct, bool backupExistingPlugin = false)
     {
         var tmpZip = Path.Combine(Path.GetTempPath(), "EndKnot_payload.zip");
         log("最新リリースをダウンロード中…");
@@ -24,6 +24,14 @@ public static class ModInstaller
 
         await Task.Run(() =>
         {
+            // 開発ビルド等、上書きで失われるものが入っている場合だけ退避する (BepInEx は .dll しか読まないので同居して安全)
+            if (backupExistingPlugin && File.Exists(install.PluginDllPath))
+            {
+                var backup = install.PluginDllPath + ".bak";
+                File.Copy(install.PluginDllPath, backup, overwrite: true);
+                log($"既存の EndKnot.dll を退避しました: {backup}");
+            }
+
             // 旧バージョンの interop は BepInEx.cfg やゲーム更新とズレて事故のもと — 消して初回起動時に再生成させる
             var interop = Path.Combine(install.Path, "BepInEx", "interop");
             if (Directory.Exists(interop))

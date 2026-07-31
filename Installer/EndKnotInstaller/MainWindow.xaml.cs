@@ -127,6 +127,44 @@ public partial class MainWindow : Window
         return false;
     }
 
+    /// <summary>タグ ("v0.9.0-alpha") から比較用の数値バージョンを取り出す</summary>
+    private static Version? ParseTagVersion(string? tag)
+    {
+        if (string.IsNullOrWhiteSpace(tag)) return null;
+        var num = tag.TrimStart('v', 'V').Split('-')[0];
+        return Version.TryParse(num, out var parsed) ? Normalize(parsed) : null;
+    }
+
+    // FileVersion は "0.9.0.0" の4要素、タグは "0.9.0" の3要素で来るため、揃えないと同一版が「新しい」と誤判定される
+    private static Version Normalize(Version v) => new(v.Major, v.Minor, v.Build < 0 ? 0 : v.Build);
+
+    /// <summary>
+    /// 既存のモッドが「これから入れる公開版より新しい / 開発ビルド」か。
+    /// true なら上書きで開発中の変更が失われるので、確認とバックアップが要る (2026-07-31 に実際に発生)。
+    /// </summary>
+    private bool IsOverwritingNewer(GameInstall install)
+    {
+        if (!install.IsModded) return false;
+        if (install.IsDevBuild) return true;
+
+        var current = install.ModNumericVersion;
+        var latest = ParseTagVersion(latestRelease?.Tag);
+        return current != null && latest != null && Normalize(current) > latest;
+    }
+
+    private bool ConfirmOverwrite(GameInstall install)
+    {
+        var reason = install.IsDevBuild
+            ? $"開発ビルド ({install.ModVersion}) が入っています"
+            : $"導入済みのバージョン ({install.ModVersion}) が最新リリース ({latestRelease?.Tag}) より新しいです";
+
+        var answer = MessageBox.Show(
+            $"{reason}。\n\nこのまま進めると公開版で上書きされ、開発中の変更が失われます。\n" +
+            "(上書きする前に BepInEx\\plugins\\EndKnot.dll.bak へバックアップします)\n\n続行しますか？",
+            "End K not インストーラー", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
+        return answer == MessageBoxResult.Yes;
+    }
+
     private async void ClickInstall(object sender, RoutedEventArgs e)
     {
         var install = Selected;
@@ -138,12 +176,20 @@ public partial class MainWindow : Window
             return;
         }
 
+        // 上書きで失われるものがあるなら、ここで同意を取ってバックアップを有効にする
+        var needsBackup = IsOverwritingNewer(install);
+        if (needsBackup && !ConfirmOverwrite(install))
+        {
+            Log("インストールを中止しました (既存のモッドはそのままです)。");
+            return;
+        }
+
         busy = true;
         RefreshStatus();
         try
         {
             var progress = new Progress<double>(v => Progress.Value = v);
-            await ModInstaller.InstallAsync(install, zipUrl, progress, Log, CancellationToken.None);
+            await ModInstaller.InstallAsync(install, zipUrl, progress, Log, CancellationToken.None, needsBackup);
             Log("「ゲーム起動」からそのまま遊べます (初回起動は1分ほどかかります)。");
         }
         catch (Exception ex)
