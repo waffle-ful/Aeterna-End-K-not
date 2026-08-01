@@ -41,6 +41,7 @@ internal static class KickRiskDetector
     // --- 保護対象スナップショット (1 秒キャッシュ) ---
     private static readonly HashSet<uint> PlayerControlNetIds = [];
     private static readonly HashSet<uint> IdentityNetIds = []; // PlayerControl + NetworkedPlayerInfo (P4 の対象)
+    private static readonly Dictionary<uint, int> IdentityOwner = []; // 同一性 netId → 所有プレイヤーの client id (NPI の OwnerId は -2 なので pc 側を使う)
     private static readonly HashSet<uint> AllPlayerNetIds = []; // 上 + PlayerPhysics + CNT (P3 の対象)
     private static readonly HashSet<int> LiveClientIds = [];
     private static double SnapshotAt = double.NegativeInfinity;
@@ -164,7 +165,9 @@ internal static class KickRiskDetector
             case 1:
             {
                 if (!TryReadPacked(buf, end, ref pos, out uint netId)) return;
-                if (PlayerControlNetIds.Contains(netId))
+
+                // P4 と同じ理由で「所有クライアントが接続中」まで確認する (退出者の残留ローカルオブジェクト対策)。
+                if (PlayerControlNetIds.Contains(netId) && (!IdentityOwner.TryGetValue(netId, out int dataOwner) || Utils.GetClientById(dataOwner) != null))
                     Report("P1", $"Data(tag1) targets a LIVE player's PlayerControl netId={netId}", packetLen);
 
                 break;
@@ -207,7 +210,8 @@ internal static class KickRiskDetector
 
                 if (selfFamily == 0 || !FamilyOwner.TryGetValue(selfFamily, out int trueOwner) || trueOwner != ownerId)
                 {
-                    if (LiveClientIds.Contains(ownerId))
+                    // P4 と同じ理由で実クライアント表も引く (LiveClientIds は退出者の残留オブジェクト由来で腐りうる)。
+                    if (LiveClientIds.Contains(ownerId) && Utils.GetClientById(ownerId) != null)
                         Report("P2", $"Spawn(tag4) declares ownerId={ownerId}, which is a CONNECTED client", packetLen);
                 }
 
@@ -230,7 +234,13 @@ internal static class KickRiskDetector
 
                 if (IdentityNetIds.Contains(netId))
                 {
-                    Report("P4", $"Despawn targets a LIVE player's identity object netId={netId}", packetLen);
+                    // ⚠️ 退出クライアントの後片付け despawn は合法 (サーバーの保護表は切断と共に引かれる) だが、
+                    // スナップショットはローカルオブジェクト由来で退出後も残る — "Repeat Despawn"
+                    // (PlayerJoinAndLeftPatch, 離脱 2.5 秒後) はホスト側 .Despawn() を呼ばないため
+                    // 実測 15/29 で自己ヒットしていた。送信時点で所有クライアントがまだ接続中のときだけ違法。
+                    if (!IdentityOwner.TryGetValue(netId, out int owner) || Utils.GetClientById(owner) != null)
+                        Report("P4", $"Despawn targets a LIVE player's identity object netId={netId}", packetLen);
+
                     return;
                 }
 
@@ -252,6 +262,7 @@ internal static class KickRiskDetector
         SnapshotAt = now;
         PlayerControlNetIds.Clear();
         IdentityNetIds.Clear();
+        IdentityOwner.Clear();
         AllPlayerNetIds.Clear();
         LiveClientIds.Clear();
         NetIdFamily.Clear();
@@ -266,6 +277,7 @@ internal static class KickRiskDetector
             LiveClientIds.Add(pc.OwnerId);
             PlayerControlNetIds.Add(pc.NetId);
             IdentityNetIds.Add(pc.NetId);
+            IdentityOwner[pc.NetId] = pc.OwnerId;
             AllPlayerNetIds.Add(pc.NetId);
 
             // 本体族: 1 本の spawn メッセージが {PlayerControl, PlayerPhysics, CNT} をまとめて宣言する。
@@ -290,6 +302,7 @@ internal static class KickRiskDetector
                 if (pc.Data != null)
                 {
                     IdentityNetIds.Add(pc.Data.NetId);
+                    IdentityOwner[pc.Data.NetId] = pc.OwnerId;
                     AllPlayerNetIds.Add(pc.Data.NetId);
 
                     // 同一性族: NetworkedPlayerInfo は別 spawn で単体宣言される (ownerId は -2)。
