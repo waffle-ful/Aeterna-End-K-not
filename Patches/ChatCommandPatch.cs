@@ -289,6 +289,11 @@ internal static class ChatCommands
             new("Audience", "{action} [args]", Command.UsageLevels.Host, Command.UsageTimes.Always, AudienceCommand, true, false, [GetString("CommandArgs.Audience.Action")]),
             new("Yaminabe", "", Command.UsageLevels.Everyone, Command.UsageTimes.Always, YaminabeCommand, true, false),
             new("ServerInfo", "", Command.UsageLevels.Everyone, Command.UsageTimes.AfterDeathOrLobby, ServerInfoCommand, true, false),
+            // alwaysHidden: a non-modded sender's raw text is already broadcast by
+            // vanilla before the host sees it, so cancelling isn't enough — the hidden
+            // flag is what routes it through the flood-clear. Without it, reporting a
+            // griefer would show the griefer the report.
+            new("Report", "{message}", Command.UsageLevels.Everyone, Command.UsageTimes.Always, ReportCommand, true, true, [GetString("CommandArgs.Report.Message")]),
             
             // Commands with action handled elsewhere
             new("Guess", "{id} {role}", Command.UsageLevels.Everyone, Command.UsageTimes.InMeeting, (_, _, _) => { }, true, false, [GetString("CommandArgs.Guess.Id"), GetString("CommandArgs.Guess.Role")]),
@@ -849,6 +854,31 @@ internal static class ChatCommands
     {
         if (!Options.ServerInviteCommandEnabled.GetBool()) return;
         Utils.SendMessage(ServerInviteOverlay.GetServerInfoMessage(), player.PlayerId, GetString("ServerInvite.Title"));
+    }
+
+    // Every reply here goes to the reporter alone — nothing about a report is shown to
+    // the host or the lobby, so reporting a player in the room stays invisible to them.
+    private static void ReportCommand(PlayerControl player, string text, string[] args)
+    {
+        // Silent when disabled, same as ServerInfoCommand — the host turned the
+        // channel off, so the reporter shouldn't get a reply either way.
+        if (!Options.ReportCommandEnabled.GetBool()) return;
+
+        string title = GetString("LobbyShare.ReportTitle");
+        string message = args.Length > 1 ? text[(text.IndexOf(' ') + 1)..] : string.Empty;
+
+        switch (LobbyShare.SubmitReport(player, message))
+        {
+            case LobbyShare.ReportResult.Empty:
+                Utils.SendMessage(GetString("LobbyShare.ReportUsage"), player.PlayerId, title);
+                break;
+            case LobbyShare.ReportResult.OnCooldown:
+                Utils.SendMessage(GetString("LobbyShare.ReportCooldown"), player.PlayerId, title);
+                break;
+            default:
+                Utils.SendMessage(GetString("LobbyShare.ReportAck"), player.PlayerId, title);
+                break;
+        }
     }
     
     public static void SummonCommand(PlayerControl player, string text, string[] args)

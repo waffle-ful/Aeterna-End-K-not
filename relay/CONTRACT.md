@@ -13,8 +13,9 @@ or signatures break.
 | `POST` | `/api/end` | game finished — PATCH embed back to "open" (blurple). Lobby is still alive; same code is rejoinable |
 | `POST` | `/api/close` | host actually left the lobby — DELETE message + KV entry |
 | `POST` | `/api/update` | live update of player count / max / mode (status preserved) — DLL fires throttled (~5s diff-detect) during the lobby phase |
+| `POST` | `/api/report` | a player's in-game `/report`, forwarded by the host to the **operator-only** channel (separate webhook). Carries no lobby state — works even in a lobby that was never announced |
 
-All three require these headers:
+All of them require these headers:
 
 ```
 X-Timestamp: <unix seconds, no fraction>
@@ -96,6 +97,50 @@ Field rules:
 - The embed's status (open vs in-game) is preserved — `/api/update` never
   flips state, it only refreshes data fields.
 
+### `POST /api/report`
+
+```json
+{
+  "code":         "ABCDEF",
+  "fcHash":       "<host's 64 hex>",
+  "reporter":     "SomePlayer",
+  "reporterHash": "<reporting player's 64 hex>",
+  "text":         "the door in Admin never opens",
+  "region":       "North America",
+  "mode":         "Standard",
+  "modVersion":   "0.9.0-dev",
+  "phase":        "in-game"
+}
+```
+
+Field rules:
+
+- `text` — required, 1..400 chars after sanitizing. Empty (or control-chars-only) → `400 empty text`.
+  Both sides clamp at 400 (`ReportTextMax` in the DLL, `REPORT_TEXT_MAX` on the relay).
+- `code` — **may be empty**, unlike every other endpoint: a report can come from a
+  local/freeplay game that has no lobby code. Non-empty values must match `[A-Z0-9]{6}`.
+- `fcHash` — the **host** who forwarded the report. `reporterHash` — the **player who
+  typed it**. Both are checked against the denylist; a hit on either returns
+  `200 {"status":"ignored"}` (silent, so neither side can probe the list).
+- `reporter` — the reporting player's Among Us name, ≤ 32 chars. Empty → `Anonymous`.
+  Attacker-controlled: the relay strips `@`, control chars, and code-block escapes,
+  same as `hostName`.
+- `region` — accepts the short code or the vanilla long form. Unrecognized → omitted
+  from the embed rather than rejected (a report must not be lost over metadata).
+- `phase` — `lobby` / `in-game` / `meeting`.
+- Rate limit is **per `reporterHash`** (`REPORT_RATE_LIMIT_SECONDS`, default 120) —
+  a lobby full of players can each report, but one player can't spam. The DLL applies
+  its own per-player floor first (`ReportCooldownSeconds`, 180s), so the relay limit is
+  the backstop. **The DLL's floor must stay longer than this one.** The DLL acks the
+  reporter the moment it accepts, so anything it accepts and the relay then 429s is a
+  silent loss the player was told went through — and the two clocks are independent, so
+  equal values are not enough.
+- Nothing here touches `code:` — no read, no write. An accepted report costs **exactly
+  one KV write** (the rate-limit key); every rejected one costs zero.
+- If `DISCORD_REPORT_WEBHOOK_URL` is unset the relay returns `200 {"status":"disabled"}`
+  and drops the report. It never falls back to the announce webhook — reports must
+  never land in the public lobby channel.
+
 ### `POST /api/start`, `POST /api/end`, and `POST /api/close`
 
 ```json
@@ -146,7 +191,9 @@ All responses are JSON. Status codes:
 | `200 {"status":"touched"}` | /api/update: nothing changed, but `lastSeenAt` was refreshed (keepalive) |
 | `200 {"status":"announced","messageId":"..."}` | first announce, Discord message posted |
 | `200 {"status":"refreshed","messageId":"..."}` | same host re-announced existing code; existing embed was PATCHed in place |
-| `200 {"status":"ignored"}` | host is on denylist (silent ack — don't surface to user) |
+| `200 {"status":"ignored"}` | announce: host is on denylist / report: host **or** reporter is (silent ack — don't surface to user) |
+| `200 {"status":"reported"}` | /api/report: forwarded to the operator channel |
+| `200 {"status":"disabled"}` | /api/report: `DISCORD_REPORT_WEBHOOK_URL` unset; report accepted and dropped |
 | `200 {"status":"started"}` | start-edit succeeded |
 | `200 {"status":"lobby-resumed"}` | end: embed flipped back to "open" (Play-Again ready) |
 | `200 {"status":"closed"}` | close: Discord message + KV entry deleted |
@@ -157,6 +204,7 @@ All responses are JSON. Status codes:
 | `409 {"error":"code already announced by another host"}` | someone else owns this code |
 | `426 {"error":"version blocked — upgrade required"}` | `modVersion` listed in `BLOCKED_VERSIONS`; DLL should surface as "please update" |
 | `429 {"error":"rate limited (ip\|host)"}` | DLL should back off ~RATE_LIMIT_SECONDS |
+| `429 {"error":"rate limited (reporter)"}` | /api/report: this player reported within REPORT_RATE_LIMIT_SECONDS |
 | `502 {"error":"discord post failed: ..."}` | announce: upstream Discord post error; retry later |
 | `502 {"error":"discord delete failed: ..."}` | close: Discord delete still failing after retries; KV kept (messageId retained), embed not yet removed |
 
@@ -180,6 +228,26 @@ All responses are JSON. Status codes:
 6. **Region exclusion.** If `IRegionInfo.Name` doesn't normalize to NA/EU/AS, don't announce (silently no-op). Don't crash.
 7. **Android.** No platform exclusion. UnityWebRequest works the same way.
 8. **HMAC key + FC_SALT.** Stored as `internal const` in `Modules/LobbyShareSecrets.cs` (gitignored; defaults to empty in `LobbyShareSecrets.Default.cs`). Both are extractable from the DLL — that's accepted. Rotation = ship a new release with a new key while leaving the old key in `SHARED_HMAC_KEYS` for a grace window so old DLLs keep working; remove the old key after the window (or immediately on confirmed leak).
+9. **Reports are independent of the announce toggle.** `/report` works with
+   `ShareLobbyToDiscord` off and in a lobby that was never announced — it is a
+   moderation/bug channel, not part of lobby sharing. The only gate is
+   `IsConfigured` (baked secrets), and even then the host writes the report to
+   `EndKnot_Logs/EndKnot-Reports.log` **first**, so an unset secret, a relay outage
+   or a source build still leaves the operator a local copy.
+10. **Reports are never echoed by the mod** — no host chat line, no lobby message; the
+    reporter gets a private ack and nothing else is displayed. **The reporter's own
+    typing is a different matter, and the mod cannot fully cover it:**
+    - `/cmd report ...` — genuinely private. Vanilla routes `/cmd` messages to the host
+      only, so no other client ever receives the text.
+    - bare `/report ...` from a **non-modded** client — vanilla has already broadcast it
+      by the time the host sees it. `alwaysHidden` puts it through the flood-clear, which
+      scrubs the scrollback but **cannot retract a chat bubble that already rendered**.
+      Assume the lobby saw it for a moment. This is the same known compromise as Whisper
+      and the faction chats; the in-game strings therefore teach `/cmd report`.
+    - bare `/report ...` from a **modded** client or the host — cancelled before send,
+      so nothing goes out.
+11. **Kill switch.** `Options.ReportCommandEnabled` (default on) disables the command,
+    matching every other "anyone types it, the host answers" command.
 
 ## Things deliberately NOT in this contract
 
