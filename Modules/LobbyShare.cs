@@ -39,6 +39,10 @@ internal static class LobbyShare
     // Discord rate-limits PATCH on a single message; 5s leaves plenty of headroom.
     private const float UpdateThrottleSeconds = 5f;
 
+    // Keepalive interval for an otherwise-idle lobby. Must be comfortably below the
+    // relay's STALE_SECONDS (3600) so a quiet lobby is never mistaken for abandoned.
+    private const float KeepaliveSeconds = 600f;
+
     private static string activeCode;
     private static string activeFcHash;
     private static volatile bool announceSucceeded;
@@ -128,8 +132,14 @@ internal static class LobbyShare
 
     public static void OnGameEnded()
     {
-        if (!CanLifecycle()) return;
+        // Clear inGame BEFORE the eligibility guard. inGame describes whether a game
+        // is running — it is not conditional on the relay call being eligible. With
+        // the guard first, any game that ended while CanLifecycle() was false (failed
+        // announce, already-closed lobby) latched inGame=true forever, and from then
+        // on OnLobbyDestroyed always took the "lobby → ship transition" skip branch
+        // and never fired /api/close.
         inGame = false;
+        if (!CanLifecycle()) return;
         // Lobby is still alive — keep activeCode/activeFcHash for the upcoming
         // /api/end PATCH and the subsequent Play-Again re-announce / future /api/close.
         FireAndForget(PostSignedAsync("/api/end", new LifecycleBody { code = activeCode, fcHash = activeFcHash }));
@@ -201,10 +211,16 @@ internal static class LobbyShare
         if (max < 1 || max > 15) max = 15;
         string mode = FormatMode(Options.CurrentGameMode);
 
-        if (count == lastSentPlayerCount && max == lastSentMax && mode == lastSentMode) return;
-
         float now = Time.time;
-        if (now - lastUpdateAt < UpdateThrottleSeconds) return;
+        bool unchanged = count == lastSentPlayerCount && max == lastSentMax && mode == lastSentMode;
+
+        // Unchanged lobbies still ping every KeepaliveSeconds. The relay reaps entries
+        // by staleness (see relay/ sweepStaleLobbies), so a lobby that sits quiet with
+        // nobody joining must keep saying it's alive or the sweep deletes its embed.
+        // The relay skips the KV write when the entry was touched recently, so this is
+        // cheap on the server side too.
+        if (unchanged && now - lastUpdateAt < KeepaliveSeconds) return;
+        if (!unchanged && now - lastUpdateAt < UpdateThrottleSeconds) return;
 
         lastSentPlayerCount = count;
         lastSentMax = max;

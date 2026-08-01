@@ -88,6 +88,11 @@ Field rules:
 - `players`, `max`, `mode` — all optional. Only present fields are updated.
 - If no field actually differs from the stored value, the relay returns
   `200 {"status":"no-change"}` and does NOT call Discord.
+- `/api/update` doubles as the DLL's **keepalive**: the DLL fires it every
+  `KeepaliveSeconds` (600) during the lobby phase even when nothing changed, so the
+  sweep can tell a quiet lobby from an abandoned one. On a no-change call the relay
+  refreshes `lastSeenAt` only if the entry hasn't been touched for 600s
+  (`200 {"status":"touched"}`); otherwise it skips the KV write entirely.
 - The embed's status (open vs in-game) is preserved — `/api/update` never
   flips state, it only refreshes data fields.
 
@@ -113,11 +118,22 @@ sufficient for a determined attacker.
   backoff). If it still fails, the KV entry is **kept** (so its `messageId` isn't
   lost) and the relay responds `502` — it never deletes KV on a failed Discord
   delete, because that would orphan the embed permanently.
-- Abandoned lobbies that never receive `/api/close` (host crash / hard-quit, or a
-  close that never reached the relay) only have their **KV entry** expire at the
-  TTL (`ANNOUNCE_TTL_SECONDS`, default 3h) — the Discord message itself is **not**
-  swept (there is no scheduled handler). Those embeds are orphaned until a future
-  scheduled-sweep is added (see Phase 2) or are removed by hand.
+- Abandoned lobbies that never receive `/api/close` (host process killed by the
+  watchdog, official-server ban, crash, or a close that never reached the relay)
+  are cleaned up by the **scheduled sweep**: a cron trigger (every 10 min) deletes
+  the Discord message for any entry whose `lastSeenAt` is older than
+  `STALE_SECONDS` (default 3600; 3× that while `status == "in-game"`, since a game
+  in progress writes nothing and the DLL keepalive only runs during the lobby
+  phase), then deletes the KV entry. This is the only path that can recover an
+  abrupt host death — the client is gone before it can send anything, so the
+  server has to reap.
+- `ANNOUNCE_TTL_SECONDS` is a **sliding** TTL, refreshed on every write, and acts
+  as a floor: the Worker raises it if `STALE_SECONDS` would otherwise outlive it.
+  The KV entry must never expire before the sweep gets its chance, because the
+  `messageId` dies with it and nothing can delete the embed afterwards. The TTL
+  used to decay from `createdAt`, which expired the entry out from under any lobby
+  that outlived 3h — after which `/api/close` returned `no-op` and the embed was
+  orphaned permanently.
 
 ## Responses
 
@@ -126,7 +142,8 @@ All responses are JSON. Status codes:
 | status | meaning |
 |---|---|
 | `200 {"status":"updated"}` | /api/update: one or more fields changed; embed PATCHed |
-| `200 {"status":"no-change"}` | /api/update: all submitted fields matched stored values; no PATCH sent |
+| `200 {"status":"no-change"}` | /api/update: all submitted fields matched stored values; no PATCH sent, no KV write |
+| `200 {"status":"touched"}` | /api/update: nothing changed, but `lastSeenAt` was refreshed (keepalive) |
 | `200 {"status":"announced","messageId":"..."}` | first announce, Discord message posted |
 | `200 {"status":"refreshed","messageId":"..."}` | same host re-announced existing code; existing embed was PATCHed in place |
 | `200 {"status":"ignored"}` | host is on denylist (silent ack — don't surface to user) |
