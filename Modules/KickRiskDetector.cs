@@ -45,6 +45,16 @@ internal static class KickRiskDetector
     private static readonly HashSet<int> LiveClientIds = [];
     private static double SnapshotAt = double.NegativeInfinity;
 
+    // --- オブジェクト族 (spawn が「自分自身」を宣言しているだけかの判定用) ---
+    // 族 = 1 回の spawn メッセージが宣言する netId のまとまり。本体 {PlayerControl, PlayerPhysics, CNT} と
+    // 同一性オブジェクト単体 {NetworkedPlayerInfo} の 2 種類があり、族の代表 netId で引く。
+    private static readonly Dictionary<uint, uint> NetIdFamily = []; // netId → 族の代表 netId
+    private static readonly Dictionary<uint, HashSet<uint>> Families = []; // 代表 netId → 族の全 netId
+    private static readonly Dictionary<uint, int> FamilyOwner = []; // 代表 netId → 族の実所有クライアント id
+
+    /// <summary>1 つの spawn が宣言した netId (走査中の作業用・毎回 Clear)。</summary>
+    private static readonly List<uint> DeclaredNetIds = [];
+
     /// <summary>この接続で spawn メッセージを送った netId (P5 用)。</summary>
     private static readonly HashSet<uint> SpawnedThisConnection = [];
 
@@ -170,16 +180,13 @@ internal static class KickRiskDetector
                 pos++; // SpawnFlags (byte)
                 if (!TryReadPacked(buf, end, ref pos, out uint compCount)) return;
 
-                if (LiveClientIds.Contains(ownerId))
-                    Report("P2", $"Spawn(tag4) declares ownerId={ownerId}, which is a CONNECTED client", packetLen);
+                DeclaredNetIds.Clear();
 
                 for (var i = 0; i < compCount && i < 16; i++)
                 {
                     if (!TryReadPacked(buf, end, ref pos, out uint netId)) return;
 
-                    if (AllPlayerNetIds.Contains(netId))
-                        Report("P3", $"Spawn(tag4) re-declares protected netId={netId} (a live player's object)", packetLen);
-
+                    DeclaredNetIds.Add(netId);
                     SpawnedThisConnection.Add(netId);
 
                     // コンポーネント本体 (1 サブメッセージ) を読み飛ばす
@@ -187,6 +194,30 @@ internal static class KickRiskDetector
                     int len = buf[pos] | (buf[pos + 1] << 8);
                     pos += 3 + len;
                     if (len < 0 || pos > end) return;
+                }
+
+                // ⚠️ **そのオブジェクト自身の spawn は合法** (2026-08-01 に誤検知として確定)。
+                // ホストは新規クライアントの入室時、既存オブジェクト全部の spawn を tag6 で流し直す (vanilla 経路)。
+                // 送信時点でその netId/ownerId はローカルに実在するため、素朴に照合すると自分自身に必ず当たる
+                // (実測: 入室 4 回に対し検出 4 回・P3:P2 = 1029:259 ≈ 4:1 = 1 プレイヤーあたり netId 4 個 : spawn 1 本)。
+                // サーバーが禁じているのは「**他の**オブジェクトが他人の netId / ownerId を騙る」ことなので、
+                // 宣言 netId 群が既知の族と**ちょうど一致**するかで 1 ビット分離する
+                // (部分一致で許すと、保護 netId を 1 つだけ名乗る合成 spawn = P3 の陽性アーム 25B を取り逃がす)。
+                uint selfFamily = MatchFamily();
+
+                if (selfFamily == 0 || !FamilyOwner.TryGetValue(selfFamily, out int trueOwner) || trueOwner != ownerId)
+                {
+                    if (LiveClientIds.Contains(ownerId))
+                        Report("P2", $"Spawn(tag4) declares ownerId={ownerId}, which is a CONNECTED client", packetLen);
+                }
+
+                if (selfFamily == 0)
+                {
+                    foreach (uint netId in DeclaredNetIds)
+                    {
+                        if (AllPlayerNetIds.Contains(netId))
+                            Report("P3", $"Spawn(tag4) re-declares protected netId={netId} (a live player's object)", packetLen);
+                    }
                 }
 
                 break;
@@ -223,6 +254,9 @@ internal static class KickRiskDetector
         IdentityNetIds.Clear();
         AllPlayerNetIds.Clear();
         LiveClientIds.Clear();
+        NetIdFamily.Clear();
+        Families.Clear();
+        FamilyOwner.Clear();
 
         // PlayerId>=200 は CNO (Main.EnumeratePlayerControls が除外済み)。CNO は保護対象ではない。
         foreach (PlayerControl pc in Main.EnumeratePlayerControls())
@@ -234,10 +268,22 @@ internal static class KickRiskDetector
             IdentityNetIds.Add(pc.NetId);
             AllPlayerNetIds.Add(pc.NetId);
 
+            // 本体族: 1 本の spawn メッセージが {PlayerControl, PlayerPhysics, CNT} をまとめて宣言する。
+            HashSet<uint> body = [pc.NetId];
+
             try
             {
-                if (pc.MyPhysics) AllPlayerNetIds.Add(pc.MyPhysics.NetId);
-                if (pc.NetTransform) AllPlayerNetIds.Add(pc.NetTransform.NetId);
+                if (pc.MyPhysics)
+                {
+                    AllPlayerNetIds.Add(pc.MyPhysics.NetId);
+                    body.Add(pc.MyPhysics.NetId);
+                }
+
+                if (pc.NetTransform)
+                {
+                    AllPlayerNetIds.Add(pc.NetTransform.NetId);
+                    body.Add(pc.NetTransform.NetId);
+                }
 
                 // ⚠️ GameData 未登録の PlayerControl では Data のゲッター自体が例外を投げる
                 // (2026-08-01 に /nest で踏んだ)。`!= null` では防げないので try で囲う。
@@ -245,10 +291,37 @@ internal static class KickRiskDetector
                 {
                     IdentityNetIds.Add(pc.Data.NetId);
                     AllPlayerNetIds.Add(pc.Data.NetId);
+
+                    // 同一性族: NetworkedPlayerInfo は別 spawn で単体宣言される (ownerId は -2)。
+                    uint dataNetId = pc.Data.NetId;
+                    Families[dataNetId] = [dataNetId];
+                    FamilyOwner[dataNetId] = pc.Data.OwnerId;
+                    NetIdFamily[dataNetId] = dataNetId;
                 }
             }
             catch { /* best-effort */ }
+
+            Families[pc.NetId] = body;
+            FamilyOwner[pc.NetId] = pc.OwnerId;
+            foreach (uint netId in body) NetIdFamily[netId] = pc.NetId;
         }
+    }
+
+    /// <summary><see cref="DeclaredNetIds"/> が既知の族と**ちょうど一致**するならその族の代表 netId を返す
+    /// (0 = 不一致 = 「自分自身の spawn」ではない)。netId は 1 始まりなので 0 をセンチネルに使える。</summary>
+    private static uint MatchFamily()
+    {
+        if (DeclaredNetIds.Count == 0) return 0;
+        if (!NetIdFamily.TryGetValue(DeclaredNetIds[0], out uint family)) return 0;
+        if (!Families.TryGetValue(family, out HashSet<uint> members)) return 0;
+        if (members.Count != DeclaredNetIds.Count) return 0;
+
+        for (var i = 0; i < DeclaredNetIds.Count; i++)
+        {
+            if (!members.Contains(DeclaredNetIds[i])) return 0;
+        }
+
+        return family;
     }
 
     private static void Report(string pattern, string detail, int packetLen)
