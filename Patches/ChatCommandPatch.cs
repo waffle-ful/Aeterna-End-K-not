@@ -3681,6 +3681,13 @@ internal static class ChatCommands
     private static PlayerControl NestXProbe;
     private static string NestXProbeSpec = string.Empty;
 
+    // /nest dummy (累計スポーン表オーバーフロー実験) の状態。dummies は「この接続で spawn を送った」
+    // ものだけを保持し、接続オブジェクトが変わったら despawn を送らずローカル破棄する (P5 回避)。
+    private static readonly List<PlayerControl> NestDummies = [];
+    private static object NestDummyConnection;
+    private static bool NestDummyRunning;
+    private static bool NestDummyStopRequested;
+
     // GameData に登録されていない PlayerControl (手組み spawn / CNO) では `PlayerControl.Data` の
     // ゲッターが例外を投げる。プローブ系は必ずこれを通す。
     private static uint SafeDataNetId(PlayerControl pc)
@@ -3707,6 +3714,151 @@ internal static class ChatCommands
         }
 
         return false;
+    }
+
+    // /nest dummy の 1 体分。xspawn の合法アーム (owner=-2 / pid固定 / CNO と同形の再登録付き) と同じ形で、
+    // 見た目系の送信 (outfit / SetName / fan-out) を一切伴わない。
+    private static PlayerControl NestSpawnDummy(bool noReg)
+    {
+        PlayerControl xpc = UnityEngine.Object.Instantiate(AmongUsClient.Instance.PlayerPrefab, Vector2.zero, Quaternion.identity);
+        xpc.PlayerId = 201;
+        xpc.isNew = false;
+        xpc.notRealPlayer = true;
+
+        try { xpc.NetTransform.SnapTo(new Vector2(50f, 50f)); }
+        catch (Exception e) { Utils.ThrowException(e); }
+
+        AmongUsClient.Instance.NetIdCnt += 1U;
+        MessageWriter spawn = MessageWriter.Get(SendOption.Reliable);
+        spawn.StartMessage(5);
+        spawn.Write(AmongUsClient.Instance.GameId);
+        spawn.StartMessage(4);
+        var spawnMsg = AmongUsClient.Instance.CreateSpawnMessage(xpc, -2, SpawnFlags.None);
+        spawnMsg.SerializeValues(spawn);
+        spawn.EndMessage();
+
+        if (!noReg && GameStates.CurrentServerType == GameStates.ServerType.Vanilla)
+        {
+            // CustomNetObject.cs の再登録 spawn と同一 (本番 CNO とバイト同形にするため既定で送る)
+            for (uint i = 1; i <= 3; ++i)
+            {
+                spawn.StartMessage(4);
+                spawn.WritePacked(2U);
+                spawn.WritePacked(-2);
+                spawn.Write((byte)SpawnFlags.None);
+                spawn.WritePacked(1);
+                spawn.WritePacked(AmongUsClient.Instance.NetIdCnt - i);
+                spawn.StartMessage(1);
+                spawn.EndMessage();
+                spawn.EndMessage();
+            }
+        }
+
+        spawn.EndMessage();
+        HealthLog.RecordHostAction("NestDummy", spawn.Length, "Reliable");
+        AmongUsClient.Instance.SendOrDisconnect(spawn);
+        spawn.Recycle();
+
+        if (PlayerControl.AllPlayerControls.Contains(xpc)) PlayerControl.AllPlayerControls.Remove(xpc);
+        xpc.cosmetics.colorBlindText.color = Color.clear;
+        xpc.OwnerId = -2;
+        return xpc;
+    }
+
+    private static IEnumerator NestDummyRun(int total, float per, int stepSize, float pause, bool noReg, byte reporter)
+    {
+        uint startNetIdCnt = AmongUsClient.Instance.NetIdCnt;
+        string startLine = $"NEST dummy start total={total} per={per}s step={stepSize} pause={pause}s noreg={noReg} netIdCnt={startNetIdCnt} already={NestDummies.Count} phase={(GameStates.IsLobby ? "lobby" : "ingame")} server={GameStates.CurrentServerType}";
+        HealthLog.NoteAnom(startLine);
+        Logger.Info(startLine, "DevCmd");
+        Utils.SendMessage($"[nest] dummy run: {total} naked dummies @ {per}s, checkpoint every {stepSize} (pause {pause}s). '/nest dummy stop' to halt, '/nest dummy clear' to clean up.", reporter);
+
+        var spawnedThisRun = 0;
+
+        while (spawnedThisRun < total && !NestDummyStopRequested)
+        {
+            if (!AmongUsClient.Instance || !ReferenceEquals(AmongUsClient.Instance.connection, NestDummyConnection))
+            {
+                // 切断 = 実験の主要な観測イベント。何体目で落ちたかが結果そのもの。
+                string dcLine = $"NEST dummy CONNECTION LOST after {NestDummies.Count} dummies (run={spawnedThisRun}) — check DCRING reason + KICKRISK. Hacking with KICKRISK silent => table-cap / 6th-rule evidence.";
+                HealthLog.NoteAnom(dcLine);
+                Logger.Warn(dcLine, "DevCmd");
+                break;
+            }
+
+            PlayerControl dummy = NestSpawnDummy(noReg);
+            if (dummy) NestDummies.Add(dummy);
+            spawnedThisRun++;
+
+            if (NestDummies.Count % stepSize == 0)
+            {
+                string cp = $"NEST dummy checkpoint spawned={NestDummies.Count} netIdCnt={AmongUsClient.Instance.NetIdCnt} pending={PacketRateGate.PendingCount}";
+                HealthLog.NoteAnom(cp);
+                Logger.Info(cp, "DevCmd");
+                Utils.SendMessage($"[nest] dummy checkpoint: {NestDummies.Count} spawned, netIdCnt={AmongUsClient.Instance.NetIdCnt}, pending={PacketRateGate.PendingCount}.", reporter);
+                yield return new WaitForSecondsRealtime(pause);
+            }
+            else
+                yield return new WaitForSecondsRealtime(per);
+        }
+
+        NestDummyRunning = false;
+        string endLine = $"NEST dummy run ended spawned={NestDummies.Count} run={spawnedThisRun} stopRequested={NestDummyStopRequested}";
+        HealthLog.NoteAnom(endLine);
+        Logger.Info(endLine, "DevCmd");
+
+        if (AmongUsClient.Instance && ReferenceEquals(AmongUsClient.Instance.connection, NestDummyConnection))
+            Utils.SendMessage($"[nest] dummy run ended at {NestDummies.Count}. Run '/nest dummy clear' when done observing.", reporter);
+    }
+
+    private static IEnumerator NestDummyClear(byte reporter)
+    {
+        // 実行中の run に stop を伝えてから 1 フレーム待って合流する
+        yield return null;
+
+        int count = NestDummies.Count;
+        var sent = 0;
+        // ⚠️ 接続が変わっていたら despawn を「送らない」。新しい接続のサーバーはこの netId を知らないので、
+        // t5 ブロードキャスト Despawn は P5 (未 spawn netId × t5 = 100% Hacking キック) になる。
+        bool sameConnection = AmongUsClient.Instance && ReferenceEquals(AmongUsClient.Instance.connection, NestDummyConnection);
+
+        foreach (PlayerControl dummy in NestDummies.ToArray())
+        {
+            if (!dummy) continue;
+
+            if (sameConnection && AmongUsClient.Instance && ReferenceEquals(AmongUsClient.Instance.connection, NestDummyConnection))
+            {
+                MessageWriter dsp = MessageWriter.Get(SendOption.Reliable);
+                dsp.StartMessage(5);
+                dsp.Write(AmongUsClient.Instance.GameId);
+                dsp.StartMessage(5);
+                dsp.WritePacked(dummy.NetId);
+                dsp.EndMessage();
+                dsp.EndMessage();
+                AmongUsClient.Instance.SendOrDisconnect(dsp);
+                dsp.Recycle();
+                sent++;
+
+                // ゲート予算 (25 Reliable/秒) を despawn で食い潰さないよう小刻みに休む
+                if (sent % 20 == 0) yield return new WaitForSecondsRealtime(1f);
+            }
+
+            try
+            {
+                if (dummy.Data != null) dummy.Data.ClearDirtyBits();
+            }
+            catch (Exception) { /* GameData 未登録のダミーでは Data ゲッターが投げる */ }
+
+            AmongUsClient.Instance?.RemoveNetObject(dummy);
+            UnityEngine.Object.Destroy(dummy.gameObject);
+        }
+
+        NestDummies.Clear();
+        NestDummyRunning = false;
+        string line = $"NEST dummy clear count={count} despawnsSent={sent} sameConnection={sameConnection}";
+        HealthLog.NoteAnom(line);
+        Logger.Info(line, "DevCmd");
+        Utils.SendMessage($"[nest] dummy cleared: {count} destroyed, {sent} despawns sent{(sameConnection ? string.Empty : " (connection changed — local destroy only)")}.", reporter);
     }
 
     private static void NestCommand(PlayerControl player, string text, string[] args)
@@ -3916,6 +4068,72 @@ internal static class ChatCommands
             HealthLog.NoteAnom($"NEST xdespawn net={deadNet} spec={NestXProbeSpec}");
             Utils.SendMessage($"[nest] xprobe despawned (net={deadNet}).", player.PlayerId);
             NestXProbeSpec = string.Empty;
+            return;
+        }
+
+        // /nest dummy <count|stop|clear> [per=0.4] [step=50] [pause=10] [noreg]
+        // 累計スポーン表オーバーフロー説 (docs/official-server-model.md §5-2 残渣) の計器。
+        // xspawn と同形の raw spawn (owner=-2 / pid=201 / 裸 = outfit/SetName/fan-out ゼロ) を per 秒間隔で
+        // count 体積み、step 体ごとに pause 秒停止して netIdCnt を記帳する。ワイヤに出るのは spawn 電文
+        // だけなので、動く変数は「サーバーの表に登録された netId の累計」のみ。KICKRISK は常時稼働。
+        if (args.Length >= 2 && args[1].Equals("dummy", StringComparison.OrdinalIgnoreCase))
+        {
+            string sub = args.Length >= 3 ? args[2].ToLowerInvariant() : string.Empty;
+
+            if (sub == "stop")
+            {
+                NestDummyStopRequested = true;
+                Utils.SendMessage($"[nest] dummy run stop requested (spawned so far: {NestDummies.Count}).", player.PlayerId);
+                return;
+            }
+
+            if (sub == "clear")
+            {
+                NestDummyStopRequested = true;
+                Main.Instance.StartCoroutine(NestDummyClear(player.PlayerId));
+                return;
+            }
+
+            if (NestDummyRunning)
+            {
+                Utils.SendMessage($"[nest] dummy run already active ({NestDummies.Count} spawned) — '/nest dummy stop' first.", player.PlayerId);
+                return;
+            }
+
+            if (!int.TryParse(sub, out int dummyTotal) || dummyTotal < 1)
+            {
+                Utils.SendMessage("[nest] Usage: /nest dummy <count|stop|clear> [per=0.4] [step=50] [pause=10] [noreg]", player.PlayerId);
+                return;
+            }
+
+            // ホスト操作不能リスク (実測: 50〜100体で危険域) を考え、1回の総数はハードキャップする。
+            const int HardCap = 300;
+
+            if (dummyTotal > HardCap)
+            {
+                Utils.SendMessage($"[nest] count capped at {HardCap}.", player.PlayerId);
+                dummyTotal = HardCap;
+            }
+
+            var dummyPer = 0.4f;
+            var stepSize = 50;
+            var stepPause = 10f;
+            var dummyNoReg = false;
+
+            for (var i = 3; i < args.Length; i++)
+            {
+                string a = args[i];
+
+                if (a.Equals("noreg", StringComparison.OrdinalIgnoreCase)) dummyNoReg = true;
+                else if (a.StartsWith("per=", StringComparison.OrdinalIgnoreCase) && float.TryParse(a[4..], out float p) && p >= 0.1f) dummyPer = p;
+                else if (a.StartsWith("step=", StringComparison.OrdinalIgnoreCase) && int.TryParse(a[5..], out int s) && s >= 1) stepSize = s;
+                else if (a.StartsWith("pause=", StringComparison.OrdinalIgnoreCase) && float.TryParse(a[6..], out float w) && w >= 0f) stepPause = w;
+            }
+
+            NestDummyRunning = true;
+            NestDummyStopRequested = false;
+            NestDummyConnection = AmongUsClient.Instance.connection;
+            Main.Instance.StartCoroutine(NestDummyRun(dummyTotal, dummyPer, stepSize, stepPause, dummyNoReg, player.PlayerId));
             return;
         }
 
