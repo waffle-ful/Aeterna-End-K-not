@@ -508,11 +508,40 @@ namespace EndKnot
             IEnumerator CoRoutine()
             {
                 bool tooEarly = !Main.IntroDestroyed || Utils.TimeStamp - IntroCutsceneDestroyPatch.IntroDestroyTS < 10;
+                string expMode = SpawnExperimentMode();
 
+                // `off` は無制限バイパス、`off:N` は「危険域内で N 体だけ」バイパスして残りは通常ガードへ落とす。
+                // N=1 が「バースト」と「危険域内の任意 spawn」を分ける 1-bit アーム (本数以外は off と同一)。
+                bool wantOff = expMode == "off" || expMode.StartsWith("off:");
+                var offCap = int.MaxValue;
+                if (expMode.StartsWith("off:") && int.TryParse(expMode[4..], out int parsedCap)) offCap = parsedCap;
+
+                if (GameStates.InGame && tooEarly && wantOff && _spawnExperimentBypassCount < offCap)
+                {
+                    // 実験アーム: 安全弁を外して 07-30 のキック条件 (intro 直後の一斉スポーン) を復元する。
+                    _spawnExperimentBypassCount++;
+                    // netIdCnt は機序候補③ (netId 払い出しレース) の唯一の観測値。off だと即キックされて
+                    // 事後に読めないので、スポーン要求の時点でログへ焼いておく。
+                    string line = $"CNO-EXPERIMENT mode={expMode} — start guard BYPASSED #{_spawnExperimentBypassCount} for {GetType().Name} at intro+{Utils.TimeStamp - IntroCutsceneDestroyPatch.IntroDestroyTS}s netIdCnt={AmongUsClient.Instance.NetIdCnt}";
+                    HealthLog.NoteAnom(line);
+                    Logger.Warn(line, "CustomNetObject");
+                }
+                else if (GameStates.InGame && tooEarly && expMode.StartsWith("delay:") && float.TryParse(expMode[6..], out float expDelay))
+                {
+                    // 実験アーム: off と同じ「順送りなし一斉解放」を intro+N 秒まで遅らせるだけの 1-bit 対照。
+                    Logger.Warn($"CNO-EXPERIMENT mode=delay:{expDelay} — holding {GetType().Name}", "CustomNetObject");
+                    while (GameStates.InGame && !GameStates.IsEnded && (!Main.IntroDestroyed || Utils.TimeStamp - IntroCutsceneDestroyPatch.IntroDestroyTS < expDelay)) yield return null;
+                    if (!GameStates.InGame || GameStates.IsEnded) yield break;
+
+                    // 会議中に解放されたアームは対照として汚染されているので、ログで見分けられるようにする。
+                    string line = $"CNO-EXPERIMENT delay release {GetType().Name} at intro+{Utils.TimeStamp - IntroCutsceneDestroyPatch.IntroDestroyTS}s meeting={GameStates.IsMeeting} netIdCnt={AmongUsClient.Instance.NetIdCnt}";
+                    HealthLog.NoteAnom(line);
+                    Logger.Warn(line, "CustomNetObject");
+                }
                 // ⚠️ 「開始直後は出さない」待ちは**全ゲームモード**に効かせる (2026-07-30)。上流はこの安全弁を
                 // Standard 限定にしていたため、BedWars はマップ設置物 (Polus でベッド4+ショップ8+資源生成器14 =
                 // 26 体) を intro 終了 5 秒後に一斉スポーンし、公式鯖に reason=Hacking で蹴られていた。
-                if (GameStates.InGame && tooEarly)
+                else if (GameStates.InGame && tooEarly)
                 {
                     Logger.Info("Delaying CNO Spawn", "CustomNetObject.CreateNetObject");
                     while (GameStates.InGame && !GameStates.IsEnded && (!Main.IntroDestroyed || Utils.TimeStamp - IntroCutsceneDestroyPatch.IntroDestroyTS < 10)) yield return null;
@@ -820,6 +849,43 @@ namespace EndKnot
         private const float StartSpawnStaggerStep = 0.2f;
         private const int StartSpawnStaggerSlots = 40;
 
+        // ── キック実験トグル (dev 運用・出荷挙動には影響しない) ──
+        // EndKnot_DATA/cno_spawn_experiment.txt を置いたときだけ開始直後スポーンの安全弁を意図的に変える。
+        //   off      … tooEarly 待ちと順送りを丸ごとスキップ = 2026-07-30 の BedWars キック条件を復元 (ソロ100%陽性の再現機)
+        //   off:N    … 上を「危険域内で N 体だけ」に制限し、残りは通常ガードへ落とす。
+        //              N=1 が「バーストだから違法」と「危険域内の spawn なら 1 本でも違法」を分ける 1-bit。
+        //   delay:60 … intro 終了+60秒まで保持してから「順送りなし」で一斉解放 = off とタイミングだけが違う 1-bit (フェーズ説の検証)
+        // ファイル無し/内容不正 = 現行動作。正典手順: docs/nest-spawn-arms-protocol.md
+        private static string _spawnExperimentMode = string.Empty;
+        private static long _spawnExperimentCheckedTS;
+        private static int _spawnExperimentBypassCount; // off:N の本数キャップ用 (Reset() でゲーム境界リセット)
+
+        internal static string SpawnExperimentMode()
+        {
+            long now = Utils.TimeStamp;
+            if (now - _spawnExperimentCheckedTS < 5) return _spawnExperimentMode;
+
+            _spawnExperimentCheckedTS = now;
+            var mode = string.Empty;
+
+            try
+            {
+                string path = $"{Main.DataPath}/EndKnot_DATA/cno_spawn_experiment.txt";
+                if (System.IO.File.Exists(path)) mode = System.IO.File.ReadAllText(path).Trim().ToLowerInvariant();
+            }
+            catch (Exception) { /* 読めない = トグル無し扱い */ }
+
+            if (mode != _spawnExperimentMode)
+            {
+                string line = $"CNO-EXPERIMENT toggle changed: '{_spawnExperimentMode}' -> '{mode}'";
+                HealthLog.NoteAnom(line);
+                Logger.Warn(line, "CustomNetObject");
+            }
+
+            _spawnExperimentMode = mode;
+            return mode;
+        }
+
         // 会議明けフック (AfterMeetingTasks) から遅延生成される CNO (Plant/Seed/SoulObject) 用の
         // 順送りスロット。役職フックは保持者ごとに呼ばれるため、per-instance の連番だと Maximum>1 で
         // 「各保持者の i 体目」が同じティックに重なる (DummySpawner で潰したのと同じ罠)。
@@ -878,6 +944,7 @@ namespace EndKnot
                 StartSpawnSlot = 0;
                 DeferredSpawnSlot = 0;
                 UsedPlayerIds.Clear(); // Despawn を経ずに破壊された CNO の枠リークをゲーム境界で必ず回収する
+                _spawnExperimentBypassCount = 0; // dev 実験トグルの本数キャップをゲーム境界でリセット
             }
             catch (Exception e) { Utils.ThrowException(e); }
         }
