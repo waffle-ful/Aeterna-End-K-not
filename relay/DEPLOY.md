@@ -269,8 +269,7 @@ curl https://<your-worker>.workers.dev/admin/list \
 
 ## Known limitations (MVP)
 
-- **Player count is snapshot at lobby creation.** The Discord embed shows the count at the moment of announce — usually `1 / 15` since the host is alone. The count never updates as players join. Acceptable for "is the lobby open" signaling; not for "is the lobby full."
-- **Abandoned-lobby messages linger.** If the host opens a lobby, gets the announce posted, then quits to main menu without starting a game, the Discord embed stays as "Lobby Open" until the KV TTL expires (3 hours by default). The KV record clears itself but Discord doesn't get the delete.
+- **Abandoned-lobby messages linger for up to `STALE_SECONDS` + 10 min.** A clean quit sends `/api/close` and the embed goes immediately. A host that dies abruptly (watchdog restart, official-server ban, crash) can't send anything, so the embed stays until the scheduled sweep reaps it — worst case ~70 min with the default settings. Force it early with `POST /admin/sweep`.
 - **First-time region detection is unverified.** If your AU client returns a region name format we didn't anticipate, the feature silently no-ops. Check `BepInEx/LogOutput.log` for `[LobbyShare][Info] unrecognized region: '...'` on first test and update `NormalizeRegion` in `Modules/LobbyShare.cs`.
 - **Multiple Harmony postfixes on `ShipStatus.Begin`.** We add a postfix; the existing `ShipStatusBeginPatch.Prefix` returns `RolesIsAssigned`. Harmony docs say postfixes still run even if a prefix returned false, but verify on first test by watching for the `/api/start ok` log line.
 
@@ -280,6 +279,16 @@ In the Cloudflare dashboard:
 - Workers & Pages → endknot-lobby-relay → Metrics
 - Watch `Requests/day` (free cap 100k) and `KV writes/day` (free cap 1k)
 
+Writes are the tight one — a high-churn streaming day can approach the 1k cap on
+its own (see the per-op table in README.md). Reads are not a concern; a metrics
+panel dominated by "Not found" reads is the denylist and rate-limit lookups
+behaving normally, not a fault.
+
 If you ever approach the free cap, raise `RATE_LIMIT_SECONDS` in `wrangler.toml`
 to slow things down. The Worker will return 503 if you exceed the free tier —
 **no auto-billing happens** as long as you haven't manually enabled paid plans.
+
+The sweep runs on a cron trigger; `wrangler deploy` registers it from
+`[triggers]` in `wrangler.toml`. Confirm it under Workers & Pages →
+endknot-lobby-relay → Settings → Trigger Events after deploying, and watch its
+`sweep: {...}` lines with `npx wrangler tail`.

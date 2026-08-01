@@ -25,10 +25,18 @@
 //   POST /admin/ban      — bearer-auth: add fcHash to denylist
 //   POST /admin/unban    — bearer-auth: remove fcHash from denylist
 //   GET  /admin/list     — bearer-auth: list current denylist
+//   POST /admin/sweep    — bearer-auth: run the stale-lobby sweep on demand
 //   GET  /                — health check
 //
+// Scheduled (see [triggers] in wrangler.toml):
+//   Every 10 min — sweep lobbies whose host died without sending /api/close
+//   (process kill, official-server ban, crash). Without this, any abrupt host
+//   death orphans the Discord embed permanently: KV expires at TTL and nothing
+//   ever deletes the message. This is the self-healing path the 2026-07-01
+//   delete-retry fix assumed existed but never had.
+//
 // KV keys (binding STATE):
-//   code:<CODE>          — { messageId, fcHash, createdAt, status, announce } TTL=ANNOUNCE_TTL_SECONDS
+//   code:<CODE>          — { messageId, fcHash, createdAt, lastSeenAt, status, announce } TTL=ANNOUNCE_TTL_SECONDS
 //   rl:ip:<ip>           — "1" TTL=RATE_LIMIT_SECONDS
 //   rl:fc:<fcHash>       — "1" TTL=RATE_LIMIT_SECONDS
 //   deny:fc:<fcHash>     — "1" (no TTL, manual unban)
@@ -47,6 +55,11 @@ export interface Env {
     ENV: string;
     ANNOUNCE_TTL_SECONDS: string;
     RATE_LIMIT_SECONDS: string;
+    // How long an entry may go without ANY write (announce / update / start / end)
+    // before the scheduled sweep treats it as an abandoned lobby and deletes the
+    // embed. Must comfortably exceed the longest realistic single game, because a
+    // game in progress writes nothing between /api/start and /api/end.
+    STALE_SECONDS?: string;
     // Legacy — kept in interface for back-compat with deployed wrangler.toml that
     // still declares the var. No longer read (dedup is folded into idempotent
     // /api/announce PATCH behavior).
@@ -83,6 +96,9 @@ interface CodeEntry {
     messageId: string;
     fcHash: string;
     createdAt: number;
+    // Epoch ms of the last write touching this entry. Absent on entries written by
+    // pre-sweep deploys — callers fall back to createdAt.
+    lastSeenAt?: number;
     status: "open" | "in-game";
     announce: AnnouncePublic;
 }
@@ -104,6 +120,23 @@ const COLOR_IN_GAME = 0xfaa61a;  // amber
 const SIGNATURE_SKEW_SECONDS = 300;
 const ANONYMOUS_HOST_NAME = "Anonymous";
 
+// A lobby with no writes for this long is treated as abandoned by the sweep.
+// A game in progress writes nothing between /api/start and /api/end, so this has
+// to sit well above the longest realistic single game.
+const DEFAULT_STALE_SECONDS = 3600;
+// Minimum gap between keepalive-only KV writes (see handleUpdate). Deliberately
+// half the DLL's KeepaliveSeconds (600) — the two sides run on independent clocks,
+// so an equal threshold would let every other keepalive land just under the bar and
+// silently double the effective refresh interval.
+const TOUCH_MIN_INTERVAL_SECONDS = 300;
+// An in-game entry legitimately goes quiet: nothing is written between /api/start
+// and /api/end, and the DLL's keepalive only runs during the lobby phase (there is
+// no LobbyBehaviour while a game is running). Give those entries a longer leash so
+// a long game can't have its own embed swept out from under it.
+const IN_GAME_STALE_MULTIPLIER = 3;
+// Cap per sweep run so one pass can't blow the KV write budget on a bad day.
+const SWEEP_MAX_DELETES = 25;
+
 export default {
     async fetch(req: Request, env: Env): Promise<Response> {
         const url = new URL(req.url);
@@ -119,6 +152,7 @@ export default {
                 if (method === "POST" && path === "/admin/ban") return await handleAdminBan(req, env, true);
                 if (method === "POST" && path === "/admin/unban") return await handleAdminBan(req, env, false);
                 if (method === "GET" && path === "/admin/list") return await handleAdminList(env);
+                if (method === "POST" && path === "/admin/sweep") return ok(await sweepStaleLobbies(env));
                 return err(404, "not found");
             }
 
@@ -138,7 +172,63 @@ export default {
             return err(500, `internal error: ${(e as Error).message ?? "unknown"}`);
         }
     },
+
+    // Cron trigger — see [triggers] in wrangler.toml.
+    async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+        ctx.waitUntil(sweepStaleLobbies(env).then(r => {
+            if (r.deleted > 0 || r.failed > 0) console.log(`sweep: ${JSON.stringify(r)}`);
+        }));
+    },
 } satisfies ExportedHandler<Env>;
+
+// ─── sweep ─────────────────────────────────────────────────────────────────────
+
+interface SweepResult { scanned: number; deleted: number; failed: number; codes: string[]; }
+
+// Deletes the Discord embed for lobbies whose host vanished without sending
+// /api/close — process kill, official-server ban, crash, watchdog restart. Those
+// paths can't be closed from the client (the process is gone before the HTTP call
+// lands), so the server has to reap them or the message stays up forever.
+//
+// Liveness signal is lastSeenAt, refreshed by every announce/update/start/end.
+// Entries written before this field existed fall back to createdAt.
+async function sweepStaleLobbies(env: Env): Promise<SweepResult> {
+    const staleMs = num(env.STALE_SECONDS, DEFAULT_STALE_SECONDS) * 1000;
+    const now = Date.now();
+    const result: SweepResult = { scanned: 0, deleted: 0, failed: 0, codes: [] };
+
+    let cursor: string | undefined;
+    do {
+        const page = await env.STATE.list({ prefix: "code:", cursor });
+        cursor = page.list_complete ? undefined : page.cursor;
+
+        for (const k of page.keys) {
+            result.scanned++;
+            if (result.deleted + result.failed >= SWEEP_MAX_DELETES) return result;
+
+            const entry = await env.STATE.get(k.name, "json") as CodeEntry | null;
+            // Expired between list and get — nothing to delete on the Discord side
+            // that we still have a handle for.
+            if (!entry) continue;
+            const limit = entry.status === "in-game" ? staleMs * IN_GAME_STALE_MULTIPLIER : staleMs;
+            if (now - lastSeen(entry) <= limit) continue;
+
+            const code = k.name.slice("code:".length);
+            const r = await deleteDiscordMessage(env.DISCORD_WEBHOOK_URL, entry.messageId);
+            if (!r.ok) {
+                // Keep the KV entry so the next run still has the messageId.
+                result.failed++;
+                console.log(`sweep: delete failed for ${code}: ${r.error}`);
+                continue;
+            }
+            await env.STATE.delete(k.name);
+            result.deleted++;
+            result.codes.push(code);
+        }
+    } while (cursor);
+
+    return result;
+}
 
 // ─── signature ─────────────────────────────────────────────────────────────────
 
@@ -227,7 +317,6 @@ async function handleAnnounce(req: Request, env: Env, raw: string): Promise<Resp
     }
 
     const publicData = stripFcHash(a);
-    const announceTtl = num(env.ANNOUNCE_TTL_SECONDS, 10800);
 
     // Same-host re-announce (lobby returning from a game, player count change, etc.):
     // PATCH the existing embed rather than POST a new one. This is the "one lobby = one
@@ -239,7 +328,7 @@ async function handleAnnounce(req: Request, env: Env, raw: string): Promise<Resp
         if (!r.ok) return err(502, `discord patch failed: ${r.error}`);
         existing.status = "open";
         existing.announce = publicData;
-        await env.STATE.put(`code:${a.code}`, JSON.stringify(existing), { expirationTtl: kvTtl(remainingTtl(existing, env)) });
+        await putEntry(env, a.code, existing);
         return ok({ status: "refreshed", messageId: existing.messageId });
     }
 
@@ -260,7 +349,7 @@ async function handleAnnounce(req: Request, env: Env, raw: string): Promise<Resp
     };
 
     await Promise.all([
-        env.STATE.put(`code:${a.code}`, JSON.stringify(entry), { expirationTtl: kvTtl(announceTtl) }),
+        putEntry(env, a.code, entry),
         env.STATE.put(`rl:ip:${ip}`, "1", { expirationTtl: kvTtl(rateLimitSec) }),
         env.STATE.put(`rl:fc:${a.fcHash}`, "1", { expirationTtl: kvTtl(rateLimitSec) }),
     ]);
@@ -290,7 +379,7 @@ async function handleLifecycle(env: Env, raw: string, phase: "start" | "end" | "
         );
         if (!r.ok) return err(502, `discord patch failed: ${r.error}`);
         entry.status = "in-game";
-        await env.STATE.put(`code:${code}`, JSON.stringify(entry), { expirationTtl: kvTtl(remainingTtl(entry, env)) });
+        await putEntry(env, code, entry);
         return ok({ status: "started" });
     }
 
@@ -304,7 +393,7 @@ async function handleLifecycle(env: Env, raw: string, phase: "start" | "end" | "
         );
         if (!r.ok) return err(502, `discord patch failed: ${r.error}`);
         entry.status = "open";
-        await env.STATE.put(`code:${code}`, JSON.stringify(entry), { expirationTtl: kvTtl(remainingTtl(entry, env)) });
+        await putEntry(env, code, entry);
         return ok({ status: "lobby-resumed" });
     }
 
@@ -352,13 +441,23 @@ async function handleUpdate(env: Env, raw: string): Promise<Response> {
         if (entry.announce.mode !== m) { entry.announce.mode = m; changed = true; }
     }
 
-    if (!changed) return ok({ status: "no-change" });
+    if (!changed) {
+        // Nothing to show differently — but this call is also the DLL's keepalive, and
+        // the sweep reaps entries by staleness. Refresh lastSeenAt (no Discord call) if
+        // the entry is getting old; skip the write entirely otherwise so a chatty client
+        // can't burn the KV write budget.
+        if (Date.now() - lastSeen(entry) > TOUCH_MIN_INTERVAL_SECONDS * 1000) {
+            await putEntry(env, code, entry);
+            return ok({ status: "touched" });
+        }
+        return ok({ status: "no-change" });
+    }
 
     const phase = entry.status === "in-game" ? "in-game" : "open";
     const r = await editDiscordMessage(env.DISCORD_WEBHOOK_URL, entry.messageId, buildEmbed(entry.announce, phase));
     if (!r.ok) return err(502, `discord patch failed: ${r.error}`);
 
-    await env.STATE.put(`code:${code}`, JSON.stringify(entry), { expirationTtl: kvTtl(remainingTtl(entry, env)) });
+    await putEntry(env, code, entry);
     return ok({ status: "updated" });
 }
 
@@ -541,10 +640,26 @@ function kvTtl(seconds: number): number {
     return Math.max(KV_MIN_TTL_SECONDS, Math.floor(seconds));
 }
 
-function remainingTtl(entry: CodeEntry, env: Env): number {
-    const announceTtl = num(env.ANNOUNCE_TTL_SECONDS, 10800);
-    const elapsed = Math.floor((Date.now() - entry.createdAt) / 1000);
-    return Math.max(60, announceTtl - elapsed);
+// Stamp liveness and write with a SLIDING TTL measured from now — not a TTL that
+// decays from createdAt. The decaying version expired the KV entry out from under
+// a still-live embed once a lobby outlived ANNOUNCE_TTL_SECONDS; after that
+// /api/close returned "no-op" and the Discord message was orphaned forever.
+async function putEntry(env: Env, code: string, entry: CodeEntry): Promise<void> {
+    entry.lastSeenAt = Date.now();
+    await env.STATE.put(`code:${code}`, JSON.stringify(entry), { expirationTtl: kvTtl(entryTtl(env)) });
+}
+
+// The KV entry must always outlive the sweep's own staleness limit — if it expires
+// first, the messageId is gone and nothing can ever delete the Discord message.
+// Derived rather than read straight from ANNOUNCE_TTL_SECONDS so no combination of
+// operator-tuned vars can reintroduce that orphan path.
+function entryTtl(env: Env): number {
+    const staleSec = num(env.STALE_SECONDS, DEFAULT_STALE_SECONDS);
+    return Math.max(num(env.ANNOUNCE_TTL_SECONDS, 10800), staleSec * IN_GAME_STALE_MULTIPLIER * 2);
+}
+
+function lastSeen(entry: CodeEntry): number {
+    return typeof entry.lastSeenAt === "number" ? entry.lastSeenAt : entry.createdAt;
 }
 
 function addQuery(url: string, key: string, value: string): string {

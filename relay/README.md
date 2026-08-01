@@ -71,11 +71,29 @@ See [CONTRACT.md](./CONTRACT.md) for the canonical spec. Quick reference:
 
 - `POST /api/announce` — new lobby
 - `POST /api/start` — game started (PATCH the embed)
-- `POST /api/end` — lobby closed / game ended (DELETE the message)
+- `POST /api/end` — game ended, embed flips back to "open" (lobby still joinable)
+- `POST /api/close` — host left the lobby (DELETE the message)
+- `POST /api/update` — live player-count / mode refresh, and the DLL's keepalive
 - `POST /admin/ban` / `POST /admin/unban` — bearer-auth
 - `GET /admin/list` — bearer-auth, list denylist
+- `POST /admin/sweep` — bearer-auth, run the stale-lobby sweep on demand
 
-All three `/api/*` endpoints require `X-Timestamp` + `X-Signature` headers.
+All `/api/*` endpoints require `X-Timestamp` + `X-Signature` headers.
+
+## Scheduled sweep
+
+A cron trigger (`*/10 * * * *`, see `wrangler.toml`) deletes embeds whose host
+vanished without sending `/api/close` — watchdog restart, official-server ban,
+crash, hard kill. Those paths kill the game process before the HTTP call can
+land, so no client-side fix can cover them; the server has to reap.
+
+Liveness is `lastSeenAt`, refreshed by every announce / update / start / end.
+Anything untouched for `STALE_SECONDS` gets its message deleted. Because a game
+in progress writes nothing between `/api/start` and `/api/end`, `STALE_SECONDS`
+must stay well above the longest realistic single game.
+
+Run it by hand with `curl -X POST $WORKER/admin/sweep -H "Authorization: Bearer $TOKEN"`
+— it returns `{scanned, deleted, failed, codes}`.
 
 ## Admin operations
 
@@ -109,8 +127,9 @@ Edit `wrangler.toml` `[vars]`:
 
 | var | default | meaning |
 |---|---|---|
-| `ANNOUNCE_TTL_SECONDS` | 10800 | KV expiry for a lobby record (3h) |
+| `ANNOUNCE_TTL_SECONDS` | 10800 | KV expiry **floor** for a lobby record, **sliding** from the last write (3h). Raised automatically if `STALE_SECONDS` would outlive it |
 | `RATE_LIMIT_SECONDS` | 60 | min interval between announces per IP / host |
+| `STALE_SECONDS` | 3600 | no write for this long → the sweep deletes the embed. Entries in the `in-game` state get 3× the leash |
 | `DEDUP_WINDOW_SECONDS` | 30 | same host re-announcing same code returns cached message id |
 
 ## Cost model
@@ -119,9 +138,24 @@ Cloudflare free tier:
 - Workers: 100,000 requests / day
 - KV: 100,000 reads + 1,000 writes / day
 
-A typical announce = 4 KV writes + ~3 KV reads + 1 Discord POST.
-~250 announces / day fit comfortably. Over the free limit the Worker returns
-503 — there is no auto-billing escalation.
+**Writes are the binding constraint, not reads.** Per operation:
+
+| op | KV writes | KV reads |
+|---|---|---|
+| first announce of a code | 3 (`code:` + both `rl:`) | 4 (all misses — the denylist check misses by design) |
+| re-announce (same host) | 1 | 2 |
+| `/api/update` with a change | 1 | 1 |
+| `/api/update` keepalive | 1 per 10 min max | 1 |
+| `/api/update` no-change | 0 | 1 |
+| `/api/start` / `/api/end` / `/api/close` | 1 | 1 |
+| sweep run (nothing stale) | 0 | 1 list + 1 per entry |
+
+A high-churn streaming session (new lobby every ~3 min, auto-rehost) measured
+~25 write ops per 13 minutes — roughly 700 writes over a 6-hour stream, which is
+close to the 1,000/day ceiling. Reads are nowhere near their limit; a dashboard
+full of "Not found" reads is the denylist and rate-limit checks working normally.
+
+Over the free limit the Worker returns 503 — there is no auto-billing escalation.
 
 ## Rotating the HMAC key (non-breaking)
 

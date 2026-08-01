@@ -23,10 +23,21 @@ id = "b87abd55c60f480ba041ca801bd3e379"
 #                                             # SHARED_HMAC_KEYS is empty/unset.
 # Do NOT commit these values.
 
+# Scheduled sweep — deletes embeds whose host died without sending /api/close
+# (process kill, official-server ban, crash). Free plan supports cron triggers.
+[triggers]
+crons = ["*/10 * * * *"]
+
 [vars]
 ENV = "production"
-ANNOUNCE_TTL_SECONDS = "10800"   # KV TTL for active lobby entries (3h)
+ANNOUNCE_TTL_SECONDS = "10800"   # KV TTL floor for active lobby entries, sliding from
+                                 # the last write (3h). The Worker raises this on its
+                                 # own if STALE_SECONDS would otherwise outlive it.
 RATE_LIMIT_SECONDS = "60"        # per-IP and per-fcHash floor between announces
+STALE_SECONDS = "3600"           # no write for this long => sweep deletes the embed.
+                                 # Entries in the "in-game" state get 3x this, because
+                                 # nothing is written between /api/start and /api/end
+                                 # and the DLL keepalive only runs in the lobby phase.
 # DEDUP_WINDOW_SECONDS deprecated as of Phase 2 — same-host re-announces now PATCH
 # the existing embed instead of being deduped against a window. The variable can stay
 # declared for back-compat; the Worker no longer reads it.
