@@ -26,6 +26,12 @@ Total wall-clock: ~30 min.
 
    Anyone holding this URL can post in the channel. Treat as secret.
 
+5. Repeat for a **second, private channel** (e.g. `#reports`, visible to operators
+   only) and keep that webhook URL too — that one receives players' `/report`
+   submissions. Reports must never land in the public lobby channel, so this is a
+   different webhook, not the same one. Skipping it is allowed: the report endpoint
+   then accepts and drops (hosts still keep a local `EndKnot-Reports.log`).
+
 ## Step 2 — Cloudflare account + KV namespace
 
 1. Sign up at https://dash.cloudflare.com if you don't have an account
@@ -70,6 +76,11 @@ Run twice for the two values.
 cd relay
 npx wrangler secret put DISCORD_WEBHOOK_URL
 #   → paste the Discord webhook URL from Step 1
+
+npx wrangler secret put DISCORD_REPORT_WEBHOOK_URL
+#   → paste the SECOND (operator-only) webhook URL from Step 1.5.
+#   Optional: skip it and /api/report answers {"status":"disabled"} and drops
+#   reports. Never point this at the lobby channel.
 
 npx wrangler secret put ADMIN_TOKEN
 #   → paste the admin token from Step 3

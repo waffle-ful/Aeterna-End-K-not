@@ -22,6 +22,8 @@
 //   POST /api/announce   — host announces a new lobby (HMAC required)
 //   POST /api/start      — game started, edit embed to in-game (HMAC required)
 //   POST /api/end        — game ended, delete message (HMAC required)
+//   POST /api/report     — a player's in-game /report, forwarded by the host to the
+//                          operator-only channel (HMAC required, separate webhook)
 //   POST /admin/ban      — bearer-auth: add fcHash to denylist
 //   POST /admin/unban    — bearer-auth: remove fcHash from denylist
 //   GET  /admin/list     — bearer-auth: list current denylist
@@ -39,11 +41,17 @@
 //   code:<CODE>          — { messageId, fcHash, createdAt, lastSeenAt, status, announce } TTL=ANNOUNCE_TTL_SECONDS
 //   rl:ip:<ip>           — "1" TTL=RATE_LIMIT_SECONDS
 //   rl:fc:<fcHash>       — "1" TTL=RATE_LIMIT_SECONDS
+//   rl:rep:<fcHash>      — "1" TTL=REPORT_RATE_LIMIT_SECONDS (per reporting player)
 //   deny:fc:<fcHash>     — "1" (no TTL, manual unban)
 
 export interface Env {
     STATE: KVNamespace;
     DISCORD_WEBHOOK_URL: string;
+    // Separate webhook for /api/report. Deliberately NOT the announce channel — the
+    // announce channel is public-facing, reports are operator-only. Unset = the
+    // report endpoint accepts and silently drops (mirrors the DLL's IsConfigured
+    // no-op), so a source build never leaks reports into the lobby channel.
+    DISCORD_REPORT_WEBHOOK_URL?: string;
     ADMIN_TOKEN: string;
     // Comma-separated list of currently-valid HMAC keys (newest first).
     // Falls back to legacy single-key SHARED_HMAC_KEY if unset.
@@ -60,6 +68,10 @@ export interface Env {
     // embed. Must comfortably exceed the longest realistic single game, because a
     // game in progress writes nothing between /api/start and /api/end.
     STALE_SECONDS?: string;
+    // Per-reporting-player floor between accepted /api/report calls. The host DLL
+    // enforces its own cooldown too; this is the server-side backstop that also
+    // caps the KV write cost of the endpoint.
+    REPORT_RATE_LIMIT_SECONDS?: string;
     // Legacy — kept in interface for back-compat with deployed wrangler.toml that
     // still declares the var. No longer read (dedup is folded into idempotent
     // /api/announce PATCH behavior).
@@ -80,6 +92,27 @@ interface AnnounceBody {
 interface LifecycleBody {
     code: string;
     fcHash: string;
+}
+
+// A player's in-game /report, relayed by the host. Unlike every other endpoint this
+// one carries no lobby state: it must work in a lobby that was never announced (the
+// host may have lobby sharing off) and while a game is running, so nothing here is
+// looked up in or written to `code:`.
+interface ReportBody {
+    // Lobby code, or "" when there is none (local/freeplay game).
+    code: string;
+    // Host's fcHash — signs who forwarded the report, and what the denylist gates.
+    fcHash: string;
+    // Reporting player's name and fcHash. The hash is what rate-limits and what the
+    // operator bans; the name alone is not unique and is trivially spoofed.
+    reporter: string;
+    reporterHash: string;
+    text: string;
+    region: string;
+    mode: string;
+    modVersion: string;
+    // "lobby" / "in-game" / "meeting" — where the reporter was when they typed it.
+    phase: string;
 }
 
 interface AnnouncePublic {
@@ -137,6 +170,18 @@ const IN_GAME_STALE_MULTIPLIER = 3;
 // Cap per sweep run so one pass can't blow the KV write budget on a bad day.
 const SWEEP_MAX_DELETES = 25;
 
+const COLOR_REPORT = 0xed4245;   // Discord red
+// Per-reporter floor between accepted reports. Chat is cheap to spam and every
+// accepted report costs a KV write, which is the free tier's binding limit.
+// Must stay SHORTER than the DLL's ReportCooldownSeconds (180) — the DLL acks the
+// reporter as soon as it accepts, so a report this endpoint then 429s is a loss the
+// player was told went through. Raising this above the DLL's floor reintroduces that.
+const DEFAULT_REPORT_RATE_LIMIT_SECONDS = 120;
+// Report text cap. Well under Discord's 4096-char embed description limit; the
+// reporter is typing into an Among Us chat box, so anything longer is a paste bomb.
+const REPORT_TEXT_MAX = 400;
+const REPORT_NAME_MAX = 32;
+
 export default {
     async fetch(req: Request, env: Env): Promise<Response> {
         const url = new URL(req.url);
@@ -156,11 +201,12 @@ export default {
                 return err(404, "not found");
             }
 
-            if (method === "POST" && (path === "/api/announce" || path === "/api/start" || path === "/api/end" || path === "/api/close" || path === "/api/update")) {
+            if (method === "POST" && (path === "/api/announce" || path === "/api/start" || path === "/api/end" || path === "/api/close" || path === "/api/update" || path === "/api/report")) {
                 const raw = await req.text();
                 const sigOk = await verifySignature(req, env, raw);
                 if (!sigOk) return err(401, "bad signature");
                 if (path === "/api/announce") return await handleAnnounce(req, env, raw);
+                if (path === "/api/report") return await handleReport(env, raw);
                 if (path === "/api/update") return await handleUpdate(env, raw);
                 if (path === "/api/start") return await handleLifecycle(env, raw, "start");
                 if (path === "/api/end") return await handleLifecycle(env, raw, "end");
@@ -461,6 +507,47 @@ async function handleUpdate(env: Env, raw: string): Promise<Response> {
     return ok({ status: "updated" });
 }
 
+// Forwards a player's /report to the operator-only channel. Deliberately stateless:
+// no `code:` read, no `code:` write, and it works for a lobby that was never
+// announced — reports must not depend on the host having lobby sharing turned on.
+//
+// Cost: exactly one KV write (the rate-limit key) per ACCEPTED report, and zero on
+// every rejected one. Writes are the free tier's binding limit, so nothing periodic
+// may ever be added to this path.
+async function handleReport(env: Env, raw: string): Promise<Response> {
+    const parsed = safeParse<Partial<ReportBody>>(raw);
+    if (!parsed) return err(400, "invalid json");
+
+    const v = validateReport(parsed);
+    if (!v.ok) return err(400, v.error);
+    const r = v.value;
+
+    // Denylist covers both ends: a banned host can't use their lobby as a relay, and
+    // a banned player can't keep spamming reports through an innocent host. Silent-ack
+    // both so neither can probe the list.
+    if (await env.STATE.get(`deny:fc:${r.fcHash}`)) return ok({ status: "ignored" });
+    if (await env.STATE.get(`deny:fc:${r.reporterHash}`)) return ok({ status: "ignored" });
+
+    if (await env.STATE.get(`rl:rep:${r.reporterHash}`)) return err(429, "rate limited (reporter)");
+
+    const webhook = (env.DISCORD_REPORT_WEBHOOK_URL ?? "").trim();
+    // No report channel configured — accept and drop rather than 500. Reporting must
+    // never fail loudly in front of players just because the operator hasn't set the
+    // secret; the host log carries the status so the operator can still notice.
+    if (webhook.length === 0) return ok({ status: "disabled" });
+
+    const sendResult = await postDiscordMessage(webhook, buildReportEmbed(r));
+    // Don't burn the rate-limit key on a failed send — the reporter should be able to
+    // try again immediately rather than be locked out by our own outage.
+    if (!sendResult.ok) return err(502, `discord post failed: ${sendResult.error}`);
+
+    await env.STATE.put(`rl:rep:${r.reporterHash}`, "1", {
+        expirationTtl: kvTtl(num(env.REPORT_RATE_LIMIT_SECONDS, DEFAULT_REPORT_RATE_LIMIT_SECONDS)),
+    });
+
+    return ok({ status: "reported" });
+}
+
 async function handleAdminBan(req: Request, env: Env, ban: boolean): Promise<Response> {
     const body = await safeJson<{ fcHash?: string }>(req);
     const fcHash = (body?.fcHash ?? "").toString().toLowerCase();
@@ -503,6 +590,36 @@ function validateAnnounce(b: Partial<AnnounceBody>):
     return { ok: true, value: { code, region, players, max, mode, modVersion, hostName, fcHash } };
 }
 
+function validateReport(b: Partial<ReportBody>):
+    | { ok: true; value: ReportBody }
+    | { ok: false; error: string } {
+    // Every string here is attacker-controlled (a player typed it into chat), so
+    // everything goes through sanitize() before it can reach a Discord embed.
+    const text = sanitize(b.text, REPORT_TEXT_MAX);
+    if (text.length === 0) return { ok: false, error: "empty text" };
+
+    const fcHash = (b.fcHash ?? "").toString().toLowerCase();
+    if (!HEX64_RE.test(fcHash)) return { ok: false, error: "invalid fcHash" };
+
+    const reporterHash = (b.reporterHash ?? "").toString().toLowerCase();
+    if (!HEX64_RE.test(reporterHash)) return { ok: false, error: "invalid reporterHash" };
+
+    // Unlike the announce path, an empty code is legal: a report can come from a
+    // local/freeplay game that has no lobby code at all.
+    const code = (b.code ?? "").toString().toUpperCase();
+    if (code.length > 0 && !CODE_RE.test(code)) return { ok: false, error: "invalid code" };
+
+    const regionRaw = (b.region ?? "").toString().trim().toUpperCase();
+    const region = REGION_ALIASES[regionRaw] ?? "";
+
+    const reporter = sanitize(b.reporter, REPORT_NAME_MAX) || ANONYMOUS_HOST_NAME;
+    const mode = sanitize(b.mode, 32) || "Standard";
+    const modVersion = sanitize(b.modVersion, 32) || "unknown";
+    const phase = sanitize(b.phase, 16) || "unknown";
+
+    return { ok: true, value: { code, fcHash, reporter, reporterHash, text, region, mode, modVersion, phase } };
+}
+
 function sanitize(raw: unknown, max: number): string {
     if (typeof raw !== "string") return "";
     let s = raw.replace(/[\x00-\x1f\x7f]/g, "").trim();
@@ -534,6 +651,27 @@ function buildEmbed(a: AnnouncePublic, phase: "open" | "in-game"): unknown {
         ],
         timestamp: new Date().toISOString(),
         footer: { text: "End K not lobby relay" },
+    };
+}
+
+function buildReportEmbed(r: ReportBody): unknown {
+    return {
+        title: "📮 Player Report",
+        color: COLOR_REPORT,
+        description: r.text,
+        fields: [
+            { name: "Reporter", value: r.reporter, inline: true },
+            { name: "Code", value: r.code.length > 0 ? "`" + r.code + "`" : "—", inline: true },
+            { name: "Region", value: r.region.length > 0 ? r.region : "—", inline: true },
+            { name: "Mode", value: r.mode, inline: true },
+            { name: "Phase", value: r.phase, inline: true },
+            { name: "Version", value: r.modVersion, inline: true },
+            // Full hashes, not truncated — this is what /admin/ban takes verbatim.
+            { name: "Reporter hash", value: "`" + r.reporterHash + "`", inline: false },
+            { name: "Host hash", value: "`" + r.fcHash + "`", inline: false },
+        ],
+        timestamp: new Date().toISOString(),
+        footer: { text: "End K not player report" },
     };
 }
 

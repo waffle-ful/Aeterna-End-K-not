@@ -74,6 +74,7 @@ See [CONTRACT.md](./CONTRACT.md) for the canonical spec. Quick reference:
 - `POST /api/end` — game ended, embed flips back to "open" (lobby still joinable)
 - `POST /api/close` — host left the lobby (DELETE the message)
 - `POST /api/update` — live player-count / mode refresh, and the DLL's keepalive
+- `POST /api/report` — a player's `/report`, forwarded to the operator-only channel
 - `POST /admin/ban` / `POST /admin/unban` — bearer-auth
 - `GET /admin/list` — bearer-auth, list denylist
 - `POST /admin/sweep` — bearer-auth, run the stale-lobby sweep on demand
@@ -94,6 +95,24 @@ must stay well above the longest realistic single game.
 
 Run it by hand with `curl -X POST $WORKER/admin/sweep -H "Authorization: Bearer $TOKEN"`
 — it returns `{scanned, deleted, failed, codes}`.
+
+## Player reports
+
+Any player in the lobby can type `/cmd report <what happened>` — including players on
+vanilla clients, since the host processes their command. The host writes it to
+`EndKnot_Logs/EndKnot-Reports.log` and forwards it here; the relay posts it to a
+**separate, operator-only** channel (`DISCORD_REPORT_WEBHOOK_URL`). The mod itself
+displays nothing in the lobby or on the host's screen.
+
+The `/cmd` prefix is what makes it fully private — vanilla delivers those messages to
+the host alone. A bare `/report ...` from a vanilla client is broadcast by the game
+before the mod ever sees it; the mod scrubs the scrollback but can't unsend the chat
+bubble, so the in-game strings teach the `/cmd` form.
+
+The embed carries the reporter's name, the lobby code / region / mode / version /
+phase, and both fcHashes — the reporter's one is what `/admin/ban` takes verbatim if
+someone abuses the channel. Reports work even when lobby sharing is off; with the
+webhook unset the relay accepts and drops them (the local file still gets written).
 
 ## Admin operations
 
@@ -130,6 +149,7 @@ Edit `wrangler.toml` `[vars]`:
 | `ANNOUNCE_TTL_SECONDS` | 10800 | KV expiry **floor** for a lobby record, **sliding** from the last write (3h). Raised automatically if `STALE_SECONDS` would outlive it |
 | `RATE_LIMIT_SECONDS` | 60 | min interval between announces per IP / host |
 | `STALE_SECONDS` | 3600 | no write for this long → the sweep deletes the embed. Entries in the `in-game` state get 3× the leash |
+| `REPORT_RATE_LIMIT_SECONDS` | 120 | per-reporting-player floor between accepted `/api/report` calls. Keep it **below** the DLL's `ReportCooldownSeconds` (180) — above it, reports the DLL already acked get 429'd and silently vanish |
 | `DEDUP_WINDOW_SECONDS` | 30 | same host re-announcing same code returns cached message id |
 
 ## Cost model
@@ -148,6 +168,8 @@ Cloudflare free tier:
 | `/api/update` keepalive | 1 per 10 min max | 1 |
 | `/api/update` no-change | 0 | 1 |
 | `/api/start` / `/api/end` / `/api/close` | 1 | 1 |
+| `/api/report` accepted | 1 (`rl:rep:`) | 3 |
+| `/api/report` rejected (denylist / rate limit / webhook unset) | 0 | 2-3 |
 | sweep run (nothing stale) | 0 | 1 list + 1 per entry |
 
 A high-churn streaming session (new lobby every ~3 min, auto-rehost) measured

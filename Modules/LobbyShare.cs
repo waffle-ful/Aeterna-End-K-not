@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
@@ -43,6 +45,17 @@ internal static class LobbyShare
     // relay's STALE_SECONDS (3600) so a quiet lobby is never mistaken for abandoned.
     private const float KeepaliveSeconds = 600f;
 
+    // Per-player floor between accepted /report submissions. This MUST stay comfortably
+    // longer than the relay's REPORT_RATE_LIMIT_SECONDS (120s), never shorter: anything
+    // the DLL accepts it also acknowledges to the reporter, so a report the relay then
+    // 429s is a silent loss the player was told went through. The margin absorbs the two
+    // independent clocks (Time.time vs the Worker's Date.now) — same reasoning as the
+    // keepalive/TOUCH_MIN_INTERVAL pair.
+    private const float ReportCooldownSeconds = 180f;
+    // Report text is clamped here as well as on the relay. Keep the two in sync
+    // (relay: REPORT_TEXT_MAX) so what the reporter sees acknowledged is what lands.
+    private const int ReportTextMax = 400;
+
     private static string activeCode;
     private static string activeFcHash;
     private static volatile bool announceSucceeded;
@@ -61,6 +74,8 @@ internal static class LobbyShare
     // main thread by PumpNotifications() (called from LobbyBehaviour.Update).
     // Utils.SendMessage cannot be called from a worker thread — it touches Unity RPC.
     private static string pendingNotification;
+    // Time.time of each player's last accepted /report, keyed by PlayerId.
+    private static readonly Dictionary<byte, float> LastReportAt = [];
 
     public static bool IsConfigured => LobbyShareSecrets.RelayUrl.Length > 0 && LobbyShareSecrets.HmacKey.Length > 0;
 
@@ -228,6 +243,93 @@ internal static class LobbyShare
         lastUpdateAt = now;
 
         FireAndForget(PostSignedAsync("/api/update", new UpdateBody { code = activeCode, fcHash = activeFcHash, players = count, max = max, mode = mode }));
+    }
+
+    // ─── player reports ───────────────────────────────────────────────────────
+
+    public enum ReportResult
+    {
+        Accepted,
+        Empty,
+        OnCooldown,
+    }
+
+    // Handles a player's /report. Host-side only — every client's /report reaches the
+    // host (non-modded via the chat dispatch, modded via RequestCommandProcessing), so
+    // this is the single place a report is recorded.
+    //
+    // The local file write happens FIRST and unconditionally: it is the copy that
+    // survives an unset webhook, a relay outage, or a source build with no secrets.
+    // The relay POST is best-effort on top of it.
+    public static ReportResult SubmitReport(PlayerControl reporter, string text)
+    {
+        if (!reporter) return ReportResult.Empty;
+
+        text = (text ?? string.Empty).Trim();
+        if (text.Length == 0) return ReportResult.Empty;
+        if (text.Length > ReportTextMax) text = text[..ReportTextMax];
+
+        float now = Time.time;
+        if (LastReportAt.TryGetValue(reporter.PlayerId, out float last) && now - last < ReportCooldownSeconds)
+            return ReportResult.OnCooldown;
+
+        LastReportAt[reporter.PlayerId] = now;
+
+        string code = AmongUsClient.Instance && AmongUsClient.Instance.NetworkMode == NetworkModes.OnlineGame
+            ? (GameCode.IntToGameName(AmongUsClient.Instance.GameId) ?? string.Empty).ToUpperInvariant()
+            : string.Empty;
+        if (code.Length != 6) code = string.Empty;
+
+        string reporterName = reporter.Data?.PlayerName ?? string.Empty;
+        string reporterHash = HashFriendCode(reporter.FriendCode ?? string.Empty);
+        string phase = GameStates.IsLobby ? "lobby" : GameStates.IsMeeting ? "meeting" : "in-game";
+
+        AppendReportToDisk(code, phase, reporterName, reporterHash, text);
+
+        if (!IsConfigured)
+        {
+            Logger.Info("report saved locally only (LobbyShareSecrets empty)", "LobbyShare");
+            return ReportResult.Accepted;
+        }
+
+        var body = new ReportBody
+        {
+            code = code,
+            // Not activeFcHash — a report can come from a lobby that was never
+            // announced (sharing off), where activeFcHash is null.
+            fcHash = HashFriendCode(PlayerControl.LocalPlayer ? PlayerControl.LocalPlayer.FriendCode ?? string.Empty : string.Empty),
+            reporter = reporterName,
+            reporterHash = reporterHash,
+            text = text,
+            // Raw region name — the relay maps both the short codes and the vanilla
+            // long forms, and an unknown one is simply omitted from the embed.
+            region = ServerManager.Instance?.CurrentRegion?.Name ?? string.Empty,
+            mode = FormatMode(Options.CurrentGameMode),
+            modVersion = Main.PluginVersion,
+            phase = phase,
+        };
+
+        FireAndForget(PostSignedAsync("/api/report", body));
+        return ReportResult.Accepted;
+    }
+
+    private static void AppendReportToDisk(string code, string phase, string reporterName, string reporterHash, string text)
+    {
+        try
+        {
+            // Same placement as HealthLog / DumpLog so all operator-facing files live
+            // together. Note this folder is age-pruned (PlayerJoinAndLeftPatch), so it
+            // is a recent-history record, not an archive.
+            string basePath = OperatingSystem.IsAndroid() ? Main.DataPath : Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+            string dir = Path.Combine(basePath, "EndKnot_Logs");
+            Directory.CreateDirectory(dir);
+            string line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}\t{(code.Length > 0 ? code : "-")}\t{phase}\t{reporterName}\t{reporterHash}\t{text.Replace('\t', ' ').Replace('\n', ' ')}";
+            File.AppendAllText(Path.Combine(dir, "EndKnot-Reports.log"), line + Environment.NewLine, Encoding.UTF8);
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn($"failed to write report to disk: {ex.Message}", "LobbyShare");
+        }
     }
 
     // ─── eligibility ──────────────────────────────────────────────────────────
@@ -417,6 +519,19 @@ internal static class LobbyShare
         public int players { get; set; }
         public int max { get; set; }
         public string mode { get; set; }
+    }
+
+    private sealed class ReportBody
+    {
+        public string code { get; set; }
+        public string fcHash { get; set; }
+        public string reporter { get; set; }
+        public string reporterHash { get; set; }
+        public string text { get; set; }
+        public string region { get; set; }
+        public string mode { get; set; }
+        public string modVersion { get; set; }
+        public string phase { get; set; }
     }
 }
 

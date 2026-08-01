@@ -297,6 +297,8 @@ public static class Options
     public static OptionItem ServerInviteCommandEnabled;
     public static OptionItem ServerInviteRegion;
 
+    public static OptionItem ReportCommandEnabled;
+
     public static OptionItem DisableShieldAnimations;
     public static OptionItem DisableShapeshiftAnimations;
     public static OptionItem DisableAllShapeshiftAnimations;
@@ -3045,6 +3047,12 @@ public static class Options
 
         ServerInviteRegion = new StringOptionItem(44458, "ServerInviteRegion", ["Modded NA", "Modded EU", "Modded AS"], 0, TabGroup.SystemSettings, noTranslation: true)
             .SetParent(ServerInviteEnabled)
+            .SetColor(new Color32(0, 165, 255, byte.MaxValue));
+
+        // Kill switch for /report. Every other "anyone can type it, the host answers"
+        // command (Whisper, ServerInfo, the faction chats) has one; without it a player
+        // spamming reports can only be stopped by banning them.
+        ReportCommandEnabled = new BooleanOptionItem(44467, "ReportCommandEnabled", true, TabGroup.SystemSettings)
             .SetColor(new Color32(0, 165, 255, byte.MaxValue));
 
         ChaosPotSupport.SetupOptions(44445);
