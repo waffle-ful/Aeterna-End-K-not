@@ -924,23 +924,26 @@ internal static class ShapeshiftPatch
             return false;
         }
 
-        if (!shapeshifter || !target) return true;
-
-        // CNO (PlayerId >= 200) は Main.PlayerStates に登録が無い。CNO はホストの AllPlayerControls からは
-        // 外れるが非モッド客のローカルには残るため、客の変身メニューの対象として選べてしまい、以降の
-        // PlayerStates 参照が KeyNotFoundException になる (bug-inbox BUG-20260728-05)。
-        // 装飾オブジェクトへの変身に正当な用途は無いので、素通し (return true) ではなく拒否する
-        // — 通すと RpcShapeshift 経由で Main.CheckShapeshift / AllPlayerNames 側へ問題が移るだけ
-        if (target.PlayerId >= 200)
+        if (!shapeshifter || !target)
         {
-            shapeshifter.RpcRejectShapeshift();
-            return false;
+            // 計器 (BUG-20260802-10): 非モッド客の推測メニュー配線が未解明。target=null の素通り
+            // (despawn 済みghost行タップ疑い) がバニラ処理へ落ちる瞬間を可視化する
+            Logger.Info($"null pass-through: shifter={(shapeshifter ? shapeshifter.PlayerId.ToString() : "null")} target={(target ? target.PlayerId.ToString() : "null")} meetingSS={meetingSS}", "MeetingSSProbe");
+            return true;
         }
 
-        Logger.Info($"{shapeshifter.GetNameWithRole()} => {target.GetNameWithRole()}", "Shapeshift");
-
+        // ⚠️ この meetingSS ディスパッチは CNO 拒否 (下の PlayerId >= 200) より前に置くこと。
+        // 推測メニューは選択肢の行を ShapeshiftMenuElement (CNO) で増設し、その netId を
+        // NetIdToRawDisplay に登録して「CNO 行のタップ = 選択肢の選択」として解釈する設計 —
+        // 2026-07-29 の BUG-20260728-05 緩和で CNO 拒否がこのブロックより前に入り、会議中の
+        // CNO 行タップが全て無反応 (reject) になってメニューが操作不能だった (BUG-20260802-10)。
+        // 未知の netId は GuessManager.TryGetDisplay 側が Reset() に落とすので素通しして安全。
         if (AmongUsClient.Instance.AmHost && meetingSS)
         {
+            // 計器 (BUG-20260802-10): クライアントがタップした行の実体 (pid/netId) を記録 —
+            // 「CNO行タップがどの host オブジェクトとして届くか」が未解明 (00:08 のミ選択が旧ゲートを通った謎)
+            Logger.Info($"meetingSS dispatch: shifter={shapeshifter.PlayerId} target=pid:{target.PlayerId}/net:{target.NetId} hudState={MeetingHud.Instance.state}", "MeetingSSProbe");
+
             if ((MeetingHud.Instance.state is MeetingHud.VoteStates.Discussion or MeetingHud.VoteStates.Voted or MeetingHud.VoteStates.NotVoted)
                 && Main.PlayerStates.TryGetValue(shapeshifter.PlayerId, out PlayerState meetingShapeshifterState))
                 meetingShapeshifterState.Role.OnMeetingShapeshift(shapeshifter, target);
@@ -948,6 +951,21 @@ internal static class ShapeshiftPatch
             shapeshifter.RpcRejectShapeshift();
             return false;
         }
+
+        // CNO (PlayerId >= 200) は Main.PlayerStates に登録が無い。CNO はホストの AllPlayerControls からは
+        // 外れるが非モッド客のローカルには残るため、客の変身メニューの対象として選べてしまい、以降の
+        // PlayerStates 参照が KeyNotFoundException になる (bug-inbox BUG-20260728-05)。
+        // 装飾オブジェクトへの変身に正当な用途は無いので、素通し (return true) ではなく拒否する
+        // — 通すと RpcShapeshift 経由で Main.CheckShapeshift / AllPlayerNames 側へ問題が移るだけ
+        // (会議中の推測メニュー行は上の meetingSS ブロックで処理済み — ここに届くのはタスク中のみ)
+        if (target.PlayerId >= 200)
+        {
+            Logger.Info($"CNO-target reject: shifter={shapeshifter.PlayerId} target=pid:{target.PlayerId}/net:{target.NetId} meetingSS={meetingSS}", "MeetingSSProbe");
+            shapeshifter.RpcRejectShapeshift();
+            return false;
+        }
+
+        Logger.Info($"{shapeshifter.GetNameWithRole()} => {target.GetNameWithRole()}", "Shapeshift");
 
         bool shapeshifting = shapeshifter.PlayerId != target.PlayerId;
 
