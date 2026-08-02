@@ -281,10 +281,31 @@ End K not は EHR の 650+ 役職エンジンの上に、**配信・長時間運
 
 ## インストール
 
-1. [BepInEx IL2CPP](https://github.com/BepInEx/BepInEx) を Among Us フォルダに導入
-2. [Releases](../../releases) から最新の `EndKnot.dll` をダウンロード
-3. `Among Us/BepInEx/plugins/` に配置
+**ホストのみ導入すれば動作します。** 参加者は Mod 不要です。
+
+### かんたん導入（推奨）
+
+1. [Releases](../../releases) から、お使いのストア版の zip をダウンロード
+   - Steam 版 : `EndKnot-<バージョン>_Steam.zip`
+   - Epic 版 : `EndKnot-<バージョン>_Epic.zip`
+2. **Among Us を完全に終了する**
+3. zip の中身**すべて**を Among Us のインストールフォルダに上書き展開
+   - Steam : `<Steam>\steamapps\common\Among Us\`
+   - Epic : `C:\Program Files\Epic Games\AmongUs\`
 4. Among Us を起動
+
+zip には BepInEx 本体・設定ファイル・カスタムリージョン追加 Mod が同梱されているので、これだけで導入は完了します。
+
+> [!IMPORTANT]
+> **バージョンアップ時は `Among Us\BepInEx\interop\` フォルダを削除**してから上書きしてください。古い interop が残っていると起動に失敗することがあります。
+
+### バニラ（Mod なし）に戻したいとき
+
+`Among Us` フォルダ直下の `winhttp.dll` を `winhttp.dll.disabled` にリネームすると、Mod が完全に無効化されて素の Among Us として起動します。戻すときは名前を元に戻すだけです。
+
+### DLL だけ差し替える（既に導入済みの方向け）
+
+すでに End K not を導入していて更新するだけなら、Releases の `EndKnot.dll` を `Among Us\BepInEx\plugins\` に上書きし、`Among Us\BepInEx\interop\` を削除してください。
 
 ## BGM のカスタマイズ
 

@@ -277,10 +277,31 @@ Over 110 chat commands are available for hosts, moderators, and all players. See
 
 ## Installation
 
-1. Install [BepInEx IL2CPP](https://github.com/BepInEx/BepInEx) into your Among Us folder
-2. Download the latest `EndKnot.dll` from [Releases](../../releases)
-3. Place `EndKnot.dll` in `Among Us/BepInEx/plugins/`
+**Only the host needs the mod.** Other players join without installing anything.
+
+### Easy install (recommended)
+
+1. Download the zip for your store from [Releases](../../releases)
+   - Steam: `EndKnot-<version>_Steam.zip`
+   - Epic: `EndKnot-<version>_Epic.zip`
+2. **Fully close Among Us**
+3. Extract **everything** from the zip into your Among Us installation folder, overwriting existing files
+   - Steam: `<Steam>\steamapps\common\Among Us\`
+   - Epic: `C:\Program Files\Epic Games\AmongUs\`
 4. Launch Among Us
+
+The zip bundles BepInEx, the config files, and the custom-region mod, so nothing else is required.
+
+> [!IMPORTANT]
+> **When updating, delete the `Among Us\BepInEx\interop\` folder** before extracting the new version. A stale interop folder can prevent the game from starting.
+
+### Switching back to vanilla
+
+Rename `winhttp.dll` in your `Among Us` folder to `winhttp.dll.disabled`. This fully disables the mod and the game launches as plain Among Us. Rename it back to re-enable.
+
+### DLL-only update (for existing installs)
+
+If you already have End K not installed, just overwrite `Among Us\BepInEx\plugins\EndKnot.dll` with the one from Releases and delete `Among Us\BepInEx\interop\`.
 
 ## BGM customization
 
