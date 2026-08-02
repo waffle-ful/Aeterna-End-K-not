@@ -1587,10 +1587,21 @@ namespace EndKnot
 
     internal sealed class ShapeshiftMenuElement : CustomNetObject
     {
+        // ⚠️ この CNO は IsPlayerLike ではないため OnAfterCreate() は呼ばれない
+        // (呼び出し箇所が CreateNetObject の if (IsPlayerLike) ブロック内にしかない)。
+        // 生成完了を知る手段が無いので、呼び出し側は playerControl / NetId に依存しない設計にすること。
         public ShapeshiftMenuElement(PlayerControl guesser)
         {
             CreateNetObject(string.Empty, new Vector2(0f, 0f), onlyVisibleTo: guesser);
         }
+
+        // 🔴 基底の OnMeeting() は Despawn 後に onlyVisibleTo 無しで CreateNetObject を呼び直す。
+        // 上の singleClient 判定 (:585) は onlyVisibleTo が要るため再生成時に false となり、
+        // targeted 配信 (2 nests 固定) が人数分のブロードキャスト fan-out に退化する
+        // = targets≥10 の Hacking キック域に直撃し、しかも会議ごとに自己回帰する。
+        // このメニュー要素は会議をまたいで生き残る必要が無いので、復活せず消えるのが正しい。
+        // (SprayedArea / CatcherTrap も同じ理由で同じ override を持つ)
+        public override void OnMeeting() => Despawn();
     }
 
     public sealed class DeathracePowerUp : CustomNetObject
