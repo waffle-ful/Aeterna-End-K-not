@@ -142,6 +142,14 @@ namespace EndKnot
         // Hide() でホスト自身から明示的に隠された CNO は EnsureHostVisible の対象外にする
         private bool HiddenFromHost;
 
+        // 推測メニュー要素 (ShapeshiftMenuElement) 専用の targeted 配信状態。spawn を tag6 で本人だけに
+        // 送った CNO は、server/他クライアントがこの netId の spawn を一度も見ていないため、netId を参照する
+        // 後続の全ワイヤ送信 (SnapTo / despawn) も同じ宛先に揃える必要がある。-1 = 通常のブロードキャスト配信。
+        // _localOnly は「宛先がホスト自身 or 消失」の縮退形 — 自分宛 tag6 (t6self) は 26B でも即 Hacking
+        // キック (/nest 計器で実証済み) なので、その場合はワイヤ送信を一切しない (ローカル生成のみ)。
+        private int _singleClientId = -1;
+        private bool _localOnly;
+
         // player-like CNO が「非モッド客からは見えるのにホスト画面にだけ映らない」機序への対処。
         // 2026-07-29 実測 (DummyProbe): body renderer は色もスプライトも正しく、GameObject も active、
         // 座標もホストから 3.7u の至近なのに `rendererEnabled=False` / `Visible=False` で固定されていた。
@@ -221,6 +229,10 @@ namespace EndKnot
             Logger.Error($"{where}: msgLen={messageLength}B nears the 1200B protocol cap (spriteBytes={spriteBytes}B overhead={messageLength - spriteBytes}B)", "CNO.PacketSize");
         }
 
+        // ⚠️ targeted 配信 CNO (_singleClientId != -1 / _localOnly) の不変条件に未対応 — この経路は常に
+        // ブロードキャスト送信する。ShapeshiftMenuElement 等の targeted CNO からこのメソッドを呼ぶ変更を
+        // 入れる場合は、spawn を tag6 でしか見ていない server/他クライアントへ netId が漏れないよう
+        // sender.StartMessage(_singleClientId) 化 + _localOnly ガードを先に足すこと。
         public void RpcChangeSprite(string sprite)
         {
             if (!AmongUsClient.Instance.AmHost) return;
@@ -349,15 +361,31 @@ namespace EndKnot
 
                 if (playerControl)
                 {
-                    MessageWriter writer = MessageWriter.Get(SendOption.Reliable);
-                    writer.StartMessage(5);
-                    writer.Write(AmongUsClient.Instance.GameId);
-                    writer.StartMessage(5);
-                    writer.WritePacked(playerControl.NetId);
-                    writer.EndMessage();
-                    writer.EndMessage();
-                    AmongUsClient.Instance.SendOrDisconnect(writer);
-                    writer.Recycle();
+                    if (!_localOnly)
+                    {
+                        MessageWriter writer = MessageWriter.Get(SendOption.Reliable);
+
+                        if (_singleClientId != -1)
+                        {
+                            // targeted 配信 CNO は despawn も同じ宛先だけに送る — spawn を tag6 でしか流していない
+                            // netId をブロードキャストで despawn すると、server に「見せたことのない netId への操作」が映る
+                            writer.StartMessage(6);
+                            writer.Write(AmongUsClient.Instance.GameId);
+                            writer.WritePacked(_singleClientId);
+                        }
+                        else
+                        {
+                            writer.StartMessage(5);
+                            writer.Write(AmongUsClient.Instance.GameId);
+                        }
+
+                        writer.StartMessage(5);
+                        writer.WritePacked(playerControl.NetId);
+                        writer.EndMessage();
+                        writer.EndMessage();
+                        AmongUsClient.Instance.SendOrDisconnect(writer);
+                        writer.Recycle();
+                    }
 
                     // transient PC の Data は registry から外さず、dirty bit だけクリアする
                     // (RemoveNetObject(Data) は host self-disconnect を誘発する。詳細は Utils.cs 同箇所参照)
@@ -391,8 +419,13 @@ namespace EndKnot
             }
             catch (Exception e) { Utils.ThrowException(e); }
 
+            // targeted 配信 CNO の不変条件: tag6 でしか spawn していない netId への送信は全て同じ宛先へ
+            // (_localOnly = ワイヤ送信ゼロ)。現状この経路を通る CNO は常にブロードキャスト配信 (-1) だが、
+            // ShapeshiftMenuElement 系に名前を足す将来変更が不変条件を破らないよう先回りで揃えておく
+            if (_localOnly) return;
+
             MessageWriter writer = AmongUsClient.Instance.StartRpcImmediately(
-                playerControl.NetId, (byte)RpcCalls.SetName, SendOption.Reliable);
+                playerControl.NetId, (byte)RpcCalls.SetName, SendOption.Reliable, _singleClientId);
             writer.Write(playerControl.Data.NetId);
             writer.Write(name);
             writer.Write(false);
@@ -492,7 +525,7 @@ namespace EndKnot
             try
             {
                 if (!AmongUsClient.Instance.AmHost) return;
-                
+
                 // 全 CNO 合計で最大 ~30 回/秒に絞る (CNO 数に応じてスケール)。
                 // TP() 直後 (ForceSnapSend) は throttle を 1 回だけ無視して即送信する。
                 // ForceSnapMinInterval>0 を返す CNO は、毎フレ TP の強制送信をその間隔に間引く(保留して次の gap で最新 Position を送る)。
@@ -508,8 +541,12 @@ namespace EndKnot
                     catch { }
                 }
 
+                // _localOnly は wire-only guard — 上のホストローカル SnapTo (自画面反映) は止めない
+                if (_localOnly) return;
+
                 ushort num = (ushort)(playerControl.NetTransform.lastSequenceId + 2U);
-                MessageWriter messageWriter = AmongUsClient.Instance.StartRpcImmediately(playerControl.NetTransform.NetId, 21, SendOption.None);
+                // targeted 配信 CNO (_singleClientId != -1) は SnapTo も同じ宛先へ。-1 は従来どおりブロードキャスト
+                MessageWriter messageWriter = AmongUsClient.Instance.StartRpcImmediately(playerControl.NetTransform.NetId, 21, SendOption.None, _singleClientId);
                 NetHelpers.WriteVector2(Position, messageWriter);
                 messageWriter.Write(num);
                 AmongUsClient.Instance.FinishRpcImmediately(messageWriter);
@@ -535,6 +572,18 @@ namespace EndKnot
             
             IEnumerator CoRoutine()
             {
+                // OnMeeting() の復活経路は同一インスタンスで CreateNetObject を呼び直す (onlyVisibleTo なし) ため、
+                // 前回 spawn の targeted 状態が残らないよう毎回リセットする。
+                _singleClientId = -1;
+                _localOnly = false;
+
+                // 推測メニュー要素 (ShapeshiftMenuElement) は本人にしか意味がない CNO なので、
+                // 「全員へ spawn → 全員へ可視化 fan-out → 0.3s 後に本人以外へ Hide fan-out」の往復をやめ、
+                // spawn から tag6 で本人だけに送る (合法形の前例 = SetChatVisible の偽 MeetingHud spawn)。
+                // fan-out 予算が人数に依存しなくなり、満員ロビーの推測メニューでも即座に出揃う。
+                // ⚠️ マップ上に実体として出る CNO (AdventurerItem / Toilet / トラップ類) は対象外 (2026-08-02 裁定)。
+                bool singleClient = onlyVisibleTo && this is ShapeshiftMenuElement;
+
                 bool tooEarly = !Main.IntroDestroyed || Utils.TimeStamp - IntroCutsceneDestroyPatch.IntroDestroyTS < 10;
                 string expMode = SpawnExperimentMode();
 
@@ -608,8 +657,24 @@ namespace EndKnot
 
                     AmongUsClient.Instance.NetIdCnt += 1U;
                     MessageWriter msg = MessageWriter.Get(SendOption.Reliable);
-                    msg.StartMessage(5);
-                    msg.Write(AmongUsClient.Instance.GameId);
+
+                    if (singleClient && onlyVisibleTo && !onlyVisibleTo.AmOwner)
+                    {
+                        // 本人だけに届く targeted spawn (tag6)
+                        _singleClientId = onlyVisibleTo.OwnerId;
+                        msg.StartMessage(6);
+                        msg.Write(AmongUsClient.Instance.GameId);
+                        msg.WritePacked(_singleClientId);
+                    }
+                    else
+                    {
+                        // 宛先がホスト自身か消失した targeted CNO は送信しない (t6self は 26B でも即 Hacking キック)。
+                        // メッセージ構築自体は netId 採番の副作用のため通し、末尾で破棄する
+                        if (singleClient) _localOnly = true;
+                        msg.StartMessage(5);
+                        msg.Write(AmongUsClient.Instance.GameId);
+                    }
+
                     msg.StartMessage(4);
                     SpawnGameDataMessage item = AmongUsClient.Instance.CreateSpawnMessage(playerControl, -2, SpawnFlags.None);
                     item.SerializeValues(msg);
@@ -632,6 +697,14 @@ namespace EndKnot
                     }
 
                     msg.EndMessage();
+
+                    if (_localOnly)
+                    {
+                        // 宛先不在の targeted CNO はワイヤに出さない (ローカル生成のみ)
+                        msg.Recycle();
+                        return;
+                    }
+
                     // このメッセージは spawn 本体でスプライトを含まない (スプライトは後段の Shapeshift-text ブロックで送る)。
                     WarnPacketSize($"CreateNetObject({GetType().Name}) spawn-only", null, msg.Length);
                     HealthLog.RecordHostAction("CNO.Spawn", msg.Length, "Reliable");
@@ -660,7 +733,7 @@ namespace EndKnot
 
                 yield return new WaitForSecondsRealtime(0.1f);
 
-                if (PlayerControl.AllPlayerControls.Count > 1)
+                if (PlayerControl.AllPlayerControls.Count > 1 && !_localOnly)
                 {
                     int fanoutTargets = 0;
                     foreach (PlayerControl pcForCount in Main.EnumeratePlayerControls())
@@ -668,7 +741,9 @@ namespace EndKnot
 
                     // Hide (後段の 0.3s 後) も同じ幅の per-player 配信を送るため、該当 CNO はここで 2 倍課金する。
                     // 待ちを Hide 側に置かないのは、不可視化の遅延 = 「隠すべき相手に見える窓」の拡大になるため。
-                    float fanoutWait = ReserveFanoutBudget(fanoutTargets * (hideFrom != null || onlyVisibleTo ? 2 : 1));
+                    // targeted 配信 (推測メニュー要素) は宛先 1 クライアント固定 = spawn + 可視化で 2 nests 固定 —
+                    // 満員ロビーでも人数比例で予算を食わないのがこの最適化の眼目。
+                    float fanoutWait = ReserveFanoutBudget(singleClient ? 2 : fanoutTargets * (hideFrom != null || onlyVisibleTo ? 2 : 1));
                     if (fanoutWait > 0f) yield return new WaitForSecondsRealtime(fanoutWait);
                     if (!playerControl) yield break;
 
@@ -686,9 +761,12 @@ namespace EndKnot
                     stream.StartMessage(26);
                     stream.WritePacked(AmongUsClient.Instance.GameId);
 
-                    foreach (PlayerControl pc in Main.EnumeratePlayerControls())
+                    // targeted 配信は可視化トリック (PlayerId 差替→MurderPlayer FailedError→復元 の3点セット) も本人だけ
+                    IEnumerable<PlayerControl> visibilityTargets = singleClient ? new[] { onlyVisibleTo } : Main.EnumeratePlayerControls();
+
+                    foreach (PlayerControl pc in visibilityTargets)
                     {
-                        if (pc.AmOwner) continue;
+                        if (!pc || pc.AmOwner) continue;
 
                         if (stream.Length > 500 || messages + 3 > AmongUsClient.Instance.GetMaxMessagePackingLimit() || targetsInEnvelope >= MaxTargetsPerVisibilityEnvelope)
                         {
@@ -734,19 +812,32 @@ namespace EndKnot
 
                     stream.EndMessage();
                     Logger.Info($"CNO.SpawnVisibility {GetType().Name}: targets={targets} envelopes={envelopes} lastLen={stream.Length} packingLimit={AmongUsClient.Instance.GetMaxMessagePackingLimit()}", "CNO.CreateNetObject");
-                    qa = DataFlagRateLimiter.Enqueue(() =>
+
+                    // targeted 配信で宛先が消えていた場合 (targets=0)、子のない空 t26 を server に送らない
+                    if (targets > 0)
                     {
-                        HealthLog.RecordHostAction("CNO.SpawnVisibility", stream.Length, "Reliable");
-                        AmongUsClient.Instance.SendOrDisconnect(stream);
-                    });
-                    yield return qa.Wait();
-                    stream.Recycle();
-                    if (qa.Dropped) yield break;
+                        qa = DataFlagRateLimiter.Enqueue(() =>
+                        {
+                            HealthLog.RecordHostAction("CNO.SpawnVisibility", stream.Length, "Reliable");
+                            AmongUsClient.Instance.SendOrDisconnect(stream);
+                        });
+                        yield return qa.Wait();
+                        stream.Recycle();
+                        if (qa.Dropped) yield break;
+                    }
+                    else
+                        stream.Recycle();
                 }
 
                 playerControl.CachedPlayerData = PlayerControl.LocalPlayer.Data;
 
-                if (hideFrom != null || onlyVisibleTo)
+                if (singleClient)
+                {
+                    // targeted 配信では他クライアントはこの CNO の存在自体を知らない — ワイヤ Hide は不要。
+                    // ホスト画面のローカル非表示だけ通す (Hide の AmOwner 分岐は送信ゼロ)。本人がホストなら隠さない
+                    if (!(onlyVisibleTo && onlyVisibleTo.AmOwner)) Hide([PlayerControl.LocalPlayer]);
+                }
+                else if (hideFrom != null || onlyVisibleTo)
                 {
                     yield return new WaitForSecondsRealtime(0.3f);
                     Hide(onlyVisibleTo ? Main.EnumerateAlivePlayerControls().Without(onlyVisibleTo) : hideFrom);
