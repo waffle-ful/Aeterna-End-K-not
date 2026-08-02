@@ -2322,7 +2322,13 @@ internal static class ChatCommands
             MeetingHud.Instance.RpcClose();
         }
         else
-            player.NoCheckStartMeeting(null, true);
+        {
+            // /mt <playerId> はそのプレイヤーの死体が通報されたことにして会議を開く (生死不問)。
+            // 通報会議限定の能力 (ShrineMaiden 等) をホストだけでテストするための入り口。
+            NetworkedPlayerInfo reportTarget = null;
+            if (args.Length >= 2 && byte.TryParse(args[1], out byte reportId)) reportTarget = Utils.GetPlayerById(reportId)?.Data;
+            player.NoCheckStartMeeting(reportTarget, true);
+        }
     }
 
     private static void CosIDCommand(PlayerControl player, string text, string[] args)
@@ -3579,8 +3585,9 @@ internal static class ChatCommands
         if (!player.FriendCode.GetDevUser().up && !player.FriendCode.IsLocalDev()) return;
 
         MemCensus.RunNow("manual");
+        ManagedCensus.RunNow("manual");
         Logger.Info("DevCmd /census: snapshot requested", "DevCmd");
-        Utils.SendMessage("[census] snapshot written to Health.log (CENSUS/CENSUSTOP)", player.PlayerId);
+        Utils.SendMessage("[census] snapshot written to Health.log (CENSUS/CENSUSTOP/MHEAP*)", player.PlayerId);
     }
 
     private static void SizeCleanCommand(PlayerControl player, string text, string[] args)
