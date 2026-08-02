@@ -169,7 +169,9 @@ internal class Merchant : RoleBase
 
     public static bool IsBribedKiller(PlayerControl killer, PlayerControl target)
     {
-        return BribedKiller[target.PlayerId].Contains(killer.PlayerId);
+        // target が Merchant とは限らない (推測処理など外部から任意の相手で呼ばれる) ため、
+        // 直接インデックスすると KeyNotFoundException で呼び出し元の処理ごと中断する
+        return BribedKiller.TryGetValue(target.PlayerId, out List<byte> bribed) && bribed.Contains(killer.PlayerId);
     }
 
     private static void NotifyBribery(PlayerControl killer, PlayerControl target)

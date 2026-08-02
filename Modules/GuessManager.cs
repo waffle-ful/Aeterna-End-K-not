@@ -1268,6 +1268,10 @@ public static class GuessManager
         private readonly List<ShapeshiftMenuElement> ExistingCNOs = [];
         private readonly Dictionary<uint, string> NetIdToRawDisplay = [];
 
+        // ExistingCNOs と同じ並び順で、その CNO が表す選択肢を保持する。
+        // CNO の playerControl は非同期に確定するため NetId をキーにできない (生成直後は null)
+        private readonly List<string> CNOChoices = [];
+
         public void Reset()
         {
             try
@@ -1278,6 +1282,7 @@ public static class GuessManager
                 CurrentTeam = default(CustomRoleTypes);
                 ExistingCNOs.Do(x => x.Despawn());
                 ExistingCNOs.Clear();
+                CNOChoices.Clear();
                 NetIdToRawDisplay.Clear();
                 PlayerControl pc = guesserId.GetPlayer();
                 if (pc) Utils.SendGameDataTo(pc.OwnerId);
@@ -1378,6 +1383,14 @@ public static class GuessManager
             {
                 if (!NetIdToRawDisplay.TryGetValue(target.NetId, out display))
                     display = string.Empty;
+
+                // 生存者数を超える選択肢は CNO で表示している。CNO は NetId で引けない
+                // (playerControl が非同期に確定するため登録できない) ので並び順で引く
+                if (string.IsNullOrWhiteSpace(display))
+                {
+                    int slot = ExistingCNOs.FindIndex(x => x.playerControl && x.playerControl.NetId == target.NetId);
+                    if (slot >= 0 && slot < CNOChoices.Count) display = CNOChoices[slot];
+                }
 
                 if (string.IsNullOrWhiteSpace(display))
                 {
@@ -1549,24 +1562,28 @@ public static class GuessManager
                         else sb.Append(' ');
                     
                         // If there's an existing CNO, reuse it
-                        ShapeshiftMenuElement cno;
+                        // ⚠️ CNO の playerControl は生成コルーチン内で非同期に代入されるため、生成直後は null。
+                        // ここで NetId を読むと NRE でループごと落ち、残りの選択肢と下の後始末が丸ごと失われる。
+                        // NetId は使わず「ExistingCNOs の並び順」で選択肢を対応付ける (CNOChoices)。
+                        // 順序はこのループが唯一の書き手なので、生成完了を待たずに確定できる。
+                        int slot = i - alivePlayerControlsLength;
 
-                        if (ExistingCNOs.Count + alivePlayerControlsLength > i)
-                            cno = ExistingCNOs[i - alivePlayerControlsLength];
+                        if (ExistingCNOs.Count > slot)
+                            CNOChoices[slot] = choice;
                         else
                         {
-                            cno = new ShapeshiftMenuElement(guesser);
-                            ExistingCNOs.Add(cno);
+                            ExistingCNOs.Add(new ShapeshiftMenuElement(guesser));
+                            CNOChoices.Add(choice);
                         }
-                    
-                        NetIdToRawDisplay[cno.playerControl.NetId] = choice;
                     }
-                
+
                     // Despawn unused CNOs
                     for (int i = data.Length - alivePlayerControlsLength; i < ExistingCNOs.Count; i++)
                         ExistingCNOs[i].Despawn();
-                
-                    ExistingCNOs.RemoveRange(data.Length - alivePlayerControlsLength, ExistingCNOs.Count - (data.Length - alivePlayerControlsLength));
+
+                    int keep = data.Length - alivePlayerControlsLength;
+                    CNOChoices.RemoveRange(keep, CNOChoices.Count - keep);
+                    ExistingCNOs.RemoveRange(keep, ExistingCNOs.Count - keep);
                 
                     Logger.Info($"Sent {data.Length - alivePlayerControlsLength} CNOs, Reused {ExistingCNOs.Count} Existing CNOs", "Meeting Shapeshift For Guessing");
                 }
@@ -1574,6 +1591,7 @@ public static class GuessManager
                 {
                     ExistingCNOs.ForEach(x => x.Despawn());
                     ExistingCNOs.Clear();
+                    CNOChoices.Clear();
                 }
             
                 Utils.SendMessage(sb.ToString().Trim(), guesserId, GetString($"ShapeshiftGuesserUITitle.{CurrentState}"), importance: MessageImportance.High);
