@@ -279,7 +279,13 @@ Over 110 chat commands are available for hosts, moderators, and all players. See
 
 **Only the host needs the mod.** Other players join without installing anything.
 
-### Easy install (recommended)
+### Installer (easiest, recommended)
+
+1. Download `EndKnotInstaller.exe` from the [latest release](../../releases/latest)
+2. **Fully close Among Us**, then run it
+3. It auto-detects Steam / Epic and handles the whole install (updates work the same way)
+
+### Manual zip install
 
 1. Download the zip for your store from [Releases](../../releases)
    - Steam: `EndKnot-<version>_Steam.zip`
