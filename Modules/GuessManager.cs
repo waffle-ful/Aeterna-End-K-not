@@ -1296,6 +1296,9 @@ public static class GuessManager
                 {
                     case State.WaitingForTargetSelection:
                     {
+                        // CNO 行は選択肢表示専用 — 推測対象 (実プレイヤー) としては選ばせない
+                        // (meetingSS ディスパッチが CNO タップも通すようになったため必要な防御)
+                        if (target.PlayerId >= 200) return;
                         Target = target;
                         CurrentState = State.TeamSelection;
                         SpawnCNOs();
@@ -1428,15 +1431,16 @@ public static class GuessManager
                 StringBuilder sb = new();
                 int textIndex = 0;
 
-                int messages = 0;
-                int packingLimit = AmongUsClient.Instance.GetMaxMessagePackingLimit();
-                
                 var skipped = false;
                 PlayerControl guesser = guesserId.GetPlayer();
-                MessageWriter writer = MessageWriter.Get(SendOption.Reliable);
-                writer.StartMessage(6);
-                writer.Write(AmongUsClient.Instance.GameId);
-                writer.WritePacked(guesser.OwnerId);
+
+                // ⚠️ 選択肢ラベル (実プレイヤー行の SetName 書換) は即時に送らない (BUG-20260802-11)。
+                // このすぐ下の凡例チャット (Utils.SendMessage) は「生存最小 PlayerId」名義で
+                // SetName(タイトル)→SendChat→SetName(素名復元) を送り、さらに 0.7s 後の
+                // ScheduleDecoratedNameRestore が装飾名を再送するため、先に書いたラベルはその行だけ
+                // 必ず上書きされる (2人ロビーでは唯一の実プレイヤー行 = ホスト行が素名のままになり
+                // メニューが読めない)。両方の復元が済む 1.0s 後にまとめて送る。
+                List<(PlayerControl pc, string playerName, string namePlateId)> labelWrites = [];
 
                 for (var i = 0; i < alivePlayerControls.Count && (skipped ? i - 1 : i) < data.Length; i++)
                 {
@@ -1452,47 +1456,77 @@ public static class GuessManager
 
                     NetIdToRawDisplay[pc.NetId] = choice;
                     string playerName = CurrentState == State.FirstLetterSelection ? choice : GetString(choice).ToUpper();
-                
+
                     sb.Append($"[{playerName}]");
                     textIndex++;
-                
+
                     if (textIndex % 3 == 0) sb.AppendLine();
                     else sb.Append(' ');
 
-                    if (writer.Length > 500 || messages + 2 > packingLimit)
+                    labelWrites.Add((pc, playerName, namePlateId));
+                }
+
+                State scheduledState = CurrentState;
+
+                LateTask.New(() =>
+                {
+                    try
                     {
-                        messages = 0;
+                        if (labelWrites.Count == 0) return;
+                        // メニューが閉じられた/次の段階へ進んだ後に stale なラベルを書かない
+                        // (Reset() は SendGameDataTo で素名復元済み — それを再汚染しない)
+                        if (CurrentState != scheduledState || !GameStates.IsMeeting) return;
+                        PlayerControl g = guesserId.GetPlayer();
+                        if (!g) return;
+
+                        int messages = 0;
+                        int packingLimit = AmongUsClient.Instance.GetMaxMessagePackingLimit();
+                        MessageWriter writer = MessageWriter.Get(SendOption.Reliable);
+                        writer.StartMessage(6);
+                        writer.Write(AmongUsClient.Instance.GameId);
+                        writer.WritePacked(g.OwnerId);
+
+                        foreach ((PlayerControl pc, string playerName, string namePlateId) in labelWrites)
+                        {
+                            if (!pc || pc.Data == null) continue;
+
+                            if (writer.Length > 500 || messages + 2 > packingLimit)
+                            {
+                                messages = 0;
+                                writer.EndMessage();
+                                EarlyWarning.OnPacket("GuessManager.SetNameChunk", writer.Length, writer.Length, "Reliable");
+                                AmongUsClient.Instance.SendOrDisconnect(writer);
+                                writer.Clear(SendOption.Reliable);
+                                writer.StartMessage(6);
+                                writer.Write(AmongUsClient.Instance.GameId);
+                                writer.WritePacked(g.OwnerId);
+                            }
+
+                            writer.StartMessage(2);
+                            writer.WritePacked(pc.NetId);
+                            writer.Write((byte)RpcCalls.SetName);
+                            writer.Write(pc.Data.NetId);
+                            writer.Write(playerName);
+                            writer.Write(false);
+                            writer.EndMessage();
+
+                            writer.StartMessage(2);
+                            writer.WritePacked(pc.NetId);
+                            writer.Write((byte)RpcCalls.SetNamePlateStr);
+                            writer.Write(namePlateId);
+                            writer.Write(pc.GetNextRpcSequenceId(RpcCalls.SetNamePlateStr));
+                            writer.EndMessage();
+
+                            messages += 2;
+                        }
+
                         writer.EndMessage();
                         EarlyWarning.OnPacket("GuessManager.SetNameChunk", writer.Length, writer.Length, "Reliable");
                         AmongUsClient.Instance.SendOrDisconnect(writer);
-                        writer.Clear(SendOption.Reliable);
-                        writer.StartMessage(6);
-                        writer.Write(AmongUsClient.Instance.GameId);
-                        writer.WritePacked(guesser.OwnerId);
+                        writer.Recycle();
                     }
-                
-                    writer.StartMessage(2);
-                    writer.WritePacked(pc.NetId);
-                    writer.Write((byte)RpcCalls.SetName);
-                    writer.Write(pc.Data.NetId);
-                    writer.Write(playerName);
-                    writer.Write(false);
-                    writer.EndMessage();
-
-                    writer.StartMessage(2);
-                    writer.WritePacked(pc.NetId);
-                    writer.Write((byte)RpcCalls.SetNamePlateStr);
-                    writer.Write(namePlateId);
-                    writer.Write(pc.GetNextRpcSequenceId(RpcCalls.SetNamePlateStr));
-                    writer.EndMessage();
-
-                    messages += 2;
-                }
-
-                writer.EndMessage();
-                EarlyWarning.OnPacket("GuessManager.SetNameChunk", writer.Length, writer.Length, "Reliable");
-                AmongUsClient.Instance.SendOrDisconnect(writer);
-                writer.Recycle();
+                    catch (Exception e) { Utils.ThrowException(e); }
+                }, 1f, "GuessMenuLabelWrite", log: false);
 
                 // If there aren't enough living players, spawn new CNOs to show the rest of choices
             
