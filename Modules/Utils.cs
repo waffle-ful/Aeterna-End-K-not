@@ -164,7 +164,8 @@ public static class Utils
     // 公式 anti-cheat のレート仕様は未公表 (80/100 も上流由来の自主規制) のため、
     // レートは /tpdbg refill <sec> で実験調整できる。0 以下 = 回復無効 (旧挙動)。
     // getter/setter 経由の lazy refill なので既存の ++ / += / 代入サイトは全て無改変で動く。
-    public static float SnapToRefillSecondsPerToken = 1f;
+    // ⚠️ 既定は 1.5。2026-07-29 に 1.0 へ緩めたところ tpdrop (TP 未着弾) を初観測したため差し戻した。
+    public static float SnapToRefillSecondsPerToken = 1.5f;
 
     private static int _snapToCount;
     private static float _lastSnapToRefillTime;
