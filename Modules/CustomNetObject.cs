@@ -38,6 +38,34 @@ namespace EndKnot
         /// 固定上限を入れて、この量を人数によらず定数に押さえる。</summary>
         private const int MaxTargetsPerVisibilityEnvelope = 4;
 
+        /// <summary>
+        /// per-player fan-out (SpawnVisibility / Hide) の全 CNO 共通予算。公式鯖は per-player 配信の
+        /// 密度が targets≥10 × 2.5 体/秒 (≈25 nests/s) で Hacking キック、20 nests/s 以下は無傷
+        /// (2026-08-02 実測 6/6・BUG-20260730-11、正典 docs/official-server-model.md §5-3b)。
+        /// エンベロープ分割 (MaxTargetsPerVisibilityEnvelope) はこのキックを防がないことも実測済みで、
+        /// 唯一効くレバーは時間方向の間引き。12 nests/s + 瞬間許容 24 nests なら、どの呼び出し元が
+        /// 何体積んでも 10 秒窓の累計 ≤144 nests で生存実績域 (≤160) に収まる。
+        /// </summary>
+        private const float FanoutNestsPerSecond = 12f;
+        private const float FanoutBurstAllowanceNests = 24f;
+        private static float FanoutTokens = FanoutBurstAllowanceNests;
+        private static float FanoutLastRefillTime;
+
+        /// <summary>
+        /// fan-out 予算を nests ぶん消費し、必要な待ち秒数を返す。負債方式 — 呼び出し自体は常に通り、
+        /// 超過ぶんは以降の呼び出しが待つ (1 回の fan-out は分割不能なので、拒否ではなく後払いが正しい形)。
+        /// </summary>
+        private static float ReserveFanoutBudget(int nests)
+        {
+            if (nests <= 0) return 0f;
+            float now = Time.realtimeSinceStartup;
+            if (FanoutLastRefillTime <= 0f || now < FanoutLastRefillTime) FanoutLastRefillTime = now;
+            FanoutTokens = Mathf.Min(FanoutBurstAllowanceNests, FanoutTokens + ((now - FanoutLastRefillTime) * FanoutNestsPerSecond));
+            FanoutLastRefillTime = now;
+            FanoutTokens -= nests;
+            return FanoutTokens >= 0f ? 0f : -FanoutTokens / FanoutNestsPerSecond;
+        }
+
         private const byte MinCnoPlayerId = 200;
         private const byte MaxCnoPlayerId = 254;
         private const int PlayerIdSlots = MaxCnoPlayerId - MinCnoPlayerId + 1;
@@ -634,6 +662,16 @@ namespace EndKnot
 
                 if (PlayerControl.AllPlayerControls.Count > 1)
                 {
+                    int fanoutTargets = 0;
+                    foreach (PlayerControl pcForCount in Main.EnumeratePlayerControls())
+                        if (!pcForCount.AmOwner) fanoutTargets++;
+
+                    // Hide (後段の 0.3s 後) も同じ幅の per-player 配信を送るため、該当 CNO はここで 2 倍課金する。
+                    // 待ちを Hide 側に置かないのは、不可視化の遅延 = 「隠すべき相手に見える窓」の拡大になるため。
+                    float fanoutWait = ReserveFanoutBudget(fanoutTargets * (hideFrom != null || onlyVisibleTo ? 2 : 1));
+                    if (fanoutWait > 0f) yield return new WaitForSecondsRealtime(fanoutWait);
+                    if (!playerControl) yield break;
+
                     int messages = 0;
                     // ⚠️ BUG-20260730-11: 2026-07-31 まで、このループは「非ホスト人数ぶんの tag6」を
                     // **1 つの t26 エンベロープに全部**詰めていた (既存2ガードが13人以下で成立しないため)。
@@ -943,6 +981,9 @@ namespace EndKnot
                 RespawnSlot = 0;
                 StartSpawnSlot = 0;
                 DeferredSpawnSlot = 0;
+                // 途中終了で負債が残ると次ゲームの先頭 CNO が無意味に待つため、ゲーム境界で予算を満タンへ戻す
+                FanoutTokens = FanoutBurstAllowanceNests;
+                FanoutLastRefillTime = 0f;
                 UsedPlayerIds.Clear(); // Despawn を経ずに破壊された CNO の枠リークをゲーム境界で必ず回収する
                 _spawnExperimentBypassCount = 0; // dev 実験トグルの本数キャップをゲーム境界でリセット
             }

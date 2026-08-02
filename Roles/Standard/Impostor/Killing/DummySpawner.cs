@@ -157,6 +157,13 @@ public class DummySpawner : RoleBase
             // 人数分ぶら下がるので、間隔を詰めると人数の多いロビーでだけ送信が山になる。
             // 生成完了から 0.5 秒後に outfit 適用が走る (CustomNetObject の OnAfterCreate) ため、
             // 間隔がこれより短いと「新規 spawn」と「前の体への outfit 適用」が定常的に重なる。
+            // ⚠️ さらに 1 体ごとに per-player 配信 (CNO.SpawnVisibility) が非ホスト人数 (targets) 分
+            // ぶら下がる。公式鯖は targets≥10 のとき 0.4s 間隔でも Hacking キック
+            // (2026-08-02 実測 3/3、targets≤8 は無傷 — docs/official-server-model.md §5-3b)。
+            // 生存実績域は targets × 体数/秒 ≤ 20 nests/s なので、余裕を見て 12 nests/s に収まるよう
+            // 間隔を人数連動で広げる (少人数では従来の 0.4s のまま)。
+            int fanoutTargets = Main.EnumeratePlayerControls().Count(p => !p.AmOwner);
+            float spawnGap = Math.Max(SpawnGapSeconds, fanoutTargets / 12f);
             for (int i = 0; i < count; i++)
             {
                 int idx = slot++;
@@ -167,7 +174,7 @@ public class DummySpawner : RoleBase
                     if (owner == null || !owner.IsAlive()) return;
                     if (!SpawnedDummies.TryGetValue(capturedId, out var current) || current != capturedList) return;
                     capturedList.Add(new RandomDummy(GetRandomMapPosition()));
-                }, idx * SpawnGapSeconds, "DummySpawner.Spawn", log: false);
+                }, idx * spawnGap, "DummySpawner.Spawn", log: false);
             }
         }
     }
