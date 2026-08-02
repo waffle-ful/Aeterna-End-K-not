@@ -290,6 +290,10 @@ public static class HealthLog
             string hb = $"t={now} up={now - StartTs} state={state} host={(host ? 1 : 0)} server={server} players={players} wsMB={wsMB} gcMB={gcMB} gc2={gen2} nmSent={nmSent} nmSkip={nmSkip} eosTry={eosTry} eosFlow={eosFlow} idTok={idTok} ping={ping} rsndD={rsndD} unack={unack} pNoAck={pNoAck}{lastSendSuffix}";
             Write($"HB {hb}");
 
+            // マネージド保持リークの帰属計器 (BUG-20260706-01)。間隔判定は MaybeTick 側。
+            try { ManagedCensus.MaybeTick(now, state); }
+            catch { }
+
             // 平常時のタグ別送信サマリ。ゲーム中だけ出す (Menu/Lobby は比較対象にならないうえ無駄に嵩む)。
             // これが無いと DCTAG に「比較すべき無傷の窓」が存在せず、また相関止まりの結論になる。
             if ((state == "InTask" || state == "Meeting") && now - _lastTagWindowLogTs >= TagWindowLogIntervalSeconds)
