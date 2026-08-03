@@ -947,6 +947,7 @@ public class Main : BasePlugin
                 { CustomRoles.Listener, "#060270" },
                 { CustomRoles.Unbound, "#DFC57B" },
                 { CustomRoles.AntiTP, "#fcba03" },
+                { CustomRoles.Focused, "#A10E49" },
                 { CustomRoles.Urgent, "#D49255" },
                 { CustomRoles.Talkative, "#6ADEDE" },
                 { CustomRoles.Blessed, "#7bfbff" },
