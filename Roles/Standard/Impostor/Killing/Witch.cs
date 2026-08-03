@@ -182,7 +182,7 @@ public class Witch : RoleBase
             SendRPC(true, killer.PlayerId, target.PlayerId);
             killer.SetKillCooldown(SpellCooldown.GetFloat());
             killer.RPCPlayCustomSound("Curse");
-            killer.RpcRemoveAbilityUse();
+            killer.RpcRemoveAbilityUse(notify: false);
             Utils.NotifyRoles(SpecifySeer: killer, SpecifyTarget: target, ForceLoop: true);
         }
     }

@@ -55,7 +55,7 @@ public class Consort : RoleBase
 
         return killer.CheckDoubleTrigger(target, () =>
         {
-            killer.RpcRemoveAbilityUse();
+            killer.RpcRemoveAbilityUse(notify: false);
             target.BlockRole(Duration.GetFloat());
             killer.Notify(GetString("EscortTargetHacked"));
             killer.SetKillCooldown(CD.GetFloat());

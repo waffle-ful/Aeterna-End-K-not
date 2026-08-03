@@ -149,7 +149,7 @@ internal class Sentry : RoleBase
         if (!fromDevice)
         {
             if (pc.GetAbilityUseLimit() < 1) return;
-            pc.RpcRemoveAbilityUse();
+            pc.RpcRemoveAbilityUse(notify: false);
         }
 
         string roomName = Translator.GetString(MonitoredRoom.RoomId);

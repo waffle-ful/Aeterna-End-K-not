@@ -116,7 +116,7 @@ internal class TimeMaster : RoleBase
     public override void OnPet(PlayerControl pc)
     {
         if (pc.GetAbilityUseLimit() < 1) return;
-        pc.RpcRemoveAbilityUse();
+        pc.RpcRemoveAbilityUse(notify: false);
 
         Main.Instance.StartCoroutine(Rewind());
         
@@ -128,7 +128,7 @@ internal class TimeMaster : RoleBase
     {
         if (UsePets.GetBool()) return;
         if (pc.GetAbilityUseLimit() < 1) return;
-        pc.RpcRemoveAbilityUse();
+        pc.RpcRemoveAbilityUse(notify: false);
 
         Main.Instance.StartCoroutine(Rewind());
         
