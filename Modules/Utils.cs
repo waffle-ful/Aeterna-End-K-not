@@ -4374,10 +4374,15 @@ public static class Utils
 
         int cd = role switch
         {
-            CustomRoles.Farmer => 2,
+            // ⚠️ fork 独自分岐: 上流 773f4359 はこの2行を削除したが、削除すると Main.AbilityCD が
+            // 設定されず PetActionsPatch:174 の HasAbilityCD() ゲートが恒久 false になり、
+            // ペット経路のクールダウンが「表示だけでなく機能ごと」消える (Shapeshift/Vanish 経路は
+            // AURoleOptions 側の 5f で律速されるため、ペットだけ無制限になる非対称が生じる)。
+            // Farmer の 2 は下の cd <= 3 ゲートでどのみち落ちるので上流に合わせて削除済み。
             CustomRoles.Thanos => 5,
             CustomRoles.Blockade => 5,
             CustomRoles.Mole => Mole.CD.GetInt(),
+            CustomRoles.Bouncer => Bouncer.AbilityCooldown.GetInt(),
             CustomRoles.Operative => Operative.AbilityCooldown.GetInt(),
             CustomRoles.PortalMaker => PortalMaker.AbilityCooldown.GetInt(),
             CustomRoles.MapExtender => MapExtender.AbilityCooldown.GetInt(),
@@ -4456,13 +4461,15 @@ public static class Utils
             _ => -1
         };
 
-        if (cd == -1) return;
+        if (cd <= 3) return;
 
         if (Main.PlayerStates[playerId].SubRoles.Contains(CustomRoles.Energetic))
             cd = (int)Math.Round(cd * 0.75f);
 
         if (!includeDuration && ExileControllerWrapUpPatch.Stopwatch?.IsRunning == true)
             cd -= (int)ExileControllerWrapUpPatch.Stopwatch.Elapsed.TotalSeconds;
+
+        if (cd <= 3) return;
 
         Main.AbilityCD[playerId] = (TimeStamp, cd);
         if (playerId == 0 || !playerId.IsPlayerModdedClient()) return;
