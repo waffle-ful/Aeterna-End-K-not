@@ -15,6 +15,7 @@ public static class Snowdown
     // Pet: Buy the selected powerup in the shop
 
     public static float SnowballThrowSpeed = 4f;
+    public static float SnowballSize = 1f;
     private static int SnowballGainFrequency = 5;
     private static int MaxSnowballsInHand = 5;
     private static int MaxCoinsInHand = 10;
@@ -37,6 +38,7 @@ public static class Snowdown
     private static OptionItem GameEndTimeOption;
     private static OptionItem GameEndsWhenPointsReachedOption;
     private static OptionItem PointsToReachOption;
+    private static OptionItem SnowballSizeOption;
     private static Dictionary<PowerUp, OptionItem> PowerUpPriceOptions = [];
     
     private static readonly PowerUp[] AllPowerUp = Enum.GetValues<PowerUp>();
@@ -106,6 +108,12 @@ public static class Snowdown
             .SetGameMode(gameMode)
             .SetValueFormat(OptionFormat.Pieces)
             .AddReplacement(("{powerup}", Translator.GetString($"Snowdown.PowerUp.{x}"))));
+
+        SnowballSizeOption = new FloatOptionItem(id++, "Snowdown.SnowballSizeOption", new(0.1f, 2f, 0.1f), 1f, tab)
+            .SetHeader(true)
+            .SetColor(color)
+            .SetGameMode(gameMode)
+            .SetValueFormat(OptionFormat.Multiplier);
     }
 
     public static void ApplyGameOptions()
@@ -218,6 +226,7 @@ public static class Snowdown
         GameEndTime = GameEndTimeOption.GetInt();
         GameEndsWhenPointsReached = GameEndsWhenPointsReachedOption.GetBool();
         PointsToReach = PointsToReachOption.GetInt();
+        SnowballSize = SnowballSizeOption.GetFloat();
         PowerUpPrices = PowerUpPriceOptions.ToDictionary(x => x.Key, x => x.Value.GetInt());
         
         Data = Main.EnumeratePlayerControls().ToDictionary(x => x.PlayerId, _ => new PlayerData());
@@ -257,7 +266,8 @@ public static class Snowdown
 
             long now = Utils.TimeStamp;
             Vector2 pos = __instance.Pos();
-            Snowball touchingSnowball = Snowballs.Find(x => x.Active && x.Thrower != __instance && FastVector2.DistanceWithinRange(x.Position, pos, 1.5f));
+            var snowballRange = Mathf.Max(0.5f, 1.5f * SnowballSize);
+            Snowball touchingSnowball = Snowballs.Find(x => x.Active && x.Thrower != __instance && FastVector2.DistanceWithinRange(x.Position, pos, snowballRange));
 
             if (touchingSnowball != null)
             {
