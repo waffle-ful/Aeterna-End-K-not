@@ -431,7 +431,6 @@ public class ClientControlGUI : MonoBehaviour
         bool notJoined  = GameStates.IsNotJoined;
         bool localAlive = PlayerControl.LocalPlayer && PlayerControl.LocalPlayer.IsAlive();
         bool canMove    = GameStates.IsCanMove;
-        bool noGameEnd  = Options.NoGameEnd.GetBool();
 
         Section(ref y, "General");
 
@@ -654,12 +653,11 @@ public class ClientControlGUI : MonoBehaviour
                 );
                 Btn(ref y, Label("Open Chat for All", "CTRL + SHIFT + ENTER + C"), _sHost, Utils.SetChatVisibleForAll);
 
-                if (noGameEnd)
-                    Btn(ref y, Label("Force Game End", "SHIFT + ENTER + L"), _sDanger, () =>
-                    {
-                        CustomWinnerHolder.ResetAndSetWinner(CustomWinner.Draw);
-                        GameEndChecker.CheckCustomEndCriteria();
-                    });
+                Btn(ref y, Label("Force Game End", "SHIFT + ENTER + L"), _sDanger, () =>
+                {
+                    CustomWinnerHolder.ResetAndSetWinner(CustomWinner.Draw);
+                    GameEndChecker.CheckCustomEndCriteria();
+                });
             }
         }
 
