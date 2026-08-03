@@ -48,7 +48,10 @@ public abstract class GameOptionsSender
     protected virtual IEnumerator SendGameOptionsAsync()
     {
         Il2CppStructArray<byte> optionArray = BuildOptionArray();
-        yield return SendOptionsArrayAsync(optionArray);
+        // マネージド IEnumerator を yield return で直接ネストしない (下の ShouldYieldFrame コメント参照)。
+        // 手動ポンプなら子の yield 値 (null) がそのまま通り、ラッパーが生成されない。
+        IEnumerator inner = SendOptionsArrayAsync(optionArray);
+        while (inner.MoveNext()) yield return inner.Current;
     }
 
     private void SendOptionsArray(Il2CppStructArray<byte> optionArray)
@@ -78,7 +81,12 @@ public abstract class GameOptionsSender
             if (gm == null || gm.LogicComponents == null || i >= gm.LogicComponents.Count) yield break;
             Il2CppSystem.Object logicComponent = gm.LogicComponents[i];
             if (logicComponent != null && logicComponent.TryCast<LogicOptions>(out _)) SendOptionsArray(optionArray, i);
-            yield return WaitFrameIfNecessary();
+
+            if (ShouldYieldFrame())
+            {
+                yield return null;
+                OnFrameResumed();
+            }
         }
     }
 
@@ -157,6 +165,8 @@ public abstract class GameOptionsSender
         {
             while (GameStates.InGame || GameStates.IsLobby)
             {
+                float cycleStart = Time.realtimeSinceStartup;
+
                 if (GameStates.InGame)
                 {
                     PackedWriterMessages = 0;
@@ -167,7 +177,11 @@ public abstract class GameOptionsSender
 
                 for (var index = 0; index < AllSenders.Count; index++)
                 {
-                    yield return WaitFrameIfNecessary();
+                    if (ShouldYieldFrame())
+                    {
+                        yield return null;
+                        OnFrameResumed();
+                    }
 
                     // 分割閾値は公式鯖 kick 上限 (~1024) に対するヘッダ余裕込みで SafeChunkLength (800) に揃える
                     // (旧値 1000 は RPC.cs SyncCustomSettingsRPC と同じ独立マジックナンバーの兄弟だった)
@@ -176,7 +190,7 @@ public abstract class GameOptionsSender
                         PackedWriter.EndMessage();
                         EarlyWarning.OnPacket("GameOptionsSender.PackedFlush", PackedWriter.Length, PackedWriter.Length, "Reliable");
                         var qa = DataFlagRateLimiter.Enqueue(() => AmongUsClient.Instance.SendOrDisconnect(PackedWriter));
-                        yield return qa.Wait();
+                        while (!qa.Done) yield return null;
                         PackedWriterMessages = 0;
                         if (qa.Dropped) break;
                         PackedWriter.Clear(SendOption.Reliable);
@@ -184,7 +198,11 @@ public abstract class GameOptionsSender
                         PackedWriter.WritePacked(AmongUsClient.Instance.GameId);
                     }
 
-                    yield return WaitFrameIfNecessary();
+                    if (ShouldYieldFrame())
+                    {
+                        yield return null;
+                        OnFrameResumed();
+                    }
 
                     if (index >= AllSenders.Count) break;
                     GameOptionsSender sender = AllSenders[index];
@@ -197,18 +215,26 @@ public abstract class GameOptionsSender
                     }
 
                     if (sender.IsDirty)
-                        yield return sender.SendGameOptionsAsync();
+                    {
+                        IEnumerator send = sender.SendGameOptionsAsync();
+                        while (send.MoveNext()) yield return send.Current;
+                    }
 
                     sender.IsDirty = false;
                 }
 
-                yield return WaitFrameIfNecessary();
+                if (ShouldYieldFrame())
+                {
+                    yield return null;
+                    OnFrameResumed();
+                }
 
                 if (PackedWriterMessages > 0 && PackedWriter != null)
                 {
                     PackedWriter.EndMessage();
                     EarlyWarning.OnPacket("GameOptionsSender.PackedFlush", PackedWriter.Length, PackedWriter.Length, "Reliable");
-                    yield return DataFlagRateLimiter.Enqueue(() => AmongUsClient.Instance.SendOrDisconnect(PackedWriter)).Wait();
+                    var qaFinal = DataFlagRateLimiter.Enqueue(() => AmongUsClient.Instance.SendOrDisconnect(PackedWriter));
+                    while (!qaFinal.Done) yield return null;
                 }
 
                 PackedWriter?.Recycle();
@@ -216,7 +242,17 @@ public abstract class GameOptionsSender
                 PackedWriterMessages = 0;
 
                 ForceWaitFrame = true;
-                yield return WaitFrameIfNecessary();
+                if (ShouldYieldFrame())
+                {
+                    yield return null;
+                    OnFrameResumed();
+                }
+
+                // 最小周期ゲート: 旧実装はネスト yield の副作用で1周~0.37秒に偶発スロットルされており、
+                // それが毎フレーム dirty を立てる書き手 (Spurt/Dynamo の MarkDirtySettings) の送信要求を
+                // 隠蔽していた。リーク修正でループが設計速度に戻ったため、PackedFlush が Reliable 予算
+                // (DataFlagRateLimiter 23/s) を独占して critical RPC を飢えさせないよう明示的に間引く。
+                while (Time.realtimeSinceStartup - cycleStart < MinCycleIntervalSeconds) yield return null;
             }
         }
         finally
@@ -228,20 +264,32 @@ public abstract class GameOptionsSender
         }
     }
 
-    protected static IEnumerator WaitFrameIfNecessary()
+    // ⚠️ ここで「IEnumerator を返すヘルパーを yield return でネストする」形に戻してはいけない
+    // (BUG-20260706-01 round11)。マネージド IEnumerator を Il2Cpp コルーチンから yield すると、
+    // BepInEx が Il2CppManagedEnumerator + strong GCHandle を1回ごとに生成し、それが永久に解放
+    // されない (実測: 8分で2.5万個・全 live・~50個/秒 = 慢性メモリ膨張の主因)。
+    // 判定は bool で返し、呼び出し側で `yield return null` → OnFrameResumed() を書く。
+    protected static bool ShouldYieldFrame()
     {
         if (ForceWaitFrame || Stopwatch.ElapsedMilliseconds >= FrameBudget)
         {
             ForceWaitFrame = false;
             Stopwatch.Reset();
-            yield return null;
-            Stopwatch.Start();
+            return true;
         }
+
+        return false;
+    }
+
+    protected static void OnFrameResumed()
+    {
+        Stopwatch.Start();
     }
 
     public static Coroutine ActiveCoroutine;
     private static readonly Stopwatch Stopwatch = new();
     private const int FrameBudget = 3; // in milliseconds
+    private const float MinCycleIntervalSeconds = 0.2f;
     protected static bool ForceWaitFrame;
 
     #endregion
