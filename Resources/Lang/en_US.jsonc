@@ -2089,7 +2089,7 @@
   "MadGuardianCanSeeWhoTriedToKill": "Can See Who Tried to Kill You",
   "Gasp": "Gasp",
   "GaspInfo": "Mark your killer on death",
-  "GaspInfoLong": "(<#8cffff>Crewmates</color>):\n<size=80%>Die with enough tasks done — and see your killer marked in your final moments.\n_____________________________________\nDifficulty: ★★☆☆☆\n\n[Skills]\n・<b><color=#8cffff>Last Gasp</color></b>\nWhen killed after completing enough tasks, your killer is marked with a star (★) visible only to you. The mark vanishes permanently when a meeting is called.\n\n<i>Your last sight is the truth. Act before it disappears.</i></size>",
+  "GaspInfoLong": "(<#8cffff>Crewmates</color>):\n<size=80%>Die with enough tasks done — and see your killer marked in your final moments.\n_____________________________________\nDifficulty: ★★☆☆☆\n\n[Skills]\n・<b><color=#8cffff>Last Gasp</color></b>\nWhen killed after completing enough tasks, your killer is marked with a star (★) visible to everyone. The mark vanishes permanently when a meeting is called.\n\n<i>Your last sight is the truth. Act before it disappears.</i></size>",
   "GaspTaskTrigger": "Tasks Required to Activate Ability",
   "InSender": "In Sender",
   "InSenderInfo": "Your killer self-reports your body",
