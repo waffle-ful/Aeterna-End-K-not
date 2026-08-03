@@ -177,6 +177,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Kidnapper => CustomRoles.Shapeshifter,
                 CustomRoles.Frightener => CustomRoles.Shapeshifter,
                 CustomRoles.Chainbinder => UsePets ? CustomRoles.Impostor : CustomRoles.Shapeshifter,
+                CustomRoles.Gatekeeper => UsePets ? CustomRoles.Impostor : CustomRoles.Shapeshifter,
                 CustomRoles.Exorcist => CustomRoles.Impostor,
                 CustomRoles.Obstructer => CustomRoles.Impostor,
                 CustomRoles.Ambusher => UsePets ? CustomRoles.Impostor : CustomRoles.Shapeshifter,
@@ -852,6 +853,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Psychopath or
                 CustomRoles.Ambusher or
                 CustomRoles.Kidnapper or
+                CustomRoles.Gatekeeper or
                 CustomRoles.Exclusionary or
                 CustomRoles.Catalyst or
                 CustomRoles.Fabricator or
@@ -1216,6 +1218,7 @@ internal static class CustomRolesHelper
                              or CustomRoles.AntiAdminer
                              or CustomRoles.Stasis
                              or CustomRoles.Chainbinder
+                             or CustomRoles.Gatekeeper
                              or CustomRoles.Occultist
                              or CustomRoles.Overheat
                              or CustomRoles.Warlock
@@ -1428,6 +1431,7 @@ internal static class CustomRolesHelper
                 CustomRoles.EvilEraser => RoleOptionType.Impostor_Support,
                 CustomRoles.Freezer => RoleOptionType.Impostor_Support,
                 CustomRoles.Gangster => RoleOptionType.Impostor_Support,
+                CustomRoles.Gatekeeper => RoleOptionType.Impostor_Support,
                 CustomRoles.Godfather => RoleOptionType.Impostor_Support,
                 CustomRoles.Hypnotist => RoleOptionType.Impostor_Support,
                 CustomRoles.Librarian => RoleOptionType.Impostor_Support,
