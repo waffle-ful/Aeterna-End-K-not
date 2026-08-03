@@ -256,7 +256,10 @@ public class Alchemist : RoleBase
         {
             InvisTimer = null;
             if (pc == null || !pc.IsAlive()) return;
-            Main.EnumeratePlayerControls().Without(pc).Do(x => instance.RpcExitVentDesync(ventId, x));
+            var hasValue = false;
+            CustomRpcSender sender = CustomRpcSender.Create("Alchemist RpcExitVentDesync calls", SendOption.Reliable).StartPackedMessage();
+            Main.EnumeratePlayerControls().Without(pc).Do(x => hasValue |= sender.RpcExitVentDesync(instance, ventId, x));
+            sender.SendMessage(dispose: !hasValue);
             pc.Notify(GetString("SwooperInvisStateOut"));
         }, onTick: pc.IsModdedClient() ? null : () => pc.Notify(string.Format(GetString("SwooperInvisStateCountdown"), (int)Math.Ceiling(InvisTimer.Remaining.TotalSeconds)), overrideAll: true), onCanceled: () => InvisTimer = null);
         
