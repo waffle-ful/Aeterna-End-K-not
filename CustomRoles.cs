@@ -739,5 +739,6 @@ public enum CustomRoles
     GhostNoiseSender, // Ghost role
     DemonicSupporter, // Ghost role
     DemonicCrusher, // Ghost role
-    AsistingAngel // Ghost role
+    AsistingAngel, // Ghost role
+    Focused
 }
