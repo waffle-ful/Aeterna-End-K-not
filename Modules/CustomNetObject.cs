@@ -712,7 +712,9 @@ namespace EndKnot
                     msg.Recycle();
                 });
 
-                yield return qa.Wait();
+                // qa.Wait() (マネージド IEnumerator) の yield return ネストはラッパーリークする
+                // (GameOptionsSender.ShouldYieldFrame のコメント参照) — 待ちはインラインで書く
+                while (!qa.Done) yield return null;
                 if (qa.Dropped) yield break;
 
                 if (PlayerControl.AllPlayerControls.Contains(playerControl))
@@ -776,7 +778,7 @@ namespace EndKnot
                                 HealthLog.RecordHostAction("CNO.SpawnVisibility", stream.Length, "Reliable");
                                 AmongUsClient.Instance.SendOrDisconnect(stream);
                             }, cleanup: stream.Recycle);
-                            yield return qa.Wait();
+                            while (!qa.Done) yield return null;
                             if (qa.Dropped) yield break;
                             messages = 0;
                             targetsInEnvelope = 0;
@@ -821,7 +823,7 @@ namespace EndKnot
                             HealthLog.RecordHostAction("CNO.SpawnVisibility", stream.Length, "Reliable");
                             AmongUsClient.Instance.SendOrDisconnect(stream);
                         });
-                        yield return qa.Wait();
+                        while (!qa.Done) yield return null;
                         stream.Recycle();
                         if (qa.Dropped) yield break;
                     }
@@ -847,7 +849,7 @@ namespace EndKnot
                 
                 if (this is not ShapeshiftMenuElement && !IsPlayerLike)
                 {
-                    yield return DataFlagRateLimiter.Enqueue(() =>
+                    DataFlagRateLimiter.QueuedAction spriteQa = DataFlagRateLimiter.Enqueue(() =>
                     {
                         if (!playerControl) return;
 
@@ -924,7 +926,8 @@ namespace EndKnot
                         sender.EndMessage();
                         WarnPacketSize($"CreateNetObject({GetType().Name}) sprite-apply", sprite, sender.stream.Length);
                         sender.SendMessage();
-                    }).Wait();
+                    });
+                    while (!spriteQa.Done) yield return null;
                 }
 
                 if (IsPlayerLike)
