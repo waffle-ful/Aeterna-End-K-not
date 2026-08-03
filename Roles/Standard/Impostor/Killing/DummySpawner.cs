@@ -117,8 +117,13 @@ public class DummySpawner : RoleBase
         LastSpawnedMeeting = currentMeeting;
 
         // CreateNetObject は PlayerControl.AllPlayerControls を Add するため
-        // 親側の foreach (Main.EnumeratePlayerControls) を破壊する。LateTask で遅延させる
-        LateTask.New(SpawnAllDummies, 1f, "DummySpawner.AfterMeeting");
+        // 親側の foreach (Main.EnumeratePlayerControls) を破壊する。LateTask で遅延させる。
+        // ⚠️ 遅延は 10 秒から縮めないこと。会議明けは追放スイープ (SetRole 全員分 + Desync + ReactorFlash +
+        // NotifyRoles) が task phase 開始後 ~4 秒まで走り、レートゲートのドレインがさらに ~6 秒続く。
+        // 1 秒開始だと再生成波がこの窓に丸ごと重なり、targets=6 (単独では安全域) でも合算 nests が
+        // キック域に達する (2026-08-03 15:58 実キック・BUG-20260803-07。対照: スイープが軽い 5 人戦は
+        // 同条件で無傷)。
+        LateTask.New(SpawnAllDummies, 10f, "DummySpawner.AfterMeeting");
     }
 
     private static void SpawnAllDummies()
@@ -162,8 +167,12 @@ public class DummySpawner : RoleBase
             // (2026-08-02 実測 3/3、targets≤8 は無傷 — docs/official-server-model.md §5-3b)。
             // 生存実績域は targets × 体数/秒 ≤ 20 nests/s なので、余裕を見て 12 nests/s に収まるよう
             // 間隔を人数連動で広げる (少人数では従来の 0.4s のまま)。
+            // ⚠️ 密度の分子は targets だけでは足りない: 1 体につき ApplyOutfitToCNO (Data×2 + Shapeshift
+            // ≈4 nests) と spawn broadcast (≈4 nests) が人数に依らず付帯し、これらは CNO の fan-out 予算
+            // (ReserveFanoutBudget) に課金されない。targets のみの式では実効密度が想定の 2.5 倍になり、
+            // 会議明けスイープと合算でキック域に達した (2026-08-03 BUG-20260803-07) — +8 で付帯分を織り込む。
             int fanoutTargets = Main.EnumeratePlayerControls().Count(p => !p.AmOwner);
-            float spawnGap = Math.Max(SpawnGapSeconds, fanoutTargets / 12f);
+            float spawnGap = Math.Max(SpawnGapSeconds, (fanoutTargets + 8) / 12f);
             for (int i = 0; i < count; i++)
             {
                 int idx = slot++;

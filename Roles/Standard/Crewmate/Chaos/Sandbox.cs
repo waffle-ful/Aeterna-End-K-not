@@ -143,6 +143,11 @@ public class Sandbox : RoleBase
         // データの保存はここで実施)
         foreach ((byte owner, var blocks) in ActiveBlocks)
         {
+            // 再生成 (RespawnBlocks, 会議明け +10 秒) の前に次の会議が来ると ActiveBlocks は空のまま。
+            // ここで無条件に上書きすると保存済み位置が空で潰れ、ブロックが永久消失する — 空ならスキップ
+            // して前会議の保存を持ち越す (未配置プレイヤーは saved も空なのでスキップで無害)。
+            if (blocks.Count == 0) continue;
+
             if (!SavedBlockPositions.TryGetValue(owner, out var saved))
             {
                 saved = SavedBlockPositions[owner] = [];
@@ -200,7 +205,10 @@ public class Sandbox : RoleBase
             }
 
             foreach (var list in SavedBlockPositions.Values) list.Clear();
-        }, 1f, "Sandbox.RespawnBlocks");
+            // ⚠️ 外側 delay は 10 秒から縮めないこと (基底 CustomNetObject.OnMeeting() と同じ規約)。
+            // 1 秒開始だと追放スイープ+ドレイン窓 (task phase 開始後 ~10 秒) にブロック再生成の
+            // CreateNetObject 連鎖が丸ごと重なり、合算 nests がキック域に達する (BUG-20260803-07 の兄弟)。
+        }, 10f, "Sandbox.RespawnBlocks");
     }
 
     // ブロック中心からプレイヤーへの向きへ「半径+極小バッファ」までスナップする。
