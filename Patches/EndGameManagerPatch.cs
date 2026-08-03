@@ -65,7 +65,7 @@ public static class EndGameManagerPatch
         else LateTask.New(() => { BeginAutoPlayAgainCountdown(endGameManager, seconds - 1); }, 1f, log: false);
     }
 
-    private static void CleanupText()
+    public static void CleanupText()
     {
         IsRestarting = false;
         if (CountdownText == null) return;
@@ -79,6 +79,8 @@ internal static class EndGameNavigationNextGamePatch
 {
     public static void Postfix()
     {
+        EndGameManagerPatch.CleanupText();
+
         EndKnot.Modules.Media.LoadingScreenVideo.Show();
 
         if (!AmongUsClient.Instance.AmHost || !Options.KickSlowJoiningPlayers.GetBool()) return;
