@@ -121,7 +121,7 @@ internal class Lighter : RoleBase
             }, onCanceled: () => Timer = null);
 
             pc.Notify(Translator.GetString("LighterSkillInUse"), skillDuration);
-            pc.RpcRemoveAbilityUse();
+            pc.RpcRemoveAbilityUse(notify: false);
             pc.MarkDirtySettings();
         }
         else

@@ -207,7 +207,7 @@ public class Gaslighter : RoleBase
                 target.RpcGuardAndKill(target);
                 target.Notify(CustomRoles.Monarch.ColoredTextByRole(Translator.GetString("KnightedByMonarch")));
                 Utils.NotifyRoles(SpecifySeer: killer, SpecifyTarget: target);
-                killer.RpcRemoveAbilityUse();
+                killer.RpcRemoveAbilityUse(notify: false);
                 killer.SetKillCooldown();
                 break;
             case Round.Curse:
@@ -223,7 +223,7 @@ public class Gaslighter : RoleBase
                 ShieldedPlayers.Add(target.PlayerId);
                 Utils.NotifyRoles(SpecifySeer: killer, SpecifyTarget: target);
                 Utils.NotifyRoles(SpecifySeer: target, SpecifyTarget: target);
-                killer.RpcRemoveAbilityUse();
+                killer.RpcRemoveAbilityUse(notify: false);
                 killer.SetKillCooldown();
                 break;
         }

@@ -188,7 +188,7 @@ public class Swapper : RoleBase
     {
         if (SwapTargets != (byte.MaxValue, byte.MaxValue))
         {
-            Utils.GetPlayerById(SwapperId).RpcRemoveAbilityUse();
+            Utils.GetPlayerById(SwapperId)?.RpcRemoveAbilityUse(notify: false);
             SwapTargets = (byte.MaxValue, byte.MaxValue);
         }
     }

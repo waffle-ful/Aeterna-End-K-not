@@ -74,6 +74,6 @@ public class Cantankerous : RoleBase
 
     public override void OnMurder(PlayerControl killer, PlayerControl target)
     {
-        killer.RpcRemoveAbilityUse();
+        killer.RpcRemoveAbilityUse(notify: false);
     }
 }
