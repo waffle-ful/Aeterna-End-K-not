@@ -178,7 +178,12 @@ public class Swooper : RoleBase
             InvisTimer = null;
 
             if (UsedRole == CustomRoles.Chameleon && !UsePets.GetBool())
-                Main.EnumeratePlayerControls().Without(player).Do(x => player.MyPhysics.RpcExitVentDesync(ventId, x));
+            {
+                var hasValue = false;
+                CustomRpcSender sender = CustomRpcSender.Create("Swooper RpcExitVentDesync calls", SendOption.Reliable).StartPackedMessage();
+                Main.EnumeratePlayerControls().Without(player).Do(x => hasValue |= sender.RpcExitVentDesync(player.MyPhysics, ventId, x));
+                sender.SendMessage(dispose: !hasValue);
+            }
             else
                 player.RpcMakeVisible(phantom: UsedRole == CustomRoles.Swooper);
 

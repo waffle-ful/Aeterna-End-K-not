@@ -1132,5 +1132,30 @@ public static class CustomRpcSenderExtensions
 
             return true;
         }
+
+        // seer ごとに個別 Reliable を撃つ代わりに 1 つの packed message へ積む版。
+        // 対象人数ぶんの単発送信は fan-out キックのブラケット (targets>=10) に直撃するため、
+        // 複数 seer へ ExitVent を配る経路は必ずこちらを使うこと。
+        public bool RpcExitVentDesync(PlayerPhysics physics, int ventId, PlayerControl seer)
+        {
+            if (!physics) return false;
+
+            int clientId = seer.OwnerId;
+
+            if (AmongUsClient.Instance.ClientId == clientId)
+            {
+                physics.StopAllCoroutines();
+                physics.StartCoroutine(physics.CoExitVent(ventId));
+                return false;
+            }
+
+            if (clientId < 0) return false;
+
+            sender.AutoStartRpc(physics.NetId, (byte)RpcCalls.ExitVent, clientId);
+            sender.WritePacked(ventId);
+            sender.EndRpc();
+
+            return true;
+        }
     }
 }
