@@ -27,16 +27,10 @@ internal class Revenant : RoleBase
 
     public override void SetupCustomOption()
     {
-        int id = 659500;
-        SetupRoleOptions(id++, TabGroup.CrewmateRoles, CustomRoles.Revenant);
-
-        KnowInfo = new StringOptionItem(++id, "Revenant.KnowInfo", KnowInfoMode, 1, TabGroup.CrewmateRoles)
-            .SetParent(CustomRoleSpawnChances[CustomRoles.Revenant]);
-
-        RemainingTasksToBeFound = new IntegerOptionItem(++id, "SnitchRemainingTaskFound", new(0, 10, 1), 1, TabGroup.CrewmateRoles)
-            .SetParent(CustomRoleSpawnChances[CustomRoles.Revenant]);
-
-        Options.OverrideTasksData.Create(++id, TabGroup.CrewmateRoles, CustomRoles.Revenant);
+        StartSetup(659500)
+            .AutoSetupOption(ref KnowInfo, 1, KnowInfoMode)
+            .AutoSetupOption(ref RemainingTasksToBeFound, 1, new IntegerValueRule(0, 10, 1), overrideName: "SnitchRemainingTaskFound")
+            .CreateOverrideTasksData();
     }
 
     public override void Init()
