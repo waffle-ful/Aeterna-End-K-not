@@ -1026,7 +1026,13 @@ namespace EndKnot
 
         private const float DeferredSpawnStaggerStep = 0.05f;
 
-        internal static float NextDeferredSpawnDelay() => DeferredSpawnSlot++ * DeferredSpawnStaggerStep;
+        // ⚠️ 基底オフセットは 10 秒から縮めないこと (基底 OnMeeting() の WaitForMeetingEnd と同じ規約)。
+        // 会議明けは追放スイープ (SetRole 全員分 + Desync + ReactorFlash + NotifyRoles) とレートゲートの
+        // ドレインが task phase 開始後 ~10 秒続き、この窓に CNO 生成が重なると合算 nests がキック域に
+        // 達する (2026-08-03 15:58 実キック・BUG-20260803-07)。
+        private const float DeferredSpawnBaseDelay = 10f;
+
+        internal static float NextDeferredSpawnDelay() => DeferredSpawnBaseDelay + (DeferredSpawnSlot++ * DeferredSpawnStaggerStep);
 
         public virtual void OnMeeting()
         {
