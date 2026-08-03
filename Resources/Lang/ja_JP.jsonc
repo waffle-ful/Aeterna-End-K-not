@@ -8441,6 +8441,7 @@
   "Snowdown.PowerUpPriceOption": "{powerup} の価格 (コイン)",
   "Snowdown.ShopHelp": "Vanish: パワーアップ切替 | Pet: 選択中のパワーアップを購入 | Sabotage: ショップを閉じる",
   "Snowdown.SnowballGainFrequencyOption": "初期の雪玉獲得頻度",
+  "Snowdown.SnowballSizeOption": "雪玉の大きさ",
   "Snowdown.SnowballThrowSpeedOption": "雪玉の投擲速度",
   "SnowdownButtonText": "THROW",
   // SoloPVP
