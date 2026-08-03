@@ -63,7 +63,7 @@ public class Enchanter : CovenBase
             Utils.SendRPC(CustomRPC.SyncRoleData, killer.PlayerId, 1, target.PlayerId);
             Utils.NotifyRoles(SpecifySeer: killer, SpecifyTarget: target);
             killer.SetKillCooldown(AbilityCooldown.GetFloat());
-            killer.RpcRemoveAbilityUse();
+            killer.RpcRemoveAbilityUse(notify: false);
         }
     }
 }

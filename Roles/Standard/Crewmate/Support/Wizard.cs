@@ -218,7 +218,7 @@ public class Wizard : RoleBase
 
         hasValue |= sender.SyncSettings(target);
         hasValue |= sender.SetKillCooldown(killer);
-        killer.RpcRemoveAbilityUse();
+        killer.RpcRemoveAbilityUse(notify: false);
 
         hasValue |= sender.Notify(killer, string.Format(Translator.GetString("Wizard.BuffGivenNotify"), target.PlayerId.ColoredPlayerName(), Translator.GetString($"Wizard.Buff.{SelectedBuff}"), Math.Round(value, 1)), out sender);
         Utils.SendRPC(CustomRPC.SyncRoleData, 3, target.PlayerId);

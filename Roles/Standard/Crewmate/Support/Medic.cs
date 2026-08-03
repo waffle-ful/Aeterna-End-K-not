@@ -169,7 +169,7 @@ public class Medic : RoleBase
     {
         if (ProtectList.Contains(target.PlayerId)) return false;
 
-        killer.RpcRemoveAbilityUse();
+        killer.RpcRemoveAbilityUse(notify: false);
 
         ProtectList.Add(target.PlayerId);
         TempMarkProtectedList.Add(target.PlayerId);

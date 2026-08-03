@@ -89,7 +89,7 @@ public class Spy : RoleBase
     {
         if (!target.Is(CustomRoles.Spy) || killer.PlayerId == target.PlayerId || target.GetAbilityUseLimit() < 1) return true;
 
-        target.RpcRemoveAbilityUse();
+        target.RpcRemoveAbilityUse(notify: false);
         SpyRedNameList.Add(killer.PlayerId);
         SendRPC(1, killer.PlayerId);
         NotifyRoles(SpecifySeer: target, SpecifyTarget: killer);
