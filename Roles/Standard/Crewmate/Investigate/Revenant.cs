@@ -49,35 +49,37 @@ internal class Revenant : RoleBase
 
     public override void OnReportDeadBody()
     {
-        if (!TaskDone && RevenantId.GetPlayer().IsAlive())
+        PlayerControl pc = RevenantId.GetPlayer();
+
+        if (pc && pc.IsAlive() && !pc.AllTasksCompleted())
         {
+            StillAlive = true;
+            pc.RpcExiled();
             PlayerState state = Main.PlayerStates[RevenantId];
             state.deathReason = PlayerState.DeathReason.Suicide;
             state.SetDead();
-            StillAlive = true;
             SendRPC(CustomRPC.SyncRoleData, RevenantId, TaskDone, StillAlive, IsExposed);
         }
     }
 
     public override void AfterMeetingTasks()
     {
+        if (!StillAlive) return;
+
         LateTask.New(() =>
         {
-            if (!GameStates.IsInTask || ExileController.Instance || AntiBlackout.SkipTasks) return;
-            if (!Main.PlayerStates.TryGetValue(RevenantId, out var state)) return;
+            if (GameStates.IsEnded || !GameStates.IsInTask || ExileController.Instance || AntiBlackout.SkipTasks) return;
 
             PlayerControl pc = RevenantId.GetPlayer();
 
-            if (pc && StillAlive)
+            if (pc)
             {
-                RPC.PlaySoundRPC(RevenantId, Sounds.SpawnSound);
-                GhostRolesManager.RemoveGhostRole(RevenantId);
                 pc.RpcRevive();
                 pc.TPToRandomVent();
                 StillAlive = false;
                 SendRPC(CustomRPC.SyncRoleData, RevenantId, TaskDone, StillAlive, IsExposed);
             }
-        }, 2f, "Revive Delay");
+        }, 2f, "Revenant Revive Delay");
     }
 
     public override void OnTaskComplete(PlayerControl pc, int completedTaskCount, int totalTaskCount)
