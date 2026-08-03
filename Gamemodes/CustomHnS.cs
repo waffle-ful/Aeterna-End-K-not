@@ -145,7 +145,7 @@ internal static class CustomHnS
 
         Dictionary<byte, CustomRoles> preSetRoles = Main.SetRoles.AddRange(ChatCommands.DraftResult, false);
 
-        if (ChatCommands.DraftResult.Count > 0 && ChatCommands.DraftResult.Count + preSetRoles.Count >= allPlayers.Count && preSetRoles.All(x => x.Value is not (CustomRoles.Seeker or CustomRoles.Locator or CustomRoles.Dasher or CustomRoles.Venter or CustomRoles.Agent)))
+        if (ChatCommands.DraftResult.Count > 0 && ChatCommands.DraftResult.Count + preSetRoles.Count >= allPlayers.Count && preSetRoles.All(x => x.Value is not (CustomRoles.Seeker or CustomRoles.Locator or CustomRoles.Dasher or CustomRoles.Venter or CustomRoles.Agent or CustomRoles.Disguiser)))
         {
             byte removeKey = ChatCommands.DraftResult.Keys.RandomElement();
             ChatCommands.DraftResult.Remove(removeKey);
@@ -517,6 +517,8 @@ internal static class CustomHnS
     public static void OnCheckMurder(PlayerControl killer, PlayerControl target)
     {
         if (PlayerRoles[killer.PlayerId].Interface.Team != Team.Impostor || PlayerRoles[target.PlayerId].Interface.Team == Team.Impostor || IsBlindTime) return;
+
+        if (killer.Is(CustomRoles.Disguiser) && !Disguiser.CheckMurder(killer, target)) return;
 
         killer.Kill(target);
 

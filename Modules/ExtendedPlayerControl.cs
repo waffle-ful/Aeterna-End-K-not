@@ -1544,6 +1544,7 @@ internal static class ExtendedPlayerControl
                 CustomRoles.Venter => true,
                 CustomRoles.Agent => true,
                 CustomRoles.Taskinator => false,
+                CustomRoles.Disguiser => true,
 
                 _ => Main.PlayerStates.TryGetValue(player.PlayerId, out PlayerState state) && state.Role.CanUseKillButton(player)
             };
@@ -1964,6 +1965,9 @@ internal static class ExtendedPlayerControl
                 _ when player.Is(CustomRoles.Underdog) => Main.AllAlivePlayerControlsCount <= Underdog.UnderdogMaximumPlayersNeededToKill.GetInt() ? Underdog.UnderdogKillCooldownWithLessPlayersAlive.GetInt() : Underdog.UnderdogKillCooldownWithMorePlayersAlive.GetInt(),
                 _ => Main.AllPlayerKillCooldown[player.PlayerId]
             };
+
+            if (Options.CurrentGameMode == CustomGameMode.HideAndSeek)
+                Main.AllPlayerKillCooldown[player.PlayerId] = Seeker.KillCooldown.GetFloat();
 
             if (player.PlayerId == LastImpostor.CurrentId) LastImpostor.SetKillCooldown();
 

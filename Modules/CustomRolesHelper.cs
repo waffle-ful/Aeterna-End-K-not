@@ -462,6 +462,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Venter => CustomRoles.Impostor,
                 CustomRoles.Agent => CustomRoles.Impostor,
                 CustomRoles.Taskinator => CustomRoles.Crewmate,
+                CustomRoles.Disguiser => CustomRoles.Shapeshifter,
 
                 // Stop And Go
                 CustomRoles.Tasker => CustomRoles.Crewmate,

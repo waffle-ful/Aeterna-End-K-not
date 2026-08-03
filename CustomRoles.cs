@@ -585,6 +585,9 @@ public enum CustomRoles
     Jackpot,
     Shadow,
     Revenant,
+    Bouncer,
+    Gatekeeper,
+    Disguiser, // H&S role
 
 
     // Sub-role after 1000 (buffer reserved for ~500 future main roles)

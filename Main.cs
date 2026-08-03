@@ -1103,6 +1103,7 @@ public class Main : BasePlugin
                 { CustomRoles.Venter, "#694141" },
                 { CustomRoles.Agent, "#ff8f8f" },
                 { CustomRoles.Taskinator, "#561dd1" },
+                { CustomRoles.Disguiser, "#b34646" },
                 { CustomRoles.Akazukin, "#ff4d4d" },
                 // Ported TOHK Crewmate roles (End K not) — head-name colors (no entry = white name)
                 { CustomRoles.AmateurTeller, "#c9a0dc" },
