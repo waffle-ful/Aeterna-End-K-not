@@ -150,6 +150,12 @@ namespace EndKnot
         private int _singleClientId = -1;
         private bool _localOnly;
 
+        // onlyVisibleTo 限定 CNO の視聴者。基底 OnMeeting() の会議明け再生成が可視性を引き継ぐために保持する
+        // (BUG-20260803-02: 未保持だと再生成がブロードキャスト可視に退化し、Druid の探知機 /
+        // Whisperer の魂が会議のあと全員に見えていた)。hideFrom は意図的に引き継がない —
+        // ToiletMaster が「会議のあとは全員に見える」を基底再生成のこの挙動で実現している (ToiletMaster.cs:289)。
+        private PlayerControl _respawnOnlyVisibleTo;
+
         // player-like CNO が「非モッド客からは見えるのにホスト画面にだけ映らない」機序への対処。
         // 2026-07-29 実測 (DummyProbe): body renderer は色もスプライトも正しく、GameObject も active、
         // 座標もホストから 3.7u の至近なのに `rendererEnabled=False` / `Visible=False` で固定されていた。
@@ -566,13 +572,14 @@ namespace EndKnot
             // 範囲、CTF の旗拾いが全て機能しない)。フィールドだけは同期的に確定させておく。
             Position = position;
             Sprite = sprite;
+            _respawnOnlyVisibleTo = onlyVisibleTo;
 
             Main.Instance.StartCoroutine(CoRoutine());
             return;
             
             IEnumerator CoRoutine()
             {
-                // OnMeeting() の復活経路は同一インスタンスで CreateNetObject を呼び直す (onlyVisibleTo なし) ため、
+                // OnMeeting() の復活経路は同一インスタンスで CreateNetObject を呼び直すため、
                 // 前回 spawn の targeted 状態が残らないよう毎回リセットする。
                 _singleClientId = -1;
                 _localOnly = false;
@@ -842,7 +849,9 @@ namespace EndKnot
                 else if (hideFrom != null || onlyVisibleTo)
                 {
                     yield return new WaitForSecondsRealtime(0.3f);
-                    Hide(onlyVisibleTo ? Main.EnumerateAlivePlayerControls().Without(onlyVisibleTo) : hideFrom);
+                    // 母集団は可視化 fan-out (:774 の EnumeratePlayerControls = 死者込み) と揃える。
+                    // Alive 限定だと接続中のゴーストが可視化だけ受けて Hide を受けず、onlyVisibleTo 制約が破れる
+                    Hide(onlyVisibleTo ? Main.EnumeratePlayerControls().Without(onlyVisibleTo) : hideFrom);
                 }
 
                 yield return new WaitForSecondsRealtime(0.15f);
@@ -1056,8 +1065,10 @@ namespace EndKnot
                 yield return new WaitForSecondsRealtime(3f + stagger);
                 while (ReportDeadBodyPatch.MeetingStarted || GameStates.IsMeeting || ExileController.Instance || AntiBlackout.SkipTasks) yield return null;
                 if (GameStates.IsEnded || !GameStates.InGame || GameStates.IsLobby) yield break;
+                // onlyVisibleTo 限定 CNO は唯一の視聴者が切断済みなら復活させない (視聴者なしの再生成は全員に見える)
+                if (_respawnOnlyVisibleTo is not null && !_respawnOnlyVisibleTo) yield break;
 
-                CreateNetObject(Sprite, Position);
+                CreateNetObject(Sprite, Position, onlyVisibleTo: _respawnOnlyVisibleTo);
             }
         }
 
@@ -1149,11 +1160,14 @@ namespace EndKnot
     {
         public readonly Adventurer.Resource Resource;
 
+        // 2026-08-04 裁定: アイテムは全員に見えるほうが楽しいので、上流の onlyVisibleTo 制限を外して
+        // ブロードキャスト可視にする (収集判定は Adventurer 本人の OnFixedUpdate のみ — 機構には影響しない)。
+        // adventurer 引数は呼び出し側の互換のため残置。
         internal AdventurerItem(Vector2 position, Adventurer.Resource resource, PlayerControl adventurer)
         {
             Resource = resource;
             (char Icon, Color Color) data = Adventurer.ResourceDisplayData[resource];
-            CreateNetObject($"<size=300%><font=\"VCR SDF\"><line-height=67%>{Utils.ColorString(data.Color, data.Icon.ToString())}</line-height></font></size>", position, onlyVisibleTo: adventurer);
+            CreateNetObject($"<size=300%><font=\"VCR SDF\"><line-height=67%>{Utils.ColorString(data.Color, data.Icon.ToString())}</line-height></font></size>", position);
         }
     }
 
@@ -1604,11 +1618,9 @@ namespace EndKnot
             CreateNetObject(string.Empty, new Vector2(0f, 0f), onlyVisibleTo: guesser);
         }
 
-        // 🔴 基底の OnMeeting() は Despawn 後に onlyVisibleTo 無しで CreateNetObject を呼び直す。
-        // 上の singleClient 判定 (:585) は onlyVisibleTo が要るため再生成時に false となり、
-        // targeted 配信 (2 nests 固定) が人数分のブロードキャスト fan-out に退化する
-        // = targets≥10 の Hacking キック域に直撃し、しかも会議ごとに自己回帰する。
-        // このメニュー要素は会議をまたいで生き残る必要が無いので、復活せず消えるのが正しい。
+        // 基底の OnMeeting() は _respawnOnlyVisibleTo を保持して再生成する (BUG-20260803-02 修正) ため
+        // singleClient 判定も再生成時に正しく効くが、このメニュー要素はそもそも会議をまたいで
+        // 生き残る必要が無いので、復活せず消えるのが正しい。
         // (SprayedArea / CatcherTrap も同じ理由で同じ override を持つ)
         public override void OnMeeting() => Despawn();
     }
