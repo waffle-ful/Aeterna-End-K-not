@@ -1,5 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
+using EndKnot.Modules;
+using Hazel;
 
 namespace EndKnot.Roles;
 
@@ -43,12 +45,36 @@ public class Commited : IAddon
             ReduceKCD = [];
 
         var aapc = Main.CachedAlivePlayerControls();
+        var doRPC = false;
 
         foreach (PlayerControl pc in aapc)
         {
             if (pc.Is(CustomRoles.Commited))
+            {
                 Target[pc.PlayerId] = aapc.Where(x => !x.Is(CustomRoles.Commited)).RandomElement().PlayerId;
+                if (pc.IsNonHostModdedClient()) doRPC = true;
+            }
         }
+
+        if (doRPC)
+        {
+            var writer = Utils.CreateRPC(CustomRPC.Commited);
+            writer.WritePacked(Target.Count);
+
+            foreach ((byte key, byte value) in Target)
+            {
+                writer.Write(key);
+                writer.Write(value);
+            }
+
+            Utils.EndRPC(writer);
+        }
+    }
+
+    public static void ReceiveRPC(MessageReader reader)
+    {
+        Target = [];
+        Loop.Times(reader.ReadPackedInt32(), _ => Target[reader.ReadByte()] = reader.ReadByte());
     }
 
     public static void OnVotingResultsShown(List<MeetingHud.VoterState> vs)
