@@ -212,14 +212,22 @@ public sealed class PlayerGameOptionsSender(PlayerControl player) : GameOptionsS
                     if (com.TryCast(out LogicOptions lo))
                         lo.SetGameOptions(opt);
 
-                    yield return WaitFrameIfNecessary();
+                    if (ShouldYieldFrame())
+                    {
+                        yield return null;
+                        OnFrameResumed();
+                    }
                 }
             }
 
             GameOptionsManager.Instance.CurrentGameOptions = opt;
         }
         else
-            yield return base.SendGameOptionsAsync();
+        {
+            // マネージド IEnumerator の直接 yield はラッパーリークするため手動ポンプ (基底の ShouldYieldFrame コメント参照)
+            IEnumerator inner = base.SendGameOptionsAsync();
+            while (inner.MoveNext()) yield return inner.Current;
+        }
     }
     
     protected override void SendOptionsArray(Il2CppStructArray<byte> optionArray, byte logicOptionsIndex)
