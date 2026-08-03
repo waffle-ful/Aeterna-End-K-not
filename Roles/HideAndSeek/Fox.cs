@@ -6,6 +6,7 @@ internal class Fox : RoleBase, IHideAndSeekRole
 
     public static OptionItem Vision;
     public static OptionItem Speed;
+    public static OptionItem HasVitals;
 
     public override bool IsEnable => On;
     public Team Team => Team.Neutral;
@@ -31,6 +32,11 @@ internal class Fox : RoleBase, IHideAndSeekRole
         Speed = new FloatOptionItem(69_213_304, "FoxSpeed", new(0.05f, 5f, 0.05f), 1.25f, TabGroup.NeutralRoles)
             .SetGameMode(CustomGameMode.HideAndSeek)
             .SetValueFormat(OptionFormat.Multiplier)
+            .SetColor(new(0, 255, 0, byte.MaxValue))
+            .SetParent(Options.CustomRoleSpawnChances[CustomRoles.Fox]);
+
+        HasVitals = new BooleanOptionItem(706400, "FoxHasVitals", true, TabGroup.NeutralRoles)
+            .SetGameMode(CustomGameMode.HideAndSeek)
             .SetColor(new(0, 255, 0, byte.MaxValue))
             .SetParent(Options.CustomRoleSpawnChances[CustomRoles.Fox]);
     }

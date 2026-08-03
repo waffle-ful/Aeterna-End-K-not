@@ -4732,6 +4732,7 @@
   "FoxInfoLong": "勝利するために 最後まで生き延びよう",
   "FoxSpeed": "<#00ff00>フォックス</color>の速度",
   "FoxVision": "<#00ff00>フォックス</color>の視力",
+  "FoxHasVitals": "<#00ff00>フォックス</color>にバイタルを追加",
   "Hider": "ハイダー",
   "HiderInfo": "タスクを完了しつつ 最後まで生き延びよう",
   "HiderInfoLong": "タスクを完了しつつ 最後まで生き延びよう",
