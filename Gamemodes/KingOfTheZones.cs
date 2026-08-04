@@ -424,7 +424,8 @@ public static class KingOfTheZones
                 }
             }
 
-            yield return StartingCountdown();
+            System.Collections.IEnumerator startingCountdown1 = StartingCountdown();
+            while (startingCountdown1.MoveNext()) yield return startingCountdown1.Current;
         }
         else
         {
@@ -439,7 +440,10 @@ public static class KingOfTheZones
                 if (!GameStates.InGame || !Main.IntroDestroyed) goto End;
             }
             else
-                yield return StartingCountdown();
+            {
+                System.Collections.IEnumerator startingCountdown2 = StartingCountdown();
+                while (startingCountdown2.MoveNext()) yield return startingCountdown2.Current;
+            }
         }
 
         KeyValuePair<SystemTypes, Vector2>[] spawnsConst = RandomSpawn.SpawnMap.GetSpawnMap().Positions.ExceptBy(Zones, x => x.Key).ToArray();
@@ -469,7 +473,8 @@ public static class KingOfTheZones
 
     End:
 
-        yield return Utils.NotifyEveryoneAsync(false);
+        System.Collections.IEnumerator notifyEveryone = Utils.NotifyEveryoneAsync(false);
+        while (notifyEveryone.MoveNext()) yield return notifyEveryone.Current;
         yield break;
 
         IEnumerator StartingCountdown()
