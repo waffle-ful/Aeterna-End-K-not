@@ -1459,25 +1459,65 @@ internal static class RPC
 
 
     // Credit: https://github.com/music-discussion/TownOfHost-TheOtherRoles/blob/main/Modules/RPC.cs
-    public static void SyncCustomSettingsRPC(int targetId = -1)
+    // broadcast 同期の差分送信用スナップショット (option id → 最後に全員へ流した値)。
+    // 全 5871 オプションを毎回 interop 越し (1 周あたり WritePacked ×2 + Position 読み = 3 回) に
+    // 書き出すと実測 235ms かかり、開始/キャンセル押下のたびにホストが体感ヒッチを起こしていた
+    // (BUG-20260805-05: STARTPRESS syncMs=235 opts=5871)。受信側 (RPCHandlerPatch の
+    // SyncCustomSettings) は while (ReadPackedInt32() >= 0) で「受け取った id だけ」を SetValue する
+    // 実装なので、変更分だけ送ってもプロトコル互換。
+    // ⚠️ targetId 指定 (新規参加者への初回同期) は差分にしない — 途中参加者は過去の broadcast を
+    //    受けていないので全件必要。
+    private static readonly Dictionary<int, int> LastBroadcastOptionValues = [];
+
+    // 差分抽出の作業バッファ。毎回 new すると全件時に 5871 要素の割り当てがそのまま GC 圧になるので使い回す。
+    private static readonly List<(int Id, int Value)> PendingOptionSync = [];
+
+    /// <summary>次の broadcast を強制的に全件送信へ戻す。
+    /// 新規参加者への targetId 同期は VersionCheck 未達だと無言で捨てられる一発勝負なので、
+    /// 取りこぼした客を救えるのは「全件 broadcast」だけ。参加処理から必ず呼ぶこと
+    /// (呼ばないと、その客の設定が恒久的にホストとズレたままになる)。</summary>
+    public static void InvalidateOptionSyncSnapshot()
+    {
+        LastBroadcastOptionValues.Clear();
+    }
+
+    /// <returns>送信を実行した (または送る必要が無かった) なら true。ゲートで弾かれて
+    /// 「送るべきだったのに送れなかった」場合は false — 呼び出し元は
+    /// <see cref="InvalidateOptionSyncSnapshot"/> で次の broadcast を全件へ戻すこと。</returns>
+    public static bool SyncCustomSettingsRPC(int targetId = -1)
     {
         if (targetId != -1)
         {
             ClientData client = Utils.GetClientById(targetId);
-            if (client == null || client.Character == null || !Main.PlayerVersion.ContainsKey(client.Character.PlayerId)) return;
+            if (client == null || client.Character == null || !Main.PlayerVersion.ContainsKey(client.Character.PlayerId)) return false;
         }
 
-        if (!AmongUsClient.Instance.AmHost || PlayerControl.AllPlayerControls.Count <= 1) return;
+        if (!AmongUsClient.Instance.AmHost || PlayerControl.AllPlayerControls.Count <= 1) return false;
+
+        // broadcast かつスナップショットが既にある時だけ差分。初回 (スナップショット空) と targetId 指定は全件。
+        bool diffMode = targetId == -1 && LastBroadcastOptionValues.Count > 0;
+
+        PendingOptionSync.Clear();
+
+        for (var i = 0; i < OptionItem.AllOptions.Count; i++)
+        {
+            OptionItem option = OptionItem.AllOptions[i];
+            int value = option.GetValue(); // 配列参照のみのマネージド呼び出し (interop ではないので全件走査しても安い)
+            if (diffMode && LastBroadcastOptionValues.TryGetValue(option.Id, out int last) && last == value) continue;
+
+            PendingOptionSync.Add((option.Id, value));
+        }
+
+        // 変更が無ければ 1 バイトも撃たない (開始/キャンセル押下は通常ここに落ちる)。
+        if (PendingOptionSync.Count == 0) return true;
 
         MessageWriter writer = AmongUsClient.Instance.StartRpcImmediately(PlayerControl.LocalPlayer.NetId, (byte)CustomRPC.SyncCustomSettings, SendOption.Reliable, targetId);
 
-        var idx = 0;
-        while (idx < OptionItem.AllOptions.Count)
+        for (var i = 0; i < PendingOptionSync.Count; i++)
         {
-            var option = OptionItem.AllOptions[idx++];
-            writer.WritePacked(option.Id);
-            writer.WritePacked(option.GetValue());
-            if (writer.Position >= MaxBytesPerRPC && idx < OptionItem.AllOptions.Count)
+            writer.WritePacked(PendingOptionSync[i].Id);
+            writer.WritePacked(PendingOptionSync[i].Value);
+            if (writer.Position >= MaxBytesPerRPC && i + 1 < PendingOptionSync.Count)
             {
                 writer.WritePacked(-1); // Stop indicator
                 EarlyWarning.OnPacket("SyncCustomSettingsRPC", writer.Position, writer.Position, "Reliable");
@@ -1485,9 +1525,20 @@ internal static class RPC
                 writer = AmongUsClient.Instance.StartRpcImmediately(PlayerControl.LocalPlayer.NetId, (byte)CustomRPC.SyncCustomSettings, SendOption.Reliable, targetId);
             }
         }
+
         writer.WritePacked(-1); // Stop indicator
         EarlyWarning.OnPacket("SyncCustomSettingsRPC", writer.Position, writer.Position, "Reliable");
         AmongUsClient.Instance.FinishRpcImmediately(writer);
+
+        // 全員宛に流し終えた分だけ反映する。targetId 指定は特定クライアント向けなので「全員が受け取った」
+        // ことにならず、ここで更新すると他クライアントへの配信が丸ごと抜ける。
+        if (targetId == -1)
+        {
+            for (var i = 0; i < PendingOptionSync.Count; i++)
+                LastBroadcastOptionValues[PendingOptionSync[i].Id] = PendingOptionSync[i].Value;
+        }
+
+        return true;
     }
 
     public static void PlaySoundRPC(byte playerID, Sounds sound)

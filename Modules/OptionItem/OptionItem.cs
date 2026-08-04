@@ -323,16 +323,18 @@ public abstract class OptionItem
         SyncAllOptions();
     }
 
-    public static void SyncAllOptions(int targetId = -1)
+    /// <returns>送信を実行した (または送る必要が無かった) なら true。「送るべきだったのに
+    /// 送れなかった」場合のみ false — 差分送信の取りこぼしを呼び出し元が救済できるようにするため。</returns>
+    public static bool SyncAllOptions(int targetId = -1)
     {
         if (
                 PlayerControl.AllPlayerControls.Count <= 1
                 || !AmongUsClient.Instance.AmHost
                 || PlayerControl.LocalPlayer == null
             )
-            return;
+            return false;
 
-        RPC.SyncCustomSettingsRPC(targetId);
+        return RPC.SyncCustomSettingsRPC(targetId);
     }
     
     public void CallUpdateValueEvent(int beforeValue, int currentValue)

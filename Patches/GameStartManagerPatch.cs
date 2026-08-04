@@ -245,6 +245,7 @@ public static class GameStartManagerPatch
 
             GameStartManager.Instance.startState = GameStartManager.StartingStates.Countdown;
             GameStartManager.Instance.countDownTimer = Options.AutoStartTimer.GetInt();
+            LateTask.New(() => GcPrepass.Collect("autostart-countdown"), 0.15f, log: false); // 手動押下側 (ReallyBegin Prefix) と同じ先撃ち
             __instance?.StartButton.gameObject.SetActive(false);
             
             if (HudManager.InstanceExists)
@@ -542,6 +543,8 @@ public static class GameStartRandomMap
         // LobbyCorpses spawn 中に host が Play を押した場合、GameData slot 0 が空 PlayerName で
         // 「プレイヤー」表示のまま StartGameHost に入って vanilla クライアントが通信エラー →
         // Hacking kick されるレースがあるので、ここで強制同期復元する。
+        // 開始/キャンセル押下時の体感ヒッチ (HITCH gapMs=450-550) の帰属計器。押下は頻繁ではないので常時 1 行出す。
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         LobbyCorpses.EnsureHostNameRestored();
 
         PlayerControl[] invalidColor = Main.EnumeratePlayerControls().Where(p => p.Data.DefaultOutfit.ColorId < 0 || Palette.PlayerColors.Length <= p.Data.DefaultOutfit.ColorId).ToArray();
@@ -588,10 +591,17 @@ public static class GameStartRandomMap
             AURoleOptions.ShapeshifterCooldown = 0f;
         }
 
+        long tSync = sw.ElapsedMilliseconds;
         GameManager.Instance.LogicOptions.SetDirty();
+        long dirtyMs = sw.ElapsedMilliseconds - tSync;
         OptionItem.SyncAllOptions();
+        long syncMs = sw.ElapsedMilliseconds - tSync - dirtyMs;
 
+        long tBegin = sw.ElapsedMilliseconds;
         __instance.ReallyBegin(false);
+        long beginMs = sw.ElapsedMilliseconds - tBegin;
+
+        HealthLog.Note($"STARTPRESS phase=begingame totalMs={sw.ElapsedMilliseconds} dirtyMs={dirtyMs} syncMs={syncMs} opts={OptionItem.AllOptions.Count} beginMs={beginMs} preMs={tSync} t={Utils.TimeStamp}");
         return false;
     }
 
@@ -622,15 +632,22 @@ internal static class ResetStartStatePatch
 {
     public static void Prefix(GameStartManager __instance)
     {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         SoundManager.Instance.StopSound(__instance.gameStartSound);
         GameStartManagerPatch.UpdateSpriteStartButton = true;
+        long soundMs = sw.ElapsedMilliseconds;
+        long syncMs = 0;
 
         if (__instance.startState == GameStartManager.StartingStates.Countdown)
         {
             Main.NormalOptions.KillCooldown = Main.LastKillCooldown.Value;
+            long tSync = sw.ElapsedMilliseconds;
             GameManager.Instance.LogicOptions.SetDirty();
             OptionItem.SyncAllOptions();
+            syncMs = sw.ElapsedMilliseconds - tSync;
         }
+
+        HealthLog.Note($"STARTPRESS phase=reset totalMs={sw.ElapsedMilliseconds} soundMs={soundMs} syncMs={syncMs} t={Utils.TimeStamp}");
     }
 }
 
@@ -654,10 +671,13 @@ public static class GameStartManagerBeginPatch
         {
             if (!AmongUsClient.Instance.AmHost) return true;
 
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+
             if (__instance.startState == GameStartManager.StartingStates.Countdown)
             {
                 __instance.ResetStartState();
                 ChatCommands.VotedToStart.Clear();
+                HealthLog.Note($"STARTPRESS phase=cancel totalMs={sw.ElapsedMilliseconds} t={Utils.TimeStamp}");
                 return false;
             }
 
@@ -665,13 +685,23 @@ public static class GameStartManagerBeginPatch
             __instance.GameSizePopup.SetActive(false);
             DataManager.Player.Onboarding.AlwaysShowMinPlayerWarning = false;
             DataManager.Player.Onboarding.ViewedMinPlayerWarning = true;
-            DataManager.Player.Save();
+            long tSave = sw.ElapsedMilliseconds;
+            DataManager.Player.Save(); // 同期 prefs 書き込み — 押下ヒッチの容疑者その1
+            long saveMs = sw.ElapsedMilliseconds - tSave;
             __instance.StartButton.gameObject.SetActive(false);
             __instance.StartButtonClient.gameObject.SetActive(false);
             __instance.GameStartTextParent.SetActive(false);
             __instance.countDownTimer = 5.0001f;
             __instance.startState = GameStartManager.StartingStates.Countdown;
+            long tKick = sw.ElapsedMilliseconds;
             AmongUsClient.Instance.KickNotJoinedPlayers();
+            long kickMs = sw.ElapsedMilliseconds - tKick;
+            HealthLog.Note($"STARTPRESS phase=reallybegin totalMs={sw.ElapsedMilliseconds} saveMs={saveMs} kickMs={kickMs} t={Utils.TimeStamp}");
+
+            // カウントダウン表示が描画された後 (0.15s 遅延) にフル GC を先撃ち。Prefix と同一フレームの同期実行だと
+            // レンダ前に止まるため「クリック→フリーズ→UI一気に出現」の体感ヒッチになる (pitfall 監査指摘)。
+            // 以降の開始処理〜イントロを掃除済みヒープで走らせ、開始中の自然発生 GC ヒッチを減らす (詳細は GcPrepass)。
+            LateTask.New(() => GcPrepass.Collect("countdown"), 0.15f, log: false);
             return false;
         }
     }

@@ -605,6 +605,11 @@ internal static class StartGameHostPatch
         }
         catch (Exception e) { Utils.ThrowException(e); }
 
+        // ローディングバーの描画を 1 フレーム待ってからフル GC を先撃ち (同期のまま打つとバー表示前に止まる —
+        // pitfall 監査指摘)。直後の ship 生成 + 役職選出の大量アロケーションを掃除済みヒープで走らせる (詳細は GcPrepass)。
+        yield return null;
+        GcPrepass.Collect("loading");
+
         if (LobbyBehaviour.Instance)
         {
             MessageWriter writer = MessageWriter.Get(SendOption.Reliable);

@@ -774,10 +774,23 @@ internal static class InnerNetClientSpawnPatch
 
         if (client == null || !client.Character // client is null
                            || client.ColorId < 0 || Palette.PlayerColors.Length <= client.ColorId) // invalid client color
+        {
             Logger.Warn("client is null or client have invalid color", "TrySyncAndSendMessage");
+            // この客には targeted 全件同期を出せない。差分送信のままだと取り残されて設定が永久にズレるので、
+            // 次の broadcast を全件へ戻して救済経路を残す。
+            RPC.InvalidateOptionSyncSnapshot();
+        }
         else
         {
-            LateTask.New(() => OptionItem.SyncAllOptions(client.Id), 3f, "Sync All Options For New Player");
+            LateTask.New(() =>
+            {
+                // この targetId 同期は VersionCheck が 3 秒以内に届かないと RPC 側の PlayerVersion ゲートで
+                // 無言で捨てられる (リトライ無しの一発勝負)。オプション同期は差分送信なので、取りこぼしても
+                // スナップショットが残る限り二度と全件が飛ばず、その客だけ設定が恒久的にズレる。
+                // 「送れなかった時だけ」全件へ戻すのが要点 — 無条件に戻すと入室が続く間スナップショットが
+                // ほぼ常に空になり、直後の開始押下で 5871 件フル送信 (BUG-20260805-05 のヒッチ) が再発する。
+                if (!OptionItem.SyncAllOptions(client.Id)) RPC.InvalidateOptionSyncSnapshot();
+            }, 3f, "Sync All Options For New Player");
 
             LateTask.New(() =>
             {
