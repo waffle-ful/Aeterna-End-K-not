@@ -224,7 +224,13 @@ public class WaveCannon : RoleBase
             {
                 Super = new SuperCannonShot(pc, variant.Value, SuperBeamThickness.GetInt(),
                     t => !FriendlyFire.GetBool() && t.GetCustomRole().IsImpostor());
-                if (!Super.Begin(StartPosition, Direction)) Super = null;
+                if (!Super.Begin(StartPosition, Direction))
+                {
+                    // 変種が発動不能 (確殺: 有効な対象が 1 人もいない 等) → 従来の波動砲で撃つ。
+                    // 無言で落ちると「自分の目の前にゲートが出た = 自分がターゲットにされた」と誤認されるため通知する。
+                    Super = null;
+                    pc.Notify(GetString("WaveCannon.SuperFallback"));
+                }
             }
         }
 
