@@ -164,10 +164,15 @@ public class SuperCannonShot
                 List<PlayerControl> candidates = Main.EnumerateAlivePlayerControls()
                     .Where(p => p.PlayerId != Shooter.PlayerId && !IsImmune(p) && !p.Is(CustomRoles.Pestilence) && !Pelican.IsEaten(p.PlayerId))
                     .ToList();
-                if (candidates.Count == 0) return false;
+                if (candidates.Count == 0)
+                {
+                    Logger.Info($"shooter={Shooter.PlayerId} candidates=0 → 通常発射へフォールバック", "SuperCannonShot.CertainKill");
+                    return false;
+                }
 
                 PlayerControl target = candidates[IRandom.Instance.Next(candidates.Count)];
                 CertainTargetId = target.PlayerId;
+                Logger.Info($"shooter={Shooter.PlayerId} candidates={candidates.Count} → target={target.PlayerId} ({target.GetRealName()}) at {target.GetTruePosition()}", "SuperCannonShot.CertainKill");
                 Direction = Vector2.right;
                 CertainGatePos = CertainKillGatePos(target.GetTruePosition());
                 Utils.CombineSendTimeLowering(() => { GateA = new WaveCannonGate(CertainGatePos, "#5e0000", "#cc0000", "#ff3333"); });

@@ -12323,6 +12323,7 @@
   "WaveCannon.SuperBeamThickness": "超波動砲ビームの太さ",
   "WaveCannon.ButtonText": "発射",
   "WaveCannon.DirectionDetect": "発射方向に少し動いて。直後にチャージ開始するから",
+  "WaveCannon.SuperFallback": "超発射を発動できなかったから 通常の発射に切り替えたよ",
 
   /* --- Riptide --- */
   "Riptide": "リップタイド",
