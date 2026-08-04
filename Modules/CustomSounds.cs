@@ -104,6 +104,27 @@ public static class CustomSoundsManager
         catch (Exception e) { Utils.ThrowException(e); return null; }
     }
 
+    // クリップ長 (秒) を返す。解決とデコードは Play と同じ経路 (audioCache 済みなら即答)。
+    // 見つからない/再生不能環境では 0。再生開始前に「音の尻を演出タイミングに合わせる」逆算をしたい呼び出し側用。
+    public static float GetClipLength(string sound)
+    {
+        try
+        {
+            if (!Main.EnableCustomSoundEffect.Value || !OperatingSystem.IsWindows()) return 0f;
+
+            string foundPath = ResolveSoundPath(sound);
+            if (foundPath == null) return 0f;
+
+            AudioClip clip = LoadClip(foundPath);
+            return clip ? clip.length : 0f;
+        }
+        catch (Exception e)
+        {
+            Utils.ThrowException(e);
+            return 0f;
+        }
+    }
+
     // BepInEx/resources 内の実ファイル → 埋込リソース展開 の順で音源パスを解決する (無ければ null)。
     private static string ResolveSoundPath(string sound)
     {
