@@ -455,6 +455,9 @@ internal static class ChangeRoleSettings
             MeetingStates.MeetingNum = 0;
             MeetingStates.MeetingCalled = false;
             MeetingStates.FirstMeeting = true;
+            // 全ゲームモード共通のリセット必須 — StartGate (Standard+FTM 限定) だけに任せると
+            // 前ゲームの RescueTargets が非FTMゲームの会議明けに誤射する (ClientEntryProbe.Reset 参照)
+            ClientEntryProbe.Reset();
             GameStates.AlreadyDied = false;
 
             Main.Instance.StartCoroutine(PopulateSkinItems());

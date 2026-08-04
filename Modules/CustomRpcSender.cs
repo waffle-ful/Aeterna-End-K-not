@@ -1020,6 +1020,9 @@ public static class CustomRpcSenderExtensions
             nt.SnapTo(location, (ushort)(nt.lastSequenceId + 328));
             nt.SetDirtyBit(uint.MaxValue);
 
+            // Utils.TP と同じくホストローカル seq の直接書き — entry gate の偽 confirm 対策に通知する
+            ClientEntryProbe.NoteHostSnapTo(pc);
+
             var newSid = (ushort)(nt.lastSequenceId + 8);
 
             sender.AutoStartRpc(nt.NetId, RpcCalls.SnapTo);
