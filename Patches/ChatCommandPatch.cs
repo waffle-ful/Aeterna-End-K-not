@@ -122,6 +122,8 @@ internal static class ChatCommands
     public static readonly HashSet<byte> ForcedSpectators = [];
 
     private static HashSet<byte> ReadyPlayers = [];
+    // 停止には StartCoroutine が返す Coroutine ハンドルが要る (Main.StopCoroutine 参照)。
+    private static Coroutine ReadyCheckCountdown;
     public static HashSet<byte> VotedToStart = [];
 
     private static string CurrentAnagram = string.Empty;
@@ -1787,8 +1789,8 @@ internal static class ChatCommands
         Utils.SendMessage(GetString("ReadyCheckMessage"), title: GetString("ReadyCheckTitle"));
         ReadyPlayers = [player.PlayerId];
         ReadyPlayers.UnionWith(Spectators);
-        Main.Instance.StopCoroutine(Countdown());
-        Main.Instance.StartCoroutine(Countdown());
+        if (ReadyCheckCountdown != null) Main.Instance.StopCoroutine(ReadyCheckCountdown);
+        ReadyCheckCountdown = Main.Instance.StartCoroutine(Countdown());
         return;
 
         IEnumerator Countdown()

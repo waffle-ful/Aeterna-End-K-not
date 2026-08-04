@@ -234,6 +234,9 @@ public class CustomLogger
     private float timer = 1f;
 
     private readonly StringBuilder Builder;
+    // 停止には StartCoroutine が返す Coroutine ハンドルが要る。IEnumerator を渡し直すと
+    // Unity は参照 identity で照合するため一致せず、永久に止まらない (Main.StopCoroutine 参照)。
+    private Coroutine InactivityCoroutine;
 
     private CustomLogger()
     {
@@ -247,7 +250,7 @@ public class CustomLogger
         }
 
         Builder = new();
-        Main.Instance.StartCoroutine(InactivityCheck());
+        InactivityCoroutine = Main.Instance.StartCoroutine(InactivityCheck());
     }
 
     public static CustomLogger Instance => PrivateInstance ??= new();
@@ -330,7 +333,7 @@ public class CustomLogger
         Builder.Clear();
         PrivateInstance = null;
 #if DEBUG
-        Main.Instance.StopCoroutine(InactivityCheck());
+        if (InactivityCoroutine != null) Main.Instance.StopCoroutine(InactivityCoroutine);
 #endif
     }
 }

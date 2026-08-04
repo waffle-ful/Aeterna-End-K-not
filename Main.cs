@@ -1298,12 +1298,10 @@ public class Main : BasePlugin
         return coroutines.StartCoroutine(coroutine.WrapToIl2Cpp());
     }
 
-    public void StopCoroutine(IEnumerator coroutine)
-    {
-        if (coroutine == null) return;
-        coroutines.StopCoroutine(coroutine.WrapToIl2Cpp());
-    }
-
+    // ⚠️ StopCoroutine(IEnumerator) のオーバーロードを復活させてはいけない。
+    // WrapToIl2Cpp() は毎回**新しい**ラッパーを作るため、Unity の参照 identity 照合に絶対一致せず
+    // ①永久に no-op ②呼ぶたびにラッパー + strong GCHandle が1個漏れる、の二重バグになる。
+    // 停止したいときは StartCoroutine が返す Coroutine ハンドルを保持して下のオーバーロードへ渡すこと。
     public void StopCoroutine(Coroutine coroutine)
     {
         if (coroutine == null) return;
