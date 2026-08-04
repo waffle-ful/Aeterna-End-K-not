@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -41,6 +42,11 @@ public class WaveCannon : RoleBase
 
     private const float BeamBackwardReach = GateForwardOffset + GateRadius; // 1.5 unit、根本判定をプレイヤー位置まで伸ばす
 
+    // ホストローカル効果音 (Resources/Sounds/*.ogg)。チャージはクレッシェンド、発射は持続轟音 (26s > FiringDuration 最大)
+    private const string ChargeSoundName = "WaveCannonCharge";
+    private const string FireSoundName = "WaveCannonFire";
+    private const float FireSoundFadeSeconds = 0.3f;
+
     private enum Phase { Idle, DirectionDetect, Charging, Warning, Firing }
 
     // Sniper 風方向確定 phase の秒数は option で可変 (DirectionDetectDuration)。
@@ -64,6 +70,9 @@ public class WaveCannon : RoleBase
     private PlayerControl WaveCannonPC;
     private bool IsSuperShot;
     private SuperCannonShot Super;
+    private AudioSource ChargeAudio;
+    private AudioClip ChargeAudioClip;
+    private int ShotSeq; // 発射シーケンス世代。中断→再発射時に旧 LateTask のチャージ音を無効化する
 
     public override bool IsEnable => On;
 
@@ -179,6 +188,8 @@ public class WaveCannon : RoleBase
         CurrentPhase = Phase.Charging;
         PhaseEndTS = Utils.TimeStamp + (IsSuperShot ? SuperChargeDuration.GetInt() : ChargeDuration.GetInt());
         PhaseEntryDone = false;
+        ShotSeq++;
+        StartChargeSound(pc);
 
         byte id = pc.PlayerId;
 
@@ -244,6 +255,102 @@ public class WaveCannon : RoleBase
                     FlashAll();
                 }, t, log: false);
             }
+        }
+    }
+
+    // チャージ音 (クレッシェンド) は「尻を発射の瞬間 (Firing 開始) に合わせる」端点合わせで鳴らす。
+    // 素材は音程が上がり続ける作りなのでループ・尺伸縮は使えない: 残り時間 (charge+warning) が
+    // クリップより短ければ途中から再生し、長ければ開始を遅らせて、ピークを必ず発射に着地させる。
+    private void StartChargeSound(PlayerControl pc)
+    {
+        float clipLen = CustomSoundsManager.GetClipLength(ChargeSoundName);
+        if (clipLen <= 0f) return;
+
+        float preFire = (IsSuperShot ? SuperChargeDuration.GetInt() : ChargeDuration.GetInt()) + WarningDuration.GetInt();
+        if (clipLen >= preFire)
+        {
+            PlayChargeSound(clipLen - preFire);
+        }
+        else
+        {
+            // WarningDuration (最大5s) がクリップ長 4.76s を超えうるため、遅延着火は Warning 中にも落ちる。
+            // 世代 (ShotSeq) で中断→再発射時の旧タスクだけを弾く (FlashAll の PhaseEndTS capture と同型)。
+            int seq = ShotSeq;
+            LateTask.New(() =>
+            {
+                if (ShotSeq != seq || CurrentPhase is not (Phase.Charging or Phase.Warning) || !pc.IsAlive()) return;
+                PlayChargeSound(0f);
+            }, preFire - clipLen, log: false);
+        }
+    }
+
+    private void PlayChargeSound(float startOffset)
+    {
+        AudioSource src = CustomSoundsManager.PlayControllable(ChargeSoundName);
+        if (src == null) return;
+
+        ChargeAudio = src;
+        ChargeAudioClip = src.clip;
+        if (startOffset > 0f) src.time = startOffset;
+        if (Main.Instance != null) Main.Instance.StartCoroutine(ChargeSoundWatch(src, src.clip));
+    }
+
+    private void StopChargeSound()
+    {
+        if (ChargeAudio != null && ChargeAudio.clip == ChargeAudioClip) ChargeAudio.Stop();
+        ChargeAudio = null;
+        ChargeAudioClip = null;
+    }
+
+    private void StartFireSound()
+    {
+        StopChargeSound();
+        AudioSource src = CustomSoundsManager.PlayControllable(FireSoundName);
+        if (src == null) return;
+
+        if (Main.Instance != null) Main.Instance.StartCoroutine(FireSoundWatch(src, src.clip));
+    }
+
+    // SoundManager のプール済み AudioSource は別の音に再利用されうる (AudienceCutscene.FadeSoundRoutine と同じ罠)。
+    // 掴んだ時点のクリップから変わっていたら以降は一切触らない。yield は null のみ (managed enumerator ネスト禁止)。
+    private IEnumerator ChargeSoundWatch(AudioSource src, AudioClip ownClip)
+    {
+        while (src != null && src.clip == ownClip && src.isPlaying)
+        {
+            // 会議/死亡/中断 (Idle 戻し) で即停止。Firing 遷移時は StartFireSound 側が停止済み
+            if (!GameStates.IsInTask || CurrentPhase is Phase.Idle or Phase.Firing)
+            {
+                src.Stop();
+                yield break;
+            }
+
+            yield return null;
+        }
+    }
+
+    // 発射音は素材 26s > FiringDuration 最大 10s のため自然終了に頼らず、Firing を抜けた時点で短フェード停止する
+    private IEnumerator FireSoundWatch(AudioSource src, AudioClip ownClip)
+    {
+        while (src != null && src.clip == ownClip && src.isPlaying)
+        {
+            if (!GameStates.IsInTask || CurrentPhase != Phase.Firing) break;
+            yield return null;
+        }
+
+        if (src == null || src.clip != ownClip || !src.isPlaying) yield break;
+
+        float startVol = src.volume;
+        for (float t = 0f; t < FireSoundFadeSeconds; t += Time.deltaTime)
+        {
+            if (src == null || src.clip != ownClip || !src.isPlaying) yield break;
+            src.volume = startVol * Mathf.Clamp01(1f - t / FireSoundFadeSeconds);
+            yield return null;
+        }
+
+        if (src != null && src.clip == ownClip)
+        {
+            src.volume = 0f;
+            src.Stop();
         }
     }
 
@@ -376,6 +483,7 @@ public class WaveCannon : RoleBase
                     }
                     AlreadyKilled.Clear();
                     PhaseEntryDone = true;
+                    StartFireSound();
                 }
 
                 if (Super != null)
