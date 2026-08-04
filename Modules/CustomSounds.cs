@@ -1,6 +1,7 @@
 ﻿using Hazel;
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
@@ -104,13 +105,144 @@ public static class CustomSoundsManager
         catch (Exception e) { Utils.ThrowException(e); return null; }
     }
 
+    // ── モッドクライアント効果音同期 (CustomRPC.ControllableSound) ──────────────────
+    // 「offset 付き再生」「sound 名指定のフェード停止」を sub-op byte 1本の RPC で運ぶ。
+    // 非モッド客は未知 RPC として無視。受信側は sound 名キーの registry で管理し (同名の再再生は
+    // 旧セッションを置換)、会議・ゲーム終了時はローカル watchdog が自走停止する (stop RPC 欠落への保険)。
+    // ホスト自身の再生はここを通らない (呼び出し側が PlayControllable でローカル管理する)。
+
+    private static readonly Dictionary<string, (AudioSource Source, AudioClip Clip)> ControllableSessions = [];
+
+    public static void RpcPlayControllableAll(string sound, float volume, float startOffset)
+    {
+        try
+        {
+            if (!AmongUsClient.Instance.AmHost) return;
+
+            MessageWriter writer = AmongUsClient.Instance.StartRpcImmediately(PlayerControl.LocalPlayer.NetId, (byte)CustomRPC.ControllableSound, SendOption.Reliable);
+            writer.Write((byte)0);
+            writer.Write(sound);
+            writer.Write(volume);
+            writer.Write(startOffset);
+            AmongUsClient.Instance.FinishRpcImmediately(writer);
+        }
+        catch (Exception e) { Utils.ThrowException(e); }
+    }
+
+    public static void RpcStopControllableAll(string sound, float fadeSeconds)
+    {
+        try
+        {
+            if (!AmongUsClient.Instance.AmHost) return;
+
+            MessageWriter writer = AmongUsClient.Instance.StartRpcImmediately(PlayerControl.LocalPlayer.NetId, (byte)CustomRPC.ControllableSound, SendOption.Reliable);
+            writer.Write((byte)1);
+            writer.Write(sound);
+            writer.Write(fadeSeconds);
+            AmongUsClient.Instance.FinishRpcImmediately(writer);
+        }
+        catch (Exception e) { Utils.ThrowException(e); }
+    }
+
+    public static void ReceiveControllableRPC(MessageReader reader)
+    {
+        byte op = reader.ReadByte();
+        string sound = reader.ReadString();
+        switch (op)
+        {
+            case 0:
+            {
+                float volume = reader.ReadSingle();
+                float offset = reader.ReadSingle();
+                PlayControllableSession(sound, volume, offset);
+                break;
+            }
+            case 1:
+            {
+                float fade = reader.ReadSingle();
+                StopControllableSession(sound, fade);
+                break;
+            }
+        }
+    }
+
+    private static void PlayControllableSession(string sound, float volume, float startOffset)
+    {
+        StopControllableSession(sound, 0f);
+
+        AudioSource src = PlayControllable(sound, volume);
+        if (src == null) return;
+
+        if (startOffset > 0f && startOffset < src.clip.length) src.time = startOffset;
+        ControllableSessions[sound] = (src, src.clip);
+        if (Main.Instance != null) Main.Instance.StartCoroutine(ControllableWatchdog(sound, src, src.clip));
+    }
+
+    private static void StopControllableSession(string sound, float fadeSeconds)
+    {
+        if (!ControllableSessions.Remove(sound, out var session)) return;
+        if (session.Source == null || session.Source.clip != session.Clip || !session.Source.isPlaying) return;
+
+        if (fadeSeconds <= 0f)
+        {
+            session.Source.Stop();
+            return;
+        }
+
+        if (Main.Instance != null) Main.Instance.StartCoroutine(FadeOutSession(session.Source, session.Clip, fadeSeconds));
+        else session.Source.Stop();
+    }
+
+    // SoundManager のプール済み AudioSource は別の音に再利用されうるため、掴んだ時点の clip と
+    // 一致している間だけ触る (AudienceCutscene.FadeSoundRoutine と同じ罠)。yield は null のみ。
+    private static IEnumerator ControllableWatchdog(string sound, AudioSource src, AudioClip ownClip)
+    {
+        while (src != null && src.clip == ownClip && src.isPlaying)
+        {
+            // registry から外れた = 明示 stop 済み or 同名再再生で置換済み → この watchdog は退役
+            if (!ControllableSessions.TryGetValue(sound, out var session) || session.Source != src) yield break;
+
+            // ホストの stop RPC を待たずに自走停止する保険: 会議・追放・ゲーム終了で即止める
+            if (!GameStates.InGame || GameStates.IsMeeting || ExileController.Instance)
+            {
+                ControllableSessions.Remove(sound);
+                src.Stop();
+                yield break;
+            }
+
+            yield return null;
+        }
+
+        // 自然終了/クリップ再利用で抜けたら registry を掃除 (自分が現役登録のままの場合のみ)
+        if (ControllableSessions.TryGetValue(sound, out var s) && s.Source == src) ControllableSessions.Remove(sound);
+    }
+
+    private static IEnumerator FadeOutSession(AudioSource src, AudioClip ownClip, float fadeSeconds)
+    {
+        float startVol = src.volume;
+        for (float t = 0f; t < fadeSeconds; t += Time.deltaTime)
+        {
+            if (src == null || src.clip != ownClip || !src.isPlaying) yield break;
+
+            src.volume = startVol * Mathf.Clamp01(1f - t / fadeSeconds);
+            yield return null;
+        }
+
+        if (src != null && src.clip == ownClip)
+        {
+            src.volume = 0f;
+            src.Stop();
+        }
+    }
+
     // クリップ長 (秒) を返す。解決とデコードは Play と同じ経路 (audioCache 済みなら即答)。
     // 見つからない/再生不能環境では 0。再生開始前に「音の尻を演出タイミングに合わせる」逆算をしたい呼び出し側用。
+    // EnableCustomSoundEffect ではゲートしない — ホストが音を切っていてもクライアント同期の逆算には長さが要る。
     public static float GetClipLength(string sound)
     {
         try
         {
-            if (!Main.EnableCustomSoundEffect.Value || !OperatingSystem.IsWindows()) return 0f;
+            if (!OperatingSystem.IsWindows()) return 0f;
 
             string foundPath = ResolveSoundPath(sound);
             if (foundPath == null) return 0f;
