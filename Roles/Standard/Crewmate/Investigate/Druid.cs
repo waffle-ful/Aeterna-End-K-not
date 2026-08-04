@@ -24,7 +24,8 @@ public class Druid : RoleBase
 
     private PlayerControl DruidPC;
     private CountdownTimer DelayTimer;
-    private Dictionary<Vector2, int> TriggerIds = [];
+    // CNO の Id は生成コルーチン内で非同期に確定するため、設置時に控えられるのはインスタンス参照だけ
+    private Dictionary<Vector2, CustomNetObject> TriggerDetectors = [];
     private Dictionary<Vector2, string> Triggers = [];
 
     private readonly StringBuilder Suffix = new();
@@ -66,7 +67,7 @@ public class Druid : RoleBase
         PlayerIdList.Add(playerId);
         DruidPC = GetPlayerById(playerId);
         playerId.SetAbilityUseLimit(UseLimitOpt.GetFloat());
-        TriggerIds = [];
+        TriggerDetectors = [];
         Triggers = [];
         DelayTimer = null;
     }
@@ -142,10 +143,13 @@ public class Druid : RoleBase
         if (isPet)
         {
             (Vector2 location, string roomName) = pc.GetPositionInfo();
-            Triggers.TryAdd(location, roomName);
-            SendRPCAddTrigger(true, pc.PlayerId, location, roomName);
-            _ = new PlayerDetector(location, pc, out int id);
-            TriggerIds.TryAdd(location, id);
+            // 同じ座標に二重設置すると Triggers 側は1つ目を保持したまま探知機だけ2体目に差し替わり、
+            // 1体目が AllObjects に取り残される (会議のたび基底の復活エンジンに蘇る) ので新規時のみ生成する
+            if (Triggers.TryAdd(location, roomName))
+            {
+                SendRPCAddTrigger(true, pc.PlayerId, location, roomName);
+                TriggerDetectors[location] = new PlayerDetector(location, pc);
+            }
         }
         else
         {
@@ -154,10 +158,11 @@ public class Druid : RoleBase
                 byte id = pc.PlayerId;
                 DelayTimer = null;
                 (Vector2 location, string roomName) = pc.GetPositionInfo();
-                Triggers.TryAdd(location, roomName);
-                SendRPCAddTrigger(true, id, location, roomName);
-                _ = new PlayerDetector(location, pc, out int oid);
-                TriggerIds.TryAdd(location, oid);
+                if (Triggers.TryAdd(location, roomName))
+                {
+                    SendRPCAddTrigger(true, id, location, roomName);
+                    TriggerDetectors[location] = new PlayerDetector(location, pc);
+                }
             }, onTick: () => pc.Notify(string.Format(GetString("DruidTimeLeft"), (int)Math.Ceiling(DelayTimer.Remaining.TotalSeconds)), 2f, overrideAll: true), onCanceled: () => DelayTimer = null);
         }
 
@@ -175,7 +180,7 @@ public class Druid : RoleBase
                 Triggers.Remove(trigger.Key);
                 DruidPC.Notify(string.Format(GetString("DruidTriggerTriggered"), GetFormattedRoomName(trigger.Value), GetFormattedVectorText(trigger.Key)));
                 SendRPCAddTrigger(false, DruidPC.PlayerId, trigger.Key);
-                CustomNetObject.Get(TriggerIds[trigger.Key])?.Despawn();
+                if (TriggerDetectors.Remove(trigger.Key, out CustomNetObject detector)) detector?.Despawn();
             }
         }
     }
