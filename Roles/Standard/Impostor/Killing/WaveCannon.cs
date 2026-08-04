@@ -286,6 +286,9 @@ public class WaveCannon : RoleBase
 
     private void PlayChargeSound(float startOffset)
     {
+        // モッドクライアントにも同じ offset で同期 (ホストローカルの成否とは独立に送る)
+        CustomSoundsManager.RpcPlayControllableAll(ChargeSoundName, 1f, startOffset);
+
         AudioSource src = CustomSoundsManager.PlayControllable(ChargeSoundName);
         if (src == null) return;
 
@@ -297,6 +300,7 @@ public class WaveCannon : RoleBase
 
     private void StopChargeSound()
     {
+        CustomSoundsManager.RpcStopControllableAll(ChargeSoundName, 0f);
         if (ChargeAudio != null && ChargeAudio.clip == ChargeAudioClip) ChargeAudio.Stop();
         ChargeAudio = null;
         ChargeAudioClip = null;
@@ -305,10 +309,19 @@ public class WaveCannon : RoleBase
     private void StartFireSound()
     {
         StopChargeSound();
+        CustomSoundsManager.RpcPlayControllableAll(FireSoundName, 1f, 0f);
+
         AudioSource src = CustomSoundsManager.PlayControllable(FireSoundName);
         if (src == null) return;
 
         if (Main.Instance != null) Main.Instance.StartCoroutine(FireSoundWatch(src, src.clip));
+    }
+
+    // 中断・終了時のクライアント側停止 (ホストローカル側は各 watch が phase 逸脱を検知して止まる)
+    private void StopSyncedSounds()
+    {
+        CustomSoundsManager.RpcStopControllableAll(ChargeSoundName, 0f);
+        CustomSoundsManager.RpcStopControllableAll(FireSoundName, FireSoundFadeSeconds);
     }
 
     // SoundManager のプール済み AudioSource は別の音に再利用されうる (AudienceCutscene.FadeSoundRoutine と同じ罠)。
@@ -403,6 +416,7 @@ public class WaveCannon : RoleBase
             if (CurrentPhase != Phase.Idle)
             {
                 DespawnAllCNOs();
+                StopSyncedSounds();
                 RestoreSkinDeathPreserve(pc);
                 RestoreSpeedDeathPreserve(pc);
                 CurrentPhase = Phase.Idle;
@@ -508,6 +522,7 @@ public class WaveCannon : RoleBase
                 if (Utils.TimeStamp >= PhaseEndTS)
                 {
                     DespawnAllCNOs();
+                    CustomSoundsManager.RpcStopControllableAll(FireSoundName, FireSoundFadeSeconds);
                     RestoreSkin(pc);
                     RestoreSpeed(pc);
                     pc.SetKillCooldown();
@@ -650,6 +665,7 @@ public class WaveCannon : RoleBase
     {
         if (CurrentPhase == Phase.Idle) return;
         DespawnAllCNOs();
+        StopSyncedSounds();
         if (WaveCannonPC != null)
         {
             RestoreSkin(WaveCannonPC);
