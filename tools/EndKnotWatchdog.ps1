@@ -318,12 +318,12 @@ if ($ok) { exit 0 } else { exit 1 }
     return ($p.ExitCode -eq 0 -and (Test-Path $Path))
 }
 
-# ハングダンプを2段構えで採る。
-# 理由: WER の AppHang 強制クローズは心拍途絶から約83秒で走る (2026-07-29 実測: 最後の心拍
-# 22:30:17 → プロセス消滅 22:31:40) のに対し、ここへ到達するのは早くて T+35s、巡回20秒刻みなので
-# 遅いと T+55s。数GB のフルダンプは書き切る前に殺されうるが、MiniDumpWriteDump は途中で対象を
-# 失うと丸ごと失敗するので、フル一本勝負だと手ぶらで終わる。そこで先に「メインスレッドがどこで
-# 詰まっているか」だけを1秒未満で確保してから、フルに挑む。
+# ハングダンプを「フル先行」で採る (BUG-20260805-04 で順序反転)。
+# 旧設計 (速報→フル) は 2026-08-05 00:35 の実戦で敗北: 速報だけで 24s 消費し、フル開始と同時に
+# WER の AppHang クローズ (最終心拍から実測 ~84s。2026-07-29 22:30:17→22:31:40 実測) に殺された。
+# しかも速報 (0x1920) は DAC 初期化不可でマネージド解析に使えないことが確定済み
+# (memory: hang_dump_analysis_dotnet_dump_version_match) — 24s 払って解析不能物だけが残った。
+# よって唯一解析可能なフル (0x1826) に窓の全てを注ぎ、速報はフル失敗時の残念賞に格下げする。
 function Save-HangDump {
     param([int]$TargetPid)
     try {
@@ -332,26 +332,31 @@ function Save-HangDump {
         New-Item -ItemType Directory -Force -Path $dir | Out-Null
         $stamp = (Get-Date).ToString('yyyy-MM-dd_HH.mm.ss')
 
-        # 段1: 速報 (0x1920 = ThreadInfo|FullMemoryInfo|ProcessThreadData|UnloadedModules)。
-        # スタックとモジュール一覧は最小ダンプにも必ず入るので、これだけで詰まり先は読める。数十MB。
-        $quick = Join-Path $dir ("hang_{0}_pid{1}_quick.dmp" -f $stamp, $TargetPid)
-        Write-WatchLog "ハングダンプ(速報)を採取します: $quick" 'Yellow'
-        if (Invoke-MiniDump -TargetPid $TargetPid -Path $quick -DumpType 0x1920 -TimeoutMs 60000) {
-            Write-WatchLog ("ハングダンプ(速報)完了: {0:N0} MB" -f ((Get-Item $quick).Length / 1MB)) 'Cyan'
+        # 段1: フル (0x1826 = FullMemory|HandleData|UnloadedModules|FullMemoryInfo|ThreadInfo、
+        # procdump -ma 相当)。dotnet-dump 6.x でマネージドスタックが読める唯一の形式。
+        $full = Join-Path $dir ("hang_{0}_pid{1}_full.dmp" -f $stamp, $TargetPid)
+        Write-WatchLog "ハングダンプ(フル)を先行採取します (上限 300s): $full" 'Yellow'
+        $sw = [System.Diagnostics.Stopwatch]::StartNew()
+        $fullOk = Invoke-MiniDump -TargetPid $TargetPid -Path $full -DumpType 0x1826 -TimeoutMs 300000
+        if ($fullOk) {
+            Write-WatchLog ("ハングダンプ(フル)完了: {0:N0} MB / {1:N0}s" -f ((Get-Item $full).Length / 1MB), $sw.Elapsed.TotalSeconds) 'Cyan'
         } else {
-            Write-WatchLog "ハングダンプ(速報)の採取に失敗しました。" 'Red'
-            try { Remove-Item $quick -Force -ErrorAction SilentlyContinue } catch { }
+            Write-WatchLog ("ハングダンプ(フル)は失敗/中断しました ({0:N0}s 経過。WER に先を越された可能性)。" -f $sw.Elapsed.TotalSeconds) 'Red'
+            try { Remove-Item $full -Force -ErrorAction SilentlyContinue } catch { }
         }
 
-        # 段2: フル (0x1826 = FullMemory|HandleData|UnloadedModules|FullMemoryInfo|ThreadInfo、
-        # procdump -ma 相当)。WER に先を越されて落ちても段1が残っているので解析は始められる。
-        $full = Join-Path $dir ("hang_{0}_pid{1}_full.dmp" -f $stamp, $TargetPid)
-        Write-WatchLog "ハングダンプ(フル)を採取します (上限 300s): $full" 'Yellow'
-        if (Invoke-MiniDump -TargetPid $TargetPid -Path $full -DumpType 0x1826 -TimeoutMs 300000) {
-            Write-WatchLog ("ハングダンプ(フル)完了: {0:N0} MB" -f ((Get-Item $full).Length / 1MB)) 'Cyan'
-        } else {
-            Write-WatchLog "ハングダンプ(フル)は失敗/中断しました (WER に先を越された可能性)。速報ダンプで解析してください。" 'Red'
-            try { Remove-Item $full -Force -ErrorAction SilentlyContinue } catch { }
+        # 段2 (残念賞): フルが取れなかった時だけ速報 (0x1920 = ThreadInfo|FullMemoryInfo|
+        # ProcessThreadData|UnloadedModules) を試す。マネージド解析は不能だがネイティブの
+        # スレッドスタックとモジュール一覧だけは残る。プロセスが既に消えていれば即失敗して終わる。
+        if (-not $fullOk) {
+            $quick = Join-Path $dir ("hang_{0}_pid{1}_quick.dmp" -f $stamp, $TargetPid)
+            Write-WatchLog "ハングダンプ(速報)を採取します: $quick" 'Yellow'
+            if (Invoke-MiniDump -TargetPid $TargetPid -Path $quick -DumpType 0x1920 -TimeoutMs 60000) {
+                Write-WatchLog ("ハングダンプ(速報)完了: {0:N0} MB" -f ((Get-Item $quick).Length / 1MB)) 'Cyan'
+            } else {
+                Write-WatchLog "ハングダンプ(速報)の採取にも失敗しました。" 'Red'
+                try { Remove-Item $quick -Force -ErrorAction SilentlyContinue } catch { }
+            }
         }
 
         # 保持は種別ごとに最新2件 (フルは1件数GB。スナップショット20件保持とは別枠で数える)。
@@ -540,6 +545,10 @@ function Get-HealthStatus {
 # --- 単一インスタンス保証 ---
 # ゲーム内ボタンや .cmd から重ねて起動されても、番犬は常に1匹だけ動くようにする（二重監視=二重再起動を防止）。
 try { New-Item -ItemType Directory -Force -Path $HealthDir -ErrorAction SilentlyContinue | Out-Null } catch { }
+# WER LocalDumps (レジストリで DumpFolder=<HealthDir>\CrashDumps / DumpType=full 設定済み) の
+# 出力先を必ず用意しておく (BUG-20260805-04: フォルダ不在のまま AppHang クローズが2回走り、
+# WerFault 側のフルダンプを取り損ねた疑い。フォルダが在れば WER のクローズ自体が計器になる)。
+try { New-Item -ItemType Directory -Force -Path (Join-Path $HealthDir 'CrashDumps') -ErrorAction SilentlyContinue | Out-Null } catch { }
 $script:Mutex = New-Object System.Threading.Mutex($false, 'Local\EndKnotWatchdog')
 if (-not $script:Mutex.WaitOne(0)) {
     Write-WatchLog "既に番犬が起動しているため、二重起動を避けて終了します。" 'Yellow'
@@ -564,8 +573,9 @@ if ($startProc) {
     if ($LaunchIfNotRunning) { Start-Au | Out-Null }
 }
 
+$script:NextSleep = $CheckIntervalSec
 while ($true) {
-    Start-Sleep -Seconds $CheckIntervalSec
+    Start-Sleep -Seconds $script:NextSleep
 
     # 停止指示チェックはループ最上段で（proc 消失→再起動 判定より先に読む。順序を守らないと
     # 「AU が消えた巡回」がフラグより先に発火して蘇生してしまう）。
@@ -584,6 +594,13 @@ while ($true) {
     $proc     = Get-AuProcess
     $health   = Get-HealthStatus
     $inGrace  = ($now -lt $script:GraceUntil)
+
+    # --- 警戒時の巡回短縮 (BUG-20260805-04) ---
+    # 巡回20s刻みだとハングダンプ発火 (途絶35s) の検知が最悪 T+55s になり、WER の AppHang
+    # クローズ (~84s) までフルダンプの窓が 29s しか残らない。心拍が 15s 以上途絶した「警戒圏」
+    # (正当な一時停止の実測最長 14s の直上) では 5s 刻みに切り替え、検知を T+36〜40s に前倒しする。
+    $script:NextSleep = $CheckIntervalSec
+    if ($proc -and -not $inGrace -and $health.Fresh -and $health.AgeSec -ge 15) { $script:NextSleep = 5 }
 
     # 動いている AU の exe パスを随時更新（次回フォールバック用）
     if ($proc -and -not $script:CapturedExe) { try { $script:CapturedExe = $proc.Path } catch { } }
