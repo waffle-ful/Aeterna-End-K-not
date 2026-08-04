@@ -1200,7 +1200,10 @@ internal static class StartGameHostPatch
         
         
         LoadingBarManager loadingBarManager = LoadingBarManager.Instance;
-        yield return loadingBarManager.WaitAndSmoothlyUpdate(90f, 95f, 1f, GetString("LoadingBarText.1"));
+        // マネージド IEnumerator を yield return で直接ネストしない (GameOptionsSender.ShouldYieldFrame のコメント参照)。
+        // 手動ポンプなら子の yield 値がそのまま通り、Il2CppManagedEnumerator ラッパー (+strong GCHandle) が生成されない。
+        System.Collections.IEnumerator loadingBarTo95 = loadingBarManager.WaitAndSmoothlyUpdate(90f, 95f, 1f, GetString("LoadingBarText.1"));
+        while (loadingBarTo95.MoveNext()) yield return loadingBarTo95.Current;
 
         // v4 暗転根治 (2026-07-21): A案 (1.2s待ち撤去) 後も大人数ゲームで暗転が再発した真因は二層レートゲート。
         // qa.Wait() は DataFlagRateLimiter が SendOrDisconnect を呼ぶまでしか待たず、その先の PacketRateGate
@@ -1257,7 +1260,7 @@ internal static class StartGameHostPatch
             var qa = Utils.SendGameData();
             if (qa != null)
             {
-                yield return qa.Wait();
+                while (!qa.Done) yield return null;
                 if (qa.Dropped) yield break;
             }
         }
@@ -1299,7 +1302,9 @@ internal static class StartGameHostPatch
 
         {
             var qa = Utils.SendGameData();
-            if (qa != null) yield return qa.Wait();
+            if (qa != null)
+                while (!qa.Done)
+                    yield return null;
         }
 
         Logger.Info($"BlackoutProbe: restore wired +{Time.realtimeSinceStartup - probeRolesStart:F2}s after roles dispatch start (queue-drain {Time.realtimeSinceStartup - probeRestoreQueued:F2}s, gateQueue={PacketRateGate.PendingCount}, video={Modules.Media.LoadingScreenVideo.IsShowing})", "BlackoutProbe");
@@ -1316,7 +1321,8 @@ internal static class StartGameHostPatch
         }
 
         // 窓の外へ移したローディングバー演出 (95→100)。送信には無関係な純演出。
-        yield return loadingBarManager.WaitAndSmoothlyUpdate(95f, 100f, 1f, GetString("LoadingBarText.1"));
+        System.Collections.IEnumerator loadingBarTo100 = loadingBarManager.WaitAndSmoothlyUpdate(95f, 100f, 1f, GetString("LoadingBarText.1"));
+        while (loadingBarTo100.MoveNext()) yield return loadingBarTo100.Current;
         loadingBarManager.ToggleLoadingBar(false);
     }
 
