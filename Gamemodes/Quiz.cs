@@ -322,7 +322,8 @@ public static class Quiz
         if (GameStates.IsMeeting || ExileController.Instance || !GameStates.InGame || GameStates.IsLobby) yield break;
         NameNotifyManager.Reset();
 
-        yield return NewQuestion(increaseDifficulty: showTutorial, newRound: true);
+        System.Collections.IEnumerator newQuestion = NewQuestion(increaseDifficulty: showTutorial, newRound: true);
+        while (newQuestion.MoveNext()) yield return newQuestion.Current;
     }
 
     private static IEnumerator NewQuestion(bool increaseDifficulty = true, bool newRound = false)
@@ -467,7 +468,8 @@ public static class Quiz
 
         if (settings.QuestionsAsked.GetInt() > QuestionsAsked)
         {
-            yield return NewQuestion(increaseDifficulty: false);
+            System.Collections.IEnumerator newQuestion = NewQuestion(increaseDifficulty: false);
+            while (newQuestion.MoveNext()) yield return newQuestion.Current;
             yield break;
         }
 
@@ -483,7 +485,8 @@ public static class Quiz
         switch (dyingPlayers.Count)
         {
             case 0:
-                yield return NewQuestion(increaseDifficulty: settings.Rounds.GetInt() <= Round, newRound: true);
+                System.Collections.IEnumerator newQuestion0 = NewQuestion(increaseDifficulty: settings.Rounds.GetInt() <= Round, newRound: true);
+                while (newQuestion0.MoveNext()) yield return newQuestion0.Current;
                 yield break;
             case 1:
                 var pc = dyingPlayers[0].GetPlayer();
@@ -550,7 +553,8 @@ public static class Quiz
                 if (GameStates.IsMeeting || ExileController.Instance || !GameStates.InGame || GameStates.IsLobby) yield break;
 
                 FFAEndTS = 0;
-                yield return NewQuestion(increaseDifficulty: settings.Rounds.GetInt() <= Round, newRound: true);
+                System.Collections.IEnumerator newQuestion1 = NewQuestion(increaseDifficulty: settings.Rounds.GetInt() <= Round, newRound: true);
+                while (newQuestion1.MoveNext()) yield return newQuestion1.Current;
                 yield break;
         }
     }
