@@ -1102,7 +1102,10 @@ internal static class ShapeshiftPatch
     public static void Postfix(PlayerControl __instance)
     {
         // Set CNO name visible for modded clients after shapeshift
-        if (__instance.PlayerId >= 200)
+        // ⚠️ Hide() でホストから隠した CNO は対象外にする。スプライト適用の Shapeshift はこの Postfix を
+        // 必ず通るため、無条件に出すと onlyVisibleTo 指定の CNO (Druid の探知機 / Whisperer の魂) が
+        // 保持者以外のホストにも見えてしまう
+        if (__instance.PlayerId >= 200 && !CustomNetObject.IsHiddenFromHost(__instance.PlayerId))
             __instance.transform.FindChild("Names").FindChild("NameText_TMP").gameObject.SetActive(true);
     }
 }
