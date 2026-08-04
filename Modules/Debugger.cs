@@ -234,9 +234,15 @@ public class CustomLogger
     private float timer = 1f;
 
     private readonly StringBuilder Builder;
-    // 停止には StartCoroutine が返す Coroutine ハンドルが要る。IEnumerator を渡し直すと
-    // Unity は参照 identity で照合するため一致せず、永久に止まらない (Main.StopCoroutine 参照)。
-    private Coroutine InactivityCoroutine;
+
+    // 遊休 flush の監視はプロセスに1本だけ張る (BUG-20260706-01)。
+    // ⚠️ インスタンスごとに StartCoroutine してはいけない: コルーチンが正常終了しても BepInEx の
+    //    Il2CppManagedEnumerator ラッパーは strong GCHandle で永久保持されるため、そのインスタンスと
+    //    StringBuilder / Char[] バッファごと二度と回収されない。Finish は毎回 PrivateInstance を null に
+    //    するので「毎秒 new + StartCoroutine」になっており、125分で 2,353 個・Char[] 18.3MB が滞留していた
+    //    (2026-08-04 のヒープダンプ + gcroot で実測)。監視を static の常駐1本へ移せば、使い捨てられた
+    //    インスタンスは何にも掴まれず素直に GC される。
+    private static bool InactivityWatcherStarted;
 
     private CustomLogger()
     {
@@ -250,7 +256,13 @@ public class CustomLogger
         }
 
         Builder = new();
-        InactivityCoroutine = Main.Instance.StartCoroutine(InactivityCheck());
+
+        // 立った後に印を付ける。先に印を付けると、張り損ねたときに二度と誰も張り直さず flush が止まる。
+        if (!InactivityWatcherStarted)
+        {
+            Main.Instance.StartCoroutine(InactivityCheck());
+            InactivityWatcherStarted = true;
+        }
     }
 
     public static CustomLogger Instance => PrivateInstance ??= new();
@@ -312,15 +324,30 @@ public class CustomLogger
 #endif
     }
 
-    private IEnumerator InactivityCheck()
+    // プロセスに1本だけ常駐し、現行インスタンスの遊休を見張って flush する。
+    // 終わらない (= ラッパーの strong GCHandle も1個だけ) ことが要点。インスタンスは掴まない。
+    private static IEnumerator InactivityCheck()
     {
-        while (timer > 0)
+        while (true)
         {
-            timer -= Time.deltaTime;
+            CustomLogger instance = PrivateInstance;
+
+            if (instance != null)
+            {
+                instance.timer -= Time.deltaTime;
+
+                if (instance.timer <= 0f)
+                {
+                    instance.Finish(false);
+                    // Finish は書き出す物が無いと PrivateInstance を残したまま早期 return する。
+                    // タイマーを戻さないとそのインスタンスを毎フレーム叩き続けるうえ、
+                    // 次に溜まったログを流す担当が誰も居なくなる。
+                    instance.timer = 1f;
+                }
+            }
+
             yield return null;
         }
-
-        Finish(false);
     }
 
     public void Finish(bool dump = true)
@@ -332,8 +359,5 @@ public class CustomLogger
         catch (IOException) { return; } // log.html が別ハンドルに握られている瞬間の排他違反は握りつぶす (Builder 温存で次回 flush に持ち越し)
         Builder.Clear();
         PrivateInstance = null;
-#if DEBUG
-        if (InactivityCoroutine != null) Main.Instance.StopCoroutine(InactivityCoroutine);
-#endif
     }
 }
