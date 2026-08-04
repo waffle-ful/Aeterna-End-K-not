@@ -25,6 +25,17 @@ public static class HealthLog
     private static long LastBeatTs;
     private static long LastTickTs; // 直近 Tick の実時間(フレームストール検出用。heartbeat grid とは独立に毎フレーム更新)
     private static int _lastGc0Count, _lastGc2Count; // 直近 Tick 時点の GC 回数 (framestall の GC 帰属計器)
+
+    // --- サブ秒ヒッチ計器 (HITCH): framestall (3s+) に届かない 50ms〜3s のメインスレッド停止を捕まえる ---
+    private const long HitchThresholdMs = 50; // フル GC 実測 ~80ms (ManagedCensus gcPauseMs) を確実に拾う閾値
+    private const long HitchWindowSeconds = 10; // レート制限窓
+    private const int HitchMaxLinesPerWindow = 5; // 窓内の最大行数 (超過分は suppressed 集計)
+    private static readonly System.Diagnostics.Stopwatch HitchClock = System.Diagnostics.Stopwatch.StartNew();
+    private static long _lastTickMs; // 直近 Tick の ms 精度実時間 (LastTickTs は秒精度なのでヒッチ検出には使えない)
+    private static long _lastBoehmUsed; // 直近 Tick 時点の il2cpp (Boehm) ヒープ使用量 (ヒッチの Boehm GC 帰属計器)
+    private static long _hitchWindowStartTs;
+    private static int _hitchLinesInWindow;
+    private static int _hitchSuppressed;
     private static bool _lastFullScreen;
     private static int _lastScreenW, _lastScreenH; // 直近 Tick 時点の画面モード (reschg⇔framestall 相関計器)
     private static long LastNormalLogTs;
@@ -191,6 +202,45 @@ public static class HealthLog
         // されるため「ANOM と同秒のログ行」は原因でなく症状 (2026-07-14 の教訓・逆因果に注意)。
         if (LastTickTs != 0 && now - LastTickTs >= FrameStallThresholdSeconds)
             NoteAnom($"ANOM live kind=framestall gapSec={now - LastTickTs} state={state} gc0d={GC.CollectionCount(0) - _lastGc0Count} gc2d={GC.CollectionCount(2) - _lastGc2Count}{GetLastSendSuffix(now)} t={now}");
+
+        // サブ秒ヒッチ (かくつき) 検出: gc0d/gc2d ≥1 なら CoreCLR GC 起因の疑い、boehmDeltaKB が大きく負なら
+        // il2cpp (Boehm) GC 起因の疑い、両方動いていなければ GC 外 (同期 I/O / アセット操作 / シーン遷移)。
+        // フォーカス喪失 (Alt-Tab) やシーン遷移でも出るため state 併記 + レート制限で洪水を防ぐ。
+        // framestall と同じく「HITCH と同秒のログ行」は原因でなく症状 (flush が解除フレームに寄る) — 逆因果に注意。
+        long nowMs = HitchClock.ElapsedMilliseconds;
+        long boehmNow = GcPrepass.BoehmUsedBytes();
+
+        if (_lastTickMs != 0)
+        {
+            long gapMs = nowMs - _lastTickMs;
+
+            if (gapMs >= HitchThresholdMs && gapMs < FrameStallThresholdSeconds * 1000)
+            {
+                if (now - _hitchWindowStartTs >= HitchWindowSeconds)
+                {
+                    if (_hitchSuppressed > 0) Write($"HITCH suppressed={_hitchSuppressed} t={now}");
+
+                    _hitchWindowStartTs = now;
+                    _hitchLinesInWindow = 0;
+                    _hitchSuppressed = 0;
+                }
+
+                if (_hitchLinesInWindow < HitchMaxLinesPerWindow)
+                {
+                    _hitchLinesInWindow++;
+                    long boehmDeltaKb = _lastBoehmUsed > 0 && boehmNow > 0 ? (boehmNow - _lastBoehmUsed) / 1024 : 0;
+                    // ⚠️ Boehm GC 回数は Il2CppInterop ラッパー越しなので raw DllImport (BoehmUsedBytes) より高い。
+                    // Tick は FixedUpdateCaller から毎フレーム走るため、ここ (ヒッチ検出時のみ) で取る。
+                    // 差分ではなく累計を出し、連続する HITCH 行の差として読む — 毎フレーム標本を持たずに済む。
+                    Write($"HITCH gapMs={gapMs} state={state} gc0d={GC.CollectionCount(0) - _lastGc0Count} gc2d={GC.CollectionCount(2) - _lastGc2Count} bgc={GcPrepass.BoehmCollectionCount()} boehmMB={(boehmNow > 0 ? boehmNow / 1048576 : -1)} boehmDeltaKB={boehmDeltaKb} t={now}");
+                }
+                else
+                    _hitchSuppressed++;
+            }
+        }
+
+        _lastTickMs = nowMs;
+        _lastBoehmUsed = boehmNow;
 
         LastTickTs = now;
         _lastGc0Count = GC.CollectionCount(0);

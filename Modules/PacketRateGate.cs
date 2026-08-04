@@ -240,6 +240,10 @@ public static class PacketRateGate
         // ここで捨てた待機 Reliable の中に spawn が居ると、その netId はサーバーに存在しないまま
         // ローカルにだけ残る → 後の Despawn が P5 (ブロードキャスト × 未 spawn netId) になる。
         KickRiskDetector.OnConnectionReset();
+        // 捨てた待機 Reliable の中にオプション差分同期が居ると、ホストは「送った」ことにして
+        // スナップショットを更新済みなのに客には届いていない状態になる。差分送信は該当 id が
+        // 二度と変わらない限り再送しないので、ここで無効化して次の broadcast を全件に戻す。
+        RPC.InvalidateOptionSyncSnapshot();
         SentThisWindow = 0;
         SafetyValveActive = false;
         StartWindowBypass = false;

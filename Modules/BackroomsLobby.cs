@@ -2701,6 +2701,9 @@ public static class BackroomsLobby
     {
         if (!_inBackrooms && SpawnedTiles.Count == 0 && _visionGO == null) return;
 
+        // 開始直後の体感ヒッチ (HITCH gapMs=450 state=Started) の帰属計器。タイル数千の Destroy が
+        // 疑わしいので破棄区間を分離して測る。
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         _inBackrooms = false;
         _visionPaused = false;
         _zoomOverride = -1f;
@@ -2713,6 +2716,7 @@ public static class BackroomsLobby
         BackroomsCasters.Clear(); // 壁の輪郭線 caster を破棄
         _overlaySuppressed = false;
 
+        long tDestroy = sw.ElapsedMilliseconds;
         int wiped = 0;
         foreach (GameObject go in SpawnedTiles)
         {
@@ -2720,6 +2724,8 @@ public static class BackroomsLobby
             Object.Destroy(go);
             wiped++;
         }
+
+        long destroyMs = sw.ElapsedMilliseconds - tDestroy;
 
         SpawnedTiles.Clear();
         SpawnedTilePositions.Clear();
@@ -2741,6 +2747,7 @@ public static class BackroomsLobby
         EkmapLoader.ClearActiveSource();
         _customVisionRadius = null;
         Logger.Info($"OnGameStart cleanup: wiped {wiped} tiles", "BackroomsGen");
+        HealthLog.Note($"STARTPRESS phase=backrooms totalMs={sw.ElapsedMilliseconds} destroyMs={destroyMs} tiles={wiped} t={Utils.TimeStamp}");
     }
 
     // session 跨ぎ (lobby → main menu → 新 lobby) で stale state を捨てる。
