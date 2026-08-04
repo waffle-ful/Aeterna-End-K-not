@@ -90,7 +90,8 @@ static class CoShowIntroPatch
             __instance.FullScreen.transform.localPosition = new Vector3(0.0f, 0.0f, -250f);
 
             yield return __instance.ShowEmblem(true);
-            yield return CoBegin(Object.Instantiate(__instance.IntroPrefab, __instance.transform));
+            System.Collections.IEnumerator coBegin = CoBegin(Object.Instantiate(__instance.IntroPrefab, __instance.transform));
+            while (coBegin.MoveNext()) yield return coBegin.Current;
 
             PlayerControl.LocalPlayer.SetKillTimer(10f);
             ShipStatus.Instance.Systems[SystemTypes.Sabotage].CastFast<SabotageSystemType>().SetInitialSabotageCooldown();

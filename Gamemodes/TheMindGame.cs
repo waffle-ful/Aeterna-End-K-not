@@ -345,13 +345,16 @@ public static class TheMindGame
 
         Utils.SetChatVisibleForAll();
 
-        yield return NotifyEveryone("TMG.Tutorial.Basics", 6);
+        System.Collections.IEnumerator notify1 = NotifyEveryone("TMG.Tutorial.Basics", 6);
+        while (notify1.MoveNext()) yield return notify1.Current;
         if (Stop) yield break;
 
-        yield return NotifyEveryone("TMG.Notify.Round", 2, 1);
+        System.Collections.IEnumerator notify2 = NotifyEveryone("TMG.Notify.Round", 2, 1);
+        while (notify2.MoveNext()) yield return notify2.Current;
         if (Stop) yield break;
 
-        yield return NotifyEveryone("TMG.Tutorial.Round1", 12, TimeForEachPickInRound1, NumPointsToAdvanceInRound1, Main.AllAlivePlayerControlsCount - MinPlayersInRound2);
+        System.Collections.IEnumerator notify3 = NotifyEveryone("TMG.Tutorial.Round1", 12, TimeForEachPickInRound1, NumPointsToAdvanceInRound1, Main.AllAlivePlayerControlsCount - MinPlayersInRound2);
+        while (notify3.MoveNext()) yield return notify3.Current;
         if (Stop) yield break;
 
         Main.EnumerateAlivePlayerControls().Do(x => x.RpcChangeRoleBasis(CustomRoles.PhantomEndKnot));
@@ -407,10 +410,12 @@ public static class TheMindGame
         // 公式鯖では spoof RPC ではなく正規 serialize で色を同期 (anti-cheat 修正後)
         DefaultColorIds.DoIf(x => x.Key && x.Value is >= byte.MinValue and <= byte.MaxValue, x => x.Key.RpcChangeColor((byte)x.Value));
 
-        yield return NotifyEveryone("TMG.Notify.Round", 2, 2);
+        System.Collections.IEnumerator notify4 = NotifyEveryone("TMG.Notify.Round", 2, 2);
+        while (notify4.MoveNext()) yield return notify4.Current;
         if (Stop) yield break;
 
-        yield return NotifyEveryone("TMG.Tutorial.Round2", 10, SuperPointsToNormalPointsMultiplier);
+        System.Collections.IEnumerator notify5 = NotifyEveryone("TMG.Tutorial.Round2", 10, SuperPointsToNormalPointsMultiplier);
+        while (notify5.MoveNext()) yield return notify5.Current;
         if (Stop) yield break;
 
         for (int i = 0; i < 3; i++)
@@ -444,14 +449,16 @@ public static class TheMindGame
             List<byte> auctionWinners = Pick.Where(x => x.Value == highestBid).Select(x => x.Key).ToList();
             auctionWinners.ForEach(x => SuperPoints[x] += AuctionValue);
 
-            yield return NotifyEveryone("TMG.Notify.AuctionEnd", 4, highestBid, string.Join(" & ", auctionWinners.ConvertAll(x => x.ColoredPlayerName())), AuctionValue);
+            System.Collections.IEnumerator notify6 = NotifyEveryone("TMG.Notify.AuctionEnd", 4, highestBid, string.Join(" & ", auctionWinners.ConvertAll(x => x.ColoredPlayerName())), AuctionValue);
+            while (notify6.MoveNext()) yield return notify6.Current;
             if (Stop) yield break;
         }
 
         int lowestSuperPoints = SuperPoints.Values.Min();
         Main.EnumerateAlivePlayerControls().Join(SuperPoints, x => x.PlayerId, x => x.Key, (pc, kvp) => (pc, points: kvp.Value)).DoIf(x => x.points == lowestSuperPoints, x => x.pc.Suicide());
 
-        yield return NotifyEveryone("TMG.Notify.ItemPurchasingBegins", 6, TimeForItemPurchasingInRound2);
+        System.Collections.IEnumerator notify7 = NotifyEveryone("TMG.Notify.ItemPurchasingBegins", 6, TimeForItemPurchasingInRound2);
+        while (notify7.MoveNext()) yield return notify7.Current;
         if (Stop) yield break;
 
         Item[] items = AllItem;
@@ -489,15 +496,18 @@ public static class TheMindGame
 
         ShowSuffixOtherThanPoints = false;
 
-        yield return NotifyEveryone("TMG.Notify.ItemPurchasingEnd", 3);
+        System.Collections.IEnumerator notify8 = NotifyEveryone("TMG.Notify.ItemPurchasingEnd", 3);
+        while (notify8.MoveNext()) yield return notify8.Current;
         if (Stop) yield break;
 
         Round = 3;
 
-        yield return NotifyEveryone("TMG.Notify.Round", 2, 3);
+        System.Collections.IEnumerator notify9 = NotifyEveryone("TMG.Notify.Round", 2, 3);
+        while (notify9.MoveNext()) yield return notify9.Current;
         if (Stop) yield break;
 
-        yield return NotifyEveryone("TMG.Tutorial.Round3", 6, Main.AllAlivePlayerControlsCount, MaxPlayersForRound4);
+        System.Collections.IEnumerator notify10 = NotifyEveryone("TMG.Tutorial.Round3", 6, Main.AllAlivePlayerControlsCount, MaxPlayersForRound4);
+        while (notify10.MoveNext()) yield return notify10.Current;
         if (Stop) yield break;
 
         while (true)
@@ -544,7 +554,8 @@ public static class TheMindGame
             int lowestScore = Points.Values.Min();
             Main.EnumerateAlivePlayerControls().Join(Points, x => x.PlayerId, x => x.Key, (pc, kvp) => (pc, points: kvp.Value)).DoIf(x => x.points == lowestScore, x => x.pc.Suicide());
 
-            yield return NotifyEveryone("TMG.Notify.Round3NumPlayersLeft", 3, Main.AllAlivePlayerControlsCount, MaxPlayersForRound4);
+            System.Collections.IEnumerator notify11 = NotifyEveryone("TMG.Notify.Round3NumPlayersLeft", 3, Main.AllAlivePlayerControlsCount, MaxPlayersForRound4);
+            while (notify11.MoveNext()) yield return notify11.Current;
             if (Stop) yield break;
 
             if (Main.AllAlivePlayerControlsCount <= MaxPlayersForRound4) break;
@@ -552,10 +563,12 @@ public static class TheMindGame
 
         Round = 4;
 
-        yield return NotifyEveryone("TMG.Notify.Round", 2, 4);
+        System.Collections.IEnumerator notify12 = NotifyEveryone("TMG.Notify.Round", 2, 4);
+        while (notify12.MoveNext()) yield return notify12.Current;
         if (Stop) yield break;
 
-        yield return NotifyEveryone("TMG.Tutorial.Round4", 20);
+        System.Collections.IEnumerator notify13 = NotifyEveryone("TMG.Tutorial.Round4", 20);
+        while (notify13.MoveNext()) yield return notify13.Current;
         if (Stop) yield break;
 
         PreventGameEnd = true;
@@ -608,7 +621,8 @@ public static class TheMindGame
                     if (countPC == 2)
                         Round4PlacesFromFirst.Add(aapc.Select(x => x.PlayerId).Without(WinningBriefcaseHolderId).Single());
 
-                    yield return NotifyEveryone("TMG.Notify.Round4EndLastHolder", 3, WinningBriefcaseHolderId.ColoredPlayerName());
+                    System.Collections.IEnumerator notify14 = NotifyEveryone("TMG.Notify.Round4EndLastHolder", 3, WinningBriefcaseHolderId.ColoredPlayerName());
+                    while (notify14.MoveNext()) yield return notify14.Current;
                 }
 
                 break;
@@ -620,7 +634,8 @@ public static class TheMindGame
         HiddenPoints.Clear();
         EjectedPlayers.ToValidPlayers().FindAll(x => !x.IsAlive()).ForEach(x => x.RpcRevive());
 
-        yield return NotifyEveryone("TMG.Notify.Round4End", 3);
+        System.Collections.IEnumerator notify15 = NotifyEveryone("TMG.Notify.Round4End", 3);
+        while (notify15.MoveNext()) yield return notify15.Current;
         if (Stop) yield break;
 
         List<byte> ranking = [];
@@ -639,7 +654,8 @@ public static class TheMindGame
         round4Points.Do(x => Points[x.Key] += x.Value);
 
         join = string.Join('\n', round4Points.Select(x => $"{x.Key.ColoredPlayerName()}:  +{x.Value}"));
-        yield return NotifyEveryone("TMG.Notify.Round4PointGain", 5, join);
+        System.Collections.IEnumerator notify16 = NotifyEveryone("TMG.Notify.Round4PointGain", 5, join);
+        while (notify16.MoveNext()) yield return notify16.Current;
         if (Stop) yield break;
 
         foreach (PlayerControl pc in Main.EnumerateAlivePlayerControls())
@@ -663,10 +679,12 @@ public static class TheMindGame
 
         SuperPoints.SetAllValues(0);
 
-        yield return NotifyEveryone("TMG.Notify.SuperPointConversion", 4, SuperPointsToNormalPointsMultiplier);
+        System.Collections.IEnumerator notify17 = NotifyEveryone("TMG.Notify.SuperPointConversion", 4, SuperPointsToNormalPointsMultiplier);
+        while (notify17.MoveNext()) yield return notify17.Current;
         if (Stop) yield break;
 
-        yield return NotifyEveryone("TMG.Notify.TheWinnerIs", 2);
+        System.Collections.IEnumerator notify18 = NotifyEveryone("TMG.Notify.TheWinnerIs", 2);
+        while (notify18.MoveNext()) yield return notify18.Current;
 
         PreventGameEnd = false;
         int highestPoints = Points.Values.Max();

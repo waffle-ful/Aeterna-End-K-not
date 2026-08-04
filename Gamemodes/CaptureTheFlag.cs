@@ -374,7 +374,11 @@ public static class CaptureTheFlag
             PlayerTeams[player.PlayerId] = CTFTeam.Blue;
             bluePlayers.Add(player.PlayerId);
             player.RpcChangeColor(1);
-            yield return WaitFrameIfNecessary();
+            if (ShouldYieldFrame())
+            {
+                yield return null;
+                stopwatch.Start();
+            }
         }
 
         foreach (PlayerControl player in players)
@@ -382,7 +386,11 @@ public static class CaptureTheFlag
             PlayerTeams[player.PlayerId] = CTFTeam.Yellow;
             yellowPlayers.Add(player.PlayerId);
             player.RpcChangeColor(5);
-            yield return WaitFrameIfNecessary();
+            if (ShouldYieldFrame())
+            {
+                yield return null;
+                stopwatch.Start();
+            }
         }
 
         // Create flags
@@ -417,7 +425,11 @@ public static class CaptureTheFlag
             pc.RpcChangeRoleBasis(CustomRoles.CTFPlayer);
             pc.RpcResetAbilityCooldown();
 
-            yield return WaitFrameIfNecessary();
+            if (ShouldYieldFrame())
+            {
+                yield return null;
+                stopwatch.Start();
+            }
         }
         
         foreach (CTFTeamData data in TeamData.Values)
@@ -452,8 +464,12 @@ public static class CaptureTheFlag
                     sender.SendMessage();
                 }
                 catch (Exception e) { Utils.ThrowException(e); }
-                
-                yield return WaitFrameIfNecessary();
+
+                if (ShouldYieldFrame())
+                {
+                    yield return null;
+                    stopwatch.Start();
+                }
             }
         }
 
@@ -462,14 +478,15 @@ public static class CaptureTheFlag
         
         yield break;
 
-        IEnumerator WaitFrameIfNecessary()
+        bool ShouldYieldFrame()
         {
             if (stopwatch.ElapsedMilliseconds >= 5)
             {
                 stopwatch.Reset();
-                yield return null;
-                stopwatch.Start();
+                return true;
             }
+
+            return false;
         }
     }
 

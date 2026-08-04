@@ -161,7 +161,8 @@ public static class Camouflage
         }
 
         yield return new WaitForSecondsRealtime(0.5f);
-        yield return Utils.NotifyEveryoneAsync();
+        System.Collections.IEnumerator notifyEveryone = Utils.NotifyEveryoneAsync();
+        while (notifyEveryone.MoveNext()) yield return notifyEveryone.Current;
     }
 
     public static void RpcSetSkin(PlayerControl target, bool forceRevert = false, bool revertToDefault = false, bool gameEnd = false, bool revive = false, bool notCommsOrCamo = false, CustomRpcSender sender = null)

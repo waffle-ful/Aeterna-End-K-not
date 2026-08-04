@@ -453,11 +453,19 @@ public static class BedWars
             .Flatten()
             .ToDictionary(x => x.Key, x => x.Value);
 
-        yield return WaitFrameIfNecessary();
+        if (ShouldYieldFrame())
+        {
+            yield return null;
+            stopwatch.Start();
+        }
 
         Utils.SetChatVisibleForAll();
 
-        yield return WaitFrameIfNecessary();
+        if (ShouldYieldFrame())
+        {
+            yield return null;
+            stopwatch.Start();
+        }
 
         MapNames map = Main.CurrentMap;
         Dictionary<BedWarsTeam, Base> bases = Bases[map];
@@ -516,10 +524,18 @@ public static class BedWars
 
             Data[pc.PlayerId] = data;
 
-            yield return WaitFrameIfNecessary();
+            if (ShouldYieldFrame())
+            {
+                yield return null;
+                stopwatch.Start();
+            }
         }
 
-        yield return WaitFrameIfNecessary();
+        if (ShouldYieldFrame())
+        {
+            yield return null;
+            stopwatch.Start();
+        }
 
         if (GameStates.IsEnded || !GameStates.InGame || GameStates.IsLobby)
         {
@@ -551,14 +567,26 @@ public static class BedWars
             if (bed != null) AllNetObjects[team] = new(bed, new(itemShop), new(upgradeShop));
             rooms.Add(Utils.ColorString(team.GetColor(), Translator.GetString(room)));
 
-            yield return WaitFrameIfNecessary();
+            if (ShouldYieldFrame())
+            {
+                yield return null;
+                stopwatch.Start();
+            }
         }
 
-        yield return WaitFrameIfNecessary();
+        if (ShouldYieldFrame())
+        {
+            yield return null;
+            stopwatch.Start();
+        }
 
         players.NotifyPlayers($"{rooms[0]}\n{string.Join(" | ", rooms.Skip(1))}", 20f, setName: false);
 
-        yield return WaitFrameIfNecessary();
+        if (ShouldYieldFrame())
+        {
+            yield return null;
+            stopwatch.Start();
+        }
 
         foreach ((Item item, List<Vector2> positions) in ItemGeneratorPositions[map])
         {
@@ -579,21 +607,26 @@ public static class BedWars
                 if (generator != null) ItemGenerators.Add(generator);
             });
 
-            yield return WaitFrameIfNecessary();
+            if (ShouldYieldFrame())
+            {
+                yield return null;
+                stopwatch.Start();
+            }
         }
 
         GracePeriodEnd = Utils.TimeStamp + GracePeriod;
         
         yield break;
 
-        IEnumerator WaitFrameIfNecessary()
+        bool ShouldYieldFrame()
         {
             if (stopwatch.ElapsedMilliseconds >= 5)
             {
                 stopwatch.Reset();
-                yield return null;
-                stopwatch.Start();
+                return true;
             }
+
+            return false;
         }
     }
 

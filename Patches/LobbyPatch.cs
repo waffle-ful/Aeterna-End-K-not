@@ -217,8 +217,26 @@ internal static class LobbyBehaviourOnDestroyPatch
 [HarmonyPatch(typeof(LobbyBehaviour), nameof(LobbyBehaviour.Update))]
 internal static class LobbyBehaviourUpdatePatch
 {
-    private static Func<ISoundPlayer, bool> Lobbybgm;
     private static ISoundPlayer MapThemeSound;
+
+    // ⚠️ ここで soundPlayers.Find(<マネージドラムダ>) を使ってはいけない。
+    // Il2Cpp の List<T>.Find は Il2CppSystem.Predicate<T> を取るため、マネージド Func を渡すと
+    // DelegateSupport が呼び出しのたびに Il2CppToMonoDelegateReference + strong GCHandle を生成し、
+    // それが永久に解放されない (ラムダ自体は Roslyn がキャッシュするので使い回されるが、変換はキャッシュ
+    // されない)。この Postfix は毎フレーム走るため実測で 54個/秒・54分で 174,142 個が滞留していた。
+    // 手動走査なら interop 変換自体が発生しない (BGMManager.cs の soundPlayers 走査と同じ型)。
+    private static ISoundPlayer FindMapTheme(SoundManager soundManager)
+    {
+        var players = soundManager.soundPlayers;
+
+        for (var i = 0; i < players.Count; i++)
+        {
+            ISoundPlayer p = players[i];
+            if (p != null && p.Name.Equals("MapTheme")) return p;
+        }
+
+        return null;
+    }
     public static void Postfix(LobbyBehaviour __instance)
     {
         // 自動再ホスト直後などシーン再構築中は SoundManager.Instance / soundPlayers が
@@ -238,8 +256,7 @@ internal static class LobbyBehaviourUpdatePatch
                 SoundManager sm = SoundManager.Instance;
                 if (sm?.soundPlayers != null)
                 {
-                    Func<ISoundPlayer, bool> isMapTheme = x => x != null && x.Name.Equals("MapTheme");
-                    if (sm.soundPlayers.Find(isMapTheme) != null)
+                    if (FindMapTheme(sm) != null)
                         sm.StopNamedSound("MapTheme");
                 }
 
@@ -250,9 +267,7 @@ internal static class LobbyBehaviourUpdatePatch
             SoundManager soundManager = SoundManager.Instance;
             if (soundManager?.soundPlayers == null) return;
 
-            // ReSharper disable once ConvertToLocalFunction
-            Lobbybgm = x => x != null && x.Name.Equals("MapTheme");
-            MapThemeSound = soundManager.soundPlayers.Find(Lobbybgm);
+            MapThemeSound = FindMapTheme(soundManager);
 
             if (!Main.LobbyMusic.Value)
             {
