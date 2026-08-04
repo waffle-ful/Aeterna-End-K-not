@@ -272,7 +272,12 @@ public class JackalHadouHo : RoleBase
             {
                 Super = new SuperCannonShot(pc, variant.Value, SuperBeamThickness.GetInt(),
                     t => !KillJackalOpt.GetBool() && t.GetCountTypes() == CountTypes.Jackal);
-                if (!Super.Begin(StartPosition, Direction)) Super = null;
+                if (!Super.Begin(StartPosition, Direction))
+                {
+                    // 変種が発動不能 (確殺: 有効な対象が 1 人もいない 等) → 従来の発射で撃つ (WaveCannon 双子)
+                    Super = null;
+                    pc.Notify(GetString("WaveCannon.SuperFallback"));
+                }
             }
         }
 

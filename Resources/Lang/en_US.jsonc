@@ -2908,6 +2908,7 @@
   "WaveCannon.SuperBeamThickness": "Super Beam Thickness",
   "WaveCannon.ButtonText": "FIRE",
   "WaveCannon.DirectionDetect": "Move briefly in your firing direction. Beam charges right after.",
+  "WaveCannon.SuperFallback": "Couldn't activate the super shot - firing a normal shot instead.",
 
   /* --- Riptide --- */
   "Riptide": "Riptide",
