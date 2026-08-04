@@ -163,6 +163,19 @@ namespace EndKnot
         // ホスト側では Visible が prefab 既定の false のまま残る。非モッド客は spawn 電文を通常処理するので
         // true になる = 「客には見えてホストだけ見えない」の非対称の正体。
         // ホストローカルの描画状態を戻すだけなので送信は一切発生しない。
+        /// <summary>ShapeshiftPatch.Postfix が CNO の名前表示を出し直す前の照会。
+        /// Hide() の AmOwner 分岐でホストから隠した CNO を、直後のスプライト適用 Shapeshift が
+        /// 蘇らせてしまうのを防ぐ (onlyVisibleTo 指定の CNO が保持者以外=ホストにも見えていた原因)。</summary>
+        public static bool IsHiddenFromHost(byte playerId)
+        {
+            // Il2Cpp デリゲート変換の per-call GCHandle リークを避けるため List.Find は使わない
+            foreach (CustomNetObject obj in AllObjects)
+                if (obj.playerControl && obj.playerControl.PlayerId == playerId)
+                    return obj.HiddenFromHost;
+
+            return false;
+        }
+
         protected void EnsureHostVisible()
         {
             if (!playerControl || HiddenFromHost) return;
