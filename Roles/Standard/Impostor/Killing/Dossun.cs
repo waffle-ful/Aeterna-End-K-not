@@ -127,9 +127,9 @@ public class Dossun : RoleBase
 
                 // 起動地点とアンカーが離れているとブロックは永久にカメラ外 (ブロックとの距離は起動時の
                 // アンカー距離で固定される) なので、本人にだけ方向矢印を出して間接操作を補助する。
-                // CNO は実 PlayerId を持つので TargetArrow が追加 RPC なしで移動へ自動追従する
-                ArrowTargetId = BlockCNO.playerControl.PlayerId;
-                TargetArrow.Add(pc.PlayerId, ArrowTargetId);
+                // CNO は実 PlayerId を持つので TargetArrow が追加 RPC なしで移動へ自動追従する。
+                // ⚠️ playerControl は生成コルーチン内 (DataFlagRateLimiter 経由) で確定するため、
+                // Reliable キューに詰まりがあるとこの時点ではまだ null。矢印の登録は OnFixedUpdate 側へ遅らせる。
                 pc.Notify(string.Format(Translator.GetString("Dossun.Activated"), AnchorRoomName));
                 break;
 
@@ -157,6 +157,13 @@ public class Dossun : RoleBase
 
         if (!GameStates.IsInTask) return;
         if (CurrentPhase != Phase.Active || BlockCNO == null) return;
+
+        // 起動時には CNO の playerControl がまだ確定していないことがあるので、確定した最初の tick で矢印を出す
+        if (ArrowTargetId == byte.MaxValue && BlockCNO.playerControl)
+        {
+            ArrowTargetId = BlockCNO.playerControl.PlayerId;
+            TargetArrow.Add(pc.PlayerId, ArrowTargetId);
+        }
 
         if (Utils.TimeStamp - ActivatedTimeStamp >= BlockDuration.GetInt())
         {

@@ -735,7 +735,10 @@ public static class NaturalDisasters
             Vector2 addVector = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
             Vector2 newPos = Position + addVector * speed;
 
-            if ((!GoesThroughWalls.GetBool() && PhysicsHelpers.AnythingBetween(NetObject.playerControl.Collider, Position, newPos + addVector * 2, Constants.ShipOnlyMask, false)) ||
+            // NetObject.playerControl は生成コルーチン内で非同期に確定する。Tornado はコンストラクタから
+            // Update() を呼ぶので、警告 CNO の生成が遅れているとここで必ず null を踏む (Postfix 直下で無防備)。
+            // 未確定の tick は壁判定だけ飛ばす (次の tick には確定して通常判定に戻る)
+            if ((!GoesThroughWalls.GetBool() && NetObject.playerControl && PhysicsHelpers.AnythingBetween(NetObject.playerControl.Collider, Position, newPos + addVector * 2, Constants.ShipOnlyMask, false)) ||
                 newPos.x < MapBounds.X.Left || newPos.x > MapBounds.X.Right || newPos.y < MapBounds.Y.Bottom || newPos.y > MapBounds.Y.Top)
             {
                 Angle = RandomAngle();

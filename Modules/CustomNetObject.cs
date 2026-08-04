@@ -862,6 +862,13 @@ namespace EndKnot
                     {
                         if (!playerControl) return;
 
+                        // onlyVisibleTo がホスト自身 (ホストが Druid / Whisperer 等を引いた場合) だと、この
+                        // エンベロープは自分宛 tag6 になる。ホスト画面へのスプライト適用は下の
+                        // playerControl.Shapeshift(LocalPlayer, false) と NetTransform.SnapTo() が
+                        // ローカルに済ませているので、ワイヤに出す意味がない (1200B の往復が丸ごと無駄)。
+                        // spawn 経路の _localOnly 縮退と同型に、組み立てだけ通して末尾で破棄する。
+                        bool spriteLocalOnly = onlyVisibleTo && onlyVisibleTo.AmOwner;
+
                         string name = PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].PlayerName;
                         int colorId = PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].ColorId;
                         string hatId = PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].HatId;
@@ -883,7 +890,7 @@ namespace EndKnot
                         sender.checkLength = false;
 
                         MessageWriter writer = sender.stream;
-                        sender.StartMessage(onlyVisibleTo ? onlyVisibleTo.OwnerId : -1);
+                        sender.StartMessage(onlyVisibleTo && !onlyVisibleTo.AmOwner ? onlyVisibleTo.OwnerId : -1);
                         PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].PlayerName = "<size=14><br></size>" + sprite;
                         PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].ColorId = 0;
                         PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].HatId = "";
@@ -933,6 +940,14 @@ namespace EndKnot
                             .EndRpc();
 
                         sender.EndMessage();
+
+                        if (spriteLocalOnly)
+                        {
+                            // ワイヤに出ないメッセージを計器に記録しない (サイズ警告も出さない)
+                            sender.SendMessage(dispose: true);
+                            return;
+                        }
+
                         WarnPacketSize($"CreateNetObject({GetType().Name}) sprite-apply", sprite, sender.stream.Length);
                         sender.SendMessage();
                     });
@@ -1149,10 +1164,11 @@ namespace EndKnot
 
     internal sealed class PlayerDetector : CustomNetObject
     {
-        public PlayerDetector(Vector2 position, PlayerControl druid, out int id)
+        // ⚠️ 基底の Id は生成コルーチン内で非同期に確定するので、コンストラクタから out で返せない
+        // (常に既定値 0 = その試合で最初に生成された CNO の ID になる)。呼び出し側はインスタンスを直接持つこと。
+        public PlayerDetector(Vector2 position, PlayerControl druid)
         {
             CreateNetObject("<line-height=97%><cspace=0.16em><#0000>WW</color><mark=#33e6b0>W</mark><#0000>WW</color><mark=#33e6b0>W</mark><#0000>WW\nW</color><mark=#33e6b0>W</mark><#0000>WWWW</color><mark=#33e6b0>W</mark><#0000>W</color>\n<mark=#33e6b0>W</mark><#0000>WW</color><mark=#33e6b0>WW</mark><#0000>WW</color><mark=#33e6b0>W</mark>\n<mark=#33e6b0>W</mark><#0000>W</color><mark=#33e6b0>W</mark><mark=#000000>WW</mark><mark=#33e6b0>W</mark><#0000>W</color><mark=#33e6b0>W</mark>\n<mark=#33e6b0>W</mark><#0000>W</color><mark=#33e6b0>W</mark><mark=#000000>WW</mark><mark=#33e6b0>W</mark><#0000>W</color><mark=#33e6b0>W</mark>\n<mark=#33e6b0>W</mark><#0000>WW</color><mark=#33e6b0>WW</mark><#0000>WW</color><mark=#33e6b0>W</mark>\n<#0000>W</color><mark=#33e6b0>W</mark><#0000>WWWW</color><mark=#33e6b0>W</mark><#0000>W\nWW</color><mark=#33e6b0>W</mark><#0000>WW</color><mark=#33e6b0>W</mark><#0000>WW", position, onlyVisibleTo: druid);
-            id = Id;
         }
     }
 
