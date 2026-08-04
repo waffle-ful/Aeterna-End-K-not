@@ -181,10 +181,11 @@ public enum CustomRPC
     SyncAkazukinPseudoDeath,
     LobbyDecorSpawn,
     LobbyDecorClear,
+    ControllableSound, // sub-op byte: 0=offset付き再生 / 1=名前指定フェード停止 (モッドクライアント効果音同期)
 
     // EKM (custom map system) — reserved 2026-06-12 (see docs/ekm-studio/ROADMAP.md D11).
-    // Network-zero by default; the explicit 251 keeps 246-250 free for future game-mode
-    // syncs, which grow by appending after LobbyDecorClear (245).
+    // Network-zero by default; the explicit 251 keeps 247-250 free for future game-mode
+    // syncs, which grow by appending after ControllableSound (246).
     EkmSync = 251,
 
     // Upstream EHR catchup
@@ -1023,6 +1024,11 @@ internal static class RPCHandlerPatch
                 case CustomRPC.PlayCustomSound:
                 {
                     CustomSoundsManager.ReceiveRPC(reader);
+                    break;
+                }
+                case CustomRPC.ControllableSound:
+                {
+                    CustomSoundsManager.ReceiveControllableRPC(reader);
                     break;
                 }
                 case CustomRPC.SetGhostPlayer:
