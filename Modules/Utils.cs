@@ -272,6 +272,10 @@ public static class Utils
         nt.SnapTo(location, (ushort)(nt.lastSequenceId + 328));
         nt.SetDirtyBit(uint.MaxValue);
 
+        // ホスト起因 SnapTo は lastSequenceId を直接書くため、entry gate の「クライアント移動 = confirm」
+        // 判定を偽陽性にする (memory: tp_delivery_probe_pos_fallback)。gate 監視中なら baseline を付け替える。
+        ClientEntryProbe.NoteHostSnapTo(pc);
+
         // 公式/Vanilla 鯖のみ: SnapTo の送信を絞って anti-cheat の Hacking kick を防ぐ。
         // カスタム鯖 (anti-cheat 無し) では機能を犠牲にしないので無制限。
         // TpCapDebugForceOfficial (/tpdbg official 1) はローカル鯖で cap 挙動を実験するための計器。
@@ -4486,6 +4490,10 @@ public static class Utils
     {
         // T2残党退避 (2026-07-31): FTM 退避で保留していた毎フレ SetName broadcast をここで解禁。
         IntroCutsceneDestroyPatch.NameBroadcastHold = false;
+
+        // entry gate 救済 (2026-08-04): hard cap 到達時に未confirm だった客 (=発症予備軍) へ
+        // 初手会議明けに FixBlackScreen を撃つ。対象が無ければ即 return する。
+        ClientEntryProbe.RunRescue();
 
         LateTask.New(() => GameEndChecker.ShouldNotCheck = false, 0.1f, "Enable GameEndChecker");
 

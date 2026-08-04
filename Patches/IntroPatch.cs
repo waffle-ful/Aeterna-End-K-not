@@ -1448,7 +1448,8 @@ internal static class IntroCutsceneDestroyPatch
             // 【2026-07-28】固定 +1s は GM ホストの短縮 intro と遅いクライアントのレースを残す
             // (BUG-20260727-01) ため、クライアント入場完了確認方式 (ClientEntryProbe) に置換。
             // 全リモートクライアントの NetTransform seq 前進 (= intro 明けの証拠) を待ってから発火する。
-            // 最短 +1s (従来互換)・最大 +8s。Rollback bit: EndKnot_DATA/disable_entry_gate.txt
+            // 最短 +1s (従来互換)・最大 +13s (2026-08-04: 8s→13s 延長・cap 到達時の未confirm 客は
+            // 会議明けに FixBlackScreen 救済へ回す)。Rollback bit: EndKnot_DATA/disable_entry_gate.txt
             if (Options.CurrentGameMode == CustomGameMode.Standard && Options.FirstTurnMeeting.GetBool())
                 ClientEntryProbe.StartGate(FirstTurnMeetingTrigger);
 
