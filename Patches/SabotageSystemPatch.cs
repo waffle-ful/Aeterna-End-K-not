@@ -355,7 +355,26 @@ internal static class SabotageSystemTypeAnyActivePatch
 {
     public static bool Prefix(SabotageSystemType __instance, ref bool __result)
     {
-        __result = __instance.specials.Exists((Il2CppSystem.Predicate<IActivatable>)(s => s.IsActive)) || CustomSabotage.Instances.Count > 0;
+        // ⚠️ specials.Exists(<述語>) を使ってはいけない。specials は Il2Cpp 側の List なので、
+        // マネージドラムダを渡すと (Il2CppSystem.Predicate へ明示キャストしていても) 変換のたびに
+        // Il2CppToMonoDelegateReference + strong GCHandle が生成され永久に解放されない。
+        // AnyActive は Getter なので「誰かが読むたび」= 実質毎フレーム走る = LobbyPatch と同じ致命形。
+        // 手動走査なら interop 変換自体が発生しない (Patches/LobbyPatch.cs の FindMapTheme と同じ型)。
+        var anySpecialActive = false;
+        var specials = __instance.specials;
+
+        for (var i = 0; i < specials.Count; i++)
+        {
+            IActivatable s = specials[i];
+
+            if (s != null && s.IsActive)
+            {
+                anySpecialActive = true;
+                break;
+            }
+        }
+
+        __result = anySpecialActive || CustomSabotage.Instances.Count > 0;
         return false;
     }
 }
