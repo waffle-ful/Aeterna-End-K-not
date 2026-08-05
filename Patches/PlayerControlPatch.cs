@@ -139,6 +139,11 @@ internal static class CheckMurderPatch
             {
                 // ジェミニの分身だけは「キルを吸収して消える」(それ以外の CNO は従来どおり完全に無反応)
                 Gemini.TryAbsorbKill(killer, target);
+                // IKillableDummy を名乗る CNO (ダミー類) はここでキルを受け取る。客のローカルには CNO が
+                // 残っているのでキルボタンが光る = 客はこの経路で普通に殺せる。ホストは AllPlayerControls
+                // から CNO を外している都合でボタンが光らないため、別途ペット押下の近接判定を用意してある
+                // (PetActionsPatch.OnPetUse)。
+                CustomNetObject.TryKillDummy(killer, target);
                 return false;
             }
 

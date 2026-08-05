@@ -188,6 +188,19 @@ public class DummySpawner : RoleBase
         }
     }
 
+    /// <summary>撃破されたダミーを保持者の台帳から外す (進捗表示の体数を合わせるため)。</summary>
+    internal static void ForgetDummy(RandomDummy dummy)
+    {
+        foreach (List<RandomDummy> list in SpawnedDummies.Values)
+            list.Remove(dummy);
+    }
+
+    /// <summary>ペットでの撃破範囲。ダミーを持たないモードでも 0 にはしない (Dev ダミー用の既定と共用)。</summary>
+    internal static float GetKillRange()
+    {
+        return DummyKillRangeOpt?.GetFloat() ?? 1.5f;
+    }
+
     public override string GetProgressText(byte playerId, bool comms)
     {
         if (!SpawnedDummies.TryGetValue(playerId, out var dummies) || dummies.Count == 0)
@@ -291,7 +304,7 @@ public class DummySpawner : RoleBase
     }
 }
 
-internal sealed class RandomDummy : CustomNetObject
+internal sealed class RandomDummy : CustomNetObject, IKillableDummy
 {
     private static readonly string[] SkinIds =
     [
@@ -377,5 +390,26 @@ internal sealed class RandomDummy : CustomNetObject
     public override void OnMeeting()
     {
         Despawn();
+    }
+
+    // 撹乱が役職の目的なので、クルーが歩いてペットを押すだけで全消しできてはいけない。
+    // ジェミニの分身破壊 (Gemini.TryAbsorbKill) と同じくキル権限を持つ者だけに絞る。
+    public bool CanBeKilledBy(PlayerControl killer)
+    {
+        return killer && killer.IsAlive() && killer.CanUseKillButton();
+    }
+
+    public void OnKilled(PlayerControl killer)
+    {
+        Logger.Info($"{killer.GetNameWithRole().RemoveHtmlTags()} がダミーを破壊した", "DummySpawner");
+
+        DummySpawner.ForgetDummy(this);
+        // 死体はダミーが立っていた場所に、ダミー自身の色で残す (Despawn より先に Position を使う)。
+        SpawnDummyCorpse(killer, Position, _colorId);
+        Despawn();
+
+        Main.AllAlivePlayerControlsToList.Do(p => p.KillFlash());
+        killer.SetKillCooldown();
+        Utils.NotifyRoles(SpecifySeer: killer, SpecifyTarget: killer);
     }
 }
