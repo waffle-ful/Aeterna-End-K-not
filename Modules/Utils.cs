@@ -5591,7 +5591,7 @@ public static class Utils
 
     // Next 2: From MoreGamemodes by Rabek009
 
-    private static void CreateDeadBody(Vector3 position, byte colorId, PlayerControl deadBodyParent)
+    private static DeadBody CreateDeadBody(Vector3 position, byte colorId, PlayerControl deadBodyParent)
     {
         int baseColorId = deadBodyParent.Data.DefaultOutfit.ColorId;
         deadBodyParent.Data.DefaultOutfit.ColorId = colorId;
@@ -5605,11 +5605,18 @@ public static class Utils
         vector.z = vector.y / 1000f;
         deadBody.transform.position = vector;
         deadBodyParent.Data.DefaultOutfit.ColorId = baseColorId;
+        return deadBody;
     }
 
     // Ported from upstream EHR 7650ac30: wrap full dead body spawn + MurderPlayer RPC burst
     // through DataFlagRateLimiter (cost: 4 messages per call) to avoid Hacking kicks.
-    public static void RpcCreateDeadBody(Vector3 position, byte colorId, PlayerControl deadBodyParent, SendOption sendOption = SendOption.Reliable)
+    /// <param name="onCreated">
+    /// 生成された DeadBody を受け取るコールバック (ホスト側・生成直後に同期で呼ばれる)。実体の生成は
+    /// rate limiter 経由で遅延するため呼出側では掴めない — 「この死体だけ特別扱いしたい」用途
+    /// (ダミー撃破の偽死体を通報不可にする等) はここで実体を受け取ること。座標での照合は、同じ場所で
+    /// 起きた本物のキルの死体を巻き添えにするので使わない。
+    /// </param>
+    public static void RpcCreateDeadBody(Vector3 position, byte colorId, PlayerControl deadBodyParent, SendOption sendOption = SendOption.Reliable, Action<DeadBody> onCreated = null)
     {
         if (!deadBodyParent || !AmongUsClient.Instance.AmHost) return;
         if (!Main.IntroDestroyed && !GameStates.IsLobby) return;
@@ -5618,7 +5625,7 @@ public static class Utils
         {
             // rate limiter で遅延実行される間に deadBodyParent が破棄される可能性があるので再チェック
             if (!deadBodyParent) return;
-            CreateDeadBody(position, colorId, deadBodyParent);
+            onCreated?.Invoke(CreateDeadBody(position, colorId, deadBodyParent));
             PlayerControl playerControl = Object.Instantiate(AmongUsClient.Instance.PlayerPrefab, Vector2.zero, Quaternion.identity);
             playerControl.PlayerId = deadBodyParent.PlayerId;
             playerControl.isNew = false;
