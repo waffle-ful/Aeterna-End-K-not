@@ -207,7 +207,9 @@ public static class BackroomsAmbient
         }
 
         Il2CppStructArray<float> il2cppBuf = new(totalSamples);
-        for (int i = 0; i < totalSamples; i++) il2cppBuf[i] = interleaved[i];
+        // Managed float[] -> Il2CppStructArray<float> via Marshal.Copy (per-element indexer is a trap — MEMORY.md)。
+        // lobby-ambient.wav は ~3.5M サンプルあり、インデクサループはロビー入室時に ~150ms 級のヒッチ源になる。
+        System.Runtime.InteropServices.Marshal.Copy(interleaved, 0, IntPtr.Add(il2cppBuf.Pointer, IntPtr.Size * 4), totalSamples);
 
         AudioClip clip = AudioClip.Create(Path.GetFileNameWithoutExtension(path), samplesPerChannel, channels, sampleRate, false);
         clip.SetData(il2cppBuf, 0);
