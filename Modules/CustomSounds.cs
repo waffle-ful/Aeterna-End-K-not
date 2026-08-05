@@ -405,7 +405,9 @@ public static class CustomSoundsManager
     {
         var sw = Stopwatch.StartNew();
         Il2CppStructArray<float> il2cppBuffer = new(read);
-        for (int i = 0; i < read; i++) il2cppBuffer[i] = buffer[i];
+        // Managed float[] -> Il2CppStructArray<float> via Marshal.Copy (per-element indexer is a trap — MEMORY.md)。
+        // BGM 級 (23M サンプル) でインデクサループは実測 ~1000ms、一括コピーなら数十 ms。
+        System.Runtime.InteropServices.Marshal.Copy(buffer, 0, IntPtr.Add(il2cppBuffer.Pointer, IntPtr.Size * 4), read);
 
         AudioClip clip = AudioClip.Create(Path.GetFileNameWithoutExtension(path), read / channels, channels, sampleRate, false);
         clip.SetData(il2cppBuffer, 0);
@@ -430,8 +432,51 @@ public static class CustomSoundsManager
     private const int MaxPreloadSamples = 8_000_000;
     private static int preloadTicks;
     private static bool preloadStarted;
-    private static readonly ConcurrentQueue<(string Path, float[] Buffer, int Read, int Channels, int SampleRate)> PreloadDecoded = [];
+    // BgmName != null なら BGMManager 管轄のトラック (BgmCache へ届ける)。null なら SFX (audioCache へ)。
+    private static readonly ConcurrentQueue<(string Path, float[] Buffer, int Read, int Channels, int SampleRate, string BgmName)> PreloadDecoded = [];
     private static readonly ConcurrentQueue<string> PreloadWavPaths = [];
+
+    // BGM チャンク分割クリップ化の進行状態 (1 曲分)。SetData を複数フレームへ割り、1 tick の停止を
+    // HITCH 検出閾値 (50ms) 未満に抑える。完成するまで PrimeCache しないので途中データが鳴ることはない。
+    private const int BgmCopyChunkFloats = 4_000_000; // ≒16MB/チャンク、Marshal.Copy+SetData で ~15ms 級
+    private static (string BgmName, float[] Buffer, int Read, int Channels, AudioClip Clip, int Copied)? bgmClipInProgress;
+    private static Il2CppStructArray<float> bgmChunkBuffer; // フルサイズチャンク再利用バッファ (端数チャンクのみ都度確保)
+
+    private static void PumpBgmClipChunk()
+    {
+        var s = bgmClipInProgress.Value;
+
+        try
+        {
+            int chunkFloats = BgmCopyChunkFloats - BgmCopyChunkFloats % s.Channels;
+            int n = Math.Min(chunkFloats, s.Read - s.Copied);
+
+            Il2CppStructArray<float> chunk = n == chunkFloats
+                ? bgmChunkBuffer ??= new Il2CppStructArray<float>(chunkFloats)
+                : new Il2CppStructArray<float>(n);
+
+            System.Runtime.InteropServices.Marshal.Copy(s.Buffer, s.Copied, IntPtr.Add(chunk.Pointer, IntPtr.Size * 4), n);
+            // SetData の第 2 引数はサンプルフレーム単位 (チャンネル込みではない) — chunkFloats は
+            // channels の倍数に丸めてあるので Copied / Channels は常に割り切れる。
+            s.Clip.SetData(chunk, s.Copied / s.Channels);
+            s.Copied += n;
+
+            if (s.Copied >= s.Read)
+            {
+                bgmClipInProgress = null;
+                BGMManager.PrimeCache(s.BgmName, s.Clip);
+                Logger.Info($"Preloaded BGM {s.BgmName} (chunked, {(s.Read + BgmCopyChunkFloats - 1) / BgmCopyChunkFloats} frames)", "CustomSounds");
+            }
+            else bgmClipInProgress = s;
+        }
+        catch (Exception ex)
+        {
+            // この曲だけ諦める (初回再生時の同期ロードに戻るだけ)。作りかけの clip は破棄する。
+            bgmClipInProgress = null;
+            if (s.Clip) UnityEngine.Object.Destroy(s.Clip);
+            Logger.Exception(ex, "CustomSounds.PumpBgmClipChunk");
+        }
+    }
 
     // FixedUpdateCaller から毎 fixed update で呼ばれる (メインスレッド専用ポンプ)。
     public static void PreloadTick()
@@ -440,21 +485,38 @@ public static class CustomSoundsManager
 
         if (!preloadStarted)
         {
-            // 効果音を切っている間は温めない (再生されない音のデコード分だけ純増になるため)。
+            // 対象系統 (SFX / BGM) が両方切られている間は温めない (再生されない音のデコード分だけ純増になるため)。
             // ON に切り替えられたら次の tick から通常どおり始動する。
-            if (Main.EnableCustomSoundEffect == null || !Main.EnableCustomSoundEffect.Value) return;
+            bool sfxOn = Main.EnableCustomSoundEffect?.Value ?? false;
+            bool bgmOn = Main.EnableBGM?.Value ?? false;
+            if (!sfxOn && !bgmOn) return;
             if (++preloadTicks < PreloadStartDelayTicks) return;
 
             preloadStarted = true;
-            var worker = new Thread(PreloadWorker) { IsBackground = true, Priority = System.Threading.ThreadPriority.BelowNormal, Name = "EndKnot.SoundPreload" };
+            var worker = new Thread(() => PreloadWorker(sfxOn, bgmOn)) { IsBackground = true, Priority = System.Threading.ThreadPriority.BelowNormal, Name = "EndKnot.SoundPreload" };
             worker.Start();
             return;
         }
 
-        // 1 tick 1 件だけクリップ化する (まとめて処理すると自分がヒッチ源になる)
-        if (PreloadDecoded.TryDequeue(out (string Path, float[] Buffer, int Read, int Channels, int SampleRate) d))
+        // BGM のクリップ化進行中なら 1 tick 1 チャンクだけ書き進める (最優先・他の処理はしない)
+        if (bgmClipInProgress != null)
         {
-            if (!audioCache.TryGetValue(d.Path, out AudioClip cached) || !cached)
+            PumpBgmClipChunk();
+            return;
+        }
+
+        // 1 tick 1 件だけクリップ化する (まとめて処理すると自分がヒッチ源になる)
+        if (PreloadDecoded.TryDequeue(out (string Path, float[] Buffer, int Read, int Channels, int SampleRate, string BgmName) d))
+        {
+            if (d.BgmName != null)
+            {
+                // BGM 級 (数十 MB PCM) は一括 SetData でも 50-70ms かかりサブ秒ヒッチ検出閾値を踏む
+                // (実測: ロビー入り直後の preload 7 連発が「数秒かくかく」体感の一因)。
+                // クリップだけ先に作り、データ書き込みはチャンク分割で複数フレームに薄める。
+                AudioClip clip = AudioClip.Create(Path.GetFileNameWithoutExtension(d.Path), d.Read / d.Channels, d.Channels, d.SampleRate, false);
+                bgmClipInProgress = (d.BgmName, d.Buffer, d.Read, d.Channels, clip, 0);
+            }
+            else if (!audioCache.TryGetValue(d.Path, out AudioClip cached) || !cached)
             {
                 AudioClip clip = CreateClip(d.Path, d.Buffer, d.Read, d.Channels, d.SampleRate, out long copyMs);
                 if (clip) clip.hideFlags |= HideFlags.DontUnloadUnusedAsset;
@@ -477,7 +539,58 @@ public static class CustomSoundsManager
 
     // バックグラウンドスレッド本体。System.IO + マネージドデコーダのみ使用可 (Unity/Il2Cpp API 禁止、
     // Logger も呼ばない)。audioCache には触らず、結果はキュー経由でメインスレッドに渡す。
-    private static void PreloadWorker()
+    private static void PreloadWorker(bool sfxOn, bool bgmOn)
+    {
+        if (sfxOn) PreloadSfx();
+        if (bgmOn) PreloadBgm();
+    }
+
+    // BGM トラック (BGMManager 管轄) の裏デコード。SFX と違い 1 本の PCM が数十 MB あるため、
+    // 前の 1 本がメインスレッドポンプでクリップ化されるまで次をデコードしない (キュー滞留 = メモリ山を防ぐ)。
+    private static void PreloadBgm()
+    {
+        try
+        {
+            foreach (string name in BGMManager.GetPreloadFiles())
+            {
+                try
+                {
+                    while (!PreloadDecoded.IsEmpty) Thread.Sleep(100);
+
+                    string path = BGMManager.ResolveOrExtract(name);
+                    if (path == null) continue;
+
+                    switch (Path.GetExtension(path).ToLowerInvariant())
+                    {
+                        case ".ogg":
+                        {
+                            (float[] buffer, int read, int channels, int sampleRate) = DecodeOgg(path);
+                            PreloadDecoded.Enqueue((path, buffer, read, channels, sampleRate, name));
+                            break;
+                        }
+                        case ".mp3":
+                        {
+                            (float[] buffer, int read, int channels, int sampleRate) = DecodeMp3(path);
+                            PreloadDecoded.Enqueue((path, buffer, read, channels, sampleRate, name));
+                            break;
+                        }
+                        // .wav BGM は LoadWAV が Il2Cpp I/O 依存でスレッドに逃がせないため対象外
+                        // (従来どおり初回再生時の同期ロード — Marshal.Copy 化で高速化済み)。
+                    }
+                }
+                catch
+                {
+                    // このトラックだけ諦めて次へ (初回再生時の同期デコードに戻るだけ)
+                }
+            }
+        }
+        catch
+        {
+            // 列挙ごと失敗しても従来動作に戻るだけ
+        }
+    }
+
+    private static void PreloadSfx()
     {
         try
         {
@@ -525,13 +638,13 @@ public static class CustomSoundsManager
                         case ".ogg":
                         {
                             (float[] buffer, int read, int channels, int sampleRate) = DecodeOgg(path);
-                            if (read <= MaxPreloadSamples) PreloadDecoded.Enqueue((path, buffer, read, channels, sampleRate));
+                            if (read <= MaxPreloadSamples) PreloadDecoded.Enqueue((path, buffer, read, channels, sampleRate, null));
                             break;
                         }
                         case ".mp3":
                         {
                             (float[] buffer, int read, int channels, int sampleRate) = DecodeMp3(path);
-                            if (read <= MaxPreloadSamples) PreloadDecoded.Enqueue((path, buffer, read, channels, sampleRate));
+                            if (read <= MaxPreloadSamples) PreloadDecoded.Enqueue((path, buffer, read, channels, sampleRate, null));
                             break;
                         }
                         default:
@@ -562,7 +675,7 @@ public static class CustomSoundsManager
             return s / 32768.0F;
         }
 
-        private static int BytesToInt(Il2CppStructArray<byte> bytes, int offset = 0)
+        private static int BytesToInt(byte[] bytes, int offset = 0)
         {
             int value = 0;
 
@@ -578,8 +691,13 @@ public static class CustomSoundsManager
         public int SampleCount { get; }
         public int Frequency { get; }
 
-        public WAV(Il2CppStructArray<byte> wav)
+        public WAV(Il2CppStructArray<byte> wavIl2cpp)
         {
+            // Il2Cpp インデクサの per-element 読みは罠 (MEMORY.md — 大要素数だと interop 呼び出しが支配的)。
+            // 先頭で一括 managed 化してから解析・変換し、最後にチャンネルごと 1 回の Marshal.Copy で書き戻す。
+            byte[] wav = new byte[wavIl2cpp.Length];
+            System.Runtime.InteropServices.Marshal.Copy(IntPtr.Add(wavIl2cpp.Pointer, IntPtr.Size * 4), wav, 0, wav.Length);
+
             // Determine if mono or stereo
             ChannelCount = wav[22]; // Forget byte 23 as 99.999% of WAVs are 1 or 2 channels
             // Get the frequency
@@ -603,10 +721,9 @@ public static class CustomSoundsManager
             SampleCount = dataSize / 2; // 2 bytes per sample (16 bit sound mono)
             if (ChannelCount == 2) SampleCount /= 2; // 4 bytes per sample (16 bit stereo)
 
-            // Allocate memory (right will be null if only mono sound)
-            LeftChannel = new Il2CppStructArray<float>(SampleCount);
-            if (ChannelCount == 2) RightChannel = new Il2CppStructArray<float>(SampleCount);
-            else RightChannel = null;
+            // 変換は managed 配列上で行い、Il2Cpp 側へは最後に一括転送する
+            float[] left = new float[SampleCount];
+            float[] right = ChannelCount == 2 ? new float[SampleCount] : null;
 
             int end = pos + dataSize;
             // Write to double array/s:
@@ -614,16 +731,26 @@ public static class CustomSoundsManager
 
             while (pos + (ChannelCount * 2) <= end && i < SampleCount)
             {
-                LeftChannel[i] = BytesToFloat(wav[pos], wav[pos + 1]);
+                left[i] = BytesToFloat(wav[pos], wav[pos + 1]);
                 pos += 2;
 
                 if (ChannelCount == 2)
                 {
-                    RightChannel[i] = BytesToFloat(wav[pos], wav[pos + 1]);
+                    right[i] = BytesToFloat(wav[pos], wav[pos + 1]);
                     pos += 2;
                 }
                 i++;
             }
+
+            LeftChannel = new Il2CppStructArray<float>(SampleCount);
+            System.Runtime.InteropServices.Marshal.Copy(left, 0, IntPtr.Add(LeftChannel.Pointer, IntPtr.Size * 4), SampleCount);
+
+            if (ChannelCount == 2)
+            {
+                RightChannel = new Il2CppStructArray<float>(SampleCount);
+                System.Runtime.InteropServices.Marshal.Copy(right, 0, IntPtr.Add(RightChannel.Pointer, IntPtr.Size * 4), SampleCount);
+            }
+            else RightChannel = null;
         }
 
         // Returns left and right double arrays. 'right' will be null if sound is mono.
