@@ -18,8 +18,8 @@ namespace EndKnot.Modules;
 //   ・Backrooms に入っている間だけループ再生。Enter/Exit/OnGameStart/OnLobbyReload +
 //     LobbyBehaviour.OnDestroy の 5 経路から Stop() を呼ぶ。
 //   ・WAV パーサは format=1 (PCM 16/24bit) と format=3 (IEEE float 32bit) を扱う。
-//     CustomSoundsManager.LoadWAV は 16bit PCM mono 決め打ちで既存 SFX 専用なので
-//     ここでは触らない (32bit float を 16bit 整数として解釈してノイズ化する罠)。
+//     (CustomSoundsManager.DecodeWav も現在は同フォーマット対応だが、あちらは audioCache /
+//     SoundManager 前提の SFX 経路なので、独自 AudioSource 運用のこちらは自前ローダーを維持)
 public static class BackroomsAmbient
 {
     private const string AmbientName = "lobby-ambient";
@@ -134,8 +134,7 @@ public static class BackroomsAmbient
         }
     }
 
-    // CustomSoundsManager.LoadWAV は 16bit PCM mono 決め打ちで、IEEE float / stereo を
-    // 解釈できずノイズ化する。BackroomsAmbient 用に最低限のフォーマット対応版を持つ。
+    // BackroomsAmbient 用の最低限のフォーマット対応 WAV ローダー (冒頭の設計メモ参照)。
     //   ・format 1 (PCM): 16bit, 24bit
     //   ・format 3 (IEEE float): 32bit
     //   ・mono / stereo どちらも (Unity AudioClip にチャンネル数を渡してそのまま再生)
