@@ -357,6 +357,9 @@ internal static class SetUpRoleTextPatch
         ShowHostMeetingPatch.ShowRole_Postfix();
     }
 
+    // 直近にフル出力した設定ダンプのハッシュ (プロセス内比較のみなので string の既定ハッシュで足りる)。null = 未出力。
+    private static int? LastLoggedSettingsHash;
+
     private static System.Collections.IEnumerator LogGameInfo()
     {
         StringBuilder sb = new("\n");
@@ -401,39 +404,61 @@ internal static class SetUpRoleTextPatch
 
         yield return null;
 
-        sb.Append("------------Vanilla Settings------------\n");
+        // 設定ダンプは1回 ~95KB あり、log.html の 4MB ローテ (→自動 DumpLog) を約3試合ごとに起こす主因だった。
+        // 前試合から設定値が変わっていなければ文字列構築ごとスキップし、1行の印だけ残す。
+        string vanillaSettings = GameOptionsManager.Instance.CurrentGameOptions.ToHudString(GameData.Instance ? GameData.Instance.PlayerCount : 10);
 
-        foreach (string t in GameOptionsManager.Instance.CurrentGameOptions.ToHudString(GameData.Instance ? GameData.Instance.PlayerCount : 10).Split("\r\n")[1..])
-            sb.Append(t + "\n");
+        var hc = new HashCode();
+        hc.Add(vanillaSettings);
 
-        yield return null;
-
-        sb.Append("------------Modded Settings------------\n");
-
-        string disabledRoleStr = GetString("Rate0");
-        var i = 0;
-
-        foreach ((TabGroup tab, OptionItem[] options) in Options.GroupedOptions)
+        foreach (OptionItem oi in OptionItem.AllOptions)
         {
-            sb.Append($"\n----{GetString($"TabGroup.{tab}")}----\n");
+            hc.Add(oi.Id);
+            hc.Add(oi.CurrentValue);
+        }
 
-            foreach (OptionItem o in options)
+        int settingsHash = hc.ToHashCode();
+
+        if (settingsHash == LastLoggedSettingsHash)
+            sb.Append("------------Settings unchanged from previous game (dump skipped)------------\n");
+        else
+        {
+            LastLoggedSettingsHash = settingsHash;
+
+            sb.Append("------------Vanilla Settings------------\n");
+
+            foreach (string t in vanillaSettings.Split("\r\n")[1..])
+                sb.Append(t + "\n");
+
+            yield return null;
+
+            sb.Append("------------Modded Settings------------\n");
+
+            string disabledRoleStr = GetString("Rate0");
+            var i = 0;
+
+            foreach ((TabGroup tab, OptionItem[] options) in Options.GroupedOptions)
             {
-                if (!o.IsCurrentlyHidden() && (o.Parent == null ? !o.GetString().Equals(disabledRoleStr) : AllParentsEnabled(o)))
-                    sb.Append($"{(o.Parent == null ? o.GetName(true, true).RemoveHtmlTags().PadRightV2(40) : $"┗ {o.GetName(true, true).RemoveHtmlTags()}".PadRightV2(41))}:{o.GetString().RemoveHtmlTags()}\n");
+                sb.Append($"\n----{GetString($"TabGroup.{tab}")}----\n");
 
-                if (i++ > 20)
+                foreach (OptionItem o in options)
                 {
-                    yield return null;
-                    i = 0;
-                }
+                    if (!o.IsCurrentlyHidden() && (o.Parent == null ? !o.GetString().Equals(disabledRoleStr) : AllParentsEnabled(o)))
+                        sb.Append($"{(o.Parent == null ? o.GetName(true, true).RemoveHtmlTags().PadRightV2(40) : $"┗ {o.GetName(true, true).RemoveHtmlTags()}".PadRightV2(41))}:{o.GetString().RemoveHtmlTags()}\n");
 
-                continue;
+                    if (i++ > 20)
+                    {
+                        yield return null;
+                        i = 0;
+                    }
 
-                bool AllParentsEnabled(OptionItem oi)
-                {
-                    if (oi.Parent == null) return true;
-                    return oi.Parent.GetBool() && AllParentsEnabled(oi.Parent);
+                    continue;
+
+                    bool AllParentsEnabled(OptionItem oi)
+                    {
+                        if (oi.Parent == null) return true;
+                        return oi.Parent.GetBool() && AllParentsEnabled(oi.Parent);
+                    }
                 }
             }
         }

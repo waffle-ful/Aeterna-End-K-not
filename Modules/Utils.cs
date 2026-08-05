@@ -4867,7 +4867,7 @@ public static class Utils
         return t.PadRight(Mathf.Max(num - (bc - t.Length), 0));
     }
 
-    public static void DumpLog(bool open = true, bool finish = true)
+    public static void DumpLog(bool open = true, bool finish = true, bool moveHtml = false)
     {
         if (finish) CustomLogger.Instance.Finish();
 
@@ -4877,29 +4877,76 @@ public static class Utils
         if (!Directory.Exists(f)) Directory.CreateDirectory(f);
 
         var filename = $"{f}/EndKnot-v{Main.PluginVersion}-LOG";
+        string healthLog = EndKnot.Modules.HealthLog.FilePath;
 
-        FileInfo[] files = [new(Path.Combine(Paths.BepInExRootPath, "LogOutput.log")), new(CustomLogger.LOGFilePath)];
-        // log.html / LogOutput.log が別ハンドルに握られている瞬間の排他違反 (IOException) を握りつぶす (下の healthLog コピーと同型ガード)
-        // 同一秒内に2回 DumpLog が走ると同名フォルダ+同名ファイルになるので overwrite 必須 (下の healthLog と同型)
-        try { files.Do(x => File.Copy(x.FullName, $"{filename}{x.Extension}", overwrite: true)); }
-        catch (Exception e) { ThrowException(e); }
+        // 4MB ローテ (ClearLog) 経由では、この直後に log.html が新ヘッダで上書きされる。裏スレッドのコピー中に
+        // truncate されると壊れたダンプになるため、コピーでなく rename (一瞬) で先に退避する。
+        var htmlMoved = false;
 
-        // HealthLog(状態/メモリ/kick の heartbeat)も同じセッションフォルダに同梱する。
-        // ライブ本体は EndKnot_Logs 直下の固定ファイル(将来の番犬が tail 用)、ここはその時点のスナップショット。
-        try
+        if (moveHtml)
         {
-            string healthLog = EndKnot.Modules.HealthLog.FilePath;
-            if (healthLog != null && File.Exists(healthLog))
-                File.Copy(healthLog, $"{f}/EndKnot-v{Main.PluginVersion}-HEALTH.log", overwrite: true);
+            try
+            {
+                File.Move(CustomLogger.LOGFilePath, $"{filename}.html", overwrite: true);
+                htmlMoved = true;
+            }
+            catch { /* ビューアが握っていて Move できない時は下のコピーに任せる (truncate 競合は許容) */ }
         }
-        catch (Exception e) { ThrowException(e); }
 
-        if (!open) return;
+        if (!open)
+        {
+            // 自動ダンプ (試合終了時 / 4MB ローテ): 数 MB の同期コピーが毎回 300ms+ のヒッチになっていたため
+            // 裏スレッドへ逃がす (best-effort。書込み側をブロックしない共有読取コピー)。
+            var moved = htmlMoved;
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                try { CopyDumpFiles(f, filename, healthLog, !moved); }
+                catch { /* 診断用スナップショットは best-effort */ }
+            });
+
+            return;
+        }
+
+        // 手動ダンプ (open=true) はメインスレッド同期実行なので、失敗はログに残す (自動ダンプと違い操作者がその場に居る)。
+        CopyDumpFiles(f, filename, healthLog, !htmlMoved, logErrors: true);
 
         if (PlayerControl.LocalPlayer && HudManager.InstanceExists)
             HudManager.Instance?.Chat?.AddChat(PlayerControl.LocalPlayer, string.Format(GetString("Message.DumpfileSaved"), "EndKnot" + filename.Split("EndKnot")[1]));
 
         if (OperatingSystem.IsWindows()) Process.Start("explorer.exe", f.Replace("/", "\\"));
+    }
+
+    private static void CopyDumpFiles(string folder, string filename, string healthLog, bool includeHtml, bool logErrors = false)
+    {
+        // 同一秒内に2回 DumpLog が走ると同名フォルダ+同名ファイルになるので上書き (FileMode.Create) 必須。
+        // 各ファイル個別 try/catch: 別ハンドルに握られている瞬間の排他違反で他のファイルまで道連れにしない。
+        // ⚠️ logErrors はメインスレッド専用 (ThrowException → Logger は非スレッドセーフ)。裏スレッドからは必ず false。
+        try { CopyShared(Path.Combine(Paths.BepInExRootPath, "LogOutput.log"), $"{filename}.log"); }
+        catch (Exception e) { if (logErrors) ThrowException(e); }
+
+        if (includeHtml)
+        {
+            try { CopyShared(CustomLogger.LOGFilePath, $"{filename}.html"); }
+            catch (Exception e) { if (logErrors) ThrowException(e); }
+        }
+
+        // HealthLog(状態/メモリ/kick の heartbeat)も同じセッションフォルダに同梱する。
+        // ライブ本体は EndKnot_Logs 直下の固定ファイル(番犬が tail 用)、ここはその時点のスナップショット。
+        try
+        {
+            if (healthLog != null && File.Exists(healthLog))
+                CopyShared(healthLog, Path.Combine(folder, $"EndKnot-v{Main.PluginVersion}-HEALTH.log"));
+        }
+        catch (Exception e) { if (logErrors) ThrowException(e); }
+    }
+
+    private static void CopyShared(string src, string dst)
+    {
+        // File.Copy はソースを排他寄りに開くため、メインスレッドの AppendAllText と衝突して IOException になる。
+        // FileShare.ReadWrite で開けば書込み側を一切ブロックせずスナップショットを取れる。
+        using var s = new FileStream(src, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var d = new FileStream(dst, FileMode.Create, FileAccess.Write, FileShare.None);
+        s.CopyTo(d);
     }
 
     public static (int Doused, int All) GetDousedPlayerCount(byte playerId)
