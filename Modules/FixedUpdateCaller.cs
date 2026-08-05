@@ -137,6 +137,11 @@ public static class FixedUpdateCaller
             try { EndKnot.Modules.VoiceVox.VoiceVoxManager.Tick(); }
             catch (Exception e) { Utils.ThrowException(e); }
 
+            // サウンドの起動時プリロード (背景スレッドで先行デコード → ここで 1 tick 1 クリップ化)。
+            // 初回再生時の同期フルデコードによるフレームストール対策 (BUG-20260729-17)。
+            try { CustomSoundsManager.PreloadTick(); }
+            catch (Exception e) { Utils.ThrowException(e); }
+
             // AI実況相棒アプリ向けイベント出力層 (join/leave/chat/intervention/phase/demo)。送信ゼロ・ホストローカルのみ。
             try { EndKnot.Modules.Companion.CompanionEventEmitter.Tick(); }
             catch (Exception e)
