@@ -2,9 +2,12 @@
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using System;
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Reflection;
+using System.Threading;
 using UnityEngine;
 
 namespace EndKnot.Modules;
@@ -319,18 +322,43 @@ public static class CustomSoundsManager
 
     internal static AudioClip LoadWAV(string path)
     {
+        var sw = Stopwatch.StartNew();
         var fileData = Il2CppSystem.IO.File.ReadAllBytes(path);
         WAV wav = new(fileData);
 
-        Logger.Info($"[WAV: LeftChannel={wav.LeftChannel}, RightChannel={wav.RightChannel}, ChannelCount={wav.ChannelCount}, SampleCount={wav.SampleCount}, Frequency={wav.Frequency}]", "CustomSounds");
-
         AudioClip clip = AudioClip.Create(Path.GetFileNameWithoutExtension(path), wav.SampleCount, 1, wav.Frequency, false, false);
         clip.SetData(wav.LeftChannel, 0);
+
+        Logger.Info($"[WAV: LeftChannel={wav.LeftChannel}, RightChannel={wav.RightChannel}, ChannelCount={wav.ChannelCount}, SampleCount={wav.SampleCount}, Frequency={wav.Frequency}, loadMs={sw.ElapsedMilliseconds}]", "CustomSounds");
 
         return clip;
     }
 
     internal static AudioClip LoadOGG(string path)
+    {
+        var sw = Stopwatch.StartNew();
+        (float[] buffer, int read, int channels, int sampleRate) = DecodeOgg(path);
+        long decodeMs = sw.ElapsedMilliseconds;
+
+        AudioClip clip = CreateClip(path, buffer, read, channels, sampleRate, out long copyMs);
+        Logger.Info($"[OGG: Channels={channels}, SampleRate={sampleRate}, SamplesRead={read}, decodeMs={decodeMs}, copyMs={copyMs}]", "CustomSounds");
+        return clip;
+    }
+
+    internal static AudioClip LoadMP3(string path)
+    {
+        var sw = Stopwatch.StartNew();
+        (float[] buffer, int read, int channels, int sampleRate) = DecodeMp3(path);
+        long decodeMs = sw.ElapsedMilliseconds;
+
+        AudioClip clip = CreateClip(path, buffer, read, channels, sampleRate, out long copyMs);
+        Logger.Info($"[MP3: Channels={channels}, SampleRate={sampleRate}, SamplesRead={read}, decodeMs={decodeMs}, copyMs={copyMs}]", "CustomSounds");
+        return clip;
+    }
+
+    // OGG/MP3 のデコード本体。System.IO + マネージドデコーダのみ (Unity/Il2Cpp API 不使用) なので
+    // バックグラウンドスレッドから呼んでよい。AudioClip 化 (CreateClip) はメインスレッド専用。
+    private static (float[] Buffer, int Read, int Channels, int SampleRate) DecodeOgg(string path)
     {
         using var reader = new NVorbis.VorbisReader(path);
         int channels = reader.Channels;
@@ -342,18 +370,10 @@ public static class CustomSoundsManager
         int interleavedLen = (int)(totalSamples * channels);
         float[] buffer = new float[interleavedLen];
         int read = reader.ReadSamples(buffer, 0, interleavedLen);
-
-        Logger.Info($"[OGG: Channels={channels}, SampleRate={sampleRate}, SamplesRead={read}]", "CustomSounds");
-
-        Il2CppStructArray<float> il2cppBuffer = new(read);
-        for (int i = 0; i < read; i++) il2cppBuffer[i] = buffer[i];
-
-        AudioClip clip = AudioClip.Create(Path.GetFileNameWithoutExtension(path), read / channels, channels, sampleRate, false);
-        clip.SetData(il2cppBuffer, 0);
-        return clip;
+        return (buffer, read, channels, sampleRate);
     }
 
-    internal static AudioClip LoadMP3(string path)
+    private static (float[] Buffer, int Read, int Channels, int SampleRate) DecodeMp3(string path)
     {
         using var reader = new NLayer.MpegFile(path);
         int channels = reader.Channels;
@@ -365,15 +385,144 @@ public static class CustomSoundsManager
         int interleavedLen = (int)totalInterleaved;
         float[] buffer = new float[interleavedLen];
         int read = reader.ReadSamples(buffer, 0, interleavedLen);
+        return (buffer, read, channels, sampleRate);
+    }
 
-        Logger.Info($"[MP3: Channels={channels}, SampleRate={sampleRate}, SamplesRead={read}]", "CustomSounds");
-
+    private static AudioClip CreateClip(string path, float[] buffer, int read, int channels, int sampleRate, out long copyMs)
+    {
+        var sw = Stopwatch.StartNew();
         Il2CppStructArray<float> il2cppBuffer = new(read);
         for (int i = 0; i < read; i++) il2cppBuffer[i] = buffer[i];
 
         AudioClip clip = AudioClip.Create(Path.GetFileNameWithoutExtension(path), read / channels, channels, sampleRate, false);
         clip.SetData(il2cppBuffer, 0);
+        copyMs = sw.ElapsedMilliseconds;
         return clip;
+    }
+
+    // ── 起動時サウンドプリロード ──────────────────────────────────────────
+    // 初回再生時の同期フルデコードがメインスレッドを止める疑いへの根治
+    // (BUG-20260729-17: ロビー放置中 27 秒 framestall の解除フレームに Earthquake MP3 の
+    // 初回デコード完了ログが一致)。圧縮系 (.ogg/.mp3) はバックグラウンドスレッドで PCM へ
+    // 先行デコードし、メインスレッドは 1 fixed update に 1 クリップだけ AudioClip 化して
+    // audioCache を温める。.wav は Il2Cpp I/O 依存でスレッドに逃がせないが小さく速いので
+    // メインスレッド側で 1 tick 1 件ずつ処理する。BGM/Backrooms サブフォルダは BGMManager
+    // 管轄なので対象外 (SoundsPath 直下のみ列挙)。個別失敗は握りつぶし、その音は従来どおり
+    // 初回再生時の同期デコードに任せる (プリロード自体が新たな障害点にならないこと優先)。
+    private const int PreloadStartDelayTicks = 500; // 起動直後の CPU 競合を避ける (fixed 50Hz × 500 ≒ 10 秒)
+    private static int preloadTicks;
+    private static bool preloadStarted;
+    private static readonly ConcurrentQueue<(string Path, float[] Buffer, int Read, int Channels, int SampleRate)> PreloadDecoded = [];
+    private static readonly ConcurrentQueue<string> PreloadWavPaths = [];
+
+    // FixedUpdateCaller から毎 fixed update で呼ばれる (メインスレッド専用ポンプ)。
+    public static void PreloadTick()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+
+        if (!preloadStarted)
+        {
+            // 効果音を切っている間は温めない (再生されない音のデコード分だけ純増になるため)。
+            // ON に切り替えられたら次の tick から通常どおり始動する。
+            if (Main.EnableCustomSoundEffect == null || !Main.EnableCustomSoundEffect.Value) return;
+            if (++preloadTicks < PreloadStartDelayTicks) return;
+
+            preloadStarted = true;
+            var worker = new Thread(PreloadWorker) { IsBackground = true, Priority = System.Threading.ThreadPriority.BelowNormal, Name = "EndKnot.SoundPreload" };
+            worker.Start();
+            return;
+        }
+
+        // 1 tick 1 件だけクリップ化する (まとめて処理すると自分がヒッチ源になる)
+        if (PreloadDecoded.TryDequeue(out (string Path, float[] Buffer, int Read, int Channels, int SampleRate) d))
+        {
+            if (!audioCache.TryGetValue(d.Path, out AudioClip cached) || !cached)
+            {
+                AudioClip clip = CreateClip(d.Path, d.Buffer, d.Read, d.Channels, d.SampleRate, out long copyMs);
+                if (clip) clip.hideFlags |= HideFlags.DontUnloadUnusedAsset;
+                audioCache[d.Path] = clip;
+                Logger.Info($"Preloaded {Path.GetFileName(d.Path)} (copyMs={copyMs})", "CustomSounds");
+            }
+
+            return;
+        }
+
+        if (PreloadWavPaths.TryDequeue(out string wavPath))
+        {
+            if (!audioCache.TryGetValue(wavPath, out AudioClip cached) || !cached)
+            {
+                LoadClip(wavPath); // キャッシュ格納と DontUnloadUnusedAsset は LoadClip 側で行われる
+                Logger.Info($"Preloaded {Path.GetFileName(wavPath)}", "CustomSounds");
+            }
+        }
+    }
+
+    // バックグラウンドスレッド本体。System.IO + マネージドデコーダのみ使用可 (Unity/Il2Cpp API 禁止、
+    // Logger も呼ばない)。audioCache には触らず、結果はキュー経由でメインスレッドに渡す。
+    private static void PreloadWorker()
+    {
+        try
+        {
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            const string prefix = "EndKnot.Resources.Sounds.";
+
+            foreach (string res in Assembly.GetExecutingAssembly().GetManifestResourceNames())
+            {
+                if (!res.StartsWith(prefix)) continue;
+
+                string tail = res[prefix.Length..];
+                if (Array.IndexOf(SupportedExtensions, Path.GetExtension(tail).ToLowerInvariant()) < 0) continue;
+
+                names.Add(Path.GetFileNameWithoutExtension(tail));
+            }
+
+            if (Directory.Exists(SoundsPath))
+            {
+                foreach (string file in Directory.GetFiles(SoundsPath))
+                {
+                    if (Array.IndexOf(SupportedExtensions, Path.GetExtension(file).ToLowerInvariant()) < 0) continue;
+
+                    names.Add(Path.GetFileNameWithoutExtension(file));
+                }
+            }
+
+            foreach (string name in names)
+            {
+                try
+                {
+                    string path = ResolveSoundPath(name); // 埋込リソースのディスク展開込み
+                    if (path == null) continue;
+
+                    switch (Path.GetExtension(path).ToLowerInvariant())
+                    {
+                        case ".ogg":
+                        {
+                            (float[] buffer, int read, int channels, int sampleRate) = DecodeOgg(path);
+                            PreloadDecoded.Enqueue((path, buffer, read, channels, sampleRate));
+                            break;
+                        }
+                        case ".mp3":
+                        {
+                            (float[] buffer, int read, int channels, int sampleRate) = DecodeMp3(path);
+                            PreloadDecoded.Enqueue((path, buffer, read, channels, sampleRate));
+                            break;
+                        }
+                        default:
+                            PreloadWavPaths.Enqueue(path);
+                            break;
+                    }
+                }
+                catch
+                {
+                    // この音だけ諦めて次へ (初回再生時の同期デコードに戻るだけ)
+                }
+            }
+        }
+        catch
+        {
+            // 列挙ごと失敗しても従来動作に戻るだけ
+        }
     }
 
     internal class WAV
