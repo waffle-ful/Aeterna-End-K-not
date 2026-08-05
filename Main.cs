@@ -1216,6 +1216,10 @@ public class Main : BasePlugin
             CustomLogger.ClearLog();
             Loaded = true;
 
+            // 古いログダンプフォルダの保持期間掃除 (14日+直近20個保持・リネームで保護)。列挙と記録だけ即時、削除は裏スレッド。
+            try { Modules.LogDumpRetention.Prune(); }
+            catch (Exception e) { Utils.ThrowException(e); }
+
             StartCoroutine(ModNewsFetcher.FetchNews());
 
             try { DevManager.StartFetchingTags(); }

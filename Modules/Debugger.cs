@@ -277,7 +277,8 @@ public class CustomLogger
         if (!check || (File.Exists(LOGFilePath) && new FileInfo(LOGFilePath).Length > 0))
         {
             PrivateInstance?.Finish();
-            try { Utils.DumpLog(false, false); } catch (Exception e) { LateTask.New(() => Logger.Fatal(e.ToString(), "ClearLog.DumpLog"), 0.1f); }
+            // moveHtml: 直下で log.html を新ヘッダ上書きするため、コピーでなく rename で退避させる (truncate 競合防止 + 同期コピー分のヒッチ削減)。
+            try { Utils.DumpLog(false, false, moveHtml: true); } catch (Exception e) { LateTask.New(() => Logger.Fatal(e.ToString(), "ClearLog.DumpLog"), 0.1f); }
         }
 
         File.WriteAllText(LOGFilePath, HtmlHeader);
