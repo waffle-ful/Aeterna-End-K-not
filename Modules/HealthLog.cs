@@ -91,6 +91,33 @@ public static class HealthLog
     private static bool _zombieHandled; // menufall エスカレーション発行済み (state が Ended を離れたら解除)
     private static long _lastEndedStuckNoteTs; // endedstuck ANOM のスロットル
 
+    // --- 有人/無人の弁別計器 (BUG-20260721-02: 「ハングは有人操作中のみ」説の機械判定用) ---
+    // GetLastInputInfo はこの Windows セッション全体の最終入力 tick を返す。HB に「最終入力からの
+    // 経過秒」を載せることで、ハング直前の HB が有人 (数秒) か無人 (数分〜) かを事後に判定できる。
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct LastInputInfo
+    {
+        public uint cbSize;
+        public uint dwTime;
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool GetLastInputInfo(ref LastInputInfo plii);
+
+    private static long GetInputIdleSeconds()
+    {
+        if (!OperatingSystem.IsWindows()) return -1;
+
+        try
+        {
+            var lii = new LastInputInfo { cbSize = (uint)System.Runtime.InteropServices.Marshal.SizeOf<LastInputInfo>() };
+            if (!GetLastInputInfo(ref lii)) return -1;
+            // Environment.TickCount と dwTime は同じ 32bit tick 系。unchecked 減算でラップも正しく差になる。
+            return unchecked((uint)Environment.TickCount - lii.dwTime) / 1000;
+        }
+        catch { return -1; }
+    }
+
     private static void EnsureInit()
     {
         if (Inited) return;
@@ -337,7 +364,7 @@ public static class HealthLog
                 unack = relSent - ackd;
             }
 
-            string hb = $"t={now} up={now - StartTs} state={state} host={(host ? 1 : 0)} server={server} players={players} wsMB={wsMB} gcMB={gcMB} gc2={gen2} nmSent={nmSent} nmSkip={nmSkip} eosTry={eosTry} eosFlow={eosFlow} idTok={idTok} ping={ping} rsndD={rsndD} unack={unack} pNoAck={pNoAck}{lastSendSuffix}";
+            string hb = $"t={now} up={now - StartTs} state={state} host={(host ? 1 : 0)} server={server} players={players} wsMB={wsMB} gcMB={gcMB} gc2={gen2} nmSent={nmSent} nmSkip={nmSkip} eosTry={eosTry} eosFlow={eosFlow} idTok={idTok} ping={ping} rsndD={rsndD} unack={unack} pNoAck={pNoAck} inIdle={GetInputIdleSeconds()}{lastSendSuffix}";
             Write($"HB {hb}");
 
             // マネージド保持リークの帰属計器 (BUG-20260706-01)。間隔判定は MaybeTick 側。
