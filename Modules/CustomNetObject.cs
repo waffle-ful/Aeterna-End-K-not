@@ -17,6 +17,21 @@ using Tree = EndKnot.Roles.Tree;
 
 namespace EndKnot
 {
+    /// <summary>
+    /// 「キル操作で壊せる CNO」を名乗るためのインターフェース。CNO はホストの AllPlayerControls から
+    /// 外れているためホストのキルボタンの対象にならず、逆に非モッド客のローカルには残るため客のキルボタン
+    /// の対象にはなる — という非対称があるので、撃破の入口は2つ用意してこのインターフェースに集約する
+    /// (客側 = CheckMurderPatch の CNO ブロック / ホスト側 = ペット押下の近接判定)。
+    /// </summary>
+    public interface IKillableDummy
+    {
+        /// <summary>撃破された時の処理。Despawn は実装側の責務 (リスト管理が型ごとに違うため)。</summary>
+        void OnKilled(PlayerControl killer);
+
+        /// <summary>この killer に壊させてよいか。役職の設計 (ダミーで撹乱する等) を守るための門番。</summary>
+        bool CanBeKilledBy(PlayerControl killer);
+    }
+
     public class CustomNetObject
     {
         public static readonly List<CustomNetObject> AllObjects = [];
@@ -1109,6 +1124,78 @@ namespace EndKnot
         public static CustomNetObject Get(int id)
         {
             return AllObjects.Find(x => x.Id == id);
+        }
+
+        /// <summary>
+        /// killer の近傍で最も近い撃破可能ダミーを返す (無ければ null)。ホスト側のペット押下判定用。
+        /// 距離は CNO の Position フィールド基準 — playerControl.GetTruePosition() は spawn コルーチンが
+        /// 未完了だと (0,0) を返すため使わない ([[project_cno_position_assigned_async]])。
+        /// </summary>
+        public static CustomNetObject GetKillableTarget(PlayerControl killer, float range)
+        {
+            if (!killer) return null;
+
+            Vector2 pos = killer.Pos();
+            CustomNetObject best = null;
+            float bestDistance = range;
+
+            // Il2Cpp デリゲート変換の GCHandle リークを避けるため LINQ/Find でなく手動走査
+            // ([[project_il2cpp_delegate_conversion_percall_gchandle_leak]])。ここは毎ペット押下で通る。
+            for (var i = 0; i < AllObjects.Count; i++)
+            {
+                CustomNetObject obj = AllObjects[i];
+                if (obj is not IKillableDummy dummy || !obj.playerControl) continue;
+                if (!dummy.CanBeKilledBy(killer)) continue;
+
+                float distance = Vector2.Distance(pos, obj.Position);
+                if (distance > bestDistance) continue;
+
+                bestDistance = distance;
+                best = obj;
+            }
+
+            return best;
+        }
+
+        /// <summary>
+        /// 撃破されたダミーの跡に偽の死体を残す。「本当に殺した」手応えのための演出。
+        /// ⚠️ 親には killer (実プレイヤー) を借りる — Utils.CreateDeadBody は親の
+        /// Data.DefaultOutfit を読むため、Data を持たない CNO は親になれない。
+        /// 借りた結果この死体は通報可能な形になるので、必ず登録簿へ載せて通報を遮断する
+        /// (ReportDeadBodyPatch.DummyCorpseBodyIds / StartMeetingPatch の除外とセット)。
+        /// </summary>
+        protected static void SpawnDummyCorpse(PlayerControl killer, Vector2 position, int colorId)
+        {
+            if (!killer || !AmongUsClient.Instance.AmHost) return;
+
+            // 会議・追放演出・役職ジャグリング窓では死体を撒かない。ペット経由の撃破は 0.2 秒遅延で走るので、
+            // 押した時はタスク中でも実行時には会議が始まっていることがある。偽死体を撒く既存役職 (ポストポナー)
+            // と同じ3点セットで、共通口側に一本化しておく。⚠️ SkipTasks を落とさないこと — ペット経路は
+            // OnPetUse 側でも見ているが、キルボタン経路 (CheckMurderPatch の CNO 分岐) はここが唯一の関所。
+            if (!GameStates.IsInTask || ExileController.Instance || AntiBlackout.SkipTasks) return;
+
+            // 登録は生成コールバックで実体そのものを掴んで行う。実体の生成は rate limiter 経由で遅れるため
+            // ここでは掴めない。座標での照合は同じ場所で起きた本物のキルを巻き添えにするので使わない。
+            Utils.RpcCreateDeadBody(position, (byte)colorId, killer,
+                onCreated: body => ReportDeadBodyPatch.DummyCorpseBodyIds.Add(body.GetInstanceID()));
+        }
+
+        /// <summary>target が撃破可能ダミーなら撃破して true。非モッド客のキルボタン経由の入口。</summary>
+        public static bool TryKillDummy(PlayerControl killer, PlayerControl target)
+        {
+            if (!killer || !target) return false;
+
+            for (var i = 0; i < AllObjects.Count; i++)
+            {
+                CustomNetObject obj = AllObjects[i];
+                if (obj is not IKillableDummy dummy || obj.playerControl != target) continue;
+                if (!dummy.CanBeKilledBy(killer)) return false;
+
+                dummy.OnKilled(killer);
+                return true;
+            }
+
+            return false;
         }
 
         public static void Reset()

@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace EndKnot
 {
-    public sealed class DummyPlayer : CustomNetObject
+    public sealed class DummyPlayer : CustomNetObject, IKillableDummy
     {
         public static readonly Dictionary<int, DummyPlayer> ActiveDummies = new();
         public readonly string DummyName;
@@ -16,10 +16,13 @@ namespace EndKnot
         // /dummyfree でトグル。ForceField 視覚 vs 判定の calibration test 用。
         public static bool LockPosition = true;
 
+        // 撃破時の偽死体をダミー自身の色で出すために保持する。
+        private readonly int ColorId;
+
         public DummyPlayer(Vector2 position, string dummyName)
         {
             DummyName = dummyName;
-            int colorId = NextIndex % Palette.PlayerColors.Length;
+            int colorId = ColorId = NextIndex % Palette.PlayerColors.Length;
             CreateNetObject($"<size=150%><color=#888888>[{dummyName}]</color></size>", position);
             if (!playerControl)
             {
@@ -75,6 +78,17 @@ namespace EndKnot
 
         public override void OnMeeting()
         {
+            Despawn();
+            ActiveDummies.Remove(Id);
+        }
+
+        // Dev のテスト用マーカーなので誰でも壊せてよい (役職の設計を守る必要が無い)。
+        public bool CanBeKilledBy(PlayerControl killer) => killer && killer.IsAlive();
+
+        public void OnKilled(PlayerControl killer)
+        {
+            Logger.Info($"[Dummy] {DummyName} killed by {killer?.GetRealName()}", "Dummy");
+            SpawnDummyCorpse(killer, Position, ColorId);
             Despawn();
             ActiveDummies.Remove(Id);
         }

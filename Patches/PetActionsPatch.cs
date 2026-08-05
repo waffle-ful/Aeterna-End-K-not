@@ -171,6 +171,26 @@ internal static class ExternalRpcPetPatch
             return;
         }
 
+        // ダミー (IKillableDummy な CNO) の近くでのペットは「ダミーを壊す」。ホストは CNO が
+        // AllPlayerControls に居ないせいでキルボタンが光らず、この口が唯一の撃破手段になる
+        // (客はキルボタンで直接壊せる = CheckMurderPatch の CNO ブロック)。
+        // PortalButton と同じく HasAbilityCD より手前に置く — ダミー壊しは役職能力ではないので
+        // 能力クールタイム中でも通ってよい。獲物が射程内に居るキル役職のペットは横取りしない。
+        if (!PetIsKillAction(pc))
+        {
+            CustomNetObject killableDummy = CustomNetObject.GetKillableTarget(pc, DummySpawner.GetKillRange());
+            if (killableDummy != null)
+            {
+                // 1.6u 未満の TP は SendOption.None へ降格して客に届かないのに SnapTo 予算だけ減る
+                // ([[project_short_tp_none_downgrade_wastes_cap]])。近ければその場で壊す。
+                if (Vector2.Distance(pc.Pos(), killableDummy.Position) >= 1.6f)
+                    pc.TP(killableDummy.Position, log: false);
+
+                ((IKillableDummy)killableDummy).OnKilled(pc);
+                return;
+            }
+        }
+
         if (pc.HasAbilityCD())
         {
             if (!pc.IsHost()) pc.Notify(Translator.GetString("AbilityOnCooldown"));
