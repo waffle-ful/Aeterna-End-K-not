@@ -336,14 +336,11 @@ public static class CustomSoundsManager
     internal static AudioClip LoadWAV(string path)
     {
         var sw = Stopwatch.StartNew();
-        var fileData = Il2CppSystem.IO.File.ReadAllBytes(path);
-        WAV wav = new(fileData);
+        (float[] buffer, int read, int channels, int sampleRate) = DecodeWav(path);
+        long decodeMs = sw.ElapsedMilliseconds;
 
-        AudioClip clip = AudioClip.Create(Path.GetFileNameWithoutExtension(path), wav.SampleCount, 1, wav.Frequency, false, false);
-        clip.SetData(wav.LeftChannel, 0);
-
-        Logger.Info($"[WAV: LeftChannel={wav.LeftChannel}, RightChannel={wav.RightChannel}, ChannelCount={wav.ChannelCount}, SampleCount={wav.SampleCount}, Frequency={wav.Frequency}, loadMs={sw.ElapsedMilliseconds}]", "CustomSounds");
-
+        AudioClip clip = CreateClip(path, buffer, read, channels, sampleRate, out long copyMs);
+        Logger.Info($"[WAV: Channels={channels}, SampleRate={sampleRate}, SamplesRead={read}, decodeMs={decodeMs}, copyMs={copyMs}]", "CustomSounds");
         return clip;
     }
 
@@ -386,6 +383,80 @@ public static class CustomSoundsManager
         return (buffer, read, channels, sampleRate);
     }
 
+    // WAV のマネージドデコード。System.IO のみ (Il2Cpp API 不使用) なのでバックグラウンドスレッドから
+    // 呼んでよい (旧実装は Il2CppSystem.IO.File 依存でメインスレッド固定だった)。
+    // 対応フォーマットは BackroomsAmbient.LoadWavStrict と同じ: format 1 (PCM 16/24bit) +
+    // format 3 (IEEE float 32bit)、mono / stereo。非対応は throw して呼び出し側の握りつぶしに任せる。
+    private static (float[] Buffer, int Read, int Channels, int SampleRate) DecodeWav(string path)
+    {
+        byte[] data = File.ReadAllBytes(path);
+        if (data.Length < 44) throw new IOException("WAV too small");
+        if (data[0] != (byte)'R' || data[1] != (byte)'I' || data[2] != (byte)'F' || data[3] != (byte)'F') throw new IOException("Not RIFF");
+        if (data[8] != (byte)'W' || data[9] != (byte)'A' || data[10] != (byte)'V' || data[11] != (byte)'E') throw new IOException("Not WAVE");
+
+        int fmtPos = -1;
+        int dataPos = -1;
+        int dataSize = 0;
+
+        int pos = 12;
+        while (pos + 8 <= data.Length)
+        {
+            int chunkId = BitConverter.ToInt32(data, pos);
+            int chunkSize = BitConverter.ToInt32(data, pos + 4);
+            int body = pos + 8;
+            // 'fmt ' = 0x20746D66, 'data' = 0x61746164 (little endian on x86)
+            if (chunkId == 0x20746D66) { fmtPos = body; }
+            else if (chunkId == 0x61746164) { dataPos = body; dataSize = chunkSize; break; }
+            pos = body + chunkSize;
+            if ((chunkSize & 1) == 1) pos++; // RIFF: chunk body は 2byte 境界に padding
+        }
+        if (fmtPos < 0 || dataPos < 0) throw new IOException("WAV missing fmt/data chunk");
+
+        ushort audioFormat = BitConverter.ToUInt16(data, fmtPos + 0);
+        ushort channels    = BitConverter.ToUInt16(data, fmtPos + 2);
+        int    sampleRate  = BitConverter.ToInt32(data, fmtPos + 4);
+        ushort bps         = BitConverter.ToUInt16(data, fmtPos + 14);
+
+        if (channels < 1 || channels > 2) throw new IOException($"WAV unsupported channels={channels}");
+        if (bps == 0) throw new IOException("WAV bitsPerSample=0");
+
+        int bytesPerSample = bps / 8;
+        if (dataPos + dataSize > data.Length) dataSize = data.Length - dataPos; // 壊れた data チャンク長への保険
+        int totalSamples = dataSize / bytesPerSample; // interleaved sample 数
+
+        float[] interleaved = new float[totalSamples];
+
+        switch (audioFormat, bps)
+        {
+            case (1, 16): // PCM 16-bit
+                for (int i = 0; i < totalSamples; i++)
+                {
+                    int o = dataPos + i * 2;
+                    short s = (short)(data[o] | (data[o + 1] << 8));
+                    interleaved[i] = s / 32768f;
+                }
+                break;
+
+            case (1, 24): // PCM 24-bit
+                for (int i = 0; i < totalSamples; i++)
+                {
+                    int o = dataPos + i * 3;
+                    int v = (data[o] << 8) | (data[o + 1] << 16) | (data[o + 2] << 24);
+                    interleaved[i] = (v >> 8) / 8388608f;
+                }
+                break;
+
+            case (3, 32): // IEEE float 32-bit
+                Buffer.BlockCopy(data, dataPos, interleaved, 0, totalSamples * 4);
+                break;
+
+            default:
+                throw new IOException($"WAV unsupported (audioFormat={audioFormat}, bps={bps})");
+        }
+
+        return (interleaved, totalSamples, channels, sampleRate);
+    }
+
     private static (float[] Buffer, int Read, int Channels, int SampleRate) DecodeMp3(string path)
     {
         using var reader = new NLayer.MpegFile(path);
@@ -420,8 +491,8 @@ public static class CustomSoundsManager
     // (BUG-20260729-17: ロビー放置中 27 秒 framestall の解除フレームに Earthquake MP3 の
     // 初回デコード完了ログが一致)。圧縮系 (.ogg/.mp3) はバックグラウンドスレッドで PCM へ
     // 先行デコードし、メインスレッドは 1 fixed update に 1 クリップだけ AudioClip 化して
-    // audioCache を温める。.wav は Il2Cpp I/O 依存でスレッドに逃がせないが小さく速いので
-    // メインスレッド側で 1 tick 1 件ずつ処理する。BGM/Backrooms サブフォルダは BGMManager
+    // audioCache を温める (.wav も DecodeWav のマネージド化で同じ裏スレッド経路)。
+    // BGM/Backrooms サブフォルダは BGMManager
     // 管轄なので対象外 (SoundsPath 直下のみ列挙)。個別失敗は握りつぶし、その音は従来どおり
     // 初回再生時の同期デコードに任せる (プリロード自体が新たな障害点にならないこと優先)。
     private const int PreloadStartDelayTicks = 500; // 起動直後の CPU 競合を避ける (fixed 50Hz × 500 ≒ 10 秒)
@@ -434,7 +505,6 @@ public static class CustomSoundsManager
     private static bool preloadStarted;
     // BgmName != null なら BGMManager 管轄のトラック (BgmCache へ届ける)。null なら SFX (audioCache へ)。
     private static readonly ConcurrentQueue<(string Path, float[] Buffer, int Read, int Channels, int SampleRate, string BgmName)> PreloadDecoded = [];
-    private static readonly ConcurrentQueue<string> PreloadWavPaths = [];
 
     // BGM チャンク分割クリップ化の進行状態 (1 曲分)。SetData を複数フレームへ割り、1 tick の停止を
     // HITCH 検出閾値 (50ms) 未満に抑える。完成するまで PrimeCache しないので途中データが鳴ることはない。
@@ -526,15 +596,6 @@ public static class CustomSoundsManager
 
             return;
         }
-
-        if (PreloadWavPaths.TryDequeue(out string wavPath))
-        {
-            if (!audioCache.TryGetValue(wavPath, out AudioClip cached) || !cached)
-            {
-                LoadClip(wavPath); // キャッシュ格納と DontUnloadUnusedAsset は LoadClip 側で行われる
-                Logger.Info($"Preloaded {Path.GetFileName(wavPath)}", "CustomSounds");
-            }
-        }
     }
 
     // バックグラウンドスレッド本体。System.IO + マネージドデコーダのみ使用可 (Unity/Il2Cpp API 禁止、
@@ -574,8 +635,12 @@ public static class CustomSoundsManager
                             PreloadDecoded.Enqueue((path, buffer, read, channels, sampleRate, name));
                             break;
                         }
-                        // .wav BGM は LoadWAV が Il2Cpp I/O 依存でスレッドに逃がせないため対象外
-                        // (従来どおり初回再生時の同期ロード — Marshal.Copy 化で高速化済み)。
+                        case ".wav":
+                        {
+                            (float[] buffer, int read, int channels, int sampleRate) = DecodeWav(path);
+                            PreloadDecoded.Enqueue((path, buffer, read, channels, sampleRate, name));
+                            break;
+                        }
                     }
                 }
                 catch
@@ -647,9 +712,12 @@ public static class CustomSoundsManager
                             if (read <= MaxPreloadSamples) PreloadDecoded.Enqueue((path, buffer, read, channels, sampleRate, null));
                             break;
                         }
-                        default:
-                            PreloadWavPaths.Enqueue(path);
+                        default: // .wav
+                        {
+                            (float[] buffer, int read, int channels, int sampleRate) = DecodeWav(path);
+                            if (read <= MaxPreloadSamples) PreloadDecoded.Enqueue((path, buffer, read, channels, sampleRate, null));
                             break;
+                        }
                     }
                 }
                 catch
