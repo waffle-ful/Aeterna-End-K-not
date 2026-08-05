@@ -1127,6 +1127,50 @@ internal static class RpcShapeshiftPatch
 internal static class ReportDeadBodyPatch
 {
     public static HashSet<byte> AlreadyReportedBodies = [];
+
+    /// <summary>
+    /// ダミー撃破で撒いた偽死体の実体 ID。CNO は Data を持たず <see cref="Utils.RpcCreateDeadBody"/> の親に
+    /// なれないため、親には撃破した実プレイヤーを借りている。その借り物の死体が通報されると存在しない
+    /// 事件で会議が開いてゲームが壊れるので、ここで遮断する。
+    /// ⚠️ キーは **死体1体ごとの実体** であること。
+    /// ・親の PlayerId で持つと、同じ人物を親に借りている無関係な偽死体システム (トラップスターの罠死体 =
+    ///   生存者を無作為に親にする / 赤ずきんの擬似死亡 = 本人が生きたまま死体を出す) まで巻き添えで通報
+    ///   不能になる。どちらも「見つけて通報させる」のが役職の核なので無音で機能停止する。
+    /// ・座標で持つと、ダミーが湧くのはスポーン地点周辺 (= 人が集まる定番スポット) なので、同じ場所で
+    ///   起きた本物のキルの死体を誤って遮断する (「本当に死んだのに誰も通報できない」)。
+    /// 会議で vanilla が全死体を破棄するため、登録簿も会議開始時に空にする。
+    /// </summary>
+    public static HashSet<int> DummyCorpseBodyIds = [];
+
+    /// <summary>この死体がダミー撃破由来か。</summary>
+    public static bool IsDummyCorpse(DeadBody body)
+    {
+        return body && DummyCorpseBodyIds.Count > 0 && DummyCorpseBodyIds.Contains(body.GetInstanceID());
+    }
+
+    /// <summary>通報しようとしている死体 (= 通報者に最も近い、その親の死体) がダミー由来か。</summary>
+    private static bool IsReportingDummyCorpse(PlayerControl reporter, NetworkedPlayerInfo target)
+    {
+        if (DummyCorpseBodyIds.Count == 0 || !reporter) return false;
+
+        Vector2 reporterPos = reporter.Pos();
+        DeadBody nearest = null;
+        var nearestDistance = float.MaxValue;
+
+        // vanilla の通報ボタンは「最も近い死体」を対象にするので、同じ選び方を再現する。
+        foreach (DeadBody body in Object.FindObjectsOfType<DeadBody>())
+        {
+            if (!body || body.ParentId != target.PlayerId) continue;
+
+            float distance = Vector2.Distance(reporterPos, body.TruePosition);
+            if (distance >= nearestDistance) continue;
+
+            nearestDistance = distance;
+            nearest = body;
+        }
+
+        return IsDummyCorpse(nearest);
+    }
     public static Dictionary<byte, bool> CanReport;
     public static readonly Dictionary<byte, List<NetworkedPlayerInfo>> WaitReport = [];
     public static bool MeetingStarted;
@@ -1145,6 +1189,13 @@ internal static class ReportDeadBodyPatch
         if (Options.CurrentGameMode != CustomGameMode.Standard) return false;
         if (Options.DisableReportWhenCC.GetBool() && Camouflage.IsCamouflage) return false;
         if (target && AlreadyReportedBodies.Contains(target.PlayerId)) return false;
+
+        // ダミー撃破の偽死体は通報させない (存在しない事件で会議が開いてしまうため)。
+        if (target && IsReportingDummyCorpse(__instance, target))
+        {
+            Logger.Info($"{__instance.GetNameWithRole().RemoveHtmlTags()} tried to report a dummy corpse — blocked", "ReportDeadBody");
+            return false;
+        }
 
         // GM ホスト/観戦者の死体はゲーム内に存在しない (RpcExileV2 は死体を残さない)。これを target にした
         // 通報は、ロビー装飾死体 (LobbyCorpses — host が parent) をロード遅延クライアントが持ち越して押した

@@ -286,6 +286,7 @@ internal static class ChangeRoleSettings
             MapRoomDoorsUpdatePatch.DoorTimerTexts = [];
             ReportDeadBodyPatch.CanReport = [];
             ReportDeadBodyPatch.AlreadyReportedBodies = [];
+            ReportDeadBodyPatch.DummyCorpseBodyIds = [];
             
             GuessManager.Guessers = [];
             ChatCommands.VotedToStart = [];

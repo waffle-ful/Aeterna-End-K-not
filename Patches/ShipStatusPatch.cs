@@ -313,7 +313,15 @@ internal static class StartMeetingPatch
         MeetingStates.ReportTarget = target;
         MeetingStates.DeadBodies = Object.FindObjectsOfType<DeadBody>();
         
-        ReportDeadBodyPatch.AlreadyReportedBodies.UnionWith(MeetingStates.DeadBodies.Select(db => db.ParentId));
+        // ダミー撃破の偽死体は親に実プレイヤーを借りているだけなので、ここで「通報済み」に混ぜると
+        // その人が本当に死んだときの本物の死体が二度と通報できなくなる。ダミー由来は除外する。
+        ReportDeadBodyPatch.AlreadyReportedBodies.UnionWith(MeetingStates.DeadBodies
+            .Where(db => !ReportDeadBodyPatch.IsDummyCorpse(db))
+            .Select(db => db.ParentId));
+
+        // vanilla は会議で全死体を破棄するので、登録簿もここで空にする (残すと位置だけが永久に居座り、
+        // 後のラウンドで同じ場所に出た本物の死体を誤って遮断する)。
+        ReportDeadBodyPatch.DummyCorpseBodyIds.Clear();
     }
 }
 
