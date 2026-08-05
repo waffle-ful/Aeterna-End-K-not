@@ -396,38 +396,97 @@ public static class BGMManager
 
     private static readonly string[] SupportedExtensions = [".ogg", ".mp3", ".wav"];
 
+    // path 解決 + 埋込リソースのディスク展開。ファイル I/O + managed Stream のみなので
+    // バックグラウンドスレッド (CustomSoundsManager.PreloadWorker) からも呼べる。
+    // Play 経由の同期ロードと preload worker が同じファイルを同時展開しないよう lock で直列化する。
+    private static readonly object ExtractLock = new();
+
+    internal static string ResolveOrExtract(string name)
+    {
+        lock (ExtractLock)
+        {
+            if (!Directory.Exists(BGMPath))
+            {
+                Directory.CreateDirectory(BGMPath);
+                DirectoryInfo folder = new(BGMPath);
+                if ((folder.Attributes & FileAttributes.Hidden) != FileAttributes.Hidden)
+                    folder.Attributes = FileAttributes.Hidden;
+                GenerateExampleConfig();
+            }
+
+            foreach (string ext in SupportedExtensions)
+            {
+                string candidate = BGMPath + name + ext;
+                if (File.Exists(candidate)) return candidate;
+            }
+
+            Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"EndKnot.Resources.Sounds.BGM.{name}.ogg");
+            if (stream == null) return null;
+
+            string target = BGMPath + name + ".ogg";
+            using (stream)
+            using (FileStream fs = File.Create(target))
+                stream.CopyTo(fs);
+            return target;
+        }
+    }
+
+    // preload worker が温めるべきトラック名一覧 (プレイリスト記載の全エントリ)。実際に鳴る順に近い
+    // 優先度順で返す。_playlist キャッシュには触らず読み捨てでロードする (裏スレッドから呼ぶため)。
+    internal static List<string> GetPreloadFiles()
+    {
+        var result = new List<string>();
+        if (!IsEnabled()) return result;
+
+        try
+        {
+            var pl = LoadPlaylist();
+            string[] slotOrder = ["menu", "lobby", "intask", "climax", "meeting", "result", "dead"];
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (string slot in slotOrder)
+                if (pl.TryGetValue(slot, out List<BGMEntry> entries) && entries != null)
+                    foreach (var e in entries)
+                        if (e?.file != null && seen.Add(e.file))
+                            result.Add(e.file);
+
+            // slotOrder 外のユーザー定義スロットも末尾に足す
+            foreach (var (_, entries) in pl)
+                if (entries != null)
+                    foreach (var e in entries)
+                        if (e?.file != null && seen.Add(e.file))
+                            result.Add(e.file);
+        }
+        catch { /* 列挙失敗は preload を諦めるだけ (従来の同期ロードに戻る) */ }
+
+        return result;
+    }
+
+    // preload ポンプ (メインスレッド) からクリップ化済み BGM を受け取る。Play 側の同期ロードと
+    // レースした場合は先勝ち (後着の clip は破棄して native リークを防ぐ)。
+    internal static void PrimeCache(string name, AudioClip clip)
+    {
+        if (clip == null) return;
+
+        if (BgmCache.TryGetValue(name, out AudioClip existing) && existing != null)
+        {
+            UnityEngine.Object.Destroy(clip);
+            return;
+        }
+
+        clip.hideFlags |= HideFlags.DontUnloadUnusedAsset;
+        BgmCache[name] = clip;
+    }
+
     private static AudioClip LoadBGM(string name)
     {
         if (BgmCache.TryGetValue(name, out AudioClip cached) && cached != null) return cached;
 
-        if (!Directory.Exists(BGMPath))
-        {
-            Directory.CreateDirectory(BGMPath);
-            DirectoryInfo folder = new(BGMPath);
-            if ((folder.Attributes & FileAttributes.Hidden) != FileAttributes.Hidden)
-                folder.Attributes = FileAttributes.Hidden;
-            GenerateExampleConfig();
-        }
-
-        string foundPath = null;
-        foreach (string ext in SupportedExtensions)
-        {
-            string candidate = BGMPath + name + ext;
-            if (File.Exists(candidate)) { foundPath = candidate; break; }
-        }
-
+        string foundPath = ResolveOrExtract(name);
         if (foundPath == null)
         {
-            Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"EndKnot.Resources.Sounds.BGM.{name}.ogg");
-            if (stream == null)
-            {
-                Logger.Warn($"BGM not found (disk or embedded): {name}", "BGMManager");
-                return null;
-            }
-
-            foundPath = BGMPath + name + ".ogg";
-            using FileStream fs = File.Create(foundPath);
-            stream.CopyTo(fs);
+            Logger.Warn($"BGM not found (disk or embedded): {name}", "BGMManager");
+            return null;
         }
 
         try
