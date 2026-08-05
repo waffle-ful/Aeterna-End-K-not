@@ -452,6 +452,10 @@ public class Main : BasePlugin
         // (2026-07-05 の Dossun テスト連続 DC / 24 秒フレームストール事件の一次対策)。
         Application.runInBackground = true;
 
+        // conhost の QuickEdit 事故クリック (選択モード) がコンソール書き込みごとメインスレッドを
+        // 無期限ブロックするのを防ぐ (2026-08-04 ハングダンプで確定した有人限定ハングの根治)。
+        Log.LogInfo($"ConsoleGuard: {ConsoleGuard.DisableQuickEdit()}");
+
         //Client Options
         HideName = Config.Bind("Client Options", "Hide Game Code Name", "EndKnot");
         HideColor = Config.Bind("Client Options", "Hide Game Code Color", $"{ModColor}");
