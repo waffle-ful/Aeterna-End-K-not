@@ -279,9 +279,22 @@ public static class CustomSoundsManager
             Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("EndKnot.Resources.Sounds." + sound + ext);
             if (stream == null) continue;
 
+            // プリロードのワーカースレッドとメインスレッドが同じ音を同時に展開しうるため、
+            // 書きかけの実ファイルを他方が読む窓を作らない: 一時名へ書き切ってから atomic move。
+            // move 負けした側は勝った側の完成品をそのまま使う。
             string foundPath = SoundsPath + sound + ext;
-            using FileStream fileStream = File.Create(foundPath);
-            stream.CopyTo(fileStream);
+            string tmpPath = foundPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+
+            using (FileStream fileStream = File.Create(tmpPath))
+                stream.CopyTo(fileStream);
+
+            try { File.Move(tmpPath, foundPath, true); }
+            catch (IOException) when (File.Exists(foundPath))
+            {
+                try { File.Delete(tmpPath); }
+                catch { /* 孤児 tmp は次回起動の掃除に任せる */ }
+            }
+
             return foundPath;
         }
 
@@ -410,6 +423,11 @@ public static class CustomSoundsManager
     // 管轄なので対象外 (SoundsPath 直下のみ列挙)。個別失敗は握りつぶし、その音は従来どおり
     // 初回再生時の同期デコードに任せる (プリロード自体が新たな障害点にならないこと優先)。
     private const int PreloadStartDelayTicks = 500; // 起動直後の CPU 競合を避ける (fixed 50Hz × 500 ≒ 10 秒)
+
+    // これを超えるデコード結果は SFX でなく BGM 級とみなしてプリロードしない (≒90 秒ステレオ相当)。
+    // ポンプの「1 tick 1 クリップ」はファイル数単位の分割であってサンプル数単位ではないため、
+    // 巨大クリップ 1 本のクリップ化 (Il2Cpp 配列への逐次コピー) はそれ自体が framestall 源になる。
+    private const int MaxPreloadSamples = 8_000_000;
     private static int preloadTicks;
     private static bool preloadStarted;
     private static readonly ConcurrentQueue<(string Path, float[] Buffer, int Read, int Channels, int SampleRate)> PreloadDecoded = [];
@@ -474,7 +492,15 @@ public static class CustomSoundsManager
                 string tail = res[prefix.Length..];
                 if (Array.IndexOf(SupportedExtensions, Path.GetExtension(tail).ToLowerInvariant()) < 0) continue;
 
-                names.Add(Path.GetFileNameWithoutExtension(tail));
+                string name = Path.GetFileNameWithoutExtension(tail);
+
+                // 埋込名はサブフォルダも '.' 区切りで平坦化される (例 "BGM.climax.ogg")。名前に '.' が
+                // 残る = サブフォルダ配下 (BGM/Backrooms — BGMManager 等の管轄) なので対象外。
+                // 通すと ResolveSoundPath("BGM.climax") が埋込名を再構成できてしまい、BGM 級の
+                // 長尺トラックがプリロードに混入する (ディスク側のトップレベル限定と意図を揃える)。
+                if (name.Contains('.')) continue;
+
+                names.Add(name);
             }
 
             if (Directory.Exists(SoundsPath))
@@ -499,13 +525,13 @@ public static class CustomSoundsManager
                         case ".ogg":
                         {
                             (float[] buffer, int read, int channels, int sampleRate) = DecodeOgg(path);
-                            PreloadDecoded.Enqueue((path, buffer, read, channels, sampleRate));
+                            if (read <= MaxPreloadSamples) PreloadDecoded.Enqueue((path, buffer, read, channels, sampleRate));
                             break;
                         }
                         case ".mp3":
                         {
                             (float[] buffer, int read, int channels, int sampleRate) = DecodeMp3(path);
-                            PreloadDecoded.Enqueue((path, buffer, read, channels, sampleRate));
+                            if (read <= MaxPreloadSamples) PreloadDecoded.Enqueue((path, buffer, read, channels, sampleRate));
                             break;
                         }
                         default:
