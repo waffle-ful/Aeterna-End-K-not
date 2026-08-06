@@ -911,6 +911,7 @@ public class Main : BasePlugin
                 { CustomRoles.ProbabilityKing, "#c9a227" },
                 { CustomRoles.GambleKiller, "#d4571f" },
                 { CustomRoles.Mirage, "#9fd8cb" },
+                { CustomRoles.Torpedo, "#b03a2e" },
                 // Upstream EHR catchup
                 { CustomRoles.Butcher, "#b3261e" },
                 { CustomRoles.Chainbinder, "#8a7f6d" },
@@ -1502,6 +1503,7 @@ public enum CustomWinner
     Safecracker = CustomRoles.Safecracker,
     ProbabilityKing = CustomRoles.ProbabilityKing,
     GambleKiller = CustomRoles.GambleKiller,
+    Torpedo = CustomRoles.Torpedo,
 
     Coven = CustomRoles.CovenLeader,
 
