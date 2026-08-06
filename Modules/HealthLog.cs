@@ -19,6 +19,13 @@ public static class HealthLog
     private const long MaxTimelineBytes = 8 * 1024 * 1024; // Timeline は 8MB で .prev ローテート
 
     private static bool Inited;
+
+    // 背景スレッド (ConsoleGuard / AsyncConsoleLog) が EnsureInit() の**最初の呼び出し者**に
+    // なるのを防ぐための門。EnsureInit は check-then-act で File.Move まで行うため、2スレッドが
+    // 同時に入ると片方が IOException を受け、その catch が Utils.ThrowException → EndKnot.Logger
+    // (ロック無しの共有 StringBuilder/Dictionary) に落ちて、直そうとしているハングを別の形で
+    // 作ってしまう。背景スレッドはこれを見て、メインスレッドが初期化するまで黙って諦める。
+    internal static bool IsInitialized => Inited;
     public static string FilePath { get; private set; } // ライブ本体(EndKnot_Logs 直下の固定ファイル)。DumpLog がセッションフォルダへ同梱する時に参照。
     private static string TimelinePath; // 横断セッション時系列ログ(EndKnot-Timeline.log)
     private static long StartTs;
