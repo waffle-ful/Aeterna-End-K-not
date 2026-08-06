@@ -32,6 +32,11 @@ public class Doppelganger : RoleBase
     // ⚠️ DoppelPresentSkin[相手] は「相手が今着ている外見」= こちらの顔なので復元元には使えない。
     private static Dictionary<byte, NetworkedPlayerInfo.PlayerOutfit> DoppelPartnerOriginalSkin = [];
 
+    // 本人 + スワップ被害者の「本物の Level」台帳。DoppelVictim と同じ規律で上書きしない
+    // (借り物の Level を記録すると復元が壊れる)。Level はロビーへ持ち越されるため、
+    // 戻さないと KickLowLevelPlayer が無実のプレイヤーを蹴る。
+    public static Dictionary<byte, uint> DoppelOriginalLevel = [];
+
     private static readonly string[] ResetModes =
     [
         "DGRM.None",
@@ -78,6 +83,7 @@ public class Doppelganger : RoleBase
         DoppelPresentSkin = [];
         DoppelDefaultSkin = [];
         DoppelPartnerOriginalSkin = [];
+        DoppelOriginalLevel = [];
         DGId = byte.MaxValue;
 
         LocalPlayerChangeSkinTimes = 0;
@@ -98,6 +104,7 @@ public class Doppelganger : RoleBase
             DoppelVictim[playerId] = pc.Data.PlayerName;
 
         DoppelDefaultSkin[playerId] = pc.CurrentOutfit;
+        DoppelOriginalLevel[playerId] = pc.Data.PlayerLevel;
     }
 
     public override void Remove(byte playerId)
@@ -240,6 +247,13 @@ public class Doppelganger : RoleBase
         if (DoppelDefaultSkin.TryGetValue(doppel.PlayerId, out NetworkedPlayerInfo.PlayerOutfit ownSkin))
             RpcChangeSkin(doppel, ownSkin);
 
+        // Level も外見と一緒に戻す (残すと番号だけ入れ替わったままになる)
+        if (partner && DoppelOriginalLevel.TryGetValue(partnerId, out uint partnerLevel))
+            partner.RpcSetLevel(partnerLevel);
+
+        if (DoppelOriginalLevel.TryGetValue(doppel.PlayerId, out uint ownLevel))
+            doppel.RpcSetLevel(ownLevel);
+
         // 表示ID のスワップも解除する。残すと外見だけ戻って番号が入れ替わったままになる。
         SwappedIDs.RemoveWhere(x => x.Item1 == doppel.PlayerId || x.Item2 == doppel.PlayerId);
 
@@ -268,6 +282,8 @@ public class Doppelganger : RoleBase
 
         byte killerId = killer.PlayerId;
         byte targetId = target.PlayerId;
+        uint killerLevel = killer.Data.PlayerLevel;
+        uint targetLevel = target.Data.PlayerLevel;
 
         LateTask.New(() =>
         {
@@ -313,6 +329,12 @@ public class Doppelganger : RoleBase
         Logger.Info("Changed target skin", "Doppelganger");
         RpcChangeSkin(killer, targetSkin);
         Logger.Info("Changed killer skin", "Doppelganger");
+
+        // Level も交換する。外見と表示IDだけ入れ替えても Level が残っていると即座に見破られる。
+        // 交換するのは現在値 (外見と同じ挙動)、復元元は本物の台帳から引く。
+        DoppelOriginalLevel.TryAdd(targetId, targetLevel);
+        killer.RpcSetLevel(targetLevel);
+        target.RpcSetLevel(killerLevel);
 
         target.Notify(Translator.GetString("DoppelgangerWarning"));
 
