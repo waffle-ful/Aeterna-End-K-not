@@ -279,6 +279,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Gemini => CustomRoles.Crewmate,
                 CustomRoles.Vacuum => UsePets ? CustomRoles.Crewmate : CustomRoles.Engineer,
                 CustomRoles.Astral => UsePets ? CustomRoles.Crewmate : CustomRoles.Engineer,
+                CustomRoles.EvilBusker => UsePets ? CustomRoles.Impostor : CustomRoles.Shapeshifter,
                 CustomRoles.Helper => CustomRoles.Crewmate,
                 CustomRoles.Ankylosaurus => CustomRoles.Crewmate,
                 CustomRoles.Leery => CustomRoles.Crewmate,
@@ -948,7 +949,8 @@ internal static class CustomRolesHelper
                 CustomRoles.Frightener or
                 CustomRoles.Obstructer or
                 CustomRoles.Butcher or
-                CustomRoles.Autoscopy;
+                CustomRoles.Autoscopy or
+                CustomRoles.EvilBusker;
         }
 
         public bool IsNeutral(bool check = false)
@@ -1280,6 +1282,7 @@ internal static class CustomRolesHelper
                              or CustomRoles.Auditor
                              or CustomRoles.Magistrate
                              or CustomRoles.Strawdoll
+                             or CustomRoles.EvilBusker
             };
         }
 
@@ -1484,6 +1487,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Vampire => RoleOptionType.Impostor_Concealing,
                 CustomRoles.Venerer => RoleOptionType.Impostor_Concealing,
                 CustomRoles.Warlock => RoleOptionType.Impostor_Concealing,
+                CustomRoles.EvilBusker => RoleOptionType.Impostor_Concealing,
                 CustomRoles.AntiAdminer => RoleOptionType.Impostor_Miscellaneous,
                 CustomRoles.Changeling => RoleOptionType.Impostor_Miscellaneous,
                 CustomRoles.Consigliere => RoleOptionType.Impostor_Miscellaneous,
