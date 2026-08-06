@@ -672,6 +672,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Shuffler => RoleTypes.Phantom,
                 CustomRoles.ProbabilityKing => RoleTypes.Impostor,
                 CustomRoles.GambleKiller => RoleTypes.Impostor,
+                CustomRoles.Torpedo => RoleTypes.Phantom,
 
                 CustomRoles.CovenLeader => RoleTypes.Impostor,
                 CustomRoles.SpellCaster => RoleTypes.Impostor,
@@ -794,7 +795,8 @@ internal static class CustomRolesHelper
                 CustomRoles.Blockade or
                 CustomRoles.Jackpot or
                 CustomRoles.ProbabilityKing or
-                CustomRoles.GambleKiller;
+                CustomRoles.GambleKiller or
+                CustomRoles.Torpedo;
         }
 
         public bool IsGhostRole()
@@ -2362,6 +2364,7 @@ public enum CountTypes
     Remotekiller,
     ProbabilityKing,
     GambleKiller,
+    Torpedo,
 
     Coven
 }
