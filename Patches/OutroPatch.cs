@@ -57,7 +57,10 @@ internal static class EndGamePatch
 
         foreach ((byte id, PlayerState state) in Main.PlayerStates)
         {
-            if (Doppelganger.PlayerIdList.Count > 0 && Doppelganger.DoppelVictim.ContainsKey(id))
+            // ⚠️ PlayerIdList は見ない。Remove() が切断時に呼ばれて空になるため、
+            // 本人が途中切断すると被害者(最大 DoppelMaxSteals 人)の復元が丸ごと飛ぶ。
+            // 各 dict は Init() でのみクリアされるので、その存在チェックだけで十分に絞れる。
+            if (Doppelganger.DoppelVictim.ContainsKey(id))
             {
                 PlayerControl dpc = Utils.GetPlayerById(id);
 
@@ -65,10 +68,14 @@ internal static class EndGamePatch
                 {
                     dpc.RpcSetName(Doppelganger.DoppelVictim[id]);
                     Main.AllPlayerNames[id] = Doppelganger.DoppelVictim[id];
+
+                    // Level も交換するので名前と一緒に必ず戻す
+                    // (戻さないと KickLowLevelPlayer が無実のプレイヤーを蹴る)
+                    if (Doppelganger.DoppelOriginalLevel.TryGetValue(id, out uint dlevel)) dpc.RpcSetLevel(dlevel);
                 }
             }
 
-            if (Autoscopy.PlayerIdList.Count > 0 && Autoscopy.OriginalNames.ContainsKey(id))
+            if (Autoscopy.OriginalNames.ContainsKey(id))
             {
                 PlayerControl apc = Utils.GetPlayerById(id);
 
@@ -81,6 +88,14 @@ internal static class EndGamePatch
                     // (戻さないと KickLowLevelPlayer が無実のプレイヤーを蹴る)
                     if (Autoscopy.TryGetOriginalLevel(id, out uint alevel)) apc.RpcSetLevel(alevel);
                 }
+            }
+
+            // Skinwalker も変装時に Level をコピーするので同じく戻す
+            // (脱がずに死亡 / 生存のまま終了すると OnPet の復元経路を通らない)
+            if (Skinwalker.TryGetOriginalLevel(id, out uint slevel))
+            {
+                PlayerControl spc = Utils.GetPlayerById(id);
+                if (spc != null) spc.RpcSetLevel(slevel);
             }
 
             SummaryText[id] = Utils.SummaryTexts(id, false);
