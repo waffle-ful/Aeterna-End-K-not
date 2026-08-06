@@ -84,7 +84,7 @@ Use `/r <role name>` or `/myrole` in-game to read each role's effects and settin
 | **Gemini** | Crewmate | Stand still and you leave a copy of yourself behind — same colour, same name, same everything. |
 | **Supernova** | Neutral | Triggers a supernova explosion. |
 
-All of these are End K not originals (WaveCannon is a host-only re-implementation referencing other mods' designs). Look for the ⭐ marks in [`ROLES-EN.md`](./ROLES-EN.md) to find the rest.
+WaveCannon is this mod's flagship take on a fan-favourite role from other mods, rebuilt with its own presentation and tuning for a host-only setup. The others are End K not originals you can only play here — look for the ⭐ marks in [`ROLES-EN.md`](./ROLES-EN.md) to find more of them.
 
 
 ## Commands
