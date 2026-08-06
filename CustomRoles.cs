@@ -593,6 +593,7 @@ public enum CustomRoles
     Atlas,
     Newscaster,
     Dominion,
+    ProbabilityKing,
 
 
     // Sub-role after 1000 (buffer reserved for ~500 future main roles)

@@ -191,6 +191,9 @@ internal static class CheckForEndVotingPatch
                     case Amogus { IsEnable: true, ExtraVotes: > 0 } amogus:
                         Loop.Times(amogus.ExtraVotes, _ => AddVote());
                         break;
+                    case ProbabilityKing { IsEnable: true, ExtraVotes: > 0 } pk:
+                        Loop.Times(pk.ExtraVotes, _ => AddVote());
+                        break;
                     case Dad { IsEnable: true } dad when dad.UsingAbilities.Contains(Dad.Ability.GoForMilk):
                         canVote = false;
                         break;
@@ -669,6 +672,9 @@ internal static class ExtendedMeetingHud
                         break;
                     case Amogus { IsEnable: true, ExtraVotes: > 0 } amogus:
                         voteNum += amogus.ExtraVotes;
+                        break;
+                    case ProbabilityKing { IsEnable: true, ExtraVotes: > 0 } pk:
+                        voteNum += pk.ExtraVotes;
                         break;
                     case Mayor mayor:
                         voteNum += Mayor.MayorAdditionalVote.GetInt() + mayor.TaskVotes;
