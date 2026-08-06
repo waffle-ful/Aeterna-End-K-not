@@ -594,6 +594,7 @@ public enum CustomRoles
     Newscaster,
     Dominion,
     ProbabilityKing,
+    GambleKiller,
 
 
     // Sub-role after 1000 (buffer reserved for ~500 future main roles)
