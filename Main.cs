@@ -908,6 +908,7 @@ public class Main : BasePlugin
                 { CustomRoles.Atlas, "#7a5c3e" },
                 { CustomRoles.Newscaster, "#4fc3f7" },
                 { CustomRoles.Dominion, "#6d4c9f" },
+                { CustomRoles.ProbabilityKing, "#c9a227" },
                 // Upstream EHR catchup
                 { CustomRoles.Butcher, "#b3261e" },
                 { CustomRoles.Chainbinder, "#8a7f6d" },
@@ -1497,6 +1498,7 @@ public enum CustomWinner
     Monochromer = CustomRoles.Monochromer,
     Supernova = CustomRoles.Supernova,
     Safecracker = CustomRoles.Safecracker,
+    ProbabilityKing = CustomRoles.ProbabilityKing,
 
     Coven = CustomRoles.CovenLeader,
 
