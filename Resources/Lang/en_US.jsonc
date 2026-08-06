@@ -1990,6 +1990,7 @@
   "MirageSwapped": "<#8cffff>You traded places with your double.</color>",
   "MirageDismissed": "<#8cffff>Your double faded away.</color>",
   "MirageTooFar": "<#ff5555>The mark is too far away.</color>",
+  "MirageTooClose": "<#ff5555>Your double is too close to trade places with.</color>",
   "MirageSuffix.Marked": "<#8cffff>● Mark set</color>",
   "MirageSuffix.Walking": "<#8cffff>● Double walking</color>",
   "MirageSuffix.Arrived": "<#8cffff>● Double waiting</color>",

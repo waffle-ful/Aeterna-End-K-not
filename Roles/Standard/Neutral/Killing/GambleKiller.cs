@@ -132,7 +132,12 @@ public class GambleKiller : RoleBase
         if (IRandom.Instance.Next(100) < SelfDestructChance.GetInt())
         {
             killer.Notify(Translator.GetString("GambleKillerBlewUp"));
-            killer.Suicide(PlayerState.DeathReason.Gambled);
+
+            // ⚠️ DeathReason.Gambled は使わない。名前は合っているが実体は当て推量ゲーム用で
+            //    (GuessManager が「役職を当てられて死んだ」に使う)、表示は "Guessed"/「推測された」、
+            //    さらに Statistics が「正解数」として集計してしまう。
+            //    能力発動での自滅は Misfire (誤爆) が既存慣習。
+            killer.Suicide(PlayerState.DeathReason.Misfire);
             return;
         }
 

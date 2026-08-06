@@ -1969,6 +1969,7 @@
   "MirageSwapped": "<#8cffff>分身と入れ替わった。</color>",
   "MirageDismissed": "<#8cffff>分身は消えていった。</color>",
   "MirageTooFar": "<#ff5555>刻んだ場所が遠すぎる。</color>",
+  "MirageTooClose": "<#ff5555>分身が近すぎて入れ替われない。</color>",
   "MirageSuffix.Marked": "<#8cffff>● 行き先あり</color>",
   "MirageSuffix.Walking": "<#8cffff>● 分身が移動中</color>",
   "MirageSuffix.Arrived": "<#8cffff>● 分身が待機中</color>",

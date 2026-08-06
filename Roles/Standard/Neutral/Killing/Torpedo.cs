@@ -47,6 +47,12 @@ public class Torpedo : RoleBase
     private float StuckTimer;
     private Vector2 LastPosition;
     private float OriginalSpeed;
+
+    // ⚠️ 「捕捉できたか」を OriginalSpeed > 0f で判定してはいけない。Main.AllPlayerSpeed は
+    //    負値を正規の状態として扱う (反転効果: Flash/Giant/Mare) ため、開始時の速度が 0 以下だと
+    //    復元が丸ごとスキップされて**永久に高速のまま**になる。専用フラグで持つ。
+    private bool SpeedCaptured;
+
     private int SuccessfulHits;
 
     public override bool IsEnable => On;
@@ -85,7 +91,20 @@ public class Torpedo : RoleBase
 
     public override void ApplyGameOptions(IGameOptions opt, byte playerId)
     {
-        AURoleOptions.PhantomCooldown = DashCooldown.GetFloat();
+        float cd = DashCooldown.GetFloat();
+
+        // イントロ直後の PreventKill 窓では OnVanish が呼ばれず CD だけリセットされる (初回押下が無音で不発)。
+        // 窓の長さは固定 10 秒ではなく Options.StartingKillCooldown なので、それに合わせてクランプする。
+        if (IntroCutsceneDestroyPatch.PreventKill)
+            cd = Mathf.Max(cd, (Options.StartingKillCooldown?.GetFloat() ?? 10f) + 2f);
+
+        AURoleOptions.PhantomCooldown = cd;
+    }
+
+    /// <summary>いま他役職 (Electric / Chef など) に速度を凍結されているか。</summary>
+    private static bool IsFrozenByOthers(PlayerControl pc)
+    {
+        return pc && Main.AllPlayerSpeed.TryGetValue(pc.PlayerId, out float speed) && Mathf.Approximately(speed, Main.MinSpeed);
     }
 
     public override void SetButtonTexts(HudManager hud, byte id)
@@ -101,7 +120,11 @@ public class Torpedo : RoleBase
         if (IRandom.Instance.Next(100) < SelfDestructChance.GetInt())
         {
             pc.Notify(Translator.GetString("TorpedoMisfire"));
-            pc.Suicide(PlayerState.DeathReason.Bombed);
+
+            // 能力発動が空振りしての自滅は Misfire (誤爆) が既存慣習
+            // (Sharpshooter / Sheriff / Romantic / Hater / SchrodingersCat と同じ)。
+            // Bombed は「実際に爆風/衝突を受けた側」に取っておく。
+            pc.Suicide(PlayerState.DeathReason.Misfire);
             return false;
         }
 
@@ -113,6 +136,7 @@ public class Torpedo : RoleBase
         if (Main.AllPlayerSpeed.TryGetValue(pc.PlayerId, out float speed))
         {
             OriginalSpeed = speed;
+            SpeedCaptured = true;
             Main.AllPlayerSpeed[pc.PlayerId] = Mathf.Min(speed * SpeedMultiplier.GetFloat(), 3f);
             pc.MarkDirtySettings();
         }
@@ -144,8 +168,12 @@ public class Torpedo : RoleBase
 
         // ── 命中判定 ──
         float radius = BlastRadius.GetFloat();
+        // ⚠️ `Suicide` は OnCheckMurder / RpcCheckAndMurder を通らないので、そのまま撃つと
+        //    メディックのシールド・ベテランの反撃・各種護衛といった保護チェーンを全部貫通する。
+        //    同じ「範囲を巻き込む」設計の Chemist の手榴弾 (Chemist.cs:389-391) は
+        //    `RpcCheckAndMurder(x, true)` で先に濾しているので、それに揃える。
         List<PlayerControl> victims = Main.AllAlivePlayerControlsToList
-            .Where(x => x.PlayerId != pc.PlayerId && !x.Data.Disconnected && FastVector2.DistanceWithinRange(current, x.Pos(), radius))
+            .Where(x => x.PlayerId != pc.PlayerId && !x.Data.Disconnected && FastVector2.DistanceWithinRange(current, x.Pos(), radius) && pc.RpcCheckAndMurder(x, true))
             .ToList();
 
         if (victims.Count > 0)
@@ -170,6 +198,15 @@ public class Torpedo : RoleBase
         // ── 壁判定 ──
         // 加速中なのに実質進んでいない = 何かに突っかかっている。1フレームの揺らぎで誤爆しないよう
         // StuckGraceSeconds ぶん連続したときだけ自爆させる。
+        // ⚠️ 位置変化だけで判定すると、他役職の凍結 (Electric 等) で止められた場合まで
+        //    「壁に激突」として自爆させてしまう (誤殺 + 誤メッセージ)。凍結中は判定を止める。
+        if (IsFrozenByOthers(pc))
+        {
+            StuckTimer = 0f;
+            LastPosition = current;
+            return;
+        }
+
         float moved = Vector2.Distance(current, LastPosition);
         LastPosition = current;
 
@@ -199,12 +236,17 @@ public class Torpedo : RoleBase
         DashTimer = 0f;
         StuckTimer = 0f;
 
-        if (pc && Main.AllPlayerSpeed.ContainsKey(pc.PlayerId) && OriginalSpeed > 0f)
+        // ⚠️ いま他役職に凍結されている最中なら、絶対値で上書きして凍結を解除してはいけない。
+        //    凍結側 (Electric / Chef) は「凍結前の値」として**ブースト済みの値**をスナップショット
+        //    しているので、ここで先に戻すと相手の遅延タスクが後からブースト値を復元してしまい、
+        //    Main.AllPlayerSpeed が高速のまま恒久固定される。凍結中は相手の復元に委ねる。
+        if (pc && SpeedCaptured && Main.AllPlayerSpeed.ContainsKey(pc.PlayerId) && !IsFrozenByOthers(pc))
         {
             Main.AllPlayerSpeed[pc.PlayerId] = OriginalSpeed;
             pc.MarkDirtySettings();
         }
 
+        SpeedCaptured = false;
         OriginalSpeed = 0f;
     }
 
