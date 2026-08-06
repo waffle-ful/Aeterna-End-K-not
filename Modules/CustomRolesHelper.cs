@@ -1617,6 +1617,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Teller => RoleOptionType.Crewmate_Investigate,
                 CustomRoles.PonkotuTeller => RoleOptionType.Crewmate_Investigate,
                 CustomRoles.AmateurTeller => RoleOptionType.Crewmate_Investigate,
+                CustomRoles.Newscaster => RoleOptionType.Crewmate_Investigate,
                 CustomRoles.WolfBoy => RoleOptionType.Crewmate_Killing,
                 CustomRoles.King => RoleOptionType.Crewmate_Miscellaneous,
                 CustomRoles.Aid => RoleOptionType.Crewmate_Support,

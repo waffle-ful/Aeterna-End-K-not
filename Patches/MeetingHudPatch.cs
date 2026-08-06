@@ -858,6 +858,17 @@ internal static class MeetingHudStartPatch
             }
         }
 
+        // ⚠️ 会議冒頭の一斉報道はここより「前」に積むこと。下の `msgToSend.Count > 0` は
+        // このフレームで即座に評価されるため、ゲートより後で AddMsg しても
+        // (他の誰かが1件も積んでいなければ) LateTask 自体がスケジュールされず、無音で消える。
+        if (CustomRoles.Newscaster.IsEnable())
+        {
+            string newscasterBroadcast = Newscaster.BuildBroadcast();
+
+            if (!string.IsNullOrEmpty(newscasterBroadcast))
+                AddMsg(newscasterBroadcast, 255, Utils.ColorString(Utils.GetRoleColor(CustomRoles.Newscaster), GetString("NewscasterBroadcastTitle")));
+        }
+
         if (msgToSend.Count > 0)
         {
             LateTask.New(() =>
