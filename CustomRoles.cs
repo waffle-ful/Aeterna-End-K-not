@@ -588,6 +588,7 @@ public enum CustomRoles
     Bouncer,
     Gatekeeper,
     Disguiser, // H&S role
+    Autoscopy,
 
 
     // Sub-role after 1000 (buffer reserved for ~500 future main roles)

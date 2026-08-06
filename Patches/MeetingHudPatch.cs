@@ -819,6 +819,7 @@ internal static class MeetingHudStartPatch
             {
                 string playername = pc.GetRealName();
                 if (Doppelganger.DoppelVictim.TryGetValue(pc.PlayerId, out string value)) playername = value;
+                else if (Autoscopy.OriginalNames.TryGetValue(pc.PlayerId, out string avalue)) playername = avalue;
 
                 AddMsg(string.Format(GetString("SilencerDead"), playername, pc.PlayerId, Utils.ColorString(Utils.GetRoleColor(CustomRoles.Silencer), GetString("SilencerKillTitle"))));
             }
@@ -1000,13 +1001,18 @@ internal static class MeetingHudStartPatch
             if (child) Object.Destroy(child.gameObject);
 
             byte id = pva.TargetPlayerId;
-            
+
             if (Doppelganger.SwappedIDs.FindFirst(x => x.Item1 == id || x.Item2 == id, out var pair))
             {
                 if (pair.Item1 == id) id = pair.Item2;
                 else if (pair.Item2 == id) id = pair.Item1;
             }
-            
+            else if (Autoscopy.SwappedIDs.FindFirst(x => x.Item1 == id || x.Item2 == id, out var apair))
+            {
+                if (apair.Item1 == id) id = apair.Item2;
+                else if (apair.Item2 == id) id = apair.Item1;
+            }
+
             // Thanks BAU (By D1GQ) - are you happy now?
             Transform playerLevel = pva.transform.Find("PlayerLevel");
             Transform levelDisplay = Object.Instantiate(playerLevel, pva.transform);

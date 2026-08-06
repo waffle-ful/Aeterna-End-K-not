@@ -675,6 +675,7 @@ internal static class CheckMurderPatch
         if (!check) killer.Kill(target);
 
         if (killer.Is(CustomRoles.Doppelganger)) Doppelganger.OnCheckMurderEnd(killer, target);
+        if (killer.Is(CustomRoles.Autoscopy)) Autoscopy.OnCheckMurderEnd(killer, target);
 
         return true;
 
@@ -701,7 +702,7 @@ internal static class MurderPlayerPatch
 
         if (!GameStates.IsLobby) RandomSpawn.CustomNetworkTransformHandleRpcPatch.HasSpawned.Add(__instance.PlayerId);
 
-        if (!GameStates.IsLobby && !target.IsProtected() && !Doppelganger.DoppelVictim.ContainsKey(target.PlayerId) && !Camouflage.ResetSkinAfterDeathPlayers.Contains(target.PlayerId))
+        if (!GameStates.IsLobby && !target.IsProtected() && !Doppelganger.DoppelVictim.ContainsKey(target.PlayerId) && !Autoscopy.OriginalNames.ContainsKey(target.PlayerId) && !Camouflage.ResetSkinAfterDeathPlayers.Contains(target.PlayerId))
         {
             Camouflage.ResetSkinAfterDeathPlayers.Add(target.PlayerId);
             LateTask.New(() => Camouflage.RpcSetSkin(target, true), 0.2f, log: false);
@@ -1645,7 +1646,7 @@ internal static class ReportDeadBodyPatch
         {
             try
             {
-                if (Main.CheckShapeshift.ContainsKey(pc.PlayerId) && !Doppelganger.DoppelVictim.ContainsKey(pc.PlayerId))
+                if (Main.CheckShapeshift.ContainsKey(pc.PlayerId) && !Doppelganger.DoppelVictim.ContainsKey(pc.PlayerId) && !Autoscopy.OriginalNames.ContainsKey(pc.PlayerId))
                     Camouflage.RpcSetSkin(pc, revertToDefault: true);
 
                 if (Main.CurrentMap == MapNames.Fungle && (pc.IsMushroomMixupActive() || IsActive(SystemTypes.MushroomMixupSabotage)))
@@ -1741,7 +1742,7 @@ internal static class ReportDeadBodyPatch
                     {
                         if (pc.IsAlive())
                         {
-                            if (Camouflage.IsCamouflage && !Magistrate.CallCourtNextMeeting && !Doppelganger.DoppelVictim.ContainsKey(pc.PlayerId))
+                            if (Camouflage.IsCamouflage && !Magistrate.CallCourtNextMeeting && !Doppelganger.DoppelVictim.ContainsKey(pc.PlayerId) && !Autoscopy.OriginalNames.ContainsKey(pc.PlayerId))
                                 Camouflage.RpcSetSkin(pc, revertToDefault: true, forceRevert: true);
 
                             if (Magistrate.CallCourtNextMeeting)
