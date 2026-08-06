@@ -30,13 +30,22 @@ public static class AntiBlackout
         if (CheckForEndVotingPatch.TempExiledPlayer) players = players.Where(x => x.PlayerId != CheckForEndVotingPatch.TempExiledPlayer.PlayerId).ToArray();
         PlayerControl dummyImp = players.OrderByDescending(x => x.GetCustomRole() is not (CustomRoles.DetectiveEndKnot or CustomRoles.Detective) && !x.Is(CustomRoles.Examiner)).ThenByDescending(x => x.IsModdedClient()).MinBy(x => x.PlayerId);
 
-        if (players.Length == 2)
+        if (players.Length <= 2)
         {
-            // There are only 2 players alive. We need to revive 1 dead player to have 2 living crewmates.
-            PlayerControl revived = Main.EnumeratePlayerControls().Where(x => !x.IsAlive() && !x.Data.Disconnected && x != CheckForEndVotingPatch.TempExiledPlayer?.Object).MaxBy(x => x.PlayerId);
+            // Fewer than 3 players alive — revive as many dead players as needed to reach the optimal
+            // "1 impostor + 2 crewmates" POV. Historically only players.Length == 2 (revive 1) was handled;
+            // a post-ejection survivor count of 1 (e.g. 実生存2人の会議でその片方を吊る — 赤ずきんの捕食死亡や
+            // No Game End 続行で普通に起こる) fell through with no revive AND no FixBlackScreen fallback,
+            // so every unmodded client blacked out (実機 2026-08-07_02.33.53 ゲーム2)。
+            PlayerControl[] revived = Main.EnumeratePlayerControls()
+                .Where(x => !x.IsAlive() && !x.Data.Disconnected && x != CheckForEndVotingPatch.TempExiledPlayer?.Object)
+                .OrderByDescending(x => x.PlayerId)
+                .Take(3 - players.Length)
+                .ToArray();
 
-            // The black screen cannot be prevented if there are no players to revive in this case.
-            if (!revived)
+            // The black screen cannot be prevented if there aren't enough players to revive
+            // (or nobody is left alive to play the dummy impostor).
+            if (!dummyImp || players.Length + revived.Length < 3)
             {
                 // Fix the black screen manually for each player after the ejection screen.
                 if (CheckForEndVotingPatch.TempExiledPlayer) CheckForEndVotingPatch.TempExiledPlayer.Object.FixBlackScreen();
@@ -48,7 +57,8 @@ public static class AntiBlackout
                 return;
             }
 
-            revived.RpcSetRoleGlobal(RoleTypes.Crewmate);
+            foreach (PlayerControl pc in revived)
+                pc.RpcSetRoleGlobal(RoleTypes.Crewmate);
         }
 
         DummyImpId = dummyImp ? dummyImp.PlayerId : byte.MaxValue;
