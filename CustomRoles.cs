@@ -590,6 +590,7 @@ public enum CustomRoles
     Disguiser, // H&S role
     Autoscopy,
     EvilBusker,
+    Atlas,
 
 
     // Sub-role after 1000 (buffer reserved for ~500 future main roles)
