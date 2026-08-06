@@ -303,6 +303,7 @@ internal static class ChatCommands
             new("Trial", "{id}", Command.UsageLevels.Everyone, Command.UsageTimes.InMeeting, (_, _, _) => { }, true, false, [GetString("CommandArgs.Trial.Id")]),
             new("Swap", "{id}", Command.UsageLevels.Everyone, Command.UsageTimes.InMeeting, (_, _, _) => { }, true, false, [GetString("CommandArgs.Swap.Id")]),
             new("Compare", "{id1} {id2}", Command.UsageLevels.Everyone, Command.UsageTimes.InMeeting, (_, _, _) => { }, true, false, [GetString("CommandArgs.Compare.Id1"), GetString("CommandArgs.Compare.Id2")]),
+            new("Interview", "{1|2}", Command.UsageLevels.Everyone, Command.UsageTimes.InMeeting, (_, _, _) => { }, true, false, [GetString("CommandArgs.Interview.Mode")]),
             new("Medium", "{answer}", Command.UsageLevels.Everyone, Command.UsageTimes.InMeeting, (_, _, _) => { }, true, false, [GetString("CommandArgs.Medium.Answer")]),
             new("Revenge", "{id}", Command.UsageLevels.Everyone, Command.UsageTimes.AfterDeath, (_, _, _) => { }, true, false, [GetString("CommandArgs.Revenge.Id")]),
             new("GiveKill", "{id}", Command.UsageLevels.Host, Command.UsageTimes.InLobby, GiveKillCommand, true, false, [GetString("CommandArgs.GiveKill.Id")]),
@@ -508,6 +509,7 @@ internal static class ChatCommands
             if (Swapper.SwapMsg(PlayerControl.LocalPlayer, text)) goto Canceled;
             if (Inspector.InspectorCheckMsg(PlayerControl.LocalPlayer, text)) goto Canceled;
             if (Councillor.MurderMsg(PlayerControl.LocalPlayer, text)) goto Canceled;
+            if (Newscaster.InterviewMsg(PlayerControl.LocalPlayer, text)) goto Canceled;
             if (Medium.MsMsg(PlayerControl.LocalPlayer, text)) goto Canceled;
             if (Nemesis.NemesisMsgCheck(PlayerControl.LocalPlayer, text)) goto Canceled;
         }
@@ -5629,7 +5631,8 @@ internal static class ChatCommands
                 Judge.TrialMsg(player, text) ||
                 Swapper.SwapMsg(player, text) ||
                 Inspector.InspectorCheckMsg(player, text) ||
-                Councillor.MurderMsg(player, text))
+                Councillor.MurderMsg(player, text) ||
+                Newscaster.InterviewMsg(player, text))
             {
                 canceled = true;
                 LastSentCommand[player.PlayerId] = now;

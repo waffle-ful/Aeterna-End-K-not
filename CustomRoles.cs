@@ -591,6 +591,7 @@ public enum CustomRoles
     Autoscopy,
     EvilBusker,
     Atlas,
+    Newscaster,
 
 
     // Sub-role after 1000 (buffer reserved for ~500 future main roles)

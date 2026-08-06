@@ -1675,6 +1675,7 @@ internal static class ReportDeadBodyPatch
             Medium.OnReportDeadBody(target);
             Mortician.OnReportDeadBody(player, target);
             Spiritualist.OnReportDeadBody(target);
+            Newscaster.OnAnyoneReportDeadBody(player, target);
 
             Bloodmoon.OnMeetingStart();
             Deadlined.OnMeetingStart();
