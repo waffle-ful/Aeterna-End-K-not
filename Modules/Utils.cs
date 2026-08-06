@@ -1094,6 +1094,7 @@ public static class Utils
             case CustomRoles.Pestilence:
             case CustomRoles.Doomsayer:
             case CustomRoles.ProbabilityKing:
+            case CustomRoles.GambleKiller:
                 hasTasks = false;
                 break;
             case CustomRoles.Amnesiac:
