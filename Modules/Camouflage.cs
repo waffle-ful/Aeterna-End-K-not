@@ -189,12 +189,20 @@ public static class Camouflage
                 newOutfit = swValue;
             else if (!gameEnd && Doppelganger.DoppelPresentSkin.TryGetValue(id, out NetworkedPlayerInfo.PlayerOutfit value))
                 newOutfit = value;
+            else if (!gameEnd && Autoscopy.PresentSkin.TryGetValue(id, out NetworkedPlayerInfo.PlayerOutfit asValue))
+                newOutfit = asValue;
             else
             {
                 if (gameEnd && Doppelganger.DoppelVictim.TryGetValue(id, out string value1))
                 {
                     PlayerControl dpc = Utils.GetPlayerById(id);
                     dpc?.RpcSetName(value1);
+                }
+
+                if (gameEnd && Autoscopy.OriginalNames.TryGetValue(id, out string value2))
+                {
+                    PlayerControl apc = Utils.GetPlayerById(id);
+                    apc?.RpcSetName(value2);
                 }
 
                 newOutfit = PlayerSkins[id];

@@ -947,7 +947,8 @@ internal static class CustomRolesHelper
                 CustomRoles.Exorcist or
                 CustomRoles.Frightener or
                 CustomRoles.Obstructer or
-                CustomRoles.Butcher;
+                CustomRoles.Butcher or
+                CustomRoles.Autoscopy;
         }
 
         public bool IsNeutral(bool check = false)
@@ -1410,6 +1411,7 @@ internal static class CustomRolesHelper
                 CustomRoles.WaveCannon => RoleOptionType.Impostor_Killing,
                 CustomRoles.Riptide => RoleOptionType.Impostor_Killing,
                 CustomRoles.Dossun => RoleOptionType.Impostor_Killing,
+                CustomRoles.Autoscopy => RoleOptionType.Impostor_Killing,
                 CustomRoles.Wiper => RoleOptionType.Impostor_Killing,
                 CustomRoles.Witch => RoleOptionType.Impostor_Killing,
                 CustomRoles.Zombie => RoleOptionType.Impostor_Killing,
@@ -2089,8 +2091,8 @@ internal static class CustomRolesHelper
             CustomRoles.Oblivious when pc.Is(CustomRoles.Altruist) => false,
             CustomRoles.AntiTP when pc.GetCustomRole() is CustomRoles.Transmitter or CustomRoles.Miner or CustomRoles.Escapist or CustomRoles.Tunneler or CustomRoles.Ninja => false,
             CustomRoles.Swift when pc.Is(CustomRoles.Stealth) => false,
-            CustomRoles.BananaMan when pc.Is(CustomRoles.Disco) || pc.Is(CustomRoles.Doppelganger) => false,
-            CustomRoles.Disco when pc.GetCustomRole() is CustomRoles.Chameleon or CustomRoles.Swooper or CustomRoles.Wraith or CustomRoles.Alchemist or CustomRoles.Doppelganger => false,
+            CustomRoles.BananaMan when pc.Is(CustomRoles.Disco) || pc.Is(CustomRoles.Doppelganger) || pc.Is(CustomRoles.Autoscopy) => false,
+            CustomRoles.Disco when pc.GetCustomRole() is CustomRoles.Chameleon or CustomRoles.Swooper or CustomRoles.Wraith or CustomRoles.Alchemist or CustomRoles.Doppelganger or CustomRoles.Autoscopy => false,
             CustomRoles.Egoist when pc.Is(CustomRoles.Gangster) => false,
             CustomRoles.Nimble when pc.GetCustomRole() is CustomRoles.Oxyman or CustomRoles.EngineerEndKnot or CustomRoles.Mechanic => false,
             CustomRoles.Magnet when pc.Is(Team.Impostor) => false,
