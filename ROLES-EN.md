@@ -2,15 +2,15 @@
 
 [日本語](ROLES.md) ・ [← Back to README](README-EN.md)
 
-**673 roles in total** (527 faction roles + 146 sub-roles/add-ons), organized by faction.
+**682 roles in total** (536 faction roles + 146 sub-roles/add-ons), organized by faction.
 
 ⭐ = End K not original role (not ported from another mod).
 
 | Faction | Count |
 |---------|-------|
-| Impostor | 166 (vanilla 4 + remake 4 + custom 158) |
-| Crewmate | 176 (vanilla 6 + remake 7 + custom 163) |
-| Neutral | 134 |
+| Impostor | 170 (vanilla 4 + remake 4 + custom 162) |
+| Crewmate | 178 (vanilla 6 + remake 7 + custom 165) |
+| Neutral | 137 |
 | Coven | 21 |
 | Game mode exclusive | 28 |
 | Other | 2 (GM / Convict) |
@@ -18,11 +18,11 @@
 
 > [!TIP]
 > ### Featured role: WaveCannon
-> An Impostor role built on the Phantom basis. Aim with the pet button; after a warning line appears, a massive beam sweeps across the map. One of the most popular roles in this mod — re-implemented host-only for End K not, with WaveCannon designs from SuperNewRoles and TownOfHost-Pko as reference.
+> An Impostor role built on the Phantom basis. Aim with the pet button; after a warning line appears, a massive beam sweeps across the map. This mod's flagship take on a fan-favourite from SuperNewRoles and TownOfHost-Pko, rebuilt with its own presentation and tuning for a host-only setup.
 
 Use `/r <role name>` or `/myrole` in-game to check each role's effects and settings.
 
-### Impostor (166)
+### Impostor (170)
 
 |   |   |   |   |
 |---|---|---|---|
@@ -67,9 +67,10 @@ Use `/r <role name>` or `/myrole` in-game to check each role's effects and setti
 | ShrineMaiden | Devourer | Butcher | Chainbinder |
 | Exorcist | Frightener | Obstructer | Skinwalker |
 | ⭐Riptide | ⭐Crosswind | ⭐Dossun | Gatekeeper |
-| ⭐Shuffler | ⭐WordKiller |  |  |
+| ⭐Shuffler | ⭐WordKiller | ⭐Autoscopy | ⭐EvilBusker |
+| ⭐Atlas | ⭐Dominion |  |  |
 
-### Crewmate (176)
+### Crewmate (178)
 
 |   |   |   |   |
 |---|---|---|---|
@@ -114,11 +115,12 @@ Use `/r <role name>` or `/myrole` in-game to check each role's effects and setti
 | Deputy | Analyst | Unshifter | Retributionist |
 | Forensic | Adventurer | Imitator | Tree |
 | Soothsayer | Psychic | LovingCrewmate | Alchemist |
-| WolfBoy | ForceFielder | Akazukin | Sandbox |
+| WolfBoy | ⭐ForceFielder | Akazukin | Sandbox |
 | Operative | Survivor | Bouncer | ⭐Gemini |
 | ⭐MapExtender | ⭐PortalButton | Revenant | Crewmate |
+| ⭐Newscaster | ⭐Mirage |  |  |
 
-### Neutral (134)
+### Neutral (137)
 
 |   |   |   |   |
 |---|---|---|---|
@@ -155,7 +157,8 @@ Use `/r <role name>` or `/myrole` in-game to check each role's effects and setti
 | RuthlessRomantic | Reckless | Pulse | Postman |
 | Traitor | Predator | Werewolf | Strawdoll |
 | Innocent | Blockade | Jackpot | Maguro |
-| Safecracker | ⭐Supernova |  |  |
+| Safecracker | ⭐Supernova | ⭐ProbabilityKing | ⭐GambleKiller |
+| ⭐Torpedo |  |  |  |
 
 ### Coven (21)
 
