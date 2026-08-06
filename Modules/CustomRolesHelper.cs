@@ -280,6 +280,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Vacuum => UsePets ? CustomRoles.Crewmate : CustomRoles.Engineer,
                 CustomRoles.Astral => UsePets ? CustomRoles.Crewmate : CustomRoles.Engineer,
                 CustomRoles.EvilBusker => UsePets ? CustomRoles.Impostor : CustomRoles.Shapeshifter,
+                CustomRoles.Atlas => UsePets ? CustomRoles.Impostor : CustomRoles.Shapeshifter,
                 CustomRoles.Helper => CustomRoles.Crewmate,
                 CustomRoles.Ankylosaurus => CustomRoles.Crewmate,
                 CustomRoles.Leery => CustomRoles.Crewmate,
@@ -950,7 +951,8 @@ internal static class CustomRolesHelper
                 CustomRoles.Obstructer or
                 CustomRoles.Butcher or
                 CustomRoles.Autoscopy or
-                CustomRoles.EvilBusker;
+                CustomRoles.EvilBusker or
+                CustomRoles.Atlas;
         }
 
         public bool IsNeutral(bool check = false)
@@ -1283,6 +1285,7 @@ internal static class CustomRolesHelper
                              or CustomRoles.Magistrate
                              or CustomRoles.Strawdoll
                              or CustomRoles.EvilBusker
+                             or CustomRoles.Atlas
             };
         }
 
@@ -1415,6 +1418,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Riptide => RoleOptionType.Impostor_Killing,
                 CustomRoles.Dossun => RoleOptionType.Impostor_Killing,
                 CustomRoles.Autoscopy => RoleOptionType.Impostor_Killing,
+                CustomRoles.Atlas => RoleOptionType.Impostor_Killing,
                 CustomRoles.Wiper => RoleOptionType.Impostor_Killing,
                 CustomRoles.Witch => RoleOptionType.Impostor_Killing,
                 CustomRoles.Zombie => RoleOptionType.Impostor_Killing,
