@@ -4412,6 +4412,10 @@ public static class Utils
             CustomRoles.Whisperer => Whisperer.Cooldown.GetInt() + (includeDuration ? Whisperer.Duration.GetInt() : 0),
             CustomRoles.Astral => Astral.AbilityCooldown.GetInt() + (includeDuration ? Astral.AbilityDuration.GetInt() : 0),
             CustomRoles.EvilBusker => EvilBusker.AbilityCooldown.GetInt() + (includeDuration ? EvilBusker.AbilityDuration.GetInt() : 0),
+            // Atlas はダミー設置ペースをホスト設定オプションにしない (仕様上 5 個のオプションで確定済み)。
+            // ペット経路の唯一の間引きがここなので、Atlas.FixedAbilityCooldown (5秒、cd<=3 ガードを
+            // 確実に超える固定値) を直接充てる — Thanos/Blockade の固定 5 と同じ扱い。
+            CustomRoles.Atlas => Atlas.FixedAbilityCooldown,
             CustomRoles.Vacuum => Vacuum.AbilityCooldown.GetInt() + (includeDuration ? Vacuum.AbilityDuration.GetInt() : 0),
             CustomRoles.TimeMaster => TimeMaster.TimeMasterSkillCooldown.GetInt(),
             CustomRoles.Perceiver => Perceiver.CD.GetInt(),
