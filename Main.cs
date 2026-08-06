@@ -455,6 +455,12 @@ public class Main : BasePlugin
         // conhost の QuickEdit 事故クリック (選択モード) がコンソール書き込みごとメインスレッドを
         // 無期限ブロックするのを防ぐ (2026-08-04 ハングダンプで確定した有人限定ハングの根治)。
         Log.LogInfo($"ConsoleGuard: {ConsoleGuard.DisableQuickEdit()}");
+        // QuickEdit を切っても Mark モード / 明示的な範囲選択は残るため、選択状態を別スレッドで
+        // 監視して一定時間で強制解除する (2026-08-07 のハングは QuickEdit 無効下で発生した)。
+        Log.LogInfo($"ConsoleGuard: {ConsoleGuard.StartSelectionWatcher()}");
+        // さらに構造側の根治として、コンソールへの書き込み自体をメインスレッドから剥がす。
+        // これでコンソールが何で詰まってもメインスレッドは巻き込まれない。
+        Log.LogInfo($"AsyncConsoleLog: {AsyncConsoleLog.Install()}");
 
         //Client Options
         HideName = Config.Bind("Client Options", "Hide Game Code Name", "EndKnot");
