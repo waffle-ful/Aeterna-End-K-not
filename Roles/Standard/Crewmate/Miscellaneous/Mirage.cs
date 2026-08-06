@@ -76,7 +76,14 @@ public class Mirage : RoleBase
 
     public override void ApplyGameOptions(IGameOptions opt, byte playerId)
     {
-        AURoleOptions.PhantomCooldown = AbilityCooldown.GetFloat();
+        float cd = AbilityCooldown.GetFloat();
+
+        // イントロ直後の PreventKill 窓では OnVanish が呼ばれず CD だけリセットされる (初回押下が無音で不発)。
+        // 窓の長さは固定 10 秒ではなく Options.StartingKillCooldown なので、それに合わせてクランプする。
+        if (IntroCutsceneDestroyPatch.PreventKill)
+            cd = Mathf.Max(cd, (Options.StartingKillCooldown?.GetFloat() ?? 10f) + 2f);
+
+        AURoleOptions.PhantomCooldown = cd;
     }
 
     public override void SetButtonTexts(HudManager hud, byte id)
@@ -94,6 +101,15 @@ public class Mirage : RoleBase
         {
             Vector2 clonePos = Clone.Position;
             Vector2 selfPos = pc.Pos();
+
+            // ⚠️ 1.5u 未満の TP は SendOption.None へ降格して非モッド客に届かないのに、
+            // ラウンド共有の SnapTo cap だけは消費する。分身のすぐ横で連打されると
+            // cap を空にして**他役職の TP まで無音で止める**ので、近すぎるときは入れ替えない。
+            if (Vector2.Distance(selfPos, clonePos) < 1.6f)
+            {
+                pc.Notify(Translator.GetString("MirageTooClose"));
+                return false;
+            }
 
             pc.TP(clonePos);
             Clone.TP(selfPos);
