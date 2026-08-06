@@ -2,15 +2,15 @@
 
 [English](ROLES-EN.md) ・ [← README に戻る](README.md)
 
-実装済みは合計 **673 役職**（陣営別役職527 + サブ役職・アドオン146）。陣営ごとに整理しています。
+実装済みは合計 **682 役職**（陣営別役職536 + サブ役職・アドオン146）。陣営ごとに整理しています。
 
 ⭐ = End K not オリジナル役職（他の Mod からの移植ではありません）。
 
 | 陣営 | 役職数 |
 |------|-------|
-| インポスター | 166 (ヴァニラ4 + リメイク4 + カスタム158) |
-| クルーメイト | 176 (ヴァニラ6 + リメイク7 + カスタム163) |
-| ニュートラル | 134 |
+| インポスター | 170 (ヴァニラ4 + リメイク4 + カスタム162) |
+| クルーメイト | 178 (ヴァニラ6 + リメイク7 + カスタム165) |
+| ニュートラル | 137 |
 | カバン (Coven) | 21 |
 | ゲームモード専用 | 28 |
 | その他 | 2 (GM / Convict) |
@@ -18,11 +18,11 @@
 
 > [!TIP]
 > ### 注目役職: 波動砲 (WaveCannon)
-> Phantom 派生のインポスター役職。pet ボタンで方向を狙い、警告ラインのあと巨大なビームでマップを薙ぎ払います。当 Mod でも特に人気の役職で、SuperNewRoles と TownOfHost-Pko の波動砲設計を参考に、End K not 用にホストオンリーで再実装しました。
+> Phantom 派生のインポスター役職。pet ボタンで方向を狙い、警告ラインのあと巨大なビームでマップを薙ぎ払います。SuperNewRoles や TownOfHost-Pko でおなじみの人気役職を、独自の演出と調整でホストオンリー環境向けに仕立て直した当 Mod の看板役職です。
 
 各役職の効果や設定はゲーム内で `/r <役職名>` または `/myrole` で確認できます。
 
-### インポスター系 (166)
+### インポスター系 (170)
 
 |   |   |   |   |
 |---|---|---|---|
@@ -67,9 +67,10 @@
 | 巫女 (ShrineMaiden) | 貪食者 (Devourer) | ブッチャー (Butcher) | チェインバインダー (Chainbinder) |
 | エクソシスト (Exorcist) | フライトナー (Frightener) | オブストラクター (Obstructer) | スキンウォーカー (Skinwalker) |
 | ⭐リップタイド (Riptide) | ⭐横風 (Crosswind) | ⭐ドッスン (Dossun) | ゲートキーパー (Gatekeeper) |
-| ⭐シャッフラー (Shuffler) | ⭐ワードキラー (WordKiller) |  |  |
+| ⭐シャッフラー (Shuffler) | ⭐ワードキラー (WordKiller) | ⭐オートスコピー (Autoscopy) | ⭐イビルバスカー (EvilBusker) |
+| ⭐アトラス (Atlas) | ⭐ドミニオン (Dominion) |  |  |
 
-### クルーメイト系 (176)
+### クルーメイト系 (178)
 
 |   |   |   |   |
 |---|---|---|---|
@@ -114,11 +115,12 @@
 | 副官 (Deputy) | 分析者 (Analyst) | 変身解除者 (Unshifter) | 報復者 (Retributionist) |
 | 法医学者 (Forensic) | 冒険者 (Adventurer) | 模倣者 (Imitator) | 木 (Tree) |
 | 預言者 (Soothsayer) | 霊能者 (Psychic) | 恋人 (LovingCrewmate) | 錬金術師 (Alchemist) |
-| 狼少年 (WolfBoy) | フォースフィールダー(ForceFielder) | あかづきん (Akazukin) | サンドボックス (Sandbox) |
+| 狼少年 (WolfBoy) | ⭐フォースフィールダー (ForceFielder) | あかづきん (Akazukin) | サンドボックス (Sandbox) |
 | オペレーティブ (Operative) | サバイバー (Survivor) | バウンサー (Bouncer) | ⭐ジェミニ (Gemini) |
 | ⭐マップエクステンダー (MapExtender) | ⭐ポータルボタン (PortalButton) | レヴナント (Revenant) | クルーメイト (Crewmate) |
+| ⭐ニュースキャスター (Newscaster) | ⭐ミラージュ (Mirage) |  |  |
 
-### ニュートラル系 (134)
+### ニュートラル系 (137)
 
 |   |   |   |   |
 |---|---|---|---|
@@ -155,7 +157,8 @@
 | 無慈悲で冷酷なロマンチック (RuthlessRomantic) | 無謀者 (Reckless) | 模倣者 (Pulse) | 郵便配達員 (Postman) |
 | 裏切り者 (Traitor) | 略奪者 (Predator) | 狼男 (Werewolf) | 藁人形 (Strawdoll) |
 | 冤罪師 (Innocent) | ブロケード (Blockade) | ジャックポット (Jackpot) | マグロ (Maguro) |
-| 金庫破り (Safecracker) | ⭐スーパーノヴァ (Supernova) |  |  |
+| 金庫破り (Safecracker) | ⭐スーパーノヴァ (Supernova) | ⭐確率王 (ProbabilityKing) | ⭐ギャンブルキラー (GambleKiller) |
+| ⭐魚雷 (Torpedo) |  |  |  |
 
 ### カバン (Coven) (21)
 
