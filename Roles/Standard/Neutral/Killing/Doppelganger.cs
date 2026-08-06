@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using AmongUs.GameOptions;
 using EndKnot.Modules;
 using Hazel;
@@ -28,6 +27,10 @@ public class Doppelganger : RoleBase
     public static Dictionary<byte, NetworkedPlayerInfo.PlayerOutfit> DoppelPresentSkin = [];
     private static Dictionary<byte, int> TotalSteals = [];
     private static Dictionary<byte, NetworkedPlayerInfo.PlayerOutfit> DoppelDefaultSkin = [];
+
+    // スワップ相手がスワップ直前に着ていた外見 (リセットで相手が戻る先)。
+    // ⚠️ DoppelPresentSkin[相手] は「相手が今着ている外見」= こちらの顔なので復元元には使えない。
+    private static Dictionary<byte, NetworkedPlayerInfo.PlayerOutfit> DoppelPartnerOriginalSkin = [];
 
     private static readonly string[] ResetModes =
     [
@@ -74,6 +77,7 @@ public class Doppelganger : RoleBase
         TotalSteals = [];
         DoppelPresentSkin = [];
         DoppelDefaultSkin = [];
+        DoppelPartnerOriginalSkin = [];
         DGId = byte.MaxValue;
 
         LocalPlayerChangeSkinTimes = 0;
@@ -225,6 +229,25 @@ public class Doppelganger : RoleBase
         }
     }
 
+    /// <summary>スワップを解除し、双方を元の外見・表示IDへ戻す。</summary>
+    private static void RestoreSwap(PlayerControl doppel, byte partnerId)
+    {
+        PlayerControl partner = Utils.GetPlayerById(partnerId);
+
+        if (partner && DoppelPartnerOriginalSkin.TryGetValue(partnerId, out NetworkedPlayerInfo.PlayerOutfit partnerSkin))
+            RpcChangeSkin(partner, partnerSkin);
+
+        if (DoppelDefaultSkin.TryGetValue(doppel.PlayerId, out NetworkedPlayerInfo.PlayerOutfit ownSkin))
+            RpcChangeSkin(doppel, ownSkin);
+
+        // 表示ID のスワップも解除する。残すと外見だけ戻って番号が入れ替わったままになる。
+        SwappedIDs.RemoveWhere(x => x.Item1 == doppel.PlayerId || x.Item2 == doppel.PlayerId);
+
+        // ⚠️ DoppelVictim は「その playerId の本名」台帳なので空文字で潰さない。
+        // OutroPatch / Camouflage の gameEnd 復元がこの値をそのまま RpcSetName に渡すため、
+        // 空にすると試合終了時に名前が消える。
+    }
+
     public static void OnCheckMurderEnd(PlayerControl killer, PlayerControl target)
     {
         if (Camouflage.IsCamouflage || Camouflager.IsActive || Main.PlayerStates[killer.PlayerId].Role is not Doppelganger { IsEnable: true } dg) return;
@@ -243,17 +266,18 @@ public class Doppelganger : RoleBase
 
         TotalSteals[killer.PlayerId]++;
 
+        byte killerId = killer.PlayerId;
+        byte targetId = target.PlayerId;
+
         LateTask.New(() =>
         {
-            if (ResetMode.GetValue() == 2 && TotalSteals[killer.PlayerId] > 0 && target)
-            {
-                RpcChangeSkin(target, DoppelPresentSkin[target.PlayerId]);
-                RpcChangeSkin(killer, DoppelDefaultSkin[killer.PlayerId]);
-                DoppelVictim[killer.PlayerId] = string.Empty;
+            if (ResetMode.GetValue() != 2 || TotalSteals[killerId] <= 0 || !killer) return;
+            if (!SwappedIDs.Contains((killerId, targetId))) return; // 会議リセット等で既に解除済み
 
-                if (GameStates.IsInTask && !ExileController.Instance && !AntiBlackout.SkipTasks)
-                    Utils.NotifyRoles();
-            }
+            RestoreSwap(killer, targetId);
+
+            if (GameStates.IsInTask && !ExileController.Instance && !AntiBlackout.SkipTasks)
+                Utils.NotifyRoles();
         }, ResetTimer.GetInt());
 
         string kname;
@@ -273,7 +297,13 @@ public class Doppelganger : RoleBase
         NetworkedPlayerInfo.PlayerOutfit killerSkin = Set(new(), kname, killer.CurrentOutfit.ColorId, killer.CurrentOutfit.HatId, killer.CurrentOutfit.SkinId, killer.CurrentOutfit.VisorId, killer.CurrentOutfit.PetId, killer.CurrentOutfit.NamePlateId);
         NetworkedPlayerInfo.PlayerOutfit targetSkin = Set(new(), tname, target.CurrentOutfit.ColorId, target.CurrentOutfit.HatId, target.CurrentOutfit.SkinId, target.CurrentOutfit.VisorId, target.CurrentOutfit.PetId, target.CurrentOutfit.NamePlateId);
 
-        DoppelVictim[target.PlayerId] = tname;
+        // ⚠️ 上書きしない。相手が既に他人の顔を被っていると tname は借り物の名前になり、
+        // 先に記録済みの本名を潰すと試合終了時の復元が借り物の名前で戻してしまう。
+        DoppelVictim.TryAdd(target.PlayerId, tname);
+
+        // リセットで相手を戻す先。RpcChangeSkin に渡すインスタンスとは別物にする
+        // (渡した側は DoppelPresentSkin に格納されるため参照を共有しない)。
+        DoppelPartnerOriginalSkin[targetId] = Set(new(), tname, target.CurrentOutfit.ColorId, target.CurrentOutfit.HatId, target.CurrentOutfit.SkinId, target.CurrentOutfit.VisorId, target.CurrentOutfit.PetId, target.CurrentOutfit.NamePlateId);
 
         SwappedIDs.RemoveWhere(x => x.Item1 == killer.PlayerId || x.Item2 == killer.PlayerId);
         SwappedIDs.Add((killer.PlayerId, target.PlayerId));
@@ -303,14 +333,12 @@ public class Doppelganger : RoleBase
                 PlayerControl pc = Utils.GetPlayerById(DGId);
                 if (!pc) return;
 
-                PlayerControl currentTarget = Main.EnumeratePlayerControls().FirstOrDefault(x => x.GetRealName() == DoppelVictim[pc.PlayerId]);
+                // 「今の表示名が自分の本名になっている人」を探す文字列一致は使わない —
+                // 公式鯖分岐の RpcChangeOutfitByData は pc.name を更新しないため成立しない。
+                // SwappedIDs の実データから直接パートナーを引く。
+                if (!SwappedIDs.FindFirst(x => x.Item1 == DGId, out var pair)) return;
 
-                if (currentTarget)
-                {
-                    RpcChangeSkin(currentTarget, DoppelPresentSkin[currentTarget.PlayerId]);
-                    RpcChangeSkin(pc, DoppelDefaultSkin[pc.PlayerId]);
-                    DoppelVictim[pc.PlayerId] = string.Empty;
-                }
+                RestoreSwap(pc, pair.Item2);
             }
         }
         catch (Exception e) { Utils.ThrowException(e); }
