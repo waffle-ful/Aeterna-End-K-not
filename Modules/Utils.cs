@@ -1121,6 +1121,9 @@ public static class Utils
                 break;
             case CustomRoles.Carrier:
             case CustomRoles.Wizard:
+            // ⚠️ Phantom 基底のクルーはここに要る。上の `if (p.Role.IsImpostor) hasTasks = false;` は
+            //    RoleTypes ベースの判定なので、desync で Phantom を持つクルーもタスクを消されてしまう。
+            case CustomRoles.Mirage:
                 hasTasks = true;
                 break;
             default:

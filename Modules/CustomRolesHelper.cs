@@ -665,6 +665,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Doppelganger => RoleTypes.Impostor,
                 CustomRoles.Investor => RoleTypes.Impostor,
                 CustomRoles.Wizard => RoleTypes.Phantom,
+                CustomRoles.Mirage => RoleTypes.Phantom,
                 CustomRoles.Carrier => RoleTypes.Shapeshifter,
                 CustomRoles.WaveCannon => RoleTypes.Phantom,
                 CustomRoles.Crosswind => RoleTypes.Phantom,
@@ -1210,6 +1211,7 @@ internal static class CustomRolesHelper
             return role is
                 CustomRoles.Empress or
                 CustomRoles.Wizard or
+                CustomRoles.Mirage or
                 CustomRoles.Strawdoll;
         }
 
@@ -1226,6 +1228,7 @@ internal static class CustomRolesHelper
                              or CustomRoles.Racer
                              or CustomRoles.SnowdownPlayer
                              or CustomRoles.Wizard
+                             or CustomRoles.Mirage
                              or CustomRoles.AntiAdminer
                              or CustomRoles.Stasis
                              or CustomRoles.Chainbinder
@@ -1676,6 +1679,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Snowman => RoleOptionType.Crewmate_Support,
                 CustomRoles.Shyboy => RoleOptionType.Crewmate_Support,
                 CustomRoles.Wizard => RoleOptionType.Crewmate_Support,
+                CustomRoles.Mirage => RoleOptionType.Crewmate_Miscellaneous,
                 CustomRoles.GuardMaster => RoleOptionType.Crewmate_Support,
                 CustomRoles.InSender => RoleOptionType.Crewmate_Support,
                 CustomRoles.Walker => RoleOptionType.Crewmate_Support,
