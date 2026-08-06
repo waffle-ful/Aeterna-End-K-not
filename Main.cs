@@ -904,6 +904,7 @@ public class Main : BasePlugin
                 { CustomRoles.Crosswind, "#7ec8e3" },
                 { CustomRoles.Shuffler, "#c0392b" },
                 { CustomRoles.Autoscopy, "#d1567f" },
+                { CustomRoles.EvilBusker, "#5d3fd3" },
                 // Upstream EHR catchup
                 { CustomRoles.Butcher, "#b3261e" },
                 { CustomRoles.Chainbinder, "#8a7f6d" },
