@@ -5588,7 +5588,17 @@ internal static class ChatCommands
             return;
         }
 
-        if (GameStates.InGame && (Silencer.ForSilencer.Contains(player.PlayerId) || Akazukin.IsPseudoDead(player.PlayerId) || (Main.PlayerStates[player.PlayerId].Role is Dad { IsEnable: true } dad && dad.UsingAbilities.Contains(Dad.Ability.GoForMilk))) && player.IsAlive())
+        // 捕食中の赤ずきんは本当に死んでいるため、下の生存者向けブロックには入らない。
+        // 塞がないとゴーストチャットで死者から情報を仕入れたまま生き返れてしまうので、別枠で先に落とす。
+        if (GameStates.InGame && Akazukin.IsPseudoDead(player.PlayerId))
+        {
+            ChatManager.SendPreviousMessagesToAll();
+            canceled = true;
+            LastSentCommand[player.PlayerId] = now;
+            return;
+        }
+
+        if (GameStates.InGame && (Silencer.ForSilencer.Contains(player.PlayerId) || (Main.PlayerStates[player.PlayerId].Role is Dad { IsEnable: true } dad && dad.UsingAbilities.Contains(Dad.Ability.GoForMilk))) && player.IsAlive())
         {
             ChatManager.SendPreviousMessagesToAll();
             canceled = true;
