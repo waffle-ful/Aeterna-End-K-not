@@ -906,6 +906,7 @@ public class Main : BasePlugin
                 { CustomRoles.Autoscopy, "#d1567f" },
                 { CustomRoles.EvilBusker, "#5d3fd3" },
                 { CustomRoles.Atlas, "#7a5c3e" },
+                { CustomRoles.Newscaster, "#4fc3f7" },
                 // Upstream EHR catchup
                 { CustomRoles.Butcher, "#b3261e" },
                 { CustomRoles.Chainbinder, "#8a7f6d" },
