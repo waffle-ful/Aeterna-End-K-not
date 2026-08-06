@@ -903,6 +903,7 @@ public class Main : BasePlugin
                 { CustomRoles.Riptide, "#0073ff" },
                 { CustomRoles.Crosswind, "#7ec8e3" },
                 { CustomRoles.Shuffler, "#c0392b" },
+                { CustomRoles.Autoscopy, "#d1567f" },
                 // Upstream EHR catchup
                 { CustomRoles.Butcher, "#b3261e" },
                 { CustomRoles.Chainbinder, "#8a7f6d" },

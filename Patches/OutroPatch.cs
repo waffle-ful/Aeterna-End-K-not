@@ -68,6 +68,21 @@ internal static class EndGamePatch
                 }
             }
 
+            if (Autoscopy.PlayerIdList.Count > 0 && Autoscopy.OriginalNames.ContainsKey(id))
+            {
+                PlayerControl apc = Utils.GetPlayerById(id);
+
+                if (apc != null)
+                {
+                    apc.RpcSetName(Autoscopy.OriginalNames[id]);
+                    Main.AllPlayerNames[id] = Autoscopy.OriginalNames[id];
+
+                    // Level はロビーへ持ち越されるため、名前と一緒に必ず戻す
+                    // (戻さないと KickLowLevelPlayer が無実のプレイヤーを蹴る)
+                    if (Autoscopy.TryGetOriginalLevel(id, out uint alevel)) apc.RpcSetLevel(alevel);
+                }
+            }
+
             SummaryText[id] = Utils.SummaryTexts(id, false);
             if (state.SubRoles.Count == 0) continue;
 

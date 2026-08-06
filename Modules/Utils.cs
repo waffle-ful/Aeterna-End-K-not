@@ -3772,7 +3772,12 @@ public static class Utils
                                     if (pair.Item1 == id) id = pair.Item2;
                                     else if (pair.Item2 == id) id = pair.Item1;
                                 }
-                                
+                                else if (Autoscopy.SwappedIDs.FindFirst(x => x.Item1 == id || x.Item2 == id, out var apair))
+                                {
+                                    if (apair.Item1 == id) id = apair.Item2;
+                                    else if (apair.Item2 == id) id = apair.Item1;
+                                }
+
                                 targetPlayerName = $"{seerRole.ColoredTextByRole(id.ToString())} {targetPlayerName}";
                             }
 
