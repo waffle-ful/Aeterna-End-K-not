@@ -910,6 +910,7 @@ public class Main : BasePlugin
                 { CustomRoles.Dominion, "#6d4c9f" },
                 { CustomRoles.ProbabilityKing, "#c9a227" },
                 { CustomRoles.GambleKiller, "#d4571f" },
+                { CustomRoles.Mirage, "#9fd8cb" },
                 // Upstream EHR catchup
                 { CustomRoles.Butcher, "#b3261e" },
                 { CustomRoles.Chainbinder, "#8a7f6d" },

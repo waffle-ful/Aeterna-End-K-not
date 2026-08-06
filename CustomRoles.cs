@@ -595,6 +595,7 @@ public enum CustomRoles
     Dominion,
     ProbabilityKing,
     GambleKiller,
+    Mirage,
 
 
     // Sub-role after 1000 (buffer reserved for ~500 future main roles)
