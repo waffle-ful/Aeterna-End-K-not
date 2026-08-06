@@ -315,8 +315,8 @@ public class Newscaster : RoleBase
         // Trapster の囮死体 (Trapster.OnVanish) はランダムな生存者を親にして偽の死体を作り、
         // deathReason も RealKiller も設定しない。ガードなしで読むと deathReason の既定値
         // (etc = "その他") を「死因」として全員にチャットへ流してしまう。
-        // 判定は Utils.GetVitalText と同型 (本死 or 赤ずきんの擬似死)。
-        if (!victimState.IsDead && !Akazukin.IsPseudoDead(LastVictimId))
+        // 判定は Utils.GetVitalText と同型 (本死のみ。赤ずきんも捕食された時点で本当に死んでいる)。
+        if (!victimState.IsDead)
             return string.Format(GetString("NewscasterExamInconclusive"), victimName);
 
         if (mode1)

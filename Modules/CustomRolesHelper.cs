@@ -1135,6 +1135,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Challenger or
                 CustomRoles.BedWarsPlayer or
                 CustomRoles.Revenant or
+                CustomRoles.Akazukin or // 捕食中は死んでいるが OnFixedUpdate で復活予約と猶予切れを回している
                 CustomRoles.Weatherman;
         }
 

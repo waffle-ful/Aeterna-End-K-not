@@ -535,6 +535,12 @@ internal static class ExtendedPlayerControl
 
             sender.SendMessage();
 
+            // 公式鯖では会議明けに Utils.AfterMeetingTasks の末尾が「死んでいるホスト」を
+            // RpcMakeInvisible する。その後に蘇生しても可視化されないので、ここで必ず戻す。
+            // (Main.Invisible に載っていなければ RpcMakeVisible は即 return する冪等操作。
+            //  会議をまたいで蘇生する役職 = 赤ずきん / レヴォナント / アルトゥルイスト / /revive 共通の穴だった)
+            player.RpcMakeVisible();
+
             NotifyRoles(SpecifySeer: player);
             NotifyRoles(SpecifyTarget: player);
         }

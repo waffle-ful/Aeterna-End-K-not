@@ -36,7 +36,7 @@ public static class FastVector2
         for (byte playerIndex = 0; playerIndex < players.Count; playerIndex++)
         {
             PlayerControl pc = players[playerIndex];
-            if (pc.inVent || Akazukin.IsPseudoDead(pc.PlayerId) || !predicate(pc)) continue;
+            if (pc.inVent || !predicate(pc)) continue;
             
             Vector2 p = pc.Pos();
             float dx = p.x - origin.x;
@@ -134,7 +134,7 @@ public static class FastVector2
         for (byte playerIndex = 0; playerIndex < players.Count; playerIndex++)
         {
             PlayerControl pc = players[playerIndex];
-            if (pc.inVent || Akazukin.IsPseudoDead(pc.PlayerId) || !predicate(pc)) continue;
+            if (pc.inVent || !predicate(pc)) continue;
             
             Vector2 p = pc.Pos();
             float dx = p.x - origin.x;
@@ -172,7 +172,7 @@ public static class FastVector2
         for (byte playerIndex = 0; playerIndex < players.Count; playerIndex++)
         {
             PlayerControl pc = players[playerIndex];
-            if (pc.inVent || pc.PlayerId == source.PlayerId || Akazukin.IsPseudoDead(pc.PlayerId) || !predicate(pc)) continue;
+            if (pc.inVent || pc.PlayerId == source.PlayerId || !predicate(pc)) continue;
             
             Vector2 p = pc.Pos();
             float dx = p.x - origin.x;
@@ -212,7 +212,7 @@ public static class FastVector2
         for (byte playerIndex = 0; playerIndex < players.Count; playerIndex++)
         {
             PlayerControl pc = players[playerIndex];
-            if (pc.inVent || pc.PlayerId == source.PlayerId || Akazukin.IsPseudoDead(pc.PlayerId) || !predicate(pc)) continue;
+            if (pc.inVent || pc.PlayerId == source.PlayerId || !predicate(pc)) continue;
             
             Vector2 p = pc.Pos();
             float dx = p.x - origin.x;
@@ -253,7 +253,7 @@ public static class FastVector2
         for (byte playerIndex = 0; playerIndex < players.Count; playerIndex++)
         {
             PlayerControl pc = players[playerIndex];
-            if (pc.inVent || Akazukin.IsPseudoDead(pc.PlayerId) || !predicate(pc)) continue;
+            if (pc.inVent || !predicate(pc)) continue;
             
             Vector2 p = pc.Pos();
             float dx = p.x - origin.x;

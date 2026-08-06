@@ -54,7 +54,7 @@ public class Sonar : IAddon
         PlayerControl current = Utils.GetPlayerById(currentId);
 
         // 現ターゲットが死亡・退出・ベント内・擬似死亡なら最近傍探索の対象外なので即座に乗り換える
-        if (current == null || !current.IsAlive() || current.inVent || Akazukin.IsPseudoDead(currentId)) return true;
+        if (current == null || !current.IsAlive() || current.inVent) return true;
 
         Vector2 origin = seer.Pos();
         return Vector2.Distance(origin, candidate.Pos()) + SwitchMargin <= Vector2.Distance(origin, current.Pos());

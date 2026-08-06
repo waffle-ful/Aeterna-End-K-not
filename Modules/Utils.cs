@@ -731,8 +731,7 @@ public static class Utils
     public static string GetVitalText(byte playerId, bool realKillerColor = false)
     {
         PlayerState state = Main.PlayerStates[playerId];
-        bool considerDead = state.IsDead || Akazukin.IsPseudoDead(playerId);
-        string deathReason = considerDead ? GetString("DeathReason." + state.deathReason) : GetString("Alive");
+        string deathReason = state.IsDead ? GetString("DeathReason." + state.deathReason) : GetString("Alive");
 
         if (realKillerColor)
         {
@@ -908,6 +907,10 @@ public static class Utils
 
     public static bool IsRevivingRoleAlive()
     {
+        // 赤ずきんは「捕食された本人」が死んでいる側なので、生存者を舐める下のループには絶対に引っかからない。
+        // 辞書を直接見ること (ここを外すと、噛まれた本人がゴーストとして全員の役職を見てから生き返る)。
+        if (Akazukin.PseudoDead.Count > 0) return true;
+
         var alive = Main.CachedAlivePlayerControls();
         for (int i = 0; i < alive.Count; i++)
         {
@@ -5608,7 +5611,8 @@ public static class Utils
 
     // Next 2: From MoreGamemodes by Rabek009
 
-    private static DeadBody CreateDeadBody(Vector3 position, byte colorId, PlayerControl deadBodyParent)
+    // public: Akazukin がホストローカルの死体生成にだけ使う (客側はバニラの MurderPlayer が作るので RPC 不要)
+    public static DeadBody CreateDeadBody(Vector3 position, byte colorId, PlayerControl deadBodyParent)
     {
         int baseColorId = deadBodyParent.Data.DefaultOutfit.ColorId;
         deadBodyParent.Data.DefaultOutfit.ColorId = colorId;

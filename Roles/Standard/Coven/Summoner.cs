@@ -149,6 +149,10 @@ public class Summoner : CovenBase
                 GhostRolesManager.RemoveGhostRole(SummonedPlayerId);
                 ReportDeadBodyPatch.AlreadyReportedBodies.Remove(SummonedPlayerId);
                 state.SetAlive();
+                // ここは RpcRevive() を通さない手書きの蘇生経路なので、可視化を自前で戻す必要がある。
+                // 公式鯖では会議明けに Utils.AfterMeetingTasks が「死んでいるホスト」を透明化しており、
+                // 召喚対象がホストだと透明なまま生き返ってしまう (赤ずきん/レヴォナントと同じ穴)。
+                summoned.RpcMakeVisible();
                 ExtendedPlayerControl.TempExiled.Remove(SummonedPlayerId);
                 summoned.RpcSetCustomRole(CustomRoles.SerialKiller);
                 summoned.RpcChangeRoleBasis(CustomRoles.SerialKiller);
