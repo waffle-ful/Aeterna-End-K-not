@@ -907,6 +907,7 @@ public class Main : BasePlugin
                 { CustomRoles.EvilBusker, "#5d3fd3" },
                 { CustomRoles.Atlas, "#7a5c3e" },
                 { CustomRoles.Newscaster, "#4fc3f7" },
+                { CustomRoles.Dominion, "#6d4c9f" },
                 // Upstream EHR catchup
                 { CustomRoles.Butcher, "#b3261e" },
                 { CustomRoles.Chainbinder, "#8a7f6d" },
