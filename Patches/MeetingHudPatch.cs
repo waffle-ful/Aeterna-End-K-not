@@ -245,6 +245,7 @@ internal static class CheckForEndVotingPatch
             Swapper.ManipulateVotingResult(votingData, states);
             King.ManipulateVotingResult(votingData, states);
             Balancer.ManipulateVotingResult(votingData, states);
+            Dominion.ManipulateVotingResult(votingData, states);
             Assumer.OnVotingEnd(votingData);
             MeetingAngel.NegateVotes(votingData, states);
 

@@ -952,7 +952,8 @@ internal static class CustomRolesHelper
                 CustomRoles.Butcher or
                 CustomRoles.Autoscopy or
                 CustomRoles.EvilBusker or
-                CustomRoles.Atlas;
+                CustomRoles.Atlas or
+                CustomRoles.Dominion;
         }
 
         public bool IsNeutral(bool check = false)
@@ -1085,6 +1086,7 @@ internal static class CustomRolesHelper
                 CustomRoles.JackalHadouHo => true,
                 CustomRoles.MassMedia => true,
                 CustomRoles.Akazukin => true,
+                CustomRoles.Dominion => true,
                 CustomRoles.Romantic when Romantic.DesignationMethod.GetValue() != 0 => true,
 
                 _ => false
@@ -1519,6 +1521,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Exorcist => RoleOptionType.Impostor_Miscellaneous,
                 CustomRoles.Frightener => RoleOptionType.Impostor_Miscellaneous,
                 CustomRoles.Obstructer => RoleOptionType.Impostor_Miscellaneous,
+                CustomRoles.Dominion => RoleOptionType.Impostor_Miscellaneous,
                 _ => role.IsCrewmate() ? RoleOptionType.Crewmate_Miscellaneous : RoleOptionType.Neutral_Benign
             };
         }
