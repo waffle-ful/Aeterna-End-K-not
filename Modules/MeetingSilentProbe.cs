@@ -89,6 +89,13 @@ public static class MeetingSilentProbe
         List<string> silent = [];
         List<byte> aliveIds = [];
 
+        // 端末別の分母/分子 (2026-08-07 追加)。発症率は 07-31 の 6.9% から 08-03 以降 20〜25% へ上昇したが、
+        // これまで被害者側の platform しか記録していなかったため「コンソール勢が増えただけ」の交絡を潰せなかった。
+        // 母集団 (alive) 側も端末別に数えることで、端末ごとの発症率を直接出せるようにする。
+        Dictionary<string, int> platAlive = [];
+        Dictionary<string, int> platNoVote = [];
+        var moddedAlive = 0;
+
         foreach (PlayerControl pc in Main.AllAlivePlayerControls)
         {
             if (pc.IsHost() || pc.PlayerId >= 200) continue;
@@ -104,6 +111,10 @@ public static class MeetingSilentProbe
             alive++;
             aliveIds.Add(pc.PlayerId);
 
+            string platform = pc.GetClient()?.PlatformData?.Platform.ToString() ?? "Unknown";
+            platAlive[platform] = platAlive.GetValueOrDefault(platform) + 1;
+            if (pc.IsModdedClient()) moddedAlive++;
+
             if (Voted.Contains(pc.PlayerId))
             {
                 voted++;
@@ -116,13 +127,25 @@ public static class MeetingSilentProbe
             bool didRegress = PrevAlive.Contains(pc.PlayerId) && PrevVoted.Contains(pc.PlayerId);
             if (didRegress) regressed++;
 
-            string desc = $"{pc.GetRealName()} (id {pc.PlayerId}, modded={pc.IsModdedClient()}, platform={pc.GetClient()?.PlatformData?.Platform}, chats={chats}, regressed={didRegress})";
+            string desc = $"{pc.GetRealName()} (id {pc.PlayerId}, modded={pc.IsModdedClient()}, platform={platform}, chats={chats}, regressed={didRegress})";
 
-            if (chats > 0) suspects.Add(desc);
+            if (chats > 0)
+            {
+                suspects.Add(desc);
+                platNoVote[platform] = platNoVote.GetValueOrDefault(platform) + 1;
+            }
             else silent.Add(desc);
         }
 
         Logger.Info($"meeting summary: alive={alive} voted={voted} chat-no-vote={suspects.Count} silent-no-vote={silent.Count} notvoter-excluded={notVoterExcluded} regressed-no-vote={regressed} timedOut={timedOut} voteLeftAtResults={_votingTimeLeftAtResults} elapsed={elapsed:F0}s", "MeetingSilentProbe");
+
+        // 端末別の内訳。分母 (alive) 側も端末で割ることで、「発症率の上昇」が本当の悪化なのか
+        // 単に来場者の端末構成が変わっただけなのかを日別集計で分離できる。
+        List<string> platParts = [];
+        foreach (KeyValuePair<string, int> kv in platAlive)
+            platParts.Add($"{kv.Key}={platNoVote.GetValueOrDefault(kv.Key)}/{kv.Value}");
+
+        Logger.Info($"platform breakdown (chat-no-vote/alive): {string.Join(" ", platParts)} | modded-alive={moddedAlive}/{alive}", "MeetingSilentProbe");
 
         foreach (string s in suspects)
             Logger.Warn($"{s} sent chat during meeting but never cast a vote — likely broken vote UI (BUG-20260725-05 class)", "MeetingSilentProbe");
