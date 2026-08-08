@@ -191,7 +191,7 @@ End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/End
 - **[Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles)** (Gurge44 et al.) — base mod, GPL-3.0
 - **[TownOfHost-K](https://github.com/KYMario/TownOfHost-K)** (KYMario et al.) — source of many roles, streaming-support features, and the official-server packet-splitting safety net, GPL-3.0
 - **[SuperNewRoles](https://github.com/SuperNewRoles/SuperNewRoles)** (SuperNewRoles team) — WaveCannon design reference, GPL-3.0
-- **[TownOfHost-Pko](https://github.com/satokazoku/TownOfHost-Pko)** (satokazoku et al.) — WaveCannon design reference, GPL-3.0
+- **[TownOfHost-Pko](https://github.com/satokazoku/TownOfHost-Pko)** (satokazoku et al.) — Many roles, WaveCannon design reference, GPL-3.0
 - **[Town Of Host](https://github.com/tukasa0001/TownOfHost)** (tukasa0001 et al.) — root of the TOH lineage
 - **[Town Of Host_ForE](https://github.com/AsumuAkaguma/TownOfHost_ForE)** — BGM customization feature
 - **[Town of Host: Enhanced (TOHE)](https://github.com/EnhancedNetwork/TownofHost-Enhanced)** (The Enhanced Network team) — source of many roles, GPL-3.0

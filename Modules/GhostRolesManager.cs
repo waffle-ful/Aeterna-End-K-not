@@ -103,6 +103,10 @@ internal static class GhostRolesManager
             // ボタンが出ない」状態だけが残る (BUG-20260721-10)
             if (Main.PlayerStates[pc.PlayerId].Role is Revenant { StillAlive: true }) return false;
 
+            // 捕食中の赤ずきん (復活見込みの死者) も同じ理由で除外。加えて非ホストの赤ずきんは本人に
+            // 死を隠しているため、ゴースト役職の SetRole broadcast が届くとその場でゴースト化してしまう。
+            if (Akazukin.IsPseudoDead(pc.PlayerId)) return false;
+
             switch (pc.GetCustomRole())
             {
                 case CustomRoles.GM:

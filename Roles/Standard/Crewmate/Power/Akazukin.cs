@@ -27,6 +27,10 @@ namespace EndKnot.Roles;
 //    ・マップを覗かれない ← ゴーストの視界はホストから縮められない
 //      (バニラの CalculateLightRadius は死者に対して CrewLightMod/ImpostorLightMod を無視する)
 //      ので、距離で封じる。隔離房 (HoldingCell) はマップ下端の外に置く。
+//    ・そもそもゴーストにならない (非ホストの赤ずきん) ← 本人のクライアントには捕食時に死を一切
+//      伝えない (Exiled 未送信 + Data.IsDead 同期の常時バリア)。本人は「生存のまま隔離房に居る」
+//      と認識するため、ゴーストチャット・霊界情報・死者視点が構造的に発生しない。
+//      漏洩口の一覧と除外の型は IsDeathConcealed() の doc コメント参照。
 //      ⚠️ 隔離房への TP は **必ず noCheckState: true** で撃つこと。Utils.TP は既定で
 //      「死んでいる相手は転送不能」として無音キャンセルするため、外すと封じ込めが丸ごと
 //      no-op になる (2026-08-07 実機で発覚。生存前提の Pelican から機構をコピーしたのが原因)。
@@ -138,10 +142,23 @@ public class Akazukin : RoleBase
     public override void Remove(byte playerId)
     {
         PlayerIdList.Remove(playerId);
-        PseudoDead.Remove(playerId);
+        if (PseudoDead.Remove(playerId)) AFKDetector.ExemptedPlayers.Remove(playerId);
     }
 
     public static bool IsPseudoDead(byte id) => PseudoDead.ContainsKey(id);
+
+    /// <summary>捕食中で、かつ本人のクライアントに「死んだこと自体」を隠している最中か (非ホストの赤ずきんのみ)。
+    /// true の間は本人宛の死亡系送信 (Exiled / 死者向け SetRole / Data.IsDead 同期) を全経路で止める必要がある。
+    /// 漏洩口は分散しているので、新しく「死者全員に何かを broadcast する」コードを書くときは必ずこれで除外すること:
+    /// NetworkedPlayerInfoSerializePatch (Data 自動同期) / AntiBlackout の会議クローズ ghost 一括 SetRole・
+    /// 会議明け per-target 復元・死者一斉 RpcExiled スイープ / GhostRolesManager (ghost role 配布) が対応済み。
+    /// ホスト自身が赤ずきんの場合は画面をモッドが描いているので隠す必要がなく、従来どおりローカルでゴースト化する。</summary>
+    public static bool IsDeathConcealed(byte id)
+    {
+        if (!PseudoDead.ContainsKey(id)) return false;
+        PlayerControl pc = Utils.GetPlayerById(id);
+        return pc && !pc.AmOwner;
+    }
 
     public static bool ShouldDisplayDeathReason(byte id)
         => PseudoDead.ContainsKey(id) && DisplayDeathReasonInName != null && DisplayDeathReasonInName.GetBool();
@@ -196,21 +213,24 @@ public class Akazukin : RoleBase
         //   本人以外の全クライアント → 本人 NetId の self-MurderPlayer (targeted)
         //       = 各クライアントのバニラ機構が「本物の死体」を現場に落とす。通報可・ID 衝突なし。
         //         自分同士のキルなので殺害者情報は流れず、傍観者にキル演出も出ない。
-        //   本人 → Exiled (targeted) = 死体もキル演出も見ずに死ぬ (targeted self-murder の前例は
-        //         ExtendedPlayerControl.FixBlackScreen — 公式鯖で実運用済み)。
+        //   本人 → **何も送らない** (Exiled すら送らない)。本人のクライアントは「生存のまま」隔離房で
+        //         過ごすため、自分を死者と認識せず、ゴーストチャット・霊界情報・死者視点が構造的に
+        //         一切発生しない (死後にインポスターを推測できる情報を根から断つ)。
+        //         - 会議では本人にだけ自分が生存に見え投票 UI も出るが、票はホストが破棄する (OnVote)。
+        //         - 本人が会議で発言しても、受信側クライアントは「発言者は死者」と各自の帳簿で判定して
+        //           生存者には表示しないため漏れない (見えるのは霊界の死者だけ)。
+        //         - ホストの Data.IsDead=true が自動同期で漏れる経路は IsDeathConcealed() を見る
+        //           各所のバリアが塞ぐ (一覧はヘルパーの doc コメント)。
+        //         - 猶予切れ (RealDeath) で初めて本人へ Exiled を送り、本当のゴーストにする。
         //   ホスト → ローカルで Exiled() 実走 + CreateDeadBody() 直呼び (RPC なし)。
+        //         ホスト自身が赤ずきんの場合は隠しようがないので従来どおり (targeted 送信自体が無い)。
         // ⚠️ 送信は target.Exiled() より先に行う。Exiled() が立てる Data.IsDead=true の dirty 同期が
         //    MurderPlayer より先に客へ届くと「既に死んでいる相手への殺害」になり死体が落ちない恐れがある。
         // ⚠️ RpcExileV2() を使わないのは従来どおり (LoversSuicide を呼ぶ = 復活しても相方が死んだまま)。
         var sender = CustomRpcSender.Create("Akazukin.EnterPseudoDeath", SendOption.Reliable);
         var sentClientIds = new HashSet<int> { AmongUsClient.Instance.ClientId };
 
-        if (!target.AmOwner)
-        {
-            sentClientIds.Add(target.OwnerId);
-            sender.AutoStartRpc(target.NetId, RpcCalls.Exiled, target.OwnerId);
-            sender.EndRpc();
-        }
+        if (!target.AmOwner) sentClientIds.Add(target.OwnerId);
 
         // EnumeratePlayerControls = 接続中の実プレイヤーのみ (fan-out の母集合はこれが慣習。
         // AllPlayerControls だと偽 PlayerControl の残留混入時に OwnerId 未設定 → tag5 ブロードキャスト化の穴がある)
@@ -232,6 +252,10 @@ public class Akazukin : RoleBase
         // ローカル死体だけが Exiled() の実走に巻き込まれて消え、「客には見えるのにホストからだけ
         // 死体が無い/通報できない」という非対称になる (2026-08-07 実機で観測)。
         Utils.CreateDeadBody(killPos, (byte)target.Data.DefaultOutfit.ColorId, target);
+
+        // 隔離房では「生存扱いのまま静止」するため AFK 検知の対象になってしまう
+        // (速度 0.5 は凍結免除の MinSpeed に掛からない)。Consequence.Kick は無条件 KickPlayer なので免除必須。
+        AFKDetector.ExemptedPlayers.Add(targetId);
 
         Main.AllPlayerSpeed[targetId] = 0.5f;
         target.MarkDirtySettings();
@@ -269,17 +293,26 @@ public class Akazukin : RoleBase
 
         // RpcRevive() は Data.IsDead でない相手には無音 return する。取りこぼすと
         // 「PseudoDead からは外れたのに生き返っていない」= 永久に死んだままになるので、
-        // 辞書から外す前に確認する。
+        // 辞書から外す前に確認する。この分岐に来るのは (a) 他役職 (Altruist 等) が先に蘇生した、
+        // (b) 何かが vanilla の Data.IsDead だけを生存に巻き戻した (実例: AntiBlackout の偽装蘇生 —
+        // 蘇生候補からの除外で根治済みだが防御は残す)、のどちらか。いずれでも捕食時に入れた
+        // 減速・AFK 免除・mod 帳簿の死亡は残っているので、ここで必ず清算してから抜ける
+        // (実機 2026-08-07_03.31.35: この清算が無く「復活後も速度 0.5 のまま」が発生した)。
         if (!target.Data.IsDead)
         {
             PseudoDead.Remove(targetId);
             SendRPC(targetId);
-            Logger.Warn($"{target.GetRealName()} は既に生存状態だったため復活処理を省略", "Akazukin");
+            AFKDetector.ExemptedPlayers.Remove(targetId);
+            Main.AllPlayerSpeed[targetId] = state.OriginalSpeed;
+            if (Main.PlayerStates[targetId].IsDead) Main.PlayerStates[targetId].SetAlive(); // vanilla 側だけ巻き戻された分裂を揃える (他役職蘇生済みなら no-op)
+            target.MarkDirtySettings();
+            Logger.Warn($"{target.GetRealName()} は既に生存状態だったため復活処理を省略 (速度/帳簿だけ清算)", "Akazukin");
             return;
         }
 
         PseudoDead.Remove(targetId);
         SendRPC(targetId);
+        AFKDetector.ExemptedPlayers.Remove(targetId);
 
         // 速度は RpcRevive() 内の SyncSettings より先に戻す (でないと 0.5 のまま同期される)。
         Main.AllPlayerSpeed[targetId] = state.OriginalSpeed;
@@ -290,10 +323,11 @@ public class Akazukin : RoleBase
         target.TP(dest);
         target.MarkDirtySettings();
 
-        // 捕食中はゴーストとして会議に座るので、他の死者の発言 (「◯◯に殺された」) が画面に残っている。
-        // チャットはクライアント間ブロードキャストでホストからは受信自体を止められないため、
-        // せめて生き返った時点で流し、死者席の会話を持ち帰らせない。
-        ChatManager.ClearChat(target);
+        // ホスト自身が赤ずきんだった場合のみ: 捕食中はゴーストとして会議に座るので、他の死者の発言
+        // (「◯◯に殺された」) が画面に残っている。生き返った時点で流し、死者席の会話を持ち帰らせない。
+        // 非ホストの赤ずきんは死を隠されたまま (クライアントは生存のまま) なので死者チャットを
+        // そもそも見ておらず、流すと無関係な生存画面が流れるだけなのでスキップする。
+        if (target.AmOwner) ChatManager.ClearChat(target);
 
         target.Notify(Translator.GetString("Akazukin_Revived"), 10f);
 
@@ -308,9 +342,22 @@ public class Akazukin : RoleBase
 
         PseudoDead.Remove(targetId);
         SendRPC(targetId);
+        AFKDetector.ExemptedPlayers.Remove(targetId); // 以後は本物の死者なので AFK 検知の対象外
 
         PlayerControl target = Utils.GetPlayerById(targetId);
         if (target == null) return;
+
+        // 捕食中は本人に死を隠していた (Exiled 未送信・クライアントは生存のまま) ので、
+        // 復活の見込みが消えたここで初めて本人へ Exiled を送り、本当のゴーストにする。
+        // ⚠️ PseudoDead からの除去 (上) より後に呼ぶこと — IsDeathConcealed が false になってから
+        //    Exiled を届けないと、以後の死者向け broadcast 除外と整合しない。
+        if (!target.AmOwner)
+        {
+            var sender = CustomRpcSender.Create("Akazukin.RealDeath", SendOption.Reliable);
+            sender.AutoStartRpc(target.NetId, RpcCalls.Exiled, target.OwnerId);
+            sender.EndRpc();
+            sender.SendMessage();
+        }
 
         // 隔離房に置き去りにすると、ゴーストが減速したままマップ外に取り残される。
         // 速度を戻して自分の死体の場所へ解放する。

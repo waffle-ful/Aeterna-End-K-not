@@ -598,6 +598,18 @@ public enum CustomRoles
     Mirage,
     Torpedo,
 
+    // EKN custom role slots (reserved - do not reorder)
+    EkmCustomRole1,
+    EkmCustomRole2,
+    EkmCustomRole3,
+    EkmCustomRole4,
+    EkmCustomRole5,
+    EkmCustomRole6,
+    EkmCustomRole7,
+    EkmCustomRole8,
+    EkmCustomRole9,
+    EkmCustomRole10,
+
 
     // Sub-role after 1000 (buffer reserved for ~500 future main roles)
     NotAssigned = 1000,

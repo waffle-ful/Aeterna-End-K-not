@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using AmongUs.GameOptions;
 using EndKnot.Gamemodes;
 using EndKnot.Modules;
+using EndKnot.Modules.Ekm;
 using EndKnot.Roles;
 using UnityEngine;
 
@@ -486,6 +487,10 @@ internal static class CustomRolesHelper
                 // Mingle
                 CustomRoles.MinglePlayer => CustomRoles.Crewmate,
 
+                // EKN 役職メーカー: ベント可の定義が束縛されたスロットは Engineer 基底
+                // (キル可のスロットはここに来る前に GetDYRole 経由の desync 判定で Impostor になる)
+                _ when EkrManager.IsSlot(role) && EkrManager.GetDefinition(role) is { CanVent: true } => CustomRoles.Engineer,
+
                 _ => role.IsImpostor() ? CustomRoles.Impostor : CustomRoles.Crewmate
             };
         }
@@ -692,6 +697,9 @@ internal static class CustomRolesHelper
                 CustomRoles.MoonDancer => RoleTypes.Phantom,
                 CustomRoles.Empress => RoleTypes.Phantom,
                 CustomRoles.Shadow => RoleTypes.Phantom,
+
+                // EKN 役職メーカー: キル可の定義が束縛されたスロットは desync Impostor 基底 (Sheriff 系と同じ)
+                _ when EkrManager.IsSlot(role) && EkrManager.GetDefinition(role) is { CanKill: true } => RoleTypes.Impostor,
 
                 _ => RoleTypes.GuardianAngel
             };
@@ -1727,6 +1735,12 @@ internal static class CustomRolesHelper
                 CustomRoles.ForceFielder => RoleOptionType.Crewmate_Chaos,
                 CustomRoles.Sandbox => RoleOptionType.Crewmate_Chaos,
                 CustomRoles.Operative => RoleOptionType.Crewmate_Support,
+
+                // EKN 役職メーカーのスロット: 明示登録が無い役職はこのデフォルトで Neutral_Benign に
+                // 落ちる仕様のため、スロット10個をここで Crewmate_Miscellaneous に固定する
+                // (オプション構築のグルーピングと選出のカテゴリ判定が両方この分類を読む)。
+                _ when EkrManager.IsSlot(role) => RoleOptionType.Crewmate_Miscellaneous,
+
                 _ => role.IsImpostor() ? RoleOptionType.Impostor_Miscellaneous : RoleOptionType.Neutral_Benign
             };
         }

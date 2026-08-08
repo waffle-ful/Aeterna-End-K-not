@@ -1,4 +1,5 @@
 using System.IO;
+using EndKnot.Roles;
 using HarmonyLib;
 using UnityEngine;
 
@@ -55,6 +56,21 @@ internal static class NetworkedPlayerInfoSerializePatch
         if (AmongUsClient.Instance == null || !AmongUsClient.Instance.AmHost || !GameStates.InGame) return true;
         if (initialState) return true; // スポーン初期化 (initialState=true) は常に通す (偽会議トリック等が使う)
         if (IntentionalSends > 0) return true;
+
+        // 赤ずきん: 捕食中の本人 Data は会議内外を問わず常時破棄する (死を隠す設計の生命線)。
+        // IsDead=true が自動同期で本人クライアントへ届くと、その場でゴースト化して隠蔽が破れる。
+        // 他クライアントの死亡認識は捕食時の targeted MurderPlayer が確立済みで、Data 再送が
+        // 無くても保たれる (会議 write-barrier の破棄式と同じ理屈)。復活時は PseudoDead から
+        // 外れて自然に通常同期へ戻る (その時点の IsDead=false は漏れても無害)。
+        // ⚠️ IntentionalSends (上) より後に置くこと — 意図的送信まで遮ると手動 writer に
+        //    空の Data ブロックが書かれ、クライアント側の Deserialize が壊れる。
+        if (Akazukin.IsDeathConcealed(__instance.PlayerId))
+        {
+            __instance.ClearDirtyBits();
+            __result = false;
+            return false;
+        }
+
         if (Options.CurrentGameMode != CustomGameMode.Standard) return true;
         if (!GameStates.IsMeeting) return true;
         if (KillSwitchActive) return true;

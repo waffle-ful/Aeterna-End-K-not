@@ -29,6 +29,7 @@
         <button id="btn-copy-code">コードコピー</button>
         <button id="btn-load-code">コード読込</button>
         <button id="btn-play" class="primary" title="マップを EKMaps フォルダへ保存してゲームに反映します">▶ ゲームで試す</button>
+        <button id="btn-role-maker" title="役職を作ってコード化するお試し機能 (フォームのみ)">役職メーカー</button>
       </div>
     </header>
 
@@ -298,6 +299,45 @@
         <button id="code-ok" type="button">読込</button>
         <button id="code-cancel" type="button">閉じる</button>
       </menu>
+    </dialog>
+
+    <!-- 役職メーカー (EKN R0: フォームのみ・ロジック無し)。マップ本体とは無関係な独立機能。 -->
+    <dialog id="dlg-role-maker">
+      <h3>役職メーカー (お試し版)</h3>
+      <p class="note">フォームで役職を作って、コードとしてコピーできます。動きを組む機能 (ブロック) は未対応です。</p>
+
+      <label>役職名 <input id="rm-name" maxlength="24" placeholder="例: 見習いエンジニア" autocomplete="off" /></label>
+      <label>作者 (任意) <input id="rm-author" maxlength="24" placeholder="任意" autocomplete="off" /></label>
+      <label>色 <input id="rm-color" type="color" value="#8f8f8f" /></label>
+
+      <p class="note rm-team-note">陣営: クルーメイト — 今はクルーメイトのみ対応です</p>
+
+      <label class="rm-flag-row"><input type="checkbox" id="rm-can-kill" /> キルできる</label>
+      <label id="rm-kill-cd-row" hidden>キルを再び使えるまでの秒数 <input id="rm-kill-cd" type="number" min="1" max="180" step="1" value="25" /></label>
+
+      <label class="rm-flag-row"><input type="checkbox" id="rm-can-vent" /> ベントを使える</label>
+
+      <label>視界の広さ (倍率) <input id="rm-vision" type="number" min="0.25" max="5" step="0.05" value="1" /></label>
+
+      <p class="note rm-team-note">勝利条件: 通常のクルーメイト勝利 (固定)</p>
+
+      <p id="rm-status" class="note" aria-live="polite" hidden></p>
+      <textarea id="rm-manual-copy" rows="4" readonly hidden spellcheck="false"></textarea>
+
+      <menu>
+        <button id="rm-copy" type="button" class="primary">コードをコピー</button>
+        <button id="rm-close" type="button">閉じる</button>
+      </menu>
+
+      <details id="rm-load-section">
+        <summary>コードを読み込む (前に作った役職を編集し直す)</summary>
+        <textarea id="rm-load-text" rows="4" placeholder="EKR1.…" spellcheck="false"></textarea>
+        <menu>
+          <button id="rm-load-btn" type="button">このコードを読み込む</button>
+        </menu>
+      </details>
+
+      <p class="note rm-usage-note">ゲームでの使い方: コードをコピーしたら、ゲームのチャットで <code>/role import</code> → <code>/role set &lt;番号&gt;</code></p>
     </dialog>
 
     <dialog id="dlg-msg">

@@ -1304,6 +1304,11 @@ public static class Options
 
     public static int GetRoleSpawnMode(CustomRoles role)
     {
+        // EKN 役職メーカーの予約スロットは、定義が束縛されていない限り常に「出現しない」。
+        // 出現率オプションが (保存値・手動操作などで) 何であっても、ここが選出・IsEnable の
+        // 全経路の根なので、未束縛スロットが「中身のない役職」として湧く事故は構造的に起きない。
+        if (Modules.Ekm.EkrManager.IsSlot(role) && !Modules.Ekm.EkrManager.IsBound(role)) return 0;
+
         return CustomRoleSpawnChances.TryGetValue(role, out StringOptionItem sc) ? sc.GetChance() : 0;
     }
 

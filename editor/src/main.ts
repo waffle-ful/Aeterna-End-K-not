@@ -70,6 +70,7 @@ import { saveForPlaytest } from "./playtest";
 import { createBackroomsDoc } from "./presets";
 import { EKM_TEMPLATES, type EkmTemplate } from "./templates";
 import { flipStampH, flipStampV, bresenhamLine, rectOutlineCells } from "./stamp-utils";
+import { initRoleMaker } from "./logic/role-maker";
 
 type ToolV1 = "floor" | "wall" | "void" | DecorKind | "spawn";
 type ToolV2 = "pen" | "erase" | "rect" | "bucket" | "pick" | "line";
@@ -4459,6 +4460,9 @@ function wireUi(): void {
     // コーチマークボタン配線
     $("coach-next").addEventListener("click", () => showCoachStep(coachStep + 1));
     $("coach-skip").addEventListener("click", () => endCoach());
+
+    // 役職メーカー (EKN R0): マップ doc と無関係な独立機能。自分のトリガーボタンの配線まで含めて自己完結する。
+    initRoleMaker();
 }
 
 // ---------- 起動 ----------

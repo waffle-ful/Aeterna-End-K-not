@@ -1754,6 +1754,80 @@ dialog#dlg-library {
 }
 
 /* =============================================================
+   役職メーカー (dlg-role-maker) — EKN R0 (フォームのみ・ロジック無し)
+   ============================================================= */
+
+dialog#dlg-role-maker {
+    width: min(96vw, 480px);
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.rm-flag-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    margin: var(--space-xs) 0;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+/* dialog label { display: flex } は author 指定なので UA 既定の [hidden]{display:none} には
+   勝ってしまう (author 通常規則は常に UA 通常規則に勝つ — 詳細度の問題ではない)。
+   .tools[hidden] 等、このファイルの他の hidden トグルと同じ理由で明示オーバーライドが必要。 */
+#rm-kill-cd-row[hidden] {
+    display: none;
+}
+
+.rm-team-note {
+    margin: var(--space-sm) 0;
+}
+
+#rm-status {
+    margin: var(--space-sm) 0;
+}
+
+#rm-status.rm-status-error {
+    color: var(--danger);
+}
+
+#rm-status.rm-status-ok {
+    color: var(--ok);
+}
+
+#rm-manual-copy {
+    margin-top: var(--space-xs);
+}
+
+.rm-usage-note {
+    margin-top: var(--space-md);
+}
+
+.rm-usage-note code {
+    background: var(--bg-2);
+    padding: 1px 4px;
+    border-radius: 4px;
+}
+
+#rm-load-section {
+    margin-top: var(--space-md);
+    border-top: 1px solid var(--border);
+    padding-top: var(--space-sm);
+}
+
+#rm-load-section > summary {
+    cursor: pointer;
+    color: var(--text-muted);
+    padding: var(--space-xs) 0;
+    user-select: none;
+}
+
+#rm-load-section[open] > summary {
+    color: var(--text-primary);
+    margin-bottom: var(--space-sm);
+}
+
+/* =============================================================
    スタート画面 (#start-screen)
    ============================================================= */
 
