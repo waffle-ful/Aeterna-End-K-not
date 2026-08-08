@@ -114,7 +114,7 @@
 | 狼少年 (WolfBoy) | ⭐フォースフィールダー (ForceFielder) | あかづきん (Akazukin) | サンドボックス (Sandbox) |
 | オペレーティブ (Operative) | サバイバー (Survivor) | バウンサー (Bouncer) | ⭐ジェミニ (Gemini) |
 | ⭐マップエクステンダー (MapExtender) | ⭐ポータルボタン (PortalButton) | レヴナント (Revenant) | クルーメイト (Crewmate) |
-| ⭐ニュースキャスター (Newscaster) | ⭐ミラージュ (Mirage) |  |  |
+| ⭐ニュースキャスター (Newscaster) | ミラージュ (Mirage) |  |  |
 
 ### ニュートラル系 (137)
 
