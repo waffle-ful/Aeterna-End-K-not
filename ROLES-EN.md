@@ -114,7 +114,7 @@ Use `/r <role name>` or `/myrole` in-game to check each role's effects and setti
 | WolfBoy | ⭐ForceFielder | Akazukin | Sandbox |
 | Operative | Survivor | Bouncer | ⭐Gemini |
 | ⭐MapExtender | ⭐PortalButton | Revenant | Crewmate |
-| ⭐Newscaster | ⭐Mirage |  |  |
+| ⭐Newscaster | Mirage |  |  |
 
 ### Neutral (137)
 
