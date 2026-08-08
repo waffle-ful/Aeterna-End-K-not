@@ -64,7 +64,8 @@ public static class EkmCodec
         string trimmed = code.Trim();
         if (!trimmed.StartsWith(prefix, StringComparison.Ordinal))
         {
-            error = $"マップコードは {prefix} で始まる必要があります";
+            // prefix はマップ (EKM1.) / 役職 (EKR1.) 等の契約ごとに違うため、名詞は「コード」で統一する
+            error = $"コードは {prefix} で始まる必要があります";
             return false;
         }
 

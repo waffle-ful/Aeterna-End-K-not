@@ -31,6 +31,10 @@ public static class EkrManager
     // slot -> 束縛中の定義。ロビーでのみ変更する (Bind/Unbind)。試合中の per-round リセット対象外。
     private static readonly Dictionary<CustomRoles, EkrDefinition> Bound = [];
 
+    // slot -> 束縛元のファイル名。ReloadLibrary 時にディスクの最新定義へ追随させるための再解決キー
+    // (これが無いと、束縛後に .ekrole.json を手編集しても旧オブジェクト参照が残り続ける)。
+    private static readonly Dictionary<CustomRoles, string> BoundFiles = [];
+
     // enum 範囲比較の O(1) 判定 (GetRoleSpawnMode 等の高頻度経路から呼ばれる)。
     public static bool IsSlot(CustomRoles role)
     {
@@ -96,6 +100,20 @@ public static class EkrManager
             catch (Exception ex)
             {
                 Logger.Warn($"[EkrManager] Could not read role file {path}: {ex.Message}", "EkrManager");
+            }
+        }
+
+        // 束縛済みスロットをディスクの最新定義へ追随させる (手編集や再 import の反映)。
+        // ファイルが消えた/壊れた場合は旧定義のまま維持する (束縛が無言で外れて湧かなくなる事故を避ける)。
+        // ReloadLibrary は /role コマンド (ロビー限定) からしか呼ばれないので、試合中に定義が差し替わることはない。
+        foreach ((CustomRoles slot, string fileName) in BoundFiles.ToArray())
+        {
+            foreach ((string fn, EkrDefinition def) in Library)
+            {
+                if (fn != fileName) continue;
+
+                if (!ReferenceEquals(def, Bound.GetValueOrDefault(slot))) Bind(slot, def, fileName);
+                break;
             }
         }
     }
@@ -186,8 +204,8 @@ public static class EkrManager
         }
 
         CustomRoles slot = Slots[slotNumber1Based - 1];
-        EkrDefinition def = Library[libraryIndex1Based - 1].Def;
-        Bind(slot, def);
+        (string fileName, EkrDefinition def) = Library[libraryIndex1Based - 1];
+        Bind(slot, def, fileName);
         return true;
     }
 
@@ -211,9 +229,10 @@ public static class EkrManager
         return true;
     }
 
-    private static void Bind(CustomRoles slot, EkrDefinition def)
+    private static void Bind(CustomRoles slot, EkrDefinition def, string fileName)
     {
         Bound[slot] = def;
+        BoundFiles[slot] = fileName;
 
         // 表示名の実行時上書き (RoleBase.StartSetup 系・GetRoleName 等が共通で読む翻訳キー = 型名 = enum 名)。
         Translator.SetRuntimeOverride(slot.ToString(), def.Name);
@@ -223,22 +242,27 @@ public static class EkrManager
         Main.InitRoleColors();
 
         // 束縛 = 「次のゲームで使う」宣言なので、出現率オプションを 100% にしてメニューにも出す。
+        // 出現率はプリセット別配列 (OptionItem.AllValues) なので全プリセットへ反映する — 現在プリセットだけ
+        // 書くと、ホストがプリセットを切り替えた瞬間「束縛表示は残るのに出現率 0 で湧かない」無音不整合になる。
         // 保存されても安全: 未束縛スロットは Options.GetRoleSpawnMode のガードで常に 0 扱いになる。
         if (Options.CustomRoleSpawnChances != null && Options.CustomRoleSpawnChances.TryGetValue(slot, out var opt))
         {
             opt.SetColor(Utils.GetRoleColor(slot));
             opt.SetHidden(false);
-            opt.SetValue(Options.Rates.Length - 1);
+            opt.SetAllValues(Enumerable.Repeat(Options.Rates.Length - 1, OptionItem.NumPresets).ToArray());
+            opt.SetValue(Options.Rates.Length - 1); // SetAllValues は同期/保存を発火しないため、現在値の SetValue で締める
         }
     }
 
     private static void Unbind(CustomRoles slot)
     {
         Bound.Remove(slot);
+        BoundFiles.Remove(slot);
         Translator.ClearRuntimeOverride(slot.ToString());
 
         if (Options.CustomRoleSpawnChances != null && Options.CustomRoleSpawnChances.TryGetValue(slot, out var opt))
         {
+            opt.SetAllValues(new int[OptionItem.NumPresets]);
             opt.SetValue(0);
             opt.SetHidden(true);
         }

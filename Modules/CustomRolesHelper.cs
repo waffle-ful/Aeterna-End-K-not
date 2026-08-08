@@ -487,8 +487,11 @@ internal static class CustomRolesHelper
                 // Mingle
                 CustomRoles.MinglePlayer => CustomRoles.Crewmate,
 
-                // EKN 役職メーカー: ベント可の定義が束縛されたスロットは Engineer 基底
-                // (キル可のスロットはここに来る前に GetDYRole 経由の desync 判定で Impostor になる)
+                // EKN 役職メーカー: ベント可の定義が束縛されたスロットは Engineer 基底。
+                // キル可のスロットは checkDesyncRole=true の経路 (このメソッド冒頭の IsDesyncRole 分岐) で
+                // desync Impostor に確定し、この switch まで来ない。checkDesyncRole=false で呼ばれた場合は
+                // ここを通って Crewmate/Engineer 側に落ちるが、現行の false 呼び出し元は vanilla サポート役職の
+                // 種別判定にしか使っておらず Impostor/Crewmate を区別しないため影響しない。
                 _ when EkrManager.IsSlot(role) && EkrManager.GetDefinition(role) is { CanVent: true } => CustomRoles.Engineer,
 
                 _ => role.IsImpostor() ? CustomRoles.Impostor : CustomRoles.Crewmate
