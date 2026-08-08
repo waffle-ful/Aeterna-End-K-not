@@ -32,7 +32,11 @@
       - `new XxxOptionItem(Id, ...)` の "素の識別子" は役職内ローカルヘルパーの
         引数であることが多く、静的に const と区別できないためスキップする。
         基底 id は必ず SetupRoleOptions / StartSetup 側で捕捉されるので漏れない。
-      - 1 ファイル 1 StartSetup を前提 (全 116 ファイルで成立)。
+      - 1 ファイル 1 StartSetup を前提 (全 116 ファイルで成立)。const の解決は
+        宣言位置ベースのクラススコープ近似なので 1 ファイル複数クラスでも正しく効くが、
+        StartSetup の連鎖数 (chainCount) だけはファイル全体で数えている。
+        1 ファイルに StartSetup を持つクラスを複数置くと過剰予約で誤検知するので、
+        その形にするときはここを直すこと。
 
 .PARAMETER SuggestFrom
     次の空きブロックを探す開始 id (既定 700000 — 移植役職の予約帯)。
@@ -64,18 +68,34 @@ $occupied  = @{}
 $unresolved = 0
 $fileCount  = 0
 
+# 同名 const が 1 ファイルに複数ある場合 (1 ファイルに複数クラスを詰めた予約スロット等) に
+# 「使用箇所より前で最も近い宣言」を選ぶ。C# のクラススコープの近似で、
+# 「クラス冒頭で const Id を宣言してすぐ下で使う」という repo の慣習に一致する。
+# 単一宣言のファイルでは従来と同じ値になるため既存の判定には影響しない。
+function Resolve-Symbol {
+    param([hashtable]$symbols, [string]$name, [int]$atIndex)
+    if (-not $symbols.ContainsKey($name)) { return $null }
+    $defs = $symbols[$name]
+    $value = $defs[0].Value
+    foreach ($d in $defs) {
+        if ($d.Index -le $atIndex) { $value = $d.Value } else { break }
+    }
+    return $value
+}
+
 function Resolve-Id {
-    param([string]$expr, [hashtable]$symbols, [bool]$allowBare)
+    param([string]$expr, [hashtable]$symbols, [bool]$allowBare, [int]$atIndex = [int]::MaxValue)
     $expr = $expr.Trim()
     if ($expr -match '^\d+$') { return [int]$expr }
     if ($expr -match '^(\w+)\s*([+\-])\s*(\d+)$') {
         $name = $Matches[1]; $op = $Matches[2]; $n = [int]$Matches[3]
-        if ($symbols.ContainsKey($name)) {
-            return $(if ($op -eq '+') { $symbols[$name] + $n } else { $symbols[$name] - $n })
+        $base = Resolve-Symbol -symbols $symbols -name $name -atIndex $atIndex
+        if ($null -ne $base) {
+            return $(if ($op -eq '+') { $base + $n } else { $base - $n })
         }
         return $null
     }
-    if ($allowBare -and $expr -match '^(\w+)$' -and $symbols.ContainsKey($expr)) { return $symbols[$expr] }
+    if ($allowBare -and $expr -match '^(\w+)$') { return Resolve-Symbol -symbols $symbols -name $expr -atIndex $atIndex }
     return $null
 }
 
@@ -112,9 +132,12 @@ foreach ($dir in $scanDirs) {
         $rel = $file.FullName.Substring($repoRoot.Length).TrimStart('\', '/')
 
         # per-file symbol table: const int NAME = <literal>;
+        # 同名が複数あり得る (1 ファイル複数クラス) ので宣言位置つきのリストで持つ。
         $symbols = @{}
         foreach ($m in [regex]::Matches($text, 'const\s+int\s+(\w+)\s*=\s*(\d+)\s*;')) {
-            $symbols[$m.Groups[1].Value] = [int]$m.Groups[2].Value
+            $name = $m.Groups[1].Value
+            if (-not $symbols.ContainsKey($name)) { $symbols[$name] = @() }
+            $symbols[$name] += [pscustomobject]@{ Index = $m.Index; Value = [int]$m.Groups[2].Value }
         }
 
         # --- StartSetup (連続ブロック) ---
@@ -124,7 +147,7 @@ foreach ($dir in $scanDirs) {
             $overrideExtra = $overrideRx.Matches($text).Count * 3
             $lastOffset = 1 + $chainCount + $overrideExtra   # 最終 id オフセット (base 起点)
             foreach ($m in $ssMatches) {
-                $base = Resolve-Id -expr $m.Groups[1].Value -symbols $symbols -allowBare $true
+                $base = Resolve-Id -expr $m.Groups[1].Value -symbols $symbols -allowBare $true -atIndex $m.Index
                 if ($null -eq $base) { $script:unresolved++; continue }
                 Add-Range -start $base -span ($lastOffset + 1) -file $rel -label "StartSetup($($m.Groups[1].Value.Trim())) block"
             }
@@ -132,7 +155,7 @@ foreach ($dir in $scanDirs) {
 
         # --- SetupAdtRoleOptions (4 / 8) ---
         foreach ($m in $adtRx.Matches($text)) {
-            $id = Resolve-Id -expr $m.Groups[1].Value -symbols $symbols -allowBare $true
+            $id = Resolve-Id -expr $m.Groups[1].Value -symbols $symbols -allowBare $true -atIndex $m.Index
             if ($null -eq $id) { $script:unresolved++; continue }
             $span = if ($m.Groups[2].Value -match 'teamSpawnOptions\s*:\s*true') { 8 } else { 4 }
             Add-Range -start $id -span $span -file $rel -label $m.Groups[1].Value.Trim()
@@ -142,7 +165,7 @@ foreach ($dir in $scanDirs) {
         foreach ($p in $directPatterns) {
             foreach ($m in $p.Rx.Matches($text)) {
                 $exprText = $m.Groups[1].Value
-                $id = Resolve-Id -expr $exprText -symbols $symbols -allowBare $p.AllowBare
+                $id = Resolve-Id -expr $exprText -symbols $symbols -allowBare $p.AllowBare -atIndex $m.Index
                 if ($null -eq $id) { $script:unresolved++; continue }
                 Add-Range -start $id -span $p.Span -file $rel -label $exprText.Trim()
             }

@@ -148,13 +148,29 @@ public class MapExtender : RoleBase
     {
         if (!MapBoundsValid) return;
 
+        // マップ外で設置すると入口も出口も境界の外に並び、マップ内へ戻る端点が消滅する
+        // (取り残された全員が脱出不能になる)。既存のポータル対はマップ内に入口を持っているので、
+        // Despawn より手前で弾いて張り直させない。ペットのクールタイムは OnPet の後で
+        // 無条件に消費されるため、無言 return にすると20秒の沈黙に見える → 必ず通知する。
+        if (pc.Pos().y >= OutsideLine)
+        {
+            pc.Notify(Translator.GetString("MapExtender.OutsideBlocked"));
+            return;
+        }
+
         DespawnPortals();
 
         EntryPos = pc.Pos();
         ExitPos = ExitBasePosition + new Vector2(ExitXOffset, 0f);
         EntryPortal = new MapExtenderPortal(EntryPos.Value);
         ExitPortal = new MapExtenderPortal(ExitPos.Value);
+
+        // 設置者は入口の真上 (距離0) に立っている。ラッチを空にすると次の fixed update で
+        // 自分のポータルに拾われ、押した本人が毎回マップ外へ飛ばされる。
+        // 設置者だけは最初からラッチ状態にし、一度離れる (LatchReleaseRange) まで反応させない。
+        // PortalMaker は同じ事故を LastTP の5秒猶予で防いでいる (同型の保護)。
         TpLatched.Clear();
+        TpLatched.Add(pc.PlayerId);
     }
 
     public override void OnCheckPlayerPosition(PlayerControl pc)

@@ -14,8 +14,10 @@ public static class EkmCodec
     public const string Prefix = "EKM1.";
 
     // JSON テキスト → マップコード。失敗時は false + error。
-    public static bool TryEncode(string json, out string code, out string error)
+    // prefix省略時は既定の "EKM1." (マップ用)。役職コード等の別契約は prefix を渡す (例: EkrCodec.Prefix = "EKR1.")。
+    public static bool TryEncode(string json, out string code, out string error, string prefix = null)
     {
+        prefix ??= Prefix;
         code = null;
         error = null;
         if (json == null)
@@ -37,7 +39,7 @@ public static class EkmCodec
                 deflated = ms.ToArray();
             }
 
-            code = Prefix + Base64UrlEncode(deflated);
+            code = prefix + Base64UrlEncode(deflated);
             return true;
         }
         catch (Exception ex)
@@ -48,8 +50,9 @@ public static class EkmCodec
     }
 
     // マップコード → JSON テキスト。失敗時は false + error (日本語混じりでユーザーに出せる文)。
-    public static bool TryDecode(string code, out string json, out string error)
+    public static bool TryDecode(string code, out string json, out string error, string prefix = null)
     {
+        prefix ??= Prefix;
         json = null;
         error = null;
         if (string.IsNullOrWhiteSpace(code))
@@ -59,16 +62,16 @@ public static class EkmCodec
         }
 
         string trimmed = code.Trim();
-        if (!trimmed.StartsWith(Prefix, StringComparison.Ordinal))
+        if (!trimmed.StartsWith(prefix, StringComparison.Ordinal))
         {
-            error = $"マップコードは {Prefix} で始まる必要があります";
+            error = $"マップコードは {prefix} で始まる必要があります";
             return false;
         }
 
         byte[] deflated;
         try
         {
-            deflated = Base64UrlDecode(trimmed.Substring(Prefix.Length));
+            deflated = Base64UrlDecode(trimmed.Substring(prefix.Length));
         }
         catch (Exception ex)
         {

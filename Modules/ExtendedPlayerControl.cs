@@ -825,6 +825,15 @@ internal static class ExtendedPlayerControl
 
         public void SyncOutfitData(MessageWriter writer = null, SendOption sendOption = SendOption.Reliable, bool revertShapeshiftIfAlreadyShifted = true)
         {
+            // 捕食中の赤ずきん (本人に死を隠している) の Data は意図的送信 (IntentionalSends) でも broadcast しない。
+            // Data.Serialize は outfit だけでなく IsDead も一緒に書くため、通すと本人の画面へ「自分は死者」が
+            // 届いて隠蔽が破れる (実害経路: コムズ修理のカモフラ解除 → Camouflage.RpcSetSkin → ここ)。
+            // Serialize の Prefix 側で遮ると呼び出し元の writer に空の Data ブロックが残って Deserialize が
+            // 壊れるため、ブロックを書き始める前のここで丸ごとスキップするのが正しい形。outfit の同期ズレは
+            // 本人が他クライアントでは死者 (非描画) なので実害がなく、復活時の RpcRevive → Camouflage.RpcSetSkin
+            // が正しい姿で再同期する。
+            if (Akazukin.IsDeathConcealed(player.PlayerId)) return;
+
             // 見た目リフレッシュのための self-Shapeshift。ShapeshiftPatch.Prefix の副作用 (Shiftguard 通知/Sentry ループ) は抑止する
             ShapeshiftPatch.SuppressSideEffects = true;
             try { player.Shapeshift(player, false); }

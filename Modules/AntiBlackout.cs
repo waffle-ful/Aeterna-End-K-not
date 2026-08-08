@@ -4,6 +4,7 @@ using System.Linq;
 using AmongUs.GameOptions;
 using EndKnot.Modules;
 using EndKnot.Patches;
+using EndKnot.Roles;
 using Hazel;
 
 namespace EndKnot;
@@ -37,8 +38,12 @@ public static class AntiBlackout
             // a post-ejection survivor count of 1 (e.g. 実生存2人の会議でその片方を吊る — 赤ずきんの捕食死亡や
             // No Game End 続行で普通に起こる) fell through with no revive AND no FixBlackScreen fallback,
             // so every unmodded client blacked out (実機 2026-08-07_02.33.53 ゲーム2)。
+            // ⚠️ 捕食中の赤ずきんは偽装蘇生の頭数に使わない。RpcSetRoleGlobal(Crewmate) はホストローカルでも
+            //    SetRole を実行して Data.IsDead を false に巻き戻すため、赤ずきんの復活処理が「既に生存状態」と
+            //    誤認してスキップされ、速度復元・目隠し解除などが丸ごと失われる (実機 2026-08-07_03.31.35 で確定。
+            //    しかも Revert 側は IsDeathConcealed 除外で触らないので巻き戻しが恒久化する)。
             PlayerControl[] revived = Main.EnumeratePlayerControls()
-                .Where(x => !x.IsAlive() && !x.Data.Disconnected && x != CheckForEndVotingPatch.TempExiledPlayer?.Object)
+                .Where(x => !x.IsAlive() && !x.Data.Disconnected && x != CheckForEndVotingPatch.TempExiledPlayer?.Object && !Akazukin.IsPseudoDead(x.PlayerId))
                 .OrderByDescending(x => x.PlayerId)
                 .Take(3 - players.Length)
                 .ToArray();
@@ -50,6 +55,22 @@ public static class AntiBlackout
                 // Fix the black screen manually for each player after the ejection screen.
                 if (CheckForEndVotingPatch.TempExiledPlayer) CheckForEndVotingPatch.TempExiledPlayer.Object.FixBlackScreen();
                 players.Do(x => x.FixBlackScreen());
+
+                // 捕食中の赤ずきん (クライアントは生存のまま) も会議明けの全滅判定を踏む「生存クライアント」
+                // だが、ホスト帳簿では死者なので players に入らず修復から漏れて暗転する (実機 2026-08-07_03.42.59)。
+                // FixBlackScreen は死者向け self-murder を撃つため使えない (本人に死が届いて隠蔽が破れる)。
+                // 代わりに本人の画面にだけ「本人の帳簿で生存に見える誰か」を Impostor に desync 表示して
+                // imp1+crew2 相当の POV を作り、全滅判定そのものを回避する。役職の実態は変えないので
+                // 復元は不要 (本人が crew である限り Impostor 表示の視覚影響も無い)。
+                foreach (byte akaId in Akazukin.PseudoDead.Keys.ToArray())
+                {
+                    if (!Akazukin.IsDeathConcealed(akaId)) continue;
+                    PlayerControl akaPc = akaId.GetPlayer();
+                    PlayerControl fakeImp = Main.EnumeratePlayerControls().FirstOrDefault(x =>
+                        x.PlayerId != akaId && x != CheckForEndVotingPatch.TempExiledPlayer?.Object &&
+                        (!Main.PlayerStates[x.PlayerId].IsDead || x.GetCountTypes() == CountTypes.OutOfGame));
+                    if (akaPc && fakeImp) fakeImp.RpcSetRoleDesync(RoleTypes.Impostor, akaPc.OwnerId);
+                }
 
                 // Don't skip tasks since we couldn't set the optimal roles.
                 SkipTasks = false;
@@ -65,7 +86,10 @@ public static class AntiBlackout
         dummyImp.RpcSetRoleGlobal(RoleTypes.Impostor);
         players.Without(dummyImp).Where(x => x.GetCustomRole() is not (CustomRoles.DetectiveEndKnot or CustomRoles.Detective) && !x.Is(CustomRoles.Examiner)).Do(x => x.RpcSetRoleGlobal(RoleTypes.Crewmate));
         
-        Main.EnumeratePlayerControls().DoIf(x => !x.IsAlive() && x.Data && x.Data.IsDead && (!x.AmOwner || !Utils.TempReviveHostRunning), x => x.RpcSetRoleGlobal(GhostRolesManager.AssignedGhostRoles.TryGetValue(x.PlayerId, out var ghostRole) ? ghostRole.Instance.RoleTypes : RoleTypes.CrewmateGhost));
+        // 捕食中の赤ずきん (本人に死を隠している) はゴースト役職の broadcast から除外 — 本人が
+        // SetRole(CrewmateGhost) を受信するとその場でゴースト化して隠蔽が破れる。他クライアントの
+        // 帳簿では既に死者なので、見た目役職を触らなくても POV 最適化 (imp1+crew2) には影響しない。
+        Main.EnumeratePlayerControls().DoIf(x => !x.IsAlive() && x.Data && x.Data.IsDead && (!x.AmOwner || !Utils.TempReviveHostRunning) && !Akazukin.IsDeathConcealed(x.PlayerId), x => x.RpcSetRoleGlobal(GhostRolesManager.AssignedGhostRoles.TryGetValue(x.PlayerId, out var ghostRole) ? ghostRole.Instance.RoleTypes : RoleTypes.CrewmateGhost));
     }
 
     // After the ejection screen, we revert the role types to their actual values.
@@ -106,6 +130,10 @@ public static class AntiBlackout
                 byte targetId = targetGroup.Key;
                 PlayerControl target = targetId.GetPlayer();
                 if (!target) continue;
+
+                // 捕食中の赤ずきんの見た目役職は AntiBlackout に一切触らせない (クローズ時の偽装からも
+                // 除外済みなので、ここで復元 SetRole を broadcast すると本人がゴースト化するだけ)。
+                if (Akazukin.IsDeathConcealed(targetId)) continue;
 
                 // Compute the role every seer should see.
                 Dictionary<byte, RoleTypes> rolesForSeers = [];
@@ -186,6 +214,11 @@ public static class AntiBlackout
                     else
                     {
                         if (pc.AmOwner && Utils.TempReviveHostRunning) continue;
+
+                        // 捕食中の赤ずきんは死の再確立スイープから除外 — この RpcExiled は broadcast
+                        // なので、送ると本人がゴースト化して隠蔽が破れる。他クライアントへの死亡は
+                        // 捕食時の targeted MurderPlayer が確立済み。
+                        if (Akazukin.IsDeathConcealed(pc.PlayerId)) continue;
 
                         // Ensure that the players who are considered dead by the mod are actually dead in the game.
                         sender.RpcExiled(pc);
