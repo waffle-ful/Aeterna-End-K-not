@@ -14,6 +14,22 @@ public static class Translator
 {
     private const string LanguageFolderName = "Language";
     private static Dictionary<string, Dictionary<int, string>> TranslateMaps;
+
+    // EKN 役職コードの実行時名前上書き (例: "EkmCustomRole1" → 定義側の name)。
+    // 言語別データは持たず、英語スロットに書くだけで GetString の「その言語で無ければ英語へフォールバック」
+    // (下の GetString(string, SupportedLangs) 参照) にそのまま乗る。
+    private static readonly Dictionary<string, string> RuntimeOverrides = [];
+
+    public static void SetRuntimeOverride(string key, string value)
+    {
+        if (string.IsNullOrEmpty(key)) return;
+        RuntimeOverrides[key] = value ?? "";
+    }
+
+    public static void ClearRuntimeOverride(string key)
+    {
+        RuntimeOverrides.Remove(key);
+    }
     public static Dictionary<CustomRoles, Dictionary<SupportedLangs, string>> OriginalRoleNames;
     public static readonly StringNames[] AllStringNames = Enum.GetValues<StringNames>();
 
@@ -189,6 +205,9 @@ public static class Translator
     {
         try
         {
+            if (RuntimeOverrides.Count > 0 && RuntimeOverrides.TryGetValue(str, out string overrideValue))
+                return overrideValue;
+
             if (TranslateMaps.TryGetValue(str, out var dic))
             {
                 if (dic.TryGetValue((int)langId, out var res) && !string.IsNullOrEmpty(res))

@@ -9,6 +9,7 @@ using AmongUs.GameOptions;
 using Assets.CoreScripts;
 using EndKnot.Gamemodes;
 using EndKnot.Modules;
+using EndKnot.Modules.Ekm;
 using EndKnot.Modules.YouTubeChat;
 using EndKnot.Patches;
 using EndKnot.Roles;
@@ -327,7 +328,8 @@ internal static class ChatCommands
             new("RipSize", "[size]", Command.UsageLevels.Host, Command.UsageTimes.InGame, RipSizeCommand, true, true),
             new("Burst", "{count} [direct]", Command.UsageLevels.Host, Command.UsageTimes.Always, BurstCommand, true, true, [GetString("CommandArgs.Burst.Count"), GetString("CommandArgs.Burst.Direct")]),
             new("Nest", "{total} [options]", Command.UsageLevels.Host, Command.UsageTimes.Always, NestCommand, true, true, [GetString("CommandArgs.Nest.Total"), GetString("CommandArgs.Nest.Options")]),
-            new("Map", "[list|load <file>|reload|exit|import|export|info]", Command.UsageLevels.Host, Command.UsageTimes.InLobby, MapCommand, true, true)
+            new("Map", "[list|load <file>|reload|exit|import|export|info]", Command.UsageLevels.Host, Command.UsageTimes.InLobby, MapCommand, true, true),
+            new("Role", "[list | import | set [n] [slot] | unset [slot/all]]", Command.UsageLevels.Host, Command.UsageTimes.InLobby, RoleCommand, true, true)
         ];
     }
 
@@ -2989,6 +2991,149 @@ internal static class ChatCommands
 
             default:
                 Utils.SendMessage(GetString("EkMap.Usage"), pid);
+                return;
+        }
+    }
+
+    // EKN ノーコード役職メーカー (計画正典: docs/ekn-api-plan.md、実体: Modules/Ekm/EkrManager)。
+    private static void RoleCommand(PlayerControl player, string text, string[] args)
+    {
+        string sub = args.Length >= 2 ? args[1].ToLower() : "";
+        byte pid = player.PlayerId;
+
+        switch (sub)
+        {
+            case "list":
+            {
+                EkrManager.ReloadLibrary();
+                var lib = EkrManager.ListLibrary();
+                var sb = new System.Text.StringBuilder();
+
+                if (lib.Count == 0)
+                {
+                    sb.AppendLine(GetString("EkRole.List.Empty"));
+                    sb.AppendLine($"<size=70%>{EkrManager.RolesPath}</size>");
+                }
+                else
+                {
+                    sb.AppendLine(GetString("EkRole.List.Header"));
+                    sb.AppendLine($"<size=70%>{EkrManager.RolesPath}</size>");
+
+                    for (var i = 0; i < lib.Count; i++)
+                    {
+                        (string fn, EkrDefinition def) = lib[i];
+                        string author = def.Author.Length > 0 ? $" ({def.Author})" : "";
+                        sb.AppendLine($"  {i + 1}. {def.Name}{author}  <size=70%>{fn}</size>");
+                    }
+                }
+
+                sb.AppendLine(GetString("EkRole.List.SlotHeader"));
+                var anyBound = false;
+
+                for (var i = 0; i < EkrManager.Slots.Length; i++)
+                {
+                    EkrDefinition def = EkrManager.GetDefinition(EkrManager.Slots[i]);
+                    if (def == null) continue;
+
+                    anyBound = true;
+                    sb.AppendLine($"  [{i + 1}] {def.Name}");
+                }
+
+                if (!anyBound) sb.AppendLine($"  {GetString("EkRole.List.NoBound")}");
+
+                Utils.SendMessage(sb.ToString().TrimEnd(), pid);
+                return;
+            }
+
+            case "import":
+            {
+                // クリップボード直読み (EKR1.… コード)。チャット欄は文字数上限で長いコードを受けられないため /map import と同方式。
+                string code = UnityEngine.GUIUtility.systemCopyBuffer?.Trim() ?? "";
+
+                if (!EkrManager.TryImportCode(code, out string saved, out string impErr))
+                {
+                    Utils.SendMessage($"{GetString("EkRole.ImportError")}: {impErr}", pid);
+                    return;
+                }
+
+                Utils.SendMessage(string.Format(GetString("EkRole.Imported"), saved), pid);
+                return;
+            }
+
+            case "set":
+            {
+                // ゲーム再起動後に /role list を経ず直接 set した場合でもライブラリを見つけられるよう、
+                // 割り当て前に毎回ディスクから再読込する (数ファイルの JSON 読みなので常時実行してよい)。
+                EkrManager.ReloadLibrary();
+
+                if (args.Length < 3 || !int.TryParse(args[2], out int libIdx))
+                {
+                    Utils.SendMessage(GetString("EkRole.Usage"), pid);
+                    return;
+                }
+
+                int slot;
+
+                if (args.Length >= 4)
+                {
+                    if (!int.TryParse(args[3], out slot))
+                    {
+                        Utils.SendMessage(GetString("EkRole.Usage"), pid);
+                        return;
+                    }
+                }
+                else
+                {
+                    slot = EkrManager.FirstFreeSlotNumber();
+
+                    if (slot == 0)
+                    {
+                        Utils.SendMessage(GetString("EkRole.NoFreeSlot"), pid);
+                        return;
+                    }
+                }
+
+                if (!EkrManager.TryAssign(libIdx, slot, out string err))
+                {
+                    Utils.SendMessage($"{GetString("EkRole.AssignError")}: {err}", pid);
+                    return;
+                }
+
+                EkrDefinition def = EkrManager.GetDefinition(EkrManager.Slots[slot - 1]);
+                Utils.SendMessage(string.Format(GetString("EkRole.Assigned"), def.Name, slot), pid);
+                return;
+            }
+
+            case "unset":
+            {
+                string sel = args.Length >= 3 ? args[2].ToLower() : "";
+
+                if (sel == "all")
+                {
+                    for (var i = 1; i <= EkrManager.Slots.Length; i++) EkrManager.TryUnassign(i, out _);
+
+                    Utils.SendMessage(GetString("EkRole.UnassignedAll"), pid);
+                    return;
+                }
+
+                if (!int.TryParse(sel, out int slot))
+                {
+                    Utils.SendMessage(GetString("EkRole.Usage"), pid);
+                    return;
+                }
+
+                if (!EkrManager.TryUnassign(slot, out string err))
+                {
+                    Utils.SendMessage($"{GetString("EkRole.UnassignError")}: {err}", pid);
+                    return;
+                }
+
+                Utils.SendMessage(string.Format(GetString("EkRole.Unassigned"), slot), pid);
+                return;
+            }
+
+            default:
+                Utils.SendMessage(GetString("EkRole.Usage"), pid);
                 return;
         }
     }

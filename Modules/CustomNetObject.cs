@@ -1340,6 +1340,10 @@ namespace EndKnot
 
     internal sealed class YellowFlag : CustomNetObject
     {
+        // 旗は CTFTeamData.Update() が保持者の位置へ毎フレ TP して追従させる → ForceSnapSend が
+        // 間引き無しだと ~50 SnapTo/s を連射し公式 anti-cheat kick 経路に乗る (NaturalDisaster と同型)。
+        protected override float ForceSnapMinInterval => 0.2f;
+
         public YellowFlag(Vector2 position)
         {
             CreateNetObject("<line-height=97%><cspace=0.16em><mark=#000000>W</mark><mark=#ffff00>WWW</mark><#0000>WW</color>\n<mark=#000000>W</mark><mark=#ffff00>WWWWW</mark>\n<mark=#000000>W</mark><#0000>WW</color><mark=#ffff00>WWW</mark>\n<mark=#000000>W</mark><#0000>WWWWW</color>\n<mark=#000000>W</mark><#0000>WWWWW</color>\n<mark=#000000>W</mark><#0000>WWWWW", position);
@@ -1348,6 +1352,9 @@ namespace EndKnot
 
     internal sealed class BlueFlag : CustomNetObject
     {
+        // YellowFlag と同じく毎フレ追従する旗。間引きを外すと CTF 中ずっと SnapTo を連射する。
+        protected override float ForceSnapMinInterval => 0.2f;
+
         public BlueFlag(Vector2 position)
         {
             CreateNetObject("<line-height=97%><cspace=0.16em><mark=#000000>W</mark><mark=#0000ff>WWW</mark><#0000>WW</color>\n<mark=#000000>W</mark><mark=#0000ff>WWWWW</mark>\n<mark=#000000>W</mark><#0000>WW</color><mark=#0000ff>WWW</mark>\n<mark=#000000>W</mark><#0000>WWWWW</color>\n<mark=#000000>W</mark><#0000>WWWWW</color>\n<mark=#000000>W</mark><#0000>WWWWW", position);
