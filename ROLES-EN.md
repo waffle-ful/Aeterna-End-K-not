@@ -16,10 +16,6 @@
 | Other | 2 (GM / Convict) |
 | Sub-roles (add-ons) | 146 |
 
-> [!TIP]
-> ### Featured role: WaveCannon
-> An Impostor role built on the Phantom basis. Aim with the pet button; after a warning line appears, a massive beam sweeps across the map. This mod's flagship take on a fan-favourite from SuperNewRoles and TownOfHost-Pko, rebuilt with its own presentation and tuning for a host-only setup.
-
 Use `/r <role name>` or `/myrole` in-game to check each role's effects and settings.
 
 ### Impostor (170)
