@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using UnityEngine;
 
 namespace EndKnot.Modules.Ekm;
 
@@ -110,7 +109,12 @@ public sealed class EkrDefinition
         Author = (Author ?? "").Trim();
         if (Author.Length > 24) Author = Author[..24];
 
-        if (string.IsNullOrWhiteSpace(Color) || !ColorUtility.TryParseHtmlString(Color.StartsWith('#') ? Color : $"#{Color}", out _))
+        // エディタ側 (roledef.ts の COLOR_RE) と同じ「# + 6桁16進」のみ受理し、# 無し入力は # 付きへ正規化して
+        // 格納する。ColorUtility (Unity) を使うと 3/4/8桁・named color まで通ってしまい、TS 側との契約が割れる上、
+        // 生文字列のまま <color=...> タグへ埋め込まれる消費箇所 (Utils.GetRoleColorCode) の表示保証もできない。
+        Color = (Color ?? "").Trim();
+        if (!Color.StartsWith('#')) Color = $"#{Color}";
+        if (!System.Text.RegularExpressions.Regex.IsMatch(Color, "^#[0-9a-fA-F]{6}$"))
             Color = "#8f8f8f";
 
         Team = (Team ?? "crewmate").Trim().ToLowerInvariant();
