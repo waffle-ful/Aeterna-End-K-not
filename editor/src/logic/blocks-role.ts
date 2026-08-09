@@ -41,7 +41,7 @@ const WHEN_LABELS: Record<LogicWhen, string> = {
 };
 
 const WHEN_TOOLTIPS: Record<LogicWhen, string> = {
-    on_game_start: "タスクフェーズが始まったときに1回だけ実行します。",
+    on_game_start: "タスクフェーズが始まったときに1回だけ実行します。「秒待つ」を挟んだ続きは会議が始まると取り消されるので、開始すぐに会議になる設定だと動かないことがあります。",
     on_pet: "ペット能力 (ボタン) を発動したときに実行します。",
     on_kill: "自分のキルが成立した直後に実行します。",
     on_death: "自分が死亡したときに実行します (追放されたときや会議で亡くなったときも含みます。切断は含みません)。",
@@ -119,7 +119,7 @@ function jsonBlockDefs(): unknown[] {
             previousStatement: null,
             nextStatement: null,
             colour: HUE_CONTROL,
-            tooltip: "指定した秒数だけ、ここで一時停止します (0.1〜600 秒)。",
+            tooltip: "指定した秒数だけ、ここで一時停止します (0.1〜600 秒)。待っている途中で会議が始まると、続きは取り消されます。",
         },
         {
             type: "ekr_do_stop",

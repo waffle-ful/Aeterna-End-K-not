@@ -1,4 +1,4 @@
-// lint-role.ts (docs/ekr-logic-spec.md §6 の 6 ルール) のテスト。既に検証済みという前提の
+// lint-role.ts (docs/ekr-logic-spec.md §6 の 8 ルール) のテスト。既に検証済みという前提の
 // RoleLogic 値を直接組み立ててテストする (Blockly/roledef の検証を経由する必要はない —
 // リンターは「妥当な AST に対して組み方のヒントを出す」だけの層のため)。
 
@@ -153,6 +153,117 @@ describe("lint-role: L3/L4/L5/L6 (on_second 配下の teleport/notify/kill/cno_s
         expect(ids).not.toContain("L4");
         expect(ids).not.toContain("L5");
         expect(ids).not.toContain("L6");
+    });
+});
+
+describe("lint-role: L7 (on_second 配下の wait 合計 ≥1秒 — fiber cap 独占)", () => {
+    it("on_second + wait 1.0 (ちょうど) は L7 を警告する", () => {
+        const l = logic([{ when: "on_second", do: [{ op: "wait", seconds: 1.0 }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L7");
+    });
+
+    it("on_second + wait 0.5×2 (合計1.0) も合算して警告する", () => {
+        const l = logic([
+            { when: "on_second", do: [{ op: "wait", seconds: 0.5 }, { op: "wait", seconds: 0.5 }] },
+        ]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L7");
+    });
+
+    it("if の中の wait も合算する (静的近似: 分岐は区別しない)", () => {
+        const nested: LogicNode = {
+            op: "if",
+            cond: { e: "lit", v: 1 },
+            then: [{ op: "wait", seconds: 0.6 }],
+            else: [{ op: "wait", seconds: 0.6 }],
+        };
+        const l = logic([{ when: "on_second", do: [nested] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L7");
+    });
+
+    it("on_second + wait 0.9 (1秒未満) は警告しない", () => {
+        const l = logic([{ when: "on_second", do: [{ op: "wait", seconds: 0.9 }] }]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L7");
+    });
+
+    it("on_second 以外の when では長い wait でも警告しない", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "wait", seconds: 10 }] }]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L7");
+    });
+});
+
+describe("lint-role: L8 (前の cno_spawn からの累積 wait <1秒の cno_spawn — 1秒1個レートのドロップ)", () => {
+    it("wait なしで cno_spawn を2連発すると L8 を警告する (slot が違っても)", () => {
+        const l = logic([
+            {
+                when: "on_game_start",
+                do: [
+                    { op: "cno_spawn", slot: 1, text: "!", size: 1, at: "self" },
+                    { op: "cno_spawn", slot: 2, text: "!", size: 1, at: "self" },
+                ],
+            },
+        ]);
+        expect(lintRoleLogic(l).filter((w) => w.rule === "L8")).toHaveLength(1);
+    });
+
+    it("間に wait 1.1 を挟めば警告しない (fixture の正しい作法)", () => {
+        const l = logic([
+            {
+                when: "on_game_start",
+                do: [
+                    { op: "cno_spawn", slot: 1, text: "!", size: 1, at: "self" },
+                    { op: "wait", seconds: 1.1 },
+                    { op: "cno_spawn", slot: 2, text: "!", size: 1, at: "self" },
+                ],
+            },
+        ]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L8");
+    });
+
+    it("間の wait が累積1秒未満なら警告する", () => {
+        const l = logic([
+            {
+                when: "on_pet",
+                do: [
+                    { op: "cno_spawn", slot: 1, text: "!", size: 1, at: "self" },
+                    { op: "wait", seconds: 0.5 },
+                    { op: "cno_spawn", slot: 2, text: "!", size: 1, at: "self" },
+                ],
+            },
+        ]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L8");
+    });
+
+    it("wait を分割しても累積1秒以上なら警告しない", () => {
+        const l = logic([
+            {
+                when: "on_pet",
+                do: [
+                    { op: "cno_spawn", slot: 1, text: "!", size: 1, at: "self" },
+                    { op: "wait", seconds: 0.5 },
+                    { op: "wait", seconds: 0.6 },
+                    { op: "cno_spawn", slot: 2, text: "!", size: 1, at: "self" },
+                ],
+            },
+        ]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L8");
+    });
+
+    it("cno_spawn 単発は警告しない (初回はレートバケットの初期トークンで必ず出る)", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "cno_spawn", slot: 1, text: "!", size: 1, at: "self" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L8");
+    });
+
+    it("先頭に wait があっても初回 spawn の判定には影響しない", () => {
+        const l = logic([
+            {
+                when: "on_pet",
+                do: [
+                    { op: "wait", seconds: 0.2 },
+                    { op: "cno_spawn", slot: 1, text: "!", size: 1, at: "self" },
+                ],
+            },
+        ]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L8");
     });
 });
 
