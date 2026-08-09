@@ -301,25 +301,45 @@
       </menu>
     </dialog>
 
-    <!-- 役職メーカー (EKN R0: フォームのみ・ロジック無し)。マップ本体とは無関係な独立機能。 -->
+    <!-- 役職メーカー (EKN R0 フォーム + R1 ブロックロジック)。マップ本体とは無関係な独立機能。 -->
     <dialog id="dlg-role-maker">
-      <h3>役職メーカー (お試し版)</h3>
-      <p class="note">フォームで役職を作って、コードとしてコピーできます。動きを組む機能 (ブロック) は未対応です。</p>
+      <h3>役職メーカー</h3>
+      <p class="note">「基本情報」で名前や色を決めて、「ロジック」でブロックを組むと動きを追加できます。</p>
 
-      <label>役職名 <input id="rm-name" maxlength="24" placeholder="例: 見習いエンジニア" autocomplete="off" /></label>
-      <label>作者 (任意) <input id="rm-author" maxlength="24" placeholder="任意" autocomplete="off" /></label>
-      <label>色 <input id="rm-color" type="color" value="#8f8f8f" /></label>
+      <div id="rm-tabs" class="rm-tabs" role="tablist">
+        <button type="button" class="rm-tab active" data-rm-tab="basic">基本情報</button>
+        <button type="button" class="rm-tab" data-rm-tab="logic">ロジック</button>
+      </div>
 
-      <p class="note rm-team-note">陣営: クルーメイト — 今はクルーメイトのみ対応です</p>
+      <div id="rm-panel-basic">
+        <label>役職名 <input id="rm-name" maxlength="24" placeholder="例: 見習いエンジニア" autocomplete="off" /></label>
+        <label>作者 (任意) <input id="rm-author" maxlength="24" placeholder="任意" autocomplete="off" /></label>
+        <label>色 <input id="rm-color" type="color" value="#8f8f8f" /></label>
 
-      <label class="rm-flag-row"><input type="checkbox" id="rm-can-kill" /> キルできる</label>
-      <label id="rm-kill-cd-row" hidden>キルを再び使えるまでの秒数 <input id="rm-kill-cd" type="number" min="1" max="180" step="1" value="25" /></label>
+        <p class="note rm-team-note">陣営: クルーメイト — 今はクルーメイトのみ対応です</p>
 
-      <label class="rm-flag-row"><input type="checkbox" id="rm-can-vent" /> ベントを使える</label>
+        <label class="rm-flag-row"><input type="checkbox" id="rm-can-kill" /> キルできる</label>
+        <label id="rm-kill-cd-row" hidden>キルを再び使えるまでの秒数 <input id="rm-kill-cd" type="number" min="1" max="180" step="1" value="25" /></label>
 
-      <label>視界の広さ (倍率) <input id="rm-vision" type="number" min="0.25" max="5" step="0.05" value="1" /></label>
+        <label class="rm-flag-row"><input type="checkbox" id="rm-can-vent" /> ベントを使える</label>
 
-      <p class="note rm-team-note">勝利条件: 通常のクルーメイト勝利 (固定)</p>
+        <label>視界の広さ (倍率) <input id="rm-vision" type="number" min="0.25" max="5" step="0.05" value="1" /></label>
+
+        <p class="note rm-team-note">勝利条件: 通常のクルーメイト勝利 (固定)</p>
+      </div>
+
+      <div id="rm-panel-logic" hidden>
+        <section id="rm-vars-section">
+          <h4 class="rm-subheading">変数 (最大16個)</h4>
+          <div id="rm-vars-list" class="rm-vars-list"></div>
+          <button id="rm-vars-add" type="button">＋ 変数を追加</button>
+        </section>
+
+        <p id="rm-logic-notice" class="note rm-status-error" hidden></p>
+        <div id="rm-blockly-container" class="rm-blockly-container"></div>
+        <p id="rm-logic-validity" class="note rm-status-error" hidden></p>
+        <div id="rm-lint-footer" class="rm-lint-footer" hidden></div>
+      </div>
 
       <p id="rm-status" class="note" aria-live="polite" hidden></p>
       <textarea id="rm-manual-copy" rows="4" readonly hidden spellcheck="false"></textarea>

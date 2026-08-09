@@ -1754,13 +1754,97 @@ dialog#dlg-library {
 }
 
 /* =============================================================
-   役職メーカー (dlg-role-maker) — EKN R0 (フォームのみ・ロジック無し)
+   役職メーカー (dlg-role-maker) — EKN R0 フォーム + R1 ブロックロジック
    ============================================================= */
 
 dialog#dlg-role-maker {
-    width: min(96vw, 480px);
+    width: min(96vw, 900px);
     max-height: 90vh;
     overflow-y: auto;
+}
+
+.rm-tabs {
+    display: flex;
+    gap: var(--space-xs);
+    margin-bottom: var(--space-sm);
+}
+
+.rm-tab.active {
+    outline: 2px solid var(--info);
+    background: var(--bg-active-info);
+}
+
+#rm-panel-basic {
+    max-width: 480px;
+}
+
+#rm-vars-section {
+    margin-bottom: var(--space-sm);
+}
+
+.rm-subheading {
+    margin: 0 0 var(--space-xs) 0;
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.rm-vars-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    margin-bottom: var(--space-xs);
+}
+
+.rm-var-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+}
+
+.rm-var-name {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.rm-var-init {
+    width: 6em;
+    flex: 0 0 auto;
+}
+
+.rm-var-remove {
+    flex: 0 0 auto;
+}
+
+.rm-blockly-container {
+    width: 100%;
+    height: min(58vh, 480px);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--bg-2);
+}
+
+#rm-logic-notice.rm-status-error,
+#rm-logic-validity.rm-status-error {
+    color: var(--danger);
+}
+
+.rm-lint-footer {
+    margin-top: var(--space-sm);
+    padding: var(--space-sm);
+    border-left: 3px solid var(--warn);
+    border-radius: var(--radius-md);
+    background: var(--bg-2);
+}
+
+.rm-lint-heading {
+    margin: 0 0 var(--space-xs) 0;
+    color: var(--warn);
+    font-weight: 600;
+}
+
+.rm-lint-footer ul {
+    margin: 0;
+    padding-left: 1.2em;
 }
 
 .rm-flag-row {

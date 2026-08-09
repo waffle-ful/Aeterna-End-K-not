@@ -1,0 +1,151 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "彷徨う影",
+  "author": "EKN Sample",
+  "color": "#5b3a99",
+  "team": "crewmate",
+  "canKill": true,
+  "killCooldown": 25,
+  "canVent": true,
+  "visionMultiplier": 1.2,
+  "winCondition": "team",
+  "logic": {
+    "version": 1,
+    "variables": [
+      { "name": "うらみ", "init": 0 },
+      { "name": "タスク数", "init": 0 }
+    ],
+    "rules": [
+      {
+        "when": "on_game_start",
+        "do": [
+          { "op": "var_set", "name": "うらみ", "value": { "e": "lit", "v": 0 } },
+          { "op": "notify", "text": "夜が来た…", "seconds": 3 }
+        ]
+      },
+      {
+        "when": "on_pet",
+        "do": [
+          { "op": "var_add", "name": "うらみ", "delta": { "e": "lit", "v": 1 } },
+          {
+            "op": "if",
+            "cond": { "e": "op", "kind": "ge", "a": { "e": "var", "name": "うらみ" }, "b": { "e": "lit", "v": 10 } },
+            "then": [
+              { "op": "notify", "text": "すべてを、晴らした…", "seconds": 3 },
+              { "op": "kill", "target": "self" }
+            ],
+            "else": [
+              {
+                "op": "if",
+                "cond": {
+                  "e": "op",
+                  "kind": "and",
+                  "a": { "e": "op", "kind": "ge", "a": { "e": "var", "name": "うらみ" }, "b": { "e": "lit", "v": 3 } },
+                  "b": {
+                    "e": "op",
+                    "kind": "not",
+                    "a": { "e": "op", "kind": "eq", "a": { "e": "var", "name": "うらみ" }, "b": { "e": "lit", "v": 5 } }
+                  }
+                },
+                "then": [
+                  { "op": "cno_spawn", "slot": 1, "text": "影", "size": 8, "at": "self" },
+                  { "op": "notify", "text": "影が濃くなる…", "seconds": 3 }
+                ],
+                "else": [
+                  { "op": "notify", "text": "まだ闇は薄い", "seconds": 2 }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "when": "on_kill",
+        "do": [
+          { "op": "set_kill_cooldown", "seconds": 20 },
+          { "op": "speed", "mult": 1.5, "seconds": 5 },
+          { "op": "notify", "text": "また一人、闇へ", "seconds": 3 }
+        ]
+      },
+      {
+        "when": "on_death",
+        "do": [
+          { "op": "cno_spawn", "slot": 2, "text": "消滅", "size": 10, "at": "self" },
+          { "op": "cno_move", "slot": 2, "dx": 0, "dy": 3 },
+          { "op": "notify", "text": "闇に還る…", "seconds": 3 }
+        ]
+      },
+      {
+        "when": "on_meeting_start",
+        "do": [
+          { "op": "notify", "text": "影はひそむ", "seconds": 2 }
+        ]
+      },
+      {
+        "when": "on_meeting_end",
+        "do": [
+          {
+            "op": "var_set",
+            "name": "うらみ",
+            "value": {
+              "e": "op",
+              "kind": "sub",
+              "a": { "e": "var", "name": "うらみ" },
+              "b": { "e": "op", "kind": "div", "a": { "e": "var", "name": "うらみ" }, "b": { "e": "lit", "v": 2 } }
+            }
+          },
+          { "op": "notify", "text": "また夜が続く", "seconds": 2 }
+        ]
+      },
+      {
+        "when": "on_task_complete",
+        "do": [
+          { "op": "var_add", "name": "タスク数", "delta": { "e": "lit", "v": 1 } }
+        ]
+      },
+      {
+        "when": "on_vent_enter",
+        "do": [
+          {
+            "op": "if",
+            "cond": {
+              "e": "op",
+              "kind": "or",
+              "a": { "e": "op", "kind": "lt", "a": { "e": "var", "name": "うらみ" }, "b": { "e": "lit", "v": 10 } },
+              "b": { "e": "op", "kind": "eq", "a": { "e": "var", "name": "タスク数" }, "b": { "e": "lit", "v": 0 } }
+            },
+            "then": [
+              { "op": "cno_move", "slot": 1, "dx": 2, "dy": -2 },
+              { "op": "speed", "mult": 2.0, "seconds": 3 }
+            ]
+          }
+        ]
+      },
+      {
+        "when": "on_report",
+        "do": [
+          { "op": "cno_show", "slot": 1, "who": "all" },
+          { "op": "notify", "text": "見つけたのか…", "seconds": 3 },
+          { "op": "teleport", "to": "random" }
+        ]
+      },
+      {
+        "when": "on_second",
+        "do": [
+          {
+            "op": "if",
+            "cond": { "e": "op", "kind": "gt", "a": { "e": "var", "name": "うらみ" }, "b": { "e": "lit", "v": 5 } },
+            "then": [
+              { "op": "cno_despawn", "slot": 2 },
+              { "op": "stop" }
+            ],
+            "else": [
+              { "op": "wait", "seconds": 0.1 }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

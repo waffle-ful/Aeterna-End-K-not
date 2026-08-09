@@ -4,6 +4,7 @@ using System.Linq;
 using AmongUs.GameOptions;
 using EndKnot.Gamemodes;
 using EndKnot.Modules;
+using EndKnot.Modules.Ekm;
 using EndKnot.Patches;
 using EndKnot.Roles;
 using HarmonyLib;
@@ -1681,6 +1682,12 @@ internal static class ReportDeadBodyPatch
             Deadlined.OnMeetingStart();
             Commited.OnMeetingStart();
             Reroll.OnMeetingStart();
+
+            // EKR logic (docs/ekr-logic-spec.md §2): on_meeting_start は「走行中 fiber を全キャンセル」した
+            // 直後に発火する。on_report はそのキャンセルより後ろに置く必要がある — 先に置くと、この2行の
+            // 間で発火した fiber ごとキャンセルされて無言で死ぬ (advisor 指摘・2026-08-09)。
+            EkrManager.FireMeetingStart();
+            if (target) EkrManager.FireReport(player, target.Object);
         }
         catch (Exception e) { ThrowException(e); }
 
