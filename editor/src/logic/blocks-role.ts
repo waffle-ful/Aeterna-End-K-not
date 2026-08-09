@@ -250,6 +250,35 @@ function jsonBlockDefs(): unknown[] {
             colour: HUE_LOOKS,
             tooltip: "出したオブジェクトを誰に見せるかを変更します。",
         },
+        // v1.1 (spec §3 2026-08-09 追記) — SLOT は ekr_do_cno_spawn と同じ枠を共有する (同時3個まで)。
+        {
+            type: "ekr_do_dummy_spawn",
+            message0: "ダミー人形 %1 を「 %2 」の名前で %3 に出す ( %4 )",
+            args0: [
+                { type: "field_dropdown", name: "SLOT", options: [["1", "1"], ["2", "2"], ["3", "3"]] },
+                { type: "field_input", name: "NAME", text: "ダミー" },
+                { type: "field_dropdown", name: "AT", options: [["自分の場所", "self"], ["相手の場所", "ctx"]] },
+                { type: "field_dropdown", name: "KILLABLE", options: [["こわせない", "0"], ["キルでこわせる", "1"]] },
+            ],
+            inputsInline: true,
+            previousStatement: null,
+            nextStatement: null,
+            colour: HUE_LOOKS,
+            tooltip: "人間そっくりのダミー人形を出します (名前は8字まで・オブジェクトと同じ枠を使うので同時に3個まで)。「動かす」「消す」ブロックはそのまま使えますが、「見せる相手を変える」は効きません。会議が始まると自動的に消えます (会議のあとに自動では戻りません)。出せるのは3秒に1体まで、会議のあとは10秒たたないと出せません。「キルでこわせる」にすると、キルできる人がこわせるようになります。",
+        },
+        {
+            type: "ekr_do_corpse_spawn",
+            message0: "%1 の死体を %2 に置く",
+            args0: [
+                { type: "field_dropdown", name: "COLOR", options: [["自分の色", "self"], ["ランダムな色", "random"]] },
+                { type: "field_dropdown", name: "AT", options: [["自分の場所", "self"], ["相手の場所", "ctx"]] },
+            ],
+            inputsInline: true,
+            previousStatement: null,
+            nextStatement: null,
+            colour: HUE_LOOKS,
+            tooltip: "偽物の死体を置きます。ふつうに通報できます。会議が始まると自動的に消えます。出せるのは2秒に1回まで、追放の演出中は出せません。",
+        },
 
         // 変数・式 (動的ドロップダウンが不要なもののみ。var_set/var_add/変数の値 は命令形で別途登録)
         {
@@ -440,6 +469,8 @@ export function buildRoleToolbox(): Blockly.utils.toolbox.ToolboxDefinition {
                     { kind: "block", type: "ekr_do_cno_spawn" },
                     { kind: "block", type: "ekr_do_cno_despawn" },
                     { kind: "block", type: "ekr_do_cno_show" },
+                    { kind: "block", type: "ekr_do_dummy_spawn" },
+                    { kind: "block", type: "ekr_do_corpse_spawn" },
                 ],
             },
             {

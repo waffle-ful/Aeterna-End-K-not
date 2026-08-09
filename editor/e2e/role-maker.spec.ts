@@ -242,6 +242,93 @@ test.describe("役職メーカー (EKN R1, ブロックロジック)", () => {
         const parsed = JSON.parse(jsonText) as Record<string, unknown>;
         expect("logic" in parsed).toBe(false);
     });
+
+    test("v1.1 ブロック (ダミー人形/偽の死体) が blocks-role.ts↔compile-role.ts のフィールド名で正しく往復する", async ({ page }) => {
+        // vitest (environment:"node") は blocks-role.ts を一切 import しない (DOM 必須のため) —
+        // そのためブロック定義の args0 フィールド名 (SLOT/NAME/AT/KILLABLE/COLOR) と compile-role.ts
+        // の b.fields?.XXX 読み出しが一致しているかは、ここでしか検証できない (tsc は素通しする —
+        // どちらも文字列リテラルで結ばれた untyped な契約のため)。ドラッグ&ドロップには頼らず、
+        // Blockly の実シリアライズ形をそのまま下書きへ注入する: ワークスペース初期化時に
+        // Blockly.serialization.workspaces.load() がこの fields をブロック定義と突き合わせて
+        // 実ブロックへ復元し、「コードをコピー」時の save()→compileWorkspaceToLogicInput が
+        // 同じ名前で読み出せるかを実 Blockly を通して検証する。
+        const cap = capture(page);
+        await page.addInitScript(() => {
+            localStorage.setItem(
+                "ekm.roleMaker",
+                JSON.stringify({
+                    name: "v1.1ブロックテスト役職",
+                    logicBlockly: {
+                        blocks: {
+                            languageVersion: 0,
+                            blocks: [
+                                {
+                                    type: "ekr_when_on_pet",
+                                    next: {
+                                        block: {
+                                            type: "ekr_do_dummy_spawn",
+                                            fields: { SLOT: "2", NAME: "ヤギさん", AT: "ctx", KILLABLE: "1" },
+                                            next: {
+                                                block: {
+                                                    type: "ekr_do_corpse_spawn",
+                                                    fields: { COLOR: "random", AT: "self" },
+                                                },
+                                            },
+                                        },
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                }),
+            );
+        });
+
+        await page.goto("/");
+        await dismissStartScreen(page);
+        await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+
+        await page.locator("#btn-role-maker").click();
+        await expect(page.locator("#dlg-role-maker")).toBeVisible();
+        await expect(page.locator("#rm-name")).toHaveValue("v1.1ブロックテスト役職");
+
+        await page.locator('#rm-tabs .rm-tab[data-rm-tab="logic"]').click();
+        await expect(page.locator("#rm-blockly-container svg.blocklySvg")).toBeVisible({ timeout: 30000 });
+
+        // 復元/フィールド名不一致があれば検証エラー通知が出る (壊れたブロック復元 or
+        // validateRoleLogic の型エラー) — 出ていないことをまず確認する
+        await expect(page.locator("#rm-logic-validity")).toBeHidden();
+
+        await page.locator("#rm-copy").click();
+        await expect(page.locator("#rm-status")).toContainText("コピーしました");
+        const code = await page.evaluate(() => navigator.clipboard.readText());
+
+        const jsonText = await page.evaluate(async (c: string) => {
+            const mod = await import("/src/rolecode.ts");
+            return mod.decodeRoleCode(c);
+        }, code);
+        const parsed = JSON.parse(jsonText) as { logic?: { rules: { when: string; do: unknown[] }[] } };
+        expect(parsed.logic).toBeDefined();
+        const doNodes = parsed.logic!.rules[0].do;
+        expect(doNodes[0]).toEqual({ op: "dummy_spawn", slot: 2, name: "ヤギさん", killable: true, at: "ctx" });
+        expect(doNodes[1]).toEqual({ op: "corpse_spawn", color: "random", at: "self" });
+
+        // buildRoleToolbox() の2エントリ (ekr_do_dummy_spawn/ekr_do_corpse_spawn) はブロック type と
+        // 文字列リテラルで結ばれているだけなので tsc は誤字を検出できない (上のアサーションは
+        // ワークスペースへ直接注入した経路のみを通るため、パレットからの到達性は別に確認が要る)。
+        // 「見た目」カテゴリのフライアウトに両ブロックの日本語ラベルが実際に出ることを確認する。
+        await page.locator(".blocklyToolboxDiv .blocklyTreeRow", { hasText: "見た目" }).click();
+        // Blockly は使っていない (未描画/幅0の) 予備の .blocklyFlyout SVG を残すことがあるため、
+        // 実際に中身が入っている方を hasText で一意に絞り込む (素の ".blocklyFlyout" だと
+        // strict mode で複数ヒットして落ちる)。
+        const flyout = page.locator(".blocklyFlyout", { hasText: "ダミー人形" });
+        await expect(flyout).toBeVisible();
+        await expect(flyout).toContainText("死体");
+
+        console.log("=== page console ===\n" + (cap.console.join("\n") || "(なし)"));
+        console.log("=== page errors ===\n" + (cap.errors.join("\n") || "(なし)"));
+        expect(cap.errors, "未捕捉の例外あり").toEqual([]);
+    });
 });
 
 test.describe("役職メーカー (ライブプレビュー)", () => {

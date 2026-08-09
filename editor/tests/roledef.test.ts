@@ -516,6 +516,96 @@ describe("logic 検証 (docs/ekr-logic-spec.md §1〜§4・R1)", () => {
         }
     });
 
+    // v1.1 (docs/ekr-logic-spec.md §3 2026-08-09 追記): dummy_spawn / corpse_spawn
+    it("dummy_spawn: slot/killable/at/name の範囲外・型不一致は拒否、範囲内は通る", () => {
+        const cases: { node: unknown; ok: boolean }[] = [
+            { node: { op: "dummy_spawn", slot: 1, name: "ダミー", killable: false, at: "self" }, ok: true },
+            { node: { op: "dummy_spawn", slot: 3, name: "ダミー", killable: true, at: "ctx" }, ok: true },
+            { node: { op: "dummy_spawn", slot: 0, name: "ダミー", killable: false, at: "self" }, ok: false },
+            { node: { op: "dummy_spawn", slot: 4, name: "ダミー", killable: false, at: "self" }, ok: false },
+            { node: { op: "dummy_spawn", slot: 1.5, name: "ダミー", killable: false, at: "self" }, ok: false },
+            // killable は真の boolean のみ (canKill/canVent と同じ非対称 — "true"/1 は型不一致で拒否)
+            { node: { op: "dummy_spawn", slot: 1, name: "ダミー", killable: "true", at: "self" }, ok: false },
+            { node: { op: "dummy_spawn", slot: 1, name: "ダミー", killable: 1, at: "self" }, ok: false },
+            { node: { op: "dummy_spawn", slot: 1, name: "ダミー", killable: false, at: "elsewhere" }, ok: false },
+            { node: { op: "dummy_spawn", slot: 1, name: 123, killable: false, at: "self" }, ok: false },
+            { node: { op: "dummy_spawn", slot: 1, name: "12345678", killable: false, at: "self" }, ok: true }, // ちょうど8字
+            { node: { op: "dummy_spawn", slot: 1, name: "123456789", killable: false, at: "self" }, ok: false }, // 9字は拒否
+        ];
+        for (const { node, ok } of cases) {
+            const r = validateEkrDefinition(withLogic(baseLogic({ rules: [{ when: "on_pet", do: [node] }] })));
+            expect(r.ok, `${JSON.stringify(node)} は ok=${ok} を期待`).toBe(ok);
+        }
+    });
+
+    it("dummy_spawn.name は trim してから8字判定する (trim 前が8字超でも trim 後8字以内なら通る)", () => {
+        const padded = "  12345678  "; // trim すればちょうど8字
+        const r = validateEkrDefinition(withLogic(baseLogic({
+            rules: [{ when: "on_pet", do: [{ op: "dummy_spawn", slot: 1, name: padded, killable: false, at: "self" }] }],
+        })));
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            const node = r.def.logic?.rules[0].do[0] as { name: string };
+            expect(node.name).toBe("12345678");
+        }
+    });
+
+    it("dummy_spawn.name の < > は notify/cno_spawn と同じく全角 〈〉 へサニタイズされる", () => {
+        const r = validateEkrDefinition(withLogic(baseLogic({
+            rules: [{ when: "on_pet", do: [{ op: "dummy_spawn", slot: 1, name: "<a>", killable: false, at: "self" }] }],
+        })));
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            const node = r.def.logic?.rules[0].do[0] as { name: string };
+            expect(node.name).toBe("〈a〉");
+        }
+    });
+
+    it('dummy_spawn.name が空文字/空白のみなら "Dummy" に置換される (拒否ではない・spec §3)', () => {
+        for (const rawName of ["", "   "]) {
+            const r = validateEkrDefinition(withLogic(baseLogic({
+                rules: [{ when: "on_pet", do: [{ op: "dummy_spawn", slot: 1, name: rawName, killable: false, at: "self" }] }],
+            })));
+            expect(r.ok, `name=${JSON.stringify(rawName)}`).toBe(true);
+            if (r.ok) {
+                const node = r.def.logic?.rules[0].do[0] as { name: string };
+                expect(node.name).toBe("Dummy");
+            }
+        }
+    });
+
+    it("corpse_spawn: color/at の enum 外は拒否、有効な組み合わせは通る", () => {
+        const cases: { node: unknown; ok: boolean }[] = [
+            { node: { op: "corpse_spawn", color: "self", at: "self" }, ok: true },
+            { node: { op: "corpse_spawn", color: "random", at: "ctx" }, ok: true },
+            { node: { op: "corpse_spawn", color: "blue", at: "self" }, ok: false },
+            { node: { op: "corpse_spawn", color: "self", at: "elsewhere" }, ok: false },
+            { node: { op: "corpse_spawn", color: 1, at: "self" }, ok: false },
+        ];
+        for (const { node, ok } of cases) {
+            const r = validateEkrDefinition(withLogic(baseLogic({ rules: [{ when: "on_pet", do: [node] }] })));
+            expect(r.ok, `${JSON.stringify(node)} は ok=${ok} を期待`).toBe(ok);
+        }
+    });
+
+    it("dummy_spawn/corpse_spawn は leaf ノード (depth 1, count 1) として数えられる — 深さ8ちょうどの入れ子でも通る", () => {
+        function nestedIf(depth: number, leaf: unknown): unknown {
+            if (depth <= 1) return leaf;
+            return { op: "if", cond: { e: "lit", v: 1 }, then: [nestedIf(depth - 1, leaf)] };
+        }
+        const dummyLeaf = { op: "dummy_spawn", slot: 1, name: "ダミー", killable: false, at: "self" };
+        const depth8 = [nestedIf(8, dummyLeaf)];
+        expect(validateEkrDefinition(withLogic(baseLogic({ rules: [{ when: "on_pet", do: depth8 }] }))).ok).toBe(true);
+        const depth9 = [nestedIf(9, dummyLeaf)];
+        expect(validateEkrDefinition(withLogic(baseLogic({ rules: [{ when: "on_pet", do: depth9 }] }))).ok).toBe(false);
+
+        const corpseLeaf = { op: "corpse_spawn", color: "self", at: "self" };
+        const corpseDepth8 = [nestedIf(8, corpseLeaf)];
+        expect(validateEkrDefinition(withLogic(baseLogic({ rules: [{ when: "on_pet", do: corpseDepth8 }] }))).ok).toBe(true);
+        const corpseDepth9 = [nestedIf(9, corpseLeaf)];
+        expect(validateEkrDefinition(withLogic(baseLogic({ rules: [{ when: "on_pet", do: corpseDepth9 }] }))).ok).toBe(false);
+    });
+
     it("blockly フィールドは中身を検証せず、あればそのまま保持する (C# は一切見ない)", () => {
         const withBlockly = baseLogic({ blockly: { blocks: { blocks: [] }, arbitrary: "data" } });
         const r = validateEkrDefinition(withLogic(withBlockly));

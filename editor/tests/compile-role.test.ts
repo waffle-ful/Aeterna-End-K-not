@@ -211,6 +211,34 @@ describe("compile-role: CNO 系ブロックのフィールド分担", () => {
     });
 });
 
+// v1.1 (docs/ekr-logic-spec.md §3 2026-08-09 追記)
+describe("compile-role: dummy_spawn / corpse_spawn ブロックのフィールド分担 (v1.1)", () => {
+    it("dummy_spawn は slot/name/at/killable を持つ (KILLABLE は \"1\"/\"0\" 文字列→boolean 変換)", () => {
+        const killableBlocks = [{ type: "ekr_when_on_pet", next: { block: { type: "ekr_do_dummy_spawn", fields: { SLOT: 1, NAME: "ダミー", AT: "self", KILLABLE: "1" } } } }];
+        expect(compileTopBlocksToRules(killableBlocks)).toEqual([
+            { when: "on_pet", do: [{ op: "dummy_spawn", slot: 1, name: "ダミー", killable: true, at: "self" }] },
+        ]);
+
+        const notKillableBlocks = [{ type: "ekr_when_on_pet", next: { block: { type: "ekr_do_dummy_spawn", fields: { SLOT: 2, NAME: "ダミー", AT: "ctx", KILLABLE: "0" } } } }];
+        expect(compileTopBlocksToRules(notKillableBlocks)).toEqual([
+            { when: "on_pet", do: [{ op: "dummy_spawn", slot: 2, name: "ダミー", killable: false, at: "ctx" }] },
+        ]);
+    });
+
+    it("dummy_spawn の KILLABLE が欠落していると killable は undefined のまま (missing→false に化けない)", () => {
+        const blocks = [{ type: "ekr_when_on_pet", next: { block: { type: "ekr_do_dummy_spawn", fields: { SLOT: 1, NAME: "ダミー", AT: "self" } } } }];
+        const rules = compileTopBlocksToRules(blocks) as { do: Record<string, unknown>[] }[];
+        const node = rules[0].do[0];
+        expect(node.killable).toBeUndefined();
+        expect("killable" in node).toBe(true);
+    });
+
+    it("corpse_spawn は color/at を持つ", () => {
+        const blocks = [{ type: "ekr_when_on_pet", next: { block: { type: "ekr_do_corpse_spawn", fields: { COLOR: "random", AT: "ctx" } } } }];
+        expect(compileTopBlocksToRules(blocks)).toEqual([{ when: "on_pet", do: [{ op: "corpse_spawn", color: "random", at: "ctx" }] }]);
+    });
+});
+
 describe("compile-role: hasNoRules / compileWorkspaceToLogicInput (R0 互換の判定)", () => {
     it("イベントハットが無いワークスペースは hasNoRules=true・compileWorkspaceToLogicInput は null", () => {
         expect(hasNoRules(ws([]))).toBe(true);
@@ -284,5 +312,35 @@ describe("compile-role → roledef.validateRoleLogic: 統合 (実際に使える
         const compiled = compileWorkspaceToLogicInput(w, []); // 変数を1つも宣言していない
         const r = validateRoleLogic(compiled);
         expect(r.ok).toBe(false);
+    });
+
+    // v1.1 (docs/ekr-logic-spec.md §3 2026-08-09 追記)
+    it("会議明けに10.5秒待ってから dummy_spawn → corpse_spawn する複合ロジックが最後まで通る", () => {
+        const w = ws([
+            {
+                type: "ekr_when_on_meeting_end",
+                next: {
+                    block: {
+                        type: "ekr_do_wait",
+                        fields: { SECONDS: 10.5 },
+                        next: {
+                            block: {
+                                type: "ekr_do_dummy_spawn",
+                                fields: { SLOT: 1, NAME: "ダミー", AT: "self", KILLABLE: "1" },
+                                next: { block: { type: "ekr_do_corpse_spawn", fields: { COLOR: "self", AT: "self" } } },
+                            },
+                        },
+                    },
+                },
+            },
+        ]);
+        const compiled = compileWorkspaceToLogicInput(w, []);
+        expect(compiled).not.toBeNull();
+        const r = validateRoleLogic(compiled);
+        expect(r.ok, r.ok ? "" : (r as { error: string }).error).toBe(true);
+        if (r.ok) {
+            expect(r.logic.rules[0].do[1]).toEqual({ op: "dummy_spawn", slot: 1, name: "ダミー", killable: true, at: "self" });
+            expect(r.logic.rules[0].do[2]).toEqual({ op: "corpse_spawn", color: "self", at: "self" });
+        }
     });
 });

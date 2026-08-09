@@ -110,6 +110,10 @@ export const CNO_SPAWN_SIZE_MIN = 1;
 export const CNO_SPAWN_SIZE_MAX = 12;
 export const CNO_MOVE_DELTA_MIN = -50;
 export const CNO_MOVE_DELTA_MAX = 50;
+// dummy_spawn.name の上限 (spec §3 v1.1 追記)。数値は cno_spawn.text と同じ 8 だが、意味の異なる
+// 別フィールドなので別定数にする (どちらかのレンジだけ将来変わっても連動しないように)。
+export const DUMMY_SPAWN_NAME_MAX = 8;
+export const DUMMY_SPAWN_DEFAULT_NAME = "Dummy";
 
 export interface LogicVariable {
     name: string;
@@ -141,7 +145,12 @@ export type LogicNode =
     // 転記するだけで良い (エディタ側で積算する必要はない)。
     | { op: "cno_move"; slot: 1 | 2 | 3; dx: number; dy: number }
     | { op: "cno_despawn"; slot: 1 | 2 | 3 }
-    | { op: "cno_show"; slot: 1 | 2 | 3; who: "all" | "self" };
+    | { op: "cno_show"; slot: 1 | 2 | 3; who: "all" | "self" }
+    // v1.1 (spec §3 2026-08-09 追記) — slot は cno_spawn/cno_move/cno_despawn と同じ枠を共有する
+    // (「同時3 slot/ホルダー」の対象に dummy も入る)。cno_show はダミーには no-op (実装都合・仕様は
+    // TS 側の検証対象外なのでここでは触れない)。
+    | { op: "dummy_spawn"; slot: 1 | 2 | 3; name: string; killable: boolean; at: "self" | "ctx" }
+    | { op: "corpse_spawn"; color: "self" | "random"; at: "self" | "ctx" };
 
 export interface LogicRule {
     when: LogicWhen;
@@ -421,6 +430,13 @@ function expectEnum<T extends string>(raw: unknown, options: readonly T[], path:
     return raw as T;
 }
 
+/** dummy_spawn.killable 専用 (spec §3 v1.1)。canKill/canVent (R0 field) と同じく、1/0 等は許容せず
+ *  真の JSON boolean のみを受理する (compile-role.ts が Blockly の "1"/"0" 文字列から変換してから渡す)。 */
+function expectBoolean(raw: unknown, path: string): boolean {
+    if (typeof raw !== "boolean") fail(`${path} は true/false である必要があります`);
+    return raw;
+}
+
 function expectVarName(raw: unknown, varNames: ReadonlySet<string>, path: string): string {
     if (typeof raw !== "string" || !varNames.has(raw)) {
         fail(`${path} が未定義の変数を参照しています (${JSON.stringify(raw)})`);
@@ -560,6 +576,29 @@ function validateNode(raw: unknown, varNames: ReadonlySet<string>, path: string)
             const slot = expectRangeInt(raw.slot, CNO_SLOT_MIN, CNO_SLOT_MAX, `${path}.slot`) as 1 | 2 | 3;
             const who = expectEnum(raw.who, ["all", "self"] as const, `${path}.who`);
             return { node: { op: "cno_show", slot, who }, depth: 1, count: 1 };
+        }
+        case "dummy_spawn": {
+            // v1.1 (spec §3): slot は cno_spawn と共有の同じ枠。
+            const slot = expectRangeInt(raw.slot, CNO_SLOT_MIN, CNO_SLOT_MAX, `${path}.slot`) as 1 | 2 | 3;
+            // name の検証順序は cno_spawn.text (「文字数チェック→サニタイズ」を raw のまま行う) とは
+            // 意図して異なる: ここは trim → サニタイズ → 文字数チェック → 空なら既定名、の順。
+            // spec §3 (2026-08-09 裁定) がこの順序を明文で規定しており、C# 側 (EkmLogicRuntime の
+            // dummy_spawn case) も同順序で実装済み。前後の空白を詰めた結果が8字以内なら通る
+            // (例: 生の長さが8字を超えていても trim 後に収まれば受理する)。
+            if (typeof raw.name !== "string") fail(`${path}.name は文字列である必要があります`);
+            const trimmedName = sanitizeAngleBrackets(raw.name.trim());
+            if (trimmedName.length > DUMMY_SPAWN_NAME_MAX) {
+                fail(`${path}.name は ${DUMMY_SPAWN_NAME_MAX} 文字までです`);
+            }
+            const name = trimmedName.length === 0 ? DUMMY_SPAWN_DEFAULT_NAME : trimmedName;
+            const killable = expectBoolean(raw.killable, `${path}.killable`);
+            const at = expectEnum(raw.at, ["self", "ctx"] as const, `${path}.at`);
+            return { node: { op: "dummy_spawn", slot, name, killable, at }, depth: 1, count: 1 };
+        }
+        case "corpse_spawn": {
+            const color = expectEnum(raw.color, ["self", "random"] as const, `${path}.color`);
+            const at = expectEnum(raw.at, ["self", "ctx"] as const, `${path}.at`);
+            return { node: { op: "corpse_spawn", color, at }, depth: 1, count: 1 };
         }
         default:
             fail(`${path}.op が不明です (${JSON.stringify(op)})`);

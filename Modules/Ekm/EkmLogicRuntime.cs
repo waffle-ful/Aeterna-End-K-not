@@ -67,6 +67,15 @@ public sealed class EkrNode
 
     // cno_show.who ("all" | "self")
     public string Who;
+
+    // dummy_spawn.name (v1.1) — cno_spawn.text とは別の専用フィールド (spec §7 命名慣行に合わせて追加)
+    public string Name;
+
+    // dummy_spawn.killable (v1.1)
+    public bool Killable;
+
+    // corpse_spawn.color (v1.1) ("self" | "random")
+    public string Color;
 }
 
 public sealed class EkrExpr
@@ -103,7 +112,8 @@ public sealed class EkrLogicDef
     private static readonly HashSet<string> ActionOps =
     [
         "notify", "teleport", "kill", "set_kill_cooldown", "speed",
-        "cno_spawn", "cno_move", "cno_despawn", "cno_show"
+        "cno_spawn", "cno_move", "cno_despawn", "cno_show",
+        "dummy_spawn", "corpse_spawn" // v1.1 (2026-08-09)
     ];
 
     private static readonly HashSet<string> ExprKinds =
@@ -405,6 +415,38 @@ public sealed class EkrLogicDef
                 if (!TryGetInt(nodeEl, "slot", 1, 3, out n.Slot, out err)) return false;
                 if (!TryGetEnum(nodeEl, "who", ["all", "self"], out n.Who, out err)) return false;
                 break;
+
+            // v1.1 (2026-08-09)
+            case "dummy_spawn":
+                if (!TryGetInt(nodeEl, "slot", 1, 3, out n.Slot, out err)) return false;
+
+                // spec §3: name は trim → サニタイズ (text と同じ関数) → 長さ判定 (≤8字) → 空なら "Dummy" の
+                // 順。TryGetString は素の (未 trim) 文字列で長さ判定するため、trim してから空/長さを見る
+                // ここでは使わず、素の文字列取得だけ流用する。
+                if (!nodeEl.TryGetProperty("name", out JsonElement nameEl) || nameEl.ValueKind != JsonValueKind.String)
+                {
+                    err = "name の値が不正です";
+                    return false;
+                }
+
+                string dummyName = SanitizeUserText((nameEl.GetString() ?? "").Trim());
+
+                if (dummyName.Length > MaxCnoTextLength)
+                {
+                    err = $"name が長すぎます (最大{MaxCnoTextLength}文字)";
+                    return false;
+                }
+
+                n.Name = dummyName.Length == 0 ? "Dummy" : dummyName;
+
+                if (!TryGetBool(nodeEl, "killable", out n.Killable, out err)) return false;
+                if (!TryGetEnum(nodeEl, "at", ["self", "ctx"], out n.Target, out err)) return false;
+                break;
+
+            case "corpse_spawn":
+                if (!TryGetEnum(nodeEl, "color", ["self", "random"], out n.Color, out err)) return false;
+                if (!TryGetEnum(nodeEl, "at", ["self", "ctx"], out n.Target, out err)) return false;
+                break;
         }
 
         node = n;
@@ -534,6 +576,23 @@ public sealed class EkrLogicDef
         }
 
         value = (float)d;
+        return true;
+    }
+
+    // v1.1 (2026-08-09): dummy_spawn.killable 用。JSON の true/false のみ受理する (0/1 等の数値は reject —
+    // spec §1「型不一致は文書全体 reject」)。
+    private static bool TryGetBool(JsonElement parentEl, string propName, out bool value, out string err)
+    {
+        value = false;
+        err = null;
+
+        if (!parentEl.TryGetProperty(propName, out JsonElement el) || (el.ValueKind != JsonValueKind.True && el.ValueKind != JsonValueKind.False))
+        {
+            err = $"{propName} の値が不正です";
+            return false;
+        }
+
+        value = el.GetBoolean();
         return true;
     }
 
