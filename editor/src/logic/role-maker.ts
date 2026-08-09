@@ -6,7 +6,9 @@
 //
 // main.ts との接点は `initRoleMaker()` の起動呼び出し1回だけ (マップ doc とは無関係な独立機能なので
 // 「doc 読み書き + dirty 通知」の接点すら持たない — main.ts を太らせない方針の最も狭い形)。
-// ダイアログの開閉トリガー (#btn-role-maker) の配線もこのモジュール内で自己完結させる。
+// 開閉トリガー (ヘッダーの #btn-role-maker と、スタート画面の独立項目 #start-role-maker) の配線も
+// このモジュール内で自己完結させる。スタート画面は閉じない — showModal() の top layer が上に乗るので
+// 隠す必要が無く、役職メーカーを閉じたらスタート画面へ戻る流れが自然なため。
 //
 // 通知は #toast / dlg-msg を再利用しない: どちらも dlg-role-maker の ::backdrop の下に描画されて
 // 見えなくなる (ネイティブ <dialog> の backdrop は同時に開いている他要素より手前に乗る) ため、
@@ -138,6 +140,7 @@ let noBlocklyPassthrough: RoleLogic | null = null;
 let blocklyApi: BlocksRoleModule | null = null;
 let workspace: BlocklyWorkspaceSvg | null = null;
 let logicTabLoading = false;
+let containerObserver: ResizeObserver | null = null;
 
 function currentBlocklyState(): SerializedWorkspace | null {
     if (workspace && blocklyApi) {
@@ -527,6 +530,20 @@ async function ensureLogicTabReady(): Promise<void> {
             setLogicNotice("このロジックには編集用データが含まれていないため、ブロックとしては表示できません。このまま「コードをコピー」すると元のロジックはそのまま保持されます (このタブで組み替えると上書きされます)。");
         }
 
+        // 全画面レイアウトでは作業スペースの寸法が「ウィンドウのリサイズ / 変数リストの増減 /
+        // 警告フッタの出入り / ダイアログの再表示 (閉じている間は寸法 0)」で変わる。Blockly は
+        // メトリクスをキャッシュするので、寸法が変わるたびに svgResize しないと描画がズレる。
+        // コールバックは rAF に逃がす (RO コールバック内で同期的にレイアウトを触ると
+        // "ResizeObserver loop" 警告の原因になるため)。
+        if (typeof ResizeObserver !== "undefined") {
+            containerObserver = new ResizeObserver(() => {
+                requestAnimationFrame(() => {
+                    if (workspace && blocklyApi) blocklyApi.Blockly.svgResize(workspace);
+                });
+            });
+            containerObserver.observe(container);
+        }
+
         workspace.addChangeListener(() => scheduleWorkspaceAutosave());
         renderVariablesList();
         refreshLogicPanel();
@@ -584,11 +601,23 @@ function wire(): void {
     }
     $("rm-vars-add").addEventListener("click", addVariable);
 
-    $("btn-role-maker").addEventListener("click", () => {
-        setStatus("", false);
-        $<HTMLTextAreaElement>("rm-manual-copy").hidden = true;
-        $<HTMLDialogElement>("dlg-role-maker").showModal();
-    });
+    // 入口は2つ: マップエディタのヘッダー (作業中に開く) と、スタート画面の独立項目
+    // (マップを一切触らずに役職だけ作る導線)。どちらも同じ openRoleMaker() を呼ぶ。
+    for (const id of ["btn-role-maker", "start-role-maker"]) {
+        document.getElementById(id)?.addEventListener("click", openRoleMaker);
+    }
+}
+
+/** 役職メーカーを開く (全画面モーダル)。入口が増えてもここだけを呼ぶこと */
+function openRoleMaker(): void {
+    setStatus("", false);
+    $<HTMLTextAreaElement>("rm-manual-copy").hidden = true;
+    $<HTMLDialogElement>("dlg-role-maker").showModal();
+    // 閉じている間コンテナは寸法 0 なので、ロジックタブを開いたまま閉じて再表示すると
+    // メトリクスが腐っている。ResizeObserver でも拾えるが、念のため明示的に合わせる。
+    if (workspace && blocklyApi && !$("rm-panel-logic").hidden) {
+        blocklyApi.Blockly.svgResize(workspace);
+    }
 }
 
 /** main.ts からの唯一の呼び出し口。何度呼んでも二重配線しない。 */

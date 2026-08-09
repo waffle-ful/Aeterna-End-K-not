@@ -94,6 +94,31 @@ test.describe("役職メーカー (EKN R0, フォームのみ)", () => {
         expect(cap.errors, "未捕捉の例外あり").toEqual([]);
     });
 
+    test("スタート画面の独立項目から開ける / 全画面で開く / 閉じるとスタート画面へ戻る", async ({ page }) => {
+        await page.goto("/");
+        // ここではスタート画面を閉じない — 「マップを一切触らずに役職メーカーへ入れる」ことが主題
+        const startBtn = page.locator("#start-role-maker");
+        await expect(startBtn).toBeVisible({ timeout: 5000 });
+        await startBtn.click();
+
+        const dlg = page.locator("#dlg-role-maker");
+        await expect(dlg).toBeVisible();
+
+        // 全画面化の回帰止め: ビューポートのほぼ全面を占めていること
+        const box = await dlg.boundingBox();
+        const vp = page.viewportSize();
+        expect(box).not.toBeNull();
+        expect(vp).not.toBeNull();
+        if (!box || !vp) return;
+        expect(box.width).toBeGreaterThan(vp.width * 0.95);
+        expect(box.height).toBeGreaterThan(vp.height * 0.95);
+
+        await page.locator("#rm-close").click();
+        await expect(dlg).toBeHidden();
+        // スタート画面は隠していないので、閉じると元の画面に戻る
+        await expect(page.locator("#start-screen")).toBeVisible();
+    });
+
     test("名前が空のままコピーしようとするとエラーが表示される (フォームは消えない)", async ({ page }) => {
         await page.goto("/");
         await dismissStartScreen(page);
@@ -124,6 +149,15 @@ test.describe("役職メーカー (EKN R1, ブロックロジック)", () => {
         // 数百モジュール分かかることがあるため、他の待ちより長めに取る)
         const blocklySvg = page.locator("#rm-blockly-container svg.blocklySvg");
         await expect(blocklySvg).toBeVisible({ timeout: 30000 });
+
+        // 作業スペースはロジックパネルの残り全部を占める (固定高 min(58vh,480px) へ戻す回帰の検出)
+        const containerBox = await page.locator("#rm-blockly-container").boundingBox();
+        const vpSize = page.viewportSize();
+        expect(containerBox).not.toBeNull();
+        expect(vpSize).not.toBeNull();
+        if (containerBox && vpSize) {
+            expect(containerBox.height).toBeGreaterThan(vpSize.height * 0.5);
+        }
 
         // 変数を1個追加 (自前の軽量ドロップダウン UI の動作確認を兼ねる)
         await page.locator("#rm-vars-add").click();
