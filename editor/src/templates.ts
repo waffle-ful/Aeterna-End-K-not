@@ -7,7 +7,9 @@ import { createBackroomsDoc } from "./presets";
 export interface EkmTemplate {
     id: string;
     name: string;       // 表示名
-    emoji: string;
+    /** カード上部に出す平面図 (inline SVG markup)。旅館の間取り図にあたるもの —
+     *  絵文字より、そのマップが実際どんな形なのかが一目で伝わる。 */
+    plan: string;
     description: string; // 1行説明
     buildJson(name: string, author: string): unknown; // ekmap JSON オブジェクトを返す
 }
@@ -92,7 +94,13 @@ const GREAT_HALL_BASE = {
 export const EKM_TEMPLATES: EkmTemplate[] = [
     {
         id: "empty-backrooms",
-        emoji: "\u{1F7EB}", // 🟫
+        plan: `<svg viewBox="0 0 200 104" preserveAspectRatio="none" aria-hidden="true">
+            <g class="ink" opacity=".28">
+                <path d="M20 20h160M20 41h160M20 62h160M20 83h160"/>
+                <path d="M40 8v88M70 8v88M100 8v88M130 8v88M160 8v88"/>
+            </g>
+            <rect class="ink" x="20" y="8" width="160" height="88"/>
+        </svg>`,
         name: "空の Backrooms",
         description: "床・壁・奈落がすぐ使える 32×32 の白紙",
         buildJson(name: string, author: string): unknown {
@@ -101,7 +109,17 @@ export const EKM_TEMPLATES: EkmTemplate[] = [
     },
     {
         id: "sample-rooms",
-        emoji: "\u{1F6AA}", // 🚪
+        plan: `<svg viewBox="0 0 200 104" aria-hidden="true">
+            <rect class="fill" x="22" y="16" width="58" height="34"/>
+            <rect class="fill" x="112" y="16" width="66" height="30"/>
+            <rect class="fill" x="40" y="66" width="86" height="26"/>
+            <g class="ink">
+                <rect x="22" y="16" width="58" height="34"/>
+                <rect x="112" y="16" width="66" height="30"/>
+                <rect x="40" y="66" width="86" height="26"/>
+                <path d="M80 33h32M64 50v16M145 46v20h-19"/>
+            </g>
+        </svg>`,
         name: "サンプルの部屋",
         description: "小部屋がつながった見本マップ",
         buildJson(name: string, author: string): unknown {
@@ -113,7 +131,18 @@ export const EKM_TEMPLATES: EkmTemplate[] = [
     },
     {
         id: "great-hall",
-        emoji: "\u{1F3DB}", // 🏛
+        plan: `<svg viewBox="0 0 200 104" aria-hidden="true">
+            <rect class="fill" x="24" y="14" width="152" height="76"/>
+            <g class="ink">
+                <rect x="24" y="14" width="152" height="76"/>
+                <rect x="58" y="36" width="11" height="11"/>
+                <rect x="94" y="36" width="11" height="11"/>
+                <rect x="130" y="36" width="11" height="11"/>
+                <rect x="58" y="60" width="11" height="11"/>
+                <rect x="94" y="60" width="11" height="11"/>
+                <rect x="130" y="60" width="11" height="11"/>
+            </g>
+        </svg>`,
         name: "大広間",
         description: "柱の並ぶ広い部屋",
         buildJson(name: string, author: string): unknown {
