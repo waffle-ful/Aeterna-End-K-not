@@ -365,6 +365,38 @@ export function defineRoleBlocks(): void {
     defineDynamicVariableBlocks();
 }
 
+// ---------------------------------------------------------------------------
+// テーマ (エディタのダークテーマに合わせる)
+// ---------------------------------------------------------------------------
+//
+// 罠: Blockly の既定テーマ (Classic/Zelos とも) はワークスペース背景が白固定。
+// .blocklyToolboxDiv のようにあとから CSS で塗り替える手も使えるが、ワークスペース本体の
+// 背景 (.blocklyMainBackground) は Blockly がリサイズ・再描画のたびに再生成するため CSS
+// override が安定して効かない。theme オプションの componentStyles で指定するのが正攻法
+// (これを見落とすと、grid の colour を薄い白にしても白背景に白い線で完全に不可視になる —
+// 実際にこの実装時に screenshot で発見した罠)。
+let cachedTheme: Blockly.Theme | null = null;
+
+/** エディタのダークパレット (--bg-1/--bg-2/--text-primary 相当) に合わせた Blockly テーマ。 */
+export function buildRoleTheme(): Blockly.Theme {
+    if (cachedTheme) return cachedTheme;
+    cachedTheme = Blockly.Theme.defineTheme("ekmDark", {
+        name: "ekmDark",
+        base: Blockly.Themes.Zelos,
+        componentStyles: {
+            workspaceBackgroundColour: "#2a2a33",
+            toolboxBackgroundColour: "#2a2a33",
+            toolboxForegroundColour: "#e8e8ee",
+            flyoutBackgroundColour: "#1f1f26",
+            flyoutForegroundColour: "#e8e8ee",
+            flyoutOpacity: 1,
+            scrollbarColour: "#5a5a68",
+            insertionMarkerColour: "#ffd75e",
+        },
+    });
+    return cachedTheme;
+}
+
 /** ツールボックス (JSON 形式)。5カテゴリ = spec §7 のカテゴリ標準色。 */
 export function buildRoleToolbox(): Blockly.utils.toolbox.ToolboxDefinition {
     return {

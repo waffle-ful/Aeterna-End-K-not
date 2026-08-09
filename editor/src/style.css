@@ -1835,22 +1835,214 @@ dialog#dlg-role-maker[open] {
     background: var(--bg-active-info);
 }
 
+/* 基本情報タブ = 左フォーム / 右ライブプレビューの2カラム。900px 未満は縦積み (プレビューが下)。
+   列ごとの余白は #rm-basic-form / #rm-preview 側で個別に持つ。 */
 #rm-panel-basic {
-    max-width: 480px;
-    /* 全画面では横に間延びするので、フォームは中央寄せして縦スクロールさせる */
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: var(--space-lg);
+    max-width: 980px;
+    /* 全画面では横に間延びするので、2カラムをまとめて中央寄せし縦スクロールさせる */
     margin-inline: auto;
     width: 100%;
     overflow-y: auto;
 }
 
-/* 変数が増えてもワークスペースを食い潰さないよう頭打ちにする。
+#rm-basic-form {
+    flex: 1 1 480px;
+    min-width: 260px;
+    max-width: 480px;
+    width: 100%;
+}
+
+#rm-preview {
+    flex: 1 1 360px;
+    min-width: 260px;
+    max-width: 420px;
+    width: 100%;
+}
+
+/* dialog label input { flex: 1 1 60% } を継承すると input[type=color] が横長バーに間延びする
+   (2カラム化の副作用で発覚)。小さめのスウォッチに固定する。 */
+#rm-color {
+    flex: 0 0 auto;
+    width: 48px;
+    height: 28px;
+    padding: 2px;
+    cursor: pointer;
+}
+
+@media (max-width: 900px) {
+    #rm-panel-basic {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    #rm-basic-form,
+    #rm-preview {
+        max-width: 480px;
+        margin-inline: auto;
+    }
+}
+
+/* ライブプレビュー中身: ゲーム画面風カード → イントロ風バナー → 能力チップ → ロジック要約の順 */
+.rm-preview-scene {
+    position: relative;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    height: 200px;
+    padding-bottom: var(--space-md);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+    background: radial-gradient(ellipse at 50% 25%, #1c2440 0%, #0a0a12 78%);
+    overflow: hidden;
+}
+
+.rm-preview-charwrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.rm-preview-nameplate {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    margin-bottom: 2px;
+}
+
+.rm-preview-head-name {
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.25;
+    max-width: 180px;
+    overflow-wrap: anywhere;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+}
+
+.rm-preview-head-player {
+    font-size: 11px;
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+}
+
+.rm-preview-avatar {
+    width: 92px;
+    height: 115px;
+    display: block;
+}
+
+.rm-pa-shadow {
+    fill: rgba(0, 0, 0, 0.5);
+}
+
+/* 脚・バックパックは常に一定の濃色 (色フィルタは使わない — SVG 子要素への filter はレンダリング
+   コンテキストの罠があるため避ける)。ボディだけがフォームの色に追随する。 */
+.rm-pa-leg {
+    fill: #34343f;
+    stroke: rgba(0, 0, 0, 0.5);
+    stroke-width: 2;
+}
+
+.rm-pa-backpack {
+    fill: #2b2b35;
+    stroke: rgba(0, 0, 0, 0.5);
+    stroke-width: 2;
+}
+
+.rm-pa-body {
+    /* role-maker.ts の renderPreview() が親 svg (#rm-preview-avatar) にセットする */
+    fill: var(--rm-avatar-color, #8f8f8f);
+    stroke: rgba(0, 0, 0, 0.45);
+    stroke-width: 2;
+}
+
+.rm-pa-visor {
+    fill: rgba(178, 226, 255, 0.88);
+    stroke: rgba(255, 255, 255, 0.5);
+    stroke-width: 1.5;
+}
+
+.rm-pa-visor-shine {
+    fill: rgba(255, 255, 255, 0.55);
+}
+
+.rm-preview-banner {
+    margin: var(--space-sm) 0 0;
+    padding: var(--space-sm);
+    border-radius: var(--radius-md);
+    background: var(--bg-2);
+    text-align: center;
+    font-size: 14px;
+}
+
+.rm-preview-banner-line {
+    display: block;
+}
+
+.rm-preview-banner-name {
+    font-weight: 700;
+}
+
+.rm-preview-banner-team {
+    display: block;
+    margin-top: 2px;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.rm-preview-abilities {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    margin-top: var(--space-sm);
+}
+
+.rm-preview-chip {
+    margin: 0;
+    padding: var(--space-xs) var(--space-sm);
+    border-radius: var(--radius-md);
+    background: var(--bg-2);
+    font-size: 13px;
+}
+
+.rm-preview-chip-none {
+    color: var(--text-muted);
+}
+
+.rm-preview-logic-summary {
+    margin-top: var(--space-sm);
+}
+
+/* <details> 化 (既定は閉じる — 縦方向をワークスペースへ明け渡す)。開閉スタイルは
+   #rm-load-section と同じ作法 (summary=控えめな文字色、開いたら明るくする)。
    全画面では横幅も抑える (入力欄が画面端まで伸びると読みにくいため) */
 #rm-vars-section {
     flex: 0 0 auto;
-    max-height: 22vh;
     max-width: 640px;
-    overflow-y: auto;
     margin-bottom: var(--space-sm);
+}
+
+#rm-vars-section > summary {
+    cursor: pointer;
+    color: var(--text-muted);
+    padding: var(--space-xs) 0;
+    user-select: none;
+    font-size: 13px;
+}
+
+#rm-vars-section[open] > summary {
+    color: var(--text-primary);
+    margin-bottom: var(--space-xs);
+}
+
+/* 開いたときの中身だけ頭打ち+自前スクロール (summary 自体は常に見える位置に固定される) */
+.rm-vars-body {
+    max-height: 22vh;
+    overflow-y: auto;
 }
 
 .rm-subheading {
@@ -1907,6 +2099,16 @@ dialog#dlg-role-maker[open] {
     color: var(--text-primary);
 }
 
+/* ズームコントロール (+/−/リセット) は白背景前提の濃色スプライトアイコンなので、そのままだと
+   ダーク背景 (--bg-2) にほぼ溶けて見えなくなる。反転してアイコンを明るくするだけ
+   (Blockly 自身が付けている opacity ホバー演出はそのまま活きる)。
+   検証済み: この filter はズームボタンのクリック判定とは無関係 (filter を外した状態でも
+   「+」クリックが「リセット」の当たり判定に食われる挙動は再現した — 原因は Blockly 自身の
+   スプライト+clip-path 実装の側。詳細は引き継ぎ報告を参照)。 */
+.rm-blockly-container .blocklyZoom > image {
+    filter: invert(1);
+}
+
 #rm-logic-notice.rm-status-error,
 #rm-logic-validity.rm-status-error {
     color: var(--danger);
@@ -1935,13 +2137,22 @@ dialog#dlg-role-maker[open] {
     padding-left: 1.2em;
 }
 
+/* dialog label { justify-content: space-between } / dialog label input { flex: 1 1 60% }
+   は「テキスト→入力欄」の並び (例: 役職名欄) 前提。.rm-flag-row は逆順 (チェックボックス→
+   テキスト) なので、そのまま継承するとチェックボックスが 60% 幅まで間延びし、テキストが
+   space-between で右端まで離れて泣き別れる (2カラム化の副作用で発覚)。両方明示的に上書きする。 */
 .rm-flag-row {
     display: flex;
+    justify-content: flex-start;
     align-items: center;
     gap: var(--space-sm);
     margin: var(--space-xs) 0;
     cursor: pointer;
     font-size: 13px;
+}
+
+.rm-flag-row input[type="checkbox"] {
+    flex: 0 0 auto;
 }
 
 /* dialog label { display: flex } は author 指定なので UA 既定の [hidden]{display:none} には
@@ -1997,6 +2208,178 @@ dialog#dlg-role-maker[open] {
 #rm-load-section[open] > summary {
     color: var(--text-primary);
     margin-bottom: var(--space-sm);
+}
+
+/* =============================================================
+   ロジックタブの全画面フローティング UI (ComfyUI 風)
+   role-maker.ts の setActiveTab() が #dlg-role-maker に data-rm-tab="basic"|"logic" を
+   付与する。ここでは [data-rm-tab="logic"] のときだけ、通常の縦積みレイアウトをやめて
+   ワークスペースを dialog 全面に敷き、他の UI (タブ/変数/menu/状態表示) を
+   position:absolute で「浮かせる」。基本情報タブ ([data-rm-tab="basic"] または
+   属性なし) は既存レイアウトのまま — このブロックの外では一切変更しない。
+
+   位置決めの前提 (罠になりやすいので明記): #dlg-role-maker 自身に position:relative を
+   与え、#rm-tabs / > menu / #rm-status / #rm-manual-copy (dialog の直接の子) はそれを
+   containing block にする。#rm-vars-section / #rm-logic-notice / #rm-logic-validity /
+   #rm-lint-footer は #rm-panel-logic (position:absolute; inset:0) の子なので、そちらが
+   containing block になる。dialog の padding を 0 にし #rm-panel-logic が inset:0 なので
+   両者の矩形は完全に一致し、top/left/right/bottom の数値をどちらの子でも共通に使える。
+   ============================================================= */
+
+#dlg-role-maker[data-rm-tab="logic"] {
+    position: relative;
+    padding: 0;
+}
+
+/* 見出し・説明文・コード読込 (details)・使い方の一言 — 全画面ワークスペースでは隠す。
+   コード読込は「基本情報」タブ側の機能として残る (ここでは表示を止めるだけ)。
+   罠 (実測して発覚): #rm-status も class="note" を持つ (テキストの見た目を揃えるためだけの
+   共有クラス) ため、素の p.note セレクタだと #rm-status まで道連れで display:none になり、
+   hidden 属性を外しても永久に非表示になる。:not(#rm-status) で明示的に除外する。 */
+#dlg-role-maker[data-rm-tab="logic"] > h3,
+#dlg-role-maker[data-rm-tab="logic"] > p.note:not(#rm-status),
+#dlg-role-maker[data-rm-tab="logic"] > #rm-load-section,
+#dlg-role-maker[data-rm-tab="logic"] > p.rm-usage-note {
+    display: none;
+}
+
+#dlg-role-maker[data-rm-tab="logic"] #rm-panel-logic {
+    position: absolute;
+    inset: 0;
+}
+
+/* 罠 (実測して発覚・z-index だけでは解決しない): Blockly のツールボックス+フライアウトは
+   z-index を貼ろうと #rm-blockly-container 自身の子孫でしかない (position:absolute + z-index
+   を与えた時点で #rm-blockly-container が新しいスタッキングコンテキストを作るため、内側の
+   z-index をどれだけ上げても兄弟の浮きパネルより上には出せない)。カテゴリを開いたときの
+   フライアウトはツールボックス脇にワークスペースの上へ「かぶさって」出るため、浮きパネルが
+   ツールボックス/フライアウトの上に固定であるかぎり、そこに重なった瞬間クリックを奪ってしまう
+   (実際に e2e で「変数」フライアウト先頭ブロックのドラッグがタイムアウトする形で発覚した —
+   ドラッグ開始点がタブ切替ボタンに吸われて Blockly のジェスチャーが一切発火しなかった)。
+   z-index の勝ち負けでなく「そもそも重ならないようにする」ほうを取る: ワークスペース
+   (#rm-blockly-container、つまりツールボックス・フライアウトを含む Blockly 管理領域全体) の
+   上端を空け、#rm-tabs と menu をその「予約した帯」の中だけに収める。帯の高さはタブ行
+   (実測 62px) + 変数 details の閉状態 (summary 1行) が収まる余裕を見て 120px。 */
+#dlg-role-maker[data-rm-tab="logic"] #rm-blockly-container {
+    position: absolute;
+    /* 予約帯の高さ = 変数パネルの起点 60px + パネル実高さ + 余白 16px。--rm-vars-h は
+       role-maker.ts の ResizeObserver がパネルの実寸 (offsetHeight) を書き込む CSS 変数で、
+       details の開閉・変数の増減にそのまま追随する (固定 22vh 予約だと変数が少ないとき
+       上部が空白で無駄になるため実寸連動にした)。フォールバック 44px は閉状態の summary
+       1行分 — RO 発火前でも従来の 120px と一致する。 */
+    top: calc(76px + var(--rm-vars-h, 44px));
+    right: 0;
+    bottom: 0;
+    left: 0;
+    /* ワークスペースは一番奥の層。浮きパネル (z-index:10 群) の下に敷く。 */
+    z-index: 1;
+    border: 0;
+    border-radius: 0;
+    /* ResizeObserver (role-maker.ts) が下の :has() ルールによる top の変化にも追随し、
+       svgResize() でワークスペースの見た目を合わせ直す。ここでは transition は付けない
+       (Blockly 側の再描画に合わせて瞬時に切り替わってほしいため)。 */
+}
+
+/* 罠その2 (実測して発覚): #rm-vars-section を開くとその浮きパネルは予約帯を越えて下に伸びる
+   (中身の量次第で最大 22vh)。その伸びた範囲は「変数」等の幅広カテゴリのフライアウト
+   (実測: 変数カテゴリ先頭ブロックは幅 300〜370px、ツールボックス脇からその分だけワークスペースに
+   かぶって出る) と重なりうる — z-index はワークスペースの中 (#rm-blockly-container が
+   スタッキングコンテキストを作る) までしか効かないので、浮きパネルが上に乗ったままだと
+   フライアウトのブロックへのドラッグ開始点を奪ってしまう (実際に e2e で発覚)。
+   対策は「そもそも重ならない」の一択で、上の --rm-vars-h 実寸連動がそれを担う: パネルが
+   開けば実高さの分だけ予約帯が同フレームで広がり、フライアウト (ワークスペース上端から
+   始まる) とは常に空間分離される。ここに :has() の固定 22vh ルールを復活させないこと —
+   実寸連動より常に広い予約になり、変数が少ないとき上部が空白で無駄になる。 */
+
+/* フローティングパネルの共通見た目 (半透明ダーク+ぼかし+角丸)。位置は要素ごとに個別指定。
+   #rm-lint-footer だけ枠線 (警告色の左ボーダー) を独自に持っているので、この共通ブロックには
+   含めない (背景/ぼかし/角丸/z-index だけ別途あてる — 下の個別ルール参照)。 */
+#dlg-role-maker[data-rm-tab="logic"] #rm-tabs,
+#dlg-role-maker[data-rm-tab="logic"] #rm-vars-section,
+#dlg-role-maker[data-rm-tab="logic"] > menu,
+#dlg-role-maker[data-rm-tab="logic"] #rm-status,
+#dlg-role-maker[data-rm-tab="logic"] #rm-manual-copy,
+#dlg-role-maker[data-rm-tab="logic"] #rm-logic-notice,
+#dlg-role-maker[data-rm-tab="logic"] #rm-logic-validity,
+#dlg-role-maker[data-rm-tab="logic"] #rm-lint-footer {
+    position: absolute;
+    z-index: 10;
+    margin: 0;
+    background: rgba(20, 20, 26, 0.72);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: var(--radius-md);
+}
+
+/* lint-footer 以外は枠線+内側余白も足す (lint-footer は既存の border-left/padding を維持)。 */
+#dlg-role-maker[data-rm-tab="logic"] #rm-tabs,
+#dlg-role-maker[data-rm-tab="logic"] #rm-vars-section,
+#dlg-role-maker[data-rm-tab="logic"] > menu,
+#dlg-role-maker[data-rm-tab="logic"] #rm-status,
+#dlg-role-maker[data-rm-tab="logic"] #rm-manual-copy,
+#dlg-role-maker[data-rm-tab="logic"] #rm-logic-notice,
+#dlg-role-maker[data-rm-tab="logic"] #rm-logic-validity {
+    padding: var(--space-sm);
+    border: 1px solid var(--border);
+}
+
+/* 左上: タブ切替。#rm-blockly-container の top:120px 予約帯の中に収まるので、
+   ツールボックス/フライアウトと重ならない (上のコメント参照)。 */
+#dlg-role-maker[data-rm-tab="logic"] #rm-tabs {
+    top: var(--space-md);
+    left: var(--space-md);
+}
+
+/* タブのすぐ下・左上。閉じている間は予約帯の中に収まるが、開くと中身の分だけ下へ伸びて
+   ワークスペース側の領域 (ツールボックス幅 102px 実測) にかかりうる — その場合に備えて
+   ツールボックス幅より確実に右へ逃がす left を使う (bottom を指定せず top 基準のまま
+   下方向へ自然に伸ばすことで「浮きパネルとして下に展開」を素直に実現している)。 */
+#dlg-role-maker[data-rm-tab="logic"] #rm-vars-section {
+    top: 60px;
+    left: 140px;
+    max-width: 320px;
+}
+
+/* 右上: コードをコピー / 閉じる (ツールボックスは左端固定なので右上は無関係・素直に置ける) */
+#dlg-role-maker[data-rm-tab="logic"] > menu {
+    top: var(--space-md);
+    right: var(--space-md);
+    left: auto;
+}
+
+/* 下部は「中央」に寄せてツールボックス (左端フル高さ) を避ける — コーディネーター指定の
+   「下部中央〜左下」のうち中央側を採用 (左下だと同じツールボックス衝突を起こす)。
+   どれも既定 hidden で出たときだけ見える。厳密な非重複スタックは狙わず、同時に出やすい
+   組合せ (manual-copy は status とセットで出る) だけ間隔を空ける。 */
+#dlg-role-maker[data-rm-tab="logic"] #rm-status {
+    left: 50%;
+    bottom: var(--space-md);
+    transform: translateX(-50%);
+    max-width: min(560px, 90vw);
+}
+
+#dlg-role-maker[data-rm-tab="logic"] #rm-manual-copy {
+    left: 50%;
+    bottom: 56px;
+    transform: translateX(-50%);
+    width: min(560px, 90vw);
+}
+
+#dlg-role-maker[data-rm-tab="logic"] #rm-logic-notice {
+    left: 50%;
+    bottom: 168px;
+    transform: translateX(-50%);
+    max-width: min(560px, 90vw);
+}
+
+/* validity と lint-footer は refreshLogicPanel() の分岐上つねに排他 (検証エラーがあれば
+   footer は出さない/警告があるのは検証を通った後だけ) — 同じ段を共用してよい。 */
+#dlg-role-maker[data-rm-tab="logic"] #rm-logic-validity,
+#dlg-role-maker[data-rm-tab="logic"] #rm-lint-footer {
+    left: 50%;
+    bottom: 220px;
+    transform: translateX(-50%);
+    max-width: min(420px, 85vw);
 }
 
 /* =============================================================
