@@ -10,7 +10,7 @@
 
 import type { LogicNode, LogicRule, RoleLogic } from "../roledef";
 
-export type LintRuleId = "L1" | "L2" | "L3" | "L4" | "L5" | "L6";
+export type LintRuleId = "L1" | "L2" | "L3" | "L4" | "L5" | "L6" | "L7" | "L8";
 
 export interface LintWarning {
     rule: LintRuleId;
@@ -44,12 +44,33 @@ function countCnoBySlot(nodes: LogicNode[], op: "cno_spawn" | "cno_despawn"): Ma
     return counts;
 }
 
+function sumWaitSeconds(nodes: LogicNode[]): number {
+    let total = 0;
+    forEachNode(nodes, (n) => { if (n.op === "wait") total += n.seconds; });
+    return total;
+}
+
+// L8: 訪問順 (forEachNode と同じ depth-first) を疑似実行列とみなし、cno_spawn 間の累積 wait 秒を追う。
+// 初回 spawn の前は Infinity (レートバケットに初期トークンがあるため必ず通る)。
+function hasRapidConsecutiveSpawns(nodes: LogicNode[]): boolean {
+    let sinceLastSpawn = Infinity;
+    let violation = false;
+    forEachNode(nodes, (n) => {
+        if (n.op === "wait") sinceLastSpawn += n.seconds;
+        else if (n.op === "cno_spawn") {
+            if (sinceLastSpawn < 1) violation = true;
+            sinceLastSpawn = 0;
+        }
+    });
+    return violation;
+}
+
 function makeWarning(rule: LintRuleId, ruleIndex: number, when: string, message: string, suggestion: string): LintWarning {
     return { rule, ruleIndex, when, message, suggestion };
 }
 
 /**
- * 検証済みの RoleLogic に対して spec §6 の 6 ルールを静的検査する。ブロックの組み方に対する
+ * 検証済みの RoleLogic に対して spec §6 の 8 ルールを静的検査する。ブロックの組み方に対する
  * ヒントであり、export 自体は妨げない (呼び出し元は結果を警告フッタに表示するだけ)。
  */
 export function lintRoleLogic(logic: RoleLogic): LintWarning[] {
@@ -92,6 +113,13 @@ export function lintRoleLogic(logic: RoleLogic): LintWarning[] {
                     "見せる相手の切替は3秒に1回まで。毎秒だと切替が効かないよ。",
                 ));
             }
+            if (sumWaitSeconds(rule.do) >= 1) {
+                warnings.push(makeWarning(
+                    "L7", ruleIndex, rule.when,
+                    "「毎秒くりかえす」の中で合計1秒以上待っています。",
+                    "毎秒新しく始まるのに前のが終わらなくて、たまった分が他のイベントまで止めちゃうよ。長く待つのは「ゲームが始まったとき」などの1回きりのイベントにしよう。",
+                ));
+            }
         }
 
         // L2: on_second 限定ではない (rule あたり・静的近似 — 制御フローは見ない)
@@ -105,6 +133,15 @@ export function lintRoleLogic(logic: RoleLogic): LintWarning[] {
                     "前のオブジェクトを消してから出そう。",
                 ));
             }
+        }
+
+        // L8: on_second 限定ではない (slot 不問 — L2 が「同一 slot の上書き」、こちらは「1秒1個レートのドロップ」)
+        if (hasRapidConsecutiveSpawns(rule.do)) {
+            warnings.push(makeWarning(
+                "L8", ruleIndex, rule.when,
+                "オブジェクトを間をあけずに続けて出しています。",
+                "出せるのは1秒に1個までで、2個目からは出ないよ。間に「1.1 秒待つ」を入れよう。",
+            ));
         }
     });
 
