@@ -3,12 +3,23 @@ using UnityEngine;
 
 namespace EndKnot.Modules.Ekm;
 
+// cno_move/cno_despawn 系 opcode が EkrCno (テキスト) / EkrDummyCno (player-like・v1.1) のどちらにも
+// 同じ呼び出しで効くようにするための抽象 (契約正典: docs/ekr-logic-spec.md §3 v1.1「cno_move / cno_despawn は
+// ダミーにもそのまま効く」)。cno_show はこの interface に含めない — ダミーには no-op (EkrLogicOpcodes.CnoShow
+// が `is not EkrCno` で弾く)。
+internal interface IEkrSlotCno
+{
+    bool IsInstantiated { get; }
+    void MoveToOffset(float dx, float dy);
+    void Despawn();
+}
+
 // EKR logic 契約 v1 の汎用テキスト CNO (契約正典: docs/ekr-logic-spec.md §3 cno_*)。
 // 既存の非 player-like ・単一文字/短文 CNO (Modules/CustomNetObject.SizeTest.cs,
 // Modules/CustomNetObject.WaveCannon.cs の WaveCannonGate) と同じ Shapeshift-text 戦略に乗る。
 // OnMeeting() は意図的に override しない — 基底 CustomNetObject.OnMeeting() の会議明け一斉復活エンジンに
 // そのまま従う (MeetingNum ガード追加禁止・memory: cno-base-onmeeting-implicit-respawn-engine)。
-public sealed class EkrCno : CustomNetObject
+public sealed class EkrCno : CustomNetObject, IEkrSlotCno
 {
     private readonly string _sprite;
 
@@ -43,6 +54,10 @@ public sealed class EkrCno : CustomNetObject
     {
         TP(SpawnAnchor + new Vector2(dx, dy));
     }
+
+    // IEkrSlotCno.Despawn() は引数無し。基底 Despawn(bool canPool = true) とはアリティが異なるため
+    // (既定値は「実装が同じシグネチャを名乗る」ことにはならない)、明示実装で既定値付きの公開 API に委譲する。
+    void IEkrSlotCno.Despawn() => Despawn();
 
     // 「見せる相手を変える」は un-hide API が基底に無いため、despawn + 同じ sprite/position で
     // 再 spawn することでしか実現できない (Hide() は一方向)。spawn と同じ費用 (per-player fan-out への

@@ -15,8 +15,10 @@ internal sealed class EkrHolderState
     public readonly Dictionary<string, float> Variables = new();
     public readonly List<EkrFiber> Fibers = [];
 
-    // cno_spawn/cno_move/cno_despawn/cno_show の slot 引数 (1..3) に対応。index = slot - 1。
-    public readonly EkrCno[] CnoSlots = new EkrCno[3];
+    // cno_spawn/cno_move/cno_despawn/cno_show/dummy_spawn の slot 引数 (1..3) に対応。index = slot - 1。
+    // IEkrSlotCno 抽象で EkrCno (テキスト) / EkrDummyCno (player-like・v1.1) のどちらも同じ配列に入る
+    // (契約正典: docs/ekr-logic-spec.md §3 v1.1 「dummy_spawn の slot は cno_spawn と共有」)。
+    public readonly IEkrSlotCno[] CnoSlots = new IEkrSlotCno[3];
     public readonly float[] LastCnoMoveTime = [-1f, -1f, -1f];
 
     public int AbortCount;
@@ -35,6 +37,9 @@ internal sealed class EkrHolderState
     // spec §5 (2026-08-09 監査改定): cno_show は cno_spawn と共用せず独自の ≤1/3秒/ホルダー バケット
     // (despawn→respawn の fan-out 未課金コストを織り込んで spawn より厳しくする)。
     public float LastCnoShowTime = -1f;
+    // v1.1: dummy_spawn ≤1/3秒/ホルダー・corpse_spawn ≤1/2秒/ホルダー (spec §5)。
+    public float LastDummySpawnTime = -1f;
+    public float LastCorpseSpawnTime = -1f;
 
     public bool SpeedBoostActive;
     public int SpeedGen;
@@ -452,7 +457,7 @@ public static class EkrManager
 
         for (int i = 0; i < state.CnoSlots.Length; i++)
         {
-            EkrCno cno = state.CnoSlots[i];
+            IEkrSlotCno cno = state.CnoSlots[i];
             if (cno == null) continue;
             state.CnoSlots[i] = null;
 
@@ -489,8 +494,9 @@ public static class EkrManager
 
     // 実体化前に teardown された CNO を、実体化を待って回収する (spec §5)。cno はどの EkrHolderState にも
     // 属さなくなった後 (teardown 済み) の生存インスタンスをそのまま直接持ち回る — 他の誰にも参照されて
-    // いないので新しい持ち主との衝突を考える必要はない (speed のケースと異なる点)。
-    private static void RetryDespawnUninstantiated(EkrCno cno, int retriesLeft)
+    // いないので新しい持ち主との衝突を考える必要はない (speed のケースと異なる点)。EkrCno/EkrDummyCno の
+    // どちらでも呼ばれる (TeardownRuntime のテキスト CNO 回収と DespawnDummySlots のダミー回収が共用)。
+    private static void RetryDespawnUninstantiated(IEkrSlotCno cno, int retriesLeft)
     {
         if (GameStates.IsEnded) return;
 
@@ -517,26 +523,45 @@ public static class EkrManager
 
     internal static bool CanOccupyCnoSlot() => CountLiveCno() < MaxGlobalCno;
 
-    // 上限チェック (CanOccupyCnoSlot) を先に済ませたあとにだけ呼ぶこと。
-    internal static void OccupyCnoSlot(EkrHolderState state, int slotIndex1Based, EkrCno cno)
+    // 上限チェック (CanOccupyCnoSlot) を先に済ませたあとにだけ呼ぶこと。EkrCno/EkrDummyCno どちらも渡せる。
+    internal static void OccupyCnoSlot(EkrHolderState state, int slotIndex1Based, IEkrSlotCno cno)
     {
         state.CnoSlots[slotIndex1Based - 1] = cno;
     }
 
-    // cno_despawn opcode から直接呼ばれる他、cno_spawn の「同一 slot への再 spawn」でも「消してから作る」の
-    // 消す側として使われる。実体化前 (playerControl 未生成) の CNO は spec §5 の孤児コルーチン防止裁定に
-    // よりドロップ (no-op) する — slot は占有されたまま維持される (「まだ出ていないものは変えられない」)。
-    // cno_spawn 側は「既存占有者が未実体化なら release を試みる前に spawn ごと諦める」を別途行う
-    // (EkrLogicOpcodes.CnoSpawn 参照 — ここで release が no-op になっただけでは新規 CNO の occupy を防げない)。
+    // cno_despawn opcode から直接呼ばれる他、cno_spawn/dummy_spawn の「同一 slot への再 spawn」でも
+    // 「消してから作る」の消す側として使われる (v1.1: dummy_spawn の slot は cno_spawn と共有)。
+    // 実体化前 (playerControl 未生成) の CNO は spec §5 の孤児コルーチン防止裁定によりドロップ (no-op) する
+    // — slot は占有されたまま維持される (「まだ出ていないものは変えられない」)。
+    // cno_spawn/dummy_spawn 側は「既存占有者が未実体化なら release を試みる前に spawn ごと諦める」を別途行う
+    // (EkrLogicOpcodes.CnoSpawn/DummySpawn 参照 — ここで release が no-op になっただけでは新規 occupy を防げない)。
     internal static void ReleaseCnoSlot(EkrHolderState state, int slotIndex1Based)
     {
         int idx = slotIndex1Based - 1;
-        EkrCno existing = state.CnoSlots[idx];
+        IEkrSlotCno existing = state.CnoSlots[idx];
         if (existing == null) return;
         if (!existing.IsInstantiated) return;
 
         state.CnoSlots[idx] = null;
         existing.Despawn();
+    }
+
+    // EkrDummyCno.OnKilled から呼ばれる (spec §5) — ペット/キルボタン経由の撃破は EkrLogicOpcodes を
+    // 経由しないため、Despawn 済み実体を slot 台帳から外す専用の入口が要る。ここで外さないと
+    // 全体≤10体の導出カウント (CountLiveCno) が永久に埋まる。テキスト CNO (cno_despawn 等) は呼び出し元
+    // (EkrLogicOpcodes) が既に ReleaseCnoSlot/OccupyCnoSlot で台帳を直接操作しているため、この経路が
+    // 要るのはロジック外の要因 (ダミー撃破) で CNO が消えるケースだけ。
+    internal static void NotifyCnoGone(CustomNetObject cno)
+    {
+        foreach (EkrHolderState state in Runtime.Values)
+        {
+            for (int i = 0; i < state.CnoSlots.Length; i++)
+            {
+                if (!ReferenceEquals(state.CnoSlots[i], cno)) continue;
+                state.CnoSlots[i] = null;
+                return; // 1つの CNO は同時に1つの slot にしか居ない
+            }
+        }
     }
 
     // ── R1: イベント発火 (RoleBase フック → EkmTemplateRole の薄い呼び出し先) ──────
@@ -607,9 +632,28 @@ public static class EkrManager
 
     // 会議開始 (ボタン/通報どちらでも1回・spec §2)。全 EKR ホルダー共通の「走行中 fiber は全キャンセル」
     // を先に行ってから on_meeting_start を発火する (キャンセル後に発火 — 新しく生える fiber は対象外)。
+    // fiber キャンセルは純管理メモリ操作 (Il2Cpp 側へは触らない) なのでここでインラインに行うが、
+    // v1.1 のダミー slot 一括掃除 (DespawnDummySlots) は Despawn() が Object.Destroy/RemoveNetObject を
+    // 呼ぶため、この関数の呼び出し元 (PlayerControlPatch.AfterReportTasks) が抱える他の PlayerControl
+    // 走査と同じ synchronous コールスタックに乗せない — 基底 CNO の OnMeeting() 自体も同じ理由で
+    // LateTask 5f 遅延になっている (PlayerControlPatch.cs:1501)。それに倣い 1 秒遅延で呼ぶ
+    // (advisor 指摘・2026-08-09。dummy_spawn は会議中 Execute() の IsMeeting ゲートで no-op なので、
+    // この 1 秒の間に slot を奪われる心配は無い — 台帳が 1 秒長く「占有中」と数えるだけで ≤10 上限は
+    // 緩まない方向にしか振れない)。
     public static void FireMeetingStart()
     {
+        // v1.1 監査追記 (2026-08-09): 会議開始時点でも dummy_spawn の10秒ゲート起点を前進させる —
+        // 「会議開始→追放演出→会議明けスイープ」の全 span を単一の危険窓としてカバーする
+        // (EkrActionSink.Execute の ExileController ゲートとの二重防御)。会議明けには
+        // FireMeetingEndForSlot が起点を改めて再セットする。
+        LastMeetingEndTime = Time.realtimeSinceStartup;
+
         foreach (EkrHolderState state in Runtime.Values) state.Fibers.Clear();
+
+        LateTask.New(() =>
+        {
+            foreach (EkrHolderState state in Runtime.Values) DespawnDummySlots(state);
+        }, 1f, "EkrManager.DespawnDummies", log: false);
 
         foreach (CustomRoles slot in Slots)
         {
@@ -620,6 +664,55 @@ public static class EkrManager
 
             foreach (byte holderId in holders) FireEvent(slot, holderId, "on_meeting_start", byte.MaxValue);
         }
+    }
+
+    // v1.1 spec §3「ダミーは会議で消える」の唯一の消滅経路。EkrDummyCno.OnMeeting() は意図的に空 override
+    // なので (二重管理防止・EkrDummyCno.cs 参照)、ここが実際に片付ける唯一の場所になる。テキスト CNO
+    // (EkrCno) は対象外 — 従来どおり基底 OnMeeting() の会議明け自動復活エンジンに任せる。
+    private static void DespawnDummySlots(EkrHolderState state)
+    {
+        for (int i = 0; i < state.CnoSlots.Length; i++)
+        {
+            if (state.CnoSlots[i] is not EkrDummyCno dummy) continue;
+
+            if (dummy.IsInstantiated)
+            {
+                state.CnoSlots[i] = null;
+                dummy.Despawn();
+            }
+            else
+            {
+                // 実体化前は slot を保持したまま短間隔 (1秒) で回収を再試行する (完成前監査指摘・
+                // 2026-08-09)。TeardownRuntime の RetryDespawnUninstantiated (25秒間隔) と違い、この
+                // state は会議中も Runtime に生き続けるため、slot を先に null にすると CountLiveCno()
+                // が下振れして ≤10 上限が過収容を許し、その CNO は誰にも追跡されないまま会議明けに
+                // 出現してしまう (「会議で消える」約束も破れる)。slot を握ったまま数え続ければ上限は
+                // 安全側にしか振れない。会議中はプレイヤーには MeetingHud しか見えないため、実体化→
+                // 次リトライまでの最大1秒間ワールドに存在しても見た目の約束は破れない。
+                RetryDespawnDummySlot(state, i, dummy, retriesLeft: 30);
+            }
+        }
+    }
+
+    // DespawnDummySlots 専用の実体化待ち回収。slot の解放は Despawn が実際に成功した時点で行う。
+    // retriesLeft 30 × 1秒 = 既知の最大 spawn 遅延 (~30秒) をカバー。
+    private static void RetryDespawnDummySlot(EkrHolderState state, int index, EkrDummyCno dummy, int retriesLeft)
+    {
+        if (GameStates.IsEnded) return;
+
+        // Teardown (slot を null 化して RetryDespawnUninstantiated へ回す)・撃破 (NotifyCnoGone)・
+        // 別の何かが slot を差し替えた場合はそちらの回収に任せて手を引く (二重管理防止)。
+        if (state.CnoSlots[index] != dummy) return;
+
+        if (!dummy.IsInstantiated)
+        {
+            if (retriesLeft <= 0) return; // 通常あり得ない長さの spawn 遅延 — Teardown/Init の全体掃除に任せる
+            LateTask.New(() => RetryDespawnDummySlot(state, index, dummy, retriesLeft - 1), 1f, log: false);
+            return;
+        }
+
+        state.CnoSlots[index] = null;
+        dummy.Despawn();
     }
 
     // 会議中は RoleBase.OnFixedUpdate (→Pump) が呼ばれないため、MeetingHud.Update 側から毎フレーム
@@ -650,8 +743,18 @@ public static class EkrManager
     // ここで会議番号ベースの重複排除をしないと、同じ会議明けで保持者数² 回 fiber が湧く。
     private static readonly Dictionary<CustomRoles, int> LastMeetingEndNum = [];
 
+    // v1.1: dummy_spawn の「会議明けから10秒間はドロップ」ゲート (spec §5) が読む EKR 全体共通の時刻。
+    // 会議開始 (FireMeetingStart) と会議明け (FireMeetingEndForSlot) の両方で前進する。
+    // Time.realtimeSinceStartup は起動からの単調増加値。ゲーム境界で reset しない設計 — 理論上の失敗
+    // 方向は「前ゲームの最終会議終了から10秒以内に次ゲームの intro が明ける」ときの誤ドロップ (許可漏れ)
+    // だが、ロビー→キャラ選択→イントロのオーバーヘッドが常に10秒を大きく超えるため実質到達不能
+    // (完成前監査で記述方向を訂正・2026-08-09)。ResetSlot 等でここを触らないこと。
+    internal static float LastMeetingEndTime = -1f;
+
     public static void FireMeetingEndForSlot(CustomRoles slot)
     {
+        LastMeetingEndTime = Time.realtimeSinceStartup;
+
         int meetingNum = MeetingStates.MeetingNum;
         if (LastMeetingEndNum.TryGetValue(slot, out int last) && last == meetingNum) return;
         LastMeetingEndNum[slot] = meetingNum;
@@ -734,6 +837,32 @@ public static class EkrManager
         if (_recentTeleportTimes.Count >= 2) return false;
 
         _recentTeleportTimes.Add(now);
+        return true;
+    }
+
+    // v1.1 監査追記 (2026-08-09): CNO を生成/再生成する op (cno_spawn/dummy_spawn/cno_show) の
+    // cross-holder レート予算 (spec §5)。per-holder interval と全体 ≤10 体 (在庫の天井) だけでは、
+    // on_second のロックステップ (全ホルダーの LastSecondFireTime 初期値が共通 -1f → 同一フレームで
+    // 発火し続ける) や lint L9 推奨形 (会議明け wait 10.5) の WakeAt 同刻で、複数ホルダーの spawn が
+    // 同一窓に束なるのを止められない。spawn 1体には ReserveFanoutBudget 未課金の付帯送信
+    // (spawn broadcast ≈4 nests + player-like は outfit ≈4 nests) がぶら下がるため、DummySpawner の
+    // 実績式 (targets+8)/12 秒/体 (BUG-20260803-07 の修正・安全実績域 targets×体数/秒 ≤20 nests/s) を
+    // そのまま EKR 全体の最小 spawn 間隔として強制する (TryConsumeGlobalTeleportBudget と同型の鎖)。
+    // 超過は静かにドロップ (spec §5 の既存原則 — 作者には per-holder レートと区別が付かないが、
+    // cross-holder 干渉は作者に制御不能なので lint では教えない)。
+    private static float _lastGlobalCnoSpawnTime = -1f;
+
+    internal static bool TryConsumeGlobalCnoSpawnBudget()
+    {
+        int fanoutTargets = 0;
+        foreach (PlayerControl pc in Main.EnumeratePlayerControls())
+            if (!pc.AmOwner) fanoutTargets++;
+
+        float interval = Mathf.Max(0.5f, (fanoutTargets + 8) / 12f);
+        float now = Time.realtimeSinceStartup;
+        if (_lastGlobalCnoSpawnTime >= 0f && now - _lastGlobalCnoSpawnTime < interval) return false;
+
+        _lastGlobalCnoSpawnTime = now;
         return true;
     }
 }

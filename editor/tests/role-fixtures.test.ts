@@ -9,6 +9,7 @@
 import { describe, expect, it } from "vitest";
 import fullCourseRaw from "./fixtures/role-full-course.ekrole.json?raw";
 import cnoShowcaseRaw from "./fixtures/role-cno-showcase.ekrole.json?raw";
+import dummyShowcaseRaw from "./fixtures/role-dummy-showcase.ekrole.json?raw";
 import { ROLECODE_PREFIX, decodeRoleCode, encodeRoleCode } from "../src/rolecode";
 import { LOGIC_WHEN_VALUES, validateEkrDefinition, type LogicNode, type LogicWhen } from "../src/roledef";
 import { lintRoleLogic } from "../src/logic/lint-role";
@@ -165,6 +166,75 @@ describe("golden fixture: role-cno-showcase.ekrole.json (CNO 演出中心・実�
 
         // このファイルは検証前の生データに半角 <> が残っている (上のテスト参照) — 一度検証を
         // 通した後の形が不動点であること (サニタイズが二重適用されてもズレない) を確認する。
+        expect(encodeRoleCode(JSON.stringify(roundTripped.def))).toBe(code);
+    });
+});
+
+describe("golden fixture: role-dummy-showcase.ekrole.json (v1.1 dummy_spawn/corpse_spawn・実機テスト用)", () => {
+    it("validate に合格する", () => {
+        const parsed = JSON.parse(dummyShowcaseRaw);
+        const result = validateEkrDefinition(parsed);
+        expect(result.ok).toBe(true);
+    });
+
+    it("dummy_spawn/corpse_spawn の列挙値を全てカバーしている (slot 1/2・killable 両値・color 両値・at 両値)", () => {
+        const parsed = JSON.parse(dummyShowcaseRaw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        if (!result.def.logic) throw new Error("fixture は logic を持つ前提");
+
+        const dummies: Extract<LogicNode, { op: "dummy_spawn" }>[] = [];
+        const corpses: Extract<LogicNode, { op: "corpse_spawn" }>[] = [];
+        for (const rule of result.def.logic.rules) {
+            for (const n of rule.do) {
+                if (n.op === "dummy_spawn") dummies.push(n);
+                if (n.op === "corpse_spawn") corpses.push(n);
+            }
+        }
+
+        expect(dummies.map(d => d.slot)).toEqual(expect.arrayContaining([1, 2]));
+        expect(dummies.map(d => d.killable)).toEqual(expect.arrayContaining([true, false]));
+        expect(corpses.map(c => c.color)).toEqual(expect.arrayContaining(["random", "self"]));
+        expect(corpses.map(c => c.at)).toEqual(expect.arrayContaining(["ctx", "self"]));
+    });
+
+    it("on_meeting_end のダミー再設置は 10.5 秒待ちが先 (L9 の模範形)、on_death の corpse_spawn は死亡時実行可の裁定素材 (spec §2 v1.1)", () => {
+        const parsed = JSON.parse(dummyShowcaseRaw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        if (!result.def.logic) throw new Error("fixture は logic を持つ前提");
+
+        const meetingEnd = result.def.logic.rules.find(r => r.when === "on_meeting_end");
+        if (!meetingEnd) throw new Error("on_meeting_end ルールがある前提");
+        expect(meetingEnd.do[0]).toEqual({ op: "wait", seconds: 10.5 });
+        expect(meetingEnd.do[1]?.op).toBe("dummy_spawn");
+
+        const onDeath = result.def.logic.rules.find(r => r.when === "on_death");
+        if (!onDeath) throw new Error("on_death ルールがある前提");
+        expect(onDeath.do.some(n => n.op === "corpse_spawn")).toBe(true);
+    });
+
+    it("リンター (spec §6 v1.1 — L9/L10 含む) は警告0件", () => {
+        const parsed = JSON.parse(dummyShowcaseRaw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        if (!result.def.logic) throw new Error("fixture は logic を持つ前提");
+        expect(lintRoleLogic(result.def.logic)).toEqual([]);
+    });
+
+    it("rolecode (EKR1.) のエンコード→デコード ラウンドトリップで AST が deep-equal になる", () => {
+        const parsed = JSON.parse(dummyShowcaseRaw);
+        const validated = validateEkrDefinition(parsed);
+        if (!validated.ok) throw new Error(validated.error);
+
+        const code = encodeRoleCode(JSON.stringify(validated.def));
+        expect(code.startsWith(ROLECODE_PREFIX)).toBe(true);
+
+        const roundTripped = validateEkrDefinition(JSON.parse(decodeRoleCode(code)));
+        if (!roundTripped.ok) throw new Error(roundTripped.error);
+
+        expect(roundTripped.def).toEqual(validated.def);
+        expect(roundTripped.def.logic).toEqual(validated.def.logic);
         expect(encodeRoleCode(JSON.stringify(roundTripped.def))).toBe(code);
     });
 });
