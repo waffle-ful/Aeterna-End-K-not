@@ -128,6 +128,23 @@ function blockToNode(b: SerializedBlock): Record<string, unknown> {
             return { op: "cno_despawn", slot: toNum(b.fields?.SLOT) };
         case "ekr_do_cno_show":
             return { op: "cno_show", slot: toNum(b.fields?.SLOT), who: b.fields?.WHO };
+        case "ekr_do_dummy_spawn":
+            // KILLABLE は field_dropdown なので Blockly 上は "1"/"0" の文字列 (options のキー側の
+            // 値そのもの) — roledef.ts の dummy_spawn.killable は真の boolean のみ受理するため
+            // ここで変換する。フィールドが本当に欠落している (undefined) 場合はここで undefined を
+            // 通し、validateRoleLogic 側の「boolean である必要があります」reject に委ねる —
+            // `=== "1"` 一発判定にすると欠落が黙って false (=こわせない) に化けてしまい、他の
+            // フィールド (SLOT/AT 等、欠落がそのまま validateRoleLogic の型エラーになる) と
+            // 挙動が揃わなくなる。
+            return {
+                op: "dummy_spawn",
+                slot: toNum(b.fields?.SLOT),
+                name: b.fields?.NAME,
+                killable: b.fields?.KILLABLE === undefined ? undefined : b.fields.KILLABLE === "1",
+                at: b.fields?.AT,
+            };
+        case "ekr_do_corpse_spawn":
+            return { op: "corpse_spawn", color: b.fields?.COLOR, at: b.fields?.AT };
         default:
             if (b.type.startsWith(DO_BLOCK_PREFIX)) return { op: b.type.slice(DO_BLOCK_PREFIX.length) };
             // 未知のブロック型 → そのまま「不明な op」として通す (blockToExpr と同じ方針)。

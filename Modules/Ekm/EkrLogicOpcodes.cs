@@ -33,8 +33,12 @@ internal sealed class EkrActionSink : IEkrActionSink
     {
         if (fiber.Context is not EkrActionContext ctx) return;
 
-        // spec §3: 会議中はアクション系 op は no-op (notify のみ例外で有効)。
-        if (node.Op != "notify" && GameStates.IsMeeting) return;
+        // spec §3: 会議中はアクション系 op は no-op (notify のみ例外で有効)。「会議中」には追放演出中も
+        // 含む (v1.1 監査追記 2026-08-09) — 投票終了で MeetingHud が閉じると IsMeeting=false/IsInTask=true
+        // になり、ガード無しだと追放演出中に on_second 等が発火して spawn 系 op が会議クローズ送信
+        // (SetRole 全員分+Desync+NotifyRoles スイープ) と同一窓に重なる — BUG-20260803-07 の合算キック窓
+        // そのもの。CorpseSpawn の個別ガードはこの共通関所への二重防御として残置。
+        if (node.Op != "notify" && (GameStates.IsMeeting || ExileController.Instance)) return;
 
         switch (node.Op)
         {
@@ -47,6 +51,8 @@ internal sealed class EkrActionSink : IEkrActionSink
             case "cno_move": CnoMove(node, ctx); break;
             case "cno_despawn": CnoDespawn(node, ctx); break;
             case "cno_show": CnoShow(node, ctx); break;
+            case "dummy_spawn": DummySpawn(node, ctx); break;
+            case "corpse_spawn": CorpseSpawn(node, ctx); break;
         }
     }
 
@@ -265,7 +271,7 @@ internal sealed class EkrActionSink : IEkrActionSink
         if (state.LastCnoSpawnTime >= 0f && now - state.LastCnoSpawnTime < 1f) return;
 
         int idx = node.Slot - 1;
-        EkrCno existing = state.CnoSlots[idx];
+        IEkrSlotCno existing = state.CnoSlots[idx];
 
         // 実体化前 (playerControl 未生成) の同一 slot への再 spawn はドロップ (spec §5 孤児コルーチン
         // 防止裁定・2026-08-09) — 基底 spawn コルーチンは Despawn で止まらないため、ここで切り離すと
@@ -285,6 +291,10 @@ internal sealed class EkrActionSink : IEkrActionSink
 
         EkrDefinition def = EkrManager.GetDefinition(ctx.Slot);
         if (def == null) return;
+
+        // cross-holder 予算 (spec §5 v1.1 監査追記) — 他の drop 理由を全て通過した「本当に spawn する」
+        // 直前でだけ消費する (先に消費すると、後段の理由で drop されるのに予算だけ減る無駄撃ちになる)。
+        if (!EkrManager.TryConsumeGlobalCnoSpawnBudget()) return;
 
         // 同一 slot への再 spawn は先に消してから作る (L2 リンタの代替案をモッド側でも保証する)。
         // ここに来る時点で existing は null か実体化済みのどちらかなので ReleaseCnoSlot は必ず効く。
@@ -308,8 +318,14 @@ internal sealed class EkrActionSink : IEkrActionSink
         if (state == null) return;
 
         int idx = node.Slot - 1;
-        EkrCno cno = state.CnoSlots[idx];
+        IEkrSlotCno cno = state.CnoSlots[idx];
         if (cno == null) return;
+
+        // 実体化前は「まだ出ていないものは変えられない」(spec §5・他 op と同じ一貫ガード)。TP() は
+        // Despawn を呼ばないため孤児化リスクこそ無いが、実体化時に CreateNetObject コルーチンが
+        // Position を spawn 位置で再代入するため実体化前の move はどのみち上書き消滅する — ガード無し
+        // だとレート予算 (0.5秒/slot) だけ無駄に消費する (完成前監査指摘・2026-08-09)。
+        if (!cno.IsInstantiated) return;
 
         float now = Time.realtimeSinceStartup;
         if (state.LastCnoMoveTime[idx] >= 0f && now - state.LastCnoMoveTime[idx] < 0.5f) return;
@@ -332,8 +348,10 @@ internal sealed class EkrActionSink : IEkrActionSink
         if (state == null) return;
 
         int idx = node.Slot - 1;
-        EkrCno cno = state.CnoSlots[idx];
-        if (cno == null) return;
+
+        // v1.1: cno_show はダミー (EkrDummyCno) には no-op — despawn→respawn で outfit 再送を伴い高価な
+        // ため非対応 (spec §3)。`is not EkrCno` は null (未占有 slot) も自然に弾く。
+        if (state.CnoSlots[idx] is not EkrCno cno) return;
 
         // 実体化前は「まだ出ていないものは変えられない」— ドロップ (spec §5 孤児コルーチン防止裁定)。
         if (!cno.IsInstantiated) return;
@@ -342,11 +360,104 @@ internal sealed class EkrActionSink : IEkrActionSink
         // spec §5 (2026-08-09 監査改定): cno_show は cno_spawn と共用せず独自の ≤1/3秒/ホルダー バケット
         // (despawn→respawn の fan-out 未課金コスト分を織り込んで spawn より厳しくする)。
         if (state.LastCnoShowTime >= 0f && now - state.LastCnoShowTime < 3f) return;
-        state.LastCnoShowTime = now;
 
         PlayerControl holderPc = ctx.HolderId.GetPlayer();
         if (!holderPc) return;
 
+        // cross-holder 予算 (spec §5 v1.1 監査追記): 実装が despawn→respawn = spawn と同じ付帯送信を
+        // 伴うため、生成系共通の予算にも課金する。per-holder バケット (LastCnoShowTime) の更新は
+        // ここを通過した後 — グローバル拒否時に per-holder 分まで消費しない。
+        if (!EkrManager.TryConsumeGlobalCnoSpawnBudget()) return;
+        state.LastCnoShowTime = now;
+
         cno.SetVisibility(node.Who == "self", holderPc);
+    }
+
+    // ── dummy_spawn (v1.1 spec §3,§5: spawn≤1/3秒/ホルダー・会議明け10秒ドロップ・全体≤10体はcno_spawnと合算) ──
+    // slot は cno_spawn と共有 (IEkrSlotCno 経由で cno_move/cno_despawn がそのまま効く)。cno_show だけ
+    // 非対応 (CnoShow 側の `is not EkrCno` で弾かれる)。
+
+    private static void DummySpawn(EkrNode node, EkrActionContext ctx)
+    {
+        EkrHolderState state = EkrManager.GetHolderState(ctx.HolderId);
+        if (state == null) return;
+
+        float now = Time.realtimeSinceStartup;
+        if (state.LastDummySpawnTime >= 0f && now - state.LastDummySpawnTime < 3f) return;
+
+        // spec §5 (v1.1): 会議明けから10秒間はドロップ (会議クローズ+追放スイープとの合算 nests キック
+        // 回避・BUG-20260803-07 と同型)。未記録 (-1) は通す。
+        if (EkrManager.LastMeetingEndTime >= 0f && now - EkrManager.LastMeetingEndTime < 10f) return;
+
+        int idx = node.Slot - 1;
+        IEkrSlotCno existing = state.CnoSlots[idx];
+
+        // cno_spawn と同じ孤児コルーチン防止裁定 (spec §5) — 実体化前の同一 slot への再 spawn はドロップ。
+        if (existing != null && !existing.IsInstantiated) return;
+
+        if (!EkrManager.CanOccupyCnoSlot()) return; // 全体 ≤10体 (cno_spawn と合算・spec §5)
+
+        Vector2? pos = node.Target switch
+        {
+            "ctx" => ResolveCtxPosition(ctx),
+            _ => ResolveSelfPosition(ctx)
+        };
+
+        if (pos == null) return;
+
+        // cross-holder 予算 (spec §5 v1.1 監査追記) — CnoSpawn と同じく「本当に spawn する」直前で消費。
+        if (!EkrManager.TryConsumeGlobalCnoSpawnBudget()) return;
+
+        // 同一 slot への再 spawn は先に消してから作る (cno_spawn と同じ「消してから作る」規約)。
+        // ここに来る時点で existing は null か実体化済みのどちらかなので ReleaseCnoSlot は必ず効く。
+        EkrManager.ReleaseCnoSlot(state, node.Slot);
+
+        var dummy = new EkrDummyCno(pos.Value, node.Name, node.Killable);
+        EkrManager.OccupyCnoSlot(state, node.Slot, dummy); // 上限は通過済みなので必ず成功する
+
+        state.LastDummySpawnTime = now;
+    }
+
+    // ── corpse_spawn (v1.1 spec §3,§5: ≤1/2秒/ホルダー・タスク中のみ) ───────────────────────────
+    // 「通報できる普通の偽死体」— 特別扱い登録簿 (ReportDeadBodyPatch.DummyCorpseBodyIds 等) には載せない
+    // (spec §3)。CNO は Data を持たず死体の親になれないため、生存実プレイヤーを無作為に借用する
+    // (Trapster.OnVanish と同じ借用パターン — 借りた側の色は下で colorId 上書きするため見た目には出ない)。
+    // アライブ判定は意図的に付けない — spec §2 は cno_* 系を on_death 起点 fiber からも実行可としており、
+    // corpse_spawn はその仲間 (ResolveSelfPosition はゴーストでも解決できる)。
+
+    private static void CorpseSpawn(EkrNode node, EkrActionContext ctx)
+    {
+        EkrHolderState state = EkrManager.GetHolderState(ctx.HolderId);
+        if (state == null) return;
+
+        float now = Time.realtimeSinceStartup;
+        if (state.LastCorpseSpawnTime >= 0f && now - state.LastCorpseSpawnTime < 2f) return;
+
+        // spec §5: ペット0.2秒遅延発動が会議/追放演出へ滑り込む既知型の回避。GameStates.IsInTask は
+        // InGame&&!IsMeeting と等価だが、追放演出中は MeetingHud が既に閉じていて IsInTask だけでは
+        // すり抜けるため ExileController.Instance も明示的に見る (spec 指定どおり)。
+        if (!GameStates.IsInTask || ExileController.Instance) return;
+
+        PlayerControl holderPc = ctx.HolderId.GetPlayer();
+        if (!holderPc) return;
+
+        Vector2? pos = node.Target switch
+        {
+            "ctx" => ResolveCtxPosition(ctx),
+            _ => ResolveSelfPosition(ctx)
+        };
+
+        if (pos == null) return;
+
+        PlayerControl parent = Main.EnumerateAlivePlayerControls().RandomElement();
+        if (!parent) return;
+
+        byte colorId = node.Color == "random"
+            ? (byte)IRandom.Instance.Next(0, Palette.PlayerColors.Length)
+            : (byte)holderPc.Data.DefaultOutfit.ColorId;
+
+        state.LastCorpseSpawnTime = now;
+
+        Utils.RpcCreateDeadBody(pos.Value, colorId, parent);
     }
 }

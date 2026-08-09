@@ -1105,7 +1105,12 @@ namespace EndKnot
             {
                 yield return new WaitForSecondsRealtime(10f);
                 while (ReportDeadBodyPatch.MeetingStarted || GameStates.IsMeeting || ExileController.Instance || AntiBlackout.SkipTasks) yield return null;
-                yield return new WaitForSecondsRealtime(3f + stagger);
+                // ⚠️ 10 秒から縮めないこと (DeferredSpawnBaseDelay と同じ規約)。会議明けは追放スイープ+
+                // レートゲートのドレインが task phase 開始後 ~10 秒続き、CNO 再生成の spawn+visibility
+                // fan-out が重なると合算 nests がキック域に達する (BUG-20260803-07)。2026-08-09 の完成前
+                // 監査まで実装がここだけ 3 秒のままで、上の DeferredSpawnBaseDelay コメントの「同じ規約」
+                // 宣言と食い違っていた (実測キック未発生のうちに修正)。
+                yield return new WaitForSecondsRealtime(10f + stagger);
                 while (ReportDeadBodyPatch.MeetingStarted || GameStates.IsMeeting || ExileController.Instance || AntiBlackout.SkipTasks) yield return null;
                 if (GameStates.IsEnded || !GameStates.InGame || GameStates.IsLobby) yield break;
                 // onlyVisibleTo 限定 CNO は唯一の視聴者が切断済みなら復活させない (視聴者なしの再生成は全員に見える)

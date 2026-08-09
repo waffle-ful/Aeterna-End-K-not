@@ -1,0 +1,49 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "人形つかい",
+  "author": "EKN Sample",
+  "color": "#cc7ae0",
+  "team": "crewmate",
+  "canKill": true,
+  "killCooldown": 35,
+  "canVent": false,
+  "visionMultiplier": 1,
+  "winCondition": "team",
+  "logic": {
+    "version": 1,
+    "variables": [
+      { "name": "出した数", "init": 0 }
+    ],
+    "rules": [
+      {
+        "when": "on_pet",
+        "do": [
+          { "op": "dummy_spawn", "slot": 1, "name": "ヤギさん", "killable": true, "at": "self" },
+          { "op": "var_add", "name": "出した数", "delta": { "e": "lit", "v": 1 } },
+          { "op": "notify", "text": "ダミーを出した ({出した数}体目)", "seconds": 3 }
+        ]
+      },
+      {
+        "when": "on_meeting_end",
+        "do": [
+          { "op": "wait", "seconds": 10.5 },
+          { "op": "dummy_spawn", "slot": 2, "name": "みはり", "killable": false, "at": "self" }
+        ]
+      },
+      {
+        "when": "on_kill",
+        "do": [
+          { "op": "corpse_spawn", "color": "random", "at": "ctx" }
+        ]
+      },
+      {
+        "when": "on_death",
+        "do": [
+          { "op": "corpse_spawn", "color": "self", "at": "self" },
+          { "op": "notify", "text": "身代わりを残した…", "seconds": 3 }
+        ]
+      }
+    ]
+  }
+}
