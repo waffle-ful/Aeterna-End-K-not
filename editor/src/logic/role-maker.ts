@@ -141,6 +141,7 @@ let blocklyApi: BlocksRoleModule | null = null;
 let workspace: BlocklyWorkspaceSvg | null = null;
 let logicTabLoading = false;
 let containerObserver: ResizeObserver | null = null;
+let varsObserver: ResizeObserver | null = null;
 
 function currentBlocklyState(): SerializedWorkspace | null {
     if (workspace && blocklyApi) {
@@ -314,6 +315,7 @@ function loadCode(): void {
     });
     adoptLoadedLogic(r.def.logic);
     saveFormToStorage();
+    renderPreview();
     $<HTMLTextAreaElement>("rm-load-text").value = "";
     setStatus("コードを読み込みました (フォームに反映しました)", false);
 }
@@ -327,6 +329,10 @@ function syncVariableNamesToBlockly(): void {
 }
 
 function renderVariablesList(): void {
+    // <details> の summary (折りたたみ時にも見える個数表示)。details 要素自体は index.html の
+    // 静的 DOM に置いたままなので、ここで中身 (#rm-vars-list) だけ再構築しても開閉状態は保たれる。
+    $("rm-vars-summary").textContent = `変数 (${logicVariables.length}個)`;
+
     const list = $("rm-vars-list");
     list.replaceChildren();
     logicVariables.forEach((v, i) => {
@@ -474,6 +480,74 @@ function scheduleWorkspaceAutosave(): void {
 }
 
 // ---------------------------------------------------------------------------
+// ライブプレビュー (「基本情報」タブ): ゲーム内でどう見えるかの簡易再現。
+// renderPreview() は readForm() / currentLogicCandidate() など「今の状態」を読んで対応する
+// #rm-preview-* 要素へ書き込むだけの純粋表示関数 (自分では状態を持たない)。
+// ---------------------------------------------------------------------------
+
+/** 見た目用の数値整形 (25 → "25", 1.5 → "1.5")。killCooldown/visionMultiplier 表示専用。 */
+function formatPreviewNumber(n: number): string {
+    return Number(n.toFixed(2)).toString();
+}
+
+/**
+ * currentLogicCandidate() から「トリガー種別 (when) の数」だけを軽く読み取る。表示専用の概算であり
+ * validateRoleLogic() のような完全な AST 検証はしない — renderPreview() は #rm-name への1打鍵ごとに
+ * 呼ばれるため、毎回ワークスペース全体を再検証するのはコストに見合わない (検証そのものは
+ * refreshLogicPanel() が別途・Blockly の change イベントに debounce して担当している)。
+ * when が文字列でない/欠けている壊れた rule は単に数えないだけで、エラー表示はしない。
+ */
+function currentLogicTriggerCount(): number {
+    const candidate = currentLogicCandidate() as { rules?: unknown[] } | undefined;
+    if (!candidate || !Array.isArray(candidate.rules)) return 0;
+    const whens = new Set<string>();
+    for (const rule of candidate.rules) {
+        const when = (rule as { when?: unknown } | null)?.when;
+        if (typeof when === "string") whens.add(when);
+    }
+    return whens.size;
+}
+
+/** 「基本情報」タブのライブプレビューを今のフォーム状態に合わせて更新する。副作用は DOM 書き込みのみ。 */
+function renderPreview(): void {
+    const raw = readForm();
+    const color = normalizeColor(raw.color);
+    const trimmedName = raw.name.trim();
+    const displayName = trimmedName.length > 0 ? trimmedName : "（役職名未設定）";
+
+    const headName = $("rm-preview-head-name");
+    headName.textContent = displayName;
+    headName.style.color = color;
+
+    const bannerName = $("rm-preview-banner-name");
+    bannerName.textContent = displayName;
+    bannerName.style.color = color;
+
+    $("rm-preview-avatar").style.setProperty("--rm-avatar-color", color);
+
+    const killCd = normalizeKillCooldown(raw.killCooldown);
+    const vision = normalizeVisionMultiplier(raw.visionMultiplier);
+    const showVision = Math.abs(vision - 1) > 1e-6;
+
+    const killChip = $("rm-preview-ability-kill");
+    killChip.hidden = !raw.canKill;
+    if (raw.canKill) killChip.textContent = `⚔ キルできる (再使用まで ${formatPreviewNumber(killCd)} 秒)`;
+
+    $("rm-preview-ability-vent").hidden = !raw.canVent;
+
+    const visionChip = $("rm-preview-ability-vision");
+    visionChip.hidden = !showVision;
+    if (showVision) visionChip.textContent = `👁 視界 ${formatPreviewNumber(vision)} 倍`;
+
+    $("rm-preview-ability-none").hidden = raw.canKill || raw.canVent || showVision;
+
+    const triggerCount = currentLogicTriggerCount();
+    const logicSummary = $("rm-preview-logic-summary");
+    logicSummary.hidden = triggerCount === 0;
+    if (triggerCount > 0) logicSummary.textContent = `ブロックロジック: きっかけ ${triggerCount} 種`;
+}
+
+// ---------------------------------------------------------------------------
 // タブ切替 + Blockly 初期化 (dynamic import)
 // ---------------------------------------------------------------------------
 
@@ -482,6 +556,11 @@ type RmTab = "basic" | "logic";
 function setActiveTab(tab: RmTab): void {
     $("rm-panel-basic").hidden = tab !== "basic";
     $("rm-panel-logic").hidden = tab !== "logic";
+    // ロジックタブ表示中は #dlg-role-maker 全体を ComfyUI 風の全画面フローティング UI へ
+    // 切り替える (CSS 側の #dlg-role-maker[data-rm-tab="logic"] セレクタ群がこれを見て
+    // dialog の padding・タブ/変数/menu/状態表示のフローティング化・ワークスペースの
+    // 全面化を行う)。
+    $<HTMLDialogElement>("dlg-role-maker").dataset.rmTab = tab;
     for (const btn of document.querySelectorAll<HTMLButtonElement>("#rm-tabs .rm-tab")) {
         btn.classList.toggle("active", btn.dataset.rmTab === tab);
     }
@@ -489,10 +568,21 @@ function setActiveTab(tab: RmTab): void {
         if (workspace && blocklyApi) {
             // ダイアログを閉じている間コンテナは表示サイズ 0 になるため、Blockly が持つ
             // キャッシュ済みメトリクスが古くなる (再表示直後は空白/ズレて見えることがある)。
+            // 全画面フローティングレイアウトへの切替は #rm-blockly-container のサイズを
+            // position:absolute;inset:0 で一気に変えるため、ResizeObserver の非同期発火を
+            // 待たず同期で1回呼び、念のため次フレームでもう一度呼ぶ (svgResize の重複呼び出しは無害)。
             blocklyApi.Blockly.svgResize(workspace);
+            requestAnimationFrame(() => {
+                if (workspace && blocklyApi) blocklyApi.Blockly.svgResize(workspace);
+            });
         } else {
             void ensureLogicTabReady();
         }
+    } else {
+        // ロジックタブでブロックを組んでから基本情報タブへ戻ってきたときに、ロジック要約行
+        // (renderPreview の項目d) が古いままにならないよう更新する。currentLogicCandidate() は
+        // ワークスペースの現在値を都度読むので、この呼び出しだけで最新化できる。
+        renderPreview();
     }
 }
 
@@ -517,6 +607,37 @@ async function ensureLogicTabReady(): Promise<void> {
             toolbox: blocklyApi.buildRoleToolbox(),
             renderer: "zelos",
             trashcan: true,
+            // Blockly の既定テーマはワークスペース背景が白固定 (CSS だけでは上書きしきれない —
+            // blocks-role.ts のコメント参照)。これを指定しないと直後の grid.colour (薄い白) が
+            // 白背景に沈んで不可視になる。
+            theme: blocklyApi.buildRoleTheme(),
+            // ComfyUI 風の操作感 (全画面化しても作業スペースが手狭に感じる問題への対応):
+            // 背景をつかんでドラッグでパンでき、素ホイールはズームに譲る。move.wheel と
+            // zoom.wheel を両方 true にすると「ホイールがスクロールとズームの両方を起こす」
+            // 挙動になる (Blockly 公式のズーム設定ガイドが明記する既知の組み合わせ事故) ため
+            // 片方だけ true にする。
+            move: {
+                scrollbars: { horizontal: true, vertical: true },
+                drag: true,
+                wheel: false,
+            },
+            zoom: {
+                controls: true,
+                wheel: true,
+                pinch: true,
+                startScale: 1,
+                minScale: 0.4,
+                maxScale: 2.5,
+                scaleSpeed: 1.08,
+            },
+            // ComfyUI 風の方眼背景。colour は SVG line の stroke 属性へそのまま渡るので
+            // rgba() で薄い白にできる (ダーク背景 --bg-2 に馴染む主張しすぎない目盛り)。
+            grid: {
+                spacing: 24,
+                length: 4,
+                colour: "rgba(255, 255, 255, 0.06)",
+                snap: false,
+            },
         });
 
         if (pendingBlocklyRestore) {
@@ -542,6 +663,18 @@ async function ensureLogicTabReady(): Promise<void> {
                 });
             });
             containerObserver.observe(container);
+
+            // 変数パネル (浮き details) の実高さを CSS 変数 --rm-vars-h へ流す。全画面レイアウトの
+            // ワークスペース上端予約 (style.css: calc(76px + var(--rm-vars-h))) がパネルの開閉・
+            // 変数の増減に実寸で追随するため。予約帯の変化はコンテナ寸法の変化として上の
+            // containerObserver が拾い svgResize する (連鎖は一方向なのでループしない)。
+            const varsSection = $("rm-vars-section");
+            varsObserver = new ResizeObserver(() => {
+                requestAnimationFrame(() => {
+                    $<HTMLDialogElement>("dlg-role-maker").style.setProperty("--rm-vars-h", `${varsSection.offsetHeight}px`);
+                });
+            });
+            varsObserver.observe(varsSection);
         }
 
         workspace.addChangeListener(() => scheduleWorkspaceAutosave());
@@ -553,6 +686,12 @@ async function ensureLogicTabReady(): Promise<void> {
     } finally {
         logicTabLoading = false;
     }
+}
+
+/** フォーム入力の共通後処理: 下書き保存 + プレビュー更新 (このペアは常にセットで呼ぶ)。 */
+function onFormEdit(): void {
+    saveFormToStorage();
+    renderPreview();
 }
 
 let wired = false;
@@ -567,29 +706,30 @@ function wire(): void {
     pendingBlocklyRestore = draft.logicBlockly;
     noBlocklyPassthrough = draft.logicNoBlocklyPassthrough;
     renderVariablesList();
+    renderPreview();
 
-    $<HTMLInputElement>("rm-name").addEventListener("input", saveFormToStorage);
-    $<HTMLInputElement>("rm-author").addEventListener("input", saveFormToStorage);
-    $<HTMLInputElement>("rm-color").addEventListener("input", saveFormToStorage);
-    $<HTMLInputElement>("rm-can-vent").addEventListener("change", saveFormToStorage);
+    $<HTMLInputElement>("rm-name").addEventListener("input", onFormEdit);
+    $<HTMLInputElement>("rm-author").addEventListener("input", onFormEdit);
+    $<HTMLInputElement>("rm-color").addEventListener("input", onFormEdit);
+    $<HTMLInputElement>("rm-can-vent").addEventListener("change", onFormEdit);
 
     $<HTMLInputElement>("rm-can-kill").addEventListener("change", () => {
         refreshKillCdVisibility();
-        saveFormToStorage();
+        onFormEdit();
     });
 
     $<HTMLInputElement>("rm-kill-cd").addEventListener("change", () => {
         const el = $<HTMLInputElement>("rm-kill-cd");
         const raw = el.value.trim();
         el.value = String(normalizeKillCooldown(raw === "" ? NaN : Number(raw)));
-        saveFormToStorage();
+        onFormEdit();
     });
 
     $<HTMLInputElement>("rm-vision").addEventListener("change", () => {
         const el = $<HTMLInputElement>("rm-vision");
         const raw = el.value.trim();
         el.value = String(normalizeVisionMultiplier(raw === "" ? NaN : Number(raw)));
-        saveFormToStorage();
+        onFormEdit();
     });
 
     $("rm-copy").addEventListener("click", () => void copyCode());
@@ -613,6 +753,7 @@ function openRoleMaker(): void {
     setStatus("", false);
     $<HTMLTextAreaElement>("rm-manual-copy").hidden = true;
     $<HTMLDialogElement>("dlg-role-maker").showModal();
+    renderPreview();
     // 閉じている間コンテナは寸法 0 なので、ロジックタブを開いたまま閉じて再表示すると
     // メトリクスが腐っている。ResizeObserver でも拾えるが、念のため明示的に合わせる。
     if (workspace && blocklyApi && !$("rm-panel-logic").hidden) {
