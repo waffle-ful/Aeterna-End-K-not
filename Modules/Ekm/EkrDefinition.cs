@@ -9,8 +9,19 @@ namespace EndKnot.Modules.Ekm;
 // 計画正典: docs/ekn-api-plan.md。EHR 内部語彙 (enum 名/option ID/RPC 番号) を一切含まないこと。
 public sealed class EkrDefinition
 {
+    // R1 契約解決 (docs/ekr-logic-spec.md §1): ekr キーは必須。既定値 1 の初期化子だと「省略」と
+    // 「明示的に1」を区別できないため nullable にする (R0 は accept していたが、これは意図的な修正)。
     [JsonPropertyName("ekr")]
-    public int Ekr { get; set; } = 1;
+    public int? Ekr { get; set; }
+
+    // R1 (docs/ekr-logic-spec.md)。任意 — 無しは R0 動作 (完全後方互換)。C# は生 JsonElement を保持し、
+    // Validate() 内で EkrLogicDef.TryParse に渡して初めて型チェックする (blockly は不透明— パースしない)。
+    [JsonPropertyName("logic")]
+    public JsonElement? Logic { get; set; }
+
+    // Validate() 成功後にのみ非 null になる、logic の検証済み AST。実行時 (EkrManager) はこちらだけを読む。
+    [JsonIgnore]
+    public EkrLogicDef ParsedLogic { get; private set; }
 
     [JsonPropertyName("requires")]
     public List<string> Requires { get; set; } = [];
@@ -82,6 +93,12 @@ public sealed class EkrDefinition
     {
         error = null;
 
+        if (Ekr is null)
+        {
+            error = "役職コードに ekr がありません (新しい形式の役職コードではないか、コードが壊れています)";
+            return false;
+        }
+
         if (Ekr != 1)
         {
             error = $"このバージョンの End K not では読み込めない役職コードです (ekr={Ekr})。End K not を更新してください";
@@ -133,6 +150,15 @@ public sealed class EkrDefinition
 
         WinCondition = (WinCondition ?? "team").Trim().ToLowerInvariant();
         // team 以外の値は受理はするが R0 では常に通常のクルー勝利条件にフォールバックする (機能未対応)。
+
+        // R1: logic は任意。無ければ R0 動作のまま (ParsedLogic は null)。
+        if (Logic.HasValue)
+        {
+            if (!EkrLogicDef.TryParse(Logic.Value, out EkrLogicDef parsedLogic, out error))
+                return false;
+
+            ParsedLogic = parsedLogic;
+        }
 
         return true;
     }
