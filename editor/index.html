@@ -29,7 +29,7 @@
         <button id="btn-copy-code">コードコピー</button>
         <button id="btn-load-code">コード読込</button>
         <button id="btn-play" class="primary" title="マップを EKMaps フォルダへ保存してゲームに反映します">▶ ゲームで試す</button>
-        <button id="btn-role-maker" title="役職を作ってコード化するお試し機能 (フォームのみ)">役職メーカー</button>
+        <button id="btn-role-maker" title="役職を作ってコード化します (マップとは別の独立機能)">役職メーカー</button>
       </div>
     </header>
 
@@ -525,10 +525,13 @@
     <div id="start-screen" hidden>
       <div id="start-inner">
         <h1 id="start-title">EKMap マップエディタ</h1>
-        <p id="start-sub">Among Us のマップをノーコードで作ろう</p>
+        <p id="start-sub">Among Us のマップと役職をノーコードで作ろう</p>
         <div id="start-main-btns">
           <button id="start-new" class="start-main-btn primary">✨ 新規作成</button>
           <button id="start-library" class="start-main-btn">📂 書庫を開く</button>
+          <!-- 役職メーカーはマップとは無関係な独立機能。マップを作らなくても使えるよう
+               スタート画面のトップレベル項目として置く (配線は logic/role-maker.ts が自己完結) -->
+          <button id="start-role-maker" class="start-main-btn">🎭 役職メーカー</button>
           <button id="start-minigame" class="start-main-btn">🎮 ミニゲーム</button>
         </div>
         <h2 id="start-tpl-heading">テンプレートから始める</h2>

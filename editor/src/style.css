@@ -1757,10 +1757,71 @@ dialog#dlg-library {
    役職メーカー (dlg-role-maker) — EKN R0 フォーム + R1 ブロックロジック
    ============================================================= */
 
-dialog#dlg-role-maker {
-    width: min(96vw, 900px);
-    max-height: 90vh;
-    overflow-y: auto;
+/* 全画面ワークスペース: ブロックを組む面積を最大化するため、ビューポートいっぱいの
+   縦 flex (見出し/タブ = 固定, パネル = 可変, 状態表示/ボタン = 固定) にする。
+   ⚠️ セレクタは必ず [open] 付きで書くこと — `dialog#id { display:flex }` と書くと UA の
+   `dialog:not([open]) { display:none }` を作者スタイルが上書きして、閉じている間もページに
+   居座る (ネイティブ <dialog> の定番事故)。 */
+dialog#dlg-role-maker[open] {
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    width: 100vw;
+    max-width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    padding: var(--space-md) var(--space-lg);
+    border: 0;
+    border-radius: 0;
+    overflow: hidden;
+}
+
+/* 既定は「縮まない固定要素」。可変にするパネルだけ下で個別に上書きする
+   (パネル側は id 2つ = より高い詳細度で勝たせている) */
+#dlg-role-maker > * {
+    flex: 0 0 auto;
+}
+
+#dlg-role-maker > #rm-panel-basic,
+#dlg-role-maker > #rm-panel-logic {
+    flex: 1 1 auto;
+    min-height: 0; /* flex 子が中身より小さくなれるように (これが無いと下のボタンが画面外へ出る) */
+}
+
+#dlg-role-maker > #rm-panel-logic {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+}
+
+/* display:flex を当てた要素は hidden 属性が効かなくなるので明示的に打ち消す
+   (#start-screen[hidden] と同じ作法) */
+#dlg-role-maker > #rm-panel-basic[hidden],
+#dlg-role-maker > #rm-panel-logic[hidden] {
+    display: none;
+}
+
+/* 全画面では枠の装飾 (見出し・説明・ボタン列) を詰めて、その分を作業スペースの高さに回す */
+#dlg-role-maker > h3 {
+    font-size: 16px;
+    margin-bottom: 2px;
+}
+
+#dlg-role-maker > p.note {
+    margin: 2px 0;
+}
+
+#dlg-role-maker > menu {
+    margin-top: var(--space-xs);
+}
+
+#dlg-role-maker > #rm-load-section {
+    margin-top: var(--space-xs);
+}
+
+/* p.note の一般規則より後 & 同詳細度で置いて勝たせる (使い方の一言だけ少し離す) */
+#dlg-role-maker > p.rm-usage-note {
+    margin: var(--space-xs) 0 0;
 }
 
 .rm-tabs {
@@ -1776,9 +1837,19 @@ dialog#dlg-role-maker {
 
 #rm-panel-basic {
     max-width: 480px;
+    /* 全画面では横に間延びするので、フォームは中央寄せして縦スクロールさせる */
+    margin-inline: auto;
+    width: 100%;
+    overflow-y: auto;
 }
 
+/* 変数が増えてもワークスペースを食い潰さないよう頭打ちにする。
+   全画面では横幅も抑える (入力欄が画面端まで伸びると読みにくいため) */
 #rm-vars-section {
+    flex: 0 0 auto;
+    max-height: 22vh;
+    max-width: 640px;
+    overflow-y: auto;
     margin-bottom: var(--space-sm);
 }
 
@@ -1815,9 +1886,15 @@ dialog#dlg-role-maker {
     flex: 0 0 auto;
 }
 
+/* ロジックパネルの残り全部を占める作業スペース。高さは flex 任せ (固定値を戻さないこと —
+   固定にすると全画面にしても以前と同じ小さな箱に戻る)。コンテナ寸法が変わったら
+   role-maker.ts の ResizeObserver が Blockly.svgResize で追随させる。 */
 .rm-blockly-container {
     width: 100%;
-    height: min(58vh, 480px);
+    /* basis 0: 高さを「余りの分配」だけで決める。auto にすると中の SVG が伸びる →
+       コンテナの基準サイズも伸びる、の相互参照になり ResizeObserver ループを誘発する */
+    flex: 1 1 0%;
+    min-height: 180px;
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     background: var(--bg-2);
@@ -1836,6 +1913,10 @@ dialog#dlg-role-maker {
 }
 
 .rm-lint-footer {
+    /* 警告が何本出てもワークスペースを潰さないよう頭打ち + 自前スクロール */
+    flex: 0 0 auto;
+    max-height: 22vh;
+    overflow-y: auto;
     margin-top: var(--space-sm);
     padding: var(--space-sm);
     border-left: 3px solid var(--warn);
