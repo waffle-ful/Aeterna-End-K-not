@@ -18,7 +18,15 @@
 
 import * as Blockly from "blockly/core";
 import "blockly/blocks"; // math_number/logic_boolean 等の標準ブロックを Blockly.Blocks へ登録する副作用 import
+import * as jaMsg from "blockly/msg/ja";
 import { LOGIC_WHEN_VALUES, type LogicWhen } from "../roledef";
+
+// 標準ブロック (logic_boolean 等) はラベルを %{BKY_...} メッセージキーで持つため、ロケールを
+// ロードしないと生キーがそのまま表示される。カスタムブロックは全て日本語直書きなので影響しない。
+Blockly.setLocale(jaMsg as unknown as { [key: string]: string });
+// 公式 ja の「真/偽」は他ブロックのひらがな文言 (「じぶんが死んだとき」等) から浮くため上書き
+Blockly.Msg["LOGIC_BOOLEAN_TRUE"] = "ほんとう";
+Blockly.Msg["LOGIC_BOOLEAN_FALSE"] = "うそ";
 
 // カテゴリ標準色 (0〜360 の HSV 色相)
 const HUE_EVENT = 45; // イベント = 黄
