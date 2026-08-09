@@ -1823,6 +1823,13 @@ dialog#dlg-role-maker {
     background: var(--bg-2);
 }
 
+/* Blockly のカテゴリ欄はデフォルトの明灰背景のままページの白文字を継承してラベルが読めなくなる
+   ため、エディタのダークテーマへ明示的に寄せる (ワークスペース側は Blockly 標準のまま) */
+.rm-blockly-container .blocklyToolboxDiv {
+    background-color: var(--bg-2);
+    color: var(--text-primary);
+}
+
 #rm-logic-notice.rm-status-error,
 #rm-logic-validity.rm-status-error {
     color: var(--danger);
