@@ -182,7 +182,9 @@ export class MapRenderer {
     async init(host: HTMLElement): Promise<void> {
         await this.app.init({
             resizeTo: host,
-            background: "#101014",
+            // 湯屋の暗色に合わせる (style.css の --bg-0/--bg-3 と同系)。
+            // PIXI は CSS 変数を読めないので、ここだけ実値で持つ。
+            background: "#0C1317",
             antialias: true,
             resolution: Math.min(globalThis.devicePixelRatio || 1, 2),
             autoDensity: true,
@@ -190,7 +192,7 @@ export class MapRenderer {
         host.appendChild(this.app.canvas);
         this.app.canvas.style.cursor = "crosshair";
         this.app.stage.addChild(this.world);
-        this.hover.rect(0, 0, CELL, CELL).stroke({ width: 2, color: 0xffe066, alpha: 0.9 });
+        this.hover.rect(0, 0, CELL, CELL).stroke({ width: 2, color: 0xe9a648, alpha: 0.9 });
         this.hover.visible = false;
         this.rectPreview.visible = false;
     }
@@ -568,7 +570,7 @@ export class MapRenderer {
         if (!doc || !isV3Doc(doc) || !doc.shadow || doc.shadow.lines.length === 0) return;
         const alpha = this.shadowModeOn ? 0.9 : 0.35;
         const width = this.shadowModeOn ? 2.5 : 1.5;
-        this.shadowLayer.setStrokeStyle({ width, color: 0x00e5ff, alpha });
+        this.shadowLayer.setStrokeStyle({ width, color: 0x8fc2d2, alpha });
         for (const line of doc.shadow.lines) {
             if (line.length < 4) continue;
             this.shadowLayer.moveTo(line[0] * CELL, line[1] * CELL);
@@ -588,11 +590,11 @@ export class MapRenderer {
      */
     setShadowPreview(sx: number, sy: number, ex: number, ey: number): void {
         this.shadowPreview.clear();
-        this.shadowPreview.setStrokeStyle({ width: 2.5, color: 0x00e5ff, alpha: 0.75 });
+        this.shadowPreview.setStrokeStyle({ width: 2.5, color: 0x8fc2d2, alpha: 0.75 });
         // 始点と終点に小丸を描く
-        this.shadowPreview.circle(sx * CELL, sy * CELL, 4).fill({ color: 0x00e5ff, alpha: 0.8 });
+        this.shadowPreview.circle(sx * CELL, sy * CELL, 4).fill({ color: 0x8fc2d2, alpha: 0.8 });
         this.shadowPreview.moveTo(sx * CELL, sy * CELL).lineTo(ex * CELL, ey * CELL).stroke();
-        this.shadowPreview.circle(ex * CELL, ey * CELL, 4).fill({ color: 0x00e5ff, alpha: 0.8 });
+        this.shadowPreview.circle(ex * CELL, ey * CELL, 4).fill({ color: 0x8fc2d2, alpha: 0.8 });
     }
 
     clearShadowPreview(): void {

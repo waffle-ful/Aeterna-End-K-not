@@ -15,6 +15,7 @@
     "tauri:build": "tauri build"
   },
   "dependencies": {
+    "@fontsource/cormorant-garamond": "^5.3.0",
     "@tauri-apps/api": "^2.11.0",
     "@tauri-apps/plugin-fs": "^2.5.1",
     "@three.ez/instanced-mesh": "^0.3.15",

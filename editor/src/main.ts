@@ -2,6 +2,10 @@
 // v1 (Backrooms チップ) と v3 (カスタムタイルセット + 4 レイヤー) の両モードを扱う
 // ランタイム doc は MapDoc (ekm:1) | MapDocV3 (ekm:3) のみ — v2 は validateEkmapAny で自動昇格
 
+// 見出し用の明朝 (ラテン)。和文は OS の游明朝/ヒラギノ明朝にフォールバックするので
+// 日本語フォントは埋め込まない (PWA のサイズが数 MB 増えてしまう)。
+import "@fontsource/cormorant-garamond/latin-300.css";
+import "@fontsource/cormorant-garamond/latin-400.css";
 import "./style.css";
 import {
     AUTHOR_MAX,
@@ -335,9 +339,11 @@ function renderStartTemplates(): void {
         const card = document.createElement("button");
         card.className = "start-tpl-card";
         card.innerHTML = `
-            <span class="start-tpl-emoji">${t.emoji}</span>
-            <span class="start-tpl-name">${t.name}</span>
-            <span class="start-tpl-desc">${t.description}</span>
+            <span class="tpl-plan">${t.plan}</span>
+            <span class="tpl-body">
+                <span class="start-tpl-name">${t.name}</span>
+                <span class="start-tpl-desc">${t.description}</span>
+            </span>
         `;
         card.addEventListener("click", () => void loadTemplate(t));
         container.appendChild(card);
@@ -4444,6 +4450,13 @@ function wireUi(): void {
     // スタート画面ボタン配線
     $("btn-home").addEventListener("click", () => showStartScreen());
     $("btn-help").addEventListener("click", () => startCoach());
+
+    // ⋯ メニューは popover="auto" なので外側クリックでは閉じるが、
+    // 中のボタンを押しただけでは開いたままになる。押したら畳む。
+    const moreMenu = $("more-menu") as HTMLElement & { hidePopover?: () => void };
+    for (const b of moreMenu.querySelectorAll("button")) {
+        b.addEventListener("click", () => moreMenu.hidePopover?.());
+    }
 
     // スタート画面内ボタン
     $("start-new").addEventListener("click", () => {

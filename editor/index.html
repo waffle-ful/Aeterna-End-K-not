@@ -8,33 +8,28 @@
   </head>
   <body>
     <header>
-      <span class="brand">EKMap</span>
+      <span class="brand">EKMAP</span>
       <input id="map-name" placeholder="マップ名 (1〜64 文字)" maxlength="64" autocomplete="off" />
       <input id="map-author" placeholder="作者" maxlength="32" autocomplete="off" />
-      <!-- チップの大きさ: v3 マップのみ表示 (hidden は main.ts が制御) -->
-      <div id="tile-scale-wrap" class="tile-scale-wrap" hidden
-           title="小さくするとマップが密になります(ゲーム内のみ・編集画面の見た目は変わりません)">
-        <label for="tile-scale" class="tile-scale-label">ゲーム中のチップの大きさ</label>
-        <input type="range" id="tile-scale" min="0.5" max="1.0" step="0.05"
-               aria-label="チップの大きさ (0.5〜1.0)" />
-        <span id="tile-scale-val" class="tile-scale-val">1.00x</span>
-      </div>
       <div class="actions">
-        <button id="btn-home" title="スタート画面を開く">🏠</button>
-        <button id="btn-help" title="使い方ガイドをもう一度見る">?</button>
         <button id="btn-new">新規</button>
         <button id="btn-import" title="保存したマップの一覧を開きます">開く</button>
         <button id="btn-export" title="マップを書庫に保存します (Ctrl+S)。OneDrive でも失敗しません">保存</button>
+        <button id="btn-play" class="primary" title="マップを EKMaps フォルダへ保存してゲームに反映します">▶ ゲームで試す</button>
+        <button id="btn-role-maker" title="役職を作ってコード化します (マップとは別の独立機能)">役職メーカー</button>
+        <!-- 使う頻度の低い操作はここに畳んでヘッダを 1 段に収める。
+             中身の id は据え置きなので main.ts の配線はそのまま効く。 -->
+        <button id="btn-more" popovertarget="more-menu" title="その他の操作">⋯</button>
+      </div>
+      <div id="more-menu" popover>
         <button id="btn-export-file" title="マップを .ekmap.json ファイルとしてダウンロードします">ファイル書出</button>
         <button id="btn-copy-code">コードコピー</button>
         <button id="btn-load-code">コード読込</button>
-        <button id="btn-play" class="primary" title="マップを EKMaps フォルダへ保存してゲームに反映します">▶ ゲームで試す</button>
-        <button id="btn-role-maker" title="役職を作ってコード化します (マップとは別の独立機能)">役職メーカー</button>
+        <hr />
+        <button id="btn-home" title="スタート画面を開く">スタート画面</button>
+        <button id="btn-help" title="使い方ガイドをもう一度見る">使い方ガイド</button>
       </div>
     </header>
-
-    <!-- ツール説明リボン: ヘッダ直下に常駐。今選んでいるツールを一言で説明 -->
-    <div id="tool-ribbon" aria-live="polite"></div>
 
     <!-- 3ペインシェルの土台: 左レール | ビューポート | 右インスペクタ。
          今は折りたたみ式の足場 (素DOM)。後で Svelte island をこの枠に差し込む。 -->
@@ -83,6 +78,17 @@
             <dt>スポーン</dt><dd id="info-spawn">—</dd>
             <dt>検証</dt><dd id="info-valid">—</dd>
           </dl>
+          <!-- チップの大きさはマップの性質であって操作ではないので、情報パネルに置く。
+               v3 マップのみ表示 (hidden は main.ts が制御) -->
+          <div id="tile-scale-wrap" class="tile-scale-wrap" hidden
+               title="小さくするとマップが密になります(ゲーム内のみ・編集画面の見た目は変わりません)">
+            <label for="tile-scale" class="tile-scale-label">ゲーム中のチップの大きさ</label>
+            <div class="tile-scale-row">
+              <input type="range" id="tile-scale" min="0.5" max="1.0" step="0.05"
+                     aria-label="チップの大きさ (0.5〜1.0)" />
+              <span id="tile-scale-val" class="tile-scale-val">1.00x</span>
+            </div>
+          </div>
         </section>
         <section class="inspector-section">
           <h3 class="inspector-h">レイヤー</h3>
@@ -190,6 +196,9 @@
         <button id="btn-redo" title="やり直し (Ctrl+Y)" disabled>↷</button>
         <button id="btn-overlay" title="通行○×オーバーレイ">○×</button>
         <button id="btn-fit" title="全体表示">⤢</button>
+        <!-- ツール説明。専用の帯を1本立てるほどの情報量ではないので操作行に同居させる。
+             aria-live はツール切替の読み上げに必要なので必ず一緒に運ぶ。 -->
+        <span id="tool-ribbon" aria-live="polite"></span>
         <span id="status"></span>
       </div>
     </footer>
@@ -569,21 +578,65 @@
     </dialog>
 
     <!-- スタート画面 (初回訪問時 / btn-home で表示) -->
+    <!-- スタート画面。夜の露天風呂に見立てた湯屋 — 下 1/4 が湯面で、行灯の灯が映る。
+         .steam / .onsen-water / .drop はすべて装飾 (aria-hidden)。 -->
     <div id="start-screen" hidden>
+      <div class="steam steam-1" aria-hidden="true"></div>
+      <div class="steam steam-2" aria-hidden="true"></div>
+      <div class="steam steam-3" aria-hidden="true"></div>
+
+      <div class="onsen-water" aria-hidden="true">
+        <div class="water-glow"></div>
+        <div class="water-ripples-far"></div>
+        <div class="water-ripples"></div>
+        <div class="drop drop-1"></div>
+        <div class="drop drop-2"></div>
+        <div class="drop drop-3"></div>
+      </div>
+      <div class="water-edge" aria-hidden="true"></div>
+
       <div id="start-inner">
-        <h1 id="start-title">EKMap マップエディタ</h1>
-        <p id="start-sub">Among Us のマップと役職をノーコードで作ろう</p>
-        <div id="start-main-btns">
-          <button id="start-new" class="start-main-btn primary">✨ 新規作成</button>
-          <button id="start-library" class="start-main-btn">📂 書庫を開く</button>
+        <h1 id="start-title" class="rise-in">
+          <span class="title-latin">EKMAP</span>
+          <span class="title-rule" aria-hidden="true"><i></i></span>
+          <span class="title-ja">マップエディタ</span>
+        </h1>
+        <p id="start-sub" class="rise-in">コードを書かずに、Among Us のマップと役職をつくる</p>
+        <div id="start-main-btns" class="rise-in">
+          <button id="start-new" class="start-main-btn primary">
+            <svg viewBox="0 0 32 32" aria-hidden="true">
+              <rect x="5" y="5" width="22" height="22"/>
+              <path d="M5 12.3h22M5 19.7h22M12.3 5v22M19.7 5v22"/>
+            </svg>
+            新規作成
+          </button>
+          <button id="start-library" class="start-main-btn">
+            <svg viewBox="0 0 32 32" aria-hidden="true">
+              <path d="M4 9h9l2.4 3H28v14H4z"/>
+              <path d="M4 9V6.5h7.4L13 9"/>
+            </svg>
+            書庫を開く
+          </button>
           <!-- 役職メーカーはマップとは無関係な独立機能。マップを作らなくても使えるよう
                スタート画面のトップレベル項目として置く (配線は logic/role-maker.ts が自己完結) -->
-          <button id="start-role-maker" class="start-main-btn">🎭 役職メーカー</button>
-          <button id="start-minigame" class="start-main-btn">🎮 ミニゲーム</button>
+          <button id="start-role-maker" class="start-main-btn">
+            <svg viewBox="0 0 32 32" aria-hidden="true">
+              <path d="M11 8.5c0-1.7 1.6-3 4-3s4 1.3 4 3v3.3h2.6c1.9 0 3.4 1.6 3.4 3.5v6c0 1.9-1.5 3.5-3.4 3.5H9.4C7.5 24.8 6 23.2 6 21.3v-6c0-1.9 1.5-3.5 3.4-3.5H11z"/>
+              <path d="M14.5 15.5h5.6"/>
+            </svg>
+            役職メーカー
+          </button>
+          <button id="start-minigame" class="start-main-btn">
+            <svg viewBox="0 0 32 32" aria-hidden="true">
+              <rect x="5" y="8" width="22" height="16" rx="4"/>
+              <path d="M9.6 13.4v5.2M7 16h5.2M20.5 15.2h.01M23.6 18h.01"/>
+            </svg>
+            ミニゲーム
+          </button>
         </div>
-        <h2 id="start-tpl-heading">テンプレートから始める</h2>
-        <div id="start-templates"></div>
-        <button id="start-skip">✕ 何も選ばず始める</button>
+        <h2 id="start-tpl-heading" class="rise-in">見本から始める</h2>
+        <div id="start-templates" class="rise-in"></div>
+        <button id="start-skip" class="rise-in">何も選ばずに始める</button>
       </div>
     </div>
 
