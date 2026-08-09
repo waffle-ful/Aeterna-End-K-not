@@ -5,6 +5,7 @@ using System.Linq;
 using AmongUs.GameOptions;
 using EndKnot.Gamemodes;
 using EndKnot.Modules;
+using EndKnot.Modules.Ekm;
 using EndKnot.Roles;
 using HarmonyLib;
 using Hazel;
@@ -1332,6 +1333,10 @@ internal static class MeetingHudUpdatePatch
         {
             MeetingStuckProbe.Update(__instance);
             MeetingSilentProbe.Update(__instance);
+
+            // EKR logic: 会議中は RoleBase.OnFixedUpdate が止まるため、fiber はここから進める
+            // (on_meeting_start の notify [チャット私信] を会議中に届かせる — docs/ekr-logic-spec.md §3)。
+            if (AmongUsClient.Instance.AmHost) EkrManager.PumpMeetingFibers();
 
             // Meeting Skip with vote counting on keystroke (F6)
             if (AmongUsClient.Instance.AmHost && Input.GetKeyDown(KeyCode.F6)) __instance.CheckForEndVoting();

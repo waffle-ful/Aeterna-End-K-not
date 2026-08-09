@@ -1038,6 +1038,11 @@ internal static class CustomRolesHelper
 
             if (Options.UsePhantomBasis.GetBool() && (!role.IsNK() || Options.UsePhantomBasisForNKs.GetBool()) && role.SimpleAbilityTrigger()) return false;
 
+            // EKR (ノーコード役職): OnPet の override は中間基底 EkmTemplateRole が宣言しているため、下の
+            // 「直接の型が OnPet を宣言しているか」判定では常に false になる (DeclaringType == EkmTemplateRole)。
+            // 束縛中の役職コードが on_pet ルールを持つときだけペット能力扱いにする (HUD ボタン活性の要)。
+            if (EkrManager.IsSlot(role)) return EkrManager.HasOnPetLogic(role);
+
             Type type = role.GetRoleClass().GetType();
             return type.GetMethod("OnPet")?.DeclaringType == type;
         }
@@ -1147,7 +1152,13 @@ internal static class CustomRolesHelper
                 CustomRoles.BedWarsPlayer or
                 CustomRoles.Revenant or
                 CustomRoles.Akazukin or // 捕食中は死んでいるが OnFixedUpdate で復活予約と猶予切れを回している
-                CustomRoles.Weatherman;
+                CustomRoles.Weatherman or
+                // EKR logic (docs/ekr-logic-spec.md §2): on_death 起点の fiber は死後も実行を続ける契約
+                // (「死んだら爆発」演出)。EkrManager.Pump() が毎 tick 呼ばれ続けないと wait() の解決が
+                // DontUpdateDeadPlayers (既定 ON) の間引き間隔 (60〜150 tick ≈ 1〜3秒) ぶん遅延する。
+                // EKR は Utils.AddAbilityCD に意図的に未登録 (HasAbilityCD() 側の抜け道も使わない) ため
+                // ここで明示的に除外する。
+                (>= CustomRoles.EkmCustomRole1 and <= CustomRoles.EkmCustomRole10);
         }
 
         public bool IsTaskBasedCrewmate()

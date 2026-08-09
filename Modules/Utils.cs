@@ -15,6 +15,7 @@ using AmongUs.InnerNet.GameDataMessages;
 using BepInEx;
 using EndKnot.Gamemodes;
 using EndKnot.Modules;
+using EndKnot.Modules.Ekm;
 using EndKnot.Patches;
 using EndKnot.Roles;
 using HarmonyLib;
@@ -4763,6 +4764,11 @@ public static class Utils
             }
 
             if (!target) return;
+
+            // EKR logic (docs/ekr-logic-spec.md §2): on_death (自分が死んだとき・ctx=キルした人)。
+            // disconnect 経由の死亡は target の PlayerControl がこの後ろで破棄されうるため対象外にする
+            // (Stained.OnDeath 等、既存の同種フックと同じ !disconnect ガード)。
+            if (!disconnect) EkrManager.FireDeath(target, targetRealKiller);
 
             if (!disconnect && !onMeeting) Randomizer.OnAnyoneDeath(target);
             if (Executioner.Target.ContainsValue(target.PlayerId)) Executioner.ChangeRoleByTarget(target);

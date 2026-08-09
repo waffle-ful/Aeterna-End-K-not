@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 import { b64urlDecode } from "../src/base64url";
 import { ROLECODE_PREFIX, decodeRoleCode, encodeRoleCode } from "../src/rolecode";
-import { defaultEkrDefinition } from "../src/roledef";
+import { defaultEkrDefinition, validateEkrDefinition } from "../src/roledef";
 
 // このオブジェクトと下の FIXED_CODE は組で凍結されたフィクスチャ (レグレッション用の一方向ロック)。
 // FIXED_CODE は「今日の TS 実装」で1回だけ生成したバイト列を literal として埋め込んだもの —
@@ -83,5 +83,76 @@ describe("役職コード (EKR1., 計画正典: docs/ekn-api-plan.md)", () => {
         const flg = payload[1];
         const looksLikeZlibHeader = (cmf & 0x0f) === 8 && ((cmf << 8) | flg) % 31 === 0;
         expect(looksLikeZlibHeader).toBe(false);
+    });
+});
+
+// rolecode.ts (codec) は中身を一切解釈しないので、logic 付きの役職コードでも変更なく通るはず —
+// ただし「本当に通しで壊れないか」「blockly (不透明フィールド) が生き残るか」は明示的に確認しておく
+// (role-maker.ts 実装タスク item 7)。
+describe("logic 込みのラウンドトリップ (R1・docs/ekr-logic-spec.md)", () => {
+    function definitionWithLogic(): Record<string, unknown> {
+        const base = defaultEkrDefinition();
+        return {
+            ...base,
+            name: "ロジック付きテスト役職",
+            logic: {
+                version: 1,
+                variables: [{ name: "カウント", init: 0 }],
+                rules: [
+                    {
+                        when: "on_second",
+                        do: [
+                            { op: "var_add", name: "カウント", delta: { e: "lit", v: 1 } },
+                            {
+                                op: "if",
+                                cond: { e: "op", kind: "gt", a: { e: "var", name: "カウント" }, b: { e: "lit", v: 5 } },
+                                then: [{ op: "notify", text: "がんばって！", seconds: 3 }],
+                            },
+                        ],
+                    },
+                ],
+                // Blockly serialization は不透明データ (C# は一切読まない) — ネストしたオブジェクト/
+                // 配列/数値/文字列が混在する現実的な形を模して、深い構造でも壊れず生き残るか確認する。
+                blockly: {
+                    blocks: {
+                        languageVersion: 0,
+                        blocks: [
+                            {
+                                type: "ekr_when_on_second",
+                                id: "abc123",
+                                x: 20,
+                                y: 40,
+                                next: { block: { type: "ekr_do_var_add", id: "def456", fields: { VAR: "カウント" } } },
+                            },
+                        ],
+                    },
+                },
+            },
+        };
+    }
+
+    it("def → encode → decode → parse → validateEkrDefinition が完全に一致する (blockly フィールド込み)", () => {
+        const validated = validateEkrDefinition(definitionWithLogic());
+        expect(validated.ok).toBe(true);
+        if (!validated.ok) return;
+
+        const code = encodeRoleCode(JSON.stringify(validated.def));
+        expect(code.startsWith(ROLECODE_PREFIX)).toBe(true);
+
+        const roundTripped = validateEkrDefinition(JSON.parse(decodeRoleCode(code)));
+        expect(roundTripped.ok).toBe(true);
+        if (!roundTripped.ok) return;
+
+        expect(roundTripped.def).toEqual(validated.def);
+        // blockly (不透明フィールド) が構造ごと生き残っていることを明示的に確認する
+        expect(roundTripped.def.logic?.blockly).toEqual(validated.def.logic?.blockly);
+    });
+
+    it("logic 無しのコードは従来どおり def.logic が付かない (R0 互換)", () => {
+        const def = defaultEkrDefinition();
+        def.name = "ロジック無し役職";
+        const back = validateEkrDefinition(JSON.parse(decodeRoleCode(encodeRoleCode(JSON.stringify(def)))));
+        expect(back.ok).toBe(true);
+        if (back.ok) expect(back.def.logic).toBeUndefined();
     });
 });

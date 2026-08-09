@@ -106,3 +106,90 @@ test.describe("役職メーカー (EKN R0, フォームのみ)", () => {
         await expect(page.locator("#dlg-role-maker")).toBeVisible();
     });
 });
+
+test.describe("役職メーカー (EKN R1, ブロックロジック)", () => {
+    test("ロジックタブで Blockly が起動し、モーダル内でもブロック配置とドロップダウン操作ができる", async ({ page }) => {
+        const cap = capture(page);
+        await page.goto("/");
+        await dismissStartScreen(page);
+        await page.evaluate(() => localStorage.removeItem("ekm.roleMaker"));
+
+        await page.locator("#btn-role-maker").click();
+        await expect(page.locator("#dlg-role-maker")).toBeVisible();
+
+        await page.locator('#rm-tabs .rm-tab[data-rm-tab="logic"]').click();
+        await expect(page.locator("#rm-panel-logic")).toBeVisible();
+
+        // Blockly の dynamic import + inject が終わるまで待つ (Vite dev server の初回コンパイルは
+        // 数百モジュール分かかることがあるため、他の待ちより長めに取る)
+        const blocklySvg = page.locator("#rm-blockly-container svg.blocklySvg");
+        await expect(blocklySvg).toBeVisible({ timeout: 30000 });
+
+        // 変数を1個追加 (自前の軽量ドロップダウン UI の動作確認を兼ねる)
+        await page.locator("#rm-vars-add").click();
+        await expect(page.locator(".rm-var-row")).toHaveCount(1);
+
+        // ツールボックスの「変数」カテゴリを開く (toolbox 内に限定してクリック — ページ内の
+        // 他の「変数」テキスト [変数リストの見出し] と誤ってマッチしないようスコープする)。
+        // 行 (blocklyTreeRow) をクリックする — 内側の blocklyTreeLabel span だけを狙うと
+        // 行の当たり判定に intercept されて Playwright の actionability チェックに失敗する。
+        await page.locator(".blocklyToolboxDiv .blocklyTreeRow", { hasText: "変数" }).click();
+        const flyoutBlock = page.locator(".blocklyFlyout .blocklyDraggable").first();
+        await expect(flyoutBlock).toBeVisible({ timeout: 5000 });
+
+        const srcBox = await flyoutBlock.boundingBox();
+        const canvasBox = await blocklySvg.boundingBox();
+        expect(srcBox).not.toBeNull();
+        expect(canvasBox).not.toBeNull();
+        if (!srcBox || !canvasBox) return;
+
+        // Blockly は独自ポインタ実装 (native HTML5 drag-and-drop ではない) なので mouse.* で行う
+        await page.mouse.move(srcBox.x + srcBox.width / 2, srcBox.y + srcBox.height / 2);
+        await page.mouse.down();
+        await page.mouse.move(canvasBox.x + canvasBox.width / 2, canvasBox.y + canvasBox.height / 2, { steps: 10 });
+        await page.mouse.up();
+
+        // ワークスペース上 (フライアウト外) にブロックが配置されたことを確認
+        const placedBlock = page.locator("#rm-blockly-container .blocklyBlockCanvas .blocklyDraggable").first();
+        await expect(placedBlock).toBeVisible({ timeout: 5000 });
+
+        // ドロップダウンフィールドをクリック → メニューが実際に操作できることを検証する。
+        // setParentContainer が効いていない (= WidgetDiv/DropDownDiv が document.body 直下のまま)
+        // だと、showModal() の top layer 昇格により dialog の backdrop の下に隠れて
+        // Playwright の actionability チェックに失敗しタイムアウト/例外になる。
+        const dropdownField = placedBlock.locator(".blocklyDropdownText").first();
+        await dropdownField.click();
+
+        const menuItem = page.locator(".blocklyMenuItem").first();
+        await expect(menuItem).toBeVisible({ timeout: 5000 });
+        await menuItem.click();
+
+        console.log("=== page console ===\n" + (cap.console.join("\n") || "(なし)"));
+        console.log("=== page errors ===\n" + (cap.errors.join("\n") || "(なし)"));
+        expect(cap.errors, "未捕捉の例外あり").toEqual([]);
+    });
+
+    test("ロジック無しで組んだ場合は従来どおり logic キー無しのコードが出力される (R0 互換)", async ({ page }) => {
+        await page.goto("/");
+        await dismissStartScreen(page);
+        await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+        await page.evaluate(() => localStorage.removeItem("ekm.roleMaker"));
+
+        await page.locator("#btn-role-maker").click();
+        await page.locator("#rm-name").fill("ロジック無し役職");
+        // ロジックタブを開くだけ (何もブロックを置かない) でも R0 互換を維持できるか確認する
+        await page.locator('#rm-tabs .rm-tab[data-rm-tab="logic"]').click();
+        await expect(page.locator("#rm-blockly-container svg.blocklySvg")).toBeVisible({ timeout: 30000 });
+
+        await page.locator("#rm-copy").click();
+        await expect(page.locator("#rm-status")).toContainText("コピーしました");
+        const code = await page.evaluate(() => navigator.clipboard.readText());
+
+        const jsonText = await page.evaluate(async (c: string) => {
+            const mod = await import("/src/rolecode.ts");
+            return mod.decodeRoleCode(c);
+        }, code);
+        const parsed = JSON.parse(jsonText) as Record<string, unknown>;
+        expect("logic" in parsed).toBe(false);
+    });
+});

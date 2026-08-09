@@ -46,8 +46,10 @@ public abstract class EkmTemplateRole : RoleBase
 
     public override void SetKillCooldown(byte id)
     {
+        // R1: set_kill_cooldown opcode によるランタイム上書きを優先する (無ければ従来どおり役職コードの値)。
+        float? runtimeOverride = EkrManager.GetKillCooldownOverride(id);
         EkrDefinition def = EkrManager.GetDefinition(Slot);
-        Main.AllPlayerKillCooldown[id] = def is { CanKill: true } ? def.KillCooldown : Options.AdjustedDefaultKillCooldown;
+        Main.AllPlayerKillCooldown[id] = runtimeOverride ?? (def is { CanKill: true } ? def.KillCooldown : Options.AdjustedDefaultKillCooldown);
     }
 
     public override bool CanUseKillButton(PlayerControl pc)
@@ -72,5 +74,48 @@ public abstract class EkmTemplateRole : RoleBase
             opt.SetVision(false);
             opt.SetFloat(FloatOptionNames.CrewLightMod, def.VisionMultiplier);
         }
+    }
+
+    // ── R1 (docs/ekr-logic-spec.md): イベントフック→発行のみの薄い配線 ──────────
+    // per-holder 状態は一切持たず、すべて EkrManager (playerId キー) へ委譲する。
+
+    public override void OnPet(PlayerControl pc)
+    {
+        EkrDefinition def = EkrManager.GetDefinition(Slot);
+
+        if (def?.ParsedLogic == null)
+        {
+            base.OnPet(pc); // logic 無し (R0 のみの役職) は従来どおりフレーバーテキスト
+            return;
+        }
+
+        EkrManager.FirePet(Slot, pc);
+    }
+
+    public override void OnMurder(PlayerControl killer, PlayerControl target)
+    {
+        EkrManager.FireKill(Slot, killer, target);
+    }
+
+    public override void OnEnterVent(PlayerControl pc, Vent vent)
+    {
+        EkrManager.FireVentEnter(Slot, pc);
+    }
+
+    public override void OnTaskComplete(PlayerControl pc, int completedTaskCount, int totalTaskCount)
+    {
+        EkrManager.FireTaskComplete(Slot, pc);
+    }
+
+    public override void OnFixedUpdate(PlayerControl pc)
+    {
+        EkrManager.Pump(Slot, pc);
+    }
+
+    // on_meeting_end (会議明け・タスク再開時)。このメソッド自体は「保持者の人数ぶん」呼ばれる共有
+    // シングルトン呼び出しなので、重複排除は EkrManager.FireMeetingEndForSlot 側 (会議番号ベース) で行う。
+    public override void AfterMeetingTasks()
+    {
+        EkrManager.FireMeetingEndForSlot(Slot);
     }
 }
