@@ -225,7 +225,9 @@ public class Balancer : RoleBase
 
             byte redirectTo = rng.Next(2) == 0 ? MeetingTarget1 : MeetingTarget2;
             int oldCount = votingData.GetValueOrDefault(state.VotedForId, 0);
-            if (oldCount > 0 && state.VotedForId != 253 && state.VotedForId != byte.MaxValue)
+            // スキップ票 (253) は CustomCalculateVotes の算入対象なので、ここで減算しないと
+            // 移動先だけ +1 されて総票数が実投票者数を超えて増殖する。除外してよいのは非算入の値だけ。
+            if (oldCount > 0 && state.VotedForId != byte.MaxValue)
                 votingData[state.VotedForId] = oldCount - 1;
             votingData[redirectTo] = votingData.GetValueOrDefault(redirectTo, 0) + 1;
             state.VotedForId = redirectTo;

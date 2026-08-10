@@ -320,7 +320,16 @@ public static class YouTubeChatPoster
             // 空本文の 404 は「認可アカウントに YouTube チャンネルが無い / ブランドアカウント選択ミス」で
             // 起きうる。切り分けのため、そのアカウントのチャンネルを一度だけ問い合わせて記録する。
             if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                // activeLiveChatId は待機所→本配信でローテーションする。キャッシュを抱えたままだと
+                // 以後の全投稿がプロセス再起動まで 404 で固定されるため、ここで捨てて次回に引き直させる。
+                // (下のチャンネル無し 404 でも捨てるので、その場合は毎回引き直しになる — 投稿自体は
+                //  どのみち失敗し続けるので実害は診断ログの追加往復だけ。)
+                cachedLiveChatId = null;
+                cachedLiveChatIdVideoId = null;
                 await LogAuthorizedChannelAsync(token);
+            }
+
             return false;
         }
 
