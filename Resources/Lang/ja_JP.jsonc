@@ -12941,6 +12941,7 @@
   "DummySpawnerDummyCount": "会議ごとのダミー数",
   "DummySpawnerKillRange": "ダミーのキル範囲",
   "DummyCorpseReportBlocked": "<#ffff00>これは偽の死体です。通報できません</color>",
+  "StaleCorpseReportBlocked": "<#ffff00>これはロビーの残り死体です。通報できません</color>",
   "Decrescendo": "デクレッシェンド",
   "DecrescendoInfo": "キルごとに弱体化して対戦相手を欺く",
   "DecrescendoInfoLong": "(<#ff1919>インポスター</color>):\\n<size=80%>キルごとに徐々に弱体化して対戦相手を欺く。\\n_____________________________________\\n難易度：★★★☆☆\\n\\n[スキル]\\n・<b><color=#ff1919>弱体化</color></b>\\n設定キル数に達するとキルクールダウンが乗算で増加し、視界縮小やベント不可になる場合もある。弱くなることで疑惑を逃れる独特の戦法。\\n\\n<i>弱さを演じる者が、最後に笑う。</i></size>",
