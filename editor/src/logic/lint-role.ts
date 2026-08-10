@@ -11,10 +11,13 @@
 // v1.1 (2026-08-09): L9/L10 を追加 (dummy_spawn 新設に伴う会議明けドロップ窓/3秒バケットの輸出)。
 // L1 の検知対象に dummy_spawn を追加。L2 は cno_spawn のみのまま (spec §6 表は dummy_spawn を
 // 対象に含めていない — slot を共有していても L2 の対象を広げるのは契約外の拡張になる)。
+// v1.2 (2026-08-10): L11/L12 を追加 (teleport_other/portal_place/on_cno_touch 新設の輸出)。
+// L9 の対象 op を spec §6 表 (2026-08-10 モッド側の兄弟漏れ修正に合わせた4種: cno_spawn/
+// cno_show/dummy_spawn/portal_place) に合わせて拡大する (旧実装は dummy_spawn のみだった)。
 
 import type { LogicNode, LogicRule, RoleLogic } from "../roledef";
 
-export type LintRuleId = "L1" | "L2" | "L3" | "L4" | "L5" | "L6" | "L7" | "L8" | "L9" | "L10";
+export type LintRuleId = "L1" | "L2" | "L3" | "L4" | "L5" | "L6" | "L7" | "L8" | "L9" | "L10" | "L11" | "L12";
 
 export interface LintWarning {
     rule: LintRuleId;
@@ -72,17 +75,20 @@ function hasRapidConsecutiveOp(nodes: LogicNode[], op: "cno_spawn" | "dummy_spaw
     return violation;
 }
 
-// L9: L8/L10 とは起点が異なる — 「前の dummy_spawn」ではなく「ルール開始 (=会議終了の瞬間)」を
-// elapsed=0 とし、一度も 0 にリセットしない訪問順の累積 wait を追う。dummy_spawn に出会った時点で
-// まだ thresholdSeconds に届いていなければ違反 (spec §5 の「会議明けから10秒間はドロップ」の
-// 静的近似)。if 分岐は L7 と同じく合算 (forEachNode が then/else 両方を訪れるため、分岐の択一は
-// 見ない — 「wait, dummy_spawn」のような直列の前後関係だけを区別する)。
-function hasDummySpawnBeforeElapsed(nodes: LogicNode[], thresholdSeconds: number): boolean {
+// L9: L8/L10 とは起点が異なる — 「前の生成系 op」ではなく「ルール開始 (=会議終了の瞬間)」を
+// elapsed=0 とし、一度も 0 にリセットしない訪問順の累積 wait を追う。対象 op (L9_OPS) に出会った
+// 時点でまだ thresholdSeconds に届いていなければ違反 (spec §5 の「会議明けから10秒間はドロップ」の
+// 静的近似・対象は生成系4兄弟 cno_spawn/cno_show/dummy_spawn/portal_place)。if 分岐は L7 と同じく
+// 合算 (forEachNode が then/else 両方を訪れるため、分岐の択一は見ない — 「wait, dummy_spawn」の
+// ような直列の前後関係だけを区別する)。
+const L9_OPS: ReadonlySet<LogicNode["op"]> = new Set(["cno_spawn", "cno_show", "dummy_spawn", "portal_place"]);
+
+function hasGenerationOpBeforeElapsed(nodes: LogicNode[], ops: ReadonlySet<LogicNode["op"]>, thresholdSeconds: number): boolean {
     let elapsed = 0;
     let violation = false;
     forEachNode(nodes, (n) => {
         if (n.op === "wait") elapsed += n.seconds;
-        else if (n.op === "dummy_spawn" && elapsed < thresholdSeconds) violation = true;
+        else if (ops.has(n.op) && elapsed < thresholdSeconds) violation = true;
     });
     return violation;
 }
@@ -92,7 +98,7 @@ function makeWarning(rule: LintRuleId, ruleIndex: number, when: string, message:
 }
 
 /**
- * 検証済みの RoleLogic に対して spec §6 の 10 ルールを静的検査する。ブロックの組み方に対する
+ * 検証済みの RoleLogic に対して spec §6 の 12 ルール (v1.2 で L11/L12 追加) を静的検査する。ブロックの組み方に対する
  * ヒントであり、export 自体は妨げない (呼び出し元は結果を警告フッタに表示するだけ)。
  */
 export function lintRoleLogic(logic: RoleLogic): LintWarning[] {
@@ -143,14 +149,33 @@ export function lintRoleLogic(logic: RoleLogic): LintWarning[] {
                     "毎秒新しく始まるのに前のが終わらなくて、たまった分が他のイベントまで止めちゃうよ。長く待つのは「ゲームが始まったとき」などの1回きりのイベントにしよう。",
                 ));
             }
+            // L11 (v1.2): L3 (teleport) の兄弟 — teleport_other/portal_place も同じワープ予算を消費する。
+            if (hasOp(rule.do, "teleport_other") || hasOp(rule.do, "portal_place")) {
+                warnings.push(makeWarning(
+                    "L11", ruleIndex, rule.when,
+                    "「毎秒くりかえす」の中でワープ系の処理をしています。",
+                    "ワープ系は「ここぞ」で1回。毎秒だとワープ予算が切れて他の能力まで止まるよ。",
+                ));
+            }
         }
 
-        // L9 (v1.1): on_meeting_end 限定。会議明けから10秒間のドロップ窓 (spec §5) の静的近似。
-        if (rule.when === "on_meeting_end" && hasDummySpawnBeforeElapsed(rule.do, 10)) {
+        // L9 (v1.1 新設・v1.2 で対象拡大): on_meeting_end 限定。会議明けから10秒間のドロップ窓
+        // (spec §5) の静的近似。対象は生成系4兄弟 (cno_spawn/cno_show/dummy_spawn/portal_place)。
+        if (rule.when === "on_meeting_end" && hasGenerationOpBeforeElapsed(rule.do, L9_OPS, 10)) {
             warnings.push(makeWarning(
                 "L9", ruleIndex, rule.when,
-                "「会議が終わったとき」の中で、会議のあとすぐダミー人形を出そうとしています。",
-                "会議のあとすぐはダミーを出せないよ。先に「10.5 秒待つ」を入れよう。",
+                "「会議が終わったとき」の中で、会議のあとすぐオブジェクトを出そうとしています。",
+                "会議のあとすぐは出せないよ。先に「10.5 秒待つ」を入れよう。",
+            ));
+        }
+
+        // L12 (v1.2): on_cno_touch 限定。触れるたびに生成系 op を撃つ誤用の検知。
+        if (rule.when === "on_cno_touch"
+            && (hasOp(rule.do, "cno_spawn") || hasOp(rule.do, "dummy_spawn") || hasOp(rule.do, "cno_show") || hasOp(rule.do, "portal_place"))) {
+            warnings.push(makeWarning(
+                "L12", ruleIndex, rule.when,
+                "「オブジェクトにだれかが触れたとき」の中でオブジェクトを出したり切り替えたりしています。",
+                "触られるたびに出すのは出しすぎ。1秒に1個までしか出ないから、出すのは別のきっかけにしよう。",
             ));
         }
 

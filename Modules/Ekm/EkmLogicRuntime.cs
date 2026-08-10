@@ -25,6 +25,9 @@ public sealed class EkrRule
 {
     public string When;
     public List<EkrNode> Do;
+
+    // on_cno_touch (v1.2) 専用の必須フィールド (1..3)。他イベントでは常に 0 (未使用)。
+    public int Slot;
 }
 
 // op ごとの引数はフラットに全部持つ (spec §3 の「args ラッパー無し」に対応)。未使用フィールドは既定値のまま。
@@ -76,6 +79,9 @@ public sealed class EkrNode
 
     // corpse_spawn.color (v1.1) ("self" | "random")
     public string Color;
+
+    // portal_place.which (v1.2) ("a" | "b")
+    public string Which;
 }
 
 public sealed class EkrExpr
@@ -104,7 +110,8 @@ public sealed class EkrLogicDef
     private static readonly HashSet<string> KnownEvents =
     [
         "on_game_start", "on_pet", "on_kill", "on_death", "on_meeting_start",
-        "on_meeting_end", "on_task_complete", "on_vent_enter", "on_report", "on_second"
+        "on_meeting_end", "on_task_complete", "on_vent_enter", "on_report", "on_second",
+        "on_cno_touch" // v1.2 (2026-08-10)
     ];
 
     private static readonly HashSet<string> ControlOps = ["if", "wait", "stop", "var_set", "var_add"];
@@ -113,7 +120,8 @@ public sealed class EkrLogicDef
     [
         "notify", "teleport", "kill", "set_kill_cooldown", "speed",
         "cno_spawn", "cno_move", "cno_despawn", "cno_show",
-        "dummy_spawn", "corpse_spawn" // v1.1 (2026-08-09)
+        "dummy_spawn", "corpse_spawn", // v1.1 (2026-08-09)
+        "marker_save", "teleport_other", "portal_place" // v1.2 (2026-08-10)
     ];
 
     private static readonly HashSet<string> ExprKinds =
@@ -237,6 +245,25 @@ public sealed class EkrLogicDef
                 return false;
             }
 
+            // v1.2 spec §2: on_cno_touch は rule に必須フィールド slot (1..3) を持つ唯一のイベント。
+            // 他イベントに slot があれば reject、on_cno_touch に無くても reject。
+            int ruleSlot = 0;
+
+            if (when == "on_cno_touch")
+            {
+                if (!ruleEl.TryGetProperty("slot", out JsonElement ruleSlotEl) || ruleSlotEl.ValueKind != JsonValueKind.Number ||
+                    !ruleSlotEl.TryGetInt32(out ruleSlot) || ruleSlot is < 1 or > 3)
+                {
+                    error = "on_cno_touch の rule には slot (1〜3) が必要です";
+                    return false;
+                }
+            }
+            else if (ruleEl.TryGetProperty("slot", out _))
+            {
+                error = $"when=\"{when}\" の rule に slot は指定できません (on_cno_touch 専用です)";
+                return false;
+            }
+
             if (!ruleEl.TryGetProperty("do", out JsonElement doEl) || doEl.ValueKind != JsonValueKind.Array)
             {
                 error = "ロジックの rule に do がありません";
@@ -254,7 +281,7 @@ public sealed class EkrLogicDef
                 return false;
             }
 
-            parsed.Rules.Add(new EkrRule { When = when, Do = doNodes });
+            parsed.Rules.Add(new EkrRule { When = when, Do = doNodes, Slot = ruleSlot });
         }
 
         def = parsed;
@@ -369,7 +396,25 @@ public sealed class EkrLogicDef
                 break;
 
             case "teleport":
-                if (!TryGetEnum(nodeEl, "to", ["random", "ctx"], out n.Target, out err)) return false;
+                // v1.2: to にマーカー行き先 (marker1..4) を追加。
+                if (!TryGetEnum(nodeEl, "to", ["random", "ctx", "marker1", "marker2", "marker3", "marker4"], out n.Target, out err)) return false;
+                break;
+
+            // v1.2 (2026-08-10)
+            case "marker_save":
+                if (!TryGetInt(nodeEl, "slot", 1, 4, out n.Slot, out err)) return false;
+                if (!TryGetEnum(nodeEl, "at", ["self", "ctx", "cno1", "cno2", "cno3"], out n.Target, out err)) return false;
+                break;
+
+            // v1.2 (2026-08-10): target は "ctx" 固定 (spec §3) — 検証だけ行い値は保持しない。
+            // 行き先 (to) を teleport と同じ慣行で n.Target に格納する。
+            case "teleport_other":
+                if (!TryGetEnum(nodeEl, "target", ["ctx"], out _, out err)) return false;
+                if (!TryGetEnum(nodeEl, "to", ["self", "marker1", "marker2", "marker3", "marker4"], out n.Target, out err)) return false;
+                break;
+
+            case "portal_place":
+                if (!TryGetEnum(nodeEl, "which", ["a", "b"], out n.Which, out err)) return false;
                 break;
 
             case "kill":

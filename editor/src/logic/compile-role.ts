@@ -145,6 +145,14 @@ function blockToNode(b: SerializedBlock): Record<string, unknown> {
             };
         case "ekr_do_corpse_spawn":
             return { op: "corpse_spawn", color: b.fields?.COLOR, at: b.fields?.AT };
+        case "ekr_do_marker_save":
+            return { op: "marker_save", slot: toNum(b.fields?.SLOT), at: b.fields?.AT };
+        case "ekr_do_teleport_other":
+            // spec §3 v1.2: target は現状 "ctx" の一択 — ブロックに TARGET フィールドを持たせず
+            // ここで固定値を書く (単一値のドロップダウンを作る意味が薄いため)。
+            return { op: "teleport_other", target: "ctx", to: b.fields?.TO };
+        case "ekr_do_portal_place":
+            return { op: "portal_place", which: b.fields?.WHICH };
         default:
             if (b.type.startsWith(DO_BLOCK_PREFIX)) return { op: b.type.slice(DO_BLOCK_PREFIX.length) };
             // 未知のブロック型 → そのまま「不明な op」として通す (blockToExpr と同じ方針)。
@@ -172,7 +180,12 @@ export function compileTopBlocksToRules(topBlocks: SerializedBlock[]): unknown[]
     const rules: unknown[] = [];
     for (const b of topBlocks) {
         if (b.type.startsWith(WHEN_BLOCK_PREFIX)) {
-            rules.push({ when: b.type.slice(WHEN_BLOCK_PREFIX.length), do: chainToNodes(b.next?.block) });
+            const when = b.type.slice(WHEN_BLOCK_PREFIX.length);
+            const rule: Record<string, unknown> = { when, do: chainToNodes(b.next?.block) };
+            // v1.2 (spec §2): on_cno_touch は必須の slot フィールド (ekr_when_on_cno_touch の
+            // 動的 SLOT ドロップダウン) を持つ唯一のイベント。他の when には付けない。
+            if (when === "on_cno_touch") rule.slot = toNum(b.fields?.SLOT);
+            rules.push(rule);
         }
     }
     return rules;

@@ -53,6 +53,9 @@ internal sealed class EkrActionSink : IEkrActionSink
             case "cno_show": CnoShow(node, ctx); break;
             case "dummy_spawn": DummySpawn(node, ctx); break;
             case "corpse_spawn": CorpseSpawn(node, ctx); break;
+            case "marker_save": MarkerSave(node, ctx); break; // v1.2
+            case "teleport_other": TeleportOther(node, ctx); break; // v1.2
+            case "portal_place": PortalPlace(node, ctx); break; // v1.2
         }
     }
 
@@ -119,19 +122,13 @@ internal sealed class EkrActionSink : IEkrActionSink
         PlayerControl holderPc = ctx.HolderId.GetPlayer();
         if (!holderPc || !holderPc.IsAlive()) return;
 
-        Vector2? dest = node.Target switch
-        {
-            "random" => ResolveRandomPosition(),
-            "ctx" => ResolveCtxPosition(ctx),
-            _ => null
-        };
-
+        Vector2? dest = ResolveTeleportToPosition(node.Target, ctx);
         if (dest == null) return;
 
-        // to:"ctx" で相手が近距離 (1.5u 未満) だと Utils.TP が内部で None へ降格し、実際には飛ばないのに
-        // SnapTo cap もこの下のグローバル予算も消費してしまう既知型を避ける (spec §3 2026-08-09 追記。
-        // memory: short-tp-none-downgrade-wastes-cap と同型)。
-        if (node.Target == "ctx" && Vector2.Distance(holderPc.Pos(), dest.Value) < 1.5f) return;
+        // to:"ctx"/マーカーで目的地が近距離 (1.5u 未満) だと Utils.TP が内部で None へ降格し、実際には
+        // 飛ばないのに SnapTo cap もこの下のグローバル予算も消費してしまう既知型を避ける (spec §3
+        // 2026-08-09 追記・v1.2 でマーカーにも拡張。memory: short-tp-none-downgrade-wastes-cap と同型)。
+        if (node.Target != "random" && Vector2.Distance(holderPc.Pos(), dest.Value) < 1.5f) return;
 
         // spec §3 2026-08-09 追記: EKR 全体で ≤2/秒 (cross-holder 予算 — Maximum=15 全員が同時に撃っても
         // Utils.TP の共有 SnapTo cap を枯渇させない)。ホルダー毎の ≤1/2秒は下の minInterval で別途強制。
@@ -140,6 +137,25 @@ internal sealed class EkrActionSink : IEkrActionSink
         // minInterval=2f が spec の「≤1/2秒/ホルダー」を Utils.TP 側の既存レート機構でそのまま強制する
         // (毎フレーム TP 経路を自前で作らない — Utils.TP の SnapTo トークンバケットに完全に乗る)。
         holderPc.TP(dest.Value, minInterval: 2f);
+
+        // spec §2 v1.2: EKR 起因の TP は着地点で半径内の全接触センサーにラッチ済み扱い (ポータル
+        // ping-pong の構造的回避 — teleport でポータルの目の前に飛ばされても即座に再発火しない)。
+        EkrManager.PrelatchTouchSensorsNear(holderPc.PlayerId, dest.Value);
+    }
+
+    // v1.2: teleport.to / teleport_other.to の共通解決 (random は teleport 専用)。
+    private static Vector2? ResolveTeleportToPosition(string to, EkrActionContext ctx)
+    {
+        return to switch
+        {
+            "random" => ResolveRandomPosition(),
+            "ctx" => ResolveCtxPosition(ctx),
+            "marker1" => ResolveMarkerPosition(ctx, 1),
+            "marker2" => ResolveMarkerPosition(ctx, 2),
+            "marker3" => ResolveMarkerPosition(ctx, 3),
+            "marker4" => ResolveMarkerPosition(ctx, 4),
+            _ => null
+        };
     }
 
     private static Vector2? ResolveRandomPosition()
@@ -154,6 +170,24 @@ internal sealed class EkrActionSink : IEkrActionSink
         if (ctx.CtxId == byte.MaxValue) return null;
         PlayerControl ctxPc = ctx.CtxId.GetPlayer();
         return ctxPc ? ctxPc.Pos() : null;
+    }
+
+    // v1.2 (marker_save の消費側): 未保存 (null) のマーカーはそのまま null を返す (呼び出し元で
+    // ドロップ・cap 非消費・spec §3)。
+    private static Vector2? ResolveMarkerPosition(EkrActionContext ctx, int markerNumber1Based)
+    {
+        EkrHolderState state = EkrManager.GetHolderState(ctx.HolderId);
+        return state?.Markers[markerNumber1Based - 1];
+    }
+
+    // v1.2: marker_save.at の cno1..3 解決。未実体化/未使用 slot は null (no-op)。
+    private static Vector2? ResolveOwnCnoPosition(EkrActionContext ctx, int slotIndex0Based)
+    {
+        EkrHolderState state = EkrManager.GetHolderState(ctx.HolderId);
+        if (state == null) return null;
+
+        if (state.CnoSlots[slotIndex0Based] is not CustomNetObject cno || !cno.playerControl) return null;
+        return cno.Position;
     }
 
     // ── kill (spec: ≤1/秒/ホルダー・連鎖深さ1) ────────────────────────────
@@ -308,6 +342,10 @@ internal sealed class EkrActionSink : IEkrActionSink
         var cno = new EkrCno(pos.Value, node.Text, node.Size, def.Color);
         EkrManager.OccupyCnoSlot(state, node.Slot, cno); // 上限は通過済みなので必ず成功する
 
+        // spec §2 v1.2: 設置時に半径内へ既にいるプレイヤーはラッチ済み扱い (placer self-grab 既知型の
+        // 構造的回避)。
+        EkrManager.PrimeTouchSensor(state, node.Slot - 1, pos.Value, isPortal: false);
+
         state.LastCnoSpawnTime = now;
     }
 
@@ -424,6 +462,9 @@ internal sealed class EkrActionSink : IEkrActionSink
         var dummy = new EkrDummyCno(pos.Value, node.Name, node.Killable);
         EkrManager.OccupyCnoSlot(state, node.Slot, dummy); // 上限は通過済みなので必ず成功する
 
+        // spec §2 v1.2: 設置時に半径内へ既にいるプレイヤーはラッチ済み扱い (cno_spawn と同じ規約)。
+        EkrManager.PrimeTouchSensor(state, node.Slot - 1, pos.Value, isPortal: false);
+
         state.LastDummySpawnTime = now;
     }
 
@@ -468,5 +509,115 @@ internal sealed class EkrActionSink : IEkrActionSink
         state.LastCorpseSpawnTime = now;
 
         Utils.RpcCreateDeadBody(pos.Value, colorId, parent);
+    }
+
+    // ── marker_save (v1.2 spec §3: 予算なし・ctx 無し/未実体化 CNO 参照は no-op) ────────────────────
+
+    private static void MarkerSave(EkrNode node, EkrActionContext ctx)
+    {
+        EkrHolderState state = EkrManager.GetHolderState(ctx.HolderId);
+        if (state == null) return;
+
+        Vector2? pos = node.Target switch
+        {
+            "self" => ResolveSelfPosition(ctx),
+            "ctx" => ResolveCtxPosition(ctx),
+            "cno1" => ResolveOwnCnoPosition(ctx, 0),
+            "cno2" => ResolveOwnCnoPosition(ctx, 1),
+            "cno3" => ResolveOwnCnoPosition(ctx, 2),
+            _ => null
+        };
+
+        if (pos == null) return; // no-op (spec §3)
+
+        state.Markers[node.Slot - 1] = pos;
+    }
+
+    // ── teleport_other (v1.2 spec §3,§5: target=ctx のみ・teleport と同一 per-holder バケット/
+    // cross-holder 予算を共有・死者/ctx 無しは no-op) ─────────────────────────────────────────
+    // 「同一バケットを共有」は Utils.TP の LastRateLimitedTPTime を teleport と同じ minInterval=2f で
+    // 経由することで担保する (新しい EkrHolderState フィールドを追加しない — spec 2026-08-10 指示)。
+    // teleport は「動かす対象=holder」なのでそのバケットが自然に holder キーになるのに対し、
+    // teleport_other は「動かす対象=ctx」なのでキーは ctx 側になる — 同一の下層レート機構を再利用する
+    // という意味での「共有」であり、per-holder という言葉どおりの厳密なホルダーキー分離ではない。
+
+    private static void TeleportOther(EkrNode node, EkrActionContext ctx)
+    {
+        PlayerControl holderPc = ctx.HolderId.GetPlayer();
+        if (!holderPc || !holderPc.IsAlive()) return; // teleport/kill/speed と同じ「死者は常に no-op」
+
+        if (ctx.CtxId == byte.MaxValue) return; // ctx 無しは no-op (spec §3)
+        PlayerControl targetPc = ctx.CtxId.GetPlayer();
+        if (!targetPc || !targetPc.IsAlive()) return; // 死者は no-op (spec §3)
+
+        Vector2? dest = node.Target switch
+        {
+            "self" => ResolveSelfPosition(ctx),
+            "marker1" => ResolveMarkerPosition(ctx, 1),
+            "marker2" => ResolveMarkerPosition(ctx, 2),
+            "marker3" => ResolveMarkerPosition(ctx, 3),
+            "marker4" => ResolveMarkerPosition(ctx, 4),
+            _ => null
+        };
+
+        if (dest == null) return; // 未保存マーカーはドロップ (cap 非消費・spec §3)
+
+        // 1.5u 未満ドロップ (teleport と同じ既知型回避・spec §3)。
+        if (Vector2.Distance(targetPc.Pos(), dest.Value) < 1.5f) return;
+
+        // EKR 全体 ≤2/秒 (teleport と共有・spec §5)。
+        if (!EkrManager.TryConsumeGlobalTeleportBudget()) return;
+
+        Utils.TP(targetPc.NetTransform, dest.Value, minInterval: 2f);
+
+        // spec §2 v1.2: 着地点で半径内の全接触センサーにラッチ済み扱い。
+        EkrManager.PrelatchTouchSensorsNear(targetPc.PlayerId, dest.Value);
+    }
+
+    // ── portal_place (v1.2 マクロ spec §3,§5) ───────────────────────────────────────────────
+    // A/B 2枚で1対のワープポータル。実体は EkrCno 流用 (会議明け自動復活エンジンに乗る)。
+    // per-holder ≤1/2秒 + CNO 生成系 cross-holder 予算 + 会議明け10秒ドロップ (生成系4兄弟目)。
+
+    private const string PortalSprite = "◎";
+    private const int PortalSize = 6;
+
+    private static void PortalPlace(EkrNode node, EkrActionContext ctx)
+    {
+        EkrHolderState state = EkrManager.GetHolderState(ctx.HolderId);
+        if (state == null) return;
+
+        float now = Time.realtimeSinceStartup;
+        if (state.LastPortalPlaceTime >= 0f && now - state.LastPortalPlaceTime < 2f) return;
+
+        // spec §5 (v1.2): 生成系4兄弟目 — 会議明けから10秒間はドロップ。
+        if (EkrManager.LastMeetingEndTime >= 0f && now - EkrManager.LastMeetingEndTime < 10f) return;
+
+        int idx = node.Which == "b" ? 1 : 0;
+        IEkrSlotCno existing = state.Portals[idx];
+
+        // 孤児コルーチン防止裁定 (spec §5) — 実体化前の同一 which への再設置はドロップ。
+        if (existing != null && !existing.IsInstantiated) return;
+
+        if (!EkrManager.CanOccupyCnoSlot()) return; // 全体 ≤10体 (CnoSlots と合算・spec §5)
+
+        Vector2? pos = ResolveSelfPosition(ctx); // portal_place は常に自分の足元 (spec §3)
+        if (pos == null) return;
+
+        EkrDefinition def = EkrManager.GetDefinition(ctx.Slot);
+        if (def == null) return;
+
+        // cross-holder 予算 (spec §5) — 「本当に spawn する」直前で消費 (cno_spawn と同じ順序)。
+        if (!EkrManager.TryConsumeGlobalCnoSpawnBudget()) return;
+
+        // 同じ which への再実行は「移設」— 旧位置の実体を消してから張り直す (spec §3)。
+        EkrManager.ReleasePortalSlot(state, idx);
+
+        var portal = new EkrCno(pos.Value, PortalSprite, PortalSize, def.Color);
+        EkrManager.OccupyPortalSlot(state, idx, portal);
+
+        // spec §2 v1.2: 設置時に半径内へ既にいるプレイヤーはラッチ済み扱い。
+        EkrManager.PrimeTouchSensor(state, idx, pos.Value, isPortal: true);
+
+        state.LastPortalPlaceTime = now;
     }
 }

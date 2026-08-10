@@ -1,4 +1,4 @@
-// lint-role.ts (docs/ekr-logic-spec.md §6 の 10 ルール — v1.1 で L9/L10 追加) のテスト。既に
+// lint-role.ts (docs/ekr-logic-spec.md §6 の 12 ルール — v1.1 で L9/L10・v1.2 で L11/L12 追加) のテスト。既に
 // 検証済みという前提の RoleLogic 値を直接組み立ててテストする (Blockly/roledef の検証を経由する
 // 必要はない — リンターは「妥当な AST に対して組み方のヒントを出す」だけの層のため)。
 
@@ -419,6 +419,100 @@ describe("lint-role: L10 (前の dummy_spawn からの累積 wait <3秒の dummy
     });
 });
 
+// v1.2 (docs/ekr-logic-spec.md §6 2026-08-10 追記): L9 の対象 op を4種 (cno_spawn/cno_show/
+// dummy_spawn/portal_place) に拡大
+describe("lint-role: L9 拡大 (v1.2 — cno_spawn/cno_show/portal_place も同じ会議明け窓で検知)", () => {
+    it("on_meeting_end + cno_spawn (wait 無し・直後) は L9 を警告する", () => {
+        const l = logic([{ when: "on_meeting_end", do: [{ op: "cno_spawn", slot: 1, text: "!", size: 1, at: "self" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L9");
+    });
+
+    it("on_meeting_end + cno_show (wait 無し・直後) は L9 を警告する", () => {
+        const l = logic([{ when: "on_meeting_end", do: [{ op: "cno_show", slot: 1, who: "all" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L9");
+    });
+
+    it("on_meeting_end + portal_place (wait 無し・直後) は L9 を警告する", () => {
+        const l = logic([{ when: "on_meeting_end", do: [{ op: "portal_place", which: "a" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L9");
+    });
+
+    it("on_meeting_end + wait 10.5 → cno_spawn/cno_show/portal_place は警告しない (正しい作法)", () => {
+        const l = logic([
+            { when: "on_meeting_end", do: [{ op: "wait", seconds: 10.5 }, { op: "cno_spawn", slot: 1, text: "!", size: 1, at: "self" }] },
+            { when: "on_meeting_end", do: [{ op: "wait", seconds: 10.5 }, { op: "cno_show", slot: 1, who: "all" }] },
+            { when: "on_meeting_end", do: [{ op: "wait", seconds: 10.5 }, { op: "portal_place", which: "b" }] },
+        ]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L9");
+    });
+});
+
+describe("lint-role: L11 (on_second 配下の teleport_other / portal_place — L3 の兄弟)", () => {
+    it("on_second + teleport_other は L11 を警告する", () => {
+        const l = logic([{ when: "on_second", do: [{ op: "teleport_other", target: "ctx", to: "self" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L11");
+    });
+
+    it("on_second + portal_place は L11 を警告する", () => {
+        const l = logic([{ when: "on_second", do: [{ op: "portal_place", which: "a" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L11");
+    });
+
+    it("on_second + teleport_other (if の中にネスト) も検知する", () => {
+        const nested: LogicNode = {
+            op: "if",
+            cond: { e: "lit", v: 1 },
+            then: [{ op: "teleport_other", target: "ctx", to: "marker1" }],
+        };
+        const l = logic([{ when: "on_second", do: [nested] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L11");
+    });
+
+    it("on_second 以外の when では L11 を警告しない", () => {
+        const l = logic([
+            { when: "on_pet", do: [{ op: "teleport_other", target: "ctx", to: "self" }] },
+            { when: "on_kill", do: [{ op: "portal_place", which: "b" }] },
+        ]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L11");
+    });
+});
+
+describe("lint-role: L12 (on_cno_touch 配下の cno_spawn/dummy_spawn/cno_show/portal_place)", () => {
+    it("on_cno_touch + cno_spawn は L12 を警告する", () => {
+        const l = logic([{ when: "on_cno_touch", slot: 1, do: [{ op: "cno_spawn", slot: 2, text: "!", size: 1, at: "self" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L12");
+    });
+
+    it("on_cno_touch + dummy_spawn は L12 を警告する", () => {
+        const l = logic([{ when: "on_cno_touch", slot: 1, do: [{ op: "dummy_spawn", slot: 2, name: "ダミー", killable: false, at: "self" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L12");
+    });
+
+    it("on_cno_touch + cno_show は L12 を警告する", () => {
+        const l = logic([{ when: "on_cno_touch", slot: 1, do: [{ op: "cno_show", slot: 2, who: "all" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L12");
+    });
+
+    it("on_cno_touch + portal_place は L12 を警告する", () => {
+        const l = logic([{ when: "on_cno_touch", slot: 1, do: [{ op: "portal_place", which: "a" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L12");
+    });
+
+    it("on_cno_touch + notify/kill/teleport_other は L12 を警告しない (対象外の op)", () => {
+        const l = logic([
+            { when: "on_cno_touch", slot: 1, do: [{ op: "notify", text: "やあ", seconds: 3 }] },
+            { when: "on_cno_touch", slot: 2, do: [{ op: "kill", target: "ctx" }] },
+            { when: "on_cno_touch", slot: 3, do: [{ op: "teleport_other", target: "ctx", to: "self" }] },
+        ]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L12");
+    });
+
+    it("on_cno_touch 以外の when では L12 を警告しない (同じ op でも)", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "cno_spawn", slot: 1, text: "!", size: 1, at: "self" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L12");
+    });
+});
+
 describe("lint-role: 問題のないロジックは警告0件", () => {
     it("on_pet 単発の kill/teleport/notify/cno_spawn/cno_show は何も警告しない", () => {
         const l = logic([
@@ -487,6 +581,27 @@ describe("lint-role: 問題のないロジックは警告0件", () => {
                 ],
             },
         ]);
+        expect(lintRoleLogic(l)).toEqual([]);
+    });
+
+    // v1.2 (docs/ekr-logic-spec.md §6 2026-08-10 追記): on_cno_touch/marker_save/teleport_other/
+    // portal_place の正しい作法は警告0件
+    it("on_cno_touch でマーカー保存+相手ワープのみを行うのは警告0件", () => {
+        const l = logic([
+            {
+                when: "on_cno_touch",
+                slot: 1,
+                do: [
+                    { op: "marker_save", slot: 1, at: "self" },
+                    { op: "teleport_other", target: "ctx", to: "marker1" },
+                ],
+            },
+        ]);
+        expect(lintRoleLogic(l)).toEqual([]);
+    });
+
+    it("on_game_start でポータルを1回だけ置くのは警告0件", () => {
+        const l = logic([{ when: "on_game_start", do: [{ op: "portal_place", which: "a" }, { op: "portal_place", which: "b" }] }]);
         expect(lintRoleLogic(l)).toEqual([]);
     });
 });

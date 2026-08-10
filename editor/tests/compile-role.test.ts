@@ -239,6 +239,40 @@ describe("compile-role: dummy_spawn / corpse_spawn ブロックのフィール�
     });
 });
 
+// v1.2 (docs/ekr-logic-spec.md §2〜§3 2026-08-10 追記) — 位置と接触
+describe("compile-role: on_cno_touch / marker_save / teleport_other / portal_place ブロックのフィールド分担 (v1.2)", () => {
+    it("ekr_when_on_cno_touch は rule に slot を付与する (SLOT フィールドの数値化込み)", () => {
+        const blocks = [{ type: "ekr_when_on_cno_touch", fields: { SLOT: "2" }, next: { block: { type: "ekr_do_stop" } } }];
+        expect(compileTopBlocksToRules(blocks)).toEqual([{ when: "on_cno_touch", slot: 2, do: [{ op: "stop" }] }]);
+    });
+
+    it("on_cno_touch 以外の when には slot キーを付与しない", () => {
+        const blocks = [{ type: "ekr_when_on_pet", next: { block: { type: "ekr_do_stop" } } }];
+        const rules = compileTopBlocksToRules(blocks) as Record<string, unknown>[];
+        expect("slot" in rules[0]).toBe(false);
+    });
+
+    it("marker_save は slot/at を持つ", () => {
+        const blocks = [{ type: "ekr_when_on_pet", next: { block: { type: "ekr_do_marker_save", fields: { SLOT: 3, AT: "cno1" } } } }];
+        expect(compileTopBlocksToRules(blocks)).toEqual([{ when: "on_pet", do: [{ op: "marker_save", slot: 3, at: "cno1" }] }]);
+    });
+
+    it("teleport_other は target を固定 \"ctx\" で emit し、to をそのまま転記する", () => {
+        const blocks = [{ type: "ekr_when_on_pet", next: { block: { type: "ekr_do_teleport_other", fields: { TO: "marker2" } } } }];
+        expect(compileTopBlocksToRules(blocks)).toEqual([{ when: "on_pet", do: [{ op: "teleport_other", target: "ctx", to: "marker2" }] }]);
+    });
+
+    it("portal_place は which を持つ", () => {
+        const blocks = [{ type: "ekr_when_on_pet", next: { block: { type: "ekr_do_portal_place", fields: { WHICH: "b" } } } }];
+        expect(compileTopBlocksToRules(blocks)).toEqual([{ when: "on_pet", do: [{ op: "portal_place", which: "b" }] }]);
+    });
+
+    it("teleport の TO にマーカー行き先を転記できる (既存 ekr_do_teleport の汎用転記のまま)", () => {
+        const blocks = [{ type: "ekr_when_on_pet", next: { block: { type: "ekr_do_teleport", fields: { TO: "marker4" } } } }];
+        expect(compileTopBlocksToRules(blocks)).toEqual([{ when: "on_pet", do: [{ op: "teleport", to: "marker4" }] }]);
+    });
+});
+
 describe("compile-role: hasNoRules / compileWorkspaceToLogicInput (R0 互換の判定)", () => {
     it("イベントハットが無いワークスペースは hasNoRules=true・compileWorkspaceToLogicInput は null", () => {
         expect(hasNoRules(ws([]))).toBe(true);
@@ -341,6 +375,31 @@ describe("compile-role → roledef.validateRoleLogic: 統合 (実際に使える
         if (r.ok) {
             expect(r.logic.rules[0].do[1]).toEqual({ op: "dummy_spawn", slot: 1, name: "ダミー", killable: true, at: "self" });
             expect(r.logic.rules[0].do[2]).toEqual({ op: "corpse_spawn", color: "self", at: "self" });
+        }
+    });
+
+    // v1.2 (docs/ekr-logic-spec.md §2〜§3 2026-08-10 追記)
+    it("on_cno_touch でマーカーを保存し teleport_other で相手をワープさせる複合ロジックが最後まで通る", () => {
+        const w = ws([
+            {
+                type: "ekr_when_on_cno_touch",
+                fields: { SLOT: 1 },
+                next: {
+                    block: {
+                        type: "ekr_do_marker_save",
+                        fields: { SLOT: 1, AT: "self" },
+                        next: { block: { type: "ekr_do_teleport_other", fields: { TO: "marker1" } } },
+                    },
+                },
+            },
+        ]);
+        const compiled = compileWorkspaceToLogicInput(w, []);
+        expect(compiled).not.toBeNull();
+        const r = validateRoleLogic(compiled);
+        expect(r.ok, r.ok ? "" : (r as { error: string }).error).toBe(true);
+        if (r.ok) {
+            expect(r.logic.rules[0]).toMatchObject({ when: "on_cno_touch", slot: 1 });
+            expect(r.logic.rules[0].do[1]).toEqual({ op: "teleport_other", target: "ctx", to: "marker1" });
         }
     });
 });
