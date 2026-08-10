@@ -270,6 +270,11 @@ internal sealed class EkrActionSink : IEkrActionSink
         float now = Time.realtimeSinceStartup;
         if (state.LastCnoSpawnTime >= 0f && now - state.LastCnoSpawnTime < 1f) return;
 
+        // spec §5 (v1.1): 会議明けから10秒間はドロップ (dummy_spawn と同じ規約)。基底 CreateNetObject の
+        // 待ちは intro 直後 (tooEarly) 分岐にしか無く、会議明けの新規 spawn は待ちなしで
+        // DataFlagRateLimiter へ直行するため、ここで落とさないと追放スイープとの合算 nests に乗る。
+        if (EkrManager.LastMeetingEndTime >= 0f && now - EkrManager.LastMeetingEndTime < 10f) return;
+
         int idx = node.Slot - 1;
         IEkrSlotCno existing = state.CnoSlots[idx];
 
@@ -360,6 +365,10 @@ internal sealed class EkrActionSink : IEkrActionSink
         // spec §5 (2026-08-09 監査改定): cno_show は cno_spawn と共用せず独自の ≤1/3秒/ホルダー バケット
         // (despawn→respawn の fan-out 未課金コスト分を織り込んで spawn より厳しくする)。
         if (state.LastCnoShowTime >= 0f && now - state.LastCnoShowTime < 3f) return;
+
+        // spec §5 (v1.1): 会議明けから10秒間はドロップ (dummy_spawn と同じ規約)。実装が despawn→respawn
+        // = spawn と同じ付帯送信を伴う以上、生成系と同じ位相ガードが要る。
+        if (EkrManager.LastMeetingEndTime >= 0f && now - EkrManager.LastMeetingEndTime < 10f) return;
 
         PlayerControl holderPc = ctx.HolderId.GetPlayer();
         if (!holderPc) return;
