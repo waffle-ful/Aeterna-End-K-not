@@ -1551,15 +1551,23 @@ internal static class IntroCutsceneDestroyPatch
     {
         if (!GameStates.IsInGame || MeetingHud.Instance || ExileController.Instance) return;
 
-        // 【T2退避 2026-07-29】三点セットは会議送信より前に発火させる (会議中の vanilla クライアントに
-        // SetRole を撃つと MeetingHud 状態が壊れる — 07-17 +6s 版の事故機序)。SetRole 群は StartMeeting と
-        // 同じ PacketRateGate FIFO に載るため受信順は役職→会議で保たれ、MeetingStartWire 有効時は
-        // ドレイン待ちが本バーストも吸収してから StartMeeting を直送する。
-        FireT2RoleCluster("pre-first-meeting");
+        // 【T2退避 2026-07-29 → BUG-20260807-07 恒久修正 2026-08-11】三点セットは会議送信より前に
+        // 発火させる (会議中の vanilla クライアントに SetRole を撃つと MeetingHud 状態が壊れる — 07-17
+        // +6s 版の事故機序)。当初は FIFO の受信順 (役職→会議) だけで足りると考えていたが、順序が
+        // 保たれても SetRole 処理の直後フレームに MeetingHud が来ると vanilla 客は壊れる (キル持ち
+        // クルー役職=crew desync Impostor の実基底再送を受けたバニラ客が初手から暗転・EKR 役職で 3/3
+        // 再現、+0.1s 発火の 1-bit 分離で機序確定)。entry gate 完了 = 全客 intro 明け確認済みの時点で
+        // クラスタを発火し、会議送信は実時間で 2.5 秒離して客の SetRole 処理を静定させる。
+        FireT2RoleCluster("entry-gate (pre-first-meeting)");
 
-        PlayerControl host = PlayerControl.LocalPlayer;
-        if (!host || !host.IsAlive()) host = Main.AllAlivePlayerControlsToList.FirstOrDefault();
-        if (host) host.NoCheckStartMeeting(null, force: true);
+        LateTask.New(() =>
+        {
+            if (!GameStates.IsInGame || MeetingHud.Instance || ExileController.Instance) return;
+
+            PlayerControl host = PlayerControl.LocalPlayer;
+            if (!host || !host.IsAlive()) host = Main.AllAlivePlayerControlsToList.FirstOrDefault();
+            if (host) host.NoCheckStartMeeting(null, force: true);
+        }, 2.5f, "FirstTurnMeeting after T2 settle", log: false);
     }
 
     private static bool T2RoleClusterFired;
