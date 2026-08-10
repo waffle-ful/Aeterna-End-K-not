@@ -57,7 +57,7 @@
 | 偽造者 (Forger) | 恐喝者 (Blackmailer) | 吟遊詩人 (Bard) | 催眠術師 (Hypnotist) |
 | 殺人マシーン (KillingMachine) | 司書 (Librarian) | 指揮官 (Commander) | 資本主義者 (Capitalist) |
 | 首謀者 (Mastermind) | 呪われた狼 (CursedWolf) | 神風 (Kamikaze) | 想定者 (Assumer) |
-| 天秤 (Balancer) | **波動砲 (WaveCannon)** | 配偶者 (Consort) | 反逆者 (Renegade) |
+| 天秤 (Balancer) | 波動砲 (WaveCannon) | 配偶者 (Consort) | 反逆者 (Renegade) |
 | 評議員 (Councillor) | 腹話術師 (Ventriloquist) | 法医 (Pathologist) | 魔女 (Witch) |
 | 無効主義者 (Nullifier) | 誘拐犯 (Kidnapper) | 傭兵 (Mercenary) | 落雷 (Lightning) |
 | 巫女 (ShrineMaiden) | 貪食者 (Devourer) | ブッチャー (Butcher) | チェインバインダー (Chainbinder) |
@@ -111,7 +111,7 @@
 | 副官 (Deputy) | 分析者 (Analyst) | 変身解除者 (Unshifter) | 報復者 (Retributionist) |
 | 法医学者 (Forensic) | 冒険者 (Adventurer) | 模倣者 (Imitator) | 木 (Tree) |
 | 預言者 (Soothsayer) | 霊能者 (Psychic) | 恋人 (LovingCrewmate) | 錬金術師 (Alchemist) |
-| 狼少年 (WolfBoy) | ⭐フォースフィールダー (ForceFielder) | あかづきん (Akazukin) | サンドボックス (Sandbox) |
+| 狼少年 (WolfBoy) | ⭐フォースフィールダー (ForceFielder) | あかづきん (Akazukin) | ⭐サンドボックス (Sandbox) |
 | オペレーティブ (Operative) | サバイバー (Survivor) | バウンサー (Bouncer) | ⭐ジェミニ (Gemini) |
 | ⭐マップエクステンダー (MapExtender) | ⭐ポータルボタン (PortalButton) | レヴナント (Revenant) | クルーメイト (Crewmate) |
 | ⭐ニュースキャスター (Newscaster) | ミラージュ (Mirage) |  |  |
