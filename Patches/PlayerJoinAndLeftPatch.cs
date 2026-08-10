@@ -623,6 +623,10 @@ internal static class OnPlayerLeftPatch
         {
             if (data != null) GameStartManagerPatch.ClientJoinTime.Remove(data.Id);
 
+            // 退出直後の後片付け Despawn (下の "Repeat Despawn") を KickRiskDetector の P4 が
+            // 「生存プレイヤー宛」と誤検知しないよう、退出を計器へ先に知らせる。
+            if (data != null) EndKnot.Modules.KickRiskDetector.NoteClientLeft(data.Id);
+
             if (AmongUsClient.Instance.AmHost && data != null && data.Character)
             {
                 byte leftId = data.Character.PlayerId;

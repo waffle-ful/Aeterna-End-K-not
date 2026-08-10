@@ -59,6 +59,42 @@ internal static class KickRiskDetector
     /// <summary>この接続で spawn メッセージを送った netId (P5 用)。</summary>
     private static readonly HashSet<uint> SpawnedThisConnection = [];
 
+    /// <summary>
+    /// 直近に退出したクライアント id → 退出時刻 (秒)。P4 の偽陽性除去用。
+    /// 退出プレイヤーの後片付け (PlayerJoinAndLeftPatch の "Repeat Despawn"、離脱 2.5 秒後) は合法だが、
+    /// LIVE 判定が参照する接続リストの除去と競合して「所有者がまだ接続中」に見える窓がある。
+    /// </summary>
+    private static readonly Dictionary<int, double> RecentlyLeftOwners = [];
+
+    /// <summary>退出直後の Despawn を P4 から除外する猶予 (秒)。Repeat Despawn の 2.5 秒に余裕を持たせた値。</summary>
+    private const double LeaveGraceSeconds = 10d;
+
+    /// <summary>クライアント退出を記録する (OnPlayerLeftPatch から呼ばれる)。</summary>
+    public static void NoteClientLeft(int clientId)
+    {
+        if (clientId < 0) return;
+
+        double now = Clock.Elapsed.TotalSeconds;
+        RecentlyLeftOwners[clientId] = now;
+
+        // 溜め込まないよう、猶予を過ぎた記録はここで掃除する。
+        if (RecentlyLeftOwners.Count > 32)
+        {
+            var stale = new List<int>();
+            foreach (KeyValuePair<int, double> kvp in RecentlyLeftOwners)
+                if (now - kvp.Value > LeaveGraceSeconds)
+                    stale.Add(kvp.Key);
+
+            for (var i = 0; i < stale.Count; i++) RecentlyLeftOwners.Remove(stale[i]);
+        }
+    }
+
+    /// <summary>所有者が「猶予内に退出済み」か。true なら P4 を鳴らさない。</summary>
+    private static bool LeftRecently(int owner)
+    {
+        return RecentlyLeftOwners.TryGetValue(owner, out double leftAt) && Clock.Elapsed.TotalSeconds - leftAt <= LeaveGraceSeconds;
+    }
+
     private static readonly Dictionary<string, (int Count, double LastLog)> Seen = [];
 
     /// <summary>再接続でサーバー側の netId 表が作り直された = こちらの記憶も捨てる。
@@ -238,7 +274,7 @@ internal static class KickRiskDetector
                     // スナップショットはローカルオブジェクト由来で退出後も残る — "Repeat Despawn"
                     // (PlayerJoinAndLeftPatch, 離脱 2.5 秒後) はホスト側 .Despawn() を呼ばないため
                     // 実測 15/29 で自己ヒットしていた。送信時点で所有クライアントがまだ接続中のときだけ違法。
-                    if (!IdentityOwner.TryGetValue(netId, out int owner) || Utils.GetClientById(owner) != null)
+                    if (!IdentityOwner.TryGetValue(netId, out int owner) || (Utils.GetClientById(owner) != null && !LeftRecently(owner)))
                         Report("P4", $"Despawn targets a LIVE player's identity object netId={netId}", packetLen);
 
                     return;

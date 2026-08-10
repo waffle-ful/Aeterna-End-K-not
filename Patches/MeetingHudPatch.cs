@@ -877,6 +877,13 @@ internal static class MeetingHudStartPatch
                 AddMsg(newscasterBroadcast, 255, Utils.ColorString(Utils.GetRoleColor(CustomRoles.Newscaster), GetString("NewscasterBroadcastTitle")));
         }
 
+        if (CustomRoles.News.IsEnable())
+        {
+            string newsBroadcast = News.BuildBroadcast();
+            if (!string.IsNullOrEmpty(newsBroadcast))
+                AddMsg(newsBroadcast, 255, Utils.ColorString(Utils.GetRoleColor(CustomRoles.News), GetString("News.BroadcastTitle")));
+        }
+
         if (msgToSend.Count > 0)
         {
             LateTask.New(() =>
@@ -893,13 +900,6 @@ internal static class MeetingHudStartPatch
         Virus.VirusNotify.Clear();
         Mortician.MsgToSend.Clear();
         Enigma.MsgToSend.Clear();
-
-        if (CustomRoles.News.IsEnable())
-        {
-            string newsBroadcast = News.BuildBroadcast();
-            if (!string.IsNullOrEmpty(newsBroadcast))
-                AddMsg(newsBroadcast, 255, Utils.ColorString(Utils.GetRoleColor(CustomRoles.News), GetString("News.BroadcastTitle")));
-        }
 
         return;
 

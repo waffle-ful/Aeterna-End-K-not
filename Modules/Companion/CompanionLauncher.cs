@@ -157,8 +157,9 @@ public static class CompanionLauncher
         catch (Exception e) { Logger.Warn($"Companion stop failed: {e.Message}", "CompanionLauncher"); }
     }
 
-    // ゲームの正常終了時 (OnApplicationQuit) に呼ぶ。クラッシュ/強制終了時はジョブオブジェクトの
-    // 道連れ終了に任せる (相棒は AU の子プロセスなので明示 kill が無くても残留しない)。
+    // ゲームの正常終了時 (OnApplicationQuit) に呼ぶ。⚠️ 起動は UseShellExecute=true でジョブオブジェクトの
+    // 外に出る (:122-123) ため、クラッシュ/強制終了時の道連れ終了は効かない。その場合の後始末は
+    // EK_COMPANION_PARENT_PID を companion.py が監視して自死する経路が担う。
     public static void OnGameQuit()
     {
         Stop();
@@ -206,7 +207,11 @@ public static class CompanionLauncher
             "python --version >nul 2>nul\r\n" +
             "if errorlevel 1 (\r\n" +
             "  echo Python 3.10+ is required. Install it from https://www.python.org/ [check 'Add to PATH'], then re-enable the option.\r\n" +
-            "  pause\r\n" +
+            // pause だと Python が起動しないまま cmd が永久に残る。親 PID の見張り (companion.py) は
+            // Python 起動後にしか武装しないため、この分岐の窓は自滅もせず AU 再起動ごとに孤児が1つ増える。
+            // 自動で閉じる待ちにして読む時間だけ確保する。
+            "  echo [This window closes automatically in 60 seconds.]\r\n" +
+            "  timeout /t 60 >nul\r\n" +
             "  exit /b 1\r\n" +
             ")\r\n" +
             // flag はバージョン付き。requirements に依存を足したら番号を上げると既存ユーザーでも一度だけ再インストールが走る
@@ -216,7 +221,8 @@ public static class CompanionLauncher
             "  python -m pip install -r requirements.txt\r\n" +
             "  if errorlevel 1 (\r\n" +
             "    echo Dependency install failed. See output above.\r\n" +
-            "    pause\r\n" +
+            "    echo [This window closes automatically in 60 seconds.]\r\n" +
+            "    timeout /t 60 >nul\r\n" +
             "    exit /b 1\r\n" +
             "  )\r\n" +
             "  echo ok> deps-ok-v2.flag\r\n" +
