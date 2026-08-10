@@ -450,7 +450,14 @@ internal static class RPCHandlerPatch
                         }
                         catch { }
 
+                        bool firstVersion = !Main.PlayerVersion.ContainsKey(__instance.PlayerId);
                         Main.PlayerVersion[__instance.PlayerId] = new(version, tag, forkId);
+
+                        // modded 客と確定した瞬間に targeted 全件オプション同期を撃つ (join 3 秒後の一発勝負の置き換え)。
+                        // バニラ客は VersionCheck を送らないのでここへ来ない = join のたびにスナップショットを
+                        // 無効化して次の開始押下をフル送信ヒッチにする必要が無い (BUG-20260805-05 再燃の根治)。
+                        if (firstVersion && AmongUsClient.Instance.AmHost && !OptionItem.SyncAllOptions(__instance.OwnerId))
+                            RPC.InvalidateOptionSyncSnapshot();
                     }
                     catch (Exception e)
                     {
@@ -1473,9 +1480,9 @@ internal static class RPC
     private static readonly List<(int Id, int Value)> PendingOptionSync = [];
 
     /// <summary>次の broadcast を強制的に全件送信へ戻す。
-    /// 新規参加者への targetId 同期は VersionCheck 未達だと無言で捨てられる一発勝負なので、
-    /// 取りこぼした客を救えるのは「全件 broadcast」だけ。参加処理から必ず呼ぶこと
-    /// (呼ばないと、その客の設定が恒久的にホストとズレたままになる)。</summary>
+    /// modded 客への targetId 全件同期 (VersionCheck 受信時に発火) が失敗した時と、
+    /// 再接続で送信キューが破棄された時の救済経路。バニラ客の join では呼ばないこと —
+    /// 毎 join で呼ぶと次の開始押下がフル送信ヒッチになる (BUG-20260805-05)。</summary>
     public static void InvalidateOptionSyncSnapshot()
     {
         LastBroadcastOptionValues.Clear();
