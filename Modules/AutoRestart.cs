@@ -30,9 +30,14 @@ public static class AutoRestart
     // 強制終了する。番犬がプロセス消失を検知して立て直す。
     private const int HardKillAfterSeconds = 10;
 
-    // 再起動のための終了進行中フラグ。WatchdogLauncher.OnGameQuit がこれを見て「意図的終了」の
-    // stop-flag 書き込みをスキップする (でないと再起動のはずが番犬を止めて蘇生されなくなる)。
+    // 再起動のための終了進行中フラグ (エスカレーションの二重発火ガード)。
+    // ⚠️ 番犬の stop-flag 抑止にはこちらを使わないこと — 再起動が不発だったときに戻す必要があるが、
+    // 遅い teardown 中に戻ると OnGameQuit が「意図的終了」と誤認して番犬を止めてしまう。
     public static bool RestartInProgress { get; private set; }
+
+    // 一度でも再起動を要求したか。**戻さない**。WatchdogLauncher.OnGameQuit がこれを見て「意図的終了」の
+    // stop-flag 書き込みをスキップする (でないと再起動のはずが番犬を止めて蘇生されなくなる)。
+    public static bool RestartRequested { get; private set; }
 
     // Innersloth UserIDToken が死んでいる (HealthLog 段1検出、BUG-20260715-05)。これ単体では再起動しない —
     // 接続中のロビーはトークン無しでも動き続けるため、実害 (メニュー落ちゾンビ) の確定を待つ。
@@ -138,6 +143,7 @@ public static class AutoRestart
 
         if (RestartInProgress) return;
         RestartInProgress = true;
+        RestartRequested = true;
 
         Logger.Warn($"Auto-restart: restarting the game process via watchdog to recover from auth/network death [{why}]", "AutoRestart");
         HealthLog.NoteAnom($"ANOM live kind=restart stage=escalate why=\"{why}\"");
@@ -170,6 +176,23 @@ public static class AutoRestart
         ArmHardKillBelt();
     }
 
+    // 強制終了を撃った後、プロセス消失を待つ猶予 (秒)。IL2CPP の teardown が長引くことがあるので長めに取る。
+    private const int HardKillGraceSeconds = 30;
+
+    // 再起動が不発に終わったときにラッチを戻す (永久封鎖の解除)。
+    private static void ReleaseRestartLatch(string why)
+    {
+        if (!RestartInProgress) return;
+
+        RestartInProgress = false;
+        try
+        {
+            Logger.Error($"Auto-restart: restart did not take effect ({why}); releasing the latch so a later escalation can retry", "AutoRestart");
+            HealthLog.NoteAnom("ANOM live kind=restart stage=latchreleased");
+        }
+        catch { }
+    }
+
     // Quit が着地しなかった時のバックグラウンド強制終了。メインスレッドの停止と独立に動く。
     private static void ArmHardKillBelt()
     {
@@ -185,8 +208,19 @@ public static class AutoRestart
                     HealthLog.NoteAnom("ANOM live kind=restart stage=hardkill");
                     self.Kill();
                 }
+
+                // Kill が効いていればこのスレッドごとプロセスが消えるので、以降には到達しない。
+                // 到達した = Quit も Kill も効かなかった、ということ。RestartInProgress を立てたままにすると
+                // Escalate(:139) が以後の全エスカレーションを永久に封鎖するので、次の機会に賭けられるよう戻す。
+                // (番犬の stop-flag 抑止は戻さない RestartRequested 側が担うので、ここで戻しても蘇生は殺さない)
+                Thread.Sleep(HardKillGraceSeconds * 1000);
+                ReleaseRestartLatch("neither quit nor hard kill took effect");
             }
-            catch { }
+            catch (System.Exception ex)
+            {
+                // Kill 自体が投げた場合も同じ (プロセスは生き残る)。ラッチを戻さないと永久封鎖される。
+                ReleaseRestartLatch($"hard kill threw: {ex.Message}");
+            }
         }) { IsBackground = true, Name = "EndKnotAutoRestartHardKill" };
         t.Start();
     }

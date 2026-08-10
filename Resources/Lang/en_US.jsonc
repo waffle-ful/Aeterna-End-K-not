@@ -2730,6 +2730,7 @@
   "DummySpawnerInfoLong": "(<#ff1919>Impostors</color>):\n<size=80%>Flood the map with decoys — and let killers waste their time on fakes.\n_____________________________________\nDifficulty: ★★★☆☆\n\n[Skills]\n・<b><color=#ff1919>Dummy Spawn</color></b>\nAfter each meeting, random-looking dummies spawn across the map. Killing near a dummy hits it instead of a real player — cooldown still applies. All dummies vanish when you die.\n\n<i>Is that a player? Take your chances.</i></size>",
   "DummySpawnerDummyCount": "Dummies per Meeting",
   "DummySpawnerKillRange": "Dummy Kill Range",
+  "DummyCorpseReportBlocked": "<#ffff00>That body is a fake — there is nothing to report.</color>",
   "Decrescendo": "Decrescendo",
   "DecrescendoInfo": "Weaken yourself with each kill to deceive opponents",
   "DecrescendoInfoLong": "(<#ff1919>Impostors</color>):\n<size=80%>Kill freely at first — but each death weakens you further.\n_____________________________________\nDifficulty: ★★★☆☆\n\n[Skills]\n・<b><color=#ff1919>Weakening</color></b>\nAfter a set number of kills, your cooldown begins multiplying with each subsequent kill. Optionally, your vision also shrinks. At full weakness, you may lose vent access entirely.\n\n<i>Act fast. The clock on your power is already ticking.</i></size>",

@@ -1201,6 +1201,8 @@ internal static class ReportDeadBodyPatch
         if (target && IsReportingDummyCorpse(__instance, target))
         {
             Logger.Info($"{__instance.GetNameWithRole().RemoveHtmlTags()} tried to report a dummy corpse — blocked", "ReportDeadBody");
+            // 無言で弾くと「通報ボタンが効かない = バグ」と誤解されるので、遮断した理由を本人にだけ返す。
+            __instance.Notify(GetString("DummyCorpseReportBlocked"));
             return false;
         }
 
@@ -1796,6 +1798,10 @@ internal static class FixedUpdatePatch
     private static readonly StringBuilder Mark = new(20);
     private static readonly StringBuilder Suffix = new();
     private static int LevelKickBufferTime = 10;
+
+    // FriendCode 未着による level-kick 誤爆を防ぐ join 後の猶予 (秒)。不正色キック側と同じ値。
+    private const float FriendCodeKickGraceSeconds = 10f;
+
     private static readonly Dictionary<byte, int> DeadBufferTime = [];
     private static readonly Dictionary<byte, long> LastUpdate = [];
     private static readonly Dictionary<byte, long> LastAddAbilityTime = [];
@@ -1939,7 +1945,10 @@ internal static class FixedUpdatePatch
             // Kick low-level people
             if (!lowLoad && GameSettingMenuPatch.LastPresetChange + 5 < TimeStamp && GameStates.IsLobby && !player.AmOwner && Options.KickLowLevelPlayer.GetInt() != 0 && (
                 (player.Data.PlayerLevel != 0 && player.Data.PlayerLevel < Options.KickLowLevelPlayer.GetInt()) ||
-                player.Data.FriendCode == string.Empty
+                // FriendCode も ColorId と同じく post-spawn に非同期で届く。LevelKickBufferTime はフレーム数
+                // カウンタ (実質サブ秒) しかないため、低速回線 joiner の「データ未着」を誤爆しうる。
+                // 不正色キックと同じ join 時刻ベースの猶予を掛ける (BUG-20260730-14 / 兄弟 BUG-20260730-13)。
+                (player.Data.FriendCode == string.Empty && (!GameStartManagerPatch.ClientJoinTime.TryGetValue(player.OwnerId, out float fcJoinTime) || Time.time - fcJoinTime >= FriendCodeKickGraceSeconds))
             ))
             {
                 LevelKickBufferTime--;

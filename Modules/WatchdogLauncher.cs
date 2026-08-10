@@ -229,7 +229,7 @@ public static class WatchdogLauncher
     {
         // AutoRestart 由来の終了 (プロセス再起動) は「意図的終了」ではない。ここで stop-flag を書くと
         // 番犬が止まって蘇生されなくなるので、再起動進行中は番犬を触らない。
-        if (AutoRestart.RestartInProgress)
+        if (AutoRestart.RestartRequested)
         {
             Logger.Info("Watchdog: game quitting for auto-restart; leaving watchdog running to relaunch", "WatchdogLauncher");
             return;

@@ -1597,6 +1597,27 @@ internal static class ChatCommands
             PlayerControl sender = PlayerControl.LocalPlayer;
             if (sender == null || sender.Data == null) return;
 
+            // 宛先がホスト自身だと自分宛 tag6 エンベロープを撃つことになる。RPC を組まずローカル表示だけ行う
+            // (ChatUpdatePatch.SendMessage の clientId==-1 分岐 / Utils.cs:2118 の receiver.AmOwner 分岐と同型)。
+            if (target.AmOwner)
+            {
+                if (!HudManager.InstanceExists) return;
+
+                string selfName = Main.AllPlayerNames.GetValueOrDefault(sender.PlayerId, string.Empty);
+                if (selfName.Length == 0) selfName = Utils.SafePlayerName(sender);
+
+                if (selfName.Length == 0)
+                    HudManager.Instance.Chat.AddChat(sender, msg);
+                else
+                {
+                    sender.SetName(title);
+                    HudManager.Instance.Chat.AddChat(sender, msg);
+                    sender.SetName(selfName);
+                }
+
+                return;
+            }
+
             try
             {
                 CustomRpcSender w = CustomRpcSender.Create("WhisperCommand.Lobby", SendOption.Reliable);
@@ -5985,7 +6006,13 @@ internal static class ChatUpdatePatch
 
     private static bool SendMessage(PlayerControl player, string msg, byte sendTo, string title, ref CustomRpcSender sender)
     {
-        int clientId = sendTo == byte.MaxValue ? -1 : Utils.GetPlayerById(sendTo).OwnerId;
+        var broadcast = sendTo == byte.MaxValue;
+        PlayerControl receiver = broadcast ? null : Utils.GetPlayerById(sendTo);
+
+        // 宛先指定なのに相手が居ない場合、-1 に落とすとブロードキャストへ化けてしまうので再送を諦める。
+        if (!broadcast && receiver == null) return false;
+
+        int clientId = broadcast ? -1 : receiver.OwnerId;
 
         // 生の Data.PlayerName 読みは禁止 (BUG-20260710-05) — Utils.SafePlayerName 参照。
         // ここはロビーでホストを除いたランダムなプレイヤーが sender になる経路 (:4554) なので、
@@ -6000,6 +6027,20 @@ internal static class ChatUpdatePatch
             player.SetName(title);
             HudManager.Instance.Chat.AddChat(player, msg);
             player.SetName(name);
+        }
+
+        // 宛先がホスト自身の unicast は自分宛 tag6 エンベロープになる。ローカル表示だけして RPC は組まない
+        // (ロビー whisper の履歴が LastMessages に載るため、この再送経路でも実際に到達する)。
+        if (!broadcast && receiver.AmOwner)
+        {
+            if (HudManager.InstanceExists)
+            {
+                player.SetName(title);
+                HudManager.Instance.Chat.AddChat(player, msg);
+                player.SetName(name);
+            }
+
+            return false;
         }
 
         sender.AutoStartRpc(player.NetId, RpcCalls.SetName, clientId)

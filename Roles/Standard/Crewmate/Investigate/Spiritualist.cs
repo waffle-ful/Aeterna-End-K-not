@@ -102,28 +102,35 @@ internal class Spiritualist : RoleBase
 
             TargetArrow.Add(spiritualist, target.PlayerId);
 
-            var writer = CustomRpcSender.Create("SpiritualistSendMessage", SendOption.Reliable);
-            writer.StartMessage(target.OwnerId);
+            // 宛先がホスト自身だと自分宛 tag6 エンベロープを撃つことになるため、
+            // Utils.SendMessage と同じくローカル表示へ分岐する (Utils.cs の receiver.AmOwner 分岐と同型)。
+            if (target.AmOwner)
+                Utils.SendMessage(GetString("SpiritualistNoticeMessage"), target.PlayerId, GetString("SpiritualistNoticeTitle"));
+            else
+            {
+                var writer = CustomRpcSender.Create("SpiritualistSendMessage", SendOption.Reliable);
+                writer.StartMessage(target.OwnerId);
 
-            writer.StartRpc(PlayerControl.LocalPlayer.NetId, RpcCalls.SetName)
-                .Write(PlayerControl.LocalPlayer.Data.NetId)
-                .Write(GetString("SpiritualistNoticeTitle"))
-                .EndRpc();
+                writer.StartRpc(PlayerControl.LocalPlayer.NetId, RpcCalls.SetName)
+                    .Write(PlayerControl.LocalPlayer.Data.NetId)
+                    .Write(GetString("SpiritualistNoticeTitle"))
+                    .EndRpc();
 
-            writer.StartRpc(PlayerControl.LocalPlayer.NetId, RpcCalls.SendChat)
-                .Write(GetString("SpiritualistNoticeMessage"))
-                .EndRpc();
+                writer.StartRpc(PlayerControl.LocalPlayer.NetId, RpcCalls.SendChat)
+                    .Write(GetString("SpiritualistNoticeMessage"))
+                    .EndRpc();
 
-            writer.StartRpc(PlayerControl.LocalPlayer.NetId, RpcCalls.SetName)
-                .Write(PlayerControl.LocalPlayer.Data.NetId)
-                .Write(PlayerControl.LocalPlayer.Data.PlayerName)
-                .EndRpc();
+                writer.StartRpc(PlayerControl.LocalPlayer.NetId, RpcCalls.SetName)
+                    .Write(PlayerControl.LocalPlayer.Data.NetId)
+                    .Write(PlayerControl.LocalPlayer.Data.PlayerName)
+                    .EndRpc();
 
-            writer.EndMessage();
-            writer.SendMessage();
+                writer.EndMessage();
+                writer.SendMessage();
 
-            // 素名 reset で消えた装飾名 (ホストタグ等) を flush 後に復元 (Utils.SendMessage と同型の穴)。
-            Utils.ScheduleDecoratedNameRestore(PlayerControl.LocalPlayer);
+                // 素名 reset で消えた装飾名 (ホストタグ等) を flush 後に復元 (Utils.SendMessage と同型の穴)。
+                Utils.ScheduleDecoratedNameRestore(PlayerControl.LocalPlayer);
+            }
         }
     }
 
