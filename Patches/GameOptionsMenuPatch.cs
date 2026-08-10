@@ -1070,6 +1070,13 @@ public static class StringOptionPatch
                 name = $"<size=3.5>{name}</size>";
                 SetupHelpIcon(role, __instance);
             }
+            // UpdateValuePrefix と同じ汚染ガード (BUG-20260810-02): 役職名検出が失敗しても
+            // 以前の styled 名を素の name で上書きしない。
+            else if (NameCache.TryGetValue(__instance, out string prevStyled) && prevStyled.StartsWith("<size=3.5>"))
+            {
+                Logger.Warn($"role-name detection missed on Initialize: raw='{name}' prev='{prevStyled}'", "BUG-20260810-02");
+                name = prevStyled;
+            }
 
             __instance.TitleText.SetText(name);
             NameCache[__instance] = name;
@@ -1231,7 +1238,18 @@ public static class StringOptionPatch
                 NotificationPopperPatch.AddRoleSettingsChangeMessage(item, role, true);
             }
             else
+            {
                 NotificationPopperPatch.AddSettingsChangeMessage(item, true);
+
+                // 役職行なのに役職名検出が失敗すると、素の name が TitleText と NameCache の両方へ入り
+                // 装飾タイトル (白文字+色帯+size wrap) がメニュー開閉でも直らない形で退行する
+                // (BUG-20260810-02)。以前の styled 名があるなら保持し、失敗の現場をログへ残す。
+                if (NameCache.TryGetValue(__instance, out string prevStyled) && prevStyled.StartsWith("<size=3.5>"))
+                {
+                    Logger.Warn($"role-name detection missed on UpdateValue: raw='{name}' prev='{prevStyled}'", "BUG-20260810-02");
+                    name = prevStyled;
+                }
+            }
 
             __instance.TitleText.SetText(name);
             NameCache[__instance] = name;
