@@ -620,6 +620,106 @@ describe("logic 検証 (docs/ekr-logic-spec.md §1〜§4・R1)", () => {
     });
 });
 
+// v1.2 (docs/ekr-logic-spec.md §2〜§3 2026-08-10 追記) — 位置と接触
+describe("logic 検証 v1.2 (位置と接触)", () => {
+    function baseLogic(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+        return {
+            version: 1,
+            rules: [{ when: "on_pet", do: [{ op: "stop" }] }],
+            ...overrides,
+        };
+    }
+    function withLogic(logic: unknown): Record<string, unknown> {
+        return { ...baseValid(), logic };
+    }
+
+    it("on_cno_touch は 11 種目として受理される", () => {
+        const r = validateEkrDefinition(withLogic(baseLogic({
+            rules: [{ when: "on_cno_touch", slot: 1, do: [{ op: "stop" }] }],
+        })));
+        expect(r.ok).toBe(true);
+        if (r.ok) expect(r.def.logic?.rules[0]).toMatchObject({ when: "on_cno_touch", slot: 1 });
+    });
+
+    it("on_cno_touch は slot (1..3) 必須 — 欠落・範囲外・非整数は拒否", () => {
+        expect(validateEkrDefinition(withLogic(baseLogic({ rules: [{ when: "on_cno_touch", do: [{ op: "stop" }] }] }))).ok).toBe(false);
+        expect(validateEkrDefinition(withLogic(baseLogic({ rules: [{ when: "on_cno_touch", slot: 0, do: [{ op: "stop" }] }] }))).ok).toBe(false);
+        expect(validateEkrDefinition(withLogic(baseLogic({ rules: [{ when: "on_cno_touch", slot: 4, do: [{ op: "stop" }] }] }))).ok).toBe(false);
+        expect(validateEkrDefinition(withLogic(baseLogic({ rules: [{ when: "on_cno_touch", slot: 1.5, do: [{ op: "stop" }] }] }))).ok).toBe(false);
+        expect(validateEkrDefinition(withLogic(baseLogic({ rules: [{ when: "on_cno_touch", slot: 1, do: [{ op: "stop" }] }] }))).ok).toBe(true);
+        expect(validateEkrDefinition(withLogic(baseLogic({ rules: [{ when: "on_cno_touch", slot: 3, do: [{ op: "stop" }] }] }))).ok).toBe(true);
+    });
+
+    it("on_cno_touch 以外の when に slot があれば拒否 (双方向の reject)", () => {
+        const r = validateEkrDefinition(withLogic(baseLogic({ rules: [{ when: "on_pet", slot: 1, do: [{ op: "stop" }] }] })));
+        expect(r.ok).toBe(false);
+    });
+
+    it("teleport.to にマーカー1..4 を受理する (未知の marker5 等は拒否)", () => {
+        for (const to of ["marker1", "marker2", "marker3", "marker4"]) {
+            const r = validateEkrDefinition(withLogic(baseLogic({ rules: [{ when: "on_pet", do: [{ op: "teleport", to }] }] })));
+            expect(r.ok, `to=${to}`).toBe(true);
+        }
+        const bad = validateEkrDefinition(withLogic(baseLogic({ rules: [{ when: "on_pet", do: [{ op: "teleport", to: "marker5" }] }] })));
+        expect(bad.ok).toBe(false);
+    });
+
+    it("marker_save: slot 1..4・at (self/ctx/cno1..3) の範囲外・型不一致は拒否、範囲内は通る", () => {
+        const cases: { node: unknown; ok: boolean }[] = [
+            { node: { op: "marker_save", slot: 1, at: "self" }, ok: true },
+            { node: { op: "marker_save", slot: 4, at: "ctx" }, ok: true },
+            { node: { op: "marker_save", slot: 4, at: "cno3" }, ok: true },
+            { node: { op: "marker_save", slot: 0, at: "self" }, ok: false },
+            { node: { op: "marker_save", slot: 5, at: "self" }, ok: false },
+            { node: { op: "marker_save", slot: 1.5, at: "self" }, ok: false },
+            { node: { op: "marker_save", slot: 1, at: "cno4" }, ok: false },
+            { node: { op: "marker_save", slot: 1, at: "elsewhere" }, ok: false },
+        ];
+        for (const { node, ok } of cases) {
+            const r = validateEkrDefinition(withLogic(baseLogic({ rules: [{ when: "on_pet", do: [node] }] })));
+            expect(r.ok, `${JSON.stringify(node)} は ok=${ok} を期待`).toBe(ok);
+        }
+    });
+
+    it("teleport_other: target は ctx のみ・to は self/marker1..4 のみ受理", () => {
+        const cases: { node: unknown; ok: boolean }[] = [
+            { node: { op: "teleport_other", target: "ctx", to: "self" }, ok: true },
+            { node: { op: "teleport_other", target: "ctx", to: "marker1" }, ok: true },
+            { node: { op: "teleport_other", target: "ctx", to: "marker4" }, ok: true },
+            { node: { op: "teleport_other", target: "self", to: "self" }, ok: false },
+            { node: { op: "teleport_other", target: "ctx", to: "random" }, ok: false },
+            { node: { op: "teleport_other", target: "ctx", to: "ctx" }, ok: false },
+        ];
+        for (const { node, ok } of cases) {
+            const r = validateEkrDefinition(withLogic(baseLogic({ rules: [{ when: "on_pet", do: [node] }] })));
+            expect(r.ok, `${JSON.stringify(node)} は ok=${ok} を期待`).toBe(ok);
+        }
+    });
+
+    it("portal_place: which は a/b のみ受理", () => {
+        expect(validateEkrDefinition(withLogic(baseLogic({ rules: [{ when: "on_pet", do: [{ op: "portal_place", which: "a" }] }] }))).ok).toBe(true);
+        expect(validateEkrDefinition(withLogic(baseLogic({ rules: [{ when: "on_pet", do: [{ op: "portal_place", which: "b" }] }] }))).ok).toBe(true);
+        expect(validateEkrDefinition(withLogic(baseLogic({ rules: [{ when: "on_pet", do: [{ op: "portal_place", which: "c" }] }] }))).ok).toBe(false);
+    });
+
+    it("marker_save/teleport_other/portal_place は leaf ノード (depth 1, count 1)", () => {
+        function nestedIf(depth: number, leaf: unknown): unknown {
+            if (depth <= 1) return leaf;
+            return { op: "if", cond: { e: "lit", v: 1 }, then: [nestedIf(depth - 1, leaf)] };
+        }
+        for (const leaf of [
+            { op: "marker_save", slot: 1, at: "self" },
+            { op: "teleport_other", target: "ctx", to: "self" },
+            { op: "portal_place", which: "a" },
+        ]) {
+            const depth8 = [nestedIf(8, leaf)];
+            expect(validateEkrDefinition(withLogic(baseLogic({ rules: [{ when: "on_pet", do: depth8 }] }))).ok, JSON.stringify(leaf)).toBe(true);
+            const depth9 = [nestedIf(9, leaf)];
+            expect(validateEkrDefinition(withLogic(baseLogic({ rules: [{ when: "on_pet", do: depth9 }] }))).ok, JSON.stringify(leaf)).toBe(false);
+        }
+    });
+});
+
 describe("normalize* ヘルパー (UI と検証が共有する唯一のクランプ実装)", () => {
     it("normalizeKillCooldown: 有限数はクランプ、非有限/非数値は既定値", () => {
         expect(normalizeKillCooldown(50)).toBe(50);

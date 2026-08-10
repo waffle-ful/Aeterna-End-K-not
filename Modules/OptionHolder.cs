@@ -999,6 +999,14 @@ public static class Options
         GroupAddons();
         LoadUserData();
         Achievements.LoadAllData();
+
+        // EKN (ノーコード役職メーカー) のスロット束縛をゲーム再起動をまたいで復元する。役職選出
+        // (GetRoleSpawnMode の Bound ゲート) より前に必ず走らせる必要があるため、オプション構築が
+        // 終わったこの時点 (CustomRoleSpawnChances 等が揃った直後・まだ1回もゲームが始まっていない)
+        // で行う (2026-08-10 裁定)。ReloadLibrary が Library を populate してから RestoreBindings が
+        // ファイル名を解決する順序を厳守すること。
+        Modules.Ekm.EkrManager.ReloadLibrary();
+        Modules.Ekm.EkrManager.RestoreBindings();
         // OptionShower.LastText = Translator.GetString("Loading");
 
         if (AllCrewRolesHaveVanillaColor.GetBool())

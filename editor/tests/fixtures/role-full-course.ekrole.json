@@ -131,6 +131,15 @@
         ]
       },
       {
+        "when": "on_cno_touch",
+        "slot": 1,
+        "do": [
+          { "op": "marker_save", "slot": 1, "at": "ctx" },
+          { "op": "notify", "text": "触れた…", "seconds": 2 },
+          { "op": "teleport_other", "target": "ctx", "to": "marker1" }
+        ]
+      },
+      {
         "when": "on_second",
         "do": [
           {
