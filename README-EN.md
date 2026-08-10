@@ -29,7 +29,9 @@ Supported Among Us version: **2026.3.31**
 
 ## Features
 
-On top of EHR's role engine, End K not adds its own original feature set for **streaming, long-running hosting, and original content.**
+On top of EHR's role engine, End K not adds features for **streaming, long-running hosting, and presentation.**
+
+> Most of the roles are inherited from — or reimplemented with reference to — EHR and earlier mods such as the TownOfHost lineage. Credits for each project are collected under [Credits](#credits).
 
 ### 🎥 Streaming & long-running hosting
 
@@ -41,11 +43,11 @@ On top of EHR's role engine, End K not adds its own original feature set for **s
 - **AI commentary companion** — A separate AI process (Gemini Live) receives live game events and provides real-time commentary through a 2D portrait / 3D avatar with lip-sync. Topic rotation and repetition suppression keep the commentary fresh during long streams.
 - **On-screen lobby code bubble** — A draggable IMGUI overlay that keeps your lobby code visible on stream at all times.
 
-### 🏚️ Original content
+### 🏚️ Lobby presentation & worlds
 
 - **Backrooms lobby** — A special Backrooms-themed lobby presentation, with asymmetric rendering that looks different for the modded host versus non-modded joiners.
-- **EKM custom map editor** — A dedicated editor for building your own custom maps is bundled ([`editor/`](./editor)); maps you create can be loaded in-game *(work in progress)*.
-- **Riptide** — An original End K not Impostor role: a giant wave sweeps across the entire map and anyone caught in it is wiped out, accelerating with every meeting.
+- **EKM custom map editor** — A dedicated editor for building custom maps is bundled ([`editor/`](./editor)); maps you create can be loaded in-game *(work in progress)*.
+- **Riptide** — A flashy Impostor role: a giant wave sweeps across the entire map and anyone caught in it is wiped out, accelerating with every meeting.
 - **Lobby decorations** — Place decorations such as hot springs and portals in the lobby.
 
 ### 🎨 UI & policy
@@ -83,7 +85,7 @@ Use `/r <role name>` or `/myrole` in-game to read each role's effects and settin
 | **Gemini** | Crewmate | Stand still and you leave a copy of yourself behind — same colour, same name, same everything. |
 | **Supernova** | Neutral | Triggers a supernova explosion. |
 
-These are End K not originals you can only play here — look for the ⭐ marks in [`ROLES-EN.md`](./ROLES-EN.md) to find more of them.
+A picked-for-spectacle shortlist. All 682 implemented roles are listed in [`ROLES-EN.md`](./ROLES-EN.md).
 
 
 ## Commands
@@ -187,10 +189,13 @@ End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/End
 
 ## Credits
 
-- **[Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles)** (Gurge44 et al.) — base mod, GPL-3.0
-- **[TownOfHost-K](https://github.com/KYMario/TownOfHost-K)** (KYMario et al.) — source of many roles, streaming-support features, and the official-server packet-splitting safety net, GPL-3.0
-- **[SuperNewRoles](https://github.com/SuperNewRoles/SuperNewRoles)** (SuperNewRoles team) — WaveCannon design reference, GPL-3.0
-- **[TownOfHost-Pko](https://github.com/satokazoku/TownOfHost-Pko)** (satokazoku et al.) — Many roles, WaveCannon design reference, GPL-3.0
+> **The vast majority of this mod's roles come from earlier mods.** Huge thanks to the developers of the projects below. Which role came from where can be traced through this repository's git log — port commits record the upstream source and Co-authored-by lines.
+
+- **[Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles)** (Gurge44 et al.) — base mod: the role engine, the large majority of roles, and an ongoing source of bug fixes, GPL-3.0
+- **[TownOfHost-K](https://github.com/KYMario/TownOfHost-K)** (KYMario et al.) — source of many ported roles, streaming-support features, and the official-server packet-splitting safety net, GPL-3.0
+- **[SuperNewRoles](https://github.com/SuperNewRoles/SuperNewRoles)** (SuperNewRoles team) — source of WaveCannon, GPL-3.0
+- **[TownOfHost-Pko](https://github.com/satokazoku/TownOfHost-Pko)** (satokazoku et al.) — source of many ported roles, WaveCannon design reference, GPL-3.0
+- **[Nebula on the Ship (NoS)](https://github.com/Dolly1016/Nebula)** (Dolly1016 et al.) — source of Mirage and other roles, memory-optimization and add-on API design reference, GPL-3.0 (NebulaAPI is LGPL-3.0)
 - **[Town Of Host](https://github.com/tukasa0001/TownOfHost)** (tukasa0001 et al.) — root of the TOH lineage
 - **[Town Of Host_ForE](https://github.com/AsumuAkaguma/TownOfHost_ForE)** — BGM customization feature
 - **[Town of Host: Enhanced (TOHE)](https://github.com/EnhancedNetwork/TownofHost-Enhanced)** (The Enhanced Network team) — source of many roles, GPL-3.0
