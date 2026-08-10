@@ -2731,6 +2731,7 @@
   "DummySpawnerDummyCount": "Dummies per Meeting",
   "DummySpawnerKillRange": "Dummy Kill Range",
   "DummyCorpseReportBlocked": "<#ffff00>That body is a fake — there is nothing to report.</color>",
+  "StaleCorpseReportBlocked": "<#ffff00>That body is left over from the lobby — there is nothing to report.</color>",
   "Decrescendo": "Decrescendo",
   "DecrescendoInfo": "Weaken yourself with each kill to deceive opponents",
   "DecrescendoInfoLong": "(<#ff1919>Impostors</color>):\n<size=80%>Kill freely at first — but each death weakens you further.\n_____________________________________\nDifficulty: ★★★☆☆\n\n[Skills]\n・<b><color=#ff1919>Weakening</color></b>\nAfter a set number of kills, your cooldown begins multiplying with each subsequent kill. Optionally, your vision also shrinks. At full weakness, you may lose vent access entirely.\n\n<i>Act fast. The clock on your power is already ticking.</i></size>",
