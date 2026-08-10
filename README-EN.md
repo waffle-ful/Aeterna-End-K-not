@@ -76,7 +76,6 @@ Use `/r <role name>` or `/myrole` in-game to read each role's effects and settin
 
 | Role | Faction | What it does |
 |---|---|---|
-| **WaveCannon** | Impostor | Charge up a beam and fire it — anything it hits is wiped out. The most popular role in this mod. |
 | **Riptide** | Impostor | Raises a wave with every meeting, sweeping players away to drown. |
 | **Dossun** | Impostor | Places a giant block that follows your own movement — crush or knock back anyone in the way. |
 | **WordKiller** | Impostor | Kills anyone who says the forbidden word. Turns the whole conversation into a minefield. |
@@ -84,7 +83,7 @@ Use `/r <role name>` or `/myrole` in-game to read each role's effects and settin
 | **Gemini** | Crewmate | Stand still and you leave a copy of yourself behind — same colour, same name, same everything. |
 | **Supernova** | Neutral | Triggers a supernova explosion. |
 
-WaveCannon is this mod's flagship take on a fan-favourite role from other mods, rebuilt with its own presentation and tuning for a host-only setup. The others are End K not originals you can only play here — look for the ⭐ marks in [`ROLES-EN.md`](./ROLES-EN.md) to find more of them.
+These are End K not originals you can only play here — look for the ⭐ marks in [`ROLES-EN.md`](./ROLES-EN.md) to find more of them.
 
 
 ## Commands
