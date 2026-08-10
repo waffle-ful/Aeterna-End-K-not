@@ -4,7 +4,7 @@
 
 **682 roles in total** (536 faction roles + 146 sub-roles/add-ons), organized by faction.
 
-⭐ = End K not original role (not ported from another mod).
+Most of the roles listed here are inherited from — or reimplemented with reference to — the base mod [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) and earlier mods in the scene such as the TownOfHost lineage, SuperNewRoles, and Nebula on the Ship. Credits for each project are collected in the [README](README-EN.md#credits).
 
 | Faction | Count |
 |---------|-------|
@@ -62,9 +62,9 @@ Use `/r <role name>` or `/myrole` in-game to check each role's effects and setti
 | Nullifier | Kidnapper | Mercenary | Lightning |
 | ShrineMaiden | Devourer | Butcher | Chainbinder |
 | Exorcist | Frightener | Obstructer | Skinwalker |
-| ⭐Riptide | ⭐Crosswind | ⭐Dossun | Gatekeeper |
-| ⭐Shuffler | ⭐WordKiller | ⭐Autoscopy | ⭐EvilBusker |
-| ⭐Atlas | ⭐Dominion |  |  |
+| Riptide | Crosswind | Dossun | Gatekeeper |
+| Shuffler | WordKiller | Autoscopy | EvilBusker |
+| Atlas | Dominion |  |  |
 
 ### Crewmate (178)
 
@@ -111,10 +111,10 @@ Use `/r <role name>` or `/myrole` in-game to check each role's effects and setti
 | Deputy | Analyst | Unshifter | Retributionist |
 | Forensic | Adventurer | Imitator | Tree |
 | Soothsayer | Psychic | LovingCrewmate | Alchemist |
-| WolfBoy | ⭐ForceFielder | Akazukin | ⭐Sandbox |
-| Operative | Survivor | Bouncer | ⭐Gemini |
-| ⭐MapExtender | ⭐PortalButton | Revenant | Crewmate |
-| ⭐Newscaster | Mirage |  |  |
+| WolfBoy | ForceFielder | Akazukin | Sandbox |
+| Operative | Survivor | Bouncer | Gemini |
+| MapExtender | PortalButton | Revenant | Crewmate |
+| Newscaster | Mirage |  |  |
 
 ### Neutral (137)
 
@@ -153,8 +153,8 @@ Use `/r <role name>` or `/myrole` in-game to check each role's effects and setti
 | RuthlessRomantic | Reckless | Pulse | Postman |
 | Traitor | Predator | Werewolf | Strawdoll |
 | Innocent | Blockade | Jackpot | Maguro |
-| Safecracker | ⭐Supernova | ⭐ProbabilityKing | ⭐GambleKiller |
-| ⭐Torpedo |  |  |  |
+| Safecracker | Supernova | ProbabilityKing | GambleKiller |
+| Torpedo |  |  |  |
 
 ### Coven (21)
 

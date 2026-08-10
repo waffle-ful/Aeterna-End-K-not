@@ -33,7 +33,9 @@
 
 ## End K not の特徴
 
-End K not は EHR の役職エンジンの上に、**配信・長時間運用・オリジナルコンテンツ**のための独自機能を積み上げた個人フォークです。
+End K not は EHR の役職エンジンの上に、**配信・長時間運用・演出**まわりの機能を積み上げた個人フォークです。
+
+> 役職の大半は EHR や TownOfHost 系列など先行 Mod の実装を引き継いだもの・参考に再実装したものです。各 Mod への謝辞は[クレジット](#クレジット)にまとめています。
 
 ### 🎥 配信・長時間運用サポート
 
@@ -45,11 +47,11 @@ End K not は EHR の役職エンジンの上に、**配信・長時間運用・
 - **AI 実況相棒** — 別プロセスで動く AI（Gemini Live）がゲームの進行イベントを受け取り、立ち絵・3D アバター（口パク付き）でリアルタイムに実況してくれます。話題のローテーションと反復抑制で長時間配信でも実況がマンネリ化しにくい設計です。
 - **配信用ロビーコードバブル** — 配信画面に常時ロビーコードを表示するドラッグ可能な IMGUI バブル。
 
-### 🏚️ オリジナルコンテンツ
+### 🏚️ ロビー演出・ワールド
 
 - **Backrooms ロビー** — Backrooms をテーマにした特別なロビー演出。Mod を入れているホストと、入れていない参加者とで見え方が変わる非対称表示を実現しています。
-- **EKM カスタムマップエディタ** — オリジナルのカスタムマップを作れる専用エディタを同梱（[`editor/`](./editor)）。作ったマップをゲーム内で読み込めます *(開発中)*。
-- **リップタイド (Riptide)** — マップ全体を覆う巨大な波が押し寄せ、のまれると即死。会議のたびに波が加速していく、End K not オリジナルのド派手なインポスター役職。
+- **EKM カスタムマップエディタ** — カスタムマップを作れる専用エディタを同梱（[`editor/`](./editor)）。作ったマップをゲーム内で読み込めます *(開発中)*。
+- **リップタイド (Riptide)** — マップ全体を覆う巨大な波が押し寄せ、のまれると即死。会議のたびに波が加速していく、ド派手なインポスター役職。
 - **ロビー装飾** — ロビーに温泉やポータルなどの装飾を配置できます。
 
 ### 🎨 UI・ポリシー
@@ -87,7 +89,7 @@ End K not は EHR の役職エンジンの上に、**配信・長時間運用・
 | **ジェミニ (Gemini)** | クルーメイト | 立ち止まると、さっきまで居た場所に自分の分身が残る。色も名前も自分そっくり。 |
 | **スーパーノヴァ (Supernova)** | ニュートラル | 超新星爆発を起こす。 |
 
-ここで紹介しているのはここでしか遊べない End K not オリジナル役職です。オリジナル役職は [`ROLES.md`](./ROLES.md) の ⭐ 印を目印にどうぞ。
+派手さで選んだおすすめです。実装済みの全 682 役職は [`ROLES.md`](./ROLES.md) にまとめています。
 
 
 ## コマンド一覧
@@ -191,11 +193,13 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 
 ## クレジット
 
-- **[Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles)** (Gurge44 他) — ベース Mod、GPL-3.0
-- **[TownOfHost-K](https://github.com/KYMario/TownOfHost-K)** (KYMario 他) — 多くの役職、配信サポート機能、公式鯖パケット分割対策、GPL-3.0
-- **[SuperNewRoles](https://github.com/SuperNewRoles/SuperNewRoles)** (SuperNewRoles 開発チーム) — 波動砲 (WaveCannon) の設計参考、GPL-3.0
-- **[TownOfHost-Pko](https://github.com/satokazoku/TownOfHost-Pko)** (satokazoku 他) — 多くの役職、波動砲の設計参考、GPL-3.0
-- **[Nebula on the Ship (NoS)](https://github.com/Dolly1016/Nebula)** (Dolly1016 他) — メモリ最適化とアドオン API の設計参考、GPL-3.0 (NebulaAPI は LGPL-3.0)
+> **この Mod の役職は、そのほとんどが先行 Mod に由来します。** 下記プロジェクトの開発者の皆さんに深く感謝します。個別の役職がどこ由来かは、リポジトリの git log（移植コミットには移植元と Co-authored-by を記載しています）で追跡できます。
+
+- **[Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles)** (Gurge44 他) — ベース Mod。役職エンジンと大多数の役職、継続的なバグ修正の取り込み元、GPL-3.0
+- **[TownOfHost-K](https://github.com/KYMario/TownOfHost-K)** (KYMario 他) — 多くの役職の移植元、配信サポート機能、公式鯖パケット分割対策、GPL-3.0
+- **[SuperNewRoles](https://github.com/SuperNewRoles/SuperNewRoles)** (SuperNewRoles 開発チーム) — 波動砲 (WaveCannon) の移植元、GPL-3.0
+- **[TownOfHost-Pko](https://github.com/satokazoku/TownOfHost-Pko)** (satokazoku 他) — 多くの役職の移植元、波動砲の設計参考、GPL-3.0
+- **[Nebula on the Ship (NoS)](https://github.com/Dolly1016/Nebula)** (Dolly1016 他) — ミラージュ (Mirage) をはじめとする役職の移植元、メモリ最適化とアドオン API の設計参考、GPL-3.0 (NebulaAPI は LGPL-3.0)
 - **[Town Of Host](https://github.com/tukasa0001/TownOfHost)** (tukasa0001 他) — TOH 系列の祖
 - **[Town Of Host_ForE](https://github.com/AsumuAkaguma/TownOfHost_ForE)** — BGMカスタマイズ機能
 - **[Town of Host: Enhanced (TOHE)](https://github.com/EnhancedNetwork/TownofHost-Enhanced)**(The Enhanced Network 開発チーム) — 多くの役職 

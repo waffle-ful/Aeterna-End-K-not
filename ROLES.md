@@ -4,7 +4,7 @@
 
 実装済みは合計 **682 役職**（陣営別役職536 + サブ役職・アドオン146）。陣営ごとに整理しています。
 
-⭐ = End K not オリジナル役職（他の Mod からの移植ではありません）。
+ここに並ぶ役職の大半は、ベースである [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) および TownOfHost 系列・SuperNewRoles・Nebula on the Ship など先行 Mod の実装を引き継いだもの、あるいはそれらを参考に再実装したものです。各 Mod への謝辞は [README のクレジット](README.md#クレジット)にまとめています。
 
 | 陣営 | 役職数 |
 |------|-------|
@@ -62,9 +62,9 @@
 | 無効主義者 (Nullifier) | 誘拐犯 (Kidnapper) | 傭兵 (Mercenary) | 落雷 (Lightning) |
 | 巫女 (ShrineMaiden) | 貪食者 (Devourer) | ブッチャー (Butcher) | チェインバインダー (Chainbinder) |
 | エクソシスト (Exorcist) | フライトナー (Frightener) | オブストラクター (Obstructer) | スキンウォーカー (Skinwalker) |
-| ⭐リップタイド (Riptide) | ⭐横風 (Crosswind) | ⭐ドッスン (Dossun) | ゲートキーパー (Gatekeeper) |
-| ⭐シャッフラー (Shuffler) | ⭐ワードキラー (WordKiller) | ⭐オートスコピー (Autoscopy) | ⭐イビルバスカー (EvilBusker) |
-| ⭐アトラス (Atlas) | ⭐ドミニオン (Dominion) |  |  |
+| リップタイド (Riptide) | 横風 (Crosswind) | ドッスン (Dossun) | ゲートキーパー (Gatekeeper) |
+| シャッフラー (Shuffler) | ワードキラー (WordKiller) | オートスコピー (Autoscopy) | イビルバスカー (EvilBusker) |
+| アトラス (Atlas) | ドミニオン (Dominion) |  |  |
 
 ### クルーメイト系 (178)
 
@@ -111,10 +111,10 @@
 | 副官 (Deputy) | 分析者 (Analyst) | 変身解除者 (Unshifter) | 報復者 (Retributionist) |
 | 法医学者 (Forensic) | 冒険者 (Adventurer) | 模倣者 (Imitator) | 木 (Tree) |
 | 預言者 (Soothsayer) | 霊能者 (Psychic) | 恋人 (LovingCrewmate) | 錬金術師 (Alchemist) |
-| 狼少年 (WolfBoy) | ⭐フォースフィールダー (ForceFielder) | あかづきん (Akazukin) | ⭐サンドボックス (Sandbox) |
-| オペレーティブ (Operative) | サバイバー (Survivor) | バウンサー (Bouncer) | ⭐ジェミニ (Gemini) |
-| ⭐マップエクステンダー (MapExtender) | ⭐ポータルボタン (PortalButton) | レヴナント (Revenant) | クルーメイト (Crewmate) |
-| ⭐ニュースキャスター (Newscaster) | ミラージュ (Mirage) |  |  |
+| 狼少年 (WolfBoy) | フォースフィールダー (ForceFielder) | あかづきん (Akazukin) | サンドボックス (Sandbox) |
+| オペレーティブ (Operative) | サバイバー (Survivor) | バウンサー (Bouncer) | ジェミニ (Gemini) |
+| マップエクステンダー (MapExtender) | ポータルボタン (PortalButton) | レヴナント (Revenant) | クルーメイト (Crewmate) |
+| ニュースキャスター (Newscaster) | ミラージュ (Mirage) |  |  |
 
 ### ニュートラル系 (137)
 
@@ -153,8 +153,8 @@
 | 無慈悲で冷酷なロマンチック (RuthlessRomantic) | 無謀者 (Reckless) | 模倣者 (Pulse) | 郵便配達員 (Postman) |
 | 裏切り者 (Traitor) | 略奪者 (Predator) | 狼男 (Werewolf) | 藁人形 (Strawdoll) |
 | 冤罪師 (Innocent) | ブロケード (Blockade) | ジャックポット (Jackpot) | マグロ (Maguro) |
-| 金庫破り (Safecracker) | ⭐スーパーノヴァ (Supernova) | ⭐確率王 (ProbabilityKing) | ⭐ギャンブルキラー (GambleKiller) |
-| ⭐魚雷 (Torpedo) |  |  |  |
+| 金庫破り (Safecracker) | スーパーノヴァ (Supernova) | 確率王 (ProbabilityKing) | ギャンブルキラー (GambleKiller) |
+| 魚雷 (Torpedo) |  |  |  |
 
 ### カバン (Coven) (21)
 
