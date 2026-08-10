@@ -57,7 +57,7 @@ Use `/r <role name>` or `/myrole` in-game to check each role's effects and setti
 | Forger | Blackmailer | Bard | Hypnotist |
 | KillingMachine | Librarian | Commander | Capitalist |
 | Mastermind | CursedWolf | Kamikaze | Assumer |
-| Balancer | **WaveCannon** | Consort | Renegade |
+| Balancer | WaveCannon | Consort | Renegade |
 | Councillor | Ventriloquist | Pathologist | Witch |
 | Nullifier | Kidnapper | Mercenary | Lightning |
 | ShrineMaiden | Devourer | Butcher | Chainbinder |
@@ -111,7 +111,7 @@ Use `/r <role name>` or `/myrole` in-game to check each role's effects and setti
 | Deputy | Analyst | Unshifter | Retributionist |
 | Forensic | Adventurer | Imitator | Tree |
 | Soothsayer | Psychic | LovingCrewmate | Alchemist |
-| WolfBoy | ⭐ForceFielder | Akazukin | Sandbox |
+| WolfBoy | ⭐ForceFielder | Akazukin | ⭐Sandbox |
 | Operative | Survivor | Bouncer | ⭐Gemini |
 | ⭐MapExtender | ⭐PortalButton | Revenant | Crewmate |
 | ⭐Newscaster | Mirage |  |  |
