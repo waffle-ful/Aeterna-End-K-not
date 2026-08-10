@@ -38,6 +38,7 @@
       {
         "when": "on_meeting_end",
         "do": [
+          { "op": "wait", "seconds": 10.5 },
           { "op": "cno_show", "slot": 3, "who": "all" },
           { "op": "notify", "text": "灯りを分かち合おう", "seconds": 2 }
         ]

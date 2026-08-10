@@ -34,7 +34,12 @@ const HUE_MOTION = 210; // 動き = 青
 const HUE_LOOKS = 290; // 見た目 = 紫
 const HUE_CONTROL = 20; // 制御 = 橙
 const HUE_VAR = 330; // 変数 = 赤 (Blockly 標準の VARIABLES_HUE と同値)
+// v1.2 (spec §6/§7 2026-08-10 追記) — 「ひっさつわざ」カテゴリ (マーカー/相手ワープ/ポータル)。
+// 既存5色 (45/210/290/20/330) と衝突しない色相を選ぶ。
+const HUE_ULTIMATE = 150; // ひっさつわざ = 緑
 
+// on_cno_touch は動的な SLOT ドロップダウンを持つため WHEN_LABELS/WHEN_TOOLTIPS には残すが、
+// jsonBlockDefs 側では他のイベントと分けて個別のブロック定義を書く (下記参照)。
 const WHEN_LABELS: Record<LogicWhen, string> = {
     on_game_start: "ゲームが始まったとき",
     on_pet: "ボタンをおしたとき",
@@ -46,6 +51,7 @@ const WHEN_LABELS: Record<LogicWhen, string> = {
     on_vent_enter: "ベントに入ったとき",
     on_report: "死体を通報したとき",
     on_second: "毎秒くりかえす",
+    on_cno_touch: "オブジェクトにだれかが触れたとき",
 };
 
 const WHEN_TOOLTIPS: Record<LogicWhen, string> = {
@@ -59,6 +65,7 @@ const WHEN_TOOLTIPS: Record<LogicWhen, string> = {
     on_vent_enter: "自分がベントに入ったときに実行します。",
     on_report: "自分が死体を通報したときに実行します。",
     on_second: "タスク中、自分が生きている間、毎秒くりかえし実行します (処理が重いことはしないでね)。",
+    on_cno_touch: "自分が出したオブジェクト(スロットで指定)に、生きているプレイヤーが触れたときに実行します。触れた人が「相手」になります。一度触れると、その人が離れるまで(または離れてから触れ直すまで)は再発火しません。",
 };
 
 // ---------------------------------------------------------------------------
@@ -83,7 +90,9 @@ function variableDropdownOptions(): Blockly.MenuOption[] {
 // ---------------------------------------------------------------------------
 
 function jsonBlockDefs(): unknown[] {
-    const eventBlocks = LOGIC_WHEN_VALUES.map((when) => ({
+    // on_cno_touch は動的な SLOT ドロップダウン (1..3) を持つ唯一のイベント (spec §2 v1.2) —
+    // 他の when と同じ汎用テンプレートには乗せず、個別のブロック定義を書く。
+    const eventBlocks = LOGIC_WHEN_VALUES.filter((when) => when !== "on_cno_touch").map((when) => ({
         type: `ekr_when_${when}`,
         message0: WHEN_LABELS[when],
         nextStatement: null,
@@ -93,6 +102,14 @@ function jsonBlockDefs(): unknown[] {
 
     return [
         ...eventBlocks,
+        {
+            type: "ekr_when_on_cno_touch",
+            message0: "オブジェクト %1 にだれかが触れたとき",
+            args0: [{ type: "field_dropdown", name: "SLOT", options: [["1", "1"], ["2", "2"], ["3", "3"]] }],
+            nextStatement: null,
+            colour: HUE_EVENT,
+            tooltip: WHEN_TOOLTIPS.on_cno_touch,
+        },
 
         // 制御
         {
@@ -160,11 +177,16 @@ function jsonBlockDefs(): unknown[] {
         {
             type: "ekr_do_teleport",
             message0: "%1 にワープする",
-            args0: [{ type: "field_dropdown", name: "TO", options: [["ランダムな場所", "random"], ["相手の場所", "ctx"]] }],
+            args0: [{
+                type: "field_dropdown", name: "TO", options: [
+                    ["ランダムな場所", "random"], ["相手の場所", "ctx"],
+                    ["マーカー1", "marker1"], ["マーカー2", "marker2"], ["マーカー3", "marker3"], ["マーカー4", "marker4"],
+                ],
+            }],
             previousStatement: null,
             nextStatement: null,
             colour: HUE_MOTION,
-            tooltip: "ランダムな場所、または相手 (このできごとに相手がいるとき) の場所にワープします。",
+            tooltip: "ランダムな場所、相手 (このできごとに相手がいるとき) の場所、または「いまの場所をおぼえる」で保存したマーカーの場所にワープします。マーカーが未保存なら何も起きません。",
         },
         {
             type: "ekr_do_speed",
@@ -278,6 +300,49 @@ function jsonBlockDefs(): unknown[] {
             nextStatement: null,
             colour: HUE_LOOKS,
             tooltip: "偽物の死体を置きます。ふつうに通報できます。会議が始まると自動的に消えます。出せるのは2秒に1回まで、追放の演出中は出せません。",
+        },
+
+        // ひっさつわざ (v1.2 spec §3 追記 — マーカー/相手ワープ/ポータル)
+        {
+            type: "ekr_do_marker_save",
+            message0: "いまの場所をマーカー %1 におぼえる ( %2 )",
+            args0: [
+                { type: "field_dropdown", name: "SLOT", options: [["1", "1"], ["2", "2"], ["3", "3"], ["4", "4"]] },
+                {
+                    type: "field_dropdown", name: "AT", options: [
+                        ["じぶん", "self"], ["相手", "ctx"],
+                        ["オブジェクト1", "cno1"], ["オブジェクト2", "cno2"], ["オブジェクト3", "cno3"],
+                    ],
+                },
+            ],
+            inputsInline: true,
+            previousStatement: null,
+            nextStatement: null,
+            colour: HUE_ULTIMATE,
+            tooltip: "いまの場所を、あとで「ワープする」で使えるように覚えておきます (4つまで)。「相手」や「オブジェクト」を選んでも、このできごとに相手やそのオブジェクトがいなければ何も起きません。会議をまたいでも覚えていますが、ゲームが始まると全部忘れます。",
+        },
+        {
+            type: "ekr_do_teleport_other",
+            message0: "相手を %1 にワープさせる",
+            args0: [{
+                type: "field_dropdown", name: "TO", options: [
+                    ["じぶんのところ", "self"],
+                    ["マーカー1", "marker1"], ["マーカー2", "marker2"], ["マーカー3", "marker3"], ["マーカー4", "marker4"],
+                ],
+            }],
+            previousStatement: null,
+            nextStatement: null,
+            colour: HUE_ULTIMATE,
+            tooltip: "このできごとの相手をワープさせます (相手がいなければ何も起きません。マーカーが未保存でも何も起きません)。ワープは自分の役職だけでなく全部の役職まとめて1秒に2回までしか使えないので、ここぞというときに使おう。",
+        },
+        {
+            type: "ekr_do_portal_place",
+            message0: "ポータル %1 をここに置く",
+            args0: [{ type: "field_dropdown", name: "WHICH", options: [["A", "a"], ["B", "b"]] }],
+            previousStatement: null,
+            nextStatement: null,
+            colour: HUE_ULTIMATE,
+            tooltip: "自分の足元にポータルを置きます。AとB両方置くと、ワープでつながります (生きているプレイヤーが触れると反対側へワープします)。同じ方をもう一度置くと、そちらだけ引っ越します。",
         },
 
         // 変数・式 (動的ドロップダウンが不要なもののみ。var_set/var_add/変数の値 は命令形で別途登録)
@@ -471,6 +536,16 @@ export function buildRoleToolbox(): Blockly.utils.toolbox.ToolboxDefinition {
                     { kind: "block", type: "ekr_do_cno_show" },
                     { kind: "block", type: "ekr_do_dummy_spawn" },
                     { kind: "block", type: "ekr_do_corpse_spawn" },
+                ],
+            },
+            {
+                kind: "category",
+                name: "ひっさつわざ",
+                colour: String(HUE_ULTIMATE),
+                contents: [
+                    { kind: "block", type: "ekr_do_marker_save" },
+                    { kind: "block", type: "ekr_do_teleport_other" },
+                    { kind: "block", type: "ekr_do_portal_place" },
                 ],
             },
             {

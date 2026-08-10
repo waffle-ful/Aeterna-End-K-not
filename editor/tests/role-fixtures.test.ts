@@ -44,7 +44,7 @@ describe("golden fixture: role-full-course.ekrole.json (10イベント・主要o
         }
     });
 
-    it("制御 op (if/wait/stop/var_set/var_add) とアクション op (9種) を全て少なくとも1回使っている", () => {
+    it("制御 op (if/wait/stop/var_set/var_add) とアクション op (11種・v1.2 で marker_save/teleport_other を追加) を全て少なくとも1回使っている", () => {
         const parsed = JSON.parse(fullCourseRaw);
         const result = validateEkrDefinition(parsed);
         if (!result.ok) throw new Error(result.error);
@@ -57,6 +57,7 @@ describe("golden fixture: role-full-course.ekrole.json (10イベント・主要o
             "if", "wait", "stop", "var_set", "var_add",
             "notify", "teleport", "kill", "set_kill_cooldown", "speed",
             "cno_spawn", "cno_move", "cno_despawn", "cno_show",
+            "marker_save", "teleport_other",
         ];
         for (const op of expectedOps) {
             expect(ops.has(op), `op "${op}" が fixture 内で使われていない`).toBe(true);

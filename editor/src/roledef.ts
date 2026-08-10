@@ -70,6 +70,7 @@ export const LOGIC_WHEN_VALUES = [
     "on_vent_enter",
     "on_report",
     "on_second",
+    "on_cno_touch",
 ] as const;
 export type LogicWhen = (typeof LOGIC_WHEN_VALUES)[number];
 const LOGIC_WHEN_SET: ReadonlySet<string> = new Set(LOGIC_WHEN_VALUES);
@@ -115,6 +116,14 @@ export const CNO_MOVE_DELTA_MAX = 50;
 export const DUMMY_SPAWN_NAME_MAX = 8;
 export const DUMMY_SPAWN_DEFAULT_NAME = "Dummy";
 
+// v1.2 (spec §2/§3 2026-08-10 追記) — 位置と接触
+export const MARKER_SLOT_MIN = 1;
+export const MARKER_SLOT_MAX = 4;
+export const TELEPORT_TO_VALUES = ["random", "ctx", "marker1", "marker2", "marker3", "marker4"] as const;
+export const TELEPORT_OTHER_TO_VALUES = ["self", "marker1", "marker2", "marker3", "marker4"] as const;
+export const MARKER_SAVE_AT_VALUES = ["self", "ctx", "cno1", "cno2", "cno3"] as const;
+export const PORTAL_WHICH_VALUES = ["a", "b"] as const;
+
 export interface LogicVariable {
     name: string;
     init: number;
@@ -132,7 +141,7 @@ export type LogicNode =
     | { op: "var_set"; name: string; value: LogicExpr }
     | { op: "var_add"; name: string; delta: LogicExpr }
     | { op: "notify"; text: string; seconds: number }
-    | { op: "teleport"; to: "random" | "ctx" }
+    | { op: "teleport"; to: (typeof TELEPORT_TO_VALUES)[number] }
     | { op: "kill"; target: "self" | "ctx" }
     | { op: "set_kill_cooldown"; seconds: number }
     | { op: "speed"; mult: number; seconds: number }
@@ -150,10 +159,17 @@ export type LogicNode =
     // (「同時3 slot/ホルダー」の対象に dummy も入る)。cno_show はダミーには no-op (実装都合・仕様は
     // TS 側の検証対象外なのでここでは触れない)。
     | { op: "dummy_spawn"; slot: 1 | 2 | 3; name: string; killable: boolean; at: "self" | "ctx" }
-    | { op: "corpse_spawn"; color: "self" | "random"; at: "self" | "ctx" };
+    | { op: "corpse_spawn"; color: "self" | "random"; at: "self" | "ctx" }
+    // v1.2 (spec §3 2026-08-10 追記) — 位置と接触。marker_save の slot は cno_spawn とは別枠
+    // (per-holder の位置メモリ4スロット・§3「マーカー」)。
+    | { op: "marker_save"; slot: 1 | 2 | 3 | 4; at: (typeof MARKER_SAVE_AT_VALUES)[number] }
+    | { op: "teleport_other"; target: "ctx"; to: (typeof TELEPORT_OTHER_TO_VALUES)[number] }
+    | { op: "portal_place"; which: (typeof PORTAL_WHICH_VALUES)[number] };
 
 export interface LogicRule {
     when: LogicWhen;
+    // on_cno_touch の必須フィールド (spec §2 v1.2)。他イベントでは付与禁止 (検証 reject)。
+    slot?: 1 | 2 | 3;
     do: LogicNode[];
 }
 
@@ -539,7 +555,7 @@ function validateNode(raw: unknown, varNames: ReadonlySet<string>, path: string)
             return { node: { op: "notify", text, seconds }, depth: 1, count: 1 };
         }
         case "teleport": {
-            const to = expectEnum(raw.to, ["random", "ctx"] as const, `${path}.to`);
+            const to = expectEnum(raw.to, TELEPORT_TO_VALUES, `${path}.to`);
             return { node: { op: "teleport", to }, depth: 1, count: 1 };
         }
         case "kill": {
@@ -600,6 +616,22 @@ function validateNode(raw: unknown, varNames: ReadonlySet<string>, path: string)
             const at = expectEnum(raw.at, ["self", "ctx"] as const, `${path}.at`);
             return { node: { op: "corpse_spawn", color, at }, depth: 1, count: 1 };
         }
+        case "marker_save": {
+            // v1.2 (spec §3): slot は per-holder の位置メモリ4スロット (cno_spawn の3 slot 枠とは別)。
+            const slot = expectRangeInt(raw.slot, MARKER_SLOT_MIN, MARKER_SLOT_MAX, `${path}.slot`) as 1 | 2 | 3 | 4;
+            const at = expectEnum(raw.at, MARKER_SAVE_AT_VALUES, `${path}.at`);
+            return { node: { op: "marker_save", slot, at }, depth: 1, count: 1 };
+        }
+        case "teleport_other": {
+            // v1.2 (spec §3): target は現状 "ctx" の一択 (将来拡張余地として enum のまま検証する)。
+            const target = expectEnum(raw.target, ["ctx"] as const, `${path}.target`);
+            const to = expectEnum(raw.to, TELEPORT_OTHER_TO_VALUES, `${path}.to`);
+            return { node: { op: "teleport_other", target, to }, depth: 1, count: 1 };
+        }
+        case "portal_place": {
+            const which = expectEnum(raw.which, PORTAL_WHICH_VALUES, `${path}.which`);
+            return { node: { op: "portal_place", which }, depth: 1, count: 1 };
+        }
         default:
             fail(`${path}.op が不明です (${JSON.stringify(op)})`);
     }
@@ -611,6 +643,16 @@ function validateRule(raw: unknown, varNames: ReadonlySet<string>, index: number
     if (typeof when !== "string" || !LOGIC_WHEN_SET.has(when)) {
         fail(`rules[${index}].when が不明です (${JSON.stringify(when)})`);
     }
+
+    // v1.2 (spec §2): on_cno_touch は必須フィールド slot (1..3) を持つ唯一のイベント。
+    // 他イベントで slot が同梱されていれば reject (逆方向も reject)。
+    let slot: 1 | 2 | 3 | undefined;
+    if (when === "on_cno_touch") {
+        slot = expectRangeInt(raw.slot, CNO_SLOT_MIN, CNO_SLOT_MAX, `rules[${index}].slot`) as 1 | 2 | 3;
+    } else if (raw.slot !== undefined) {
+        fail(`rules[${index}].slot はイベント "${when}" では使えません (on_cno_touch 専用です)`);
+    }
+
     const doPath = `rules[${index}].do`;
     if (raw.do === undefined || raw.do === null) fail(`${doPath} が必要です`);
     const doResult = validateNodeArray(raw.do, varNames, doPath);
@@ -620,7 +662,9 @@ function validateRule(raw: unknown, varNames: ReadonlySet<string>, index: number
     if (doResult.depth > LOGIC_AST_DEPTH_MAX) {
         fail(`${doPath} の入れ子が深すぎます (上限 ${LOGIC_AST_DEPTH_MAX})`);
     }
-    return { when: when as LogicWhen, do: doResult.nodes };
+    return slot === undefined
+        ? { when: when as LogicWhen, do: doResult.nodes }
+        : { when: when as LogicWhen, slot, do: doResult.nodes };
 }
 
 /**

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 using UnityEngine;
 
 namespace EndKnot.Modules.Ekm;
@@ -20,6 +21,32 @@ internal sealed class EkrHolderState
     // (契約正典: docs/ekr-logic-spec.md §3 v1.1 「dummy_spawn の slot は cno_spawn と共有」)。
     public readonly IEkrSlotCno[] CnoSlots = new IEkrSlotCno[3];
     public readonly float[] LastCnoMoveTime = [-1f, -1f, -1f];
+
+    // v1.2 (docs/ekr-logic-spec.md §3 marker_save): per-holder 位置メモリ 4 スロット。会議をまたいで保持、
+    // ゲーム開始時 (= InitRuntime が state を作り直すタイミング) に自然に全消去される。
+    public readonly Vector2?[] Markers = new Vector2?[4];
+
+    // v1.2 (§3 portal_place): CnoSlots (3 枠) とは別の専用 2 枠 (index 0=a, 1=b)。実体は EkrCno 系のみ
+    // (IEkrSlotCno は cno_move/despawn 共有インターフェースそのものだが、portal はロジック op から
+    // cno_move/despawn の対象にはならない — 直接 EkrManager のポータル専用アクセサ経由でのみ操作する)。
+    public readonly IEkrSlotCno[] Portals = new IEkrSlotCno[2];
+    public float LastPortalPlaceTime = -1f;
+
+    // v1.2 (§2 on_cno_touch / §5 ポータル warp): 接触ラッチ・デバウンス状態。index は CnoSlots/Portals と対応。
+    // 「ラッチ中 (latched.Contains(playerId))」= enter 済み・出るまで再発火しない。
+    public readonly HashSet<byte>[] TouchLatched = [[], [], []];
+    public readonly Dictionary<byte, float>[] TouchLastFireTime = [new(), new(), new()];
+    public readonly HashSet<byte>[] PortalLatched = [[], []];
+    // ポータルの CD は「入った側」ではなく player 単位 (spec §3: per-player warp CD 3秒) — 両側で共有する
+    // 単一の辞書にする (side ごとに分けると、A→B→(3秒待たず)A→B の高速往復を止められない)。
+    public readonly Dictionary<byte, float> PortalLastWarpTime = new();
+
+    // v1.2 監査修正 (2026-08-10): センサー実体の「非実体→実体」遷移 (初回 spawn / 会議明け復活 /
+    // ポータル移設) を検出してラッチ/デバウンスを作り直すための前回ポーリング時の実体化状態。
+    // 復活後に旧ラッチが残ると「半径内スポーンで enter が永久不発」「切断者の残留エントリを
+    // PlayerId 再利用者が無音継承」の2事故になる (pitfall 監査指摘)。
+    public readonly bool[] TouchSensorWasLive = new bool[3];
+    public readonly bool[] PortalSensorWasLive = new bool[2];
 
     public int AbortCount;
     public bool LogicDisabled;
@@ -148,15 +175,27 @@ public static class EkrManager
         // 束縛済みスロットをディスクの最新定義へ追随させる (手編集や再 import の反映)。
         // ファイルが消えた/壊れた場合は旧定義のまま維持する (束縛が無言で外れて湧かなくなる事故を避ける)。
         // ReloadLibrary は /role コマンド (ロビー限定) からしか呼ばれないので、試合中に定義が差し替わることはない。
-        foreach ((CustomRoles slot, string fileName) in BoundFiles.ToArray())
-        {
-            foreach ((string fn, EkrDefinition def) in Library)
-            {
-                if (fn != fileName) continue;
+        // Library はこの関数の呼び出しごとに毎回作り直されるため、参照比較は毎回不一致になり Bind() が
+        // 呼ばれ得る — 台帳内容は変わらないので、無駄な再保存を避けるため書き戻し抑制ガードをかける
+        // (advisor 指摘・2026-08-10。RestoreBindings の _suppressSave と同じもの)。
+        _suppressSave = true;
 
-                if (!ReferenceEquals(def, Bound.GetValueOrDefault(slot))) Bind(slot, def, fileName);
-                break;
+        try
+        {
+            foreach ((CustomRoles slot, string fileName) in BoundFiles.ToArray())
+            {
+                foreach ((string fn, EkrDefinition def) in Library)
+                {
+                    if (fn != fileName) continue;
+
+                    if (!ReferenceEquals(def, Bound.GetValueOrDefault(slot))) Bind(slot, def, fileName);
+                    break;
+                }
             }
+        }
+        finally
+        {
+            _suppressSave = false;
         }
     }
 
@@ -271,6 +310,100 @@ public static class EkrManager
         return true;
     }
 
+    // slot 束縛をゲーム再起動をまたいで永続化するファイル (docs 裁定 2026-08-10)。EKRoles フォルダ直下に
+    // 置くが、ReloadLibrary の `*.ekrole.json` スキャンには "_bindings.json" は一致しないため拾われない
+    // (先頭の `_` はスキャン対象拡張子と衝突しないことの確認用の意図的な命名)。
+    private static string BindingsFilePath => string.IsNullOrEmpty(RolesPath) ? null : RolesPath + "_bindings.json";
+
+    // RestoreBindings (と ReloadLibrary の再解決ループ) が内部で Bind() を呼ぶ間は台帳を書き戻さない
+    // (advisor 指摘・2026-08-10)。これが無いと、復元中にファイルが見つからず skip したスロットの
+    // 記録が「見つかったスロットだけの再保存」で消え、ユーザーがファイルを元に戻しても二度と
+    // 復活しなくなる (「ファイルを戻せば次回復活する」という設計要件を壊す)。
+    private static bool _suppressSave;
+
+    // Bind/Unbind の全ミューテーション経路から呼ぶ。書き込み失敗はログ警告のみ (ゲームを止めない —
+    // 束縛自体はメモリ上には反映済みなので、今回のセッションの動作には影響しない)。
+    private static void SaveBindings()
+    {
+        if (_suppressSave) return;
+
+        string path = BindingsFilePath;
+        if (string.IsNullOrEmpty(path)) return;
+
+        try
+        {
+            EnsureFolder();
+
+            var slots = new Dictionary<string, string>();
+            foreach ((CustomRoles slot, string fileName) in BoundFiles) slots[slot.ToString()] = fileName;
+
+            var root = new { ekrBindings = 1, slots };
+            string json = JsonSerializer.Serialize(root, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(path, json, new UTF8Encoding(false));
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn($"[EkrManager] Could not save slot bindings: {ex.Message}", "EkrManager");
+        }
+    }
+
+    // ゲーム再起動後、役職選出より前に必ず1回呼ぶこと (Options.GetRoleSpawnMode の Bound ゲートより前)。
+    // Library (ReloadLibrary が既に populate 済みである前提) からファイル名を解決して Bind() する。
+    // ファイルが消えている/壊れているスロットはそのスロットだけスキップしログする (出現率オプションの
+    // 保存値には触れない — ユーザーがファイルを元に戻せば次回の ReloadLibrary で自然に復活する)。
+    public static void RestoreBindings()
+    {
+        string path = BindingsFilePath;
+        if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;
+
+        try
+        {
+            string json = File.ReadAllText(path);
+            using JsonDocument doc = JsonDocument.Parse(json);
+
+            if (!doc.RootElement.TryGetProperty("slots", out JsonElement slotsElem) || slotsElem.ValueKind != JsonValueKind.Object)
+                return;
+
+            _suppressSave = true;
+
+            try
+            {
+                foreach (JsonProperty prop in slotsElem.EnumerateObject())
+                {
+                    // キーは Bind 直後に enum 名 (slot.ToString()) で書き出したもの限定。数値文字列を
+                    // 手編集で入れても Enum.TryParse は数値を許容してしまうが、IsSlot ガードで弾かれる。
+                    if (!Enum.TryParse(prop.Name, out CustomRoles slot) || !IsSlot(slot)) continue;
+
+                    string fileName = prop.Value.GetString();
+                    if (string.IsNullOrEmpty(fileName)) continue;
+
+                    bool found = false;
+
+                    foreach ((string fn, EkrDefinition def) in Library)
+                    {
+                        if (fn != fileName) continue;
+                        Bind(slot, def, fileName);
+                        found = true;
+                        break;
+                    }
+
+                    // ここに来るのは「ファイルが消えた」だけでなく「JSON が壊れていて ReloadLibrary が
+                    // 既に読み込みをスキップした」場合も含む (詳細な理由はその時点で別途 warn 済み)。
+                    if (!found)
+                        Logger.Warn($"[EkrManager] Could not restore slot {slot} <- {fileName}: file is missing, or was skipped as invalid (see the warning above). The slot stays unbound; fix or restore the file and it will bind again next launch.", "EkrManager");
+                }
+            }
+            finally
+            {
+                _suppressSave = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn($"[EkrManager] Could not restore slot bindings: {ex.Message}", "EkrManager");
+        }
+    }
+
     private static void Bind(CustomRoles slot, EkrDefinition def, string fileName)
     {
         Bound[slot] = def;
@@ -294,6 +427,8 @@ public static class EkrManager
             opt.SetAllValues(Enumerable.Repeat(Options.Rates.Length - 1, OptionItem.NumPresets).ToArray());
             opt.SetValue(Options.Rates.Length - 1); // SetAllValues は同期/保存を発火しないため、現在値の SetValue で締める
         }
+
+        SaveBindings();
     }
 
     private static void Unbind(CustomRoles slot)
@@ -308,6 +443,8 @@ public static class EkrManager
             opt.SetValue(0);
             opt.SetHidden(true);
         }
+
+        SaveBindings();
     }
 
     // /role set でスロット省略時に使う最初の空きスロット (1..10)。空きが無ければ 0。
@@ -402,8 +539,14 @@ public static class EkrManager
         int count = 0;
 
         foreach (EkrHolderState state in Runtime.Values)
+        {
             for (int i = 0; i < state.CnoSlots.Length; i++)
                 if (state.CnoSlots[i] != null) count++;
+
+            // v1.2: ポータル実体も「EKR 全体 ≤10 体」の導出カウントに含む (spec §5 P6 整合)。
+            for (int i = 0; i < state.Portals.Length; i++)
+                if (state.Portals[i] != null) count++;
+        }
 
         return count;
     }
@@ -466,6 +609,17 @@ public static class EkrManager
             // 待って遅延 Despawn を再試行する。
             if (cno.IsInstantiated) cno.Despawn();
             else RetryDespawnUninstantiated(cno, retriesLeft: 5);
+        }
+
+        // v1.2 (spec §3): 役職剥奪 (Teardown) で両側消滅。CnoSlots と同じ孤児コルーチン防止裁定に従う。
+        for (int i = 0; i < state.Portals.Length; i++)
+        {
+            IEkrSlotCno portal = state.Portals[i];
+            if (portal == null) continue;
+            state.Portals[i] = null;
+
+            if (portal.IsInstantiated) portal.Despawn();
+            else RetryDespawnUninstantiated(portal, retriesLeft: 5);
         }
     }
 
@@ -543,6 +697,29 @@ public static class EkrManager
         if (!existing.IsInstantiated) return;
 
         state.CnoSlots[idx] = null;
+        state.TouchLatched[idx].Clear();
+        state.TouchLastFireTime[idx].Clear();
+        existing.Despawn();
+    }
+
+    // ── v1.2: ポータル (portal_place) の専用 2 枠アクセサ (idx: 0=a, 1=b) ─────────────────────
+    // CnoSlots と同じ「実体化前は release しない」規約 (spec §5 孤児コルーチン防止裁定)。呼び出し元
+    // (EkrLogicOpcodes.PortalPlace) が cno_spawn と同じ順序 (existing 未実体化なら諦める→上限チェック→
+    // release→occupy) で使う。
+
+    internal static void OccupyPortalSlot(EkrHolderState state, int idx, IEkrSlotCno portal)
+    {
+        state.Portals[idx] = portal;
+    }
+
+    internal static void ReleasePortalSlot(EkrHolderState state, int idx)
+    {
+        IEkrSlotCno existing = state.Portals[idx];
+        if (existing == null) return;
+        if (!existing.IsInstantiated) return;
+
+        state.Portals[idx] = null;
+        state.PortalLatched[idx].Clear();
         existing.Despawn();
     }
 
@@ -561,12 +738,21 @@ public static class EkrManager
                 state.CnoSlots[i] = null;
                 return; // 1つの CNO は同時に1つの slot にしか居ない
             }
+
+            // v1.2: ポータルは撃破不可 (IKillableDummy 非実装) だが、将来の呼び出し元追加に備えて対称に扱う。
+            for (int i = 0; i < state.Portals.Length; i++)
+            {
+                if (!ReferenceEquals(state.Portals[i], cno)) continue;
+                state.Portals[i] = null;
+                return;
+            }
         }
     }
 
     // ── R1: イベント発火 (RoleBase フック → EkmTemplateRole の薄い呼び出し先) ──────
 
-    private static void FireEvent(CustomRoles slot, byte holderId, string eventName, byte ctxId)
+    // requiredSlot: on_cno_touch (v1.2) 専用のフィルタ (rule.Slot と一致するものだけ発火)。他イベントは null。
+    private static void FireEvent(CustomRoles slot, byte holderId, string eventName, byte ctxId, int? requiredSlot = null)
     {
         if (!Runtime.TryGetValue(holderId, out EkrHolderState state) || state.LogicDisabled) return;
 
@@ -585,6 +771,7 @@ public static class EkrManager
         foreach (EkrRule rule in def.ParsedLogic.Rules)
         {
             if (rule.When != eventName) continue;
+            if (requiredSlot.HasValue && rule.Slot != requiredSlot.Value) continue;
             if (state.Fibers.Count >= EkmLogicRuntime.MaxFibersPerHolder) continue; // spec §5: 超過は新規発火をドロップ
 
             var context = new EkrActionContext { HolderId = holderId, CtxId = ctxId, Slot = slot };
@@ -593,6 +780,11 @@ public static class EkrManager
     }
 
     public static void FirePet(CustomRoles slot, PlayerControl pc) => FireEvent(slot, pc.PlayerId, "on_pet", byte.MaxValue);
+
+    // v1.2 (spec §2 on_cno_touch): slotNumber1Based は接触した「自分の CNO/ダミー」の slot (1..3)。
+    // ctx = 触れた人。呼び出し元は PollCnoTouchIfDue (0.25秒ポーリングエンジン) のみ。
+    public static void FireCnoTouch(CustomRoles slot, byte holderId, int slotNumber1Based, byte toucherId) =>
+        FireEvent(slot, holderId, "on_cno_touch", toucherId, slotNumber1Based);
 
     public static void FireKill(CustomRoles slot, PlayerControl killer, PlayerControl victim) =>
         FireEvent(slot, killer.PlayerId, "on_kill", victim ? victim.PlayerId : byte.MaxValue);
@@ -614,7 +806,26 @@ public static class EkrManager
         // on_death を発火する (この fiber だけは死後も実行可 — 「死んだら爆発」演出のため)。FireEvent
         // 側の「on_death 以外は死後発火しない」ゲートとセットで、以後この保持者は on_death 起点の
         // fiber しか持たなくなる。
-        if (Runtime.TryGetValue(target.PlayerId, out EkrHolderState state)) state.Fibers.Clear();
+        if (Runtime.TryGetValue(target.PlayerId, out EkrHolderState state))
+        {
+            state.Fibers.Clear();
+
+            // v1.2 (spec §3): 「ホルダー死亡/役職剥奪で両側消滅」。役職剥奪側は TeardownRuntime が担当、
+            // こちらはホルダーが役職を保持したまま死亡する経路 (Teardown を経ない) の唯一の消滅点。
+            // fiber キャンセルとは無関係 (on_death 起点 fiber の実行可否は EkrActionSink 側の判定であり、
+            // ポータル消滅とは別規約 — cno_*/dummy_spawn/corpse_spawn は on_death からも実行できるが、
+            // ポータルという「既に置かれた実体」は死亡と同時に片付ける)。
+            for (int i = 0; i < state.Portals.Length; i++)
+            {
+                IEkrSlotCno portal = state.Portals[i];
+                if (portal == null) continue;
+                state.Portals[i] = null;
+                state.PortalLatched[i].Clear();
+
+                if (portal.IsInstantiated) portal.Despawn();
+                else RetryDespawnUninstantiated(portal, retriesLeft: 5);
+            }
+        }
 
         FireEvent(slot, target.PlayerId, "on_death", killer ? killer.PlayerId : byte.MaxValue);
     }
@@ -648,7 +859,13 @@ public static class EkrManager
         // FireMeetingEndForSlot が起点を改めて再セットする。
         LastMeetingEndTime = Time.realtimeSinceStartup;
 
-        foreach (EkrHolderState state in Runtime.Values) state.Fibers.Clear();
+        foreach (EkrHolderState state in Runtime.Values)
+        {
+            state.Fibers.Clear();
+            // ポータル warp CD の残留エントリ掃除 (切断者の 3 秒 CD を PlayerId 再利用者が継承しない
+            // ように会議境界で毎回捨てる — センサー実体はどのみち会議で消えるので CD 継続の意味がない)。
+            state.PortalLastWarpTime.Clear();
+        }
 
         LateTask.New(() =>
         {
@@ -768,6 +985,11 @@ public static class EkrManager
     // 立ち上がり検出・on_second の 1Hz 間引き・fiber の手動ポンプ (常駐コルーチン禁止) をここでまとめて行う。
     public static void Pump(CustomRoles slot, PlayerControl pc)
     {
+        // v1.2: EKR 全体で1本のポーリングエンジン (自己スロットリング — 0.25秒に満たない呼び出しは
+        // 内部で即 return する)。ホルダーごとに毎 FixedUpdate 呼ばれる Pump に相乗りさせる (専用の
+        // 毎フレーム経路を新しく作らない・spec §5「専用の毎フレーム経路を作らない」)。
+        PollCnoTouchIfDue();
+
         if (!Runtime.TryGetValue(pc.PlayerId, out EkrHolderState state) || state.LogicDisabled) return;
 
         EkrDefinition def = GetDefinition(slot);
@@ -864,5 +1086,189 @@ public static class EkrManager
 
         _lastGlobalCnoSpawnTime = now;
         return true;
+    }
+
+    // ── v1.2: 接触判定エンジン (spec §2 on_cno_touch / §3,§5 ポータル warp) ──────────────────────
+    // 0.25秒ポーリング (毎フレーム判定経路を作らない・spec §5)。進入 0.8u / 退出 1.0u のヒステリシス。
+    // Pump() から毎 FixedUpdate 呼ばれるが、この関数自身が 0.25秒に満たない呼び出しを即 return する
+    // ことで実質1本のポーリングにする (呼び出し元がホルダー数ぶん重複しても中身は1回しか走らない)。
+
+    private const float TouchPollInterval = 0.25f;
+    private const float TouchEnterRadius = 0.8f;
+    private const float TouchExitRadius = 1.0f;
+    private const float TouchDebounceSeconds = 1f;
+    private const float PortalWarpCooldownSeconds = 3f;
+
+    private static float _lastTouchPollTime = -1f;
+
+    private static void PollCnoTouchIfDue()
+    {
+        float now = Time.realtimeSinceStartup;
+        if (_lastTouchPollTime >= 0f && now - _lastTouchPollTime < TouchPollInterval) return;
+        _lastTouchPollTime = now;
+
+        // 会議中/ロビーは世界座標が意味を持たない (プレイヤーは MeetingHud/ロビー UI にいる)。
+        // spec は on_cno_touch を「タスク中のみ」とは明記していないが、判定対象そのものが存在しない
+        // 期間なので実装上の安全ガードとして間引く (誤検出防止・過剰な no-op ループの回避)。
+        if (!GameStates.IsInTask) return;
+
+        IReadOnlyList<PlayerControl> livePlayers = Main.AllAlivePlayerControls;
+        if (livePlayers.Count == 0) return;
+
+        // fiber 実行が Teardown (Runtime.Remove) を誘発しても列挙を壊さないようスナップショットで回す
+        // (PumpMeetingFibers の Fibers.ToArray() と同じ裁定・pitfall 監査指摘)。
+        foreach ((byte holderId, EkrHolderState state) in Runtime.ToArray())
+        {
+            if (state.LogicDisabled) continue;
+
+            CustomRoles? holderSlot = null;
+
+            // ── on_cno_touch: 自分の CNO/ダミー (CnoSlots 1..3) ──
+            for (int i = 0; i < state.CnoSlots.Length; i++)
+            {
+                if (state.CnoSlots[i] is not CustomNetObject cno || !cno.playerControl)
+                {
+                    state.TouchSensorWasLive[i] = false;
+                    continue;
+                }
+
+                Vector2 sensorPos = cno.Position;
+
+                // 実体化の立ち上がり (会議明け復活・張り直し) でラッチ/デバウンスを作り直す。裁定は設置時
+                // と同じ「その時点で半径内にいる者は発火なしでラッチ済み」(PrimeTouchSensor)。
+                if (!state.TouchSensorWasLive[i])
+                {
+                    state.TouchSensorWasLive[i] = true;
+                    PrimeTouchSensor(state, i, sensorPos, false);
+                }
+
+                HashSet<byte> latched = state.TouchLatched[i];
+
+                foreach (PlayerControl pc in livePlayers)
+                {
+                    float dist = Vector2.Distance(pc.Pos(), sensorPos);
+                    bool inside = latched.Contains(pc.PlayerId);
+
+                    if (!inside && dist <= TouchEnterRadius)
+                    {
+                        latched.Add(pc.PlayerId);
+
+                        float lastFire = state.TouchLastFireTime[i].GetValueOrDefault(pc.PlayerId, -1f);
+                        if (lastFire >= 0f && now - lastFire < TouchDebounceSeconds) continue;
+                        state.TouchLastFireTime[i][pc.PlayerId] = now;
+
+                        holderSlot ??= SlotForHolder(holderId);
+                        if (holderSlot.HasValue) FireCnoTouch(holderSlot.Value, holderId, i + 1, pc.PlayerId);
+                    }
+                    else if (inside && dist >= TouchExitRadius)
+                    {
+                        latched.Remove(pc.PlayerId);
+                    }
+                }
+            }
+
+            // ── ポータル warp: 両側設置済みのときだけ判定 ──
+            // (立ち上がり検出は片側だけ実体化済みの間も行う — 相方が遅れて実体化した瞬間に旧ラッチで
+            //  すり抜けないように、warp 判定より先に per-side でプライムしておく)
+            for (int side = 0; side < 2; side++)
+            {
+                if (state.Portals[side] is not CustomNetObject liveCheck || !liveCheck.playerControl)
+                {
+                    state.PortalSensorWasLive[side] = false;
+                }
+                else if (!state.PortalSensorWasLive[side])
+                {
+                    state.PortalSensorWasLive[side] = true;
+                    PrimeTouchSensor(state, side, liveCheck.Position, true);
+                }
+            }
+
+            for (int side = 0; side < 2; side++)
+            {
+                if (state.Portals[side] is not CustomNetObject sensorCno || !sensorCno.playerControl) continue;
+                if (state.Portals[1 - side] is not CustomNetObject otherCno || !otherCno.playerControl) continue;
+
+                Vector2 sensorPos = sensorCno.Position;
+                Vector2 destination = otherCno.Position;
+                HashSet<byte> latched = state.PortalLatched[side];
+
+                foreach (PlayerControl pc in livePlayers)
+                {
+                    float dist = Vector2.Distance(pc.Pos(), sensorPos);
+                    bool inside = latched.Contains(pc.PlayerId);
+
+                    if (!inside && dist <= TouchEnterRadius)
+                    {
+                        latched.Add(pc.PlayerId);
+                        TryWarpThroughPortal(state, pc, destination);
+                    }
+                    else if (inside && dist >= TouchExitRadius)
+                    {
+                        latched.Remove(pc.PlayerId);
+                    }
+                }
+            }
+        }
+    }
+
+    // slot -> 保持者の逆引き (PlayersBySlot は slot キー)。EKR は Maximum=15・10 slot なので毎回スキャンでも軽い。
+    private static CustomRoles? SlotForHolder(byte holderId)
+    {
+        foreach (CustomRoles slot in Slots)
+            if (PlayersBySlot.TryGetValue(slot, out HashSet<byte> holders) && holders.Contains(holderId))
+                return slot;
+
+        return null;
+    }
+
+    // spec §3: warp の TP は teleport と同じ EKR 全体 ≤2/秒予算を消費。予算枯渇時はその接触は消滅
+    // (ラッチ済み扱い・リトライしない — latch は呼び出し前の enter 検出時点で既に立っている)。
+    private static void TryWarpThroughPortal(EkrHolderState state, PlayerControl pc, Vector2 destination)
+    {
+        if (!pc.IsAlive()) return;
+
+        float now = Time.realtimeSinceStartup;
+        if (state.PortalLastWarpTime.TryGetValue(pc.PlayerId, out float last) && now - last < PortalWarpCooldownSeconds) return;
+
+        if (!TryConsumeGlobalTeleportBudget()) return;
+
+        state.PortalLastWarpTime[pc.PlayerId] = now;
+        Utils.TP(pc.NetTransform, destination, minInterval: 0f);
+
+        PrelatchTouchSensorsNear(pc.PlayerId, destination);
+    }
+
+    // v1.2 (spec §2): EKR 起因の TP (teleport/teleport_other/ポータル warp) で移動したプレイヤーは、
+    // 着地点で半径内の全接触センサーにラッチ済み扱い — ポータル間 ping-pong 無限ループの構造的回避。
+    // teleport/teleport_other (EkrLogicOpcodes) とポータル warp (上記 TryWarpThroughPortal) の3経路から呼ぶ。
+    internal static void PrelatchTouchSensorsNear(byte playerId, Vector2 landedPos)
+    {
+        foreach (EkrHolderState state in Runtime.Values)
+        {
+            for (int i = 0; i < state.CnoSlots.Length; i++)
+            {
+                if (state.CnoSlots[i] is not CustomNetObject cno || !cno.playerControl) continue;
+                if (Vector2.Distance(cno.Position, landedPos) <= TouchEnterRadius) state.TouchLatched[i].Add(playerId);
+            }
+
+            for (int side = 0; side < 2; side++)
+            {
+                if (state.Portals[side] is not CustomNetObject cno || !cno.playerControl) continue;
+                if (Vector2.Distance(cno.Position, landedPos) <= TouchEnterRadius) state.PortalLatched[side].Add(playerId);
+            }
+        }
+    }
+
+    // v1.2 (spec §2): 設置時に半径内へ既にいるプレイヤーはラッチ済み扱い (placer self-grab 既知型の
+    // 構造的回避)。cno_spawn/dummy_spawn (idx=CnoSlots index) とportal_place (idx=Portals index) の
+    // 両方から呼ぶ (isPortal で対象配列を切り替える)。
+    internal static void PrimeTouchSensor(EkrHolderState state, int idx, Vector2 pos, bool isPortal)
+    {
+        HashSet<byte> latched = isPortal ? state.PortalLatched[idx] : state.TouchLatched[idx];
+        latched.Clear();
+        if (!isPortal) state.TouchLastFireTime[idx].Clear();
+
+        foreach (PlayerControl pc in Main.AllAlivePlayerControls)
+            if (Vector2.Distance(pc.Pos(), pos) <= TouchEnterRadius) latched.Add(pc.PlayerId);
     }
 }
