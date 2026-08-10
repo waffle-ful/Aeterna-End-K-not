@@ -1213,6 +1213,8 @@ internal static class ReportDeadBodyPatch
         if (target && (target.Object?.Is(CustomRoles.GM) == true || ChatCommands.Spectators.Contains(target.PlayerId) || Main.GM.Value && target.PlayerId == 0))
         {
             Logger.Warn($"{__instance.GetNameWithRole().RemoveHtmlTags()} tried to report GM/spectator body (stale lobby corpse) — blocked", "ReportDeadBody");
+            // 無言で弾くと「通報ボタンが効かない = バグ」と誤解されるので、遮断した理由を本人にだけ返す。
+            __instance.Notify(GetString("StaleCorpseReportBlocked"));
             return false;
         }
 
