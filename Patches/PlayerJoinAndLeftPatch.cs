@@ -780,21 +780,15 @@ internal static class InnerNetClientSpawnPatch
                            || client.ColorId < 0 || Palette.PlayerColors.Length <= client.ColorId) // invalid client color
         {
             Logger.Warn("client is null or client have invalid color", "TrySyncAndSendMessage");
-            // この客には targeted 全件同期を出せない。差分送信のままだと取り残されて設定が永久にズレるので、
-            // 次の broadcast を全件へ戻して救済経路を残す。
-            RPC.InvalidateOptionSyncSnapshot();
+            // オプション同期はここではしない — modded 客なら VersionCheck 受信時 (RPC.cs) に targeted 全件同期が
+            // 走り、失敗時のみスナップショット無効化で救済される。バニラ客はそもそも読めないので何も要らない。
         }
         else
         {
-            LateTask.New(() =>
-            {
-                // この targetId 同期は VersionCheck が 3 秒以内に届かないと RPC 側の PlayerVersion ゲートで
-                // 無言で捨てられる (リトライ無しの一発勝負)。オプション同期は差分送信なので、取りこぼしても
-                // スナップショットが残る限り二度と全件が飛ばず、その客だけ設定が恒久的にズレる。
-                // 「送れなかった時だけ」全件へ戻すのが要点 — 無条件に戻すと入室が続く間スナップショットが
-                // ほぼ常に空になり、直後の開始押下で 5871 件フル送信 (BUG-20260805-05 のヒッチ) が再発する。
-                if (!OptionItem.SyncAllOptions(client.Id)) RPC.InvalidateOptionSyncSnapshot();
-            }, 3f, "Sync All Options For New Player");
+            // 新規参加者へのオプション同期は join N 秒後の一発勝負をやめ、VersionCheck 受信時 (= modded 客と
+            // 確定した瞬間) に RPC.cs 側で targeted 全件送信する方式に変更。バニラ客 (VersionCheck を送らない)
+            // の join でスナップショットを無効化すると、次の開始押下が 5900 件フル送信 220-290ms ヒッチになる
+            // (BUG-20260805-05 の再燃機序 — ホスト専用 mod では視聴者は全員バニラなので毎 join 発火していた)。
 
             LateTask.New(() =>
             {
