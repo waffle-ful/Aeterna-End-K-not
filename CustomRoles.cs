@@ -610,6 +610,10 @@ public enum CustomRoles
     EkmCustomRole9,
     EkmCustomRole10,
 
+    // EKR defined roles: shipped-in roles authored with the role maker (Resources/EkRoles/<Name>.ekrole.json).
+    // Same evaluation path as the user slots above (EkrManager.IsEkrRole covers both). Append only.
+    EkrShowcase,
+
 
     // Sub-role after 1000 (buffer reserved for ~500 future main roles)
     NotAssigned = 1000,

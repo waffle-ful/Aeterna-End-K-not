@@ -47,4 +47,13 @@
         </None>
     </ItemGroup>
 
+    <!-- 埋込出荷役職 (Resources/EkRoles/*.ekrole.json — LoadEmbeddedRoles が起動時に束縛する定義) を
+         全数パース検証にかける。壊れた定義を同梱すると実機では起動ログの warn 1行で無音に消えるため、
+         テストで先に落とす。 -->
+    <ItemGroup>
+        <None Include="..\..\Resources\EkRoles\*.ekrole.json" Link="embedded-roles\%(Filename)%(Extension)">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+    </ItemGroup>
+
 </Project>
