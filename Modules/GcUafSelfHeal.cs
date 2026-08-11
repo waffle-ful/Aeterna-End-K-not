@@ -66,6 +66,18 @@ public static class GcUafSelfHeal
             if (sameGen && markerState is "SAFE" or "GAVE_UP")
                 return; // 判定済み世代と一致 → probe すら回さない (通常時オーバーヘッドゼロ)。
 
+            // 32-bit プロセスでは昇格そのものが自殺行為。ScanMethodRefs=true にすると次回起動の interop 生成
+            // (Pass16ScanMethodRefs の並列 xref スキャン) がアドレス空間を使い切り、メニューに到達する前に落ちる
+            // = 二度と起動できなくなる (2026-08-11 実機報告: x86 プロセスで true=起動不可 / false=起動可の 1-bit A/B)。
+            // 起動不能になるとこのコードも走れず自動復帰できないため、probe すら回さず降りる。
+            // この環境で GC UAF から守れるのは RemoveGcMaxTimeSlice (incremental GC 無効化) だけ — 上流と同じ防御に倒す。
+            if (!Environment.Is64BitProcess)
+            {
+                WriteMarker(markerPath, currentGen, "GAVE_UP", MaxHealAttempts);
+                Logger.Warn("GCUAF-SELFHEAL: 32-bit process detected — escalation skipped (ScanMethodRefs=true would break interop generation and brick the boot); relying on RemoveGcMaxTimeSlice", "GcUafSelfHeal");
+                return;
+            }
+
             int? collected = GcUafProbe.Probe();
             if (collected == null)
             {
