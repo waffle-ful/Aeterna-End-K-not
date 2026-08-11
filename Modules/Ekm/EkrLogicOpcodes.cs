@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.RegularExpressions;
 using UnityEngine;
 
@@ -21,6 +22,10 @@ internal sealed class EkrActionContext
     // いる間 (最初の wait まで) だけ。wait を跨いだ後は攻撃が既に解決済みなので no-op (リンタ L17)。
     public bool AllowCancelAttack;
     public bool CancelAttack;
+
+    // Wave 2 (docs/ekn-wave2-contract.md §1.1 on_meeting_vote 同期プロローグ): cancel_attack と同型。
+    public bool AllowCancelVote;
+    public bool CancelVote;
 }
 
 internal sealed class EkrActionSink : IEkrActionSink
@@ -45,7 +50,20 @@ internal sealed class EkrActionSink : IEkrActionSink
         // そのもの。CorpseSpawn の個別ガードはこの共通関所への二重防御として残置。
         // cancel_attack は完全にローカル判定 (送信ゼロ・ワールドへの作用ゼロ) なので notify と同じく
         // この関所から除外する。もっとも on_attacked は会議中に発火し得ないため実質到達しない防御。
-        if (node.Op is not "notify" and not "cancel_attack" && (GameStates.IsMeeting || ExileController.Instance)) return;
+        //
+        // Wave 2 (docs/ekn-wave2-contract.md §4 会議中 op 白名単): remember/inspect/reveal/vote_weight_set は
+        // 会議中も常時有効 (ローカル状態または notify と同じ既存チャネルのみ)。cancel_vote/vote_block/
+        // vote_swap/exile は逆に「会議中のみ有効」(タスク中は no-op) — 投票操作はそもそも会議でしか
+        // 意味を持たない。
+        bool meetingOrExile = GameStates.IsMeeting || ExileController.Instance;
+
+        bool isMeetingOnly = node.Op is "cancel_vote" or "vote_block" or "vote_swap" or "exile";
+
+        if (isMeetingOnly)
+        {
+            if (!meetingOrExile) return;
+        }
+        else if (node.Op is not "notify" and not "cancel_attack" and not "remember" and not "inspect" and not "reveal" and not "vote_weight_set" && meetingOrExile) return;
 
         switch (node.Op)
         {
@@ -70,6 +88,17 @@ internal sealed class EkrActionSink : IEkrActionSink
             case "field": Field(node, ctx); break; // v1.3
             case "remember": Remember(node, ctx); break; // Wave 1
             case "cancel_attack": CancelAttack(ctx); break; // Wave 1
+            // Wave 2 (docs/ekn-wave2-contract.md)
+            case "inspect": Inspect(node, ctx, fiber); break;
+            case "reveal": Reveal(node, ctx); break;
+            case "arrow_show": ArrowShow(node, ctx); break;
+            case "arrow_mark": ArrowMark(node, ctx); break;
+            case "arrow_hide": ArrowHide(ctx); break;
+            case "cancel_vote": CancelVote(ctx); break;
+            case "vote_weight_set": VoteWeightSet(node, ctx); break;
+            case "vote_block": VoteBlock(node, ctx); break;
+            case "vote_swap": VoteSwap(ctx); break;
+            case "exile": Exile(node, ctx); break;
         }
     }
 
@@ -876,5 +905,227 @@ internal sealed class EkrActionSink : IEkrActionSink
         }
 
         state.LastFieldPlaceTime = now;
+    }
+
+    // ── Wave 2 (docs/ekn-wave2-contract.md §2): しらべる系 ──────────────────────────────────────
+
+    // inspect: notify と同一チャネル・同一バケットを共有 (spec §2.1 — 新バケットを作らない)。
+    private static void Inspect(EkrNode node, EkrActionContext ctx, EkrFiber fiber)
+    {
+        EkrHolderState state = EkrManager.GetHolderState(ctx.HolderId);
+        if (state == null) return;
+
+        PlayerControl holderPc = ctx.HolderId.GetPlayer();
+        if (!holderPc) return;
+
+        PlayerControl targetPc = ResolveSingle(node.Target, ctx);
+        if (!targetPc || !targetPc.IsAlive()) return; // 壊れた参照/死者は no-op (予算不消費・spec §2.1)
+
+        bool meeting = GameStates.IsMeeting;
+        float now = Time.realtimeSinceStartup;
+
+        // notify と同一バケットを共有 (per-holder ≤1/秒・会議中は ≤1/5秒)。
+        Dictionary<byte, float> bucket = meeting ? state.LastMeetingNotifyTime : state.LastNotifyTime;
+        float interval = meeting ? 5f : 1f;
+
+        if (bucket.TryGetValue(ctx.HolderId, out float last) && now - last < interval) return;
+        bucket[ctx.HolderId] = now;
+
+        string text = BuildInspectText(node, targetPc);
+
+        if (meeting) Utils.SendMessage(text, ctx.HolderId);
+        else holderPc.Notify(text, 5f);
+    }
+
+    // 嘘2型の合成順序 (spec §2.1): まず failChance で「見せる答え」を決め (Oracle.cs:91 型)、次に noise 件の
+    // ダミーを混ぜてリストにする (FortuneTeller.cs:89 型 — 真値の挿入位置は無作為)。
+    private static string BuildInspectText(EkrNode node, PlayerControl targetPc)
+    {
+        if (node.Depth == "team")
+        {
+            Team team = targetPc.GetTeam();
+
+            if (node.FailChance > 0 && IRandom.Instance.Next(100) < node.FailChance)
+            {
+                Team[] decoys = Main.TeamValues.Where(t => t != team && t != Team.None).ToArray();
+                if (decoys.Length > 0) team = decoys[IRandom.Instance.Next(0, decoys.Length)];
+            }
+
+            return string.Format(Translator.GetString("EkrInspectResult"), targetPc.GetRealName(), Translator.GetString($"Team{team}"));
+        }
+
+        CustomRoles trueRole = targetPc.GetCustomRole();
+        CustomRoles shown = trueRole;
+
+        if (node.FailChance > 0 && IRandom.Instance.Next(100) < node.FailChance)
+            shown = PickRandomOtherRole(trueRole);
+
+        if (node.Noise <= 0)
+            return string.Format(Translator.GetString("EkrInspectResult"), targetPc.GetRealName(), shown.ToColoredString());
+
+        var list = new List<CustomRoles> { shown };
+
+        while (list.Count < node.Noise + 1)
+        {
+            CustomRoles candidate = PickRandomOtherRole(trueRole);
+            if (!list.Contains(candidate)) list.Add(candidate);
+        }
+
+        // 真値 (shown) の挿入位置を無作為に (FortuneTeller.cs:89 型)。
+        list.Remove(shown);
+        list.Insert(IRandom.Instance.Next(0, list.Count + 1), shown);
+
+        string joined = string.Join(", ", list.Select(x => x.ToColoredString()));
+        return string.Format(Translator.GetString("EkrInspectResultNoise"), targetPc.GetRealName(), joined);
+    }
+
+    private static CustomRoles PickRandomOtherRole(CustomRoles exclude)
+    {
+        CustomRoles[] pool = Main.CustomRoleValues.Where(x => x != exclude && !x.IsVanilla() && !x.IsAdditionRole() && x is not CustomRoles.GM and not CustomRoles.NotAssigned).ToArray();
+        return pool.Length == 0 ? exclude : pool[IRandom.Instance.Next(0, pool.Length)];
+    }
+
+    // reveal (spec §2.2): アンカーは EkmTemplateRole.KnowRole 1点のみ (集約側が4表示系を拾う)。ここは
+    // per-holder の Revealed 集合へ登録するだけ。
+    private static void Reveal(EkrNode node, EkrActionContext ctx)
+    {
+        EkrHolderState state = EkrManager.GetHolderState(ctx.HolderId);
+        if (state == null) return;
+
+        PlayerControl targetPc = ResolveSingle(node.Target, ctx);
+        if (!targetPc) return;
+
+        EkrManager.Reveal(ctx.HolderId, targetPc.PlayerId);
+
+        float now = Time.realtimeSinceStartup;
+        if (state.LastNotifyTime.TryGetValue(ctx.HolderId, out float last) && now - last < 1f) return; // ≤1/秒/ホルダー (spec §2.2)
+        state.LastNotifyTime[ctx.HolderId] = now;
+
+        // NotifyRoles 送信を伴う (spec §2.2) — 表示反映は次の自然な更新に相乗り (実装裁量)。
+        // advisor 指摘 (2026-08-11): reveal は会議中も有効な白名単 op だが、NotifyRoles の明示送信は
+        // タスク中限定にする (会議中は「次の自然な更新」= 会議明けの通常リフレッシュに任せ、write-barrier/
+        // 追放スイープと重なる窓を作らない — memory 罠7の型)。
+        if (GameStates.IsInTask) Utils.NotifyRoles(SpecifySeer: ctx.HolderId.GetPlayer(), ForceLoop: false);
+    }
+
+    // ── Wave 2 (docs/ekn-wave2-contract.md §2.3): 矢印3 op ──────────────────────────────────────
+    // 予算: arrow_show+arrow_mark 合算 ≤1/秒/ホルダー + 同時 ≤4本/ホルダー (両種合算)。
+    // タスクフェーズ限定 (基盤の IsInTask ガードどおり) — 会議中は Execute() 側の共通関所で既に no-op。
+
+    private static void ArrowShow(EkrNode node, EkrActionContext ctx)
+    {
+        EkrHolderState state = EkrManager.GetHolderState(ctx.HolderId);
+        if (state == null) return;
+        if (!GameStates.IsInTask) return;
+
+        PlayerControl targetPc = ResolveSingle(node.Target, ctx);
+        if (!targetPc || !targetPc.IsAlive()) return;
+
+        bool isNew = !state.ArrowTargetExpiry.ContainsKey(targetPc.PlayerId);
+
+        if (isNew && EkrManager.CountActiveArrows(state) >= 4) return; // 同時 ≤4本 (再発行はカウント不変)
+
+        float now = Time.realtimeSinceStartup;
+        if (state.LastArrowTime >= 0f && now - state.LastArrowTime < 1f) return; // 合算 ≤1/秒/ホルダー
+        state.LastArrowTime = now;
+
+        EkrManager.RegisterArrowTarget(state, targetPc.PlayerId, node.Seconds);
+        TargetArrow.Add(ctx.HolderId, targetPc.PlayerId);
+    }
+
+    private static void ArrowMark(EkrNode node, EkrActionContext ctx)
+    {
+        EkrHolderState state = EkrManager.GetHolderState(ctx.HolderId);
+        if (state == null) return;
+        if (!GameStates.IsInTask) return;
+
+        Vector2? pos = node.Target switch
+        {
+            "ctx" => ResolveCtxPosition(ctx), // spec §2.3: ctx の現在位置は死者でも可 (追尾はしない)
+            "marker1" => ResolveMarkerPosition(ctx, 1),
+            "marker2" => ResolveMarkerPosition(ctx, 2),
+            "marker3" => ResolveMarkerPosition(ctx, 3),
+            "marker4" => ResolveMarkerPosition(ctx, 4),
+            "cno1" => ResolveOwnCnoPosition(ctx, 0),
+            "cno2" => ResolveOwnCnoPosition(ctx, 1),
+            "cno3" => ResolveOwnCnoPosition(ctx, 2),
+            _ => null
+        };
+
+        if (pos == null) return;
+
+        bool wasAtCap = EkrManager.CountActiveArrows(state) >= 4; // 登録前の時点で既に4本埋まっていたか
+
+        float now = Time.realtimeSinceStartup;
+        if (state.LastArrowTime >= 0f && now - state.LastArrowTime < 1f) return; // 合算 ≤1/秒/ホルダー
+
+        bool isNew = EkrManager.RegisterArrowMark(state, pos.Value, node.Seconds);
+        if (isNew && wasAtCap) // 新規かつ既に4本埋まっていた場合はドロップ (登録を取り消す)
+        {
+            state.ArrowMarks.RemoveAll(x => x.Pos == (Vector3)pos.Value);
+            return;
+        }
+
+        state.LastArrowTime = now;
+        LocateArrow.Add(ctx.HolderId, pos.Value);
+    }
+
+    private static void ArrowHide(EkrActionContext ctx)
+    {
+        EkrHolderState state = EkrManager.GetHolderState(ctx.HolderId);
+        if (state == null) return;
+
+        EkrManager.HideArrows(state, ctx.HolderId);
+    }
+
+    // ── Wave 2 (docs/ekn-wave2-contract.md §3): 票操作 ─────────────────────────────────────────
+
+    private static void CancelVote(EkrActionContext ctx)
+    {
+        if (ctx.AllowCancelVote) ctx.CancelVote = true;
+    }
+
+    private static void VoteWeightSet(EkrNode node, EkrActionContext ctx)
+    {
+        EkrManager.SetVoteWeightOverride(ctx.HolderId, node.IntArg);
+    }
+
+    private static void VoteBlock(EkrNode node, EkrActionContext ctx)
+    {
+        PlayerControl targetPc = ResolveSingle(node.Target, ctx);
+        if (!targetPc) return;
+
+        EkrManager.TryVoteBlock(ctx.HolderId, targetPc.PlayerId);
+    }
+
+    private static void VoteSwap(EkrActionContext ctx)
+    {
+        EkrHolderState state = EkrManager.GetHolderState(ctx.HolderId);
+        if (state == null) return;
+
+        // spec §3.3: saved1 ↔ saved2 固定 (remember との合成を強制する設計)。失効判定 (死亡/切断/未保存) は
+        // ResolveSaved が既に行う — 片方でも欠けたら予約しない (集計側で改めて再検証もするが、ここでも
+        // 「壊れた参照は静かに no-op」の総則に従って早期に諦める)。
+        PlayerControl p1 = ResolveSaved(ctx, 0);
+        PlayerControl p2 = ResolveSaved(ctx, 1);
+        if (!p1 || !p2) return;
+
+        EkrManager.TryReserveVoteSwap(ctx.HolderId, p1.PlayerId, p2.PlayerId);
+    }
+
+    private static void Exile(EkrNode node, EkrActionContext ctx)
+    {
+        // advisor 指摘 (2026-08-11): 共通の meetingOrExile ゲートは Results/Proceeding/追放演出中も通す
+        // (vote_block/vote_swap はそこへ着地しても無害な no-op だが、exile は RpcVotingComplete を二重送信
+        // しうる)。GuessManager.GuesserMsg (GuessManager.cs:67) と同じ投票フェーズ判定で narrow に絞る。
+        if (!MeetingHud.Instance || ExileController.Instance || MeetingHud.Instance.state is MeetingHud.VoteStates.Results or MeetingHud.VoteStates.Proceeding) return;
+
+        PlayerControl targetPc = ResolveSingle(node.Target, ctx);
+        if (!targetPc || !targetPc.IsAlive()) return;
+
+        if (!EkrManager.TryConsumeExile()) return; // 構造的 1/会議
+
+        PlayerControl holderPc = ctx.HolderId.GetPlayer();
+        Patches.CheckForEndVotingPatch.ForceExile(targetPc, holderPc);
     }
 }

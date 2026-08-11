@@ -92,6 +92,17 @@ public sealed class EkrNode
 
     // field.strength (v1.3) ("weak" | "medium" | "strong")
     public string StrengthTier;
+
+    // Wave 2 (docs/ekn-wave2-contract.md §2.1 inspect): depth ("team" | "role")
+    public string Depth;
+
+    // Wave 2 (inspect): failChance (0..100) / noise (0..5)
+    public int FailChance;
+    public int Noise;
+
+    // Wave 2 (vote_weight_set.value 0..3): 汎用の整数引数置き場 (他 op の Slot/Size とは意味論が
+    // 別物なので専用フィールドにする — 「票のちから」を CNO slot と誤読させない)。
+    public int IntArg;
 }
 
 public sealed class EkrExpr
@@ -122,7 +133,8 @@ public sealed class EkrLogicDef
         "on_game_start", "on_pet", "on_kill", "on_death", "on_meeting_start",
         "on_meeting_end", "on_task_complete", "on_vent_enter", "on_report", "on_second",
         "on_cno_touch", // v1.2 (2026-08-10)
-        "on_attacked" // Wave 1 (2026-08-11)
+        "on_attacked", // Wave 1 (2026-08-11)
+        "on_meeting_vote", "on_meeting_pick" // Wave 2 (docs/ekn-wave2-contract.md §1)
     ];
 
     // Wave 1 (spec §3 統一セレクタ語彙)。単数セレクタのみ受理する op (kill/teleport_other/remember 等) と、
@@ -142,7 +154,10 @@ public sealed class EkrLogicDef
         "dummy_spawn", "corpse_spawn", // v1.1 (2026-08-09)
         "marker_save", "teleport_other", "portal_place", // v1.2 (2026-08-10)
         "pull", "drag", "field", // v1.3 (2026-08-11)
-        "remember", "cancel_attack" // Wave 1 (2026-08-11)
+        "remember", "cancel_attack", // Wave 1 (2026-08-11)
+        // Wave 2 (docs/ekn-wave2-contract.md §2,§3): 情報と会議
+        "inspect", "reveal", "arrow_show", "arrow_mark", "arrow_hide",
+        "cancel_vote", "vote_weight_set", "vote_block", "vote_swap", "exile"
     ];
 
     private static readonly HashSet<string> ExprKinds =
@@ -312,6 +327,14 @@ public sealed class EkrLogicDef
                 return false;
             }
 
+            // Wave 2 (docs/ekn-wave2-contract.md §1.3): cancel_vote は on_meeting_vote 以外の rule 配下に
+            // 現れたら文書 reject (cancel_attack と同じ厳格側 — 静的に検査できるので no-op より reject)。
+            if (when != "on_meeting_vote" && ContainsOp(doNodes, "cancel_vote"))
+            {
+                error = $"「票をつかわずにえらぶ」は「かいぎで投票したとき」のブロックの中でだけ使えます (when=\"{when}\" の中では使えません)";
+                return false;
+            }
+
             parsed.Rules.Add(new EkrRule { When = when, Do = doNodes, Slot = ruleSlot });
         }
 
@@ -321,15 +344,18 @@ public sealed class EkrLogicDef
 
     // cancel_attack のスコープ検証用の再帰探索 (if の then/else も潜る)。深さは既に MaxDepth で
     // 制限済みなので追加のガードは不要。
-    private static bool ContainsCancelAttack(List<EkrNode> nodes)
+    private static bool ContainsCancelAttack(List<EkrNode> nodes) => ContainsOp(nodes, "cancel_attack");
+
+    // Wave 2: cancel_vote も同型のスコープ検証を要る (§1.3) ので汎用化した。
+    private static bool ContainsOp(List<EkrNode> nodes, string op)
     {
         if (nodes == null) return false;
 
         foreach (EkrNode node in nodes)
         {
-            if (node.Op == "cancel_attack") return true;
-            if (ContainsCancelAttack(node.Then)) return true;
-            if (ContainsCancelAttack(node.Else)) return true;
+            if (node.Op == op) return true;
+            if (ContainsOp(node.Then, op)) return true;
+            if (ContainsOp(node.Else, op)) return true;
         }
 
         return false;
@@ -580,6 +606,72 @@ public sealed class EkrLogicDef
                 if (!TryGetFloat(nodeEl, "seconds", out float fieldSec, out err)) return false;
                 if (fieldSec is < 1f or > 15f) { err = "field の秒数が範囲外です (1〜15)"; return false; }
                 n.Seconds = fieldSec;
+                break;
+
+            // ── Wave 2 (docs/ekn-wave2-contract.md §2,§3): 情報と会議 ──────────────────────────
+
+            case "inspect":
+                // spec §2.1: self は受理しない (OtherSelectors = ctx/saved1/saved2/nearest/random)。
+                if (!TryGetEnum(nodeEl, "target", OtherSelectors, out n.Target, out err)) return false;
+                if (!TryGetEnum(nodeEl, "depth", ["team", "role"], out n.Depth, out err)) return false;
+
+                n.FailChance = 0;
+                if (nodeEl.TryGetProperty("failChance", out _) && !TryGetInt(nodeEl, "failChance", 0, 100, out n.FailChance, out err)) return false;
+
+                n.Noise = 0;
+                if (nodeEl.TryGetProperty("noise", out _) && !TryGetInt(nodeEl, "noise", 0, 5, out n.Noise, out err)) return false;
+
+                // spec §2.1: noise は depth="role" のみ受理 (team との併用は文書 reject)。
+                if (n.Noise > 0 && n.Depth != "role")
+                {
+                    err = "「まぜるダミー」は「やくしょくをみる」のときだけ使えます";
+                    return false;
+                }
+
+                break;
+
+            case "reveal":
+                // spec §2.2: inspect と同じ受理値 (self 不可)。
+                if (!TryGetEnum(nodeEl, "target", OtherSelectors, out n.Target, out err)) return false;
+                break;
+
+            case "arrow_show":
+                // spec §2.3: inspect と同じ受理値 (self 不可)。
+                if (!TryGetEnum(nodeEl, "target", OtherSelectors, out n.Target, out err)) return false;
+                if (!TryGetFloat(nodeEl, "seconds", out float arrowShowSec, out err)) return false;
+                if (arrowShowSec is < 5f or > 600f) { err = "arrow_show の秒数が範囲外です (5〜600)"; return false; }
+                n.Seconds = arrowShowSec;
+                break;
+
+            case "arrow_mark":
+                if (!TryGetEnum(nodeEl, "at", ["ctx", "marker1", "marker2", "marker3", "marker4", "cno1", "cno2", "cno3"], out n.Target, out err)) return false;
+                if (!TryGetFloat(nodeEl, "seconds", out float arrowMarkSec, out err)) return false;
+                if (arrowMarkSec is < 5f or > 600f) { err = "arrow_mark の秒数が範囲外です (5〜600)"; return false; }
+                n.Seconds = arrowMarkSec;
+                break;
+
+            case "arrow_hide":
+                break;
+
+            // spec §1.3: 引数なし。on_meeting_vote 以外の rule 配下は文書 reject (上の ContainsOp 検査済み)。
+            case "cancel_vote":
+                break;
+
+            case "vote_weight_set":
+                if (!TryGetInt(nodeEl, "value", 0, 3, out n.IntArg, out err)) return false;
+                break;
+
+            case "vote_block":
+                // spec §3.2: self 不可。
+                if (!TryGetEnum(nodeEl, "target", OtherSelectors, out n.Target, out err)) return false;
+                break;
+
+            case "vote_swap":
+                break;
+
+            case "exile":
+                // spec §3.4: self 可 (SingleSelectors は self を含む単数セレクタ全種)。
+                if (!TryGetEnum(nodeEl, "target", SingleSelectors, out n.Target, out err)) return false;
                 break;
         }
 

@@ -38,6 +38,11 @@ const HUE_VAR = 330; // 変数 = 赤 (Blockly 標準の VARIABLES_HUE と同値)
 // v1.3 (spec §3 2026-08-11 追記) で pull/drag/field (ひっぱる・ひきずる・フィールド) を同カテゴリに追加。
 // 既存5色 (45/210/290/20/330) と衝突しない色相を選ぶ。
 const HUE_ULTIMATE = 150; // ひっさつわざ = 緑
+// Wave 2 (docs/ekn-wave2-contract.md 2026-08-11 追記) — 「しらべる」(情報開示) と「とうひょう」
+// (会議・投票操作) の2カテゴリを追加。既存6色 (45/210/290/20/330/150) の隙間から選ぶ
+// (45〜150 の隙間に HUE_INFO、210〜290 の隙間に HUE_MEETING)。
+const HUE_INFO = 100; // しらべる = 黄緑
+const HUE_MEETING = 260; // とうひょう = 青紫
 
 // on_cno_touch は動的な SLOT ドロップダウンを持つため WHEN_LABELS/WHEN_TOOLTIPS には残すが、
 // jsonBlockDefs 側では他のイベントと分けて個別のブロック定義を書く (下記参照)。
@@ -56,6 +61,9 @@ const WHEN_LABELS: Record<LogicWhen, string> = {
     on_second: "毎秒くりかえす",
     on_cno_touch: "オブジェクトにだれかが触れたとき",
     on_attacked: "こうげきされたとき",
+    // Wave 2 (docs/ekn-wave2-contract.md §1.1/§1.2 2026-08-11)
+    on_meeting_vote: "かいぎで投票したとき",
+    on_meeting_pick: "かいぎであいてをえらんだとき",
 };
 
 const WHEN_TOOLTIPS: Record<LogicWhen, string> = {
@@ -73,6 +81,9 @@ const WHEN_TOOLTIPS: Record<LogicWhen, string> = {
     // Wave 1 (spec §2 2026-08-11)。同期プロローグ (最初の「秒待つ」までしか攻撃を止められない)
     // をユーザーの言葉で言い切る一文にする — リンタ L17 の文言と同じ趣旨。
     on_attacked: "このときの「あいて」= 攻撃してきた人。ふせぐのは一番はじめに置こう",
+    // Wave 2 (docs/ekn-wave2-contract.md §1.1/§1.2 2026-08-11)
+    on_meeting_vote: "このときの「あいて」= 投票した相手 (スキップでは発火しません)。票を取り消せるのは一番はじめだけです。",
+    on_meeting_pick: "このときの「あいて」= えらんだ相手 (会議のボタン、または /pick コマンドどちらでも発火します)。票そのものには関係ありません。",
 };
 
 // ---------------------------------------------------------------------------
@@ -454,6 +465,120 @@ function jsonBlockDefs(): unknown[] {
             tooltip: "指定した場所にブラックホールを出します。半径の中にいる生きているプレイヤー (自分以外) を、指定した秒数のあいだ中心へ引き寄せ続けます (1〜15秒)。会議が始まったり時間が終わったりすると消えます。ひきずるのとフィールドは同時に1つしか使えないので、使っているときに新しく置いても出ません。マーカーが未保存だと出ません。",
         },
 
+        // しらべる (Wave 2 spec §2 追記 — 情報開示制御)
+        {
+            type: "ekr_do_inspect",
+            message0: "%1 の %2 をしらべる",
+            args0: [
+                { type: "field_dropdown", name: "TARGET", options: TARGET_OTHER_OPTIONS },
+                { type: "field_dropdown", name: "DEPTH", options: [["じんえい", "team"], ["やくしょく", "role"]] },
+            ],
+            message1: "(はずれる確率 %1 ％ ・ まぜるダミー %2 こ)",
+            args1: [
+                { type: "field_number", name: "FAILCHANCE", value: 0, min: 0, max: 100, precision: 1 },
+                { type: "field_number", name: "NOISE", value: 0, min: 0, max: 5, precision: 1 },
+            ],
+            inputsInline: true,
+            previousStatement: null,
+            nextStatement: null,
+            colour: HUE_INFO,
+            tooltip: "えらんだ人をしらべて、自分だけに結果を知らせます。「じんえい」は陣営 (クルー等)、「やくしょく」は正確な役職名です。「はずれる確率」を上げると、たまにウソの結果を見せます。「まぜるダミー」は「やくしょく」のときだけ効き、本物の役職とダミーの役職をまとめてリスト表示します (「◯◯か△△か××のようだ」)。しらべられるのは1秒に1回まで (会議中は5秒に1回)。死んでいる人はしらべられません。",
+        },
+        {
+            type: "ekr_do_reveal",
+            message0: "%1 の役職がゲームが終わるまでずっと見えるようになる",
+            args0: [{ type: "field_dropdown", name: "TARGET", options: TARGET_OTHER_OPTIONS }],
+            previousStatement: null,
+            nextStatement: null,
+            colour: HUE_INFO,
+            tooltip: "えらんだ人の役職名と役職の色が、これ以降ずっと (タスク中も会議中も) 自分にだけ見えるようになります。ウソはつきません (「しらべる」とは別物)。効かせられるのは1秒に1回まで。",
+        },
+        {
+            type: "ekr_do_arrow_show",
+            message0: "%1 を追いかける矢印をだす ( %2 びょう)",
+            args0: [
+                { type: "field_dropdown", name: "TARGET", options: TARGET_OTHER_OPTIONS },
+                { type: "field_number", name: "SECONDS", value: 10, min: 5, max: 600, precision: 1 },
+            ],
+            inputsInline: true,
+            previousStatement: null,
+            nextStatement: null,
+            colour: HUE_INFO,
+            tooltip: "えらんだ人を追いかけ続ける矢印を出します (タスク中だけ見えます。会議中は出ません)。その人が死ぬと矢印も消えます。「場所への矢印」と合わせて同時に4本まで、出せるのは1秒に1回までです。",
+        },
+        {
+            type: "ekr_do_arrow_mark",
+            message0: "%1 に矢印をおく ( %2 びょう)",
+            args0: [
+                {
+                    type: "field_dropdown", name: "AT", options: [
+                        ["あいての場所", "ctx"],
+                        ["マーカー1", "marker1"], ["マーカー2", "marker2"], ["マーカー3", "marker3"], ["マーカー4", "marker4"],
+                        ...CNO_PLACE_OPTIONS,
+                    ],
+                },
+                { type: "field_number", name: "SECONDS", value: 10, min: 5, max: 600, precision: 1 },
+            ],
+            inputsInline: true,
+            previousStatement: null,
+            nextStatement: null,
+            colour: HUE_INFO,
+            tooltip: "指定した場所に、その場から動かない矢印を出します (このできごとに「あいて」がいなければ「あいての場所」は何も起きません。マーカーやオブジェクトが未保存でも同じです)。「人への矢印」と合わせて同時に4本まで、出せるのは1秒に1回までです。",
+        },
+        {
+            type: "ekr_do_arrow_hide",
+            message0: "だしている矢印をぜんぶ消す",
+            previousStatement: null,
+            nextStatement: null,
+            colour: HUE_INFO,
+            tooltip: "自分が出した矢印 (人への矢印・場所への矢印の両方) を全部消します。",
+        },
+
+        // とうひょう (Wave 2 spec §1.3/§3 追記 — 会議・投票操作)
+        {
+            type: "ekr_do_cancel_vote",
+            message0: "票をつかわずにえらぶ",
+            previousStatement: null,
+            nextStatement: null,
+            colour: HUE_MEETING,
+            tooltip: "いま入れようとしている票を取り消して、選び直せるようにします。「かいぎで投票したとき」の中だけで使えて、しかも「秒待つ」より前に置かないと間に合いません。ひと会議に1回だけ効きます (2回目以降はふつうに票が入ります)。",
+        },
+        {
+            type: "ekr_do_vote_weight_set",
+            message0: "自分の票のちからを %1 にする",
+            args0: [{ type: "field_number", name: "VALUE", value: 1, min: 0, max: 3, precision: 1 }],
+            previousStatement: null,
+            nextStatement: null,
+            colour: HUE_MEETING,
+            tooltip: "今後の会議すべてで、自分の1票の重さを変更します (0〜3・0だと投票しても数えられません)。今すぐ反映されます。",
+        },
+        {
+            type: "ekr_do_vote_block",
+            message0: "%1 の票をなくす",
+            args0: [{ type: "field_dropdown", name: "TARGET", options: TARGET_OTHER_OPTIONS }],
+            previousStatement: null,
+            nextStatement: null,
+            colour: HUE_MEETING,
+            tooltip: "この会議だけ、えらんだ人の票を無効にします (すでに入れていた票も無効になります)。相手には知らせません。会議中でしか効きません。",
+        },
+        {
+            type: "ekr_do_vote_swap",
+            message0: "おぼえた人1と2の票をいれかえる",
+            previousStatement: null,
+            nextStatement: null,
+            colour: HUE_MEETING,
+            tooltip: "「おぼえた人1」と「おぼえた人2」に入った票を入れかえます (どちらか忘れていたら何も起きません)。会議中でしか効きません。全部の役職まとめて1つの会議で1回までです。",
+        },
+        {
+            type: "ekr_do_exile",
+            message0: "%1 をつよせいついほうする",
+            args0: [{ type: "field_dropdown", name: "TARGET", options: TARGET_SINGLE_OPTIONS }],
+            previousStatement: null,
+            nextStatement: null,
+            colour: HUE_MEETING,
+            tooltip: "投票を待たずに、えらんだ人をすぐ追放して会議を終わらせます (自分をえらぶこともできます)。会議中でしか効かず、ひと会議に1回だけです。何回使えるようにするかは、変数を使って自分で決めよう。",
+        },
+
         // 変数・式 (動的ドロップダウンが不要なもののみ。var_set/var_add/変数の値 は命令形で別途登録)
         {
             type: "ekr_expr_arith",
@@ -660,6 +785,30 @@ export function buildRoleToolbox(): Blockly.utils.toolbox.ToolboxDefinition {
                     { kind: "block", type: "ekr_do_pull" },
                     { kind: "block", type: "ekr_do_drag" },
                     { kind: "block", type: "ekr_do_field" },
+                ],
+            },
+            {
+                kind: "category",
+                name: "しらべる",
+                colour: String(HUE_INFO),
+                contents: [
+                    { kind: "block", type: "ekr_do_inspect" },
+                    { kind: "block", type: "ekr_do_reveal" },
+                    { kind: "block", type: "ekr_do_arrow_show" },
+                    { kind: "block", type: "ekr_do_arrow_mark" },
+                    { kind: "block", type: "ekr_do_arrow_hide" },
+                ],
+            },
+            {
+                kind: "category",
+                name: "とうひょう",
+                colour: String(HUE_MEETING),
+                contents: [
+                    { kind: "block", type: "ekr_do_cancel_vote" },
+                    { kind: "block", type: "ekr_do_vote_weight_set" },
+                    { kind: "block", type: "ekr_do_vote_block" },
+                    { kind: "block", type: "ekr_do_vote_swap" },
+                    { kind: "block", type: "ekr_do_exile" },
                 ],
             },
             {
