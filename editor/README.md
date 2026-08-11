@@ -1,8 +1,15 @@
-# End K not マップエディタ (EKM v1)
+# Symbolon
 
-End K not のカスタムマップ (`.ekmap.json`) をブラウザで作成・編集する Web エディタ (Phase 1 MVP)。
-床/壁/奈落のペイント、decor スタンプ、スポーン配置、通行○×プレビュー、Undo/Redo、
-IndexedDB 自動保存、`.ekmap.json` 入出力、マップコード (`EKM1.…`) のコピー/読込に対応。
+コードを書かずに、Among Us のマップと役職をつくるエディタ。
+
+カスタムマップ (`.ekmap.json`) の作成・編集に対応する。床/壁/奈落のペイント、decor スタンプ、
+スポーン配置、通行○×プレビュー、Undo/Redo、IndexedDB 自動保存、`.ekmap.json` 入出力、
+マップコード (`EKM1.…`) のコピー/読込、および役職メーカー。
+デスクトップアプリ (Windows) とブラウザの両方で動作する。
+
+> **名前について** — *symbolon* (σύμβολον) は古代ギリシアの割符。土器を割って二人が持ち合い、
+> 合わせて本人であることを証明した。語源は σύν (共に) + βάλλειν (投げる) — 「投げ合わせる」。
+> symbol の語源でもある。
 
 ## 開発
 
@@ -24,10 +31,11 @@ Windows は MSVC ビルドツール (Visual Studio C++ Build Tools) も必要。
 
 ```
 npm run tauri:dev     # 開発: ネイティブウィンドウで起動 (vite dev を内包)
-npm run tauri:build   # リリース: src-tauri/target/release/bundle/ に exe + インストーラ
+npm run tauri:build   # リリース: src-tauri/target/release/bundle/nsis/ にインストーラ (.exe)
 ```
 
-- 設定: `src-tauri/tauri.conf.json` (識別子 `net.endknot.ekmap`、ウィンドウ 1280×800)。
+- 設定: `src-tauri/tauri.conf.json` (識別子 `net.symbolon.editor`、ウィンドウ 1280×800)。
+  配布形式は NSIS インストーラのみ (`bundle.targets`)。
 - ファイル書込権限: `src-tauri/capabilities/default.json` で `Documents/EndKnot/EKMaps` 配下のみ許可。
 - アプリ側の保存ロジックは `src/playtest.ts` (Tauri 検出 → `@tauri-apps/plugin-fs` で直書き / ブラウザ → File System Access API / 未対応 → ダウンロード)。
 - アイコンは Tauri 既定のプレースホルダ。差し替えは `npm run tauri icon <png>`。

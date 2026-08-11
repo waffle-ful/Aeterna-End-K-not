@@ -140,7 +140,7 @@ export async function saveForPlaytest(filename: string, text: string): Promise<P
             suggestedName: filename,
             startIn: "documents",
             id: "ekmaps-file",
-            types: [{ description: "EKMap マップ", accept: { "application/json": [".json"] } }],
+            types: [{ description: "EKM マップ", accept: { "application/json": [".json"] } }],
         });
         await ensurePermission(fh);
         await storeHandle(fh, fileKey);
