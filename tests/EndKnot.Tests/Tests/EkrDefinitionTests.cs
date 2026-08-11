@@ -171,6 +171,108 @@ public class EkrDefinitionTests
         Assert.True(ok == shouldAccept, shouldAccept ? error : "本来 reject されるべき op が受理されました: " + opJson);
     }
 
+    // ── Wave 2 (docs/ekn-wave2-contract.md): 新イベント2種+新 op 10種 ────────────────────────────
+
+    [Fact]
+    public void FullCourseFixture_ExposesWave2Rules()
+    {
+        string json = File.ReadAllText(FixturePath("role-full-course.ekrole.json"));
+        Assert.True(EkrDefinition.TryParse(json, out EkrDefinition def, out string error), error);
+
+        Assert.Contains(def.ParsedLogic.Rules, r => r.When == "on_meeting_vote");
+        Assert.Contains(def.ParsedLogic.Rules, r => r.When == "on_meeting_pick");
+    }
+
+    // spec §1.3: cancel_vote は on_meeting_vote 以外の rule 配下に現れたら文書 reject (cancel_attack と同じ厳格側)。
+    [Fact]
+    public void CancelVote_OutsideOnMeetingVote_IsRejected()
+    {
+        string json = Wrap("\"logic\":{\"version\":1,\"rules\":[{\"when\":\"on_pet\",\"do\":[{\"op\":\"cancel_vote\"}]}]}");
+        Assert.False(EkrDefinition.TryParse(json, out _, out _));
+    }
+
+    [Fact]
+    public void CancelVote_InsideOnMeetingVote_IsAccepted()
+    {
+        string json = Wrap("\"logic\":{\"version\":1,\"rules\":[{\"when\":\"on_meeting_vote\",\"do\":[{\"op\":\"cancel_vote\"}]}]}");
+        Assert.True(EkrDefinition.TryParse(json, out _, out string error), error);
+    }
+
+    // TS coordinator 裁定 (2026-08-11): vote_block/vote_swap/exile はどの rule 配下でも検証 reject しない
+    // (リンタ L18 の警告のみ・実行時に会議中でなければ no-op)。
+    [Theory]
+    [InlineData("{\"op\":\"vote_block\",\"target\":\"nearest\"}")]
+    [InlineData("{\"op\":\"vote_swap\"}")]
+    [InlineData("{\"op\":\"exile\",\"target\":\"self\"}")]
+    public void MeetingOnlyOps_AnyRulePlacement_IsAccepted(string opJson)
+    {
+        Assert.True(EkrDefinition.TryParse(LogicWithOp(opJson), out _, out string error), error);
+    }
+
+    // spec §2.1: inspect の self 不可・noise は depth="role" のみ受理 (TS と同じ「noise>0 かつ depth=team」判定)。
+    [Theory]
+    [InlineData("{\"op\":\"inspect\",\"target\":\"self\",\"depth\":\"team\"}", false)]
+    [InlineData("{\"op\":\"inspect\",\"target\":\"nearest\",\"depth\":\"team\"}", true)]
+    [InlineData("{\"op\":\"inspect\",\"target\":\"nearest\",\"depth\":\"team\",\"noise\":0}", true)] // noise:0 は team 併用でも許容
+    [InlineData("{\"op\":\"inspect\",\"target\":\"nearest\",\"depth\":\"team\",\"noise\":2}", false)]
+    [InlineData("{\"op\":\"inspect\",\"target\":\"nearest\",\"depth\":\"role\",\"noise\":2}", true)]
+    [InlineData("{\"op\":\"inspect\",\"target\":\"nearest\",\"depth\":\"role\",\"failChance\":50}", true)]
+    [InlineData("{\"op\":\"inspect\",\"target\":\"nearest\",\"depth\":\"role\",\"noise\":6}", false)] // 範囲外 (0..5)
+    public void Inspect_MatchesContract(string opJson, bool shouldAccept)
+    {
+        bool ok = EkrDefinition.TryParse(LogicWithOp(opJson), out _, out string error);
+        Assert.True(ok == shouldAccept, shouldAccept ? error : "本来 reject されるべき op が受理されました: " + opJson);
+    }
+
+    // spec §2.2/§2.3/§3.2: self 不可の対象セレクタ (reveal/arrow_show/vote_block) と self 可の exile。
+    [Theory]
+    [InlineData("{\"op\":\"reveal\",\"target\":\"self\"}", false)]
+    [InlineData("{\"op\":\"reveal\",\"target\":\"ctx\"}", true)]
+    [InlineData("{\"op\":\"arrow_show\",\"target\":\"self\",\"seconds\":10}", false)]
+    [InlineData("{\"op\":\"arrow_show\",\"target\":\"ctx\",\"seconds\":10}", true)]
+    [InlineData("{\"op\":\"vote_block\",\"target\":\"self\"}", false)]
+    [InlineData("{\"op\":\"vote_block\",\"target\":\"ctx\"}", true)]
+    [InlineData("{\"op\":\"exile\",\"target\":\"self\"}", true)]
+    [InlineData("{\"op\":\"exile\",\"target\":\"ctx\"}", true)]
+    public void Wave2SelfSelectorRestrictions_MatchContract(string opJson, bool shouldAccept)
+    {
+        bool ok = EkrDefinition.TryParse(LogicWithOp(opJson), out _, out string error);
+        Assert.True(ok == shouldAccept, shouldAccept ? error : "本来 reject されるべき op が受理されました: " + opJson);
+    }
+
+    // spec §2.3: arrow_mark の at 受理値 (ctx/marker1-4/cno1-3) と秒数範囲 (5..600)。
+    [Theory]
+    [InlineData("{\"op\":\"arrow_mark\",\"at\":\"ctx\",\"seconds\":60}", true)]
+    [InlineData("{\"op\":\"arrow_mark\",\"at\":\"marker2\",\"seconds\":600}", true)]
+    [InlineData("{\"op\":\"arrow_mark\",\"at\":\"cno1\",\"seconds\":5}", true)]
+    [InlineData("{\"op\":\"arrow_mark\",\"at\":\"ctx\",\"seconds\":4}", false)] // 範囲外
+    [InlineData("{\"op\":\"arrow_mark\",\"at\":\"self\",\"seconds\":10}", false)] // self は arrow_mark.at に無い
+    public void ArrowMark_MatchesContract(string opJson, bool shouldAccept)
+    {
+        bool ok = EkrDefinition.TryParse(LogicWithOp(opJson), out _, out string error);
+        Assert.True(ok == shouldAccept, shouldAccept ? error : "本来 reject されるべき op が受理されました: " + opJson);
+    }
+
+    // spec §3.1: vote_weight_set.value は 0..3。
+    [Theory]
+    [InlineData("{\"op\":\"vote_weight_set\",\"value\":0}", true)]
+    [InlineData("{\"op\":\"vote_weight_set\",\"value\":3}", true)]
+    [InlineData("{\"op\":\"vote_weight_set\",\"value\":4}", false)]
+    [InlineData("{\"op\":\"vote_weight_set\",\"value\":-1}", false)]
+    public void VoteWeightSet_MatchesContract(string opJson, bool shouldAccept)
+    {
+        bool ok = EkrDefinition.TryParse(LogicWithOp(opJson), out _, out string error);
+        Assert.True(ok == shouldAccept, shouldAccept ? error : "本来 reject されるべき op が受理されました: " + opJson);
+    }
+
+    // arrow_hide / vote_swap は引数なし。
+    [Fact]
+    public void NoArgOps_AreAccepted()
+    {
+        Assert.True(EkrDefinition.TryParse(LogicWithOp("{\"op\":\"arrow_hide\"}"), out _, out string e1), e1);
+        Assert.True(EkrDefinition.TryParse(LogicWithOp("{\"op\":\"vote_swap\"}"), out _, out string e2), e2);
+    }
+
     // passives 無しでも R0 動作 (完全後方互換) — ParsedPassives は既定インスタンスで非 null。
     [Fact]
     public void NoPassives_UsesDefaults()

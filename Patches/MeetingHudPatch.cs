@@ -183,6 +183,9 @@ internal static class CheckForEndVotingPatch
                 if (Poache.PoachedPlayers.Contains(ps.TargetPlayerId)) canVote = false;
                 if (Silencer.ForSilencer.Contains(ps.TargetPlayerId) && Main.AllAlivePlayerControls.Count > Silencer.MaxPlayersAliveForSilencedToVote.GetInt()) canVote = false;
                 if (CheckRole(ps.TargetPlayerId, CustomRoles.Notvoter)) canVote = false;
+                // Wave 2 (docs/ekn-wave2-contract.md §3.2 vote_block): 無効化グループ (Notvoter と同じ位置 —
+                // 加算より前)。既に投票済みの票も含めて無効になる (Notvoter と同じ意味論)。
+                if (EndKnot.Modules.Ekm.EkrManager.IsVoteBlocked(ps.TargetPlayerId)) canVote = false;
 
                 switch (Main.PlayerStates[ps.TargetPlayerId].Role)
                 {
@@ -264,6 +267,7 @@ internal static class CheckForEndVotingPatch
             Dominion.ManipulateVotingResult(votingData, states);
             Assumer.OnVotingEnd(votingData);
             MeetingAngel.NegateVotes(votingData, states);
+            EndKnot.Modules.Ekm.EkrManager.ApplyVoteSwap(votingData, states); // Wave 2 (spec §3.3)
 
             foreach (MeetingHud.VoterState voteState in states)
                 Missioneer.TrackVoteReceived(voteState.VotedForId);
@@ -604,6 +608,35 @@ internal static class CheckForEndVotingPatch
         catch (Exception e) { Utils.ThrowException(e); }
     }
 
+    // Wave 2 (docs/ekn-wave2-contract.md §3.4 exile): EkrLogicOpcodes.Exile から呼ぶ。Dictator の強制追放
+    // 経路 (上の CheckForEndVoting 内 :61-91) の一般部分をそのままなぞる — Dictator 固有の自殺コスト
+    // (TryAddAfterMeetingDeathPlayers(Suicide, exiler)) は EKR exile の契約に無いので入れない。
+    // CloseMeeting/RpcClose の送信パターンは一切変更しない (既往 anti-cheat 論点への配線変更禁止)。
+    internal static void ForceExile(PlayerControl target, PlayerControl exiler)
+    {
+        if (!AmongUsClient.Instance.AmHost || !target || !target.Data || !MeetingHud.Instance) return;
+
+        var states = new[]
+        {
+            new MeetingHud.VoterState { VoterId = exiler ? exiler.PlayerId : target.PlayerId, VotedForId = target.PlayerId }
+        };
+
+        target.SetRealKiller(exiler);
+        Main.LastVotedPlayerInfo = target.Data;
+        ExileControllerWrapUpPatch.LastExiled = target.Data;
+
+        if (Main.LastVotedPlayerInfo != null) ConfirmEjections(Main.LastVotedPlayerInfo, false);
+
+        MeetingHud.Instance.RpcVotingComplete(states, target.Data, false);
+        Statistics.OnVotingComplete(states, target.Data, false, true);
+
+        CheckForDeathOnExile(PlayerState.DeathReason.Vote, target.PlayerId);
+
+        MeetingHudRpcClosePatch.AllowClose = true;
+
+        Logger.Info($"{target.GetNameWithRole().RemoveHtmlTags()} force-exiled by EKR exile op (holder {(exiler ? exiler.PlayerId : target.PlayerId)})", "EkrManager");
+    }
+
     private static void RevengeOnExile(byte playerId /*, PlayerState.DeathReason deathReason*/)
     {
         PlayerControl player = Utils.GetPlayerById(playerId);
@@ -665,6 +698,8 @@ internal static class ExtendedMeetingHud
                 if (Poache.PoachedPlayers.Contains(ps.TargetPlayerId)) voteNum = 0;
                 if (Silencer.ForSilencer.Contains(ps.TargetPlayerId) && Main.AllAlivePlayerControls.Count > Silencer.MaxPlayersAliveForSilencedToVote.GetInt()) voteNum = 0;
                 if (CheckForEndVotingPatch.CheckRole(ps.TargetPlayerId, CustomRoles.Notvoter)) voteNum = 0;
+                // Wave 2 (spec §3.2): site1 と同方向の無効化グループ (2箇所セット — memory 罠)。
+                if (EndKnot.Modules.Ekm.EkrManager.IsVoteBlocked(ps.TargetPlayerId)) voteNum = 0;
 
                 if (CheckForEndVotingPatch.CheckRole(ps.TargetPlayerId, CustomRoles.Magistrate) && Magistrate.CallCourtNextMeeting) voteNum += Magistrate.ExtraVotes.GetInt();
                 if (CheckForEndVotingPatch.CheckRole(ps.TargetPlayerId, CustomRoles.Knighted)) voteNum += 1;
@@ -1262,6 +1297,7 @@ internal static class MeetingHudStartPatch
         GuessManager.StartMeetingPatch.Postfix(__instance);
         Inspector.StartMeetingPatch.Postfix(__instance);
         Judge.StartMeetingPatch.Postfix(__instance);
+        EkrMeetingButton.StartMeetingPatch(__instance); // Wave 2 (docs/ekn-wave2-contract.md §1.2)
         Swapper.StartMeetingPatch.Postfix(__instance);
         Councillor.StartMeetingPatch.Postfix(__instance);
         Nemesis.StartMeetingPatch.Postfix(__instance);
@@ -1407,6 +1443,13 @@ internal static class MeetingHudUpdatePatch
                         break;
                     case CustomRoles.Nemesis when !PlayerControl.LocalPlayer.IsAlive() && !GameObject.Find("ShootButton"):
                         Nemesis.CreateJudgeButton(__instance);
+                        break;
+                    // Wave 2 (docs/ekn-wave2-contract.md §1.2): EKR ホルダーが会議中に死亡したら他役職と
+                    // 同じ規約でボタンを強制掃除する (会議を跨いで残らないよう・裁定書「掃除を忘れると
+                    // ボタンが会議を跨いで残る」の指示どおり)。掃除側は生成側 (HasOnMeetingPickLogic 込み)
+                    // より広く取る (advisor 指摘 2026-08-11 — 掃除条件が生成条件より狭いと取りこぼす)。
+                    case var r when EkrManager.IsSlot(r) && !PlayerControl.LocalPlayer.IsAlive():
+                        ClearShootButton(__instance, true);
                         break;
                 }
 

@@ -74,6 +74,11 @@ export const LOGIC_WHEN_VALUES = [
     // Wave 1 (spec §2 2026-08-11): 自分へのキル試行時。ctx = 攻撃者。slot は持たない
     // (slot は on_cno_touch 専用 — validateRule の既存 else 分岐がそのまま reject する)。
     "on_attacked",
+    // Wave 2 (docs/ekn-wave2-contract.md §1.1/§1.2 2026-08-11): 会議中の対象選択2系統。
+    // どちらも ctx を持つ (投票先/選んだ相手) — CTXLESS_WHENS 相当の対象には入れない
+    // (lint-role.ts 側の判定で同じ扱い)。slot は持たない (on_cno_touch 専用のまま)。
+    "on_meeting_vote",
+    "on_meeting_pick",
 ] as const;
 export type LogicWhen = (typeof LOGIC_WHEN_VALUES)[number];
 const LOGIC_WHEN_SET: ReadonlySet<string> = new Set(LOGIC_WHEN_VALUES);
@@ -166,6 +171,40 @@ export const FIELD_SECONDS_MIN = 1;
 export const FIELD_SECONDS_MAX = 15;
 
 // ---------------------------------------------------------------------------
+// Wave 2 (docs/ekn-wave2-contract.md 2026-08-11) — 情報と会議
+// ---------------------------------------------------------------------------
+// inspect/reveal/arrow_show/vote_block はどれも「self 不可の単数セレクタ」を共有する
+// (契約 §2.1/§2.2/§2.3/§3.2「inspect と同じ受理値」)。TELEPORT_OTHER_TARGET_VALUES と
+// 値集合が完全一致するため、意味を明示する別名として再利用する (別々に配列リテラルを
+// 書くと将来どちらかだけ更新されてズレる)。
+export const SELF_EXCLUDED_TARGET_VALUES = TELEPORT_OTHER_TARGET_VALUES;
+export const INSPECT_TARGET_VALUES = SELF_EXCLUDED_TARGET_VALUES;
+export const REVEAL_TARGET_VALUES = SELF_EXCLUDED_TARGET_VALUES;
+export const ARROW_SHOW_TARGET_VALUES = SELF_EXCLUDED_TARGET_VALUES;
+export const VOTE_BLOCK_TARGET_VALUES = SELF_EXCLUDED_TARGET_VALUES;
+// exile.target は self を含む唯一の Wave 2 セレクタ (契約 §3.4「自分を追放させる」演出が正当ユース)。
+export const EXILE_TARGET_VALUES = TARGET_SINGLE_VALUES;
+
+export const INSPECT_DEPTH_VALUES = ["team", "role"] as const;
+export const INSPECT_FAIL_CHANCE_MIN = 0;
+export const INSPECT_FAIL_CHANCE_MAX = 100;
+export const INSPECT_NOISE_MIN = 0;
+export const INSPECT_NOISE_MAX = 5;
+
+export const ARROW_SECONDS_MIN = 5;
+export const ARROW_SECONDS_MAX = 600;
+// arrow_mark.at は「どこ」セレクタだが self を含まない独自集合 (契約 §2.3 — teleport.to 等の
+// 空間セレクタとは別枠。marker_save.at や teleport.to と値集合が重なる部分はあるが、
+// 契約表がこの独自集合を明記しているため専用定数にする)。
+export const ARROW_MARK_AT_VALUES = ["ctx", "marker1", "marker2", "marker3", "marker4", "cno1", "cno2", "cno3"] as const;
+
+// vote_weight_set.value は passives.voteWeight (PASSIVE_VOTE_WEIGHT_MIN/MAX) と同じ範囲 0..3 だが、
+// 「実行時オーバーライド」という別物のフィールドなので別定数にする (DUMMY_SPAWN_NAME_MAX と同じ方針 —
+// 片方だけ将来変わっても連動しないように)。
+export const VOTE_WEIGHT_SET_MIN = 0;
+export const VOTE_WEIGHT_SET_MAX = 3;
+
+// ---------------------------------------------------------------------------
 // パッシブ層 passives (Wave 1・spec §1.1) — トップレベルの固定キーオブジェクト
 // ---------------------------------------------------------------------------
 // logic とは独立 (logic 無しでも passives 単独で可)。Blockly ワークスペースには置かない —
@@ -251,7 +290,27 @@ export type LogicNode =
     | { op: "remember"; slot: 1 | 2; target: TargetSingle }
     // Wave 1 (spec §3 2026-08-11) — 引数なし。on_attacked 配下でのみ書ける (他イベント配下は
     // 実行時 no-op ではなく**検証 reject** — 静的に判定できるため厳格側に倒す裁定)。
-    | { op: "cancel_attack" };
+    | { op: "cancel_attack" }
+    // Wave 2 (docs/ekn-wave2-contract.md §2 2026-08-11) — しらべる系。failChance/noise は
+    // 「任意・既定0」だが、この実装では Blockly ブロックが常に数値を持つため常に出力する
+    // (省略時の意味と値0の意味が同じなので害はない — 実装裁量。手書き JSON では省略もできる)。
+    | { op: "inspect"; target: (typeof INSPECT_TARGET_VALUES)[number]; depth: (typeof INSPECT_DEPTH_VALUES)[number]; failChance?: number; noise?: number }
+    | { op: "reveal"; target: (typeof REVEAL_TARGET_VALUES)[number] }
+    // Wave 2 (§2.3) — 矢印3 op。
+    | { op: "arrow_show"; target: (typeof ARROW_SHOW_TARGET_VALUES)[number]; seconds: number }
+    | { op: "arrow_mark"; at: (typeof ARROW_MARK_AT_VALUES)[number]; seconds: number }
+    | { op: "arrow_hide" }
+    // Wave 2 (§1.3) — 票をつかわずにえらぶ。on_meeting_vote 配下でのみ書ける (cancel_attack と
+    // 同じ厳格側の裁定 — 他イベント配下は検証 reject)。
+    | { op: "cancel_vote" }
+    // Wave 2 (§3.1) — 常時 op (会議専用ではない)。
+    | { op: "vote_weight_set"; value: number }
+    // Wave 2 (§3.2〜§3.4) — 会議専用 op 3つ。配置 (会議系イベント配下か) は検証では強制せず
+    // リンタ L18 のヒントに委ねる (契約: cancel_vote だけが構造的 reject 対象)。
+    | { op: "vote_block"; target: (typeof VOTE_BLOCK_TARGET_VALUES)[number] }
+    // vote_swap は引数なし (saved1/saved2 固定 — remember との合成を強制する設計)。
+    | { op: "vote_swap" }
+    | { op: "exile"; target: (typeof EXILE_TARGET_VALUES)[number] };
 
 export interface LogicRule {
     when: LogicWhen;
@@ -772,6 +831,69 @@ function validateNode(raw: unknown, varNames: ReadonlySet<string>, path: string,
                 fail(`${path} の「こうげきをふせぐ」はイベント "${when}" では使えません (「こうげきされたとき」の中だけで使えます)`);
             }
             return { node: { op: "cancel_attack" }, depth: 1, count: 1 };
+        }
+        // Wave 2 (docs/ekn-wave2-contract.md §2 2026-08-11) — しらべる系
+        case "inspect": {
+            const target = expectEnum(raw.target, INSPECT_TARGET_VALUES, `${path}.target`);
+            const depth = expectEnum(raw.depth, INSPECT_DEPTH_VALUES, `${path}.depth`);
+            const failChance = raw.failChance !== undefined
+                ? expectRangeInt(raw.failChance, INSPECT_FAIL_CHANCE_MIN, INSPECT_FAIL_CHANCE_MAX, `${path}.failChance`)
+                : undefined;
+            let noise: number | undefined;
+            if (raw.noise !== undefined) {
+                noise = expectRangeInt(raw.noise, INSPECT_NOISE_MIN, INSPECT_NOISE_MAX, `${path}.noise`);
+                // 契約 §2.1: noise は depth:"role" のみ受理。noise=0 は「まぜない」既定と同義なので
+                // team との併用でも害が無く許容する (0 は実質「noise を使っていない」と区別できない —
+                // 実装裁量。1以上を team と併用したときだけ reject する)。
+                if (depth === "team" && noise > 0) {
+                    fail(`${path}.noise は depth:"role" のときだけ使えます (depth:"team" では意味がありません)`);
+                }
+            }
+            const node: LogicNode = {
+                op: "inspect", target, depth,
+                ...(failChance !== undefined ? { failChance } : {}),
+                ...(noise !== undefined ? { noise } : {}),
+            };
+            return { node, depth: 1, count: 1 };
+        }
+        case "reveal": {
+            const target = expectEnum(raw.target, REVEAL_TARGET_VALUES, `${path}.target`);
+            return { node: { op: "reveal", target }, depth: 1, count: 1 };
+        }
+        case "arrow_show": {
+            const target = expectEnum(raw.target, ARROW_SHOW_TARGET_VALUES, `${path}.target`);
+            const seconds = expectRangeNumber(raw.seconds, ARROW_SECONDS_MIN, ARROW_SECONDS_MAX, `${path}.seconds`);
+            return { node: { op: "arrow_show", target, seconds }, depth: 1, count: 1 };
+        }
+        case "arrow_mark": {
+            const at = expectEnum(raw.at, ARROW_MARK_AT_VALUES, `${path}.at`);
+            const seconds = expectRangeNumber(raw.seconds, ARROW_SECONDS_MIN, ARROW_SECONDS_MAX, `${path}.seconds`);
+            return { node: { op: "arrow_mark", at, seconds }, depth: 1, count: 1 };
+        }
+        case "arrow_hide":
+            return { node: { op: "arrow_hide" }, depth: 1, count: 1 };
+        // Wave 2 (§1.3) — 票をつかわずにえらぶ。cancel_attack と同じ配置検査 (静的に判定できるので reject)。
+        case "cancel_vote": {
+            if (when !== "on_meeting_vote") {
+                fail(`${path} の「票をつかわずにえらぶ」はイベント "${when}" では使えません (「かいぎで投票したとき」の中だけで使えます)`);
+            }
+            return { node: { op: "cancel_vote" }, depth: 1, count: 1 };
+        }
+        // Wave 2 (§3.1〜§3.4) — 票操作。vote_block/vote_swap/exile は配置を検証で強制しない
+        // (契約: 会議専用 op の配置ヒントはリンタ L18 に委ねる — cancel_vote だけが構造的 reject)。
+        case "vote_weight_set": {
+            const value = expectRangeInt(raw.value, VOTE_WEIGHT_SET_MIN, VOTE_WEIGHT_SET_MAX, `${path}.value`);
+            return { node: { op: "vote_weight_set", value }, depth: 1, count: 1 };
+        }
+        case "vote_block": {
+            const target = expectEnum(raw.target, VOTE_BLOCK_TARGET_VALUES, `${path}.target`);
+            return { node: { op: "vote_block", target }, depth: 1, count: 1 };
+        }
+        case "vote_swap":
+            return { node: { op: "vote_swap" }, depth: 1, count: 1 };
+        case "exile": {
+            const target = expectEnum(raw.target, EXILE_TARGET_VALUES, `${path}.target`);
+            return { node: { op: "exile", target }, depth: 1, count: 1 };
         }
         default:
             fail(`${path}.op が不明です (${JSON.stringify(op)})`);

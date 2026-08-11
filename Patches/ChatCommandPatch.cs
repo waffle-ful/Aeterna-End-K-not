@@ -301,6 +301,9 @@ internal static class ChatCommands
             
             // Commands with action handled elsewhere
             new("Guess", "{id} {role}", Command.UsageLevels.Everyone, Command.UsageTimes.InMeeting, (_, _, _) => { }, true, false, [GetString("CommandArgs.Guess.Id"), GetString("CommandArgs.Guess.Role")]),
+            // EKR Wave 2 (docs/ekn-wave2-contract.md §1.2 on_meeting_pick): dispatch は EkrManager.PickMsg
+            // ("||" 早期チェイン、Command.AllCommands の通常ディスパッチより前) — このエントリは /help 表示専用。
+            new("Pick", "{id}", Command.UsageLevels.Everyone, Command.UsageTimes.InMeeting, (_, _, _) => { }, true, false, [GetString("CommandArgs.Pick.Id")]),
             new("Trial", "{id}", Command.UsageLevels.Everyone, Command.UsageTimes.InMeeting, (_, _, _) => { }, true, false, [GetString("CommandArgs.Trial.Id")]),
             new("Swap", "{id}", Command.UsageLevels.Everyone, Command.UsageTimes.InMeeting, (_, _, _) => { }, true, false, [GetString("CommandArgs.Swap.Id")]),
             new("Compare", "{id1} {id2}", Command.UsageLevels.Everyone, Command.UsageTimes.InMeeting, (_, _, _) => { }, true, false, [GetString("CommandArgs.Compare.Id1"), GetString("CommandArgs.Compare.Id2")]),
@@ -514,6 +517,8 @@ internal static class ChatCommands
             if (Newscaster.InterviewMsg(PlayerControl.LocalPlayer, text)) goto Canceled;
             if (Medium.MsMsg(PlayerControl.LocalPlayer, text)) goto Canceled;
             if (Nemesis.NemesisMsgCheck(PlayerControl.LocalPlayer, text)) goto Canceled;
+            // EKR Wave 2 (docs/ekn-wave2-contract.md §1.2): ローカル側 (ホスト自身の /pick) ディスパッチ。
+            if (EndKnot.Modules.Ekm.EkrManager.PickMsg(PlayerControl.LocalPlayer, text)) goto Canceled;
         }
 
         Main.IsChatCommand = false;
@@ -5808,7 +5813,9 @@ internal static class ChatCommands
                 Swapper.SwapMsg(player, text) ||
                 Inspector.InspectorCheckMsg(player, text) ||
                 Councillor.MurderMsg(player, text) ||
-                Newscaster.InterviewMsg(player, text))
+                Newscaster.InterviewMsg(player, text) ||
+                // EKR Wave 2 (docs/ekn-wave2-contract.md §1.2): ホスト側 (バニラ客含む全員) ディスパッチ。
+                EndKnot.Modules.Ekm.EkrManager.PickMsg(player, text))
             {
                 canceled = true;
                 LastSentCommand[player.PlayerId] = now;

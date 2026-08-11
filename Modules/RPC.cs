@@ -191,7 +191,13 @@ public enum CustomRPC
     // Upstream EHR catchup
     Entombed = 252,
     Haunter = 253,
-    Commited = 254
+    Commited = 254,
+
+    // EKN Wave 2 (docs/ekn-wave2-contract.md §1.2 on_meeting_pick 会議ボタン) — 2026-08-11 予約。
+    // ⚠️ 末尾に追記できる最後の値 (255) を使った。以後の新規 RPC は EkmSync のコメントが指す
+    // 247-250 (ゲームモード同期用に空けてある予約枠) を使うか、既存 ID の sub-op 多重化
+    // (EkmSync / ControllableSound と同じ形) で対応すること — 素朴な「末尾へ追記」はもうできない。
+    EkrMeetingPick = 255
 
     // The total number of RPCs must not exceed 255
     // Because HandleRpc accepts Rpc in byte (max 255) system, and it will be impossible to use int
@@ -266,7 +272,7 @@ internal static class RPCHandlerPatch
     {
         if (id == 115) return true;
         if (SubmergedCompatibility.IsSubmerged() && id is >= 120 and <= 124) return true;
-        return (CustomRPC)id is CustomRPC.VersionCheck or CustomRPC.RequestRetryVersionCheck or CustomRPC.AntiBlackout or CustomRPC.SyncNameNotify or CustomRPC.RequestCommandProcessing or CustomRPC.Judge or CustomRPC.SetSwapperVotes or CustomRPC.MeetingKill or CustomRPC.Guess or CustomRPC.NemesisRevenge or CustomRPC.BAU or CustomRPC.TMGSync or CustomRPC.InspectorCommand or CustomRPC.EkmSync;
+        return (CustomRPC)id is CustomRPC.VersionCheck or CustomRPC.RequestRetryVersionCheck or CustomRPC.AntiBlackout or CustomRPC.SyncNameNotify or CustomRPC.RequestCommandProcessing or CustomRPC.Judge or CustomRPC.SetSwapperVotes or CustomRPC.MeetingKill or CustomRPC.Guess or CustomRPC.NemesisRevenge or CustomRPC.BAU or CustomRPC.TMGSync or CustomRPC.InspectorCommand or CustomRPC.EkmSync or CustomRPC.EkrMeetingPick;
     }
 
     private static bool CheckRateLimit(PlayerControl __instance, RpcCalls rpcType)
@@ -1130,6 +1136,11 @@ internal static class RPCHandlerPatch
                 case CustomRPC.Judge:
                 {
                     Judge.ReceiveRPC(reader, __instance);
+                    break;
+                }
+                case CustomRPC.EkrMeetingPick:
+                {
+                    EndKnot.Modules.Ekm.EkrMeetingButton.ReceiveRPC(reader, __instance);
                     break;
                 }
                 case CustomRPC.MeetingKill:

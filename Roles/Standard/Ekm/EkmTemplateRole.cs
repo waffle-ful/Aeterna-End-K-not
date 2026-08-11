@@ -158,4 +158,44 @@ public abstract class EkmTemplateRole : RoleBase
     {
         EkrManager.FireMeetingEndForSlot(Slot);
     }
+
+    // ── Wave 2 (docs/ekn-wave2-contract.md §1.1 on_meeting_vote): CastVote 関門 (MeetingHudPatch.cs:1610) ──
+    // 戻り値 = 票を消費した (=キャンセルした) か。CancelsVote() の EKR arm (定義に on_meeting_vote
+    // ルールがあれば true) が通ったときだけこの経路に来る。Oracle/FortuneTeller と同じ
+    // 「cancel したら Main.DontCancelVoteList へ積んで revote を許す」規約 — これが cancel_vote の
+    // 「ひと会議に1回だけ有効」を無料で実現する (2回目は CancelsVote() の外側ゲートで OnVote 自体が
+    // 呼ばれなくなる)。
+    public override bool OnVote(PlayerControl voter, PlayerControl target)
+    {
+        if (!voter || !target) return false;
+
+        bool canceled = EkrManager.FireMeetingVote(Slot, voter, target);
+        if (canceled) Main.DontCancelVoteList.Add(voter.PlayerId);
+
+        return canceled;
+    }
+
+    // ── Wave 2 (spec §2.2 reveal): KnowRole は 1 点 override のみ (4 表示系の総なめ集約が拾う)。
+    // 集約は Main.PlayerStates.Values.Any(x => x.Role.KnowRole(seer, target)) — this や x には依存せず
+    // seer/target の playerId だけで判定すること (個別サイトへの直書き禁止・memory 罠)。
+    public override bool KnowRole(PlayerControl seer, PlayerControl target)
+    {
+        if (base.KnowRole(seer, target)) return true;
+        if (!seer || !target) return false;
+
+        return EkrManager.HasRevealed(seer.PlayerId, target.PlayerId);
+    }
+
+    // ── Wave 2 (spec §2.3 矢印): Scout.GetSuffix と同じ3点セット (自分の名札の上にだけ描画)。
+    // advisor 指摘 (2026-08-11): 呼び出し元 (Utils.BuildSuffix) は Main.PlayerStates.Values を全部
+    // なめて state.Role.GetSuffix(seer, target, ...) を呼ぶ — this は「そのスロットの共有シングルトン」
+    // であって seer の役職とは無関係。ガード無しだと束縛中の EKR スロットの数だけ矢印が重複描画される
+    // (KnowRole アグリゲータと同型の罠 — this に依存せず、seer が「このスロットの保持者か」を毎回検証する)。
+    public override string GetSuffix(PlayerControl seer, PlayerControl target, bool hud = false, bool meeting = false)
+    {
+        if (seer == null || (target != null && seer.PlayerId != target.PlayerId) || meeting || hud) return string.Empty;
+        if (seer.GetCustomRole() != Slot) return string.Empty;
+
+        return TargetArrow.GetAllArrows(seer.PlayerId) + LocateArrow.GetArrows(seer);
+    }
 }

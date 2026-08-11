@@ -298,6 +298,158 @@ describe("compile-role: pull/drag/field ブロックのフィールド分担 (v1
     });
 });
 
+// Wave 2 (docs/ekn-wave2-contract.md 2026-08-11 追記) — しらべる系 / とうひょう系
+describe("compile-role: しらべる/とうひょう ブロックのフィールド分担 (Wave 2)", () => {
+    it("inspect: depth:role のとき failChance/noise が0でなければそれぞれ出力される", () => {
+        const blocks = [{
+            type: "ekr_when_on_kill",
+            next: { block: { type: "ekr_do_inspect", fields: { TARGET: "ctx", DEPTH: "role", FAILCHANCE: 10, NOISE: 2 } } },
+        }];
+        expect(compileTopBlocksToRules(blocks)).toEqual([
+            { when: "on_kill", do: [{ op: "inspect", target: "ctx", depth: "role", failChance: 10, noise: 2 }] },
+        ]);
+    });
+
+    it("inspect: failChance/noise が0 (既定) のときはキー自体を出力しない (notify.target と同じ既定値省略の作法)", () => {
+        const blocks = [{
+            type: "ekr_when_on_kill",
+            next: { block: { type: "ekr_do_inspect", fields: { TARGET: "ctx", DEPTH: "role", FAILCHANCE: 0, NOISE: 0 } } },
+        }];
+        expect(compileTopBlocksToRules(blocks)).toEqual([
+            { when: "on_kill", do: [{ op: "inspect", target: "ctx", depth: "role" }] },
+        ]);
+    });
+
+    it("inspect: depth:team のときは NUMBER フィールドに値が残っていても noise を出力しない (failChance は出す)", () => {
+        const blocks = [{
+            type: "ekr_when_on_kill",
+            next: { block: { type: "ekr_do_inspect", fields: { TARGET: "ctx", DEPTH: "team", FAILCHANCE: 20, NOISE: 3 } } },
+        }];
+        expect(compileTopBlocksToRules(blocks)).toEqual([
+            { when: "on_kill", do: [{ op: "inspect", target: "ctx", depth: "team", failChance: 20 }] },
+        ]);
+    });
+
+    it("reveal は target のみ", () => {
+        const blocks = [{ type: "ekr_when_on_kill", next: { block: { type: "ekr_do_reveal", fields: { TARGET: "ctx" } } } }];
+        expect(compileTopBlocksToRules(blocks)).toEqual([{ when: "on_kill", do: [{ op: "reveal", target: "ctx" }] }]);
+    });
+
+    it("arrow_show は target/seconds を持つ", () => {
+        const blocks = [{
+            type: "ekr_when_on_kill",
+            next: { block: { type: "ekr_do_arrow_show", fields: { TARGET: "nearest", SECONDS: "30" } } },
+        }];
+        expect(compileTopBlocksToRules(blocks)).toEqual([
+            { when: "on_kill", do: [{ op: "arrow_show", target: "nearest", seconds: 30 }] },
+        ]);
+    });
+
+    it("arrow_mark は at/seconds を持つ", () => {
+        const blocks = [{
+            type: "ekr_when_on_kill",
+            next: { block: { type: "ekr_do_arrow_mark", fields: { AT: "marker1", SECONDS: 60 } } },
+        }];
+        expect(compileTopBlocksToRules(blocks)).toEqual([
+            { when: "on_kill", do: [{ op: "arrow_mark", at: "marker1", seconds: 60 }] },
+        ]);
+    });
+
+    it("arrow_hide は引数を持たない", () => {
+        const blocks = [{ type: "ekr_when_on_pet", next: { block: { type: "ekr_do_arrow_hide" } } }];
+        expect(compileTopBlocksToRules(blocks)).toEqual([{ when: "on_pet", do: [{ op: "arrow_hide" }] }]);
+    });
+
+    it("cancel_vote は引数を持たない", () => {
+        const blocks = [{ type: "ekr_when_on_meeting_vote", next: { block: { type: "ekr_do_cancel_vote" } } }];
+        expect(compileTopBlocksToRules(blocks)).toEqual([{ when: "on_meeting_vote", do: [{ op: "cancel_vote" }] }]);
+    });
+
+    it("vote_weight_set は value を持つ (数値化込み)", () => {
+        const blocks = [{ type: "ekr_when_on_pet", next: { block: { type: "ekr_do_vote_weight_set", fields: { VALUE: "2" } } } }];
+        expect(compileTopBlocksToRules(blocks)).toEqual([{ when: "on_pet", do: [{ op: "vote_weight_set", value: 2 }] }]);
+    });
+
+    it("vote_block は target のみ", () => {
+        const blocks = [{
+            type: "ekr_when_on_meeting_start",
+            next: { block: { type: "ekr_do_vote_block", fields: { TARGET: "nearest" } } },
+        }];
+        expect(compileTopBlocksToRules(blocks)).toEqual([
+            { when: "on_meeting_start", do: [{ op: "vote_block", target: "nearest" }] },
+        ]);
+    });
+
+    it("vote_swap は引数を持たない", () => {
+        const blocks = [{ type: "ekr_when_on_meeting_pick", next: { block: { type: "ekr_do_vote_swap" } } }];
+        expect(compileTopBlocksToRules(blocks)).toEqual([{ when: "on_meeting_pick", do: [{ op: "vote_swap" }] }]);
+    });
+
+    it("exile は target のみ (self も転記できる)", () => {
+        const blocks = [{
+            type: "ekr_when_on_meeting_vote",
+            next: { block: { type: "ekr_do_exile", fields: { TARGET: "self" } } },
+        }];
+        expect(compileTopBlocksToRules(blocks)).toEqual([
+            { when: "on_meeting_vote", do: [{ op: "exile", target: "self" }] },
+        ]);
+    });
+
+    it("Wave 2 の全ブロックが roledef.validateRoleLogic を通る (統合)", () => {
+        const blocks: SerializedBlock[] = [
+            { type: "ekr_when_on_meeting_vote", next: { block: { type: "ekr_do_cancel_vote" } } },
+            {
+                type: "ekr_when_on_meeting_pick",
+                next: {
+                    block: {
+                        type: "ekr_do_vote_swap",
+                        next: { block: { type: "ekr_do_exile", fields: { TARGET: "ctx" } } },
+                    },
+                },
+            },
+            {
+                type: "ekr_when_on_kill",
+                next: {
+                    block: {
+                        type: "ekr_do_inspect",
+                        fields: { TARGET: "ctx", DEPTH: "role", FAILCHANCE: 10, NOISE: 2 },
+                        next: {
+                            block: {
+                                type: "ekr_do_reveal",
+                                fields: { TARGET: "ctx" },
+                                next: {
+                                    block: {
+                                        type: "ekr_do_arrow_show",
+                                        fields: { TARGET: "ctx", SECONDS: 30 },
+                                        next: {
+                                            block: {
+                                                type: "ekr_do_arrow_mark",
+                                                fields: { AT: "ctx", SECONDS: 30 },
+                                                next: {
+                                                    block: {
+                                                        type: "ekr_do_arrow_hide",
+                                                        next: {
+                                                            block: { type: "ekr_do_vote_weight_set", fields: { VALUE: 2 } },
+                                                        },
+                                                    },
+                                                },
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        ];
+        const compiled = compileWorkspaceToLogicInput(ws(blocks), []);
+        expect(compiled).not.toBeNull();
+        const result = validateRoleLogic(compiled);
+        expect(result.ok, result.ok ? "" : result.error).toBe(true);
+    });
+});
+
 describe("compile-role: hasNoRules / compileWorkspaceToLogicInput (R0 互換の判定)", () => {
     it("イベントハットが無いワークスペースは hasNoRules=true・compileWorkspaceToLogicInput は null", () => {
         expect(hasNoRules(ws([]))).toBe(true);

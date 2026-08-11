@@ -29,7 +29,8 @@
         "when": "on_game_start",
         "do": [
           { "op": "var_set", "name": "うらみ", "value": { "e": "lit", "v": 0 } },
-          { "op": "notify", "text": "夜が来た…", "seconds": 3 }
+          { "op": "notify", "text": "夜が来た…", "seconds": 3 },
+          { "op": "vote_weight_set", "value": 2 }
         ]
       },
       {
@@ -73,7 +74,8 @@
         "do": [
           { "op": "set_kill_cooldown", "seconds": 20 },
           { "op": "speed", "mult": 1.5, "seconds": 5 },
-          { "op": "notify", "text": "また一人、闇へ", "seconds": 3 }
+          { "op": "notify", "text": "また一人、闇へ", "seconds": 3 },
+          { "op": "reveal", "target": "ctx" }
         ]
       },
       {
@@ -87,7 +89,34 @@
       {
         "when": "on_meeting_start",
         "do": [
-          { "op": "notify", "text": "影はひそむ", "seconds": 2 }
+          { "op": "notify", "text": "影はひそむ", "seconds": 2 },
+          { "op": "arrow_hide" },
+          { "op": "vote_block", "target": "nearest" }
+        ]
+      },
+      {
+        "when": "on_meeting_vote",
+        "do": [
+          { "op": "remember", "slot": 1, "target": "ctx" },
+          {
+            "op": "if",
+            "cond": { "e": "op", "kind": "ge", "a": { "e": "var", "name": "うらみ" }, "b": { "e": "lit", "v": 10 } },
+            "then": [
+              { "op": "exile", "target": "ctx" }
+            ],
+            "else": [
+              { "op": "cancel_vote" },
+              { "op": "notify", "text": "また、見送った…", "seconds": 3 }
+            ]
+          }
+        ]
+      },
+      {
+        "when": "on_meeting_pick",
+        "do": [
+          { "op": "remember", "slot": 2, "target": "ctx" },
+          { "op": "vote_swap" },
+          { "op": "notify", "text": "票よ、いれかわれ…", "seconds": 3, "target": "ctx" }
         ]
       },
       {
@@ -109,7 +138,8 @@
       {
         "when": "on_task_complete",
         "do": [
-          { "op": "var_add", "name": "タスク数", "delta": { "e": "lit", "v": 1 } }
+          { "op": "var_add", "name": "タスク数", "delta": { "e": "lit", "v": 1 } },
+          { "op": "arrow_show", "target": "nearest", "seconds": 30 }
         ]
       },
       {
@@ -125,7 +155,8 @@
             },
             "then": [
               { "op": "cno_move", "slot": 1, "dx": 2, "dy": -2 },
-              { "op": "speed", "mult": 2.0, "seconds": 3 }
+              { "op": "speed", "mult": 2.0, "seconds": 3 },
+              { "op": "inspect", "target": "nearest", "depth": "role", "failChance": 10, "noise": 2 }
             ]
           }
         ]
@@ -135,7 +166,8 @@
         "do": [
           { "op": "cno_show", "slot": 1, "who": "all" },
           { "op": "notify", "text": "見つけたのか…", "seconds": 3 },
-          { "op": "teleport", "to": "random" }
+          { "op": "teleport", "to": "random" },
+          { "op": "arrow_mark", "at": "ctx", "seconds": 60 }
         ]
       },
       {

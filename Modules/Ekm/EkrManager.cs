@@ -101,6 +101,30 @@ internal sealed class EkrHolderState
     public float SpeedBaseline;
 
     public float? KillCooldownOverride;
+
+    // ── Wave 2 (docs/ekn-wave2-contract.md) ────────────────────────────────────────────────────
+
+    // §2.2 reveal: 恒久に見えるようになった target の playerId 集合。ゲーム開始 (state 作り直し) でリセット。
+    public readonly HashSet<byte> Revealed = [];
+
+    // §3.1 vote_weight_set: passives.voteWeight の実行時オーバーライド (per-holder 永続)。null = 未オーバーライド。
+    public int? VoteWeightOverride;
+
+    // §2.3 矢印: 同時 ≤4本/ホルダー (両種合算)・seconds 経過で自動 Remove。
+    // 人矢印は targetId をキーに (TargetArrow は playerId ペアなので float 等価比較の心配が無い)。
+    public readonly Dictionary<byte, float> ArrowTargetExpiry = new();
+    // 場所矢印は Add に使った厳密な Vector3 を Remove にもそのまま渡す必要があるため位置ごと保持する。
+    public readonly List<(UnityEngine.Vector3 Pos, float ExpireAt)> ArrowMarks = [];
+    public float LastArrowTime = -1f;
+
+    // §3.2 vote_block: この会議に限り target の票を無効化した回数 (≤1/会議/ホルダー)。会議境界でリセット。
+    public bool VoteBlockUsedThisMeeting;
+
+    // §3.3 vote_swap: この会議で予約を使ったか (≤1/会議/ホルダー)。会議境界でリセット。
+    public bool VoteSwapUsedThisMeeting;
+
+    // §1.2 on_meeting_pick: /pick 連打デデュープ (≤1/秒/ホルダー)。
+    public float LastMeetingPickTime = -1f;
 }
 
 // EKN 役職メーカー R0 の実行時マネージャ。
@@ -512,6 +536,36 @@ public static class EkrManager
         return Bound.ContainsKey(slot);
     }
 
+    // Wave 2 (docs/ekn-wave2-contract.md §1.1): 束縛中の役職コードが on_meeting_vote ルールを持つか。
+    // CustomRolesHelper.CancelsVote() の EKR arm が読む。coordinator 裁定 (2026-08-11): 述語は
+    // 「cancel_vote の有無」ではなく「on_meeting_vote ルールの有無」— cancel_vote を使わない定義
+    // (「投票した人をおぼえる」だけ等) でも OnVote 呼び出し口 (MeetingHudPatch.cs:1610) を
+    // 通さないとイベントが永久に発火しない。HasOnPetLogic と同型の静的導出。
+    public static bool HasOnMeetingVoteLogic(CustomRoles slot)
+    {
+        EkrDefinition def = GetDefinition(slot);
+        if (def?.ParsedLogic == null) return false;
+
+        foreach (EkrRule rule in def.ParsedLogic.Rules)
+            if (rule.When == "on_meeting_vote")
+                return true;
+
+        return false;
+    }
+
+    // Wave 2: 束縛中の役職コードが on_meeting_pick ルールを持つか (EkrManager.PickMsg / 将来のボタン表示判定用)。
+    public static bool HasOnMeetingPickLogic(CustomRoles slot)
+    {
+        EkrDefinition def = GetDefinition(slot);
+        if (def?.ParsedLogic == null) return false;
+
+        foreach (EkrRule rule in def.ParsedLogic.Rules)
+            if (rule.When == "on_meeting_pick")
+                return true;
+
+        return false;
+    }
+
     // ── per-round プレイヤー追跡 (RoleBase.Init/Add/Remove から呼ばれる) ────────
 
     public static void ResetSlot(CustomRoles slot)
@@ -661,6 +715,9 @@ public static class EkrManager
         if (_cc != null && (_cc.HolderId == playerId || _cc.CtxId == playerId)) StopCrowdControl();
 
         if (!Runtime.Remove(playerId, out EkrHolderState state)) return;
+
+        // Wave 2 (spec §2.3): 役職剥奪でも矢印は片付ける (ポータルと同じ「持っている実体は手放す」規約)。
+        HideArrows(state, playerId);
 
         if (state.SpeedBoostActive)
         {
@@ -924,6 +981,9 @@ public static class EkrManager
         {
             state.Fibers.Clear();
 
+            // Wave 2 (spec §2.3): 死亡でも矢印は片付ける (Teardown を経ない死亡経路の唯一の消滅点)。
+            HideArrows(state, target.PlayerId);
+
             // Wave 1 (spec §1.1「解除 = 剥奪・死亡・ゲーム終了で必ず復元」)。役職を保持したまま死亡する
             // 経路 (Teardown を通らない) の復元点。opcode 側ブースト → パッシブの順で戻す。
             if (state.SpeedBoostActive)
@@ -1097,6 +1157,127 @@ public static class EkrManager
         PlayerControl.LocalPlayer.Notify(string.Format(Translator.GetString("EkrLogicAutoDisabled"), Translator.GetString(slot.ToString())), 10f);
     }
 
+    // ── Wave 2: on_meeting_vote (docs/ekn-wave2-contract.md §1.1) ──────────────────────────────
+    // EkmTemplateRole.OnVote (MeetingHudPatch.cs:1610 の CastVote 関門) から呼ばれる。on_attacked と
+    // 同じ「同期プロローグ」構造 — fiber は最初の wait まで同期実行され、cancel_vote が有効なのは
+    // その間だけ。戻り値 = cancel_vote が実際に実行されたか (呼び出し元が Main.DontCancelVoteList へ
+    // 積むかどうかを決める — 「ひと会議に1回だけ有効」はその既存機構に乗る・予算はここでは持たない)。
+    public static bool FireMeetingVote(CustomRoles slot, PlayerControl voter, PlayerControl target)
+    {
+        if (!voter || !target) return false;
+        if (!voter.IsAlive()) return false;
+        if (!Runtime.TryGetValue(voter.PlayerId, out EkrHolderState state) || state.LogicDisabled) return false;
+
+        EkrDefinition def = GetDefinition(slot);
+        if (def?.ParsedLogic == null) return false;
+
+        var canceled = false;
+
+        foreach (EkrRule rule in def.ParsedLogic.Rules)
+        {
+            if (rule.When != "on_meeting_vote") continue;
+            if (state.Fibers.Count >= EkmLogicRuntime.MaxFibersPerHolder) continue; // spec §5: 超過はドロップ
+
+            var context = new EkrActionContext
+            {
+                HolderId = voter.PlayerId,
+                CtxId = target.PlayerId,
+                Slot = slot,
+                AllowCancelVote = true // 最初の wait までの間だけ有効 (spec §1.1)
+            };
+
+            EkrFiber fiber = EkmLogicRuntime.Spawn(rule.Do, state.Variables, context, EkrActionSink.InOpcodeKill);
+            bool keep = EkmLogicRuntime.Pump(fiber, EkrActionSink.Instance, ignoreFrameBudget: true);
+
+            context.AllowCancelVote = false; // 以後 (wait 後の継続) の cancel_vote は no-op
+            if (context.CancelVote) canceled = true;
+
+            if (keep) state.Fibers.Add(fiber);
+            else if (fiber.Aborted) NoteFiberAbort(slot, state);
+        }
+
+        return canceled;
+    }
+
+    // ── Wave 2: on_meeting_pick (docs/ekn-wave2-contract.md §1.2) ──────────────────────────────
+    // 入力2系統 (会議ボタン [Modules/Ekm/EkrMeetingButton.cs・CustomRPC.EkrMeetingPick] /
+    // /pick チャットコマンド) を1イベントに統合。発火デデュープ ≤1/秒/ホルダー (チャット連打/連打対策・
+    // TryGateMeetingPick が両入力の共通関所)。
+
+    private static void FireMeetingPick(CustomRoles slot, byte holderId, byte pickedId) =>
+        FireEvent(slot, holderId, "on_meeting_pick", pickedId);
+
+    // 会議ボタン (Judge.cs:240-281 と同型) と /pick チャットコマンドの共通関所。両方とも「対象生存・
+    // GameStates.IsVoting 相当・ホルダー生存・on_meeting_pick ルール保持・≤1/秒/ホルダー」を通過してから
+    // FireMeetingPick へ合流する (契約の「チャットコマンドの糖衣」規約)。呼び出し元ごとに要る前段の
+    // ゲート (メッセージの prefix 判定・ボタンの表示条件) だけを外側で行う。
+    // 戻り値: false = ゲートで弾かれた (呼び出し元がエラーメッセージ等を出す余地がある)。
+    private static bool TryGateMeetingPick(PlayerControl pc, out CustomRoles slot, out EkrHolderState state)
+    {
+        slot = default;
+        state = null;
+
+        if (!AmongUsClient.Instance.AmHost || !pc) return false;
+        if (!GameStates.IsMeeting || !MeetingHud.Instance || MeetingHud.Instance.state is MeetingHud.VoteStates.Results or MeetingHud.VoteStates.Proceeding) return false;
+        if (!pc.IsAlive()) return false;
+
+        slot = pc.GetCustomRole();
+        if (!IsSlot(slot) || !HasOnMeetingPickLogic(slot)) return false;
+
+        if (!Runtime.TryGetValue(pc.PlayerId, out state) || state.LogicDisabled) return false;
+
+        float now = Time.realtimeSinceStartup;
+        if (state.LastMeetingPickTime >= 0f && now - state.LastMeetingPickTime < 1f) return false; // spec: ≤1/秒/ホルダー
+
+        return true;
+    }
+
+    // /pick <番号> — GuessManager.CheckCommand と同じ「消費したら true」規約。
+    public static bool PickMsg(PlayerControl pc, string msg)
+    {
+        if (!AmongUsClient.Instance.AmHost || !pc) return false;
+
+        string m = (msg ?? "").Trim();
+        if (!m.StartsWith("/pick", StringComparison.OrdinalIgnoreCase)) return false;
+
+        if (!TryGateMeetingPick(pc, out CustomRoles slot, out EkrHolderState state)) return true; // 消費はする (無言で通常チャットへ流さない)
+
+        string rest = m["/pick".Length..].Trim();
+
+        if (!byte.TryParse(rest, out byte targetId))
+        {
+            Utils.SendMessage(Translator.GetString("EkrPickUsage"), pc.PlayerId);
+            return true;
+        }
+
+        PlayerControl target = targetId.GetPlayer();
+
+        if (!target)
+        {
+            Utils.SendMessage(Translator.GetString("EkrPickPlayerNotFound"), pc.PlayerId);
+            return true;
+        }
+
+        state.LastMeetingPickTime = Time.realtimeSinceStartup;
+        FireMeetingPick(slot, pc.PlayerId, target.PlayerId);
+        return true;
+    }
+
+    // 会議ボタン (EkrMeetingButton.OnClick のホストローカル分岐 / EkrMeetingButton.ReceiveRPC の両方から
+    // 呼ばれる)。§6 裁定: RPC 受信側はホストのみが処理し、送信者が実際に on_meeting_pick を持つ生存
+    // ホルダーであることをここで再検証する (クライアント申告を信用しない) — TryGateMeetingPick が
+    // それを担う。ボタンはクリック演出のみなので、対象不在時もチャットへエラーは出さない (無音 no-op)。
+    internal static void HandleMeetingPickButton(PlayerControl pc, byte targetId)
+    {
+        if (!TryGateMeetingPick(pc, out CustomRoles slot, out EkrHolderState state)) return;
+
+        PlayerControl target = targetId.GetPlayer();
+        if (!target) return;
+
+        state.LastMeetingPickTime = Time.realtimeSinceStartup;
+        FireMeetingPick(slot, pc.PlayerId, target.PlayerId);
+    }
+
     // reporter が EKR ホルダーのときだけ発火 (spec: 自分が通報者になったとき・ctx=死体の主)。
     public static void FireReport(PlayerControl reporter, PlayerControl bodyOwner)
     {
@@ -1133,12 +1314,20 @@ public static class EkrManager
         // PlayerId 再利用で他人の結論を継承しないよう、PortalLastWarpTime と同じ作法で捨てる)。
         RecentAttackDecisions.Clear();
 
+        // Wave 2 (spec §3): vote_block/vote_swap/exile は会議スコープの状態 (trap 10 — Init() 経由の
+        // ラウンド境界リセットではなく、実際の会議境界であるここで捨てる)。
+        VoteBlockedThisMeeting.Clear();
+        _voteSwapReservation = null;
+        _exileUsedThisMeeting = false;
+
         foreach (EkrHolderState state in Runtime.Values)
         {
             state.Fibers.Clear();
             // ポータル warp CD の残留エントリ掃除 (切断者の 3 秒 CD を PlayerId 再利用者が継承しない
             // ように会議境界で毎回捨てる — センサー実体はどのみち会議で消えるので CD 継続の意味がない)。
             state.PortalLastWarpTime.Clear();
+            state.VoteBlockUsedThisMeeting = false;
+            state.VoteSwapUsedThisMeeting = false;
         }
 
         LateTask.New(() =>
@@ -1268,6 +1457,9 @@ public static class EkrManager
         PumpCrowdControlIfDue();
 
         if (!Runtime.TryGetValue(pc.PlayerId, out EkrHolderState state)) return;
+
+        // Wave 2 (spec §2.3): seconds 経過の矢印は毎フレームここで自動 Remove する (専用ポーリング無し)。
+        ExpireArrowsIfDue(state, pc.PlayerId);
 
         EkrDefinition def = GetDefinition(slot);
 
@@ -1427,9 +1619,200 @@ public static class EkrManager
     }
 
     // MeetingHudPatch の票数中央 switch 2箇所から呼ぶ (既定 1)。
+    // Wave 2 (spec §3.1 vote_weight_set): per-holder のランタイムオーバーライドを passives より優先する
+    // (「実行時オーバーライド」— 集計 switch への新規配線は不要、この 1 点を差せば Wave 1 の2箇所 arm が
+    // そのまま効く = 無効化先勝ちも自動維持)。
     public static int GetVoteWeight(byte playerId)
     {
+        if (Runtime.TryGetValue(playerId, out EkrHolderState state) && state.VoteWeightOverride.HasValue)
+            return state.VoteWeightOverride.Value;
+
         return GetPassivesFor(playerId)?.VoteWeight ?? 1;
+    }
+
+    // EkrLogicOpcodes.VoteWeightSet から呼ぶ。予算なし・ローカル状態のみ (spec §3.1)。
+    internal static void SetVoteWeightOverride(byte playerId, int value)
+    {
+        if (Runtime.TryGetValue(playerId, out EkrHolderState state)) state.VoteWeightOverride = value;
+    }
+
+    // ── Wave 2: reveal (docs/ekn-wave2-contract.md §2.2) ────────────────────────────────────────
+    // KnowRole override (EkmTemplateRole・4表示系を1点で拾う集約) が読む。seer/target 両方の playerId
+    // だけで判定する — 集約側は Main.PlayerStates.Values.Any(x => x.Role.KnowRole(seer, target)) の
+    // 全 PlayerState 総なめなので、this や x には一切依存しないこと (coordinator 指摘 2026-08-11)。
+    internal static bool HasRevealed(byte seerId, byte targetId)
+    {
+        return Runtime.TryGetValue(seerId, out EkrHolderState state) && state.Revealed.Contains(targetId);
+    }
+
+    internal static void Reveal(byte seerId, byte targetId)
+    {
+        if (Runtime.TryGetValue(seerId, out EkrHolderState state)) state.Revealed.Add(targetId);
+    }
+
+    // ── Wave 2: vote_block (docs/ekn-wave2-contract.md §3.2) ────────────────────────────────────
+    // 「この会議のみ」target の票を無効化する集合。MeetingHudPatch の2箇所 (site1 canVote / site2 voteNum)
+    // が読む。会議境界 (FireMeetingStart) でリセット — ResetSlot では触らない (trap 10: Init() はゲーム中
+    // いつでも発火しうるので、会議スコープの状態をラウンド境界の関数で管理しない)。
+    private static readonly HashSet<byte> VoteBlockedThisMeeting = [];
+
+    public static bool IsVoteBlocked(byte targetId) => VoteBlockedThisMeeting.Contains(targetId);
+
+    // EkrLogicOpcodes.VoteBlock から呼ぶ。予算 (≤1/会議/ホルダー) はホルダー側の使用済みフラグで強制する。
+    internal static bool TryVoteBlock(byte holderId, byte targetId)
+    {
+        if (!Runtime.TryGetValue(holderId, out EkrHolderState state) || state.VoteBlockUsedThisMeeting) return false;
+
+        state.VoteBlockUsedThisMeeting = true;
+        VoteBlockedThisMeeting.Add(targetId);
+        return true;
+    }
+
+    // ── Wave 2: vote_swap (docs/ekn-wave2-contract.md §3.3) ────────────────────────────────────
+    // EKR 全体で同時1件/会議 (複数ホルダーの swap 連鎖は結果が順序依存になるため後着は静かにドロップ)。
+    // 予約は「この会議の集計に swap を予約する」宣言 — 実際の入れ替えは MeetingHudPatch の
+    // ManipulateVotingResult ディスパッチから ApplyVoteSwap が1回だけ読む。
+    private static (byte HolderId, byte Saved1Id, byte Saved2Id)? _voteSwapReservation;
+
+    // EkrLogicOpcodes.VoteSwap から呼ぶ。saved1/saved2 の失効判定 (死亡/切断/未保存) はここでは行わない
+    // — 予約時点では有効でも集計時に失効しうるため、消費側 (ApplyVoteSwap) で改めて検証する。
+    internal static bool TryReserveVoteSwap(byte holderId, byte saved1Id, byte saved2Id)
+    {
+        if (_voteSwapReservation.HasValue) return false; // EKR 全体で同時1件
+
+        if (!Runtime.TryGetValue(holderId, out EkrHolderState state) || state.VoteSwapUsedThisMeeting) return false;
+
+        state.VoteSwapUsedThisMeeting = true;
+        _voteSwapReservation = (holderId, saved1Id, saved2Id);
+        return true;
+    }
+
+    // MeetingHudPatch.cs の ManipulateVotingResult ディスパッチから1回だけ呼ぶ (Swapper.ManipulateVotingResult
+    // と同じ呼び出し形)。saved1/saved2 いずれかが失効していれば no-op (spec §3.3)。内部票と表示票の両方を
+    // 書き換える (Swapper.cs:203-220 と同じ二重書き換え規約 — 片方だけの書き換え禁止・memory 罠)。
+    public static void ApplyVoteSwap(Dictionary<byte, int> votingData, MeetingHud.VoterState[] states)
+    {
+        if (!_voteSwapReservation.HasValue) return;
+
+        (byte holderId, byte t1, byte t2) = _voteSwapReservation.Value;
+
+        PlayerControl p1 = t1.GetPlayer();
+        PlayerControl p2 = t2.GetPlayer();
+        if (!p1 || !p2 || !p1.IsAlive() || !p2.IsAlive() || p1.Data == null || p1.Data.Disconnected || p2.Data == null || p2.Data.Disconnected) return;
+
+        int count1 = votingData.GetValueOrDefault(t1, 0);
+        int count2 = votingData.GetValueOrDefault(t2, 0);
+        votingData[t1] = count2;
+        votingData[t2] = count1;
+
+        List<byte> votedFor1 = [];
+        List<byte> votedFor2 = [];
+
+        foreach (MeetingHud.VoterState st in states)
+        {
+            if (st.VotedForId == t1) votedFor1.Add(st.VoterId);
+            else if (st.VotedForId == t2) votedFor2.Add(st.VoterId);
+        }
+
+        for (var i = 0; i < states.Length; i++)
+        {
+            if (votedFor1.Contains(states[i].VoterId)) states[i].VotedForId = t2;
+            else if (votedFor2.Contains(states[i].VoterId)) states[i].VotedForId = t1;
+        }
+
+        Logger.Info($"EKR vote_swap: {t1} <-> {t2} (by {holderId})", "EkrManager");
+    }
+
+    // ── Wave 2: exile (docs/ekn-wave2-contract.md §3.4) ─────────────────────────────────────────
+    // エンジンのハード制限は「1会議1回」のみ (発動で会議が終わるため構造的に自明)。ゲーム単位の
+    // 回数上限は掛けない (作者がブロックで組む・裁定済み)。
+    private static bool _exileUsedThisMeeting;
+
+    internal static bool TryConsumeExile()
+    {
+        if (_exileUsedThisMeeting) return false;
+        _exileUsedThisMeeting = true;
+        return true;
+    }
+
+    // ── Wave 2: 矢印3 op の per-holder 帳簿 (docs/ekn-wave2-contract.md §2.3) ───────────────────
+    // 予算: arrow_show+arrow_mark 合算 ≤1/秒/ホルダー + 同時 ≤4本/ホルダー (両種合算)。レートは
+    // ここでは強制しない (EkrLogicOpcodes 側が LastArrowTime を見て消費前に判定する) — ここは
+    // 「台帳への登録・期限切れの自動 Remove・全消し」だけを担当する。
+
+    // target 矢印を (再) 登録する。戻り値 = 新規カウントとして扱うか (4本上限の判定用・再発行は false)。
+    internal static bool RegisterArrowTarget(EkrHolderState state, byte targetId, float seconds)
+    {
+        bool isNew = !state.ArrowTargetExpiry.ContainsKey(targetId);
+        state.ArrowTargetExpiry[targetId] = Time.realtimeSinceStartup + seconds;
+        return isNew;
+    }
+
+    internal static bool RegisterArrowMark(EkrHolderState state, Vector2 pos, float seconds)
+    {
+        Vector3 pos3 = pos;
+        float expireAt = Time.realtimeSinceStartup + seconds;
+
+        for (int i = 0; i < state.ArrowMarks.Count; i++)
+        {
+            if (state.ArrowMarks[i].Pos != pos3) continue;
+            state.ArrowMarks[i] = (pos3, expireAt);
+            return false; // 既存の再発行 (spec §2.3: カウント不変)
+        }
+
+        state.ArrowMarks.Add((pos3, expireAt));
+        return true;
+    }
+
+    internal static int CountActiveArrows(EkrHolderState state) => state.ArrowTargetExpiry.Count + state.ArrowMarks.Count;
+
+    // Pump() から毎 FixedUpdate 呼ぶ (専用の毎フレーム経路を新設しない — spec §5 の一般原則に倣う)。
+    // 期限切れの矢印だけを基盤 (TargetArrow/LocateArrow) から Remove する。
+    private static void ExpireArrowsIfDue(EkrHolderState state, byte holderId)
+    {
+        if (state.ArrowTargetExpiry.Count > 0)
+        {
+            float now = Time.realtimeSinceStartup;
+            List<byte> expired = null;
+
+            foreach (KeyValuePair<byte, float> kv in state.ArrowTargetExpiry)
+            {
+                if (kv.Value > now) continue;
+                (expired ??= []).Add(kv.Key);
+            }
+
+            if (expired != null)
+            {
+                foreach (byte targetId in expired)
+                {
+                    state.ArrowTargetExpiry.Remove(targetId);
+                    TargetArrow.Remove(holderId, targetId);
+                }
+            }
+        }
+
+        if (state.ArrowMarks.Count == 0) return;
+
+        float now2 = Time.realtimeSinceStartup;
+
+        for (int i = state.ArrowMarks.Count - 1; i >= 0; i--)
+        {
+            if (state.ArrowMarks[i].ExpireAt > now2) continue;
+            Vector3 pos = state.ArrowMarks[i].Pos;
+            state.ArrowMarks.RemoveAt(i);
+            LocateArrow.Remove(holderId, pos);
+        }
+    }
+
+    // arrow_hide (docs/ekn-wave2-contract.md §2.3): ホルダーの EKR 矢印 (両種) を全消し。TargetArrow/
+    // LocateArrow は playerId 単位の共有ストアだが、1人のプレイヤーは同時に1役職しか持てないため
+    // 「この seer の矢印は全部この EKR ロジックが出したもの」が常に成り立つ (他ロールとの混線は無い)。
+    internal static void HideArrows(EkrHolderState state, byte holderId)
+    {
+        state.ArrowTargetExpiry.Clear();
+        state.ArrowMarks.Clear();
+        TargetArrow.RemoveAllTarget(holderId);
+        LocateArrow.RemoveAllTarget(holderId);
     }
 
     // ── R1: EKR 全体の cross-holder レート予算 (spec §3 2026-08-09 追記) ──────────
