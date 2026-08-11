@@ -326,6 +326,7 @@ internal static class ChatCommands
             new("Hitbox", "", Command.UsageLevels.Host, Command.UsageTimes.InGame, HitboxCommand, true, true),
             new("WcDbg", "[mask]", Command.UsageLevels.Host, Command.UsageTimes.Always, WcDbgCommand, true, true),
             new("TpDbg", "[set <n>|official <0|1>]", Command.UsageLevels.Host, Command.UsageTimes.Always, TpDbgCommand, true, true),
+            new("TpBurst", "{rate} {sec} [rel|none] [tgt=<id>] [gated] | stop", Command.UsageLevels.Host, Command.UsageTimes.Always, TpBurstCommand, true, true),
             new("Census", "", Command.UsageLevels.Host, Command.UsageTimes.Always, CensusCommand, true, true),
             new("SizeClean", "", Command.UsageLevels.Host, Command.UsageTimes.InGame, SizeCleanCommand, true, true),
             new("RipSize", "[size]", Command.UsageLevels.Host, Command.UsageTimes.InGame, RipSizeCommand, true, true),
@@ -3715,6 +3716,272 @@ internal static class ChatCommands
         }
 
         Utils.SendMessage($"[tpdbg] count={Utils.NumSnapToCallsThisRound} gross={Utils.NumSnapToGrossThisRound} refill={Utils.SnapToRefillSecondsPerToken}s/token forceOfficial={Utils.TpCapDebugForceOfficial} server={GameStates.CurrentServerType} {TpDeliveryProbe.GetStatsForTpDbg()}", player.PlayerId);
+    }
+
+    // ── SnapTo レート実験プローブ (/tpburst) ─────────────────────────────────────────────
+    // 上流 EHR の SnapTo cap (80/100) の設計意図は「ホストが短時間に Reliable SnapTo を連射すると
+    // 公式鯖に蹴られる」という想定である (考古学で確定):
+    //   ① 100 側の警告文が "Too many Total SnapTo calls this round **and this second**" なのに、
+    //      実装には秒の要素が一切ない (リセットは会議境界のみ) = 作者の意図は短窓レート、実装が累積。
+    //   ② 80 側は Reliable **だけ**を数えて Reliable→None に降格させる (ec794df9)。回数そのものが
+    //      問題なら None でも同じはずで、作者は「Reliable 送信のレート」を疑っていたことになる。
+    // 一方このフォークの実キック調査 (P1〜P5 / fan-out ブラケット) では SnapTo は一度も容疑に
+    // 上がっていない。つまり「作者がそう信じていた」と「サーバーが実際にそう振る舞う」は未分離で、
+    // それを 1 ビットで測るのがこのプローブ。
+    //
+    // 実験行列 (同一ワイヤレートで sendOption だけを振るのが本命の 1 ビット分離):
+    //   /tpburst 50 4        → Reliable 50/s × 4s (200発)   ← cap 100 超域から開始 (100以下は
+    //   /tpburst 100 4       → Reliable 100/s                  2026-07-21 に「キック無し」実測済み)
+    //   /tpburst 200 4       → Reliable 200/s
+    //   /tpburst 200 4 none  → 同レートの Unreliable 対照。Reliable 側だけ死ねば上流の想定が正しい。
+    //                          両方無傷なら SnapTo レート説は死に、cap は desync 対策と確定できる。
+    //
+    // ⚠️ 陽性コントロール (`/nest 1 thin` = 100% キック) は**全アーム生還後の最後**に撃つこと。
+    //    先に撃つと蹴られて実験が始まらない (陰性を「サーバーが見ていなかった」と誤読しないため)。
+    // ⚠️ Utils.TP は通さない — cap / minInterval / AntiTP / 1.5u 降格 / TpDeliveryProbe が全部
+    //    交絡要因になる。ワイヤ形式だけ Utils.TP と同形に手書きする。NumSnapToCallsThisRound は
+    //    消費しない (cap を測るのではなく、cap が防ごうとしている当のものを測るプローブなので)。
+    // ⚠️ Reliable アームは PacketRateGate (25/秒) を必ず bypass する。しないと submitted 200/s が
+    //    ワイヤでは 25/s に整形され、「200/s 撃って無傷」が黙って偽陰性になる (/nest で踏んだ罠)。
+    private static bool TpBurstRunning;
+    private static bool TpBurstStopRequested;
+    private static object TpBurstConnection;
+
+    private static void TpBurstCommand(PlayerControl player, string text, string[] args)
+    {
+        if (!player.FriendCode.GetDevUser().up && !player.FriendCode.IsLocalDev()) return;
+
+        if (args.Length >= 2 && args[1].Equals("stop", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!TpBurstRunning)
+            {
+                Utils.SendMessage("[tpburst] not running.", player.PlayerId);
+                return;
+            }
+
+            TpBurstStopRequested = true;
+            Utils.SendMessage("[tpburst] stop requested.", player.PlayerId);
+            return;
+        }
+
+        if (TpBurstRunning)
+        {
+            Utils.SendMessage("[tpburst] already running — '/tpburst stop' first.", player.PlayerId);
+            return;
+        }
+
+        if (args.Length < 3 || !int.TryParse(args[1], out int rate) || !float.TryParse(args[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float seconds) || rate <= 0 || seconds <= 0f)
+        {
+            Utils.SendMessage("[tpburst] Usage: /tpburst <rate/s> <seconds> [rel|none] [tgt=<playerId>] [gated] | /tpburst stop", player.PlayerId);
+            return;
+        }
+
+        // 暴走防止のクランプ (実験行列の最大は 200/s × 4s = 800発)
+        rate = Math.Min(rate, 500);
+        seconds = Math.Min(seconds, 20f);
+        if (rate * seconds > 4000) seconds = 4000f / rate;
+
+        SendOption option = args.Any(a => a.Equals("none", StringComparison.OrdinalIgnoreCase)) ? SendOption.None : SendOption.Reliable;
+        bool gated = args.Any(a => a.Equals("gated", StringComparison.OrdinalIgnoreCase));
+
+        byte targetId = player.PlayerId;
+        string tgtArg = args.FirstOrDefault(a => a.StartsWith("tgt=", StringComparison.OrdinalIgnoreCase));
+        if (tgtArg != null && byte.TryParse(tgtArg[4..], out byte parsedTgt)) targetId = parsedTgt;
+
+        PlayerControl target = Utils.GetPlayerById(targetId);
+
+        if (!target || !target.NetTransform)
+        {
+            Utils.SendMessage($"[tpburst] target playerId={targetId} not found (or has no NetTransform).", player.PlayerId);
+            return;
+        }
+
+        Main.Instance.StartCoroutine(TpBurstRun(rate, seconds, option, targetId, gated, player.PlayerId));
+    }
+
+    private static IEnumerator TpBurstRun(int rate, float seconds, SendOption option, byte targetId, bool gated, byte reporter)
+    {
+        // ⚠️ コマンド受付からコルーチン開始までの 1 フレームで対象が切断していることがある。
+        //    ここで弾かないと以降のセットアップが NRE を投げ、TpBurstRunning が立つ前でも後でも
+        //    実験が不能になる (立った後だと「already running」で二度と撃てなくなる) — 監査 2026-08-11。
+        PlayerControl target = Utils.GetPlayerById(targetId);
+
+        if (!target || !target.NetTransform)
+        {
+            Utils.SendMessage($"[tpburst] target playerId={targetId} vanished before the burst started — aborted.", reporter);
+            yield break;
+        }
+
+        TpBurstRunning = true;
+        TpBurstStopRequested = false;
+
+        float start = Time.realtimeSinceStartup;
+        var sent = 0;
+        var lost = false;
+        var total = 0;
+        var pendingBefore = 0;
+        var bypass = false;
+        var lostReason = string.Empty;
+        var bypassStolen = false;
+        Vector2 lastDest = target.Pos();
+
+        // 🔴 切断検出の裏取り用。`ReferenceEquals(connection, ...)` は本 repo の確立慣習
+        // (`PacketRateGate.DetectReconnect` / `/nest dummy`) だが、Il2CppInterop のラッパーが
+        // 同一 native 接続に対して作り直されると理屈上は偽陽性になりうる。このプローブの成果物は
+        // 「切断したか否か」の二値そのものなので、偽陽性は**探している結論を無実験で捏造する**
+        // 最悪の失敗モードになる。よって identity 単独では断定せず、null 化と ClientId の変化を
+        // 併記して読み手が値で裏を取れるようにする (監査 2026-08-11)。
+        int startClientId = AmongUsClient.Instance ? AmongUsClient.Instance.ClientId : -1;
+
+        // ⚠️ StartWindowBypass は本来「ゲーム開始の復元シーケンス専用」の単一グローバル bool で、既存の
+        // 消費者は無条件 false で閉じている。任意タイミングで撃てる dev コマンドはその排他前提を満たさない
+        // ので、呼び出し前の値を保存/復元する (無条件 false は他窓の早期クローズ = 暗転バグ級の再導入)。
+        // try の外で採る — try 内で採ると、採る前に投げた例外で finally が未初期化の値を書き戻す。
+        bool prevBypass = PacketRateGate.StartWindowBypass;
+
+        // 🔴 セットアップも含めて try で覆う (フラグ固着・bypass 漏れ・免除の付けっぱなしを一括で防ぐ)。
+        try
+        {
+            TpBurstConnection = AmongUsClient.Instance.connection;
+            CustomNetworkTransform nt = target.NetTransform;
+
+            // 2u 離れた 2 点を往復させる: 1 発ごとが「本物の TP」相当の距離 (1.5u 超) でありながら、
+            // ホストの居場所は開始地点から 1u 以内に留まるので壁抜け・場外落下の事故を作らない。
+            Vector2 basePos = target.Pos();
+            Vector2 posA = basePos + new Vector2(-1f, 0f);
+            Vector2 posB = basePos + new Vector2(1f, 0f);
+            lastDest = basePos;
+
+            total = (int)(rate * seconds);
+            pendingBefore = PacketRateGate.PendingCount;
+
+            // Reliable のみゲート対象 (TryGate は Unreliable を素通しする) なので、bypass も Reliable 時だけ。
+            bypass = !gated && option == SendOption.Reliable;
+
+            // 自前の AFK / 不正移動検知が実験を汚さないようにする (Utils.TP と同じ免除。ただし 1 発ごとに
+            // LateTask を張ると 800 本積むので、バースト全体を 1 回で覆う)。
+            CheckInvalidMovementPatch.ExemptedPlayers.Add(targetId);
+            AFKDetector.TempIgnoredPlayers.Add(targetId);
+
+            string startLine = $"TPBURST start rate={rate}/s dur={seconds:F2}s total={total} opt={option} tgt={targetId} gated={gated} bypass={bypass} queued={pendingBefore} phase={(GameStates.IsLobby ? "lobby" : "ingame")} server={GameStates.CurrentServerType}";
+            HealthLog.NoteAnom(startLine);
+            Logger.Info(startLine, "DevCmd");
+            Utils.SendMessage($"[tpburst] firing {total} SnapTo ({option}) @ {rate}/s for {seconds:F1}s at player {targetId}. '/tpburst stop' to halt.", reporter);
+
+            start = Time.realtimeSinceStartup;
+
+            if (bypass) PacketRateGate.StartWindowBypass = true;
+
+            while (sent < total && !TpBurstStopRequested)
+            {
+                // 切断 = 実験の主要な観測イベント。「何発目・何秒目で落ちたか」が結果そのもの。
+                if (!AmongUsClient.Instance)
+                {
+                    lost = true;
+                    lostReason = "noclient";
+                    break;
+                }
+
+                if (AmongUsClient.Instance.connection == null)
+                {
+                    lost = true;
+                    lostReason = "nullconn";
+                    break;
+                }
+
+                if (!ReferenceEquals(AmongUsClient.Instance.connection, TpBurstConnection))
+                {
+                    lost = true;
+                    // ClientId が動いていれば本物の再接続。動いていなければラッパー churn の疑いがあるので
+                    // 断定せず DCRING と突き合わせろ、と結果行に書かせる。
+                    lostReason = AmongUsClient.Instance.ClientId != startClientId ? "identity+clientid" : "identity-only";
+                    break;
+                }
+
+                // 🔴 bypass の横取り検出: MeetingStartWire / OnGameStartedPatch は StartWindowBypass を
+                // 無条件 false で閉じる所有者なので、バースト窓の隙間で走るとワイヤレートが黙って
+                // 25/s に崩壊する。PendingCount の前後比較では検出できない (崩壊後に整形された
+                // パケットは素直にキューを流れるため) ので、フラグ自体を毎フレーム見張る。
+                if (bypass && !PacketRateGate.StartWindowBypass) bypassStolen = true;
+
+                if (!target || !nt) break;
+
+                float elapsed = Time.realtimeSinceStartup - start;
+                int due = Math.Min(total, (int)(elapsed * rate));
+                var batchBytes = 0;
+
+                while (sent < due)
+                {
+                    Vector2 dest = (sent & 1) == 0 ? posB : posA;
+
+                    // ワイヤ形式は Utils.TP と同形に保つ (sid +328 / 本体 +8)。
+                    nt.SnapTo(dest, (ushort)(nt.lastSequenceId + 328));
+                    nt.SetDirtyBit(uint.MaxValue);
+                    var newSid = (ushort)(nt.lastSequenceId + 8);
+                    MessageWriter w = AmongUsClient.Instance.StartRpcImmediately(nt.NetId, (byte)RpcCalls.SnapTo, option);
+                    NetHelpers.WriteVector2(dest, w);
+                    w.Write(newSid);
+                    batchBytes += w.Length; // ⚠️ Finish 前に読む (Finish 後は Recycle 済み)。EndMessage 分だけ過少。
+                    AmongUsClient.Instance.FinishRpcImmediately(w);
+                    sent++;
+                    lastDest = dest;
+                }
+
+                // 切断の per-name 内訳に出す (StartRpcImmediately 直呼び経路は CustomRpcSender を通らず、
+                // 自分で RecordHostAction を呼ばないと DCTX/DCTAG の内訳から丸ごと消える)。
+                if (batchBytes > 0) HealthLog.RecordHostAction("TpBurst", batchBytes, option.ToString());
+
+                yield return null;
+            }
+        }
+        finally
+        {
+            if (bypass) PacketRateGate.StartWindowBypass = prevBypass;
+
+            // ⚠️ 順序は Utils.TP と同じく「LastPosition 更新 → 免除解除」。逆にすると
+            // 「免除が外れた直後、まだ古い位置のまま無防備な 1 フレーム」が生まれる。
+            // target が消えていても最後の転送先で更新しておく (古い座標のまま放置しない)。
+            CheckInvalidMovementPatch.LastPosition[targetId] = lastDest;
+            CheckInvalidMovementPatch.ExemptedPlayers.Remove(targetId);
+            AFKDetector.TempIgnoredPlayers.Remove(targetId);
+            TpBurstRunning = false;
+        }
+
+        float took = Time.realtimeSinceStartup - start;
+        int pendingAfter = PacketRateGate.PendingCount;
+        float achieved = took > 0f ? sent / took : 0f;
+
+        // 陰性を「証拠」と誤読しないための無効化条件は結果に必ず併記する。
+        var warn = string.Empty;
+        if (bypass && pendingBefore > 0) warn += $" ⚠ gate queue was not empty ({pendingBefore}) — bypass only works while the queue is empty, so the wire rate may be far below the submitted rate.";
+        if (pendingAfter > 0) warn += $" ⚠ {pendingAfter} packet(s) still queued — submitted != wire.";
+        if (gated && option == SendOption.Reliable) warn += " ⚠ 'gated' arm: PacketRateGate shaped this to ~25/s — this is NOT a high-rate arm.";
+        if (achieved < rate * 0.8f && !lost && !TpBurstStopRequested) warn += $" ⚠ achieved rate {achieved:F0}/s is well below the requested {rate}/s (frame-rate bound) — read the ladder by achieved, not requested.";
+        if (bypassStolen) warn += " 🔴 StartWindowBypass was cleared mid-burst by another owner (MeetingStartWire / game start) — the wire rate collapsed to ~25/s partway through. ARM INVALID, re-run it.";
+        // SetDirtyBit(uint.MaxValue) が誘発する位置ストリーム更新は batchBytes にも "TpBurst" 帰属にも
+        // 乗らない。バーストは最大 4000 発なので、この付帯分が DCTX/DCTAG 内訳から丸ごと落ちると
+        // 「犯人は別に居る」と誤読される (fan-out 調査で踏んだのと同型の取りこぼし)。
+        warn += " ℹ bytes exclude SetDirtyBit-driven position-stream traffic (not attributed to \"TpBurst\" in DCTX/DCTAG).";
+
+        string endLine = $"TPBURST end rate={rate}/s opt={option} tgt={targetId} submitted={sent}/{total} elapsed={took:F2}s achieved={achieved:F0}/s queued={pendingBefore}->{pendingAfter} lost={lost} lostReason={(lost ? lostReason : "-")} clientId={startClientId}->{(AmongUsClient.Instance ? AmongUsClient.Instance.ClientId : -1)} stopped={TpBurstStopRequested} phase={(GameStates.IsLobby ? "lobby" : "ingame")} server={GameStates.CurrentServerType}{warn}";
+        HealthLog.NoteAnom(endLine);
+        Logger.Info(endLine, "DevCmd");
+
+        if (lost)
+        {
+            // ⚠️ identity-only (接続オブジェクトの同一性だけが変わり ClientId は据え置き) は
+            // Il2CppInterop のラッパー作り直しでも起きうる形。ここで「レートが述語だ」と断定すると
+            // 探している結論を捏造することになるので、断定は裏取り済みの場合だけにする。
+            string verdict = lostReason == "identity-only"
+                ? "⚠ identity-only change (ClientId unchanged) — this may be an Il2CPP wrapper churn false positive. Do NOT treat as a kick unless DCRING shows a real disconnect."
+                : "Hacking with KICKRISK silent => SnapTo rate is a real predicate.";
+            string dcLine = $"TPBURST CONNECTION LOST after {sent} SnapTo ({option}) in {took:F2}s (achieved {achieved:F0}/s) reason={lostReason} — check DCRING reason + KICKRISK. {verdict}";
+            HealthLog.NoteAnom(dcLine);
+            Logger.Warn(dcLine, "DevCmd");
+            yield break;
+        }
+
+        Utils.SendMessage($"[tpburst] done: submitted {sent}/{total} {option} SnapTo in {took:F2}s (achieved {achieved:F0}/s), queued={pendingBefore}->{pendingAfter}, survived.{warn}", reporter);
     }
 
     private static WaveCannonWarning WcDbgProbeCno;
