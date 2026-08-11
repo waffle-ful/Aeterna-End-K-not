@@ -347,7 +347,10 @@ public class SuperCannonShot
             float dist = Vector2.Distance(pos, center);
             if (dist < PullDeadzone) continue;
 
-            float step = Mathf.Min(PullStep, dist - PullDeadzone / 2f);
+            // 1.6u 未満の TP は SendOption.None 降格で非モッド客に届かないのに SnapTo 予算だけ減る
+            // (dist が deadzone のすぐ外の帯域で min() が短い段を選ぶ) — 下限クランプで空撃ちを防ぐ。
+            // step > dist のときは中心を少し追い越すが、次 tick は deadzone スキップで収束する。
+            float step = Mathf.Max(Mathf.Min(PullStep, dist - PullDeadzone / 2f), 1.6f);
             Vector2 newPos = pos + ((center - pos).normalized * step);
 
             // 壁越えは引かない (壁内へ埋め込むと非モッドがスタックする)

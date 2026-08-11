@@ -14,10 +14,12 @@
 // v1.2 (2026-08-10): L11/L12 を追加 (teleport_other/portal_place/on_cno_touch 新設の輸出)。
 // L9 の対象 op を spec §6 表 (2026-08-10 モッド側の兄弟漏れ修正に合わせた4種: cno_spawn/
 // cno_show/dummy_spawn/portal_place) に合わせて拡大する (旧実装は dummy_spawn のみだった)。
+// v1.3 (2026-08-11): L13 を追加 (pull/drag/field 新設の輸出・L3/L11 の兄弟)。L9/L12 の対象 op に
+// field を追加 (CNO 生成系防御3点セット + 会議明け10秒ドロップ + on_cno_touch 誤用検知の対象)。
 
 import type { LogicNode, LogicRule, RoleLogic } from "../roledef";
 
-export type LintRuleId = "L1" | "L2" | "L3" | "L4" | "L5" | "L6" | "L7" | "L8" | "L9" | "L10" | "L11" | "L12";
+export type LintRuleId = "L1" | "L2" | "L3" | "L4" | "L5" | "L6" | "L7" | "L8" | "L9" | "L10" | "L11" | "L12" | "L13";
 
 export interface LintWarning {
     rule: LintRuleId;
@@ -81,7 +83,9 @@ function hasRapidConsecutiveOp(nodes: LogicNode[], op: "cno_spawn" | "dummy_spaw
 // 静的近似・対象は生成系4兄弟 cno_spawn/cno_show/dummy_spawn/portal_place)。if 分岐は L7 と同じく
 // 合算 (forEachNode が then/else 両方を訪れるため、分岐の択一は見ない — 「wait, dummy_spawn」の
 // ような直列の前後関係だけを区別する)。
-const L9_OPS: ReadonlySet<LogicNode["op"]> = new Set(["cno_spawn", "cno_show", "dummy_spawn", "portal_place"]);
+// v1.3 (spec §5/§6 2026-08-11 追記): field も CNO 生成系防御3点セット + 会議明け10秒ドロップの
+// 対象 (生成系5兄弟目) に加わったため L9_OPS に追加する。
+const L9_OPS: ReadonlySet<LogicNode["op"]> = new Set(["cno_spawn", "cno_show", "dummy_spawn", "portal_place", "field"]);
 
 function hasGenerationOpBeforeElapsed(nodes: LogicNode[], ops: ReadonlySet<LogicNode["op"]>, thresholdSeconds: number): boolean {
     let elapsed = 0;
@@ -98,8 +102,9 @@ function makeWarning(rule: LintRuleId, ruleIndex: number, when: string, message:
 }
 
 /**
- * 検証済みの RoleLogic に対して spec §6 の 12 ルール (v1.2 で L11/L12 追加) を静的検査する。ブロックの組み方に対する
- * ヒントであり、export 自体は妨げない (呼び出し元は結果を警告フッタに表示するだけ)。
+ * 検証済みの RoleLogic に対して spec §6 の 13 ルール (v1.2 で L11/L12 追加、v1.3 で L13 追加) を
+ * 静的検査する。ブロックの組み方に対するヒントであり、export 自体は妨げない (呼び出し元は結果を
+ * 警告フッタに表示するだけ)。
  */
 export function lintRoleLogic(logic: RoleLogic): LintWarning[] {
     const warnings: LintWarning[] = [];
@@ -157,6 +162,14 @@ export function lintRoleLogic(logic: RoleLogic): LintWarning[] {
                     "ワープ系は「ここぞ」で1回。毎秒だとワープ予算が切れて他の能力まで止まるよ。",
                 ));
             }
+            // L13 (v1.3): L3/L11 の兄弟 — pull/drag/field。
+            if (hasOp(rule.do, "pull") || hasOp(rule.do, "drag") || hasOp(rule.do, "field")) {
+                warnings.push(makeWarning(
+                    "L13", ruleIndex, rule.when,
+                    "「毎秒くりかえす」の中でひっぱる系の処理をしています。",
+                    "ひっぱる系は「ここぞ」で1回。毎秒だとワープ予算が切れて他の能力まで止まるよ (drag/field は同時1本なので毎秒かけ直しても効かないよ)。",
+                ));
+            }
         }
 
         // L9 (v1.1 新設・v1.2 で対象拡大): on_meeting_end 限定。会議明けから10秒間のドロップ窓
@@ -169,9 +182,10 @@ export function lintRoleLogic(logic: RoleLogic): LintWarning[] {
             ));
         }
 
-        // L12 (v1.2): on_cno_touch 限定。触れるたびに生成系 op を撃つ誤用の検知。
+        // L12 (v1.2・v1.3 で field 追加): on_cno_touch 限定。触れるたびに生成系 op を撃つ誤用の検知。
         if (rule.when === "on_cno_touch"
-            && (hasOp(rule.do, "cno_spawn") || hasOp(rule.do, "dummy_spawn") || hasOp(rule.do, "cno_show") || hasOp(rule.do, "portal_place"))) {
+            && (hasOp(rule.do, "cno_spawn") || hasOp(rule.do, "dummy_spawn") || hasOp(rule.do, "cno_show")
+                || hasOp(rule.do, "portal_place") || hasOp(rule.do, "field"))) {
             warnings.push(makeWarning(
                 "L12", ruleIndex, rule.when,
                 "「オブジェクトにだれかが触れたとき」の中でオブジェクトを出したり切り替えたりしています。",

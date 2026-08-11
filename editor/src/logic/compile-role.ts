@@ -153,6 +153,19 @@ function blockToNode(b: SerializedBlock): Record<string, unknown> {
             return { op: "teleport_other", target: "ctx", to: b.fields?.TO };
         case "ekr_do_portal_place":
             return { op: "portal_place", which: b.fields?.WHICH };
+        // v1.3 (spec §3 2026-08-11 追記) — ひっぱる・ひきずる・フィールド
+        case "ekr_do_pull":
+            return { op: "pull" };
+        case "ekr_do_drag":
+            return { op: "drag", seconds: toNum(b.fields?.SECONDS) };
+        case "ekr_do_field":
+            return {
+                op: "field",
+                at: b.fields?.AT,
+                radius: b.fields?.RADIUS,
+                strength: b.fields?.STRENGTH,
+                seconds: toNum(b.fields?.SECONDS),
+            };
         default:
             if (b.type.startsWith(DO_BLOCK_PREFIX)) return { op: b.type.slice(DO_BLOCK_PREFIX.length) };
             // 未知のブロック型 → そのまま「不明な op」として通す (blockToExpr と同じ方針)。

@@ -82,6 +82,12 @@ public sealed class EkrNode
 
     // portal_place.which (v1.2) ("a" | "b")
     public string Which;
+
+    // field.radius (v1.3) ("small" | "medium" | "large")
+    public string RadiusTier;
+
+    // field.strength (v1.3) ("weak" | "medium" | "strong")
+    public string StrengthTier;
 }
 
 public sealed class EkrExpr
@@ -121,7 +127,8 @@ public sealed class EkrLogicDef
         "notify", "teleport", "kill", "set_kill_cooldown", "speed",
         "cno_spawn", "cno_move", "cno_despawn", "cno_show",
         "dummy_spawn", "corpse_spawn", // v1.1 (2026-08-09)
-        "marker_save", "teleport_other", "portal_place" // v1.2 (2026-08-10)
+        "marker_save", "teleport_other", "portal_place", // v1.2 (2026-08-10)
+        "pull", "drag", "field" // v1.3 (2026-08-11)
     ];
 
     private static readonly HashSet<string> ExprKinds =
@@ -491,6 +498,28 @@ public sealed class EkrLogicDef
             case "corpse_spawn":
                 if (!TryGetEnum(nodeEl, "color", ["self", "random"], out n.Color, out err)) return false;
                 if (!TryGetEnum(nodeEl, "at", ["self", "ctx"], out n.Target, out err)) return false;
+                break;
+
+            // v1.3 (2026-08-11): pull は引数なし。実装 (EkrLogicOpcodes) が teleport_other の to:"self" 経路と
+            // 完全共有するため、n.Target を "self" に固定しておく (spec §3「実装は teleport_other の to:"self"
+            // と完全共有」)。
+            case "pull":
+                n.Target = "self";
+                break;
+
+            case "drag":
+                if (!TryGetFloat(nodeEl, "seconds", out float dragSec, out err)) return false;
+                if (dragSec is < 1f or > 10f) { err = "drag の秒数が範囲外です (1〜10)"; return false; }
+                n.Seconds = dragSec;
+                break;
+
+            case "field":
+                if (!TryGetEnum(nodeEl, "at", ["self", "ctx", "marker1", "marker2", "marker3", "marker4"], out n.Target, out err)) return false;
+                if (!TryGetEnum(nodeEl, "radius", ["small", "medium", "large"], out n.RadiusTier, out err)) return false;
+                if (!TryGetEnum(nodeEl, "strength", ["weak", "medium", "strong"], out n.StrengthTier, out err)) return false;
+                if (!TryGetFloat(nodeEl, "seconds", out float fieldSec, out err)) return false;
+                if (fieldSec is < 1f or > 15f) { err = "field の秒数が範囲外です (1〜15)"; return false; }
+                n.Seconds = fieldSec;
                 break;
         }
 
