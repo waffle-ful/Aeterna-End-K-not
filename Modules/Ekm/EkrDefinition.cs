@@ -23,6 +23,16 @@ public sealed class EkrDefinition
     [JsonIgnore]
     public EkrLogicDef ParsedLogic { get; private set; }
 
+    // Wave 1 (docs/ekr-logic-spec.md §1.1): パッシブ層。logic と並置され、logic 無しでも passives 単独で有効。
+    // 生 JsonElement を保持し Validate() 内で EkrPassives.TryParse に渡す (logic と同じ作法)。
+    [JsonPropertyName("passives")]
+    public JsonElement? Passives { get; set; }
+
+    // Validate() 成功後の検証済みパッシブ。passives 未指定でも共有の既定インスタンスが入るので
+    // 消費側 (EkrManager/EkmTemplateRole) は null チェック不要。
+    [JsonIgnore]
+    public EkrPassives ParsedPassives { get; private set; } = EkrPassives.Default;
+
     [JsonPropertyName("requires")]
     public List<string> Requires { get; set; } = [];
 
@@ -158,6 +168,15 @@ public sealed class EkrDefinition
                 return false;
 
             ParsedLogic = parsedLogic;
+        }
+
+        // Wave 1: passives も任意。無ければ EkrPassives.Default のまま (全キー既定 = 何も変えない)。
+        if (Passives.HasValue)
+        {
+            if (!EkrPassives.TryParse(Passives.Value, out EkrPassives parsedPassives, out error))
+                return false;
+
+            ParsedPassives = parsedPassives;
         }
 
         return true;

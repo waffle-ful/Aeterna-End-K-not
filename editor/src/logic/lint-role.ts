@@ -19,7 +19,13 @@
 
 import type { LogicNode, LogicRule, RoleLogic } from "../roledef";
 
-export type LintRuleId = "L1" | "L2" | "L3" | "L4" | "L5" | "L6" | "L7" | "L8" | "L9" | "L10" | "L11" | "L12" | "L13";
+// Wave 1 (2026-08-11): L14〜L17 を追加 (計17ルール)。L14 = ctx 無しイベント配下の ctx セレクタ、
+// L15 = 未保存マーカーへの行き先、L16 = 未生成 CNO / 未保存 saved の参照、L17 = wait より後の
+// cancel_attack。L15/L16 は「参照整合性3原則」③ (エディタは欠落を能動的に教える) の実装。
+
+export type LintRuleId =
+    | "L1" | "L2" | "L3" | "L4" | "L5" | "L6" | "L7" | "L8" | "L9" | "L10" | "L11" | "L12" | "L13"
+    | "L14" | "L15" | "L16" | "L17";
 
 export interface LintWarning {
     rule: LintRuleId;
@@ -97,17 +103,98 @@ function hasGenerationOpBeforeElapsed(nodes: LogicNode[], ops: ReadonlySet<Logic
     return violation;
 }
 
+// ---------------------------------------------------------------------------
+// Wave 1: セレクタ参照の静的検査 (L14/L15/L16) 用の共通ヘルパー
+// ---------------------------------------------------------------------------
+
+// spec §6 L14 の対象イベント (「あいて」を持たないもの) をそのまま列挙する。
+// ctx を持つイベント (on_kill/on_death/on_report/on_cno_touch/on_attacked) はここに入れない。
+const CTXLESS_WHENS: ReadonlySet<string> = new Set([
+    "on_game_start", "on_pet", "on_meeting_start", "on_meeting_end", "on_task_complete", "on_vent_enter", "on_second",
+]);
+
+/**
+ * ノードが持つ「セレクタ値」(spec §3 のフィールド target/at/to の文字列値) を集める。
+ * ※ 引数を持たない ctx 暗黙 op (`pull`/`drag`) はここには出てこないので、L14 側で別途 op 名で見る。
+ * cno_show の `who` や cno_spawn の `slot` のような別意味のフィールドは対象外 (L16 は
+ * `cnoN`/`savedN` という**トークン参照**だけを見る — slot 番号での指定は参照整合性の対象外)。
+ */
+function selectorTokens(n: LogicNode): string[] {
+    const rec = n as unknown as Record<string, unknown>;
+    const out: string[] = [];
+    for (const key of ["target", "at", "to"]) {
+        const v = rec[key];
+        if (typeof v === "string") out.push(v);
+    }
+    return out;
+}
+
+function anySelectorToken(nodes: LogicNode[], predicate: (token: string) => boolean): boolean {
+    return firstSelectorToken(nodes, predicate) !== null;
+}
+
+/** 条件に合う最初のセレクタ値を返す (警告文に実際の値を出して、同じ文言の重複を避けるため) */
+function firstSelectorToken(nodes: LogicNode[], predicate: (token: string) => boolean): string | null {
+    let found: string | null = null;
+    forEachNode(nodes, (n) => {
+        if (found !== null) return;
+        for (const t of selectorTokens(n)) {
+            if (predicate(t)) {
+                found = t;
+                return;
+            }
+        }
+    });
+    return found;
+}
+
+/** 全 rule を横断して「生成/保存側」の slot 番号を集める (L15/L16 は rule をまたいで解決する) */
+function collectProvidedSlots(logic: RoleLogic, op: LogicNode["op"]): ReadonlySet<number> {
+    const slots = new Set<number>();
+    for (const rule of logic.rules) {
+        forEachNode(rule.do, (n) => {
+            if (n.op === op && "slot" in n && typeof n.slot === "number") slots.add(n.slot);
+        });
+    }
+    return slots;
+}
+
+function tokenSlot(token: string, prefix: string): number | null {
+    if (!token.startsWith(prefix)) return null;
+    const n = Number(token.slice(prefix.length));
+    return Number.isInteger(n) ? n : null;
+}
+
+/** L17: 訪問順で wait より後に現れる cancel_attack (同期プロローグを抜けた後は no-op) */
+function hasCancelAttackAfterWait(nodes: LogicNode[]): boolean {
+    let waited = false;
+    let violation = false;
+    forEachNode(nodes, (n) => {
+        if (n.op === "wait") waited = true;
+        else if (n.op === "cancel_attack" && waited) violation = true;
+    });
+    return violation;
+}
+
 function makeWarning(rule: LintRuleId, ruleIndex: number, when: string, message: string, suggestion: string): LintWarning {
     return { rule, ruleIndex, when, message, suggestion };
 }
 
 /**
- * 検証済みの RoleLogic に対して spec §6 の 13 ルール (v1.2 で L11/L12 追加、v1.3 で L13 追加) を
+ * 検証済みの RoleLogic に対して spec §6 の 17 ルール (v1.2 で L11/L12、v1.3 で L13、Wave 1 で L14〜L17 追加) を
  * 静的検査する。ブロックの組み方に対するヒントであり、export 自体は妨げない (呼び出し元は結果を
  * 警告フッタに表示するだけ)。
  */
 export function lintRoleLogic(logic: RoleLogic): LintWarning[] {
     const warnings: LintWarning[] = [];
+
+    // L15/L16 は rule をまたいで解決する (「どの rule にも無い」が条件 — spec §6)。
+    const savedMarkers = collectProvidedSlots(logic, "marker_save");
+    const spawnedCnoSlots = new Set([
+        ...collectProvidedSlots(logic, "cno_spawn"),
+        ...collectProvidedSlots(logic, "dummy_spawn"),
+    ]);
+    const rememberedSlots = collectProvidedSlots(logic, "remember");
 
     logic.rules.forEach((rule: LogicRule, ruleIndex: number) => {
         if (rule.when === "on_second") {
@@ -221,6 +308,62 @@ export function lintRoleLogic(logic: RoleLogic): LintWarning[] {
                 "L10", ruleIndex, rule.when,
                 "ダミー人形を間をあけずに続けて出しています。",
                 "ダミーは3秒に1体まで、2体目からは出ないよ。間に「3.1 秒待つ」を入れよう。",
+            ));
+        }
+
+        // L14 (Wave 1): 「あいて」がいないきっかけの中で「あいて」を使っている。
+        // 対象は ①セレクタ値 (target/at/to) の "ctx" と ②引数を持たない **ctx 暗黙 op**
+        // (`pull`/`drag` — フィールドは無いが実行時は ctx に依存するので、ctx 無しイベント配下では
+        // 丸ごと no-op になる。2026-08-11 の三面監査裁定で L14 の対象へ拡張)。
+        if (CTXLESS_WHENS.has(rule.when)
+            && (anySelectorToken(rule.do, (t) => t === "ctx") || hasOp(rule.do, "pull") || hasOp(rule.do, "drag"))) {
+            warnings.push(makeWarning(
+                "L14", ruleIndex, rule.when,
+                "「あいて」のいないきっかけの中で「あいて」を指定しています。",
+                "このきっかけには「あいて」がいないよ。",
+            ));
+        }
+
+        // L15 (Wave 1): teleport(to:markerN)/teleport_other(to:markerN)/field(at:markerN) の
+        // 行き先に対応する marker_save(N) がどの rule にも無い。
+        const missingMarker = firstSelectorToken(rule.do, (t) => {
+            const slot = tokenSlot(t, "marker");
+            return slot !== null && !savedMarkers.has(slot);
+        });
+        if (missingMarker !== null) {
+            warnings.push(makeWarning(
+                "L15", ruleIndex, rule.when,
+                `まだおぼえていない場所 (マーカー${missingMarker.slice("marker".length)}) を使おうとしています。`,
+                "おぼえていない場所へはワープできないよ。先に「いまの場所をおぼえる」を入れよう。",
+            ));
+        }
+
+        // L16 (Wave 1・L15 と同型): cnoN / savedN の参照に対応する生成 (cno_spawn/dummy_spawn) /
+        // 保存 (remember) op がどの rule にも無い。
+        const missingRef = firstSelectorToken(rule.do, (t) => {
+            const cnoSlot = tokenSlot(t, "cno");
+            if (cnoSlot !== null) return !spawnedCnoSlots.has(cnoSlot);
+            const savedSlot = tokenSlot(t, "saved");
+            return savedSlot !== null && !rememberedSlots.has(savedSlot);
+        });
+        if (missingRef !== null) {
+            const label = missingRef.startsWith("cno")
+                ? `まだ出していないオブジェクト${missingRef.slice("cno".length)}`
+                : `まだおぼえていない人 (おぼえた人${missingRef.slice("saved".length)})`;
+            warnings.push(makeWarning(
+                "L16", ruleIndex, rule.when,
+                `${label} を指定しています。`,
+                "出していないオブジェクト/おぼえていない人は使えないよ。先に「出す」か「おぼえる」を入れよう。",
+            ));
+        }
+
+        // L17 (Wave 1): on_attacked の同期プロローグは最初の wait で終わる — その後の
+        // cancel_attack は no-op (spec §2「同期プロローグ」)。
+        if (rule.when === "on_attacked" && hasCancelAttackAfterWait(rule.do)) {
+            warnings.push(makeWarning(
+                "L17", ruleIndex, rule.when,
+                "「秒待つ」のあとで「こうげきをふせぐ」を使っています。",
+                "まってから防ぐことはできないよ。ふせぐのは一番はじめに。",
             ));
         }
     });

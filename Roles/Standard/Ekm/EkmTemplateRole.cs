@@ -74,6 +74,20 @@ public abstract class EkmTemplateRole : RoleBase
             opt.SetVision(false);
             opt.SetFloat(FloatOptionNames.CrewLightMod, def.VisionMultiplier);
         }
+
+        // Wave 1 (docs/ekr-logic-spec.md §1.1): passives.killDistance を vanilla 0/1/2 へ写像。
+        // 未指定 (-1) はホスト設定のまま。
+        if (def.ParsedPassives.KillDistance >= 0)
+            opt.SetInt(Int32OptionNames.KillDistance, def.ParsedPassives.KillDistance);
+    }
+
+    // Wave 1 (spec §2 on_attacked): 自分へのキル試行の一点関門。まもり (passives.shield) の消費判定と
+    // on_attacked の同期プロローグはすべて EkrManager 側 (per-holder 状態を触るのはあちらの責務)。
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    {
+        if (!base.OnCheckMurderAsTarget(killer, target)) return false;
+
+        return EkrManager.FireAttacked(Slot, target, killer);
     }
 
     // ── R1 (docs/ekr-logic-spec.md): イベントフック→発行のみの薄い配線 ──────────
@@ -88,6 +102,32 @@ public abstract class EkmTemplateRole : RoleBase
             base.OnPet(pc); // logic 無し (R0 のみの役職) は従来どおりフレーバーテキスト
             return;
         }
+
+        EkrManager.FirePet(Slot, pc);
+    }
+
+    // Wave 1 (spec §2 発動トリガ統合): on_pet は「とくいわざボタンをおしたとき」= 能力ボタンの発動全般。
+    // AST の id は on_pet のまま (契約不変) で、役職基盤がペット以外のボタンを提供する場合はそちらでも
+    // 同じイベントを発行する。現行の EKR 基盤 (Crewmate / CanVent=Engineer / CanKill=desync Impostor) は
+    // シェイプシフト/バニッシュを持たないため、いまは将来の基盤拡張に備えた配線。
+    public override bool OnShapeshift(PlayerControl shapeshifter, PlayerControl target, bool shapeshifting)
+    {
+        if (shapeshifting) FireAbilityButton(shapeshifter); // 戻り (shapeshifting=false) では二重発火させない
+        return true;
+    }
+
+    public override bool OnVanish(PlayerControl pc)
+    {
+        FireAbilityButton(pc);
+        return true;
+    }
+
+    private void FireAbilityButton(PlayerControl pc)
+    {
+        if (!pc) return;
+
+        EkrDefinition def = EkrManager.GetDefinition(Slot);
+        if (def?.ParsedLogic == null) return;
 
         EkrManager.FirePet(Slot, pc);
     }

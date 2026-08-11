@@ -1338,6 +1338,7 @@ internal static class ReportDeadBodyPatch
                     || Main.PlayerStates[target.PlayerId].deathReason == PlayerState.DeathReason.Gambled
                     || killerRole == CustomRoles.Scavenger
                     || Cleaner.CleanerBodies.Contains(target.PlayerId)
+                    || EndKnot.Modules.Ekm.EkrManager.IsCorpseUnreportable(target.PlayerId) // EKR passives.corpse="noReport"
                     || Skinwalker.WornCorpseTargetId.ContainsValue(target.PlayerId))
                 {
                     Notify("UnreportableBody");

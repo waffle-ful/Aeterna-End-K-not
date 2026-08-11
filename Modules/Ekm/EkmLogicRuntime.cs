@@ -52,8 +52,12 @@ public sealed class EkrNode
     // notify.text / cno_spawn.text
     public string Text;
 
-    // teleport.to / kill.target / cno_spawn.at ("self" | "ctx" | "random")
+    // teleport.to / kill.target / cno_spawn.at ("self" | "ctx" | "random") / notify.target (Wave 1)
     public string Target;
+
+    // Wave 1 (spec §3 統一セレクタ): 「行き先 (to/at)」と「だれに (target)」が同じノードに同居する op
+    // (teleport_other / pull) 用。Target が行き先を保持するので、対象セレクタはこちらに入れる。
+    public string Subject;
 
     // speed.mult
     public float Mult;
@@ -117,8 +121,17 @@ public sealed class EkrLogicDef
     [
         "on_game_start", "on_pet", "on_kill", "on_death", "on_meeting_start",
         "on_meeting_end", "on_task_complete", "on_vent_enter", "on_report", "on_second",
-        "on_cno_touch" // v1.2 (2026-08-10)
+        "on_cno_touch", // v1.2 (2026-08-10)
+        "on_attacked" // Wave 1 (2026-08-11)
     ];
+
+    // Wave 1 (spec §3 統一セレクタ語彙)。単数セレクタのみ受理する op (kill/teleport_other/remember 等) と、
+    // 複数セレクタも受理する明示ホワイトリスト op (Wave 1 では notify だけ) を分ける。
+    private static readonly string[] SingleSelectors = ["self", "ctx", "saved1", "saved2", "nearest", "random"];
+    private static readonly string[] MultiSelectors = ["self", "ctx", "saved1", "saved2", "nearest", "random", "all", "room"];
+
+    // teleport_other.target は「他人」を動かす op なので self を含まない (自分は teleport の役目・spec §3)。
+    private static readonly string[] OtherSelectors = ["ctx", "saved1", "saved2", "nearest", "random"];
 
     private static readonly HashSet<string> ControlOps = ["if", "wait", "stop", "var_set", "var_add"];
 
@@ -128,7 +141,8 @@ public sealed class EkrLogicDef
         "cno_spawn", "cno_move", "cno_despawn", "cno_show",
         "dummy_spawn", "corpse_spawn", // v1.1 (2026-08-09)
         "marker_save", "teleport_other", "portal_place", // v1.2 (2026-08-10)
-        "pull", "drag", "field" // v1.3 (2026-08-11)
+        "pull", "drag", "field", // v1.3 (2026-08-11)
+        "remember", "cancel_attack" // Wave 1 (2026-08-11)
     ];
 
     private static readonly HashSet<string> ExprKinds =
@@ -168,7 +182,7 @@ public sealed class EkrLogicDef
 
         var parsed = new EkrLogicDef();
 
-        if (!root.TryGetProperty("version", out JsonElement versionEl) || versionEl.ValueKind != JsonValueKind.Number || !versionEl.TryGetInt32(out int version) || version != 1)
+        if (!root.TryGetProperty("version", out JsonElement versionEl) || !EkrJson.TryReadInt(versionEl, out int version) || version != 1)
         {
             error = "このバージョンの End K not では読み込めないロジックです (logic.version)。End K not を更新してください";
             return false;
@@ -258,8 +272,8 @@ public sealed class EkrLogicDef
 
             if (when == "on_cno_touch")
             {
-                if (!ruleEl.TryGetProperty("slot", out JsonElement ruleSlotEl) || ruleSlotEl.ValueKind != JsonValueKind.Number ||
-                    !ruleSlotEl.TryGetInt32(out ruleSlot) || ruleSlot is < 1 or > 3)
+                if (!ruleEl.TryGetProperty("slot", out JsonElement ruleSlotEl) ||
+                    !EkrJson.TryReadInt(ruleSlotEl, out ruleSlot) || ruleSlot is < 1 or > 3)
                 {
                     error = "on_cno_touch の rule には slot (1〜3) が必要です";
                     return false;
@@ -288,11 +302,37 @@ public sealed class EkrLogicDef
                 return false;
             }
 
+            // Wave 1 (spec §3 cancel_attack): on_attacked 以外の rule 配下 (if の入れ子含む) に現れたら
+            // 文書全体 reject。静的に検査できるので no-op ではなく reject する (on_cno_touch の slot 必須と
+            // 同じ厳格側)。TryParseNode は「その時点で囲っている rule の when」を知らない (汎用エンジンに
+            // 役職イベントの語彙を持ち込まないため) ので、rule の解析完了後にまとめて歩く。
+            if (when != "on_attacked" && ContainsCancelAttack(doNodes))
+            {
+                error = $"「こうげきをふせぐ」は「こうげきされたとき」のブロックの中でだけ使えます (when=\"{when}\" の中では使えません)";
+                return false;
+            }
+
             parsed.Rules.Add(new EkrRule { When = when, Do = doNodes, Slot = ruleSlot });
         }
 
         def = parsed;
         return true;
+    }
+
+    // cancel_attack のスコープ検証用の再帰探索 (if の then/else も潜る)。深さは既に MaxDepth で
+    // 制限済みなので追加のガードは不要。
+    private static bool ContainsCancelAttack(List<EkrNode> nodes)
+    {
+        if (nodes == null) return false;
+
+        foreach (EkrNode node in nodes)
+        {
+            if (node.Op == "cancel_attack") return true;
+            if (ContainsCancelAttack(node.Then)) return true;
+            if (ContainsCancelAttack(node.Else)) return true;
+        }
+
+        return false;
     }
 
     private static bool TryParseNodeList(JsonElement arrEl, HashSet<string> knownVars, NodeBudget budget, int depth, out List<EkrNode> nodes, out string err)
@@ -400,11 +440,19 @@ public sealed class EkrLogicDef
                 if (!TryGetFloat(nodeEl, "seconds", out float notifySec, out err)) return false;
                 if (notifySec is < 1f or > 30f) { err = "notify の秒数が範囲外です (1〜30)"; return false; }
                 n.Seconds = notifySec;
+
+                // Wave 1 (spec §3): target は任意 (既定 "self")。複数セレクタを受理する唯一の op。
+                if (nodeEl.TryGetProperty("target", out _))
+                {
+                    if (!TryGetEnum(nodeEl, "target", MultiSelectors, out n.Target, out err)) return false;
+                }
+                else n.Target = "self";
+
                 break;
 
             case "teleport":
-                // v1.2: to にマーカー行き先 (marker1..4) を追加。
-                if (!TryGetEnum(nodeEl, "to", ["random", "ctx", "marker1", "marker2", "marker3", "marker4"], out n.Target, out err)) return false;
+                // v1.2: to にマーカー行き先 (marker1..4) を追加。Wave 1: cno1..3 を追加。
+                if (!TryGetEnum(nodeEl, "to", ["random", "ctx", "marker1", "marker2", "marker3", "marker4", "cno1", "cno2", "cno3"], out n.Target, out err)) return false;
                 break;
 
             // v1.2 (2026-08-10)
@@ -413,11 +461,11 @@ public sealed class EkrLogicDef
                 if (!TryGetEnum(nodeEl, "at", ["self", "ctx", "cno1", "cno2", "cno3"], out n.Target, out err)) return false;
                 break;
 
-            // v1.2 (2026-08-10): target は "ctx" 固定 (spec §3) — 検証だけ行い値は保持しない。
-            // 行き先 (to) を teleport と同じ慣行で n.Target に格納する。
+            // v1.2 (2026-08-10) / Wave 1 拡張: target は単数セレクタ (self を除く)、to は行き先。
+            // 行き先 (to) を teleport と同じ慣行で n.Target に、対象セレクタを n.Subject に格納する。
             case "teleport_other":
-                if (!TryGetEnum(nodeEl, "target", ["ctx"], out _, out err)) return false;
-                if (!TryGetEnum(nodeEl, "to", ["self", "marker1", "marker2", "marker3", "marker4"], out n.Target, out err)) return false;
+                if (!TryGetEnum(nodeEl, "target", OtherSelectors, out n.Subject, out err)) return false;
+                if (!TryGetEnum(nodeEl, "to", ["self", "marker1", "marker2", "marker3", "marker4", "cno1", "cno2", "cno3"], out n.Target, out err)) return false;
                 break;
 
             case "portal_place":
@@ -425,7 +473,18 @@ public sealed class EkrLogicDef
                 break;
 
             case "kill":
-                if (!TryGetEnum(nodeEl, "target", ["self", "ctx"], out n.Target, out err)) return false;
+                // Wave 1: 単数セレクタ全種を受理 (saved1/saved2/nearest/random を追加)。
+                if (!TryGetEnum(nodeEl, "target", SingleSelectors, out n.Target, out err)) return false;
+                break;
+
+            // Wave 1 (spec §3): marker_save の人間版。予算なし (ローカル状態のみ)。
+            case "remember":
+                if (!TryGetInt(nodeEl, "slot", 1, 2, out n.Slot, out err)) return false;
+                if (!TryGetEnum(nodeEl, "target", SingleSelectors, out n.Target, out err)) return false;
+                break;
+
+            // Wave 1 (spec §3): 引数なし。on_attacked 配下でのみ有効 (スコープ検証は ValidateCancelAttackScope)。
+            case "cancel_attack":
                 break;
 
             case "set_kill_cooldown":
@@ -505,6 +564,7 @@ public sealed class EkrLogicDef
             // と完全共有」)。
             case "pull":
                 n.Target = "self";
+                n.Subject = "ctx"; // spec §3: pull は ctx 暗黙 (引数なしの糖衣)
                 break;
 
             case "drag":
@@ -675,7 +735,8 @@ public sealed class EkrLogicDef
         value = 0;
         err = null;
 
-        if (!parentEl.TryGetProperty(propName, out JsonElement el) || el.ValueKind != JsonValueKind.Number || !el.TryGetInt32(out int i))
+        // spec §1 (2026-08-11 裁定): 小数点/指数表記でも整数と等価なら受理 (`2.0` = `2`)。
+        if (!parentEl.TryGetProperty(propName, out JsonElement el) || !EkrJson.TryReadInt(el, out int i))
         {
             err = $"{propName} の値が不正です";
             return false;
@@ -814,7 +875,10 @@ public static class EkmLogicRuntime
     // 1つの fiber を「起きるまで/終わるまで」進める。呼び出し元は毎 FixedUpdate、保持者ごとの
     // アクティブ fiber リストを舐めてこれを呼ぶ。戻り値 false = 呼び出し元のリストから除去してよい
     // (Done か Aborted のどちらか — Aborted は fiber.Aborted で判別する)。
-    public static bool Pump(EkrFiber fiber, IEkrActionSink sink)
+    // ignoreFrameBudget: この Pump 呼び出しの間だけ「2000/フレーム」による打ち切りを見送る
+    // (実行した命令のフレーム集計への加算は維持・per-fiber 500 は通常どおり適用)。
+    // 汎用エンジンはこのフラグの意味 (=どのイベントが特別か) を知らない — 呼び出し元が決める。
+    public static bool Pump(EkrFiber fiber, IEkrActionSink sink, bool ignoreFrameBudget = false)
     {
         if (fiber.Done) return false;
         if (fiber.WakeAt >= 0f && Time.realtimeSinceStartup < fiber.WakeAt) return true;
@@ -838,7 +902,7 @@ public static class EkmLogicRuntime
                 continue;
             }
 
-            if (fiber.InstrUsed >= MaxInstructionsPerFiber || _globalInstrThisFrame >= MaxInstructionsPerFrame)
+            if (fiber.InstrUsed >= MaxInstructionsPerFiber || (!ignoreFrameBudget && _globalInstrThisFrame >= MaxInstructionsPerFrame))
             {
                 fiber.Aborted = true;
                 fiber.Done = true;

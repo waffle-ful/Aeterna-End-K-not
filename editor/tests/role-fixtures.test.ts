@@ -64,6 +64,22 @@ describe("golden fixture: role-full-course.ekrole.json (10イベント・主要o
         }
     });
 
+    // Wave 1 (spec §1.1): passives の6キーすべてを実物の .ekrole.json で1度ずつ使う
+    // (C# 側の検証と突き合わせる共有資材にするため — 型/レンジの実装差分はここで露見する)。
+    it("passives の6キーすべてを使っている (検証を通り、そのまま保持される)", () => {
+        const parsed = JSON.parse(fullCourseRaw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        expect(result.def.passives).toEqual({
+            speedMult: 1.2,
+            killDistance: "short",
+            shield: { count: 2 },
+            corpse: "noReport",
+            voteWeight: 2,
+            doom: { seconds: 300 },
+        });
+    });
+
     it("リンター (spec §6) は警告0件 — golden fixture は模範的な組み方で書く", () => {
         const parsed = JSON.parse(fullCourseRaw);
         const result = validateEkrDefinition(parsed);

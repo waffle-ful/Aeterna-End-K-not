@@ -257,7 +257,9 @@ describe("compile-role: on_cno_touch / marker_save / teleport_other / portal_pla
         expect(compileTopBlocksToRules(blocks)).toEqual([{ when: "on_pet", do: [{ op: "marker_save", slot: 3, at: "cno1" }] }]);
     });
 
-    it("teleport_other は target を固定 \"ctx\" で emit し、to をそのまま転記する", () => {
+    // Wave 1 で TARGET フィールドが追加されたが、フィールドを持たない (Wave 1 より前に保存された)
+    // ワークスペースは従来どおり target:"ctx" として復元される — 移行既定値の回帰テスト。
+    it("teleport_other は TARGET 欠落時に target=\"ctx\" で emit し、to をそのまま転記する", () => {
         const blocks = [{ type: "ekr_when_on_pet", next: { block: { type: "ekr_do_teleport_other", fields: { TO: "marker2" } } } }];
         expect(compileTopBlocksToRules(blocks)).toEqual([{ when: "on_pet", do: [{ op: "teleport_other", target: "ctx", to: "marker2" }] }]);
     });
@@ -459,5 +461,92 @@ describe("compile-role → roledef.validateRoleLogic: 統合 (実際に使える
             expect(r.logic.rules[0].do[1]).toEqual({ op: "drag", seconds: 5 });
             expect(r.logic.rules[0].do[2]).toEqual({ op: "field", at: "self", radius: "large", strength: "strong", seconds: 10 });
         }
+    });
+});
+
+// Wave 1 (docs/ekr-logic-spec.md §2/§3 2026-08-11 併合)
+describe("compile-role: Wave 1 ブロック (on_attacked / cancel_attack / remember / セレクタ)", () => {
+    it("ekr_when_on_attacked は when:\"on_attacked\" の rule になる (slot は付かない)", () => {
+        const blocks: SerializedBlock[] = [
+            { type: "ekr_when_on_attacked", next: { block: { type: "ekr_do_cancel_attack" } } },
+        ];
+        expect(compileTopBlocksToRules(blocks)).toEqual([{ when: "on_attacked", do: [{ op: "cancel_attack" }] }]);
+    });
+
+    it("ekr_do_remember は SLOT (文字列) を数値へ寄せ、TARGET をそのまま転記する", () => {
+        const blocks: SerializedBlock[] = [
+            { type: "ekr_when_on_kill", next: { block: { type: "ekr_do_remember", fields: { SLOT: "2", TARGET: "nearest" } } } },
+        ];
+        expect(compileTopBlocksToRules(blocks)).toEqual([
+            { when: "on_kill", do: [{ op: "remember", slot: 2, target: "nearest" }] },
+        ]);
+    });
+
+    it("notify の TARGET は self / 欠落なら AST に出さない (既定値の明示化はしない)", () => {
+        const withSelf: SerializedBlock[] = [
+            { type: "ekr_when_on_pet", next: { block: { type: "ekr_do_notify", fields: { TARGET: "self", TEXT: "やあ", SECONDS: 3 } } } },
+        ];
+        expect(compileTopBlocksToRules(withSelf)).toEqual([{ when: "on_pet", do: [{ op: "notify", text: "やあ", seconds: 3 }] }]);
+
+        const legacy: SerializedBlock[] = [
+            { type: "ekr_when_on_pet", next: { block: { type: "ekr_do_notify", fields: { TEXT: "やあ", SECONDS: 3 } } } },
+        ];
+        expect(compileTopBlocksToRules(legacy)).toEqual([{ when: "on_pet", do: [{ op: "notify", text: "やあ", seconds: 3 }] }]);
+    });
+
+    it("notify の TARGET が self 以外なら target を付ける (複数セレクタも)", () => {
+        const blocks: SerializedBlock[] = [
+            { type: "ekr_when_on_kill", next: { block: { type: "ekr_do_notify", fields: { TARGET: "room", TEXT: "やあ", SECONDS: 3 } } } },
+        ];
+        expect(compileTopBlocksToRules(blocks)).toEqual([
+            { when: "on_kill", do: [{ op: "notify", text: "やあ", seconds: 3, target: "room" }] },
+        ]);
+    });
+
+    it("teleport_other は TARGET があればそれを使う (Wave 1 のセレクタ拡張)", () => {
+        const blocks: SerializedBlock[] = [
+            { type: "ekr_when_on_pet", next: { block: { type: "ekr_do_teleport_other", fields: { TARGET: "saved1", TO: "cno2" } } } },
+        ];
+        expect(compileTopBlocksToRules(blocks)).toEqual([
+            { when: "on_pet", do: [{ op: "teleport_other", target: "saved1", to: "cno2" }] },
+        ]);
+    });
+
+    it("on_attacked の「ふせぐ→おぼえる→反撃」ワークスペースが validateRoleLogic まで通る", () => {
+        const w = ws([
+            {
+                type: "ekr_when_on_attacked",
+                next: {
+                    block: {
+                        type: "ekr_do_cancel_attack",
+                        next: {
+                            block: {
+                                type: "ekr_do_remember",
+                                fields: { SLOT: "1", TARGET: "ctx" },
+                                next: { block: { type: "ekr_do_kill", fields: { TARGET: "saved1" } } },
+                            },
+                        },
+                    },
+                },
+            },
+        ]);
+        const compiled = compileWorkspaceToLogicInput(w, []);
+        expect(compiled).not.toBeNull();
+        const r = validateRoleLogic(compiled);
+        expect(r.ok, r.ok ? "" : (r as { error: string }).error).toBe(true);
+        if (r.ok) {
+            expect(r.logic.rules[0].when).toBe("on_attacked");
+            expect(r.logic.rules[0].do).toEqual([
+                { op: "cancel_attack" },
+                { op: "remember", slot: 1, target: "ctx" },
+                { op: "kill", target: "saved1" },
+            ]);
+        }
+    });
+
+    it("cancel_attack を on_attacked 以外に置いたワークスペースは validateRoleLogic で reject される", () => {
+        const w = ws([{ type: "ekr_when_on_pet", next: { block: { type: "ekr_do_cancel_attack" } } }]);
+        const r = validateRoleLogic(compileWorkspaceToLogicInput(w, []));
+        expect(r.ok).toBe(false);
     });
 });

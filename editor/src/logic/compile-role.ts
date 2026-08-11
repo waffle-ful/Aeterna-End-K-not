@@ -110,8 +110,15 @@ function blockToNode(b: SerializedBlock): Record<string, unknown> {
             return { op: "wait", seconds: toNum(b.fields?.SECONDS) };
         case "ekr_do_stop":
             return { op: "stop" };
-        case "ekr_do_notify":
-            return { op: "notify", text: b.fields?.TEXT, seconds: toNum(b.fields?.SECONDS) };
+        case "ekr_do_notify": {
+            // Wave 1 (spec §3): target は任意・既定 self。"self" と欠落 (Wave 1 より前に保存された
+            // ワークスペース) はどちらもキーを付けない — AST を最小に保ち、既存コードの再書き出しが
+            // バイト単位で不動点のままになるようにする。
+            const target = b.fields?.TARGET;
+            const node: Record<string, unknown> = { op: "notify", text: b.fields?.TEXT, seconds: toNum(b.fields?.SECONDS) };
+            if (target !== undefined && target !== "self") node.target = target;
+            return node;
+        }
         case "ekr_do_teleport":
             return { op: "teleport", to: b.fields?.TO };
         case "ekr_do_kill":
@@ -148,11 +155,20 @@ function blockToNode(b: SerializedBlock): Record<string, unknown> {
         case "ekr_do_marker_save":
             return { op: "marker_save", slot: toNum(b.fields?.SLOT), at: b.fields?.AT };
         case "ekr_do_teleport_other":
-            // spec §3 v1.2: target は現状 "ctx" の一択 — ブロックに TARGET フィールドを持たせず
-            // ここで固定値を書く (単一値のドロップダウンを作る意味が薄いため)。
-            return { op: "teleport_other", target: "ctx", to: b.fields?.TO };
+            // TARGET は Wave 1 で追加されたフィールド。`?? "ctx"` は「Wave 1 より前に保存された
+            // ワークスペースの移行既定値」であって、フィールド欠落一般に既定値を当てる方針では
+            // ない (dummy_spawn.KILLABLE のコメント参照 — あちらは欠落を素通しして reject させる)。
+            // 旧ブロックは target が "ctx" 固定だったので、旧データの意味をそのまま復元している。
+            return { op: "teleport_other", target: b.fields?.TARGET ?? "ctx", to: b.fields?.TO };
         case "ekr_do_portal_place":
             return { op: "portal_place", which: b.fields?.WHICH };
+        // Wave 1 (spec §3 2026-08-11) — おぼえる / こうげきをふせぐ
+        case "ekr_do_remember":
+            return { op: "remember", slot: toNum(b.fields?.SLOT), target: b.fields?.TARGET };
+        case "ekr_do_cancel_attack":
+            // 配置 (on_attacked 配下かどうか) の検査は roledef.ts の validateRoleLogic が行う —
+            // compile 側は契約を一切強制しない (ファイル冒頭の方針)。
+            return { op: "cancel_attack" };
         // v1.3 (spec §3 2026-08-11 追記) — ひっぱる・ひきずる・フィールド
         case "ekr_do_pull":
             return { op: "pull" };

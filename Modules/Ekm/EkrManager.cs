@@ -53,12 +53,38 @@ internal sealed class EkrHolderState
     public bool GameStartFired;
 
     public float LastSecondFireTime = -1f;
-    public float LastNotifyTime = -1f;
+
+    // Wave 1 (spec §3 notify): 複数対象は「1人ごとに個別課金・超過分は静かにドロップ」なので、
+    // バケットは per-(ホルダー, 受け取り手) にする。単数対象 (既定 self) のときは自分1件だけの
+    // 辞書になるので、v1.3 までの float 1本と挙動は同じ。
+    public readonly Dictionary<byte, float> LastNotifyTime = new();
     // notify が会議中に呼ばれたときだけ使う専用バケット (通常より粗い間隔)。
     // Utils.SendMessage はワールド名札と違い「呼ぶたびにチャット欄へ1行追加」なので、
     // LastNotifyTime (1秒間隔) をそのまま共用すると1回の会議で数十行のスパムになりうる
     // (advisor 指摘・2026-08-09)。EkrLogicOpcodes.Notify() 参照。
-    public float LastMeetingNotifyTime = -1f;
+    public readonly Dictionary<byte, float> LastMeetingNotifyTime = new();
+
+    // ── Wave 1 (docs/ekr-logic-spec.md §3 remember / §1.1 passives) ────────────────────────────
+    // おぼえた人 2 スロット (byte.MaxValue = 未保存)。死亡・切断は参照時に検証して自動失効させる
+    // (ここを能動的に掃除する常駐処理は作らない — 「壊れた参照は静かに no-op」規約 §3 参照整合性3原則)。
+    public readonly byte[] Saved = [byte.MaxValue, byte.MaxValue];
+
+    // passives.shield の残数 / passives.doom の残秒。どちらもゲーム開始 (InitRuntime) でリセット。
+    public int ShieldRemaining;
+    public int DoomRemaining;
+    public float LastDoomTickTime = -1f;
+
+    // passives.speedMult の適用状態。opcode 側の速度ブースト (SpeedBoostActive) とは別枠で、
+    // こちらは「役職を持っている間ずっと」効く常時倍率。復元は memory 罠
+    // (allplayerspeed-temp-boost-restore-race) どおり「凍結中スキップ + 捕捉フラグ」の2点セット。
+    public bool PassiveSpeedApplied;
+    public float PassiveSpeedBaseline;
+
+    // 最後に「生きていたときの」座標。passives.corpse=vanish はホルダーをマップ外へ飛ばしてから
+    // 死体を作るため、on_death 起点 fiber の self 解決 (身代わりダミー/偽死体) がマップ外になる。
+    // 死後の self 解決はこのスナップショットを使う (spec §2 v1.1 の正当ユースを壊さないため)。
+    public bool HasLastLivePosition;
+    public Vector2 LastLivePosition;
     public float LastKillTime = -1f;
     public float LastCnoSpawnTime = -1f;
     // spec §5 (2026-08-09 監査改定): cno_show は cno_spawn と共用せず独自の ≤1/3秒/ホルダー バケット
@@ -613,6 +639,12 @@ public static class EkrManager
                 state.Variables[v.Name] = v.Init;
         }
 
+        // Wave 1 (spec §1.1): shield 残数 / doom 残時間はゲーム開始でリセット。ここ (Add=役職付与) が
+        // 唯一の初期化点 — state 自体が作り直されるので「前ラウンドの残数の持ち越し」は構造的に起きない。
+        EkrPassives passives = def?.ParsedPassives ?? EkrPassives.Default;
+        state.ShieldRemaining = passives.ShieldCount;
+        state.DoomRemaining = passives.DoomSeconds;
+
         Runtime[playerId] = state;
     }
 
@@ -646,6 +678,14 @@ public static class EkrManager
             }
 
             state.SpeedBoostActive = false;
+        }
+
+        // Wave 1 (spec §1.1「解除 = 役職剥奪・死亡・ゲーム終了時に必ず復元」)。opcode 側の復元の後に
+        // 行う — opcode の baseline は「パッシブ適用後の値」なので、順序が逆だとパッシブ倍率が残る。
+        if (state.PassiveSpeedApplied)
+        {
+            state.PassiveSpeedApplied = false;
+            RestorePassiveSpeed(playerId, state.PassiveSpeedBaseline, retriesLeft: 30);
         }
 
         for (int i = 0; i < state.CnoSlots.Length; i++)
@@ -688,6 +728,25 @@ public static class EkrManager
         {
             if (retriesLeft <= 0) return; // 諦める (相手の凍結解除に委ねる)
             LateTask.New(() => RetryRestoreSpeed(playerId, baseline, retriesLeft - 1), 1f, log: false);
+            return;
+        }
+
+        Main.AllPlayerSpeed[playerId] = baseline;
+        PlayerControl pc = playerId.GetPlayer();
+        if (pc) pc.MarkDirtySettings();
+    }
+
+    // Wave 1: passives.speedMult の復元。RetryRestoreSpeed と同型 (凍結中スキップ + 再試行) だが、
+    // 「新しい持ち主が既に速度を管理しているなら譲る」判定にパッシブ側のフラグも含める。
+    private static void RestorePassiveSpeed(byte playerId, float baseline, int retriesLeft)
+    {
+        if (GameStates.IsEnded) return;
+        if (Runtime.TryGetValue(playerId, out EkrHolderState newState) && (newState.SpeedBoostActive || newState.PassiveSpeedApplied)) return;
+
+        if (Mathf.Approximately(Main.AllPlayerSpeed.GetValueOrDefault(playerId), Main.MinSpeed))
+        {
+            if (retriesLeft <= 0) return; // 諦める (相手の凍結解除に委ねる)
+            LateTask.New(() => RestorePassiveSpeed(playerId, baseline, retriesLeft - 1), 1f, log: false);
             return;
         }
 
@@ -865,6 +924,20 @@ public static class EkrManager
         {
             state.Fibers.Clear();
 
+            // Wave 1 (spec §1.1「解除 = 剥奪・死亡・ゲーム終了で必ず復元」)。役職を保持したまま死亡する
+            // 経路 (Teardown を通らない) の復元点。opcode 側ブースト → パッシブの順で戻す。
+            if (state.SpeedBoostActive)
+            {
+                state.SpeedBoostActive = false;
+                RetryRestoreSpeed(target.PlayerId, state.SpeedBaseline, retriesLeft: 30);
+            }
+
+            if (state.PassiveSpeedApplied)
+            {
+                state.PassiveSpeedApplied = false;
+                RestorePassiveSpeed(target.PlayerId, state.PassiveSpeedBaseline, retriesLeft: 30);
+            }
+
             // v1.2 (spec §3): 「ホルダー死亡/役職剥奪で両側消滅」。役職剥奪側は TeardownRuntime が担当、
             // こちらはホルダーが役職を保持したまま死亡する経路 (Teardown を経ない) の唯一の消滅点。
             // fiber キャンセルとは無関係 (on_death 起点 fiber の実行可否は EkrActionSink 側の判定であり、
@@ -883,6 +956,145 @@ public static class EkrManager
         }
 
         FireEvent(slot, target.PlayerId, "on_death", killer ? killer.PlayerId : byte.MaxValue);
+    }
+
+    // ── Wave 1: on_attacked (docs/ekr-logic-spec.md §2) ────────────────────────────────────────
+    // PlayerControlPatch.cs の RpcCheckAndMurder 一点関門 (Role.OnCheckMurderAsTarget) から
+    // EkmTemplateRole 経由で呼ばれる。戻り値 false = この攻撃は不成立。
+    //
+    // 順序 (spec §1.1,§2):
+    //   ① passives.shield の残数消費判定 (発火より前)
+    //   ② on_attacked fiber を同期プロローグで即時実行 (最初の wait か終端まで同期・命令数予算は通常適用)
+    //   ③ shield 消費 OR cancel_attack なら不成立
+    // 攻撃の成立/不成立に関わらず ② は必ず走る (「防いだ上で通知/反撃」を組めるようにするため)。
+
+    // 同期プロローグ中に kill(target:"self") 等でこの関所へ再入するのを防ぐ (無限再帰ガード)。
+    private static readonly HashSet<byte> AttackedInProgress = [];
+
+    // 打診デデュープ (spec §2 on_attacked に明文化済み・2026-08-11 監査裁定)。
+    // `RpcCheckAndMurder(target, check: true)` の「当たるか試すだけ」の打診がこの関所を通るが、
+    // その打診元には **毎 FixedUpdate 走る周期経路** が実在する (Torpedo のダッシュ命中判定
+    // Torpedo.cs:176 / Sharpshooter の構え中 Sharpshooter.cs:127 — どちらも OnFixedUpdate)。
+    // 素直に「1打診 = 1発火」にすると、EKR ホルダーが Torpedo の爆風半径に立っているだけで
+    // 毎フレーム on_attacked が発火し、まもり9回が 0.2 秒で溶け、fiber 枠 (≤8) を独占して
+    // その保持者の他イベント (on_pet/on_second) が全部無音でドロップする。
+    // → 同一 (被害者, 攻撃者) の判定を 1 秒キャッシュし、窓の中は「同じ1回の攻撃」として
+    //    前回の結論をそのまま返す (打診と実キルで結論が食い違わないよう結果ごと覚える)。
+    private const float AttackedDedupeSeconds = 1f;
+    private static readonly Dictionary<(byte Victim, byte Killer), (float Time, bool Allow)> RecentAttackDecisions = [];
+
+    public static bool FireAttacked(CustomRoles slot, PlayerControl target, PlayerControl killer)
+    {
+        if (!target || !killer) return true;
+        if (!Runtime.TryGetValue(target.PlayerId, out EkrHolderState state)) return true;
+        if (!target.IsAlive()) return true; // spec §2: on_attacked は生存中のみ
+        if (!AttackedInProgress.Add(target.PlayerId)) return true; // 再入 — 素通し (二重消費させない)
+
+        try
+        {
+            float nowTs = Time.realtimeSinceStartup;
+            var dedupeKey = (target.PlayerId, killer.PlayerId);
+
+            if (RecentAttackDecisions.TryGetValue(dedupeKey, out (float Time, bool Allow) recent) && nowTs - recent.Time < AttackedDedupeSeconds)
+                return recent.Allow;
+
+            bool blocked = false;
+
+            // ① まもり (spec §1.1): 消費判定は発火より前。自傷 (kill target:"self" 等) は消費させない
+            //    — 既存の数え上げ式まもり役職 (CursedWolf.OnCheckMurderAsTarget) と同じ裁定。
+            if (state.ShieldRemaining > 0 && killer.PlayerId != target.PlayerId)
+            {
+                state.ShieldRemaining--;
+                blocked = true;
+                Logger.Info($"EKR shield consumed by {target.GetRealName()} ({state.ShieldRemaining} left)", "EkrManager");
+            }
+
+            // ② on_attacked (同期プロローグ)
+            bool canceled = FireAttackedPrologue(slot, target.PlayerId, killer.PlayerId, state);
+
+            // spec §2 (2026-08-11 監査裁定): プロローグ実行後にターゲットの生存を再検査する。
+            // プロローグ内の副作用 (kill(target:"self") 等) で本人が既に死んでいたら、canceled の
+            // 有無に関わらず関所は false — 死亡済みプレイヤーへ killer.Kill が走ると MurderPlayer /
+            // FireDeath が二重発火する。
+            bool aliveAfterPrologue = target.IsAlive();
+
+            bool allow = !blocked && !canceled && aliveAfterPrologue;
+            RecentAttackDecisions[dedupeKey] = (nowTs, allow);
+
+            if (allow) return true;
+
+            // ③ 不成立。関所側 (PlayerControlPatch) が「SomeSortOfProtection」通知を出すので、
+            //    ここでは CD の面倒だけ見る (既存の防御系役職と同じ作法)。
+            killer.SetKillCooldown();
+            return false;
+        }
+        finally
+        {
+            AttackedInProgress.Remove(target.PlayerId);
+        }
+    }
+
+    // 同期プロローグ本体。戻り値 = cancel_attack が実行されたか。
+    private static bool FireAttackedPrologue(CustomRoles slot, byte holderId, byte killerId, EkrHolderState state)
+    {
+        if (state.LogicDisabled) return false;
+
+        EkrDefinition def = GetDefinition(slot);
+        if (def?.ParsedLogic == null) return false;
+
+        var canceled = false;
+
+        foreach (EkrRule rule in def.ParsedLogic.Rules)
+        {
+            if (rule.When != "on_attacked") continue;
+            if (state.Fibers.Count >= EkmLogicRuntime.MaxFibersPerHolder) continue; // spec §5: 超過はドロップ
+
+            var context = new EkrActionContext
+            {
+                HolderId = holderId,
+                CtxId = killerId,
+                Slot = slot,
+                AllowCancelAttack = true // 最初の wait までの間だけ有効 (spec §2)
+            };
+
+            // spec §5 kill 連鎖ガード (Wave 1 拡張): kill opcode 起因で発火した on_attacked の中では
+            // kill は no-op (深さ1)。反射 vs 反射のピンポンはこれで構造的に終端する。
+            EkrFiber fiber = EkmLogicRuntime.Spawn(rule.Do, state.Variables, context, EkrActionSink.InOpcodeKill);
+
+            // 「最初の wait に当たるか終端に達するまで同期的に走る」= EkmLogicRuntime.Pump そのもの。
+            // per-fiber 500 命令は通常どおり効く。ただし spec §2 (2026-08-11 監査裁定) により
+            // **EKR 全体のフレーム予算 (2000/フレーム) の停止対象外** — 防御は死亡に直結する唯一の
+            // イベントで、他ホルダーの on_second 負荷でプロローグが1命令も走れず無音死 + Abort 累積
+            // (3回で logic 自動 disable) まで食らうのは「静かにドロップ」の設計意図を超える。
+            // 実行した命令はフレーム集計へは通常どおり加算される。頻度は上の打診デデュープが締める。
+            bool keep = EkmLogicRuntime.Pump(fiber, EkrActionSink.Instance, ignoreFrameBudget: true);
+
+            context.AllowCancelAttack = false; // 以後 (wait 後の継続) の cancel_attack は no-op
+            if (context.CancelAttack) canceled = true;
+
+            if (keep)
+            {
+                // プロローグ中の kill(self) 等で死亡し fiber が全キャンセルされていたら復活させない。
+                PlayerControl holderPc = holderId.GetPlayer();
+                if (holderPc && holderPc.IsAlive() && Runtime.TryGetValue(holderId, out EkrHolderState now) && ReferenceEquals(now, state) && !state.LogicDisabled)
+                    state.Fibers.Add(fiber);
+            }
+            else if (fiber.Aborted) NoteFiberAbort(slot, state);
+        }
+
+        return canceled;
+    }
+
+    // 命令数超過による打ち切りの per-holder 計数 (spec §5: 累計3回で当該ホルダーの logic 自動 disable)。
+    // Pump() のインライン処理と同じ挙動を、プロローグ経路からも使えるように切り出したもの。
+    private static void NoteFiberAbort(CustomRoles slot, EkrHolderState state)
+    {
+        state.AbortCount++;
+        if (state.AbortCount < 3 || state.LogicDisabled) return;
+
+        state.LogicDisabled = true;
+        state.Fibers.Clear();
+        PlayerControl.LocalPlayer.Notify(string.Format(Translator.GetString("EkrLogicAutoDisabled"), Translator.GetString(slot.ToString())), 10f);
     }
 
     // reporter が EKR ホルダーのときだけ発火 (spec: 自分が通報者になったとき・ctx=死体の主)。
@@ -916,6 +1128,10 @@ public static class EkrManager
 
         // v1.3 (spec §3,§5): 会議開始 (追放演出突入含む) で drag/field は即停止・解除 (持ち越しはしない)。
         StopCrowdControl();
+
+        // Wave 1: on_attacked の打診デデュープ窓は会議境界を跨いで持ち越す意味が無い (切断者の
+        // PlayerId 再利用で他人の結論を継承しないよう、PortalLastWarpTime と同じ作法で捨てる)。
+        RecentAttackDecisions.Clear();
 
         foreach (EkrHolderState state in Runtime.Values)
         {
@@ -1051,9 +1267,16 @@ public static class EkrManager
         // v1.3: crowd-control (drag/field) の 1.0 秒 tick も同じ相乗り駆動 (自己スロットリング)。
         PumpCrowdControlIfDue();
 
-        if (!Runtime.TryGetValue(pc.PlayerId, out EkrHolderState state) || state.LogicDisabled) return;
+        if (!Runtime.TryGetValue(pc.PlayerId, out EkrHolderState state)) return;
 
         EkrDefinition def = GetDefinition(slot);
+
+        // Wave 1: パッシブ層は logic の有無にも LogicDisabled にも依らず常に適用する
+        // (spec §1.1 は「logic 無しでも passives 単独で可」・logic の暴走 auto-disable は
+        // 「ブロックを止める」処置であって常時とくせいを剥奪する処置ではない)。
+        TickPassives(pc, state, def?.ParsedPassives ?? EkrPassives.Default);
+
+        if (state.LogicDisabled) return;
         if (def?.ParsedLogic == null) return;
 
         if (!state.GameStartFired && Main.IntroDestroyed)
@@ -1105,6 +1328,110 @@ public static class EkrManager
         }
     }
 
+    // ── Wave 1: パッシブ層 (docs/ekr-logic-spec.md §1.1) ────────────────────────────────────────
+    // 毎 FixedUpdate、保持者ごとに1回 Pump から呼ばれる。ここは logic の有無/停止に依存しない。
+
+    private static void TickPassives(PlayerControl pc, EkrHolderState state, EkrPassives passives)
+    {
+        bool alive = pc.IsAlive();
+
+        // 最後に生きていた座標のスナップショット (corpse=vanish が死体をマップ外へ飛ばすため —
+        // EkrLogicOpcodes.ResolveSelfPosition の死後フォールバック用)。
+        if (alive)
+        {
+            state.LastLivePosition = pc.Pos();
+            state.HasLastLivePosition = true;
+        }
+
+        if (!Main.IntroDestroyed) return;
+
+        // speedMult: AllPlayerSpeed 一発 write + MarkDirtySettings (spec §1.1)。捕捉は1回だけ (捕捉フラグ)。
+        // 捕捉時に他役職が MinSpeed で凍結中だとその凍結値を「本来の速度」として掴んでしまうため、
+        // 凍結中はゲーム既定値を baseline にする (memory: allplayerspeed-temp-boost-restore-race)。
+        if (passives.HasSpeed && !state.PassiveSpeedApplied && alive)
+        {
+            float current = Main.AllPlayerSpeed.GetValueOrDefault(pc.PlayerId, Main.RealOptionsData.GetFloat(AmongUs.GameOptions.FloatOptionNames.PlayerSpeedMod));
+
+            state.PassiveSpeedBaseline = Mathf.Approximately(current, Main.MinSpeed)
+                ? Main.RealOptionsData.GetFloat(AmongUs.GameOptions.FloatOptionNames.PlayerSpeedMod)
+                : current;
+
+            state.PassiveSpeedApplied = true;
+            Main.AllPlayerSpeed[pc.PlayerId] = state.PassiveSpeedBaseline * passives.SpeedMult;
+            pc.MarkDirtySettings();
+        }
+
+        // doom: タスク中のみ進行・会議 (追放演出含む) で一時停止・0 到達で自殺死亡 (spec §1.1)。
+        if (!passives.HasDoom || !alive) return;
+
+        if (!GameStates.IsInTask || ExileController.Instance)
+        {
+            state.LastDoomTickTime = -1f; // 一時停止 — 再開時に基準時刻を取り直す (会議ぶんは進めない)
+            return;
+        }
+
+        float now = Time.realtimeSinceStartup;
+
+        if (state.LastDoomTickTime < 0f)
+        {
+            state.LastDoomTickTime = now;
+            return;
+        }
+
+        if (now - state.LastDoomTickTime < 1f) return;
+        state.LastDoomTickTime = now;
+        state.DoomRemaining--;
+
+        if (state.DoomRemaining > 0) return;
+
+        // Suicide() 自身が IsInTask/ExileController を再チェックするので二重に安全。
+        // on_death は Utils.AfterPlayerDeathTasks → FireDeath 経由で通常どおり発火する。
+        // ⚠ Suicide() が no-op で返る局面 (Veteran 護衛中など保護役職の分岐) では DoomRemaining が
+        // ≤0 のまま毎秒ここへ来て再試行する — 意図した挙動 (いずれ保護が切れて成立する)。
+        pc.Suicide(PlayerState.DeathReason.Overtired);
+    }
+
+    // 残り秒数 (GetProgressText 等の表示側が使えるように公開しておく。0 = doom 無し)。
+    public static int GetDoomRemaining(byte playerId)
+    {
+        return Runtime.TryGetValue(playerId, out EkrHolderState state) ? state.DoomRemaining : 0;
+    }
+
+    // ── Wave 1: パッシブの派生ルックアップ (spec §1.1) ───────────────────────────────────────
+    // ⚠ 可変レジストリ (HashSet<byte> 等) を新設しない — ResetSlot は Init() 経由でゲーム中いつでも
+    // 発火しうるため、EKR 全体の可変 static を持つと v1.3 の `_cc` と同じ孤児化事故を招く
+    // (memory: init_fires_midgame_slot_reset_clobbers_global)。役職からの都度引きなら「解除 = 剥奪・
+    // 死亡・ゲーム終了で必ず復元」が構造的に無料になる。
+    internal static EkrPassives GetPassivesFor(byte playerId)
+    {
+        PlayerControl pc = playerId.GetPlayer();
+        if (!pc) return null;
+
+        CustomRoles role = pc.GetCustomRole();
+        return IsSlot(role) ? GetDefinition(role)?.ParsedPassives : null;
+    }
+
+    // ReportDeadBody の通報不可チェーン (Patches/PlayerControlPatch.cs) から呼ぶ。
+    // vanish も含む: 死体を逃がす SnapTo は sender 経由なので**リモート客にしか効かず**、ホスト自身の
+    // ローカル DeadBody は死亡地点に湧く (ExtendedPlayerControl.DoKill は MurderPlayer をローカル先行
+    // 実行する)。ホストだけが見えて通報できる死体、という非対称を潰すために通報も止める。
+    public static bool IsCorpseUnreportable(byte playerId)
+    {
+        return GetPassivesFor(playerId)?.Corpse is "noReport" or "vanish";
+    }
+
+    // ExtendedPlayerControl.Kill の Main.Invisible 分岐 (死体をマップ外へ逃がす既存経路) から呼ぶ。
+    public static bool HasVanishingCorpse(byte playerId)
+    {
+        return GetPassivesFor(playerId)?.Corpse == "vanish";
+    }
+
+    // MeetingHudPatch の票数中央 switch 2箇所から呼ぶ (既定 1)。
+    public static int GetVoteWeight(byte playerId)
+    {
+        return GetPassivesFor(playerId)?.VoteWeight ?? 1;
+    }
+
     // ── R1: EKR 全体の cross-holder レート予算 (spec §3 2026-08-09 追記) ──────────
 
     // teleport は Utils.TP の共有 SnapTo トークンバケットに乗っている。ホルダー毎の ≤1/2秒だけでは
@@ -1146,6 +1473,24 @@ public static class EkrManager
         if (_lastGlobalCnoSpawnTime >= 0f && now - _lastGlobalCnoSpawnTime < interval) return false;
 
         _lastGlobalCnoSpawnTime = now;
+        return true;
+    }
+
+    // 複数対象 notify の cross-holder 予算 (spec §5 に明文化済み・2026-08-11 実装裁定)。
+    // Wave 1 の notify は複数対象 (all/room) を受理する唯一の op。受け取り手1人につき
+    // Utils.NotifyRoles(SpecifySeer, SpecifyTarget) = RpcSetName 1本なので、満員での target:"all" は
+    // 1フレームに14本の identity 送信になる。per-(ホルダー,受け取り手) バケットは「同じ人へ連投
+    // しない」ことしか保証せず、複数ホルダーが同一フレームに撃つのを止められない
+    // (on_second のロックステップで同時発火が既定・v1.1 で cno_spawn に同じ穴があった)。
+    // EKR 全体で「複数対象 notify は 1 秒に 1 回」に締める。単数対象 (既定 self) は対象外。
+    private static float _lastGlobalNotifyBroadcastTime = -1f;
+
+    internal static bool TryConsumeGlobalNotifyBroadcastBudget()
+    {
+        float now = Time.realtimeSinceStartup;
+        if (_lastGlobalNotifyBroadcastTime >= 0f && now - _lastGlobalNotifyBroadcastTime < 1f) return false;
+
+        _lastGlobalNotifyBroadcastTime = now;
         return true;
     }
 
