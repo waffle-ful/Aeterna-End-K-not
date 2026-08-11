@@ -12,9 +12,9 @@ export default defineConfig({
             selfDestroying: true,
             registerType: "autoUpdate",
             manifest: {
-                name: "EKMap エディタ",
-                short_name: "EKMap",
-                description: "End K not カスタムマップエディタ",
+                name: "Symbolon",
+                short_name: "Symbolon",
+                description: "Among Us のマップと役職をつくるエディタ",
                 lang: "ja",
                 theme_color: "#141419",
                 background_color: "#141419",

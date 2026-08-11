@@ -1,7 +1,7 @@
 [package]
-name = "ekmap"
+name = "symbolon"
 version = "0.1.0"
-description = "EKMap — End K not カスタムマップエディタ"
+description = "Symbolon — Among Us のマップと役職をつくるエディタ"
 authors = ["End K not"]
 license = ""
 repository = ""
