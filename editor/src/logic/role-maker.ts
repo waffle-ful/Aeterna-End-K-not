@@ -30,6 +30,7 @@ import {
     LOGIC_VARIABLES_MAX,
     LOGIC_VAR_NAME_MAX,
     type LogicVariable,
+    type LogicWhen,
     PASSIVE_CORPSE_VALUES,
     PASSIVE_DOOM_SECONDS_MAX,
     PASSIVE_DOOM_SECONDS_MIN,
@@ -51,7 +52,7 @@ import {
     validateRoleLogic,
 } from "../roledef";
 import { decodeRoleCode, encodeRoleCode } from "../rolecode";
-import { compileWorkspaceToLogicInput, type SerializedWorkspace } from "./compile-role";
+import { compileWorkspaceToLogicInput, findEmptyWhenBlocks, type SerializedWorkspace } from "./compile-role";
 import { formatLintWarning, lintRoleLogic } from "./lint-role";
 
 // Blockly 本体には型としてもここでは触れない (import type は erase されるので実行時コストゼロ —
@@ -362,6 +363,15 @@ function buildDefinitionFromForm(): EkrDefinition | null {
 
     const r = validateEkrDefinition(candidate);
     if (!r.ok) {
+        // 空っぽのきっかけブロックが原因のときは index 表記ではなくきっかけ名で伝える
+        // (refreshLogicPanel の同名処理と同じ理由 — あちらは常時表示、こちらはコピー押下時)。
+        const state = currentBlocklyState();
+        const empties = state ? findEmptyWhenBlocks(state) : [];
+        if (empties.length > 0) {
+            const names = empties.map((e) => `「${blocklyApi?.WHEN_LABELS[e.when as LogicWhen] ?? e.when}」`).join("・");
+            setStatus(`${names} の中に何も入っていません (ブロックを1つ以上つなげるか、このきっかけを消してください)`, true);
+            return null;
+        }
         setStatus(r.error, true);
         return null;
     }
@@ -560,6 +570,37 @@ function refreshLogicPanel(): void {
     const state = currentBlocklyState();
     if (!state) {
         validityEl.hidden = true;
+        footer.hidden = true;
+        footer.replaceChildren();
+        return;
+    }
+
+    // 空っぽのきっかけブロックは validateRoleLogic の「rules[i].do のノード数は…(現在 0 個)」で
+    // 弾かれるが、検証は最初の1件で打ち切るため index 表記のままだと (a) どのブロックのことか
+    // 分からず (b) 他の場所にブロックを足しても文面が変わらない。ここで先回りしてきっかけ名で
+    // 伝え、該当ブロックへジャンプできるようにする。
+    const empties = findEmptyWhenBlocks(state);
+    if (empties.length > 0) {
+        const names = empties.map((e) => `「${blocklyApi?.WHEN_LABELS[e.when as LogicWhen] ?? e.when}」`).join("・");
+        validityEl.hidden = false;
+        validityEl.replaceChildren(
+            document.createTextNode(
+                `⚠ このままだとコピーできません: ${names} の中に何も入っていません (ブロックを1つ以上つなげるか、このきっかけを消してください)`,
+            ),
+        );
+        const jumpId = empties[0].id;
+        if (jumpId !== undefined && workspace) {
+            const jump = document.createElement("button");
+            jump.type = "button";
+            jump.className = "rm-validity-jump";
+            jump.textContent = "その場所を見る";
+            jump.addEventListener("click", () => {
+                if (!workspace) return;
+                workspace.centerOnBlock(jumpId);
+                workspace.getBlockById(jumpId)?.select();
+            });
+            validityEl.appendChild(jump);
+        }
         footer.hidden = true;
         footer.replaceChildren();
         return;
