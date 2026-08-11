@@ -479,4 +479,48 @@ test.describe("役職メーカー (ロジックタブの全画面フローティ
         console.log("=== page errors ===\n" + (cap.errors.join("\n") || "(なし)"));
         expect(cap.errors, "未捕捉の例外あり").toEqual([]);
     });
+    test("中身が空のきっかけブロックは、きっかけ名で警告し「その場所を見る」で選択できる", async ({ page }) => {
+        const cap = capture(page);
+
+        await page.goto("/");
+        await dismissStartScreen(page);
+        // 空のハット (ベントに入ったとき) を画面外の遠い座標に、中身のあるハットを原点付近に置いた
+        // 下書きを仕込む。ユーザー報告 (2026-08-11) と同じ「遠くに置き忘れた空ブロック」の再現。
+        await page.evaluate(() => {
+            localStorage.setItem(
+                "ekm.roleMaker",
+                JSON.stringify({
+                    name: "テスト役職",
+                    logicVariables: [],
+                    logicBlockly: {
+                        blocks: {
+                            languageVersion: 0,
+                            blocks: [
+                                { type: "ekr_when_on_pet", id: "filled", x: 40, y: 40, next: { block: { type: "ekr_do_stop", id: "stop1" } } },
+                                { type: "ekr_when_on_vent_enter", id: "empty1", x: 2400, y: 1800 },
+                            ],
+                        },
+                    },
+                })
+            );
+        });
+        await page.reload();
+        await dismissStartScreen(page);
+
+        await page.locator("#btn-role-maker").click();
+        await page.locator("#rm-tabs .rm-tab[data-rm-tab='logic']").click();
+
+        // index (rules[1]) ではなく、きっかけ名で場所を伝えること
+        const validity = page.locator("#rm-logic-validity");
+        await expect(validity).toBeVisible();
+        await expect(validity).toContainText("ベントに入ったとき");
+        await expect(validity).not.toContainText("rules[");
+
+        // 「その場所を見る」で該当ブロックが選択される (Blockly は選択中ブロックに
+        // blocklySelected を付ける)。centerOnBlock のスクロールもここで実走する。
+        await page.locator(".rm-validity-jump").click();
+        await expect(page.locator("g[data-id='empty1'].blocklySelected")).toHaveCount(1);
+
+        expect(cap.errors, "未捕捉の例外あり").toEqual([]);
+    });
 });
