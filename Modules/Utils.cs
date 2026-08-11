@@ -162,12 +162,24 @@ public static class Utils
     // SnapTo 予算のトークンバケット化 (2026-07-28): 閾値 80(None降格)/100(停止) は不変のまま、
     // カウンタが SnapToRefillSecondsPerToken 秒ごとに 1 ずつ時間回復する。従来は会議境界でしか
     // リセットされず、会議なしモード/長ラウンドで予算枯渇 famine が起きていた。
-    // 公式 anti-cheat のレート仕様は未公表 (80/100 も上流由来の自主規制) のため、
     // レートは /tpdbg refill <sec> で実験調整できる。0 以下 = 回復無効 (旧挙動)。
     // getter/setter 経由の lazy refill なので既存の ++ / += / 代入サイトは全て無改変で動く。
-    // ⚠️ 既定は 1.0 で固定 (2026-08-06 ユーザー指定)。過去に 1.5 へ差し戻した経緯があるが、
-    // 以後この既定値を勝手に戻さないこと。実験は /tpdbg refill <sec> の一時変更で行う。
-    public static float SnapToRefillSecondsPerToken = 1.0f;
+    //
+    // 🔴 既定 0.25s/token (= 持続 4/s) の根拠 — 2026-08-12 に公式鯖で実測。詳細は
+    // docs/tpburst-rate-protocol.md、計器は /tpburst。それまでの 1.0 は「公式のレート仕様は
+    // 未公表」という前提で置かれた当て推量だったが、実測でサーバー側の述語が判明した:
+    //   **公式鯖は SnapTo の「本数」を数え、≒358 本 / 約 10 秒窓で Hacking キックする (レート非依存)**
+    //   (98/s → 360 発で死亡 / 49/s → 358 発で死亡 / 30/s → 600 発 20 秒を完走・生還)。
+    // 設計式: 任意 10 秒窓の最大本数 ≒ 閾値 + 10 × 回復レート。
+    //   1.0s/token  → 110 本 = 予算の 31% (絞りすぎ。持続 1/s は実測安全値 30/s の 1/30)
+    //   0.25s/token → 140 本 = 予算の 39%  ← 現行
+    //   0.125s/token→ 180 本 = 予算の 50%
+    // ⚠️ 予算 358 は**ホストが出す全 SnapTo の共有財布** (役職 TP だけでなく RpcMakeInvisible/
+    //    Visible・FreezeForOthers・vent TP も同じ)。実測は players=2 の静かな試合なので、
+    //    大人数の地の消費ぶんの安全率としてこの 39% を意図的に残している。使い切る設計にしないこと。
+    // ⚠️ 閾値 80/100 は据え置き。バースト側は元から予算内 (100 ≪ 358) で、絞りすぎていたのは
+    //    回復レートの側だけだったため。
+    public static float SnapToRefillSecondsPerToken = 0.25f;
 
     private static int _snapToCount;
     private static float _lastSnapToRefillTime;
