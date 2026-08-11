@@ -445,6 +445,23 @@ describe("lint-role: L9 拡大 (v1.2 — cno_spawn/cno_show/portal_place も同�
         ]);
         expect(ruleIds(lintRoleLogic(l))).not.toContain("L9");
     });
+
+    // v1.3 (docs/ekr-logic-spec.md §6 2026-08-11 追記): L9 の対象 op に field を追加
+    it("on_meeting_end + field (wait 無し・直後) は L9 を警告する", () => {
+        const l = logic([{
+            when: "on_meeting_end",
+            do: [{ op: "field", at: "self", radius: "small", strength: "weak", seconds: 3 }],
+        }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L9");
+    });
+
+    it("on_meeting_end + wait 10.5 → field は警告しない (正しい作法)", () => {
+        const l = logic([{
+            when: "on_meeting_end",
+            do: [{ op: "wait", seconds: 10.5 }, { op: "field", at: "self", radius: "small", strength: "weak", seconds: 3 }],
+        }]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L9");
+    });
 });
 
 describe("lint-role: L11 (on_second 配下の teleport_other / portal_place — L3 の兄弟)", () => {
@@ -477,6 +494,39 @@ describe("lint-role: L11 (on_second 配下の teleport_other / portal_place — 
     });
 });
 
+// v1.3 (docs/ekr-logic-spec.md §6 2026-08-11 追記): L13 = L3/L11 の兄弟 (pull/drag/field)
+describe("lint-role: L13 (on_second 配下の pull / drag / field)", () => {
+    it("on_second + pull は L13 を警告する", () => {
+        const l = logic([{ when: "on_second", do: [{ op: "pull" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L13");
+    });
+
+    it("on_second + drag は L13 を警告する", () => {
+        const l = logic([{ when: "on_second", do: [{ op: "drag", seconds: 3 }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L13");
+    });
+
+    it("on_second + field は L13 を警告する", () => {
+        const l = logic([{ when: "on_second", do: [{ op: "field", at: "self", radius: "small", strength: "weak", seconds: 3 }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L13");
+    });
+
+    it("on_second + pull (if の中にネスト) も検知する", () => {
+        const nested: LogicNode = { op: "if", cond: { e: "lit", v: 1 }, then: [{ op: "pull" }] };
+        const l = logic([{ when: "on_second", do: [nested] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L13");
+    });
+
+    it("on_second 以外の when では L13 を警告しない", () => {
+        const l = logic([
+            { when: "on_pet", do: [{ op: "pull" }] },
+            { when: "on_kill", do: [{ op: "drag", seconds: 5 }] },
+            { when: "on_death", do: [{ op: "field", at: "self", radius: "large", strength: "strong", seconds: 15 }] },
+        ]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L13");
+    });
+});
+
 describe("lint-role: L12 (on_cno_touch 配下の cno_spawn/dummy_spawn/cno_show/portal_place)", () => {
     it("on_cno_touch + cno_spawn は L12 を警告する", () => {
         const l = logic([{ when: "on_cno_touch", slot: 1, do: [{ op: "cno_spawn", slot: 2, text: "!", size: 1, at: "self" }] }]);
@@ -498,11 +548,19 @@ describe("lint-role: L12 (on_cno_touch 配下の cno_spawn/dummy_spawn/cno_show/
         expect(ruleIds(lintRoleLogic(l))).toContain("L12");
     });
 
-    it("on_cno_touch + notify/kill/teleport_other は L12 を警告しない (対象外の op)", () => {
+    // v1.3 (docs/ekr-logic-spec.md §6 2026-08-11 追記): L12 の対象 op に field を追加
+    it("on_cno_touch + field は L12 を警告する", () => {
+        const l = logic([{ when: "on_cno_touch", slot: 1, do: [{ op: "field", at: "self", radius: "small", strength: "weak", seconds: 3 }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L12");
+    });
+
+    it("on_cno_touch + notify/kill/teleport_other/pull/drag は L12 を警告しない (対象外の op)", () => {
         const l = logic([
             { when: "on_cno_touch", slot: 1, do: [{ op: "notify", text: "やあ", seconds: 3 }] },
             { when: "on_cno_touch", slot: 2, do: [{ op: "kill", target: "ctx" }] },
             { when: "on_cno_touch", slot: 3, do: [{ op: "teleport_other", target: "ctx", to: "self" }] },
+            { when: "on_cno_touch", slot: 1, do: [{ op: "pull" }] },
+            { when: "on_cno_touch", slot: 2, do: [{ op: "drag", seconds: 3 }] },
         ]);
         expect(ruleIds(lintRoleLogic(l))).not.toContain("L12");
     });
@@ -602,6 +660,16 @@ describe("lint-role: 問題のないロジックは警告0件", () => {
 
     it("on_game_start でポータルを1回だけ置くのは警告0件", () => {
         const l = logic([{ when: "on_game_start", do: [{ op: "portal_place", which: "a" }, { op: "portal_place", which: "b" }] }]);
+        expect(lintRoleLogic(l)).toEqual([]);
+    });
+
+    // v1.3 (docs/ekr-logic-spec.md §6 2026-08-11 追記): pull/drag/field の正しい作法は警告0件
+    it("on_kill でひとつだけ pull/drag/field を使うのは警告0件", () => {
+        const l = logic([
+            { when: "on_kill", do: [{ op: "pull" }] },
+            { when: "on_kill", do: [{ op: "drag", seconds: 5 }] },
+            { when: "on_kill", do: [{ op: "field", at: "self", radius: "medium", strength: "medium", seconds: 8 }] },
+        ]);
         expect(lintRoleLogic(l)).toEqual([]);
     });
 });

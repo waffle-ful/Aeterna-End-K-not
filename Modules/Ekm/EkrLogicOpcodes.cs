@@ -56,6 +56,11 @@ internal sealed class EkrActionSink : IEkrActionSink
             case "marker_save": MarkerSave(node, ctx); break; // v1.2
             case "teleport_other": TeleportOther(node, ctx); break; // v1.2
             case "portal_place": PortalPlace(node, ctx); break; // v1.2
+            // v1.3: pull は teleport_other の to:"self" 経路と完全共有 (spec §3「新バケットを作らない」)。
+            // parser (EkmLogicRuntime.TryParseNode) が node.Target を "self" に固定しているのでそのまま渡せる。
+            case "pull": TeleportOther(node, ctx); break;
+            case "drag": Drag(node, ctx); break; // v1.3
+            case "field": Field(node, ctx); break; // v1.3
         }
     }
 
@@ -619,5 +624,83 @@ internal sealed class EkrActionSink : IEkrActionSink
         EkrManager.PrimeTouchSensor(state, idx, pos.Value, isPortal: true);
 
         state.LastPortalPlaceTime = now;
+    }
+
+    // ── drag (v1.3 マクロ spec §3,§5) ────────────────────────────────────────────────────────
+    // 実際の持続 tick は EkrManager の crowd-control エンジン (fiber 外・EKR 全体同時1本) が管理する。
+    // ここでは開始条件 (ctx 生存・死者/ctx 無しは no-op) を確認して起動を委譲するだけ — 発火1回=1命令で
+    // 即継続する (spec §3「fiber は発火1回=1命令で即継続」)。
+
+    private static void Drag(EkrNode node, EkrActionContext ctx)
+    {
+        PlayerControl holderPc = ctx.HolderId.GetPlayer();
+        if (!holderPc || !holderPc.IsAlive()) return;
+
+        if (ctx.CtxId == byte.MaxValue) return; // ctx 無しは no-op (spec §3)
+        PlayerControl targetPc = ctx.CtxId.GetPlayer();
+        if (!targetPc || !targetPc.IsAlive()) return;
+
+        EkrManager.TryStartDrag(ctx.HolderId, ctx.CtxId, node.Seconds); // 稼働中なら静かにドロップ (spec §5)
+    }
+
+    // ── field (v1.3 マクロ spec §3,§5) ───────────────────────────────────────────────────────
+    // CNO 生成系の必須防御3点 (TryConsumeGlobalCnoSpawnBudget 課金・Execute 共通関所の会議/追放中 no-op・
+    // pending は slot 保持のまま回収) を cno_spawn/portal_place と同じ順序で適用したうえで
+    // EkrManager.TryStartField に委譲する。持続 tick 自体はエンジン側 (EkrManager) が管理する。
+
+    private static void Field(EkrNode node, EkrActionContext ctx)
+    {
+        EkrHolderState state = EkrManager.GetHolderState(ctx.HolderId);
+        if (state == null) return;
+
+        float now = Time.realtimeSinceStartup;
+        if (state.LastFieldPlaceTime >= 0f && now - state.LastFieldPlaceTime < 2f) return;
+
+        // spec §5: 生成系5兄弟目 — 会議明けから10秒間はドロップ。
+        if (EkrManager.LastMeetingEndTime >= 0f && now - EkrManager.LastMeetingEndTime < 10f) return;
+
+        // 稼働中 (drag/field 同枠) なら、CNO 生成コストを払う前に諦める (spec §5「稼働中の新規起動は
+        // 静かにドロップ」)。TryStartField 側にも同じガードがあるが、ここで先に弾くことで
+        // 予算だけ無駄撃ちする事故を避ける (cno_spawn の cross-holder 予算消費と同じ順序原則)。
+        if (EkrManager.IsCrowdControlActive) return;
+
+        // 共有 SnapTo 残量が乏しい局面も同様に、CNO を実体化する前に諦める (TryStartField 側と同じ判定)。
+        if (!EkrManager.SnapToBudgetAllowsCrowdControl()) return;
+
+        Vector2? pos = node.Target switch
+        {
+            "self" => ResolveSelfPosition(ctx),
+            "ctx" => ResolveCtxPosition(ctx),
+            "marker1" => ResolveMarkerPosition(ctx, 1),
+            "marker2" => ResolveMarkerPosition(ctx, 2),
+            "marker3" => ResolveMarkerPosition(ctx, 3),
+            "marker4" => ResolveMarkerPosition(ctx, 4),
+            _ => null
+        };
+
+        if (pos == null) return; // no-op (spec §3: ctx 無し/未保存マーカーは予算不消費)
+
+        if (!EkrManager.CanOccupyCnoSlot()) return; // 全体 ≤10体 (spec §5)
+
+        EkrDefinition def = EkrManager.GetDefinition(ctx.Slot);
+        if (def == null) return;
+
+        // cross-holder 予算 (spec §5) — 「本当に spawn する」直前で消費 (cno_spawn と同じ順序)。
+        if (!EkrManager.TryConsumeGlobalCnoSpawnBudget()) return;
+
+        float radius = node.RadiusTier switch { "small" => 3f, "large" => 7f, _ => 5f };
+        float pullDistance = node.StrengthTier switch { "weak" => 1.75f, "strong" => 3.5f, _ => 2.5f };
+
+        var fieldCno = new EkrFieldCno(pos.Value, def.Color);
+
+        if (!EkrManager.TryStartField(ctx.HolderId, fieldCno, radius, pullDistance, node.Seconds))
+        {
+            // 稼働中への競合 (単一スレッド実行では通常到達しない防御的経路) — 孤児コルーチン防止裁定に
+            // 従って回収する (spec §5: 実体化前は遅延 Despawn・実体化済みなら即 Despawn)。
+            EkrManager.RetryDespawnOrphanFieldCno(fieldCno);
+            return;
+        }
+
+        state.LastFieldPlaceTime = now;
     }
 }

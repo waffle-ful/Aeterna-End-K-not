@@ -273,6 +273,29 @@ describe("compile-role: on_cno_touch / marker_save / teleport_other / portal_pla
     });
 });
 
+// v1.3 (docs/ekr-logic-spec.md §3 2026-08-11 追記) — ひっぱる・ひきずる・フィールド
+describe("compile-role: pull/drag/field ブロックのフィールド分担 (v1.3)", () => {
+    it("pull は引数を持たない", () => {
+        const blocks = [{ type: "ekr_when_on_pet", next: { block: { type: "ekr_do_pull" } } }];
+        expect(compileTopBlocksToRules(blocks)).toEqual([{ when: "on_pet", do: [{ op: "pull" }] }]);
+    });
+
+    it("drag は seconds を持つ (数値化込み)", () => {
+        const blocks = [{ type: "ekr_when_on_pet", next: { block: { type: "ekr_do_drag", fields: { SECONDS: 4 } } } }];
+        expect(compileTopBlocksToRules(blocks)).toEqual([{ when: "on_pet", do: [{ op: "drag", seconds: 4 }] }]);
+    });
+
+    it("field は at/radius/strength/seconds を持つ", () => {
+        const blocks = [{
+            type: "ekr_when_on_pet",
+            next: { block: { type: "ekr_do_field", fields: { AT: "marker2", RADIUS: "medium", STRENGTH: "strong", SECONDS: 8 } } },
+        }];
+        expect(compileTopBlocksToRules(blocks)).toEqual([
+            { when: "on_pet", do: [{ op: "field", at: "marker2", radius: "medium", strength: "strong", seconds: 8 }] },
+        ]);
+    });
+});
+
 describe("compile-role: hasNoRules / compileWorkspaceToLogicInput (R0 互換の判定)", () => {
     it("イベントハットが無いワークスペースは hasNoRules=true・compileWorkspaceToLogicInput は null", () => {
         expect(hasNoRules(ws([]))).toBe(true);
@@ -400,6 +423,41 @@ describe("compile-role → roledef.validateRoleLogic: 統合 (実際に使える
         if (r.ok) {
             expect(r.logic.rules[0]).toMatchObject({ when: "on_cno_touch", slot: 1 });
             expect(r.logic.rules[0].do[1]).toEqual({ op: "teleport_other", target: "ctx", to: "marker1" });
+        }
+    });
+
+    // v1.3 (docs/ekr-logic-spec.md §3 2026-08-11 追記)
+    it("on_kill で相手をひきよせ、つかんでひきずり、フィールドを出す複合ロジックが最後まで通る", () => {
+        const w = ws([
+            {
+                type: "ekr_when_on_kill",
+                next: {
+                    block: {
+                        type: "ekr_do_pull",
+                        next: {
+                            block: {
+                                type: "ekr_do_drag",
+                                fields: { SECONDS: 5 },
+                                next: {
+                                    block: {
+                                        type: "ekr_do_field",
+                                        fields: { AT: "self", RADIUS: "large", STRENGTH: "strong", SECONDS: 10 },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        ]);
+        const compiled = compileWorkspaceToLogicInput(w, []);
+        expect(compiled).not.toBeNull();
+        const r = validateRoleLogic(compiled);
+        expect(r.ok, r.ok ? "" : (r as { error: string }).error).toBe(true);
+        if (r.ok) {
+            expect(r.logic.rules[0].do[0]).toEqual({ op: "pull" });
+            expect(r.logic.rules[0].do[1]).toEqual({ op: "drag", seconds: 5 });
+            expect(r.logic.rules[0].do[2]).toEqual({ op: "field", at: "self", radius: "large", strength: "strong", seconds: 10 });
         }
     });
 });
