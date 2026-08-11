@@ -261,6 +261,33 @@ export function compileTopBlocksToRules(topBlocks: SerializedBlock[]): unknown[]
     return rules;
 }
 
+/** 中身が空っぽのイベントハット (下に1つもブロックが繋がっていないもの)。 */
+export interface EmptyWhenBlock {
+    /** Blockly のブロック id (ワークスペース上で該当ブロックへジャンプするために使う) */
+    id?: string;
+    /** spec §2 の when 値 (`ekr_when_` を除いた部分) */
+    when: string;
+}
+
+/**
+ * 「置いただけで中身が空っぽのきっかけブロック」を全て列挙する。
+ *
+ * 空のハットは compileTopBlocksToRules が `{ when, do: [] }` として素直に積むため、
+ * validateRoleLogic が `rules[i].do のノード数は 1〜64 個…(現在 0 個)` で reject する。検証は
+ * 最初の1件で打ち切るので、この状態のまま他の場所へブロックを足してもエラー文が1文字も
+ * 変わらず「ノード数がカウントされない」ように見えてしまう (2026-08-11 のユーザー報告)。
+ * 呼び出し元 (role-maker.ts) はこれを使って、index ではなくきっかけ名で場所を伝える。
+ */
+export function findEmptyWhenBlocks(serialized: SerializedWorkspace): EmptyWhenBlock[] {
+    const out: EmptyWhenBlock[] = [];
+    for (const b of serialized.blocks?.blocks ?? []) {
+        if (b.type.startsWith(WHEN_BLOCK_PREFIX) && !b.next?.block) {
+            out.push({ id: b.id, when: b.type.slice(WHEN_BLOCK_PREFIX.length) });
+        }
+    }
+    return out;
+}
+
 /** ワークスペースに rule が1つも無い (イベントハットが無い) かどうか。R0 互換出力判定に使う。 */
 export function hasNoRules(serialized: SerializedWorkspace): boolean {
     const blocks = serialized.blocks?.blocks ?? [];

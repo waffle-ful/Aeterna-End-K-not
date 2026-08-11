@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import {
     compileTopBlocksToRules,
     compileWorkspaceToLogicInput,
+    findEmptyWhenBlocks,
     hasNoRules,
     type SerializedBlock,
     type SerializedWorkspace,
@@ -700,5 +701,39 @@ describe("compile-role: Wave 1 ブロック (on_attacked / cancel_attack / remem
         const w = ws([{ type: "ekr_when_on_pet", next: { block: { type: "ekr_do_cancel_attack" } } }]);
         const r = validateRoleLogic(compileWorkspaceToLogicInput(w, []));
         expect(r.ok).toBe(false);
+    });
+});
+
+describe("compile-role: 空っぽのきっかけブロック検出", () => {
+    it("下に何も繋がっていないハットだけを id 付きで拾う", () => {
+        const w = ws([
+            { type: "ekr_when_on_pet", id: "A", next: { block: { type: "ekr_do_stop" } } },
+            { type: "ekr_when_on_vent_enter", id: "B" },
+            { type: "ekr_do_stop", id: "C" }, // 孤立した非ハットは対象外
+            { type: "ekr_when_on_second", id: "D" },
+        ]);
+        expect(findEmptyWhenBlocks(w)).toEqual([
+            { id: "B", when: "on_vent_enter" },
+            { id: "D", when: "on_second" },
+        ]);
+    });
+
+    it("空のハットは validateRoleLogic では index 表記でしか場所が分からない (この検出が必要な理由)", () => {
+        const w = ws([
+            { type: "ekr_when_on_pet", next: { block: { type: "ekr_do_stop" } } },
+            { type: "ekr_when_on_vent_enter" },
+        ]);
+        const r = validateRoleLogic(compileWorkspaceToLogicInput(w, []));
+        expect(r.ok).toBe(false);
+        expect(findEmptyWhenBlocks(w).map((e) => e.when)).toEqual(["on_vent_enter"]);
+
+        // 空のハットを取り除いた同じワークスペースは通る (= 空ハットだけが原因であることの片側検証)
+        const fixed = ws([{ type: "ekr_when_on_pet", next: { block: { type: "ekr_do_stop" } } }]);
+        expect(validateRoleLogic(compileWorkspaceToLogicInput(fixed, [])).ok).toBe(true);
+    });
+
+    it("全てのハットに中身があれば空配列", () => {
+        const w = ws([{ type: "ekr_when_on_pet", next: { block: { type: "ekr_do_stop" } } }]);
+        expect(findEmptyWhenBlocks(w)).toEqual([]);
     });
 });

@@ -46,7 +46,7 @@ const HUE_MEETING = 260; // とうひょう = 青紫
 
 // on_cno_touch は動的な SLOT ドロップダウンを持つため WHEN_LABELS/WHEN_TOOLTIPS には残すが、
 // jsonBlockDefs 側では他のイベントと分けて個別のブロック定義を書く (下記参照)。
-const WHEN_LABELS: Record<LogicWhen, string> = {
+export const WHEN_LABELS: Record<LogicWhen, string> = {
     on_game_start: "ゲームが始まったとき",
     // Wave 1 (spec §2 2026-08-11): 発動トリガ統合により「ペット」ではなく汎用の発動ボタンを指す
     // ラベルへ変更 (AST の id `on_pet` は不変 — 表示だけの変更)。

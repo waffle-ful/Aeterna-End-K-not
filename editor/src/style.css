@@ -2250,6 +2250,23 @@ dialog#dlg-role-maker[open] {
     color: var(--danger);
 }
 
+/* 空っぽのきっかけブロックへジャンプするボタン (検証エラー文の末尾にぶら下がる)。
+   エラー文と同じ行に収めたいので inline 扱いにする。 */
+.rm-validity-jump {
+    margin-left: var(--space-sm);
+    padding: 2px 8px;
+    border: 1px solid var(--danger);
+    border-radius: 3px;
+    background: transparent;
+    color: var(--danger);
+    font: inherit;
+    cursor: pointer;
+}
+
+.rm-validity-jump:hover {
+    background: var(--bg-hover);
+}
+
 .rm-lint-footer {
     /* 警告が何本出てもワークスペースを潰さないよう頭打ち + 自前スクロール */
     flex: 0 0 auto;
