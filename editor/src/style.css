@@ -2130,6 +2130,25 @@ dialog#dlg-role-maker[open] {
     color: var(--text-muted);
 }
 
+/* とくせいチップ (可変個数・renderPreview が中身を作り直す)。能力チップと同じ縦並びに見せる */
+.rm-preview-passive-chips {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+}
+
+.rm-preview-passive-chips:empty {
+    display: none;
+}
+
+/* 「とくせい」フォームセクション: 基本情報タブの中で1かたまりに見えるよう軽く囲う */
+.rm-passives {
+    margin-top: var(--space-md);
+    padding: var(--space-sm);
+    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
+    border-radius: var(--radius-md);
+}
+
 .rm-preview-logic-summary {
     margin-top: var(--space-sm);
 }
@@ -2275,7 +2294,9 @@ dialog#dlg-role-maker[open] {
 /* dialog label { display: flex } は author 指定なので UA 既定の [hidden]{display:none} には
    勝ってしまう (author 通常規則は常に UA 通常規則に勝つ — 詳細度の問題ではない)。
    .tools[hidden] 等、このファイルの他の hidden トグルと同じ理由で明示オーバーライドが必要。 */
-#rm-kill-cd-row[hidden] {
+#rm-kill-cd-row[hidden],
+#rm-p-shield-row[hidden],
+#rm-p-doom-row[hidden] {
     display: none;
 }
 

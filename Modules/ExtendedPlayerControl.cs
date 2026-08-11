@@ -2191,7 +2191,9 @@ internal static class ExtendedPlayerControl
                 var sender = CustomRpcSender.Create("RpcMurderPlayer", SendOption.Reliable);
                 sender.StartMessage();
 
-                if (Main.Invisible.Contains(target.PlayerId))
+                // EKR passives.corpse="vanish" (docs/ekr-logic-spec.md §1.1) は既存の「死体をマップ外へ
+                // 逃がす」経路にそのまま相乗りする (死体は生成位置ごと (50,50) へ飛ぶ = 実質即消滅)。
+                if (Main.Invisible.Contains(target.PlayerId) || EndKnot.Modules.Ekm.EkrManager.HasVanishingCorpse(target.PlayerId))
                 {
                     sender.StartRpc(target.NetTransform.NetId, RpcCalls.SnapTo)
                         .WriteVector2(new Vector2(50f, 50f))

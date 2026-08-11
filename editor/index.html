@@ -335,6 +335,40 @@
 
           <label>視界の広さ (倍率) <input id="rm-vision" type="number" min="0.25" max="5" step="0.05" value="1" /></label>
 
+          <!-- とくせい (パッシブ層): ブロックを置かなくてもずっと効く力。ブロックのワークスペースには
+               置かない設計 (契約: docs/ekr-logic-spec.md §1.1) — 固定キーのフォームだけが入口。
+               既定値 (バニラと同じ) のままの項目はコードに書き出さない。 -->
+          <div id="rm-passives" class="rm-passives">
+            <h4 class="rm-subheading">とくせい (ずっとつづく力)</h4>
+
+            <label>いつものはやさ (倍率) <input id="rm-p-speed" type="number" min="0.5" max="3" step="0.1" value="1" /></label>
+
+            <label>キルできるきょり
+              <select id="rm-p-killdist">
+                <option value="">かえない (そのまま)</option>
+                <option value="short">みじかい</option>
+                <option value="medium">ふつう</option>
+                <option value="long">ながい</option>
+              </select>
+            </label>
+
+            <label class="rm-flag-row"><input type="checkbox" id="rm-p-shield" /> まもり (さいしょの何回かをふせぐ)</label>
+            <label id="rm-p-shield-row" hidden>ふせぐ回数 <input id="rm-p-shield-count" type="number" min="1" max="9" step="1" value="1" /></label>
+
+            <label>じぶんの死体のあつかい
+              <select id="rm-p-corpse">
+                <option value="normal">ふつう</option>
+                <option value="noReport">通報できない</option>
+                <option value="vanish">すぐ消える</option>
+              </select>
+            </label>
+
+            <label>票のちから (0 = 票なし) <input id="rm-p-vote" type="number" min="0" max="3" step="1" value="1" /></label>
+
+            <label class="rm-flag-row"><input type="checkbox" id="rm-p-doom" /> よわさ (時間がくると死ぬ)</label>
+            <label id="rm-p-doom-row" hidden>たおれるまでの秒数 <input id="rm-p-doom-seconds" type="number" min="30" max="600" step="1" value="60" /></label>
+          </div>
+
           <p class="note rm-team-note">勝利条件: 通常のクルーメイト勝利 (固定)</p>
         </div>
 
@@ -372,6 +406,9 @@
             <p id="rm-preview-ability-kill" class="rm-preview-chip" hidden></p>
             <p id="rm-preview-ability-vent" class="rm-preview-chip" hidden>⬇ ベントを使える</p>
             <p id="rm-preview-ability-vision" class="rm-preview-chip" hidden></p>
+            <!-- とくせいのチップは項目数が可変なので、role-maker.ts の renderPreview() が
+                 このコンテナの中身を毎回作り直す (静的な骨組みはコンテナだけ)。 -->
+            <div id="rm-preview-passive-chips" class="rm-preview-passive-chips"></div>
             <p id="rm-preview-ability-none" class="rm-preview-chip rm-preview-chip-none">とくべつな能力はありません</p>
           </div>
 

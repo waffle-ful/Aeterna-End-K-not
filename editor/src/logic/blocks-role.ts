@@ -43,7 +43,9 @@ const HUE_ULTIMATE = 150; // ひっさつわざ = 緑
 // jsonBlockDefs 側では他のイベントと分けて個別のブロック定義を書く (下記参照)。
 const WHEN_LABELS: Record<LogicWhen, string> = {
     on_game_start: "ゲームが始まったとき",
-    on_pet: "ボタンをおしたとき",
+    // Wave 1 (spec §2 2026-08-11): 発動トリガ統合により「ペット」ではなく汎用の発動ボタンを指す
+    // ラベルへ変更 (AST の id `on_pet` は不変 — 表示だけの変更)。
+    on_pet: "とくいわざボタンをおしたとき",
     on_kill: "キルしたとき",
     on_death: "じぶんが死んだとき",
     on_meeting_start: "会議が始まったとき",
@@ -53,11 +55,12 @@ const WHEN_LABELS: Record<LogicWhen, string> = {
     on_report: "死体を通報したとき",
     on_second: "毎秒くりかえす",
     on_cno_touch: "オブジェクトにだれかが触れたとき",
+    on_attacked: "こうげきされたとき",
 };
 
 const WHEN_TOOLTIPS: Record<LogicWhen, string> = {
     on_game_start: "タスクフェーズが始まったときに1回だけ実行します。「秒待つ」を挟んだ続きは会議が始まると取り消されるので、開始すぐに会議になる設定だと動かないことがあります。",
-    on_pet: "ペット能力 (ボタン) を発動したときに実行します。",
+    on_pet: "とくいわざのボタン (能力ボタン) を発動したときに実行します。",
     on_kill: "自分のキルが成立した直後に実行します。",
     on_death: "自分が死亡したときに実行します (追放されたときや会議で亡くなったときも含みます。切断は含みません)。",
     on_meeting_start: "会議画面が開いたときに実行します。",
@@ -67,7 +70,38 @@ const WHEN_TOOLTIPS: Record<LogicWhen, string> = {
     on_report: "自分が死体を通報したときに実行します。",
     on_second: "タスク中、自分が生きている間、毎秒くりかえし実行します (処理が重いことはしないでね)。",
     on_cno_touch: "自分が出したオブジェクト(スロットで指定)に、生きているプレイヤーが触れたときに実行します。触れた人が「相手」になります。一度触れると、その人が離れるまで(または離れてから触れ直すまで)は再発火しません。",
+    // Wave 1 (spec §2 2026-08-11)。同期プロローグ (最初の「秒待つ」までしか攻撃を止められない)
+    // をユーザーの言葉で言い切る一文にする — リンタ L17 の文言と同じ趣旨。
+    on_attacked: "このときの「あいて」= 攻撃してきた人。ふせぐのは一番はじめに置こう",
 };
+
+// ---------------------------------------------------------------------------
+// 統一セレクタ語彙 (spec §3 — UI ラベルは表の日本語をそのまま使う)
+// ---------------------------------------------------------------------------
+// 単数セレクタ: kill / teleport_other / remember など「1人に効く」op はこれだけを出す
+// (複数形を出さないのがブロック側の型規律 — 検証側も reject する)。
+const TARGET_SINGLE_OPTIONS: [string, string][] = [
+    ["じぶん", "self"],
+    ["あいて", "ctx"],
+    ["おぼえた人1", "saved1"],
+    ["おぼえた人2", "saved2"],
+    ["いちばん近くの人", "nearest"],
+    ["だれか (ランダム)", "random"],
+];
+// teleport_other は「相手を飛ばす」op なので じぶん を出さない (spec §3 のアクション表どおり)。
+const TARGET_OTHER_OPTIONS: [string, string][] = TARGET_SINGLE_OPTIONS.filter(([, v]) => v !== "self");
+// 複数セレクタを出せるのは notify だけ (Wave 1 のホワイトリスト)。
+const TARGET_NOTIFY_OPTIONS: [string, string][] = [
+    ...TARGET_SINGLE_OPTIONS,
+    ["みんな", "all"],
+    ["おなじ部屋のみんな", "room"],
+];
+// 空間セレクタ「どこ」に追加された cno1..3 (spec §3)。
+const CNO_PLACE_OPTIONS: [string, string][] = [
+    ["じぶんのオブジェクト1のところ", "cno1"],
+    ["じぶんのオブジェクト2のところ", "cno2"],
+    ["じぶんのオブジェクト3のところ", "cno3"],
+];
 
 // ---------------------------------------------------------------------------
 // 変数ドロップダウン (Blockly 標準の変数機構は使わず、role-maker.ts が管理する
@@ -158,11 +192,22 @@ function jsonBlockDefs(): unknown[] {
         {
             type: "ekr_do_kill",
             message0: "%1 をキルする",
-            args0: [{ type: "field_dropdown", name: "TARGET", options: [["自分", "self"], ["相手", "ctx"]] }],
+            // Wave 1 (spec §3): 単数セレクタ全種を受理 (複数形は出さない = 型規律)。
+            args0: [{ type: "field_dropdown", name: "TARGET", options: TARGET_SINGLE_OPTIONS }],
             previousStatement: null,
             nextStatement: null,
             colour: HUE_CONTROL,
-            tooltip: "自分、または相手 (このできごとに相手がいるとき) をキルします。",
+            tooltip: "えらんだ人をキルします。「あいて」はこのできごとの相手 (いなければ何も起きません)、「おぼえた人」は「この人をおぼえる」で保存した人です (死んだり切断したりすると忘れます)。",
+        },
+        // Wave 1 (spec §3 2026-08-11) — こうげきをふせぐ。「こうげきされたとき」の中でしか使えない
+        // (他のイベントに入れるとコードを書き出せない = 検証エラーになる)。
+        {
+            type: "ekr_do_cancel_attack",
+            message0: "こうげきをふせぐ",
+            previousStatement: null,
+            nextStatement: null,
+            colour: HUE_CONTROL,
+            tooltip: "いま受けているこうげきを取り消します。「こうげきされたとき」の中だけで使えて、しかも「秒待つ」より前に置かないと間に合いません (ふせぐのは一番はじめに)。",
         },
         {
             type: "ekr_do_set_kill_cooldown",
@@ -182,12 +227,14 @@ function jsonBlockDefs(): unknown[] {
                 type: "field_dropdown", name: "TO", options: [
                     ["ランダムな場所", "random"], ["相手の場所", "ctx"],
                     ["マーカー1", "marker1"], ["マーカー2", "marker2"], ["マーカー3", "marker3"], ["マーカー4", "marker4"],
+                    // Wave 1 (spec §3): 空間セレクタに cno1..3 を追加
+                    ...CNO_PLACE_OPTIONS,
                 ],
             }],
             previousStatement: null,
             nextStatement: null,
             colour: HUE_MOTION,
-            tooltip: "ランダムな場所、相手 (このできごとに相手がいるとき) の場所、または「いまの場所をおぼえる」で保存したマーカーの場所にワープします。マーカーが未保存なら何も起きません。",
+            tooltip: "ランダムな場所、相手 (このできごとに相手がいるとき) の場所、「いまの場所をおぼえる」で保存したマーカーの場所、または自分が出したオブジェクトの場所にワープします。マーカーが未保存だったりオブジェクトを出していなかったりすると何も起きません。",
         },
         {
             type: "ekr_do_speed",
@@ -222,8 +269,10 @@ function jsonBlockDefs(): unknown[] {
         // 見た目
         {
             type: "ekr_do_notify",
-            message0: "「 %1 」と %2 秒間おしらせする",
+            message0: "%1 に「 %2 」と %3 秒間おしらせする",
             args0: [
+                // Wave 1 (spec §3): 複数セレクタ (みんな/おなじ部屋のみんな) を出せる唯一の op。
+                { type: "field_dropdown", name: "TARGET", options: TARGET_NOTIFY_OPTIONS },
                 { type: "field_input", name: "TEXT", text: "おしらせ" },
                 { type: "field_number", name: "SECONDS", value: 3, min: 1, max: 30, precision: 1 },
             ],
@@ -234,7 +283,7 @@ function jsonBlockDefs(): unknown[] {
             // spec §3: 会議中は画面上への表示ができないため、ホストになりすましたプライベート
             // チャットの1行として届く (会議中だけ出せる頻度も 1/5秒 に下がる)。< > は文字として
             // 使えず全角 〈〉 に変わる。
-            tooltip: "画面にメッセージを表示します (最大120字。出せるのは1秒に1回まで)。会議中はチャット欄への個人メッセージとして届きます (出せる頻度も下がります)。「<」「>」は使えず、自動的に「〈」「〉」に変わります。",
+            tooltip: "えらんだ人の画面にメッセージを表示します (最大120字。出せるのは1秒に1回まで)。「みんな」や「おなじ部屋のみんな」も選べます (人数分ぶんの回数を使うので、多いと後の方は届かないことがあります)。会議中はチャット欄への個人メッセージとして届きます (出せる頻度も下がります)。「<」「>」は使えず、自動的に「〈」「〉」に変わります。",
         },
         {
             type: "ekr_do_cno_spawn",
@@ -324,17 +373,37 @@ function jsonBlockDefs(): unknown[] {
         },
         {
             type: "ekr_do_teleport_other",
-            message0: "相手を %1 にワープさせる",
-            args0: [{
-                type: "field_dropdown", name: "TO", options: [
-                    ["じぶんのところ", "self"],
-                    ["マーカー1", "marker1"], ["マーカー2", "marker2"], ["マーカー3", "marker3"], ["マーカー4", "marker4"],
-                ],
-            }],
+            message0: "%1 を %2 にワープさせる",
+            args0: [
+                // Wave 1 (spec §3): 単数セレクタへ拡張 (じぶんは出さない — 自分を飛ばすのは「ワープする」)。
+                { type: "field_dropdown", name: "TARGET", options: TARGET_OTHER_OPTIONS },
+                {
+                    type: "field_dropdown", name: "TO", options: [
+                        ["じぶんのところ", "self"],
+                        ["マーカー1", "marker1"], ["マーカー2", "marker2"], ["マーカー3", "marker3"], ["マーカー4", "marker4"],
+                        ...CNO_PLACE_OPTIONS,
+                    ],
+                },
+            ],
+            inputsInline: true,
             previousStatement: null,
             nextStatement: null,
             colour: HUE_ULTIMATE,
-            tooltip: "このできごとの相手をワープさせます (相手がいなければ何も起きません。マーカーが未保存でも何も起きません)。ワープは自分の役職だけでなく全部の役職まとめて1秒に2回までしか使えないので、ここぞというときに使おう。",
+            tooltip: "えらんだ人をワープさせます (その人がいなければ何も起きません。マーカーが未保存だったりオブジェクトを出していなかったりしても何も起きません)。ワープは自分の役職だけでなく全部の役職まとめて1秒に2回までしか使えないので、ここぞというときに使おう。",
+        },
+        // Wave 1 (spec §3 2026-08-11) — remember (marker_save の人間版・slot は 2 つ)
+        {
+            type: "ekr_do_remember",
+            message0: "%1 を おぼえた人 %2 としておぼえる",
+            args0: [
+                { type: "field_dropdown", name: "TARGET", options: TARGET_SINGLE_OPTIONS },
+                { type: "field_dropdown", name: "SLOT", options: [["1", "1"], ["2", "2"]] },
+            ],
+            inputsInline: true,
+            previousStatement: null,
+            nextStatement: null,
+            colour: HUE_ULTIMATE,
+            tooltip: "えらんだ人を「おぼえた人1／2」として覚えておきます (2人まで)。あとで「キルする」や「ワープさせる」で指定できます。おぼえた人が死んだり切断したりすると忘れ、そのときは何も起きません。会議をまたいでも覚えていますが、ゲームが始まると忘れます。",
         },
         {
             type: "ekr_do_portal_place",
@@ -552,6 +621,7 @@ export function buildRoleToolbox(): Blockly.utils.toolbox.ToolboxDefinition {
                     { kind: "block", type: "ekr_do_wait" },
                     { kind: "block", type: "ekr_do_stop" },
                     { kind: "block", type: "ekr_do_kill" },
+                    { kind: "block", type: "ekr_do_cancel_attack" },
                     { kind: "block", type: "ekr_do_set_kill_cooldown" },
                 ],
             },
@@ -584,6 +654,7 @@ export function buildRoleToolbox(): Blockly.utils.toolbox.ToolboxDefinition {
                 colour: String(HUE_ULTIMATE),
                 contents: [
                     { kind: "block", type: "ekr_do_marker_save" },
+                    { kind: "block", type: "ekr_do_remember" },
                     { kind: "block", type: "ekr_do_teleport_other" },
                     { kind: "block", type: "ekr_do_portal_place" },
                     { kind: "block", type: "ekr_do_pull" },

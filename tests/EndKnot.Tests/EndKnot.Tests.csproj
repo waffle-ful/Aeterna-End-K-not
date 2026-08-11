@@ -27,11 +27,24 @@
          (コンパイル成立のために含める。挙動テストの対象外)。 -->
     <ItemGroup>
         <Compile Include="..\..\Modules\EkmCodec.cs" Link="src\EkmCodec.cs" />
+        <!-- EKR 役職コードの契約 (docs/ekr-logic-spec.md)。EkrDefinition / EkrPassives は Unity 非依存。
+             EkmLogicRuntime だけが UnityEngine.Time を触るので Support/GameShims.cs のスタブで解決する。 -->
+        <Compile Include="..\..\Modules\Ekm\EkrDefinition.cs" Link="src\Ekm\EkrDefinition.cs" />
+        <Compile Include="..\..\Modules\Ekm\EkrPassives.cs" Link="src\Ekm\EkrPassives.cs" />
+        <Compile Include="..\..\Modules\Ekm\EkmLogicRuntime.cs" Link="src\Ekm\EkmLogicRuntime.cs" />
         <Compile Include="..\..\Modules\Random\IRandom.cs" Link="src\Random\IRandom.cs" />
         <Compile Include="..\..\Modules\Random\MersenneTwister.cs" Link="src\Random\MersenneTwister.cs" />
         <Compile Include="..\..\Modules\Random\Xorshift.cs" Link="src\Random\Xorshift.cs" />
         <Compile Include="..\..\Modules\Random\NetRandomWrapper.cs" Link="src\Random\NetRandomWrapper.cs" />
         <Compile Include="..\..\Modules\Random\HashRandomWrapper.cs" Link="src\Random\HashRandomWrapper.cs" />
+    </ItemGroup>
+
+    <!-- TS 側 (editor/) の役職 fixture をそのまま読んで C# 検証にかける。TS↔C# の契約非対称を
+         機械検出する網なので、fixture 自体は編集しない (TS 側資材が正典)。 -->
+    <ItemGroup>
+        <None Include="..\..\editor\tests\fixtures\role-full-course.ekrole.json" Link="fixtures\role-full-course.ekrole.json">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
     </ItemGroup>
 
 </Project>
