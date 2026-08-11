@@ -15,7 +15,7 @@
 // 分かりやすい日本語エラーに変換してくれる。
 //
 // ブロック type 命名規約 (blocks-role.ts と1対1で対応させること):
-//   ekr_when_<when-id>          … イベントハット (10種、id は spec §2 の when 値そのもの)
+//   ekr_when_<when-id>          … イベントハット (14種、id は spec §2 の when 値そのもの)
 //   ekr_if / ekr_if_else        … 制御構文 if (else 無し/else 付きの2ブロックに分離、mutator 不使用)
 //   ekr_do_<op>                 … その他の制御/アクション opcode (spec §3)
 //   math_number / logic_boolean … Blockly 標準ブロックをそのまま「lit」式として再利用
@@ -169,6 +169,47 @@ function blockToNode(b: SerializedBlock): Record<string, unknown> {
             // 配置 (on_attacked 配下かどうか) の検査は roledef.ts の validateRoleLogic が行う —
             // compile 側は契約を一切強制しない (ファイル冒頭の方針)。
             return { op: "cancel_attack" };
+        // Wave 2 (docs/ekn-wave2-contract.md §2.1 2026-08-11 追記) — しらべる系。failChance/noise は
+        // 「任意・既定0」(spec 表) なので notify.target と同じ既定値省略の作法に倣い、値が既定 (0)
+        // なら AST にキーを足さない。noise はさらに depth:"team" のとき常に省略する — 契約は
+        // 「noise は depth:"role" のみ受理 (team との併用は文書 reject)」だが、ドロップダウンを
+        // "team" に切り替えても NUMBER フィールドの残留値は消えない (Blockly の一般挙動) ため、
+        // 省略しないと切替前の値が意図せず出力されてしまう。roledef.ts の validateNode は
+        // noise=0 + depth:"team" を許容する側に倒しているが (noise>0 のときだけ reject)、
+        // compile 側はそもそもこの組み合わせを一切生成しない — どちらの厳格さで読んでも
+        // エディタ生成コードは通る (解釈の余地があることは spec 併合時に確認すること)。
+        case "ekr_do_inspect": {
+            const target = b.fields?.TARGET;
+            const depth = b.fields?.DEPTH;
+            const node: Record<string, unknown> = { op: "inspect", target, depth };
+            const failChance = toNum(b.fields?.FAILCHANCE);
+            if (failChance !== 0) node.failChance = failChance;
+            if (depth === "role") {
+                const noise = toNum(b.fields?.NOISE);
+                if (noise !== 0) node.noise = noise;
+            }
+            return node;
+        }
+        case "ekr_do_reveal":
+            return { op: "reveal", target: b.fields?.TARGET };
+        case "ekr_do_arrow_show":
+            return { op: "arrow_show", target: b.fields?.TARGET, seconds: toNum(b.fields?.SECONDS) };
+        case "ekr_do_arrow_mark":
+            return { op: "arrow_mark", at: b.fields?.AT, seconds: toNum(b.fields?.SECONDS) };
+        case "ekr_do_arrow_hide":
+            return { op: "arrow_hide" };
+        // Wave 2 — とうひょう
+        case "ekr_do_cancel_vote":
+            // 配置 (on_meeting_vote 配下かどうか) の検査は roledef.ts の validateRoleLogic が行う。
+            return { op: "cancel_vote" };
+        case "ekr_do_vote_weight_set":
+            return { op: "vote_weight_set", value: toNum(b.fields?.VALUE) };
+        case "ekr_do_vote_block":
+            return { op: "vote_block", target: b.fields?.TARGET };
+        case "ekr_do_vote_swap":
+            return { op: "vote_swap" };
+        case "ekr_do_exile":
+            return { op: "exile", target: b.fields?.TARGET };
         // v1.3 (spec §3 2026-08-11 追記) — ひっぱる・ひきずる・フィールド
         case "ekr_do_pull":
             return { op: "pull" };

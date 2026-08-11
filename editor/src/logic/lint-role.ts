@@ -22,10 +22,14 @@ import type { LogicNode, LogicRule, RoleLogic } from "../roledef";
 // Wave 1 (2026-08-11): L14〜L17 を追加 (計17ルール)。L14 = ctx 無しイベント配下の ctx セレクタ、
 // L15 = 未保存マーカーへの行き先、L16 = 未生成 CNO / 未保存 saved の参照、L17 = wait より後の
 // cancel_attack。L15/L16 は「参照整合性3原則」③ (エディタは欠落を能動的に教える) の実装。
+// Wave 2 (docs/ekn-wave2-contract.md §6 2026-08-11): L18〜L20 を追加 (計20ルール) + L16 拡張。
+// L18 = 会議専用 op (vote_block/vote_swap/exile) が会議系イベント以外の rule 配下、L19 = L17 の
+// 兄弟 (on_meeting_vote 配下で wait より後の cancel_vote)、L20 = L3/L4 のレート系兄弟 (on_second
+// 配下の arrow_show/arrow_mark/inspect/reveal)。L16 拡張 = vote_swap の暗黙 saved1/saved2 参照。
 
 export type LintRuleId =
     | "L1" | "L2" | "L3" | "L4" | "L5" | "L6" | "L7" | "L8" | "L9" | "L10" | "L11" | "L12" | "L13"
-    | "L14" | "L15" | "L16" | "L17";
+    | "L14" | "L15" | "L16" | "L17" | "L18" | "L19" | "L20";
 
 export interface LintWarning {
     rule: LintRuleId;
@@ -176,14 +180,31 @@ function hasCancelAttackAfterWait(nodes: LogicNode[]): boolean {
     return violation;
 }
 
+/** L19 (Wave 2): L17 の兄弟 — 訪問順で wait より後に現れる cancel_vote */
+function hasCancelVoteAfterWait(nodes: LogicNode[]): boolean {
+    let waited = false;
+    let violation = false;
+    forEachNode(nodes, (n) => {
+        if (n.op === "wait") waited = true;
+        else if (n.op === "cancel_vote" && waited) violation = true;
+    });
+    return violation;
+}
+
+// L18 (Wave 2): 会議専用 op (vote_block/vote_swap/exile) の配置ヒント対象イベント。
+// cancel_vote はここに含めない (roledef.ts の validateRoleLogic が on_meeting_vote 以外を
+// 構造的に reject するため、リンタで重ねて警告する必要がない)。
+const MEETING_ONLY_LINT_WHENS: ReadonlySet<string> = new Set(["on_meeting_start", "on_meeting_vote", "on_meeting_pick"]);
+const MEETING_ONLY_LINT_OPS: readonly LogicNode["op"][] = ["vote_block", "vote_swap", "exile"];
+
 function makeWarning(rule: LintRuleId, ruleIndex: number, when: string, message: string, suggestion: string): LintWarning {
     return { rule, ruleIndex, when, message, suggestion };
 }
 
 /**
- * 検証済みの RoleLogic に対して spec §6 の 17 ルール (v1.2 で L11/L12、v1.3 で L13、Wave 1 で L14〜L17 追加) を
- * 静的検査する。ブロックの組み方に対するヒントであり、export 自体は妨げない (呼び出し元は結果を
- * 警告フッタに表示するだけ)。
+ * 検証済みの RoleLogic に対して spec §6 の 20 ルール (v1.2 で L11/L12、v1.3 で L13、Wave 1 で
+ * L14〜L17、Wave 2 で L18〜L20 追加) を静的検査する。ブロックの組み方に対するヒントであり、
+ * export 自体は妨げない (呼び出し元は結果を警告フッタに表示するだけ)。
  */
 export function lintRoleLogic(logic: RoleLogic): LintWarning[] {
     const warnings: LintWarning[] = [];
@@ -255,6 +276,14 @@ export function lintRoleLogic(logic: RoleLogic): LintWarning[] {
                     "L13", ruleIndex, rule.when,
                     "「毎秒くりかえす」の中でひっぱる系の処理をしています。",
                     "ひっぱる系は「ここぞ」で1回。毎秒だとワープ予算が切れて他の能力まで止まるよ (drag/field は同時1本なので毎秒かけ直しても効かないよ)。",
+                ));
+            }
+            // L20 (Wave 2): L3/L4 のレート系兄弟 — arrow_show/arrow_mark/inspect/reveal。
+            if (hasOp(rule.do, "arrow_show") || hasOp(rule.do, "arrow_mark") || hasOp(rule.do, "inspect") || hasOp(rule.do, "reveal")) {
+                warnings.push(makeWarning(
+                    "L20", ruleIndex, rule.when,
+                    "「毎秒くりかえす」の中で、しらべたり矢印を出したりしています。",
+                    "毎秒はやりすぎだよ。1秒に1回までしか効かないよ。",
                 ));
             }
         }
@@ -364,6 +393,35 @@ export function lintRoleLogic(logic: RoleLogic): LintWarning[] {
                 "L17", ruleIndex, rule.when,
                 "「秒待つ」のあとで「こうげきをふせぐ」を使っています。",
                 "まってから防ぐことはできないよ。ふせぐのは一番はじめに。",
+            ));
+        }
+
+        // L18 (Wave 2): 会議専用 op (vote_block/vote_swap/exile) が会議系イベント以外の rule 配下。
+        if (!MEETING_ONLY_LINT_WHENS.has(rule.when) && MEETING_ONLY_LINT_OPS.some((op) => hasOp(rule.do, op))) {
+            warnings.push(makeWarning(
+                "L18", ruleIndex, rule.when,
+                "会議専用のちからを、会議とは関係ないきっかけの中で使おうとしています。",
+                "会議のあいだしか効かないよ。「かいぎで投票したとき」などに置こう。",
+            ));
+        }
+
+        // L19 (Wave 2): L17 の兄弟 — on_meeting_vote の同期プロローグは最初の wait で終わる。
+        if (rule.when === "on_meeting_vote" && hasCancelVoteAfterWait(rule.do)) {
+            warnings.push(makeWarning(
+                "L19", ruleIndex, rule.when,
+                "「秒待つ」のあとで「票をつかわずにえらぶ」を使っています。",
+                "まってから取り消すことはできないよ。取り消すのは一番はじめに。",
+            ));
+        }
+
+        // L16 拡張 (Wave 2): vote_swap の暗黙 saved1/saved2 参照。vote_swap は target フィールドを
+        // 持たないため selectorTokens 経由の一般チェックには乗らない (pull/drag の L14 拡張と同型 —
+        // 引数を持たない ctx/saved 暗黙 op は op 名で別途見る)。
+        if (hasOp(rule.do, "vote_swap") && !(rememberedSlots.has(1) && rememberedSlots.has(2))) {
+            warnings.push(makeWarning(
+                "L16", ruleIndex, rule.when,
+                "「おぼえた人1と2の票をいれかえる」を使っていますが、1と2の両方をおぼえていません。",
+                "おぼえていない人の票は入れかえられないよ。先に「1をおぼえる」と「2をおぼえる」の両方を入れよう。",
             ));
         }
     });

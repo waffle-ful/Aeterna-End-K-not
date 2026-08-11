@@ -1025,6 +1025,180 @@ describe("logic 検証 Wave 1 (on_attacked / cancel_attack / remember / セレ�
     });
 });
 
+// ---------------------------------------------------------------------------
+// Wave 2 (docs/ekn-wave2-contract.md 2026-08-11) — 情報と会議
+// ---------------------------------------------------------------------------
+describe("logic 検証 Wave 2 (on_meeting_vote / on_meeting_pick / inspect / reveal / arrow_* / vote_* / exile)", () => {
+    function baseLogic(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+        return {
+            version: 1,
+            rules: [{ when: "on_pet", do: [{ op: "stop" }] }],
+            ...overrides,
+        };
+    }
+    function withLogic(logic: unknown): Record<string, unknown> {
+        return { ...baseValid(), logic };
+    }
+    function withRule(rule: Record<string, unknown>): Record<string, unknown> {
+        return withLogic(baseLogic({ rules: [rule] }));
+    }
+
+    it("14 種類の when すべてを受理する (Wave 2 の2種を含む)", () => {
+        const whens = [
+            "on_game_start", "on_pet", "on_kill", "on_death", "on_meeting_start",
+            "on_meeting_end", "on_task_complete", "on_vent_enter", "on_report", "on_second",
+            "on_attacked", "on_meeting_vote", "on_meeting_pick",
+        ];
+        for (const when of whens) {
+            const r = validateEkrDefinition(withRule({ when, do: [{ op: "stop" }] }));
+            expect(r.ok, `when=${when} が拒否された`).toBe(true);
+        }
+    });
+
+    it("on_meeting_vote / on_meeting_pick に slot が付いていれば拒否 (on_cno_touch 専用)", () => {
+        expect(validateEkrDefinition(withRule({ when: "on_meeting_vote", slot: 1, do: [{ op: "stop" }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_meeting_pick", slot: 1, do: [{ op: "stop" }] })).ok).toBe(false);
+    });
+
+    it("cancel_vote は on_meeting_vote 配下でのみ受理 (他イベント配下は文書 reject・if の入れ子でも判定)", () => {
+        expect(validateEkrDefinition(withRule({ when: "on_meeting_vote", do: [{ op: "cancel_vote" }] })).ok).toBe(true);
+        for (const when of ["on_pet", "on_kill", "on_meeting_start", "on_meeting_pick", "on_second"]) {
+            expect(validateEkrDefinition(withRule({ when, do: [{ op: "cancel_vote" }] })).ok, when).toBe(false);
+        }
+        const nested = { op: "if", cond: { e: "lit", v: 1 }, then: [{ op: "cancel_vote" }] };
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [nested] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_meeting_vote", do: [nested] })).ok).toBe(true);
+    });
+
+    it("on_meeting_vote は cancel_vote を伴わなくても正当 (「投票した人をおぼえる」だけの定義も通る)", () => {
+        const r = validateEkrDefinition(withRule({ when: "on_meeting_vote", do: [{ op: "remember", slot: 1, target: "ctx" }] }));
+        expect(r.ok).toBe(true);
+    });
+
+    it("inspect: target は self 不可・depth は team/role のみ・failChance/noise は範囲外を拒否", () => {
+        const cases: { node: unknown; ok: boolean }[] = [
+            { node: { op: "inspect", target: "ctx", depth: "team" }, ok: true },
+            { node: { op: "inspect", target: "saved1", depth: "role" }, ok: true },
+            { node: { op: "inspect", target: "nearest", depth: "role", failChance: 0, noise: 0 }, ok: true },
+            { node: { op: "inspect", target: "random", depth: "role", failChance: 100, noise: 5 }, ok: true },
+            { node: { op: "inspect", target: "self", depth: "team" }, ok: false },
+            { node: { op: "inspect", target: "ctx", depth: "faction" }, ok: false },
+            { node: { op: "inspect", target: "ctx", depth: "team", failChance: 101 }, ok: false },
+            { node: { op: "inspect", target: "ctx", depth: "team", failChance: -1 }, ok: false },
+            { node: { op: "inspect", target: "ctx", depth: "role", noise: 6 }, ok: false },
+            { node: { op: "inspect", target: "ctx", depth: "role", noise: -1 }, ok: false },
+            { node: { op: "inspect", target: "ctx", depth: "role", noise: 1.5 }, ok: false },
+        ];
+        for (const { node, ok } of cases) {
+            const r = validateEkrDefinition(withRule({ when: "on_kill", do: [node] }));
+            expect(r.ok, `${JSON.stringify(node)} は ok=${ok} を期待`).toBe(ok);
+        }
+    });
+
+    it("inspect: noise>0 と depth:'team' の併用は拒否、noise=0 との併用は許容 (実装裁量)", () => {
+        expect(validateEkrDefinition(withRule({ when: "on_kill", do: [{ op: "inspect", target: "ctx", depth: "team", noise: 1 }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_kill", do: [{ op: "inspect", target: "ctx", depth: "team", noise: 0 }] })).ok).toBe(true);
+    });
+
+    it("inspect: failChance/noise は省略可 (省略時はキーを付けない)", () => {
+        const r = validateEkrDefinition(withRule({ when: "on_kill", do: [{ op: "inspect", target: "ctx", depth: "role" }] }));
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            const node = r.def.logic?.rules[0].do[0];
+            expect(node).toEqual({ op: "inspect", target: "ctx", depth: "role" });
+        }
+    });
+
+    it("reveal: target は self 不可の単数セレクタ", () => {
+        for (const target of ["ctx", "saved1", "saved2", "nearest", "random"]) {
+            expect(validateEkrDefinition(withRule({ when: "on_kill", do: [{ op: "reveal", target }] })).ok, target).toBe(true);
+        }
+        expect(validateEkrDefinition(withRule({ when: "on_kill", do: [{ op: "reveal", target: "self" }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_kill", do: [{ op: "reveal", target: "all" }] })).ok).toBe(false);
+    });
+
+    it("arrow_show: target は self 不可・seconds は5..600", () => {
+        expect(validateEkrDefinition(withRule({ when: "on_kill", do: [{ op: "arrow_show", target: "ctx", seconds: 5 }] })).ok).toBe(true);
+        expect(validateEkrDefinition(withRule({ when: "on_kill", do: [{ op: "arrow_show", target: "ctx", seconds: 600 }] })).ok).toBe(true);
+        expect(validateEkrDefinition(withRule({ when: "on_kill", do: [{ op: "arrow_show", target: "self", seconds: 10 }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_kill", do: [{ op: "arrow_show", target: "ctx", seconds: 4.9 }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_kill", do: [{ op: "arrow_show", target: "ctx", seconds: 600.1 }] })).ok).toBe(false);
+    });
+
+    it("arrow_mark: at は ctx/marker1..4/cno1..3・self は含まれない", () => {
+        for (const at of ["ctx", "marker1", "marker4", "cno1", "cno3"]) {
+            expect(validateEkrDefinition(withRule({ when: "on_kill", do: [{ op: "arrow_mark", at, seconds: 30 }] })).ok, at).toBe(true);
+        }
+        expect(validateEkrDefinition(withRule({ when: "on_kill", do: [{ op: "arrow_mark", at: "self", seconds: 30 }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_kill", do: [{ op: "arrow_mark", at: "cno4", seconds: 30 }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_kill", do: [{ op: "arrow_mark", at: "ctx", seconds: 3 }] })).ok).toBe(false);
+    });
+
+    it("arrow_hide: 引数なしで受理される", () => {
+        const r = validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "arrow_hide" }] }));
+        expect(r.ok).toBe(true);
+        if (r.ok) expect(r.def.logic?.rules[0].do[0]).toEqual({ op: "arrow_hide" });
+    });
+
+    it("vote_weight_set: value は0..3の整数のみ (常時 op・when 不問)", () => {
+        for (const value of [0, 1, 2, 3]) {
+            expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "vote_weight_set", value }] })).ok, String(value)).toBe(true);
+        }
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "vote_weight_set", value: -1 }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "vote_weight_set", value: 4 }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "vote_weight_set", value: 1.5 }] })).ok).toBe(false);
+    });
+
+    it("vote_block: target は self 不可の単数セレクタ", () => {
+        for (const target of ["ctx", "saved1", "saved2", "nearest", "random"]) {
+            expect(validateEkrDefinition(withRule({ when: "on_meeting_start", do: [{ op: "vote_block", target }] })).ok, target).toBe(true);
+        }
+        expect(validateEkrDefinition(withRule({ when: "on_meeting_start", do: [{ op: "vote_block", target: "self" }] })).ok).toBe(false);
+    });
+
+    it("vote_swap: 引数なしで受理される", () => {
+        const r = validateEkrDefinition(withRule({ when: "on_meeting_pick", do: [{ op: "vote_swap" }] }));
+        expect(r.ok).toBe(true);
+        if (r.ok) expect(r.def.logic?.rules[0].do[0]).toEqual({ op: "vote_swap" });
+    });
+
+    it("exile: target は単数セレクタ全種を受理 (self も可)", () => {
+        for (const target of ["self", "ctx", "saved1", "saved2", "nearest", "random"]) {
+            expect(validateEkrDefinition(withRule({ when: "on_meeting_vote", do: [{ op: "exile", target }] })).ok, target).toBe(true);
+        }
+        expect(validateEkrDefinition(withRule({ when: "on_meeting_vote", do: [{ op: "exile", target: "all" }] })).ok).toBe(false);
+    });
+
+    it("vote_block/vote_swap/exile は会議系イベント以外の rule 配下でも構造的には受理される (配置ヒントはリンタ L18 に委ねる)", () => {
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "vote_block", target: "ctx" }] })).ok).toBe(true);
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "vote_swap" }] })).ok).toBe(true);
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "exile", target: "self" }] })).ok).toBe(true);
+    });
+
+    it("Wave 2 op はすべて leaf ノード (depth 1, count 1) — 深さ8ちょうどの入れ子でも通る", () => {
+        function nestedIf(depth: number, leaf: unknown): unknown {
+            if (depth <= 1) return leaf;
+            return { op: "if", cond: { e: "lit", v: 1 }, then: [nestedIf(depth - 1, leaf)] };
+        }
+        for (const leaf of [
+            { op: "inspect", target: "ctx", depth: "role" },
+            { op: "reveal", target: "ctx" },
+            { op: "arrow_show", target: "ctx", seconds: 10 },
+            { op: "arrow_mark", at: "ctx", seconds: 10 },
+            { op: "arrow_hide" },
+            { op: "vote_weight_set", value: 1 },
+            { op: "vote_block", target: "ctx" },
+            { op: "vote_swap" },
+            { op: "exile", target: "self" },
+        ]) {
+            const depth8 = [nestedIf(8, leaf)];
+            expect(validateEkrDefinition(withRule({ when: "on_kill", do: depth8 })).ok, JSON.stringify(leaf)).toBe(true);
+            const depth9 = [nestedIf(9, leaf)];
+            expect(validateEkrDefinition(withRule({ when: "on_kill", do: depth9 })).ok, JSON.stringify(leaf)).toBe(false);
+        }
+    });
+});
+
 describe("normalize* ヘルパー (UI と検証が共有する唯一のクランプ実装)", () => {
     it("normalizeKillCooldown: 有限数はクランプ、非有限/非数値は既定値", () => {
         expect(normalizeKillCooldown(50)).toBe(50);

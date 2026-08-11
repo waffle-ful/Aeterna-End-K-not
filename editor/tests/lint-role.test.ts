@@ -623,6 +623,26 @@ describe("lint-role: L14 (ctx 無しイベント配下の ctx セレクタ)", ()
         const l = logic([{ when: "on_pet", do: [{ op: "kill", target: "nearest" }, { op: "teleport", to: "random" }] }]);
         expect(ruleIds(lintRoleLogic(l))).not.toContain("L14");
     });
+
+    // Wave 2 (docs/ekn-wave2-contract.md §6 2026-08-11 併合): inspect/reveal/arrow_show/vote_block/
+    // exile の target:"ctx"、arrow_mark の at:"ctx" は selectorTokens の target/at/to 汎用スキャン
+    // だけで拾える (新イベント2種を対象から外した以外、L14 の実装を変える必要が無い契約どおり)。
+    it("ctx 無しイベント配下の inspect/reveal/arrow_show/vote_block/exile(target:ctx) / arrow_mark(at:ctx) は L14 を警告する", () => {
+        expect(ruleIds(lintRoleLogic(logic([{ when: "on_pet", do: [{ op: "inspect", target: "ctx", depth: "role" }] }])))).toContain("L14");
+        expect(ruleIds(lintRoleLogic(logic([{ when: "on_pet", do: [{ op: "reveal", target: "ctx" }] }])))).toContain("L14");
+        expect(ruleIds(lintRoleLogic(logic([{ when: "on_pet", do: [{ op: "arrow_show", target: "ctx", seconds: 10 }] }])))).toContain("L14");
+        expect(ruleIds(lintRoleLogic(logic([{ when: "on_pet", do: [{ op: "arrow_mark", at: "ctx", seconds: 10 }] }])))).toContain("L14");
+        expect(ruleIds(lintRoleLogic(logic([{ when: "on_pet", do: [{ op: "vote_block", target: "ctx" }] }])))).toContain("L14");
+        expect(ruleIds(lintRoleLogic(logic([{ when: "on_pet", do: [{ op: "exile", target: "ctx" }] }])))).toContain("L14");
+    });
+
+    it("on_meeting_vote / on_meeting_pick 配下の target:ctx は L14 を警告しない (新イベント2種は ctx あり)", () => {
+        const l = logic([
+            { when: "on_meeting_vote", do: [{ op: "exile", target: "ctx" }] },
+            { when: "on_meeting_pick", do: [{ op: "vote_block", target: "ctx" }] },
+        ]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L14");
+    });
 });
 
 describe("lint-role: L15 (未保存マーカーの行き先)", () => {
@@ -715,6 +735,100 @@ describe("lint-role: L17 (on_attacked 配下・wait より後の cancel_attack)"
         expect(ruleIds(lintRoleLogic(after))).toContain("L17");
         const before = logic([{ when: "on_attacked", do: [nested, { op: "wait", seconds: 0.5 }] }]);
         expect(ruleIds(lintRoleLogic(before))).not.toContain("L17");
+    });
+});
+
+// Wave 2 (docs/ekn-wave2-contract.md §6 2026-08-11 併合): L18〜L20 + L16 拡張
+describe("lint-role: L18 (会議専用 op が会議系イベント以外の rule 配下)", () => {
+    it("on_pet + vote_block/vote_swap/exile はそれぞれ L18 を警告する", () => {
+        expect(ruleIds(lintRoleLogic(logic([{ when: "on_pet", do: [{ op: "vote_block", target: "ctx" }] }])))).toContain("L18");
+        expect(ruleIds(lintRoleLogic(logic([{ when: "on_pet", do: [{ op: "vote_swap" }] }])))).toContain("L18");
+        expect(ruleIds(lintRoleLogic(logic([{ when: "on_pet", do: [{ op: "exile", target: "self" }] }])))).toContain("L18");
+    });
+
+    it("on_meeting_start / on_meeting_vote / on_meeting_pick 配下では L18 を警告しない", () => {
+        const l = logic([
+            { when: "on_meeting_start", do: [{ op: "vote_block", target: "ctx" }] },
+            { when: "on_meeting_vote", do: [{ op: "vote_swap" }] },
+            { when: "on_meeting_pick", do: [{ op: "exile", target: "ctx" }] },
+        ]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L18");
+    });
+
+    it("if の中にネストした vote_block も検知する", () => {
+        const nested: LogicNode = { op: "if", cond: { e: "lit", v: 1 }, then: [{ op: "vote_block", target: "ctx" }] };
+        const l = logic([{ when: "on_kill", do: [nested] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L18");
+    });
+
+    it("cancel_vote は L18 の対象外 (検証で構造的 reject されるため重ねて警告しない)", () => {
+        const l = logic([{ when: "on_meeting_vote", do: [{ op: "cancel_vote" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L18");
+    });
+});
+
+describe("lint-role: L19 (on_meeting_vote 配下・wait より後の cancel_vote)", () => {
+    it("wait のあとの cancel_vote は警告する", () => {
+        const l = logic([{ when: "on_meeting_vote", do: [{ op: "wait", seconds: 1 }, { op: "cancel_vote" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L19");
+    });
+
+    it("wait より前の cancel_vote は警告しない", () => {
+        const l = logic([{ when: "on_meeting_vote", do: [{ op: "cancel_vote" }, { op: "wait", seconds: 1 }] }]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L19");
+    });
+
+    it("if の中の cancel_vote も訪問順で判定する", () => {
+        const nested: LogicNode = { op: "if", cond: { e: "lit", v: 1 }, then: [{ op: "cancel_vote" }] };
+        const after = logic([{ when: "on_meeting_vote", do: [{ op: "wait", seconds: 0.5 }, nested] }]);
+        expect(ruleIds(lintRoleLogic(after))).toContain("L19");
+        const before = logic([{ when: "on_meeting_vote", do: [nested, { op: "wait", seconds: 0.5 }] }]);
+        expect(ruleIds(lintRoleLogic(before))).not.toContain("L19");
+    });
+});
+
+describe("lint-role: L20 (on_second 配下の arrow_show/arrow_mark/inspect/reveal — L3/L4 の兄弟)", () => {
+    it("on_second + arrow_show/arrow_mark/inspect/reveal はそれぞれ L20 を警告する", () => {
+        expect(ruleIds(lintRoleLogic(logic([{ when: "on_second", do: [{ op: "arrow_show", target: "nearest", seconds: 10 }] }])))).toContain("L20");
+        expect(ruleIds(lintRoleLogic(logic([{ when: "on_second", do: [{ op: "arrow_mark", at: "ctx", seconds: 10 }] }])))).toContain("L20");
+        expect(ruleIds(lintRoleLogic(logic([{ when: "on_second", do: [{ op: "inspect", target: "nearest", depth: "role" }] }])))).toContain("L20");
+        expect(ruleIds(lintRoleLogic(logic([{ when: "on_second", do: [{ op: "reveal", target: "nearest" }] }])))).toContain("L20");
+    });
+
+    it("on_second 以外の when では L20 を警告しない", () => {
+        const l = logic([
+            { when: "on_kill", do: [{ op: "arrow_show", target: "ctx", seconds: 10 }] },
+            { when: "on_pet", do: [{ op: "inspect", target: "nearest", depth: "team" }] },
+        ]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L20");
+    });
+});
+
+describe("lint-role: L16 拡張 (vote_swap の暗黙 saved1/saved2 参照)", () => {
+    it("remember(1)/remember(2) が無い vote_swap は L16 を警告する", () => {
+        const l = logic([{ when: "on_meeting_pick", do: [{ op: "vote_swap" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L16");
+    });
+
+    it("remember(1) だけ (2が無い) でも L16 を警告する", () => {
+        const l = logic([
+            { when: "on_meeting_vote", do: [{ op: "remember", slot: 1, target: "ctx" }] },
+            { when: "on_meeting_pick", do: [{ op: "vote_swap" }] },
+        ]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L16");
+    });
+
+    it("別の rule に remember(1) と remember(2) が両方あれば警告しない", () => {
+        const l = logic([
+            { when: "on_meeting_vote", do: [{ op: "remember", slot: 1, target: "ctx" }] },
+            { when: "on_meeting_pick", do: [{ op: "remember", slot: 2, target: "ctx" }, { op: "vote_swap" }] },
+        ]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L16");
+    });
+
+    it("vote_swap を使わなければ remember の有無に関わらず警告しない", () => {
+        const l = logic([{ when: "on_meeting_vote", do: [{ op: "remember", slot: 1, target: "ctx" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L16");
     });
 });
 
@@ -835,6 +949,49 @@ describe("lint-role: 問題のないロジックは警告0件", () => {
             { when: "on_kill", do: [{ op: "pull" }] },
             { when: "on_kill", do: [{ op: "drag", seconds: 5 }] },
             { when: "on_kill", do: [{ op: "field", at: "self", radius: "medium", strength: "medium", seconds: 8 }] },
+        ]);
+        expect(lintRoleLogic(l)).toEqual([]);
+    });
+
+    // Wave 2 (docs/ekn-wave2-contract.md §6 2026-08-11 併合): 会議・投票の模範形は警告0件
+    it("on_meeting_vote で「おぼえる→票をつかわずにえらぶ」と組むのは警告0件", () => {
+        const l = logic([
+            {
+                when: "on_meeting_vote",
+                do: [
+                    { op: "remember", slot: 1, target: "ctx" },
+                    { op: "cancel_vote" },
+                    { op: "notify", text: "また今度…", seconds: 3 },
+                ],
+            },
+        ]);
+        expect(lintRoleLogic(l)).toEqual([]);
+    });
+
+    it("on_meeting_pick で remember(1)/remember(2) を両方入れてから vote_swap するのは警告0件", () => {
+        const l = logic([
+            { when: "on_meeting_vote", do: [{ op: "remember", slot: 1, target: "ctx" }] },
+            { when: "on_meeting_pick", do: [{ op: "remember", slot: 2, target: "ctx" }, { op: "vote_swap" }] },
+        ]);
+        expect(lintRoleLogic(l)).toEqual([]);
+    });
+
+    it("on_meeting_start でひとつだけ vote_block/exile を使うのは警告0件", () => {
+        const l = logic([
+            { when: "on_meeting_start", do: [{ op: "vote_block", target: "nearest" }] },
+            { when: "on_meeting_vote", do: [{ op: "exile", target: "ctx" }] },
+        ]);
+        expect(lintRoleLogic(l)).toEqual([]);
+    });
+
+    it("on_kill でひとつだけ inspect/reveal/arrow_show/arrow_mark/arrow_hide を使うのは警告0件", () => {
+        const l = logic([
+            { when: "on_kill", do: [{ op: "inspect", target: "ctx", depth: "role", failChance: 10, noise: 2 }] },
+            { when: "on_kill", do: [{ op: "reveal", target: "ctx" }] },
+            { when: "on_kill", do: [{ op: "arrow_show", target: "ctx", seconds: 30 }] },
+            { when: "on_kill", do: [{ op: "arrow_mark", at: "ctx", seconds: 30 }] },
+            { when: "on_kill", do: [{ op: "arrow_hide" }] },
+            { when: "on_pet", do: [{ op: "vote_weight_set", value: 2 }] },
         ]);
         expect(lintRoleLogic(l)).toEqual([]);
     });
