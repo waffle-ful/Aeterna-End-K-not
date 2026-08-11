@@ -10379,6 +10379,8 @@
   "CommandDescription.WcDbg": "Set WaveCannon debug skip mask for official-server kick bisection (1=sequence, 2=skin, 4=CNO, 8=speed) [dev]",
   "CommandForms.TpDbg": "tpdbg",
   "CommandDescription.TpDbg": "SnapTo cap experiment tool: show/set NumSnapToCallsThisRound, change token refill rate, force official-server cap path on local servers [dev]",
+  "CommandForms.TpBurst": "tpburst",
+  "CommandDescription.TpBurst": "Fire raw SnapTo RPCs at a fixed rate (bypassing the cap and the packet gate) to test whether official-server Hacking kicks are triggered by SnapTo rate [dev]",
   "CommandForms.Census": "census",
   "CommandDescription.Census": "Write a Unity object census snapshot (CENSUS/CENSUSTOP) to Health.log for memory-leak attribution [dev]",
   "CommandForms.SizeClean": "sizeclean",
