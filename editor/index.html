@@ -297,7 +297,18 @@
       <div id="library-list"></div>
       <menu>
         <button id="library-import" type="button">ファイルから読込</button>
+        <!-- 配布 exe のみ表示 (ブラウザではフォルダを直接読めないため main.ts で隠す) -->
+        <button id="library-ekmaps" type="button" hidden>ゲームのフォルダから開く</button>
         <button id="library-close" type="button">閉じる</button>
+      </menu>
+    </dialog>
+
+    <!-- ゲームが読む EKMaps フォルダの一覧 (配布 exe 限定)。「▶ ゲームで試す」の逆方向 -->
+    <dialog id="dlg-ekmaps">
+      <h3>ゲームのフォルダから開く</h3>
+      <div id="ekmaps-list"></div>
+      <menu>
+        <button id="ekmaps-close" type="button">閉じる</button>
       </menu>
     </dialog>
 

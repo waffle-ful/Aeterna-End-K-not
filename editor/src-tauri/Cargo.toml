@@ -24,6 +24,7 @@ log = "0.4"
 tauri = { version = "2.11.2", features = [] }
 tauri-plugin-log = "2"
 tauri-plugin-fs = "2"
+tauri-plugin-dialog = "2"
 
 # time 0.3.48 の `impl From<HourBase> for <HourBase as ModifierValue>::Type` (Self が
 # 関連型 projection) が rustc >= 1.88 の coherence で正規化されず、下流のあらゆる blanket

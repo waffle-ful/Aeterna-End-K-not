@@ -492,7 +492,7 @@ internal static class CustomRolesHelper
                 // desync Impostor に確定し、この switch まで来ない。checkDesyncRole=false で呼ばれた場合は
                 // ここを通って Crewmate/Engineer 側に落ちるが、現行の false 呼び出し元は vanilla サポート役職の
                 // 種別判定にしか使っておらず Impostor/Crewmate を区別しないため影響しない。
-                _ when EkrManager.IsSlot(role) && EkrManager.GetDefinition(role) is { CanVent: true } => CustomRoles.Engineer,
+                _ when EkrManager.IsEkrRole(role) && EkrManager.GetDefinition(role) is { CanVent: true } => CustomRoles.Engineer,
 
                 _ => role.IsImpostor() ? CustomRoles.Impostor : CustomRoles.Crewmate
             };
@@ -702,7 +702,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Shadow => RoleTypes.Phantom,
 
                 // EKN 役職メーカー: キル可の定義が束縛されたスロットは desync Impostor 基底 (Sheriff 系と同じ)
-                _ when EkrManager.IsSlot(role) && EkrManager.GetDefinition(role) is { CanKill: true } => RoleTypes.Impostor,
+                _ when EkrManager.IsEkrRole(role) && EkrManager.GetDefinition(role) is { CanKill: true } => RoleTypes.Impostor,
 
                 _ => RoleTypes.GuardianAngel
             };
@@ -1041,7 +1041,7 @@ internal static class CustomRolesHelper
             // EKR (ノーコード役職): OnPet の override は中間基底 EkmTemplateRole が宣言しているため、下の
             // 「直接の型が OnPet を宣言しているか」判定では常に false になる (DeclaringType == EkmTemplateRole)。
             // 束縛中の役職コードが on_pet ルールを持つときだけペット能力扱いにする (HUD ボタン活性の要)。
-            if (EkrManager.IsSlot(role)) return EkrManager.HasOnPetLogic(role);
+            if (EkrManager.IsEkrRole(role)) return EkrManager.HasOnPetLogic(role);
 
             Type type = role.GetRoleClass().GetType();
             return type.GetMethod("OnPet")?.DeclaringType == type;
@@ -1116,7 +1116,7 @@ internal static class CustomRolesHelper
                 // 同型)。coordinator 裁定 (2026-08-11): 述語は「on_meeting_vote ルールの有無」— cancel_vote
                 // を使わない定義 (「投票した人をおぼえる」だけ等) でも OnVote 呼び出し口 (MeetingHudPatch.cs:
                 // 1610) を通さないとイベントが永久に発火しない。
-                _ when EndKnot.Modules.Ekm.EkrManager.IsSlot(role) && EndKnot.Modules.Ekm.EkrManager.HasOnMeetingVoteLogic(role) => true,
+                _ when EndKnot.Modules.Ekm.EkrManager.IsEkrRole(role) && EndKnot.Modules.Ekm.EkrManager.HasOnMeetingVoteLogic(role) => true,
 
                 _ => false
             };
@@ -1158,13 +1158,13 @@ internal static class CustomRolesHelper
                 CustomRoles.BedWarsPlayer or
                 CustomRoles.Revenant or
                 CustomRoles.Akazukin or // 捕食中は死んでいるが OnFixedUpdate で復活予約と猶予切れを回している
-                CustomRoles.Weatherman or
+                CustomRoles.Weatherman
                 // EKR logic (docs/ekr-logic-spec.md §2): on_death 起点の fiber は死後も実行を続ける契約
                 // (「死んだら爆発」演出)。EkrManager.Pump() が毎 tick 呼ばれ続けないと wait() の解決が
                 // DontUpdateDeadPlayers (既定 ON) の間引き間隔 (60〜150 tick ≈ 1〜3秒) ぶん遅延する。
                 // EKR は Utils.AddAbilityCD に意図的に未登録 (HasAbilityCD() 側の抜け道も使わない) ため
-                // ここで明示的に除外する。
-                (>= CustomRoles.EkmCustomRole1 and <= CustomRoles.EkmCustomRole10);
+                // ここで明示的に除外する。ユーザースロット + 埋込出荷役職の両方 (IsEkrRole)。
+                || EkrManager.IsEkrRole(role);
         }
 
         public bool IsTaskBasedCrewmate()
@@ -1759,7 +1759,7 @@ internal static class CustomRolesHelper
                 // EKN 役職メーカーのスロット: 明示登録が無い役職はこのデフォルトで Neutral_Benign に
                 // 落ちる仕様のため、スロット10個をここで Crewmate_Miscellaneous に固定する
                 // (オプション構築のグルーピングと選出のカテゴリ判定が両方この分類を読む)。
-                _ when EkrManager.IsSlot(role) => RoleOptionType.Crewmate_Miscellaneous,
+                _ when EkrManager.IsEkrRole(role) => RoleOptionType.Crewmate_Miscellaneous,
 
                 _ => role.IsImpostor() ? RoleOptionType.Impostor_Miscellaneous : RoleOptionType.Neutral_Benign
             };

@@ -156,10 +156,99 @@ public static class EkrManager
     // (これが無いと、束縛後に .ekrole.json を手編集しても旧オブジェクト参照が残り続ける)。
     private static readonly Dictionary<CustomRoles, string> BoundFiles = [];
 
-    // enum 範囲比較の O(1) 判定 (GetRoleSpawnMode 等の高頻度経路から呼ばれる)。
+    // enum 範囲比較の O(1) 判定。⚠️ これは「ユーザースロット10個」限定の判定 — 束縛 UI (/role set|unset)
+    // と _bindings.json 永続化だけがこれを使う。「EkrDefinition で動く役職か」の判定 (特別扱い arm・
+    // Fire ガード等) は IsEkrRole を使うこと (埋込出荷役職も含むため)。
     public static bool IsSlot(CustomRoles role)
     {
         return role is >= CustomRoles.EkmCustomRole1 and <= CustomRoles.EkmCustomRole10;
+    }
+
+    // ── 埋込出荷役職 (DLL 同梱 Resources/EkRoles/<EnumName>.ekrole.json) ─────────────────
+    // 「役職メーカーで開発して、そのまま本体の正式役職として出荷する」レーン。起動時に Bound へ恒久
+    // 束縛され、以後はユーザースロットと完全に同じ評価経路に乗る (選出・IsEnable・Fire 系・opcode 予算)。
+    // /role set|unset の対象外・_bindings.json にも載らない (BoundFiles に入れない)。
+    //
+    // ⚠️ メンバーシップは **コンパイル時静的** に保つ (LoadEmbeddedRoles での実行時 Add にしない)。
+    // 理由 (2026-08-11 監査): ①GetRoleOptionType はメニュー構築 (OptionHolder.Load コルーチン) 時 =
+    // LoadEmbeddedRoles より前に評価されるため、実行時登録だと Neutral_Benign へ誤分類される
+    // ②JSON パース失敗時に IsEkrRole が false になると GetRoleSpawnMode の「未束縛 EKR 役職は出現率0」
+    // 安全網の管轄から漏れ、定義なしの役職が湧きうる。静的メンバーシップなら破損時も「未束縛 = 湧かない」
+    // へ正しく倒れる。新しい埋込役職の追加 = enum + クラス (EkrDefinedRoles.cs) + json + ここ の4点セット。
+    private static readonly HashSet<CustomRoles> EmbeddedRoles =
+    [
+        CustomRoles.EkrShowcase
+    ];
+
+    // 「EkrDefinition で動く役職」の全集合判定 (ユーザースロット + 埋込出荷役職)。
+    public static bool IsEkrRole(CustomRoles role)
+    {
+        return IsSlot(role) || EmbeddedRoles.Contains(role);
+    }
+
+    // Options.Load 完了時 (OptionHolder.PostLoadTasks) に1回呼ぶ。再入しても安全 (Bound 上書き+Set 追加のみ)。
+    // 対応するロールクラス (EkmTemplateRole 派生・型名 = enum 名) と enum エントリは通常の役職追加と同じく
+    // 手で登録する — ここはリソース名→enum 名の照合と定義の束縛だけを行う。
+    public static void LoadEmbeddedRoles()
+    {
+        const string prefix = "EndKnot.Resources.EkRoles.";
+        const string suffix = ".ekrole.json";
+
+        try
+        {
+            var assembly = System.Reflection.Assembly.GetExecutingAssembly();
+
+            foreach (string resName in assembly.GetManifestResourceNames())
+            {
+                if (!resName.StartsWith(prefix) || !resName.EndsWith(suffix)) continue;
+
+                string stem = resName[prefix.Length..^suffix.Length];
+
+                // 照合先は静的な EmbeddedRoles 集合のみ — 任意の enum 名を受けると、既存役職名のファイルを
+                // 置いただけでその役職を無警告で乗っ取れてしまう (ユーザースロット名のシャドウも同時に防ぐ)。
+                if (!Enum.TryParse(stem, out CustomRoles role) || !EmbeddedRoles.Contains(role))
+                {
+                    Logger.Warn($"[EkrManager] Embedded role file {resName} does not match a registered embedded role (enum + EkrDefinedRoles.cs + EmbeddedRoles set) — skipped", "EkrManager");
+                    continue;
+                }
+
+                using Stream stream = assembly.GetManifestResourceStream(resName);
+                if (stream == null) continue;
+
+                using var reader = new StreamReader(stream, Encoding.UTF8);
+                string json = reader.ReadToEnd();
+
+                if (!EkrDefinition.TryParse(json, out EkrDefinition def, out string error))
+                {
+                    Logger.Error($"[EkrManager] Embedded role {stem} failed to parse: {error}", "EkrManager");
+                    continue;
+                }
+
+                Bound[role] = def;
+
+                // 表示は定義が正 (役職メーカーが名前と色の出所)。lang の同名キーは未ロード環境向けの保険表示。
+                Translator.SetRuntimeOverride(role.ToString(), def.Name);
+                Main.RoleHtmlColors[role] = def.Color;
+                Main.InitRoleColors(); // GetRoleColor が読むのは InitRoleColors 後のテーブル (Bind() と同順序)
+
+                // 出現率は通常役職と同じ扱い (既定 0%・ホストがメニューで上げる)。色だけオプション表示へ反映。
+                if (Options.CustomRoleSpawnChances != null && Options.CustomRoleSpawnChances.TryGetValue(role, out var opt))
+                    opt.SetColor(Utils.GetRoleColor(role));
+
+                Logger.Info($"[EkrManager] Embedded role loaded: {role} = {def.Name}", "EkrManager");
+            }
+
+            // メンバー登録済みなのに定義が束縛できなかった役職 (リソース欠落/パース失敗)。IsEkrRole は静的に
+            // true のままなので GetRoleSpawnMode の「未束縛 = 出現率0」安全網に正しく落ちる — 湧きはしないが
+            // メニューには出るため、開発者が気付けるようここで明示的に警告する。
+            foreach (CustomRoles role in EmbeddedRoles)
+                if (!Bound.ContainsKey(role))
+                    Logger.Warn($"[EkrManager] Embedded role {role} has no loadable definition (missing or invalid Resources/EkRoles/{role}.ekrole.json) — it stays unbound and will never spawn", "EkrManager");
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"[EkrManager] LoadEmbeddedRoles failed: {ex}", "EkrManager");
+        }
     }
 
     // slot -> 現在そのロールが割り当てられているプレイヤー。RoleBase.Init/Add/Remove から更新。
@@ -971,7 +1060,7 @@ public static class EkrManager
         if (_cc != null && (_cc.HolderId == target.PlayerId || _cc.CtxId == target.PlayerId)) StopCrowdControl();
 
         CustomRoles slot = target.GetCustomRole();
-        if (!IsSlot(slot)) return;
+        if (!IsEkrRole(slot)) return;
 
         // spec §2 死亡時の意味論 (2026-08-09 監査裁定): 死亡で走行中 fiber を全キャンセル → その後
         // on_death を発火する (この fiber だけは死後も実行可 — 「死んだら爆発」演出のため)。FireEvent
@@ -1222,7 +1311,7 @@ public static class EkrManager
         if (!pc.IsAlive()) return false;
 
         slot = pc.GetCustomRole();
-        if (!IsSlot(slot) || !HasOnMeetingPickLogic(slot)) return false;
+        if (!IsEkrRole(slot) || !HasOnMeetingPickLogic(slot)) return false;
 
         if (!Runtime.TryGetValue(pc.PlayerId, out state) || state.LogicDisabled) return false;
 
@@ -1284,7 +1373,7 @@ public static class EkrManager
         if (!reporter) return;
 
         CustomRoles slot = reporter.GetCustomRole();
-        if (!IsSlot(slot)) return;
+        if (!IsEkrRole(slot)) return;
 
         FireEvent(slot, reporter.PlayerId, "on_report", bodyOwner ? bodyOwner.PlayerId : byte.MaxValue);
     }
@@ -1335,9 +1424,11 @@ public static class EkrManager
             foreach (EkrHolderState state in Runtime.Values) DespawnDummySlots(state);
         }, 1f, "EkrManager.DespawnDummies", log: false);
 
-        foreach (CustomRoles slot in Slots)
+        // PlayersBySlot はユーザースロット + 埋込出荷役職の両方をキーに持つ (AddPlayer 経由でしか増えない)
+        // ので、Slots 配列でなくこちらを走査する — 埋込役職を反復から漏らすと会議イベントが無音死する。
+        foreach ((CustomRoles slot, HashSet<byte> holders) in PlayersBySlot)
         {
-            if (!PlayersBySlot.TryGetValue(slot, out HashSet<byte> holders) || holders.Count == 0) continue;
+            if (holders.Count == 0) continue;
 
             EkrDefinition def = GetDefinition(slot);
             if (def?.ParsedLogic == null) continue;
@@ -1600,7 +1691,7 @@ public static class EkrManager
         if (!pc) return null;
 
         CustomRoles role = pc.GetCustomRole();
-        return IsSlot(role) ? GetDefinition(role)?.ParsedPassives : null;
+        return IsEkrRole(role) ? GetDefinition(role)?.ParsedPassives : null;
     }
 
     // ReportDeadBody の通報不可チェーン (Patches/PlayerControlPatch.cs) から呼ぶ。
@@ -2003,8 +2094,9 @@ public static class EkrManager
     // slot -> 保持者の逆引き (PlayersBySlot は slot キー)。EKR は Maximum=15・10 slot なので毎回スキャンでも軽い。
     private static CustomRoles? SlotForHolder(byte holderId)
     {
-        foreach (CustomRoles slot in Slots)
-            if (PlayersBySlot.TryGetValue(slot, out HashSet<byte> holders) && holders.Contains(holderId))
+        // Slots 配列でなく PlayersBySlot を走査する (埋込出荷役職の保持者も逆引きできるように)。
+        foreach ((CustomRoles slot, HashSet<byte> holders) in PlayersBySlot)
+            if (holders.Contains(holderId))
                 return slot;
 
         return null;
