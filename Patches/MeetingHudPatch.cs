@@ -1448,7 +1448,7 @@ internal static class MeetingHudUpdatePatch
                     // 同じ規約でボタンを強制掃除する (会議を跨いで残らないよう・裁定書「掃除を忘れると
                     // ボタンが会議を跨いで残る」の指示どおり)。掃除側は生成側 (HasOnMeetingPickLogic 込み)
                     // より広く取る (advisor 指摘 2026-08-11 — 掃除条件が生成条件より狭いと取りこぼす)。
-                    case var r when EkrManager.IsSlot(r) && !PlayerControl.LocalPlayer.IsAlive():
+                    case var r when EkrManager.IsEkrRole(r) && !PlayerControl.LocalPlayer.IsAlive():
                         ClearShootButton(__instance, true);
                         break;
                 }

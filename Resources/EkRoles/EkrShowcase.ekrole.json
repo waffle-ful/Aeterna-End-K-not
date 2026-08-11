@@ -1,0 +1,42 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "しるべ",
+  "author": "End K not",
+  "color": "#ffd166",
+  "team": "crewmate",
+  "canKill": false,
+  "canVent": false,
+  "visionMultiplier": 1.0,
+  "winCondition": "team",
+  "logic": {
+    "version": 1,
+    "variables": [
+      { "name": "しるしの数", "init": 0 }
+    ],
+    "rules": [
+      {
+        "when": "on_game_start",
+        "do": [
+          { "op": "notify", "text": "きみは しるべ！とくいわざで しるしを のこそう", "seconds": 5 }
+        ]
+      },
+      {
+        "when": "on_pet",
+        "do": [
+          { "op": "marker_save", "slot": 1, "at": "self" },
+          { "op": "cno_spawn", "slot": 1, "text": "しるべ", "size": 8, "at": "self" },
+          { "op": "var_add", "name": "しるしの数", "delta": { "e": "lit", "v": 1 } },
+          { "op": "notify", "text": "しるしを のこした！({しるしの数}こめ)", "seconds": 3 }
+        ]
+      },
+      {
+        "when": "on_meeting_end",
+        "do": [
+          { "op": "teleport", "to": "marker1" },
+          { "op": "notify", "text": "しるしの ばしょへ もどってきた", "seconds": 3 }
+        ]
+      }
+    ]
+  }
+}

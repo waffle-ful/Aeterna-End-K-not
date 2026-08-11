@@ -71,6 +71,7 @@ import {
 import { MapRenderer, loadTilesetImage } from "./render";
 import { InputController } from "./input";
 import { saveForPlaytest } from "./playtest";
+import { type EkmapEntry, isTauri, listEkmapsNative, openMapFileNative, readEkmapNative, saveMapFileNative } from "./native";
 import { createBackroomsDoc } from "./presets";
 import { EKM_TEMPLATES, type EkmTemplate } from "./templates";
 import { flipStampH, flipStampV, bresenhamLine, rectOutlineCells } from "./stamp-utils";
@@ -2618,13 +2619,54 @@ function sanitizeFileName(name: string): string {
 function exportFile(): void {
     const text = buildValidatedJson(true);
     if (text === null) return;
+    const filename = `${sanitizeFileName(doc.name)}.ekmap.json`;
+    // 配布 exe では OS標準の「名前を付けて保存」で保存先を選べる。
+    // ブラウザは従来どおりダウンロードフォルダへ。
+    if (isTauri()) {
+        void (async () => {
+            const r = await saveMapFileNative(filename, text);
+            if (r.ok) toast(`保存しました (${baseName(r.value)})`);
+            else if (r.reason === "error") showMessages("保存エラー", [r.message], []);
+        })();
+        return;
+    }
     const blob = new Blob([text], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `${sanitizeFileName(doc.name)}.ekmap.json`;
+    a.download = filename;
     a.click();
     window.setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     toast("エクスポートしました (.ekmap.json)");
+}
+
+/** 絶対パスからファイル名だけを取り出す (トーストに出す用) */
+function baseName(p: string): string {
+    const parts = p.split(/[\\/]/);
+    return parts[parts.length - 1] || p;
+}
+
+/**
+ * テキストをマップとして読み込む。サイズ検証と自動保存バックアップ込み。
+ * ファイル選択・ネイティブダイアログ・ドラッグ&ドロップ・EKMaps 一覧の共通入口。
+ */
+async function openMapFromText(text: string): Promise<void> {
+    const size = new TextEncoder().encode(text).length;
+    if (size > MAX_JSON_BYTES_V2) {
+        showMessages("読込エラー", [`JSON が 4 MB を超えています (${formatKb(size)})`], []);
+        return;
+    }
+    await backupAutosave();
+    loadFromJsonText(text);
+}
+
+/** 配布 exe: OS標準の「開く」ダイアログでマップを選んで読み込む */
+async function openMapViaNativeDialog(): Promise<void> {
+    const r = await openMapFileNative();
+    if (!r.ok) {
+        if (r.reason === "error") showMessages("読込エラー", [r.message], []);
+        return;
+    }
+    await openMapFromText(r.value.text);
 }
 
 /** 現在編集中のマップが書庫に保存されている場合の書庫 ID。Ctrl+S / 保存ボタンの上書き先 */
@@ -2673,6 +2715,74 @@ async function openLibraryDialog(): Promise<void> {
     const dlg = $<HTMLDialogElement>("dlg-library");
     await renderLibraryList();
     dlg.showModal();
+}
+
+/**
+ * 「ゲームのフォルダから開く」ダイアログ (配布 exe 限定)。
+ * ゲームが読む <Documents>/EndKnot/EKMaps の .ekmap.json を新しい順に並べる。
+ */
+async function openEkmapsDialog(): Promise<void> {
+    const dlg = $<HTMLDialogElement>("dlg-ekmaps");
+    const container = $("ekmaps-list");
+    container.innerHTML = "";
+
+    const r = await listEkmapsNative();
+    if (!r.ok) {
+        showMessages("読込エラー", [r.reason === "error" ? r.message : "取得できませんでした"], []);
+        return;
+    }
+    $<HTMLDialogElement>("dlg-library").close();
+
+    if (r.value.length === 0) {
+        const empty = document.createElement("p");
+        empty.className = "note";
+        empty.textContent = "ゲームのフォルダにマップはありません (「▶ ゲームで試す」で保存すると、ここに並びます)";
+        container.appendChild(empty);
+    } else {
+        for (const entry of r.value) container.appendChild(buildEkmapRow(entry, dlg));
+    }
+    dlg.showModal();
+}
+
+/** EKMaps 一覧の 1 行を組み立てる (書庫一覧と同じ見た目を使う) */
+function buildEkmapRow(entry: EkmapEntry, dlg: HTMLDialogElement): HTMLElement {
+    const row = document.createElement("div");
+    row.className = "library-row";
+
+    const info = document.createElement("div");
+    info.className = "library-info";
+
+    const title = document.createElement("span");
+    title.className = "library-name";
+    title.textContent = entry.name;
+    info.appendChild(title);
+
+    const meta = document.createElement("span");
+    meta.className = "library-meta";
+    meta.textContent = new Date(entry.modified * 1000).toLocaleString();
+    info.appendChild(meta);
+
+    const btns = document.createElement("div");
+    btns.className = "library-btns";
+    const open = document.createElement("button");
+    open.type = "button";
+    open.textContent = "開く";
+    open.addEventListener("click", () => {
+        void (async () => {
+            const res = await readEkmapNative(entry.path);
+            if (!res.ok) {
+                showMessages("読込エラー", [res.reason === "error" ? res.message : "読み込めませんでした"], []);
+                return;
+            }
+            dlg.close();
+            await openMapFromText(res.value);
+        })();
+    });
+    btns.appendChild(open);
+
+    row.appendChild(info);
+    row.appendChild(btns);
+    return row;
 }
 
 /** 書庫一覧を再描画する */
@@ -4232,12 +4342,7 @@ function wireUi(): void {
         const f = fileInput.files?.[0];
         fileInput.value = "";
         if (!f) return;
-        if (f.size > MAX_JSON_BYTES_V2) {
-            showMessages("読込エラー", [`JSON が 4 MB を超えています (${formatKb(f.size)})`], []);
-            return;
-        }
-        await backupAutosave();
-        loadFromJsonText(await f.text());
+        await openMapFromText(await f.text());
     });
     // "保存" → 書庫に保存
     $("btn-export").addEventListener("click", () => void saveToLibrary(false));
@@ -4248,9 +4353,36 @@ function wireUi(): void {
     // 書庫ダイアログ
     $("library-import").addEventListener("click", () => {
         $<HTMLDialogElement>("dlg-library").close();
-        fileInput.click();
+        // 配布 exe は OS標準の「開く」ダイアログ、ブラウザは <input type="file">
+        if (isTauri()) void openMapViaNativeDialog();
+        else fileInput.click();
     });
+    // ゲームのフォルダ (EKMaps) から開く — 「▶ ゲームで試す」の逆。配布 exe 限定
+    $("library-ekmaps").addEventListener("click", () => void openEkmapsDialog());
     $("library-close").addEventListener("click", () => $<HTMLDialogElement>("dlg-library").close());
+    $("ekmaps-close").addEventListener("click", () => $<HTMLDialogElement>("dlg-ekmaps").close());
+    // 「ゲームのフォルダから開く」は配布 exe でしか使えないので、ブラウザでは出さない
+    if (isTauri()) $("library-ekmaps").hidden = false;
+
+    // マップファイルを窓に落として開く。exe / ブラウザ共通で動く
+    // (配布 exe は tauri.conf.json の dragDropEnabled: false により、
+    //  Tauri がドロップを横取りせず HTML のイベントがそのまま届く)。
+    window.addEventListener("dragover", (e) => {
+        // ファイルのドラッグだけ受ける — エディタ内のドラッグ操作を邪魔しない
+        if (!e.dataTransfer || !Array.from(e.dataTransfer.types).includes("Files")) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "copy";
+    });
+    window.addEventListener("drop", (e) => {
+        const f = e.dataTransfer?.files?.[0];
+        if (!f) return;
+        e.preventDefault();
+        if (!f.name.endsWith(".json")) {
+            toast("マップファイル (.ekmap.json) を落としてください");
+            return;
+        }
+        void (async () => await openMapFromText(await f.text()))();
+    });
 
     // マップコード
     $("btn-copy-code").addEventListener("click", () => void copyMapCode());

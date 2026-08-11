@@ -96,7 +96,7 @@ internal static class EkrMeetingButton
     public static void StartMeetingPatch(MeetingHud __instance)
     {
         CustomRoles myRole = PlayerControl.LocalPlayer.GetCustomRole();
-        if (!EkrManager.IsSlot(myRole) || !PlayerControl.LocalPlayer.IsAlive()) return;
+        if (!EkrManager.IsEkrRole(myRole) || !PlayerControl.LocalPlayer.IsAlive()) return;
 
         bool shouldShow = AmongUsClient.Instance.AmHost
             ? EkrManager.HasOnMeetingPickLogic(myRole) // ホスト: 厳格判定 (Bound を読める)

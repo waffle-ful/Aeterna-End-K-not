@@ -1005,6 +1005,9 @@ public static class Options
         // 終わったこの時点 (CustomRoleSpawnChances 等が揃った直後・まだ1回もゲームが始まっていない)
         // で行う (2026-08-10 裁定)。ReloadLibrary が Library を populate してから RestoreBindings が
         // ファイル名を解決する順序を厳守すること。
+        // 埋込出荷役職 (DLL 同梱の .ekrole.json) の恒久束縛。ユーザースロットの復元とは独立だが、
+        // どちらも GetRoleSpawnMode の Bound ゲートより前に走る必要があるのは同じ。
+        Modules.Ekm.EkrManager.LoadEmbeddedRoles();
         Modules.Ekm.EkrManager.ReloadLibrary();
         Modules.Ekm.EkrManager.RestoreBindings();
         // OptionShower.LastText = Translator.GetString("Loading");
@@ -1312,10 +1315,11 @@ public static class Options
 
     public static int GetRoleSpawnMode(CustomRoles role)
     {
-        // EKN 役職メーカーの予約スロットは、定義が束縛されていない限り常に「出現しない」。
+        // EKN 役職メーカーの役職は、定義が束縛されていない限り常に「出現しない」。
         // 出現率オプションが (保存値・手動操作などで) 何であっても、ここが選出・IsEnable の
-        // 全経路の根なので、未束縛スロットが「中身のない役職」として湧く事故は構造的に起きない。
-        if (Modules.Ekm.EkrManager.IsSlot(role) && !Modules.Ekm.EkrManager.IsBound(role)) return 0;
+        // 全経路の根なので、定義のない役職が「中身のない役職」として湧く事故は構造的に起きない。
+        // 埋込出荷役職 (LoadEmbeddedRoles) は起動時に恒久束縛されるので、通常役職と同じく出現率だけで決まる。
+        if (Modules.Ekm.EkrManager.IsEkrRole(role) && !Modules.Ekm.EkrManager.IsBound(role)) return 0;
 
         return CustomRoleSpawnChances.TryGetValue(role, out StringOptionItem sc) ? sc.GetChance() : 0;
     }
