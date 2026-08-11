@@ -67,6 +67,8 @@ internal sealed class EkrHolderState
     // v1.1: dummy_spawn ≤1/3秒/ホルダー・corpse_spawn ≤1/2秒/ホルダー (spec §5)。
     public float LastDummySpawnTime = -1f;
     public float LastCorpseSpawnTime = -1f;
+    // v1.3: field ≤1/2秒/ホルダー (spec §5 — CNO 生成系防御3点の per-holder レート枠)。
+    public float LastFieldPlaceTime = -1f;
 
     public bool SpeedBoostActive;
     public int SpeedGen;
@@ -488,6 +490,27 @@ public static class EkrManager
 
     public static void ResetSlot(CustomRoles slot)
     {
+        // v1.3: crowd-control の帰属判定は set を空にする前に採る (下の _cc クリア条件で使う)。
+        // このスロットの保持者のものである場合に加え、どのスロットの保持者でもなくなった孤児も断つ
+        // (ラウンド境界で前ラウンドの保持者が既に全 set から消えていると、帰属チェックだけでは
+        // 誰もクリアできず新ラウンドへ持ち越される — 元の無条件クリアが守っていたケース)。
+        bool ccShouldClear = false;
+
+        if (_cc != null)
+        {
+            bool ownedBySomeSlot = false;
+
+            foreach (HashSet<byte> owners in PlayersBySlot.Values)
+            {
+                if (!owners.Contains(_cc.HolderId)) continue;
+
+                ownedBySomeSlot = true;
+                break;
+            }
+
+            ccShouldClear = !ownedBySomeSlot || (PlayersBySlot.TryGetValue(slot, out HashSet<byte> mine) && mine.Contains(_cc.HolderId));
+        }
+
         if (PlayersBySlot.TryGetValue(slot, out HashSet<byte> set)) set.Clear();
         else PlayersBySlot[slot] = [];
 
@@ -498,6 +521,24 @@ public static class EkrManager
         // 重複排除されてしまう (ラウンド境界の取りこぼし)。Init() (=ResetSlot) はラウンド毎に
         // 必ず1回呼ばれるので、ここで確実に破棄する。
         LastMeetingEndNum.Remove(slot);
+
+        // v1.3: crowd-control (drag/field) は EKR 全体の static シングルトン。新ラウンド開始の主経路
+        // (OnGameStartedPatch の PlayerStates 差し替え) は Role.Remove() を呼ばないため、前ラウンド稼働中の
+        // まま持ち越すと HolderId が新ラウンドの別人として解決されうる (監査指摘 2026-08-11 — EndAt 経過で
+        // 自己回収はするが、ここで確実に断つ)。実体 CNO はゲーム終了時の CNO 一斉破棄で片付いているので
+        // Despawn は呼ばず参照だけ捨てる。
+        //
+        // ⚠ ただし ResetSlot は Init() 経由で「ゲーム中いつでも」呼ばれうる (GameState.SetMainRole の
+        // `if (!role.RoleExist(true)) Role.Init();` — 役職変更持ち役職が未使用スロットへ再配役したとき)。
+        // 無条件クリアだと無関係スロットの稼働中 field を参照ごと捨てて孤児 CNO 化させ、≤10 上限が
+        // 静かに破れる (監査指摘 2026-08-11)。帰属するときだけ断つ — TeardownRuntime の HolderId/CtxId
+        // チェックと同じ非対称の解消。ラウンド境界では前ラウンドの保持者が set に残っているので通る。
+        if (ccShouldClear)
+        {
+            _cc = null;
+            _ccPendingDespawn.Clear();
+            _lastCcTickTime = -1f;
+        }
     }
 
     public static void AddPlayer(CustomRoles slot, byte playerId)
@@ -548,6 +589,12 @@ public static class EkrManager
                 if (state.Portals[i] != null) count++;
         }
 
+        // v1.3: field の実体も「EKR 全体 ≤10 体」の導出カウントに含む (spec §5 P6 整合)。crowd-control は
+        // EKR 全体で同時1本だが、遅延 Despawn 待ちは 1 秒窓の間に複数重なりうる (下記 _ccPendingDespawn の
+        // コメント参照)。遅延待ちの実体も数える (過小カウント側に振れると ≤10 上限が実質破れるため)。
+        if (_cc?.FieldCno != null) count++;
+        count += _ccPendingDespawn.Count;
+
         return count;
     }
 
@@ -578,6 +625,9 @@ public static class EkrManager
     // と同型の破棄経路)。teardown 時点で即座に復元することで防ぐ。
     private static void TeardownRuntime(byte playerId)
     {
+        // v1.3 (spec §5 crowd-control エンジン): ホルダー/ctx いずれかの死亡・切断・役職剥奪でも即解除。
+        if (_cc != null && (_cc.HolderId == playerId || _cc.CtxId == playerId)) StopCrowdControl();
+
         if (!Runtime.Remove(playerId, out EkrHolderState state)) return;
 
         if (state.SpeedBoostActive)
@@ -799,6 +849,11 @@ public static class EkrManager
     {
         if (!target) return;
 
+        // v1.3 (spec §5 crowd-control エンジン): ホルダー/ctx いずれかの死亡でも即解除。target が EKR
+        // ホルダーかどうかに関わらず判定する (drag の ctx は EKR ホルダーである必要が無いため — 「相手」は
+        // 任意の生存プレイヤー)。
+        if (_cc != null && (_cc.HolderId == target.PlayerId || _cc.CtxId == target.PlayerId)) StopCrowdControl();
+
         CustomRoles slot = target.GetCustomRole();
         if (!IsSlot(slot)) return;
 
@@ -858,6 +913,9 @@ public static class EkrManager
         // (EkrActionSink.Execute の ExileController ゲートとの二重防御)。会議明けには
         // FireMeetingEndForSlot が起点を改めて再セットする。
         LastMeetingEndTime = Time.realtimeSinceStartup;
+
+        // v1.3 (spec §3,§5): 会議開始 (追放演出突入含む) で drag/field は即停止・解除 (持ち越しはしない)。
+        StopCrowdControl();
 
         foreach (EkrHolderState state in Runtime.Values)
         {
@@ -989,6 +1047,9 @@ public static class EkrManager
         // 内部で即 return する)。ホルダーごとに毎 FixedUpdate 呼ばれる Pump に相乗りさせる (専用の
         // 毎フレーム経路を新しく作らない・spec §5「専用の毎フレーム経路を作らない」)。
         PollCnoTouchIfDue();
+
+        // v1.3: crowd-control (drag/field) の 1.0 秒 tick も同じ相乗り駆動 (自己スロットリング)。
+        PumpCrowdControlIfDue();
 
         if (!Runtime.TryGetValue(pc.PlayerId, out EkrHolderState state) || state.LogicDisabled) return;
 
@@ -1270,5 +1331,272 @@ public static class EkrManager
 
         foreach (PlayerControl pc in Main.AllAlivePlayerControls)
             if (Vector2.Distance(pc.Pos(), pos) <= TouchEnterRadius) latched.Add(pc.PlayerId);
+    }
+
+    // ── v1.3: crowd-control エンジン (drag/field の共有枠・spec §3,§5) ──────────────────────────
+    // EKR 全体で同時1本 (drag/field 合算)。所有 fiber とは切り離したエンジン側の単一スロットで、
+    // 「1.0秒 tick・per-tick TP 上限 (field のみ 5人・ラウンドロビン)・発動あたり TP 総予算
+    // (drag≤15/field≤45)」の3点セットを SuperCannonShot.PullTick から移植する。tick の TP は fiber 側
+    // teleport の EKR 全体 ≤2/秒予算とは別勘定 (このエンジン自身の3点セットが締める)。
+
+    private sealed class EkrCrowdControlState
+    {
+        public byte HolderId;
+        public byte CtxId = byte.MaxValue; // drag のみ使用。field は対象を毎 tick 半径で都度決めるので不要。
+        public bool IsField;
+        public float EndAt;
+        public int Spent;
+        public int Budget;
+        public int Rotation; // field のみ: ラウンドロビン公平化 (PullTick と同型)
+
+        // field のみ
+        public IEkrSlotCno FieldCno;
+        public float Radius;
+        public float PullDistance;
+    }
+
+    private static EkrCrowdControlState _cc;
+
+    // StopCrowdControl の遅延 Despawn 待ちの field 実体。CountLiveCno はこれも数える —
+    // 「実在するのに数えない」過小カウント側 (≤10 上限にとって危険側) に振れないための参照保持
+    // (DespawnDummySlots の pending 台帳保持と同じ裁定)。
+    //
+    // ⚠ 単一スロットではなくリスト。crowd-control 自体は同時1本だが、遅延窓 (1秒) の中で
+    // 「A 停止 → B 起動 → B 停止」が連鎖しうる (CanOccupyCnoSlot は pending も数えるので B の spawn は通る)。
+    // 単一 static だと後着の B が A を上書きし、A が二度と Despawn されない孤児 CNO になる
+    // (= ≤10 上限が 1 体ずつ静かに狭まる片方向リーク・監査指摘 2026-08-11)。
+    private static readonly List<IEkrSlotCno> _ccPendingDespawn = [];
+
+    private const float CcTickInterval = 1f;
+    private const float CcDeadzone = 1.6f; // spec §5: 最短ゲート (下回る tick はスキップ・予算不消費)
+    private const int CcFieldPerTickCap = 5;
+    private const int CcDragBudget = 15;
+    private const int CcFieldBudget = 45;
+
+    private static float _lastCcTickTime = -1f;
+
+    // 起動を認める共有 SnapTo 残量の下限。Utils.TP は 80..99 帯でも true を返す (SendOption.None へ降格する
+    // だけ) ため、枯渇間際に始めた drag/field は「予算は減るのに客へ確実には届かない」空撃ちになり、加えて
+    // 他役職の TP まで枯らす (memory: multiplayer_pull_tp_cap_budget)。EKR field(45) と SuperCannonShot
+    // BlackHole(45) が同一ラウンドで加算されるケースの防波堤も兼ねる。
+    // ⚠ 判定は「起動時のみ」— 稼働中に閾値へ達しても途中で畳まない。周期 TP を中断すると引き寄せ途中の
+    // 位置で止まって効果が意味不明になるうえ、能力と CD は既に消費済みで取り返せない (監査指摘 2026-08-11)。
+    // 稼働中の枯渇は Utils.TP 側の 100 到達 (false 返し = 予算不消費) が自然に受け止める。
+    private const int CcMaxSnapToPressureToStart = 60;
+
+    internal static bool SnapToBudgetAllowsCrowdControl()
+        => GameStates.CurrentServerType != GameStates.ServerType.Vanilla || Utils.NumSnapToCallsThisRound < CcMaxSnapToPressureToStart;
+
+    internal static bool IsCrowdControlActive => _cc != null;
+
+    // 早期ガード (IsCrowdControlActive) と TryStartField 呼び出しの間に他の何かが割り込んで _cc が
+    // 埋まった場合の後始末 (単一スレッド実行のこのコードベースでは通常到達しない防御的経路)。
+    // 実体化前でも後でも孤児コルーチン防止裁定 (spec §5) に従って回収する。
+    internal static void RetryDespawnOrphanFieldCno(IEkrSlotCno cno)
+    {
+        if (cno.IsInstantiated) cno.Despawn();
+        else RetryDespawnUninstantiated(cno, retriesLeft: 5);
+    }
+
+    // drag opcode から呼ぶ。稼働中なら静かにドロップ (spec §5「稼働中の新規起動は静かにドロップ」)。
+    internal static bool TryStartDrag(byte holderId, byte ctxId, float seconds)
+    {
+        if (_cc != null) return false;
+        if (!SnapToBudgetAllowsCrowdControl()) return false;
+
+        // 前セッションの最終 tick 時刻を持ち越すと 1 発目が最大 1 秒遅れ、seconds:1 の drag/field が
+        // 1 tick も打たずに終わる (監査指摘 2026-08-11)。開始直後に 1 発目を打つ。
+        _lastCcTickTime = -1f;
+
+        _cc = new EkrCrowdControlState
+        {
+            HolderId = holderId,
+            CtxId = ctxId,
+            IsField = false,
+            EndAt = Time.realtimeSinceStartup + seconds,
+            Budget = CcDragBudget
+        };
+
+        return true;
+    }
+
+    // field opcode から呼ぶ。fieldCno は呼び出し元 (EkrLogicOpcodes.Field) が CNO 生成系防御3点
+    // (TryConsumeGlobalCnoSpawnBudget 課金・会議/追放中 no-op・全体≤10体) を通過させた後に渡す。
+    // 稼働中なら静かにドロップ — その場合 fieldCno は呼び出し元が孤児コルーチン防止裁定に従って
+    // 回収すること (実体化前なら RetryDespawnUninstantiated 相当・実体化済みなら即 Despawn)。
+    internal static bool TryStartField(byte holderId, IEkrSlotCno fieldCno, float radius, float pullDistance, float seconds)
+    {
+        if (_cc != null) return false;
+        if (!SnapToBudgetAllowsCrowdControl()) return false;
+
+        _lastCcTickTime = -1f; // 開始直後に 1 発目を打つ (TryStartDrag と同じ・監査指摘 2026-08-11)
+
+        _cc = new EkrCrowdControlState
+        {
+            HolderId = holderId,
+            IsField = true,
+            EndAt = Time.realtimeSinceStartup + seconds,
+            Budget = CcFieldBudget,
+            FieldCno = fieldCno,
+            Radius = radius,
+            PullDistance = pullDistance
+        };
+
+        return true;
+    }
+
+    // 会議開始 (追放演出突入含む)・ホルダー/ctx の死亡切断・持続終了のいずれかから呼ぶ (spec §3,§5)。
+    // tick 停止 (_cc = null) は同期で行うが、CNO の実 Despawn は 1 秒遅延 — 呼び出し元の 1 つが
+    // FireMeetingStart (= PlayerControlPatch.AfterReportTasks の同期コールスタック) で、そこに
+    // Object.Destroy/RemoveNetObject を乗せない規約 (DespawnDummySlots と同じ・上のコメント参照) を
+    // 全呼び出し元へ一律適用する (経路ごとに分けると会議経路だけ漏れる — 監査指摘 2026-08-11)。
+    private static void StopCrowdControl()
+    {
+        if (_cc == null) return;
+
+        EkrCrowdControlState cc = _cc;
+        _cc = null;
+
+        if (cc.IsField && cc.FieldCno != null)
+        {
+            // クロージャは static ではなくこのローカルを掴む (static を読み直すと後着の停止で上書きされ、
+            // 先着の実体が孤児化する — 上の _ccPendingDespawn のコメント参照)。
+            IEkrSlotCno pending = cc.FieldCno;
+            _ccPendingDespawn.Add(pending);
+
+            LateTask.New(() =>
+            {
+                _ccPendingDespawn.Remove(pending);
+
+                // spec §5: 実体化前に持続終了した pending は遅延 Despawn で回収 (孤児コルーチン既知型・
+                // TeardownRuntime の CnoSlots 回収と同じ裁定)。retry へ渡した後は既存の受容残差
+                // (「teardown-while-pending の孤児1体は10体カウント外」) と同じ扱い。
+                if (pending.IsInstantiated) pending.Despawn();
+                else RetryDespawnUninstantiated(pending, retriesLeft: 5);
+            }, 1f, "EKR-CC-FieldDespawn");
+        }
+    }
+
+    // Pump() から毎 FixedUpdate 相乗りで呼ばれる (自己スロットリング — spec §5「専用の毎フレーム経路を
+    // 作らない」)。会議中/追放演出中は即停止 (FireMeetingStart の明示停止と二重防御・タイミング競合対策)。
+    private static void PumpCrowdControlIfDue()
+    {
+        if (_cc == null) return;
+
+        // 同ファイルの他の遅延処理 (RetryDespawnUninstantiated / RetryRestoreSpeed) と同じ規約 —
+        // 勝利演出中に TP tick を続けない (監査指摘 2026-08-11)。
+        if (GameStates.IsEnded)
+        {
+            StopCrowdControl();
+            return;
+        }
+
+        if (GameStates.IsMeeting || ExileController.Instance)
+        {
+            StopCrowdControl();
+            return;
+        }
+
+        float now = Time.realtimeSinceStartup;
+
+        if (now >= _cc.EndAt)
+        {
+            StopCrowdControl();
+            return;
+        }
+
+        if (_lastCcTickTime >= 0f && now - _lastCcTickTime < CcTickInterval) return;
+        _lastCcTickTime = now;
+
+        PlayerControl holderPc = _cc.HolderId.GetPlayer();
+        if (!holderPc || !holderPc.IsAlive())
+        {
+            StopCrowdControl();
+            return;
+        }
+
+        if (_cc.IsField) TickField(_cc);
+        else TickDrag(_cc, holderPc);
+    }
+
+    // drag: 発火時の ctx を毎 tick ホルダーの現在位置へ TP する (Penguin 型・spec §3)。部分移動ではなく
+    // 1回で現在位置まで飛ばす — SuperCannonShot.PullTick のような段階的な引き寄せではない点が field との違い。
+    private static void TickDrag(EkrCrowdControlState cc, PlayerControl holderPc)
+    {
+        PlayerControl ctxPc = cc.CtxId.GetPlayer();
+        if (!ctxPc || !ctxPc.IsAlive())
+        {
+            StopCrowdControl();
+            return;
+        }
+
+        if (cc.Spent >= cc.Budget) return; // 予算超過は静かにドロップ (稼働自体は seconds 経過まで維持)
+
+        Vector2 dest = holderPc.Pos();
+        Vector2 from = ctxPc.Pos();
+        if (Vector2.Distance(from, dest) < CcDeadzone) return; // 予算不消費 (None降格既知型回避)
+
+        // 壁越えは引かない (TickField / SuperCannonShot.PullTick と同じ裁定 — 壁内へ埋め込むと非モッドが
+        // スタックする)。着地点はホルダーの現在位置なので通常は歩ける場所だが、ホルダーが直前に vent や
+        // 移動床で飛んだ直後のフレームでは経路が壁を貫きうる。3兄弟で1つだけ防御が欠けていた (監査指摘 2026-08-11)。
+        if (PhysicsHelpers.AnythingBetween(from, dest, Constants.ShipOnlyMask, false)) return;
+
+        if (Utils.TP(ctxPc.NetTransform, dest, minInterval: 0f)) // 成功時のみ消費 (spec §5)
+        {
+            cc.Spent++;
+            PrelatchTouchSensorsNear(ctxPc.PlayerId, dest); // spec §3 意味論: drag/field の tick TP にも適用
+        }
+    }
+
+    // field: 中心 (フィールド実体) の半径内にいる生存プレイヤーを 1.0秒 tick で中心へ部分的に引き寄せる
+    // (SuperCannonShot.PullTick 移植・spec §3,§5)。ホルダー自身は対象外。per-tick 上限5人・ラウンドロビン公平化。
+    private static void TickField(EkrCrowdControlState cc)
+    {
+        if (cc.FieldCno is not CustomNetObject fieldCno || !fieldCno.playerControl) return; // 実体化前は何もしない
+
+        Vector2 center = fieldCno.Position;
+
+        var candidates = new List<PlayerControl>();
+
+        // 毎秒ループなので yield 版 (Main.EnumerateAlivePlayerControls) は使わない —
+        // ネスト管理 IEnumerator は呼び出し毎に strong GCHandle を残す (memory: nested_managed_enumerator_gchandle_leak)。
+        // 同ファイルの PollCnoTouchIfDue / PrimeTouchSensor と同じくキャッシュ済みリストを使う (監査指摘 2026-08-11)。
+        foreach (PlayerControl pc in Main.AllAlivePlayerControls)
+        {
+            if (pc.PlayerId == cc.HolderId) continue; // ホルダー自身は引き寄せ対象外 (spec §3)
+            if (Vector2.Distance(pc.Pos(), center) <= cc.Radius) candidates.Add(pc);
+        }
+
+        if (candidates.Count == 0) return;
+
+        int pulled = 0;
+
+        for (int i = 0; i < candidates.Count && pulled < CcFieldPerTickCap && cc.Spent < cc.Budget; i++)
+        {
+            PlayerControl pc = candidates[(cc.Rotation + i) % candidates.Count];
+
+            Vector2 pos = pc.Pos();
+            float dist = Vector2.Distance(pos, center);
+            if (dist < CcDeadzone) continue; // 予算不消費 (None降格既知型回避)
+
+            // spec §5 の「引き寄せ TP は全段 1.5u 超」は実際に TP する移動量 (step) への保証 —
+            // dist ∈ [1.6, 2.3) では min() が dist-0.8 (<1.5) 側を選び None 降格の空撃ちになるため、
+            // 下限 1.6u (安全マージン込み) でクランプする。step ≤ dist なのでオーバーシュートはしない
+            // (dist=1.6 なら中心ちょうどに着地 → 次 tick は deadzone スキップで収束)。監査指摘 2026-08-11。
+            float step = Mathf.Max(Mathf.Min(cc.PullDistance, dist - (CcDeadzone / 2f)), CcDeadzone);
+            Vector2 newPos = pos + ((center - pos).normalized * step);
+
+            // 壁越えは引かない (PullTick と同じ裁定 — 壁内へ埋め込むと非モッドがスタックする)
+            if (PhysicsHelpers.AnythingBetween(pos, newPos, Constants.ShipOnlyMask, false)) continue;
+
+            if (Utils.TP(pc.NetTransform, newPos, minInterval: 0f)) // 成功時のみ消費 (spec §5)
+            {
+                cc.Spent++;
+                pulled++;
+                PrelatchTouchSensorsNear(pc.PlayerId, newPos);
+            }
+        }
+
+        cc.Rotation = (cc.Rotation + CcFieldPerTickCap) % candidates.Count;
     }
 }

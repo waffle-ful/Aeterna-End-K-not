@@ -720,6 +720,80 @@ describe("logic 検証 v1.2 (位置と接触)", () => {
     });
 });
 
+// v1.3 (docs/ekr-logic-spec.md §3 2026-08-11 追記) — ひっぱる・ひきずる・フィールド
+describe("logic 検証 v1.3 (ひっぱる・ひきずる・フィールド)", () => {
+    function baseLogic(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+        return {
+            version: 1,
+            rules: [{ when: "on_pet", do: [{ op: "stop" }] }],
+            ...overrides,
+        };
+    }
+    function withLogic(logic: unknown): Record<string, unknown> {
+        return { ...baseValid(), logic };
+    }
+
+    it("pull は引数なしで受理される", () => {
+        const r = validateEkrDefinition(withLogic(baseLogic({ rules: [{ when: "on_pet", do: [{ op: "pull" }] }] })));
+        expect(r.ok).toBe(true);
+        if (r.ok) expect(r.def.logic?.rules[0].do[0]).toEqual({ op: "pull" });
+    });
+
+    it("pull に余計なフィールドがあっても無視される (余剰キーは黙って無視)", () => {
+        const r = validateEkrDefinition(withLogic(baseLogic({ rules: [{ when: "on_pet", do: [{ op: "pull", target: "ctx" }] }] })));
+        expect(r.ok).toBe(true);
+        if (r.ok) expect(r.def.logic?.rules[0].do[0]).toEqual({ op: "pull" });
+    });
+
+    it("drag: seconds は 1..10 (境界値は通り、範囲外/非数値は拒否)", () => {
+        const cases: { node: unknown; ok: boolean }[] = [
+            { node: { op: "drag", seconds: 1 }, ok: true },
+            { node: { op: "drag", seconds: 10 }, ok: true },
+            { node: { op: "drag", seconds: 0.9 }, ok: false },
+            { node: { op: "drag", seconds: 10.1 }, ok: false },
+            { node: { op: "drag", seconds: "3" }, ok: false },
+        ];
+        for (const { node, ok } of cases) {
+            const r = validateEkrDefinition(withLogic(baseLogic({ rules: [{ when: "on_pet", do: [node] }] })));
+            expect(r.ok, `${JSON.stringify(node)} は ok=${ok} を期待`).toBe(ok);
+        }
+    });
+
+    it("field: at/radius/strength/seconds の範囲外・未知値は拒否、範囲内は通る", () => {
+        const cases: { node: unknown; ok: boolean }[] = [
+            { node: { op: "field", at: "self", radius: "small", strength: "weak", seconds: 1 }, ok: true },
+            { node: { op: "field", at: "ctx", radius: "medium", strength: "medium", seconds: 15 }, ok: true },
+            { node: { op: "field", at: "marker4", radius: "large", strength: "strong", seconds: 15 }, ok: true },
+            { node: { op: "field", at: "marker5", radius: "small", strength: "weak", seconds: 1 }, ok: false },
+            { node: { op: "field", at: "self", radius: "huge", strength: "weak", seconds: 1 }, ok: false },
+            { node: { op: "field", at: "self", radius: "small", strength: "extreme", seconds: 1 }, ok: false },
+            { node: { op: "field", at: "self", radius: "small", strength: "weak", seconds: 0.9 }, ok: false },
+            { node: { op: "field", at: "self", radius: "small", strength: "weak", seconds: 15.1 }, ok: false },
+        ];
+        for (const { node, ok } of cases) {
+            const r = validateEkrDefinition(withLogic(baseLogic({ rules: [{ when: "on_pet", do: [node] }] })));
+            expect(r.ok, `${JSON.stringify(node)} は ok=${ok} を期待`).toBe(ok);
+        }
+    });
+
+    it("pull/drag/field は leaf ノード (depth 1, count 1) — 深さ8ちょうどの入れ子でも通る", () => {
+        function nestedIf(depth: number, leaf: unknown): unknown {
+            if (depth <= 1) return leaf;
+            return { op: "if", cond: { e: "lit", v: 1 }, then: [nestedIf(depth - 1, leaf)] };
+        }
+        for (const leaf of [
+            { op: "pull" },
+            { op: "drag", seconds: 3 },
+            { op: "field", at: "self", radius: "small", strength: "weak", seconds: 3 },
+        ]) {
+            const depth8 = [nestedIf(8, leaf)];
+            expect(validateEkrDefinition(withLogic(baseLogic({ rules: [{ when: "on_pet", do: depth8 }] }))).ok, JSON.stringify(leaf)).toBe(true);
+            const depth9 = [nestedIf(9, leaf)];
+            expect(validateEkrDefinition(withLogic(baseLogic({ rules: [{ when: "on_pet", do: depth9 }] }))).ok, JSON.stringify(leaf)).toBe(false);
+        }
+    });
+});
+
 describe("normalize* ヘルパー (UI と検証が共有する唯一のクランプ実装)", () => {
     it("normalizeKillCooldown: 有限数はクランプ、非有限/非数値は既定値", () => {
         expect(normalizeKillCooldown(50)).toBe(50);

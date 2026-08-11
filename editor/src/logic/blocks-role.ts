@@ -35,6 +35,7 @@ const HUE_LOOKS = 290; // 見た目 = 紫
 const HUE_CONTROL = 20; // 制御 = 橙
 const HUE_VAR = 330; // 変数 = 赤 (Blockly 標準の VARIABLES_HUE と同値)
 // v1.2 (spec §6/§7 2026-08-10 追記) — 「ひっさつわざ」カテゴリ (マーカー/相手ワープ/ポータル)。
+// v1.3 (spec §3 2026-08-11 追記) で pull/drag/field (ひっぱる・ひきずる・フィールド) を同カテゴリに追加。
 // 既存5色 (45/210/290/20/330) と衝突しない色相を選ぶ。
 const HUE_ULTIMATE = 150; // ひっさつわざ = 緑
 
@@ -344,6 +345,45 @@ function jsonBlockDefs(): unknown[] {
             colour: HUE_ULTIMATE,
             tooltip: "自分の足元にポータルを置きます。AとB両方置くと、ワープでつながります (生きているプレイヤーが触れると反対側へワープします)。同じ方をもう一度置くと、そちらだけ引っ越します。",
         },
+        // v1.3 (spec §3 2026-08-11 追記) — ひっぱる・ひきずる・フィールド
+        {
+            type: "ekr_do_pull",
+            message0: "あいてをひきよせる",
+            previousStatement: null,
+            nextStatement: null,
+            colour: HUE_ULTIMATE,
+            tooltip: "このできごとの相手を、自分のいまいる場所へ一気に引き寄せます (相手がいなければ何も起きません)。ワープと同じ予算 (全部の役職まとめて1秒に2回まで) を使うので、ここぞというときに使おう。",
+        },
+        {
+            type: "ekr_do_drag",
+            message0: "相手をつかんでひきずる ( %1 びょう)",
+            args0: [{ type: "field_number", name: "SECONDS", value: 3, min: 1, max: 10, precision: 1 }],
+            inputsInline: true,
+            previousStatement: null,
+            nextStatement: null,
+            colour: HUE_ULTIMATE,
+            tooltip: "このできごとの相手を、指定した秒数のあいだつかんで自分のそばへ引きずり続けます (1〜10秒)。会議が始まると自動的にはなします。ひきずるのとフィールドは同時に1つしか使えないので、使っているときに新しく始めても効きません。",
+        },
+        {
+            type: "ekr_do_field",
+            message0: "%1 に ( 半径 %2 ・ 強さ %3 ) の ブラックホールをつくる ( %4 びょう)",
+            args0: [
+                {
+                    type: "field_dropdown", name: "AT", options: [
+                        ["じぶんの場所", "self"], ["相手の場所", "ctx"],
+                        ["マーカー1", "marker1"], ["マーカー2", "marker2"], ["マーカー3", "marker3"], ["マーカー4", "marker4"],
+                    ],
+                },
+                { type: "field_dropdown", name: "RADIUS", options: [["小", "small"], ["中", "medium"], ["大", "large"]] },
+                { type: "field_dropdown", name: "STRENGTH", options: [["弱", "weak"], ["中", "medium"], ["強", "strong"]] },
+                { type: "field_number", name: "SECONDS", value: 5, min: 1, max: 15, precision: 1 },
+            ],
+            inputsInline: true,
+            previousStatement: null,
+            nextStatement: null,
+            colour: HUE_ULTIMATE,
+            tooltip: "指定した場所にブラックホールを出します。半径の中にいる生きているプレイヤー (自分以外) を、指定した秒数のあいだ中心へ引き寄せ続けます (1〜15秒)。会議が始まったり時間が終わったりすると消えます。ひきずるのとフィールドは同時に1つしか使えないので、使っているときに新しく置いても出ません。マーカーが未保存だと出ません。",
+        },
 
         // 変数・式 (動的ドロップダウンが不要なもののみ。var_set/var_add/変数の値 は命令形で別途登録)
         {
@@ -546,6 +586,9 @@ export function buildRoleToolbox(): Blockly.utils.toolbox.ToolboxDefinition {
                     { kind: "block", type: "ekr_do_marker_save" },
                     { kind: "block", type: "ekr_do_teleport_other" },
                     { kind: "block", type: "ekr_do_portal_place" },
+                    { kind: "block", type: "ekr_do_pull" },
+                    { kind: "block", type: "ekr_do_drag" },
+                    { kind: "block", type: "ekr_do_field" },
                 ],
             },
             {

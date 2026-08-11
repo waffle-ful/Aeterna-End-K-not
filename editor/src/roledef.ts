@@ -124,6 +124,15 @@ export const TELEPORT_OTHER_TO_VALUES = ["self", "marker1", "marker2", "marker3"
 export const MARKER_SAVE_AT_VALUES = ["self", "ctx", "cno1", "cno2", "cno3"] as const;
 export const PORTAL_WHICH_VALUES = ["a", "b"] as const;
 
+// v1.3 (spec §3 2026-08-11 追記) — ひっぱる・ひきずる・フィールド
+export const DRAG_SECONDS_MIN = 1;
+export const DRAG_SECONDS_MAX = 10;
+export const FIELD_AT_VALUES = ["self", "ctx", "marker1", "marker2", "marker3", "marker4"] as const;
+export const FIELD_RADIUS_VALUES = ["small", "medium", "large"] as const;
+export const FIELD_STRENGTH_VALUES = ["weak", "medium", "strong"] as const;
+export const FIELD_SECONDS_MIN = 1;
+export const FIELD_SECONDS_MAX = 15;
+
 export interface LogicVariable {
     name: string;
     init: number;
@@ -164,7 +173,18 @@ export type LogicNode =
     // (per-holder の位置メモリ4スロット・§3「マーカー」)。
     | { op: "marker_save"; slot: 1 | 2 | 3 | 4; at: (typeof MARKER_SAVE_AT_VALUES)[number] }
     | { op: "teleport_other"; target: "ctx"; to: (typeof TELEPORT_OTHER_TO_VALUES)[number] }
-    | { op: "portal_place"; which: (typeof PORTAL_WHICH_VALUES)[number] };
+    | { op: "portal_place"; which: (typeof PORTAL_WHICH_VALUES)[number] }
+    // v1.3 (spec §3 2026-08-11 追記) — ひっぱる・ひきずる・フィールド。pull は引数なし
+    // (ctx 暗黙。teleport_other の to:"self" と実行時は完全共有だが opcode としては独立 — spec §3)。
+    | { op: "pull" }
+    | { op: "drag"; seconds: number }
+    | {
+        op: "field";
+        at: (typeof FIELD_AT_VALUES)[number];
+        radius: (typeof FIELD_RADIUS_VALUES)[number];
+        strength: (typeof FIELD_STRENGTH_VALUES)[number];
+        seconds: number;
+    };
 
 export interface LogicRule {
     when: LogicWhen;
@@ -631,6 +651,20 @@ function validateNode(raw: unknown, varNames: ReadonlySet<string>, path: string)
         case "portal_place": {
             const which = expectEnum(raw.which, PORTAL_WHICH_VALUES, `${path}.which`);
             return { node: { op: "portal_place", which }, depth: 1, count: 1 };
+        }
+        // v1.3 (spec §3): pull/drag/field
+        case "pull":
+            return { node: { op: "pull" }, depth: 1, count: 1 };
+        case "drag": {
+            const seconds = expectRangeNumber(raw.seconds, DRAG_SECONDS_MIN, DRAG_SECONDS_MAX, `${path}.seconds`);
+            return { node: { op: "drag", seconds }, depth: 1, count: 1 };
+        }
+        case "field": {
+            const at = expectEnum(raw.at, FIELD_AT_VALUES, `${path}.at`);
+            const radius = expectEnum(raw.radius, FIELD_RADIUS_VALUES, `${path}.radius`);
+            const strength = expectEnum(raw.strength, FIELD_STRENGTH_VALUES, `${path}.strength`);
+            const seconds = expectRangeNumber(raw.seconds, FIELD_SECONDS_MIN, FIELD_SECONDS_MAX, `${path}.seconds`);
+            return { node: { op: "field", at, radius, strength, seconds }, depth: 1, count: 1 };
         }
         default:
             fail(`${path}.op が不明です (${JSON.stringify(op)})`);
