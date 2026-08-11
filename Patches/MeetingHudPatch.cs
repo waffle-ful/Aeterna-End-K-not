@@ -201,6 +201,18 @@ internal static class CheckForEndVotingPatch
                     case Mayor mayor when !Mayor.MayorHideVote.GetBool():
                         Loop.Times(Mayor.MayorAdditionalVote.GetInt() + mayor.TaskVotes, _ => AddVote());
                         break;
+                    // EKR passives.voteWeight (0..3・既定 1)。この switch は下の `if (canVote) AddVote();`
+                    // より前なので、1票ぶんは既定の AddVote が出す — 追加は weight-1 票。
+                    // ⚠ 「票のちから」は既にある票を増やす修飾であって票を作り出すものではない —
+                    //    上の canVote=false 群 (Notvoter/Glitch/Shifter/Poache/Silencer 等) で票を
+                    //    奪われている場合は増やさない (でないと投票不能のはずの人が複数票を投じる)。
+                    case EkmTemplateRole:
+                    {
+                        int ekrVoteWeight = EndKnot.Modules.Ekm.EkrManager.GetVoteWeight(ps.TargetPlayerId);
+                        if (ekrVoteWeight <= 0) canVote = false;
+                        else if (canVote) Loop.Times(ekrVoteWeight - 1, _ => AddVote());
+                        break;
+                    }
                 }
 
                 if (canVote) AddVote();
@@ -683,6 +695,17 @@ internal static class ExtendedMeetingHud
                     case Survivor when Utils.AllAlivePlayersCount <= Survivor.ThirdAbility.GetInt():
                         voteNum += Survivor.AdditionalVote.GetInt();
                         break;
+                    // EKR passives.voteWeight (0..3・既定 1)。ここは既に基本1票 (+他の加算修飾) が
+                    // voteNum に入っているので、weight-1 を足す (voteNum=weight だと他の修飾を潰す)。
+                    // ⚠ 上の `voteNum = 0` 群 (Notvoter/Glitch/Shifter) で票を奪われている場合は
+                    //    増やさない — site 1 の canVote 判定と同じ合成規則 (票を作り出す修飾ではない)。
+                    case EkmTemplateRole:
+                    {
+                        int ekrVoteWeight = EndKnot.Modules.Ekm.EkrManager.GetVoteWeight(ps.TargetPlayerId);
+                        if (ekrVoteWeight <= 0) voteNum = 0;
+                        else if (voteNum > 0) voteNum += ekrVoteWeight - 1;
+                        break;
+                    }
                 }
 
                 if (ps.TargetPlayerId == ps.VotedFor && Options.MadmateSpawnMode.GetInt() == 2 && CustomRoles.Madmate.IsEnable() && MeetingStates.FirstMeeting) voteNum = 0;

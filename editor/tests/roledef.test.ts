@@ -17,6 +17,7 @@ import {
     normalizeKillCooldown,
     normalizeVisionMultiplier,
     validateEkrDefinition,
+    validatePassives,
 } from "../src/roledef";
 
 function baseValid(): Record<string, unknown> {
@@ -395,6 +396,18 @@ describe("logic 検証 (docs/ekr-logic-spec.md §1〜§4・R1)", () => {
 
         expect(validateEkrDefinition(withLogic(baseLogic({ variables: [{ name: "x", init: "0" }] }))).ok).toBe(false);
         expect(validateEkrDefinition(withLogic(baseLogic({ variables: [{ name: "x", init: NaN }] }))).ok).toBe(false);
+    });
+
+    // spec §1 (2026-08-11 裁定): 省略だけが「変数なし」— 明示的な null は型不一致として reject
+    it("variables: キー省略は受理・明示的な null は拒否 (型不一致は文書全体 reject)", () => {
+        const omitted = validateEkrDefinition(withLogic({ version: 1, rules: [{ when: "on_pet", do: [{ op: "stop" }] }] }));
+        expect(omitted.ok).toBe(true);
+        if (omitted.ok) expect(omitted.def.logic?.variables).toEqual([]);
+
+        expect(validateEkrDefinition(withLogic(baseLogic({ variables: null }))).ok).toBe(false);
+        // 配列以外 (オブジェクト/数値/文字列) も同じく拒否
+        expect(validateEkrDefinition(withLogic(baseLogic({ variables: {} }))).ok).toBe(false);
+        expect(validateEkrDefinition(withLogic(baseLogic({ variables: 0 }))).ok).toBe(false);
     });
 
     it("var 式 / var_set / var_add は未定義の変数名を参照すると拒否する", () => {
@@ -791,6 +804,224 @@ describe("logic 検証 v1.3 (ひっぱる・ひきずる・フィールド)", ()
             const depth9 = [nestedIf(9, leaf)];
             expect(validateEkrDefinition(withLogic(baseLogic({ rules: [{ when: "on_pet", do: depth9 }] }))).ok, JSON.stringify(leaf)).toBe(false);
         }
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Wave 1 (docs/ekr-logic-spec.md §1.1/§2/§3 2026-08-11 併合)
+// ---------------------------------------------------------------------------
+
+describe("passives 検証 (Wave 1・spec §1.1)", () => {
+    function withPassives(passives: unknown): Record<string, unknown> {
+        return { ...baseValid(), passives };
+    }
+
+    it("6キーすべてを正常値で指定できる (そのまま保持される)", () => {
+        const passives = {
+            speedMult: 1.5,
+            killDistance: "long",
+            shield: { count: 3 },
+            corpse: "vanish",
+            voteWeight: 2,
+            doom: { seconds: 90 },
+        };
+        const r = validateEkrDefinition(withPassives(passives));
+        expect(r.ok).toBe(true);
+        if (r.ok) expect(r.def.passives).toEqual(passives);
+    });
+
+    it("passives 省略/null は passives キー自体を持たない (R0 互換)", () => {
+        const omitted = validateEkrDefinition(baseValid());
+        expect(omitted.ok).toBe(true);
+        if (omitted.ok) expect("passives" in omitted.def).toBe(false);
+
+        const nulled = validateEkrDefinition(withPassives(null));
+        expect(nulled.ok).toBe(true);
+        if (nulled.ok) expect("passives" in nulled.def).toBe(false);
+    });
+
+    it("既知キーが1つも無い passives ({} / 未知キーのみ) はキーごと落とす (未知キーは黙って無視)", () => {
+        for (const p of [{}, { みらいのとくせい: 1, visionMult: 2 }]) {
+            const r = validateEkrDefinition(withPassives(p));
+            expect(r.ok).toBe(true);
+            if (r.ok) expect("passives" in r.def).toBe(false);
+        }
+    });
+
+    it("既知キーと未知キーが混在しても、既知キーだけを拾う", () => {
+        const r = validateEkrDefinition(withPassives({ voteWeight: 0, visionMult: 3 }));
+        expect(r.ok).toBe(true);
+        if (r.ok) expect(r.def.passives).toEqual({ voteWeight: 0 });
+    });
+
+    it("passives がオブジェクトでなければ拒否", () => {
+        expect(validateEkrDefinition(withPassives(5)).ok).toBe(false);
+        expect(validateEkrDefinition(withPassives("shield")).ok).toBe(false);
+        expect(validateEkrDefinition(withPassives([{ voteWeight: 1 }])).ok).toBe(false);
+    });
+
+    it("speedMult は 0.5〜3.0 の範囲外/非数値を拒否 (クランプしない)", () => {
+        expect(validateEkrDefinition(withPassives({ speedMult: 0.5 })).ok).toBe(true);
+        expect(validateEkrDefinition(withPassives({ speedMult: 3 })).ok).toBe(true);
+        expect(validateEkrDefinition(withPassives({ speedMult: 0.4 })).ok).toBe(false);
+        expect(validateEkrDefinition(withPassives({ speedMult: 3.1 })).ok).toBe(false);
+        expect(validateEkrDefinition(withPassives({ speedMult: "1.5" })).ok).toBe(false);
+        expect(validateEkrDefinition(withPassives({ speedMult: null })).ok).toBe(false);
+    });
+
+    it("killDistance は short/medium/long のみ", () => {
+        for (const v of ["short", "medium", "long"]) {
+            expect(validateEkrDefinition(withPassives({ killDistance: v })).ok, v).toBe(true);
+        }
+        expect(validateEkrDefinition(withPassives({ killDistance: "veryLong" })).ok).toBe(false);
+        expect(validateEkrDefinition(withPassives({ killDistance: 1 })).ok).toBe(false);
+    });
+
+    it("shield.count は 1〜9 の整数のみ (count 欠落は拒否 — shield があるのに数が無いのは誤り)", () => {
+        expect(validateEkrDefinition(withPassives({ shield: { count: 1 } })).ok).toBe(true);
+        expect(validateEkrDefinition(withPassives({ shield: { count: 9 } })).ok).toBe(true);
+        expect(validateEkrDefinition(withPassives({ shield: { count: 0 } })).ok).toBe(false);
+        expect(validateEkrDefinition(withPassives({ shield: { count: 10 } })).ok).toBe(false);
+        expect(validateEkrDefinition(withPassives({ shield: { count: 1.5 } })).ok).toBe(false);
+        expect(validateEkrDefinition(withPassives({ shield: {} })).ok).toBe(false);
+        expect(validateEkrDefinition(withPassives({ shield: 3 })).ok).toBe(false);
+    });
+
+    it("corpse は normal/noReport/vanish のみ", () => {
+        for (const v of ["normal", "noReport", "vanish"]) {
+            expect(validateEkrDefinition(withPassives({ corpse: v })).ok, v).toBe(true);
+        }
+        expect(validateEkrDefinition(withPassives({ corpse: "noreport" })).ok).toBe(false);
+    });
+
+    it("voteWeight は 0〜3 の整数のみ", () => {
+        for (const v of [0, 1, 2, 3]) {
+            expect(validateEkrDefinition(withPassives({ voteWeight: v })).ok, String(v)).toBe(true);
+        }
+        expect(validateEkrDefinition(withPassives({ voteWeight: -1 })).ok).toBe(false);
+        expect(validateEkrDefinition(withPassives({ voteWeight: 4 })).ok).toBe(false);
+        expect(validateEkrDefinition(withPassives({ voteWeight: 1.5 })).ok).toBe(false);
+    });
+
+    it("doom.seconds は 30〜600 の整数のみ (seconds 欠落は拒否)", () => {
+        expect(validateEkrDefinition(withPassives({ doom: { seconds: 30 } })).ok).toBe(true);
+        expect(validateEkrDefinition(withPassives({ doom: { seconds: 600 } })).ok).toBe(true);
+        expect(validateEkrDefinition(withPassives({ doom: { seconds: 29 } })).ok).toBe(false);
+        expect(validateEkrDefinition(withPassives({ doom: { seconds: 601 } })).ok).toBe(false);
+        expect(validateEkrDefinition(withPassives({ doom: { seconds: 60.5 } })).ok).toBe(false);
+        expect(validateEkrDefinition(withPassives({ doom: {} })).ok).toBe(false);
+    });
+
+    it("logic 無しでも passives 単独で使える", () => {
+        const r = validateEkrDefinition(withPassives({ shield: { count: 2 } }));
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(r.def.logic).toBeUndefined();
+            expect(r.def.passives).toEqual({ shield: { count: 2 } });
+        }
+    });
+
+    it("validatePassives を単体で呼んでも同じ規則 (フォーム側からの利用)", () => {
+        expect(validatePassives({ voteWeight: 0 })).toEqual({ ok: true, passives: { voteWeight: 0 } });
+        expect(validatePassives({ voteWeight: 9 }).ok).toBe(false);
+    });
+});
+
+describe("logic 検証 Wave 1 (on_attacked / cancel_attack / remember / セレクタ拡張)", () => {
+    function baseLogic(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+        return {
+            version: 1,
+            rules: [{ when: "on_pet", do: [{ op: "stop" }] }],
+            ...overrides,
+        };
+    }
+    function withLogic(logic: unknown): Record<string, unknown> {
+        return { ...baseValid(), logic };
+    }
+    function withRule(rule: Record<string, unknown>): Record<string, unknown> {
+        return withLogic(baseLogic({ rules: [rule] }));
+    }
+
+    it("on_attacked は 12 種目の when として受理される", () => {
+        const r = validateEkrDefinition(withRule({ when: "on_attacked", do: [{ op: "cancel_attack" }] }));
+        expect(r.ok).toBe(true);
+        if (r.ok) expect(r.def.logic?.rules[0].when).toBe("on_attacked");
+    });
+
+    it("on_attacked に slot は付けられない (slot は on_cno_touch 専用)", () => {
+        expect(validateEkrDefinition(withRule({ when: "on_attacked", slot: 1, do: [{ op: "stop" }] })).ok).toBe(false);
+    });
+
+    it("cancel_attack は on_attacked 配下でのみ受理 (他イベント配下は文書 reject)", () => {
+        expect(validateEkrDefinition(withRule({ when: "on_attacked", do: [{ op: "cancel_attack" }] })).ok).toBe(true);
+        for (const when of ["on_pet", "on_kill", "on_death", "on_second"]) {
+            expect(validateEkrDefinition(withRule({ when, do: [{ op: "cancel_attack" }] })).ok, when).toBe(false);
+        }
+    });
+
+    it("cancel_attack は if の入れ子の中でも配置検査される", () => {
+        const nested = (thenNodes: unknown[]) => ({ op: "if", cond: { e: "lit", v: 1 }, then: thenNodes });
+        expect(validateEkrDefinition(withRule({ when: "on_attacked", do: [nested([{ op: "cancel_attack" }])] })).ok).toBe(true);
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [nested([{ op: "cancel_attack" }])] })).ok).toBe(false);
+        // else 側も同じ
+        const withElse = { op: "if", cond: { e: "lit", v: 1 }, then: [{ op: "stop" }], else: [{ op: "cancel_attack" }] };
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [withElse] })).ok).toBe(false);
+    });
+
+    it("remember は slot 1..2 と単数セレクタのみ", () => {
+        for (const target of ["self", "ctx", "saved1", "saved2", "nearest", "random"]) {
+            expect(validateEkrDefinition(withRule({ when: "on_kill", do: [{ op: "remember", slot: 1, target }] })).ok, target).toBe(true);
+        }
+        expect(validateEkrDefinition(withRule({ when: "on_kill", do: [{ op: "remember", slot: 2, target: "ctx" }] })).ok).toBe(true);
+        expect(validateEkrDefinition(withRule({ when: "on_kill", do: [{ op: "remember", slot: 3, target: "ctx" }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_kill", do: [{ op: "remember", slot: 0, target: "ctx" }] })).ok).toBe(false);
+        for (const target of ["all", "room", "marker1"]) {
+            expect(validateEkrDefinition(withRule({ when: "on_kill", do: [{ op: "remember", slot: 1, target }] })).ok, target).toBe(false);
+        }
+    });
+
+    it("kill.target は単数セレクタ全種を受理し、複数セレクタは拒否", () => {
+        for (const target of ["self", "ctx", "saved1", "saved2", "nearest", "random"]) {
+            expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "kill", target }] })).ok, target).toBe(true);
+        }
+        for (const target of ["all", "room", "saved3"]) {
+            expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "kill", target }] })).ok, target).toBe(false);
+        }
+    });
+
+    it("teleport_other.target は単数セレクタ (self は含まない)、to は cno1..3 も受理", () => {
+        for (const target of ["ctx", "saved1", "saved2", "nearest", "random"]) {
+            expect(validateEkrDefinition(withRule({ when: "on_kill", do: [{ op: "teleport_other", target, to: "self" }] })).ok, target).toBe(true);
+        }
+        expect(validateEkrDefinition(withRule({ when: "on_kill", do: [{ op: "teleport_other", target: "self", to: "self" }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_kill", do: [{ op: "teleport_other", target: "all", to: "self" }] })).ok).toBe(false);
+        for (const to of ["cno1", "cno2", "cno3", "marker4"]) {
+            expect(validateEkrDefinition(withRule({ when: "on_kill", do: [{ op: "teleport_other", target: "ctx", to }] })).ok, to).toBe(true);
+        }
+        expect(validateEkrDefinition(withRule({ when: "on_kill", do: [{ op: "teleport_other", target: "ctx", to: "cno4" }] })).ok).toBe(false);
+    });
+
+    it("teleport.to は cno1..3 を受理する", () => {
+        for (const to of ["cno1", "cno2", "cno3"]) {
+            expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "teleport", to }] })).ok, to).toBe(true);
+        }
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "teleport", to: "cno0" }] })).ok).toBe(false);
+    });
+
+    it("notify.target は省略可 (省略時は AST にキーを足さない)・単複とも受理", () => {
+        const omitted = validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "notify", text: "やあ", seconds: 3 }] }));
+        expect(omitted.ok).toBe(true);
+        if (omitted.ok) expect(omitted.def.logic?.rules[0].do[0]).toEqual({ op: "notify", text: "やあ", seconds: 3 });
+
+        for (const target of ["self", "ctx", "saved1", "saved2", "nearest", "random", "all", "room"]) {
+            expect(validateEkrDefinition(withRule({ when: "on_kill", do: [{ op: "notify", text: "やあ", seconds: 3, target }] })).ok, target).toBe(true);
+        }
+        expect(validateEkrDefinition(withRule({ when: "on_kill", do: [{ op: "notify", text: "やあ", seconds: 3, target: "marker1" }] })).ok).toBe(false);
+    });
+
+    it("field.at / marker_save.at は Wave 1 で拡張していない (field は cno を受理しない・marker_save は元から受理する)", () => {
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "field", at: "cno1", radius: "small", strength: "weak", seconds: 3 }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "marker_save", slot: 1, at: "cno1" }] })).ok).toBe(true);
     });
 });
 

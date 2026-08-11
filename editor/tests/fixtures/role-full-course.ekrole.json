@@ -10,6 +10,14 @@
   "canVent": true,
   "visionMultiplier": 1.2,
   "winCondition": "team",
+  "passives": {
+    "speedMult": 1.2,
+    "shield": { "count": 2 },
+    "corpse": "noReport",
+    "voteWeight": 2,
+    "doom": { "seconds": 300 },
+    "killDistance": "short"
+  },
   "logic": {
     "version": 1,
     "variables": [
@@ -137,6 +145,14 @@
           { "op": "marker_save", "slot": 1, "at": "ctx" },
           { "op": "notify", "text": "触れた…", "seconds": 2 },
           { "op": "teleport_other", "target": "ctx", "to": "marker1" }
+        ]
+      },
+      {
+        "when": "on_attacked",
+        "do": [
+          { "op": "cancel_attack" },
+          { "op": "remember", "slot": 1, "target": "ctx" },
+          { "op": "notify", "text": "その手は影を切っただけ…", "seconds": 3, "target": "ctx" }
         ]
       },
       {

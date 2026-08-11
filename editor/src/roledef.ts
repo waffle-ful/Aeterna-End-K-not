@@ -71,6 +71,9 @@ export const LOGIC_WHEN_VALUES = [
     "on_report",
     "on_second",
     "on_cno_touch",
+    // Wave 1 (spec §2 2026-08-11): 自分へのキル試行時。ctx = 攻撃者。slot は持たない
+    // (slot は on_cno_touch 専用 — validateRule の既存 else 分岐がそのまま reject する)。
+    "on_attacked",
 ] as const;
 export type LogicWhen = (typeof LOGIC_WHEN_VALUES)[number];
 const LOGIC_WHEN_SET: ReadonlySet<string> = new Set(LOGIC_WHEN_VALUES);
@@ -119,10 +122,39 @@ export const DUMMY_SPAWN_DEFAULT_NAME = "Dummy";
 // v1.2 (spec §2/§3 2026-08-10 追記) — 位置と接触
 export const MARKER_SLOT_MIN = 1;
 export const MARKER_SLOT_MAX = 4;
-export const TELEPORT_TO_VALUES = ["random", "ctx", "marker1", "marker2", "marker3", "marker4"] as const;
-export const TELEPORT_OTHER_TO_VALUES = ["self", "marker1", "marker2", "marker3", "marker4"] as const;
+// Wave 1 (spec §3 統一セレクタ語彙 2026-08-11): 空間セレクタ「どこ」に cno1..3 を追加。
+// 追加先は teleport.to / teleport_other.to の2つだけ — spec §3 の一般文は「at/to に追加」と
+// 広く書いてあるが、各 op の引数表 (および Wave 1 実装スコープの明示列挙) はこの2フィールドに
+// 限定しているため、狭い方 (per-op 表) に合わせる。marker_save.at は元から cno1..3 を持ち、
+// field.at は Wave 1 では拡張しない。
+export const TELEPORT_TO_VALUES = ["random", "ctx", "marker1", "marker2", "marker3", "marker4", "cno1", "cno2", "cno3"] as const;
+export const TELEPORT_OTHER_TO_VALUES = ["self", "marker1", "marker2", "marker3", "marker4", "cno1", "cno2", "cno3"] as const;
 export const MARKER_SAVE_AT_VALUES = ["self", "ctx", "cno1", "cno2", "cno3"] as const;
 export const PORTAL_WHICH_VALUES = ["a", "b"] as const;
+
+// ---------------------------------------------------------------------------
+// Wave 1 (spec §3「統一セレクタ語彙」2026-08-11) — 対象セレクタ「だれに」
+// ---------------------------------------------------------------------------
+// 単数セレクタ = 1人に解決するもの。kill/teleport_other/remember 等の単発強効果 op はここまで。
+export const TARGET_SINGLE_VALUES = ["self", "ctx", "saved1", "saved2", "nearest", "random"] as const;
+// 複数セレクタ = 集合に解決するもの。受理する op は明示ホワイトリストのみ (Wave 1 は notify だけ)。
+export const TARGET_MULTI_VALUES = ["all", "room"] as const;
+export const TARGET_ANY_VALUES = [...TARGET_SINGLE_VALUES, ...TARGET_MULTI_VALUES] as const;
+export type TargetSingle = (typeof TARGET_SINGLE_VALUES)[number];
+export type TargetAny = (typeof TARGET_ANY_VALUES)[number];
+
+// kill.target は self を含む (自殺が正当ユース) が、teleport_other.target は含まない —
+// spec §3 のアクション表がその非対称のまま凍結されているので揃えない。
+export const KILL_TARGET_VALUES = TARGET_SINGLE_VALUES;
+export const TELEPORT_OTHER_TARGET_VALUES = ["ctx", "saved1", "saved2", "nearest", "random"] as const;
+export const REMEMBER_TARGET_VALUES = TARGET_SINGLE_VALUES;
+// remember の slot は 2 まで (cno の3 slot・marker の4 slot とは別枠・別定数 —
+// どれか一つのレンジが将来変わっても連動しないようにする)。
+export const REMEMBER_SLOT_MIN = 1;
+export const REMEMBER_SLOT_MAX = 2;
+// notify.target は「複数セレクタを受理する唯一の op」(spec §3 型規律)。省略時は self。
+export const NOTIFY_TARGET_VALUES = TARGET_ANY_VALUES;
+export const NOTIFY_TARGET_DEFAULT: TargetAny = "self";
 
 // v1.3 (spec §3 2026-08-11 追記) — ひっぱる・ひきずる・フィールド
 export const DRAG_SECONDS_MIN = 1;
@@ -132,6 +164,34 @@ export const FIELD_RADIUS_VALUES = ["small", "medium", "large"] as const;
 export const FIELD_STRENGTH_VALUES = ["weak", "medium", "strong"] as const;
 export const FIELD_SECONDS_MIN = 1;
 export const FIELD_SECONDS_MAX = 15;
+
+// ---------------------------------------------------------------------------
+// パッシブ層 passives (Wave 1・spec §1.1) — トップレベルの固定キーオブジェクト
+// ---------------------------------------------------------------------------
+// logic とは独立 (logic 無しでも passives 単独で可)。Blockly ワークスペースには置かない —
+// 基本情報タブの「とくせい」フォームセクションが唯一の UI (spec §1.1 の裁定)。
+// 検証: 内部の未知キーは黙って無視 / 既知キーの型不一致・範囲外は文書全体 reject (spec §1 総則)。
+// ロジック op と数値レンジが重なるもの (speedMult ↔ speed.mult の 0.5〜3.0) も別定数にする —
+// 片方だけ将来変わっても連動しないように (DUMMY_SPAWN_NAME_MAX と同じ方針)。
+export const PASSIVE_SPEED_MULT_MIN = 0.5;
+export const PASSIVE_SPEED_MULT_MAX = 3.0;
+export const PASSIVE_KILL_DISTANCE_VALUES = ["short", "medium", "long"] as const;
+export const PASSIVE_SHIELD_COUNT_MIN = 1;
+export const PASSIVE_SHIELD_COUNT_MAX = 9;
+export const PASSIVE_CORPSE_VALUES = ["normal", "noReport", "vanish"] as const;
+export const PASSIVE_VOTE_WEIGHT_MIN = 0;
+export const PASSIVE_VOTE_WEIGHT_MAX = 3;
+export const PASSIVE_DOOM_SECONDS_MIN = 30;
+export const PASSIVE_DOOM_SECONDS_MAX = 600;
+
+export interface RolePassives {
+    speedMult?: number;
+    killDistance?: (typeof PASSIVE_KILL_DISTANCE_VALUES)[number];
+    shield?: { count: number };
+    corpse?: (typeof PASSIVE_CORPSE_VALUES)[number];
+    voteWeight?: number;
+    doom?: { seconds: number };
+}
 
 export interface LogicVariable {
     name: string;
@@ -149,9 +209,11 @@ export type LogicNode =
     | { op: "stop" }
     | { op: "var_set"; name: string; value: LogicExpr }
     | { op: "var_add"; name: string; delta: LogicExpr }
-    | { op: "notify"; text: string; seconds: number }
+    // target は任意 (省略 = self)。Wave 1 で複数セレクタ (all/room) を受理する唯一の op。
+    // 省略された target は AST に足さない (再エンコード不動点を保つため — 既定値の明示化はしない)。
+    | { op: "notify"; text: string; seconds: number; target?: TargetAny }
     | { op: "teleport"; to: (typeof TELEPORT_TO_VALUES)[number] }
-    | { op: "kill"; target: "self" | "ctx" }
+    | { op: "kill"; target: TargetSingle }
     | { op: "set_kill_cooldown"; seconds: number }
     | { op: "speed"; mult: number; seconds: number }
     | { op: "cno_spawn"; slot: 1 | 2 | 3; text: string; size: number; at: "self" | "ctx" }
@@ -172,7 +234,7 @@ export type LogicNode =
     // v1.2 (spec §3 2026-08-10 追記) — 位置と接触。marker_save の slot は cno_spawn とは別枠
     // (per-holder の位置メモリ4スロット・§3「マーカー」)。
     | { op: "marker_save"; slot: 1 | 2 | 3 | 4; at: (typeof MARKER_SAVE_AT_VALUES)[number] }
-    | { op: "teleport_other"; target: "ctx"; to: (typeof TELEPORT_OTHER_TO_VALUES)[number] }
+    | { op: "teleport_other"; target: (typeof TELEPORT_OTHER_TARGET_VALUES)[number]; to: (typeof TELEPORT_OTHER_TO_VALUES)[number] }
     | { op: "portal_place"; which: (typeof PORTAL_WHICH_VALUES)[number] }
     // v1.3 (spec §3 2026-08-11 追記) — ひっぱる・ひきずる・フィールド。pull は引数なし
     // (ctx 暗黙。teleport_other の to:"self" と実行時は完全共有だが opcode としては独立 — spec §3)。
@@ -184,7 +246,12 @@ export type LogicNode =
         radius: (typeof FIELD_RADIUS_VALUES)[number];
         strength: (typeof FIELD_STRENGTH_VALUES)[number];
         seconds: number;
-    };
+    }
+    // Wave 1 (spec §3 2026-08-11) — marker_save の人間版。おぼえた人は死亡・切断で自動失効。
+    | { op: "remember"; slot: 1 | 2; target: TargetSingle }
+    // Wave 1 (spec §3 2026-08-11) — 引数なし。on_attacked 配下でのみ書ける (他イベント配下は
+    // 実行時 no-op ではなく**検証 reject** — 静的に判定できるため厳格側に倒す裁定)。
+    | { op: "cancel_attack" };
 
 export interface LogicRule {
     when: LogicWhen;
@@ -217,6 +284,9 @@ export interface EkrDefinition {
     // 省略 = R0 動作 (完全後方互換)。defaultEkrDefinition() には含めない
     // (rolecode.test.ts の凍結フィクスチャがこのキー無し形状に依存する)。
     logic?: RoleLogic;
+    // Wave 1 (spec §1.1)。logic と同じ理由で defaultEkrDefinition() には含めない。
+    // 既知キーが1つも無いとき (空オブジェクト) はキー自体を出力しない (バニラ既定 = 欠落)。
+    passives?: RolePassives;
 }
 
 export function defaultEkrDefinition(): EkrDefinition {
@@ -241,6 +311,10 @@ export type EkrValidationResult =
 
 export type LogicValidationResult =
     | { ok: true; logic: RoleLogic }
+    | { ok: false; error: string };
+
+export type PassivesValidationResult =
+    | { ok: true; passives: RolePassives }
     | { ok: false; error: string };
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -412,6 +486,15 @@ export function validateEkrDefinition(value: unknown): EkrValidationResult {
         def.logic = logicResult.logic;
     }
 
+    // passives (Wave 1・spec §1.1): logic と同じ扱い — 省略/null は「とくせい無し」、
+    // 中身が壊れていれば役職コード全体を reject する。既知キーが1つも無ければキーを付けない
+    // (バニラ既定はキーの欠落で表すため、空オブジェクトを書き出す意味が無い)。
+    if (value.passives !== undefined && value.passives !== null) {
+        const passivesResult = validatePassives(value.passives);
+        if (!passivesResult.ok) return { ok: false, error: passivesResult.error };
+        if (Object.keys(passivesResult.passives).length > 0) def.passives = passivesResult.passives;
+    }
+
     return { ok: true, def };
 }
 
@@ -524,13 +607,16 @@ function validateExpr(raw: unknown, varNames: ReadonlySet<string>, path: string)
     fail(`${path}.e の種類が不明です (${JSON.stringify(e)})`);
 }
 
-function validateNodeArray(raw: unknown, varNames: ReadonlySet<string>, path: string): NodeArrayValidation {
+// Wave 1: cancel_attack の配置検査 (on_attacked 以外の rule 配下なら reject) のために、
+// 「今どのイベント配下を検証しているか」を do 配列の入れ子の奥まで持ち回る。if の then/else を
+// 通っても値は変わらないので、入れ子の中の cancel_attack も同じ判定になる。
+function validateNodeArray(raw: unknown, varNames: ReadonlySet<string>, path: string, when: string): NodeArrayValidation {
     if (!Array.isArray(raw)) fail(`${path} は配列である必要があります`);
     let depth = 0;
     let count = 0;
     const nodes: LogicNode[] = [];
     raw.forEach((item, i) => {
-        const r = validateNode(item, varNames, `${path}[${i}]`);
+        const r = validateNode(item, varNames, `${path}[${i}]`, when);
         nodes.push(r.node);
         depth = Math.max(depth, r.depth);
         count += r.count;
@@ -538,16 +624,16 @@ function validateNodeArray(raw: unknown, varNames: ReadonlySet<string>, path: st
     return { nodes, depth, count };
 }
 
-function validateNode(raw: unknown, varNames: ReadonlySet<string>, path: string): NodeValidation {
+function validateNode(raw: unknown, varNames: ReadonlySet<string>, path: string, when: string): NodeValidation {
     if (!isRecord(raw)) fail(`${path} のノードが正しくありません`);
     const op = raw.op;
     switch (op) {
         case "if": {
             const cond = validateExpr(raw.cond, varNames, `${path}.cond`);
             if (raw.then === undefined || raw.then === null) fail(`${path}.then が必要です`);
-            const thenList = validateNodeArray(raw.then, varNames, `${path}.then`);
+            const thenList = validateNodeArray(raw.then, varNames, `${path}.then`, when);
             const hasElse = raw.else !== undefined && raw.else !== null;
-            const elseList = hasElse ? validateNodeArray(raw.else, varNames, `${path}.else`) : { nodes: [] as LogicNode[], depth: 0, count: 0 };
+            const elseList = hasElse ? validateNodeArray(raw.else, varNames, `${path}.else`, when) : { nodes: [] as LogicNode[], depth: 0, count: 0 };
             const node: LogicNode = hasElse
                 ? { op: "if", cond: cond.expr, then: thenList.nodes, else: elseList.nodes }
                 : { op: "if", cond: cond.expr, then: thenList.nodes };
@@ -572,14 +658,19 @@ function validateNode(raw: unknown, varNames: ReadonlySet<string>, path: string)
         case "notify": {
             const text = sanitizeAngleBrackets(expectString(raw.text, NOTIFY_TEXT_MAX, `${path}.text`));
             const seconds = expectRangeNumber(raw.seconds, NOTIFY_SECONDS_MIN, NOTIFY_SECONDS_MAX, `${path}.seconds`);
-            return { node: { op: "notify", text, seconds }, depth: 1, count: 1 };
+            // Wave 1 (spec §3): target は任意・既定 self・複数セレクタ (all/room) を受理する唯一の op。
+            // 省略時は AST にキーを足さない (「既定値の明示化」をすると再エンコード不動点が崩れる)。
+            if (raw.target === undefined) return { node: { op: "notify", text, seconds }, depth: 1, count: 1 };
+            const target = expectEnum(raw.target, NOTIFY_TARGET_VALUES, `${path}.target`);
+            return { node: { op: "notify", text, seconds, target }, depth: 1, count: 1 };
         }
         case "teleport": {
             const to = expectEnum(raw.to, TELEPORT_TO_VALUES, `${path}.to`);
             return { node: { op: "teleport", to }, depth: 1, count: 1 };
         }
         case "kill": {
-            const target = expectEnum(raw.target, ["self", "ctx"] as const, `${path}.target`);
+            // Wave 1: 単数セレクタ全種 (self/ctx/saved1/saved2/nearest/random) を受理。
+            const target = expectEnum(raw.target, KILL_TARGET_VALUES, `${path}.target`);
             return { node: { op: "kill", target }, depth: 1, count: 1 };
         }
         case "set_kill_cooldown": {
@@ -643,8 +734,9 @@ function validateNode(raw: unknown, varNames: ReadonlySet<string>, path: string)
             return { node: { op: "marker_save", slot, at }, depth: 1, count: 1 };
         }
         case "teleport_other": {
-            // v1.2 (spec §3): target は現状 "ctx" の一択 (将来拡張余地として enum のまま検証する)。
-            const target = expectEnum(raw.target, ["ctx"] as const, `${path}.target`);
+            // v1.2 では "ctx" の一択だったが、Wave 1 で単数セレクタへ拡張 (self を含まないのは
+            // spec §3 のアクション表どおり — 自分を飛ばすのは teleport の役目)。
+            const target = expectEnum(raw.target, TELEPORT_OTHER_TARGET_VALUES, `${path}.target`);
             const to = expectEnum(raw.to, TELEPORT_OTHER_TO_VALUES, `${path}.to`);
             return { node: { op: "teleport_other", target, to }, depth: 1, count: 1 };
         }
@@ -665,6 +757,21 @@ function validateNode(raw: unknown, varNames: ReadonlySet<string>, path: string)
             const strength = expectEnum(raw.strength, FIELD_STRENGTH_VALUES, `${path}.strength`);
             const seconds = expectRangeNumber(raw.seconds, FIELD_SECONDS_MIN, FIELD_SECONDS_MAX, `${path}.seconds`);
             return { node: { op: "field", at, radius, strength, seconds }, depth: 1, count: 1 };
+        }
+        // Wave 1 (spec §3 2026-08-11)
+        case "remember": {
+            const slot = expectRangeInt(raw.slot, REMEMBER_SLOT_MIN, REMEMBER_SLOT_MAX, `${path}.slot`) as 1 | 2;
+            const target = expectEnum(raw.target, REMEMBER_TARGET_VALUES, `${path}.target`);
+            return { node: { op: "remember", slot, target }, depth: 1, count: 1 };
+        }
+        case "cancel_attack": {
+            // spec §3: on_attacked 以外の rule 配下に現れたら文書 reject (静的に検査できるので
+            // no-op ではなく reject 側に倒す — on_cno_touch の slot 必須と同じ厳格側の裁定)。
+            // if の入れ子の中でも when は持ち回られているため同じ判定になる。
+            if (when !== "on_attacked") {
+                fail(`${path} の「こうげきをふせぐ」はイベント "${when}" では使えません (「こうげきされたとき」の中だけで使えます)`);
+            }
+            return { node: { op: "cancel_attack" }, depth: 1, count: 1 };
         }
         default:
             fail(`${path}.op が不明です (${JSON.stringify(op)})`);
@@ -689,7 +796,7 @@ function validateRule(raw: unknown, varNames: ReadonlySet<string>, index: number
 
     const doPath = `rules[${index}].do`;
     if (raw.do === undefined || raw.do === null) fail(`${doPath} が必要です`);
-    const doResult = validateNodeArray(raw.do, varNames, doPath);
+    const doResult = validateNodeArray(raw.do, varNames, doPath, when);
     if (doResult.count < LOGIC_RULE_NODES_MIN || doResult.count > LOGIC_RULE_NODES_MAX) {
         fail(`${doPath} のノード数は ${LOGIC_RULE_NODES_MIN}〜${LOGIC_RULE_NODES_MAX} 個である必要があります (現在 ${doResult.count} 個)`);
     }
@@ -716,7 +823,10 @@ export function validateRoleLogic(value: unknown): LogicValidationResult {
 
         const variables: LogicVariable[] = [];
         const rawVariables = value.variables;
-        if (rawVariables !== undefined && rawVariables !== null) {
+        // spec §1 (2026-08-11 裁定): 省略 (undefined) だけが「変数なし」。明示的な null は
+        // **型不一致として文書全体 reject** (「JSON 型不一致は文書全体 reject」の総則どおり —
+        // C# 側は List<T> へ null が来ても後段で落ちるため、TS だけ寛容にしない)。
+        if (rawVariables !== undefined) {
             if (!Array.isArray(rawVariables)) fail("logic.variables は配列である必要があります");
             if (rawVariables.length > LOGIC_VARIABLES_MAX) fail(`変数は最大 ${LOGIC_VARIABLES_MAX} 個までです`);
             const seen = new Set<string>();
@@ -746,6 +856,49 @@ export function validateRoleLogic(value: unknown): LogicValidationResult {
             logic.blockly = value.blockly;
         }
         return { ok: true, logic };
+    } catch (e) {
+        if (e instanceof EkrLogicError) return { ok: false, error: e.message };
+        throw e;
+    }
+}
+
+/**
+ * `passives` オブジェクト (Wave 1・spec §1.1) を検証する。固定キーなので順序・重複・参照整合性の
+ * 問題が構造的に存在しない — 「既知キーだけを読み、型不一致/範囲外なら文書全体 reject、未知キーは
+ * 黙って無視」だけを行う。キーの欠落 = バニラ既定 (何も適用しない) であり、既定値を埋めて返すことは
+ * しない (埋めると「明示的にバニラ相当を指定した」と区別できなくなり、再エンコード不動点も崩れる)。
+ */
+export function validatePassives(value: unknown): PassivesValidationResult {
+    try {
+        if (!isRecord(value)) fail("passives の中身が正しくありません (JSON オブジェクトが必要です)");
+        const p: RolePassives = {};
+
+        if (value.speedMult !== undefined) {
+            p.speedMult = expectRangeNumber(value.speedMult, PASSIVE_SPEED_MULT_MIN, PASSIVE_SPEED_MULT_MAX, "passives.speedMult");
+        }
+        if (value.killDistance !== undefined) {
+            p.killDistance = expectEnum(value.killDistance, PASSIVE_KILL_DISTANCE_VALUES, "passives.killDistance");
+        }
+        if (value.shield !== undefined) {
+            // shield が存在する = 「まもりを付ける」宣言なので、count 欠落は黙って無視せず reject
+            // (欠落を「まもり無し」に落とすと、作者が意図した防御が無音で消える)。
+            if (!isRecord(value.shield)) fail("passives.shield は { count: 回数 } の形である必要があります");
+            const count = expectRangeInt(value.shield.count, PASSIVE_SHIELD_COUNT_MIN, PASSIVE_SHIELD_COUNT_MAX, "passives.shield.count");
+            p.shield = { count };
+        }
+        if (value.corpse !== undefined) {
+            p.corpse = expectEnum(value.corpse, PASSIVE_CORPSE_VALUES, "passives.corpse");
+        }
+        if (value.voteWeight !== undefined) {
+            p.voteWeight = expectRangeInt(value.voteWeight, PASSIVE_VOTE_WEIGHT_MIN, PASSIVE_VOTE_WEIGHT_MAX, "passives.voteWeight");
+        }
+        if (value.doom !== undefined) {
+            if (!isRecord(value.doom)) fail("passives.doom は { seconds: 秒数 } の形である必要があります");
+            const seconds = expectRangeInt(value.doom.seconds, PASSIVE_DOOM_SECONDS_MIN, PASSIVE_DOOM_SECONDS_MAX, "passives.doom.seconds");
+            p.doom = { seconds };
+        }
+
+        return { ok: true, passives: p };
     } catch (e) {
         if (e instanceof EkrLogicError) return { ok: false, error: e.message };
         throw e;

@@ -571,14 +571,163 @@ describe("lint-role: L12 (on_cno_touch 配下の cno_spawn/dummy_spawn/cno_show/
     });
 });
 
+// Wave 1 (docs/ekr-logic-spec.md §6 2026-08-11 併合): L14〜L17
+describe("lint-role: L14 (ctx 無しイベント配下の ctx セレクタ)", () => {
+    it("on_pet + kill(target:ctx) は L14 を警告する", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "kill", target: "ctx" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L14");
+    });
+
+    it("at / to フィールドの ctx も検知する", () => {
+        const atRule = logic([{ when: "on_game_start", do: [{ op: "cno_spawn", slot: 1, text: "!", size: 1, at: "ctx" }] }]);
+        expect(ruleIds(lintRoleLogic(atRule))).toContain("L14");
+        const toRule = logic([{ when: "on_second", do: [{ op: "teleport", to: "ctx" }] }]);
+        expect(ruleIds(lintRoleLogic(toRule))).toContain("L14");
+    });
+
+    it("if の中にネストした ctx も検知する", () => {
+        const nested: LogicNode = { op: "if", cond: { e: "lit", v: 1 }, then: [{ op: "corpse_spawn", color: "self", at: "ctx" }] };
+        const l = logic([{ when: "on_vent_enter", do: [nested] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L14");
+    });
+
+    it("ctx を持つイベント (on_kill/on_death/on_report/on_cno_touch/on_attacked) では警告しない", () => {
+        const l = logic([
+            { when: "on_kill", do: [{ op: "kill", target: "ctx" }] },
+            { when: "on_death", do: [{ op: "corpse_spawn", color: "self", at: "ctx" }] },
+            { when: "on_report", do: [{ op: "teleport", to: "ctx" }] },
+            { when: "on_cno_touch", slot: 1, do: [{ op: "marker_save", slot: 1, at: "ctx" }] },
+            { when: "on_attacked", do: [{ op: "kill", target: "ctx" }] },
+        ]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L14");
+    });
+
+    // 2026-08-11 三面監査裁定: フィールドを持たない ctx 暗黙 op (pull/drag) も L14 の対象
+    it("ctx 無しイベント配下の pull / drag は L14 を警告する (引数が無くても ctx 依存のため)", () => {
+        expect(ruleIds(lintRoleLogic(logic([{ when: "on_pet", do: [{ op: "pull" }] }])))).toContain("L14");
+        expect(ruleIds(lintRoleLogic(logic([{ when: "on_game_start", do: [{ op: "drag", seconds: 3 }] }])))).toContain("L14");
+        const nested: LogicNode = { op: "if", cond: { e: "lit", v: 1 }, then: [{ op: "pull" }] };
+        expect(ruleIds(lintRoleLogic(logic([{ when: "on_vent_enter", do: [nested] }])))).toContain("L14");
+    });
+
+    it("ctx を持つイベント配下の pull / drag は警告しない", () => {
+        const l = logic([
+            { when: "on_attacked", do: [{ op: "pull" }] },
+            { when: "on_kill", do: [{ op: "drag", seconds: 3 }] },
+            { when: "on_cno_touch", slot: 1, do: [{ op: "pull" }] },
+        ]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L14");
+    });
+
+    it("ctx を使わなければ ctx 無しイベントでも警告しない", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "kill", target: "nearest" }, { op: "teleport", to: "random" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L14");
+    });
+});
+
+describe("lint-role: L15 (未保存マーカーの行き先)", () => {
+    it("marker_save が無いのに teleport(to:markerN) すると警告する", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "teleport", to: "marker1" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L15");
+    });
+
+    it("別の rule に marker_save(同じ番号) があれば警告しない", () => {
+        const l = logic([
+            { when: "on_game_start", do: [{ op: "marker_save", slot: 2, at: "self" }] },
+            { when: "on_pet", do: [{ op: "teleport", to: "marker2" }] },
+        ]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L15");
+    });
+
+    it("番号が違う marker_save では救われない", () => {
+        const l = logic([
+            { when: "on_game_start", do: [{ op: "marker_save", slot: 1, at: "self" }] },
+            { when: "on_pet", do: [{ op: "teleport", to: "marker2" }] },
+        ]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L15");
+    });
+
+    it("teleport_other(to:markerN) / field(at:markerN) も対象", () => {
+        const other = logic([{ when: "on_kill", do: [{ op: "teleport_other", target: "ctx", to: "marker3" }] }]);
+        expect(ruleIds(lintRoleLogic(other))).toContain("L15");
+        const field = logic([{ when: "on_kill", do: [{ op: "field", at: "marker4", radius: "small", strength: "weak", seconds: 3 }] }]);
+        expect(ruleIds(lintRoleLogic(field))).toContain("L15");
+    });
+});
+
+describe("lint-role: L16 (未生成の cnoN / 未保存の savedN 参照)", () => {
+    it("cno_spawn が無いのに teleport(to:cnoN) すると警告する", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "teleport", to: "cno2" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L16");
+    });
+
+    it("同じ番号の cno_spawn / dummy_spawn があれば警告しない", () => {
+        const spawn = logic([
+            { when: "on_game_start", do: [{ op: "cno_spawn", slot: 2, text: "!", size: 1, at: "self" }] },
+            { when: "on_pet", do: [{ op: "teleport", to: "cno2" }] },
+        ]);
+        expect(ruleIds(lintRoleLogic(spawn))).not.toContain("L16");
+        const dummy = logic([
+            { when: "on_game_start", do: [{ op: "dummy_spawn", slot: 3, name: "ダミー", killable: false, at: "self" }] },
+            { when: "on_pet", do: [{ op: "marker_save", slot: 1, at: "cno3" }] },
+        ]);
+        expect(ruleIds(lintRoleLogic(dummy))).not.toContain("L16");
+    });
+
+    it("remember が無いのに savedN を参照すると警告する", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "kill", target: "saved1" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L16");
+    });
+
+    it("同じ番号の remember があれば警告しない (番号違いは警告する)", () => {
+        const ok = logic([
+            { when: "on_kill", do: [{ op: "remember", slot: 1, target: "ctx" }] },
+            { when: "on_pet", do: [{ op: "kill", target: "saved1" }] },
+        ]);
+        expect(ruleIds(lintRoleLogic(ok))).not.toContain("L16");
+        const ng = logic([
+            { when: "on_kill", do: [{ op: "remember", slot: 1, target: "ctx" }] },
+            { when: "on_pet", do: [{ op: "kill", target: "saved2" }] },
+        ]);
+        expect(ruleIds(lintRoleLogic(ng))).toContain("L16");
+    });
+
+    it("cno_move/cno_despawn の slot 指定は L16 の対象外 (トークン参照ではない)", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "cno_move", slot: 1, dx: 1, dy: 0 }, { op: "cno_despawn", slot: 2 }] }]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L16");
+    });
+});
+
+describe("lint-role: L17 (on_attacked 配下・wait より後の cancel_attack)", () => {
+    it("wait のあとの cancel_attack は警告する", () => {
+        const l = logic([{ when: "on_attacked", do: [{ op: "wait", seconds: 1 }, { op: "cancel_attack" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L17");
+    });
+
+    it("wait より前の cancel_attack は警告しない", () => {
+        const l = logic([{ when: "on_attacked", do: [{ op: "cancel_attack" }, { op: "wait", seconds: 1 }, { op: "notify", text: "ふせいだ", seconds: 3 }] }]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L17");
+    });
+
+    it("if の中の cancel_attack も訪問順で判定する", () => {
+        const nested: LogicNode = { op: "if", cond: { e: "lit", v: 1 }, then: [{ op: "cancel_attack" }] };
+        const after = logic([{ when: "on_attacked", do: [{ op: "wait", seconds: 0.5 }, nested] }]);
+        expect(ruleIds(lintRoleLogic(after))).toContain("L17");
+        const before = logic([{ when: "on_attacked", do: [nested, { op: "wait", seconds: 0.5 }] }]);
+        expect(ruleIds(lintRoleLogic(before))).not.toContain("L17");
+    });
+});
+
 describe("lint-role: 問題のないロジックは警告0件", () => {
+    // Wave 1 で L14 (ctx 無しイベント配下の ctx セレクタ) が入ったため、on_pet の例では ctx を
+    // 使わない形に直した (on_pet には「あいて」がいないので、元の形は警告が出るのが正しい)。
     it("on_pet 単発の kill/teleport/notify/cno_spawn/cno_show は何も警告しない", () => {
         const l = logic([
             {
                 when: "on_pet",
                 do: [
-                    { op: "kill", target: "ctx" },
-                    { op: "teleport", to: "ctx" },
+                    { op: "kill", target: "nearest" },
+                    { op: "teleport", to: "random" },
                     { op: "notify", text: "やった", seconds: 3 },
                     { op: "cno_spawn", slot: 1, text: "!", size: 1, at: "self" },
                     { op: "cno_show", slot: 1, who: "all" },
@@ -608,7 +757,8 @@ describe("lint-role: 問題のないロジックは警告0件", () => {
                 when: "on_pet",
                 do: [
                     { op: "dummy_spawn", slot: 1, name: "ダミー", killable: true, at: "self" },
-                    { op: "corpse_spawn", color: "random", at: "ctx" },
+                    // at:"ctx" は Wave 1 の L14 対象 (on_pet に「あいて」はいない) — self へ変更
+                    { op: "corpse_spawn", color: "random", at: "self" },
                 ],
             },
         ]);
@@ -660,6 +810,22 @@ describe("lint-role: 問題のないロジックは警告0件", () => {
 
     it("on_game_start でポータルを1回だけ置くのは警告0件", () => {
         const l = logic([{ when: "on_game_start", do: [{ op: "portal_place", which: "a" }, { op: "portal_place", which: "b" }] }]);
+        expect(lintRoleLogic(l)).toEqual([]);
+    });
+
+    // Wave 1 (docs/ekr-logic-spec.md §6 2026-08-11 併合): 反射役職の模範形は警告0件
+    it("on_attacked で「ふせぐ→おぼえる→反撃」と組むのは警告0件", () => {
+        const l = logic([
+            {
+                when: "on_attacked",
+                do: [
+                    { op: "cancel_attack" },
+                    { op: "remember", slot: 1, target: "ctx" },
+                    { op: "notify", text: "ふせいだ！", seconds: 3, target: "all" },
+                    { op: "kill", target: "saved1" },
+                ],
+            },
+        ]);
         expect(lintRoleLogic(l)).toEqual([]);
     });
 

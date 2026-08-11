@@ -16,6 +16,11 @@ internal sealed class EkrActionContext
     public byte HolderId;
     public byte CtxId = byte.MaxValue; // byte.MaxValue = ctx 無し
     public CustomRoles Slot;
+
+    // Wave 1 (spec §2 on_attacked 同期プロローグ): cancel_attack が有効なのは関所の中で同期実行されて
+    // いる間 (最初の wait まで) だけ。wait を跨いだ後は攻撃が既に解決済みなので no-op (リンタ L17)。
+    public bool AllowCancelAttack;
+    public bool CancelAttack;
 }
 
 internal sealed class EkrActionSink : IEkrActionSink
@@ -38,7 +43,9 @@ internal sealed class EkrActionSink : IEkrActionSink
         // になり、ガード無しだと追放演出中に on_second 等が発火して spawn 系 op が会議クローズ送信
         // (SetRole 全員分+Desync+NotifyRoles スイープ) と同一窓に重なる — BUG-20260803-07 の合算キック窓
         // そのもの。CorpseSpawn の個別ガードはこの共通関所への二重防御として残置。
-        if (node.Op != "notify" && (GameStates.IsMeeting || ExileController.Instance)) return;
+        // cancel_attack は完全にローカル判定 (送信ゼロ・ワールドへの作用ゼロ) なので notify と同じく
+        // この関所から除外する。もっとも on_attacked は会議中に発火し得ないため実質到達しない防御。
+        if (node.Op is not "notify" and not "cancel_attack" && (GameStates.IsMeeting || ExileController.Instance)) return;
 
         switch (node.Op)
         {
@@ -61,6 +68,134 @@ internal sealed class EkrActionSink : IEkrActionSink
             case "pull": TeleportOther(node, ctx); break;
             case "drag": Drag(node, ctx); break; // v1.3
             case "field": Field(node, ctx); break; // v1.3
+            case "remember": Remember(node, ctx); break; // Wave 1
+            case "cancel_attack": CancelAttack(ctx); break; // Wave 1
+        }
+    }
+
+    // ── Wave 1: 統一セレクタ解決 (spec §3) ───────────────────────────────────────────────────
+    // 壊れた参照 (ctx 無し / 失効 saved / 部屋外の room) は「静かに no-op・予算不消費」— 呼び出し元は
+    // null / 空リストを見たら何もせず return する (参照整合性3原則②)。
+
+    private static PlayerControl ResolveSingle(string selector, EkrActionContext ctx)
+    {
+        switch (selector)
+        {
+            case "self":
+            {
+                PlayerControl pc = ctx.HolderId.GetPlayer();
+                return pc ? pc : null;
+            }
+            case "ctx":
+            {
+                if (ctx.CtxId == byte.MaxValue) return null;
+                PlayerControl pc = ctx.CtxId.GetPlayer();
+                return pc ? pc : null;
+            }
+            case "saved1": return ResolveSaved(ctx, 0);
+            case "saved2": return ResolveSaved(ctx, 1);
+            case "nearest": return ResolveNearest(ctx);
+            case "random":
+            {
+                List<PlayerControl> others = AliveOthers(ctx.HolderId);
+                return others.Count == 0 ? null : others[IRandom.Instance.Next(0, others.Count)];
+            }
+            default: return null;
+        }
+    }
+
+    // spec §3: おぼえた人は死亡・切断で自動失効 → 参照は no-op (予算不消費)。失効を検出したら
+    // スロットも消しておく (次回以降の再検証を省く。掃除の常駐処理は作らない)。
+    private static PlayerControl ResolveSaved(EkrActionContext ctx, int index)
+    {
+        EkrHolderState state = EkrManager.GetHolderState(ctx.HolderId);
+        if (state == null) return null;
+
+        byte savedId = state.Saved[index];
+        if (savedId == byte.MaxValue) return null;
+
+        PlayerControl pc = savedId.GetPlayer();
+
+        if (!pc || !pc.IsAlive() || pc.Data == null || pc.Data.Disconnected)
+        {
+            state.Saved[index] = byte.MaxValue;
+            return null;
+        }
+
+        return pc;
+    }
+
+    private static PlayerControl ResolveNearest(EkrActionContext ctx)
+    {
+        PlayerControl holderPc = ctx.HolderId.GetPlayer();
+        if (!holderPc) return null;
+
+        Vector2 from = holderPc.Pos();
+        PlayerControl best = null;
+        float bestDist = float.MaxValue;
+
+        foreach (PlayerControl pc in Main.AllAlivePlayerControls)
+        {
+            if (pc.PlayerId == ctx.HolderId) continue;
+
+            float dist = Vector2.Distance(pc.Pos(), from);
+            if (dist >= bestDist) continue;
+
+            bestDist = dist;
+            best = pc;
+        }
+
+        return best;
+    }
+
+    private static List<PlayerControl> AliveOthers(byte holderId)
+    {
+        var list = new List<PlayerControl>();
+
+        foreach (PlayerControl pc in Main.AllAlivePlayerControls)
+            if (pc.PlayerId != holderId)
+                list.Add(pc);
+
+        return list;
+    }
+
+    // 複数セレクタ (all / room)。単数セレクタが来たら1件のリストに包んで返す — 呼び出し元
+    // (notify) は単複を区別せず「1人ごとに個別課金」する。
+    private static List<PlayerControl> ResolveMulti(string selector, EkrActionContext ctx)
+    {
+        switch (selector)
+        {
+            case "all":
+                return AliveOthers(ctx.HolderId);
+
+            case "room":
+            {
+                // spec §3: 「自分と同じ PlainShipRoom 内の生存者」— all と違い自分を除外する明記が無いので
+                // ホルダー自身も含める (「おなじ部屋のみんな」の素直な読み)。部屋の外にいれば空集合 = no-op。
+                var list = new List<PlayerControl>();
+
+                PlayerControl holderPc = ctx.HolderId.GetPlayer();
+                if (!holderPc) return list;
+
+                PlainShipRoom room = holderPc.GetPlainShipRoom();
+                if (!room) return list;
+
+                foreach (PlayerControl pc in Main.AllAlivePlayerControls)
+                {
+                    PlainShipRoom other = pc.GetPlainShipRoom();
+                    if (other && other.RoomId == room.RoomId) list.Add(pc);
+                }
+
+                return list;
+            }
+
+            default:
+            {
+                var list = new List<PlayerControl>();
+                PlayerControl single = ResolveSingle(selector, ctx);
+                if (single) list.Add(single);
+                return list;
+            }
         }
     }
 
@@ -71,39 +206,62 @@ internal sealed class EkrActionSink : IEkrActionSink
         EkrHolderState state = EkrManager.GetHolderState(ctx.HolderId);
         if (state == null) return;
 
+        // Wave 1 (spec §3): target は任意 (既定 self)・複数セレクタを受理する唯一の op。
+        List<PlayerControl> targets = ResolveMulti(node.Target ?? "self", ctx);
+        if (targets.Count == 0) return; // 壊れた参照/部屋外は静かに no-op
+
+        // 複数対象は EKR 全体の cross-holder 予算にも課金する (EkrManager 側のコメント参照 —
+        // 満員 target:"all" = 1フレーム14本の RpcSetName、かつ複数ホルダーの同時発火が既定)。
+        if (targets.Count > 1 && !EkrManager.TryConsumeGlobalNotifyBroadcastBudget()) return;
+
         bool meeting = GameStates.IsMeeting;
         float now = Time.realtimeSinceStartup;
-
-        // 会議中はチャット私信 (下記) へ切り替わる — ワールド名札と違い「呼ぶたびにチャット欄へ1行
-        // 追加」なので、通常の1秒バケットを共用すると64ノード予算いっぱいの notify/wait 連打で
-        // 1回の会議中に数十行のスパムになりうる (advisor 指摘・2026-08-09)。会議中専用の粗いバケット
-        // (5秒) で別途間引く。
-        if (meeting)
-        {
-            if (state.LastMeetingNotifyTime >= 0f && now - state.LastMeetingNotifyTime < 5f) return;
-            state.LastMeetingNotifyTime = now;
-        }
-        else
-        {
-            if (state.LastNotifyTime >= 0f && now - state.LastNotifyTime < 1f) return;
-            state.LastNotifyTime = now;
-        }
-
-        PlayerControl holderPc = ctx.HolderId.GetPlayer();
-        if (!holderPc) return;
-
         string text = SubstituteVariables(node.Text, fiber.Variables);
 
-        // NameNotifyManager.Notify はワールド空間の名前ラベル描画専用で GameStates.IsInTask
-        // (= !MeetingHud.Instance) を無条件に要求し、会議中は毎 OnFixedUpdate で全件 Reset() もされる
-        // ため会議中は構造的に絶対表示されない (2026-08-09 コード確認)。spec は notify を「会議中も
-        // 有効な唯一のアクション op」と明記しているため、会議中はチャット私信 (Utils.SendMessage,
-        // sendTo=本人・host-only の既存経路・2引数呼び出しは内部で自己 flush 確認済み) へ切り替えて
-        // 代替する。
-        if (meeting)
-            Utils.SendMessage(text, holderPc.PlayerId);
-        else
-            holderPc.Notify(text, node.Seconds);
+        foreach (PlayerControl targetPc in targets)
+        {
+            if (!targetPc) continue;
+
+            // spec §3: 複数対象は「1人ごとに個別課金・超過分は静かにドロップ」。バケットは
+            // per-(ホルダー, 受け取り手) — ホルダー1本の共有バケットにすると target:"all" が
+            // 1人にしか届かず、複数セレクタ唯一の op が機能しなくなる。
+            Dictionary<byte, float> bucket = meeting ? state.LastMeetingNotifyTime : state.LastNotifyTime;
+            float interval = meeting ? 5f : 1f;
+
+            if (bucket.TryGetValue(targetPc.PlayerId, out float last) && now - last < interval) continue;
+            bucket[targetPc.PlayerId] = now;
+
+            // NameNotifyManager.Notify はワールド空間の名前ラベル描画専用で GameStates.IsInTask
+            // (= !MeetingHud.Instance) を無条件に要求し、会議中は毎 OnFixedUpdate で全件 Reset() もされる
+            // ため会議中は構造的に絶対表示されない (2026-08-09 コード確認)。spec は notify を「会議中も
+            // 有効な唯一のアクション op」と明記しているため、会議中はチャット私信 (Utils.SendMessage,
+            // sendTo=本人・host-only の既存経路・2引数呼び出しは内部で自己 flush 確認済み) へ切り替えて
+            // 代替する。
+            if (meeting)
+                Utils.SendMessage(text, targetPc.PlayerId);
+            else
+                targetPc.Notify(text, node.Seconds);
+        }
+    }
+
+    // ── Wave 1: remember / cancel_attack (spec §3 — どちらも予算なし・ローカル状態のみ) ────────
+
+    private static void Remember(EkrNode node, EkrActionContext ctx)
+    {
+        EkrHolderState state = EkrManager.GetHolderState(ctx.HolderId);
+        if (state == null) return;
+
+        PlayerControl targetPc = ResolveSingle(node.Target, ctx);
+        if (!targetPc) return; // ctx 無し文脈・失効 saved 参照は no-op (spec §3)
+
+        state.Saved[node.Slot - 1] = targetPc.PlayerId;
+    }
+
+    // spec §2: 攻撃を止められるのは on_attacked の同期プロローグ内だけ。wait 後は攻撃が既に
+    // 解決済みなので no-op (リンタ L17 がエディタ側で先に教える)。
+    private static void CancelAttack(EkrActionContext ctx)
+    {
+        if (ctx.AllowCancelAttack) ctx.CancelAttack = true;
     }
 
     private static readonly Regex VarPattern = new(@"\{([^{}]+)\}", RegexOptions.Compiled);
@@ -159,6 +317,10 @@ internal sealed class EkrActionSink : IEkrActionSink
             "marker2" => ResolveMarkerPosition(ctx, 2),
             "marker3" => ResolveMarkerPosition(ctx, 3),
             "marker4" => ResolveMarkerPosition(ctx, 4),
+            // Wave 1 (spec §3 空間セレクタ): じぶんのオブジェクト 1..3 のところ。未実体化なら no-op。
+            "cno1" => ResolveOwnCnoPosition(ctx, 0),
+            "cno2" => ResolveOwnCnoPosition(ctx, 1),
+            "cno3" => ResolveOwnCnoPosition(ctx, 2),
             _ => null
         };
     }
@@ -210,15 +372,8 @@ internal sealed class EkrActionSink : IEkrActionSink
         PlayerControl holderPc = ctx.HolderId.GetPlayer();
         if (!holderPc || !holderPc.IsAlive()) return;
 
-        PlayerControl targetPc;
-
-        if (node.Target == "self") targetPc = holderPc;
-        else
-        {
-            if (ctx.CtxId == byte.MaxValue) return;
-            targetPc = ctx.CtxId.GetPlayer();
-        }
-
+        // Wave 1: 単数セレクタ全種 (self/ctx/saved1/saved2/nearest/random)。
+        PlayerControl targetPc = ResolveSingle(node.Target, ctx);
         if (!targetPc || !targetPc.IsAlive()) return;
 
         state.LastKillTime = now;
@@ -283,6 +438,10 @@ internal sealed class EkrActionSink : IEkrActionSink
 
             EkrHolderState s = EkrManager.GetHolderState(holderId);
             if (s == null || s.SpeedGen != gen) return; // 再発動済み (世代不一致) = このタスクは stale
+
+            // 死亡/剥奪の復元経路が既にブーストを畳んでいたら何もしない (Wave 1 でパッシブ速度を
+            // 足したため、ここで opcode の baseline を書き戻すとパッシブ復元を踏み潰す)。
+            if (!s.SpeedBoostActive) return;
 
             // 凍結中は復元をスキップして相手の遅延タスクへ委ねる (触ると相手の凍結を解除してしまう)
             if (Mathf.Approximately(Main.AllPlayerSpeed.GetValueOrDefault(holderId), Main.MinSpeed)) return;
@@ -357,7 +516,19 @@ internal sealed class EkrActionSink : IEkrActionSink
     private static Vector2? ResolveSelfPosition(EkrActionContext ctx)
     {
         PlayerControl pc = ctx.HolderId.GetPlayer();
-        return pc ? pc.Pos() : null;
+        if (!pc) return null;
+
+        // Wave 1: 死後 (on_death 起点 fiber) は「最後に生きていた座標」を使う。passives.corpse="vanish" は
+        // 死体を消すためにホルダーをマップ外 (50,50) へ飛ばしてから殺すので、素の Pos() だと
+        // spec §2 v1.1 が正当ユースとして挙げる「死んだ場所に身代わりダミー/偽死体を残す」が壊れる。
+        // 生存中は毎 FixedUpdate 更新しているので、通常の死亡では従来と同じ座標になる。
+        if (!pc.IsAlive())
+        {
+            EkrHolderState state = EkrManager.GetHolderState(ctx.HolderId);
+            if (state is { HasLastLivePosition: true }) return state.LastLivePosition;
+        }
+
+        return pc.Pos();
     }
 
     private static void CnoMove(EkrNode node, EkrActionContext ctx)
@@ -551,9 +722,9 @@ internal sealed class EkrActionSink : IEkrActionSink
         PlayerControl holderPc = ctx.HolderId.GetPlayer();
         if (!holderPc || !holderPc.IsAlive()) return; // teleport/kill/speed と同じ「死者は常に no-op」
 
-        if (ctx.CtxId == byte.MaxValue) return; // ctx 無しは no-op (spec §3)
-        PlayerControl targetPc = ctx.CtxId.GetPlayer();
-        if (!targetPc || !targetPc.IsAlive()) return; // 死者は no-op (spec §3)
+        // Wave 1: 対象は単数セレクタ (ctx/saved1/saved2/nearest/random)。pull はパーサが "ctx" 固定。
+        PlayerControl targetPc = ResolveSingle(node.Subject ?? "ctx", ctx);
+        if (!targetPc || !targetPc.IsAlive()) return; // ctx 無し/失効 saved/死者は no-op (spec §3)
 
         Vector2? dest = node.Target switch
         {
@@ -562,6 +733,9 @@ internal sealed class EkrActionSink : IEkrActionSink
             "marker2" => ResolveMarkerPosition(ctx, 2),
             "marker3" => ResolveMarkerPosition(ctx, 3),
             "marker4" => ResolveMarkerPosition(ctx, 4),
+            "cno1" => ResolveOwnCnoPosition(ctx, 0),
+            "cno2" => ResolveOwnCnoPosition(ctx, 1),
+            "cno3" => ResolveOwnCnoPosition(ctx, 2),
             _ => null
         };
 

@@ -30,7 +30,18 @@ import {
     LOGIC_VARIABLES_MAX,
     LOGIC_VAR_NAME_MAX,
     type LogicVariable,
+    PASSIVE_CORPSE_VALUES,
+    PASSIVE_DOOM_SECONDS_MAX,
+    PASSIVE_DOOM_SECONDS_MIN,
+    PASSIVE_KILL_DISTANCE_VALUES,
+    PASSIVE_SHIELD_COUNT_MAX,
+    PASSIVE_SHIELD_COUNT_MIN,
+    PASSIVE_SPEED_MULT_MAX,
+    PASSIVE_SPEED_MULT_MIN,
+    PASSIVE_VOTE_WEIGHT_MAX,
+    PASSIVE_VOTE_WEIGHT_MIN,
     type RoleLogic,
+    type RolePassives,
     SUPPORTED_TEAM,
     defaultEkrDefinition,
     normalizeColor,
@@ -60,6 +71,9 @@ interface FormState {
     killCooldown: number;
     canVent: boolean;
     visionMultiplier: number;
+    // Wave 1: とくせい (spec §1.1)。「バニラ既定 = キーの欠落」なので、既定のままの項目は
+    // ここにも入らない (下書きの形と書き出しの形を一致させておく)。
+    passives: RolePassives;
     // R1: ロジックの下書き。ワークスペースを一度も開いていなければ logicBlockly は null。
     logicVariables: LogicVariable[];
     logicBlockly: unknown | null;
@@ -76,6 +90,7 @@ function defaultFormState(): FormState {
         killCooldown: d.killCooldown,
         canVent: d.canVent,
         visionMultiplier: d.visionMultiplier,
+        passives: {},
         logicVariables: [],
         logicBlockly: null,
         logicNoBlocklyPassthrough: null,
@@ -99,7 +114,7 @@ function refreshKillCdVisibility(): void {
 }
 
 /** フォーム入力欄 → 生の値 (未検証・未クランプ)。name/author はユーザーの入力途中の値をそのまま読む */
-function readForm(): Omit<FormState, "logicVariables" | "logicBlockly" | "logicNoBlocklyPassthrough"> {
+function readForm(): Omit<FormState, "passives" | "logicVariables" | "logicBlockly" | "logicNoBlocklyPassthrough"> {
     return {
         name: $<HTMLInputElement>("rm-name").value,
         author: $<HTMLInputElement>("rm-author").value,
@@ -116,7 +131,7 @@ function readForm(): Omit<FormState, "logicVariables" | "logicBlockly" | "logicN
  * (input type="color" に不正な文字列を代入すると黙って #000000 にリセットされる仕様があるため、
  * 呼び出し元の由来 [既定値/localStorage/読込コード] を問わずここで安全な値であることを保証する)。
  */
-function writeForm(s: Omit<FormState, "logicVariables" | "logicBlockly" | "logicNoBlocklyPassthrough">): void {
+function writeForm(s: Omit<FormState, "passives" | "logicVariables" | "logicBlockly" | "logicNoBlocklyPassthrough">): void {
     $<HTMLInputElement>("rm-name").value = s.name;
     $<HTMLInputElement>("rm-author").value = s.author;
     $<HTMLInputElement>("rm-color").value = normalizeColor(s.color);
@@ -125,6 +140,122 @@ function writeForm(s: Omit<FormState, "logicVariables" | "logicBlockly" | "logic
     $<HTMLInputElement>("rm-can-vent").checked = s.canVent;
     $<HTMLInputElement>("rm-vision").value = String(normalizeVisionMultiplier(s.visionMultiplier));
     refreshKillCdVisibility();
+}
+
+// ---------------------------------------------------------------------------
+// とくせい (Wave 1・spec §1.1) — 基本情報タブのフォームセクション
+// ---------------------------------------------------------------------------
+// 契約側は「範囲外なら文書全体 reject」(クランプしない) なので、フォーム側は常に範囲内の値だけを
+// 返す責務を持つ (壊れた下書きを復元しても必ずコピーできる状態にする)。数値欄の change ハンドラも
+// 既存の rm-kill-cd と同じ作法でクランプ結果を書き戻す。
+// 「バニラ既定 (= 何も変えない)」はキーの欠落で表す — 既定のままの項目は読み取り時点で落とす。
+
+/** フォーム表示用の既定値 (チェックを外しているときに数値欄へ入れておく値)。契約の既定値ではない */
+const PASSIVE_FORM_DEFAULTS = {
+    speedMult: 1,
+    shieldCount: 1,
+    voteWeight: 1,
+    doomSeconds: 60,
+} as const;
+
+function clampToRange(raw: unknown, min: number, max: number, fallback: number): number {
+    const n = typeof raw === "number" ? raw : Number(raw);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.min(max, Math.max(min, n));
+}
+
+function clampIntToRange(raw: unknown, min: number, max: number, fallback: number): number {
+    return Math.round(clampToRange(raw, min, max, fallback));
+}
+
+function refreshPassiveRowVisibility(): void {
+    $("rm-p-shield-row").hidden = !$<HTMLInputElement>("rm-p-shield").checked;
+    $("rm-p-doom-row").hidden = !$<HTMLInputElement>("rm-p-doom").checked;
+}
+
+/** とくせいフォーム → RolePassives (既定のままの項目はキーごと落とす・値は必ず範囲内) */
+function readPassivesForm(): RolePassives {
+    const p: RolePassives = {};
+
+    const speed = clampToRange($<HTMLInputElement>("rm-p-speed").value, PASSIVE_SPEED_MULT_MIN, PASSIVE_SPEED_MULT_MAX, PASSIVE_FORM_DEFAULTS.speedMult);
+    if (Math.abs(speed - PASSIVE_FORM_DEFAULTS.speedMult) > 1e-9) p.speedMult = speed;
+
+    const killDistance = $<HTMLSelectElement>("rm-p-killdist").value;
+    if ((PASSIVE_KILL_DISTANCE_VALUES as readonly string[]).includes(killDistance)) {
+        p.killDistance = killDistance as RolePassives["killDistance"];
+    }
+
+    if ($<HTMLInputElement>("rm-p-shield").checked) {
+        p.shield = {
+            count: clampIntToRange($<HTMLInputElement>("rm-p-shield-count").value, PASSIVE_SHIELD_COUNT_MIN, PASSIVE_SHIELD_COUNT_MAX, PASSIVE_FORM_DEFAULTS.shieldCount),
+        };
+    }
+
+    const corpse = $<HTMLSelectElement>("rm-p-corpse").value;
+    if ((PASSIVE_CORPSE_VALUES as readonly string[]).includes(corpse) && corpse !== "normal") {
+        p.corpse = corpse as RolePassives["corpse"];
+    }
+
+    const vote = clampIntToRange($<HTMLInputElement>("rm-p-vote").value, PASSIVE_VOTE_WEIGHT_MIN, PASSIVE_VOTE_WEIGHT_MAX, PASSIVE_FORM_DEFAULTS.voteWeight);
+    if (vote !== PASSIVE_FORM_DEFAULTS.voteWeight) p.voteWeight = vote;
+
+    if ($<HTMLInputElement>("rm-p-doom").checked) {
+        p.doom = {
+            seconds: clampIntToRange($<HTMLInputElement>("rm-p-doom-seconds").value, PASSIVE_DOOM_SECONDS_MIN, PASSIVE_DOOM_SECONDS_MAX, PASSIVE_FORM_DEFAULTS.doomSeconds),
+        };
+    }
+
+    return p;
+}
+
+/** RolePassives → とくせいフォーム (キーが無い項目は表示用の既定値を入れておく) */
+function writePassivesForm(p: RolePassives): void {
+    $<HTMLInputElement>("rm-p-speed").value = String(clampToRange(p.speedMult, PASSIVE_SPEED_MULT_MIN, PASSIVE_SPEED_MULT_MAX, PASSIVE_FORM_DEFAULTS.speedMult));
+    $<HTMLSelectElement>("rm-p-killdist").value = (PASSIVE_KILL_DISTANCE_VALUES as readonly string[]).includes(p.killDistance ?? "") ? p.killDistance! : "";
+    $<HTMLInputElement>("rm-p-shield").checked = p.shield !== undefined;
+    $<HTMLInputElement>("rm-p-shield-count").value = String(clampIntToRange(p.shield?.count, PASSIVE_SHIELD_COUNT_MIN, PASSIVE_SHIELD_COUNT_MAX, PASSIVE_FORM_DEFAULTS.shieldCount));
+    $<HTMLSelectElement>("rm-p-corpse").value = (PASSIVE_CORPSE_VALUES as readonly string[]).includes(p.corpse ?? "") ? p.corpse! : "normal";
+    $<HTMLInputElement>("rm-p-vote").value = String(clampIntToRange(p.voteWeight, PASSIVE_VOTE_WEIGHT_MIN, PASSIVE_VOTE_WEIGHT_MAX, PASSIVE_FORM_DEFAULTS.voteWeight));
+    $<HTMLInputElement>("rm-p-doom").checked = p.doom !== undefined;
+    $<HTMLInputElement>("rm-p-doom-seconds").value = String(clampIntToRange(p.doom?.seconds, PASSIVE_DOOM_SECONDS_MIN, PASSIVE_DOOM_SECONDS_MAX, PASSIVE_FORM_DEFAULTS.doomSeconds));
+    refreshPassiveRowVisibility();
+}
+
+/** 下書き (localStorage) の passives を寛容に復元する — 壊れていても既定 (とくせい無し) に落とす */
+function sanitizePassivesDraft(raw: unknown): RolePassives {
+    if (typeof raw !== "object" || raw === null) return {};
+    const r = raw as Record<string, unknown>;
+    const p: RolePassives = {};
+    if (typeof r.speedMult === "number") p.speedMult = clampToRange(r.speedMult, PASSIVE_SPEED_MULT_MIN, PASSIVE_SPEED_MULT_MAX, PASSIVE_FORM_DEFAULTS.speedMult);
+    if (typeof r.killDistance === "string" && (PASSIVE_KILL_DISTANCE_VALUES as readonly string[]).includes(r.killDistance)) {
+        p.killDistance = r.killDistance as RolePassives["killDistance"];
+    }
+    if (typeof r.shield === "object" && r.shield !== null) {
+        p.shield = { count: clampIntToRange((r.shield as Record<string, unknown>).count, PASSIVE_SHIELD_COUNT_MIN, PASSIVE_SHIELD_COUNT_MAX, PASSIVE_FORM_DEFAULTS.shieldCount) };
+    }
+    if (typeof r.corpse === "string" && (PASSIVE_CORPSE_VALUES as readonly string[]).includes(r.corpse) && r.corpse !== "normal") {
+        p.corpse = r.corpse as RolePassives["corpse"];
+    }
+    if (typeof r.voteWeight === "number") p.voteWeight = clampIntToRange(r.voteWeight, PASSIVE_VOTE_WEIGHT_MIN, PASSIVE_VOTE_WEIGHT_MAX, PASSIVE_FORM_DEFAULTS.voteWeight);
+    if (typeof r.doom === "object" && r.doom !== null) {
+        p.doom = { seconds: clampIntToRange((r.doom as Record<string, unknown>).seconds, PASSIVE_DOOM_SECONDS_MIN, PASSIVE_DOOM_SECONDS_MAX, PASSIVE_FORM_DEFAULTS.doomSeconds) };
+    }
+    return p;
+}
+
+/** プレビューの能力チップに出す「とくせい」の説明文 (ON のものだけ) */
+function passiveChipTexts(p: RolePassives): string[] {
+    const chips: string[] = [];
+    if (p.speedMult !== undefined) chips.push(`🏃 いつものはやさ ${formatPreviewNumber(p.speedMult)} 倍`);
+    if (p.killDistance !== undefined) {
+        const label = p.killDistance === "short" ? "みじかい" : p.killDistance === "medium" ? "ふつう" : "ながい";
+        chips.push(`🎯 キルできるきょり: ${label}`);
+    }
+    if (p.shield !== undefined) chips.push(`🛡 さいしょの ${p.shield.count} 回のこうげきをふせぐ`);
+    if (p.corpse !== undefined) chips.push(p.corpse === "noReport" ? "🩸 じぶんの死体は通報できない" : "🩸 じぶんの死体はすぐ消える");
+    if (p.voteWeight !== undefined) chips.push(p.voteWeight === 0 ? "🗳 票をもっていない" : `🗳 票のちから ${p.voteWeight}`);
+    if (p.doom !== undefined) chips.push(`⏳ ${p.doom.seconds} 秒たつと死んでしまう`);
+    return chips;
 }
 
 // ---------------------------------------------------------------------------
@@ -165,6 +296,7 @@ function saveFormToStorage(): void {
     try {
         const state: FormState = {
             ...readForm(),
+            passives: readPassivesForm(),
             logicVariables,
             logicBlockly: currentBlocklyState(),
             logicNoBlocklyPassthrough: noBlocklyPassthrough,
@@ -196,6 +328,7 @@ function loadFormFromStorage(): FormState {
             killCooldown: normalizeKillCooldown(parsed.killCooldown),
             canVent: typeof parsed.canVent === "boolean" ? parsed.canVent : d.canVent,
             visionMultiplier: normalizeVisionMultiplier(parsed.visionMultiplier),
+            passives: sanitizePassivesDraft(parsed.passives),
             logicVariables: Array.isArray(parsed.logicVariables) ? (parsed.logicVariables as LogicVariable[]) : d.logicVariables,
             logicBlockly: parsed.logicBlockly ?? d.logicBlockly,
             logicNoBlocklyPassthrough: (parsed.logicNoBlocklyPassthrough as RoleLogic | undefined) ?? d.logicNoBlocklyPassthrough,
@@ -223,6 +356,9 @@ function buildDefinitionFromForm(): EkrDefinition | null {
     };
     const logic = currentLogicCandidate();
     if (logic !== undefined) candidate.logic = logic;
+    // とくせい: 既定のまま (キー0個) なら passives キー自体を書き出さない (バニラ既定 = 欠落)。
+    const passives = readPassivesForm();
+    if (Object.keys(passives).length > 0) candidate.passives = passives;
 
     const r = validateEkrDefinition(candidate);
     if (!r.ok) {
@@ -313,6 +449,7 @@ function loadCode(): void {
         canVent: r.def.canVent,
         visionMultiplier: r.def.visionMultiplier,
     });
+    writePassivesForm(r.def.passives ?? {});
     adoptLoadedLogic(r.def.logic);
     saveFormToStorage();
     renderPreview();
@@ -539,7 +676,18 @@ function renderPreview(): void {
     visionChip.hidden = !showVision;
     if (showVision) visionChip.textContent = `👁 視界 ${formatPreviewNumber(vision)} 倍`;
 
-    $("rm-preview-ability-none").hidden = raw.canKill || raw.canVent || showVision;
+    // とくせい (Wave 1): ON のものだけをチップとして並べる (項目数が可変なので毎回作り直す)。
+    const passiveChips = passiveChipTexts(readPassivesForm());
+    const passiveContainer = $("rm-preview-passive-chips");
+    passiveContainer.replaceChildren();
+    for (const text of passiveChips) {
+        const chip = document.createElement("p");
+        chip.className = "rm-preview-chip";
+        chip.textContent = text;
+        passiveContainer.appendChild(chip);
+    }
+
+    $("rm-preview-ability-none").hidden = raw.canKill || raw.canVent || showVision || passiveChips.length > 0;
 
     const triggerCount = currentLogicTriggerCount();
     const logicSummary = $("rm-preview-logic-summary");
@@ -702,6 +850,7 @@ function wire(): void {
 
     const draft = loadFormFromStorage();
     writeForm(draft);
+    writePassivesForm(draft.passives);
     logicVariables = draft.logicVariables;
     pendingBlocklyRestore = draft.logicBlockly;
     noBlocklyPassthrough = draft.logicNoBlocklyPassthrough;
@@ -731,6 +880,32 @@ function wire(): void {
         el.value = String(normalizeVisionMultiplier(raw === "" ? NaN : Number(raw)));
         onFormEdit();
     });
+
+    // とくせい (Wave 1): 数値欄は change で範囲内へ丸めて書き戻す (rm-kill-cd と同じ作法 —
+    // 契約側は範囲外を reject するので、フォームから出る値は常に範囲内であることを保証する)。
+    const clampPassiveNumberOnChange = (id: string, min: number, max: number, fallback: number, integer: boolean): void => {
+        $<HTMLInputElement>(id).addEventListener("change", () => {
+            const el = $<HTMLInputElement>(id);
+            const raw = el.value.trim();
+            const n = raw === "" ? NaN : Number(raw);
+            el.value = String(integer ? clampIntToRange(n, min, max, fallback) : clampToRange(n, min, max, fallback));
+            onFormEdit();
+        });
+    };
+    clampPassiveNumberOnChange("rm-p-speed", PASSIVE_SPEED_MULT_MIN, PASSIVE_SPEED_MULT_MAX, PASSIVE_FORM_DEFAULTS.speedMult, false);
+    clampPassiveNumberOnChange("rm-p-shield-count", PASSIVE_SHIELD_COUNT_MIN, PASSIVE_SHIELD_COUNT_MAX, PASSIVE_FORM_DEFAULTS.shieldCount, true);
+    clampPassiveNumberOnChange("rm-p-vote", PASSIVE_VOTE_WEIGHT_MIN, PASSIVE_VOTE_WEIGHT_MAX, PASSIVE_FORM_DEFAULTS.voteWeight, true);
+    clampPassiveNumberOnChange("rm-p-doom-seconds", PASSIVE_DOOM_SECONDS_MIN, PASSIVE_DOOM_SECONDS_MAX, PASSIVE_FORM_DEFAULTS.doomSeconds, true);
+
+    for (const id of ["rm-p-killdist", "rm-p-corpse"]) {
+        $<HTMLSelectElement>(id).addEventListener("change", onFormEdit);
+    }
+    for (const id of ["rm-p-shield", "rm-p-doom"]) {
+        $<HTMLInputElement>(id).addEventListener("change", () => {
+            refreshPassiveRowVisibility();
+            onFormEdit();
+        });
+    }
 
     $("rm-copy").addEventListener("click", () => void copyCode());
     $("rm-load-btn").addEventListener("click", () => loadCode());
