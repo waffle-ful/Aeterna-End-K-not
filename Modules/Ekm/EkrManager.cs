@@ -1321,17 +1321,33 @@ public static class EkrManager
         return true;
     }
 
+    // 別名の正典は lang の CommandForms.Pick (ja では "pick,えらぶ")。リテラル "/pick" 決め打ちにすると
+    // 翻訳された別名が丸ごと無音死する (BUG-20260813-03)。Command.IsThisCommand と同じ「先頭トークンの
+    // 完全一致」で照合する — GuessManager.CheckCommand の StartsWith+Replace 方式は前方一致の自己衝突を
+    // 起こす既知の欠陥型なので踏襲しない (memory: meeting-command-parser-chain-wins)。
+    private static string[] PickCommandForms => EndKnot.Command.AllCommands.Find(x => x.Key == "Pick")?.CommandForms ?? ["pick"];
+
     // /pick <番号> — GuessManager.CheckCommand と同じ「消費したら true」規約。
     public static bool PickMsg(PlayerControl pc, string msg)
     {
         if (!AmongUsClient.Instance.AmHost || !pc) return false;
 
         string m = (msg ?? "").Trim();
-        if (!m.StartsWith("/pick", StringComparison.OrdinalIgnoreCase)) return false;
+        if (!m.StartsWith('/')) return false;
+
+        // 日本語 IME での全角スペース区切り ("/えらぶ　1") も区切りとして受ける — 半角のみで切ると別名一致に
+        // 失敗して通常 dispatch の空アクションへ落ち、リテラル照合時代と同じ無音死が別入力で残る。
+        string head = m.ToLower().TrimStart('/').Split(' ', '　')[0];
+        if (!PickCommandForms.Any(head.Equals)) return false;
+
+        // 別名 "pick" は Choose (Changeling / Pawn の役職選択) とも重複している (BUG-20260813-02)。EKR 役職を持たない
+        // 人の入力まで消費すると、早期チェインは通常 dispatch より前に走るので相手のコマンドが無音死する。
+        // ゲート落ちで消費するのは「EKR ホルダー本人の入力」だけに限る (誤爆を通常チャットへ漏らさない設計意図)。
+        if (!IsEkrRole(pc.GetCustomRole())) return false;
 
         if (!TryGateMeetingPick(pc, out CustomRoles slot, out EkrHolderState state)) return true; // 消費はする (無言で通常チャットへ流さない)
 
-        string rest = m["/pick".Length..].Trim();
+        string rest = m[(m.Split(' ', '　')[0].Length)..].Trim();
 
         if (!byte.TryParse(rest, out byte targetId))
         {
