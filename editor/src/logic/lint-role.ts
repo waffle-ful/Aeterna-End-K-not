@@ -26,10 +26,12 @@ import type { LogicNode, LogicRule, RoleLogic } from "../roledef";
 // L18 = 会議専用 op (vote_block/vote_swap/exile) が会議系イベント以外の rule 配下、L19 = L17 の
 // 兄弟 (on_meeting_vote 配下で wait より後の cancel_vote)、L20 = L3/L4 のレート系兄弟 (on_second
 // 配下の arrow_show/arrow_mark/inspect/reveal)。L16 拡張 = vote_swap の暗黙 saved1/saved2 参照。
+// 2026-08-14 (BUG-20260813-04 の机上切り分け): L21 を追加 (計21ルール)。L17/L19 の兄弟で、
+// wait より後の exile。
 
 export type LintRuleId =
     | "L1" | "L2" | "L3" | "L4" | "L5" | "L6" | "L7" | "L8" | "L9" | "L10" | "L11" | "L12" | "L13"
-    | "L14" | "L15" | "L16" | "L17" | "L18" | "L19" | "L20";
+    | "L14" | "L15" | "L16" | "L17" | "L18" | "L19" | "L20" | "L21";
 
 export interface LintWarning {
     rule: LintRuleId;
@@ -191,6 +193,29 @@ function hasCancelVoteAfterWait(nodes: LogicNode[]): boolean {
     return violation;
 }
 
+/**
+ * L21 (2026-08-14): L17/L19 の兄弟 — 訪問順で wait より後に現れる exile。
+ *
+ * exile は EkrLogicOpcodes.Exile のフェーズゲート (MeetingHud 不在 / 追放演出中 / state が
+ * Results・Proceeding) で弾かれる。wait を挟むと、その間に全員の投票が揃って Results へ遷移し
+ * (CheckForEndVoting は投票受信ごとに走る)、再開時には既に手遅れというケースが構造的に起こる
+ * — BUG-20260813-04 の実機2回とも追放されなかった件がこれ。弾かれても 1会議1回の枠は消費
+ * しない (TryConsumeExile はゲートの後) ので、作者からは「無言で何も起きない」だけに見える。
+ *
+ * vote_block / vote_swap は対象にしない: どちらも「予約」を置くだけで実際に読まれるのは集計時
+ * なので、Voting 中に wait を挟んでも予約さえ間に合えば成立する (待ってから撃つのが正当な
+ * 使い方になり得る)。cancel_vote は L19 が既に見ている。
+ */
+function hasExileAfterWait(nodes: LogicNode[]): boolean {
+    let waited = false;
+    let violation = false;
+    forEachNode(nodes, (n) => {
+        if (n.op === "wait") waited = true;
+        else if (n.op === "exile" && waited) violation = true;
+    });
+    return violation;
+}
+
 // L18 (Wave 2): 会議専用 op (vote_block/vote_swap/exile) の配置ヒント対象イベント。
 // cancel_vote はここに含めない (roledef.ts の validateRoleLogic が on_meeting_vote 以外を
 // 構造的に reject するため、リンタで重ねて警告する必要がない)。
@@ -202,8 +227,8 @@ function makeWarning(rule: LintRuleId, ruleIndex: number, when: string, message:
 }
 
 /**
- * 検証済みの RoleLogic に対して spec §6 の 20 ルール (v1.2 で L11/L12、v1.3 で L13、Wave 1 で
- * L14〜L17、Wave 2 で L18〜L20 追加) を静的検査する。ブロックの組み方に対するヒントであり、
+ * 検証済みの RoleLogic に対して spec §6 の 21 ルール (v1.2 で L11/L12、v1.3 で L13、Wave 1 で
+ * L14〜L17、Wave 2 で L18〜L20、2026-08-14 に L21 追加) を静的検査する。ブロックの組み方に対するヒントであり、
  * export 自体は妨げない (呼び出し元は結果を警告フッタに表示するだけ)。
  */
 export function lintRoleLogic(logic: RoleLogic): LintWarning[] {
@@ -411,6 +436,15 @@ export function lintRoleLogic(logic: RoleLogic): LintWarning[] {
                 "L19", ruleIndex, rule.when,
                 "「秒待つ」のあとで「票をつかわずにえらぶ」を使っています。",
                 "まってから取り消すことはできないよ。取り消すのは一番はじめに。",
+            ));
+        }
+
+        // L21 (2026-08-14): L17/L19 の兄弟 — wait を挟むと会議が終わっていて exile が届かない。
+        if (hasExileAfterWait(rule.do)) {
+            warnings.push(makeWarning(
+                "L21", ruleIndex, rule.when,
+                "「秒待つ」のあとで「ついほうする」を使っています。",
+                "待っているあいだに会議が終わってしまうと、ついほうは何も起きないよ。ついほうは待たずにすぐ。",
             ));
         }
 
