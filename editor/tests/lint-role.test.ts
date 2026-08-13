@@ -787,6 +787,33 @@ describe("lint-role: L19 (on_meeting_vote 配下・wait より後の cancel_vote
     });
 });
 
+describe("lint-role: L21 (wait より後の exile — L17/L19 の兄弟)", () => {
+    it("wait のあとの exile は警告する", () => {
+        const l = logic([{ when: "on_meeting_pick", do: [{ op: "wait", seconds: 2 }, { op: "exile", target: "ctx" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L21");
+    });
+
+    it("wait より前の exile は警告しない", () => {
+        const l = logic([{ when: "on_meeting_pick", do: [{ op: "exile", target: "ctx" }, { op: "wait", seconds: 2 }] }]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L21");
+    });
+
+    it("if の中の exile も訪問順で判定する", () => {
+        const nested: LogicNode = { op: "if", cond: { e: "lit", v: 1 }, then: [{ op: "exile", target: "ctx" }] };
+        const after = logic([{ when: "on_meeting_pick", do: [{ op: "wait", seconds: 0.5 }, nested] }]);
+        expect(ruleIds(lintRoleLogic(after))).toContain("L21");
+        const before = logic([{ when: "on_meeting_pick", do: [nested, { op: "wait", seconds: 0.5 }] }]);
+        expect(ruleIds(lintRoleLogic(before))).not.toContain("L21");
+    });
+
+    it("vote_block / vote_swap は L21 の対象外 (予約は集計時に読まれるので wait を挟んでも成立しうる)", () => {
+        const block = logic([{ when: "on_meeting_pick", do: [{ op: "wait", seconds: 2 }, { op: "vote_block", target: "ctx" }] }]);
+        expect(ruleIds(lintRoleLogic(block))).not.toContain("L21");
+        const swap = logic([{ when: "on_meeting_pick", do: [{ op: "wait", seconds: 2 }, { op: "vote_swap" }] }]);
+        expect(ruleIds(lintRoleLogic(swap))).not.toContain("L21");
+    });
+});
+
 describe("lint-role: L20 (on_second 配下の arrow_show/arrow_mark/inspect/reveal — L3/L4 の兄弟)", () => {
     it("on_second + arrow_show/arrow_mark/inspect/reveal はそれぞれ L20 を警告する", () => {
         expect(ruleIds(lintRoleLogic(logic([{ when: "on_second", do: [{ op: "arrow_show", target: "nearest", seconds: 10 }] }])))).toContain("L20");
