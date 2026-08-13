@@ -28,12 +28,26 @@
           never catch a key that exists in NO language; without the forms
           key IsThisCommand never matches and the command silently dies
           in every language (found live via /exo //reroll on 2026-07-03).
+      r6  two different commands share one form inside the same file.
+          Command.AllCommands is scanned in registration order and the
+          FIRST match wins (ChatCommandPatch.cs:535 / :6119), so the later
+          command becomes unreachable through that alias and dies without
+          any error message (found via /pick vs /choose on 2026-08-13).
+          Checked as FAIL for en_US and ja_JP only; the Crowdin-managed
+          languages carry upstream duplicates we cannot fix here, so they
+          are reported as WARN under -AllLangs. Known and accepted pairs
+          live in $acceptedDupeForms below.
+          Scope note: this only covers the lang-side forms. The meeting
+          command parsers (GuessManager.CheckCommand and friends) keep
+          their own "a|b|c" alias lists that run before the dispatch loop;
+          those still need a manual check.
 
     WARN rules (exit 0, or exit 1 with -Strict):
       - keys present in en_US but missing from ja_JP (non-CommandForms)
       - keys present only in ja_JP (orphans)
       - r5w: a registered command has no CommandDescription.<Key> in en_US
         (the raw "*CommandDescription.<Key>" placeholder shows up in /help)
+      - r6w: cross-command duplicate forms in a Crowdin-managed language
 
 .PARAMETER Strict
     Treat WARN findings as failures (exit 1).
@@ -215,9 +229,9 @@ else {
 # for every registered command. A key missing from ALL languages is invisible
 # to the en<->ja sync rules, so check code -> en_US here.
 $cmdPatchPath = Join-Path (Split-Path -Parent $PSScriptRoot) 'Patches\ChatCommandPatch.cs'
+$cmdKeys = New-Object 'System.Collections.Generic.List[string]'   # registration order, also used by r6
 if (Test-Path -LiteralPath $cmdPatchPath) {
     $regRegex = [regex]::new('new\("([A-Za-z0-9_]+)"\s*,.*Command\.UsageLevels\.', [System.Text.RegularExpressions.RegexOptions]::Compiled)
-    $cmdKeys = New-Object 'System.Collections.Generic.List[string]'
     foreach ($srcLine in [System.IO.File]::ReadAllLines($cmdPatchPath)) {
         $m = $regRegex.Match($srcLine)
         if ($m.Success) { $cmdKeys.Add($m.Groups[1].Value) }
@@ -255,6 +269,85 @@ if (Test-Path -LiteralPath $cmdPatchPath) {
 else {
     $warnCount += 1
     Write-Host ("$MARK_WARN r5: ChatCommandPatch.cs not found, skipped: {0}" -f $cmdPatchPath)
+}
+
+# ------------------- r6: one form claimed by two different commands
+# Command.AllCommands is walked in registration order and the first match wins,
+# so the later command is unreachable through the shared alias - silently, with
+# no error anywhere. Accepted pairs must be listed here on purpose.
+#   form -> comma-joined sorted key set that is known to be harmless.
+# 'pick': Choose (Changeling / Pawn) is registered first and wins the dispatch
+# loop, but EKR's own /pick is served by the early PickMsg chain that runs
+# before dispatch, so both stay reachable (BUG-20260813-02, verified live).
+$acceptedDupeForms = @{
+    'pick' = 'CommandForms.Choose,CommandForms.Pick'
+}
+
+# key name -> registration index, for naming the command that actually wins
+$cmdOrder = @{}
+for ($i = 0; $i -lt $cmdKeys.Count; $i++) {
+    if (-not $cmdOrder.ContainsKey($cmdKeys[$i])) { $cmdOrder[$cmdKeys[$i]] = $i }
+}
+
+function Get-DispatchIndex {
+    # position of a CommandForms.<Key> in AllCommands; unregistered keys sort last
+    param([string]$FormsKey)
+    $name = $FormsKey.Substring('CommandForms.'.Length)
+    if ($cmdOrder.ContainsKey($name)) { return $cmdOrder[$name] }
+    return [int]::MaxValue
+}
+
+function Get-DupeForms {
+    # -> list of human readable findings for one parsed file
+    param([pscustomobject]$File)
+
+    $byForm = @{}
+    foreach ($key in $File.CmdForms.Keys) {
+        foreach ($form in (Get-FormSet -Raw $File.CmdForms[$key])) {
+            if (-not $byForm.ContainsKey($form)) {
+                $byForm[$form] = New-Object 'System.Collections.Generic.List[string]'
+            }
+            # a form repeated inside one value is harmless (Any() just matches twice)
+            if (-not $byForm[$form].Contains($key)) { [void]$byForm[$form].Add($key) }
+        }
+    }
+
+    $found = New-Object 'System.Collections.Generic.List[string]'
+    foreach ($form in ($byForm.Keys | Sort-Object)) {
+        $keys = @($byForm[$form] | Sort-Object)
+        if ($keys.Count -lt 2) { continue }
+        $sig = $keys -join ','
+        if ($acceptedDupeForms.ContainsKey($form) -and $acceptedDupeForms[$form] -eq $sig) { continue }
+
+        # order the keys the way the dispatch loop sees them, when known
+        $ranked = @($keys | Sort-Object -Property @{ Expression = { Get-DispatchIndex $_ } }, @{ Expression = { $_ } })
+        $winner = $ranked[0]
+        $losers = ($ranked | Select-Object -Skip 1) -join ', '
+        $found.Add(('form ''{0}'' claimed by {1} - {2} wins the dispatch loop, {3} unreachable' -f $form, $sig, $winner, $losers))
+    }
+    , $found
+}
+
+foreach ($file in (@($en) + $targets)) {
+    $r6 = Get-DupeForms -File $file
+    # en_US and ja_JP are ours to fix; the Crowdin languages carry upstream
+    # duplicates (st = Guess/Swap etc.) that cannot be fixed from this repo.
+    $isOwned = $file.Name -eq 'en_US.jsonc' -or $file.Name -eq 'ja_JP.jsonc'
+
+    if ($r6.Count -gt 0) {
+        if ($isOwned) {
+            $failCount += $r6.Count
+            Write-Host ("$MARK_FAIL r6: cross-command duplicate forms in {0} - {1} form(s)" -f $file.Name, $r6.Count)
+        }
+        else {
+            $warnCount += $r6.Count
+            Write-Host ("$MARK_WARN r6w: cross-command duplicate forms in {0} - {1} form(s)" -f $file.Name, $r6.Count)
+        }
+        Write-KeyList -Items $r6 -Max 100
+    }
+    elseif ($isOwned) {
+        Write-Host ("$MARK_OK r6: no cross-command duplicate forms in {0} ({1} forms-bearing keys)" -f $file.Name, $file.CmdForms.Count)
+    }
 }
 
 # --------------------------------- r4: duplicate keys (every parsed file)
