@@ -2171,9 +2171,18 @@ public static class EkrManager
 
     // ── v1.3: crowd-control エンジン (drag/field の共有枠・spec §3,§5) ──────────────────────────
     // EKR 全体で同時1本 (drag/field 合算)。所有 fiber とは切り離したエンジン側の単一スロットで、
-    // 「1.0秒 tick・per-tick TP 上限 (field のみ 5人・ラウンドロビン)・発動あたり TP 総予算
-    // (drag≤15/field≤45)」の3点セットを SuperCannonShot.PullTick から移植する。tick の TP は fiber 側
+    // 「tick 間隔・per-tick TP 上限 (field のみ 5人・ラウンドロビン)・発動あたり TP 総予算
+    // (drag≤55/field≤45)」の3点セットを SuperCannonShot.PullTick から移植する。tick の TP は fiber 側
     // teleport の EKR 全体 ≤2/秒予算とは別勘定 (このエンジン自身の3点セットが締める)。
+    //
+    // ⚠ tick 間隔とゲートは drag / field で**意図的に非対称** (2026-08-14 実機の体感裁定)。
+    //   drag = Penguin 型 (0.2秒 tick + ホルダー移動ゲート)。1回でホルダーの現在位置へ飛ばす型なので、
+    //          「つかまれている」感を出すには追従頻度そのものが要る。
+    //   field = 1.0秒 tick + 1.6u デッドゾーン据え置き。per-tick 5人を 5Hz で撃つと 25/s = 約250本/10秒窓
+    //          (公式鯖の SnapTo 本数予算 ≒358本/10秒窓の70%) で致死域に触れる。加えて field は段階引き寄せ
+    //          なので、1.6u デッドゾーンが None 降格の空撃ち回避として効いている (memory: short-tp-none-downgrade)。
+    //   ⇒ 兄弟スイープでここを「揃っていない漏れ」と見なして field / SuperCannonShot.PullTick へ 0.2秒を
+    //     横展開しないこと。
 
     private sealed class EkrCrowdControlState
     {
@@ -2184,6 +2193,10 @@ public static class EkrManager
         public int Spent;
         public int Budget;
         public int Rotation; // field のみ: ラウンドロビン公平化 (PullTick と同型)
+
+        // drag のみ: 前回 snap した時点のホルダー位置 (Penguin.LastDragSnapPos と同型)。番兵は「初回 tick を
+        // 無条件で発火させる」ため遠方に置く (= seconds:1 でも必ず1発打つ・BUG-20260814-02)。
+        public Vector2 LastDragSnapPos = new(-9999f, -9999f);
 
         // field のみ
         public IEkrSlotCno FieldCno;
@@ -2203,10 +2216,12 @@ public static class EkrManager
     // (= ≤10 上限が 1 体ずつ静かに狭まる片方向リーク・監査指摘 2026-08-11)。
     private static readonly List<IEkrSlotCno> _ccPendingDespawn = [];
 
-    private const float CcTickInterval = 1f;
-    private const float CcDeadzone = 1.6f; // spec §5: 最短ゲート (下回る tick はスキップ・予算不消費)
+    private const float CcTickInterval = 1f;             // field の tick 間隔
+    private const float CcDragTickInterval = 0.2f;       // drag の tick 間隔 (~5/s = Penguin.DragSnapInterval と同値)
+    private const float CcDragHolderMoveGate = 0.3f;     // drag: ホルダーがこれ未満しか動いていない tick は撃たない (Penguin と同値)
+    private const float CcDeadzone = 1.6f; // spec §5: field の最短ゲート (下回る tick はスキップ・予算不消費)
     private const int CcFieldPerTickCap = 5;
-    private const int CcDragBudget = 15;
+    private const int CcDragBudget = 55;   // 0.2秒 tick × 最長10秒 = 50 + 余裕
     private const int CcFieldBudget = 45;
 
     private static float _lastCcTickTime = -1f;
@@ -2341,7 +2356,10 @@ public static class EkrManager
             return;
         }
 
-        if (_lastCcTickTime >= 0f && now - _lastCcTickTime < CcTickInterval) return;
+        // tick 間隔は drag / field で非対称 (上のブロックコメント参照)。稼働は同時1本なので単一の
+        // _lastCcTickTime で足りる (起動時に -1f リセット済み = セッション跨ぎの混線なし)。
+        float tickInterval = _cc.IsField ? CcTickInterval : CcDragTickInterval;
+        if (_lastCcTickTime >= 0f && now - _lastCcTickTime < tickInterval) return;
         _lastCcTickTime = now;
 
         PlayerControl holderPc = _cc.HolderId.GetPlayer();
@@ -2370,7 +2388,15 @@ public static class EkrManager
 
         Vector2 dest = holderPc.Pos();
         Vector2 from = ctxPc.Pos();
-        if (Vector2.Distance(from, dest) < CcDeadzone) return; // 予算不消費 (None降格既知型回避)
+
+        // ゲートは「対象との距離」ではなく「ホルダーが前回 snap から動いた量」で持つ (Penguin.cs:406 と同型)。
+        // 0.2秒 tick では ctx は常にホルダーの至近にいるので、距離デッドゾーン (field の CcDeadzone) を
+        // 使うと全 tick が空振りして引きずりが成立しない (2026-08-14 実機: 10秒アームで TP 5発だけ)。
+        // ホルダーが止まっている間は撃たない = 送信量は「ホルダーが実際に歩いた分」に比例する。
+        // ⚠ 至近距離の TP は Utils.TP 内で SendOption.None へ降格する (非モッド客への到達はベストエフォート)。
+        //   これは Penguin のドラッグと同じ挙動で、ペンギン並みの追従感を採る裁定 (2026-08-14)。
+        if (Vector2.Distance(dest, cc.LastDragSnapPos) < CcDragHolderMoveGate) return; // 予算不消費
+        cc.LastDragSnapPos = dest;
 
         // 壁越えは引かない (TickField / SuperCannonShot.PullTick と同じ裁定 — 壁内へ埋め込むと非モッドが
         // スタックする)。着地点はホルダーの現在位置なので通常は歩ける場所だが、ホルダーが直前に vent や
