@@ -5693,7 +5693,12 @@ public static class Utils
         {
             // rate limiter で遅延実行される間に deadBodyParent が破棄される可能性があるので再チェック
             if (!deadBodyParent) return;
-            onCreated?.Invoke(CreateDeadBody(position, colorId, deadBodyParent));
+            // ⚠️ `onCreated?.Invoke(CreateDeadBody(...))` と1行に畳んではいけない。null 条件演算子は
+            // 引数の評価ごと短絡するので、コールバック未指定 (= 呼出元のほぼ全て) のとき
+            // ホストローカルの死体生成が丸ごとスキップされ「客には見えるがホストには見えない偽死体」になる
+            // (2026-08-06 の 3c4f10aa で混入・ロビー死体装飾が消えた真因)
+            DeadBody hostBody = CreateDeadBody(position, colorId, deadBodyParent);
+            onCreated?.Invoke(hostBody);
             PlayerControl playerControl = Object.Instantiate(AmongUsClient.Instance.PlayerPrefab, Vector2.zero, Quaternion.identity);
             playerControl.PlayerId = deadBodyParent.PlayerId;
             playerControl.isNew = false;
