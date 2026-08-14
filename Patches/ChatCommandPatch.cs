@@ -3050,23 +3050,38 @@ internal static class ChatCommands
                     {
                         (string fn, EkrDefinition def) = lib[i];
                         string author = def.Author.Length > 0 ? $" ({def.Author})" : "";
-                        sb.AppendLine($"  {i + 1}. {def.Name}{author}  <size=70%>{fn}</size>");
+                        // R2: 陣営を併記する (入れられるスロットが陣営で決まるため — 事故防止)。
+                        sb.AppendLine($"  {i + 1}. {def.Name}{author} <{EkrManager.TeamLabel(def.ParsedTeam)}>  <size=70%>{fn}</size>");
                     }
                 }
 
                 sb.AppendLine(GetString("EkRole.List.SlotHeader"));
                 var anyBound = false;
 
-                for (var i = 0; i < EkrManager.Slots.Length; i++)
+                // R2: スロットは陣営ごとに分かれているので、陣営ごとに「番号の範囲」と束縛済みを並べる。
+                foreach (EkrTeam team in new[] { EkrTeam.Crewmate, EkrTeam.Impostor, EkrTeam.Neutral })
                 {
-                    EkrDefinition def = EkrManager.GetDefinition(EkrManager.Slots[i]);
-                    if (def == null) continue;
+                    (int first, int last) = EkrManager.SlotRange(team);
+                    if (first == 0) continue;
 
-                    anyBound = true;
-                    sb.AppendLine($"  [{i + 1}] {def.Name}");
+                    var bound = new System.Text.StringBuilder();
+
+                    for (int i = first - 1; i < last; i++)
+                    {
+                        EkrDefinition def = EkrManager.GetDefinition(EkrManager.Slots[i]);
+                        if (def == null) continue;
+
+                        anyBound = true;
+                        if (bound.Length > 0) bound.Append(" / ");
+                        bound.Append($"[{i + 1}] {def.Name}");
+                    }
+
+                    if (bound.Length == 0) bound.Append(GetString("EkRole.List.NoBound"));
+
+                    sb.AppendLine($"  {EkrManager.TeamLabel(team)} [{first}-{last}]: {bound}");
                 }
 
-                if (!anyBound) sb.AppendLine($"  {GetString("EkRole.List.NoBound")}");
+                if (!anyBound) sb.AppendLine($"  <size=70%>{GetString("EkRole.List.SlotHint")}</size>");
 
                 Utils.SendMessage(sb.ToString().TrimEnd(), pid);
                 return;
@@ -3111,7 +3126,11 @@ internal static class ChatCommands
                 }
                 else
                 {
-                    slot = EkrManager.FirstFreeSlotNumber();
+                    // R2: 省略時は「その役職コードの陣営の」空きスロットを探す。
+                    var setLib = EkrManager.ListLibrary();
+                    EkrTeam wantTeam = libIdx >= 1 && libIdx <= setLib.Count ? setLib[libIdx - 1].Def.ParsedTeam : EkrTeam.Crewmate;
+
+                    slot = EkrManager.FirstFreeSlotNumber(wantTeam);
 
                     if (slot == 0)
                     {

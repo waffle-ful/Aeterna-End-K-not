@@ -9,6 +9,7 @@ import {
     ROLE_AUTHOR_MAX,
     ROLE_NAME_MAX,
     SUPPORTED_TEAM,
+    SUPPORTED_TEAMS,
     VISION_MULTIPLIER_DEFAULT,
     VISION_MULTIPLIER_MAX,
     VISION_MULTIPLIER_MIN,
@@ -134,25 +135,46 @@ describe("役職コード検証規則 (EkrDefinition.cs 契約ミラー)", () =>
         if (r.ok) expect(r.def.color).toBe("#3fa9f5");
     });
 
-    it("team は crewmate 固定 — 欠落/null は crewmate に収束するが、空文字は拒否 (非対称)", () => {
+    it("team は省略/null で既定 crewmate に収束するが、空文字は拒否 (非対称)", () => {
         const omitted = baseValid();
         delete omitted.team;
         expect(validateEkrDefinition(omitted).ok).toBe(true);
         expect(validateEkrDefinition({ ...baseValid(), team: null }).ok).toBe(true);
-        // 明示的な空文字はトリム後 "" になり crewmate と一致しないため拒否 (EkrDefinition.cs と同じ非対称性)
+        // 明示的な空文字はトリム後 "" になり3値のどれとも一致しないため拒否 (EkrDefinition.cs と同じ非対称性)
         expect(validateEkrDefinition({ ...baseValid(), team: "" }).ok).toBe(false);
     });
 
-    it("team=impostor/neutral 等の非対応値は拒否", () => {
-        const r = validateEkrDefinition({ ...baseValid(), team: "impostor" });
-        expect(r.ok).toBe(false);
-        if (!r.ok) expect(r.error).toContain("impostor");
+    // R2 (docs/ekn-r2-contract.md §1 2026-08-11): team は crewmate/impostor/neutral の3値を受理する
+    // (madmate/coven は対象外のまま拒否)。
+    it("team は crewmate/impostor/neutral の3値すべてを受理する", () => {
+        for (const team of SUPPORTED_TEAMS) {
+            const r = validateEkrDefinition({ ...baseValid(), team });
+            expect(r.ok, `team=${team}`).toBe(true);
+            if (r.ok) expect(r.def.team).toBe(team);
+        }
     });
 
-    it("team は大文字・前後空白があっても crewmate として通る", () => {
-        const r = validateEkrDefinition({ ...baseValid(), team: "  CrewMate  " });
-        expect(r.ok).toBe(true);
-        if (r.ok) expect(r.def.team).toBe(SUPPORTED_TEAM);
+    it("team=madmate/coven 等の非対応値は拒否", () => {
+        const r = validateEkrDefinition({ ...baseValid(), team: "madmate" });
+        expect(r.ok).toBe(false);
+        if (!r.ok) expect(r.error).toContain("madmate");
+
+        const r2 = validateEkrDefinition({ ...baseValid(), team: "coven" });
+        expect(r2.ok).toBe(false);
+    });
+
+    it("team は大文字・前後空白があっても対応する値として通る (3値それぞれで確認)", () => {
+        const r1 = validateEkrDefinition({ ...baseValid(), team: "  CrewMate  " });
+        expect(r1.ok).toBe(true);
+        if (r1.ok) expect(r1.def.team).toBe(SUPPORTED_TEAM);
+
+        const r2 = validateEkrDefinition({ ...baseValid(), team: "  Impostor  " });
+        expect(r2.ok).toBe(true);
+        if (r2.ok) expect(r2.def.team).toBe("impostor");
+
+        const r3 = validateEkrDefinition({ ...baseValid(), team: "NEUTRAL" });
+        expect(r3.ok).toBe(true);
+        if (r3.ok) expect(r3.def.team).toBe("neutral");
     });
 
     it("canKill/canVent は真偽値そのまま反映し、既定は false", () => {

@@ -51,6 +51,19 @@ public class EkrDefinitionTests
         Assert.Contains(def.ParsedLogic.Rules, r => r.When == "on_attacked");
     }
 
+    // R2 (docs/ekn-r2-contract.md §3b,§4): 共有 fixture に載せた kind / cause / disguise が
+    // C# 側でも同じ値まで通ること (TS↔C# の drift 検出網)。
+    [Fact]
+    public void FullCourseFixture_ExposesR2KindCauseAndDisguise()
+    {
+        string json = File.ReadAllText(FixturePath("role-full-course.ekrole.json"));
+        Assert.True(EkrDefinition.TryParse(json, out EkrDefinition def, out string error), error);
+
+        Assert.Equal("force", Assert.Single(def.ParsedLogic.Rules, r => r.When == "on_attacked").Kind);
+        Assert.Equal("poison-curse", Assert.Single(def.ParsedLogic.Rules, r => r.When == "on_death").Cause);
+        Assert.Equal(EkrTeam.Neutral, def.ParsedPassives.DisguiseTeam);
+    }
+
     // ── 個別の契約ケース ──────────────────────────────────────────────
 
     private static string Wrap(string passivesAndLogic)
@@ -59,6 +72,48 @@ public class EkrDefinitionTests
     }
 
     private const string MinimalRule = "\"rules\":[{\"when\":\"on_pet\",\"do\":[{\"op\":\"stop\"}]}]";
+
+    // R2 (docs/ekn-r2-contract.md §1): team は3値受理。madmate / coven は対象外。
+    // TS 側 (roledef.ts SUPPORTED_TEAMS) と同じ集合・同じ既定であること。
+    [Theory]
+    [InlineData("crewmate", true, EkrTeam.Crewmate)]
+    [InlineData("impostor", true, EkrTeam.Impostor)]
+    [InlineData("neutral", true, EkrTeam.Neutral)]
+    [InlineData("Impostor", true, EkrTeam.Impostor)] // 大文字小文字は正規化される
+    [InlineData("madmate", false, EkrTeam.Crewmate)]
+    [InlineData("coven", false, EkrTeam.Crewmate)]
+    [InlineData("", false, EkrTeam.Crewmate)]
+    public void Team_AcceptsThreeValuesOnly(string team, bool expectOk, EkrTeam expected)
+    {
+        string json = "{\"ekr\":1,\"name\":\"t\",\"color\":\"#112233\",\"team\":\"" + team + "\"}";
+
+        Assert.Equal(expectOk, EkrDefinition.TryParse(json, out EkrDefinition def, out _));
+        if (expectOk) Assert.Equal(expected, def.ParsedTeam);
+    }
+
+    // R2 (契約 §3b): kind は on_attacked 専用 / cause は on_death 専用。他イベントに付いていたら
+    // slot と同じく文書 reject (TS 側 readRuleFilter と同じ規則)。
+    [Theory]
+    [InlineData("\"when\":\"on_attacked\",\"kind\":\"force\"", true)]
+    [InlineData("\"when\":\"on_attacked\",\"kind\":\"vote\"", false)] // cause の語彙は kind では使えない
+    [InlineData("\"when\":\"on_pet\",\"kind\":\"kill\"", false)] // イベント違い
+    [InlineData("\"when\":\"on_death\",\"cause\":\"poison-curse\"", true)]
+    [InlineData("\"when\":\"on_death\",\"cause\":\"force\"", false)] // kind の語彙は cause では使えない
+    [InlineData("\"when\":\"on_pet\",\"cause\":\"kill\"", false)] // イベント違い
+    public void RuleFilters_AreEventScoped(string ruleHead, bool expectOk)
+    {
+        string json = Wrap("\"logic\":{\"version\":1,\"rules\":[{" + ruleHead + ",\"do\":[{\"op\":\"stop\"}]}]}");
+
+        Assert.Equal(expectOk, EkrDefinition.TryParse(json, out _, out _));
+    }
+
+    // team キーそのものが無い場合は既定の crewmate (後方互換 — R0/R1 の役職コードがそのまま動く)。
+    [Fact]
+    public void Team_Omitted_DefaultsToCrewmate()
+    {
+        Assert.True(EkrDefinition.TryParse("{\"ekr\":1,\"name\":\"t\"}", out EkrDefinition def, out string error), error);
+        Assert.Equal(EkrTeam.Crewmate, def.ParsedTeam);
+    }
 
     // spec §1: `logic.variables: null` は型不一致として文書 reject (「省略扱い」にしない)。
     [Fact]

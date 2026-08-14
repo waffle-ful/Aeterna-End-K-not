@@ -39,9 +39,12 @@ export const VISION_MULTIPLIER_DEFAULT = 1;
 
 export const DEFAULT_COLOR = "#8f8f8f";
 
-// R0 が対応する唯一の team。他の値は読込時にエラー (EkrDefinition.cs Validate と同じ — R0 は
-// Crewmate 非キル系優先の決定に基づき team!=crewmate をハード拒否する)。
-export const SUPPORTED_TEAM = "crewmate";
+// R2 (docs/ekn-r2-contract.md §1): 受理する team は3値。madmate / coven は対象外。
+// C# 側 (EkrDefinition.Validate) と同じ集合・同じ既定値を保つこと。
+export const SUPPORTED_TEAMS = ["crewmate", "impostor", "neutral"] as const;
+export type EkrTeam = (typeof SUPPORTED_TEAMS)[number];
+/** 省略時の既定 team。 */
+export const SUPPORTED_TEAM: EkrTeam = "crewmate";
 export const DEFAULT_WIN_CONDITION = "team";
 
 // R0 が対応する capability の集合 (logic は requires 経由の capability ゲートではなく、
@@ -81,6 +84,16 @@ export const LOGIC_WHEN_VALUES = [
     "on_meeting_pick",
 ] as const;
 export type LogicWhen = (typeof LOGIC_WHEN_VALUES)[number];
+
+// R2 (docs/ekn-r2-contract.md §3b): on_attacked の種別と on_death の死因バケット。
+// ⚠️ C# 側 (EkmLogicRuntime.EkrAttackKinds / EkrDeathCauses) と同じ並び・同じ綴りを保つこと。
+export const ATTACK_KIND_VALUES = ["kill", "indirect", "force", "guess"] as const;
+export type AttackKind = (typeof ATTACK_KIND_VALUES)[number];
+
+export const DEATH_CAUSE_VALUES = [
+    "kill", "vote", "guess", "bomb", "poison-curse", "environment", "suicide", "other",
+] as const;
+export type DeathCause = (typeof DEATH_CAUSE_VALUES)[number];
 const LOGIC_WHEN_SET: ReadonlySet<string> = new Set(LOGIC_WHEN_VALUES);
 
 export const EXPR_OP_KINDS = [
@@ -230,6 +243,8 @@ export interface RolePassives {
     corpse?: (typeof PASSIVE_CORPSE_VALUES)[number];
     voteWeight?: number;
     doom?: { seconds: number };
+    // R2 (契約 §4): 表示層だけの陣営偽装。
+    disguise?: { team: EkrTeam };
 }
 
 export interface LogicVariable {
@@ -316,6 +331,9 @@ export interface LogicRule {
     when: LogicWhen;
     // on_cno_touch の必須フィールド (spec §2 v1.2)。他イベントでは付与禁止 (検証 reject)。
     slot?: 1 | 2 | 3;
+    // R2: on_attacked / on_death 専用の任意フィルタ。省略 = 全種にマッチ。他イベントでは付与禁止。
+    kind?: AttackKind;
+    cause?: DeathCause;
     do: LogicNode[];
 }
 
@@ -504,13 +522,13 @@ export function validateEkrDefinition(value: unknown): EkrValidationResult {
     if (!colorField.ok) return colorField;
     const color = normalizeColor(colorField.v);
 
-    // team: キー省略/null は既定 "crewmate" に収束するが、明示的な空文字/他の値はエラー
-    // (C# の `(Team ?? "crewmate").Trim().ToLowerInvariant()` → crewmate 比較と同じ非対称性)。
+    // team: キー省略/null は既定 "crewmate" に収束するが、明示的な空文字/対象外の値はエラー
+    // (C# の `(Team ?? "crewmate").Trim().ToLowerInvariant()` → switch と同じ非対称性)。
     const teamField = readStringField(value, "team", SUPPORTED_TEAM);
     if (!teamField.ok) return teamField;
     const team = teamField.v.trim().toLowerCase();
-    if (team !== SUPPORTED_TEAM) {
-        return { ok: false, error: `この End K not のバージョンでは team="${team}" の役職コードにはまだ対応していません (現在は team="${SUPPORTED_TEAM}" のみ対応)` };
+    if (!(SUPPORTED_TEAMS as readonly string[]).includes(team)) {
+        return { ok: false, error: `team="${team}" は使えません (使えるのは ${SUPPORTED_TEAMS.join(" / ")} の3つです)` };
     }
 
     const canKillField = readBoolField(value, "canKill");
@@ -916,6 +934,11 @@ function validateRule(raw: unknown, varNames: ReadonlySet<string>, index: number
         fail(`rules[${index}].slot はイベント "${when}" では使えません (on_cno_touch 専用です)`);
     }
 
+    // R2 (契約 §3b): kind は on_attacked 専用 / cause は on_death 専用。省略可 (= 全種にマッチ)。
+    // 他イベントに付いていたら slot と同じく reject する。
+    const kind = readRuleFilter(raw, "kind", when, "on_attacked", ATTACK_KIND_VALUES, index) as AttackKind | undefined;
+    const cause = readRuleFilter(raw, "cause", when, "on_death", DEATH_CAUSE_VALUES, index) as DeathCause | undefined;
+
     const doPath = `rules[${index}].do`;
     if (raw.do === undefined || raw.do === null) fail(`${doPath} が必要です`);
     const doResult = validateNodeArray(raw.do, varNames, doPath, when);
@@ -925,9 +948,28 @@ function validateRule(raw: unknown, varNames: ReadonlySet<string>, index: number
     if (doResult.depth > LOGIC_AST_DEPTH_MAX) {
         fail(`${doPath} の入れ子が深すぎます (上限 ${LOGIC_AST_DEPTH_MAX})`);
     }
-    return slot === undefined
-        ? { when: when as LogicWhen, do: doResult.nodes }
-        : { when: when as LogicWhen, slot, do: doResult.nodes };
+    const rule: LogicRule = { when: when as LogicWhen, do: doResult.nodes };
+    if (slot !== undefined) rule.slot = slot;
+    if (kind !== undefined) rule.kind = kind;
+    if (cause !== undefined) rule.cause = cause;
+    return rule;
+}
+
+/** rule 直下の任意フィルタ (kind/cause) を読む。指定できるイベントが決まっている (R2 契約 §3b)。 */
+function readRuleFilter(
+    raw: Record<string, unknown>,
+    field: string,
+    when: string,
+    onlyEvent: LogicWhen,
+    allowed: readonly string[],
+    index: number,
+): string | undefined {
+    const v = raw[field];
+    if (v === undefined) return undefined;
+    if (when !== onlyEvent) {
+        fail(`rules[${index}].${field} はイベント "${when}" では使えません (${onlyEvent} 専用です)`);
+    }
+    return expectEnum(v, allowed, `rules[${index}].${field}`);
 }
 
 /**
@@ -1018,6 +1060,13 @@ export function validatePassives(value: unknown): PassivesValidationResult {
             if (!isRecord(value.doom)) fail("passives.doom は { seconds: 秒数 } の形である必要があります");
             const seconds = expectRangeInt(value.doom.seconds, PASSIVE_DOOM_SECONDS_MIN, PASSIVE_DOOM_SECONDS_MAX, "passives.doom.seconds");
             p.doom = { seconds };
+        }
+
+        // R2 (契約 §4): 他の人からの見え方だけを偽る陣営。shield/doom と同じネスト形。
+        if (value.disguise !== undefined) {
+            if (!isRecord(value.disguise)) fail("passives.disguise は { team: 陣営 } の形である必要があります");
+            const team = expectEnum(value.disguise.team, SUPPORTED_TEAMS, "passives.disguise.team");
+            p.disguise = { team: team as EkrTeam };
         }
 
         return { ok: true, passives: p };

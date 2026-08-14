@@ -5,6 +5,15 @@ using System.Text.Json.Serialization;
 
 namespace EndKnot.Modules.Ekm;
 
+// R2 (docs/ekn-r2-contract.md §1): 役職コードが名乗れる陣営。madmate / coven は R2 対象外 (受理しない)。
+// neutral のサブカテゴリ (Killing/Benign) は canKill から導出するので、ここには出さない。
+public enum EkrTeam
+{
+    Crewmate,
+    Impostor,
+    Neutral
+}
+
 // EKN 役職コードのデータ契約 (R0: フォーム式テンプレートのみ・ロジック無し)。
 // 計画正典: docs/ekn-api-plan.md。EHR 内部語彙 (enum 名/option ID/RPC 番号) を一切含まないこと。
 public sealed class EkrDefinition
@@ -47,6 +56,12 @@ public sealed class EkrDefinition
 
     [JsonPropertyName("team")]
     public string Team { get; set; } = "crewmate";
+
+    // Validate() 成功後にのみ意味を持つ、Team の enum 版。⚠️ これは「役職コードが名乗る陣営」であって
+    // 「実際に効く陣営」ではない — 実陣営はスロット種 (EkmImpRole*/EkmNeuRole*/EkmCustomRole*) が静的に
+    // 決める (EkrManager.GetTeam)。この値は束縛時の一致検証にのみ使うこと (docs/ekn-r2-contract.md §1)。
+    [JsonIgnore]
+    public EkrTeam ParsedTeam { get; private set; } = EkrTeam.Crewmate;
 
     [JsonPropertyName("canKill")]
     public bool CanKill { get; set; }
@@ -145,14 +160,18 @@ public sealed class EkrDefinition
             Color = "#8f8f8f";
 
         Team = (Team ?? "crewmate").Trim().ToLowerInvariant();
-        // R0 スコープ: Crewmate 非キル系を優先して動作検証する決定 (ekn-api-plan §5) に基づき、
-        // team=impostor/neutral は「フィールドとしては受け付けるが機能未対応」としてこの場で拒否する。
-        // 理由: IsImpostor()/IsNeutral() 等の陣営判定は CustomRoles enum 静的 switch (CustomRolesHelper.cs) で、
-        // ロビー確定後の動的束縛を安全に反映できない箇所がある (勝敗判定 GetCountTypes 等)。
-        if (Team != "crewmate")
+        // R2 (docs/ekn-r2-contract.md §1): 3値を受理する。R0/R1 が impostor/neutral を拒否していたのは
+        // 陣営判定の静的 switch を動的束縛で安全に動かせなかったため — R2 では「陣営はスロット種が静的に
+        // 決める」形にしたので解消済み (陣営別スロット EkmImpRole*/EkmNeuRole* が受け皿)。
+        // madmate / coven は R2 対象外。
+        switch (Team)
         {
-            error = $"この End K not のバージョンでは team=\"{Team}\" の役職コードにはまだ対応していません (現在は team=\"crewmate\" のみ対応)";
-            return false;
+            case "crewmate": ParsedTeam = EkrTeam.Crewmate; break;
+            case "impostor": ParsedTeam = EkrTeam.Impostor; break;
+            case "neutral": ParsedTeam = EkrTeam.Neutral; break;
+            default:
+                error = $"team=\"{Team}\" は使えません (使えるのは crewmate / impostor / neutral の3つです)";
+                return false;
         }
 
         KillCooldown = Math.Clamp(float.IsFinite(KillCooldown) ? KillCooldown : 25f, 1f, 180f);

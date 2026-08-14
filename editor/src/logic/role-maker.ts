@@ -27,6 +27,7 @@
 import {
     DEFAULT_WIN_CONDITION,
     type EkrDefinition,
+    type EkrTeam,
     LOGIC_VARIABLES_MAX,
     LOGIC_VAR_NAME_MAX,
     type LogicVariable,
@@ -44,6 +45,7 @@ import {
     type RoleLogic,
     type RolePassives,
     SUPPORTED_TEAM,
+    SUPPORTED_TEAMS,
     defaultEkrDefinition,
     normalizeColor,
     normalizeKillCooldown,
@@ -63,11 +65,13 @@ type BlocklyWorkspaceSvg = InstanceType<typeof import("blockly/core").WorkspaceS
 
 const STORAGE_KEY = "ekm.roleMaker";
 
-/** localStorage に保存する「編集中フォームの生の値」。R0 で固定のフィールド (ekr/requires/team/winCondition) は含めない */
+/** localStorage に保存する「編集中フォームの生の値」。R0 で固定のフィールド (ekr/requires/winCondition) は含めない。
+ *  team は R2 (docs/ekn-r2-contract.md §1) でフォーム項目になったためここに含める。 */
 interface FormState {
     name: string;
     author: string;
     color: string;
+    team: EkrTeam;
     canKill: boolean;
     killCooldown: number;
     canVent: boolean;
@@ -81,12 +85,30 @@ interface FormState {
     logicNoBlocklyPassthrough: RoleLogic | null;
 }
 
+/**
+ * team の下書き/読込値を寛容に復元する唯一の実装 (localStorage 下書き復元・writeForm の防御的
+ * フォールバックの両方から呼ぶ — sanitizePassivesDraft と同じ方針)。不正な値は既定 (crewmate) へ。
+ * roledef.ts 側の validateEkrDefinition は不正な team を reject するだけでフォールバックしない
+ * (契約は変更しない) — フォールバックはこのフォーム層だけの責務。
+ */
+export function normalizeTeamDraft(raw: unknown): EkrTeam {
+    return typeof raw === "string" && (SUPPORTED_TEAMS as readonly string[]).includes(raw) ? (raw as EkrTeam) : SUPPORTED_TEAM;
+}
+
+/** rm-team の <option> 文言と揃える JP ラベル (プレビューの陣営行に使う)。 */
+const TEAM_LABELS: Record<EkrTeam, string> = {
+    crewmate: "クルーメイト",
+    impostor: "インポスター",
+    neutral: "ニュートラル",
+};
+
 function defaultFormState(): FormState {
     const d = defaultEkrDefinition();
     return {
         name: d.name,
         author: d.author,
         color: d.color,
+        team: SUPPORTED_TEAM,
         canKill: d.canKill,
         killCooldown: d.killCooldown,
         canVent: d.canVent,
@@ -114,12 +136,14 @@ function refreshKillCdVisibility(): void {
     $("rm-kill-cd-row").hidden = !$<HTMLInputElement>("rm-can-kill").checked;
 }
 
-/** フォーム入力欄 → 生の値 (未検証・未クランプ)。name/author はユーザーの入力途中の値をそのまま読む */
+/** フォーム入力欄 → 生の値 (未検証・未クランプ)。name/author はユーザーの入力途中の値をそのまま読む。
+ *  team は <select> なので不正値は原理上入らないが、念のため normalizeTeamDraft を通す (writeForm と対称)。 */
 function readForm(): Omit<FormState, "passives" | "logicVariables" | "logicBlockly" | "logicNoBlocklyPassthrough"> {
     return {
         name: $<HTMLInputElement>("rm-name").value,
         author: $<HTMLInputElement>("rm-author").value,
         color: $<HTMLInputElement>("rm-color").value,
+        team: normalizeTeamDraft($<HTMLSelectElement>("rm-team").value),
         canKill: $<HTMLInputElement>("rm-can-kill").checked,
         killCooldown: Number($<HTMLInputElement>("rm-kill-cd").value),
         canVent: $<HTMLInputElement>("rm-can-vent").checked,
@@ -128,14 +152,17 @@ function readForm(): Omit<FormState, "passives" | "logicVariables" | "logicBlock
 }
 
 /**
- * フォーム入力欄 ← 状態を反映。color/killCooldown/visionMultiplier は normalize* を必ず経由する
+ * フォーム入力欄 ← 状態を反映。color/killCooldown/visionMultiplier/team は normalize* を必ず経由する
  * (input type="color" に不正な文字列を代入すると黙って #000000 にリセットされる仕様があるため、
  * 呼び出し元の由来 [既定値/localStorage/読込コード] を問わずここで安全な値であることを保証する)。
+ * team も同じ理由: <select> に <option> と一致しない値を代入すると選択が外れる (どの項目も
+ * selected にならない) ため、normalizeTeamDraft で必ず既知の3値のどれかに丸めてから書き込む。
  */
 function writeForm(s: Omit<FormState, "passives" | "logicVariables" | "logicBlockly" | "logicNoBlocklyPassthrough">): void {
     $<HTMLInputElement>("rm-name").value = s.name;
     $<HTMLInputElement>("rm-author").value = s.author;
     $<HTMLInputElement>("rm-color").value = normalizeColor(s.color);
+    $<HTMLSelectElement>("rm-team").value = normalizeTeamDraft(s.team);
     $<HTMLInputElement>("rm-can-kill").checked = s.canKill;
     $<HTMLInputElement>("rm-kill-cd").value = String(normalizeKillCooldown(s.killCooldown));
     $<HTMLInputElement>("rm-can-vent").checked = s.canVent;
@@ -206,6 +233,11 @@ function readPassivesForm(): RolePassives {
         };
     }
 
+    const disguise = $<HTMLSelectElement>("rm-p-disguise").value;
+    if ((SUPPORTED_TEAMS as readonly string[]).includes(disguise)) {
+        p.disguise = { team: disguise as EkrTeam };
+    }
+
     return p;
 }
 
@@ -219,6 +251,7 @@ function writePassivesForm(p: RolePassives): void {
     $<HTMLInputElement>("rm-p-vote").value = String(clampIntToRange(p.voteWeight, PASSIVE_VOTE_WEIGHT_MIN, PASSIVE_VOTE_WEIGHT_MAX, PASSIVE_FORM_DEFAULTS.voteWeight));
     $<HTMLInputElement>("rm-p-doom").checked = p.doom !== undefined;
     $<HTMLInputElement>("rm-p-doom-seconds").value = String(clampIntToRange(p.doom?.seconds, PASSIVE_DOOM_SECONDS_MIN, PASSIVE_DOOM_SECONDS_MAX, PASSIVE_FORM_DEFAULTS.doomSeconds));
+    $<HTMLSelectElement>("rm-p-disguise").value = (SUPPORTED_TEAMS as readonly string[]).includes(p.disguise?.team ?? "") ? p.disguise!.team : "";
     refreshPassiveRowVisibility();
 }
 
@@ -241,6 +274,12 @@ function sanitizePassivesDraft(raw: unknown): RolePassives {
     if (typeof r.doom === "object" && r.doom !== null) {
         p.doom = { seconds: clampIntToRange((r.doom as Record<string, unknown>).seconds, PASSIVE_DOOM_SECONDS_MIN, PASSIVE_DOOM_SECONDS_MAX, PASSIVE_FORM_DEFAULTS.doomSeconds) };
     }
+    if (typeof r.disguise === "object" && r.disguise !== null) {
+        const team = (r.disguise as Record<string, unknown>).team;
+        if (typeof team === "string" && (SUPPORTED_TEAMS as readonly string[]).includes(team)) {
+            p.disguise = { team: team as EkrTeam };
+        }
+    }
     return p;
 }
 
@@ -256,6 +295,7 @@ function passiveChipTexts(p: RolePassives): string[] {
     if (p.corpse !== undefined) chips.push(p.corpse === "noReport" ? "🩸 じぶんの死体は通報できない" : "🩸 じぶんの死体はすぐ消える");
     if (p.voteWeight !== undefined) chips.push(p.voteWeight === 0 ? "🗳 票をもっていない" : `🗳 票のちから ${p.voteWeight}`);
     if (p.doom !== undefined) chips.push(`⏳ ${p.doom.seconds} 秒たつと死んでしまう`);
+    if (p.disguise !== undefined) chips.push(`🎭 ${TEAM_LABELS[p.disguise.team]} に見える (見た目だけ)`);
     return chips;
 }
 
@@ -325,6 +365,7 @@ function loadFormFromStorage(): FormState {
             name: typeof parsed.name === "string" ? parsed.name : d.name,
             author: typeof parsed.author === "string" ? parsed.author : d.author,
             color: normalizeColor(parsed.color),
+            team: normalizeTeamDraft(parsed.team),
             canKill: typeof parsed.canKill === "boolean" ? parsed.canKill : d.canKill,
             killCooldown: normalizeKillCooldown(parsed.killCooldown),
             canVent: typeof parsed.canVent === "boolean" ? parsed.canVent : d.canVent,
@@ -339,7 +380,7 @@ function loadFormFromStorage(): FormState {
     }
 }
 
-/** フォーム → EkrDefinition (常に requires:[] / team:crewmate / winCondition:team を強制する) */
+/** フォーム → EkrDefinition (常に requires:[] / winCondition:team を強制する。team はフォームの陣営セレクタから) */
 function buildDefinitionFromForm(): EkrDefinition | null {
     const raw = readForm();
     const candidate: Record<string, unknown> = {
@@ -348,7 +389,7 @@ function buildDefinitionFromForm(): EkrDefinition | null {
         name: raw.name,
         author: raw.author,
         color: raw.color,
-        team: SUPPORTED_TEAM,
+        team: raw.team,
         canKill: raw.canKill,
         killCooldown: raw.killCooldown,
         canVent: raw.canVent,
@@ -454,6 +495,9 @@ function loadCode(): void {
         name: r.def.name,
         author: r.def.author,
         color: r.def.color,
+        // r.def.team は validateEkrDefinition 通過済みなので必ず3値のどれかだが、EkrDefinition.team の
+        // 型は string (契約側は team を専用の enum 型にしていない) — normalizeTeamDraft で EkrTeam へ寄せる。
+        team: normalizeTeamDraft(r.def.team),
         canKill: r.def.canKill,
         killCooldown: r.def.killCooldown,
         canVent: r.def.canVent,
@@ -701,6 +745,8 @@ function renderPreview(): void {
     bannerName.textContent = displayName;
     bannerName.style.color = color;
 
+    $("rm-preview-banner-team").textContent = TEAM_LABELS[raw.team];
+
     $("rm-preview-avatar").style.setProperty("--rm-avatar-color", color);
 
     const killCd = normalizeKillCooldown(raw.killCooldown);
@@ -901,6 +947,7 @@ function wire(): void {
     $<HTMLInputElement>("rm-name").addEventListener("input", onFormEdit);
     $<HTMLInputElement>("rm-author").addEventListener("input", onFormEdit);
     $<HTMLInputElement>("rm-color").addEventListener("input", onFormEdit);
+    $<HTMLSelectElement>("rm-team").addEventListener("change", onFormEdit);
     $<HTMLInputElement>("rm-can-vent").addEventListener("change", onFormEdit);
 
     $<HTMLInputElement>("rm-can-kill").addEventListener("change", () => {
@@ -938,7 +985,7 @@ function wire(): void {
     clampPassiveNumberOnChange("rm-p-vote", PASSIVE_VOTE_WEIGHT_MIN, PASSIVE_VOTE_WEIGHT_MAX, PASSIVE_FORM_DEFAULTS.voteWeight, true);
     clampPassiveNumberOnChange("rm-p-doom-seconds", PASSIVE_DOOM_SECONDS_MIN, PASSIVE_DOOM_SECONDS_MAX, PASSIVE_FORM_DEFAULTS.doomSeconds, true);
 
-    for (const id of ["rm-p-killdist", "rm-p-corpse"]) {
+    for (const id of ["rm-p-killdist", "rm-p-corpse", "rm-p-disguise"]) {
         $<HTMLSelectElement>(id).addEventListener("change", onFormEdit);
     }
     for (const id of ["rm-p-shield", "rm-p-doom"]) {

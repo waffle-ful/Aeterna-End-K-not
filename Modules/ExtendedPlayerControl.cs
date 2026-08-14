@@ -1062,6 +1062,12 @@ internal static class ExtendedPlayerControl
                 case Veteran when Veteran.VeteranInProtect.Contains(player.PlayerId):
                 case Pestilence:
                     return;
+
+                // R2 (docs/ekn-r2-contract.md §3b): on_attacked kind:"indirect"。realKiller のある間接死
+                // (爆弾/毒/呪い/時限死) だけを「攻撃」として扱う — 純自滅・環境死・EKR 自身の doom は
+                // realKiller が無いのでここに来ない。false = この間接死は不成立 (キャンセル/身代わり)。
+                case EkmTemplateRole when realKiller && !Modules.Ekm.EkrManager.FireAttacked(player.GetCustomRole(), player, realKiller, "indirect"):
+                    return;
             }
 
             state.deathReason = deathReason;
@@ -2173,6 +2179,14 @@ internal static class ExtendedPlayerControl
                 case false when Main.PlayerStates[target.PlayerId].Role is Akazukin akazukin:
                     akazukin.OnCheckMurderAsTarget(player, target);
                     return;
+
+                // R2 (docs/ekn-r2-contract.md §3b): on_attacked kind:"force"。RpcCheckAndMurder を通らない
+                // 直接 Kill() (反撃・処刑型) の関所。false = この強制キルは不成立。
+                case false when Main.PlayerStates[target.PlayerId].Role is EkmTemplateRole:
+                    if (!Modules.Ekm.EkrManager.FireAttacked(target.GetCustomRole(), target, player, "force")) return;
+                    DoKill();
+                    break;
+
                 default:
                     DoKill();
                     break;

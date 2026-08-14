@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 import { b64urlDecode } from "../src/base64url";
 import { ROLECODE_PREFIX, decodeRoleCode, encodeRoleCode } from "../src/rolecode";
-import { defaultEkrDefinition, validateEkrDefinition } from "../src/roledef";
+import { SUPPORTED_TEAMS, defaultEkrDefinition, validateEkrDefinition } from "../src/roledef";
 
 // このオブジェクトと下の FIXED_CODE は組で凍結されたフィクスチャ (レグレッション用の一方向ロック)。
 // FIXED_CODE は「今日の TS 実装」で1回だけ生成したバイト列を literal として埋め込んだもの —
@@ -51,6 +51,25 @@ describe("役職コード (EKR1., 計画正典: docs/ekn-api-plan.md)", () => {
         def.name = "黄色い忍者🥷";
         const back = JSON.parse(decodeRoleCode(encodeRoleCode(JSON.stringify(def))));
         expect(back).toEqual(def);
+    });
+
+    // R2 (docs/ekn-r2-contract.md §1 2026-08-11): role-maker.ts の陣営セレクタが持ちうる3値それぞれで
+    // 「フォーム相当のオブジェクト → 検証 → コード化 → 復号 → 再検証」の往復が保たれることを確認する
+    // (role-maker.ts 自体は DOM 依存で直接テストできないため、buildDefinitionFromForm が組み立てる
+    // 形と同じ素の EkrDefinition 候補で代替する)。
+    it.each(SUPPORTED_TEAMS)("team=%s のフォーム相当オブジェクトはコード化→読込の往復で team を保つ", (team) => {
+        const candidate = { ...defaultEkrDefinition(), name: "陣営テスト役職", team };
+        const validated = validateEkrDefinition(candidate);
+        expect(validated.ok).toBe(true);
+        if (!validated.ok) return;
+        expect(validated.def.team).toBe(team);
+
+        const code = encodeRoleCode(JSON.stringify(validated.def));
+        const roundTripped = validateEkrDefinition(JSON.parse(decodeRoleCode(code)));
+        expect(roundTripped.ok).toBe(true);
+        if (!roundTripped.ok) return;
+        expect(roundTripped.def).toEqual(validated.def);
+        expect(roundTripped.def.team).toBe(team);
     });
 
     it("デコーダはパディング有無どちらも受理する", () => {

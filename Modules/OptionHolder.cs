@@ -1014,7 +1014,8 @@ public static class Options
 
         if (AllCrewRolesHaveVanillaColor.GetBool())
         {
-            List<CustomRoles> toChange = Main.RoleHtmlColors.Keys.Where(x => !x.IsAdditionRole() && x.IsCrewmate() && !x.IsForOtherGameMode()).ToList();
+            // 役職メーカー製の役職は色も作者の役職コードが持ち物なので、この一括塗り潰しの対象外にする。
+            List<CustomRoles> toChange = Main.RoleHtmlColors.Keys.Where(x => !x.IsAdditionRole() && x.IsCrewmate() && !x.IsForOtherGameMode() && !Modules.Ekm.EkrManager.IsEkrRole(x)).ToList();
             toChange.ForEach(x => Main.RoleHtmlColors[x] = "#8cffff");
             Main.InitRoleColors();
         }

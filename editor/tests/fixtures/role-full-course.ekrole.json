@@ -16,7 +16,8 @@
     "corpse": "noReport",
     "voteWeight": 2,
     "doom": { "seconds": 300 },
-    "killDistance": "short"
+    "killDistance": "short",
+    "disguise": { "team": "neutral" }
   },
   "logic": {
     "version": 1,
@@ -80,6 +81,7 @@
       },
       {
         "when": "on_death",
+        "cause": "poison-curse",
         "do": [
           { "op": "cno_spawn", "slot": 2, "text": "消滅", "size": 10, "at": "self" },
           { "op": "cno_move", "slot": 2, "dx": 0, "dy": 3 },
@@ -181,6 +183,7 @@
       },
       {
         "when": "on_attacked",
+        "kind": "force",
         "do": [
           { "op": "cancel_attack" },
           { "op": "remember", "slot": 1, "target": "ctx" },

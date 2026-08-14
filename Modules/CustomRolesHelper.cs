@@ -492,7 +492,9 @@ internal static class CustomRolesHelper
                 // desync Impostor に確定し、この switch まで来ない。checkDesyncRole=false で呼ばれた場合は
                 // ここを通って Crewmate/Engineer 側に落ちるが、現行の false 呼び出し元は vanilla サポート役職の
                 // 種別判定にしか使っておらず Impostor/Crewmate を区別しないため影響しない。
-                _ when EkrManager.IsEkrRole(role) && EkrManager.GetDefinition(role) is { CanVent: true } => CustomRoles.Engineer,
+                // R2: インポスター陣営のスロットは本物の Impostor 基底 (下の `_ =>` へ落とす) — ベントは
+                // 素で使えるので Engineer に落としてはいけない。
+                _ when EkrManager.IsEkrRole(role) && !EkrManager.IsEkrImpostor(role) && EkrManager.GetDefinition(role) is { CanVent: true } => CustomRoles.Engineer,
 
                 _ => role.IsImpostor() ? CustomRoles.Impostor : CustomRoles.Crewmate
             };
@@ -701,8 +703,11 @@ internal static class CustomRolesHelper
                 CustomRoles.Empress => RoleTypes.Phantom,
                 CustomRoles.Shadow => RoleTypes.Phantom,
 
-                // EKN 役職メーカー: キル可の定義が束縛されたスロットは desync Impostor 基底 (Sheriff 系と同じ)
-                _ when EkrManager.IsEkrRole(role) && EkrManager.GetDefinition(role) is { CanKill: true } => RoleTypes.Impostor,
+                // EKN 役職メーカー: キル可の定義が束縛されたスロットは desync Impostor 基底 (Sheriff 系と同じ)。
+                // R2: インポスター陣営のスロットだけは除外する — あちらは desync ではなく**本物の**
+                // RoleTypes.Impostor (相互認識+サボ+バニラ勝利判定に乗る) で、GuardianAngel を返して
+                // IsDesyncRole を false に保つことで通常の役職付与経路へ流す (契約 §0.3)。
+                _ when EkrManager.IsEkrRole(role) && !EkrManager.IsEkrImpostor(role) && EkrManager.GetDefinition(role) is { CanKill: true } => RoleTypes.Impostor,
 
                 _ => RoleTypes.GuardianAngel
             };
@@ -720,6 +725,10 @@ internal static class CustomRolesHelper
 
         public bool IsNK(bool check = false)
         {
+            // R2: 第三陣営スロットのうち「キルできる」定義が入っているもの (契約 §1: サブカテゴリは
+            // canKill から導出)。キル不可の第三陣営は下の IsNonNK 側 (Neutral_Benign) に落ちる。
+            if (EkrManager.IsEkrNeutralKilling(role)) return true;
+
             return (role == CustomRoles.Arsonist && (check || !CanCheck || !Options.IsLoaded || Arsonist.ArsonistKeepsGameGoing == null || Arsonist.ArsonistKeepsGameGoing.GetBool() || (Arsonist.ArsonistCanIgniteAnytime != null && Arsonist.ArsonistCanIgniteAnytime.GetBool()))) || role is
                 CustomRoles.Jackal or
                 CustomRoles.Glitch or
@@ -817,6 +826,9 @@ internal static class CustomRolesHelper
 
         public bool IsImpostor()
         {
+            // R2: 役職メーカーのインポスター陣営スロット (陣営はスロット種が静的に決める — 定義は読まない)。
+            if (EkrManager.IsEkrImpostor(role)) return true;
+
             return (role == CustomRoles.DoubleAgent && (!Options.IsLoaded || !Main.IntroDestroyed)) || role is
                 CustomRoles.Impostor or
                 CustomRoles.ImpostorEndKnot or
@@ -1395,6 +1407,11 @@ internal static class CustomRolesHelper
                 CustomRoles.Tama => RoleOptionType.Neutral_Killing,
                 CustomRoles.SantaClaus => RoleOptionType.Neutral_Benign,
                 CustomRoles.MassMedia => RoleOptionType.Neutral_Killing,
+                // R2: 役職メーカーの第三陣営スロット。キル可 = Neutral_Killing (IsNK)、キル不可と未束縛 =
+                // Neutral_Benign (IsNonNK)。⚠️ 明示 arm が無いとキル不可の側がデフォルトの
+                // Crewmate_Miscellaneous に落ち、IsNonNK が false = どの陣営にも属さない役職になる。
+                _ when EkrManager.IsEkrNeutral(role) => EkrManager.IsEkrNeutralKilling(role) ? RoleOptionType.Neutral_Killing : RoleOptionType.Neutral_Benign,
+
                 _ => role.IsNK(true) ? RoleOptionType.Neutral_Killing : role.IsImpostor() ? RoleOptionType.Impostor_Miscellaneous : RoleOptionType.Crewmate_Miscellaneous
             };
         }
@@ -1560,6 +1577,11 @@ internal static class CustomRolesHelper
                 CustomRoles.Frightener => RoleOptionType.Impostor_Miscellaneous,
                 CustomRoles.Obstructer => RoleOptionType.Impostor_Miscellaneous,
                 CustomRoles.Dominion => RoleOptionType.Impostor_Miscellaneous,
+
+                // R2: 役職メーカーのインポスター陣営スロット (明示登録が無いとデフォルトで Neutral_Benign
+                // へ落ちてしまう — 上の GetCrewmateRoleCategory と同じ罠)。
+                _ when EkrManager.IsEkrImpostor(role) => RoleOptionType.Impostor_Miscellaneous,
+
                 _ => role.IsCrewmate() ? RoleOptionType.Crewmate_Miscellaneous : RoleOptionType.Neutral_Benign
             };
         }
@@ -1759,7 +1781,8 @@ internal static class CustomRolesHelper
                 // EKN 役職メーカーのスロット: 明示登録が無い役職はこのデフォルトで Neutral_Benign に
                 // 落ちる仕様のため、スロット10個をここで Crewmate_Miscellaneous に固定する
                 // (オプション構築のグルーピングと選出のカテゴリ判定が両方この分類を読む)。
-                _ when EkrManager.IsEkrRole(role) => RoleOptionType.Crewmate_Miscellaneous,
+                // R2: クルー陣営の EKR だけに絞る (インポスター/第三陣営は各陣営のカテゴリ関数が見る)。
+                _ when EkrManager.IsEkrRole(role) && EkrManager.GetTeam(role) == Modules.Ekm.EkrTeam.Crewmate => RoleOptionType.Crewmate_Miscellaneous,
 
                 _ => role.IsImpostor() ? RoleOptionType.Impostor_Miscellaneous : RoleOptionType.Neutral_Benign
             };
@@ -2401,7 +2424,16 @@ public enum CountTypes
     GambleKiller,
     Torpedo,
 
-    Coven
+    Coven,
+
+    // R2 (docs/ekn-r2-contract.md §0.1): 役職メーカーの第三陣営スロットは**それぞれが独立陣営**
+    // (EKR 第三陣営同士も敵対する — 本物の NK と同形)。GetCountTypes のデフォルトが enum 名で
+    // TryParse するので、名前を CustomRoles 側と一致させておくだけで自動的に効く。
+    EkmNeuRole1,
+    EkmNeuRole2,
+    EkmNeuRole3,
+    EkmNeuRole4,
+    EkmNeuRole5
 }
 
 

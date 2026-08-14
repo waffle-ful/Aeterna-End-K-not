@@ -248,7 +248,9 @@ public static class NameColorManager
             || (seer.Is(CustomRoles.God) && God.KnowInfo.GetValue() == 2)
             || (seer.Is(CustomRoles.Revenant) && Revenant.KnowInfo.GetValue() == 1)
             || (seer.Is(CustomRoleTypes.Coven) && target.Is(CustomRoleTypes.Coven))
-            || (seer.Is(CustomRoleTypes.Impostor) && target.Is(CustomRoleTypes.Impostor) && CustomTeamManager.ArentInCustomTeam(seer.PlayerId, target.PlayerId))
+            // R2 (docs/ekn-r2-contract.md §4): 役職メーカーの passives.disguise がインポスター以外を
+            // 名乗っているホルダーは、インポスター同士の相互認識から外れる (= 一匹狼)。
+            || (seer.Is(CustomRoleTypes.Impostor) && target.Is(CustomRoleTypes.Impostor) && !Modules.Ekm.EkrManager.IsDisguisedAwayFrom(target.GetCustomRole(), Modules.Ekm.EkrTeam.Impostor) && CustomTeamManager.ArentInCustomTeam(seer.PlayerId, target.PlayerId))
             || (seer.Is(CustomRoles.Traitor) && target.Is(Team.Impostor))
             || (seer.Is(CustomRoles.Jackal) && target.Is(CustomRoles.Sidekick))
             || (seer.Is(CustomRoles.Sidekick) && target.Is(CustomRoles.Sidekick))
