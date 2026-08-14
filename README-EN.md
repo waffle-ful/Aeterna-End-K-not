@@ -14,16 +14,49 @@
 
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/sEYAFzD3a)
 
+---
+
+## Your usual Among Us night ends here.
+
+### Only the host installs anything.
+
+End K not runs off **the host's client alone.** Everyone else joins vanilla and still plays with all **682 roles.** You never have to say "install this first, then come back" — the friction of getting people into a lobby drops to zero. Works fully on both official and custom servers.
+
+### Your lobby doesn't die.
+
+Dropped by the server? End K not **re-creates the lobby automatically**, same region, same settings. If Among Us itself crashes or hangs, the bundled external watchdog notices, relaunches the game, and restores the lobby. Leave it running for 24 hours and it keeps going. "We got disconnected, let's call it a night" — never again.
+
+### Your viewers never get bored.
+
+Every player's chat is **read aloud in a different voice**, so your audience can tell who spoke by ear alone. Viewers can **reach into the game itself** with `!` commands from live chat. And an **AI commentary companion** — 2D portrait and lip-synced 3D avatar — calls the kills, the meetings, and the wins in real time. Your chat stops being an audience and becomes a control panel.
+
+### Roles like these are waiting.
+
+- **Riptide** — A giant wave sweeps the entire map. Caught in it, you're gone. It gets faster with every meeting.
+- **WordKiller** — Kills anyone who says the forbidden word. The conversation itself becomes a minefield.
+- **Gemini** — Stand still and a copy of you stays where you were. Same colour, same name, same everything.
+- **Crosswind** — Vanishes, then blasts everyone sideways with a gust of wind.
+- **Dossun** — Places a giant block that moves with you. Crush them, or knock them flying.
+- **Supernova** — A star that detonates the moment you stand still. Take everyone nearby with you — and if you last until the end, you shove the real winner aside and take the win alone.
+
+### And trying it costs you nothing.
+
+Just run the installer — it works out whether you're on Steam or Epic and handles the rest. Not for you? Rename one file (`winhttp.dll`) and you're back to **completely vanilla Among Us.** Getting in and getting out both take seconds.
+
+> **682 roles · 110+ chat commands · host-only install · completely free**
+
+---
+
 ## About this mod
 
-**End K not** is an unofficial personal fork of [Endless Host Roles (EHR)](https://github.com/Gurge44/EndlessHostRoles) for Among Us. It currently implements **673 roles**.
+**End K not** is an unofficial personal fork of [Endless Host Roles (EHR)](https://github.com/Gurge44/EndlessHostRoles) for Among Us. It currently implements **682 roles**.
 
 Only the lobby host needs to install the mod — other players can join and enjoy the additional roles without installing anything. It works fully on both official and custom servers.
 
 This mod is unofficial and is **not affiliated with or endorsed by Innersloth**. **Please do not contact Innersloth regarding any issues with this mod.**
 
 > [!WARNING]
-> End K not is in **alpha**. Some roles are untested and several features are works-in-progress. Please report bugs and suggestions on [GitHub Issues](../../issues) or our [Discord](https://discord.gg/sEYAFzD3a).
+> End K not is in **beta**. Some roles are untested and several features are works-in-progress. Please report bugs and suggestions on [GitHub Issues](../../issues) or our [Discord](https://discord.gg/sEYAFzD3a).
 
 Supported Among Us version: **2026.3.31**
 
@@ -53,40 +86,25 @@ On top of EHR's role engine, End K not adds features for **streaming, long-runni
 ### 🎨 UI & policy
 
 - **Calamity-themed main menu** *(work in progress)* — A custom Calamity-style title screen (referencing [CalamityModPublic](https://github.com/CalamityTeam/CalamityModPublic)).
-- **External communication reduced** — Achievements API, online presets, news fetching, and other upstream EHR network calls are disabled. Exceptions: update checks against this mod's GitHub releases, and gameplay features such as Bard and the anagram command that fetch public data from third-party APIs.
 - **GPL-3.0 open source** — Full source available; you may study, modify, and redistribute under GPL-3.0.
 
 ## Role list
 
-**673 roles in total.** Breakdown by faction:
+**682 roles in total.** Breakdown by faction:
 
 | Faction | Count |
 |---------|-------|
-| Impostor | 166 (vanilla 4 + remake 4 + custom 158) |
-| Crewmate | 176 (vanilla 6 + remake 7 + custom 163) |
-| Neutral | 134 |
+| Impostor | 170 (vanilla 4 + remake 4 + custom 162) |
+| Crewmate | 178 (vanilla 6 + remake 7 + custom 165) |
+| Neutral | 137 |
 | Coven | 21 |
 | Game mode exclusive | 28 |
 | Other | 2 (GM / Convict) |
 | Sub-roles (add-ons) | 146 |
 
-▶ **[See the full list of all 673 roles (`ROLES-EN.md`)](./ROLES-EN.md)**
+▶ **[See the full list of all 682 roles (`ROLES-EN.md`)](./ROLES-EN.md)**
 
-Use `/r <role name>` or `/myrole` in-game to read each role's effects and settings.
-
-### Featured roles
-
-| Role | Faction | What it does |
-|---|---|---|
-| **Riptide** | Impostor | Raises a wave with every meeting, sweeping players away to drown. |
-| **Dossun** | Impostor | Places a giant block that follows your own movement — crush or knock back anyone in the way. |
-| **WordKiller** | Impostor | Kills anyone who says the forbidden word. Turns the whole conversation into a minefield. |
-| **Crosswind** | Impostor | Vanishes, then blasts everyone sideways with a gust of wind. |
-| **Gemini** | Crewmate | Stand still and you leave a copy of yourself behind — same colour, same name, same everything. |
-| **Supernova** | Neutral | Triggers a supernova explosion. |
-
-A picked-for-spectacle shortlist. All 682 implemented roles are listed in [`ROLES-EN.md`](./ROLES-EN.md).
-
+Use `/r <role name>` or `/myrole` in-game to read each role's effects and settings. A picked-for-spectacle shortlist is [at the top of this page](#roles-like-these-are-waiting).
 
 ## Commands
 
