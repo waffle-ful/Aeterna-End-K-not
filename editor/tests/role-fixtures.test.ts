@@ -31,6 +31,18 @@ describe("golden fixture: role-full-course.ekrole.json (10イベント・主要o
         expect(result.ok).toBe(true);
     });
 
+    // plan §7 Tier 1 #2: 説明文2欄。C# 側 (EkrDefinitionTests.FullCourseFixture_ExposesDescriptions)
+    // が同じファイルの同じ値を読むので、片側だけ実装が抜けるとどちらかが落ちる。
+    it("説明文2欄を保持する (詳細文の改行はそのまま残る)", () => {
+        const parsed = JSON.parse(fullCourseRaw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+
+        expect(result.def.description).toBe("影を渡り歩き、触れた者の運命を書き換える");
+        expect(result.def.descriptionLong).toContain("\n");
+        expect(result.def.descriptionLong?.startsWith("影を渡り歩く役職です。")).toBe(true);
+    });
+
     it("10 種類のイベントすべてを1回ずつカバーしている", () => {
         const parsed = JSON.parse(fullCourseRaw);
         const result = validateEkrDefinition(parsed);

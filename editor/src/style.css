@@ -1980,6 +1980,20 @@ dialog#dlg-role-maker[open] {
     width: 100%;
 }
 
+/* くわしい説明は複数行入力なので、label の横並び (dialog label の flex) を解いて下に敷く。
+   1行 input のままの「短い説明」は既存のレイアウトをそのまま使う。 */
+.rm-desc-long {
+    display: block;
+}
+
+.rm-desc-long textarea {
+    display: block;
+    width: 100%;
+    margin-top: 4px;
+    min-height: 72px;
+    resize: vertical;
+}
+
 /* dialog label input { flex: 1 1 60% } を継承すると input[type=color] が横長バーに間延びする
    (2カラム化の副作用で発覚)。小さめのスウォッチに固定する。 */
 #rm-color {
@@ -2109,6 +2123,14 @@ dialog#dlg-role-maker[open] {
     margin-top: 2px;
     font-size: 11px;
     color: var(--text-muted);
+}
+
+.rm-preview-banner-desc {
+    display: block;
+    margin-top: var(--space-xs);
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text-1);
 }
 
 .rm-preview-abilities {

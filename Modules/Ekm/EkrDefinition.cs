@@ -51,6 +51,15 @@ public sealed class EkrDefinition
     [JsonPropertyName("author")]
     public string Author { get; set; } = "";
 
+    // plan §7 Tier 1 #2: 役職の説明文。任意 — 空なら lang の既定文言 (スロット共通の案内文) がそのまま出る
+    // (完全後方互換)。短文は頂上の役職パネル/イントロ (Info キー)、詳細文は /h r やオプションメニュー
+    // (InfoLong キー) に出る — どちらも ExtendedPlayerControl.GetRoleInfo が読む2キーへ束縛時に上書きする。
+    [JsonPropertyName("description")]
+    public string Description { get; set; } = "";
+
+    [JsonPropertyName("descriptionLong")]
+    public string DescriptionLong { get; set; } = "";
+
     [JsonPropertyName("color")]
     public string Color { get; set; } = "#8f8f8f";
 
@@ -77,6 +86,47 @@ public sealed class EkrDefinition
 
     [JsonPropertyName("winCondition")]
     public string WinCondition { get; set; } = "team";
+
+    // 説明文の改行潰し (TS 側 roledef.ts の /[\r\n]+/g と同一規則 — 連続改行は空白1つへ畳む)。
+    private static readonly System.Text.RegularExpressions.Regex NewlineRun = new("[\r\n]+");
+
+    // 文字数での切り詰めは TMP タグの途中に落ちうる (`…<color=#ff00` が残ると TMP パーサが後続テキストまで
+    // 巻き込んで壊す — イントロの <size=…> 包みや /h r の連結メッセージが実際の巻き添え先)。
+    // ⚠️ `CustomNetObject.DropUnterminatedTag` と **同一実装の複製**。テストプロジェクト (EndKnot.Tests) は
+    // Unity 依存を避けるため CustomNetObject.cs をコンパイル対象に含めておらず、そちらを参照できない。
+    // 片方だけ直すと契約が割れるので、変更するときは必ず両方 + TS の dropUnterminatedTag を揃えること。
+    private static string DropUnterminatedTag(string s)
+    {
+        int lastOpen = s.LastIndexOf('<');
+        if (lastOpen < 0) return s;
+        return s.IndexOf('>', lastOpen) < 0 ? s[..lastOpen] : s;
+    }
+
+    /// <summary>
+    /// `{スロット}InfoLong` へ上書きする文字列を組み立てる。**「見出し + 空行 + 本文」の形を必ず作る**こと。
+    /// 理由: 非モッド客の画面では役職説明が名前ペイロードに載る (`Utils.SetupLongRoleDescriptions` →
+    /// `WriteSetNameRpcsToSender` の `ChangeNameToRoleInfo` 分岐)。そこで使われるのは **最初の `\n\n` の手前だけ**で、
+    /// 既存役職の lang InfoLong はどれも「キャッチ文 + 空行 + 本文」構造のおかげで短く収まっている
+    /// (ja_JP の 691 件中、この切り出しが 296 字を超えるのは 3 件だけ)。自由記述の詳細文をそのまま渡すと
+    /// この構造的マージンが無くなり、日本語で約 235 字を超えたあたりから名前予算 (705B) を食い潰して
+    /// **末尾の役職マーク (矢印/♥/メディック印) が無音で切り落とされる**。
+    /// 短文が空のときは詳細文の 1 行目 (≤80字) を見出しに使い、構造だけは必ず維持する。
+    /// </summary>
+    public string BuildInfoLongOverride()
+    {
+        if (DescriptionLong.Length == 0) return Description;
+
+        string headline = Description;
+
+        if (headline.Length == 0)
+        {
+            headline = DescriptionLong.Split('\n')[0].Trim();
+            if (headline.Length > 80) headline = DropUnterminatedTag(headline[..80]);
+        }
+
+        // 見出しが本文そのものなら二重に出さない (改行の無い短い詳細文を書いた場合)。
+        return headline.Length == 0 || headline == DescriptionLong ? DescriptionLong : $"{headline}\n\n{DescriptionLong}";
+    }
 
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
@@ -150,6 +200,15 @@ public sealed class EkrDefinition
 
         Author = (Author ?? "").Trim();
         if (Author.Length > 24) Author = Author[..24];
+
+        // 説明文 (plan §7 Tier 1 #2)。上限は roledef.ts の ROLE_DESCRIPTION_MAX / ROLE_DESCRIPTION_LONG_MAX と同値。
+        // 短文は1行表示の場所 (頂上パネル/イントロ) に出るので改行を空白へ潰す (連続改行は空白1つ = TS 側と同一規則)。
+        // 詳細文は改行をそのまま許す (CRLF だけ LF へ正規化)。
+        Description = NewlineRun.Replace(Description ?? "", " ").Trim();
+        if (Description.Length > 80) Description = DropUnterminatedTag(Description[..80]);
+
+        DescriptionLong = (DescriptionLong ?? "").Replace("\r\n", "\n").Trim();
+        if (DescriptionLong.Length > 400) DescriptionLong = DropUnterminatedTag(DescriptionLong[..400]);
 
         // エディタ側 (roledef.ts の COLOR_RE) と同じ「# + 6桁16進」のみ受理し、# 無し入力は # 付きへ正規化して
         // 格納する。ColorUtility (Unity) を使うと 3/4/8桁・named color まで通ってしまい、TS 側との契約が割れる上、

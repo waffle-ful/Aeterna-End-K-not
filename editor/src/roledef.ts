@@ -28,6 +28,9 @@ export const EKR_VERSION = 1;
 
 export const ROLE_NAME_MAX = 24;
 export const ROLE_AUTHOR_MAX = 24;
+// plan §7 Tier 1 #2 の説明文。C# (EkrDefinition.Validate) の直値と同値であること。
+export const ROLE_DESCRIPTION_MAX = 80;
+export const ROLE_DESCRIPTION_LONG_MAX = 400;
 
 export const KILL_COOLDOWN_MIN = 1;
 export const KILL_COOLDOWN_MAX = 180;
@@ -364,6 +367,23 @@ export interface EkrDefinition {
     // Wave 1 (spec §1.1)。logic と同じ理由で defaultEkrDefinition() には含めない。
     // 既知キーが1つも無いとき (空オブジェクト) はキー自体を出力しない (バニラ既定 = 欠落)。
     passives?: RolePassives;
+    // plan §7 Tier 1 #2: 説明文。logic/passives と同じ理由で defaultEkrDefinition() には含めず、
+    // 空欄はキー自体を出力しない (欠落 = ゲーム側のスロット共通の既定文言がそのまま出る)。
+    // description = 短文 (頂上の役職パネル/イントロ)・descriptionLong = 詳細文 (/h r・オプションメニュー)。
+    description?: string;
+    descriptionLong?: string;
+}
+
+/**
+ * 文字数での機械的な切り詰めは TMP タグの途中に落ちうる (`…<color=#ff00` のような断片が残ると、
+ * ゲーム側の TMP パーサが後続テキストまで巻き込んで壊す)。閉じていない末尾タグは丸ごと捨てる。
+ * ゲーム側 `CustomNetObject.DropUnterminatedTag` と同一実装 (契約: 両側で同じ文字列を出すこと)。
+ * ⚠️ 末尾を捨てて上限に収める切り詰め専用 — 全文を保つ分割器に流用しないこと (捨てた文字が消滅する)。
+ */
+function dropUnterminatedTag(s: string): string {
+    const lastOpen = s.lastIndexOf("<");
+    if (lastOpen < 0) return s;
+    return s.indexOf(">", lastOpen) < 0 ? s.slice(0, lastOpen) : s;
 }
 
 export function defaultEkrDefinition(): EkrDefinition {
@@ -553,7 +573,22 @@ export function validateEkrDefinition(value: unknown): EkrValidationResult {
     if (!winField.ok) return winField;
     const winCondition = winField.v.trim().toLowerCase();
 
+    // 説明文 (plan §7 Tier 1 #2)。短文は1行表示の場所に出るので改行を空白へ潰す (C# 側と同一規則)。
+    const descField = readStringField(value, "description", "");
+    if (!descField.ok) return descField;
+    let description = descField.v.replace(/[\r\n]+/g, " ").trim();
+    if (description.length > ROLE_DESCRIPTION_MAX) description = dropUnterminatedTag(description.slice(0, ROLE_DESCRIPTION_MAX));
+
+    const descLongField = readStringField(value, "descriptionLong", "");
+    if (!descLongField.ok) return descLongField;
+    let descriptionLong = descLongField.v.replace(/\r\n/g, "\n").trim();
+    if (descriptionLong.length > ROLE_DESCRIPTION_LONG_MAX) descriptionLong = dropUnterminatedTag(descriptionLong.slice(0, ROLE_DESCRIPTION_LONG_MAX));
+
     const def: EkrDefinition = { ekr: 1, requires, name, author, color, team, canKill, killCooldown, canVent, visionMultiplier, winCondition };
+
+    // 空欄はキーごと落とす (欠落 = 既定文言)。logic/passives と同じ「既定はキーの欠落で表す」作法。
+    if (description.length > 0) def.description = description;
+    if (descriptionLong.length > 0) def.descriptionLong = descriptionLong;
 
     // logic: 省略/null = R0 動作 (キー自体を付けない)。存在すれば全体を検証し、失敗時は
     // 役職コード全体を reject する (「壊れたロジックだけ黙って捨てる」は spec の方針に反する)。
