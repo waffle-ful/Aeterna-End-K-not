@@ -28,10 +28,13 @@ import type { LogicNode, LogicRule, RoleLogic } from "../roledef";
 // 配下の arrow_show/arrow_mark/inspect/reveal)。L16 拡張 = vote_swap の暗黙 saved1/saved2 参照。
 // 2026-08-14 (BUG-20260813-04 の机上切り分け): L21 を追加 (計21ルール)。L17/L19 の兄弟で、
 // wait より後の exile。
+// L22: 会議では起きないこうげきのしゅるいの下に、会議専用のちから (R2)。
+// L23: 会議中に決まる死にかたの下に、タスク中しか効かないちから (R2)。
 
 export type LintRuleId =
     | "L1" | "L2" | "L3" | "L4" | "L5" | "L6" | "L7" | "L8" | "L9" | "L10" | "L11" | "L12" | "L13"
-    | "L14" | "L15" | "L16" | "L17" | "L18" | "L19" | "L20" | "L21";
+    | "L14" | "L15" | "L16" | "L17" | "L18" | "L19" | "L20" | "L21"
+    | "L22" | "L23";
 
 export interface LintWarning {
     rule: LintRuleId;
@@ -221,6 +224,19 @@ function hasExileAfterWait(nodes: LogicNode[]): boolean {
 // 構造的に reject するため、リンタで重ねて警告する必要がない)。
 const MEETING_ONLY_LINT_WHENS: ReadonlySet<string> = new Set(["on_meeting_start", "on_meeting_vote", "on_meeting_pick"]);
 const MEETING_ONLY_LINT_OPS: readonly LogicNode["op"][] = ["vote_block", "vote_swap", "exile"];
+
+// R2 (docs/ekn-r2-contract.md §3c L23): 会議中は no-op になる「体を動かす」系の op。
+// C# 側の会議中ゲート (EkrLogicOpcodes の関所) が黙って落とすものと同じ顔ぶれを並べる —
+// 会議中も有効な notify / remember / inspect / reveal / vote_weight_set はここに入れない。
+const TASK_ONLY_LINT_OPS: readonly LogicNode["op"][] = [
+    "teleport", "teleport_other", "kill", "speed", "set_kill_cooldown",
+    "cno_spawn", "cno_move", "cno_despawn", "cno_show",
+    "dummy_spawn", "corpse_spawn", "marker_save", "portal_place",
+    "pull", "drag", "field",
+    // 矢印3種も会議中は no-op (spec §3 の会議中 op 白名単に入っていない)。2026-08-14 の契約監査で
+    // 「spec §6 の L23 の例示列挙が §3 の白名単より狭い」自己矛盾として検出された漏れ。
+    "arrow_show", "arrow_mark", "arrow_hide",
+];
 
 function makeWarning(rule: LintRuleId, ruleIndex: number, when: string, message: string, suggestion: string): LintWarning {
     return { rule, ruleIndex, when, message, suggestion };
@@ -445,6 +461,28 @@ export function lintRoleLogic(logic: RoleLogic): LintWarning[] {
                 "L21", ruleIndex, rule.when,
                 "「秒待つ」のあとで「ついほうする」を使っています。",
                 "待っているあいだに会議が終わってしまうと、ついほうは何も起きないよ。ついほうは待たずにすぐ。",
+            ));
+        }
+
+        // L22 (R2・docs/ekn-r2-contract.md §3c): 会議中に起きない種類の攻撃なのに、会議専用のちからを
+        // 置いている。会議で起きうる攻撃は「すいそく」だけ (キル/かんせつ/きょうせいはタスク中)。
+        if (rule.when === "on_attacked" && rule.kind !== undefined && rule.kind !== "guess"
+            && MEETING_ONLY_LINT_OPS.some((op) => hasOp(rule.do, op))) {
+            warnings.push(makeWarning(
+                "L22", ruleIndex, rule.when,
+                "会議のあいだしか効かないちからを、会議では起きないこうげきのきっかけに置いています。",
+                "「されたとき」のしゅるいを「すいそく」にするか、会議専用のちからを外そう。",
+            ));
+        }
+
+        // L23 (R2・同 §3c): 会議中に確定する死にかた (ついほう/すいそく) なのに、タスク中しか
+        // 効かないちからを置いている (会議中は動けないので置いても何も起きない)。
+        if (rule.when === "on_death" && (rule.cause === "vote" || rule.cause === "guess")
+            && TASK_ONLY_LINT_OPS.some((op) => hasOp(rule.do, op))) {
+            warnings.push(makeWarning(
+                "L23", ruleIndex, rule.when,
+                "会議のあいだに決まる死にかたなのに、タスク中しか効かないちからを置いています。",
+                "会議中は動けないので、その処理は何も起きないよ。死にかたを変えるか、別のちからにしよう。",
             ));
         }
 

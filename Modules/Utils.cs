@@ -675,6 +675,28 @@ public static class Utils
         string roleText = GetRoleName(targetMainRole);
         Color roleColor = GetRoleColor(loversShowDifferentRole ? CustomRoles.Impostor : targetMainRole);
 
+        // R2 (docs/ekn-r2-contract.md §4): 役職メーカーの passives.disguise。DoubleAgent と同じ
+        // 「見えている相手への表示を差し替える」型で、本人の勝敗・選出・実陣営は変えない。
+        // 第三陣営への偽装だけは役職名をそのままにして色だけ変える (モッドに「汎用の第三陣営役職」が
+        // 存在せず、実在の第三陣営役職も各自の名前で見えるため — 2026-08-14 ご主人様裁定)。
+        if (!self && Modules.Ekm.EkrManager.GetDisguiseTeam(targetMainRole) is { } ekrDisguise)
+        {
+            switch (ekrDisguise)
+            {
+                case Modules.Ekm.EkrTeam.Crewmate:
+                    roleText = GetRoleName(CustomRoles.CrewmateEndKnot);
+                    roleColor = GetRoleColor(CustomRoles.CrewmateEndKnot);
+                    break;
+                case Modules.Ekm.EkrTeam.Impostor:
+                    roleText = GetRoleName(CustomRoles.ImpostorEndKnot);
+                    roleColor = GetRoleColor(CustomRoles.ImpostorEndKnot);
+                    break;
+                case Modules.Ekm.EkrTeam.Neutral:
+                    if (ColorUtility.TryParseHtmlString(Main.NeutralColor, out Color neutralColor)) roleColor = neutralColor;
+                    break;
+            }
+        }
+
         if (LastImpostor.CurrentId == targetId) roleText = GetRoleString("Last-") + roleText;
 
         if ((Options.NameDisplayAddons.GetBool() || ((ReportDeadBodyPatch.MeetingStarted || GameStates.IsMeeting) && Options.NameDisplayAddonsOnlyInMeetings.GetBool())) && !pure && self)
@@ -977,6 +999,12 @@ public static class Utils
         }
 
         CustomRoles role = state.MainRole;
+
+        // R2 (docs/ekn-r2-contract.md §1): 役職メーカーのインポスター/第三陣営スロットはタスク無し。
+        // ⚠️ この switch は「タスクを持たない役職」を列挙する形なので、arm が無いとデフォルト側 =
+        // タスク有りに落ちる (クルー陣営の EKR はそれが正しいのでそのまま)。
+        if (Modules.Ekm.EkrManager.IsEkrRole(role) && Modules.Ekm.EkrManager.GetTeam(role) != Modules.Ekm.EkrTeam.Crewmate)
+            return false;
 
         switch (role)
         {
@@ -4780,7 +4808,8 @@ public static class Utils
             // EKR logic (docs/ekr-logic-spec.md §2): on_death (自分が死んだとき・ctx=キルした人)。
             // disconnect 経由の死亡は target の PlayerControl がこの後ろで破棄されうるため対象外にする
             // (Stained.OnDeath 等、既存の同種フックと同じ !disconnect ガード)。
-            if (!disconnect) EkrManager.FireDeath(target, targetRealKiller);
+            // R2 (契約 §3b): 死因を 8 バケットへ畳んで渡す (on_death の cause フィルタ用)。
+            if (!disconnect) EkrManager.FireDeath(target, targetRealKiller, Main.PlayerStates.TryGetValue(target.PlayerId, out PlayerState ekrState) ? ekrState.deathReason : PlayerState.DeathReason.etc);
 
             if (!disconnect && !onMeeting) Randomizer.OnAnyoneDeath(target);
             if (Executioner.Target.ContainsValue(target.PlayerId)) Executioner.ChangeRoleByTarget(target);

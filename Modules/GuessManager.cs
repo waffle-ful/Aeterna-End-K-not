@@ -270,6 +270,15 @@ public static class GuessManager
                         return true;
                     }
 
+                    // R2 (docs/ekn-r2-contract.md §3b): on_attacked kind:"guess"。Medic 層と同じ位置
+                    // (Misfire 分岐より前) なので、キャンセルされた推測は **誰も死なない** (Medic 型)。
+                    if (Modules.Ekm.EkrManager.IsEkrRole(target.GetCustomRole()) &&
+                        !Modules.Ekm.EkrManager.FireAttacked(target.GetCustomRole(), target, pc, "guess"))
+                    {
+                        ShowMessage("GuessShielded");
+                        return true;
+                    }
+
                     switch (role)
                     {
                         case CustomRoles.Crewmate or CustomRoles.CrewmateEndKnot when CrewmateVanillaRoles.VanillaCrewmateCannotBeGuessed.GetBool():

@@ -72,7 +72,13 @@ public abstract class EkmTemplateRole : RoleBase
         if (Math.Abs(def.VisionMultiplier - 1f) > 0.001f)
         {
             opt.SetVision(false);
+
+            // R2: 基底が本物/desync の Impostor になる役職 (インポスター陣営スロット・キル可の第三陣営)
+            // は ImpostorLightMod の側を読む。SetVision(false) は「今の CrewLightMod を ImpostorLightMod へ
+            // 複製する」動きなので、片方だけ書くともう片方に旧値が残る。家の標準形 (PlayerGameOptionsSender
+            // .cs:489-491) と同じく両方へ明示的に書く。
             opt.SetFloat(FloatOptionNames.CrewLightMod, def.VisionMultiplier);
+            opt.SetFloat(FloatOptionNames.ImpostorLightMod, def.VisionMultiplier);
         }
 
         // Wave 1 (docs/ekr-logic-spec.md §1.1): passives.killDistance を vanilla 0/1/2 へ写像。

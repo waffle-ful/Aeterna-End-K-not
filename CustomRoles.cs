@@ -614,6 +614,18 @@ public enum CustomRoles
     // Same evaluation path as the user slots above (EkrManager.IsEkrRole covers both). Append only.
     EkrShowcase,
 
+    // EKN R2: team-specific slots (reserved - do not reorder). The 10 slots above stay crewmate-only
+    // because option tabs are fixed at construction time; a slot's team is decided by its slot kind,
+    // never by the bound definition (see EkrManager.GetTeam).
+    EkmImpRole1,
+    EkmImpRole2,
+    EkmImpRole3,
+    EkmNeuRole1,
+    EkmNeuRole2,
+    EkmNeuRole3,
+    EkmNeuRole4,
+    EkmNeuRole5,
+
 
     // Sub-role after 1000 (buffer reserved for ~500 future main roles)
     NotAssigned = 1000,

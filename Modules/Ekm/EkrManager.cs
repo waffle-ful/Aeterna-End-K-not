@@ -135,6 +135,8 @@ public static class EkrManager
 {
     public const string CodePrefix = "EKR1.";
 
+    // スロット番号 (1始まり) の並び順。R2 で陣営別スロットを追記した — crew 1〜10 / impostor 11〜13 /
+    // neutral 14〜18。⚠️ **並べ替え禁止** (/role set の番号と _bindings.json のキーが乗っている)。
     public static readonly CustomRoles[] Slots =
     [
         CustomRoles.EkmCustomRole1,
@@ -146,7 +148,15 @@ public static class EkrManager
         CustomRoles.EkmCustomRole7,
         CustomRoles.EkmCustomRole8,
         CustomRoles.EkmCustomRole9,
-        CustomRoles.EkmCustomRole10
+        CustomRoles.EkmCustomRole10,
+        CustomRoles.EkmImpRole1,
+        CustomRoles.EkmImpRole2,
+        CustomRoles.EkmImpRole3,
+        CustomRoles.EkmNeuRole1,
+        CustomRoles.EkmNeuRole2,
+        CustomRoles.EkmNeuRole3,
+        CustomRoles.EkmNeuRole4,
+        CustomRoles.EkmNeuRole5
     ];
 
     // slot -> 束縛中の定義。ロビーでのみ変更する (Bind/Unbind)。試合中の per-round リセット対象外。
@@ -161,7 +171,66 @@ public static class EkrManager
     // Fire ガード等) は IsEkrRole を使うこと (埋込出荷役職も含むため)。
     public static bool IsSlot(CustomRoles role)
     {
-        return role is >= CustomRoles.EkmCustomRole1 and <= CustomRoles.EkmCustomRole10;
+        return role is >= CustomRoles.EkmCustomRole1 and <= CustomRoles.EkmCustomRole10
+            or >= CustomRoles.EkmImpRole1 and <= CustomRoles.EkmNeuRole5;
+    }
+
+    // ── R2: 陣営 (docs/ekn-r2-contract.md §1) ────────────────────────────────────────────
+    // ⚠️ **陣営はスロット種が静的に決める** — 束縛された定義の team は読まない。理由は EmbeddedRoles と
+    // 同じで、GetRoleOptionType (メニュー構築) が束縛/埋込ロードより前に走るため。動的に読むと未束縛の
+    // 瞬間に誤分類が確定してしまう。定義側の team は「そのスロットに入れてよいか」の検証にだけ使う。
+    // IsCrewmate() 等は毎フレーム級で呼ばれるので、この判定は辞書1回だけ・GetDefinition を挟まない。
+    // ⚠️ 遅延生成 (`static readonly ... = Build()` にしない) — EmbeddedRoleTeams はこのファイルの
+    // **後ろ**で宣言されており、静的フィールド初期化子は記述順に走るので、即時初期化にすると
+    // まだ null の EmbeddedRoleTeams を読んで型初期化例外になる。
+    private static Dictionary<CustomRoles, EkrTeam> _slotTeams;
+
+    private static Dictionary<CustomRoles, EkrTeam> SlotTeams => _slotTeams ??= BuildSlotTeams();
+
+    private static Dictionary<CustomRoles, EkrTeam> BuildSlotTeams()
+    {
+        var map = new Dictionary<CustomRoles, EkrTeam>();
+
+        for (CustomRoles r = CustomRoles.EkmCustomRole1; r <= CustomRoles.EkmCustomRole10; r++) map[r] = EkrTeam.Crewmate;
+        for (CustomRoles r = CustomRoles.EkmImpRole1; r <= CustomRoles.EkmImpRole3; r++) map[r] = EkrTeam.Impostor;
+        for (CustomRoles r = CustomRoles.EkmNeuRole1; r <= CustomRoles.EkmNeuRole5; r++) map[r] = EkrTeam.Neutral;
+
+        foreach ((CustomRoles role, EkrTeam team) in EmbeddedRoleTeams) map[role] = team;
+
+        return map;
+    }
+
+    // EKR 役職の陣営。EKR でない役職を渡した場合は Crewmate を返す (呼び出し側は IsEkrRole で先に絞る)。
+    public static EkrTeam GetTeam(CustomRoles role)
+    {
+        return SlotTeams.TryGetValue(role, out EkrTeam team) ? team : EkrTeam.Crewmate;
+    }
+
+    // IsCrewmate() 系の排除法から呼ばれる = 毎フレーム級。辞書1回で答えが出る形にしておく。
+    public static bool IsEkrImpostor(CustomRoles role) => SlotTeams.TryGetValue(role, out EkrTeam team) && team == EkrTeam.Impostor;
+
+    public static bool IsEkrNeutral(CustomRoles role) => SlotTeams.TryGetValue(role, out EkrTeam team) && team == EkrTeam.Neutral;
+
+    // neutral のサブカテゴリだけは定義依存 (契約 §1: canKill から導出)。未束縛スロットは canKill=false
+    // 扱い = Neutral_Benign に落ちる — 未束縛は GetRoleSpawnMode ガードで出現不能なので実害は無い。
+    public static bool IsEkrNeutralKilling(CustomRoles role) => IsEkrNeutral(role) && GetDefinition(role) is { CanKill: true };
+
+    // ── R2: 偽装 (docs/ekn-r2-contract.md §4) ────────────────────────────────────────────
+    // passives.disguise の陣営。null = 偽装なし (EKR 以外も null)。
+    // ⚠️ 効くのは**表示層だけ**で、しかも「本来見えていたものを隠す/差し替える」向きだけ
+    // (2026-08-14 ご主人様裁定「既存のものに合わせる」= DoubleAgent と同じ向き)。
+    // 見えていない相手に新しく見せる向き — たとえばクルー陣営の EKR が impostor 偽装しても
+    // 本物のインポスターの仲間一覧には現れない — はやらない。
+    public static EkrTeam? GetDisguiseTeam(CustomRoles role)
+    {
+        return IsEkrRole(role) ? GetDefinition(role)?.ParsedPassives?.DisguiseTeam : null;
+    }
+
+    // 「その陣営として見られているか」。相互認識の抑止判定に使う (偽装先が指定陣営でなければ隠す)。
+    public static bool IsDisguisedAwayFrom(CustomRoles role, EkrTeam team)
+    {
+        EkrTeam? disguise = GetDisguiseTeam(role);
+        return disguise.HasValue && disguise.Value != team;
     }
 
     // ── 埋込出荷役職 (DLL 同梱 Resources/EkRoles/<EnumName>.ekrole.json) ─────────────────
@@ -174,16 +243,21 @@ public static class EkrManager
     // LoadEmbeddedRoles より前に評価されるため、実行時登録だと Neutral_Benign へ誤分類される
     // ②JSON パース失敗時に IsEkrRole が false になると GetRoleSpawnMode の「未束縛 EKR 役職は出現率0」
     // 安全網の管轄から漏れ、定義なしの役職が湧きうる。静的メンバーシップなら破損時も「未束縛 = 湧かない」
-    // へ正しく倒れる。新しい埋込役職の追加 = enum + クラス (EkrDefinedRoles.cs) + json + ここ の4点セット。
-    private static readonly HashSet<CustomRoles> EmbeddedRoles =
-    [
-        CustomRoles.EkrShowcase
-    ];
+    // へ正しく倒れる。新しい埋込役職の追加 = enum + クラス (EkrDefinedRoles.cs) + json + ここ の4点セット
+    // (neutral 陣営で出す場合は CountTypes / CustomWinner への追記も要るので5点セット)。
+    //
+    // ⚠️ R2: 陣営もここで**コンパイル時に**決める (json の team は束縛時の一致検証にしか使わない)。
+    // 実行時に json から読むと、メニュー構築が LoadEmbeddedRoles より前に走る分だけ誤分類が確定する。
+    private static readonly Dictionary<CustomRoles, EkrTeam> EmbeddedRoleTeams = new()
+    {
+        [CustomRoles.EkrShowcase] = EkrTeam.Crewmate
+    };
 
     // 「EkrDefinition で動く役職」の全集合判定 (ユーザースロット + 埋込出荷役職)。
+    // SlotTeams は両方を収めているので、辞書1回で済ませる (この判定も毎フレーム級で呼ばれる)。
     public static bool IsEkrRole(CustomRoles role)
     {
-        return IsSlot(role) || EmbeddedRoles.Contains(role);
+        return SlotTeams.ContainsKey(role);
     }
 
     // Options.Load 完了時 (OptionHolder.PostLoadTasks) に1回呼ぶ。再入しても安全 (Bound 上書き+Set 追加のみ)。
@@ -204,11 +278,11 @@ public static class EkrManager
 
                 string stem = resName[prefix.Length..^suffix.Length];
 
-                // 照合先は静的な EmbeddedRoles 集合のみ — 任意の enum 名を受けると、既存役職名のファイルを
+                // 照合先は静的な EmbeddedRoleTeams のキーのみ — 任意の enum 名を受けると、既存役職名のファイルを
                 // 置いただけでその役職を無警告で乗っ取れてしまう (ユーザースロット名のシャドウも同時に防ぐ)。
-                if (!Enum.TryParse(stem, out CustomRoles role) || !EmbeddedRoles.Contains(role))
+                if (!Enum.TryParse(stem, out CustomRoles role) || !EmbeddedRoleTeams.ContainsKey(role))
                 {
-                    Logger.Warn($"[EkrManager] Embedded role file {resName} does not match a registered embedded role (enum + EkrDefinedRoles.cs + EmbeddedRoles set) — skipped", "EkrManager");
+                    Logger.Warn($"[EkrManager] Embedded role file {resName} does not match a registered embedded role (enum + EkrDefinedRoles.cs + EmbeddedRoleTeams map) — skipped", "EkrManager");
                     continue;
                 }
 
@@ -241,7 +315,7 @@ public static class EkrManager
             // メンバー登録済みなのに定義が束縛できなかった役職 (リソース欠落/パース失敗)。IsEkrRole は静的に
             // true のままなので GetRoleSpawnMode の「未束縛 = 出現率0」安全網に正しく落ちる — 湧きはしないが
             // メニューには出るため、開発者が気付けるようここで明示的に警告する。
-            foreach (CustomRoles role in EmbeddedRoles)
+            foreach (CustomRoles role in EmbeddedRoleTeams.Keys)
                 if (!Bound.ContainsKey(role))
                     Logger.Warn($"[EkrManager] Embedded role {role} has no loadable definition (missing or invalid Resources/EkRoles/{role}.ekrole.json) — it stays unbound and will never spawn", "EkrManager");
         }
@@ -329,6 +403,14 @@ public static class EkrManager
                 {
                     if (fn != fileName) continue;
 
+                    // R2: 手編集で陣営が変わっていたら追随させない (旧定義のまま維持 = 束縛が黙って
+                    // 別陣営に化けるのを防ぐ)。作者が陣営を変えたいときは合うスロットへ入れ直す。
+                    if (!TeamMatches(slot, def))
+                    {
+                        Logger.Warn($"[EkrManager] Slot {slot} keeps its old definition: {fileName} now declares team={def.ParsedTeam} but the slot is {GetTeam(slot)}.", "EkrManager");
+                        break;
+                    }
+
                     if (!ReferenceEquals(def, Bound.GetValueOrDefault(slot))) Bind(slot, def, fileName);
                     break;
                 }
@@ -413,9 +495,9 @@ public static class EkrManager
             return false;
         }
 
-        if (slotNumber1Based is < 1 or > 10)
+        if (slotNumber1Based < 1 || slotNumber1Based > Slots.Length)
         {
-            error = "スロット番号は1〜10で指定してください";
+            error = $"スロット番号は1〜{Slots.Length}で指定してください";
             return false;
         }
 
@@ -427,8 +509,30 @@ public static class EkrManager
 
         CustomRoles slot = Slots[slotNumber1Based - 1];
         (string fileName, EkrDefinition def) = Library[libraryIndex1Based - 1];
+
+        // R2: スロット種と役職コードの陣営が一致しないと束縛できない (陣営はスロット側が静的に持つため、
+        // 不一致のまま入れると「クルーのスロットに入れたインポスター役職」が黙ってクルーとして動く)。
+        if (!TeamMatches(slot, def))
+        {
+            error = $"この役職コードは「{TeamLabel(def.ParsedTeam)}」の役職なので、スロット{slotNumber1Based}({TeamLabel(GetTeam(slot))}用)には入れられません。/role list で陣営に合ったスロット番号を確認してください";
+            return false;
+        }
+
         Bind(slot, def, fileName);
         return true;
+    }
+
+    private static bool TeamMatches(CustomRoles slot, EkrDefinition def) => def != null && def.ParsedTeam == GetTeam(slot);
+
+    // /role list とエラー文言で使う陣営の日本語表記。
+    public static string TeamLabel(EkrTeam team)
+    {
+        return team switch
+        {
+            EkrTeam.Impostor => "インポスター",
+            EkrTeam.Neutral => "ニュートラル",
+            _ => "クルーメイト"
+        };
     }
 
     public static bool TryUnassign(int slotNumber1Based, out string error)
@@ -441,9 +545,9 @@ public static class EkrManager
             return false;
         }
 
-        if (slotNumber1Based is < 1 or > 10)
+        if (slotNumber1Based < 1 || slotNumber1Based > Slots.Length)
         {
-            error = "スロット番号は1〜10で指定してください";
+            error = $"スロット番号は1〜{Slots.Length}で指定してください";
             return false;
         }
 
@@ -523,6 +627,16 @@ public static class EkrManager
                     foreach ((string fn, EkrDefinition def) in Library)
                     {
                         if (fn != fileName) continue;
+
+                        // R2: 束縛後にファイルを別陣営の役職コードへ差し替えられていた場合はここで落とす
+                        // (TryAssign と同じ規則。復元経路が唯一の抜け道になるのを塞ぐ)。
+                        if (!TeamMatches(slot, def))
+                        {
+                            Logger.Warn($"[EkrManager] Could not restore slot {slot} <- {fileName}: the role code is team={def.ParsedTeam} but the slot is {GetTeam(slot)}. The slot stays unbound.", "EkrManager");
+                            found = true;
+                            break;
+                        }
+
                         Bind(slot, def, fileName);
                         found = true;
                         break;
@@ -589,15 +703,36 @@ public static class EkrManager
     }
 
     // /role set でスロット省略時に使う最初の空きスロット (1..10)。空きが無ければ 0。
-    public static int FirstFreeSlotNumber()
+    // R2: 陣営を指定すると、その陣営のスロットの中から空きを探す (/role set のスロット省略時に、
+    // 役職コードの陣営に合わないスロットを掴んで束縛エラーになるのを防ぐ)。
+    public static int FirstFreeSlotNumber(EkrTeam? team = null)
     {
         for (int i = 0; i < Slots.Length; i++)
         {
+            if (team.HasValue && GetTeam(Slots[i]) != team.Value) continue;
+
             if (!Bound.ContainsKey(Slots[i]))
                 return i + 1;
         }
 
         return 0;
+    }
+
+    // /role list の陣営別サマリ用。1始まりのスロット番号の範囲を返す。
+    public static (int First, int Last) SlotRange(EkrTeam team)
+    {
+        var first = 0;
+        var last = 0;
+
+        for (int i = 0; i < Slots.Length; i++)
+        {
+            if (GetTeam(Slots[i]) != team) continue;
+
+            if (first == 0) first = i + 1;
+            last = i + 1;
+        }
+
+        return (first, last);
     }
 
     public static EkrDefinition GetDefinition(CustomRoles slot)
@@ -1007,7 +1142,9 @@ public static class EkrManager
     // ── R1: イベント発火 (RoleBase フック → EkmTemplateRole の薄い呼び出し先) ──────
 
     // requiredSlot: on_cno_touch (v1.2) 専用のフィルタ (rule.Slot と一致するものだけ発火)。他イベントは null。
-    private static void FireEvent(CustomRoles slot, byte holderId, string eventName, byte ctxId, int? requiredSlot = null)
+    // filter: R2 の on_death cause 用 (rule.Cause が指定されているものは一致したときだけ発火)。
+    // ⚠️ on_attacked の kind は同期プロローグ側 (FireAttackedPrologue) が別途フィルタする。
+    private static void FireEvent(CustomRoles slot, byte holderId, string eventName, byte ctxId, int? requiredSlot = null, string filter = null)
     {
         if (!Runtime.TryGetValue(holderId, out EkrHolderState state) || state.LogicDisabled) return;
 
@@ -1027,6 +1164,7 @@ public static class EkrManager
         {
             if (rule.When != eventName) continue;
             if (requiredSlot.HasValue && rule.Slot != requiredSlot.Value) continue;
+            if (rule.Cause != null && rule.Cause != filter) continue; // R2: on_death の死因フィルタ (未指定 = 全死因)
             if (state.Fibers.Count >= EkmLogicRuntime.MaxFibersPerHolder) continue; // spec §5: 超過は新規発火をドロップ
 
             var context = new EkrActionContext { HolderId = holderId, CtxId = ctxId, Slot = slot };
@@ -1050,7 +1188,47 @@ public static class EkrManager
 
     // target の死亡確定時 (spec: 自分が死んだとき・ctx=キルした人 [いれば])。Utils.AfterPlayerDeathTasks から
     // 呼ぶ想定 — target 自身が EKR ホルダーかどうかは呼び出し前提を置かず、ここで判定する。
-    public static void FireDeath(PlayerControl target, PlayerControl killer)
+    // R2 (docs/ekn-r2-contract.md §3b): DeathReason (~90種) を 8 バケットへ畳む。
+    // 語彙を粗くしているのは、作者が覚えられる粒度に留めるため — 表に無い死因は "other" に落ちる
+    // (新しい DeathReason が上流から増えても壊れない側)。⚠️ TS 側 (roledef.ts) と同じ綴り。
+    public static string DeathCauseBucket(PlayerState.DeathReason reason)
+    {
+        return reason switch
+        {
+            PlayerState.DeathReason.Kill or PlayerState.DeathReason.Bite or PlayerState.DeathReason.Sniped
+                or PlayerState.DeathReason.Shot or PlayerState.DeathReason.Mauled or PlayerState.DeathReason.Dismembered
+                or PlayerState.DeathReason.LossOfHead or PlayerState.DeathReason.Dragged or PlayerState.DeathReason.Swooped
+                or PlayerState.DeathReason.Revenge or PlayerState.DeathReason.Retribution or PlayerState.DeathReason.Execution
+                or PlayerState.DeathReason.Destroyed or PlayerState.DeathReason.Demolished or PlayerState.DeathReason.WipedOut
+                or PlayerState.DeathReason.Crushed or PlayerState.DeathReason.Erased or PlayerState.DeathReason.Censored
+                or PlayerState.DeathReason.Eaten or PlayerState.DeathReason.Consumed or PlayerState.DeathReason.Scavenged => "kill",
+
+            PlayerState.DeathReason.Vote or PlayerState.DeathReason.Trialed or PlayerState.DeathReason.DidntVote
+                or PlayerState.DeathReason.SkippedVote => "vote",
+
+            PlayerState.DeathReason.Misfire or PlayerState.DeathReason.Misguess or PlayerState.DeathReason.Assumed
+                or PlayerState.DeathReason.Gambled => "guess",
+
+            PlayerState.DeathReason.Bombed or PlayerState.DeathReason.Torched or PlayerState.DeathReason.Kamikazed
+                or PlayerState.DeathReason.Quantization => "bomb",
+
+            PlayerState.DeathReason.Poison or PlayerState.DeathReason.Curse or PlayerState.DeathReason.Spell
+                or PlayerState.DeathReason.Infected or PlayerState.DeathReason.Diseased or PlayerState.DeathReason.Allergy
+                or PlayerState.DeathReason.LossOfBlood or PlayerState.DeathReason.Stung => "poison-curse",
+
+            PlayerState.DeathReason.Meteor or PlayerState.DeathReason.Lava or PlayerState.DeathReason.Tornado
+                or PlayerState.DeathReason.Lightning or PlayerState.DeathReason.Drowned or PlayerState.DeathReason.RiptideKilled
+                or PlayerState.DeathReason.Sunken or PlayerState.DeathReason.Collapsed or PlayerState.DeathReason.Fall
+                or PlayerState.DeathReason.OutOfOxygen or PlayerState.DeathReason.Trapped or PlayerState.DeathReason.Stoned => "environment",
+
+            PlayerState.DeathReason.Suicide or PlayerState.DeathReason.FollowingSuicide or PlayerState.DeathReason.Sacrifice
+                or PlayerState.DeathReason.Overtired or PlayerState.DeathReason.Ashamed or PlayerState.DeathReason.PissedOff => "suicide",
+
+            _ => "other"
+        };
+    }
+
+    public static void FireDeath(PlayerControl target, PlayerControl killer, PlayerState.DeathReason deathReason)
     {
         if (!target) return;
 
@@ -1104,7 +1282,7 @@ public static class EkrManager
             }
         }
 
-        FireEvent(slot, target.PlayerId, "on_death", killer ? killer.PlayerId : byte.MaxValue);
+        FireEvent(slot, target.PlayerId, "on_death", killer ? killer.PlayerId : byte.MaxValue, filter: DeathCauseBucket(deathReason));
     }
 
     // ── Wave 1: on_attacked (docs/ekr-logic-spec.md §2) ────────────────────────────────────────
@@ -1129,10 +1307,16 @@ public static class EkrManager
     // その保持者の他イベント (on_pet/on_second) が全部無音でドロップする。
     // → 同一 (被害者, 攻撃者) の判定を 1 秒キャッシュし、窓の中は「同じ1回の攻撃」として
     //    前回の結論をそのまま返す (打診と実キルで結論が食い違わないよう結果ごと覚える)。
+    //
+    // R2 (docs/ekn-r2-contract.md §3b): キーに Kind を足す。Magnet/Bloodlust の再打診で種別が混線する
+    // ため必要だが、**種別ごとに独立枠を持つ = 同一被害者への発火は最悪 4種/秒まで増える**。
+    // まもり (shield) は kind:"kill" でしか減らないので数え上げ防御は無傷。fiber 枠 (≤8) の側は
+    // 「同じ相手からの別種別の攻撃が1秒に4回来る」状況でしか増えず、実在する周期経路 (Torpedo/
+    // Sharpshooter の毎 FixedUpdate 打診) はすべて kill 種別なのでそこは従来どおり 1/秒で止まる。
     private const float AttackedDedupeSeconds = 1f;
-    private static readonly Dictionary<(byte Victim, byte Killer), (float Time, bool Allow)> RecentAttackDecisions = [];
+    private static readonly Dictionary<(byte Victim, byte Killer, string Kind), (float Time, bool Allow)> RecentAttackDecisions = [];
 
-    public static bool FireAttacked(CustomRoles slot, PlayerControl target, PlayerControl killer)
+    public static bool FireAttacked(CustomRoles slot, PlayerControl target, PlayerControl killer, string kind = "kill")
     {
         if (!target || !killer) return true;
         if (!Runtime.TryGetValue(target.PlayerId, out EkrHolderState state)) return true;
@@ -1142,7 +1326,7 @@ public static class EkrManager
         try
         {
             float nowTs = Time.realtimeSinceStartup;
-            var dedupeKey = (target.PlayerId, killer.PlayerId);
+            var dedupeKey = (target.PlayerId, killer.PlayerId, kind);
 
             if (RecentAttackDecisions.TryGetValue(dedupeKey, out (float Time, bool Allow) recent) && nowTs - recent.Time < AttackedDedupeSeconds)
                 return recent.Allow;
@@ -1151,7 +1335,9 @@ public static class EkrManager
 
             // ① まもり (spec §1.1): 消費判定は発火より前。自傷 (kill target:"self" 等) は消費させない
             //    — 既存の数え上げ式まもり役職 (CursedWolf.OnCheckMurderAsTarget) と同じ裁定。
-            if (state.ShieldRemaining > 0 && killer.PlayerId != target.PlayerId)
+            //    R2 (契約 §3b): まもりは **kind:"kill" にだけ**効く (推測や間接死から守るのは、作者が
+            //    `on_attacked kind:… → cancel_attack` で組む — エンジンの既定を広げない)。
+            if (kind == "kill" && state.ShieldRemaining > 0 && killer.PlayerId != target.PlayerId)
             {
                 state.ShieldRemaining--;
                 blocked = true;
@@ -1159,7 +1345,7 @@ public static class EkrManager
             }
 
             // ② on_attacked (同期プロローグ)
-            bool canceled = FireAttackedPrologue(slot, target.PlayerId, killer.PlayerId, state);
+            bool canceled = FireAttackedPrologue(slot, target.PlayerId, killer.PlayerId, state, kind);
 
             // spec §2 (2026-08-11 監査裁定): プロローグ実行後にターゲットの生存を再検査する。
             // プロローグ内の副作用 (kill(target:"self") 等) で本人が既に死んでいたら、canceled の
@@ -1174,7 +1360,8 @@ public static class EkrManager
 
             // ③ 不成立。関所側 (PlayerControlPatch) が「SomeSortOfProtection」通知を出すので、
             //    ここでは CD の面倒だけ見る (既存の防御系役職と同じ作法)。
-            killer.SetKillCooldown();
+            //    R2: キル打診以外 (間接死/強制キル/推測) はキルボタンの CD 経路ではないので触らない。
+            if (kind == "kill") killer.SetKillCooldown();
             return false;
         }
         finally
@@ -1184,7 +1371,7 @@ public static class EkrManager
     }
 
     // 同期プロローグ本体。戻り値 = cancel_attack が実行されたか。
-    private static bool FireAttackedPrologue(CustomRoles slot, byte holderId, byte killerId, EkrHolderState state)
+    private static bool FireAttackedPrologue(CustomRoles slot, byte holderId, byte killerId, EkrHolderState state, string kind)
     {
         if (state.LogicDisabled) return false;
 
@@ -1196,6 +1383,7 @@ public static class EkrManager
         foreach (EkrRule rule in def.ParsedLogic.Rules)
         {
             if (rule.When != "on_attacked") continue;
+            if (rule.Kind != null && rule.Kind != kind) continue; // R2: 攻撃の種別フィルタ (未指定 = 全種)
             if (state.Fibers.Count >= EkmLogicRuntime.MaxFibersPerHolder) continue; // spec §5: 超過はドロップ
 
             var context = new EkrActionContext

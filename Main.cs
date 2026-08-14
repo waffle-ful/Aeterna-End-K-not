@@ -1513,7 +1513,15 @@ public enum CustomWinner
 
     Coven = CustomRoles.CovenLeader,
 
-    Bloodlust = CustomRoles.Bloodlust
+    Bloodlust = CustomRoles.Bloodlust,
+
+    // R2 (docs/ekn-r2-contract.md §0.1): 役職メーカーの第三陣営スロット。各スロットが独立陣営なので
+    // 勝者表示もスロットごとに要る (勝者名は Bind 時のランタイム上書きで役職コードの名前になる)。
+    EkmNeuRole1 = CustomRoles.EkmNeuRole1,
+    EkmNeuRole2 = CustomRoles.EkmNeuRole2,
+    EkmNeuRole3 = CustomRoles.EkmNeuRole3,
+    EkmNeuRole4 = CustomRoles.EkmNeuRole4,
+    EkmNeuRole5 = CustomRoles.EkmNeuRole5
 }
 
 [SuppressMessage("ReSharper", "UnusedMember.Global")]

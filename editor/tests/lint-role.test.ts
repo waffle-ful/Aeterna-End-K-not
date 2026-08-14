@@ -787,6 +787,50 @@ describe("lint-role: L19 (on_meeting_vote 配下・wait より後の cancel_vote
     });
 });
 
+describe("lint-role: L22 (会議で起きないこうげきのしゅるい × 会議専用のちから — R2)", () => {
+    it("kind:kill の下の exile は警告する", () => {
+        const l = logic([{ when: "on_attacked", kind: "kill", do: [{ op: "exile", target: "ctx" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L22");
+    });
+
+    it("kind:guess の下なら警告しない (推測は会議中に起きる)", () => {
+        const l = logic([{ when: "on_attacked", kind: "guess", do: [{ op: "exile", target: "ctx" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L22");
+    });
+
+    it("kind 省略 (すべて) なら警告しない — 推測も含まれるため", () => {
+        const l = logic([{ when: "on_attacked", do: [{ op: "exile", target: "ctx" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L22");
+    });
+});
+
+describe("lint-role: L23 (会議中に決まる死にかた × タスク中しか効かないちから — R2)", () => {
+    it("cause:vote の下の teleport は警告する", () => {
+        const l = logic([{ when: "on_death", cause: "vote", do: [{ op: "teleport", to: "marker1" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L23");
+    });
+
+    it("cause:guess の下の drag も警告する", () => {
+        const l = logic([{ when: "on_death", cause: "guess", do: [{ op: "drag", seconds: 3 }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L23");
+    });
+
+    it("cause:vote でも notify は警告しない (会議中も有効な op)", () => {
+        const l = logic([{ when: "on_death", cause: "vote", do: [{ op: "notify", target: "self", text: "やられた", seconds: 3 }] }]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L23");
+    });
+
+    it("矢印も会議中は効かないので対象に含める (2026-08-14 契約監査で見つかった漏れ)", () => {
+        const l = logic([{ when: "on_death", cause: "vote", do: [{ op: "arrow_show", target: "ctx", seconds: 5 }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L23");
+    });
+
+    it("cause:kill (タスク中に決まる死にかた) なら teleport でも警告しない", () => {
+        const l = logic([{ when: "on_death", cause: "kill", do: [{ op: "teleport", to: "marker1" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L23");
+    });
+});
+
 describe("lint-role: L21 (wait より後の exile — L17/L19 の兄弟)", () => {
     it("wait のあとの exile は警告する", () => {
         const l = logic([{ when: "on_meeting_pick", do: [{ op: "wait", seconds: 2 }, { op: "exile", target: "ctx" }] }]);
