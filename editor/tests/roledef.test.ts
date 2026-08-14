@@ -31,6 +31,38 @@ describe("役職コード検証規則 (EkrDefinition.cs 契約ミラー)", () =>
         expect(r.ok).toBe(true);
     });
 
+    // plan §7 Tier 1 #2 の説明文2欄。C# 側 (EkrDefinitionTests) と同じ入力・同じ期待値で書くこと —
+    // ここが両側の drift 検出網になる (連続改行の潰し方とタグ境界の扱いは実際に食い違っていた)。
+    it("説明文: 空欄/欠落はキーごと落ちる (欠落 = ゲーム側の既定文言)", () => {
+        const omitted = validateEkrDefinition(baseValid());
+        if (!omitted.ok) throw new Error(omitted.error);
+        expect(omitted.def.description).toBeUndefined();
+        expect(omitted.def.descriptionLong).toBeUndefined();
+
+        const blank = validateEkrDefinition({ ...baseValid(), description: "   ", descriptionLong: "" });
+        if (!blank.ok) throw new Error(blank.error);
+        expect(blank.def.description).toBeUndefined();
+        expect(blank.def.descriptionLong).toBeUndefined();
+    });
+
+    it("説明文: 短文は連続改行を空白1つへ畳む (C# の [\\r\\n]+ と同一規則)", () => {
+        const r = validateEkrDefinition({ ...baseValid(), description: "あ\r\nい\n\nう" });
+        if (!r.ok) throw new Error(r.error);
+        expect(r.def.description).toBe("あ い う");
+    });
+
+    it("説明文: 上限 (80/400) で切り、切り口に残った未閉じ TMP タグ断片は捨てる", () => {
+        const body = "あ".repeat(76);
+        const r = validateEkrDefinition({ ...baseValid(), description: `${body}<color=#ff0000>強調</color>` });
+        if (!r.ok) throw new Error(r.error);
+        expect(r.def.description).toBe(body);
+
+        const longBody = "い".repeat(500);
+        const r2 = validateEkrDefinition({ ...baseValid(), descriptionLong: longBody });
+        if (!r2.ok) throw new Error(r2.error);
+        expect(r2.def.descriptionLong?.length).toBe(400);
+    });
+
     it("JSON トップレベルがオブジェクトでなければ拒否 (null/配列/数値)", () => {
         expect(validateEkrDefinition(null).ok).toBe(false);
         expect(validateEkrDefinition([1, 2, 3]).ok).toBe(false);

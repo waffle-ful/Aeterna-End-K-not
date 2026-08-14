@@ -337,6 +337,14 @@
           <label>作者 (任意) <input id="rm-author" maxlength="24" placeholder="任意" autocomplete="off" /></label>
           <label>色 <input id="rm-color" type="color" value="#8f8f8f" /></label>
 
+          <!-- 説明文 (plan §7 Tier 1 #2): 短い説明 = ゲーム画面の上の役職パネル / くわしい説明 = 設定画面と /h r。
+               どちらも空のままなら、ゲーム側のスロット共通の案内文がそのまま出る (書かなくても壊れない)。 -->
+          <label>短い説明 (任意) <input id="rm-desc" maxlength="80" placeholder="例: しらべると相手の陣営がわかる" autocomplete="off" /></label>
+          <label class="rm-desc-long">くわしい説明 (任意)
+            <textarea id="rm-desc-long" maxlength="400" rows="3" placeholder="どんな役職なのか、遊び方をくわしく書けます (改行できます)"></textarea>
+          </label>
+          <p class="note rm-desc-note">短い説明はゲーム画面の役職パネルに、くわしい説明は設定画面や /h r に出ます。どちらも空のままで大丈夫です。</p>
+
           <label>陣営
             <select id="rm-team">
               <option value="crewmate">クルーメイト</option>
@@ -427,6 +435,8 @@
           <p id="rm-preview-banner" class="rm-preview-banner">
             <span class="rm-preview-banner-line">あなたは <span id="rm-preview-banner-name" class="rm-preview-banner-name"></span></span>
             <span id="rm-preview-banner-team" class="rm-preview-banner-team">クルーメイト</span>
+            <!-- 短い説明はゲーム開始時のバナーにも出る (ゲーム側 Info キー)。空欄なら行ごと消す。 -->
+            <span id="rm-preview-banner-desc" class="rm-preview-banner-desc" hidden></span>
           </p>
 
           <div id="rm-preview-abilities" class="rm-preview-abilities">

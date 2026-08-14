@@ -64,6 +64,103 @@ public class EkrDefinitionTests
         Assert.Equal(EkrTeam.Neutral, def.ParsedPassives.DisguiseTeam);
     }
 
+    // plan §7 Tier 1 #2: 説明文2欄。TS 側 (role-fixtures.test.ts) が同じファイルの同じ値を見ている。
+    [Fact]
+    public void FullCourseFixture_ExposesDescriptions()
+    {
+        string json = File.ReadAllText(FixturePath("role-full-course.ekrole.json"));
+        Assert.True(EkrDefinition.TryParse(json, out EkrDefinition def, out string error), error);
+
+        Assert.Equal("影を渡り歩き、触れた者の運命を書き換える", def.Description);
+        Assert.Contains("\n", def.DescriptionLong);
+        Assert.StartsWith("影を渡り歩く役職です。", def.DescriptionLong);
+    }
+
+    [Fact]
+    public void Descriptions_AreOptional_AndClampedToTheContractLimits()
+    {
+        // 説明文なし = 旧い役職コード (欠落は空文字へ収束し、ゲーム側は既定文言のまま)
+        Assert.True(EkrDefinition.TryParse(Wrap(""), out EkrDefinition plain, out string error), error);
+        Assert.Equal("", plain.Description);
+        Assert.Equal("", plain.DescriptionLong);
+
+        // 短文は改行を空白へ潰して1行にし、上限 80 / 400 で切る
+        string longDesc = new('あ', 100);
+        string longDescLong = new('い', 500);
+        string json = $$"""
+                        {"ekr":1,"name":"テスト","description":"1行目\n2行目","descriptionLong":"  前後の空白は落ちる  "}
+                        """;
+        Assert.True(EkrDefinition.TryParse(json, out EkrDefinition def, out error), error);
+        Assert.Equal("1行目 2行目", def.Description);
+        Assert.Equal("前後の空白は落ちる", def.DescriptionLong);
+
+        string clampJson = $$"""
+                             {"ekr":1,"name":"テスト","description":"{{longDesc}}","descriptionLong":"{{longDescLong}}"}
+                             """;
+        Assert.True(EkrDefinition.TryParse(clampJson, out EkrDefinition clamped, out error), error);
+        Assert.Equal(80, clamped.Description.Length);
+        Assert.Equal(400, clamped.DescriptionLong.Length);
+    }
+
+    // 非モッド客の名前ペイロードに載るのは InfoLong の「最初の \n\n の手前」だけなので、
+    // 組み立てが見出し構造を失うと長い説明が役職マークを押し出す (anticheat 監査 2026-08-14)。
+    [Fact]
+    public void BuildInfoLongOverride_AlwaysKeepsTheHeadlineParagraphShort()
+    {
+        string body = new('あ', 400);
+
+        // 短文あり: 短文が見出しになる
+        Assert.True(EkrDefinition.TryParse($$"""
+                                             {"ekr":1,"name":"t","description":"短い説明","descriptionLong":"{{body}}"}
+                                             """, out EkrDefinition both, out string error), error);
+        string builtBoth = both.BuildInfoLongOverride();
+        Assert.Equal("短い説明", builtBoth.Split("\n\n")[0]);
+        Assert.EndsWith(body, builtBoth);
+
+        // 短文なし: 詳細の1行目 (≤80字) が見出しになる
+        Assert.True(EkrDefinition.TryParse($$"""
+                                             {"ekr":1,"name":"t","descriptionLong":"{{body}}"}
+                                             """, out EkrDefinition longOnly, out error), error);
+        Assert.True(longOnly.BuildInfoLongOverride().Split("\n\n")[0].Length <= 80);
+
+        // 詳細なし: 短文をそのまま流用 (見出しだけの形)
+        Assert.True(EkrDefinition.TryParse("""
+                                           {"ekr":1,"name":"t","description":"短い説明"}
+                                           """, out EkrDefinition shortOnly, out error), error);
+        Assert.Equal("短い説明", shortOnly.BuildInfoLongOverride());
+
+        // 両方なし: 空 (呼び出し側が ClearRuntimeOverride して既定文言へ戻す)
+        Assert.True(EkrDefinition.TryParse("""{"ekr":1,"name":"t"}""", out EkrDefinition none, out error), error);
+        Assert.Equal("", none.BuildInfoLongOverride());
+    }
+
+    // 連続改行は空白1つへ畳む (TS の /[\r\n]+/g と同一)。1文字ずつ置換すると両側の切り詰め位置がズレる。
+    [Fact]
+    public void Description_CollapsesConsecutiveNewlinesIntoOneSpace()
+    {
+        const string json = """
+                            {"ekr":1,"name":"テスト","description":"あ\r\nい\n\nう"}
+                            """;
+
+        Assert.True(EkrDefinition.TryParse(json, out EkrDefinition def, out string error), error);
+        Assert.Equal("あ い う", def.Description);
+    }
+
+    // 上限ちょうどで TMP タグを切ると、閉じていない断片が後続テキストまで壊す (CNO/名前クランプと同型)。
+    [Fact]
+    public void Descriptions_DropTheUnterminatedTagFragmentWhenClamped()
+    {
+        // 80字目がタグの途中に落ちるように、76字の本文 + 開きタグを置く
+        string body = new('あ', 76);
+        string json = $$"""
+                        {"ekr":1,"name":"テスト","description":"{{body}}<color=#ff0000>強調</color>"}
+                        """;
+
+        Assert.True(EkrDefinition.TryParse(json, out EkrDefinition def, out string error), error);
+        Assert.Equal(body, def.Description);
+        Assert.DoesNotContain("<", def.Description);
+    }
+
     // ── 個別の契約ケース ──────────────────────────────────────────────
 
     private static string Wrap(string passivesAndLogic)

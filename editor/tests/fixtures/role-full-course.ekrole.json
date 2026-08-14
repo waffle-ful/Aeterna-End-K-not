@@ -3,6 +3,8 @@
   "requires": [],
   "name": "彷徨う影",
   "author": "EKN Sample",
+  "description": "影を渡り歩き、触れた者の運命を書き換える",
+  "descriptionLong": "影を渡り歩く役職です。\nペットを押すと目印を残し、その場所へあとから跳べます。\n攻撃されたときは影が身代わりになりますが、回数には限りがあります。",
   "color": "#5b3a99",
   "team": "crewmate",
   "canKill": true,

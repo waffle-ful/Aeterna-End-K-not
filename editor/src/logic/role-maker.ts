@@ -70,6 +70,9 @@ const STORAGE_KEY = "ekm.roleMaker";
 interface FormState {
     name: string;
     author: string;
+    // plan §7 Tier 1 #2: 説明文 (短文/詳細)。空欄は書き出し時にキーごと落ちる。
+    description: string;
+    descriptionLong: string;
     color: string;
     team: EkrTeam;
     canKill: boolean;
@@ -107,6 +110,8 @@ function defaultFormState(): FormState {
     return {
         name: d.name,
         author: d.author,
+        description: "",
+        descriptionLong: "",
         color: d.color,
         team: SUPPORTED_TEAM,
         canKill: d.canKill,
@@ -142,6 +147,8 @@ function readForm(): Omit<FormState, "passives" | "logicVariables" | "logicBlock
     return {
         name: $<HTMLInputElement>("rm-name").value,
         author: $<HTMLInputElement>("rm-author").value,
+        description: $<HTMLInputElement>("rm-desc").value,
+        descriptionLong: $<HTMLTextAreaElement>("rm-desc-long").value,
         color: $<HTMLInputElement>("rm-color").value,
         team: normalizeTeamDraft($<HTMLSelectElement>("rm-team").value),
         canKill: $<HTMLInputElement>("rm-can-kill").checked,
@@ -161,6 +168,8 @@ function readForm(): Omit<FormState, "passives" | "logicVariables" | "logicBlock
 function writeForm(s: Omit<FormState, "passives" | "logicVariables" | "logicBlockly" | "logicNoBlocklyPassthrough">): void {
     $<HTMLInputElement>("rm-name").value = s.name;
     $<HTMLInputElement>("rm-author").value = s.author;
+    $<HTMLInputElement>("rm-desc").value = s.description;
+    $<HTMLTextAreaElement>("rm-desc-long").value = s.descriptionLong;
     $<HTMLInputElement>("rm-color").value = normalizeColor(s.color);
     $<HTMLSelectElement>("rm-team").value = normalizeTeamDraft(s.team);
     $<HTMLInputElement>("rm-can-kill").checked = s.canKill;
@@ -364,6 +373,8 @@ function loadFormFromStorage(): FormState {
         return {
             name: typeof parsed.name === "string" ? parsed.name : d.name,
             author: typeof parsed.author === "string" ? parsed.author : d.author,
+            description: typeof parsed.description === "string" ? parsed.description : d.description,
+            descriptionLong: typeof parsed.descriptionLong === "string" ? parsed.descriptionLong : d.descriptionLong,
             color: normalizeColor(parsed.color),
             team: normalizeTeamDraft(parsed.team),
             canKill: typeof parsed.canKill === "boolean" ? parsed.canKill : d.canKill,
@@ -388,6 +399,9 @@ function buildDefinitionFromForm(): EkrDefinition | null {
         requires: [] as string[],
         name: raw.name,
         author: raw.author,
+        // 空欄は validateEkrDefinition 側でキーごと落ちる (欠落 = ゲーム側の既定文言)。
+        description: raw.description,
+        descriptionLong: raw.descriptionLong,
         color: raw.color,
         team: raw.team,
         canKill: raw.canKill,
@@ -494,6 +508,9 @@ function loadCode(): void {
     writeForm({
         name: r.def.name,
         author: r.def.author,
+        // キーが無い役職コード (説明文を書いていない・R2 以前のコード) は空欄として読み込む。
+        description: r.def.description ?? "",
+        descriptionLong: r.def.descriptionLong ?? "",
         color: r.def.color,
         // r.def.team は validateEkrDefinition 通過済みなので必ず3値のどれかだが、EkrDefinition.team の
         // 型は string (契約側は team を専用の enum 型にしていない) — normalizeTeamDraft で EkrTeam へ寄せる。
@@ -747,6 +764,13 @@ function renderPreview(): void {
 
     $("rm-preview-banner-team").textContent = TEAM_LABELS[raw.team];
 
+    // 短い説明はゲーム側で Info キーとして役職バナー/パネルに出る。空欄なら行ごと隠す
+    // (ゲーム側も空欄ならスロット共通の既定文言に戻るので、ここで既定文言は模写しない)。
+    const bannerDesc = $("rm-preview-banner-desc");
+    const previewDesc = raw.description.replace(/[\r\n]+/g, " ").trim();
+    bannerDesc.textContent = previewDesc;
+    bannerDesc.hidden = previewDesc.length === 0;
+
     $("rm-preview-avatar").style.setProperty("--rm-avatar-color", color);
 
     const killCd = normalizeKillCooldown(raw.killCooldown);
@@ -946,6 +970,8 @@ function wire(): void {
 
     $<HTMLInputElement>("rm-name").addEventListener("input", onFormEdit);
     $<HTMLInputElement>("rm-author").addEventListener("input", onFormEdit);
+    $<HTMLInputElement>("rm-desc").addEventListener("input", onFormEdit);
+    $<HTMLTextAreaElement>("rm-desc-long").addEventListener("input", onFormEdit);
     $<HTMLInputElement>("rm-color").addEventListener("input", onFormEdit);
     $<HTMLSelectElement>("rm-team").addEventListener("change", onFormEdit);
     $<HTMLInputElement>("rm-can-vent").addEventListener("change", onFormEdit);
