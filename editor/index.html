@@ -337,7 +337,13 @@
           <label>作者 (任意) <input id="rm-author" maxlength="24" placeholder="任意" autocomplete="off" /></label>
           <label>色 <input id="rm-color" type="color" value="#8f8f8f" /></label>
 
-          <p class="note rm-team-note">陣営: クルーメイト — 今はクルーメイトのみ対応です</p>
+          <label>陣営
+            <select id="rm-team">
+              <option value="crewmate">クルーメイト</option>
+              <option value="impostor">インポスター</option>
+              <option value="neutral">ニュートラル</option>
+            </select>
+          </label>
 
           <label class="rm-flag-row"><input type="checkbox" id="rm-can-kill" /> キルできる</label>
           <label id="rm-kill-cd-row" hidden>キルを再び使えるまでの秒数 <input id="rm-kill-cd" type="number" min="1" max="180" step="1" value="25" /></label>
@@ -378,9 +384,19 @@
 
             <label class="rm-flag-row"><input type="checkbox" id="rm-p-doom" /> よわさ (時間がくると死ぬ)</label>
             <label id="rm-p-doom-row" hidden>たおれるまでの秒数 <input id="rm-p-doom-seconds" type="number" min="30" max="600" step="1" value="60" /></label>
+
+            <label>べつの陣営に見せる
+              <select id="rm-p-disguise">
+                <option value="">しない (そのまま)</option>
+                <option value="crewmate">クルーメイト</option>
+                <option value="impostor">インポスター</option>
+                <option value="neutral">ニュートラル</option>
+              </select>
+            </label>
+            <p class="note rm-disguise-note">ほかの人からの見え方だけが変わります。勝ち負け・出現・ほんとうの陣営はそのままです。ニュートラルに見せる場合は役職名はそのままで色だけ変わります。</p>
           </div>
 
-          <p class="note rm-team-note">勝利条件: 通常のクルーメイト勝利 (固定)</p>
+          <p class="note rm-team-note">勝利条件: えらんだ陣営のふつうの勝ち方 (固定)</p>
         </div>
 
         <!-- ライブプレビュー: ゲーム内でどう見えるかの簡易再現。中身 (テキスト/色/表示切替) は
@@ -410,7 +426,7 @@
 
           <p id="rm-preview-banner" class="rm-preview-banner">
             <span class="rm-preview-banner-line">あなたは <span id="rm-preview-banner-name" class="rm-preview-banner-name"></span></span>
-            <span class="rm-preview-banner-team">クルーメイト</span>
+            <span id="rm-preview-banner-team" class="rm-preview-banner-team">クルーメイト</span>
           </p>
 
           <div id="rm-preview-abilities" class="rm-preview-abilities">

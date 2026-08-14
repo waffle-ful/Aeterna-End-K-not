@@ -255,6 +255,18 @@ export function compileTopBlocksToRules(topBlocks: SerializedBlock[]): unknown[]
             // v1.2 (spec §2): on_cno_touch は必須の slot フィールド (ekr_when_on_cno_touch の
             // 動的 SLOT ドロップダウン) を持つ唯一のイベント。他の when には付けない。
             if (when === "on_cno_touch") rule.slot = toNum(b.fields?.SLOT);
+
+            // R2 (docs/ekn-r2-contract.md §3b): on_attacked の kind / on_death の cause。
+            // ドロップダウンの「すべて」= 空文字 は **フィールドごと省略** する (= 全種にマッチ)。
+            if (when === "on_attacked") {
+                const kind = b.fields?.KIND;
+                if (typeof kind === "string" && kind !== "") rule.kind = kind;
+            }
+            if (when === "on_death") {
+                const cause = b.fields?.CAUSE;
+                if (typeof cause === "string" && cause !== "") rule.cause = cause;
+            }
+
             rules.push(rule);
         }
     }

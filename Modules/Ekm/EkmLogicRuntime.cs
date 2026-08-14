@@ -28,6 +28,13 @@ public sealed class EkrRule
 
     // on_cno_touch (v1.2) 専用の必須フィールド (1..3)。他イベントでは常に 0 (未使用)。
     public int Slot;
+
+    // R2 (docs/ekn-r2-contract.md §3b): on_attacked 専用の任意フィールド。null = 全種にマッチ。
+    // 値は EkrAttackKinds のいずれか。
+    public string Kind;
+
+    // R2 (同 §3b): on_death 専用の任意フィールド。null = 全死因にマッチ。値は EkrDeathCauses のいずれか。
+    public string Cause;
 }
 
 // op ごとの引数はフラットに全部持つ (spec §3 の「args ラッパー無し」に対応)。未使用フィールドは既定値のまま。
@@ -136,6 +143,45 @@ public sealed class EkrLogicDef
         "on_attacked", // Wave 1 (2026-08-11)
         "on_meeting_vote", "on_meeting_pick" // Wave 2 (docs/ekn-wave2-contract.md §1)
     ];
+
+    // R2 (docs/ekn-r2-contract.md §3b): on_attacked の種別と on_death の死因バケット。
+    // ⚠️ TS 側 (editor/src/roledef.ts) と同じ並び・同じ綴りを保つこと (drift 検出は共有 fixture)。
+    public static readonly string[] EkrAttackKinds = ["kill", "indirect", "force", "guess"];
+
+    public static readonly string[] EkrDeathCauses = ["kill", "vote", "guess", "bomb", "poison-curse", "environment", "suicide", "other"];
+
+    // rule 直下の任意フィルタ (kind/cause) の読み取り。指定できるイベントが決まっており、
+    // 他イベントに置かれていたら slot と同じく reject する (静的に検査できるものは no-op でなく reject)。
+    private static bool TryReadRuleFilter(JsonElement ruleEl, string when, string field, string onlyEvent, string[] allowed, out string value, out string error)
+    {
+        value = null;
+        error = null;
+
+        if (!ruleEl.TryGetProperty(field, out JsonElement el)) return true;
+
+        if (when != onlyEvent)
+        {
+            error = $"when=\"{when}\" の rule に {field} は指定できません ({onlyEvent} 専用です)";
+            return false;
+        }
+
+        if (el.ValueKind != JsonValueKind.String)
+        {
+            error = $"{onlyEvent} の {field} は文字列で指定してください";
+            return false;
+        }
+
+        string raw = el.GetString();
+
+        if (Array.IndexOf(allowed, raw) < 0)
+        {
+            error = $"{onlyEvent} の {field}=\"{raw}\" は未対応です (使えるのは {string.Join(" / ", allowed)})";
+            return false;
+        }
+
+        value = raw;
+        return true;
+    }
 
     // Wave 1 (spec §3 統一セレクタ語彙)。単数セレクタのみ受理する op (kill/teleport_other/remember 等) と、
     // 複数セレクタも受理する明示ホワイトリスト op (Wave 1 では notify だけ) を分ける。
@@ -300,6 +346,11 @@ public sealed class EkrLogicDef
                 return false;
             }
 
+            // R2 (docs/ekn-r2-contract.md §3b): on_attacked の任意フィールド kind / on_death の任意
+            // フィールド cause。省略 = 全種にマッチ。他イベントに置かれていたら slot と同じく reject。
+            if (!TryReadRuleFilter(ruleEl, when, "kind", "on_attacked", EkrAttackKinds, out string ruleKind, out error)) return false;
+            if (!TryReadRuleFilter(ruleEl, when, "cause", "on_death", EkrDeathCauses, out string ruleCause, out error)) return false;
+
             if (!ruleEl.TryGetProperty("do", out JsonElement doEl) || doEl.ValueKind != JsonValueKind.Array)
             {
                 error = "ロジックの rule に do がありません";
@@ -335,7 +386,7 @@ public sealed class EkrLogicDef
                 return false;
             }
 
-            parsed.Rules.Add(new EkrRule { When = when, Do = doNodes, Slot = ruleSlot });
+            parsed.Rules.Add(new EkrRule { When = when, Do = doNodes, Slot = ruleSlot, Kind = ruleKind, Cause = ruleCause });
         }
 
         def = parsed;

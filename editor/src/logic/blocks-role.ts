@@ -44,6 +44,28 @@ const HUE_ULTIMATE = 150; // ひっさつわざ = 緑
 const HUE_INFO = 100; // しらべる = 黄緑
 const HUE_MEETING = 260; // とうひょう = 青紫
 
+// R2 (docs/ekn-r2-contract.md §3b): on_attacked の「こうげきのしゅるい」と on_death の「死にかた」。
+// 先頭の "" は「すべて」= AST でフィールドごと省略する (= 全種にマッチ)。
+const ATTACK_KIND_OPTIONS: [string, string][] = [
+    ["こうげき (ぜんぶ)", ""],
+    ["キル", "kill"],
+    ["かんせつこうげき", "indirect"],
+    ["きょうせいキル", "force"],
+    ["すいそく", "guess"],
+];
+
+const DEATH_CAUSE_OPTIONS: [string, string][] = [
+    ["なにか (ぜんぶ)", ""],
+    ["キル", "kill"],
+    ["ついほう", "vote"],
+    ["すいそく", "guess"],
+    ["ばくはつ", "bomb"],
+    ["どく・のろい", "poison-curse"],
+    ["かんきょう", "environment"],
+    ["じさつ", "suicide"],
+    ["そのほか", "other"],
+];
+
 // on_cno_touch は動的な SLOT ドロップダウンを持つため WHEN_LABELS/WHEN_TOOLTIPS には残すが、
 // jsonBlockDefs 側では他のイベントと分けて個別のブロック定義を書く (下記参照)。
 export const WHEN_LABELS: Record<LogicWhen, string> = {
@@ -138,7 +160,9 @@ function variableDropdownOptions(): Blockly.MenuOption[] {
 function jsonBlockDefs(): unknown[] {
     // on_cno_touch は動的な SLOT ドロップダウン (1..3) を持つ唯一のイベント (spec §2 v1.2) —
     // 他の when と同じ汎用テンプレートには乗せず、個別のブロック定義を書く。
-    const eventBlocks = LOGIC_WHEN_VALUES.filter((when) => when !== "on_cno_touch").map((when) => ({
+    // R2 (docs/ekn-r2-contract.md §3b): on_attacked / on_death も任意フィルタのドロップダウンを
+    // 持つので、on_cno_touch と同じく汎用テンプレートから外して個別に書く。
+    const eventBlocks = LOGIC_WHEN_VALUES.filter((when) => when !== "on_cno_touch" && when !== "on_attacked" && when !== "on_death").map((when) => ({
         type: `ekr_when_${when}`,
         message0: WHEN_LABELS[when],
         nextStatement: null,
@@ -155,6 +179,22 @@ function jsonBlockDefs(): unknown[] {
             nextStatement: null,
             colour: HUE_EVENT,
             tooltip: WHEN_TOOLTIPS.on_cno_touch,
+        },
+        {
+            type: "ekr_when_on_attacked",
+            message0: "%1 されたとき",
+            args0: [{ type: "field_dropdown", name: "KIND", options: ATTACK_KIND_OPTIONS }],
+            nextStatement: null,
+            colour: HUE_EVENT,
+            tooltip: WHEN_TOOLTIPS.on_attacked,
+        },
+        {
+            type: "ekr_when_on_death",
+            message0: "じぶんが %1 で死んだとき",
+            args0: [{ type: "field_dropdown", name: "CAUSE", options: DEATH_CAUSE_OPTIONS }],
+            nextStatement: null,
+            colour: HUE_EVENT,
+            tooltip: WHEN_TOOLTIPS.on_death,
         },
 
         // 制御

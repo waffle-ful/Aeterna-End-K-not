@@ -54,6 +54,11 @@ public sealed class EkrPassives
     // よわさ (時間がくると死ぬ)。0 = 無効。有効時は 30..600 秒。
     public int DoomSeconds { get; private set; }
 
+    // R2 (docs/ekn-r2-contract.md §4): ほかの人からの見え方だけを偽る陣営。null = 偽装なし。
+    // ⚠️ 効くのは**表示層だけ** — 本人の勝敗・選出・実陣営は一切変わらない。既存の占い/判定役職
+    // (Teller 系・Sheriff のキル可否等) は実陣営を読むので、そちらには素の陣営が見える (受容済み)。
+    public EkrTeam? DisguiseTeam { get; private set; }
+
     public bool HasSpeed => SpeedMult < 0.999f || SpeedMult > 1.001f;
     public bool HasShield => ShieldCount > 0;
     public bool HasDoom => DoomSeconds > 0;
@@ -152,6 +157,29 @@ public sealed class EkrPassives
             }
 
             p.DoomSeconds = seconds;
+        }
+
+        // R2 (契約 §4): `"disguise": { "team": "crewmate" | "impostor" | "neutral" }`。
+        // shield/doom と同じネストしたオブジェクト形。
+        if (root.TryGetProperty("disguise", out JsonElement disguiseEl))
+        {
+            if (disguiseEl.ValueKind != JsonValueKind.Object ||
+                !disguiseEl.TryGetProperty("team", out JsonElement dTeamEl) ||
+                dTeamEl.ValueKind != JsonValueKind.String)
+            {
+                error = "とくせいの「べつの陣営に見せる」は { team: 陣営 } の形で指定してください";
+                return false;
+            }
+
+            switch (dTeamEl.GetString())
+            {
+                case "crewmate": p.DisguiseTeam = EkrTeam.Crewmate; break;
+                case "impostor": p.DisguiseTeam = EkrTeam.Impostor; break;
+                case "neutral": p.DisguiseTeam = EkrTeam.Neutral; break;
+                default:
+                    error = "とくせいの「べつの陣営に見せる」には crewmate / impostor / neutral のどれかを指定してください";
+                    return false;
+            }
         }
 
         passives = p;

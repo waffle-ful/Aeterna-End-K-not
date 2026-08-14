@@ -64,9 +64,10 @@ describe("golden fixture: role-full-course.ekrole.json (10イベント・主要o
         }
     });
 
-    // Wave 1 (spec §1.1): passives の6キーすべてを実物の .ekrole.json で1度ずつ使う
+    // Wave 1 (spec §1.1): passives の全キーを実物の .ekrole.json で1度ずつ使う
     // (C# 側の検証と突き合わせる共有資材にするため — 型/レンジの実装差分はここで露見する)。
-    it("passives の6キーすべてを使っている (検証を通り、そのまま保持される)", () => {
+    // R2 (docs/ekn-r2-contract.md §4): disguise を追加して7キーになった。
+    it("passives の7キーすべてを使っている (検証を通り、そのまま保持される)", () => {
         const parsed = JSON.parse(fullCourseRaw);
         const result = validateEkrDefinition(parsed);
         if (!result.ok) throw new Error(result.error);
@@ -77,7 +78,19 @@ describe("golden fixture: role-full-course.ekrole.json (10イベント・主要o
             corpse: "noReport",
             voteWeight: 2,
             doom: { seconds: 300 },
+            disguise: { team: "neutral" },
         });
+    });
+
+    // R2 (契約 §3b): on_attacked の kind / on_death の cause も共有 fixture に載せて
+    // TS↔C# の drift 検出網に入れる。
+    it("on_attacked の kind と on_death の cause が保持される", () => {
+        const parsed = JSON.parse(fullCourseRaw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        const rules = result.def.logic?.rules ?? [];
+        expect(rules.find((r) => r.when === "on_attacked")?.kind).toBe("force");
+        expect(rules.find((r) => r.when === "on_death")?.cause).toBe("poison-curse");
     });
 
     it("リンター (spec §6) は警告0件 — golden fixture は模範的な組み方で書く", () => {
