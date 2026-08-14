@@ -302,6 +302,7 @@ public static class EkrManager
 
                 // 表示は定義が正 (役職メーカーが名前と色の出所)。lang の同名キーは未ロード環境向けの保険表示。
                 Translator.SetRuntimeOverride(role.ToString(), def.Name);
+                ApplyDescriptionOverrides(role, def);
                 Main.RoleHtmlColors[role] = def.Color;
                 Main.InitRoleColors(); // GetRoleColor が読むのは InitRoleColors 後のテーブル (Bind() と同順序)
 
@@ -659,6 +660,25 @@ public static class EkrManager
         }
     }
 
+    // 説明文の実行時上書き (plan §7 Tier 1 #2)。Info/InfoLong は ExtendedPlayerControl.GetRoleInfo が読む
+    // 2キーで、頂上の役職パネル・イントロ・/h r・オプションメニューのツールチップが全部ここへ集約されている
+    // (個別の表示サイトへ書き足さないこと)。空欄はキーごと解除して lang の既定文言へ戻す — 解除しないと
+    // 別の役職コードへ差し替えたときに前の説明が残る無音不整合になる。
+    private static void ApplyDescriptionOverrides(CustomRoles role, EkrDefinition def)
+    {
+        SetOrClear($"{role}Info", def.Description);
+        // 詳細文は「見出し + 空行 + 本文」へ組み立ててから渡す (組み立て規則と理由は BuildInfoLongOverride)。
+        // 詳細文が空なら短文を流用する (片方だけ書いた作者を救う)。両方空なら既定文言へ戻る。
+        SetOrClear($"{role}InfoLong", def.BuildInfoLongOverride());
+        return;
+
+        static void SetOrClear(string key, string value)
+        {
+            if (value.Length > 0) Translator.SetRuntimeOverride(key, value);
+            else Translator.ClearRuntimeOverride(key);
+        }
+    }
+
     private static void Bind(CustomRoles slot, EkrDefinition def, string fileName)
     {
         Bound[slot] = def;
@@ -666,6 +686,7 @@ public static class EkrManager
 
         // 表示名の実行時上書き (RoleBase.StartSetup 系・GetRoleName 等が共通で読む翻訳キー = 型名 = enum 名)。
         Translator.SetRuntimeOverride(slot.ToString(), def.Name);
+        ApplyDescriptionOverrides(slot, def);
 
         // 色: Main.RoleHtmlColors が正典 (Main.cs RoleHtmlColors 辞書)。
         Main.RoleHtmlColors[slot] = def.Color;
@@ -691,6 +712,8 @@ public static class EkrManager
         Bound.Remove(slot);
         BoundFiles.Remove(slot);
         Translator.ClearRuntimeOverride(slot.ToString());
+        Translator.ClearRuntimeOverride($"{slot}Info");
+        Translator.ClearRuntimeOverride($"{slot}InfoLong");
 
         if (Options.CustomRoleSpawnChances != null && Options.CustomRoleSpawnChances.TryGetValue(slot, out var opt))
         {
