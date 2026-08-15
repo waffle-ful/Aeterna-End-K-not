@@ -135,6 +135,39 @@ public static class GameStartManagerPatch
         private static SpriteRenderer LobbyTimerBg;
         public static bool Warned;
 
+        // ── 毎フレーム経路 (Update = 60-144fps) のアロケ対策キャッシュ群 ──
+        // バージョン照合スキャン (旧: allClients.ToArray() + GetComponent を毎フレーム) は 0.25s 周期に間引く。
+        private static float nextVersionScanTime;
+        private static bool cachedCanStartGame = true;
+        private static string cachedMismatchedName = string.Empty;
+        // 期待タグはコンパイル時定数由来 — 毎フレームの補間生成を 1 回きりにする。
+        private static readonly string ExpectedVersionTag = $"{ThisAssembly.Git.Commit}({ThisAssembly.Git.Branch})";
+        // public/private 表示の変化検出 (VanillaUpdate 側)。
+        private static int lastShownGameId = int.MinValue;
+        private static bool lastShownIsPublic;
+        // プリセット表示と推定ゲーム時間サフィックスの再構築間引き。
+        private static int lastShownPreset = int.MinValue;
+        private static string cachedPresetText = string.Empty;
+        private static float nextSuffixBuildTime;
+        private static string cachedLengthSuffix = " ";
+        // GameStartManager はロビーごとに作り直され、テキストはプレハブ既定文に戻る — 変化検出キャッシュを
+        // 持ち越すと「値が同じだから書かない」で既定文が残るため、新インスタンス検出で必ず全リセットする。
+        private static GameStartManager lastSeenInstance;
+
+        private static void ResetDisplayCachesIfNewInstance(GameStartManager instance)
+        {
+            if (instance == lastSeenInstance) return; // UnityEngine.Object の == (native 同一性 + destroyed 判定)
+
+            lastSeenInstance = instance;
+            lastShownGameId = int.MinValue;
+            lastShownPreset = int.MinValue;
+            cachedPresetText = string.Empty;
+            nextSuffixBuildTime = 0f;
+            nextVersionScanTime = 0f;
+            cachedCanStartGame = true;
+            cachedMismatchedName = string.Empty;
+        }
+
         public static bool Prefix(GameStartManager __instance)
         {
             try
@@ -144,6 +177,7 @@ public static class GameStartManagerPatch
                 
                 if (!AmongUsClient.Instance) return false;
 
+                ResetDisplayCachesIfNewInstance(__instance);
                 VanillaUpdate(__instance);
 
                 if (AmongUsClient.Instance.IsGameStarted || GameStates.IsInGame || !__instance || __instance.startState == GameStartManager.StartingStates.Starting) return false;
@@ -270,11 +304,23 @@ public static class GameStartManagerPatch
 
             instance.CheckSettingsDiffs();
             instance.StartButton.gameObject.SetActive(AmongUsClient.Instance.AmHost);
-            instance.RulesPresetText.text = TranslationController.Instance.GetString(GameOptionsManager.Instance.CurrentGameOptions.GetRulesPresetTitle());
+            // RulesPresetText はこの後の Postfix が毎回 mod のプリセット名で上書きするので、ここでの
+            // バニラ題の書き込み (native GetString = 毎フレーム新規 string) は無駄撃ちだった — 削除。
 
-            if (GameCode.IntToGameName(AmongUsClient.Instance.GameId) == null) instance.privatePublicPanelText.text = TranslationController.Instance.GetString(StringNames.LocalButton);
-            else if (AmongUsClient.Instance.IsGamePublic) instance.privatePublicPanelText.text = TranslationController.Instance.GetString(StringNames.PublicHeader);
-            else instance.privatePublicPanelText.text = TranslationController.Instance.GetString(StringNames.PrivateHeader);
+            // public/private 表示は状態が変わった時だけ更新する (IntToGameName / native GetString が
+            // 毎フレーム新規 managed string を確保していた)。
+            int gameId = AmongUsClient.Instance.GameId;
+            bool isPublic = AmongUsClient.Instance.IsGamePublic;
+
+            if (gameId != lastShownGameId || isPublic != lastShownIsPublic)
+            {
+                lastShownGameId = gameId;
+                lastShownIsPublic = isPublic;
+
+                if (GameCode.IntToGameName(gameId) == null) instance.privatePublicPanelText.text = TranslationController.Instance.GetString(StringNames.LocalButton);
+                else if (isPublic) instance.privatePublicPanelText.text = TranslationController.Instance.GetString(StringNames.PublicHeader);
+                else instance.privatePublicPanelText.text = TranslationController.Instance.GetString(StringNames.PrivateHeader);
+            }
 
             instance.HostPrivateButton.gameObject.SetActive(!AmongUsClient.Instance.IsGamePublic);
             instance.HostPublicButton.gameObject.SetActive(AmongUsClient.Instance.IsGamePublic);
@@ -369,26 +415,40 @@ public static class GameStartManagerPatch
 
                 if (AmongUsClient.Instance.AmHost)
                 {
-                    ClientData[] allClients = AmongUsClient.Instance.allClients.ToArray();
-
-                    lock (allClients)
+                    // 照合結果は 0.25s ごとの再スキャンで十分 — 旧実装は毎フレーム ToArray (managed 配列
+                    // + 全要素 proxy 解決) + クライアント数ぶんの GetComponent で、ロビー常駐のアロケ源だった。
+                    if (Time.unscaledTime >= nextVersionScanTime)
                     {
-                        // ReSharper disable once ForCanBeConvertedToForeach
-                        for (var index = 0; index < allClients.Length; index++)
+                        nextVersionScanTime = Time.unscaledTime + 0.25f;
+                        var scanCanStart = true;
+                        string scanMismatchedName = string.Empty;
+
+                        Il2CppSystem.Collections.Generic.List<ClientData> allClients = AmongUsClient.Instance.allClients;
+
+                        lock (allClients)
                         {
-                            ClientData client = allClients[index];
-                            if (!client.Character) continue;
-
-                            var dummyComponent = client.Character.GetComponent<DummyBehaviour>();
-                            if (dummyComponent && dummyComponent.enabled) continue;
-
-                            if (!MatchVersions(client.Character.PlayerId, true))
+                            for (var index = 0; index < allClients.Count; index++)
                             {
-                                canStartGame = false;
-                                mismatchedClientName = client.Character.PlayerId.ColoredPlayerName();
+                                ClientData client = allClients[index];
+                                if (!client.Character) continue;
+
+                                var dummyComponent = client.Character.GetComponent<DummyBehaviour>();
+                                if (dummyComponent && dummyComponent.enabled) continue;
+
+                                if (!MatchVersions(client.Character.PlayerId, true))
+                                {
+                                    scanCanStart = false;
+                                    scanMismatchedName = client.Character.PlayerId.ColoredPlayerName();
+                                }
                             }
                         }
+
+                        cachedCanStartGame = scanCanStart;
+                        cachedMismatchedName = scanMismatchedName;
                     }
+
+                    canStartGame = cachedCanStartGame;
+                    mismatchedClientName = cachedMismatchedName;
 
                     if (!canStartGame) __instance.StartButton.gameObject.SetActive(false);
                 }
@@ -420,9 +480,68 @@ public static class GameStartManagerPatch
                     WarningText.gameObject.SetActive(true);
                 }
 
-                __instance.RulesPresetText.text = GetString($"Preset_{OptionItem.CurrentPreset + 1}");
+                if (lastShownPreset != OptionItem.CurrentPreset)
+                {
+                    lastShownPreset = OptionItem.CurrentPreset;
+                    cachedPresetText = GetString($"Preset_{OptionItem.CurrentPreset + 1}");
+                }
 
-                
+                __instance.RulesPresetText.text = cachedPresetText;
+
+                if (Time.unscaledTime >= nextSuffixBuildTime || !canStartGame)
+                {
+                    nextSuffixBuildTime = Time.unscaledTime + 0.25f;
+                    cachedLengthSuffix = BuildLengthSuffix(canStartGame, mismatchedClientName);
+                }
+
+                TextMeshPro tmp = GameStartManagerStartPatch.GameCountdown;
+
+                if (tmp.text == string.Empty)
+                {
+                    tmp.name = "LobbyInfoText";
+                    tmp.fontSize = tmp.fontSizeMin = tmp.fontSizeMax = 3f;
+                    tmp.autoSizeTextContainer = true;
+                    tmp.alignment = TextAlignmentOptions.Center;
+                    tmp.color = Color.cyan;
+                    tmp.outlineColor = Color.black;
+                    tmp.outlineWidth = LangHasSensitiveOutlineText() ? 0.1f : 0.4f;
+                    tmp.transform.localPosition += new Vector3(-0.625f, -0.12f, 0f);
+                    tmp.transform.localScale = new(0.6f, 0.6f, 1f);
+                }
+
+                if (!ReferenceEquals(tmp.text, cachedLengthSuffix)) tmp.text = cachedLengthSuffix;
+                tmp.gameObject.SetActive(true);
+
+                // Lobby timer
+                if (GameData.Instance && HudManager.InstanceExists && AmongUsClient.Instance.NetworkMode != NetworkModes.LocalGame && GameStates.CurrentServerType == GameStates.ServerType.Vanilla)
+                {
+                    float timer = Timer;
+
+                    if (!LobbyTimerBg)
+                    {
+                        LobbyTimerBg = HudManager.Instance.LobbyTimerExtensionUI.timerText.transform.parent.transform.Find("LabelBackground").GetComponent<SpriteRenderer>();
+                        // sprite は不変 — 毎フレーム LoadSprite (キー文字列生成 + 辞書引き) して代入し直す必要はない
+                        LobbyTimerBg.sprite = Utils.LoadSprite("EndKnot.Resources.Images.LobbyTimerBG.png", 100f);
+                    }
+
+                    LobbyTimerBg.color = GetTimerColor(timer);
+
+                    if (timer <= 60 && !Warned && AmongUsClient.Instance.AmHost)
+                    {
+                        Warned = true;
+                        LobbyTimerExtensionUI lobbyTimerExtensionUI = HudManager.Instance.LobbyTimerExtensionUI;
+                        lobbyTimerExtensionUI.timerText.transform.parent.transform.Find("Icon").gameObject.SetActive(true);
+                        SoundManager.Instance.PlaySound(lobbyTimerExtensionUI.lobbyTimerPopUpSound, false);
+                        Utils.FlashColor(new(1f, 1f, 0f, 0.4f), 1.4f);
+                    }
+                }
+            }
+            catch (NullReferenceException) { }
+            catch (Exception e) { Logger.Error(e.ToString(), "GameStartManagerUpdatePatch.Postfix (3)"); }
+        }
+
+        private static string BuildLengthSuffix(bool canStartGame, string mismatchedClientName)
+        {
                 int estimatedGameLength = Options.CurrentGameMode switch
                 {
                     CustomGameMode.SoloPVP => SoloPVP.SoloPVP_GameTime.GetInt(),
@@ -447,45 +566,7 @@ public static class GameStartManagerPatch
                 if (!canStartGame)
                     suffix = Utils.ColorString(Color.red, string.Format(GetString("VersionMismatch"), mismatchedClientName));
 
-                TextMeshPro tmp = GameStartManagerStartPatch.GameCountdown;
-
-                if (tmp.text == string.Empty)
-                {
-                    tmp.name = "LobbyInfoText";
-                    tmp.fontSize = tmp.fontSizeMin = tmp.fontSizeMax = 3f;
-                    tmp.autoSizeTextContainer = true;
-                    tmp.alignment = TextAlignmentOptions.Center;
-                    tmp.color = Color.cyan;
-                    tmp.outlineColor = Color.black;
-                    tmp.outlineWidth = LangHasSensitiveOutlineText() ? 0.1f : 0.4f;
-                    tmp.transform.localPosition += new Vector3(-0.625f, -0.12f, 0f);
-                    tmp.transform.localScale = new(0.6f, 0.6f, 1f);
-                }
-
-                tmp.text = suffix;
-                tmp.gameObject.SetActive(true);
-
-                // Lobby timer
-                if (GameData.Instance && HudManager.InstanceExists && AmongUsClient.Instance.NetworkMode != NetworkModes.LocalGame && GameStates.CurrentServerType == GameStates.ServerType.Vanilla)
-                {
-                    float timer = Timer;
-
-                    if (!LobbyTimerBg) LobbyTimerBg = HudManager.Instance.LobbyTimerExtensionUI.timerText.transform.parent.transform.Find("LabelBackground").GetComponent<SpriteRenderer>();
-                    LobbyTimerBg.sprite = Utils.LoadSprite("EndKnot.Resources.Images.LobbyTimerBG.png", 100f);
-                    LobbyTimerBg.color = GetTimerColor(timer);
-
-                    if (timer <= 60 && !Warned && AmongUsClient.Instance.AmHost)
-                    {
-                        Warned = true;
-                        LobbyTimerExtensionUI lobbyTimerExtensionUI = HudManager.Instance.LobbyTimerExtensionUI;
-                        lobbyTimerExtensionUI.timerText.transform.parent.transform.Find("Icon").gameObject.SetActive(true);
-                        SoundManager.Instance.PlaySound(lobbyTimerExtensionUI.lobbyTimerPopUpSound, false);
-                        Utils.FlashColor(new(1f, 1f, 0f, 0.4f), 1.4f);
-                    }
-                }
-            }
-            catch (NullReferenceException) { }
-            catch (Exception e) { Logger.Error(e.ToString(), "GameStartManagerUpdatePatch.Postfix (3)"); }
+                return suffix;
         }
 
         private static Color GetTimerColor(float timer)
@@ -521,7 +602,7 @@ public static class GameStartManagerPatch
 
             return Main.ForkId == version.forkId
                    && Main.Version.CompareTo(version.version) == 0
-                   && version.tag == $"{ThisAssembly.Git.Commit}({ThisAssembly.Git.Branch})";
+                   && version.tag == ExpectedVersionTag;
         }
     }
 

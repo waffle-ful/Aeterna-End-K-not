@@ -606,8 +606,18 @@ internal static class StartGameHostPatch
         }
         catch (Exception e) { Utils.ThrowException(e); }
 
-        // ローディングバーの描画を 1 フレーム待ってからフル GC を先撃ち (同期のまま打つとバー表示前に止まる —
-        // pitfall 監査指摘)。直後の ship 生成 + 役職選出の大量アロケーションを掃除済みヒープで走らせる (詳細は GcPrepass)。
+        // ローディングバーの描画を 1 フレーム待つ (同期のまま GC を打つとバー表示前に止まってしまう)。
+        yield return null;
+
+        // 設定 UI キャッシュ (~1万GO / Boehm 100MB級) はメニューを開けない試合中は死荷重で、全 GC の
+        // stop-the-world マークとシーン遷移の暗黙アセット走査を試合の間じゅう延ばす。開始が確定した
+        // ここで破棄し、ロード画面に回収を隠す (次のロビーでのオープン時に遅延再ビルド)。
+        // ⚠️ 上の Close() と同一フレームで呼ぶと GameSettingMenu.Instance がまだ生きていて (OnDestroy は
+        // フレーム末発火) purge が自衛ガードで無音スキップされる — 必ず 1 フレーム空けてから呼ぶこと。
+        GameSettingMenuPatch.PurgeUiCache("gamestart");
+
+        // purge の Destroy がフレーム末で処理されてからフル GC を先撃ちし、purge 分もまとめて回収する。
+        // 直後の ship 生成 + 役職選出の大量アロケーションを掃除済みヒープで走らせる (詳細は GcPrepass)。
         yield return null;
         GcPrepass.Collect("loading");
 

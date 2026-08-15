@@ -1231,12 +1231,15 @@ public static class Options
 
     //private static string PathUserData;
     private static readonly List<string> Errors = [];
+    // 10 秒周期の呼び出しで毎回全ファイルを JSON デシリアライズし直さないための変更検知。
+    // ファイルの追加/削除/上書きはどれも (件数, 最新更新時刻) の組を動かす。
+    private static DateTime lastUserDataNewestWrite = DateTime.MinValue;
+    private static int lastUserDataFileCount = -1;
+
     public static void LoadUserData()
     {
         try
         {
-            Main.UserData.Clear();
-
             var path = $"{Main.DataPath}/EndKnot_DATA/UserData";
 
             if (!Directory.Exists(path))
@@ -1245,9 +1248,25 @@ public static class Options
                 File.WriteAllText(path + "/friendcode#1234.txt", JsonSerializer.Serialize(new UserData { Tag = string.Empty }, new JsonSerializerOptions { WriteIndented = true }));
             }
 
+            string[] files = Directory.GetFiles(path, "*.txt");
+
+            var newestWrite = DateTime.MinValue;
+
+            foreach (string file in files)
+            {
+                DateTime write = File.GetLastWriteTimeUtc(file);
+                if (write > newestWrite) newestWrite = write;
+            }
+
+            if (files.Length == lastUserDataFileCount && newestWrite == lastUserDataNewestWrite) return;
+
+            lastUserDataFileCount = files.Length;
+            lastUserDataNewestWrite = newestWrite;
+
+            Main.UserData.Clear();
             Errors.Clear();
 
-            foreach (string file in Directory.GetFiles(path, "*.txt"))
+            foreach (string file in files)
             {
                 try
                 {

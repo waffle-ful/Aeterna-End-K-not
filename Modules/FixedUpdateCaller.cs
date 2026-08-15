@@ -19,6 +19,8 @@ public static class FixedUpdateCaller
     // ReSharper disable once UnusedMember.Global
     public static void Postfix()
     {
+        long alloc = AllocProbe.Now(); // 系統別アロケ帰属 (詳細は AllocProbe)
+
         try
         {
             PerSecondUpdateScheduler.OnFixedUpdate();
@@ -58,6 +60,8 @@ public static class FixedUpdateCaller
             try { TextBoxPatch.CheckChatOpen(); }
             catch (Exception e) { Utils.ThrowException(e); }
 
+            alloc = AllocProbe.Mark("misc", alloc);
+
             var amongUsClient = AmongUsClient.Instance;
             var lobbyBehaviour = LobbyBehaviour.Instance;
 
@@ -92,6 +96,8 @@ public static class FixedUpdateCaller
                 else Utils.ThrowException(e);
             }
 
+            alloc = AllocProbe.Mark("lobby", alloc);
+
             try
             {
                 if (HudManager.InstanceExists)
@@ -108,6 +114,8 @@ public static class FixedUpdateCaller
                 if (OnGameJoinedPatch.JoiningGame && e is NullReferenceException) { /* join 窓の transient fake-null は黙殺 */ }
                 else Utils.ThrowException(e);
             }
+
+            alloc = AllocProbe.Mark("hud", alloc);
 
             // YouTube chat polling は HUD の有無と無関係に進める（ロビーから動かす前提）
             try { YouTubeChatManager.Tick(UnityEngine.Time.fixedDeltaTime); }
@@ -165,6 +173,8 @@ public static class FixedUpdateCaller
             try { EndKnot.Patches.CalamityMenu.CalamityFire.Tick(); }
             catch (Exception e) { Utils.ThrowException(e); }
 
+            alloc = AllocProbe.Mark("svc", alloc);
+
             if (!PlayerControl.LocalPlayer) return;
 
             if (amongUsClient.IsGameStarted)
@@ -210,6 +220,8 @@ public static class FixedUpdateCaller
                     FixedUpdatePatch.LoversSuicide();
             }
             catch (Exception e) { Utils.ThrowException(e); }
+
+            alloc = AllocProbe.Mark("kill", alloc);
 
             bool lobby = GameStates.IsLobby;
 
@@ -270,6 +282,8 @@ public static class FixedUpdateCaller
                     catch (Exception e) { Utils.ThrowException(e); }
                 }
 
+                alloc = AllocProbe.Mark("pcloop", alloc);
+
                 if (lobby) return;
 
                 try
@@ -320,6 +334,8 @@ public static class FixedUpdateCaller
                     }
                 }
                 catch (Exception e) { Utils.ThrowException(e); }
+
+                AllocProbe.Mark("tail", alloc);
             }
         }
         catch (Exception e)
@@ -327,5 +343,6 @@ public static class FixedUpdateCaller
             if (OnGameJoinedPatch.JoiningGame && e is NullReferenceException) return; // join 窓の transient fake-null は黙殺
             Utils.ThrowException(e);
         }
+        finally { AllocProbe.FrameEnd(); }
     }
 }

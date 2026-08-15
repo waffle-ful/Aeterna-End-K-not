@@ -29,6 +29,22 @@ internal static class HudManagerPatch
 
     private static TaskPanelBehaviour RoleTab;
 
+    // ── 毎 tick 経路 (FixedUpdateCaller 経由 50Hz) のアロケ対策キャッシュ群 ──
+    // HUD の文字列は人間が読む表示なので 50Hz の再構築は過剰 — 5 tick に 1 回 (10Hz) の
+    // 「テキストレーン」に間引く。ボタン可視/有効などの機能系は従来どおり毎 tick。
+    private static int textLaneTick;
+
+    // GetString キーの毎 tick 補間生成 (enum ToString の box 込み) を 1 回きりにする。
+    // 訳文でなくキー文字列のキャッシュなので、実行中の言語切替にもそのまま追随する。
+    private static readonly Dictionary<RoleTypes, (string Ability, string Secondary)> RoleTypeButtonKeys = [];
+    private static readonly Dictionary<CustomRoles, string> RoleKillButtonKeys = [];
+
+    // state.Role が OnVote を override しているか (旧実装は毎 tick リフレクション GetMethod — 最重量アロケ源だった)。
+    private static readonly Dictionary<Type, bool> OverridesOnVoteCache = [];
+
+    // role.ToString().EndsWith("EndKnot") の enum ToString + 文字列比較を 1 回きりにする。
+    private static readonly Dictionary<CustomRoles, bool> EndKnotNamedRoleCache = [];
+
     public static void ClearLowerInfoText()
     {
         if (!LowerInfoText) return;
@@ -43,6 +59,11 @@ internal static class HudManagerPatch
 
             PlayerControl player = PlayerControl.LocalPlayer;
             if (!player) return;
+
+            // 10Hz の「テキストレーン」(このメソッド共通)。HUD の文字列再構築 + TMP 再レイアウトを
+            // 5 tick に 1 回へ間引く。ボタン可視/有効などの機能系は従来どおり毎 tick。
+            bool textLane = ++textLaneTick >= 5;
+            if (textLane) textLaneTick = 0;
 
             if (GameStates.IsLobby)
             {
@@ -89,84 +110,84 @@ internal static class HudManagerPatch
                     OverriddenRolesText.fontSize = OverriddenRolesText.fontSizeMax = OverriddenRolesText.fontSizeMin = 2.5f;
                 }
 
-                if (Main.SetRoles.Count > 0 || Main.SetAddOns.Count > 0)
+                if (textLane)
                 {
-                    Dictionary<byte, string> resultText = [];
-                    var first = true;
-
-                    foreach (KeyValuePair<byte, CustomRoles> item in Main.SetRoles)
+                    if (Main.SetRoles.Count > 0 || Main.SetAddOns.Count > 0)
                     {
-                        PlayerControl pc = Utils.GetPlayerById(item.Key);
-                        string prefix = first ? string.Empty : "\n";
-                        var text = $"{prefix}{(item.Key == 0 ? "Host" : $"{(!pc ? $"ID {item.Key}" : $"{pc.GetRealName()}")}")} - <color={Utils.GetRoleColorCode(item.Value)}>{GetString(item.Value.ToString())}</color>";
-                        resultText[item.Key] = text;
-                        first = false;
-                    }
+                        Dictionary<byte, string> resultText = [];
+                        var first = true;
 
-                    if (Main.SetRoles.Count == 0) first = true;
-
-                    foreach (KeyValuePair<byte, List<CustomRoles>> item in Main.SetAddOns)
-                    {
-                        foreach (CustomRoles role in item.Value)
+                        foreach (KeyValuePair<byte, CustomRoles> item in Main.SetRoles)
                         {
                             PlayerControl pc = Utils.GetPlayerById(item.Key);
+                            string prefix = first ? string.Empty : "\n";
+                            var text = $"{prefix}{(item.Key == 0 ? "Host" : $"{(!pc ? $"ID {item.Key}" : $"{pc.GetRealName()}")}")} - <color={Utils.GetRoleColorCode(item.Value)}>{GetString(item.Value.ToString())}</color>";
+                            resultText[item.Key] = text;
+                            first = false;
+                        }
 
-                            if (resultText.ContainsKey(item.Key))
+                        if (Main.SetRoles.Count == 0) first = true;
+
+                        foreach (KeyValuePair<byte, List<CustomRoles>> item in Main.SetAddOns)
+                        {
+                            foreach (CustomRoles role in item.Value)
                             {
-                                var text = $" <#ffffff>(</color><color={Utils.GetRoleColorCode(role)}>{GetString(role.ToString())}</color><#ffffff>)</color>";
-                                resultText[item.Key] += text;
-                            }
-                            else
-                            {
-                                string prefix = first ? string.Empty : "\n";
-                                var text = $"{prefix}{(item.Key == 0 ? "Host" : $"{(!pc ? $"ID {item.Key}" : $"{pc.GetRealName()}")}")} - <#ffffff>(</color><color={Utils.GetRoleColorCode(role)}>{GetString(role.ToString())}</color><#ffffff>)</color>";
-                                resultText[item.Key] = text;
-                                first = false;
+                                PlayerControl pc = Utils.GetPlayerById(item.Key);
+
+                                if (resultText.ContainsKey(item.Key))
+                                {
+                                    var text = $" <#ffffff>(</color><color={Utils.GetRoleColorCode(role)}>{GetString(role.ToString())}</color><#ffffff>)</color>";
+                                    resultText[item.Key] += text;
+                                }
+                                else
+                                {
+                                    string prefix = first ? string.Empty : "\n";
+                                    var text = $"{prefix}{(item.Key == 0 ? "Host" : $"{(!pc ? $"ID {item.Key}" : $"{pc.GetRealName()}")}")} - <#ffffff>(</color><color={Utils.GetRoleColorCode(role)}>{GetString(role.ToString())}</color><#ffffff>)</color>";
+                                    resultText[item.Key] = text;
+                                    first = false;
+                                }
                             }
                         }
+
+                        OverriddenRolesText.text = string.Join(string.Empty, resultText.Values);
                     }
+                    else if (OverriddenRolesText.text.Length > 0)
+                        OverriddenRolesText.text = string.Empty;
 
-                    OverriddenRolesText.text = string.Join(string.Empty, resultText.Values);
-                }
-                else
-                    OverriddenRolesText.text = string.Empty;
+                    OverriddenRolesText.enabled = OverriddenRolesText.text != string.Empty;
 
-                OverriddenRolesText.enabled = OverriddenRolesText.text != string.Empty;
-
-
-                if (Options.AutoGMRotationEnabled)
-                {
-                    if (!AutoGMRotationStatusText)
+                    if (Options.AutoGMRotationEnabled)
                     {
-                        AutoGMRotationStatusText = Object.Instantiate(__instance.KillButton.cooldownTimerText, __instance.transform, true);
-                        AutoGMRotationStatusText.alignment = TextAlignmentOptions.Left;
-                        AutoGMRotationStatusText.verticalAlignment = VerticalAlignmentOptions.Top;
-                        AutoGMRotationStatusText.transform.localPosition = new(-2.5f, 2.5f, 0);
-                        AutoGMRotationStatusText.overflowMode = TextOverflowModes.Overflow;
-                        AutoGMRotationStatusText.enableWordWrapping = false;
-                        AutoGMRotationStatusText.color = Color.white;
-                        AutoGMRotationStatusText.fontSize = AutoGMRotationStatusText.fontSizeMax = AutoGMRotationStatusText.fontSizeMin = 2.5f;
-                    }
+                        if (!AutoGMRotationStatusText)
+                        {
+                            AutoGMRotationStatusText = Object.Instantiate(__instance.KillButton.cooldownTimerText, __instance.transform, true);
+                            AutoGMRotationStatusText.alignment = TextAlignmentOptions.Left;
+                            AutoGMRotationStatusText.verticalAlignment = VerticalAlignmentOptions.Top;
+                            AutoGMRotationStatusText.transform.localPosition = new(-2.5f, 2.5f, 0);
+                            AutoGMRotationStatusText.overflowMode = TextOverflowModes.Overflow;
+                            AutoGMRotationStatusText.enableWordWrapping = false;
+                            AutoGMRotationStatusText.color = Color.white;
+                            AutoGMRotationStatusText.fontSize = AutoGMRotationStatusText.fontSizeMax = AutoGMRotationStatusText.fontSizeMin = 2.5f;
+                        }
 
-                    AutoGMRotationStatusText.text = BuildAutoGMRotationStatusText(false);
-                    AutoGMRotationStatusText.enabled = AutoGMRotationStatusText.text != string.Empty && GameStates.IsLobby;
-                }
-                else if (AutoGMRotationStatusText)
-                {
-                    AutoGMRotationStatusText.text = string.Empty;
-                    AutoGMRotationStatusText.enabled = false;
+                        AutoGMRotationStatusText.text = BuildAutoGMRotationStatusText(false);
+                        AutoGMRotationStatusText.enabled = AutoGMRotationStatusText.text != string.Empty && GameStates.IsLobby;
+                    }
+                    else if (AutoGMRotationStatusText && AutoGMRotationStatusText.enabled)
+                    {
+                        AutoGMRotationStatusText.text = string.Empty;
+                        AutoGMRotationStatusText.enabled = false;
+                    }
                 }
             }
             else if (GameStates.IsLobby)
             {
-                new ActionButton[]
-                {
-                    __instance.ReportButton,
-                    __instance.KillButton,
-                    __instance.AbilityButton,
-                    __instance.ImpostorVentButton,
-                    __instance.SabotageButton
-                }.Do(x => x?.Hide());
+                // 配列 + Do(delegate) は毎 tick 2 確保になるので直接呼ぶ
+                __instance.ReportButton?.Hide();
+                __instance.KillButton?.Hide();
+                __instance.AbilityButton?.Hide();
+                __instance.ImpostorVentButton?.Hide();
+                __instance.SabotageButton?.Hide();
             }
             else if (Options.CurrentGameMode != CustomGameMode.Standard) __instance.ReportButton?.Hide();
 
@@ -195,65 +216,96 @@ internal static class HudManagerPatch
                     CustomRoles role = player.GetCustomRole();
 
                     if (!RoleTab) RoleTab = TaskPanelBehaviourPatch.CreateRoleTab(role);
-                    TaskPanelBehaviourPatch.UpdateRoleTab(RoleTab, role);
 
                     bool usesPetInsteadOfKill = player.UsesPetInsteadOfKill();
-                    if (usesPetInsteadOfKill) __instance.PetButton?.OverrideText(GetString("KillButtonText"));
 
                     ActionButton usedButton = __instance.KillButton;
                     if (usesPetInsteadOfKill) usedButton = __instance.PetButton;
 
-                    __instance.KillButton?.OverrideText(player.GetRoleTypes() == RoleTypes.Viper ? GetString("AbilityButtonText.Viper") : GetString("KillButtonText"));
-                    __instance.ReportButton?.OverrideText(GetString("ReportButtonText"));
-                    __instance.PetButton?.OverrideText(GetString("PetButtonText"));
-                    __instance.ImpostorVentButton?.OverrideText(GetString("VentButtonText"));
-                    __instance.SabotageButton?.OverrideText(GetString("SabotageButtonText"));
-
-                    RoleTypes roleTypes = player.GetRoleTypes();
-                    __instance.AbilityButton?.OverrideText(GetString($"AbilityButtonText.{roleTypes}"));
-                    __instance.SecondaryAbilityButton?.OverrideText(GetString($"SecondaryAbilityButtonText.{roleTypes}"));
-
                     if (!Main.PlayerStates.TryGetValue(player.PlayerId, out var state)) return;
 
-                    state.Role.SetButtonTexts(__instance, player.PlayerId);
-
-                    switch (role)
+                    if (textLane)
                     {
-                        case CustomRoles.Investigator:
-                        case CustomRoles.Escort:
-                        case CustomRoles.Gaulois:
-                        case CustomRoles.Sheriff:
-                        case CustomRoles.Crusader:
-                        case CustomRoles.Monarch:
-                            usedButton?.OverrideText(GetString($"{role}KillButtonText"));
-                            break;
-                        case CustomRoles.Analyst:
-                            usedButton?.OverrideText(GetString("AnalyzerKillButtonText"));
-                            break;
-                        case CustomRoles.Aid:
-                        case CustomRoles.DonutDelivery:
-                        case CustomRoles.Medic:
-                            usedButton?.OverrideText(GetString("MedicalerButtonText"));
-                            break;
-                        case CustomRoles.Challenger:
-                        case CustomRoles.BedWarsPlayer:
-                            __instance.KillButton?.OverrideText(GetString("DemonButtonText"));
-                            break;
-                        case CustomRoles.Deputy:
-                            usedButton?.OverrideText(GetString("DeputyHandcuffText"));
-                            break;
-                        case CustomRoles.CTFPlayer:
-                            __instance.AbilityButton?.OverrideText(GetString("CTF_ButtonText"));
-                            break;
-                        case CustomRoles.RRPlayer when __instance.AbilityButton && RoomRush.VentLimit.TryGetValue(PlayerControl.LocalPlayer.PlayerId, out int ventLimit):
-                            __instance.AbilityButton?.SetUsesRemaining(ventLimit);
-                            break;
-                        case CustomRoles.SnowdownPlayer:
-                            __instance.AbilityButton?.OverrideText(GetString("SnowdownButtonText"));
-                            break;
+                        TaskPanelBehaviourPatch.UpdateRoleTab(RoleTab, role);
+
+                        if (usesPetInsteadOfKill) __instance.PetButton?.OverrideText(GetString("KillButtonText"));
+
+                        __instance.KillButton?.OverrideText(player.GetRoleTypes() == RoleTypes.Viper ? GetString("AbilityButtonText.Viper") : GetString("KillButtonText"));
+                        __instance.ReportButton?.OverrideText(GetString("ReportButtonText"));
+                        __instance.PetButton?.OverrideText(GetString("PetButtonText"));
+                        __instance.ImpostorVentButton?.OverrideText(GetString("VentButtonText"));
+                        __instance.SabotageButton?.OverrideText(GetString("SabotageButtonText"));
+
+                        RoleTypes roleTypes = player.GetRoleTypes();
+
+                        if (!RoleTypeButtonKeys.TryGetValue(roleTypes, out (string Ability, string Secondary) buttonKeys))
+                            RoleTypeButtonKeys[roleTypes] = buttonKeys = ($"AbilityButtonText.{roleTypes}", $"SecondaryAbilityButtonText.{roleTypes}");
+
+                        __instance.AbilityButton?.OverrideText(GetString(buttonKeys.Ability));
+                        __instance.SecondaryAbilityButton?.OverrideText(GetString(buttonKeys.Secondary));
+
+                        state.Role.SetButtonTexts(__instance, player.PlayerId);
+
+                        switch (role)
+                        {
+                            case CustomRoles.Investigator:
+                            case CustomRoles.Escort:
+                            case CustomRoles.Gaulois:
+                            case CustomRoles.Sheriff:
+                            case CustomRoles.Crusader:
+                            case CustomRoles.Monarch:
+                            {
+                                if (!RoleKillButtonKeys.TryGetValue(role, out string killKey))
+                                    RoleKillButtonKeys[role] = killKey = $"{role}KillButtonText";
+
+                                usedButton?.OverrideText(GetString(killKey));
+                                break;
+                            }
+                            case CustomRoles.Analyst:
+                                usedButton?.OverrideText(GetString("AnalyzerKillButtonText"));
+                                break;
+                            case CustomRoles.Aid:
+                            case CustomRoles.DonutDelivery:
+                            case CustomRoles.Medic:
+                                usedButton?.OverrideText(GetString("MedicalerButtonText"));
+                                break;
+                            case CustomRoles.Challenger:
+                            case CustomRoles.BedWarsPlayer:
+                                __instance.KillButton?.OverrideText(GetString("DemonButtonText"));
+                                break;
+                            case CustomRoles.Deputy:
+                                usedButton?.OverrideText(GetString("DeputyHandcuffText"));
+                                break;
+                            case CustomRoles.CTFPlayer:
+                                __instance.AbilityButton?.OverrideText(GetString("CTF_ButtonText"));
+                                break;
+                            case CustomRoles.RRPlayer when __instance.AbilityButton && RoomRush.VentLimit.TryGetValue(PlayerControl.LocalPlayer.PlayerId, out int ventLimit):
+                                __instance.AbilityButton?.SetUsesRemaining(ventLimit);
+                                break;
+                            case CustomRoles.SnowdownPlayer:
+                                __instance.AbilityButton?.OverrideText(GetString("SnowdownButtonText"));
+                                break;
+                        }
                     }
 
-                    if (role.PetActivatedAbility() && Options.CurrentGameMode == CustomGameMode.Standard && player.GetRoleTypes() != RoleTypes.Engineer && !role.OnlySpawnsWithPets() && !role.AlwaysUsesPhantomBase() && !player.GetCustomSubRoles().Any(StartGameHostPatch.BasisChangingAddons.ContainsKey) && role is not CustomRoles.Changeling and not CustomRoles.Ninja and not CustomRoles.Duality and not CustomRoles.Witch and not CustomRoles.HexMaster and not CustomRoles.Silencer && (!role.SimpleAbilityTrigger() || !Options.UsePhantomBasis.GetBool() || !(player.IsNeutralKiller() && Options.UsePhantomBasisForNKs.GetBool())) && !(Options.UseMeetingShapeshift.GetBool() && player.UsesMeetingShapeshift()) && !role.ToString().EndsWith("EndKnot") && !role.IsVanilla())
+                    // このガードは可視制御なので毎 tick 維持 (バニラ側の再表示と競合させない)。
+                    // 旧実装で毎 tick 確保していた GetCustomSubRoles().Any(...) の delegate と
+                    // role.ToString() は、state.SubRoles の手動ループとキャッシュに置換済み。
+                    var hasBasisChangingAddon = false;
+
+                    foreach (CustomRoles subRole in state.SubRoles)
+                    {
+                        if (StartGameHostPatch.BasisChangingAddons.ContainsKey(subRole))
+                        {
+                            hasBasisChangingAddon = true;
+                            break;
+                        }
+                    }
+
+                    if (!EndKnotNamedRoleCache.TryGetValue(role, out bool endKnotNamed))
+                        EndKnotNamedRoleCache[role] = endKnotNamed = role.ToString().EndsWith("EndKnot");
+
+                    if (role.PetActivatedAbility() && Options.CurrentGameMode == CustomGameMode.Standard && player.GetRoleTypes() != RoleTypes.Engineer && !role.OnlySpawnsWithPets() && !role.AlwaysUsesPhantomBase() && !hasBasisChangingAddon && role is not CustomRoles.Changeling and not CustomRoles.Ninja and not CustomRoles.Duality and not CustomRoles.Witch and not CustomRoles.HexMaster and not CustomRoles.Silencer && (!role.SimpleAbilityTrigger() || !Options.UsePhantomBasis.GetBool() || !(player.IsNeutralKiller() && Options.UsePhantomBasisForNKs.GetBool())) && !(Options.UseMeetingShapeshift.GetBool() && player.UsesMeetingShapeshift()) && !endKnotNamed && !role.IsVanilla())
                         __instance.AbilityButton?.Hide();
 
                     if (!LowerInfoText)
@@ -267,60 +319,71 @@ internal static class HudManagerPatch
                         LowerInfoText.fontSize = LowerInfoText.fontSizeMax = LowerInfoText.fontSizeMin = 2.7f;
                     }
 
-                    LowerInfoText.text = Options.CurrentGameMode switch
+                    if (textLane)
                     {
-                        CustomGameMode.SoloPVP => SoloPVP.GetHudText(),
-                        CustomGameMode.FFA => FreeForAll.GetHudText(),
-                        CustomGameMode.StopAndGo => StopAndGo.GetHudText(),
-                        CustomGameMode.HotPotato => HotPotato.GetSuffixText(player.PlayerId, true),
-                        CustomGameMode.HideAndSeek => CustomHnS.GetSuffixText(player, player, true),
-                        CustomGameMode.NaturalDisasters when AmongUsClient.Instance.AmHost => NaturalDisasters.SuffixText,
-                        CustomGameMode.Deathrace => Deathrace.GetSuffix(player, player, true),
-                        CustomGameMode.Snowdown => Snowdown.GetHudText(),
-                        CustomGameMode.Standard => state.Role.GetSuffix(player, player, true, GameStates.IsMeeting) + GetAddonSuffixes(),
-                        _ => string.Empty
-                    };
-
-                    string GetAddonSuffixes()
-                    {
-                        string[] suffixes = state.SubRoles.Select(s => s switch
+                        LowerInfoText.text = Options.CurrentGameMode switch
                         {
-                            CustomRoles.Asthmatic => Asthmatic.GetSuffixText(player.PlayerId),
-                            CustomRoles.Spurt => Spurt.GetSuffix(player, true),
-                            CustomRoles.Dynamo => Dynamo.GetSuffix(player, true),
-                            CustomRoles.Deadlined => Deadlined.GetSuffix(player, true),
-                            CustomRoles.Introvert => Introvert.GetSelfSuffix(player),
-                            CustomRoles.Blessed => Blessed.GetSuffix(player),
-                            CustomRoles.Entombed => Entombed.GetSelfSuffix(player),
+                            CustomGameMode.SoloPVP => SoloPVP.GetHudText(),
+                            CustomGameMode.FFA => FreeForAll.GetHudText(),
+                            CustomGameMode.StopAndGo => StopAndGo.GetHudText(),
+                            CustomGameMode.HotPotato => HotPotato.GetSuffixText(player.PlayerId, true),
+                            CustomGameMode.HideAndSeek => CustomHnS.GetSuffixText(player, player, true),
+                            CustomGameMode.NaturalDisasters when AmongUsClient.Instance.AmHost => NaturalDisasters.SuffixText,
+                            CustomGameMode.Deathrace => Deathrace.GetSuffix(player, player, true),
+                            CustomGameMode.Snowdown => Snowdown.GetHudText(),
+                            CustomGameMode.Standard => state.Role.GetSuffix(player, player, true, GameStates.IsMeeting) + GetAddonSuffixes(),
                             _ => string.Empty
-                        }).Where(x => !string.IsNullOrWhiteSpace(x)).ToArray();
+                        };
 
-                        return suffixes.Length > 0
-                            ? $"\n{string.Join('\n', suffixes)}"
-                            : string.Empty;
+                        // 手動ループ: 旧 LINQ 版 (Select/Where/ToArray + キャプチャ用 display class) は
+                        // アドオン無しの通常ケースでも毎回数個のオブジェクトを確保していた。
+                        string GetAddonSuffixes()
+                        {
+                            string result = null;
+
+                            foreach (CustomRoles s in state.SubRoles)
+                            {
+                                string suffix = s switch
+                                {
+                                    CustomRoles.Asthmatic => Asthmatic.GetSuffixText(player.PlayerId),
+                                    CustomRoles.Spurt => Spurt.GetSuffix(player, true),
+                                    CustomRoles.Dynamo => Dynamo.GetSuffix(player, true),
+                                    CustomRoles.Deadlined => Deadlined.GetSuffix(player, true),
+                                    CustomRoles.Introvert => Introvert.GetSelfSuffix(player),
+                                    CustomRoles.Blessed => Blessed.GetSuffix(player),
+                                    CustomRoles.Entombed => Entombed.GetSelfSuffix(player),
+                                    _ => string.Empty
+                                };
+
+                                if (string.IsNullOrWhiteSpace(suffix)) continue;
+                                result = result == null ? $"\n{suffix}" : $"{result}\n{suffix}";
+                            }
+
+                            return result ?? string.Empty;
+                        }
+
+                        string cdHUDText = !Options.UsePets.GetBool() || !Main.AbilityCD.TryGetValue(player.PlayerId, out (long StartTimeStamp, int TotalCooldown) CD)
+                            ? string.Empty
+                            : string.Format(GetString("CDPT"), CD.TotalCooldown - (Utils.TimeStamp - CD.StartTimeStamp) + 1);
+
+                        bool hasCD = cdHUDText != string.Empty;
+
+                        if (hasCD)
+                        {
+                            if (CooldownTimerFlashColor.HasValue) cdHUDText = $"<b>{Utils.ColorString(CooldownTimerFlashColor.Value, cdHUDText.RemoveHtmlTags())}</b>";
+
+                            LowerInfoText.text = $"{cdHUDText}\n{LowerInfoText.text}";
+                        }
+
+                        if (AchievementUnlockedText != string.Empty)
+                        {
+                            LowerInfoText.text = LowerInfoText.text == string.Empty
+                                ? AchievementUnlockedText
+                                : $"{AchievementUnlockedText}\n\n{LowerInfoText.text}\n\n\n\n";
+                        }
+
+                        LowerInfoText.enabled = hasCD || LowerInfoText.text != string.Empty;
                     }
-
-                    string cdHUDText = !Options.UsePets.GetBool() || !Main.AbilityCD.TryGetValue(player.PlayerId, out (long StartTimeStamp, int TotalCooldown) CD)
-                        ? string.Empty
-                        : string.Format(GetString("CDPT"), CD.TotalCooldown - (Utils.TimeStamp - CD.StartTimeStamp) + 1);
-
-                    bool hasCD = cdHUDText != string.Empty;
-
-                    if (hasCD)
-                    {
-                        if (CooldownTimerFlashColor.HasValue) cdHUDText = $"<b>{Utils.ColorString(CooldownTimerFlashColor.Value, cdHUDText.RemoveHtmlTags())}</b>";
-
-                        LowerInfoText.text = $"{cdHUDText}\n{LowerInfoText.text}";
-                    }
-
-                    if (AchievementUnlockedText != string.Empty)
-                    {
-                        LowerInfoText.text = LowerInfoText.text == string.Empty
-                            ? AchievementUnlockedText
-                            : $"{AchievementUnlockedText}\n\n{LowerInfoText.text}\n\n\n\n";
-                    }
-
-                    LowerInfoText.enabled = hasCD || LowerInfoText.text != string.Empty;
 
                     if ((!AmongUsClient.Instance.IsGameStarted && AmongUsClient.Instance.NetworkMode != NetworkModes.FreePlay) || GameStates.IsMeeting)
                         LowerInfoText.enabled = false;
@@ -356,7 +419,10 @@ internal static class HudManagerPatch
                         ActionButton button;
                         Type type = state.Role.GetType();
 
-                        if (type.GetMethod("OnVote").DeclaringType == type || role is CustomRoles.Adrenaline or CustomRoles.Battery or CustomRoles.Dad or CustomRoles.Grappler or CustomRoles.Inquirer or CustomRoles.Judge or CustomRoles.Mechanic or CustomRoles.Medium or CustomRoles.Swapper or CustomRoles.Inspector or CustomRoles.Spy or CustomRoles.Councillor or CustomRoles.CursedWolf or CustomRoles.Forger or CustomRoles.Generator or CustomRoles.Ventriloquist or CustomRoles.Bargainer or CustomRoles.Technician or CustomRoles.Virus)
+                        if (!OverridesOnVoteCache.TryGetValue(type, out bool overridesOnVote))
+                            OverridesOnVoteCache[type] = overridesOnVote = type.GetMethod("OnVote").DeclaringType == type;
+
+                        if (overridesOnVote || role is CustomRoles.Adrenaline or CustomRoles.Battery or CustomRoles.Dad or CustomRoles.Grappler or CustomRoles.Inquirer or CustomRoles.Judge or CustomRoles.Mechanic or CustomRoles.Medium or CustomRoles.Swapper or CustomRoles.Inspector or CustomRoles.Spy or CustomRoles.Councillor or CustomRoles.CursedWolf or CustomRoles.Forger or CustomRoles.Generator or CustomRoles.Ventriloquist or CustomRoles.Bargainer or CustomRoles.Technician or CustomRoles.Virus)
                             button = null;
                         else if (role is CustomRoles.Coroner or CustomRoles.Occultist or CustomRoles.Vulture)
                             button = __instance.ReportButton;
