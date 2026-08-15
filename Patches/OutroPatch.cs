@@ -23,6 +23,10 @@ internal static class EndGamePatch
 
     public static void Postfix()
     {
+        // Ended 帯 1.8 秒級ストールの帰属計測 (BUG-20260714-05)。ストール窓は EndGame 統計構築と
+        // SetEverythingUp (outro) の両方を含むため、各段の取り分を TRANSIT 行で分離する。
+        var transitSw = System.Diagnostics.Stopwatch.StartNew();
+
         try
         {
             bool allDead = Main.PlayerStates.Values.All(s => s.IsDead);
@@ -251,6 +255,8 @@ internal static class EndGamePatch
             
             Main.Instance.StartCoroutine(BanManager.LoadEACList());
         }
+
+        HealthLog.Note($"TRANSIT phase=gameend totalMs={transitSw.ElapsedMilliseconds} t={Utils.TimeStamp}");
     }
 }
 
@@ -261,13 +267,26 @@ internal static class SetEverythingUpPatch
     public static string LastWinsReason = string.Empty;
     private static SimpleButton ResultsToggleButton;
 
+    // outro ストールの vanilla 取り分計測: Prefix→Postfix 到達までがバニラ SetEverythingUp 本体
+    // (+他 postfix) の実行時間。Postfix 以降が mod の outro 構築コスト。
+    private static System.Diagnostics.Stopwatch _outroSw;
+
+    public static void Prefix()
+    {
+        _outroSw = System.Diagnostics.Stopwatch.StartNew();
+    }
+
     public static void Postfix(EndGameManager __instance)
     {
+        long vanillaMs = _outroSw?.ElapsedMilliseconds ?? -1;
+        var postSw = System.Diagnostics.Stopwatch.StartNew();
+
         //#######################################
         //      ==Victory Faction Display==
         //#######################################
 
         BGMManager.SetEndingBGM();
+        long bgmMs = postSw.ElapsedMilliseconds;
 
         Main.Instance.StartCoroutine(SetupPoolablePlayers());
 
@@ -533,6 +552,17 @@ internal static class SetEverythingUpPatch
         // ズドドド音の真因: この強制GCは毎ゲーム終了で3-4秒のフレームストール(音声スタック)を起こすのに
         // ほぼ何も回収しない(CENSUS実測)ため、既定OFF (Main.EnableAggressiveGcCleanup)
         if (Main.EnableAggressiveGcCleanup.Value) GC.Collect();
+
+        HealthLog.Note($"TRANSIT phase=outro vanillaMs={vanillaMs} bgmMs={bgmMs} postMs={postSw.ElapsedMilliseconds} t={Utils.TimeStamp}");
+
+        // Ended→Lobby 遷移の Boehm GC 集中 (bgc +3〜4回/窓・ヒープが熱いと計 1.8 秒級) 対策:
+        // GC を先撃ちしてヒープ余白を作り、遷移窓内の GC 発火回数を減らす (nos-gc-strategy の
+        // 「演出中に隠す」流儀 — countdown/loading と同じ GcPrepass を再利用)。
+        // ⚠️ LateTask +2s は不可 (実測 2026-08-15_14.22.14): Auto Play Again 運用だと outro が 2〜4 秒しか
+        // なく、3回中2回で遷移後に着弾して空振りした。この Postfix フレームは元々 1 秒級で停止している
+        // (vanilla outro 構築 + Boehm GC) ため、ここに同期で埋め込めば追加 ~60ms は体感ゼロで、
+        // かつ遷移前の完了が保証される。
+        GcPrepass.Collect("outro");
         return;
 
         IEnumerator SetupPoolablePlayers()

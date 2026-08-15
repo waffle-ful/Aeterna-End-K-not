@@ -2551,6 +2551,8 @@ public static class BackroomsLobby
 
         if (PlayerControl.LocalPlayer == null) return;
 
+        var enterSw = System.Diagnostics.Stopwatch.StartNew();
+
         // 1+2. バニラ船を隠す (LobbyBehaviour.Start Postfix で既に走っていれば全 skip)
         (int disabledCols, int disabledRs) = HideVanillaShipImmediate();
 
@@ -2577,7 +2579,7 @@ public static class BackroomsLobby
             BackroomsShadow.Arm(BackroomsConfig.DefaultShadowRadius);
         }
 
-        Logger.Info($"Entered Backrooms (no-TP) seed={seed} disabledCols={disabledCols} disabledRs={disabledRs} tiles={SpawnedTiles.Count}", "BackroomsGen");
+        Logger.Info($"Entered Backrooms (no-TP) seed={seed} disabledCols={disabledCols} disabledRs={disabledRs} tiles={SpawnedTiles.Count} ms={enterSw.ElapsedMilliseconds}", "BackroomsGen");
     }
 
     public static void ExitBackrooms(byte targetPid, bool silent = false, bool destroyTileset = true)
