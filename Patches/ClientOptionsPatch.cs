@@ -117,7 +117,15 @@ public static class OptionsMenuBehaviourStartPatch
             static void EnableBGMButtonToggle()
             {
                 if (Main.EnableBGM.Value)
-                    Modules.BGMManager.SetMenuBGM();
+                {
+                    // この設定画面はメニューとロビー(歯車)の両方から開ける。常に menu 固定だと
+                    // ロビー中の OFF→ON でメニュー曲が鳴り、ロビーに居る限り自然回復しない
+                    // (SetLobbyBGM はロビー再入場時にしか呼ばれない)。状態に合わせて復帰する。
+                    if (GameStates.IsLobby) Modules.BGMManager.SetLobbyBGM();
+                    else if (GameStates.InGame && !GameStates.IsEnded && GameStates.IsMeeting) Modules.BGMManager.SetMeetingBGM();
+                    else if (GameStates.InGame && !GameStates.IsEnded) Modules.BGMManager.SetTaskBGM();
+                    else Modules.BGMManager.SetMenuBGM();
+                }
                 else
                     Modules.BGMManager.Stop();
             }
