@@ -78,6 +78,18 @@ public static class GcUafSelfHeal
                 return;
             }
 
+            // incremental GC が切れている環境では probe は判別能力を持たない — barrier 無しの書き込みでも
+            // フルマークなら回収されないので、interop が stub でも collected=0 (SAFE) が返る。
+            // その結果をマーカーへ焼き付けると、gen が変わらない限り以後 probe ごとスキップされ (:66-67)、
+            // incremental を戻した後も「判定済み SAFE」として永久に信頼されてしまう。
+            // よって判定不能な回は**マーカーを書かずに降りる** (config 値ではなく実測値で判断する —
+            // IncrementalGcInvalidator は検証失敗時にロールバックするので、設定 true でも実際は ON がありうる)。
+            if (!GcUafProbe.IsIncrementalGc())
+            {
+                Logger.Warn("GCUAF-SELFHEAL: incremental GC is off — probe cannot discriminate, marker not written", "GcUafSelfHeal");
+                return;
+            }
+
             int? collected = GcUafProbe.Probe();
             if (collected == null)
             {
