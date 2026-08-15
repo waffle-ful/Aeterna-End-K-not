@@ -45,6 +45,9 @@ public static class HealthLog
     private static int _hitchSuppressed;
     private static bool _lastFullScreen;
     private static int _lastScreenW, _lastScreenH; // 直近 Tick 時点の画面モード (reschg⇔framestall 相関計器)
+    private static bool _lastFocused = true; // 直近 Tick 時点のウィンドウフォーカス (focus⇔framestall 相関計器)
+    private static bool _focusSampled; // 初回 Tick の実値取得前に focus 変化行を出さないためのゲート
+    private static bool _focusProbeDead; // Application.isFocused が interop 未生成等で例外を吐いたら以後この計器だけ止める
     private static long LastNormalLogTs;
     private static string LastState = "?";
     private static System.Diagnostics.Process Proc;
@@ -291,6 +294,30 @@ public static class HealthLog
             _lastFullScreen = Screen.fullScreen;
             _lastScreenW = Screen.width;
             _lastScreenH = Screen.height;
+        }
+
+        // フォーカス喪失/復帰の帰属計器 (2026-08-15: ロビー中 5-7 秒 framestall の gc0d=0・reschg 不発ケースの
+        // 切り分け用。/dump が explorer.exe を開く → ウィンドウ切替が容疑)。reschg と同じ理屈で、切替ストール中は
+        // Tick が止まるため focus 行は解除フレームで framestall ANOM と同時に flush される — t= の一致/近接が判定条件。
+        // runInBackground=true でも排他フルスクリーンのフォーカス断はドライバ側で数秒止め得るため、focus は独立計器。
+        // ⚠️ isFocused はこの repo 初使用の Application メンバ。万一 interop 未生成で例外を吐くと、Tick 全体を
+        // 包む FixedUpdateCaller の catch に抜けて heartbeat / EarlyWarning ごと毎フレーム死ぬため、
+        // ファイル内規約どおり個別 try/catch + ラッチで「この計器だけ」静かに止める。
+        if (!_focusProbeDead)
+        {
+            try
+            {
+                bool focusedNow = Application.isFocused;
+                if (_focusSampled && focusedNow != _lastFocused)
+                    NoteAnom($"ANOM live kind=focus {(focusedNow ? "regained" : "lost")} state={state} t={now}");
+                _lastFocused = focusedNow;
+                _focusSampled = true;
+            }
+            catch (Exception e)
+            {
+                _focusProbeDead = true;
+                Utils.ThrowException(e);
+            }
         }
 
         // 早期警報テレメトリは HB の 5 秒 grid を待たず 1/sec で回す(SnapTo 枯渇・例外洪水はより早い検知が要る)。
