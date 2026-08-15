@@ -12,6 +12,15 @@ internal sealed class EkmCustomRole1 : EkmTemplateRole
     public override void SetupCustomOption()
     {
         Options.SetupRoleOptions(Id, TabGroup.CrewmateRoles, Slot);
+        SetupHostOptionPool(
+            new FloatOptionItem(Id + 2, HostOptionName(0), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 3, HostOptionName(1), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 4, HostOptionName(2), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 5, HostOptionName(3), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 6, HostOptionName(4), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 7, HostOptionName(5), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 8, HostOptionName(6), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 9, HostOptionName(7), HostOptionRule, 0f, TabGroup.CrewmateRoles));
         HideUntilBound();
     }
 }
@@ -22,6 +31,15 @@ internal sealed class EkmCustomRole2 : EkmTemplateRole
     public override void SetupCustomOption()
     {
         Options.SetupRoleOptions(Id, TabGroup.CrewmateRoles, Slot);
+        SetupHostOptionPool(
+            new FloatOptionItem(Id + 2, HostOptionName(0), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 3, HostOptionName(1), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 4, HostOptionName(2), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 5, HostOptionName(3), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 6, HostOptionName(4), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 7, HostOptionName(5), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 8, HostOptionName(6), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 9, HostOptionName(7), HostOptionRule, 0f, TabGroup.CrewmateRoles));
         HideUntilBound();
     }
 }
@@ -32,6 +50,15 @@ internal sealed class EkmCustomRole3 : EkmTemplateRole
     public override void SetupCustomOption()
     {
         Options.SetupRoleOptions(Id, TabGroup.CrewmateRoles, Slot);
+        SetupHostOptionPool(
+            new FloatOptionItem(Id + 2, HostOptionName(0), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 3, HostOptionName(1), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 4, HostOptionName(2), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 5, HostOptionName(3), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 6, HostOptionName(4), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 7, HostOptionName(5), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 8, HostOptionName(6), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 9, HostOptionName(7), HostOptionRule, 0f, TabGroup.CrewmateRoles));
         HideUntilBound();
     }
 }
@@ -42,6 +69,15 @@ internal sealed class EkmCustomRole4 : EkmTemplateRole
     public override void SetupCustomOption()
     {
         Options.SetupRoleOptions(Id, TabGroup.CrewmateRoles, Slot);
+        SetupHostOptionPool(
+            new FloatOptionItem(Id + 2, HostOptionName(0), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 3, HostOptionName(1), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 4, HostOptionName(2), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 5, HostOptionName(3), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 6, HostOptionName(4), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 7, HostOptionName(5), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 8, HostOptionName(6), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 9, HostOptionName(7), HostOptionRule, 0f, TabGroup.CrewmateRoles));
         HideUntilBound();
     }
 }
@@ -52,6 +88,15 @@ internal sealed class EkmCustomRole5 : EkmTemplateRole
     public override void SetupCustomOption()
     {
         Options.SetupRoleOptions(Id, TabGroup.CrewmateRoles, Slot);
+        SetupHostOptionPool(
+            new FloatOptionItem(Id + 2, HostOptionName(0), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 3, HostOptionName(1), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 4, HostOptionName(2), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 5, HostOptionName(3), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 6, HostOptionName(4), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 7, HostOptionName(5), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 8, HostOptionName(6), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 9, HostOptionName(7), HostOptionRule, 0f, TabGroup.CrewmateRoles));
         HideUntilBound();
     }
 }
@@ -62,6 +107,15 @@ internal sealed class EkmCustomRole6 : EkmTemplateRole
     public override void SetupCustomOption()
     {
         Options.SetupRoleOptions(Id, TabGroup.CrewmateRoles, Slot);
+        SetupHostOptionPool(
+            new FloatOptionItem(Id + 2, HostOptionName(0), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 3, HostOptionName(1), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 4, HostOptionName(2), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 5, HostOptionName(3), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 6, HostOptionName(4), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 7, HostOptionName(5), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 8, HostOptionName(6), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 9, HostOptionName(7), HostOptionRule, 0f, TabGroup.CrewmateRoles));
         HideUntilBound();
     }
 }
@@ -72,6 +126,15 @@ internal sealed class EkmCustomRole7 : EkmTemplateRole
     public override void SetupCustomOption()
     {
         Options.SetupRoleOptions(Id, TabGroup.CrewmateRoles, Slot);
+        SetupHostOptionPool(
+            new FloatOptionItem(Id + 2, HostOptionName(0), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 3, HostOptionName(1), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 4, HostOptionName(2), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 5, HostOptionName(3), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 6, HostOptionName(4), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 7, HostOptionName(5), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 8, HostOptionName(6), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 9, HostOptionName(7), HostOptionRule, 0f, TabGroup.CrewmateRoles));
         HideUntilBound();
     }
 }
@@ -82,6 +145,15 @@ internal sealed class EkmCustomRole8 : EkmTemplateRole
     public override void SetupCustomOption()
     {
         Options.SetupRoleOptions(Id, TabGroup.CrewmateRoles, Slot);
+        SetupHostOptionPool(
+            new FloatOptionItem(Id + 2, HostOptionName(0), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 3, HostOptionName(1), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 4, HostOptionName(2), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 5, HostOptionName(3), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 6, HostOptionName(4), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 7, HostOptionName(5), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 8, HostOptionName(6), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 9, HostOptionName(7), HostOptionRule, 0f, TabGroup.CrewmateRoles));
         HideUntilBound();
     }
 }
@@ -92,6 +164,15 @@ internal sealed class EkmCustomRole9 : EkmTemplateRole
     public override void SetupCustomOption()
     {
         Options.SetupRoleOptions(Id, TabGroup.CrewmateRoles, Slot);
+        SetupHostOptionPool(
+            new FloatOptionItem(Id + 2, HostOptionName(0), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 3, HostOptionName(1), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 4, HostOptionName(2), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 5, HostOptionName(3), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 6, HostOptionName(4), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 7, HostOptionName(5), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 8, HostOptionName(6), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 9, HostOptionName(7), HostOptionRule, 0f, TabGroup.CrewmateRoles));
         HideUntilBound();
     }
 }
@@ -102,6 +183,15 @@ internal sealed class EkmCustomRole10 : EkmTemplateRole
     public override void SetupCustomOption()
     {
         Options.SetupRoleOptions(Id, TabGroup.CrewmateRoles, Slot);
+        SetupHostOptionPool(
+            new FloatOptionItem(Id + 2, HostOptionName(0), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 3, HostOptionName(1), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 4, HostOptionName(2), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 5, HostOptionName(3), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 6, HostOptionName(4), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 7, HostOptionName(5), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 8, HostOptionName(6), HostOptionRule, 0f, TabGroup.CrewmateRoles),
+            new FloatOptionItem(Id + 9, HostOptionName(7), HostOptionRule, 0f, TabGroup.CrewmateRoles));
         HideUntilBound();
     }
 }
@@ -117,6 +207,15 @@ internal sealed class EkmImpRole1 : EkmTemplateRole
     public override void SetupCustomOption()
     {
         Options.SetupRoleOptions(Id, TabGroup.ImpostorRoles, Slot);
+        SetupHostOptionPool(
+            new FloatOptionItem(Id + 2, HostOptionName(0), HostOptionRule, 0f, TabGroup.ImpostorRoles),
+            new FloatOptionItem(Id + 3, HostOptionName(1), HostOptionRule, 0f, TabGroup.ImpostorRoles),
+            new FloatOptionItem(Id + 4, HostOptionName(2), HostOptionRule, 0f, TabGroup.ImpostorRoles),
+            new FloatOptionItem(Id + 5, HostOptionName(3), HostOptionRule, 0f, TabGroup.ImpostorRoles),
+            new FloatOptionItem(Id + 6, HostOptionName(4), HostOptionRule, 0f, TabGroup.ImpostorRoles),
+            new FloatOptionItem(Id + 7, HostOptionName(5), HostOptionRule, 0f, TabGroup.ImpostorRoles),
+            new FloatOptionItem(Id + 8, HostOptionName(6), HostOptionRule, 0f, TabGroup.ImpostorRoles),
+            new FloatOptionItem(Id + 9, HostOptionName(7), HostOptionRule, 0f, TabGroup.ImpostorRoles));
         HideUntilBound();
     }
 }
@@ -127,6 +226,15 @@ internal sealed class EkmImpRole2 : EkmTemplateRole
     public override void SetupCustomOption()
     {
         Options.SetupRoleOptions(Id, TabGroup.ImpostorRoles, Slot);
+        SetupHostOptionPool(
+            new FloatOptionItem(Id + 2, HostOptionName(0), HostOptionRule, 0f, TabGroup.ImpostorRoles),
+            new FloatOptionItem(Id + 3, HostOptionName(1), HostOptionRule, 0f, TabGroup.ImpostorRoles),
+            new FloatOptionItem(Id + 4, HostOptionName(2), HostOptionRule, 0f, TabGroup.ImpostorRoles),
+            new FloatOptionItem(Id + 5, HostOptionName(3), HostOptionRule, 0f, TabGroup.ImpostorRoles),
+            new FloatOptionItem(Id + 6, HostOptionName(4), HostOptionRule, 0f, TabGroup.ImpostorRoles),
+            new FloatOptionItem(Id + 7, HostOptionName(5), HostOptionRule, 0f, TabGroup.ImpostorRoles),
+            new FloatOptionItem(Id + 8, HostOptionName(6), HostOptionRule, 0f, TabGroup.ImpostorRoles),
+            new FloatOptionItem(Id + 9, HostOptionName(7), HostOptionRule, 0f, TabGroup.ImpostorRoles));
         HideUntilBound();
     }
 }
@@ -137,6 +245,15 @@ internal sealed class EkmImpRole3 : EkmTemplateRole
     public override void SetupCustomOption()
     {
         Options.SetupRoleOptions(Id, TabGroup.ImpostorRoles, Slot);
+        SetupHostOptionPool(
+            new FloatOptionItem(Id + 2, HostOptionName(0), HostOptionRule, 0f, TabGroup.ImpostorRoles),
+            new FloatOptionItem(Id + 3, HostOptionName(1), HostOptionRule, 0f, TabGroup.ImpostorRoles),
+            new FloatOptionItem(Id + 4, HostOptionName(2), HostOptionRule, 0f, TabGroup.ImpostorRoles),
+            new FloatOptionItem(Id + 5, HostOptionName(3), HostOptionRule, 0f, TabGroup.ImpostorRoles),
+            new FloatOptionItem(Id + 6, HostOptionName(4), HostOptionRule, 0f, TabGroup.ImpostorRoles),
+            new FloatOptionItem(Id + 7, HostOptionName(5), HostOptionRule, 0f, TabGroup.ImpostorRoles),
+            new FloatOptionItem(Id + 8, HostOptionName(6), HostOptionRule, 0f, TabGroup.ImpostorRoles),
+            new FloatOptionItem(Id + 9, HostOptionName(7), HostOptionRule, 0f, TabGroup.ImpostorRoles));
         HideUntilBound();
     }
 }
@@ -147,6 +264,15 @@ internal sealed class EkmNeuRole1 : EkmTemplateRole
     public override void SetupCustomOption()
     {
         Options.SetupRoleOptions(Id, TabGroup.NeutralRoles, Slot);
+        SetupHostOptionPool(
+            new FloatOptionItem(Id + 2, HostOptionName(0), HostOptionRule, 0f, TabGroup.NeutralRoles),
+            new FloatOptionItem(Id + 3, HostOptionName(1), HostOptionRule, 0f, TabGroup.NeutralRoles),
+            new FloatOptionItem(Id + 4, HostOptionName(2), HostOptionRule, 0f, TabGroup.NeutralRoles),
+            new FloatOptionItem(Id + 5, HostOptionName(3), HostOptionRule, 0f, TabGroup.NeutralRoles),
+            new FloatOptionItem(Id + 6, HostOptionName(4), HostOptionRule, 0f, TabGroup.NeutralRoles),
+            new FloatOptionItem(Id + 7, HostOptionName(5), HostOptionRule, 0f, TabGroup.NeutralRoles),
+            new FloatOptionItem(Id + 8, HostOptionName(6), HostOptionRule, 0f, TabGroup.NeutralRoles),
+            new FloatOptionItem(Id + 9, HostOptionName(7), HostOptionRule, 0f, TabGroup.NeutralRoles));
         HideUntilBound();
     }
 }
@@ -157,6 +283,15 @@ internal sealed class EkmNeuRole2 : EkmTemplateRole
     public override void SetupCustomOption()
     {
         Options.SetupRoleOptions(Id, TabGroup.NeutralRoles, Slot);
+        SetupHostOptionPool(
+            new FloatOptionItem(Id + 2, HostOptionName(0), HostOptionRule, 0f, TabGroup.NeutralRoles),
+            new FloatOptionItem(Id + 3, HostOptionName(1), HostOptionRule, 0f, TabGroup.NeutralRoles),
+            new FloatOptionItem(Id + 4, HostOptionName(2), HostOptionRule, 0f, TabGroup.NeutralRoles),
+            new FloatOptionItem(Id + 5, HostOptionName(3), HostOptionRule, 0f, TabGroup.NeutralRoles),
+            new FloatOptionItem(Id + 6, HostOptionName(4), HostOptionRule, 0f, TabGroup.NeutralRoles),
+            new FloatOptionItem(Id + 7, HostOptionName(5), HostOptionRule, 0f, TabGroup.NeutralRoles),
+            new FloatOptionItem(Id + 8, HostOptionName(6), HostOptionRule, 0f, TabGroup.NeutralRoles),
+            new FloatOptionItem(Id + 9, HostOptionName(7), HostOptionRule, 0f, TabGroup.NeutralRoles));
         HideUntilBound();
     }
 }
@@ -167,6 +302,15 @@ internal sealed class EkmNeuRole3 : EkmTemplateRole
     public override void SetupCustomOption()
     {
         Options.SetupRoleOptions(Id, TabGroup.NeutralRoles, Slot);
+        SetupHostOptionPool(
+            new FloatOptionItem(Id + 2, HostOptionName(0), HostOptionRule, 0f, TabGroup.NeutralRoles),
+            new FloatOptionItem(Id + 3, HostOptionName(1), HostOptionRule, 0f, TabGroup.NeutralRoles),
+            new FloatOptionItem(Id + 4, HostOptionName(2), HostOptionRule, 0f, TabGroup.NeutralRoles),
+            new FloatOptionItem(Id + 5, HostOptionName(3), HostOptionRule, 0f, TabGroup.NeutralRoles),
+            new FloatOptionItem(Id + 6, HostOptionName(4), HostOptionRule, 0f, TabGroup.NeutralRoles),
+            new FloatOptionItem(Id + 7, HostOptionName(5), HostOptionRule, 0f, TabGroup.NeutralRoles),
+            new FloatOptionItem(Id + 8, HostOptionName(6), HostOptionRule, 0f, TabGroup.NeutralRoles),
+            new FloatOptionItem(Id + 9, HostOptionName(7), HostOptionRule, 0f, TabGroup.NeutralRoles));
         HideUntilBound();
     }
 }
@@ -177,6 +321,15 @@ internal sealed class EkmNeuRole4 : EkmTemplateRole
     public override void SetupCustomOption()
     {
         Options.SetupRoleOptions(Id, TabGroup.NeutralRoles, Slot);
+        SetupHostOptionPool(
+            new FloatOptionItem(Id + 2, HostOptionName(0), HostOptionRule, 0f, TabGroup.NeutralRoles),
+            new FloatOptionItem(Id + 3, HostOptionName(1), HostOptionRule, 0f, TabGroup.NeutralRoles),
+            new FloatOptionItem(Id + 4, HostOptionName(2), HostOptionRule, 0f, TabGroup.NeutralRoles),
+            new FloatOptionItem(Id + 5, HostOptionName(3), HostOptionRule, 0f, TabGroup.NeutralRoles),
+            new FloatOptionItem(Id + 6, HostOptionName(4), HostOptionRule, 0f, TabGroup.NeutralRoles),
+            new FloatOptionItem(Id + 7, HostOptionName(5), HostOptionRule, 0f, TabGroup.NeutralRoles),
+            new FloatOptionItem(Id + 8, HostOptionName(6), HostOptionRule, 0f, TabGroup.NeutralRoles),
+            new FloatOptionItem(Id + 9, HostOptionName(7), HostOptionRule, 0f, TabGroup.NeutralRoles));
         HideUntilBound();
     }
 }
@@ -187,6 +340,15 @@ internal sealed class EkmNeuRole5 : EkmTemplateRole
     public override void SetupCustomOption()
     {
         Options.SetupRoleOptions(Id, TabGroup.NeutralRoles, Slot);
+        SetupHostOptionPool(
+            new FloatOptionItem(Id + 2, HostOptionName(0), HostOptionRule, 0f, TabGroup.NeutralRoles),
+            new FloatOptionItem(Id + 3, HostOptionName(1), HostOptionRule, 0f, TabGroup.NeutralRoles),
+            new FloatOptionItem(Id + 4, HostOptionName(2), HostOptionRule, 0f, TabGroup.NeutralRoles),
+            new FloatOptionItem(Id + 5, HostOptionName(3), HostOptionRule, 0f, TabGroup.NeutralRoles),
+            new FloatOptionItem(Id + 6, HostOptionName(4), HostOptionRule, 0f, TabGroup.NeutralRoles),
+            new FloatOptionItem(Id + 7, HostOptionName(5), HostOptionRule, 0f, TabGroup.NeutralRoles),
+            new FloatOptionItem(Id + 8, HostOptionName(6), HostOptionRule, 0f, TabGroup.NeutralRoles),
+            new FloatOptionItem(Id + 9, HostOptionName(7), HostOptionRule, 0f, TabGroup.NeutralRoles));
         HideUntilBound();
     }
 }

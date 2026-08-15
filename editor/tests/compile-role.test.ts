@@ -704,6 +704,52 @@ describe("compile-role: Wave 1 ブロック (on_attacked / cancel_attack / remem
     });
 });
 
+// Wave 3 (docs/ekn-wave3-contract.md §1 2026-08-14) — じょうたいと数値の新3イベント
+describe("compile-role: Wave 3 ブロック (on_var / on_alive_count / on_vent_exit)", () => {
+    it("ekr_when_on_var は var/cmp/value を rule に転記する", () => {
+        const blocks: SerializedBlock[] = [
+            { type: "ekr_when_on_var", fields: { VAR: "カウント", VALUE: 5, CMP: "ge" }, next: { block: { type: "ekr_do_stop" } } },
+        ];
+        expect(compileTopBlocksToRules(blocks)).toEqual([
+            { when: "on_var", var: "カウント", cmp: "ge", value: 5, do: [{ op: "stop" }] },
+        ]);
+    });
+
+    it("ekr_when_on_alive_count は cmp/value を rule に転記する (var は付かない)", () => {
+        const blocks: SerializedBlock[] = [
+            { type: "ekr_when_on_alive_count", fields: { VALUE: 3, CMP: "le" }, next: { block: { type: "ekr_do_stop" } } },
+        ];
+        expect(compileTopBlocksToRules(blocks)).toEqual([
+            { when: "on_alive_count", cmp: "le", value: 3, do: [{ op: "stop" }] },
+        ]);
+    });
+
+    it("ekr_when_on_vent_exit は追加フィールド無しの通常イベントとして転記される", () => {
+        const blocks: SerializedBlock[] = [
+            { type: "ekr_when_on_vent_exit", next: { block: { type: "ekr_do_stop" } } },
+        ];
+        expect(compileTopBlocksToRules(blocks)).toEqual([{ when: "on_vent_exit", do: [{ op: "stop" }] }]);
+    });
+
+    it("on_var のワークスペースが validateRoleLogic まで通る (変数を宣言した状態で)", () => {
+        const w = ws([
+            { type: "ekr_when_on_var", fields: { VAR: "カウント", VALUE: 7, CMP: "eq" }, next: { block: { type: "ekr_do_stop" } } },
+        ]);
+        const compiled = compileWorkspaceToLogicInput(w, [{ name: "カウント", init: 0 }]);
+        const r = validateRoleLogic(compiled);
+        expect(r.ok, r.ok ? "" : (r as { error: string }).error).toBe(true);
+        if (r.ok) expect(r.logic.rules[0]).toEqual({ when: "on_var", var: "カウント", cmp: "eq", value: 7, do: [{ op: "stop" }] });
+    });
+
+    it("on_var のワークスペースは変数未宣言だと validateRoleLogic で reject される", () => {
+        const w = ws([
+            { type: "ekr_when_on_var", fields: { VAR: "カウント", VALUE: 7, CMP: "eq" }, next: { block: { type: "ekr_do_stop" } } },
+        ]);
+        const r = validateRoleLogic(compileWorkspaceToLogicInput(w, []));
+        expect(r.ok).toBe(false);
+    });
+});
+
 describe("compile-role: 空っぽのきっかけブロック検出", () => {
     it("下に何も繋がっていないハットだけを id 付きで拾う", () => {
         const w = ws([

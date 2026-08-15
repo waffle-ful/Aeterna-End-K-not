@@ -28,6 +28,14 @@ import {
     DEFAULT_WIN_CONDITION,
     type EkrDefinition,
     type EkrTeam,
+    HOST_OPTION_FIXED_KEYS,
+    HOST_OPTION_LABEL_MAX,
+    HOST_OPTION_MINMAX_MAX,
+    HOST_OPTION_MINMAX_MIN,
+    HOST_OPTION_VAR_KEY_PREFIX,
+    HOST_OPTIONS_MAX,
+    type HostOption,
+    type HostOptionFixedKey,
     LOGIC_VARIABLES_MAX,
     LOGIC_VAR_NAME_MAX,
     type LogicVariable,
@@ -82,6 +90,10 @@ interface FormState {
     // Wave 1: とくせい (spec §1.1)。「バニラ既定 = キーの欠落」なので、既定のままの項目は
     // ここにも入らない (下書きの形と書き出しの形を一致させておく)。
     passives: RolePassives;
+    // Wave 3 (docs/ekn-wave3-contract.md §3): なまえのよこに出す文字。空欄 = progress キー省略。
+    progressText: string;
+    // Wave 3 (契約 §4): ホストがへんこうできる数値。0件 = hostOptions キー省略。
+    hostOptions: HostOption[];
     // R1: ロジックの下書き。ワークスペースを一度も開いていなければ logicBlockly は null。
     logicVariables: LogicVariable[];
     logicBlockly: unknown | null;
@@ -119,6 +131,8 @@ function defaultFormState(): FormState {
         canVent: d.canVent,
         visionMultiplier: d.visionMultiplier,
         passives: {},
+        progressText: "",
+        hostOptions: [],
         logicVariables: [],
         logicBlockly: null,
         logicNoBlocklyPassthrough: null,
@@ -143,7 +157,7 @@ function refreshKillCdVisibility(): void {
 
 /** フォーム入力欄 → 生の値 (未検証・未クランプ)。name/author はユーザーの入力途中の値をそのまま読む。
  *  team は <select> なので不正値は原理上入らないが、念のため normalizeTeamDraft を通す (writeForm と対称)。 */
-function readForm(): Omit<FormState, "passives" | "logicVariables" | "logicBlockly" | "logicNoBlocklyPassthrough"> {
+function readForm(): Omit<FormState, "passives" | "hostOptions" | "logicVariables" | "logicBlockly" | "logicNoBlocklyPassthrough"> {
     return {
         name: $<HTMLInputElement>("rm-name").value,
         author: $<HTMLInputElement>("rm-author").value,
@@ -155,6 +169,8 @@ function readForm(): Omit<FormState, "passives" | "logicVariables" | "logicBlock
         killCooldown: Number($<HTMLInputElement>("rm-kill-cd").value),
         canVent: $<HTMLInputElement>("rm-can-vent").checked,
         visionMultiplier: Number($<HTMLInputElement>("rm-vision").value),
+        // Wave 3 (契約 §3): なまえのよこに出す文字。description と同じ「空欄=キー省略」の単純テキスト欄。
+        progressText: $<HTMLInputElement>("rm-progress-text").value,
     };
 }
 
@@ -165,7 +181,7 @@ function readForm(): Omit<FormState, "passives" | "logicVariables" | "logicBlock
  * team も同じ理由: <select> に <option> と一致しない値を代入すると選択が外れる (どの項目も
  * selected にならない) ため、normalizeTeamDraft で必ず既知の3値のどれかに丸めてから書き込む。
  */
-function writeForm(s: Omit<FormState, "passives" | "logicVariables" | "logicBlockly" | "logicNoBlocklyPassthrough">): void {
+function writeForm(s: Omit<FormState, "passives" | "hostOptions" | "logicVariables" | "logicBlockly" | "logicNoBlocklyPassthrough">): void {
     $<HTMLInputElement>("rm-name").value = s.name;
     $<HTMLInputElement>("rm-author").value = s.author;
     $<HTMLInputElement>("rm-desc").value = s.description;
@@ -176,6 +192,7 @@ function writeForm(s: Omit<FormState, "passives" | "logicVariables" | "logicBloc
     $<HTMLInputElement>("rm-kill-cd").value = String(normalizeKillCooldown(s.killCooldown));
     $<HTMLInputElement>("rm-can-vent").checked = s.canVent;
     $<HTMLInputElement>("rm-vision").value = String(normalizeVisionMultiplier(s.visionMultiplier));
+    $<HTMLInputElement>("rm-progress-text").value = s.progressText;
     refreshKillCdVisibility();
 }
 
@@ -309,6 +326,190 @@ function passiveChipTexts(p: RolePassives): string[] {
 }
 
 // ---------------------------------------------------------------------------
+// ホストがへんこうできる数値 (Wave 3・契約 §4) — 基本情報タブのフォームセクション
+// ---------------------------------------------------------------------------
+// hostOptions は passives と違って固定キーの単一オブジェクトではなく可変長のリストなので、
+// logicVariables (下の「ロジック (R1) の状態」節) と同じ「モジュール直下の配列 + 都度フル再構築の
+// render 関数」方式で持つ (renderVariablesList() と同型)。key ドロップダウンの選択肢
+// (固定6種 + 宣言済み変数) は logicVariables の増減に追随する必要があるため、変数リストが変わる
+// たびに renderHostOptionsList() も呼び直す (renderVariablesList() の末尾で呼ぶ)。
+
+/** 固定キーの日本語ラベル (key ドロップダウン用)。契約 §4.1 表の6キー。 */
+const HOST_OPTION_FIXED_LABELS: Record<HostOptionFixedKey, string> = {
+    "shield.count": "まもりの回数",
+    "doom.seconds": "よわさの秒数",
+    speedMult: "はやさの倍率",
+    voteWeight: "票のちから",
+    killCooldown: "キルクールダウン",
+    vision: "視界の広さ",
+};
+
+let hostOptionsDraft: HostOption[] = [];
+
+/** key ドロップダウンの選択肢 (固定6種 + 宣言済み変数)。呼ぶたびに現在の変数リストから作り直す。 */
+function hostOptionKeyChoices(): [string, string][] {
+    const fixed: [string, string][] = HOST_OPTION_FIXED_KEYS.map((k) => [HOST_OPTION_FIXED_LABELS[k], k]);
+    const vars: [string, string][] = logicVariables.map((v) => [`へんすう: ${v.name}`, `${HOST_OPTION_VAR_KEY_PREFIX}${v.name}`]);
+    return [...fixed, ...vars];
+}
+
+function isVarHostOptionKey(key: string): boolean {
+    return key.startsWith(HOST_OPTION_VAR_KEY_PREFIX);
+}
+
+function renderHostOptionsList(): void {
+    const choices = hostOptionKeyChoices();
+    const validKeys = new Set(choices.map(([, v]) => v));
+
+    $("rm-hostopts-summary").textContent = `(${hostOptionsDraft.length}/${HOST_OPTIONS_MAX})`;
+
+    const list = $("rm-hostopts-list");
+    list.replaceChildren();
+    hostOptionsDraft.forEach((opt, i) => {
+        const row = document.createElement("div");
+        row.className = "rm-var-row";
+
+        const keySelect = document.createElement("select");
+        keySelect.className = "rm-var-name";
+        keySelect.setAttribute("aria-label", "露出する項目");
+        for (const [label, value] of choices) {
+            const optionEl = document.createElement("option");
+            optionEl.value = value;
+            optionEl.textContent = label;
+            keySelect.appendChild(optionEl);
+        }
+        // 変数が消えて選択肢から外れた key はそのまま残す (壊れたまま表示 — 契約 §4.1 の
+        // 「var: は宣言済み変数のみ」は copyCode 時に validateEkrDefinition が reject で伝える)。
+        if (validKeys.has(opt.key)) {
+            keySelect.value = opt.key;
+        } else {
+            const orphan = document.createElement("option");
+            orphan.value = opt.key;
+            orphan.textContent = `(見つからない: ${opt.key})`;
+            keySelect.insertBefore(orphan, keySelect.firstChild);
+            keySelect.value = opt.key;
+        }
+        keySelect.addEventListener("change", () => {
+            hostOptionsDraft[i] = { ...hostOptionsDraft[i], key: keySelect.value };
+            if (isVarHostOptionKey(keySelect.value)) {
+                // var: 系は min/max が必須 (契約 §4.1) — 見た目の初期表示 (opt.min ?? 既定) だけでなく
+                // 実データにも既定値を焼き込む (触らずにコピーしても reject にならないように)。
+                hostOptionsDraft[i].min ??= HOST_OPTION_MINMAX_MIN;
+                hostOptionsDraft[i].max ??= HOST_OPTION_MINMAX_MAX;
+            } else {
+                delete hostOptionsDraft[i].min;
+                delete hostOptionsDraft[i].max;
+            }
+            renderHostOptionsList();
+            saveFormToStorage();
+            renderPreview();
+        });
+
+        const labelInput = document.createElement("input");
+        labelInput.className = "rm-var-name";
+        labelInput.maxLength = HOST_OPTION_LABEL_MAX;
+        labelInput.value = opt.label;
+        labelInput.placeholder = "オプション画面での表示名";
+        labelInput.setAttribute("aria-label", "表示名");
+        labelInput.addEventListener("input", () => {
+            hostOptionsDraft[i] = { ...hostOptionsDraft[i], label: labelInput.value };
+            saveFormToStorage();
+        });
+
+        row.append(keySelect, labelInput);
+
+        if (isVarHostOptionKey(opt.key)) {
+            const minInput = document.createElement("input");
+            minInput.type = "number";
+            minInput.className = "rm-var-init";
+            minInput.title = "さいしょう値";
+            minInput.setAttribute("aria-label", "さいしょう値");
+            minInput.value = String(opt.min ?? HOST_OPTION_MINMAX_MIN);
+            minInput.addEventListener("change", () => {
+                const n = clampIntToRange(minInput.value, HOST_OPTION_MINMAX_MIN, HOST_OPTION_MINMAX_MAX, HOST_OPTION_MINMAX_MIN);
+                hostOptionsDraft[i] = { ...hostOptionsDraft[i], min: n };
+                minInput.value = String(n);
+                saveFormToStorage();
+            });
+
+            const maxInput = document.createElement("input");
+            maxInput.type = "number";
+            maxInput.className = "rm-var-init";
+            maxInput.title = "さいだい値";
+            maxInput.setAttribute("aria-label", "さいだい値");
+            maxInput.value = String(opt.max ?? HOST_OPTION_MINMAX_MAX);
+            maxInput.addEventListener("change", () => {
+                const n = clampIntToRange(maxInput.value, HOST_OPTION_MINMAX_MIN, HOST_OPTION_MINMAX_MAX, HOST_OPTION_MINMAX_MAX);
+                hostOptionsDraft[i] = { ...hostOptionsDraft[i], max: n };
+                maxInput.value = String(n);
+                saveFormToStorage();
+            });
+
+            row.append(minInput, maxInput);
+        }
+
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "rm-var-remove";
+        removeBtn.textContent = "✕";
+        removeBtn.title = "この数値を削除";
+        removeBtn.addEventListener("click", () => {
+            hostOptionsDraft.splice(i, 1);
+            renderHostOptionsList();
+            saveFormToStorage();
+            renderPreview();
+        });
+        row.append(removeBtn);
+
+        list.appendChild(row);
+    });
+    $<HTMLButtonElement>("rm-hostopts-add").disabled = hostOptionsDraft.length >= HOST_OPTIONS_MAX;
+}
+
+function addHostOption(): void {
+    if (hostOptionsDraft.length >= HOST_OPTIONS_MAX) return;
+    const choices = hostOptionKeyChoices();
+    const usedKeys = new Set(hostOptionsDraft.map((o) => o.key));
+    const firstFree = choices.find(([, key]) => !usedKeys.has(key));
+    const key = firstFree ? firstFree[1] : HOST_OPTION_FIXED_KEYS[0];
+    // label は空文字にしない (契約 §4.1: label は1文字以上必須 — 空のままだと copyCode() が
+    // 常に reject され続けてしまう。addVariable() が「へんすう1」を既定にするのと同じ理由 —
+    // 「壊れた下書きを復元しても必ずコピーできる状態にする」をここでも守る)。
+    // ドロップダウンの表示文言 (choices の label 側) をそのまま初期値にする — 作者は後から書き換えられる。
+    const label = firstFree ? firstFree[0] : HOST_OPTION_FIXED_LABELS[HOST_OPTION_FIXED_KEYS[0]];
+    const opt: HostOption = { key, label };
+    if (isVarHostOptionKey(key)) {
+        opt.min = HOST_OPTION_MINMAX_MIN;
+        opt.max = HOST_OPTION_MINMAX_MAX;
+    }
+    hostOptionsDraft.push(opt);
+    renderHostOptionsList();
+    saveFormToStorage();
+    renderPreview();
+}
+
+/** 下書き (localStorage) の hostOptions を寛容に復元する — 型が壊れていても既定 (0件) に落とす。
+ *  範囲/重複/未定義変数などの契約検証はここでは行わない (壊れたままでもフォームは必ず開ける —
+ *  最終的な reject は copyCode() 時の validateEkrDefinition に委ねる、sanitizePassivesDraft と同じ方針)。 */
+function sanitizeHostOptionsDraft(raw: unknown): HostOption[] {
+    if (!Array.isArray(raw)) return [];
+    const out: HostOption[] = [];
+    for (const item of raw.slice(0, HOST_OPTIONS_MAX)) {
+        if (typeof item !== "object" || item === null) continue;
+        const r = item as Record<string, unknown>;
+        // label が空/空白のみの行は丸ごと捨てる (契約 §4.1: label は1文字以上必須。空のまま
+        // 復元すると copyCode() が reject され続ける行が残ってしまう — addHostOption() が
+        // 空ラベルを作らないのと同じ理由で、下書き復元側でも同じ不変条件を守る)。
+        if (typeof r.key !== "string" || typeof r.label !== "string" || r.label.trim().length === 0) continue;
+        const opt: HostOption = { key: r.key, label: r.label };
+        if (typeof r.min === "number") opt.min = r.min;
+        if (typeof r.max === "number") opt.max = r.max;
+        out.push(opt);
+    }
+    return out;
+}
+
+// ---------------------------------------------------------------------------
 // ロジック (R1) の状態
 // ---------------------------------------------------------------------------
 
@@ -347,6 +548,7 @@ function saveFormToStorage(): void {
         const state: FormState = {
             ...readForm(),
             passives: readPassivesForm(),
+            hostOptions: hostOptionsDraft,
             logicVariables,
             logicBlockly: currentBlocklyState(),
             logicNoBlocklyPassthrough: noBlocklyPassthrough,
@@ -382,6 +584,8 @@ function loadFormFromStorage(): FormState {
             canVent: typeof parsed.canVent === "boolean" ? parsed.canVent : d.canVent,
             visionMultiplier: normalizeVisionMultiplier(parsed.visionMultiplier),
             passives: sanitizePassivesDraft(parsed.passives),
+            progressText: typeof parsed.progressText === "string" ? parsed.progressText : d.progressText,
+            hostOptions: sanitizeHostOptionsDraft(parsed.hostOptions),
             logicVariables: Array.isArray(parsed.logicVariables) ? (parsed.logicVariables as LogicVariable[]) : d.logicVariables,
             logicBlockly: parsed.logicBlockly ?? d.logicBlockly,
             logicNoBlocklyPassthrough: (parsed.logicNoBlocklyPassthrough as RoleLogic | undefined) ?? d.logicNoBlocklyPassthrough,
@@ -415,6 +619,13 @@ function buildDefinitionFromForm(): EkrDefinition | null {
     // とくせい: 既定のまま (キー0個) なら passives キー自体を書き出さない (バニラ既定 = 欠落)。
     const passives = readPassivesForm();
     if (Object.keys(passives).length > 0) candidate.passives = passives;
+
+    // Wave 3 (契約 §3): なまえのよこに出す文字。空欄なら progress キー自体を書き出さない。
+    const trimmedProgress = raw.progressText.trim();
+    if (trimmedProgress.length > 0) candidate.progress = { text: trimmedProgress };
+
+    // Wave 3 (契約 §4): ホストがへんこうできる数値。0件なら hostOptions キー自体を書き出さない。
+    if (hostOptionsDraft.length > 0) candidate.hostOptions = hostOptionsDraft;
 
     const r = validateEkrDefinition(candidate);
     if (!r.ok) {
@@ -519,8 +730,14 @@ function loadCode(): void {
         killCooldown: r.def.killCooldown,
         canVent: r.def.canVent,
         visionMultiplier: r.def.visionMultiplier,
+        // Wave 3 (契約 §3): キーが無い役職コードは空欄として読み込む (description と同じ扱い)。
+        progressText: r.def.progress?.text ?? "",
     });
     writePassivesForm(r.def.passives ?? {});
+    // Wave 3 (契約 §4): adoptLoadedLogic() が末尾で renderVariablesList() → renderHostOptionsList()
+    // を呼ぶため、その前に hostOptionsDraft を差し替えておく (key ドロップダウンの選択肢が
+    // 新しい logicVariables を反映した状態で hostOptionsDraft の中身も一緒に描画されるように)。
+    hostOptionsDraft = r.def.hostOptions ? r.def.hostOptions.map((o) => ({ ...o })) : [];
     adoptLoadedLogic(r.def.logic);
     saveFormToStorage();
     renderPreview();
@@ -559,6 +776,7 @@ function renderVariablesList(): void {
             logicVariables[i] = { ...logicVariables[i], name: newName };
             nameInput.value = newName;
             syncVariableNamesToBlockly();
+            renderHostOptionsList();
             saveFormToStorage();
             refreshLogicPanel();
         });
@@ -595,6 +813,8 @@ function renderVariablesList(): void {
         list.appendChild(row);
     });
     $<HTMLButtonElement>("rm-vars-add").disabled = logicVariables.length >= LOGIC_VARIABLES_MAX;
+    // hostOptions の key ドロップダウン (固定6種 + 宣言済み変数) は変数リストの増減に追随する。
+    renderHostOptionsList();
 }
 
 function addVariable(): void {
@@ -686,7 +906,9 @@ function refreshLogicPanel(): void {
     }
     validityEl.hidden = true;
 
-    const warnings = lintRoleLogic(validated.logic);
+    // Wave 3 (契約 §6 L25): progress.text の変数参照もリンタに渡す (トリム前の生値で良い —
+    // extractProgressVarRefs は {変数名} トークンだけを見るので前後の空白は影響しない)。
+    const warnings = lintRoleLogic(validated.logic, $<HTMLInputElement>("rm-progress-text").value);
     footer.replaceChildren();
     if (warnings.length === 0) {
         footer.hidden = true;
@@ -962,6 +1184,7 @@ function wire(): void {
     const draft = loadFormFromStorage();
     writeForm(draft);
     writePassivesForm(draft.passives);
+    hostOptionsDraft = draft.hostOptions;
     logicVariables = draft.logicVariables;
     pendingBlocklyRestore = draft.logicBlockly;
     noBlocklyPassthrough = draft.logicNoBlocklyPassthrough;
@@ -975,6 +1198,11 @@ function wire(): void {
     $<HTMLInputElement>("rm-color").addEventListener("input", onFormEdit);
     $<HTMLSelectElement>("rm-team").addEventListener("change", onFormEdit);
     $<HTMLInputElement>("rm-can-vent").addEventListener("change", onFormEdit);
+    // Wave 3 (契約 §3): なまえのよこに出す文字。description と同じ単純テキスト欄の配線。
+    $<HTMLInputElement>("rm-progress-text").addEventListener("input", () => {
+        onFormEdit();
+        refreshLogicPanel();
+    });
 
     $<HTMLInputElement>("rm-can-kill").addEventListener("change", () => {
         refreshKillCdVisibility();
@@ -1029,6 +1257,7 @@ function wire(): void {
         btn.addEventListener("click", () => setActiveTab(btn.dataset.rmTab as RmTab));
     }
     $("rm-vars-add").addEventListener("click", addVariable);
+    $("rm-hostopts-add").addEventListener("click", addHostOption);
 
     // 入口は2つ: マップエディタのヘッダー (作業中に開く) と、スタート画面の独立項目
     // (マップを一切触らずに役職だけ作る導線)。どちらも同じ openRoleMaker() を呼ぶ。

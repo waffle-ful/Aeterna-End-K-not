@@ -14,6 +14,27 @@ public enum EkrTeam
     Neutral
 }
 
+// Wave 3 (docs/ekn-wave3-contract.md §4): ホストがロビーで変えられるようにする数値1件の宣言。
+// 「どの数値か」は固定キー表 (EkrHostOption.FixedKeys) か `var:<変数名>` のどちらかで指名する。
+public sealed class EkrHostOption
+{
+    // 契約 §4.1 の許容キー (固定キー系)。値域は契約側の既存定義が正なので min/max は指定させない。
+    // ⚠️ TS 側 (editor/src/roledef.ts) と同じ綴り・同じ並びを保つこと (drift 検出は共有 fixture)。
+    public static readonly string[] FixedKeys = ["shield.count", "doom.seconds", "speedMult", "voteWeight", "killCooldown", "vision"];
+
+    public const string VarPrefix = "var:";
+
+    public string Key { get; init; }
+    public string Label { get; init; }
+
+    // Key が "var:<変数名>" のときだけ非 null。作者が min/max を決める。
+    public string VarName { get; init; }
+    public int Min { get; init; }
+    public int Max { get; init; }
+
+    public bool IsVar => VarName != null;
+}
+
 // EKN 役職コードのデータ契約 (R0: フォーム式テンプレートのみ・ロジック無し)。
 // 計画正典: docs/ekn-api-plan.md。EHR 内部語彙 (enum 名/option ID/RPC 番号) を一切含まないこと。
 public sealed class EkrDefinition
@@ -41,6 +62,23 @@ public sealed class EkrDefinition
     // 消費側 (EkrManager/EkmTemplateRole) は null チェック不要。
     [JsonIgnore]
     public EkrPassives ParsedPassives { get; private set; } = EkrPassives.Default;
+
+    // Wave 3 (docs/ekn-wave3-contract.md §3): 名前の横に出す進捗テキスト。任意 — 無ければ表示なし
+    // (現行挙動そのまま)。logic/passives と同じく生 JsonElement を保持して Validate() で型チェックする。
+    [JsonPropertyName("progress")]
+    public JsonElement? Progress { get; set; }
+
+    // Validate() 成功後の進捗テキスト (サニタイズ+クランプ済み)。空 = 進捗表示なし。
+    [JsonIgnore]
+    public string ProgressText { get; private set; } = "";
+
+    // Wave 3 (§4): 「作者が決めた数値をホストがロビーで変えられる」露出宣言。任意・0..8 件。
+    [JsonPropertyName("hostOptions")]
+    public JsonElement? HostOptions { get; set; }
+
+    // Validate() 成功後の検証済みリスト (空 = 露出なし)。並び順がオプション枠 (Id+2..Id+9) の割当順。
+    [JsonIgnore]
+    public List<EkrHostOption> ParsedHostOptions { get; private set; } = [];
 
     [JsonPropertyName("requires")]
     public List<string> Requires { get; set; } = [];
@@ -255,6 +293,161 @@ public sealed class EkrDefinition
                 return false;
 
             ParsedPassives = parsedPassives;
+        }
+
+        // Wave 3 (契約 §3): 進捗テキスト。任意 — 無ければ表示なし。
+        if (Progress.HasValue)
+        {
+            if (!TryParseProgress(Progress.Value, out string progressText, out error))
+                return false;
+
+            ProgressText = progressText;
+        }
+
+        // Wave 3 (契約 §4): ホスト露出。`var:` 系が宣言済み変数を参照するので logic の解析より後に置く。
+        if (HostOptions.HasValue)
+        {
+            if (!TryParseHostOptions(HostOptions.Value, ParsedLogic, out List<EkrHostOption> parsedHostOptions, out error))
+                return false;
+
+            ParsedHostOptions = parsedHostOptions;
+        }
+
+        return true;
+    }
+
+    // ── Wave 3 (docs/ekn-wave3-contract.md §3): progress ────────────────────────────────────────
+    // 自由テキスト形式 (裁定 §7-2)。予算・注入面は構造ガードで抑える: 16字上限 / TMP タグ不可
+    // (`<`・`>` を全角へ機械置換 = notify.text・cno_spawn.text と同一規約) / 置換後 24字クランプ
+    // (これは消費側 EkrManager.BuildProgressText が行う) / 色は役職色固定 (作者に指定させない)。
+    private const int ProgressTextMax = 16;
+
+    private static bool TryParseProgress(JsonElement root, out string text, out string error)
+    {
+        text = "";
+        error = null;
+
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            error = "なまえのよこに出す文字 (progress) の形式が不正です";
+            return false;
+        }
+
+        if (!root.TryGetProperty("text", out JsonElement textEl) || textEl.ValueKind != JsonValueKind.String)
+        {
+            error = "progress には text (出す文字) が必要です";
+            return false;
+        }
+
+        // サニタイズ → trim の順 (全角化してから前後の空白を落とす)。
+        string raw = (textEl.GetString() ?? "").Replace('<', '〈').Replace('>', '〉').Trim();
+
+        if (raw.Length == 0)
+        {
+            error = "progress の text が空です (書かないなら progress ごと消してください)";
+            return false;
+        }
+
+        // 長さ超過は reject でなくクランプ (description と同じ寛容側)。タグは上で潰してあるので
+        // 未閉じタグ断片の心配は無い。
+        text = raw.Length > ProgressTextMax ? raw[..ProgressTextMax] : raw;
+        return true;
+    }
+
+    // ── Wave 3 (§4.1): hostOptions ──────────────────────────────────────────────────────────────
+    private const int MaxHostOptions = 8;
+
+    private static bool TryParseHostOptions(JsonElement root, EkrLogicDef logic, out List<EkrHostOption> options, out string error)
+    {
+        options = [];
+        error = null;
+
+        if (root.ValueKind != JsonValueKind.Array)
+        {
+            error = "ホストがへんこうできる数値 (hostOptions) の形式が不正です";
+            return false;
+        }
+
+        if (root.GetArrayLength() > MaxHostOptions)
+        {
+            error = $"ホストがへんこうできる数値が多すぎます (最大{MaxHostOptions}個)";
+            return false;
+        }
+
+        var seenKeys = new HashSet<string>();
+
+        foreach (JsonElement el in root.EnumerateArray())
+        {
+            if (el.ValueKind != JsonValueKind.Object ||
+                !el.TryGetProperty("key", out JsonElement keyEl) || keyEl.ValueKind != JsonValueKind.String ||
+                !el.TryGetProperty("label", out JsonElement labelEl) || labelEl.ValueKind != JsonValueKind.String)
+            {
+                error = "hostOptions の中身が不正です (key / label を確認してください)";
+                return false;
+            }
+
+            // ⚠️ key は trim しない (TS 側 roledef.ts と同一) — 露出キーはエディタのドロップダウンが
+            // 生成する固定語彙で、前後の空白を許すと C# だけが受理する非対称になる。
+            string key = keyEl.GetString() ?? "";
+            string label = (labelEl.GetString() ?? "").Replace('<', '〈').Replace('>', '〉').Trim();
+
+            if (label.Length is 0 or > 24)
+            {
+                error = "hostOptions の label は1〜24文字にしてください";
+                return false;
+            }
+
+            if (!seenKeys.Add(key))
+            {
+                error = $"hostOptions のキーが重複しています ({key})";
+                return false;
+            }
+
+            bool isVar = key.StartsWith(EkrHostOption.VarPrefix, StringComparison.Ordinal);
+
+            if (!isVar && Array.IndexOf(EkrHostOption.FixedKeys, key) < 0)
+            {
+                error = $"hostOptions のキーが未対応です ({key})。End K not を更新してください";
+                return false;
+            }
+
+            if (!isVar)
+            {
+                // 固定キー系の値域は契約側の既存定義が正 — min/max を書かせない (書いてあれば reject)。
+                if (el.TryGetProperty("min", out _) || el.TryGetProperty("max", out _))
+                {
+                    error = $"hostOptions の {key} には min / max を指定できません (へんすう [var:] のときだけ指定します)";
+                    return false;
+                }
+
+                options.Add(new EkrHostOption { Key = key, Label = label });
+                continue;
+            }
+
+            string varName = key[EkrHostOption.VarPrefix.Length..];
+
+            // 変数名はそのまま照合する (TS 側と同一 — 宣言側が trim 済みなので、エディタ生成の key は
+            // 常に一致する)。logic 自体が無ければ変数も無い。
+            if (logic == null || !logic.Variables.Exists(v => v.Name == varName))
+            {
+                error = $"未定義の変数を参照しています ({varName})";
+                return false;
+            }
+
+            if (!el.TryGetProperty("min", out JsonElement minEl) || !EkrJson.TryReadInt(minEl, out int min) ||
+                !el.TryGetProperty("max", out JsonElement maxEl) || !EkrJson.TryReadInt(maxEl, out int max))
+            {
+                error = $"hostOptions の {key} には min と max (整数) が必要です";
+                return false;
+            }
+
+            if (min >= max || min < -9999 || max > 9999)
+            {
+                error = $"hostOptions の {key} の min / max が範囲外です (min < max ・ -9999〜9999)";
+                return false;
+            }
+
+            options.Add(new EkrHostOption { Key = key, Label = label, VarName = varName, Min = min, Max = max });
         }
 
         return true;

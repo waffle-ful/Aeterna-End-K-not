@@ -30,11 +30,15 @@ import type { LogicNode, LogicRule, RoleLogic } from "../roledef";
 // wait より後の exile。
 // L22: 会議では起きないこうげきのしゅるいの下に、会議専用のちから (R2)。
 // L23: 会議中に決まる死にかたの下に、タスク中しか効かないちから (R2)。
+// Wave 3 (docs/ekn-wave3-contract.md §6 2026-08-14): L24/L25 を追加 (計25ルール)。
+// L24 = on_var の rule 配下で自分が監視している変数を書き換えている (ピンポン/発火抑止の温床)、
+// L25 = L15/L16 の参照整合性シリーズの兄弟 — on_var の監視変数・progress.text が参照する変数に
+// どの rule にも var_set/var_add が無い (一生変わらない)。
 
 export type LintRuleId =
     | "L1" | "L2" | "L3" | "L4" | "L5" | "L6" | "L7" | "L8" | "L9" | "L10" | "L11" | "L12" | "L13"
     | "L14" | "L15" | "L16" | "L17" | "L18" | "L19" | "L20" | "L21"
-    | "L22" | "L23";
+    | "L22" | "L23" | "L24" | "L25";
 
 export interface LintWarning {
     rule: LintRuleId;
@@ -118,8 +122,10 @@ function hasGenerationOpBeforeElapsed(nodes: LogicNode[], ops: ReadonlySet<Logic
 
 // spec §6 L14 の対象イベント (「あいて」を持たないもの) をそのまま列挙する。
 // ctx を持つイベント (on_kill/on_death/on_report/on_cno_touch/on_attacked) はここに入れない。
+// Wave 3 (契約 §1.2/§1.3/§1.4): on_var/on_alive_count/on_vent_exit も ctx 無し (L14 一覧に追加)。
 const CTXLESS_WHENS: ReadonlySet<string> = new Set([
     "on_game_start", "on_pet", "on_meeting_start", "on_meeting_end", "on_task_complete", "on_vent_enter", "on_second",
+    "on_var", "on_alive_count", "on_vent_exit",
 ]);
 
 /**
@@ -242,12 +248,50 @@ function makeWarning(rule: LintRuleId, ruleIndex: number, when: string, message:
     return { rule, ruleIndex, when, message, suggestion };
 }
 
+// ---------------------------------------------------------------------------
+// Wave 3 (契約 §6 L24/L25) 用の共通ヘルパー
+// ---------------------------------------------------------------------------
+
+/** nodes の中 (if 分岐込み) に、指定した変数名への var_set/var_add があるか */
+function writesVarName(nodes: LogicNode[], name: string): boolean {
+    let found = false;
+    forEachNode(nodes, (n) => {
+        if ((n.op === "var_set" || n.op === "var_add") && n.name === name) found = true;
+    });
+    return found;
+}
+
+/** 全 rule を横断して var_set/var_add が書き込んでいる変数名を集める (L25 は rule をまたいで解決する) */
+function collectWrittenVarNames(logic: RoleLogic): ReadonlySet<string> {
+    const names = new Set<string>();
+    for (const rule of logic.rules) {
+        forEachNode(rule.do, (n) => {
+            if (n.op === "var_set" || n.op === "var_add") names.add(n.name);
+        });
+    }
+    return names;
+}
+
+/** progress.text 内の `{変数名}` 参照を抽出する (契約 §3 の SubstituteVariables と同じトークン形)。 */
+function extractProgressVarRefs(text: string): string[] {
+    const out: string[] = [];
+    const re = /\{([^{}]+)\}/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null) out.push(m[1]);
+    return out;
+}
+
 /**
- * 検証済みの RoleLogic に対して spec §6 の 21 ルール (v1.2 で L11/L12、v1.3 で L13、Wave 1 で
- * L14〜L17、Wave 2 で L18〜L20、2026-08-14 に L21 追加) を静的検査する。ブロックの組み方に対するヒントであり、
- * export 自体は妨げない (呼び出し元は結果を警告フッタに表示するだけ)。
+ * 検証済みの RoleLogic に対して spec §6 の 25 ルール (v1.2 で L11/L12、v1.3 で L13、Wave 1 で
+ * L14〜L17、Wave 2 で L18〜L20、2026-08-14 に L21、Wave 3 で L22〜L25 のうち L24/L25) を
+ * 静的検査する。ブロックの組み方に対するヒントであり、export 自体は妨げない (呼び出し元は結果を
+ * 警告フッタに表示するだけ)。
+ *
+ * `progressText` は L25 が progress.text 内の `{変数名}` 参照も一緒に検査するための任意引数
+ * (契約 §6 L25 — progress は logic とは別のトップレベルキーなので、RoleLogic には含まれない)。
+ * 省略時は progress.text 側の検査をスキップする (呼び出し元が progress を持たない場合に対応)。
  */
-export function lintRoleLogic(logic: RoleLogic): LintWarning[] {
+export function lintRoleLogic(logic: RoleLogic, progressText?: string): LintWarning[] {
     const warnings: LintWarning[] = [];
 
     // L15/L16 は rule をまたいで解決する (「どの rule にも無い」が条件 — spec §6)。
@@ -257,6 +301,9 @@ export function lintRoleLogic(logic: RoleLogic): LintWarning[] {
         ...collectProvidedSlots(logic, "dummy_spawn"),
     ]);
     const rememberedSlots = collectProvidedSlots(logic, "remember");
+    // L25 (Wave 3): on_var の監視変数・progress.text の参照変数を横断して集める。
+    const writtenVarNames = collectWrittenVarNames(logic);
+    const declaredVarNames = new Set(logic.variables.map((v) => v.name));
 
     logic.rules.forEach((rule: LogicRule, ruleIndex: number) => {
         if (rule.when === "on_second") {
@@ -496,7 +543,45 @@ export function lintRoleLogic(logic: RoleLogic): LintWarning[] {
                 "おぼえていない人の票は入れかえられないよ。先に「1をおぼえる」と「2をおぼえる」の両方を入れよう。",
             ));
         }
+
+        // L24 (Wave 3・契約 §6): on_var の rule 配下 (訪問順・if 分岐込み) で、自分が監視している
+        // 変数そのものを書き換えている。武装は正しく効くが、次の発火が1回分おくれたりピンポンしたり
+        // する紛らわしい組み方 (契約 §1.1 の「FromVarChain fiber 内の変数書込みは発火を生まない」)。
+        if (rule.when === "on_var" && rule.var !== undefined && writesVarName(rule.do, rule.var)) {
+            warnings.push(makeWarning(
+                "L24", ruleIndex, rule.when,
+                "「へんすうが◯になったら」の中で、自分が見はっているその変数を変えています。",
+                "じぶんのきっかけの変数をここで変えると、つぎの発火が1回分おくれたり、ぐるぐるしたりするよ。",
+            ));
+        }
+
+        // L25 (Wave 3・契約 §6・L15/L16 の参照整合性シリーズ): on_var の監視変数が、どの rule にも
+        // var_set/var_add で書かれていない (=一生変わらないので絶対に発火しない)。
+        if (rule.when === "on_var" && rule.var !== undefined && !writtenVarNames.has(rule.var)) {
+            warnings.push(makeWarning(
+                "L25", ruleIndex, rule.when,
+                `見はっている変数 (${rule.var}) が、どの「〜したとき」でも書きかえられていません。`,
+                "この変数はどこでも変わらないから、ずっと同じままだよ。",
+            ));
+        }
     });
+
+    // L25 (progress.text 側): {変数名} を参照しているのに、どの rule にも var_set/var_add が無い。
+    // rule に紐づかないトップレベルの検査なので ruleIndex は -1・when は "progress" の擬似値にする。
+    if (progressText !== undefined) {
+        for (const varName of extractProgressVarRefs(progressText)) {
+            // 固定文字列は正当ユース (契約 §3): 宣言されていない `{◯◯}` はただの文字として表示される
+            // だけなので L25 の対象にしない (対象は「変数として参照しているのに書かれない」ケースのみ)。
+            if (!declaredVarNames.has(varName)) continue;
+            if (!writtenVarNames.has(varName)) {
+                warnings.push(makeWarning(
+                    "L25", -1, "progress",
+                    `なまえのよこの表示が使っている変数 (${varName}) が、どの「〜したとき」でも書きかえられていません。`,
+                    "この変数はどこでも変わらないから、ずっと同じままだよ。",
+                ));
+            }
+        }
+    }
 
     return warnings;
 }

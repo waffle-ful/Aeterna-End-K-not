@@ -12,6 +12,12 @@
   "canVent": true,
   "visionMultiplier": 1.2,
   "winCondition": "team",
+  "progress": { "text": "うらみ{うらみ}" },
+  "hostOptions": [
+    { "key": "shield.count", "label": "かげのまもり" },
+    { "key": "killCooldown", "label": "キルクールダウン" },
+    { "key": "var:うらみ", "label": "はじめのうらみ", "min": 0, "max": 20 }
+  ],
   "passives": {
     "speedMult": 1.2,
     "shield": { "count": 2 },
@@ -190,6 +196,32 @@
           { "op": "cancel_attack" },
           { "op": "remember", "slot": 1, "target": "ctx" },
           { "op": "notify", "text": "その手は影を切っただけ…", "seconds": 3, "target": "ctx" }
+        ]
+      },
+      {
+        "when": "on_vent_exit",
+        "do": [
+          { "op": "notify", "text": "影から出た", "seconds": 2 },
+          { "op": "arrow_hide" }
+        ]
+      },
+      {
+        "when": "on_var",
+        "var": "うらみ",
+        "cmp": "ge",
+        "value": 7,
+        "do": [
+          { "op": "notify", "text": "うらみが満ちた…", "seconds": 3 },
+          { "op": "speed", "mult": 1.4, "seconds": 5 }
+        ]
+      },
+      {
+        "when": "on_alive_count",
+        "cmp": "le",
+        "value": 3,
+        "do": [
+          { "op": "notify", "text": "残りわずか…", "seconds": 3 },
+          { "op": "var_add", "name": "タスク数", "delta": { "e": "lit", "v": 1 } }
         ]
       },
       {

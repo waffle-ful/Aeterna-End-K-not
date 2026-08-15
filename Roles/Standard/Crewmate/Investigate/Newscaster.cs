@@ -167,9 +167,12 @@ public class Newscaster : RoleBase
     // Enigma/Mortician/Medium/Spiritualist と同じ位置で呼ばれる)。このあと
     // RoleBase.OnReportDeadBody() のインスタンス側オーバーライドが Encounters/Routes を
     // クリアするので、必ずそれより前に走る (呼び出し順は PlayerControlPatch.cs 側で保証済み)。
-    public static void OnAnyoneReportDeadBody(PlayerControl player, NetworkedPlayerInfo target)
+    // synthetic: 他役職・コマンドが起こした合成通報 (InSender / Anonymous / Paranoid / /mt <id> 等)。
+    // 死体を指してはいるが「誰かが実際に見つけた」わけではないので、緊急ボタンと同じく調査対象なし扱いに
+    // する (Wave 3 契約 §2 — それまでは target 付き合成通報が本物の通報として号外に載っていた)。
+    public static void OnAnyoneReportDeadBody(PlayerControl player, NetworkedPlayerInfo target, bool synthetic = false)
     {
-        if (target == null)
+        if (target == null || synthetic)
         {
             // 通常ボタンでの緊急会議 (死体の通報ではない)。今回の会議は調査対象なし扱いにする。
             LastReportWasBodyReport = false;

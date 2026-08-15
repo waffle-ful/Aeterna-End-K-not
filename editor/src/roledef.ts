@@ -85,6 +85,11 @@ export const LOGIC_WHEN_VALUES = [
     // (lint-role.ts 側の判定で同じ扱い)。slot は持たない (on_cno_touch 専用のまま)。
     "on_meeting_vote",
     "on_meeting_pick",
+    // Wave 3 (docs/ekn-wave3-contract.md §1 2026-08-14): 状態条件トリガ (エッジ発火・共通意味論は
+    // 契約 §1.1)。3つとも ctx 無し (CTXLESS_WHENS/L14 の対象に追加)。
+    "on_var",
+    "on_alive_count",
+    "on_vent_exit",
 ] as const;
 export type LogicWhen = (typeof LOGIC_WHEN_VALUES)[number];
 
@@ -221,6 +226,52 @@ export const VOTE_WEIGHT_SET_MIN = 0;
 export const VOTE_WEIGHT_SET_MAX = 3;
 
 // ---------------------------------------------------------------------------
+// Wave 3 (docs/ekn-wave3-contract.md 2026-08-14) — じょうたいと数値
+// ---------------------------------------------------------------------------
+// on_var/on_alive_count の cmp は「ExprKinds の流用」(契約 §1.2) — EXPR_OP_KIND_SET と同じ
+// 文字列 (eq/le/ge) を使う。専用の3値サブセットとして別定数にする (rule 直下フィールドという
+// 別の型的立場のため EXPR_OP_KINDS そのものは再利用しない)。
+export const VAR_CMP_VALUES = ["eq", "le", "ge"] as const;
+export type VarCmp = (typeof VAR_CMP_VALUES)[number];
+
+export const ALIVE_COUNT_VALUE_MIN = 1;
+export const ALIVE_COUNT_VALUE_MAX = 15;
+
+// progress (契約 §3): 自由テキスト形式。text は trim 後 1..16字 (超過はクランプ)。
+export const PROGRESS_TEXT_MIN = 1;
+export const PROGRESS_TEXT_MAX = 16;
+// 置換後 (SubstituteVariables 適用後) の最終文字列に対する安全弁クランプ (契約 §3)。
+// TS 側は {変数名} 置換を行わない (ゲーム側の実行時処理) ため、この定数は契約の記録用途のみ
+// (エディタのプレビュー等で将来使う可能性はあるが、v1 実装では未使用でも export しておく)。
+export const PROGRESS_TEXT_SUBSTITUTED_MAX = 24;
+
+export interface RoleProgress {
+    text: string;
+}
+
+// hostOptions (契約 §4.1): 固定6キー + var:<変数名> の動的キー。
+export const HOST_OPTION_FIXED_KEYS = [
+    "shield.count", "doom.seconds", "speedMult", "voteWeight", "killCooldown", "vision",
+] as const;
+export type HostOptionFixedKey = (typeof HOST_OPTION_FIXED_KEYS)[number];
+const HOST_OPTION_FIXED_KEY_SET: ReadonlySet<string> = new Set(HOST_OPTION_FIXED_KEYS);
+export const HOST_OPTION_VAR_KEY_PREFIX = "var:";
+
+export const HOST_OPTIONS_MAX = 8;
+export const HOST_OPTION_LABEL_MIN = 1;
+export const HOST_OPTION_LABEL_MAX = 24;
+export const HOST_OPTION_MINMAX_MIN = -9999;
+export const HOST_OPTION_MINMAX_MAX = 9999;
+
+export interface HostOption {
+    key: string;
+    label: string;
+    // var: 系のみ必須。固定キー系は付いていたら reject (契約 §4.1)。
+    min?: number;
+    max?: number;
+}
+
+// ---------------------------------------------------------------------------
 // パッシブ層 passives (Wave 1・spec §1.1) — トップレベルの固定キーオブジェクト
 // ---------------------------------------------------------------------------
 // logic とは独立 (logic 無しでも passives 単独で可)。Blockly ワークスペースには置かない —
@@ -337,6 +388,11 @@ export interface LogicRule {
     // R2: on_attacked / on_death 専用の任意フィルタ。省略 = 全種にマッチ。他イベントでは付与禁止。
     kind?: AttackKind;
     cause?: DeathCause;
+    // Wave 3 (契約 §1.2/§1.3): on_var は var/cmp/value の3つとも必須。on_alive_count は
+    // cmp/value のみ必須 (var は持たない)。他イベントではどれも付与禁止 (検証 reject)。
+    var?: string;
+    cmp?: VarCmp;
+    value?: number;
     do: LogicNode[];
 }
 
@@ -372,6 +428,11 @@ export interface EkrDefinition {
     // description = 短文 (頂上の役職パネル/イントロ)・descriptionLong = 詳細文 (/h r・オプションメニュー)。
     description?: string;
     descriptionLong?: string;
+    // Wave 3 (docs/ekn-wave3-contract.md §3): なまえのよこに出す文字。logic/passives と同じ理由で
+    // defaultEkrDefinition() には含めず、キー省略 = 進捗表示なし (現行挙動)。
+    progress?: RoleProgress;
+    // Wave 3 (契約 §4): ホストがへんこうできる数値。同上 (省略/空配列 = キー自体を出力しない)。
+    hostOptions?: HostOption[];
 }
 
 /**
@@ -412,6 +473,14 @@ export type LogicValidationResult =
 
 export type PassivesValidationResult =
     | { ok: true; passives: RolePassives }
+    | { ok: false; error: string };
+
+export type ProgressValidationResult =
+    | { ok: true; progress: RoleProgress }
+    | { ok: false; error: string };
+
+export type HostOptionsValidationResult =
+    | { ok: true; hostOptions: HostOption[] }
     | { ok: false; error: string };
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -607,6 +676,23 @@ export function validateEkrDefinition(value: unknown): EkrValidationResult {
         if (Object.keys(passivesResult.passives).length > 0) def.passives = passivesResult.passives;
     }
 
+    // progress (Wave 3・契約 §3): 省略/null = 進捗表示なし (現行挙動)。
+    if (value.progress !== undefined && value.progress !== null) {
+        const progressResult = validateProgress(value.progress);
+        if (!progressResult.ok) return { ok: false, error: progressResult.error };
+        def.progress = progressResult.progress;
+    }
+
+    // hostOptions (Wave 3・契約 §4.1): var:<変数名> の宣言済みチェックには logic.variables が
+    // 要るため、logic ブロックの後で検証する (順序依存)。logic が無ければ空集合になり、
+    // var: 系キーは (宣言済み変数が存在しないので) 必ず reject される。
+    if (value.hostOptions !== undefined && value.hostOptions !== null) {
+        const declaredVarNames: ReadonlySet<string> = new Set(def.logic?.variables.map((v) => v.name) ?? []);
+        const hostOptionsResult = validateHostOptions(value.hostOptions, declaredVarNames);
+        if (!hostOptionsResult.ok) return { ok: false, error: hostOptionsResult.error };
+        if (hostOptionsResult.hostOptions.length > 0) def.hostOptions = hostOptionsResult.hostOptions;
+    }
+
     return { ok: true, def };
 }
 
@@ -630,6 +716,13 @@ function expectRangeInt(raw: unknown, min: number, max: number, path: string): n
     const n = expectRangeNumber(raw, min, max, path);
     if (!Number.isInteger(n)) fail(`${path} は整数である必要があります (現在 ${n})`);
     return n;
+}
+
+/** レンジ制約の無い整数フィールド (on_var.value — 契約 §1.2「整数リテラル」だけが規定で範囲は無い)。 */
+function expectInt(raw: unknown, path: string): number {
+    if (typeof raw !== "number" || !Number.isFinite(raw)) fail(`${path} は数値である必要があります`);
+    if (!Number.isInteger(raw)) fail(`${path} は整数である必要があります (現在 ${raw})`);
+    return raw;
 }
 
 function expectString(raw: unknown, maxLen: number, path: string): string {
@@ -668,11 +761,18 @@ function expectBoolean(raw: unknown, path: string): boolean {
     return raw;
 }
 
+// spec §1: 変数名は**宣言側・参照側とも trim してから**照合する (宣言側は validateVariables が
+// 既に trim 済み)。参照側で trim を忘れると、手書き JSON の `" カウント "` をローダー (C#) は
+// 受理するのにエディタだけが「未定義の変数」で弾く非対称になる (2026-08-14 契約監査で検出)。
 function expectVarName(raw: unknown, varNames: ReadonlySet<string>, path: string): string {
-    if (typeof raw !== "string" || !varNames.has(raw)) {
+    if (typeof raw !== "string") {
         fail(`${path} が未定義の変数を参照しています (${JSON.stringify(raw)})`);
     }
-    return raw;
+    const name = raw.trim();
+    if (!varNames.has(name)) {
+        fail(`${path} が未定義の変数を参照しています (${JSON.stringify(raw)})`);
+    }
+    return name;
 }
 
 interface ExprValidation { expr: LogicExpr; depth: number }
@@ -974,6 +1074,32 @@ function validateRule(raw: unknown, varNames: ReadonlySet<string>, index: number
     const kind = readRuleFilter(raw, "kind", when, "on_attacked", ATTACK_KIND_VALUES, index) as AttackKind | undefined;
     const cause = readRuleFilter(raw, "cause", when, "on_death", DEATH_CAUSE_VALUES, index) as DeathCause | undefined;
 
+    // Wave 3 (契約 §1.2/§1.3): on_var は var/cmp/value の3つとも必須。on_alive_count は cmp/value
+    // のみ必須 (var は他イベント同様 reject)。それ以外のイベントは3フィールドとも付与禁止。
+    let varName: string | undefined;
+    let cmp: VarCmp | undefined;
+    let value: number | undefined;
+    if (when === "on_var") {
+        varName = expectVarName(raw.var, varNames, `rules[${index}].var`);
+        cmp = expectEnum(raw.cmp, VAR_CMP_VALUES, `rules[${index}].cmp`);
+        value = expectInt(raw.value, `rules[${index}].value`);
+    } else {
+        if (raw.var !== undefined) {
+            fail(`rules[${index}].var はイベント "${when}" では使えません (on_var 専用です)`);
+        }
+        if (when === "on_alive_count") {
+            cmp = expectEnum(raw.cmp, VAR_CMP_VALUES, `rules[${index}].cmp`);
+            value = expectRangeInt(raw.value, ALIVE_COUNT_VALUE_MIN, ALIVE_COUNT_VALUE_MAX, `rules[${index}].value`);
+        } else {
+            if (raw.cmp !== undefined) {
+                fail(`rules[${index}].cmp はイベント "${when}" では使えません (on_var/on_alive_count 専用です)`);
+            }
+            if (raw.value !== undefined) {
+                fail(`rules[${index}].value はイベント "${when}" では使えません (on_var/on_alive_count 専用です)`);
+            }
+        }
+    }
+
     const doPath = `rules[${index}].do`;
     if (raw.do === undefined || raw.do === null) fail(`${doPath} が必要です`);
     const doResult = validateNodeArray(raw.do, varNames, doPath, when);
@@ -987,6 +1113,9 @@ function validateRule(raw: unknown, varNames: ReadonlySet<string>, index: number
     if (slot !== undefined) rule.slot = slot;
     if (kind !== undefined) rule.kind = kind;
     if (cause !== undefined) rule.cause = cause;
+    if (varName !== undefined) rule.var = varName;
+    if (cmp !== undefined) rule.cmp = cmp;
+    if (value !== undefined) rule.value = value;
     return rule;
 }
 
@@ -1105,6 +1234,85 @@ export function validatePassives(value: unknown): PassivesValidationResult {
         }
 
         return { ok: true, passives: p };
+    } catch (e) {
+        if (e instanceof EkrLogicError) return { ok: false, error: e.message };
+        throw e;
+    }
+}
+
+/**
+ * `progress` オブジェクト (Wave 3・契約 §3) を検証する。自由テキスト形式。キーを書いた以上は
+ * 表示宣言なので text の欠落/空は reject (description の「空欄はキーごと落ちる」寛容側とは違う —
+ * こちらはキー自体が既に「表示する」という明示的な意思表示のため)。長さ超過は description と同じ
+ * クランプ (reject にしない)。`<``>` は notify.text 等と同じ全角サニタイズ。
+ */
+export function validateProgress(value: unknown): ProgressValidationResult {
+    try {
+        if (!isRecord(value)) fail("progress の中身が正しくありません (JSON オブジェクトが必要です)");
+        if (typeof value.text !== "string") fail("progress.text は文字列である必要があります");
+        let text = sanitizeAngleBrackets(value.text.trim());
+        if (text.length === 0) fail("progress.text が空です (書くなら1文字以上・書かないならキーごと省略してください)");
+        if (text.length > PROGRESS_TEXT_MAX) text = text.slice(0, PROGRESS_TEXT_MAX);
+        return { ok: true, progress: { text } };
+    } catch (e) {
+        if (e instanceof EkrLogicError) return { ok: false, error: e.message };
+        throw e;
+    }
+}
+
+/**
+ * `hostOptions` 配列 (Wave 3・契約 §4.1) を検証する。固定6キー + `var:<変数名>` (宣言済みのみ)。
+ * key の重複は文書全体 reject。`var:` 系のみ min/max が必須 (固定キー系は付いていたら reject)。
+ * 呼び出し元 (validateEkrDefinition) は `logic.variables` から集めた宣言済み変数名集合を渡すこと —
+ * このモジュール自身は `logic` の存在を仮定しない (未宣言のときは空集合を渡せば var: は全滅で reject される)。
+ */
+export function validateHostOptions(value: unknown, declaredVarNames: ReadonlySet<string>): HostOptionsValidationResult {
+    try {
+        if (!Array.isArray(value)) fail("hostOptions は配列である必要があります");
+        if (value.length > HOST_OPTIONS_MAX) fail(`hostOptions は最大 ${HOST_OPTIONS_MAX} 件までです (現在 ${value.length} 件)`);
+
+        const seenKeys = new Set<string>();
+        const out: HostOption[] = [];
+        value.forEach((raw, i) => {
+            if (!isRecord(raw)) fail(`hostOptions[${i}] が正しくありません`);
+            if (typeof raw.key !== "string") fail(`hostOptions[${i}].key は文字列である必要があります`);
+            const key = raw.key;
+            const isVarKey = key.startsWith(HOST_OPTION_VAR_KEY_PREFIX);
+            if (isVarKey) {
+                const varName = key.slice(HOST_OPTION_VAR_KEY_PREFIX.length);
+                if (!declaredVarNames.has(varName)) {
+                    fail(`hostOptions[${i}].key が未定義の変数を参照しています (${JSON.stringify(key)})`);
+                }
+            } else if (!HOST_OPTION_FIXED_KEY_SET.has(key)) {
+                fail(`hostOptions[${i}].key の値が正しくありません (${JSON.stringify(key)})`);
+            }
+            if (seenKeys.has(key)) fail(`hostOptions のキーが重複しています: ${key}`);
+            seenKeys.add(key);
+
+            if (typeof raw.label !== "string") fail(`hostOptions[${i}].label は文字列である必要があります`);
+            const trimmedLabel = raw.label.trim();
+            if (trimmedLabel.length < HOST_OPTION_LABEL_MIN || trimmedLabel.length > HOST_OPTION_LABEL_MAX) {
+                fail(`hostOptions[${i}].label は ${HOST_OPTION_LABEL_MIN}〜${HOST_OPTION_LABEL_MAX} 文字である必要があります (現在 ${trimmedLabel.length} 文字)`);
+            }
+            const label = sanitizeAngleBrackets(trimmedLabel);
+
+            const opt: HostOption = { key, label };
+            if (isVarKey) {
+                if (raw.min === undefined || raw.max === undefined) {
+                    fail(`hostOptions[${i}] は変数を露出するキーのため min/max が必須です`);
+                }
+                const min = expectRangeInt(raw.min, HOST_OPTION_MINMAX_MIN, HOST_OPTION_MINMAX_MAX, `hostOptions[${i}].min`);
+                const max = expectRangeInt(raw.max, HOST_OPTION_MINMAX_MIN, HOST_OPTION_MINMAX_MAX, `hostOptions[${i}].max`);
+                if (min >= max) fail(`hostOptions[${i}] は min < max である必要があります (現在 min=${min}, max=${max})`);
+                opt.min = min;
+                opt.max = max;
+            } else if (raw.min !== undefined || raw.max !== undefined) {
+                fail(`hostOptions[${i}] は固定キーのため min/max を指定できません (${key})`);
+            }
+            out.push(opt);
+        });
+
+        return { ok: true, hostOptions: out };
     } catch (e) {
         if (e instanceof EkrLogicError) return { ok: false, error: e.message };
         throw e;
