@@ -72,6 +72,24 @@ public static class GameOptionsMenuPatch
     private static readonly System.Collections.Generic.HashSet<int> EverBuiltRows = new();
     private static readonly System.Collections.Generic.HashSet<int> EverBuiltHeaders = new();
 
+    // 意図的なキャッシュ全破棄 (GameSettingMenuPatch.PurgeUiCache) の後始末。EverBuilt* を残すと
+    // 次回オープンの正当な再ビルドが MenuLeak の「row rebuild (dead-cache)」として誤記録される。
+    internal static void OnUiCachePurged()
+    {
+        EverBuiltRows.Clear();
+        EverBuiltHeaders.Clear();
+        BuildCoroutines.Clear(); // メニュー個体ごと破棄済み — StopCoroutine は不要 (個体の死で止まる)
+        BuildGenerations.Clear();
+
+        if (ReCreateAllCoroutine != null)
+        {
+            Main.Instance.StopCoroutine(ReCreateAllCoroutine);
+            ReCreateAllCoroutine = null;
+        }
+
+        ReCreateGeneration++;
+    }
+
     [HarmonyPatch(nameof(GameOptionsMenu.Initialize))]
     [HarmonyPrefix]
     private static bool InitializePrefix(GameOptionsMenu __instance)
@@ -324,7 +342,9 @@ public static class GameOptionsMenuPatch
                 }
                 catch (Exception e) { Utils.ThrowException(e); }
 
-                if (index % 100 == 0) yield return null;
+                // 100 件刻みだと建設フレームが 1 フレーム 60-119ms 級の停止になる (50 件でもまだ 50-70ms)。
+                // 30 件刻みで HITCH 閾値 (50ms) を下回らせる (総ビルド時間はフレーム数が増えても体感差なし)。
+                if (index % 30 == 0) yield return null;
             }
 
             // Bail if a newer build coroutine was started on this instance while we were running
@@ -2362,6 +2382,65 @@ public static class GameSettingMenuPatch
             catch (Exception e) { Logger.Warn($"stash {what} failed: {e.Message}", "MenuLeak"); }
         }
     }
+
+    // 設定 UI キャッシュの全破棄。キャッシュ (行 ~1万GO / マテリアル ~9千 / Boehm 100MB級) は再オープンを
+    // 速くするためだけの物で、メニューが開けない試合中には丸ごと死荷重 — incremental GC 無効環境では
+    // 全 GC の stop-the-world マーク時間と、シーン遷移の暗黙 Resources.UnloadUnusedAssets の全走査時間の
+    // 両方を試合の間じゅう延ばし続ける。ゲーム開始確定点 (StartGameHost、直後に GCPRE loading が走り
+    // ロード画面で回収が隠れる) で破棄し、次にロビーでメニューを開いた時に既存の遅延ビルドで作り直す。
+    // ロビー内での開閉はキャッシュがそのまま残るので今まで通り即時。
+    public static void PurgeUiCache(string reason)
+    {
+        if (GameSettingMenu.Instance) return; // 開いている最中の UI は絶対に壊さない (通常この状況で呼ばれない)
+
+        try
+        {
+            var destroyed = 0;
+
+            if (TempParent)
+            {
+                for (int i = TempParent.childCount - 1; i >= 0; i--)
+                {
+                    Object.Destroy(TempParent.GetChild(i).gameObject);
+                    destroyed++;
+                }
+            }
+
+            // 破棄した個体への静的参照をすべて手放す。取りこぼしても既存の dead-cache ガード
+            // (CreateSettings / StartPostfix の Unity-null 判定) が次回オープンで拾うが、参照が残る限り
+            // マネージド側 (IL2CPP ラッパー + dict) が回収されないので、ここで明示的に空にする。
+            ModSettingsTabs.Clear();
+            ModSettingsButtons.Clear();
+            GMButtons.Clear();
+            InputField = null;
+            PresetSelector = null;
+            PresetMinusButton = null;
+            PresetPlusButton = null;
+            PresetBehaviour = null;
+            PresetValueText = null;
+            GameModeLabelText = null;
+            TemplateGameOptionsMenu = null;
+            TemplateGameSettingsButton = null;
+
+            ModGameOptionsMenu.OptionList.Clear();
+            ModGameOptionsMenu.BehaviourList.Clear();
+            ModGameOptionsMenu.CategoryHeaderList.Clear();
+            ModGameOptionsMenu.HelpIconList.Clear();
+            ModGameOptionsMenu.BaseGameSettingCache.Clear();
+
+            foreach (OptionItem option in OptionItem.AllOptions) option.OptionBehaviour = null;
+
+            GameOptionsMenuPatch.OnUiCachePurged();
+            OptionSearch.Clear();
+            NewRoleMenuState.DetailObjects.Clear();
+            NewRoleMenuState.SelBars.Clear();
+            NewRoleMenuState.LastBuiltSelectedIndex = -2;
+            RoleMenuTabBar.Reset();
+
+            Logger.Info($"UI cache purged ({reason}): destroyed {destroyed} cached root object(s)", "MenuLeak");
+        }
+        catch (Exception e) { Logger.Warn($"UI cache purge failed: {e.Message}", "MenuLeak"); }
+    }
     [HarmonyPatch(nameof(GameSettingMenu.Close))]
     [HarmonyPostfix]
     public static void Close_Postfix()
@@ -2392,18 +2471,10 @@ public static class GameSettingMenuPatch
 
         // Each menu open+close orphans material instances (the vanilla menu masks its own panels with
         // fresh "(Instance)" materials and is then destroyed — destroying a renderer never destroys its
-        // instanced material). They are only reclaimed by Resources.UnloadUnusedAssets, which used to run
-        // no earlier than the next game start / meeting, so lobby-idle menu fiddling accumulated
-        // ~+400-1000 mat per cycle (BUG-20260706-01 round9 実測)。 Reclaim right after the close instead.
-        // Same GC trio as OnGameStartedPatch/MeetingHudPatch; cached sprites are HideAndDontSave-protected.
-        LateTask.New(() =>
-        {
-            if (GameSettingMenu.Instance || !GameStates.IsLobby) return; // reopened quickly / not idling in lobby
-            GC.Collect();
-            Resources.UnloadUnusedAssets();
-            GC.Collect();
-            Logger.Info("post-close unload of orphaned UI assets", "MenuLeak");
-        }, 1.5f, log: false);
+        // instanced material). かつてはここで GC+UnloadUnusedAssets+GC を打っていたが、Backrooms ロビーは
+        // GameObject 1万超なので Unload の全走査だけで 600-700ms 級の体感ヒッチになる (プレイヤーが操作中の
+        // ロビーで最悪の瞬間に止まる)。孤児マテリアルは native メモリを食うだけで GC 停止時間には効かないため、
+        // 回収はゲーム開始時の UI キャッシュ purge + シーン遷移 (ゲーム終了→ロビー等) の暗黙 Unload に任せる。
 
         try
         {

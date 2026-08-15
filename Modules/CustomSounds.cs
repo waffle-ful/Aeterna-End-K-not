@@ -378,7 +378,7 @@ public static class CustomSoundsManager
         if (totalSamples <= 0) throw new IOException($"OGG TotalSamples invalid: {totalSamples}");
 
         int interleavedLen = (int)(totalSamples * channels);
-        float[] buffer = new float[interleavedLen];
+        float[] buffer = RentDecodeBuffer(interleavedLen);
         int read = reader.ReadSamples(buffer, 0, interleavedLen);
         return (buffer, read, channels, sampleRate);
     }
@@ -424,7 +424,7 @@ public static class CustomSoundsManager
         if (dataPos + dataSize > data.Length) dataSize = data.Length - dataPos; // 壊れた data チャンク長への保険
         int totalSamples = dataSize / bytesPerSample; // interleaved sample 数
 
-        float[] interleaved = new float[totalSamples];
+        float[] interleaved = RentDecodeBuffer(totalSamples);
 
         switch (audioFormat, bps)
         {
@@ -467,7 +467,7 @@ public static class CustomSoundsManager
         if (totalInterleaved <= 0) throw new IOException($"MP3 Length invalid: {totalInterleaved}");
 
         int interleavedLen = (int)totalInterleaved;
-        float[] buffer = new float[interleavedLen];
+        float[] buffer = RentDecodeBuffer(interleavedLen);
         int read = reader.ReadSamples(buffer, 0, interleavedLen);
         return (buffer, read, channels, sampleRate);
     }
@@ -483,7 +483,32 @@ public static class CustomSoundsManager
         AudioClip clip = AudioClip.Create(Path.GetFileNameWithoutExtension(path), read / channels, channels, sampleRate, false);
         clip.SetData(il2cppBuffer, 0);
         copyMs = sw.ElapsedMilliseconds;
+        ReturnDecodeBuffer(buffer); // クリップ化が済んだらデコードバッファはプールへ (以後 buffer に触らないこと)
         return clip;
+    }
+
+    // ── デコードバッファの LOH プール ─────────────────────────────────────
+    // BGM 1 曲のデコードバッファは最大 ~40MB の float[] で、毎回 new すると LOH/gen2 圧が
+    // 状態遷移窓 (ロビー入り・ゲーム終了直後の複数曲プリロード) に集中し、遷移中の GC 停止を
+    // 底上げする。BGM 級 (>= 1M float) だけ最大 2 本 (worker のデコード中 1 + pump のクリップ化中 1)
+    // 使い回す。SFX 級の小物はプールしない (確保が安価で、在庫を小物で埋めると BGM が借りられない)。
+    private const int PooledBufferMinFloats = 1_000_000;
+    private static readonly ConcurrentQueue<float[]> DecodeBufferPool = [];
+
+    private static float[] RentDecodeBuffer(int minLen)
+    {
+        // 足りない在庫 (過去最大曲より短い) は捨てる — 在庫は自然に「最大曲長 2 本」へ収束する
+        while (DecodeBufferPool.TryDequeue(out float[] pooled))
+            if (pooled.Length >= minLen)
+                return pooled;
+
+        return new float[minLen];
+    }
+
+    private static void ReturnDecodeBuffer(float[] buffer)
+    {
+        if (buffer == null || buffer.Length < PooledBufferMinFloats) return;
+        if (DecodeBufferPool.Count < 2) DecodeBufferPool.Enqueue(buffer);
     }
 
     // ── 起動時サウンドプリロード ──────────────────────────────────────────
@@ -536,6 +561,7 @@ public static class CustomSoundsManager
                 bgmClipInProgress = null;
                 BgmInflight.Remove(s.BgmName);
                 BGMManager.PrimeCache(s.BgmName, s.Clip);
+                ReturnDecodeBuffer(s.Buffer);
                 Logger.Info($"Preloaded BGM {s.BgmName} (chunked, {(s.Read + BgmCopyChunkFloats - 1) / BgmCopyChunkFloats} frames)", "CustomSounds");
             }
             else bgmClipInProgress = s;
@@ -548,6 +574,7 @@ public static class CustomSoundsManager
             BgmInflight.Remove(s.BgmName);
             if (s.Clip) UnityEngine.Object.Destroy(s.Clip);
             BGMManager.OnPreloadFailed(s.BgmName);
+            ReturnDecodeBuffer(s.Buffer);
             Logger.Exception(ex, "CustomSounds.PumpBgmClipChunk");
         }
     }
@@ -689,6 +716,7 @@ public static class CustomSoundsManager
                 if (!BGMManager.IsFileWantedOrPending(d.BgmName))
                 {
                     BgmInflight.Remove(d.BgmName);
+                    ReturnDecodeBuffer(d.Buffer);
                     return;
                 }
 
@@ -762,18 +790,21 @@ public static class CustomSoundsManager
                         {
                             (float[] buffer, int read, int channels, int sampleRate) = DecodeOgg(path);
                             if (read <= MaxPreloadSamples) PreloadDecoded.Enqueue((path, buffer, read, channels, sampleRate, null));
+                            else ReturnDecodeBuffer(buffer);
                             break;
                         }
                         case ".mp3":
                         {
                             (float[] buffer, int read, int channels, int sampleRate) = DecodeMp3(path);
                             if (read <= MaxPreloadSamples) PreloadDecoded.Enqueue((path, buffer, read, channels, sampleRate, null));
+                            else ReturnDecodeBuffer(buffer);
                             break;
                         }
                         default: // .wav
                         {
                             (float[] buffer, int read, int channels, int sampleRate) = DecodeWav(path);
                             if (read <= MaxPreloadSamples) PreloadDecoded.Enqueue((path, buffer, read, channels, sampleRate, null));
+                            else ReturnDecodeBuffer(buffer);
                             break;
                         }
                     }

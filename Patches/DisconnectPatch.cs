@@ -8,6 +8,11 @@ internal static class OnDisconnectedPatch
     public static void Postfix( /*AmongUsClient __instance*/)
     {
         Main.VisibleTasksCount = false;
+
+        // ロビーを離れたら設定 UI キャッシュ (DontDestroyOnLoad 退避分) は次のロビーまで出番がない —
+        // メインメニュー滞在中も全 GC のマーク対象であり続けるので、ここで手放す (auto-rehost 後の
+        // 初回オープンは既存の遅延ビルドで作り直される)。
+        GameSettingMenuPatch.PurgeUiCache("disconnect");
     }
 }
 /*
