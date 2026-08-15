@@ -70,11 +70,21 @@ public static class GcUafSelfHeal
             // (Pass16ScanMethodRefs の並列 xref スキャン) がアドレス空間を使い切り、メニューに到達する前に落ちる
             // = 二度と起動できなくなる (2026-08-11 実機報告: x86 プロセスで true=起動不可 / false=起動可の 1-bit A/B)。
             // 起動不能になるとこのコードも走れず自動復帰できないため、probe すら回さず降りる。
-            // この環境で GC UAF から守れるのは RemoveGcMaxTimeSlice (incremental GC 無効化) だけ — 上流と同じ防御に倒す。
+            // この環境で GC UAF から守れるのは incremental GC の無効化だけ: IncrementalGcInvalidator (実行時
+            // メモリパッチ) と Doorstop 4.5.1 の [Environment] GC_DISABLE_INCREMENTAL=1 の二重系。
+            // (旧同梱の RemoveGcMaxTimeSlice は boot.config の読まれない死にキーを消すだけで効果ゼロと
+            //  2026-08-15 実測確定 → 同梱撤去済み。)
+            // 両方外れて incremental が ON のまま残った x86 は防御ゼロ = クラッシュ条件そのものなので、
+            // ここは実測値で判定して ERROR の警報を残す (この RunOnce は起動 3 秒後 = INCGC 適用後に走る)。
             if (!Environment.Is64BitProcess)
             {
                 WriteMarker(markerPath, currentGen, "GAVE_UP", MaxHealAttempts);
-                Logger.Warn("GCUAF-SELFHEAL: 32-bit process detected — escalation skipped (ScanMethodRefs=true would break interop generation and brick the boot); relying on RemoveGcMaxTimeSlice", "GcUafSelfHeal");
+
+                if (GcUafProbe.IsIncrementalGc())
+                    Logger.Error("GCUAF-SELFHEAL: 32-bit process with incremental GC still ON — both kill switches (IncrementalGcInvalidator / Doorstop GC_DISABLE_INCREMENTAL) failed, and escalation to ScanMethodRefs=true is impossible on 32-bit (it bricks interop generation). This environment is exposed to the GC UAF crash.", "GcUafSelfHeal");
+                else
+                    Logger.Warn("GCUAF-SELFHEAL: 32-bit process detected — escalation skipped (ScanMethodRefs=true would break interop generation and brick the boot); incremental GC is off, so the UAF precondition is absent", "GcUafSelfHeal");
+
                 return;
             }
 
