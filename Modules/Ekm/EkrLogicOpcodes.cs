@@ -296,7 +296,9 @@ internal sealed class EkrActionSink : IEkrActionSink
     private static readonly Regex VarPattern = new(@"\{([^{}]+)\}", RegexOptions.Compiled);
 
     // notify.text 内の {変数名} を現在値に置換する。未定義名はそのまま表示する (spec §3)。
-    private static string SubstituteVariables(string text, Dictionary<string, float> vars)
+    // Wave 3: progress.text も**同一規約・同一実装**を使う契約なので EkrManager からも呼ぶ
+    // (EkrActionSink.SubstituteVariables として internal 公開)。
+    internal static string SubstituteVariables(string text, Dictionary<string, float> vars)
     {
         if (string.IsNullOrEmpty(text) || vars == null || !text.Contains('{')) return text;
 

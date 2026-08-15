@@ -425,6 +425,181 @@ public class EkrDefinitionTests
         Assert.True(EkrDefinition.TryParse(LogicWithOp("{\"op\":\"vote_swap\"}"), out _, out string e2), e2);
     }
 
+    // ── Wave 3 (docs/ekn-wave3-contract.md) ────────────────────────────────────────────────────
+
+    // §1: 共有 fixture に載せた3イベントが C# 側でも同じ値まで通ること (TS↔C# の drift 検出網)。
+    [Fact]
+    public void FullCourseFixture_ExposesWave3Triggers()
+    {
+        string json = File.ReadAllText(FixturePath("role-full-course.ekrole.json"));
+        Assert.True(EkrDefinition.TryParse(json, out EkrDefinition def, out string error), error);
+
+        EkrRule onVar = Assert.Single(def.ParsedLogic.Rules, r => r.When == "on_var");
+        Assert.Equal("うらみ", onVar.VarName);
+        Assert.Equal("ge", onVar.Cmp);
+        Assert.Equal(7, onVar.CmpValue);
+        Assert.True(onVar.IsStateTrigger);
+
+        EkrRule onAlive = Assert.Single(def.ParsedLogic.Rules, r => r.When == "on_alive_count");
+        Assert.Null(onAlive.VarName);
+        Assert.Equal("le", onAlive.Cmp);
+        Assert.Equal(3, onAlive.CmpValue);
+        Assert.True(onAlive.IsStateTrigger);
+
+        EkrRule onVentExit = Assert.Single(def.ParsedLogic.Rules, r => r.When == "on_vent_exit");
+        Assert.False(onVentExit.IsStateTrigger);
+    }
+
+    // §1.2/§1.3: じょうたいトリガの必須フィールドと、他イベントへの付着 reject (slot と同じ厳格側)。
+    [Theory]
+    [InlineData("{\"when\":\"on_var\",\"var\":\"v\",\"cmp\":\"eq\",\"value\":0,\"do\":[{\"op\":\"stop\"}]}", true)]
+    [InlineData("{\"when\":\"on_var\",\"var\":\"v\",\"cmp\":\"le\",\"value\":-5,\"do\":[{\"op\":\"stop\"}]}", true)]
+    // on_var の value に範囲は無い (契約が定めていない — 独自の上下限を足すと TS 側と非対称になる)
+    [InlineData("{\"when\":\"on_var\",\"var\":\"v\",\"cmp\":\"ge\",\"value\":100000,\"do\":[{\"op\":\"stop\"}]}", true)]
+    // 未定義の変数 / 不正な cmp / 式は受理しない
+    [InlineData("{\"when\":\"on_var\",\"var\":\"なし\",\"cmp\":\"eq\",\"value\":0,\"do\":[{\"op\":\"stop\"}]}", false)]
+    [InlineData("{\"when\":\"on_var\",\"var\":\"v\",\"cmp\":\"lt\",\"value\":0,\"do\":[{\"op\":\"stop\"}]}", false)]
+    [InlineData("{\"when\":\"on_var\",\"var\":\"v\",\"cmp\":\"eq\",\"value\":{\"e\":\"lit\",\"v\":0},\"do\":[{\"op\":\"stop\"}]}", false)]
+    // var / cmp / value の欠落
+    [InlineData("{\"when\":\"on_var\",\"cmp\":\"eq\",\"value\":0,\"do\":[{\"op\":\"stop\"}]}", false)]
+    [InlineData("{\"when\":\"on_var\",\"var\":\"v\",\"value\":0,\"do\":[{\"op\":\"stop\"}]}", false)]
+    // on_alive_count は var 不可・value は 1..15
+    [InlineData("{\"when\":\"on_alive_count\",\"cmp\":\"le\",\"value\":3,\"do\":[{\"op\":\"stop\"}]}", true)]
+    [InlineData("{\"when\":\"on_alive_count\",\"cmp\":\"ge\",\"value\":1,\"do\":[{\"op\":\"stop\"}]}", true)]
+    [InlineData("{\"when\":\"on_alive_count\",\"cmp\":\"le\",\"value\":15,\"do\":[{\"op\":\"stop\"}]}", true)]
+    // 整数等価トークン (spec §1 2026-08-11 裁定) — TS は JSON.parse 後に表記を区別できないので C# も受理側
+    [InlineData("{\"when\":\"on_alive_count\",\"cmp\":\"le\",\"value\":3.0,\"do\":[{\"op\":\"stop\"}]}", true)]
+    [InlineData("{\"when\":\"on_var\",\"var\":\"v\",\"cmp\":\"eq\",\"value\":2.0,\"do\":[{\"op\":\"stop\"}]}", true)]
+    [InlineData("{\"when\":\"on_var\",\"var\":\"v\",\"cmp\":\"eq\",\"value\":1.5,\"do\":[{\"op\":\"stop\"}]}", false)]
+    [InlineData("{\"when\":\"on_alive_count\",\"var\":\"v\",\"cmp\":\"le\",\"value\":3,\"do\":[{\"op\":\"stop\"}]}", false)]
+    [InlineData("{\"when\":\"on_alive_count\",\"cmp\":\"le\",\"value\":0,\"do\":[{\"op\":\"stop\"}]}", false)]
+    [InlineData("{\"when\":\"on_alive_count\",\"cmp\":\"le\",\"value\":16,\"do\":[{\"op\":\"stop\"}]}", false)]
+    // 他イベントへの付着は文書 reject
+    [InlineData("{\"when\":\"on_pet\",\"var\":\"v\",\"do\":[{\"op\":\"stop\"}]}", false)]
+    [InlineData("{\"when\":\"on_pet\",\"cmp\":\"eq\",\"do\":[{\"op\":\"stop\"}]}", false)]
+    [InlineData("{\"when\":\"on_pet\",\"value\":1,\"do\":[{\"op\":\"stop\"}]}", false)]
+    // on_vent_exit は追加フィールド無し
+    [InlineData("{\"when\":\"on_vent_exit\",\"do\":[{\"op\":\"stop\"}]}", true)]
+    public void StateTriggerRules_MatchTheContract(string ruleJson, bool shouldAccept)
+    {
+        string json = Wrap("\"logic\":{\"version\":1,\"variables\":[{\"name\":\"v\",\"init\":0}],\"rules\":[" + ruleJson + "]}");
+        bool ok = EkrDefinition.TryParse(json, out _, out string error);
+        Assert.True(ok == shouldAccept, shouldAccept ? error : "本来 reject されるべき rule が受理されました: " + ruleJson);
+    }
+
+    // §1.1: cancel_attack / cancel_vote の配置 reject は新イベント配下にも自動で効く (白名単の補集合)。
+    [Fact]
+    public void CancelOps_StayRejectedUnderTheNewEvents()
+    {
+        Assert.False(EkrDefinition.TryParse(
+            Wrap("\"logic\":{\"version\":1,\"variables\":[{\"name\":\"v\",\"init\":0}],\"rules\":[{\"when\":\"on_var\",\"var\":\"v\",\"cmp\":\"eq\",\"value\":0,\"do\":[{\"op\":\"cancel_attack\"}]}]}"),
+            out _, out _));
+
+        Assert.False(EkrDefinition.TryParse(
+            Wrap("\"logic\":{\"version\":1,\"rules\":[{\"when\":\"on_vent_exit\",\"do\":[{\"op\":\"cancel_vote\"}]}]}"),
+            out _, out _));
+    }
+
+    // §3: progress は自由テキスト。タグは全角化・16字でクランプ・空は reject・キーごと無しは後方互換。
+    [Fact]
+    public void Progress_MatchesTheContract()
+    {
+        string json = File.ReadAllText(FixturePath("role-full-course.ekrole.json"));
+        Assert.True(EkrDefinition.TryParse(json, out EkrDefinition fixtureDef, out string error), error);
+        Assert.Equal("うらみ{うらみ}", fixtureDef.ProgressText);
+
+        // 無し = 表示なし (完全後方互換)
+        Assert.True(EkrDefinition.TryParse(Wrap("\"canVent\":true"), out EkrDefinition none, out error), error);
+        Assert.Equal("", none.ProgressText);
+
+        // TMP タグは書けない (notify.text と同一規約)
+        Assert.True(EkrDefinition.TryParse(Wrap("\"progress\":{\"text\":\"<b>あ</b>\"}"), out EkrDefinition tagged, out error), error);
+        Assert.DoesNotContain('<', tagged.ProgressText);
+        Assert.DoesNotContain('>', tagged.ProgressText);
+
+        // 超過はクランプ (reject にしない = description と同じ寛容側)
+        Assert.True(EkrDefinition.TryParse(Wrap("\"progress\":{\"text\":\"" + new string('あ', 40) + "\"}"), out EkrDefinition clamped, out error), error);
+        Assert.Equal(16, clamped.ProgressText.Length);
+
+        // キーを書いた以上は表示宣言 — text 欠落・空は reject
+        Assert.False(EkrDefinition.TryParse(Wrap("\"progress\":{}"), out _, out _));
+        Assert.False(EkrDefinition.TryParse(Wrap("\"progress\":{\"text\":\"   \"}"), out _, out _));
+    }
+
+    // §4.1: hostOptions のキー表・重複・var: の参照整合性・min/max の付着規則。
+    [Fact]
+    public void HostOptions_MatchTheContract()
+    {
+        string json = File.ReadAllText(FixturePath("role-full-course.ekrole.json"));
+        Assert.True(EkrDefinition.TryParse(json, out EkrDefinition fixtureDef, out string error), error);
+        Assert.Equal(3, fixtureDef.ParsedHostOptions.Count);
+        Assert.Equal("shield.count", fixtureDef.ParsedHostOptions[0].Key);
+        Assert.False(fixtureDef.ParsedHostOptions[0].IsVar);
+        Assert.True(fixtureDef.ParsedHostOptions[2].IsVar);
+        Assert.Equal("うらみ", fixtureDef.ParsedHostOptions[2].VarName);
+        Assert.Equal(0, fixtureDef.ParsedHostOptions[2].Min);
+        Assert.Equal(20, fixtureDef.ParsedHostOptions[2].Max);
+
+        // 無し = 露出なし (後方互換)
+        Assert.True(EkrDefinition.TryParse(Wrap("\"canVent\":true"), out EkrDefinition none, out error), error);
+        Assert.Empty(none.ParsedHostOptions);
+
+        // 未対応キー / 重複キー / label 範囲外
+        Assert.False(EkrDefinition.TryParse(Wrap("\"hostOptions\":[{\"key\":\"nope\",\"label\":\"あ\"}]"), out _, out _));
+        Assert.False(EkrDefinition.TryParse(Wrap("\"hostOptions\":[{\"key\":\"vision\",\"label\":\"あ\"},{\"key\":\"vision\",\"label\":\"い\"}]"), out _, out _));
+        Assert.False(EkrDefinition.TryParse(Wrap("\"hostOptions\":[{\"key\":\"vision\",\"label\":\"\"}]"), out _, out _));
+
+        // 固定キーへの min/max 付着は reject (値域は契約側の既存定義が正)
+        Assert.False(EkrDefinition.TryParse(Wrap("\"hostOptions\":[{\"key\":\"vision\",\"label\":\"あ\",\"min\":0,\"max\":1}]"), out _, out _));
+
+        // key は trim しない (TS 側と同一 — 片側だけ寛容だと非対称になる)
+        Assert.False(EkrDefinition.TryParse(Wrap("\"hostOptions\":[{\"key\":\" vision \",\"label\":\"あ\"}]"), out _, out _));
+
+        // 固定キー6種すべてが受理されること (TS 側 roledef.test.ts と同じ網)
+        foreach (string fixedKey in EkrHostOption.FixedKeys)
+            Assert.True(EkrDefinition.TryParse(Wrap($"\"hostOptions\":[{{\"key\":\"{fixedKey}\",\"label\":\"あ\"}}]"), out _, out error), $"{fixedKey}: {error}");
+
+        // label は 24字ちょうどまで受理・25字は reject (クランプではなく reject 側)・空白のみも reject
+        Assert.True(EkrDefinition.TryParse(Wrap("\"hostOptions\":[{\"key\":\"vision\",\"label\":\"" + new string('あ', 24) + "\"}]"), out _, out error), error);
+        Assert.False(EkrDefinition.TryParse(Wrap("\"hostOptions\":[{\"key\":\"vision\",\"label\":\"" + new string('あ', 25) + "\"}]"), out _, out _));
+        Assert.False(EkrDefinition.TryParse(Wrap("\"hostOptions\":[{\"key\":\"vision\",\"label\":\"   \"}]"), out _, out _));
+
+        // label の TMP タグは全角化される
+        Assert.True(EkrDefinition.TryParse(Wrap("\"hostOptions\":[{\"key\":\"vision\",\"label\":\"<b>あ</b>\"}]"), out EkrDefinition taggedLabel, out error), error);
+        Assert.DoesNotContain('<', Assert.Single(taggedLabel.ParsedHostOptions).Label);
+
+        // var: は宣言済み変数のみ + min/max 必須 + min<max
+        const string varsLogic = "\"logic\":{\"version\":1,\"variables\":[{\"name\":\"v\",\"init\":2}]," + MinimalRule + "},";
+        Assert.True(EkrDefinition.TryParse(Wrap(varsLogic + "\"hostOptions\":[{\"key\":\"var:v\",\"label\":\"あ\",\"min\":1,\"max\":9}]"), out EkrDefinition varOk, out error), error);
+        Assert.Equal("v", Assert.Single(varOk.ParsedHostOptions).VarName);
+
+        Assert.False(EkrDefinition.TryParse(Wrap(varsLogic + "\"hostOptions\":[{\"key\":\"var:none\",\"label\":\"あ\",\"min\":1,\"max\":9}]"), out _, out _));
+        Assert.False(EkrDefinition.TryParse(Wrap(varsLogic + "\"hostOptions\":[{\"key\":\"var:v\",\"label\":\"あ\"}]"), out _, out _));
+        Assert.False(EkrDefinition.TryParse(Wrap(varsLogic + "\"hostOptions\":[{\"key\":\"var:v\",\"label\":\"あ\",\"min\":9,\"max\":1}]"), out _, out _));
+        Assert.False(EkrDefinition.TryParse(Wrap(varsLogic + "\"hostOptions\":[{\"key\":\"var:v\",\"label\":\"あ\",\"min\":5,\"max\":5}]"), out _, out _)); // min == max も reject
+        Assert.False(EkrDefinition.TryParse(Wrap(varsLogic + "\"hostOptions\":[{\"key\":\"var:v\",\"label\":\"あ\",\"min\":-10000,\"max\":9}]"), out _, out _));
+
+        // logic 自体が無ければ var: は必ず reject (参照できる変数が存在しない)
+        Assert.False(EkrDefinition.TryParse(Wrap("\"hostOptions\":[{\"key\":\"var:v\",\"label\":\"あ\",\"min\":1,\"max\":9}]"), out _, out _));
+
+        // 8件ちょうどは受理・9件目は reject (上限8枠)
+        var vars = new System.Text.StringBuilder("\"logic\":{\"version\":1,\"variables\":[");
+        for (var i = 0; i < 9; i++) vars.Append(i > 0 ? "," : "").Append("{\"name\":\"v").Append(i).Append("\",\"init\":0}");
+        vars.Append("],").Append(MinimalRule).Append("},");
+
+        Assert.True(EkrDefinition.TryParse(Wrap(vars + BuildHostOptions(8)), out EkrDefinition eight, out error), error);
+        Assert.Equal(8, eight.ParsedHostOptions.Count);
+        Assert.False(EkrDefinition.TryParse(Wrap(vars + BuildHostOptions(9)), out _, out _));
+        return;
+
+        static string BuildHostOptions(int count)
+        {
+            var sb = new System.Text.StringBuilder("\"hostOptions\":[");
+            for (var i = 0; i < count; i++) sb.Append(i > 0 ? "," : "").Append("{\"key\":\"var:v").Append(i).Append("\",\"label\":\"あ\",\"min\":0,\"max\":9}");
+            return sb.Append(']').ToString();
+        }
+    }
+
     // passives 無しでも R0 動作 (完全後方互換) — ParsedPassives は既定インスタンスで非 null。
     [Fact]
     public void NoPassives_UsesDefaults()

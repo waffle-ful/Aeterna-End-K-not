@@ -267,6 +267,20 @@ export function compileTopBlocksToRules(topBlocks: SerializedBlock[]): unknown[]
                 if (typeof cause === "string" && cause !== "") rule.cause = cause;
             }
 
+            // Wave 3 (docs/ekn-wave3-contract.md §1.2/§1.3 2026-08-14): on_var は変数名/比較/値の
+            // 3フィールドとも必須。on_alive_count は比較/値のみ (var は持たない)。欠落しているフィールドは
+            // そのまま undefined を通し (欠落を既定値に化けさせない — dummy_spawn.KILLABLE のコメントと
+            // 同じ方針)、validateRoleLogic 側の「必須です」reject に委ねる。
+            if (when === "on_var") {
+                rule.var = b.fields?.VAR;
+                rule.cmp = b.fields?.CMP;
+                rule.value = toNum(b.fields?.VALUE);
+            }
+            if (when === "on_alive_count") {
+                rule.cmp = b.fields?.CMP;
+                rule.value = toNum(b.fields?.VALUE);
+            }
+
             rules.push(rule);
         }
     }

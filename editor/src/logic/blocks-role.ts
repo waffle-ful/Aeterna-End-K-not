@@ -19,7 +19,7 @@
 import * as Blockly from "blockly/core";
 import "blockly/blocks"; // math_number/logic_boolean 等の標準ブロックを Blockly.Blocks へ登録する副作用 import
 import * as jaMsg from "blockly/msg/ja";
-import { LOGIC_WHEN_VALUES, type LogicWhen } from "../roledef";
+import { ALIVE_COUNT_VALUE_MAX, ALIVE_COUNT_VALUE_MIN, LOGIC_WHEN_VALUES, type LogicWhen } from "../roledef";
 
 // 標準ブロック (logic_boolean 等) はラベルを %{BKY_...} メッセージキーで持つため、ロケールを
 // ロードしないと生キーがそのまま表示される。カスタムブロックは全て日本語直書きなので影響しない。
@@ -68,6 +68,14 @@ const DEATH_CAUSE_OPTIONS: [string, string][] = [
 
 // on_cno_touch は動的な SLOT ドロップダウンを持つため WHEN_LABELS/WHEN_TOOLTIPS には残すが、
 // jsonBlockDefs 側では他のイベントと分けて個別のブロック定義を書く (下記参照)。
+// Wave 3 (docs/ekn-wave3-contract.md §1 2026-08-14) — 状態条件トリガのちょうど/いか/いじょう。
+// on_var / on_alive_count のどちらの比較にも使う (見え方が違うだけの同じ3値)。
+const CMP_OPTIONS: [string, string][] = [
+    ["ちょうど", "eq"],
+    ["いか", "le"],
+    ["いじょう", "ge"],
+];
+
 export const WHEN_LABELS: Record<LogicWhen, string> = {
     on_game_start: "ゲームが始まったとき",
     // Wave 1 (spec §2 2026-08-11): 発動トリガ統合により「ペット」ではなく汎用の発動ボタンを指す
@@ -86,6 +94,10 @@ export const WHEN_LABELS: Record<LogicWhen, string> = {
     // Wave 2 (docs/ekn-wave2-contract.md §1.1/§1.2 2026-08-11)
     on_meeting_vote: "かいぎで投票したとき",
     on_meeting_pick: "かいぎであいてをえらんだとき",
+    // Wave 3 (docs/ekn-wave3-contract.md §1 2026-08-14) — 状態条件トリガ。
+    on_var: "へんすうが条件になったとき",
+    on_alive_count: "いきのこりが◯人になったとき",
+    on_vent_exit: "ベントから出たとき",
 };
 
 const WHEN_TOOLTIPS: Record<LogicWhen, string> = {
@@ -97,7 +109,9 @@ const WHEN_TOOLTIPS: Record<LogicWhen, string> = {
     on_meeting_end: "追放処理のあと、タスクが再開するときに実行します。",
     on_task_complete: "自分がタスクを1つ終えるたびに実行します。見せかけのタスク (インポスターなどの偽タスク) では発火しません。",
     on_vent_enter: "自分がベントに入れたとき (封鎖などの妨害をくぐり抜けて実際に入れたとき) に実行します。",
-    on_report: "自分が死体を通報したときに実行します。",
+    // Wave 3 (docs/ekn-wave3-contract.md §2 2026-08-14): 合成通報 (他の役職の能力・コマンドが
+    // 起こす偽装通報) では発火しないことを明記した文言へ更新。
+    on_report: "自分が死体を見つけて通報したときに実行します (他の役職の能力で会議になったときは実行されません)。",
     on_second: "タスク中、自分が生きている間、毎秒くりかえし実行します (処理が重いことはしないでね)。",
     on_cno_touch: "自分が出したオブジェクト(スロットで指定)に、生きているプレイヤーが触れたときに実行します。触れた人が「相手」になります。一度触れると、その人が離れるまで(または離れてから触れ直すまで)は再発火しません。",
     // Wave 1 (spec §2 2026-08-11)。同期プロローグ (最初の「秒待つ」までしか攻撃を止められない)
@@ -106,6 +120,13 @@ const WHEN_TOOLTIPS: Record<LogicWhen, string> = {
     // Wave 2 (docs/ekn-wave2-contract.md §1.1/§1.2 2026-08-11)
     on_meeting_vote: "このときの「あいて」= 投票した相手 (スキップでは発火しません)。票を取り消せるのは一番はじめだけです。",
     on_meeting_pick: "このときの「あいて」= えらんだ相手 (会議のボタン、または /pick コマンドどちらでも発火します)。票そのものには関係ありません。",
+    // Wave 3 (docs/ekn-wave3-contract.md §1 2026-08-14) — 状態条件トリガ (エッジ発火・共通意味論)。
+    on_var: "この変数の値が指定した条件になったしゅんかんに1回だけ実行します。条件を満たしたままだと再発火せず、いちど条件から外れてからまた満たすと、もう1回発火します。ゲーム開始時にすでに条件を満たしていても、そのときは発火しません。",
+    on_alive_count: "生きている人数が指定した条件になったしゅんかんに1回だけ実行します (ダミー人形は数えません)。自分が死んだあとは発火しません。条件を満たしたままだと再発火せず、いちど条件から外れてからまた満たすと、もう1回発火します。",
+    // 契約 §1.4: 「ベントから出たときに実行します (追い出されたときも含みます)。」の verbatim に加え、
+    // 「on_vent_enter とのペアは保証しない (入ったときと数が合わないことがあるよ)」を tooltip に
+    // 明記する要件が別途あるため、注意書きの一文を続ける (2つの要件を1文で満たす)。
+    on_vent_exit: "ベントから出たときに実行します (追い出されたときも含みます)。入ったときと数が合わないことがあるよ。",
 };
 
 // ---------------------------------------------------------------------------
@@ -162,13 +183,19 @@ function jsonBlockDefs(): unknown[] {
     // 他の when と同じ汎用テンプレートには乗せず、個別のブロック定義を書く。
     // R2 (docs/ekn-r2-contract.md §3b): on_attacked / on_death も任意フィルタのドロップダウンを
     // 持つので、on_cno_touch と同じく汎用テンプレートから外して個別に書く。
-    const eventBlocks = LOGIC_WHEN_VALUES.filter((when) => when !== "on_cno_touch" && when !== "on_attacked" && when !== "on_death").map((when) => ({
-        type: `ekr_when_${when}`,
-        message0: WHEN_LABELS[when],
-        nextStatement: null,
-        colour: HUE_EVENT,
-        tooltip: WHEN_TOOLTIPS[when],
-    }));
+    // Wave 3 (docs/ekn-wave3-contract.md §1 2026-08-14): on_alive_count も cmp/value のドロップダウン+
+    // 数値欄を持つので同様に個別定義。on_var はさらに変数ドロップダウンが動的 (変数リストの増減に
+    // 追随する必要がある) ため、ekr_expr_var/ekr_do_var_set と同じく defineDynamicVariableBlocks()
+    // 側で命令形登録する (on_vent_exit はフィールドを持たないのでこのフィルタに含めず生成のまま)。
+    const eventBlocks = LOGIC_WHEN_VALUES
+        .filter((when) => when !== "on_cno_touch" && when !== "on_attacked" && when !== "on_death" && when !== "on_alive_count" && when !== "on_var")
+        .map((when) => ({
+            type: `ekr_when_${when}`,
+            message0: WHEN_LABELS[when],
+            nextStatement: null,
+            colour: HUE_EVENT,
+            tooltip: WHEN_TOOLTIPS[when],
+        }));
 
     return [
         ...eventBlocks,
@@ -195,6 +222,19 @@ function jsonBlockDefs(): unknown[] {
             nextStatement: null,
             colour: HUE_EVENT,
             tooltip: WHEN_TOOLTIPS.on_death,
+        },
+        // Wave 3 (docs/ekn-wave3-contract.md §1.3 2026-08-14) — いきのこりが◯人になったら。
+        {
+            type: "ekr_when_on_alive_count",
+            message0: "いきのこりが %1 人 %2 になったら",
+            args0: [
+                { type: "field_number", name: "VALUE", value: 3, min: ALIVE_COUNT_VALUE_MIN, max: ALIVE_COUNT_VALUE_MAX, precision: 1 },
+                { type: "field_dropdown", name: "CMP", options: CMP_OPTIONS },
+            ],
+            inputsInline: true,
+            nextStatement: null,
+            colour: HUE_EVENT,
+            tooltip: WHEN_TOOLTIPS.on_alive_count,
         },
 
         // 制御
@@ -703,6 +743,25 @@ function defineDynamicVariableBlocks(): void {
             this.setNextStatement(true, null);
             this.setColour(HUE_VAR);
             this.setTooltip("変数の値を指定した値に変更します。");
+        },
+    };
+
+    // Wave 3 (docs/ekn-wave3-contract.md §1.2 2026-08-14) — 「へんすう◯が◯になったら」。
+    // 変数ドロップダウンが動的なので ekr_expr_var/ekr_do_var_set と同じく命令形で登録する
+    // (JSON block defs の field_dropdown は静的な options 配列しか持てない)。
+    Blockly.Blocks["ekr_when_on_var"] = {
+        init(this: Blockly.Block): void {
+            this.appendDummyInput()
+                .appendField("へんすう")
+                .appendField(new Blockly.FieldDropdown(variableDropdownOptions), "VAR")
+                .appendField("が")
+                .appendField(new Blockly.FieldNumber(0), "VALUE")
+                .appendField(new Blockly.FieldDropdown(CMP_OPTIONS), "CMP")
+                .appendField("になったら");
+            this.setInputsInline(true);
+            this.setNextStatement(true, null);
+            this.setColour(HUE_EVENT);
+            this.setTooltip(WHEN_TOOLTIPS.on_var);
         },
     };
 

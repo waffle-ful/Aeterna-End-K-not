@@ -329,6 +329,85 @@ test.describe("役職メーカー (EKN R1, ブロックロジック)", () => {
         console.log("=== page errors ===\n" + (cap.errors.join("\n") || "(なし)"));
         expect(cap.errors, "未捕捉の例外あり").toEqual([]);
     });
+
+    // Wave 3 (docs/ekn-wave3-contract.md §1.2 2026-08-14) — ekr_when_on_var は blocks-role.ts が
+    // Blockly.Blocks["ekr_when_on_var"] として命令形で登録する唯一の新イベントブロック (他の
+    // ekr_when_* は defineBlocksWithJsonArray 経由)。命令形登録は型チェックが利かない生文字列
+    // (VAR/VALUE/CMP のフィールド名、ブロック type 名そのもの) の塊なので、v1.1 の
+    // dummy_spawn/corpse_spawn と同じ理由で実 Blockly を通した往復確認がここでしか取れない。
+    test("ekr_when_on_var が blocks-role.ts↔compile-role.ts のフィールド名で正しく往復する", async ({ page }) => {
+        const cap = capture(page);
+        await page.addInitScript(() => {
+            localStorage.setItem(
+                "ekm.roleMaker",
+                JSON.stringify({
+                    name: "on_varテスト役職",
+                    logicVariables: [{ name: "カウント", init: 0 }],
+                    logicBlockly: {
+                        blocks: {
+                            languageVersion: 0,
+                            blocks: [
+                                {
+                                    type: "ekr_when_on_var",
+                                    fields: { VAR: "カウント", VALUE: 5, CMP: "ge" },
+                                    next: { block: { type: "ekr_do_stop" } },
+                                },
+                            ],
+                        },
+                    },
+                }),
+            );
+        });
+
+        await page.goto("/");
+        await dismissStartScreen(page);
+        await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+
+        await page.locator("#btn-role-maker").click();
+        await expect(page.locator("#dlg-role-maker")).toBeVisible();
+        await expect(page.locator("#rm-name")).toHaveValue("on_varテスト役職");
+
+        await page.locator('#rm-tabs .rm-tab[data-rm-tab="logic"]').click();
+        await expect(page.locator("#rm-blockly-container svg.blocklySvg")).toBeVisible({ timeout: 30000 });
+
+        // 復元/フィールド名不一致があれば検証エラー通知が出る (Blockly.Blocks["ekr_when_on_var"]
+        // が未登録・型名の typo・compile-role.ts 側の b.fields?.XXX 名のズレ、のいずれでも起きる)
+        await expect(page.locator("#rm-logic-validity")).toBeHidden();
+
+        await page.locator("#rm-copy").click();
+        await expect(page.locator("#rm-status")).toContainText("コピーしました");
+        const code = await page.evaluate(() => navigator.clipboard.readText());
+
+        const jsonText = await page.evaluate(async (c: string) => {
+            const mod = await import("/src/rolecode.ts");
+            return mod.decodeRoleCode(c);
+        }, code);
+        const parsed = JSON.parse(jsonText) as { logic?: { rules: { when: string; var?: string; cmp?: string; value?: number; do: unknown[] }[] } };
+        expect(parsed.logic).toBeDefined();
+        const rule = parsed.logic!.rules[0];
+        expect(rule.when).toBe("on_var");
+        expect(rule.var).toBe("カウント");
+        expect(rule.cmp).toBe("ge");
+        expect(rule.value).toBe(5);
+        expect(rule.do).toEqual([{ op: "stop" }]);
+
+        // イベントカテゴリのフライアウトに新3ブロック (on_var/on_alive_count/on_vent_exit) の
+        // 日本語ラベルが実際に出ること (buildRoleToolbox() は type 名を文字列リテラルで組み立てる
+        // だけなので、ekr_when_on_var の型名 typo はここでの描画失敗で初めて顕在化する)。
+        // ekr_when_on_var/ekr_when_on_alive_count は「へんすう」「いきのこりが」等のフィールド区切り
+        // テキストとして描画される (WHEN_LABELS の1文まるごとではない) — 実際にブロックへ焼き込んだ
+        // 文字列だけを部分一致で確認する ("になったら" は on_var/on_alive_count 共通の締め文言)。
+        await page.locator(".blocklyToolboxDiv .blocklyTreeRow", { hasText: "イベント" }).click();
+        const eventFlyout = page.locator(".blocklyFlyout", { hasText: "になったら" });
+        await expect(eventFlyout).toBeVisible();
+        await expect(eventFlyout).toContainText("へんすう");
+        await expect(eventFlyout).toContainText("いきのこりが");
+        await expect(eventFlyout).toContainText("ベントから出たとき");
+
+        console.log("=== page console ===\n" + (cap.console.join("\n") || "(なし)"));
+        console.log("=== page errors ===\n" + (cap.errors.join("\n") || "(なし)"));
+        expect(cap.errors, "未捕捉の例外あり").toEqual([]);
+    });
 });
 
 test.describe("役職メーカー (ライブプレビュー)", () => {
