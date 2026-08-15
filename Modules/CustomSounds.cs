@@ -534,6 +534,7 @@ public static class CustomSoundsManager
             if (s.Copied >= s.Read)
             {
                 bgmClipInProgress = null;
+                BgmInflight.Remove(s.BgmName);
                 BGMManager.PrimeCache(s.BgmName, s.Clip);
                 Logger.Info($"Preloaded BGM {s.BgmName} (chunked, {(s.Read + BgmCopyChunkFloats - 1) / BgmCopyChunkFloats} frames)", "CustomSounds");
             }
@@ -541,10 +542,102 @@ public static class CustomSoundsManager
         }
         catch (Exception ex)
         {
-            // この曲だけ諦める (初回再生時の同期ロードに戻るだけ)。作りかけの clip は破棄する。
+            // この曲だけ諦める。作りかけの clip は破棄し、失敗として通知する (同期ロードへの
+            // フォールバックは存在しないので、通知しないと pending が無音のまま永久に待つ)。
             bgmClipInProgress = null;
+            BgmInflight.Remove(s.BgmName);
             if (s.Clip) UnityEngine.Object.Destroy(s.Clip);
+            BGMManager.OnPreloadFailed(s.BgmName);
             Logger.Exception(ex, "CustomSounds.PumpBgmClipChunk");
+        }
+    }
+
+    // ── BGM の状態別遅延プリロード (リクエスト駆動) ──────────────────────
+    // 起動時の全曲一括デコードは廃止。BGMManager の planner / Play が「今必要な曲」だけを
+    // RequestBgmDecode で依頼し、短命の裏スレッドがデコードして PreloadDecoded 経由で届ける。
+    // 同期ロード経路は存在しない (間に合わない時は無音 → 届いた瞬間フェードイン合流)。
+
+    private static readonly ConcurrentQueue<string> BgmDecodeRequests = [];
+    private static readonly ConcurrentQueue<string> BgmDecodeFailures = [];
+    // in-flight 集合 (依頼済み・未完了)。追加/削除はメインスレッドのみ — 二重デコード防止。
+    private static readonly HashSet<string> BgmInflight = new(StringComparer.OrdinalIgnoreCase);
+    private static Thread bgmWorker;
+
+    // PreloadDecoded 内に滞留している「BGM 級」アイテム数 (Interlocked 専用)。裏デコードの
+    // backpressure はこれを見る — 共有キューの IsEmpty を見ると起動時の SFX 一括プリロードの
+    // 未消化分 (小物) にまで足止めされ、ロビー BGM の立ち上がりが不必要に遅れる。
+    private static int bgmDecodedInQueue;
+
+    // planner の GC 先撃ちタイミング判定用。「デコード中/クリップ化中/依頼残あり」の間は false。
+    internal static bool IsBgmPipelineIdle
+        => BgmInflight.Count == 0 && bgmClipInProgress == null && BgmDecodeRequests.IsEmpty && PreloadDecoded.IsEmpty;
+
+    // メインスレッド専用。
+    internal static void RequestBgmDecode(string name)
+    {
+        if (!OperatingSystem.IsWindows() || name == null) return;
+        if (!BgmInflight.Add(name)) return;
+
+        BgmDecodeRequests.Enqueue(name);
+        EnsureBgmWorker();
+    }
+
+    private static void EnsureBgmWorker()
+    {
+        if (bgmWorker is { IsAlive: true }) return;
+
+        bgmWorker = new Thread(BgmDecodeLoop) { IsBackground = true, Priority = System.Threading.ThreadPriority.BelowNormal, Name = "EndKnot.BgmDecode" };
+        bgmWorker.Start();
+    }
+
+    // 裏スレッド本体。System.IO + マネージドデコーダのみ使用可 (Unity/Il2Cpp API 禁止、Logger も呼ばない)。
+    // 1 本の PCM が数十 MB あるため、前の 1 本がメインスレッドポンプで消化されるまで次をデコードしない
+    // (キュー滞留 = メモリ山を防ぐ)。キューが空になったら退出する (常駐しない)。
+    private static void BgmDecodeLoop()
+    {
+        while (BgmDecodeRequests.TryDequeue(out string name))
+        {
+            try
+            {
+                // 前の BGM がメインスレッドポンプで消化されるまで待つ (BGM 級 PCM の滞留 = メモリ山を防ぐ)。
+                // SFX の未消化分では待たない (BGM 専用カウンタを見る)。
+                while (System.Threading.Interlocked.CompareExchange(ref bgmDecodedInQueue, 0, 0) > 0) Thread.Sleep(100);
+
+                string path = BGMManager.ResolveOrExtract(name);
+                if (path == null) { BgmDecodeFailures.Enqueue(name); continue; }
+
+                switch (Path.GetExtension(path).ToLowerInvariant())
+                {
+                    case ".ogg":
+                    {
+                        (float[] buffer, int read, int channels, int sampleRate) = DecodeOgg(path);
+                        System.Threading.Interlocked.Increment(ref bgmDecodedInQueue);
+                        PreloadDecoded.Enqueue((path, buffer, read, channels, sampleRate, name));
+                        break;
+                    }
+                    case ".mp3":
+                    {
+                        (float[] buffer, int read, int channels, int sampleRate) = DecodeMp3(path);
+                        System.Threading.Interlocked.Increment(ref bgmDecodedInQueue);
+                        PreloadDecoded.Enqueue((path, buffer, read, channels, sampleRate, name));
+                        break;
+                    }
+                    case ".wav":
+                    {
+                        (float[] buffer, int read, int channels, int sampleRate) = DecodeWav(path);
+                        System.Threading.Interlocked.Increment(ref bgmDecodedInQueue);
+                        PreloadDecoded.Enqueue((path, buffer, read, channels, sampleRate, name));
+                        break;
+                    }
+                    default:
+                        BgmDecodeFailures.Enqueue(name);
+                        break;
+                }
+            }
+            catch
+            {
+                BgmDecodeFailures.Enqueue(name);
+            }
         }
     }
 
@@ -553,20 +646,29 @@ public static class CustomSoundsManager
     {
         if (!OperatingSystem.IsWindows()) return;
 
+        // SFX の起動時一括プリロード (従来どおり、起動 ~10 秒後に 1 回だけ)。OFF の間は温めない
+        // (再生されない音のデコード分だけ純増になるため)。ON に切り替えられたら始動する。
         if (!preloadStarted)
         {
-            // 対象系統 (SFX / BGM) が両方切られている間は温めない (再生されない音のデコード分だけ純増になるため)。
-            // ON に切り替えられたら次の tick から通常どおり始動する。
             bool sfxOn = Main.EnableCustomSoundEffect?.Value ?? false;
-            bool bgmOn = Main.EnableBGM?.Value ?? false;
-            if (!sfxOn && !bgmOn) return;
-            if (++preloadTicks < PreloadStartDelayTicks) return;
-
-            preloadStarted = true;
-            var worker = new Thread(() => PreloadWorker(sfxOn, bgmOn)) { IsBackground = true, Priority = System.Threading.ThreadPriority.BelowNormal, Name = "EndKnot.SoundPreload" };
-            worker.Start();
-            return;
+            if (sfxOn && ++preloadTicks >= PreloadStartDelayTicks)
+            {
+                preloadStarted = true;
+                var worker = new Thread(PreloadSfx) { IsBackground = true, Priority = System.Threading.ThreadPriority.BelowNormal, Name = "EndKnot.SoundPreload" };
+                worker.Start();
+            }
         }
+
+        // BGM デコードの失敗通知を先に配る (pending の解除が遅れると無音が延びるため)
+        while (BgmDecodeFailures.TryDequeue(out string failed))
+        {
+            BgmInflight.Remove(failed);
+            BGMManager.OnPreloadFailed(failed);
+        }
+
+        // ワーカー退出レース対策: 「TryDequeue 空振り → 退出」の隙間にメインスレッドが enqueue した
+        // 依頼は誰にも拾われない。キュー残があるのにワーカーが死んでいたらここで立て直す。
+        if (!BgmDecodeRequests.IsEmpty) EnsureBgmWorker();
 
         // BGM のクリップ化進行中なら 1 tick 1 チャンクだけ書き進める (最優先・他の処理はしない)
         if (bgmClipInProgress != null)
@@ -580,6 +682,16 @@ public static class CustomSoundsManager
         {
             if (d.BgmName != null)
             {
+                System.Threading.Interlocked.Decrement(ref bgmDecodedInQueue);
+
+                // デコード中に状態が先へ進んで不要になったトラックはクリップ化せず捨てる
+                // (数十 ms の SetData 連鎖と数十 MB の native 確保をまるごと節約)。
+                if (!BGMManager.IsFileWantedOrPending(d.BgmName))
+                {
+                    BgmInflight.Remove(d.BgmName);
+                    return;
+                }
+
                 // BGM 級 (数十 MB PCM) は一括 SetData でも 50-70ms かかりサブ秒ヒッチ検出閾値を踏む
                 // (実測: ロビー入り直後の preload 7 連発が「数秒かくかく」体感の一因)。
                 // クリップだけ先に作り、データ書き込みはチャンク分割で複数フレームに薄める。
@@ -596,63 +708,9 @@ public static class CustomSoundsManager
 
             return;
         }
-    }
 
-    // バックグラウンドスレッド本体。System.IO + マネージドデコーダのみ使用可 (Unity/Il2Cpp API 禁止、
-    // Logger も呼ばない)。audioCache には触らず、結果はキュー経由でメインスレッドに渡す。
-    private static void PreloadWorker(bool sfxOn, bool bgmOn)
-    {
-        if (sfxOn) PreloadSfx();
-        if (bgmOn) PreloadBgm();
-    }
-
-    // BGM トラック (BGMManager 管轄) の裏デコード。SFX と違い 1 本の PCM が数十 MB あるため、
-    // 前の 1 本がメインスレッドポンプでクリップ化されるまで次をデコードしない (キュー滞留 = メモリ山を防ぐ)。
-    private static void PreloadBgm()
-    {
-        try
-        {
-            foreach (string name in BGMManager.GetPreloadFiles())
-            {
-                try
-                {
-                    while (!PreloadDecoded.IsEmpty) Thread.Sleep(100);
-
-                    string path = BGMManager.ResolveOrExtract(name);
-                    if (path == null) continue;
-
-                    switch (Path.GetExtension(path).ToLowerInvariant())
-                    {
-                        case ".ogg":
-                        {
-                            (float[] buffer, int read, int channels, int sampleRate) = DecodeOgg(path);
-                            PreloadDecoded.Enqueue((path, buffer, read, channels, sampleRate, name));
-                            break;
-                        }
-                        case ".mp3":
-                        {
-                            (float[] buffer, int read, int channels, int sampleRate) = DecodeMp3(path);
-                            PreloadDecoded.Enqueue((path, buffer, read, channels, sampleRate, name));
-                            break;
-                        }
-                        case ".wav":
-                        {
-                            (float[] buffer, int read, int channels, int sampleRate) = DecodeWav(path);
-                            PreloadDecoded.Enqueue((path, buffer, read, channels, sampleRate, name));
-                            break;
-                        }
-                    }
-                }
-                catch
-                {
-                    // このトラックだけ諦めて次へ (初回再生時の同期デコードに戻るだけ)
-                }
-            }
-        }
-        catch
-        {
-            // 列挙ごと失敗しても従来動作に戻るだけ
-        }
+        // 完全に暇になったら 16MB のチャンク再利用バッファも手放す (次のロードで再確保される)
+        if (bgmChunkBuffer != null && IsBgmPipelineIdle) bgmChunkBuffer = null;
     }
 
     private static void PreloadSfx()
