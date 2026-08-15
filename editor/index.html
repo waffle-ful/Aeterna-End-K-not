@@ -404,6 +404,22 @@
             <p class="note rm-disguise-note">ほかの人からの見え方だけが変わります。勝ち負け・出現・ほんとうの陣営はそのままです。ニュートラルに見せる場合は役職名はそのままで色だけ変わります。</p>
           </div>
 
+          <!-- なまえのよこに出す文字 (Wave 3・契約 §3): 進捗テキスト。{変数名} で変数の値に置き換わる。 -->
+          <div id="rm-progress" class="rm-passives">
+            <h4 class="rm-subheading">なまえのよこに出す文字</h4>
+            <label>表示文字 (任意) <input id="rm-progress-text" maxlength="16" placeholder="例: のこり{たま}発" autocomplete="off" /></label>
+            <p class="note">「{へんすう名}」と書くと、そのへんすうの今の値に表示が置き換わります。書かなければ何も表示されません (最大16字)。</p>
+          </div>
+
+          <!-- ホストがへんこうできる数値 (Wave 3・契約 §4): 最大8個まで。role-maker.ts の
+               renderHostOptionsList() が中身 (#rm-hostopts-list) を作り直す。 -->
+          <div id="rm-hostopts" class="rm-passives">
+            <h4 class="rm-subheading">ホストがへんこうできる数値 <span id="rm-hostopts-summary"></span></h4>
+            <div id="rm-hostopts-list" class="rm-vars-list"></div>
+            <button id="rm-hostopts-add" type="button">＋ 数値を追加</button>
+            <p class="note">ホストがオプション画面で数値を変えられるようにします (最大8個)。</p>
+          </div>
+
           <p class="note rm-team-note">勝利条件: えらんだ陣営のふつうの勝ち方 (固定)</p>
         </div>
 

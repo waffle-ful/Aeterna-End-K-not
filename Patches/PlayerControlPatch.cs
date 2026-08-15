@@ -858,7 +858,9 @@ internal static class MurderPlayerPatch
                             if (!Options.ReportBaitAtAllCost.GetBool())
                                 killer.CmdReportDeadBody(target.Data);
                             else
-                                killer.NoCheckStartMeeting(target.Data, true);
+                                // Wave 3 契約 §2 裁定4: Bait の自己通報は「本物」扱い (synthetic:false)。
+                                // OFF 側 (上の CmdReportDeadBody) と挙動を揃える。
+                                killer.NoCheckStartMeeting(target.Data, true, synthetic: false);
                         }
                     }, delay, "Bait Self Report");
                 }
@@ -1461,7 +1463,11 @@ internal static class ReportDeadBodyPatch
         void Notify(string str) => __instance.Notify(ColorString(Color.yellow, GetString("CheckReportFail") + GetString(str)), 15f);
     }
 
-    public static void AfterReportTasks(PlayerControl player, NetworkedPlayerInfo target)
+    // synthetic: 「他役職・コマンドが起こした偽装通報」か (Wave 3 契約 §2 — docs/ekn-wave3-contract.md)。
+    // 通常の通報 (CmdReportDeadBody → Prefix → ここ) は false、NoCheckStartMeeting 経由は既定 true。
+    // 「自分が死体を見つけて通報したとき」の意味論を持つ処理 (EKR の on_report / Newscaster の調査対象)
+    // だけがこのフラグを見る — 会議そのものの進行は従来どおり synthetic でも同一に走る。
+    public static void AfterReportTasks(PlayerControl player, NetworkedPlayerInfo target, bool synthetic = false)
     {
         //=============================================================================================
         //    Hereinafter, it is confirmed that the meeting is allowed, and the meeting will start.
@@ -1681,7 +1687,10 @@ internal static class ReportDeadBodyPatch
             Medium.OnReportDeadBody(target);
             Mortician.OnReportDeadBody(player, target);
             Spiritualist.OnReportDeadBody(target);
-            Newscaster.OnAnyoneReportDeadBody(player, target);
+            // Wave 3 契約 §2: Newscaster の既存防御は「target==null か」だけなので、target 付きの合成通報
+            // (InSender / Anonymous / /mt <id>) に誤爆して「誰かが死体を見つけた」ことにしてしまっていた
+            // (BUG-20260814-08 と同型)。EKR の on_report と同じ synthetic ゲートに乗せて同時に解消する。
+            Newscaster.OnAnyoneReportDeadBody(player, target, synthetic);
 
             Bloodmoon.OnMeetingStart();
             Deadlined.OnMeetingStart();
@@ -1692,7 +1701,10 @@ internal static class ReportDeadBodyPatch
             // 直後に発火する。on_report はそのキャンセルより後ろに置く必要がある — 先に置くと、この2行の
             // 間で発火した fiber ごとキャンセルされて無言で死ぬ (advisor 指摘・2026-08-09)。
             EkrManager.FireMeetingStart();
-            if (target) EkrManager.FireReport(player, target.Object);
+            // Wave 3 契約 §2: on_report は「自分が死体を見つけて通報したとき」— 合成通報では発火しない。
+            // (Bait の自己通報だけは synthetic:false で来る = 本物扱い。キラーは実際に死体に関与しており、
+            //  ReportBaitAtAllCost という無関係なホストオプションで発火有無が変わる非対称を作らないため)
+            if (target && !synthetic) EkrManager.FireReport(player, target.Object);
         }
         catch (Exception e) { ThrowException(e); }
 

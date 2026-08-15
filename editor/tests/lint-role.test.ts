@@ -1068,6 +1068,87 @@ describe("lint-role: 問題のないロジックは警告0件", () => {
     });
 });
 
+// Wave 3 (docs/ekn-wave3-contract.md §6 2026-08-14) — L24/L25 は on_var の監視変数を扱うので、
+// variables 宣言込みの RoleLogic を組む専用ヘルパーを使う (logic() は variables:[] 固定のため)。
+function logicWithVars(variables: RoleLogic["variables"], rules: RoleLogic["rules"]): RoleLogic {
+    return { version: 1, variables, rules };
+}
+
+describe("lint-role: L24 (on_var 配下で自分が監視している変数を書き換えている)", () => {
+    it("on_var の中で監視変数そのものを var_set していると L24 を警告する", () => {
+        const l = logicWithVars(
+            [{ name: "カウント", init: 0 }],
+            [{ when: "on_var", var: "カウント", cmp: "eq", value: 5, do: [{ op: "var_set", name: "カウント", value: { e: "lit", v: 0 } }] }],
+        );
+        expect(ruleIds(lintRoleLogic(l))).toContain("L24");
+    });
+
+    it("on_var の中で監視変数を var_add していても L24 を警告する (if の中にネストしていても検知)", () => {
+        const nested: LogicNode = {
+            op: "if",
+            cond: { e: "lit", v: 1 },
+            then: [{ op: "var_add", name: "カウント", delta: { e: "lit", v: 1 } }],
+        };
+        const l = logicWithVars(
+            [{ name: "カウント", init: 0 }],
+            [{ when: "on_var", var: "カウント", cmp: "eq", value: 5, do: [nested] }],
+        );
+        expect(ruleIds(lintRoleLogic(l))).toContain("L24");
+    });
+
+    it("on_var の中で別の変数を書き換えても L24 は警告しない", () => {
+        const l = logicWithVars(
+            [{ name: "カウント", init: 0 }, { name: "べつ", init: 0 }],
+            [{ when: "on_var", var: "カウント", cmp: "eq", value: 5, do: [{ op: "var_set", name: "べつ", value: { e: "lit", v: 1 } }] }],
+        );
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L24");
+    });
+});
+
+describe("lint-role: L25 (on_var の監視変数・progress.text の参照変数がどこでも書かれない)", () => {
+    it("on_var の監視変数がどの rule でも var_set/var_add されていなければ L25 を警告する", () => {
+        const l = logicWithVars(
+            [{ name: "カウント", init: 0 }],
+            [{ when: "on_var", var: "カウント", cmp: "eq", value: 5, do: [{ op: "notify", text: "!", seconds: 1 }] }],
+        );
+        expect(ruleIds(lintRoleLogic(l))).toContain("L25");
+    });
+
+    it("別の rule (on_pet 等) で監視変数が書かれていれば L25 は警告しない", () => {
+        const l = logicWithVars(
+            [{ name: "カウント", init: 0 }],
+            [
+                { when: "on_var", var: "カウント", cmp: "eq", value: 5, do: [{ op: "notify", text: "!", seconds: 1 }] },
+                { when: "on_pet", do: [{ op: "var_add", name: "カウント", delta: { e: "lit", v: 1 } }] },
+            ],
+        );
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L25");
+    });
+
+    it("progress.text が {変数名} を参照していて、その変数がどこでも書かれていなければ L25 を警告する", () => {
+        const l = logicWithVars([{ name: "たま", init: 0 }], [{ when: "on_pet", do: [{ op: "stop" }] }]);
+        expect(ruleIds(lintRoleLogic(l, "のこり{たま}発"))).toContain("L25");
+    });
+
+    it("progress.text が参照する変数がどこかで書かれていれば L25 を警告しない", () => {
+        const l = logicWithVars(
+            [{ name: "たま", init: 0 }],
+            [{ when: "on_pet", do: [{ op: "var_add", name: "たま", delta: { e: "lit", v: 1 } }] }],
+        );
+        expect(ruleIds(lintRoleLogic(l, "のこり{たま}発"))).not.toContain("L25");
+    });
+
+    it("progress.text が宣言されていない名前を {◯◯} で参照していても L25 は警告しない (固定文字列は正当ユース)", () => {
+        const l = logicWithVars([], [{ when: "on_pet", do: [{ op: "stop" }] }]);
+        expect(ruleIds(lintRoleLogic(l, "のこり{たま}発"))).not.toContain("L25");
+    });
+
+    it("progressText を渡さなければ progress 側の L25 検査はスキップされる", () => {
+        const l = logicWithVars([{ name: "たま", init: 0 }], [{ when: "on_pet", do: [{ op: "stop" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L25");
+    });
+});
+
 describe("lint-role: formatLintWarning", () => {
     it("メッセージと代替案を連結した1行を返す", () => {
         const l = logic([{ when: "on_second", do: [{ op: "kill", target: "self" }] }]);

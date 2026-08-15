@@ -125,6 +125,34 @@ internal sealed class EkrHolderState
 
     // §1.2 on_meeting_pick: /pick 連打デデュープ (≤1/秒/ホルダー)。
     public float LastMeetingPickTime = -1f;
+
+    // ── Wave 3 (docs/ekn-wave3-contract.md §1): じょうたいトリガのエッジ発火エンジン ──────────────
+
+    // この state の持ち主のスロット。フラッシュ点 (PumpMeetingFibers 等) は playerId しか持たないので、
+    // 定義を引くために state 側に控える (Runtime の値だけを舐める経路から GetDefinition を引けるように)。
+    public CustomRoles Slot;
+
+    // per-(holder, rule) の前回真偽値 = 武装状態。index は def.ParsedLogic.Rules の添字。
+    // 「真へ遷移した瞬間だけ発火」なので、真のまま張り付いている間は再発火しない (§1.1)。
+    public bool[] EdgeArmed = [];
+
+    // このホルダーの定義に on_alive_count ルールが1つでもあるか (フラッシュ毎の生存数評価の要否)。
+    public bool HasAliveCountRule;
+
+    // 直近のフラッシュ以降に書き換えられた変数名。fiber から Pump 直後に回収する (EkrFiber.WrittenVars)。
+    // 連鎖起点 (FromVarChain) の fiber による書込みは Chain 側へ分けて積む — そちらは武装遷移だけ
+    // 起こして新規発火は生まない (§1.1 深さ1)。
+    public readonly HashSet<string> PendingVarWrites = [];
+    public readonly HashSet<string> PendingChainVarWrites = [];
+
+    // §3 進捗テキスト: 最後に名札へ載せた置換後の文字列。null = まだ一度も評価していない
+    // (最初の評価では送らず種を置くだけ — ゲーム開始時の通常の NotifyRoles で既に出ているため)。
+    public string LastProgressSent;
+
+    // §4 ホスト露出を反映した実効値。**InitRuntime で1回だけ焼き込む** — オプションの読みをゲーム開始
+    // 時点の1箇所に集約し、ゲーム中のオプション変更は次ゲームからにする (既存役職と同じ規約)。
+    public float EffectiveSpeedMult = 1f;
+    public int EffectiveVoteWeight = 1;
 }
 
 // EKN 役職メーカー R0 の実行時マネージャ。
@@ -583,7 +611,12 @@ public static class EkrManager
             var slots = new Dictionary<string, string>();
             foreach ((CustomRoles slot, string fileName) in BoundFiles) slots[slot.ToString()] = fileName;
 
-            var root = new { ekrBindings = 1, slots };
+            // Wave 3 (契約 §4.2): ホスト露出の同定子。これを保存しないと、再起動のたびに復元 Bind が
+            // 「初回束縛」と判定してホストが調整した値を既定値で塗り潰す。
+            var hostOptionSignatures = new Dictionary<string, string>();
+            foreach ((CustomRoles slot, string signature) in HostOptionSignatures) hostOptionSignatures[slot.ToString()] = signature;
+
+            var root = new { ekrBindings = 1, slots, hostOptionSignatures };
             string json = JsonSerializer.Serialize(root, new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(path, json, new UTF8Encoding(false));
         }
@@ -609,6 +642,20 @@ public static class EkrManager
 
             if (!doc.RootElement.TryGetProperty("slots", out JsonElement slotsElem) || slotsElem.ValueKind != JsonValueKind.Object)
                 return;
+
+            // Wave 3 (契約 §4.2): 露出の同定子は Bind より**先に**読み込む — 後だと復元 Bind が
+            // 「初回」と判定してホストの保存値を既定値で塗り潰す。旧形式のファイル (このキーが無い) は
+            // 空のまま = 初回扱いで既定値が入る (Wave 3 より前に束縛したスロットには露出が無いので無害)。
+            if (doc.RootElement.TryGetProperty("hostOptionSignatures", out JsonElement sigElem) && sigElem.ValueKind == JsonValueKind.Object)
+            {
+                foreach (JsonProperty prop in sigElem.EnumerateObject())
+                {
+                    if (!Enum.TryParse(prop.Name, out CustomRoles sigSlot) || !IsSlot(sigSlot)) continue;
+
+                    string signature = prop.Value.GetString();
+                    if (!string.IsNullOrEmpty(signature)) HostOptionSignatures[sigSlot] = signature;
+                }
+            }
 
             _suppressSave = true;
 
@@ -660,6 +707,128 @@ public static class EkrManager
         }
     }
 
+    // ── Wave 3: ホスト露出オプション (docs/ekn-wave3-contract.md §4) ────────────────────────────
+    //
+    // slot -> 前登録済みの 8 枠 (Id+2..Id+9)。各スロットの SetupCustomOption から一度だけ登録される
+    // (EkmTemplateRole.SetupHostOptionPool)。Bind 時に「名前・表示・既定値」だけを差し替える。
+    private static readonly Dictionary<CustomRoles, OptionItem[]> HostOptionPool = [];
+
+    // slot -> 前回この枠に流し込んだ役職コードの同定子。**同一コードの再束縛ではホストの保存値を
+    // 尊重する** (plan §7 Tier 1 #1 の裁定に従う) ため、既定値の流し込みは同定子が変わったときだけ。
+    // _bindings.json へ一緒に保存する — 保存しないと再起動のたびに復元 Bind が既定値で塗り潰す。
+    private static readonly Dictionary<CustomRoles, string> HostOptionSignatures = [];
+
+    internal static void RegisterHostOptionPool(CustomRoles slot, OptionItem[] pool)
+    {
+        HostOptionPool[slot] = pool;
+    }
+
+    // 「同じ役職コードか」の同定子。ファイル名 + 露出宣言の中身 (キー/範囲) — ラベルだけ書き換えた
+    // 場合は同じ扱いにしない方が安全側なのでラベルも含める。
+    private static string BuildHostOptionSignature(string fileName, EkrDefinition def)
+    {
+        var sb = new StringBuilder(fileName);
+
+        foreach (EkrHostOption ho in def.ParsedHostOptions)
+            sb.Append('|').Append(ho.Key).Append(':').Append(ho.Label).Append(':').Append(ho.Min).Append('-').Append(ho.Max);
+
+        return sb.ToString();
+    }
+
+    // 束縛中の役職コードが宣言した露出を 8 枠へ反映する。宣言の並び順 = 枠の割当順。
+    // flowDefaults: 既定値を全プリセットへ流し込むか (初回束縛 / 別の役職コードへの差し替え時のみ true)。
+    private static void ApplyHostOptions(CustomRoles slot, EkrDefinition def, bool flowDefaults)
+    {
+        if (!HostOptionPool.TryGetValue(slot, out OptionItem[] pool)) return;
+
+        List<EkrHostOption> declared = def?.ParsedHostOptions ?? [];
+
+        for (var i = 0; i < pool.Length; i++)
+        {
+            OptionItem opt = pool[i];
+            string key = $"{slot}HostOpt{i}";
+
+            // 未使用枠は Clear + hidden (説明文の Set-or-Clear と同じ対称 — 解除しないと別の役職コードへ
+            // 差し替えたときに前のラベルが残る)。
+            if (i >= declared.Count)
+            {
+                Translator.ClearRuntimeOverride(key);
+                opt.SetHidden(true);
+                continue;
+            }
+
+            EkrHostOption ho = declared[i];
+            Translator.SetRuntimeOverride(key, ho.Label);
+            opt.SetHidden(false);
+
+            if (!flowDefaults || opt is not FloatOptionItem floatOpt) continue;
+
+            // 出現率の書き込みと同じ定型: SetAllValues (全プリセット) + SetValue (現在値で締める)。
+            // 片方だけだとプリセット切替で無音の不整合になる。
+            //
+            // ⚠️ index 化の前に**必ず枠の値域へクランプする**。FloatValueRule.RepeatIndex は範囲外の
+            // インデックスを 0 側へ丸めず modulo で折り返すので (負→maxIndex / 超過→余り)、作者が
+            // 枠の外の初期値を書いていると無関係な値が既定値として焼き付く (2026-08-14 監査)。
+            float rawDefault = ResolveHostOptionDefault(def, ho);
+            int index = floatOpt.Rule.GetNearestIndex(Math.Clamp(rawDefault, floatOpt.Rule.MinValue, floatOpt.Rule.MaxValue));
+            opt.SetAllValues(Enumerable.Repeat(index, OptionItem.NumPresets).ToArray());
+            opt.SetValue(index);
+        }
+    }
+
+    // 露出キーに対応する「役職コード側が書いている値」= ホストが触る前の既定値。
+    private static float ResolveHostOptionDefault(EkrDefinition def, EkrHostOption ho)
+    {
+        if (ho.IsVar)
+        {
+            EkrVariable v = def.ParsedLogic?.Variables?.Find(x => x.Name == ho.VarName);
+            return v?.Init ?? 0f;
+        }
+
+        return ho.Key switch
+        {
+            "shield.count" => def.ParsedPassives.ShieldCount,
+            "doom.seconds" => def.ParsedPassives.DoomSeconds,
+            "speedMult" => def.ParsedPassives.SpeedMult,
+            "voteWeight" => def.ParsedPassives.VoteWeight,
+            "killCooldown" => def.KillCooldown,
+            "vision" => def.VisionMultiplier,
+            _ => 0f
+        };
+    }
+
+    // 消費側の唯一の入口。null = そのキーは露出されていない (= 役職コードの値をそのまま使う)。
+    // ⚠️ 生インデックスを返す GetValue() ではなく GetFloat() を使うこと (契約 §4.2)。
+    private static float? GetHostOptionValue(CustomRoles slot, string key)
+    {
+        EkrDefinition def = GetDefinition(slot);
+        if (def == null || def.ParsedHostOptions.Count == 0) return null;
+        if (!HostOptionPool.TryGetValue(slot, out OptionItem[] pool)) return null;
+
+        for (var i = 0; i < def.ParsedHostOptions.Count && i < pool.Length; i++)
+        {
+            if (def.ParsedHostOptions[i].Key != key) continue;
+            return pool[i].GetFloat();
+        }
+
+        return null;
+    }
+
+    // 「露出されていればホスト値をキーごとの契約範囲へクランプして、されていなければ役職コードの値」。
+    // 枠の値域は全キー共通の広め固定なので、キーごとの範囲保証はここが唯一の砦 (ホストが 3.5 を
+    // 入れても shield は 3 に丸まる = 範囲逸脱で壊れない側)。
+    private static float HostOptionOr(CustomRoles slot, string key, float fallback, float min, float max)
+    {
+        float? value = GetHostOptionValue(slot, key);
+        return value.HasValue ? Math.Clamp(value.Value, min, max) : fallback;
+    }
+
+    // EkmTemplateRole から読む2キー。per-holder state があればそれを信じ (InitRuntime で焼き込み済み)、
+    // 無い経路 (ApplyGameOptions が Add より先に走る等) では同じ計算を live に行う。
+    public static float GetEffectiveKillCooldown(CustomRoles slot, float fallback) => HostOptionOr(slot, "killCooldown", fallback, 1f, 300f);
+
+    public static float GetEffectiveVision(CustomRoles slot, float fallback) => HostOptionOr(slot, "vision", fallback, 0.1f, 3f);
+
     // 説明文の実行時上書き (plan §7 Tier 1 #2)。Info/InfoLong は ExtendedPlayerControl.GetRoleInfo が読む
     // 2キーで、頂上の役職パネル・イントロ・/h r・オプションメニューのツールチップが全部ここへ集約されている
     // (個別の表示サイトへ書き足さないこと)。空欄はキーごと解除して lang の既定文言へ戻す — 解除しないと
@@ -688,6 +857,13 @@ public static class EkrManager
         Translator.SetRuntimeOverride(slot.ToString(), def.Name);
         ApplyDescriptionOverrides(slot, def);
 
+        // Wave 3 (契約 §4.2): ホスト露出の 8 枠を差し替える。既定値の流し込みは「初回束縛」と
+        // 「別の役職コードへの差し替え」のときだけ (同一コードの再束縛はホストの保存値を尊重する)。
+        string hostOptionSignature = BuildHostOptionSignature(fileName, def);
+        bool flowHostOptionDefaults = !HostOptionSignatures.TryGetValue(slot, out string prevSignature) || prevSignature != hostOptionSignature;
+        HostOptionSignatures[slot] = hostOptionSignature;
+        ApplyHostOptions(slot, def, flowHostOptionDefaults);
+
         // 色: Main.RoleHtmlColors が正典 (Main.cs RoleHtmlColors 辞書)。
         Main.RoleHtmlColors[slot] = def.Color;
         Main.InitRoleColors();
@@ -714,6 +890,11 @@ public static class EkrManager
         Translator.ClearRuntimeOverride(slot.ToString());
         Translator.ClearRuntimeOverride($"{slot}Info");
         Translator.ClearRuntimeOverride($"{slot}InfoLong");
+
+        // Wave 3 (契約 §4.2): 露出枠は全部 Clear + hidden へ戻す (Set-or-Clear 対称)。同定子も捨てる —
+        // 次に同じ役職コードを束縛し直したときは「初回」として既定値が入る。
+        HostOptionSignatures.Remove(slot);
+        ApplyHostOptions(slot, null, flowDefaults: false);
 
         if (Options.CustomRoleSpawnChances != null && Options.CustomRoleSpawnChances.TryGetValue(slot, out var opt))
         {
@@ -930,7 +1111,7 @@ public static class EkrManager
     // GetHolderState 経由で参照するため — logic の有無に関わらず一貫して引ける方が呼び出し側が単純になる)。
     private static void InitRuntime(CustomRoles slot, byte playerId)
     {
-        var state = new EkrHolderState();
+        var state = new EkrHolderState { Slot = slot };
 
         EkrDefinition def = GetDefinition(slot);
 
@@ -938,13 +1119,34 @@ public static class EkrManager
         {
             foreach (EkrVariable v in def.ParsedLogic.Variables)
                 state.Variables[v.Name] = v.Init;
+
+            // Wave 3 (契約 §4.1 `var:`): ホストが初期値を変えている変数を上書きする。エッジ発火の初期
+            // 武装評価より**前**に置くこと (後だと武装が旧初期値で焼かれる)。
+            foreach (EkrHostOption ho in def.ParsedHostOptions)
+            {
+                if (!ho.IsVar) continue;
+
+                float? hostValue = GetHostOptionValue(slot, ho.Key);
+                if (hostValue.HasValue) state.Variables[ho.VarName] = Math.Clamp(hostValue.Value, ho.Min, ho.Max);
+            }
+
+            // Wave 3 (契約 §1.1): 初期化時点で条件を評価し、その真偽をそのまま初期武装状態にする。
+            // 初期値が既に条件を満たしていても「遷移」ではないので発火しない (武装済み開始)。
+            // 「最初から満たしているなら即実行」は作者が on_game_start + if で組める。
+            RebuildEdgeArming(state, def.ParsedLogic.Rules);
         }
 
         // Wave 1 (spec §1.1): shield 残数 / doom 残時間はゲーム開始でリセット。ここ (Add=役職付与) が
         // 唯一の初期化点 — state 自体が作り直されるので「前ラウンドの残数の持ち越し」は構造的に起きない。
         EkrPassives passives = def?.ParsedPassives ?? EkrPassives.Default;
-        state.ShieldRemaining = passives.ShieldCount;
-        state.DoomRemaining = passives.DoomSeconds;
+
+        // Wave 3 (契約 §4.2): 露出されているキーはホストのオプション現在値を、されていなければ役職コード
+        // 側の値を使う。読みはこの1点に集約する。⚠️ shield / doom の 0 は「無効」なので下限を 0 にして
+        // ホストが切れるようにしてある (契約表の 1..9 / 30..600 は「有効時の値域」の意味)。
+        state.ShieldRemaining = (int)Math.Round(HostOptionOr(slot, "shield.count", passives.ShieldCount, 0f, 9f));
+        state.DoomRemaining = (int)Math.Round(HostOptionOr(slot, "doom.seconds", passives.DoomSeconds, 0f, 600f));
+        state.EffectiveSpeedMult = HostOptionOr(slot, "speedMult", passives.SpeedMult, 0.5f, 3f);
+        state.EffectiveVoteWeight = (int)Math.Round(HostOptionOr(slot, "voteWeight", passives.VoteWeight, 0f, 3f));
 
         Runtime[playerId] = state;
     }
@@ -1209,6 +1411,11 @@ public static class EkrManager
 
     public static void FireVentEnter(CustomRoles slot, PlayerControl pc) => FireEvent(slot, pc.PlayerId, "on_vent_enter", byte.MaxValue);
 
+    // Wave 3 (docs/ekn-wave3-contract.md §1.4): ベントから出たとき。FireVentEnter と完全対称。
+    // ⚠️ enter とのペアは保証しない — enter は妨害ゲートを通過したときだけ発火する一方、追い出し
+    // (RpcBootFromVent) 経由の exit は enter 無しで飛んでくる (作者向け tooltip にも明記済み)。
+    public static void FireVentExit(CustomRoles slot, PlayerControl pc) => FireEvent(slot, pc.PlayerId, "on_vent_exit", byte.MaxValue);
+
     // target の死亡確定時 (spec: 自分が死んだとき・ctx=キルした人 [いれば])。Utils.AfterPlayerDeathTasks から
     // 呼ぶ想定 — target 自身が EKR ホルダーかどうかは呼び出し前提を置かず、ここで判定する。
     // R2 (docs/ekn-r2-contract.md §3b): DeathReason (~90種) を 8 バケットへ畳む。
@@ -1428,6 +1635,7 @@ public static class EkrManager
             // (3回で logic 自動 disable) まで食らうのは「静かにドロップ」の設計意図を超える。
             // 実行した命令はフレーム集計へは通常どおり加算される。頻度は上の打診デデュープが締める。
             bool keep = EkmLogicRuntime.Pump(fiber, EkrActionSink.Instance, ignoreFrameBudget: true);
+            DrainFiberWrites(state, fiber);
 
             context.AllowCancelAttack = false; // 以後 (wait 後の継続) の cancel_attack は no-op
             if (context.CancelAttack) canceled = true;
@@ -1441,6 +1649,10 @@ public static class EkrManager
             }
             else if (fiber.Aborted) NoteFiberAbort(slot, state);
         }
+
+        // Wave 3 (契約 §1.1 評価点③): 同期プロローグ直後の評価。評価自体は同期だが、ここで発火する
+        // fiber は通常の非同期 spawn — プロローグ化しない (攻撃解決スタックで走る fiber を増やさない)。
+        FlushStateEdges(state, holderId);
 
         return canceled;
     }
@@ -1488,6 +1700,7 @@ public static class EkrManager
 
             EkrFiber fiber = EkmLogicRuntime.Spawn(rule.Do, state.Variables, context, EkrActionSink.InOpcodeKill);
             bool keep = EkmLogicRuntime.Pump(fiber, EkrActionSink.Instance, ignoreFrameBudget: true);
+            DrainFiberWrites(state, fiber);
 
             context.AllowCancelVote = false; // 以後 (wait 後の継続) の cancel_vote は no-op
             if (context.CancelVote) canceled = true;
@@ -1495,6 +1708,9 @@ public static class EkrManager
             if (keep) state.Fibers.Add(fiber);
             else if (fiber.Aborted) NoteFiberAbort(slot, state);
         }
+
+        // Wave 3 (契約 §1.1 評価点④): 投票プロローグ直後の評価 (攻撃プロローグと同型)。
+        FlushStateEdges(state, voter.PlayerId);
 
         return canceled;
     }
@@ -1720,9 +1936,9 @@ public static class EkrManager
     // 省略する — do ≤64 制約下の会議中実行で 500 命令/fiber には構造的に届かない。
     public static void PumpMeetingFibers()
     {
-        foreach (EkrHolderState state in Runtime.Values)
+        foreach ((byte holderId, EkrHolderState state) in Runtime)
         {
-            if (state.LogicDisabled || state.Fibers.Count == 0) continue;
+            if (state.LogicDisabled) continue;
 
             EkrFiber[] snapshot = state.Fibers.ToArray();
 
@@ -1730,8 +1946,15 @@ public static class EkrManager
             {
                 EkrFiber fiber = snapshot[i];
                 if (!state.Fibers.Contains(fiber)) continue;
-                if (!EkmLogicRuntime.Pump(fiber, EkrActionSink.Instance)) state.Fibers.Remove(fiber);
+
+                bool keep = EkmLogicRuntime.Pump(fiber, EkrActionSink.Instance);
+                DrainFiberWrites(state, fiber); // 捨てる判定より前に回収する (Pump 側と同じ理由)
+                if (!keep) state.Fibers.Remove(fiber);
             }
+
+            // Wave 3 (契約 §1.1 評価点②): 会議中も変数は動くのでエッジ判定も回す。
+            // アクション op 側は既存の会議中白名単 (spec §3) が守る。
+            FlushStateEdges(state, holderId);
         }
     }
 
@@ -1821,6 +2044,11 @@ public static class EkrManager
             if (!state.Fibers.Contains(fiber)) continue; // 再入で既に Clear 済み — この tick はもう進めない
 
             bool keep = EkmLogicRuntime.Pump(fiber, EkrActionSink.Instance);
+
+            // Wave 3: 回収は「捨てるかどうか」の判定より **前**。終了/打ち切りの直前に書かれた変数を
+            // 落とすと、その書込みだけ on_var が無音で鳴らなくなる。
+            DrainFiberWrites(state, fiber);
+
             if (keep) continue;
 
             state.Fibers.Remove(fiber); // 再入で既に居ない場合は no-op (添字ではなく参照で消す)
@@ -1836,6 +2064,203 @@ public static class EkrManager
                 break;
             }
         }
+
+        // Wave 3 (契約 §1.1 評価点①): fiber pump の切れ目。ここまでに溜まった変数書込みと生存数から
+        // じょうたいトリガのエッジを判定する。
+        FlushStateEdges(state, pc.PlayerId);
+
+        // Wave 3 (契約 §3): 進捗テキストが変わっていたら名札の再送を予約する (notify/inspect/reveal と
+        // 同じ per-holder ≤1/秒バケットを共有・新バケットを作らない)。
+        TickProgressText(state, pc);
+    }
+
+    // ── Wave 3: じょうたいトリガのエッジ発火エンジン (docs/ekn-wave3-contract.md §1) ────────────
+    //
+    // 意味論: 条件が **偽→真に遷移した瞬間に1回だけ**発火する (レベル発火にしない)。再武装は条件が
+    // 偽に戻ったとき。武装状態は per-(holder, rule) で、InitRuntime で「その時点の真偽」に初期化する
+    // (初期値が既に条件を満たしていても発火しない = 武装済み開始)。
+    //
+    // 評価点は fiber pump の切れ目4箇所だけ (Pump / PumpMeetingFibers / 攻撃プロローグ / 投票プロローグ)。
+    // 「この pump で書かれた変数名」は fiber 側 (EkrFiber.WrittenVars) が記録し、ここが回収して評価する
+    // — EkmLogicRuntime に「エッジ発火」という役職語彙を持ち込まないための境界 (同ファイル冒頭の層規律)。
+
+    // fiber を1回 Pump した直後に必ず呼ぶ (Done/Aborted で捨てる fiber の書込みも拾うため、
+    // 「捨てるかどうか」を判定するより前に回収すること — 順序を逆にすると最後の書込みが消える)。
+    private static void DrainFiberWrites(EkrHolderState state, EkrFiber fiber)
+    {
+        if (fiber.WrittenVars.Count == 0) return;
+
+        // §1.1 深さ1: 連鎖起点 (じょうたいトリガ由来) の fiber の書込みは別枠へ積む。
+        (fiber.FromVarChain ? state.PendingChainVarWrites : state.PendingVarWrites).UnionWith(fiber.WrittenVars);
+        fiber.WrittenVars.Clear();
+    }
+
+    // §1.1 の初期武装評価。EdgeArmed をルール数ぶん作り直し、各じょうたいトリガの現在の真偽を焼く。
+    private static void RebuildEdgeArming(EkrHolderState state, List<EkrRule> rules)
+    {
+        state.EdgeArmed = new bool[rules.Count];
+        state.HasAliveCountRule = false;
+
+        var aliveCount = -1;
+
+        for (var i = 0; i < rules.Count; i++)
+        {
+            EkrRule rule = rules[i];
+            if (!rule.IsStateTrigger) continue;
+
+            float actual;
+
+            if (rule.When == "on_alive_count")
+            {
+                state.HasAliveCountRule = true;
+                if (aliveCount < 0) aliveCount = Main.AllAlivePlayerControlsCount;
+                actual = aliveCount;
+            }
+            else actual = state.Variables.GetValueOrDefault(rule.VarName);
+
+            state.EdgeArmed[i] = EkmLogicRuntime.CompareValue(actual, rule.Cmp, rule.CmpValue);
+        }
+    }
+
+    // 4つのフラッシュ点から呼ぶ。書込みが無く on_alive_count ルールも無ければ即 return (常時コストは
+    // 辞書1個の Count 参照だけ — 送信ゼロ・ローカル演算のみなので予算対象外 §5)。
+    private static void FlushStateEdges(EkrHolderState state, byte holderId)
+    {
+        bool anyWrites = state.PendingVarWrites.Count > 0 || state.PendingChainVarWrites.Count > 0;
+
+        if (state.LogicDisabled || (!anyWrites && !state.HasAliveCountRule))
+        {
+            state.PendingVarWrites.Clear();
+            state.PendingChainVarWrites.Clear();
+            return;
+        }
+
+        List<EkrRule> rules = GetDefinition(state.Slot)?.ParsedLogic?.Rules;
+
+        if (rules == null)
+        {
+            state.PendingVarWrites.Clear();
+            state.PendingChainVarWrites.Clear();
+            return;
+        }
+
+        // 束縛の差し替え (ReloadLibrary) でルール数が変わっていたら武装を作り直す。長さを信じて添字を
+        // 引くと IndexOutOfRange になるため、フラッシュ側でも毎回長さを確認する (InitRuntime だけに
+        // 頼らない)。作り直しは「今の真偽で武装済み開始」= 差し替え直後の一斉発火を起こさない側。
+        if (state.EdgeArmed.Length != rules.Count) RebuildEdgeArming(state, rules);
+
+        int aliveCount = state.HasAliveCountRule ? Main.AllAlivePlayerControlsCount : 0;
+
+        for (var i = 0; i < rules.Count; i++)
+        {
+            EkrRule rule = rules[i];
+            if (!rule.IsStateTrigger) continue;
+
+            float actual;
+            var chainOnly = false;
+
+            if (rule.When == "on_alive_count")
+            {
+                // §1.3: 生存数の変化点は死亡/追放/切断/蘇生の4系統に散っており、切断は死亡イベントを
+                // 通らない。書込みフックを列挙する方式は必ず漏れるので、フラッシュ毎に素直に数え直す。
+                actual = aliveCount;
+            }
+            else
+            {
+                bool normal = state.PendingVarWrites.Contains(rule.VarName);
+                bool chain = state.PendingChainVarWrites.Contains(rule.VarName);
+                if (!normal && !chain) continue; // 書かれていない = 遷移しようがない (write-trigger)
+
+                chainOnly = !normal;
+                actual = state.Variables.GetValueOrDefault(rule.VarName);
+            }
+
+            bool now = EkmLogicRuntime.CompareValue(actual, rule.Cmp, rule.CmpValue);
+            bool wasArmed = state.EdgeArmed[i];
+            state.EdgeArmed[i] = now; // 武装遷移は発火の可否と独立に必ず反映する (§1.1)
+
+            if (!now || wasArmed) continue;
+            if (chainOnly) continue; // §1.1 深さ1: 連鎖起点の書込みは再武装/武装解除だけ効かせ発火は生まない
+
+            SpawnStateTriggerFiber(state, holderId, rule);
+        }
+
+        state.PendingVarWrites.Clear();
+        state.PendingChainVarWrites.Clear();
+    }
+
+    // §1.1: エッジが立ったルールの fiber を生やす。プロローグ直後の評価でも「通常の非同期 spawn」に
+    // する (同期性が要る op [cancel_attack/cancel_vote] は on_var 配下で検証 reject されるため、
+    // 攻撃解決スタックで走る fiber を増やす理由が構造的に無い)。
+    private static void SpawnStateTriggerFiber(EkrHolderState state, byte holderId, EkrRule rule)
+    {
+        // §1.1 死後ゲート: FireEvent の「死後は on_death 以外発火しない」に乗せる。
+        PlayerControl holderPc = holderId.GetPlayer();
+        if (!holderPc || !holderPc.IsAlive()) return;
+
+        // §1.1 / §5: cap 超過の発火は静かにドロップされる (武装遷移は上で済んでいるので、偽へ戻れば
+        // ちゃんと再武装される)。ドロップされた発火はやり直さない — 既存イベントと同じ規約。
+        if (state.Fibers.Count >= EkmLogicRuntime.MaxFibersPerHolder) return;
+
+        var context = new EkrActionContext { HolderId = holderId, CtxId = byte.MaxValue, Slot = state.Slot };
+        state.Fibers.Add(EkmLogicRuntime.Spawn(rule.Do, state.Variables, context, EkrActionSink.InOpcodeKill, fromVarChain: true));
+    }
+
+    // ── Wave 3: 進捗テキスト (docs/ekn-wave3-contract.md §3) ────────────────────────────────────
+
+    // 置換後の最終文字列の上限。変数値の膨張に対する安全弁 (置換前の 16字検査だけでは
+    // 「{a}{b}{c}」型で膨らむ)。
+    private const int ProgressRenderedMax = 24;
+
+    // EkmTemplateRole.GetProgressText から呼ぶ表示本体。**加算型** — 呼び出し元が base の
+    // ability-limit + タスク数の後ろへ足す (EKR はタスク持ち crew が基本形なのでタスク数を消さない)。
+    // ⚠️ Utils.GetProgressText は共有 StringBuilder を使い回すので、ここから直接にも間接的にも
+    // 呼んではいけない (再入で他の役職の進捗表示が壊れる)。
+    public static string BuildProgressText(CustomRoles slot, byte playerId)
+    {
+        EkrDefinition def = GetDefinition(slot);
+        if (def == null || def.ProgressText.Length == 0) return string.Empty;
+
+        EkrHolderState state = GetHolderState(playerId);
+        string text = EkrActionSink.SubstituteVariables(def.ProgressText, state?.Variables);
+        if (text.Length > ProgressRenderedMax) text = text[..ProgressRenderedMax];
+
+        // 色は役職色固定 (作者に色/サイズを触らせない構造ガード)。先頭の半角スペースで前の項と離す。
+        return " " + Utils.ColorString(Utils.GetRoleColor(slot), text);
+    }
+
+    // Pump 末尾から毎 FixedUpdate 呼ぶ。進捗が実際に変わったときだけ名札の再送を予約する。
+    // 予算: notify(self)/inspect/reveal と**同一の per-holder ≤1/秒バケットを共有**する (新バケット
+    // 禁止)。再送は seer=target=保持者本人のみ (targets=1) — 進捗テキストは自分の名札の一部で、
+    // 他人の画面には既存の役職テキスト表示経路でしか出ないため、ここで全員へ撒く理由が無い
+    // (18スロット全束縛の最悪ケースでも identity nests は 18/秒 = 安全式 targets×体数/秒≤20 の内側)。
+    // バケットが埋まっていたら送らずに戻る = 次のフラッシュで再試行され、**送るのは常に最新値**なので
+    // 中間値の欠落は起きない (最終値保証)。会議中は Pump 自体が回らないので明示送信もしない。
+    // 補足: NotifyRoles はモッドクライアント宛の指定送信を自前で早期 return するので、実際に
+    // パケットが出るのは**非モッド客がホルダーのとき**だけ (ホスト自身の表示は毎フレームのローカル描画)。
+    private static void TickProgressText(EkrHolderState state, PlayerControl pc)
+    {
+        EkrDefinition def = GetDefinition(state.Slot);
+        if (def == null || def.ProgressText.Length == 0) return;
+        if (!pc || !pc.IsAlive() || !Main.IntroDestroyed) return;
+
+        string current = BuildProgressText(state.Slot, pc.PlayerId);
+
+        // 初回は種を置くだけ (ゲーム開始時の通常の NotifyRoles で既に表示済み)。
+        if (state.LastProgressSent == null)
+        {
+            state.LastProgressSent = current;
+            return;
+        }
+
+        if (current == state.LastProgressSent) return;
+
+        float now = Time.realtimeSinceStartup;
+        if (state.LastNotifyTime.TryGetValue(pc.PlayerId, out float last) && now - last < 1f) return;
+
+        state.LastNotifyTime[pc.PlayerId] = now;
+        state.LastProgressSent = current;
+        Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
     }
 
     // ── Wave 1: パッシブ層 (docs/ekr-logic-spec.md §1.1) ────────────────────────────────────────
@@ -1858,7 +2283,10 @@ public static class EkrManager
         // speedMult: AllPlayerSpeed 一発 write + MarkDirtySettings (spec §1.1)。捕捉は1回だけ (捕捉フラグ)。
         // 捕捉時に他役職が MinSpeed で凍結中だとその凍結値を「本来の速度」として掴んでしまうため、
         // 凍結中はゲーム既定値を baseline にする (memory: allplayerspeed-temp-boost-restore-race)。
-        if (passives.HasSpeed && !state.PassiveSpeedApplied && alive)
+        // Wave 3 (契約 §4): 倍率は InitRuntime で焼いた実効値 (ホスト露出があればホストの値)。
+        bool hasSpeed = state.EffectiveSpeedMult is < 0.999f or > 1.001f;
+
+        if (hasSpeed && !state.PassiveSpeedApplied && alive)
         {
             float current = Main.AllPlayerSpeed.GetValueOrDefault(pc.PlayerId, Main.RealOptionsData.GetFloat(AmongUs.GameOptions.FloatOptionNames.PlayerSpeedMod));
 
@@ -1867,7 +2295,7 @@ public static class EkrManager
                 : current;
 
             state.PassiveSpeedApplied = true;
-            Main.AllPlayerSpeed[pc.PlayerId] = state.PassiveSpeedBaseline * passives.SpeedMult;
+            Main.AllPlayerSpeed[pc.PlayerId] = state.PassiveSpeedBaseline * state.EffectiveSpeedMult;
             pc.MarkDirtySettings();
         }
 
@@ -1942,8 +2370,12 @@ public static class EkrManager
     // そのまま効く = 無効化先勝ちも自動維持)。
     public static int GetVoteWeight(byte playerId)
     {
-        if (Runtime.TryGetValue(playerId, out EkrHolderState state) && state.VoteWeightOverride.HasValue)
-            return state.VoteWeightOverride.Value;
+        if (Runtime.TryGetValue(playerId, out EkrHolderState state))
+        {
+            // vote_weight_set の実行時オーバーライドが最優先。無ければ InitRuntime で焼いた実効値
+            // (Wave 3 のホスト露出があればホストの値が入っている)。
+            return state.VoteWeightOverride ?? state.EffectiveVoteWeight;
+        }
 
         return GetPassivesFor(playerId)?.VoteWeight ?? 1;
     }

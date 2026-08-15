@@ -2266,7 +2266,10 @@ internal static class ExtendedPlayerControl
             return CheckMurderPatch.RpcCheckAndMurder(player, target, check);
         }
 
-        public void NoCheckStartMeeting(NetworkedPlayerInfo target, bool force = false)
+        // synthetic (Wave 3 契約 §2 — docs/ekn-wave3-contract.md): この経路は「役職やコマンドが起こす
+        // 会議」なので既定 true。「本人が死体を見つけて通報した」意味論を持つ経路 (Bait の自己通報) だけが
+        // 明示的に false を渡す。EKR の on_report と Newscaster の調査対象判定がこのフラグを見る。
+        public void NoCheckStartMeeting(NetworkedPlayerInfo target, bool force = false, bool synthetic = true)
         {
             if (!HudManager.InstanceExists) return;
             // ロビー等ゲーム外で会議を開始すると操作不能 + 会議端末表示 + BGM 停止になる (2026-07-15 実測)。
@@ -2274,7 +2277,7 @@ internal static class ExtendedPlayerControl
             if (!GameStates.InGame || GameStates.IsLobby) return;
             if (Options.DisableMeeting.GetBool() && !force) return;
 
-            ReportDeadBodyPatch.AfterReportTasks(player, target);
+            ReportDeadBodyPatch.AfterReportTasks(player, target, synthetic);
             MeetingRoomManager.Instance.AssignSelf(player, target);
             HudManager.Instance.OpenMeetingRoom(player);
             // ワイヤ方式 (ホスト先行入室+RPC遅延直送) は BUG-20260723-01 のキック疑いにより既定無効 —

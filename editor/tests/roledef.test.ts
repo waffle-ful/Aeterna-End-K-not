@@ -2,10 +2,14 @@
 
 import { describe, expect, it } from "vitest";
 import {
+    ALIVE_COUNT_VALUE_MAX,
+    ALIVE_COUNT_VALUE_MIN,
     DEFAULT_COLOR,
+    HOST_OPTIONS_MAX,
     KILL_COOLDOWN_DEFAULT,
     KILL_COOLDOWN_MAX,
     KILL_COOLDOWN_MIN,
+    PROGRESS_TEXT_MAX,
     ROLE_AUTHOR_MAX,
     ROLE_NAME_MAX,
     SUPPORTED_TEAM,
@@ -1275,5 +1279,240 @@ describe("normalize* ヘルパー (UI と検証が共有する唯一のクラン
         expect(normalizeColor("abcdef")).toBe("#abcdef");
         expect(normalizeColor("#ABC")).toBe(DEFAULT_COLOR);
         expect(normalizeColor(123)).toBe(DEFAULT_COLOR);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Wave 3 (docs/ekn-wave3-contract.md 2026-08-14) — じょうたいと数値
+// ---------------------------------------------------------------------------
+describe("logic 検証 Wave 3 (on_var / on_alive_count / on_vent_exit)", () => {
+    function baseLogic(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+        return {
+            version: 1,
+            variables: [{ name: "カウント", init: 0 }],
+            rules: [{ when: "on_pet", do: [{ op: "stop" }] }],
+            ...overrides,
+        };
+    }
+    function withLogic(logic: unknown): Record<string, unknown> {
+        return { ...baseValid(), logic };
+    }
+    function withRule(rule: Record<string, unknown>): Record<string, unknown> {
+        return withLogic(baseLogic({ rules: [rule] }));
+    }
+
+    it("on_var: 宣言済み変数 + cmp(eq/le/ge) + 整数 value は受理される", () => {
+        for (const cmp of ["eq", "le", "ge"]) {
+            const r = validateEkrDefinition(withRule({ when: "on_var", var: "カウント", cmp, value: 3, do: [{ op: "stop" }] }));
+            expect(r.ok, cmp).toBe(true);
+            if (r.ok) expect(r.def.logic?.rules[0]).toEqual({ when: "on_var", var: "カウント", cmp, value: 3, do: [{ op: "stop" }] });
+        }
+    });
+
+    it("on_var: 未定義の変数は文書 reject", () => {
+        expect(validateEkrDefinition(withRule({ when: "on_var", var: "そんざいしない", cmp: "eq", value: 0, do: [{ op: "stop" }] })).ok).toBe(false);
+    });
+
+    // spec §1: 変数名は宣言側・参照側とも trim してから照合する。参照側の trim が抜けていると、
+    // 手書き JSON の前後空白付き参照をローダー (C#) だけが受理する非対称になる (2026-08-14 契約監査)。
+    it("on_var: 前後に空白のある変数参照は trim してから照合される (C# 側と同一)", () => {
+        const r = validateEkrDefinition(withRule({ when: "on_var", var: "  カウント  ", cmp: "eq", value: 0, do: [{ op: "stop" }] }));
+        expect(r.ok).toBe(true);
+        if (r.ok) expect(r.def.logic?.rules[0].var).toBe("カウント");
+    });
+
+    it("var_set/var_add/変数式の参照も同じく trim される", () => {
+        const r = validateEkrDefinition(
+            withRule({
+                when: "on_pet",
+                do: [
+                    { op: "var_set", name: " カウント ", value: { e: "var", name: "カウント " } },
+                    { op: "var_add", name: "カウント ", delta: { e: "lit", v: 1 } },
+                ],
+            }),
+        );
+        expect(r.ok).toBe(true);
+        if (r.ok) expect(r.def.logic?.rules[0].do[0]).toEqual({ op: "var_set", name: "カウント", value: { e: "var", name: "カウント" } });
+    });
+
+    it("on_var: var/cmp/value のいずれかが欠けていたら reject", () => {
+        expect(validateEkrDefinition(withRule({ when: "on_var", cmp: "eq", value: 0, do: [{ op: "stop" }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_var", var: "カウント", value: 0, do: [{ op: "stop" }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_var", var: "カウント", cmp: "eq", do: [{ op: "stop" }] })).ok).toBe(false);
+    });
+
+    it("on_var: cmp は eq/le/ge 以外は reject・value は整数以外 (小数/式オブジェクト) は reject", () => {
+        expect(validateEkrDefinition(withRule({ when: "on_var", var: "カウント", cmp: "ne", value: 0, do: [{ op: "stop" }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_var", var: "カウント", cmp: "eq", value: 1.5, do: [{ op: "stop" }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_var", var: "カウント", cmp: "eq", value: { e: "lit", v: 1 }, do: [{ op: "stop" }] })).ok).toBe(false);
+    });
+
+    it("on_var 以外の rule に var が付いていたら reject (on_alive_count でも reject)", () => {
+        expect(validateEkrDefinition(withRule({ when: "on_pet", var: "カウント", do: [{ op: "stop" }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_alive_count", var: "カウント", cmp: "eq", value: 3, do: [{ op: "stop" }] })).ok).toBe(false);
+    });
+
+    it("on_alive_count: cmp + value(1..15) は受理・var は禁止", () => {
+        const ok = validateEkrDefinition(withRule({ when: "on_alive_count", cmp: "le", value: 3, do: [{ op: "stop" }] }));
+        expect(ok.ok).toBe(true);
+        if (ok.ok) expect(ok.def.logic?.rules[0]).toEqual({ when: "on_alive_count", cmp: "le", value: 3, do: [{ op: "stop" }] });
+
+        expect(validateEkrDefinition(withRule({ when: "on_alive_count", cmp: "le", value: ALIVE_COUNT_VALUE_MIN, do: [{ op: "stop" }] })).ok).toBe(true);
+        expect(validateEkrDefinition(withRule({ when: "on_alive_count", cmp: "le", value: ALIVE_COUNT_VALUE_MAX, do: [{ op: "stop" }] })).ok).toBe(true);
+        expect(validateEkrDefinition(withRule({ when: "on_alive_count", cmp: "le", value: ALIVE_COUNT_VALUE_MIN - 1, do: [{ op: "stop" }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_alive_count", cmp: "le", value: ALIVE_COUNT_VALUE_MAX + 1, do: [{ op: "stop" }] })).ok).toBe(false);
+    });
+
+    it("on_alive_count: cmp/value のどちらかが欠けていたら reject", () => {
+        expect(validateEkrDefinition(withRule({ when: "on_alive_count", value: 3, do: [{ op: "stop" }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_alive_count", cmp: "le", do: [{ op: "stop" }] })).ok).toBe(false);
+    });
+
+    it("on_alive_count/on_var 以外の rule に cmp/value が付いていたら reject", () => {
+        expect(validateEkrDefinition(withRule({ when: "on_pet", cmp: "eq", do: [{ op: "stop" }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_pet", value: 1, do: [{ op: "stop" }] })).ok).toBe(false);
+    });
+
+    it("on_vent_exit: 追加フィールド無しで受理される", () => {
+        const r = validateEkrDefinition(withRule({ when: "on_vent_exit", do: [{ op: "stop" }] }));
+        expect(r.ok).toBe(true);
+        if (r.ok) expect(r.def.logic?.rules[0]).toEqual({ when: "on_vent_exit", do: [{ op: "stop" }] });
+    });
+
+    it("17 種類すべてが LOGIC_WHEN_VALUES 経由で受理される (新3イベント込み)", () => {
+        for (const when of ["on_var", "on_alive_count", "on_vent_exit"]) {
+            const rule = when === "on_var"
+                ? { when, var: "カウント", cmp: "eq", value: 0, do: [{ op: "stop" }] }
+                : when === "on_alive_count"
+                    ? { when, cmp: "eq", value: 1, do: [{ op: "stop" }] }
+                    : { when, do: [{ op: "stop" }] };
+            expect(validateEkrDefinition(withRule(rule)).ok, when).toBe(true);
+        }
+    });
+});
+
+describe("progress 検証 (Wave 3・契約 §3)", () => {
+    it("progress キー省略は progress: undefined (現行挙動のまま)", () => {
+        const r = validateEkrDefinition(baseValid());
+        if (!r.ok) throw new Error(r.error);
+        expect(r.def.progress).toBeUndefined();
+    });
+
+    it("text は必須。欠落/空文字/空白のみは reject", () => {
+        expect(validateEkrDefinition({ ...baseValid(), progress: {} }).ok).toBe(false);
+        expect(validateEkrDefinition({ ...baseValid(), progress: { text: "" } }).ok).toBe(false);
+        expect(validateEkrDefinition({ ...baseValid(), progress: { text: "   " } }).ok).toBe(false);
+    });
+
+    it("text は trim される", () => {
+        const r = validateEkrDefinition({ ...baseValid(), progress: { text: "  のこり1つ  " } });
+        if (!r.ok) throw new Error(r.error);
+        expect(r.def.progress).toEqual({ text: "のこり1つ" });
+    });
+
+    it(`text は ${PROGRESS_TEXT_MAX} 文字を超えるとクランプ (rejectではない)`, () => {
+        const over = "あ".repeat(PROGRESS_TEXT_MAX + 5);
+        const r = validateEkrDefinition({ ...baseValid(), progress: { text: over } });
+        if (!r.ok) throw new Error(r.error);
+        expect(r.def.progress?.text.length).toBe(PROGRESS_TEXT_MAX);
+        expect(r.def.progress?.text).toBe("あ".repeat(PROGRESS_TEXT_MAX));
+    });
+
+    it("<> は全角 〈〉 へサニタイズされる", () => {
+        const r = validateEkrDefinition({ ...baseValid(), progress: { text: "<強調>" } });
+        if (!r.ok) throw new Error(r.error);
+        expect(r.def.progress?.text).toBe("〈強調〉");
+    });
+
+    it("text が文字列でなければ reject", () => {
+        expect(validateEkrDefinition({ ...baseValid(), progress: { text: 5 } }).ok).toBe(false);
+        expect(validateEkrDefinition({ ...baseValid(), progress: "のこり1つ" }).ok).toBe(false);
+    });
+});
+
+describe("hostOptions 検証 (Wave 3・契約 §4.1)", () => {
+    function withVar(hostOptions: unknown): Record<string, unknown> {
+        return {
+            ...baseValid(),
+            logic: { version: 1, variables: [{ name: "たま", init: 0 }], rules: [{ when: "on_pet", do: [{ op: "stop" }] }] },
+            hostOptions,
+        };
+    }
+
+    it("hostOptions キー省略/空配列は hostOptions: undefined (現行挙動のまま)", () => {
+        const omitted = validateEkrDefinition(baseValid());
+        if (!omitted.ok) throw new Error(omitted.error);
+        expect(omitted.def.hostOptions).toBeUndefined();
+
+        const empty = validateEkrDefinition({ ...baseValid(), hostOptions: [] });
+        if (!empty.ok) throw new Error(empty.error);
+        expect(empty.def.hostOptions).toBeUndefined();
+    });
+
+    it("固定6キーはすべて受理される (min/max無し)", () => {
+        for (const key of ["shield.count", "doom.seconds", "speedMult", "voteWeight", "killCooldown", "vision"]) {
+            const r = validateEkrDefinition({ ...baseValid(), hostOptions: [{ key, label: "らべる" }] });
+            expect(r.ok, key).toBe(true);
+        }
+    });
+
+    it("固定キーに min/max が付いていたら reject", () => {
+        expect(validateEkrDefinition({ ...baseValid(), hostOptions: [{ key: "voteWeight", label: "ちから", min: 0, max: 3 }] }).ok).toBe(false);
+    });
+
+    it("var:<宣言済み変数> は min/max 必須で受理・min>=max は reject", () => {
+        const ok = validateEkrDefinition(withVar([{ key: "var:たま", label: "たまの数", min: 0, max: 10 }]));
+        expect(ok.ok).toBe(true);
+        if (ok.ok) expect(ok.def.hostOptions).toEqual([{ key: "var:たま", label: "たまの数", min: 0, max: 10 }]);
+
+        expect(validateEkrDefinition(withVar([{ key: "var:たま", label: "たまの数" }])).ok).toBe(false);
+        expect(validateEkrDefinition(withVar([{ key: "var:たま", label: "たまの数", min: 10, max: 10 }])).ok).toBe(false);
+        expect(validateEkrDefinition(withVar([{ key: "var:たま", label: "たまの数", min: 10, max: 5 }])).ok).toBe(false);
+    });
+
+    it("var:<未定義変数> は reject (logic 自体が無いときも reject)", () => {
+        expect(validateEkrDefinition(withVar([{ key: "var:そんざいしない", label: "x", min: 0, max: 10 }])).ok).toBe(false);
+        expect(validateEkrDefinition({ ...baseValid(), hostOptions: [{ key: "var:たま", label: "x", min: 0, max: 10 }] }).ok).toBe(false);
+    });
+
+    it("不正な key は reject", () => {
+        expect(validateEkrDefinition({ ...baseValid(), hostOptions: [{ key: "not.a.key", label: "x" }] }).ok).toBe(false);
+    });
+
+    it("キーの重複は reject", () => {
+        const dup = [{ key: "voteWeight", label: "A" }, { key: "voteWeight", label: "B" }];
+        expect(validateEkrDefinition({ ...baseValid(), hostOptions: dup }).ok).toBe(false);
+    });
+
+    it("label は1..24字 (trim)。空/超過は reject・<> はサニタイズ", () => {
+        expect(validateEkrDefinition({ ...baseValid(), hostOptions: [{ key: "voteWeight", label: "" }] }).ok).toBe(false);
+        expect(validateEkrDefinition({ ...baseValid(), hostOptions: [{ key: "voteWeight", label: "   " }] }).ok).toBe(false);
+        expect(validateEkrDefinition({ ...baseValid(), hostOptions: [{ key: "voteWeight", label: "あ".repeat(25) }] }).ok).toBe(false);
+
+        const r = validateEkrDefinition({ ...baseValid(), hostOptions: [{ key: "voteWeight", label: "<強調>" }] });
+        if (!r.ok) throw new Error(r.error);
+        expect(r.def.hostOptions?.[0].label).toBe("〈強調〉");
+    });
+
+    it(`最大 ${HOST_OPTIONS_MAX} 件まで。超過は reject`, () => {
+        expect(HOST_OPTIONS_MAX).toBe(8); // 上の定数が変わったらこのテストの前提を見直す合図
+        // 重複キーを避けるため、固定キー6種 + var:2種 (2変数宣言) で8件ちょうど作る
+        const fixedKeys = ["shield.count", "doom.seconds", "speedMult", "voteWeight", "killCooldown", "vision"];
+        const eight = [
+            ...fixedKeys.map((key, i) => ({ key, label: `A${i}` })),
+            { key: "var:たま", label: "たまの数", min: 0, max: 10 },
+            { key: "var:ぎん", label: "ぎんの数", min: 0, max: 10 },
+        ];
+        const threeVarsLogic = {
+            version: 1,
+            variables: [{ name: "たま", init: 0 }, { name: "ぎん", init: 0 }, { name: "どう", init: 0 }],
+            rules: [{ when: "on_pet", do: [{ op: "stop" }] }],
+        };
+        expect(validateEkrDefinition({ ...baseValid(), logic: threeVarsLogic, hostOptions: eight }).ok).toBe(true);
+
+        // 9件目 (var:どう) を足すと重複キー無しのまま純粋に件数だけ超過する
+        const nine = [...eight, { key: "var:どう", label: "どうの数", min: 0, max: 10 }];
+        expect(nine.length).toBe(HOST_OPTIONS_MAX + 1);
+        expect(validateEkrDefinition({ ...baseValid(), logic: threeVarsLogic, hostOptions: nine }).ok).toBe(false);
     });
 });

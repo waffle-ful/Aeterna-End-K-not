@@ -43,7 +43,22 @@ describe("golden fixture: role-full-course.ekrole.json (10イベント・主要o
         expect(result.def.descriptionLong?.startsWith("影を渡り歩く役職です。")).toBe(true);
     });
 
-    it("10 種類のイベントすべてを1回ずつカバーしている", () => {
+    // Wave 3 (docs/ekn-wave3-contract.md §3/§4 2026-08-14): progress/hostOptions。
+    // C# 側 (EkrDefinitionTests) が同じファイルの同じ値を読むので、片側だけ実装が抜けるとどちらかが落ちる。
+    it("progress.text と hostOptions を保持する", () => {
+        const parsed = JSON.parse(fullCourseRaw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+
+        expect(result.def.progress).toEqual({ text: "うらみ{うらみ}" });
+        expect(result.def.hostOptions).toEqual([
+            { key: "shield.count", label: "かげのまもり" },
+            { key: "killCooldown", label: "キルクールダウン" },
+            { key: "var:うらみ", label: "はじめのうらみ", min: 0, max: 20 },
+        ]);
+    });
+
+    it("17 種類すべてのイベントを1回ずつカバーしている (Wave 3 で on_var/on_alive_count/on_vent_exit を追加)", () => {
         const parsed = JSON.parse(fullCourseRaw);
         const result = validateEkrDefinition(parsed);
         if (!result.ok) throw new Error(result.error);
@@ -96,6 +111,26 @@ describe("golden fixture: role-full-course.ekrole.json (10イベント・主要o
 
     // R2 (契約 §3b): on_attacked の kind / on_death の cause も共有 fixture に載せて
     // TS↔C# の drift 検出網に入れる。
+    it("Wave 3 の新3イベント (on_var/on_alive_count/on_vent_exit) の rule 形が保持される", () => {
+        const parsed = JSON.parse(fullCourseRaw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        const rules = result.def.logic?.rules ?? [];
+
+        const onVar = rules.find((r) => r.when === "on_var");
+        expect(onVar?.var).toBe("うらみ");
+        expect(onVar?.cmp).toBe("ge");
+        expect(onVar?.value).toBe(7);
+
+        const onAliveCount = rules.find((r) => r.when === "on_alive_count");
+        expect(onAliveCount?.var).toBeUndefined();
+        expect(onAliveCount?.cmp).toBe("le");
+        expect(onAliveCount?.value).toBe(3);
+
+        const onVentExit = rules.find((r) => r.when === "on_vent_exit");
+        expect(onVentExit?.do.length).toBeGreaterThan(0);
+    });
+
     it("on_attacked の kind と on_death の cause が保持される", () => {
         const parsed = JSON.parse(fullCourseRaw);
         const result = validateEkrDefinition(parsed);
@@ -105,12 +140,12 @@ describe("golden fixture: role-full-course.ekrole.json (10イベント・主要o
         expect(rules.find((r) => r.when === "on_death")?.cause).toBe("poison-curse");
     });
 
-    it("リンター (spec §6) は警告0件 — golden fixture は模範的な組み方で書く", () => {
+    it("リンター (spec §6・Wave 3 で L24/L25 含む) は警告0件 — golden fixture は模範的な組み方で書く", () => {
         const parsed = JSON.parse(fullCourseRaw);
         const result = validateEkrDefinition(parsed);
         if (!result.ok) throw new Error(result.error);
         if (!result.def.logic) throw new Error("fixture は logic を持つ前提");
-        expect(lintRoleLogic(result.def.logic)).toEqual([]);
+        expect(lintRoleLogic(result.def.logic, result.def.progress?.text)).toEqual([]);
     });
 
     it("rolecode (EKR1.) のエンコード→デコード ラウンドトリップで AST が deep-equal になる", () => {

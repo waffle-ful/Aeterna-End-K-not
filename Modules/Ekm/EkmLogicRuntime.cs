@@ -35,6 +35,19 @@ public sealed class EkrRule
 
     // R2 (同 §3b): on_death 専用の任意フィールド。null = 全死因にマッチ。値は EkrDeathCauses のいずれか。
     public string Cause;
+
+    // Wave 3 (docs/ekn-wave3-contract.md §1.2): on_var 専用の必須フィールド。監視する変数名。
+    // 他イベントでは null。
+    public string VarName;
+
+    // Wave 3 (§1.2 / §1.3): on_var と on_alive_count の必須フィールド。比較演算子 (EkrValueCmps) と閾値。
+    // 他イベントでは Cmp == null。閾値は整数リテラルのみ (式は受理しない — 動く閾値は if で組む)。
+    public string Cmp;
+    public int CmpValue;
+
+    // Wave 3 (§1.1): このルールが「じょうたいトリガ」(エッジ発火エンジンが管理するもの) か。
+    // パース時に確定する導出値 — 呼び出し元 (EkrManager) が武装配列を組むときの唯一の判定基準。
+    public bool IsStateTrigger;
 }
 
 // op ごとの引数はフラットに全部持つ (spec §3 の「args ラッパー無し」に対応)。未使用フィールドは既定値のまま。
@@ -141,8 +154,17 @@ public sealed class EkrLogicDef
         "on_meeting_end", "on_task_complete", "on_vent_enter", "on_report", "on_second",
         "on_cno_touch", // v1.2 (2026-08-10)
         "on_attacked", // Wave 1 (2026-08-11)
-        "on_meeting_vote", "on_meeting_pick" // Wave 2 (docs/ekn-wave2-contract.md §1)
+        "on_meeting_vote", "on_meeting_pick", // Wave 2 (docs/ekn-wave2-contract.md §1)
+        // Wave 3 (docs/ekn-wave3-contract.md §1): じょうたいトリガ2種 + ベント退出。
+        "on_var", "on_alive_count", "on_vent_exit"
     ];
+
+    // Wave 3 (§1.2): 比較演算子。**綴りは ExprKinds の流用** (新語彙を作らない)。
+    // ⚠️ TS 側 (editor/src/roledef.ts) と同じ並び・同じ綴りを保つこと。
+    public static readonly string[] EkrValueCmps = ["eq", "le", "ge"];
+
+    // Wave 3 (§1.1): エッジ発火エンジンが武装状態を管理するイベント。
+    public static bool IsStateTriggerEvent(string when) => when is "on_var" or "on_alive_count";
 
     // R2 (docs/ekn-r2-contract.md §3b): on_attacked の種別と on_death の死因バケット。
     // ⚠️ TS 側 (editor/src/roledef.ts) と同じ並び・同じ綴りを保つこと (drift 検出は共有 fixture)。
@@ -180,6 +202,85 @@ public sealed class EkrLogicDef
         }
 
         value = raw;
+        return true;
+    }
+
+    // Wave 3 (docs/ekn-wave3-contract.md §1.2/§1.3): じょうたいトリガの rule 直下フィールドの読み取り。
+    // `var` は on_var のみ・`cmp`/`value` は on_var と on_alive_count のみ (どちらも必須)。
+    // 他イベントに付いていたら on_cno_touch の slot と同じく文書 reject する
+    // (静的に検査できるものは no-op でなく reject — spec §1 の総則)。
+    private static bool TryReadStateTriggerFields(JsonElement ruleEl, string when, HashSet<string> knownVars, out string varName, out string cmp, out int cmpValue, out string error)
+    {
+        varName = null;
+        cmp = null;
+        cmpValue = 0;
+        error = null;
+
+        if (when == "on_var")
+        {
+            if (!ruleEl.TryGetProperty("var", out JsonElement varEl) || varEl.ValueKind != JsonValueKind.String)
+            {
+                error = "on_var の rule には var (みはる変数の名前) が必要です";
+                return false;
+            }
+
+            // 宣言側 (TryParseInner) と同じ trim 慣行で照合する (spec §1 2026-08-09 裁定)。
+            varName = (varEl.GetString() ?? "").Trim();
+
+            if (!knownVars.Contains(varName))
+            {
+                error = $"未定義の変数を参照しています ({varName})";
+                return false;
+            }
+        }
+        else if (ruleEl.TryGetProperty("var", out _))
+        {
+            error = $"when=\"{when}\" の rule に var は指定できません (on_var 専用です)";
+            return false;
+        }
+
+        bool wantsCmp = IsStateTriggerEvent(when);
+
+        if (!wantsCmp)
+        {
+            if (ruleEl.TryGetProperty("cmp", out _))
+            {
+                error = $"when=\"{when}\" の rule に cmp は指定できません (on_var / on_alive_count 専用です)";
+                return false;
+            }
+
+            if (ruleEl.TryGetProperty("value", out _))
+            {
+                error = $"when=\"{when}\" の rule に value は指定できません (on_var / on_alive_count 専用です)";
+                return false;
+            }
+
+            return true;
+        }
+
+        if (!ruleEl.TryGetProperty("cmp", out JsonElement cmpEl) || cmpEl.ValueKind != JsonValueKind.String || Array.IndexOf(EkrValueCmps, cmpEl.GetString()) < 0)
+        {
+            error = $"{when} の cmp が不正です (使えるのは {string.Join(" / ", EkrValueCmps)})";
+            return false;
+        }
+
+        cmp = cmpEl.GetString();
+
+        // 契約 §1.2: value は整数リテラルのみ (式は受理しない — 動く閾値は作者が if で組む)。
+        if (!ruleEl.TryGetProperty("value", out JsonElement valueEl) || !EkrJson.TryReadInt(valueEl, out cmpValue))
+        {
+            error = $"{when} の value が不正です (整数で指定してください)";
+            return false;
+        }
+
+        // 契約 §1.3: 生存人数だけ 1..15 の範囲を持つ。**on_var の value に範囲は無い** (変数の値域その
+        // ものなので契約が範囲を定めていない — ここに独自の上下限を足すと TS 側と非対称になる)。
+        if (when == "on_alive_count" && cmpValue is < 1 or > 15)
+        {
+            error = "on_alive_count の value が範囲外です (1〜15)";
+            return false;
+        }
+
         return true;
     }
 
@@ -351,6 +452,11 @@ public sealed class EkrLogicDef
             if (!TryReadRuleFilter(ruleEl, when, "kind", "on_attacked", EkrAttackKinds, out string ruleKind, out error)) return false;
             if (!TryReadRuleFilter(ruleEl, when, "cause", "on_death", EkrDeathCauses, out string ruleCause, out error)) return false;
 
+            // Wave 3 (契約 §1.2/§1.3): じょうたいトリガの必須フィールド。slot と同じ厳格側 —
+            // 付ける場所を間違えたら「静かに効かない」ではなく文書 reject にする。
+            if (!TryReadStateTriggerFields(ruleEl, when, knownVarNames, out string ruleVar, out string ruleCmp, out int ruleCmpValue, out error))
+                return false;
+
             if (!ruleEl.TryGetProperty("do", out JsonElement doEl) || doEl.ValueKind != JsonValueKind.Array)
             {
                 error = "ロジックの rule に do がありません";
@@ -386,7 +492,18 @@ public sealed class EkrLogicDef
                 return false;
             }
 
-            parsed.Rules.Add(new EkrRule { When = when, Do = doNodes, Slot = ruleSlot, Kind = ruleKind, Cause = ruleCause });
+            parsed.Rules.Add(new EkrRule
+            {
+                When = when,
+                Do = doNodes,
+                Slot = ruleSlot,
+                Kind = ruleKind,
+                Cause = ruleCause,
+                VarName = ruleVar,
+                Cmp = ruleCmp,
+                CmpValue = ruleCmpValue,
+                IsStateTrigger = IsStateTriggerEvent(when)
+            });
         }
 
         def = parsed;
@@ -990,6 +1107,19 @@ public sealed class EkrFiber
     // (生存中ずっと wait を挟んでも失われないよう、実行時に都度グローバルフラグを見ない設計)。
     public bool FromKillChain;
 
+    // Wave 3 (docs/ekn-wave3-contract.md §1.1): じょうたいトリガ (on_var/on_alive_count) 起点の fiber か。
+    // kill 連鎖ガードと同型の per-fiber 焼き込み — この fiber が行った変数書込みは「武装状態の遷移は
+    // 起こすが新規発火は生まない」(ピンポン構造の排除・深さ1)。
+    public bool FromVarChain;
+
+    // Wave 3 (§1.1): 前回のドレイン以降にこの fiber が書き換えた変数名。呼び出し元 (EkrManager) が
+    // Pump 直後に回収して空にする — 「fiber にフラグを載せ呼び出し元が読む」慣行 (FromKillChain/Aborted
+    // と同型) で、汎用エンジンに「エッジ発火」という役職語彙を持ち込まないための境界。
+    // ⚠️ 変数への書込み経路をこの先で増やすときは、必ずここへの記録もセットで行うこと
+    // (記録を漏らすとその書込みだけ on_var が無音で鳴らなくなる)。現在の書込み口は var_set / var_add の
+    // 2つだけ (+ 初期値の焼き込みは EkrManager.InitRuntime — こちらは「遷移ではない」ので記録しない)。
+    public readonly HashSet<string> WrittenVars = [];
+
     internal readonly List<EkrFrame> Stack = [];
 }
 
@@ -1005,9 +1135,9 @@ public static class EkmLogicRuntime
     private static int _lastFrameCount = -1;
     private static int _globalInstrThisFrame;
 
-    public static EkrFiber Spawn(IReadOnlyList<EkrNode> nodes, Dictionary<string, float> variables, object context, bool fromKillChain)
+    public static EkrFiber Spawn(IReadOnlyList<EkrNode> nodes, Dictionary<string, float> variables, object context, bool fromKillChain, bool fromVarChain = false)
     {
-        var fiber = new EkrFiber { Variables = variables, Context = context, FromKillChain = fromKillChain };
+        var fiber = new EkrFiber { Variables = variables, Context = context, FromKillChain = fromKillChain, FromVarChain = fromVarChain };
 
         if (nodes is { Count: > 0 }) fiber.Stack.Add(new EkrFrame { Nodes = nodes, Index = 0 });
         else fiber.Done = true;
@@ -1075,10 +1205,12 @@ public static class EkmLogicRuntime
 
                 case "var_set":
                     fiber.Variables[node.VarName] = Eval(node.Value, fiber.Variables);
+                    fiber.WrittenVars.Add(node.VarName); // Wave 3: エッジ発火の書込み記録 (EkrFiber.WrittenVars 参照)
                     continue;
 
                 case "var_add":
                     fiber.Variables[node.VarName] = fiber.Variables.GetValueOrDefault(node.VarName) + Eval(node.Value, fiber.Variables);
+                    fiber.WrittenVars.Add(node.VarName);
                     continue;
 
                 default:
@@ -1094,6 +1226,19 @@ public static class EkmLogicRuntime
         if (frame == _lastFrameCount) return;
         _lastFrameCount = frame;
         _globalInstrThisFrame = 0;
+    }
+
+    // Wave 3 (docs/ekn-wave3-contract.md §1.2): じょうたいトリガの条件評価。等値は Eval の "eq" と
+    // 同じ素の float 比較にする (変数は整数運用が前提で、engine 全体で許容誤差を持たない規約に揃える)。
+    public static bool CompareValue(float actual, string cmp, int threshold)
+    {
+        return cmp switch
+        {
+            "eq" => actual == threshold,
+            "le" => actual <= threshold,
+            "ge" => actual >= threshold,
+            _ => false
+        };
     }
 
     public static bool EvalTruthy(EkrExpr expr, Dictionary<string, float> vars) => Eval(expr, vars) != 0f;
