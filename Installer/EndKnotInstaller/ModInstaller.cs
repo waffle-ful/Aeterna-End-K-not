@@ -43,6 +43,15 @@ public static class ModInstaller
             log("ゲームフォルダへ展開中…");
             ZipFile.ExtractToDirectory(tmpZip, install.Path, overwriteFiles: true);
 
+            // zip の上書き展開は「zip に無くなったファイル」を消さないので、同梱をやめた旧プラグインは
+            // ここで明示的に掃除する (残すと AU 更新のたび初回起動が無言終了する副作用だけが残り続ける)
+            var stalePlugin = Path.Combine(install.Path, "BepInEx", "plugins", "RemoveGcMaxTimeSlice.Plugin.dll");
+            if (File.Exists(stalePlugin))
+            {
+                File.Delete(stalePlugin);
+                log("旧バージョン同梱の RemoveGcMaxTimeSlice.Plugin.dll を削除しました (現在は不要です)");
+            }
+
             // 無効化状態で更新した場合は有効状態へ揃える (zip が winhttp.dll を復元するため)
             if (File.Exists(install.WinhttpDisabledPath))
             {
