@@ -223,13 +223,22 @@ End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/End
 BGM by **DM DOKURO**
 - [DM DOKURO YouTube Channel](https://www.youtube.com/@DMDOKURO)
 
-BGM by **自称芸術家みーさん (Miisan)**
+BGM by **自称芸術家みーさん (Miisan)** (commercial-use permission obtained)
 - [HURT RECORD](https://www.hurtrecord.com/bgm/46/zero-no-heya.html)
+
+BGM by **もっぴーさうんど (Moppy Sound)**, **こおろぎ (Kohrogi)**, **蒲鉾さちこ (Kamaboko Sachiko)**
+- [DOVA-SYNDROME](https://dova-s.jp/)
 
 ### Sound Effect Credits
 
 Some sound effects use material from:
 - On-Jin ～音人～ ([https://on-jin.com/](https://on-jin.com/))
+- [DOVA-SYNDROME](https://dova-s.jp/)
+- [Pixabay](https://pixabay.com/)
+
+### Video Asset Credits
+
+- [みりんの動画素材 (Miirriin)](https://miirriin.com/)
 
 ### VOICEVOX (text-to-speech)
 

@@ -226,13 +226,22 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 DM DOKURO様のBGMが使われています
 - [DM DOKURO YouTube Channel](https://www.youtube.com/@DMDOKURO)
 
-自称芸術家みーさん様のBGMが使われています
+自称芸術家みーさん様のBGMが使われています（商用利用の許諾取得済み）
 - [HURT RECORD](https://www.hurtrecord.com/bgm/46/zero-no-heya.html)
+
+もっぴーさうんど様・こおろぎ様・蒲鉾さちこ様のBGMが使われています
+- [DOVA-SYNDROME](https://dova-s.jp/)
 
 ### 効果音クレジット
 
 一部の効果音に以下の素材を使用しています。
 - On-Jin ～音人～ ([https://on-jin.com/](https://on-jin.com/))
+- [DOVA-SYNDROME](https://dova-s.jp/)
+- [Pixabay](https://pixabay.com/)
+
+### 動画素材クレジット
+
+- [みりんの動画素材](https://miirriin.com/)
 
 ### VOICEVOX（音声読み上げ）
 
