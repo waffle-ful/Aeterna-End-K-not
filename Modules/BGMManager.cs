@@ -628,43 +628,45 @@ public static class BGMManager
         if (currentSlot.Length > 0) slots.Add(currentSlot);
         if (pendingSlot != null) slots.Add(pendingSlot);
 
-        if (GameStates.InGame && !GameStates.IsLobby)
-        {
-            if (GameStates.IsEnded)
-            {
-                // 勝敗判定が出た瞬間から result を温める (outro の SetEndingBGM に間に合わせる)。
-                slots.Add("result");
-                // result が鳴り始めたら次はロビーへ戻るので、ロビー曲を先に温めておく。
-                if (currentSlot == "result") slots.Add("lobby");
-            }
-            else
-            {
-                slots.Add(GetTaskSlot());
-                slots.Add("meeting");
-
-                // result は IsEnded から温めたのでは間に合わない — 勝敗確定から outro (SetEndingBGM) まで
-                // 数秒しかなく、デコード完了までバニラの勝敗スティンガーが露出する (2026-08-15 実測 2〜3 秒)。
-                // 試合は必ず終わるので、タスクフェーズの間ずっと wanted に含めて常温しておく。
-                slots.Add("result");
-
-                // climax は会議を待たずキル数発で突入し得るので、閾値+2人まで迫ったら先に温める。
-                // 一度武装したら +4 人を超えるまで解除しない (蘇生等で境界を毎秒跨ぐと wanted が
-                // トグルし、破棄→再デコード→GC 先撃ちの空回りが毎秒連発するため)。
-                int alive = Main.AllAlivePlayerControlsToList?.Count ?? 15;
-                int threshold = ClimaxCount?.GetInt() ?? 6;
-                if (alive <= threshold + 2) climaxArmed = true;
-                else if (alive > threshold + 4) climaxArmed = false;
-                if (climaxArmed) slots.Add("climax");
-
-                if (HasTracks("dead")) slots.Add("dead");
-            }
-        }
-        else if (GameStates.IsLobby)
+        if (GameStates.IsLobby)
         {
             // ロビー = 次のゲームの入口。intro (~6秒) の猶予があるので intask はここから温め始めれば
             // タスクフェーズ開始に間に合う。
             slots.Add("lobby");
             slots.Add("intask");
+        }
+        else if (GameStates.IsEnded)
+        {
+            // 勝敗判定が出た瞬間から result を温める (outro の SetEndingBGM に間に合わせる)。
+            // ⚠️ この判定は InGame と独立に評価すること: OutroPatch の OnGameEnd が InGame=false を
+            // 立てた後も GameState は Ended のままリザルト画面が続く。旧実装は
+            // `if (InGame && !IsLobby)` の内側に IsEnded 分岐を置いていたため、この窓に毎秒 planner が
+            // 着地すると「メニュー扱い」に落ちて result を破棄し、SetEndingBGM が cache miss →
+            // デコード完了までバニラの勝敗スティンガーが露出していた (確率的再発の正体)。
+            slots.Add("result");
+            // result が鳴り始めたら次はロビーへ戻るので、ロビー曲を先に温めておく。
+            if (currentSlot == "result") slots.Add("lobby");
+        }
+        else if (GameStates.InGame)
+        {
+            slots.Add(GetTaskSlot());
+            slots.Add("meeting");
+
+            // result は IsEnded から温めたのでは間に合わない — 勝敗確定から outro (SetEndingBGM) まで
+            // 数秒しかなく、デコード完了までバニラの勝敗スティンガーが露出する (2026-08-15 実測 2〜3 秒)。
+            // 試合は必ず終わるので、タスクフェーズの間ずっと wanted に含めて常温しておく。
+            slots.Add("result");
+
+            // climax は会議を待たずキル数発で突入し得るので、閾値+2人まで迫ったら先に温める。
+            // 一度武装したら +4 人を超えるまで解除しない (蘇生等で境界を毎秒跨ぐと wanted が
+            // トグルし、破棄→再デコード→GC 先撃ちの空回りが毎秒連発するため)。
+            int alive = Main.AllAlivePlayerControlsToList?.Count ?? 15;
+            int threshold = ClimaxCount?.GetInt() ?? 6;
+            if (alive <= threshold + 2) climaxArmed = true;
+            else if (alive > threshold + 4) climaxArmed = false;
+            if (climaxArmed) slots.Add("climax");
+
+            if (HasTracks("dead")) slots.Add("dead");
         }
         else
         {
