@@ -88,14 +88,28 @@ internal static class LobbyBehaviourStartPatch
     private static bool _bgmStarted;
     private static float _silenceUntil;
 
+    // ロビー入場フレーム 1.8 秒級ストールの帰属計測 (BUG-20260714-05)。Prefix→Postfix 到達までが
+    // バニラ LobbyBehaviour.Start 本体、それ以降が mod の入場時仕事の取り分。
+    private static System.Diagnostics.Stopwatch _enterSw;
+
+    public static void Prefix()
+    {
+        _enterSw = System.Diagnostics.Stopwatch.StartNew();
+    }
+
     public static void Postfix()
     {
+        long vanillaMs = _enterSw?.ElapsedMilliseconds ?? -1;
+        var postSw = System.Diagnostics.Stopwatch.StartNew();
+
         EndKnot.Modules.Media.LoadingScreenVideo.Hide();
 
         // 新 LobbyBehaviour 起動 → 前 session の stale Backrooms state を捨てる
         // (main menu 経由で復帰した時に dead Unity ref が残るバグ対応 — 2026-05-22 v3)
         try { BackroomsLobby.OnLobbyReload(); }
         catch (Exception ex) { Logger.Warn($"OnLobbyReload failed: {ex.Message}", "BackroomsGen"); }
+
+        long reloadMs = postSw.ElapsedMilliseconds;
 
         // BackroomsEnabled が OFF なら船隠し + 自動入室を全 skip (バニラロビーのまま)
         bool backroomsEnabled = Main.BackroomsEnabled?.Value ?? true;
@@ -107,6 +121,9 @@ internal static class LobbyBehaviourStartPatch
             try { BackroomsLobby.HideVanillaShipImmediate(); }
             catch (Exception ex) { Logger.Warn($"HideVanillaShipImmediate failed: {ex.Message}", "BackroomsGen"); }
         }
+
+        long hideShipMs = postSw.ElapsedMilliseconds - reloadMs;
+        EndKnot.Modules.HealthLog.Note($"TRANSIT phase=lobbyenter vanillaMs={vanillaMs} reloadMs={reloadMs} hideShipMs={hideShipMs} t={Utils.TimeStamp}");
 
         if (AmongUsClient.Instance != null && AmongUsClient.Instance.AmHost)
         {
