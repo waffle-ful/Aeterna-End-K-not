@@ -12,13 +12,22 @@ public static class LobbyFixedUpdatePatch
     private static GameObject Paint;
     private static SpriteRenderer LeftEngineSR;
     private static SpriteRenderer RightEngineSR;
+    private static float NextFindTime;
 
     public static void Postfix()
     {
         try
         {
+            // Backrooms ロビーではバニラ船ごと非表示 — GameObject.Find は非アクティブを見つけられないので、
+            // 旧実装はシーン全走査 ×3 を毎 tick 空振りし続けていた。塗装対象が無い以上、丸ごとスキップする。
+            if (Main.BackroomsEnabled?.Value ?? true) return;
+
             if (!Paint)
             {
+                // 見つかるまでの探索も 1 秒に 1 回で十分 (Find はシーン全走査)
+                if (Time.unscaledTime < NextFindTime) return;
+                NextFindTime = Time.unscaledTime + 1f;
+
                 GameObject leftBox = GameObject.Find("Leftbox");
 
                 if (leftBox)
@@ -33,6 +42,9 @@ public static class LobbyFixedUpdatePatch
 
             if (!LeftEngineSR || !RightEngineSR)
             {
+                if (Time.unscaledTime < NextFindTime) return;
+                NextFindTime = Time.unscaledTime + 1f;
+
                 var leftEngine = GameObject.Find("LeftEngine");
                 if (leftEngine) LeftEngineSR = leftEngine.GetComponent<SpriteRenderer>();
 
@@ -235,6 +247,7 @@ internal static class LobbyBehaviourOnDestroyPatch
 internal static class LobbyBehaviourUpdatePatch
 {
     private static ISoundPlayer MapThemeSound;
+    private static float nextMapThemeCheckTime;
 
     // ⚠️ ここで soundPlayers.Find(<マネージドラムダ>) を使ってはいけない。
     // Il2Cpp の List<T>.Find は Il2CppSystem.Predicate<T> を取るため、マネージド Func を渡すと
@@ -270,10 +283,15 @@ internal static class LobbyBehaviourUpdatePatch
                 // re-arm MapTheme later (post player-spawn handshake). Mirror the
                 // Ambience GO idempotent-every-frame pattern: target MapTheme only
                 // so we don't kill our own AudioSource sitting in soundPlayers.
-                SoundManager sm = SoundManager.Instance;
-                if (sm?.soundPlayers != null)
+                // StopNamedSound は不在時 no-op なので、事前の FindMapTheme (soundPlayer ごとの
+                // p.Name 取得 = 毎フレーム managed string 確保) を挟む必要はない。呼び出し自体の
+                // interop 文字列変換も毎フレームは無駄なので 0.25s に間引く (再アームの黙らせが
+                // 最大 0.25s 遅れるだけ)。
+                if (Time.unscaledTime >= nextMapThemeCheckTime)
                 {
-                    if (FindMapTheme(sm) != null)
+                    nextMapThemeCheckTime = Time.unscaledTime + 0.25f;
+                    SoundManager sm = SoundManager.Instance;
+                    if (sm?.soundPlayers != null)
                         sm.StopNamedSound("MapTheme");
                 }
 
@@ -281,6 +299,11 @@ internal static class LobbyBehaviourUpdatePatch
             }
 
             // BGM disabled: honour the vanilla LobbyMusic option.
+            // FindMapTheme の p.Name 走査は毎フレームだと string 確保が積もるので 0.25s に間引く
+            // (再生開始/停止の反応が最大 0.25s 遅れるだけで、聴感上は分からない)。
+            if (Time.unscaledTime < nextMapThemeCheckTime) return;
+            nextMapThemeCheckTime = Time.unscaledTime + 0.25f;
+
             SoundManager soundManager = SoundManager.Instance;
             if (soundManager?.soundPlayers == null) return;
 

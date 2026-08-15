@@ -235,19 +235,20 @@ public static class Translator
     {
         return TranslationController.Instance.GetString(room);
     }
+    // 名前→StringNames の1回構築辞書。以前の実装 (AllStringNames 線形走査 + 要素ごとの enum ToString) は
+    // 1 ミスあたり数千個の一時 string を確保し、未登録キーを毎 tick 引く HUD 経路 (例: 大半の役職に存在
+    // しない SecondaryAbilityButtonText.*) で MB/s 級のアロケ源になっていた。ミスも記憶して再走査させない。
+    private static Dictionary<string, StringNames> stringNameLookup;
+
     private static bool TryGetStringName(string str, out StringNames result)
     {
-        for (int i = 0; i < AllStringNames.Length; i++)
+        if (stringNameLookup == null)
         {
-            var val = AllStringNames[i];
-            if (val.ToString() == str)
-            {
-                result = val;
-                return true;
-            }
+            stringNameLookup = new(AllStringNames.Length);
+            foreach (StringNames val in AllStringNames) stringNameLookup.TryAdd(val.ToString(), val);
         }
-        result = default;
-        return false;
+
+        return stringNameLookup.TryGetValue(str, out result);
     }
     public static string GetRoleString(string str, bool forUser = true)
     {

@@ -2898,15 +2898,18 @@ public static class Utils
         name = string.Empty;
         if (!AmongUsClient.Instance.AmHost || !player) return false;
 
-        DevManager.TagInfo devUser = player.FriendCode.GetDevUser();
-        bool localDev = player.FriendCode.IsLocalDev();
+        // FriendCode は IL2CPP の string プロパティ — 参照のたびに新しい managed string を確保するので
+        // 1 回だけ取り出して使い回す (旧実装は 7 回参照 = 呼び出しごとに 7 確保)。
+        string friendCode = player.FriendCode;
+        DevManager.TagInfo devUser = friendCode.GetDevUser();
+        bool localDev = friendCode.IsLocalDev();
         bool isDev = localDev || devUser.up;
-        bool admin = !isDev && ChatCommands.IsPlayerAdmin(player.FriendCode);
-        bool mod = !isDev && ChatCommands.IsPlayerModerator(player.FriendCode);
-        bool vip = !isDev && !mod && ChatCommands.IsPlayerVIP(player.FriendCode);
+        bool admin = !isDev && ChatCommands.IsPlayerAdmin(friendCode);
+        bool mod = !isDev && ChatCommands.IsPlayerModerator(friendCode);
+        bool vip = !isDev && !mod && ChatCommands.IsPlayerVIP(friendCode);
         bool hasTag = devUser.HasTag() || localDev;
-        bool hasPrivateTag = PrivateTagManager.Tags.TryGetValue(player.FriendCode, out string privateTag);
-        bool hasTagInUserData = Main.UserData.TryGetValue(player.FriendCode, out Options.UserData userData) && !string.IsNullOrWhiteSpace(userData.Tag) && userData.Tag.Length > 0;
+        bool hasPrivateTag = PrivateTagManager.Tags.TryGetValue(friendCode, out string privateTag);
+        bool hasTagInUserData = Main.UserData.TryGetValue(friendCode, out Options.UserData userData) && !string.IsNullOrWhiteSpace(userData.Tag) && userData.Tag.Length > 0;
 
         if (!player.AmOwner && !hasTag && !mod && !vip && !hasPrivateTag && !hasTagInUserData && !DirtyName.Contains(player.PlayerId) && !(AmongUsClient.Instance.IsGameStarted && Options.FormatNameMode.GetInt() == 1 && Main.NickName == string.Empty)) return false;
 
