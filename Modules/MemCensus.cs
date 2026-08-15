@@ -45,20 +45,22 @@ public static class MemCensus
             Append<AudioClip>(sb, "aud");
             Append<GameObject>(sb, "go");
 
-            // Texture2D の native 概算 (RGBA32 換算 MB)。犯人がテクスチャ系かの当たりを付ける
+            // Texture2D の native 概算 MB。フォーマット別バイト/px + ミップ 4/3 倍で換算する。
+            // ⚠️ 旧実装は全テクスチャを RGBA32 (4B/px) 換算しており、Alpha8 のフォントアトラスや
+            // DXT 圧縮アトラスを 4〜8 倍過大計上 → BUG-20260810-03 で texMB=835 という偽の主犯を
+            // 作った (実測の Backrooms 帰属は ~11MB)。数値の連続性は旧ログと比較不可になる点に注意。
             try
             {
                 var texs = Resources.FindObjectsOfTypeAll(Il2CppType.Of<Texture2D>());
-                long px = 0;
+                double totalBytes = 0;
 
                 foreach (var o in texs)
                 {
                     Texture2D t = o != null ? o.TryCast<Texture2D>() : null;
-                    if (t != null)
-                        px += (long)t.width * t.height;
+                    if (t != null) totalBytes += EstimateBytes(t);
                 }
 
-                sb.Append(" texMB=").Append(px * 4 / (1024 * 1024));
+                sb.Append(" texMB=").Append((long)(totalBytes / (1024 * 1024)));
             }
             catch { sb.Append(" texMB=?"); }
 
@@ -80,6 +82,7 @@ public static class MemCensus
             TopNames<GameObject>("go", 20, now, src);
             TopNames<Material>("mat", 10, now, src);
             TopNames<Sprite>("spr", 10, now, src);
+            TopTextures(10, now, src);
         }
         catch (Exception e) { Logger.Warn($"census failed: {e.Message}", "MemCensus"); }
     }
@@ -117,6 +120,56 @@ public static class MemCensus
         }
         catch (Exception e) { Logger.Warn($"census top {kind} failed: {e.Message}", "MemCensus"); }
     }
+
+    // テクスチャの実消費上位。名前+寸法+フォーマット+推定MBを残す — 型カウント/合計値だけでは
+    // 「どのテクスチャが重いか」に到達できず、次のメモリスパイク調査で毎回コードを掘る羽目になる。
+    private static void TopTextures(int top, long now, string src)
+    {
+        try
+        {
+            var arr = Resources.FindObjectsOfTypeAll(Il2CppType.Of<Texture2D>());
+            if (arr == null) return;
+
+            var list = new List<(string Desc, double Bytes)>(256);
+
+            foreach (var o in arr)
+            {
+                Texture2D t = o != null ? o.TryCast<Texture2D>() : null;
+                if (t == null) continue;
+
+                string n = string.IsNullOrEmpty(t.name) ? "<noname>" : t.name.Replace(' ', '_');
+                list.Add(($"{n}_{t.width}x{t.height}_{t.format}", EstimateBytes(t)));
+            }
+
+            var sb = new StringBuilder("CENSUSTOP kind=tex t=").Append(now).Append(" src=").Append(src).Append(' ');
+
+            foreach (var kv in list.OrderByDescending(x => x.Bytes).Take(top))
+                sb.Append(kv.Desc).Append('x').Append((kv.Bytes / (1024 * 1024)).ToString("0.0")).Append("MB ");
+
+            HealthLog.Note(sb.ToString().TrimEnd());
+        }
+        catch (Exception e) { Logger.Warn($"census top tex failed: {e.Message}", "MemCensus"); }
+    }
+
+    private static double EstimateBytes(Texture2D t)
+    {
+        double bytes = (double)t.width * t.height * BytesPerPixel(t.format);
+        if (t.mipmapCount > 1) bytes *= 4.0 / 3.0;
+        return bytes;
+    }
+
+    private static double BytesPerPixel(TextureFormat f) => f switch
+    {
+        TextureFormat.Alpha8 or TextureFormat.R8 => 1,
+        TextureFormat.RGB565 or TextureFormat.RGBA4444 or TextureFormat.ARGB4444 or TextureFormat.R16 or TextureFormat.RHalf or TextureFormat.RG16 => 2,
+        TextureFormat.RGB24 => 3,
+        TextureFormat.DXT1 or TextureFormat.BC4 => 0.5,
+        TextureFormat.DXT5 or TextureFormat.BC5 or TextureFormat.BC7 or TextureFormat.BC6H => 1,
+        TextureFormat.RGHalf or TextureFormat.RFloat or TextureFormat.RG32 => 4,
+        TextureFormat.RGBAHalf or TextureFormat.RGFloat => 8,
+        TextureFormat.RGBAFloat => 16,
+        _ => 4, // 未知/RGBA32系は 4B/px
+    };
 
     private static void Append<T>(StringBuilder sb, string key) where T : UnityEngine.Object
     {
