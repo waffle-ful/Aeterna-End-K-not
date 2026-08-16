@@ -486,14 +486,16 @@ public static class BGMManager
 
     private static readonly string[] SupportedExtensions = [".ogg", ".mp3", ".wav"];
 
-    // path 解決 + 埋込リソースのディスク展開。ファイル I/O + managed Stream のみなので
-    // バックグラウンドスレッド (CustomSoundsManager.BgmDecodeLoop) からも呼べる。
-    // 複数スレッドが同じファイルを同時展開しないよう lock で直列化する。
-    private static readonly object ExtractLock = new();
+    // 音源キーの解決。ホストが resources/BGM/ に置いた差し替えファイルを優先し、無ければ埋込リソースを
+    // そのまま指す擬似キー ("embedded:…") を返す (デコードは CustomSoundsManager がメモリ内で行う)。
+    // 埋込曲をディスクへ書き出す方式は素材の再配布条項に当たるため廃止した。
+    // ファイル I/O + managed Stream のみなのでバックグラウンドスレッド (BgmDecodeLoop) からも呼べる。
+    // フォルダ生成とサンプル config 生成が複数スレッドで重ならないよう lock で直列化する。
+    private static readonly object ResolveLock = new();
 
-    internal static string ResolveOrExtract(string name)
+    internal static string ResolveSource(string name)
     {
-        lock (ExtractLock)
+        lock (ResolveLock)
         {
             if (!Directory.Exists(BGMPath))
             {
@@ -510,14 +512,8 @@ public static class BGMManager
                 if (File.Exists(candidate)) return candidate;
             }
 
-            Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"EndKnot.Resources.Sounds.BGM.{name}.ogg");
-            if (stream == null) return null;
-
-            string target = BGMPath + name + ".ogg";
-            using (stream)
-            using (FileStream fs = File.Create(target))
-                stream.CopyTo(fs);
-            return target;
+            // 埋込側は .ogg 決め打ち (同梱曲は必ず ogg に変換する規約)
+            return CustomSoundsManager.TryEmbeddedKey($"EndKnot.Resources.Sounds.BGM.{name}.ogg");
         }
     }
 
@@ -796,7 +792,7 @@ public static class BGMManager
             "  ]\n" +
             "}\n";
 
-        // ここは裏スレッド (BgmDecodeLoop → ResolveOrExtract) からも呼ばれるため Logger は使えない。
+        // ここは裏スレッド (BgmDecodeLoop → ResolveSource) からも呼ばれるため Logger は使えない。
         // サンプル生成の失敗は実害がない (次回起動時に再試行される) ので黙って諦める。
         try { File.WriteAllText(examplePath, example, System.Text.Encoding.UTF8); }
         catch { /* ignore */ }
