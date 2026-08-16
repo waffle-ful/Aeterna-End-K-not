@@ -490,8 +490,10 @@ Modules/LocalDevOverride.Local.cs
 CTA/
 
 # BGM audio files — embedded into the DLL at build but never pushed.
-# License terms (e.g. DM Dokuro: credit + no reupload) forbid redistributing
-# the source files, but distributing the compiled DLL with credit is allowed.
+# What the licences actually forbid is redistributing the source files in a form
+# the end user can grab as audio; the compiled DLL decodes them in memory and
+# never writes them to disk, so that route stays clear. Per-track provenance and
+# the current standing of each licence live in docs/asset-provenance.md.
 # bgm_titles.json is kept for attribution metadata.
 Resources/Sounds/BGM/*.ogg
 Resources/Sounds/BGM/*.mp3
@@ -502,6 +504,13 @@ Resources/Sounds/BGM/*.flac
 Resources/Sounds/Backrooms/*.wav
 Resources/Sounds/Backrooms/*.ogg
 Resources/Sounds/Backrooms/*.mp3
+
+# DOVA-SYNDROME sound effects (AudienceShock / WaveCannonCharge / WaveCannonFire).
+# Same rule as the BGM above: the DLL decodes them in memory, but the raw files must
+# never sit in the public repo where an end user can grab them as audio. These were
+# tracked by mistake until 2026-08-17 — the BGM/ and Backrooms/ rules did not cover
+# Resources/Sounds/ itself. The upstream-inherited *.wav in this directory stay tracked.
+Resources/Sounds/*.ogg
 
 # UI mockups / design drafts — internal only, not for the public repo
 mock_refined.html
