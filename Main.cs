@@ -570,6 +570,11 @@ public class Main : BasePlugin
         }
         //EndKnot.Logger.isDetail = true;
 
+        // 同梱音声は埋込リソースからメモリ内でデコードするようになったので、旧方式が
+        // BepInEx/resources/ へ展開していた生ファイルを 1 回だけ掃除する (ディスク優先ルールにより
+        // 残しておくと新しい経路が一生使われないため)。
+        BundledAudioCleanup.Run();
+
         // incremental GC の実行時制御 (Debug.DisableIncrementalGc)。ゲームプレイが始まる前・
         // interop 経由のフィールド書き込みが起きる前に決着させる必要があるのでここで呼ぶ。
         IncrementalGcInvalidator.ApplyIfConfigured();
