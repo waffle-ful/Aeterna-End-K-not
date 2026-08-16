@@ -220,9 +220,6 @@ End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/End
 
 ### Music Credits
 
-BGM by **DM DOKURO**
-- [DM DOKURO YouTube Channel](https://www.youtube.com/@DMDOKURO)
-
 BGM by **自称芸術家みーさん (Miisan)** (commercial-use permission obtained)
 - [HURT RECORD](https://www.hurtrecord.com/bgm/46/zero-no-heya.html)
 

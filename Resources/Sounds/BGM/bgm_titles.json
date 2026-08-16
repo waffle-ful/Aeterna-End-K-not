@@ -1,6 +1,5 @@
 {
   "menu": [
-    { "file": "menu",     "weight": 1, "title": "The Tale of a Cruel World", "author": "DM Dokuro" },
     { "file": "menu_alt", "weight": 1, "title": "堕ちる", "author": "もっぴーさうんど" }
   ],
 
@@ -9,10 +8,10 @@
     { "file": "lobby_alt", "weight": 1, "title": "時計仕掛けの歪なワルツ ", "author": "こおろぎ" }
   ],
   "intask": [
-    { "file": "intask", "weight": 1, "title": "22. Toxic Wisdom", "author": "DM Dokuro" }
+    { "file": "lobby_alt", "weight": 1, "title": "時計仕掛けの歪なワルツ ", "author": "こおろぎ" }
   ],
   "climax": [
-    { "file": "climax", "weight": 1, "title": "04. The Filthy Mind (ft. SixteenInMono)", "author": "DM Dokuro(ft. SixteenInMono)" }
+    { "file": "result", "weight": 1, "title": "The long spell of falling down,white", "author": "蒲鉾さちこ" }
   ],
   "dead": [],
   "meeting": [],
