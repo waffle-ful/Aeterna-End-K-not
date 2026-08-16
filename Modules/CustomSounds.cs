@@ -14,7 +14,7 @@ namespace EndKnot.Modules;
 
 public static class CustomSoundsManager
 {
-    private static readonly string SoundsPath = $"{Environment.CurrentDirectory.Replace(@"\", "/")}/BepInEx/resources/";
+    internal static readonly string SoundsPath = $"{Environment.CurrentDirectory.Replace(@"\", "/")}/BepInEx/resources/";
     private static readonly string[] SupportedExtensions = [".wav", ".ogg", ".mp3"];
 
     // PlaySoundRPC の broadcast を (player, sound) ごとに「同一秒に 1 回」へ間引く dedup 用。
@@ -70,15 +70,15 @@ public static class CustomSoundsManager
         {
             if (!Constants.ShouldPlaySfx() || !Main.EnableCustomSoundEffect.Value || !OperatingSystem.IsWindows()) return;
 
-            string foundPath = ResolveSoundPath(sound);
-            if (foundPath == null)
+            string key = ResolveSoundKey(sound);
+            if (key == null)
             {
                 Logger.Warn($"Could not find sound: {sound}", "CustomSounds");
                 return;
             }
 
-            StartPlay(foundPath, volume, pitch);
-            Logger.Msg($"Playing sound: {sound} ({Path.GetExtension(foundPath)})", "CustomSounds");
+            StartPlay(key, volume, pitch);
+            Logger.Msg($"Playing sound: {sound} ({Path.GetExtension(key)})", "CustomSounds");
         }
         catch (Exception e) { Utils.ThrowException(e); }
     }
@@ -92,17 +92,17 @@ public static class CustomSoundsManager
         {
             if (!Constants.ShouldPlaySfx() || !Main.EnableCustomSoundEffect.Value || !OperatingSystem.IsWindows()) return null;
 
-            string foundPath = ResolveSoundPath(sound);
-            if (foundPath == null)
+            string key = ResolveSoundKey(sound);
+            if (key == null)
             {
                 Logger.Warn($"Could not find sound: {sound}", "CustomSounds");
                 return null;
             }
 
-            AudioClip clip = LoadClip(foundPath);
+            AudioClip clip = LoadClip(key);
             if (clip == null) return null;
 
-            Logger.Msg($"Playing sound (controllable): {sound} ({Path.GetExtension(foundPath)})", "CustomSounds");
+            Logger.Msg($"Playing sound (controllable): {sound} ({Path.GetExtension(key)})", "CustomSounds");
             return SoundManager.Instance.PlaySound(clip, false, volume);
         }
         catch (Exception e) { Utils.ThrowException(e); return null; }
@@ -247,10 +247,10 @@ public static class CustomSoundsManager
         {
             if (!OperatingSystem.IsWindows()) return 0f;
 
-            string foundPath = ResolveSoundPath(sound);
-            if (foundPath == null) return 0f;
+            string key = ResolveSoundKey(sound);
+            if (key == null) return 0f;
 
-            AudioClip clip = LoadClip(foundPath);
+            AudioClip clip = LoadClip(key);
             return clip ? clip.length : 0f;
         }
         catch (Exception e)
@@ -260,8 +260,82 @@ public static class CustomSoundsManager
         }
     }
 
-    // BepInEx/resources 内の実ファイル → 埋込リソース展開 の順で音源パスを解決する (無ければ null)。
-    private static string ResolveSoundPath(string sound)
+    // ── 音源の解決 (ディスク優先 → 埋込はメモリ内デコード) ────────────────────
+    // 埋込音声を BepInEx/resources/ へ書き出す方式は廃止した。素材の再配布条項 (DOVA-SYNDROME の
+    // 「コンバート等を行わず、エンドユーザーが容易に音源ファイルに音声ファイルとしてアクセス、複製が
+    // 可能な状態での利用」禁止) には、DLL 埋め込みより先にディスク展開の方が当たるため。
+    // 解決結果は「実ファイルパス」か "embedded:<リソース名>" の擬似キーで、どちらも OpenSound() で
+    // Stream として開ける。ホストが自分で resources/ に置いた差し替えファイルは従来どおり優先。
+    // ⚠️ このキーは audioCache のキーそのものなので、LoadClip / StartPlay / GetClipLength /
+    //    プリロード経路で必ず同じ文字列を使うこと (ズレると二重デコードか無音になる)。
+    internal const string EmbeddedKeyPrefix = "embedded:";
+    private const string SoundResourcePrefix = "EndKnot.Resources.Sounds.";
+
+    internal static bool IsEmbeddedKey(string key) => key != null && key.StartsWith(EmbeddedKeyPrefix, StringComparison.Ordinal);
+
+    // 埋込リソース名の一覧は不変なので一度だけ作る。存在確認のたびに GetManifestResourceStream で
+    // 開いて捨てると、音を鳴らすたびに Stream が 1〜3 個ゴミになる (解決は毎再生走る)。
+    private static readonly Lazy<HashSet<string>> EmbeddedResourceNames = new(() =>
+        new HashSet<string>(Assembly.GetExecutingAssembly().GetManifestResourceNames(), StringComparer.Ordinal));
+
+    // 埋込リソースが存在すれば擬似キーを、無ければ null を返す (BGMManager からも使う)。
+    internal static string TryEmbeddedKey(string resourceName)
+        => EmbeddedResourceNames.Value.Contains(resourceName) ? EmbeddedKeyPrefix + resourceName : null;
+
+    // 解決キーを読み出し用 Stream として開く (呼び出し側が using で閉じる)。
+    // System.IO + マネージド Stream のみなのでバックグラウンドスレッドから呼んでよい。
+    private static Stream OpenSound(string key)
+    {
+        Stream stream = IsEmbeddedKey(key)
+            ? Assembly.GetExecutingAssembly().GetManifestResourceStream(key[EmbeddedKeyPrefix.Length..])
+            : File.OpenRead(key);
+
+        return stream ?? throw new IOException($"Sound source not found: {key}");
+    }
+
+    // AudioClip に付ける表示名。擬似キーをそのまま Path.GetFileNameWithoutExtension に通すと
+    // "embedded:EndKnot.Resources.Sounds.…" が名前として残るので、リソース名側から素の音名を取る。
+    private static string ClipNameOf(string key)
+    {
+        if (!IsEmbeddedKey(key)) return Path.GetFileNameWithoutExtension(key);
+
+        string res = key[EmbeddedKeyPrefix.Length..];
+        if (res.StartsWith(SoundResourcePrefix, StringComparison.Ordinal)) res = res[SoundResourcePrefix.Length..];
+
+        int dot = res.LastIndexOf('.');
+        return dot > 0 ? res[..dot] : res;
+    }
+
+    // キーの中身を丸ごと byte[] へ読む (WAV デコード用)。Stream.Read は要求より短く返しうるので
+    // 必ず読み切る (File.ReadAllBytes と違い、短読みを見逃すと無言で音声が途中で切れる)。
+    private static byte[] ReadAllBytes(string key)
+    {
+        using Stream stream = OpenSound(key);
+
+        if (!stream.CanSeek)
+        {
+            using var ms = new MemoryStream();
+            stream.CopyTo(ms);
+            return ms.ToArray();
+        }
+
+        byte[] data = new byte[stream.Length];
+        int off = 0;
+
+        while (off < data.Length)
+        {
+            int n = stream.Read(data, off, data.Length - off);
+            if (n <= 0) break;
+
+            off += n;
+        }
+
+        if (off < data.Length) Array.Resize(ref data, off);
+        return data;
+    }
+
+    // BepInEx/resources 内の実ファイル → 埋込リソース の順で音源キーを解決する (無ければ null)。
+    private static string ResolveSoundKey(string sound)
     {
         if (!Directory.Exists(SoundsPath)) Directory.CreateDirectory(SoundsPath);
 
@@ -276,26 +350,8 @@ public static class CustomSoundsManager
 
         foreach (string ext in SupportedExtensions)
         {
-            Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("EndKnot.Resources.Sounds." + sound + ext);
-            if (stream == null) continue;
-
-            // プリロードのワーカースレッドとメインスレッドが同じ音を同時に展開しうるため、
-            // 書きかけの実ファイルを他方が読む窓を作らない: 一時名へ書き切ってから atomic move。
-            // move 負けした側は勝った側の完成品をそのまま使う。
-            string foundPath = SoundsPath + sound + ext;
-            string tmpPath = foundPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
-
-            using (FileStream fileStream = File.Create(tmpPath))
-                stream.CopyTo(fileStream);
-
-            try { File.Move(tmpPath, foundPath, true); }
-            catch (IOException) when (File.Exists(foundPath))
-            {
-                try { File.Delete(tmpPath); }
-                catch { /* 孤児 tmp は次回起動の掃除に任せる */ }
-            }
-
-            return foundPath;
+            string key = TryEmbeddedKey(SoundResourcePrefix + sound + ext);
+            if (key != null) return key;
         }
 
         return null;
@@ -303,74 +359,78 @@ public static class CustomSoundsManager
 
     private static readonly Dictionary<string, AudioClip> audioCache = [];
 
-    private static void StartPlay(string path, float volume = 1f, float pitch = 1f)
+    private static void StartPlay(string key, float volume = 1f, float pitch = 1f)
     {
-        AudioClip clip = LoadClip(path);
+        AudioClip clip = LoadClip(key);
         if (clip)
             SoundManager.Instance.PlaySoundImmediate(clip, false, volume);
     }
 
-    // path 単位でデコード結果をキャッシュしつつ AudioClip を返す (初回のみデコード)。
+    // キー単位でデコード結果をキャッシュしつつ AudioClip を返す (初回のみデコード)。
     // シーン遷移 (ゲーム終了→ロビー等) の暗黙 UnloadUnusedAssets は、managed dict からしか参照されていない
     // AudioClip をネイティブ側で破棄する。破棄済みクリップは Play 側の `if (clip)` が黙って false になり
     // 「ログは出るのに無音」になる (2026-07-14 実機確認) ため、fake-null を検出して再デコードし、
     // 以後は DontUnloadUnusedAsset で保護する。
-    private static AudioClip LoadClip(string path)
+    private static AudioClip LoadClip(string key)
     {
-        if (!audioCache.TryGetValue(path, out var clip) || !clip)
+        if (!audioCache.TryGetValue(key, out var clip) || !clip)
         {
-            string ext = Path.GetExtension(path).ToLowerInvariant();
+            string ext = Path.GetExtension(key).ToLowerInvariant();
             clip = ext switch
             {
-                ".ogg" => LoadOGG(path),
-                ".mp3" => LoadMP3(path),
-                _ => LoadWAV(path)
+                ".ogg" => LoadOGG(key),
+                ".mp3" => LoadMP3(key),
+                _ => LoadWAV(key)
             };
             if (clip) clip.hideFlags |= HideFlags.DontUnloadUnusedAsset;
-            audioCache[path] = clip;
+            audioCache[key] = clip;
         }
 
         return clip;
     }
 
-    internal static AudioClip LoadWAV(string path)
+    internal static AudioClip LoadWAV(string key)
     {
         var sw = Stopwatch.StartNew();
-        (float[] buffer, int read, int channels, int sampleRate) = DecodeWav(path);
+        (float[] buffer, int read, int channels, int sampleRate) = DecodeWav(key);
         long decodeMs = sw.ElapsedMilliseconds;
 
-        AudioClip clip = CreateClip(path, buffer, read, channels, sampleRate, out long copyMs);
+        AudioClip clip = CreateClip(key, buffer, read, channels, sampleRate, out long copyMs);
         Logger.Info($"[WAV: Channels={channels}, SampleRate={sampleRate}, SamplesRead={read}, decodeMs={decodeMs}, copyMs={copyMs}]", "CustomSounds");
         return clip;
     }
 
-    internal static AudioClip LoadOGG(string path)
+    internal static AudioClip LoadOGG(string key)
     {
         var sw = Stopwatch.StartNew();
-        (float[] buffer, int read, int channels, int sampleRate) = DecodeOgg(path);
+        (float[] buffer, int read, int channels, int sampleRate) = DecodeOgg(key);
         long decodeMs = sw.ElapsedMilliseconds;
 
-        AudioClip clip = CreateClip(path, buffer, read, channels, sampleRate, out long copyMs);
+        AudioClip clip = CreateClip(key, buffer, read, channels, sampleRate, out long copyMs);
         Logger.Info($"[OGG: Channels={channels}, SampleRate={sampleRate}, SamplesRead={read}, decodeMs={decodeMs}, copyMs={copyMs}]", "CustomSounds");
         return clip;
     }
 
-    internal static AudioClip LoadMP3(string path)
+    internal static AudioClip LoadMP3(string key)
     {
         var sw = Stopwatch.StartNew();
-        (float[] buffer, int read, int channels, int sampleRate) = DecodeMp3(path);
+        (float[] buffer, int read, int channels, int sampleRate) = DecodeMp3(key);
         long decodeMs = sw.ElapsedMilliseconds;
 
-        AudioClip clip = CreateClip(path, buffer, read, channels, sampleRate, out long copyMs);
+        AudioClip clip = CreateClip(key, buffer, read, channels, sampleRate, out long copyMs);
         Logger.Info($"[MP3: Channels={channels}, SampleRate={sampleRate}, SamplesRead={read}, decodeMs={decodeMs}, copyMs={copyMs}]", "CustomSounds");
         return clip;
     }
 
     // OGG/MP3 のデコード本体。System.IO + マネージドデコーダのみ (Unity/Il2Cpp API 不使用) なので
     // バックグラウンドスレッドから呼んでよい。AudioClip 化 (CreateClip) はメインスレッド専用。
-    private static (float[] Buffer, int Read, int Channels, int SampleRate) DecodeOgg(string path)
+    // Stream 版コンストラクタを使うので、埋込リソースを直接 (ディスクを経由せず) デコードできる。
+    private static (float[] Buffer, int Read, int Channels, int SampleRate) DecodeOgg(string key)
     {
-        using var reader = new NVorbis.VorbisReader(path);
+        using Stream stream = OpenSound(key);
+        // 第2引数 (dispose 時に stream を閉じるか) はバージョンによって意味が揺れうるので false 固定にし、
+        // stream の寿命は上の using でこちらが持つ。
+        using var reader = new NVorbis.VorbisReader(stream, false);
         int channels = reader.Channels;
         int sampleRate = reader.SampleRate;
         long totalSamples = reader.TotalSamples;
@@ -387,9 +447,9 @@ public static class CustomSoundsManager
     // 呼んでよい (旧実装は Il2CppSystem.IO.File 依存でメインスレッド固定だった)。
     // 対応フォーマットは BackroomsAmbient.LoadWavStrict と同じ: format 1 (PCM 16/24bit) +
     // format 3 (IEEE float 32bit)、mono / stereo。非対応は throw して呼び出し側の握りつぶしに任せる。
-    private static (float[] Buffer, int Read, int Channels, int SampleRate) DecodeWav(string path)
+    private static (float[] Buffer, int Read, int Channels, int SampleRate) DecodeWav(string key)
     {
-        byte[] data = File.ReadAllBytes(path);
+        byte[] data = ReadAllBytes(key);
         if (data.Length < 44) throw new IOException("WAV too small");
         if (data[0] != (byte)'R' || data[1] != (byte)'I' || data[2] != (byte)'F' || data[3] != (byte)'F') throw new IOException("Not RIFF");
         if (data[8] != (byte)'W' || data[9] != (byte)'A' || data[10] != (byte)'V' || data[11] != (byte)'E') throw new IOException("Not WAVE");
@@ -457,9 +517,10 @@ public static class CustomSoundsManager
         return (interleaved, totalSamples, channels, sampleRate);
     }
 
-    private static (float[] Buffer, int Read, int Channels, int SampleRate) DecodeMp3(string path)
+    private static (float[] Buffer, int Read, int Channels, int SampleRate) DecodeMp3(string key)
     {
-        using var reader = new NLayer.MpegFile(path);
+        using Stream stream = OpenSound(key);
+        using var reader = new NLayer.MpegFile(stream);
         int channels = reader.Channels;
         int sampleRate = reader.SampleRate;
         long totalInterleaved = reader.Length;
@@ -472,7 +533,7 @@ public static class CustomSoundsManager
         return (buffer, read, channels, sampleRate);
     }
 
-    private static AudioClip CreateClip(string path, float[] buffer, int read, int channels, int sampleRate, out long copyMs)
+    private static AudioClip CreateClip(string key, float[] buffer, int read, int channels, int sampleRate, out long copyMs)
     {
         var sw = Stopwatch.StartNew();
         Il2CppStructArray<float> il2cppBuffer = new(read);
@@ -480,7 +541,7 @@ public static class CustomSoundsManager
         // BGM 級 (23M サンプル) でインデクサループは実測 ~1000ms、一括コピーなら数十 ms。
         System.Runtime.InteropServices.Marshal.Copy(buffer, 0, IntPtr.Add(il2cppBuffer.Pointer, IntPtr.Size * 4), read);
 
-        AudioClip clip = AudioClip.Create(Path.GetFileNameWithoutExtension(path), read / channels, channels, sampleRate, false);
+        AudioClip clip = AudioClip.Create(ClipNameOf(key), read / channels, channels, sampleRate, false);
         clip.SetData(il2cppBuffer, 0);
         copyMs = sw.ElapsedMilliseconds;
         ReturnDecodeBuffer(buffer); // クリップ化が済んだらデコードバッファはプールへ (以後 buffer に触らないこと)
@@ -529,7 +590,7 @@ public static class CustomSoundsManager
     private static int preloadTicks;
     private static bool preloadStarted;
     // BgmName != null なら BGMManager 管轄のトラック (BgmCache へ届ける)。null なら SFX (audioCache へ)。
-    private static readonly ConcurrentQueue<(string Path, float[] Buffer, int Read, int Channels, int SampleRate, string BgmName)> PreloadDecoded = [];
+    private static readonly ConcurrentQueue<(string Key, float[] Buffer, int Read, int Channels, int SampleRate, string BgmName)> PreloadDecoded = [];
 
     // BGM チャンク分割クリップ化の進行状態 (1 曲分)。SetData を複数フレームへ割り、1 tick の停止を
     // HITCH 検出閾値 (50ms) 未満に抑える。完成するまで PrimeCache しないので途中データが鳴ることはない。
@@ -630,30 +691,30 @@ public static class CustomSoundsManager
                 // SFX の未消化分では待たない (BGM 専用カウンタを見る)。
                 while (System.Threading.Interlocked.CompareExchange(ref bgmDecodedInQueue, 0, 0) > 0) Thread.Sleep(100);
 
-                string path = BGMManager.ResolveOrExtract(name);
-                if (path == null) { BgmDecodeFailures.Enqueue(name); continue; }
+                string key = BGMManager.ResolveSource(name);
+                if (key == null) { BgmDecodeFailures.Enqueue(name); continue; }
 
-                switch (Path.GetExtension(path).ToLowerInvariant())
+                switch (Path.GetExtension(key).ToLowerInvariant())
                 {
                     case ".ogg":
                     {
-                        (float[] buffer, int read, int channels, int sampleRate) = DecodeOgg(path);
+                        (float[] buffer, int read, int channels, int sampleRate) = DecodeOgg(key);
                         System.Threading.Interlocked.Increment(ref bgmDecodedInQueue);
-                        PreloadDecoded.Enqueue((path, buffer, read, channels, sampleRate, name));
+                        PreloadDecoded.Enqueue((key, buffer, read, channels, sampleRate, name));
                         break;
                     }
                     case ".mp3":
                     {
-                        (float[] buffer, int read, int channels, int sampleRate) = DecodeMp3(path);
+                        (float[] buffer, int read, int channels, int sampleRate) = DecodeMp3(key);
                         System.Threading.Interlocked.Increment(ref bgmDecodedInQueue);
-                        PreloadDecoded.Enqueue((path, buffer, read, channels, sampleRate, name));
+                        PreloadDecoded.Enqueue((key, buffer, read, channels, sampleRate, name));
                         break;
                     }
                     case ".wav":
                     {
-                        (float[] buffer, int read, int channels, int sampleRate) = DecodeWav(path);
+                        (float[] buffer, int read, int channels, int sampleRate) = DecodeWav(key);
                         System.Threading.Interlocked.Increment(ref bgmDecodedInQueue);
-                        PreloadDecoded.Enqueue((path, buffer, read, channels, sampleRate, name));
+                        PreloadDecoded.Enqueue((key, buffer, read, channels, sampleRate, name));
                         break;
                     }
                     default:
@@ -705,7 +766,7 @@ public static class CustomSoundsManager
         }
 
         // 1 tick 1 件だけクリップ化する (まとめて処理すると自分がヒッチ源になる)
-        if (PreloadDecoded.TryDequeue(out (string Path, float[] Buffer, int Read, int Channels, int SampleRate, string BgmName) d))
+        if (PreloadDecoded.TryDequeue(out (string Key, float[] Buffer, int Read, int Channels, int SampleRate, string BgmName) d))
         {
             if (d.BgmName != null)
             {
@@ -723,15 +784,15 @@ public static class CustomSoundsManager
                 // BGM 級 (数十 MB PCM) は一括 SetData でも 50-70ms かかりサブ秒ヒッチ検出閾値を踏む
                 // (実測: ロビー入り直後の preload 7 連発が「数秒かくかく」体感の一因)。
                 // クリップだけ先に作り、データ書き込みはチャンク分割で複数フレームに薄める。
-                AudioClip clip = AudioClip.Create(Path.GetFileNameWithoutExtension(d.Path), d.Read / d.Channels, d.Channels, d.SampleRate, false);
+                AudioClip clip = AudioClip.Create(ClipNameOf(d.Key), d.Read / d.Channels, d.Channels, d.SampleRate, false);
                 bgmClipInProgress = (d.BgmName, d.Buffer, d.Read, d.Channels, clip, 0);
             }
-            else if (!audioCache.TryGetValue(d.Path, out AudioClip cached) || !cached)
+            else if (!audioCache.TryGetValue(d.Key, out AudioClip cached) || !cached)
             {
-                AudioClip clip = CreateClip(d.Path, d.Buffer, d.Read, d.Channels, d.SampleRate, out long copyMs);
+                AudioClip clip = CreateClip(d.Key, d.Buffer, d.Read, d.Channels, d.SampleRate, out long copyMs);
                 if (clip) clip.hideFlags |= HideFlags.DontUnloadUnusedAsset;
-                audioCache[d.Path] = clip;
-                Logger.Info($"Preloaded {Path.GetFileName(d.Path)} (copyMs={copyMs})", "CustomSounds");
+                audioCache[d.Key] = clip;
+                Logger.Info($"Preloaded {ClipNameOf(d.Key)} (copyMs={copyMs})", "CustomSounds");
             }
 
             return;
@@ -760,7 +821,7 @@ public static class CustomSoundsManager
 
                 // 埋込名はサブフォルダも '.' 区切りで平坦化される (例 "BGM.climax.ogg")。名前に '.' が
                 // 残る = サブフォルダ配下 (BGM/Backrooms — BGMManager 等の管轄) なので対象外。
-                // 通すと ResolveSoundPath("BGM.climax") が埋込名を再構成できてしまい、BGM 級の
+                // 通すと ResolveSoundKey("BGM.climax") が埋込名を再構成できてしまい、BGM 級の
                 // 長尺トラックがプリロードに混入する (ディスク側のトップレベル限定と意図を揃える)。
                 if (name.Contains('.')) continue;
 
@@ -781,29 +842,29 @@ public static class CustomSoundsManager
             {
                 try
                 {
-                    string path = ResolveSoundPath(name); // 埋込リソースのディスク展開込み
-                    if (path == null) continue;
+                    string key = ResolveSoundKey(name); // ディスクの差し替え優先、無ければ埋込リソース
+                    if (key == null) continue;
 
-                    switch (Path.GetExtension(path).ToLowerInvariant())
+                    switch (Path.GetExtension(key).ToLowerInvariant())
                     {
                         case ".ogg":
                         {
-                            (float[] buffer, int read, int channels, int sampleRate) = DecodeOgg(path);
-                            if (read <= MaxPreloadSamples) PreloadDecoded.Enqueue((path, buffer, read, channels, sampleRate, null));
+                            (float[] buffer, int read, int channels, int sampleRate) = DecodeOgg(key);
+                            if (read <= MaxPreloadSamples) PreloadDecoded.Enqueue((key, buffer, read, channels, sampleRate, null));
                             else ReturnDecodeBuffer(buffer);
                             break;
                         }
                         case ".mp3":
                         {
-                            (float[] buffer, int read, int channels, int sampleRate) = DecodeMp3(path);
-                            if (read <= MaxPreloadSamples) PreloadDecoded.Enqueue((path, buffer, read, channels, sampleRate, null));
+                            (float[] buffer, int read, int channels, int sampleRate) = DecodeMp3(key);
+                            if (read <= MaxPreloadSamples) PreloadDecoded.Enqueue((key, buffer, read, channels, sampleRate, null));
                             else ReturnDecodeBuffer(buffer);
                             break;
                         }
                         default: // .wav
                         {
-                            (float[] buffer, int read, int channels, int sampleRate) = DecodeWav(path);
-                            if (read <= MaxPreloadSamples) PreloadDecoded.Enqueue((path, buffer, read, channels, sampleRate, null));
+                            (float[] buffer, int read, int channels, int sampleRate) = DecodeWav(key);
+                            if (read <= MaxPreloadSamples) PreloadDecoded.Enqueue((key, buffer, read, channels, sampleRate, null));
                             else ReturnDecodeBuffer(buffer);
                             break;
                         }

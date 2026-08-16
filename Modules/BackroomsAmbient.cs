@@ -107,21 +107,37 @@ public static class BackroomsAmbient
 
             string diskPath = AmbientPath + AmbientName + ".wav";
 
-            // disk に user override 版があれば優先、なければ embedded を一度だけ展開
-            if (!File.Exists(diskPath))
+            // disk に user override 版があれば優先、なければ埋込リソースをメモリ内でデコードする。
+            // (ディスクへ書き出す方式は素材の再配布条項に当たるため廃止)
+            byte[] data;
+
+            if (File.Exists(diskPath))
+                data = File.ReadAllBytes(diskPath);
+            else
             {
-                Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"EndKnot.Resources.Sounds.Backrooms.{AmbientName}.wav");
+                using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"EndKnot.Resources.Sounds.Backrooms.{AmbientName}.wav");
                 if (stream == null)
                 {
                     Logger.Warn($"BackroomsAmbient WAV not found (disk or embedded): {AmbientName}", "BackroomsAmbient");
                     return null;
                 }
 
-                using FileStream fs = File.Create(diskPath);
-                stream.CopyTo(fs);
+                // Stream.Read は要求より短く返しうるので読み切る (短読みは無言で音声が途中で切れる)
+                data = new byte[stream.Length];
+                int off = 0;
+
+                while (off < data.Length)
+                {
+                    int n = stream.Read(data, off, data.Length - off);
+                    if (n <= 0) break;
+
+                    off += n;
+                }
+
+                if (off < data.Length) Array.Resize(ref data, off);
             }
 
-            _clip = LoadWavStrict(diskPath);
+            _clip = LoadWavStrict(data);
             // シーン unload 時の Resources.UnloadUnusedAssets() で消されないように。
             // これを忘れると 2 回目以降の lobby 入室で「無音」になる罠 (2026-05-23)
             if (_clip != null) _clip.hideFlags |= HideFlags.DontUnloadUnusedAsset;
@@ -138,9 +154,8 @@ public static class BackroomsAmbient
     //   ・format 1 (PCM): 16bit, 24bit
     //   ・format 3 (IEEE float): 32bit
     //   ・mono / stereo どちらも (Unity AudioClip にチャンネル数を渡してそのまま再生)
-    private static AudioClip LoadWavStrict(string path)
+    private static AudioClip LoadWavStrict(byte[] data)
     {
-        byte[] data = File.ReadAllBytes(path);
         if (data.Length < 44) throw new IOException("WAV too small");
         if (data[0] != (byte)'R' || data[1] != (byte)'I' || data[2] != (byte)'F' || data[3] != (byte)'F') throw new IOException("Not RIFF");
         if (data[8] != (byte)'W' || data[9] != (byte)'A' || data[10] != (byte)'V' || data[11] != (byte)'E') throw new IOException("Not WAVE");
@@ -210,7 +225,7 @@ public static class BackroomsAmbient
         // lobby-ambient.wav は ~3.5M サンプルあり、インデクサループはロビー入室時に ~150ms 級のヒッチ源になる。
         System.Runtime.InteropServices.Marshal.Copy(interleaved, 0, IntPtr.Add(il2cppBuf.Pointer, IntPtr.Size * 4), totalSamples);
 
-        AudioClip clip = AudioClip.Create(Path.GetFileNameWithoutExtension(path), samplesPerChannel, channels, sampleRate, false);
+        AudioClip clip = AudioClip.Create(AmbientName, samplesPerChannel, channels, sampleRate, false);
         clip.SetData(il2cppBuf, 0);
 
         Logger.Info($"BackroomsAmbient WAV loaded: format={audioFormat} ch={channels} rate={sampleRate} bps={bps} samples/ch={samplesPerChannel}", "BackroomsAmbient");
