@@ -652,7 +652,7 @@ public static class Utils
         if (Options.CurrentGameMode == CustomGameMode.HideAndSeek && targetMainRole == CustomRoles.Agent && CustomHnS.PlayerRoles[seerId].Interface.Team != Team.Impostor)
             targetMainRole = CustomRoles.Hider;
 
-        if ((ExileController.Instance || targetState.IsDead || (GameStates.IsMeeting && MeetingHud.Instance.state is MeetingHud.VoteStates.Results or MeetingHud.VoteStates.Proceeding or MeetingHud.VoteStates.Voted or MeetingHud.VoteStates.NotVoted)) && !GameStates.IsEnded && Forger.Forges.TryGetValue(targetId, out var forgedRole))
+        if ((ExileController.Instance || targetState.IsDead || (GameStates.IsMeeting && MeetingHud.Instance.state is MeetingHud.MeetingStates.Results or MeetingHud.MeetingStates.Proceeding or MeetingHud.MeetingStates.Voted or MeetingHud.MeetingStates.NotVoted)) && !GameStates.IsEnded && Forger.Forges.TryGetValue(targetId, out var forgedRole))
             targetMainRole = forgedRole;
 
         if (!self && seerMainRole.IsImpostor() && targetMainRole == CustomRoles.DoubleAgent && DoubleAgent.ShownRoles.TryGetValue(targetId, out CustomRoles shownRole))

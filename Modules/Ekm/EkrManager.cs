@@ -1734,7 +1734,7 @@ public static class EkrManager
         state = null;
 
         if (!AmongUsClient.Instance.AmHost || !pc) return false;
-        if (!GameStates.IsMeeting || !MeetingHud.Instance || MeetingHud.Instance.state is MeetingHud.VoteStates.Results or MeetingHud.VoteStates.Proceeding) return false;
+        if (!GameStates.IsMeeting || !MeetingHud.Instance || MeetingHud.Instance.state is MeetingHud.MeetingStates.Results or MeetingHud.MeetingStates.Proceeding) return false;
         if (!pc.IsAlive()) return false;
 
         slot = pc.GetCustomRole();

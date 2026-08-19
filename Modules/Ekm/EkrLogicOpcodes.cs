@@ -1120,7 +1120,7 @@ internal sealed class EkrActionSink : IEkrActionSink
         // advisor 指摘 (2026-08-11): 共通の meetingOrExile ゲートは Results/Proceeding/追放演出中も通す
         // (vote_block/vote_swap はそこへ着地しても無害な no-op だが、exile は RpcVotingComplete を二重送信
         // しうる)。GuessManager.GuesserMsg (GuessManager.cs:67) と同じ投票フェーズ判定で narrow に絞る。
-        if (!MeetingHud.Instance || ExileController.Instance || MeetingHud.Instance.state is MeetingHud.VoteStates.Results or MeetingHud.VoteStates.Proceeding) return;
+        if (!MeetingHud.Instance || ExileController.Instance || MeetingHud.Instance.state is MeetingHud.MeetingStates.Results or MeetingHud.MeetingStates.Proceeding) return;
 
         PlayerControl targetPc = ResolveSingle(node.Target, ctx);
         if (!targetPc || !targetPc.IsAlive()) return;

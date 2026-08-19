@@ -2715,14 +2715,14 @@ internal static class ChatCommands
         if (text.Length < 6 || !GameStates.IsMeeting) return;
 
         string toVote = text[6..].Replace(" ", string.Empty);
-        if (!byte.TryParse(toVote, out byte voteId) || MeetingHud.Instance.playerStates?.FirstOrDefault(x => x.TargetPlayerId == player.PlayerId)?.DidVote is true or null) return;
+        if (!byte.TryParse(toVote, out byte voteId) || MeetingHud.Instance.playerStates?.FirstOrDefault(x => x.PlayerId == player.PlayerId)?.DidVote is true or null) return;
 
         if (voteId > PlayerControl.AllPlayerControls.Count) return;
 
         PlayerControl votedPlayer = voteId.GetPlayer();
         if (!player.UsesMeetingShapeshift() && Main.PlayerStates.TryGetValue(player.PlayerId, out PlayerState state) && votedPlayer != null && state.Role.OnVote(player, votedPlayer)) return;
 
-        MeetingHud.Instance.CastVote(player.PlayerId, voteId);
+        MeetingHudCastVotePatch.CastVoteChecked(MeetingHud.Instance, player.PlayerId, voteId);
     }
 
     private static void SayCommand(PlayerControl player, string text, string[] args)
@@ -6117,7 +6117,7 @@ internal static class ChatCommands
 
         var commandEntered = false;
 
-        if (text.StartsWith('/') && !player.IsModdedClient() && (!GameStates.IsMeeting || MeetingHud.Instance.state is not MeetingHud.VoteStates.Results and not MeetingHud.VoteStates.Proceeding))
+        if (text.StartsWith('/') && !player.IsModdedClient() && (!GameStates.IsMeeting || MeetingHud.Instance.state is not MeetingHud.MeetingStates.Results and not MeetingHud.MeetingStates.Proceeding))
         {
             Utils.CheckServerCommand(ref text, out bool spamRequired); // spamRequired == true は /cmd 未使用
 

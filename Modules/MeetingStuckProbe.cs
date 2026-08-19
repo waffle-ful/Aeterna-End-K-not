@@ -34,7 +34,7 @@ public static class MeetingStuckProbe
             Flagged.Clear();
         }
 
-        if (meetingHud.state is MeetingHud.VoteStates.Animating or MeetingHud.VoteStates.Results or MeetingHud.VoteStates.Proceeding) return;
+        if (meetingHud.state is MeetingHud.MeetingStates.Animating or MeetingHud.MeetingStates.Results or MeetingHud.MeetingStates.Proceeding) return;
         if (Time.time < _nextSampleTime) return;
 
         _nextSampleTime = Time.time + SampleInterval;
