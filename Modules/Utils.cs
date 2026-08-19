@@ -1267,7 +1267,7 @@ public static class Utils
                (__instance.Is(CustomRoles.Mimic) && Main.VisibleTasksCount && !__instance.IsAlive()) ||
                (__instance.Is(CustomRoleTypes.Impostor) && PlayerControl.LocalPlayer.Is(CustomRoles.Crewpostor) && Options.AlliesKnowCrewpostor.GetBool()) ||
                (__instance.Is(CustomRoleTypes.Impostor) && PlayerControl.LocalPlayer.Is(CustomRoles.Hypocrite) && Hypocrite.AlliesKnowHypocrite.GetBool()) ||
-               __instance.Is(CustomRoleTypes.Impostor) && PlayerControl.LocalPlayer.Is(CustomRoleTypes.Impostor) && Options.ImpKnowAlliesRole.GetBool() && CustomTeamManager.ArentInCustomTeam(PlayerControl.LocalPlayer.PlayerId, __instance.PlayerId) ||
+               __instance.Is(CustomRoleTypes.Impostor) && PlayerControl.LocalPlayer.Is(CustomRoleTypes.Impostor) && Options.ImpKnowAlliesRole.GetBool() && CustomTeamManager.ArentInCustomTeam(PlayerControl.LocalPlayer.PlayerId, __instance.PlayerId) && !PlayerControl.LocalPlayer.Is(CustomRoles.OneWolf) && !__instance.Is(CustomRoles.OneWolf) ||
                (__instance.Is(CustomRoleTypes.Coven) && PlayerControl.LocalPlayer.Is(CustomRoleTypes.Coven)) ||
                (Main.LoversPlayers.TrueForAll(x => x.PlayerId == __instance.PlayerId || x.AmOwner) && Main.LoversPlayers.Count == 2 && Lovers.LoverKnowRoles.GetBool()) ||
                (CustomTeamManager.AreInSameCustomTeam(__instance.PlayerId, PlayerControl.LocalPlayer.PlayerId) && CustomTeamManager.IsSettingEnabledForPlayerTeam(__instance.PlayerId, CTAOption.KnowRoles)) ||
@@ -1634,6 +1634,9 @@ public static class Utils
                 case "ImpCanBeRole" or "CrewCanBeRole" or "NeutralCanBeRole" or "CovenCanBeRole" when f1:
                     continue;
             }
+
+            // 常時隠しの枠 (EKR の未使用 hostOption など) は生キー名のまま出てしまうので列挙しない
+            if (opt.Value.IsCurrentlyHidden()) continue;
 
             if (deep > 0)
             {

@@ -229,6 +229,24 @@ public class Autoscopy : RoleBase
     }
 
     /// <summary>スワップを解除し、双方を元の外見・レベル・表示IDへ戻す。</summary>
+    // ゲーム終了時にホストから呼ぶ (Doppelganger と同型 — リセット設定「なし」が既定なので
+    // RestoreSwap が一度も呼ばれず、見た目だけ入れ替わったままロビーへ持ち越される)。
+    public static void RestoreOutfitOnGameEnd(byte id)
+    {
+        PlayerControl pc = Utils.GetPlayerById(id);
+        if (pc == null) return;
+
+        // ⚠️ Doppelganger と同じ理由で一致判定が要る (退避は Add() 時点で全員分入る)
+        if (DefaultSkin.TryGetValue(id, out NetworkedPlayerInfo.PlayerOutfit ownSkin))
+        {
+            if (!ownSkin.Compare(pc.Data.DefaultOutfit)) RpcWearOutfit(pc, ownSkin);
+        }
+        else if (PartnerOriginalSkin.TryGetValue(id, out NetworkedPlayerInfo.PlayerOutfit partnerSkin))
+        {
+            if (!partnerSkin.Compare(pc.Data.DefaultOutfit)) RpcWearOutfit(pc, partnerSkin);
+        }
+    }
+
     private static void RestoreSwap(PlayerControl autoscopy, byte partnerId)
     {
         PlayerControl partner = Utils.GetPlayerById(partnerId);

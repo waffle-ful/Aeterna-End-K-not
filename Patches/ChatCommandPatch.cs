@@ -3051,7 +3051,8 @@ internal static class ChatCommands
                         (string fn, EkrDefinition def) = lib[i];
                         string author = def.Author.Length > 0 ? $" ({def.Author})" : "";
                         // R2: 陣営を併記する (入れられるスロットが陣営で決まるため — 事故防止)。
-                        sb.AppendLine($"  {i + 1}. {def.Name}{author} <{EkrManager.TeamLabel(def.ParsedTeam)}>  <size=70%>{fn}</size>");
+                        // 角括弧で囲う — 山括弧だと TMP が不明タグとして丸ごと食べてしまう
+                        sb.AppendLine($"  {i + 1}. {def.Name}{author} [{EkrManager.TeamLabel(def.ParsedTeam)}]  <size=70%>{fn}</size>");
                     }
                 }
 

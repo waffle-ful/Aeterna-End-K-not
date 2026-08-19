@@ -140,6 +140,14 @@ internal static class LocateArrow
         int arrowCount = ArrowList.Count;
         if (arrowCount == 0) return;
 
+        // Blind は Add でしか検査していないため、ゲーム途中で付与されると登録済みの矢印が残り続ける
+        if (Main.PlayerStates.TryGetValue(seer.PlayerId, out var seerState) && seerState.SubRoles.Contains(CustomRoles.Blind))
+        {
+            RemoveAllTarget(seer.PlayerId);
+            Utils.NotifyRoles(SpecifySeer: seer, ForceLoop: false, SpecifyTarget: seer);
+            return;
+        }
+
         var update = false;
 
         for (int arrowId = 0; arrowId < arrowCount; arrowId++)

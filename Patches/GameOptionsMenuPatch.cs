@@ -1121,6 +1121,9 @@ public static class StringOptionPatch
 {
     private static long HelpShowEndTS;
 
+    // ツールチップの黒枠に収まる行数 (実測: 既存役職の InfoLong 567 件中 449 件が 3 行・4 行で枠外へ出る)
+    private const int TooltipMaxLines = 3;
+
     // Final styled title (role color band / pet indicator / size wrap) per row. Rows are reused across
     // preset switches and menu reopens without re-running Initialize, so anything that resets TitleText
     // in between leaves the plain unstyled name on screen. RefreshSettingValues restores from this cache
@@ -1233,7 +1236,17 @@ public static class StringOptionPatch
                     string infoLong;
 
                     try { infoLong = CustomHnS.AllHnSRoles.Contains(value) ? str : str[(str.IndexOf('\n') + 1)..str.Split("\n\n")[0].Length]; }
-                    catch { infoLong = str; }
+                    catch
+                    {
+                        // 見出しと本文が空行で区切られていない自由記述 (作者が書く役職の説明文など) はここへ
+                        // 落ちて全文が流れ込み、ツールチップの黒枠からはみ出す。既存役職の InfoLong は
+                        // 567 件中 449 件が 3 行で、4 行あると枠外へ出る実測があるので 3 行で打ち切る。
+                        string[] descLines = str.Split('\n');
+
+                        infoLong = descLines.Length <= TooltipMaxLines
+                            ? str
+                            : CustomNetObject.DropUnterminatedTag(string.Join("\n", descLines.Take(TooltipMaxLines))) + " …";
+                    }
 
                     GameObject.Find("PlayerOptionsMenu(Clone)").transform.FindChild("What Is This?").gameObject.SetActive(true);
                     GameSettingMenuPatch.GMButtons.ForEach(x => { if (x) x.gameObject.SetActive(false); });
