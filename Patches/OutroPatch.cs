@@ -102,6 +102,31 @@ internal static class EndGamePatch
                 if (spc != null) spc.RpcSetLevel(slevel);
             }
 
+            // ⚠️ 色/帽子/スキン/バイザー/ペットのフル復元は CheckGameEndPatch の Camouflage.RpcSetSkin が
+            // 本体だが、Camouflager 不在 + コミュサボ変装 OFF という典型設定では先頭ガードで降りて一度も
+            // 走らない。台帳そのものを書き換える役職はここで個別に戻す。
+
+            // Devourer は被害者の外見を Camouflage の復元台帳ごと上書きし、戻す口が本人の死亡1本しかない
+            Devourer.RestoreConsumedOutfit(id);
+
+            // Venerer は変装中に死亡すると復元経路が2本とも !IsAlive() で降りる
+            if (state.Role is Venerer { ChangedSkin: true } venerer) venerer.RestoreDisguise(id);
+
+            // 波動砲系は充填中の見た目を戻す口が3本とも「試合が続いている」前提で、決着した瞬間に全部止まる
+            if (state.Role is WaveCannon waveCannon) waveCannon.RestoreOnGameEnd(id);
+            if (state.Role is JackalHadouHo hadouHo) hadouHo.RestoreOnGameEnd(id);
+
+            // Shadow のカモ解除はタイマー完了時にしか無く、試合終了ではキャンセル側へ倒れて解けない
+            if (state.Role is Shadow shadow) shadow.RestoreOnGameEnd(id);
+
+            // 顔の入れ替え組は、上の名前/Level 復元と違って見た目を戻す口がリセット設定に依存する。
+            // 既定の「リセットなし」では一度も走らないので、ここで無条件に戻す。
+            Doppelganger.RestoreOutfitOnGameEnd(id);
+            Autoscopy.RestoreOutfitOnGameEnd(id);
+
+            // Skinwalker は死体を着たまま死ぬと脱げず、見た目に加えて名前まで被害者のまま残る
+            Skinwalker.RestoreOutfitOnGameEnd(id);
+
             SummaryText[id] = Utils.SummaryTexts(id, false);
             if (state.SubRoles.Count == 0) continue;
 

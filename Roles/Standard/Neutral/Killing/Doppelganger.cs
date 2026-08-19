@@ -237,6 +237,27 @@ public class Doppelganger : RoleBase
     }
 
     /// <summary>スワップを解除し、双方を元の外見・表示IDへ戻す。</summary>
+    // ゲーム終了時にホストから呼ぶ。RestoreSwap はリセット設定が「なし」(既定) だと一度も呼ばれず、
+    // OutroPatch が戻すのも名前と Level だけなので、既定設定のまま普通に遊ぶと色/帽子/スキン/バイザー/
+    // ペット/名刺だけ入れ替わった状態がロビーへ持ち越される。
+    public static void RestoreOutfitOnGameEnd(byte id)
+    {
+        PlayerControl pc = Utils.GetPlayerById(id);
+        if (pc == null) return;
+
+        // ⚠️ 退避は Add() 時点で全員分入るので、一度も顔を入れ替えていない本人にも当たる。
+        // RpcChangeSkin は Utils.RpcChangeSkin と違って一致判定を持たないため、ここで見ないと
+        // 試合終了の1フレームに未使用分のフル outfit RPC が丸ごと積み上がる。
+        if (DoppelDefaultSkin.TryGetValue(id, out NetworkedPlayerInfo.PlayerOutfit ownSkin))
+        {
+            if (!ownSkin.Compare(pc.Data.DefaultOutfit)) RpcChangeSkin(pc, ownSkin);
+        }
+        else if (DoppelPartnerOriginalSkin.TryGetValue(id, out NetworkedPlayerInfo.PlayerOutfit partnerSkin))
+        {
+            if (!partnerSkin.Compare(pc.Data.DefaultOutfit)) RpcChangeSkin(pc, partnerSkin);
+        }
+    }
+
     private static void RestoreSwap(PlayerControl doppel, byte partnerId)
     {
         PlayerControl partner = Utils.GetPlayerById(partnerId);

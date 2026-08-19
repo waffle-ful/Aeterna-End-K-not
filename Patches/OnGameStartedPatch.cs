@@ -287,7 +287,8 @@ internal static class ChangeRoleSettings
             ReportDeadBodyPatch.CanReport = [];
             ReportDeadBodyPatch.AlreadyReportedBodies = [];
             ReportDeadBodyPatch.DummyCorpseBodyIds = [];
-            
+            ReportDeadBodyPatch.BorrowedParentBodyIds = [];
+
             GuessManager.Guessers = [];
             ChatCommands.VotedToStart = [];
 

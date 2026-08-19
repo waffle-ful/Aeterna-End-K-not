@@ -95,7 +95,11 @@ public class Devourer : RoleBase
             Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: target);
             Utils.NotifyRoles(SpecifySeer: target, SpecifyTarget: pc);
 
-            OriginalPlayerSkins[target.PlayerId] = Camouflage.PlayerSkins[target.PlayerId];
+            // ⚠️ 既に別の Devourer に食われている相手を食い直すと、退避先へ ConsumedOutfit そのものが
+            // 入って元の見た目が永久に失われる (PlayerSkinsCosumed はインスタンス毎なので二重食いは起こりうる)
+            if (!OriginalPlayerSkins.ContainsKey(target.PlayerId))
+                OriginalPlayerSkins[target.PlayerId] = Camouflage.PlayerSkins[target.PlayerId];
+
             Camouflage.PlayerSkins[target.PlayerId] = ConsumedOutfit;
 
             float cdReduction = ReduceKillCooldown.GetFloat() * PlayerSkinsCosumed.Count;
@@ -134,6 +138,22 @@ public class Devourer : RoleBase
         }
 
         dv.PlayerSkinsCosumed.Clear();
+    }
+
+    // ゲーム終了時にホストから呼ぶ。Devourer が生存したまま試合が終わると OnDevourerDied を通らないため、
+    // 被害者の見た目 (と Camouflage の復元台帳) が食われたままロビーへ持ち越される。
+    // ⚠️ PlayerIdList / IsEnable は見ない — 切断で空になると被害者全員の復元が飛ぶ。
+    public static void RestoreConsumedOutfit(byte playerId)
+    {
+        if (!OriginalPlayerSkins.TryGetValue(playerId, out NetworkedPlayerInfo.PlayerOutfit outfit)) return;
+
+        Camouflage.PlayerSkins[playerId] = outfit;
+
+        PlayerControl pc = Utils.GetPlayerById(playerId);
+
+        // 本人の死亡で既に戻っている被害者へ撃ち直さない (SetSkin は Utils.RpcChangeSkin と違って
+        // 一致判定を持たないので、ここで見ないと終了時に全被害者分のフル outfit RPC が飛ぶ)
+        if (pc != null && !outfit.Compare(pc.Data.DefaultOutfit)) SetSkin(pc, outfit);
     }
 
     private static void SetSkin(PlayerControl target, NetworkedPlayerInfo.PlayerOutfit outfit)
