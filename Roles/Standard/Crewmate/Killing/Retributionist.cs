@@ -134,7 +134,7 @@ public class Retributionist : RoleBase
     {
         foreach (PlayerVoteArea pva in __instance.playerStates)
         {
-            PlayerControl pc = Utils.GetPlayerById(pva.TargetPlayerId);
+            PlayerControl pc = Utils.GetPlayerById(pva.PlayerId);
             if (!pc || !pc.IsAlive()) continue;
 
             GameObject template = pva.Buttons.transform.Find("CancelButton").gameObject;
@@ -145,7 +145,7 @@ public class Retributionist : RoleBase
             renderer.sprite = Utils.LoadSprite("EndKnot.Resources.Images.Skills.MeetingKillButton.png", 140f);
             var button = targetBox.GetComponent<PassiveButton>();
             button.OnClick.RemoveAllListeners();
-            button.OnClick.AddListener((Action)(() => RetributionistOnClick(pva.TargetPlayerId)));
+            button.OnClick.AddListener((Action)(() => RetributionistOnClick(pva.PlayerId)));
         }
     }
 

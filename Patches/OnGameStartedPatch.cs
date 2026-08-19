@@ -123,7 +123,7 @@ internal static class ChangeRoleSettings
                 }
             }
 
-            FriendsListManager.Instance.SetRecentlyPlayed(GameData.Instance.AllPlayers);
+            FriendsListManager.Instance.UpdateFriendsDataWithPlayers(GameData.Instance.AllPlayers);
             GameData.TimeGameStarted = Time.realtimeSinceStartup;
             int map = Mathf.Clamp(GameOptionsManager.Instance.CurrentGameOptions.MapId, 0, Constants.MapNames.Length - 1);
             string gameName = GameCode.IntToGameName(AmongUsClient.Instance.GameId);
@@ -506,7 +506,7 @@ internal static class StartGameHostPatch
     public static readonly Dictionary<CustomRoles, List<byte>> BasisChangingAddons = [];
     private static Dictionary<RoleTypes, int> RoleTypeNums = [];
 
-    private static RoleOptionsCollectionV10 RoleOpt => Main.NormalOptions.roleOptions;
+    private static RoleOptionsCollectionV11 RoleOpt => Main.NormalOptions.roleOptions;
 
     private static void UpdateRoleTypeNums()
     {

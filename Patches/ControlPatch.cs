@@ -256,7 +256,7 @@ internal static class ControllerManagerUpdatePatch
             }
 
             if (KeysDown(KeyCode.Return, KeyCode.V, KeyCode.LeftShift) && GameStates.IsMeeting)
-                MeetingHud.Instance.RpcClearVote(AmongUsClient.Instance.ClientId);
+                MeetingHud.Instance.RpcClearVote(PlayerControl.LocalPlayer.PlayerId);
 
             if (KeysDown(KeyCode.Return, KeyCode.D, KeyCode.LeftShift) && GameStates.IsInGame)
             {

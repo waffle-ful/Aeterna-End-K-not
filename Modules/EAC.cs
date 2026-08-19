@@ -108,7 +108,7 @@ internal static class EAC
                         return true;
                     }
 
-                    if (GameStates.IsMeeting && MeetingHud.Instance.state != MeetingHud.VoteStates.Animating && !pc.IsHost())
+                    if (GameStates.IsMeeting && MeetingHud.Instance.state != MeetingHud.MeetingStates.Animating && !pc.IsHost())
                     {
                         // ban しない: 会議開始RPCをロード/イントロ中に取りこぼして InTask のまま取り残された
                         // 正規クライアントが通報/緊急ボタンを押すとここに来る (2026-07-21 に2名誤BAN)。
@@ -146,7 +146,7 @@ internal static class EAC
                         // 通報を弾き、緊急回数を消費しない「自己通報→無限会議」スパム(進行不能の主因)を塞ぐ。自分の
                         // 死体は通報者死亡ガード(ReportDeadBodyPatch:1099)で別処理されるため、生存中の自己通報に正当な
                         // 用途は無い。Animating 中だけは会議開始アニメの正当なレースなので従来どおり通す。
-                        if (!bodyExists && (!MeetingHud.Instance || MeetingHud.Instance.state != MeetingHud.VoteStates.Animating))
+                        if (!bodyExists && (!MeetingHud.Instance || MeetingHud.Instance.state != MeetingHud.MeetingStates.Animating))
                         {
                             Logger.Warn($"Player [{pc.OwnerId}:{pc.GetRealName()}] attempted to report a nonexistent body (incl. self), rejected", "EAC");
                             sr.Recycle();
@@ -317,7 +317,7 @@ internal static class EAC
                         return true;
                     }
 
-                    if (((MeetingHud.Instance && MeetingHud.Instance.state != MeetingHud.VoteStates.Animating) || ExileController.Instance) && target != pc && !(Options.UseMeetingShapeshift.GetBool() && (GuessManager.Data.ContainsKey(pc.PlayerId) || pc.UsesMeetingShapeshift())))
+                    if (((MeetingHud.Instance && MeetingHud.Instance.state != MeetingHud.MeetingStates.Animating) || ExileController.Instance) && target != pc && !(Options.UseMeetingShapeshift.GetBool() && (GuessManager.Data.ContainsKey(pc.PlayerId) || pc.UsesMeetingShapeshift())))
                     {
                         WarnHost();
                         Report(pc, "Trying to shift during meeting");
@@ -374,7 +374,7 @@ internal static class EAC
                         return true;
                     }
 
-                    if ((MeetingHud.Instance && MeetingHud.Instance.state != MeetingHud.VoteStates.Animating && !ReportDeadBodyPatch.MeetingStarted) || ExileController.Instance)
+                    if ((MeetingHud.Instance && MeetingHud.Instance.state != MeetingHud.MeetingStates.Animating && !ReportDeadBodyPatch.MeetingStarted) || ExileController.Instance)
                     {
                         WarnHost();
                         Report(pc, "Doing task during meeting");
@@ -424,7 +424,7 @@ internal static class EAC
                         return true;
                     }
 
-                    if ((MeetingHud.Instance && MeetingHud.Instance.state != MeetingHud.VoteStates.Animating) || ExileController.Instance)
+                    if ((MeetingHud.Instance && MeetingHud.Instance.state != MeetingHud.MeetingStates.Animating) || ExileController.Instance)
                     {
                         WarnHost();
                         Report(pc, "Trying to vanish during meeting");
@@ -446,7 +446,7 @@ internal static class EAC
                         return true;
                     }
 
-                    if ((MeetingHud.Instance && MeetingHud.Instance.state != MeetingHud.VoteStates.Animating) || ExileController.Instance)
+                    if ((MeetingHud.Instance && MeetingHud.Instance.state != MeetingHud.MeetingStates.Animating) || ExileController.Instance)
                     {
                         WarnHost();
                         Report(pc, "Trying to appear during meeting");
@@ -478,7 +478,7 @@ internal static class EAC
                         return true;
                     }
 
-                    if ((MeetingHud.Instance && MeetingHud.Instance.state != MeetingHud.VoteStates.Animating) || ExileController.Instance)
+                    if ((MeetingHud.Instance && MeetingHud.Instance.state != MeetingHud.MeetingStates.Animating) || ExileController.Instance)
                     {
                         WarnHost();
                         Report(pc, "PlayAnimation Rpc during meeting");
@@ -533,7 +533,7 @@ internal static class EAC
                         return true;
                     }
 
-                    if ((MeetingHud.Instance && MeetingHud.Instance.state != MeetingHud.VoteStates.Animating) || ExileController.Instance)
+                    if ((MeetingHud.Instance && MeetingHud.Instance.state != MeetingHud.MeetingStates.Animating) || ExileController.Instance)
                     {
                         WarnHost();
                         Report(pc, "SetScanner Rpc during meeting");
@@ -591,7 +591,7 @@ internal static class EAC
                         return true;
                     }
 
-                    if ((MeetingHud.Instance && MeetingHud.Instance.state != MeetingHud.VoteStates.Animating) || ExileController.Instance)
+                    if ((MeetingHud.Instance && MeetingHud.Instance.state != MeetingHud.MeetingStates.Animating) || ExileController.Instance)
                     {
                         WarnHost();
                         Report(pc, "Using platform during meeting");
@@ -625,7 +625,7 @@ internal static class EAC
 
                     if (target == null) break;
 
-                    if ((MeetingHud.Instance && MeetingHud.Instance.state != MeetingHud.VoteStates.Animating) || ExileController.Instance)
+                    if ((MeetingHud.Instance && MeetingHud.Instance.state != MeetingHud.MeetingStates.Animating) || ExileController.Instance)
                     {
                         WarnHost();
                         Report(pc, "Trying to protect during meeting");
@@ -657,7 +657,7 @@ internal static class EAC
                         return true;
                     }
 
-                    if ((MeetingHud.Instance && MeetingHud.Instance.state != MeetingHud.VoteStates.Animating) || ExileController.Instance)
+                    if ((MeetingHud.Instance && MeetingHud.Instance.state != MeetingHud.MeetingStates.Animating) || ExileController.Instance)
                     {
                         WarnHost();
                         Report(pc, "Using zipline during meeting");
@@ -689,7 +689,7 @@ internal static class EAC
                         return true;
                     }
 
-                    if ((MeetingHud.Instance && MeetingHud.Instance.state != MeetingHud.VoteStates.Animating) || ExileController.Instance)
+                    if ((MeetingHud.Instance && MeetingHud.Instance.state != MeetingHud.MeetingStates.Animating) || ExileController.Instance)
                     {
                         WarnHost();
                         Report(pc, "Triggering spore during meeting");
@@ -914,7 +914,7 @@ internal static class EAC
                         return true;
                     }
 
-                    if ((MeetingHud.Instance && MeetingHud.Instance.state != MeetingHud.VoteStates.Animating) || ExileController.Instance)
+                    if ((MeetingHud.Instance && MeetingHud.Instance.state != MeetingHud.MeetingStates.Animating) || ExileController.Instance)
                     {
                         // ban しない: 会議に入れず取り残されたクライアントの正規操作でも到達する (reject のみで無害化済み)
                         WarnHost();
@@ -988,7 +988,7 @@ internal static class EAC
                         return true;
                     }
 
-                    if ((MeetingHud.Instance && MeetingHud.Instance.state != MeetingHud.VoteStates.Animating) || ExileController.Instance)
+                    if ((MeetingHud.Instance && MeetingHud.Instance.state != MeetingHud.MeetingStates.Animating) || ExileController.Instance)
                     {
                         WarnHost();
                         Report(player, "Climbing ladder during meeting");
@@ -1044,7 +1044,7 @@ internal static class EAC
                         return true;
                     }
 
-                    if ((MeetingHud.Instance && MeetingHud.Instance.state != MeetingHud.VoteStates.Animating) || ExileController.Instance)
+                    if ((MeetingHud.Instance && MeetingHud.Instance.state != MeetingHud.MeetingStates.Animating) || ExileController.Instance)
                     {
                         WarnHost();
                         Report(player, "Petting during meeting");
@@ -1146,7 +1146,7 @@ internal static class EAC
     {
         if (player.IsModdedClient() || !AmongUsClient.Instance.AmHost) return false;
 
-        if (GameStates.IsMeeting && MeetingHud.Instance.state is MeetingHud.VoteStates.Voted or MeetingHud.VoteStates.NotVoted or MeetingHud.VoteStates.Discussion or MeetingHud.VoteStates.Proceeding)
+        if (GameStates.IsMeeting && MeetingHud.Instance.state is MeetingHud.MeetingStates.Voted or MeetingHud.MeetingStates.NotVoted or MeetingHud.MeetingStates.Discussion or MeetingHud.MeetingStates.Proceeding)
         {
             // ban しない: 会議に入れず取り残されたクライアントの正規操作でも到達する (reject のみで無害化済み)
             WarnHost();

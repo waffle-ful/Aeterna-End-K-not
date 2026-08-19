@@ -925,7 +925,7 @@ internal static class ShapeshiftPatch
 
     public static bool ProcessShapeshift(PlayerControl shapeshifter, PlayerControl target)
     {
-        if (MeetingHud.Instance && MeetingHud.Instance.state == MeetingHud.VoteStates.Results) return true;
+        if (MeetingHud.Instance && MeetingHud.Instance.state == MeetingHud.MeetingStates.Results) return true;
         
         bool meetingSS = Options.UseMeetingShapeshift.GetBool() && GameStates.IsMeeting;
         if ((!Main.ProcessShapeshifts && !meetingSS) || shapeshifter.PlayerId >= 200) return true;
@@ -956,7 +956,7 @@ internal static class ShapeshiftPatch
             // 「CNO行タップがどの host オブジェクトとして届くか」が未解明 (00:08 のミ選択が旧ゲートを通った謎)
             Logger.Info($"meetingSS dispatch: shifter={shapeshifter.PlayerId} target=pid:{target.PlayerId}/net:{target.NetId} hudState={MeetingHud.Instance.state}", "MeetingSSProbe");
 
-            if ((MeetingHud.Instance.state is MeetingHud.VoteStates.Discussion or MeetingHud.VoteStates.Voted or MeetingHud.VoteStates.NotVoted)
+            if ((MeetingHud.Instance.state is MeetingHud.MeetingStates.Discussion or MeetingHud.MeetingStates.Voted or MeetingHud.MeetingStates.NotVoted)
                 && Main.PlayerStates.TryGetValue(shapeshifter.PlayerId, out PlayerState meetingShapeshifterState))
                 meetingShapeshifterState.Role.OnMeetingShapeshift(shapeshifter, target);
 
@@ -2710,7 +2710,7 @@ internal static class GameDataCompleteTaskPatch
     
     public static void Postfix(PlayerControl pc, uint taskId)
     {
-        if (MeetingHud.Instance && MeetingHud.Instance.state != MeetingHud.VoteStates.Animating) return;
+        if (MeetingHud.Instance && MeetingHud.Instance.state != MeetingHud.MeetingStates.Animating) return;
 
         if (Options.CurrentGameMode == CustomGameMode.HideAndSeek && CustomHnS.PlayerRoles[pc.PlayerId].Interface.Team == Team.Crewmate && pc.IsAlive())
         {
