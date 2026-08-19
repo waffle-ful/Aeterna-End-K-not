@@ -12361,6 +12361,7 @@
   /* ==============================
     Meeting Settings         
   ============================== */
+  "UseJudgeMeetingButton": "Show a Gavel Button on Vote Rows for Target Selection (works on vanilla clients)",
   "UseMeetingShapeshift": "Use Shapeshift Menu in Meetings to Select Targets Instead of Commands/Votes",
   "UseMeetingShapeshiftForGuessing": "Even For Guessing (can cause frequent disconnects) (EXTREMELY EXPERIMENTAL ALPHA VERSION)",
   "UsePetInsteadOfKillButton": "Use Pet Button As Kill Button",
