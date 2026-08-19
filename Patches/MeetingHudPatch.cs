@@ -839,7 +839,7 @@ internal static class MeetingHudStartPatch
 
                 if (settings.Length > 0) roleDescMsgs.Add(new("\n", pc.PlayerId, settings.ToString()));
                 if (role.UsesPetInsteadOfKill()) roleDescMsgs.Add(new("\n", pc.PlayerId, GetString("UsesPetInsteadOfKillNotice")));
-                if (pc.UsesMeetingShapeshift()) roleDescMsgs.Add(new("\n", pc.PlayerId, GetString("UsesMeetingShapeshiftNotice")));
+                if (pc.UsesMeetingShapeshift() && !MeetingTargetPicker.WouldGetButton(pc)) roleDescMsgs.Add(new("\n", pc.PlayerId, GetString("UsesMeetingShapeshiftNotice")));
 
                 roleDescMsgs.Add(new(sb.ToString(), pc.PlayerId, titleSb.ToString()));
 
@@ -1217,6 +1217,9 @@ internal static class MeetingHudStartPatch
 
                     foreach (PlayerControl pc in aapc)
                     {
+                        // 木槌ボタンを配ってある客はシェイプシフト付与から外す (両方配ると後勝ちで木槌が消える)
+                        if (MeetingTargetPicker.IsHolder(pc.PlayerId)) continue;
+
                         if (pc.UsesMeetingShapeshift() || (meetingSSForGuessing && !pc.IsModdedClient() && GuessManager.StartMeetingPatch.CanGuess(pc, restrictions)))
                         {
                             var sender = CustomRpcSender.Create($"RpcSetRoleDesync for meeting shapeshift ({Main.AllPlayerNames.GetValueOrDefault(pc.PlayerId, "Someone")})", SendOption.Reliable);
@@ -1344,6 +1347,7 @@ internal static class MeetingHudStartPatch
         GuessManager.StartMeetingPatch.Postfix(__instance);
         Inspector.StartMeetingPatch.Postfix(__instance);
         Judge.StartMeetingPatch.Postfix(__instance);
+        MeetingTargetPicker.OnMeetingStart(); // 非モッド客へ木槌ボタンを配る (MeetingHud 生成後に配るのが安全な順序)
         EkrMeetingButton.StartMeetingPatch(__instance); // Wave 2 (docs/ekn-wave2-contract.md §1.2)
         Swapper.StartMeetingPatch.Postfix(__instance);
         Councillor.StartMeetingPatch.Postfix(__instance);
@@ -1573,7 +1577,9 @@ internal static class MeetingHudOnDestroyPatch
 
                 foreach (PlayerControl pc in Main.EnumerateAlivePlayerControls())
                 {
-                    if (pc.UsesMeetingShapeshift() || (meetingSSForGuessing && !pc.IsModdedClient() && GuessManager.StartMeetingPatch.CanGuess(pc, restrictions)))
+                    // 木槌ボタン側の保持者は MeetingTargetPicker.AfterMeeting が戻すので、ここでは触らない
+                    if (!MeetingTargetPicker.IsHolder(pc.PlayerId) &&
+                        (pc.UsesMeetingShapeshift() || (meetingSSForGuessing && !pc.IsModdedClient() && GuessManager.StartMeetingPatch.CanGuess(pc, restrictions))))
                         pc.RpcSetRoleDesync(pc.GetRoleTypes(), pc.OwnerId);
 
                     if (pc.IsImpostor())
@@ -1941,6 +1947,22 @@ internal static class MeetingHudHandleRpcPatch
             Logger.Info($"HandleRpc CastVote: src={srcPlayerId}, suspectRaw={suspectRaw}, remaining={reader.BytesRemaining}", "MeetingHudHandleRpcPatch");
             MeetingHudCastVotePatch.CastVoteChecked(__instance, srcPlayerId, suspectRaw);
             return false;
+        }
+
+        // 会議 UI の木槌ボタン (バニラ Judge basis の借用) 押下。読み取り位置を戻してオリジナルには素通しする
+        // — ホストが握り潰すと客のローカル queue に残るため (docs/judge-integration-resume.md)。
+        if (callId == (byte)RpcCalls.QueueOverruleVotes && AmongUsClient.Instance.AmHost)
+        {
+            try
+            {
+                int pos = reader.Position;
+                byte judgeId = reader.ReadByte();
+                byte targetId = reader.ReadByte();
+                reader.Position = pos;
+
+                MeetingTargetPicker.OnOverrulePressed(judgeId, targetId);
+            }
+            catch (Exception e) { Utils.ThrowException(e); }
         }
 
         if (callId == (byte)RpcCalls.CloseMeeting)

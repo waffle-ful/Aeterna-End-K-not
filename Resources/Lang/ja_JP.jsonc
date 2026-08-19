@@ -11682,6 +11682,7 @@
   /* ==============================
     Meeting Settings         
   ============================== */
+  "UseJudgeMeetingButton": "会議中の対象選択に 投票欄の木槌ボタンを使う (バニラクライアントでも使える)",
   "UseMeetingShapeshift": "会議中の対象選択を コマンド／投票ではなく シェイプシフト メニューで行う",
   "UseMeetingShapeshiftForGuessing": "Even For Guessing (may disconnect the host on vanilla servers)",
   "UsePetInsteadOfKillButton": "キルボタンとして ペットボタンを使用する",
