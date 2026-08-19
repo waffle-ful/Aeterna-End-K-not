@@ -71,7 +71,7 @@ public class Main : BasePlugin
     public const string ModColor = "#00ffff";
     public const bool AllowPublicRoom = true;
     public const string ForkId = "EndKnot";
-    public const string SupportedAUVersion = "2026.3.31";
+    public const string SupportedAUVersion = "2026.8.18";
 
     private static string StarData => Environment.GetEnvironmentVariable("STAR_DATA_PATH");    
 
@@ -220,7 +220,7 @@ public class Main : BasePlugin
         "gameplay.disable.playermeetinginfo"
     ];
 
-    public static NormalGameOptionsV10 NormalOptions => GameOptionsManager.Instance != null ? GameOptionsManager.Instance.currentNormalGameOptions : null;
+    public static NormalGameOptionsV11 NormalOptions => GameOptionsManager.Instance != null ? GameOptionsManager.Instance.currentNormalGameOptions : null;
 
     // Client Options
     public static ConfigEntry<string> HideName { get; private set; }
@@ -1197,9 +1197,9 @@ public class Main : BasePlugin
         ClassInjector.RegisterTypeInIl2Cpp<ShapeShifterPagingBehaviour>();
         ClassInjector.RegisterTypeInIl2Cpp<VitalsPagingBehaviour>();
 
-        NormalGameOptionsV10.RecommendedImpostors = NormalGameOptionsV10.MaxImpostors = Enumerable.Repeat(128, 128).ToArray();
-        NormalGameOptionsV10.MinPlayers = Enumerable.Repeat(4, 128).ToArray();
-        HideNSeekGameOptionsV10.MinPlayers = Enumerable.Repeat(4, 128).ToArray();
+        NormalGameOptionsV11.RecommendedImpostors = NormalGameOptionsV11.MaxImpostors = Enumerable.Repeat(128, 128).ToArray();
+        NormalGameOptionsV11.MinPlayers = Enumerable.Repeat(4, 128).ToArray();
+        HideNSeekGameOptionsV11.MinPlayers = Enumerable.Repeat(4, 128).ToArray();
 
         PrivateTagManager.LoadTagsFromFile();
 

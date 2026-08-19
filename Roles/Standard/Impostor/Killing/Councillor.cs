@@ -309,7 +309,7 @@ public class Councillor : RoleBase
     {
         foreach (PlayerVoteArea pva in __instance.playerStates)
         {
-            PlayerControl pc = Utils.GetPlayerById(pva.TargetPlayerId);
+            PlayerControl pc = Utils.GetPlayerById(pva.PlayerId);
             if (!pc || !pc.IsAlive()) continue;
 
             GameObject template = pva.Buttons.transform.Find("CancelButton").gameObject;
@@ -320,7 +320,7 @@ public class Councillor : RoleBase
             renderer.sprite = Utils.LoadSprite("EndKnot.Resources.Images.Skills.MeetingKillButton.png", 140f);
             var button = targetBox.GetComponent<PassiveButton>();
             button.OnClick.RemoveAllListeners();
-            button.OnClick.AddListener((Action)(() => CouncillorOnClick(pva.TargetPlayerId /*, __instance*/)));
+            button.OnClick.AddListener((Action)(() => CouncillorOnClick(pva.PlayerId /*, __instance*/)));
         }
     }
 

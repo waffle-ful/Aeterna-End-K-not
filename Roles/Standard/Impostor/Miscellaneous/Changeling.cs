@@ -146,10 +146,10 @@ internal class Changeling : RoleBase
     public static void CreateChangelingButton(MeetingHud __instance)
     {
         PlayerVoteArea localPva = __instance.playerStates
-            .FirstOrDefault(pva => pva.TargetPlayerId == PlayerControl.LocalPlayer.PlayerId);
+            .FirstOrDefault(pva => pva.PlayerId == PlayerControl.LocalPlayer.PlayerId);
 
         if (localPva == null) return;
-        PlayerControl pc = Utils.GetPlayerById(localPva.TargetPlayerId);
+        PlayerControl pc = Utils.GetPlayerById(localPva.PlayerId);
         if (!pc || !pc.IsAlive()) return;
 
         if (Main.PlayerStates[pc.PlayerId].Role is not Changeling changeling) return;

@@ -130,7 +130,7 @@ public class WordKiller : RoleBase
         // 投票終了〜会議クローズの窓でキルすると、追放ワープアップの Reliable バーストと重なって
         // 公式鯖のキック帯に入る (docs/bug-inbox の CloseMeeting / exile wrap-up 事例)。
         // `/` コマンド分岐 (ChatCommandPatch.cs) が持つのと同じ vote-state ガードを張る。
-        if (MeetingHud.Instance && MeetingHud.Instance.state is MeetingHud.VoteStates.Results or MeetingHud.VoteStates.Proceeding) return;
+        if (MeetingHud.Instance && MeetingHud.Instance.state is MeetingHud.MeetingStates.Results or MeetingHud.MeetingStates.Proceeding) return;
 
         // 既にキル予約が入っている相手には二重に撃たない (使用回数の多重消費とアナウンス連投の防止)。
         if (PendingKill.Contains(speaker.PlayerId)) return;

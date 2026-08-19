@@ -235,7 +235,7 @@ public class Newscaster : RoleBase
     // /int コマンド本体 (ChatCommandPatch から呼ばれる)。会議中のみ有効。
     public static bool InterviewMsg(PlayerControl pc, string msg, bool isUI = false)
     {
-        if (!AmongUsClient.Instance.AmHost || !GameStates.IsMeeting || (MeetingHud.Instance && MeetingHud.Instance.state is MeetingHud.VoteStates.Results or MeetingHud.VoteStates.Proceeding) || !pc || !pc.Is(CustomRoles.Newscaster)) return false;
+        if (!AmongUsClient.Instance.AmHost || !GameStates.IsMeeting || (MeetingHud.Instance && MeetingHud.Instance.state is MeetingHud.MeetingStates.Results or MeetingHud.MeetingStates.Proceeding) || !pc || !pc.Is(CustomRoles.Newscaster)) return false;
 
         msg = msg.ToLower().TrimStart().TrimEnd();
 

@@ -96,25 +96,40 @@ public static class ClaudeBridge
 
     private static void DrainCommandFile()
     {
-        if (PendingDirectives.Count == 0)
+        // wait 中: 後続ディレクティブはキューに滞留させたまま条件だけを評価する。
+        // cmd ファイルは読み続ける(`wait cancel` の割り込みを受けるため)。
+        if (_activeWait != null)
         {
-            List<string> lines = TryReadAndClearCmdFile();
-            if (lines == null) return;
+            if (PendingDirectives.Count < MaxBatchLines) ReadCmdFileIntoQueue();
+            if (TryConsumeWaitCancel()) return;
 
-            foreach (string raw in lines)
-            {
-                string line = raw.Trim();
-                if (line.Length == 0 || line.StartsWith('#')) continue;
-
-                PendingDirectives.Enqueue(line);
-                if (PendingDirectives.Count >= MaxBatchLines) break;
-            }
+            EvaluateActiveWait();
+            return;
         }
 
-        if (PendingDirectives.Count == 0) return;
+        if (PendingDirectives.Count == 0)
+        {
+            ReadCmdFileIntoQueue();
+            if (PendingDirectives.Count == 0) return;
+        }
 
         string directive = PendingDirectives.Dequeue();
         ExecuteDirective(directive);
+    }
+
+    private static void ReadCmdFileIntoQueue()
+    {
+        List<string> lines = TryReadAndClearCmdFile();
+        if (lines == null) return;
+
+        foreach (string raw in lines)
+        {
+            string line = raw.Trim();
+            if (line.Length == 0 || line.StartsWith('#')) continue;
+
+            PendingDirectives.Enqueue(line);
+            if (PendingDirectives.Count >= MaxBatchLines) break;
+        }
     }
 
     // 既読管理 = 削除方式。実行前にファイルを消す(flood-clear の教訓)。削除失敗→truncate、
@@ -251,9 +266,33 @@ public static class ClaudeBridge
             return;
         }
 
+        // Layer D2: 全レベルのログリングをゲーム内 grep(発火マーカー確認を out.log 1チャンネルで完結させる)。
+        if (directive.Equals("grep", StringComparison.OrdinalIgnoreCase) || directive.StartsWith("grep ", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecuteGrep(directive.Length > 4 ? directive[5..].Trim() : ""); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR grep failed"); }
+            return;
+        }
+
+        // Layer E: 待ち合わせ。条件成立 or timeout まで後続ディレクティブの実行を停める(1/sec 評価)。
+        if (directive.Equals("wait", StringComparison.OrdinalIgnoreCase) || directive.StartsWith("wait ", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecuteWait(directive.Length > 4 ? directive[5..].Trim() : ""); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR wait failed"); }
+            return;
+        }
+
+        // sleep N — 後続を N 秒停めるだけの純粋ペーシング(click チェーンの画面遷移待ちに必須。wait の糖衣)。
+        if (directive.StartsWith("sleep ", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecuteSleep(directive[6..].Trim()); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR sleep failed"); }
+            return;
+        }
+
         if (directive.Equals("help", StringComparison.OrdinalIgnoreCase))
         {
-            WriteOut("HELP directives: state | screenshot | click <h|label:x> | getopt <pattern> | setopt <name> <idx|on|off|~real> | forcerole <id|host|clear> [EnumName] | start | tp <x> <y> | tp <playerId> | walk <x> <y> | walk <playerId> | walk stop | vote <playerId|skip> | chat <text> | use <kill|vent|pet|ability|report|sabotage> | errors [n] | /<chatcommand>");
+            WriteOut("HELP directives: state | screenshot | click <h|label:x> | getopt <pattern> | setopt <name> <idx|on|off|~real> | forcerole <id|host|clear> [EnumName] | start | tp <x> <y> | tp <playerId> | walk <x> <y> | walk <playerId> | walk stop | vote <playerId|skip> | chat <text> | use <kill|vent|pet|ability|report|sabotage> | errors [n] | grep <pattern> [n] | sleep <sec> | wait <phase=X|players=N|marker:text|join|arrived> [timeoutSec] | wait cancel | /<chatcommand>");
             return;
         }
 
@@ -526,6 +565,7 @@ public static class ClaudeBridge
         sb.Append("\"gameMode\":").Append(JStr(SafeGameMode())).Append(',');
         sb.Append("\"errorsTotal\":").Append(TotalErrorsRecorded).Append(',');
         sb.Append("\"local\":"); AppendLocal(sb); sb.Append(',');
+        sb.Append("\"code\":"); AppendGameCode(sb); sb.Append(','); // ルームコード(未接続は null)。スクショから読む往復を潰す
         sb.Append("\"players\":["); int np = AppendPlayers(sb); sb.Append("],");
         sb.Append("\"cnos\":["); int nc = AppendCnos(sb); sb.Append("],");
         sb.Append("\"hud\":"); AppendHud(sb); sb.Append(',');
@@ -576,6 +616,7 @@ public static class ClaudeBridge
             sb.Append("\"name\":").Append(JStr(SafeName(pc))).Append(',');
             sb.Append("\"role\":").Append(JStr(SafeRole(pc))).Append(',');
             sb.Append("\"alive\":").Append(SafeAlive(pc) ? "true" : "false").Append(',');
+            sb.Append("\"client\":").Append(SafeClientId(pc)).Append(','); // PLAYERJOINED の client id と突合してエミュ台↔playerId を特定する(id は join し直しで入れ替わる)
             sb.Append("\"color\":").Append(SafeColorId(pc)).Append(',');
             sb.Append("\"pos\":[").Append(F(p.x)).Append(',').Append(F(p.y)).Append(']');
             sb.Append('}');
@@ -721,6 +762,21 @@ public static class ClaudeBridge
         {
             string want = selector[6..].Trim();
             target = buttons.FirstOrDefault(b => b.Active && string.Equals(b.Label, want, StringComparison.OrdinalIgnoreCase));
+
+            if (target == null)
+            {
+                // 完全一致なし → 一意な部分一致にフォールバック (TMP ラベルが翻訳キーのままのボタンがある。
+                // 2件以上当たったら曖昧なので実行せず候補を返す)
+                List<BtnRec> partial = buttons.Where(b => b.Active && b.Label != null && b.Label.Contains(want, StringComparison.OrdinalIgnoreCase)).ToList();
+
+                if (partial.Count == 1)
+                    target = partial[0];
+                else if (partial.Count > 1)
+                {
+                    WriteOut($"ERR click ambiguous label \"{want}\": {string.Join(", ", partial.Take(8).Select(b => b.Handle))}");
+                    return;
+                }
+            }
         }
         else
         {
@@ -999,7 +1055,7 @@ public static class ClaudeBridge
         {
             PlayerControl target = Utils.GetPlayerById(pid);
             if (!target) { WriteOut($"ERR tp no player with id {pid}"); return; }
-            dest = target.GetTruePosition();
+            dest = target.Pos(); // SnapTo は transform 空間 — GetTruePosition(足元)を渡すと Collider.offset ぶん沈む
         }
         else if (parts.Length == 2 &&
                  float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float x) &&
@@ -1012,7 +1068,7 @@ public static class ClaudeBridge
         }
 
         bool ok = Utils.TP(lp.NetTransform, dest, true);
-        WriteOut(ok ? $"OK tp -> [{F(dest.x)}, {F(dest.y)}]" : "ERR tp rejected (state check)");
+        WriteOut(ok ? $"OK tp -> [{F(dest.x)}, {F(dest.y)}]" : "ERR tp rejected (noCheckState 経路で false になるのは SnapTo cap 超過がほぼ唯一 — KICKRISK 抑制中)");
     }
 
     private static void ExecuteUse(string button)
@@ -1198,10 +1254,10 @@ public static class ClaudeBridge
         }
         catch { }
 
-        // CmdCastVote はホストなら CastVote 直行 = EHR の MeetingHudCastVotePatch(OnVote 等)を通る通常経路。
-        // ただし CancelsVote 系役職/死亡ガードは Prefix 内でサイレントに投票を握り潰すので、
+        // CastVoteChecked = EHR の投票判定 (OnVote 等) を通してからバニラ CastVote に流す共通入口。
+        // CancelsVote 系役職/死亡ガードはサイレントに投票を握り潰すので、
         // 呼び出し後に DidVote で「実際に反映されたか」を検証してから OK/ERR を出し分ける。
-        meeting.CmdCastVote(lp.PlayerId, suspect);
+        Patches.MeetingHudCastVotePatch.CastVoteChecked(meeting, lp.PlayerId, suspect);
 
         bool landed;
         try { landed = meeting.DidVote(lp.PlayerId); }
@@ -1276,6 +1332,7 @@ public static class ClaudeBridge
 
         try
         {
+            _joinCount++; // `wait join` の充足判定用(push 通知と同じ発火点)
             string name = client?.PlayerName ?? "?";
             WriteOut($"PLAYERJOINED {name} (client {client?.Id ?? -1})");
         }
@@ -1345,6 +1402,292 @@ public static class ClaudeBridge
         for (int i = Math.Max(0, snapshot.Length - n); i < snapshot.Length; i++) WriteOut($"E {snapshot[i]}");
     }
 
+    // ── Layer D2: 全レベルログリング + ゲーム内 grep ──────────────────
+    // log.html を外部 grep する2チャンネル運用を潰すための in-proc 検索窓。
+    // リングの中身は log.html と同じフィルタ(DisableList / Debug ゲート)通過後の行なので内容は一致する。
+
+    private const int LogRingCap = 1000;
+    private const int LogLineMaxChars = 300;
+    private static readonly Queue<string> LogRing = new(LogRingCap);
+    private static long TotalLogsRecorded; // リング先頭のシーケンス復元と marker 走査位置の管理用
+
+    // Logger(Debugger.cs)の全レベル経路から呼ばれる。ファイル I/O 無し・超軽量必須。
+    public static void RecordLog(BepInEx.Logging.LogLevel level, string tag, string text)
+    {
+        if (Main.EnableClaudeBridge is not { Value: true } || !OperatingSystem.IsWindows()) return;
+
+        try
+        {
+            string t = (text ?? "").Replace("\r\n", "\n").Replace('\r', '\n').Replace("\n", "\\n");
+            if (t.Length > LogLineMaxChars) t = t[..LogLineMaxChars] + "...";
+
+            // log.html と突き合わせられるよう壁時計 HH:mm:ss(out.log の unix 秒とはあえて別系)
+            string line = $"[{DateTime.Now:HH:mm:ss}][{level}][{tag}]{t}";
+
+            lock (LogRing)
+            {
+                TotalLogsRecorded++;
+                if (LogRing.Count >= LogRingCap) LogRing.Dequeue();
+                LogRing.Enqueue(line);
+            }
+        }
+        catch { }
+    }
+
+    private static void ExecuteGrep(string rest)
+    {
+        if (rest.Length == 0)
+        {
+            WriteOut("ERR grep usage: grep <pattern> [n]  (末尾が数字1トークンなら件数指定と解釈)");
+            return;
+        }
+
+        var n = 20;
+        int idx = rest.LastIndexOf(' ');
+
+        if (idx > 0 && int.TryParse(rest[(idx + 1)..], out int parsed))
+        {
+            n = Math.Clamp(parsed, 1, 50);
+            rest = rest[..idx].TrimEnd();
+        }
+
+        List<string> matches = [];
+        int ringCount;
+
+        lock (LogRing)
+        {
+            ringCount = LogRing.Count;
+            foreach (string line in LogRing)
+                if (line.Contains(rest, StringComparison.OrdinalIgnoreCase))
+                    matches.Add(line);
+        }
+
+        WriteOut($"OK grep \"{rest}\" ({matches.Count} matches in last {ringCount} log lines, showing last {Math.Min(n, matches.Count)})");
+        for (int i = Math.Max(0, matches.Count - n); i < matches.Count; i++) WriteOut($"L {matches[i]}");
+    }
+
+    // ── Layer E: wait(待ち合わせ)─────────────────────────────────────
+    // 条件成立 or timeout まで後続ディレクティブの実行を停める。評価は Tick(1/sec)。
+    // Claude 側の sleep+tail ポーリングを「wait 1行 → OK/ERR 1行」に置き換えるのが目的。
+
+    private sealed class WaitState
+    {
+        public string Cond;          // 表示用の正規化済み条件
+        public string Kind;          // phase | players | marker | join | arrived | sleep
+        public string Arg;           // phase 名 / marker 部分一致文字列
+        public long StartTs;
+        public int TimeoutSec;
+        public long JoinCountAtStart;
+        public long MarkerScanSeq;   // 走査済みシーケンス(毎 Tick の再走査を避ける)
+    }
+
+    private static WaitState _activeWait;
+    private static long _joinCount;
+
+    private static void ExecuteWait(string rest)
+    {
+        if (rest.Equals("cancel", StringComparison.OrdinalIgnoreCase))
+        {
+            // アクティブな wait 中の cancel は TryConsumeWaitCancel が先に拾う。ここに来たら待機なし。
+            WriteOut("ERR wait none active");
+            return;
+        }
+
+        if (rest.Length == 0)
+        {
+            WriteOut("ERR wait usage: wait <phase=X|players=N|marker:text|join|arrived> [timeoutSec=60]");
+            return;
+        }
+
+        var timeout = 60;
+        int idx = rest.LastIndexOf(' ');
+
+        if (idx > 0 && int.TryParse(rest[(idx + 1)..], out int parsed))
+        {
+            timeout = Math.Clamp(parsed, 5, 300);
+            rest = rest[..idx].TrimEnd();
+        }
+
+        var w = new WaitState
+        {
+            StartTs = Utils.TimeStamp,
+            TimeoutSec = timeout,
+            JoinCountAtStart = _joinCount
+        };
+
+        if (rest.StartsWith("phase=", StringComparison.OrdinalIgnoreCase))
+        {
+            w.Kind = "phase";
+            w.Arg = rest[6..].Trim();
+        }
+        else if (rest.StartsWith("players=", StringComparison.OrdinalIgnoreCase))
+        {
+            // エミュ複数台の一括合流待ち: 総プレイヤー数が N 以上で充足(join イベント数でなく現在数 — 途中退出に強い)
+            w.Kind = "players";
+            w.Arg = rest[8..].Trim();
+
+            if (!int.TryParse(w.Arg, out int want) || want < 1)
+            {
+                WriteOut("ERR wait usage: wait players=<N>  (ホスト含む総プレイヤー数が N 以上になるまで)");
+                return;
+            }
+        }
+        else if (rest.StartsWith("marker:", StringComparison.OrdinalIgnoreCase))
+        {
+            w.Kind = "marker";
+            w.Arg = rest[7..].Trim();
+            lock (LogRing) w.MarkerScanSeq = TotalLogsRecorded; // wait 開始以降の行だけを対象にする
+        }
+        else if (rest.Equals("join", StringComparison.OrdinalIgnoreCase))
+            w.Kind = "join";
+        else if (rest.Equals("arrived", StringComparison.OrdinalIgnoreCase))
+            w.Kind = "arrived";
+        else
+        {
+            WriteOut("ERR wait usage: wait <phase=X|players=N|marker:text|join|arrived> [timeoutSec=60]");
+            return;
+        }
+
+        if (w.Kind is "phase" or "marker" && w.Arg.Length == 0)
+        {
+            WriteOut("ERR wait usage: wait <phase=X|players=N|marker:text|join|arrived> [timeoutSec=60]");
+            return;
+        }
+
+        w.Cond = w.Kind switch
+        {
+            "phase" => $"phase={w.Arg}",
+            "players" => $"players={w.Arg}",
+            "marker" => $"marker:{w.Arg}",
+            _ => w.Kind
+        };
+
+        _activeWait = w;
+        EvaluateActiveWait(); // 既に条件成立なら 0s で即 OK
+    }
+
+    private static void ExecuteSleep(string rest)
+    {
+        if (!int.TryParse(rest, out int sec) || sec < 1)
+        {
+            WriteOut("ERR sleep usage: sleep <秒 1-120>");
+            return;
+        }
+
+        sec = Math.Clamp(sec, 1, 120);
+
+        // wait の機構を流用: 充足条件が「時間経過のみ」の WaitState。cancel も wait cancel で効く
+        _activeWait = new WaitState
+        {
+            Cond = $"sleep {sec}s",
+            Kind = "sleep",
+            StartTs = Utils.TimeStamp,
+            TimeoutSec = sec
+        };
+    }
+
+    private static void EvaluateActiveWait()
+    {
+        WaitState w = _activeWait;
+        if (w == null) return;
+
+        long elapsed = Utils.TimeStamp - w.StartTs;
+
+        bool ok;
+
+        try
+        {
+            ok = w.Kind switch
+            {
+                "phase" => SafeState().Equals(w.Arg, StringComparison.OrdinalIgnoreCase),
+                "sleep" => elapsed >= w.TimeoutSec, // 時間経過のみで充足(timeout 分岐より先に OK 側で拾う)
+                "players" => SafePlayerCount() >= int.Parse(w.Arg),
+                "join" => _joinCount > w.JoinCountAtStart,
+                "arrived" => _walkTarget == null, // walk 終了(到着/stuck/timeout/cancel)で充足。終端の実際の結果行は直前の out.log にある
+                "marker" => ScanForMarker(w),
+                _ => true
+            };
+        }
+        catch (Exception e)
+        {
+            // 評価中の例外で _activeWait が残ると timeout 判定にも到達できず恒久ハングするため、強制解除する
+            _activeWait = null;
+            WriteOut($"ERR wait exception {w.Cond}");
+            Utils.ThrowException(e);
+            return;
+        }
+
+        if (ok)
+        {
+            _activeWait = null;
+            WriteOut($"OK wait {w.Cond} ({elapsed}s)");
+            return;
+        }
+
+        if (elapsed >= w.TimeoutSec)
+        {
+            _activeWait = null;
+            WriteOut($"ERR wait timeout {w.Cond} ({w.TimeoutSec}s)");
+        }
+    }
+
+    private static bool ScanForMarker(WaitState w)
+    {
+        lock (LogRing)
+        {
+            long firstSeq = TotalLogsRecorded - LogRing.Count;
+            var skip = (int)Math.Max(0, w.MarkerScanSeq - firstSeq);
+            var i = 0;
+
+            foreach (string line in LogRing)
+            {
+                if (i++ < skip) continue;
+                if (line.Contains(w.Arg, StringComparison.OrdinalIgnoreCase)) return true;
+            }
+
+            w.MarkerScanSeq = TotalLogsRecorded;
+            return false;
+        }
+    }
+
+    // ExecuteWait 側のディスパッチ正規化 (directive[5..].Trim()) と同じ判定に揃える。
+    // 完全一致だけだと "wait  cancel" (二重スペース等) が割り込みで拾えず無音で滞留する。
+    private static bool IsWaitCancel(string d)
+    {
+        return d.StartsWith("wait ", StringComparison.OrdinalIgnoreCase) && d[5..].Trim().Equals("cancel", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool TryConsumeWaitCancel()
+    {
+        WaitState w = _activeWait;
+        if (w == null) return false;
+
+        var found = false;
+        foreach (string d in PendingDirectives)
+            if (IsWaitCancel(d)) { found = true; break; }
+
+        if (!found) return false;
+
+        // 最初の "wait cancel" 1行だけ取り除き、他のディレクティブは順序を保って残す
+        var removed = false;
+        List<string> rest = [];
+
+        while (PendingDirectives.Count > 0)
+        {
+            string d = PendingDirectives.Dequeue();
+            if (!removed && IsWaitCancel(d)) { removed = true; continue; }
+            rest.Add(d);
+        }
+
+        foreach (string d in rest) PendingDirectives.Enqueue(d);
+
+        long elapsed = Utils.TimeStamp - w.StartTs;
+        _activeWait = null;
+        WriteOut("> wait cancel");
+        WriteOut($"OK wait cancel ({w.Cond} aborted after {elapsed}s)");
+        return true;
+    }
+
     // ── safe accessors / JSON helpers ─────────────────────────────────
 
     private static string SafeState()
@@ -1361,7 +1704,12 @@ public static class ClaudeBridge
 
     private static string SafeName(PlayerControl pc)
     {
-        try { return pc.Data?.PlayerName ?? ""; }
+        // 装飾ロビー名は TMP タグだらけで機械可読性ゼロ (state の JSON が数百バイト膨れる) — タグ除去+空白圧縮して返す
+        try
+        {
+            string raw = (pc.Data?.PlayerName ?? "").RemoveHtmlTags();
+            return System.Text.RegularExpressions.Regex.Replace(raw, @"\s+", " ").Trim();
+        }
         catch { return ""; }
     }
 
@@ -1381,6 +1729,39 @@ public static class ClaudeBridge
     {
         try { return pc.Data?.DefaultOutfit?.ColorId ?? -1; }
         catch { return -1; }
+    }
+
+    private static void AppendGameCode(StringBuilder sb)
+    {
+        try
+        {
+            int id = AmongUsClient.Instance ? AmongUsClient.Instance.GameId : 0;
+            string code = id == 0 ? null : GameCode.IntToGameName(id);
+            if (string.IsNullOrEmpty(code)) { sb.Append("null"); return; }
+
+            sb.Append(JStr(code.ToUpperInvariant()));
+        }
+        catch { sb.Append("null"); }
+    }
+
+    private static int SafeClientId(PlayerControl pc)
+    {
+        try { return pc.OwnerId; }
+        catch { return -1; }
+    }
+
+    private static int SafePlayerCount()
+    {
+        try
+        {
+            var n = 0;
+            foreach (PlayerControl pc in Main.AllPlayerControls)
+                if (pc)
+                    n++;
+
+            return n;
+        }
+        catch { return 0; }
     }
 
     private static Vector2 SafePos(PlayerControl pc)

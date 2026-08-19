@@ -16,7 +16,7 @@ namespace EndKnot.Roles;
 //
 // 追加投票の実装は Amogus.ExtraVotes と完全に同型: 役職インスタンス自身に public int ExtraVotes を
 // 持たせ、Patches/MeetingHudPatch.cs の2箇所 (票アイコン描画側 / 集計側) の
-// switch (Main.PlayerStates[ps.TargetPlayerId].Role) に case ProbabilityKing { IsEnable: true,
+// switch (Main.PlayerStates[ps.PlayerId].Role) に case ProbabilityKing { IsEnable: true,
 // ExtraVotes: > 0 } を追加して読む。RoleBase はロールごとの singleton ではなく、SetMainRole が
 // role.GetRoleClass() (Activator.CreateInstance) で毎回新規インスタンスを払い出すため、各保持者は
 // 自分専用のインスタンスを持つ (Main.PlayerStates[id].Role で常にその人自身のオブジェクトが引ける)。
