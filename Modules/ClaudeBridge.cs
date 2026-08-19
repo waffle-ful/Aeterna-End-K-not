@@ -250,6 +250,14 @@ public static class ClaudeBridge
             return;
         }
 
+        // Layer C3b: バニラ Judge 木槌演出つき強制追放の実機検証口 (JudgeGavelPresenter 経由)。
+        if (directive.StartsWith("overrule ", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecuteOverrule(directive[9..].Trim()); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR overrule failed"); }
+            return;
+        }
+
         // Layer C4: 実チャット送信(SYS のホストローカル表示でなく、他クライアントにも見える通常チャット)。
         if (directive.StartsWith("chat ", StringComparison.OrdinalIgnoreCase))
         {
@@ -292,7 +300,7 @@ public static class ClaudeBridge
 
         if (directive.Equals("help", StringComparison.OrdinalIgnoreCase))
         {
-            WriteOut("HELP directives: state | screenshot | click <h|label:x> | getopt <pattern> | setopt <name> <idx|on|off|~real> | forcerole <id|host|clear> [EnumName] | start | tp <x> <y> | tp <playerId> | walk <x> <y> | walk <playerId> | walk stop | vote <playerId|skip> | chat <text> | use <kill|vent|pet|ability|report|sabotage> | errors [n] | grep <pattern> [n] | sleep <sec> | wait <phase=X|players=N|marker:text|join|arrived> [timeoutSec] | wait cancel | /<chatcommand>");
+            WriteOut("HELP directives: state | screenshot | click <h|label:x> | getopt <pattern> | setopt <name> <idx|on|off|~real> | forcerole <id|host|clear> [EnumName] | start | tp <x> <y> | tp <playerId> | walk <x> <y> | walk <playerId> | walk stop | vote <playerId|skip> | overrule <targetId> [judgeId] | chat <text> | use <kill|vent|pet|ability|report|sabotage> | errors [n] | grep <pattern> [n] | sleep <sec> | wait <phase=X|players=N|marker:text|join|arrived> [timeoutSec] | wait cancel | /<chatcommand>");
             return;
         }
 
@@ -1265,6 +1273,32 @@ public static class ClaudeBridge
 
         string targetStr = suspect == 253 ? "skip" : suspect.ToString();
         WriteOut(landed ? $"OK vote {targetStr}" : $"ERR vote {targetStr} silently canceled (role logic / dead)");
+    }
+
+    // ── Layer C3b: Judge 木槌演出つき強制追放 (実機検証口) ─────────────
+
+    // overrule <targetId> [judgeId] — 会議中限定。judgeId 省略時はホスト自身がジャッジ役。
+    // 成立すると target が「ジャッジに覆された」ネイティブ演出 (gavel) 付きで追放される。
+    private static void ExecuteOverrule(string rest)
+    {
+        if (!AmongUsClient.Instance.AmHost) { WriteOut("ERR overrule host only"); return; }
+
+        MeetingHud meeting = MeetingHud.Instance;
+        if (!meeting) { WriteOut("ERR overrule no meeting"); return; }
+
+        string[] parts = rest.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length is < 1 or > 2 || !byte.TryParse(parts[0], out byte targetId)) { WriteOut("ERR overrule usage: overrule <targetId> [judgeId]"); return; }
+
+        byte judgeId = PlayerControl.LocalPlayer.PlayerId;
+        if (parts.Length == 2 && !byte.TryParse(parts[1], out judgeId)) { WriteOut("ERR overrule bad judgeId"); return; }
+
+        PlayerControl target = Utils.GetPlayerById(targetId);
+        PlayerControl judge = Utils.GetPlayerById(judgeId);
+        if (!target || !target.IsAlive()) { WriteOut("ERR overrule target invalid/dead"); return; }
+        if (!judge) { WriteOut("ERR overrule judge invalid"); return; }
+
+        Patches.CheckForEndVotingPatch.ForceExile(target, judge, judgeGavel: true);
+        WriteOut($"OK overrule target={targetId} judge={judgeId}");
     }
 
     // ── Layer C4: 実チャット ───────────────────────────────────────────
