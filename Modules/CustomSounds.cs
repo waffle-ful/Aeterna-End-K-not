@@ -785,6 +785,12 @@ public static class CustomSoundsManager
                 // (実測: ロビー入り直後の preload 7 連発が「数秒かくかく」体感の一因)。
                 // クリップだけ先に作り、データ書き込みはチャンク分割で複数フレームに薄める。
                 AudioClip clip = AudioClip.Create(ClipNameOf(d.Key), d.Read / d.Channels, d.Channels, d.SampleRate, false);
+
+                // ⚠️ 書き込みは複数フレームにまたがるので、その途中でシーン遷移が挟まると
+                // UnloadUnusedAssets が作りかけのクリップを回収して SetData が落ちる。
+                // 下の完成済みクリップと同じ扱いにして回収対象から外す。
+                if (clip) clip.hideFlags |= HideFlags.DontUnloadUnusedAsset;
+
                 bgmClipInProgress = (d.BgmName, d.Buffer, d.Read, d.Channels, clip, 0);
             }
             else if (!audioCache.TryGetValue(d.Key, out AudioClip cached) || !cached)

@@ -1157,6 +1157,22 @@ internal static class ReportDeadBodyPatch
         return body && DummyCorpseBodyIds.Count > 0 && DummyCorpseBodyIds.Contains(body.GetInstanceID());
     }
 
+    /// <summary>
+    /// 生存プレイヤーを親に借りて撒いた偽死体の実体 ID (トラップスターの罠死体 / EKR の corpse_spawn)。
+    /// これらは <see cref="DummyCorpseBodyIds"/> と違い **通報させるのが役職の芸** なので通報は素通しするが、
+    /// 未通報のまま会議が来ると <see cref="AlreadyReportedBodies"/> へ借りた人の PlayerId が永久登録され、
+    /// その人が本当に死んだときの死体が二度と通報できなくなる (解除は蘇生4経路のみ)。会議開始時の
+    /// union からはこの集合を除外する。
+    /// ⚠️ キーは死体1体ごとの実体 ID — 親の PlayerId や座標で持つと巻き添えが出る理由は上の注記と同じ。
+    /// </summary>
+    public static HashSet<int> BorrowedParentBodyIds = [];
+
+    /// <summary>この死体が生存者を親に借りた偽死体か。</summary>
+    public static bool IsBorrowedParentCorpse(DeadBody body)
+    {
+        return body && BorrowedParentBodyIds.Count > 0 && BorrowedParentBodyIds.Contains(body.GetInstanceID());
+    }
+
     /// <summary>通報しようとしている死体 (= 通報者に最も近い、その親の死体) がダミー由来か。</summary>
     private static bool IsReportingDummyCorpse(PlayerControl reporter, NetworkedPlayerInfo target)
     {

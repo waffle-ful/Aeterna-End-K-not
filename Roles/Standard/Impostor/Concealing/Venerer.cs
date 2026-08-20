@@ -169,11 +169,26 @@ public class Venerer : RoleBase
     {
         if (ChangedSkin)
         {
-            ChangedSkin = false;
             PlayerControl pc = VenererId.GetPlayer();
+
+            // 死亡時にフラグだけ落とすと、変装したままなのに終了時の復元にも引っかからなくなる
             if (pc == null || !pc.IsAlive()) return;
+
+            ChangedSkin = false;
             Utils.RpcChangeSkin(pc, Camouflage.PlayerSkins[VenererId]);
         }
+    }
+
+    // ゲーム終了時にホストから呼ぶ。変装中に死亡すると LateTask / OnReportDeadBody の復元が
+    // どちらも !IsAlive() で降りるため、空欄の見た目がロビーへ持ち越される。
+    public void RestoreDisguise(byte playerId)
+    {
+        ChangedSkin = false;
+
+        PlayerControl pc = Utils.GetPlayerById(playerId);
+        if (pc == null || !Camouflage.PlayerSkins.TryGetValue(playerId, out NetworkedPlayerInfo.PlayerOutfit outfit)) return;
+
+        Utils.RpcChangeSkin(pc, outfit);
     }
 
     public void ReceiveRPC(MessageReader reader)

@@ -197,11 +197,21 @@ public class Skinwalker : RoleBase
 
         WornCorpsePos.Remove(pc.PlayerId);
         WornCorpseTargetId.Remove(pc.PlayerId);
-        OriginalOutfit.Remove(pc.PlayerId);
         SkinwalkerPresentSkin.Remove(pc.PlayerId);
-        // OriginalLevel はここで消さない: 死亡後も Level は変装先のまま残す仕様 (会議の Level 表示で
-        // 変装がバレないため) だが、消すと復元元が失われて変装先の Level がロビーへ持ち越され、
-        // KickLowLevelPlayer が無実のプレイヤーを蹴る。実際の復元は OutroPatch が終了時に行う。
+        // OriginalOutfit / OriginalLevel はここで消さない: 死亡後も見た目と Level は変装先のまま残す仕様
+        // (会議の表示で変装がバレないため) だが、消すと復元元が失われて変装先の見た目・名前・Level が
+        // ロビーへ持ち越される (Level は KickLowLevelPlayer が無実のプレイヤーを蹴る)。
+        // 実際の復元は OutroPatch が終了時に行う。
+    }
+
+    // ゲーム終了時にホストから呼ぶ。着たまま死ぬと上の死亡分岐が dict を畳むだけで脱がせないため、
+    // 見た目に加えて名前まで被害者のままロビーへ残る (RpcWearOutfit は Main.AllPlayerNames も書く)。
+    public static void RestoreOutfitOnGameEnd(byte id)
+    {
+        if (!OriginalOutfit.TryGetValue(id, out NetworkedPlayerInfo.PlayerOutfit outfit)) return;
+
+        PlayerControl pc = Utils.GetPlayerById(id);
+        if (pc != null) RpcWearOutfit(pc, outfit);
     }
 
     // ゲーム終了時の無条件 Level 復元用 (OutroPatch から呼ばれる)。

@@ -287,7 +287,8 @@ internal static class ChangeRoleSettings
             ReportDeadBodyPatch.CanReport = [];
             ReportDeadBodyPatch.AlreadyReportedBodies = [];
             ReportDeadBodyPatch.DummyCorpseBodyIds = [];
-            
+            ReportDeadBodyPatch.BorrowedParentBodyIds = [];
+
             GuessManager.Guessers = [];
             ChatCommands.VotedToStart = [];
 
@@ -335,6 +336,7 @@ internal static class ChangeRoleSettings
             ChatCommands.MutedPlayers.Clear();
             ExtendedPlayerControl.TempExiled.Clear();
             Utils.CachedRoleSettings.Clear();
+            MeetingTargetPicker.Reset();
 
             MeetingTimeManager.Init();
             Main.DefaultCrewmateVision = Main.RealOptionsData.GetFloat(FloatOptionNames.CrewLightMod);
@@ -1701,7 +1703,12 @@ internal static class StartGameHostPatch
                                 {
                                     try
                                     {
-                                        if (RoleResult.TryGetValue(target.PlayerId, out CustomRoles targetRole) && targetRole.IsDesyncRole() && !target.IsHost()) continue;
+                                        // desync 役職の seer には Crewmate 表を被せない (見え方が別途組まれているため)。
+                                        // ただしホストは例外で被せる — その例外が seer==target (自己エントリ) にも効いてしまうと、
+                                        // AssignDesyncRole が書いたホスト自身の実基底 (Shapeshifter/Phantom) が Crewmate に潰れ、
+                                        // SetRoleSelf が陣営不整合を Impostor へ矯正した結果ホストだけ能力ボタンが消える
+                                        // (WaveCannon 2026-08-20 実機。ログの "from role: CrewmateEndKnot" がこの上書きの痕跡)。
+                                        if (RoleResult.TryGetValue(target.PlayerId, out CustomRoles targetRole) && targetRole.IsDesyncRole() && (!target.IsHost() || target.PlayerId == pc.PlayerId)) continue;
                                         RoleMap[(target.PlayerId, pc.PlayerId)] = (RoleTypes.Crewmate, CustomRoles.CrewmateEndKnot);
                                     }
                                     catch (Exception e) { Utils.ThrowException(e); }

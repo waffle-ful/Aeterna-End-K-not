@@ -139,7 +139,9 @@ internal class Trapster : RoleBase
             Vector2 location = player.Pos();
             TrapsterBody.Add(player.PlayerId);
             PlayerControl randomPlayer = Main.EnumerateAlivePlayerControls().Without(player).RandomElement();
-            Utils.RpcCreateDeadBody(location, (byte)randomPlayer.CurrentOutfit.ColorId, randomPlayer);
+            // 親は生存者からの借り物なので、未通報のまま会議へ入っても借りた人が「通報済み」にならないよう登録する
+            Utils.RpcCreateDeadBody(location, (byte)randomPlayer.CurrentOutfit.ColorId, randomPlayer,
+                onCreated: body => ReportDeadBodyPatch.BorrowedParentBodyIds.Add(body.GetInstanceID()));
             return false;
         }
 

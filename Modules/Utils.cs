@@ -1267,7 +1267,7 @@ public static class Utils
                (__instance.Is(CustomRoles.Mimic) && Main.VisibleTasksCount && !__instance.IsAlive()) ||
                (__instance.Is(CustomRoleTypes.Impostor) && PlayerControl.LocalPlayer.Is(CustomRoles.Crewpostor) && Options.AlliesKnowCrewpostor.GetBool()) ||
                (__instance.Is(CustomRoleTypes.Impostor) && PlayerControl.LocalPlayer.Is(CustomRoles.Hypocrite) && Hypocrite.AlliesKnowHypocrite.GetBool()) ||
-               __instance.Is(CustomRoleTypes.Impostor) && PlayerControl.LocalPlayer.Is(CustomRoleTypes.Impostor) && Options.ImpKnowAlliesRole.GetBool() && CustomTeamManager.ArentInCustomTeam(PlayerControl.LocalPlayer.PlayerId, __instance.PlayerId) ||
+               __instance.Is(CustomRoleTypes.Impostor) && PlayerControl.LocalPlayer.Is(CustomRoleTypes.Impostor) && Options.ImpKnowAlliesRole.GetBool() && CustomTeamManager.ArentInCustomTeam(PlayerControl.LocalPlayer.PlayerId, __instance.PlayerId) && !PlayerControl.LocalPlayer.Is(CustomRoles.OneWolf) && !__instance.Is(CustomRoles.OneWolf) ||
                (__instance.Is(CustomRoleTypes.Coven) && PlayerControl.LocalPlayer.Is(CustomRoleTypes.Coven)) ||
                (Main.LoversPlayers.TrueForAll(x => x.PlayerId == __instance.PlayerId || x.AmOwner) && Main.LoversPlayers.Count == 2 && Lovers.LoverKnowRoles.GetBool()) ||
                (CustomTeamManager.AreInSameCustomTeam(__instance.PlayerId, PlayerControl.LocalPlayer.PlayerId) && CustomTeamManager.IsSettingEnabledForPlayerTeam(__instance.PlayerId, CTAOption.KnowRoles)) ||
@@ -1634,6 +1634,9 @@ public static class Utils
                 case "ImpCanBeRole" or "CrewCanBeRole" or "NeutralCanBeRole" or "CovenCanBeRole" when f1:
                     continue;
             }
+
+            // 常時隠しの枠 (EKR の未使用 hostOption など) は生キー名のまま出てしまうので列挙しない
+            if (opt.Value.IsCurrentlyHidden()) continue;
 
             if (deep > 0)
             {
@@ -3109,6 +3112,29 @@ public static class Utils
         return null;
     }
 
+    // 自由長テキスト (lang InfoLong の切り出し / CTA 作者自由記述) が名前ペイロードに合流する経路の上流クランプ。
+    // 最終防波堤 (CustomRpcSenderExtensions.ClampNameForOfficialServer, NameBudget=705B) はキックこそ防ぐが
+    // 末尾から無差別に切るため、役職マーク/suffix 側が犠牲になる — 「何を削るか」は発生源で決める。
+    // 公式鯖以外では名前長の制約が無いので素通し。切り詰め時は rune 境界 + 未終端タグ除去 + "..."。
+    private static string ClampFreeTextForVanillaServer(string text, int byteBudget)
+    {
+        if (GameStates.CurrentServerType != GameStates.ServerType.Vanilla || string.IsNullOrEmpty(text) || System.Text.Encoding.UTF8.GetByteCount(text) <= byteBudget) return text;
+
+        var sb = new System.Text.StringBuilder();
+        var bytes = 0;
+
+        foreach (System.Text.Rune rune in text.EnumerateRunes())
+        {
+            int rb = rune.Utf8SequenceLength;
+            if (bytes + rb > byteBudget) break;
+
+            sb.Append(rune.ToString());
+            bytes += rb;
+        }
+
+        return CustomNetObject.DropUnterminatedTag(sb.ToString()) + "...";
+    }
+
     public static void SetupLongRoleDescriptions()
     {
         try
@@ -3135,6 +3161,20 @@ public static class Utils
                         {
                             longInfo = longInfo[..296];
                             longInfo += "...";
+                            tooLong = true;
+                        }
+
+                        // 296字クランプは byte 盲目で、日本語は 1字3B — 191字 (488B) でも名前組み立て後に
+                        // NameBudget (705B) を超え、末尾の役職マーク/suffix が丸ごと切り落とされる
+                        // (2026-08-20 実測: ドッスン 488B + 組み立てオーバーヘッド 245B = 733B でクランプ発生。
+                        // ja の切り出し分布で 400B 超は 15/691 件)。公式鯖のときだけ rune 境界で byte 予算へ切り詰める。
+                        // ラテン文字言語は 296字 ≈ 296B なので上の字数クランプが先に効き、挙動不変。
+                        // 380 = 説明文の取り分 400B − ラッパー <#ffffff></color> (17B) − "..." (3B)。
+                        string byteClamped = ClampFreeTextForVanillaServer(longInfo, 380);
+
+                        if (byteClamped != longInfo)
+                        {
+                            longInfo = byteClamped;
                             tooLong = true;
                         }
 
@@ -3540,14 +3580,18 @@ public static class Utils
                             team.RoleRevealScreenBackgroundColor == "*" || !ColorUtility.TryParseHtmlString(team.RoleRevealScreenBackgroundColor, out Color teamColor)
                                 ? Color.yellow
                                 : teamColor,
-                            string.Format(
-                                GetString("CustomTeamHelp"),
-                                team.RoleRevealScreenTitle == "*"
-                                    ? team.TeamName
-                                    : team.RoleRevealScreenTitle,
-                                team.RoleRevealScreenSubtitle == "*"
-                                    ? string.Empty
-                                    : team.RoleRevealScreenSubtitle));
+                            // CTA の title/subtitle は作者自由記述で長さ上限が無い — InfoLong と同じ理由で
+                            // 名前予算 (705B) を単独圧迫し得るので、同じ byte クランプを通す (兄弟スイープ 2026-08-20)。
+                            ClampFreeTextForVanillaServer(
+                                string.Format(
+                                    GetString("CustomTeamHelp"),
+                                    team.RoleRevealScreenTitle == "*"
+                                        ? team.TeamName
+                                        : team.RoleRevealScreenTitle,
+                                    team.RoleRevealScreenSubtitle == "*"
+                                        ? string.Empty
+                                        : team.RoleRevealScreenSubtitle),
+                                400));
                     }
                     else if (Options.CurrentGameMode == CustomGameMode.HideAndSeek)
                     {
