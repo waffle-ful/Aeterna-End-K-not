@@ -101,6 +101,19 @@ public static class HealthLog
     private static bool _zombieHandled; // menufall エスカレーション発行済み (state が Ended を離れたら解除)
     private static long _lastEndedStuckNoteTs; // endedstuck ANOM のスロットル
 
+    // --- リンク劣化の検出 (BUG-20260820-06 計器) ---
+    // 2026-08-20 の Hacking キックで初めて取れた形: 送信量だけ見ると無傷の窓のほうが重かった一方、キック回は
+    // RTT が ~400ms の台地に 7 分張り付き (通常 60〜90ms)、再送と未 ACK 在庫が伸び続けていた。再接続直後に
+    // 18ms / unack=0 へ戻ったので回線でなく接続状態。HB は5秒毎に出るが「いつ劣化に入り/抜けたか」は数百行を
+    // 追わないと分からないので、遷移だけを ANOM に出して log-doctor / stream-gate から見えるようにする。
+    private const int LinkDegradedPingMs = 300; // これ以上が続いたら劣化入り
+    private const int LinkHealthyPingMs = 200;  // これ未満が続いたら回復 (間の帯はヒステリシス)
+    private const int LinkSustainTicks = 3;     // HB 3 連続 (約15秒) — 単発スパイクを拾わない
+    private static int _linkBadStreak;
+    private static int _linkGoodStreak;
+    private static bool _linkDegradedNoted;     // degraded ANOM 発行済み (回復/切断で解除)
+    private static long _linkDegradedSinceTs;   // 劣化ストリークの開始 t (0=非連続)
+
     // --- 有人/無人の弁別計器 (BUG-20260721-02: 「ハングは有人操作中のみ」説の機械判定用) ---
     // GetLastInputInfo はこの Windows セッション全体の最終入力 tick を返す。HB に「最終入力からの
     // 経過秒」を載せることで、ハング直前の HB が有人 (数秒) か無人 (数分〜) かを事後に判定できる。
@@ -401,6 +414,10 @@ public static class HealthLog
             string hb = $"t={now} up={now - StartTs} state={state} host={(host ? 1 : 0)} server={server} players={players} wsMB={wsMB} gcMB={gcMB} gc2={gen2} nmSent={nmSent} nmSkip={nmSkip} eosTry={eosTry} eosFlow={eosFlow} idTok={idTok} ping={ping} rsndD={rsndD} unack={unack} pNoAck={pNoAck} inIdle={GetInputIdleSeconds()}{lastSendSuffix}";
             Write($"HB {hb}");
 
+            // リンク劣化の遷移だけを ANOM へ (BUG-20260820-06)。読み取り専用で送信はしない。
+            try { NoteLinkHealth(now, ping, rsndD, unack, pNoAck); }
+            catch { }
+
             // マネージド保持リークの帰属計器 (BUG-20260706-01)。間隔判定は MaybeTick 側。
             try { ManagedCensus.MaybeTick(now, state); }
             catch { }
@@ -415,7 +432,9 @@ public static class HealthLog
                 {
                     // nest=[...] は PacketRateGate のリング由来 (tag/leaf tag 別のネスト総数)。BuildTagWindow が
                     // 拾えるのは CustomRpcSender 経由の per-name だけで、人数比例で膨らむ t26 の中身は見えないため。
-                    string tagLine = $"TAGWIN state={state} players={players} {BuildTagWindow(now, TagWindowSeconds)} {PacketRateGate.SummarizeRecent(TagWindowSeconds)} t={now}";
+                    // ping/rsndD/unack を併記する: 送信量だけの比較では「キック回より無傷の窓のほうが重い」が
+                    // 繰り返し出てリンク健全性という軸が抜け落ちていた (BUG-20260820-06)。
+                    string tagLine = $"TAGWIN state={state} players={players} ping={ping} rsndD={rsndD} unack={unack} {BuildTagWindow(now, TagWindowSeconds)} {PacketRateGate.SummarizeRecent(TagWindowSeconds)} t={now}";
                     Write(tagLine);
                     Timeline(tagLine);
                 }
@@ -615,6 +634,48 @@ public static class HealthLog
                 Logger.Info($"disconnect: {line}", "Health");
         }
         catch (Exception e) { Utils.ThrowException(e); }
+    }
+
+    /// <summary>RTT 台地への出入りだけを ANOM に1行ずつ出す (BUG-20260820-06 計器)。読み取り専用・送信ゼロ。
+    /// HB を全部読まなくても「キックの何分前からリンクが劣化していたか」が log-doctor で拾えるようにする。</summary>
+    private static void NoteLinkHealth(long now, int ping, int rsndD, int unack, int pNoAck)
+    {
+        // ping=0 は未接続 (Menu / 切断直後)。接続が張り替わると Hazel の統計もリセットされるので、ストリークごと
+        // 畳んで次の接続を新品として測る (張り替え後の 18ms を「回復」と誤報告しないため)。
+        if (ping <= 0)
+        {
+            _linkBadStreak = _linkGoodStreak = 0;
+            _linkDegradedNoted = false;
+            _linkDegradedSinceTs = 0;
+            return;
+        }
+
+        if (ping >= LinkDegradedPingMs)
+        {
+            _linkGoodStreak = 0;
+            _linkBadStreak++;
+            if (_linkBadStreak == 1) _linkDegradedSinceTs = now;
+
+            if (!_linkDegradedNoted && _linkBadStreak >= LinkSustainTicks)
+            {
+                _linkDegradedNoted = true;
+                NoteAnom($"ANOM live kind=net stage=degraded ping={ping} rsndD={rsndD} unack={unack} pNoAck={pNoAck} t={now}");
+            }
+
+            return;
+        }
+
+        if (ping >= LinkHealthyPingMs) return; // ヒステリシス帯 — どちらのストリークも進めない
+
+        _linkBadStreak = 0;
+        _linkGoodStreak++;
+
+        if (_linkDegradedNoted && _linkGoodStreak >= LinkSustainTicks)
+        {
+            NoteAnom($"ANOM live kind=net stage=recovered ping={ping} durSec={now - _linkDegradedSinceTs} unack={unack} t={now}");
+            _linkDegradedNoted = false;
+            _linkDegradedSinceTs = 0;
+        }
     }
 
     /// <summary>

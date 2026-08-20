@@ -187,6 +187,15 @@ public static class ClaudeBridge
             return;
         }
 
+        // Layer 3b: OS レベルのマウス注入。click(OnClick.Invoke 直呼び)では発火しない動的配線 UI
+        // (会議の投票確認・Shapeshifter 対象選択等)向け(project_host_ui_real_click_injection)。
+        if (directive.StartsWith("press ", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecutePress(directive[6..].Trim()); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR press failed"); }
+            return;
+        }
+
         // Layer A: mod オプション操作(OptionItem ツリー直アクセス。/changesetting は vanilla 設定専用)。
         if (directive.StartsWith("getopt ", StringComparison.OrdinalIgnoreCase))
         {
@@ -198,6 +207,14 @@ public static class ClaudeBridge
         if (directive.StartsWith("setopt ", StringComparison.OrdinalIgnoreCase))
         {
             try { ExecuteSetOpt(directive[7..].Trim()); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR setopt failed"); }
+            return;
+        }
+
+        // `setopt#<id> <value>`(空白無し)も受理する。ExecuteSetOpt 側の #<id> 分岐がそのまま処理できる。
+        if (directive.StartsWith("setopt#", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecuteSetOpt(directive[6..].Trim()); }
             catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR setopt failed"); }
             return;
         }
@@ -230,6 +247,14 @@ public static class ClaudeBridge
         {
             try { ExecuteUse(directive[4..].Trim()); }
             catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR use failed"); }
+            return;
+        }
+
+        // Layer C: ベント出入り(RpcEnterVent/RpcExitVent 直呼び。使用可否判定は挟まない実機検証口)。
+        if (directive.StartsWith("vent ", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecuteVent(directive[5..].Trim()); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR vent failed"); }
             return;
         }
 
@@ -300,7 +325,7 @@ public static class ClaudeBridge
 
         if (directive.Equals("help", StringComparison.OrdinalIgnoreCase))
         {
-            WriteOut("HELP directives: state | screenshot | click <h|label:x> | getopt <pattern> | setopt <name> <idx|on|off|~real> | forcerole <id|host|clear> [EnumName] | start | tp <x> <y> | tp <playerId> | walk <x> <y> | walk <playerId> | walk stop | vote <playerId|skip> | overrule <targetId> [judgeId] | chat <text> | use <kill|vent|pet|ability|report|sabotage> | errors [n] | grep <pattern> [n] | sleep <sec> | wait <phase=X|players=N|marker:text|join|arrived> [timeoutSec] | wait cancel | /<chatcommand>");
+            WriteOut("HELP directives: state | screenshot | click <h|label:x> | press <h|x y> | getopt <pattern> | setopt <name|#id> <idx|on|off|~real> | forcerole <id|host|clear> [EnumName] | start | tp <x> <y> | tp <playerId> | walk <x> <y> | walk <playerId> | walk stop | vote <playerId|skip> | overrule <targetId> [judgeId] | chat <text> | use <kill|vent|pet|ability|report|sabotage> | vent enter <id> | vent exit | errors [n] | grep <pattern> [n] | sleep <sec> | wait <phase=X|players=N|marker:text|join|arrived> [timeoutSec] | wait cancel | /<chatcommand>");
             return;
         }
 
@@ -576,6 +601,7 @@ public static class ClaudeBridge
         sb.Append("\"code\":"); AppendGameCode(sb); sb.Append(','); // ルームコード(未接続は null)。スクショから読む往復を潰す
         sb.Append("\"players\":["); int np = AppendPlayers(sb); sb.Append("],");
         sb.Append("\"cnos\":["); int nc = AppendCnos(sb); sb.Append("],");
+        sb.Append("\"vents\":["); int nv = AppendVents(sb); sb.Append("],");
         sb.Append("\"hud\":"); AppendHud(sb); sb.Append(',');
         sb.Append("\"walk\":"); AppendWalk(sb); sb.Append(',');
         sb.Append("\"lastDisconnect\":"); AppendLastDisconnect(sb); sb.Append(',');
@@ -583,7 +609,7 @@ public static class ClaudeBridge
         sb.Append('}');
 
         File.WriteAllText(_statePath, sb.ToString());
-        WriteOut($"OK state ({np} players, {nc} cnos, {nb} buttons) -> claude-state.json");
+        WriteOut($"OK state ({np} players, {nc} cnos, {nv} vents, {nb} buttons) -> claude-state.json");
     }
 
     private static void AppendLocal(StringBuilder sb)
@@ -684,6 +710,43 @@ public static class ClaudeBridge
                 count++;
             }
             catch { }
+        }
+
+        return count;
+    }
+
+    // vent enter/exit ディレクティブが指定できる id の一覧。cnos と同じ「例外時は0件で JSON は常に整形式」方針。
+    private static int AppendVents(StringBuilder sb)
+    {
+        Il2CppReferenceArray<Vent> all;
+        try { all = ShipStatus.Instance?.AllVents; } catch { return 0; }
+        if (all == null) return 0;
+
+        int count = 0;
+        foreach (Vent v in all)
+        {
+            // cnos と同じ per-element 防御: 値の取得を try で済ませてから append する
+            // (append 途中で例外を出すと JSON が半端に切れる — 取得と書き出しを分離)。
+            int id;
+            float px, py;
+
+            try
+            {
+                if (!v) continue;
+                id = v.Id;
+                Vector3 wp = v.transform.position;
+                px = wp.x;
+                py = wp.y;
+            }
+            catch { continue; }
+
+            if (count > 0) sb.Append(',');
+
+            sb.Append('{');
+            sb.Append("\"id\":").Append(id).Append(',');
+            sb.Append("\"pos\":[").Append(F(px)).Append(',').Append(F(py)).Append(']');
+            sb.Append('}');
+            count++;
         }
 
         return count;
@@ -807,6 +870,185 @@ public static class ClaudeBridge
         }
     }
 
+    // ── Layer 3b: OS レベルのマウス注入 ─────────────────────────────────
+    // click(PassiveButton.OnClick.Invoke 直呼び)は AU が実行時に動的 AddListener する UI
+    // (会議の投票確認チェック、PlayerVoteArea の Select 連鎖等)を発火できない。ここは本物の
+    // OS マウスイベントを注入して Unity から見て人間の操作と区別が付かない形にする
+    // (project_host_ui_real_click_injection の実証済み代替経路)。
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct Win32Point
+    {
+        public int X;
+        public int Y;
+    }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct Win32Rect
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    private const uint MouseEventLeftDown = 0x0002;
+    private const uint MouseEventLeftUp = 0x0004;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool SetCursorPos(int x, int y);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool GetCursorPos(out Win32Point lpPoint);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool GetWindowRect(IntPtr hWnd, out Win32Rect lpRect);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool MoveWindow(IntPtr hWnd, int x, int y, int nWidth, int nHeight, bool bRepaint);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool ClientToScreen(IntPtr hWnd, ref Win32Point lpPoint);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern void mouse_event(uint dwFlags, int dx, int dy, uint dwData, IntPtr dwExtraInfo);
+
+    // press <handle> — state の ui[].h から world 座標を解決して押す。
+    // press <x> <y> — screenshot 画像座標(top-down, クライアント原点)をそのままクライアント座標として押す。
+    private static void ExecutePress(string rest)
+    {
+        if (!OperatingSystem.IsWindows()) { WriteOut("ERR press windows only"); return; }
+        if (string.IsNullOrEmpty(rest)) { WriteOut("ERR press usage: press <handle> | press <x> <y>"); return; }
+
+        string[] parts = rest.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        int clientX, clientY;
+
+        if (parts.Length == 1)
+        {
+            List<BtnRec> buttons = EnumerateButtons();
+            BtnRec target = buttons.FirstOrDefault(b => string.Equals(b.Handle, parts[0], StringComparison.OrdinalIgnoreCase));
+
+            if (target == null) { WriteOut($"ERR press no match: {parts[0]}"); return; }
+            if (!target.Active || !target.Pb) { WriteOut($"ERR press inactive/destroyed: {parts[0]}"); return; }
+
+            // HUD/メニュー系 PassiveButton は UICamera (固定投影) が描画する。Camera.main はズーム/追従で
+            // 投影が変わるゲームプレイカメラなので、ボタンのレイヤーを cullingMask に含むカメラを選ぶ
+            // (同レイヤーを複数カメラが含む場合は UI カメラ優先)。Camera.main 固定だとズーム中に
+            // 「別の場所を静かに押す」誤操作になる (pitfall 監査 2026-08-20 指摘)。
+            Camera cam = null;
+            int layerBit = 1 << target.Pb.gameObject.layer;
+
+            foreach (Camera c in Camera.allCameras)
+            {
+                if (!c || !c.isActiveAndEnabled || (c.cullingMask & layerBit) == 0) continue;
+                if (cam == null) cam = c;
+                if (c.name.Contains("UI", StringComparison.OrdinalIgnoreCase)) { cam = c; break; }
+            }
+
+            if (!cam) cam = Camera.main;
+            if (!cam) { WriteOut("ERR press no camera renders this button"); return; }
+
+            Vector3 sp = cam.WorldToScreenPoint(target.Pb.transform.position);
+            clientX = (int)sp.x;
+            clientY = Screen.height - (int)sp.y; // Unity の screen 座標は左下原点 -> client(top-down) へ反転
+        }
+        else if (parts.Length == 2 &&
+                 float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float fx) &&
+                 float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float fy))
+        {
+            clientX = (int)fx;
+            clientY = (int)fy;
+        }
+        else
+        {
+            WriteOut("ERR press usage: press <handle> | press <x> <y>");
+            return;
+        }
+
+        IntPtr hWnd = System.Diagnostics.Process.GetCurrentProcess().MainWindowHandle;
+        if (hWnd == IntPtr.Zero) { WriteOut("ERR press no window handle"); return; }
+
+        try { SetForegroundWindow(hWnd); } catch { }
+
+        var clientPoint = new Win32Point { X = clientX, Y = clientY };
+        if (!ClientToScreen(hWnd, ref clientPoint)) { WriteOut("ERR press ClientToScreen failed"); return; }
+
+        var moved = false;
+        Win32Rect originalRect = default;
+
+        try
+        {
+            SetCursorPos(clientPoint.X, clientPoint.Y);
+            GetCursorPos(out Win32Point actual);
+
+            if (actual.X != clientPoint.X || actual.Y != clientPoint.Y)
+            {
+                // 画面外ウィンドウでカーソルが仮想スクリーン境界にクリップされる既知の罠への構造対策。
+                if (!GetWindowRect(hWnd, out originalRect)) { WriteOut("ERR press GetWindowRect failed"); return; }
+
+                int width = originalRect.Right - originalRect.Left;
+                int height = originalRect.Bottom - originalRect.Top;
+
+                if (!MoveWindow(hWnd, 100, 100, width, height, true)) { WriteOut("ERR press MoveWindow failed"); return; }
+                moved = true;
+
+                // ウィンドウ移動で client→screen の対応が変わるため同じクライアント座標を再変換する。
+                var retryPoint = new Win32Point { X = clientX, Y = clientY };
+                if (!ClientToScreen(hWnd, ref retryPoint))
+                {
+                    WriteOut("ERR press ClientToScreen retry failed");
+                    RestoreWindow(hWnd, originalRect);
+                    return;
+                }
+
+                SetCursorPos(retryPoint.X, retryPoint.Y);
+                GetCursorPos(out Win32Point actual2);
+
+                if (actual2.X != retryPoint.X || actual2.Y != retryPoint.Y)
+                {
+                    WriteOut($"ERR press cursor mismatch after retry: wanted [{retryPoint.X}, {retryPoint.Y}] got [{actual2.X}, {actual2.Y}]");
+                    RestoreWindow(hWnd, originalRect);
+                    return;
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            if (moved) RestoreWindow(hWnd, originalRect);
+            Utils.ThrowException(e);
+            WriteOut("ERR press injection setup failed");
+            return;
+        }
+
+        try { mouse_event(MouseEventLeftDown, 0, 0, 0, IntPtr.Zero); }
+        catch (Exception e)
+        {
+            if (moved) RestoreWindow(hWnd, originalRect);
+            Utils.ThrowException(e);
+            WriteOut("ERR press mouse down failed");
+            return;
+        }
+
+        // down と up を同一 tick で打たない(Unity のフレームポーリング取りこぼし対策)。up は 0.1s 後。
+        LateTask.New(() =>
+        {
+            try { mouse_event(MouseEventLeftUp, 0, 0, 0, IntPtr.Zero); }
+            catch (Exception e) { Utils.ThrowException(e); }
+            finally { if (moved) RestoreWindow(hWnd, originalRect); }
+
+            WriteOut($"OK press [{clientX}, {clientY}]");
+        }, 0.1f, "ClaudeBridge.PressUp", log: false);
+    }
+
+    private static void RestoreWindow(IntPtr hWnd, Win32Rect rect)
+    {
+        try { MoveWindow(hWnd, rect.Left, rect.Top, rect.Right - rect.Left, rect.Bottom - rect.Top, true); }
+        catch { }
+    }
+
     // ── Layer A: mod オプション操作 ────────────────────────────────────
 
     // OptionItem の実 SetValue は「選択肢 index」を取る。ここでは index を主インターフェースにし、
@@ -888,33 +1130,47 @@ public static class ClaudeBridge
     private static void ExecuteSetOpt(string rest)
     {
         int sp = rest.LastIndexOf(' ');
-        if (sp <= 0) { WriteOut("ERR setopt usage: setopt <name> <index|on|off|~realValue>"); return; }
+        if (sp <= 0) { WriteOut("ERR setopt usage: setopt <name|#id> <index|on|off|~realValue>"); return; }
 
         string name = rest[..sp].Trim();
         string valueArg = rest[(sp + 1)..].Trim();
 
-        // 完全一致優先、なければ一意な部分一致で解決。
-        List<OptionItem> exact = OptionItem.AllOptions.Where(o => string.Equals(o.Name, name, StringComparison.OrdinalIgnoreCase)).ToList();
+        OptionItem opt;
 
-        if (exact.Count == 0)
+        // #<id> 直指定 — getopt が claude-opts.json に出す id と同じ体系(OptionItem.AllOptions を共有ソースにする)。
+        // AbilityUseLimit のような同名オプションが実機に89個ある問題(名前一意解決が不可能)を id で迂回する。
+        if (name.StartsWith('#'))
         {
-            List<OptionItem> partial = OptionItem.AllOptions.Where(o => o.Name != null && o.Name.Contains(name, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (!int.TryParse(name[1..], out int wantId)) { WriteOut($"ERR setopt bad id: {name}"); return; }
 
-            switch (partial.Count)
-            {
-                case 0:
-                    WriteOut($"ERR setopt no option named: {name}");
-                    return;
-                case 1:
-                    exact = partial;
-                    break;
-                default:
-                    WriteOut($"ERR setopt ambiguous ({partial.Count}): {string.Join(", ", partial.Take(5).Select(o => o.Name))}{(partial.Count > 5 ? ", ..." : "")}");
-                    return;
-            }
+            opt = OptionItem.AllOptions.FirstOrDefault(o => o.Id == wantId);
+            if (opt == null) { WriteOut($"ERR setopt no option with id {wantId}"); return; }
         }
+        else
+        {
+            // 完全一致優先、なければ一意な部分一致で解決。
+            List<OptionItem> exact = OptionItem.AllOptions.Where(o => string.Equals(o.Name, name, StringComparison.OrdinalIgnoreCase)).ToList();
 
-        OptionItem opt = exact[0];
+            if (exact.Count == 0)
+            {
+                List<OptionItem> partial = OptionItem.AllOptions.Where(o => o.Name != null && o.Name.Contains(name, StringComparison.OrdinalIgnoreCase)).ToList();
+
+                switch (partial.Count)
+                {
+                    case 0:
+                        WriteOut($"ERR setopt no option named: {name}");
+                        return;
+                    case 1:
+                        exact = partial;
+                        break;
+                    default:
+                        WriteOut($"ERR setopt ambiguous ({partial.Count}): {string.Join(", ", partial.Take(5).Select(o => o.Name))}{(partial.Count > 5 ? ", ..." : "")}");
+                        return;
+                }
+            }
+
+            opt = exact[0];
+        }
 
         // PresetOptionItem は全インスタンスが Name=="Preset" で、SetValue が SwitchPreset(全オプション
         // Refresh + 全体同期)に化ける。単一オプション操作の意図と食い違うので明示ブロック。
@@ -1100,7 +1356,62 @@ public static class ClaudeBridge
         if (!target.isActiveAndEnabled) { WriteOut($"ERR use {button}: button inactive"); return; }
 
         target.DoClick();
+
+        // BUG-20260817-05 の再発防止: イントロ明け StartingKillCooldown 秒の PreventKill 窓内は、
+        // kill (PlayerControlPatch.cs:700) / pet (PetActionsPatch.OnPetUse) / ability=vanish・shapeshift
+        // (PlayerControlPatch.cs:988) の発動がモッド側で無音棄却される。OK だけ返すと「押したのに
+        // 発火しない」を故障と誤診するので、窓内である事実を応答に併記する (解除待ちは
+        // `wait marker:PreventKillReset`)。
+        if (button.ToLowerInvariant() is "kill" or "pet" or "ability" && IntroCutsceneDestroyPatch.PreventKill)
+        {
+            WriteOut($"OK use {button} (WARN PreventKill active: ability/kill triggers are silently swallowed until \"PreventKillReset\" — wait marker:PreventKillReset first)");
+            return;
+        }
+
         WriteOut($"OK use {button}");
+    }
+
+    // vent enter <id> / vent exit — MyPhysics.RpcEnterVent/RpcExitVent 直呼び(既存経路の前例:
+    // Roles/Standard/Crewmate/Support/Aid.cs, Comebacker.cs)。exit の対象 id は GetClosestVent()
+    // (repo 全体で「現在の vent」を引くのに使われている既存パターン、真の currentVent フィールドは無い)。
+    private static void ExecuteVent(string rest)
+    {
+        PlayerControl lp = PlayerControl.LocalPlayer;
+        if (!lp) { WriteOut("ERR no local player"); return; }
+        if (ShipStatus.Instance == null) { WriteOut("ERR vent no ShipStatus"); return; }
+
+        string[] parts = rest.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        if (parts.Length == 2 && parts[0].Equals("enter", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!int.TryParse(parts[1], out int ventId)) { WriteOut($"ERR vent enter bad id: {parts[1]}"); return; }
+            if (!ShipStatus.Instance.AllVents.Any(v => v.Id == ventId)) { WriteOut($"ERR vent enter no such vent id {ventId}"); return; }
+            if (!lp.MyPhysics) { WriteOut("ERR vent no MyPhysics"); return; }
+            // 死体への RpcEnterVent は IL2CPP ネイティブヒープを破壊する(Patches/ControlPatch.cs の
+            // CRITICAL コメント / Roles/Standard/Ghost/DemonicVenter.cs 参照)。生存ガード必須。
+            if (!lp.IsAlive()) { WriteOut("ERR vent enter local player is dead (RpcEnterVent on a corpse corrupts the IL2CPP heap)"); return; }
+            // 二重 enter はローカルの vent ステートマシンを desync させ、後続 exit の GetClosestVent
+            // 近似解決が「入っていない vent の id」を送る入口になる (anticheat 監査 2026-08-20 指摘)。
+            if (lp.inVent) { WriteOut("ERR vent enter already in a vent (use `vent exit` first)"); return; }
+
+            lp.MyPhysics.RpcEnterVent(ventId);
+            WriteOut($"OK vent enter {ventId}");
+            return;
+        }
+
+        if (parts.Length == 1 && parts[0].Equals("exit", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!lp.inVent) { WriteOut("ERR vent exit not in vent"); return; }
+
+            Vent current = lp.GetClosestVent();
+            if (current == null) { WriteOut("ERR vent exit no vent resolved"); return; }
+
+            lp.MyPhysics?.RpcExitVent(current.Id);
+            WriteOut($"OK vent exit {current.Id}");
+            return;
+        }
+
+        WriteOut("ERR vent usage: vent enter <id> | vent exit");
     }
 
     // ── Layer C2: 歩行移動 ─────────────────────────────────────────────
