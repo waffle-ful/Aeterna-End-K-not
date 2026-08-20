@@ -176,6 +176,29 @@ public class Shadow : CovenBase
         }
     }
 
+    // ゲーム終了時にホストから呼ぶ。カモの解除は CountdownTimer の完了ラムダにしか無く、
+    // タイマーは試合終了で onCanceled (参照を捨てるだけ) へ倒れるため、カモが解けないまま終わる。
+    // ⚠️ 既に元の見た目なら Utils.RpcChangeSkin が自分で早期 return するので送信は増えない。
+    public void RestoreOnGameEnd(byte id)
+    {
+        // ⚠️ タイマーの生存では判定しない — 試合終了とタイマー満了がほぼ同時だと、こちらが走る前に
+        // キャンセル側 (参照を捨てるだけ) が通って復元が丸ごと飛ぶ。退避してある外見だけを見る。
+        if (OriginalOutfit != null)
+        {
+            PlayerControl pc = Utils.GetPlayerById(id);
+            if (pc != null) Utils.RpcChangeSkin(pc, OriginalOutfit);
+        }
+
+        if (OriginalTargetOutfit != null)
+        {
+            PlayerControl target = Utils.GetPlayerById(TargetId);
+            if (target != null) Utils.RpcChangeSkin(target, OriginalTargetOutfit);
+        }
+
+        SelfTimer = null;
+        OthersCamoTimer = null;
+    }
+
     public override void OnReportDeadBody()
     {
         if (HasNecronomicon && SwitchCamoAbilityToInvisWithNecronomicon.GetBool()) return;
@@ -195,7 +218,8 @@ public class Shadow : CovenBase
             OthersCamoTimer = null;
             PlayerControl pc = TargetId.GetPlayer();
             if (Camouflage.IsCamouflage || !pc) return;
-            Utils.RpcChangeSkin(pc, OriginalOutfit);
+            // 戻す相手は他者カモの被害者なので、退避も相手側のものを使う (自分の OriginalOutfit ではない)
+            Utils.RpcChangeSkin(pc, OriginalTargetOutfit);
         }
     }
 }

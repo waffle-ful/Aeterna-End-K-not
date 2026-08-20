@@ -814,6 +814,10 @@ public sealed class PlayerGameOptionsSender(PlayerControl player) : GameOptionsS
 
             MeetingTimeManager.ApplyGameOptions(opt);
 
+            // 木槌ボタンを配ったプレイヤーはタスクゲート (JudgeRole.IsBlockedByTasks) を外す
+            if (MeetingTargetPicker.IsHolder(player.PlayerId))
+                opt.SetFloat(FloatOptionNames.JudgeTaskRequirementPercentage, 0f);
+
             AURoleOptions.ShapeshifterCooldown = Mathf.Max(1f, AURoleOptions.ShapeshifterCooldown);
             AURoleOptions.ProtectionDurationSeconds = 0f;
             AURoleOptions.ImpostorsCanSeeProtect = false;

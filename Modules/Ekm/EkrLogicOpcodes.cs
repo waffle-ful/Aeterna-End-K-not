@@ -715,7 +715,9 @@ internal sealed class EkrActionSink : IEkrActionSink
 
         state.LastCorpseSpawnTime = now;
 
-        Utils.RpcCreateDeadBody(pos.Value, colorId, parent);
+        // 親は生存者からの借り物なので、未通報のまま会議へ入っても借りた人が「通報済み」にならないよう登録する
+        Utils.RpcCreateDeadBody(pos.Value, colorId, parent,
+            onCreated: body => ReportDeadBodyPatch.BorrowedParentBodyIds.Add(body.GetInstanceID()));
     }
 
     // ── marker_save (v1.2 spec §3: 予算なし・ctx 無し/未実体化 CNO 参照は no-op) ────────────────────

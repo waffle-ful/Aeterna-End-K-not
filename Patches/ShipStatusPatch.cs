@@ -315,13 +315,17 @@ internal static class StartMeetingPatch
         
         // ダミー撃破の偽死体は親に実プレイヤーを借りているだけなので、ここで「通報済み」に混ぜると
         // その人が本当に死んだときの本物の死体が二度と通報できなくなる。ダミー由来は除外する。
+        // 罠死体 (トラップスター / EKR) も生存者を親に借りているだけなので同じ理由で除外する。
+        // こちらは通報させるのが芸なので遮断はしないが、未通報のまま会議へ入ると借りた人の実死体が
+        // 以後通報不能になる。
         ReportDeadBodyPatch.AlreadyReportedBodies.UnionWith(MeetingStates.DeadBodies
-            .Where(db => !ReportDeadBodyPatch.IsDummyCorpse(db))
+            .Where(db => !ReportDeadBodyPatch.IsDummyCorpse(db) && !ReportDeadBodyPatch.IsBorrowedParentCorpse(db))
             .Select(db => db.ParentId));
 
         // vanilla は会議で全死体を破棄するので、登録簿もここで空にする (残すと位置だけが永久に居座り、
         // 後のラウンドで同じ場所に出た本物の死体を誤って遮断する)。
         ReportDeadBodyPatch.DummyCorpseBodyIds.Clear();
+        ReportDeadBodyPatch.BorrowedParentBodyIds.Clear();
     }
 }
 
