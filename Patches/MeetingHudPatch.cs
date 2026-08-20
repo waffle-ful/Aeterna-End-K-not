@@ -78,7 +78,10 @@ internal static class CheckForEndVotingPatch
                     if (Main.LastVotedPlayerInfo != null)
                         ConfirmEjections(Main.LastVotedPlayerInfo, false);
 
-                    __instance.RpcVotingComplete(states.ToArray(), voteTarget.Data, false, false, 0);
+                    // Dictator の強制追放はバニラ Judge の「判決が下された」木槌演出で見せる (失敗時 nonce=0 → 通常追放)。
+                    // ⚠️ QueueOverrule → RpcVotingComplete の隣接順序は不可分 (クライアントは queue 受信済みが gavel の前提) — 間に遅延や送信を挟まない
+                    ushort dictatorGavelNonce = JudgeGavelPresenter.QueueOverrule(pc.PlayerId, pva.VotedForId);
+                    __instance.RpcVotingComplete(states.ToArray(), voteTarget.Data, false, dictatorGavelNonce != 0, dictatorGavelNonce);
 
                     Statistics.OnVotingComplete(states.ToArray(), voteTarget.Data, false, true);
 
@@ -610,7 +613,7 @@ internal static class CheckForEndVotingPatch
     // 経路 (上の CheckForEndVoting 内 :61-91) の一般部分をそのままなぞる — Dictator 固有の自殺コスト
     // (TryAddAfterMeetingDeathPlayers(Suicide, exiler)) は EKR exile の契約に無いので入れない。
     // CloseMeeting/RpcClose の送信パターンは一切変更しない (既往 anti-cheat 論点への配線変更禁止)。
-    internal static void ForceExile(PlayerControl target, PlayerControl exiler)
+    internal static void ForceExile(PlayerControl target, PlayerControl exiler, bool judgeGavel = false)
     {
         if (!AmongUsClient.Instance.AmHost || !target || !target.Data || !MeetingHud.Instance) return;
 
@@ -625,7 +628,9 @@ internal static class CheckForEndVotingPatch
 
         if (Main.LastVotedPlayerInfo != null) ConfirmEjections(Main.LastVotedPlayerInfo, false);
 
-        MeetingHud.Instance.RpcVotingComplete(states, target.Data, false, false, 0);
+        // ⚠️ QueueOverrule → RpcVotingComplete の隣接順序は不可分 (クライアントは queue 受信済みが gavel の前提) — 間に遅延や送信を挟まない
+        ushort gavelNonce = judgeGavel ? JudgeGavelPresenter.QueueOverrule(exiler ? exiler.PlayerId : target.PlayerId, target.PlayerId) : (ushort)0;
+        MeetingHud.Instance.RpcVotingComplete(states, target.Data, false, gavelNonce != 0, gavelNonce);
         Statistics.OnVotingComplete(states, target.Data, false, true);
 
         CheckForDeathOnExile(PlayerState.DeathReason.Vote, target.PlayerId);
@@ -657,6 +662,50 @@ internal static class CheckForEndVotingPatch
 
         PlayerControl target = targetList.RandomElement();
         return target;
+    }
+}
+
+// AU 2026.8.18 のバニラ Judge (投票結果却下) の木槌演出を、mod 側の強制追放に借りるための送信ヘルパー。
+// 機序 (GameAssembly 実測): クライアントの gavel は VotingComplete(wasOverruled=true) 受信時に
+// ローカル judgeOverrulesQueue の先頭有効エントリ (judge/target とも生存) で表示され、役職検証は無い。
+// mod は会議中の auto Data 同期を遮断している (MeetingDataBarrier) ため、queue の伝播は
+// RPC 66 (QueueOverruleVotes: byte judgeId, byte targetId, ushort nonce) の手送りで行う。
+// 呼び順は「QueueOverrule → RpcVotingComplete(..., true, nonce)」(共に Reliable なので順序保証)。
+internal static class JudgeGavelPresenter
+{
+    private static ushort NonceCounter = 1; // 0 = vanilla の未初期化 sentinel なので 1 始まり
+
+    // 成立時は nonce (>=1)、演出不成立 (judge 死亡等) は 0 を返す — 呼び元は 0 なら通常追放にフォールバック。
+    public static ushort QueueOverrule(byte judgeId, byte targetId)
+    {
+        try
+        {
+            MeetingHud meeting = MeetingHud.Instance;
+            if (!meeting) return 0;
+            if (judgeId == targetId) return 0; // 「自分が自分を覆す」無意味演出の予防 (exiler=null の ForceExile 等)
+
+            PlayerControl judge = Utils.GetPlayerById(judgeId);
+            if (judge == null || !judge.IsAlive() || judge.Data == null || judge.Data.Disconnected) return 0;
+
+            ushort nonce = NonceCounter++;
+            if (NonceCounter == 0) NonceCounter = 1;
+
+            meeting.SetJudgeOverrule(judgeId, targetId, nonce);
+
+            MessageWriter writer = AmongUsClient.Instance.StartRpcImmediately(meeting.NetId, (byte)RpcCalls.QueueOverruleVotes, SendOption.Reliable);
+            writer.Write(judgeId);
+            writer.Write(targetId);
+            writer.Write(nonce);
+            AmongUsClient.Instance.FinishRpcImmediately(writer);
+
+            Logger.Info($"Judge gavel queued: judge={judgeId}, target={targetId}, nonce={nonce}", "JudgeGavelPresenter");
+            return nonce;
+        }
+        catch (Exception e)
+        {
+            Utils.ThrowException(e);
+            return 0;
+        }
     }
 }
 
@@ -790,7 +839,7 @@ internal static class MeetingHudStartPatch
 
                 if (settings.Length > 0) roleDescMsgs.Add(new("\n", pc.PlayerId, settings.ToString()));
                 if (role.UsesPetInsteadOfKill()) roleDescMsgs.Add(new("\n", pc.PlayerId, GetString("UsesPetInsteadOfKillNotice")));
-                if (pc.UsesMeetingShapeshift()) roleDescMsgs.Add(new("\n", pc.PlayerId, GetString("UsesMeetingShapeshiftNotice")));
+                if (pc.UsesMeetingShapeshift() && !MeetingTargetPicker.WouldGetButton(pc)) roleDescMsgs.Add(new("\n", pc.PlayerId, GetString("UsesMeetingShapeshiftNotice")));
 
                 roleDescMsgs.Add(new(sb.ToString(), pc.PlayerId, titleSb.ToString()));
 
@@ -1009,7 +1058,7 @@ internal static class MeetingHudStartPatch
                 (target.Is(CustomRoles.Gravestone) && Main.VisibleTasksCount && !target.IsAlive()) ||
                 (Main.LoversPlayers.TrueForAll(x => x.PlayerId == target.PlayerId || x.PlayerId == seer.PlayerId) && Main.LoversPlayers.Count == 2 && Lovers.LoverKnowRoles.GetBool()) ||
                 (seer.Is(CustomRoleTypes.Coven) && target.Is(CustomRoleTypes.Coven)) ||
-                (target.Is(CustomRoleTypes.Impostor) && seer.Is(CustomRoleTypes.Impostor) && Options.ImpKnowAlliesRole.GetBool() && CustomTeamManager.ArentInCustomTeam(seer.PlayerId, target.PlayerId)) ||
+                (target.Is(CustomRoleTypes.Impostor) && seer.Is(CustomRoleTypes.Impostor) && Options.ImpKnowAlliesRole.GetBool() && CustomTeamManager.ArentInCustomTeam(seer.PlayerId, target.PlayerId) && !seer.Is(CustomRoles.OneWolf) && !target.Is(CustomRoles.OneWolf)) ||
                 (target.Is(CustomRoleTypes.Impostor) && seer.IsMadmate() && Options.MadmateKnowWhosImp.GetBool()) ||
                 (target.IsMadmate() && seer.Is(CustomRoleTypes.Impostor) && Options.ImpKnowWhosMadmate.GetBool()) ||
                 (target.Is(CustomRoleTypes.Impostor) && seer.Is(CustomRoles.Crewpostor) && Options.AlliesKnowCrewpostor.GetBool()) ||
@@ -1168,6 +1217,9 @@ internal static class MeetingHudStartPatch
 
                     foreach (PlayerControl pc in aapc)
                     {
+                        // 木槌ボタンを配ってある客はシェイプシフト付与から外す (両方配ると後勝ちで木槌が消える)
+                        if (MeetingTargetPicker.IsHolder(pc.PlayerId)) continue;
+
                         if (pc.UsesMeetingShapeshift() || (meetingSSForGuessing && !pc.IsModdedClient() && GuessManager.StartMeetingPatch.CanGuess(pc, restrictions)))
                         {
                             var sender = CustomRpcSender.Create($"RpcSetRoleDesync for meeting shapeshift ({Main.AllPlayerNames.GetValueOrDefault(pc.PlayerId, "Someone")})", SendOption.Reliable);
@@ -1295,6 +1347,7 @@ internal static class MeetingHudStartPatch
         GuessManager.StartMeetingPatch.Postfix(__instance);
         Inspector.StartMeetingPatch.Postfix(__instance);
         Judge.StartMeetingPatch.Postfix(__instance);
+        MeetingTargetPicker.OnMeetingStart(); // 非モッド客へ木槌ボタンを配る (MeetingHud 生成後に配るのが安全な順序)
         EkrMeetingButton.StartMeetingPatch(__instance); // Wave 2 (docs/ekn-wave2-contract.md §1.2)
         Swapper.StartMeetingPatch.Postfix(__instance);
         Councillor.StartMeetingPatch.Postfix(__instance);
@@ -1524,7 +1577,9 @@ internal static class MeetingHudOnDestroyPatch
 
                 foreach (PlayerControl pc in Main.EnumerateAlivePlayerControls())
                 {
-                    if (pc.UsesMeetingShapeshift() || (meetingSSForGuessing && !pc.IsModdedClient() && GuessManager.StartMeetingPatch.CanGuess(pc, restrictions)))
+                    // 木槌ボタン側の保持者は MeetingTargetPicker.AfterMeeting が戻すので、ここでは触らない
+                    if (!MeetingTargetPicker.IsHolder(pc.PlayerId) &&
+                        (pc.UsesMeetingShapeshift() || (meetingSSForGuessing && !pc.IsModdedClient() && GuessManager.StartMeetingPatch.CanGuess(pc, restrictions))))
                         pc.RpcSetRoleDesync(pc.GetRoleTypes(), pc.OwnerId);
 
                     if (pc.IsImpostor())
@@ -1892,6 +1947,22 @@ internal static class MeetingHudHandleRpcPatch
             Logger.Info($"HandleRpc CastVote: src={srcPlayerId}, suspectRaw={suspectRaw}, remaining={reader.BytesRemaining}", "MeetingHudHandleRpcPatch");
             MeetingHudCastVotePatch.CastVoteChecked(__instance, srcPlayerId, suspectRaw);
             return false;
+        }
+
+        // 会議 UI の木槌ボタン (バニラ Judge basis の借用) 押下。読み取り位置を戻してオリジナルには素通しする
+        // — ホストが握り潰すと客のローカル queue に残るため (docs/judge-integration-resume.md)。
+        if (callId == (byte)RpcCalls.QueueOverruleVotes && AmongUsClient.Instance.AmHost)
+        {
+            try
+            {
+                int pos = reader.Position;
+                byte judgeId = reader.ReadByte();
+                byte targetId = reader.ReadByte();
+                reader.Position = pos;
+
+                MeetingTargetPicker.OnOverrulePressed(judgeId, targetId);
+            }
+            catch (Exception e) { Utils.ThrowException(e); }
         }
 
         if (callId == (byte)RpcCalls.CloseMeeting)

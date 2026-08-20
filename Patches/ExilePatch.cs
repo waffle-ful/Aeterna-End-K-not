@@ -202,6 +202,12 @@ internal static class ExileControllerWrapUpPatch
 
     public static void AfterMeetingTasks()
     {
+        // 会議のあいだだけ配っていた木槌ボタン用 basis を元に戻す。下の勝者確定ガードより前に置くこと
+        // — NoGameEnd が ON だと勝者が確定してもゲームは続くので、ここでガードに巻き込むと
+        // その客だけ Judge の見た目のままラウンド終了まで取り残される (自己修復しない)。
+        try { MeetingTargetPicker.AfterMeeting(); }
+        catch (Exception e) { Utils.ThrowException(e); }
+
         if (CustomWinnerHolder.WinnerTeam != CustomWinner.Default || GameStates.IsEnded)
         {
             Stopwatch.Reset();

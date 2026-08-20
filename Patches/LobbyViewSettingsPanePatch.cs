@@ -1088,7 +1088,8 @@ public static class LobbyViewSettingsPanePatch
 
         foreach (OptionItem firstOption in optionRole.Children)
         {
-            bool show = firstOption.Name != "Maximum";
+            // 常時隠しの枠 (EKR の未使用 hostOption など) はここでも出さない
+            bool show = firstOption.Name != "Maximum" && !firstOption.IsCurrentlyHidden();
             if (!show) continue;
 
             BaseGameSetting data = GameOptionsMenuPatch.GetSetting(firstOption);
@@ -1099,6 +1100,8 @@ public static class LobbyViewSettingsPanePatch
 
             foreach (OptionItem secondOption in firstOption.Children)
             {
+                if (secondOption.IsCurrentlyHidden()) continue;
+
                 data = GameOptionsMenuPatch.GetSetting(secondOption);
                 if (!data) continue;
 
@@ -1107,6 +1110,8 @@ public static class LobbyViewSettingsPanePatch
 
                 foreach (OptionItem thirdOption in secondOption.Children)
                 {
+                    if (thirdOption.IsCurrentlyHidden()) continue;
+
                     data = GameOptionsMenuPatch.GetSetting(thirdOption);
                     if (!data) continue;
 

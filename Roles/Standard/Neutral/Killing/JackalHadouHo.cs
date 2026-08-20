@@ -438,6 +438,13 @@ public class JackalHadouHo : RoleBase
         OriginalOutfit = null;
     }
 
+    // ゲーム終了時にホストから呼ぶ (WaveCannon と同型 — 復元経路が全て試合継続前提)
+    public void RestoreOnGameEnd(byte id)
+    {
+        PlayerControl pc = Utils.GetPlayerById(id);
+        if (pc != null) RestoreSkin(pc);
+    }
+
     private void RestoreSpeed(PlayerControl pc, bool deathPreserve = false)
     {
         if (OriginalSpeed <= 0f) return;

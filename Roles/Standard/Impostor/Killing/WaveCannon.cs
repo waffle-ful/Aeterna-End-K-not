@@ -389,6 +389,14 @@ public class WaveCannon : RoleBase
         OriginalOutfit = null;
     }
 
+    // ゲーム終了時にホストから呼ぶ。チャージ/発射中に試合が決着すると OnFixedUpdate 冒頭の
+    // !GameStates.IsInTask で降りてしまい、復元経路が3本とも止まって充填中の見た目がロビーへ残る。
+    public void RestoreOnGameEnd(byte id)
+    {
+        PlayerControl pc = Utils.GetPlayerById(id);
+        if (pc != null) RestoreSkin(pc);
+    }
+
     private void RestoreSkinDeathPreserve(PlayerControl pc)
     {
         if (OriginalOutfit == null) return;

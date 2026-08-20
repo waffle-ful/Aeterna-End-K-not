@@ -3051,7 +3051,8 @@ internal static class ChatCommands
                         (string fn, EkrDefinition def) = lib[i];
                         string author = def.Author.Length > 0 ? $" ({def.Author})" : "";
                         // R2: 陣営を併記する (入れられるスロットが陣営で決まるため — 事故防止)。
-                        sb.AppendLine($"  {i + 1}. {def.Name}{author} <{EkrManager.TeamLabel(def.ParsedTeam)}>  <size=70%>{fn}</size>");
+                        // 角括弧で囲う — 山括弧だと TMP が不明タグとして丸ごと食べてしまう
+                        sb.AppendLine($"  {i + 1}. {def.Name}{author} [{EkrManager.TeamLabel(def.ParsedTeam)}]  <size=70%>{fn}</size>");
                     }
                 }
 
@@ -3291,7 +3292,7 @@ internal static class ChatCommands
 
             Utils.SendMessage(sb.ToString(), player.PlayerId, titleSb.ToString(), importance: MessageImportance.High);
             if (role.UsesPetInsteadOfKill()) Utils.SendMessage("\n", player.PlayerId, GetString("UsesPetInsteadOfKillNotice"));
-            if (player.UsesMeetingShapeshift()) Utils.SendMessage("\n", player.PlayerId, GetString("UsesMeetingShapeshiftNotice"));
+            if (player.UsesMeetingShapeshift() && !MeetingTargetPicker.WouldGetButton(player)) Utils.SendMessage("\n", player.PlayerId, GetString("UsesMeetingShapeshiftNotice"));
         }
         else
             Utils.SendMessage((player.FriendCode.GetDevUser().HasTag() ? "\n" : string.Empty) + GetString("Message.CanNotUseInLobby"), player.PlayerId);
