@@ -58,7 +58,7 @@ describe("golden fixture: role-full-course.ekrole.json (10イベント・主要o
         ]);
     });
 
-    it("17 種類すべてのイベントを1回ずつカバーしている (Wave 3 で on_var/on_alive_count/on_vent_exit を追加)", () => {
+    it("22 種類のイベントを1回ずつカバーしている (Wave 4 で on_near/on_far/on_room_enter/on_room_exit/on_linked_death を追加)", () => {
         const parsed = JSON.parse(fullCourseRaw);
         const result = validateEkrDefinition(parsed);
         if (!result.ok) throw new Error(result.error);
@@ -71,7 +71,7 @@ describe("golden fixture: role-full-course.ekrole.json (10イベント・主要o
         }
     });
 
-    it("制御 op (if/wait/stop/var_set/var_add) とアクション op (11種・v1.2 で marker_save/teleport_other を追加) を全て少なくとも1回使っている", () => {
+    it("制御 op (if/wait/stop/var_set/var_add) とアクション op (v1.2 で marker_save/teleport_other・Wave 4 で link/unlink/recruit を追加) を全て少なくとも1回使っている", () => {
         const parsed = JSON.parse(fullCourseRaw);
         const result = validateEkrDefinition(parsed);
         if (!result.ok) throw new Error(result.error);
@@ -85,6 +85,8 @@ describe("golden fixture: role-full-course.ekrole.json (10イベント・主要o
             "notify", "teleport", "kill", "set_kill_cooldown", "speed",
             "cno_spawn", "cno_move", "cno_despawn", "cno_show",
             "marker_save", "teleport_other",
+            // Wave 4 (docs/ekn-wave4-contract.md §3/§4): リンクと変換の3 op。
+            "link", "unlink", "recruit",
         ];
         for (const op of expectedOps) {
             expect(ops.has(op), `op "${op}" が fixture 内で使われていない`).toBe(true);
@@ -138,6 +140,37 @@ describe("golden fixture: role-full-course.ekrole.json (10イベント・主要o
         const rules = result.def.logic?.rules ?? [];
         expect(rules.find((r) => r.when === "on_attacked")?.kind).toBe("force");
         expect(rules.find((r) => r.when === "on_death")?.cause).toBe("poison-curse");
+    });
+
+    // Wave 4 (docs/ekn-wave4-contract.md §1〜§3): 近接/部屋/リンク死の rule 形。
+    // C# 側 (EkrDefinitionTests.FullCourseFixture_ExposesWave4Triggers) が同じファイルの同じ値を
+    // 読むので、片側だけ実装が抜けるとどちらかが落ちる。
+    it("Wave 4 の新5イベントの rule 形が保持される (radius/who/cause の付着規則込み)", () => {
+        const parsed = JSON.parse(fullCourseRaw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        const rules = result.def.logic?.rules ?? [];
+
+        // on_near は radius 必須・who 任意 (省略 = anyone。省略キーは AST に載せない)
+        const onNear = rules.find((r) => r.when === "on_near");
+        expect(onNear?.radius).toBe("small");
+        expect(onNear?.who).toBeUndefined();
+
+        // on_far は radius/who とも必須 (who は anyone 不可)
+        const onFar = rules.find((r) => r.when === "on_far");
+        expect(onFar?.radius).toBe("medium");
+        expect(onFar?.who).toBe("linked");
+
+        // 部屋2種は追加フィールドなし (ctx 無しイベント)
+        for (const when of ["on_room_enter", "on_room_exit"] as const) {
+            const room = rules.find((r) => r.when === when);
+            expect(room?.radius).toBeUndefined();
+            expect(room?.who).toBeUndefined();
+            expect((room?.do.length ?? 0) > 0).toBe(true);
+        }
+
+        // on_linked_death は cause を任意で受ける (on_death と同じ8バケット)
+        expect(rules.find((r) => r.when === "on_linked_death")?.cause).toBe("kill");
     });
 
     it("リンター (spec §6・Wave 3 で L24/L25 含む) は警告0件 — golden fixture は模範的な組み方で書く", () => {

@@ -239,6 +239,46 @@
             ]
           }
         ]
+      },
+      {
+        "when": "on_near",
+        "radius": "small",
+        "do": [
+          { "op": "notify", "text": "影が近づいてくる…", "seconds": 2 },
+          { "op": "link", "target": "ctx" },
+          { "op": "var_add", "name": "うらみ", "delta": { "e": "lit", "v": 1 } }
+        ]
+      },
+      {
+        "when": "on_far",
+        "radius": "medium",
+        "who": "linked",
+        "do": [
+          { "op": "notify", "text": "糸が伸びきった", "seconds": 2, "target": "linked" },
+          { "op": "unlink" }
+        ]
+      },
+      {
+        "when": "on_room_enter",
+        "do": [
+          { "op": "notify", "text": "部屋の灯りが影を薄める", "seconds": 2 },
+          { "op": "var_add", "name": "タスク数", "delta": { "e": "lit", "v": 1 } }
+        ]
+      },
+      {
+        "when": "on_room_exit",
+        "do": [
+          { "op": "notify", "text": "廊下は影が濃い", "seconds": 2 },
+          { "op": "speed", "mult": 1.1, "seconds": 3 }
+        ]
+      },
+      {
+        "when": "on_linked_death",
+        "cause": "kill",
+        "do": [
+          { "op": "notify", "text": "糸の先が絶えた…", "seconds": 3 },
+          { "op": "recruit", "target": "nearest" }
+        ]
       }
     ]
   }

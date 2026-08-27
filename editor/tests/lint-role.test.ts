@@ -1149,6 +1149,134 @@ describe("lint-role: L25 (on_var の監視変数・progress.text の参照変数
     });
 });
 
+// ---------------------------------------------------------------------------
+// Wave 4 (docs/ekn-wave4-contract.md §6 2026-08-25) — L26/L27 + L12/L14 の対象拡大
+// ---------------------------------------------------------------------------
+
+describe("lint-role: L26 (linked 参照があるのにどの rule にも link op が無い)", () => {
+    it("kill(target:linked) があって link が無ければ L26 を警告する", () => {
+        const l = logic([{ when: "on_kill", do: [{ op: "kill", target: "linked" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L26");
+    });
+
+    it("on_far(who:linked) があって link が無ければ L26 を警告する", () => {
+        const l = logic([{ when: "on_far", radius: "medium", who: "linked", do: [{ op: "stop" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L26");
+    });
+
+    it("on_linked_death rule があって link が無ければ L26 を警告する", () => {
+        const l = logic([{ when: "on_linked_death", do: [{ op: "stop" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L26");
+    });
+
+    it("recruit(target:linked) も linked トークン参照として検知する", () => {
+        const l = logic([{ when: "on_kill", do: [{ op: "recruit", target: "linked" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L26");
+    });
+
+    it("別の rule に link op があれば L26 は警告しない (rule をまたいで解決)", () => {
+        const l = logic([
+            { when: "on_kill", do: [{ op: "link", target: "ctx" }] },
+            { when: "on_linked_death", do: [{ op: "kill", target: "linked" }] },
+            { when: "on_far", radius: "small", who: "linked", do: [{ op: "stop" }] },
+        ]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L26");
+    });
+
+    it("if の入れ子の中の link op も「置いてある」と数える", () => {
+        const l = logic([
+            {
+                when: "on_kill",
+                do: [{ op: "if", cond: { e: "lit", v: 1 }, then: [{ op: "link", target: "ctx" }] }],
+            },
+            { when: "on_linked_death", do: [{ op: "stop" }] },
+        ]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L26");
+    });
+
+    it("on_far(who:saved1) は linked を参照しないので L26 を警告しない", () => {
+        const l = logic([{ when: "on_far", radius: "small", who: "saved1", do: [{ op: "stop" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L26");
+    });
+
+    it("on_near(who:linked) も link 無しでは一生発火しないので L26 を警告する (契約 §6 改定 2026-08-25)", () => {
+        const l = logic([{ when: "on_near", radius: "small", who: "linked", do: [{ op: "stop" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L26");
+    });
+
+    it("on_near(who:linked) でも link op がどこかにあれば L26 を警告しない", () => {
+        const l = logic([
+            { when: "on_near", radius: "small", who: "linked", do: [{ op: "stop" }] },
+            { when: "on_pet", do: [{ op: "link", target: "nearest" }] },
+        ]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L26");
+    });
+});
+
+describe("lint-role: L27 (on_second 配下の recruit — L5 の兄弟)", () => {
+    it("on_second + recruit (直下) は L27 を警告する", () => {
+        const l = logic([{ when: "on_second", do: [{ op: "recruit", target: "nearest" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L27");
+    });
+
+    it("on_second + recruit (if の中にネスト) も検知する", () => {
+        const l = logic([
+            {
+                when: "on_second",
+                do: [{ op: "if", cond: { e: "lit", v: 1 }, then: [{ op: "recruit", target: "nearest" }] }],
+            },
+        ]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L27");
+    });
+
+    it("on_pet (on_second 以外) の recruit は L27 を警告しない", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "recruit", target: "nearest" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L27");
+    });
+});
+
+describe("lint-role: L12 の Wave 4 対象拡大 (on_near/on_room_enter/on_room_exit)", () => {
+    it("on_near + cno_spawn は L12 を警告する", () => {
+        const l = logic([{ when: "on_near", radius: "small", do: [{ op: "cno_spawn", slot: 1, text: "!", size: 1, at: "self" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L12");
+    });
+
+    it("on_room_enter + dummy_spawn / on_room_exit + field も L12 を警告する", () => {
+        const enter = logic([{ when: "on_room_enter", do: [{ op: "dummy_spawn", slot: 1, name: "ダミー", killable: false, at: "self" }] }]);
+        expect(ruleIds(lintRoleLogic(enter))).toContain("L12");
+        const exit = logic([{ when: "on_room_exit", do: [{ op: "field", at: "self", radius: "small", strength: "weak", seconds: 3 }] }]);
+        expect(ruleIds(lintRoleLogic(exit))).toContain("L12");
+    });
+
+    it("on_far は L12 の対象外 (往復が要るぶん頻度が落ちる — 契約 §6 の改定リストどおり)", () => {
+        const l = logic([{ when: "on_far", radius: "small", who: "saved1", do: [{ op: "cno_spawn", slot: 1, text: "!", size: 1, at: "self" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L12");
+    });
+
+    it("on_near + notify (生成系以外) は L12 を警告しない", () => {
+        const l = logic([{ when: "on_near", radius: "small", do: [{ op: "notify", text: "!", seconds: 1 }] }]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L12");
+    });
+});
+
+describe("lint-role: L14 の Wave 4 対象拡大 (on_room_enter/on_room_exit は ctx 無し)", () => {
+    it("on_room_enter + kill(target:ctx) は L14 を警告する", () => {
+        const l = logic([{ when: "on_room_enter", do: [{ op: "kill", target: "ctx" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L14");
+    });
+
+    it("on_room_exit + pull (ctx 暗黙 op) も L14 を警告する", () => {
+        const l = logic([{ when: "on_room_exit", do: [{ op: "pull" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L14");
+    });
+
+    it("on_near/on_far/on_linked_death は ctx を持つので L14 を警告しない", () => {
+        expect(ruleIds(lintRoleLogic(logic([{ when: "on_near", radius: "small", do: [{ op: "kill", target: "ctx" }] }])))).not.toContain("L14");
+        expect(ruleIds(lintRoleLogic(logic([{ when: "on_far", radius: "small", who: "saved1", do: [{ op: "teleport", to: "ctx" }] }])))).not.toContain("L14");
+        expect(ruleIds(lintRoleLogic(logic([{ when: "on_linked_death", do: [{ op: "kill", target: "self" }, { op: "pull" }] }])))).not.toContain("L14");
+    });
+});
+
 describe("lint-role: formatLintWarning", () => {
     it("メッセージと代替案を連結した1行を返す", () => {
         const l = logic([{ when: "on_second", do: [{ op: "kill", target: "self" }] }]);

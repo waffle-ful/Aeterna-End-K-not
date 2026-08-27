@@ -90,6 +90,15 @@ export const LOGIC_WHEN_VALUES = [
     "on_var",
     "on_alive_count",
     "on_vent_exit",
+    // Wave 4 (docs/ekn-wave4-contract.md 2026-08-25): つなぐ — 対人近接/部屋/リンク死。
+    // on_near (ctx = 近づいた人)・on_far (ctx = 離れた人)・on_linked_death (ctx = 死んだ相手) は
+    // ctx を持つ。on_room_enter/on_room_exit は ctx 無し (CTXLESS_WHENS/L14 の対象に追加)。
+    // ⚠️ C# 側 (EkmLogicRuntime.KnownEvents) と同じ並び・同じ綴りを保つこと。
+    "on_near",
+    "on_far",
+    "on_room_enter",
+    "on_room_exit",
+    "on_linked_death",
 ] as const;
 export type LogicWhen = (typeof LOGIC_WHEN_VALUES)[number];
 
@@ -162,7 +171,11 @@ export const PORTAL_WHICH_VALUES = ["a", "b"] as const;
 // Wave 1 (spec §3「統一セレクタ語彙」2026-08-11) — 対象セレクタ「だれに」
 // ---------------------------------------------------------------------------
 // 単数セレクタ = 1人に解決するもの。kill/teleport_other/remember 等の単発強効果 op はここまで。
-export const TARGET_SINGLE_VALUES = ["self", "ctx", "saved1", "saved2", "nearest", "random"] as const;
+// Wave 4 (docs/ekn-wave4-contract.md §3.4): `linked` (つないだ人) を追加 — saved1/2 が受理される
+// すべての箇所への受理値の追加のみ (フィールド名の付け替えなし = 純拡張)。C# 側の
+// SingleSelectors/OtherSelectors (EkmLogicRuntime) と同じ集合を保つこと。at/to (空間セレクタ) には
+// 追加しない (人参照であって位置参照ではない)。
+export const TARGET_SINGLE_VALUES = ["self", "ctx", "linked", "saved1", "saved2", "nearest", "random"] as const;
 // 複数セレクタ = 集合に解決するもの。受理する op は明示ホワイトリストのみ (Wave 1 は notify だけ)。
 export const TARGET_MULTI_VALUES = ["all", "room"] as const;
 export const TARGET_ANY_VALUES = [...TARGET_SINGLE_VALUES, ...TARGET_MULTI_VALUES] as const;
@@ -172,7 +185,8 @@ export type TargetAny = (typeof TARGET_ANY_VALUES)[number];
 // kill.target は self を含む (自殺が正当ユース) が、teleport_other.target は含まない —
 // spec §3 のアクション表がその非対称のまま凍結されているので揃えない。
 export const KILL_TARGET_VALUES = TARGET_SINGLE_VALUES;
-export const TELEPORT_OTHER_TARGET_VALUES = ["ctx", "saved1", "saved2", "nearest", "random"] as const;
+// Wave 4: linked を追加 (TARGET_SINGLE_VALUES のコメント参照 — self 抜きの同じ拡張)。
+export const TELEPORT_OTHER_TARGET_VALUES = ["ctx", "linked", "saved1", "saved2", "nearest", "random"] as const;
 export const REMEMBER_TARGET_VALUES = TARGET_SINGLE_VALUES;
 // remember の slot は 2 まで (cno の3 slot・marker の4 slot とは別枠・別定数 —
 // どれか一つのレンジが将来変わっても連動しないようにする)。
@@ -236,6 +250,25 @@ export type VarCmp = (typeof VAR_CMP_VALUES)[number];
 
 export const ALIVE_COUNT_VALUE_MIN = 1;
 export const ALIVE_COUNT_VALUE_MAX = 15;
+
+// ---------------------------------------------------------------------------
+// Wave 4 (docs/ekn-wave4-contract.md 2026-08-25) — つなぐ (対人近接/部屋/リンク/勧誘)
+// ---------------------------------------------------------------------------
+// on_near/on_far の radius tier (small=1.5u / medium=3.0u / large=5.0u — 実値はエンジン側)。
+// field の FIELD_RADIUS_VALUES と同じ3語だが別スケールの別フィールドなので別定数にする
+// (契約 §1.2「同語別値」— どちらかだけ将来変わっても連動しないように)。
+export const NEAR_RADIUS_VALUES = ["small", "medium", "large"] as const;
+export type NearRadius = (typeof NEAR_RADIUS_VALUES)[number];
+// on_near.who は任意・既定 "anyone" (省略 = anyone)。on_far.who は必須で "anyone" 不可
+// (「知らない誰かが遠くにいる」は常時成立で意味を持たない — 契約 §1.3)。
+export const NEAR_WHO_VALUES = ["anyone", "linked", "saved1", "saved2"] as const;
+export type NearWho = (typeof NEAR_WHO_VALUES)[number];
+export const FAR_WHO_VALUES = ["linked", "saved1", "saved2"] as const;
+export type FarWho = (typeof FAR_WHO_VALUES)[number];
+// link.target は self 不可 (自分とはつなげない) かつ linked 不可 (つなぎ先を張り替えるのに
+// つないだ人を指すのは無意味)。recruit.target は self 不可・linked は可 (契約 §3.1/§4)。
+export const LINK_TARGET_VALUES = ["ctx", "saved1", "saved2", "nearest", "random"] as const;
+export const RECRUIT_TARGET_VALUES = ["ctx", "linked", "saved1", "saved2", "nearest", "random"] as const;
 
 // progress (契約 §3): 自由テキスト形式。text は trim 後 1..16字 (超過はクランプ)。
 export const PROGRESS_TEXT_MIN = 1;
@@ -379,13 +412,21 @@ export type LogicNode =
     | { op: "vote_block"; target: (typeof VOTE_BLOCK_TARGET_VALUES)[number] }
     // vote_swap は引数なし (saved1/saved2 固定 — remember との合成を強制する設計)。
     | { op: "vote_swap" }
-    | { op: "exile"; target: (typeof EXILE_TARGET_VALUES)[number] };
+    | { op: "exile"; target: (typeof EXILE_TARGET_VALUES)[number] }
+    // Wave 4 (docs/ekn-wave4-contract.md §3) — リンク。link は再実行で張り替え・1ホルダー1本。
+    // unlink は引数なし (リンクが無ければ no-op)。どちらも会議中も有効 (会議中白名単)。
+    | { op: "link"; target: (typeof LINK_TARGET_VALUES)[number] }
+    | { op: "unlink" }
+    // Wave 4 (契約 §4) — 相手を「自分と同じ EKR 役職」へ変換する。会議中は no-op (task-only)。
+    | { op: "recruit"; target: (typeof RECRUIT_TARGET_VALUES)[number] };
 
 export interface LogicRule {
     when: LogicWhen;
     // on_cno_touch の必須フィールド (spec §2 v1.2)。他イベントでは付与禁止 (検証 reject)。
     slot?: 1 | 2 | 3;
-    // R2: on_attacked / on_death 専用の任意フィルタ。省略 = 全種にマッチ。他イベントでは付与禁止。
+    // R2: kind は on_attacked 専用・cause は on_death 専用の任意フィルタ。省略 = 全種にマッチ。
+    // Wave 4 (docs/ekn-wave4-contract.md §3.3): cause は on_linked_death でも同じ8バケットを任意受理。
+    // 他イベントでは付与禁止。
     kind?: AttackKind;
     cause?: DeathCause;
     // Wave 3 (契約 §1.2/§1.3): on_var は var/cmp/value の3つとも必須。on_alive_count は
@@ -393,6 +434,11 @@ export interface LogicRule {
     var?: string;
     cmp?: VarCmp;
     value?: number;
+    // Wave 4 (docs/ekn-wave4-contract.md §1): on_near は radius 必須・who 任意 (省略 = anyone)。
+    // on_far は radius/who とも必須 (who は anyone 不可)。他イベントではどちらも付与禁止 (検証 reject)。
+    // cause は Wave 4 で on_linked_death でも任意受理になった (上の R2 コメント参照)。
+    radius?: NearRadius;
+    who?: NearWho;
     do: LogicNode[];
 }
 
@@ -1048,6 +1094,19 @@ function validateNode(raw: unknown, varNames: ReadonlySet<string>, path: string,
             const target = expectEnum(raw.target, EXILE_TARGET_VALUES, `${path}.target`);
             return { node: { op: "exile", target }, depth: 1, count: 1 };
         }
+        // Wave 4 (docs/ekn-wave4-contract.md §3/§4) — link/unlink/recruit。link.target は self と
+        // linked を含まない・recruit.target は self を含まない (定数側のコメント参照)。unlink は
+        // 引数なし — pull/arrow_hide と同じく余剰キーは黙って無視する (reject しない)。
+        case "link": {
+            const target = expectEnum(raw.target, LINK_TARGET_VALUES, `${path}.target`);
+            return { node: { op: "link", target }, depth: 1, count: 1 };
+        }
+        case "unlink":
+            return { node: { op: "unlink" }, depth: 1, count: 1 };
+        case "recruit": {
+            const target = expectEnum(raw.target, RECRUIT_TARGET_VALUES, `${path}.target`);
+            return { node: { op: "recruit", target }, depth: 1, count: 1 };
+        }
         default:
             fail(`${path}.op が不明です (${JSON.stringify(op)})`);
     }
@@ -1071,8 +1130,29 @@ function validateRule(raw: unknown, varNames: ReadonlySet<string>, index: number
 
     // R2 (契約 §3b): kind は on_attacked 専用 / cause は on_death 専用。省略可 (= 全種にマッチ)。
     // 他イベントに付いていたら slot と同じく reject する。
-    const kind = readRuleFilter(raw, "kind", when, "on_attacked", ATTACK_KIND_VALUES, index) as AttackKind | undefined;
-    const cause = readRuleFilter(raw, "cause", when, "on_death", DEATH_CAUSE_VALUES, index) as DeathCause | undefined;
+    // Wave 4 (docs/ekn-wave4-contract.md §3.3): cause は on_linked_death でも同じ8バケットを任意受理。
+    const kind = readRuleFilter(raw, "kind", when, ["on_attacked"], ATTACK_KIND_VALUES, index) as AttackKind | undefined;
+    const cause = readRuleFilter(raw, "cause", when, ["on_death", "on_linked_death"], DEATH_CAUSE_VALUES, index) as DeathCause | undefined;
+
+    // Wave 4 (契約 §1.2/§1.3): on_near は radius 必須・who 任意 (省略 = anyone・省略キーは AST に
+    // 足さない)。on_far は radius/who とも必須で who は anyone 不可。他イベントに付いていたら
+    // slot と同じ対称検査で reject する。
+    let radius: NearRadius | undefined;
+    let who: NearWho | undefined;
+    if (when === "on_near") {
+        radius = expectEnum(raw.radius, NEAR_RADIUS_VALUES, `rules[${index}].radius`);
+        if (raw.who !== undefined) who = expectEnum(raw.who, NEAR_WHO_VALUES, `rules[${index}].who`);
+    } else if (when === "on_far") {
+        radius = expectEnum(raw.radius, NEAR_RADIUS_VALUES, `rules[${index}].radius`);
+        who = expectEnum(raw.who, FAR_WHO_VALUES, `rules[${index}].who`);
+    } else {
+        if (raw.radius !== undefined) {
+            fail(`rules[${index}].radius はイベント "${when}" では使えません (on_near/on_far 専用です)`);
+        }
+        if (raw.who !== undefined) {
+            fail(`rules[${index}].who はイベント "${when}" では使えません (on_near/on_far 専用です)`);
+        }
+    }
 
     // Wave 3 (契約 §1.2/§1.3): on_var は var/cmp/value の3つとも必須。on_alive_count は cmp/value
     // のみ必須 (var は他イベント同様 reject)。それ以外のイベントは3フィールドとも付与禁止。
@@ -1116,22 +1196,25 @@ function validateRule(raw: unknown, varNames: ReadonlySet<string>, index: number
     if (varName !== undefined) rule.var = varName;
     if (cmp !== undefined) rule.cmp = cmp;
     if (value !== undefined) rule.value = value;
+    if (radius !== undefined) rule.radius = radius;
+    if (who !== undefined) rule.who = who;
     return rule;
 }
 
-/** rule 直下の任意フィルタ (kind/cause) を読む。指定できるイベントが決まっている (R2 契約 §3b)。 */
+/** rule 直下の任意フィルタ (kind/cause) を読む。指定できるイベントが決まっている (R2 契約 §3b —
+ *  Wave 4 で cause が on_death/on_linked_death の2イベント受理になったため onlyEvents は配列)。 */
 function readRuleFilter(
     raw: Record<string, unknown>,
     field: string,
     when: string,
-    onlyEvent: LogicWhen,
+    onlyEvents: readonly LogicWhen[],
     allowed: readonly string[],
     index: number,
 ): string | undefined {
     const v = raw[field];
     if (v === undefined) return undefined;
-    if (when !== onlyEvent) {
-        fail(`rules[${index}].${field} はイベント "${when}" では使えません (${onlyEvent} 専用です)`);
+    if (!(onlyEvents as readonly string[]).includes(when)) {
+        fail(`rules[${index}].${field} はイベント "${when}" では使えません (${onlyEvents.join("/")} 専用です)`);
     }
     return expectEnum(v, allowed, `rules[${index}].${field}`);
 }
