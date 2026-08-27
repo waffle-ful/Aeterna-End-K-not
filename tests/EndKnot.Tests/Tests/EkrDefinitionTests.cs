@@ -450,6 +450,42 @@ public class EkrDefinitionTests
         Assert.False(onVentExit.IsStateTrigger);
     }
 
+    // ── Wave 4 (docs/ekn-wave4-contract.md) ────────────────────────────────────────────────────
+
+    // §1〜§3: 共有 fixture に載せた5イベントが C# 側でも同じ値まで通ること (TS↔C# の drift 検出網)。
+    // TS 側 (role-fixtures.test.ts「Wave 4 の新5イベントの rule 形が保持される」) と対になる。
+    [Fact]
+    public void FullCourseFixture_ExposesWave4Triggers()
+    {
+        string json = File.ReadAllText(FixturePath("role-full-course.ekrole.json"));
+        Assert.True(EkrDefinition.TryParse(json, out EkrDefinition def, out string error), error);
+
+        // on_near: radius 必須・who 省略。⚠️ C# は欠落を "anyone" へ焼き込む (TS は AST に載せない)
+        // — この非対称は契約 §1.2 の既定値規定どおりで、rolecode ラウンドトリップには出ない。
+        EkrRule onNear = Assert.Single(def.ParsedLogic.Rules, r => r.When == "on_near");
+        Assert.Equal("small", onNear.Radius);
+        Assert.Equal("anyone", onNear.Who);
+
+        // on_far: radius / who とも必須 ("anyone" は文書 reject)
+        EkrRule onFar = Assert.Single(def.ParsedLogic.Rules, r => r.When == "on_far");
+        Assert.Equal("medium", onFar.Radius);
+        Assert.Equal("linked", onFar.Who);
+
+        // 部屋2種: 追加フィールドなし (ctx 無しイベント)
+        foreach (string when in new[] { "on_room_enter", "on_room_exit" })
+        {
+            EkrRule room = Assert.Single(def.ParsedLogic.Rules, r => r.When == when);
+            Assert.Null(room.Radius);
+            Assert.Null(room.Who);
+            Assert.NotEmpty(room.Do);
+        }
+
+        // on_linked_death: cause を任意で受ける (on_death と同じ8バケット)
+        EkrRule onLinkedDeath = Assert.Single(def.ParsedLogic.Rules, r => r.When == "on_linked_death");
+        Assert.Equal("kill", onLinkedDeath.Cause);
+        Assert.Null(onLinkedDeath.Radius);
+    }
+
     // §1.2/§1.3: じょうたいトリガの必須フィールドと、他イベントへの付着 reject (slot と同じ厳格側)。
     [Theory]
     [InlineData("{\"when\":\"on_var\",\"var\":\"v\",\"cmp\":\"eq\",\"value\":0,\"do\":[{\"op\":\"stop\"}]}", true)]
@@ -598,6 +634,127 @@ public class EkrDefinitionTests
             for (var i = 0; i < count; i++) sb.Append(i > 0 ? "," : "").Append("{\"key\":\"var:v").Append(i).Append("\",\"label\":\"あ\",\"min\":0,\"max\":9}");
             return sb.Append(']').ToString();
         }
+    }
+
+    // ── Wave 4 (docs/ekn-wave4-contract.md) ────────────────────────────────────────────────────
+
+    // §1/§6: on_near/on_far の radius (必須)/who (on_near 任意・on_far 必須で anyone 不可)、
+    // 他イベントへの付着 reject (slot と同じ対称検査)。§3.3: on_linked_death の cause 受理と、
+    // cause が on_death / on_linked_death 以外では従来どおり reject されること。
+    [Theory]
+    // on_near: radius 必須・who 任意 (既定 anyone)
+    [InlineData("{\"when\":\"on_near\",\"radius\":\"small\",\"do\":[{\"op\":\"stop\"}]}", true)]
+    [InlineData("{\"when\":\"on_near\",\"radius\":\"medium\",\"who\":\"linked\",\"do\":[{\"op\":\"stop\"}]}", true)]
+    [InlineData("{\"when\":\"on_near\",\"radius\":\"large\",\"who\":\"anyone\",\"do\":[{\"op\":\"stop\"}]}", true)]
+    [InlineData("{\"when\":\"on_near\",\"radius\":\"large\",\"who\":\"saved2\",\"do\":[{\"op\":\"stop\"}]}", true)]
+    [InlineData("{\"when\":\"on_near\",\"do\":[{\"op\":\"stop\"}]}", false)] // radius 欠落
+    [InlineData("{\"when\":\"on_near\",\"radius\":\"huge\",\"do\":[{\"op\":\"stop\"}]}", false)] // radius 不正値
+    [InlineData("{\"when\":\"on_near\",\"radius\":\"small\",\"who\":\"self\",\"do\":[{\"op\":\"stop\"}]}", false)] // who 不正値
+    // on_far: radius/who とも必須・anyone は文書 reject
+    [InlineData("{\"when\":\"on_far\",\"radius\":\"medium\",\"who\":\"linked\",\"do\":[{\"op\":\"stop\"}]}", true)]
+    [InlineData("{\"when\":\"on_far\",\"radius\":\"small\",\"who\":\"saved1\",\"do\":[{\"op\":\"stop\"}]}", true)]
+    [InlineData("{\"when\":\"on_far\",\"radius\":\"medium\",\"do\":[{\"op\":\"stop\"}]}", false)] // who 欠落
+    [InlineData("{\"when\":\"on_far\",\"who\":\"linked\",\"do\":[{\"op\":\"stop\"}]}", false)] // radius 欠落
+    [InlineData("{\"when\":\"on_far\",\"radius\":\"medium\",\"who\":\"anyone\",\"do\":[{\"op\":\"stop\"}]}", false)] // anyone reject
+    // radius/who の他イベント付着は文書 reject (対称検査)
+    [InlineData("{\"when\":\"on_pet\",\"radius\":\"small\",\"do\":[{\"op\":\"stop\"}]}", false)]
+    [InlineData("{\"when\":\"on_pet\",\"who\":\"linked\",\"do\":[{\"op\":\"stop\"}]}", false)]
+    [InlineData("{\"when\":\"on_cno_touch\",\"slot\":1,\"radius\":\"small\",\"do\":[{\"op\":\"stop\"}]}", false)]
+    // on_linked_death: cause は任意受理・kind の語彙や他フィールドは reject
+    [InlineData("{\"when\":\"on_linked_death\",\"do\":[{\"op\":\"stop\"}]}", true)]
+    [InlineData("{\"when\":\"on_linked_death\",\"cause\":\"kill\",\"do\":[{\"op\":\"stop\"}]}", true)]
+    [InlineData("{\"when\":\"on_linked_death\",\"cause\":\"vote\",\"do\":[{\"op\":\"stop\"}]}", true)]
+    [InlineData("{\"when\":\"on_linked_death\",\"cause\":\"force\",\"do\":[{\"op\":\"stop\"}]}", false)] // kind の語彙は cause では使えない
+    [InlineData("{\"when\":\"on_linked_death\",\"radius\":\"small\",\"do\":[{\"op\":\"stop\"}]}", false)]
+    // cause は on_death / on_linked_death 以外では従来どおり reject
+    [InlineData("{\"when\":\"on_near\",\"radius\":\"small\",\"cause\":\"kill\",\"do\":[{\"op\":\"stop\"}]}", false)]
+    // 部屋イベントは追加フィールド無し
+    [InlineData("{\"when\":\"on_room_enter\",\"do\":[{\"op\":\"stop\"}]}", true)]
+    [InlineData("{\"when\":\"on_room_exit\",\"do\":[{\"op\":\"stop\"}]}", true)]
+    [InlineData("{\"when\":\"on_room_enter\",\"radius\":\"small\",\"do\":[{\"op\":\"stop\"}]}", false)]
+    public void Wave4RuleFields_MatchTheContract(string ruleJson, bool shouldAccept)
+    {
+        string json = Wrap("\"logic\":{\"version\":1,\"rules\":[" + ruleJson + "]}");
+        bool ok = EkrDefinition.TryParse(json, out _, out string error);
+        Assert.True(ok == shouldAccept, shouldAccept ? error : "本来 reject されるべき rule が受理されました: " + ruleJson);
+    }
+
+    // §1.2: who 省略は "anyone" としてパース時に焼き込まれる (notify.target の既定 self と同じ方式)。
+    [Fact]
+    public void OnNear_WhoOmitted_DefaultsToAnyone()
+    {
+        string json = Wrap("\"logic\":{\"version\":1,\"rules\":[" +
+                           "{\"when\":\"on_near\",\"radius\":\"small\",\"do\":[{\"op\":\"stop\"}]}," +
+                           "{\"when\":\"on_far\",\"radius\":\"large\",\"who\":\"saved1\",\"do\":[{\"op\":\"stop\"}]}]}");
+
+        Assert.True(EkrDefinition.TryParse(json, out EkrDefinition def, out string error), error);
+
+        EkrRule near = Assert.Single(def.ParsedLogic.Rules, r => r.When == "on_near");
+        Assert.Equal("small", near.Radius);
+        Assert.Equal("anyone", near.Who);
+
+        EkrRule far = Assert.Single(def.ParsedLogic.Rules, r => r.When == "on_far");
+        Assert.Equal("large", far.Radius);
+        Assert.Equal("saved1", far.Who);
+    }
+
+    // §3/§4: link (self/linked 不可)・unlink (引数なし)・recruit (self 不可・linked 可) の受理集合。
+    [Theory]
+    [InlineData("{\"op\":\"link\",\"target\":\"ctx\"}", true)]
+    [InlineData("{\"op\":\"link\",\"target\":\"saved1\"}", true)]
+    [InlineData("{\"op\":\"link\",\"target\":\"nearest\"}", true)]
+    [InlineData("{\"op\":\"link\",\"target\":\"random\"}", true)]
+    [InlineData("{\"op\":\"link\",\"target\":\"self\"}", false)]
+    [InlineData("{\"op\":\"link\",\"target\":\"linked\"}", false)] // 「つないだ人と つなぐ」は恒等 — reject
+    [InlineData("{\"op\":\"link\",\"target\":\"all\"}", false)]
+    [InlineData("{\"op\":\"link\"}", false)] // target 必須
+    [InlineData("{\"op\":\"unlink\"}", true)]
+    [InlineData("{\"op\":\"recruit\",\"target\":\"ctx\"}", true)]
+    [InlineData("{\"op\":\"recruit\",\"target\":\"linked\"}", true)]
+    [InlineData("{\"op\":\"recruit\",\"target\":\"saved2\"}", true)]
+    [InlineData("{\"op\":\"recruit\",\"target\":\"nearest\"}", true)]
+    [InlineData("{\"op\":\"recruit\",\"target\":\"self\"}", false)]
+    [InlineData("{\"op\":\"recruit\",\"target\":\"all\"}", false)]
+    [InlineData("{\"op\":\"recruit\"}", false)] // target 必須
+    [InlineData("{\"op\":\"addon_give\",\"target\":\"ctx\"}", false)] // 未知 op は従来どおり reject (Wave 5 送り §0)
+    public void Wave4Ops_MatchTheContract(string opJson, bool shouldAccept)
+    {
+        bool ok = EkrDefinition.TryParse(LogicWithOp(opJson), out _, out string error);
+        Assert.True(ok == shouldAccept, shouldAccept ? error : "本来 reject されるべき op が受理されました: " + opJson);
+    }
+
+    // §3.4: linked セレクタは「saved1/2 が受理されるすべての箇所」(Single/Other/Multi の3受理面) に追加。
+    // notify は TS 側が TARGET_SINGLE_VALUES からの導出で構造的に受理するため C# も受理 (検証パリティ)。
+    // at/to (空間セレクタ) には追加しない (§3.4 明示除外)。
+    [Theory]
+    [InlineData("{\"op\":\"kill\",\"target\":\"linked\"}", true)]
+    [InlineData("{\"op\":\"teleport_other\",\"target\":\"linked\",\"to\":\"marker1\"}", true)]
+    [InlineData("{\"op\":\"inspect\",\"target\":\"linked\",\"depth\":\"team\"}", true)]
+    [InlineData("{\"op\":\"reveal\",\"target\":\"linked\"}", true)]
+    [InlineData("{\"op\":\"arrow_show\",\"target\":\"linked\",\"seconds\":10}", true)]
+    [InlineData("{\"op\":\"remember\",\"slot\":1,\"target\":\"linked\"}", true)]
+    [InlineData("{\"op\":\"vote_block\",\"target\":\"linked\"}", true)]
+    [InlineData("{\"op\":\"exile\",\"target\":\"linked\"}", true)]
+    [InlineData("{\"op\":\"teleport\",\"to\":\"linked\"}", false)] // 空間セレクタには追加しない (§3.4)
+    [InlineData("{\"op\":\"marker_save\",\"slot\":1,\"at\":\"linked\"}", false)]
+    [InlineData("{\"op\":\"notify\",\"text\":\"a\",\"seconds\":2,\"target\":\"linked\"}", true)] // MultiSelectors にも追加 (TS 導出構造とのパリティ)
+    public void LinkedSelector_MatchesTheContract(string opJson, bool shouldAccept)
+    {
+        bool ok = EkrDefinition.TryParse(LogicWithOp(opJson), out _, out string error);
+        Assert.True(ok == shouldAccept, shouldAccept ? error : "本来 reject されるべき op が受理されました: " + opJson);
+    }
+
+    // §6 (確認のみの項): cancel_attack/cancel_vote の配置 reject は Wave 4 の新イベント配下にも自動で効く。
+    [Fact]
+    public void CancelOps_StayRejectedUnderTheWave4Events()
+    {
+        Assert.False(EkrDefinition.TryParse(
+            Wrap("\"logic\":{\"version\":1,\"rules\":[{\"when\":\"on_near\",\"radius\":\"small\",\"do\":[{\"op\":\"cancel_attack\"}]}]}"),
+            out _, out _));
+
+        Assert.False(EkrDefinition.TryParse(
+            Wrap("\"logic\":{\"version\":1,\"rules\":[{\"when\":\"on_linked_death\",\"do\":[{\"op\":\"cancel_vote\"}]}]}"),
+            out _, out _));
     }
 
     // passives 無しでも R0 動作 (完全後方互換) — ParsedPassives は既定インスタンスで非 null。

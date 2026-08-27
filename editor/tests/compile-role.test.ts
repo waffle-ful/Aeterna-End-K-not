@@ -783,3 +783,112 @@ describe("compile-role: 空っぽのきっかけブロック検出", () => {
         expect(findEmptyWhenBlocks(w)).toEqual([]);
     });
 });
+
+// Wave 4 (docs/ekn-wave4-contract.md 2026-08-25) — つなぐ
+describe("compile-role: Wave 4 ブロック (on_near / on_far / on_room_enter / on_room_exit / on_linked_death / link / unlink / recruit)", () => {
+    it("ekr_when_on_near は radius を転記し、WHO が既定の anyone ならフィールドごと省略する", () => {
+        const blocks: SerializedBlock[] = [
+            { type: "ekr_when_on_near", fields: { RADIUS: "small", WHO: "anyone" }, next: { block: { type: "ekr_do_stop" } } },
+        ];
+        expect(compileTopBlocksToRules(blocks)).toEqual([
+            { when: "on_near", radius: "small", do: [{ op: "stop" }] },
+        ]);
+    });
+
+    it("ekr_when_on_near は WHO が anyone 以外なら who を転記する", () => {
+        const blocks: SerializedBlock[] = [
+            { type: "ekr_when_on_near", fields: { RADIUS: "medium", WHO: "linked" }, next: { block: { type: "ekr_do_stop" } } },
+        ];
+        expect(compileTopBlocksToRules(blocks)).toEqual([
+            { when: "on_near", radius: "medium", who: "linked", do: [{ op: "stop" }] },
+        ]);
+    });
+
+    it("ekr_when_on_far は radius/who を両方転記する (who は必須)", () => {
+        const blocks: SerializedBlock[] = [
+            { type: "ekr_when_on_far", fields: { RADIUS: "large", WHO: "saved2" }, next: { block: { type: "ekr_do_stop" } } },
+        ];
+        expect(compileTopBlocksToRules(blocks)).toEqual([
+            { when: "on_far", radius: "large", who: "saved2", do: [{ op: "stop" }] },
+        ]);
+    });
+
+    it("ekr_when_on_linked_death は CAUSE 空文字 (すべて) をフィールドごと省略し、指定時は cause を転記する", () => {
+        const all: SerializedBlock[] = [
+            { type: "ekr_when_on_linked_death", fields: { CAUSE: "" }, next: { block: { type: "ekr_do_stop" } } },
+        ];
+        expect(compileTopBlocksToRules(all)).toEqual([{ when: "on_linked_death", do: [{ op: "stop" }] }]);
+
+        const filtered: SerializedBlock[] = [
+            { type: "ekr_when_on_linked_death", fields: { CAUSE: "kill" }, next: { block: { type: "ekr_do_stop" } } },
+        ];
+        expect(compileTopBlocksToRules(filtered)).toEqual([{ when: "on_linked_death", cause: "kill", do: [{ op: "stop" }] }]);
+    });
+
+    it("on_room_enter / on_room_exit は追加フィールド無しの生成ハットとして転記される", () => {
+        const blocks: SerializedBlock[] = [
+            { type: "ekr_when_on_room_enter", next: { block: { type: "ekr_do_stop" } } },
+            { type: "ekr_when_on_room_exit", next: { block: { type: "ekr_do_stop" } } },
+        ];
+        expect(compileTopBlocksToRules(blocks)).toEqual([
+            { when: "on_room_enter", do: [{ op: "stop" }] },
+            { when: "on_room_exit", do: [{ op: "stop" }] },
+        ]);
+    });
+
+    it("ekr_do_link / ekr_do_unlink / ekr_do_recruit をコンパイルする", () => {
+        const blocks: SerializedBlock[] = [
+            {
+                type: "ekr_when_on_kill",
+                next: {
+                    block: {
+                        type: "ekr_do_link",
+                        fields: { TARGET: "ctx" },
+                        next: {
+                            block: {
+                                type: "ekr_do_recruit",
+                                fields: { TARGET: "linked" },
+                                next: { block: { type: "ekr_do_unlink" } },
+                            },
+                        },
+                    },
+                },
+            },
+        ];
+        expect(compileTopBlocksToRules(blocks)).toEqual([
+            {
+                when: "on_kill",
+                do: [
+                    { op: "link", target: "ctx" },
+                    { op: "recruit", target: "linked" },
+                    { op: "unlink" },
+                ],
+            },
+        ]);
+    });
+
+    it("「つなぐ→リンク死で道連れ」ワークスペースが validateRoleLogic まで通る", () => {
+        const w = ws([
+            { type: "ekr_when_on_kill", next: { block: { type: "ekr_do_link", fields: { TARGET: "ctx" } } } },
+            { type: "ekr_when_on_linked_death", fields: { CAUSE: "" }, next: { block: { type: "ekr_do_kill", fields: { TARGET: "self" } } } },
+            { type: "ekr_when_on_far", fields: { RADIUS: "medium", WHO: "linked" }, next: { block: { type: "ekr_do_kill", fields: { TARGET: "linked" } } } },
+        ]);
+        const compiled = compileWorkspaceToLogicInput(w, []);
+        expect(compiled).not.toBeNull();
+        const r = validateRoleLogic(compiled);
+        expect(r.ok, r.ok ? "" : (r as { error: string }).error).toBe(true);
+        if (r.ok) {
+            expect(r.logic.rules).toEqual([
+                { when: "on_kill", do: [{ op: "link", target: "ctx" }] },
+                { when: "on_linked_death", do: [{ op: "kill", target: "self" }] },
+                { when: "on_far", radius: "medium", who: "linked", do: [{ op: "kill", target: "linked" }] },
+            ]);
+        }
+    });
+
+    it("on_near ハットの RADIUS が欠落したままだと validateRoleLogic で reject される (欠落を既定値に化けさせない)", () => {
+        const w = ws([{ type: "ekr_when_on_near", next: { block: { type: "ekr_do_stop" } } }]);
+        const r = validateRoleLogic(compileWorkspaceToLogicInput(w, []));
+        expect(r.ok).toBe(false);
+    });
+});

@@ -15,7 +15,8 @@
 // 分かりやすい日本語エラーに変換してくれる。
 //
 // ブロック type 命名規約 (blocks-role.ts と1対1で対応させること):
-//   ekr_when_<when-id>          … イベントハット (14種、id は spec §2 の when 値そのもの)
+//   ekr_when_<when-id>          … イベントハット (22種 — 正典は roledef.ts の LOGIC_WHEN_VALUES。
+//                                  id は spec §2 の when 値そのもの)
 //   ekr_if / ekr_if_else        … 制御構文 if (else 無し/else 付きの2ブロックに分離、mutator 不使用)
 //   ekr_do_<op>                 … その他の制御/アクション opcode (spec §3)
 //   math_number / logic_boolean … Blockly 標準ブロックをそのまま「lit」式として再利用
@@ -210,6 +211,13 @@ function blockToNode(b: SerializedBlock): Record<string, unknown> {
             return { op: "vote_swap" };
         case "ekr_do_exile":
             return { op: "exile", target: b.fields?.TARGET };
+        // Wave 4 (docs/ekn-wave4-contract.md §3/§4) — つなぐ (link/unlink/recruit)
+        case "ekr_do_link":
+            return { op: "link", target: b.fields?.TARGET };
+        case "ekr_do_unlink":
+            return { op: "unlink" };
+        case "ekr_do_recruit":
+            return { op: "recruit", target: b.fields?.TARGET };
         // v1.3 (spec §3 2026-08-11 追記) — ひっぱる・ひきずる・フィールド
         case "ekr_do_pull":
             return { op: "pull" };
@@ -279,6 +287,25 @@ export function compileTopBlocksToRules(topBlocks: SerializedBlock[]): unknown[]
             if (when === "on_alive_count") {
                 rule.cmp = b.fields?.CMP;
                 rule.value = toNum(b.fields?.VALUE);
+            }
+
+            // Wave 4 (docs/ekn-wave4-contract.md §1.2/§1.3/§3.3): on_near は radius 必須 + who 任意 —
+            // WHO が既定の "anyone" のときはフィールドごと省略する (欠落 = anyone。正準形を最小に
+            // 保つ notify.target の "self" 省略と同じ作法)。on_far は radius/who とも必須なので
+            // 両方そのまま転記する。on_linked_death の CAUSE は on_death と同じ「すべて = 空文字は
+            // フィールドごと省略」。
+            if (when === "on_near") {
+                rule.radius = b.fields?.RADIUS;
+                const who = b.fields?.WHO;
+                if (typeof who === "string" && who !== "" && who !== "anyone") rule.who = who;
+            }
+            if (when === "on_far") {
+                rule.radius = b.fields?.RADIUS;
+                rule.who = b.fields?.WHO;
+            }
+            if (when === "on_linked_death") {
+                const cause = b.fields?.CAUSE;
+                if (typeof cause === "string" && cause !== "") rule.cause = cause;
             }
 
             rules.push(rule);

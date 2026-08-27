@@ -43,6 +43,10 @@ const HUE_ULTIMATE = 150; // ひっさつわざ = 緑
 // (45〜150 の隙間に HUE_INFO、210〜290 の隙間に HUE_MEETING)。
 const HUE_INFO = 100; // しらべる = 黄緑
 const HUE_MEETING = 260; // とうひょう = 青紫
+// Wave 4 (docs/ekn-wave4-contract.md 2026-08-25) — 「つなぐ」(リンク・勧誘) カテゴリ。
+// 既存8色 (45/210/290/20/330/150/100/260) の隙間 (150〜210) から選ぶ — 動き (210) と
+// ひっさつわざ (150) のあいだで視覚的に区別できる青緑。
+const HUE_LINK = 190; // つなぐ = 青緑
 
 // R2 (docs/ekn-r2-contract.md §3b): on_attacked の「こうげきのしゅるい」と on_death の「死にかた」。
 // 先頭の "" は「すべて」= AST でフィールドごと省略する (= 全種にマッチ)。
@@ -76,6 +80,23 @@ const CMP_OPTIONS: [string, string][] = [
     ["いじょう", "ge"],
 ];
 
+// Wave 4 (docs/ekn-wave4-contract.md §1) — on_near/on_far の はんい (radius tier) と あいて (who)。
+// radius の3語は「ブラックホール」(field) と同じ字面だが別スケール (契約 §1.2「同語別値」) なので、
+// tooltip で別ものであることを明示する。
+const NEAR_RADIUS_OPTIONS: [string, string][] = [
+    ["ちかく", "small"],
+    ["そこそこ", "medium"],
+    ["とおく", "large"],
+];
+const NEAR_WHO_OPTIONS: [string, string][] = [
+    ["だれでも", "anyone"],
+    ["つないだ人", "linked"],
+    ["おぼえた人1", "saved1"],
+    ["おぼえた人2", "saved2"],
+];
+// on_far は「だれでも」を出さない (who 必須・anyone は検証 reject — 契約 §1.3)。
+const FAR_WHO_OPTIONS: [string, string][] = NEAR_WHO_OPTIONS.filter(([, v]) => v !== "anyone");
+
 export const WHEN_LABELS: Record<LogicWhen, string> = {
     on_game_start: "ゲームが始まったとき",
     // Wave 1 (spec §2 2026-08-11): 発動トリガ統合により「ペット」ではなく汎用の発動ボタンを指す
@@ -98,6 +119,12 @@ export const WHEN_LABELS: Record<LogicWhen, string> = {
     on_var: "へんすうが条件になったとき",
     on_alive_count: "いきのこりが◯人になったとき",
     on_vent_exit: "ベントから出たとき",
+    // Wave 4 (docs/ekn-wave4-contract.md §1〜§3 2026-08-25) — つなぐ。
+    on_near: "だれかが 近づいたとき",
+    on_far: "あのひとが はなれたとき",
+    on_room_enter: "へやに 入ったとき",
+    on_room_exit: "へやから 出たとき",
+    on_linked_death: "つないだ人が 死んだとき",
 };
 
 const WHEN_TOOLTIPS: Record<LogicWhen, string> = {
@@ -127,6 +154,13 @@ const WHEN_TOOLTIPS: Record<LogicWhen, string> = {
     // 「on_vent_enter とのペアは保証しない (入ったときと数が合わないことがあるよ)」を tooltip に
     // 明記する要件が別途あるため、注意書きの一文を続ける (2つの要件を1文で満たす)。
     on_vent_exit: "ベントから出たときに実行します (追い出されたときも含みます)。入ったときと数が合わないことがあるよ。",
+    // Wave 4 (docs/ekn-wave4-contract.md §1〜§3 2026-08-25) — つなぐ。radius は field (ブラックホール)
+    // と同語別値 (契約 §1.2) なので「別もの」の一文を必ず残すこと。
+    on_near: "選んだ範囲に生きている人が入ったときに1回だけ実行します (このときの「あいて」= 近づいた人)。その人が出ていくまでは、もう一度は実行されません。ワープでとなりに現れた人には反応しません (歩いて近づいたときだけ)。はんいは「ブラックホール」の大きさとは別ものだよ。",
+    on_far: "つないだ人/おぼえた人が、いちど近づいてから はなれたときに1回実行します (このときの「あいて」= はなれた人)。さいしょから遠いときは実行されません。はんいは「ブラックホール」の大きさとは別ものだよ。",
+    on_room_enter: "名前のある部屋に入ったときに実行します。ろうか・外は部屋ではありません。ベントやワープで入っても実行されます。",
+    on_room_exit: "名前のある部屋から出たときに実行します。ろうか・外は部屋ではありません。ベントやワープで出ても実行されます。",
+    on_linked_death: "「このひとと つなぐ」でつないだ人が死んだときに1回実行します (このときの「あいて」= 死んだ人)。切断でいなくなったときは実行されません。",
 };
 
 // ---------------------------------------------------------------------------
@@ -137,6 +171,9 @@ const WHEN_TOOLTIPS: Record<LogicWhen, string> = {
 const TARGET_SINGLE_OPTIONS: [string, string][] = [
     ["じぶん", "self"],
     ["あいて", "ctx"],
+    // Wave 4 (docs/ekn-wave4-contract.md §3.4): つないだ人 — saved1/2 が出るすべてのドロップダウン
+    // (kill/teleport_other/remember/inspect/reveal/arrow_show/vote_block/exile/notify) に出す。
+    ["つないだ人", "linked"],
     ["おぼえた人1", "saved1"],
     ["おぼえた人2", "saved2"],
     ["いちばん近くの人", "nearest"],
@@ -187,8 +224,12 @@ function jsonBlockDefs(): unknown[] {
     // 数値欄を持つので同様に個別定義。on_var はさらに変数ドロップダウンが動的 (変数リストの増減に
     // 追随する必要がある) ため、ekr_expr_var/ekr_do_var_set と同じく defineDynamicVariableBlocks()
     // 側で命令形登録する (on_vent_exit はフィールドを持たないのでこのフィルタに含めず生成のまま)。
+    // Wave 4 (docs/ekn-wave4-contract.md §1/§3): on_near (RADIUS+WHO)・on_far (RADIUS+WHO)・
+    // on_linked_death (CAUSE) もドロップダウンを持つので個別定義 (on_room_enter/on_room_exit は
+    // フィールドを持たないので生成のまま)。
     const eventBlocks = LOGIC_WHEN_VALUES
-        .filter((when) => when !== "on_cno_touch" && when !== "on_attacked" && when !== "on_death" && when !== "on_alive_count" && when !== "on_var")
+        .filter((when) => when !== "on_cno_touch" && when !== "on_attacked" && when !== "on_death" && when !== "on_alive_count" && when !== "on_var"
+            && when !== "on_near" && when !== "on_far" && when !== "on_linked_death")
         .map((when) => ({
             type: `ekr_when_${when}`,
             message0: WHEN_LABELS[when],
@@ -235,6 +276,42 @@ function jsonBlockDefs(): unknown[] {
             nextStatement: null,
             colour: HUE_EVENT,
             tooltip: WHEN_TOOLTIPS.on_alive_count,
+        },
+        // Wave 4 (docs/ekn-wave4-contract.md §1.2/§1.3) — 対人近接。on_near の WHO は「だれでも」
+        // 込み・on_far は「だれでも」抜き (anyone は検証 reject)。
+        {
+            type: "ekr_when_on_near",
+            message0: "%1 が 近づいたとき (はんい %2 )",
+            args0: [
+                { type: "field_dropdown", name: "WHO", options: NEAR_WHO_OPTIONS },
+                { type: "field_dropdown", name: "RADIUS", options: NEAR_RADIUS_OPTIONS },
+            ],
+            inputsInline: true,
+            nextStatement: null,
+            colour: HUE_EVENT,
+            tooltip: WHEN_TOOLTIPS.on_near,
+        },
+        {
+            type: "ekr_when_on_far",
+            message0: "%1 が はなれたとき (はんい %2 )",
+            args0: [
+                { type: "field_dropdown", name: "WHO", options: FAR_WHO_OPTIONS },
+                { type: "field_dropdown", name: "RADIUS", options: NEAR_RADIUS_OPTIONS },
+            ],
+            inputsInline: true,
+            nextStatement: null,
+            colour: HUE_EVENT,
+            tooltip: WHEN_TOOLTIPS.on_far,
+        },
+        // Wave 4 (契約 §3.3) — つないだ人の死。CAUSE は on_death と同じ8バケット +「ぜんぶ」
+        // (空文字 = フィールドごと省略) のドロップダウンを流用する。
+        {
+            type: "ekr_when_on_linked_death",
+            message0: "つないだ人が %1 で死んだとき",
+            args0: [{ type: "field_dropdown", name: "CAUSE", options: DEATH_CAUSE_OPTIONS }],
+            nextStatement: null,
+            colour: HUE_EVENT,
+            tooltip: WHEN_TOOLTIPS.on_linked_death,
         },
 
         // 制御
@@ -659,6 +736,47 @@ function jsonBlockDefs(): unknown[] {
             tooltip: "投票を待たずに、えらんだ人をすぐ追放して会議を終わらせます (自分をえらぶこともできます)。会議中でしか効かず、ひと会議に1回だけです。何回使えるようにするかは、変数を使って自分で決めよう。",
         },
 
+        // つなぐ (Wave 4 docs/ekn-wave4-contract.md §3/§4 — リンクと勧誘)
+        {
+            type: "ekr_do_link",
+            message0: "%1 と つなぐ",
+            args0: [{
+                type: "field_dropdown", name: "TARGET", options: [
+                    ["あいて", "ctx"],
+                    ["おぼえた人1", "saved1"], ["おぼえた人2", "saved2"],
+                    ["いちばん近くの人", "nearest"], ["だれか (ランダム)", "random"],
+                ],
+            }],
+            previousStatement: null,
+            nextStatement: null,
+            colour: HUE_LINK,
+            tooltip: "えらんだ人と つなぎます (つなげるのは1人だけ。もう一度つなぐと、前のつなぎは外れて新しい人につなぎ直します)。つないだ人は「つないだ人」としてキルやワープなどで指定でき、その人が死ぬと「つないだ人が 死んだとき」が動きます。会議をまたいでもつながったままですが、ゲームが始まると外れます (切断でいなくなったときは、なにも起きずに外れます)。会議中でも使えます。",
+        },
+        {
+            type: "ekr_do_unlink",
+            message0: "つなぎを とく",
+            previousStatement: null,
+            nextStatement: null,
+            colour: HUE_LINK,
+            tooltip: "いまのつなぎを外します (つないでいなければ何も起きません)。会議中でも使えます。",
+        },
+        {
+            type: "ekr_do_recruit",
+            message0: "%1 を なかまにする",
+            args0: [{
+                type: "field_dropdown", name: "TARGET", options: [
+                    ["あいて", "ctx"], ["つないだ人", "linked"],
+                    ["おぼえた人1", "saved1"], ["おぼえた人2", "saved2"],
+                    ["いちばん近くの人", "nearest"], ["だれか (ランダム)", "random"],
+                ],
+            }],
+            previousStatement: null,
+            nextStatement: null,
+            colour: HUE_LINK,
+            // 契約 §4: on_game_start 再発火とインポスター人数枠の増加は tooltip 明記が契約要件。
+            tooltip: "えらんだ人が、自分と同じ役職になります。会議中は効きません。同じ役職の人には効きません。しばらく間をあけないと連続では効きません。なかまに した/された ときも「ゲームがはじまったとき」が動くよ。じぶんがインポスターの役職なら、なかまにした人も本物のインポスターになるよ (インポスターの人数がふえる)。",
+        },
+
         // 変数・式 (動的ドロップダウンが不要なもののみ。var_set/var_add/変数の値 は命令形で別途登録)
         {
             type: "ekr_expr_arith",
@@ -884,6 +1002,16 @@ export function buildRoleToolbox(): Blockly.utils.toolbox.ToolboxDefinition {
                     { kind: "block", type: "ekr_do_pull" },
                     { kind: "block", type: "ekr_do_drag" },
                     { kind: "block", type: "ekr_do_field" },
+                ],
+            },
+            {
+                kind: "category",
+                name: "つなぐ",
+                colour: String(HUE_LINK),
+                contents: [
+                    { kind: "block", type: "ekr_do_link" },
+                    { kind: "block", type: "ekr_do_unlink" },
+                    { kind: "block", type: "ekr_do_recruit" },
                 ],
             },
             {

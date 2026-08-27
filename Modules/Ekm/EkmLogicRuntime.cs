@@ -48,6 +48,13 @@ public sealed class EkrRule
     // Wave 3 (§1.1): このルールが「じょうたいトリガ」(エッジ発火エンジンが管理するもの) か。
     // パース時に確定する導出値 — 呼び出し元 (EkrManager) が武装配列を組むときの唯一の判定基準。
     public bool IsStateTrigger;
+
+    // Wave 4 (docs/ekn-wave4-contract.md §1): on_near / on_far 専用フィールド。radius は両者必須
+    // ("small" | "medium" | "large")。Who は on_near では任意 (欠落 = "anyone" をパース時に焼き込む —
+    // notify.target の既定 self と同じ方式)・on_far では必須 ("linked" | "saved1" | "saved2"、
+    // "anyone" は文書 reject)。他イベントでは両方とも null。
+    public string Radius;
+    public string Who;
 }
 
 // op ごとの引数はフラットに全部持つ (spec §3 の「args ラッパー無し」に対応)。未使用フィールドは既定値のまま。
@@ -156,7 +163,9 @@ public sealed class EkrLogicDef
         "on_attacked", // Wave 1 (2026-08-11)
         "on_meeting_vote", "on_meeting_pick", // Wave 2 (docs/ekn-wave2-contract.md §1)
         // Wave 3 (docs/ekn-wave3-contract.md §1): じょうたいトリガ2種 + ベント退出。
-        "on_var", "on_alive_count", "on_vent_exit"
+        "on_var", "on_alive_count", "on_vent_exit",
+        // Wave 4 (docs/ekn-wave4-contract.md §0): 対人近接2種 + 部屋2種 + リンク死。
+        "on_near", "on_far", "on_room_enter", "on_room_exit", "on_linked_death"
     ];
 
     // Wave 3 (§1.2): 比較演算子。**綴りは ExprKinds の流用** (新語彙を作らない)。
@@ -174,22 +183,24 @@ public sealed class EkrLogicDef
 
     // rule 直下の任意フィルタ (kind/cause) の読み取り。指定できるイベントが決まっており、
     // 他イベントに置かれていたら slot と同じく reject する (静的に検査できるものは no-op でなく reject)。
-    private static bool TryReadRuleFilter(JsonElement ruleEl, string when, string field, string onlyEvent, string[] allowed, out string value, out string error)
+    // Wave 4 (docs/ekn-wave4-contract.md §3.3): cause は on_death と on_linked_death の2イベントで
+    // 受理するため、対象イベントは単数でなく配列で受ける。
+    private static bool TryReadRuleFilter(JsonElement ruleEl, string when, string field, string[] onlyEvents, string[] allowed, out string value, out string error)
     {
         value = null;
         error = null;
 
         if (!ruleEl.TryGetProperty(field, out JsonElement el)) return true;
 
-        if (when != onlyEvent)
+        if (Array.IndexOf(onlyEvents, when) < 0)
         {
-            error = $"when=\"{when}\" の rule に {field} は指定できません ({onlyEvent} 専用です)";
+            error = $"when=\"{when}\" の rule に {field} は指定できません ({string.Join(" / ", onlyEvents)} 専用です)";
             return false;
         }
 
         if (el.ValueKind != JsonValueKind.String)
         {
-            error = $"{onlyEvent} の {field} は文字列で指定してください";
+            error = $"{when} の {field} は文字列で指定してください";
             return false;
         }
 
@@ -197,11 +208,80 @@ public sealed class EkrLogicDef
 
         if (Array.IndexOf(allowed, raw) < 0)
         {
-            error = $"{onlyEvent} の {field}=\"{raw}\" は未対応です (使えるのは {string.Join(" / ", allowed)})";
+            error = $"{when} の {field}=\"{raw}\" は未対応です (使えるのは {string.Join(" / ", allowed)})";
             return false;
         }
 
         value = raw;
+        return true;
+    }
+
+    // Wave 4 (docs/ekn-wave4-contract.md §1/§6): 対人近接 (on_near/on_far) の rule 直下フィールド。
+    // radius は両イベントの必須。who は on_near では任意 (既定 "anyone")・on_far では必須かつ
+    // "anyone" 不可 (「知らない誰かが遠くにいる」は常時成立で意味を持たない — 契約 §1.3)。
+    // 他イベントに付いていたら on_cno_touch の slot と同じく文書 reject する (対称検査)。
+    // ⚠️ TS 側 (editor/src/roledef.ts) と同じ並び・同じ綴りを保つこと (drift 検出は共有 fixture)。
+    public static readonly string[] EkrProximityRadii = ["small", "medium", "large"];
+    public static readonly string[] EkrNearWhoValues = ["anyone", "linked", "saved1", "saved2"];
+    public static readonly string[] EkrFarWhoValues = ["linked", "saved1", "saved2"];
+
+    private static bool TryReadProximityFields(JsonElement ruleEl, string when, out string radius, out string who, out string error)
+    {
+        radius = null;
+        who = null;
+        error = null;
+
+        if (when is not "on_near" and not "on_far")
+        {
+            if (ruleEl.TryGetProperty("radius", out _))
+            {
+                error = $"when=\"{when}\" の rule に radius は指定できません (on_near / on_far 専用です)";
+                return false;
+            }
+
+            if (ruleEl.TryGetProperty("who", out _))
+            {
+                error = $"when=\"{when}\" の rule に who は指定できません (on_near / on_far 専用です)";
+                return false;
+            }
+
+            return true;
+        }
+
+        if (!ruleEl.TryGetProperty("radius", out JsonElement radiusEl) || radiusEl.ValueKind != JsonValueKind.String || Array.IndexOf(EkrProximityRadii, radiusEl.GetString()) < 0)
+        {
+            error = $"{when} の radius が不正です (使えるのは {string.Join(" / ", EkrProximityRadii)})";
+            return false;
+        }
+
+        radius = radiusEl.GetString();
+
+        if (when == "on_near")
+        {
+            if (!ruleEl.TryGetProperty("who", out JsonElement whoEl))
+            {
+                who = "anyone"; // 欠落 = anyone (契約 §1.2 — 既定値はパース時に焼き込む)
+                return true;
+            }
+
+            if (whoEl.ValueKind != JsonValueKind.String || Array.IndexOf(EkrNearWhoValues, whoEl.GetString()) < 0)
+            {
+                error = $"on_near の who が不正です (使えるのは {string.Join(" / ", EkrNearWhoValues)})";
+                return false;
+            }
+
+            who = whoEl.GetString();
+            return true;
+        }
+
+        // on_far: who は必須・"anyone" は文書 reject (契約 §1.3)。
+        if (!ruleEl.TryGetProperty("who", out JsonElement farWhoEl) || farWhoEl.ValueKind != JsonValueKind.String || Array.IndexOf(EkrFarWhoValues, farWhoEl.GetString()) < 0)
+        {
+            error = $"on_far の who が不正です (使えるのは {string.Join(" / ", EkrFarWhoValues)})";
+            return false;
+        }
+
+        who = farWhoEl.GetString();
         return true;
     }
 
@@ -286,11 +366,20 @@ public sealed class EkrLogicDef
 
     // Wave 1 (spec §3 統一セレクタ語彙)。単数セレクタのみ受理する op (kill/teleport_other/remember 等) と、
     // 複数セレクタも受理する明示ホワイトリスト op (Wave 1 では notify だけ) を分ける。
-    private static readonly string[] SingleSelectors = ["self", "ctx", "saved1", "saved2", "nearest", "random"];
-    private static readonly string[] MultiSelectors = ["self", "ctx", "saved1", "saved2", "nearest", "random", "all", "room"];
+    // Wave 4 (docs/ekn-wave4-contract.md §3.4): "linked" (つないだ人) を追加 — 「saved1/saved2 が受理される
+    // すべての箇所」= SingleSelectors / OtherSelectors / MultiSelectors (TS 側は TARGET_SINGLE_VALUES からの
+    // 導出で notify も構造的に受理するため、こちらも追加しないと検証が非対称になる)。at/to (空間セレクタ)
+    // には追加しない (§3.4 明示除外 — 人参照であって位置参照ではない)。
+    // ⚠️ TS 側 (editor/src/roledef.ts) と同じ並び ("ctx" の直後に "linked")・同じ綴りを保つこと。
+    private static readonly string[] SingleSelectors = ["self", "ctx", "linked", "saved1", "saved2", "nearest", "random"];
+    private static readonly string[] MultiSelectors = ["self", "ctx", "linked", "saved1", "saved2", "nearest", "random", "all", "room"];
 
     // teleport_other.target は「他人」を動かす op なので self を含まない (自分は teleport の役目・spec §3)。
-    private static readonly string[] OtherSelectors = ["ctx", "saved1", "saved2", "nearest", "random"];
+    private static readonly string[] OtherSelectors = ["ctx", "linked", "saved1", "saved2", "nearest", "random"];
+
+    // Wave 4 (契約 §3.1): link.target は self 不可かつ linked 不可 (「つないだ人と つなぐ」は恒等)。
+    // OtherSelectors は Wave 4 で linked を含むため専用リストにする。
+    private static readonly string[] LinkTargetSelectors = ["ctx", "saved1", "saved2", "nearest", "random"];
 
     private static readonly HashSet<string> ControlOps = ["if", "wait", "stop", "var_set", "var_add"];
 
@@ -304,7 +393,9 @@ public sealed class EkrLogicDef
         "remember", "cancel_attack", // Wave 1 (2026-08-11)
         // Wave 2 (docs/ekn-wave2-contract.md §2,§3): 情報と会議
         "inspect", "reveal", "arrow_show", "arrow_mark", "arrow_hide",
-        "cancel_vote", "vote_weight_set", "vote_block", "vote_swap", "exile"
+        "cancel_vote", "vote_weight_set", "vote_block", "vote_swap", "exile",
+        // Wave 4 (docs/ekn-wave4-contract.md §3,§4): リンクと変換
+        "link", "unlink", "recruit"
     ];
 
     private static readonly HashSet<string> ExprKinds =
@@ -449,8 +540,13 @@ public sealed class EkrLogicDef
 
             // R2 (docs/ekn-r2-contract.md §3b): on_attacked の任意フィールド kind / on_death の任意
             // フィールド cause。省略 = 全種にマッチ。他イベントに置かれていたら slot と同じく reject。
-            if (!TryReadRuleFilter(ruleEl, when, "kind", "on_attacked", EkrAttackKinds, out string ruleKind, out error)) return false;
-            if (!TryReadRuleFilter(ruleEl, when, "cause", "on_death", EkrDeathCauses, out string ruleCause, out error)) return false;
+            // Wave 4 (契約 §3.3): cause は on_linked_death でも受理する (同じ 8 バケット・同じ任意性 —
+            // DeathCauseBucket は FireDeath で計算済みなので増分ゼロ)。
+            if (!TryReadRuleFilter(ruleEl, when, "kind", ["on_attacked"], EkrAttackKinds, out string ruleKind, out error)) return false;
+            if (!TryReadRuleFilter(ruleEl, when, "cause", ["on_death", "on_linked_death"], EkrDeathCauses, out string ruleCause, out error)) return false;
+
+            // Wave 4 (契約 §1/§6): on_near/on_far の radius/who (他イベントへの付着 reject を含む)。
+            if (!TryReadProximityFields(ruleEl, when, out string ruleRadius, out string ruleWho, out error)) return false;
 
             // Wave 3 (契約 §1.2/§1.3): じょうたいトリガの必須フィールド。slot と同じ厳格側 —
             // 付ける場所を間違えたら「静かに効かない」ではなく文書 reject にする。
@@ -502,7 +598,9 @@ public sealed class EkrLogicDef
                 VarName = ruleVar,
                 Cmp = ruleCmp,
                 CmpValue = ruleCmpValue,
-                IsStateTrigger = IsStateTriggerEvent(when)
+                IsStateTrigger = IsStateTriggerEvent(when),
+                Radius = ruleRadius,
+                Who = ruleWho
             });
         }
 
@@ -840,6 +938,22 @@ public sealed class EkrLogicDef
             case "exile":
                 // spec §3.4: self 可 (SingleSelectors は self を含む単数セレクタ全種)。
                 if (!TryGetEnum(nodeEl, "target", SingleSelectors, out n.Target, out err)) return false;
+                break;
+
+            // ── Wave 4 (docs/ekn-wave4-contract.md §3,§4): リンクと変換 ─────────────────────────
+
+            // §3.1: self 不可・linked 不可 (LinkTargetSelectors 参照)。
+            case "link":
+                if (!TryGetEnum(nodeEl, "target", LinkTargetSelectors, out n.Target, out err)) return false;
+                break;
+
+            // §3.2: 引数なし。
+            case "unlink":
+                break;
+
+            // §4: self 不可・linked 可 (OtherSelectors = Wave 4 の受理集合そのもの)。
+            case "recruit":
+                if (!TryGetEnum(nodeEl, "target", OtherSelectors, out n.Target, out err)) return false;
                 break;
         }
 
