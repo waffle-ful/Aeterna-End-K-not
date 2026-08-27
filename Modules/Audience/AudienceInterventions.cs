@@ -353,6 +353,17 @@ public static class AudienceInterventions
 
     // ---- !偽死体: 生存プレイヤーの偽死体を別の生存者の近くにスポーン ----
 
+    // 外見の入れ替え。送信の分散と復元台帳は OutfitShuffle 側が全部持っているので、ここは呼ぶだけ。
+    public static bool DoShuffleOne(byte targetId)
+    {
+        return OutfitShuffle.ShuffleOne(targetId, out _);
+    }
+
+    public static bool DoShuffleAll()
+    {
+        return OutfitShuffle.ShuffleAll(out _);
+    }
+
     public static bool DoFakeBody()
     {
         if (!ShipStatus.Instance) return false;

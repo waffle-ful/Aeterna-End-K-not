@@ -1719,6 +1719,8 @@ public static class Options
 
         Modules.Audience.AudienceOptions.SetupCustomOption();
 
+        Modules.OutfitShuffle.SetupCustomOption();
+
         LoadingPercentage = 61;
 
         AutoKickStart = new BooleanOptionItem(19310, "AutoKickStart", false, TabGroup.SystemSettings);

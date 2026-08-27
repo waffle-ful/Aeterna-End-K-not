@@ -1187,6 +1187,8 @@ internal static class IntroCutsceneDestroyPatch
 
         if (AmongUsClient.Instance.AmHost)
         {
+            EndKnot.Modules.OutfitShuffle.OnIntroFinished();
+
             LateTask.New(() =>
             {
                 if (!GameStates.InGame || GameStates.IsEnded) return;

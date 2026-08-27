@@ -69,6 +69,8 @@ public class Duality : RoleBase
 
     public override void OnMurder(PlayerControl killer, PlayerControl target)
     {
+        if (!killer.IsAlive()) return;
+
         LateTask.New(() =>
         {
             KillingPhase = false;
@@ -80,6 +82,8 @@ public class Duality : RoleBase
 
     public override void OnTaskComplete(PlayerControl pc, int completedTaskCount, int totalTaskCount)
     {
+        if (!pc.IsAlive()) return;
+
         KillingPhase = true;
         pc.RpcSetRoleDesync(RoleTypes.Impostor, pc.OwnerId, setRoleMap: true);
         ResetTimer();

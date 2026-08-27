@@ -209,6 +209,7 @@ internal static class ChangeRoleSettings
 
             EndKnot.Modules.Audience.AudienceManager.ResetForNewGame();
             EndKnot.Modules.Audience.AudienceInterventions.ResetForNewGame();
+            EndKnot.Modules.OutfitShuffle.OnGameStart();
             EndKnot.Modules.Companion.CompanionEventEmitter.ResetForNewGame();
 
             Main.AllPlayerKillCooldown = [];

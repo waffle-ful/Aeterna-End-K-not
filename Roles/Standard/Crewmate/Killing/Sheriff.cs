@@ -120,7 +120,7 @@ public class Sheriff : RoleBase
     {
         return !Main.PlayerStates[pc.PlayerId].IsDead
                && (CanKillAllAlive.GetBool() || GameStates.AlreadyDied)
-               && pc.GetAbilityUseLimit() is float.NaN or > 0;
+               && (pc.GetAbilityUseLimit() is float.NaN or > 0 || pc.Is(CustomRoles.Bloodlust));
     }
 
     public override bool OnCheckMurder(PlayerControl killer, PlayerControl target)
@@ -139,6 +139,9 @@ public class Sheriff : RoleBase
     {
         killer.RpcRemoveAbilityUse();
         Logger.Info($"{killer.GetNameWithRole().RemoveHtmlTags()} : Number of kills left: {killer.GetAbilityUseLimit()}", "Sheriff");
+
+        if (killer.Is(CustomRoles.Bloodlust)) return;
+
         Main.PlayerStates[target.PlayerId].deathReason = PlayerState.DeathReason.Shot;
 
         if (killer.AmOwner && Utils.TimeStamp - IntroCutsceneDestroyPatch.IntroDestroyTS < 25)

@@ -187,6 +187,7 @@ public static class TextBoxPatch
             {
                 Destroy();
                 IsInvalidCommand = false;
+                __instance.outputText.color = Main.DarkTheme.Value ? Color.white : Color.black;
                 return;
             }
 
