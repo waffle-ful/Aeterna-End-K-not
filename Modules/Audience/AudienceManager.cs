@@ -24,7 +24,9 @@ public static class AudienceManager
         Meteor,
         Earthquake,
         Voice,
-        FakeBody
+        FakeBody,
+        ShuffleOne,
+        ShuffleAll
     }
 
     // Text は !天の声 のメッセージ本文にのみ使う (他コマンドは null)。
@@ -76,7 +78,13 @@ public static class AudienceManager
         ["天の声"] = InterventionKind.Voice,
         ["voice"] = InterventionKind.Voice,
         ["偽死体"] = InterventionKind.FakeBody,
-        ["fakebody"] = InterventionKind.FakeBody
+        ["fakebody"] = InterventionKind.FakeBody,
+        ["変身"] = InterventionKind.ShuffleOne,
+        ["入れ替え"] = InterventionKind.ShuffleOne,
+        ["shuffle"] = InterventionKind.ShuffleOne,
+        ["大変身"] = InterventionKind.ShuffleAll,
+        ["総入れ替え"] = InterventionKind.ShuffleAll,
+        ["shuffleall"] = InterventionKind.ShuffleAll
     };
 
     public static void EnsureSubscribed()
@@ -145,6 +153,7 @@ public static class AudienceManager
         {
             case InterventionKind.Curse:
             case InterventionKind.Bless:
+            case InterventionKind.ShuffleOne:
             {
                 if (parts.Length < 2)
                 {
@@ -190,7 +199,7 @@ public static class AudienceManager
         Logger.Info($"Audience intervention queued (pending, not executed): {kind} (author={author}, queue={InterventionQueue.Count}, points={AudienceEconomy.GetPoints(author)})", "Audience");
     }
 
-    private static PlayerControl FindPlayerByNamePart(string namePart)
+    public static PlayerControl FindPlayerByNamePart(string namePart)
     {
         namePart = namePart.Trim();
         if (namePart.Length == 0) return null;
@@ -214,6 +223,13 @@ public static class AudienceManager
         {
             InterventionKind.Voice => true,
             InterventionKind.Earthquake => inTask || GameStates.IsLobby,
+            // 外見の入れ替えはロビーでも成立する。会議中だけは外す — MeetingHud の
+            // プレイヤー行は会議開始時に作られたクローンで、途中で見た目を差し替えても
+            // 追随せず投票 UI の顔と実体がずれる (OutfitShuffle 側も同じ理由で弾く)。
+            // ここは reject でなく「会議明けまで待たせる」形なので視聴者の課金は無駄にならない。
+            // 会議明けの追放スイープ窓 (task phase 開始後 ~10 秒) も避ける。ここは reject でなく
+            // 「窓が明けるまで待たせる」形なので、視聴者が払ったポイントは無駄にならない。
+            InterventionKind.ShuffleOne or InterventionKind.ShuffleAll => (inTask && !OutfitShuffle.InPostMeetingSweep) || GameStates.IsLobby,
             _ => inTask
         };
     }
@@ -248,6 +264,8 @@ public static class AudienceManager
             InterventionKind.Earthquake => (AudienceOptions.EarthquakeEnabled, AudienceOptions.EarthquakePrice),
             InterventionKind.Voice => (AudienceOptions.VoiceEnabled, AudienceOptions.VoicePrice),
             InterventionKind.FakeBody => (AudienceOptions.FakeBodyEnabled, AudienceOptions.FakeBodyPrice),
+            InterventionKind.ShuffleOne => (OutfitShuffle.AudienceShuffleOneEnabled, OutfitShuffle.AudienceShuffleOnePrice),
+            InterventionKind.ShuffleAll => (OutfitShuffle.AudienceShuffleAllEnabled, OutfitShuffle.AudienceShuffleAllPrice),
             _ => (null, null)
         };
 
@@ -257,7 +275,7 @@ public static class AudienceManager
             return false;
         }
 
-        bool isTargeted = item.Kind is InterventionKind.Curse or InterventionKind.Bless;
+        bool isTargeted = item.Kind is InterventionKind.Curse or InterventionKind.Bless or InterventionKind.ShuffleOne;
         if (isTargeted)
         {
             long now = Utils.TimeStamp;
@@ -294,6 +312,8 @@ public static class AudienceManager
             InterventionKind.Earthquake => AudienceInterventions.DoEarthquake(),
             InterventionKind.Voice => AudienceInterventions.DoVoice(item.Author, item.Text),
             InterventionKind.FakeBody => AudienceInterventions.DoFakeBody(),
+            InterventionKind.ShuffleOne => AudienceInterventions.DoShuffleOne(item.TargetId),
+            InterventionKind.ShuffleAll => AudienceInterventions.DoShuffleAll(),
             _ => false
         };
 

@@ -320,7 +320,7 @@ internal static class SoloPVP
             if (!GameStates.IsInTask || ExileController.Instance || !Main.IntroDestroyed || Options.CurrentGameMode != CustomGameMode.SoloPVP || !AmongUsClient.Instance.AmHost || id >= 254) return;
 
             long now = Utils.TimeStamp;
-            if (LastCountdownTime[id] == now) return;
+            if (!LastCountdownTime.TryGetValue(id, out long lastCountdownTime) || lastCountdownTime == now) return;
             LastCountdownTime[id] = now;
 
             if (LastHurt[id] + SoloPVP_RecoverAfterSecond.GetInt() < now && PlayerHP[id] < PlayerHPMax[id] && __instance.SoloAlive() && !__instance.inVent)

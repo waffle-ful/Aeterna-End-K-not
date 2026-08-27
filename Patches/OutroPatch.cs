@@ -127,11 +127,17 @@ internal static class EndGamePatch
             // Skinwalker は死体を着たまま死ぬと脱げず、見た目に加えて名前まで被害者のまま残る
             Skinwalker.RestoreOutfitOnGameEnd(id);
 
+            // 外見シャッフルはロビーでも掛かるので、役職の有無に関わらず全員分を無条件で戻す
+            EndKnot.Modules.OutfitShuffle.RestoreOnGameEnd(id);
+
             SummaryText[id] = Utils.SummaryTexts(id, false);
             if (state.SubRoles.Count == 0) continue;
 
             Main.LastAddOns[id] = $"<size=70%>{id.ColoredPlayerName()}: {state.SubRoles.Join(x => x.ToColoredString())}</size>";
         }
+
+        // 全員分を戻し終えたのでシャッフル台帳を空にする (ここが唯一のクリア地点)
+        EndKnot.Modules.OutfitShuffle.ClearLedger();
 
         if (Options.DumpLogAfterGameEnd.GetBool()) Utils.DumpLog(false);
 
