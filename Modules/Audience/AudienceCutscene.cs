@@ -116,6 +116,8 @@ public class AudienceCutscene : MonoBehaviour
             "Earthquake" => (4.2f, 0.66f, false, 2.2f, 3, false),// 落石 + 土煙 + 地割れ
             "Voice" => (4.2f, 0.52f, true, 0.6f, 2, false),      // 天の光柱 + 波紋 + 本文表示
             "FakeBody" => (3.4f, 0.78f, false, 1.0f, 3, false),  // 血の一文字 + 心電図フラットライン
+            "ShuffleOne" => (3.0f, 0.55f, true, 1.1f, 3, false), // 誰かが誰かに化ける
+            "ShuffleAll" => (3.4f, 0.62f, true, 1.6f, 5, false), // 全員まとめて入れ替わる
             _ => (DefaultDuration, 0.68f, false, 1.0f, 3, false)
         };
     }
@@ -278,6 +280,8 @@ public class AudienceCutscene : MonoBehaviour
         "Earthquake" => new Color(0.75f, 0.5f, 0.15f),
         "Voice" => new Color(1f, 0.85f, 0.35f),
         "FakeBody" => new Color(0.55f, 0.6f, 0.68f),
+        "ShuffleOne" => new Color(0.3f, 0.9f, 0.7f),
+        "ShuffleAll" => new Color(0.95f, 0.4f, 0.85f),
         _ => new Color(1f, 0.2f, 0.2f)
     };
 

@@ -291,6 +291,7 @@ internal static class ChatCommands
             new("YT", "{action}", Command.UsageLevels.Host, Command.UsageTimes.Always, YTCommand, true, false, [GetString("CommandArgs.YT.Action")]),
             new("YTPost", "{text}", Command.UsageLevels.Host, Command.UsageTimes.Always, YTPostCommand, true, false, [GetString("CommandArgs.YTPost.Text")]),
             new("Audience", "{action} [args]", Command.UsageLevels.Host, Command.UsageTimes.Always, AudienceCommand, true, false, [GetString("CommandArgs.Audience.Action")]),
+            new("Mix", "[name] [name]", Command.UsageLevels.HostOrModerator, Command.UsageTimes.Always, MixCommand, true, false, [GetString("CommandArgs.Mix.Target")]),
             new("Yaminabe", "", Command.UsageLevels.Everyone, Command.UsageTimes.Always, YaminabeCommand, true, false),
             new("ServerInfo", "", Command.UsageLevels.Everyone, Command.UsageTimes.AfterDeathOrLobby, ServerInfoCommand, true, false),
             // alwaysHidden: a non-modded sender's raw text is already broadcast by
@@ -749,6 +750,67 @@ internal static class ChatCommands
         string message = string.Join(' ', args, 1, args.Length - 1).Trim();
         YouTubeChatPoster.PostRaw(message);
         Utils.SendMessage(GetString("YouTubePost.Posted"), player.PlayerId);
+    }
+
+    private static void MixCommand(PlayerControl player, string text, string[] args)
+    {
+        // /mix                  -> 全員を一対一でシャッフル
+        // /mix all              -> 同上
+        // /mix <名前>           -> その人を無作為の誰かと交換
+        // /mix <名前> <名前>    -> 指定の 2 人を交換
+        // /mix reset            -> 全員を元の姿へ戻す
+        string sub = args.Length >= 2 ? args[1].Trim() : string.Empty;
+
+        if (sub.Equals("reset", StringComparison.OrdinalIgnoreCase))
+        {
+            EndKnot.Modules.OutfitShuffle.RestoreAll();
+            Utils.SendMessage(GetString("OutfitShuffle.Restored"), player.PlayerId);
+            return;
+        }
+
+        string error;
+
+        if (sub.Length == 0 || sub.Equals("all", StringComparison.OrdinalIgnoreCase))
+        {
+            if (EndKnot.Modules.OutfitShuffle.ShuffleAll(out error))
+                Utils.SendMessage(GetString("OutfitShuffle.ShuffledAll"), player.PlayerId);
+            else
+                Utils.SendMessage(error, player.PlayerId);
+
+            return;
+        }
+
+        PlayerControl first = EndKnot.Modules.Audience.AudienceManager.FindPlayerByNamePart(sub);
+
+        if (!first)
+        {
+            Utils.SendMessage(string.Format(GetString("OutfitShuffle.TargetNotFound"), sub), player.PlayerId);
+            return;
+        }
+
+        if (args.Length < 3)
+        {
+            if (EndKnot.Modules.OutfitShuffle.ShuffleOne(first.PlayerId, out error))
+                Utils.SendMessage(GetString("OutfitShuffle.Shuffled"), player.PlayerId);
+            else
+                Utils.SendMessage(error, player.PlayerId);
+
+            return;
+        }
+
+        string secondQuery = string.Join(' ', args, 2, args.Length - 2).Trim();
+        PlayerControl second = EndKnot.Modules.Audience.AudienceManager.FindPlayerByNamePart(secondQuery);
+
+        if (!second)
+        {
+            Utils.SendMessage(string.Format(GetString("OutfitShuffle.TargetNotFound"), secondQuery), player.PlayerId);
+            return;
+        }
+
+        if (EndKnot.Modules.OutfitShuffle.SwapPair(first.PlayerId, second.PlayerId, out error))
+            Utils.SendMessage(GetString("OutfitShuffle.Shuffled"), player.PlayerId);
+        else
+            Utils.SendMessage(error, player.PlayerId);
     }
 
     private static void AudienceCommand(PlayerControl player, string text, string[] args)

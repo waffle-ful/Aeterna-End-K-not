@@ -116,7 +116,7 @@ internal class Impartial : RoleBase
 
     public override void Remove(byte playerId)
     {
-        Instances.Remove(this);
+        Instances?.Remove(this);
     }
 
     public override bool CanUseKillButton(PlayerControl pc)
@@ -154,7 +154,7 @@ internal class Impartial : RoleBase
 
     public static void OnAnyoneDead()
     {
-        if (!ChangeRoleWhenWinningIsImpossible.GetBool()) return;
+        if (Instances == null || !ChangeRoleWhenWinningIsImpossible.GetBool()) return;
 
         var aapc = Main.CachedAlivePlayerControls();
         Dictionary<Team, int> numAlive = new()

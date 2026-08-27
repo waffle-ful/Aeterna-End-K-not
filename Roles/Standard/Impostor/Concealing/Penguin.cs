@@ -337,7 +337,7 @@ public class Penguin : RoleBase
 
         if (AbductVictim)
         {
-            if (!Penguin_.IsAlive() || Pelican.IsEaten(PenguinId) || !AbductVictim.IsAlive())
+            if (!Penguin_ || !Penguin_.IsAlive() || Pelican.IsEaten(PenguinId) || !AbductVictim.IsAlive())
             {
                 // allowDelay=false で AbductVictim を即 null 化する。遅延 (LateTask) で null 化すると
                 // この分岐が次フレーム以降も真のまま毎フレーム再突入し、MarkDirtySettings/NotifyRoles/

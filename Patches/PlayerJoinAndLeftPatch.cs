@@ -40,6 +40,11 @@ internal static class OnGameJoinedPatch
         // 自動部屋立て直し: 新しい部屋に join した = 成功シグナル (旧 GameId と比較。内部でガード)
         Modules.AutoRehost.NotifyJoinedNewLobby();
 
+        // 新しいロビー = PlayerId 空間の振り直し。外見台帳は PlayerId をキーにしていて
+        // セッションを跨いで意味を持たないので、持ち越すと無関係な新入りが前の部屋の別人の
+        // 名前と姿へ書き換えられる。ここで丸ごと捨てる。
+        Modules.OutfitShuffle.ResetForNewLobby();
+
         SetUpRoleTextPatch.IsInIntro = false;
 
         Main.PlayerVersion = [];
@@ -696,6 +701,7 @@ internal static class OnPlayerLeftPatch
 
                 Postman.CheckAndResetTargets(data.Character);
                 GhostRolesManager.AssignedGhostRoles.Remove(id);
+                EndKnot.Modules.OutfitShuffle.OnPlayerLeft(id);
 
                 PlayerState state = Main.PlayerStates[id];
                 if (state.deathReason == PlayerState.DeathReason.etc) state.deathReason = PlayerState.DeathReason.Disconnected;
@@ -748,7 +754,13 @@ internal static class OnPlayerLeftPatch
                 }
 
                 if (GameStates.IsLobby)
+                {
                     Options.AutoSetFactionMinMaxSettings();
+
+                    // 上の退出クリーンアップ一式はゲーム中限定のブロックに入っているため、
+                    // ロビーで抜けた人の外見台帳はここで落とす (PlayerId は使い回されるので残すと別人に誤爆する)
+                    if (data?.Character) EndKnot.Modules.OutfitShuffle.OnPlayerLeft(data.Character.PlayerId);
+                }
             }
 
             GameEndChecker.SetDirtyCheckEnd();

@@ -49,6 +49,8 @@ internal class Revenant : RoleBase
 
     public override void OnReportDeadBody()
     {
+        StillAlive = false;
+
         PlayerControl pc = RevenantId.GetPlayer();
 
         if (pc && pc.IsAlive() && !pc.AllTasksCompleted())
@@ -109,5 +111,12 @@ internal class Revenant : RoleBase
         TaskDone = reader.ReadBoolean();
         StillAlive = reader.ReadBoolean();
         IsExposed = reader.ReadBoolean();
+    }
+
+    public override void OnRevived(PlayerControl pc)
+    {
+        // RpcRevive() が同期的にここを呼ぶため、既定実装 (AfterMeetingTasks() 再呼出) に任せると
+        // 自分自身の蘇生処理を再入して StillAlive がまだ true のまま二重に RpcRevive/TP が走る
+        // (会議後の不要テレポートの原因)。ノーオペで上書きして再入を止める。
     }
 }

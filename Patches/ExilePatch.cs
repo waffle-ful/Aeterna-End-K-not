@@ -208,6 +208,9 @@ internal static class ExileControllerWrapUpPatch
         try { MeetingTargetPicker.AfterMeeting(); }
         catch (Exception e) { Utils.ThrowException(e); }
 
+        // 会議明けスイープ窓の起点。外見の一斉入れ替えはこの窓を避ける必要がある。
+        EndKnot.Modules.OutfitShuffle.OnAfterMeeting();
+
         if (CustomWinnerHolder.WinnerTeam != CustomWinner.Default || GameStates.IsEnded)
         {
             Stopwatch.Reset();
