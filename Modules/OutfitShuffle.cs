@@ -367,6 +367,18 @@ public static class OutfitShuffle
         return new Snapshot(pc.PlayerId, copy, pc.Data.PlayerLevel);
     }
 
+    private static NetworkedPlayerInfo.PlayerOutfit Clone(NetworkedPlayerInfo.PlayerOutfit outfit)
+    {
+        return new NetworkedPlayerInfo.PlayerOutfit().Set(
+            outfit.PlayerName ?? string.Empty,
+            outfit.ColorId,
+            outfit.HatId ?? string.Empty,
+            outfit.SkinId ?? string.Empty,
+            outfit.VisorId ?? string.Empty,
+            outfit.PetId ?? string.Empty,
+            outfit.NamePlateId ?? string.Empty);
+    }
+
     private static void RememberOriginal(Snapshot snapshot)
     {
         // 2 回目以降のシャッフルで「1 回目の入れ替え後の姿」を本物として覚えないよう TryAdd。
@@ -421,11 +433,17 @@ public static class OutfitShuffle
         // コムズ変装の復元先台帳も入れ替え後の姿へ寄せる。
         // ⚠️ Camouflage.BlockCamouflage は立てない — 立てっぱなしにするとコムズ変装が試合の残り
         // 全部で死ぬ (Devourer の 3 点セットは時限能力用であって、ラウンド持続の用途には合わない)。
-        if (Camouflage.PlayerSkins.ContainsKey(item.Id)) Camouflage.PlayerSkins[item.Id] = item.Outfit;
+        if (Camouflage.PlayerSkins.ContainsKey(item.Id)) Camouflage.PlayerSkins[item.Id] = Clone(item.Outfit);
 
         // カモフラ中は当ててもすぐ塗り潰されるので帯域を使わない。ただし復元だけは必ず当てる
         // (試合終了時にコムズ変装が張られたままだと、戻す機会がここしか無い)。
-        if (restoring || !Camouflage.IsCamouflage) Utils.RpcChangeSkin(pc, item.Outfit);
+        //
+        // ⚠️ 必ず複製を渡すこと。公式鯖経路の RpcChangeOutfitByData は
+        // `Data.Outfits[Default] = outfit` で**インスタンスをそのまま代入**するため、台帳の値を直接
+        // 渡すと「その人の現在の outfit」と「誰かの復元元」が同一オブジェクトになる。そうなると
+        // ホスト名の装飾 (SetName) が他人の復元元を書き換えてしまい、戻したときに他人の飾りが移る
+        // (2026-08-27 実機で再現)。Doppelganger が退避と送信で別インスタンスを使っているのと同じ理由。
+        if (restoring || !Camouflage.IsCamouflage) Utils.RpcChangeSkin(pc, Clone(item.Outfit));
 
         // Level はロビーでは絶対に触らない。ロビー中は毎フレーム低レベル自動キック判定が走っており
         // (Patches/PlayerControlPatch.cs)、低レベルの人に化けた瞬間に無実のプレイヤーが
