@@ -55,6 +55,12 @@ internal sealed class EkrActionSink : IEkrActionSink
         // 会議中も常時有効 (ローカル状態または notify と同じ既存チャネルのみ)。cancel_vote/vote_block/
         // vote_swap/exile は逆に「会議中のみ有効」(タスク中は no-op) — 投票操作はそもそも会議でしか
         // 意味を持たない。
+        //
+        // Wave 4 (docs/ekn-wave4-contract.md §3.1/§4): link/unlink は会議中も有効 (ローカル状態のみ・
+        // 送信ゼロ —「かいぎで投票した人とつなぐ」on_meeting_vote → link(ctx) が正規の組み方で、
+        // 抜けると無音で崩れる)。recruit はどちらの白名単にも**載せない** — 未分類 = task-only の既定が
+        // そのまま契約 §4 の「会議中 (追放演出含む) は no-op」になる (RpcChangeRoleBasis の会議/追放中
+        // コルーチン遅延に仕事をさせない)。
         bool meetingOrExile = GameStates.IsMeeting || ExileController.Instance;
 
         bool isMeetingOnly = node.Op is "cancel_vote" or "vote_block" or "vote_swap" or "exile";
@@ -63,7 +69,7 @@ internal sealed class EkrActionSink : IEkrActionSink
         {
             if (!meetingOrExile) return;
         }
-        else if (node.Op is not "notify" and not "cancel_attack" and not "remember" and not "inspect" and not "reveal" and not "vote_weight_set" && meetingOrExile) return;
+        else if (node.Op is not "notify" and not "cancel_attack" and not "remember" and not "inspect" and not "reveal" and not "vote_weight_set" and not "link" and not "unlink" && meetingOrExile) return;
 
         switch (node.Op)
         {
@@ -99,6 +105,10 @@ internal sealed class EkrActionSink : IEkrActionSink
             case "vote_block": VoteBlock(node, ctx); break;
             case "vote_swap": VoteSwap(ctx); break;
             case "exile": Exile(node, ctx); break;
+            // Wave 4 (docs/ekn-wave4-contract.md §3,§4)
+            case "link": Link(node, ctx); break;
+            case "unlink": Unlink(ctx); break;
+            case "recruit": Recruit(node, ctx); break;
         }
     }
 
@@ -121,6 +131,7 @@ internal sealed class EkrActionSink : IEkrActionSink
                 PlayerControl pc = ctx.CtxId.GetPlayer();
                 return pc ? pc : null;
             }
+            case "linked": return ResolveLinked(ctx); // Wave 4 (docs/ekn-wave4-contract.md §3.4)
             case "saved1": return ResolveSaved(ctx, 0);
             case "saved2": return ResolveSaved(ctx, 1);
             case "nearest": return ResolveNearest(ctx);
@@ -148,6 +159,29 @@ internal sealed class EkrActionSink : IEkrActionSink
         if (!pc || !pc.IsAlive() || pc.Data == null || pc.Data.Disconnected)
         {
             state.Saved[index] = byte.MaxValue;
+            return null;
+        }
+
+        return pc;
+    }
+
+    // Wave 4 (docs/ekn-wave4-contract.md §3.4): つないだ人。失効 (リンク無し/死亡/切断) は静かに no-op
+    // + lazy 解消 (ResolveSaved と同じ参照整合性3原則② — 掃除の常駐処理は作らない)。相手の死亡は
+    // 本来 FireDeath の on_linked_death 発火経路が先に解消するので、ここで死者を踏むのは同フレーム内の
+    // 競合だけだが、防御は対称に持つ。
+    private static PlayerControl ResolveLinked(EkrActionContext ctx)
+    {
+        EkrHolderState state = EkrManager.GetHolderState(ctx.HolderId);
+        if (state == null) return null;
+
+        byte linkedId = state.LinkedId;
+        if (linkedId == byte.MaxValue) return null;
+
+        PlayerControl pc = linkedId.GetPlayer();
+
+        if (!pc || !pc.IsAlive() || pc.Data == null || pc.Data.Disconnected)
+        {
+            state.LinkedId = byte.MaxValue;
             return null;
         }
 
@@ -1115,6 +1149,42 @@ internal sealed class EkrActionSink : IEkrActionSink
         if (!p1 || !p2) return;
 
         EkrManager.TryReserveVoteSwap(ctx.HolderId, p1.PlayerId, p2.PlayerId);
+    }
+
+    // ── Wave 4 (docs/ekn-wave4-contract.md §3): link / unlink (予算なし・ローカル状態のみ・会議中も有効) ──
+
+    private static void Link(EkrNode node, EkrActionContext ctx)
+    {
+        EkrHolderState state = EkrManager.GetHolderState(ctx.HolderId);
+        if (state == null) return;
+
+        PlayerControl targetPc = ResolveSingle(node.Target, ctx);
+        if (!targetPc || !targetPc.IsAlive()) return; // ctx 無し/失効 saved/死者は no-op (§3.1)
+        if (targetPc.PlayerId == ctx.HolderId) return; // セレクタ解決が自分に落ちた場合も no-op (§3.1 self 不可の実行時側)
+
+        EkrManager.Link(state, targetPc.PlayerId);
+    }
+
+    private static void Unlink(EkrActionContext ctx)
+    {
+        EkrHolderState state = EkrManager.GetHolderState(ctx.HolderId);
+        if (state == null) return;
+
+        EkrManager.Unlink(state); // リンクが無ければ実質 no-op (§3.2)
+    }
+
+    // ── Wave 4 (契約 §4): recruit — 相手を「自分と同じ EKR 役職」へ変換 ──────────────────────
+    // レート/no-op 条件/2呼び固定順は EkrManager.TryRecruit が正典。ここは解決と holder 実在の確認だけ。
+
+    private static void Recruit(EkrNode node, EkrActionContext ctx)
+    {
+        EkrHolderState state = EkrManager.GetHolderState(ctx.HolderId);
+        if (state == null) return;
+
+        PlayerControl targetPc = ResolveSingle(node.Target, ctx);
+        if (!targetPc) return; // 壊れた参照は静かに no-op・予算不消費 (§4)
+
+        EkrManager.TryRecruit(state, ctx.HolderId, targetPc);
     }
 
     private static void Exile(EkrNode node, EkrActionContext ctx)

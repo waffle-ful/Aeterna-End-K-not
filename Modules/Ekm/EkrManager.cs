@@ -153,6 +153,41 @@ internal sealed class EkrHolderState
     // 時点の1箇所に集約し、ゲーム中のオプション変更は次ゲームからにする (既存役職と同じ規約)。
     public float EffectiveSpeedMult = 1f;
     public int EffectiveVoteWeight = 1;
+
+    // ── Wave 4 (docs/ekn-wave4-contract.md) ────────────────────────────────────────────────────
+
+    // §3.1 link: つないだ人 (byte.MaxValue = なし — Chainbinder の paired byte フィールド型)。
+    // 1ホルダー1本・再実行は張り替え・会議をまたいで保持・ゲーム開始 (state 作り直し) で全消去。
+    // 失効は saved1/2 と同じ lazy 方式 (相手の死亡 = FireDeath が on_linked_death 発火後に解消 /
+    // 切断・参照時無効 = 無音で解消)。ホルダー自身の死亡・役職剥奪でも解消 (state ごと消える)。
+    public byte LinkedId = byte.MaxValue;
+
+    // §1 on_near: per-(rule, 相手) のラッチと発火時刻 (TouchLatched / TouchLastFireTime の rule 軸版 —
+    // 複数の on_near rule が別 radius/who を持てるため slot でなく rule index がキーになる)。長さは
+    // def.ParsedLogic.Rules と EnsureProximityArrays が突き合わせる (RebuildEdgeArming と同じ長さ
+    // 再確認 — 作り直しは「現状真偽で焼く」= 差し替え/会議明け直後の一斉発火を起こさない)。
+    public HashSet<byte>[] NearLatched = [];
+    public Dictionary<byte, float>[] NearLastFireTime = [];
+
+    // §1.2 who フィルタ付き on_near の監視相手 (byte.MaxValue = 監視なし)。FarWatchedId と同じ差分検出で、
+    // 監視相手の張り替え時に「既に radius 内ならラッチ済み扱い (発火しない)」を焼く — §1.1 の
+    // 「設置時に半径内へ既にいる者は発火なしでラッチ」(PrimeTouchSensor) を参照確立にも適用する。
+    public byte[] NearWatchedId = [];
+
+    // §1.3 on_far: per-rule の「一度 radius 内へ入った」武装と、いま監視している相手 (byte.MaxValue =
+    // 監視なし)。監視相手の張り替え (link/remember の再実行) を前回値との差分で検出し、武装を現状真偽
+    // から焼き直す — リンク成立時に既に遠くても発火しない (§1.3 初期武装裁定)。
+    public bool[] FarArmed = [];
+    public byte[] FarWatchedId = [];
+
+    // §2 部屋追跡: 前回ポーリングの部屋 (null = 部屋でない [廊下/屋外/ベント/死者])。RoomPrimed=false の
+    // 間は「次のポーリングの部屋を武装済み開始として焼く」だけで発火しない (ゲーム開始と会議明けの
+    // 再配置で発火させないための番)。死亡でクリア (FireDeath — 死は部屋替えではない)。
+    public SystemTypes? PrevRoom;
+    public bool RoomPrimed;
+
+    // §5 recruit: per-holder ≤1/10秒 のスタンプ (EKR 全体 ≤1/5秒 は EkrManager._lastGlobalRecruitTime)。
+    public float LastRecruitTime = -1f;
 }
 
 // EKN 役職メーカー R0 の実行時マネージャ。
@@ -1368,8 +1403,12 @@ public static class EkrManager
 
     // requiredSlot: on_cno_touch (v1.2) 専用のフィルタ (rule.Slot と一致するものだけ発火)。他イベントは null。
     // filter: R2 の on_death cause 用 (rule.Cause が指定されているものは一致したときだけ発火)。
+    // Wave 4 では on_linked_death も同じ cause フィルタに乗る (契約 §3.3)。
+    // onlyRuleIndex: Wave 4 の近接ポーラー (on_near/on_far) 専用 — 複数 rule が別 radius/who を持ち
+    // ラッチが per-rule なので、発火をラッチが立ったその 1 rule にスコープする (FireCnoTouch の
+    // requiredSlot と同じ思想の rule 軸版)。他イベントは null (全 rule 走査)。
     // ⚠️ on_attacked の kind は同期プロローグ側 (FireAttackedPrologue) が別途フィルタする。
-    private static void FireEvent(CustomRoles slot, byte holderId, string eventName, byte ctxId, int? requiredSlot = null, string filter = null)
+    private static void FireEvent(CustomRoles slot, byte holderId, string eventName, byte ctxId, int? requiredSlot = null, string filter = null, int? onlyRuleIndex = null)
     {
         if (!Runtime.TryGetValue(holderId, out EkrHolderState state) || state.LogicDisabled) return;
 
@@ -1385,8 +1424,12 @@ public static class EkrManager
         EkrDefinition def = GetDefinition(slot);
         if (def?.ParsedLogic == null) return;
 
-        foreach (EkrRule rule in def.ParsedLogic.Rules)
+        List<EkrRule> rules = def.ParsedLogic.Rules;
+
+        for (var i = 0; i < rules.Count; i++)
         {
+            EkrRule rule = rules[i];
+            if (onlyRuleIndex.HasValue && i != onlyRuleIndex.Value) continue; // Wave 4: 近接ポーラーの rule 単位スコープ
             if (rule.When != eventName) continue;
             if (requiredSlot.HasValue && rule.Slot != requiredSlot.Value) continue;
             if (rule.Cause != null && rule.Cause != filter) continue; // R2: on_death の死因フィルタ (未指定 = 全死因)
@@ -1467,6 +1510,35 @@ public static class EkrManager
         // 任意の生存プレイヤー)。
         if (_cc != null && (_cc.HolderId == target.PlayerId || _cc.CtxId == target.PlayerId)) StopCrowdControl();
 
+        string causeBucket = DeathCauseBucket(deathReason);
+
+        // Wave 4 (契約 §3.3): on_linked_death — 死んだのはホルダーではなく「つないだ相手」でも発火する
+        // 必要があるため、IsEkrRole(target) の早期 return より**前** (_cc チェックと同じ位置取り)。
+        // 発火 → LinkedId 解消の順 (§3.3)。死んだホルダー側は FireEvent の死後ゲート (:on_death 以外は
+        // 発火しない) が黙らせる。あわせて死者を参照する近接ラッチ/far 武装をここで掃除する (stale
+        // エントリを PlayerId 再利用者が無音継承しない — PortalLastWarpTime の会議境界掃除と同じ発想)。
+        // FireEvent は fiber を spawn するだけ (Runtime 辞書は不変) なので直接列挙で安全。
+        foreach ((byte holderId, EkrHolderState hs) in Runtime)
+        {
+            for (var i = 0; i < hs.NearLatched.Length; i++)
+            {
+                hs.NearLatched[i].Remove(target.PlayerId);
+                hs.NearLastFireTime[i].Remove(target.PlayerId);
+            }
+
+            for (var i = 0; i < hs.FarWatchedId.Length; i++)
+            {
+                if (hs.FarWatchedId[i] != target.PlayerId) continue;
+                hs.FarArmed[i] = false; // 相手の死亡は武装解除のみ・発火しない (契約 §1.3 — 死は on_linked_death の領分)
+                hs.FarWatchedId[i] = byte.MaxValue;
+            }
+
+            if (hs.LinkedId != target.PlayerId) continue;
+
+            FireEvent(hs.Slot, holderId, "on_linked_death", target.PlayerId, filter: causeBucket);
+            hs.LinkedId = byte.MaxValue;
+        }
+
         CustomRoles slot = target.GetCustomRole();
         if (!IsEkrRole(slot)) return;
 
@@ -1477,6 +1549,14 @@ public static class EkrManager
         if (Runtime.TryGetValue(target.PlayerId, out EkrHolderState state))
         {
             state.Fibers.Clear();
+
+            // Wave 4 (契約 §3.1/§2): ホルダー自身の死亡でリンク解消 (以後の on_death 起点 fiber の
+            // "linked" 参照は no-op — 死後も生き残る参照は saved1/2 だけ)。部屋追跡もクリアする —
+            // 死亡による部屋→null で exit を発火させない (§2「死は部屋替えではない」)。蘇生時は
+            // RoomPrimed=false が「次のポーリングの部屋を焼くだけ」を保証する。
+            state.LinkedId = byte.MaxValue;
+            state.PrevRoom = null;
+            state.RoomPrimed = false;
 
             // Wave 2 (spec §2.3): 死亡でも矢印は片付ける (Teardown を経ない死亡経路の唯一の消滅点)。
             HideArrows(state, target.PlayerId);
@@ -1512,7 +1592,7 @@ public static class EkrManager
             }
         }
 
-        FireEvent(slot, target.PlayerId, "on_death", killer ? killer.PlayerId : byte.MaxValue, filter: DeathCauseBucket(deathReason));
+        FireEvent(slot, target.PlayerId, "on_death", killer ? killer.PlayerId : byte.MaxValue, filter: causeBucket);
     }
 
     // ── Wave 1: on_attacked (docs/ekr-logic-spec.md §2) ────────────────────────────────────────
@@ -1860,6 +1940,18 @@ public static class EkrManager
             state.PortalLastWarpTime.Clear();
             state.VoteBlockUsedThisMeeting = false;
             state.VoteSwapUsedThisMeeting = false;
+
+            // Wave 4 (契約 §1.1/§2): 近接ラッチ/far 武装/部屋追跡は会議境界で捨て、会議明け最初の
+            // ポーリングで「現状真偽」から作り直す (respawn の再配置を歩行と誤認して一斉発火しない —
+            // 空配列は EnsureProximityArrays の長さ再確認が拾って再プライムする)。リンク (LinkedId) は
+            // 会議をまたいで保持 (§3.1 — marker/remember と同じ)。
+            state.NearLatched = [];
+            state.NearLastFireTime = [];
+            state.NearWatchedId = [];
+            state.FarArmed = [];
+            state.FarWatchedId = [];
+            state.PrevRoom = null;
+            state.RoomPrimed = false;
         }
 
         LateTask.New(() =>
@@ -1993,6 +2085,10 @@ public static class EkrManager
         // 内部で即 return する)。ホルダーごとに毎 FixedUpdate 呼ばれる Pump に相乗りさせる (専用の
         // 毎フレーム経路を新しく作らない・spec §5「専用の毎フレーム経路を作らない」)。
         PollCnoTouchIfDue();
+
+        // Wave 4: 対人近接 (on_near/on_far) と部屋変化 (on_room_enter/exit) のポーラー — PollCnoTouchIfDue
+        // と同型の 0.25s 自己スロットリング相乗り (docs/ekn-wave4-contract.md §1,§2)。
+        PollProximityIfDue();
 
         // v1.3: crowd-control (drag/field) の 1.0 秒 tick も同じ相乗り駆動 (自己スロットリング)。
         PumpCrowdControlIfDue();
@@ -2783,7 +2879,7 @@ public static class EkrManager
     // teleport/teleport_other (EkrLogicOpcodes) とポータル warp (上記 TryWarpThroughPortal) の3経路から呼ぶ。
     internal static void PrelatchTouchSensorsNear(byte playerId, Vector2 landedPos)
     {
-        foreach (EkrHolderState state in Runtime.Values)
+        foreach ((byte holderId, EkrHolderState state) in Runtime)
         {
             for (int i = 0; i < state.CnoSlots.Length; i++)
             {
@@ -2795,6 +2891,36 @@ public static class EkrManager
             {
                 if (state.Portals[side] is not CustomNetObject cno || !cno.playerControl) continue;
                 if (Vector2.Distance(cno.Position, landedPos) <= TouchEnterRadius) state.PortalLatched[side].Add(playerId);
+            }
+
+            // Wave 4 (契約 §1.1): EKR 起因の TP では on_near も発火させない — 動いた本人を、着地点から
+            // 各 on_near rule の進入半径内にいるホルダーのラッチへ登録する (歩いて入り直したときだけ
+            // 発火する)。teleport/teleport_other/pull/drag/field/ポータル warp の全 TP 経路がこの1関数を
+            // 経由するため、呼び出し点を増やさずに全経路へ波及する。
+            if (holderId == playerId) continue; // 自分は自分の on_near の対象外
+
+            List<EkrRule> rules = GetDefinition(state.Slot)?.ParsedLogic?.Rules;
+            if (rules == null) continue;
+
+            PlayerControl holderPc = holderId.GetPlayer();
+            if (!holderPc || !holderPc.IsAlive()) continue;
+
+            Vector2 holderPos = holderPc.Pos();
+            float distToHolder = Vector2.Distance(holderPos, landedPos);
+            var ensured = false;
+
+            for (var i = 0; i < rules.Count; i++)
+            {
+                if (rules[i].When != "on_near") continue;
+                if (distToHolder > ProximityRadius(rules[i].Radius)) continue;
+
+                if (!ensured)
+                {
+                    EnsureProximityArrays(state, rules, holderPos);
+                    ensured = true;
+                }
+
+                state.NearLatched[i].Add(playerId);
             }
         }
     }
@@ -2810,6 +2936,359 @@ public static class EkrManager
 
         foreach (PlayerControl pc in Main.AllAlivePlayerControls)
             if (Vector2.Distance(pc.Pos(), pos) <= TouchEnterRadius) latched.Add(pc.PlayerId);
+    }
+
+    // ── Wave 4: 対人近接/部屋変化ポーラー (docs/ekn-wave4-contract.md §1,§2) ────────────────────
+    // PollCnoTouchIfDue と同型の Pump ライダー (0.25s グローバル自己スロットリング・送信ゼロ・
+    // ローカル演算のみで予算対象外 §5)。on_near/on_far のラッチ/武装は per-(holder, rule) — 複数 rule が
+    // 別 radius/who を持てるため、発火は FireEvent の onlyRuleIndex でその 1 rule にスコープする。
+
+    private const float ProximityDebounceSeconds = 1f; // 発火間デバウンス / per-(rule, 相手) — TouchDebounceSeconds と同値 (契約 §1.1)
+    private const float ProximityHysteresis = 0.5f; // radius で進入発火・radius+0.5 超で再武装 (契約 §1.2)
+
+    private static float _lastProximityPollTime = -1f;
+
+    // 契約 §1.2: radius tier の実値 small=1.5u / medium=3.0u / large=5.0u。field の 3/5/7u とは
+    // **別スケール** (あちらはゾーン、こちらは対人 — 同語別値は TS 側 tooltip で明示)。
+    private static float ProximityRadius(string tier)
+    {
+        return tier switch { "small" => 1.5f, "large" => 5f, _ => 3f };
+    }
+
+    private static void PollProximityIfDue()
+    {
+        float now = Time.realtimeSinceStartup;
+        if (_lastProximityPollTime >= 0f && now - _lastProximityPollTime < TouchPollInterval) return;
+        _lastProximityPollTime = now;
+
+        // 会議中/ロビーは PollCnoTouchIfDue と同じ理由で間引く。追放演出中も止める — 演出中に
+        // respawn 前の座標で「現状真偽」を焼くと、会議明けの再配置が歩行と誤認されて部屋 enter /
+        // on_near が一斉発火する (契約 §2「会議明けスポーンで発火しない」を守る側)。
+        // AntiBlackout の役職ジャグリング窓 (SkipTasks) も止める — ExileController は WrapUp 完了で先に
+        // 消えるのに SkipTasks は RevertToActualRoleTypes (+2秒) まで残るため、この窓だけポーラーが
+        // 動いて「会議中の座標」を現状真偽として焼き、直後の BeforeMeetingPositions 復元 TP を歩行と
+        // 誤認する余地があった (裁定 #9 の穴)。RoomPrimed=false のままなので窓明け最初のポーリングが
+        // 焼き直す = 発火しない側で再武装される。
+        if (!GameStates.IsInTask || ExileController.Instance || AntiBlackout.SkipTasks) return;
+
+        IReadOnlyList<PlayerControl> livePlayers = Main.AllAlivePlayerControls;
+
+        // FireEvent は fiber を spawn するだけだが、PollCnoTouchIfDue と同じスナップショット規約で回す
+        // (将来 fiber 同期実行が入っても列挙が壊れない側)。
+        foreach ((byte holderId, EkrHolderState state) in Runtime.ToArray())
+        {
+            if (state.LogicDisabled) continue;
+
+            List<EkrRule> rules = GetDefinition(state.Slot)?.ParsedLogic?.Rules;
+            if (rules == null) continue;
+
+            var hasNearFar = false;
+            var hasRoom = false;
+
+            foreach (EkrRule rule in rules)
+            {
+                if (rule.When is "on_near" or "on_far") hasNearFar = true;
+                else if (rule.When is "on_room_enter" or "on_room_exit") hasRoom = true;
+            }
+
+            if (!hasNearFar && !hasRoom) continue;
+
+            PlayerControl holderPc = holderId.GetPlayer();
+
+            // 契約 §1.1/§2: ホルダー生存中のみ。死んだホルダーも Pump は回り続ける
+            // (NeedsUpdateAfterDeath) ので明示ガード必須。
+            if (!holderPc || !holderPc.IsAlive()) continue;
+
+            if (hasRoom) TrackRoomChange(state, holderId, holderPc);
+
+            if (!hasNearFar) continue;
+
+            Vector2 holderPos = holderPc.Pos();
+            EnsureProximityArrays(state, rules, holderPos);
+
+            for (var i = 0; i < rules.Count; i++)
+            {
+                EkrRule rule = rules[i];
+
+                if (rule.When == "on_near") StepNearRule(state, holderId, holderPos, i, rule, livePlayers, now);
+                else if (rule.When == "on_far") StepFarRule(state, holderId, holderPos, i, rule);
+            }
+        }
+    }
+
+    // 近接ラッチ/far 武装の配列を rule 数と突き合わせる (RebuildEdgeArming :2099 と同じ長さ再確認 —
+    // 束縛差し替えで長さが変わったら「現状真偽」で作り直し、差し替え直後の一斉発火を起こさない)。
+    // FireMeetingStart が配列を空へ戻すことで、会議明け最初のポーリングもここを通って再プライムされる。
+    private static void EnsureProximityArrays(EkrHolderState state, List<EkrRule> rules, Vector2 holderPos)
+    {
+        if (state.NearLatched.Length == rules.Count) return;
+
+        int n = rules.Count;
+        state.NearLatched = new HashSet<byte>[n];
+        state.NearLastFireTime = new Dictionary<byte, float>[n];
+        state.NearWatchedId = new byte[n];
+        state.FarArmed = new bool[n];
+        state.FarWatchedId = new byte[n];
+
+        for (var i = 0; i < n; i++)
+        {
+            state.NearLatched[i] = [];
+            state.NearLastFireTime[i] = new Dictionary<byte, float>();
+            state.NearWatchedId[i] = byte.MaxValue; // 次のポーリングが参照を確立して現状真偽を焼く (§1.2)
+            state.FarWatchedId[i] = byte.MaxValue; // 次のポーリングが参照を確立して現状真偽を焼く (§1.3)
+        }
+
+        // on_near: いま進入半径内にいる生存者はラッチ済み扱い (PrimeTouchSensor の「設置時に半径内へ
+        // 既にいる者は発火なしでラッチ」と同じ裁定を rule 軸へ適用)。
+        foreach (PlayerControl pc in Main.AllAlivePlayerControls)
+        {
+            float dist = Vector2.Distance(pc.Pos(), holderPos);
+
+            for (var i = 0; i < n; i++)
+            {
+                if (rules[i].When != "on_near") continue;
+                if (dist <= ProximityRadius(rules[i].Radius)) state.NearLatched[i].Add(pc.PlayerId);
+            }
+        }
+    }
+
+    // on_near (契約 §1.2): 相手が radius 内へ入った瞬間に1回 (per-(rule, 相手) ラッチ + 1秒デバウンス)。
+    // who フィルタ (linked/saved1/saved2) は**その1人だけ**を監視 — 失効中 = 監視対象なし = 何も起きない。
+    private static void StepNearRule(EkrHolderState state, byte holderId, Vector2 holderPos, int ruleIndex, EkrRule rule, IReadOnlyList<PlayerControl> livePlayers, float now)
+    {
+        if (rule.Who is "linked" or "saved1" or "saved2")
+        {
+            byte watchedId = ResolveWatchedId(state, rule.Who);
+
+            if (watchedId == byte.MaxValue || watchedId == holderId)
+            {
+                state.NearWatchedId[ruleIndex] = byte.MaxValue;
+                return;
+            }
+
+            if (state.NearWatchedId[ruleIndex] != watchedId)
+            {
+                // 参照の (再) 確立 — 既に radius 内にいる相手はラッチ済み扱いで発火しない (§1.1 の
+                // PrimeTouchSensor 裁定を参照確立にも適用)。歩いて出入りし直したときだけ発火する。
+                state.NearWatchedId[ruleIndex] = watchedId;
+                state.NearLatched[ruleIndex].Clear();
+
+                PlayerControl w0 = watchedId.GetPlayer();
+                if (w0 && Vector2.Distance(w0.Pos(), holderPos) <= ProximityRadius(rule.Radius))
+                    state.NearLatched[ruleIndex].Add(watchedId);
+            }
+
+            PlayerControl watched = watchedId.GetPlayer();
+            if (watched) StepNearCandidate(state, holderId, holderPos, ruleIndex, rule, watched, now);
+
+            return;
+        }
+
+        // "anyone": 自分以外の全生存実プレイヤー (死者・ダミー CNO は発火させない §1.1)。
+        foreach (PlayerControl pc in livePlayers)
+        {
+            if (pc.PlayerId == holderId) continue;
+            StepNearCandidate(state, holderId, holderPos, ruleIndex, rule, pc, now);
+        }
+    }
+
+    private static void StepNearCandidate(EkrHolderState state, byte holderId, Vector2 holderPos, int ruleIndex, EkrRule rule, PlayerControl other, float now)
+    {
+        float radius = ProximityRadius(rule.Radius);
+        float dist = Vector2.Distance(other.Pos(), holderPos);
+        HashSet<byte> latched = state.NearLatched[ruleIndex];
+        bool inside = latched.Contains(other.PlayerId);
+
+        if (!inside && dist <= radius)
+        {
+            latched.Add(other.PlayerId);
+
+            Dictionary<byte, float> lastFire = state.NearLastFireTime[ruleIndex];
+            float last = lastFire.GetValueOrDefault(other.PlayerId, -1f);
+            if (last >= 0f && now - last < ProximityDebounceSeconds) return;
+            lastFire[other.PlayerId] = now;
+
+            FireEvent(state.Slot, holderId, "on_near", other.PlayerId, onlyRuleIndex: ruleIndex);
+        }
+        else if (inside && dist >= radius + ProximityHysteresis) latched.Remove(other.PlayerId);
+    }
+
+    // on_far (契約 §1.3): 逆ヒステリシス — armed (一度 radius 内へ入った) の状態で radius+0.5 を超えた
+    // 瞬間に1回発火・radius 内へ戻ったら再武装。参照の (再) 確立時は現状真偽を焼く (link/remember した
+    // 時点で既に遠くにいても発火しない)。相手の死亡・切断・失効は武装解除のみ (発火しない — 死は
+    // on_linked_death の領分。死亡側の解除は FireDeath が即時に行い、ここは lazy 側の防御)。
+    private static void StepFarRule(EkrHolderState state, byte holderId, Vector2 holderPos, int ruleIndex, EkrRule rule)
+    {
+        byte watchedId = ResolveWatchedId(state, rule.Who);
+
+        if (watchedId == byte.MaxValue || watchedId == holderId)
+        {
+            state.FarArmed[ruleIndex] = false;
+            state.FarWatchedId[ruleIndex] = byte.MaxValue;
+            return;
+        }
+
+        if (state.FarWatchedId[ruleIndex] != watchedId)
+        {
+            state.FarWatchedId[ruleIndex] = watchedId;
+            state.FarArmed[ruleIndex] = false; // 参照の (再) 確立 — 現状真偽から焼き直す (§1.3)
+        }
+
+        PlayerControl watched = watchedId.GetPlayer();
+        if (!watched) return; // ResolveWatchedId 直後の消滅 (通常到達しない防御)
+
+        float radius = ProximityRadius(rule.Radius);
+        float dist = Vector2.Distance(watched.Pos(), holderPos);
+
+        if (!state.FarArmed[ruleIndex])
+        {
+            if (dist <= radius) state.FarArmed[ruleIndex] = true; // 一度近づいた — 武装 (発火はしない)
+        }
+        else if (dist >= radius + ProximityHysteresis)
+        {
+            state.FarArmed[ruleIndex] = false; // 再武装は radius 内へ戻ったとき (上の分岐が担う)
+            FireEvent(state.Slot, holderId, "on_far", watchedId, onlyRuleIndex: ruleIndex);
+        }
+    }
+
+    // who (linked/saved1/saved2) の監視対象解決。失効 (未設定/死亡/切断) は lazy に解消して番兵を返す
+    // (EkrLogicOpcodes.ResolveSaved/ResolveLinked と同じ参照整合性3原則②)。
+    private static byte ResolveWatchedId(EkrHolderState state, string who)
+    {
+        byte id = who switch
+        {
+            "linked" => state.LinkedId,
+            "saved1" => state.Saved[0],
+            "saved2" => state.Saved[1],
+            _ => byte.MaxValue
+        };
+
+        if (id == byte.MaxValue) return byte.MaxValue;
+
+        PlayerControl pc = id.GetPlayer();
+        if (pc && pc.IsAlive() && pc.Data != null && !pc.Data.Disconnected) return id;
+
+        switch (who)
+        {
+            case "linked": state.LinkedId = byte.MaxValue; break;
+            case "saved1": state.Saved[0] = byte.MaxValue; break;
+            case "saved2": state.Saved[1] = byte.MaxValue; break;
+        }
+
+        return byte.MaxValue;
+    }
+
+    // 部屋変化 (契約 §2): per-holder の GetPlainShipRoom()?.RoomId 前回値比較 (Satellite.cs:87-89 の
+    // per-holder 版)。null = 部屋でない (廊下/屋外/ベント/死者)。null→A = enter / A→null = exit /
+    // A→B 直遷移 = exit(A) → enter(B) の順に同一ポーリング内で両方発火。ベント・TP・追い出しでも
+    // 部屋が変われば発火する (on_near の TP プレラッチとは意図的に非対称 §2)。会議開始で PrevRoom を
+    // リセットし (FireMeetingStart)、会議明け最初のポーリングは現在の部屋を武装済み開始として焼くだけ。
+    private static void TrackRoomChange(EkrHolderState state, byte holderId, PlayerControl holderPc)
+    {
+        PlainShipRoom room = holderPc.GetPlainShipRoom();
+        SystemTypes? current = room ? room.RoomId : (SystemTypes?)null;
+
+        if (!state.RoomPrimed)
+        {
+            state.RoomPrimed = true;
+            state.PrevRoom = current;
+            return;
+        }
+
+        if (current == state.PrevRoom) return;
+
+        SystemTypes? prev = state.PrevRoom;
+        state.PrevRoom = current;
+
+        if (prev != null) FireEvent(state.Slot, holderId, "on_room_exit", byte.MaxValue);
+        if (current != null) FireEvent(state.Slot, holderId, "on_room_enter", byte.MaxValue);
+    }
+
+    // ── Wave 4: link / unlink (docs/ekn-wave4-contract.md §3.1,§3.2 — 予算なし・ローカル状態のみ) ──
+
+    internal static void Link(EkrHolderState state, byte targetId)
+    {
+        state.LinkedId = targetId; // 再実行 = 張り替え (旧リンクは無言で解消・§3.1 portal_place の「移設」裁定と同型)
+        ResetFarArmingForLinked(state);
+    }
+
+    internal static void Unlink(EkrHolderState state)
+    {
+        state.LinkedId = byte.MaxValue;
+        ResetFarArmingForLinked(state);
+    }
+
+    // link/unlink で「linked を見ている on_far」の武装を張り直す (§1.3: 初期武装は参照成立後の現状真偽)。
+    // FarWatchedId を番兵へ戻せば、次のポーリングが参照を再確立して現状を焼く — 同一人物への再 link でも
+    // 必ず焼き直す (前回値の差分検出だけでは同一人物の張り替えを見逃す)。
+    private static void ResetFarArmingForLinked(EkrHolderState state)
+    {
+        List<EkrRule> rules = GetDefinition(state.Slot)?.ParsedLogic?.Rules;
+        if (rules == null) return;
+
+        int n = Math.Min(rules.Count, state.FarArmed.Length);
+
+        for (var i = 0; i < n; i++)
+        {
+            if (rules[i].When != "on_far" || rules[i].Who != "linked") continue;
+            state.FarArmed[i] = false;
+            state.FarWatchedId[i] = byte.MaxValue;
+        }
+    }
+
+    // ── Wave 4: recruit (docs/ekn-wave4-contract.md §4,§5 — 相手を自分と同じ EKR 役職へ変換) ──────
+
+    private const float RecruitPerHolderInterval = 10f; // §5: per-holder ≤1/10秒
+    private const float RecruitGlobalInterval = 5f; // §5: EKR 全体 ≤1/5秒 (SetRole バーストの頻度の砦)
+
+    // _lastGlobalCnoSpawnTime と同じく Time.realtimeSinceStartup (単調時計) との差分比較のみで
+    // リセット不要 — ResetSlot からは触らない (trap: init_fires_midgame_slot_reset_clobbers_global)。
+    private static float _lastGlobalRecruitTime = -1f;
+
+    internal static void TryRecruit(EkrHolderState state, byte holderId, PlayerControl targetPc)
+    {
+        // no-op 条件 (すべて予算不消費・§4): 死者/切断/自分自身/既に同スロット。
+        if (!targetPc || !targetPc.IsAlive() || targetPc.Data == null || targetPc.Data.Disconnected) return;
+        if (targetPc.PlayerId == holderId) return;
+
+        CustomRoles slot = state.Slot;
+        if (targetPc.GetCustomRole() == slot) return; // 既に同スロット — 変換総数はプレイヤー数で自然有界 (§4)
+
+        // 勧誘者自身が消えていたら変換しない (下の Init() 不変条件を切断エッジでも守る防波堤)。
+        if (!holderId.GetPlayer()) return;
+
+        // 🔴 会議明けの「役職ジャグリング窓」(AntiBlackout.SkipTasks) も no-op に含める (契約 §4 の意図)。
+        // 共通の meetingOrExile ゲート (EkrLogicOpcodes.cs) は IsMeeting か ExileController.Instance しか
+        // 見ないが、ExileController は WrapUp 完了で先に消えるのに SkipTasks は RevertToActualRoleTypes
+        // (WrapUp の +2秒後) まで真のまま残る — この窓だけ recruit がすり抜ける。素通りさせると
+        // RpcSetCustomRole は即時・RpcChangeRoleBasis だけ DelayBasisChange で最低1秒遅れて着弾し、
+        // 2呼びが分裂する (§4「RpcChangeRoleBasis の会議/追放中コルーチン遅延に仕事をさせない」の破れ)。
+        if (AntiBlackout.SkipTasks) return;
+
+        // レートゲート (§5): 超過は静かにドロップ。スタンプは変換が実際に進むときだけ更新する
+        // (ゲートで落ちた呼び出しが枠を消費しない側)。
+        float now = Time.realtimeSinceStartup;
+        if (state.LastRecruitTime >= 0f && now - state.LastRecruitTime < RecruitPerHolderInterval) return;
+        if (_lastGlobalRecruitTime >= 0f && now - _lastGlobalRecruitTime < RecruitGlobalInterval) return;
+
+        state.LastRecruitTime = now;
+        _lastGlobalRecruitTime = now;
+
+        // §4: 変換 = 既存2呼びの固定順。RpcSetCustomRole は**インスタンス拡張** (ExtendedPlayerControl.cs
+        // の extension — static byte 版はホスト状態を書かないので使用禁止) → RpcChangeRoleBasis (変換前の
+        // RoleMap を読んで旧基底を解決するため順序逆転禁止 — Jackal/Necromancer/ChatCommandPatch の3前例と
+        // 同順)。変換後の追加 Utils.NotifyRoles は呼ばない — SetMainRole が内蔵の NotifyRoles ペアを既に
+        // 発行する (§5 二重払い禁止・Jackal 型の「SetMainRole に任せる」側)。
+        //
+        // 🔴 不変条件 (契約 §4): recruit は `if (!role.RoleExist(true)) Role.Init()` (GameState.SetMainRole)
+        // の ResetSlot mid-game 罠を構造的に踏まない — 変換先スロットには必ず勧誘者自身がいるため
+        // RoleExist(true) が真になる (RoleExist の引数は countDead: 勧誘者が死んでいても数えられる)。
+        // 上の GetPlayer() ガードは勧誘者切断の同フレーム競合だけを塞ぐ。将来 recruit 以外の変換入口
+        // (テンプレ逃がし等) を作るときは、この前提が崩れていないか必ず再検討すること。
+        targetPc.RpcSetCustomRole(slot);
+        targetPc.RpcChangeRoleBasis(slot);
+
+        Logger.Info($"EKR recruit: {targetPc.GetRealName()} => {slot} (by holder {holderId})", "EkrManager");
     }
 
     // ── v1.3: crowd-control エンジン (drag/field の共有枠・spec §3,§5) ──────────────────────────

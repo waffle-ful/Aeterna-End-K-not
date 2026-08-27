@@ -34,11 +34,17 @@ import type { LogicNode, LogicRule, RoleLogic } from "../roledef";
 // L24 = on_var の rule 配下で自分が監視している変数を書き換えている (ピンポン/発火抑止の温床)、
 // L25 = L15/L16 の参照整合性シリーズの兄弟 — on_var の監視変数・progress.text が参照する変数に
 // どの rule にも var_set/var_add が無い (一生変わらない)。
+// Wave 4 (docs/ekn-wave4-contract.md §6 2026-08-25): L26/L27 を追加 (計27ルール)。
+// L26 = L15/L16 の参照整合性シリーズ — `linked` セレクタ / on_far(who:"linked") / on_linked_death を
+// 使っているのにどの rule にも link op が無い。L27 = L5 の兄弟 (on_second 配下の recruit)。
+// 既存リスト改定: L12 の対象イベントに on_near/on_room_enter/on_room_exit を追加 (高頻度エッジ
+// イベント配下の生成系 op)、CTXLESS_WHENS (L14) に on_room_enter/on_room_exit を追加
+// (on_near/on_far/on_linked_death は ctx を持つので入れない)。
 
 export type LintRuleId =
     | "L1" | "L2" | "L3" | "L4" | "L5" | "L6" | "L7" | "L8" | "L9" | "L10" | "L11" | "L12" | "L13"
     | "L14" | "L15" | "L16" | "L17" | "L18" | "L19" | "L20" | "L21"
-    | "L22" | "L23" | "L24" | "L25";
+    | "L22" | "L23" | "L24" | "L25" | "L26" | "L27";
 
 export interface LintWarning {
     rule: LintRuleId;
@@ -123,9 +129,13 @@ function hasGenerationOpBeforeElapsed(nodes: LogicNode[], ops: ReadonlySet<Logic
 // spec §6 L14 の対象イベント (「あいて」を持たないもの) をそのまま列挙する。
 // ctx を持つイベント (on_kill/on_death/on_report/on_cno_touch/on_attacked) はここに入れない。
 // Wave 3 (契約 §1.2/§1.3/§1.4): on_var/on_alive_count/on_vent_exit も ctx 無し (L14 一覧に追加)。
+// Wave 4 (docs/ekn-wave4-contract.md §2/§6): on_room_enter/on_room_exit も ctx 無し。
+// on_near (ctx = 近づいた人)・on_far (ctx = 離れた人)・on_linked_death (ctx = 死んだ相手) は
+// ctx を持つので入れない。
 const CTXLESS_WHENS: ReadonlySet<string> = new Set([
     "on_game_start", "on_pet", "on_meeting_start", "on_meeting_end", "on_task_complete", "on_vent_enter", "on_second",
     "on_var", "on_alive_count", "on_vent_exit",
+    "on_room_enter", "on_room_exit",
 ]);
 
 /**
@@ -228,6 +238,11 @@ function hasExileAfterWait(nodes: LogicNode[]): boolean {
 // L18 (Wave 2): 会議専用 op (vote_block/vote_swap/exile) の配置ヒント対象イベント。
 // cancel_vote はここに含めない (roledef.ts の validateRoleLogic が on_meeting_vote 以外を
 // 構造的に reject するため、リンタで重ねて警告する必要がない)。
+// L12 (v1.2 新設・Wave 4 docs/ekn-wave4-contract.md §6 で対象イベント拡大): 高頻度エッジイベント。
+// on_far は入れない (契約 §6 の改定リストは on_near/on_room_enter/on_room_exit の3つ —
+// on_far は「一度近づいてから離れる」の往復が要るぶん頻度が一段落ちる)。
+const L12_WHENS: ReadonlySet<string> = new Set(["on_cno_touch", "on_near", "on_room_enter", "on_room_exit"]);
+
 const MEETING_ONLY_LINT_WHENS: ReadonlySet<string> = new Set(["on_meeting_start", "on_meeting_vote", "on_meeting_pick"]);
 const MEETING_ONLY_LINT_OPS: readonly LogicNode["op"][] = ["vote_block", "vote_swap", "exile"];
 
@@ -282,10 +297,10 @@ function extractProgressVarRefs(text: string): string[] {
 }
 
 /**
- * 検証済みの RoleLogic に対して spec §6 の 25 ルール (v1.2 で L11/L12、v1.3 で L13、Wave 1 で
- * L14〜L17、Wave 2 で L18〜L20、2026-08-14 に L21、Wave 3 で L22〜L25 のうち L24/L25) を
- * 静的検査する。ブロックの組み方に対するヒントであり、export 自体は妨げない (呼び出し元は結果を
- * 警告フッタに表示するだけ)。
+ * 検証済みの RoleLogic に対して spec §6 の 27 ルール (v1.2 で L11/L12、v1.3 で L13、Wave 1 で
+ * L14〜L17、Wave 2 で L18〜L20、2026-08-14 に L21、Wave 3 で L22〜L25 のうち L24/L25、Wave 4 で
+ * L26/L27) を静的検査する。ブロックの組み方に対するヒントであり、export 自体は妨げない
+ * (呼び出し元は結果を警告フッタに表示するだけ)。
  *
  * `progressText` は L25 が progress.text 内の `{変数名}` 参照も一緒に検査するための任意引数
  * (契約 §6 L25 — progress は logic とは別のトップレベルキーなので、RoleLogic には含まれない)。
@@ -301,6 +316,8 @@ export function lintRoleLogic(logic: RoleLogic, progressText?: string): LintWarn
         ...collectProvidedSlots(logic, "dummy_spawn"),
     ]);
     const rememberedSlots = collectProvidedSlots(logic, "remember");
+    // L26 (Wave 4): 「つなぐ」(link op) がどの rule かに1つでもあるか (L15/L16 と同じ横断解決)。
+    const hasLinkOp = logic.rules.some((r) => hasOp(r.do, "link"));
     // L25 (Wave 3): on_var の監視変数・progress.text の参照変数を横断して集める。
     const writtenVarNames = collectWrittenVarNames(logic);
     const declaredVarNames = new Set(logic.variables.map((v) => v.name));
@@ -374,6 +391,14 @@ export function lintRoleLogic(logic: RoleLogic, progressText?: string): LintWarn
                     "毎秒はやりすぎだよ。1秒に1回までしか効かないよ。",
                 ));
             }
+            // L27 (Wave 4・docs/ekn-wave4-contract.md §6): L5 の兄弟 — on_second 配下の recruit。
+            if (hasOp(rule.do, "recruit")) {
+                warnings.push(makeWarning(
+                    "L27", ruleIndex, rule.when,
+                    "「毎秒くりかえす」の中でなかまにしています。",
+                    "毎秒なかまにするのはやりすぎだよ。じゅんばんに1人ずつ、きっかけを決めてさそおう。",
+                ));
+            }
         }
 
         // L9 (v1.1 新設・v1.2 で対象拡大): on_meeting_end 限定。会議明けから10秒間のドロップ窓
@@ -386,14 +411,16 @@ export function lintRoleLogic(logic: RoleLogic, progressText?: string): LintWarn
             ));
         }
 
-        // L12 (v1.2・v1.3 で field 追加): on_cno_touch 限定。触れるたびに生成系 op を撃つ誤用の検知。
-        if (rule.when === "on_cno_touch"
+        // L12 (v1.2・v1.3 で field 追加・Wave 4 で on_near/on_room_enter/on_room_exit を追加):
+        // 高頻度エッジイベント (触れる/近づく/部屋の出入り — 1試合に何十回も起きる) のたびに
+        // 生成系 op を撃つ誤用の検知。
+        if (L12_WHENS.has(rule.when)
             && (hasOp(rule.do, "cno_spawn") || hasOp(rule.do, "dummy_spawn") || hasOp(rule.do, "cno_show")
                 || hasOp(rule.do, "portal_place") || hasOp(rule.do, "field"))) {
             warnings.push(makeWarning(
                 "L12", ruleIndex, rule.when,
-                "「オブジェクトにだれかが触れたとき」の中でオブジェクトを出したり切り替えたりしています。",
-                "触られるたびに出すのは出しすぎ。1秒に1個までしか出ないから、出すのは別のきっかけにしよう。",
+                "なんども起きるきっかけの中でオブジェクトを出したり切り替えたりしています。",
+                "起きるたびに出すのは出しすぎ。1秒に1個までしか出ないから、出すのは別のきっかけにしよう。",
             ));
         }
 
@@ -541,6 +568,21 @@ export function lintRoleLogic(logic: RoleLogic, progressText?: string): LintWarn
                 "L16", ruleIndex, rule.when,
                 "「おぼえた人1と2の票をいれかえる」を使っていますが、1と2の両方をおぼえていません。",
                 "おぼえていない人の票は入れかえられないよ。先に「1をおぼえる」と「2をおぼえる」の両方を入れよう。",
+            ));
+        }
+
+        // L26 (Wave 4・docs/ekn-wave4-contract.md §6・L15/L16 の参照整合性シリーズ): `linked`
+        // セレクタ (target フィールドのトークン参照)・on_near/on_far(who:"linked")・on_linked_death の
+        // どれかを使っているのに、どの rule にも link op が無い (=つないでいないので一生解決しない)。
+        // on_near(who:"linked") も対象 (契約 §6 改定 2026-08-25 — link 無しでは一生発火しない同族)。
+        if (!hasLinkOp
+            && (anySelectorToken(rule.do, (t) => t === "linked")
+                || ((rule.when === "on_far" || rule.when === "on_near") && rule.who === "linked")
+                || rule.when === "on_linked_death")) {
+            warnings.push(makeWarning(
+                "L26", ruleIndex, rule.when,
+                "つないでいない人は使えないよ。",
+                "「このひとと つなぐ」ブロックをどこかに置こう。",
             ));
         }
 

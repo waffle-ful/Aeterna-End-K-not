@@ -1516,3 +1516,168 @@ describe("hostOptions 検証 (Wave 3・契約 §4.1)", () => {
         expect(validateEkrDefinition({ ...baseValid(), logic: threeVarsLogic, hostOptions: nine }).ok).toBe(false);
     });
 });
+
+// ---------------------------------------------------------------------------
+// Wave 4 (docs/ekn-wave4-contract.md 2026-08-25) — つなぐ
+// ---------------------------------------------------------------------------
+describe("logic 検証 Wave 4 (on_near / on_far / on_room_enter / on_room_exit / on_linked_death / link / unlink / recruit)", () => {
+    function baseLogic(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+        return {
+            version: 1,
+            rules: [{ when: "on_pet", do: [{ op: "stop" }] }],
+            ...overrides,
+        };
+    }
+    function withLogic(logic: unknown): Record<string, unknown> {
+        return { ...baseValid(), logic };
+    }
+    function withRule(rule: Record<string, unknown>): Record<string, unknown> {
+        return withLogic(baseLogic({ rules: [rule] }));
+    }
+
+    it("on_near: radius (small/medium/large) 必須・who 省略可 (省略時は AST にキーが無い)", () => {
+        for (const radius of ["small", "medium", "large"]) {
+            const r = validateEkrDefinition(withRule({ when: "on_near", radius, do: [{ op: "stop" }] }));
+            expect(r.ok, radius).toBe(true);
+            if (r.ok) expect(r.def.logic?.rules[0]).toEqual({ when: "on_near", radius, do: [{ op: "stop" }] });
+        }
+        // radius 欠落・不正値は reject
+        expect(validateEkrDefinition(withRule({ when: "on_near", do: [{ op: "stop" }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_near", radius: "huge", do: [{ op: "stop" }] })).ok).toBe(false);
+    });
+
+    it("on_near: who は anyone/linked/saved1/saved2 を受理し、明示指定はそのまま保持される", () => {
+        for (const who of ["anyone", "linked", "saved1", "saved2"]) {
+            const r = validateEkrDefinition(withRule({ when: "on_near", radius: "small", who, do: [{ op: "stop" }] }));
+            expect(r.ok, who).toBe(true);
+            if (r.ok) expect(r.def.logic?.rules[0].who).toBe(who);
+        }
+        expect(validateEkrDefinition(withRule({ when: "on_near", radius: "small", who: "self", do: [{ op: "stop" }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_near", radius: "small", who: "nearest", do: [{ op: "stop" }] })).ok).toBe(false);
+    });
+
+    it("on_far: radius/who とも必須・who は linked/saved1/saved2 のみ (anyone は reject)", () => {
+        for (const who of ["linked", "saved1", "saved2"]) {
+            const r = validateEkrDefinition(withRule({ when: "on_far", radius: "medium", who, do: [{ op: "stop" }] }));
+            expect(r.ok, who).toBe(true);
+            if (r.ok) expect(r.def.logic?.rules[0]).toEqual({ when: "on_far", radius: "medium", who, do: [{ op: "stop" }] });
+        }
+        expect(validateEkrDefinition(withRule({ when: "on_far", radius: "medium", who: "anyone", do: [{ op: "stop" }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_far", radius: "medium", do: [{ op: "stop" }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_far", who: "linked", do: [{ op: "stop" }] })).ok).toBe(false);
+    });
+
+    it("radius/who は on_near/on_far 以外のイベントに付いていたら reject (slot と同じ対称検査)", () => {
+        for (const when of ["on_pet", "on_second", "on_room_enter", "on_linked_death"]) {
+            expect(validateEkrDefinition(withRule({ when, radius: "small", do: [{ op: "stop" }] })).ok, `${when}+radius`).toBe(false);
+            expect(validateEkrDefinition(withRule({ when, who: "linked", do: [{ op: "stop" }] })).ok, `${when}+who`).toBe(false);
+        }
+    });
+
+    it("on_room_enter / on_room_exit: 追加フィールド無しで受理される", () => {
+        for (const when of ["on_room_enter", "on_room_exit"]) {
+            const r = validateEkrDefinition(withRule({ when, do: [{ op: "stop" }] }));
+            expect(r.ok, when).toBe(true);
+            if (r.ok) expect(r.def.logic?.rules[0]).toEqual({ when, do: [{ op: "stop" }] });
+        }
+    });
+
+    it("on_linked_death: cause は on_death と同じ8バケットを任意受理 (省略 = 全死因)", () => {
+        const omitted = validateEkrDefinition(withRule({ when: "on_linked_death", do: [{ op: "stop" }] }));
+        expect(omitted.ok).toBe(true);
+        if (omitted.ok) expect(omitted.def.logic?.rules[0]).toEqual({ when: "on_linked_death", do: [{ op: "stop" }] });
+
+        for (const cause of ["kill", "vote", "guess", "bomb", "poison-curse", "environment", "suicide", "other"]) {
+            const r = validateEkrDefinition(withRule({ when: "on_linked_death", cause, do: [{ op: "stop" }] }));
+            expect(r.ok, cause).toBe(true);
+            if (r.ok) expect(r.def.logic?.rules[0].cause).toBe(cause);
+        }
+        expect(validateEkrDefinition(withRule({ when: "on_linked_death", cause: "meteor", do: [{ op: "stop" }] })).ok).toBe(false);
+    });
+
+    it("cause は on_death でも従来どおり受理され、他イベント (on_near 含む) では reject のまま", () => {
+        expect(validateEkrDefinition(withRule({ when: "on_death", cause: "kill", do: [{ op: "stop" }] })).ok).toBe(true);
+        expect(validateEkrDefinition(withRule({ when: "on_pet", cause: "kill", do: [{ op: "stop" }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_near", radius: "small", cause: "kill", do: [{ op: "stop" }] })).ok).toBe(false);
+    });
+
+    it("on_linked_death に kind / slot は付けられない (専用フィールドの対称検査)", () => {
+        expect(validateEkrDefinition(withRule({ when: "on_linked_death", kind: "kill", do: [{ op: "stop" }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_linked_death", slot: 1, do: [{ op: "stop" }] })).ok).toBe(false);
+    });
+
+    it("link: target は ctx/saved1/saved2/nearest/random のみ (self と linked は reject)", () => {
+        for (const target of ["ctx", "saved1", "saved2", "nearest", "random"]) {
+            expect(validateEkrDefinition(withRule({ when: "on_kill", do: [{ op: "link", target }] })).ok, target).toBe(true);
+        }
+        for (const target of ["self", "linked", "all", "room"]) {
+            expect(validateEkrDefinition(withRule({ when: "on_kill", do: [{ op: "link", target }] })).ok, target).toBe(false);
+        }
+        // target 欠落も reject
+        expect(validateEkrDefinition(withRule({ when: "on_kill", do: [{ op: "link" }] })).ok).toBe(false);
+    });
+
+    it("unlink: 引数なしで受理・余剰キーは黙って無視 (pull と同じ)", () => {
+        const r = validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "unlink" }] }));
+        expect(r.ok).toBe(true);
+        if (r.ok) expect(r.def.logic?.rules[0].do[0]).toEqual({ op: "unlink" });
+
+        const extra = validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "unlink", target: "ctx" }] }));
+        expect(extra.ok).toBe(true);
+        if (extra.ok) expect(extra.def.logic?.rules[0].do[0]).toEqual({ op: "unlink" });
+    });
+
+    it("recruit: target は ctx/linked/saved1/saved2/nearest/random (self は reject)", () => {
+        for (const target of ["ctx", "linked", "saved1", "saved2", "nearest", "random"]) {
+            expect(validateEkrDefinition(withRule({ when: "on_kill", do: [{ op: "recruit", target }] })).ok, target).toBe(true);
+        }
+        for (const target of ["self", "all", "room"]) {
+            expect(validateEkrDefinition(withRule({ when: "on_kill", do: [{ op: "recruit", target }] })).ok, target).toBe(false);
+        }
+    });
+
+    it("linked セレクタは saved1/2 と同じ受理箇所で使える (kill/teleport_other/inspect/reveal/arrow_show/remember/vote_block)", () => {
+        const nodes: Record<string, unknown>[] = [
+            { op: "kill", target: "linked" },
+            { op: "teleport_other", target: "linked", to: "self" },
+            { op: "inspect", target: "linked", depth: "team" },
+            { op: "reveal", target: "linked" },
+            { op: "arrow_show", target: "linked", seconds: 10 },
+            { op: "remember", slot: 1, target: "linked" },
+            { op: "vote_block", target: "linked" },
+        ];
+        for (const node of nodes) {
+            expect(validateEkrDefinition(withRule({ when: "on_kill", do: [node] })).ok, String(node.op)).toBe(true);
+        }
+    });
+
+    it("linked は空間セレクタ (teleport.to / marker_save.at / arrow_mark.at) には追加されていない", () => {
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "teleport", to: "linked" }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "marker_save", slot: 1, at: "linked" }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "arrow_mark", at: "linked", seconds: 10 }] })).ok).toBe(false);
+    });
+
+    it("link/unlink/recruit は leaf ノード (depth 1, count 1)", () => {
+        const r = validateEkrDefinition(withRule({
+            when: "on_kill",
+            do: [
+                { op: "link", target: "ctx" },
+                { op: "unlink" },
+                { op: "recruit", target: "nearest" },
+            ],
+        }));
+        expect(r.ok).toBe(true);
+        if (r.ok) expect(r.def.logic?.rules[0].do).toHaveLength(3);
+    });
+
+    it("22 種類すべてが LOGIC_WHEN_VALUES 経由で受理される (Wave 4 の新5イベント込み)", () => {
+        for (const when of ["on_near", "on_far", "on_room_enter", "on_room_exit", "on_linked_death"]) {
+            const rule = when === "on_near"
+                ? { when, radius: "small", do: [{ op: "stop" }] }
+                : when === "on_far"
+                    ? { when, radius: "large", who: "saved1", do: [{ op: "stop" }] }
+                    : { when, do: [{ op: "stop" }] };
+            expect(validateEkrDefinition(withRule(rule)).ok, when).toBe(true);
+        }
+    });
+});
