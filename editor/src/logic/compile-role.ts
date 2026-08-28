@@ -216,8 +216,17 @@ function blockToNode(b: SerializedBlock): Record<string, unknown> {
             return { op: "link", target: b.fields?.TARGET };
         case "ekr_do_unlink":
             return { op: "unlink" };
-        case "ekr_do_recruit":
+        case "ekr_do_recruit": {
+            // Wave 5 (docs/ekn-wave5-contract.md §2): SLOT が既定の "" (じぶんとおなじ) のときは
+            // フィールドごと省略する (正準形を最小に保つ — on_near.who の "anyone" 省略と同じ作法)。
+            const slot = b.fields?.SLOT;
+            if (typeof slot === "string" && slot !== "") return { op: "recruit", target: b.fields?.TARGET, slot: toNum(slot) };
+            if (typeof slot === "number") return { op: "recruit", target: b.fields?.TARGET, slot };
             return { op: "recruit", target: b.fields?.TARGET };
+        }
+        // Wave 5 (docs/ekn-wave5-contract.md §1) — こうかをかける
+        case "ekr_do_effect_give":
+            return { op: "effect_give", target: b.fields?.TARGET, kind: b.fields?.KIND, seconds: toNum(b.fields?.SECONDS) };
         // v1.3 (spec §3 2026-08-11 追記) — ひっぱる・ひきずる・フィールド
         case "ekr_do_pull":
             return { op: "pull" };

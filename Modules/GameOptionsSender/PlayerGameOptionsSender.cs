@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using AmongUs.GameOptions;
 using EndKnot.Gamemodes;
+using EndKnot.Modules.Ekm;
 using EndKnot.Roles;
 using Hazel;
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
@@ -636,6 +637,17 @@ public sealed class PlayerGameOptionsSender(PlayerControl player) : GameOptionsS
                 opt.SetVision(false);
                 opt.SetFloat(FloatOptionNames.CrewLightMod, Options.GrenadierCauseVision.GetFloat());
                 opt.SetFloat(FloatOptionNames.ImpostorLightMod, Options.GrenadierCauseVision.GetFloat());
+            }
+
+            // EKN Wave 5 (docs/ekn-wave5-contract.md §1.1/§1.3): effect_give の "くらくする" (blind)。
+            // 宣言型の読み取りフックなので世界の値を書き換えず、効果が消えれば次の SyncSettings で
+            // 自然に元へ戻る (復元問題が構造的に無い)。実効値は固定 0.3 — Grenadier の既定値と同値だが、
+            // ホストの Grenadier 設定を EKR に流し込まないよう定数で持つ (作者にも数値は開けない)。
+            if (EkrManager.HasBlindEffect(player.PlayerId))
+            {
+                opt.SetVision(false);
+                opt.SetFloat(FloatOptionNames.CrewLightMod, 0.3f);
+                opt.SetFloat(FloatOptionNames.ImpostorLightMod, 0.3f);
             }
 
             switch (role)

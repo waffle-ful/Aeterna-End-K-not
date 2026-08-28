@@ -867,6 +867,23 @@ describe("compile-role: Wave 4 ブロック (on_near / on_far / on_room_enter / 
         ]);
     });
 
+    // Wave 5 (docs/ekn-wave5-contract.md §1/§2)
+    it("ekr_do_recruit の SLOT は既定 \"\" でフィールドごと省略し、指名時だけ数値で転記する", () => {
+        expect(compileTopBlocksToRules([
+            { type: "ekr_when_on_kill", next: { block: { type: "ekr_do_recruit", fields: { TARGET: "ctx", SLOT: "" } } } },
+        ])).toEqual([{ when: "on_kill", do: [{ op: "recruit", target: "ctx" }] }]);
+
+        expect(compileTopBlocksToRules([
+            { type: "ekr_when_on_kill", next: { block: { type: "ekr_do_recruit", fields: { TARGET: "ctx", SLOT: "12" } } } },
+        ])).toEqual([{ when: "on_kill", do: [{ op: "recruit", target: "ctx", slot: 12 }] }]);
+    });
+
+    it("ekr_do_effect_give をコンパイルする (3フィールドとも常時書き出し)", () => {
+        expect(compileTopBlocksToRules([
+            { type: "ekr_when_on_pet", next: { block: { type: "ekr_do_effect_give", fields: { TARGET: "nearest", KIND: "freeze", SECONDS: 5 } } } },
+        ])).toEqual([{ when: "on_pet", do: [{ op: "effect_give", target: "nearest", kind: "freeze", seconds: 5 }] }]);
+    });
+
     it("「つなぐ→リンク死で道連れ」ワークスペースが validateRoleLogic まで通る", () => {
         const w = ws([
             { type: "ekr_when_on_kill", next: { block: { type: "ekr_do_link", fields: { TARGET: "ctx" } } } },

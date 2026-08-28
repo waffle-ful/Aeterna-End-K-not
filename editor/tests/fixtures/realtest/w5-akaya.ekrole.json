@@ -1,0 +1,37 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "あかや",
+  "author": "EKN Realtest",
+  "description": "よびやの へんかんさきに つかう インポスターの けんしょう用の役職",
+  "descriptionLong": "インポスターです。\nころすと かずが ふえます。\nよびやに よばれて この やくしょくに なった人が まっさらから はじまるかを たしかめます。",
+  "color": "#e04040",
+  "team": "impostor",
+  "canKill": true,
+  "canVent": true,
+  "visionMultiplier": 1.0,
+  "winCondition": "team",
+  "passives": { "speedMult": 1.2 },
+  "progress": { "text": "k{き}" },
+  "logic": {
+    "version": 1,
+    "variables": [
+      { "name": "き", "init": 0 }
+    ],
+    "rules": [
+      {
+        "when": "on_game_start",
+        "do": [
+          { "op": "notify", "text": "あかや かいし", "seconds": 5 }
+        ]
+      },
+      {
+        "when": "on_kill",
+        "do": [
+          { "op": "var_add", "name": "き", "delta": { "e": "lit", "v": 1 } },
+          { "op": "notify", "text": "ころした", "seconds": 3 }
+        ]
+      }
+    ]
+  }
+}

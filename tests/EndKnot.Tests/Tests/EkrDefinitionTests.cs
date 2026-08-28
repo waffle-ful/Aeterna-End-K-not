@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using EndKnot.Modules.Ekm;
 using Xunit;
@@ -484,6 +485,99 @@ public class EkrDefinitionTests
         EkrRule onLinkedDeath = Assert.Single(def.ParsedLogic.Rules, r => r.When == "on_linked_death");
         Assert.Equal("kill", onLinkedDeath.Cause);
         Assert.Null(onLinkedDeath.Radius);
+    }
+
+
+    // ── Wave 5 (docs/ekn-wave5-contract.md §1〜§3): 持続効果と変換先スロット指名 ────────────────
+
+    // 共有 fixture から Wave 5 語彙が AST まで通ること。TS 側 (role-fixtures.test.ts の
+    // 「effect_give の4種と recruit.slot が保持される」) と同じファイルの同じ値を読むので、
+    // 片側だけ実装が抜けるとどちらかが落ちる。
+    [Fact]
+    public void FullCourseFixture_ExposesWave5Vocabulary()
+    {
+        string json = File.ReadAllText(FixturePath("role-full-course.ekrole.json"));
+        Assert.True(EkrDefinition.TryParse(json, out EkrDefinition def, out string error), error);
+
+        var effects = new List<EkrNode>();
+
+        foreach (EkrRule rule in def.ParsedLogic.Rules)
+            CollectOps(rule.Do, "effect_give", effects);
+
+        // 4 kind すべてを1回以上 (movement 3種 + vision 1種)
+        var kinds = new HashSet<string>();
+        foreach (EkrNode n in effects) kinds.Add(n.EffectKind);
+        Assert.Equal(new HashSet<string> { "haste", "slow", "freeze", "blind" }, kinds);
+
+        // freeze は上限 10 秒 (§1) — fixture は境界を割る値で持つ
+        EkrNode freeze = effects.Find(n => n.EffectKind == "freeze");
+        Assert.NotNull(freeze);
+        Assert.Equal(8f, freeze.Seconds);
+        Assert.Equal("nearest", freeze.Target);
+
+        // target 受理集合は単数セレクタ全種 (self / linked とも通る)
+        Assert.Contains(effects, n => n.Target == "self");
+        Assert.Contains(effects, n => n.Target == "linked");
+
+        // recruit.slot は IntArg に入る (0 = 省略)
+        var recruits = new List<EkrNode>();
+
+        foreach (EkrRule rule in def.ParsedLogic.Rules)
+            CollectOps(rule.Do, "recruit", recruits);
+
+        EkrNode recruit = Assert.Single(recruits);
+        Assert.Equal(3, recruit.IntArg);
+    }
+
+    private static void CollectOps(List<EkrNode> nodes, string op, List<EkrNode> into)
+    {
+        foreach (EkrNode n in nodes)
+        {
+            if (n.Op == op) into.Add(n);
+            if (n.Then != null) CollectOps(n.Then, op, into);
+            if (n.Else != null) CollectOps(n.Else, op, into);
+        }
+    }
+
+    // §1/§3: effect_give の必須3フィールドと kind 別 seconds 上限 (TS 側 roledef.test.ts と同じ表)。
+    [Theory]
+    [InlineData("{\"op\":\"effect_give\",\"target\":\"ctx\",\"kind\":\"haste\",\"seconds\":10}", true)]
+    [InlineData("{\"op\":\"effect_give\",\"target\":\"self\",\"kind\":\"slow\",\"seconds\":1}", true)]
+    [InlineData("{\"op\":\"effect_give\",\"target\":\"linked\",\"kind\":\"blind\",\"seconds\":30}", true)]
+    [InlineData("{\"op\":\"effect_give\",\"target\":\"nearest\",\"kind\":\"freeze\",\"seconds\":10}", true)]
+    // 3フィールドとも必須 (既定を作らない)
+    [InlineData("{\"op\":\"effect_give\",\"kind\":\"haste\",\"seconds\":10}", false)]
+    [InlineData("{\"op\":\"effect_give\",\"target\":\"ctx\",\"seconds\":10}", false)]
+    [InlineData("{\"op\":\"effect_give\",\"target\":\"ctx\",\"kind\":\"haste\"}", false)]
+    // 未知 kind / 複数セレクタ / kind 別の上限超過・下限割れ
+    [InlineData("{\"op\":\"effect_give\",\"target\":\"ctx\",\"kind\":\"shield\",\"seconds\":10}", false)]
+    [InlineData("{\"op\":\"effect_give\",\"target\":\"all\",\"kind\":\"haste\",\"seconds\":10}", false)]
+    [InlineData("{\"op\":\"effect_give\",\"target\":\"ctx\",\"kind\":\"haste\",\"seconds\":31}", false)]
+    [InlineData("{\"op\":\"effect_give\",\"target\":\"ctx\",\"kind\":\"freeze\",\"seconds\":11}", false)]
+    [InlineData("{\"op\":\"effect_give\",\"target\":\"ctx\",\"kind\":\"freeze\",\"seconds\":0}", false)]
+    // §2: recruit.slot は任意・整数 1..18 のみ (整数等価トークンは既存規則どおり受理)
+    [InlineData("{\"op\":\"recruit\",\"target\":\"ctx\"}", true)]
+    [InlineData("{\"op\":\"recruit\",\"target\":\"ctx\",\"slot\":1}", true)]
+    [InlineData("{\"op\":\"recruit\",\"target\":\"ctx\",\"slot\":18}", true)]
+    [InlineData("{\"op\":\"recruit\",\"target\":\"ctx\",\"slot\":3.0}", true)]
+    [InlineData("{\"op\":\"recruit\",\"target\":\"ctx\",\"slot\":0}", false)]
+    [InlineData("{\"op\":\"recruit\",\"target\":\"ctx\",\"slot\":19}", false)]
+    [InlineData("{\"op\":\"recruit\",\"target\":\"ctx\",\"slot\":2.5}", false)]
+    [InlineData("{\"op\":\"recruit\",\"target\":\"ctx\",\"slot\":\"3\"}", false)]
+    public void Wave5Ops_MatchTheContract(string nodeJson, bool shouldAccept)
+    {
+        string json = Wrap("\"logic\":{\"version\":1,\"rules\":[{\"when\":\"on_pet\",\"do\":[" + nodeJson + "]}]}");
+        bool ok = EkrDefinition.TryParse(json, out _, out string error);
+        Assert.True(ok == shouldAccept, shouldAccept ? error : "本来 reject されるべき node が受理されました: " + nodeJson);
+    }
+
+    // §2: recruit.slot 省略時は IntArg = 0 のまま (「自分と同じ役職」の後方互換パス)。
+    [Fact]
+    public void RecruitSlot_DefaultsToZeroWhenOmitted()
+    {
+        string json = Wrap("\"logic\":{\"version\":1,\"rules\":[{\"when\":\"on_pet\",\"do\":[{\"op\":\"recruit\",\"target\":\"ctx\"}]}]}");
+        Assert.True(EkrDefinition.TryParse(json, out EkrDefinition def, out string error), error);
+        Assert.Equal(0, def.ParsedLogic.Rules[0].Do[0].IntArg);
     }
 
     // §1.2/§1.3: じょうたいトリガの必須フィールドと、他イベントへの付着 reject (slot と同じ厳格側)。

@@ -40,11 +40,14 @@ import type { LogicNode, LogicRule, RoleLogic } from "../roledef";
 // 既存リスト改定: L12 の対象イベントに on_near/on_room_enter/on_room_exit を追加 (高頻度エッジ
 // イベント配下の生成系 op)、CTXLESS_WHENS (L14) に on_room_enter/on_room_exit を追加
 // (on_near/on_far/on_linked_death は ctx を持つので入れない)。
+// Wave 5 (docs/ekn-wave5-contract.md §4 2026-08-27): L28 を追加 (計28ルール)。
+// L28 = L5/L27 の兄弟 — on_second 配下の effect_give (毎秒かけ直すと無駄うちになる。効いている
+// 時間は seconds が決めるので、きっかけを決めて1回かけるのが正しい組み方)。
 
 export type LintRuleId =
     | "L1" | "L2" | "L3" | "L4" | "L5" | "L6" | "L7" | "L8" | "L9" | "L10" | "L11" | "L12" | "L13"
     | "L14" | "L15" | "L16" | "L17" | "L18" | "L19" | "L20" | "L21"
-    | "L22" | "L23" | "L24" | "L25" | "L26" | "L27";
+    | "L22" | "L23" | "L24" | "L25" | "L26" | "L27" | "L28";
 
 export interface LintWarning {
     rule: LintRuleId;
@@ -397,6 +400,14 @@ export function lintRoleLogic(logic: RoleLogic, progressText?: string): LintWarn
                     "L27", ruleIndex, rule.when,
                     "「毎秒くりかえす」の中でなかまにしています。",
                     "毎秒なかまにするのはやりすぎだよ。じゅんばんに1人ずつ、きっかけを決めてさそおう。",
+                ));
+            }
+            // L28 (Wave 5・docs/ekn-wave5-contract.md §4): L5/L27 の兄弟 — on_second 配下の effect_give。
+            if (hasOp(rule.do, "effect_give")) {
+                warnings.push(makeWarning(
+                    "L28", ruleIndex, rule.when,
+                    "「毎秒くりかえす」の中で こうかをかけつづけています。",
+                    "まいびょう こうかをかけつづけると むだうちになっちゃうよ。きっかけを決めて1回かけよう (じかんは「なんびょう」で決められるよ)。",
                 ));
             }
         }

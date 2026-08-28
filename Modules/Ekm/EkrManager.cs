@@ -96,6 +96,9 @@ internal sealed class EkrHolderState
     // v1.3: field ≤1/2秒/ホルダー (spec §5 — CNO 生成系防御3点の per-holder レート枠)。
     public float LastFieldPlaceTime = -1f;
 
+    // Wave 5 (docs/ekn-wave5-contract.md §1.4): effect_give ≤1/2秒/ホルダー。
+    public float LastEffectGiveTime = -1f;
+
     public bool SpeedBoostActive;
     public int SpeedGen;
     public float SpeedBaseline;
@@ -1054,6 +1057,10 @@ public static class EkrManager
             ccShouldClear = !ownedBySomeSlot || (PlayersBySlot.TryGetValue(slot, out HashSet<byte> mine) && mine.Contains(_cc.HolderId));
         }
 
+        // Wave 5 (契約 §1.3 解除タイミング④): このスロットの保持者が掛けた持続効果を解除・復元する。
+        // set.Clear() より前に呼ぶ (帰属判定が PlayersBySlot を読むため — ccShouldClear と同じ理由)。
+        ClearEffectsForSlot(slot);
+
         if (PlayersBySlot.TryGetValue(slot, out HashSet<byte> set)) set.Clear();
         else PlayersBySlot[slot] = [];
 
@@ -1922,6 +1929,10 @@ public static class EkrManager
         // v1.3 (spec §3,§5): 会議開始 (追放演出突入含む) で drag/field は即停止・解除 (持ち越しはしない)。
         StopCrowdControl();
 
+        // Wave 5 (契約 §1.3 解除タイミング③): 会議開始で持続効果は全解除・会議明けへ持ち越さない
+        // (Grenadier の ReportDeadBody クリアと同じ慣例)。
+        ClearAllEffects();
+
         // Wave 1: on_attacked の打診デデュープ窓は会議境界を跨いで持ち越す意味が無い (切断者の
         // PlayerId 再利用で他人の結論を継承しないよう、PortalLastWarpTime と同じ作法で捨てる)。
         RecentAttackDecisions.Clear();
@@ -2034,7 +2045,7 @@ public static class EkrManager
 
             EkrFiber[] snapshot = state.Fibers.ToArray();
 
-            for (int i = snapshot.Length - 1; i >= 0; i--)
+            for (var i = 0; i < snapshot.Length; i++) // 前方 = 生えた順 (通常 Pump と同じ FIFO 規約)
             {
                 EkrFiber fiber = snapshot[i];
                 if (!state.Fibers.Contains(fiber)) continue;
@@ -2093,6 +2104,10 @@ public static class EkrManager
         // v1.3: crowd-control (drag/field) の 1.0 秒 tick も同じ相乗り駆動 (自己スロットリング)。
         PumpCrowdControlIfDue();
 
+        // Wave 5: 持続効果 (effect_give) の期限管理 — 同じ 0.25s 自己スロットリング相乗り
+        // (docs/ekn-wave5-contract.md §1.3)。
+        PollEffectsIfDue();
+
         if (!Runtime.TryGetValue(pc.PlayerId, out EkrHolderState state)) return;
 
         // Wave 2 (spec §2.3): seconds 経過の矢印は毎フレームここで自動 Remove する (専用ポーリング無し)。
@@ -2132,9 +2147,13 @@ public static class EkrManager
         // 「新しく生えた on_death fiber を誤って削除する」事故になるため、この tick で処理すべき
         // fiber を先にスナップショットし、各要素を pump する直前に「まだ生きているか」を再確認する
         // (Clear 済みならその fiber はこの tick ではもう進めない — 「全キャンセル」を壊さないため)。
+        // 反復は前方 = 生えた順 (FIFO)。同一 tick で複数の fiber が生えるイベント (契約 §2 の部屋直遷移
+        // exit→enter) の実行順を、発火順とそのまま一致させるため (BUG-20260825-01: 逆順反復のせいで
+        // enter→exit に転倒していた)。再入安全性は「反復方向」ではなく上のスナップショット + 直前の
+        // 生存再確認 + 参照による削除が担保しているので、方向は自由に選べる。
         EkrFiber[] snapshot = state.Fibers.ToArray();
 
-        for (int i = snapshot.Length - 1; i >= 0; i--)
+        for (var i = 0; i < snapshot.Length; i++)
         {
             EkrFiber fiber = snapshot[i];
             if (!state.Fibers.Contains(fiber)) continue; // 再入で既に Clear 済み — この tick はもう進めない
@@ -2382,7 +2401,12 @@ public static class EkrManager
         // Wave 3 (契約 §4): 倍率は InitRuntime で焼いた実効値 (ホスト露出があればホストの値)。
         bool hasSpeed = state.EffectiveSpeedMult is < 0.999f or > 1.001f;
 
-        if (hasSpeed && !state.PassiveSpeedApplied && alive)
+        // Wave 5: EKR の持続効果 (movement) が乗っている間は捕捉を遅らせる。効果で歪んだ値を
+        // 「本来の速度」として掴むと、効果が切れたあとも歪みが passive baseline に残り続ける
+        // (効果側の第3 writer 保護が復元を降ろすので自然回復しない)。到達経路は「recruit した相手に
+        // 同じ fiber で effect_give する」— 新ホルダーの初回 TickPassives が効果の値を掴む窓。
+        // 効果が切れた次の tick で通常どおり捕捉される (MinSpeed 凍結ガードと同じ「遅らせる」処置)。
+        if (hasSpeed && !state.PassiveSpeedApplied && alive && !HasMovementEffect(pc.PlayerId))
         {
             float current = Main.AllPlayerSpeed.GetValueOrDefault(pc.PlayerId, Main.RealOptionsData.GetFloat(AmongUs.GameOptions.FloatOptionNames.PlayerSpeedMod));
 
@@ -3153,6 +3177,14 @@ public static class EkrManager
 
     // who (linked/saved1/saved2) の監視対象解決。失効 (未設定/死亡/切断) は lazy に解消して番兵を返す
     // (EkrLogicOpcodes.ResolveSaved/ResolveLinked と同じ参照整合性3原則②)。
+    // ⚠️ linked の「死亡」だけは lazy 解消の対象外 (契約 §3.1「相手の死亡 = on_linked_death 発火後に解消」)。
+    // 追放死は WrapUpPostfix (ExilePatch.cs:72) が SetDead を同期で立てるのに対し FireDeath は同 :132 の
+    // LateTask (+3.5秒)。近接ポーラーのゲート (ExileController/AntiBlackout.SkipTasks) は +2秒で開くため、
+    // その差の窓 (約1.5秒 = 0.25秒間隔で約6回) でここが LinkedId を先に消すと、FireDeath の一致判定
+    // (hs.LinkedId != target.PlayerId で continue) が外れて on_linked_death が無音で落ちる
+    // (BUG-20260828-01。キル死は AfterPlayerDeathTasks が同期なので隙が無く再現しない)。死亡は「今は
+    // 解決できない」として番兵だけ返し (発火はしない)、解消の権限は FireDeath へ一本化する。
+    // 切断/消滅は FireDeath が !disconnect ゲートで拾わないので従来どおりここで lazy 解消する。
     private static byte ResolveWatchedId(EkrHolderState state, string who)
     {
         byte id = who switch
@@ -3167,6 +3199,9 @@ public static class EkrManager
 
         PlayerControl pc = id.GetPlayer();
         if (pc && pc.IsAlive() && pc.Data != null && !pc.Data.Disconnected) return id;
+
+        // linked かつ「実体はあり接続もしているが死んでいるだけ」= FireDeath 待ち。ここでは消さない。
+        if (who == "linked" && pc && pc.Data != null && !pc.Data.Disconnected) return byte.MaxValue;
 
         switch (who)
         {
@@ -3245,13 +3280,31 @@ public static class EkrManager
     // リセット不要 — ResetSlot からは触らない (trap: init_fires_midgame_slot_reset_clobbers_global)。
     private static float _lastGlobalRecruitTime = -1f;
 
-    internal static void TryRecruit(EkrHolderState state, byte holderId, PlayerControl targetPc)
+    // Wave 5 (docs/ekn-wave5-contract.md §2): slotNumber1Based は変換先スロットの指名 (1..18)。
+    // 0 = 省略 = 現行どおり「自分と同じ役職」(完全後方互換)。解決だけが増え、レート/2呼び固定順・
+    // 他の no-op 条件は一切変えない。
+    internal static void TryRecruit(EkrHolderState state, byte holderId, PlayerControl targetPc, int slotNumber1Based = 0)
     {
         // no-op 条件 (すべて予算不消費・§4): 死者/切断/自分自身/既に同スロット。
         if (!targetPc || !targetPc.IsAlive() || targetPc.Data == null || targetPc.Data.Disconnected) return;
         if (targetPc.PlayerId == holderId) return;
 
         CustomRoles slot = state.Slot;
+
+        if (slotNumber1Based > 0)
+        {
+            // 範囲外は文書検証 (1..18) で既に落ちているが、Slots の長さ変更に備えて実行時も守る。
+            if (slotNumber1Based > Slots.Length) return;
+
+            CustomRoles named = Slots[slotNumber1Based - 1];
+
+            // Wave 5 §2: ロビーで未束縛のスロットへの変換は無音 no-op (予算不消費)。定義が無いスロットへ
+            // 変換すると「何のロジックも持たない役職」になってしまうため。
+            if (!IsBound(named)) return;
+
+            slot = named;
+        }
+
         if (targetPc.GetCustomRole() == slot) return; // 既に同スロット — 変換総数はプレイヤー数で自然有界 (§4)
 
         // 勧誘者自身が消えていたら変換しない (下の Init() 不変条件を切断エッジでも守る防波堤)。
@@ -3280,15 +3333,290 @@ public static class EkrManager
         // 同順)。変換後の追加 Utils.NotifyRoles は呼ばない — SetMainRole が内蔵の NotifyRoles ペアを既に
         // 発行する (§5 二重払い禁止・Jackal 型の「SetMainRole に任せる」側)。
         //
-        // 🔴 不変条件 (契約 §4): recruit は `if (!role.RoleExist(true)) Role.Init()` (GameState.SetMainRole)
-        // の ResetSlot mid-game 罠を構造的に踏まない — 変換先スロットには必ず勧誘者自身がいるため
-        // RoleExist(true) が真になる (RoleExist の引数は countDead: 勧誘者が死んでいても数えられる)。
-        // 上の GetPlayer() ガードは勧誘者切断の同フレーム競合だけを塞ぐ。将来 recruit 以外の変換入口
-        // (テンプレ逃がし等) を作るときは、この前提が崩れていないか必ず再検討すること。
+        // 🔴 不変条件 (2026-08-27 Wave 5 で改訂 — docs/ekn-wave5-contract.md §2)。
+        //
+        // Wave 4 までは「recruit は `if (!role.RoleExist(true)) Role.Init()` (GameState.SetMainRole) の
+        // ResetSlot mid-game 罠を構造的に踏まない」と書いてあった (変換先が常に勧誘者自身のスロットで
+        // RoleExist(true) が真になるため)。**Wave 5 の slot 指名でこの前提は偽になった** — 保持者ゼロの
+        // スロットを指名した変換は mid-game で Role.Init() → EkrManager.ResetSlot を走らせる初のケース。
+        //
+        // これは**仕様として受容**する: 前任者がいないスロットの per-slot 状態 (変数・saved・marker・
+        // リンク・CNO・crowd-control 帰属・持続効果) が新品で始まるのは正しい挙動。過去に保持者がいて
+        // 全員死んだスロットは RoleExist(true) (countDead) が真のままなので Init() は走らず、死んだ前任者
+        // 時代の状態が残る — これも現行意味論の踏襲 (変えない)。
+        //
+        // ⚠️ したがって ResetSlot 側は「mid-game に呼ばれうる」前提で書くこと (無条件の全体クリアを
+        // 足さない — ClearEffectsForSlot / ccShouldClear の帰属判定がその実装)。
+        // 上の GetPlayer() ガードは勧誘者切断の同フレーム競合だけを塞ぐ。
         targetPc.RpcSetCustomRole(slot);
         targetPc.RpcChangeRoleBasis(slot);
 
         Logger.Info($"EKR recruit: {targetPc.GetRealName()} => {slot} (by holder {holderId})", "EkrManager");
+    }
+
+
+    // ── Wave 5: 持続効果エンジン (docs/ekn-wave5-contract.md §1) ─────────────────────────────────
+    //
+    // effect_give は「相手に一定時間だけ効く状態」を付ける op。対象は EKR ホルダーとは限らないので、
+    // 台帳は EkrHolderState ではなく **per-target の static テーブル** に持つ (キー = (targetId, channel))。
+    //
+    // チャンネルは2本だけ (§1.2): movement (haste/slow/freeze 共有) と vision (blind)。同じチャンネルへの
+    // 再適用は**後勝ち上書き**でスタックしない — 期限も新しい効果のものになり、切れたら「素の値」へ戻る。
+    // ホルダー跨ぎも同一チャンネル (別ホルダーの haste 中に freeze が来たら freeze が勝つ)。
+    //
+    // 送信面 (§1.3): 新しい送信種はゼロ。実費は対象1人の SyncSettings 再送 (MarkDirtySettings) だけで、
+    // バニラ客にもそのまま効く既存経路に乗る。movement は Main.AllPlayerSpeed への書き込み、vision は
+    // 書き込みすら無い宣言型 (PlayerGameOptionsSender が HasBlindEffect を読む) なので復元問題が構造的に無い。
+    //
+    // 期限管理は PollCnoTouchIfDue と同族の 0.25s Pump ライダー (専用の毎フレーム経路を作らない)。
+    // 期限粒度 ±0.25s は仕様。
+
+    internal const int EffectChannelMovement = 0;
+    internal const int EffectChannelVision = 1;
+
+    private sealed class EkrEffectEntry
+    {
+        public string Kind;
+        public float EndAt;
+
+        // movement のみ: 捕捉した素の速度と、自分が実際に書き込んだ値 (第3の writer 保護に使う)。
+        public float Baseline;
+        public float Written;
+
+        public byte HolderId; // ログ用 (付与元)
+    }
+
+    private static readonly Dictionary<(byte TargetId, int Channel), EkrEffectEntry> Effects = [];
+
+    // §1.4 予算: per-holder ≤1/2秒 + EKR 全体 ≤2/秒 (teleport 系と同じ2段構え・超過は静かにドロップ)。
+    private const float EffectPerHolderInterval = 2f;
+    private static readonly List<float> _recentEffectTimes = [];
+
+    internal static bool TryConsumeEffectBudget(EkrHolderState state)
+    {
+        float now = Time.realtimeSinceStartup;
+
+        if (state.LastEffectGiveTime >= 0f && now - state.LastEffectGiveTime < EffectPerHolderInterval) return false;
+
+        _recentEffectTimes.RemoveAll(t => now - t >= 1f);
+        if (_recentEffectTimes.Count >= 2) return false;
+
+        state.LastEffectGiveTime = now;
+        _recentEffectTimes.Add(now);
+        return true;
+    }
+
+    // 設定同期の dirty マーク。🔴 AntiBlackout.SkipTasks 中は PlayerGameOptionsSender.SendOptionsArray が
+    // 早期 return するのに、GameOptionsSender の送信ループは送信の成否に関わらず IsDirty を落とす
+    // (GameOptionsSender.cs の "sender.IsDirty = false;" は SendGameOptionsAsync の外) — この窓で立てた
+    // dirty は**無音で捨てられ、再送されない**。効果の適用/解除がホスト側だけ進んで対象クライアント
+    // (バニラ客含む) に届かない desync になるため、窓が閉じるまで 1 秒間隔で再マークする。
+    // 送信そのものは既存のバッチ+PacketRateGate 経路に乗るので、再マークの実費はフラグ1本だけ。
+    // (memory: skiptasks-window-outlives-exilecontroller — TryRecruit が同じ窓を no-op で避けている側)
+    private static void MarkSettingsDirty(PlayerControl pc, int retriesLeft = 5)
+    {
+        if (!pc) return;
+
+        pc.MarkDirtySettings();
+
+        if (!AntiBlackout.SkipTasks || retriesLeft <= 0) return;
+
+        byte playerId = pc.PlayerId;
+
+        LateTask.New(() =>
+        {
+            if (GameStates.IsEnded) return;
+
+            PlayerControl retry = playerId.GetPlayer();
+            if (retry) MarkSettingsDirty(retry, retriesLeft - 1);
+        }, 1f, log: false);
+    }
+
+    // vision チャンネルの宣言型読み取りフック (PlayerGameOptionsSender が呼ぶ)。
+    internal static bool HasBlindEffect(byte playerId)
+    {
+        return Effects.ContainsKey((playerId, EffectChannelVision));
+    }
+
+    // movement チャンネルが埋まっているか (passives.speedMult の baseline 捕捉を遅らせる判定に使う)。
+    internal static bool HasMovementEffect(byte playerId)
+    {
+        return Effects.ContainsKey((playerId, EffectChannelMovement));
+    }
+
+    // §1.1 実効値 (固定・作者には開けない)。haste ×1.5 / slow ×0.5 / freeze = MinSpeed。
+    private static float EffectSpeedValue(string kind, float baseline)
+    {
+        return kind switch
+        {
+            "haste" => baseline * 1.5f,
+            "slow" => baseline * 0.5f,
+            _ => Main.MinSpeed
+        };
+    }
+
+    internal static void ApplyEffect(byte targetId, string kind, float seconds, byte holderId)
+    {
+        PlayerControl target = targetId.GetPlayer();
+        if (!target || !target.IsAlive() || target.Data == null || target.Data.Disconnected) return;
+
+        float endAt = Time.realtimeSinceStartup + seconds;
+
+        if (kind == "blind")
+        {
+            Effects[(targetId, EffectChannelVision)] = new EkrEffectEntry { Kind = kind, EndAt = endAt, HolderId = holderId };
+            MarkSettingsDirty(target);
+            Logger.Info($"EKR effect: {target.GetRealName()} <= {kind} {seconds}s (by holder {holderId})", "EkrManager");
+            return;
+        }
+
+        // movement: baseline を捕捉する前に、同じ Main.AllPlayerSpeed キーを持つ既存の書き手を畳む
+        // (§1.2 後勝ち)。畳まないと「前の効果で歪んだ値」を素の速度として捕捉し、期限切れの復元で
+        // 歪みが永続化する (memory: allplayerspeed-temp-boost-restore-race の系)。
+        ClearEffect(targetId, EffectChannelMovement, "overwrite");
+        FoldSpeedBoost(targetId);
+
+        float current = Main.AllPlayerSpeed.GetValueOrDefault(targetId, Main.RealOptionsData.GetFloat(AmongUs.GameOptions.FloatOptionNames.PlayerSpeedMod));
+
+        // 捕捉時に他役職が MinSpeed で凍結中だと、その凍結値を「本来の速度」として捕捉してしまい、
+        // 復元で永久凍結固定になる (speed op と同じ罠・EkrLogicOpcodes.cs の捕捉側ガードと同型)。
+        float baseline = Mathf.Approximately(current, Main.MinSpeed)
+            ? Main.RealOptionsData.GetFloat(AmongUs.GameOptions.FloatOptionNames.PlayerSpeedMod)
+            : current;
+
+        float value = EffectSpeedValue(kind, baseline);
+
+        Effects[(targetId, EffectChannelMovement)] = new EkrEffectEntry { Kind = kind, EndAt = endAt, Baseline = baseline, Written = value, HolderId = holderId };
+
+        Main.AllPlayerSpeed[targetId] = value;
+        MarkSettingsDirty(target);
+
+        Logger.Info($"EKR effect: {target.GetRealName()} <= {kind} {seconds}s (by holder {holderId})", "EkrManager");
+    }
+
+    // 効果の解除 + 復元。解除は常に世界へ書き戻す (ゲーム終了時の掃除も次ラウンドの ResetSlot →
+    // ClearEffectsForSlot が担うので、「復元しない解除」の呼び出し口は存在しない)。
+    private static void ClearEffect(byte targetId, int channel, string reason)
+    {
+        if (!Effects.Remove((targetId, channel), out EkrEffectEntry entry)) return;
+
+        PlayerControl pc = targetId.GetPlayer();
+
+        // 実機検証の計器 (付与側のログと対になる解除ログ) — 会議開始の一括解除が自然失効と
+        // 区別できず実機で分離に失敗したため、解除の理由と時刻を残す。
+        Logger.Info($"EKR effect clear: {(pc ? pc.GetRealName() : targetId.ToString())} => {entry.Kind} ({reason})", "EkrManager");
+
+        if (channel == EffectChannelVision)
+        {
+            // 宣言型なので「テーブルから消して再送」だけ (§1.3 — 復元問題が構造的に無い)。
+            MarkSettingsDirty(pc);
+            return;
+        }
+
+        float current = Main.AllPlayerSpeed.GetValueOrDefault(targetId, entry.Written);
+
+        // 第3の writer 保護 (§1.3): 自分が書いた値のままでなければ、既に誰かが上書きしている —
+        // 触ると相手の効果を巻き戻してしまうので何もしない。
+        if (!Mathf.Approximately(current, entry.Written)) return;
+
+        Main.AllPlayerSpeed[targetId] = entry.Baseline;
+        MarkSettingsDirty(pc);
+    }
+
+    // movement チャンネルの外部解除口 (speed op が同じキーへ書く前に呼ぶ — 後勝ちの対称側)。
+    internal static void ClearMovementEffect(byte targetId)
+    {
+        ClearEffect(targetId, EffectChannelMovement, "speed-op");
+    }
+
+    // speed op のブースト (per-holder・EkrHolderState 側) を畳んで素の速度へ戻す。effect_give が同じ
+    // Main.AllPlayerSpeed キーへ書く前に呼ぶ — 畳まないと speed の遅延復元が effect の値を踏み潰し、
+    // その後 effect の復元が「第3の writer 保護」で降りて歪みが残る (2つの書き手が baseline を交換する事故)。
+    private static void FoldSpeedBoost(byte playerId)
+    {
+        if (!Runtime.TryGetValue(playerId, out EkrHolderState state) || !state.SpeedBoostActive) return;
+
+        state.SpeedGen++; // 進行中の遅延復元タスクを stale 化する (世代不一致で降りる)
+        state.SpeedBoostActive = false;
+
+        // 凍結中は触らない (speed op の復元側と同じ裁定 — 相手の凍結を解除してしまう)。
+        if (Mathf.Approximately(Main.AllPlayerSpeed.GetValueOrDefault(playerId), Main.MinSpeed)) return;
+
+        Main.AllPlayerSpeed[playerId] = state.SpeedBaseline;
+    }
+
+    // スロット単位の解除 (§1.3 の解除タイミング④)。⚠️ **無条件の全解除にしないこと** — ResetSlot は
+    // ゲーム中いつでも呼ばれうる (Wave 5 の recruit slot 指名で「保持者ゼロのスロットへの変換」が
+    // mid-game Init() を走らせる初のケースになった)。無条件クリアだと無関係なホルダーが掛けた効果まで
+    // 巻き添えで消える。帰属するものだけ断つ — _cc (crowd-control) の ccShouldClear と同じ非対称の解消で、
+    // 「このスロットの保持者が付与元」に加えて「どのスロットの保持者でもなくなった孤児」も回収する
+    // (ラウンド境界では前ラウンドの保持者が set に残っているので前者で通る)。
+    internal static void ClearEffectsForSlot(CustomRoles slot)
+    {
+        if (Effects.Count == 0) return;
+
+        PlayersBySlot.TryGetValue(slot, out HashSet<byte> mine);
+
+        foreach ((byte TargetId, int Channel) key in Effects.Keys.ToArray())
+        {
+            if (!Effects.TryGetValue(key, out EkrEffectEntry entry)) continue;
+
+            bool ownedBySomeSlot = false;
+
+            foreach (HashSet<byte> owners in PlayersBySlot.Values)
+            {
+                if (!owners.Contains(entry.HolderId)) continue;
+
+                ownedBySomeSlot = true;
+                break;
+            }
+
+            if (ownedBySomeSlot && (mine == null || !mine.Contains(entry.HolderId))) continue;
+
+            ClearEffect(key.TargetId, key.Channel, "slot");
+        }
+    }
+
+    // 全効果の解除 (§1.3 の解除タイミング③④: 会議開始 / ゲーム終了・スロット束縛差し替え)。
+    internal static void ClearAllEffects()
+    {
+        if (Effects.Count == 0) return;
+
+        foreach ((byte targetId, int channel) in Effects.Keys.ToArray())
+            ClearEffect(targetId, channel, "all");
+
+        _recentEffectTimes.Clear();
+    }
+
+    // 0.25s Pump ライダー (PollCnoTouchIfDue と同型の自己スロットリング)。期限切れと、対象の
+    // 死亡・切断 (§1.3 解除タイミング②) をここで回収する。付与元ホルダーの死は見ない — 効果は
+    // 期限まで残る (§1.3・「死に際に相手を凍らせる」演出を成立させる)。
+    private const float EffectPollInterval = 0.25f;
+    private static float _lastEffectPollTime = -1f;
+
+    private static void PollEffectsIfDue()
+    {
+        if (Effects.Count == 0) return;
+
+        float now = Time.realtimeSinceStartup;
+        if (_lastEffectPollTime >= 0f && now - _lastEffectPollTime < EffectPollInterval) return;
+        _lastEffectPollTime = now;
+
+        List<(byte TargetId, int Channel)> expired = null;
+
+        foreach (KeyValuePair<(byte TargetId, int Channel), EkrEffectEntry> kv in Effects)
+        {
+            PlayerControl pc = kv.Key.TargetId.GetPlayer();
+            bool gone = !pc || !pc.IsAlive() || pc.Data == null || pc.Data.Disconnected;
+
+            if (!gone && kv.Value.EndAt > now) continue;
+
+            (expired ??= []).Add(kv.Key);
+        }
+
+        if (expired == null) return;
+
+        foreach ((byte targetId, int channel) in expired) ClearEffect(targetId, channel, "poll");
     }
 
     // ── v1.3: crowd-control エンジン (drag/field の共有枠・spec §3,§5) ──────────────────────────

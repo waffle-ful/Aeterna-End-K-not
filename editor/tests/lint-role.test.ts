@@ -1235,6 +1235,29 @@ describe("lint-role: L27 (on_second 配下の recruit — L5 の兄弟)", () => 
     });
 });
 
+// Wave 5 (docs/ekn-wave5-contract.md §4 2026-08-27) — L28
+describe("lint-role: L28 (on_second 配下の effect_give — L5/L27 の兄弟)", () => {
+    it("on_second + effect_give (直下) は L28 を警告する", () => {
+        const l = logic([{ when: "on_second", do: [{ op: "effect_give", target: "nearest", kind: "slow", seconds: 5 }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L28");
+    });
+
+    it("on_second + effect_give (if の中にネスト) も検知する", () => {
+        const l = logic([
+            {
+                when: "on_second",
+                do: [{ op: "if", cond: { e: "lit", v: 1 }, then: [{ op: "effect_give", target: "nearest", kind: "freeze", seconds: 3 }] }],
+            },
+        ]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L28");
+    });
+
+    it("on_second 以外の effect_give は L28 を警告しない", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "effect_give", target: "nearest", kind: "blind", seconds: 5 }] }]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L28");
+    });
+});
+
 describe("lint-role: L12 の Wave 4 対象拡大 (on_near/on_room_enter/on_room_exit)", () => {
     it("on_near + cno_spawn は L12 を警告する", () => {
         const l = logic([{ when: "on_near", radius: "small", do: [{ op: "cno_spawn", slot: 1, text: "!", size: 1, at: "self" }] }]);

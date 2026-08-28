@@ -19,7 +19,7 @@
 import * as Blockly from "blockly/core";
 import "blockly/blocks"; // math_number/logic_boolean 等の標準ブロックを Blockly.Blocks へ登録する副作用 import
 import * as jaMsg from "blockly/msg/ja";
-import { ALIVE_COUNT_VALUE_MAX, ALIVE_COUNT_VALUE_MIN, LOGIC_WHEN_VALUES, type LogicWhen } from "../roledef";
+import { ALIVE_COUNT_VALUE_MAX, ALIVE_COUNT_VALUE_MIN, LOGIC_WHEN_VALUES, RECRUIT_SLOT_MAX, type LogicWhen } from "../roledef";
 
 // 標準ブロック (logic_boolean 等) はラベルを %{BKY_...} メッセージキーで持つため、ロケールを
 // ロードしないと生キーがそのまま表示される。カスタムブロックは全て日本語直書きなので影響しない。
@@ -181,6 +181,13 @@ const TARGET_SINGLE_OPTIONS: [string, string][] = [
 ];
 // teleport_other は「相手を飛ばす」op なので じぶん を出さない (spec §3 のアクション表どおり)。
 const TARGET_OTHER_OPTIONS: [string, string][] = TARGET_SINGLE_OPTIONS.filter(([, v]) => v !== "self");
+// Wave 5 (docs/ekn-wave5-contract.md §2): recruit の「かえるさき」。先頭の "" = 「じぶんとおなじ」で、
+// compile-role が正準形からフィールドごと省略する (ATTACK_KIND_OPTIONS の「すべて」と同じ作法)。
+// スロット番号はロビー構成への相対参照 (中身はホストが決める) なので、絶対語彙の禁止には触れない。
+const RECRUIT_SLOT_OPTIONS: [string, string][] = [
+    ["じぶんとおなじ", ""],
+    ...Array.from({ length: RECRUIT_SLOT_MAX }, (_, i) => [`スロット${i + 1}`, String(i + 1)] as [string, string]),
+];
 // 複数セレクタを出せるのは notify だけ (Wave 1 のホワイトリスト)。
 const TARGET_NOTIFY_OPTIONS: [string, string][] = [
     ...TARGET_SINGLE_OPTIONS,
@@ -762,19 +769,47 @@ function jsonBlockDefs(): unknown[] {
         },
         {
             type: "ekr_do_recruit",
-            message0: "%1 を なかまにする",
+            // Wave 5 (docs/ekn-wave5-contract.md §2): かえるさき (SLOT) は任意。既定の "" =
+            // 「じぶんとおなじ」で、compile-role が正準形からフィールドごと省略する。
+            message0: "%1 を なかまにする (かえるさき %2)",
             args0: [{
                 type: "field_dropdown", name: "TARGET", options: [
                     ["あいて", "ctx"], ["つないだ人", "linked"],
                     ["おぼえた人1", "saved1"], ["おぼえた人2", "saved2"],
                     ["いちばん近くの人", "nearest"], ["だれか (ランダム)", "random"],
                 ],
+            }, {
+                type: "field_dropdown", name: "SLOT", options: RECRUIT_SLOT_OPTIONS,
             }],
+            inputsInline: true,
             previousStatement: null,
             nextStatement: null,
             colour: HUE_LINK,
             // 契約 §4: on_game_start 再発火とインポスター人数枠の増加は tooltip 明記が契約要件。
-            tooltip: "えらんだ人が、自分と同じ役職になります。会議中は効きません。同じ役職の人には効きません。しばらく間をあけないと連続では効きません。なかまに した/された ときも「ゲームがはじまったとき」が動くよ。じぶんがインポスターの役職なら、なかまにした人も本物のインポスターになるよ (インポスターの人数がふえる)。",
+            tooltip: "えらんだ人が、自分と同じ役職になります。会議中は効きません。同じ役職の人には効きません。しばらく間をあけないと連続では効きません。なかまに した/された ときも「ゲームがはじまったとき」が動くよ。じぶんがインポスターの役職なら、なかまにした人も本物のインポスターになるよ (インポスターの人数がふえる)。「かえるさき」でスロット番号をえらぶと、その役職にすることもできるよ (そのスロットに役職が入っていないときは なにも起きません)。",
+        },
+
+        // 持続効果 (Wave 5 docs/ekn-wave5-contract.md §1 — こうかをかける)
+        {
+            type: "ekr_do_effect_give",
+            message0: "%1 を %2 %3 秒",
+            args0: [
+                { type: "field_dropdown", name: "TARGET", options: TARGET_SINGLE_OPTIONS },
+                {
+                    type: "field_dropdown", name: "KIND", options: [
+                        ["はやくする", "haste"], ["おそくする", "slow"],
+                        ["こおらせる", "freeze"], ["くらくする", "blind"],
+                    ],
+                },
+                { type: "field_number", name: "SECONDS", value: 5, min: 1, max: 30, precision: 1 },
+            ],
+            inputsInline: true,
+            previousStatement: null,
+            nextStatement: null,
+            colour: HUE_LINK,
+            // 契約 §1.1: 実効値 (×1.5 / ×0.5 / 視界 0.3) は作者に開けないので、tooltip も数字を出さない。
+            // freeze だけ上限 10 秒なので、そこは明記する (超えると保存時にエラーになるため)。
+            tooltip: "えらんだ人に、しばらくのあいだ こうかをかけます。はやくする / おそくする / こおらせる (うごけなくする) / くらくする (見えるはんいをせまくする) の4つから えらべます。おなじ人に かけなおすと、あとからかけた方が勝ちます (かさなりません)。会議がはじまると ぜんぶ消えます。かける人が死んでも、じかんが終わるまで こうかは のこります。こおらせるは 1〜10 秒、ほかは 1〜30 秒までです。",
         },
 
         // 変数・式 (動的ドロップダウンが不要なもののみ。var_set/var_add/変数の値 は命令形で別途登録)
@@ -1012,6 +1047,7 @@ export function buildRoleToolbox(): Blockly.utils.toolbox.ToolboxDefinition {
                     { kind: "block", type: "ekr_do_link" },
                     { kind: "block", type: "ekr_do_unlink" },
                     { kind: "block", type: "ekr_do_recruit" },
+                    { kind: "block", type: "ekr_do_effect_give" },
                 ],
             },
             {

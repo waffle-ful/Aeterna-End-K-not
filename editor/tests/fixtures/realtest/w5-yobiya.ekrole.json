@@ -1,0 +1,70 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "よびや",
+  "author": "EKN Realtest",
+  "description": "そばの人を えらんだ やくしょくに かえる けんしょう用の役職",
+  "descriptionLong": "ベントに入るたびに モードが1つ すすみます。\n1=9ばんへ (だれも いない はこ) / 2=11ばんへ (あかや) / 3=じぶんと おなじ やくしょくへ。\nそばに いる人が かわります。",
+  "color": "#d04f7a",
+  "team": "crewmate",
+  "canKill": false,
+  "canVent": true,
+  "visionMultiplier": 1.0,
+  "winCondition": "team",
+  "progress": { "text": "m{モ}r{よ}" },
+  "logic": {
+    "version": 1,
+    "variables": [
+      { "name": "モ", "init": 0 },
+      { "name": "よ", "init": 0 }
+    ],
+    "rules": [
+      {
+        "when": "on_game_start",
+        "do": [
+          { "op": "notify", "text": "よびや かいし", "seconds": 3 }
+        ]
+      },
+      {
+        "when": "on_vent_enter",
+        "do": [
+          { "op": "var_add", "name": "モ", "delta": { "e": "lit", "v": 1 } },
+          { "op": "notify", "text": "モードを すすめた", "seconds": 2 }
+        ]
+      },
+      {
+        "when": "on_var",
+        "var": "モ",
+        "cmp": "eq",
+        "value": 1,
+        "do": [
+          { "op": "recruit", "target": "nearest", "slot": 9 },
+          { "op": "var_add", "name": "よ", "delta": { "e": "lit", "v": 1 } },
+          { "op": "notify", "text": "9ばんへ よんだ", "seconds": 3 }
+        ]
+      },
+      {
+        "when": "on_var",
+        "var": "モ",
+        "cmp": "eq",
+        "value": 2,
+        "do": [
+          { "op": "recruit", "target": "nearest", "slot": 11 },
+          { "op": "var_add", "name": "よ", "delta": { "e": "lit", "v": 1 } },
+          { "op": "notify", "text": "11ばんへ よんだ", "seconds": 3 }
+        ]
+      },
+      {
+        "when": "on_var",
+        "var": "モ",
+        "cmp": "eq",
+        "value": 3,
+        "do": [
+          { "op": "recruit", "target": "nearest" },
+          { "op": "var_add", "name": "よ", "delta": { "e": "lit", "v": 1 } },
+          { "op": "notify", "text": "おなじやくへ よんだ", "seconds": 3 }
+        ]
+      }
+    ]
+  }
+}

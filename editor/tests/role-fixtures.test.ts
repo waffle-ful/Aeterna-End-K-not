@@ -87,6 +87,8 @@ describe("golden fixture: role-full-course.ekrole.json (10イベント・主要o
             "marker_save", "teleport_other",
             // Wave 4 (docs/ekn-wave4-contract.md §3/§4): リンクと変換の3 op。
             "link", "unlink", "recruit",
+            // Wave 5 (docs/ekn-wave5-contract.md §1): 持続効果。
+            "effect_give",
         ];
         for (const op of expectedOps) {
             expect(ops.has(op), `op "${op}" が fixture 内で使われていない`).toBe(true);
@@ -131,6 +133,37 @@ describe("golden fixture: role-full-course.ekrole.json (10イベント・主要o
 
         const onVentExit = rules.find((r) => r.when === "on_vent_exit");
         expect(onVentExit?.do.length).toBeGreaterThan(0);
+    });
+
+    // Wave 5 (docs/ekn-wave5-contract.md §1/§2): 持続効果と変換先スロット指名。C# 側
+    // (EkrDefinitionTests.FullCourseFixture_ExposesWave5Vocabulary) が同じファイルの同じ値を読むので、
+    // 片側だけ実装が抜けるとどちらかが落ちる。
+    it("effect_give の4種と recruit.slot が保持される (kind 別の seconds 上限も含む)", () => {
+        const parsed = JSON.parse(fullCourseRaw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        const rules = result.def.logic?.rules ?? [];
+
+        const effects: { target: string; kind: string; seconds: number }[] = [];
+        for (const rule of rules) {
+            for (const n of rule.do) {
+                if (n.op === "effect_give") effects.push({ target: n.target, kind: n.kind, seconds: n.seconds });
+            }
+        }
+
+        // 4 kind すべてを1回以上 (movement 3種 + vision 1種)。
+        expect(new Set(effects.map((e) => e.kind))).toEqual(new Set(["slow", "blind", "freeze", "haste"]));
+        // freeze は上限 10 秒 (契約 §1) — fixture は境界を割る値で持つ。
+        const freeze = effects.find((e) => e.kind === "freeze");
+        expect(freeze?.seconds).toBe(8);
+        expect(freeze?.target).toBe("nearest");
+        // linked セレクタと self がどちらも受理されること (§1 の target 受理集合 = 単数セレクタ全種)。
+        expect(effects.some((e) => e.target === "linked")).toBe(true);
+        expect(effects.some((e) => e.target === "self")).toBe(true);
+
+        // recruit.slot: 指名あり (§2)。省略時にフィールドを持たないことは compile-role 側で検証する。
+        const recruit = rules.flatMap((r) => r.do).find((n) => n.op === "recruit");
+        expect(recruit && "slot" in recruit ? recruit.slot : undefined).toBe(3);
     });
 
     it("on_attacked の kind と on_death の cause が保持される", () => {
