@@ -71,6 +71,9 @@ public static class ClaudeBridge
 
         try { HandleAutoScreenshot(); }
         catch (Exception e) { Utils.ThrowException(e); }
+
+        try { PushLobbyCodeIfChanged(); }
+        catch (Exception e) { Utils.ThrowException(e); }
     }
 
     // Utils.SendLocally からの写し窓口。ホストローカル表示のチャット/通知を claude-out.log にも記録する。
@@ -1644,6 +1647,24 @@ public static class ClaudeBridge
     // ── 接続イベント(キック検知)──────────────────────────────────────
     // HealthLogDisconnectPatch / OnPlayerJoinedPatch / OnPlayerLeftPatch から呼ばれる軽量フック。
     // 「ホストがキックされたか」「Android サブ端末が落ちたか」をポーリング無しの push 通知で判定する。
+
+    // ロビーコードの push 通知 (`LOBBYCODE XXXXXX`)。ロビー再生成 (LobbyInactivity 切断や自動開始サイクル) で
+    // コードが変わるたびに out.log へ流れるので、ld-sub.ps1 watch-rejoin がこれを tail してエミュ fleet を自動再 join できる。
+    private static int _lastPushedGameId;
+
+    private static void PushLobbyCodeIfChanged()
+    {
+        if (!GameStates.IsLobby) return;
+
+        int id = AmongUsClient.Instance ? AmongUsClient.Instance.GameId : 0;
+        if (id == 0 || id == _lastPushedGameId) return;
+
+        string code = GameCode.IntToGameName(id);
+        if (string.IsNullOrEmpty(code)) return;
+
+        _lastPushedGameId = id;
+        WriteOut($"LOBBYCODE {code.ToUpperInvariant()}");
+    }
 
     private static string _lastDisconnect;
     private static long _lastDisconnectTs;

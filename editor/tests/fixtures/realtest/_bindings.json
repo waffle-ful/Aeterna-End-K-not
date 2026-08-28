@@ -1,0 +1,19 @@
+{
+  "ekrBindings": 1,
+  "slots": {
+    "EkmCustomRole1": "w5-kouka.ekrole.json",
+    "EkmCustomRole2": "w4c-tsunagi.ekrole.json",
+    "EkmCustomRole3": "w5-kaigi.ekrole.json",
+    "EkmCustomRole4": "w5-tsutae.ekrole.json",
+    "EkmCustomRole5": "w5-yobiya.ekrole.json",
+    "EkmImpRole1": "w5-akaya.ekrole.json"
+  },
+  "hostOptionSignatures": {
+    "EkmCustomRole1": "w5-kouka.ekrole.json",
+    "EkmCustomRole2": "w4c-tsunagi.ekrole.json",
+    "EkmCustomRole3": "w5-kaigi.ekrole.json",
+    "EkmCustomRole4": "w5-tsutae.ekrole.json",
+    "EkmCustomRole5": "w5-yobiya.ekrole.json",
+    "EkmImpRole1": "w5-akaya.ekrole.json"
+  }
+}

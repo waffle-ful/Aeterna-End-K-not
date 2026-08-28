@@ -516,3 +516,7 @@ Resources/Sounds/*.ogg
 mock_refined.html
 mockup_role_menu_planB.html
 mockups/
+# 実機検証 fixture の運用メモ — どの fixture がどの内部契約を潰すためのものか、
+# どのスロットを意図的に空けてあるか、といった作り方の中身なので公開リポには置かない。
+# 同ディレクトリの .ekrole.json / _bindings.json は再作成コストの高い「データ」なので追跡する。
+editor/tests/fixtures/realtest/README.md

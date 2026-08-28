@@ -270,6 +270,27 @@ export type FarWho = (typeof FAR_WHO_VALUES)[number];
 export const LINK_TARGET_VALUES = ["ctx", "saved1", "saved2", "nearest", "random"] as const;
 export const RECRUIT_TARGET_VALUES = ["ctx", "linked", "saved1", "saved2", "nearest", "random"] as const;
 
+// ---------------------------------------------------------------------------
+// Wave 5 (docs/ekn-wave5-contract.md 2026-08-27) — 持続効果と変換先
+// ---------------------------------------------------------------------------
+// effect_give の効果種別。実効値 (haste ×1.5 / slow ×0.5 / freeze = 移動不能 / blind 視界 0.3) は
+// エンジン側の固定値で、作者には数値を開けない (契約 §1.1 — radius tier と同じ方針)。
+// ⚠️ C# 側 (Modules/Ekm/EkmLogicRuntime.cs の EkrEffectKinds) と同じ並び・同じ綴りを保つこと。
+export const EFFECT_KIND_VALUES = ["haste", "slow", "freeze", "blind"] as const;
+export type EffectKind = (typeof EFFECT_KIND_VALUES)[number];
+// seconds の下限は共通 1、上限は kind 別 — freeze だけ短い (移動権の剥奪なので drag の 1..10 と同格)。
+export const EFFECT_SECONDS_MIN = 1;
+export const EFFECT_SECONDS_MAX = 30;
+export const EFFECT_FREEZE_SECONDS_MAX = 10;
+export function effectMaxSeconds(kind: EffectKind): number {
+    return kind === "freeze" ? EFFECT_FREEZE_SECONDS_MAX : EFFECT_SECONDS_MAX;
+}
+// effect_give.target は単数セレクタ全種 (self も可 — 「じぶんをはやくする」は正当)。
+export const EFFECT_TARGET_VALUES = TARGET_SINGLE_VALUES;
+// recruit.slot (契約 §2): 変換先スロットの指名。省略 = 自分と同じ役職 (正準形では書き出さない)。
+export const RECRUIT_SLOT_MIN = 1;
+export const RECRUIT_SLOT_MAX = 18;
+
 // progress (契約 §3): 自由テキスト形式。text は trim 後 1..16字 (超過はクランプ)。
 export const PROGRESS_TEXT_MIN = 1;
 export const PROGRESS_TEXT_MAX = 16;
@@ -418,7 +439,11 @@ export type LogicNode =
     | { op: "link"; target: (typeof LINK_TARGET_VALUES)[number] }
     | { op: "unlink" }
     // Wave 4 (契約 §4) — 相手を「自分と同じ EKR 役職」へ変換する。会議中は no-op (task-only)。
-    | { op: "recruit"; target: (typeof RECRUIT_TARGET_VALUES)[number] };
+    // Wave 5 (docs/ekn-wave5-contract.md §2) — 任意の slot (1..18) で変換先スロットを指名できる。
+    // 省略 = 自分と同じ役職 (完全後方互換・正準形ではフィールドごと省略)。
+    | { op: "recruit"; target: (typeof RECRUIT_TARGET_VALUES)[number]; slot?: number }
+    // Wave 5 (契約 §1) — 相手に持続効果をかける。target/kind/seconds すべて必須 (既定を作らない)。
+    | { op: "effect_give"; target: (typeof EFFECT_TARGET_VALUES)[number]; kind: EffectKind; seconds: number };
 
 export interface LogicRule {
     when: LogicWhen;
@@ -1105,7 +1130,18 @@ function validateNode(raw: unknown, varNames: ReadonlySet<string>, path: string,
             return { node: { op: "unlink" }, depth: 1, count: 1 };
         case "recruit": {
             const target = expectEnum(raw.target, RECRUIT_TARGET_VALUES, `${path}.target`);
-            return { node: { op: "recruit", target }, depth: 1, count: 1 };
+            // Wave 5 (契約 §2/§3): slot は任意。省略時は正準形でもフィールドを持たせない。
+            if (raw.slot === undefined) return { node: { op: "recruit", target }, depth: 1, count: 1 };
+            const slot = expectRangeInt(raw.slot, RECRUIT_SLOT_MIN, RECRUIT_SLOT_MAX, `${path}.slot`);
+            return { node: { op: "recruit", target, slot }, depth: 1, count: 1 };
+        }
+        // Wave 5 (docs/ekn-wave5-contract.md §1/§3) — こうかをかける。3フィールドとも必須なので
+        // 畳み込み (省略) は無し。seconds の上限は kind 別 (freeze ≤10 / 他 ≤30)。
+        case "effect_give": {
+            const target = expectEnum(raw.target, EFFECT_TARGET_VALUES, `${path}.target`);
+            const kind = expectEnum(raw.kind, EFFECT_KIND_VALUES, `${path}.kind`);
+            const seconds = expectRangeNumber(raw.seconds, EFFECT_SECONDS_MIN, effectMaxSeconds(kind), `${path}.seconds`);
+            return { node: { op: "effect_give", target, kind, seconds }, depth: 1, count: 1 };
         }
         default:
             fail(`${path}.op が不明です (${JSON.stringify(op)})`);

@@ -127,6 +127,9 @@ public sealed class EkrNode
     public int FailChance;
     public int Noise;
 
+    // Wave 5 (docs/ekn-wave5-contract.md §1 effect_give): かける効果の種類 ("haste" | "slow" | "freeze" | "blind")。
+    public string EffectKind;
+
     // Wave 2 (vote_weight_set.value 0..3): 汎用の整数引数置き場 (他 op の Slot/Size とは意味論が
     // 別物なので専用フィールドにする — 「票のちから」を CNO slot と誤読させない)。
     public int IntArg;
@@ -381,6 +384,13 @@ public sealed class EkrLogicDef
     // OtherSelectors は Wave 4 で linked を含むため専用リストにする。
     private static readonly string[] LinkTargetSelectors = ["ctx", "saved1", "saved2", "nearest", "random"];
 
+    // Wave 5 (docs/ekn-wave5-contract.md §1): effect_give の効果種別と kind 別の秒数上限。
+    // freeze だけ上限が短い (移動権の剥奪なので drag の 1..10 と同格 — 契約 §1)。
+    // ⚠️ TS 側 (editor/src/roledef.ts) と同じ並び・同じ綴りを保つこと (drift 検出は共有 fixture)。
+    public static readonly string[] EkrEffectKinds = ["haste", "slow", "freeze", "blind"];
+
+    public static float EffectMaxSeconds(string kind) => kind == "freeze" ? 10f : 30f;
+
     private static readonly HashSet<string> ControlOps = ["if", "wait", "stop", "var_set", "var_add"];
 
     private static readonly HashSet<string> ActionOps =
@@ -395,7 +405,9 @@ public sealed class EkrLogicDef
         "inspect", "reveal", "arrow_show", "arrow_mark", "arrow_hide",
         "cancel_vote", "vote_weight_set", "vote_block", "vote_swap", "exile",
         // Wave 4 (docs/ekn-wave4-contract.md §3,§4): リンクと変換
-        "link", "unlink", "recruit"
+        "link", "unlink", "recruit",
+        // Wave 5 (docs/ekn-wave5-contract.md §1): 持続効果
+        "effect_give"
     ];
 
     private static readonly HashSet<string> ExprKinds =
@@ -952,8 +964,35 @@ public sealed class EkrLogicDef
                 break;
 
             // §4: self 不可・linked 可 (OtherSelectors = Wave 4 の受理集合そのもの)。
+            // Wave 5 (docs/ekn-wave5-contract.md §2): 任意の slot (1..18) で変換先スロットを指名できる。
+            // 省略 = 自分と同じ役職 (完全後方互換)。CNO slot (1..3) と意味論が別物なので Slot ではなく
+            // IntArg に入れる (0 = 省略)。
             case "recruit":
                 if (!TryGetEnum(nodeEl, "target", OtherSelectors, out n.Target, out err)) return false;
+
+                if (nodeEl.TryGetProperty("slot", out _))
+                {
+                    if (!TryGetInt(nodeEl, "slot", 1, 18, out n.IntArg, out err)) return false;
+                }
+
+                break;
+
+            // ── Wave 5 (docs/ekn-wave5-contract.md §1): 持続効果 ────────────────────────────────
+
+            // §1: target/kind/seconds すべて必須 (既定を作らない — 「相手にかける」が本義)。
+            // seconds の上限は kind 別 (freeze ≤10 / 他 ≤30)。
+            case "effect_give":
+                if (!TryGetEnum(nodeEl, "target", SingleSelectors, out n.Target, out err)) return false;
+                if (!TryGetEnum(nodeEl, "kind", EkrEffectKinds, out n.EffectKind, out err)) return false;
+                if (!TryGetFloat(nodeEl, "seconds", out float effectSec, out err)) return false;
+
+                if (effectSec < 1f || effectSec > EffectMaxSeconds(n.EffectKind))
+                {
+                    err = $"effect_give の秒数が範囲外です ({n.EffectKind} は 1〜{EffectMaxSeconds(n.EffectKind)} 秒)";
+                    return false;
+                }
+
+                n.Seconds = effectSec;
                 break;
         }
 
