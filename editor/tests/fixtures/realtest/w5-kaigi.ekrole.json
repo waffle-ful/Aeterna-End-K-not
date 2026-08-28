@@ -1,0 +1,46 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "かいぎけし",
+  "author": "EKN Realtest",
+  "description": "かいぎが はじまると こうかが 消えるかを たしかめる役職",
+  "descriptionLong": "ベントに入ると じぶんに ながい こうか (30びょう) を かけます。\nかいぎが はじまると こうかは ぜんぶ 消えるはずです。\nかいぎ明けに まだ こうかが のこっていたら バグです。",
+  "color": "#3f8fd0",
+  "team": "crewmate",
+  "canKill": false,
+  "canVent": true,
+  "visionMultiplier": 1.0,
+  "winCondition": "team",
+  "progress": { "text": "b{く}s{お}" },
+  "logic": {
+    "version": 1,
+    "variables": [
+      { "name": "く", "init": 0 },
+      { "name": "お", "init": 0 }
+    ],
+    "rules": [
+      {
+        "when": "on_vent_enter",
+        "do": [
+          { "op": "effect_give", "target": "self", "kind": "blind", "seconds": 30 },
+          { "op": "var_add", "name": "く", "delta": { "e": "lit", "v": 1 } },
+          { "op": "notify", "text": "くらくなった (30びょう)", "seconds": 3 }
+        ]
+      },
+      {
+        "when": "on_vent_exit",
+        "do": [
+          { "op": "effect_give", "target": "self", "kind": "slow", "seconds": 30 },
+          { "op": "var_add", "name": "お", "delta": { "e": "lit", "v": 1 } },
+          { "op": "notify", "text": "おそくなった (30びょう)", "seconds": 3 }
+        ]
+      },
+      {
+        "when": "on_meeting_start",
+        "do": [
+          { "op": "notify", "text": "かいぎ b{く} s{お}", "seconds": 3 }
+        ]
+      }
+    ]
+  }
+}

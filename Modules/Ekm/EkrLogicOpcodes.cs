@@ -109,6 +109,8 @@ internal sealed class EkrActionSink : IEkrActionSink
             case "link": Link(node, ctx); break;
             case "unlink": Unlink(ctx); break;
             case "recruit": Recruit(node, ctx); break;
+            // Wave 5 (docs/ekn-wave5-contract.md §1)
+            case "effect_give": EffectGive(node, ctx); break;
         }
     }
 
@@ -165,10 +167,12 @@ internal sealed class EkrActionSink : IEkrActionSink
         return pc;
     }
 
-    // Wave 4 (docs/ekn-wave4-contract.md §3.4): つないだ人。失効 (リンク無し/死亡/切断) は静かに no-op
-    // + lazy 解消 (ResolveSaved と同じ参照整合性3原則② — 掃除の常駐処理は作らない)。相手の死亡は
-    // 本来 FireDeath の on_linked_death 発火経路が先に解消するので、ここで死者を踏むのは同フレーム内の
-    // 競合だけだが、防御は対称に持つ。
+    // Wave 4 (docs/ekn-wave4-contract.md §3.4): つないだ人。失効 (リンク無し/死亡/切断) は静かに no-op。
+    // 切断/消滅だけ lazy 解消する (ResolveSaved と同じ参照整合性3原則② — 掃除の常駐処理は作らない)。
+    // ⚠️ 相手の死亡ではリンクを消さない: 追放死は FireDeath が死亡確定の 3.5 秒後に走るため
+    // (ExilePatch.cs:72 の SetDead vs :132 の LateTask)、その窓に走った fiber がここでリンクを先に
+    // 消すと on_linked_death が無音で落ちる (BUG-20260828-01)。EkrManager.ResolveWatchedId と同じ裁定で、
+    // 死亡による解消の権限は FireDeath に一本化する。
     private static PlayerControl ResolveLinked(EkrActionContext ctx)
     {
         EkrHolderState state = EkrManager.GetHolderState(ctx.HolderId);
@@ -179,13 +183,13 @@ internal sealed class EkrActionSink : IEkrActionSink
 
         PlayerControl pc = linkedId.GetPlayer();
 
-        if (!pc || !pc.IsAlive() || pc.Data == null || pc.Data.Disconnected)
+        if (!pc || pc.Data == null || pc.Data.Disconnected)
         {
             state.LinkedId = byte.MaxValue;
             return null;
         }
 
-        return pc;
+        return pc.IsAlive() ? pc : null; // 死亡 = 今は no-op・解消は FireDeath の領分
     }
 
     private static PlayerControl ResolveNearest(EkrActionContext ctx)
@@ -475,6 +479,10 @@ internal sealed class EkrActionSink : IEkrActionSink
 
         PlayerControl holderPc = ctx.HolderId.GetPlayer();
         if (!holderPc || !holderPc.IsAlive()) return;
+
+        // Wave 5: 同じ Main.AllPlayerSpeed キーへ effect_give の movement 効果が乗っていたら先に畳む
+        // (契約 §1.2 後勝ちの対称側)。畳まないと 2 つの書き手が baseline を交換して歪みが永続化する。
+        EkrManager.ClearMovementEffect(ctx.HolderId);
 
         if (!state.SpeedBoostActive)
         {
@@ -1184,7 +1192,31 @@ internal sealed class EkrActionSink : IEkrActionSink
         PlayerControl targetPc = ResolveSingle(node.Target, ctx);
         if (!targetPc) return; // 壊れた参照は静かに no-op・予算不消費 (§4)
 
-        EkrManager.TryRecruit(state, ctx.HolderId, targetPc);
+        // Wave 5 (契約 §2): node.IntArg = 変換先スロット番号 (0 = 省略 = 自分と同じ役職)。
+        EkrManager.TryRecruit(state, ctx.HolderId, targetPc, node.IntArg);
+    }
+
+    // ── Wave 5 (docs/ekn-wave5-contract.md §1): effect_give — 相手に持続効果をかける ────────────
+    // 意味論・チャンネル・復元は EkrManager の持続効果エンジンが正典。ここは解決と予算だけ。
+
+    private static void EffectGive(EkrNode node, EkrActionContext ctx)
+    {
+        EkrHolderState state = EkrManager.GetHolderState(ctx.HolderId);
+        if (state == null) return;
+
+        PlayerControl targetPc = ResolveSingle(node.Target, ctx);
+
+        // 壊れた参照 (ctx 無し / 失効 saved・linked)・死者・切断は静かに no-op・予算不消費 (§1.3/§1.4)。
+        // ⚠ 判定は EkrManager.ApplyEffect 側と**同じ厳しさ**にすること — 緩いと予算だけ消費して
+        // 向こうで無音 no-op になり、「no-op は予算不消費」の契約が破れる (完成前監査指摘)。
+        if (!targetPc || !targetPc.IsAlive() || targetPc.Data == null || targetPc.Data.Disconnected) return;
+
+        // ⚠ ホルダー生存ガードは意図的に付けない — §1.3 は on_death 起点 fiber からの実行を許す
+        // (「死んだら爆発で周囲を凍らせる」型)。死んだ本人への適用は上の死者 no-op で自然に落ちる。
+
+        if (!EkrManager.TryConsumeEffectBudget(state)) return; // 超過は静かにドロップ (§1.4)
+
+        EkrManager.ApplyEffect(targetPc.PlayerId, node.EffectKind, node.Seconds, ctx.HolderId);
     }
 
     private static void Exile(EkrNode node, EkrActionContext ctx)

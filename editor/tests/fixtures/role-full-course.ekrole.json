@@ -91,6 +91,7 @@
         "when": "on_death",
         "cause": "poison-curse",
         "do": [
+          { "op": "effect_give", "target": "nearest", "kind": "freeze", "seconds": 8 },
           { "op": "cno_spawn", "slot": 2, "text": "消滅", "size": 10, "at": "self" },
           { "op": "cno_move", "slot": 2, "dx": 0, "dy": 3 },
           { "op": "notify", "text": "闇に還る…", "seconds": 3 }
@@ -246,6 +247,7 @@
         "do": [
           { "op": "notify", "text": "影が近づいてくる…", "seconds": 2 },
           { "op": "link", "target": "ctx" },
+          { "op": "effect_give", "target": "ctx", "kind": "slow", "seconds": 10 },
           { "op": "var_add", "name": "うらみ", "delta": { "e": "lit", "v": 1 } }
         ]
       },
@@ -255,6 +257,7 @@
         "who": "linked",
         "do": [
           { "op": "notify", "text": "糸が伸びきった", "seconds": 2, "target": "linked" },
+          { "op": "effect_give", "target": "linked", "kind": "blind", "seconds": 20 },
           { "op": "unlink" }
         ]
       },
@@ -277,7 +280,8 @@
         "cause": "kill",
         "do": [
           { "op": "notify", "text": "糸の先が絶えた…", "seconds": 3 },
-          { "op": "recruit", "target": "nearest" }
+          { "op": "effect_give", "target": "self", "kind": "haste", "seconds": 6 },
+          { "op": "recruit", "target": "nearest", "slot": 3 }
         ]
       }
     ]

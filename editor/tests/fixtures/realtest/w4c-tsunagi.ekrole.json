@@ -1,0 +1,84 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "つなぎや",
+  "author": "EKN Realtest",
+  "description": "ちかづいた人と いとを つなぐ けんしょう用の役職",
+  "descriptionLong": "ちかづいた人と いとを つなぎます。\nいとが のびきると ひきもどし、つないだ人が しぬと わかります。\nベントに入ると いとを とき、ベントから出ると そばの人を なかまに します。",
+  "color": "#2fbfa0",
+  "team": "crewmate",
+  "canKill": false,
+  "canVent": true,
+  "visionMultiplier": 1.0,
+  "winCondition": "team",
+  "progress": { "text": "n{ち}f{と}d{し}k{き}" },
+  "logic": {
+    "version": 1,
+    "variables": [
+      { "name": "ち", "init": 0 },
+      { "name": "と", "init": 0 },
+      { "name": "し", "init": 0 },
+      { "name": "き", "init": 0 }
+    ],
+    "rules": [
+      {
+        "when": "on_game_start",
+        "do": [
+          { "op": "notify", "text": "つなぎや かいし", "seconds": 3 }
+        ]
+      },
+      {
+        "when": "on_near",
+        "radius": "small",
+        "who": "anyone",
+        "do": [
+          { "op": "var_add", "name": "ち", "delta": { "e": "lit", "v": 1 } },
+          { "op": "link", "target": "ctx" },
+          { "op": "arrow_show", "target": "linked", "seconds": 60 },
+          { "op": "notify", "text": "いとを つないだ", "seconds": 3 }
+        ]
+      },
+      {
+        "when": "on_far",
+        "radius": "large",
+        "who": "linked",
+        "do": [
+          { "op": "var_add", "name": "と", "delta": { "e": "lit", "v": 1 } },
+          { "op": "notify", "text": "いとが のびきった", "seconds": 3 },
+          { "op": "teleport_other", "target": "linked", "to": "self" }
+        ]
+      },
+      {
+        "when": "on_linked_death",
+        "do": [
+          { "op": "var_add", "name": "し", "delta": { "e": "lit", "v": 1 } },
+          { "op": "notify", "text": "いとの さきが たえた", "seconds": 3 }
+        ]
+      },
+      {
+        "when": "on_linked_death",
+        "cause": "kill",
+        "do": [
+          { "op": "var_add", "name": "き", "delta": { "e": "lit", "v": 1 } },
+          { "op": "notify", "text": "ころされた みたい", "seconds": 3 }
+        ]
+      },
+      {
+        "when": "on_vent_enter",
+        "do": [
+          { "op": "arrow_hide" },
+          { "op": "unlink" },
+          { "op": "arrow_show", "target": "linked", "seconds": 60 },
+          { "op": "notify", "text": "いとを といた", "seconds": 3 }
+        ]
+      },
+      {
+        "when": "on_vent_exit",
+        "do": [
+          { "op": "recruit", "target": "nearest" },
+          { "op": "notify", "text": "なかまに した", "seconds": 3 }
+        ]
+      }
+    ]
+  }
+}

@@ -1657,6 +1657,49 @@ describe("logic 検証 Wave 4 (on_near / on_far / on_room_enter / on_room_exit /
         expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "arrow_mark", at: "linked", seconds: 10 }] })).ok).toBe(false);
     });
 
+    // ── Wave 5 (docs/ekn-wave5-contract.md §1〜§3) ────────────────────────────────────────
+    it("recruit.slot: 任意・整数 1..18 のみ受理 (省略時はフィールドを持たない)", () => {
+        const omitted = validateEkrDefinition(withRule({ when: "on_kill", do: [{ op: "recruit", target: "ctx" }] }));
+        expect(omitted.ok).toBe(true);
+        if (omitted.ok) expect("slot" in omitted.def.logic!.rules[0].do[0]).toBe(false);
+
+        for (const slot of [1, 18, 3.0]) {
+            expect(validateEkrDefinition(withRule({ when: "on_kill", do: [{ op: "recruit", target: "ctx", slot }] })).ok, String(slot)).toBe(true);
+        }
+        for (const slot of [0, 19, -1, 2.5, "3", null]) {
+            expect(validateEkrDefinition(withRule({ when: "on_kill", do: [{ op: "recruit", target: "ctx", slot }] })).ok, String(slot)).toBe(false);
+        }
+    });
+
+    it("effect_give: target/kind/seconds はすべて必須・未知 kind は reject", () => {
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "effect_give", target: "ctx", kind: "haste", seconds: 10 }] })).ok).toBe(true);
+
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "effect_give", kind: "haste", seconds: 10 }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "effect_give", target: "ctx", seconds: 10 }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "effect_give", target: "ctx", kind: "haste" }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "effect_give", target: "ctx", kind: "shield", seconds: 10 }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "effect_give", target: "all", kind: "haste", seconds: 10 }] })).ok).toBe(false);
+    });
+
+    it("effect_give: seconds の上限は kind 別 (freeze ≤10 / 他 ≤30)", () => {
+        for (const kind of ["haste", "slow", "blind"]) {
+            expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "effect_give", target: "ctx", kind, seconds: 30 }] })).ok, kind).toBe(true);
+            expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "effect_give", target: "ctx", kind, seconds: 31 }] })).ok, kind).toBe(false);
+        }
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "effect_give", target: "ctx", kind: "freeze", seconds: 10 }] })).ok).toBe(true);
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "effect_give", target: "ctx", kind: "freeze", seconds: 11 }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "effect_give", target: "ctx", kind: "freeze", seconds: 0 }] })).ok).toBe(false);
+    });
+
+    it("effect_give は leaf ノード (depth 1, count 1)・self も受理する", () => {
+        const r = validateEkrDefinition(withRule({
+            when: "on_pet",
+            do: [{ op: "effect_give", target: "self", kind: "haste", seconds: 5 }],
+        }));
+        expect(r.ok).toBe(true);
+        if (r.ok) expect(r.def.logic?.rules[0].do).toHaveLength(1);
+    });
+
     it("link/unlink/recruit は leaf ノード (depth 1, count 1)", () => {
         const r = validateEkrDefinition(withRule({
             when: "on_kill",
