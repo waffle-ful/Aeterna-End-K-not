@@ -38,6 +38,17 @@ internal static class LobbyCorpses
     // spawn 開始時にセットし、復元処理 + GameStart ガードで参照される。
     private static string SavedHostName;
 
+    // リンク劣化ゲートの延期状態 (BUG-20260820-06 緩和)
+    private static int DeferredSpawnAttempts;
+    private static bool DeferralPending;
+    private const int MaxDeferredSpawnAttempts = 12; // 5 秒間隔 × 12 = 最大 60 秒待って諦める
+
+    // ゲーム開始コミットラッチ。BeginGame Prefix (EnsureHostNameRestored) で立ち、Reset (新ロビー) で降りる。
+    // GameStates.IsLobby は「ネットワーク層が Joined を抜けた瞬間」にしかフリップしないため、
+    // 開始コミット〜遷移完了の隙間に劣化ゲートの延期リトライが滑り込むと、開始直後スポーン窓 (P6 近傍)
+    // で corpse burst を新規開始してしまう。そのレースをこのラッチで封じる。
+    private static bool GameStartCommitted;
+
     public static void Reset()
     {
         BasePos = null;
@@ -48,6 +59,9 @@ internal static class LobbyCorpses
         LastJoinTime = 0f;
         LastSpawnTime = 0f;
         SavedHostName = null;
+        DeferredSpawnAttempts = 0;
+        DeferralPending = false;
+        GameStartCommitted = false;
     }
 
     // 初期 spawn (LobbyBehaviour.Start から)
@@ -93,9 +107,38 @@ internal static class LobbyCorpses
     private static void StartSpawn()
     {
         if (SpawnInProgress) return;
+        if (GameStartCommitted) return;
         if (AmongUsClient.Instance == null || !AmongUsClient.Instance.AmHost) return;
         if (!Options.LobbyCorpseEnabled.GetBool()) return;
         if (PlayerControl.LocalPlayer == null || PlayerControl.LocalPlayer.Data == null) return;
+
+        // リンク劣化ゲート (BUG-20260820-06 緩和): 公式鯖の Hacking キックは「劣化リンク × バースト」の
+        // 連言でのみ観測されている (同一スポーン列は健全リンクで多数生存 — 2026-08-29 実測 18 ロビー無傷 vs
+        // 劣化時 1 キック)。装飾なので劣化中は送らず、健全化するまで 5 秒間隔で延期する。
+        // 60 秒待っても回復しなければこのロビーでは諦める (次のロビーで Reset される)。
+        if (HealthLog.IsLinkDegradedNow(out string linkDetail))
+        {
+            if (DeferralPending) return;
+
+            if (++DeferredSpawnAttempts <= MaxDeferredSpawnAttempts)
+            {
+                DeferralPending = true;
+                Logger.Info($"LobbyCorpses: spawn deferred, link degraded ({linkDetail}) attempt={DeferredSpawnAttempts}/{MaxDeferredSpawnAttempts}", "LobbyCorpses");
+
+                LateTask.New(() =>
+                {
+                    DeferralPending = false;
+                    if (!GameStates.IsLobby || GameStates.InGame) return;
+                    StartSpawn();
+                }, 5f, "LobbyCorpses.DeferredSpawn");
+            }
+            else
+                Logger.Warn($"LobbyCorpses: spawn skipped, link stayed degraded for 60s ({linkDetail})", "LobbyCorpses");
+
+            return;
+        }
+
+        DeferredSpawnAttempts = 0;
 
         // 初回呼出時に位置を確定。replay 時は同じ位置で再 broadcast → 既存 client では
         // 同位置 stack で視覚的に等価 (no per-client targeting in RpcCreateDeadBody)
@@ -199,6 +242,9 @@ internal static class LobbyCorpses
     // 既に rate limiter 経由で復元済みなら no-op。
     public static void EnsureHostNameRestored()
     {
+        // 名前復元の要否と無関係に、開始コミットのラッチだけは必ず立てる (延期リトライの滑り込み防止)
+        GameStartCommitted = true;
+
         if (string.IsNullOrEmpty(SavedHostName)) return;
         if (AmongUsClient.Instance == null || !AmongUsClient.Instance.AmHost) return;
         PlayerControl lp = PlayerControl.LocalPlayer;
