@@ -94,6 +94,7 @@
           { "op": "effect_give", "target": "nearest", "kind": "freeze", "seconds": 8 },
           { "op": "cno_spawn", "slot": 2, "text": "消滅", "size": 10, "at": "self" },
           { "op": "cno_move", "slot": 2, "dx": 0, "dy": 3 },
+          { "op": "cno_launch", "slot": 2, "dir": "move" },
           { "op": "notify", "text": "闇に還る…", "seconds": 3 }
         ]
       },
@@ -282,6 +283,19 @@
           { "op": "notify", "text": "糸の先が絶えた…", "seconds": 3 },
           { "op": "effect_give", "target": "self", "kind": "haste", "seconds": 6 },
           { "op": "recruit", "target": "nearest", "slot": 3 }
+        ]
+      },
+      {
+        "when": "on_sabotage",
+        "do": [
+          { "op": "notify", "text": "サボタージュだ…", "seconds": 3, "target": "ctx" }
+        ]
+      },
+      {
+        "when": "on_revive",
+        "do": [
+          { "op": "var_set", "name": "うらみ", "value": { "e": "lit", "v": 0 } },
+          { "op": "notify", "text": "また、動ける…", "seconds": 3 }
         ]
       }
     ]

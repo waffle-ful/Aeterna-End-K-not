@@ -17,11 +17,18 @@ internal interface IEkrSlotCno
 // EKR logic 契約 v1 の汎用テキスト CNO (契約正典: docs/ekr-logic-spec.md §3 cno_*)。
 // 既存の非 player-like ・単一文字/短文 CNO (Modules/CustomNetObject.SizeTest.cs,
 // Modules/CustomNetObject.WaveCannon.cs の WaveCannonGate) と同じ Shapeshift-text 戦略に乗る。
-// OnMeeting() は意図的に override しない — 基底 CustomNetObject.OnMeeting() の会議明け一斉復活エンジンに
-// そのまま従う (MeetingNum ガード追加禁止・memory: cno-base-onmeeting-implicit-respawn-engine)。
+// OnMeeting() は「置きっぱなしの CNO」については意図的に素通しする — 基底 CustomNetObject.OnMeeting() の
+// 会議明け一斉復活エンジンにそのまま従う (MeetingNum ガード追加禁止・memory:
+// cno-base-onmeeting-implicit-respawn-engine)。Wave 6 の発射体 (cno_launch 済み) だけがこの engine から
+// 離脱する (下の OnMeeting override 参照)。
 public sealed class EkrCno : CustomNetObject, IEkrSlotCno
 {
     private readonly string _sprite;
+
+    // Wave 6 (docs/ekn-wave6-contract.md §1.1): cno_launch で飛行に入った実体。以後この CNO は
+    // 「消えるのが自然な弾」として扱われ、飛行終了 (壁/40u/10秒) と中断 (会議・追放演出・ゲーム終了・
+    // ホルダー死亡/切断/slot 剥奪) で必ず Despawn される。一度立ったら降りない (弾は再利用しない)。
+    public bool Launched { get; private set; }
 
     // cno_move の dx/dy は「毎回の相対移動」ではなく、この spawn 時アンカーからの絶対オフセットとして
     // 解決する (spec §3 裁定準拠)。理由: on_second 配下で毎秒呼ぶ想定 (エディタ L1 の代替案そのもの) の
@@ -58,6 +65,41 @@ public sealed class EkrCno : CustomNetObject, IEkrSlotCno
     // IEkrSlotCno.Despawn() は引数無し。基底 Despawn(bool canPool = true) とはアリティが異なるため
     // (既定値は「実装が同じシグネチャを名乗る」ことにはならない)、明示実装で既定値付きの公開 API に委譲する。
     void IEkrSlotCno.Despawn() => Despawn();
+
+    // ── Wave 6 (docs/ekn-wave6-contract.md §1.1): 発射体モード ────────────────────────────────
+
+    // 飛行エンジン (EkrManager) が 0.1 秒 tick で呼ぶ。Position を書いて ForceSnapSend を立てるだけで、
+    // 実送信は基底 OnFixedUpdate が ForceSnapMinInterval (0.2秒 = 5Hz) に間引く (Snowball と同じ委譲形)。
+    // SnapTo ラウンド予算 (Utils.NumSnapToCallsThisRound) は消費しない — 基底の CNO 移動は
+    // StartRpcImmediately + SendOption.None の直書き経路 (CustomNetObject.cs:557-589)。
+    public void FlyTo(Vector2 position)
+    {
+        Launched = true;
+        TP(position);
+    }
+
+    // 飛行中だけ 5Hz へ間引く (Snowball.ForceSnapMinInterval と同値)。置きっぱなしの CNO は cno_move が
+    // ≤2/秒/slot なので基底既定 (0f = 次フレーム即送信) のままにする — ここを一律 0.2f にすると
+    // cno_move の反映が最大 0.2 秒遅れる無関係な挙動変化になる。
+    protected override float ForceSnapMinInterval => Launched ? 0.2f : base.ForceSnapMinInterval;
+
+    // 会議開始 +5 秒の全 CNO 一斉 OnMeeting (Patches/PlayerControlPatch.cs:1528-1538) は、会議開始時点の
+    // AllObjects スナップショットを舐める。EkrManager.FireMeetingStart は同期でそれより先に走って飛行中の
+    // 弾を Despawn するが、スナップショットには載ったままなので、基底 OnMeeting() に委ねると
+    // 「消したはずの弾が会議明けに復活する」(基底は Despawn 済みでも復活コルーチンを起こす)。
+    // memory: cno-base-onmeeting-implicit-respawn-engine が「基底から離脱したい CNO は override して
+    // Despawn だけする」と定める作法にそのまま従う (EkrDummyCno の空 override と同じ位置付け — あちらは
+    // EkrManager が唯一の消滅経路なので完全に空、こちらは念のため Despawn を撃つ)。
+    public override void OnMeeting()
+    {
+        if (Launched)
+        {
+            Despawn();
+            return;
+        }
+
+        base.OnMeeting();
+    }
 
     // 「見せる相手を変える」は un-hide API が基底に無いため、despawn + 同じ sprite/position で
     // 再 spawn することでしか実現できない (Hide() は一方向)。spawn と同じ費用 (per-player fan-out への

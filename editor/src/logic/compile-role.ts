@@ -15,7 +15,7 @@
 // 分かりやすい日本語エラーに変換してくれる。
 //
 // ブロック type 命名規約 (blocks-role.ts と1対1で対応させること):
-//   ekr_when_<when-id>          … イベントハット (22種 — 正典は roledef.ts の LOGIC_WHEN_VALUES。
+//   ekr_when_<when-id>          … イベントハット (24種 — 正典は roledef.ts の LOGIC_WHEN_VALUES。
 //                                  id は spec §2 の when 値そのもの)
 //   ekr_if / ekr_if_else        … 制御構文 if (else 無し/else 付きの2ブロックに分離、mutator 不使用)
 //   ekr_do_<op>                 … その他の制御/アクション opcode (spec §3)
@@ -136,6 +136,16 @@ function blockToNode(b: SerializedBlock): Record<string, unknown> {
             return { op: "cno_despawn", slot: toNum(b.fields?.SLOT) };
         case "ekr_do_cno_show":
             return { op: "cno_show", slot: toNum(b.fields?.SLOT), who: b.fields?.WHO };
+        // Wave 6 (docs/ekn-wave6-contract.md §1) — とばす。SPEED が既定 "medium" のときはフィールドごと
+        // 省略する (on_near.WHO の "anyone" 省略と同じ作法 — recruit.slot と同種の畳み込み)。
+        case "ekr_do_cno_launch": {
+            const slot = toNum(b.fields?.SLOT);
+            const dir = b.fields?.DIR;
+            const speed = b.fields?.SPEED;
+            const node: Record<string, unknown> = { op: "cno_launch", slot, dir };
+            if (typeof speed === "string" && speed !== "" && speed !== "medium") node.speed = speed;
+            return node;
+        }
         case "ekr_do_dummy_spawn":
             // KILLABLE は field_dropdown なので Blockly 上は "1"/"0" の文字列 (options のキー側の
             // 値そのもの) — roledef.ts の dummy_spawn.killable は真の boolean のみ受理するため
