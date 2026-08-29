@@ -93,6 +93,19 @@ public static class PacketRateGate
     private static long CurrentSecBucket;
     private static int PeakWarned;
 
+    // --- Reliable 再送メータ (BUG-20260820-06: 「劣化リンク×バースト」連言の 1-bit 計器) ---
+    // アプリ層の送信メータ (リング/秒メータ) には Hazel トランスポートの再送が写らないため、
+    // 「サーバーが実際に受け取った本数」はここでしか推定できない。1Hz で MessagesResent の
+    // デルタを取り、増えた秒だけ直近5秒の送信タグ内訳と併記して恒久チャネルへ残す —
+    // 次のキックで「再送されたのはバースト分か」を突合するための計器。
+    private static long _resendSampleSec;
+    private static int _resendLastTotal;
+    private static int _resendNoteCount;
+    private const int ResendNoteSessionCap = 300; // 劣化が数時間続いても台帳を埋めない保険
+
+    /// <summary>直近で Reliable 再送を観測した Unix 秒 (0=未観測)。リンク健全性プローブ (HealthLog.IsLinkDegradedNow) が参照する。</summary>
+    public static long LastResendObservedTs { get; private set; }
+
     /// <summary>関所の Prefix 冒頭で毎回呼ぶ。全パケットについて計装だけ行う (ゲート判定はしない)。</summary>
     public static void RecordInstrumentation(MessageWriter msg)
     {
@@ -175,6 +188,7 @@ public static class PacketRateGate
 
             DetectReconnect(instance);
             ResetWindowIfNeeded();
+            SampleResendMeter(instance);
 
             if (PendingReliableQueue.Count > QueueSafetyValve)
             {
@@ -261,6 +275,36 @@ public static class PacketRateGate
             WindowTimer.Restart();
             SentThisWindow = 0;
         }
+    }
+
+    /// <summary>1Hz で Hazel の MessagesResent デルタを観測する (OnFixedUpdate から毎フレーム呼ばれ、秒が変わった時だけ実サンプル)。</summary>
+    private static void SampleResendMeter(AmongUsClient instance)
+    {
+        long sec = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        if (sec == _resendSampleSec) return;
+        _resendSampleSec = sec;
+
+        try
+        {
+            var conn = instance.connection;
+            if (conn == null) { _resendLastTotal = 0; return; }
+            Hazel.ConnectionStatistics st = conn.Statistics;
+            if (st == null) { _resendLastTotal = 0; return; }
+
+            int total = st.MessagesResent;
+            int delta = total - _resendLastTotal;
+            if (delta < 0) delta = total; // 接続張り替えでカウンタが 0 から再スタートした
+            _resendLastTotal = total;
+            if (delta <= 0) return;
+
+            LastResendObservedTs = sec;
+
+            if (_resendNoteCount++ < ResendNoteSessionCap)
+                HealthLog.NoteAnom($"ANOM live kind=resend d={delta} total={total} ping={instance.Ping} {SummarizeRecent(5)} t={sec}");
+            else
+                Logger.Warn($"resend d={delta} total={total} (session cap reached, health note suppressed)", "PacketRateGate");
+        }
+        catch { /* 計装は送信を止めてはいけない */ }
     }
 
     private static void TickSecondMeter()
