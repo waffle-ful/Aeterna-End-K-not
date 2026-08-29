@@ -188,8 +188,8 @@ public class ForceFielder : RoleBase
         Collider2D collider = target.Collider;
 
         // raycast 始点は collider.bounds.center を使う (Car.cs:111 と同パターン)。
-        // target.Pos() (=GetTruePosition、足元) を始点にすると collider 範囲外の点になる
-        // ため exclusion が効かず、ray が自分のコライダーに即ヒット → 全 12 方向で
+        // target.Pos() (= transform、見た目の中心。足元ではない) を始点にすると collider 範囲外の
+        // 点になるため exclusion が効かず、ray が自分のコライダーに即ヒット → 全 12 方向で
         // AnythingBetween が true を返し、毎回 TPToFallback (spawn) に落ちていた。
         Vector2 rayStart = collider != null ? (Vector2)collider.bounds.center : target.Pos();
 

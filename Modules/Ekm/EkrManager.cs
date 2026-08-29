@@ -1126,7 +1126,7 @@ public static class EkrManager
                 break;
             }
 
-            if (!ownedBySomeSlot || (set != null && set.Contains(f.HolderId))) EndFlight(f);
+            if (!ownedBySomeSlot || (set != null && set.Contains(f.HolderId))) EndFlight(f, "slot-unowned");
         }
     }
 
@@ -3996,7 +3996,10 @@ public static class EkrManager
         // 壁越えは引かない (TickField / SuperCannonShot.PullTick と同じ裁定 — 壁内へ埋め込むと非モッドが
         // スタックする)。着地点はホルダーの現在位置なので通常は歩ける場所だが、ホルダーが直前に vent や
         // 移動床で飛んだ直後のフレームでは経路が壁を貫きうる。3兄弟で1つだけ防御が欠けていた (監査指摘 2026-08-11)。
-        if (PhysicsHelpers.AnythingBetween(from, dest, Constants.ShipOnlyMask, false)) return;
+        // レイは足元空間で撃つ — Pos() は見た目の中心で足元より約0.36u上にあり、そのままだと壁の上下端
+        // 0.36u 帯で誤判定する (歩ける経路のブロック / 足元では塞がる壁のすり抜け両方向。監査指摘 2026-08-29)。
+        Vector2 rayOff = ctxPc.WallRayOffset();
+        if (PhysicsHelpers.AnythingBetween(from + rayOff, dest + rayOff, Constants.ShipOnlyMask, false)) return;
 
         if (Utils.TP(ctxPc.NetTransform, dest, minInterval: 0f)) // 成功時のみ消費 (spec §5)
         {
@@ -4043,8 +4046,12 @@ public static class EkrManager
             float step = Mathf.Max(Mathf.Min(cc.PullDistance, dist - (CcDeadzone / 2f)), CcDeadzone);
             Vector2 newPos = pos + ((center - pos).normalized * step);
 
-            // 壁越えは引かない (PullTick と同じ裁定 — 壁内へ埋め込むと非モッドがスタックする)
-            if (PhysicsHelpers.AnythingBetween(pos, newPos, Constants.ShipOnlyMask, false)) continue;
+            // 壁越えは引かない (PullTick と同じ裁定 — 壁内へ埋め込むと非モッドがスタックする)。
+            // レイは足元空間で撃つ — 移植元 PullTick は GetTruePosition() で正しかったのに移植時に
+            // Pos() (見た目の中心) へ取り違えていた退行の修正 (監査指摘 2026-08-29)。TP 先 (newPos) の
+            // 座標系は transform 空間のままにする (足元基準を渡すと 0.36u 沈む — memory: 壁チェック=足元/TP先=Pos())。
+            Vector2 rayOff = pc.WallRayOffset();
+            if (PhysicsHelpers.AnythingBetween(pos + rayOff, newPos + rayOff, Constants.ShipOnlyMask, false)) continue;
 
             if (Utils.TP(pc.NetTransform, newPos, minInterval: 0f)) // 成功時のみ消費 (spec §5)
             {
@@ -4158,8 +4165,15 @@ public static class EkrManager
     // 飛行の終了 (壁/距離/寿命) と中断 (会議・死亡・剥奪) の共通後始末。飛び始めた弾は必ず消える
     // (契約 §1.1「弾は消えるのが自然」) — 実体化待ちのまま終わったものは「まだ飛んでいない置きっぱなしの
     // CNO」なので slot に残す (Launched が立っていないので基底の会議明け復活エンジンにもそのまま乗る)。
-    private static void EndFlight(EkrFlightState flight)
+    // Wave 6 実機検証用の計器 (2026-08-29)。EKR の発火はログに出ないため、飛行の開始/実体化/終了理由が
+    // 外から一切見えず「create と despawn が同じ秒に出る」以上のことが分からなかった。ログ1行で
+    // 「どこで終わったか」を二値判定できるようにする (送信ゼロ・per-flight で最大数行/発)。
+    internal static void FlightLog(string line) => Logger.Info(line, "EKR.Flight");
+
+    private static void EndFlight(EkrFlightState flight, string reason = "?")
     {
+        FlightLog($"end slot={flight.SlotIndex + 1} holder={flight.HolderId} reason={reason} moving={flight.Moving} travelled={flight.Travelled:F2} dir=({flight.Dir.x:F2},{flight.Dir.y:F2}) speed={flight.Speed}");
+
         _flights.Remove(flight);
 
         if (!flight.Moving) return;
@@ -4187,7 +4201,7 @@ public static class EkrManager
     // 会議開始 (追放演出突入含む)・ゲーム終了・ランタイム破棄から呼ぶ (契約 §1.1 中断)。
     internal static void StopAllFlights()
     {
-        for (int i = _flights.Count - 1; i >= 0; i--) EndFlight(_flights[i]);
+        for (int i = _flights.Count - 1; i >= 0; i--) EndFlight(_flights[i], "stop-all");
     }
 
     // ホルダーの切断・役職剥奪から呼ぶ (TeardownRuntime)。死亡は launch 時の生死ラッチを見る必要が
@@ -4196,7 +4210,7 @@ public static class EkrManager
     {
         for (int i = _flights.Count - 1; i >= 0; i--)
             if (_flights[i].HolderId == holderId)
-                EndFlight(_flights[i]);
+                EndFlight(_flights[i], "holder-teardown");
     }
 
     // Pump() から毎 FixedUpdate 相乗りで呼ばれる (自己スロットリング 0.1秒 — 専用の毎フレーム経路を
@@ -4236,7 +4250,7 @@ public static class EkrManager
             if (!holderPc || holderPc.Data == null || holderPc.Data.Disconnected ||
                 (f.AbortOnHolderDeath && !holderPc.IsAlive()))
             {
-                EndFlight(f);
+                EndFlight(f, "holder-gone");
                 continue;
             }
 
@@ -4251,6 +4265,7 @@ public static class EkrManager
             {
                 f.Moving = true;
                 f.ExpireAt = now + FlightLifetimeSeconds; // 寿命は「飛び始めてから」10秒 (契約 §1.1 消滅③)
+                FlightLog($"moving slot={f.SlotIndex + 1} at=({f.Cno.Position.x:F2},{f.Cno.Position.y:F2}) dir=({f.Dir.x:F2},{f.Dir.y:F2}) speed={f.Speed}");
 
                 // 🔴 実体化の立ち上がりで静止ポーラー (PollCnoTouchIfDue) がラッチを作り直すのを、
                 // 飛び始める前に先回りして押さえる。PrimeTouchSensor は latch と debounce を **Clear** する
@@ -4265,7 +4280,7 @@ public static class EkrManager
             }
             else if (now >= f.ExpireAt)
             {
-                EndFlight(f);
+                EndFlight(f, "lifetime");
                 continue;
             }
 
@@ -4273,10 +4288,25 @@ public static class EkrManager
             float step = f.Speed * dt;
             Vector2 to = from + (f.Dir * step);
 
-            // 壁で消える (契約 §1.1 消滅① — SuperCannonShot.cs:357 / Snowball と同型の線分判定)。
-            if (PhysicsHelpers.AnythingBetween(from, to, Constants.ShipOnlyMask, false))
+            // 壁で消える (契約 §1.1 消滅①)。⚠️ レイは **CNO の見た目位置ではなくコライダー空間**で撃つ —
+            // 船コライダーは GetTruePosition (足元) 基準に敷かれているのに CNO.Position は pc.Pos()
+            // (transform = 見た目の中心) 由来で約 0.36u 上にあり、そのまま撃つと通路の上壁を早取りして
+            // 弾が即死する (2026-08-29 実機実測: 自分が直前に歩いて通った地点で travelled=0.00)。
+            // 自分のコライダーを除外する overload を使うのは Sandbox / ForceFielder / Car と同じ作法
+            // (ray が自身のコライダーに即ヒットするのを防ぐ)。
+            Vector2 rayOffset = f.Cno.WallRayOffset;
+            Vector2 rayFrom = from + rayOffset;
+            Vector2 rayTo = to + rayOffset;
+            Collider2D cnoCollider = f.Cno.SelfCollider;
+
+            bool blocked = cnoCollider
+                ? PhysicsHelpers.AnythingBetween(cnoCollider, rayFrom, rayTo, Constants.ShipOnlyMask, false)
+                : PhysicsHelpers.AnythingBetween(rayFrom, rayTo, Constants.ShipOnlyMask, false);
+
+            if (blocked)
             {
-                EndFlight(f);
+                FlightLog($"wall slot={f.SlotIndex + 1} from=({from.x:F2},{from.y:F2}) to=({to.x:F2},{to.y:F2}) ray=({rayFrom.x:F2},{rayFrom.y:F2})->({rayTo.x:F2},{rayTo.y:F2}) off=({rayOffset.x:F2},{rayOffset.y:F2}) step={step:F3}");
+                EndFlight(f, "wall");
                 continue;
             }
 
@@ -4288,7 +4318,7 @@ public static class EkrManager
             // (fast 6u/s は 0.25秒ポーリングだと 1.5u 進んですり抜けるため — トンネリング対策)。
             SweepCnoTouch(f, state, from, to, now);
 
-            if (f.Travelled >= FlightMaxDistance) EndFlight(f); // 消滅② 総飛距離
+            if (f.Travelled >= FlightMaxDistance) EndFlight(f, "distance"); // 消滅② 総飛距離
         }
     }
 
