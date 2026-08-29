@@ -684,6 +684,33 @@ public static class HealthLog
     /// pingsNoAck=ACK を受けずに連続した keepalive ping 数 / ping=AU 報告の RTT(ms)。
     /// connection 未確立・切断済みなどで取れなければ false。
     /// </summary>
+    /// <summary>瞬時リンク健全性プローブ (BUG-20260820-06 緩和用)。装飾系バースト (ロビー死体等) の送出可否判定に使う。
+    /// HB の degraded 判定 (60 秒 HB×3 連続) はロビー+3秒のスポーン判断には遅すぎるため、その場サンプルで判定する。
+    /// 判定軸: ping>=300 (HB degraded と同閾) / ACK を受けない keepalive ping の連続 / 直近10秒の Reliable 再送観測。
+    /// 接続未確立などで統計が取れないときは false (=健全扱い) を返す。</summary>
+    public static bool IsLinkDegradedNow(out string detail)
+    {
+        detail = "";
+
+        try
+        {
+            if (!TryGetNetStats(out _, out int relSent, out int ackd, out int pNoAck, out int ping)) return false;
+
+            long lastResend = PacketRateGate.LastResendObservedTs;
+            long now = Utils.TimeStamp;
+            bool resendRecent = lastResend > 0 && now - lastResend <= 10;
+
+            if (ping >= 300 || pNoAck >= 1 || resendRecent)
+            {
+                detail = $"ping={ping} unack={relSent - ackd} pNoAck={pNoAck} resendAge={(lastResend > 0 ? (now - lastResend).ToString() : "-")}";
+                return true;
+            }
+
+            return false;
+        }
+        catch { return false; }
+    }
+
     private static bool TryGetNetStats(out int resent, out int relSent, out int ackd, out int pingsNoAck, out int ping)
     {
         resent = relSent = ackd = pingsNoAck = ping = 0;
