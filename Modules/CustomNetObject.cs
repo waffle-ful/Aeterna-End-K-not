@@ -134,6 +134,33 @@ namespace EndKnot
         protected virtual float ForceSnapMinInterval => 0f;
         private float LastForcedSendTime;
 
+        // 壁レイの座標系合わせ (2026-08-29 Wave6 実機で発覚 → 全 CNO 共通化)。CNO の Position は生成側が
+        // 渡す `pc.Pos()` = `transform.position` = **見た目の中心**。一方 Among Us の船コライダーは
+        // `GetTruePosition()` (足元) 基準で敷かれているため、Position をそのまま
+        // `PhysicsHelpers.AnythingBetween` に渡すと**約 0.36u 上**を通るレイになり、通路の上側の壁を
+        // 早取りする (Wave6 実測: プレイヤーが直前に歩いて通った地点で弾が travelled=0.00 で即死)。
+        // 壁レイは両端に WallRayOffset を足して平行移動させる (見た目の位置は動かさない)。
+        // 自己コライダー除外 overload へ渡す始点は bounds.center 基準 (= collider 内の点) であること —
+        // Pos() (= transform、見た目の中心) だと collider 範囲外の点になり exclusion が効かない
+        // (ForceFielder.cs:189 の前科。GetTruePosition ≒ bounds.center は安全な側)。
+        public Collider2D SelfCollider => playerControl ? playerControl.Collider : null;
+
+        public Vector2 WallRayOffset
+        {
+            get
+            {
+                Collider2D c = SelfCollider;
+                if (!c) return Vector2.zero;
+
+                Vector2 off = (Vector2)c.bounds.center - (Vector2)playerControl.transform.position;
+
+                // 妥当性クランプ: noclip デバッグ (ControlPatch の Ctrl 押下) は Collider.offset を
+                // (0,127) へ飛ばす。そのままだとレイがマップ外へ平行移動して壁判定が恒常すり抜けに
+                // なるので、既定 ~0.36u から大きく外れた値はオフセット無しへフォールバックする。
+                return off.sqrMagnitude > 4f ? Vector2.zero : off;
+            }
+        }
+
         private bool IsPooled;
 
         // true なら見た目が通常プレイヤーのように振る舞う CNO:
@@ -1810,8 +1837,17 @@ namespace EndKnot
             if (!Active) return;
             
             Vector2 newPos = Position + Direction * Time.fixedDeltaTime * Snowdown.SnowballThrowSpeed;
-            
-            if ((PhysicsHelpers.AnythingBetween(Position, newPos, Constants.ShipOnlyMask, false)) ||
+
+            // 壁レイは視覚系 Position のままだと足元より約0.36u上を通り、通路の上壁を早取りして雪玉が
+            // 即死する (EkrManager の飛行エンジンと同型 — 基底 WallRayOffset のコメント参照)。
+            Vector2 rayOff = WallRayOffset;
+            Collider2D self = SelfCollider;
+
+            bool blocked = self
+                ? PhysicsHelpers.AnythingBetween(self, Position + rayOff, newPos + rayOff, Constants.ShipOnlyMask, false)
+                : PhysicsHelpers.AnythingBetween(Position + rayOff, newPos + rayOff, Constants.ShipOnlyMask, false);
+
+            if (blocked ||
                 newPos.x < Snowdown.MapBounds.X.Left || newPos.x > Snowdown.MapBounds.X.Right || newPos.y < Snowdown.MapBounds.Y.Bottom || newPos.y > Snowdown.MapBounds.Y.Top)
             {
                 SetInactive();

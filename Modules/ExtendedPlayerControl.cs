@@ -1650,6 +1650,26 @@ internal static class ExtendedPlayerControl
             return new Vector3(pos.x, pos.y, player.transform.position.z);
         }
 
+        /// <summary>
+        /// Pos() 基準の座標から壁レイ (PhysicsHelpers.AnythingBetween) を撃つときの平行移動オフセット。
+        /// Pos() = transform = 見た目の中心だが、船コライダーは足元 (GetTruePosition ≒ collider 中心)
+        /// 基準で敷かれているため、視覚系のままレイを撃つと約0.36u上を通り壁の上下端で誤判定する
+        /// (2026-08-29 Wave6 弾即死の根本原因 → 兄弟スイープで共通化。CNO 側は CustomNetObject.WallRayOffset)。
+        /// レイの両端に足す。TP 先の座標には足さない (TP は transform 空間 — 足すと 0.36u 沈む)。
+        /// </summary>
+        public Vector2 WallRayOffset()
+        {
+            Collider2D c = player.Collider;
+            if (!c) return Vector2.zero;
+
+            Vector2 off = (Vector2)c.bounds.center - (Vector2)player.transform.position;
+
+            // 妥当性クランプ: ホストの noclip デバッグ (ControlPatch.cs:45-51 — 実ゲーム中でも Ctrl 押下で
+            // LocalPlayer.Collider.offset が (0,127) に化ける) を踏むと、レイがマップ外へ平行移動して
+            // 壁判定が恒常すり抜けになる。既定 ~0.36u から大きく外れた値はオフセット無しへフォールバック。
+            return off.sqrMagnitude > 4f ? Vector2.zero : off;
+        }
+
         // Next 5: https://github.com/Rabek009/MoreGamemodes/blob/master/Modules/ExtendedPlayerControl.cs
 
         public void MakeInvisible()

@@ -270,6 +270,7 @@ public static class AudienceInterventions
     private static bool TryQuakeShake(PlayerControl pc)
     {
         Vector2 pos = pc.Pos();
+        Vector2 rayOff = pc.WallRayOffset(); // 壁レイは足元空間で撃つ (Pos() は見た目の中心 — 兄弟スイープ 2026-08-29)
 
         for (int attempt = 0; attempt < 3; attempt++)
         {
@@ -278,7 +279,8 @@ public static class AudienceInterventions
             Vector2 candidate = pos + (new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * dist);
 
             // 壁越え/壁めり込み防止 (Car/CustomNetObject と同じ判定)。塞がっていたら方向を変えてリトライ。
-            if (PhysicsHelpers.AnythingBetween(pos, candidate, Constants.ShipOnlyMask, false)) continue;
+            // 始点が bounds.center 相当 (= 自分の collider 内) になったので自己コライダー除外 overload とセットで使う。
+            if (PhysicsHelpers.AnythingBetween(pc.Collider, pos + rayOff, candidate + rayOff, Constants.ShipOnlyMask, false)) continue;
 
             // 移動量 <1.5 ユニットは Utils.TP 側で自動的に SendOption.None (unreliable) へ降格される。
             // inVent/ladder 等の TP 不能状態も Utils.TP 側の既存チェックに任せる。
@@ -385,13 +387,15 @@ public static class AudienceInterventions
 
         Vector2 basePos = anchor.Pos();
         Vector2 pos = basePos;
+        Vector2 rayOff = anchor.WallRayOffset(); // 壁レイは足元空間で撃つ (Pos() は見た目の中心 — 兄弟スイープ 2026-08-29)
 
         for (int attempt = 0; attempt < 3; attempt++)
         {
             float angle = IRandom.Instance.Next(0, 360) * Mathf.Deg2Rad;
             float dist = 0.6f + (IRandom.Instance.Next(0, 101) / 100f * 0.8f);
             Vector2 candidate = basePos + (new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * dist);
-            if (PhysicsHelpers.AnythingBetween(basePos, candidate, Constants.ShipOnlyMask, false)) continue;
+            // 始点が bounds.center 相当 (= anchor の collider 内) になったので自己コライダー除外 overload とセットで使う。
+            if (PhysicsHelpers.AnythingBetween(anchor.Collider, basePos + rayOff, candidate + rayOff, Constants.ShipOnlyMask, false)) continue;
 
             pos = candidate;
             break;
