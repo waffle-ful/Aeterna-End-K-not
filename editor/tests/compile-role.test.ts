@@ -909,3 +909,59 @@ describe("compile-role: Wave 4 ブロック (on_near / on_far / on_room_enter / 
         expect(r.ok).toBe(false);
     });
 });
+
+// Wave 6 (docs/ekn-wave6-contract.md 2026-08-29) — とばすもの (発射体プリミティブ)
+describe("compile-role: Wave 6 ブロック (cno_launch / on_sabotage / on_revive)", () => {
+    it("ekr_do_cno_launch は SPEED が既定 medium ならフィールドごと省略する", () => {
+        expect(compileTopBlocksToRules([
+            { type: "ekr_when_on_pet", next: { block: { type: "ekr_do_cno_launch", fields: { SLOT: "1", DIR: "move", SPEED: "medium" } } } },
+        ])).toEqual([{ when: "on_pet", do: [{ op: "cno_launch", slot: 1, dir: "move" }] }]);
+    });
+
+    it("ekr_do_cno_launch は SPEED が medium 以外なら speed を転記する", () => {
+        expect(compileTopBlocksToRules([
+            { type: "ekr_when_on_pet", next: { block: { type: "ekr_do_cno_launch", fields: { SLOT: "2", DIR: "ctx", SPEED: "fast" } } } },
+        ])).toEqual([{ when: "on_pet", do: [{ op: "cno_launch", slot: 2, dir: "ctx", speed: "fast" }] }]);
+    });
+
+    it("ekr_when_on_sabotage / ekr_when_on_revive は追加フィールド無しの生成ハットとして転記される", () => {
+        const blocks: SerializedBlock[] = [
+            { type: "ekr_when_on_sabotage", next: { block: { type: "ekr_do_stop" } } },
+            { type: "ekr_when_on_revive", next: { block: { type: "ekr_do_stop" } } },
+        ];
+        expect(compileTopBlocksToRules(blocks)).toEqual([
+            { when: "on_sabotage", do: [{ op: "stop" }] },
+            { when: "on_revive", do: [{ op: "stop" }] },
+        ]);
+    });
+
+    it("「ゆきだま」型 (cno_spawn → cno_launch → on_cno_touch → kill) が validateRoleLogic まで通る", () => {
+        const w = ws([
+            {
+                type: "ekr_when_on_pet",
+                next: {
+                    block: {
+                        type: "ekr_do_cno_spawn",
+                        fields: { SLOT: "1", TEXT: "!", SIZE: 6, AT: "self" },
+                        next: { block: { type: "ekr_do_cno_launch", fields: { SLOT: "1", DIR: "move", SPEED: "medium" } } },
+                    },
+                },
+            },
+            {
+                type: "ekr_when_on_cno_touch",
+                fields: { SLOT: "1" },
+                next: { block: { type: "ekr_do_kill", fields: { TARGET: "ctx" } } },
+            },
+        ]);
+        const compiled = compileWorkspaceToLogicInput(w, []);
+        expect(compiled).not.toBeNull();
+        const r = validateRoleLogic(compiled);
+        expect(r.ok, r.ok ? "" : (r as { error: string }).error).toBe(true);
+        if (r.ok) {
+            expect(r.logic.rules).toEqual([
+                { when: "on_pet", do: [{ op: "cno_spawn", slot: 1, text: "!", size: 6, at: "self" }, { op: "cno_launch", slot: 1, dir: "move" }] },
+                { when: "on_cno_touch", slot: 1, do: [{ op: "kill", target: "ctx" }] },
+            ]);
+        }
+    });
+});

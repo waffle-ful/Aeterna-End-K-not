@@ -43,11 +43,14 @@ import type { LogicNode, LogicRule, RoleLogic } from "../roledef";
 // Wave 5 (docs/ekn-wave5-contract.md §4 2026-08-27): L28 を追加 (計28ルール)。
 // L28 = L5/L27 の兄弟 — on_second 配下の effect_give (毎秒かけ直すと無駄うちになる。効いている
 // 時間は seconds が決めるので、きっかけを決めて1回かけるのが正しい組み方)。
+// Wave 6 (docs/ekn-wave6-contract.md §5 2026-08-29): L29 を追加 (計29ルール)。
+// L29 = L5/L27/L28 の兄弟 — on_second 配下の cno_launch (毎秒とばすと予算切れですぐ消える)。
+// CTXLESS_WHENS (L14) に on_revive を追加 (holder限定・ctx無し — 契約 §3)。
 
 export type LintRuleId =
     | "L1" | "L2" | "L3" | "L4" | "L5" | "L6" | "L7" | "L8" | "L9" | "L10" | "L11" | "L12" | "L13"
     | "L14" | "L15" | "L16" | "L17" | "L18" | "L19" | "L20" | "L21"
-    | "L22" | "L23" | "L24" | "L25" | "L26" | "L27" | "L28";
+    | "L22" | "L23" | "L24" | "L25" | "L26" | "L27" | "L28" | "L29";
 
 export interface LintWarning {
     rule: LintRuleId;
@@ -135,10 +138,13 @@ function hasGenerationOpBeforeElapsed(nodes: LogicNode[], ops: ReadonlySet<Logic
 // Wave 4 (docs/ekn-wave4-contract.md §2/§6): on_room_enter/on_room_exit も ctx 無し。
 // on_near (ctx = 近づいた人)・on_far (ctx = 離れた人)・on_linked_death (ctx = 死んだ相手) は
 // ctx を持つので入れない。
+// Wave 6 (docs/ekn-wave6-contract.md §3): on_revive も ctx 無し (holder 限定)。on_sabotage は
+// グローバル型で ctx (=起こした人) を持つのでここには入れない。
 const CTXLESS_WHENS: ReadonlySet<string> = new Set([
     "on_game_start", "on_pet", "on_meeting_start", "on_meeting_end", "on_task_complete", "on_vent_enter", "on_second",
     "on_var", "on_alive_count", "on_vent_exit",
     "on_room_enter", "on_room_exit",
+    "on_revive",
 ]);
 
 /**
@@ -300,9 +306,9 @@ function extractProgressVarRefs(text: string): string[] {
 }
 
 /**
- * 検証済みの RoleLogic に対して spec §6 の 27 ルール (v1.2 で L11/L12、v1.3 で L13、Wave 1 で
+ * 検証済みの RoleLogic に対して spec §6 の 29 ルール (v1.2 で L11/L12、v1.3 で L13、Wave 1 で
  * L14〜L17、Wave 2 で L18〜L20、2026-08-14 に L21、Wave 3 で L22〜L25 のうち L24/L25、Wave 4 で
- * L26/L27) を静的検査する。ブロックの組み方に対するヒントであり、export 自体は妨げない
+ * L26/L27、Wave 5 で L28、Wave 6 で L29) を静的検査する。ブロックの組み方に対するヒントであり、export 自体は妨げない
  * (呼び出し元は結果を警告フッタに表示するだけ)。
  *
  * `progressText` は L25 が progress.text 内の `{変数名}` 参照も一緒に検査するための任意引数
@@ -408,6 +414,14 @@ export function lintRoleLogic(logic: RoleLogic, progressText?: string): LintWarn
                     "L28", ruleIndex, rule.when,
                     "「毎秒くりかえす」の中で こうかをかけつづけています。",
                     "まいびょう こうかをかけつづけると むだうちになっちゃうよ。きっかけを決めて1回かけよう (じかんは「なんびょう」で決められるよ)。",
+                ));
+            }
+            // L29 (Wave 6・docs/ekn-wave6-contract.md §5): L5/L27/L28 の兄弟 — on_second 配下の cno_launch。
+            if (hasOp(rule.do, "cno_launch")) {
+                warnings.push(makeWarning(
+                    "L29", ruleIndex, rule.when,
+                    "まいびょう とばすと よさんぎれで きえちゃうよ。",
+                    "きっかけ (ペットや サボ) で とばそう",
                 ));
             }
         }

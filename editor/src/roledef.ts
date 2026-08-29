@@ -99,6 +99,11 @@ export const LOGIC_WHEN_VALUES = [
     "on_room_enter",
     "on_room_exit",
     "on_linked_death",
+    // Wave 6 (docs/ekn-wave6-contract.md §2/§3 2026-08-29): 残イベント2種。on_sabotage はグローバル型
+    // (ctx = サボタージュを起こした人・全ホルダーへ配る)。on_revive は holder 限定・ctx 無し
+    // (CTXLESS_WHENS/L14 の対象に追加 — lint-role.ts 側で同じ扱い)。
+    "on_sabotage",
+    "on_revive",
 ] as const;
 export type LogicWhen = (typeof LOGIC_WHEN_VALUES)[number];
 
@@ -291,6 +296,21 @@ export const EFFECT_TARGET_VALUES = TARGET_SINGLE_VALUES;
 export const RECRUIT_SLOT_MIN = 1;
 export const RECRUIT_SLOT_MAX = 18;
 
+// ---------------------------------------------------------------------------
+// Wave 6 (docs/ekn-wave6-contract.md 2026-08-29) — とばすもの (発射体プリミティブ)
+// ---------------------------------------------------------------------------
+// cno_launch.dir (契約 §1): launch 時に1回だけ解決し、以後は追尾しない。
+export const CNO_LAUNCH_DIR_VALUES = ["move", "ctx", "marker1", "marker2", "marker3", "marker4"] as const;
+export type CnoLaunchDir = (typeof CNO_LAUNCH_DIR_VALUES)[number];
+// cno_launch.speed (契約 §1 表): 任意・省略 = medium。実効値 (2.0/4.0/6.0 u/s) は作者に開けない
+// (radius tier と同じ方針)。正準形: 既定値 (medium) は書き出さない (契約 §1/§4 — medium 自体が
+// 値集合のメンバーなので、省略と明示 medium が別コードにならないよう検証層でも畳み込む。
+// on_near.who の "anyone" 畳み込みと同型。recruit.slot は「既定=不在」で値集合のメンバーではないため
+// この畳み込みが不要 — 混同しないこと)。
+export const CNO_LAUNCH_SPEED_VALUES = ["slow", "medium", "fast"] as const;
+export type CnoLaunchSpeed = (typeof CNO_LAUNCH_SPEED_VALUES)[number];
+export const CNO_LAUNCH_SPEED_DEFAULT: CnoLaunchSpeed = "medium";
+
 // progress (契約 §3): 自由テキスト形式。text は trim 後 1..16字 (超過はクランプ)。
 export const PROGRESS_TEXT_MIN = 1;
 export const PROGRESS_TEXT_MAX = 16;
@@ -443,7 +463,11 @@ export type LogicNode =
     // 省略 = 自分と同じ役職 (完全後方互換・正準形ではフィールドごと省略)。
     | { op: "recruit"; target: (typeof RECRUIT_TARGET_VALUES)[number]; slot?: number }
     // Wave 5 (契約 §1) — 相手に持続効果をかける。target/kind/seconds すべて必須 (既定を作らない)。
-    | { op: "effect_give"; target: (typeof EFFECT_TARGET_VALUES)[number]; kind: EffectKind; seconds: number };
+    | { op: "effect_give"; target: (typeof EFFECT_TARGET_VALUES)[number]; kind: EffectKind; seconds: number }
+    // Wave 6 (docs/ekn-wave6-contract.md §1) — とばす。slot は cno_spawn と同じ枠を共有する。dir は
+    // launch 時に1回だけ解決 (追尾しない)。speed は任意・省略 = medium (既定値は検証層で畳み込むため
+    // 明示 "medium" も AST では省略される — validateNode 参照)。
+    | { op: "cno_launch"; slot: 1 | 2 | 3; dir: CnoLaunchDir; speed?: CnoLaunchSpeed };
 
 export interface LogicRule {
     when: LogicWhen;
@@ -1142,6 +1166,19 @@ function validateNode(raw: unknown, varNames: ReadonlySet<string>, path: string,
             const kind = expectEnum(raw.kind, EFFECT_KIND_VALUES, `${path}.kind`);
             const seconds = expectRangeNumber(raw.seconds, EFFECT_SECONDS_MIN, effectMaxSeconds(kind), `${path}.seconds`);
             return { node: { op: "effect_give", target, kind, seconds }, depth: 1, count: 1 };
+        }
+        // Wave 6 (docs/ekn-wave6-contract.md §1/§4) — とばす。slot は cno_spawn と同じ枠 (1..3)。
+        // speed は任意・省略 = medium。契約 §1/§4 は「既定値は書き出さない」を明記しており (recruit.slot
+        // のような「既定=不在」ではなく medium 自体が値集合のメンバーなので)、この検証層でも明示された
+        // "medium" を既定値へ畳み込む (省略と明示 medium が別コードにならないようにする — recruit.slot は
+        // 「既定=不在」なので畳み込みが不要だが、こちらは on_near.who の "anyone" 畳み込みと同型)。
+        case "cno_launch": {
+            const slot = expectRangeInt(raw.slot, CNO_SLOT_MIN, CNO_SLOT_MAX, `${path}.slot`) as 1 | 2 | 3;
+            const dir = expectEnum(raw.dir, CNO_LAUNCH_DIR_VALUES, `${path}.dir`);
+            if (raw.speed === undefined) return { node: { op: "cno_launch", slot, dir }, depth: 1, count: 1 };
+            const speed = expectEnum(raw.speed, CNO_LAUNCH_SPEED_VALUES, `${path}.speed`);
+            if (speed === CNO_LAUNCH_SPEED_DEFAULT) return { node: { op: "cno_launch", slot, dir }, depth: 1, count: 1 };
+            return { node: { op: "cno_launch", slot, dir, speed }, depth: 1, count: 1 };
         }
         default:
             fail(`${path}.op が不明です (${JSON.stringify(op)})`);

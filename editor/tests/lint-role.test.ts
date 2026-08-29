@@ -1310,3 +1310,38 @@ describe("lint-role: formatLintWarning", () => {
         expect(text).toContain(warnings[0].suggestion);
     });
 });
+
+// Wave 6 (docs/ekn-wave6-contract.md §5/§3 2026-08-29) — L29 + CTXLESS_WHENS (on_revive)
+describe("lint-role: L29 (on_second 配下の cno_launch — L5/L27/L28 の兄弟)", () => {
+    it("on_second + cno_launch (直下) は L29 を警告する", () => {
+        const l = logic([{ when: "on_second", do: [{ op: "cno_launch", slot: 1, dir: "move" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L29");
+    });
+
+    it("on_second + cno_launch (if の中にネスト) も検知する", () => {
+        const l = logic([
+            {
+                when: "on_second",
+                do: [{ op: "if", cond: { e: "lit", v: 1 }, then: [{ op: "cno_launch", slot: 1, dir: "ctx" }] }],
+            },
+        ]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L29");
+    });
+
+    it("on_pet (on_second 以外) の cno_launch は L29 を警告しない", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "cno_launch", slot: 1, dir: "move" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L29");
+    });
+});
+
+describe("lint-role: L14 の Wave 6 対象拡大 (on_revive は ctx 無し)", () => {
+    it("on_revive + kill(target:ctx) は L14 を警告する", () => {
+        const l = logic([{ when: "on_revive", do: [{ op: "kill", target: "ctx" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L14");
+    });
+
+    it("on_sabotage は ctx を持つので L14 を警告しない", () => {
+        const l = logic([{ when: "on_sabotage", do: [{ op: "notify", text: "!", seconds: 1, target: "ctx" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L14");
+    });
+});

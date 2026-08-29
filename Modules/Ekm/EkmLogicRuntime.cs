@@ -130,6 +130,12 @@ public sealed class EkrNode
     // Wave 5 (docs/ekn-wave5-contract.md §1 effect_give): かける効果の種類 ("haste" | "slow" | "freeze" | "blind")。
     public string EffectKind;
 
+    // Wave 6 (docs/ekn-wave6-contract.md §1 cno_launch): とばす向き ("move" | "ctx" | "marker1".."marker4") と
+    // 速さ tier ("slow" | "medium" | "fast")。速さは任意フィールドで、省略時はパース時に "medium" を焼き込む
+    // (notify.target の既定 self と同じ方式 — 実行側で既定値を再解釈しない)。
+    public string LaunchDir;
+    public string LaunchSpeed;
+
     // Wave 2 (vote_weight_set.value 0..3): 汎用の整数引数置き場 (他 op の Slot/Size とは意味論が
     // 別物なので専用フィールドにする — 「票のちから」を CNO slot と誤読させない)。
     public int IntArg;
@@ -168,7 +174,10 @@ public sealed class EkrLogicDef
         // Wave 3 (docs/ekn-wave3-contract.md §1): じょうたいトリガ2種 + ベント退出。
         "on_var", "on_alive_count", "on_vent_exit",
         // Wave 4 (docs/ekn-wave4-contract.md §0): 対人近接2種 + 部屋2種 + リンク死。
-        "on_near", "on_far", "on_room_enter", "on_room_exit", "on_linked_death"
+        "on_near", "on_far", "on_room_enter", "on_room_exit", "on_linked_death",
+        // Wave 6 (docs/ekn-wave6-contract.md §2,§3): サボタージュ成立 (グローバル・ctx=起こした人) と
+        // 蘇生 (ホルダー限定・ctx 無し — 蘇生させた人は RpcRevive のシグネチャに存在しないため渡せない)。
+        "on_sabotage", "on_revive"
     ];
 
     // Wave 3 (§1.2): 比較演算子。**綴りは ExprKinds の流用** (新語彙を作らない)。
@@ -389,6 +398,12 @@ public sealed class EkrLogicDef
     // ⚠️ TS 側 (editor/src/roledef.ts) と同じ並び・同じ綴りを保つこと (drift 検出は共有 fixture)。
     public static readonly string[] EkrEffectKinds = ["haste", "slow", "freeze", "blind"];
 
+    // Wave 6 (docs/ekn-wave6-contract.md §1): cno_launch の dir / speed 受理値。
+    // ⚠️ TS 側 (editor/src/roledef.ts) と同じ並び・同じ綴りを保つこと (drift 検出は共有 fixture)。
+    public static readonly string[] EkrLaunchDirs = ["move", "ctx", "marker1", "marker2", "marker3", "marker4"];
+
+    public static readonly string[] EkrLaunchSpeeds = ["slow", "medium", "fast"];
+
     public static float EffectMaxSeconds(string kind) => kind == "freeze" ? 10f : 30f;
 
     private static readonly HashSet<string> ControlOps = ["if", "wait", "stop", "var_set", "var_add"];
@@ -407,7 +422,9 @@ public sealed class EkrLogicDef
         // Wave 4 (docs/ekn-wave4-contract.md §3,§4): リンクと変換
         "link", "unlink", "recruit",
         // Wave 5 (docs/ekn-wave5-contract.md §1): 持続効果
-        "effect_give"
+        "effect_give",
+        // Wave 6 (docs/ekn-wave6-contract.md §1): 発射体プリミティブ
+        "cno_launch"
     ];
 
     private static readonly HashSet<string> ExprKinds =
@@ -993,6 +1010,19 @@ public sealed class EkrLogicDef
                 }
 
                 n.Seconds = effectSec;
+                break;
+
+            // ── Wave 6 (docs/ekn-wave6-contract.md §1): 発射体プリミティブ ──────────────────────
+
+            // §1: slot (1..3) と dir は必須・speed は任意 (省略 = "medium" を焼き込む = 正準形で
+            // 書き出さない側と対応する)。
+            case "cno_launch":
+                if (!TryGetInt(nodeEl, "slot", 1, 3, out n.Slot, out err)) return false;
+                if (!TryGetEnum(nodeEl, "dir", EkrLaunchDirs, out n.LaunchDir, out err)) return false;
+
+                n.LaunchSpeed = "medium";
+                if (nodeEl.TryGetProperty("speed", out _) && !TryGetEnum(nodeEl, "speed", EkrLaunchSpeeds, out n.LaunchSpeed, out err)) return false;
+
                 break;
         }
 

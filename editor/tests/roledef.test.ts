@@ -1724,3 +1724,90 @@ describe("logic 検証 Wave 4 (on_near / on_far / on_room_enter / on_room_exit /
         }
     });
 });
+
+describe("logic 検証 Wave 6 (cno_launch / on_sabotage / on_revive)", () => {
+    function baseLogic(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+        return {
+            version: 1,
+            rules: [{ when: "on_pet", do: [{ op: "stop" }] }],
+            ...overrides,
+        };
+    }
+    function withLogic(logic: unknown): Record<string, unknown> {
+        return { ...baseValid(), logic };
+    }
+    function withRule(rule: Record<string, unknown>): Record<string, unknown> {
+        return withLogic(baseLogic({ rules: [rule] }));
+    }
+
+    it("cno_launch: slot(1..3)・dir 必須、speed は任意 (省略時は AST にキーが無い)", () => {
+        for (const slot of [1, 2, 3]) {
+            const r = validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "cno_launch", slot, dir: "move" }] }));
+            expect(r.ok, String(slot)).toBe(true);
+            if (r.ok) expect(r.def.logic?.rules[0].do[0]).toEqual({ op: "cno_launch", slot, dir: "move" });
+        }
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "cno_launch", slot: 0, dir: "move" }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "cno_launch", slot: 4, dir: "move" }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "cno_launch", dir: "move" }] })).ok).toBe(false);
+    });
+
+    it("cno_launch.dir: move/ctx/marker1..4 を受理し、未知値は reject", () => {
+        for (const dir of ["move", "ctx", "marker1", "marker2", "marker3", "marker4"]) {
+            const r = validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "cno_launch", slot: 1, dir }] }));
+            expect(r.ok, dir).toBe(true);
+        }
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "cno_launch", slot: 1, dir: "self" }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "cno_launch", slot: 1 }] })).ok).toBe(false);
+    });
+
+    it("cno_launch.speed: slow/medium/fast を受理し、slow/fast は明示指定がそのまま保持される", () => {
+        for (const speed of ["slow", "fast"]) {
+            const r = validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "cno_launch", slot: 1, dir: "move", speed }] }));
+            expect(r.ok, speed).toBe(true);
+            if (r.ok) expect(r.def.logic?.rules[0].do[0]).toEqual({ op: "cno_launch", slot: 1, dir: "move", speed });
+        }
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "cno_launch", slot: 1, dir: "move", speed: "fastest" }] })).ok).toBe(false);
+    });
+
+    it("cno_launch.speed: 既定値 medium は省略時・明示時のどちらも AST でキーが畳み込まれる (契約 §1/§4)", () => {
+        const omitted = validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "cno_launch", slot: 1, dir: "move" }] }));
+        expect(omitted.ok).toBe(true);
+        if (omitted.ok) expect(omitted.def.logic?.rules[0].do[0]).toEqual({ op: "cno_launch", slot: 1, dir: "move" });
+
+        const explicitMedium = validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "cno_launch", slot: 1, dir: "move", speed: "medium" }] }));
+        expect(explicitMedium.ok).toBe(true);
+        if (explicitMedium.ok) {
+            expect(explicitMedium.def.logic?.rules[0].do[0]).toEqual({ op: "cno_launch", slot: 1, dir: "move" });
+            expect("speed" in explicitMedium.def.logic!.rules[0].do[0]).toBe(false);
+        }
+
+        // 不動点: 省略形と明示 medium 形は同じ正準 AST に収束する。
+        expect(omitted.ok && explicitMedium.ok && JSON.stringify(omitted.def) === JSON.stringify(explicitMedium.def)).toBe(true);
+    });
+
+    it("cno_launch は leaf ノード (depth 1, count 1)", () => {
+        const r = validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "cno_launch", slot: 1, dir: "move" }] }));
+        expect(r.ok).toBe(true);
+        if (r.ok) expect(r.def.logic?.rules[0].do).toHaveLength(1);
+    });
+
+    it("on_sabotage: rule フィルタなし (kind/cause/slot が付いていたら reject)", () => {
+        expect(validateEkrDefinition(withRule({ when: "on_sabotage", do: [{ op: "stop" }] })).ok).toBe(true);
+        expect(validateEkrDefinition(withRule({ when: "on_sabotage", kind: "kill", do: [{ op: "stop" }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_sabotage", cause: "bomb", do: [{ op: "stop" }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_sabotage", slot: 1, do: [{ op: "stop" }] })).ok).toBe(false);
+    });
+
+    it("on_revive: 追加フィールド無しで受理される (rule フィルタなし)", () => {
+        const r = validateEkrDefinition(withRule({ when: "on_revive", do: [{ op: "stop" }] }));
+        expect(r.ok).toBe(true);
+        if (r.ok) expect(r.def.logic?.rules[0]).toEqual({ when: "on_revive", do: [{ op: "stop" }] });
+        expect(validateEkrDefinition(withRule({ when: "on_revive", cause: "kill", do: [{ op: "stop" }] })).ok).toBe(false);
+    });
+
+    it("24 種類すべてが LOGIC_WHEN_VALUES 経由で受理される (Wave 6 の新2イベント込み)", () => {
+        for (const when of ["on_sabotage", "on_revive"]) {
+            expect(validateEkrDefinition(withRule({ when, do: [{ op: "stop" }] })).ok, when).toBe(true);
+        }
+    });
+});

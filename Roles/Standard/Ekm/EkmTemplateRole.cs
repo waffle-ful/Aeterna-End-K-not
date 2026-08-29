@@ -203,6 +203,14 @@ public abstract class EkmTemplateRole : RoleBase
         EkrManager.FireTaskComplete(Slot, pc);
     }
 
+    // Wave 6 (docs/ekn-wave6-contract.md §3): on_revive。ホルダー限定・ctx 無し (蘇生させた人は
+    // RpcRevive のシグネチャに存在しないため渡せない)。呼び出し元 (ExtendedPlayerControl.RpcRevive) が
+    // Standard モードゲートの内側なので EKR 側の追加ゲートは要らない。
+    public override void OnRevived(PlayerControl pc)
+    {
+        EkrManager.FireRevive(pc);
+    }
+
     public override void OnFixedUpdate(PlayerControl pc)
     {
         EkrManager.Pump(Slot, pc);

@@ -42,7 +42,7 @@
     <!-- TS 側 (editor/) の役職 fixture をそのまま読んで C# 検証にかける。TS↔C# の契約非対称を
          機械検出する網なので、fixture 自体は編集しない (TS 側資材が正典)。 -->
     <ItemGroup>
-        <None Include="..\..\editor\tests\fixtures\role-full-course.ekrole.json" Link="fixtures\role-full-course.ekrole.json">
+        <None Include="..\..\editor\tests\fixtures\*.ekrole.json" Link="fixtures\%(Filename)%(Extension)">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
     </ItemGroup>

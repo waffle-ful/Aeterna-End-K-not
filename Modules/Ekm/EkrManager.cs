@@ -99,6 +99,19 @@ internal sealed class EkrHolderState
     // Wave 5 (docs/ekn-wave5-contract.md §1.4): effect_give ≤1/2秒/ホルダー。
     public float LastEffectGiveTime = -1f;
 
+    // Wave 6 (docs/ekn-wave6-contract.md §1.2): cno_launch ≤1/2秒/ホルダー。
+    public float LastCnoLaunchTime = -1f;
+
+    // Wave 6 (契約 §1.1 dir:"move"): ホルダーの「最後の移動方向」を採るための 2 点履歴。Snowdown の
+    // 実績形 (Gamemodes/Snowdown.cs:286-299 — 0.01u 超動いたときだけ前へ送る) をそのまま採り、止まって
+    // いる間は最後に動いた向きを保持する。更新は TickPassives の生存分岐に相乗り (既に毎 FixedUpdate
+    // 走っている唯一の per-holder 経路 — 専用の毎フレーム経路は作らない spec §5)。
+    // ⚠️ 契約 §6 のアンカー表は「near/far ポーラーの位置キャッシュに相乗り」と書いているが、
+    // そのポーラーは毎回 Pos() を読み直しており位置キャッシュを持たない (2026-08-29 実装時に確認)。
+    public bool MoveHistPrimed;
+    public Vector2 MoveHistLast;
+    public Vector2 MoveHistLastLast;
+
     public bool SpeedBoostActive;
     public int SpeedGen;
     public float SpeedBaseline;
@@ -1089,6 +1102,32 @@ public static class EkrManager
             _ccPendingDespawn.Clear();
             _lastCcTickTime = -1f;
         }
+
+        // Wave 6 (契約 §2): サボの per-系統デバウンスをラウンド境界でも捨てる。会議境界
+        // (FireMeetingStart) だけでクリアしていると、**会議が一度も起きずに終わった試合**の最終サボ成立
+        // 時刻が次の試合へ持ち越され、同じ系統のサボが 5 秒以内に起きるとその試合の最初の on_sabotage が
+        // 無音でドロップする (完成前 pitfall 監査指摘 2026-08-29)。ここは _cc のような帰属判定を要しない —
+        // 単なるデバウンス辞書なので、早めに捨てても「1 回余分に発火しうる」安全側にしか振れない。
+        LastSabotageFireTime.Clear();
+
+        // Wave 6 (契約 §1.1 中断: slot 剥奪): 飛行台帳も同じ非対称で片付ける — このスロットの保持者の
+        // ものと、どのスロットの保持者でもなくなった孤児だけを断つ (無関係スロットの飛行中の弾を
+        // 巻き添えにしない)。_cc と違い実体の後始末が要る (EndFlight が slot 台帳ごと Despawn する)。
+        for (int i = _flights.Count - 1; i >= 0; i--)
+        {
+            EkrFlightState f = _flights[i];
+            var ownedBySomeSlot = false;
+
+            foreach (HashSet<byte> owners in PlayersBySlot.Values)
+            {
+                if (!owners.Contains(f.HolderId)) continue;
+
+                ownedBySomeSlot = true;
+                break;
+            }
+
+            if (!ownedBySomeSlot || (set != null && set.Contains(f.HolderId))) EndFlight(f);
+        }
     }
 
     public static void AddPlayer(CustomRoles slot, byte playerId)
@@ -1204,6 +1243,10 @@ public static class EkrManager
     {
         // v1.3 (spec §5 crowd-control エンジン): ホルダー/ctx いずれかの死亡・切断・役職剥奪でも即解除。
         if (_cc != null && (_cc.HolderId == playerId || _cc.CtxId == playerId)) StopCrowdControl();
+
+        // Wave 6 (契約 §1.1 中断): 切断・役職剥奪では launch 時の生死に関わらず飛行を断つ
+        // (Runtime.Remove の後だと EndFlight が slot 台帳を辿れず実体が孤児化するので、必ず先に呼ぶ)。
+        StopFlightsForHolder(playerId);
 
         if (!Runtime.Remove(playerId, out EkrHolderState state)) return;
 
@@ -1516,6 +1559,14 @@ public static class EkrManager
         // ホルダーかどうかに関わらず判定する (drag の ctx は EKR ホルダーである必要が無いため — 「相手」は
         // 任意の生存プレイヤー)。
         if (_cc != null && (_cc.HolderId == target.PlayerId || _cc.CtxId == target.PlayerId)) StopCrowdControl();
+
+        // Wave 6 (契約 §1.1 中断): ホルダーの死亡で飛行中の弾は消える — ただし**ここでは撃たない**。
+        // EndFlight は Despawn() (Object.Destroy/RemoveNetObject) を伴うので、キルパイプラインの同期
+        // コールスタックには乗せない (FireMeetingStart と同じ規約)。実際の停止は次の FixedUpdate で
+        // PumpFlightsIfDue が同じ述語 (AbortOnHolderDeath && !IsAlive) で撃つ — EKR 役職は
+        // NeedsUpdateAfterDeath に載っているので死後も Pump は回り続ける (最大 0.1 秒の遅れ)。
+        // 「死に際に弾をはなつ」(on_death 起点 fiber) で撃たれた弾はこの死の後に生まれるので対象外
+        // (AbortOnHolderDeath のラッチ — EkrFlightState のコメント参照)。
 
         string causeBucket = DeathCauseBucket(deathReason);
 
@@ -1908,6 +1959,65 @@ public static class EkrManager
         FireEvent(slot, reporter.PlayerId, "on_report", bodyOwner ? bodyOwner.PlayerId : byte.MaxValue);
     }
 
+    // ── Wave 6 (docs/ekn-wave6-contract.md §2,§3): サボタージュ成立と蘇生 ─────────────────────
+
+    // §2: 同種サボの連打 (リアクター連続押し等) で fiber 起票が暴れないための per-系統デバウンス。
+    // fiber を起票する前 (エンジン側) で落とす。
+    private const float SabotageDebounceSeconds = 5f;
+    private static readonly Dictionary<int, float> LastSabotageFireTime = new();
+
+    // §2: グローバル型 — 起こした人が EKR ホルダーかどうかに関わらず、全ホルダーへ ctx=起こした人で配る
+    // (FireDeath/FireReport の fan-out と同型)。呼び出し口はサボ成立の一点関門
+    // (Patches/SabotageSystemPatch.cs の `if (allow)` 直下) — 却下されたサボ打診では発火しない。
+    // ⚠️ 既知のカバレッジ穴 (契約 §2 で受容): カスタムサボ (GrabOxygenMask の個別 Deteriorate) だけは
+    // CheckSabotage の成立分岐を通らないため発火しない。**Submerged は穴ではない** — 契約 §2 は
+    // 「Submerged 経路も発火しない」と書いているが、SabotageSystemPatch.cs:447 は
+    // `return CheckSabotage(...)` でこの関門をきちんと通る (2026-08-29 の完成前監査で実コード確認・
+    // 契約側の記述誤り)。
+    public static void FireSabotage(PlayerControl player, SystemTypes systemTypes)
+    {
+        if (!player) return;
+
+        float now = Time.realtimeSinceStartup;
+        var key = (int)systemTypes;
+
+        if (LastSabotageFireTime.TryGetValue(key, out float last) && now - last < SabotageDebounceSeconds) return;
+        LastSabotageFireTime[key] = now;
+
+        foreach ((CustomRoles slot, HashSet<byte> holders) in PlayersBySlot)
+        {
+            if (holders.Count == 0) continue;
+
+            EkrDefinition def = GetDefinition(slot);
+            if (def?.ParsedLogic == null) continue;
+
+            // FireEvent は fiber を spawn するだけ (Runtime 辞書は不変) なので直接列挙で安全。
+            foreach (byte holderId in holders) FireEvent(slot, holderId, "on_sabotage", player.PlayerId);
+        }
+    }
+
+    // §3: ホルダー限定・ctx 無し。蘇生させた人は RpcRevive のシグネチャに存在しないため渡せない
+    // (ExtendedPlayerControl.cs の一点関門 → RoleBase.OnRevived → EkmTemplateRole の override)。
+    // 変数・progress・passives は蘇生で初期化しない (蘇生は役職の Init ではない — 契約 §3)。
+    // ⚠️ 既知の取りこぼし (契約 §3 で受容): RpcRevive を通さない手書き蘇生からは発火しない。
+    public static void FireRevive(PlayerControl pc)
+    {
+        if (!pc) return;
+
+        CustomRoles slot = pc.GetCustomRole();
+        if (!IsEkrRole(slot)) return;
+
+        // Wave 6 (契約 §1.1 dir:"move"): 移動履歴を蘇生でプライムし直す。死亡中はサンプラが止まるので
+        // 履歴は「死ぬ直前の移動方向」のまま残り (これは on_death 起点の cno_launch にとって正しい値)、
+        // 蘇生でプレイヤーは別の場所へ再配置される。プライムを畳まないと、蘇生後の最初のサンプルが
+        // 「死んだ場所 → 生き返った場所」という無関係なベクトルを移動方向として焼いてしまう
+        // (完成前 pitfall 監査指摘 2026-08-29)。false にしておくと次の生存 tick が現在地で 2 点とも
+        // 引き直し、実際に歩くまでは方向が定まらない = no-op になる (契約どおりの安全側)。
+        if (Runtime.TryGetValue(pc.PlayerId, out EkrHolderState reviveState)) reviveState.MoveHistPrimed = false;
+
+        FireEvent(slot, pc.PlayerId, "on_revive", byte.MaxValue);
+    }
+
     // 会議開始 (ボタン/通報どちらでも1回・spec §2)。全 EKR ホルダー共通の「走行中 fiber は全キャンセル」
     // を先に行ってから on_meeting_start を発火する (キャンセル後に発火 — 新しく生える fiber は対象外)。
     // fiber キャンセルは純管理メモリ操作 (Il2Cpp 側へは触らない) なのでここでインラインに行うが、
@@ -1929,6 +2039,15 @@ public static class EkrManager
         // v1.3 (spec §3,§5): 会議開始 (追放演出突入含む) で drag/field は即停止・解除 (持ち越しはしない)。
         StopCrowdControl();
 
+        // Wave 6 (docs/ekn-wave6-contract.md §1.1 中断): 飛行中の弾は会議開始で消す。
+        // ⚠️ ここで同期に停止しない — EndFlight は ReleaseCnoSlot 経由で Despawn()
+        // (Object.Destroy/RemoveNetObject) を呼ぶので、この関数の呼び出し元 (AfterReportTasks) の
+        // 同期コールスタックには乗せられない (DespawnDummySlots が 1 秒遅延になっているのと同じ規約)。
+        // 実際の停止は次の FixedUpdate で PumpFlightsIfDue の会議ガードが撃つ (そちらは安全な文脈)。
+        // 下の LateTask はホルダー不在等で Pump が回らないときの取りこぼし止め。
+        // 会議開始 +5 秒の全 CNO 一斉 OnMeeting より先にどちらかが必ず走るが、仮に間に合わなくても
+        // EkrCno.OnMeeting の Launched 分岐が復活を止める (三重防御)。
+
         // Wave 5 (契約 §1.3 解除タイミング③): 会議開始で持続効果は全解除・会議明けへ持ち越さない
         // (Grenadier の ReportDeadBody クリアと同じ慣例)。
         ClearAllEffects();
@@ -1936,6 +2055,10 @@ public static class EkrManager
         // Wave 1: on_attacked の打診デデュープ窓は会議境界を跨いで持ち越す意味が無い (切断者の
         // PlayerId 再利用で他人の結論を継承しないよう、PortalLastWarpTime と同じ作法で捨てる)。
         RecentAttackDecisions.Clear();
+
+        // Wave 6 (契約 §2): サボの per-系統デバウンスは会議境界で捨てる (会議明けは新しいタスクフェーズ —
+        // 前フェーズの残り時間で最初の1回が無音死しないように)。
+        LastSabotageFireTime.Clear();
 
         // Wave 2 (spec §3): vote_block/vote_swap/exile は会議スコープの状態 (trap 10 — Init() 経由の
         // ラウンド境界リセットではなく、実際の会議境界であるここで捨てる)。
@@ -1968,6 +2091,10 @@ public static class EkrManager
         LateTask.New(() =>
         {
             foreach (EkrHolderState state in Runtime.Values) DespawnDummySlots(state);
+
+            // Wave 6: 飛行中の弾の後始末 (上のブロックコメント参照 — 同期コールスタックに Despawn を
+            // 乗せない規約でここへ回している)。
+            StopAllFlights();
         }, 1f, "EkrManager.DespawnDummies", log: false);
 
         // PlayersBySlot はユーザースロット + 埋込出荷役職の両方をキーに持つ (AddPlayer 経由でしか増えない)
@@ -2107,6 +2234,9 @@ public static class EkrManager
         // Wave 5: 持続効果 (effect_give) の期限管理 — 同じ 0.25s 自己スロットリング相乗り
         // (docs/ekn-wave5-contract.md §1.3)。
         PollEffectsIfDue();
+
+        // Wave 6: 発射体 (cno_launch) の 0.1 秒 tick も同じ相乗り駆動 (docs/ekn-wave6-contract.md §1.1)。
+        PumpFlightsIfDue();
 
         if (!Runtime.TryGetValue(pc.PlayerId, out EkrHolderState state)) return;
 
@@ -2389,8 +2519,23 @@ public static class EkrManager
         // EkrLogicOpcodes.ResolveSelfPosition の死後フォールバック用)。
         if (alive)
         {
-            state.LastLivePosition = pc.Pos();
+            Vector2 livePos = pc.Pos();
+            state.LastLivePosition = livePos;
             state.HasLastLivePosition = true;
+
+            // Wave 6 (契約 §1.1 dir:"move"): 移動方向の 2 点履歴。Snowdown.cs:286-299 と同じく
+            // 「0.01u 超動いたときだけ前へ送る」— 止まっている間は最後に動いた向きが残る。
+            if (!state.MoveHistPrimed)
+            {
+                state.MoveHistPrimed = true;
+                state.MoveHistLast = livePos;
+                state.MoveHistLastLast = livePos;
+            }
+            else if (!FastVector2.DistanceWithinRange(livePos, state.MoveHistLast, 0.01f))
+            {
+                state.MoveHistLastLast = state.MoveHistLast;
+                state.MoveHistLast = livePos;
+            }
         }
 
         if (!Main.IntroDestroyed) return;
@@ -3910,5 +4055,287 @@ public static class EkrManager
         }
 
         cc.Rotation = (cc.Rotation + CcFieldPerTickCap) % candidates.Count;
+    }
+
+    // ── Wave 6: 飛行エンジン (cno_launch — docs/ekn-wave6-contract.md §1) ────────────────────────
+    // crowd-control (_cc) と同族の「fiber 外 static + Pump 相乗り + 即時停止」3点セット。ただし
+    // crowd-control が**プレイヤーを TP する** (= SnapTo ラウンド予算を消費する) のに対し、こちらは
+    // **CNO を動かすだけ**なので予算次元がまったく別 — 送信は CustomNetObject の
+    // StartRpcImmediately + SendOption.None 直書き経路 (CustomNetObject.cs:557-589) で、
+    // Utils.NumSnapToCallsThisRound を一切消費しない (契約 §7)。実費は位置 update 5Hz × ≤2本 = ≤10 msg/s。
+    //
+    // ⚠️ 「飛行台帳」は CnoSlots の**別勘定ではない** — 弾は launch 後も CnoSlots に居座り続ける
+    // (CountLiveCno が数える側に残す)。この台帳はパラメータ (向き/速さ/飛距離/寿命) だけを持つ。
+    // 二重台帳にすると _ccPendingDespawn のコメントが警告する「実在するのに数えない」過小カウントを
+    // 作り直すことになる (契約 §7 の監査観点①)。
+
+    private sealed class EkrFlightState
+    {
+        public byte HolderId;
+        public EkrCno Cno;
+        public int SlotIndex; // 0-based (CnoSlots / TouchLatched の index)
+
+        public Vector2 Dir;   // 正規化済み。launch 時に1回だけ確定し、以後は追尾しない (契約 §1.1)
+        public float Speed;   // u/s (tier 実値)
+        public float Travelled;
+
+        // 実体化待ち (pending) の間は動かさず、実体化してから飛び始める。契約 §1.1 は
+        // 「cno_spawn(at:self) → cno_launch の2ブロック」を基本形と定めており、同一 fiber の直後は
+        // まだ spawn コルーチンが走っていない (DataFlagRateLimiter のキュー待ち) ため、pending を
+        // no-op にすると基本形そのものが動かない。
+        public bool Moving;
+
+        // Moving 中 = 飛行寿命 (10秒)。pending 中 = 実体化待ちの打ち切り (5秒)。
+        public float ExpireAt;
+
+        // launch 時にホルダーが生きていたか。契約 §8 は「ホルダー死亡で飛行中の弾は消える」(#11) と
+        // 「on_death 起点 fiber から cno_launch できる」(#11) の両方を凍結しているため、死亡を無条件の
+        // 中断条件にすると後者が到達不能になる。launch 時点の生死をラッチして両立させる
+        // (死んでから撃った弾は「その死」では止まらない)。
+        public bool AbortOnHolderDeath;
+    }
+
+    private static readonly List<EkrFlightState> _flights = [];
+
+    private const float FlightTickInterval = 0.1f;      // 契約 §1.1 (送信は基底が 0.2秒へ間引く)
+    private const float FlightMaxDistance = 40f;        // 契約 §1.1 消滅②
+    private const float FlightLifetimeSeconds = 10f;    // 契約 §1.1 消滅③
+    private const float FlightPendingTimeoutSeconds = 5f; // 実体化待ちの打ち切り (飛行枠を明け渡す)
+    private const int MaxGlobalFlights = 2;             // 契約 §1.2 (per-holder は 1)
+
+    private static float _lastFlightTickTime = -1f;
+    private static float _lastGlobalLaunchTime = -1f;
+
+    // 契約 §1.1: 速度 tier の実値 (数値は作者に開けない)。medium = Snowdown.SnowballThrowSpeed と同値。
+    internal static float FlightSpeedFor(string tier)
+    {
+        return tier switch { "slow" => 2f, "fast" => 6f, _ => 4f };
+    }
+
+    // 契約 §1.2: EKR 全体 ≤2/秒 (effect_give の全体バケットと同じ2段構えの外側)。
+    internal static bool TryConsumeGlobalLaunchBudget()
+    {
+        float now = Time.realtimeSinceStartup;
+        if (_lastGlobalLaunchTime >= 0f && now - _lastGlobalLaunchTime < 0.5f) return false;
+
+        _lastGlobalLaunchTime = now;
+        return true;
+    }
+
+    // 契約 §1.2: 同時飛行 EKR 全体 ≤2・per-holder ≤1。母数は飛行台帳そのもの (AllObjects は数えない)。
+    internal static bool CanStartFlight(byte holderId)
+    {
+        if (_flights.Count >= MaxGlobalFlights) return false;
+
+        foreach (EkrFlightState f in _flights)
+            if (f.HolderId == holderId)
+                return false;
+
+        return true;
+    }
+
+    // cno_launch opcode から呼ぶ。呼び出し元が「slot に EkrCno が居る・dir が解決できた・レート予算を
+    // 通過した」を確認済みであること。dir は正規化済みの非ゼロベクトル。
+    internal static void StartFlight(byte holderId, EkrCno cno, int slotNumber1Based, Vector2 dir, string speedTier, bool holderAlive)
+    {
+        // 台帳が空だった = 前回の tick 時刻は「前の弾が飛んでいた頃」のもの。持ち越すと最初の tick の
+        // Δt が「前の飛行が終わってから今までの実時間」になり、弾が1フレームでマップ外まで吹き飛ぶ
+        // (crowd-control が TryStartDrag/TryStartField で _lastCcTickTime を -1 に戻すのと同じ理由)。
+        if (_flights.Count == 0) _lastFlightTickTime = -1f;
+
+        _flights.Add(new EkrFlightState
+        {
+            HolderId = holderId,
+            Cno = cno,
+            SlotIndex = slotNumber1Based - 1,
+            Dir = dir,
+            Speed = FlightSpeedFor(speedTier),
+            ExpireAt = Time.realtimeSinceStartup + FlightPendingTimeoutSeconds,
+            AbortOnHolderDeath = holderAlive
+        });
+    }
+
+    // 飛行の終了 (壁/距離/寿命) と中断 (会議・死亡・剥奪) の共通後始末。飛び始めた弾は必ず消える
+    // (契約 §1.1「弾は消えるのが自然」) — 実体化待ちのまま終わったものは「まだ飛んでいない置きっぱなしの
+    // CNO」なので slot に残す (Launched が立っていないので基底の会議明け復活エンジンにもそのまま乗る)。
+    private static void EndFlight(EkrFlightState flight)
+    {
+        _flights.Remove(flight);
+
+        if (!flight.Moving) return;
+
+        // slot 台帳がまだこの実体を指しているときだけ片付ける。作者が on_cno_touch → cno_despawn を
+        // 組んでいた場合は既に slot から外れて Despawn 済みなので、ここは何もしない。
+        if (!Runtime.TryGetValue(flight.HolderId, out EkrHolderState state) ||
+            !ReferenceEquals(state.CnoSlots[flight.SlotIndex], flight.Cno)) return;
+
+        if (flight.Cno.IsInstantiated)
+        {
+            ReleaseCnoSlot(state, flight.SlotIndex + 1);
+            return;
+        }
+
+        // ここへ来る = 飛び始めた (= 一度は実体化した) のに今は未実体化 → 別経路が既に Despawn 済み
+        // (基底の会議一斉 OnMeeting が先に走った等)。ReleaseCnoSlot は「pending は触らない」規約で
+        // 早期 return するため、そのままだと slot が永久占有になり全体 ≤10 の導出カウントが 1 体ずつ
+        // 静かに狭まる (_ccPendingDespawn のコメントが警告している片方向リークと同型)。台帳だけ外す。
+        state.CnoSlots[flight.SlotIndex] = null;
+        state.TouchLatched[flight.SlotIndex].Clear();
+        state.TouchLastFireTime[flight.SlotIndex].Clear();
+    }
+
+    // 会議開始 (追放演出突入含む)・ゲーム終了・ランタイム破棄から呼ぶ (契約 §1.1 中断)。
+    internal static void StopAllFlights()
+    {
+        for (int i = _flights.Count - 1; i >= 0; i--) EndFlight(_flights[i]);
+    }
+
+    // ホルダーの切断・役職剥奪から呼ぶ (TeardownRuntime)。死亡は launch 時の生死ラッチを見る必要が
+    // あるので、この関数ではなく PumpFlightsIfDue の tick 側が撃つ (FireDeath のコメント参照)。
+    private static void StopFlightsForHolder(byte holderId)
+    {
+        for (int i = _flights.Count - 1; i >= 0; i--)
+            if (_flights[i].HolderId == holderId)
+                EndFlight(_flights[i]);
+    }
+
+    // Pump() から毎 FixedUpdate 相乗りで呼ばれる (自己スロットリング 0.1秒 — 専用の毎フレーム経路を
+    // 作らない spec §5)。PumpCrowdControlIfDue と同じ中断3点 (終了演出/会議・追放演出) を先に見る。
+    private static void PumpFlightsIfDue()
+    {
+        if (_flights.Count == 0) return;
+
+        if (GameStates.IsEnded || GameStates.IsMeeting || ExileController.Instance || AntiBlackout.SkipTasks)
+        {
+            StopAllFlights();
+            return;
+        }
+
+        float now = Time.realtimeSinceStartup;
+        if (_lastFlightTickTime >= 0f && now - _lastFlightTickTime < FlightTickInterval) return;
+
+        // フレーム落ち・ロード停止で Δt が跳ねても弾がワープしないよう上限を切る (壁判定は線分なので
+        // すり抜けはしないが、1 tick で数十 u 進むと「見えないまま消えた」になる)。
+        float dt = _lastFlightTickTime < 0f ? FlightTickInterval : Mathf.Min(now - _lastFlightTickTime, 0.5f);
+        _lastFlightTickTime = now;
+
+        for (int i = _flights.Count - 1; i >= 0; i--)
+        {
+            EkrFlightState f = _flights[i];
+
+            if (!Runtime.TryGetValue(f.HolderId, out EkrHolderState state) ||
+                !ReferenceEquals(state.CnoSlots[f.SlotIndex], f.Cno))
+            {
+                // 台帳から外れた (作者が cno_despawn した / 束縛が消えた) — 弾はもう他所の管理下。
+                _flights.RemoveAt(i);
+                continue;
+            }
+
+            PlayerControl holderPc = f.HolderId.GetPlayer();
+
+            if (!holderPc || holderPc.Data == null || holderPc.Data.Disconnected ||
+                (f.AbortOnHolderDeath && !holderPc.IsAlive()))
+            {
+                EndFlight(f);
+                continue;
+            }
+
+            if (!f.Cno.IsInstantiated)
+            {
+                // 実体化待ち。打ち切り時刻を過ぎたら飛行枠を明け渡す (CNO は置きっぱなしとして slot に残る)。
+                if (now >= f.ExpireAt) _flights.RemoveAt(i);
+                continue;
+            }
+
+            if (!f.Moving)
+            {
+                f.Moving = true;
+                f.ExpireAt = now + FlightLifetimeSeconds; // 寿命は「飛び始めてから」10秒 (契約 §1.1 消滅③)
+
+                // 🔴 実体化の立ち上がりで静止ポーラー (PollCnoTouchIfDue) がラッチを作り直すのを、
+                // 飛び始める前に先回りして押さえる。PrimeTouchSensor は latch と debounce を **Clear** する
+                // ので、飛行が始まった後に「今の弾の位置」で作り直されると
+                //   ① 発射時ラッチ (射手の自己命中防止・契約 §1.1) が消える
+                //   ② その瞬間たまたま弾の近くにいた人が「発火なしでラッチ済み」になり、最初の1人が無音で飲まれる
+                // の2事故になる。ポーラー (0.25秒) と飛行 tick (0.1秒) は独立に自己スロットリングするので
+                // 順序は保証されない = 実際に起こりうる競合。ここで撃つ Prime は弾がまだ動く前なので
+                // 位置は spawn 時と同じ (cno_move 済みならその位置) = 意味は変わらない。
+                PrimeTouchSensor(state, f.SlotIndex, f.Cno.Position, isPortal: false);
+                state.TouchSensorWasLive[f.SlotIndex] = true;
+            }
+            else if (now >= f.ExpireAt)
+            {
+                EndFlight(f);
+                continue;
+            }
+
+            Vector2 from = f.Cno.Position;
+            float step = f.Speed * dt;
+            Vector2 to = from + (f.Dir * step);
+
+            // 壁で消える (契約 §1.1 消滅① — SuperCannonShot.cs:357 / Snowball と同型の線分判定)。
+            if (PhysicsHelpers.AnythingBetween(from, to, Constants.ShipOnlyMask, false))
+            {
+                EndFlight(f);
+                continue;
+            }
+
+            f.Travelled += step;
+            f.Cno.FlyTo(to);
+
+            // 命中は既存 on_cno_touch へ合流 (契約 §1.1)。静止 CNO の 0.25秒ポーラーと同じラッチ/
+            // デバウンス構造をそのまま使い、進入判定だけを点距離から**移動線分との距離**へ差し替える
+            // (fast 6u/s は 0.25秒ポーリングだと 1.5u 進んですり抜けるため — トンネリング対策)。
+            SweepCnoTouch(f, state, from, to, now);
+
+            if (f.Travelled >= FlightMaxDistance) EndFlight(f); // 消滅② 総飛距離
+        }
+    }
+
+    // 飛行中の弾の掃引接触判定。PollCnoTouchIfDue の on_cno_touch 分岐と同じ状態 (TouchLatched /
+    // TouchLastFireTime) を共有するので、静止ポーラーと二重発火しない (ラッチ済みは再発火しない)。
+    private static void SweepCnoTouch(EkrFlightState flight, EkrHolderState state, Vector2 from, Vector2 to, float now)
+    {
+        int idx = flight.SlotIndex;
+        HashSet<byte> latched = state.TouchLatched[idx];
+        CustomRoles? holderSlot = null;
+
+        // 毎 tick ループなので yield 版は使わない (memory: nested_managed_enumerator_gchandle_leak)。
+        foreach (PlayerControl pc in Main.AllAlivePlayerControls)
+        {
+            Vector2 p = pc.Pos();
+            bool inside = latched.Contains(pc.PlayerId);
+
+            if (!inside)
+            {
+                if (DistanceToSegment(p, from, to) > TouchEnterRadius) continue;
+
+                latched.Add(pc.PlayerId);
+
+                float lastFire = state.TouchLastFireTime[idx].GetValueOrDefault(pc.PlayerId, -1f);
+                if (lastFire >= 0f && now - lastFire < TouchDebounceSeconds) continue;
+                state.TouchLastFireTime[idx][pc.PlayerId] = now;
+
+                holderSlot ??= SlotForHolder(flight.HolderId);
+                if (holderSlot.HasValue) FireCnoTouch(holderSlot.Value, flight.HolderId, idx + 1, pc.PlayerId);
+            }
+            else if (Vector2.Distance(p, to) >= TouchExitRadius)
+            {
+                // 退出は静止ポーラーと同じ「今の位置からの点距離」で判定する (貫通弾が通り過ぎたら
+                // ラッチが外れ、次の弾/次の周回で再び当たれる)。
+                latched.Remove(pc.PlayerId);
+            }
+        }
+    }
+
+    // 点と線分の距離。飛行 tick の掃引判定でしか使わないので Unity の汎用 API は使わず素で書く。
+    private static float DistanceToSegment(Vector2 point, Vector2 a, Vector2 b)
+    {
+        Vector2 ab = b - a;
+        float lenSq = ab.sqrMagnitude;
+        if (lenSq < 0.000001f) return Vector2.Distance(point, a);
+
+        float t = Mathf.Clamp01(Vector2.Dot(point - a, ab) / lenSq);
+        return Vector2.Distance(point, a + (ab * t));
     }
 }
