@@ -6,6 +6,7 @@ using AmongUs.GameOptions;
 using BepInEx.Unity.IL2CPP.Utils.Collections;
 using EndKnot.Gamemodes;
 using EndKnot.Modules;
+using EndKnot.Modules.Ekm;
 using EndKnot.Roles;
 using HarmonyLib;
 using Hazel;
@@ -315,6 +316,20 @@ internal static class GameEndChecker
                     {
                         WinnerIds.Add(pc.PlayerId);
                         AdditionalWinnerTeams.Add(AdditionalWinners.LastNeutral);
+                    }
+
+                    // Wave 7 (docs/ekn-wave7-contract.md §2): EKR「いっしょにかたせる」(win_join) の便乗
+                    // ラッチを勝者へ合流する (無条件便乗 — どの陣営が勝っても加わる)。切断者は
+                    // CachedAllPlayerControls に居ないので自然に除外される (契約 §2)。第1ループでなく
+                    // この第2ループに置くのは、第1ループ内の勝者剥奪 (Walker/WolfBoy/SchrodingersCat の
+                    // WinnerIds.Remove) や Stalker 型の ResetAndSetWinner に便乗が巻き添えで消されない
+                    // ため — 「無条件」を文字どおりにする (2026-08-30 完成前監査指摘)。表示帰属は
+                    // 「かたせた側の EKR スロット」— AdditionalWinners = CustomRoles キャストで束縛
+                    // 役職名が勝敗画面に出る (OutroPatch.GetAdditionalWinnerRoleName の既定書式)。
+                    if (EkrManager.TryGetWinJoinSlot(pc.PlayerId, out CustomRoles winJoinSlot))
+                    {
+                        AdditionalWinnerTeams.Add((AdditionalWinners)winJoinSlot);
+                        WinnerIds.Add(pc.PlayerId);
                     }
                 }
 

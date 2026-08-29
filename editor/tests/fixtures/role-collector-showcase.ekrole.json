@@ -1,0 +1,39 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "あつめや",
+  "author": "EKN Sample",
+  "description": "タスクを終えるたびに かけらを集め、5個そろうと ひとりで勝つ",
+  "color": "#ffd166",
+  "team": "neutral",
+  "canKill": false,
+  "killCooldown": 25,
+  "canVent": false,
+  "visionMultiplier": 1,
+  "winCondition": "team",
+  "progress": { "text": "かけら{かけら}" },
+  "logic": {
+    "version": 1,
+    "variables": [
+      { "name": "かけら", "init": 0 }
+    ],
+    "rules": [
+      {
+        "when": "on_task_complete",
+        "do": [
+          { "op": "var_add", "name": "かけら", "delta": { "e": "lit", "v": 1 } },
+          { "op": "notify", "text": "かけらを ひろった！", "seconds": 2 }
+        ]
+      },
+      {
+        "when": "on_var",
+        "var": "かけら",
+        "cmp": "ge",
+        "value": 5,
+        "do": [
+          { "op": "win", "target": "self" }
+        ]
+      }
+    ]
+  }
+}

@@ -974,4 +974,101 @@ public class EkrDefinitionTests
         Assert.Equal("normal", def.ParsedPassives.Corpse);
         Assert.Equal(-1, def.ParsedPassives.KillDistance);
     }
+
+    // ── Wave 7 (docs/ekn-wave7-contract.md §1,§2): 勝利条件 (win / win_join) ─────────────────────
+
+    private static string WrapTeam(string team, string logicJson)
+    {
+        return "{\"ekr\":1,\"name\":\"t\",\"color\":\"#112233\",\"team\":\"" + team + "\"," + logicJson + "}";
+    }
+
+    // §1/§4: win の受理表。target は任意 (既定 self)・単数セレクタ全種を受理・複数形は reject。
+    // neutral 限定は次の Theory が担う。TS 側 (roledef.test.ts の Wave 7 describe) と同じ表。
+    [Theory]
+    [InlineData("{\"op\":\"win\"}", true)]
+    [InlineData("{\"op\":\"win\",\"target\":\"self\"}", true)]
+    [InlineData("{\"op\":\"win\",\"target\":\"ctx\"}", true)]
+    [InlineData("{\"op\":\"win\",\"target\":\"linked\"}", true)]
+    [InlineData("{\"op\":\"win\",\"target\":\"saved1\"}", true)]
+    [InlineData("{\"op\":\"win\",\"target\":\"saved2\"}", true)]
+    [InlineData("{\"op\":\"win\",\"target\":\"nearest\"}", true)]
+    [InlineData("{\"op\":\"win\",\"target\":\"random\"}", true)]
+    [InlineData("{\"op\":\"win\",\"target\":\"all\"}", false)]
+    [InlineData("{\"op\":\"win\",\"target\":\"room\"}", false)]
+    [InlineData("{\"op\":\"win\",\"target\":\"everyone\"}", false)]
+    public void Win_TargetMatchesTheContract(string nodeJson, bool shouldAccept)
+    {
+        string json = WrapTeam("neutral", "\"logic\":{\"version\":1,\"rules\":[{\"when\":\"on_pet\",\"do\":[" + nodeJson + "]}]}");
+        bool ok = EkrDefinition.TryParse(json, out _, out string error);
+        Assert.True(ok == shouldAccept, shouldAccept ? error : "本来 reject されるべき node が受理されました: " + nodeJson);
+    }
+
+    // §1: win は neutral 文書限定 (crewmate/impostor は文書 reject)。if の then/else に埋めても
+    // ContainsWinOp の再帰探索が検出する。win_join は全陣営で受理される (§2)。
+    [Theory]
+    [InlineData("neutral", "{\"op\":\"win\"}", true)]
+    [InlineData("crewmate", "{\"op\":\"win\"}", false)]
+    [InlineData("impostor", "{\"op\":\"win\"}", false)]
+    [InlineData("crewmate", "{\"op\":\"if\",\"cond\":{\"e\":\"lit\",\"v\":1},\"then\":[{\"op\":\"win\"}]}", false)]
+    [InlineData("crewmate", "{\"op\":\"if\",\"cond\":{\"e\":\"lit\",\"v\":1},\"then\":[{\"op\":\"stop\"}],\"else\":[{\"op\":\"win\"}]}", false)]
+    [InlineData("neutral", "{\"op\":\"if\",\"cond\":{\"e\":\"lit\",\"v\":1},\"then\":[{\"op\":\"win\"}]}", true)]
+    [InlineData("neutral", "{\"op\":\"win_join\"}", true)]
+    [InlineData("crewmate", "{\"op\":\"win_join\"}", true)]
+    [InlineData("impostor", "{\"op\":\"win_join\"}", true)]
+    public void Win_IsNeutralOnly_WinJoinIsNot(string team, string nodeJson, bool shouldAccept)
+    {
+        string json = WrapTeam(team, "\"logic\":{\"version\":1,\"rules\":[{\"when\":\"on_pet\",\"do\":[" + nodeJson + "]}]}");
+        bool ok = EkrDefinition.TryParse(json, out _, out string error);
+        Assert.True(ok == shouldAccept, shouldAccept ? error : "本来 reject されるべき文書が受理されました: team=" + team + " node=" + nodeJson);
+    }
+
+    // §1/§2: target 省略時はパース時に "self" を焼き込む (cno_launch.speed の medium と同じ —
+    // 実行側で既定値を再解釈しない)。
+    [Fact]
+    public void WinTarget_DefaultsToSelfWhenOmitted()
+    {
+        string json = WrapTeam("neutral", "\"logic\":{\"version\":1,\"rules\":[{\"when\":\"on_pet\",\"do\":[{\"op\":\"win\"},{\"op\":\"win_join\"}]}]}");
+        Assert.True(EkrDefinition.TryParse(json, out EkrDefinition def, out string error), error);
+
+        Assert.Equal("self", def.ParsedLogic.Rules[0].Do[0].Target);
+        Assert.Equal("self", def.ParsedLogic.Rules[0].Do[1].Target);
+    }
+
+    // 契約 §6 のテンプレギャラリー見本2本 (あつめや / コバンザメ) が C# パーサを通ること。
+    // あつめやは win を含む唯一の neutral fixture = win の C# パース網羅を担う。
+    [Theory]
+    [InlineData("role-collector-showcase.ekrole.json", "win")]
+    [InlineData("role-parasite-showcase.ekrole.json", "win_join")]
+    public void Wave7TemplateGalleryFixtures_AreAcceptedByCSharpValidator(string fileName, string winOp)
+    {
+        string json = File.ReadAllText(FixturePath(fileName));
+        Assert.True(EkrDefinition.TryParse(json, out EkrDefinition def, out string error), error);
+
+        var wins = new List<EkrNode>();
+
+        foreach (EkrRule rule in def.ParsedLogic.Rules)
+            CollectOps(rule.Do, winOp, wins);
+
+        Assert.NotEmpty(wins);
+    }
+
+    // 共有 fixture から Wave 7 語彙 (win_join) が AST まで通ること。TS 側 (role-fixtures.test.ts の
+    // op 網羅アサーション) と同じファイルの同じ値を読む。win は crewmate 文書に置けないので
+    // full-course には無い (上の Wave7TemplateGalleryFixtures が担う)。
+    [Fact]
+    public void FullCourseFixture_ExposesWave7Vocabulary()
+    {
+        string json = File.ReadAllText(FixturePath("role-full-course.ekrole.json"));
+        Assert.True(EkrDefinition.TryParse(json, out EkrDefinition def, out string error), error);
+
+        var joins = new List<EkrNode>();
+
+        foreach (EkrRule rule in def.ParsedLogic.Rules)
+            CollectOps(rule.Do, "win_join", joins);
+
+        // on_death 配下に「明示 self」と「省略 → self 焼き込み」の2形を持つ (どちらも Target=self)
+        Assert.Equal(2, joins.Count);
+        Assert.All(joins, n => Assert.Equal("self", n.Target));
+        Assert.Single(def.ParsedLogic.Rules, r => r.When == "on_death" && r.Do.Exists(n => n.Op == "win_join"));
+    }
 }

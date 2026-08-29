@@ -47,6 +47,7 @@ const HUE_MEETING = 260; // とうひょう = 青紫
 // 既存8色 (45/210/290/20/330/150/100/260) の隙間 (150〜210) から選ぶ — 動き (210) と
 // ひっさつわざ (150) のあいだで視覚的に区別できる青緑。
 const HUE_LINK = 190; // つなぐ = 青緑
+const HUE_WIN = 0; // かちまけ = 深紅 (Wave 7 docs/ekn-wave7-contract.md)
 
 // R2 (docs/ekn-r2-contract.md §3b): on_attacked の「こうげきのしゅるい」と on_death の「死にかた」。
 // 先頭の "" は「すべて」= AST でフィールドごと省略する (= 全種にマッチ)。
@@ -770,6 +771,26 @@ function jsonBlockDefs(): unknown[] {
             tooltip: "投票を待たずに、えらんだ人をすぐ追放して会議を終わらせます (自分をえらぶこともできます)。会議中でしか効かず、ひと会議に1回だけです。何回使えるようにするかは、変数を使って自分で決めよう。",
         },
 
+        // かちまけ (Wave 7 docs/ekn-wave7-contract.md §1/§2 — 勝利条件)
+        {
+            type: "ekr_do_win",
+            message0: "%1 をかちにする (ゲームがおわる)",
+            args0: [{ type: "field_dropdown", name: "TARGET", options: TARGET_SINGLE_OPTIONS }],
+            previousStatement: null,
+            nextStatement: null,
+            colour: HUE_WIN,
+            tooltip: "ゲームをすぐ終わらせて、えらんだ人を勝ちにします。何人かいっしょに勝たせたいときは、このブロックを続けて並べます (例: じぶん → つないだ人)。死んだ人も勝ちにできます。会議中でも使えます。このブロックは、だいさん陣営 (team が neutral) の役職だけ使えます。",
+        },
+        {
+            type: "ekr_do_win_join",
+            message0: "ゲームがおわったら %1 もいっしょにかつ",
+            args0: [{ type: "field_dropdown", name: "TARGET", options: TARGET_SINGLE_OPTIONS }],
+            previousStatement: null,
+            nextStatement: null,
+            colour: HUE_WIN,
+            tooltip: "えらんだ人に「いっしょ勝ち」のしるしを付けます。ゲームが終わったとき、どのチームが勝っていても、しるしの付いた人は勝者のなかまに加わります (ゲームはこのブロックでは終わりません)。しるしは取り消せず、次のゲームには持ちこしません。どの陣営の役職でも使えます。会議中でも使えます。",
+        },
+
         // つなぐ (Wave 4 docs/ekn-wave4-contract.md §3/§4 — リンクと勧誘)
         {
             type: "ekr_do_link",
@@ -1100,6 +1121,15 @@ export function buildRoleToolbox(): Blockly.utils.toolbox.ToolboxDefinition {
                     { kind: "block", type: "ekr_do_vote_block" },
                     { kind: "block", type: "ekr_do_vote_swap" },
                     { kind: "block", type: "ekr_do_exile" },
+                ],
+            },
+            {
+                kind: "category",
+                name: "かちまけ",
+                colour: String(HUE_WIN),
+                contents: [
+                    { kind: "block", type: "ekr_do_win" },
+                    { kind: "block", type: "ekr_do_win_join" },
                 ],
             },
             {
