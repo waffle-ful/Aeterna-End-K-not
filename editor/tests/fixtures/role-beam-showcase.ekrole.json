@@ -1,0 +1,35 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "ビームふう",
+  "author": "EKN Sample",
+  "description": "大きな一文字を高速でとばすビームふうのこうげき",
+  "color": "#ff5e5e",
+  "team": "crewmate",
+  "canKill": false,
+  "killCooldown": 25,
+  "canVent": false,
+  "visionMultiplier": 1,
+  "winCondition": "team",
+  "logic": {
+    "version": 1,
+    "variables": [],
+    "rules": [
+      {
+        "when": "on_pet",
+        "do": [
+          { "op": "cno_spawn", "slot": 1, "text": "▬", "size": 12, "at": "self" },
+          { "op": "cno_launch", "slot": 1, "dir": "move", "speed": "fast" }
+        ]
+      },
+      {
+        "when": "on_cno_touch",
+        "slot": 1,
+        "do": [
+          { "op": "kill", "target": "ctx" },
+          { "op": "cno_despawn", "slot": 1 }
+        ]
+      }
+    ]
+  }
+}

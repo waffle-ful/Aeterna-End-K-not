@@ -125,6 +125,9 @@ export const WHEN_LABELS: Record<LogicWhen, string> = {
     on_room_enter: "へやに 入ったとき",
     on_room_exit: "へやから 出たとき",
     on_linked_death: "つないだ人が 死んだとき",
+    // Wave 6 (docs/ekn-wave6-contract.md §2/§3 2026-08-29) — 残イベント2種。
+    on_sabotage: "だれかがサボタージュをおこしたとき",
+    on_revive: "いきかえったとき",
 };
 
 const WHEN_TOOLTIPS: Record<LogicWhen, string> = {
@@ -161,6 +164,9 @@ const WHEN_TOOLTIPS: Record<LogicWhen, string> = {
     on_room_enter: "名前のある部屋に入ったときに実行します。ろうか・外は部屋ではありません。ベントやワープで入っても実行されます。",
     on_room_exit: "名前のある部屋から出たときに実行します。ろうか・外は部屋ではありません。ベントやワープで出ても実行されます。",
     on_linked_death: "「このひとと つなぐ」でつないだ人が死んだときに1回実行します (このときの「あいて」= 死んだ人)。切断でいなくなったときは実行されません。",
+    // Wave 6 (docs/ekn-wave6-contract.md §2/§3 2026-08-29) — 残イベント2種。
+    on_sabotage: "だれかがサボタージュ (電気・酸素・爆弾・通信など) を成功させたときに実行します (このときの「あいて」= サボタージュをおこした人)。だれの役職でも、生きている全員に実行されます。おなじサボタージュを連打しても、しばらくは続けて実行されません。",
+    on_revive: "自分が生き返ったときに実行します (「あいて」はいません)。変数やここまでの進み具合はそのまま続きます。",
 };
 
 // ---------------------------------------------------------------------------
@@ -439,6 +445,27 @@ function jsonBlockDefs(): unknown[] {
             // spec §3: dx/dy は「出した時の場所」からの絶対オフセット (毎回の積み上げではない —
             // 暴走ドリフト防止)。同じ数値で何度動かしても毎回同じ場所に着地する。
             tooltip: "出したときの場所を基準にした位置 (x, y) へ動かします。同じ数値で何度も動かすと毎回同じ場所に戻ります (動かした分がどんどん積み上がることはありません)。",
+        },
+        // Wave 6 (docs/ekn-wave6-contract.md §1 2026-08-29 追記) — とばすもの (発射体プリミティブ)。
+        {
+            type: "ekr_do_cno_launch",
+            message0: "オブジェクト %1 を %2 の方向へ %3 でとばす",
+            args0: [
+                { type: "field_dropdown", name: "SLOT", options: [["1", "1"], ["2", "2"], ["3", "3"]] },
+                {
+                    type: "field_dropdown", name: "DIR", options: [
+                        ["すすんでいる方向", "move"], ["相手の方向", "ctx"],
+                        ["マーカー1の方向", "marker1"], ["マーカー2の方向", "marker2"],
+                        ["マーカー3の方向", "marker3"], ["マーカー4の方向", "marker4"],
+                    ],
+                },
+                { type: "field_dropdown", name: "SPEED", options: [["ゆっくり", "slow"], ["ふつう", "medium"], ["はやく", "fast"]] },
+            ],
+            inputsInline: true,
+            previousStatement: null,
+            nextStatement: null,
+            colour: HUE_MOTION,
+            tooltip: "出したオブジェクトを、決めた方向へ飛ばします。飛んでいる間に壁にぶつかったり、遠くまで飛んだり、しばらく時間がたったりすると自動的に消えます (スロットがあくのでまた出せます)。「あいて」や「マーカー」の方向は飛ばした瞬間に1回だけ決まり、あとから追いかけません。「すすんでいる方向」は止まっていると飛びません。当たったときの処理は「オブジェクトにだれかが触れたとき」で決めよう (当たっても弾は消えないので、消したいときは「オブジェクトを消す」も置こう)。オブジェクトを出していないスロットを指定しても何も起きません。",
         },
 
         // 見た目
@@ -1010,6 +1037,7 @@ export function buildRoleToolbox(): Blockly.utils.toolbox.ToolboxDefinition {
                     { kind: "block", type: "ekr_do_teleport" },
                     { kind: "block", type: "ekr_do_speed" },
                     { kind: "block", type: "ekr_do_cno_move" },
+                    { kind: "block", type: "ekr_do_cno_launch" },
                 ],
             },
             {

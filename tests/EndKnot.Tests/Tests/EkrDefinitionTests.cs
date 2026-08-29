@@ -851,6 +851,115 @@ public class EkrDefinitionTests
             out _, out _));
     }
 
+    // ── Wave 6 (docs/ekn-wave6-contract.md §1〜§4): とばすもの + 残イベント2種 ──────────────────
+
+    // 契約 §9-3 のテンプレギャラリー見本 (ゆきだま / こおりのたま / ビームふう) を含む TS 側 fixture が
+    // 全数 C# パーサを通ること。見本は「作者がそのまま真似する組み方」なので、片側だけ通る形が混じると
+    // 「エディタでは作れるのにゲームで開けない」を出荷することになる。
+    [Theory]
+    [InlineData("role-yukidama-showcase.ekrole.json")]
+    [InlineData("role-koorinotama-showcase.ekrole.json")]
+    [InlineData("role-beam-showcase.ekrole.json")]
+    public void TemplateGalleryFixtures_AreAcceptedByCSharpValidator(string fileName)
+    {
+        string json = File.ReadAllText(FixturePath(fileName));
+        Assert.True(EkrDefinition.TryParse(json, out EkrDefinition def, out string error), error);
+
+        var launches = new List<EkrNode>();
+
+        foreach (EkrRule rule in def.ParsedLogic.Rules)
+            CollectOps(rule.Do, "cno_launch", launches);
+
+        Assert.NotEmpty(launches);
+        Assert.Contains(def.ParsedLogic.Rules, r => r.When == "on_cno_touch"); // 命中は既存イベントへ合流
+    }
+
+    // 共有 fixture から Wave 6 語彙が AST まで通ること。TS 側 (role-fixtures.test.ts の 24 イベント
+    // 網羅アサーション) と同じファイルの同じ値を読むので、片側だけ実装が抜けるとどちらかが落ちる。
+    [Fact]
+    public void FullCourseFixture_ExposesWave6Vocabulary()
+    {
+        string json = File.ReadAllText(FixturePath("role-full-course.ekrole.json"));
+        Assert.True(EkrDefinition.TryParse(json, out EkrDefinition def, out string error), error);
+
+        // 新イベント2種が rule として通っている (フィルタ無しで受理される)
+        Assert.Single(def.ParsedLogic.Rules, r => r.When == "on_sabotage");
+        Assert.Single(def.ParsedLogic.Rules, r => r.When == "on_revive");
+
+        var launches = new List<EkrNode>();
+
+        foreach (EkrRule rule in def.ParsedLogic.Rules)
+            CollectOps(rule.Do, "cno_launch", launches);
+
+        EkrNode launch = Assert.Single(launches);
+        Assert.Equal(2, launch.Slot);
+        Assert.Equal("move", launch.LaunchDir);
+        Assert.Equal("medium", launch.LaunchSpeed); // 省略 = 既定を焼き込む (正準形と対応)
+
+        // 契約 §1.1: cno_launch は on_death 起点 fiber の白名単に載る (「死に際に弾をはなつ」) —
+        // fixture はその形 (on_death 配下の cno_spawn → cno_launch) で持っている。
+        EkrRule deathRule = Assert.Single(def.ParsedLogic.Rules, r => r.When == "on_death" && r.Do.Exists(n => n.Op == "cno_launch"));
+        Assert.Contains(deathRule.Do, n => n.Op == "cno_spawn" && n.Slot == 2);
+    }
+
+    // §1/§4: cno_launch の必須フィールド (slot / dir) と任意フィールド (speed) の受理表。
+    // TS 側 (roledef.test.ts) と同じ表を持つので、片側だけ実装が抜けるとどちらかが落ちる。
+    [Theory]
+    [InlineData("{\"op\":\"cno_launch\",\"slot\":1,\"dir\":\"move\"}", true)]
+    [InlineData("{\"op\":\"cno_launch\",\"slot\":3,\"dir\":\"ctx\",\"speed\":\"fast\"}", true)]
+    [InlineData("{\"op\":\"cno_launch\",\"slot\":2,\"dir\":\"marker1\",\"speed\":\"slow\"}", true)]
+    [InlineData("{\"op\":\"cno_launch\",\"slot\":1,\"dir\":\"marker4\",\"speed\":\"medium\"}", true)]
+    // slot / dir とも必須
+    [InlineData("{\"op\":\"cno_launch\",\"dir\":\"move\"}", false)]
+    [InlineData("{\"op\":\"cno_launch\",\"slot\":1}", false)]
+    // slot は 1..3 (CNO スロット語彙)
+    [InlineData("{\"op\":\"cno_launch\",\"slot\":0,\"dir\":\"move\"}", false)]
+    [InlineData("{\"op\":\"cno_launch\",\"slot\":4,\"dir\":\"move\"}", false)]
+    // 未知の dir / speed は文書 reject (marker5 は語彙外・"self" は向きではない)
+    [InlineData("{\"op\":\"cno_launch\",\"slot\":1,\"dir\":\"self\"}", false)]
+    [InlineData("{\"op\":\"cno_launch\",\"slot\":1,\"dir\":\"marker5\"}", false)]
+    [InlineData("{\"op\":\"cno_launch\",\"slot\":1,\"dir\":\"move\",\"speed\":\"veryfast\"}", false)]
+    [InlineData("{\"op\":\"cno_launch\",\"slot\":1,\"dir\":\"move\",\"speed\":4}", false)]
+    public void CnoLaunch_MatchesTheContract(string nodeJson, bool shouldAccept)
+    {
+        string json = Wrap("\"logic\":{\"version\":1,\"rules\":[{\"when\":\"on_pet\",\"do\":[" + nodeJson + "]}]}");
+        bool ok = EkrDefinition.TryParse(json, out _, out string error);
+        Assert.True(ok == shouldAccept, shouldAccept ? error : "本来 reject されるべき node が受理されました: " + nodeJson);
+    }
+
+    // §1: speed 省略時はパース時に "medium" を焼き込む (実行側で既定値を再解釈しない — 正準形が
+    // 既定値を書き出さない側と対応する)。
+    [Fact]
+    public void CnoLaunchSpeed_DefaultsToMediumWhenOmitted()
+    {
+        string json = Wrap("\"logic\":{\"version\":1,\"rules\":[{\"when\":\"on_pet\",\"do\":[{\"op\":\"cno_launch\",\"slot\":1,\"dir\":\"move\"}]}]}");
+        Assert.True(EkrDefinition.TryParse(json, out EkrDefinition def, out string error), error);
+
+        EkrNode launch = def.ParsedLogic.Rules[0].Do[0];
+        Assert.Equal("move", launch.LaunchDir);
+        Assert.Equal("medium", launch.LaunchSpeed);
+        Assert.Equal(1, launch.Slot);
+    }
+
+    // §2/§3: 新イベント2種は rule フィルタを持たない (on_cno_touch の slot のような必須フィールドは無い)。
+    // 他イベント専用フィルタの付着は既存の厳格側に自然合流する。
+    [Theory]
+    [InlineData("{\"when\":\"on_sabotage\",\"do\":[{\"op\":\"notify\",\"text\":\"a\",\"seconds\":3}]}", true)]
+    [InlineData("{\"when\":\"on_revive\",\"do\":[{\"op\":\"notify\",\"text\":\"a\",\"seconds\":3}]}", true)]
+    // slot / cause / kind / radius は付けられない (専用イベント以外は reject)
+    [InlineData("{\"when\":\"on_sabotage\",\"slot\":1,\"do\":[{\"op\":\"stop\"}]}", false)]
+    [InlineData("{\"when\":\"on_revive\",\"cause\":\"kill\",\"do\":[{\"op\":\"stop\"}]}", false)]
+    [InlineData("{\"when\":\"on_sabotage\",\"kind\":\"kill\",\"do\":[{\"op\":\"stop\"}]}", false)]
+    // 綴り違いは未知イベントとして文書 reject
+    [InlineData("{\"when\":\"on_sabotages\",\"do\":[{\"op\":\"stop\"}]}", false)]
+    [InlineData("{\"when\":\"on_revived\",\"do\":[{\"op\":\"stop\"}]}", false)]
+    public void Wave6Events_MatchTheContract(string ruleJson, bool shouldAccept)
+    {
+        string json = Wrap("\"logic\":{\"version\":1,\"rules\":[" + ruleJson + "]}");
+        bool ok = EkrDefinition.TryParse(json, out _, out string error);
+        Assert.True(ok == shouldAccept, shouldAccept ? error : "本来 reject されるべき rule が受理されました: " + ruleJson);
+    }
+
     // passives 無しでも R0 動作 (完全後方互換) — ParsedPassives は既定インスタンスで非 null。
     [Fact]
     public void NoPassives_UsesDefaults()

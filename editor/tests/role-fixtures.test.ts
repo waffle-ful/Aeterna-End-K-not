@@ -10,6 +10,9 @@ import { describe, expect, it } from "vitest";
 import fullCourseRaw from "./fixtures/role-full-course.ekrole.json?raw";
 import cnoShowcaseRaw from "./fixtures/role-cno-showcase.ekrole.json?raw";
 import dummyShowcaseRaw from "./fixtures/role-dummy-showcase.ekrole.json?raw";
+import yukidamaShowcaseRaw from "./fixtures/role-yukidama-showcase.ekrole.json?raw";
+import koorinotamaShowcaseRaw from "./fixtures/role-koorinotama-showcase.ekrole.json?raw";
+import beamShowcaseRaw from "./fixtures/role-beam-showcase.ekrole.json?raw";
 import { ROLECODE_PREFIX, decodeRoleCode, encodeRoleCode } from "../src/rolecode";
 import { LOGIC_WHEN_VALUES, validateEkrDefinition, type LogicNode, type LogicWhen } from "../src/roledef";
 import { lintRoleLogic } from "../src/logic/lint-role";
@@ -58,7 +61,7 @@ describe("golden fixture: role-full-course.ekrole.json (10イベント・主要o
         ]);
     });
 
-    it("22 種類のイベントを1回ずつカバーしている (Wave 4 で on_near/on_far/on_room_enter/on_room_exit/on_linked_death を追加)", () => {
+    it("24 種類のイベントを1回ずつカバーしている (Wave 4 で on_near/on_far/on_room_enter/on_room_exit/on_linked_death・Wave 6 で on_sabotage/on_revive を追加)", () => {
         const parsed = JSON.parse(fullCourseRaw);
         const result = validateEkrDefinition(parsed);
         if (!result.ok) throw new Error(result.error);
@@ -89,6 +92,8 @@ describe("golden fixture: role-full-course.ekrole.json (10イベント・主要o
             "link", "unlink", "recruit",
             // Wave 5 (docs/ekn-wave5-contract.md §1): 持続効果。
             "effect_give",
+            // Wave 6 (docs/ekn-wave6-contract.md §1): とばす。
+            "cno_launch",
         ];
         for (const op of expectedOps) {
             expect(ops.has(op), `op "${op}" が fixture 内で使われていない`).toBe(true);
@@ -204,6 +209,32 @@ describe("golden fixture: role-full-course.ekrole.json (10イベント・主要o
 
         // on_linked_death は cause を任意で受ける (on_death と同じ8バケット)
         expect(rules.find((r) => r.when === "on_linked_death")?.cause).toBe("kill");
+    });
+
+    // Wave 6 (docs/ekn-wave6-contract.md §1〜§3): とばす + 残イベント2種。C# 側 (EkrDefinitionTests) が
+    // 同じファイルの同じ値を読む想定なので、片側だけ実装が抜けるとどちらかが落ちる。
+    it("cno_launch (slot/dir・speed 省略=medium) と on_sabotage/on_revive の rule 形が保持される", () => {
+        const parsed = JSON.parse(fullCourseRaw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        const rules = result.def.logic?.rules ?? [];
+
+        let launch: Extract<LogicNode, { op: "cno_launch" }> | undefined;
+        for (const rule of rules) {
+            for (const n of rule.do) {
+                if (n.op === "cno_launch") launch = n;
+            }
+        }
+        if (!launch) throw new Error("cno_launch が fixture 内にある前提");
+        expect(launch.slot).toBe(2);
+        expect(launch.dir).toBe("move");
+        expect("speed" in launch).toBe(false);
+
+        const onSabotage = rules.find((r) => r.when === "on_sabotage");
+        expect(onSabotage?.do.length).toBeGreaterThan(0);
+
+        const onRevive = rules.find((r) => r.when === "on_revive");
+        expect(onRevive?.do.length).toBeGreaterThan(0);
     });
 
     it("リンター (spec §6・Wave 3 で L24/L25 含む) は警告0件 — golden fixture は模範的な組み方で書く", () => {
@@ -367,6 +398,58 @@ describe("golden fixture: role-dummy-showcase.ekrole.json (v1.1 dummy_spawn/corp
 
     it("rolecode (EKR1.) のエンコード→デコード ラウンドトリップで AST が deep-equal になる", () => {
         const parsed = JSON.parse(dummyShowcaseRaw);
+        const validated = validateEkrDefinition(parsed);
+        if (!validated.ok) throw new Error(validated.error);
+
+        const code = encodeRoleCode(JSON.stringify(validated.def));
+        expect(code.startsWith(ROLECODE_PREFIX)).toBe(true);
+
+        const roundTripped = validateEkrDefinition(JSON.parse(decodeRoleCode(code)));
+        if (!roundTripped.ok) throw new Error(roundTripped.error);
+
+        expect(roundTripped.def).toEqual(validated.def);
+        expect(roundTripped.def.logic).toEqual(validated.def.logic);
+        expect(encodeRoleCode(JSON.stringify(roundTripped.def))).toBe(code);
+    });
+});
+
+// Wave 6 (docs/ekn-wave6-contract.md §9-3 2026-08-29): テンプレギャラリー見本3本。
+// 「spawn❄ → launch → touch → kill」型 (ゆきだま/こおりのたま) と「大サイズ+fast」型 (ビームふう) の
+// 最小構成 — role-cno-showcase/role-dummy-showcase と同じ「fixture 兼リグレッション資材」の扱い。
+describe.each([
+    { name: "role-yukidama-showcase.ekrole.json", raw: yukidamaShowcaseRaw },
+    { name: "role-koorinotama-showcase.ekrole.json", raw: koorinotamaShowcaseRaw },
+    { name: "role-beam-showcase.ekrole.json", raw: beamShowcaseRaw },
+])("golden fixture: $name (Wave 6 テンプレギャラリー見本・とばすもの)", ({ raw }) => {
+    it("validate に合格する", () => {
+        const parsed = JSON.parse(raw);
+        const result = validateEkrDefinition(parsed);
+        expect(result.ok, result.ok ? "" : (result as { error: string }).error).toBe(true);
+    });
+
+    it("cno_spawn → cno_launch → (on_cno_touch) の並びを持つ", () => {
+        const parsed = JSON.parse(raw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        if (!result.def.logic) throw new Error("fixture は logic を持つ前提");
+
+        const ops = new Set<string>();
+        for (const rule of result.def.logic.rules) collectOps(rule.do, ops);
+        expect(ops.has("cno_spawn")).toBe(true);
+        expect(ops.has("cno_launch")).toBe(true);
+        expect(result.def.logic.rules.some((r) => r.when === "on_cno_touch")).toBe(true);
+    });
+
+    it("リンター (spec §6・L29 含む) は警告0件", () => {
+        const parsed = JSON.parse(raw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        if (!result.def.logic) throw new Error("fixture は logic を持つ前提");
+        expect(lintRoleLogic(result.def.logic)).toEqual([]);
+    });
+
+    it("rolecode (EKR1.) のエンコード→デコード ラウンドトリップで AST が deep-equal になる", () => {
+        const parsed = JSON.parse(raw);
         const validated = validateEkrDefinition(parsed);
         if (!validated.ok) throw new Error(validated.error);
 

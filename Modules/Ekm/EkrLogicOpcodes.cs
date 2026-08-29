@@ -111,6 +111,8 @@ internal sealed class EkrActionSink : IEkrActionSink
             case "recruit": Recruit(node, ctx); break;
             // Wave 5 (docs/ekn-wave5-contract.md §1)
             case "effect_give": EffectGive(node, ctx); break;
+            // Wave 6 (docs/ekn-wave6-contract.md §1)
+            case "cno_launch": CnoLaunch(node, ctx); break;
         }
     }
 
@@ -632,6 +634,80 @@ internal sealed class EkrActionSink : IEkrActionSink
         if (state == null) return;
 
         EkrManager.ReleaseCnoSlot(state, node.Slot);
+    }
+
+    // ── Wave 6 (docs/ekn-wave6-contract.md §1): とばす (発射体プリミティブ) ──────────────────────
+    // 「とばせるのは cno_spawn で出したオブジェクトだけ」— 空 slot / ダミー (EkrDummyCno) / field の実体は
+    // 無音 no-op (予算不消費)。ホルダー生存ガードは**付けない** (契約 §1.1: on_death 起点 fiber から
+    // 「死に際に弾をはなつ」ができる — 死者への no-op が要る op は個別に IsAlive を見る側の作法)。
+    private static void CnoLaunch(EkrNode node, EkrActionContext ctx)
+    {
+        EkrHolderState state = EkrManager.GetHolderState(ctx.HolderId);
+        if (state == null) return;
+
+        int idx = node.Slot - 1;
+
+        // 対象は自分の CNO slot に居る EkrCno のみ。`is not EkrCno` が null (未占有) とダミーを同時に弾く。
+        // 既に飛んでいる弾の二度撃ちも no-op (飛行中の向き変更は「追尾しない」裁定に反する)。
+        if (state.CnoSlots[idx] is not EkrCno cno || cno.Launched) return;
+
+        float now = Time.realtimeSinceStartup;
+
+        // 契約 §1.2: per-holder ≤1/2秒。超過は静かにドロップ (予算不消費)。
+        if (state.LastCnoLaunchTime >= 0f && now - state.LastCnoLaunchTime < 2f) return;
+
+        // 契約 §1.1: 会議明け10秒ドロップは生成系5兄弟と同じ規約で適用する
+        // (追放スイープ+レートゲートのドレインと同一窓に位置 update を重ねない)。
+        if (EkrManager.LastMeetingEndTime >= 0f && now - EkrManager.LastMeetingEndTime < 10f) return;
+
+        Vector2? dir = ResolveLaunchDirection(node.LaunchDir, cno, ctx, state);
+        if (dir == null) return;
+
+        // 契約 §1.2: 同時飛行 EKR 全体 ≤2・per-holder ≤1 (母数は飛行台帳 — AllObjects は数えない)。
+        if (!EkrManager.CanStartFlight(ctx.HolderId)) return;
+
+        // 全体 ≤2/秒。他の drop 理由を全て通過した「本当に飛ばす」直前でだけ消費する (CnoSpawn の
+        // cross-holder 予算と同じ位置取り)。
+        if (!EkrManager.TryConsumeGlobalLaunchBudget()) return;
+
+        PlayerControl holderPc = ctx.HolderId.GetPlayer();
+
+        EkrManager.StartFlight(ctx.HolderId, cno, node.Slot, dir.Value, node.LaunchSpeed, holderAlive: holderPc && holderPc.IsAlive());
+
+        state.LastCnoLaunchTime = now;
+    }
+
+    // 契約 §1.1: 向きは launch 時に1回だけ確定し、以後は追尾しない。解決できないものは無音 no-op。
+    private static Vector2? ResolveLaunchDirection(string dir, EkrCno cno, EkrActionContext ctx, EkrHolderState state)
+    {
+        if (dir == "move")
+        {
+            // ホルダーの最後の移動方向 (フル 2D)。Snowdown.cs:392 の実績形をそのまま採る。
+            // FlipX は見ない (ホスト非同期のため — WaveCannon の教訓) ので on_pet 発動と両立する。
+            // 移動履歴ゼロ (ゲーム開始から不動) は方向が定まらないので no-op。
+            if (!state.MoveHistPrimed) return null;
+
+            Vector2 delta = state.MoveHistLast - state.MoveHistLastLast;
+            return delta.sqrMagnitude < 0.0001f ? null : delta.normalized;
+        }
+
+        Vector2? destination = dir switch
+        {
+            // 契約 §1.1: ctx 無し文脈・死者は no-op。ResolveCtxPosition は死者も返すので、生存を見る
+            // 統一セレクタ側 (ResolveSingle) を使う。
+            "ctx" => ResolveSingle("ctx", ctx) is { } ctxPc ? ctxPc.Pos() : null,
+            "marker1" => ResolveMarkerPosition(ctx, 1),
+            "marker2" => ResolveMarkerPosition(ctx, 2),
+            "marker3" => ResolveMarkerPosition(ctx, 3),
+            "marker4" => ResolveMarkerPosition(ctx, 4),
+            _ => null
+        };
+
+        if (destination == null) return null;
+
+        // 弾の現在位置から見た向き。0.5u 未満は方向が定まらないので no-op (契約 §1.1)。
+        Vector2 toTarget = destination.Value - cno.Position;
+        return toTarget.magnitude < 0.5f ? null : toTarget.normalized;
     }
 
     private static void CnoShow(EkrNode node, EkrActionContext ctx)
