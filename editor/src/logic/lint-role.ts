@@ -46,6 +46,8 @@ import type { LogicNode, LogicRule, RoleLogic } from "../roledef";
 // Wave 6 (docs/ekn-wave6-contract.md §5 2026-08-29): L29 を追加 (計29ルール)。
 // L29 = L5/L27/L28 の兄弟 — on_second 配下の cno_launch (毎秒とばすと予算切れですぐ消える)。
 // CTXLESS_WHENS (L14) に on_revive を追加 (holder限定・ctx無し — 契約 §3)。
+// Wave 7 (docs/ekn-wave7-contract.md §5 2026-08-30): 新ルールなし (計29のまま)。win/win_join の
+// `linked`/`ctx` 参照は selectorTokens が target フィールドを総称で読むため L26/L14 に自動で乗る。
 
 export type LintRuleId =
     | "L1" | "L2" | "L3" | "L4" | "L5" | "L6" | "L7" | "L8" | "L9" | "L10" | "L11" | "L12" | "L13"

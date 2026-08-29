@@ -221,6 +221,12 @@ function blockToNode(b: SerializedBlock): Record<string, unknown> {
             return { op: "vote_swap" };
         case "ekr_do_exile":
             return { op: "exile", target: b.fields?.TARGET };
+        // Wave 7 (docs/ekn-wave7-contract.md §1,§2) — 勝利条件。target はドロップダウン値をそのまま
+        // 渡す (明示 "self" も validate 層は受理する — notify と同じ「畳まない」側)。
+        case "ekr_do_win":
+            return { op: "win", target: b.fields?.TARGET };
+        case "ekr_do_win_join":
+            return { op: "win_join", target: b.fields?.TARGET };
         // Wave 4 (docs/ekn-wave4-contract.md §3/§4) — つなぐ (link/unlink/recruit)
         case "ekr_do_link":
             return { op: "link", target: b.fields?.TARGET };

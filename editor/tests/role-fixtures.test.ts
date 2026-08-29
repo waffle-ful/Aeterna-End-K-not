@@ -13,6 +13,8 @@ import dummyShowcaseRaw from "./fixtures/role-dummy-showcase.ekrole.json?raw";
 import yukidamaShowcaseRaw from "./fixtures/role-yukidama-showcase.ekrole.json?raw";
 import koorinotamaShowcaseRaw from "./fixtures/role-koorinotama-showcase.ekrole.json?raw";
 import beamShowcaseRaw from "./fixtures/role-beam-showcase.ekrole.json?raw";
+import collectorShowcaseRaw from "./fixtures/role-collector-showcase.ekrole.json?raw";
+import parasiteShowcaseRaw from "./fixtures/role-parasite-showcase.ekrole.json?raw";
 import { ROLECODE_PREFIX, decodeRoleCode, encodeRoleCode } from "../src/rolecode";
 import { LOGIC_WHEN_VALUES, validateEkrDefinition, type LogicNode, type LogicWhen } from "../src/roledef";
 import { lintRoleLogic } from "../src/logic/lint-role";
@@ -94,6 +96,10 @@ describe("golden fixture: role-full-course.ekrole.json (10イベント・主要o
             "effect_give",
             // Wave 6 (docs/ekn-wave6-contract.md §1): とばす。
             "cno_launch",
+            // Wave 7 (docs/ekn-wave7-contract.md §2): 便乗勝ち。win (即勝ち) はこの fixture には
+            // 入れられない (crewmate 文書は検証 reject — win の C# パース網羅は
+            // role-collector-showcase.ekrole.json が担う)。
+            "win_join",
         ];
         for (const op of expectedOps) {
             expect(ops.has(op), `op "${op}" が fixture 内で使われていない`).toBe(true);
@@ -461,6 +467,54 @@ describe.each([
 
         expect(roundTripped.def).toEqual(validated.def);
         expect(roundTripped.def.logic).toEqual(validated.def.logic);
+        expect(encodeRoleCode(JSON.stringify(roundTripped.def))).toBe(code);
+    });
+});
+
+// Wave 7 (docs/ekn-wave7-contract.md §6 2026-08-30): テンプレギャラリー見本2本。
+// P2 型 (あつめや: on_task_complete → var_add → on_var ge 5 → win) と P7 型 (コバンザメ:
+// on_game_start → win_join) の最小構成。あつめやは win の C# パース網羅も担う唯一の neutral fixture。
+describe.each([
+    { name: "role-collector-showcase.ekrole.json", raw: collectorShowcaseRaw, winOp: "win" },
+    { name: "role-parasite-showcase.ekrole.json", raw: parasiteShowcaseRaw, winOp: "win_join" },
+])("golden fixture: $name (Wave 7 テンプレギャラリー見本・かちまけ)", ({ raw, winOp }) => {
+    it("validate に合格する", () => {
+        const parsed = JSON.parse(raw);
+        const result = validateEkrDefinition(parsed);
+        expect(result.ok, result.ok ? "" : (result as { error: string }).error).toBe(true);
+    });
+
+    it(`勝利 op (${winOp}) を使っている`, () => {
+        const parsed = JSON.parse(raw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        if (!result.def.logic) throw new Error("fixture は logic を持つ前提");
+
+        const ops = new Set<string>();
+        for (const rule of result.def.logic.rules) collectOps(rule.do, ops);
+        expect(ops.has(winOp)).toBe(true);
+    });
+
+    it("リンター (spec §6) は警告0件", () => {
+        const parsed = JSON.parse(raw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        if (!result.def.logic) throw new Error("fixture は logic を持つ前提");
+        expect(lintRoleLogic(result.def.logic)).toEqual([]);
+    });
+
+    it("rolecode (EKR1.) のエンコード→デコード ラウンドトリップで AST が deep-equal になる", () => {
+        const parsed = JSON.parse(raw);
+        const validated = validateEkrDefinition(parsed);
+        if (!validated.ok) throw new Error(validated.error);
+
+        const code = encodeRoleCode(JSON.stringify(validated.def));
+        expect(code.startsWith(ROLECODE_PREFIX)).toBe(true);
+
+        const roundTripped = validateEkrDefinition(JSON.parse(decodeRoleCode(code)));
+        if (!roundTripped.ok) throw new Error(roundTripped.error);
+
+        expect(roundTripped.def).toEqual(validated.def);
         expect(encodeRoleCode(JSON.stringify(roundTripped.def))).toBe(code);
     });
 });

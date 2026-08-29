@@ -224,6 +224,9 @@ export const ARROW_SHOW_TARGET_VALUES = SELF_EXCLUDED_TARGET_VALUES;
 export const VOTE_BLOCK_TARGET_VALUES = SELF_EXCLUDED_TARGET_VALUES;
 // exile.target は self を含む唯一の Wave 2 セレクタ (契約 §3.4「自分を追放させる」演出が正当ユース)。
 export const EXILE_TARGET_VALUES = TARGET_SINGLE_VALUES;
+// Wave 7 (docs/ekn-wave7-contract.md §1,§2): win/win_join の target も「self を含む単数セレクタ全種」
+// (任意・既定 self)。
+export const WIN_TARGET_VALUES = TARGET_SINGLE_VALUES;
 
 export const INSPECT_DEPTH_VALUES = ["team", "role"] as const;
 export const INSPECT_FAIL_CHANCE_MIN = 0;
@@ -467,7 +470,12 @@ export type LogicNode =
     // Wave 6 (docs/ekn-wave6-contract.md §1) — とばす。slot は cno_spawn と同じ枠を共有する。dir は
     // launch 時に1回だけ解決 (追尾しない)。speed は任意・省略 = medium (既定値は検証層で畳み込むため
     // 明示 "medium" も AST では省略される — validateNode 参照)。
-    | { op: "cno_launch"; slot: 1 | 2 | 3; dir: CnoLaunchDir; speed?: CnoLaunchSpeed };
+    | { op: "cno_launch"; slot: 1 | 2 | 3; dir: CnoLaunchDir; speed?: CnoLaunchSpeed }
+    // Wave 7 (docs/ekn-wave7-contract.md §1,§2) — 勝利条件。target は任意・既定 self (省略時は AST に
+    // キーを足さない — notify と同じ作法)。win は neutral 文書限定 (doc レベル検証 —
+    // validateEkrDefinition。ノード層では team が見えない — C# の分担と同じ)。
+    | { op: "win"; target?: (typeof WIN_TARGET_VALUES)[number] }
+    | { op: "win_join"; target?: (typeof WIN_TARGET_VALUES)[number] };
 
 export interface LogicRule {
     when: LogicWhen;
@@ -760,6 +768,12 @@ export function validateEkrDefinition(value: unknown): EkrValidationResult {
         const logicResult = validateRoleLogic(value.logic);
         if (!logicResult.ok) return { ok: false, error: logicResult.error };
         def.logic = logicResult.logic;
+
+        // Wave 7 (docs/ekn-wave7-contract.md §1): 「かちにする」(win) は neutral 文書限定
+        // (C# の EkrDefinition.Validate と対称の doc レベル静的検査)。
+        if (team !== "neutral" && def.logic.rules.some((r) => logicContainsOp(r.do, "win"))) {
+            return { ok: false, error: '「かちにする」はだいさん陣営 (team: "neutral") の役職だけ使えます' };
+        }
     }
 
     // passives (Wave 1・spec §1.1): logic と同じ扱い — 省略/null は「とくせい無し」、
@@ -794,6 +808,20 @@ export function validateEkrDefinition(value: unknown): EkrValidationResult {
 // ---------------------------------------------------------------------------
 // Logic 検証本体 (docs/ekr-logic-spec.md §2〜§4)
 // ---------------------------------------------------------------------------
+
+// Wave 7 (docs/ekn-wave7-contract.md §1): win の neutral 限定検査用の再帰探索 (if の then/else も潜る)。
+// lint-role.ts の forEachNode と同型だが、roledef は lint に依存しない層なので最小の再帰をここに持つ
+// (C# 側 EkrLogicDef.ContainsWinOp と対称)。
+function logicContainsOp(nodes: LogicNode[], op: LogicNode["op"]): boolean {
+    for (const n of nodes) {
+        if (n.op === op) return true;
+        if (n.op === "if") {
+            if (logicContainsOp(n.then, op)) return true;
+            if (n.else && logicContainsOp(n.else, op)) return true;
+        }
+    }
+    return false;
+}
 
 class EkrLogicError extends Error {}
 
@@ -1179,6 +1207,19 @@ function validateNode(raw: unknown, varNames: ReadonlySet<string>, path: string,
             const speed = expectEnum(raw.speed, CNO_LAUNCH_SPEED_VALUES, `${path}.speed`);
             if (speed === CNO_LAUNCH_SPEED_DEFAULT) return { node: { op: "cno_launch", slot, dir }, depth: 1, count: 1 };
             return { node: { op: "cno_launch", slot, dir, speed }, depth: 1, count: 1 };
+        }
+        // Wave 7 (docs/ekn-wave7-contract.md §1,§2) — 勝利条件。target は任意・既定 self (省略時は
+        // AST にキーを足さない — notify と同じ作法・再エンコード不動点維持)。win の neutral 限定は
+        // doc レベル (validateEkrDefinition) で検査する。
+        case "win": {
+            if (raw.target === undefined) return { node: { op: "win" }, depth: 1, count: 1 };
+            const target = expectEnum(raw.target, WIN_TARGET_VALUES, `${path}.target`);
+            return { node: { op: "win", target }, depth: 1, count: 1 };
+        }
+        case "win_join": {
+            if (raw.target === undefined) return { node: { op: "win_join" }, depth: 1, count: 1 };
+            const target = expectEnum(raw.target, WIN_TARGET_VALUES, `${path}.target`);
+            return { node: { op: "win_join", target }, depth: 1, count: 1 };
         }
         default:
             fail(`${path}.op が不明です (${JSON.stringify(op)})`);

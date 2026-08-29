@@ -1174,6 +1174,13 @@ describe("lint-role: L26 (linked 参照があるのにどの rule にも link op
         expect(ruleIds(lintRoleLogic(l))).toContain("L26");
     });
 
+    // Wave 7 (docs/ekn-wave7-contract.md §5): win/win_join の linked 参照は selectorTokens の
+    // target 総称読みで L26 に自動で乗る (新ルール無し) — その契約主張の証明。
+    it("win(target:linked) / win_join(target:linked) も linked トークン参照として検知する", () => {
+        expect(ruleIds(lintRoleLogic(logic([{ when: "on_kill", do: [{ op: "win", target: "linked" }] }])))).toContain("L26");
+        expect(ruleIds(lintRoleLogic(logic([{ when: "on_kill", do: [{ op: "win_join", target: "linked" }] }])))).toContain("L26");
+    });
+
     it("別の rule に link op があれば L26 は警告しない (rule をまたいで解決)", () => {
         const l = logic([
             { when: "on_kill", do: [{ op: "link", target: "ctx" }] },

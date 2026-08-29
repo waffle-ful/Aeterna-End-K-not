@@ -1,0 +1,26 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "コバンザメ",
+  "author": "EKN Sample",
+  "description": "なにもしなくても、ゲームがおわると勝ったチームに ちゃっかり加わる",
+  "color": "#9bb0c1",
+  "team": "crewmate",
+  "canKill": false,
+  "killCooldown": 25,
+  "canVent": false,
+  "visionMultiplier": 1,
+  "winCondition": "team",
+  "logic": {
+    "version": 1,
+    "variables": [],
+    "rules": [
+      {
+        "when": "on_game_start",
+        "do": [
+          { "op": "win_join", "target": "self" }
+        ]
+      }
+    ]
+  }
+}
