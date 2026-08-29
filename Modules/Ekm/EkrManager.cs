@@ -1085,6 +1085,10 @@ public static class EkrManager
         // 必ず1回呼ばれるので、ここで確実に破棄する。
         LastMeetingEndNum.Remove(slot);
 
+        // Wave 7 (契約 §2): win_join の便乗ラッチもラウンド境界で自スロット分を破棄 (前の試合のラッチが
+        // 次の試合の fold に混入しないように — Wave 6 pitfall #2 と同型のゲームまたぎ持ち越し対策)。
+        WinJoinLatchBySlot.Remove(slot);
+
         // v1.3: crowd-control (drag/field) は EKR 全体の static シングルトン。新ラウンド開始の主経路
         // (OnGameStartedPatch の PlayerStates 差し替え) は Role.Remove() を呼ばないため、前ラウンド稼働中の
         // まま持ち越すと HolderId が新ラウンドの別人として解決されうる (監査指摘 2026-08-11 — EndAt 経過で
@@ -1957,6 +1961,39 @@ public static class EkrManager
         if (!IsEkrRole(slot)) return;
 
         FireEvent(slot, reporter.PlayerId, "on_report", bodyOwner ? bodyOwner.PlayerId : byte.MaxValue);
+    }
+
+    // ── Wave 7 (docs/ekn-wave7-contract.md §2): 「いっしょにかたせる」(win_join) の便乗ラッチ ─────
+
+    // per-slot キー (ResetSlot がラウンド境界で自スロット分だけ捨てる — LastMeetingEndNum と同じ作法。
+    // LastSabotageFireTime 型の全体 Clear にしないのは、ラッチが「1 回余分に発火しても安全」なデバウンス
+    // ではなく巻き添え消去がそのまま機能欠落になるため)。会議境界では捨てない — ゲーム終了まで持ち越す
+    // のが本義 (契約 §2)。終了時の合流 (WinnerIds への追加) は CheckGameEndPatch の per-player fold。
+    private static readonly Dictionary<CustomRoles, HashSet<byte>> WinJoinLatchBySlot = new();
+
+    public static void LatchWinJoin(CustomRoles slot, byte playerId)
+    {
+        if (!WinJoinLatchBySlot.TryGetValue(slot, out HashSet<byte> set))
+            WinJoinLatchBySlot[slot] = set = [];
+
+        set.Add(playerId);
+    }
+
+    // CheckGameEndPatch の fold 用 — 全スロット横断で「この人はラッチ済みか」。slot は表示帰属用
+    // (AdditionalWinners = CustomRoles キャストで「かたせた側の EKR 役職名」を勝敗画面に出す)。
+    // 複数スロットからラッチされていたら最初に見つかった 1 つでよい (勝者追加は HashSet で冪等)。
+    public static bool TryGetWinJoinSlot(byte playerId, out CustomRoles slot)
+    {
+        foreach ((CustomRoles s, HashSet<byte> set) in WinJoinLatchBySlot)
+        {
+            if (!set.Contains(playerId)) continue;
+
+            slot = s;
+            return true;
+        }
+
+        slot = default;
+        return false;
     }
 
     // ── Wave 6 (docs/ekn-wave6-contract.md §2,§3): サボタージュ成立と蘇生 ─────────────────────

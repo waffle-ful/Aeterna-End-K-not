@@ -1594,7 +1594,29 @@ public enum AdditionalWinners
     Amanojaku = CustomRoles.Amanojaku,
     Twins = CustomRoles.Twins,
     Faction = CustomRoles.Faction,
-    LastNeutral = CustomRoles.LastNeutral
+    LastNeutral = CustomRoles.LastNeutral,
+
+    // Wave 7 (docs/ekn-wave7-contract.md §2): EKR win_join の便乗勝者の表示帰属。値は「かたせた側の
+    // EKR スロット」— OutroPatch が CustomRoles へキャストして束縛役職名で表示する (全 19 スロット)。
+    EkmCustomRole1 = CustomRoles.EkmCustomRole1,
+    EkmCustomRole2 = CustomRoles.EkmCustomRole2,
+    EkmCustomRole3 = CustomRoles.EkmCustomRole3,
+    EkmCustomRole4 = CustomRoles.EkmCustomRole4,
+    EkmCustomRole5 = CustomRoles.EkmCustomRole5,
+    EkmCustomRole6 = CustomRoles.EkmCustomRole6,
+    EkmCustomRole7 = CustomRoles.EkmCustomRole7,
+    EkmCustomRole8 = CustomRoles.EkmCustomRole8,
+    EkmCustomRole9 = CustomRoles.EkmCustomRole9,
+    EkmCustomRole10 = CustomRoles.EkmCustomRole10,
+    EkrShowcase = CustomRoles.EkrShowcase,
+    EkmImpRole1 = CustomRoles.EkmImpRole1,
+    EkmImpRole2 = CustomRoles.EkmImpRole2,
+    EkmImpRole3 = CustomRoles.EkmImpRole3,
+    EkmNeuRole1 = CustomRoles.EkmNeuRole1,
+    EkmNeuRole2 = CustomRoles.EkmNeuRole2,
+    EkmNeuRole3 = CustomRoles.EkmNeuRole3,
+    EkmNeuRole4 = CustomRoles.EkmNeuRole4,
+    EkmNeuRole5 = CustomRoles.EkmNeuRole5
 }
 
 public enum SuffixModes

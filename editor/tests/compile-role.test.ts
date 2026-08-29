@@ -965,3 +965,41 @@ describe("compile-role: Wave 6 ブロック (cno_launch / on_sabotage / on_reviv
         }
     });
 });
+
+describe("compile-role: Wave 7 ブロック (win / win_join — docs/ekn-wave7-contract.md)", () => {
+    it("ekr_do_win は target を転記する (ドロップダウン既定の self も明示のまま)", () => {
+        expect(compileTopBlocksToRules([
+            { type: "ekr_when_on_pet", next: { block: { type: "ekr_do_win", fields: { TARGET: "self" } } } },
+        ])).toEqual([
+            { when: "on_pet", do: [{ op: "win", target: "self" }] },
+        ]);
+    });
+
+    it("ekr_do_win_join は target を転記する", () => {
+        expect(compileTopBlocksToRules([
+            { type: "ekr_when_on_game_start", next: { block: { type: "ekr_do_win_join", fields: { TARGET: "self" } } } },
+        ])).toEqual([
+            { when: "on_game_start", do: [{ op: "win_join", target: "self" }] },
+        ]);
+    });
+
+    it("win(self) → win(linked) の複数勝者並びが validateRoleLogic まで通る", () => {
+        const compiled = compileTopBlocksToRules([
+            {
+                type: "ekr_when_on_kill",
+                next: {
+                    block: {
+                        type: "ekr_do_win",
+                        fields: { TARGET: "self" },
+                        next: { block: { type: "ekr_do_win", fields: { TARGET: "linked" } } },
+                    },
+                },
+            },
+        ]);
+        expect(compiled).toEqual([
+            { when: "on_kill", do: [{ op: "win", target: "self" }, { op: "win", target: "linked" }] },
+        ]);
+        const r = validateRoleLogic({ version: 1, rules: compiled });
+        expect(r.ok, r.ok ? "" : (r as { error: string }).error).toBe(true);
+    });
+});

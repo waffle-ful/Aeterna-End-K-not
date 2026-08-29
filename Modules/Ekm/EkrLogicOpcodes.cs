@@ -61,6 +61,10 @@ internal sealed class EkrActionSink : IEkrActionSink
         // 抜けると無音で崩れる)。recruit はどちらの白名単にも**載せない** — 未分類 = task-only の既定が
         // そのまま契約 §4 の「会議中 (追放演出含む) は no-op」になる (RpcChangeRoleBasis の会議/追放中
         // コルーチン遅延に仕事をさせない)。
+        //
+        // Wave 7 (docs/ekn-wave7-contract.md §1,§2): win/win_join は会議中も有効 (ローカル latch への
+        // 書込みのみ・送信ゼロ — Executioner 型「会議中勝利が本体」のデザインを許す。終了処理自体は
+        // CheckGameEndPatch の評価タイミング任せなので追放演出窓とも衝突しない)。
         bool meetingOrExile = GameStates.IsMeeting || ExileController.Instance;
 
         bool isMeetingOnly = node.Op is "cancel_vote" or "vote_block" or "vote_swap" or "exile";
@@ -69,7 +73,7 @@ internal sealed class EkrActionSink : IEkrActionSink
         {
             if (!meetingOrExile) return;
         }
-        else if (node.Op is not "notify" and not "cancel_attack" and not "remember" and not "inspect" and not "reveal" and not "vote_weight_set" and not "link" and not "unlink" && meetingOrExile) return;
+        else if (node.Op is not "notify" and not "cancel_attack" and not "remember" and not "inspect" and not "reveal" and not "vote_weight_set" and not "link" and not "unlink" and not "win" and not "win_join" && meetingOrExile) return;
 
         switch (node.Op)
         {
@@ -113,7 +117,51 @@ internal sealed class EkrActionSink : IEkrActionSink
             case "effect_give": EffectGive(node, ctx); break;
             // Wave 6 (docs/ekn-wave6-contract.md §1)
             case "cno_launch": CnoLaunch(node, ctx); break;
+            // Wave 7 (docs/ekn-wave7-contract.md §1,§2)
+            case "win": Win(node, ctx); break;
+            case "win_join": WinJoin(node, ctx); break;
         }
+    }
+
+    // ── Wave 7 (docs/ekn-wave7-contract.md §1,§2): 勝利条件 ──────────────────────────────────
+
+    // §1「かちにする」: CustomWinnerHolder への書込みのみ (送信ゼロ・予算なし・冪等)。ゲーム終了は
+    // CheckGameEndPatch の次評価 (CheckGameEndPatch.cs:69 の WinnerTeam 検知 → StartEndGame) に任せ、
+    // この同期スタックでは終了処理を呼ばない (Wave 6 の「同期コールスタックへ Despawn を乗せない」と
+    // 同じ作法)。
+    // ⚠ ホルダー生存ガードは意図的に付けない — 契約 §1.1 は on_death 起点 fiber (「死に際に道連れ勝ち」型)
+    // からの実行を許す。死者も勝者にできる (WinnerIds は死者を受ける — Specter 前例)。
+    private static void Win(EkrNode node, EkrActionContext ctx)
+    {
+        // 検証 (EkrDefinition.Validate) が win を neutral 文書に限定済み = 束縛先は EkmNeuRole1..5 だけの
+        // はず。ここは防御の再確認 — 崩れていたら黙って no-op が安全側 (CustomWinner に対応値が無い)。
+        if (ctx.Slot < CustomRoles.EkmNeuRole1 || ctx.Slot > CustomRoles.EkmNeuRole5) return;
+
+        PlayerControl target = ResolveSingle(node.Target, ctx);
+        if (target == null) return; // 壊れた参照は静かに no-op・予算不消費 (参照整合性3原則②)
+
+        var winner = (CustomWinner)ctx.Slot; // CustomWinner.EkmNeuRoleN = CustomRoles.EkmNeuRoleN (Main.cs:1531)
+
+        // §1.1: 「最初に成立した win」だけが Reset する — ResetAndSetWinner は WinnerIds も空にするため、
+        // win を並べたとき (win(self) + win(linked)) の 2 発目が直前に足した勝者を巻き添えにする。
+        // 他役職が先に勝者を立てていた場合はここで上書き = 既存役職間の「後勝ち」作法そのまま
+        // (Missioneer.cs:166 型の無条件 ResetAndSetWinner と同じ結果になる)。
+        if (CustomWinnerHolder.WinnerTeam != winner)
+            CustomWinnerHolder.ResetAndSetWinner(winner);
+
+        CustomWinnerHolder.WinnerIds.Add(target.PlayerId);
+    }
+
+    // §2「いっしょにかたせる」: EkrManager のローカルラッチへ記録するだけ (送信ゼロ・予算なし・冪等)。
+    // ゲーム終了時の合流は CheckGameEndPatch の per-player fold (Specter 作法) が行う。取り消し op は
+    // 作らない (契約 §2 — ラッチは一方通行)。全スロット可 (crew/imp/neu)。
+    // ⚠ ホルダー生存ガードなし (契約 §2 — on_death 起点可)。
+    private static void WinJoin(EkrNode node, EkrActionContext ctx)
+    {
+        PlayerControl target = ResolveSingle(node.Target, ctx);
+        if (target == null) return;
+
+        EkrManager.LatchWinJoin(ctx.Slot, target.PlayerId);
     }
 
     // ── Wave 1: 統一セレクタ解決 (spec §3) ───────────────────────────────────────────────────

@@ -1811,3 +1811,67 @@ describe("logic 検証 Wave 6 (cno_launch / on_sabotage / on_revive)", () => {
         }
     });
 });
+
+describe("logic 検証 Wave 7 (win / win_join — docs/ekn-wave7-contract.md)", () => {
+    function withTeamLogic(team: string, rules: unknown[]): Record<string, unknown> {
+        return { ...baseValid(), team, logic: { version: 1, rules } };
+    }
+    const WIN_TARGETS = ["self", "ctx", "linked", "saved1", "saved2", "nearest", "random"];
+
+    it("win: neutral 文書で受理・target は任意 (省略時は AST にキーが無い — notify と同じ作法)", () => {
+        const r = validateEkrDefinition(withTeamLogic("neutral", [{ when: "on_pet", do: [{ op: "win" }] }]));
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(r.def.logic?.rules[0].do[0]).toEqual({ op: "win" });
+            expect("target" in r.def.logic!.rules[0].do[0]).toBe(false);
+        }
+    });
+
+    it("win.target: self を含む単数セレクタ全種を受理・複数形/未知値は reject", () => {
+        for (const target of WIN_TARGETS) {
+            const r = validateEkrDefinition(withTeamLogic("neutral", [{ when: "on_kill", do: [{ op: "win", target }] }]));
+            expect(r.ok, target).toBe(true);
+            if (r.ok) expect(r.def.logic?.rules[0].do[0]).toEqual({ op: "win", target });
+        }
+        for (const bad of ["all", "room", "everyone"]) {
+            expect(validateEkrDefinition(withTeamLogic("neutral", [{ when: "on_kill", do: [{ op: "win", target: bad }] }])).ok, bad).toBe(false);
+        }
+    });
+
+    it("win: crewmate/impostor 文書は文書 reject (契約 §1 の neutral 限定)", () => {
+        for (const team of ["crewmate", "impostor"]) {
+            expect(validateEkrDefinition(withTeamLogic(team, [{ when: "on_pet", do: [{ op: "win" }] }])).ok, team).toBe(false);
+        }
+    });
+
+    it("win: if の then/else に埋めても neutral 限定が検出される (再帰探索)", () => {
+        const inThen = [{ op: "if", cond: { e: "lit", v: 1 }, then: [{ op: "win" }] }];
+        expect(validateEkrDefinition(withTeamLogic("crewmate", [{ when: "on_pet", do: inThen }])).ok).toBe(false);
+        const inElse = [{ op: "if", cond: { e: "lit", v: 1 }, then: [{ op: "stop" }], else: [{ op: "win" }] }];
+        expect(validateEkrDefinition(withTeamLogic("crewmate", [{ when: "on_pet", do: inElse }])).ok).toBe(false);
+        // 同じ形が neutral なら通る (ゲートが team だけを見ている証明)
+        expect(validateEkrDefinition(withTeamLogic("neutral", [{ when: "on_pet", do: inThen }])).ok).toBe(true);
+    });
+
+    it("win_join: どの陣営の文書でも受理される (契約 §2 の全スロット可)", () => {
+        for (const team of ["crewmate", "impostor", "neutral"]) {
+            const r = validateEkrDefinition(withTeamLogic(team, [{ when: "on_game_start", do: [{ op: "win_join" }] }]));
+            expect(r.ok, team).toBe(true);
+            if (r.ok) expect(r.def.logic?.rules[0].do[0]).toEqual({ op: "win_join" });
+        }
+    });
+
+    it("win_join.target: win と同じ受理集合", () => {
+        for (const target of WIN_TARGETS) {
+            const r = validateEkrDefinition(withTeamLogic("crewmate", [{ when: "on_kill", do: [{ op: "win_join", target }] }]));
+            expect(r.ok, target).toBe(true);
+        }
+        expect(validateEkrDefinition(withTeamLogic("crewmate", [{ when: "on_kill", do: [{ op: "win_join", target: "all" }] }])).ok).toBe(false);
+    });
+
+    it("win/win_join は leaf ノード (depth 1, count 1)", () => {
+        const r = validateEkrDefinition(withTeamLogic("neutral", [{ when: "on_pet", do: [{ op: "win" }, { op: "win_join" }] }]));
+        expect(r.ok).toBe(true);
+        if (r.ok) expect(r.def.logic?.rules[0].do).toHaveLength(2);
+    });
+});

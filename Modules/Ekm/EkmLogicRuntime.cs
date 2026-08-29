@@ -424,7 +424,9 @@ public sealed class EkrLogicDef
         // Wave 5 (docs/ekn-wave5-contract.md §1): 持続効果
         "effect_give",
         // Wave 6 (docs/ekn-wave6-contract.md §1): 発射体プリミティブ
-        "cno_launch"
+        "cno_launch",
+        // Wave 7 (docs/ekn-wave7-contract.md §1,§2): 勝利条件
+        "win", "win_join"
     ];
 
     private static readonly HashSet<string> ExprKinds =
@@ -640,6 +642,17 @@ public sealed class EkrLogicDef
     // cancel_attack のスコープ検証用の再帰探索 (if の then/else も潜る)。深さは既に MaxDepth で
     // 制限済みなので追加のガードは不要。
     private static bool ContainsCancelAttack(List<EkrNode> nodes) => ContainsOp(nodes, "cancel_attack");
+
+    // Wave 7 (docs/ekn-wave7-contract.md §1): 「かちにする」(win) の neutral スロット限定検査を
+    // EkrDefinition.Validate 側で行うための露出。team は文書レベルの情報でパーサからは見えない。
+    public bool ContainsWinOp()
+    {
+        foreach (EkrRule rule in Rules)
+            if (ContainsOp(rule.Do, "win"))
+                return true;
+
+        return false;
+    }
 
     // Wave 2: cancel_vote も同型のスコープ検証を要る (§1.3) ので汎用化した。
     private static bool ContainsOp(List<EkrNode> nodes, string op)
@@ -1022,6 +1035,21 @@ public sealed class EkrLogicDef
 
                 n.LaunchSpeed = "medium";
                 if (nodeEl.TryGetProperty("speed", out _) && !TryGetEnum(nodeEl, "speed", EkrLaunchSpeeds, out n.LaunchSpeed, out err)) return false;
+
+                break;
+
+            // ── Wave 7 (docs/ekn-wave7-contract.md §1,§2): 勝利条件 ─────────────────────────────
+
+            // §1/§2: target は任意 (既定 "self"・self 可)。受理値は SingleSelectors 全種 (複数形は
+            // 単発強効果 op の型規律どおり reject)。win の neutral スロット限定 (§1) はここでは見ない —
+            // team は文書レベルの情報なので EkrDefinition.Validate 側が ContainsWinOp で reject する。
+            case "win":
+            case "win_join":
+                if (nodeEl.TryGetProperty("target", out _))
+                {
+                    if (!TryGetEnum(nodeEl, "target", SingleSelectors, out n.Target, out err)) return false;
+                }
+                else n.Target = "self";
 
                 break;
         }

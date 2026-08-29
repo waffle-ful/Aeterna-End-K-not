@@ -275,7 +275,8 @@ public sealed class EkrDefinition
         VisionMultiplier = Math.Clamp(float.IsFinite(VisionMultiplier) ? VisionMultiplier : 1f, 0.25f, 5f);
 
         WinCondition = (WinCondition ?? "team").Trim().ToLowerInvariant();
-        // team 以外の値は受理はするが R0 では常に通常のクルー勝利条件にフォールバックする (機能未対応)。
+        // Wave 7 (docs/ekn-wave7-contract.md §3): このフィールドは歴史的受理のみ — どの値も消費しない。
+        // 勝利条件はブロック (`win` / `win_join`) で組む (R2 契約 §94 の「ブロック化」の履行先が Wave 7)。
 
         // R1: logic は任意。無ければ R0 動作のまま (ParsedLogic は null)。
         if (Logic.HasValue)
@@ -284,6 +285,15 @@ public sealed class EkrDefinition
                 return false;
 
             ParsedLogic = parsedLogic;
+        }
+
+        // Wave 7 (docs/ekn-wave7-contract.md §1): 「かちにする」(win) は neutral スロット限定。
+        // CustomWinner.EkmNeuRole1..5 が既製なのは neu の 5 スロットだけ + クルーの即勝ちは陣営裏切りの
+        // 意味論が重い (裁定③)。パース時の静的検査なので束縛前に弾ける (TS validate 側と対称)。
+        if (ParsedLogic != null && ParsedTeam != EkrTeam.Neutral && ParsedLogic.ContainsWinOp())
+        {
+            error = "「かちにする」はだいさん陣営 (team: \"neutral\") の役職だけ使えます";
+            return false;
         }
 
         // Wave 1: passives も任意。無ければ EkrPassives.Default のまま (全キー既定 = 何も変えない)。
