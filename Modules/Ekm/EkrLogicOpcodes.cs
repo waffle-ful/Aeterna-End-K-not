@@ -649,26 +649,53 @@ internal sealed class EkrActionSink : IEkrActionSink
 
         // 対象は自分の CNO slot に居る EkrCno のみ。`is not EkrCno` が null (未占有) とダミーを同時に弾く。
         // 既に飛んでいる弾の二度撃ちも no-op (飛行中の向き変更は「追尾しない」裁定に反する)。
-        if (state.CnoSlots[idx] is not EkrCno cno || cno.Launched) return;
+        if (state.CnoSlots[idx] is not EkrCno cno || cno.Launched)
+        {
+            EkrManager.FlightLog($"launch drop slot={node.Slot} reason=no-cno-or-already-launched");
+            return;
+        }
 
         float now = Time.realtimeSinceStartup;
 
         // 契約 §1.2: per-holder ≤1/2秒。超過は静かにドロップ (予算不消費)。
-        if (state.LastCnoLaunchTime >= 0f && now - state.LastCnoLaunchTime < 2f) return;
+        if (state.LastCnoLaunchTime >= 0f && now - state.LastCnoLaunchTime < 2f)
+        {
+            EkrManager.FlightLog($"launch drop slot={node.Slot} reason=holder-rate");
+            return;
+        }
 
         // 契約 §1.1: 会議明け10秒ドロップは生成系5兄弟と同じ規約で適用する
         // (追放スイープ+レートゲートのドレインと同一窓に位置 update を重ねない)。
-        if (EkrManager.LastMeetingEndTime >= 0f && now - EkrManager.LastMeetingEndTime < 10f) return;
+        if (EkrManager.LastMeetingEndTime >= 0f && now - EkrManager.LastMeetingEndTime < 10f)
+        {
+            EkrManager.FlightLog($"launch drop slot={node.Slot} reason=post-meeting-10s");
+            return;
+        }
 
         Vector2? dir = ResolveLaunchDirection(node.LaunchDir, cno, ctx, state);
-        if (dir == null) return;
+
+        if (dir == null)
+        {
+            EkrManager.FlightLog($"launch drop slot={node.Slot} reason=no-direction dir={node.LaunchDir} primed={state.MoveHistPrimed} last=({state.MoveHistLast.x:F2},{state.MoveHistLast.y:F2}) lastlast=({state.MoveHistLastLast.x:F2},{state.MoveHistLastLast.y:F2})");
+            return;
+        }
 
         // 契約 §1.2: 同時飛行 EKR 全体 ≤2・per-holder ≤1 (母数は飛行台帳 — AllObjects は数えない)。
-        if (!EkrManager.CanStartFlight(ctx.HolderId)) return;
+        if (!EkrManager.CanStartFlight(ctx.HolderId))
+        {
+            EkrManager.FlightLog($"launch drop slot={node.Slot} reason=concurrent-cap");
+            return;
+        }
 
         // 全体 ≤2/秒。他の drop 理由を全て通過した「本当に飛ばす」直前でだけ消費する (CnoSpawn の
         // cross-holder 予算と同じ位置取り)。
-        if (!EkrManager.TryConsumeGlobalLaunchBudget()) return;
+        if (!EkrManager.TryConsumeGlobalLaunchBudget())
+        {
+            EkrManager.FlightLog($"launch drop slot={node.Slot} reason=global-rate");
+            return;
+        }
+
+        EkrManager.FlightLog($"launch ok slot={node.Slot} dir={node.LaunchDir}=({dir.Value.x:F2},{dir.Value.y:F2}) speed={node.LaunchSpeed} cnoPos=({cno.Position.x:F2},{cno.Position.y:F2}) instantiated={cno.IsInstantiated}");
 
         PlayerControl holderPc = ctx.HolderId.GetPlayer();
 

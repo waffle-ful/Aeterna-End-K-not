@@ -78,6 +78,9 @@ public sealed class EkrCno : CustomNetObject, IEkrSlotCno
         TP(position);
     }
 
+    // 壁判定の座標系合わせ (WallRayOffset / SelfCollider) は CustomNetObject 基底へ共通化済み
+    // (2026-08-29 Wave6 実機で発覚 → 兄弟スイープで全 CNO 共通の罠と判明したため昇格)。
+
     // 飛行中だけ 5Hz へ間引く (Snowball.ForceSnapMinInterval と同値)。置きっぱなしの CNO は cno_move が
     // ≤2/秒/slot なので基底既定 (0f = 次フレーム即送信) のままにする — ここを一律 0.2f にすると
     // cno_move の反映が最大 0.2 秒遅れる無関係な挙動変化になる。

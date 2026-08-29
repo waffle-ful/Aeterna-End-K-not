@@ -737,8 +737,12 @@ public static class NaturalDisasters
 
             // NetObject.playerControl は生成コルーチン内で非同期に確定する。Tornado はコンストラクタから
             // Update() を呼ぶので、警告 CNO の生成が遅れているとここで必ず null を踏む (Postfix 直下で無防備)。
-            // 未確定の tick は壁判定だけ飛ばす (次の tick には確定して通常判定に戻る)
-            if ((!GoesThroughWalls.GetBool() && NetObject.playerControl && PhysicsHelpers.AnythingBetween(NetObject.playerControl.Collider, Position, newPos + addVector * 2, Constants.ShipOnlyMask, false)) ||
+            // 未確定の tick は壁判定だけ飛ばす (次の tick には確定して通常判定に戻る)。
+            // レイは WallRayOffset で足元空間へ平行移動 — 視覚系のままだと上壁で約0.36u早く反射する
+            // (CustomNetObject 基底のコメント参照)。
+            Vector2 rayOff = NetObject.WallRayOffset;
+
+            if ((!GoesThroughWalls.GetBool() && NetObject.playerControl && PhysicsHelpers.AnythingBetween(NetObject.SelfCollider, Position + rayOff, newPos + addVector * 2 + rayOff, Constants.ShipOnlyMask, false)) ||
                 newPos.x < MapBounds.X.Left || newPos.x > MapBounds.X.Right || newPos.y < MapBounds.Y.Bottom || newPos.y > MapBounds.Y.Top)
             {
                 Angle = RandomAngle();
