@@ -78,8 +78,9 @@ internal class Replay : RoleBase
             ReplayRequiredKills11, ReplayRequiredKills12, ReplayRequiredKills13, ReplayRequiredKills14, ReplayRequiredKills15
         ];
 
-        // 親が Integer (最小値1) の子は GetBool() が常に true になり出し分けが効かないため、
+        // 親が Integer の子は GetBool() が index != 0 判定 (= 最小値のときだけ OFF) で出し分けが効かないため、
         // 最大爆破回数を超える行は SetHidden で明示的に畳む (Disguiser / Lovers と同型)。
+        // 最大爆破回数=1 (index 0) で子が丸ごと消えないよう、GetBool() 側に常時 ON の特例を入れてある。
         SyncRequiredKillsVisibility();
         ReplayMaxBlastCount.RegisterUpdateValueEvent((_, _, _) => SyncRequiredKillsVisibility()).SetRunEventOnLoad(true);
     }
