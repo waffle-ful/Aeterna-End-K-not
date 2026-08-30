@@ -683,6 +683,7 @@ internal static class CustomRolesHelper
                 CustomRoles.ProbabilityKing => RoleTypes.Impostor,
                 CustomRoles.GambleKiller => RoleTypes.Impostor,
                 CustomRoles.Torpedo => RoleTypes.Phantom,
+                CustomRoles.Replay => RoleTypes.Phantom,
 
                 CustomRoles.CovenLeader => RoleTypes.Impostor,
                 CustomRoles.SpellCaster => RoleTypes.Impostor,
@@ -968,6 +969,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Lurker or
                 CustomRoles.Fakeshifter or
                 CustomRoles.WaveCannon or
+                CustomRoles.Replay or
                 CustomRoles.Perplexer or
                 CustomRoles.DummySpawner or
                 CustomRoles.Skinwalker or
@@ -1472,6 +1474,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Trapster => RoleOptionType.Impostor_Killing,
                 CustomRoles.Wasp => RoleOptionType.Impostor_Killing,
                 CustomRoles.WaveCannon => RoleOptionType.Impostor_Killing,
+                CustomRoles.Replay => RoleOptionType.Impostor_Killing,
                 CustomRoles.Riptide => RoleOptionType.Impostor_Killing,
                 CustomRoles.Dossun => RoleOptionType.Impostor_Killing,
                 CustomRoles.Autoscopy => RoleOptionType.Impostor_Killing,

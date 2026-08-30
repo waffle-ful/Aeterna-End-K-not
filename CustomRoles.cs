@@ -597,6 +597,7 @@ public enum CustomRoles
     GambleKiller,
     Mirage,
     Torpedo,
+    Replay,
 
     // EKN custom role slots (reserved - do not reorder)
     EkmCustomRole1,

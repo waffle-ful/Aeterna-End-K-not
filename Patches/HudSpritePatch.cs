@@ -498,6 +498,11 @@ public static class HudSpritePatch
 
                     break;
                 }
+                case CustomRoles.Replay:
+                {
+                    newAbilityButton = CustomButton.Get("Bomb");
+                    break;
+                }
                 case CustomRoles.Camouflager:
                 {
                     newAbilityButton = CustomButton.Get("Camo");

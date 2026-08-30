@@ -929,6 +929,7 @@ public class Main : BasePlugin
                 { CustomRoles.GambleKiller, "#d4571f" },
                 { CustomRoles.Mirage, "#9fd8cb" },
                 { CustomRoles.Torpedo, "#b03a2e" },
+                { CustomRoles.Replay, "#ff6a3d" },
                 // Upstream EHR catchup
                 { CustomRoles.Butcher, "#b3261e" },
                 { CustomRoles.Chainbinder, "#8a7f6d" },
