@@ -1059,6 +1059,13 @@ internal static class ExtendedPlayerControl
                 case Akazukin when realKiller:
                     Akazukin.EnterPseudoDeath(player, realKiller, deathReason);
                     return;
+                // 反撃態勢中のベテランは、直接キルと同じく OnCheckMurderAsTarget へ渡して反撃を発火させる
+                // (ここが素の return だった間、爆弾など realKiller のある間接死ではベテランが守られるだけで
+                //  一度も撃ち返せなかった — SchrodingersCat / Akazukin は元から渡していたので、その3つを揃える)。
+                // 間接死まで反撃対象にするかはゲームバランスに直結するのでホスト設定で切り替えられる。
+                case Veteran veteran when realKiller && Veteran.VeteranInProtect.Contains(player.PlayerId) && Veteran.VeteranRetaliatesOnIndirectDeath.GetBool():
+                    veteran.OnCheckMurderAsTarget(realKiller, player);
+                    return;
                 case Veteran when Veteran.VeteranInProtect.Contains(player.PlayerId):
                 case Pestilence:
                     return;
