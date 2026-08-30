@@ -19,6 +19,7 @@ internal class Veteran : RoleBase
     public static OptionItem VeteranAbilityUseGainWithEachTaskCompleted;
     public static OptionItem VeteranAbilityChargesWhenFinishedTasks;
     public static OptionItem VeteranAlertActivatesOnNonKillingInteractions;
+    public static OptionItem VeteranRetaliatesOnIndirectDeath;
 
     public override void SetupCustomOption()
     {
@@ -46,6 +47,9 @@ internal class Veteran : RoleBase
             .SetValueFormat(OptionFormat.Times);
         
         VeteranAlertActivatesOnNonKillingInteractions = new BooleanOptionItem(id + 7, "VeteranAlertActivatesOnNonKillingInteractions", false, TabGroup.CrewmateRoles)
+            .SetParent(CustomRoleSpawnChances[CustomRoles.Veteran]);
+
+        VeteranRetaliatesOnIndirectDeath = new BooleanOptionItem(id + 8, "VeteranRetaliatesOnIndirectDeath", true, TabGroup.CrewmateRoles)
             .SetParent(CustomRoleSpawnChances[CustomRoles.Veteran]);
     }
 
