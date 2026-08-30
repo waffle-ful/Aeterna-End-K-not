@@ -207,6 +207,10 @@ public abstract class OptionItem
             "BlackHoleDespawnMode" => GetValue() == 1,
             "CTF_TaggedPlayersGet" => GetValue() == 2,
             "CTF_GameEndCriteria" => true,
+            // 数値オプションの CurrentValue は「値」でなく「選択肢 index」なので、最小値 1 の Integer を
+            // 最小にすると index 0 = OFF 扱いになり、その子オプションがメニューと設定一覧の両方から消える。
+            // 0 を取れないオプションは常に ON。
+            "ReplayMaxBlastCount" => true,
             _ => CurrentValue != 0
         };
     }
