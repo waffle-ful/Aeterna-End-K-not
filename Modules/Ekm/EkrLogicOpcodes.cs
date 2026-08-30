@@ -133,6 +133,12 @@ internal sealed class EkrActionSink : IEkrActionSink
     // からの実行を許す。死者も勝者にできる (WinnerIds は死者を受ける — Specter 前例)。
     private static void Win(EkrNode node, EkrActionContext ctx)
     {
+        // 終了ラッチ後 (StartEndGame 済み・Predicate=null) の書込みは no-op — 先勝ち尊重。ラッチ後の
+        // ResetAndSetWinner は WinnerIds ごと消すため、確定済みの勝者と win_join の便乗 fold 結果を
+        // 巻き添えにし、outro の勝者テキストと終了理由が混成になる (BUG-20260830-03)。
+        // Ended は次ゲーム開始 (OnGameStartedPatch.cs:326) で false へ戻るので on_game_start 起点は無傷。
+        if (GameEndChecker.Ended) return;
+
         // 検証 (EkrDefinition.Validate) が win を neutral 文書に限定済み = 束縛先は EkmNeuRole1..5 だけの
         // はず。ここは防御の再確認 — 崩れていたら黙って no-op が安全側 (CustomWinner に対応値が無い)。
         if (ctx.Slot < CustomRoles.EkmNeuRole1 || ctx.Slot > CustomRoles.EkmNeuRole5) return;
@@ -158,6 +164,10 @@ internal sealed class EkrActionSink : IEkrActionSink
     // ⚠ ホルダー生存ガードなし (契約 §2 — on_death 起点可)。
     private static void WinJoin(EkrNode node, EkrActionContext ctx)
     {
+        // Win と同じ終了ラッチガード — fold (CheckGameEndPatch 第2ループ) は既に走り終えているので、
+        // ラッチ後のラッチ追記は勝者に反映されない死にデータになるだけ (次ゲームへは ResetSlot が捨てる)。
+        if (GameEndChecker.Ended) return;
+
         PlayerControl target = ResolveSingle(node.Target, ctx);
         if (target == null) return;
 
@@ -481,6 +491,11 @@ internal sealed class EkrActionSink : IEkrActionSink
     private static void Kill(EkrNode node, EkrActionContext ctx, EkrFiber fiber)
     {
         if (fiber.FromKillChain) return;
+
+        // Win/WinJoin と同じ終了ラッチガード (兄弟スイープ 2026-08-30) — outro 窓 (StartEndGame 後も
+        // CoEndGame 完了まで fiber pump は回り続ける) の kill は、CoEndGame の playersToRevive 生死復元
+        // (CheckGameEndPatch.cs の IsDead=false 再送) と逆順競合して確定済みの生死状態を壊す。
+        if (GameEndChecker.Ended) return;
 
         EkrHolderState state = EkrManager.GetHolderState(ctx.HolderId);
         if (state == null) return;
