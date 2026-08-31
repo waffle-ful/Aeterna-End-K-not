@@ -359,7 +359,7 @@ public class SuperCannonShot
 
             // Utils.TP が inVent / ladder / movingPlat / AntiTP を弾く。
             // TP 先は transform 空間 — 足元空間の newPos をそのまま渡すと恒常 0.36u 沈む
-            // (memory: 壁チェック=足元 / TP先=Pos()。EkrManager.TickField が見本)。
+            // (壁チェック=足元 / TP先=Pos()。EkrManager.TickField が見本)。
             if (p.TP(newPos - p.WallRayOffset(), log: false))
             {
                 PullSpent++;

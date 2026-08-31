@@ -603,7 +603,7 @@ internal static class OnPlayerJoinedPatch
     }
 
     // 劣化延期の累積秒。join のたびにリセットすると持続劣化+連続 join で60s予算が永久に満了しない
-    // (2026-08-31 監査指摘) ため、予算は単調に消費し、再送を実行した時だけ 0 に戻す。
+    // ため、予算は単調に消費し、再送を実行した時だけ 0 に戻す。
     private static float JoinRebroadcastDeferredSec;
 
     // BUG-20260820-06 クラスタ緩和: join 時の全員装飾名再送 (LastBroadcastName.Clear() → FixedUpdate が

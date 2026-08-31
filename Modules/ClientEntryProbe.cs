@@ -10,7 +10,7 @@ namespace EndKnot.Modules;
 //
 // 機序: FirstTurnMeetingTrigger はホストの intro 終了 +1 秒の固定アンカーで発火するが、GM ホストの
 // intro は短縮 (~7-9s)、遅いクライアント (Switch 等) は 10-11s かかるため、客の intro 中に会議が
-// 着弾して暗転する既知レースがある (memory: gm_host_short_intro_rpc_lands_mid_client_intro)。
+// 着弾して暗転する既知レースがある。
 // 固定秒数の再調整は3連敗済みで禁止 — ここでは「観測」で置き換える。
 //
 // シグナル: 各クライアントの CustomNetworkTransform.lastSequenceId。バニラは intro 中プレイヤーを
@@ -25,7 +25,7 @@ namespace EndKnot.Modules;
 //
 // 偽 confirm 対策 (2026-08-04): Utils.TP の nt.SnapTo はホストローカルの lastSequenceId を +328
 // 直接書きするため、gate 武装後のホスト起因 TP (Submerged 補正・役職 TP) は客が動いていなくても
-// seq が動いて偽 confirm になる (memory: tp_delivery_probe_pos_fallback)。Utils.TP から
+// seq が動いて偽 confirm になる。Utils.TP から
 // NoteHostSnapTo を受けて baseline を現値へ付け替えることで、クライアント自身の移動だけを confirm
 // として数える。
 //
@@ -51,7 +51,7 @@ public static class ClientEntryProbe
     /// 全状態を破棄する。StartGate 内だけでなく OnGameStartedPatch (全ゲームモード共通) からも
     /// 毎ゲーム必ず呼ぶこと — StartGate は Standard+FTM のゲームでしか走らないため、そこだけに
     /// リセットを置くと「FTM ゲームで積んだ RescueTargets が会議ゼロのまま終了 → 次の非FTMゲームの
-    /// 会議明けに前ゲームの PlayerId へ誤射」する跨ゲーム汚染が起こる (2026-08-04 pitfall 監査)。
+    /// 会議明けに前ゲームの PlayerId へ誤射」する跨ゲーム汚染が起こる (2026-08-04 確認)。
     /// </summary>
     public static void Reset()
     {
@@ -157,7 +157,7 @@ public static class ClientEntryProbe
         {
             // 未confirm = 発症予備軍 (2026-08-04 実測: 未confirm 2名が暗転発症者と完全一致)。
             // ここで新規送信はしない (intro 構築中クライアントへのブロードキャストは自身が暗転容疑
-            // — memory: gm_host_short_intro_rpc_lands_mid_client_intro の +8s ReactorFlash の教訓)。
+            // — かつて +8s 遅延の ReactorFlash 送信が同種の暗転を誘発した教訓)。
             // 会議明け (Utils.AfterMeetingTasks) に FixBlackScreen 救済を撃つ。
             RescueTargets.AddRange(Pending);
             string names = string.Join(", ", Pending.Select(id => Utils.GetPlayerById(id, fast: false)?.GetRealName() ?? $"id {id}"));
@@ -169,7 +169,7 @@ public static class ClientEntryProbe
         fire();
     }
 
-    // 会議明けの同フレーム逐次発射数の上限 (identity系 nests 合算対策・2026-08-04 anticheat 監査)。
+    // 会議明けの同フレーム逐次発射数の上限 (identity系 nests 合算対策・2026-08-04)。
     // これを超える人数が未confirm になるロビーは回線全体が崩壊しており、救済より観察が正しい。
     private const int MaxRescueTargets = 4;
 
@@ -196,7 +196,7 @@ public static class ClientEntryProbe
         // FixBlackScreen の重量パス (reactor desync flash) は死者が1人もいないと内部の待機コルーチンが
         // 「最初のキル」まで発射を保留する (ExtendedPlayerControl の dummyGhost ガード)。FTM 明けは
         // 死者ゼロが普通に起こる (NoVote 構成なら常に) ため、その場合はキル直後の RPC 群への近接着弾を
-        // 避けて重量パスを撃たない (2026-08-04 両監査の 🔴)。
+        // 避けて重量パスを撃たない (2026-08-04 確認済みの既知リスク)。
         bool anyDead = Main.EnumeratePlayerControls().FindFirst(x => !x.IsAlive(), out _);
 
         foreach (byte id in targets)

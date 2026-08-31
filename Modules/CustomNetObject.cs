@@ -39,7 +39,7 @@ namespace EndKnot
 
         // vanilla 2026 の GameData PlayerInfo cache は PlayerId をキーに管理。
         // 全 CNO を 254 固定にすると Sandbox のような multi-instance per-player CNO で衝突し、
-        // 2 体目以降の Shapeshift-text trick が非モッド受信側で間欠的に反映されない (memory: cno_vanilla_2026_solutions)。
+        // 2 体目以降の Shapeshift-text trick が非モッド受信側で間欠的に反映されない。
         // 範囲 200-254 は実プレイヤー (0-14) と衝突せず、EHR の filter は既に `>= 200` で対応済み。
         // Despawn 時に Id を返却する解放式リサイクル: 55 枠の上限は「累計 55 回の生成」ではなく
         // 「同時生存 55 体」。プール中の NaturalDisaster は playerControl が生きているので返却しない。
@@ -643,7 +643,7 @@ namespace EndKnot
                 // 「全員へ spawn → 全員へ可視化 fan-out → 0.3s 後に本人以外へ Hide fan-out」の往復をやめ、
                 // spawn から tag6 で本人だけに送る (合法形の前例 = SetChatVisible の偽 MeetingHud spawn)。
                 // fan-out 予算が人数に依存しなくなり、満員ロビーの推測メニューでも即座に出揃う。
-                // ⚠️ マップ上に実体として出る CNO (AdventurerItem / Toilet / トラップ類) は対象外 (2026-08-02 裁定)。
+                // ⚠️ マップ上に実体として出る CNO (AdventurerItem / Toilet / トラップ類) は対象外。
                 bool singleClient = onlyVisibleTo && this is ShapeshiftMenuElement;
 
                 bool tooEarly = !Main.IntroDestroyed || Utils.TimeStamp - IntroCutsceneDestroyPatch.IntroDestroyTS < 10;
@@ -1134,9 +1134,9 @@ namespace EndKnot
                 while (ReportDeadBodyPatch.MeetingStarted || GameStates.IsMeeting || ExileController.Instance || AntiBlackout.SkipTasks) yield return null;
                 // ⚠️ 10 秒から縮めないこと (DeferredSpawnBaseDelay と同じ規約)。会議明けは追放スイープ+
                 // レートゲートのドレインが task phase 開始後 ~10 秒続き、CNO 再生成の spawn+visibility
-                // fan-out が重なると合算 nests がキック域に達する (BUG-20260803-07)。2026-08-09 の完成前
-                // 監査まで実装がここだけ 3 秒のままで、上の DeferredSpawnBaseDelay コメントの「同じ規約」
-                // 宣言と食い違っていた (実測キック未発生のうちに修正)。
+                // fan-out が重なると合算 nests がキック域に達する (BUG-20260803-07)。2026-08-09 に実装だけ
+                // 3 秒のままだったのを、上の DeferredSpawnBaseDelay コメントの「同じ規約」宣言に合わせて
+                // 修正済み (実測キック未発生のうちに修正)。
                 yield return new WaitForSecondsRealtime(10f + stagger);
                 while (ReportDeadBodyPatch.MeetingStarted || GameStates.IsMeeting || ExileController.Instance || AntiBlackout.SkipTasks) yield return null;
                 if (GameStates.IsEnded || !GameStates.InGame || GameStates.IsLobby) yield break;
@@ -1308,7 +1308,7 @@ namespace EndKnot
     {
         public readonly Adventurer.Resource Resource;
 
-        // 2026-08-04 裁定: アイテムは全員に見えるほうが楽しいので、上流の onlyVisibleTo 制限を外して
+        // アイテムは全員に見えるほうが楽しいので、上流の onlyVisibleTo 制限を外して
         // ブロードキャスト可視にする (収集判定は Adventurer 本人の OnFixedUpdate のみ — 機構には影響しない)。
         // adventurer 引数は呼び出し側の互換のため残置。
         internal AdventurerItem(Vector2 position, Adventurer.Resource resource, PlayerControl adventurer)

@@ -780,7 +780,7 @@ public static class GameStartManagerBeginPatch
             HealthLog.Note($"STARTPRESS phase=reallybegin totalMs={sw.ElapsedMilliseconds} saveMs={saveMs} kickMs={kickMs} t={Utils.TimeStamp}");
 
             // カウントダウン表示が描画された後 (0.15s 遅延) にフル GC を先撃ち。Prefix と同一フレームの同期実行だと
-            // レンダ前に止まるため「クリック→フリーズ→UI一気に出現」の体感ヒッチになる (pitfall 監査指摘)。
+            // レンダ前に止まるため「クリック→フリーズ→UI一気に出現」の体感ヒッチになる。
             // 以降の開始処理〜イントロを掃除済みヒープで走らせ、開始中の自然発生 GC ヒッチを減らす (詳細は GcPrepass)。
             LateTask.New(() => GcPrepass.Collect("countdown"), 0.15f, log: false);
             return false;

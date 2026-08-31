@@ -1,6 +1,6 @@
 // logic 付き .ekrole.json の golden fixture (docs/ekr-logic-spec.md §1〜§6 の共有検証資材)。
-// 契約監査の指摘: 「AST 深さ不一致のような実装差分は、共有の実物 .ekrole.json が無いと自動検出
-// できない」— このテストはその穴を塞ぐ。fixtures/ のファイルは vitest 専用ではなく、そのまま
+// AST 深さ不一致のような実装差分は、共有の実物 .ekrole.json が無いと自動検出できない —
+// このテストはその穴を塞ぐ。fixtures/ のファイルは vitest 専用ではなく、そのまま
 // Documents/EndKnot/EKRoles/ に置いて実機 /role import テストにも使う想定 (現実的な日本語の
 // 役職名・flavor text で書く)。そのため fixture 自体を書き換えるときはこのテストと変更内容を
 // 揃えること (golden.ts の「仕様書から逐語コピー・改変禁止」ほど厳格な凍結ではないが、
@@ -378,7 +378,7 @@ describe("golden fixture: role-dummy-showcase.ekrole.json (v1.1 dummy_spawn/corp
         expect(corpses.map(c => c.at)).toEqual(expect.arrayContaining(["ctx", "self"]));
     });
 
-    it("on_meeting_end のダミー再設置は 10.5 秒待ちが先 (L9 の模範形)、on_death の corpse_spawn は死亡時実行可の裁定素材 (spec §2 v1.1)", () => {
+    it("on_meeting_end のダミー再設置は 10.5 秒待ちが先 (L9 の模範形)、on_death の corpse_spawn は死亡時実行可 (spec §2 v1.1)", () => {
         const parsed = JSON.parse(dummyShowcaseRaw);
         const result = validateEkrDefinition(parsed);
         if (!result.ok) throw new Error(result.error);

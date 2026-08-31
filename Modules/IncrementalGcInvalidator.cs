@@ -12,7 +12,7 @@ namespace EndKnot.Modules;
 // incremental を本当に切れるのは、Boehm の実行時フラグ (`il2cpp_gc_is_incremental()` が読む
 // グローバル変数) を直接 0 にするこの方式だけ。
 //
-// 既定 ON (2026-08-15 裁定) の理由は **安全性** であって perf ではない:
+// 既定 ON の理由は **安全性** であって perf ではない:
 //   - barrier 無し interop でも incremental が切れていれば GC UAF は原理的に起きない
 //     (docs/coreclr-av-chat-uaf-resume.md §1e)。x86 は ScanMethodRefs=true がブリックを起こすため
 //     自己修復が降りる設計で、これが無いと防御が残らない (BUG-20260815-06)。

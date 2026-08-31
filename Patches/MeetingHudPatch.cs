@@ -745,7 +745,7 @@ internal static class ExtendedMeetingHud
                 if (Poache.PoachedPlayers.Contains(ps.PlayerId)) voteNum = 0;
                 if (Silencer.ForSilencer.Contains(ps.PlayerId) && Main.AllAlivePlayerControls.Count > Silencer.MaxPlayersAliveForSilencedToVote.GetInt()) voteNum = 0;
                 if (CheckForEndVotingPatch.CheckRole(ps.PlayerId, CustomRoles.Notvoter)) voteNum = 0;
-                // Wave 2 (spec §3.2): site1 と同方向の無効化グループ (2箇所セット — memory 罠)。
+                // Wave 2 (spec §3.2): site1 と同方向の無効化グループ (2箇所セット)。
                 if (EndKnot.Modules.Ekm.EkrManager.IsVoteBlocked(ps.PlayerId)) voteNum = 0;
 
                 if (CheckForEndVotingPatch.CheckRole(ps.PlayerId, CustomRoles.Magistrate) && Magistrate.CallCourtNextMeeting) voteNum += Magistrate.ExtraVotes.GetInt();
@@ -1416,7 +1416,7 @@ internal static class MeetingHudUpdatePatch
     {
         if (__instance.CurrentState != MeetingHud.MeetingStates.Results) return true;
 
-        // Results 遷移直後の残り投票秒を one-shot でラッチ (2026-07-28 監査指摘)。
+        // Results 遷移直後の残り投票秒を one-shot でラッチ。
         // 直下の UpdateTimerText(MeetingProceeds) が VotingTimeLeft を 5→0 で上書きするため、
         // MeetingHud.OnDestroy 時点の値では「時間切れ終了か全員投票の早期終了か」を区別できない。
         MeetingSilentProbe.OnResultsPhase();
@@ -1496,9 +1496,8 @@ internal static class MeetingHudUpdatePatch
                         Nemesis.CreateJudgeButton(__instance);
                         break;
                     // Wave 2 (docs/ekn-wave2-contract.md §1.2): EKR ホルダーが会議中に死亡したら他役職と
-                    // 同じ規約でボタンを強制掃除する (会議を跨いで残らないよう・裁定書「掃除を忘れると
-                    // ボタンが会議を跨いで残る」の指示どおり)。掃除側は生成側 (HasOnMeetingPickLogic 込み)
-                    // より広く取る (advisor 指摘 2026-08-11 — 掃除条件が生成条件より狭いと取りこぼす)。
+                    // 同じ規約でボタンを強制掃除する (会議を跨いで残らないよう)。掃除側は生成側
+                    // (HasOnMeetingPickLogic 込み) より広く取る (掃除条件が生成条件より狭いと取りこぼすため)。
                     case var r when EkrManager.IsEkrRole(r) && !PlayerControl.LocalPlayer.IsAlive():
                         ClearShootButton(__instance, true);
                         break;

@@ -352,7 +352,7 @@ export interface HostOption {
 // パッシブ層 passives (Wave 1・spec §1.1) — トップレベルの固定キーオブジェクト
 // ---------------------------------------------------------------------------
 // logic とは独立 (logic 無しでも passives 単独で可)。Blockly ワークスペースには置かない —
-// 基本情報タブの「とくせい」フォームセクションが唯一の UI (spec §1.1 の裁定)。
+// 基本情報タブの「とくせい」フォームセクションが唯一の UI (spec §1.1)。
 // 検証: 内部の未知キーは黙って無視 / 既知キーの型不一致・範囲外は文書全体 reject (spec §1 総則)。
 // ロジック op と数値レンジが重なるもの (speedMult ↔ speed.mult の 0.5〜3.0) も別定数にする —
 // 片方だけ将来変わっても連動しないように (DUMMY_SPAWN_NAME_MAX と同じ方針)。
@@ -405,7 +405,7 @@ export type LogicNode =
     // cno_move/cno_despawn/cno_show は3つとも対象を `slot` で指定し、move だけ追加で dx/dy、
     // show だけ追加で who を取る (despawn は slot のみ) — spec §3 で確定済み。
     // dx/dy は「出した時点のアンカー位置からの絶対オフセット」(spec §3 追記・C# 側確定事項)。
-    // 呼ぶたびに積み上がる相対移動ではない (暴走ドリフト防止の裁定) — 同じ値で複数回呼んでも
+    // 呼ぶたびに積み上がる相対移動ではない (暴走ドリフト防止のため) — 同じ値で複数回呼んでも
     // 毎回同じ位置に着地する。compile-role.ts は Blockly の DX/DY フィールド値をそのまま
     // 転記するだけで良い (エディタ側で積算する必要はない)。
     | { op: "cno_move"; slot: 1 | 2 | 3; dx: number; dy: number }
@@ -435,7 +435,7 @@ export type LogicNode =
     // Wave 1 (spec §3 2026-08-11) — marker_save の人間版。おぼえた人は死亡・切断で自動失効。
     | { op: "remember"; slot: 1 | 2; target: TargetSingle }
     // Wave 1 (spec §3 2026-08-11) — 引数なし。on_attacked 配下でのみ書ける (他イベント配下は
-    // 実行時 no-op ではなく**検証 reject** — 静的に判定できるため厳格側に倒す裁定)。
+    // 実行時 no-op ではなく**検証 reject** — 静的に判定できるため厳格側に倒す)。
     | { op: "cancel_attack" }
     // Wave 2 (docs/ekn-wave2-contract.md §2 2026-08-11) — しらべる系。failChance/noise は
     // 「任意・既定0」だが、この実装では Blockly ブロックが常に数値を持つため常に出力する
@@ -447,7 +447,7 @@ export type LogicNode =
     | { op: "arrow_mark"; at: (typeof ARROW_MARK_AT_VALUES)[number]; seconds: number }
     | { op: "arrow_hide" }
     // Wave 2 (§1.3) — 票をつかわずにえらぶ。on_meeting_vote 配下でのみ書ける (cancel_attack と
-    // 同じ厳格側の裁定 — 他イベント配下は検証 reject)。
+    // 同じ厳格側の扱い — 他イベント配下は検証 reject)。
     | { op: "cancel_vote" }
     // Wave 2 (§3.1) — 常時 op (会議専用ではない)。
     | { op: "vote_weight_set"; value: number }
@@ -886,7 +886,7 @@ function expectBoolean(raw: unknown, path: string): boolean {
 
 // spec §1: 変数名は**宣言側・参照側とも trim してから**照合する (宣言側は validateVariables が
 // 既に trim 済み)。参照側で trim を忘れると、手書き JSON の `" カウント "` をローダー (C#) は
-// 受理するのにエディタだけが「未定義の変数」で弾く非対称になる (2026-08-14 契約監査で検出)。
+// 受理するのにエディタだけが「未定義の変数」で弾く非対称になる。
 function expectVarName(raw: unknown, varNames: ReadonlySet<string>, path: string): string {
     if (typeof raw !== "string") {
         fail(`${path} が未定義の変数を参照しています (${JSON.stringify(raw)})`);
@@ -902,8 +902,8 @@ interface ExprValidation { expr: LogicExpr; depth: number }
 interface NodeValidation { node: LogicNode; depth: number; count: number }
 interface NodeArrayValidation { nodes: LogicNode[]; depth: number; count: number }
 
-// AST 深さ (spec §1: 「node と expr を合算」・上限8) の数え方 — spec §1 (2026-08-09 裁定) が
-// この実装を正典として明文化した (「子へ潜る遷移はすべて +1 — if.then/if.else の子 node、
+// AST 深さ (spec §1: 「node と expr を合算」・上限8) の数え方 — spec §1 が
+// この実装を正典として明文化している (「子へ潜る遷移はすべて +1 — if.then/if.else の子 node、
 // op 式の a/b、および node から自身の expr への突入 (if.cond/var_set.value/var_add.delta) も
 // +1。expr 起点でも制御起点でも数え方は同一」)。1本の木として「ノード配下へ潜る」
 // 「式配下へ潜る」の両方を同じカウンタで +1 する (ノード用・式用の2つの独立予算ではない):
@@ -1044,7 +1044,7 @@ function validateNode(raw: unknown, varNames: ReadonlySet<string>, path: string,
             const slot = expectRangeInt(raw.slot, CNO_SLOT_MIN, CNO_SLOT_MAX, `${path}.slot`) as 1 | 2 | 3;
             // name の検証順序は cno_spawn.text (「文字数チェック→サニタイズ」を raw のまま行う) とは
             // 意図して異なる: ここは trim → サニタイズ → 文字数チェック → 空なら既定名、の順。
-            // spec §3 (2026-08-09 裁定) がこの順序を明文で規定しており、C# 側 (EkmLogicRuntime の
+            // spec §3 がこの順序を明文で規定しており、C# 側 (EkmLogicRuntime の
             // dummy_spawn case) も同順序で実装済み。前後の空白を詰めた結果が8字以内なら通る
             // (例: 生の長さが8字を超えていても trim 後に収まれば受理する)。
             if (typeof raw.name !== "string") fail(`${path}.name は文字列である必要があります`);
@@ -1101,7 +1101,7 @@ function validateNode(raw: unknown, varNames: ReadonlySet<string>, path: string,
         }
         case "cancel_attack": {
             // spec §3: on_attacked 以外の rule 配下に現れたら文書 reject (静的に検査できるので
-            // no-op ではなく reject 側に倒す — on_cno_touch の slot 必須と同じ厳格側の裁定)。
+            // no-op ではなく reject 側に倒す — on_cno_touch の slot 必須と同じ厳格側の扱い)。
             // if の入れ子の中でも when は持ち回られているため同じ判定になる。
             if (when !== "on_attacked") {
                 fail(`${path} の「こうげきをふせぐ」はイベント "${when}" では使えません (「こうげきされたとき」の中だけで使えます)`);
@@ -1348,7 +1348,7 @@ export function validateRoleLogic(value: unknown): LogicValidationResult {
 
         const variables: LogicVariable[] = [];
         const rawVariables = value.variables;
-        // spec §1 (2026-08-11 裁定): 省略 (undefined) だけが「変数なし」。明示的な null は
+        // spec §1: 省略 (undefined) だけが「変数なし」。明示的な null は
         // **型不一致として文書全体 reject** (「JSON 型不一致は文書全体 reject」の総則どおり —
         // C# 側は List<T> へ null が来ても後段で落ちるため、TS だけ寛容にしない)。
         if (rawVariables !== undefined) {

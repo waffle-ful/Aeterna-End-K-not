@@ -270,7 +270,7 @@ public static class AudienceInterventions
     private static bool TryQuakeShake(PlayerControl pc)
     {
         Vector2 pos = pc.Pos();
-        Vector2 rayOff = pc.WallRayOffset(); // 壁レイは足元空間で撃つ (Pos() は見た目の中心 — 兄弟スイープ 2026-08-29)
+        Vector2 rayOff = pc.WallRayOffset(); // 壁レイは足元空間で撃つ (Pos() は見た目の中心)
 
         for (int attempt = 0; attempt < 3; attempt++)
         {
@@ -387,7 +387,7 @@ public static class AudienceInterventions
 
         Vector2 basePos = anchor.Pos();
         Vector2 pos = basePos;
-        Vector2 rayOff = anchor.WallRayOffset(); // 壁レイは足元空間で撃つ (Pos() は見た目の中心 — 兄弟スイープ 2026-08-29)
+        Vector2 rayOff = anchor.WallRayOffset(); // 壁レイは足元空間で撃つ (Pos() は見た目の中心)
 
         for (int attempt = 0; attempt < 3; attempt++)
         {

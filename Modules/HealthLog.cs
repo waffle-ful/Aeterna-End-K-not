@@ -296,7 +296,7 @@ public static class HealthLog
         _lastGc0Count = GC.CollectionCount(0);
         _lastGc2Count = GC.CollectionCount(2);
 
-        // フルスクリーン切替/解像度変更の帰属計器 (BUG-20260729-17 系: ユーザー仮説「全画面切替→3-4秒スタッター」の
+        // フルスクリーン切替/解像度変更の帰属計器 (BUG-20260729-17 系: 「全画面切替→3-4秒スタッター」の
         // 1-bit 検証用)。切替ストール中は Tick 自体が止まるため、切替検知行は解除フレームで framestall ANOM と
         // 同時に flush される — reschg 行と framestall 行の t= 一致/近接が「切替起因」の判定条件。
         if (Screen.fullScreen != _lastFullScreen || Screen.width != _lastScreenW || Screen.height != _lastScreenH)
@@ -485,7 +485,7 @@ public static class HealthLog
 
             // ── 段1: UserIDToken 死の検出 (BUG-20260715-05)。ここでは再起動しない — 接続中のロビーは
             // トークン無しでも動き続けるため、計器 (ANOM) と AutoRestart へのフラグ通知のみ。
-            // 実際の再起動は段2 (実害=メニュー落ち) が確定してから (ユーザー方針: 再起動は最終手段)。
+            // 実際の再起動は段2 (実害=メニュー落ち) が確定してから (再起動は最終手段の方針)。
             if (idTok == 1)
             {
                 _sawUserIdToken = true;

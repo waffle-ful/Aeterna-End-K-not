@@ -537,7 +537,7 @@ public static class CustomSoundsManager
     {
         var sw = Stopwatch.StartNew();
         Il2CppStructArray<float> il2cppBuffer = new(read);
-        // Managed float[] -> Il2CppStructArray<float> via Marshal.Copy (per-element indexer is a trap — MEMORY.md)。
+        // Managed float[] -> Il2CppStructArray<float> via Marshal.Copy (per-element indexer is a trap)。
         // BGM 級 (23M サンプル) でインデクサループは実測 ~1000ms、一括コピーなら数十 ms。
         System.Runtime.InteropServices.Marshal.Copy(buffer, 0, IntPtr.Add(il2cppBuffer.Pointer, IntPtr.Size * 4), read);
 
@@ -943,7 +943,7 @@ public static class CustomSoundsManager
 
         public WAV(Il2CppStructArray<byte> wavIl2cpp)
         {
-            // Il2Cpp インデクサの per-element 読みは罠 (MEMORY.md — 大要素数だと interop 呼び出しが支配的)。
+            // Il2Cpp インデクサの per-element 読みは罠 (大要素数だと interop 呼び出しが支配的)。
             // 先頭で一括 managed 化してから解析・変換し、最後にチャンネルごと 1 回の Marshal.Copy で書き戻す。
             byte[] wav = new byte[wavIl2cpp.Length];
             System.Runtime.InteropServices.Marshal.Copy(IntPtr.Add(wavIl2cpp.Pointer, IntPtr.Size * 4), wav, 0, wav.Length);

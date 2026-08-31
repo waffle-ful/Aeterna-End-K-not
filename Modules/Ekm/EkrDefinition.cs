@@ -289,7 +289,7 @@ public sealed class EkrDefinition
 
         // Wave 7 (docs/ekn-wave7-contract.md §1): 「かちにする」(win) は neutral スロット限定。
         // CustomWinner.EkmNeuRole1..5 が既製なのは neu の 5 スロットだけ + クルーの即勝ちは陣営裏切りの
-        // 意味論が重い (裁定③)。パース時の静的検査なので束縛前に弾ける (TS validate 側と対称)。
+        // 意味論が重い。パース時の静的検査なので束縛前に弾ける (TS validate 側と対称)。
         if (ParsedLogic != null && ParsedTeam != EkrTeam.Neutral && ParsedLogic.ContainsWinOp())
         {
             error = "「かちにする」はだいさん陣営 (team: \"neutral\") の役職だけ使えます";
@@ -327,7 +327,7 @@ public sealed class EkrDefinition
     }
 
     // ── Wave 3 (docs/ekn-wave3-contract.md §3): progress ────────────────────────────────────────
-    // 自由テキスト形式 (裁定 §7-2)。予算・注入面は構造ガードで抑える: 16字上限 / TMP タグ不可
+    // 自由テキスト形式 (spec §7-2)。予算・注入面は構造ガードで抑える: 16字上限 / TMP タグ不可
     // (`<`・`>` を全角へ機械置換 = notify.text・cno_spawn.text と同一規約) / 置換後 24字クランプ
     // (これは消費側 EkrManager.BuildProgressText が行う) / 色は役職色固定 (作者に指定させない)。
     private const int ProgressTextMax = 16;

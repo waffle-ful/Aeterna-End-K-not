@@ -20,7 +20,6 @@ public abstract class GameOptionsSender
     /// 速度/視界が古い値のまま固まり、無関係な次の dirty イベントが同じプレイヤーで起きるまで直らない無音 desync
     /// になる (例外もログも出ない)。MarkDirtySettings() を呼ぶ全コード (259 箇所) に効く共通の欠陥なので、
     /// 呼び出し側ごとの再マークではなくここで止める。
-    /// memory: skiptasks-window-outlives-exilecontroller
     /// </summary>
     protected virtual bool SendSuppressed => false;
 

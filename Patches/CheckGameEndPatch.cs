@@ -323,7 +323,7 @@ internal static class GameEndChecker
                     // CachedAllPlayerControls に居ないので自然に除外される (契約 §2)。第1ループでなく
                     // この第2ループに置くのは、第1ループ内の勝者剥奪 (Walker/WolfBoy/SchrodingersCat の
                     // WinnerIds.Remove) や Stalker 型の ResetAndSetWinner に便乗が巻き添えで消されない
-                    // ため — 「無条件」を文字どおりにする (2026-08-30 完成前監査指摘)。表示帰属は
+                    // ため — 「無条件」を文字どおりにする。表示帰属は
                     // 「かたせた側の EKR スロット」— AdditionalWinners = CustomRoles キャストで束縛
                     // 役職名が勝敗画面に出る (OutroPatch.GetAdditionalWinnerRoleName の既定書式)。
                     if (EkrManager.TryGetWinJoinSlot(pc.PlayerId, out CustomRoles winJoinSlot))

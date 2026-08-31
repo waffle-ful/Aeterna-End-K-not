@@ -7,7 +7,7 @@ namespace EndKnot
         public byte OwnerId { get; }
 
         // 視覚 world radius → font_size 逆関数。TMP <size=N> 絶対モードのサブリニア応答補正。
-        // K/P は ForceField 較正と同パラメータ (memory: tmp-size-n-sublinear)。
+        // K/P は ForceField 較正と同パラメータ。
         private const float K = 0.05f;
         private const float P = 0.9f;
 
