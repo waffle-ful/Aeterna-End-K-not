@@ -330,7 +330,7 @@ test.describe("役職メーカー (EKN R1, ブロックロジック)", () => {
         expect(cap.errors, "未捕捉の例外あり").toEqual([]);
     });
 
-    // Wave 3 (docs/ekn-wave3-contract.md §1.2 2026-08-14) — ekr_when_on_var は blocks-role.ts が
+    // Wave 3 (§1.2 2026-08-14) — ekr_when_on_var は blocks-role.ts が
     // Blockly.Blocks["ekr_when_on_var"] として命令形で登録する唯一の新イベントブロック (他の
     // ekr_when_* は defineBlocksWithJsonArray 経由)。命令形登録は型チェックが利かない生文字列
     // (VAR/VALUE/CMP のフィールド名、ブロック type 名そのもの) の塊なので、v1.1 の

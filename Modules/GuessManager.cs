@@ -270,7 +270,7 @@ public static class GuessManager
                         return true;
                     }
 
-                    // R2 (docs/ekn-r2-contract.md §3b): on_attacked kind:"guess"。Medic 層と同じ位置
+                    // R2: on_attacked kind:"guess"。Medic 層と同じ位置
                     // (Misfire 分岐より前) なので、キャンセルされた推測は **誰も死なない** (Medic 型)。
                     if (Modules.Ekm.EkrManager.IsEkrRole(target.GetCustomRole()) &&
                         !Modules.Ekm.EkrManager.FireAttacked(target.GetCustomRole(), target, pc, "guess"))
@@ -1456,7 +1456,7 @@ public static class GuessManager
                 var skipped = false;
                 PlayerControl guesser = guesserId.GetPlayer();
 
-                // ⚠️ 選択肢ラベル (実プレイヤー行の SetName 書換) は即時に送らない (BUG-20260802-11)。
+                // ⚠️ 選択肢ラベル (実プレイヤー行の SetName 書換) は即時に送らない。
                 // このすぐ下の凡例チャット (Utils.SendMessage) は「生存最小 PlayerId」名義で
                 // SetName(タイトル)→SendChat→SetName(素名復元) を送り、さらに 0.7s 後の
                 // ScheduleDecoratedNameRestore が装飾名を再送するため、先に書いたラベルはその行だけ

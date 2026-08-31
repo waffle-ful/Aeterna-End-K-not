@@ -140,7 +140,7 @@ public static class Zoom
         if (!Main || !HudManager.InstanceExists) return;
 
         // ロビーでは IsAlive を見ない — 前ゲームの MainRole (GM/観戦者) が PlayerStates に残留したまま
-        // IsAlive()=false になり、ゲーム後ロビーの影 (Backrooms 含む) が毎フレ強制 OFF される (BUG-20260706-03)。
+        // IsAlive()=false になり、ゲーム後ロビーの影 (Backrooms 含む) が毎フレ強制 OFF される。
         HudManager.Instance?.ShadowQuad?.gameObject.SetActive(Mathf.Approximately(Main.orthographicSize, 3.0f) && (GameStates.IsLobby || PlayerControl.LocalPlayer.IsAlive()));
     }
 }

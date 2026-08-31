@@ -3,7 +3,7 @@ using System.Collections.Generic;
 namespace EndKnot.Modules;
 
 // 会議UI破綻検知の計器 (ホストローカル・送信ゼロ)。
-// BUG-20260725-05: 会議には入れた (チャットは送れる) のに投票グリッドが構築されず投票できないクラスは、
+// 会議には入れた (チャットは送れる) のに投票グリッドが構築されず投票できないクラスは、
 // 移動ベースの MeetingStuckProbe では原理的に検知できない (会議に入れた時点で移動はロックされるため)。
 // 判別器 = 「生存していて、会議中にチャットは送れているのに、CastVote が一度もホストに届かない」。
 // チャットが送れている = 画面の前に居て操作意思がある、なので「単に投票しない人」の交絡をかなり削れる。
@@ -148,7 +148,7 @@ public static class MeetingSilentProbe
         Logger.Info($"platform breakdown (chat-no-vote/alive): {string.Join(" ", platParts)} | modded-alive={moddedAlive}/{alive}", "MeetingSilentProbe");
 
         foreach (string s in suspects)
-            Logger.Warn($"{s} sent chat during meeting but never cast a vote — likely broken vote UI (BUG-20260725-05 class)", "MeetingSilentProbe");
+            Logger.Warn($"{s} sent chat during meeting but never cast a vote — likely broken vote UI", "MeetingSilentProbe");
 
         if (silent.Count > 0)
             Logger.Info($"no-vote & no-chat (indeterminate, AFK?): {string.Join(", ", silent)}", "MeetingSilentProbe");

@@ -135,7 +135,7 @@ internal static class CheckMurderPatch
 
             // CNO (PlayerId >= 200) は host の AllPlayerControls からは外してあるが、非モッド客のローカルには
             // 残るため client のキルボタンの対象になりうる。Main.PlayerStates に登録が無いので以降の参照が
-            // KeyNotFoundException になる (BUG-20260728-05 と同型) — キルごと無効化する
+            // KeyNotFoundException になる — キルごと無効化する
             if (target.PlayerId >= 200)
             {
                 // ジェミニの分身だけは「キルを吸収して消える」(それ以外の CNO は従来どおり完全に無反応)
@@ -938,7 +938,7 @@ internal static class ShapeshiftPatch
 
         if (!shapeshifter || !target)
         {
-            // 計器 (BUG-20260802-10): 非モッド客の推測メニュー配線が未解明。target=null の素通り
+            // 計器: 非モッド客の推測メニュー配線が未解明。target=null の素通り
             // (despawn 済みghost行タップ疑い) がバニラ処理へ落ちる瞬間を可視化する
             Logger.Info($"null pass-through: shifter={(shapeshifter ? shapeshifter.PlayerId.ToString() : "null")} target={(target ? target.PlayerId.ToString() : "null")} meetingSS={meetingSS}", "MeetingSSProbe");
             return true;
@@ -947,12 +947,12 @@ internal static class ShapeshiftPatch
         // ⚠️ この meetingSS ディスパッチは CNO 拒否 (下の PlayerId >= 200) より前に置くこと。
         // 推測メニューは選択肢の行を ShapeshiftMenuElement (CNO) で増設し、その netId を
         // NetIdToRawDisplay に登録して「CNO 行のタップ = 選択肢の選択」として解釈する設計 —
-        // 2026-07-29 の BUG-20260728-05 緩和で CNO 拒否がこのブロックより前に入り、会議中の
-        // CNO 行タップが全て無反応 (reject) になってメニューが操作不能だった (BUG-20260802-10)。
+        // 2026-07-29 の緩和で CNO 拒否がこのブロックより前に入り、会議中の
+        // CNO 行タップが全て無反応 (reject) になってメニューが操作不能だった。
         // 未知の netId は GuessManager.TryGetDisplay 側が Reset() に落とすので素通しして安全。
         if (AmongUsClient.Instance.AmHost && meetingSS)
         {
-            // 計器 (BUG-20260802-10): クライアントがタップした行の実体 (pid/netId) を記録 —
+            // 計器: クライアントがタップした行の実体 (pid/netId) を記録 —
             // 「CNO行タップがどの host オブジェクトとして届くか」が未解明 (00:08 のミ選択が旧ゲートを通った謎)
             Logger.Info($"meetingSS dispatch: shifter={shapeshifter.PlayerId} target=pid:{target.PlayerId}/net:{target.NetId} hudState={MeetingHud.Instance.state}", "MeetingSSProbe");
 
@@ -966,7 +966,7 @@ internal static class ShapeshiftPatch
 
         // CNO (PlayerId >= 200) は Main.PlayerStates に登録が無い。CNO はホストの AllPlayerControls からは
         // 外れるが非モッド客のローカルには残るため、客の変身メニューの対象として選べてしまい、以降の
-        // PlayerStates 参照が KeyNotFoundException になる (bug-inbox BUG-20260728-05)。
+        // PlayerStates 参照が KeyNotFoundException になる。
         // 装飾オブジェクトへの変身に正当な用途は無いので、素通し (return true) ではなく拒否する
         // — 通すと RpcShapeshift 経由で Main.CheckShapeshift / AllPlayerNames 側へ問題が移るだけ
         // (会議中の推測メニュー行は上の meetingSS ブロックで処理済み — ここに届くのはタスク中のみ)
@@ -1200,7 +1200,7 @@ internal static class ReportDeadBodyPatch
     public static readonly Dictionary<byte, List<NetworkedPlayerInfo>> WaitReport = [];
     public static bool MeetingStarted;
 
-    // (会議安全窓 MeetingSafeAt は 2026-07-17 の TOHK 統一で撤去 — 経緯は docs/bug-inbox.md BUG-20260717-05)
+    // (会議安全窓 MeetingSafeAt は 2026-07-17 の TOHK 統一で撤去)
     public static bool Prefix(PlayerControl __instance, [HarmonyArgument(0)] NetworkedPlayerInfo target)
     {
         if (GameStates.IsMeeting || MeetingStarted) return false;
@@ -1461,7 +1461,7 @@ internal static class ReportDeadBodyPatch
 
         AfterReportTasks(__instance, target);
 
-        // TOHK パリティのワイヤ方式 (ホスト先行入室+RPC遅延直送) は BUG-20260723-01 のキック疑いにより
+        // TOHK パリティのワイヤ方式 (ホスト先行入室+RPC遅延直送) はキック疑いにより
         // 既定無効 — enable_meeting_wire.txt を置いたときだけ通る (詳細は Modules/MeetingStartWire.cs)。
         // 既定は vanilla 続行 (AssignSelf/OpenMeetingRoom/RpcStartMeeting を vanilla が実行する従来経路)
         if (MeetingStartWire.WireEnabled)
@@ -1479,7 +1479,7 @@ internal static class ReportDeadBodyPatch
         void Notify(string str) => __instance.Notify(ColorString(Color.yellow, GetString("CheckReportFail") + GetString(str)), 15f);
     }
 
-    // synthetic: 「他役職・コマンドが起こした偽装通報」か (Wave 3 契約 §2 — docs/ekn-wave3-contract.md)。
+    // synthetic: 「他役職・コマンドが起こした偽装通報」か。
     // 通常の通報 (CmdReportDeadBody → Prefix → ここ) は false、NoCheckStartMeeting 経由は既定 true。
     // 「自分が死体を見つけて通報したとき」の意味論を持つ処理 (EKR の on_report / Newscaster の調査対象)
     // だけがこのフラグを見る — 会議そのものの進行は従来どおり synthetic でも同一に走る。
@@ -1705,7 +1705,7 @@ internal static class ReportDeadBodyPatch
             Spiritualist.OnReportDeadBody(target);
             // Wave 3 契約 §2: Newscaster の既存防御は「target==null か」だけなので、target 付きの合成通報
             // (InSender / Anonymous / /mt <id>) に誤爆して「誰かが死体を見つけた」ことにしてしまっていた
-            // (BUG-20260814-08 と同型)。EKR の on_report と同じ synthetic ゲートに乗せて同時に解消する。
+            // EKR の on_report と同じ synthetic ゲートに乗せて同時に解消する。
             Newscaster.OnAnyoneReportDeadBody(player, target, synthetic);
 
             Bloodmoon.OnMeetingStart();
@@ -1713,7 +1713,7 @@ internal static class ReportDeadBodyPatch
             Commited.OnMeetingStart();
             Reroll.OnMeetingStart();
 
-            // EKR logic (docs/ekr-logic-spec.md §2): on_meeting_start は「走行中 fiber を全キャンセル」した
+            // EKR logic: on_meeting_start は「走行中 fiber を全キャンセル」した
             // 直後に発火する。on_report はそのキャンセルより後ろに置く必要がある — 先に置くと、この2行の
             // 間で発火した fiber ごとキャンセルされて無言で死ぬ。
             EkrManager.FireMeetingStart();
@@ -1978,7 +1978,7 @@ internal static class FixedUpdatePatch
                 (player.Data.PlayerLevel != 0 && player.Data.PlayerLevel < Options.KickLowLevelPlayer.GetInt()) ||
                 // FriendCode も ColorId と同じく post-spawn に非同期で届く。LevelKickBufferTime はフレーム数
                 // カウンタ (実質サブ秒) しかないため、低速回線 joiner の「データ未着」を誤爆しうる。
-                // 不正色キックと同じ join 時刻ベースの猶予を掛ける (BUG-20260730-14 / 兄弟 BUG-20260730-13)。
+                // 不正色キックと同じ join 時刻ベースの猶予を掛ける。
                 (player.Data.FriendCode == string.Empty && (!GameStartManagerPatch.ClientJoinTime.TryGetValue(player.OwnerId, out float fcJoinTime) || Time.time - fcJoinTime >= FriendCodeKickGraceSeconds))
             ))
             {

@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace EndKnot.Modules.Ekm;
 
-// EKR logic 契約 v1.1 の dummy_spawn 用 player-like CNO (契約正典: docs/ekr-logic-spec.md §3,§5)。
+// EKR logic 契約 v1.1 の dummy_spawn 用 player-like CNO。
 // 参考実装: Roles/Standard/Impostor/Killing/DummySpawner.cs の RandomDummy。既存コードは一切改変せず、
 // 外見ランダムプールと OnAfterCreate の呼び出し順序だけを踏襲する。
 internal sealed class EkrDummyCno : CustomNetObject, IKillableDummy, IEkrSlotCno

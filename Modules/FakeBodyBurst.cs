@@ -26,8 +26,8 @@ internal static class FakeBodyBurst
     // することでワイヤ率を 2/s (発症時 5.75/s の 1/3 以下) に落とす。
     public const float SpacingSeconds = 0.5f;
 
-    // リンク劣化中の縮小パラメータ (BUG-20260820-06 クラスタ緩和)。キック実測の連言は「劣化リンク×バースト」
-    // (project_kick_link_health_missing_axis) で、キル演出はスキップ型ゲートが使えない (キルは既に成立していて
+    // リンク劣化中の縮小パラメータ (クラスタ緩和)。キック実測の連言は「劣化リンク×バースト」
+    // で、キル演出はスキップ型ゲートが使えない (キルは既に成立していて
     // 死体が見えないと理不尽) ため、量と間隔を絞るペーシング型で対処する。kill switch 時は劣化判定ごと無効。
     private const int DegradedCount = 3;
     private const float DegradedSpacingSeconds = 1.5f;

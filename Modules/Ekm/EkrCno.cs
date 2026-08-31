@@ -4,7 +4,7 @@ using UnityEngine;
 namespace EndKnot.Modules.Ekm;
 
 // cno_move/cno_despawn 系 opcode が EkrCno (テキスト) / EkrDummyCno (player-like・v1.1) のどちらにも
-// 同じ呼び出しで効くようにするための抽象 (契約正典: docs/ekr-logic-spec.md §3 v1.1「cno_move / cno_despawn は
+// 同じ呼び出しで効くようにするための抽象 (契約 v1.1「cno_move / cno_despawn は
 // ダミーにもそのまま効く」)。cno_show はこの interface に含めない — ダミーには no-op (EkrLogicOpcodes.CnoShow
 // が `is not EkrCno` で弾く)。
 internal interface IEkrSlotCno
@@ -14,7 +14,7 @@ internal interface IEkrSlotCno
     void Despawn();
 }
 
-// EKR logic 契約 v1 の汎用テキスト CNO (契約正典: docs/ekr-logic-spec.md §3 cno_*)。
+// EKR logic 契約 v1 の汎用テキスト CNO (cno_*)。
 // 既存の非 player-like ・単一文字/短文 CNO (Modules/CustomNetObject.SizeTest.cs,
 // Modules/CustomNetObject.WaveCannon.cs の WaveCannonGate) と同じ Shapeshift-text 戦略に乗る。
 // OnMeeting() は「置きっぱなしの CNO」については意図的に素通しする — 基底 CustomNetObject.OnMeeting() の
@@ -24,7 +24,7 @@ public sealed class EkrCno : CustomNetObject, IEkrSlotCno
 {
     private readonly string _sprite;
 
-    // Wave 6 (docs/ekn-wave6-contract.md §1.1): cno_launch で飛行に入った実体。以後この CNO は
+    // Wave 6: cno_launch で飛行に入った実体。以後この CNO は
     // 「消えるのが自然な弾」として扱われ、飛行終了 (壁/40u/10秒) と中断 (会議・追放演出・ゲーム終了・
     // ホルダー死亡/切断/slot 剥奪) で必ず Despawn される。一度立ったら降りない (弾は再利用しない)。
     public bool Launched { get; private set; }
@@ -65,7 +65,7 @@ public sealed class EkrCno : CustomNetObject, IEkrSlotCno
     // (既定値は「実装が同じシグネチャを名乗る」ことにはならない)、明示実装で既定値付きの公開 API に委譲する。
     void IEkrSlotCno.Despawn() => Despawn();
 
-    // ── Wave 6 (docs/ekn-wave6-contract.md §1.1): 発射体モード ────────────────────────────────
+    // ── Wave 6: 発射体モード ────────────────────────────────
 
     // 飛行エンジン (EkrManager) が 0.1 秒 tick で呼ぶ。Position を書いて ForceSnapSend を立てるだけで、
     // 実送信は基底 OnFixedUpdate が ForceSnapMinInterval (0.2秒 = 5Hz) に間引く (Snowball と同じ委譲形)。

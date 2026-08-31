@@ -165,8 +165,8 @@ public static class Utils
     // レートは /tpdbg refill <sec> で実験調整できる。0 以下 = 回復無効 (旧挙動)。
     // getter/setter 経由の lazy refill なので既存の ++ / += / 代入サイトは全て無改変で動く。
     //
-    // 🔴 既定 0.25s/token (= 持続 4/s) の根拠 — 2026-08-12 に公式鯖で実測。詳細は
-    // docs/tpburst-rate-protocol.md、計器は /tpburst。それまでの 1.0 は「公式のレート仕様は
+    // 🔴 既定 0.25s/token (= 持続 4/s) の根拠 — 2026-08-12 に公式鯖で実測。
+    // 計器は /tpburst。それまでの 1.0 は「公式のレート仕様は
     // 未公表」という前提で置かれた当て推量だったが、実測でサーバー側の述語が判明した:
     //   **公式鯖は SnapTo の「本数」を数え、≒358 本 / 約 10 秒窓で Hacking キックする (レート非依存)**
     //   (98/s → 360 発で死亡 / 49/s → 358 発で死亡 / 30/s → 600 発 20 秒を完走・生還)。
@@ -673,7 +673,7 @@ public static class Utils
         string roleText = GetRoleName(targetMainRole);
         Color roleColor = GetRoleColor(loversShowDifferentRole ? CustomRoles.Impostor : targetMainRole);
 
-        // R2 (docs/ekn-r2-contract.md §4): 役職メーカーの passives.disguise。DoubleAgent と同じ
+        // R2: 役職メーカーの passives.disguise。DoubleAgent と同じ
         // 「見えている相手への表示を差し替える」型で、本人の勝敗・選出・実陣営は変えない。
         // 第三陣営への偽装だけは役職名をそのままにして色だけ変える (モッドに「汎用の第三陣営役職」が
         // 存在せず、実在の第三陣営役職も各自の名前で見えるため (2026-08-14)。
@@ -998,7 +998,7 @@ public static class Utils
 
         CustomRoles role = state.MainRole;
 
-        // R2 (docs/ekn-r2-contract.md §1): 役職メーカーのインポスター/第三陣営スロットはタスク無し。
+        // R2: 役職メーカーのインポスター/第三陣営スロットはタスク無し。
         // ⚠️ この switch は「タスクを持たない役職」を列挙する形なので、arm が無いとデフォルト側 =
         // タスク有りに落ちる (クルー陣営の EKR はそれが正しいのでそのまま)。
         if (Modules.Ekm.EkrManager.IsEkrRole(role) && Modules.Ekm.EkrManager.GetTeam(role) != Modules.Ekm.EkrTeam.Crewmate)
@@ -2272,13 +2272,13 @@ public static class Utils
             int resetNameRpcSize = HazelExtensions.GetStringWriteSize(Main.AllPlayerNames.GetValueOrDefault(sender.PlayerId, string.Empty)) + 4;
             int fullRpcSize = textRpcSize + titleRpcSize + resetNameRpcSize;
 
-            // 累積型の穴 (BUG-20260708-01/-04): StartRpc の分割チェックも RestartMessageIfTooLong も
+            // 累積型の穴: StartRpc の分割チェックも RestartMessageIfTooLong も
             // 「累積<500 の writer に大きな1書込みが乗る」合体を防げない (pre-write は書く前の長さしか
             // 見ず、post-write は溢れたまま送る)。前回呼び出しの残りが writer に溜まった状態でこの分を
             // 追記すると単一チャンクが SafeChunkLength を超える場合、書く前に見積りでフラッシュする。
             // (実測: SetName+SendChat ペア ~450B×2 が 902B 単一チャンクに合体、公式 kick 閾値 ~1024 に肉薄)
             // Length>10 は「裸の GameData エンベロープ (ヘッダ7B のみ)」を空ブロードキャストしない保険。
-            // 閾値は SetName 系チャンクの実測キック境界 (787B 通過 / 817B キック, 2026-07-14 BUG-20260714-04) に
+            // 閾値は SetName 系チャンクの実測キック境界 (787B 通過 / 817B キック, 2026-07-14) に
             // 合わせて SetNameChunkFlushThreshold (750) を使う。fullRpcSize は GameDataTo ラッパ / RPC ヘッダを
             // 含まない過小見積もりのため、3 RPC ぶんのラッパ相当をマージンとして上乗せする。
             if (writer.stream.Length > 10 && writer.stream.Length + fullRpcSize + (CustomRpcSenderExtensions.SetNameWrapperOverhead * 3) > CustomRpcSenderExtensions.SetNameChunkFlushThreshold)
@@ -2501,7 +2501,7 @@ public static class Utils
 
             if (sendTo == byte.MaxValue && HudManager.InstanceExists)
             {
-                // 生の Data.PlayerName 読みは禁止 (BUG-20260710-05) — SafePlayerName 参照。
+                // 生の Data.PlayerName 読みは禁止 — SafePlayerName 参照。
                 // ここはブロードキャスト経路で、mod のチャット送信のうち最頻。
                 string name = SafePlayerName(sender);
 
@@ -2653,7 +2653,7 @@ public static class Utils
         {
             if (HudManager.InstanceExists)
             {
-                // 生の Data.PlayerName 読みは禁止 (BUG-20260710-05): このフィールドは解放済みの il2cpp string を
+                // 生の Data.PlayerName 読みは禁止: このフィールドは解放済みの il2cpp string を
                 // 保持することがあり、marshal した瞬間に AV でプロセスごと即死する (fail-fast で try/catch 不可)。
                 // ここは差し替え「前」の最初の読みで、mod のシステムメッセージ全部が通る = 最頻の地雷だった。
                 string name = SafePlayerName(sender);
@@ -2853,7 +2853,7 @@ public static class Utils
 
             // 装飾名があればそれで、無ければ素名で overhead を確実に上書き (stuck タイトルの解消優先)。
             // GetValueOrDefault の第2引数はキーが在っても必ず評価されるため、ここに生の Data.PlayerName を
-            // 置くとシステムメッセージのたびに毎回読まれる = BUG-20260710-05 の地雷だった。ミラーが無ければ
+            // 置くとシステムメッセージのたびに毎回読まれる地雷だった。ミラーが無ければ
             // 空にして下の早期 return に任せる (生読みするくらいなら復元を諦める)。
             string restore = ApplySuffix(pc, out string decorated) && !string.IsNullOrEmpty(decorated)
                 ? decorated
@@ -2875,15 +2875,15 @@ public static class Utils
         }, 0.7f, "RestoreDecoratedNameAfterMessage", log: false);
     }
 
-    // BUG-20260710-05: `pc.Data.PlayerName` の生読みは禁止。このフィールドは解放済みの il2cpp string を
+    // `pc.Data.PlayerName` の生読みは禁止。このフィールドは解放済みの il2cpp string を
     // 保持することがあり、managed へ marshal した瞬間に「再利用先の boxed Color の r(=1.0f=0x3F800000)」を
     // 文字列長と誤読して約2.13GB の memmove が AV → プロセスごと即死する (fail-fast なので try/catch 不可)。
     // 代わりに managed ミラーを返す (Patches/TextBoxPatch.cs の SafeChatText と同じ「生読みをやめて鏡を返す」型)。
     //
     // LastBroadcastName を先に見るのは、RpcSetName の Postfix (RpcSetNameMirrorCachePatch) で常時同期される
     // = Data.PlayerName の正確な鏡だから。ここで素名 (AllPlayerNames) を先に返すと、装飾名を持つホストの
-    // 名前が素名に化けたまま FixedUpdate の dirty-check に「送信済み」と誤判定されて永久固定される
-    // ([[project_name_tag_dirty_cache_mirror]] の罠)。両方無ければ空 — 呼び出し側で書き戻しを諦めること
+    // 名前が素名に化けたまま FixedUpdate の dirty-check に「送信済み」と誤判定されて永久固定される罠がある。
+    // 両方無ければ空 — 呼び出し側で書き戻しを諦めること
     // (空名で SetName すると名前が消えるため)。
     internal static string SafePlayerName(PlayerControl player)
     {
@@ -4139,7 +4139,7 @@ public static class Utils
         if (newOutfit.Compare(pc.Data.DefaultOutfit)) return false;
 
         // デバッグラベルを作るためだけに生の Data.PlayerName を読むと、それだけで AV 即死の目が出る
-        // (BUG-20260710-05) — SafePlayerName 参照。ラベルなのでミラーで十分。
+        // — SafePlayerName 参照。ラベルなのでミラーで十分。
         CustomRpcSender sender = writer ?? CustomRpcSender.Create($"Utils.RpcChangeSkin({SafePlayerName(pc)})", sendOption);
 
         NetworkedPlayerInfo.PlayerOutfit current = pc.Data.DefaultOutfit;
@@ -4850,7 +4850,7 @@ public static class Utils
 
             if (!target) return;
 
-            // EKR logic (docs/ekr-logic-spec.md §2): on_death (自分が死んだとき・ctx=キルした人)。
+            // EKR logic: on_death (自分が死んだとき・ctx=キルした人)。
             // disconnect 経由の死亡は target の PlayerControl がこの後ろで破棄されうるため対象外にする
             // (Stained.OnDeath 等、既存の同種フックと同じ !disconnect ガード)。
             // R2 (契約 §3b): 死因を 8 バケットへ畳んで渡す (on_death の cause フィルタ用)。
@@ -5753,7 +5753,7 @@ public static class Utils
             playerControl.NetTransform.SnapTo(position);
             AmongUsClient.Instance.NetIdCnt += 1U;
             var sender = CustomRpcSender.Create("Utils.RpcCreateDeadBody", sendOption, true, false);
-            sender.checkLength = false; // ⚠️ writer キャッシュ + StartRpc 後の raw 直書き = CNO と同型 (BUG-20260711-02)。分割は PacketSplitPatch に任せる
+            sender.checkLength = false; // ⚠️ writer キャッシュ + StartRpc 後の raw 直書き = CNO と同型。分割は PacketSplitPatch に任せる
             MessageWriter writer = sender.stream;
             sender.StartMessage();
             writer.StartMessage(4);

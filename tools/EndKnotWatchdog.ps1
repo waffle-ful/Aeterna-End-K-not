@@ -41,10 +41,10 @@ $HealthLog            = Join-Path $HealthDir 'EndKnot-Health.log'
 # 心拍(5秒毎)がこの秒数途切れたら「ハング/クラッシュ」とみなす。GCやロードの一時停止で誤検知しない余裕を持たせる。
 $StaleSeconds         = 90
 
-# ハングダンプの先行採取しきい値 (BUG-20260721-02)。WER の AppHang 強制クローズは最終心拍から
+# ハングダンプの先行採取しきい値。WER の AppHang 強制クローズは最終心拍から
 # 実測 ~84s で発火し、stale=90s の検出を待つとダンプを取る前にプロセスが消える (2026-07-29 22:31 実測)。
 # kill 判定は $StaleSeconds のままにして、ダンプだけこの秒数で先に取る。正当な一時停止の実測最長は
-# 14s (BUG-20260707-09) なので 35s は誤検知余裕 2.5 倍。ダンプ採取はプロセスを殺さない (suspend のみ)。
+# 14s なので 35s は誤検知余裕 2.5 倍。ダンプ採取はプロセスを殺さない (suspend のみ)。
 $HangDumpSeconds      = 35
 
 # 番犬の巡回間隔（秒）
@@ -279,7 +279,7 @@ function Save-CrashSnapshot {
     }
 }
 
-# ハング時のプロセスダンプ (BUG-20260721-02)。ハングは WER が発火しないため LocalDumps 計器では
+# ハング時のプロセスダンプ。ハングは WER が発火しないため LocalDumps 計器では
 # 何も残らない — kill する前にフルダンプを取り、メインスレッドの詰まり先スタックを事後解析
 # (dotnet-dump/windbg) に残す。フルダンプは数GBになるため保持は最新2件のみ。
 # ⚠️ rundll32 comsvcs.dll MiniDump は使わない (2026-07-29 実測: 引用符付きパスは ERROR_INVALID_NAME で
@@ -318,7 +318,7 @@ if ($ok) { exit 0 } else { exit 1 }
     return ($p.ExitCode -eq 0 -and (Test-Path $Path))
 }
 
-# ハングダンプを「フル先行」で採る (BUG-20260805-04 で順序反転)。
+# ハングダンプを「フル先行」で採る (過去の実戦経験から順序反転)。
 # 旧設計 (速報→フル) は 2026-08-05 00:35 の実戦で敗北: 速報だけで 24s 消費し、フル開始と同時に
 # WER の AppHang クローズ (最終心拍から実測 ~84s。2026-07-29 22:30:17→22:31:40 実測) に殺された。
 # しかも速報 (0x1920) は DAC 初期化不可でマネージド解析に使えないことが確定済み
@@ -546,8 +546,8 @@ function Get-HealthStatus {
 # ゲーム内ボタンや .cmd から重ねて起動されても、番犬は常に1匹だけ動くようにする（二重監視=二重再起動を防止）。
 try { New-Item -ItemType Directory -Force -Path $HealthDir -ErrorAction SilentlyContinue | Out-Null } catch { }
 # WER LocalDumps (レジストリで DumpFolder=<HealthDir>\CrashDumps / DumpType=full 設定済み) の
-# 出力先を必ず用意しておく (BUG-20260805-04: フォルダ不在のまま AppHang クローズが2回走り、
-# WerFault 側のフルダンプを取り損ねた疑い。フォルダが在れば WER のクローズ自体が計器になる)。
+# 出力先を必ず用意しておく (フォルダ不在のまま AppHang クローズが2回走り、
+# WerFault 側のフルダンプを取り損ねた疑いがあった。フォルダが在れば WER のクローズ自体が計器になる)。
 try { New-Item -ItemType Directory -Force -Path (Join-Path $HealthDir 'CrashDumps') -ErrorAction SilentlyContinue | Out-Null } catch { }
 $script:Mutex = New-Object System.Threading.Mutex($false, 'Local\EndKnotWatchdog')
 if (-not $script:Mutex.WaitOne(0)) {
@@ -595,7 +595,7 @@ while ($true) {
     $health   = Get-HealthStatus
     $inGrace  = ($now -lt $script:GraceUntil)
 
-    # --- 警戒時の巡回短縮 (BUG-20260805-04) ---
+    # --- 警戒時の巡回短縮 ---
     # 巡回20s刻みだとハングダンプ発火 (途絶35s) の検知が最悪 T+55s になり、WER の AppHang
     # クローズ (~84s) までフルダンプの窓が 29s しか残らない。心拍が 15s 以上途絶した「警戒圏」
     # (正当な一時停止の実測最長 14s の直上) では 5s 刻みに切り替え、検知を T+36〜40s に前倒しする。
@@ -664,7 +664,7 @@ while ($true) {
         $script:BootDeaths   = 0
         $script:LaunchJudged = $true
 
-        # --- ハングダンプの先行採取 (BUG-20260721-02) ---
+        # --- ハングダンプの先行採取 ---
         # Fresh (age < 90s) のまま WER の AppHang クローズ (~84s) に殺されるとダンプが永遠に取れないため、
         # 35s 途絶の時点でダンプだけ先に取る。kill はしない (回復すればそのまま続行、ダンプは証拠として残る)。
         # 起動猶予中は前セッションの古い心拍を新プロセスのハングと誤認しうるので撃たない。

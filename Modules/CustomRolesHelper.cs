@@ -1126,7 +1126,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Dominion => true,
                 CustomRoles.Romantic when Romantic.DesignationMethod.GetValue() != 0 => true,
 
-                // Wave 2 (docs/ekn-wave2-contract.md §1.1 on_meeting_vote): 静的導出 arm (HasOnPetLogic と
+                // Wave 2 (on_meeting_vote): 静的導出 arm (HasOnPetLogic と
                 // 同型)。述語は「on_meeting_vote ルールの有無」— cancel_vote を使わない定義 (「投票した人を
                 // おぼえる」だけ等) でも OnVote 呼び出し口 (MeetingHudPatch.cs:1610) を通さないとイベントが
                 // 永久に発火しない (2026-08-11 確認)。
@@ -1173,7 +1173,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Revenant or
                 CustomRoles.Akazukin or // 捕食中は死んでいるが OnFixedUpdate で復活予約と猶予切れを回している
                 CustomRoles.Weatherman
-                // EKR logic (docs/ekr-logic-spec.md §2): on_death 起点の fiber は死後も実行を続ける契約
+                // EKR logic: on_death 起点の fiber は死後も実行を続ける契約
                 // (「死んだら爆発」演出)。EkrManager.Pump() が毎 tick 呼ばれ続けないと wait() の解決が
                 // DontUpdateDeadPlayers (既定 ON) の間引き間隔 (60〜150 tick ≈ 1〜3秒) ぶん遅延する。
                 // EKR は Utils.AddAbilityCD に意図的に未登録 (HasAbilityCD() 側の抜け道も使わない) ため
@@ -2429,7 +2429,7 @@ public enum CountTypes
 
     Coven,
 
-    // R2 (docs/ekn-r2-contract.md §0.1): 役職メーカーの第三陣営スロットは**それぞれが独立陣営**
+    // R2: 役職メーカーの第三陣営スロットは**それぞれが独立陣営**
     // (EKR 第三陣営同士も敵対する — 本物の NK と同形)。GetCountTypes のデフォルトが enum 名で
     // TryParse するので、名前を CustomRoles 側と一致させておくだけで自動的に効く。
     EkmNeuRole1,

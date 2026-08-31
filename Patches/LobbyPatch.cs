@@ -100,7 +100,7 @@ internal static class LobbyBehaviourStartPatch
     private static bool _bgmStarted;
     private static float _silenceUntil;
 
-    // ロビー入場フレーム 1.8 秒級ストールの帰属計測 (BUG-20260714-05)。Prefix→Postfix 到達までが
+    // ロビー入場フレーム 1.8 秒級ストールの帰属計測。Prefix→Postfix 到達までが
     // バニラ LobbyBehaviour.Start 本体、それ以降が mod の入場時仕事の取り分。
     private static System.Diagnostics.Stopwatch _enterSw;
 

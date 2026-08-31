@@ -600,7 +600,7 @@ public static class CustomSoundsManager
 
     // ── 起動時サウンドプリロード ──────────────────────────────────────────
     // 初回再生時の同期フルデコードがメインスレッドを止める疑いへの根治
-    // (BUG-20260729-17: ロビー放置中 27 秒 framestall の解除フレームに Earthquake MP3 の
+    // (ロビー放置中 27 秒 framestall の解除フレームに Earthquake MP3 の
     // 初回デコード完了ログが一致)。圧縮系 (.ogg/.mp3) はバックグラウンドスレッドで PCM へ
     // 先行デコードし、メインスレッドは 1 fixed update に 1 クリップだけ AudioClip 化して
     // audioCache を温める (.wav も DecodeWav のマネージド化で同じ裏スレッド経路)。

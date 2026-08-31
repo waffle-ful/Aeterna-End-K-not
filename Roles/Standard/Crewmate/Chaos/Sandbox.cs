@@ -207,7 +207,7 @@ public class Sandbox : RoleBase
             foreach (var list in SavedBlockPositions.Values) list.Clear();
             // ⚠️ 外側 delay は 10 秒から縮めないこと (基底 CustomNetObject.OnMeeting() と同じ規約)。
             // 1 秒開始だと追放スイープ+ドレイン窓 (task phase 開始後 ~10 秒) にブロック再生成の
-            // CreateNetObject 連鎖が丸ごと重なり、合算 nests がキック域に達する (BUG-20260803-07 の兄弟)。
+            // CreateNetObject 連鎖が丸ごと重なり、合算 nests がキック域に達する。
         }, 10f, "Sandbox.RespawnBlocks");
     }
 

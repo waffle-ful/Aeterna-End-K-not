@@ -1,4 +1,4 @@
-// 役職ロジック用 Blockly ブロック定義 (docs/ekr-logic-spec.md §2〜§4 のブロック UI 化)。
+// 役職ロジック用 Blockly ブロック定義 (spec §2〜§4 のブロック UI 化)。
 // zelos レンダラー素のまま・カテゴリ標準色 (イベント=黄/動き=青/見た目=紫/制御=橙/変数=赤 —
 // spec §7)。ここでは Blockly 標準の HSV 色相 (0〜360) をそのまま使う: LOGIC_HUE=210 等の
 // Blockly 自身の標準カテゴリ色相と同じ考え方 (実測: node_modules/blockly/msg/en.js の
@@ -38,18 +38,18 @@ const HUE_VAR = 330; // 変数 = 赤 (Blockly 標準の VARIABLES_HUE と同値)
 // v1.3 (spec §3 2026-08-11 追記) で pull/drag/field (ひっぱる・ひきずる・フィールド) を同カテゴリに追加。
 // 既存5色 (45/210/290/20/330) と衝突しない色相を選ぶ。
 const HUE_ULTIMATE = 150; // ひっさつわざ = 緑
-// Wave 2 (docs/ekn-wave2-contract.md 2026-08-11 追記) — 「しらべる」(情報開示) と「とうひょう」
+// Wave 2 (2026-08-11 追記) — 「しらべる」(情報開示) と「とうひょう」
 // (会議・投票操作) の2カテゴリを追加。既存6色 (45/210/290/20/330/150) の隙間から選ぶ
 // (45〜150 の隙間に HUE_INFO、210〜290 の隙間に HUE_MEETING)。
 const HUE_INFO = 100; // しらべる = 黄緑
 const HUE_MEETING = 260; // とうひょう = 青紫
-// Wave 4 (docs/ekn-wave4-contract.md 2026-08-25) — 「つなぐ」(リンク・勧誘) カテゴリ。
+// Wave 4 (2026-08-25) — 「つなぐ」(リンク・勧誘) カテゴリ。
 // 既存8色 (45/210/290/20/330/150/100/260) の隙間 (150〜210) から選ぶ — 動き (210) と
 // ひっさつわざ (150) のあいだで視覚的に区別できる青緑。
 const HUE_LINK = 190; // つなぐ = 青緑
-const HUE_WIN = 0; // かちまけ = 深紅 (Wave 7 docs/ekn-wave7-contract.md)
+const HUE_WIN = 0; // かちまけ = 深紅 (Wave 7)
 
-// R2 (docs/ekn-r2-contract.md §3b): on_attacked の「こうげきのしゅるい」と on_death の「死にかた」。
+// R2 (契約 §3b): on_attacked の「こうげきのしゅるい」と on_death の「死にかた」。
 // 先頭の "" は「すべて」= AST でフィールドごと省略する (= 全種にマッチ)。
 const ATTACK_KIND_OPTIONS: [string, string][] = [
     ["こうげき (ぜんぶ)", ""],
@@ -73,7 +73,7 @@ const DEATH_CAUSE_OPTIONS: [string, string][] = [
 
 // on_cno_touch は動的な SLOT ドロップダウンを持つため WHEN_LABELS/WHEN_TOOLTIPS には残すが、
 // jsonBlockDefs 側では他のイベントと分けて個別のブロック定義を書く (下記参照)。
-// Wave 3 (docs/ekn-wave3-contract.md §1 2026-08-14) — 状態条件トリガのちょうど/いか/いじょう。
+// Wave 3 (§1 2026-08-14) — 状態条件トリガのちょうど/いか/いじょう。
 // on_var / on_alive_count のどちらの比較にも使う (見え方が違うだけの同じ3値)。
 const CMP_OPTIONS: [string, string][] = [
     ["ちょうど", "eq"],
@@ -81,7 +81,7 @@ const CMP_OPTIONS: [string, string][] = [
     ["いじょう", "ge"],
 ];
 
-// Wave 4 (docs/ekn-wave4-contract.md §1) — on_near/on_far の はんい (radius tier) と あいて (who)。
+// Wave 4 (§1) — on_near/on_far の はんい (radius tier) と あいて (who)。
 // radius の3語は「ブラックホール」(field) と同じ字面だが別スケール (契約 §1.2「同語別値」) なので、
 // tooltip で別ものであることを明示する。
 const NEAR_RADIUS_OPTIONS: [string, string][] = [
@@ -113,20 +113,20 @@ export const WHEN_LABELS: Record<LogicWhen, string> = {
     on_second: "毎秒くりかえす",
     on_cno_touch: "オブジェクトにだれかが触れたとき",
     on_attacked: "こうげきされたとき",
-    // Wave 2 (docs/ekn-wave2-contract.md §1.1/§1.2 2026-08-11)
+    // Wave 2 (§1.1/§1.2 2026-08-11)
     on_meeting_vote: "かいぎで投票したとき",
     on_meeting_pick: "かいぎであいてをえらんだとき",
-    // Wave 3 (docs/ekn-wave3-contract.md §1 2026-08-14) — 状態条件トリガ。
+    // Wave 3 (§1 2026-08-14) — 状態条件トリガ。
     on_var: "へんすうが条件になったとき",
     on_alive_count: "いきのこりが◯人になったとき",
     on_vent_exit: "ベントから出たとき",
-    // Wave 4 (docs/ekn-wave4-contract.md §1〜§3 2026-08-25) — つなぐ。
+    // Wave 4 (§1〜§3 2026-08-25) — つなぐ。
     on_near: "だれかが 近づいたとき",
     on_far: "あのひとが はなれたとき",
     on_room_enter: "へやに 入ったとき",
     on_room_exit: "へやから 出たとき",
     on_linked_death: "つないだ人が 死んだとき",
-    // Wave 6 (docs/ekn-wave6-contract.md §2/§3 2026-08-29) — 残イベント2種。
+    // Wave 6 (§2/§3 2026-08-29) — 残イベント2種。
     on_sabotage: "だれかがサボタージュをおこしたとき",
     on_revive: "いきかえったとき",
 };
@@ -140,7 +140,7 @@ const WHEN_TOOLTIPS: Record<LogicWhen, string> = {
     on_meeting_end: "追放処理のあと、タスクが再開するときに実行します。",
     on_task_complete: "自分がタスクを1つ終えるたびに実行します。見せかけのタスク (インポスターなどの偽タスク) では発火しません。",
     on_vent_enter: "自分がベントに入れたとき (封鎖などの妨害をくぐり抜けて実際に入れたとき) に実行します。",
-    // Wave 3 (docs/ekn-wave3-contract.md §2 2026-08-14): 合成通報 (他の役職の能力・コマンドが
+    // Wave 3 (§2 2026-08-14): 合成通報 (他の役職の能力・コマンドが
     // 起こす偽装通報) では発火しないことを明記した文言へ更新。
     on_report: "自分が死体を見つけて通報したときに実行します (他の役職の能力で会議になったときは実行されません)。",
     on_second: "タスク中、自分が生きている間、毎秒くりかえし実行します (処理が重いことはしないでね)。",
@@ -148,24 +148,24 @@ const WHEN_TOOLTIPS: Record<LogicWhen, string> = {
     // Wave 1 (spec §2 2026-08-11)。同期プロローグ (最初の「秒待つ」までしか攻撃を止められない)
     // をユーザーの言葉で言い切る一文にする — リンタ L17 の文言と同じ趣旨。
     on_attacked: "このときの「あいて」= 攻撃してきた人。ふせぐのは一番はじめに置こう",
-    // Wave 2 (docs/ekn-wave2-contract.md §1.1/§1.2 2026-08-11)
+    // Wave 2 (§1.1/§1.2 2026-08-11)
     on_meeting_vote: "このときの「あいて」= 投票した相手 (スキップでは発火しません)。票を取り消せるのは一番はじめだけです。",
     on_meeting_pick: "このときの「あいて」= えらんだ相手 (会議のボタン、または /pick コマンドどちらでも発火します)。票そのものには関係ありません。",
-    // Wave 3 (docs/ekn-wave3-contract.md §1 2026-08-14) — 状態条件トリガ (エッジ発火・共通意味論)。
+    // Wave 3 (§1 2026-08-14) — 状態条件トリガ (エッジ発火・共通意味論)。
     on_var: "この変数の値が指定した条件になったしゅんかんに1回だけ実行します。条件を満たしたままだと再発火せず、いちど条件から外れてからまた満たすと、もう1回発火します。ゲーム開始時にすでに条件を満たしていても、そのときは発火しません。",
     on_alive_count: "生きている人数が指定した条件になったしゅんかんに1回だけ実行します (ダミー人形は数えません)。自分が死んだあとは発火しません。条件を満たしたままだと再発火せず、いちど条件から外れてからまた満たすと、もう1回発火します。",
     // 契約 §1.4: 「ベントから出たときに実行します (追い出されたときも含みます)。」の verbatim に加え、
     // 「on_vent_enter とのペアは保証しない (入ったときと数が合わないことがあるよ)」を tooltip に
     // 明記する要件が別途あるため、注意書きの一文を続ける (2つの要件を1文で満たす)。
     on_vent_exit: "ベントから出たときに実行します (追い出されたときも含みます)。入ったときと数が合わないことがあるよ。",
-    // Wave 4 (docs/ekn-wave4-contract.md §1〜§3 2026-08-25) — つなぐ。radius は field (ブラックホール)
+    // Wave 4 (§1〜§3 2026-08-25) — つなぐ。radius は field (ブラックホール)
     // と同語別値 (契約 §1.2) なので「別もの」の一文を必ず残すこと。
     on_near: "選んだ範囲に生きている人が入ったときに1回だけ実行します (このときの「あいて」= 近づいた人)。その人が出ていくまでは、もう一度は実行されません。ワープでとなりに現れた人には反応しません (歩いて近づいたときだけ)。はんいは「ブラックホール」の大きさとは別ものだよ。",
     on_far: "つないだ人/おぼえた人が、いちど近づいてから はなれたときに1回実行します (このときの「あいて」= はなれた人)。さいしょから遠いときは実行されません。はんいは「ブラックホール」の大きさとは別ものだよ。",
     on_room_enter: "名前のある部屋に入ったときに実行します。ろうか・外は部屋ではありません。ベントやワープで入っても実行されます。",
     on_room_exit: "名前のある部屋から出たときに実行します。ろうか・外は部屋ではありません。ベントやワープで出ても実行されます。",
     on_linked_death: "「このひとと つなぐ」でつないだ人が死んだときに1回実行します (このときの「あいて」= 死んだ人)。切断でいなくなったときは実行されません。",
-    // Wave 6 (docs/ekn-wave6-contract.md §2/§3 2026-08-29) — 残イベント2種。
+    // Wave 6 (§2/§3 2026-08-29) — 残イベント2種。
     on_sabotage: "だれかがサボタージュ (電気・酸素・爆弾・通信など) を成功させたときに実行します (このときの「あいて」= サボタージュをおこした人)。だれの役職でも、生きている全員に実行されます。おなじサボタージュを連打しても、しばらくは続けて実行されません。",
     on_revive: "自分が生き返ったときに実行します (「あいて」はいません)。変数やここまでの進み具合はそのまま続きます。",
 };
@@ -178,7 +178,7 @@ const WHEN_TOOLTIPS: Record<LogicWhen, string> = {
 const TARGET_SINGLE_OPTIONS: [string, string][] = [
     ["じぶん", "self"],
     ["あいて", "ctx"],
-    // Wave 4 (docs/ekn-wave4-contract.md §3.4): つないだ人 — saved1/2 が出るすべてのドロップダウン
+    // Wave 4 (§3.4): つないだ人 — saved1/2 が出るすべてのドロップダウン
     // (kill/teleport_other/remember/inspect/reveal/arrow_show/vote_block/exile/notify) に出す。
     ["つないだ人", "linked"],
     ["おぼえた人1", "saved1"],
@@ -188,7 +188,7 @@ const TARGET_SINGLE_OPTIONS: [string, string][] = [
 ];
 // teleport_other は「相手を飛ばす」op なので じぶん を出さない (spec §3 のアクション表どおり)。
 const TARGET_OTHER_OPTIONS: [string, string][] = TARGET_SINGLE_OPTIONS.filter(([, v]) => v !== "self");
-// Wave 5 (docs/ekn-wave5-contract.md §2): recruit の「かえるさき」。先頭の "" = 「じぶんとおなじ」で、
+// Wave 5 (§2): recruit の「かえるさき」。先頭の "" = 「じぶんとおなじ」で、
 // compile-role が正準形からフィールドごと省略する (ATTACK_KIND_OPTIONS の「すべて」と同じ作法)。
 // スロット番号はロビー構成への相対参照 (中身はホストが決める) なので、絶対語彙の禁止には触れない。
 const RECRUIT_SLOT_OPTIONS: [string, string][] = [
@@ -232,13 +232,13 @@ function variableDropdownOptions(): Blockly.MenuOption[] {
 function jsonBlockDefs(): unknown[] {
     // on_cno_touch は動的な SLOT ドロップダウン (1..3) を持つ唯一のイベント (spec §2 v1.2) —
     // 他の when と同じ汎用テンプレートには乗せず、個別のブロック定義を書く。
-    // R2 (docs/ekn-r2-contract.md §3b): on_attacked / on_death も任意フィルタのドロップダウンを
+    // R2 (契約 §3b): on_attacked / on_death も任意フィルタのドロップダウンを
     // 持つので、on_cno_touch と同じく汎用テンプレートから外して個別に書く。
-    // Wave 3 (docs/ekn-wave3-contract.md §1 2026-08-14): on_alive_count も cmp/value のドロップダウン+
+    // Wave 3 (§1 2026-08-14): on_alive_count も cmp/value のドロップダウン+
     // 数値欄を持つので同様に個別定義。on_var はさらに変数ドロップダウンが動的 (変数リストの増減に
     // 追随する必要がある) ため、ekr_expr_var/ekr_do_var_set と同じく defineDynamicVariableBlocks()
     // 側で命令形登録する (on_vent_exit はフィールドを持たないのでこのフィルタに含めず生成のまま)。
-    // Wave 4 (docs/ekn-wave4-contract.md §1/§3): on_near (RADIUS+WHO)・on_far (RADIUS+WHO)・
+    // Wave 4 (§1/§3): on_near (RADIUS+WHO)・on_far (RADIUS+WHO)・
     // on_linked_death (CAUSE) もドロップダウンを持つので個別定義 (on_room_enter/on_room_exit は
     // フィールドを持たないので生成のまま)。
     const eventBlocks = LOGIC_WHEN_VALUES
@@ -278,7 +278,7 @@ function jsonBlockDefs(): unknown[] {
             colour: HUE_EVENT,
             tooltip: WHEN_TOOLTIPS.on_death,
         },
-        // Wave 3 (docs/ekn-wave3-contract.md §1.3 2026-08-14) — いきのこりが◯人になったら。
+        // Wave 3 (§1.3 2026-08-14) — いきのこりが◯人になったら。
         {
             type: "ekr_when_on_alive_count",
             message0: "いきのこりが %1 人 %2 になったら",
@@ -291,7 +291,7 @@ function jsonBlockDefs(): unknown[] {
             colour: HUE_EVENT,
             tooltip: WHEN_TOOLTIPS.on_alive_count,
         },
-        // Wave 4 (docs/ekn-wave4-contract.md §1.2/§1.3) — 対人近接。on_near の WHO は「だれでも」
+        // Wave 4 (§1.2/§1.3) — 対人近接。on_near の WHO は「だれでも」
         // 込み・on_far は「だれでも」抜き (anyone は検証 reject)。
         {
             type: "ekr_when_on_near",
@@ -447,7 +447,7 @@ function jsonBlockDefs(): unknown[] {
             // 暴走ドリフト防止)。同じ数値で何度動かしても毎回同じ場所に着地する。
             tooltip: "出したときの場所を基準にした位置 (x, y) へ動かします。同じ数値で何度も動かすと毎回同じ場所に戻ります (動かした分がどんどん積み上がることはありません)。",
         },
-        // Wave 6 (docs/ekn-wave6-contract.md §1 2026-08-29 追記) — とばすもの (発射体プリミティブ)。
+        // Wave 6 (§1 2026-08-29 追記) — とばすもの (発射体プリミティブ)。
         {
             type: "ekr_do_cno_launch",
             message0: "オブジェクト %1 を %2 の方向へ %3 でとばす",
@@ -771,7 +771,7 @@ function jsonBlockDefs(): unknown[] {
             tooltip: "投票を待たずに、えらんだ人をすぐ追放して会議を終わらせます (自分をえらぶこともできます)。会議中でしか効かず、ひと会議に1回だけです。何回使えるようにするかは、変数を使って自分で決めよう。",
         },
 
-        // かちまけ (Wave 7 docs/ekn-wave7-contract.md §1/§2 — 勝利条件)
+        // かちまけ (Wave 7 §1/§2 — 勝利条件)
         {
             type: "ekr_do_win",
             message0: "%1 をかちにする (ゲームがおわる)",
@@ -791,7 +791,7 @@ function jsonBlockDefs(): unknown[] {
             tooltip: "えらんだ人に「いっしょ勝ち」のしるしを付けます。ゲームが終わったとき、どのチームが勝っていても、しるしの付いた人は勝者のなかまに加わります (ゲームはこのブロックでは終わりません)。しるしは取り消せず、次のゲームには持ちこしません。どの陣営の役職でも使えます。会議中でも使えます。",
         },
 
-        // つなぐ (Wave 4 docs/ekn-wave4-contract.md §3/§4 — リンクと勧誘)
+        // つなぐ (Wave 4 §3/§4 — リンクと勧誘)
         {
             type: "ekr_do_link",
             message0: "%1 と つなぐ",
@@ -817,7 +817,7 @@ function jsonBlockDefs(): unknown[] {
         },
         {
             type: "ekr_do_recruit",
-            // Wave 5 (docs/ekn-wave5-contract.md §2): かえるさき (SLOT) は任意。既定の "" =
+            // Wave 5 (§2): かえるさき (SLOT) は任意。既定の "" =
             // 「じぶんとおなじ」で、compile-role が正準形からフィールドごと省略する。
             message0: "%1 を なかまにする (かえるさき %2)",
             args0: [{
@@ -837,7 +837,7 @@ function jsonBlockDefs(): unknown[] {
             tooltip: "えらんだ人が、自分と同じ役職になります。会議中は効きません。同じ役職の人には効きません。しばらく間をあけないと連続では効きません。なかまに した/された ときも「ゲームがはじまったとき」が動くよ。じぶんがインポスターの役職なら、なかまにした人も本物のインポスターになるよ (インポスターの人数がふえる)。「かえるさき」でスロット番号をえらぶと、その役職にすることもできるよ (そのスロットに役職が入っていないときは なにも起きません)。",
         },
 
-        // 持続効果 (Wave 5 docs/ekn-wave5-contract.md §1 — こうかをかける)
+        // 持続効果 (Wave 5 §1 — こうかをかける)
         {
             type: "ekr_do_effect_give",
             message0: "%1 を %2 %3 秒",
@@ -947,7 +947,7 @@ function defineDynamicVariableBlocks(): void {
         },
     };
 
-    // Wave 3 (docs/ekn-wave3-contract.md §1.2 2026-08-14) — 「へんすう◯が◯になったら」。
+    // Wave 3 (§1.2 2026-08-14) — 「へんすう◯が◯になったら」。
     // 変数ドロップダウンが動的なので ekr_expr_var/ekr_do_var_set と同じく命令形で登録する
     // (JSON block defs の field_dropdown は静的な options 配列しか持てない)。
     Blockly.Blocks["ekr_when_on_var"] = {

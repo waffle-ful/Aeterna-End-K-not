@@ -24,7 +24,7 @@ public static class GameStartManagerPatch
     public static float Timer => Math.Max(0, 597f - (Utils.TimeStamp - TimerStartTS));
 
     // ClientId => join 時刻 (Time.time)。低速回線の joiner は SetName/SetColor 到着まで数秒かかるため、
-    // 不正色キックはこの時刻から猶予を置いて判定する (BUG-20260730-13)
+    // 不正色キックはこの時刻から猶予を置いて判定する
     public static readonly Dictionary<int, float> ClientJoinTime = [];
 
     [HarmonyPatch(typeof(TimerTextTMP), nameof(TimerTextTMP.UpdateText))]
@@ -236,7 +236,7 @@ public static class GameStartManagerPatch
             {
                 Main.UpdateTime = -100;
 
-                // join 直後は SetName/SetColor が未着なだけの可能性があるため、猶予内のプレイヤーは蹴らず開始だけ遅らせる (BUG-20260730-13)
+                // join 直後は SetName/SetColor が未着なだけの可能性があるため、猶予内のプレイヤーは蹴らず開始だけ遅らせる
                 PlayerControl[] overdue = invalidColor.Where(p => !GameStartManagerPatch.ClientJoinTime.TryGetValue(p.OwnerId, out float joinTime) || Time.time - joinTime >= InvalidColorKickGraceSeconds).ToArray();
                 if (overdue.Length == 0) return;
 

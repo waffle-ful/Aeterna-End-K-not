@@ -5,8 +5,8 @@ using UnityEngine;
 
 namespace EndKnot.Modules.Ekm;
 
-// EKR logic 契約 v1 の汎用インタープリタ (契約正典: docs/ekr-logic-spec.md)。
-// 将来のマップロジック (docs/ekm-studio/ROADMAP.md Stage 5a) とも共用する設計のため、
+// EKR logic 契約 v1 の汎用インタープリタ。
+// 将来のマップロジックとも共用する設計のため、
 // このファイルには「役職」固有の語彙 (PlayerControl/kill/teleport 等) を一切持ち込まない。
 // 「自分/相手」の解決は EkrFiber.Context (不透明 object) 経由で呼び出し元 (EkrLogicOpcodes 等) が行う。
 //
@@ -29,14 +29,14 @@ public sealed class EkrRule
     // on_cno_touch (v1.2) 専用の必須フィールド (1..3)。他イベントでは常に 0 (未使用)。
     public int Slot;
 
-    // R2 (docs/ekn-r2-contract.md §3b): on_attacked 専用の任意フィールド。null = 全種にマッチ。
+    // R2: on_attacked 専用の任意フィールド。null = 全種にマッチ。
     // 値は EkrAttackKinds のいずれか。
     public string Kind;
 
     // R2 (同 §3b): on_death 専用の任意フィールド。null = 全死因にマッチ。値は EkrDeathCauses のいずれか。
     public string Cause;
 
-    // Wave 3 (docs/ekn-wave3-contract.md §1.2): on_var 専用の必須フィールド。監視する変数名。
+    // Wave 3: on_var 専用の必須フィールド。監視する変数名。
     // 他イベントでは null。
     public string VarName;
 
@@ -49,7 +49,7 @@ public sealed class EkrRule
     // パース時に確定する導出値 — 呼び出し元 (EkrManager) が武装配列を組むときの唯一の判定基準。
     public bool IsStateTrigger;
 
-    // Wave 4 (docs/ekn-wave4-contract.md §1): on_near / on_far 専用フィールド。radius は両者必須
+    // Wave 4: on_near / on_far 専用フィールド。radius は両者必須
     // ("small" | "medium" | "large")。Who は on_near では任意 (欠落 = "anyone" をパース時に焼き込む —
     // notify.target の既定 self と同じ方式)・on_far では必須 ("linked" | "saved1" | "saved2"、
     // "anyone" は文書 reject)。他イベントでは両方とも null。
@@ -120,17 +120,17 @@ public sealed class EkrNode
     // field.strength (v1.3) ("weak" | "medium" | "strong")
     public string StrengthTier;
 
-    // Wave 2 (docs/ekn-wave2-contract.md §2.1 inspect): depth ("team" | "role")
+    // Wave 2 (inspect): depth ("team" | "role")
     public string Depth;
 
     // Wave 2 (inspect): failChance (0..100) / noise (0..5)
     public int FailChance;
     public int Noise;
 
-    // Wave 5 (docs/ekn-wave5-contract.md §1 effect_give): かける効果の種類 ("haste" | "slow" | "freeze" | "blind")。
+    // Wave 5 (effect_give): かける効果の種類 ("haste" | "slow" | "freeze" | "blind")。
     public string EffectKind;
 
-    // Wave 6 (docs/ekn-wave6-contract.md §1 cno_launch): とばす向き ("move" | "ctx" | "marker1".."marker4") と
+    // Wave 6 (cno_launch): とばす向き ("move" | "ctx" | "marker1".."marker4") と
     // 速さ tier ("slow" | "medium" | "fast")。速さは任意フィールドで、省略時はパース時に "medium" を焼き込む
     // (notify.target の既定 self と同じ方式 — 実行側で既定値を再解釈しない)。
     public string LaunchDir;
@@ -170,12 +170,12 @@ public sealed class EkrLogicDef
         "on_meeting_end", "on_task_complete", "on_vent_enter", "on_report", "on_second",
         "on_cno_touch", // v1.2 (2026-08-10)
         "on_attacked", // Wave 1 (2026-08-11)
-        "on_meeting_vote", "on_meeting_pick", // Wave 2 (docs/ekn-wave2-contract.md §1)
-        // Wave 3 (docs/ekn-wave3-contract.md §1): じょうたいトリガ2種 + ベント退出。
+        "on_meeting_vote", "on_meeting_pick", // Wave 2
+        // Wave 3: じょうたいトリガ2種 + ベント退出。
         "on_var", "on_alive_count", "on_vent_exit",
-        // Wave 4 (docs/ekn-wave4-contract.md §0): 対人近接2種 + 部屋2種 + リンク死。
+        // Wave 4: 対人近接2種 + 部屋2種 + リンク死。
         "on_near", "on_far", "on_room_enter", "on_room_exit", "on_linked_death",
-        // Wave 6 (docs/ekn-wave6-contract.md §2,§3): サボタージュ成立 (グローバル・ctx=起こした人) と
+        // Wave 6: サボタージュ成立 (グローバル・ctx=起こした人) と
         // 蘇生 (ホルダー限定・ctx 無し — 蘇生させた人は RpcRevive のシグネチャに存在しないため渡せない)。
         "on_sabotage", "on_revive"
     ];
@@ -187,7 +187,7 @@ public sealed class EkrLogicDef
     // Wave 3 (§1.1): エッジ発火エンジンが武装状態を管理するイベント。
     public static bool IsStateTriggerEvent(string when) => when is "on_var" or "on_alive_count";
 
-    // R2 (docs/ekn-r2-contract.md §3b): on_attacked の種別と on_death の死因バケット。
+    // R2: on_attacked の種別と on_death の死因バケット。
     // ⚠️ TS 側 (editor/src/roledef.ts) と同じ並び・同じ綴りを保つこと (drift 検出は共有 fixture)。
     public static readonly string[] EkrAttackKinds = ["kill", "indirect", "force", "guess"];
 
@@ -195,7 +195,7 @@ public sealed class EkrLogicDef
 
     // rule 直下の任意フィルタ (kind/cause) の読み取り。指定できるイベントが決まっており、
     // 他イベントに置かれていたら slot と同じく reject する (静的に検査できるものは no-op でなく reject)。
-    // Wave 4 (docs/ekn-wave4-contract.md §3.3): cause は on_death と on_linked_death の2イベントで
+    // Wave 4: cause は on_death と on_linked_death の2イベントで
     // 受理するため、対象イベントは単数でなく配列で受ける。
     private static bool TryReadRuleFilter(JsonElement ruleEl, string when, string field, string[] onlyEvents, string[] allowed, out string value, out string error)
     {
@@ -228,7 +228,7 @@ public sealed class EkrLogicDef
         return true;
     }
 
-    // Wave 4 (docs/ekn-wave4-contract.md §1/§6): 対人近接 (on_near/on_far) の rule 直下フィールド。
+    // Wave 4: 対人近接 (on_near/on_far) の rule 直下フィールド。
     // radius は両イベントの必須。who は on_near では任意 (既定 "anyone")・on_far では必須かつ
     // "anyone" 不可 (「知らない誰かが遠くにいる」は常時成立で意味を持たない — 契約 §1.3)。
     // 他イベントに付いていたら on_cno_touch の slot と同じく文書 reject する (対称検査)。
@@ -297,7 +297,7 @@ public sealed class EkrLogicDef
         return true;
     }
 
-    // Wave 3 (docs/ekn-wave3-contract.md §1.2/§1.3): じょうたいトリガの rule 直下フィールドの読み取り。
+    // Wave 3: じょうたいトリガの rule 直下フィールドの読み取り。
     // `var` は on_var のみ・`cmp`/`value` は on_var と on_alive_count のみ (どちらも必須)。
     // 他イベントに付いていたら on_cno_touch の slot と同じく文書 reject する
     // (静的に検査できるものは no-op でなく reject — spec §1 の総則)。
@@ -378,7 +378,7 @@ public sealed class EkrLogicDef
 
     // Wave 1 (spec §3 統一セレクタ語彙)。単数セレクタのみ受理する op (kill/teleport_other/remember 等) と、
     // 複数セレクタも受理する明示ホワイトリスト op (Wave 1 では notify だけ) を分ける。
-    // Wave 4 (docs/ekn-wave4-contract.md §3.4): "linked" (つないだ人) を追加 — 「saved1/saved2 が受理される
+    // Wave 4: "linked" (つないだ人) を追加 — 「saved1/saved2 が受理される
     // すべての箇所」= SingleSelectors / OtherSelectors / MultiSelectors (TS 側は TARGET_SINGLE_VALUES からの
     // 導出で notify も構造的に受理するため、こちらも追加しないと検証が非対称になる)。at/to (空間セレクタ)
     // には追加しない (§3.4 明示除外 — 人参照であって位置参照ではない)。
@@ -393,12 +393,12 @@ public sealed class EkrLogicDef
     // OtherSelectors は Wave 4 で linked を含むため専用リストにする。
     private static readonly string[] LinkTargetSelectors = ["ctx", "saved1", "saved2", "nearest", "random"];
 
-    // Wave 5 (docs/ekn-wave5-contract.md §1): effect_give の効果種別と kind 別の秒数上限。
+    // Wave 5: effect_give の効果種別と kind 別の秒数上限。
     // freeze だけ上限が短い (移動権の剥奪なので drag の 1..10 と同格 — 契約 §1)。
     // ⚠️ TS 側 (editor/src/roledef.ts) と同じ並び・同じ綴りを保つこと (drift 検出は共有 fixture)。
     public static readonly string[] EkrEffectKinds = ["haste", "slow", "freeze", "blind"];
 
-    // Wave 6 (docs/ekn-wave6-contract.md §1): cno_launch の dir / speed 受理値。
+    // Wave 6: cno_launch の dir / speed 受理値。
     // ⚠️ TS 側 (editor/src/roledef.ts) と同じ並び・同じ綴りを保つこと (drift 検出は共有 fixture)。
     public static readonly string[] EkrLaunchDirs = ["move", "ctx", "marker1", "marker2", "marker3", "marker4"];
 
@@ -416,16 +416,16 @@ public sealed class EkrLogicDef
         "marker_save", "teleport_other", "portal_place", // v1.2 (2026-08-10)
         "pull", "drag", "field", // v1.3 (2026-08-11)
         "remember", "cancel_attack", // Wave 1 (2026-08-11)
-        // Wave 2 (docs/ekn-wave2-contract.md §2,§3): 情報と会議
+        // Wave 2: 情報と会議
         "inspect", "reveal", "arrow_show", "arrow_mark", "arrow_hide",
         "cancel_vote", "vote_weight_set", "vote_block", "vote_swap", "exile",
-        // Wave 4 (docs/ekn-wave4-contract.md §3,§4): リンクと変換
+        // Wave 4: リンクと変換
         "link", "unlink", "recruit",
-        // Wave 5 (docs/ekn-wave5-contract.md §1): 持続効果
+        // Wave 5: 持続効果
         "effect_give",
-        // Wave 6 (docs/ekn-wave6-contract.md §1): 発射体プリミティブ
+        // Wave 6: 発射体プリミティブ
         "cno_launch",
-        // Wave 7 (docs/ekn-wave7-contract.md §1,§2): 勝利条件
+        // Wave 7: 勝利条件
         "win", "win_join"
     ];
 
@@ -569,7 +569,7 @@ public sealed class EkrLogicDef
                 return false;
             }
 
-            // R2 (docs/ekn-r2-contract.md §3b): on_attacked の任意フィールド kind / on_death の任意
+            // R2: on_attacked の任意フィールド kind / on_death の任意
             // フィールド cause。省略 = 全種にマッチ。他イベントに置かれていたら slot と同じく reject。
             // Wave 4 (契約 §3.3): cause は on_linked_death でも受理する (同じ 8 バケット・同じ任意性 —
             // DeathCauseBucket は FireDeath で計算済みなので増分ゼロ)。
@@ -611,7 +611,7 @@ public sealed class EkrLogicDef
                 return false;
             }
 
-            // Wave 2 (docs/ekn-wave2-contract.md §1.3): cancel_vote は on_meeting_vote 以外の rule 配下に
+            // Wave 2: cancel_vote は on_meeting_vote 以外の rule 配下に
             // 現れたら文書 reject (cancel_attack と同じ厳格側 — 静的に検査できるので no-op より reject)。
             if (when != "on_meeting_vote" && ContainsOp(doNodes, "cancel_vote"))
             {
@@ -643,7 +643,7 @@ public sealed class EkrLogicDef
     // 制限済みなので追加のガードは不要。
     private static bool ContainsCancelAttack(List<EkrNode> nodes) => ContainsOp(nodes, "cancel_attack");
 
-    // Wave 7 (docs/ekn-wave7-contract.md §1): 「かちにする」(win) の neutral スロット限定検査を
+    // Wave 7: 「かちにする」(win) の neutral スロット限定検査を
     // EkrDefinition.Validate 側で行うための露出。team は文書レベルの情報でパーサからは見えない。
     public bool ContainsWinOp()
     {
@@ -916,7 +916,7 @@ public sealed class EkrLogicDef
                 n.Seconds = fieldSec;
                 break;
 
-            // ── Wave 2 (docs/ekn-wave2-contract.md §2,§3): 情報と会議 ──────────────────────────
+            // ── Wave 2: 情報と会議 ──────────────────────────
 
             case "inspect":
                 // spec §2.1: self は受理しない (OtherSelectors = ctx/saved1/saved2/nearest/random)。
@@ -982,7 +982,7 @@ public sealed class EkrLogicDef
                 if (!TryGetEnum(nodeEl, "target", SingleSelectors, out n.Target, out err)) return false;
                 break;
 
-            // ── Wave 4 (docs/ekn-wave4-contract.md §3,§4): リンクと変換 ─────────────────────────
+            // ── Wave 4: リンクと変換 ─────────────────────────
 
             // §3.1: self 不可・linked 不可 (LinkTargetSelectors 参照)。
             case "link":
@@ -994,7 +994,7 @@ public sealed class EkrLogicDef
                 break;
 
             // §4: self 不可・linked 可 (OtherSelectors = Wave 4 の受理集合そのもの)。
-            // Wave 5 (docs/ekn-wave5-contract.md §2): 任意の slot (1..18) で変換先スロットを指名できる。
+            // Wave 5: 任意の slot (1..18) で変換先スロットを指名できる。
             // 省略 = 自分と同じ役職 (完全後方互換)。CNO slot (1..3) と意味論が別物なので Slot ではなく
             // IntArg に入れる (0 = 省略)。
             case "recruit":
@@ -1007,7 +1007,7 @@ public sealed class EkrLogicDef
 
                 break;
 
-            // ── Wave 5 (docs/ekn-wave5-contract.md §1): 持続効果 ────────────────────────────────
+            // ── Wave 5: 持続効果 ────────────────────────────────
 
             // §1: target/kind/seconds すべて必須 (既定を作らない — 「相手にかける」が本義)。
             // seconds の上限は kind 別 (freeze ≤10 / 他 ≤30)。
@@ -1025,7 +1025,7 @@ public sealed class EkrLogicDef
                 n.Seconds = effectSec;
                 break;
 
-            // ── Wave 6 (docs/ekn-wave6-contract.md §1): 発射体プリミティブ ──────────────────────
+            // ── Wave 6: 発射体プリミティブ ──────────────────────
 
             // §1: slot (1..3) と dir は必須・speed は任意 (省略 = "medium" を焼き込む = 正準形で
             // 書き出さない側と対応する)。
@@ -1038,7 +1038,7 @@ public sealed class EkrLogicDef
 
                 break;
 
-            // ── Wave 7 (docs/ekn-wave7-contract.md §1,§2): 勝利条件 ─────────────────────────────
+            // ── Wave 7: 勝利条件 ─────────────────────────────
 
             // §1/§2: target は任意 (既定 "self"・self 可)。受理値は SingleSelectors 全種 (複数形は
             // 単発強効果 op の型規律どおり reject)。win の neutral スロット限定 (§1) はここでは見ない —
@@ -1319,7 +1319,7 @@ public sealed class EkrFiber
     // (生存中ずっと wait を挟んでも失われないよう、実行時に都度グローバルフラグを見ない設計)。
     public bool FromKillChain;
 
-    // Wave 3 (docs/ekn-wave3-contract.md §1.1): じょうたいトリガ (on_var/on_alive_count) 起点の fiber か。
+    // Wave 3: じょうたいトリガ (on_var/on_alive_count) 起点の fiber か。
     // kill 連鎖ガードと同型の per-fiber 焼き込み — この fiber が行った変数書込みは「武装状態の遷移は
     // 起こすが新規発火は生まない」(ピンポン構造の排除・深さ1)。
     public bool FromVarChain;
@@ -1440,7 +1440,7 @@ public static class EkmLogicRuntime
         _globalInstrThisFrame = 0;
     }
 
-    // Wave 3 (docs/ekn-wave3-contract.md §1.2): じょうたいトリガの条件評価。等値は Eval の "eq" と
+    // Wave 3: じょうたいトリガの条件評価。等値は Eval の "eq" と
     // 同じ素の float 比較にする (変数は整数運用が前提で、engine 全体で許容誤差を持たない規約に揃える)。
     public static bool CompareValue(float actual, string cmp, int threshold)
     {

@@ -150,7 +150,7 @@ public static class FixedUpdateCaller
             catch (Exception e) { Utils.ThrowException(e); }
 
             // サウンドの起動時プリロード (背景スレッドで先行デコード → ここで 1 tick 1 クリップ化)。
-            // 初回再生時の同期フルデコードによるフレームストール対策 (BUG-20260729-17)。
+            // 初回再生時の同期フルデコードによるフレームストール対策。
             try { CustomSoundsManager.PreloadTick(); }
             catch (Exception e) { Utils.ThrowException(e); }
 

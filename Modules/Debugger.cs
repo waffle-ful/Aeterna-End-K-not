@@ -237,7 +237,7 @@ public class CustomLogger
 
     private readonly StringBuilder Builder;
 
-    // 遊休 flush の監視はプロセスに1本だけ張る (BUG-20260706-01)。
+    // 遊休 flush の監視はプロセスに1本だけ張る。
     // ⚠️ インスタンスごとに StartCoroutine してはいけない: コルーチンが正常終了しても BepInEx の
     //    Il2CppManagedEnumerator ラッパーは strong GCHandle で永久保持されるため、そのインスタンスと
     //    StringBuilder / Char[] バッファごと二度と回収されない。Finish は毎回 PrivateInstance を null に

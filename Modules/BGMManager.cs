@@ -602,7 +602,7 @@ public static class BGMManager
     private const float ReleaseGraceSeconds = 3f; // FadeOutDuration (1.5s) の完走を待ってから破棄する
 
     // 破棄予約。BgmCache に入っている = ポンプ完了済みクリップのみがここへ来る (チャンク書込み中の
-    // クリップは PrimeCache 前なので対象外 — SetData と Destroy の競合 (BUG-20260810-04) を踏まない)。
+    // クリップは PrimeCache 前なので対象外 — SetData と Destroy の競合を踏まない)。
     private static readonly List<(string Name, AudioClip Clip, float Due)> PendingRelease = [];
 
     private static HashSet<string> lastWantedFiles = new(StringComparer.OrdinalIgnoreCase);

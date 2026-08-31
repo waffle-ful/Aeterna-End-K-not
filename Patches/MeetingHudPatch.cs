@@ -184,7 +184,7 @@ internal static class CheckForEndVotingPatch
                 if (Poache.PoachedPlayers.Contains(ps.PlayerId)) canVote = false;
                 if (Silencer.ForSilencer.Contains(ps.PlayerId) && Main.AllAlivePlayerControls.Count > Silencer.MaxPlayersAliveForSilencedToVote.GetInt()) canVote = false;
                 if (CheckRole(ps.PlayerId, CustomRoles.Notvoter)) canVote = false;
-                // Wave 2 (docs/ekn-wave2-contract.md §3.2 vote_block): 無効化グループ (Notvoter と同じ位置 —
+                // Wave 2 (vote_block): 無効化グループ (Notvoter と同じ位置 —
                 // 加算より前)。既に投票済みの票も含めて無効になる (Notvoter と同じ意味論)。
                 if (EndKnot.Modules.Ekm.EkrManager.IsVoteBlocked(ps.PlayerId)) canVote = false;
 
@@ -609,7 +609,7 @@ internal static class CheckForEndVotingPatch
         catch (Exception e) { Utils.ThrowException(e); }
     }
 
-    // Wave 2 (docs/ekn-wave2-contract.md §3.4 exile): EkrLogicOpcodes.Exile から呼ぶ。Dictator の強制追放
+    // Wave 2 (exile): EkrLogicOpcodes.Exile から呼ぶ。Dictator の強制追放
     // 経路 (上の CheckForEndVoting 内 :61-91) の一般部分をそのままなぞる — Dictator 固有の自殺コスト
     // (TryAddAfterMeetingDeathPlayers(Suicide, exiler)) は EKR exile の契約に無いので入れない。
     // CloseMeeting/RpcClose の送信パターンは一切変更しない (既往 anti-cheat 論点への配線変更禁止)。
@@ -1348,7 +1348,7 @@ internal static class MeetingHudStartPatch
         Inspector.StartMeetingPatch.Postfix(__instance);
         Judge.StartMeetingPatch.Postfix(__instance);
         MeetingTargetPicker.OnMeetingStart(); // 非モッド客へ木槌ボタンを配る (MeetingHud 生成後に配るのが安全な順序)
-        EkrMeetingButton.StartMeetingPatch(__instance); // Wave 2 (docs/ekn-wave2-contract.md §1.2)
+        EkrMeetingButton.StartMeetingPatch(__instance); // Wave 2
         Swapper.StartMeetingPatch.Postfix(__instance);
         Councillor.StartMeetingPatch.Postfix(__instance);
         Nemesis.StartMeetingPatch.Postfix(__instance);
@@ -1445,7 +1445,7 @@ internal static class MeetingHudUpdatePatch
             MeetingSilentProbe.Update(__instance);
 
             // EKR logic: 会議中は RoleBase.OnFixedUpdate が止まるため、fiber はここから進める
-            // (on_meeting_start の notify [チャット私信] を会議中に届かせる — docs/ekr-logic-spec.md §3)。
+            // (on_meeting_start の notify [チャット私信] を会議中に届かせる)。
             if (AmongUsClient.Instance.AmHost) EkrManager.PumpMeetingFibers();
 
             // Meeting Skip with vote counting on keystroke (F6)
@@ -1495,7 +1495,7 @@ internal static class MeetingHudUpdatePatch
                     case CustomRoles.Nemesis when !PlayerControl.LocalPlayer.IsAlive() && !GameObject.Find("ShootButton"):
                         Nemesis.CreateJudgeButton(__instance);
                         break;
-                    // Wave 2 (docs/ekn-wave2-contract.md §1.2): EKR ホルダーが会議中に死亡したら他役職と
+                    // Wave 2: EKR ホルダーが会議中に死亡したら他役職と
                     // 同じ規約でボタンを強制掃除する (会議を跨いで残らないよう)。掃除側は生成側
                     // (HasOnMeetingPickLogic 込み) より広く取る (掃除条件が生成条件より狭いと取りこぼすため)。
                     case var r when EkrManager.IsEkrRole(r) && !PlayerControl.LocalPlayer.IsAlive():
@@ -1825,7 +1825,7 @@ internal static class MeetingHudRpcClosePatch
 {
     public static bool AllowClose;
 
-    // 2026-07-23〜25 (BUG-20260723-01): 会議クローズと同一秒の公式鯖 Hacking キックの機序を実機 1-bit で確定。
+    // 2026-07-23〜25: 会議クローズと同一秒の公式鯖 Hacking キックの機序を実機 1-bit で確定。
     //   犯人 = vanilla CloseMeeting RPC への trailing EjectionText ペイロード付加 (これ単独でキック)。
     //   無罪 = 追放者への SetName 偽装 (色付き長名)。trailing だけ除いた追放クローズ×2 が無キック通過。
     // ⇒ trailing を送らなければ追放演出 (色付き名前) は公式鯖でも出せる。以下はその形 (実機検証済みのワイヤ)。
@@ -1949,7 +1949,7 @@ internal static class MeetingHudHandleRpcPatch
         }
 
         // 会議 UI の木槌ボタン (バニラ Judge basis の借用) 押下。読み取り位置を戻してオリジナルには素通しする
-        // — ホストが握り潰すと客のローカル queue に残るため (docs/judge-integration-resume.md)。
+        // — ホストが握り潰すと客のローカル queue に残るため。
         if (callId == (byte)RpcCalls.QueueOverruleVotes && AmongUsClient.Instance.AmHost)
         {
             try

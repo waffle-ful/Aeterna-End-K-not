@@ -9,16 +9,16 @@ namespace EndKnot.Modules;
 // (../TOHK/Patches/PlayerContorols/ReportDeadBodyPatch.cs:296-311)。うちは vanilla の
 // RpcStartMeeting がグローバル 25/s レートゲート FIFO の最後尾に載るため、会議直前の
 // バースト (NotifyRoles/名前再送) の後ろで数秒遅れ、遅いクライアントは会議 UI が出ない
-// まま取り残される (BUG-20260721-09 系)。ここでは v4 (OnGameStartedPatch) と同じ
+// まま取り残される。ここでは v4 (OnGameStartedPatch) と同じ
 // 「ドレイン待ち→直送窓」でワイヤ直行を保証する。ドレインがタイムアウトした場合は
 // 追い越し (順序逆転 = 既知の暗転原因型) を作らないよう従来どおりゲート経由で送る。
 // Rollback bit: create EndKnot_DATA/disable_meeting_direct_window.txt (会議毎に素読み・再ビルド不要)
 public static class MeetingStartWire
 {
-    // 2026-07-23: ワイヤ方式の初実戦2ゲームで、mod起点会議のクローズ瞬間に公式鯖 Hacking キックが2連発
-    // (BUG-20260723-01)。機序は未確定だが唯一の一貫相関のため、既定を従来の vanilla RpcStartMeeting 経路へ
+    // 2026-07-23: ワイヤ方式の初実戦2ゲームで、mod起点会議のクローズ瞬間に公式鯖 Hacking キックが2連発。
+    // 機序は未確定だが唯一の一貫相関のため、既定を従来の vanilla RpcStartMeeting 経路へ
     // 戻し、本ワイヤ方式は EndKnot_DATA/enable_meeting_wire.txt を置いたときだけ有効 (A/B 用・再起動不要)。
-    // 有効化すると会議取り残し (BUG-20260721-09) の修復が戻る代わりにキック疑いを再導入する。
+    // 有効化すると会議取り残しの修復が戻る代わりにキック疑いを再導入する。
     private static bool _wireEnabled;
     private static float _wireCheckedAt = float.MinValue;
 

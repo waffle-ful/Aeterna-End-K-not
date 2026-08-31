@@ -5,7 +5,7 @@ namespace EndKnot.Modules.CalamityMenu;
 /// <summary>
 /// Calamity 風メインメニューの全グローバル状態。
 /// kill switch (<see cref="Active"/> = false) を切れば全機能無効化され、既存 EHR メニューが復活する。
-/// クレーム対策の保険として残す。詳細は docs/calamity-menu-plan.md。
+/// クレーム対策の保険として残す。
 /// </summary>
 public static class CalamityMenuState
 {

@@ -1,4 +1,4 @@
-// lint-role.ts (docs/ekr-logic-spec.md §6 の 12 ルール — v1.1 で L9/L10・v1.2 で L11/L12 追加) のテスト。既に
+// lint-role.ts (§6 の 12 ルール — v1.1 で L9/L10・v1.2 で L11/L12 追加) のテスト。既に
 // 検証済みという前提の RoleLogic 値を直接組み立ててテストする (Blockly/roledef の検証を経由する
 // 必要はない — リンターは「妥当な AST に対して組み方のヒントを出す」だけの層のため)。
 
@@ -48,7 +48,7 @@ describe("lint-role: L1 (on_second 配下の cno_spawn)", () => {
         expect(lintRoleLogic(l).filter((w) => w.rule === "L1")).toHaveLength(1);
     });
 
-    // v1.1 (docs/ekr-logic-spec.md §6): L1 の検知対象に dummy_spawn を追加
+    // v1.1 (§6): L1 の検知対象に dummy_spawn を追加
     it("on_second + dummy_spawn (直下) も L1 を警告する", () => {
         const l = logic([{ when: "on_second", do: [{ op: "dummy_spawn", slot: 1, name: "ダミー", killable: false, at: "self" }] }]);
         expect(ruleIds(lintRoleLogic(l))).toContain("L1");
@@ -296,7 +296,7 @@ describe("lint-role: L8 (前の cno_spawn からの累積 wait <1秒の cno_spaw
     });
 });
 
-// v1.1 (docs/ekr-logic-spec.md §6): dummy_spawn 新設に伴う L9/L10 追加
+// v1.1 (§6): dummy_spawn 新設に伴う L9/L10 追加
 describe("lint-role: L9 (on_meeting_end 配下・会議明けから10秒未満で出す dummy_spawn)", () => {
     it("on_meeting_end + dummy_spawn (wait 無し・直後) は L9 を警告する", () => {
         const l = logic([{ when: "on_meeting_end", do: [{ op: "dummy_spawn", slot: 1, name: "ダミー", killable: false, at: "self" }] }]);
@@ -419,7 +419,7 @@ describe("lint-role: L10 (前の dummy_spawn からの累積 wait <3秒の dummy
     });
 });
 
-// v1.2 (docs/ekr-logic-spec.md §6 2026-08-10 追記): L9 の対象 op を4種 (cno_spawn/cno_show/
+// v1.2 (§6 2026-08-10 追記): L9 の対象 op を4種 (cno_spawn/cno_show/
 // dummy_spawn/portal_place) に拡大
 describe("lint-role: L9 拡大 (v1.2 — cno_spawn/cno_show/portal_place も同じ会議明け窓で検知)", () => {
     it("on_meeting_end + cno_spawn (wait 無し・直後) は L9 を警告する", () => {
@@ -446,7 +446,7 @@ describe("lint-role: L9 拡大 (v1.2 — cno_spawn/cno_show/portal_place も同�
         expect(ruleIds(lintRoleLogic(l))).not.toContain("L9");
     });
 
-    // v1.3 (docs/ekr-logic-spec.md §6 2026-08-11 追記): L9 の対象 op に field を追加
+    // v1.3 (§6 2026-08-11 追記): L9 の対象 op に field を追加
     it("on_meeting_end + field (wait 無し・直後) は L9 を警告する", () => {
         const l = logic([{
             when: "on_meeting_end",
@@ -494,7 +494,7 @@ describe("lint-role: L11 (on_second 配下の teleport_other / portal_place — 
     });
 });
 
-// v1.3 (docs/ekr-logic-spec.md §6 2026-08-11 追記): L13 = L3/L11 の兄弟 (pull/drag/field)
+// v1.3 (§6 2026-08-11 追記): L13 = L3/L11 の兄弟 (pull/drag/field)
 describe("lint-role: L13 (on_second 配下の pull / drag / field)", () => {
     it("on_second + pull は L13 を警告する", () => {
         const l = logic([{ when: "on_second", do: [{ op: "pull" }] }]);
@@ -548,7 +548,7 @@ describe("lint-role: L12 (on_cno_touch 配下の cno_spawn/dummy_spawn/cno_show/
         expect(ruleIds(lintRoleLogic(l))).toContain("L12");
     });
 
-    // v1.3 (docs/ekr-logic-spec.md §6 2026-08-11 追記): L12 の対象 op に field を追加
+    // v1.3 (§6 2026-08-11 追記): L12 の対象 op に field を追加
     it("on_cno_touch + field は L12 を警告する", () => {
         const l = logic([{ when: "on_cno_touch", slot: 1, do: [{ op: "field", at: "self", radius: "small", strength: "weak", seconds: 3 }] }]);
         expect(ruleIds(lintRoleLogic(l))).toContain("L12");
@@ -571,7 +571,7 @@ describe("lint-role: L12 (on_cno_touch 配下の cno_spawn/dummy_spawn/cno_show/
     });
 });
 
-// Wave 1 (docs/ekr-logic-spec.md §6 2026-08-11 併合): L14〜L17
+// Wave 1 (§6 2026-08-11 併合): L14〜L17
 describe("lint-role: L14 (ctx 無しイベント配下の ctx セレクタ)", () => {
     it("on_pet + kill(target:ctx) は L14 を警告する", () => {
         const l = logic([{ when: "on_pet", do: [{ op: "kill", target: "ctx" }] }]);
@@ -624,7 +624,7 @@ describe("lint-role: L14 (ctx 無しイベント配下の ctx セレクタ)", ()
         expect(ruleIds(lintRoleLogic(l))).not.toContain("L14");
     });
 
-    // Wave 2 (docs/ekn-wave2-contract.md §6 2026-08-11 併合): inspect/reveal/arrow_show/vote_block/
+    // Wave 2 (§6 2026-08-11 併合): inspect/reveal/arrow_show/vote_block/
     // exile の target:"ctx"、arrow_mark の at:"ctx" は selectorTokens の target/at/to 汎用スキャン
     // だけで拾える (新イベント2種を対象から外した以外、L14 の実装を変える必要が無い契約どおり)。
     it("ctx 無しイベント配下の inspect/reveal/arrow_show/vote_block/exile(target:ctx) / arrow_mark(at:ctx) は L14 を警告する", () => {
@@ -738,7 +738,7 @@ describe("lint-role: L17 (on_attacked 配下・wait より後の cancel_attack)"
     });
 });
 
-// Wave 2 (docs/ekn-wave2-contract.md §6 2026-08-11 併合): L18〜L20 + L16 拡張
+// Wave 2 (§6 2026-08-11 併合): L18〜L20 + L16 拡張
 describe("lint-role: L18 (会議専用 op が会議系イベント以外の rule 配下)", () => {
     it("on_pet + vote_block/vote_swap/exile はそれぞれ L18 を警告する", () => {
         expect(ruleIds(lintRoleLogic(logic([{ when: "on_pet", do: [{ op: "vote_block", target: "ctx" }] }])))).toContain("L18");
@@ -935,7 +935,7 @@ describe("lint-role: 問題のないロジックは警告0件", () => {
         expect(lintRoleLogic(l)).toEqual([]);
     });
 
-    // v1.1 (docs/ekr-logic-spec.md §6): dummy_spawn/corpse_spawn の正しい作法は警告0件
+    // v1.1 (§6): dummy_spawn/corpse_spawn の正しい作法は警告0件
     it("on_pet 単発の dummy_spawn/corpse_spawn は何も警告しない", () => {
         const l = logic([
             {
@@ -977,7 +977,7 @@ describe("lint-role: 問題のないロジックは警告0件", () => {
         expect(lintRoleLogic(l)).toEqual([]);
     });
 
-    // v1.2 (docs/ekr-logic-spec.md §6 2026-08-10 追記): on_cno_touch/marker_save/teleport_other/
+    // v1.2 (§6 2026-08-10 追記): on_cno_touch/marker_save/teleport_other/
     // portal_place の正しい作法は警告0件
     it("on_cno_touch でマーカー保存+相手ワープのみを行うのは警告0件", () => {
         const l = logic([
@@ -998,7 +998,7 @@ describe("lint-role: 問題のないロジックは警告0件", () => {
         expect(lintRoleLogic(l)).toEqual([]);
     });
 
-    // Wave 1 (docs/ekr-logic-spec.md §6 2026-08-11 併合): 反射役職の模範形は警告0件
+    // Wave 1 (§6 2026-08-11 併合): 反射役職の模範形は警告0件
     it("on_attacked で「ふせぐ→おぼえる→反撃」と組むのは警告0件", () => {
         const l = logic([
             {
@@ -1014,7 +1014,7 @@ describe("lint-role: 問題のないロジックは警告0件", () => {
         expect(lintRoleLogic(l)).toEqual([]);
     });
 
-    // v1.3 (docs/ekr-logic-spec.md §6 2026-08-11 追記): pull/drag/field の正しい作法は警告0件
+    // v1.3 (§6 2026-08-11 追記): pull/drag/field の正しい作法は警告0件
     it("on_kill でひとつだけ pull/drag/field を使うのは警告0件", () => {
         const l = logic([
             { when: "on_kill", do: [{ op: "pull" }] },
@@ -1024,7 +1024,7 @@ describe("lint-role: 問題のないロジックは警告0件", () => {
         expect(lintRoleLogic(l)).toEqual([]);
     });
 
-    // Wave 2 (docs/ekn-wave2-contract.md §6 2026-08-11 併合): 会議・投票の模範形は警告0件
+    // Wave 2 (§6 2026-08-11 併合): 会議・投票の模範形は警告0件
     it("on_meeting_vote で「おぼえる→票をつかわずにえらぶ」と組むのは警告0件", () => {
         const l = logic([
             {
@@ -1068,7 +1068,7 @@ describe("lint-role: 問題のないロジックは警告0件", () => {
     });
 });
 
-// Wave 3 (docs/ekn-wave3-contract.md §6 2026-08-14) — L24/L25 は on_var の監視変数を扱うので、
+// Wave 3 (§6 2026-08-14) — L24/L25 は on_var の監視変数を扱うので、
 // variables 宣言込みの RoleLogic を組む専用ヘルパーを使う (logic() は variables:[] 固定のため)。
 function logicWithVars(variables: RoleLogic["variables"], rules: RoleLogic["rules"]): RoleLogic {
     return { version: 1, variables, rules };
@@ -1150,7 +1150,7 @@ describe("lint-role: L25 (on_var の監視変数・progress.text の参照変数
 });
 
 // ---------------------------------------------------------------------------
-// Wave 4 (docs/ekn-wave4-contract.md §6 2026-08-25) — L26/L27 + L12/L14 の対象拡大
+// Wave 4 (§6 2026-08-25) — L26/L27 + L12/L14 の対象拡大
 // ---------------------------------------------------------------------------
 
 describe("lint-role: L26 (linked 参照があるのにどの rule にも link op が無い)", () => {
@@ -1174,7 +1174,7 @@ describe("lint-role: L26 (linked 参照があるのにどの rule にも link op
         expect(ruleIds(lintRoleLogic(l))).toContain("L26");
     });
 
-    // Wave 7 (docs/ekn-wave7-contract.md §5): win/win_join の linked 参照は selectorTokens の
+    // Wave 7 (§5): win/win_join の linked 参照は selectorTokens の
     // target 総称読みで L26 に自動で乗る (新ルール無し) — その契約主張の証明。
     it("win(target:linked) / win_join(target:linked) も linked トークン参照として検知する", () => {
         expect(ruleIds(lintRoleLogic(logic([{ when: "on_kill", do: [{ op: "win", target: "linked" }] }])))).toContain("L26");
@@ -1242,7 +1242,7 @@ describe("lint-role: L27 (on_second 配下の recruit — L5 の兄弟)", () => 
     });
 });
 
-// Wave 5 (docs/ekn-wave5-contract.md §4 2026-08-27) — L28
+// Wave 5 (§4 2026-08-27) — L28
 describe("lint-role: L28 (on_second 配下の effect_give — L5/L27 の兄弟)", () => {
     it("on_second + effect_give (直下) は L28 を警告する", () => {
         const l = logic([{ when: "on_second", do: [{ op: "effect_give", target: "nearest", kind: "slow", seconds: 5 }] }]);
@@ -1318,7 +1318,7 @@ describe("lint-role: formatLintWarning", () => {
     });
 });
 
-// Wave 6 (docs/ekn-wave6-contract.md §5/§3 2026-08-29) — L29 + CTXLESS_WHENS (on_revive)
+// Wave 6 (§5/§3 2026-08-29) — L29 + CTXLESS_WHENS (on_revive)
 describe("lint-role: L29 (on_second 配下の cno_launch — L5/L27/L28 の兄弟)", () => {
     it("on_second + cno_launch (直下) は L29 を警告する", () => {
         const l = logic([{ when: "on_second", do: [{ op: "cno_launch", slot: 1, dir: "move" }] }]);

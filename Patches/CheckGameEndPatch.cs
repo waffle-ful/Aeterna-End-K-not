@@ -318,7 +318,7 @@ internal static class GameEndChecker
                         AdditionalWinnerTeams.Add(AdditionalWinners.LastNeutral);
                     }
 
-                    // Wave 7 (docs/ekn-wave7-contract.md §2): EKR「いっしょにかたせる」(win_join) の便乗
+                    // EKR「いっしょにかたせる」(win_join) の便乗
                     // ラッチを勝者へ合流する (無条件便乗 — どの陣営が勝っても加わる)。切断者は
                     // CachedAllPlayerControls に居ないので自然に除外される (契約 §2)。第1ループでなく
                     // この第2ループに置くのは、第1ループ内の勝者剥奪 (Walker/WolfBoy/SchrodingersCat の

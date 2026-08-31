@@ -9,7 +9,7 @@ namespace EndKnot.Roles;
 // Mirage (ミラージュ) — Crewmate/Miscellaneous
 //
 // doc の「ドッペルゲンガー」。既存 Neutral 役職 `Doppelganger` と名前が衝突するため改名した
-// (仮採用・承認待ち。候補は docs/hyperdifficult-roles-resume.md の「承認待ち」節)。
+// (仮採用・承認待ち)。
 //
 // ファントムボタンの3段階サイクル:
 //   ① 何も無い状態で押す      → その場に「行き先」を刻む

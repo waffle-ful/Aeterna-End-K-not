@@ -13,9 +13,9 @@ namespace EndKnot.Modules;
 // グローバル変数) を直接 0 にするこの方式だけ。
 //
 // 既定 ON の理由は **安全性** であって perf ではない:
-//   - barrier 無し interop でも incremental が切れていれば GC UAF は原理的に起きない
-//     (docs/coreclr-av-chat-uaf-resume.md §1e)。x86 は ScanMethodRefs=true がブリックを起こすため
-//     自己修復が降りる設計で、これが無いと防御が残らない (BUG-20260815-06)。
+//   - barrier 無し interop でも incremental が切れていれば GC UAF は原理的に起きない。
+//     x86 は ScanMethodRefs=true がブリックを起こすため
+//     自己修復が降りる設計で、これが無いと防御が残らない。
 //   - perf は無関係と実測で確定: 実機 A/B (1アーム 4 サイクル) で ON=HITCH 合計 5626ms /
 //     OFF=5811ms、主要ストール (ゲーム終了 ~360ms・ロビー復帰 ~370ms) は両者同等。
 //     遷移ストールの実体はシーン遷移の強制フル収集で、incremental モードが元々カバーしない領域だった。

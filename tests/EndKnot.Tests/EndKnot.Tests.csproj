@@ -27,7 +27,7 @@
          (コンパイル成立のために含める。挙動テストの対象外)。 -->
     <ItemGroup>
         <Compile Include="..\..\Modules\EkmCodec.cs" Link="src\EkmCodec.cs" />
-        <!-- EKR 役職コードの契約 (docs/ekr-logic-spec.md)。EkrDefinition / EkrPassives は Unity 非依存。
+        <!-- EKR 役職コードの契約。EkrDefinition / EkrPassives は Unity 非依存。
              EkmLogicRuntime だけが UnityEngine.Time を触るので Support/GameShims.cs のスタブで解決する。 -->
         <Compile Include="..\..\Modules\Ekm\EkrDefinition.cs" Link="src\Ekm\EkrDefinition.cs" />
         <Compile Include="..\..\Modules\Ekm\EkrPassives.cs" Link="src\Ekm\EkrPassives.cs" />

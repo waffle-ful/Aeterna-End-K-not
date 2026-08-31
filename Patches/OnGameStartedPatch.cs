@@ -647,7 +647,7 @@ internal static class StartGameHostPatch
         {
             int index = Mathf.Clamp(GameOptionsManager.Instance.CurrentGameOptions.MapId, 0, Constants.MapNames.Length - 1);
 
-            // BUG-20260830-01: マシン高負荷時にこの非同期ロードが 45〜50 秒
+            // マシン高負荷時にこの非同期ロードが 45〜50 秒
             // 飢餓し、バニラ客は ~20 秒で自主退出・公式鯖は開始 ~51 秒でホストを Hacking キックする。
             // Unity の非同期ロード統合予算は backgroundLoadingPriority に従う (既定 BelowNormal ≒ 2ms/frame) ため、
             // fps が落ちるほどロードが進まなくなる悪循環になる — ship ロード中だけ High (≒50ms/frame) へ引き上げる。
@@ -1260,8 +1260,8 @@ internal static class StartGameHostPatch
         // Rollback bit: create EndKnot_DATA/disable_start_direct_window.txt to skip drain+direct window.
         bool directWindow = !DisableStartDirectWindow();
 
-        // BUG-20260820-06 緩和: キック実測の連言は「劣化しきったリンク × 開始バースト」(送信量単独でも
-        // 劣化単独でも蹴られていない — project_kick_link_health_missing_axis)。開始バーストを流す前に
+        // 緩和: キック実測の連言は「劣化しきったリンク × 開始バースト」(送信量単独でも
+        // 劣化単独でも蹴られていない)。開始バーストを流す前に
         // リンク回復を最大 4 秒待つことで連言の成立自体を避ける。回復しなければ従来通り開始する
         // (開始を無期限に人質へ取らない) が、その事実を恒久チャネルへ残す = 連言仮説の 1-bit 計器を兼ねる。
         // ⚠️ 順序契約: この待ちは必ず drain 待ちより【前】に置く — 後に置くと、劣化スロットル (12/s) の

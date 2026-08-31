@@ -154,7 +154,7 @@ public class WaveCannon : RoleBase
         return false;
     }
 
-    // 公式鯖 Hacking キック切り分け用 (BUG-20260711-02)。/wcdbg {mask} で設定。
+    // 公式鯖 Hacking キック切り分け用。/wcdbg {mask} で設定。
     // bit1=発射シーケンス全体スキップ(ボタン押下のみ) bit2=チャージ外見スキップ bit4=gate CNO スキップ bit8=速度ロックスキップ
     public static int DebugSkipMask;
 

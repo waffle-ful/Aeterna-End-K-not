@@ -3,7 +3,7 @@ namespace EndKnot.Roles;
 // EKN 役職メーカー R0 の10予約スロット。中身は EkmTemplateRole に集約済み。
 // SetupCustomOption だけは各スロットで実装する (check-option-ids.ps1 が id リテラルと
 // 呼び出しの同一ファイル内一致を前提にしているため)。
-// id ブロック: 708000 + 50*スロット番号(0-9)、docs/role-migration-log.md 2026-08-08 予約分。
+// id ブロック: 708000 + 50*スロット番号(0-9)、2026-08-08 予約分。
 // 未束縛スロットはオプションメニューに出さない (EkrManager.Bind/Unbind が表示と出現率を制御し、
 // Options.GetRoleSpawnMode のガードが選出を封じる)。
 internal sealed class EkmCustomRole1 : EkmTemplateRole
@@ -196,7 +196,7 @@ internal sealed class EkmCustomRole10 : EkmTemplateRole
     }
 }
 
-// ── R2 (docs/ekn-r2-contract.md §2): 陣営別スロット ────────────────────────────────────
+// ── R2: 陣営別スロット ────────────────────────────────────
 // 上の10スロットはクルー専用のまま (オプションのタブは構築時に固定されるので、束縛後に陣営を
 // 変えることはできない)。陣営ごとに別スロットを用意して、束縛時に役職コードの team と突き合わせる。
 // id ブロック: 709000 + 50*n (708500〜708999 は埋込出荷役職用に空けてある)。

@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace EndKnot.Modules.Ekm;
 
-// EKR logic 契約 v1 のアクション系 op 実装 (契約正典: docs/ekr-logic-spec.md §3,§5)。
+// EKR logic 契約 v1 のアクション系 op 実装。
 // 制御系 op (if/wait/stop/var_set/var_add) は EkmLogicRuntime 側で汎用処理される — ここは
 // notify/teleport/kill/set_kill_cooldown/speed/cno_* の役職固有セマンティクスとレート予算の実装のみ。
 // 予算はここが最後の砦 (エディタ側リンターは警告するだけ)。
@@ -23,7 +23,7 @@ internal sealed class EkrActionContext
     public bool AllowCancelAttack;
     public bool CancelAttack;
 
-    // Wave 2 (docs/ekn-wave2-contract.md §1.1 on_meeting_vote 同期プロローグ): cancel_attack と同型。
+    // Wave 2 (on_meeting_vote 同期プロローグ): cancel_attack と同型。
     public bool AllowCancelVote;
     public bool CancelVote;
 }
@@ -46,23 +46,23 @@ internal sealed class EkrActionSink : IEkrActionSink
         // spec §3: 会議中はアクション系 op は no-op (notify のみ例外で有効)。「会議中」には追放演出中も
         // 含む (v1.1) — 投票終了で MeetingHud が閉じると IsMeeting=false/IsInTask=true
         // になり、ガード無しだと追放演出中に on_second 等が発火して spawn 系 op が会議クローズ送信
-        // (SetRole 全員分+Desync+NotifyRoles スイープ) と同一窓に重なる — BUG-20260803-07 の合算キック窓
-        // そのもの。CorpseSpawn の個別ガードはこの共通関所への二重防御として残置。
+        // (SetRole 全員分+Desync+NotifyRoles スイープ) と同一窓に重なる — 合算キック窓そのもの。
+        // CorpseSpawn の個別ガードはこの共通関所への二重防御として残置。
         // cancel_attack は完全にローカル判定 (送信ゼロ・ワールドへの作用ゼロ) なので notify と同じく
         // この関所から除外する。もっとも on_attacked は会議中に発火し得ないため実質到達しない防御。
         //
-        // Wave 2 (docs/ekn-wave2-contract.md §4 会議中 op 白名単): remember/inspect/reveal/vote_weight_set は
+        // Wave 2 (会議中 op 白名単): remember/inspect/reveal/vote_weight_set は
         // 会議中も常時有効 (ローカル状態または notify と同じ既存チャネルのみ)。cancel_vote/vote_block/
         // vote_swap/exile は逆に「会議中のみ有効」(タスク中は no-op) — 投票操作はそもそも会議でしか
         // 意味を持たない。
         //
-        // Wave 4 (docs/ekn-wave4-contract.md §3.1/§4): link/unlink は会議中も有効 (ローカル状態のみ・
+        // Wave 4: link/unlink は会議中も有効 (ローカル状態のみ・
         // 送信ゼロ —「かいぎで投票した人とつなぐ」on_meeting_vote → link(ctx) が正規の組み方で、
         // 抜けると無音で崩れる)。recruit はどちらの白名単にも**載せない** — 未分類 = task-only の既定が
         // そのまま契約 §4 の「会議中 (追放演出含む) は no-op」になる (RpcChangeRoleBasis の会議/追放中
         // コルーチン遅延に仕事をさせない)。
         //
-        // Wave 7 (docs/ekn-wave7-contract.md §1,§2): win/win_join は会議中も有効 (ローカル latch への
+        // Wave 7: win/win_join は会議中も有効 (ローカル latch への
         // 書込みのみ・送信ゼロ — Executioner 型「会議中勝利が本体」のデザインを許す。終了処理自体は
         // CheckGameEndPatch の評価タイミング任せなので追放演出窓とも衝突しない)。
         bool meetingOrExile = GameStates.IsMeeting || ExileController.Instance;
@@ -98,7 +98,7 @@ internal sealed class EkrActionSink : IEkrActionSink
             case "field": Field(node, ctx); break; // v1.3
             case "remember": Remember(node, ctx); break; // Wave 1
             case "cancel_attack": CancelAttack(ctx); break; // Wave 1
-            // Wave 2 (docs/ekn-wave2-contract.md)
+            // Wave 2
             case "inspect": Inspect(node, ctx, fiber); break;
             case "reveal": Reveal(node, ctx); break;
             case "arrow_show": ArrowShow(node, ctx); break;
@@ -109,21 +109,21 @@ internal sealed class EkrActionSink : IEkrActionSink
             case "vote_block": VoteBlock(node, ctx); break;
             case "vote_swap": VoteSwap(ctx); break;
             case "exile": Exile(node, ctx); break;
-            // Wave 4 (docs/ekn-wave4-contract.md §3,§4)
+            // Wave 4
             case "link": Link(node, ctx); break;
             case "unlink": Unlink(ctx); break;
             case "recruit": Recruit(node, ctx); break;
-            // Wave 5 (docs/ekn-wave5-contract.md §1)
+            // Wave 5
             case "effect_give": EffectGive(node, ctx); break;
-            // Wave 6 (docs/ekn-wave6-contract.md §1)
+            // Wave 6
             case "cno_launch": CnoLaunch(node, ctx); break;
-            // Wave 7 (docs/ekn-wave7-contract.md §1,§2)
+            // Wave 7
             case "win": Win(node, ctx); break;
             case "win_join": WinJoin(node, ctx); break;
         }
     }
 
-    // ── Wave 7 (docs/ekn-wave7-contract.md §1,§2): 勝利条件 ──────────────────────────────────
+    // ── Wave 7: 勝利条件 ──────────────────────────────────
 
     // §1「かちにする」: CustomWinnerHolder への書込みのみ (送信ゼロ・予算なし・冪等)。ゲーム終了は
     // CheckGameEndPatch の次評価 (CheckGameEndPatch.cs:69 の WinnerTeam 検知 → StartEndGame) に任せ、
@@ -135,7 +135,7 @@ internal sealed class EkrActionSink : IEkrActionSink
     {
         // 終了ラッチ後 (StartEndGame 済み・Predicate=null) の書込みは no-op — 先勝ち尊重。ラッチ後の
         // ResetAndSetWinner は WinnerIds ごと消すため、確定済みの勝者と win_join の便乗 fold 結果を
-        // 巻き添えにし、outro の勝者テキストと終了理由が混成になる (BUG-20260830-03)。
+        // 巻き添えにし、outro の勝者テキストと終了理由が混成になる。
         // Ended は次ゲーム開始 (OnGameStartedPatch.cs:326) で false へ戻るので on_game_start 起点は無傷。
         if (GameEndChecker.Ended) return;
 
@@ -193,7 +193,7 @@ internal sealed class EkrActionSink : IEkrActionSink
                 PlayerControl pc = ctx.CtxId.GetPlayer();
                 return pc ? pc : null;
             }
-            case "linked": return ResolveLinked(ctx); // Wave 4 (docs/ekn-wave4-contract.md §3.4)
+            case "linked": return ResolveLinked(ctx); // Wave 4
             case "saved1": return ResolveSaved(ctx, 0);
             case "saved2": return ResolveSaved(ctx, 1);
             case "nearest": return ResolveNearest(ctx);
@@ -227,11 +227,11 @@ internal sealed class EkrActionSink : IEkrActionSink
         return pc;
     }
 
-    // Wave 4 (docs/ekn-wave4-contract.md §3.4): つないだ人。失効 (リンク無し/死亡/切断) は静かに no-op。
+    // Wave 4: つないだ人。失効 (リンク無し/死亡/切断) は静かに no-op。
     // 切断/消滅だけ lazy 解消する (ResolveSaved と同じ参照整合性3原則② — 掃除の常駐処理は作らない)。
     // ⚠️ 相手の死亡ではリンクを消さない: 追放死は FireDeath が死亡確定の 3.5 秒後に走るため
     // (ExilePatch.cs:72 の SetDead vs :132 の LateTask)、その窓に走った fiber がここでリンクを先に
-    // 消すと on_linked_death が無音で落ちる (BUG-20260828-01)。EkrManager.ResolveWatchedId と同じ方針で、
+    // 消すと on_linked_death が無音で落ちる。EkrManager.ResolveWatchedId と同じ方針で、
     // 死亡による解消の権限は FireDeath に一本化する。
     private static PlayerControl ResolveLinked(EkrActionContext ctx)
     {
@@ -699,7 +699,7 @@ internal sealed class EkrActionSink : IEkrActionSink
         EkrManager.ReleaseCnoSlot(state, node.Slot);
     }
 
-    // ── Wave 6 (docs/ekn-wave6-contract.md §1): とばす (発射体プリミティブ) ──────────────────────
+    // ── Wave 6: とばす (発射体プリミティブ) ──────────────────────
     // 「とばせるのは cno_spawn で出したオブジェクトだけ」— 空 slot / ダミー (EkrDummyCno) / field の実体は
     // 無音 no-op (予算不消費)。ホルダー生存ガードは**付けない** (契約 §1.1: on_death 起点 fiber から
     // 「死に際に弾をはなつ」ができる — 死者への no-op が要る op は個別に IsAlive を見る側の作法)。
@@ -848,7 +848,7 @@ internal sealed class EkrActionSink : IEkrActionSink
         if (state.LastDummySpawnTime >= 0f && now - state.LastDummySpawnTime < 3f) return;
 
         // spec §5 (v1.1): 会議明けから10秒間はドロップ (会議クローズ+追放スイープとの合算 nests キック
-        // 回避・BUG-20260803-07 と同型)。未記録 (-1) は通す。
+        // 回避)。未記録 (-1) は通す。
         if (EkrManager.LastMeetingEndTime >= 0f && now - EkrManager.LastMeetingEndTime < 10f) return;
 
         int idx = node.Slot - 1;
@@ -1119,7 +1119,7 @@ internal sealed class EkrActionSink : IEkrActionSink
         state.LastFieldPlaceTime = now;
     }
 
-    // ── Wave 2 (docs/ekn-wave2-contract.md §2): しらべる系 ──────────────────────────────────────
+    // ── Wave 2: しらべる系 ──────────────────────────────────────
 
     // inspect: notify と同一チャネル・同一バケットを共有 (spec §2.1 — 新バケットを作らない)。
     private static void Inspect(EkrNode node, EkrActionContext ctx, EkrFiber fiber)
@@ -1220,7 +1220,7 @@ internal sealed class EkrActionSink : IEkrActionSink
         if (GameStates.IsInTask) Utils.NotifyRoles(SpecifySeer: ctx.HolderId.GetPlayer(), ForceLoop: false);
     }
 
-    // ── Wave 2 (docs/ekn-wave2-contract.md §2.3): 矢印3 op ──────────────────────────────────────
+    // ── Wave 2: 矢印3 op ──────────────────────────────────────
     // 予算: arrow_show+arrow_mark 合算 ≤1/秒/ホルダー + 同時 ≤4本/ホルダー (両種合算)。
     // タスクフェーズ限定 (基盤の IsInTask ガードどおり) — 会議中は Execute() 側の共通関所で既に no-op。
 
@@ -1290,7 +1290,7 @@ internal sealed class EkrActionSink : IEkrActionSink
         EkrManager.HideArrows(state, ctx.HolderId);
     }
 
-    // ── Wave 2 (docs/ekn-wave2-contract.md §3): 票操作 ─────────────────────────────────────────
+    // ── Wave 2: 票操作 ─────────────────────────────────────────
 
     private static void CancelVote(EkrActionContext ctx)
     {
@@ -1325,7 +1325,7 @@ internal sealed class EkrActionSink : IEkrActionSink
         EkrManager.TryReserveVoteSwap(ctx.HolderId, p1.PlayerId, p2.PlayerId);
     }
 
-    // ── Wave 4 (docs/ekn-wave4-contract.md §3): link / unlink (予算なし・ローカル状態のみ・会議中も有効) ──
+    // ── Wave 4: link / unlink (予算なし・ローカル状態のみ・会議中も有効) ──
 
     private static void Link(EkrNode node, EkrActionContext ctx)
     {
@@ -1362,7 +1362,7 @@ internal sealed class EkrActionSink : IEkrActionSink
         EkrManager.TryRecruit(state, ctx.HolderId, targetPc, node.IntArg);
     }
 
-    // ── Wave 5 (docs/ekn-wave5-contract.md §1): effect_give — 相手に持続効果をかける ────────────
+    // ── Wave 5: effect_give — 相手に持続効果をかける ────────────
     // 意味論・チャンネル・復元は EkrManager の持続効果エンジンが正典。ここは解決と予算だけ。
 
     private static void EffectGive(EkrNode node, EkrActionContext ctx)

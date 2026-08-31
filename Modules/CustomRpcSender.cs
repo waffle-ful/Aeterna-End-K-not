@@ -49,7 +49,7 @@ public class CustomRpcSender
     // When false, the >500 byte auto-split in StartMessage/StartPackedMessage/StartRpc is skipped.
     // RpcSetName sets this false and does its own accurate SafeChunkLength (UTF-8) chunking instead.
     //
-    // ⚠️ **`sender.stream` をローカル変数にキャッシュする経路は必ず false にすること** (BUG-20260711-02 の真因)。
+    // ⚠️ **`sender.stream` をローカル変数にキャッシュする経路は必ず false にすること**。
     // 分割 (StartRpc:458 → EndMessage(startNew:true):412-413) は `stream` を新しい writer に**差し替える**ため、
     // キャッシュ済みの参照は閉じた古い stream を指したままになり、以降の直書きが壊れたパケットを作って
     // 公式鯖に reason=Hacking で蹴られる。該当経路: CustomNetObject (2箇所) / Utils.RpcCreateDeadBody / DummySpawner。
@@ -610,7 +610,7 @@ public static class CustomRpcSenderExtensions
     public const int NameBudget = SetNameChunkFlushThreshold - SetNameWrapperOverhead - 32;
 
     // NameBudget クランプの共有ヘルパ: 公式鯖のみ、予算超過時に rune 境界で末尾を切り捨て、
-    // 閉じていない末尾タグを除去した文字列を返す (BUG-20260715-09 の CNO スプライトと同型の壊れ方対策)。
+    // 閉じていない末尾タグを除去した文字列を返す (CNO スプライトと同型の壊れ方対策)。
     // ⚠️ vanilla PlayerControl.RpcSetName 直呼び経路 (FixedUpdate タグ再送 / ScheduleDecoratedNameRestore) も
     // 必ずこれを通し、dirty-check はクランプ後の値で行うこと — クランプ前の値で比較すると
     // ミラー (=実送信名) と永遠に一致せず毎 tick 再送ループになる。
