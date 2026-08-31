@@ -353,11 +353,14 @@ public class SuperCannonShot
             float step = Mathf.Max(Mathf.Min(PullStep, dist - PullDeadzone / 2f), 1.6f);
             Vector2 newPos = pos + ((center - pos).normalized * step);
 
-            // 壁越えは引かない (壁内へ埋め込むと非モッドがスタックする)
+            // 壁越えは引かない (壁内へ埋め込むと非モッドがスタックする)。レイは足元空間のままでよい
+            // (pos / center とも GetTruePosition 由来 — 船コライダーは足元基準に敷かれている)。
             if (PhysicsHelpers.AnythingBetween(pos, newPos, Constants.ShipOnlyMask, false)) continue;
 
-            // Utils.TP が inVent / ladder / movingPlat / AntiTP を弾く
-            if (p.TP(newPos, log: false))
+            // Utils.TP が inVent / ladder / movingPlat / AntiTP を弾く。
+            // TP 先は transform 空間 — 足元空間の newPos をそのまま渡すと恒常 0.36u 沈む
+            // (memory: 壁チェック=足元 / TP先=Pos()。EkrManager.TickField が見本)。
+            if (p.TP(newPos - p.WallRayOffset(), log: false))
             {
                 PullSpent++;
                 pulled++;
