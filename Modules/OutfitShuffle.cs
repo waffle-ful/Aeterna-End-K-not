@@ -174,6 +174,15 @@ public static class OutfitShuffle
             return false;
         }
 
+        // 劣化リンク上に装飾 fan-out を重ねない (LobbyCorpses と同じ規約 — 量の間引きだけでは
+        // 不十分で、キック実測の連言は「劣化リンク×バースト」project_kick_link_health_missing_axis)。
+        if (HealthLog.IsLinkDegradedNow(out string linkDetail))
+        {
+            Logger.Info($"ShuffleAll blocked, link degraded ({linkDetail})", "OutfitShuffle");
+            error = Translator.GetString("OutfitShuffle.LinkDegraded");
+            return false;
+        }
+
         List<PlayerControl> pool = GetPool();
 
         if (pool.Count < 2)
@@ -236,6 +245,14 @@ public static class OutfitShuffle
         if (InPostMeetingSweep)
         {
             error = Translator.GetString("OutfitShuffle.PostMeetingCooldown");
+            return false;
+        }
+
+        // ShuffleAll と同じ劣化リンクガード (ペア入れ替えも identity fan-out を送る)。
+        if (HealthLog.IsLinkDegradedNow(out string linkDetail))
+        {
+            Logger.Info($"SwapPair blocked, link degraded ({linkDetail})", "OutfitShuffle");
+            error = Translator.GetString("OutfitShuffle.LinkDegraded");
             return false;
         }
 
