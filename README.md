@@ -62,7 +62,7 @@ End K not は**ホストのクライアントにだけ**入れれば動きます
 > [!WARNING]
 > End K not は **beta 段階**です。未テスト役職や WIP 機能を含みます。不具合報告や提案は [GitHub Issues](../../issues) または [Discord](https://discord.gg/sEYAFzD3a) へお願いします。
 
-対応 Among Us バージョン : **2026.3.31**
+対応 Among Us バージョン : **2026.8.18**
 
 ## End K not の特徴
 
@@ -211,16 +211,73 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 
 ## クレジット
 
-> **この Mod の役職は、そのほとんどが先行 Mod に由来します。** 下記プロジェクトの開発者の皆さんに深く感謝します。個別の役職がどこ由来かは、リポジトリの git log（移植コミットには移植元と Co-authored-by を記載しています）で追跡できます。
+> **この Mod の役職・機能は、そのほとんどが先行 Mod に由来します。** 下記プロジェクトの開発者の皆さんに深く感謝します。直接参照したプロジェクトも、ベースにした Mod がクレジットしているプロジェクトも、まとめてこの一覧に並べています。個別の役職がどこ由来かは、リポジトリの git log（移植コミットには移植元と Co-authored-by を記載しています）で追跡できます。
 
-- **[Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles)** (Gurge44 他) — ベース Mod。役職エンジンと大多数の役職、継続的なバグ修正の取り込み元、GPL-3.0
-- **[TownOfHost-K](https://github.com/KYMario/TownOfHost-K)** (KYMario 他) — 多くの役職の移植元、配信サポート機能、公式鯖パケット分割対策、GPL-3.0
-- **[SuperNewRoles](https://github.com/SuperNewRoles/SuperNewRoles)** (SuperNewRoles 開発チーム) — 波動砲 (WaveCannon) の移植元、GPL-3.0
-- **[TownOfHost-Pko](https://github.com/satokazoku/TownOfHost-Pko)** (satokazoku 他) — 多くの役職の移植元、波動砲の設計参考、GPL-3.0
-- **[Nebula on the Ship (NoS)](https://github.com/Dolly1016/Nebula)** (Dolly1016 他) — ミラージュ (Mirage) をはじめとする役職の移植元、メモリ最適化とアドオン API の設計参考、GPL-3.0 (NebulaAPI は LGPL-3.0)
-- **[Town Of Host](https://github.com/tukasa0001/TownOfHost)** (tukasa0001 他) — TOH 系列の祖
-- **[Town Of Host_ForE](https://github.com/AsumuAkaguma/TownOfHost_ForE)** — BGMカスタマイズ機能
-- **[Town of Host: Enhanced (TOHE)](https://github.com/EnhancedNetwork/TownofHost-Enhanced)**(The Enhanced Network 開発チーム) — 多くの役職 
+- **[au.libhalt.net](https://au.libhalt.net/)** — マッドジェスター
+- **[AutoRejoin](https://github.com/Maxi0fc/AutoRejoin)** (Maxi0fc) — 自動再入室
+- **[BetterAmongUs](https://github.com/D1GQ/BetterAmongUs)** (D1GQ、GPL-3.0) — modded クライアント判別フラグの一覧
+- **[Calamity Mod (Terraria)](https://github.com/CalamityTeam/CalamityModPublic)** (Calamity Team) — メインメニューのテーマ・デザインの参考
+- **[CrowdedMod](https://github.com/CrowdedMods/CrowdedMod)** (andry08 / CrowdedMods、MIT) — 大人数ロビー対応
+- **[Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles)** (Gurge44 他、GPL-3.0) — ベース Mod。役職エンジンと大多数の役職、継続的なバグ修正の取り込み元
+- **[ExtremeRoles](https://github.com/yukieiji/ExtremeRoles)** (yukieiji) — アサシン、マーリン、エアシップ関連のパッチ
+- **[Lotus (LotusContinued)](https://github.com/NikoCat233/LotusContinued)** (GPL-3.0) — メインメニュー刷新の参考、オブジェクト操作の補助処理、Alchemist / Chameleon / Escapist / Necromancer / Deathknight / Romantic 系 / Vengeance の着想、自動リプレイ、タブアイコン
+- **[Mini.RegionInstall](https://github.com/miniduikboot/Mini.RegionInstall)** (miniduikboot、GPL-3.0) — カスタムリージョンの追加（配布パッケージに同梱）
+- **[MiraAPI](https://github.com/All-Of-Us-Mods/MiraAPI)** (All-Of-Us-Mods、LGPL-2.1) — 役職情報タブのコード、UI スプライト（ページ送りボタン 2 点・チェックマーク 2 点）、ダブルタスクパネル
+- **[More Gamemodes](https://github.com/Rabek009/MoreGamemodes)** (Rabek009) — カスタムネットオブジェクト (CNO)、チャット制御と消去、ShipStatus / 投票追放まわり、ベント使用制限、メインメニュー画像の処理
+- **[Nebula on the Ship (NoS)](https://github.com/Dolly1016/Nebula)** (Dolly1016 他、GPL-3.0 / NebulaAPI は LGPL-3.0) — ミラージュ (Mirage) をはじめとする役職、ドクター、スナイパー、メモリ最適化とアドオン API の設計参考
+- **[Reactor](https://github.com/NuclearPowered/Reactor)** / [XtraCube fork](https://github.com/XtraCube/Reactor) — modded ハンドシェイク、コンパイラ生成オブジェクト・ステートマシンのラッパー、カスタムサーバーの 5 秒タイムアウト解除
+- **[Revolutionary Host Roles](https://github.com/sansaaaaai/Revolutionary-host-roles)** (sansaaaaai) — 設定メニューの改修、カスタムボタン、リローダー、スタッフ、インセンダー
+- **[Stellar Roles](https://github.com/Mr-Fluuff/StellarRolesAU)** (Mr-Fluuff) — 多数の役職案、カスタムボタン画像
+- **[Submerged](https://github.com/SubmergedAmongUs/Submerged)** (SubmergedAmongUs) — マップ選択ボタンの扱い（Submerged 対応）
+- **[SuperNewRoles](https://github.com/SuperNewRoles/SuperNewRoles)** (SuperNewRoles 開発チーム、GPL-3.0) — 波動砲 (WaveCannon)、クレジット表示、Horse Mode 切替、Mod 部屋検索、カスタムボタン、天秤、ミーティングシェリフ、トイレファン、イビルギャンブラー、ペンギン、マッドスーサイド
+- **[template-unity](https://github.com/vpmedia/template-unity)** (vpmedia、MIT) — メルセンヌ・ツイスタ実装の参照元
+- **[TheOtherRoles](https://github.com/TheOtherRolesAU/TheOtherRoles)** — カモフラージャー、ゲッサー ほか
+- **[TheOtherRoles-GM](https://github.com/yukinogatari/TheOtherRoles-GM)** (yukinogatari) — 一部役職
+- **TOR_GM_Haoming_Edition** — イビルトラッカー、シュレディンガーの猫 ほか
+- **[TOHEX / TONEX](https://github.com/TOHEX-Official/TownOfHostEdited-Xi)** — Swapper、チャット履歴の保存
+- **[TOU-Mira](https://github.com/AU-Avengers/TOU-Mira)** (AU-Avengers、GPL-3.0) — dleks マップ選択、キルボタンのクールダウン表示、HudManager まわり、役職情報タブ
+- **[Town Of Host](https://github.com/tukasa0001/TownOfHost)** (tukasa0001 他) — TOH 系列の祖。ランダムスポーンやサボタージュまわりの処理
+- **[Town Of Host-H](https://github.com/Hyz-sui/TownOfHost-H)** (Hyz-sui) — 10.24 アップデート対応
+- **[Town Of Host-K](https://github.com/KYMario/TownOfHost-K)** (KYMario 他、GPL-3.0) — 多くの役職の移植元、配信サポート機能、公式鯖パケット分割対策
+- **[Town Of Host Re-Edited](https://github.com/Loonie-Toons/)** — EHR の fork 元、PhantomRolePatch
+- **[Town Of Host_ForE](https://github.com/AsumuAkaguma/TownOfHost_ForE)** (AsumuAkaguma) — BGM カスタマイズ機能、コメント取得処理の一部
+- **[Town Of Host_Y](https://github.com/Yumenopai/TownOfHost_Y)** (Yumenopai) — AntiAdminer / CursedWolf / Workaholic / Greedy / Stalker / Ignitor / Rabbit、会議時の役職表示と会議拡張、属性名、ゲーム内アナウンスの変更、設定 UI、ゲーム中の役職ベース変更
+- **[Town of Host: Enhanced (TOHE)](https://github.com/EnhancedNetwork/TownofHost-Enhanced)** (The Enhanced Network 開発チーム) — 多くの役職、各種パッチ
+- **[Town Of Host Edited / Town Of Next](https://github.com/KARPED1EM/TownOfNext)** (KARPED1EM) — EHR は TOHE の後継。チャット文字数制限の変更、メインメニューのアニメーション、入力まわりのパッチ、テキストボックス
+- **[Town-Of-Moss](https://github.com/Koke1024/Town-Of-Moss)** (Koke1024) — 原子炉メルトダウンの加速処理
+- **[Town Of Us - Reactivated](https://github.com/eDonnes124/Town-Of-Us-R)** (eDonnes124、GPL-3.0) — Submerged 互換レイヤー、ホストの会議表示
+- **[TownOfHost-Optimized](https://github.com/Limeau/TownofHost-Optimized)** (Limeau) — Tank / Deadlined / Journalist / Grappler / Negotiator / Hypnotist などの役職案
+- **[TownOfHost-Pko](https://github.com/satokazoku/TownOfHost-Pko)** (satokazoku 他、GPL-3.0) — 多くの役職の移植元、波動砲の設計参考
+- **[TownOfHost-TheOtherRoles](https://github.com/music-discussion/TownOfHost-TheOtherRoles)** (music-discussion) — 多数の役職案、追放確認、RPC パケットの分割送信
+- **[TownOfHostPlus](https://github.com/SkullCreeper/TownOfHostPlus)** (SkullCreeper) — Marshall / Poisoner / Necroview / Sidekick
+- **[TownOfPlus](https://github.com/tugaru1975/TownOfPlus)** (tugaru1975) — ズーム
+- **[UnityDoorstop](https://github.com/NeighTools/UnityDoorstop)** (NeighTools、LGPL-2.1) — 配布パッケージの `winhttp.dll` / `doorstop_config.ini`
+- **[Vanilla Enhancements](https://github.com/xChipseq/VanillaEnhancements)** (xChipseq、GPL-3.0) — 会議画面のパッチ
+
+### 開発者・翻訳者への謝辞
+
+**[Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles)**
+
+- 開発: Gurge44
+- コントリビューター: Dx / PH_Gaming / TommyXL / Drakos / PEPPERcula
+- Special Thanks: Seleneous / thewhiskas27 / HyperAtill / Sil
+- 翻訳: Dx (PT-BR) / PH_Gaming (PT-BR) / Tomix (PT-BR) / HyperAtill (RU) / ABoringCat (ZH-CN) / Reborn (ZH-CN) / Pomelo (ZH-TW) / Polan (JP) / DoArc (ES) / Kurma (ID) / Gurge44 (HU) / Æ (KO)
+
+> 本 Mod の `Resources/Lang/` は EHR の翻訳を引き継いでいるため、上記の翻訳者の成果がそのまま含まれています。
+
+**[TownOfHost-K](https://github.com/KYMario/TownOfHost-K)**
+
+- 開発: 暇な人 KY/けーわい / タイガー / 夜藍 / ねむa / はろん
+- サポーター: りぃりぃ
+
+### 同梱している第三者ソフトウェア
+
+`EndKnot.dll` に埋め込まれているもの、配布パッケージに同梱されているものがあります。いずれも各作者の著作物で、End K not 本体 (GPL-3.0) とは別のライセンスです。一覧とライセンス全文は [`THIRD-PARTY-NOTICES.md`](./THIRD-PARTY-NOTICES.md) にまとめています。
+
+- NVorbis (MIT) — Ogg Vorbis のデコード
+- NLayer (MIT) — MP3 のデコード
+- BepInEx / Il2CppInterop / Unity Doorstop (LGPL-2.1) — Mod の読み込み基盤
+- Mini.RegionInstall (GPL-3.0、作者 duikbo) — カスタムリージョンの追加
 
 ### Music Credits
 自称芸術家みーさん様のBGMが使われています

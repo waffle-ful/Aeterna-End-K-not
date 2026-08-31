@@ -12,8 +12,9 @@ using static EndKnot.GameStates;
 
 namespace EndKnot.Patches;
 
-// https://github.com/CrowdedMods/CrowdedMod/blob/master/src/CrowdedMod
-// Niko adjusted mono behavior patches to fit into non-reactor mods
+// Adapted from CrowdedMod (https://github.com/CrowdedMods/CrowdedMod/blob/master/src/CrowdedMod)
+// MIT License, Copyright (c) 2020-2022 andry08 and CrowdedMods — full text in THIRD-PARTY-NOTICES.md.
+// The MonoBehaviour patches are adjusted here to work without Reactor.
 
 internal static class Crowded
 {
