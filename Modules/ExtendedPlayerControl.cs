@@ -715,8 +715,19 @@ internal static class ExtendedPlayerControl
                             int seerClientId = seer.OwnerId;
                             if (seerClientId == -1) continue;
 
-                            if ((playerIsDesync || seer.HasDesyncRole()) && seer.PlayerId != player.PlayerId)
+                            bool self = seer.PlayerId == player.PlayerId;
+
+                            if ((playerIsDesync || seer.HasDesyncRole()) && !self)
                                 rememberRoleType = Utils.GetRoleMap(seer.PlayerId, player.PlayerId).RoleType;
+                            else if (self && newRoleIsDesync)
+                            {
+                                // desync→desync の自己エントリ。上の (false, true) 分岐と同じ規約を当てる:
+                                // ホストには Crewmate を見せて、バニラ側のインポスター機能 (サボタージュ等) が
+                                // 生えないようにする。Shapeshifter/Phantom 基底だけは能力ボタンのため素通し。
+                                // newRoleIsDesync で限定しているので (false, false) = 通常役職→通常役職は不変。
+                                rememberRoleType = player.IsHost() ? RoleTypes.Crewmate : RoleTypes.Impostor;
+                                if (newRoleDY is RoleTypes.Shapeshifter or RoleTypes.Phantom) rememberRoleType = newRoleDY;
+                            }
                             else
                                 rememberRoleType = newRoleType;
 
