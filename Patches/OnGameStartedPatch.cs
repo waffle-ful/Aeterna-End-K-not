@@ -646,6 +646,16 @@ internal static class StartGameHostPatch
         if (!ShipStatus.Instance)
         {
             int index = Mathf.Clamp(GameOptionsManager.Instance.CurrentGameOptions.MapId, 0, Constants.MapNames.Length - 1);
+
+            // BUG-20260830-01: マシン高負荷時にこの非同期ロードが 45〜50 秒
+            // 飢餓し、バニラ客は ~20 秒で自主退出・公式鯖は開始 ~51 秒でホストを Hacking キックする。
+            // Unity の非同期ロード統合予算は backgroundLoadingPriority に従う (既定 BelowNormal ≒ 2ms/frame) ため、
+            // fps が落ちるほどロードが進まなくなる悪循環になる — ship ロード中だけ High (≒50ms/frame) へ引き上げる。
+            UnityEngine.ThreadPriority prevLoadingPriority = Application.backgroundLoadingPriority;
+            Application.backgroundLoadingPriority = UnityEngine.ThreadPriority.High;
+            float shipLoadStartRealtime = Time.realtimeSinceStartup;
+            float nextShipLoadWarnAt = shipLoadStartRealtime + 5f;
+
             AUClient.ShipLoadingAsyncHandle = AUClient.ShipPrefabs[index].InstantiateAsync();
 
             while (!AUClient.ShipLoadingAsyncHandle.IsDone)
@@ -654,8 +664,20 @@ internal static class StartGameHostPatch
                 float displayPercent = Mathf.Lerp(0f, 10f, progress);
                 loadingBarManager.SetLoadingPercent(displayPercent, StringNames.LoadingBarGameStart);
                 loadingBarManager.loadingBar.loadingText.text = loadingTextText1;
+
+                // 飢餓の帰属計器: 5 秒を超えたら 5 秒毎に進捗を記録する (健全時は ~1-2 秒で完了するので無音)。
+                if (Time.realtimeSinceStartup >= nextShipLoadWarnAt)
+                {
+                    int elapsedSec = (int)(Time.realtimeSinceStartup - shipLoadStartRealtime);
+                    Logger.Warn($"Ship InstantiateAsync slow: elapsed={elapsedSec}s pct={progress:F2} (vanilla clients bail at ~20s, official server kicks host at ~51s)", "StartGameHost");
+                    HealthLog.NoteAnom($"ANOM live kind=shipload elapsedSec={elapsedSec} pct={progress:F2} t={Utils.TimeStamp}");
+                    nextShipLoadWarnAt += 5f;
+                }
+
                 yield return null;
             }
+
+            Application.backgroundLoadingPriority = prevLoadingPriority;
 
             GameObject result = AUClient.ShipLoadingAsyncHandle.Result;
             ShipStatus.Instance = result.GetComponent<ShipStatus>();
