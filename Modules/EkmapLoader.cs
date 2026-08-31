@@ -397,7 +397,7 @@ public static class EkmapLoader
 
         if (raw.author != null && raw.author.Length > 32)
         {
-            // spec §9: author 超過は拒否リストに無い → エディタと同じ「警告 + 切り詰め」(契約監査 2026-06-13)
+            // spec §9: author 超過は拒否リストに無い → エディタと同じ「警告 + 切り詰め」(2026-06-13)
             Logger.Warn($"[EkmapLoader] author exceeds 32 characters ({raw.author.Length}), truncating", "EkmapLoader");
             raw.author = raw.author.Substring(0, 32);
         }
@@ -607,7 +607,7 @@ public static class EkmapLoader
 
         if (raw.author != null && raw.author.Length > 32)
         {
-            // spec §9: author 超過は拒否リストに無い → エディタと同じ「警告 + 切り詰め」(契約監査 2026-06-13)
+            // spec §9: author 超過は拒否リストに無い → エディタと同じ「警告 + 切り詰め」(2026-06-13)
             Logger.Warn($"[EkmapLoader] author exceeds 32 characters ({raw.author.Length}), truncating", "EkmapLoader");
             raw.author = raw.author.Substring(0, 32);
         }
@@ -861,7 +861,7 @@ public static class EkmapLoader
             return false;
         }
 
-        // Marshal.Copy 直書き方式 (Il2CppStructArray インデクサ罠回避 — MEMORY.md)
+        // Marshal.Copy 直書き方式 (Il2CppStructArray インデクサ罠回避)
         Texture2D tex = new(2, 2, TextureFormat.ARGB32, false);
         tex.filterMode = FilterMode.Point;
         var il2cppBytes = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<byte>(pngBytes.Length);
@@ -1034,7 +1034,7 @@ public static class EkmapLoader
 
         if (raw.author != null && raw.author.Length > 32)
         {
-            // spec §9: author 超過は拒否リストに無い → エディタと同じ「警告 + 切り詰め」(契約監査 2026-06-13)
+            // spec §9: author 超過は拒否リストに無い → エディタと同じ「警告 + 切り詰め」(2026-06-13)
             Logger.Warn($"[EkmapLoader] author exceeds 32 characters ({raw.author.Length}), truncating", "EkmapLoader");
             raw.author = raw.author.Substring(0, 32);
         }

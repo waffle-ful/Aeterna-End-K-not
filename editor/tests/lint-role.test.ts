@@ -602,7 +602,7 @@ describe("lint-role: L14 (ctx 無しイベント配下の ctx セレクタ)", ()
         expect(ruleIds(lintRoleLogic(l))).not.toContain("L14");
     });
 
-    // 2026-08-11 三面監査裁定: フィールドを持たない ctx 暗黙 op (pull/drag) も L14 の対象
+    // フィールドを持たない ctx 暗黙 op (pull/drag) も L14 の対象
     it("ctx 無しイベント配下の pull / drag は L14 を警告する (引数が無くても ctx 依存のため)", () => {
         expect(ruleIds(lintRoleLogic(logic([{ when: "on_pet", do: [{ op: "pull" }] }])))).toContain("L14");
         expect(ruleIds(lintRoleLogic(logic([{ when: "on_game_start", do: [{ op: "drag", seconds: 3 }] }])))).toContain("L14");
@@ -820,7 +820,7 @@ describe("lint-role: L23 (会議中に決まる死にかた × タスク中し�
         expect(ruleIds(lintRoleLogic(l))).not.toContain("L23");
     });
 
-    it("矢印も会議中は効かないので対象に含める (2026-08-14 契約監査で見つかった漏れ)", () => {
+    it("矢印も会議中は効かないので対象に含める (L23 の対象漏れを埋める)", () => {
         const l = logic([{ when: "on_death", cause: "vote", do: [{ op: "arrow_show", target: "ctx", seconds: 5 }] }]);
         expect(ruleIds(lintRoleLogic(l))).toContain("L23");
     });

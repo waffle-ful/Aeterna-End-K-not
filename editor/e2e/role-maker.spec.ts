@@ -564,7 +564,7 @@ test.describe("役職メーカー (ロジックタブの全画面フローティ
         await page.goto("/");
         await dismissStartScreen(page);
         // 空のハット (ベントに入ったとき) を画面外の遠い座標に、中身のあるハットを原点付近に置いた
-        // 下書きを仕込む。ユーザー報告 (2026-08-11) と同じ「遠くに置き忘れた空ブロック」の再現。
+        // 下書きを仕込む。「遠くに置き忘れた空ブロック」(2026-08-11) の再現。
         await page.evaluate(() => {
             localStorage.setItem(
                 "ekm.roleMaker",

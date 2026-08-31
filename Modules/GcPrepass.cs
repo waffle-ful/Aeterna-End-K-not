@@ -26,7 +26,7 @@ public static class GcPrepass
 
     // reason 別 debounce: 同一トリガーの連打 (開始→キャンセル→開始等) だけを抑止する。全 reason 共有の
     // 単一窓にすると、countdown→loading の間隔 (手動 5s / autostart 下限 10s) が将来 3s 未満に変更された時に
-    // loading 側が無音でスキップされる暗黙依存が生まれる (pitfall 監査指摘) — 別窓なら両方必ず撃てる。
+    // loading 側が無音でスキップされる暗黙依存が生まれる — 別窓なら両方必ず撃てる。
     private static readonly System.Collections.Generic.Dictionary<string, long> LastRunTs = [];
 
     // Boehm (il2cpp 側) ヒープの使用バイト数。エクスポート欠落時は -1 (HITCH 計器のフォールバック値と一致)。

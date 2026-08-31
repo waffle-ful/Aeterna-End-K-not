@@ -1249,7 +1249,7 @@ internal static class StartGameHostPatch
         System.Collections.IEnumerator loadingBarTo95 = loadingBarManager.WaitAndSmoothlyUpdate(90f, 95f, 1f, GetString("LoadingBarText.1"));
         while (loadingBarTo95.MoveNext()) yield return loadingBarTo95.Current;
 
-        // v4 暗転根治 (2026-07-21): A案 (1.2s待ち撤去) 後も大人数ゲームで暗転が再発した真因は二層レートゲート。
+        // v4 暗転根治 (2026-07-21): 1.2s 待ちの撤去だけでは大人数ゲームで暗転が再発した。真因は二層レートゲート。
         // qa.Wait() は DataFlagRateLimiter が SendOrDisconnect を呼ぶまでしか待たず、その先の PacketRateGate
         // (25/s FIFO) はキュー非空だと実送信せず自キューへ積み直す (TryGate) ため、開始バースト (∝N²) の後ろに
         // 並んだ復元 Data はワイヤ上で roles の 1.8s+ 後になり、クライアント intro が全員 Disconnected のまま
@@ -1265,7 +1265,7 @@ internal static class StartGameHostPatch
         // リンク回復を最大 4 秒待つことで連言の成立自体を避ける。回復しなければ従来通り開始する
         // (開始を無期限に人質へ取らない) が、その事実を恒久チャネルへ残す = 連言仮説の 1-bit 計器を兼ねる。
         // ⚠️ 順序契約: この待ちは必ず drain 待ちより【前】に置く — 後に置くと、劣化スロットル (12/s) の
-        // まま drain がタイムアウト → 直送窓が落ちて v4 暗転根治が壊れる (2026-08-31 監査指摘)。
+        // まま drain がタイムアウト → 直送窓が落ちて v4 暗転根治が壊れる。
         // ⚠️ 待ち上限 4s + 劣化時 drain 上限 10s = 最悪 14s。バニラ客は roles dispatch まで ~20s で
         // 自主退出するため、合計をこの予算内に必ず収めること。
         // Rollback bit: EndKnot_DATA/disable_start_link_wait.txt で待ち自体をスキップ (再ビルド不要)。
@@ -1349,7 +1349,7 @@ internal static class StartGameHostPatch
         Logger.Info("Successfully set everyone's data as Disconnected", "StartGameHost");
         Logger.Info($"BlackoutProbe: Disconnected=true wired {Time.realtimeSinceStartup - probeSetStart:F2}s after set start (gateQueue={PacketRateGate.PendingCount}, video={Modules.Media.LoadingScreenVideo.IsShowing})", "BlackoutProbe");
 
-        // v4 監査反映: ローディングバー演出 (旧: ここで 95→100 の1秒) は直送窓の外 (restore 完了後) へ移動。
+        // v4: ローディングバー演出 (旧: ここで 95→100 の1秒) は直送窓の外 (restore 完了後) へ移動。
         // 窓中の実時間 yield を無くし、無関係な送信が予算免除を受ける露出を数フレームに縮める。
         float probeRolesStart = Time.realtimeSinceStartup;
         Main.EnumeratePlayerControls().Do(SetRoleSelf);
@@ -1855,7 +1855,7 @@ internal static class StartGameHostPatch
                             CustomRpcSender captured = sender;
                             int calls = SenderRpcCount.GetValueOrDefault(captured);
 
-                            // cleanup: drop 時 (切断等) は送信せず pooled writer だけ回収する (memory: writer-leak 型(b))
+                            // cleanup: drop 時 (切断等) は送信せず pooled writer だけ回収する
                             DataFlagRateLimiter.Enqueue(() => captured.SendMessage(), SendOption.Reliable, calls, cleanup: () => captured.SendMessage(dispose: true));
                         }
                         else

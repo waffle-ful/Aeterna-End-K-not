@@ -456,7 +456,7 @@ describe("logic 検証 (docs/ekr-logic-spec.md §1〜§4・R1)", () => {
         expect(validateEkrDefinition(withLogic(baseLogic({ variables: [{ name: "x", init: NaN }] }))).ok).toBe(false);
     });
 
-    // spec §1 (2026-08-11 裁定): 省略だけが「変数なし」— 明示的な null は型不一致として reject
+    // spec §1: 省略だけが「変数なし」— 明示的な null は型不一致として reject
     it("variables: キー省略は受理・明示的な null は拒否 (型不一致は文書全体 reject)", () => {
         const omitted = validateEkrDefinition(withLogic({ version: 1, rules: [{ when: "on_pet", do: [{ op: "stop" }] }] }));
         expect(omitted.ok).toBe(true);
@@ -1314,7 +1314,7 @@ describe("logic 検証 Wave 3 (on_var / on_alive_count / on_vent_exit)", () => {
     });
 
     // spec §1: 変数名は宣言側・参照側とも trim してから照合する。参照側の trim が抜けていると、
-    // 手書き JSON の前後空白付き参照をローダー (C#) だけが受理する非対称になる (2026-08-14 契約監査)。
+    // 手書き JSON の前後空白付き参照をローダー (C#) だけが受理する非対称になる。
     it("on_var: 前後に空白のある変数参照は trim してから照合される (C# 側と同一)", () => {
         const r = validateEkrDefinition(withRule({ when: "on_var", var: "  カウント  ", cmp: "eq", value: 0, do: [{ op: "stop" }] }));
         expect(r.ok).toBe(true);

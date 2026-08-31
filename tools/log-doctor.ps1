@@ -263,7 +263,7 @@ if ($r1.Count -gt 0) {
     Add-Finding -Severity critical -Rule 'rule1' -Title ('CLR ランタイム即死シグネチャ検出 ({0}件)' -f $r1.Count) -Time '' `
         -Evidence $r1 `
         -Cause 'CLR/IL2CPP レベルのプロセス即死。既知原因は3系統: (a) hot な IL2CPP メソッドへの string 引数 Harmony パッチ (b) CNO の PlayerId 200-254 がバニラ配列を踏み越え OOB (c) チャット欄テキストの dangling String* 直読み。' `
-        -Advice 'memory 参照: project_messagewriter_write_patch_clr_crash / project_cno_playerid_overflows_vanilla_arrays / project_live_chatfield_gettext_fatal。直近に足した Harmony パッチ・CNO・チャットUI読取りを疑うこと。'
+        -Advice '直近に足した Harmony パッチ・CNO・チャットUI読取りを疑うこと。'
 }
 
 # =================================================================
@@ -299,7 +299,7 @@ foreach ($sess in $healthSessions) {
         Add-Finding -Severity critical -Rule 'rule2' -Title ('公式 anti-cheat kick (DC reason=Hacking) [{0}]' -f $sess.Source) -Time $timeStr `
             -Evidence $ev -NoCap $true `
             -Cause '公式サーバーの anti-cheat による切断。~1KB 単一パケット閾値超過 / 不正 GUID / ロビーでの PlayerControl 系 CNO などが引き金。' `
-            -Advice '対処: (1) len>=900 マークの送信を縮小する(sprite圧縮・分割送信) (2) PluginGuid は V4 UUID 必須 (3) PlayerControl-based CNO はロビーで出さない。2026-07-07 以降のビルドは SyncCustomSettingsRPC / GameOptionsSender.PackedFlush / PlayerGameOptionsSender.PackedFlush / GuessManager.SetNameChunk にも EarlyWarning 計装済み — DC 近傍の WARN kind=packet にこれらの name が出たら bug-inbox BUG-20260706-05 の真因確定/反証に直結する。memory 参照: project_official_kick_packet_cap_chunking / project_innersloth_uuid_pluginguid_required / project_cno_lobby_anticheat_kick。'
+            -Advice '対処: (1) len>=900 マークの送信を縮小する(sprite圧縮・分割送信) (2) PluginGuid は V4 UUID 必須 (3) PlayerControl-based CNO はロビーで出さない。2026-07-07 以降のビルドは SyncCustomSettingsRPC / GameOptionsSender.PackedFlush / PlayerGameOptionsSender.PackedFlush / GuessManager.SetNameChunk にも EarlyWarning 計装済み — DC 近傍の WARN kind=packet にこれらの name が出たら bug-inbox BUG-20260706-05 の真因確定/反証に直結する。'
     }
 }
 
@@ -355,7 +355,7 @@ if ($r4Map.Count -gt 0) {
     Add-Finding -Severity warn -Rule 'rule4' -Title ('Large reliable packet 検出 ({0}回)' -f $total) -Time '' `
         -Evidence $ev `
         -Cause '~1KB 単一パケット閾値(公式 anti-cheat kick)への接近。chat/CNO/outfit serialization の肥大が典型。' `
-        -Advice 'RPC 名ごとにペイロードを縮小(sprite の run-length 圧縮、分割送信)。memory 参照: project_au2026_1kb_packet_threshold / project_cno_sprite_mark_w_optimization。'
+        -Advice 'RPC 名ごとにペイロードを縮小(sprite の run-length 圧縮、分割送信)。'
 }
 
 # =================================================================
@@ -369,7 +369,7 @@ if ($r5.Count -gt 0) {
     Add-Finding -Severity warn -Rule 'rule5' -Title ('SnapTo throttle 枯渇 ({0}回)' -f $r5.Count) -Time '' `
         -Evidence $r5 `
         -Cause 'SnapTo のラウンド内呼び出し数が上限に到達(80で SendOption.None に降格 / 100で送信中止)。非ホストの位置 desync の前兆。' `
-        -Advice '毎フレーム TP 系役職(Penguin / Goose / 竜巻 / 雪玉 / Tama / Pelican / Magician 等)の 0.2s 間引き漏れを疑う。memory 参照: project_official_server_position_desync_penguin_goose。'
+        -Advice '毎フレーム TP 系役職(Penguin / Goose / 竜巻 / 雪玉 / Tama / Pelican / Magician 等)の 0.2s 間引き漏れを疑う。'
 }
 
 # =================================================================
@@ -385,7 +385,7 @@ if ($r6.Count -ge 5) {
     Add-Finding -Severity warn -Rule 'rule6' -Title ('オプションロード未完レースの疑い (Option系 NRE {0}件)' -f $r6.Count) -Time '' `
         -Evidence $r6 `
         -Cause 'Option の Load() は非同期・ゲート無しのため、ロード完了前に参照すると null 参照が洪水になる(自動ホスト直後に多発する既知レース)。' `
-        -Advice '参照側を「?.GetBool() != true」パターンで守る。memory 参照: project_option_load_race_null_fields。'
+        -Advice '参照側を「?.GetBool() != true」パターンで守る。'
 }
 
 # =================================================================
@@ -402,7 +402,7 @@ if ($r7.Count -gt 0) {
     Add-Finding -Severity warn -Rule 'rule7' -Title ('Version.Parse の FormatException ({0}件)' -f $r7.Count) -Time '' `
         -Evidence $r7 `
         -Cause 'Version.Parse が "-alpha" 等のサフィックス付きバージョン文字列を食った既知罠の再発。' `
-        -Advice 'パース前に Split(''-'')[0] でサフィックスを除去するのが正。memory 参照: reference_version_parse_alpha_suffix_and_chat_caret_crash。'
+        -Advice 'パース前に Split(''-'')[0] でサフィックスを除去するのが正。'
 }
 
 # =================================================================
@@ -470,7 +470,7 @@ foreach ($sess in $healthSessions) {
         Add-Finding -Severity warn -Rule 'rule9' -Title ('自動再ホスト失敗で放置の疑い [{0}]' -f $sess.Source) -Time (Format-UnixTime $bestStart) `
             -Evidence $ev `
             -Cause '切断(DC)後に Menu 状態のまま5分以上滞留。自動再ホストが起動しなかった / GiveUp した / オプション未ロードで再ホストが失敗した可能性。' `
-            -Advice 'log.html の AutoRehost / GiveUp 行で失敗理由を特定。memory 参照: project_auto_rehost_feature / project_option_load_race_null_fields。'
+            -Advice 'log.html の AutoRehost / GiveUp 行で失敗理由を特定。'
     }
 }
 
@@ -587,14 +587,14 @@ if ($r13.Count -gt 0) {
     Add-Finding -Severity info -Rule 'rule13' -Title ('EOS ログイン/トークン系のエラー ({0}件)' -f $r13.Count) -Time '' `
         -Evidence $r13 `
         -Cause 'EOS 認証トークンの失効 / 再ログイン失敗。予防再ログインは3時間毎に走る設計。' `
-        -Advice '頻発しているなら再ログイン間隔の見直し。memory 参照: project_h1_eos_relogin_patch_implemented。'
+        -Advice '頻発しているなら再ログイン間隔の見直し。'
 }
 
 # =================================================================
 # 🟡 rule 14: プレイヤー発話バグ報告 (チャット内の症状ワード)
 # =================================================================
 # ログ計器に何も出ないバグ (例: 非モッドクライアントだけの暗転) はプレイヤーの
-# チャット発言が唯一の検知器 (2026-07-17 制定 — 暗転を Discord 指摘で初めて知った教訓)。
+# チャット発言が唯一の検知器。
 # 対象は ReceiveChat (他プレイヤーの発言。RPC.cs で全受信チャットが log.html に記録される)。
 # SendChat (ホスト側送信) は mod 自動投稿・コマンド応答が混ざりノイズ源なので対象外。
 # 強シグナルのみで運用開始 (弱シグナル「おかしい/重い/ラグ」は取りこぼしが見えたら追加)。

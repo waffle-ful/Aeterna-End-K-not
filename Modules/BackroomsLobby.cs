@@ -112,7 +112,7 @@ public static class BackroomsLobby
 
     // 各タイルが所属する chunk の packed key (long)。streaming chunks (2026-05-22)
     // で chunk 単位の destroy を可能にするため。long.MinValue は「chunk 非所属」(test
-    // pattern など)。0L だと PackChunkKey(0,0)==0L と衝突する罠 (advisor 指摘) を回避。
+    // pattern など)。0L だと PackChunkKey(0,0)==0L と衝突する罠を回避。
     // SpawnedTiles を mutate する全 site で同期維持必須
     private static readonly List<long> SpawnedTileChunkKeys = [];
 
@@ -768,7 +768,7 @@ public static class BackroomsLobby
     // V outline の中に H face が嵌まる絵になる。sortingOrder は V body (-4) より前 (-3)。
     //
     // perf: cap face は V body と完全に同サイズ・同位置で重なるので、V body の SR を disable
-    // して GPU fill 量を倍化させない (memory: backrooms-perf-bottleneck-diagnosed — fill rate が支配)
+    // して GPU fill 量を倍化させない (fill rate が支配)
     public static void AddWallVBottomCap(GameObject wallV)
     {
         if (wallV == null) return;
@@ -2817,7 +2817,7 @@ public static class BackroomsLobby
     //   ※ 直接ヒット点から direction を逆算するのは NG (inside-AABB で hit≈player → atan2(0,0)=0 で
     //      全ヒット同一方向に collapse → 一方向だけ見える縮退多角形バグ)。angle 自体を保持して sort/build に使う
 
-    // 2026-05-22 v4: vision/dark radius を絞って GPU 負荷 + corner ray 数を削減 (user request)
+    // 2026-05-22 v4: vision/dark radius を絞って GPU 負荷 + corner ray 数を削減
     //   8u → 5u: 視界半径 (60% に絞ると lit area 面積は 39%、より「Backrooms らしい」狭視界)
     //   60u → 25u: dark mesh 外周。プレイヤー本体が見える範囲を覆えれば十分 (camera ortho ~3.5u)
     // 2026-05-22 v5: streaming 実装後 perf 余裕が生まれたので VisionRadius を 8u に戻す
@@ -2836,7 +2836,7 @@ public static class BackroomsLobby
     //     ぼやけて「影自体が薄い」感が出る。上げると視界境界が hard edge 寄りになり影が濃く感じる。
     //   ShadowMaxAlpha: outer ring (DarkRadius 端) の α。1.0 = 完全不可視、0.95 = 5% map 透過。
     // bodies/players は SR.enabled で独立に hard-cut されるので、ここを下げても body 可視性には影響しない。
-    // user 要望 (2026-05-28): 影の中でも map が薄く見えるが、影自体は濃く感じるように
+    // 影の中でも map が薄く見えるが、影自体は濃く感じるように (2026-05-28)
     private const float ShadowMinAlpha = 0.65f;
     private const float ShadowMaxAlpha = 0.95f;
     private const int MaxRayFanCount = 360;    // base ray fan 上限 (cos/sin table 確保サイズ)
@@ -3228,7 +3228,7 @@ public static class BackroomsLobby
             }
             case "mask":
             {
-                // ★本命 (advisor): AU 影は per-sprite 受信。ShadowQuad._Mask が「影を受けるレイヤー」の bitmask。
+                // ★本命: AU 影は per-sprite 受信。ShadowQuad._Mask が「影を受けるレイヤー」の bitmask。
                 //   既定 3 はバニラのみ。LevelImposter は SetInt("_Mask",7) でランタイム sprite に影を受けさせる。
                 int mk = args is { Length: >= 3 } && int.TryParse(args[2], out int mv) ? mv : 7;
                 if (HudManager.InstanceExists && HudManager.Instance.ShadowQuad != null && HudManager.Instance.ShadowQuad.material != null)
@@ -3776,7 +3776,7 @@ public static class BackroomsLobby
         _perfStreamUpdates = 0;
     }
 
-    // /bbzoom 再適用 + 「視界内+αのみ描写」(ユーザー提案 2026-06-10) の毎フレ処理。
+    // /bbzoom 再適用 + 「視界内+αのみ描写」の毎フレ処理。
     // ズームアウトすると表示 (cull) とロード (UpdateStreaming 側) が視界に自動追従し、戻すと 10u に縮んで軽くなる。
     private static void ApplyZoomAndAdaptiveView()
     {
@@ -4353,7 +4353,7 @@ public static class BackroomsLobby
     //   - 連続 cell の V 字状段差を chain でならす (並列壁が一つの壁として動く)
     // v4 (2026-05-28 前段): v1 (tNear) に回帰 — 「壁が自分の影に被って暗くなる」効果のため
     // v5 (2026-05-28 後段、現状): **v3 (chain tFar) に再回帰**
-    //   - user 要望: 「同じ壁でも視点角度によって影が乗ったり乗らなかったりするように」(2026-05-28)
+    //   - ねらい: 「同じ壁でも視点角度によって影が乗ったり乗らなかったりするように」(2026-05-28)
     //   - tFar の donut hole は最近接壁の向こうまで延びるので、その壁を occluder とする ray では
     //     壁が donut hole 内 = 影なし、別の ray で他の壁の奥に隠れる場合は donut shadow 内 = 影あり
     //   - per-ray の occlusion 判定が「同じ壁でも見える角度では明るく、隠れる角度では暗く」を自然に実現

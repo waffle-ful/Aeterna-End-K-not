@@ -1672,7 +1672,7 @@ internal static class ExtendedPlayerControl
         /// Pos() 基準の座標から壁レイ (PhysicsHelpers.AnythingBetween) を撃つときの平行移動オフセット。
         /// Pos() = transform = 見た目の中心だが、船コライダーは足元 (GetTruePosition ≒ collider 中心)
         /// 基準で敷かれているため、視覚系のままレイを撃つと約0.36u上を通り壁の上下端で誤判定する
-        /// (2026-08-29 Wave6 弾即死の根本原因 → 兄弟スイープで共通化。CNO 側は CustomNetObject.WallRayOffset)。
+        /// (2026-08-29 Wave6 弾即死の根本原因 → 共通ヘルパーへ統合。CNO 側は CustomNetObject.WallRayOffset)。
         /// レイの両端に足す。TP 先の座標には足さない (TP は transform 空間 — 足すと 0.36u 沈む)。
         /// </summary>
         public Vector2 WallRayOffset()

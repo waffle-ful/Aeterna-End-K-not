@@ -174,7 +174,7 @@ internal static class VoiceVoxManager
     // MAIN THREAD. IL2CPP audio decode + play, reusing the WAV recipe from CustomSoundsManager.
     private static void PlayWav(byte[] bytes)
     {
-        // Managed byte[] -> Il2CppStructArray<byte> via Marshal.Copy (per-element indexer is a trap — MEMORY.md).
+        // Managed byte[] -> Il2CppStructArray<byte> via Marshal.Copy (per-element indexer is a trap).
         var il2cppBytes = new Il2CppStructArray<byte>(bytes.Length);
         Marshal.Copy(bytes, 0, IntPtr.Add(il2cppBytes.Pointer, IntPtr.Size * 4), bytes.Length);
 

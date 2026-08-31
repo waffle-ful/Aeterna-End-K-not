@@ -39,7 +39,7 @@ public abstract class EkmTemplateRole : RoleBase
     // ⚠️ **負側を必ず含めること**。`var:` 露出は符号付きの変数 (「かちに必要な数 -5〜+5」等) を
     // 一級サポートしており、値域が 0 始まりだと作者の初期値が負のときに `FloatValueRule.RepeatIndex`
     // (ValueRule.cs:61-68) が**負のインデックスを 0 側へクランプせず maxIndex へ折り返す**ため、
-    // -50 が 600 に化ける無音のデータ破損になる (2026-08-14 完成前監査で捕獲)。
+    // -50 が 600 に化ける無音のデータ破損になる。
     // -999..999 は固定6キーの契約範囲 (最大 doom 600 / killCooldown 300) を全て内包する。
     protected static FloatValueRule HostOptionRule => new(-999f, 999f, 0.1f);
 
@@ -250,7 +250,7 @@ public abstract class EkmTemplateRole : RoleBase
 
     // ── Wave 2 (spec §2.2 reveal): KnowRole は 1 点 override のみ (4 表示系の総なめ集約が拾う)。
     // 集約は Main.PlayerStates.Values.Any(x => x.Role.KnowRole(seer, target)) — this や x には依存せず
-    // seer/target の playerId だけで判定すること (個別サイトへの直書き禁止・memory 罠)。
+    // seer/target の playerId だけで判定すること (個別サイトへの直書き禁止)。
     public override bool KnowRole(PlayerControl seer, PlayerControl target)
     {
         if (base.KnowRole(seer, target)) return true;
@@ -260,7 +260,7 @@ public abstract class EkmTemplateRole : RoleBase
     }
 
     // ── Wave 2 (spec §2.3 矢印): Scout.GetSuffix と同じ3点セット (自分の名札の上にだけ描画)。
-    // advisor 指摘 (2026-08-11): 呼び出し元 (Utils.BuildSuffix) は Main.PlayerStates.Values を全部
+    // 呼び出し元 (Utils.BuildSuffix) は Main.PlayerStates.Values を全部
     // なめて state.Role.GetSuffix(seer, target, ...) を呼ぶ — this は「そのスロットの共有シングルトン」
     // であって seer の役職とは無関係。ガード無しだと束縛中の EKR スロットの数だけ矢印が重複描画される
     // (KnowRole アグリゲータと同型の罠 — this に依存せず、seer が「このスロットの保持者か」を毎回検証する)。

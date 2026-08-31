@@ -52,7 +52,7 @@ internal sealed class EkrDummyCno : CustomNetObject, IKillableDummy, IEkrSlotCno
 
     protected override bool IsPlayerLike => true;
 
-    // cno_move opcode (dx/dy) はこのアンカーからの絶対オフセット (EkrCno と同型・spec §3 裁定準拠)。
+    // cno_move opcode (dx/dy) はこのアンカーからの絶対オフセット (EkrCno と同型・spec §3 準拠)。
     public Vector2 SpawnAnchor { get; }
 
     public bool IsInstantiated => playerControl;

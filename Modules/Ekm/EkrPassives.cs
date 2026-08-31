@@ -6,7 +6,7 @@ namespace EndKnot.Modules.Ekm;
 // ⚠ UnityEngine 非依存を維持すること (EkrDefinition と同じ理由 — テストプロジェクトへ組込可能に保つ)。
 internal static class EkrJson
 {
-    // spec §1「整数フィールドの数値トークン (2026-08-11 裁定)」: 小数点/指数表記でも値が整数と
+    // spec §1「整数フィールドの数値トークン」: 小数点/指数表記でも値が整数と
     // 等価なら受理する (`2.0` = `2`)。TS は JSON.parse 後にトークン表記を区別できず構造的に受理するため、
     // C# 側を合わせるのが唯一の整合方向 — TryGetInt32 単独だと `2.0` で C# だけが reject して契約が割れる。
     public static bool TryReadInt(JsonElement el, out int value)
@@ -29,7 +29,7 @@ internal static class EkrJson
 // フォーム+固定キーなので、順序・重複・参照整合性の問題が構造的に存在しない。
 //
 // ⚠ このファイルは EkrDefinition.cs と同じく **UnityEngine 非依存** に保つこと
-// (2026-08-09 の完成前監査で EkrDefinition を Unity 非依存にして EndKnot.Tests へ組込可能にした経緯)。
+// (EndKnot.Tests へ組込可能にするため)。
 // 実行時の適用 (AllPlayerSpeed / ApplyGameOptions / 死体 / 票 / doom) は EkrManager 側が行う。
 public sealed class EkrPassives
 {

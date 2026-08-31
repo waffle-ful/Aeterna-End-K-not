@@ -17,7 +17,7 @@ namespace EndKnot.Modules;
 // →自己回復」はこの追い付き遅延の観測)。
 // ⚠️ pc.Pos() を一次判定に使ってはいけない: 受信キューが空だと transform.position (=ホストが
 // SnapTo 済みの転送先) にフォールバックするため、未着弾のケースほど「着弾」に見える
-// (2026-07-28 pitfall 監査で検出)。位置の相対距離比較 (マージン 1.0u) は受信キューが実データを
+// (2026-07-28 に検出)。位置の相対距離比較 (マージン 1.0u) は受信キューが実データを
 // 持つときの二次確認にのみ使う。
 //
 // どちらとも言えないサンプルは ambiguous として捨てる (AFKDetector の位置判定誤検知類型
@@ -101,7 +101,7 @@ public static class TpDeliveryProbe
             (done ??= []).Add(kv.Key);
 
             // 窓を逃した/位置ストリームが信用できない状態は白黒つけず捨てる。
-            // IsAlive はポストゲームロビーの GM/観戦ホストで常に false (memory: isalive-false-in-postgame-lobby)
+            // IsAlive はポストゲームロビーの GM/観戦ホストで常に false
             // なので、ロビー中 (Backrooms の TP は正規サポート対象) は短絡して生存判定を見ない。
             PlayerControl pc = kv.Key.GetPlayer();
 

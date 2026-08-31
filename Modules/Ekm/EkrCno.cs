@@ -18,8 +18,7 @@ internal interface IEkrSlotCno
 // 既存の非 player-like ・単一文字/短文 CNO (Modules/CustomNetObject.SizeTest.cs,
 // Modules/CustomNetObject.WaveCannon.cs の WaveCannonGate) と同じ Shapeshift-text 戦略に乗る。
 // OnMeeting() は「置きっぱなしの CNO」については意図的に素通しする — 基底 CustomNetObject.OnMeeting() の
-// 会議明け一斉復活エンジンにそのまま従う (MeetingNum ガード追加禁止・memory:
-// cno-base-onmeeting-implicit-respawn-engine)。Wave 6 の発射体 (cno_launch 済み) だけがこの engine から
+// 会議明け一斉復活エンジンにそのまま従う (MeetingNum ガード追加禁止)。Wave 6 の発射体 (cno_launch 済み) だけがこの engine から
 // 離脱する (下の OnMeeting override 参照)。
 public sealed class EkrCno : CustomNetObject, IEkrSlotCno
 {
@@ -31,22 +30,22 @@ public sealed class EkrCno : CustomNetObject, IEkrSlotCno
     public bool Launched { get; private set; }
 
     // cno_move の dx/dy は「毎回の相対移動」ではなく、この spawn 時アンカーからの絶対オフセットとして
-    // 解決する (spec §3 裁定準拠)。理由: on_second 配下で毎秒呼ぶ想定 (エディタ L1 の代替案そのもの) の
+    // 解決する (spec §3 準拠)。理由: on_second 配下で毎秒呼ぶ想定 (エディタ L1 の代替案そのもの) の
     // オブジェクトが、呼ぶたびに加算される設計だと数秒でマップ外まで暴走しうる。アンカー基準なら同じ
     // (dx,dy) の再呼び出しは冪等で安全。
     public Vector2 SpawnAnchor { get; }
 
     // 実体化前 (spawn コルーチンが Object.Instantiate に到達する前) は基底の playerControl が null のまま。
     // 基底 spawn コルーチンは Despawn で止まらないため、実体化前の cno_show/cno_despawn/同一 slot 再
-    // cno_spawn はドロップ (no-op) する (spec §5 孤児コルーチン防止裁定・2026-08-09)。
+    // cno_spawn はドロップ (no-op) する (spec §5 孤児コルーチン防止方針)。
     public bool IsInstantiated => playerControl;
 
     public EkrCno(Vector2 position, string text, int size, string colorHex)
     {
         SpawnAnchor = position;
 
-        // <size=N> は絶対値のみ (memory: cno_size_absolute_mode_policy — % は ~600% で飽和し 700%+ は
-        // 非モッド描画破壊の報告あり)。spec の size 1..12 から実際の TMP 絶対値へのマッピングは
+        // <size=N> は絶対値のみ (% は ~600% で飽和し 700%+ は非モッド描画破壊の報告あり)。
+        // spec の size 1..12 から実際の TMP 絶対値へのマッピングは
         // 規範化されていない実装判断: RpcChangeSprite の名前非表示プレフィックスが <size=14> を
         // 「素のネームプレート相当」の基準として使っている実績を踏まえ、8..56 のレンジに写像する。
         int renderSize = 8 + (Math.Clamp(size, 1, 12) * 4);
@@ -79,7 +78,7 @@ public sealed class EkrCno : CustomNetObject, IEkrSlotCno
     }
 
     // 壁判定の座標系合わせ (WallRayOffset / SelfCollider) は CustomNetObject 基底へ共通化済み
-    // (2026-08-29 Wave6 実機で発覚 → 兄弟スイープで全 CNO 共通の罠と判明したため昇格)。
+    // (2026-08-29 Wave6 実機で発覚した全 CNO 共通の罠)。
 
     // 飛行中だけ 5Hz へ間引く (Snowball.ForceSnapMinInterval と同値)。置きっぱなしの CNO は cno_move が
     // ≤2/秒/slot なので基底既定 (0f = 次フレーム即送信) のままにする — ここを一律 0.2f にすると
@@ -90,8 +89,8 @@ public sealed class EkrCno : CustomNetObject, IEkrSlotCno
     // AllObjects スナップショットを舐める。EkrManager.FireMeetingStart は同期でそれより先に走って飛行中の
     // 弾を Despawn するが、スナップショットには載ったままなので、基底 OnMeeting() に委ねると
     // 「消したはずの弾が会議明けに復活する」(基底は Despawn 済みでも復活コルーチンを起こす)。
-    // memory: cno-base-onmeeting-implicit-respawn-engine が「基底から離脱したい CNO は override して
-    // Despawn だけする」と定める作法にそのまま従う (EkrDummyCno の空 override と同じ位置付け — あちらは
+    // 「基底から離脱したい CNO は override して Despawn だけする」という作法にそのまま従う
+    // (EkrDummyCno の空 override と同じ位置付け — あちらは
     // EkrManager が唯一の消滅経路なので完全に空、こちらは念のため Despawn を撃つ)。
     public override void OnMeeting()
     {
@@ -107,7 +106,7 @@ public sealed class EkrCno : CustomNetObject, IEkrSlotCno
     // 「見せる相手を変える」は un-hide API が基底に無いため、despawn + 同じ sprite/position で
     // 再 spawn することでしか実現できない (Hide() は一方向)。spawn と同じ費用 (per-player fan-out への
     // 再突入) だが、despawn→respawn の未課金コスト分を織り込んで spawn より厳しい独自バケット
-    // (≤1/3秒/ホルダー) を呼び出し側 (EkrLogicOpcodes.CnoShow) で強制する (spec §5 2026-08-09 監査改定)。
+    // (≤1/3秒/ホルダー) を呼び出し側 (EkrLogicOpcodes.CnoShow) で強制する (spec §5)。
     public void SetVisibility(bool selfOnly, PlayerControl holder)
     {
         Despawn(canPool: false);

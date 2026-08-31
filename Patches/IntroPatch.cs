@@ -1373,9 +1373,9 @@ internal static class IntroCutsceneDestroyPatch
                 System.Collections.Generic.List<PlayerControl> spectators = ChatCommands.Spectators.ToList().ToValidPlayers();
                 if (Main.GM.Value) spectators.Add(PlayerControl.LocalPlayer);
 
-                // 【2026-07-31 監査裁定】Exiled broadcast の T2 アンカー退避は不採用 — 削減量が数パケットに対し、
-                // 退避窓中の vanilla-alive 露出 + 組織的早期会議 (通報/緊急はゲート対象外) で保留分が凍結し
-                // GM/観戦者が投票名簿に載る抜け道のリスクが上回る (pitfall/anticheat 両監査一致)。即時発火を維持。
+                // Exiled broadcast は T2 アンカーへ退避せず即時発火する。退避すると、その窓の間
+                // vanilla-alive として露出し続けたうえ、組織的早期会議 (通報/緊急はゲート対象外) で
+                // 保留分が凍結して、GM/観戦者が投票名簿に載る抜け道になってしまう。
                 spectators.ForEach(x =>
                 {
                     x.RpcExileV2();

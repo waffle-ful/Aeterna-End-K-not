@@ -95,7 +95,7 @@ public sealed class EkrNode
     // cno_spawn.size
     public int Size;
 
-    // cno_move.dx / cno_move.dy (spawn アンカーからの絶対オフセット — spec §3 裁定準拠)
+    // cno_move.dx / cno_move.dy (spawn アンカーからの絶対オフセット — spec §3 準拠)
     public float Dx;
     public float Dy;
 
@@ -316,7 +316,7 @@ public sealed class EkrLogicDef
                 return false;
             }
 
-            // 宣言側 (TryParseInner) と同じ trim 慣行で照合する (spec §1 2026-08-09 裁定)。
+            // 宣言側 (TryParseInner) と同じ trim 慣行で照合する (spec §1)。
             varName = (varEl.GetString() ?? "").Trim();
 
             if (!knownVars.Contains(varName))
@@ -500,7 +500,7 @@ public sealed class EkrLogicDef
                     return false;
                 }
 
-                // R0 の name/author と同じトリム慣行 (spec §1 2026-08-09 裁定) — 宣言側もここで trim してから
+                // R0 の name/author と同じトリム慣行 (spec §1) — 宣言側もここで trim してから
                 // 空/長さ/重複判定する。参照側 (TryGetVarName / "var" 式) も同じ trim 済み文字列で照合する。
                 string name = (nameEl.GetString() ?? "").Trim();
 
@@ -726,7 +726,7 @@ public sealed class EkrLogicDef
         switch (op)
         {
             case "if":
-                // spec §1 (2026-08-09 裁定): node から自身の expr への突入も +1 (if.then/else の子 node や
+                // spec §1: node から自身の expr への突入も +1 (if.then/else の子 node や
                 // op.a/op.b と同じ「潜る遷移は全て+1」ルール)。cond を depth のまま渡すのはオフバイワン。
                 if (!TryGetExpr(nodeEl, "cond", knownVars, depth + 1, out n.Cond, out err)) return false;
 
@@ -764,7 +764,7 @@ public sealed class EkrLogicDef
             case "var_set":
             case "var_add":
                 if (!TryGetVarName(nodeEl, "name", knownVars, out n.VarName, out err)) return false;
-                // spec §1 (2026-08-09 裁定): var_set.value / var_add.delta への突入も +1 (if.cond と同型)。
+                // spec §1: var_set.value / var_add.delta への突入も +1 (if.cond と同型)。
                 if (!TryGetExpr(nodeEl, op == "var_set" ? "value" : "delta", knownVars, depth + 1, out n.Value, out err)) return false;
                 break;
 
@@ -1110,7 +1110,7 @@ public sealed class EkrLogicDef
                     return false;
                 }
 
-                // 宣言側 (TryParseInner) と同じ trim 慣行 (spec §1 2026-08-09 裁定) — trim してから照合しないと
+                // 宣言側 (TryParseInner) と同じ trim 慣行 (spec §1) — trim してから照合しないと
                 // 宣言時に trim 済みの名前と一致しなくなる。
                 string vname = (nameEl.GetString() ?? "").Trim();
 
@@ -1157,7 +1157,7 @@ public sealed class EkrLogicDef
             return false;
         }
 
-        // 宣言側 (TryParseInner) と同じ trim 慣行 (spec §1 2026-08-09 裁定)。
+        // 宣言側 (TryParseInner) と同じ trim 慣行 (spec §1)。
         name = (el.GetString() ?? "").Trim();
 
         if (!knownVars.Contains(name))
@@ -1206,7 +1206,7 @@ public sealed class EkrLogicDef
         value = 0;
         err = null;
 
-        // spec §1 (2026-08-11 裁定): 小数点/指数表記でも整数と等価なら受理 (`2.0` = `2`)。
+        // spec §1: 小数点/指数表記でも整数と等価なら受理 (`2.0` = `2`)。
         if (!parentEl.TryGetProperty(propName, out JsonElement el) || !EkrJson.TryReadInt(el, out int i))
         {
             err = $"{propName} の値が不正です";
@@ -1299,7 +1299,8 @@ internal sealed class EkrFrame
 
 // 1回のイベント発火が生む実行単位。明示スタック (EkrFrame の列) で if の入れ子を表現し、
 // wait は C# の yield/コルーチンを使わず WakeAt を立てて即 return する
-// (常駐コルーチン禁止 — 呼び出し元が毎 FixedUpdate 手動で Pump する。memory: nested-managed-enumerator-gchandle-leak)。
+// (常駐コルーチン禁止 — ネスト管理 IEnumerator は呼び出し毎に strong GCHandle をリークするため、
+// 呼び出し元が毎 FixedUpdate 手動で Pump する)。
 public sealed class EkrFiber
 {
     // 役職なら EkrActionContext。汎用エンジンはこの中身を一切読まない (呼び出し元とアクション実装だけが読む)。
@@ -1342,7 +1343,7 @@ public static class EkmLogicRuntime
     public const int MaxFibersPerHolder = 8;
 
     // フレーム境界の検出は Time.frameCount (int) を使う。Time.time (float) の相対誤差比較は稼働時間が
-    // 伸びると隣接ステップが等値判定されて二度とリセットされなくなる罠がある (advisor 指摘・2026-08-09)。
+    // 伸びると隣接ステップが等値判定されて二度とリセットされなくなる罠がある。
     private static int _lastFrameCount = -1;
     private static int _globalInstrThisFrame;
 
