@@ -38,6 +38,7 @@ public static class TestBridge
     // ファイルから読み取った未実行ディレクティブのキュー。排出レート 1件/秒を守るため、
     // ファイル読取と削除は一括で行い、実行だけを Tick ごとに 1件ずつ進める。
     private static readonly Queue<string> PendingDirectives = new();
+    private static readonly Queue<string> ObservationDirectives = new(); // wait 中に届いた観測専用行の追い越しレーン
 
     private static void EnsureInit()
     {
@@ -77,6 +78,9 @@ public static class TestBridge
 
         try { PushLobbyCodeIfChanged(); }
         catch (Exception e) { Utils.ThrowException(e); }
+
+        try { WarnLobbyIdleDeadline(); }
+        catch (Exception e) { Utils.ThrowException(e); }
     }
 
     // Utils.SendLocally からの写し窓口。ホストローカル表示のチャット/通知を bridge-out.log にも記録する。
@@ -103,13 +107,26 @@ public static class TestBridge
     private static void DrainCommandFile()
     {
         // wait 中: 後続ディレクティブはキューに滞留させたまま条件だけを評価する。
-        // cmd ファイルは読み続ける(`wait cancel` の割り込みを受けるため)。
+        // cmd ファイルは読み続ける(`wait cancel` の割り込みと観測系の追い越しを受けるため)。
         if (_activeWait != null)
         {
-            if (PendingDirectives.Count < MaxBatchLines) ReadCmdFileIntoQueue();
+            if (PendingDirectives.Count < MaxBatchLines) ReadCmdFileIntoQueue(duringWait: true);
             if (TryConsumeWaitCancel()) return;
 
+            // wait 開始「後」に届いた観測専用ディレクティブ (state/screenshot/errors/grep) は副作用が無いので
+            // 追い越して即実行する — 待ちの間スクショが更新されず「ブリッジが死んだ」と誤読される実害への対処。
+            // wait より前から滞留していた行は追い越さない (スクリプトの「wait の後に撮る」意図を壊さないため、
+            // 振り分けは読み込み時に duringWait で行う)。1 tick 1 本まで。
+            if (ObservationDirectives.Count > 0) ExecuteDirective(ObservationDirectives.Dequeue());
+
             EvaluateActiveWait();
+            return;
+        }
+
+        // wait 解除と同 tick に残った追い越し分を先に掃く (通常時は空)
+        if (ObservationDirectives.Count > 0)
+        {
+            ExecuteDirective(ObservationDirectives.Dequeue());
             return;
         }
 
@@ -123,7 +140,15 @@ public static class TestBridge
         ExecuteDirective(directive);
     }
 
-    private static void ReadCmdFileIntoQueue()
+    private static bool IsObservationDirective(string d)
+    {
+        return d.Equals("state", StringComparison.OrdinalIgnoreCase)
+               || d.Equals("screenshot", StringComparison.OrdinalIgnoreCase)
+               || d.Equals("errors", StringComparison.OrdinalIgnoreCase) || d.StartsWith("errors ", StringComparison.OrdinalIgnoreCase)
+               || d.Equals("grep", StringComparison.OrdinalIgnoreCase) || d.StartsWith("grep ", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void ReadCmdFileIntoQueue(bool duringWait = false)
     {
         List<string> lines = TryReadAndClearCmdFile();
         if (lines == null) return;
@@ -133,7 +158,9 @@ public static class TestBridge
             string line = raw.Trim();
             if (line.Length == 0 || line.StartsWith('#')) continue;
 
-            PendingDirectives.Enqueue(line);
+            if (duringWait && IsObservationDirective(line)) ObservationDirectives.Enqueue(line);
+            else PendingDirectives.Enqueue(line);
+
             if (PendingDirectives.Count >= MaxBatchLines) break;
         }
     }
@@ -353,7 +380,7 @@ public static class TestBridge
 
         if (directive.Equals("help", StringComparison.OrdinalIgnoreCase))
         {
-            WriteOut("HELP directives: state | screenshot | click <h|label:x> | press <h|x y> | getopt <pattern> | setopt <name|#id> <idx|on|off|~real> | forcerole <id|host|clear> [EnumName] | start | hostlobby | autostart <on|off> | tp <x> <y> | tp <playerId> | walk <x> <y> | walk <playerId> | walk stop | vote <playerId|skip> | overrule <targetId> [judgeId] | chat <text> | use <kill|vent|pet|ability|report|sabotage> | vent enter <id> | vent exit | errors [n] | grep <pattern> [n] | sleep <sec> | wait <phase=X|players=N|marker:text|join|arrived> [timeoutSec] | wait cancel | /<chatcommand>");
+            WriteOut("HELP directives: state | screenshot | click <h|label:x> | press <h|x y> | getopt <pattern> | setopt <name|#id> <idx|on|off|~real> | forcerole <id|name|host|clear> [EnumName] | start | hostlobby | autostart <on|off> | tp <x> <y> | tp <playerId> | walk <x> <y> | walk <playerId> | walk stop | vote <playerId|skip> | overrule <targetId> [judgeId] | chat <text> | use <kill|vent|pet|ability|report|sabotage> | vent enter <id> | vent exit | errors [n] | grep <pattern> [n] | sleep <sec> | wait <phase=X|players=N|marker:text|join|arrived> [timeoutSec] | wait cancel | /<chatcommand>");
             return;
         }
 
@@ -1395,7 +1422,7 @@ public static class TestBridge
         }
 
         string[] parts = rest.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length != 2) { WriteOut("ERR forcerole usage: forcerole <playerId|host|clear> <CustomRolesEnumName>"); return; }
+        if (parts.Length != 2) { WriteOut("ERR forcerole usage: forcerole <playerId|name|host|clear> <CustomRolesEnumName>"); return; }
 
         byte targetId;
 
@@ -1406,8 +1433,12 @@ public static class TestBridge
         }
         else if (!byte.TryParse(parts[0], out targetId))
         {
-            WriteOut($"ERR forcerole bad player id: {parts[0]}");
-            return;
+            // ロビー再生成のたびに playerId が入れ替わり state で番号を引き直す手間があるので、
+            // 表示名 (タグ除去済み・前方一致・大小無視) でも指定できる。空白入りの名前は前方一致で拾う。
+            PlayerControl byName = ResolvePlayerByName(parts[0], out string nameErr);
+            if (byName == null) { WriteOut($"ERR forcerole {nameErr}"); return; }
+
+            targetId = byName.PlayerId;
         }
 
         if (!Enum.TryParse(parts[1], true, out CustomRoles role))
@@ -1436,6 +1467,31 @@ public static class TestBridge
             Main.SetRoles[targetId] = role;
             WriteOut($"OK forcerole {targetId} = {role} (applies at next game start)");
         }
+    }
+
+    private static PlayerControl ResolvePlayerByName(string query, out string error)
+    {
+        error = null;
+        List<PlayerControl> exact = [];
+        List<PlayerControl> prefix = [];
+
+        foreach (PlayerControl pc in Main.AllPlayerControls)
+        {
+            string name = SafeName(pc);
+            if (name.Length == 0) continue;
+
+            if (name.Equals(query, StringComparison.OrdinalIgnoreCase)) exact.Add(pc);
+            else if (name.StartsWith(query, StringComparison.OrdinalIgnoreCase)) prefix.Add(pc);
+        }
+
+        List<PlayerControl> hits = exact.Count > 0 ? exact : prefix;
+        if (hits.Count == 1) return hits[0];
+
+        error = hits.Count == 0
+            ? $"no player named '{query}'"
+            : $"ambiguous name '{query}': {string.Join(", ", hits.Select(p => $"{p.PlayerId}:{SafeName(p)}"))}";
+
+        return null;
     }
 
     // ── Layer B: ゲームフロー ─────────────────────────────────────────
@@ -1848,6 +1904,37 @@ public static class TestBridge
         WriteOut($"LOBBYCODE {code.ToUpperInvariant()}");
     }
 
+    // 公式鯖はゲームを開始しないまま放置したロビーを約600秒で LobbyInactivity 切断する (実測 596s/619s)。
+    // 窓を踏む前に一度だけ WARN を push して、運転側が start か段取り繰り上げを判断できるようにする。
+    // タイマーは「ロビーに入った時点」から数える (試合を挟んだらロビー復帰時点から数え直し — 実測挙動と一致)。
+    private const long LobbyIdleWarnAtSec = 480;
+    private static long _lobbyIdleSince;
+    private static bool _lobbyIdleWarned;
+    private static bool _wasLobby;
+
+    private static void WarnLobbyIdleDeadline()
+    {
+        bool lobby = GameStates.IsLobby;
+        long now = Utils.TimeStamp;
+
+        if (lobby && !_wasLobby)
+        {
+            _lobbyIdleSince = now;
+            _lobbyIdleWarned = false;
+        }
+
+        _wasLobby = lobby;
+
+        if (!lobby || _lobbyIdleWarned || _lobbyIdleSince == 0) return;
+        if (!AmongUsClient.Instance || !AmongUsClient.Instance.AmHost || !GameStates.IsOnlineGame) return;
+
+        long age = now - _lobbyIdleSince;
+        if (age < LobbyIdleWarnAtSec) return;
+
+        _lobbyIdleWarned = true;
+        WriteOut($"WARN lobby idle {age}s — server closes idle lobbies at ~600s (LobbyInactivity); start a game or expect a relobby soon");
+    }
+
     private static string _lastDisconnect;
     private static long _lastDisconnectTs;
 
@@ -1866,8 +1953,25 @@ public static class TestBridge
             _lastDisconnectTs = Utils.TimeStamp;
             StopWalk(false); // 切断後に velocity を触らない
             WriteOut($"DISCONNECTED {_lastDisconnect}");
+            AbortWaitOnDisconnect();
         }
         catch { }
+    }
+
+    // ホスト切断はロビーごと消える = このロビー/試合を前提にした wait は充足しえない。
+    // 自動再ホストで新コードのロビーが立ち直っても客は join のやり直しになるため、
+    // timeout まで寝かせず即 ERR で運転側へ返す。sleep / marker / Lobby・Menu 待ちは切断を跨いでも
+    // 意味が変わらない (再ホスト成立の待ち受けに使われる) ので生かす。
+    private static void AbortWaitOnDisconnect()
+    {
+        WaitState w = _activeWait;
+        if (w == null) return;
+
+        bool survivable = w.Kind is "sleep" or "marker" || (w.Kind == "phase" && IsOutOfGamePhase(w.Arg));
+        if (survivable) return;
+
+        _activeWait = null;
+        WriteOut($"ERR wait aborted {w.Cond} (disconnected: {_lastDisconnect} after {Utils.TimeStamp - w.StartTs}s)");
     }
 
     public static void OnPlayerJoined(ClientData client)
@@ -2027,6 +2131,7 @@ public static class TestBridge
         public int TimeoutSec;
         public long JoinCountAtStart;
         public long MarkerScanSeq;   // 走査済みシーケンス(毎 Tick の再走査を避ける)
+        public bool SawInGame;       // phase 待ち中に一度でもゲーム内フェーズを観測したか(fail-fast 判定用)
     }
 
     private static WaitState _activeWait;
@@ -2172,11 +2277,42 @@ public static class TestBridge
             return;
         }
 
+        // ゲーム内フェーズ待ちの fail-fast: 試合が終わってロビーへ戻ったら、この待ちは次の試合まで
+        // 充足しえない — timeout まで寝かせず即 ERR で運転側へ返す (即勝利終了した試合の
+        // phase=InTask 待ちが 90 秒まるごと死んだ実測への対処)。
+        if (w.Kind == "phase" && IsPhaseWaitDead(w))
+        {
+            _activeWait = null;
+            WriteOut($"ERR wait aborted {w.Cond} (game ended, back in lobby after {elapsed}s)");
+            return;
+        }
+
         if (elapsed >= w.TimeoutSec)
         {
             _activeWait = null;
             WriteOut($"ERR wait timeout {w.Cond} ({w.TimeoutSec}s)");
         }
+    }
+
+    // Lobby/Menu は「試合の外」— これら以外のフェーズを目標にした待ちだけが試合終了で死ぬ。
+    private static bool IsOutOfGamePhase(string s)
+    {
+        return s.Equals("Lobby", StringComparison.OrdinalIgnoreCase) || s.Equals("Menu", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsPhaseWaitDead(WaitState w)
+    {
+        if (IsOutOfGamePhase(w.Arg)) return false; // Lobby/Menu 待ちは試合終了がむしろ充足へ向かう
+
+        string cur = SafeState();
+
+        if (!IsOutOfGamePhase(cur) && cur != "?")
+        {
+            w.SawInGame = true; // 試合中を観測 — ここからロビーへ戻ったら「終わった」と断定できる
+            return false;
+        }
+
+        return w.SawInGame && IsOutOfGamePhase(cur);
     }
 
     private static bool ScanForMarker(WaitState w)
