@@ -85,12 +85,12 @@ internal static class Logger
         LogText.Clear();
         DateTime now = DateTime.Now;
 
-        ClaudeBridge.RecordLog(level, tag, text); // 全レベルリング(grep/wait marker 用)。ブリッジ OFF 時は即 return する軽量フック
+        TestBridge.RecordLog(level, tag, text); // 全レベルリング(grep/wait marker 用)。ブリッジ OFF 時は即 return する軽量フック
 
         if (level is LogLevel.Error or LogLevel.Fatal)
         {
             ExceptionTags[tag] = ExceptionTags.GetValueOrDefault(tag) + 1;
-            ClaudeBridge.RecordError(tag, text); // ブリッジ OFF 時は即 return する軽量フック
+            TestBridge.RecordError(tag, text); // ブリッジ OFF 時は即 return する軽量フック
         }
 
         if (level is LogLevel.Error or LogLevel.Fatal && !multiLine && (!NowDetailedErrorLog.TryGetValue(tag, out DateTime dt) || dt.AddSeconds(3) < now))

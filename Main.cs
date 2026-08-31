@@ -277,10 +277,10 @@ public class Main : BasePlugin
     public static ConfigEntry<bool> EnableAggressiveGcCleanup { get; private set; }
     public static ConfigEntry<bool> EnablePreemptiveGc { get; private set; }
     public static ConfigEntry<bool> EnableEosReloginPatch { get; private set; }
-    public static ConfigEntry<bool> EnableClaudeBridge { get; private set; }
-    public static ConfigEntry<bool> ClaudeBridgeAutoScreenshot { get; private set; }
-    public static ConfigEntry<int> ClaudeBridgeScreenshotInterval { get; private set; }
-    public static ConfigEntry<int> ClaudeBridgeScreenshotKeep { get; private set; }
+    public static ConfigEntry<bool> EnableTestBridge { get; private set; }
+    public static ConfigEntry<bool> TestBridgeAutoScreenshot { get; private set; }
+    public static ConfigEntry<int> TestBridgeScreenshotInterval { get; private set; }
+    public static ConfigEntry<int> TestBridgeScreenshotKeep { get; private set; }
     public static ConfigEntry<bool> EnableAICommentary { get; private set; }
     public static ConfigEntry<string> AICommentaryArgs { get; private set; }
     public static ConfigEntry<bool> GcUafBootProbe { get; private set; }
@@ -412,8 +412,81 @@ public class Main : BasePlugin
 
     public static bool LIMap => NormalOptions is { MapId: 7 };
 
+    // テストブリッジの設定キーは旧名 (EnableClaudeBridge 等) から改名された。BepInEx は知らないキーを
+    // 素通しするだけなので、放置すると既存の BepInEx.cfg を使っている環境でブリッジが黙って既定値
+    // (OFF) に戻る — エラーもログも出ない。新キーが既定値のままのときだけ、cfg の生テキストから旧キーを
+    // 読んで引き継ぐ。BepInEx の orphaned-entry API は公開されていないのでファイルを直接読む。
+    // 引き継いだ値は次回保存時に新キーとして書かれるため、この移行は実質 1 回だけ走る。
+    // Bind 前の cfg 全文をキー→値で保持する。値の解釈は移行側が行う。
+    private static Dictionary<string, string> _preBindConfig;
+
+    private void SnapshotConfigFileBeforeBind()
+    {
+        try
+        {
+            string path = Config.ConfigFilePath;
+            if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;
+
+            Dictionary<string, string> snapshot = [];
+
+            foreach (string raw in File.ReadAllLines(path))
+            {
+                string line = raw.Trim();
+                if (line.Length == 0 || line[0] is '#' or '[') continue;
+
+                int eq = line.IndexOf('=');
+                if (eq > 0) snapshot[line[..eq].Trim()] = line[(eq + 1)..].Trim();
+            }
+
+            _preBindConfig = snapshot;
+        }
+        catch { _preBindConfig = null; }
+    }
+
+    // テストブリッジの設定キーは旧名 (EnableClaudeBridge 等) から改名された。BepInEx は知らないキーを
+    // 素通しするだけなので、放置すると既存の BepInEx.cfg を使っている環境でブリッジが黙って既定値
+    // (OFF) に戻る — エラーもログも出ない。
+    // 引き継ぐのは「旧キーが cfg にあり、かつ新キーがまだ cfg に無い」ときだけ。新キーが既に書かれて
+    // いるなら利用者が明示的に選んだ値なので、旧キーが残っていても上書きしない (一度 OFF にした設定が
+    // 毎起動 ON へ戻る事故を防ぐ)。BepInEx の orphaned-entry API は公開されていないので生テキストを読む。
+    private void MigrateLegacyBridgeConfig()
+    {
+        try
+        {
+            if (_preBindConfig == null || _preBindConfig.Count == 0) return;
+
+            AdoptBool(EnableTestBridge, "EnableTestBridge", "EnableClaudeBridge");
+            AdoptBool(TestBridgeAutoScreenshot, "TestBridgeAutoScreenshot", "ClaudeBridgeAutoScreenshot");
+            AdoptInt(TestBridgeScreenshotInterval, "TestBridgeScreenshotInterval", "ClaudeBridgeScreenshotInterval");
+            AdoptInt(TestBridgeScreenshotKeep, "TestBridgeScreenshotKeep", "ClaudeBridgeScreenshotKeep");
+
+            return;
+
+            bool ShouldAdopt(string newKey, string oldKey, out string value)
+            {
+                value = null;
+                return !_preBindConfig.ContainsKey(newKey) && _preBindConfig.TryGetValue(oldKey, out value);
+            }
+
+            void AdoptBool(ConfigEntry<bool> entry, string newKey, string oldKey)
+            {
+                if (entry != null && ShouldAdopt(newKey, oldKey, out string v) && bool.TryParse(v, out bool parsed)) entry.Value = parsed;
+            }
+
+            void AdoptInt(ConfigEntry<int> entry, string newKey, string oldKey)
+            {
+                if (entry != null && ShouldAdopt(newKey, oldKey, out string v) && int.TryParse(v, out int parsed)) entry.Value = parsed;
+            }
+        }
+        catch { /* 移行は best-effort。失敗しても新キーの既定値で動く */ }
+    }
+
     public override void Load()
     {
+        // Config.Bind は束縛と同時に新キーを cfg へ書き出すので、旧キーの読み取りは
+        // 1 回目の Bind より前に済ませておく必要がある。
+        SnapshotConfigFileBeforeBind();
+
         try
         {
             // Migrate legacy data/config from upstream EHR and the earlier KnotHost rename.
@@ -519,10 +592,11 @@ public class Main : BasePlugin
         EnableAggressiveGcCleanup = Config.Bind("Client Options", "EnableAggressiveGcCleanup", false, "Run the upstream-EHR forced cleanup (GC.Collect x3 + Resources.UnloadUnusedAssets) at every meeting end (MeetingHud.OnDestroy) and game end (Outro). DEFAULT OFF (2026-07-21): HEALTH.log framestall attribution (gc2d=3) proved these forced passes cause the regular 3-4s stall + audio stutter at every game end, while CENSUS shows they reclaim almost nothing (our persistent settings-menu cache keeps ~41k GameObjects / ~19k Materials referenced, making each sweep expensive). Vanilla's implicit scene-transition UnloadUnusedAssets still runs either way. Set true only to A/B the old behavior.");
         EnablePreemptiveGc = Config.Bind("Client Options", "EnablePreemptiveGc", true, "Preemptively run a full GC (both the CoreCLR/mod heap and the il2cpp/Boehm game heap) at moments where the stop-the-world pause is invisible: when the start countdown begins and while the loading bar is shown. With incremental GC disabled (DisableIncrementalGc, on by default -- note the bundled RemoveGcMaxTimeSlice plugin does not actually do this, see Modules/IncrementalGcInvalidator.cs) a full GC pauses the game ~80ms, so shifting collections into these windows reduces mid-game / on-click hitches. Unlike EnableAggressiveGcCleanup this never calls Resources.UnloadUnusedAssets (the proven 3-4s stall source) and never runs during play. Measured via GCPRE/HITCH lines in EndKnot-Health.log.");
         EnableEosReloginPatch = Config.Bind("Client Options", "EnableEosReloginPatch", false, "Apply the EOS re-login rescue patches (EOSReLoginPatch: proactive re-login / auth-expiration recovery / stuck-login escalation). DEFAULT OFF (2026-07-17): a real-device A/B proved these patches were themselves the cause of the ~66-min EOS auth-death loop — the Harmony detour on the by-ref OnAuthExpirationCallback induced the vanilla NRE (OFF => ~9h stable / ON => ~66-min cycle, 79% fail). Leaving them off reproduces stock-EHR behavior. The separate restart recovery chain (DisconnectPopup / idtokendead -> AutoRestart egl-refresh) is independent of this flag and always active. eosTry/eosFlow heartbeat telemetry keeps working either way. Set true only to re-diagnose the old loop.");
-        EnableClaudeBridge = Config.Bind("Client Options", "EnableClaudeBridge", false, "Enable the ClaudeBridge remote test bridge: polls <Desktop>/EndKnot_Logs/claude-cmd.txt for chat-command directives and writes results to claude-out.log. Windows-only, host-only. Default off.");
-        ClaudeBridgeAutoScreenshot = Config.Bind("Client Options", "ClaudeBridgeAutoScreenshot", false, "When ClaudeBridge is enabled, also capture a screenshot on a fixed interval (see ClaudeBridgeScreenshotInterval) in addition to the manual 'screenshot' directive.");
-        ClaudeBridgeScreenshotInterval = Config.Bind("Client Options", "ClaudeBridgeScreenshotInterval", 20, "Seconds between automatic screenshots when ClaudeBridgeAutoScreenshot is on.");
-        ClaudeBridgeScreenshotKeep = Config.Bind("Client Options", "ClaudeBridgeScreenshotKeep", 30, "Max number of screenshots to keep under EndKnot_Logs/Screens (oldest deleted first).");
+        EnableTestBridge = Config.Bind("Client Options", "EnableTestBridge", false, "Enable the remote test bridge (TestBridge): polls <Desktop>/EndKnot_Logs/bridge-cmd.txt for chat-command directives and writes results to bridge-out.log. Plain text files in, plain text out, so any external driver can use it. Windows-only, host-only. Default off.");
+        TestBridgeAutoScreenshot = Config.Bind("Client Options", "TestBridgeAutoScreenshot", false, "When TestBridge is enabled, also capture a screenshot on a fixed interval (see TestBridgeScreenshotInterval) in addition to the manual 'screenshot' directive.");
+        TestBridgeScreenshotInterval = Config.Bind("Client Options", "TestBridgeScreenshotInterval", 20, "Seconds between automatic screenshots when TestBridgeAutoScreenshot is on.");
+        TestBridgeScreenshotKeep = Config.Bind("Client Options", "TestBridgeScreenshotKeep", 30, "Max number of screenshots to keep under EndKnot_Logs/Screens (oldest deleted first).");
+        MigrateLegacyBridgeConfig();
         EnableAICommentary = Config.Bind("Client Options", "EnableAICommentary", false, "Enable the AI commentary companion event layer: writes host-local JSON Lines events (join/leave/chat/intervention/phase/demo) to EndKnot_DATA/companion-events.jsonl for an external companion app to tail. No network sending. Also enables a lobby-idle auto demo of the viewer-intervention cutscene. When on, the companion app itself is also auto-launched as a child process (requires Python and the GEMINI_API_KEY environment variable; see EndKnot_DATA/companion/README). Default off.");
         AICommentaryArgs = Config.Bind("Client Options", "AICommentaryArgs", "", "Extra command-line arguments passed to the auto-launched AI commentary companion app (e.g. --voice Kore --quiet-meeting --audio-device \"CABLE Input\").");
         GcUafBootProbe = Config.Bind("Debug", "GcUafBootProbe", false, "Run a one-time boot-time probe (GcUafProbe) that deterministically tests whether the incremental GC collects a freshly-written interop string field before the field is read back. Logs GCUAF-PROBE: VULNERABLE or SAFE. Default off; only meant for diagnosing the coreclr AV bug.");

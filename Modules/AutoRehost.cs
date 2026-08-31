@@ -39,7 +39,7 @@ public static class AutoRehost
 
     private static bool _pending;
 
-    // ClaudeBridge の hostlobby が二重要求を検知するための読み取り口。
+    // TestBridge の hostlobby が二重要求を検知するための読み取り口。
     public static bool Pending => _pending;
 
     private static int _attempts;

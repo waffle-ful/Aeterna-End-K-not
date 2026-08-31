@@ -963,6 +963,6 @@ internal static class HealthLogDisconnectPatch
     public static void Prefix(DisconnectReasons reason, string stringReason)
     {
         HealthLog.RecordDisconnect(reason, stringReason);
-        try { ClaudeBridge.OnDisconnect(reason, stringReason); } catch { } // ブリッジ OFF 時は即 return する軽量フック
+        try { TestBridge.OnDisconnect(reason, stringReason); } catch { } // ブリッジ OFF 時は即 return する軽量フック
     }
 }
