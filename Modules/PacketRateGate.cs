@@ -15,6 +15,13 @@ namespace EndKnot.Modules;
 public static class PacketRateGate
 {
     private const int GateLimitPerSecond = 25; // DataFlagRateLimiter(23) よりわずかに上乗せ
+
+    // リンク劣化中の縮小予算 (BUG-20260820-06 緩和)。キック実測の連言は「劣化しきったリンク × バースト」で、
+    // 劣化中に送るほど Hazel Reliable 再送 (アプリ層メータに写らない重複) がサーバー側予算へ加算される疑い
+    // (project_kick_link_health_missing_axis)。劣化中は予算を半減してホスト自身の増幅を抑える。
+    // 12/s は P9 候補 (無送信 ~50s キック) の圏外で、完全停止には決してしない。
+    // Rollback bit: EndKnot_DATA/disable_adaptive_gate.txt を置くと常時 25/s に戻る (再ビルド不要)。
+    private const int DegradedGateLimitPerSecond = 12;
     private const int QueueSafetyValve = 300; // 超過時はペース付き高速ドレインに切り替える閾値
     private const int SafetyValveDrainPerFrame = 15; // 安全弁作動中でも1フレームで吐き出す上限 (バーストを自作しない)
     private const int RingBufferSize = 512;
@@ -43,6 +50,16 @@ public static class PacketRateGate
     private static int LastPingMs;
     private static object LastConnection;
     private static bool SafetyValveActive;
+
+    // --- 適応スロットル (リンク劣化中の予算縮小) ---
+    /// <summary>劣化スロットル作動中か。StartGameHost の pre-start drain がタイムアウトを予算に合わせて
+    /// 延ばすために参照する (12/s のまま 6s 固定だと drain が間に合わず直送窓が落ち、v4 暗転根治が壊れる)。</summary>
+    public static bool DegradedThrottleActive { get; private set; }
+    private static long _degradedThrottleSinceTs;
+    private static string _degradedThrottleDetail = "";
+
+    /// <summary>現在有効な 1 秒予算。劣化スロットル中は縮小予算。</summary>
+    private static int CurrentGateLimit => DegradedThrottleActive ? DegradedGateLimitPerSecond : GateLimitPerSecond;
 
     /// <summary>TryGate の例外は同一原因で毎パケット発火しうるので、恒久チャネルへは1セッション1回だけ出す。</summary>
     private static bool TryGateFailureNoted;
@@ -152,7 +169,7 @@ public static class PacketRateGate
             DetectReconnect(instance);
             ResetWindowIfNeeded();
 
-            if (PendingReliableQueue.Count == 0 && (SentThisWindow < GateLimitPerSecond || StartWindowBypass))
+            if (PendingReliableQueue.Count == 0 && (SentThisWindow < CurrentGateLimit || StartWindowBypass))
             {
                 SentThisWindow++;
                 return false;
@@ -213,7 +230,7 @@ public static class PacketRateGate
 
             SafetyValveActive = false;
 
-            while (PendingReliableQueue.Count > 0 && SentThisWindow < GateLimitPerSecond)
+            while (PendingReliableQueue.Count > 0 && SentThisWindow < CurrentGateLimit)
             {
                 SendQueued(instance, PendingReliableQueue.Dequeue());
                 SentThisWindow++;
@@ -250,6 +267,8 @@ public static class PacketRateGate
         // 直送窓フラグも強制クリア (StartGameHost コルーチンが中断されて finally が走らなかった場合の保険)。
         LastConnection = conn;
         PendingReliableQueue.Clear();
+        // 再接続直後は実測で即健全化する (unack=0/ping 18ms) ため、旧接続の劣化スロットルを持ち越さない。
+        DegradedThrottleActive = false;
         // サーバー側の netId 表も作り直されている = 「この接続で spawn した netId」の記憶も捨てる。
         // ここで捨てた待機 Reliable の中に spawn が居ると、その netId はサーバーに存在しないまま
         // ローカルにだけ残る → 後の Despawn が P5 (ブロードキャスト × 未 spawn netId) になる。
@@ -274,7 +293,42 @@ public static class PacketRateGate
             LastPingMs = AmongUsClient.Instance.Ping;
             WindowTimer.Restart();
             SentThisWindow = 0;
+            UpdateDegradedThrottle();
         }
+    }
+
+    /// <summary>窓ロールオーバー毎 (~1Hz) にリンク健全性を再評価して予算を切り替える。
+    /// 判定は HealthLog.IsLinkDegradedNow (ping>=300 / pNoAck>=1 / 直近10秒の Reliable 再送観測) と同一軸。
+    /// 遷移は恒久チャネルへ1エピソード1組 (on/off) だけ残す — 次のキックで「スロットルが効いていた窓か」を
+    /// 事後突合するための計器を兼ねる。</summary>
+    private static void UpdateDegradedThrottle()
+    {
+        try
+        {
+            string detail = "";
+            bool degraded = !AdaptiveGateDisabled() && HealthLog.IsLinkDegradedNow(out detail);
+
+            if (degraded && !DegradedThrottleActive)
+            {
+                DegradedThrottleActive = true;
+                _degradedThrottleSinceTs = Utils.TimeStamp;
+                _degradedThrottleDetail = detail;
+                HealthLog.NoteAnom($"ANOM live kind=gatethrottle stage=on limit={DegradedGateLimitPerSecond} {detail} t={_degradedThrottleSinceTs}");
+            }
+            else if (!degraded && DegradedThrottleActive)
+            {
+                DegradedThrottleActive = false;
+                long now = Utils.TimeStamp;
+                HealthLog.NoteAnom($"ANOM live kind=gatethrottle stage=off durSec={now - _degradedThrottleSinceTs} onDetail=({_degradedThrottleDetail}) t={now}");
+            }
+        }
+        catch { DegradedThrottleActive = false; /* 判定不能時は通常予算に倒す (誤スロットルの方が害) */ }
+    }
+
+    private static bool AdaptiveGateDisabled()
+    {
+        try { return System.IO.File.Exists($"{Main.DataPath}/EndKnot_DATA/disable_adaptive_gate.txt"); }
+        catch { return false; }
     }
 
     /// <summary>1Hz で Hazel の MessagesResent デルタを観測する (OnFixedUpdate から毎フレーム呼ばれ、秒が変わった時だけ実サンプル)。</summary>

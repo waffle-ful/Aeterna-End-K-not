@@ -9531,6 +9531,7 @@
   "OutfitShuffle.SameTarget": "You can't swap a player with themselves.",
   "OutfitShuffle.NotInMeeting": "You can't move appearances around during a meeting.",
   "OutfitShuffle.PostMeetingCooldown": "Too soon after a meeting — wait a few seconds and try again.",
+  "OutfitShuffle.LinkDegraded": "The connection is unstable right now — try again in a moment.",
   "OutfitShuffle.NotEligible": "That player can't be shuffled right now.",
   "OutfitShuffle.TargetNotFound": "No player found matching \"{0}\".",
   "OutfitShuffle.Shuffled": "Swapped their appearances.",

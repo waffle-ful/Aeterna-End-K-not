@@ -1260,17 +1260,54 @@ internal static class StartGameHostPatch
         // Rollback bit: create EndKnot_DATA/disable_start_direct_window.txt to skip drain+direct window.
         bool directWindow = !DisableStartDirectWindow();
 
+        // BUG-20260820-06 緩和: キック実測の連言は「劣化しきったリンク × 開始バースト」(送信量単独でも
+        // 劣化単独でも蹴られていない — project_kick_link_health_missing_axis)。開始バーストを流す前に
+        // リンク回復を最大 4 秒待つことで連言の成立自体を避ける。回復しなければ従来通り開始する
+        // (開始を無期限に人質へ取らない) が、その事実を恒久チャネルへ残す = 連言仮説の 1-bit 計器を兼ねる。
+        // ⚠️ 順序契約: この待ちは必ず drain 待ちより【前】に置く — 後に置くと、劣化スロットル (12/s) の
+        // まま drain がタイムアウト → 直送窓が落ちて v4 暗転根治が壊れる (2026-08-31 監査指摘)。
+        // ⚠️ 待ち上限 4s + 劣化時 drain 上限 10s = 最悪 14s。バニラ客は roles dispatch まで ~20s で
+        // 自主退出するため、合計をこの予算内に必ず収めること。
+        // Rollback bit: EndKnot_DATA/disable_start_link_wait.txt で待ち自体をスキップ (再ビルド不要)。
+        if (!DisableStartLinkWait() && HealthLog.IsLinkDegradedNow(out string linkDetail0))
+        {
+            float linkWaitStart = Time.realtimeSinceStartup;
+            float nextLinkProbe = 0f;
+            bool linkStillDegraded = true;
+            string linkDetail = linkDetail0;
+
+            while (Time.realtimeSinceStartup - linkWaitStart < 4f)
+            {
+                if (Time.realtimeSinceStartup >= nextLinkProbe)
+                {
+                    nextLinkProbe = Time.realtimeSinceStartup + 0.5f;
+                    linkStillDegraded = HealthLog.IsLinkDegradedNow(out linkDetail);
+                    if (!linkStillDegraded) break;
+                }
+
+                yield return null;
+            }
+
+            if (linkStillDegraded)
+                HealthLog.NoteAnom($"ANOM live kind=startdegraded waitedSec={Time.realtimeSinceStartup - linkWaitStart:F1} {linkDetail} t={Utils.TimeStamp}");
+            else
+                Logger.Info($"BlackoutProbe: link recovered in {Time.realtimeSinceStartup - linkWaitStart:F1}s before start burst (was: {linkDetail0})", "BlackoutProbe");
+        }
+
         if (directWindow)
         {
             float drainStart = Time.realtimeSinceStartup;
+            // 劣化スロットル中は 12/s しか吐けないので、25/s 前提の 6s 固定だと同じ backlog で
+            // タイムアウト → 直送窓喪失 (暗転リスク) になる。予算に合わせて上限を延ばす。
+            float drainTimeout = PacketRateGate.DegradedThrottleActive ? 10f : 6f;
 
-            while ((PacketRateGate.PendingCount > 0 || DataFlagRateLimiter.PendingCount > 0) && Time.realtimeSinceStartup - drainStart < 6f)
+            while ((PacketRateGate.PendingCount > 0 || DataFlagRateLimiter.PendingCount > 0) && Time.realtimeSinceStartup - drainStart < drainTimeout)
                 yield return null;
 
             if (PacketRateGate.PendingCount > 0 || DataFlagRateLimiter.PendingCount > 0)
             {
                 directWindow = false;
-                Logger.Error($"BlackoutProbe: pre-start drain timed out after 6s (gateQueue={PacketRateGate.PendingCount}, dataQueue={DataFlagRateLimiter.PendingCount}) — falling back to gated sends for this game", "BlackoutProbe");
+                Logger.Error($"BlackoutProbe: pre-start drain timed out after {drainTimeout:F0}s (gateQueue={PacketRateGate.PendingCount}, dataQueue={DataFlagRateLimiter.PendingCount}) — falling back to gated sends for this game", "BlackoutProbe");
             }
             else
                 Logger.Info($"BlackoutProbe: rate-gate queues drained in {Time.realtimeSinceStartup - drainStart:F2}s — opening direct-send window for fake/roles/restore", "BlackoutProbe");
@@ -1379,6 +1416,12 @@ internal static class StartGameHostPatch
     private static bool DisableStartDirectWindow()
     {
         try { return System.IO.File.Exists($"{Main.DataPath}/EndKnot_DATA/disable_start_direct_window.txt"); }
+        catch { return false; }
+    }
+
+    private static bool DisableStartLinkWait()
+    {
+        try { return System.IO.File.Exists($"{Main.DataPath}/EndKnot_DATA/disable_start_link_wait.txt"); }
         catch { return false; }
     }
 

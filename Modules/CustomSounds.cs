@@ -554,10 +554,14 @@ public static class CustomSoundsManager
     // 底上げする。BGM 級 (>= 1M float) だけ最大 2 本 (worker のデコード中 1 + pump のクリップ化中 1)
     // 使い回す。SFX 級の小物はプールしない (確保が安価で、在庫を小物で埋めると BGM が借りられない)。
     private const int PooledBufferMinFloats = 1_000_000;
+    private const long PoolIdleTrimSeconds = 300; // 5分未使用なら在庫を返上 (低スペック機の常駐 WS 削減)
     private static readonly ConcurrentQueue<float[]> DecodeBufferPool = [];
+    private static long _poolLastUseTs;
 
     private static float[] RentDecodeBuffer(int minLen)
     {
+        _poolLastUseTs = Utils.TimeStamp;
+
         // 足りない在庫 (過去最大曲より短い) は捨てる — 在庫は自然に「最大曲長 2 本」へ収束する
         while (DecodeBufferPool.TryDequeue(out float[] pooled))
             if (pooled.Length >= minLen)
@@ -569,7 +573,29 @@ public static class CustomSoundsManager
     private static void ReturnDecodeBuffer(float[] buffer)
     {
         if (buffer == null || buffer.Length < PooledBufferMinFloats) return;
+        _poolLastUseTs = Utils.TimeStamp;
         if (DecodeBufferPool.Count < 2) DecodeBufferPool.Enqueue(buffer);
+    }
+
+    /// <summary>BGM デコードが長く走っていない (曲替えの無いロビー放置等) 間、~45MB×2 の在庫を
+    /// 抱え続けないための解放弁。次の曲替えで再確保されるが、確保は PreloadWorker の裏スレッドで
+    /// 起きるためフレームヒッチにはならない (プールの本義 = 遷移窓の LOH/gen2 圧集中の緩和は、
+    /// 曲替えが続く間はトリムが発火しないことで保たれる)。毎秒スケジューラから呼ぶ。</summary>
+    internal static void TrimIdleDecodePool()
+    {
+        if (DecodeBufferPool.IsEmpty) return;
+        if (Utils.TimeStamp - _poolLastUseTs < PoolIdleTrimSeconds) return;
+
+        int dropped = 0;
+        long droppedFloats = 0;
+
+        while (DecodeBufferPool.TryDequeue(out float[] pooled))
+        {
+            dropped++;
+            droppedFloats += pooled.Length;
+        }
+
+        if (dropped > 0) Logger.Info($"decode pool trimmed after {PoolIdleTrimSeconds}s idle: {dropped} buffers / {droppedFloats * 4 / (1024 * 1024)}MB returned to GC", "CustomSounds");
     }
 
     // ── 起動時サウンドプリロード ──────────────────────────────────────────

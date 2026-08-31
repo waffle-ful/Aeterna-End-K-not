@@ -55,6 +55,10 @@ public static class FixedUpdateCaller
             try { if (PerSecondUpdateScheduler.ShouldRunUpdate("bgm-watchdog")) BGMManager.Tick(); }
             catch (Exception e) { Utils.ThrowException(e); }
 
+            // BGM デコードバッファ在庫 (最大 ~45MB×2) のアイドル解放。曲替えが止まって5分で発火。
+            try { if (PerSecondUpdateScheduler.ShouldRunUpdate("decode-pool-trim")) CustomSoundsManager.TrimIdleDecodePool(); }
+            catch (Exception e) { Utils.ThrowException(e); }
+
             // チャット open/close 状態を毎フレーム overlay に反映。ローカルプレイヤー非依存で回す
             // (メニュー・非ゲーム中でもチャットが開くため、LocalPlayer ガードの中では遅すぎる)。
             try { TextBoxPatch.CheckChatOpen(); }
