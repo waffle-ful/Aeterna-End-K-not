@@ -120,8 +120,34 @@ public static class PacketRateGate
     private static int _resendNoteCount;
     private const int ResendNoteSessionCap = 300; // 劣化が数時間続いても台帳を埋めない保険
 
-    /// <summary>直近で Reliable 再送を観測した Unix 秒 (0=未観測)。リンク健全性プローブ (HealthLog.IsLinkDegradedNow) が参照する。</summary>
+    /// <summary>直近で Reliable 再送を観測した Unix 秒 (0=未観測)。事後解析用の計器
+    /// (リンク健全性プローブは 2026-08-31 からレート窓 ResendCountLast10s を参照する — 単発再送での誤検知対策)。</summary>
     public static long LastResendObservedTs { get; private set; }
+
+    // --- 直近10秒の再送レート窓 (BUG-20260831-02: 「再送1本で10秒劣化」の誤検知をレート基準に置換) ---
+    // 再送は delta>0 の秒しか起きないので、秒バケットのリングではなく (秒, 本数) のキュー+走行合計で持つ。
+    private static readonly Queue<(long Sec, int Count)> RecentResends = new();
+    private static int _recentResendTotal;
+
+    /// <summary>直近10秒間に観測した Reliable 再送の本数。IsLinkDegradedNow の再送軸 (>=5 で劣化)。</summary>
+    public static int ResendCountLast10s
+    {
+        get
+        {
+            try
+            {
+                PruneResendWindow(DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+                return _recentResendTotal;
+            }
+            catch { return 0; }
+        }
+    }
+
+    private static void PruneResendWindow(long now)
+    {
+        while (RecentResends.Count > 0 && now - RecentResends.Peek().Sec > 10)
+            _recentResendTotal -= RecentResends.Dequeue().Count;
+    }
 
     /// <summary>関所の Prefix 冒頭で毎回呼ぶ。全パケットについて計装だけ行う (ゲート判定はしない)。</summary>
     public static void RecordInstrumentation(MessageWriter msg)
@@ -269,6 +295,9 @@ public static class PacketRateGate
         PendingReliableQueue.Clear();
         // 再接続直後は実測で即健全化する (unack=0/ping 18ms) ため、旧接続の劣化スロットルを持ち越さない。
         DegradedThrottleActive = false;
+        // 旧接続で観測した再送も新リンクの健全性判定に持ち越さない (レート窓ごと捨てる)。
+        RecentResends.Clear();
+        _recentResendTotal = 0;
         // サーバー側の netId 表も作り直されている = 「この接続で spawn した netId」の記憶も捨てる。
         // ここで捨てた待機 Reliable の中に spawn が居ると、その netId はサーバーに存在しないまま
         // ローカルにだけ残る → 後の Despawn が P5 (ブロードキャスト × 未 spawn netId) になる。
@@ -298,7 +327,7 @@ public static class PacketRateGate
     }
 
     /// <summary>窓ロールオーバー毎 (~1Hz) にリンク健全性を再評価して予算を切り替える。
-    /// 判定は HealthLog.IsLinkDegradedNow (ping>=300 / pNoAck>=1 / 直近10秒の Reliable 再送観測) と同一軸。
+    /// 判定は HealthLog.IsLinkDegradedNow (ping>=300 / pNoAck>=2 / 直近10秒の Reliable 再送>=5本) と同一軸。
     /// 遷移は恒久チャネルへ1エピソード1組 (on/off) だけ残す — 次のキックで「スロットルが効いていた窓か」を
     /// 事後突合するための計器を兼ねる。</summary>
     private static void UpdateDegradedThrottle()
@@ -352,6 +381,9 @@ public static class PacketRateGate
             if (delta <= 0) return;
 
             LastResendObservedTs = sec;
+            RecentResends.Enqueue((sec, delta));
+            _recentResendTotal += delta;
+            PruneResendWindow(sec);
 
             if (_resendNoteCount++ < ResendNoteSessionCap)
                 HealthLog.NoteAnom($"ANOM live kind=resend d={delta} total={total} ping={instance.Ping} {SummarizeRecent(5)} t={sec}");
