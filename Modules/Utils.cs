@@ -5536,15 +5536,17 @@ public static class Utils
     // 公式サーバーだけが reason: Hacking の server-side anti-cheat を実行する。
     // カスタム / モッドサーバー (aumods.org・duikbo.at・自前鯖など) には anti-cheat が無いので false。
     // 判定不能時 (region null / 例外) は安全側で true → outfit spoof ガードを効かせて host 切断を防ぐ。
-    public static bool IsOfficialServer()
+    public static bool IsOfficialServer(bool ignoreNetworkMode = false, bool unknownIsOfficial = true)
     {
         try
         {
-            if (AmongUsClient.Instance.NetworkMode != NetworkModes.OnlineGame) return false; // ローカル / LAN は公式 anti-cheat 無し
+            if (!ignoreNetworkMode && AmongUsClient.Instance.NetworkMode != NetworkModes.OnlineGame) return false; // ローカル / LAN は公式 anti-cheat 無し
             var region = ServerManager.Instance.CurrentRegion;
-            return region == null || region.PingServer.EndsWith("among.us", StringComparison.Ordinal);
+            if (region == null) return unknownIsOfficial;
+
+            return region.PingServer.EndsWith("among.us", StringComparison.Ordinal);
         }
-        catch { return true; }
+        catch { return unknownIsOfficial; }
     }
 
     public static string GetRegionName(IRegionInfo region = null, bool ignoreNetworkMode = false)
