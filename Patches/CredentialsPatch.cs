@@ -146,7 +146,10 @@ internal static class VersionShowerStartPatch
         string testBuildIndicator = Main.TestBuild ? " <#ff0000>TEST</color>" : string.Empty;
 #pragma warning restore CS0162 // Unreachable code detected
 
-        Main.CredentialsText = $"<color={Main.ModColor}>Endless Host Roles</color> v{Main.PluginDisplayVersion}{testBuildIndicator} <color=#a54aff>by</color> <color=#ffff00>Gurge44</color>";
+        // 派生元の明示は GPL の要求であると同時に礼儀なので、ロビー表示から落とさないこと。
+        Main.CredentialsText = $"<color={Main.ModColor}>{Main.ModName}</color> v{Main.PluginDisplayVersion}{testBuildIndicator}" +
+                               $" <color=#a54aff>by</color> <color=#ffff00>waffle</color>" +
+                               $" <size=70%><color=#8c8c8c>based on</color> <color=#00ffcc>Endless Host Roles</color> <color=#8c8c8c>by</color> <color=#c8c800>Gurge44</color></size>";
 
         if (Main.IsAprilFools) Main.CredentialsText = "<color=#00bfff>Endless Madness</color> v11.45.14 <color=#a54aff>by</color> <color=#ffff00>No one</color>";
 
@@ -167,7 +170,8 @@ public static class UpdateFriendCodeUIPatch
 
     public static void Prefix()
     {
-        var credentialsText = $"<color={Main.ModColor}>waffle</color> \u00a9 2026";
+        // \u6d3e\u751f\u7269\u306a\u306e\u3067\u8457\u4f5c\u6a29\u8868\u793a\u306f fork \u5358\u72ec\u3067\u306f\u51fa\u3055\u305a\u3001\u6d3e\u751f\u5143\u3068 GPL \u3092\u4f75\u8a18\u3059\u308b\u3002
+        var credentialsText = "<size=80%><color=#8c8c8c>based on Endless Host Roles - GPL-3.0</color></size>";
         credentialsText += "\t\t\t";
         credentialsText += $"<color={Main.ModColor}>{Main.ModName}</color> - {Main.PluginVersion}";
 

@@ -58,7 +58,7 @@ This mod is unofficial and is **not affiliated with or endorsed by Innersloth**.
 > [!WARNING]
 > End K not is in **beta**. Some roles are untested and several features are works-in-progress. Please report bugs and suggestions on [GitHub Issues](../../issues) or our [Discord](https://discord.gg/sEYAFzD3a).
 
-Supported Among Us version: **2026.3.31**
+Supported Among Us version: **2026.8.18**
 
 ## Features
 
@@ -207,20 +207,77 @@ End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/End
 
 ## Credits
 
-> **The vast majority of this mod's roles come from earlier mods.** Huge thanks to the developers of the projects below. Which role came from where can be traced through this repository's git log — port commits record the upstream source and Co-authored-by lines.
+> **The vast majority of this mod's roles and features come from earlier mods.** Huge thanks to the developers of the projects below. Projects this fork referenced directly and projects credited by the mods it is built on are listed together here. Which role came from where can be traced through this repository's git log — port commits record the upstream source and Co-authored-by lines.
 
-- **[Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles)** (Gurge44 et al.) — base mod: the role engine, the large majority of roles, and an ongoing source of bug fixes, GPL-3.0
-- **[TownOfHost-K](https://github.com/KYMario/TownOfHost-K)** (KYMario et al.) — source of many ported roles, streaming-support features, and the official-server packet-splitting safety net, GPL-3.0
-- **[SuperNewRoles](https://github.com/SuperNewRoles/SuperNewRoles)** (SuperNewRoles team) — source of WaveCannon, GPL-3.0
-- **[TownOfHost-Pko](https://github.com/satokazoku/TownOfHost-Pko)** (satokazoku et al.) — source of many ported roles, WaveCannon design reference, GPL-3.0
-- **[Nebula on the Ship (NoS)](https://github.com/Dolly1016/Nebula)** (Dolly1016 et al.) — source of Mirage and other roles, memory-optimization and add-on API design reference, GPL-3.0 (NebulaAPI is LGPL-3.0)
-- **[Town Of Host](https://github.com/tukasa0001/TownOfHost)** (tukasa0001 et al.) — root of the TOH lineage
-- **[Town Of Host_ForE](https://github.com/AsumuAkaguma/TownOfHost_ForE)** — BGM customization feature
-- **[Town of Host: Enhanced (TOHE)](https://github.com/EnhancedNetwork/TownofHost-Enhanced)** (The Enhanced Network team) — source of many roles, GPL-3.0
+- **[au.libhalt.net](https://au.libhalt.net/)** — Mad Jester
+- **[AutoRejoin](https://github.com/Maxi0fc/AutoRejoin)** (Maxi0fc) — auto rejoin
+- **[BetterAmongUs](https://github.com/D1GQ/BetterAmongUs)** (D1GQ, GPL-3.0) — the modded-client support flag list
+- **[Calamity Mod (Terraria)](https://github.com/CalamityTeam/CalamityModPublic)** (Calamity Team) — reference for the main menu theme and visual design
+- **[CrowdedMod](https://github.com/CrowdedMods/CrowdedMod)** (andry08 / CrowdedMods, MIT) — large-lobby support
+- **[Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles)** (Gurge44 et al., GPL-3.0) — base mod: the role engine, the large majority of roles, and an ongoing source of bug fixes
+- **[ExtremeRoles](https://github.com/yukieiji/ExtremeRoles)** (yukieiji) — Assassin, Merlin, Airship patches
+- **[Lotus (LotusContinued)](https://github.com/NikoCat233/LotusContinued)** (GPL-3.0) — reference for the main menu rework, object helper code, ideas for Alchemist / Chameleon / Escapist / Necromancer / Deathknight / Romantic and its variants / Vengeance, auto play again, some tab icons
+- **[Mini.RegionInstall](https://github.com/miniduikboot/Mini.RegionInstall)** (miniduikboot, GPL-3.0) — custom region installer (shipped in the release packages)
+- **[MiraAPI](https://github.com/All-Of-Us-Mods/MiraAPI)** (All-Of-Us-Mods, LGPL-2.1) — role info tab code, UI sprites (two next-page buttons, two checkmarks), double task panel
+- **[More Gamemodes](https://github.com/Rabek009/MoreGamemodes)** (Rabek009) — Custom Net Objects (CNO), chat control and clearing, ShipStatus and vote/ejection handling, vent interaction blocking, main menu image code
+- **[Nebula on the Ship (NoS)](https://github.com/Dolly1016/Nebula)** (Dolly1016 et al., GPL-3.0; NebulaAPI is LGPL-3.0) — Mirage and other roles, Doctor, Sniper, memory-optimization and add-on API design reference
+- **[Reactor](https://github.com/NuclearPowered/Reactor)** / [XtraCube fork](https://github.com/XtraCube/Reactor) — modded handshake, compiler-generated object and state machine wrappers, disabling the 5s timeout on custom servers
+- **[Revolutionary Host Roles](https://github.com/sansaaaaai/Revolutionary-host-roles)** (sansaaaaai) — settings menu rework, custom buttons, Reloader, Staff, Incender
+- **[Stellar Roles](https://github.com/Mr-Fluuff/StellarRolesAU)** (Mr-Fluuff) — many role ideas, some custom button images
+- **[Submerged](https://github.com/SubmergedAmongUs/Submerged)** (SubmergedAmongUs) — map select button handling for Submerged
+- **[SuperNewRoles](https://github.com/SuperNewRoles/SuperNewRoles)** (SuperNewRoles team, GPL-3.0) — WaveCannon, credentials display, switch horse mode, search mod game, custom buttons, Libra, Meeting Sheriff, Toilet Fan, Evil Gambler, Penguin, Mad Suicide
+- **[template-unity](https://github.com/vpmedia/template-unity)** (vpmedia, MIT) — reference for the Mersenne Twister implementation
+- **[TheOtherRoles](https://github.com/TheOtherRolesAU/TheOtherRoles)** — Camouflager, Guesser, and more
+- **[TheOtherRoles-GM](https://github.com/yukinogatari/TheOtherRoles-GM)** (yukinogatari) — several roles
+- **TOR_GM_Haoming_Edition** — Evil Tracker, Schrödinger's Cat, and more
+- **[TOHEX / TONEX](https://github.com/TOHEX-Official/TownOfHostEdited-Xi)** — Swapper, storing message history
+- **[TOU-Mira](https://github.com/AU-Avengers/TOU-Mira)** (AU-Avengers, GPL-3.0) — dleks map selection, kill button cooldown display, HudManager work, role info tab
+- **[Town Of Host](https://github.com/tukasa0001/TownOfHost)** (tukasa0001 et al.) — the root of the whole lineage; random spawn and sabotage handling
+- **[Town Of Host-H](https://github.com/Hyz-sui/TownOfHost-H)** (Hyz-sui) — reference for the 10.24 update
+- **[Town Of Host-K](https://github.com/KYMario/TownOfHost-K)** (KYMario et al., GPL-3.0) — source of many ported roles, streaming-support features, the official-server packet-splitting safety net
+- **[Town Of Host Re-Edited](https://github.com/Loonie-Toons/)** — EHR's fork origin; PhantomRolePatch
+- **[Town Of Host_ForE](https://github.com/AsumuAkaguma/TownOfHost_ForE)** (AsumuAkaguma) — BGM customization, part of the comment-fetching code
+- **[Town Of Host_Y](https://github.com/Yumenopai/TownOfHost_Y)** (Yumenopai) — AntiAdminer / CursedWolf / Workaholic / Greedy / Stalker / Ignitor / Rabbit, role display during meetings and meeting extensions, attribute names, game announcement changes, settings UI, role basis changing mid-game
+- **[Town of Host: Enhanced (TOHE)](https://github.com/EnhancedNetwork/TownofHost-Enhanced)** (The Enhanced Network team) — many roles, various patches
+- **[Town Of Host Edited / Town Of Next](https://github.com/KARPED1EM/TownOfNext)** (KARPED1EM) — EHR is a continuation of TOHE; chat message character limit, main menu animations, input patches, text box
+- **[Town-Of-Moss](https://github.com/Koke1024/Town-Of-Moss)** (Koke1024) — reactor meltdown boost
+- **[Town Of Us - Reactivated](https://github.com/eDonnes124/Town-Of-Us-R)** (eDonnes124, GPL-3.0) — the Submerged compatibility layer, host meeting display
+- **[TownOfHost-Optimized](https://github.com/Limeau/TownofHost-Optimized)** (Limeau) — role ideas (Tank, Deadlined, Journalist, Grappler, Negotiator, Hypnotist, etc.)
+- **[TownOfHost-Pko](https://github.com/satokazoku/TownOfHost-Pko)** (satokazoku et al., GPL-3.0) — source of many ported roles, WaveCannon design reference
+- **[TownOfHost-TheOtherRoles](https://github.com/music-discussion/TownOfHost-TheOtherRoles)** (music-discussion) — many role ideas, exile confirm, split RPC packs
+- **[TownOfHostPlus](https://github.com/SkullCreeper/TownOfHostPlus)** (SkullCreeper) — Marshall / Poisoner / Necroview / Sidekick
+- **[TownOfPlus](https://github.com/tugaru1975/TownOfPlus)** (tugaru1975) — zoom
+- **[UnityDoorstop](https://github.com/NeighTools/UnityDoorstop)** (NeighTools, LGPL-2.1) — `winhttp.dll` / `doorstop_config.ini` used for packaging
+- **[Vanilla Enhancements](https://github.com/xChipseq/VanillaEnhancements)** (xChipseq, GPL-3.0) — meeting screen patches
+
+### Thanks to the developers and translators
+
+**[Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles)**
+
+- Developers: Gurge44
+- Contributors: Dx / PH_Gaming / TommyXL / Drakos / PEPPERcula
+- Special Thanks: Seleneous / thewhiskas27 / HyperAtill / Sil
+- Translators: Dx (PT-BR) / PH_Gaming (PT-BR) / Tomix (PT-BR) / HyperAtill (RU) / ABoringCat (ZH-CN) / Reborn (ZH-CN) / Pomelo (ZH-TW) / Polan (JP) / DoArc (ES) / Kurma (ID) / Gurge44 (HU) / Æ (KO)
+
+> This mod's `Resources/Lang/` is inherited from EHR, so the translators' work above is included as-is.
+
+**[TownOfHost-K](https://github.com/KYMario/TownOfHost-K)**
+
+- Developers: 暇な人 KY/けーわい / タイガー / 夜藍 / ねむa / はろん
+- Supporter: りぃりぃ
+
+### Bundled third-party software
+
+Some components are embedded into `EndKnot.dll`, others ship inside the release packages. All of them are the work of their respective authors and are licensed separately from End K not itself (GPL-3.0). The full list and license texts live in [`THIRD-PARTY-NOTICES.md`](./THIRD-PARTY-NOTICES.md).
+
+- NVorbis (MIT) — Ogg Vorbis decoding
+- NLayer (MIT) — MP3 decoding
+- BepInEx / Il2CppInterop / Unity Doorstop (LGPL-2.1) — the mod loading stack
+- Mini.RegionInstall (GPL-3.0, by duikbo) — custom region installer
 
 ### Music Credits
 
-BGM by **自称芸術家みーさん (Miisan)** (commercial-use permission obtained)
+BGM by **自称芸術家みーさん (Miisan)**
 - [HURT RECORD](https://www.hurtrecord.com/bgm/46/zero-no-heya.html)
 
 BGM by **もっぴーさうんど (Moppy Sound)**, **こおろぎ (Kohrogi)**, **蒲鉾さちこ (Kamaboko Sachiko)**
