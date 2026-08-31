@@ -24,7 +24,7 @@
   "SayTitle": "★[Mensaje del moderador]★",
   "announcementUpdate": "<size=3f>Actualización v{0}</size>\\n{1}",
   "announcementChangelog": "<size=3f>Registro de Cambios v{0}</size>\\n{1}",
-  "Server": "<#00ffa5>Servidor:</color> <b>{0}</b>",
+  "Server": "<#00ffa5>Servidor:</color> ",
   "VersionMismatch": "{0} Tiene una versión diferente del mod instalado",
   "ModMismatch": "{0} has a different mod installed that isn't compatible with End K not",
   "Kick": "Expulsar",

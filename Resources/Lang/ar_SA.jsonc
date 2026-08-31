@@ -24,7 +24,7 @@
   "SayTitle": "★[كلمة من المسير]★",
   "announcementUpdate": "<size=3f>تحديث v{0}</size>\\n{1}",
   "announcementChangelog": "<size=3f>التطويرات لv{0}</size>\\n{1}",
-  "Server": "<#00ffa5> الخادم: </color> <b>{0}</b>",
+  "Server": "<#00ffa5> الخادم: </color> ",
   "VersionMismatch": "{0} لديه نسخة مختلفون من المود",
   "ModMismatch": "{0} لديه مود مختلفون لا يستقبلهم End K not <#ffff00⚠</color>",
   "Kick": "طرد",

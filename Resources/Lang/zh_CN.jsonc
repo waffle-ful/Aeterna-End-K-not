@@ -24,7 +24,7 @@
   "SayTitle": "★[ 协管消息 ]★",
   "announcementUpdate": "<size=3f>更新到 v{0}</size>\\n{1} 版本.",
   "announcementChangelog": "<size=3f>更新日志 v{0}</size>\\n{1} 版本",
-  "Server": "<#00ffa5>服务器：</color> <b>{0}</b>",
+  "Server": "<#00ffa5>服务器：</color> ",
   "VersionMismatch": "{0} 安装了不同版本的模组",
   "ModMismatch": "{0} 安装了与 End K not 不兼容的模组",
   "Kick": "踢出",

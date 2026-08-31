@@ -24,7 +24,7 @@
   "SayTitle": "★[ Messaggio da Moderatore ]★",
   "announcementUpdate": "<size=3f>Aggiornamento v{0}</size>\\n{1}",
   "announcementChangelog": "<size=3f>Registro Modifiche v{0}</size>\\n{1}",
-  "Server": "<#00ffa5>Server:</color> <b>{0}</b>",
+  "Server": "<#00ffa5>Server:</color> ",
   "VersionMismatch": "{0} ha una versione diversa della mod installata",
   "ModMismatch": "{0} ha una mod diversa installata che non è compatibile con End K not <#ff00>⚠️</color>",
   "Kick": "Espelli",

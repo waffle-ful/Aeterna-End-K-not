@@ -24,7 +24,7 @@
   "SayTitle": "★[ Wiadomość Moderatora ]★",
   "announcementUpdate": "<size=3f>Aktualizacja v{0}</size>\\n{1}",
   "announcementChangelog": "<size=3f>Dzienniki zmian v{0}</size>\\n{1}",
-  "Server": "<#00ffa5>Server:</color> <b>{0}</b>",
+  "Server": "<#00ffa5>Server:</color> ",
   "VersionMismatch": "{0} ma zainstalowaną inną wersję moda",
   "ModMismatch": "{0} has a different mod installed that isn't compatible with End K not",
   "Kick": "Wyrzuć",

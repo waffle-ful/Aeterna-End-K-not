@@ -24,7 +24,7 @@
   "SayTitle": "★ [ Message des modérateurs ]★",
   "announcementUpdate": "<size=3f>Mise à Jour v{0}</size>\\n{1}",
   "announcementChangelog": "<size=3f>ChangeLogs v{0}</size>\\n{1}",
-  "Server": "<#00ffa5>Serveur :</color> <b>{0}</b>",
+  "Server": "<#00ffa5>Serveur :</color> ",
   "VersionMismatch": "{0} a une différente version du mod installé",
   "ModMismatch": "{0} a un différent mod installé qui n'est pas compatible avec End K not <#ffff00>⚠</color>",
   "Kick": "Expulser",
