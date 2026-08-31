@@ -1,4 +1,4 @@
-// 役職コード (計画正典: docs/ekn-api-plan.md) — EKR1. + base64url(deflate-raw)、
+// 役職コード — EKR1. + base64url(deflate-raw)、
 // パディング無し出力・有無両受理。mapcode.test.ts (仕様 §8) と同型だが役職コードは独立契約。
 
 import { describe, expect, it } from "vitest";
@@ -29,7 +29,7 @@ const FIXED_SAMPLE = {
 const FIXED_CODE =
     "EKR1.HY6xCsIwFEX_5bkWQcXBrI7i6iIOoX3F0DTRNLWDCNqqCN2cnRzE3UUH8WOeYD_DtOO75zzuXQNGBljHA4PLVBhMgE1nHigeIzCobuXvc6bdnvI7FQ_Kn1SUlF_BA57auXavQMWR8hcVp-_7Um0PDvlaNqTVC_kg7LvEIo9d4BvMYm6xdrgaCSmBhVwm6EHkjqHWMtCZAtbtN8YElQVmTeqElUiEVuNUWrGQAuvR7VrLhBpqFQjrqKtomjZ_";
 
-describe("役職コード (EKR1., 計画正典: docs/ekn-api-plan.md)", () => {
+describe("役職コード (EKR1.)", () => {
     it("凍結フィクスチャ: 固定バイト列が今も正しく decode できる (フレーミング変更の回帰ガード)", () => {
         const back = JSON.parse(decodeRoleCode(FIXED_CODE));
         expect(back).toEqual(FIXED_SAMPLE);
@@ -53,7 +53,7 @@ describe("役職コード (EKR1., 計画正典: docs/ekn-api-plan.md)", () => {
         expect(back).toEqual(def);
     });
 
-    // R2 (docs/ekn-r2-contract.md §1 2026-08-11): role-maker.ts の陣営セレクタが持ちうる3値それぞれで
+    // R2 (§1 2026-08-11): role-maker.ts の陣営セレクタが持ちうる3値それぞれで
     // 「フォーム相当のオブジェクト → 検証 → コード化 → 復号 → 再検証」の往復が保たれることを確認する
     // (role-maker.ts 自体は DOM 依存で直接テストできないため、buildDefinitionFromForm が組み立てる
     // 形と同じ素の EkrDefinition 候補で代替する)。
@@ -108,7 +108,7 @@ describe("役職コード (EKR1., 計画正典: docs/ekn-api-plan.md)", () => {
 // rolecode.ts (codec) は中身を一切解釈しないので、logic 付きの役職コードでも変更なく通るはず —
 // ただし「本当に通しで壊れないか」「blockly (不透明フィールド) が生き残るか」は明示的に確認しておく
 // (role-maker.ts 実装タスク item 7)。
-describe("logic 込みのラウンドトリップ (R1・docs/ekr-logic-spec.md)", () => {
+describe("logic 込みのラウンドトリップ (R1)", () => {
     function definitionWithLogic(): Record<string, unknown> {
         const base = defaultEkrDefinition();
         return {

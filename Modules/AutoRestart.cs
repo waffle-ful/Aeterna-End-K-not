@@ -39,7 +39,7 @@ public static class AutoRestart
     // stop-flag 書き込みをスキップする (でないと再起動のはずが番犬を止めて蘇生されなくなる)。
     public static bool RestartRequested { get; private set; }
 
-    // Innersloth UserIDToken が死んでいる (HealthLog 段1検出、BUG-20260715-05)。これ単体では再起動しない —
+    // Innersloth UserIDToken が死んでいる (HealthLog 段1検出)。これ単体では再起動しない —
     // 接続中のロビーはトークン無しでも動き続けるため、実害 (メニュー落ちゾンビ) の確定を待つ。
     // ゾンビ確定時に authDeath (egl-refresh 要求) を付けるかどうかの判定にだけ使う。
     public static bool UserIdTokenDead { get; set; }
@@ -100,7 +100,7 @@ public static class AutoRestart
         Escalate("eos re-login stuck", authDeath: true);
     }
 
-    // メニュー落ちゾンビ検知 (HealthLog 段2、BUG-20260715-05) から呼ばれる。GameState=Ended のまま
+    // メニュー落ちゾンビ検知 (HealthLog 段2) から呼ばれる。GameState=Ended のまま
     // メインメニューに落ちた矛盾状態は DisconnectPopup も DC イベントも出さず、AutoRehost の WaitClean
     // (IsNotJoined 必須) も永久に通らないため、プロセス再起動が唯一の回復パス。トークン死が先に検出されて
     // いれば egl-refresh 付き (外部 JWT 失効なので EGL から新しい exchange code が要る)。

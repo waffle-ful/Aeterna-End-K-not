@@ -8,7 +8,7 @@ using UnityEngine;
 namespace EndKnot.Modules;
 
 // EKM v1/v2/v3 カスタムマップローダー (Phase 0 / Phase B / Phase C)
-// 仕様: docs/ekmap-spec.md (凍結 2026-06-10 v1 / 凍結 2026-06-11 v2 / 凍結 2026-06-13 v3)
+// 仕様は凍結済み (2026-06-10 v1 / 2026-06-11 v2 / 2026-06-13 v3)
 public static class EkmapLoader
 {
     // BepInEx.Paths ベースで確実にゲームフォルダ配下を指す

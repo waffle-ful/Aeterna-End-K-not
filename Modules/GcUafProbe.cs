@@ -5,7 +5,7 @@ using Il2CppInterop.Runtime;
 
 namespace EndKnot.Modules;
 
-// GC use-after-free 検出プローブ (docs/coreclr-av-chat-uaf-resume.md §1e が正典)。
+// GC use-after-free 検出プローブ。
 // incremental GC のマークサイクル中に interop フィールド setter (write barrier 無し) で書いた
 // il2cpp string が、後続のサイクルで回収されてしまうかを起動時に決定的に判定する。
 // interop 再生成 (barrier 有効化) の前後で VULNERABLE→SAFE に変わることを確認する 1-bit テスト器。

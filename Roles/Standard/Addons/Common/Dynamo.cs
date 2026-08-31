@@ -63,7 +63,7 @@ public class Dynamo : IAddon
         LastPos[player.PlayerId] = pos;
 
         // ForceFielder のフィールド展開中は減速が意図的トレードオフ。Dynamo が毎フレーム AllPlayerSpeed を
-        // 上書きすると ForceFielder の一発減速が塗り潰されて機能しない (BUG-20260723-06)。フィールド中は
+        // 上書きすると ForceFielder の一発減速が塗り潰されて機能しない。フィールド中は
         // 速度制御を ForceFielder に譲る (LastPos は上で更新済み=フィールド解除後の初回判定が正しくなる)。
         if (Main.PlayerStates[player.PlayerId].Role is ForceFielder { FieldActive: true }) return;
 

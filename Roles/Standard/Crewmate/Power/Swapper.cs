@@ -79,7 +79,7 @@ public class Swapper : RoleBase
             operate = 1;
         // st は推理側 (GuesserMsg の "shoot|...|st|bt") が先に食うため此処では永久に到達しない。Swapper も推理可能役職なので綴りを推理側へ寄せる
         // CheckCommand は先頭から StartsWith で走査して最初に当たった1つだけを Replace で剥がすため、短い別名を
-        // 先に置くと長い方が死ぬ (BUG-20260813-05: "sw" が先だと /swap が "ap 1 2" に化けて使い方表示で終わっていた)
+        // 先に置くと長い方が死ぬ ("sw" が先だと /swap が "ap 1 2" に化けて使い方表示で終わっていた)
         else if (GuessManager.CheckCommand(ref msg, "swap|sw|换票|换", false, out spamRequired))
             operate = 2;
         else

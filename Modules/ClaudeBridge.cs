@@ -191,7 +191,7 @@ public static class ClaudeBridge
         }
 
         // Layer 3b: OS レベルのマウス注入。click(OnClick.Invoke 直呼び)では発火しない動的配線 UI
-        // (会議の投票確認・Shapeshifter 対象選択等)向け(project_host_ui_real_click_injection)。
+        // (会議の投票確認・Shapeshifter 対象選択等)向け。
         if (directive.StartsWith("press ", StringComparison.OrdinalIgnoreCase))
         {
             try { ExecutePress(directive[6..].Trim()); }
@@ -893,8 +893,7 @@ public static class ClaudeBridge
     // ── Layer 3b: OS レベルのマウス注入 ─────────────────────────────────
     // click(PassiveButton.OnClick.Invoke 直呼び)は AU が実行時に動的 AddListener する UI
     // (会議の投票確認チェック、PlayerVoteArea の Select 連鎖等)を発火できない。ここは本物の
-    // OS マウスイベントを注入して Unity から見て人間の操作と区別が付かない形にする
-    // (project_host_ui_real_click_injection の実証済み代替経路)。
+    // OS マウスイベントを注入して Unity から見て人間の操作と区別が付かない形にする。
 
     [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
     private struct Win32Point
@@ -1405,7 +1404,7 @@ public static class ClaudeBridge
 
         target.DoClick();
 
-        // BUG-20260817-05 の再発防止: イントロ明け StartingKillCooldown 秒の PreventKill 窓内は、
+        // 再発防止: イントロ明け StartingKillCooldown 秒の PreventKill 窓内は、
         // kill (PlayerControlPatch.cs:700) / pet (PetActionsPatch.OnPetUse) / ability=vanish・shapeshift
         // (PlayerControlPatch.cs:988) の発動がモッド側で無音棄却される。OK だけ返すと「押したのに
         // 発火しない」を故障と誤診するので、窓内である事実を応答に併記する (解除待ちは

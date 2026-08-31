@@ -4,7 +4,7 @@ using EndKnot.Modules.Ekm;
 
 namespace EndKnot.Roles;
 
-// EKN ノーコード役職メーカー R0 の共通実体 (計画正典: docs/ekn-api-plan.md)。
+// EKN ノーコード役職メーカー R0 の共通実体。
 // 10個の予約スロット (CustomRoles.EkmCustomRole1..10) はこのクラスの「スロット番号だけ持つ薄い派生」。
 // per-slot の状態は static フィールドで持たない (基底クラスの static は全スロットで1個しか無いため、
 // 誤って混ざる) — 必ず EkrManager に CustomRoles (Slot) をキーとして持たせる。
@@ -21,7 +21,7 @@ public abstract class EkmTemplateRole : RoleBase
     // R0 は最小構成: 役職ヘッダ (出現率) + Maximum のみ。数値パラメータは役職コード (JSON) 側が持つので
     // ホストオプション化しない (ekn-api-plan §決定事項6)。
 
-    // ── Wave 3 (docs/ekn-wave3-contract.md §4.2): ホスト露出の「前登録プール」 ──────────────────
+    // ── Wave 3: ホスト露出の「前登録プール」 ──────────────────
     //
     // 🔴 Bind 時に OptionItem を新規生成することは構造的に不可能 (保存値の復元 OptionSaver.Load が
     // 束縛より先に走る / 役職タブは GroupedOptions の一度きりのスナップショット / repo に後付け生成の
@@ -125,7 +125,7 @@ public abstract class EkmTemplateRole : RoleBase
             opt.SetFloat(FloatOptionNames.ImpostorLightMod, vision);
         }
 
-        // Wave 1 (docs/ekr-logic-spec.md §1.1): passives.killDistance を vanilla 0/1/2 へ写像。
+        // Wave 1: passives.killDistance を vanilla 0/1/2 へ写像。
         // 未指定 (-1) はホスト設定のまま。
         if (def.ParsedPassives.KillDistance >= 0)
             opt.SetInt(Int32OptionNames.KillDistance, def.ParsedPassives.KillDistance);
@@ -140,7 +140,7 @@ public abstract class EkmTemplateRole : RoleBase
         return EkrManager.FireAttacked(Slot, target, killer);
     }
 
-    // ── R1 (docs/ekr-logic-spec.md): イベントフック→発行のみの薄い配線 ──────────
+    // ── R1: イベントフック→発行のみの薄い配線 ──────────
     // per-holder 状態は一切持たず、すべて EkrManager (playerId キー) へ委譲する。
 
     public override void OnPet(PlayerControl pc)
@@ -192,7 +192,7 @@ public abstract class EkmTemplateRole : RoleBase
         EkrManager.FireVentEnter(Slot, pc);
     }
 
-    // Wave 3 (docs/ekn-wave3-contract.md §1.4): ExitVentPatch.Postfix (ホストガード後) からの1本道。
+    // Wave 3: ExitVentPatch.Postfix (ホストガード後) からの1本道。
     public override void OnExitVent(PlayerControl pc, Vent vent)
     {
         EkrManager.FireVentExit(Slot, pc);
@@ -203,7 +203,7 @@ public abstract class EkmTemplateRole : RoleBase
         EkrManager.FireTaskComplete(Slot, pc);
     }
 
-    // Wave 6 (docs/ekn-wave6-contract.md §3): on_revive。ホルダー限定・ctx 無し (蘇生させた人は
+    // Wave 6: on_revive。ホルダー限定・ctx 無し (蘇生させた人は
     // RpcRevive のシグネチャに存在しないため渡せない)。呼び出し元 (ExtendedPlayerControl.RpcRevive) が
     // Standard モードゲートの内側なので EKR 側の追加ゲートは要らない。
     public override void OnRevived(PlayerControl pc)
@@ -216,7 +216,7 @@ public abstract class EkmTemplateRole : RoleBase
         EkrManager.Pump(Slot, pc);
     }
 
-    // ── Wave 3 (docs/ekn-wave3-contract.md §3 progress): 名前の横に出す作者の文字 ──
+    // ── Wave 3 (progress): 名前の横に出す作者の文字 ──
     // 加算型 — base の ability-limit + タスク数を残して末尾に足す (Tank.cs:70 型)。
     // ⚠️ Utils.GetProgressText は共有 StringBuilder を使い回すため、この override の中から
     // 直接にも間接的にも呼ばないこと (base.GetProgressText は SB を触らない別経路)。
@@ -232,7 +232,7 @@ public abstract class EkmTemplateRole : RoleBase
         EkrManager.FireMeetingEndForSlot(Slot);
     }
 
-    // ── Wave 2 (docs/ekn-wave2-contract.md §1.1 on_meeting_vote): CastVote 関門 (MeetingHudPatch.cs:1610) ──
+    // ── Wave 2 (on_meeting_vote): CastVote 関門 (MeetingHudPatch.cs:1610) ──
     // 戻り値 = 票を消費した (=キャンセルした) か。CancelsVote() の EKR arm (定義に on_meeting_vote
     // ルールがあれば true) が通ったときだけこの経路に来る。Oracle/FortuneTeller と同じ
     // 「cancel したら Main.DontCancelVoteList へ積んで revote を許す」規約 — これが cancel_vote の

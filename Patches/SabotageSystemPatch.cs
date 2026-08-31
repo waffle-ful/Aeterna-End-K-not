@@ -574,7 +574,7 @@ public static class SabotageSystemTypeUpdateSystemPatch
         {
             try { EndKnot.Modules.Companion.CompanionEventEmitter.OnSabotageStart(systemTypes); } catch { } // AI実況相棒アプリ向けイベント (OFF 時は即 return)
 
-            // EKR logic (docs/ekn-wave6-contract.md §2): on_sabotage はサボ成立のこの一点関門で発火する
+            // EKR logic: on_sabotage はサボ成立のこの一点関門で発火する
             // (却下された打診では発火しない)。グローバル型 — ctx = 起こした人で全ホルダーへ配る。
             try { EndKnot.Modules.Ekm.EkrManager.FireSabotage(player, systemTypes); } catch (Exception e) { Utils.ThrowException(e); }
 

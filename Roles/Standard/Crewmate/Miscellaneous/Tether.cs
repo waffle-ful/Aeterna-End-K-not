@@ -101,7 +101,7 @@ public class Tether : RoleBase
         {
             LateTask.New(() =>
             {
-                // 遅延中の切断で pc / Target が stale 化すると SnapTo / Pos() が NRE (BUG-20260714-03 兄弟)。
+                // 遅延中の切断で pc / Target が stale 化すると SnapTo / Pos() が NRE。
                 if (!pc || pc.Data == null || pc.Data.Disconnected) return;
                 PlayerControl target = Utils.GetPlayerById(Target);
                 if (target == null) return;

@@ -6,8 +6,7 @@ using Xunit;
 
 namespace EndKnot.Tests;
 
-// Modules/Ekm/EkrDefinition.cs + EkmLogicRuntime.cs + EkrPassives.cs — EKR 役職コードの契約テスト
-// (正典: docs/ekr-logic-spec.md)。
+// Modules/Ekm/EkrDefinition.cs + EkmLogicRuntime.cs + EkrPassives.cs — EKR 役職コードの契約テスト。
 //
 // 主目的は **TS (editor/src/roledef.ts) と C# の検証規則の非対称を機械検出する網**。
 // editor/tests/fixtures/ の実 fixture をそのまま食わせるので、TS 側だけが通る/C# 側だけが通る形の
@@ -52,7 +51,7 @@ public class EkrDefinitionTests
         Assert.Contains(def.ParsedLogic.Rules, r => r.When == "on_attacked");
     }
 
-    // R2 (docs/ekn-r2-contract.md §3b,§4): 共有 fixture に載せた kind / cause / disguise が
+    // R2: 共有 fixture に載せた kind / cause / disguise が
     // C# 側でも同じ値まで通ること (TS↔C# の drift 検出網)。
     [Fact]
     public void FullCourseFixture_ExposesR2KindCauseAndDisguise()
@@ -171,7 +170,7 @@ public class EkrDefinitionTests
 
     private const string MinimalRule = "\"rules\":[{\"when\":\"on_pet\",\"do\":[{\"op\":\"stop\"}]}]";
 
-    // R2 (docs/ekn-r2-contract.md §1): team は3値受理。madmate / coven は対象外。
+    // R2: team は3値受理。madmate / coven は対象外。
     // TS 側 (roledef.ts SUPPORTED_TEAMS) と同じ集合・同じ既定であること。
     [Theory]
     [InlineData("crewmate", true, EkrTeam.Crewmate)]
@@ -324,7 +323,7 @@ public class EkrDefinitionTests
         Assert.True(ok == shouldAccept, shouldAccept ? error : "本来 reject されるべき op が受理されました: " + opJson);
     }
 
-    // ── Wave 2 (docs/ekn-wave2-contract.md): 新イベント2種+新 op 10種 ────────────────────────────
+    // ── Wave 2: 新イベント2種+新 op 10種 ────────────────────────────────────────────────────────
 
     [Fact]
     public void FullCourseFixture_ExposesWave2Rules()
@@ -426,7 +425,7 @@ public class EkrDefinitionTests
         Assert.True(EkrDefinition.TryParse(LogicWithOp("{\"op\":\"vote_swap\"}"), out _, out string e2), e2);
     }
 
-    // ── Wave 3 (docs/ekn-wave3-contract.md) ────────────────────────────────────────────────────
+    // ── Wave 3 ──────────────────────────────────────────────────────────────────────────────────
 
     // §1: 共有 fixture に載せた3イベントが C# 側でも同じ値まで通ること (TS↔C# の drift 検出網)。
     [Fact]
@@ -451,7 +450,7 @@ public class EkrDefinitionTests
         Assert.False(onVentExit.IsStateTrigger);
     }
 
-    // ── Wave 4 (docs/ekn-wave4-contract.md) ────────────────────────────────────────────────────
+    // ── Wave 4 ──────────────────────────────────────────────────────────────────────────────────
 
     // §1〜§3: 共有 fixture に載せた5イベントが C# 側でも同じ値まで通ること (TS↔C# の drift 検出網)。
     // TS 側 (role-fixtures.test.ts「Wave 4 の新5イベントの rule 形が保持される」) と対になる。
@@ -488,7 +487,7 @@ public class EkrDefinitionTests
     }
 
 
-    // ── Wave 5 (docs/ekn-wave5-contract.md §1〜§3): 持続効果と変換先スロット指名 ────────────────
+    // ── Wave 5: 持続効果と変換先スロット指名 ──────────────────────────────────────────────────
 
     // 共有 fixture から Wave 5 語彙が AST まで通ること。TS 側 (role-fixtures.test.ts の
     // 「effect_give の4種と recruit.slot が保持される」) と同じファイルの同じ値を読むので、
@@ -730,7 +729,7 @@ public class EkrDefinitionTests
         }
     }
 
-    // ── Wave 4 (docs/ekn-wave4-contract.md) ────────────────────────────────────────────────────
+    // ── Wave 4 ──────────────────────────────────────────────────────────────────────────────────
 
     // §1/§6: on_near/on_far の radius (必須)/who (on_near 任意・on_far 必須で anyone 不可)、
     // 他イベントへの付着 reject (slot と同じ対称検査)。§3.3: on_linked_death の cause 受理と、
@@ -851,7 +850,7 @@ public class EkrDefinitionTests
             out _, out _));
     }
 
-    // ── Wave 6 (docs/ekn-wave6-contract.md §1〜§4): とばすもの + 残イベント2種 ──────────────────
+    // ── Wave 6: とばすもの + 残イベント2種 ────────────────────────────────────────────────────
 
     // 契約 §9-3 のテンプレギャラリー見本 (ゆきだま / こおりのたま / ビームふう) を含む TS 側 fixture が
     // 全数 C# パーサを通ること。見本は「作者がそのまま真似する組み方」なので、片側だけ通る形が混じると
@@ -975,7 +974,7 @@ public class EkrDefinitionTests
         Assert.Equal(-1, def.ParsedPassives.KillDistance);
     }
 
-    // ── Wave 7 (docs/ekn-wave7-contract.md §1,§2): 勝利条件 (win / win_join) ─────────────────────
+    // ── Wave 7: 勝利条件 (win / win_join) ─────────────────────────────────────────────────────
 
     private static string WrapTeam(string team, string logicJson)
     {

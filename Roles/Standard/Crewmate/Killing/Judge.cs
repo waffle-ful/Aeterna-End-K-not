@@ -177,7 +177,7 @@ public class Judge : RoleBase
 
                     PlayerControl dp = judgeSuicide ? pc : target;
 
-                    // R2 (docs/ekn-r2-contract.md §3b): on_attacked kind:"guess" — 裁判の処刑も推測系
+                    // R2: on_attacked kind:"guess" — 裁判の処刑も推測系
                     // として扱う。キャンセルされた場合は Medic 層と同じく **誰も死なず**、使用回数も
                     // 減らさない (GuessManager の Medic 分岐と同じ作法)。無反応に見えないよう、
                     // 「守られていた」ことは GuessManager と同じ文言で必ず伝える。

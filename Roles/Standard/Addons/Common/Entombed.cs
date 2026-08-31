@@ -35,7 +35,7 @@ public class Entombed : IAddon
         MeetingEndTS = Utils.TimeStamp;
         GracePeriodLength = 5 + 5 / Main.RealOptionsData.GetFloat(FloatOptionNames.PlayerSpeedMod);
 
-        // 計器 (BUG-20260715-07)
+        // 計器
         foreach ((byte id, SystemTypes room) in BlockedRoom)
             Logger.Info($"Assigned {room} to {Utils.GetPlayerById(id)?.GetRealName() ?? id.ToString()} (grace {GracePeriodLength:F1}s from TS {MeetingEndTS})", "Entombed");
 
@@ -91,11 +91,11 @@ public class Entombed : IAddon
         LogNearMiss(pc, blockedRoom, now);
     }
 
-    // 計器 (BUG-20260715-07): 「指定部屋に入ったのに自殺しない」の切り分け用。
+    // 計器: 「指定部屋に入ったのに自殺しない」の切り分け用。
     // 部屋の bounds には入っているのに IsInRoom() が false を返した = 「死ぬはずが死ななかった」瞬間だけを
     // 1 秒に 1 回記録する (OnFixedUpdate は毎 tick 呼ばれるため無throttleだとログが溢れる)。
     // IsTouching=false なら Check() の非矩形部屋パス (ExtendedPlayerControl.cs:2730) が犯人、
-    // colliderOffset.y が 127 付近なら no-clip ([[project_noclip_collider_offset_shadow_loss]]) が犯人。
+    // colliderOffset.y が 127 付近なら no-clip が犯人。
     private static readonly Dictionary<byte, long> LastNearMissLog = [];
 
     private static void LogNearMiss(PlayerControl pc, SystemTypes blockedRoom, long now)

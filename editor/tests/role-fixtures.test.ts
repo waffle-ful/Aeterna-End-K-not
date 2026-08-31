@@ -1,4 +1,4 @@
-// logic 付き .ekrole.json の golden fixture (docs/ekr-logic-spec.md §1〜§6 の共有検証資材)。
+// logic 付き .ekrole.json の golden fixture (§1〜§6 の共有検証資材)。
 // AST 深さ不一致のような実装差分は、共有の実物 .ekrole.json が無いと自動検出できない —
 // このテストはその穴を塞ぐ。fixtures/ のファイルは vitest 専用ではなく、そのまま
 // Documents/EndKnot/EKRoles/ に置いて実機 /role import テストにも使う想定 (現実的な日本語の
@@ -48,7 +48,7 @@ describe("golden fixture: role-full-course.ekrole.json (10イベント・主要o
         expect(result.def.descriptionLong?.startsWith("影を渡り歩く役職です。")).toBe(true);
     });
 
-    // Wave 3 (docs/ekn-wave3-contract.md §3/§4 2026-08-14): progress/hostOptions。
+    // Wave 3 (§3/§4 2026-08-14): progress/hostOptions。
     // C# 側 (EkrDefinitionTests) が同じファイルの同じ値を読むので、片側だけ実装が抜けるとどちらかが落ちる。
     it("progress.text と hostOptions を保持する", () => {
         const parsed = JSON.parse(fullCourseRaw);
@@ -90,13 +90,13 @@ describe("golden fixture: role-full-course.ekrole.json (10イベント・主要o
             "notify", "teleport", "kill", "set_kill_cooldown", "speed",
             "cno_spawn", "cno_move", "cno_despawn", "cno_show",
             "marker_save", "teleport_other",
-            // Wave 4 (docs/ekn-wave4-contract.md §3/§4): リンクと変換の3 op。
+            // Wave 4 (§3/§4): リンクと変換の3 op。
             "link", "unlink", "recruit",
-            // Wave 5 (docs/ekn-wave5-contract.md §1): 持続効果。
+            // Wave 5 (§1): 持続効果。
             "effect_give",
-            // Wave 6 (docs/ekn-wave6-contract.md §1): とばす。
+            // Wave 6 (§1): とばす。
             "cno_launch",
-            // Wave 7 (docs/ekn-wave7-contract.md §2): 便乗勝ち。win (即勝ち) はこの fixture には
+            // Wave 7 (§2): 便乗勝ち。win (即勝ち) はこの fixture には
             // 入れられない (crewmate 文書は検証 reject — win の C# パース網羅は
             // role-collector-showcase.ekrole.json が担う)。
             "win_join",
@@ -108,7 +108,7 @@ describe("golden fixture: role-full-course.ekrole.json (10イベント・主要o
 
     // Wave 1 (spec §1.1): passives の全キーを実物の .ekrole.json で1度ずつ使う
     // (C# 側の検証と突き合わせる共有資材にするため — 型/レンジの実装差分はここで露見する)。
-    // R2 (docs/ekn-r2-contract.md §4): disguise を追加して7キーになった。
+    // R2 (§4): disguise を追加して7キーになった。
     it("passives の7キーすべてを使っている (検証を通り、そのまま保持される)", () => {
         const parsed = JSON.parse(fullCourseRaw);
         const result = validateEkrDefinition(parsed);
@@ -146,7 +146,7 @@ describe("golden fixture: role-full-course.ekrole.json (10イベント・主要o
         expect(onVentExit?.do.length).toBeGreaterThan(0);
     });
 
-    // Wave 5 (docs/ekn-wave5-contract.md §1/§2): 持続効果と変換先スロット指名。C# 側
+    // Wave 5 (§1/§2): 持続効果と変換先スロット指名。C# 側
     // (EkrDefinitionTests.FullCourseFixture_ExposesWave5Vocabulary) が同じファイルの同じ値を読むので、
     // 片側だけ実装が抜けるとどちらかが落ちる。
     it("effect_give の4種と recruit.slot が保持される (kind 別の seconds 上限も含む)", () => {
@@ -186,7 +186,7 @@ describe("golden fixture: role-full-course.ekrole.json (10イベント・主要o
         expect(rules.find((r) => r.when === "on_death")?.cause).toBe("poison-curse");
     });
 
-    // Wave 4 (docs/ekn-wave4-contract.md §1〜§3): 近接/部屋/リンク死の rule 形。
+    // Wave 4 (§1〜§3): 近接/部屋/リンク死の rule 形。
     // C# 側 (EkrDefinitionTests.FullCourseFixture_ExposesWave4Triggers) が同じファイルの同じ値を
     // 読むので、片側だけ実装が抜けるとどちらかが落ちる。
     it("Wave 4 の新5イベントの rule 形が保持される (radius/who/cause の付着規則込み)", () => {
@@ -217,7 +217,7 @@ describe("golden fixture: role-full-course.ekrole.json (10イベント・主要o
         expect(rules.find((r) => r.when === "on_linked_death")?.cause).toBe("kill");
     });
 
-    // Wave 6 (docs/ekn-wave6-contract.md §1〜§3): とばす + 残イベント2種。C# 側 (EkrDefinitionTests) が
+    // Wave 6 (§1〜§3): とばす + 残イベント2種。C# 側 (EkrDefinitionTests) が
     // 同じファイルの同じ値を読む想定なので、片側だけ実装が抜けるとどちらかが落ちる。
     it("cno_launch (slot/dir・speed 省略=medium) と on_sabotage/on_revive の rule 形が保持される", () => {
         const parsed = JSON.parse(fullCourseRaw);
@@ -419,7 +419,7 @@ describe("golden fixture: role-dummy-showcase.ekrole.json (v1.1 dummy_spawn/corp
     });
 });
 
-// Wave 6 (docs/ekn-wave6-contract.md §9-3 2026-08-29): テンプレギャラリー見本3本。
+// Wave 6 (§9-3 2026-08-29): テンプレギャラリー見本3本。
 // 「spawn❄ → launch → touch → kill」型 (ゆきだま/こおりのたま) と「大サイズ+fast」型 (ビームふう) の
 // 最小構成 — role-cno-showcase/role-dummy-showcase と同じ「fixture 兼リグレッション資材」の扱い。
 describe.each([
@@ -471,7 +471,7 @@ describe.each([
     });
 });
 
-// Wave 7 (docs/ekn-wave7-contract.md §6 2026-08-30): テンプレギャラリー見本2本。
+// Wave 7 (§6 2026-08-30): テンプレギャラリー見本2本。
 // P2 型 (あつめや: on_task_complete → var_add → on_var ge 5 → win) と P7 型 (コバンザメ:
 // on_game_start → win_join) の最小構成。あつめやは win の C# パース網羅も担う唯一の neutral fixture。
 describe.each([

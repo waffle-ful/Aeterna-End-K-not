@@ -67,7 +67,7 @@ public static class GameOptionsMenuPatch
     private static readonly Dictionary<GameOptionsMenu, Coroutine> BuildCoroutines = new();
     private static readonly Dictionary<GameOptionsMenu, int> BuildGenerations = new();
 
-    // メモリリーク計器 (BUG-20260706-01): 一度ビルドした index が再ビルドされたら、その option 名と
+    // メモリリーク計器: 一度ビルドした index が再ビルドされたら、その option 名と
     // 「dict 欠落 / Unity-dead キャッシュ」のどちらが原因かを記録する。初回ビルドは記録しない (スパム防止)。
     private static readonly System.Collections.Generic.HashSet<int> EverBuiltRows = new();
     private static readonly System.Collections.Generic.HashSet<int> EverBuiltHeaders = new();
@@ -236,7 +236,7 @@ public static class GameOptionsMenuPatch
                         CategoryHeaderMasked categoryHeaderMasked = freshCHM ? ModGameOptionsMenu.Track(Object.Instantiate(__instance.categoryHeaderOrigin, Vector3.zero, Quaternion.identity, __instance.settingsContainer)) : cacheCHM;
                         // SetHeader (native) re-instances the masked sprite/font materials on every call — running it
                         // on a cached header leaked Material instances (DepthMaskedTexture/SDF "(Instance)") each menu
-                        // open (BUG-20260706-01 round8 ③). Mask setup and the one-time font styling (outlineWidth also
+                        // open. Mask setup and the one-time font styling (outlineWidth also
                         // touches fontMaterial) only need to happen when the header is freshly instantiated.
                         if (freshCHM)
                         {
@@ -323,7 +323,7 @@ public static class GameOptionsMenuPatch
                     optionBehaviour.transform.localPosition = new(0.952f, num, -2f);
                     optionBehaviour.SetClickMask(__instance.ButtonClickMask);
                     // SetUpFromData (native) re-instances the masked materials of every renderer/TMP in the row on
-                    // each call — this was the steady +380〜905 Material/(open+close) leak (BUG-20260706-01 round8 ③).
+                    // each call — this was the steady +380〜905 Material/(open+close) leak.
                     // Only fresh rows need it (mask + data binding); reused rows get the same managed value refresh
                     // that preset switches already rely on (RefreshSettingValues path), which touches no materials.
                     if (freshRow) optionBehaviour.SetUpFromData(baseGameSetting, 20);
@@ -1186,11 +1186,11 @@ public static class StringOptionPatch
                 name = $"<size=3.5>{name}</size>";
                 SetupHelpIcon(role, __instance);
             }
-            // UpdateValuePrefix と同じ汚染ガード (BUG-20260810-02): 役職名検出が失敗しても
+            // UpdateValuePrefix と同じ汚染ガード: 役職名検出が失敗しても
             // 以前の styled 名を素の name で上書きしない。
             else if (NameCache.TryGetValue(__instance, out string prevStyled) && prevStyled.StartsWith("<size=3.5>"))
             {
-                Logger.Warn($"role-name detection missed on Initialize: raw='{name}' prev='{prevStyled}'", "BUG-20260810-02");
+                Logger.Warn($"role-name detection missed on Initialize: raw='{name}' prev='{prevStyled}'", "RoleNameStyling");
                 name = prevStyled;
             }
 
@@ -1369,10 +1369,10 @@ public static class StringOptionPatch
 
                 // 役職行なのに役職名検出が失敗すると、素の name が TitleText と NameCache の両方へ入り
                 // 装飾タイトル (白文字+色帯+size wrap) がメニュー開閉でも直らない形で退行する
-                // (BUG-20260810-02)。以前の styled 名があるなら保持し、失敗の現場をログへ残す。
+                // 以前の styled 名があるなら保持し、失敗の現場をログへ残す。
                 if (NameCache.TryGetValue(__instance, out string prevStyled) && prevStyled.StartsWith("<size=3.5>"))
                 {
-                    Logger.Warn($"role-name detection missed on UpdateValue: raw='{name}' prev='{prevStyled}'", "BUG-20260810-02");
+                    Logger.Warn($"role-name detection missed on UpdateValue: raw='{name}' prev='{prevStyled}'", "RoleNameStyling");
                     name = prevStyled;
                 }
             }
@@ -1624,7 +1624,7 @@ public static class GameSettingMenuPatch
         // it drew from, so dropping it owes every tab a rebuild that puts those rows back.
         if (OptionSearch.Clear()) GameOptionsMenuPatch.ReCreateAllSettings();
 
-        // Isolated: an exception inside the extended UI (e.g. BUG-20260712-01's template NRE) must not
+        // Isolated: an exception inside the extended UI (e.g. a template NRE) must not
         // abort the rest of the menu build. XuiStage pinpoints the failing section — the native get_name
         // NRE (2026-07-12 12:42 実機) erases line info at the IL2CPP boundary, so a breadcrumb is the
         // only way to attribute it.
@@ -1699,7 +1699,7 @@ public static class GameSettingMenuPatch
             gMinus = PresetMinusButton;
             plusFab = PresetPlusButton;
             // Find が null を返すと GetComponent で NRE → SetupExtendedUI ごと中断し、末尾の検索欄構築まで
-            // 道連れになる (BUG-20260725-02 と同型)。しかもここはキャッシュ経路なので、一度テンプレート階層が
+            // 道連れになる。しかもここはキャッシュ経路なので、一度テンプレート階層が
             // ズレると以後の全リオープンで同じ所で落ち続ける。plusLabel は font 差替にしか使わず、利用側
             // (`if (plusLabel)`) が null 許容なので、取れなければ黙って null のまま進める。
             Transform plusLabelTf = plusFab ? plusFab.transform.Find("FontPlacer/Text_TMP") : null;
@@ -1708,7 +1708,7 @@ public static class GameSettingMenuPatch
         }
         else
         {
-            // BUG-20260712-01: the vanilla "ModeValue"/"MinusButton" templates aren't always findable
+            // The vanilla "ModeValue"/"MinusButton" templates aren't always findable
             // (GameObject.Find only sees active objects) and Instantiate(null) NREs inside get_name,
             // killing the rest of the menu build. Isolate the whole preset build: on any failure, drop
             // the half-built selector and carry on without a preset UI for this open (next open retries).
@@ -1882,8 +1882,8 @@ public static class GameSettingMenuPatch
 
             gmButton.transform.localScale = new(0.4f, 0.3f, 1f);
             // ラベルの化粧は「取れなければ諦めてよい」処理。無ガードの Find(...).GetComponent で NRE を出すと
-            // SetupExtendedUI ごと中断し、後続のモードボタンも末尾の検索欄構築も丸ごと消える (BUG-20260725-02
-            // と同型の道連れ)。ボタン自体のクリック配線は下でそのまま続行させる。
+            // SetupExtendedUI ごと中断し、後続のモードボタンも末尾の検索欄構築も丸ごと消える道連れになる。
+            // ボタン自体のクリック配線は下でそのまま続行させる。
             Transform gmButtonTextTf = gmButton.transform.Find("FontPlacer/Text_TMP");
             var gmButtonTmp = gmButtonTextTf ? gmButtonTextTf.GetComponent<TextMeshPro>() : null;
             if (gmButtonTmp)
@@ -1913,7 +1913,7 @@ public static class GameSettingMenuPatch
 
             // dead-cache slot must be REPLACED in place. Appending instead grew the list past gms.Count, and
             // the trim loop below then destroyed the freshly-created buttons from the tail while the dead
-            // entries stayed — the "menu empty after DC→rehost" state (BUG-20260706-01 round8 ②/⑤).
+            // entries stayed — the "menu empty after DC→rehost" state.
             if (index < GMButtons.Count) GMButtons[index] = gmButton;
             else GMButtons.Add(gmButton);
         }
@@ -1960,7 +1960,7 @@ public static class GameSettingMenuPatch
             field.textArea.outputText.transform.localScale = new(3.5f, 2f, 1f);
             if (plusLabel) field.textArea.outputText.font = plusLabel.font;
         }
-        else Logger.Warn("search box clone has no outputText — text styling skipped (BUG-20260725-02)", "MenuLeak");
+        else Logger.Warn("search box clone has no outputText — text styling skipped", "MenuLeak");
 
         Transform button = field.transform.FindChild("ChatSendButton");
         if (!button) { BailSearchField("no ChatSendButton in the clone"); return; }
@@ -1973,7 +1973,7 @@ public static class GameSettingMenuPatch
         // 送信ボタンの Icon/Text 破棄 (チャット欄→検索欄の再スキン) は以前「新規 clone のときだけ」走らせて
         // いた。この区間で例外が飛ぶと未スキンの個体が InputField にキャッシュされ、以降は毎回キャッシュ経路
         // を通って再スキンが二度と走らない → 「設定の検索欄が生のチャット入力欄のまま」がアプリ再起動まで
-        // 固定される (BUG-20260725-02)。毎回・冪等 (存在チェック付き) に走らせて自己修復させる。
+        // 固定される。毎回・冪等 (存在チェック付き) に走らせて自己修復させる。
         int stripped = StripChatIcon(buttonNormal) + StripChatIcon(buttonHover) + StripChatIcon(buttonDisabled);
 
         Transform buttonText = button.FindChild("Text");
@@ -1985,7 +1985,7 @@ public static class GameSettingMenuPatch
 
         // キャッシュ済み個体に生チャットの部品が残っていた = 汚染状態の直接観測。真因特定用の唯一の証拠。
         if (cachedInputField && stripped > 0)
-            Logger.Warn($"cached search box still carried {stripped} raw chat-skin part(s) — re-stripped (BUG-20260725-02)", "MenuLeak");
+            Logger.Warn($"cached search box still carried {stripped} raw chat-skin part(s) — re-stripped", "MenuLeak");
 
         Transform buttonNormalBackground = buttonNormal.FindChild("Background");
         Transform buttonHoverBackground = buttonHover.FindChild("Background");
@@ -2041,7 +2041,7 @@ public static class GameSettingMenuPatch
         // ⚠️ この掃除は**リーク衛生であって必須処理ではない**。ゴーストが1個残る損害より、ここで例外が出て
         // 以降の再スキン (scale/位置/アイコン差替/OnClick 配線/InputField キャッシュ) が丸ごと飛ぶ損害の方が
         // 遥かに大きい — clone だけが生のチャット入力欄の姿で設定画面に残り、InputField にも載らないので
-        // 開き直しても毎回同じ経路で落ちて直らない (BUG-20260725-02 の「まんまチャット欄・検索も効かない・
+        // 開き直しても毎回同じ経路で落ちて直らない (「まんまチャット欄・検索も効かない・
         // 部屋を建て直すまで固定」がこれ)。ghost.name は IL2CPP の native get_name で、解放済み/再利用
         // スロットの TMP を掴むと NRE を投げうる (2026-07-12 実機の get_name NRE と同型)。よって probe /
         // scan / 各要素をそれぞれ隔離し、失敗しても必ず再スキンへ抜ける。
@@ -2049,11 +2049,11 @@ public static class GameSettingMenuPatch
         {
             TextMeshPro clonedOutput;
             try { clonedOutput = field.textArea ? field.textArea.outputText : null; }
-            catch (Exception e) { Logger.Warn($"search box: outputText probe failed ({e.Message}) — ghost strip skipped (BUG-20260725-02)", "MenuLeak"); return; }
+            catch (Exception e) { Logger.Warn($"search box: outputText probe failed ({e.Message}) — ghost strip skipped", "MenuLeak"); return; }
 
             Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppArrayBase<TextMeshPro> ghosts;
             try { ghosts = field.GetComponentsInChildren<TextMeshPro>(true); }
-            catch (Exception e) { Logger.Warn($"search box: ghost scan failed ({e.Message}) — ghost strip skipped (BUG-20260725-02)", "MenuLeak"); return; }
+            catch (Exception e) { Logger.Warn($"search box: ghost scan failed ({e.Message}) — ghost strip skipped", "MenuLeak"); return; }
 
             if (ghosts == null) return;
 
@@ -2064,7 +2064,7 @@ public static class GameSettingMenuPatch
                     if (ghost && ghost.name.StartsWith("PlaceHolderText") && ghost != clonedOutput)
                         Object.DestroyImmediate(ghost.gameObject);
                 }
-                catch (Exception e) { Logger.Warn($"search box: skipped one ghost ({e.Message}) (BUG-20260725-02)", "MenuLeak"); }
+                catch (Exception e) { Logger.Warn($"search box: skipped one ghost ({e.Message})", "MenuLeak"); }
             }
         }
 
@@ -2326,7 +2326,7 @@ public static class GameSettingMenuPatch
             GameOptionsMenuPatch.ReCreateAllCoroutine = null;
         }
 
-        // Unity-null ガード + each-item 例外隔離 (BUG-20260706-01 round8 ①): rehost/シーン再ロードで
+        // Unity-null ガード + each-item 例外隔離: rehost/シーン再ロードで
         // 破棄された個体が dict に残ると、`if (x)` の生存チェック後でも IL2CPP 側の破棄タイミング次第で
         // 引数評価 x.gameObject が Il2CppException を投げ得る。1個の失敗で退避ループ全体がアボートすると、
         // 以降の GMButtons(モード名ラベル)等が非表示・退避されず active のままシーンに残留する

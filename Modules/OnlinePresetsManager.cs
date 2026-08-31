@@ -26,7 +26,7 @@ public static class OnlinePresetsManager
         float y = 2.0f;
 
         {
-            // Fresh/dead-cache guard mirroring GameOptionsMenuPatch (BUG-20260706-01 round9 sibling sweep):
+            // Fresh/dead-cache guard mirroring GameOptionsMenuPatch:
             // SetHeader/SetUpFromData (native) re-instance masked materials on every call, so they must only
             // run on freshly instantiated objects, and a scene-reload-destroyed cache entry must be rebuilt.
             bool freshH0 = !(HeaderCache.TryGetValue(0, out CategoryHeaderMasked cacheH0) && cacheH0);
@@ -111,7 +111,7 @@ public static class OnlinePresetsManager
                 // 以降の行が一切作られないまま抜けてしまう。しかも OptionBehaviourCache への登録はループ末尾
                 // (:180) なので失敗した index はキャッシュされず、**毎回同じ所で落ち続ける** (= 一覧の途中
                 // から先がアプリ再起動まで永久欠落)。さらにループ後の scrollBar 範囲と ControllerSelectable
-                // 登録も飛ぶ。BUG-20260725-02 (設定検索欄) と同型の「付随処理の失敗が本処理を道連れにする」
+                // 登録も飛ぶ。設定検索欄と同型の「付随処理の失敗が本処理を道連れにする」
                 // 構造なので、壊れた行だけ捨てて次の行へ進む。
                 try
                 {

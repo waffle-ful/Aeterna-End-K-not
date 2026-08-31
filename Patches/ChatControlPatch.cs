@@ -284,7 +284,7 @@ public static class ChatManager
                     if (!ChatCommands.LastSentCommand.ContainsKey(player.PlayerId))
                     {
                         GuessManager.GuesserMsg(player, message);
-                        // EKR Wave 2 (docs/ekn-wave2-contract.md §1.2): 遅延リトライの安全網 (GuesserMsg と
+                        // EKR Wave 2: 遅延リトライの安全網 (GuesserMsg と
                         // 同型 — PickMsg 側の 1秒/ホルダーデデュープが二重発火を吸収する)。
                         EndKnot.Modules.Ekm.EkrManager.PickMsg(player, message);
                         Logger.Info("Delayed Guess", "ChatManager");

@@ -5,7 +5,7 @@ using System.Text.Json.Serialization;
 
 namespace EndKnot.Modules.Ekm;
 
-// R2 (docs/ekn-r2-contract.md §1): 役職コードが名乗れる陣営。madmate / coven は R2 対象外 (受理しない)。
+// R2: 役職コードが名乗れる陣営。madmate / coven は R2 対象外 (受理しない)。
 // neutral のサブカテゴリ (Killing/Benign) は canKill から導出するので、ここには出さない。
 public enum EkrTeam
 {
@@ -14,7 +14,7 @@ public enum EkrTeam
     Neutral
 }
 
-// Wave 3 (docs/ekn-wave3-contract.md §4): ホストがロビーで変えられるようにする数値1件の宣言。
+// Wave 3: ホストがロビーで変えられるようにする数値1件の宣言。
 // 「どの数値か」は固定キー表 (EkrHostOption.FixedKeys) か `var:<変数名>` のどちらかで指名する。
 public sealed class EkrHostOption
 {
@@ -36,15 +36,15 @@ public sealed class EkrHostOption
 }
 
 // EKN 役職コードのデータ契約 (R0: フォーム式テンプレートのみ・ロジック無し)。
-// 計画正典: docs/ekn-api-plan.md。EHR 内部語彙 (enum 名/option ID/RPC 番号) を一切含まないこと。
+// EHR 内部語彙 (enum 名/option ID/RPC 番号) を一切含まないこと。
 public sealed class EkrDefinition
 {
-    // R1 契約解決 (docs/ekr-logic-spec.md §1): ekr キーは必須。既定値 1 の初期化子だと「省略」と
+    // R1 契約解決: ekr キーは必須。既定値 1 の初期化子だと「省略」と
     // 「明示的に1」を区別できないため nullable にする (R0 は accept していたが、これは意図的な修正)。
     [JsonPropertyName("ekr")]
     public int? Ekr { get; set; }
 
-    // R1 (docs/ekr-logic-spec.md)。任意 — 無しは R0 動作 (完全後方互換)。C# は生 JsonElement を保持し、
+    // R1: 任意 — 無しは R0 動作 (完全後方互換)。C# は生 JsonElement を保持し、
     // Validate() 内で EkrLogicDef.TryParse に渡して初めて型チェックする (blockly は不透明— パースしない)。
     [JsonPropertyName("logic")]
     public JsonElement? Logic { get; set; }
@@ -53,7 +53,7 @@ public sealed class EkrDefinition
     [JsonIgnore]
     public EkrLogicDef ParsedLogic { get; private set; }
 
-    // Wave 1 (docs/ekr-logic-spec.md §1.1): パッシブ層。logic と並置され、logic 無しでも passives 単独で有効。
+    // Wave 1: パッシブ層。logic と並置され、logic 無しでも passives 単独で有効。
     // 生 JsonElement を保持し Validate() 内で EkrPassives.TryParse に渡す (logic と同じ作法)。
     [JsonPropertyName("passives")]
     public JsonElement? Passives { get; set; }
@@ -63,7 +63,7 @@ public sealed class EkrDefinition
     [JsonIgnore]
     public EkrPassives ParsedPassives { get; private set; } = EkrPassives.Default;
 
-    // Wave 3 (docs/ekn-wave3-contract.md §3): 名前の横に出す進捗テキスト。任意 — 無ければ表示なし
+    // Wave 3: 名前の横に出す進捗テキスト。任意 — 無ければ表示なし
     // (現行挙動そのまま)。logic/passives と同じく生 JsonElement を保持して Validate() で型チェックする。
     [JsonPropertyName("progress")]
     public JsonElement? Progress { get; set; }
@@ -106,7 +106,7 @@ public sealed class EkrDefinition
 
     // Validate() 成功後にのみ意味を持つ、Team の enum 版。⚠️ これは「役職コードが名乗る陣営」であって
     // 「実際に効く陣営」ではない — 実陣営はスロット種 (EkmImpRole*/EkmNeuRole*/EkmCustomRole*) が静的に
-    // 決める (EkrManager.GetTeam)。この値は束縛時の一致検証にのみ使うこと (docs/ekn-r2-contract.md §1)。
+    // 決める (EkrManager.GetTeam)。この値は束縛時の一致検証にのみ使うこと。
     [JsonIgnore]
     public EkrTeam ParsedTeam { get; private set; } = EkrTeam.Crewmate;
 
@@ -257,7 +257,7 @@ public sealed class EkrDefinition
             Color = "#8f8f8f";
 
         Team = (Team ?? "crewmate").Trim().ToLowerInvariant();
-        // R2 (docs/ekn-r2-contract.md §1): 3値を受理する。R0/R1 が impostor/neutral を拒否していたのは
+        // R2: 3値を受理する。R0/R1 が impostor/neutral を拒否していたのは
         // 陣営判定の静的 switch を動的束縛で安全に動かせなかったため — R2 では「陣営はスロット種が静的に
         // 決める」形にしたので解消済み (陣営別スロット EkmImpRole*/EkmNeuRole* が受け皿)。
         // madmate / coven は R2 対象外。
@@ -275,7 +275,7 @@ public sealed class EkrDefinition
         VisionMultiplier = Math.Clamp(float.IsFinite(VisionMultiplier) ? VisionMultiplier : 1f, 0.25f, 5f);
 
         WinCondition = (WinCondition ?? "team").Trim().ToLowerInvariant();
-        // Wave 7 (docs/ekn-wave7-contract.md §3): このフィールドは歴史的受理のみ — どの値も消費しない。
+        // Wave 7: このフィールドは歴史的受理のみ — どの値も消費しない。
         // 勝利条件はブロック (`win` / `win_join`) で組む (R2 契約 §94 の「ブロック化」の履行先が Wave 7)。
 
         // R1: logic は任意。無ければ R0 動作のまま (ParsedLogic は null)。
@@ -287,7 +287,7 @@ public sealed class EkrDefinition
             ParsedLogic = parsedLogic;
         }
 
-        // Wave 7 (docs/ekn-wave7-contract.md §1): 「かちにする」(win) は neutral スロット限定。
+        // Wave 7: 「かちにする」(win) は neutral スロット限定。
         // CustomWinner.EkmNeuRole1..5 が既製なのは neu の 5 スロットだけ + クルーの即勝ちは陣営裏切りの
         // 意味論が重い。パース時の静的検査なので束縛前に弾ける (TS validate 側と対称)。
         if (ParsedLogic != null && ParsedTeam != EkrTeam.Neutral && ParsedLogic.ContainsWinOp())
@@ -326,7 +326,7 @@ public sealed class EkrDefinition
         return true;
     }
 
-    // ── Wave 3 (docs/ekn-wave3-contract.md §3): progress ────────────────────────────────────────
+    // ── Wave 3: progress ────────────────────────────────────────
     // 自由テキスト形式 (spec §7-2)。予算・注入面は構造ガードで抑える: 16字上限 / TMP タグ不可
     // (`<`・`>` を全角へ機械置換 = notify.text・cno_spawn.text と同一規約) / 置換後 24字クランプ
     // (これは消費側 EkrManager.BuildProgressText が行う) / 色は役職色固定 (作者に指定させない)。

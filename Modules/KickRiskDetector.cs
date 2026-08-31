@@ -14,7 +14,7 @@ namespace EndKnot.Modules;
 /// 静的スイープでは本番コードに違反ゼロだったので、これが鳴るなら
 /// 「動的にしか成立しない経路」(= 探していたもの) が鳴っている。
 ///
-/// 確定ルール (詳細と実験ログは docs/official-server-model.md):
+/// 確定ルール:
 ///   P1 Data(tag1)   → 生きているプレイヤーの PlayerControl netId
 ///   P2 Spawn(tag4)  → ownerId が接続中クライアントの id
 ///   P3 Spawn(tag4)  → 保護対象 netId (生きているプレイヤーの PC/Physics/CNT/NPI) の再宣言
@@ -387,7 +387,7 @@ internal static class KickRiskDetector
         }
 
         Seen[pattern] = (count, now);
-        string line = $"KICKRISK {pattern} #{count} len={packetLen} {detail} — this pattern is a confirmed 100% Hacking kick on official servers (docs/official-server-model.md)";
+        string line = $"KICKRISK {pattern} #{count} len={packetLen} {detail} — this pattern is a confirmed 100% Hacking kick on official servers";
         HealthLog.NoteAnom(line);
         Logger.Warn(line, "KickRiskDetector");
     }

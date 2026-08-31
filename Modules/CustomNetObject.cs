@@ -56,7 +56,7 @@ namespace EndKnot
         /// <summary>
         /// per-player fan-out (SpawnVisibility / Hide) の全 CNO 共通予算。公式鯖は per-player 配信の
         /// 密度が targets≥10 × 2.5 体/秒 (≈25 nests/s) で Hacking キック、20 nests/s 以下は無傷
-        /// (2026-08-02 実測 6/6・BUG-20260730-11、正典 docs/official-server-model.md §5-3b)。
+        /// (2026-08-02 実測 6/6)。
         /// エンベロープ分割 (MaxTargetsPerVisibilityEnvelope) はこのキックを防がないことも実測済みで、
         /// 唯一効くレバーは時間方向の間引き。12 nests/s + 瞬間許容 24 nests なら、どの呼び出し元が
         /// 何体積んでも 10 秒窓の累計 ≤144 nests で生存実績域 (≤160) に収まる。
@@ -193,7 +193,7 @@ namespace EndKnot
         private bool _localOnly;
 
         // onlyVisibleTo 限定 CNO の視聴者。基底 OnMeeting() の会議明け再生成が可視性を引き継ぐために保持する
-        // (BUG-20260803-02: 未保持だと再生成がブロードキャスト可視に退化し、Druid の探知機 /
+        // (未保持だと再生成がブロードキャスト可視に退化し、Druid の探知機 /
         // Whisperer の魂が会議のあと全員に見えていた)。hideFrom は意図的に引き継がない —
         // ToiletMaster が「会議のあとは全員に見える」を基底再生成のこの挙動で実現している (ToiletMaster.cs:289)。
         private PlayerControl _respawnOnlyVisibleTo;
@@ -240,7 +240,7 @@ namespace EndKnot
         // 1000B + 実測オーバーヘッド ~328B ≈ 1328B で 1200B 上限を割りうるし、逆にオーバーヘッドは
         // ホスト名とコスメ ID の長さで変動する (sprite-apply メッセージは2回目の Data シリアライズでそれらを復元する)。
         // **1200B に対する実効ガードは実メッセージ長を見る WarnPacketSize の方**であって、ここではない。
-        // ⚠️ この値を「1200 − オーバーヘッド」の引き算で下げ直さないこと — それが 330B (BUG-20260715-09) を生み、
+        // ⚠️ この値を「1200 − オーバーヘッド」の引き算で下げ直さないこと — それが 330B を生み、
         // 出荷中の9個の CNO スプライトを切り刻んで壊した誤りそのもの。上流実績: PlayerDetector の 869B は
         // 公式鯖で無クランプのまま正常に描画される (2026-07-16 実機確認) = サイズ由来のキックは反証済み。
         private static string ClampSpriteForOfficial(string sprite)
@@ -267,7 +267,7 @@ namespace EndKnot
             return DropUnterminatedTag(sb.ToString());
         }
 
-        // rune 単位の機械的な切り詰めは TMP タグの途中に落ちうる (BUG-20260715-09: Portal 358B を 330B で切ると
+        // rune 単位の機械的な切り詰めは TMP タグの途中に落ちうる (Portal 358B を 330B で切ると
         // 末尾が `<mark=#2b006b` になり TMP のパースが壊れて色が飛んだ)。閉じていない末尾タグは丸ごと捨てる。
         // ⚠️ **末尾を捨てて予算に収める切り詰め専用**。CustomRpcSender の RpcSetName.NameBudget も同じ用途で使う。
         // 全文を保つ**分割**器 (Utils.ChunkByByteSize 等) に流用してはいけない — そちらで末尾を捨てると
@@ -279,7 +279,7 @@ namespace EndKnot
             return s.IndexOf('>', lastOpen) < 0 ? s[..lastOpen] : s;
         }
 
-        // 恒久ガード (BUG-20260715-09): 予算はスプライト byte 数では保証できないので、実メッセージ長を監視する。
+        // 恒久ガード: 予算はスプライト byte 数では保証できないので、実メッセージ長を監視する。
         // 実測オーバーヘッド 328B (2026-07-16 /wcdbg gate 50) だが、ホスト名とコスメ ID の長さで変動する。
         private static void WarnPacketSize(string where, string sprite, int messageLength)
         {
@@ -812,7 +812,7 @@ namespace EndKnot
                     if (!playerControl) yield break;
 
                     int messages = 0;
-                    // ⚠️ BUG-20260730-11: 2026-07-31 まで、このループは「非ホスト人数ぶんの tag6」を
+                    // ⚠️ 2026-07-31 まで、このループは「非ホスト人数ぶんの tag6」を
                     // **1 つの t26 エンベロープに全部**詰めていた (既存2ガードが13人以下で成立しないため)。
                     // パケット本数もバイト数も人数でほぼ変わらないので、本数/バイト数のメータは
                     // キック有無を分けている当の変数に構造的に盲目だった。現在は
@@ -932,7 +932,7 @@ namespace EndKnot
                         string visorId = PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].VisorId;
                         var sender = CustomRpcSender.Create("CustomNetObject.CreateNetObject", SendOption.Reliable, log: false);
 
-                        // ⚠️ checkLength=false は必須 (BUG-20260711-02 の真因)。この経路は下で `sender.stream` を
+                        // ⚠️ checkLength=false は必須。この経路は下で `sender.stream` を
                         // ローカル変数 `writer` にキャッシュし、state machine を通さず raw sub-message を直書きする。
                         // checkLength=true のままだと StartRpc (CustomRpcSender.cs:458) が「stream.Length > 500」で
                         // EndMessage(startNew:true) を呼び、`sender.stream` を**新しい writer に差し替える** (:412-413)。
@@ -1066,7 +1066,7 @@ namespace EndKnot
         //   off:N    … 上を「危険域内で N 体だけ」に制限し、残りは通常ガードへ落とす。
         //              N=1 が「バーストだから違法」と「危険域内の spawn なら 1 本でも違法」を分ける 1-bit。
         //   delay:60 … intro 終了+60秒まで保持してから「順送りなし」で一斉解放 = off とタイミングだけが違う 1-bit (フェーズ説の検証)
-        // ファイル無し/内容不正 = 現行動作。正典手順: docs/nest-spawn-arms-protocol.md
+        // ファイル無し/内容不正 = 現行動作。
         private static string _spawnExperimentMode = string.Empty;
         private static long _spawnExperimentCheckedTS;
         private static int _spawnExperimentBypassCount; // off:N の本数キャップ用 (Reset() でゲーム境界リセット)
@@ -1108,7 +1108,7 @@ namespace EndKnot
         // ⚠️ 基底オフセットは 10 秒から縮めないこと (基底 OnMeeting() の WaitForMeetingEnd と同じ規約)。
         // 会議明けは追放スイープ (SetRole 全員分 + Desync + ReactorFlash + NotifyRoles) とレートゲートの
         // ドレインが task phase 開始後 ~10 秒続き、この窓に CNO 生成が重なると合算 nests がキック域に
-        // 達する (2026-08-03 15:58 実キック・BUG-20260803-07)。
+        // 達する (2026-08-03 15:58 実キック)。
         private const float DeferredSpawnBaseDelay = 10f;
 
         internal static float NextDeferredSpawnDelay() => DeferredSpawnBaseDelay + (DeferredSpawnSlot++ * DeferredSpawnStaggerStep);
@@ -1134,7 +1134,7 @@ namespace EndKnot
                 while (ReportDeadBodyPatch.MeetingStarted || GameStates.IsMeeting || ExileController.Instance || AntiBlackout.SkipTasks) yield return null;
                 // ⚠️ 10 秒から縮めないこと (DeferredSpawnBaseDelay と同じ規約)。会議明けは追放スイープ+
                 // レートゲートのドレインが task phase 開始後 ~10 秒続き、CNO 再生成の spawn+visibility
-                // fan-out が重なると合算 nests がキック域に達する (BUG-20260803-07)。2026-08-09 に実装だけ
+                // fan-out が重なると合算 nests がキック域に達する。2026-08-09 に実装だけ
                 // 3 秒のままだったのを、上の DeferredSpawnBaseDelay コメントの「同じ規約」宣言に合わせて
                 // 修正済み (実測キック未発生のうちに修正)。
                 yield return new WaitForSecondsRealtime(10f + stagger);
@@ -1161,7 +1161,7 @@ namespace EndKnot
         /// <summary>
         /// killer の近傍で最も近い撃破可能ダミーを返す (無ければ null)。ホスト側のペット押下判定用。
         /// 距離は CNO の Position フィールド基準 — playerControl.GetTruePosition() は spawn コルーチンが
-        /// 未完了だと (0,0) を返すため使わない ([[project_cno_position_assigned_async]])。
+        /// 未完了だと (0,0) を返すため使わない。
         /// </summary>
         public static CustomNetObject GetKillableTarget(PlayerControl killer, float range)
         {
@@ -1172,7 +1172,7 @@ namespace EndKnot
             float bestDistance = range;
 
             // Il2Cpp デリゲート変換の GCHandle リークを避けるため LINQ/Find でなく手動走査
-            // ([[project_il2cpp_delegate_conversion_percall_gchandle_leak]])。ここは毎ペット押下で通る。
+            // ここは毎ペット押下で通る。
             for (var i = 0; i < AllObjects.Count; i++)
             {
                 CustomNetObject obj = AllObjects[i];
@@ -1773,7 +1773,7 @@ namespace EndKnot
             CreateNetObject(string.Empty, new Vector2(0f, 0f), onlyVisibleTo: guesser);
         }
 
-        // 基底の OnMeeting() は _respawnOnlyVisibleTo を保持して再生成する (BUG-20260803-02 修正) ため
+        // 基底の OnMeeting() は _respawnOnlyVisibleTo を保持して再生成するため
         // singleClient 判定も再生成時に正しく効くが、このメニュー要素はそもそも会議をまたいで
         // 生き残る必要が無いので、復活せず消えるのが正しい。
         // (SprayedArea / CatcherTrap も同じ理由で同じ override を持つ)

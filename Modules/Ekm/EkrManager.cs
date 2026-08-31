@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace EndKnot.Modules.Ekm;
 
-// R1 (docs/ekr-logic-spec.md) の per-holder ランタイム状態。EkrManager が生成/破棄/Pump を管理し、
+// R1 の per-holder ランタイム状態。EkrManager が生成/破棄/Pump を管理し、
 // EkrLogicOpcodes (アクション opcode 実装) が直接参照してレートバケット・CNO スロットを読み書きする。
 // 「1スロット複数人前提 (Maximum=15)」— キーは常に playerId (byte) であって slot ではない。
 internal sealed class EkrHolderState
@@ -18,11 +18,11 @@ internal sealed class EkrHolderState
 
     // cno_spawn/cno_move/cno_despawn/cno_show/dummy_spawn の slot 引数 (1..3) に対応。index = slot - 1。
     // IEkrSlotCno 抽象で EkrCno (テキスト) / EkrDummyCno (player-like・v1.1) のどちらも同じ配列に入る
-    // (契約正典: docs/ekr-logic-spec.md §3 v1.1 「dummy_spawn の slot は cno_spawn と共有」)。
+    // (v1.1 「dummy_spawn の slot は cno_spawn と共有」)。
     public readonly IEkrSlotCno[] CnoSlots = new IEkrSlotCno[3];
     public readonly float[] LastCnoMoveTime = [-1f, -1f, -1f];
 
-    // v1.2 (docs/ekr-logic-spec.md §3 marker_save): per-holder 位置メモリ 4 スロット。会議をまたいで保持、
+    // v1.2 (marker_save): per-holder 位置メモリ 4 スロット。会議をまたいで保持、
     // ゲーム開始時 (= InitRuntime が state を作り直すタイミング) に自然に全消去される。
     public readonly Vector2?[] Markers = new Vector2?[4];
 
@@ -64,7 +64,7 @@ internal sealed class EkrHolderState
     // EkrLogicOpcodes.Notify() 参照。
     public readonly Dictionary<byte, float> LastMeetingNotifyTime = new();
 
-    // ── Wave 1 (docs/ekr-logic-spec.md §3 remember / §1.1 passives) ────────────────────────────
+    // ── Wave 1 (remember / passives) ────────────────────────────
     // おぼえた人 2 スロット (byte.MaxValue = 未保存)。死亡・切断は参照時に検証して自動失効させる
     // (ここを能動的に掃除する常駐処理は作らない — 「壊れた参照は静かに no-op」規約 §3 参照整合性3原則)。
     public readonly byte[] Saved = [byte.MaxValue, byte.MaxValue];
@@ -96,10 +96,10 @@ internal sealed class EkrHolderState
     // v1.3: field ≤1/2秒/ホルダー (spec §5 — CNO 生成系防御3点の per-holder レート枠)。
     public float LastFieldPlaceTime = -1f;
 
-    // Wave 5 (docs/ekn-wave5-contract.md §1.4): effect_give ≤1/2秒/ホルダー。
+    // Wave 5: effect_give ≤1/2秒/ホルダー。
     public float LastEffectGiveTime = -1f;
 
-    // Wave 6 (docs/ekn-wave6-contract.md §1.2): cno_launch ≤1/2秒/ホルダー。
+    // Wave 6: cno_launch ≤1/2秒/ホルダー。
     public float LastCnoLaunchTime = -1f;
 
     // Wave 6 (契約 §1.1 dir:"move"): ホルダーの「最後の移動方向」を採るための 2 点履歴。Snowdown の
@@ -118,7 +118,7 @@ internal sealed class EkrHolderState
 
     public float? KillCooldownOverride;
 
-    // ── Wave 2 (docs/ekn-wave2-contract.md) ────────────────────────────────────────────────────
+    // ── Wave 2 ────────────────────────────────────────────────────
 
     // §2.2 reveal: 恒久に見えるようになった target の playerId 集合。ゲーム開始 (state 作り直し) でリセット。
     public readonly HashSet<byte> Revealed = [];
@@ -142,7 +142,7 @@ internal sealed class EkrHolderState
     // §1.2 on_meeting_pick: /pick 連打デデュープ (≤1/秒/ホルダー)。
     public float LastMeetingPickTime = -1f;
 
-    // ── Wave 3 (docs/ekn-wave3-contract.md §1): じょうたいトリガのエッジ発火エンジン ──────────────
+    // ── Wave 3: じょうたいトリガのエッジ発火エンジン ──────────────
 
     // この state の持ち主のスロット。フラッシュ点 (PumpMeetingFibers 等) は playerId しか持たないので、
     // 定義を引くために state 側に控える (Runtime の値だけを舐める経路から GetDefinition を引けるように)。
@@ -170,7 +170,7 @@ internal sealed class EkrHolderState
     public float EffectiveSpeedMult = 1f;
     public int EffectiveVoteWeight = 1;
 
-    // ── Wave 4 (docs/ekn-wave4-contract.md) ────────────────────────────────────────────────────
+    // ── Wave 4 ────────────────────────────────────────────────────
 
     // §3.1 link: つないだ人 (byte.MaxValue = なし — Chainbinder の paired byte フィールド型)。
     // 1ホルダー1本・再実行は張り替え・会議をまたいで保持・ゲーム開始 (state 作り直し) で全消去。
@@ -207,7 +207,7 @@ internal sealed class EkrHolderState
 }
 
 // EKN 役職メーカー R0 の実行時マネージャ。
-// 計画正典: docs/ekn-api-plan.md。CustomRoles.EkmCustomRole1..10 の10スロットへ
+// CustomRoles.EkmCustomRole1..10 の10スロットへ
 // EkrDefinition (ノーコード役職定義) を束縛する。ロビー内でのみ束縛操作を許可する
 // (試合中の束縛変更はゲームエンド判定等の静的 switch と整合しなくなるため禁止)。
 public static class EkrManager
@@ -254,7 +254,7 @@ public static class EkrManager
             or >= CustomRoles.EkmImpRole1 and <= CustomRoles.EkmNeuRole5;
     }
 
-    // ── R2: 陣営 (docs/ekn-r2-contract.md §1) ────────────────────────────────────────────
+    // ── R2: 陣営 ────────────────────────────────────────────────────
     // ⚠️ **陣営はスロット種が静的に決める** — 束縛された定義の team は読まない。理由は EmbeddedRoles と
     // 同じで、GetRoleOptionType (メニュー構築) が束縛/埋込ロードより前に走るため。動的に読むと未束縛の
     // 瞬間に誤分類が確定してしまう。定義側の team は「そのスロットに入れてよいか」の検証にだけ使う。
@@ -294,7 +294,7 @@ public static class EkrManager
     // 扱い = Neutral_Benign に落ちる — 未束縛は GetRoleSpawnMode ガードで出現不能なので実害は無い。
     public static bool IsEkrNeutralKilling(CustomRoles role) => IsEkrNeutral(role) && GetDefinition(role) is { CanKill: true };
 
-    // ── R2: 偽装 (docs/ekn-r2-contract.md §4) ────────────────────────────────────────────
+    // ── R2: 偽装 ────────────────────────────────────────────────────
     // passives.disguise の陣営。null = 偽装なし (EKR 以外も null)。
     // ⚠️ 効くのは**表示層だけ**で、しかも「本来見えていたものを隠す/差し替える」向きだけ
     // (DoubleAgent と同じ向き)。
@@ -758,7 +758,7 @@ public static class EkrManager
         }
     }
 
-    // ── Wave 3: ホスト露出オプション (docs/ekn-wave3-contract.md §4) ────────────────────────────
+    // ── Wave 3: ホスト露出オプション ────────────────────────────
     //
     // slot -> 前登録済みの 8 枠 (Id+2..Id+9)。各スロットの SetupCustomOption から一度だけ登録される
     // (EkmTemplateRole.SetupHostOptionPool)。Bind 時に「名前・表示・既定値」だけを差し替える。
@@ -1015,7 +1015,7 @@ public static class EkrManager
         return Bound.ContainsKey(slot);
     }
 
-    // Wave 2 (docs/ekn-wave2-contract.md §1.1): 束縛中の役職コードが on_meeting_vote ルールを持つか。
+    // Wave 2: 束縛中の役職コードが on_meeting_vote ルールを持つか。
     // CustomRolesHelper.CancelsVote() の EKR arm が読む。述語は
     // 「cancel_vote の有無」ではなく「on_meeting_vote ルールの有無」— cancel_vote を使わない定義
     // (「投票した人をおぼえる」だけ等) でも OnVote 呼び出し口 (MeetingHudPatch.cs:1610) を
@@ -1152,7 +1152,7 @@ public static class EkrManager
         return PlayersBySlot.TryGetValue(slot, out HashSet<byte> set) && set.Count > 0;
     }
 
-    // ── R1: per-holder ロジックランタイム (docs/ekr-logic-spec.md) ──────────────
+    // ── R1: per-holder ロジックランタイム ──────────────
 
     private static readonly Dictionary<byte, EkrHolderState> Runtime = [];
 
@@ -1508,14 +1508,14 @@ public static class EkrManager
 
     public static void FireVentEnter(CustomRoles slot, PlayerControl pc) => FireEvent(slot, pc.PlayerId, "on_vent_enter", byte.MaxValue);
 
-    // Wave 3 (docs/ekn-wave3-contract.md §1.4): ベントから出たとき。FireVentEnter と完全対称。
+    // Wave 3: ベントから出たとき。FireVentEnter と完全対称。
     // ⚠️ enter とのペアは保証しない — enter は妨害ゲートを通過したときだけ発火する一方、追い出し
     // (RpcBootFromVent) 経由の exit は enter 無しで飛んでくる (作者向け tooltip にも明記済み)。
     public static void FireVentExit(CustomRoles slot, PlayerControl pc) => FireEvent(slot, pc.PlayerId, "on_vent_exit", byte.MaxValue);
 
     // target の死亡確定時 (spec: 自分が死んだとき・ctx=キルした人 [いれば])。Utils.AfterPlayerDeathTasks から
     // 呼ぶ想定 — target 自身が EKR ホルダーかどうかは呼び出し前提を置かず、ここで判定する。
-    // R2 (docs/ekn-r2-contract.md §3b): DeathReason (~90種) を 8 バケットへ畳む。
+    // R2: DeathReason (~90種) を 8 バケットへ畳む。
     // 語彙を粗くしているのは、作者が覚えられる粒度に留めるため — 表に無い死因は "other" に落ちる
     // (新しい DeathReason が上流から増えても壊れない側)。⚠️ TS 側 (roledef.ts) と同じ綴り。
     public static string DeathCauseBucket(PlayerState.DeathReason reason)
@@ -1657,7 +1657,7 @@ public static class EkrManager
         FireEvent(slot, target.PlayerId, "on_death", killer ? killer.PlayerId : byte.MaxValue, filter: causeBucket);
     }
 
-    // ── Wave 1: on_attacked (docs/ekr-logic-spec.md §2) ────────────────────────────────────────
+    // ── Wave 1: on_attacked ────────────────────────────────────────
     // PlayerControlPatch.cs の RpcCheckAndMurder 一点関門 (Role.OnCheckMurderAsTarget) から
     // EkmTemplateRole 経由で呼ばれる。戻り値 false = この攻撃は不成立。
     //
@@ -1680,7 +1680,7 @@ public static class EkrManager
     // → 同一 (被害者, 攻撃者) の判定を 1 秒キャッシュし、窓の中は「同じ1回の攻撃」として
     //    前回の結論をそのまま返す (打診と実キルで結論が食い違わないよう結果ごと覚える)。
     //
-    // R2 (docs/ekn-r2-contract.md §3b): キーに Kind を足す。Magnet/Bloodlust の再打診で種別が混線する
+    // R2: キーに Kind を足す。Magnet/Bloodlust の再打診で種別が混線する
     // ため必要だが、**種別ごとに独立枠を持つ = 同一被害者への発火は最悪 4種/秒まで増える**。
     // まもり (shield) は kind:"kill" でしか減らないので数え上げ防御は無傷。fiber 枠 (≤8) の側は
     // 「同じ相手からの別種別の攻撃が1秒に4回来る」状況でしか増えず、実在する周期経路 (Torpedo/
@@ -1811,7 +1811,7 @@ public static class EkrManager
         PlayerControl.LocalPlayer.Notify(string.Format(Translator.GetString("EkrLogicAutoDisabled"), Translator.GetString(slot.ToString())), 10f);
     }
 
-    // ── Wave 2: on_meeting_vote (docs/ekn-wave2-contract.md §1.1) ──────────────────────────────
+    // ── Wave 2: on_meeting_vote ──────────────────────────────
     // EkmTemplateRole.OnVote (MeetingHudPatch.cs:1610 の CastVote 関門) から呼ばれる。on_attacked と
     // 同じ「同期プロローグ」構造 — fiber は最初の wait まで同期実行され、cancel_vote が有効なのは
     // その間だけ。戻り値 = cancel_vote が実際に実行されたか (呼び出し元が Main.DontCancelVoteList へ
@@ -1857,7 +1857,7 @@ public static class EkrManager
         return canceled;
     }
 
-    // ── Wave 2: on_meeting_pick (docs/ekn-wave2-contract.md §1.2) ──────────────────────────────
+    // ── Wave 2: on_meeting_pick ──────────────────────────────
     // 入力2系統 (会議ボタン [Modules/Ekm/EkrMeetingButton.cs・CustomRPC.EkrMeetingPick] /
     // /pick チャットコマンド) を1イベントに統合。発火デデュープ ≤1/秒/ホルダー (チャット連打/連打対策・
     // TryGateMeetingPick が両入力の共通関所)。
@@ -1891,7 +1891,7 @@ public static class EkrManager
     }
 
     // 別名の正典は lang の CommandForms.Pick (ja では "pick,えらぶ")。リテラル "/pick" 決め打ちにすると
-    // 翻訳された別名が丸ごと無音死する (BUG-20260813-03)。Command.IsThisCommand と同じ「先頭トークンの
+    // 翻訳された別名が丸ごと無音死する。Command.IsThisCommand と同じ「先頭トークンの
     // 完全一致」で照合する — GuessManager.CheckCommand の StartsWith+Replace 方式は前方一致の自己衝突を
     // 起こす既知の欠陥型なので踏襲しない。
     private static string[] PickCommandForms => EndKnot.Command.AllCommands.Find(x => x.Key == "Pick")?.CommandForms ?? ["pick"];
@@ -1909,7 +1909,7 @@ public static class EkrManager
         string head = m.ToLower().TrimStart('/').Split(' ', '　')[0];
         if (!PickCommandForms.Any(head.Equals)) return false;
 
-        // 別名 "pick" は Choose (Changeling / Pawn の役職選択) とも重複している (BUG-20260813-02)。EKR 役職を持たない
+        // 別名 "pick" は Choose (Changeling / Pawn の役職選択) とも重複している。EKR 役職を持たない
         // 人の入力まで消費すると、早期チェインは通常 dispatch より前に走るので相手のコマンドが無音死する。
         // ゲート落ちで消費するのは「EKR ホルダー本人の入力」だけに限る (誤爆を通常チャットへ漏らさない設計意図)。
         if (!IsEkrRole(pc.GetCustomRole())) return false;
@@ -1963,7 +1963,7 @@ public static class EkrManager
         FireEvent(slot, reporter.PlayerId, "on_report", bodyOwner ? bodyOwner.PlayerId : byte.MaxValue);
     }
 
-    // ── Wave 7 (docs/ekn-wave7-contract.md §2): 「いっしょにかたせる」(win_join) の便乗ラッチ ─────
+    // ── Wave 7: 「いっしょにかたせる」(win_join) の便乗ラッチ ─────
 
     // per-slot キー (ResetSlot がラウンド境界で自スロット分だけ捨てる — LastMeetingEndNum と同じ作法。
     // LastSabotageFireTime 型の全体 Clear にしないのは、ラッチが「1 回余分に発火しても安全」なデバウンス
@@ -1996,7 +1996,7 @@ public static class EkrManager
         return false;
     }
 
-    // ── Wave 6 (docs/ekn-wave6-contract.md §2,§3): サボタージュ成立と蘇生 ─────────────────────
+    // ── Wave 6: サボタージュ成立と蘇生 ─────────────────────
 
     // §2: 同種サボの連打 (リアクター連続押し等) で fiber 起票が暴れないための per-系統デバウンス。
     // fiber を起票する前 (エンジン側) で落とす。
@@ -2076,7 +2076,7 @@ public static class EkrManager
         // v1.3 (spec §3,§5): 会議開始 (追放演出突入含む) で drag/field は即停止・解除 (持ち越しはしない)。
         StopCrowdControl();
 
-        // Wave 6 (docs/ekn-wave6-contract.md §1.1 中断): 飛行中の弾は会議開始で消す。
+        // Wave 6 (中断): 飛行中の弾は会議開始で消す。
         // ⚠️ ここで同期に停止しない — EndFlight は ReleaseCnoSlot 経由で Despawn()
         // (Object.Destroy/RemoveNetObject) を呼ぶので、この関数の呼び出し元 (AfterReportTasks) の
         // 同期コールスタックには乗せられない (DespawnDummySlots が 1 秒遅延になっているのと同じ規約)。
@@ -2262,17 +2262,16 @@ public static class EkrManager
         PollCnoTouchIfDue();
 
         // Wave 4: 対人近接 (on_near/on_far) と部屋変化 (on_room_enter/exit) のポーラー — PollCnoTouchIfDue
-        // と同型の 0.25s 自己スロットリング相乗り (docs/ekn-wave4-contract.md §1,§2)。
+        // と同型の 0.25s 自己スロットリング相乗り。
         PollProximityIfDue();
 
         // v1.3: crowd-control (drag/field) の 1.0 秒 tick も同じ相乗り駆動 (自己スロットリング)。
         PumpCrowdControlIfDue();
 
-        // Wave 5: 持続効果 (effect_give) の期限管理 — 同じ 0.25s 自己スロットリング相乗り
-        // (docs/ekn-wave5-contract.md §1.3)。
+        // Wave 5: 持続効果 (effect_give) の期限管理 — 同じ 0.25s 自己スロットリング相乗り。
         PollEffectsIfDue();
 
-        // Wave 6: 発射体 (cno_launch) の 0.1 秒 tick も同じ相乗り駆動 (docs/ekn-wave6-contract.md §1.1)。
+        // Wave 6: 発射体 (cno_launch) の 0.1 秒 tick も同じ相乗り駆動。
         PumpFlightsIfDue();
 
         if (!Runtime.TryGetValue(pc.PlayerId, out EkrHolderState state)) return;
@@ -2315,7 +2314,7 @@ public static class EkrManager
         // fiber を先にスナップショットし、各要素を pump する直前に「まだ生きているか」を再確認する
         // (Clear 済みならその fiber はこの tick ではもう進めない — 「全キャンセル」を壊さないため)。
         // 反復は前方 = 生えた順 (FIFO)。同一 tick で複数の fiber が生えるイベント (契約 §2 の部屋直遷移
-        // exit→enter) の実行順を、発火順とそのまま一致させるため (BUG-20260825-01: 逆順反復のせいで
+        // exit→enter) の実行順を、発火順とそのまま一致させるため (逆順反復のせいで
         // enter→exit に転倒していた)。再入安全性は「反復方向」ではなく上のスナップショット + 直前の
         // 生存再確認 + 参照による削除が担保しているので、方向は自由に選べる。
         EkrFiber[] snapshot = state.Fibers.ToArray();
@@ -2356,7 +2355,7 @@ public static class EkrManager
         TickProgressText(state, pc);
     }
 
-    // ── Wave 3: じょうたいトリガのエッジ発火エンジン (docs/ekn-wave3-contract.md §1) ────────────
+    // ── Wave 3: じょうたいトリガのエッジ発火エンジン ────────────
     //
     // 意味論: 条件が **偽→真に遷移した瞬間に1回だけ**発火する (レベル発火にしない)。再武装は条件が
     // 偽に戻ったとき。武装状態は per-(holder, rule) で、InitRuntime で「その時点の真偽」に初期化する
@@ -2488,7 +2487,7 @@ public static class EkrManager
         state.Fibers.Add(EkmLogicRuntime.Spawn(rule.Do, state.Variables, context, EkrActionSink.InOpcodeKill, fromVarChain: true));
     }
 
-    // ── Wave 3: 進捗テキスト (docs/ekn-wave3-contract.md §3) ────────────────────────────────────
+    // ── Wave 3: 進捗テキスト ────────────────────────────────────
 
     // 置換後の最終文字列の上限。変数値の膨張に対する安全弁 (置換前の 16字検査だけでは
     // 「{a}{b}{c}」型で膨らむ)。
@@ -2545,7 +2544,7 @@ public static class EkrManager
         Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
     }
 
-    // ── Wave 1: パッシブ層 (docs/ekr-logic-spec.md §1.1) ────────────────────────────────────────
+    // ── Wave 1: パッシブ層 ────────────────────────────────────────
     // 毎 FixedUpdate、保持者ごとに1回 Pump から呼ばれる。ここは logic の有無/停止に依存しない。
 
     private static void TickPassives(PlayerControl pc, EkrHolderState state, EkrPassives passives)
@@ -2687,7 +2686,7 @@ public static class EkrManager
         if (Runtime.TryGetValue(playerId, out EkrHolderState state)) state.VoteWeightOverride = value;
     }
 
-    // ── Wave 2: reveal (docs/ekn-wave2-contract.md §2.2) ────────────────────────────────────────
+    // ── Wave 2: reveal ────────────────────────────────────────
     // KnowRole override (EkmTemplateRole・4表示系を1点で拾う集約) が読む。seer/target 両方の playerId
     // だけで判定する — 集約側は Main.PlayerStates.Values.Any(x => x.Role.KnowRole(seer, target)) の
     // 全 PlayerState 総なめなので、this や x には一切依存しないこと。
@@ -2701,7 +2700,7 @@ public static class EkrManager
         if (Runtime.TryGetValue(seerId, out EkrHolderState state)) state.Revealed.Add(targetId);
     }
 
-    // ── Wave 2: vote_block (docs/ekn-wave2-contract.md §3.2) ────────────────────────────────────
+    // ── Wave 2: vote_block ────────────────────────────────────────
     // 「この会議のみ」target の票を無効化する集合。MeetingHudPatch の2箇所 (site1 canVote / site2 voteNum)
     // が読む。会議境界 (FireMeetingStart) でリセット — ResetSlot では触らない (trap 10: Init() はゲーム中
     // いつでも発火しうるので、会議スコープの状態をラウンド境界の関数で管理しない)。
@@ -2719,7 +2718,7 @@ public static class EkrManager
         return true;
     }
 
-    // ── Wave 2: vote_swap (docs/ekn-wave2-contract.md §3.3) ────────────────────────────────────
+    // ── Wave 2: vote_swap ────────────────────────────────────────
     // EKR 全体で同時1件/会議 (複数ホルダーの swap 連鎖は結果が順序依存になるため後着は静かにドロップ)。
     // 予約は「この会議の集計に swap を予約する」宣言 — 実際の入れ替えは MeetingHudPatch の
     // ManipulateVotingResult ディスパッチから ApplyVoteSwap が1回だけ読む。
@@ -2774,7 +2773,7 @@ public static class EkrManager
         Logger.Info($"EKR vote_swap: {t1} <-> {t2} (by {holderId})", "EkrManager");
     }
 
-    // ── Wave 2: exile (docs/ekn-wave2-contract.md §3.4) ─────────────────────────────────────────
+    // ── Wave 2: exile ─────────────────────────────────────────
     // エンジンのハード制限は「1会議1回」のみ (発動で会議が終わるため構造的に自明)。ゲーム単位の
     // 回数上限は掛けない (作者がブロックで組む)。
     private static bool _exileUsedThisMeeting;
@@ -2786,7 +2785,7 @@ public static class EkrManager
         return true;
     }
 
-    // ── Wave 2: 矢印3 op の per-holder 帳簿 (docs/ekn-wave2-contract.md §2.3) ───────────────────
+    // ── Wave 2: 矢印3 op の per-holder 帳簿 ───────────────────
     // 予算: arrow_show+arrow_mark 合算 ≤1/秒/ホルダー + 同時 ≤4本/ホルダー (両種合算)。レートは
     // ここでは強制しない (EkrLogicOpcodes 側が LastArrowTime を見て消費前に判定する) — ここは
     // 「台帳への登録・期限切れの自動 Remove・全消し」だけを担当する。
@@ -2855,7 +2854,7 @@ public static class EkrManager
         }
     }
 
-    // arrow_hide (docs/ekn-wave2-contract.md §2.3): ホルダーの EKR 矢印 (両種) を全消し。TargetArrow/
+    // arrow_hide: ホルダーの EKR 矢印 (両種) を全消し。TargetArrow/
     // LocateArrow は playerId 単位の共有ストアだが、1人のプレイヤーは同時に1役職しか持てないため
     // 「この seer の矢印は全部この EKR ロジックが出したもの」が常に成り立つ (他ロールとの混線は無い)。
     internal static void HideArrows(EkrHolderState state, byte holderId)
@@ -2890,7 +2889,7 @@ public static class EkrManager
     // 発火し続ける) や lint L9 推奨形 (会議明け wait 10.5) の WakeAt 同刻で、複数ホルダーの spawn が
     // 同一窓に束なるのを止められない。spawn 1体には ReserveFanoutBudget 未課金の付帯送信
     // (spawn broadcast ≈4 nests + player-like は outfit ≈4 nests) がぶら下がるため、DummySpawner の
-    // 実績式 (targets+8)/12 秒/体 (BUG-20260803-07 の修正・安全実績域 targets×体数/秒 ≤20 nests/s) を
+    // 実績式 (targets+8)/12 秒/体 (安全実績域 targets×体数/秒 ≤20 nests/s) を
     // そのまま EKR 全体の最小 spawn 間隔として強制する (TryConsumeGlobalTeleportBudget と同型の鎖)。
     // 超過は静かにドロップ (spec §5 の既存原則 — 作者には per-holder レートと区別が付かないが、
     // cross-holder 干渉は作者に制御不能なので lint では教えない)。
@@ -3143,7 +3142,7 @@ public static class EkrManager
             if (Vector2.Distance(pc.Pos(), pos) <= TouchEnterRadius) latched.Add(pc.PlayerId);
     }
 
-    // ── Wave 4: 対人近接/部屋変化ポーラー (docs/ekn-wave4-contract.md §1,§2) ────────────────────
+    // ── Wave 4: 対人近接/部屋変化ポーラー ────────────────────
     // PollCnoTouchIfDue と同型の Pump ライダー (0.25s グローバル自己スロットリング・送信ゼロ・
     // ローカル演算のみで予算対象外 §5)。on_near/on_far のラッチ/武装は per-(holder, rule) — 複数 rule が
     // 別 radius/who を持てるため、発火は FireEvent の onlyRuleIndex でその 1 rule にスコープする。
@@ -3363,7 +3362,7 @@ public static class EkrManager
     // LateTask (+3.5秒)。近接ポーラーのゲート (ExileController/AntiBlackout.SkipTasks) は +2秒で開くため、
     // その差の窓 (約1.5秒 = 0.25秒間隔で約6回) でここが LinkedId を先に消すと、FireDeath の一致判定
     // (hs.LinkedId != target.PlayerId で continue) が外れて on_linked_death が無音で落ちる
-    // (BUG-20260828-01。キル死は AfterPlayerDeathTasks が同期なので隙が無く再現しない)。死亡は「今は
+    // (キル死は AfterPlayerDeathTasks が同期なので隙が無く再現しない)。死亡は「今は
     // 解決できない」として番兵だけ返し (発火はしない)、解消の権限は FireDeath へ一本化する。
     // 切断/消滅は FireDeath が !disconnect ゲートで拾わないので従来どおりここで lazy 解消する。
     private static byte ResolveWatchedId(EkrHolderState state, string who)
@@ -3420,7 +3419,7 @@ public static class EkrManager
         if (current != null) FireEvent(state.Slot, holderId, "on_room_enter", byte.MaxValue);
     }
 
-    // ── Wave 4: link / unlink (docs/ekn-wave4-contract.md §3.1,§3.2 — 予算なし・ローカル状態のみ) ──
+    // ── Wave 4: link / unlink (予算なし・ローカル状態のみ) ──
 
     internal static void Link(EkrHolderState state, byte targetId)
     {
@@ -3452,7 +3451,7 @@ public static class EkrManager
         }
     }
 
-    // ── Wave 4: recruit (docs/ekn-wave4-contract.md §4,§5 — 相手を自分と同じ EKR 役職へ変換) ──────
+    // ── Wave 4: recruit (相手を自分と同じ EKR 役職へ変換) ──────
 
     private const float RecruitPerHolderInterval = 10f; // §5: per-holder ≤1/10秒
     private const float RecruitGlobalInterval = 5f; // §5: EKR 全体 ≤1/5秒 (SetRole バーストの頻度の砦)
@@ -3461,7 +3460,7 @@ public static class EkrManager
     // リセット不要 — ResetSlot からは触らない (trap: init_fires_midgame_slot_reset_clobbers_global)。
     private static float _lastGlobalRecruitTime = -1f;
 
-    // Wave 5 (docs/ekn-wave5-contract.md §2): slotNumber1Based は変換先スロットの指名 (1..18)。
+    // Wave 5: slotNumber1Based は変換先スロットの指名 (1..18)。
     // 0 = 省略 = 現行どおり「自分と同じ役職」(完全後方互換)。解決だけが増え、レート/2呼び固定順・
     // 他の no-op 条件は一切変えない。
     internal static void TryRecruit(EkrHolderState state, byte holderId, PlayerControl targetPc, int slotNumber1Based = 0)
@@ -3514,7 +3513,7 @@ public static class EkrManager
         // 同順)。変換後の追加 Utils.NotifyRoles は呼ばない — SetMainRole が内蔵の NotifyRoles ペアを既に
         // 発行する (§5 二重払い禁止・Jackal 型の「SetMainRole に任せる」側)。
         //
-        // 🔴 不変条件 (2026-08-27 Wave 5 で改訂 — docs/ekn-wave5-contract.md §2)。
+        // 🔴 不変条件 (2026-08-27 Wave 5 で改訂)。
         //
         // Wave 4 までは「recruit は `if (!role.RoleExist(true)) Role.Init()` (GameState.SetMainRole) の
         // ResetSlot mid-game 罠を構造的に踏まない」と書いてあった (変換先が常に勧誘者自身のスロットで
@@ -3536,7 +3535,7 @@ public static class EkrManager
     }
 
 
-    // ── Wave 5: 持続効果エンジン (docs/ekn-wave5-contract.md §1) ─────────────────────────────────
+    // ── Wave 5: 持続効果エンジン ─────────────────────────────────
     //
     // effect_give は「相手に一定時間だけ効く状態」を付ける op。対象は EKR ホルダーとは限らないので、
     // 台帳は EkrHolderState ではなく **per-target の static テーブル** に持つ (キー = (targetId, channel))。
@@ -3827,7 +3826,7 @@ public static class EkrManager
         public int Rotation; // field のみ: ラウンドロビン公平化 (PullTick と同型)
 
         // drag のみ: 前回 snap した時点のホルダー位置 (Penguin.LastDragSnapPos と同型)。番兵は「初回 tick を
-        // 無条件で発火させる」ため遠方に置く (= seconds:1 でも必ず1発打つ・BUG-20260814-02)。
+        // 無条件で発火させる」ため遠方に置く (= seconds:1 でも必ず1発打つ)。
         public Vector2 LastDragSnapPos = new(-9999f, -9999f);
 
         // field のみ
@@ -4101,7 +4100,7 @@ public static class EkrManager
         cc.Rotation = (cc.Rotation + CcFieldPerTickCap) % candidates.Count;
     }
 
-    // ── Wave 6: 飛行エンジン (cno_launch — docs/ekn-wave6-contract.md §1) ────────────────────────
+    // ── Wave 6: 飛行エンジン (cno_launch) ────────────────────────
     // crowd-control (_cc) と同族の「fiber 外 static + Pump 相乗り + 即時停止」3点セット。ただし
     // crowd-control が**プレイヤーを TP する** (= SnapTo ラウンド予算を消費する) のに対し、こちらは
     // **CNO を動かすだけ**なので予算次元がまったく別 — 送信は CustomNetObject の

@@ -525,7 +525,7 @@ public class Main : BasePlugin
         ClaudeBridgeScreenshotKeep = Config.Bind("Client Options", "ClaudeBridgeScreenshotKeep", 30, "Max number of screenshots to keep under EndKnot_Logs/Screens (oldest deleted first).");
         EnableAICommentary = Config.Bind("Client Options", "EnableAICommentary", false, "Enable the AI commentary companion event layer: writes host-local JSON Lines events (join/leave/chat/intervention/phase/demo) to EndKnot_DATA/companion-events.jsonl for an external companion app to tail. No network sending. Also enables a lobby-idle auto demo of the viewer-intervention cutscene. When on, the companion app itself is also auto-launched as a child process (requires Python and the GEMINI_API_KEY environment variable; see EndKnot_DATA/companion/README). Default off.");
         AICommentaryArgs = Config.Bind("Client Options", "AICommentaryArgs", "", "Extra command-line arguments passed to the auto-launched AI commentary companion app (e.g. --voice Kore --quiet-meeting --audio-device \"CABLE Input\").");
-        GcUafBootProbe = Config.Bind("Debug", "GcUafBootProbe", false, "Run a one-time boot-time probe (GcUafProbe) that deterministically tests whether the incremental GC collects a freshly-written interop string field before the field is read back (see docs/coreclr-av-chat-uaf-resume.md §1e). Logs GCUAF-PROBE: VULNERABLE or SAFE. Default off; only meant for diagnosing the coreclr AV bug.");
+        GcUafBootProbe = Config.Bind("Debug", "GcUafBootProbe", false, "Run a one-time boot-time probe (GcUafProbe) that deterministically tests whether the incremental GC collects a freshly-written interop string field before the field is read back. Logs GCUAF-PROBE: VULNERABLE or SAFE. Default off; only meant for diagnosing the coreclr AV bug.");
         DisableIncrementalGc = Config.Bind("Client Options", "DisableIncrementalGc", true, "Turn Unity's incremental GC off at runtime by zeroing the Boehm flag that il2cpp_gc_is_incremental() reads (see Modules/IncrementalGcInvalidator.cs). DEFAULT ON (2026-08-15) as a safety measure: while incremental GC is active, any interop reference-field write that lacks a write barrier can have its target collected while still referenced -> coreclr AV 0xc0000005, a fail-fast process death that try/catch cannot stop. Turning incremental off removes that whole hazard class regardless of whether the generated interop assemblies have barriers, which matters most on 32-bit installs where the barrier fix (ScanMethodRefs=true) cannot be applied at all. Measured cost is small: a real-device A/B (4 game-start/end cycles per arm) found no improvement from incremental GC -- total hitch 5626ms with it ON vs 5811ms with it OFF, and the big per-cycle stalls (game end ~360ms, lobby return ~370ms) were the same either way, because those are forced full collections that incremental mode never covered. Note the bundled RemoveGcMaxTimeSlice plugin does NOT disable incremental GC on this build (removing gc-max-time-slice from boot.config leaves it running with the default 3ms slice) -- this is the only mechanism that actually works. Windows-only. Result is logged as INCGC:. Set false to A/B the incremental behaviour.");
         LoadingVideoEnabled = Config.Bind("Client Options", "LoadingVideoEnabled", true, "Play a short loading-screen video (host-local, no network traffic) over the fade-to-black during scene transitions (game start / next game). Falls back silently to no video if no file is available.");
         LoadingVideoFile = Config.Bind("Client Options", "LoadingVideoFile", "", "Optional file name (relative to BepInEx/plugins/EndKnot/Media/) or absolute path of a custom loading-screen video (.mp4) to use instead of the bundled default.");
@@ -1527,7 +1527,7 @@ public enum CustomWinner
 
     Bloodlust = CustomRoles.Bloodlust,
 
-    // R2 (docs/ekn-r2-contract.md §0.1): 役職メーカーの第三陣営スロット。各スロットが独立陣営なので
+    // R2: 役職メーカーの第三陣営スロット。各スロットが独立陣営なので
     // 勝者表示もスロットごとに要る (勝者名は Bind 時のランタイム上書きで役職コードの名前になる)。
     EkmNeuRole1 = CustomRoles.EkmNeuRole1,
     EkmNeuRole2 = CustomRoles.EkmNeuRole2,
@@ -1597,7 +1597,7 @@ public enum AdditionalWinners
     Faction = CustomRoles.Faction,
     LastNeutral = CustomRoles.LastNeutral,
 
-    // Wave 7 (docs/ekn-wave7-contract.md §2): EKR win_join の便乗勝者の表示帰属。値は「かたせた側の
+    // Wave 7: EKR win_join の便乗勝者の表示帰属。値は「かたせた側の
     // EKR スロット」— OutroPatch が CustomRoles へキャストして束縛役職名で表示する (全 19 スロット)。
     EkmCustomRole1 = CustomRoles.EkmCustomRole1,
     EkmCustomRole2 = CustomRoles.EkmCustomRole2,

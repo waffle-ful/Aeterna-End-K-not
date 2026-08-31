@@ -4,7 +4,7 @@
 // フォーム値の下書き復元ヘルパーは、この environment: "node" の vitest からでも import して直接呼べる —
 // DOM を必要とする wire()/readForm()/writeForm() 等は対象外 (dev サーバでの目視確認に委ねる)。
 //
-// docs/ekn-r2-contract.md §1 (R2): team は crewmate/impostor/neutral の3値。
+// §1 (R2): team は crewmate/impostor/neutral の3値。
 // normalizeTeamDraft は「壊れた localStorage 下書き/読込値でもフォーム自体は必ず開ける」ための
 // フォーム層専用のフォールバック実装 (roledef.ts の validateEkrDefinition は不正な team を
 // reject するだけでフォールバックしない — 契約に手を入れずフォーム層だけで吸収する)。

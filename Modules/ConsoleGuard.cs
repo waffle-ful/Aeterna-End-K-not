@@ -8,7 +8,7 @@ namespace EndKnot.Modules;
 // conhost はテキストが選択されている間、コンソールへの WriteFile を無期限ブロックする。
 // BepInEx.Logging.ConsoleLogListener は同期書き込みのため、選択中に次のログを1行吐いた瞬間に
 // メインスレッドごと停止し、心拍途絶→番犬 kill の「ハング」として観測される
-// (2026-08-04 16:41 のハングダンプで WriteFile 停止スタックを直接確認 — BUG-20260721-02)。
+// (2026-08-04 16:41 のハングダンプで WriteFile 停止スタックを直接確認)。
 //
 // 対策は2段構え:
 //   1) DisableQuickEdit() — 左クリックだけで選択モードに入る QuickEdit を起動時に無効化する。

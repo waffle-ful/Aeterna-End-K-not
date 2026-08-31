@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace EndKnot.Modules.Ekm;
 
-// EKR logic 契約 v1.3 の field (crowd-control) 実体用テキスト CNO (契約正典: docs/ekr-logic-spec.md §3,§5)。
+// EKR logic 契約 v1.3 の field (crowd-control) 実体用テキスト CNO。
 // 見た目・生成戦略は EkrCno と同じ (Shapeshift-text 戦略・<size=N> 絶対値のみ) だが、
 // EkrCno は sealed かつ「OnMeeting() を意図的に override しない」
 // (会議明け自動復活エンジンに乗る) 契約を持つクラスなので、field 専用に別クラスを起こす — field は

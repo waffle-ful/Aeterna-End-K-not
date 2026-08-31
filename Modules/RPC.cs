@@ -183,7 +183,7 @@ public enum CustomRPC
     LobbyDecorClear,
     ControllableSound, // sub-op byte: 0=offset付き再生 / 1=名前指定フェード停止 (モッドクライアント効果音同期)
 
-    // EKM (custom map system) — reserved 2026-06-12 (see docs/ekm-studio/ROADMAP.md D11).
+    // EKM (custom map system) — reserved 2026-06-12.
     // Network-zero by default; the explicit 251 keeps 247-250 free for future game-mode
     // syncs, which grow by appending after ControllableSound (246).
     EkmSync = 251,
@@ -193,7 +193,7 @@ public enum CustomRPC
     Haunter = 253,
     Commited = 254,
 
-    // EKN Wave 2 (docs/ekn-wave2-contract.md §1.2 on_meeting_pick 会議ボタン) — 2026-08-11 予約。
+    // EKN Wave 2 (on_meeting_pick 会議ボタン) — 2026-08-11 予約。
     // ⚠️ 末尾に追記できる最後の値 (255) を使った。以後の新規 RPC は EkmSync のコメントが指す
     // 247-250 (ゲームモード同期用に空けてある予約枠) を使うか、既存 ID の sub-op 多重化
     // (EkmSync / ControllableSound と同じ形) で対応すること — 素朴な「末尾へ追記」はもうできない。
@@ -462,7 +462,7 @@ internal static class RPCHandlerPatch
 
                         // modded 客と確定した瞬間に targeted 全件オプション同期を撃つ (join 3 秒後の一発勝負の置き換え)。
                         // バニラ客は VersionCheck を送らないのでここへ来ない = join のたびにスナップショットを
-                        // 無効化して次の開始押下をフル送信ヒッチにする必要が無い (BUG-20260805-05 再燃の根治)。
+                        // 無効化して次の開始押下をフル送信ヒッチにする必要が無い (再燃の根治)。
                         if (firstVersion && AmongUsClient.Instance.AmHost && !OptionItem.SyncAllOptions(__instance.OwnerId))
                             RPC.InvalidateOptionSyncSnapshot();
                     }
@@ -1481,7 +1481,7 @@ internal static class RPC
     // broadcast 同期の差分送信用スナップショット (option id → 最後に全員へ流した値)。
     // 全 5871 オプションを毎回 interop 越し (1 周あたり WritePacked ×2 + Position 読み = 3 回) に
     // 書き出すと実測 235ms かかり、開始/キャンセル押下のたびにホストが体感ヒッチを起こしていた
-    // (BUG-20260805-05: STARTPRESS syncMs=235 opts=5871)。受信側 (RPCHandlerPatch の
+    // (実測: STARTPRESS syncMs=235 opts=5871)。受信側 (RPCHandlerPatch の
     // SyncCustomSettings) は while (ReadPackedInt32() >= 0) で「受け取った id だけ」を SetValue する
     // 実装なので、変更分だけ送ってもプロトコル互換。
     // ⚠️ targetId 指定 (新規参加者への初回同期) は差分にしない — 途中参加者は過去の broadcast を
@@ -1494,7 +1494,7 @@ internal static class RPC
     /// <summary>次の broadcast を強制的に全件送信へ戻す。
     /// modded 客への targetId 全件同期 (VersionCheck 受信時に発火) が失敗した時と、
     /// 再接続で送信キューが破棄された時の救済経路。バニラ客の join では呼ばないこと —
-    /// 毎 join で呼ぶと次の開始押下がフル送信ヒッチになる (BUG-20260805-05)。</summary>
+    /// 毎 join で呼ぶと次の開始押下がフル送信ヒッチになる。</summary>
     public static void InvalidateOptionSyncSnapshot()
     {
         LastBroadcastOptionValues.Clear();

@@ -20,7 +20,7 @@ namespace EndKnot.Modules;
 // ⚠️ 信号の限界 (2026-07-28 実機確認): seq 前進は「移動入力が届いた」証明であって「intro 正常完了」
 // の証明ではない — Switch は物理スティックで黒画面のまま盲目移動して confirm しうる。ゲートを
 // 暗転検知器として読んではならない。一方 2026-08-04 の再発ゲームでは hard cap 到達時の未confirm
-// 2名が暗転本人発症者と完全一致した (docs/blackout-resume.md 08-04) — 未confirm は発症予備軍として
+// 2名が暗転本人発症者と完全一致した (08-04) — 未confirm は発症予備軍として
 // 扱い、cap 到達時は会議明けに FixBlackScreen 救済を撃つ (RunRescue)。
 //
 // 偽 confirm 対策 (2026-08-04): Utils.TP の nt.SnapTo はホストローカルの lastSequenceId を +328

@@ -12,14 +12,14 @@ namespace EndKnot.Modules;
 // 各外見がちょうど 1 人ずつ存在する状態が保たれるので、「同じ顔が 3 人いる」事故が起きない。
 //
 // ⚠️ 外見と名前はロビーへ持ち越される永続データなので、復元は Patches/OutroPatch.cs の
-// 無条件復元とセットで成立する ([[project-persistent-player-data-restore-on-game-end]])。
+// 無条件復元とセットで成立する。
 // この台帳を死亡クリーンアップで消してはいけない (消すと試合終了時に戻す先が無くなる)。
 public static class OutfitShuffle
 {
     public const int OptionIdBase = 44750;
 
     // 公式鯖の fan-out キック安全実績域は「宛先数 × 体数/秒 ≤ 20」
-    // ([[project_fanout_burst_kick_brackets]])。全員シャッフルは 1 人 1 回の Data ブロードキャストなので
+    // 全員シャッフルは 1 人 1 回の Data ブロードキャストなので
     // 送出間隔 = 宛先数 / 20 秒 に開けるとちょうどこの実績域に収まる。
     private const float SafeNestsPerSecond = 20f;
     private const float MinInterval = 0.25f;
@@ -98,7 +98,7 @@ public static class OutfitShuffle
 
         // 公式鯖のキックに対して効いているのは「待つこと」ではなく DispatchStaggered の間引き
         // (同時本数を上げない) の方。固定待ちは対策として無効というのが実測の結論
-        // ([[project_p6_game_start_spawn_window]])。この遅延は役職一斉割り当てのバーストと
+        // この遅延は役職一斉割り当てのバーストと
         // 単純に時間帯をずらすためだけのもの。
         int generation = Generation;
         LateTask.New(() =>
@@ -117,7 +117,7 @@ public static class OutfitShuffle
 
     // 会議明けは追放スイープ (SetRole 全員分 + Desync + ReactorFlash + NotifyRoles) とレートゲートの
     // ドレインが task phase 開始後 ~10 秒続く。この窓に外見の一斉入れ替えを重ねると合算 nests が
-    // キック域に達する (2026-08-03 実キック・BUG-20260803-07。CNO の DeferredSpawnBaseDelay と同じ規約)。
+    // キック域に達する (2026-08-03 実キック。CNO の DeferredSpawnBaseDelay と同じ規約)。
     public static bool InPostMeetingSweep => LastMeetingEndTime >= 0f && Time.realtimeSinceStartup - LastMeetingEndTime < PostMeetingSweepWindow;
 
     // Patches/PlayerJoinAndLeftPatch.cs の OnGameJoinedPatch から呼ばれる。
@@ -175,7 +175,7 @@ public static class OutfitShuffle
         }
 
         // 劣化リンク上に装飾 fan-out を重ねない (LobbyCorpses と同じ規約 — 量の間引きだけでは
-        // 不十分で、キック実測の連言は「劣化リンク×バースト」project_kick_link_health_missing_axis)。
+        // 不十分で、キック実測の連言は「劣化リンク×バースト」であるため)。
         if (HealthLog.IsLinkDegradedNow(out string linkDetail))
         {
             Logger.Info($"ShuffleAll blocked, link degraded ({linkDetail})", "OutfitShuffle");

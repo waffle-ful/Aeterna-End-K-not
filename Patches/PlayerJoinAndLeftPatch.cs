@@ -606,7 +606,7 @@ internal static class OnPlayerJoinedPatch
     // ため、予算は単調に消費し、再送を実行した時だけ 0 に戻す。
     private static float JoinRebroadcastDeferredSec;
 
-    // BUG-20260820-06 クラスタ緩和: join 時の全員装飾名再送 (LastBroadcastName.Clear() → FixedUpdate が
+    // クラスタ緩和: join 時の全員装飾名再送 (LastBroadcastName.Clear() → FixedUpdate が
     // 全プレイヤー分を fan-out) は identity nests のバーストになるため、リンク劣化中は LobbyCorpses と
     // 同じ規約で延期する (5s 間隔・最大 60s)。名前同期は機能要件なので完全スキップはせず、諦め時刻を
     // 過ぎたら劣化中でも実行する (送信自体は PacketRateGate の縮小予算でペーシングされる)。
@@ -824,7 +824,7 @@ internal static class InnerNetClientSpawnPatch
             // 新規参加者へのオプション同期は join N 秒後の一発勝負をやめ、VersionCheck 受信時 (= modded 客と
             // 確定した瞬間) に RPC.cs 側で targeted 全件送信する方式に変更。バニラ客 (VersionCheck を送らない)
             // の join でスナップショットを無効化すると、次の開始押下が 5900 件フル送信 220-290ms ヒッチになる
-            // (BUG-20260805-05 の再燃機序 — ホスト専用 mod では視聴者は全員バニラなので毎 join 発火していた)。
+            // (ホスト専用 mod では視聴者は全員バニラなので毎 join 発火していた、という再燃機序)。
 
             LateTask.New(() =>
             {

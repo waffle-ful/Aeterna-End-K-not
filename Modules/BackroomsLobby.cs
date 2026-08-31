@@ -150,7 +150,7 @@ public static class BackroomsLobby
     private static readonly List<(float minX, float maxX, float minY, float maxY)> _mergeBufB = [];
     private static bool _occludersDirty = true; // WallAabbs 変更 (Add/RemoveAt) で立てる
     // Pass1 (horizontal) sort: y-band 昇順 (minY, maxY) → その中で minX 昇順。
-    // IL2CPP default Comparer 不安定回避のため明示 Comparison を渡す ([[ray sort と同方針]])。
+    // IL2CPP default Comparer 不安定回避のため明示 Comparison を渡す (下記 RayHit の角度ソートと同方針)。
     private static readonly Comparison<(float minX, float maxX, float minY, float maxY)> _occluderHSort = (a, b) =>
     {
         int c = a.minY.CompareTo(b.minY);
@@ -1158,7 +1158,7 @@ public static class BackroomsLobby
         // vanilla lobby spawn (~ -0.2, 1.3) → cell (0,1) が WallV になり player が壁中に
         // 詰まる事故が起きる (TP 廃止に伴い顕在化)。player + 4 cardinal cell を強制 floor 化。
         // origin は body center (Pos) で 0.36u 高い → cell が 1 ズレるので足元 (GetTruePosition)
-        // で再取得。collision/vision と同じ cell に揃える ([[reference_pos_vs_gettrueposition]])
+        // で再取得。collision/vision と同じ cell に揃える。
         EnsureSpawnFloor(LocalPlayerFeet());
 
         int chunkCount = _loadedChunks.Count;
@@ -2864,7 +2864,7 @@ public static class BackroomsLobby
     // Upper dark mesh (sortingOrder=+50): player/DeadBody/cosmetic を dark zone で覆う。
     // 2026-05-27 v3: mesh は Lower (_visionMesh) と **分離** (旧: 共有)。
     // 真因 — corner ray が donut inner ring に notch を作り、Upper (壁の前面) では notch dark が
-    // 壁の上面を覆って「cell 境界の黒い縦線」「top band 消失」の症状を出す ([[plans/image-1-h-h-glowing-haven]])。
+    // 壁の上面を覆って「cell 境界の黒い縦線」「top band 消失」の症状を出す。
     // Upper は base ray fan のみで smooth donut を構築し、Lower は従来通り corner ray ありで sharp に保つ。
     // A8 (2026-06-02): Upper dark mesh を無効化。視界外 entity 隠蔽は UpdateEntityVisibility の hard-cut が、
     // 壁面暗化は per-wall ghost(+60) が担うため Upper は冗長。二重影解消 + 1 層削減 + 毎フレ build 削減。
@@ -3482,7 +3482,7 @@ public static class BackroomsLobby
         //   Lower (-7, corner ray あり / sharp): floor を dark zone で覆う。壁 (-3 以上) は素通り
         //   Upper (+50, base ray のみ / smooth): player/DeadBody/cosmetic を dark zone で覆う。
         //     corner ray を入れない理由 — 壁角の notch が Upper では壁の上面を darken し
-        //     「cell 境界の黒線」「top band 消失」を引き起こす ([[plans/image-1-h-h-glowing-haven]])。
+        //     「cell 境界の黒線」「top band 消失」を引き起こす。
         //   Ghost (+60, per-wall child): Upper dark の上に wall.png α=0.30 で透過、壁テクスチャをうっすら描画
         //   CastRayLength は tFar 返却で donut 穴が壁の向こうまで広がり、視界内の壁は full color で見える
         mr.sortingOrder = -7;

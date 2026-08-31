@@ -7,7 +7,7 @@ namespace EndKnot.Roles;
 // Overkiller と Butcher は同一役職。上流が Overkiller→Butcher へ改名したのを追いきれず、
 // このフォークが旧名のまま独自保持したうえ後日 Butcher も取り込んで二重移植してしまった残骸。
 // Butcher が正規版。Overkiller だけ偽死体バーストが SendOption.None + rate-gate バイパスで、
-// 公式鯖に host を reason=Hacking で自己DC させる真因だった (bug-inbox BUG-20260724-02)。
+// 公式鯖に host を reason=Hacking で自己DC させる真因だった。
 // Butcher に一本化するため Overkiller を無効化する。
 //
 // enum スロット CustomRoles.Overkiller は残す — ID は永続・全クライアント同期で、消すと後続が全ズレする。

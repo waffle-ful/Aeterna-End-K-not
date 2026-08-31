@@ -1,4 +1,4 @@
-// Blockly ワークスペース (serialization JSON) → 役職ロジック AST (spec: docs/ekr-logic-spec.md)。
+// Blockly ワークスペース (serialization JSON) → 役職ロジック AST (spec)。
 // 「コード生成なし・JSON データのみ」(spec §7) — Blockly のコードジェネレータ機構は一切使わない。
 //
 // 意図的に blockly を実行時にも型としても import しない (compile-role.ts は DOM 非依存の純関数層 —
@@ -136,7 +136,7 @@ function blockToNode(b: SerializedBlock): Record<string, unknown> {
             return { op: "cno_despawn", slot: toNum(b.fields?.SLOT) };
         case "ekr_do_cno_show":
             return { op: "cno_show", slot: toNum(b.fields?.SLOT), who: b.fields?.WHO };
-        // Wave 6 (docs/ekn-wave6-contract.md §1) — とばす。SPEED が既定 "medium" のときはフィールドごと
+        // Wave 6 (§1) — とばす。SPEED が既定 "medium" のときはフィールドごと
         // 省略する (on_near.WHO の "anyone" 省略と同じ作法 — recruit.slot と同種の畳み込み)。
         case "ekr_do_cno_launch": {
             const slot = toNum(b.fields?.SLOT);
@@ -180,7 +180,7 @@ function blockToNode(b: SerializedBlock): Record<string, unknown> {
             // 配置 (on_attacked 配下かどうか) の検査は roledef.ts の validateRoleLogic が行う —
             // compile 側は契約を一切強制しない (ファイル冒頭の方針)。
             return { op: "cancel_attack" };
-        // Wave 2 (docs/ekn-wave2-contract.md §2.1 2026-08-11 追記) — しらべる系。failChance/noise は
+        // Wave 2 (§2.1 2026-08-11 追記) — しらべる系。failChance/noise は
         // 「任意・既定0」(spec 表) なので notify.target と同じ既定値省略の作法に倣い、値が既定 (0)
         // なら AST にキーを足さない。noise はさらに depth:"team" のとき常に省略する — 契約は
         // 「noise は depth:"role" のみ受理 (team との併用は文書 reject)」だが、ドロップダウンを
@@ -221,26 +221,26 @@ function blockToNode(b: SerializedBlock): Record<string, unknown> {
             return { op: "vote_swap" };
         case "ekr_do_exile":
             return { op: "exile", target: b.fields?.TARGET };
-        // Wave 7 (docs/ekn-wave7-contract.md §1,§2) — 勝利条件。target はドロップダウン値をそのまま
+        // Wave 7 (§1,§2) — 勝利条件。target はドロップダウン値をそのまま
         // 渡す (明示 "self" も validate 層は受理する — notify と同じ「畳まない」側)。
         case "ekr_do_win":
             return { op: "win", target: b.fields?.TARGET };
         case "ekr_do_win_join":
             return { op: "win_join", target: b.fields?.TARGET };
-        // Wave 4 (docs/ekn-wave4-contract.md §3/§4) — つなぐ (link/unlink/recruit)
+        // Wave 4 (§3/§4) — つなぐ (link/unlink/recruit)
         case "ekr_do_link":
             return { op: "link", target: b.fields?.TARGET };
         case "ekr_do_unlink":
             return { op: "unlink" };
         case "ekr_do_recruit": {
-            // Wave 5 (docs/ekn-wave5-contract.md §2): SLOT が既定の "" (じぶんとおなじ) のときは
+            // Wave 5 (§2): SLOT が既定の "" (じぶんとおなじ) のときは
             // フィールドごと省略する (正準形を最小に保つ — on_near.who の "anyone" 省略と同じ作法)。
             const slot = b.fields?.SLOT;
             if (typeof slot === "string" && slot !== "") return { op: "recruit", target: b.fields?.TARGET, slot: toNum(slot) };
             if (typeof slot === "number") return { op: "recruit", target: b.fields?.TARGET, slot };
             return { op: "recruit", target: b.fields?.TARGET };
         }
-        // Wave 5 (docs/ekn-wave5-contract.md §1) — こうかをかける
+        // Wave 5 (§1) — こうかをかける
         case "ekr_do_effect_give":
             return { op: "effect_give", target: b.fields?.TARGET, kind: b.fields?.KIND, seconds: toNum(b.fields?.SECONDS) };
         // v1.3 (spec §3 2026-08-11 追記) — ひっぱる・ひきずる・フィールド
@@ -289,7 +289,7 @@ export function compileTopBlocksToRules(topBlocks: SerializedBlock[]): unknown[]
             // 動的 SLOT ドロップダウン) を持つ唯一のイベント。他の when には付けない。
             if (when === "on_cno_touch") rule.slot = toNum(b.fields?.SLOT);
 
-            // R2 (docs/ekn-r2-contract.md §3b): on_attacked の kind / on_death の cause。
+            // R2 (§3b): on_attacked の kind / on_death の cause。
             // ドロップダウンの「すべて」= 空文字 は **フィールドごと省略** する (= 全種にマッチ)。
             if (when === "on_attacked") {
                 const kind = b.fields?.KIND;
@@ -300,7 +300,7 @@ export function compileTopBlocksToRules(topBlocks: SerializedBlock[]): unknown[]
                 if (typeof cause === "string" && cause !== "") rule.cause = cause;
             }
 
-            // Wave 3 (docs/ekn-wave3-contract.md §1.2/§1.3 2026-08-14): on_var は変数名/比較/値の
+            // Wave 3 (§1.2/§1.3 2026-08-14): on_var は変数名/比較/値の
             // 3フィールドとも必須。on_alive_count は比較/値のみ (var は持たない)。欠落しているフィールドは
             // そのまま undefined を通し (欠落を既定値に化けさせない — dummy_spawn.KILLABLE のコメントと
             // 同じ方針)、validateRoleLogic 側の「必須です」reject に委ねる。
@@ -314,7 +314,7 @@ export function compileTopBlocksToRules(topBlocks: SerializedBlock[]): unknown[]
                 rule.value = toNum(b.fields?.VALUE);
             }
 
-            // Wave 4 (docs/ekn-wave4-contract.md §1.2/§1.3/§3.3): on_near は radius 必須 + who 任意 —
+            // Wave 4 (§1.2/§1.3/§3.3): on_near は radius 必須 + who 任意 —
             // WHO が既定の "anyone" のときはフィールドごと省略する (欠落 = anyone。正準形を最小に
             // 保つ notify.target の "self" 省略と同じ作法)。on_far は radius/who とも必須なので
             // 両方そのまま転記する。on_linked_death の CAUSE は on_death と同じ「すべて = 空文字は
