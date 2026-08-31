@@ -24,6 +24,11 @@ public sealed class PlayerGameOptionsSender(PlayerControl player) : GameOptionsS
 
     protected override bool IsDirty { get; set; }
 
+    // SkipTasks 中に捨てられるのは下の SendOptionsArray を通る「他クライアントへの送信」だけ。
+    // AmOwner (ホスト自身) の枝は SendGameOptionsAsync でローカル適用するだけで送信しないため、
+    // 窓中も従来どおり走らせる (ここまで止めるとホスト自身の設定反映が2秒遅れる)。
+    protected override bool SendSuppressed => AntiBlackout.SkipTasks && !player.AmOwner;
+
     public static void SetDirty(byte playerId)
     {
         for (var index = 0; index < AllSenders.Count; index++)
@@ -46,6 +51,16 @@ public sealed class PlayerGameOptionsSender(PlayerControl player) : GameOptionsS
 
             if (allSender is PlayerGameOptionsSender sender && sender.player.PlayerId == playerId)
             {
+                // 同期経路の同型欠陥: SkipTasks 中の non-owner は下の SendOptionsArray が丸ごと no-op なのに
+                // dirty だけ消費されて再送されなくなる (SyncSettings() の実体がここ — 呼び出し側は dirty を
+                // 立てずに即送信を頼むので、素通しすると変更が永久に失われる)。抑止中は dirty を立てて
+                // 窓明けの非同期ループに送信を委ねる。
+                if (sender.SendSuppressed)
+                {
+                    sender.IsDirty = true;
+                    break;
+                }
+
                 ForceWaitFrame = true;
                 sender.SendGameOptions();
                 sender.IsDirty = false;
