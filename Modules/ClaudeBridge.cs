@@ -238,6 +238,23 @@ public static class ClaudeBridge
             return;
         }
 
+        // Layer B2: メインメニューからのロビー自動作成 (AutoRehost の起動時ホスト機構を借用 —
+        // UI クリックチェーン非依存。成立は wait phase=Lobby で待ち、入場時に LOBBYCODE が push される)。
+        if (directive.Equals("hostlobby", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecuteHostLobby(); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR hostlobby failed"); }
+            return;
+        }
+
+        // Layer A2: AutoStart (ConfigEntry — setopt の OptionItem ツリー外) のフリップ。
+        if (directive.StartsWith("autostart ", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecuteAutoStart(directive[10..].Trim()); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR autostart failed"); }
+            return;
+        }
+
         // Layer C: ホストの TP と HUD アクションボタン押下。
         if (directive.StartsWith("tp ", StringComparison.OrdinalIgnoreCase))
         {
@@ -328,7 +345,7 @@ public static class ClaudeBridge
 
         if (directive.Equals("help", StringComparison.OrdinalIgnoreCase))
         {
-            WriteOut("HELP directives: state | screenshot | click <h|label:x> | press <h|x y> | getopt <pattern> | setopt <name|#id> <idx|on|off|~real> | forcerole <id|host|clear> [EnumName] | start | tp <x> <y> | tp <playerId> | walk <x> <y> | walk <playerId> | walk stop | vote <playerId|skip> | overrule <targetId> [judgeId] | chat <text> | use <kill|vent|pet|ability|report|sabotage> | vent enter <id> | vent exit | errors [n] | grep <pattern> [n] | sleep <sec> | wait <phase=X|players=N|marker:text|join|arrived> [timeoutSec] | wait cancel | /<chatcommand>");
+            WriteOut("HELP directives: state | screenshot | click <h|label:x> | press <h|x y> | getopt <pattern> | setopt <name|#id> <idx|on|off|~real> | forcerole <id|host|clear> [EnumName] | start | hostlobby | autostart <on|off> | tp <x> <y> | tp <playerId> | walk <x> <y> | walk <playerId> | walk stop | vote <playerId|skip> | overrule <targetId> [judgeId] | chat <text> | use <kill|vent|pet|ability|report|sabotage> | vent enter <id> | vent exit | errors [n] | grep <pattern> [n] | sleep <sec> | wait <phase=X|players=N|marker:text|join|arrived> [timeoutSec] | wait cancel | /<chatcommand>");
             return;
         }
 
@@ -940,7 +957,7 @@ public static class ClaudeBridge
             // HUD/メニュー系 PassiveButton は UICamera (固定投影) が描画する。Camera.main はズーム/追従で
             // 投影が変わるゲームプレイカメラなので、ボタンのレイヤーを cullingMask に含むカメラを選ぶ
             // (同レイヤーを複数カメラが含む場合は UI カメラ優先)。Camera.main 固定だとズーム中に
-            // 「別の場所を静かに押す」誤操作になる (pitfall 監査 2026-08-20 指摘)。
+            // 「別の場所を静かに押す」誤操作になる。
             Camera cam = null;
             int layerBit = 1 << target.Pb.gameObject.layer;
 
@@ -1306,6 +1323,34 @@ public static class ClaudeBridge
         WriteOut("OK start");
     }
 
+    // ── Layer B2: ロビー自動作成 / Layer A2: AutoStart フリップ ─────────
+
+    private static void ExecuteHostLobby()
+    {
+        if (AutoRehost.Pending) { WriteOut("OK hostlobby already in progress (wait phase=Lobby)"); return; }
+        if (!GameStates.IsNotJoined) { WriteOut("ERR hostlobby already in a lobby/game (leave first)"); return; }
+        if (UnityEngine.Object.FindObjectOfType<MainMenuManager>() == null) { WriteOut("ERR hostlobby not at MainMenu"); return; }
+
+        AutoRehost.RequestStartupHost();
+        WriteOut("OK hostlobby requested (region/map/settings restored from disk — follow with: wait phase=Lobby 90)");
+    }
+
+    private static void ExecuteAutoStart(string rest)
+    {
+        bool? value = rest.ToLowerInvariant() switch
+        {
+            "on" or "true" or "1" => true,
+            "off" or "false" or "0" => false,
+            _ => null
+        };
+
+        if (value == null) { WriteOut("ERR autostart usage: autostart <on|off>"); return; }
+        if (Main.AutoStart == null) { WriteOut("ERR autostart config not bound"); return; }
+
+        Main.AutoStart.Value = value.Value;
+        WriteOut($"OK autostart {(value.Value ? "on" : "off")}");
+    }
+
     // ── Layer C: TP / HUD アクションボタン ─────────────────────────────
 
     private static void ExecuteTp(string rest)
@@ -1394,7 +1439,7 @@ public static class ClaudeBridge
             // CRITICAL コメント / Roles/Standard/Ghost/DemonicVenter.cs 参照)。生存ガード必須。
             if (!lp.IsAlive()) { WriteOut("ERR vent enter local player is dead (RpcEnterVent on a corpse corrupts the IL2CPP heap)"); return; }
             // 二重 enter はローカルの vent ステートマシンを desync させ、後続 exit の GetClosestVent
-            // 近似解決が「入っていない vent の id」を送る入口になる (anticheat 監査 2026-08-20 指摘)。
+            // 近似解決が「入っていない vent の id」を送る入口になる。
             if (lp.inVent) { WriteOut("ERR vent enter already in a vent (use `vent exit` first)"); return; }
 
             lp.MyPhysics.RpcEnterVent(ventId);
