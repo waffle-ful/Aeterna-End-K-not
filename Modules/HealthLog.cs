@@ -686,7 +686,11 @@ public static class HealthLog
     /// </summary>
     /// <summary>瞬時リンク健全性プローブ (BUG-20260820-06 緩和用)。装飾系バースト (ロビー死体等) の送出可否判定に使う。
     /// HB の degraded 判定 (60 秒 HB×3 連続) はロビー+3秒のスポーン判断には遅すぎるため、その場サンプルで判定する。
-    /// 判定軸: ping>=300 (HB degraded と同閾) / ACK を受けない keepalive ping の連続 / 直近10秒の Reliable 再送観測。
+    /// 判定軸: ping>=300 (HB degraded と同閾) / ACK を受けない keepalive ping が2連続以上 / 直近10秒の Reliable 再送が5本以上。
+    /// ⚠️ 閾値は 2026-08-31 実機分布で較正済み (BUG-20260831-02): pNoAck=1 は健全リンクでも約16%の頻度で立ち
+    /// (0=709回/1=138回/2以上=0回)、再送1本 (d=1×154回・d=2×74回) は join 時などに日常的に起きる。
+    /// 「pNoAck>=1」「再送1本で10秒劣化」に戻すと健全時に全消費者 (LobbyCorpses/OutfitShuffle/FakeBodyBurst/
+    /// 適応ゲート/開始前link-wait/join名前再送延期) が巻き添え発火する。実劣化ストームは再送21〜54本/s なので取り零さない。
     /// 接続未確立などで統計が取れないときは false (=健全扱い) を返す。</summary>
     public static bool IsLinkDegradedNow(out string detail)
     {
@@ -696,13 +700,12 @@ public static class HealthLog
         {
             if (!TryGetNetStats(out _, out int relSent, out int ackd, out int pNoAck, out int ping)) return false;
 
-            long lastResend = PacketRateGate.LastResendObservedTs;
-            long now = Utils.TimeStamp;
-            bool resendRecent = lastResend > 0 && now - lastResend <= 10;
+            int resend10 = PacketRateGate.ResendCountLast10s;
+            bool resendStorm = resend10 >= 5;
 
-            if (ping >= 300 || pNoAck >= 1 || resendRecent)
+            if (ping >= 300 || pNoAck >= 2 || resendStorm)
             {
-                detail = $"ping={ping} unack={relSent - ackd} pNoAck={pNoAck} resendAge={(lastResend > 0 ? (now - lastResend).ToString() : "-")}";
+                detail = $"ping={ping} unack={relSent - ackd} pNoAck={pNoAck} resend10s={resend10}";
                 return true;
             }
 
@@ -924,6 +927,12 @@ public static class HealthLog
         EnsureInit();
         Write(line);
         Timeline(line);
+        // log.html にもミラーする: HB は Logger 併記なのに ANOM がファイル直書きだけだと、log.html だけを
+        // 読む事後解析が「計器が発火していない」偽陰性を踏む (BUG-20260831-03 で実証 — gatethrottle ANOM は
+        // Health.log/Timeline に出ていたのに log.html grep で「出ない」と誤診された)。
+        // Logger はバックグラウンドスレッド (AutoRestart hardkill belt 等) からの呼び出し実績あり。
+        try { Logger.Warn(line, "Health"); }
+        catch { }
     }
 
     public static string GetState()
