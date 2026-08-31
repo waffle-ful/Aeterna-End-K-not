@@ -210,7 +210,7 @@ public class GambleKiller : RoleBase
 
                     Utils.RpcCreateDeadBody(location, (byte)target.CurrentOutfit.ColorId, target);
 
-                    yield return new WaitForSecondsRealtime(FakeBodyBurst.SpacingSeconds);
+                    yield return new WaitForSecondsRealtime(FakeBodyBurst.CurrentSpacingSeconds);
                 }
             }
         }, 0.05f, "GambleKiller Overkill");

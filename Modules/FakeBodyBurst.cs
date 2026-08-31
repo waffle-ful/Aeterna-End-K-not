@@ -26,17 +26,36 @@ internal static class FakeBodyBurst
     // することでワイヤ率を 2/s (発症時 5.75/s の 1/3 以下) に落とす。
     public const float SpacingSeconds = 0.5f;
 
+    // リンク劣化中の縮小パラメータ (BUG-20260820-06 クラスタ緩和)。キック実測の連言は「劣化リンク×バースト」
+    // (project_kick_link_health_missing_axis) で、キル演出はスキップ型ゲートが使えない (キルは既に成立していて
+    // 死体が見えないと理不尽) ため、量と間隔を絞るペーシング型で対処する。kill switch 時は劣化判定ごと無効。
+    private const int DegradedCount = 3;
+    private const float DegradedSpacingSeconds = 1.5f;
+
     private static bool CapDisabled => File.Exists($"{Main.DataPath}/EndKnot_DATA/disable_overkill_body_cap.txt");
+
+    private static bool LinkDegraded
+    {
+        get
+        {
+            try { return HealthLog.IsLinkDegradedNow(out _); }
+            catch { return false; }
+        }
+    }
 
     // 緩和が有効か (= kill switch 不在)。false のとき呼び出し側は旧挙動を使う。
     public static bool Gentle => !CapDisabled;
 
-    // 撒く偽死体の数。緩和時は削減、kill switch 有効時は旧 30 体。
-    public static int BodyCount => CapDisabled ? LegacyCount : CappedCount;
+    // 撒く偽死体の数。緩和時は削減 (リンク劣化中はさらに削減)、kill switch 有効時は旧 30 体。
+    public static int BodyCount => CapDisabled ? LegacyCount : LinkDegraded ? DegradedCount : CappedCount;
+
+    // 1 体ごとの送出間隔。バースト途中でリンクが劣化/回復しても追従できるよう、呼び出し側は
+    // 毎 wait ごとにこのプロパティを読み直すこと (SpacingSeconds 定数を直接使わない)。
+    public static float CurrentSpacingSeconds => !CapDisabled && LinkDegraded ? DegradedSpacingSeconds : SpacingSeconds;
 
     // バースト開始時に 1 行だけ計器ログを出す。将来キック再発時に spawn 数/ペースを突合できる。
     public static void LogBurst(string role, int count)
     {
-        Logger.Info($"FakeBodyBurst: role={role} count={count} gentle={Gentle} (spacing={SpacingSeconds}s)", "FakeBodyBurst");
+        Logger.Info($"FakeBodyBurst: role={role} count={count} gentle={Gentle} degraded={LinkDegraded} (spacing={CurrentSpacingSeconds}s)", "FakeBodyBurst");
     }
 }
