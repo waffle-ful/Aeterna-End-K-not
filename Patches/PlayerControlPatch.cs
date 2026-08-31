@@ -1929,6 +1929,11 @@ internal static class FixedUpdatePatch
 
     private static void DoPostfix(PlayerControl player, bool lowLoad)
     {
+        // 突然の切断では PlayerControl の破棄と Data の除去が数フレームずれるため、毎フレーム全プレイヤーを
+        // 回るこの経路が「本体は生きているが Data が無い」中間状態を踏む。この関数に切断処理は無いので
+        // 抜けても失うものはない。
+        if (!player || player.Data == null || player.Data.Disconnected) return;
+
         byte playerId = player.PlayerId;
         byte lpId = PlayerControl.LocalPlayer.PlayerId;
         bool self = playerId == lpId; // Updates that are independent of the player are only executed for the local player.
@@ -2285,7 +2290,9 @@ internal static class FixedUpdatePatch
 
             additionalSuffixes.Add(AFKDetector.GetSuffix(seer, target));
             
-            if (!GameStates.IsMeeting && Options.CurrentGameMode == CustomGameMode.Standard && Main.Invisible.Contains(target.PlayerId) && ((self && seer.IsAlive() && target.GetCustomRole() is not (CustomRoles.Swooper or CustomRoles.Wraith or CustomRoles.Chameleon)) || (seer.IsImpostor() && target.IsImpostor())))
+            // 仲間側の分岐は「透明」表示自体が相手をインポスターだと明かすので、一匹狼は名前色と同じく除外する
+            // (この行は役職テキストのゲートを通らず単独で積まれるため、他所を塞いでもここだけ残る)。
+            if (!GameStates.IsMeeting && Options.CurrentGameMode == CustomGameMode.Standard && Main.Invisible.Contains(target.PlayerId) && ((self && seer.IsAlive() && target.GetCustomRole() is not (CustomRoles.Swooper or CustomRoles.Wraith or CustomRoles.Chameleon)) || (seer.IsImpostor() && target.IsImpostor() && !seer.Is(CustomRoles.OneWolf) && !target.Is(CustomRoles.OneWolf))))
                 additionalSuffixes.Add(ColorString(Palette.White_75Alpha, "\n" + GetString("Invisible")));
 
             switch (target.GetCustomRole())
