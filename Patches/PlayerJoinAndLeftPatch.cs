@@ -533,7 +533,7 @@ internal static class OnPlayerJoinedPatch
 
         GameStartManagerPatch.ClientJoinTime[client.Id] = Time.time;
 
-        try { EndKnot.Modules.ClaudeBridge.OnPlayerJoined(client); } catch { } // ブリッジ OFF 時は即 return する軽量フック
+        try { EndKnot.Modules.TestBridge.OnPlayerJoined(client); } catch { } // ブリッジ OFF 時は即 return する軽量フック
         try { EndKnot.Modules.Companion.CompanionEventEmitter.OnPlayerJoin(client.PlayerName); } catch { } // AI実況相棒アプリ向けイベント (OFF 時は即 return)
 
         Main.SetDirtyRebuildPC();
@@ -645,7 +645,7 @@ internal static class OnPlayerLeftPatch
 {
     public static void Postfix(AmongUsClient __instance, [HarmonyArgument(0)] ClientData data, [HarmonyArgument(1)] DisconnectReasons reason)
     {
-        try { EndKnot.Modules.ClaudeBridge.OnPlayerLeft(data, reason); } catch { } // ブリッジ OFF 時は即 return する軽量フック
+        try { EndKnot.Modules.TestBridge.OnPlayerLeft(data, reason); } catch { } // ブリッジ OFF 時は即 return する軽量フック
         try { EndKnot.Modules.Companion.CompanionEventEmitter.OnPlayerLeave(data?.PlayerName); } catch { } // AI実況相棒アプリ向けイベント (OFF 時は即 return)
 
         try
