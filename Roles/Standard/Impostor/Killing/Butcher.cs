@@ -81,12 +81,16 @@ internal class Butcher : RoleBase
 
                     for (var i = 0; i < count; i++)
                     {
+                        // GambleKiller の同型ループと同じバイル (双子役職の非対称解消 — 劣化 spacing 1.5s では
+                        // バーストが最大 ~12s に伸び、会議開始/試合終了へ食い込む窓が3倍になるため)。
+                        if (GameStates.IsEnded || GameStates.IsMeeting) yield break;
+
                         Vector2 location = new(ops.x + ((float)(rd.Next(0, 201) - 100) / 100), ops.y + ((float)(rd.Next(0, 201) - 100) / 100));
                         location += new Vector2(0, 0.3636f);
 
                         Utils.RpcCreateDeadBody(location, (byte)target.CurrentOutfit.ColorId, target);
 
-                        yield return new WaitForSecondsRealtime(FakeBodyBurst.SpacingSeconds);
+                        yield return new WaitForSecondsRealtime(FakeBodyBurst.CurrentSpacingSeconds);
                     }
                 }
             }, 0.05f, "Butcher Murder");

@@ -180,13 +180,19 @@ internal static class LobbyCorpses
         // レートのみ絞る。kill switch (disable_overkill_body_cap.txt) で旧 4 体/フレームに戻せる。
         for (int i = 0; i < CurrentPositions.Count; i++)
         {
+            // 開始コミット/ロビー離脱を検知したら残りを撒かない (走り出したループは StartSpawn 入口の
+            // GameStartCommitted ゲートの射程外。劣化 spacing 1.5s ではテイルが最大 ~43s まで伸び、
+            // 開始バーストへ装飾 spawn が食い込む窓になる — 2026-08-31 監査指摘)。yield break でなく
+            // break で抜けて、後続の復元 Action enqueue と SpawnInProgress 解除は必ず走らせる。
+            if (GameStartCommitted || !GameStates.IsLobby) break;
+
             Utils.RpcCreateDeadBody(
                 CurrentPositions[i],
                 colorId,
                 lp,
                 SendOption.Reliable);
             spawned++;
-            if (FakeBodyBurst.Gentle) yield return new WaitForSecondsRealtime(FakeBodyBurst.SpacingSeconds);
+            if (FakeBodyBurst.Gentle) yield return new WaitForSecondsRealtime(FakeBodyBurst.CurrentSpacingSeconds);
             else if (i % 4 == 3) yield return null;
         }
 

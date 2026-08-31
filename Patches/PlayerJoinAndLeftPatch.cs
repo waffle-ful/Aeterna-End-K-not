@@ -598,21 +598,45 @@ internal static class OnPlayerJoinedPatch
                 LateTask.New(Options.AutoSetFactionMinMaxSettings, 2f, log: false);
 
             RpcSetNameWaitTimer?.Dispose();
-            RpcSetNameWaitTimer = new CountdownTimer(4f, () =>
-            {
-                RpcSetNameWaitTimer = null;
-                if (AmongUsClient.Instance.IsGameStarted) return;
-                // dirty-check キャッシュをクリアして、新規参加者にも全員の装飾名が 1 度再送されるようにする
-                // (クリアしないと、既に送信済みの名前は FixedUpdatePatch でスキップされ参加者に届かない)。
-                FixedUpdatePatch.LastBroadcastName.Clear();
-                // ApplySuffix returns false (leaving name null/empty) when the host has no entry in
-                // Main.AllPlayerNames yet — exactly the window right after OnGameJoined clears the dict.
-                // Sending that empty/null name blanks the host label on every client, so only push when
-                // ApplySuffix actually produced a name (mirror of the guarded call at PlayerControlPatch.cs:1854).
-                if (Utils.ApplySuffix(PlayerControl.LocalPlayer, out string name))
-                    PlayerControl.LocalPlayer.RpcSetName(name);
-            }, cancelOnMeeting: false, cancelOnGameEnd: false);
+            ScheduleJoinNameRebroadcast(4f);
         }
+    }
+
+    // 劣化延期の累積秒。join のたびにリセットすると持続劣化+連続 join で60s予算が永久に満了しない
+    // (2026-08-31 監査指摘) ため、予算は単調に消費し、再送を実行した時だけ 0 に戻す。
+    private static float JoinRebroadcastDeferredSec;
+
+    // BUG-20260820-06 クラスタ緩和: join 時の全員装飾名再送 (LastBroadcastName.Clear() → FixedUpdate が
+    // 全プレイヤー分を fan-out) は identity nests のバーストになるため、リンク劣化中は LobbyCorpses と
+    // 同じ規約で延期する (5s 間隔・最大 60s)。名前同期は機能要件なので完全スキップはせず、諦め時刻を
+    // 過ぎたら劣化中でも実行する (送信自体は PacketRateGate の縮小予算でペーシングされる)。
+    private static void ScheduleJoinNameRebroadcast(float delay)
+    {
+        RpcSetNameWaitTimer = new CountdownTimer(delay, () =>
+        {
+            RpcSetNameWaitTimer = null;
+            if (AmongUsClient.Instance.IsGameStarted) return;
+
+            if (JoinRebroadcastDeferredSec < 60f && HealthLog.IsLinkDegradedNow(out string linkDetail))
+            {
+                Logger.Info($"join name rebroadcast deferred 5s, link degraded ({linkDetail}, waited {JoinRebroadcastDeferredSec:F0}s)", "NameRebroadcast");
+                JoinRebroadcastDeferredSec += 5f;
+                ScheduleJoinNameRebroadcast(5f);
+                return;
+            }
+
+            JoinRebroadcastDeferredSec = 0f;
+
+            // dirty-check キャッシュをクリアして、新規参加者にも全員の装飾名が 1 度再送されるようにする
+            // (クリアしないと、既に送信済みの名前は FixedUpdatePatch でスキップされ参加者に届かない)。
+            FixedUpdatePatch.LastBroadcastName.Clear();
+            // ApplySuffix returns false (leaving name null/empty) when the host has no entry in
+            // Main.AllPlayerNames yet — exactly the window right after OnGameJoined clears the dict.
+            // Sending that empty/null name blanks the host label on every client, so only push when
+            // ApplySuffix actually produced a name (mirror of the guarded call at PlayerControlPatch.cs:1854).
+            if (Utils.ApplySuffix(PlayerControl.LocalPlayer, out string name))
+                PlayerControl.LocalPlayer.RpcSetName(name);
+        }, cancelOnMeeting: false, cancelOnGameEnd: false);
     }
 }
 
