@@ -13,19 +13,21 @@ using UnityEngine;
 
 namespace EndKnot.Modules;
 
-// Claude がゲームを遠隔テストするための観測・操作ブリッジ(既定 OFF、config でのみ有効化)。
-// <Desktop>/EndKnot_Logs/claude-cmd.txt を 1/sec ポーリングしてチャットコマンドを実行し、
-// claude-out.log に結果を書き出す。スクショは Screens/ 配下へ保存する。
+// 外部ツールからゲームを遠隔テストするための観測・操作ブリッジ(既定 OFF、config でのみ有効化)。
+// <Desktop>/EndKnot_Logs/bridge-cmd.txt を 1/sec ポーリングしてチャットコマンドを実行し、
+// bridge-out.log に結果を書き出す。スクショは Screens/ 配下へ保存する。
+// 入出力はプレーンなテキストファイルだけなので、driver 側の実装言語や種類は問わない。
 // 全処理はメインスレッド(FixedUpdateCaller の 1/sec ゲート + コルーチン)のみで完結させ、
 // FileSystemWatcher 等の非同期監視は使わない。host-only 前提(Command.Action は LocalPlayer=host で実行)。
-public static class ClaudeBridge
+public static class TestBridge
 {
     private const int MaxBatchLines = 20; // 1回のファイル読取で受け付けるディレクティブ数の上限
-    private const long MaxOutFileBytes = 2 * 1024 * 1024; // claude-out.log の .prev ローテート閾値
+    private const long MaxOutFileBytes = 2 * 1024 * 1024; // bridge-out.log の .prev ローテート閾値
 
     private static bool _inited;
     private static string _dir;
     private static string _cmdPath;
+    private static string _legacyCmdPath; // 旧名 (claude-cmd.txt)。既存の driver スクリプトを当面壊さないための受け口。
     private static string _outPath;
     private static string _statePath;
     private static string _screensDir;
@@ -49,9 +51,10 @@ public static class ClaudeBridge
             _dir = Path.Combine(basePath, "EndKnot_Logs");
             Directory.CreateDirectory(_dir);
 
-            _cmdPath = Path.Combine(_dir, "claude-cmd.txt");
-            _outPath = Path.Combine(_dir, "claude-out.log");
-            _statePath = Path.Combine(_dir, "claude-state.json");
+            _cmdPath = Path.Combine(_dir, "bridge-cmd.txt");
+            _legacyCmdPath = Path.Combine(_dir, "claude-cmd.txt");
+            _outPath = Path.Combine(_dir, "bridge-out.log");
+            _statePath = Path.Combine(_dir, "bridge-state.json");
             _screensDir = Path.Combine(_dir, "Screens");
             Directory.CreateDirectory(_screensDir);
         }
@@ -61,7 +64,7 @@ public static class ClaudeBridge
     public static void Tick()
     {
         if (!OperatingSystem.IsWindows()) return;
-        if (Main.EnableClaudeBridge is not { Value: true }) return;
+        if (Main.EnableTestBridge is not { Value: true }) return;
 
         EnsureInit();
         if (_dir == null) return;
@@ -76,11 +79,11 @@ public static class ClaudeBridge
         catch (Exception e) { Utils.ThrowException(e); }
     }
 
-    // Utils.SendLocally からの写し窓口。ホストローカル表示のチャット/通知を claude-out.log にも記録する。
+    // Utils.SendLocally からの写し窓口。ホストローカル表示のチャット/通知を bridge-out.log にも記録する。
     public static void OnHostSystemMessage(string title, string text)
     {
         if (!OperatingSystem.IsWindows()) return;
-        if (Main.EnableClaudeBridge is not { Value: true }) return;
+        if (Main.EnableTestBridge is not { Value: true }) return;
 
         EnsureInit();
         if (_dir == null) return;
@@ -139,13 +142,18 @@ public static class ClaudeBridge
     // それも失敗したら今回は何も実行しない(誤再実行ゼロを構造で保証)。
     private static List<string> TryReadAndClearCmdFile()
     {
-        if (!File.Exists(_cmdPath)) return null;
+        // 新名を優先し、無ければ旧名を読む。旧名で書く driver がまだ動いていても取りこぼさない。
+        string path = File.Exists(_cmdPath) ? _cmdPath
+            : _legacyCmdPath != null && File.Exists(_legacyCmdPath) ? _legacyCmdPath
+            : null;
+
+        if (path == null) return null;
 
         List<string> lines;
 
         try
         {
-            using var fs = new FileStream(_cmdPath, FileMode.Open, FileAccess.Read, FileShare.None);
+            using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None);
             using var sr = new StreamReader(fs, Encoding.UTF8);
 
             lines = [];
@@ -154,10 +162,10 @@ public static class ClaudeBridge
         }
         catch { return null; } // ロック中等 = 次回リトライ
 
-        try { File.Delete(_cmdPath); }
+        try { File.Delete(path); }
         catch
         {
-            try { File.WriteAllText(_cmdPath, string.Empty); }
+            try { File.WriteAllText(path, string.Empty); }
             catch { return null; }
         }
 
@@ -390,10 +398,10 @@ public static class ClaudeBridge
 
     private static void HandleAutoScreenshot()
     {
-        if (Main.ClaudeBridgeAutoScreenshot is not { Value: true }) return;
+        if (Main.TestBridgeAutoScreenshot is not { Value: true }) return;
 
         long now = Utils.TimeStamp;
-        int interval = Math.Max(1, Main.ClaudeBridgeScreenshotInterval?.Value ?? 20);
+        int interval = Math.Max(1, Main.TestBridgeScreenshotInterval?.Value ?? 20);
 
         if (now - _lastAutoShotTs < interval) return;
 
@@ -504,7 +512,7 @@ public static class ClaudeBridge
     {
         try
         {
-            int keep = Math.Max(1, Main.ClaudeBridgeScreenshotKeep?.Value ?? 30);
+            int keep = Math.Max(1, Main.TestBridgeScreenshotKeep?.Value ?? 30);
 
             List<FileInfo> files = [.. new DirectoryInfo(_screensDir).GetFiles().OrderByDescending(f => f.CreationTimeUtc)];
 
@@ -629,7 +637,7 @@ public static class ClaudeBridge
         sb.Append('}');
 
         File.WriteAllText(_statePath, sb.ToString());
-        WriteOut($"OK state ({np} players, {nc} cnos, {nv} vents, {nb} buttons) -> claude-state.json");
+        WriteOut($"OK state ({np} players, {nc} cnos, {nv} vents, {nb} buttons) -> bridge-state.json");
     }
 
     private static void AppendLocal(StringBuilder sb)
@@ -1059,7 +1067,7 @@ public static class ClaudeBridge
             finally { if (moved) RestoreWindow(hWnd, originalRect); }
 
             WriteOut($"OK press [{clientX}, {clientY}]");
-        }, 0.1f, "ClaudeBridge.PressUp", log: false);
+        }, 0.1f, "TestBridge.PressUp", log: false);
     }
 
     private static void RestoreWindow(IntPtr hWnd, Win32Rect rect)
@@ -1141,9 +1149,9 @@ public static class ClaudeBridge
 
         sb.Append("]}");
 
-        string optsPath = Path.Combine(_dir, "claude-opts.json");
+        string optsPath = Path.Combine(_dir, "bridge-opts.json");
         File.WriteAllText(optsPath, sb.ToString());
-        WriteOut($"OK getopt {Math.Min(matches.Count, cap)}/{matches.Count} matches -> claude-opts.json");
+        WriteOut($"OK getopt {Math.Min(matches.Count, cap)}/{matches.Count} matches -> bridge-opts.json");
     }
 
     private static void ExecuteSetOpt(string rest)
@@ -1156,7 +1164,7 @@ public static class ClaudeBridge
 
         OptionItem opt;
 
-        // #<id> 直指定 — getopt が claude-opts.json に出す id と同じ体系(OptionItem.AllOptions を共有ソースにする)。
+        // #<id> 直指定 — getopt が bridge-opts.json に出す id と同じ体系(OptionItem.AllOptions を共有ソースにする)。
         // AbilityUseLimit のような同名オプションが実機に89個ある問題(名前一意解決が不可能)を id で迂回する。
         if (name.StartsWith('#'))
         {
@@ -1528,12 +1536,12 @@ public static class ClaudeBridge
         catch { }
     }
 
-    // ClaudeBridgeWalkPatch(毎物理 tick)から呼ばれる。先頭の _walkTarget null チェックで
+    // TestBridgeWalkPatch(毎物理 tick)から呼ばれる。先頭の _walkTarget null チェックで
     // 非使用時のコストは実質ゼロ。到着/stuck/timeout の終端イベントだけ out.log に書く。
     internal static void OnPlayerPhysicsFixedUpdate(PlayerPhysics physics)
     {
         if (_walkTarget == null) return;
-        if (Main.EnableClaudeBridge is not { Value: true }) { _walkTarget = null; return; }
+        if (Main.EnableTestBridge is not { Value: true }) { _walkTarget = null; return; }
 
         try
         {
@@ -1716,7 +1724,7 @@ public static class ClaudeBridge
     public static void OnDisconnect(DisconnectReasons reason, string stringReason)
     {
         if (!OperatingSystem.IsWindows()) return;
-        if (Main.EnableClaudeBridge is not { Value: true }) return;
+        if (Main.EnableTestBridge is not { Value: true }) return;
 
         EnsureInit();
         if (_dir == null) return;
@@ -1735,7 +1743,7 @@ public static class ClaudeBridge
     public static void OnPlayerJoined(ClientData client)
     {
         if (!OperatingSystem.IsWindows()) return;
-        if (Main.EnableClaudeBridge is not { Value: true }) return;
+        if (Main.EnableTestBridge is not { Value: true }) return;
 
         EnsureInit();
         if (_dir == null) return;
@@ -1752,7 +1760,7 @@ public static class ClaudeBridge
     public static void OnPlayerLeft(ClientData data, DisconnectReasons reason)
     {
         if (!OperatingSystem.IsWindows()) return;
-        if (Main.EnableClaudeBridge is not { Value: true }) return;
+        if (Main.EnableTestBridge is not { Value: true }) return;
 
         EnsureInit();
         if (_dir == null) return;
@@ -1777,7 +1785,7 @@ public static class ClaudeBridge
     // Logger(Debugger.cs)の Error/Fatal 経路から呼ばれる。ファイル I/O 無し・超軽量必須。
     public static void RecordError(string tag, string text)
     {
-        if (Main.EnableClaudeBridge is not { Value: true }) return;
+        if (Main.EnableTestBridge is not { Value: true }) return;
 
         try
         {
@@ -1824,7 +1832,7 @@ public static class ClaudeBridge
     // Logger(Debugger.cs)の全レベル経路から呼ばれる。ファイル I/O 無し・超軽量必須。
     public static void RecordLog(BepInEx.Logging.LogLevel level, string tag, string text)
     {
-        if (Main.EnableClaudeBridge is not { Value: true } || !OperatingSystem.IsWindows()) return;
+        if (Main.EnableTestBridge is not { Value: true } || !OperatingSystem.IsWindows()) return;
 
         try
         {
@@ -1878,7 +1886,7 @@ public static class ClaudeBridge
 
     // ── Layer E: wait(待ち合わせ)─────────────────────────────────────
     // 条件成立 or timeout まで後続ディレクティブの実行を停める。評価は Tick(1/sec)。
-    // Claude 側の sleep+tail ポーリングを「wait 1行 → OK/ERR 1行」に置き換えるのが目的。
+    // driver 側の sleep+tail ポーリングを「wait 1行 → OK/ERR 1行」に置き換えるのが目的。
 
     private sealed class WaitState
     {
@@ -2243,7 +2251,7 @@ public static class ClaudeBridge
             {
                 if (File.Exists(_outPath) && new FileInfo(_outPath).Length > MaxOutFileBytes)
                 {
-                    string prev = Path.Combine(_dir, "claude-out.prev.log");
+                    string prev = Path.Combine(_dir, "bridge-out.prev.log");
 
                     try
                     {
@@ -2264,10 +2272,10 @@ public static class ClaudeBridge
 // walk ディレクティブの駆動源。vanilla が入力から velocity を書いた「後」に上書きするため Postfix。
 // FixedUpdate は private なので nameof でなく文字列指定。
 [HarmonyPatch(typeof(PlayerPhysics), "FixedUpdate")]
-internal static class ClaudeBridgeWalkPatch
+internal static class TestBridgeWalkPatch
 {
     public static void Postfix(PlayerPhysics __instance)
     {
-        ClaudeBridge.OnPlayerPhysicsFixedUpdate(__instance);
+        TestBridge.OnPlayerPhysicsFixedUpdate(__instance);
     }
 }

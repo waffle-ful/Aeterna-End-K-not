@@ -44,7 +44,7 @@ public static class FixedUpdateCaller
             catch (Exception e) { Utils.ThrowException(e); }
 
             // Claude 遠隔テストブリッジ(既定OFF)。コマンドファイルのポーリング+自動スクショを 1/sec ゲートで回す。
-            try { if (PerSecondUpdateScheduler.ShouldRunUpdate("claude-bridge")) ClaudeBridge.Tick(); }
+            try { if (PerSecondUpdateScheduler.ShouldRunUpdate("test-bridge")) TestBridge.Tick(); }
             catch (Exception e) { Utils.ThrowException(e); }
 
             // 当たり判定可視化 (/hitbox・既定OFF) の TTL 掃除。Enabled でなくても残存形状の破棄が要るため無条件で回す。

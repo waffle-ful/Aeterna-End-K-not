@@ -3,7 +3,7 @@
     公開ファイルの「内部事情コメント」チェッカー (End K not)
 
 .DESCRIPTION
-    このリポジトリは公開されている。一方で docs/ ツリー・.claude メモリ・
+    このリポジトリは公開されている。一方で docs/ ツリー・非公開の作業ノート・
     内部バグ台帳は gitignore 済みで、クローンした第三者からは一切見えない。
     そのためコード内のコメントに
 
@@ -61,7 +61,7 @@ Add-Rule 'dev-loop-actor' `
 
 Add-Rule 'internal-memory-ref' `
     'memory:\s*[A-Za-z][A-Za-z0-9_.-]{5,}|memory (参照|罠)|蓄積 memory|MEMORY\.md' `
-    '.claude メモリは gitignore 済み。スラッグを平文の技術説明に置き換える'
+    '非公開の作業ノートは gitignore 済み。スラッグを平文の技術説明に置き換える'
 
 # メモリファイル名は `memory:` 接頭辞なしの裸のスラッグや [[wikilink]] でも書かれる。
 # 命名は project_ / reference_ / feedback_ + snake_case (MEMORY.md の索引と同じ形)。
@@ -69,7 +69,7 @@ Add-Rule 'internal-memory-ref' `
 #    ファイル行への参照にも使われており、そちらは第三者が解決できるので正当。
 Add-Rule 'internal-memory-slug' `
     '(?<![A-Za-z0-9_])(project|reference|feedback)[_-][a-z0-9]+[_-][a-z0-9_-]{4,}' `
-    '.claude メモリのファイル名。参照ごと消し、必要なら要点を平文で書き下す'
+    '非公開の作業ノートのファイル名。参照ごと消し、必要なら要点を平文で書き下す'
 
 Add-Rule 'gitignored-docs-ref' `
     'docs[\\/][A-Za-z0-9._-]+\.md' `
@@ -85,7 +85,7 @@ Add-Rule 'internal-design-label' `
 
 Add-Rule 'assistant-workspace-ref' `
     'CLAUDE\.md|(?<![A-Za-z0-9._-])\.claude[\\/]' `
-    'Claude 用の運用ノートは gitignore 済み。公開ファイルから参照しない'
+    '非公開の運用ノートは gitignore 済み。公開ファイルから参照しない'
 
 # ── 既知の正当な例外 ────────────────────────────────────────────────────────
 # "<相対パス>:<行番号>" 完全一致、またはパスだけの指定でファイル丸ごと除外。
