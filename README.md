@@ -223,7 +223,7 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 - **[Town of Host: Enhanced (TOHE)](https://github.com/EnhancedNetwork/TownofHost-Enhanced)**(The Enhanced Network 開発チーム) — 多くの役職 
 
 ### Music Credits
-自称芸術家みーさん様のBGMが使われています（商用利用の許諾取得済み）
+自称芸術家みーさん様のBGMが使われています
 - [HURT RECORD](https://www.hurtrecord.com/bgm/46/zero-no-heya.html)
 
 もっぴーさうんど様・こおろぎ様・蒲鉾さちこ様のBGMが使われています
