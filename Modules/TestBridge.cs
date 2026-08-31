@@ -943,6 +943,114 @@ public static class TestBridge
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern void mouse_event(uint dwFlags, int dx, int dy, uint dwData, IntPtr dwExtraInfo);
 
+    private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool GetClientRect(IntPtr hWnd, out Win32Rect lpRect);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool IsWindowVisible(IntPtr hWnd);
+
+    private static EnumWindowsProc _enumWindowsProc;
+    private static uint _ownProcessId;
+    private static readonly List<IntPtr> WindowScratch = [];
+
+    private static bool CollectProcessWindow(IntPtr hWnd, IntPtr lParam)
+    {
+        try
+        {
+            GetWindowThreadProcessId(hWnd, out uint pid);
+            if (pid == _ownProcessId && IsWindowVisible(hWnd)) WindowScratch.Add(hWnd);
+        }
+        catch { }
+
+        return true;
+    }
+
+    private static string ClassNameOf(IntPtr hWnd)
+    {
+        try
+        {
+            var sb = new StringBuilder(96);
+            return GetClassName(hWnd, sb, sb.Capacity) == 0 ? string.Empty : sb.ToString();
+        }
+        catch { return string.Empty; }
+    }
+
+    // Process.MainWindowHandle は「タイトルを持つ最初のトップレベル窓」なので、レンダーウィンドウ以外を
+    // 掴むことがある(その窓のクライアント矩形へ換算すると注入が全く別の場所に落ちる)。プロセス内の
+    // 可視トップレベル窓を列挙し、Unity のバックバッファ(Screen.width/height)と寸法が一致する窓 >
+    // Unity のウィンドウクラス > 面積最大、の順で本命を選ぶ。
+    // 解決結果はキャッシュしない — 列挙が一度でも空振りした瞬間 (シーン遷移などで可視窓が無い間) の
+    // フォールバック値を握ると、まさに直したい「別窓を掴んだ状態」がセッション中ずっと固定される。
+    private static IntPtr ResolveGameWindow(out Win32Rect client, out string className)
+    {
+        client = default;
+        className = string.Empty;
+
+        if (_ownProcessId == 0)
+        {
+            try { _ownProcessId = (uint)System.Diagnostics.Process.GetCurrentProcess().Id; }
+            catch { return IntPtr.Zero; }
+        }
+
+        WindowScratch.Clear();
+        _enumWindowsProc ??= CollectProcessWindow;
+
+        try { EnumWindows(_enumWindowsProc, IntPtr.Zero); }
+        catch (Exception e) { Utils.ThrowException(e); }
+
+        int screenW = Screen.width;
+        int screenH = Screen.height;
+        IntPtr best = IntPtr.Zero;
+        long bestScore = long.MinValue;
+        Win32Rect bestRect = default;
+
+        foreach (IntPtr h in WindowScratch)
+        {
+            if (!GetClientRect(h, out Win32Rect r)) continue;
+
+            int w = r.Right - r.Left;
+            int ht = r.Bottom - r.Top;
+            if (w <= 0 || ht <= 0) continue;
+
+            string cls = ClassNameOf(h);
+
+            long score = (long)w * ht;
+            if (w == screenW && ht == screenH) score += 1_000_000_000L;
+            if (cls.Contains("Unity", StringComparison.OrdinalIgnoreCase)) score += 100_000_000L;
+
+            if (score <= bestScore) continue;
+
+            bestScore = score;
+            best = h;
+            bestRect = r;
+            className = cls;
+        }
+
+        if (best == IntPtr.Zero)
+        {
+            try { best = System.Diagnostics.Process.GetCurrentProcess().MainWindowHandle; }
+            catch { return IntPtr.Zero; }
+
+            if (best == IntPtr.Zero || !GetClientRect(best, out bestRect)) return IntPtr.Zero;
+
+            className = ClassNameOf(best) + "|fallback";
+        }
+
+        client = bestRect;
+        return best;
+    }
+
     // press <handle> — state の ui[].h から world 座標を解決して押す。
     // press <x> <y> — screenshot 画像座標(top-down, クライアント原点)をそのままクライアント座標として押す。
     private static void ExecutePress(string rest)
@@ -995,8 +1103,30 @@ public static class TestBridge
             return;
         }
 
-        IntPtr hWnd = System.Diagnostics.Process.GetCurrentProcess().MainWindowHandle;
+        IntPtr hWnd = ResolveGameWindow(out Win32Rect clientRect, out string winClass);
         if (hWnd == IntPtr.Zero) { WriteOut("ERR press no window handle"); return; }
+
+        int clientW = clientRect.Right - clientRect.Left;
+        int clientH = clientRect.Bottom - clientRect.Top;
+        int screenW = Screen.width;
+        int screenH = Screen.height;
+
+        string geom = $"win=0x{hWnd.ToInt64():X} class={(winClass.Length > 0 ? winClass : "?")} client={clientW}x{clientH} screen={screenW}x{screenH}";
+
+        // 範囲チェックは換算「前」に、座標の出所と同じバックバッファ基準で行う。換算後の値は定義上
+        // クライアント矩形に収まるので、そちらで見ると当たり判定の外れを永久に検出できない。
+        if (screenW > 0 && screenH > 0 && (clientX < 0 || clientY < 0 || clientX >= screenW || clientY >= screenH))
+            WriteOut($"WARN press target outside the captured frame: [{clientX}, {clientY}] {geom}");
+
+        // 座標の出所(screenshot / WorldToScreenPoint)はどちらも Unity のバックバッファ基準だが、注入は
+        // ウィンドウのクライアント座標で行う。DPI スケーリングやレンダースケールで両者の寸法は一致しない
+        // ことがあるため実測比で換算する(一致していれば係数 1 で素通り)。
+        if (screenW > 0 && screenH > 0 && clientW > 0 && clientH > 0 && (clientW != screenW || clientH != screenH))
+        {
+            clientX = (int)Math.Round(clientX * (double)clientW / screenW);
+            clientY = (int)Math.Round(clientY * (double)clientH / screenH);
+            geom += " scaled";
+        }
 
         try { SetForegroundWindow(hWnd); } catch { }
 
@@ -1066,7 +1196,7 @@ public static class TestBridge
             catch (Exception e) { Utils.ThrowException(e); }
             finally { if (moved) RestoreWindow(hWnd, originalRect); }
 
-            WriteOut($"OK press [{clientX}, {clientY}]");
+            WriteOut($"OK press [{clientX}, {clientY}] ({geom})");
         }, 0.1f, "TestBridge.PressUp", log: false);
     }
 

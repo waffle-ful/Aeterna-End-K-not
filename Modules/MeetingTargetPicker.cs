@@ -126,6 +126,15 @@ public static class MeetingTargetPicker
         if (!AmongUsClient.Instance.AmHost || GameStates.IsEnded) return;
         if (!IsHolder(judgeId)) return;
 
+        // 木槌ボタンは他人の行にしか生えないので、押下で judgeId == targetId は成立しない。
+        // このペイロードは送信元の照合ができない (受信層に送信者の identity が無い) 一方、
+        // 自分自身を対象にした裁判は Judge の自決分岐へ直行するため、届いた時点で捨てる。
+        if (judgeId == targetId)
+        {
+            Logger.Warn($"Rejected self-targeted overrule payload (id {judgeId})", "MeetingTargetPicker");
+            return;
+        }
+
         PlayerControl judge = Utils.GetPlayerById(judgeId);
         PlayerControl target = Utils.GetPlayerById(targetId);
         if (!judge || !target || !judge.IsAlive()) return;

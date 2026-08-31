@@ -89,7 +89,9 @@ public static class NameColorManager
         if (seer.Is(CustomRoleTypes.Coven) && target.Is(CustomRoleTypes.Coven)) color = Main.CovenColor;
 
         // Impostors and Madmates
-        if (seer.Is(CustomRoleTypes.Impostor) && target.Is(CustomRoleTypes.Impostor) && CustomTeamManager.ArentInCustomTeam(seer.PlayerId, target.PlayerId)) color = target.Is(CustomRoles.Egoist) && Options.ImpEgoistVisibalToAllies.GetBool() && seer != target ? Utils.GetRoleColorCode(CustomRoles.Egoist) : Main.ImpostorColor;
+        // 一匹狼は仲間インポスターとの相互認識から外れる。役職テキスト側 (KnowsTargetRole) と同じ除外を
+        // 名前色側にも掛けないと、テキストは隠れているのに名前だけ赤いままで正体が割れる。
+        if (seer.Is(CustomRoleTypes.Impostor) && target.Is(CustomRoleTypes.Impostor) && !seer.Is(CustomRoles.OneWolf) && !target.Is(CustomRoles.OneWolf) && CustomTeamManager.ArentInCustomTeam(seer.PlayerId, target.PlayerId)) color = target.Is(CustomRoles.Egoist) && Options.ImpEgoistVisibalToAllies.GetBool() && seer != target ? Utils.GetRoleColorCode(CustomRoles.Egoist) : Main.ImpostorColor;
         if (seer.Is(CustomRoleTypes.Impostor) && target.Is(CustomRoles.DoubleAgent)) color = Main.ImpostorColor;
         if (seer.IsMadmate() && target.Is(CustomRoleTypes.Impostor) && Options.MadmateKnowWhosImp.GetBool()) color = Main.ImpostorColor;
         if (seer.Is(CustomRoleTypes.Impostor) && target.IsMadmate() && Options.ImpKnowWhosMadmate.GetBool()) color = Utils.GetRoleColorCode(CustomRoles.Madmate);
@@ -250,7 +252,7 @@ public static class NameColorManager
             || (seer.Is(CustomRoleTypes.Coven) && target.Is(CustomRoleTypes.Coven))
             // R2: 役職メーカーの passives.disguise がインポスター以外を
             // 名乗っているホルダーは、インポスター同士の相互認識から外れる (= 一匹狼)。
-            || (seer.Is(CustomRoleTypes.Impostor) && target.Is(CustomRoleTypes.Impostor) && !Modules.Ekm.EkrManager.IsDisguisedAwayFrom(target.GetCustomRole(), Modules.Ekm.EkrTeam.Impostor) && CustomTeamManager.ArentInCustomTeam(seer.PlayerId, target.PlayerId))
+            || (seer.Is(CustomRoleTypes.Impostor) && target.Is(CustomRoleTypes.Impostor) && !seer.Is(CustomRoles.OneWolf) && !target.Is(CustomRoles.OneWolf) && !Modules.Ekm.EkrManager.IsDisguisedAwayFrom(target.GetCustomRole(), Modules.Ekm.EkrTeam.Impostor) && CustomTeamManager.ArentInCustomTeam(seer.PlayerId, target.PlayerId))
             || (seer.Is(CustomRoles.Traitor) && target.Is(Team.Impostor))
             || (seer.Is(CustomRoles.Jackal) && target.Is(CustomRoles.Sidekick))
             || (seer.Is(CustomRoles.Sidekick) && target.Is(CustomRoles.Sidekick))
