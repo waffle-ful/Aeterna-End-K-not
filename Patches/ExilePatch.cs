@@ -149,7 +149,7 @@ internal static class ExileControllerWrapUpPatch
                 AntiBlackout.RevertToActualRoleTypes();
             }, 2f, "Revert AntiBlackout Measures");
 
-            // TOHK の AftermeetingFlash 方式 (BUG-20260716-09 の修復側): 暗転したまま会議を終えた
+            // TOHK の AftermeetingFlash 方式: 暗転したまま会議を終えた
             // バニラクライアントに、リアクター desync フラッシュ (128→16) を撃って HUD を強制再構築させる。
             // AntiBlackout の役職 revert (2s) が落ち着いた後に発火する。
             // 【TOHK 統一 2026-07-17】初手会議限定 → TOHK と同じ毎会議後に拡大 (18:52 ゲームで

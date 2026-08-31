@@ -7,8 +7,8 @@ using UnityEngine;
 
 namespace EndKnot.Modules;
 
-// ゲームサイクル毎の Unity オブジェクト型別 census。BUG-20260706-01 (1ゲームあたり ~50〜150MB の
-// ネイティブ破棄漏れ) の犯人型を特定するための計器。ロビー復帰の 8 秒後に 1 回だけ
+// ゲームサイクル毎の Unity オブジェクト型別 census。1ゲームあたり ~50〜150MB の
+// ネイティブ破棄漏れの犯人型を特定するための計器。ロビー復帰の 8 秒後に 1 回だけ
 // Resources.FindObjectsOfTypeAll の型別カウントを Health.log に CENSUS 行で残す。
 // サイクル間で単調に増える型 = 破棄漏れの型。毎秒走査系 (UiAnomalyWatch) と違い
 // 1 サイクル 1 回なので膨張への寄与は無視できる。
@@ -47,7 +47,7 @@ public static class MemCensus
 
             // Texture2D の native 概算 MB。フォーマット別バイト/px + ミップ 4/3 倍で換算する。
             // ⚠️ 旧実装は全テクスチャを RGBA32 (4B/px) 換算しており、Alpha8 のフォントアトラスや
-            // DXT 圧縮アトラスを 4〜8 倍過大計上 → BUG-20260810-03 で texMB=835 という偽の主犯を
+            // DXT 圧縮アトラスを 4〜8 倍過大計上 → texMB=835 という偽の主犯を
             // 作った (実測の Backrooms 帰属は ~11MB)。数値の連続性は旧ログと比較不可になる点に注意。
             try
             {

@@ -1243,7 +1243,7 @@ internal static class IntroCutsceneDestroyPatch
 
             PlayerControl lp = PlayerControl.LocalPlayer;
 
-            // 【診断ロールバック 2026-07-17 19:55 (BUG-20260717-05)】+6秒遅延化 (17:41 デプロイ) の後から
+            // 【診断ロールバック 2026-07-17 19:55】+6秒遅延化 (17:41 デプロイ) の後から
             // 「入場失敗型」暗転が出現したため、発生側変更を 17:41 以前の形 (+0.1秒) へ全て戻して 1-bit 分離する。
             // 戻したもの: RpcChangeRoleBasis / SetActualSelfRolesAfterOverride / DoubleAgent の +6s 遅延、
             // ゲーム開始 +8s の予防 ReactorFlash、会議安全窓の +9.5s フロア。
@@ -1472,9 +1472,9 @@ internal static class IntroCutsceneDestroyPatch
 
             // 【TOHK 統一 2026-07-17】暗転対策のフォーク独自タイミング機構 (会議安全窓/+8s予防フラッシュ/
             // +6s遅延) は全撤去し、TOHK 実戦形 (毎会議後 AftermeetingFlash + /kf + intro終了+1秒の初手会議)
-            // に統一した。経緯は docs/bug-inbox.md BUG-20260717-05 / BUG-20260716-09。
+            // に統一した。
             // 【2026-07-28】固定 +1s は GM ホストの短縮 intro と遅いクライアントのレースを残す
-            // (BUG-20260727-01) ため、クライアント入場完了確認方式 (ClientEntryProbe) に置換。
+            // ため、クライアント入場完了確認方式 (ClientEntryProbe) に置換。
             // 全リモートクライアントの NetTransform seq 前進 (= intro 明けの証拠) を待ってから発火する。
             // 最短 +1s (従来互換)・最大 +13s (2026-08-04: 8s→13s 延長・cap 到達時の未confirm 客は
             // 会議明けに FixBlackScreen 救済へ回す)。Rollback bit: EndKnot_DATA/disable_entry_gate.txt
@@ -1554,7 +1554,7 @@ internal static class IntroCutsceneDestroyPatch
     {
         if (!GameStates.IsInGame || MeetingHud.Instance || ExileController.Instance) return;
 
-        // 【T2退避 2026-07-29 → BUG-20260807-07 恒久修正 2026-08-11】三点セットは会議送信より前に
+        // 【T2退避 2026-07-29 → 恒久修正 2026-08-11】三点セットは会議送信より前に
         // 発火させる (会議中の vanilla クライアントに SetRole を撃つと MeetingHud 状態が壊れる — 07-17
         // +6s 版の事故機序)。当初は FIFO の受信順 (役職→会議) だけで足りると考えていたが、順序が
         // 保たれても SetRole 処理の直後フレームに MeetingHud が来ると vanilla 客は壊れる (キル持ち

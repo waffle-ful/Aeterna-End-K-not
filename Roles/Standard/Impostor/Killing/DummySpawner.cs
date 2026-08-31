@@ -121,7 +121,7 @@ public class DummySpawner : RoleBase
         // ⚠️ 遅延は 10 秒から縮めないこと。会議明けは追放スイープ (SetRole 全員分 + Desync + ReactorFlash +
         // NotifyRoles) が task phase 開始後 ~4 秒まで走り、レートゲートのドレインがさらに ~6 秒続く。
         // 1 秒開始だと再生成波がこの窓に丸ごと重なり、targets=6 (単独では安全域) でも合算 nests が
-        // キック域に達する (2026-08-03 15:58 実キック・BUG-20260803-07。対照: スイープが軽い 5 人戦は
+        // キック域に達する (2026-08-03 15:58 実キック。対照: スイープが軽い 5 人戦は
         // 同条件で無傷)。
         LateTask.New(SpawnAllDummies, 10f, "DummySpawner.AfterMeeting");
     }
@@ -164,13 +164,13 @@ public class DummySpawner : RoleBase
             // 間隔がこれより短いと「新規 spawn」と「前の体への outfit 適用」が定常的に重なる。
             // ⚠️ さらに 1 体ごとに per-player 配信 (CNO.SpawnVisibility) が非ホスト人数 (targets) 分
             // ぶら下がる。公式鯖は targets≥10 のとき 0.4s 間隔でも Hacking キック
-            // (2026-08-02 実測 3/3、targets≤8 は無傷 — docs/official-server-model.md §5-3b)。
+            // (2026-08-02 実測 3/3、targets≤8 は無傷)。
             // 生存実績域は targets × 体数/秒 ≤ 20 nests/s なので、余裕を見て 12 nests/s に収まるよう
             // 間隔を人数連動で広げる (少人数では従来の 0.4s のまま)。
             // ⚠️ 密度の分子は targets だけでは足りない: 1 体につき ApplyOutfitToCNO (Data×2 + Shapeshift
             // ≈4 nests) と spawn broadcast (≈4 nests) が人数に依らず付帯し、これらは CNO の fan-out 予算
             // (ReserveFanoutBudget) に課金されない。targets のみの式では実効密度が想定の 2.5 倍になり、
-            // 会議明けスイープと合算でキック域に達した (2026-08-03 BUG-20260803-07) — +8 で付帯分を織り込む。
+            // 会議明けスイープと合算でキック域に達した (2026-08-03) — +8 で付帯分を織り込む。
             int fanoutTargets = Main.EnumeratePlayerControls().Count(p => !p.AmOwner);
             float spawnGap = Math.Max(SpawnGapSeconds, (fanoutTargets + 8) / 12f);
             for (int i = 0; i < count; i++)
@@ -257,7 +257,7 @@ public class DummySpawner : RoleBase
         string origVisor = localOutfit.VisorId;
 
         var sender = CustomRpcSender.Create("DummySpawner.ApplyOutfit", SendOption.Reliable, log: false);
-        sender.checkLength = false; // ⚠️ writer キャッシュ + 後続 StartRpc = CNO と同型 (BUG-20260711-02)。分割は PacketSplitPatch に任せる
+        sender.checkLength = false; // ⚠️ writer キャッシュ + 後続 StartRpc = CNO と同型。分割は PacketSplitPatch に任せる
         var writer = sender.stream;
         sender.StartMessage();
 

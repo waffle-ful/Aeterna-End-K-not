@@ -24,7 +24,7 @@ internal static class EkrJson
     }
 }
 
-// EKR パッシブ層 (Wave 1・契約正典: docs/ekr-logic-spec.md §1.1)。
+// EKR パッシブ層 (Wave 1)。
 // `.ekrole.json` のトップレベル固定キーオブジェクト `passives` — 「when の無いブロック」ではなく
 // フォーム+固定キーなので、順序・重複・参照整合性の問題が構造的に存在しない。
 //
@@ -54,7 +54,7 @@ public sealed class EkrPassives
     // よわさ (時間がくると死ぬ)。0 = 無効。有効時は 30..600 秒。
     public int DoomSeconds { get; private set; }
 
-    // R2 (docs/ekn-r2-contract.md §4): ほかの人からの見え方だけを偽る陣営。null = 偽装なし。
+    // R2: ほかの人からの見え方だけを偽る陣営。null = 偽装なし。
     // ⚠️ 効くのは**表示層だけ** — 本人の勝敗・選出・実陣営は一切変わらない。既存の占い/判定役職
     // (Teller 系・Sheriff のキル可否等) は実陣営を読むので、そちらには素の陣営が見える (受容済み)。
     public EkrTeam? DisguiseTeam { get; private set; }

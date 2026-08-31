@@ -38,7 +38,7 @@ internal static class LobbyCorpses
     // spawn 開始時にセットし、復元処理 + GameStart ガードで参照される。
     private static string SavedHostName;
 
-    // リンク劣化ゲートの延期状態 (BUG-20260820-06 緩和)
+    // リンク劣化ゲートの延期状態 (緩和)
     private static int DeferredSpawnAttempts;
     private static bool DeferralPending;
     private const int MaxDeferredSpawnAttempts = 12; // 5 秒間隔 × 12 = 最大 60 秒待って諦める
@@ -112,7 +112,7 @@ internal static class LobbyCorpses
         if (!Options.LobbyCorpseEnabled.GetBool()) return;
         if (PlayerControl.LocalPlayer == null || PlayerControl.LocalPlayer.Data == null) return;
 
-        // リンク劣化ゲート (BUG-20260820-06 緩和): 公式鯖の Hacking キックは「劣化リンク × バースト」の
+        // リンク劣化ゲート (緩和): 公式鯖の Hacking キックは「劣化リンク × バースト」の
         // 連言でのみ観測されている (同一スポーン列は健全リンクで多数生存 — 2026-08-29 実測 18 ロビー無傷 vs
         // 劣化時 1 キック)。装飾なので劣化中は送らず、健全化するまで 5 秒間隔で延期する。
         // 60 秒待っても回復しなければこのロビーでは諦める (次のロビーで Reset される)。

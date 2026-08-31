@@ -1,5 +1,5 @@
 // 役職メーカー (EKN R0 フォーム + R1 ブロックロジック) の UI モジュール。
-// 契約の正典: docs/ekr-logic-spec.md。R0 計画正典: docs/ekn-api-plan.md §4。
+// 契約の正典: spec。R0 のフォーム仕様は計画書 §4。
 // 検証は ../roledef.ts、コード入出力は ../rolecode.ts、ブロック→AST 変換は ./compile-role.ts、
 // 警告ヒントは ./lint-role.ts。Blockly 本体・ブロック定義 (./blocks-role.ts) は DOM/描画コストが
 // 大きいため「ロジック」タブを初めて開いたときに dynamic import する (spec §7)。
@@ -74,7 +74,7 @@ type BlocklyWorkspaceSvg = InstanceType<typeof import("blockly/core").WorkspaceS
 const STORAGE_KEY = "ekm.roleMaker";
 
 /** localStorage に保存する「編集中フォームの生の値」。R0 で固定のフィールド (ekr/requires/winCondition) は含めない。
- *  team は R2 (docs/ekn-r2-contract.md §1) でフォーム項目になったためここに含める。 */
+ *  team は R2 (契約 §1) でフォーム項目になったためここに含める。 */
 interface FormState {
     name: string;
     author: string;
@@ -90,7 +90,7 @@ interface FormState {
     // Wave 1: とくせい (spec §1.1)。「バニラ既定 = キーの欠落」なので、既定のままの項目は
     // ここにも入らない (下書きの形と書き出しの形を一致させておく)。
     passives: RolePassives;
-    // Wave 3 (docs/ekn-wave3-contract.md §3): なまえのよこに出す文字。空欄 = progress キー省略。
+    // Wave 3 (§3): なまえのよこに出す文字。空欄 = progress キー省略。
     progressText: string;
     // Wave 3 (契約 §4): ホストがへんこうできる数値。0件 = hostOptions キー省略。
     hostOptions: HostOption[];

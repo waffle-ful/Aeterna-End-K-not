@@ -65,7 +65,7 @@ public static class HealthLog
     private static readonly HostActionEntry[] SendRing = new HostActionEntry[16];
     private static int SendRingIndex; // 次の書き込み位置
 
-    // --- 送信タグ別ヒストグラム用の広いリング (BUG-20260706-05 の弁別計器) ---
+    // --- 送信タグ別ヒストグラム用の広いリング (弁別計器) ---
     // DCTX の直近16本は「キック時に何を送っていたか」しか答えられず、無傷の窓と比較できないため
     // キックの弁別に3回連続で失敗した (量の指標=Reliable burst / CNO burst はどちらも負の対照で棄却済み)。
     // そこで「直近 N 秒に送ったメッセージをタグ別に集計」した同一書式のサマリを、
@@ -81,14 +81,14 @@ public static class HealthLog
     private static long _sessionStartWsMB; // セッション先頭の wsMB(mem 増分の基準)
     private static long _lastNameSent; // 前回 HB 時点の FixedUpdatePatch.NameSent(HB デルタ算出用)
     private static long _lastNameSkip; // 前回 HB 時点の FixedUpdatePatch.NameSkip
-    private static int _lastNetResent; // 前回 HB 時点の Hazel MessagesResent(wire 再送ストーム弁別計器 — BUG-20260716-06)
+    private static int _lastNetResent; // 前回 HB 時点の Hazel MessagesResent(wire 再送ストーム弁別計器)
     private static bool _hadDisconnectThisSession; // セッション中に DC 記録があったか(stuck-menu 判定の前提条件)
     private static long _continuousMenuSinceTs; // 非ホスト Menu 状態が連続している開始 t(0=非連続)
     private static long _lastStuckMenuNoteTs;
     private static long _lastMemNoteTs;
     private static long _lastAbnormalDcTs; // 直近の異常切断 t(回復判定の猶予に使用)
 
-    // --- Innersloth UserIDToken 死 + メニュー落ちゾンビの検出 (BUG-20260715-05) ---
+    // --- Innersloth UserIDToken 死 + メニュー落ちゾンビの検出 ---
     // TokenGrant 401 (外部 JWT 失効) で UserIDToken が失われても接続中のロビーは動き続け、次のロビー遷移で
     // DisconnectPopup も DC イベントも無しにメインメニューへ落ちる (GameState=Ended のまま数時間ゾンビ化)。
     // 検出は2段: ①トークン消失 (計器+フラグのみ、再起動しない) ②Ended スタック+メニュー実在 (=実際に壊れた確定) で初めて再起動。
@@ -101,7 +101,7 @@ public static class HealthLog
     private static bool _zombieHandled; // menufall エスカレーション発行済み (state が Ended を離れたら解除)
     private static long _lastEndedStuckNoteTs; // endedstuck ANOM のスロットル
 
-    // --- リンク劣化の検出 (BUG-20260820-06 計器) ---
+    // --- リンク劣化の検出 (計器) ---
     // 2026-08-20 の Hacking キックで初めて取れた形: 送信量だけ見ると無傷の窓のほうが重かった一方、キック回は
     // RTT が ~400ms の台地に 7 分張り付き (通常 60〜90ms)、再送と未 ACK 在庫が伸び続けていた。再接続直後に
     // 18ms / unack=0 へ戻ったので回線でなく接続状態。HB は5秒毎に出るが「いつ劣化に入り/抜けたか」は数百行を
@@ -114,7 +114,7 @@ public static class HealthLog
     private static bool _linkDegradedNoted;     // degraded ANOM 発行済み (回復/切断で解除)
     private static long _linkDegradedSinceTs;   // 劣化ストリークの開始 t (0=非連続)
 
-    // --- 有人/無人の弁別計器 (BUG-20260721-02: 「ハングは有人操作中のみ」説の機械判定用) ---
+    // --- 有人/無人の弁別計器 (「ハングは有人操作中のみ」説の機械判定用) ---
     // GetLastInputInfo はこの Windows セッション全体の最終入力 tick を返す。HB に「最終入力からの
     // 経過秒」を載せることで、ハング直前の HB が有人 (数秒) か無人 (数分〜) かを事後に判定できる。
     [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
@@ -296,7 +296,7 @@ public static class HealthLog
         _lastGc0Count = GC.CollectionCount(0);
         _lastGc2Count = GC.CollectionCount(2);
 
-        // フルスクリーン切替/解像度変更の帰属計器 (BUG-20260729-17 系: 「全画面切替→3-4秒スタッター」の
+        // フルスクリーン切替/解像度変更の帰属計器 (「全画面切替→3-4秒スタッター」の
         // 1-bit 検証用)。切替ストール中は Tick 自体が止まるため、切替検知行は解除フレームで framestall ANOM と
         // 同時に flush される — reschg 行と framestall 行の t= 一致/近接が「切替起因」の判定条件。
         if (Screen.fullScreen != _lastFullScreen || Screen.width != _lastScreenW || Screen.height != _lastScreenH)
@@ -382,7 +382,7 @@ public static class HealthLog
 
             // EOS ログインフローの進行中フラグ (再ログインスタック監視の計器 — 1 が 180 秒続くと不発弾)
             // eosFlow=0 が online 中に続く場合は「再ログインでフローが再スタートしたまま未完了」の直接証拠
-            // (BUG-20260711-03 の 1-bit 分離用。正常時は起動ログイン完了後ずっと 1)
+            // (1-bit 分離用。正常時は起動ログイン完了後ずっと 1)
             int eosTry = 0;
             int eosFlow = 0;
             try
@@ -392,13 +392,13 @@ public static class HealthLog
             }
             catch { }
 
-            // Innersloth UserIDToken の生存 (BUG-20260715-05 計器)。TokenGrant 401 で失われると 0 に落ちたまま
+            // Innersloth UserIDToken の生存 (計器)。TokenGrant 401 で失われると 0 に落ちたまま
             // 戻らず、次のロビー遷移で無音メニュー落ちする。field 直読みなので EOSReLoginPatch の cfg 状態と無関係に生きる。
             int idTok = 0;
             try { idTok = EOSManager.Instance != null && !string.IsNullOrEmpty(EOSManager.Instance.UserIDToken) ? 1 : 0; }
             catch { }
 
-            // Hazel connection の wire 統計 (BUG-20260716-06 計器)。mod 送信層の計測では既知4機序が全て
+            // Hazel connection の wire 統計 (計器)。mod 送信層の計測では既知4機序が全て
             // シロだったため、送信層から見えない再送ストーム (回線ヒカップで Reliable 再送が実ワイヤレートを
             // 数倍化) を弁別する。rsndD=前回HBからの再送デルタ / unack=未ACKの Reliable 在庫 / pNoAck=ACK
             // 無しに連続した ping 数 (リンク死の直接signal)。
@@ -414,11 +414,11 @@ public static class HealthLog
             string hb = $"t={now} up={now - StartTs} state={state} host={(host ? 1 : 0)} server={server} players={players} wsMB={wsMB} gcMB={gcMB} gc2={gen2} nmSent={nmSent} nmSkip={nmSkip} eosTry={eosTry} eosFlow={eosFlow} idTok={idTok} ping={ping} rsndD={rsndD} unack={unack} pNoAck={pNoAck} inIdle={GetInputIdleSeconds()}{lastSendSuffix}";
             Write($"HB {hb}");
 
-            // リンク劣化の遷移だけを ANOM へ (BUG-20260820-06)。読み取り専用で送信はしない。
+            // リンク劣化の遷移だけを ANOM へ。読み取り専用で送信はしない。
             try { NoteLinkHealth(now, ping, rsndD, unack, pNoAck); }
             catch { }
 
-            // マネージド保持リークの帰属計器 (BUG-20260706-01)。間隔判定は MaybeTick 側。
+            // マネージド保持リークの帰属計器。間隔判定は MaybeTick 側。
             try { ManagedCensus.MaybeTick(now, state); }
             catch { }
 
@@ -433,7 +433,7 @@ public static class HealthLog
                     // nest=[...] は PacketRateGate のリング由来 (tag/leaf tag 別のネスト総数)。BuildTagWindow が
                     // 拾えるのは CustomRpcSender 経由の per-name だけで、人数比例で膨らむ t26 の中身は見えないため。
                     // ping/rsndD/unack を併記する: 送信量だけの比較では「キック回より無傷の窓のほうが重い」が
-                    // 繰り返し出てリンク健全性という軸が抜け落ちていた (BUG-20260820-06)。
+                    // 繰り返し出てリンク健全性という軸が抜け落ちていた。
                     string tagLine = $"TAGWIN state={state} players={players} ping={ping} rsndD={rsndD} unack={unack} {BuildTagWindow(now, TagWindowSeconds)} {PacketRateGate.SummarizeRecent(TagWindowSeconds)} t={now}";
                     Write(tagLine);
                     Timeline(tagLine);
@@ -483,7 +483,7 @@ public static class HealthLog
                 }
             }
 
-            // ── 段1: UserIDToken 死の検出 (BUG-20260715-05)。ここでは再起動しない — 接続中のロビーは
+            // ── 段1: UserIDToken 死の検出。ここでは再起動しない — 接続中のロビーは
             // トークン無しでも動き続けるため、計器 (ANOM) と AutoRestart へのフラグ通知のみ。
             // 実際の再起動は段2 (実害=メニュー落ち) が確定してから (再起動は最終手段の方針)。
             if (idTok == 1)
@@ -589,7 +589,7 @@ public static class HealthLog
 
             if (!intentional)
             {
-                // wire 統計の最終スナップショット (BUG-20260716-06)。再送ストーム説なら resent が直近 HB の
+                // wire 統計の最終スナップショット。再送ストーム説なら resent が直近 HB の
                 // rsndD 帯から跳ね、pNoAck が積み上がっているはず。切断後は connection が既に死んでいる
                 // ことがあるので取れたときだけ書く。
                 if (TryGetNetStats(out int rsnd, out int relSent, out int ackd, out int pNoAck, out int ping))
@@ -636,7 +636,7 @@ public static class HealthLog
         catch (Exception e) { Utils.ThrowException(e); }
     }
 
-    /// <summary>RTT 台地への出入りだけを ANOM に1行ずつ出す (BUG-20260820-06 計器)。読み取り専用・送信ゼロ。
+    /// <summary>RTT 台地への出入りだけを ANOM に1行ずつ出す (計器)。読み取り専用・送信ゼロ。
     /// HB を全部読まなくても「キックの何分前からリンクが劣化していたか」が log-doctor で拾えるようにする。</summary>
     private static void NoteLinkHealth(long now, int ping, int rsndD, int unack, int pNoAck)
     {
@@ -679,15 +679,15 @@ public static class HealthLog
     }
 
     /// <summary>
-    /// Hazel connection の wire 統計スナップショット (BUG-20260716-06 計器)。読み取り専用・送信ゼロ。
+    /// Hazel connection の wire 統計スナップショット (計器)。読み取り専用・送信ゼロ。
     /// resent=Reliable 再送の累計 / relSent=Reliable 送信累計 / ackd=ACK 済み累計 /
     /// pingsNoAck=ACK を受けずに連続した keepalive ping 数 / ping=AU 報告の RTT(ms)。
     /// connection 未確立・切断済みなどで取れなければ false。
     /// </summary>
-    /// <summary>瞬時リンク健全性プローブ (BUG-20260820-06 緩和用)。装飾系バースト (ロビー死体等) の送出可否判定に使う。
+    /// <summary>瞬時リンク健全性プローブ (緩和用)。装飾系バースト (ロビー死体等) の送出可否判定に使う。
     /// HB の degraded 判定 (60 秒 HB×3 連続) はロビー+3秒のスポーン判断には遅すぎるため、その場サンプルで判定する。
     /// 判定軸: ping>=300 (HB degraded と同閾) / ACK を受けない keepalive ping が2連続以上 / 直近10秒の Reliable 再送が5本以上。
-    /// ⚠️ 閾値は 2026-08-31 実機分布で較正済み (BUG-20260831-02): pNoAck=1 は健全リンクでも約16%の頻度で立ち
+    /// ⚠️ 閾値は 2026-08-31 実機分布で較正済み: pNoAck=1 は健全リンクでも約16%の頻度で立ち
     /// (0=709回/1=138回/2以上=0回)、再送1本 (d=1×154回・d=2×74回) は join 時などに日常的に起きる。
     /// 「pNoAck>=1」「再送1本で10秒劣化」に戻すと健全時に全消費者 (LobbyCorpses/OutfitShuffle/FakeBodyBurst/
     /// 適応ゲート/開始前link-wait/join名前再送延期) が巻き添え発火する。実劣化ストームは再送21〜54本/s なので取り零さない。
@@ -928,7 +928,7 @@ public static class HealthLog
         Write(line);
         Timeline(line);
         // log.html にもミラーする: HB は Logger 併記なのに ANOM がファイル直書きだけだと、log.html だけを
-        // 読む事後解析が「計器が発火していない」偽陰性を踏む (BUG-20260831-03 で実証 — gatethrottle ANOM は
+        // 読む事後解析が「計器が発火していない」偽陰性を踏む (実証済み — gatethrottle ANOM は
         // Health.log/Timeline に出ていたのに log.html grep で「出ない」と誤診された)。
         // Logger はバックグラウンドスレッド (AutoRestart hardkill belt 等) からの呼び出し実績あり。
         try { Logger.Warn(line, "Health"); }

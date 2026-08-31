@@ -278,7 +278,7 @@ else {
 #   form -> comma-joined sorted key set that is known to be harmless.
 # 'pick': Choose (Changeling / Pawn) is registered first and wins the dispatch
 # loop, but EKR's own /pick is served by the early PickMsg chain that runs
-# before dispatch, so both stay reachable (BUG-20260813-02, verified live).
+# before dispatch, so both stay reachable (verified live).
 $acceptedDupeForms = @{
     'pick' = 'CommandForms.Choose,CommandForms.Pick'
 }

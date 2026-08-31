@@ -1081,7 +1081,7 @@ internal static class ExtendedPlayerControl
                 case Pestilence:
                     return;
 
-                // R2 (docs/ekn-r2-contract.md §3b): on_attacked kind:"indirect"。realKiller のある間接死
+                // R2: on_attacked kind:"indirect"。realKiller のある間接死
                 // (爆弾/毒/呪い/時限死) だけを「攻撃」として扱う — 純自滅・環境死・EKR 自身の doom は
                 // realKiller が無いのでここに来ない。false = この間接死は不成立 (キャンセル/身代わり)。
                 case EkmTemplateRole when realKiller && !Modules.Ekm.EkrManager.FireAttacked(player.GetCustomRole(), player, realKiller, "indirect"):
@@ -1412,7 +1412,7 @@ internal static class ExtendedPlayerControl
             LateTask.New(() =>
             {
                 // 遅延中 (~1-1.3秒) にプレイヤーが切断・破棄されると SnapTo / GetNameWithRole が NRE
-                // (ShipStatusSpawnPlayerPatch と同型の stale-player 窓、BUG-20260714-03 兄弟)。
+                // (ShipStatusSpawnPlayerPatch と同型の stale-player 窓)。
                 if (!player || player.Data == null || player.Data.Disconnected) return;
 
                 sender = CustomRpcSender.Create($"Fix Black Screen For {player.GetNameWithRole()} (2)", SendOption.Reliable);
@@ -2220,7 +2220,7 @@ internal static class ExtendedPlayerControl
                     akazukin.OnCheckMurderAsTarget(player, target);
                     return;
 
-                // R2 (docs/ekn-r2-contract.md §3b): on_attacked kind:"force"。RpcCheckAndMurder を通らない
+                // R2: on_attacked kind:"force"。RpcCheckAndMurder を通らない
                 // 直接 Kill() (反撃・処刑型) の関所。false = この強制キルは不成立。
                 case false when Main.PlayerStates[target.PlayerId].Role is EkmTemplateRole:
                     if (!Modules.Ekm.EkrManager.FireAttacked(target.GetCustomRole(), target, player, "force")) return;
@@ -2245,7 +2245,7 @@ internal static class ExtendedPlayerControl
                 var sender = CustomRpcSender.Create("RpcMurderPlayer", SendOption.Reliable);
                 sender.StartMessage();
 
-                // EKR passives.corpse="vanish" (docs/ekr-logic-spec.md §1.1) は既存の「死体をマップ外へ
+                // EKR passives.corpse="vanish" は既存の「死体をマップ外へ
                 // 逃がす」経路にそのまま相乗りする (死体は生成位置ごと (50,50) へ飛ぶ = 実質即消滅)。
                 if (Main.Invisible.Contains(target.PlayerId) || EndKnot.Modules.Ekm.EkrManager.HasVanishingCorpse(target.PlayerId))
                 {
@@ -2306,7 +2306,7 @@ internal static class ExtendedPlayerControl
             return CheckMurderPatch.RpcCheckAndMurder(player, target, check);
         }
 
-        // synthetic (Wave 3 契約 §2 — docs/ekn-wave3-contract.md): この経路は「役職やコマンドが起こす
+        // synthetic (Wave 3 契約 §2): この経路は「役職やコマンドが起こす
         // 会議」なので既定 true。「本人が死体を見つけて通報した」意味論を持つ経路 (Bait の自己通報) だけが
         // 明示的に false を渡す。EKR の on_report と Newscaster の調査対象判定がこのフラグを見る。
         public void NoCheckStartMeeting(NetworkedPlayerInfo target, bool force = false, bool synthetic = true)
@@ -2320,7 +2320,7 @@ internal static class ExtendedPlayerControl
             ReportDeadBodyPatch.AfterReportTasks(player, target, synthetic);
             MeetingRoomManager.Instance.AssignSelf(player, target);
             HudManager.Instance.OpenMeetingRoom(player);
-            // ワイヤ方式 (ホスト先行入室+RPC遅延直送) は BUG-20260723-01 のキック疑いにより既定無効 —
+            // ワイヤ方式 (ホスト先行入室+RPC遅延直送) はキック疑いにより既定無効 —
             // enable_meeting_wire.txt を置いたときだけ通る (詳細は Modules/MeetingStartWire.cs)
             if (MeetingStartWire.WireEnabled)
             {

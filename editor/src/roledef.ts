@@ -1,11 +1,11 @@
 // EKN 役職コード (EKR1.) のデータ契約 — Modules/Ekm/EkrDefinition.cs の TS 側ミラー。
 // R0: フォームのみ (name/color/canKill/killCooldown/canVent/vision/team)。
-// R1: 上記に加え、任意の `logic` (Blockly ロジック AST)。契約の正典は docs/ekr-logic-spec.md —
+// R1: 上記に加え、任意の `logic` (Blockly ロジック AST)。契約の正典は spec —
 // C# (Modules/Ekm/EkrDefinition.cs 予定) と本ファイルは同書のミラー。矛盾を見つけたら実装で
-// 吸収せず spec 改訂を先に行うこと。役職コードはマップコード (docs/ekmap-spec.md) とは独立した
+// 吸収せず spec 改訂を先に行うこと。役職コードはマップコードとは独立した
 // 契約であり、このファイルは model.ts/validate.ts (マップ契約) には一切依存しない。
 //
-// 型不一致の扱い (docs/ekr-logic-spec.md §1 「契約解決」= C# に合わせて統一済み。旧版はここに
+// 型不一致の扱い (spec §1 「契約解決」= C# に合わせて統一済み。旧版はここに
 // フィールド毎の「TS だけ緩い」逸脱リストがあったが、以下の統一ルールで解消したため削除した):
 //   - 値型フィールド (canKill/canVent の bool、killCooldown/visionMultiplier の number ——
 //     C# 側は非 nullable 値型): 省略 → 既定値 / 明示的な null → 拒否 (STJ は非 nullable 値型に
@@ -42,7 +42,7 @@ export const VISION_MULTIPLIER_DEFAULT = 1;
 
 export const DEFAULT_COLOR = "#8f8f8f";
 
-// R2 (docs/ekn-r2-contract.md §1): 受理する team は3値。madmate / coven は対象外。
+// R2 (§1): 受理する team は3値。madmate / coven は対象外。
 // C# 側 (EkrDefinition.Validate) と同じ集合・同じ既定値を保つこと。
 export const SUPPORTED_TEAMS = ["crewmate", "impostor", "neutral"] as const;
 export type EkrTeam = (typeof SUPPORTED_TEAMS)[number];
@@ -60,7 +60,7 @@ const SUPPORTED_CAPABILITIES: ReadonlySet<string> = new Set();
 const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 
 // ============================================================================
-// Logic (R1) — docs/ekr-logic-spec.md §2〜§6 のミラー
+// Logic (R1) — spec §2〜§6 のミラー
 // ============================================================================
 
 export const LOGIC_VERSION = 1;
@@ -80,17 +80,17 @@ export const LOGIC_WHEN_VALUES = [
     // Wave 1 (spec §2 2026-08-11): 自分へのキル試行時。ctx = 攻撃者。slot は持たない
     // (slot は on_cno_touch 専用 — validateRule の既存 else 分岐がそのまま reject する)。
     "on_attacked",
-    // Wave 2 (docs/ekn-wave2-contract.md §1.1/§1.2 2026-08-11): 会議中の対象選択2系統。
+    // Wave 2 (§1.1/§1.2 2026-08-11): 会議中の対象選択2系統。
     // どちらも ctx を持つ (投票先/選んだ相手) — CTXLESS_WHENS 相当の対象には入れない
     // (lint-role.ts 側の判定で同じ扱い)。slot は持たない (on_cno_touch 専用のまま)。
     "on_meeting_vote",
     "on_meeting_pick",
-    // Wave 3 (docs/ekn-wave3-contract.md §1 2026-08-14): 状態条件トリガ (エッジ発火・共通意味論は
+    // Wave 3 (§1 2026-08-14): 状態条件トリガ (エッジ発火・共通意味論は
     // 契約 §1.1)。3つとも ctx 無し (CTXLESS_WHENS/L14 の対象に追加)。
     "on_var",
     "on_alive_count",
     "on_vent_exit",
-    // Wave 4 (docs/ekn-wave4-contract.md 2026-08-25): つなぐ — 対人近接/部屋/リンク死。
+    // Wave 4 (2026-08-25): つなぐ — 対人近接/部屋/リンク死。
     // on_near (ctx = 近づいた人)・on_far (ctx = 離れた人)・on_linked_death (ctx = 死んだ相手) は
     // ctx を持つ。on_room_enter/on_room_exit は ctx 無し (CTXLESS_WHENS/L14 の対象に追加)。
     // ⚠️ C# 側 (EkmLogicRuntime.KnownEvents) と同じ並び・同じ綴りを保つこと。
@@ -99,7 +99,7 @@ export const LOGIC_WHEN_VALUES = [
     "on_room_enter",
     "on_room_exit",
     "on_linked_death",
-    // Wave 6 (docs/ekn-wave6-contract.md §2/§3 2026-08-29): 残イベント2種。on_sabotage はグローバル型
+    // Wave 6 (§2/§3 2026-08-29): 残イベント2種。on_sabotage はグローバル型
     // (ctx = サボタージュを起こした人・全ホルダーへ配る)。on_revive は holder 限定・ctx 無し
     // (CTXLESS_WHENS/L14 の対象に追加 — lint-role.ts 側で同じ扱い)。
     "on_sabotage",
@@ -107,7 +107,7 @@ export const LOGIC_WHEN_VALUES = [
 ] as const;
 export type LogicWhen = (typeof LOGIC_WHEN_VALUES)[number];
 
-// R2 (docs/ekn-r2-contract.md §3b): on_attacked の種別と on_death の死因バケット。
+// R2 (§3b): on_attacked の種別と on_death の死因バケット。
 // ⚠️ C# 側 (EkmLogicRuntime.EkrAttackKinds / EkrDeathCauses) と同じ並び・同じ綴りを保つこと。
 export const ATTACK_KIND_VALUES = ["kill", "indirect", "force", "guess"] as const;
 export type AttackKind = (typeof ATTACK_KIND_VALUES)[number];
@@ -176,7 +176,7 @@ export const PORTAL_WHICH_VALUES = ["a", "b"] as const;
 // Wave 1 (spec §3「統一セレクタ語彙」2026-08-11) — 対象セレクタ「だれに」
 // ---------------------------------------------------------------------------
 // 単数セレクタ = 1人に解決するもの。kill/teleport_other/remember 等の単発強効果 op はここまで。
-// Wave 4 (docs/ekn-wave4-contract.md §3.4): `linked` (つないだ人) を追加 — saved1/2 が受理される
+// Wave 4 (§3.4): `linked` (つないだ人) を追加 — saved1/2 が受理される
 // すべての箇所への受理値の追加のみ (フィールド名の付け替えなし = 純拡張)。C# 側の
 // SingleSelectors/OtherSelectors (EkmLogicRuntime) と同じ集合を保つこと。at/to (空間セレクタ) には
 // 追加しない (人参照であって位置参照ではない)。
@@ -211,7 +211,7 @@ export const FIELD_SECONDS_MIN = 1;
 export const FIELD_SECONDS_MAX = 15;
 
 // ---------------------------------------------------------------------------
-// Wave 2 (docs/ekn-wave2-contract.md 2026-08-11) — 情報と会議
+// Wave 2 (2026-08-11) — 情報と会議
 // ---------------------------------------------------------------------------
 // inspect/reveal/arrow_show/vote_block はどれも「self 不可の単数セレクタ」を共有する
 // (契約 §2.1/§2.2/§2.3/§3.2「inspect と同じ受理値」)。TELEPORT_OTHER_TARGET_VALUES と
@@ -224,7 +224,7 @@ export const ARROW_SHOW_TARGET_VALUES = SELF_EXCLUDED_TARGET_VALUES;
 export const VOTE_BLOCK_TARGET_VALUES = SELF_EXCLUDED_TARGET_VALUES;
 // exile.target は self を含む唯一の Wave 2 セレクタ (契約 §3.4「自分を追放させる」演出が正当ユース)。
 export const EXILE_TARGET_VALUES = TARGET_SINGLE_VALUES;
-// Wave 7 (docs/ekn-wave7-contract.md §1,§2): win/win_join の target も「self を含む単数セレクタ全種」
+// Wave 7 (§1,§2): win/win_join の target も「self を含む単数セレクタ全種」
 // (任意・既定 self)。
 export const WIN_TARGET_VALUES = TARGET_SINGLE_VALUES;
 
@@ -248,7 +248,7 @@ export const VOTE_WEIGHT_SET_MIN = 0;
 export const VOTE_WEIGHT_SET_MAX = 3;
 
 // ---------------------------------------------------------------------------
-// Wave 3 (docs/ekn-wave3-contract.md 2026-08-14) — じょうたいと数値
+// Wave 3 (2026-08-14) — じょうたいと数値
 // ---------------------------------------------------------------------------
 // on_var/on_alive_count の cmp は「ExprKinds の流用」(契約 §1.2) — EXPR_OP_KIND_SET と同じ
 // 文字列 (eq/le/ge) を使う。専用の3値サブセットとして別定数にする (rule 直下フィールドという
@@ -260,7 +260,7 @@ export const ALIVE_COUNT_VALUE_MIN = 1;
 export const ALIVE_COUNT_VALUE_MAX = 15;
 
 // ---------------------------------------------------------------------------
-// Wave 4 (docs/ekn-wave4-contract.md 2026-08-25) — つなぐ (対人近接/部屋/リンク/勧誘)
+// Wave 4 (2026-08-25) — つなぐ (対人近接/部屋/リンク/勧誘)
 // ---------------------------------------------------------------------------
 // on_near/on_far の radius tier (small=1.5u / medium=3.0u / large=5.0u — 実値はエンジン側)。
 // field の FIELD_RADIUS_VALUES と同じ3語だが別スケールの別フィールドなので別定数にする
@@ -279,7 +279,7 @@ export const LINK_TARGET_VALUES = ["ctx", "saved1", "saved2", "nearest", "random
 export const RECRUIT_TARGET_VALUES = ["ctx", "linked", "saved1", "saved2", "nearest", "random"] as const;
 
 // ---------------------------------------------------------------------------
-// Wave 5 (docs/ekn-wave5-contract.md 2026-08-27) — 持続効果と変換先
+// Wave 5 (2026-08-27) — 持続効果と変換先
 // ---------------------------------------------------------------------------
 // effect_give の効果種別。実効値 (haste ×1.5 / slow ×0.5 / freeze = 移動不能 / blind 視界 0.3) は
 // エンジン側の固定値で、作者には数値を開けない (契約 §1.1 — radius tier と同じ方針)。
@@ -300,7 +300,7 @@ export const RECRUIT_SLOT_MIN = 1;
 export const RECRUIT_SLOT_MAX = 18;
 
 // ---------------------------------------------------------------------------
-// Wave 6 (docs/ekn-wave6-contract.md 2026-08-29) — とばすもの (発射体プリミティブ)
+// Wave 6 (2026-08-29) — とばすもの (発射体プリミティブ)
 // ---------------------------------------------------------------------------
 // cno_launch.dir (契約 §1): launch 時に1回だけ解決し、以後は追尾しない。
 export const CNO_LAUNCH_DIR_VALUES = ["move", "ctx", "marker1", "marker2", "marker3", "marker4"] as const;
@@ -437,7 +437,7 @@ export type LogicNode =
     // Wave 1 (spec §3 2026-08-11) — 引数なし。on_attacked 配下でのみ書ける (他イベント配下は
     // 実行時 no-op ではなく**検証 reject** — 静的に判定できるため厳格側に倒す)。
     | { op: "cancel_attack" }
-    // Wave 2 (docs/ekn-wave2-contract.md §2 2026-08-11) — しらべる系。failChance/noise は
+    // Wave 2 (§2 2026-08-11) — しらべる系。failChance/noise は
     // 「任意・既定0」だが、この実装では Blockly ブロックが常に数値を持つため常に出力する
     // (省略時の意味と値0の意味が同じなので害はない — 実装裁量。手書き JSON では省略もできる)。
     | { op: "inspect"; target: (typeof INSPECT_TARGET_VALUES)[number]; depth: (typeof INSPECT_DEPTH_VALUES)[number]; failChance?: number; noise?: number }
@@ -457,21 +457,21 @@ export type LogicNode =
     // vote_swap は引数なし (saved1/saved2 固定 — remember との合成を強制する設計)。
     | { op: "vote_swap" }
     | { op: "exile"; target: (typeof EXILE_TARGET_VALUES)[number] }
-    // Wave 4 (docs/ekn-wave4-contract.md §3) — リンク。link は再実行で張り替え・1ホルダー1本。
+    // Wave 4 (§3) — リンク。link は再実行で張り替え・1ホルダー1本。
     // unlink は引数なし (リンクが無ければ no-op)。どちらも会議中も有効 (会議中白名単)。
     | { op: "link"; target: (typeof LINK_TARGET_VALUES)[number] }
     | { op: "unlink" }
     // Wave 4 (契約 §4) — 相手を「自分と同じ EKR 役職」へ変換する。会議中は no-op (task-only)。
-    // Wave 5 (docs/ekn-wave5-contract.md §2) — 任意の slot (1..18) で変換先スロットを指名できる。
+    // Wave 5 (§2) — 任意の slot (1..18) で変換先スロットを指名できる。
     // 省略 = 自分と同じ役職 (完全後方互換・正準形ではフィールドごと省略)。
     | { op: "recruit"; target: (typeof RECRUIT_TARGET_VALUES)[number]; slot?: number }
     // Wave 5 (契約 §1) — 相手に持続効果をかける。target/kind/seconds すべて必須 (既定を作らない)。
     | { op: "effect_give"; target: (typeof EFFECT_TARGET_VALUES)[number]; kind: EffectKind; seconds: number }
-    // Wave 6 (docs/ekn-wave6-contract.md §1) — とばす。slot は cno_spawn と同じ枠を共有する。dir は
+    // Wave 6 (§1) — とばす。slot は cno_spawn と同じ枠を共有する。dir は
     // launch 時に1回だけ解決 (追尾しない)。speed は任意・省略 = medium (既定値は検証層で畳み込むため
     // 明示 "medium" も AST では省略される — validateNode 参照)。
     | { op: "cno_launch"; slot: 1 | 2 | 3; dir: CnoLaunchDir; speed?: CnoLaunchSpeed }
-    // Wave 7 (docs/ekn-wave7-contract.md §1,§2) — 勝利条件。target は任意・既定 self (省略時は AST に
+    // Wave 7 (§1,§2) — 勝利条件。target は任意・既定 self (省略時は AST に
     // キーを足さない — notify と同じ作法)。win は neutral 文書限定 (doc レベル検証 —
     // validateEkrDefinition。ノード層では team が見えない — C# の分担と同じ)。
     | { op: "win"; target?: (typeof WIN_TARGET_VALUES)[number] }
@@ -482,7 +482,7 @@ export interface LogicRule {
     // on_cno_touch の必須フィールド (spec §2 v1.2)。他イベントでは付与禁止 (検証 reject)。
     slot?: 1 | 2 | 3;
     // R2: kind は on_attacked 専用・cause は on_death 専用の任意フィルタ。省略 = 全種にマッチ。
-    // Wave 4 (docs/ekn-wave4-contract.md §3.3): cause は on_linked_death でも同じ8バケットを任意受理。
+    // Wave 4 (§3.3): cause は on_linked_death でも同じ8バケットを任意受理。
     // 他イベントでは付与禁止。
     kind?: AttackKind;
     cause?: DeathCause;
@@ -491,7 +491,7 @@ export interface LogicRule {
     var?: string;
     cmp?: VarCmp;
     value?: number;
-    // Wave 4 (docs/ekn-wave4-contract.md §1): on_near は radius 必須・who 任意 (省略 = anyone)。
+    // Wave 4 (§1): on_near は radius 必須・who 任意 (省略 = anyone)。
     // on_far は radius/who とも必須 (who は anyone 不可)。他イベントではどちらも付与禁止 (検証 reject)。
     // cause は Wave 4 で on_linked_death でも任意受理になった (上の R2 コメント参照)。
     radius?: NearRadius;
@@ -531,7 +531,7 @@ export interface EkrDefinition {
     // description = 短文 (頂上の役職パネル/イントロ)・descriptionLong = 詳細文 (/h r・オプションメニュー)。
     description?: string;
     descriptionLong?: string;
-    // Wave 3 (docs/ekn-wave3-contract.md §3): なまえのよこに出す文字。logic/passives と同じ理由で
+    // Wave 3 (§3): なまえのよこに出す文字。logic/passives と同じ理由で
     // defaultEkrDefinition() には含めず、キー省略 = 進捗表示なし (現行挙動)。
     progress?: RoleProgress;
     // Wave 3 (契約 §4): ホストがへんこうできる数値。同上 (省略/空配列 = キー自体を出力しない)。
@@ -769,7 +769,7 @@ export function validateEkrDefinition(value: unknown): EkrValidationResult {
         if (!logicResult.ok) return { ok: false, error: logicResult.error };
         def.logic = logicResult.logic;
 
-        // Wave 7 (docs/ekn-wave7-contract.md §1): 「かちにする」(win) は neutral 文書限定
+        // Wave 7 (§1): 「かちにする」(win) は neutral 文書限定
         // (C# の EkrDefinition.Validate と対称の doc レベル静的検査)。
         if (team !== "neutral" && def.logic.rules.some((r) => logicContainsOp(r.do, "win"))) {
             return { ok: false, error: '「かちにする」はだいさん陣営 (team: "neutral") の役職だけ使えます' };
@@ -806,10 +806,10 @@ export function validateEkrDefinition(value: unknown): EkrValidationResult {
 }
 
 // ---------------------------------------------------------------------------
-// Logic 検証本体 (docs/ekr-logic-spec.md §2〜§4)
+// Logic 検証本体 (spec §2〜§4)
 // ---------------------------------------------------------------------------
 
-// Wave 7 (docs/ekn-wave7-contract.md §1): win の neutral 限定検査用の再帰探索 (if の then/else も潜る)。
+// Wave 7 (§1): win の neutral 限定検査用の再帰探索 (if の then/else も潜る)。
 // lint-role.ts の forEachNode と同型だが、roledef は lint に依存しない層なので最小の再帰をここに持つ
 // (C# 側 EkrLogicDef.ContainsWinOp と対称)。
 function logicContainsOp(nodes: LogicNode[], op: LogicNode["op"]): boolean {
@@ -1108,7 +1108,7 @@ function validateNode(raw: unknown, varNames: ReadonlySet<string>, path: string,
             }
             return { node: { op: "cancel_attack" }, depth: 1, count: 1 };
         }
-        // Wave 2 (docs/ekn-wave2-contract.md §2 2026-08-11) — しらべる系
+        // Wave 2 (§2 2026-08-11) — しらべる系
         case "inspect": {
             const target = expectEnum(raw.target, INSPECT_TARGET_VALUES, `${path}.target`);
             const depth = expectEnum(raw.depth, INSPECT_DEPTH_VALUES, `${path}.depth`);
@@ -1171,7 +1171,7 @@ function validateNode(raw: unknown, varNames: ReadonlySet<string>, path: string,
             const target = expectEnum(raw.target, EXILE_TARGET_VALUES, `${path}.target`);
             return { node: { op: "exile", target }, depth: 1, count: 1 };
         }
-        // Wave 4 (docs/ekn-wave4-contract.md §3/§4) — link/unlink/recruit。link.target は self と
+        // Wave 4 (§3/§4) — link/unlink/recruit。link.target は self と
         // linked を含まない・recruit.target は self を含まない (定数側のコメント参照)。unlink は
         // 引数なし — pull/arrow_hide と同じく余剰キーは黙って無視する (reject しない)。
         case "link": {
@@ -1187,7 +1187,7 @@ function validateNode(raw: unknown, varNames: ReadonlySet<string>, path: string,
             const slot = expectRangeInt(raw.slot, RECRUIT_SLOT_MIN, RECRUIT_SLOT_MAX, `${path}.slot`);
             return { node: { op: "recruit", target, slot }, depth: 1, count: 1 };
         }
-        // Wave 5 (docs/ekn-wave5-contract.md §1/§3) — こうかをかける。3フィールドとも必須なので
+        // Wave 5 (§1/§3) — こうかをかける。3フィールドとも必須なので
         // 畳み込み (省略) は無し。seconds の上限は kind 別 (freeze ≤10 / 他 ≤30)。
         case "effect_give": {
             const target = expectEnum(raw.target, EFFECT_TARGET_VALUES, `${path}.target`);
@@ -1195,7 +1195,7 @@ function validateNode(raw: unknown, varNames: ReadonlySet<string>, path: string,
             const seconds = expectRangeNumber(raw.seconds, EFFECT_SECONDS_MIN, effectMaxSeconds(kind), `${path}.seconds`);
             return { node: { op: "effect_give", target, kind, seconds }, depth: 1, count: 1 };
         }
-        // Wave 6 (docs/ekn-wave6-contract.md §1/§4) — とばす。slot は cno_spawn と同じ枠 (1..3)。
+        // Wave 6 (§1/§4) — とばす。slot は cno_spawn と同じ枠 (1..3)。
         // speed は任意・省略 = medium。契約 §1/§4 は「既定値は書き出さない」を明記しており (recruit.slot
         // のような「既定=不在」ではなく medium 自体が値集合のメンバーなので)、この検証層でも明示された
         // "medium" を既定値へ畳み込む (省略と明示 medium が別コードにならないようにする — recruit.slot は
@@ -1208,7 +1208,7 @@ function validateNode(raw: unknown, varNames: ReadonlySet<string>, path: string,
             if (speed === CNO_LAUNCH_SPEED_DEFAULT) return { node: { op: "cno_launch", slot, dir }, depth: 1, count: 1 };
             return { node: { op: "cno_launch", slot, dir, speed }, depth: 1, count: 1 };
         }
-        // Wave 7 (docs/ekn-wave7-contract.md §1,§2) — 勝利条件。target は任意・既定 self (省略時は
+        // Wave 7 (§1,§2) — 勝利条件。target は任意・既定 self (省略時は
         // AST にキーを足さない — notify と同じ作法・再エンコード不動点維持)。win の neutral 限定は
         // doc レベル (validateEkrDefinition) で検査する。
         case "win": {
@@ -1244,7 +1244,7 @@ function validateRule(raw: unknown, varNames: ReadonlySet<string>, index: number
 
     // R2 (契約 §3b): kind は on_attacked 専用 / cause は on_death 専用。省略可 (= 全種にマッチ)。
     // 他イベントに付いていたら slot と同じく reject する。
-    // Wave 4 (docs/ekn-wave4-contract.md §3.3): cause は on_linked_death でも同じ8バケットを任意受理。
+    // Wave 4 (§3.3): cause は on_linked_death でも同じ8バケットを任意受理。
     const kind = readRuleFilter(raw, "kind", when, ["on_attacked"], ATTACK_KIND_VALUES, index) as AttackKind | undefined;
     const cause = readRuleFilter(raw, "cause", when, ["on_death", "on_linked_death"], DEATH_CAUSE_VALUES, index) as DeathCause | undefined;
 
@@ -1334,7 +1334,7 @@ function readRuleFilter(
 }
 
 /**
- * `logic` オブジェクト (EkrDefinition の任意フィールド) を検証する。docs/ekr-logic-spec.md §1〜§4
+ * `logic` オブジェクト (EkrDefinition の任意フィールド) を検証する。spec §1〜§4
  * のミラー。失敗時は日本語の平易文でエラーを返す — 呼び出し元 (validateEkrDefinition) は
  * これを役職コード全体の reject に変換する (ロジックだけ黙って捨てることはしない)。
  */

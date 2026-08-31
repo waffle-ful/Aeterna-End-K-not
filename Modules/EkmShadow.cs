@@ -11,7 +11,7 @@ namespace EndKnot.Modules;
 // 実機の影 caster に変換する。マップチップ由来の occluder (旧 CustomMapCastShadows) は
 // 端で破綻したので廃止 → 代わりにユーザーが明示的に引いた線だけを影源にする。
 //
-// 仕組み (reference_au_map_construction_shadows / BackroomsShadow.SpawnTestEdgeRoom と同型):
+// 仕組み (BackroomsShadow.SpawnTestEdgeRoom と同型):
 //   各折れ線 → layer10 (Shadow) の GameObject + EdgeCollider2D.points。
 //   バニラ GPU 影ドライバ (BackroomsShadow.Drive、EnterCustomMap で Arm 済) が
 //   Physics2D.OverlapCircle(プレイヤー足元, 半径, ShadowMask) で layer10 を拾い、

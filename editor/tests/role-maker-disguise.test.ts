@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 //
-// passives.disguise (R2 契約 §4: docs/ekn-r2-contract.md) のフォーム欄を、role-maker.ts の実際の
+// passives.disguise (R2 契約 §4) のフォーム欄を、role-maker.ts の実際の
 // DOM 配線を通して検証する。dlg-role-maker のマークアップは index.html から実際に切り出して使う —
 // テスト側で id を手書き複製すると id ドリフト (フォームとテストが同時にズレて green のまま壊れる事故)
 // を検出できなくなるため。

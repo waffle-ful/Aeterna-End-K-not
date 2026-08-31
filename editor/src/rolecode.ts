@@ -1,6 +1,6 @@
-// 役職コード (EKN R0 計画正典: docs/ekn-api-plan.md): "EKR1." + base64url( deflate-raw( UTF-8 JSON ) )
+// 役職コード: "EKR1." + base64url( deflate-raw( UTF-8 JSON ) )
 // mapcode.ts (仕様 §8 のマップコード) と同一の deflate-raw + base64url 契約だが、prefix が異なる
-// 独立した契約 (役職コードは docs/ekmap-spec.md の管轄外)。C# 側は Modules/EkmCodec.cs の
+// 独立した契約 (役職コードはマップコード仕様の管轄外)。C# 側は Modules/EkmCodec.cs の
 // prefix 引数 (EkrManager.CodePrefix = "EKR1.") で同じ枠組みを再利用しているが、TS 側は
 // mapcode.ts (凍結されたマップ契約ファイル) に触れないため、同型のロジックをこちらに独立して持つ。
 // base64url のビット演算そのものは base64url.ts を共有する (base64url.ts 自体は特定の契約に属さない

@@ -182,7 +182,7 @@ internal static class ExternalRpcPetPatch
             if (killableDummy != null)
             {
                 // 1.6u 未満の TP は SendOption.None へ降格して客に届かないのに SnapTo 予算だけ減る
-                // ([[project_short_tp_none_downgrade_wastes_cap]])。近ければその場で壊す。
+                // 近ければその場で壊す。
                 if (Vector2.Distance(pc.Pos(), killableDummy.Position) >= 1.6f)
                     pc.TP(killableDummy.Position, log: false);
 

@@ -270,8 +270,8 @@ public abstract class OptionItem
     {
         if (OptionBehaviour is StringOption opt)
         {
-            // 素の GetName() を直書きすると役職行の装飾タイトル (白文字+色帯+size wrap) が剥がれる
-            // (BUG-20260810-02)。装飾込みの確定タイトルは StringOptionPatch.NameCache が持つので、
+            // 素の GetName() を直書きすると役職行の装飾タイトル (白文字+色帯+size wrap) が剥がれる。
+            // 装飾込みの確定タイトルは StringOptionPatch.NameCache が持つので、
             // ある場合はそちらを優先する。
             opt.TitleText.text = StringOptionPatch.NameCache.TryGetValue(opt, out string styledName) ? styledName : GetName();
             opt.ValueText.text = GetString();

@@ -661,7 +661,7 @@ internal static class ShipStatusSerializePatch
                 writer.EndMessage();
                 // ⚠️ CustomRpcSender を通らない直呼びなので、自力で登録しないと切断診断の送信内訳
                 // (DCTX/DCTAG) から丸ごと消える。人数比例で増える Reliable なので、公式鯖 Hacking
-                // キック調査 (BUG-20260730-11) では CNO の per-player ループと並ぶ容疑者になる。
+                // キック調査では CNO の per-player ループと並ぶ容疑者になる。
                 HealthLog.RecordHostAction("ShipStatus.SyncHudOverride", writer.Length, "Reliable");
                 AmongUsClient.Instance.SendOrDisconnect(writer);
                 writer.Recycle();

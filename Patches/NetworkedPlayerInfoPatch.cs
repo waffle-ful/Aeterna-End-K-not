@@ -8,11 +8,11 @@ namespace EndKnot;
 // TOHK の GameDataSerializePatch (Patches/NetworkedPlayrInfoPatch.cs) 移植: 会議中は NetworkedPlayerInfo の
 // 自動 dirty シリアライズ (バニラの broadcast 経路) を保留する write-barrier。会議中にゲッサー射殺や
 // 役職死などで Data が dirty になっても、vanilla クライアントへ「生の IsDead/Disconnected」入りロスターが
-// 漏れて MeetingHud の状態機械を壊す (= 会議中発症の暗転, BUG-20260715-11 / -05 残差) のを発生側で防ぐ。
+// 漏れて MeetingHud の状態機械を壊す (= 会議中発症の暗転) のを発生側で防ぐ。
 //
 // TOHK と同じく、遮断時は ClearDirtyBits() で dirty を「捨てる」(保持しない):
 // - 当初は「dirty 保持→会議明けにバニラ自然フラッシュ」の独自適合だったが、初実戦 (2026-07-23) で
-//   会議クローズ=フラッシュ瞬間に公式鯖 Hacking キックと完全同時刻の相関を観測 (BUG-20260723-01)。
+//   会議クローズ=フラッシュ瞬間に公式鯖 Hacking キックと完全同時刻の相関を観測。
 //   バニラ dirty フラッシュは PacketRateGate/分割保護を全迂回するため、TOHK 実戦実証済みの破棄式へ回帰。
 // - 破棄しても実害はない: フォークは TOHK と違い Data.IsDead をマスクしない (ジャグリングは SetRole RPC 方式)
 //   ため会議明けの全 Data 再送を必要とせず、死亡状態の真実は追放画面明けの RpcExiled 一斉送信

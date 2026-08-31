@@ -128,7 +128,7 @@ public class WordKiller : RoleBase
         if (!speaker || speaker.PlayerId >= 200 || !speaker.IsAlive()) return;
 
         // 投票終了〜会議クローズの窓でキルすると、追放ワープアップの Reliable バーストと重なって
-        // 公式鯖のキック帯に入る (docs/bug-inbox の CloseMeeting / exile wrap-up 事例)。
+        // 公式鯖のキック帯に入る。
         // `/` コマンド分岐 (ChatCommandPatch.cs) が持つのと同じ vote-state ガードを張る。
         if (MeetingHud.Instance && MeetingHud.Instance.state is MeetingHud.MeetingStates.Results or MeetingHud.MeetingStates.Proceeding) return;
 

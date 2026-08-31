@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 //
-// Wave 3 (docs/ekn-wave3-contract.md §3/§4) のフォーム欄 (progress / hostOptions) を、
+// Wave 3 (§3/§4) のフォーム欄 (progress / hostOptions) を、
 // role-maker.ts の実際の DOM 配線を通して検証する。dlg-role-maker のマークアップは
 // index.html から実際に切り出して使う (role-maker-disguise.test.ts と同じ理由 — id ドリフト検出)。
 //

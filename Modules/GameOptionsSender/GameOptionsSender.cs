@@ -276,8 +276,8 @@ public abstract class GameOptionsSender
         }
     }
 
-    // ⚠️ ここで「IEnumerator を返すヘルパーを yield return でネストする」形に戻してはいけない
-    // (BUG-20260706-01 round11)。マネージド IEnumerator を Il2Cpp コルーチンから yield すると、
+    // ⚠️ ここで「IEnumerator を返すヘルパーを yield return でネストする」形に戻してはいけない。
+    // マネージド IEnumerator を Il2Cpp コルーチンから yield すると、
     // BepInEx が Il2CppManagedEnumerator + strong GCHandle を1回ごとに生成し、それが永久に解放
     // されない (実測: 8分で2.5万個・全 live・~50個/秒 = 慢性メモリ膨張の主因)。
     // 判定は bool で返し、呼び出し側で `yield return null` → OnFrameResumed() を書く。

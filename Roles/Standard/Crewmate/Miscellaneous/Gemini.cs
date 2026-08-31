@@ -19,7 +19,6 @@ namespace EndKnot.Roles;
 //   ⚠️ 非モッド客に body が見えるのは AU 2026 が MurderPlayer FailedError の隠蔽トリックを
 //      潰した「回帰」に依存している (他の CNO では赤い人型が透けて見えるという不具合だが、
 //      この役職ではそれがそのまま仕様になる)。Innersloth が回帰を直すとこの役職は見えなくなる。
-//      背景は memory `project_cno_body_2026_regression_resume` を参照。
 //
 // 静止クロックはマグロ (Roles/Standard/Neutral/Benign/Maguro.cs) と同一。
 //   座標の変化だけで静止を判定すると、サボタージュ修理中など「操作しているのに動いていない」

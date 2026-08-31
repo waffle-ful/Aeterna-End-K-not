@@ -16,9 +16,9 @@ public static class PacketRateGate
 {
     private const int GateLimitPerSecond = 25; // DataFlagRateLimiter(23) よりわずかに上乗せ
 
-    // リンク劣化中の縮小予算 (BUG-20260820-06 緩和)。キック実測の連言は「劣化しきったリンク × バースト」で、
+    // リンク劣化中の縮小予算 (緩和)。キック実測の連言は「劣化しきったリンク × バースト」で、
     // 劣化中に送るほど Hazel Reliable 再送 (アプリ層メータに写らない重複) がサーバー側予算へ加算される疑い
-    // (project_kick_link_health_missing_axis)。劣化中は予算を半減してホスト自身の増幅を抑える。
+    // 劣化中は予算を半減してホスト自身の増幅を抑える。
     // 12/s は P9 候補 (無送信 ~50s キック) の圏外で、完全停止には決してしない。
     // Rollback bit: EndKnot_DATA/disable_adaptive_gate.txt を置くと常時 25/s に戻る (再ビルド不要)。
     private const int DegradedGateLimitPerSecond = 12;
@@ -110,7 +110,7 @@ public static class PacketRateGate
     private static long CurrentSecBucket;
     private static int PeakWarned;
 
-    // --- Reliable 再送メータ (BUG-20260820-06: 「劣化リンク×バースト」連言の 1-bit 計器) ---
+    // --- Reliable 再送メータ (「劣化リンク×バースト」連言の 1-bit 計器) ---
     // アプリ層の送信メータ (リング/秒メータ) には Hazel トランスポートの再送が写らないため、
     // 「サーバーが実際に受け取った本数」はここでしか推定できない。1Hz で MessagesResent の
     // デルタを取り、増えた秒だけ直近5秒の送信タグ内訳と併記して恒久チャネルへ残す —
@@ -124,7 +124,7 @@ public static class PacketRateGate
     /// (リンク健全性プローブは 2026-08-31 からレート窓 ResendCountLast10s を参照する — 単発再送での誤検知対策)。</summary>
     public static long LastResendObservedTs { get; private set; }
 
-    // --- 直近10秒の再送レート窓 (BUG-20260831-02: 「再送1本で10秒劣化」の誤検知をレート基準に置換) ---
+    // --- 直近10秒の再送レート窓 (「再送1本で10秒劣化」の誤検知をレート基準に置換) ---
     // 再送は delta>0 の秒しか起きないので、秒バケットのリングではなく (秒, 本数) のキュー+走行合計で持つ。
     private static readonly Queue<(long Sec, int Count)> RecentResends = new();
     private static int _recentResendTotal;
@@ -168,7 +168,7 @@ public static class PacketRateGate
                 AppendRing(msg.Length, tag, innerTag, nested, msg.SendOption, gated: false);
                 TickSecondMeter();
 
-                // 公式鯖で 100% キックが確定している 5 パターン (docs/official-server-model.md) を
+                // 公式鯖で 100% キックが確定している 5 パターンを
                 // 送信直前に検出してログに残す。ブロックはしない。ここが全送信の唯一の関所なので、
                 // 「キックされずに生き残った窓」でも混入を捕まえられる。
                 KickRiskDetector.Scan(msg);
@@ -632,7 +632,7 @@ public static class PacketRateGate
             var bySec = new SortedDictionary<long, (int count, int bytes)>();
             // 秒ごとの「先頭サブメッセージ tag」内訳。本数とバイト数だけでは、キック直前のバーストが
             // 何の送信だったのか (tag5=GameData/spawn か、tag6=GameDataTo か、別物か) が分からない。
-            // BUG-20260730-06 の rate 説を 1-bit で決着させるための計器。
+            // 送信レートが原因かという説を 1-bit で決着させるための計器。
             // 値は (パケット本数, 直下サブメッセージ総数)。後者が無いと、人数比例で膨らむ
             // t26 の中身 (CNO の per-player 配信) がパケット本数のメータ上で完全に不可視になる。
             var tagsBySec = new SortedDictionary<long, SortedDictionary<string, (int packets, int nested)>>();

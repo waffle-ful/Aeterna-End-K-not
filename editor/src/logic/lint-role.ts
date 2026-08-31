@@ -1,4 +1,4 @@
-// docs/ekr-logic-spec.md §6 — エディタ AST リンター (二層防御のヒント層)。
+// spec §6 — エディタ AST リンター (二層防御のヒント層)。
 // 「ブロックは組める・書き出しもできる」が前提 — ここで見つけた問題は *警告* であり、
 // roledef.ts の validateRoleLogic (契約違反=文書全体 reject) とは別物。呼び出し元は既に
 // 検証済みの RoleLogic (roledef.ts の型) だけを渡すこと — このモジュール自身は妥当性検証をしない。
@@ -22,31 +22,31 @@ import type { LogicNode, LogicRule, RoleLogic } from "../roledef";
 // Wave 1 (2026-08-11): L14〜L17 を追加 (計17ルール)。L14 = ctx 無しイベント配下の ctx セレクタ、
 // L15 = 未保存マーカーへの行き先、L16 = 未生成 CNO / 未保存 saved の参照、L17 = wait より後の
 // cancel_attack。L15/L16 は「参照整合性3原則」③ (エディタは欠落を能動的に教える) の実装。
-// Wave 2 (docs/ekn-wave2-contract.md §6 2026-08-11): L18〜L20 を追加 (計20ルール) + L16 拡張。
+// Wave 2 (§6 2026-08-11): L18〜L20 を追加 (計20ルール) + L16 拡張。
 // L18 = 会議専用 op (vote_block/vote_swap/exile) が会議系イベント以外の rule 配下、L19 = L17 の
 // 兄弟 (on_meeting_vote 配下で wait より後の cancel_vote)、L20 = L3/L4 のレート系兄弟 (on_second
 // 配下の arrow_show/arrow_mark/inspect/reveal)。L16 拡張 = vote_swap の暗黙 saved1/saved2 参照。
-// 2026-08-14 (BUG-20260813-04 の机上切り分け): L21 を追加 (計21ルール)。L17/L19 の兄弟で、
+// 2026-08-14 (実機で2回とも追放されなかった不具合の切り分けから): L21 を追加 (計21ルール)。L17/L19 の兄弟で、
 // wait より後の exile。
 // L22: 会議では起きないこうげきのしゅるいの下に、会議専用のちから (R2)。
 // L23: 会議中に決まる死にかたの下に、タスク中しか効かないちから (R2)。
-// Wave 3 (docs/ekn-wave3-contract.md §6 2026-08-14): L24/L25 を追加 (計25ルール)。
+// Wave 3 (§6 2026-08-14): L24/L25 を追加 (計25ルール)。
 // L24 = on_var の rule 配下で自分が監視している変数を書き換えている (ピンポン/発火抑止の温床)、
 // L25 = L15/L16 の参照整合性シリーズの兄弟 — on_var の監視変数・progress.text が参照する変数に
 // どの rule にも var_set/var_add が無い (一生変わらない)。
-// Wave 4 (docs/ekn-wave4-contract.md §6 2026-08-25): L26/L27 を追加 (計27ルール)。
+// Wave 4 (§6 2026-08-25): L26/L27 を追加 (計27ルール)。
 // L26 = L15/L16 の参照整合性シリーズ — `linked` セレクタ / on_far(who:"linked") / on_linked_death を
 // 使っているのにどの rule にも link op が無い。L27 = L5 の兄弟 (on_second 配下の recruit)。
 // 既存リスト改定: L12 の対象イベントに on_near/on_room_enter/on_room_exit を追加 (高頻度エッジ
 // イベント配下の生成系 op)、CTXLESS_WHENS (L14) に on_room_enter/on_room_exit を追加
 // (on_near/on_far/on_linked_death は ctx を持つので入れない)。
-// Wave 5 (docs/ekn-wave5-contract.md §4 2026-08-27): L28 を追加 (計28ルール)。
+// Wave 5 (§4 2026-08-27): L28 を追加 (計28ルール)。
 // L28 = L5/L27 の兄弟 — on_second 配下の effect_give (毎秒かけ直すと無駄うちになる。効いている
 // 時間は seconds が決めるので、きっかけを決めて1回かけるのが正しい組み方)。
-// Wave 6 (docs/ekn-wave6-contract.md §5 2026-08-29): L29 を追加 (計29ルール)。
+// Wave 6 (§5 2026-08-29): L29 を追加 (計29ルール)。
 // L29 = L5/L27/L28 の兄弟 — on_second 配下の cno_launch (毎秒とばすと予算切れですぐ消える)。
 // CTXLESS_WHENS (L14) に on_revive を追加 (holder限定・ctx無し — 契約 §3)。
-// Wave 7 (docs/ekn-wave7-contract.md §5 2026-08-30): 新ルールなし (計29のまま)。win/win_join の
+// Wave 7 (§5 2026-08-30): 新ルールなし (計29のまま)。win/win_join の
 // `linked`/`ctx` 参照は selectorTokens が target フィールドを総称で読むため L26/L14 に自動で乗る。
 
 export type LintRuleId =
@@ -137,10 +137,10 @@ function hasGenerationOpBeforeElapsed(nodes: LogicNode[], ops: ReadonlySet<Logic
 // spec §6 L14 の対象イベント (「あいて」を持たないもの) をそのまま列挙する。
 // ctx を持つイベント (on_kill/on_death/on_report/on_cno_touch/on_attacked) はここに入れない。
 // Wave 3 (契約 §1.2/§1.3/§1.4): on_var/on_alive_count/on_vent_exit も ctx 無し (L14 一覧に追加)。
-// Wave 4 (docs/ekn-wave4-contract.md §2/§6): on_room_enter/on_room_exit も ctx 無し。
+// Wave 4 (契約 §2/§6): on_room_enter/on_room_exit も ctx 無し。
 // on_near (ctx = 近づいた人)・on_far (ctx = 離れた人)・on_linked_death (ctx = 死んだ相手) は
 // ctx を持つので入れない。
-// Wave 6 (docs/ekn-wave6-contract.md §3): on_revive も ctx 無し (holder 限定)。on_sabotage は
+// Wave 6 (契約 §3): on_revive も ctx 無し (holder 限定)。on_sabotage は
 // グローバル型で ctx (=起こした人) を持つのでここには入れない。
 const CTXLESS_WHENS: ReadonlySet<string> = new Set([
     "on_game_start", "on_pet", "on_meeting_start", "on_meeting_end", "on_task_complete", "on_vent_enter", "on_second",
@@ -229,7 +229,7 @@ function hasCancelVoteAfterWait(nodes: LogicNode[]): boolean {
  * exile は EkrLogicOpcodes.Exile のフェーズゲート (MeetingHud 不在 / 追放演出中 / state が
  * Results・Proceeding) で弾かれる。wait を挟むと、その間に全員の投票が揃って Results へ遷移し
  * (CheckForEndVoting は投票受信ごとに走る)、再開時には既に手遅れというケースが構造的に起こる
- * — BUG-20260813-04 の実機2回とも追放されなかった件がこれ。弾かれても 1会議1回の枠は消費
+ * — 実機で2回とも追放されなかった件がこれ。弾かれても 1会議1回の枠は消費
  * しない (TryConsumeExile はゲートの後) ので、作者からは「無言で何も起きない」だけに見える。
  *
  * vote_block / vote_swap は対象にしない: どちらも「予約」を置くだけで実際に読まれるのは集計時
@@ -249,7 +249,7 @@ function hasExileAfterWait(nodes: LogicNode[]): boolean {
 // L18 (Wave 2): 会議専用 op (vote_block/vote_swap/exile) の配置ヒント対象イベント。
 // cancel_vote はここに含めない (roledef.ts の validateRoleLogic が on_meeting_vote 以外を
 // 構造的に reject するため、リンタで重ねて警告する必要がない)。
-// L12 (v1.2 新設・Wave 4 docs/ekn-wave4-contract.md §6 で対象イベント拡大): 高頻度エッジイベント。
+// L12 (v1.2 新設・Wave 4 契約 §6 で対象イベント拡大): 高頻度エッジイベント。
 // on_far は入れない (契約 §6 の改定リストは on_near/on_room_enter/on_room_exit の3つ —
 // on_far は「一度近づいてから離れる」の往復が要るぶん頻度が一段落ちる)。
 const L12_WHENS: ReadonlySet<string> = new Set(["on_cno_touch", "on_near", "on_room_enter", "on_room_exit"]);
@@ -257,7 +257,7 @@ const L12_WHENS: ReadonlySet<string> = new Set(["on_cno_touch", "on_near", "on_r
 const MEETING_ONLY_LINT_WHENS: ReadonlySet<string> = new Set(["on_meeting_start", "on_meeting_vote", "on_meeting_pick"]);
 const MEETING_ONLY_LINT_OPS: readonly LogicNode["op"][] = ["vote_block", "vote_swap", "exile"];
 
-// R2 (docs/ekn-r2-contract.md §3c L23): 会議中は no-op になる「体を動かす」系の op。
+// R2 (契約 §3c L23): 会議中は no-op になる「体を動かす」系の op。
 // C# 側の会議中ゲート (EkrLogicOpcodes の関所) が黙って落とすものと同じ顔ぶれを並べる —
 // 会議中も有効な notify / remember / inspect / reveal / vote_weight_set はここに入れない。
 const TASK_ONLY_LINT_OPS: readonly LogicNode["op"][] = [
@@ -402,7 +402,7 @@ export function lintRoleLogic(logic: RoleLogic, progressText?: string): LintWarn
                     "毎秒はやりすぎだよ。1秒に1回までしか効かないよ。",
                 ));
             }
-            // L27 (Wave 4・docs/ekn-wave4-contract.md §6): L5 の兄弟 — on_second 配下の recruit。
+            // L27 (Wave 4・契約 §6): L5 の兄弟 — on_second 配下の recruit。
             if (hasOp(rule.do, "recruit")) {
                 warnings.push(makeWarning(
                     "L27", ruleIndex, rule.when,
@@ -410,7 +410,7 @@ export function lintRoleLogic(logic: RoleLogic, progressText?: string): LintWarn
                     "毎秒なかまにするのはやりすぎだよ。じゅんばんに1人ずつ、きっかけを決めてさそおう。",
                 ));
             }
-            // L28 (Wave 5・docs/ekn-wave5-contract.md §4): L5/L27 の兄弟 — on_second 配下の effect_give。
+            // L28 (Wave 5・契約 §4): L5/L27 の兄弟 — on_second 配下の effect_give。
             if (hasOp(rule.do, "effect_give")) {
                 warnings.push(makeWarning(
                     "L28", ruleIndex, rule.when,
@@ -418,7 +418,7 @@ export function lintRoleLogic(logic: RoleLogic, progressText?: string): LintWarn
                     "まいびょう こうかをかけつづけると むだうちになっちゃうよ。きっかけを決めて1回かけよう (じかんは「なんびょう」で決められるよ)。",
                 ));
             }
-            // L29 (Wave 6・docs/ekn-wave6-contract.md §5): L5/L27/L28 の兄弟 — on_second 配下の cno_launch。
+            // L29 (Wave 6・契約 §5): L5/L27/L28 の兄弟 — on_second 配下の cno_launch。
             if (hasOp(rule.do, "cno_launch")) {
                 warnings.push(makeWarning(
                     "L29", ruleIndex, rule.when,
@@ -565,7 +565,7 @@ export function lintRoleLogic(logic: RoleLogic, progressText?: string): LintWarn
             ));
         }
 
-        // L22 (R2・docs/ekn-r2-contract.md §3c): 会議中に起きない種類の攻撃なのに、会議専用のちからを
+        // L22 (R2・契約 §3c): 会議中に起きない種類の攻撃なのに、会議専用のちからを
         // 置いている。会議で起きうる攻撃は「すいそく」だけ (キル/かんせつ/きょうせいはタスク中)。
         if (rule.when === "on_attacked" && rule.kind !== undefined && rule.kind !== "guess"
             && MEETING_ONLY_LINT_OPS.some((op) => hasOp(rule.do, op))) {
@@ -598,7 +598,7 @@ export function lintRoleLogic(logic: RoleLogic, progressText?: string): LintWarn
             ));
         }
 
-        // L26 (Wave 4・docs/ekn-wave4-contract.md §6・L15/L16 の参照整合性シリーズ): `linked`
+        // L26 (Wave 4・契約 §6・L15/L16 の参照整合性シリーズ): `linked`
         // セレクタ (target フィールドのトークン参照)・on_near/on_far(who:"linked")・on_linked_death の
         // どれかを使っているのに、どの rule にも link op が無い (=つないでいないので一生解決しない)。
         // on_near(who:"linked") も対象 (契約 §6 改定 2026-08-25 — link 無しでは一生発火しない同族)。

@@ -40,7 +40,7 @@ internal static class EOSReLoginProactivePatch
     internal static float PendingRecoveryArmedTime;
 
     // ゲームが LastResort 秒以内に終わらなければゲーム中でも再ログインを強行する。
-    // 実測 (BUG-20260707-10 相関 n=4) で expircallback の 8〜14 分後にトークン実失効 →
+    // 実測 (相関 n=4) で expircallback の 8〜14 分後にトークン実失効 →
     // ホスト確定切断なので、5 分待ってもゲーム続行中なら「どうせ死ぬ接続」— 賭けて再ログインする方が期待値が高い。
     private const float LastResortDelaySeconds = 300f;
 
@@ -69,7 +69,7 @@ internal static class EOSReLoginProactivePatch
         // loginFlowFinished=false に戻す — 壊れた認証ではフローが完了せず false のまま
         // スタックするため、ガードの内側に検出器を置くと自分自身を封鎖して全回復パスが
         // 死ぬ (2026-07-11 実測: expirrecover 後 tryingToLogin=true が 40 分沈黙 → token
-        // 実失効 → InTask 中に Hacking キック。BUG-20260711-03 の真因)。
+        // 実失効 → InTask 中に Hacking キック、が真因)。
         // loginFlowFinished は初回起動ログイン完了前の proactive 再ログイン抑止 (メソッド
         // 末尾) にのみ使う。
 

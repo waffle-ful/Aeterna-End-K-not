@@ -100,7 +100,7 @@ internal static class GhostRolesManager
 
             // 蘇生予約中のレヴナント (会議での仮死 → 会議明け2秒で RpcRevive) を除外。配ってしまうと
             // 蘇生時の役職再送が GuardianAngel desync を2秒で上書きし、「ゴースト役職と告知されたのに
-            // ボタンが出ない」状態だけが残る (BUG-20260721-10)
+            // ボタンが出ない」状態だけが残る
             if (Main.PlayerStates[pc.PlayerId].Role is Revenant { StillAlive: true }) return false;
 
             // 捕食中の赤ずきん (復活見込みの死者) も同じ理由で除外。加えて非ホストの赤ずきんは本人に

@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace EndKnot.Modules.Ekm;
 
-// EKN Wave 2 (docs/ekn-wave2-contract.md §1.2 on_meeting_pick — 会議ボタン)。
+// EKN Wave 2 (on_meeting_pick — 会議ボタン)。
 //
 // Judge.cs:240-281 (SendRPC/ReceiveRPC/JudgeOnClick/CreateJudgeButton) と**同型**の複製。Judge 本体は
 // fork 規則 (BackroomsLobby と同じ「既存コードのリファクタ禁止」精神を role コードにも適用) でリファクタ

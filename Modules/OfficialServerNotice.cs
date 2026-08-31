@@ -8,7 +8,7 @@ namespace EndKnot.Modules;
 // 万一 (大人数ロビー等の未検証ケースで) Hacking 切断された場合のフォールバック通知だけ残す。
 //
 // 表示は全て LOCAL の ShowPopUp のみ。公式鯖で networked SendMessage を足すと、それ自体が
-// anti-cheat を誘発しかねない ([[project_au2026_sendmessage_burst_kick]]) ので絶対にネットワーク送信しない。
+// anti-cheat を誘発しかねないので絶対にネットワーク送信しない。
 public static class OfficialServerNotice
 {
     // 自動部屋立て直し中は警告ポップアップを出さない (公式で kick されると毎周期出てしまうため)。

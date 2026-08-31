@@ -180,7 +180,7 @@ describe("役職コード検証規則 (EkrDefinition.cs 契約ミラー)", () =>
         expect(validateEkrDefinition({ ...baseValid(), team: "" }).ok).toBe(false);
     });
 
-    // R2 (docs/ekn-r2-contract.md §1 2026-08-11): team は crewmate/impostor/neutral の3値を受理する
+    // R2 (§1 2026-08-11): team は crewmate/impostor/neutral の3値を受理する
     // (madmate/coven は対象外のまま拒否)。
     it("team は crewmate/impostor/neutral の3値すべてを受理する", () => {
         for (const team of SUPPORTED_TEAMS) {
@@ -269,7 +269,7 @@ describe("役職コード検証規則 (EkrDefinition.cs 契約ミラー)", () =>
     });
 });
 
-// docs/ekr-logic-spec.md §1 の契約解決: 「JSON 型不一致は文書全体 reject」を C# (System.Text.Json の
+// §1 の契約解決: 「JSON 型不一致は文書全体 reject」を C# (System.Text.Json の
 // 素の挙動) に合わせて統一。値型 (bool/number) は明示的な null も拒否 (STJ が非 nullable 値型に
 // null を入れられず例外になるのを模倣)、参照型 (string) は null を省略と同じ既定値扱いにする
 // (STJ は string へ null を代入でき、Validate() 側の `??` が既定値に落とすのと同じ)。
@@ -324,7 +324,7 @@ describe("型不一致は文書全体 reject (C# の JsonSerializer 挙動に合
     });
 });
 
-describe("logic 検証 (docs/ekr-logic-spec.md §1〜§4・R1)", () => {
+describe("logic 検証 (§1〜§4・R1)", () => {
     function baseLogic(overrides: Record<string, unknown> = {}): Record<string, unknown> {
         return {
             version: 1,
@@ -587,7 +587,7 @@ describe("logic 検証 (docs/ekr-logic-spec.md §1〜§4・R1)", () => {
         }
     });
 
-    // v1.1 (docs/ekr-logic-spec.md §3 2026-08-09 追記): dummy_spawn / corpse_spawn
+    // v1.1 (§3 2026-08-09 追記): dummy_spawn / corpse_spawn
     it("dummy_spawn: slot/killable/at/name の範囲外・型不一致は拒否、範囲内は通る", () => {
         const cases: { node: unknown; ok: boolean }[] = [
             { node: { op: "dummy_spawn", slot: 1, name: "ダミー", killable: false, at: "self" }, ok: true },
@@ -691,7 +691,7 @@ describe("logic 検証 (docs/ekr-logic-spec.md §1〜§4・R1)", () => {
     });
 });
 
-// v1.2 (docs/ekr-logic-spec.md §2〜§3 2026-08-10 追記) — 位置と接触
+// v1.2 (§2〜§3 2026-08-10 追記) — 位置と接触
 describe("logic 検証 v1.2 (位置と接触)", () => {
     function baseLogic(overrides: Record<string, unknown> = {}): Record<string, unknown> {
         return {
@@ -791,7 +791,7 @@ describe("logic 検証 v1.2 (位置と接触)", () => {
     });
 });
 
-// v1.3 (docs/ekr-logic-spec.md §3 2026-08-11 追記) — ひっぱる・ひきずる・フィールド
+// v1.3 (§3 2026-08-11 追記) — ひっぱる・ひきずる・フィールド
 describe("logic 検証 v1.3 (ひっぱる・ひきずる・フィールド)", () => {
     function baseLogic(overrides: Record<string, unknown> = {}): Record<string, unknown> {
         return {
@@ -866,7 +866,7 @@ describe("logic 検証 v1.3 (ひっぱる・ひきずる・フィールド)", ()
 });
 
 // ---------------------------------------------------------------------------
-// Wave 1 (docs/ekr-logic-spec.md §1.1/§2/§3 2026-08-11 併合)
+// Wave 1 (§1.1/§2/§3 2026-08-11 併合)
 // ---------------------------------------------------------------------------
 
 describe("passives 検証 (Wave 1・spec §1.1)", () => {
@@ -1084,7 +1084,7 @@ describe("logic 検証 Wave 1 (on_attacked / cancel_attack / remember / セレ�
 });
 
 // ---------------------------------------------------------------------------
-// Wave 2 (docs/ekn-wave2-contract.md 2026-08-11) — 情報と会議
+// Wave 2 (2026-08-11) — 情報と会議
 // ---------------------------------------------------------------------------
 describe("logic 検証 Wave 2 (on_meeting_vote / on_meeting_pick / inspect / reveal / arrow_* / vote_* / exile)", () => {
     function baseLogic(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -1283,7 +1283,7 @@ describe("normalize* ヘルパー (UI と検証が共有する唯一のクラン
 });
 
 // ---------------------------------------------------------------------------
-// Wave 3 (docs/ekn-wave3-contract.md 2026-08-14) — じょうたいと数値
+// Wave 3 (2026-08-14) — じょうたいと数値
 // ---------------------------------------------------------------------------
 describe("logic 検証 Wave 3 (on_var / on_alive_count / on_vent_exit)", () => {
     function baseLogic(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -1518,7 +1518,7 @@ describe("hostOptions 検証 (Wave 3・契約 §4.1)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Wave 4 (docs/ekn-wave4-contract.md 2026-08-25) — つなぐ
+// Wave 4 (2026-08-25) — つなぐ
 // ---------------------------------------------------------------------------
 describe("logic 検証 Wave 4 (on_near / on_far / on_room_enter / on_room_exit / on_linked_death / link / unlink / recruit)", () => {
     function baseLogic(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -1657,7 +1657,7 @@ describe("logic 検証 Wave 4 (on_near / on_far / on_room_enter / on_room_exit /
         expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "arrow_mark", at: "linked", seconds: 10 }] })).ok).toBe(false);
     });
 
-    // ── Wave 5 (docs/ekn-wave5-contract.md §1〜§3) ────────────────────────────────────────
+    // ── Wave 5 (§1〜§3) ────────────────────────────────────────────────────────────────────
     it("recruit.slot: 任意・整数 1..18 のみ受理 (省略時はフィールドを持たない)", () => {
         const omitted = validateEkrDefinition(withRule({ when: "on_kill", do: [{ op: "recruit", target: "ctx" }] }));
         expect(omitted.ok).toBe(true);
@@ -1812,7 +1812,7 @@ describe("logic 検証 Wave 6 (cno_launch / on_sabotage / on_revive)", () => {
     });
 });
 
-describe("logic 検証 Wave 7 (win / win_join — docs/ekn-wave7-contract.md)", () => {
+describe("logic 検証 Wave 7 (win / win_join)", () => {
     function withTeamLogic(team: string, rules: unknown[]): Record<string, unknown> {
         return { ...baseValid(), team, logic: { version: 1, rules } };
     }

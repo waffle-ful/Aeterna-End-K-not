@@ -442,6 +442,8 @@ tools/*
 !tools/check-option-ids.ps1
 # ...and the lang-key sync checker, which the build & CI depend on.
 !tools/check-lang-keys.ps1
+# ...and the internal-only-comment checker, which the build & CI depend on.
+!tools/check-forbidden-comments.ps1
 # ...and the crash-recovery watchdog, which is embedded into the DLL & shipped as a feature.
 !tools/EndKnotWatchdog.ps1
 !tools/番犬スタート.cmd

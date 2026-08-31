@@ -302,7 +302,7 @@ internal static class ChatCommands
             
             // Commands with action handled elsewhere
             new("Guess", "{id} {role}", Command.UsageLevels.Everyone, Command.UsageTimes.InMeeting, (_, _, _) => { }, true, false, [GetString("CommandArgs.Guess.Id"), GetString("CommandArgs.Guess.Role")]),
-            // EKR Wave 2 (docs/ekn-wave2-contract.md §1.2 on_meeting_pick): dispatch は EkrManager.PickMsg
+            // EKR Wave 2 (on_meeting_pick): dispatch は EkrManager.PickMsg
             // ("||" 早期チェイン、Command.AllCommands の通常ディスパッチより前) — このエントリは /help 表示専用。
             new("Pick", "{id}", Command.UsageLevels.Everyone, Command.UsageTimes.InMeeting, (_, _, _) => { }, true, false, [GetString("CommandArgs.Pick.Id")]),
             new("Trial", "{id}", Command.UsageLevels.Everyone, Command.UsageTimes.InMeeting, (_, _, _) => { }, true, false, [GetString("CommandArgs.Trial.Id")]),
@@ -519,7 +519,7 @@ internal static class ChatCommands
             if (Newscaster.InterviewMsg(PlayerControl.LocalPlayer, text)) goto Canceled;
             if (Medium.MsMsg(PlayerControl.LocalPlayer, text)) goto Canceled;
             if (Nemesis.NemesisMsgCheck(PlayerControl.LocalPlayer, text)) goto Canceled;
-            // EKR Wave 2 (docs/ekn-wave2-contract.md §1.2): ローカル側 (ホスト自身の /pick) ディスパッチ。
+            // EKR Wave 2: ローカル側 (ホスト自身の /pick) ディスパッチ。
             if (EndKnot.Modules.Ekm.EkrManager.PickMsg(PlayerControl.LocalPlayer, text)) goto Canceled;
         }
 
@@ -1383,7 +1383,7 @@ internal static class ChatCommands
     }
 
     // TOHK の /kf 相当: 全バニラクライアントへリアクター desync フラッシュを撃ち、固まった
-    // 黒画面を HUD 再構築で強制復帰させる (BUG-20260716-09 の手動レスキュー)。/fix {id} と違い
+    // 黒画面を HUD 再構築で強制復帰させる手動レスキュー。/fix {id} と違い
     // FixBlackScreen の会議ゲートを通らないので、いつでも即座に全員へ撃てる。
     private static void KillFlashCommand(PlayerControl player, string text, string[] args)
     {
@@ -3084,7 +3084,7 @@ internal static class ChatCommands
         }
     }
 
-    // EKN ノーコード役職メーカー (計画正典: docs/ekn-api-plan.md、実体: Modules/Ekm/EkrManager)。
+    // EKN ノーコード役職メーカー (実体: Modules/Ekm/EkrManager)。
     private static void RoleCommand(PlayerControl player, string text, string[] args)
     {
         string sub = args.Length >= 2 ? args[1].ToLower() : "";
@@ -4152,7 +4152,7 @@ internal static class ChatCommands
         Utils.SendMessage($"[wcdbg] WaveCannon DebugSkipMask={m} (1=sequence off, 2=skin off, 4=CNO off, 8=speed off)", player.PlayerId);
     }
 
-    // メモリリーク調査用: 任意タイミングで Unity オブジェクト census を Health.log に記録 (BUG-20260706-01)
+    // メモリリーク調査用: 任意タイミングで Unity オブジェクト census を Health.log に記録
     private static void CensusCommand(PlayerControl player, string text, string[] args)
     {
         if (!player.FriendCode.GetDevUser().up && !player.FriendCode.IsLocalDev()) return;
@@ -4682,7 +4682,7 @@ internal static class ChatCommands
         }
 
         // /nest dummy <count|stop|clear> [per=0.4] [step=50] [pause=10] [noreg]
-        // 累計スポーン表オーバーフロー説 (docs/official-server-model.md §5-2 残渣) の計器。
+        // 累計スポーン表オーバーフロー説の計器。
         // xspawn と同形の raw spawn (owner=-2 / pid=201 / 裸 = outfit/SetName/fan-out ゼロ) を per 秒間隔で
         // count 体積み、step 体ごとに pause 秒停止して netIdCnt を記帳する。ワイヤに出るのは spawn 電文
         // だけなので、動く変数は「サーバーの表に登録された netId の累計」のみ。KICKRISK は常時稼働。
@@ -6163,7 +6163,7 @@ internal static class ChatCommands
                 Inspector.InspectorCheckMsg(player, text) ||
                 Councillor.MurderMsg(player, text) ||
                 Newscaster.InterviewMsg(player, text) ||
-                // EKR Wave 2 (docs/ekn-wave2-contract.md §1.2): ホスト側 (バニラ客含む全員) ディスパッチ。
+                // EKR Wave 2: ホスト側 (バニラ客含む全員) ディスパッチ。
                 EndKnot.Modules.Ekm.EkrManager.PickMsg(player, text))
             {
                 canceled = true;
@@ -6370,7 +6370,7 @@ internal static class ChatUpdatePatch
 
         int clientId = broadcast ? -1 : receiver.OwnerId;
 
-        // 生の Data.PlayerName 読みは禁止 (BUG-20260710-05) — Utils.SafePlayerName 参照。
+        // 生の Data.PlayerName 読みは禁止 — Utils.SafePlayerName 参照。
         // ここはロビーでホストを除いたランダムなプレイヤーが sender になる経路 (:4554) なので、
         // 「解放済みの名前を持つプレイヤー」を引く確率が構造的に一番高い。
         // ミラーが無いときは名前を安全に書き戻せないため、このメッセージの再送自体を諦める

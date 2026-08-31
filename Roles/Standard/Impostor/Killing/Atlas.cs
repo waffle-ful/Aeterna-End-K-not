@@ -27,7 +27,7 @@ namespace EndKnot.Roles;
 //
 // per-player 状態を static Dictionary<byte,T> で持つ理由:
 //   会議明けの張り直しを DummySpawner.SpawnAllDummies と同じ「保持者をまたいだ通し番号での
-//   順送り」で行う必要があるため (公式鯖キック対策 BUG-20260803-07)。Gemini/EvilBusker のような
+//   順送り」で行う必要があるため (公式鯖キック対策)。Gemini/EvilBusker のような
 //   per-instance フィールドだと、Atlas を複数人が持ったときに各人が 0 から順送りを始めてしまい、
 //   ピーク送信密度が保持者数倍になってしまう。
 // ============================================================
@@ -48,7 +48,7 @@ public class Atlas : RoleBase
     // 一切セットされずペット経路の連打が完全無制限になる。ApplyOutfitToCNO の
     // Data×2+Shapeshift (≈4 nests/体) は CNO の fan-out 予算 (ReserveFanoutBudget) に
     // 課金されないため (DummySpawner.cs:170-173 参照)、無制限だと MaxStock 分のダミーが
-    // 同一フレームで一気に設置されうる — BUG-20260803-07 と同じ形の公式鯖キック要因になる。
+    // 同一フレームで一気に設置されうる — 公式鯖キック要因になる。
     internal const int FixedAbilityCooldown = 5;
 
     private static List<byte> PlayerIdList = [];
@@ -221,7 +221,7 @@ public class Atlas : RoleBase
 
         // ⚠️ 遅延は 10 秒から縮めないこと。会議明けは追放スイープ (SetRole 全員分 + Desync +
         // ReactorFlash + NotifyRoles) が task phase 開始後 ~4 秒まで走り、レートゲートのドレインが
-        // さらに ~6 秒続く。DummySpawner.AfterMeetingTasks と同じ実測対策値 (BUG-20260803-07)。
+        // さらに ~6 秒続く。DummySpawner.AfterMeetingTasks と同じ実測対策値。
         LateTask.New(RespawnAllDummies, 10f, "Atlas.AfterMeeting");
     }
 

@@ -30,6 +30,10 @@ jobs:
         shell: pwsh
         run: pwsh tools/check-lang-keys.ps1
 
+      - name: Check for internal-only comments
+        shell: pwsh
+        run: pwsh tools/check-forbidden-comments.ps1
+
       - name: Restore dependencies
         run: dotnet restore EndKnot.csproj
 

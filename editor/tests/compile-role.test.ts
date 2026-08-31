@@ -212,7 +212,7 @@ describe("compile-role: CNO 系ブロックのフィールド分担", () => {
     });
 });
 
-// v1.1 (docs/ekr-logic-spec.md §3 2026-08-09 追記)
+// v1.1 (§3 2026-08-09 追記)
 describe("compile-role: dummy_spawn / corpse_spawn ブロックのフィールド分担 (v1.1)", () => {
     it("dummy_spawn は slot/name/at/killable を持つ (KILLABLE は \"1\"/\"0\" 文字列→boolean 変換)", () => {
         const killableBlocks = [{ type: "ekr_when_on_pet", next: { block: { type: "ekr_do_dummy_spawn", fields: { SLOT: 1, NAME: "ダミー", AT: "self", KILLABLE: "1" } } } }];
@@ -240,7 +240,7 @@ describe("compile-role: dummy_spawn / corpse_spawn ブロックのフィール�
     });
 });
 
-// v1.2 (docs/ekr-logic-spec.md §2〜§3 2026-08-10 追記) — 位置と接触
+// v1.2 (§2〜§3 2026-08-10 追記) — 位置と接触
 describe("compile-role: on_cno_touch / marker_save / teleport_other / portal_place ブロックのフィールド分担 (v1.2)", () => {
     it("ekr_when_on_cno_touch は rule に slot を付与する (SLOT フィールドの数値化込み)", () => {
         const blocks = [{ type: "ekr_when_on_cno_touch", fields: { SLOT: "2" }, next: { block: { type: "ekr_do_stop" } } }];
@@ -276,7 +276,7 @@ describe("compile-role: on_cno_touch / marker_save / teleport_other / portal_pla
     });
 });
 
-// v1.3 (docs/ekr-logic-spec.md §3 2026-08-11 追記) — ひっぱる・ひきずる・フィールド
+// v1.3 (§3 2026-08-11 追記) — ひっぱる・ひきずる・フィールド
 describe("compile-role: pull/drag/field ブロックのフィールド分担 (v1.3)", () => {
     it("pull は引数を持たない", () => {
         const blocks = [{ type: "ekr_when_on_pet", next: { block: { type: "ekr_do_pull" } } }];
@@ -299,7 +299,7 @@ describe("compile-role: pull/drag/field ブロックのフィールド分担 (v1
     });
 });
 
-// Wave 2 (docs/ekn-wave2-contract.md 2026-08-11 追記) — しらべる系 / とうひょう系
+// Wave 2 (2026-08-11 追記) — しらべる系 / とうひょう系
 describe("compile-role: しらべる/とうひょう ブロックのフィールド分担 (Wave 2)", () => {
     it("inspect: depth:role のとき failChance/noise が0でなければそれぞれ出力される", () => {
         const blocks = [{
@@ -526,7 +526,7 @@ describe("compile-role → roledef.validateRoleLogic: 統合 (実際に使える
         expect(r.ok).toBe(false);
     });
 
-    // v1.1 (docs/ekr-logic-spec.md §3 2026-08-09 追記)
+    // v1.1 (§3 2026-08-09 追記)
     it("会議明けに10.5秒待ってから dummy_spawn → corpse_spawn する複合ロジックが最後まで通る", () => {
         const w = ws([
             {
@@ -556,7 +556,7 @@ describe("compile-role → roledef.validateRoleLogic: 統合 (実際に使える
         }
     });
 
-    // v1.2 (docs/ekr-logic-spec.md §2〜§3 2026-08-10 追記)
+    // v1.2 (§2〜§3 2026-08-10 追記)
     it("on_cno_touch でマーカーを保存し teleport_other で相手をワープさせる複合ロジックが最後まで通る", () => {
         const w = ws([
             {
@@ -581,7 +581,7 @@ describe("compile-role → roledef.validateRoleLogic: 統合 (実際に使える
         }
     });
 
-    // v1.3 (docs/ekr-logic-spec.md §3 2026-08-11 追記)
+    // v1.3 (§3 2026-08-11 追記)
     it("on_kill で相手をひきよせ、つかんでひきずり、フィールドを出す複合ロジックが最後まで通る", () => {
         const w = ws([
             {
@@ -617,7 +617,7 @@ describe("compile-role → roledef.validateRoleLogic: 統合 (実際に使える
     });
 });
 
-// Wave 1 (docs/ekr-logic-spec.md §2/§3 2026-08-11 併合)
+// Wave 1 (§2/§3 2026-08-11 併合)
 describe("compile-role: Wave 1 ブロック (on_attacked / cancel_attack / remember / セレクタ)", () => {
     it("ekr_when_on_attacked は when:\"on_attacked\" の rule になる (slot は付かない)", () => {
         const blocks: SerializedBlock[] = [
@@ -704,7 +704,7 @@ describe("compile-role: Wave 1 ブロック (on_attacked / cancel_attack / remem
     });
 });
 
-// Wave 3 (docs/ekn-wave3-contract.md §1 2026-08-14) — じょうたいと数値の新3イベント
+// Wave 3 (§1 2026-08-14) — じょうたいと数値の新3イベント
 describe("compile-role: Wave 3 ブロック (on_var / on_alive_count / on_vent_exit)", () => {
     it("ekr_when_on_var は var/cmp/value を rule に転記する", () => {
         const blocks: SerializedBlock[] = [
@@ -784,7 +784,7 @@ describe("compile-role: 空っぽのきっかけブロック検出", () => {
     });
 });
 
-// Wave 4 (docs/ekn-wave4-contract.md 2026-08-25) — つなぐ
+// Wave 4 (2026-08-25) — つなぐ
 describe("compile-role: Wave 4 ブロック (on_near / on_far / on_room_enter / on_room_exit / on_linked_death / link / unlink / recruit)", () => {
     it("ekr_when_on_near は radius を転記し、WHO が既定の anyone ならフィールドごと省略する", () => {
         const blocks: SerializedBlock[] = [
@@ -867,7 +867,7 @@ describe("compile-role: Wave 4 ブロック (on_near / on_far / on_room_enter / 
         ]);
     });
 
-    // Wave 5 (docs/ekn-wave5-contract.md §1/§2)
+    // Wave 5 (§1/§2)
     it("ekr_do_recruit の SLOT は既定 \"\" でフィールドごと省略し、指名時だけ数値で転記する", () => {
         expect(compileTopBlocksToRules([
             { type: "ekr_when_on_kill", next: { block: { type: "ekr_do_recruit", fields: { TARGET: "ctx", SLOT: "" } } } },
@@ -910,7 +910,7 @@ describe("compile-role: Wave 4 ブロック (on_near / on_far / on_room_enter / 
     });
 });
 
-// Wave 6 (docs/ekn-wave6-contract.md 2026-08-29) — とばすもの (発射体プリミティブ)
+// Wave 6 (2026-08-29) — とばすもの (発射体プリミティブ)
 describe("compile-role: Wave 6 ブロック (cno_launch / on_sabotage / on_revive)", () => {
     it("ekr_do_cno_launch は SPEED が既定 medium ならフィールドごと省略する", () => {
         expect(compileTopBlocksToRules([
@@ -966,7 +966,7 @@ describe("compile-role: Wave 6 ブロック (cno_launch / on_sabotage / on_reviv
     });
 });
 
-describe("compile-role: Wave 7 ブロック (win / win_join — docs/ekn-wave7-contract.md)", () => {
+describe("compile-role: Wave 7 ブロック (win / win_join)", () => {
     it("ekr_do_win は target を転記する (ドロップダウン既定の self も明示のまま)", () => {
         expect(compileTopBlocksToRules([
             { type: "ekr_when_on_pet", next: { block: { type: "ekr_do_win", fields: { TARGET: "self" } } } },

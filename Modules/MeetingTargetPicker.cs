@@ -10,7 +10,7 @@ namespace EndKnot.Modules;
 //
 // バニラ Judge (RoleTypes.Judge) の basis を会議のあいだだけ配ると、他人の行に木槌ボタンが生え、
 // 押下が RpcCalls.QueueOverruleVotes (66) でホストへ届く。これを役職側のコマンド処理へ流す。
-// 実測の性質と制約は docs/judge-integration-resume.md が正典。要点だけ再掲:
+// 実測で確認済みの制約は次のとおり:
 //   ・押下したクライアントの票は didVote=True / votedFor=255 の無効票になる (集計は 255 を既に除外)
 //   ・木槌はバニラ側で 1 会議 1 回のハードキャップ (使用回数の多い役職はチャットコマンドが必要)
 //   ・死者の行には出ない / 通信妨害中は死ぬ

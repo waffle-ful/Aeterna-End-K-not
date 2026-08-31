@@ -23,7 +23,7 @@ internal static class EndGamePatch
 
     public static void Postfix()
     {
-        // Ended 帯 1.8 秒級ストールの帰属計測 (BUG-20260714-05)。ストール窓は EndGame 統計構築と
+        // Ended 帯 1.8 秒級ストールの帰属計測。ストール窓は EndGame 統計構築と
         // SetEverythingUp (outro) の両方を含むため、各段の取り分を TRANSIT 行で分離する。
         var transitSw = System.Diagnostics.Stopwatch.StartNew();
 

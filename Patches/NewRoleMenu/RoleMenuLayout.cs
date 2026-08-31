@@ -1,7 +1,7 @@
 namespace EndKnot;
 using UnityEngine;
 
-// World-space coordinate system derived from docs/mockups/role-screen-refined.html (1440x860).
+// World-space coordinate system for the role-screen UI mockup (1440x860).
 // Anchor: canvas x in [-6,6] (width 12u), unitsPerPx = 12/1440 = 0.008333.
 public static class RoleMenuLayout
 {

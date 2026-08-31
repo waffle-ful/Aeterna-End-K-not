@@ -11,7 +11,7 @@ using UnityEngine.Events;
 
 namespace EndKnot.Modules;
 
-// GC use-after-free (coreclr AV) の自己修復オーケストレータ (docs/coreclr-av-chat-uaf-resume.md §1e が正典)。
+// GC use-after-free (coreclr AV) の自己修復オーケストレータ。
 // 起動時に GcUafProbe.Probe() で VULNERABLE (interop フィールドに write barrier が無い状態) を検知したら
 // BepInEx.cfg の ScanMethodRefs を BepInEx.Configuration.ConfigFile.CoreConfig 経由で true にし、生成済み
 // interop の hash マーカーを消して次回起動で barrier 付き interop を再生成させる。
