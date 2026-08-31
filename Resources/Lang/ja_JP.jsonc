@@ -8937,6 +8937,7 @@
   "OutfitShuffle.SameTarget": "同じプレイヤー同士は交換できません。",
   "OutfitShuffle.NotInMeeting": "会議中は外見を入れ替えられません。",
   "OutfitShuffle.PostMeetingCooldown": "会議明け直後は入れ替えられません。数秒おいてからもう一度どうぞ。",
+  "OutfitShuffle.LinkDegraded": "いま回線が不安定です。少し待ってからもう一度どうぞ。",
   "OutfitShuffle.NotEligible": "そのプレイヤーは今シャッフルできません。",
   "OutfitShuffle.TargetNotFound": "「{0}」に一致するプレイヤーが見つかりません。",
   "OutfitShuffle.Shuffled": "外見を交換しました。",
