@@ -24,7 +24,7 @@
   "SayTitle": "★[ モデレーター メッセージ ]★",
   "announcementUpdate": "<size=3f>アップデート v{0}</size>\\n{1}",
   "announcementChangelog": "<size=3f>更新内容 v{0}</size>\\n{1}",
-  "Server": "<#00ffa5>サーバー:</color> <b>{0}</b>",
+  "Server": "<#00ffa5>サーバー:</color> ",
   "VersionMismatch": "<size=80%>{0}は 異なるバージョンのmodをインストールしてます</size>",
   "ModMismatch": "<size=80%>{0}は End K notの互換性がない 異なるmodが インストールされています</size>",
   "Kick": "キック",

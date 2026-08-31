@@ -24,7 +24,7 @@
   "SayTitle": "★[ Moderátor üzenet ]★",
   "announcementUpdate": "<size=3f>Frissítés v{0}</size>\\n{1}",
   "announcementChangelog": "<size=3f>Módosítási napló v{0}</size>\\n{1}",
-  "Server": "<#00ffa5>Szerver:</color> <b>{0}</b>",
+  "Server": "<#00ffa5>Szerver:</color> ",
   "VersionMismatch": "{0} a mod másik verzióját töltötte le",
   "ModMismatch": "{0} olyan modot töltött le amelyik nem kompatibilis az End K not <#ffff00>⚠</color> moddal",
   "Kick": "Kirúgás",

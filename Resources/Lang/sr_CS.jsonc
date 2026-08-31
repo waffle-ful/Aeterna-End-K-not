@@ -24,7 +24,7 @@
   "SayTitle": "★[ Moderatova poruka ]★",
   "announcementUpdate": "<size=3f>Ažuriranje v{0}</size>\\n{1}",
   "announcementChangelog": "<size=3f>EvidencijaIzmena v{0}</size>\\n{1}",
-  "Server": "<#00ffa5>Server:</color> <b>{0}</b>",
+  "Server": "<#00ffa5>Server:</color> ",
   "VersionMismatch": "{0} ima drugačiju mod verziju instaliranu",
   "ModMismatch": "{0} ima instaliran drugi mod koji nije kompatibilan sa End K not-om <#ffff00>⚠</color>",
   "Kick": "Izbaci",

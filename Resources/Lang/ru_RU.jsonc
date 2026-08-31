@@ -24,7 +24,7 @@
   "SayTitle": "★[ Сообщение от модератора ]★",
   "announcementUpdate": "<size=3f>Обновление v{0}</size>\\n{1}",
   "announcementChangelog": "<size=3f>Список Изменений v{0}</size>\\n{1}",
-  "Server": "<#00ffa5>Регион:</color> <b>{0}</b>",
+  "Server": "<#00ffa5>Регион:</color> ",
   "VersionMismatch": "У {0} установлена другая версия мода",
   "ModMismatch": "У {0} установлен другой мод (несовместимый с End K not)",
   "Kick": "Кикнуть",
