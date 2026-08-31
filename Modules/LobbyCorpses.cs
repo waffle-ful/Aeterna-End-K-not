@@ -182,7 +182,7 @@ internal static class LobbyCorpses
         {
             // 開始コミット/ロビー離脱を検知したら残りを撒かない (走り出したループは StartSpawn 入口の
             // GameStartCommitted ゲートの射程外。劣化 spacing 1.5s ではテイルが最大 ~43s まで伸び、
-            // 開始バーストへ装飾 spawn が食い込む窓になる — 2026-08-31 監査指摘)。yield break でなく
+            // 開始バーストへ装飾 spawn が食い込む窓になる — 2026-08-31 確認)。yield break でなく
             // break で抜けて、後続の復元 Action enqueue と SpawnInProgress 解除は必ず走らせる。
             if (GameStartCommitted || !GameStates.IsLobby) break;
 

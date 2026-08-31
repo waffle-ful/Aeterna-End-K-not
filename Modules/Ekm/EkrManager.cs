@@ -41,10 +41,10 @@ internal sealed class EkrHolderState
     // 単一の辞書にする (side ごとに分けると、A→B→(3秒待たず)A→B の高速往復を止められない)。
     public readonly Dictionary<byte, float> PortalLastWarpTime = new();
 
-    // v1.2 監査修正 (2026-08-10): センサー実体の「非実体→実体」遷移 (初回 spawn / 会議明け復活 /
+    // v1.2 (2026-08-10): センサー実体の「非実体→実体」遷移 (初回 spawn / 会議明け復活 /
     // ポータル移設) を検出してラッチ/デバウンスを作り直すための前回ポーリング時の実体化状態。
     // 復活後に旧ラッチが残ると「半径内スポーンで enter が永久不発」「切断者の残留エントリを
-    // PlayerId 再利用者が無音継承」の2事故になる (pitfall 監査指摘)。
+    // PlayerId 再利用者が無音継承」の2事故になる。
     public readonly bool[] TouchSensorWasLive = new bool[3];
     public readonly bool[] PortalSensorWasLive = new bool[2];
 
@@ -60,8 +60,8 @@ internal sealed class EkrHolderState
     public readonly Dictionary<byte, float> LastNotifyTime = new();
     // notify が会議中に呼ばれたときだけ使う専用バケット (通常より粗い間隔)。
     // Utils.SendMessage はワールド名札と違い「呼ぶたびにチャット欄へ1行追加」なので、
-    // LastNotifyTime (1秒間隔) をそのまま共用すると1回の会議で数十行のスパムになりうる
-    // (advisor 指摘・2026-08-09)。EkrLogicOpcodes.Notify() 参照。
+    // LastNotifyTime (1秒間隔) をそのまま共用すると1回の会議で数十行のスパムになりうる。
+    // EkrLogicOpcodes.Notify() 参照。
     public readonly Dictionary<byte, float> LastMeetingNotifyTime = new();
 
     // ── Wave 1 (docs/ekr-logic-spec.md §3 remember / §1.1 passives) ────────────────────────────
@@ -75,8 +75,8 @@ internal sealed class EkrHolderState
     public float LastDoomTickTime = -1f;
 
     // passives.speedMult の適用状態。opcode 側の速度ブースト (SpeedBoostActive) とは別枠で、
-    // こちらは「役職を持っている間ずっと」効く常時倍率。復元は memory 罠
-    // (allplayerspeed-temp-boost-restore-race) どおり「凍結中スキップ + 捕捉フラグ」の2点セット。
+    // こちらは「役職を持っている間ずっと」効く常時倍率。復元は一時速度ブーストの復元レース対策として
+    // 「凍結中スキップ + 捕捉フラグ」の2点セット。
     public bool PassiveSpeedApplied;
     public float PassiveSpeedBaseline;
 
@@ -87,7 +87,7 @@ internal sealed class EkrHolderState
     public Vector2 LastLivePosition;
     public float LastKillTime = -1f;
     public float LastCnoSpawnTime = -1f;
-    // spec §5 (2026-08-09 監査改定): cno_show は cno_spawn と共用せず独自の ≤1/3秒/ホルダー バケット
+    // spec §5 (2026-08-09): cno_show は cno_spawn と共用せず独自の ≤1/3秒/ホルダー バケット
     // (despawn→respawn の fan-out 未課金コストを織り込んで spawn より厳しくする)。
     public float LastCnoShowTime = -1f;
     // v1.1: dummy_spawn ≤1/3秒/ホルダー・corpse_spawn ≤1/2秒/ホルダー (spec §5)。
@@ -192,7 +192,7 @@ internal sealed class EkrHolderState
 
     // §1.3 on_far: per-rule の「一度 radius 内へ入った」武装と、いま監視している相手 (byte.MaxValue =
     // 監視なし)。監視相手の張り替え (link/remember の再実行) を前回値との差分で検出し、武装を現状真偽
-    // から焼き直す — リンク成立時に既に遠くても発火しない (§1.3 初期武装裁定)。
+    // から焼き直す — リンク成立時に既に遠くても発火しない (§1.3 初期武装方針)。
     public bool[] FarArmed = [];
     public byte[] FarWatchedId = [];
 
@@ -297,7 +297,7 @@ public static class EkrManager
     // ── R2: 偽装 (docs/ekn-r2-contract.md §4) ────────────────────────────────────────────
     // passives.disguise の陣営。null = 偽装なし (EKR 以外も null)。
     // ⚠️ 効くのは**表示層だけ**で、しかも「本来見えていたものを隠す/差し替える」向きだけ
-    // (2026-08-14 ご主人様裁定「既存のものに合わせる」= DoubleAgent と同じ向き)。
+    // (DoubleAgent と同じ向き)。
     // 見えていない相手に新しく見せる向き — たとえばクルー陣営の EKR が impostor 偽装しても
     // 本物のインポスターの仲間一覧には現れない — はやらない。
     public static EkrTeam? GetDisguiseTeam(CustomRoles role)
@@ -318,7 +318,7 @@ public static class EkrManager
     // /role set|unset の対象外・_bindings.json にも載らない (BoundFiles に入れない)。
     //
     // ⚠️ メンバーシップは **コンパイル時静的** に保つ (LoadEmbeddedRoles での実行時 Add にしない)。
-    // 理由 (2026-08-11 監査): ①GetRoleOptionType はメニュー構築 (OptionHolder.Load コルーチン) 時 =
+    // 理由: ①GetRoleOptionType はメニュー構築 (OptionHolder.Load コルーチン) 時 =
     // LoadEmbeddedRoles より前に評価されるため、実行時登録だと Neutral_Benign へ誤分類される
     // ②JSON パース失敗時に IsEkrRole が false になると GetRoleSpawnMode の「未束縛 EKR 役職は出現率0」
     // 安全網の管轄から漏れ、定義なしの役職が湧きうる。静的メンバーシップなら破損時も「未束縛 = 湧かない」
@@ -472,7 +472,7 @@ public static class EkrManager
         // ReloadLibrary は /role コマンド (ロビー限定) からしか呼ばれないので、試合中に定義が差し替わることはない。
         // Library はこの関数の呼び出しごとに毎回作り直されるため、参照比較は毎回不一致になり Bind() が
         // 呼ばれ得る — 台帳内容は変わらないので、無駄な再保存を避けるため書き戻し抑制ガードをかける
-        // (advisor 指摘・2026-08-10。RestoreBindings の _suppressSave と同じもの)。
+        // (RestoreBindings の _suppressSave と同じもの)。
         _suppressSave = true;
 
         try
@@ -635,13 +635,13 @@ public static class EkrManager
         return true;
     }
 
-    // slot 束縛をゲーム再起動をまたいで永続化するファイル (docs 裁定 2026-08-10)。EKRoles フォルダ直下に
+    // slot 束縛をゲーム再起動をまたいで永続化するファイル。EKRoles フォルダ直下に
     // 置くが、ReloadLibrary の `*.ekrole.json` スキャンには "_bindings.json" は一致しないため拾われない
     // (先頭の `_` はスキャン対象拡張子と衝突しないことの確認用の意図的な命名)。
     private static string BindingsFilePath => string.IsNullOrEmpty(RolesPath) ? null : RolesPath + "_bindings.json";
 
-    // RestoreBindings (と ReloadLibrary の再解決ループ) が内部で Bind() を呼ぶ間は台帳を書き戻さない
-    // (advisor 指摘・2026-08-10)。これが無いと、復元中にファイルが見つからず skip したスロットの
+    // RestoreBindings (と ReloadLibrary の再解決ループ) が内部で Bind() を呼ぶ間は台帳を書き戻さない。
+    // これが無いと、復元中にファイルが見つからず skip したスロットの
     // 記録が「見つかったスロットだけの再保存」で消え、ユーザーがファイルを元に戻しても二度と
     // 復活しなくなる (「ファイルを戻せば次回復活する」という設計要件を壊す)。
     private static bool _suppressSave;
@@ -765,7 +765,7 @@ public static class EkrManager
     private static readonly Dictionary<CustomRoles, OptionItem[]> HostOptionPool = [];
 
     // slot -> 前回この枠に流し込んだ役職コードの同定子。**同一コードの再束縛ではホストの保存値を
-    // 尊重する** (plan §7 Tier 1 #1 の裁定に従う) ため、既定値の流し込みは同定子が変わったときだけ。
+    // 尊重する** (plan §7 Tier 1 #1 の方針に従う) ため、既定値の流し込みは同定子が変わったときだけ。
     // _bindings.json へ一緒に保存する — 保存しないと再起動のたびに復元 Bind が既定値で塗り潰す。
     private static readonly Dictionary<CustomRoles, string> HostOptionSignatures = [];
 
@@ -819,7 +819,7 @@ public static class EkrManager
             //
             // ⚠️ index 化の前に**必ず枠の値域へクランプする**。FloatValueRule.RepeatIndex は範囲外の
             // インデックスを 0 側へ丸めず modulo で折り返すので (負→maxIndex / 超過→余り)、作者が
-            // 枠の外の初期値を書いていると無関係な値が既定値として焼き付く (2026-08-14 監査)。
+            // 枠の外の初期値を書いていると無関係な値が既定値として焼き付く。
             float rawDefault = ResolveHostOptionDefault(def, ho);
             int index = floatOpt.Rule.GetNearestIndex(Math.Clamp(rawDefault, floatOpt.Rule.MinValue, floatOpt.Rule.MaxValue));
             opt.SetAllValues(Enumerable.Repeat(index, OptionItem.NumPresets).ToArray());
@@ -1016,7 +1016,7 @@ public static class EkrManager
     }
 
     // Wave 2 (docs/ekn-wave2-contract.md §1.1): 束縛中の役職コードが on_meeting_vote ルールを持つか。
-    // CustomRolesHelper.CancelsVote() の EKR arm が読む。coordinator 裁定 (2026-08-11): 述語は
+    // CustomRolesHelper.CancelsVote() の EKR arm が読む。述語は
     // 「cancel_vote の有無」ではなく「on_meeting_vote ルールの有無」— cancel_vote を使わない定義
     // (「投票した人をおぼえる」だけ等) でも OnVote 呼び出し口 (MeetingHudPatch.cs:1610) を
     // 通さないとイベントが永久に発火しない。HasOnPetLogic と同型の静的導出。
@@ -1091,14 +1091,14 @@ public static class EkrManager
 
         // v1.3: crowd-control (drag/field) は EKR 全体の static シングルトン。新ラウンド開始の主経路
         // (OnGameStartedPatch の PlayerStates 差し替え) は Role.Remove() を呼ばないため、前ラウンド稼働中の
-        // まま持ち越すと HolderId が新ラウンドの別人として解決されうる (監査指摘 2026-08-11 — EndAt 経過で
+        // まま持ち越すと HolderId が新ラウンドの別人として解決されうる (EndAt 経過で
         // 自己回収はするが、ここで確実に断つ)。実体 CNO はゲーム終了時の CNO 一斉破棄で片付いているので
         // Despawn は呼ばず参照だけ捨てる。
         //
         // ⚠ ただし ResetSlot は Init() 経由で「ゲーム中いつでも」呼ばれうる (GameState.SetMainRole の
         // `if (!role.RoleExist(true)) Role.Init();` — 役職変更持ち役職が未使用スロットへ再配役したとき)。
         // 無条件クリアだと無関係スロットの稼働中 field を参照ごと捨てて孤児 CNO 化させ、≤10 上限が
-        // 静かに破れる (監査指摘 2026-08-11)。帰属するときだけ断つ — TeardownRuntime の HolderId/CtxId
+        // 静かに破れる。帰属するときだけ断つ — TeardownRuntime の HolderId/CtxId
         // チェックと同じ非対称の解消。ラウンド境界では前ラウンドの保持者が set に残っているので通る。
         if (ccShouldClear)
         {
@@ -1110,7 +1110,7 @@ public static class EkrManager
         // Wave 6 (契約 §2): サボの per-系統デバウンスをラウンド境界でも捨てる。会議境界
         // (FireMeetingStart) だけでクリアしていると、**会議が一度も起きずに終わった試合**の最終サボ成立
         // 時刻が次の試合へ持ち越され、同じ系統のサボが 5 秒以内に起きるとその試合の最初の on_sabotage が
-        // 無音でドロップする (完成前 pitfall 監査指摘 2026-08-29)。ここは _cc のような帰属判定を要しない —
+        // 無音でドロップする。ここは _cc のような帰属判定を要しない —
         // 単なるデバウンス辞書なので、早めに捨てても「1 回余分に発火しうる」安全側にしか振れない。
         LastSabotageFireTime.Clear();
 
@@ -1156,7 +1156,7 @@ public static class EkrManager
 
     private static readonly Dictionary<byte, EkrHolderState> Runtime = [];
 
-    // spec §5 (2026-08-09 監査改定):「全体 ≤10体」は導出型で数える — 手動カウンタ (増減の対称性が崩れると
+    // spec §5 (2026-08-09):「全体 ≤10体」は導出型で数える — 手動カウンタ (増減の対称性が崩れると
     // 片方向リークで無音に上限が機能しなくなる構造を持つ) を廃止し、CanOccupyCnoSlot() の呼び出し毎に
     // 全ホルダーの CnoSlots から都度数え直す。実体化前 (pending) の slot も「予約済み」として数える —
     // spawn コルーチンは既に起動済みでいずれ実体化するため、実体化後だけ数えると瞬間的に 10 体超の
@@ -1241,8 +1241,8 @@ public static class EkrManager
     //
     // ラウンド境界以外でも起きる (Randomizer/Imitator/Amnesiac 等の役職再割当て) ため、speed ブースト中に
     // ここへ来ると EkrLogicOpcodes.Speed() の遅延復元タスクが GetHolderState(playerId)==null で早期 return し、
-    // Main.AllPlayerSpeed が永久にブースト値のまま固定される (memory: allplayerspeed-temp-boost-restore-race
-    // と同型の破棄経路)。teardown 時点で即座に復元することで防ぐ。
+    // Main.AllPlayerSpeed が永久にブースト値のまま固定される (一時速度ブーストの復元レースと同型の破棄経路)。
+    // teardown 時点で即座に復元することで防ぐ。
     private static void TeardownRuntime(byte playerId)
     {
         // v1.3 (spec §5 crowd-control エンジン): ホルダー/ctx いずれかの死亡・切断・役職剥奪でも即解除。
@@ -1262,7 +1262,7 @@ public static class EkrManager
             // 凍結中 (他の役職の SetDark/ノックバック等が MinSpeed を敷いている) は触らない — 復元すると
             // 相手側の凍結を巻き戻してしまう。ここで諦めて放置すると、この state は teardown 済みで
             // 誰も再試行しないまま「相手の凍結解除がブースト値を復元先として控えたまま解除」→ 永久高速固定
-            // になる (memory: allplayerspeed-temp-boost-restore-race と同型)。凍結が抜けるまで再試行する。
+            // になる (一時速度ブーストの復元レースと同型)。凍結が抜けるまで再試行する。
             if (Mathf.Approximately(Main.AllPlayerSpeed.GetValueOrDefault(playerId), Main.MinSpeed))
                 RetryRestoreSpeed(playerId, state.SpeedBaseline, retriesLeft: 30);
             else
@@ -1289,14 +1289,14 @@ public static class EkrManager
             if (cno == null) continue;
             state.CnoSlots[i] = null;
 
-            // spec §5 孤児コルーチン防止裁定: 実体化前 (playerControl 未生成) は Despawn を呼んでも
+            // spec §5 孤児コルーチン防止方針: 実体化前 (playerControl 未生成) は Despawn を呼んでも
             // 基底 spawn コルーチンは止まらず、いずれ勝手に実体化して追跡外のまま居座る。実体化を
             // 待って遅延 Despawn を再試行する。
             if (cno.IsInstantiated) cno.Despawn();
             else RetryDespawnUninstantiated(cno, retriesLeft: 5);
         }
 
-        // v1.2 (spec §3): 役職剥奪 (Teardown) で両側消滅。CnoSlots と同じ孤児コルーチン防止裁定に従う。
+        // v1.2 (spec §3): 役職剥奪 (Teardown) で両側消滅。CnoSlots と同じ孤児コルーチン防止方針に従う。
         for (int i = 0; i < state.Portals.Length; i++)
         {
             IEkrSlotCno portal = state.Portals[i];
@@ -1311,7 +1311,7 @@ public static class EkrManager
     // teardown 時点で凍結中だった speed ブーストの復元を、凍結が解けるまで再試行する。playerId は
     // この呼び出し後に他の役職・別の EKR スロットへ再割当てされうるため、EkrHolderState には依存せず
     // baseline を値渡しで持ち回る。ただし再試行の間に「同じ playerId が新しい EKR speed ブーストを
-    // 開始している」ケースがありうる (advisor 指摘・2026-08-09) — 復元直前に新しい持ち主がブーストを
+    // 開始している」ケースがありうる — 復元直前に新しい持ち主がブーストを
     // 管理していないか確認し、していればこの再試行は諦める (新しい持ち主の責務に譲る。でないと
     // 新しいブーストを古い baseline で踏み潰してしまう)。
     private static void RetryRestoreSpeed(byte playerId, float baseline, int retriesLeft)
@@ -1389,7 +1389,7 @@ public static class EkrManager
 
     // cno_despawn opcode から直接呼ばれる他、cno_spawn/dummy_spawn の「同一 slot への再 spawn」でも
     // 「消してから作る」の消す側として使われる (v1.1: dummy_spawn の slot は cno_spawn と共有)。
-    // 実体化前 (playerControl 未生成) の CNO は spec §5 の孤児コルーチン防止裁定によりドロップ (no-op) する
+    // 実体化前 (playerControl 未生成) の CNO は spec §5 の孤児コルーチン防止方針によりドロップ (no-op) する
     // — slot は占有されたまま維持される (「まだ出ていないものは変えられない」)。
     // cno_spawn/dummy_spawn 側は「既存占有者が未実体化なら release を試みる前に spawn ごと諦める」を別途行う
     // (EkrLogicOpcodes.CnoSpawn/DummySpawn 参照 — ここで release が no-op になっただけでは新規 occupy を防げない)。
@@ -1407,7 +1407,7 @@ public static class EkrManager
     }
 
     // ── v1.2: ポータル (portal_place) の専用 2 枠アクセサ (idx: 0=a, 1=b) ─────────────────────
-    // CnoSlots と同じ「実体化前は release しない」規約 (spec §5 孤児コルーチン防止裁定)。呼び出し元
+    // CnoSlots と同じ「実体化前は release しない」規約 (spec §5 孤児コルーチン防止方針)。呼び出し元
     // (EkrLogicOpcodes.PortalPlace) が cno_spawn と同じ順序 (existing 未実体化なら諦める→上限チェック→
     // release→occupy) で使う。
 
@@ -1466,7 +1466,7 @@ public static class EkrManager
     {
         if (!Runtime.TryGetValue(holderId, out EkrHolderState state) || state.LogicDisabled) return;
 
-        // spec §2 死亡時の意味論 (2026-08-09 監査裁定): 死後の新規イベントは on_death 以外発火しない
+        // spec §2 死亡時の意味論 (2026-08-09): 死後の新規イベントは on_death 以外発火しない
         // (会議系イベントも含む — 死者はもう何も観測しない)。on_death 自体はホルダーが死亡確定した
         // 瞬間に発火するものなのでこのゲートから除外する。
         if (eventName != "on_death")
@@ -1604,7 +1604,7 @@ public static class EkrManager
         CustomRoles slot = target.GetCustomRole();
         if (!IsEkrRole(slot)) return;
 
-        // spec §2 死亡時の意味論 (2026-08-09 監査裁定): 死亡で走行中 fiber を全キャンセル → その後
+        // spec §2 死亡時の意味論 (2026-08-09): 死亡で走行中 fiber を全キャンセル → その後
         // on_death を発火する (この fiber だけは死後も実行可 — 「死んだら爆発」演出のため)。FireEvent
         // 側の「on_death 以外は死後発火しない」ゲートとセットで、以後この保持者は on_death 起点の
         // fiber しか持たなくなる。
@@ -1670,7 +1670,7 @@ public static class EkrManager
     // 同期プロローグ中に kill(target:"self") 等でこの関所へ再入するのを防ぐ (無限再帰ガード)。
     private static readonly HashSet<byte> AttackedInProgress = [];
 
-    // 打診デデュープ (spec §2 on_attacked に明文化済み・2026-08-11 監査裁定)。
+    // 打診デデュープ (spec §2 on_attacked に明文化済み・2026-08-11)。
     // `RpcCheckAndMurder(target, check: true)` の「当たるか試すだけ」の打診がこの関所を通るが、
     // その打診元には **毎 FixedUpdate 走る周期経路** が実在する (Torpedo のダッシュ命中判定
     // Torpedo.cs:176 / Sharpshooter の構え中 Sharpshooter.cs:127 — どちらも OnFixedUpdate)。
@@ -1706,7 +1706,7 @@ public static class EkrManager
             bool blocked = false;
 
             // ① まもり (spec §1.1): 消費判定は発火より前。自傷 (kill target:"self" 等) は消費させない
-            //    — 既存の数え上げ式まもり役職 (CursedWolf.OnCheckMurderAsTarget) と同じ裁定。
+            //    — 既存の数え上げ式まもり役職 (CursedWolf.OnCheckMurderAsTarget) と同じ方針。
             //    R2 (契約 §3b): まもりは **kind:"kill" にだけ**効く (推測や間接死から守るのは、作者が
             //    `on_attacked kind:… → cancel_attack` で組む — エンジンの既定を広げない)。
             if (kind == "kill" && state.ShieldRemaining > 0 && killer.PlayerId != target.PlayerId)
@@ -1719,7 +1719,7 @@ public static class EkrManager
             // ② on_attacked (同期プロローグ)
             bool canceled = FireAttackedPrologue(slot, target.PlayerId, killer.PlayerId, state, kind);
 
-            // spec §2 (2026-08-11 監査裁定): プロローグ実行後にターゲットの生存を再検査する。
+            // spec §2: プロローグ実行後にターゲットの生存を再検査する。
             // プロローグ内の副作用 (kill(target:"self") 等) で本人が既に死んでいたら、canceled の
             // 有無に関わらず関所は false — 死亡済みプレイヤーへ killer.Kill が走ると MurderPlayer /
             // FireDeath が二重発火する。
@@ -1771,7 +1771,7 @@ public static class EkrManager
             EkrFiber fiber = EkmLogicRuntime.Spawn(rule.Do, state.Variables, context, EkrActionSink.InOpcodeKill);
 
             // 「最初の wait に当たるか終端に達するまで同期的に走る」= EkmLogicRuntime.Pump そのもの。
-            // per-fiber 500 命令は通常どおり効く。ただし spec §2 (2026-08-11 監査裁定) により
+            // per-fiber 500 命令は通常どおり効く。ただし spec §2 により
             // **EKR 全体のフレーム予算 (2000/フレーム) の停止対象外** — 防御は死亡に直結する唯一の
             // イベントで、他ホルダーの on_second 負荷でプロローグが1命令も走れず無音死 + Abort 累積
             // (3回で logic 自動 disable) まで食らうのは「静かにドロップ」の設計意図を超える。
@@ -1893,7 +1893,7 @@ public static class EkrManager
     // 別名の正典は lang の CommandForms.Pick (ja では "pick,えらぶ")。リテラル "/pick" 決め打ちにすると
     // 翻訳された別名が丸ごと無音死する (BUG-20260813-03)。Command.IsThisCommand と同じ「先頭トークンの
     // 完全一致」で照合する — GuessManager.CheckCommand の StartsWith+Replace 方式は前方一致の自己衝突を
-    // 起こす既知の欠陥型なので踏襲しない (memory: meeting-command-parser-chain-wins)。
+    // 起こす既知の欠陥型なので踏襲しない。
     private static string[] PickCommandForms => EndKnot.Command.AllCommands.Find(x => x.Key == "Pick")?.CommandForms ?? ["pick"];
 
     // /pick <番号> — GuessManager.CheckCommand と同じ「消費したら true」規約。
@@ -1938,7 +1938,7 @@ public static class EkrManager
     }
 
     // 会議ボタン (EkrMeetingButton.OnClick のホストローカル分岐 / EkrMeetingButton.ReceiveRPC の両方から
-    // 呼ばれる)。§6 裁定: RPC 受信側はホストのみが処理し、送信者が実際に on_meeting_pick を持つ生存
+    // 呼ばれる)。§6 方針: RPC 受信側はホストのみが処理し、送信者が実際に on_meeting_pick を持つ生存
     // ホルダーであることをここで再検証する (クライアント申告を信用しない) — TryGateMeetingPick が
     // それを担う。ボタンはクリック演出のみなので、対象不在時もチャットへエラーは出さない (無音 no-op)。
     internal static void HandleMeetingPickButton(PlayerControl pc, byte targetId)
@@ -2009,7 +2009,7 @@ public static class EkrManager
     // ⚠️ 既知のカバレッジ穴 (契約 §2 で受容): カスタムサボ (GrabOxygenMask の個別 Deteriorate) だけは
     // CheckSabotage の成立分岐を通らないため発火しない。**Submerged は穴ではない** — 契約 §2 は
     // 「Submerged 経路も発火しない」と書いているが、SabotageSystemPatch.cs:447 は
-    // `return CheckSabotage(...)` でこの関門をきちんと通る (2026-08-29 の完成前監査で実コード確認・
+    // `return CheckSabotage(...)` でこの関門をきちんと通る (2026-08-29 実コード確認・
     // 契約側の記述誤り)。
     public static void FireSabotage(PlayerControl player, SystemTypes systemTypes)
     {
@@ -2047,8 +2047,8 @@ public static class EkrManager
         // Wave 6 (契約 §1.1 dir:"move"): 移動履歴を蘇生でプライムし直す。死亡中はサンプラが止まるので
         // 履歴は「死ぬ直前の移動方向」のまま残り (これは on_death 起点の cno_launch にとって正しい値)、
         // 蘇生でプレイヤーは別の場所へ再配置される。プライムを畳まないと、蘇生後の最初のサンプルが
-        // 「死んだ場所 → 生き返った場所」という無関係なベクトルを移動方向として焼いてしまう
-        // (完成前 pitfall 監査指摘 2026-08-29)。false にしておくと次の生存 tick が現在地で 2 点とも
+        // 「死んだ場所 → 生き返った場所」という無関係なベクトルを移動方向として焼いてしまう。
+        // false にしておくと次の生存 tick が現在地で 2 点とも
         // 引き直し、実際に歩くまでは方向が定まらない = no-op になる (契約どおりの安全側)。
         if (Runtime.TryGetValue(pc.PlayerId, out EkrHolderState reviveState)) reviveState.MoveHistPrimed = false;
 
@@ -2062,12 +2062,12 @@ public static class EkrManager
     // 呼ぶため、この関数の呼び出し元 (PlayerControlPatch.AfterReportTasks) が抱える他の PlayerControl
     // 走査と同じ synchronous コールスタックに乗せない — 基底 CNO の OnMeeting() 自体も同じ理由で
     // LateTask 5f 遅延になっている (PlayerControlPatch.cs:1501)。それに倣い 1 秒遅延で呼ぶ
-    // (advisor 指摘・2026-08-09。dummy_spawn は会議中 Execute() の IsMeeting ゲートで no-op なので、
+    // (dummy_spawn は会議中 Execute() の IsMeeting ゲートで no-op なので、
     // この 1 秒の間に slot を奪われる心配は無い — 台帳が 1 秒長く「占有中」と数えるだけで ≤10 上限は
     // 緩まない方向にしか振れない)。
     public static void FireMeetingStart()
     {
-        // v1.1 監査追記 (2026-08-09): 会議開始時点でも dummy_spawn の10秒ゲート起点を前進させる —
+        // v1.1 (2026-08-09): 会議開始時点でも dummy_spawn の10秒ゲート起点を前進させる —
         // 「会議開始→追放演出→会議明けスイープ」の全 span を単一の危険窓としてカバーする
         // (EkrActionSink.Execute の ExileController ゲートとの二重防御)。会議明けには
         // FireMeetingEndForSlot が起点を改めて再セットする。
@@ -2163,8 +2163,8 @@ public static class EkrManager
             }
             else
             {
-                // 実体化前は slot を保持したまま短間隔 (1秒) で回収を再試行する (完成前監査指摘・
-                // 2026-08-09)。TeardownRuntime の RetryDespawnUninstantiated (25秒間隔) と違い、この
+                // 実体化前は slot を保持したまま短間隔 (1秒) で回収を再試行する。
+                // TeardownRuntime の RetryDespawnUninstantiated (25秒間隔) と違い、この
                 // state は会議中も Runtime に生き続けるため、slot を先に null にすると CountLiveCno()
                 // が下振れして ≤10 上限が過収容を許し、その CNO は誰にも追跡されないまま会議明けに
                 // 出現してしまう (「会議で消える」約束も破れる)。slot を握ったまま数え続ければ上限は
@@ -2235,8 +2235,8 @@ public static class EkrManager
     // 会議開始 (FireMeetingStart) と会議明け (FireMeetingEndForSlot) の両方で前進する。
     // Time.realtimeSinceStartup は起動からの単調増加値。ゲーム境界で reset しない設計 — 理論上の失敗
     // 方向は「前ゲームの最終会議終了から10秒以内に次ゲームの intro が明ける」ときの誤ドロップ (許可漏れ)
-    // だが、ロビー→キャラ選択→イントロのオーバーヘッドが常に10秒を大きく超えるため実質到達不能
-    // (完成前監査で記述方向を訂正・2026-08-09)。ResetSlot 等でここを触らないこと。
+    // だが、ロビー→キャラ選択→イントロのオーバーヘッドが常に10秒を大きく超えるため実質到達不能。
+    // ResetSlot 等でここを触らないこと。
     internal static float LastMeetingEndTime = -1f;
 
     public static void FireMeetingEndForSlot(CustomRoles slot)
@@ -2579,7 +2579,7 @@ public static class EkrManager
 
         // speedMult: AllPlayerSpeed 一発 write + MarkDirtySettings (spec §1.1)。捕捉は1回だけ (捕捉フラグ)。
         // 捕捉時に他役職が MinSpeed で凍結中だとその凍結値を「本来の速度」として掴んでしまうため、
-        // 凍結中はゲーム既定値を baseline にする (memory: allplayerspeed-temp-boost-restore-race)。
+        // 凍結中はゲーム既定値を baseline にする。
         // Wave 3 (契約 §4): 倍率は InitRuntime で焼いた実効値 (ホスト露出があればホストの値)。
         bool hasSpeed = state.EffectiveSpeedMult is < 0.999f or > 1.001f;
 
@@ -2639,9 +2639,8 @@ public static class EkrManager
 
     // ── Wave 1: パッシブの派生ルックアップ (spec §1.1) ───────────────────────────────────────
     // ⚠ 可変レジストリ (HashSet<byte> 等) を新設しない — ResetSlot は Init() 経由でゲーム中いつでも
-    // 発火しうるため、EKR 全体の可変 static を持つと v1.3 の `_cc` と同じ孤児化事故を招く
-    // (memory: init_fires_midgame_slot_reset_clobbers_global)。役職からの都度引きなら「解除 = 剥奪・
-    // 死亡・ゲーム終了で必ず復元」が構造的に無料になる。
+    // 発火しうるため、EKR 全体の可変 static を持つと v1.3 の `_cc` と同じ孤児化事故を招く。
+    // 役職からの都度引きなら「解除 = 剥奪・死亡・ゲーム終了で必ず復元」が構造的に無料になる。
     internal static EkrPassives GetPassivesFor(byte playerId)
     {
         PlayerControl pc = playerId.GetPlayer();
@@ -2691,7 +2690,7 @@ public static class EkrManager
     // ── Wave 2: reveal (docs/ekn-wave2-contract.md §2.2) ────────────────────────────────────────
     // KnowRole override (EkmTemplateRole・4表示系を1点で拾う集約) が読む。seer/target 両方の playerId
     // だけで判定する — 集約側は Main.PlayerStates.Values.Any(x => x.Role.KnowRole(seer, target)) の
-    // 全 PlayerState 総なめなので、this や x には一切依存しないこと (coordinator 指摘 2026-08-11)。
+    // 全 PlayerState 総なめなので、this や x には一切依存しないこと。
     internal static bool HasRevealed(byte seerId, byte targetId)
     {
         return Runtime.TryGetValue(seerId, out EkrHolderState state) && state.Revealed.Contains(targetId);
@@ -2741,7 +2740,7 @@ public static class EkrManager
 
     // MeetingHudPatch.cs の ManipulateVotingResult ディスパッチから1回だけ呼ぶ (Swapper.ManipulateVotingResult
     // と同じ呼び出し形)。saved1/saved2 いずれかが失効していれば no-op (spec §3.3)。内部票と表示票の両方を
-    // 書き換える (Swapper.cs:203-220 と同じ二重書き換え規約 — 片方だけの書き換え禁止・memory 罠)。
+    // 書き換える (Swapper.cs:203-220 と同じ二重書き換え規約 — 片方だけの書き換え禁止)。
     public static void ApplyVoteSwap(Dictionary<byte, int> votingData, MeetingHud.VoterState[] states)
     {
         if (!_voteSwapReservation.HasValue) return;
@@ -2777,7 +2776,7 @@ public static class EkrManager
 
     // ── Wave 2: exile (docs/ekn-wave2-contract.md §3.4) ─────────────────────────────────────────
     // エンジンのハード制限は「1会議1回」のみ (発動で会議が終わるため構造的に自明)。ゲーム単位の
-    // 回数上限は掛けない (作者がブロックで組む・裁定済み)。
+    // 回数上限は掛けない (作者がブロックで組む)。
     private static bool _exileUsedThisMeeting;
 
     internal static bool TryConsumeExile()
@@ -2871,7 +2870,7 @@ public static class EkrManager
 
     // teleport は Utils.TP の共有 SnapTo トークンバケットに乗っている。ホルダー毎の ≤1/2秒だけでは
     // Maximum=15 で全ホルダーが同時に撃つと共有 cap を枯渇させ、EKR 以外の TP 系能力まで巻き込んで
-    // 止めてしまう (memory: multiplayer-pull-tp-cap-budget と同型の懸念)。EKR 全体で ≤2/秒に鎖をかける。
+    // 止めてしまう (公式サーバーの SnapTo 本数上限と同型の懸念)。EKR 全体で ≤2/秒に鎖をかける。
     private static readonly List<float> _recentTeleportTimes = [];
 
     internal static bool TryConsumeGlobalTeleportBudget()
@@ -2885,7 +2884,7 @@ public static class EkrManager
         return true;
     }
 
-    // v1.1 監査追記 (2026-08-09): CNO を生成/再生成する op (cno_spawn/dummy_spawn/cno_show) の
+    // v1.1 (2026-08-09): CNO を生成/再生成する op (cno_spawn/dummy_spawn/cno_show) の
     // cross-holder レート予算 (spec §5)。per-holder interval と全体 ≤10 体 (在庫の天井) だけでは、
     // on_second のロックステップ (全ホルダーの LastSecondFireTime 初期値が共通 -1f → 同一フレームで
     // 発火し続ける) や lint L9 推奨形 (会議明け wait 10.5) の WakeAt 同刻で、複数ホルダーの spawn が
@@ -2911,7 +2910,7 @@ public static class EkrManager
         return true;
     }
 
-    // 複数対象 notify の cross-holder 予算 (spec §5 に明文化済み・2026-08-11 実装裁定)。
+    // 複数対象 notify の cross-holder 予算 (spec §5 に明文化済み・2026-08-11)。
     // Wave 1 の notify は複数対象 (all/room) を受理する唯一の op。受け取り手1人につき
     // Utils.NotifyRoles(SpecifySeer, SpecifyTarget) = RpcSetName 1本なので、満員での target:"all" は
     // 1フレームに14本の identity 送信になる。per-(ホルダー,受け取り手) バケットは「同じ人へ連投
@@ -2957,7 +2956,7 @@ public static class EkrManager
         if (livePlayers.Count == 0) return;
 
         // fiber 実行が Teardown (Runtime.Remove) を誘発しても列挙を壊さないようスナップショットで回す
-        // (PumpMeetingFibers の Fibers.ToArray() と同じ裁定・pitfall 監査指摘)。
+        // (PumpMeetingFibers の Fibers.ToArray() と同じ対応)。
         foreach ((byte holderId, EkrHolderState state) in Runtime.ToArray())
         {
             if (state.LogicDisabled) continue;
@@ -2975,7 +2974,7 @@ public static class EkrManager
 
                 Vector2 sensorPos = cno.Position;
 
-                // 実体化の立ち上がり (会議明け復活・張り直し) でラッチ/デバウンスを作り直す。裁定は設置時
+                // 実体化の立ち上がり (会議明け復活・張り直し) でラッチ/デバウンスを作り直す。方針は設置時
                 // と同じ「その時点で半径内にいる者は発火なしでラッチ済み」(PrimeTouchSensor)。
                 if (!state.TouchSensorWasLive[i])
                 {
@@ -3173,7 +3172,7 @@ public static class EkrManager
         // AntiBlackout の役職ジャグリング窓 (SkipTasks) も止める — ExileController は WrapUp 完了で先に
         // 消えるのに SkipTasks は RevertToActualRoleTypes (+2秒) まで残るため、この窓だけポーラーが
         // 動いて「会議中の座標」を現状真偽として焼き、直後の BeforeMeetingPositions 復元 TP を歩行と
-        // 誤認する余地があった (裁定 #9 の穴)。RoomPrimed=false のままなので窓明け最初のポーリングが
+        // 誤認する余地があった。RoomPrimed=false のままなので窓明け最初のポーリングが
         // 焼き直す = 発火しない側で再武装される。
         if (!GameStates.IsInTask || ExileController.Instance || AntiBlackout.SkipTasks) return;
 
@@ -3245,7 +3244,7 @@ public static class EkrManager
         }
 
         // on_near: いま進入半径内にいる生存者はラッチ済み扱い (PrimeTouchSensor の「設置時に半径内へ
-        // 既にいる者は発火なしでラッチ」と同じ裁定を rule 軸へ適用)。
+        // 既にいる者は発火なしでラッチ」と同じ方針を rule 軸へ適用)。
         foreach (PlayerControl pc in Main.AllAlivePlayerControls)
         {
             float dist = Vector2.Distance(pc.Pos(), holderPos);
@@ -3275,7 +3274,7 @@ public static class EkrManager
             if (state.NearWatchedId[ruleIndex] != watchedId)
             {
                 // 参照の (再) 確立 — 既に radius 内にいる相手はラッチ済み扱いで発火しない (§1.1 の
-                // PrimeTouchSensor 裁定を参照確立にも適用)。歩いて出入りし直したときだけ発火する。
+                // PrimeTouchSensor 方針を参照確立にも適用)。歩いて出入りし直したときだけ発火する。
                 state.NearWatchedId[ruleIndex] = watchedId;
                 state.NearLatched[ruleIndex].Clear();
 
@@ -3425,7 +3424,7 @@ public static class EkrManager
 
     internal static void Link(EkrHolderState state, byte targetId)
     {
-        state.LinkedId = targetId; // 再実行 = 張り替え (旧リンクは無言で解消・§3.1 portal_place の「移設」裁定と同型)
+        state.LinkedId = targetId; // 再実行 = 張り替え (旧リンクは無言で解消・§3.1 portal_place の「移設」方針と同型)
         ResetFarArmingForLinked(state);
     }
 
@@ -3594,7 +3593,7 @@ public static class EkrManager
     // dirty は**無音で捨てられ、再送されない**。効果の適用/解除がホスト側だけ進んで対象クライアント
     // (バニラ客含む) に届かない desync になるため、窓が閉じるまで 1 秒間隔で再マークする。
     // 送信そのものは既存のバッチ+PacketRateGate 経路に乗るので、再マークの実費はフラグ1本だけ。
-    // (memory: skiptasks-window-outlives-exilecontroller — TryRecruit が同じ窓を no-op で避けている側)
+    // (TryRecruit が同じ窓を no-op で避けている側)
     private static void MarkSettingsDirty(PlayerControl pc, int retriesLeft = 5)
     {
         if (!pc) return;
@@ -3654,7 +3653,7 @@ public static class EkrManager
 
         // movement: baseline を捕捉する前に、同じ Main.AllPlayerSpeed キーを持つ既存の書き手を畳む
         // (§1.2 後勝ち)。畳まないと「前の効果で歪んだ値」を素の速度として捕捉し、期限切れの復元で
-        // 歪みが永続化する (memory: allplayerspeed-temp-boost-restore-race の系)。
+        // 歪みが永続化する (一時速度ブーストの復元レースの系)。
         ClearEffect(targetId, EffectChannelMovement, "overwrite");
         FoldSpeedBoost(targetId);
 
@@ -3721,7 +3720,7 @@ public static class EkrManager
         state.SpeedGen++; // 進行中の遅延復元タスクを stale 化する (世代不一致で降りる)
         state.SpeedBoostActive = false;
 
-        // 凍結中は触らない (speed op の復元側と同じ裁定 — 相手の凍結を解除してしまう)。
+        // 凍結中は触らない (speed op の復元側と同じ方針 — 相手の凍結を解除してしまう)。
         if (Mathf.Approximately(Main.AllPlayerSpeed.GetValueOrDefault(playerId), Main.MinSpeed)) return;
 
         Main.AllPlayerSpeed[playerId] = state.SpeedBaseline;
@@ -3807,13 +3806,14 @@ public static class EkrManager
     // (drag≤55/field≤45)」の3点セットを SuperCannonShot.PullTick から移植する。tick の TP は fiber 側
     // teleport の EKR 全体 ≤2/秒予算とは別勘定 (このエンジン自身の3点セットが締める)。
     //
-    // ⚠ tick 間隔とゲートは drag / field で**意図的に非対称** (2026-08-14 実機の体感裁定)。
+    // ⚠ tick 間隔とゲートは drag / field で**意図的に非対称** (2026-08-14 実機の体感)。
     //   drag = Penguin 型 (0.2秒 tick + ホルダー移動ゲート)。1回でホルダーの現在位置へ飛ばす型なので、
     //          「つかまれている」感を出すには追従頻度そのものが要る。
     //   field = 1.0秒 tick + 1.6u デッドゾーン据え置き。per-tick 5人を 5Hz で撃つと 25/s = 約250本/10秒窓
     //          (公式鯖の SnapTo 本数予算 ≒358本/10秒窓の70%) で致死域に触れる。加えて field は段階引き寄せ
-    //          なので、1.6u デッドゾーンが None 降格の空撃ち回避として効いている (memory: short-tp-none-downgrade)。
-    //   ⇒ 兄弟スイープでここを「揃っていない漏れ」と見なして field / SuperCannonShot.PullTick へ 0.2秒を
+    //          なので、1.6u デッドゾーンが None 降格の空撃ち回避として効いている
+    //          (閾値未満の TP は移動量ゼロの None に降格されるのに cap だけ消費するため)。
+    //   ⇒ ここは意図的な非対称なので、field / SuperCannonShot.PullTick へ 0.2秒を
     //     横展開しないこと。
 
     private sealed class EkrCrowdControlState
@@ -3840,12 +3840,12 @@ public static class EkrManager
 
     // StopCrowdControl の遅延 Despawn 待ちの field 実体。CountLiveCno はこれも数える —
     // 「実在するのに数えない」過小カウント側 (≤10 上限にとって危険側) に振れないための参照保持
-    // (DespawnDummySlots の pending 台帳保持と同じ裁定)。
+    // (DespawnDummySlots の pending 台帳保持と同じ方針)。
     //
     // ⚠ 単一スロットではなくリスト。crowd-control 自体は同時1本だが、遅延窓 (1秒) の中で
     // 「A 停止 → B 起動 → B 停止」が連鎖しうる (CanOccupyCnoSlot は pending も数えるので B の spawn は通る)。
     // 単一 static だと後着の B が A を上書きし、A が二度と Despawn されない孤児 CNO になる
-    // (= ≤10 上限が 1 体ずつ静かに狭まる片方向リーク・監査指摘 2026-08-11)。
+    // (= ≤10 上限が 1 体ずつ静かに狭まる片方向リーク)。
     private static readonly List<IEkrSlotCno> _ccPendingDespawn = [];
 
     private const float CcTickInterval = 1f;             // field の tick 間隔
@@ -3860,10 +3860,10 @@ public static class EkrManager
 
     // 起動を認める共有 SnapTo 残量の下限。Utils.TP は 80..99 帯でも true を返す (SendOption.None へ降格する
     // だけ) ため、枯渇間際に始めた drag/field は「予算は減るのに客へ確実には届かない」空撃ちになり、加えて
-    // 他役職の TP まで枯らす (memory: multiplayer_pull_tp_cap_budget)。EKR field(45) と SuperCannonShot
+    // 他役職の TP まで枯らす。EKR field(45) と SuperCannonShot
     // BlackHole(45) が同一ラウンドで加算されるケースの防波堤も兼ねる。
     // ⚠ 判定は「起動時のみ」— 稼働中に閾値へ達しても途中で畳まない。周期 TP を中断すると引き寄せ途中の
-    // 位置で止まって効果が意味不明になるうえ、能力と CD は既に消費済みで取り返せない (監査指摘 2026-08-11)。
+    // 位置で止まって効果が意味不明になるうえ、能力と CD は既に消費済みで取り返せない。
     // 稼働中の枯渇は Utils.TP 側の 100 到達 (false 返し = 予算不消費) が自然に受け止める。
     private const int CcMaxSnapToPressureToStart = 60;
 
@@ -3874,7 +3874,7 @@ public static class EkrManager
 
     // 早期ガード (IsCrowdControlActive) と TryStartField 呼び出しの間に他の何かが割り込んで _cc が
     // 埋まった場合の後始末 (単一スレッド実行のこのコードベースでは通常到達しない防御的経路)。
-    // 実体化前でも後でも孤児コルーチン防止裁定 (spec §5) に従って回収する。
+    // 実体化前でも後でも孤児コルーチン防止方針 (spec §5) に従って回収する。
     internal static void RetryDespawnOrphanFieldCno(IEkrSlotCno cno)
     {
         if (cno.IsInstantiated) cno.Despawn();
@@ -3888,7 +3888,7 @@ public static class EkrManager
         if (!SnapToBudgetAllowsCrowdControl()) return false;
 
         // 前セッションの最終 tick 時刻を持ち越すと 1 発目が最大 1 秒遅れ、seconds:1 の drag/field が
-        // 1 tick も打たずに終わる (監査指摘 2026-08-11)。開始直後に 1 発目を打つ。
+        // 1 tick も打たずに終わる。開始直後に 1 発目を打つ。
         _lastCcTickTime = -1f;
 
         _cc = new EkrCrowdControlState
@@ -3905,14 +3905,14 @@ public static class EkrManager
 
     // field opcode から呼ぶ。fieldCno は呼び出し元 (EkrLogicOpcodes.Field) が CNO 生成系防御3点
     // (TryConsumeGlobalCnoSpawnBudget 課金・会議/追放中 no-op・全体≤10体) を通過させた後に渡す。
-    // 稼働中なら静かにドロップ — その場合 fieldCno は呼び出し元が孤児コルーチン防止裁定に従って
+    // 稼働中なら静かにドロップ — その場合 fieldCno は呼び出し元が孤児コルーチン防止方針に従って
     // 回収すること (実体化前なら RetryDespawnUninstantiated 相当・実体化済みなら即 Despawn)。
     internal static bool TryStartField(byte holderId, IEkrSlotCno fieldCno, float radius, float pullDistance, float seconds)
     {
         if (_cc != null) return false;
         if (!SnapToBudgetAllowsCrowdControl()) return false;
 
-        _lastCcTickTime = -1f; // 開始直後に 1 発目を打つ (TryStartDrag と同じ・監査指摘 2026-08-11)
+        _lastCcTickTime = -1f; // 開始直後に 1 発目を打つ (TryStartDrag と同じ)
 
         _cc = new EkrCrowdControlState
         {
@@ -3932,7 +3932,7 @@ public static class EkrManager
     // tick 停止 (_cc = null) は同期で行うが、CNO の実 Despawn は 1 秒遅延 — 呼び出し元の 1 つが
     // FireMeetingStart (= PlayerControlPatch.AfterReportTasks の同期コールスタック) で、そこに
     // Object.Destroy/RemoveNetObject を乗せない規約 (DespawnDummySlots と同じ・上のコメント参照) を
-    // 全呼び出し元へ一律適用する (経路ごとに分けると会議経路だけ漏れる — 監査指摘 2026-08-11)。
+    // 全呼び出し元へ一律適用する (経路ごとに分けると会議経路だけ漏れる)。
     private static void StopCrowdControl()
     {
         if (_cc == null) return;
@@ -3952,7 +3952,7 @@ public static class EkrManager
                 _ccPendingDespawn.Remove(pending);
 
                 // spec §5: 実体化前に持続終了した pending は遅延 Despawn で回収 (孤児コルーチン既知型・
-                // TeardownRuntime の CnoSlots 回収と同じ裁定)。retry へ渡した後は既存の受容残差
+                // TeardownRuntime の CnoSlots 回収と同じ方針)。retry へ渡した後は既存の受容残差
                 // (「teardown-while-pending の孤児1体は10体カウント外」) と同じ扱い。
                 if (pending.IsInstantiated) pending.Despawn();
                 else RetryDespawnUninstantiated(pending, retriesLeft: 5);
@@ -3967,7 +3967,7 @@ public static class EkrManager
         if (_cc == null) return;
 
         // 同ファイルの他の遅延処理 (RetryDespawnUninstantiated / RetryRestoreSpeed) と同じ規約 —
-        // 勝利演出中に TP tick を続けない (監査指摘 2026-08-11)。
+        // 勝利演出中に TP tick を続けない。
         if (GameStates.IsEnded)
         {
             StopCrowdControl();
@@ -4026,15 +4026,15 @@ public static class EkrManager
         // 使うと全 tick が空振りして引きずりが成立しない (2026-08-14 実機: 10秒アームで TP 5発だけ)。
         // ホルダーが止まっている間は撃たない = 送信量は「ホルダーが実際に歩いた分」に比例する。
         // ⚠ 至近距離の TP は Utils.TP 内で SendOption.None へ降格する (非モッド客への到達はベストエフォート)。
-        //   これは Penguin のドラッグと同じ挙動で、ペンギン並みの追従感を採る裁定 (2026-08-14)。
+        //   これは Penguin のドラッグと同じ挙動で、ペンギン並みの追従感を採る (2026-08-14)。
         if (Vector2.Distance(dest, cc.LastDragSnapPos) < CcDragHolderMoveGate) return; // 予算不消費
         cc.LastDragSnapPos = dest;
 
-        // 壁越えは引かない (TickField / SuperCannonShot.PullTick と同じ裁定 — 壁内へ埋め込むと非モッドが
+        // 壁越えは引かない (TickField / SuperCannonShot.PullTick と同じ方針 — 壁内へ埋め込むと非モッドが
         // スタックする)。着地点はホルダーの現在位置なので通常は歩ける場所だが、ホルダーが直前に vent や
-        // 移動床で飛んだ直後のフレームでは経路が壁を貫きうる。3兄弟で1つだけ防御が欠けていた (監査指摘 2026-08-11)。
+        // 移動床で飛んだ直後のフレームでは経路が壁を貫きうる。3兄弟で1つだけ防御が欠けていた。
         // レイは足元空間で撃つ — Pos() は見た目の中心で足元より約0.36u上にあり、そのままだと壁の上下端
-        // 0.36u 帯で誤判定する (歩ける経路のブロック / 足元では塞がる壁のすり抜け両方向。監査指摘 2026-08-29)。
+        // 0.36u 帯で誤判定する (歩ける経路のブロック / 足元では塞がる壁のすり抜け両方向)。
         Vector2 rayOff = ctxPc.WallRayOffset();
         if (PhysicsHelpers.AnythingBetween(from + rayOff, dest + rayOff, Constants.ShipOnlyMask, false)) return;
 
@@ -4056,8 +4056,8 @@ public static class EkrManager
         var candidates = new List<PlayerControl>();
 
         // 毎秒ループなので yield 版 (Main.EnumerateAlivePlayerControls) は使わない —
-        // ネスト管理 IEnumerator は呼び出し毎に strong GCHandle を残す (memory: nested_managed_enumerator_gchandle_leak)。
-        // 同ファイルの PollCnoTouchIfDue / PrimeTouchSensor と同じくキャッシュ済みリストを使う (監査指摘 2026-08-11)。
+        // ネスト管理 IEnumerator は呼び出し毎に strong GCHandle を残す。
+        // 同ファイルの PollCnoTouchIfDue / PrimeTouchSensor と同じくキャッシュ済みリストを使う。
         foreach (PlayerControl pc in Main.AllAlivePlayerControls)
         {
             if (pc.PlayerId == cc.HolderId) continue; // ホルダー自身は引き寄せ対象外 (spec §3)
@@ -4079,14 +4079,14 @@ public static class EkrManager
             // spec §5 の「引き寄せ TP は全段 1.5u 超」は実際に TP する移動量 (step) への保証 —
             // dist ∈ [1.6, 2.3) では min() が dist-0.8 (<1.5) 側を選び None 降格の空撃ちになるため、
             // 下限 1.6u (安全マージン込み) でクランプする。step ≤ dist なのでオーバーシュートはしない
-            // (dist=1.6 なら中心ちょうどに着地 → 次 tick は deadzone スキップで収束)。監査指摘 2026-08-11。
+            // (dist=1.6 なら中心ちょうどに着地 → 次 tick は deadzone スキップで収束)。
             float step = Mathf.Max(Mathf.Min(cc.PullDistance, dist - (CcDeadzone / 2f)), CcDeadzone);
             Vector2 newPos = pos + ((center - pos).normalized * step);
 
-            // 壁越えは引かない (PullTick と同じ裁定 — 壁内へ埋め込むと非モッドがスタックする)。
+            // 壁越えは引かない (PullTick と同じ方針 — 壁内へ埋め込むと非モッドがスタックする)。
             // レイは足元空間で撃つ — 移植元 PullTick は GetTruePosition() で正しかったのに移植時に
-            // Pos() (見た目の中心) へ取り違えていた退行の修正 (監査指摘 2026-08-29)。TP 先 (newPos) の
-            // 座標系は transform 空間のままにする (足元基準を渡すと 0.36u 沈む — memory: 壁チェック=足元/TP先=Pos())。
+            // Pos() (見た目の中心) へ取り違えていた退行の修正 (2026-08-29)。TP 先 (newPos) の
+            // 座標系は transform 空間のままにする (足元基準を渡すと 0.36u 沈む — 壁チェック=足元 / TP先=Pos())。
             Vector2 rayOff = pc.WallRayOffset();
             if (PhysicsHelpers.AnythingBetween(pos + rayOff, newPos + rayOff, Constants.ShipOnlyMask, false)) continue;
 
@@ -4111,7 +4111,7 @@ public static class EkrManager
     // ⚠️ 「飛行台帳」は CnoSlots の**別勘定ではない** — 弾は launch 後も CnoSlots に居座り続ける
     // (CountLiveCno が数える側に残す)。この台帳はパラメータ (向き/速さ/飛距離/寿命) だけを持つ。
     // 二重台帳にすると _ccPendingDespawn のコメントが警告する「実在するのに数えない」過小カウントを
-    // 作り直すことになる (契約 §7 の監査観点①)。
+    // 作り直すことになる (契約 §7)。
 
     private sealed class EkrFlightState
     {
@@ -4367,7 +4367,7 @@ public static class EkrManager
         HashSet<byte> latched = state.TouchLatched[idx];
         CustomRoles? holderSlot = null;
 
-        // 毎 tick ループなので yield 版は使わない (memory: nested_managed_enumerator_gchandle_leak)。
+        // 毎 tick ループなので yield 版は使わない (ネスト管理 IEnumerator は呼び出し毎に strong GCHandle をリークする)。
         foreach (PlayerControl pc in Main.AllAlivePlayerControls)
         {
             Vector2 p = pc.Pos();

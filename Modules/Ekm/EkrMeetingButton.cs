@@ -16,8 +16,8 @@ namespace EndKnot.Modules.Ekm;
 // 糖衣」) へ合流する。
 internal static class EkrMeetingButton
 {
-    // 2026-08-11 ご主人様裁定: 見送りを取り消し、CustomRPC.EkrMeetingPick (Modules/RPC.cs 末尾・255) を
-    // 新規予約してホスト以外のモッドクライアントもボタンから発火できるようにする。
+    // CustomRPC.EkrMeetingPick (Modules/RPC.cs 末尾・255) を予約し、ホスト以外のモッド
+    // クライアントもボタンから発火できるようにする。
     private static void SendRPC(byte targetPlayerId)
     {
         MessageWriter writer = AmongUsClient.Instance.StartRpcImmediately(PlayerControl.LocalPlayer.NetId, (byte)CustomRPC.EkrMeetingPick, SendOption.Reliable, AmongUsClient.Instance.HostId);
@@ -26,7 +26,7 @@ internal static class EkrMeetingButton
     }
 
     // ホストのみが処理する (RPCHandlerPatch は AmHost で無ければここへ来る前提のロールが多いが、二重に
-    // 明示チェックする — §6 裁定「送信者を信用しない」の一環)。sender は RPC を投げてきた実際のオーナー
+    // 明示チェックする — §6「送信者を信用しない」の一環)。sender は RPC を投げてきた実際のオーナー
     // (Judge.ReceiveRPC と同じ引数付け)。
     public static void ReceiveRPC(MessageReader reader, PlayerControl sender)
     {
@@ -71,7 +71,7 @@ internal static class EkrMeetingButton
             targetBox.name = "ShootButton";
             targetBox.transform.localPosition = new(-0.35f, 0.03f, -1.31f);
             var renderer = targetBox.GetComponent<SpriteRenderer>();
-            // 裁定 #7 (2026-08-11): 新規画像リソースは追加しない — 既存アイコンの使い回し。
+            // 新規画像リソースは追加しない — 既存アイコンの使い回し。
             renderer.sprite = CustomButton.Get("JudgeIcon");
             var button = targetBox.GetComponent<PassiveButton>();
             button.OnClick.RemoveAllListeners();
@@ -82,7 +82,7 @@ internal static class EkrMeetingButton
     // MeetingHudPatch.cs の StartMeetingPatch ディスパッチ列 (Judge.StartMeetingPatch.Postfix 等と同じ帯)
     // から1行で呼ぶ。契約 §1.2「on_meeting_pick ルールを持つ生存ホルダーの画面にだけ出す」。
     //
-    // 2026-08-11 ご主人様裁定 (a): 非ホストのクライアントには役職コード (EkrDefinition/Bound) が同期
+    // 非ホストのクライアントには役職コード (EkrDefinition/Bound) が同期
     // されない (Bind() の書き込み元は TryAssign/ReloadLibrary/RestoreBindings 全てホスト限定・ディスク
     // 由来 — 同期 RPC が存在しない)。よって非ホストで HasOnMeetingPickLogic 相当の判定をすると常に
     // false になり、ボタンが永久に出ない (SendRPC が到達不能コードになる)。表示ゲートだけをホスト/

@@ -351,7 +351,7 @@ public static class BackroomsShadow
     // variant: "edge"=layer10 EdgeCollider2D 閉ループ(滑らか想定) / "box"=layer10 BoxCollider2D(blocky 想定)
     //          / "both"=左 edge + 右 box の A/B / "off"=破棄。
     //
-    // 配置の鉄則 (advisor 指摘の罠回避): テスト物は光半径(5)に完全内包させ、かつ ortho≈3 の
+    // 配置の鉄則 (罠回避): テスト物は光半径(5)に完全内包させ、かつ ortho≈3 の
     // 画面(±5u 横/±3u 縦)に収める。半径ぴったり/画面外だと影ウェッジが暗部に落ちて「何も出ない=偽陰性」になる。
     // 実証済アンカー = /bbrenderer caster (物体 feet+2u・小・半径3 で影確認済) に寄せ、小さく近くに置く。
     public static void SpawnTestRoom(string variant, byte targetPid)

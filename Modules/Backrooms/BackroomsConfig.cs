@@ -35,7 +35,7 @@ public static class BackroomsConfig
     public static bool ShowWallHTopBand = true;
 
     // 横壁(H)の「裏から見ると壁が暗い」(バニラ AU 風) モード。true=遮蔽線を壁の北端に置き、裏(北)から
-    // 見ると壁本体が影に沈む → 「壁が影の上に浮く」を解消 (ユーザー選択 2026-06-10)。
+    // 見ると壁本体が影に沈む → 「壁が影の上に浮く」を解消 (2026-06-10)。
     // false=旧 far-face (Lo を南端に置き両側から壁を lit に保つ・裏から見ると浮く)。
     // /bbshadow hback on|off で live トグル (caster を rebuild)。WallV は対象外 (常に far-face)。
     public static bool WallHDarkFromBehind = true;

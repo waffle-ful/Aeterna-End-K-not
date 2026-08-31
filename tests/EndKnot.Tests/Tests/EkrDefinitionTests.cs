@@ -104,7 +104,7 @@ public class EkrDefinitionTests
     }
 
     // 非モッド客の名前ペイロードに載るのは InfoLong の「最初の \n\n の手前」だけなので、
-    // 組み立てが見出し構造を失うと長い説明が役職マークを押し出す (anticheat 監査 2026-08-14)。
+    // 組み立てが見出し構造を失うと長い説明が役職マークを押し出す。
     [Fact]
     public void BuildInfoLongOverride_AlwaysKeepsTheHeadlineParagraphShort()
     {
@@ -223,7 +223,7 @@ public class EkrDefinitionTests
         Assert.False(string.IsNullOrEmpty(error));
     }
 
-    // spec §1 (2026-08-11 裁定): 整数フィールドは小数点表記でも整数と等価なら受理 (`2.0` = `2`)。
+    // spec §1: 整数フィールドは小数点表記でも整数と等価なら受理 (`2.0` = `2`)。
     // TS は JSON.parse 後にトークン表記を区別できないので、C# 側を合わせるのが唯一の整合方向。
     [Fact]
     public void IntegerFields_DecimalNotation_IsAccepted()
@@ -351,7 +351,7 @@ public class EkrDefinitionTests
         Assert.True(EkrDefinition.TryParse(json, out _, out string error), error);
     }
 
-    // TS coordinator 裁定 (2026-08-11): vote_block/vote_swap/exile はどの rule 配下でも検証 reject しない
+    // vote_block/vote_swap/exile はどの rule 配下でも検証 reject しない
     // (リンタ L18 の警告のみ・実行時に会議中でなければ no-op)。
     [Theory]
     [InlineData("{\"op\":\"vote_block\",\"target\":\"nearest\"}")]
@@ -597,7 +597,7 @@ public class EkrDefinitionTests
     [InlineData("{\"when\":\"on_alive_count\",\"cmp\":\"le\",\"value\":3,\"do\":[{\"op\":\"stop\"}]}", true)]
     [InlineData("{\"when\":\"on_alive_count\",\"cmp\":\"ge\",\"value\":1,\"do\":[{\"op\":\"stop\"}]}", true)]
     [InlineData("{\"when\":\"on_alive_count\",\"cmp\":\"le\",\"value\":15,\"do\":[{\"op\":\"stop\"}]}", true)]
-    // 整数等価トークン (spec §1 2026-08-11 裁定) — TS は JSON.parse 後に表記を区別できないので C# も受理側
+    // 整数等価トークン (spec §1) — TS は JSON.parse 後に表記を区別できないので C# も受理側
     [InlineData("{\"when\":\"on_alive_count\",\"cmp\":\"le\",\"value\":3.0,\"do\":[{\"op\":\"stop\"}]}", true)]
     [InlineData("{\"when\":\"on_var\",\"var\":\"v\",\"cmp\":\"eq\",\"value\":2.0,\"do\":[{\"op\":\"stop\"}]}", true)]
     [InlineData("{\"when\":\"on_var\",\"var\":\"v\",\"cmp\":\"eq\",\"value\":1.5,\"do\":[{\"op\":\"stop\"}]}", false)]

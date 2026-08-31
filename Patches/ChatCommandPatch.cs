@@ -3885,7 +3885,7 @@ internal static class ChatCommands
     {
         // ⚠️ コマンド受付からコルーチン開始までの 1 フレームで対象が切断していることがある。
         //    ここで弾かないと以降のセットアップが NRE を投げ、TpBurstRunning が立つ前でも後でも
-        //    実験が不能になる (立った後だと「already running」で二度と撃てなくなる) — 監査 2026-08-11。
+        //    実験が不能になる (立った後だと「already running」で二度と撃てなくなる)。
         PlayerControl target = Utils.GetPlayerById(targetId);
 
         if (!target || !target.NetTransform)
@@ -3912,7 +3912,7 @@ internal static class ChatCommands
         // 同一 native 接続に対して作り直されると理屈上は偽陽性になりうる。このプローブの成果物は
         // 「切断したか否か」の二値そのものなので、偽陽性は**探している結論を無実験で捏造する**
         // 最悪の失敗モードになる。よって identity 単独では断定せず、null 化と ClientId の変化を
-        // 併記して読み手が値で裏を取れるようにする (監査 2026-08-11)。
+        // 併記して読み手が値で裏を取れるようにする。
         int startClientId = AmongUsClient.Instance ? AmongUsClient.Instance.ClientId : -1;
 
         // ⚠️ StartWindowBypass は本来「ゲーム開始の復元シーケンス専用」の単一グローバル bool で、既存の
@@ -4793,7 +4793,7 @@ internal static class ChatCommands
             // これらの再宣言は P3 = 25B で即 Hacking キック。`op=despawn tgt=self` が force を要求するのに
             // こちらが素通りだと、事故で 1 ロビー潰す非対称ができるので同じゲートを張る。
             // ⚠️ 自分だけでなく**全プレイヤー**を見る。`/nest info` が他人の netId をダンプするので、
-            // 「info で他人の netId を調べる → retype で狙う」の2手経路が無警告で通ってしまう (2026-08-01 監査)。
+            // 「info で他人の netId を調べる → retype で狙う」の2手経路が無警告で通ってしまう。
             bool lethal = NestIsLivePlayerNetId(target);
 
             if (lethal && !args.Any(a => a.Equals("force", StringComparison.OrdinalIgnoreCase)))
@@ -4925,7 +4925,7 @@ internal static class ChatCommands
                 return;
             }
 
-            // ⚠️ `via` も固定しないと不変条件が破れる (2026-08-01 監査で発見)。
+            // ⚠️ `via` も固定しないと不変条件が破れる。
             // `dst=self` を強制しても `via=t5` にすると BuildEnvelope が dests を無視して
             // **真のブロードキャスト**を組むので、`tgt=other` では他プレイヤーの netId が第三者の配線に乗る。
             // しかもログ上は「対象 netId だけを変えた1変数アーム」に見えるのに乗り物も動いている

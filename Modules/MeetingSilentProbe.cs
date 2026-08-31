@@ -29,7 +29,7 @@ public static class MeetingSilentProbe
     private static float _meetingStart;
 
     // Results フェーズ遷移瞬間の残り投票秒 (-1 = 未到達)。OnDestroy 時点の VotingTimeLeft は
-    // Results/Proceeding の 5 秒カウントダウンに常時上書きされるため使えない (2026-07-28 監査指摘)。
+    // Results/Proceeding の 5 秒カウントダウンに常時上書きされるため使えない (2026-07-28 確認)。
     private static int _votingTimeLeftAtResults = -1;
 
     public static void Update(MeetingHud meetingHud)

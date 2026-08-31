@@ -41,7 +41,7 @@ public static class BackroomsCasters
 
     // 面位置の微調整スケール (/bbshadow inset <V> [H])。V=垂直 run(縦壁の左右面)・H=水平 run(横壁の上下面) を個別に。
     // 1.0=可視壁面(min 半幅)ぴったり、>1=影を壁から離す、<1=壁中心へ寄せる。
-    // 既定 V=0.6 / H=0.8 はユーザー実機較正値 (2026-06-09・影が壁に密着してちょうど良いと確認)。
+    // 既定 V=0.6 / H=0.8 は実機較正値 (2026-06-09・影が壁に密着してちょうど良いと確認)。
     public static float FaceScaleV = 0.6f;
     public static float FaceScaleH = 0.8f;
 
@@ -127,7 +127,7 @@ public static class BackroomsCasters
             // 両面を spawn。初期は両方 enabled、毎フレ gating で片方に絞る。
             // ★AU の GPU 影 caster は片面 (winding 依存): edge は light が「front 法線側」にある時だけ影を落とす
             //   (= 法線が光を向く時だけ反対側へ影。実機検証で確定した規約)。
-            // ── 水平壁 (WallH): face は南向き。「裏から見ると壁が暗い」(バニラ AU 風・ユーザー選択 2026-06-10)。
+            // ── 水平壁 (WallH): face は南向き。「裏から見ると壁が暗い」(バニラ AU 風・2026-06-10)。
             //   遮蔽線を常に壁の北端 (key+face) に置く: 前(南)から見ると壁は線の手前=lit、裏(北)から見ると壁は
             //   線の奥=影に沈む。両面とも北端に置き winding だけ反転して光の向きに応じ遠側へ影を出す:
             //     Hi=表向き(法線 -y / player 南で active→影は北、壁 lit) ・ Lo=裏向き(法線 +y / player 北で active→影は南=壁を覆い暗く)。
@@ -150,7 +150,7 @@ public static class BackroomsCasters
                 // ★V 面は全面セル (WallH 角・junction・柱 = half≥0.45) の lit 帯をまたがない (2026-06-11):
                 //   全面セルの WallH 発射線は北端 (r + 0.5*FaceScaleH)。それより南は「明るく見える壁面」なのに、
                 //   旧実装は V 面がセル南端 (r-0.5) まで届いていて、横向きの影が lit 面/床を斜めに横切る
-                //   黒い楔 =「壁Hなのに横から発射」の正体だった (ユーザー仮説 2026-06-11 的中)。
+                //   黒い楔 =「壁Hなのに横から発射」の正体だった (2026-06-11 確定)。
                 //   → 全面セルの寄与区間を [r + 0.5*FaceScaleH, r+0.5] に切り詰め、途切れたら別セグメントに分割。
                 //   セグメント下端 (key±face, r+0.5*FaceScaleH) は H 発射線 (y=r+0.5*FaceScaleH, x はセル幅全域) 上に
                 //   乗るので角は頂点一致のまま = 透けは出ない。薄 V セルは従来どおり全高 [r-0.5, r+0.5]。

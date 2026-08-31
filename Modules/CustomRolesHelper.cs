@@ -1127,9 +1127,9 @@ internal static class CustomRolesHelper
                 CustomRoles.Romantic when Romantic.DesignationMethod.GetValue() != 0 => true,
 
                 // Wave 2 (docs/ekn-wave2-contract.md §1.1 on_meeting_vote): 静的導出 arm (HasOnPetLogic と
-                // 同型)。coordinator 裁定 (2026-08-11): 述語は「on_meeting_vote ルールの有無」— cancel_vote
-                // を使わない定義 (「投票した人をおぼえる」だけ等) でも OnVote 呼び出し口 (MeetingHudPatch.cs:
-                // 1610) を通さないとイベントが永久に発火しない。
+                // 同型)。述語は「on_meeting_vote ルールの有無」— cancel_vote を使わない定義 (「投票した人を
+                // おぼえる」だけ等) でも OnVote 呼び出し口 (MeetingHudPatch.cs:1610) を通さないとイベントが
+                // 永久に発火しない (2026-08-11 確認)。
                 _ when EndKnot.Modules.Ekm.EkrManager.IsEkrRole(role) && EndKnot.Modules.Ekm.EkrManager.HasOnMeetingVoteLogic(role) => true,
 
                 _ => false

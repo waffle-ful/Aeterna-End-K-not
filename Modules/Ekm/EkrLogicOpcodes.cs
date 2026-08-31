@@ -44,7 +44,7 @@ internal sealed class EkrActionSink : IEkrActionSink
         if (fiber.Context is not EkrActionContext ctx) return;
 
         // spec §3: 会議中はアクション系 op は no-op (notify のみ例外で有効)。「会議中」には追放演出中も
-        // 含む (v1.1 監査追記 2026-08-09) — 投票終了で MeetingHud が閉じると IsMeeting=false/IsInTask=true
+        // 含む (v1.1) — 投票終了で MeetingHud が閉じると IsMeeting=false/IsInTask=true
         // になり、ガード無しだと追放演出中に on_second 等が発火して spawn 系 op が会議クローズ送信
         // (SetRole 全員分+Desync+NotifyRoles スイープ) と同一窓に重なる — BUG-20260803-07 の合算キック窓
         // そのもの。CorpseSpawn の個別ガードはこの共通関所への二重防御として残置。
@@ -231,7 +231,7 @@ internal sealed class EkrActionSink : IEkrActionSink
     // 切断/消滅だけ lazy 解消する (ResolveSaved と同じ参照整合性3原則② — 掃除の常駐処理は作らない)。
     // ⚠️ 相手の死亡ではリンクを消さない: 追放死は FireDeath が死亡確定の 3.5 秒後に走るため
     // (ExilePatch.cs:72 の SetDead vs :132 の LateTask)、その窓に走った fiber がここでリンクを先に
-    // 消すと on_linked_death が無音で落ちる (BUG-20260828-01)。EkrManager.ResolveWatchedId と同じ裁定で、
+    // 消すと on_linked_death が無音で落ちる (BUG-20260828-01)。EkrManager.ResolveWatchedId と同じ方針で、
     // 死亡による解消の権限は FireDeath に一本化する。
     private static PlayerControl ResolveLinked(EkrActionContext ctx)
     {
@@ -419,7 +419,7 @@ internal sealed class EkrActionSink : IEkrActionSink
 
         // to:"ctx"/マーカーで目的地が近距離 (1.5u 未満) だと Utils.TP が内部で None へ降格し、実際には
         // 飛ばないのに SnapTo cap もこの下のグローバル予算も消費してしまう既知型を避ける (spec §3
-        // 2026-08-09 追記・v1.2 でマーカーにも拡張。memory: short-tp-none-downgrade-wastes-cap と同型)。
+        // 2026-08-09 追記・v1.2 でマーカーにも拡張)。
         if (node.Target != "random" && Vector2.Distance(holderPc.Pos(), dest.Value) < 1.5f) return;
 
         // spec §3 2026-08-09 追記: EKR 全体で ≤2/秒 (cross-holder 予算 — Maximum=15 全員が同時に撃っても
@@ -492,7 +492,7 @@ internal sealed class EkrActionSink : IEkrActionSink
     {
         if (fiber.FromKillChain) return;
 
-        // Win/WinJoin と同じ終了ラッチガード (兄弟スイープ 2026-08-30) — outro 窓 (StartEndGame 後も
+        // Win/WinJoin と同じ終了ラッチガード — outro 窓 (StartEndGame 後も
         // CoEndGame 完了まで fiber pump は回り続ける) の kill は、CoEndGame の playersToRevive 生死復元
         // (CheckGameEndPatch.cs の IsDead=false 再送) と逆順競合して確定済みの生死状態を壊す。
         if (GameEndChecker.Ended) return;
@@ -534,8 +534,8 @@ internal sealed class EkrActionSink : IEkrActionSink
     }
 
     // ── speed (spec: 同時1本・再発動は上書き) ─────────────────────────────
-    // memory: allplayerspeed-temp-boost-restore-race — 復元は「凍結中スキップ + 捕捉フラグ」。
-    // 再発動の上書きは世代カウンタで stale な復元タスクを弾く (memory: sfx-variable-timing-playbook §3 と同型)。
+    // 一時速度ブーストの復元レース対策 — 復元は「凍結中スキップ + 捕捉フラグ」。
+    // 再発動の上書きは世代カウンタで stale な復元タスクを弾く。
 
     private static void Speed(EkrNode node, EkrActionContext ctx)
     {
@@ -554,8 +554,8 @@ internal sealed class EkrActionSink : IEkrActionSink
             float current = Main.AllPlayerSpeed.GetValueOrDefault(ctx.HolderId, Main.RealOptionsData.GetFloat(AmongUs.GameOptions.FloatOptionNames.PlayerSpeedMod));
 
             // 捕捉時に他役職が既に MinSpeed で凍結中だと、その凍結値を「本来の速度」として捕捉してしまい、
-            // 復元時に MinSpeed へ戻す = 永久凍結固定になる (memory: allplayerspeed-temp-boost-restore-race
-            // の罠を捕捉側にも適用・2026-08-09 監査指摘)。凍結中はゲーム既定値を baseline に使う。
+            // 復元時に MinSpeed へ戻す = 永久凍結固定になる (一時速度ブーストの復元レースの罠を捕捉側にも適用)。
+            // 凍結中はゲーム既定値を baseline に使う。
             state.SpeedBaseline = Mathf.Approximately(current, Main.MinSpeed)
                 ? Main.RealOptionsData.GetFloat(AmongUs.GameOptions.FloatOptionNames.PlayerSpeedMod)
                 : current;
@@ -595,8 +595,8 @@ internal sealed class EkrActionSink : IEkrActionSink
     // ── CNO 系 (spec §5: 同時≤3slot/ホルダー・全役職合計≤10体・spawn≤1/秒/ホルダー・move≤2/秒/slot・
     // show≤1/3秒/ホルダー) ── 生存数のカウントは CustomNetObject.AllObjects を見ない — 基底
     // OnMeeting() の会議明け自動復活は Despawn→10s+3s 待ち→再生成の間 AllObjects から一時的に外れる
-    // ため、その窓で数えると 0 になり上限が破れる (memory: cno_respawn_window_swallows_live_objects
-    // と同型)。EkrManager 側の「スロットに割り当てているか」(実体化前の pending も含む) だけで数える。
+    // ため、その窓で数えると 0 になり上限が破れる。EkrManager 側の「スロットに割り当てているか」
+    // (実体化前の pending も含む) だけで数える。
 
     private static void CnoSpawn(EkrNode node, EkrActionContext ctx)
     {
@@ -615,7 +615,7 @@ internal sealed class EkrActionSink : IEkrActionSink
         IEkrSlotCno existing = state.CnoSlots[idx];
 
         // 実体化前 (playerControl 未生成) の同一 slot への再 spawn はドロップ (spec §5 孤児コルーチン
-        // 防止裁定・2026-08-09) — 基底 spawn コルーチンは Despawn で止まらないため、ここで切り離すと
+        // 防止方針) — 基底 spawn コルーチンは Despawn で止まらないため、ここで切り離すと
         // 追跡外のまま居座る CNO を生む。ReleaseCnoSlot 側も同じ理由で no-op するが、それだけでは
         // 「消せない」というだけで下の新規 occupy は防げないため、spawn 自体をここで諦める必要がある。
         if (existing != null && !existing.IsInstantiated) return;
@@ -633,7 +633,7 @@ internal sealed class EkrActionSink : IEkrActionSink
         EkrDefinition def = EkrManager.GetDefinition(ctx.Slot);
         if (def == null) return;
 
-        // cross-holder 予算 (spec §5 v1.1 監査追記) — 他の drop 理由を全て通過した「本当に spawn する」
+        // cross-holder 予算 (spec §5 v1.1) — 他の drop 理由を全て通過した「本当に spawn する」
         // 直前でだけ消費する (先に消費すると、後段の理由で drop されるのに予算だけ減る無駄撃ちになる)。
         if (!EkrManager.TryConsumeGlobalCnoSpawnBudget()) return;
 
@@ -681,7 +681,7 @@ internal sealed class EkrActionSink : IEkrActionSink
         // 実体化前は「まだ出ていないものは変えられない」(spec §5・他 op と同じ一貫ガード)。TP() は
         // Despawn を呼ばないため孤児化リスクこそ無いが、実体化時に CreateNetObject コルーチンが
         // Position を spawn 位置で再代入するため実体化前の move はどのみち上書き消滅する — ガード無し
-        // だとレート予算 (0.5秒/slot) だけ無駄に消費する (完成前監査指摘・2026-08-09)。
+        // だとレート予算 (0.5秒/slot) だけ無駄に消費する。
         if (!cno.IsInstantiated) return;
 
         float now = Time.realtimeSinceStartup;
@@ -711,7 +711,7 @@ internal sealed class EkrActionSink : IEkrActionSink
         int idx = node.Slot - 1;
 
         // 対象は自分の CNO slot に居る EkrCno のみ。`is not EkrCno` が null (未占有) とダミーを同時に弾く。
-        // 既に飛んでいる弾の二度撃ちも no-op (飛行中の向き変更は「追尾しない」裁定に反する)。
+        // 既に飛んでいる弾の二度撃ちも no-op (飛行中の向き変更は「追尾しない」方針に反する)。
         if (state.CnoSlots[idx] is not EkrCno cno || cno.Launched)
         {
             EkrManager.FlightLog($"launch drop slot={node.Slot} reason=no-cno-or-already-launched");
@@ -811,11 +811,11 @@ internal sealed class EkrActionSink : IEkrActionSink
         // ため非対応 (spec §3)。`is not EkrCno` は null (未占有 slot) も自然に弾く。
         if (state.CnoSlots[idx] is not EkrCno cno) return;
 
-        // 実体化前は「まだ出ていないものは変えられない」— ドロップ (spec §5 孤児コルーチン防止裁定)。
+        // 実体化前は「まだ出ていないものは変えられない」— ドロップ (spec §5 孤児コルーチン防止方針)。
         if (!cno.IsInstantiated) return;
 
         float now = Time.realtimeSinceStartup;
-        // spec §5 (2026-08-09 監査改定): cno_show は cno_spawn と共用せず独自の ≤1/3秒/ホルダー バケット
+        // spec §5: cno_show は cno_spawn と共用せず独自の ≤1/3秒/ホルダー バケット
         // (despawn→respawn の fan-out 未課金コスト分を織り込んで spawn より厳しくする)。
         if (state.LastCnoShowTime >= 0f && now - state.LastCnoShowTime < 3f) return;
 
@@ -826,7 +826,7 @@ internal sealed class EkrActionSink : IEkrActionSink
         PlayerControl holderPc = ctx.HolderId.GetPlayer();
         if (!holderPc) return;
 
-        // cross-holder 予算 (spec §5 v1.1 監査追記): 実装が despawn→respawn = spawn と同じ付帯送信を
+        // cross-holder 予算 (spec §5 v1.1): 実装が despawn→respawn = spawn と同じ付帯送信を
         // 伴うため、生成系共通の予算にも課金する。per-holder バケット (LastCnoShowTime) の更新は
         // ここを通過した後 — グローバル拒否時に per-holder 分まで消費しない。
         if (!EkrManager.TryConsumeGlobalCnoSpawnBudget()) return;
@@ -854,7 +854,7 @@ internal sealed class EkrActionSink : IEkrActionSink
         int idx = node.Slot - 1;
         IEkrSlotCno existing = state.CnoSlots[idx];
 
-        // cno_spawn と同じ孤児コルーチン防止裁定 (spec §5) — 実体化前の同一 slot への再 spawn はドロップ。
+        // cno_spawn と同じ孤児コルーチン防止方針 (spec §5) — 実体化前の同一 slot への再 spawn はドロップ。
         if (existing != null && !existing.IsInstantiated) return;
 
         if (!EkrManager.CanOccupyCnoSlot()) return; // 全体 ≤10体 (cno_spawn と合算・spec §5)
@@ -867,7 +867,7 @@ internal sealed class EkrActionSink : IEkrActionSink
 
         if (pos == null) return;
 
-        // cross-holder 予算 (spec §5 v1.1 監査追記) — CnoSpawn と同じく「本当に spawn する」直前で消費。
+        // cross-holder 予算 (spec §5 v1.1) — CnoSpawn と同じく「本当に spawn する」直前で消費。
         if (!EkrManager.TryConsumeGlobalCnoSpawnBudget()) return;
 
         // 同一 slot への再 spawn は先に消してから作る (cno_spawn と同じ「消してから作る」規約)。
@@ -1015,7 +1015,7 @@ internal sealed class EkrActionSink : IEkrActionSink
         int idx = node.Which == "b" ? 1 : 0;
         IEkrSlotCno existing = state.Portals[idx];
 
-        // 孤児コルーチン防止裁定 (spec §5) — 実体化前の同一 which への再設置はドロップ。
+        // 孤児コルーチン防止方針 (spec §5) — 実体化前の同一 which への再設置はドロップ。
         if (existing != null && !existing.IsInstantiated) return;
 
         if (!EkrManager.CanOccupyCnoSlot()) return; // 全体 ≤10体 (CnoSlots と合算・spec §5)
@@ -1110,7 +1110,7 @@ internal sealed class EkrActionSink : IEkrActionSink
 
         if (!EkrManager.TryStartField(ctx.HolderId, fieldCno, radius, pullDistance, node.Seconds))
         {
-            // 稼働中への競合 (単一スレッド実行では通常到達しない防御的経路) — 孤児コルーチン防止裁定に
+            // 稼働中への競合 (単一スレッド実行では通常到達しない防御的経路) — 孤児コルーチン防止方針に
             // 従って回収する (spec §5: 実体化前は遅延 Despawn・実体化済みなら即 Despawn)。
             EkrManager.RetryDespawnOrphanFieldCno(fieldCno);
             return;
@@ -1214,9 +1214,9 @@ internal sealed class EkrActionSink : IEkrActionSink
         state.LastNotifyTime[ctx.HolderId] = now;
 
         // NotifyRoles 送信を伴う (spec §2.2) — 表示反映は次の自然な更新に相乗り (実装裁量)。
-        // advisor 指摘 (2026-08-11): reveal は会議中も有効な白名単 op だが、NotifyRoles の明示送信は
+        // reveal は会議中も有効な白名単 op だが、NotifyRoles の明示送信は
         // タスク中限定にする (会議中は「次の自然な更新」= 会議明けの通常リフレッシュに任せ、write-barrier/
-        // 追放スイープと重なる窓を作らない — memory 罠7の型)。
+        // 追放スイープと重なる窓を作らない)。
         if (GameStates.IsInTask) Utils.NotifyRoles(SpecifySeer: ctx.HolderId.GetPlayer(), ForceLoop: false);
     }
 
@@ -1374,7 +1374,7 @@ internal sealed class EkrActionSink : IEkrActionSink
 
         // 壊れた参照 (ctx 無し / 失効 saved・linked)・死者・切断は静かに no-op・予算不消費 (§1.3/§1.4)。
         // ⚠ 判定は EkrManager.ApplyEffect 側と**同じ厳しさ**にすること — 緩いと予算だけ消費して
-        // 向こうで無音 no-op になり、「no-op は予算不消費」の契約が破れる (完成前監査指摘)。
+        // 向こうで無音 no-op になり、「no-op は予算不消費」の契約が破れる。
         if (!targetPc || !targetPc.IsAlive() || targetPc.Data == null || targetPc.Data.Disconnected) return;
 
         // ⚠ ホルダー生存ガードは意図的に付けない — §1.3 は on_death 起点 fiber からの実行を許す
@@ -1387,7 +1387,7 @@ internal sealed class EkrActionSink : IEkrActionSink
 
     private static void Exile(EkrNode node, EkrActionContext ctx)
     {
-        // advisor 指摘 (2026-08-11): 共通の meetingOrExile ゲートは Results/Proceeding/追放演出中も通す
+        // 共通の meetingOrExile ゲートは Results/Proceeding/追放演出中も通す
         // (vote_block/vote_swap はそこへ着地しても無害な no-op だが、exile は RpcVotingComplete を二重送信
         // しうる)。GuessManager.GuesserMsg (GuessManager.cs:67) と同じ投票フェーズ判定で narrow に絞る。
         if (!MeetingHud.Instance || ExileController.Instance || MeetingHud.Instance.state is MeetingHud.MeetingStates.Results or MeetingHud.MeetingStates.Proceeding) return;

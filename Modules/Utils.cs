@@ -199,7 +199,7 @@ public static class Utils
         {
             // 代入前にも回復を清算する (基準時刻は RefillSnapToBudget が端数保持で前進させる)。
             // ここで基準時刻を now にリセットすると「回復間隔未満の消費が続く間は回復ゼロ」になり、
-            // 持続消費シナリオ (famine の本丸) で回復が無効化される — 監査 2026-07-28 の指摘。
+            // 持続消費シナリオ (famine の本丸) で回復が無効化される (2026-07-28 確認)。
             RefillSnapToBudget();
 
             // 増加方向の代入 = 消費 (++/+=)、減少・同値方向 = ラウンド境界等の明示リセットとみなす
@@ -287,7 +287,7 @@ public static class Utils
         nt.SetDirtyBit(uint.MaxValue);
 
         // ホスト起因 SnapTo は lastSequenceId を直接書くため、entry gate の「クライアント移動 = confirm」
-        // 判定を偽陽性にする (memory: tp_delivery_probe_pos_fallback)。gate 監視中なら baseline を付け替える。
+        // 判定を偽陽性にする。gate 監視中なら baseline を付け替える。
         ClientEntryProbe.NoteHostSnapTo(pc);
 
         // 公式/Vanilla 鯖のみ: SnapTo の送信を絞って anti-cheat の Hacking kick を防ぐ。
@@ -676,7 +676,7 @@ public static class Utils
         // R2 (docs/ekn-r2-contract.md §4): 役職メーカーの passives.disguise。DoubleAgent と同じ
         // 「見えている相手への表示を差し替える」型で、本人の勝敗・選出・実陣営は変えない。
         // 第三陣営への偽装だけは役職名をそのままにして色だけ変える (モッドに「汎用の第三陣営役職」が
-        // 存在せず、実在の第三陣営役職も各自の名前で見えるため — 2026-08-14 ご主人様裁定)。
+        // 存在せず、実在の第三陣営役職も各自の名前で見えるため (2026-08-14)。
         if (!self && Modules.Ekm.EkrManager.GetDisguiseTeam(targetMainRole) is { } ekrDisguise)
         {
             switch (ekrDisguise)
@@ -3579,7 +3579,7 @@ public static class Utils
                                 ? Color.yellow
                                 : teamColor,
                             // CTA の title/subtitle は作者自由記述で長さ上限が無い — InfoLong と同じ理由で
-                            // 名前予算 (705B) を単独圧迫し得るので、同じ byte クランプを通す (兄弟スイープ 2026-08-20)。
+                            // 名前予算 (705B) を単独圧迫し得るので、同じ byte クランプを通す (2026-08-20)。
                             ClampFreeTextForVanillaServer(
                                 string.Format(
                                     GetString("CustomTeamHelp"),

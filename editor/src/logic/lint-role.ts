@@ -5,7 +5,7 @@
 //
 // 静的近似であり制御フロー解析はしない (spec §6 L2 の注記どおり)。例えば if/else の両方の枝で
 // 同じ slot に cno_spawn していても、実行時にはどちらか一方しか通らない可能性があるが、
-// このリンターはその区別をせず単純にノードの出現数を数える (蓄積 memory の kick 知見を
+// このリンターはその区別をせず単純にノードの出現数を数える (公式サーバーの kick 知見を
 // ヒントとして出すのが目的であり、正確な静的解析エンジンではない)。
 //
 // v1.1 (2026-08-09): L9/L10 を追加 (dummy_spawn 新設に伴う会議明けドロップ窓/3秒バケットの輸出)。
@@ -265,8 +265,8 @@ const TASK_ONLY_LINT_OPS: readonly LogicNode["op"][] = [
     "cno_spawn", "cno_move", "cno_despawn", "cno_show",
     "dummy_spawn", "corpse_spawn", "marker_save", "portal_place",
     "pull", "drag", "field",
-    // 矢印3種も会議中は no-op (spec §3 の会議中 op 白名単に入っていない)。2026-08-14 の契約監査で
-    // 「spec §6 の L23 の例示列挙が §3 の白名単より狭い」自己矛盾として検出された漏れ。
+    // 矢印3種も会議中は no-op (spec §3 の会議中 op 白名単に入っていない)。
+    // spec §6 の L23 の例示列挙は §3 の白名単より狭く、その漏れをここで埋めている。
     "arrow_show", "arrow_mark", "arrow_hide",
 ];
 
@@ -485,7 +485,7 @@ export function lintRoleLogic(logic: RoleLogic, progressText?: string): LintWarn
         // L14 (Wave 1): 「あいて」がいないきっかけの中で「あいて」を使っている。
         // 対象は ①セレクタ値 (target/at/to) の "ctx" と ②引数を持たない **ctx 暗黙 op**
         // (`pull`/`drag` — フィールドは無いが実行時は ctx に依存するので、ctx 無しイベント配下では
-        // 丸ごと no-op になる。2026-08-11 の三面監査裁定で L14 の対象へ拡張)。
+        // 丸ごと no-op になるため、L14 の対象へ拡張してある)。
         if (CTXLESS_WHENS.has(rule.when)
             && (anySelectorToken(rule.do, (t) => t === "ctx") || hasOp(rule.do, "pull") || hasOp(rule.do, "drag"))) {
             warnings.push(makeWarning(

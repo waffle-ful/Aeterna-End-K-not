@@ -858,7 +858,7 @@ internal static class MurderPlayerPatch
                             if (!Options.ReportBaitAtAllCost.GetBool())
                                 killer.CmdReportDeadBody(target.Data);
                             else
-                                // Wave 3 契約 §2 裁定4: Bait の自己通報は「本物」扱い (synthetic:false)。
+                                // Bait の自己通報は「本物」扱い (synthetic:false)。
                                 // OFF 側 (上の CmdReportDeadBody) と挙動を揃える。
                                 killer.NoCheckStartMeeting(target.Data, true, synthetic: false);
                         }
@@ -1715,7 +1715,7 @@ internal static class ReportDeadBodyPatch
 
             // EKR logic (docs/ekr-logic-spec.md §2): on_meeting_start は「走行中 fiber を全キャンセル」した
             // 直後に発火する。on_report はそのキャンセルより後ろに置く必要がある — 先に置くと、この2行の
-            // 間で発火した fiber ごとキャンセルされて無言で死ぬ (advisor 指摘・2026-08-09)。
+            // 間で発火した fiber ごとキャンセルされて無言で死ぬ。
             EkrManager.FireMeetingStart();
             // Wave 3 契約 §2: on_report は「自分が死体を見つけて通報したとき」— 合成通報では発火しない。
             // (Bait の自己通報だけは synthetic:false で来る = 本物扱い。キラーは実際に死体に関与しており、
