@@ -38,6 +38,10 @@ public static class AutoRehost
     }
 
     private static bool _pending;
+
+    // ClaudeBridge の hostlobby が二重要求を検知するための読み取り口。
+    public static bool Pending => _pending;
+
     private static int _attempts;
     private static int _seq;        // 世代トークン。古い Tick / stabilize を無効化する
     private static Phase _phase;
@@ -183,6 +187,13 @@ public static class AutoRehost
         try { _oldMapId = GameOptionsManager.Instance.normalGameHostOptions.MapId; }
         catch { _oldMapId = 0; }
         _attempts = 0;
+
+        // コールドブート直後の MainMenu は NetworkMode が LocalGame のまま (バニラは「オンライン」ボタン押下が
+        // OnlineGame を設定するが、この in-scene 直行パスはそこを経由しない)。このまま Confirm() すると
+        // LAN ゲームとして部屋が建ち、コードが公式マッチメーカーに載らず誰も join できない (2026-08-31 実機確定 —
+        // 切断起因の rehost は前セッションの OnlineGame が残っているため影響なし)。
+        try { AmongUsClient.Instance.NetworkMode = NetworkModes.OnlineGame; }
+        catch (Exception ex) { Logger.Warn($"NetworkMode set failed: {ex.Message}", "AutoRehost"); }
 
         Logger.Info("Auto-rehost: startup auto-host starting (region/map/settings restored from disk)", "AutoRehost");
         BeginAttempt(false); // 既にメインメニューなので scene 切替不要
