@@ -14,6 +14,16 @@ public abstract class GameOptionsSender
 {
     protected abstract bool IsDirty { get; set; }
 
+    /// <summary>
+    /// 🔴 送信が呼び先の内部ガードで丸ごと捨てられる窓かどうか。真の間は dirty を落とさずに次周回へ持ち越す。
+    /// ここで無条件に dirty を落とすと「送信されないまま dirty だけ消費」= 対象クライアント (バニラ客含む) だけ
+    /// 速度/視界が古い値のまま固まり、無関係な次の dirty イベントが同じプレイヤーで起きるまで直らない無音 desync
+    /// になる (例外もログも出ない)。MarkDirtySettings() を呼ぶ全コード (259 箇所) に効く共通の欠陥なので、
+    /// 呼び出し側ごとの再マークではなくここで止める。
+    /// memory: skiptasks-window-outlives-exilecontroller
+    /// </summary>
+    protected virtual bool SendSuppressed => false;
+
     private Il2CppStructArray<byte> BuildOptionArray()
     {
         IGameOptions opt = BuildSendableGameOptions();
@@ -216,6 +226,9 @@ public abstract class GameOptionsSender
 
                     if (sender.IsDirty)
                     {
+                        // 送信が捨てられる窓は dirty を保持したまま見送る (窓明けの周回で送り直される)
+                        if (sender.SendSuppressed) continue;
+
                         IEnumerator send = sender.SendGameOptionsAsync();
                         while (send.MoveNext()) yield return send.Current;
                     }
