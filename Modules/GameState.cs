@@ -612,6 +612,11 @@ public static class GameStates
         {
             if (IsFreePlay || IsLocalGame || IsNotJoined) return ServerType.Local;
 
+            // 公式鯖判定の一次情報は ping server (matchmaker*.among.us)。下の regionName switch は
+            // 表示名一致なので、deep link 等でリージョンを入れ直して名前が既定と違うと、公式鯖なのに
+            // Custom へ落ちて安全装置 (PacketRateGate / SnapTo cap / NameBudget 等) が一斉に無武装になる。
+            if (Utils.IsOfficialServer()) return ServerType.Vanilla;
+
             string regionName = Utils.GetRegionName();
 
             return regionName switch
@@ -628,6 +633,11 @@ public static class GameStates
         get
         {
             if (IsFreePlay) return ServerType.Local;
+
+            // 作成メニューは未接続 (region 未解決) を通るので、判定不能を公式扱いにしない。
+            // ここでの誤 Vanilla は「制限が強まる」で済まず、Crowded が MaxPlayers=15 を永続設定へ
+            // 書き込む / ClientPatch が nonce 認証待ちを走らせる = 機能破壊の方向になる。
+            if (Utils.IsOfficialServer(ignoreNetworkMode: true, unknownIsOfficial: false)) return ServerType.Vanilla;
 
             string regionName = Utils.GetRegionName(ignoreNetworkMode: true);
 
