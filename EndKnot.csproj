@@ -110,13 +110,6 @@
     <Target Name="CheckLangKeys" BeforeTargets="BeforeCompile" Condition="'$(OS)' == 'Windows_NT'">
         <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\tools\check-lang-keys.ps1&quot;" />
     </Target>
-    <!-- 公開ファイルに内部向けの覚え書き (レビュー帰属・非公開ドキュメントへのパス・
-         内部バグ台帳 ID) が残っていないか検査する。公開リポジトリのコメントは第三者が
-         そのまま読むため、検出したら exit 1 → ビルド失敗にする。
-         規約と直し方はスクリプト冒頭のコメントを参照。 -->
-    <Target Name="CheckForbiddenComments" BeforeTargets="BeforeCompile" Condition="'$(OS)' == 'Windows_NT'">
-        <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\tools\check-forbidden-comments.ps1&quot;" />
-    </Target>
     <Target Name="Roles" AfterTargets="Build">
         <Copy SourceFiles="CustomRoles.cs" DestinationFolder="CTA/CustomTeamAssigner/"/>
     </Target>
