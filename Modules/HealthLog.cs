@@ -318,7 +318,10 @@ public static class HealthLog
                     _hitchSuppressed = 0;
                 }
 
-                if (_hitchLinesInWindow < HitchMaxLinesPerWindow)
+                // 500ms 以上の大ヒッチはレート制限の対象外 — suppressed に埋もれると
+                // 「1.5s 級ストールが出たか」の 1-bit 判定が窓内の先着5行に阻まれる
+                // (framestall の 3s 閾値まで届かない帯が視界外になる)。
+                if (gapMs >= 500 || _hitchLinesInWindow < HitchMaxLinesPerWindow)
                 {
                     _hitchLinesInWindow++;
                     long boehmDeltaKb = _lastBoehmUsed > 0 && boehmNow > 0 ? (boehmNow - _lastBoehmUsed) / 1024 : 0;
