@@ -412,9 +412,9 @@ FodyWeavers.xml
 local.props
 Modules/LocalDevOverride.Local.cs
 
-# Lobby share secrets — operator's real RelayUrl + HmacKey for the Cloudflare Worker.
+# Lobby share secrets — the operator's RelayUrl + HmacKey for the Cloudflare Worker.
 # The committed Modules/LobbyShareSecrets.Default.cs provides empty fallbacks so
-# source-built copies still compile (feature disabled). See relay/DEPLOY.md.
+# source-built copies still compile (feature disabled).
 Modules/LobbyShareSecrets.cs
 
 # Cloudflare Wrangler local state and dev secrets — never commit.
@@ -423,13 +423,11 @@ relay/.wrangler/
 .wrangler/
 .dev.vars
 
-# Claude Code / AI assistant artifacts
+# Editor / assistant tooling artifacts — generated locally, machine-specific.
 .claude/
 .claudeignore
 CLAUDE.md
 CLAUDE.local.md
-# Skill working copies and their lock file. Same class as .claude/ above:
-# generated on the fly when a skill loads, and specific to one machine's setup.
 .agents/
 skills-lock.json
 .cursor/
@@ -437,17 +435,15 @@ skills-lock.json
 .aider*
 .windsurfrules
 
-# Internal planning / migration docs (not for upstream)
+# Local working notes
 docs/
 
-# External ops tooling — private by default (not for public repo)
+# Local ops scripts
 tools/*
 # ...except the option-Id collision checker, which the build & CI depend on.
 !tools/check-option-ids.ps1
 # ...and the lang-key sync checker, which the build & CI depend on.
 !tools/check-lang-keys.ps1
-# ...and the internal-only-comment checker, which the build & CI depend on.
-!tools/check-forbidden-comments.ps1
 # ...and the crash-recovery watchdog, which is embedded into the DLL & shipped as a feature.
 !tools/EndKnotWatchdog.ps1
 !tools/番犬スタート.cmd
@@ -490,16 +486,12 @@ log1.txt
 # Local override (already covered above but kept explicit)
 Modules/LocalDevOverride.Local.cs
 
-# CTA (Custom Team Assigner) — separate WPF app under BSD-4-Clause (advertising
-# clause), GPL-3.0-incompatible. Kept local only to avoid the BSD-4 obligations
-# when redistributing through this fork.
+# CTA (Custom Team Assigner) — a separate WPF app with its own licence terms.
+# It is built and distributed on its own, not through this repository.
 CTA/
 
-# BGM audio files — embedded into the DLL at build but never pushed.
-# What the licences actually forbid is redistributing the source files in a form
-# the end user can grab as audio; the compiled DLL decodes them in memory and
-# never writes them to disk, so that route stays clear. Per-track provenance and
-# the current standing of each licence live in docs/asset-provenance.md.
+# BGM audio files — embedded into the DLL at build, not redistributed as source
+# files. The DLL decodes them in memory and never writes them to disk.
 # bgm_titles.json is kept for attribution metadata.
 Resources/Sounds/BGM/*.ogg
 Resources/Sounds/BGM/*.mp3
@@ -511,23 +503,21 @@ Resources/Sounds/Backrooms/*.wav
 Resources/Sounds/Backrooms/*.ogg
 Resources/Sounds/Backrooms/*.mp3
 
-# DOVA-SYNDROME sound effects (AudienceShock / WaveCannonCharge / WaveCannonFire).
-# Same rule as the BGM above: the DLL decodes them in memory, but the raw files must
-# never sit in the public repo where an end user can grab them as audio. These were
-# tracked by mistake until 2026-08-17 — the BGM/ and Backrooms/ rules did not cover
-# Resources/Sounds/ itself. The upstream-inherited *.wav in this directory stay tracked.
+# Sound effects directly under Resources/Sounds/ (AudienceShock / WaveCannonCharge /
+# WaveCannonFire). Same rule as the BGM above — the BGM/ and Backrooms/ patterns do
+# not reach this directory, so it needs its own line. Only *.ogg is matched; the
+# upstream-inherited *.wav here stay tracked.
 Resources/Sounds/*.ogg
 
-# UI mockups / design drafts — internal only, not for the public repo
+# UI mockups / design drafts — local scratch files
 mock_refined.html
 mockup_role_menu_planB.html
 mockups/
-# 実機検証 fixture の運用メモ — どの fixture がどの内部契約を潰すためのものか、
-# どのスロットを意図的に空けてあるか、といった作り方の中身なので公開リポには置かない。
-# 同ディレクトリの .ekrole.json / _bindings.json は再作成コストの高い「データ」なので追跡する。
+# fixture の運用メモ。同ディレクトリの .ekrole.json / _bindings.json は
+# 再作成コストの高い「データ」なので追跡する。
 editor/tests/fixtures/realtest/README.md
 
-# Relay operator documentation (kept locally, not published)
+# Relay operator documentation — kept locally
 relay/README.md
 relay/DEPLOY.md
 relay/CONTRACT.md
