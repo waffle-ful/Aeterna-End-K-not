@@ -2519,6 +2519,30 @@ public static class GameSettingMenuPatch
         // それを超える規模ではフレームあたりの本数を増やして完走を優先する。
         int rootsPerFrame = Math.Max(2, doomedRoots.Count / 100);
         Modules.HealthLog.Note($"UIPURGE begin roots={doomedRoots.Count} perFrame={rootsPerFrame} t={Utils.TimeStamp}");
+
+        // 破棄コストの 9 割が 2〜3 root に集中する (frameGapsMs の突出バッチ・~150ms/フレーム実測) が、
+        // その root が snapshot 内のどこに来るかはタブ巡回順で変わる — frameGaps の突出位置と突き合わせて
+        // 太った root を名指しできるよう、snapshot 順の添字付きで名前と子孫数を残す。
+        // 子孫数 (transform 階層の総数) は破棄コストの代理指標。1 行 ~40 root に収まる長さに丸める。
+        var rootNames = new System.Text.StringBuilder();
+        for (var i = 0; i < doomedRoots.Count; i++)
+        {
+            var go = doomedRoots[i];
+            string label = "(dead)";
+            var kids = 0;
+            try
+            {
+                if (go)
+                {
+                    label = go.name.Length > 24 ? go.name.Substring(0, 24) : go.name;
+                    kids = go.GetComponentsInChildren<Transform>(true).Length;
+                }
+            }
+            catch { /* 破棄競合した root は (dead) のまま記録する */ }
+            rootNames.Append(i).Append(':').Append(label).Append('/').Append(kids).Append(' ');
+        }
+        Modules.HealthLog.Note($"UIPURGEROOTS {rootNames.ToString().TrimEnd()} t={Utils.TimeStamp}");
+
         var frameGaps = new System.Text.StringBuilder();
         float lastResumeAt = Time.realtimeSinceStartup;
 
