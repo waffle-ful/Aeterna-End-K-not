@@ -31,6 +31,15 @@ internal static class ChangeRoleSettings
     {
         // オンラインでは下のガードで vanilla CoStartGame に流れるため、ローディング動画の
         // 表示はガードより前に置く (Show は内部で HudManager 不在時 no-op)。
+        //
+        // 挟み撃ち計器: ゲーム開始窓の 1.4s 級無帰属ストールがどの区間で起きるかを、
+        // Health.log の行順で括る。オンラインではここ〜StartGameHost 入口の間が vanilla CoStartGame
+        // (フェード / コスメ整理 / FindObjectOfType / GameStartManager 破棄 — mod からは触れない区間)。
+        // HITCH 行は長フレームの末尾で書かれるので、GSMARK 2 本の間に HITCH が挟まればその区間が犯人。
+        // 区間長の判定は rt (Time.realtimeSinceStartup, ms 分解能) の差分で行う — t は秒分解能で ±1s、
+        // HITCH はレート制限 (5行/10s) に食われて開始窓で欠けることがある (どちらも実測)。
+        Modules.HealthLog.NoteOp("GameStartVideoShow");
+        Modules.HealthLog.Note($"GSMARK videoShow t={Utils.TimeStamp} rt={Time.realtimeSinceStartup:F3}");
         EndKnot.Modules.Media.LoadingScreenVideo.Show();
 
         if (!GameStates.IsLocalGame || !HudManager.InstanceExists) return true;
@@ -565,6 +574,10 @@ internal static class StartGameHostPatch
 
     private static System.Collections.IEnumerator StartGameHost()
     {
+        // 挟み撃ち計器: videoShow〜ここ = vanilla CoStartGame 区間。行順で括り、区間長は rt 差分で測る。
+        Modules.HealthLog.NoteOp("GameStartHostEnter");
+        Modules.HealthLog.Note($"GSMARK hostEnter t={Utils.TimeStamp} rt={Time.realtimeSinceStartup:F3}");
+
         // Close the settings / customization menus if the host started the game with one still open. The
         // custom CoStartGame path closes them (see ChangeRoleSettings) only for local games — its early
         // return skips that for ONLINE hosts, so without this the settings menu's whole UI subtree
@@ -598,6 +611,7 @@ internal static class StartGameHostPatch
         // GameObject.Find のシーングラフ全走査 2 本を含む) に落ちているかを HITCH の lastOp で判定する。
         // 名前が出なければ、この区間の外 (エンジン側のフレーム仕事) が犯人ということになる。
         Modules.HealthLog.NoteOp("GameStartLoadingBar");
+        Modules.HealthLog.Note($"GSMARK loadingBar t={Utils.TimeStamp} rt={Time.realtimeSinceStartup:F3}");
 
         try
         {
