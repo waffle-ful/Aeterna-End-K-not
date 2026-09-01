@@ -31,6 +31,7 @@ public class Stressed : IAddon
 
     private static Dictionary<byte, int> Timers = [];
     private static Dictionary<byte, long> LastUpdates = [];
+    private static Dictionary<byte, int> LastNotifiedDisplay = [];
 
     public static bool CountRepairSabotage;
 
@@ -87,6 +88,7 @@ public class Stressed : IAddon
 
         Timers = [];
         LastUpdates = [];
+        LastNotifiedDisplay = [];
         CountRepairSabotage = true;
     }
 
@@ -129,6 +131,7 @@ public class Stressed : IAddon
             Main.PlayerStates[pc.PlayerId].RemoveSubRole(CustomRoles.Stressed);
             Timers.Remove(pc.PlayerId);
             LastUpdates.Remove(pc.PlayerId);
+            LastNotifiedDisplay.Remove(pc.PlayerId);
             return;
         }
 
@@ -145,7 +148,8 @@ public class Stressed : IAddon
 
         if (pc.IsNonHostModdedClient()) SendRPC(pc.PlayerId, Timers[pc.PlayerId], LastUpdates[pc.PlayerId]);
 
-        if (!pc.IsModdedClient()) Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
+        if (!pc.IsModdedClient() && Utils.ShouldNotifySuffixTimer(LastNotifiedDisplay, pc.PlayerId, Timers[pc.PlayerId]))
+            Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
     }
 
     public static void SendRPC(byte id, int time, long lastUpdate)
@@ -244,7 +248,7 @@ public class Stressed : IAddon
     public static void GetProgressText(byte playerId, StringBuilder resultText)
     {
         if (Timers.TryGetValue(playerId, out int x))
-            resultText.AppendFormat(GetString("DamoclesTimeLeft"), x);
+            resultText.AppendFormat(GetString("DamoclesTimeLeft"), Utils.GetSuffixTimerDisplay(x));
     }
 
     private static void AdjustTime(int change)

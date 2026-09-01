@@ -5,6 +5,7 @@ using System.Linq;
 using BepInEx.Unity.IL2CPP.Utils.Collections;
 using EndKnot.Gamemodes;
 using EndKnot.Modules;
+using EndKnot.Patches;
 using EndKnot.Roles;
 using HarmonyLib;
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
@@ -213,6 +214,29 @@ internal static class EndGamePatch
         // 最終会議の DeadBody 配列 (SpriteRenderer 部分木ごと) をロビー滞在中まで吊らない。
         // null でなく空配列 — IsExistDeadBody が .Length を読むため。
         MeetingStates.DeadBodies = [];
+
+        // 生存セット削減: ロビー読者が居ない重量残渣だけをゲーム終了時点で手放す (Boehm GC の
+        // 停止時間は生存ヒープに線形)。軽量な値型辞書 (byte→float 等 ≤15件) は回収がほぼゼロなので
+        // 従来どおり次ゲーム開始時の一括リセットに任せる。ここに足してよいのは
+        // 「ロビー中に読むコードパスが無い」と確認できたものだけ — /lastroles・再入場時の自動戦績・
+        // ロビーキル・投票開始などが前ゲームデータを読むため、無差別クリアは無音デグレを生む。
+        try
+        {
+            SabotageMapPatch.TimerTexts.Values.DoIf(x => x, x => Object.Destroy(x.gameObject));
+            MapRoomDoorsUpdatePatch.DoorTimerTexts.Values.DoIf(x => x, x => Object.Destroy(x.gameObject));
+        }
+        catch (Exception e) { Utils.ThrowException(e); }
+
+        SabotageMapPatch.TimerTexts = [];
+        MapRoomDoorsUpdatePatch.DoorTimerTexts = [];
+        ReportDeadBodyPatch.WaitReport.SetAllValues([]); // キーは消さない — 次ゲーム開始時の再作成フローの前提
+        Main.LastEnteredVent = [];
+        Main.LastNotifyNames = [];
+        Main.LastSentClampedNames = [];
+        // Camouflage.PlayerSkins はここで手放さない — 素インデクサ読者が役職側に9箇所あり
+        // (Shadow/Enigma/Venerer)、クリア前倒しはその全部を将来の欠損例外候補にする。回収量は
+        // 外見15個分で見合わない。従来どおり次ゲーム開始時の Init() に任せる。
+
         Main.LoversPlayers.Clear();
         Bloodmoon.OnMeetingStart();
         AFKDetector.ExemptedPlayers.Clear();

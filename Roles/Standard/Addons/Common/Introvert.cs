@@ -11,6 +11,7 @@ public class Introvert : IAddon
     private static OptionItem Time;
 
     public static Dictionary<byte, long> TeleportAwayDelays = [];
+    private static Dictionary<byte, int> LastNotifiedDisplay = [];
     public AddonTypes Type => AddonTypes.Mixed;
 
     public void SetupCustomOption()
@@ -31,6 +32,7 @@ public class Introvert : IAddon
         if (Main.HasJustStarted || !Main.IntroDestroyed || AntiBlackout.SkipTasks || ExileController.Instance)
         {
             TeleportAwayDelays = [];
+            LastNotifiedDisplay = [];
             return;
         }
 
@@ -42,6 +44,7 @@ public class Introvert : IAddon
         {
             if (TeleportAwayDelays.Remove(pc.PlayerId))
             {
+                LastNotifiedDisplay.Remove(pc.PlayerId);
                 Utils.SendRPC(CustomRPC.SyncIntrovert, 1, pc.PlayerId);
                 Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
             }
@@ -69,6 +72,7 @@ public class Introvert : IAddon
             pc.RPCPlayCustomSound("Teleport");
             pc.TPToRandomVent();
             TeleportAwayDelays.Remove(pc.PlayerId);
+            LastNotifiedDisplay.Remove(pc.PlayerId);
             Utils.SendRPC(CustomRPC.SyncIntrovert, 1, pc.PlayerId);
             Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc); // suffix を消すので即時
             return;
@@ -76,7 +80,9 @@ public class Introvert : IAddon
 
         // カウントダウン suffix は整数秒表示なので毎秒だけ送る (毎 tick 呼んでも実質1本/秒に
         // 収まっていたのは LastNotifyNames の内容 dedup 任せだったので、依存を明示に変える)。
-        if (PerSecondUpdateScheduler.ShouldRunUpdate(pc.PlayerId))
+        // さらに残り10秒超は5秒刻みの表示に丸め、刻みが変わった時だけ送る。
+        if (PerSecondUpdateScheduler.ShouldRunUpdate(pc.PlayerId)
+            && Utils.ShouldNotifySuffixTimer(LastNotifiedDisplay, pc.PlayerId, (int)(endTS - Utils.TimeStamp)))
             Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
     }
 
@@ -103,6 +109,6 @@ public class Introvert : IAddon
     public static string GetSelfSuffix(PlayerControl seer)
     {
         if (!seer.IsAlive() || !TeleportAwayDelays.TryGetValue(seer.PlayerId, out long endTS)) return string.Empty;
-        return string.Format(Translator.GetString("Introvert.Suffix"), endTS - Utils.TimeStamp);
+        return string.Format(Translator.GetString("Introvert.Suffix"), Utils.GetSuffixTimerDisplay((int)(endTS - Utils.TimeStamp)));
     }
 }
