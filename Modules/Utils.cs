@@ -2038,13 +2038,44 @@ public static class Utils
     // draft announcements still arrive comfortably before the meeting / lobby state changes.
     private const float MultiMessageGapSeconds = 0.4f;
 
+    // 間隔送出はプロセス全体で1本の直列キューに集約する。呼び出しごとに独立したコルーチンを立てると、
+    // 同時に走る複数バッチが互いの 0.4s 間隔の「隙間」へ入り込む — 予約時刻の差が 0.4 の倍数のバッチ同士は
+    // 位相差 0 で毎回同じフレーム帯に着地し、合流後の実効間隔が 0 秒まで詰まって、間隔送出が守るはずの
+    // フレーム内バースト条件そのものに戻ってしまう (会議冒頭は3バッチが同時に走る実在ケース)。
+    private static readonly Queue<(string Text, byte SendTo, string Title, MessageImportance Importance)> ThrottledSendQueue = new();
+    private static bool ThrottledSendPumpRunning;
+    private static float NextThrottledSendTime;
+
     public static void SendMultipleMessages(this IEnumerable<Message> messages, MessageImportance importance = MessageImportance.Medium)
     {
         var list = messages as IList<Message> ?? messages.ToList();
 
         if (list.Count == 0) return;
 
-        Main.Instance.StartCoroutine(SendMultipleMessagesThrottled(list, importance));
+        foreach (Message msg in list)
+        {
+            PlayerControl receiver = GetPlayerById(msg.SendTo, GameStates.InGame);
+
+            if (RecipientIncludesVanillaClient(msg.SendTo, receiver) && HazelExtensions.GetStringWriteSize(msg.Text) + 4 >= SpacedChunkTextByteBudget)
+                foreach (string piece in SplitTextForSpacedSending(msg.Text))
+                    ThrottledSendQueue.Enqueue((piece, msg.SendTo, msg.Title, importance));
+            else
+                ThrottledSendQueue.Enqueue((msg.Text, msg.SendTo, msg.Title, importance));
+        }
+
+        if (!ThrottledSendPumpRunning)
+        {
+            ThrottledSendPumpRunning = true;
+
+            // 起動自体が失敗したままフラグが立ち続けると以後の間隔送出が全て無音停止するため、
+            // 失敗時はフラグを戻して次の呼び出しで再起動できるようにする。
+            try { Main.Instance.StartCoroutine(ThrottledSendPump()); }
+            catch
+            {
+                ThrottledSendPumpRunning = false;
+                throw;
+            }
+        }
     }
 
     // A single long Message is split by SendMessage into several title-bearing chunks that all hit the
@@ -2057,33 +2088,35 @@ public static class Utils
     // single sub-1KB send that SendMessage won't re-split on one frame.
     private const int SpacedChunkTextByteBudget = 450;
 
-    private static IEnumerator SendMultipleMessagesThrottled(IList<Message> messages, MessageImportance importance)
+    private static IEnumerator ThrottledSendPump()
     {
-        var sends = new List<(string Text, byte SendTo, string Title)>();
-
-        foreach (Message msg in messages)
+        while (ThrottledSendQueue.Count > 0)
         {
-            PlayerControl receiver = GetPlayerById(msg.SendTo, GameStates.InGame);
+            // NextThrottledSendTime は static なので、キューが空になってポンプが終了した直後に新しい
+            // バッチが来ても前回送出からの 0.4s 間隔が保たれる (バッチ境界でも間隔保証を切らさない)。
+            // WaitForSecondsRealtime はマネージド IEnumerator で、yield するたび強 GCHandle が残るため
+            // 待機は null yield のポーリングで行う。
+            while (Time.realtimeSinceStartup < NextThrottledSendTime) yield return null;
 
-            if (RecipientIncludesVanillaClient(msg.SendTo, receiver) && HazelExtensions.GetStringWriteSize(msg.Text) + 4 >= SpacedChunkTextByteBudget)
-                foreach (string piece in SplitTextForSpacedSending(msg.Text))
-                    sends.Add((piece, msg.SendTo, msg.Title));
-            else
-                sends.Add((msg.Text, msg.SendTo, msg.Title));
-        }
-
-        for (var i = 0; i < sends.Count; i++)
-        {
             // 間隔送出の待機中に試合が終わり得る。追放ラップアップ〜終局窓へ送信の尻尾を
-            // 食い込ませないよう、各送出の直前に生存条件を再確認する。
-            if (!AmongUsClient.Instance.AmHost || GameStates.IsEnded) yield break;
+            // 食い込ませないよう、各送出の直前に生存条件を再確認する (不成立なら残りは全部捨てる)。
+            if (!AmongUsClient.Instance.AmHost || GameStates.IsEnded)
+            {
+                ThrottledSendQueue.Clear();
+                break;
+            }
 
-            (string text, byte sendTo, string title) = sends[i];
-            SendMessage(text, sendTo, title, importance: importance);
+            (string text, byte sendTo, string title, MessageImportance importance) = ThrottledSendQueue.Dequeue();
 
-            if (i < sends.Count - 1)
-                yield return new WaitForSecondsRealtime(MultiMessageGapSeconds);
+            // 例外でポンプが死ぬと ThrottledSendPumpRunning が立ったまま以後の全送出が無音停止するため、
+            // 1件の失敗はここで握って次の送出へ進む。
+            try { SendMessage(text, sendTo, title, importance: importance); }
+            catch (Exception e) { ThrowException(e); }
+
+            NextThrottledSendTime = Time.realtimeSinceStartup + MultiMessageGapSeconds;
         }
+
+        ThrottledSendPumpRunning = false;
     }
 
     // Group lines into pieces that each stay under SpacedChunkTextByteBudget. Mirrors the core split's
