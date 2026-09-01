@@ -594,6 +594,11 @@ internal static class StartGameHostPatch
         string loadingTextText1 = GetString("LoadingBarText.1");
         LoadingBarManager loadingBarManager = LoadingBarManager.Instance;
 
+        // 開始窓の帰属計器: 1秒級の大ストールがこのフレーム (メニュー Close 〜ローディングバー設定、
+        // GameObject.Find のシーングラフ全走査 2 本を含む) に落ちているかを HITCH の lastOp で判定する。
+        // 名前が出なければ、この区間の外 (エンジン側のフレーム仕事) が犯人ということになる。
+        Modules.HealthLog.NoteOp("GameStartLoadingBar");
+
         try
         {
             loadingBarManager.ToggleLoadingBar(true);
@@ -620,9 +625,25 @@ internal static class StartGameHostPatch
         // フレーム末発火) purge が自衛ガードで無音スキップされる — 必ず 1 フレーム空けてから呼ぶこと。
         GameSettingMenuPatch.PurgeUiCache("gamestart");
 
-        // purge の Destroy がフレーム末で処理されてからフル GC を先撃ちし、purge 分もまとめて回収する。
+        // gamestart の purge は Destroy を数フレームに分散する (1 フレームに全root を落とすと ~300ms の
+        // 単発フリーズになる)。分散が終わってからフル GC を先撃ちし、purge 分もまとめて回収する。
         // 直後の ship 生成 + 役職選出の大量アロケーションを掃除済みヒープで走らせる (詳細は GcPrepass)。
         yield return null;
+
+        // このコルーチンは CoStartGameHost 本体の置き換えなので、ここで無条件に待つとフラグ固着 =
+        // 全員のゲーム開始が永久停止になる。通常は ~5 フレームで終わる分散に対し 120 フレームを
+        // 上限とし、超えたら GC 先撃ちを諦めて開始シーケンスを優先する。
+        for (var purgeWaitFrames = 0; GameSettingMenuPatch.UiCachePurgeInFlight; purgeWaitFrames++)
+        {
+            if (purgeWaitFrames >= 120)
+            {
+                Logger.Warn("UI cache spread-destroy did not finish in 120 frames — proceeding with game start", "MenuLeak");
+                break;
+            }
+
+            yield return null;
+        }
+
         GcPrepass.Collect("loading");
 
         if (LobbyBehaviour.Instance)

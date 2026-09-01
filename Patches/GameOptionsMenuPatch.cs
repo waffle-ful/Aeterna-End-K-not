@@ -2406,27 +2406,48 @@ public static class GameSettingMenuPatch
     // 両方を試合の間じゅう延ばし続ける。ゲーム開始確定点 (StartGameHost、直後に GCPRE loading が走り
     // ロード画面で回収が隠れる) で破棄し、次にロビーでメニューを開いた時に既存の遅延ビルドで作り直す。
     // ロビー内での開閉はキャッシュがそのまま残るので今まで通り即時。
+    // gamestart の分散破棄が完走したかどうか。StartGameHost はこれを見て GCPRE loading を分散完了後まで遅らせる
+    // (途中で GC を打つと未破棄分が回収から漏れ、purge の意味が半減する)。
+    public static bool UiCachePurgeInFlight { get; private set; }
+
     public static void PurgeUiCache(string reason)
     {
         if (GameSettingMenu.Instance) return; // 開いている最中の UI は絶対に壊さない (通常この状況で呼ばれない)
 
         try
         {
-            // ゲーム開始窓の 1.5s 級ストールとの相関が観測されている区間 — HITCH の lastOp で帰属を取る。
             // Object.Destroy は遅延実行 (フレーム末で子孫ごと破棄) なので、下の swMs は managed 側の
-            // 掃除しか測れない。本体コストはフレーム末に落ち、直後の HITCH 行に lastOp=PurgeUiCache が
-            // 乗るかどうかが確定判定。
+            // 掃除しか測れない。本体コストは Destroy を呼んだ各フレームの末に落ち、HITCH 行の
+            // lastOp=PurgeUiCache がその帰属になる。
             Modules.HealthLog.NoteOp("PurgeUiCache");
             var purgeSw = System.Diagnostics.Stopwatch.StartNew();
             var destroyed = 0;
+            List<GameObject> doomedRoots = null;
 
             if (TempParent)
             {
+                doomedRoots = new List<GameObject>(TempParent.childCount);
+
                 for (int i = TempParent.childCount - 1; i >= 0; i--)
                 {
-                    Object.Destroy(TempParent.GetChild(i).gameObject);
+                    doomedRoots.Add(TempParent.GetChild(i).gameObject);
                     destroyed++;
                 }
+            }
+
+            if (doomedRoots is { Count: > 0 })
+            {
+                // root ~40 本を1フレームで Destroy するとフレーム末の子孫破棄が ~300ms の単発フリーズに
+                // なる (実測)。ロード画面で隠れる gamestart では数本/フレームに分散して 1 フレームの
+                // 上限を抑える。disconnect はメニューが直後に再オープンされ得るので従来どおり即時全破棄。
+                if (reason == "gamestart")
+                {
+                    UiCachePurgeInFlight = true;
+                    Main.Instance.StartCoroutine(CoSpreadDestroyUiCache(doomedRoots));
+                }
+                else
+                    foreach (GameObject go in doomedRoots)
+                        Object.Destroy(go);
             }
 
             // 破棄した個体への静的参照をすべて手放す。取りこぼしても既存の dead-cache ガード
@@ -2465,7 +2486,35 @@ public static class GameSettingMenuPatch
 
             Logger.Info($"UI cache purged ({reason}): destroyed {destroyed} cached root object(s) in {purgeSw.ElapsedMilliseconds}ms (managed sweep only — Destroy はフレーム末着地)", "MenuLeak");
         }
-        catch (Exception e) { Logger.Warn($"UI cache purge failed: {e.Message}", "MenuLeak"); }
+        catch (Exception e)
+        {
+            // フラグが立ったまま死ぬと StartGameHost の分散完了待ちが永久ループする — 失敗時は必ず下ろす。
+            UiCachePurgeInFlight = false;
+            Logger.Warn($"UI cache purge failed: {e.Message}", "MenuLeak");
+        }
+    }
+
+    // root を数本ずつ Destroy して、フレーム末の子孫破棄コストを複数フレームへ分散する。
+    // 各 root の子孫破棄は平均 ~7.5ms (300ms/40root 実測) なので、8本/フレームで 1 フレームあたり
+    // ~60ms 上限 × ~5 フレーム。呼び出し時に root を snapshot 済みのため、分散中に新しくキャッシュへ
+    // 入った個体 (メニュー再ビルド) を巻き込むことはない。
+    private static System.Collections.IEnumerator CoSpreadDestroyUiCache(List<GameObject> doomedRoots)
+    {
+        const int RootsPerFrame = 8;
+
+        for (var i = 0; i < doomedRoots.Count; i++)
+        {
+            Modules.HealthLog.NoteOp("PurgeUiCache");
+
+            // 例外でコルーチンが黙って止まると UiCachePurgeInFlight が立ったままになり、StartGameHost の
+            // 分散完了待ちを永久に塞ぐ — 1本の失敗はここで握って残りの破棄と末尾のフラグ復旧まで必ず進む。
+            try { if (doomedRoots[i]) Object.Destroy(doomedRoots[i]); }
+            catch (Exception e) { Logger.Warn($"spread destroy failed at root {i}: {e.Message}", "MenuLeak"); }
+
+            if ((i + 1) % RootsPerFrame == 0) yield return null;
+        }
+
+        UiCachePurgeInFlight = false;
     }
     [HarmonyPatch(nameof(GameSettingMenu.Close))]
     [HarmonyPostfix]
