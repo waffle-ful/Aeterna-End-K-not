@@ -2059,6 +2059,10 @@ public static class Utils
 
         for (var i = 0; i < sends.Count; i++)
         {
+            // 間隔送出の待機中に試合が終わり得る。追放ラップアップ〜終局窓へ送信の尻尾を
+            // 食い込ませないよう、各送出の直前に生存条件を再確認する。
+            if (!AmongUsClient.Instance.AmHost || GameStates.IsEnded) yield break;
+
             (string text, byte sendTo, string title) = sends[i];
             SendMessage(text, sendTo, title, importance: importance);
 
@@ -3271,6 +3275,8 @@ public static class Utils
             //if (!ForMeeting && !NoCache && !ForceLoop && !CamouflageIsForMeeting && !GuesserIsForMeeting && !MushroomMixup && GameStates.CurrentServerType == GameStates.ServerType.Vanilla) return;
             if (!AmongUsClient.Instance.AmHost) return;
             if (!SetUpRoleTextPatch.IsInIntro && ((SpecifySeer && SpecifySeer.IsModdedClient() && (Options.CurrentGameMode == CustomGameMode.Standard || SpecifySeer.IsHost())) || (GameStates.IsMeeting && !ForMeeting) || GameStates.IsLobby)) return;
+
+            HealthLog.NoteOp("NotifyRoles");
 
             var apc = Main.CachedAllPlayerControls();
             SeerList = SpecifySeer ? [SpecifySeer] : apc;

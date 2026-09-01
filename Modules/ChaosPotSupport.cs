@@ -175,8 +175,8 @@ public static class ChaosPotSupport
         List<(string Title, string Body)> sections = BuildChatSections(includeCrewmate: true);
         if (sections.Count == 0) return;
 
-        foreach ((string title, string body) in sections)
-            Utils.SendMessage("\n" + body, byte.MaxValue, title);
+        // 同一フレームでタイトル付き放送を連射しない — 間隔送出に乗せる (会議冒頭通知と同じ流儀)。
+        sections.ConvertAll(s => new Message("\n" + s.Body, byte.MaxValue, s.Title)).SendMultipleMessages(MessageImportance.High);
     }
 
     public static void SendChatToPlayer(PlayerControl player)
@@ -195,7 +195,8 @@ public static class ChaosPotSupport
             return;
         }
 
-        foreach ((string title, string body) in sections)
-            Utils.SendMessage("\n" + body, player.PlayerId, title);
+        // 同一フレーム連射を避ける (/myrole・/r と同型)。
+        byte sendTo = player.PlayerId;
+        sections.ConvertAll(s => new Message("\n" + s.Body, sendTo, s.Title)).SendMultipleMessages(MessageImportance.High);
     }
 }

@@ -210,6 +210,9 @@ internal static class EndGamePatch
         Main.VisibleTasksCount = false;
 
         CustomNetObject.Reset();
+        // 最終会議の DeadBody 配列 (SpriteRenderer 部分木ごと) をロビー滞在中まで吊らない。
+        // null でなく空配列 — IsExistDeadBody が .Length を読むため。
+        MeetingStates.DeadBodies = [];
         Main.LoversPlayers.Clear();
         Bloodmoon.OnMeetingStart();
         AFKDetector.ExemptedPlayers.Clear();

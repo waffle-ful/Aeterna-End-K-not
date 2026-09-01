@@ -43,6 +43,36 @@ public static class HealthLog
     private static long _hitchWindowStartTs;
     private static int _hitchLinesInWindow;
     private static int _hitchSuppressed;
+
+    // --- ヒッチ帰属計器 (lastOp): 重い区間の入口で NoteOp("名前") を呼んでおくと、直後の HITCH 行に
+    // その名前と経過 ms が載る (op がヒッチ窓の内側にある時だけ)。メインスレッド専用・呼び出し側は
+    // const / 既存 string を渡すこと (合成 string を渡すと帰属計器自体がアロケ源になる)。
+    private static string _lastOpName;
+    private static long _lastOpAtMs;
+
+    // --- fps 計器: 直近窓の描画フレームレート。Tick は InnerNetClient.FixedUpdate 駆動 (~30Hz 定数) なので
+    // Tick 回数を数えても描画 fps にならない (実測: 描画118fps中に29-30を返した) — Time.frameCount の
+    // 差分で真の描画フレーム数を取る。前景/背景 (スロットル) の判別はこの値の高低で行う。
+    private static int _fpsLastFrameCount;
+    private static long _fpsWinStartMs;
+    private static int _fpsLast = -1;
+
+    /// <summary>重い区間の入口で呼ぶと、その区間中/直後の HITCH 行に lastOp として帰属が載る。メインスレッド専用。</summary>
+    public static void NoteOp(string name)
+    {
+        _lastOpName = name;
+        _lastOpAtMs = HitchClock.ElapsedMilliseconds;
+    }
+
+    // op の開始がヒッチ窓 (前回 Tick 以降 = gapMs+誤差) の内側にある時だけ帰属を出す。
+    // 古い op を出すと「直近のヒッチは全部それのせい」に見える偽帰属になるため、窓外は無記載。
+    private static string GetLastOpSuffix(long nowMs, long gapMs)
+    {
+        string op = _lastOpName;
+        if (op == null) return "";
+        long age = nowMs - _lastOpAtMs;
+        return age <= gapMs + 100 ? $" lastOp={op} opAgeMs={age}" : "";
+    }
     private static bool _lastFullScreen;
     private static int _lastScreenW, _lastScreenH; // 直近 Tick 時点の画面モード (reschg⇔framestall 相関計器)
     private static bool _lastFocused = true; // 直近 Tick 時点のウィンドウフォーカス (focus⇔framestall 相関計器)
@@ -260,6 +290,19 @@ public static class HealthLog
         long nowMs = HitchClock.ElapsedMilliseconds;
         long boehmNow = GcPrepass.BoehmUsedBytes();
 
+        if (_fpsWinStartMs == 0)
+        {
+            _fpsWinStartMs = nowMs;
+            _fpsLastFrameCount = Time.frameCount;
+        }
+        else if (nowMs - _fpsWinStartMs >= 1000)
+        {
+            int fc = Time.frameCount;
+            _fpsLast = (int)((fc - _fpsLastFrameCount) * 1000L / (nowMs - _fpsWinStartMs));
+            _fpsLastFrameCount = fc;
+            _fpsWinStartMs = nowMs;
+        }
+
         if (_lastTickMs != 0)
         {
             long gapMs = nowMs - _lastTickMs;
@@ -282,7 +325,7 @@ public static class HealthLog
                     // ⚠️ Boehm GC 回数は Il2CppInterop ラッパー越しなので raw DllImport (BoehmUsedBytes) より高い。
                     // Tick は FixedUpdateCaller から毎フレーム走るため、ここ (ヒッチ検出時のみ) で取る。
                     // 差分ではなく累計を出し、連続する HITCH 行の差として読む — 毎フレーム標本を持たずに済む。
-                    Write($"HITCH gapMs={gapMs} state={state} gc0d={GC.CollectionCount(0) - _lastGc0Count} gc2d={GC.CollectionCount(2) - _lastGc2Count} bgc={GcPrepass.BoehmCollectionCount()} boehmMB={(boehmNow > 0 ? boehmNow / 1048576 : -1)} boehmDeltaKB={boehmDeltaKb} t={now}");
+                    Write($"HITCH gapMs={gapMs} state={state} gc0d={GC.CollectionCount(0) - _lastGc0Count} gc2d={GC.CollectionCount(2) - _lastGc2Count} bgc={GcPrepass.BoehmCollectionCount()} boehmMB={(boehmNow > 0 ? boehmNow / 1048576 : -1)} boehmDeltaKB={boehmDeltaKb} fps={_fpsLast}{GetLastOpSuffix(nowMs, gapMs)} t={now}");
                 }
                 else
                     _hitchSuppressed++;
@@ -411,7 +454,7 @@ public static class HealthLog
                 unack = relSent - ackd;
             }
 
-            string hb = $"t={now} up={now - StartTs} state={state} host={(host ? 1 : 0)} server={server} players={players} wsMB={wsMB} gcMB={gcMB} gc2={gen2} nmSent={nmSent} nmSkip={nmSkip} eosTry={eosTry} eosFlow={eosFlow} idTok={idTok} ping={ping} rsndD={rsndD} unack={unack} pNoAck={pNoAck} inIdle={GetInputIdleSeconds()}{lastSendSuffix}";
+            string hb = $"t={now} up={now - StartTs} state={state} host={(host ? 1 : 0)} server={server} players={players} wsMB={wsMB} gcMB={gcMB} gc2={gen2} nmSent={nmSent} nmSkip={nmSkip} eosTry={eosTry} eosFlow={eosFlow} idTok={idTok} ping={ping} rsndD={rsndD} unack={unack} pNoAck={pNoAck} inIdle={GetInputIdleSeconds()} fps={_fpsLast}{lastSendSuffix}";
             Write($"HB {hb}");
 
             // リンク劣化の遷移だけを ANOM へ。読み取り専用で送信はしない。

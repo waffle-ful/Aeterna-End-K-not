@@ -243,7 +243,9 @@ internal static class LobbyBehaviourOnDestroyPatch
 }
 
 // https://github.com/SuperNewRoles/SuperNewRoles/blob/master/SuperNewRoles/Patches/LobbyBehaviourPatch.cs
-[HarmonyPatch(typeof(LobbyBehaviour), nameof(LobbyBehaviour.Update))]
+// FixedUpdateCaller が lobbyBehaviour 存在時に毎 tick 呼ぶ (LobbyFixedUpdatePatch と同じ dispatcher 集約)。
+// Harmony 属性を生かすと Update 経由と dispatcher 経由の二重実行になるため属性側を外してある。
+//[HarmonyPatch(typeof(LobbyBehaviour), nameof(LobbyBehaviour.Update))]
 internal static class LobbyBehaviourUpdatePatch
 {
     private static ISoundPlayer MapThemeSound;

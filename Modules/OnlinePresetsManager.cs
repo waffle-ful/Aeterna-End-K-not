@@ -19,6 +19,14 @@ public static class OnlinePresetsManager
     public static List<PresetMeta> CachedPresets = [];
     public static bool PresetsLoaded = false;
 
+    // UI キャッシュ全破棄 (PurgeUiCache) 用。破棄済み StringOption / ヘッダーへの強参照を残すと
+    // IL2CPP ラッパーごと生存ヒープに残り続ける (dead-cache ガードは上書きするだけでキー数を減らさない)。
+    public static void ClearUiCache()
+    {
+        OptionBehaviourCache.Clear();
+        HeaderCache.Clear();
+    }
+
     public static void CreatePresetExplorerUI(GameOptionsMenu menu)
     {
         if (!PresetsLoaded) return;

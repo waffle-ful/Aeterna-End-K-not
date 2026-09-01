@@ -286,6 +286,7 @@ internal static class ChangeRoleSettings
             SabotageMapPatch.TimerTexts = [];
             MapRoomDoorsUpdatePatch.DoorTimerTexts = [];
             ReportDeadBodyPatch.CanReport = [];
+            ReportDeadBodyPatch.WaitReport.Clear(); // 退出済みプレイヤーの残骸エントリ (NetworkedPlayerInfo の吊り元) を落とす。在籍者分は下で再作成される
             ReportDeadBodyPatch.AlreadyReportedBodies = [];
             ReportDeadBodyPatch.DummyCorpseBodyIds = [];
             ReportDeadBodyPatch.BorrowedParentBodyIds = [];

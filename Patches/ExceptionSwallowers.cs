@@ -7,8 +7,9 @@ namespace EndKnot.Patches;
 // These methods sometimes throw random exceptions in the base game code and stop the code after them from executing
 // Simply swallow the exception and continue as if nothing happened
 
-[HarmonyPatch(typeof(AbilityButton), nameof(AbilityButton.SetFromSettings))]
-[HarmonyPatch(typeof(ActionButton), nameof(ActionButton.SetEnabled))]
+// AbilityButton.SetFromSettings / ActionButton.SetEnabled は HudPatch 側の専用 Finalizer
+// (AbilityButtonSetFromSettingsPatch / ActionButtonSetEnabledPatch) が同じ握り潰し+ログ付きで
+// 既にカバーしている。ここにも並べると毎フレームのボタン更新に Finalizer が二枚重ねになる。
 [HarmonyPatch(typeof(PlayerControl), nameof(PlayerControl.RawSetName))]
 [HarmonyPatch(typeof(PlayerControl), nameof(PlayerControl.SetName))]
 [HarmonyPatch(typeof(CosmeticsLayer), nameof(CosmeticsLayer.UpdateBodyMaterial))]
