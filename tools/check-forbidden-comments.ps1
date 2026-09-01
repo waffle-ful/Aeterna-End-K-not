@@ -40,7 +40,8 @@ $selfPath = $MyInvocation.MyCommand.Path
 # 役職名などに正当な語 (Auditor = 監査) が出るため対象外。
 $includeGlobs = @(
     '*.cs', '*.ts', '*.tsx', '*.svelte', '*.html', '*.ps1', '*.csproj',
-    '*.yml', '*.yaml', '*.props', '*.json', '*.jsonc'
+    '*.yml', '*.yaml', '*.props', '*.json', '*.jsonc',
+    '*.js', '*.mjs', '*.cjs'
 )
 $excludeDirRegex = '(^|[\\/])(\.git|\.claude|\.vs|\.idea|node_modules|vendor|obj|bin|build|dist|packages|docs|Resources|TestResults|src-tauri[\\/]target)([\\/]|$)'
 
