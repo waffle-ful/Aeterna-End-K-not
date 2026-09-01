@@ -344,7 +344,11 @@ public static class GameOptionsMenuPatch
 
                 // 100 件刻みだと建設フレームが 1 フレーム 60-119ms 級の停止になる (50 件でもまだ 50-70ms)。
                 // 30 件刻みで HITCH 閾値 (50ms) を下回らせる (総ビルド時間はフレーム数が増えても体感差なし)。
-                if (index % 30 == 0) yield return null;
+                if (index % 30 == 0)
+                {
+                    yield return null;
+                    Modules.HealthLog.NoteOp("MenuBuild");
+                }
             }
 
             // Bail if a newer build coroutine was started on this instance while we were running
@@ -2440,6 +2444,9 @@ public static class GameSettingMenuPatch
             ModGameOptionsMenu.CategoryHeaderList.Clear();
             ModGameOptionsMenu.HelpIconList.Clear();
             ModGameOptionsMenu.BaseGameSettingCache.Clear();
+            StringOptionPatch.NameCache.Clear();
+            Modules.OnlinePresetsManager.ClearUiCache();
+            SearchForOptionsAction = null; // 最後に開いた検索欄部分木をクロージャ経由で永久固定しない
 
             foreach (OptionItem option in OptionItem.AllOptions) option.OptionBehaviour = null;
 

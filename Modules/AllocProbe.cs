@@ -16,7 +16,7 @@ public static class AllocProbe
     private static readonly StringBuilder Sb = new(256);
     private static float nextDump;
     private static long windowGlobalStart = -1;
-    private static int frames;
+    private static int windowFrameStart = -1; // 窓開始時の Time.frameCount (FrameEnd は FixedUpdate 駆動 ~30Hz 定数なので、呼び出し回数を数えても描画フレーム数にならない)
 
     public static long Now() => GC.GetAllocatedBytesForCurrentThread();
 
@@ -38,12 +38,20 @@ public static class AllocProbe
     // 毎 tick の締め。5 秒ごとに集計行を吐いてリセットする。
     public static void FrameEnd()
     {
-        frames++;
         float now = Time.unscaledTime;
-        if (nextDump == 0f) nextDump = now + 5f;
+
+        if (nextDump == 0f)
+        {
+            nextDump = now + 5f;
+            windowFrameStart = Time.frameCount;
+        }
+
         if (now < nextDump) return;
 
         nextDump = now + 5f;
+        int fc = Time.frameCount;
+        int frames = windowFrameStart >= 0 ? fc - windowFrameStart : -1;
+        windowFrameStart = fc;
 
         long globalNow = GC.GetTotalAllocatedBytes(false);
         long globalDelta = windowGlobalStart >= 0 ? globalNow - windowGlobalStart : -1;
@@ -56,7 +64,6 @@ public static class AllocProbe
         if (globalDelta >= 0 && globalDelta < 256 * 1024 && tickTotal < 256 * 1024)
         {
             Buckets.Clear();
-            frames = 0;
             return;
         }
 
@@ -76,6 +83,5 @@ public static class AllocProbe
         HealthLog.Note(Sb.ToString());
 
         Buckets.Clear();
-        frames = 0;
     }
 }

@@ -614,7 +614,10 @@ internal static class ShipStatusSerializePatch
         foreach (PlayerControl pc in PlayerControl.AllPlayerControls)
         {
             if (VentilationSystemDeterioratePatch.BlockVentInteraction(pc))
+            {
                 cancel = true;
+                break; // 1人でも該当すれば結論は変わらない — 残りの player×vent 走査は不要
+            }
         }
 
         var hudOverrideSystem = ShipStatusSystem.HudOverrideSystemType;

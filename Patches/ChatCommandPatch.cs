@@ -3350,11 +3350,16 @@ internal static class ChatCommands
                 sb.Replace(searchSubStr.ToLower(), subRole.ToColoredString());
             }
 
-            if (settings.Length > 0) Utils.SendMessage("\n", player.PlayerId, settings.ToString());
+            // 同一フレームで最大4通発射するとタイトル付き SetName の連続送信になるため、間隔送出に乗せる
+            // (会議版の役職説明と同型)。
+            List<Message> myRoleMsgs = [];
+            if (settings.Length > 0) myRoleMsgs.Add(new("\n", player.PlayerId, settings.ToString()));
 
-            Utils.SendMessage(sb.ToString(), player.PlayerId, titleSb.ToString(), importance: MessageImportance.High);
-            if (role.UsesPetInsteadOfKill()) Utils.SendMessage("\n", player.PlayerId, GetString("UsesPetInsteadOfKillNotice"));
-            if (player.UsesMeetingShapeshift() && !MeetingTargetPicker.WouldGetButton(player)) Utils.SendMessage("\n", player.PlayerId, GetString("UsesMeetingShapeshiftNotice"));
+            myRoleMsgs.Add(new(sb.ToString(), player.PlayerId, titleSb.ToString()));
+            if (role.UsesPetInsteadOfKill()) myRoleMsgs.Add(new("\n", player.PlayerId, GetString("UsesPetInsteadOfKillNotice")));
+            if (player.UsesMeetingShapeshift() && !MeetingTargetPicker.WouldGetButton(player)) myRoleMsgs.Add(new("\n", player.PlayerId, GetString("UsesMeetingShapeshiftNotice")));
+
+            myRoleMsgs.SendMultipleMessages(MessageImportance.High);
         }
         else
             Utils.SendMessage((player.FriendCode.GetDevUser().HasTag() ? "\n" : string.Empty) + GetString("Message.CanNotUseInLobby"), player.PlayerId);
@@ -6047,11 +6052,14 @@ internal static class ChatCommands
 
                 if (rl.PetActivatedAbility()) sb.Append($"<size=1>{GetString("SupportsPetMessage")}</size>");
 
-                if (settings.Length > 0) Utils.SendMessage("\n", playerId, settings.ToString());
-                if (rl.UsesPetInsteadOfKill()) Utils.SendMessage("\n", playerId, GetString("UsesPetInsteadOfKillNotice"));
-                if (rl.UsesMeetingShapeshift()) Utils.SendMessage("\n", playerId, GetString("UsesMeetingShapeshiftNotice"));
+                // 同一フレーム最大4通の連続送信を避け、間隔送出に乗せる (/myrole と同型)。
+                List<Message> roleInfoMsgs = [];
+                if (settings.Length > 0) roleInfoMsgs.Add(new("\n", playerId, settings.ToString()));
+                if (rl.UsesPetInsteadOfKill()) roleInfoMsgs.Add(new("\n", playerId, GetString("UsesPetInsteadOfKillNotice")));
+                if (rl.UsesMeetingShapeshift()) roleInfoMsgs.Add(new("\n", playerId, GetString("UsesMeetingShapeshiftNotice")));
 
-                Utils.SendMessage(sb.ToString(), playerId, title, importance: MessageImportance.High);
+                roleInfoMsgs.Add(new(sb.ToString(), playerId, title));
+                roleInfoMsgs.SendMultipleMessages(MessageImportance.High);
                 return;
 
                 void AddSettings(StringOptionItem stringOptionItem)
@@ -6323,15 +6331,25 @@ internal static class ChatUpdatePatch
 {
     public static readonly List<(string Text, byte SendTo, string Title, long SendTimeStamp)> LastMessages = [];
 
+    private static int _styledControllerId;
+
     public static void Postfix(ChatController __instance)
     {
-        var chatBubble = __instance.chatBubblePool.Prefab.CastFast<ChatBubble>();
-        chatBubble.TextArea.overrideColorTags = false;
+        // プレハブへのバブル装飾は個体ごとに1回で足りる (プレハブはシーン再構築まで不変)。
+        // 毎フレームやると CastFast のラッパー生成+interop プロパティ書きが常時コストになる。
+        int id = __instance.GetInstanceID();
 
-        if (Main.DarkTheme.Value)
+        if (id != _styledControllerId)
         {
-            chatBubble.TextArea.color = Color.white;
-            chatBubble.Background.color = new(0.1f, 0.1f, 0.1f, 1f);
+            _styledControllerId = id;
+            var chatBubble = __instance.chatBubblePool.Prefab.CastFast<ChatBubble>();
+            chatBubble.TextArea.overrideColorTags = false;
+
+            if (Main.DarkTheme.Value)
+            {
+                chatBubble.TextArea.color = Color.white;
+                chatBubble.Background.color = new(0.1f, 0.1f, 0.1f, 1f);
+            }
         }
 
         try

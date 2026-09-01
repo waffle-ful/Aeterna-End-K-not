@@ -8,22 +8,36 @@ namespace EndKnot;
 [HarmonyPatch(typeof(Console), nameof(Console.CanUse))]
 internal static class CanUsePatch
 {
+    // ローカルプレイヤー側の判定 (HasTasks + 役職 switch) はフレーム内で不変なのに、CanUse は
+    // 毎フレーム近傍 console ごとに呼ばれる。console 依存なのは AllowImpostor だけなので、
+    // プレイヤー側はフレーム1回だけ評価してキャッシュする。
+    private static int _gateFrame = -1;
+    private static bool _gateValue;
+
     public static bool Prefix( /*ref float __result,*/ Console __instance, /*[HarmonyArgument(0)] NetworkedPlayerInfo pc,*/ [HarmonyArgument(1)] out bool canUse, [HarmonyArgument(2)] out bool couldUse)
     {
         canUse = couldUse = false;
         // Even if you return this with false, usable items other than tasks will remain usable (buttons, etc.)
         if (Main.GM.Value && AmongUsClient.Instance.AmHost && GameStates.InGame) return false;
 
+        if (__instance.AllowImpostor) return true;
+
+        int frame = Time.frameCount;
+        if (frame == _gateFrame) return _gateValue;
+
         PlayerControl lp = PlayerControl.LocalPlayer;
 
-        return __instance.AllowImpostor || (Utils.HasTasks(lp.Data, false) && lp.GetCustomRole() switch
+        _gateFrame = frame;
+        _gateValue = Utils.HasTasks(lp.Data, false) && lp.GetCustomRole() switch
         {
             CustomRoles.Wizard or CustomRoles.Carrier => HasTasksAsDynamicTaskingRole(),
             CustomRoles.Medic => (Options.UsePets.GetBool() && Medic.UsePet.GetBool()) || lp.GetAbilityUseLimit() < 1f,
             CustomRoles.Duality => !((Duality)Main.PlayerStates[lp.PlayerId].Role).KillingPhase,
             CustomRoles.Accumulator => !((Accumulator)Main.PlayerStates[lp.PlayerId].Role).Killing,
             _ => true
-        });
+        };
+
+        return _gateValue;
 
         bool HasTasksAsDynamicTaskingRole()
         {

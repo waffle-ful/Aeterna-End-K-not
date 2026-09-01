@@ -26,6 +26,10 @@ internal static class LateTask
 
             try
             {
+                // 無名タスクは最頻出なので帰属に載せない — lastOp が "No Name Task" で埋まると
+                // 名前付きの重い区間 (帰属計器の本命) を上書きして計器が無意味化する。
+                if (name is not "" and not "No Name Task") Modules.HealthLog.NoteOp(name);
+
                 action();
             
                 if (name is not "" and not "No Name Task" && log)

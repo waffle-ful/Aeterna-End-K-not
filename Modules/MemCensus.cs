@@ -35,6 +35,7 @@ public static class MemCensus
             long now = Utils.TimeStamp;
             if (src == "lobby" && now - _lastRunTs < 30) return; // 遷移バタつきによる多重発火ガード
             _lastRunTs = now;
+            HealthLog.NoteOp("MemCensus");
 
             var sb = new StringBuilder("CENSUS t=").Append(now).Append(" src=").Append(src);
             Append<Texture2D>(sb, "tex");

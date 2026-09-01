@@ -630,6 +630,7 @@ public static class CustomSoundsManager
 
         try
         {
+            HealthLog.NoteOp("BgmPump");
             int chunkFloats = BgmCopyChunkFloats - BgmCopyChunkFloats % s.Channels;
             int n = Math.Min(chunkFloats, s.Read - s.Copied);
 
