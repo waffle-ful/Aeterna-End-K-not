@@ -2540,6 +2540,11 @@ public static class TestBridge
 [HarmonyPatch(typeof(PlayerPhysics), "FixedUpdate")]
 internal static class TestBridgeWalkPatch
 {
+    // PlayerPhysics.FixedUpdate は 50Hz×プレイヤー数の最ホット経路で、素通し Postfix でも detour 分の
+    // 呼び出し税を払い続ける。TestBridge 無効 (既定) ならパッチ自体を当てない。有効化は起動前の
+    // config 設定が前提 (実行中トグルでは patch は増えない)。
+    public static bool Prepare() => Main.EnableTestBridge is { Value: true };
+
     public static void Postfix(PlayerPhysics __instance)
     {
         TestBridge.OnPlayerPhysicsFixedUpdate(__instance);

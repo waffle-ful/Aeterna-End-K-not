@@ -659,7 +659,7 @@ public static class GameStates
 
 public static class MeetingStates
 {
-    public static DeadBody[] DeadBodies;
+    public static DeadBody[] DeadBodies = [];
 
     public static int MeetingNum;
     public static bool MeetingCalled;

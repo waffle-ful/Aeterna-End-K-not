@@ -934,7 +934,7 @@ internal static class MeetingHudStartPatch
                 if (Doppelganger.DoppelVictim.TryGetValue(pc.PlayerId, out string value)) playername = value;
                 else if (Autoscopy.OriginalNames.TryGetValue(pc.PlayerId, out string avalue)) playername = avalue;
 
-                AddMsg(string.Format(GetString("SilencerDead"), playername, pc.PlayerId, Utils.ColorString(Utils.GetRoleColor(CustomRoles.Silencer), GetString("SilencerKillTitle"))));
+                AddMsg(string.Format(GetString("SilencerDead"), playername), pc.PlayerId, Utils.ColorString(Utils.GetRoleColor(CustomRoles.Silencer), GetString("SilencerKillTitle")));
             }
 
             if (Forensic.ForensicNotify.TryGetValue(pc.PlayerId, out string value1)) AddMsg(value1, pc.PlayerId, Utils.ColorString(Utils.GetRoleColor(CustomRoles.Forensic), GetString("ForensicNoticeTitle")));
@@ -995,7 +995,9 @@ internal static class MeetingHudStartPatch
             {
                 if (!AmongUsClient.Instance.AmHost || !GameStates.InGame || GameStates.IsEnded) return;
 
-                msgToSend.Do(x => Utils.SendMessage(x.Text, x.SendTo, x.Title, importance: MessageImportance.High));
+                // 同一フレームで全通発射するとタイトル付き SetName が3本/frame を超え、バニラ客持ちホストが
+                // reason=Hacking で蹴られ得る (会議冒頭は通知が7系統まで積もる)。役職説明と同じ間隔送出に乗せる。
+                msgToSend.SendMultipleMessages(MessageImportance.High);
             }, 9f, "Meeting Start Notify");
         }
 
@@ -1383,7 +1385,8 @@ internal static class MeetingHudStartPatch
                 chaosPotInfo.gameObject.SetActive(true);
             }
 
-            LateTask.New(ChaosPotSupport.SendChatBroadcastOnMeetingStart, 9f, "ChaosPotSupport Chat");
+            // 会議冒頭通知 (Meeting Start Notify, 9f) と同一 tick に重ねない — 先頭1通同士がフレームを共有するため
+            LateTask.New(ChaosPotSupport.SendChatBroadcastOnMeetingStart, 9.3f, "ChaosPotSupport Chat");
         }
 
         TextBoxPatch.OnMeetingStart();

@@ -114,7 +114,9 @@ internal static class ChatControllerUpdatePatch
             DataManager.Settings.Multiplayer.ChatMode = QuickChatModes.FreeChatOrQuickChat;
     }
 
-    public static void Postfix(ChatController __instance)
+    private static float _nextThemeStyleTime;
+
+    private static void ApplyThemeStyle(ChatController __instance)
     {
         if (Main.DarkTheme.Value)
         {
@@ -142,6 +144,17 @@ internal static class ChatControllerUpdatePatch
                 OpenKeyboardIcon.sprite = Utils.LoadSprite("EndKnot.Resources.Images.DarkKeyboard.png", 100f);
         }
         else __instance.freeChatField.textArea.outputText.color = Color.black;
+    }
+
+    public static void Postfix(ChatController __instance)
+    {
+        // テーマ装飾はバニラ側の色リセットとの上書き合戦なので毎フレームは要らない。interop プロパティ
+        // 書き ~10 回/frame + LoadSprite 辞書引き×3 を 0.25s に間引く (復元遅延は最大 0.25s で知覚不能)。
+        if (Time.unscaledTime >= _nextThemeStyleTime)
+        {
+            _nextThemeStyleTime = Time.unscaledTime + 0.25f;
+            ApplyThemeStyle(__instance);
+        }
 
         if (!__instance.freeChatField.textArea.hasFocus) return;
 

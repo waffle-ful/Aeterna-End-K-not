@@ -59,6 +59,7 @@ public static class ManagedCensus
     {
         try
         {
+            HealthLog.NoteOp("ManagedCensus");
             long now = Utils.TimeStamp;
             _fields ??= BuildFieldList();
 
@@ -127,6 +128,8 @@ public static class ManagedCensus
                     return s.Length;
                 case Delegate d:
                     return d.GetInvocationList().Length;
+                case Array a:
+                    return a.Length;
             }
 
             // フィールド宣言型でなく実行時型から Count を引く (IList/interface 宣言のフィールド対応)
@@ -186,7 +189,7 @@ public static class ManagedCensus
         return list.ToArray();
     }
 
-    // 追跡対象の型か: 成長しうるマネージド容器だけ拾う。配列は固定長なので対象外。
+    // 追跡対象の型か: 成長しうるマネージド容器だけ拾う。
     // Il2Cpp コレクション proxy は managed の Count パターンに合致しないため自然に外れる (interop 呼びを踏まない)。
     private static bool Qualifies(Type ft)
     {
@@ -194,7 +197,10 @@ public static class ManagedCensus
         {
             if (ft == typeof(StringBuilder)) return true;
             if (typeof(MulticastDelegate).IsAssignableFrom(ft)) return true;
-            if (ft.IsArray || ft.IsPointer || ft.IsPrimitive || ft == typeof(string)) return false;
+            // 参照型要素の配列は再代入で伸び得るし、要素ごとにオブジェクト部分木を吊る (DeadBody[] 型の
+            // 残留が不可視だった穴)。primitive 配列はマーク上1オブジェクトなので従来どおり対象外。
+            if (ft.IsArray) { Type et = ft.GetElementType(); return et != null && !et.IsPrimitive && !et.IsPointer; }
+            if (ft.IsPointer || ft.IsPrimitive || ft == typeof(string)) return false;
             if (ft.Namespace != null && ft.Namespace.StartsWith("Il2Cpp", StringComparison.Ordinal)) return false;
 
             PropertyInfo count = ft.GetProperty("Count", BindingFlags.Instance | BindingFlags.Public);
