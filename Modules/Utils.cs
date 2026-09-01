@@ -1288,6 +1288,21 @@ public static class Utils
         return $"<#777777>(at {pos.ToString().Replace("(", string.Empty).Replace(")", string.Empty)})</color>";
     }
 
+    // 残り秒数系の名前サフィックスは表示値をここで丸めてから使う: 10秒以下は毎秒そのまま、
+    // それを超える帯は5秒刻みに固定する。刻み境界を跨がなければ NotifyRoles を呼ばず送信本数を減らす。
+    public static int GetSuffixTimerDisplay(int remainingSeconds) =>
+        remainingSeconds > 10 ? remainingSeconds - remainingSeconds % 5 : remainingSeconds;
+
+    public static bool ShouldNotifySuffixTimer(Dictionary<byte, int> lastDisplayed, byte playerId, int remainingSeconds)
+    {
+        int display = GetSuffixTimerDisplay(remainingSeconds);
+
+        if (lastDisplayed.TryGetValue(playerId, out int last) && last == display) return false;
+
+        lastDisplayed[playerId] = display;
+        return true;
+    }
+
     public static string GetProgressText(PlayerControl pc)
     {
         TaskState taskState = pc.GetTaskState();

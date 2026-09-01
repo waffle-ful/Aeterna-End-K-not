@@ -12,6 +12,7 @@ public class Allergic : IAddon
 
     private static Dictionary<byte, byte> AllergicPlayers = [];
     private static Dictionary<byte, long> AllergyMaxTS = [];
+    private static Dictionary<byte, int> LastNotifiedDisplay = [];
     public AddonTypes Type => AddonTypes.Harmful;
 
     public void SetupCustomOption()
@@ -31,6 +32,7 @@ public class Allergic : IAddon
     {
         AllergicPlayers = [];
         AllergyMaxTS = [];
+        LastNotifiedDisplay = [];
 
         LateTask.New(() =>
         {
@@ -61,6 +63,7 @@ public class Allergic : IAddon
         {
             if (AllergyMaxTS.Remove(pc.PlayerId))
             {
+                LastNotifiedDisplay.Remove(pc.PlayerId);
                 Utils.NotifyRoles(SpecifyTarget: pc, SpecifySeer: pc);
                 Utils.SendRPC(CustomRPC.SyncAllergic, 1, pc.PlayerId);
             }
@@ -78,11 +81,14 @@ public class Allergic : IAddon
         if (Utils.TimeStamp >= endTS)
         {
             AllergyMaxTS.Remove(pc.PlayerId);
+            LastNotifiedDisplay.Remove(pc.PlayerId);
             pc.Suicide(PlayerState.DeathReason.Allergy, target);
         }
         // カウントダウン suffix は整数秒表示なので毎秒だけ送る (毎 tick 呼んでも実質1本/秒に
         // 収まっていたのは LastNotifyNames の内容 dedup 任せだったので、依存を明示に変える)。
-        else if (PerSecondUpdateScheduler.ShouldRunUpdate(pc.PlayerId))
+        // さらに残り10秒超は5秒刻みの表示に丸め、刻みが変わった時だけ送る。
+        else if (PerSecondUpdateScheduler.ShouldRunUpdate(pc.PlayerId)
+            && Utils.ShouldNotifySuffixTimer(LastNotifiedDisplay, pc.PlayerId, (int)(endTS - Utils.TimeStamp)))
             Utils.NotifyRoles(SpecifyTarget: pc, SpecifySeer: pc);
     }
 
@@ -103,7 +109,8 @@ public class Allergic : IAddon
     {
         if (!seer.IsAlive() || !AllergyMaxTS.TryGetValue(seer.PlayerId, out long endTS)) return string.Empty;
         long now = Utils.TimeStamp;
-        float percentage = (float)(endTS - now) / Time.GetInt();
+        int remaining = Utils.GetSuffixTimerDisplay((int)(endTS - now));
+        float percentage = (float)remaining / Time.GetInt();
         return string.Format(Translator.GetString("Allergic.Suffix"), 100 - (int)Math.Round(percentage * 100f));
     }
 }

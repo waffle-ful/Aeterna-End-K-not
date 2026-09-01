@@ -23,6 +23,7 @@ public class Damocles : IAddon
 
     public static Dictionary<byte, long> LastUpdate;
     public static Dictionary<byte, List<int>> PreviouslyEnteredVents;
+    private static Dictionary<byte, int> LastNotifiedDisplay;
 
     public static bool CountRepairSabotage;
     public AddonTypes Type => AddonTypes.ImpOnly;
@@ -53,6 +54,7 @@ public class Damocles : IAddon
         Timer = [];
         LastUpdate = [];
         PreviouslyEnteredVents = [];
+        LastNotifiedDisplay = [];
         CountRepairSabotage = true;
     }
 
@@ -67,6 +69,7 @@ public class Damocles : IAddon
         if (!pc.IsAlive())
         {
             Main.PlayerStates[id].RemoveSubRole(CustomRoles.Damocles);
+            LastNotifiedDisplay.Remove(id);
             return;
         }
 
@@ -86,7 +89,8 @@ public class Damocles : IAddon
 
         if (pc.IsNonHostModdedClient()) SendRPC(id);
 
-        if (!pc.IsModdedClient()) Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
+        if (!pc.IsModdedClient() && Utils.ShouldNotifySuffixTimer(LastNotifiedDisplay, id, Timer[id]))
+            Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
     }
 
     public static void SendRPC(byte playerId)
@@ -193,6 +197,6 @@ public class Damocles : IAddon
 
     public static void GetProgressText(byte id, StringBuilder resultText)
     {
-        resultText.AppendFormat(GetString("DamoclesTimeLeft"), Timer.GetValueOrDefault(id, StartingTime));
+        resultText.AppendFormat(GetString("DamoclesTimeLeft"), Utils.GetSuffixTimerDisplay(Timer.GetValueOrDefault(id, StartingTime)));
     }
 }

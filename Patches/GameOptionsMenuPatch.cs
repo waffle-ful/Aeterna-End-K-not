@@ -2412,6 +2412,12 @@ public static class GameSettingMenuPatch
 
         try
         {
+            // ゲーム開始窓の 1.5s 級ストールとの相関が観測されている区間 — HITCH の lastOp で帰属を取る。
+            // Object.Destroy は遅延実行 (フレーム末で子孫ごと破棄) なので、下の swMs は managed 側の
+            // 掃除しか測れない。本体コストはフレーム末に落ち、直後の HITCH 行に lastOp=PurgeUiCache が
+            // 乗るかどうかが確定判定。
+            Modules.HealthLog.NoteOp("PurgeUiCache");
+            var purgeSw = System.Diagnostics.Stopwatch.StartNew();
             var destroyed = 0;
 
             if (TempParent)
@@ -2457,7 +2463,7 @@ public static class GameSettingMenuPatch
             NewRoleMenuState.LastBuiltSelectedIndex = -2;
             RoleMenuTabBar.Reset();
 
-            Logger.Info($"UI cache purged ({reason}): destroyed {destroyed} cached root object(s)", "MenuLeak");
+            Logger.Info($"UI cache purged ({reason}): destroyed {destroyed} cached root object(s) in {purgeSw.ElapsedMilliseconds}ms (managed sweep only — Destroy はフレーム末着地)", "MenuLeak");
         }
         catch (Exception e) { Logger.Warn($"UI cache purge failed: {e.Message}", "MenuLeak"); }
     }
