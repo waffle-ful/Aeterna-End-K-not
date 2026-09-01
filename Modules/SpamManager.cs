@@ -137,9 +137,15 @@ public static class SpamManager
                 Utils.SendMessage(msg, importance: MessageImportance.Low);
             else
             {
+                // 全員へ同一フレームで個別送信するとフレーム内バーストになるため、
+                // 間隔送出キューへまとめて積む (importance Low は Reliable ゲートを通らない送出経路)。
+                List<Message> messages = [];
+
                 foreach (PlayerControl pc in Main.CachedAllPlayerControls())
                     if (pc.IsAlive() == player.IsAlive())
-                        Utils.SendMessage(msg, pc.PlayerId, importance: MessageImportance.Low);
+                        messages.Add(new Message(msg, pc.PlayerId));
+
+                messages.SendMultipleMessages(MessageImportance.Low);
             }
         }
 
