@@ -2,7 +2,7 @@
 
 ## Reporting a vulnerability
 
-If you discover a security vulnerability in End K not — for example an in-game exploit, a way for a non-host client to crash other lobbies, or a bug in the mod that could harm users — please report it **privately** rather than opening a public issue.
+Report security vulnerabilities **privately** instead of opening a public issue. This covers in-game exploits, ways for a non-host client to crash other lobbies, and bugs in the mod that could harm users.
 
 Preferred channels:
 
@@ -22,8 +22,8 @@ This policy covers:
 - In-game exploits or crashes triggered by End K not's added behavior
 - Mod code vulnerabilities affecting users running the mod
 
-It does **not** cover vulnerabilities in upstream Among Us, BepInEx, or upstream EHR — please report those to their respective projects.
+It does **not** cover vulnerabilities in upstream Among Us, BepInEx, or upstream EHR. Report those to the projects that own them.
 
 ## Disclosure
 
-Please do not publicly disclose a vulnerability until a fix has been released. End K not is a small fork maintained as a hobby — response time is best-effort.
+Please hold off on disclosing a vulnerability publicly until a fix ships. One person maintains End K not as a hobby, so response time is best-effort.

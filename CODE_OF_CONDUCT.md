@@ -2,13 +2,13 @@
 
 This Code of Conduct applies to all interactions involving the End K not community: this GitHub repository, the project Discord, and lobbies hosted with the mod.
 
-The goal is simple: **everyone should be able to participate, contribute, and have fun without being mistreated.**
+**You should be able to join in, contribute, and have fun here without anyone mistreating you.** That's what this document is for.
 
 ## Expected behavior
 
 - Be respectful in code review, issue threads, and chat
 - Play fair, follow host rules, and don't deliberately ruin other players' games
-- When reporting bugs, share enough information for us to actually reproduce them
+- When reporting bugs, share enough information for us to reproduce them
 - Don't abuse known unfixed bugs for unfair advantage
 
 ## Unacceptable behavior
@@ -28,7 +28,7 @@ If you experience or witness a violation:
 - In Discord: open a support ticket / DM a moderator
 - In-game: provide friend code, hashed PUID, or Discord ID of the offender plus context (screenshots, video, logs)
 
-Anonymous reports are not acted on, but reports made privately to the maintainer are kept confidential.
+We don't act on anonymous reports, but we keep private reports to the maintainer confidential.
 
 ## Enforcement
 
