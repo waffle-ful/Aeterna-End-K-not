@@ -72,12 +72,177 @@ public static class GameOptionsMenuPatch
     private static readonly System.Collections.Generic.HashSet<int> EverBuiltRows = new();
     private static readonly System.Collections.Generic.HashSet<int> EverBuiltHeaders = new();
 
+    // ---- Viewport row culling ----
+    // The open tab used to keep every built row active across the whole layout strip (500+ rows over
+    // ~230 units of local space), and the renderer/TMP submission of the off-screen rows alone held
+    // the menu at 37–54 fps. The camera can only ever show ~6 world units of the strip, so rows
+    // outside a camera-height band (+ margin) are kept inactive and re-activated as the list scrolls.
+    // This is a display-only layer over the logical visibility the build/reflow/refresh paths compute:
+    // their SetActive calls all route through SetRowActive, which records both the layout Y and the
+    // logical verdict, so the culled state can never fight the logical one.
+    // The two-pane view (NewRoleMenuView) manages its tabs' row states itself and is skipped here.
+    private struct CullEntry
+    {
+        public GameObject Go;
+        public Transform Container;
+        public float Y; // settingsContainer-local layout Y
+        public bool Logical; // visibility the build/reflow logic decided, before culling
+    }
+
+    private static readonly System.Collections.Generic.Dictionary<int, CullEntry> CullMap = new();
+    private static Transform LastCullContainer;
+    private static float LastCullRelY = float.NaN;
+    private static bool CullDirty;
+    private static Camera CachedCullCam;
+    private static int CachedCullCamFrame = int.MinValue;
+    private static float NextCullWarnTime;
+    private const float CullMargin = 1.0f; // ~2 rows of headroom so scrolled-in rows never pop visibly
+
+    // HUD/メニュー系は UICamera (固定投影) が描画しうる — Camera.main はズーム/追従で投影が変わる
+    // ゲームプレイカメラなので、コンテナのレイヤーを cullingMask に含むカメラを選ぶ (同レイヤーを
+    // 複数カメラが含む場合は UI カメラ優先。TestBridge の press 解決と同じ規則)。カメラの顔ぶれは
+    // 滅多に変わらないので ~5 秒キャッシュする (Camera.allCameras は毎回配列を作るため)。
+    private static Camera ResolveCullCam(Transform container)
+    {
+        if (CachedCullCam && CachedCullCam.isActiveAndEnabled && Time.frameCount - CachedCullCamFrame < 300)
+            return CachedCullCam;
+
+        Camera cam = null;
+        int layerBit = 1 << container.gameObject.layer;
+
+        foreach (Camera c in Camera.allCameras)
+        {
+            if (!c || !c.isActiveAndEnabled || (c.cullingMask & layerBit) == 0) continue;
+            if (!cam) cam = c;
+
+            if (c.name.Contains("UI", StringComparison.OrdinalIgnoreCase))
+            {
+                cam = c;
+                break;
+            }
+        }
+
+        CachedCullCam = cam ? cam : Camera.main;
+        CachedCullCamFrame = Time.frameCount;
+        return CachedCullCam;
+    }
+
+    // Single entry point for a row/header's active state: records the layout, then applies the
+    // logical visibility AND the viewport band in one place. The dirty flag makes the next
+    // ViewportCullPass run unconditionally — it owns the fail-open check for the case where the
+    // band verdicts computed here were all misses (wrong camera / calibration drift).
+    private static void SetRowActive(GameObject go, int index, bool logical, float layoutY)
+    {
+        if (!go) return;
+
+        Transform container = go.transform.parent;
+        CullMap[index] = new CullEntry { Go = go, Container = container, Y = layoutY, Logical = logical };
+        CullDirty = true;
+
+        bool active = logical && RowInBand(container, layoutY);
+        if (go.activeSelf != active) go.SetActive(active);
+    }
+
+    private static bool RowInBand(Transform container, float layoutY)
+    {
+        if (!container) return true;
+
+        Camera cam = ResolveCullCam(container);
+        if (!cam) return true; // nothing to judge the viewport by — show whatever is logically visible
+
+        float rel = container.position.y - cam.transform.position.y + layoutY * container.lossyScale.y;
+        float half = cam.orthographicSize + CullMargin;
+        return rel > -half && rel < half;
+    }
+
+    // A row hidden because it left the current view (search filter / tab takeover) must also drop its
+    // logical flag, or the next cull pass would switch it back on the moment its Y enters the band.
+    private static void MarkRowCullHidden(int index)
+    {
+        if (!CullMap.TryGetValue(index, out CullEntry e)) return;
+
+        e.Logical = false;
+        CullMap[index] = e;
+    }
+
+    // Runs every frame from the Update patch while a mod tab is open. Cheap early-outs: only
+    // re-applies the band when the strip actually moved relative to the camera (scroll / camera
+    // drift) or the visible container changed (tab switch / menu reopen).
+    private static void ViewportCullPass(GameOptionsMenu menu)
+    {
+        if (CullMap.Count == 0) return;
+
+        var modTab = (TabGroup)(ModGameOptionsMenu.TabIndex - 3);
+
+        // Mirror of the CreateSettings dispatch: tabs the two-pane view renders own their row states.
+        if (NewRoleMenuState.Active && !OptionSearch.Active &&
+            (modTab is >= TabGroup.ImpostorRoles and <= TabGroup.OtherRoles || NewRoleMenuView.IsConsolidatedSettingsTab(modTab)))
+            return;
+
+        Transform container = menu.settingsContainer;
+        if (!container) return;
+
+        Camera cam = ResolveCullCam(container);
+        if (!cam) return;
+
+        float rel = container.position.y - cam.transform.position.y;
+        bool force = CullDirty || LastCullContainer != container;
+        if (!force && Mathf.Abs(rel - LastCullRelY) < 0.02f) return;
+
+        LastCullContainer = container;
+        LastCullRelY = rel;
+        CullDirty = false;
+
+        float scale = container.lossyScale.y;
+        float half = cam.orthographicSize + CullMargin;
+
+        // First pass: does the band admit anything at all? A band that rejects every logically
+        // visible row means the camera model is off (wrong camera picked, projection drift) — in
+        // that case fail open and show the logical states instead of presenting an empty menu.
+        var logicalCount = 0;
+        var inBandCount = 0;
+
+        foreach (var kv in CullMap)
+        {
+            CullEntry e = kv.Value;
+            if (!e.Logical || e.Container != container || !e.Go) continue;
+
+            logicalCount++;
+            float y = rel + e.Y * scale;
+            if (y > -half && y < half) inBandCount++;
+        }
+
+        bool failOpen = logicalCount > 0 && inBandCount == 0;
+
+        if (failOpen && Time.unscaledTime >= NextCullWarnTime)
+        {
+            NextCullWarnTime = Time.unscaledTime + 60f;
+            Logger.Warn($"viewport band rejected all {logicalCount} visible rows (cam={cam.name} rel={rel:F2} half={half:F2}) — falling back to logical visibility", "MenuCull");
+        }
+
+        foreach (var kv in CullMap)
+        {
+            CullEntry e = kv.Value;
+            if (e.Container != container) continue; // laid out under another tab's container — not on screen here
+
+            GameObject go = e.Go;
+            if (!go) continue;
+
+            float y = rel + e.Y * scale;
+            bool active = e.Logical && (failOpen || (y > -half && y < half));
+            if (go.activeSelf != active) go.SetActive(active);
+        }
+    }
+
     // 意図的なキャッシュ全破棄 (GameSettingMenuPatch.PurgeUiCache) の後始末。EverBuilt* を残すと
     // 次回オープンの正当な再ビルドが MenuLeak の「row rebuild (dead-cache)」として誤記録される。
     internal static void OnUiCachePurged()
     {
         EverBuiltRows.Clear();
         EverBuiltHeaders.Clear();
+        CullMap.Clear();
+        LastCullContainer = null;
+        LastCullRelY = float.NaN;
         BuildCoroutines.Clear(); // メニュー個体ごと破棄済み — StopCoroutine は不要 (個体の死で止まる)
         BuildGenerations.Clear();
 
@@ -268,7 +433,7 @@ public static class GameOptionsMenuPatch
                             }));
                             chmButton.SetButtonEnableState(true);
                         }
-                        categoryHeaderMasked.gameObject.SetActive(enabled);
+                        SetRowActive(categoryHeaderMasked.gameObject, index, enabled, num);
                         ModGameOptionsMenu.CategoryHeaderList[index] = categoryHeaderMasked;
 
                         if (enabledOrNotCollapsed) num -= 0.63f;
@@ -327,7 +492,7 @@ public static class GameOptionsMenuPatch
                     // Only fresh rows need it (mask + data binding); reused rows get the same managed value refresh
                     // that preset switches already rely on (RefreshSettingValues path), which touches no materials.
                     if (freshRow) optionBehaviour.SetUpFromData(baseGameSetting, 20);
-                    optionBehaviour.gameObject.SetActive(enabledOrNotCollapsed);
+                    SetRowActive(optionBehaviour.gameObject, index, enabledOrNotCollapsed, num);
                     optionBehaviour.OnValueChanged = new Action<OptionBehaviour>(__instance.ValueChanged);
 
                     EverBuiltRows.Add(index);
@@ -428,14 +593,20 @@ public static class GameOptionsMenuPatch
         {
             OptionBehaviour ob = kv.Value;
             if (ob && ob.transform.parent == menu.settingsContainer && !OptionSearch.IsInView(kv.Key, modTab))
+            {
                 ob.gameObject.SetActive(false);
+                MarkRowCullHidden(kv.Key);
+            }
         }
 
         foreach (var kv in ModGameOptionsMenu.CategoryHeaderList)
         {
             CategoryHeaderMasked chm = kv.Value;
             if (chm && chm.transform.parent == menu.settingsContainer && !OptionSearch.IsInView(kv.Key, modTab))
+            {
                 chm.gameObject.SetActive(false);
+                MarkRowCullHidden(kv.Key);
+            }
         }
     }
 
@@ -534,6 +705,8 @@ public static class GameOptionsMenuPatch
         if (!HudManager.InstanceExists || !__instance.gameObject.activeSelf) return;
 
         __instance.scrollBar.enabled = !HudManager.Instance.Chat.IsOpenOrOpening;
+
+        if (ModGameOptionsMenu.TabIndex >= 3) ViewportCullPass(__instance);
     }
     [HarmonyPatch(nameof(GameOptionsMenu.ValueChanged))]
     [HarmonyPrefix]
@@ -633,7 +806,7 @@ public static class GameOptionsMenuPatch
             if (ModGameOptionsMenu.CategoryHeaderList.TryGetValue(index, out CategoryHeaderMasked categoryHeaderMasked) && categoryHeaderMasked)
             {
                 categoryHeaderMasked.transform.localPosition = new(-0.903f, num, -2f);
-                categoryHeaderMasked.gameObject.SetActive(enabled);
+                SetRowActive(categoryHeaderMasked.gameObject, index, enabled, num);
                 if (enabledOrNotCollapsed) num -= 0.63f;
             }
             else if (option.IsHeader && enabledOrNotCollapsed) num -= 0.18f;
@@ -642,7 +815,7 @@ public static class GameOptionsMenuPatch
             {
                 AdoptRow(optionBehaviour, __instance, index);
                 optionBehaviour.transform.localPosition = new(0.952f, num, -2f);
-                optionBehaviour.gameObject.SetActive(enabledOrNotCollapsed);
+                SetRowActive(optionBehaviour.gameObject, index, enabledOrNotCollapsed, num);
                 if (enabledOrNotCollapsed) num -= 0.45f;
             }
         }
@@ -663,7 +836,12 @@ public static class GameOptionsMenuPatch
     }
     public static BaseGameSetting GetSetting(OptionItem item)
     {
-        if (ModGameOptionsMenu.BaseGameSettingCache.TryGetValue(item, out BaseGameSetting cached)) return cached;
+        // `&& cached`: these ScriptableObjects are held only by this managed dictionary, and a managed
+        // reference alone does not protect a Unity object from the implicit UnloadUnusedAssets of a
+        // scene transition (same IL2CPP behavior BGMManager documents for its clip cache). A dead
+        // cached instance returned here fails the build loop's `if (!baseGameSetting) continue;` and
+        // every row of the tab silently vanishes after a rehost — fall through and recreate instead.
+        if (ModGameOptionsMenu.BaseGameSettingCache.TryGetValue(item, out BaseGameSetting cached) && cached) return cached;
 
         BaseGameSetting baseGameSetting;
 
@@ -768,7 +946,15 @@ public static class GameOptionsMenuPatch
             // (Outside a search this must stay tab-blind: rows of the other tabs are refreshed here too,
             // and their tab is shown again without a rebuild.)
             bool inView = !OptionSearch.Active || OptionSearch.IsInView(item, kv.Value, activeModTab);
-            ob.gameObject.SetActive(inView && RowVisibleInView(item));
+            bool logical = inView && RowVisibleInView(item);
+
+            // Rows the classic renderer has laid out carry a stored layout Y — keep their viewport
+            // band applied. A row without one (never laid out / built by the two-pane view) gets the
+            // plain logical state.
+            if (CullMap.TryGetValue(kv.Value, out CullEntry cullEntry))
+                SetRowActive(ob.gameObject, kv.Value, logical, cullEntry.Y);
+            else
+                ob.gameObject.SetActive(logical);
 
             // Re-apply the displayed value from the option's current value. Rows are reused across preset
             // switches without a rebuild, so without this the checkmarks / value texts keep showing the
