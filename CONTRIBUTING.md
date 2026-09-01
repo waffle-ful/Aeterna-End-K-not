@@ -1,6 +1,6 @@
 # Contributing to End K not
 
-Thanks for your interest in contributing! End K not is a small personal fork — contributions are welcome but the bar for being merged is "the maintainer agrees and has time to review".
+Thanks for your interest in contributing. End K not is a small personal fork, so the bar for merging is simple: the maintainer agrees with the change and has time to review it.
 
 ## Getting in touch
 
@@ -17,7 +17,7 @@ You don't need to file an issue before opening a small PR. For larger changes (n
 
 ## Coding guidelines
 
-- Match the existing code style. JetBrains Rider is recommended; the editor settings (`EndKnot.sln.DotSettings`) are committed and will sync automatically.
+- Match the existing code style. We use JetBrains Rider; the editor settings (`EndKnot.sln.DotSettings`) are committed, so Rider picks them up on its own.
 - Follow upstream EHR's conventions for role/option/RPC IDs.
 - New user-facing strings need an `en_US.jsonc` entry in `Resources/Lang/`.
 

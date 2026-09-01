@@ -428,6 +428,10 @@ relay/.wrangler/
 .claudeignore
 CLAUDE.md
 CLAUDE.local.md
+# Skill working copies and their lock file. Same class as .claude/ above:
+# generated on the fly when a skill loads, and specific to one machine's setup.
+.agents/
+skills-lock.json
 .cursor/
 .cursorrules
 .aider*
@@ -522,3 +526,8 @@ mockups/
 # どのスロットを意図的に空けてあるか、といった作り方の中身なので公開リポには置かない。
 # 同ディレクトリの .ekrole.json / _bindings.json は再作成コストの高い「データ」なので追跡する。
 editor/tests/fixtures/realtest/README.md
+
+# Relay operator documentation (kept locally, not published)
+relay/README.md
+relay/DEPLOY.md
+relay/CONTRACT.md

@@ -9,7 +9,7 @@
 <p align="center">
   <b>↑ Click to grab the installer. Close Among Us, run it, and you're done.</b><br>
   <sub>Prefer to unzip it yourself, or want an older build? Head to the <a href="../../releases/latest">releases page</a>.<br>
-  Windows will show a blue warning on first run — <a href="#if-windows-shows-a-blue-warning">here's how to get past it</a>.</sub>
+  Windows will show a blue warning on first run; <a href="#if-windows-shows-a-blue-warning">getting past it takes two clicks</a>.</sub>
 </p>
 
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/sEYAFzD3a)
@@ -20,28 +20,28 @@
 
 ### Only the host installs anything.
 
-End K not runs off **the host's client alone.** Everyone else joins vanilla and still plays with all **682 roles.** You never have to say "install this first, then come back" — the friction of getting people into a lobby drops to zero. Works fully on both official and custom servers.
+End K not runs off **the host's client alone.** Everyone else joins vanilla and still plays all **682 roles.** You never have to say "install this first, then come back," so nobody has to set anything up before they can join you. Official servers and custom servers both run the full feature set.
 
 ### Your lobby doesn't die.
 
-Dropped by the server? End K not **re-creates the lobby automatically**, same region, same settings. If Among Us itself crashes or hangs, the bundled external watchdog notices, relaunches the game, and restores the lobby. Leave it running for 24 hours and it keeps going. "We got disconnected, let's call it a night" — never again.
+Dropped by the server? End K not **re-creates the lobby automatically**, same region, same settings. If Among Us itself crashes or hangs, the bundled external watchdog notices, relaunches the game, and restores the lobby. Leave it running for a full day and it keeps going. You won't have to end a night early because the connection gave out.
 
 ### Your viewers never get bored.
 
-Every player's chat is **read aloud in a different voice**, so your audience can tell who spoke by ear alone. Viewers can **reach into the game itself** with `!` commands from live chat. And an **AI commentary companion** — 2D portrait and lip-synced 3D avatar — calls the kills, the meetings, and the wins in real time. Your chat stops being an audience and becomes a control panel.
+End K not reads each player's chat aloud in **its own voice**, so your audience can tell who spoke without watching the screen. Viewers **reach into the game itself** with `!` commands from live chat. An **AI commentary companion**, a 2D portrait with a lip-synced 3D avatar, calls the kills, the meetings, and the wins in real time. Your chat gets a seat at the controls.
 
 ### Roles like these are waiting.
 
 - **Riptide** — A giant wave sweeps the entire map. Caught in it, you're gone. It gets faster with every meeting.
 - **WordKiller** — Kills anyone who says the forbidden word. The conversation itself becomes a minefield.
-- **Gemini** — Stand still and a copy of you stays where you were. Same colour, same name, same everything.
+- **Gemini** — Stand still and a copy of you stays where you were. Same colour, same name, identical to you.
 - **Crosswind** — Vanishes, then blasts everyone sideways with a gust of wind.
 - **Dossun** — Places a giant block that moves with you. Crush them, or knock them flying.
-- **Supernova** — A star that detonates the moment you stand still. Take everyone nearby with you — and if you last until the end, you shove the real winner aside and take the win alone.
+- **Supernova** — A star that detonates the moment you stand still. Take everyone nearby with you, and if you last until the end, you shove the real winner aside and take the win alone.
 
 ### And trying it costs you nothing.
 
-Just run the installer — it works out whether you're on Steam or Epic and handles the rest. Not for you? Rename one file (`winhttp.dll`) and you're back to **completely vanilla Among Us.** Getting in and getting out both take seconds.
+Run the installer. It works out whether you're on Steam or Epic and handles the rest. If it isn't for you, rename one file (`winhttp.dll`) and you're back to **plain Among Us.** Getting in and getting out both take seconds.
 
 > **682 roles · 110+ chat commands · host-only install · completely free**
 
@@ -49,9 +49,9 @@ Just run the installer — it works out whether you're on Steam or Epic and hand
 
 ## About this mod
 
-**End K not** is an unofficial personal fork of [Endless Host Roles (EHR)](https://github.com/Gurge44/EndlessHostRoles) for Among Us. It currently implements **682 roles**.
+**End K not** is an unofficial personal fork of [Endless Host Roles (EHR)](https://github.com/Gurge44/EndlessHostRoles) for Among Us. It ships **682 roles**.
 
-Only the lobby host needs to install the mod — other players can join and enjoy the additional roles without installing anything. It works fully on both official and custom servers.
+Only the lobby host installs the mod. Everyone else joins and plays the extra roles with nothing installed. Official servers and custom servers both run the full feature set.
 
 This mod is unofficial and is **not affiliated with or endorsed by Innersloth**. **Please do not contact Innersloth regarding any issues with this mod.**
 
@@ -64,23 +64,23 @@ Supported Among Us version: **2026.8.18**
 
 On top of EHR's role engine, End K not adds features for **streaming, long-running hosting, and presentation.**
 
-> Most of the roles are inherited from — or reimplemented with reference to — EHR and earlier mods such as the TownOfHost lineage. Credits for each project are collected under [Credits](#credits).
+> Most of the roles come from EHR and earlier mods such as the TownOfHost lineage, either inherited directly or reimplemented with reference to them. Credits for each project are collected under [Credits](#credits).
 
 ### 🎥 Streaming & long-running hosting
 
-- **Per-crew text-to-speech (VOICEVOX integration)** — Reads each player's chat aloud in a distinct voice. It drives a locally-installed copy of [VOICEVOX](https://voicevox.hiroshiba.jp/); the audio plays only on the host's machine (your stream) and is never sent to the game. Voices can also be pinned per player name or friend code. *(See [Credits](#credits) for the attribution required when streaming.)*
-- **Auto re-host & crash self-recovery** — If the host is kicked or dropped by the official server, End K not automatically re-creates a new lobby with the same region and settings. And if Among Us itself crashes or hangs, the bundled external watchdog detects it and relaunches the game to restore the lobby — so it keeps running unattended through 24-hour soaks and long streams.
+- **Per-crew text-to-speech (VOICEVOX integration)** — Reads each player's chat aloud in its own voice. The host's own copy of [VOICEVOX](https://voicevox.hiroshiba.jp/) does the speaking, so the audio stays on the host's machine (your stream) and never reaches the game. You can pin a voice to a player name or a friend code. *(See [Credits](#credits) for the attribution required when streaming.)*
+- **Auto re-host & crash self-recovery** — When the official server kicks or drops the host, End K not builds a new lobby with the same region and the same settings. If Among Us crashes or hangs, the bundled external watchdog relaunches the game and restores the lobby, so a stream keeps running unattended for a full day.
 - **BGM system** — Replaceable background music for menu / lobby / in-task / climax / meeting / result. Default tracks bundled.
-- **YouTube live chat overlay & auto-posting** — Displays your YouTube live chat on top of the game screen while streaming, and auto-posts in-game commentary events (kills, meetings, wins, etc.) back to that live chat to keep viewers engaged.
+- **YouTube live chat overlay & auto-posting** — Draws your YouTube live chat over the game screen, and posts in-game events (kills, meetings, wins) back to that chat so viewers who look away still follow the round.
 - **Viewer intervention system** — Lets viewers interfere with the game via `!`-prefixed live chat commands, gated by a point economy. Includes `!大地震` (big earthquake — closes all doors, cuts power, and randomly teleports players), `!天の声` (voice of heaven — broadcasts a viewer's message to all players), and `!偽死体` (fake corpse — spawns a fake dead body near a living player).
-- **AI commentary companion** — A separate AI process (Gemini Live) receives live game events and provides real-time commentary through a 2D portrait / 3D avatar with lip-sync. Topic rotation and repetition suppression keep the commentary fresh during long streams.
-- **On-screen lobby code bubble** — A draggable IMGUI overlay that keeps your lobby code visible on stream at all times.
+- **AI commentary companion** — A separate AI process (Gemini Live) takes live game events and commentates through a 2D portrait with a lip-synced 3D avatar. It rotates through topics, so a long stream doesn't circle back to the same three remarks.
+- **On-screen lobby code bubble** — A small draggable bubble that keeps your lobby code on screen for the whole stream.
 
 ### 🏚️ Lobby presentation & worlds
 
-- **Backrooms lobby** — A special Backrooms-themed lobby presentation, with asymmetric rendering that looks different for the modded host versus non-modded joiners.
+- **Backrooms lobby** — A Backrooms-themed lobby. The host and the players who joined without the mod see different things.
 - **EKM custom map editor** — A dedicated editor for building custom maps is bundled ([`editor/`](./editor)); maps you create can be loaded in-game *(work in progress)*.
-- **Riptide** — A flashy Impostor role: a giant wave sweeps across the entire map and anyone caught in it is wiped out, accelerating with every meeting.
+- **Riptide** — A loud Impostor role. A giant wave sweeps the whole map, kills anyone it catches, and speeds up after every meeting.
 - **Lobby decorations** — Place decorations such as hot springs and portals in the lobby.
 
 ### 🎨 UI & policy
@@ -104,11 +104,11 @@ On top of EHR's role engine, End K not adds features for **streaming, long-runni
 
 ▶ **[See the full list of all 682 roles (`ROLES-EN.md`)](./ROLES-EN.md)**
 
-Use `/r <role name>` or `/myrole` in-game to read each role's effects and settings. A picked-for-spectacle shortlist is [at the top of this page](#roles-like-these-are-waiting).
+Use `/r <role name>` or `/myrole` in-game to read each role's effects and settings. A picked-for-spectacle shortlist sits [at the top of this page](#roles-like-these-are-waiting).
 
 ## Commands
 
-Over 110 chat commands are available for hosts, moderators, and all players. See [`COMMANDS.md`](./COMMANDS.md) for the full list. Run `/help` in-game to see only the commands available in your current context.
+End K not adds over 110 chat commands across the host, moderator, and player tiers. See [`COMMANDS.md`](./COMMANDS.md) for the full list. Run `/help` in-game to see only the commands available in your current context.
 
 ## Installation
 
@@ -122,7 +122,7 @@ Over 110 chat commands are available for hosts, moderators, and all players. See
 
 #### If Windows shows a blue warning
 
-The installer isn't code-signed, so the first run brings up a blue "**Windows protected your PC**" screen. That isn't a malware detection — it appears for **every unsigned exe distributed by an individual**.
+The installer isn't code-signed, so the first run brings up a blue "**Windows protected your PC**" screen. Windows shows that screen for any unsigned exe an individual distributes. It does not mean a scanner found something in the file.
 
 1. Click "**More info**"
 2. Click the "**Run anyway**" button that appears
@@ -156,7 +156,7 @@ The zip bundles BepInEx, the config files, and the custom-region mod, so nothing
 
 ### Switching back to vanilla
 
-Rename `winhttp.dll` in your `Among Us` folder to `winhttp.dll.disabled`. This fully disables the mod and the game launches as plain Among Us. Rename it back to re-enable.
+Rename `winhttp.dll` in your `Among Us` folder to `winhttp.dll.disabled`. This disables the mod and the game launches as plain Among Us. Rename it back to re-enable.
 
 ### DLL-only update (for existing installs)
 
@@ -195,7 +195,7 @@ End K not is run by the following members.
 
 End K not is a **free, GPL-3.0 mod**. All features are and will remain free, and donations are never required.
 
-Any donations are **not personal income for the developers** — they are used solely for the mod's actual running costs (server, domain, API usage, commissioned assets, and so on). The spending rules and monthly finances are published for transparency.
+Donations are **not personal income for the developers.** They cover the mod's running costs (server, domain, API usage, commissioned assets), and we publish the spending rules along with where the money went each month.
 
 ▶ **[Funding rules and financial reports (`FUNDING.md`)](./FUNDING.md)**
 
@@ -207,7 +207,7 @@ End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/End
 
 ## Credits
 
-> **The vast majority of this mod's roles and features come from earlier mods.** Huge thanks to the developers of the projects below. Projects this fork referenced directly and projects credited by the mods it is built on are listed together here. Which role came from where can be traced through this repository's git log — port commits record the upstream source and Co-authored-by lines.
+> **The vast majority of this mod's roles and features come from earlier mods.** Huge thanks to the developers of the projects below. This list covers both the projects this fork referenced directly and the projects credited by the mods it builds on. You can trace which role came from where through this repository's git log; port commits record the upstream source and Co-authored-by lines.
 
 - **[au.libhalt.net](https://au.libhalt.net/)** — Mad Jester
 - **[AutoRejoin](https://github.com/Maxi0fc/AutoRejoin)** (Maxi0fc) — auto rejoin
@@ -296,7 +296,7 @@ Some sound effects use material from:
 
 ### VOICEVOX (text-to-speech)
 
-The per-crew read-aloud feature uses **[VOICEVOX](https://voicevox.hiroshiba.jp/)**, a free Japanese text-to-speech software. End K not bundles no voice data — it synthesizes at runtime through the VOICEVOX installed on the host's PC.
+The per-crew read-aloud feature uses **[VOICEVOX](https://voicevox.hiroshiba.jp/)**, a free Japanese text-to-speech software. End K not bundles no voice data; it synthesizes at runtime through the VOICEVOX installed on the host's PC.
 
 > [!IMPORTANT]
 > **If you publish the generated audio in a stream or recording, you must credit both VOICEVOX and the character(s) used.**

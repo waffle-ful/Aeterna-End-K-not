@@ -4,7 +4,7 @@
 
 実装済みは合計 **682 役職**（陣営別役職536 + サブ役職・アドオン146）。陣営ごとに整理しています。
 
-ここに並ぶ役職の大半は、ベースである [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) および TownOfHost 系列・SuperNewRoles・Nebula on the Ship など先行 Mod の実装を引き継いだもの、あるいはそれらを参考に再実装したものです。各 Mod への謝辞は [README のクレジット](README.md#クレジット)にまとめています。
+ここに並ぶ役職の大半は、ベースである [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) や TownOfHost 系列・SuperNewRoles・Nebula on the Ship といった先行 Mod から来ています。実装をそのまま引き継いだものと、参考にして書き直したものが混ざっています。各 Mod への謝辞は [README のクレジット](README.md#クレジット)にまとめています。
 
 | 陣営 | 役職数 |
 |------|-------|

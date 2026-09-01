@@ -25,4 +25,4 @@ Please include:
 
 ## Upstream issues
 
-Bugs that also reproduce on stock EHR are best reported [upstream](https://github.com/Gurge44/EndlessHostRoles/issues). End K not does not fix upstream EHR bugs unless they specifically affect the End K not use case.
+If a bug also reproduces on stock EHR, report it [upstream](https://github.com/Gurge44/EndlessHostRoles/issues). End K not doesn't fix upstream EHR bugs unless they hit the End K not use case.

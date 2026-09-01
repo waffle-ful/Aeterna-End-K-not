@@ -4,7 +4,7 @@
 
 **682 roles in total** (536 faction roles + 146 sub-roles/add-ons), organized by faction.
 
-Most of the roles listed here are inherited from — or reimplemented with reference to — the base mod [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) and earlier mods in the scene such as the TownOfHost lineage, SuperNewRoles, and Nebula on the Ship. Credits for each project are collected in the [README](README-EN.md#credits).
+Most of the roles listed here come from the base mod [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) and earlier mods in the scene such as the TownOfHost lineage, SuperNewRoles, and Nebula on the Ship. Some carry over the original implementation; others were rewritten with reference to it. Credits for each project are collected in the [README](README-EN.md#credits).
 
 | Faction | Count |
 |---------|-------|
