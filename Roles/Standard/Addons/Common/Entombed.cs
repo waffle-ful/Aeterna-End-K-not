@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using AmongUs.GameOptions;
 using EndKnot.Modules;
 using EndKnot.Modules.Extensions;
@@ -13,6 +14,7 @@ public class Entombed : IAddon
     public static Dictionary<byte, SystemTypes> BlockedRoom;
     private static long MeetingEndTS;
     private static float GracePeriodLength;
+    private static readonly Dictionary<byte, int> LastNotifiedDisplay = [];
 
     public void SetupCustomOption()
     {
@@ -34,6 +36,7 @@ public class Entombed : IAddon
         
         MeetingEndTS = Utils.TimeStamp;
         GracePeriodLength = 5 + 5 / Main.RealOptionsData.GetFloat(FloatOptionNames.PlayerSpeedMod);
+        LastNotifiedDisplay.Clear();
 
         // 計器
         foreach ((byte id, SystemTypes room) in BlockedRoom)
@@ -75,8 +78,14 @@ public class Entombed : IAddon
             // 猶予の残り秒数は整数表示なので毎秒だけ送る。以前は毎 tick 呼んでいて、
             // 実質1本/秒に収まっていたのは CustomRpcSender 側の LastNotifyNames 内容 dedup
             // という別モジュールの実装詳細に依存していただけだった (明示のガードにしておく)。
+            // さらに残り10秒超は5秒刻みの表示に丸め、刻みが変わった時だけ送る。
             if (PerSecondUpdateScheduler.ShouldRunUpdate(pc.PlayerId))
-                Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
+            {
+                int remaining = (int)Math.Ceiling(GracePeriodLength - (now - MeetingEndTS));
+
+                if (Utils.ShouldNotifySuffixTimer(LastNotifiedDisplay, pc.PlayerId, remaining))
+                    Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
+            }
 
             return;
         }
@@ -118,6 +127,8 @@ public class Entombed : IAddon
     {
         if (BlockedRoom == null || !BlockedRoom.TryGetValue(seer.PlayerId, out SystemTypes blockedRoom) || !seer.IsAlive()) return string.Empty;
         long elapsed = Utils.TimeStamp - MeetingEndTS;
-        return string.Format(Translator.GetString(elapsed < GracePeriodLength ? "Entombed.SuffixGracePeriod" : "Entombed.SuffixActive"), Translator.GetString(blockedRoom.ToString()), GracePeriodLength - elapsed);
+        bool inGracePeriod = elapsed < GracePeriodLength;
+        object remaining = inGracePeriod ? Utils.GetSuffixTimerDisplay((int)Math.Ceiling(GracePeriodLength - elapsed)) : GracePeriodLength - elapsed;
+        return string.Format(Translator.GetString(inGracePeriod ? "Entombed.SuffixGracePeriod" : "Entombed.SuffixActive"), Translator.GetString(blockedRoom.ToString()), remaining);
     }
 }

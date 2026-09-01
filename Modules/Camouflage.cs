@@ -205,7 +205,16 @@ public static class Camouflage
                     apc?.RpcSetName(value2);
                 }
 
-                newOutfit = PlayerSkins[id];
+                // 素のインデクサ禁止: 試合終了間際のキルが積んだ LateTask がロビーで着弾すると、
+                // ゲーム終了時に PlayerSkins を手放した後にここへ到達し KeyNotFoundException になる。
+                // 台帳が無いなら復元すべき外見も無いので、何もしないで抜ける。
+                if (!PlayerSkins.TryGetValue(id, out NetworkedPlayerInfo.PlayerOutfit savedOutfit))
+                {
+                    Logger.Info($"No saved skin for {id}, skipping revert", "Camouflage.RpcSetSkin");
+                    return;
+                }
+
+                newOutfit = savedOutfit;
             }
         }
 

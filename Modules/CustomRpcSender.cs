@@ -648,7 +648,9 @@ public static class CustomRpcSenderExtensions
         switch (seerIsNull)
         {
             case true when Main.LastNotifyNames.Where(x => x.Key.Item1 == player.PlayerId).All(x => x.Value == name):
-            case false when Main.LastNotifyNames[(player.PlayerId, seer.PlayerId)] == name:
+            // 素のインデクサ禁止: LastNotifyNames はゲーム終了時に手放すため、キル直後の遅延 NotifyRoles
+            // (LateTask 0.2-0.4s) が outro 窓に着弾するとキー欠損になる。未登録 = 必ず送信扱い。
+            case false when Main.LastNotifyNames.TryGetValue((player.PlayerId, seer.PlayerId), out string lastSent) && lastSent == name:
                 return;
             case true:
                 Main.EnumeratePlayerControls().Do(x => Main.LastNotifyNames[(player.PlayerId, x.PlayerId)] = name);
