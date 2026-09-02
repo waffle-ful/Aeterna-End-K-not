@@ -315,6 +315,9 @@ internal static class EndGamePatch
         }
 
         HealthLog.Note($"TRANSIT phase=gameend totalMs={transitSw.ElapsedMilliseconds} t={Utils.TimeStamp}");
+        // Ended→ロビー帰還の遷移窓を開く (ロビー到達 +2.5s、または 45s で閉じる)
+        TransitionTimeline.Arm("end", 45000, "Lobby", 2500);
+        TransitionTimeline.Mark($"TRANSIT:gameend({transitSw.ElapsedMilliseconds}ms)");
     }
 }
 
@@ -612,6 +615,7 @@ internal static class SetEverythingUpPatch
         if (Main.EnableAggressiveGcCleanup.Value) GC.Collect();
 
         HealthLog.Note($"TRANSIT phase=outro vanillaMs={vanillaMs} bgmMs={bgmMs} postMs={postSw.ElapsedMilliseconds} t={Utils.TimeStamp}");
+        TransitionTimeline.Mark($"TRANSIT:outro(v{vanillaMs}+bgm{bgmMs}+post{postSw.ElapsedMilliseconds}ms)");
 
         // Ended→Lobby 遷移の Boehm GC 集中 (bgc +3〜4回/窓・ヒープが熱いと計 1.8 秒級) 対策:
         // GC を先撃ちしてヒープ余白を作り、遷移窓内の GC 発火回数を減らす (nos-gc-strategy の

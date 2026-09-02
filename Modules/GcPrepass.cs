@@ -70,6 +70,7 @@ public static class GcPrepass
             int bgcAfter = BoehmCollectionCount();
             long boehmAfter = BoehmUsedBytes();
             HealthLog.Note($"GCPRE reason={reason} clrMs={clrMs} totalMs={sw.ElapsedMilliseconds} clrMB={clrBefore / 1048576}->{GC.GetTotalMemory(false) / 1048576} boehmMB={(boehmBefore < 0 ? -1 : boehmBefore / 1048576)}->{(boehmAfter < 0 ? -1 : boehmAfter / 1048576)} bgc={bgcBefore}->{bgcAfter} t={now}");
+            TransitionTimeline.Mark($"GCPRE:{reason}({sw.ElapsedMilliseconds}ms,boehm{(boehmBefore < 0 ? -1 : boehmBefore / 1048576)}->{(boehmAfter < 0 ? -1 : boehmAfter / 1048576)}MB)");
         }
         catch (Exception e) { Utils.ThrowException(e); }
     }

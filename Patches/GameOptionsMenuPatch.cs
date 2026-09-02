@@ -2815,6 +2815,7 @@ public static class GameSettingMenuPatch
         // それを超える規模ではフレームあたりの本数を増やして完走を優先する。
         int rootsPerFrame = Math.Max(2, doomedRoots.Count / 100);
         Modules.HealthLog.Note($"UIPURGE begin roots={doomedRoots.Count} perFrame={rootsPerFrame} t={Utils.TimeStamp}");
+        Modules.TransitionTimeline.Mark($"UIPURGE:begin(roots={doomedRoots.Count})");
 
         // 破棄コストの 9 割が 2〜3 root に集中する (frameGapsMs の突出バッチ・~150ms/フレーム実測) が、
         // その root が snapshot 内のどこに来るかはタブ巡回順で変わる — frameGaps の突出位置と突き合わせて
@@ -2882,6 +2883,7 @@ public static class GameSettingMenuPatch
 
         // フレームごとの gap 分布: 太った root がどのバッチに居るかは、この列の突出値の位置で分かる。
         Modules.HealthLog.Note($"UIPURGE end roots={doomedRoots.Count} frameGapsMs={frameGaps.ToString().TrimEnd(',')} listeners={listenersRemoved} valueChanged={valueChangedRemoved} menus={menusCleared} t={Utils.TimeStamp}");
+        Modules.TransitionTimeline.Mark("UIPURGE:end");
         UiCachePurgeInFlight = false;
     }
     [HarmonyPatch(nameof(GameSettingMenu.Close))]

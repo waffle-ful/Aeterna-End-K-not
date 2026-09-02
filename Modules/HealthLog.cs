@@ -37,7 +37,7 @@ public static class HealthLog
     private const long HitchThresholdMs = 50; // フル GC 実測 ~80ms (ManagedCensus gcPauseMs) を確実に拾う閾値
     private const long HitchWindowSeconds = 10; // レート制限窓
     private const int HitchMaxLinesPerWindow = 5; // 窓内の最大行数 (超過分は suppressed 集計)
-    private static readonly System.Diagnostics.Stopwatch HitchClock = System.Diagnostics.Stopwatch.StartNew();
+    internal static readonly System.Diagnostics.Stopwatch HitchClock = System.Diagnostics.Stopwatch.StartNew();
     private static long _lastTickMs; // 直近 Tick の ms 精度実時間 (LastTickTs は秒精度なのでヒッチ検出には使えない)
     private static long _lastBoehmUsed; // 直近 Tick 時点の il2cpp (Boehm) ヒープ使用量 (ヒッチの Boehm GC 帰属計器)
     private static long _hitchWindowStartTs;
@@ -66,6 +66,14 @@ public static class HealthLog
 
     // op の開始がヒッチ窓 (前回 Tick 以降 = gapMs+誤差) の内側にある時だけ帰属を出す。
     // 古い op を出すと「直近のヒッチは全部それのせい」に見える偽帰属になるため、窓外は無記載。
+    // 窓内 (前回 Tick 以降) に始まった op の名前だけを返す。窓外は null (GetLastOpSuffix と同じ偽帰属回避)。
+    private static string LastOpInWindow(long nowMs, long gapMs)
+    {
+        string op = _lastOpName;
+        if (op == null) return null;
+        return nowMs - _lastOpAtMs <= gapMs + 100 ? op : null;
+    }
+
     private static string GetLastOpSuffix(long nowMs, long gapMs)
     {
         string op = _lastOpName;
@@ -265,6 +273,7 @@ public static class HealthLog
         if (state != LastState)
         {
             Write($"STATE {LastState}->{state} t={now}");
+            TransitionTimeline.OnStateChange(LastState, state);
             LastState = state;
 
             // ロビー復帰毎に 1 回、型別オブジェクト census を残す (per-game 破棄漏れの犯人型特定計器)
@@ -306,6 +315,9 @@ public static class HealthLog
         if (_lastTickMs != 0)
         {
             long gapMs = nowMs - _lastTickMs;
+
+            // 遷移窓の時間分解 (窓外は分岐 1 つで抜ける)
+            TransitionTimeline.OnTick(nowMs, gapMs, state, boehmNow, LastOpInWindow(nowMs, gapMs));
 
             if (gapMs >= HitchThresholdMs && gapMs < FrameStallThresholdSeconds * 1000)
             {

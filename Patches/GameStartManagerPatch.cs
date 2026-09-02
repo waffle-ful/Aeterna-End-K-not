@@ -282,6 +282,7 @@ public static class GameStartManagerPatch
             // UI キャッシュはカウントダウン中に前倒しで破棄する — vanilla CoStartGame 区間の 1.7s 級
             // 無帰属ストールがキャッシュ生存時のみ再現する (roots=0 対照で消滅・2026-09-01 実測) ため、
             // vanilla 区間へ入る前に破棄を終わらせる。分散破棄 ~0.4s はカウントダウン (下限 10s) に収まる
+            TransitionTimeline.Arm("start", 60000, "InTask", 3000); // カウントダウン→試合開始の遷移窓
             GameSettingMenuPatch.PurgeUiCache("countdown");
             LateTask.New(() => GcPrepass.Collect("autostart-countdown"), 0.15f, log: false); // 手動押下側 (ReallyBegin Prefix) と同じ先撃ち
             __instance?.StartButton.gameObject.SetActive(false);
@@ -787,6 +788,7 @@ public static class GameStartManagerBeginPatch
             // 手動開始のカウントダウンは 5s — 分散破棄 ~0.4s は収まる。ブリッジの start 経由は直後に
             // countDownTimer=0 で飛ばすため分散が間に合わないが、その場合は StartGameHost 冒頭の
             // gamestart フォールバックが従来どおり拾う
+            TransitionTimeline.Arm("start", 60000, "InTask", 3000); // カウントダウン→試合開始の遷移窓
             GameSettingMenuPatch.PurgeUiCache("countdown");
             // カウントダウン表示が描画された後 (0.15s 遅延) にフル GC を先撃ち。Prefix と同一フレームの同期実行だと
             // レンダ前に止まるため「クリック→フリーズ→UI一気に出現」の体感ヒッチになる。
