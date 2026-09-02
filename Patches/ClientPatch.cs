@@ -75,6 +75,10 @@ internal static class SplashLogoAnimatorPatch
     {
         __instance.sceneChanger.AllowFinishLoadingScene();
         __instance.startedSceneLoad = true;
+
+        // メインメニューの背景動画 (火) の準備をここで始める。準備完了まで実測で約2秒かかるので、
+        // メニュー構築時に始めると開幕の数秒だけ火が消えた画になる。初回のみ実行される。
+        EndKnot.Patches.CalamityMenu.CalamityFire.Prewarm();
     }
 }
 
