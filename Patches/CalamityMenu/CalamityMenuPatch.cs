@@ -56,7 +56,8 @@ public static class CalamityMenuPatch
         // teardown starts (avoids a flash of half-suppressed vanilla UI on the first frame).
         SafeStep("Fonts",       () => CalamityFonts.Capture(__instance));
         SafeStep("MenuRoot",    () => MenuRoot.Create(__instance));
-        SafeStep("FadeIn",      () => CalamityFadeIn.Build(CalamityMenuState.Root.transform));
+        if (Main.ShowStartupFadeIn?.Value ?? false)
+            SafeStep("FadeIn",  () => CalamityFadeIn.Build(CalamityMenuState.Root.transform));
         SafeStep("Suppressor",  () => VanillaSuppressor.Apply(__instance));
         SafeStep("Background",  () => CalamityBackground.Build(MenuRoot.GetLayer("BackgroundLayer")));
         SafeStep("Fire",        () => CalamityFire.Build(MenuRoot.GetLayer("BackgroundLayer")));

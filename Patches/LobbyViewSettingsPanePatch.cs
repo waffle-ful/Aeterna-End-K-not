@@ -505,10 +505,58 @@ public static class LobbyViewSettingsPanePatch
     private static void ReDrawTab(this LobbyViewSettingsPane viewSettings, StringNames tabName)
     {
         viewSettings.currentTab = tabName;
-        for (var i = 0; i < viewSettings.settingsInfo.Count; i++)
-            Object.Destroy(viewSettings.settingsInfo[i].gameObject);
-        viewSettings.settingsInfo.Clear();
+        PurgeAndLog(viewSettings, "lobbyredraw");
         SetTabPatch_Postfix(viewSettings);
+    }
+
+    // LobbyViewSettingsPane 自体には OnDestroy が存在せず (ilspycmd で確認済み)、OnDisable が
+    // hide/close のたびにも呼ばれる (LobbyInfoPane.ActivatePane/DeactivatePane 経由)。pane root を丸ごと
+    // purge すると Awake で一度だけ配線されるタブボタン (バニラ taskTabButton/rolesTabButton/BackButton
+    // 含む) の listener が二度と戻らない。settingsInfo (毎描画で作り直す行/ヘッダ) だけを対象にする —
+    // これらは次回 ChangeTab で必ず再生成されるので、hide 時に消しても壊れない。
+    // Prefix で走らせる: バニラの OnDisable/ChangeTab/RefreshTab はネイティブ側で settingsInfo を
+    // Destroy+Clear するので、Postfix では purge が空リストを見て instanced Material が孤児になる。
+    [HarmonyPatch(nameof(LobbyViewSettingsPane.OnDisable))]
+    [HarmonyPrefix]
+    public static void OnDisable_Prefix(LobbyViewSettingsPane __instance) => PurgeAndLog(__instance, "lobbypane");
+
+    [HarmonyPatch(nameof(LobbyViewSettingsPane.ChangeTab))]
+    [HarmonyPatch(nameof(LobbyViewSettingsPane.RefreshTab))]
+    [HarmonyPrefix]
+    public static void ChangeTab_Prefix(LobbyViewSettingsPane __instance) => PurgeAndLog(__instance, "lobbytab");
+
+    private static void PurgeAndLog(LobbyViewSettingsPane viewSettings, string src)
+    {
+        try
+        {
+            if (!viewSettings || viewSettings.settingsInfo == null || viewSettings.settingsInfo.Count == 0) return;
+            (int l, int vc, int m, int mats) = PurgeSettingsInfo(viewSettings);
+            Modules.HealthLog.Note($"UIPURGE src={src} listeners={l} valueChanged={vc} menus={m} mats={mats} t={Utils.TimeStamp}");
+        }
+        catch (Exception e) { Logger.Warn($"lobby view settings pane purge failed: {e.Message}", "MenuLeak"); }
+    }
+
+    private static (int Listeners, int ValueChanged, int Menus, int Materials) PurgeSettingsInfo(LobbyViewSettingsPane viewSettings)
+    {
+        int listeners = 0, valueChanged = 0, menus = 0, mats = 0;
+        for (var i = 0; i < viewSettings.settingsInfo.Count; i++)
+        {
+            GameObject go = viewSettings.settingsInfo[i].gameObject;
+            try
+            {
+                (int l, int vc, int m, int mt) = GameSettingMenuPatch.PurgeUnityEventListeners(go);
+                listeners += l;
+                valueChanged += vc;
+                menus += m;
+                mats += mt;
+            }
+            catch (Exception e) { Logger.Warn($"purge listeners failed: {e.Message}", "MenuLeak"); }
+
+            Object.Destroy(go);
+        }
+
+        viewSettings.settingsInfo.Clear();
+        return (listeners, valueChanged, menus, mats);
     }
 
     private static void HideTab(TabGroup tabName, PassiveButton buttonTab)
@@ -642,7 +690,8 @@ public static class LobbyViewSettingsPanePatch
                     chmButton.OnClick.AddListener((UnityAction)(() =>
                     {
                         toi.CollapsesSection = !toi.CollapsesSection;
-                        viewSettings.ReDrawTab(LastTabPressed);
+                        LobbyViewSettingsPane pane = chmButton.GetComponentInParent<LobbyViewSettingsPane>();
+                        if (pane) pane.ReDrawTab(LastTabPressed);
                     }));
                     chmButton.SetButtonEnableState(true);
                     categoryHeaderMasked.gameObject.SetActive(enabledOrNotCollapsed);
@@ -822,7 +871,8 @@ public static class LobbyViewSettingsPanePatch
                     chmButton.OnClick.AddListener((UnityAction)(() =>
                     {
                         toi.CollapsesSection = !toi.CollapsesSection;
-                        viewSettings.ReDrawTab(LastTabPressed);
+                        LobbyViewSettingsPane pane = chmButton.GetComponentInParent<LobbyViewSettingsPane>();
+                        if (pane) pane.ReDrawTab(LastTabPressed);
                     }));
                     chmButton.SetButtonEnableState(true);
                     categoryHeaderRoleVariant.gameObject.SetActive(enabled);
@@ -1067,6 +1117,7 @@ public static class LobbyViewSettingsPanePatch
         advancedRoleViewPanel.transform.localScale = Vector3.one;
         advancedRoleViewPanel.transform.localPosition = new Vector3(xPosRoleHeader, yPos, -2f);
         advancedRoleViewPanel.header.SetHeader((StringNames)(6000 + role), maskLayer, tabName is not TabGroup.ImpostorRoles /*<- Role Icons sets here*/);
+        // .material は複製を作り Destroy(go) では回収されない — PurgeSettingsInfo 側で instanced Material を破棄する。
         advancedRoleViewPanel.divider.material.SetInt(PlayerMaterial.MaskLayer, maskLayer);
         advancedRoleViewPanel.header.Title.text = Translator.GetString(role.ToString());
         advancedRoleViewPanel.header.Title.color = Color.white;

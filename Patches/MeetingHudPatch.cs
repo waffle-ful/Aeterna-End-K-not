@@ -1538,8 +1538,18 @@ internal static class SetHighlightedPatch
 [HarmonyPatch(typeof(MeetingHud), nameof(MeetingHud.OnDestroy))]
 internal static class MeetingHudOnDestroyPatch
 {
-    public static void Postfix()
+    public static void Postfix(MeetingHud __instance)
     {
+        try
+        {
+            if (__instance)
+            {
+                (int l, int vc, int m, int mats) = GameSettingMenuPatch.PurgeUnityEventListeners(__instance.gameObject);
+                Modules.HealthLog.Note($"UIPURGE src=meeting listeners={l} valueChanged={vc} menus={m} mats={mats} t={Utils.TimeStamp}");
+            }
+        }
+        catch (Exception e) { Logger.Warn($"meeting hud purge failed: {e.Message}", "MenuLeak"); }
+
         Logger.Info("------------End of meeting------------", "Phase");
 
         MeetingStates.FirstMeeting = false;

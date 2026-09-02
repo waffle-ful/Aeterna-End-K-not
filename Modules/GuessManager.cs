@@ -778,7 +778,7 @@ public static class GuessManager
             var button = targetBox.GetComponent<PassiveButton>();
             button.OnClick.RemoveAllListeners();
             PlayerVoteArea pva1 = pva;
-            button.OnClick.AddListener((Action)(() => GuesserOnClick(pva1.PlayerId, __instance)));
+            button.OnClick.AddListener((Action)(() => GuesserOnClick(pva1.PlayerId)));
         }
     }
 
@@ -813,10 +813,13 @@ public static class GuessManager
         }
     }
 
-    private static void GuesserOnClick(byte playerId, MeetingHud __instance)
+    private static void GuesserOnClick(byte playerId)
     {
         PlayerControl pc = Utils.GetPlayerById(playerId);
         if (!pc || !pc.IsAlive() || GuesserUI || MeetingHud.Instance.state is MeetingHud.MeetingStates.Results or MeetingHud.MeetingStates.Proceeding || Starspawn.IsDayBreak) return;
+
+        MeetingHud __instance = MeetingHud.Instance;
+        if (!__instance) return;
 
         try
         {
@@ -867,6 +870,7 @@ public static class GuessManager
             passiveButton.OnClick.AddListener((Action)(() =>
             {
                 __instance.playerStates.ToList().ForEach(x => x.gameObject.SetActive(true));
+                try { GameSettingMenuPatch.PurgeUnityEventListeners(container.gameObject); } catch { /* Destroy 自体は必ず走らせる */ }
                 Object.Destroy(container.gameObject);
             }));
 
@@ -1223,7 +1227,11 @@ public static class GuessManager
             if (TextTemplate && TextTemplate.gameObject) Object.Destroy(TextTemplate.gameObject);
             TextTemplate = null;
 
-            if (GuesserUI) Object.Destroy(GuesserUI);
+            if (GuesserUI)
+            {
+                try { GameSettingMenuPatch.PurgeUnityEventListeners(GuesserUI); } catch { /* Destroy 自体は必ず走らせる */ }
+                Object.Destroy(GuesserUI);
+            }
 
             foreach (List<Transform> roleButtonsValue in RoleButtons.Values)
             {

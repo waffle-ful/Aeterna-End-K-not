@@ -73,6 +73,7 @@ public static class BoehmCensus
     private const int Stage2RootLimit = 50;
 
     private const int TopCount = 25;
+    private const int TopHandleTypeCount = 30;
     private const int MaxObjectCountHint = 1 << 20; // native 側の内部バッファ確保には使われないヒント値
     private const long InitialBufferCapacity = 1 << 20; // ポインタ保存用バッファの初期容量(8MB on x64)
 
@@ -140,6 +141,12 @@ public static class BoehmCensus
     // ClassCounts = 総計、HandleOnlyClassCounts = GCHandle ルートでしか到達しなかった分のみ。
     private static readonly Dictionary<IntPtr, (long Count, long Bytes)> ClassCounts = new(4096);
     private static readonly Dictionary<IntPtr, (long Count, long Bytes)> HandleOnlyClassCounts = new(4096);
+
+    // 生存中の全 GCHandle ターゲットを型別の本数だけで集計する先 (バイトサイズは持たない)。
+    // 到達済みか否かに関係なく、ハンドルが指しているだけのオブジェクトの増加 (本数だけ伸びて
+    // handleMB は動かない型) を捉えるための計器。finalize 後の分類フェーズでのみ書き込む。
+    private static readonly Dictionary<IntPtr, long> HandleTypeCounts = new(4096);
+    private static long _handleNullTargetCount; // ターゲット NULL または klass 解決不能でスキップした件数
 
     // コールバックはマーク中で il2cpp API を呼べないため、生ポインタをここへ memcpy するだけに留める。
     // Run 間で使い回す (毎回 free/alloc しない) native メモリ。マネージド割当はゼロ。
@@ -226,6 +233,8 @@ public static class BoehmCensus
 
         ClassCounts.Clear();
         HandleOnlyClassCounts.Clear();
+        HandleTypeCounts.Clear();
+        _handleNullTargetCount = 0;
         ResetBuffer();
         ResetHandleBuffer();
         _bufferBoundary = 0;
@@ -416,6 +425,7 @@ public static class BoehmCensus
             {
                 Mark("classify");
                 ClassifyBuffer(_bufferBoundary);
+                ClassifyHandleTypes();
                 ReportTopRoots(src, now, workItems, workItemDelta, handleDelta);
             }
         }
@@ -474,6 +484,18 @@ public static class BoehmCensus
         }
 
         HealthLog.Note(topH.ToString().TrimEnd());
+
+        var topType = new StringBuilder("BCENSUSHTYPE t=").Append(now).Append(" src=").Append(src).Append(" total=").Append(_handleBufferCount).Append(' ');
+
+        foreach (var kv in HandleTypeCounts.OrderByDescending(x => x.Value).Take(TopHandleTypeCount))
+        {
+            string name = ResolveClassName(kv.Key);
+            topType.Append(name).Append('x').Append(kv.Value).Append(' ');
+        }
+
+        if (_handleNullTargetCount > 0) topType.Append("null=").Append(_handleNullTargetCount);
+
+        HealthLog.Note(topType.ToString().TrimEnd());
     }
 
     // ドメイン→アセンブリ→イメージ→クラス→フィールドを自前で辿り、参照型 static フィールドの
@@ -794,6 +816,38 @@ public static class BoehmCensus
         }
     }
 
+
+    // finalize (マーク解除) 完了後にのみ呼ばれる。到達済みか否かに関係なく、生存中の全 GCHandle
+    // ターゲットを型別の本数だけで数える。ClassifyBuffer は「from_root で新規に発見したバイト数」を
+    // 数えるため、既に到達可能なオブジェクトを指すだけのハンドルが増える型 (本数だけ伸びて
+    // handleMB は動かない) には原理的に盲目 — こちらはハンドル本数そのものを対象にする。
+    private static unsafe void ClassifyHandleTypes()
+    {
+        if (_handleBuffer == IntPtr.Zero || _handleBufferCount == 0) return;
+
+        IntPtr* hp = (IntPtr*)_handleBuffer;
+
+        for (long h = 0; h < _handleBufferCount; h++)
+        {
+            IntPtr target = hp[h];
+            if (target == IntPtr.Zero) { _handleNullTargetCount++; continue; }
+
+            IntPtr klass;
+            try
+            {
+                IntPtr klassRaw = IL2CPP.il2cpp_object_get_class(target);
+                klass = klassRaw == IntPtr.Zero ? IntPtr.Zero : (IntPtr)(klassRaw.ToInt64() & ~1L);
+            }
+            catch { klass = IntPtr.Zero; }
+
+            if (klass == IntPtr.Zero) { _handleNullTargetCount++; continue; }
+
+            if (HandleTypeCounts.TryGetValue(klass, out long count))
+                HandleTypeCounts[klass] = count + 1;
+            else
+                HandleTypeCounts[klass] = 1;
+        }
+    }
 
     // 少数のルートが巨大なグラフを保持している可能性を追う計器。統計ルート (workItems) と GCHandle
     // ルートそれぞれについて、from_root 直後の _bufferCount 差分が大きい上位ランクを報告する。
