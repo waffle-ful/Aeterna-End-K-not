@@ -85,6 +85,10 @@ public static class CalamityMenuPatch
                 Logger.Info("RightPanel fallback-initialized in CalamityMenuPatch (TitleLogoPatch early-returned)", "CalamityMenuPatch");
             }
             rp.transform.localPosition = TitleLogoPatch.RightPanelOp + new Vector3(10f, 0f, 0f);
+
+            // TitleLogoPatch が途中で抜けていた場合でも枠は出さない (タブは子なので renderer だけ切る)。
+            var rpsr = rp.GetComponent<SpriteRenderer>();
+            if (rpsr != null) rpsr.enabled = false;
         }
 
         // Reset slide-state flag so the panel doesn't immediately slide in on scene load.

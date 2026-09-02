@@ -325,7 +325,6 @@ internal static class TitleLogoPatch
     private static GameObject LeftPanel;
     public static GameObject RightPanel;
     private static GameObject CloseRightButton;
-    private static GameObject Tint;
     private static GameObject BottomButtonBounds;
 
     public static Vector3 RightPanelOp;
@@ -443,7 +442,11 @@ internal static class TitleLogoPatch
 
         RightPanelOp = RightPanel.transform.localPosition;
         RightPanel.transform.localPosition = RightPanelOp + new Vector3(10f, 0f, 0f);
-        RightPanel.GetComponent<SpriteRenderer>().color = new(1f, 0.78f, 0.9f, 1f);
+
+        // パネル自体の枠は描かない — ゲームモードのタブだけを背景の上に浮かせる。
+        // GameObject ごと伏せるとタブが子なので一緒に消えるので、SpriteRenderer だけを切る。
+        var rightPanelRenderer = RightPanel.GetComponent<SpriteRenderer>();
+        if (rightPanelRenderer) rightPanelRenderer.enabled = false;
 
         CloseRightButton = new("CloseRightPanelButton");
         CloseRightButton.transform.SetParent(RightPanel.transform);
@@ -461,13 +464,9 @@ internal static class TitleLogoPatch
         closeRightPassiveButton.OnMouseOver = new();
         closeRightPassiveButton.OnMouseOver.AddListener((Action)(() => closeRightSpriteRenderer.color = new(1f, 0.68f, 0.99f, 1f)));
 
-        Tint = __instance.screenTint.gameObject;
-        var ttap = Tint.GetComponent<AspectPosition>();
-        if (ttap) Object.Destroy(ttap);
-
-        Tint.transform.SetParent(RightPanel.transform);
-        Tint.transform.localPosition = new(-0.0824f, 0.0513f, Tint.transform.localPosition.z);
-        Tint.transform.localScale = new(1f, 1f, 1f);
+        // バニラの暗幕 (screenTint) はパネルの子にしない。子にするとパネルと同じ大きさ・
+        // 同じ位置で一緒にスライドしてきて、ゲームモードのタブの後ろに黒い四角として写る。
+        // 画面全体を覆うポップオーバー用の暗幕として、バニラの置き場所のまま残す。
         __instance.howToPlayButton.gameObject.SetActive(false);
         __instance.howToPlayButton.transform.parent.Find("FreePlayButton").gameObject.SetActive(false);
 
