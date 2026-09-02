@@ -136,6 +136,7 @@ internal static class LobbyBehaviourStartPatch
 
         long hideShipMs = postSw.ElapsedMilliseconds - reloadMs;
         EndKnot.Modules.HealthLog.Note($"TRANSIT phase=lobbyenter vanillaMs={vanillaMs} reloadMs={reloadMs} hideShipMs={hideShipMs} t={Utils.TimeStamp}");
+        EndKnot.Modules.TransitionTimeline.Mark($"TRANSIT:lobbyenter(v{vanillaMs}+reload{reloadMs}+hide{hideShipMs}ms)");
 
         if (AmongUsClient.Instance != null && AmongUsClient.Instance.AmHost)
         {

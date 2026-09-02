@@ -77,6 +77,9 @@ public static class MainMenuManagerPatch
 
         LateTask.New(GcUafSelfHeal.RunOnce, 3f, "GcUafSelfHeal.RunOnce");
 
+        // MainMenu シーンの資産が揃った後に巨大テクスチャを縮小・圧縮版へ作り替える (冪等・設定で無効化可)
+        LateTask.New(TextureSlimmer.RunOnce, 1.5f, "TextureSlimmer.RunOnce", log: false);
+
         if (Template == null) Template = __instance.quitButton;
 
         if (Template == null) return;
