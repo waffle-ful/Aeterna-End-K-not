@@ -15,6 +15,7 @@ namespace EndKnot.Modules;
 public static class MemCensus
 {
     private static long _lastRunTs;
+    private const int TopTexOwnerCount = 8;
 
     // HealthLog の STATE 遷移 (→Lobby) から呼ばれる。ロビー生成 (Backrooms 等) が落ち着く 8 秒後に実施。
     public static void ScheduleAfterLobbyEnter()
@@ -34,7 +35,7 @@ public static class MemCensus
         {
             long now = Utils.TimeStamp;
             if (src == "lobby" && now - _lastRunTs < 30) return; // 遷移バタつきによる多重発火ガード
-            _lastRunTs = now;
+            if (src == "lobby") _lastRunTs = now; // 手動発火(bridge/manual)は自動発火の30s抑制を消費しない
             HealthLog.NoteOp("MemCensus");
 
             var sb = new StringBuilder("CENSUS t=").Append(now).Append(" src=").Append(src);
@@ -84,6 +85,14 @@ public static class MemCensus
             TopNames<Material>("mat", 10, now, src);
             TopNames<Sprite>("spr", 10, now, src);
             TopTextures(10, now, src);
+
+            // il2cpp (Boehm) 側の型別生存オブジェクト帰属。CENSUS と同じ発火点・同じ間引きに乗せる。
+            // 自動発火 (src=lobby) は既定 OFF — 手動発火 (manual/bridge) は設定に関係なく常に走る。
+            bool boehmAllowed = src != "lobby" || (Main.EnableBoehmCensus is { Value: true });
+            if (boehmAllowed)
+                try { BoehmCensus.RunNow(src); } catch (Exception e) { Logger.Warn($"boehm census hook failed: {e.Message}", "MemCensus"); }
+
+            AttributeTopTextureOwners(TopTexOwnerCount, now, src);
         }
         catch (Exception e) { Logger.Warn($"census failed: {e.Message}", "MemCensus"); }
     }
@@ -150,6 +159,133 @@ public static class MemCensus
             HealthLog.Note(sb.ToString().TrimEnd());
         }
         catch (Exception e) { Logger.Warn($"census top tex failed: {e.Message}", "MemCensus"); }
+    }
+
+    // CENSUSTOP kind=tex の上位テクスチャは「何 MB か」までしか分からず、常駐の犯人 (どの
+    // GameObject が保持しているか) には到達できない。上位テクスチャを使う Sprite と、その Sprite を
+    // 表示している SpriteRenderer/Image のヒエラルキーパスを逆引きして 1 テクスチャ 1 行で残す。
+    private static void AttributeTopTextureOwners(int top, long now, string src)
+    {
+        try
+        {
+            var texArr = Resources.FindObjectsOfTypeAll(Il2CppType.Of<Texture2D>());
+            if (texArr == null) return;
+
+            var texList = new List<(Texture2D Tex, double Bytes)>(256);
+            for (int i = 0; i < texArr.Length; i++)
+            {
+                var o = texArr[i];
+                Texture2D t = o != null ? o.TryCast<Texture2D>() : null;
+                if (t != null) texList.Add((t, EstimateBytes(t)));
+            }
+
+            var topTex = texList.OrderByDescending(x => x.Bytes).Take(top).ToList();
+            if (topTex.Count == 0) return;
+
+            var spriteArr = Resources.FindObjectsOfTypeAll(Il2CppType.Of<Sprite>());
+            var spritesByTexId = new Dictionary<int, List<Sprite>>(256);
+
+            if (spriteArr != null)
+            {
+                for (int i = 0; i < spriteArr.Length; i++)
+                {
+                    var o = spriteArr[i];
+                    Sprite s = o != null ? o.TryCast<Sprite>() : null;
+                    Texture2D st = s != null ? s.texture : null;
+                    if (st == null) continue;
+
+                    int id = st.GetInstanceID();
+                    if (!spritesByTexId.TryGetValue(id, out List<Sprite> list)) spritesByTexId[id] = list = new List<Sprite>();
+                    list.Add(s);
+                }
+            }
+
+            var srArr = Resources.FindObjectsOfTypeAll(Il2CppType.Of<SpriteRenderer>());
+            var imgArr = Resources.FindObjectsOfTypeAll(Il2CppType.Of<UnityEngine.UI.Image>());
+
+            foreach ((Texture2D tex, double bytes) in topTex)
+            {
+                string texName = string.IsNullOrEmpty(tex.name) ? "<noname>" : tex.name.Replace(' ', '_');
+                var sb = new StringBuilder("CENSUSREF src=").Append(src).Append(" t=").Append(now).Append(" tex=").Append(texName);
+
+                if (!spritesByTexId.TryGetValue(tex.GetInstanceID(), out List<Sprite> sprites) || sprites.Count == 0)
+                {
+                    sb.Append(" sprites=0 owner=none");
+                    HealthLog.Note(sb.ToString());
+                    continue;
+                }
+
+                sb.Append(" sprites=").Append(sprites.Count).Append(':');
+                int listed = Math.Min(sprites.Count, 8);
+                for (int i = 0; i < listed; i++)
+                {
+                    string sn = string.IsNullOrEmpty(sprites[i].name) ? "<noname>" : sprites[i].name.Replace(' ', '_');
+                    sb.Append(sn);
+                    if (i < listed - 1) sb.Append(',');
+                }
+
+                string owner = FindSpriteOwnerPath(sprites, srArr, imgArr);
+                sb.Append(" owner=").Append(owner);
+                HealthLog.Note(sb.ToString());
+            }
+        }
+        catch (Exception e) { Logger.Warn($"census tex owner attribution failed: {e.Message}", "MemCensus"); }
+    }
+
+    // Sprite を表示している SpriteRenderer/Image を手動 for ループで探す (Il2Cpp オブジェクト配列に
+    // マネージドラムダを渡すと呼び出し毎に GCHandle が漏れるため LINQ を使わない)。
+    private static string FindSpriteOwnerPath(List<Sprite> sprites, UnityEngine.Object[] srArr, UnityEngine.Object[] imgArr)
+    {
+        for (int i = 0; i < sprites.Count; i++)
+        {
+            Sprite sp = sprites[i];
+
+            if (srArr != null)
+            {
+                for (int j = 0; j < srArr.Length; j++)
+                {
+                    var o = srArr[j];
+                    SpriteRenderer sr = o != null ? o.TryCast<SpriteRenderer>() : null;
+                    if (sr != null && sr.sprite == sp)
+                    {
+                        string path = HierarchyPath(sr.gameObject, 3);
+                        return sr.gameObject.GetComponent<PowerTools.SpriteAnim>() != null ? path + "+anim" : path;
+                    }
+                }
+            }
+
+            if (imgArr != null)
+            {
+                for (int j = 0; j < imgArr.Length; j++)
+                {
+                    var o = imgArr[j];
+                    UnityEngine.UI.Image img = o != null ? o.TryCast<UnityEngine.UI.Image>() : null;
+                    if (img != null && img.sprite == sp) return HierarchyPath(img.gameObject, 3);
+                }
+            }
+        }
+
+        return "none";
+    }
+
+    // 親3段までのヒエラルキーパス。census 目的の帰属なので、それ以上遡っても読みやすさが落ちるだけ。
+    private static string HierarchyPath(GameObject go, int maxDepth)
+    {
+        if (go == null) return "none";
+
+        var names = new List<string>(maxDepth);
+        Transform t = go.transform;
+        int depth = 0;
+
+        while (t != null && depth < maxDepth)
+        {
+            names.Add(t.name);
+            t = t.parent;
+            depth++;
+        }
+
+        names.Reverse();
+        return string.Join("/", names).Replace(' ', '_');
     }
 
     private static double EstimateBytes(Texture2D t)

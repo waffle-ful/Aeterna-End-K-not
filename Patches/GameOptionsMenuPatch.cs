@@ -2644,8 +2644,15 @@ public static class GameSettingMenuPatch
                     Main.Instance.StartCoroutine(CoSpreadDestroyUiCache(doomedRoots));
                 }
                 else
+                {
                     foreach (GameObject go in doomedRoots)
+                    {
+                        try { PurgeUnityEventListeners(go); }
+                        catch (Exception e) { Logger.Warn($"purge listeners failed: {e.Message}", "MenuLeak"); }
+
                         Object.Destroy(go);
+                    }
+                }
             }
 
             // 破棄した個体への静的参照をすべて手放す。取りこぼしても既存の dead-cache ガード
@@ -2692,6 +2699,109 @@ public static class GameSettingMenuPatch
         }
     }
 
+    // UnityEvent (OnClick/OnMouseOver/OnMouseOut/onValueChanged 等) がクロージャ経由で Il2Cpp デリゲート
+    // (Il2CppInterop が GCHandle で固定) → クロージャが捕捉した Button/TMP ラッパー → ラッパーの GCHandle
+    // → il2cpp 側ボタン → その UnityEvent、というランタイム跨ぎの循環参照を作る。GameObject 自体を
+    // Destroy しても、この循環はどちらの GC (Boehm/CLR) 単独でも切れない。Destroy 直前に UnityEvent 側
+    // から明示的に listener を外して循環を破断する。GameOptionButton は PassiveButton 派生 (実測確認済み)
+    // なので個別の分岐は不要。
+    //
+    // OptionBehaviour.OnValueChanged (Action<OptionBehaviour>、UnityEvent ではない素の delegate) も同種の
+    // 循環を作る: 管理デリゲートを il2cpp フィールドに代入すると Il2CppInterop がその管理デリゲートを
+    // GCHandle で固定し、target 側 (GameOptionsMenu ラッパー) が il2cpp ハンドルでメニューを固定する。
+    // メニューは Children 経由で全行を保持し、各行の OnValueChanged がまたその管理デリゲートを指す —
+    // どちらの UnityEvent 系処理にも触れないフィールドなので個別に null 化する。
+    private static (int Listeners, int ValueChanged, int Menus) PurgeUnityEventListeners(GameObject root)
+    {
+        int n = 0;
+        int valueChanged = 0;
+        int menus = 0;
+        if (!root) return (n, valueChanged, menus);
+
+        try
+        {
+            var passiveButtons = root.GetComponentsInChildren<PassiveButton>(true);
+            if (passiveButtons != null)
+            {
+                for (int i = 0; i < passiveButtons.Length; i++)
+                {
+                    PassiveButton btn = passiveButtons[i];
+                    if (btn == null) continue;
+
+                    if (btn.OnClick != null) { btn.OnClick.RemoveAllListeners(); n++; }
+                    if (btn.OnMouseOver != null) { btn.OnMouseOver.RemoveAllListeners(); n++; }
+                    if (btn.OnMouseOut != null) { btn.OnMouseOut.RemoveAllListeners(); n++; }
+                }
+            }
+        }
+        catch (Exception e) { Logger.Warn($"purge listeners (PassiveButton) failed: {e.Message}", "MenuLeak"); }
+
+        try
+        {
+            var uiButtons = root.GetComponentsInChildren<UnityEngine.UI.Button>(true);
+            if (uiButtons != null)
+            {
+                for (int i = 0; i < uiButtons.Length; i++)
+                {
+                    UnityEngine.UI.Button b = uiButtons[i];
+                    if (b == null) continue;
+                    if (b.onClick != null) { b.onClick.RemoveAllListeners(); n++; }
+                }
+            }
+        }
+        catch (Exception e) { Logger.Warn($"purge listeners (Button) failed: {e.Message}", "MenuLeak"); }
+
+        try
+        {
+            var inputFields = root.GetComponentsInChildren<TMPro.TMP_InputField>(true);
+            if (inputFields != null)
+            {
+                for (int i = 0; i < inputFields.Length; i++)
+                {
+                    TMPro.TMP_InputField f = inputFields[i];
+                    if (f == null) continue;
+                    if (f.onValueChanged != null) { f.onValueChanged.RemoveAllListeners(); n++; }
+                    if (f.onEndEdit != null) { f.onEndEdit.RemoveAllListeners(); n++; }
+                    if (f.onSelect != null) { f.onSelect.RemoveAllListeners(); n++; }
+                    if (f.onDeselect != null) { f.onDeselect.RemoveAllListeners(); n++; }
+                }
+            }
+        }
+        catch (Exception e) { Logger.Warn($"purge listeners (TMP_InputField) failed: {e.Message}", "MenuLeak"); }
+
+        try
+        {
+            var optionBehaviours = root.GetComponentsInChildren<OptionBehaviour>(true);
+            if (optionBehaviours != null)
+            {
+                for (int i = 0; i < optionBehaviours.Length; i++)
+                {
+                    OptionBehaviour ob = optionBehaviours[i];
+                    if (ob == null) continue;
+                    if (ob.OnValueChanged != null) { ob.OnValueChanged = null; valueChanged++; }
+                }
+            }
+        }
+        catch (Exception e) { Logger.Warn($"purge listeners (OptionBehaviour) failed: {e.Message}", "MenuLeak"); }
+
+        try
+        {
+            var menusFound = root.GetComponentsInChildren<GameOptionsMenu>(true);
+            if (menusFound != null)
+            {
+                for (int i = 0; i < menusFound.Length; i++)
+                {
+                    GameOptionsMenu menu = menusFound[i];
+                    if (menu == null) continue;
+                    if (menu.Children != null) { menu.Children.Clear(); menus++; }
+                }
+            }
+        }
+        catch (Exception e) { Logger.Warn($"purge listeners (GameOptionsMenu) failed: {e.Message}", "MenuLeak"); }
+
+        return (n, valueChanged, menus);
+    }
+
     // root を数本ずつ Destroy して、フレーム末の子孫破棄コストを複数フレームへ分散する。
     // 8 root/フレーム時代に 7 タブ巡回条件で 319ms 単発が実測された (想定 ~60ms 上限の 5 倍超) ため、
     // root あたりの実コストが想定 (~7.5ms) を大きく外れている疑いがある。刻みを 2 root/フレームへ下げ、
@@ -2731,6 +2841,9 @@ public static class GameSettingMenuPatch
 
         var frameGaps = new System.Text.StringBuilder();
         float lastResumeAt = Time.realtimeSinceStartup;
+        var listenersRemoved = 0;
+        var valueChangedRemoved = 0;
+        var menusCleared = 0;
 
         for (var i = 0; i < doomedRoots.Count; i++)
         {
@@ -2738,8 +2851,21 @@ public static class GameSettingMenuPatch
 
             // 例外でコルーチンが黙って止まると UiCachePurgeInFlight が立ったままになり、StartGameHost の
             // 分散完了待ちを永久に塞ぐ — 1本の失敗はここで握って残りの破棄と末尾のフラグ復旧まで必ず進む。
-            try { if (doomedRoots[i]) Object.Destroy(doomedRoots[i]); }
-            catch (Exception e) { Logger.Warn($"spread destroy failed at root {i}: {e.Message}", "MenuLeak"); }
+            // purge (UnityEvent 除去) が失敗しても Destroy 自体は必ず走らせる — 即時経路と同じ分離。
+            if (doomedRoots[i])
+            {
+                try
+                {
+                    (int l, int vc, int m) = PurgeUnityEventListeners(doomedRoots[i]);
+                    listenersRemoved += l;
+                    valueChangedRemoved += vc;
+                    menusCleared += m;
+                }
+                catch (Exception e) { Logger.Warn($"purge listeners failed at root {i}: {e.Message}", "MenuLeak"); }
+
+                try { Object.Destroy(doomedRoots[i]); }
+                catch (Exception e) { Logger.Warn($"spread destroy failed at root {i}: {e.Message}", "MenuLeak"); }
+            }
 
             if ((i + 1) % rootsPerFrame == 0 || i == doomedRoots.Count - 1)
             {
@@ -2755,7 +2881,7 @@ public static class GameSettingMenuPatch
         }
 
         // フレームごとの gap 分布: 太った root がどのバッチに居るかは、この列の突出値の位置で分かる。
-        Modules.HealthLog.Note($"UIPURGE end roots={doomedRoots.Count} frameGapsMs={frameGaps.ToString().TrimEnd(',')} t={Utils.TimeStamp}");
+        Modules.HealthLog.Note($"UIPURGE end roots={doomedRoots.Count} frameGapsMs={frameGaps.ToString().TrimEnd(',')} listeners={listenersRemoved} valueChanged={valueChangedRemoved} menus={menusCleared} t={Utils.TimeStamp}");
         UiCachePurgeInFlight = false;
     }
     [HarmonyPatch(nameof(GameSettingMenu.Close))]
