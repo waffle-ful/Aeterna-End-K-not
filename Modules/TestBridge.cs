@@ -362,6 +362,14 @@ public static class TestBridge
             return;
         }
 
+        // Layer D3: il2cpp (Boehm) 側の型別生存オブジェクト census を手動発火する。
+        if (directive.Equals("bcensus", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecuteBcensus(); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR bcensus failed"); }
+            return;
+        }
+
         // Layer E: 待ち合わせ。条件成立 or timeout まで後続ディレクティブの実行を停める(1/sec 評価)。
         if (directive.Equals("wait", StringComparison.OrdinalIgnoreCase) || directive.StartsWith("wait ", StringComparison.OrdinalIgnoreCase))
         {
@@ -380,7 +388,7 @@ public static class TestBridge
 
         if (directive.Equals("help", StringComparison.OrdinalIgnoreCase))
         {
-            WriteOut("HELP directives: state | screenshot | click <h|label:x> | press <h|x y> | getopt <pattern> | setopt <name|#id> <idx|on|off|~real> | forcerole <id|name|host|clear> [EnumName] | start | hostlobby | autostart <on|off> | tp <x> <y> | tp <playerId> | walk <x> <y> | walk <playerId> | walk stop | vote <playerId|skip> | overrule <targetId> [judgeId] | chat <text> | use <kill|vent|pet|ability|report|sabotage> | vent enter <id> | vent exit | errors [n] | grep <pattern> [n] | sleep <sec> | wait <phase=X|players=N|marker:text|join|arrived> [timeoutSec] | wait cancel | /<chatcommand>");
+            WriteOut("HELP directives: state | screenshot | click <h|label:x> | press <h|x y> | getopt <pattern> | setopt <name|#id> <idx|on|off|~real> | forcerole <id|name|host|clear> [EnumName] | start | hostlobby | autostart <on|off> | tp <x> <y> | tp <playerId> | walk <x> <y> | walk <playerId> | walk stop | vote <playerId|skip> | overrule <targetId> [judgeId] | chat <text> | use <kill|vent|pet|ability|report|sabotage> | vent enter <id> | vent exit | errors [n] | grep <pattern> [n] | bcensus | sleep <sec> | wait <phase=X|players=N|marker:text|join|arrived> [timeoutSec] | wait cancel | /<chatcommand>");
             return;
         }
 
@@ -2084,6 +2092,13 @@ public static class TestBridge
             }
         }
         catch { }
+    }
+
+    // ── Layer D3: Boehm census 手動発火 ──────────────────
+    private static void ExecuteBcensus()
+    {
+        MemCensus.RunNow("bridge");
+        WriteOut("OK bcensus snapshot written to Health.log (CENSUS/CENSUSTOP/CENSUSREF/BCENSUS/BCENSUSTOP)");
     }
 
     private static void ExecuteGrep(string rest)
