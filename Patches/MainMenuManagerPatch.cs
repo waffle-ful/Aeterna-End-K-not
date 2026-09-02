@@ -37,82 +37,66 @@ public static class MainMenuManagerPatch
         ShowingPanel = true;
     }
 
-    // ゲームモード選択を開くたびに、パネルの枠を落とす。MainMenuManager.Start の
-    // 一発だけでは足りない — TitleLogoPatch はメインメニューの構成物が見つからないと
-    // 途中で抜けるので、枠が残ったままここへ来る経路がある。
-    // 暗幕 (Tint) は Calamity メニューのときだけ伏せる。あれはバニラが設定/アカウント/
-    // クレジットの暗転にも使い回す共有オブジェクトで、常時殺すとそちらの演出まで消える。
-    // ロビーから戻ると親が MainUI 直下へ戻って掴んでおいた参照が古くなるため、毎回名前で取り直す。
+    // ゲームモード選択画面の見た目を整える。器の中身は
+    //   RightPanel / MaskedBlackScreen / { GameModeButtons | OnlineButtons | EnterCodeButtons }
+    // という並びで、MaskedBlackScreen が全画面共通の下敷き。
+    // ここで落とすのは「ローカル/オンラインを選ぶ画面」の飾りだけに限定する — 総当たりで
+    // 伏せると、まだ中身の入っていないオンライン画面の入れ物まで巻き込んで空白になる。
     [HarmonyPatch(typeof(MainMenuManager), nameof(MainMenuManager.OpenGameModeMenu))]
     [HarmonyPostfix]
     public static void HideRightPanelChrome()
     {
         try
         {
-            if (TitleLogoPatch.RightPanel != null)
-            {
-                var frame = TitleLogoPatch.RightPanel.GetComponent<SpriteRenderer>();
-                if (frame != null) frame.enabled = false;
-            }
+            Transform panel = TitleLogoPatch.RightPanel != null ? TitleLogoPatch.RightPanel.transform : null;
+            if (panel == null) return;
 
-            if (CalamityMenuState.Active)
-                GameObject.Find("Tint")?.SetActive(false);
-
-            // 器の装飾 (背景板・黒フチ・見出し・区切り線) は落として、押せるものだけ残す。
-            // 中身はバニラが遅れて組み立てることがあるので、直後ともう一度あとで掃く。
-            PruneRightPanelDecor();
-            LateTask.New(PruneRightPanelDecor, 0.3f, "Prune right panel decor", true);
-        }
-        catch (Exception ex) { Logger.Exception(ex, "MainMenuManagerPatch.HideRightPanelChrome"); }
-    }
-
-    private static void PruneRightPanelDecor()
-    {
-        if (TitleLogoPatch.RightPanel == null) return;
-
-        try
-        {
-            Transform panel = TitleLogoPatch.RightPanel.transform;
-
-            // 器そのものが持つ絵 (背景板・黒フチ) を落とす。
-            DisableOwnRenderers(panel);
+            // 器の枠。
+            var frame = panel.GetComponent<SpriteRenderer>();
+            if (frame != null) frame.enabled = false;
 
             // Calamity メニューでは BACK ボタンが閉じ手段なので、器の左に付くつまみは要らない。
             // バニラのメニューへ退避しているときは唯一の閉じ手段なので残す。
             if (CalamityMenuState.Active)
                 panel.Find("CloseRightPanelButton")?.gameObject.SetActive(false);
 
-            PruneDecor(panel);
+            // 見出し「プレイ」と、その下の区切り線。
+            panel.Find("MaskedBlackScreen/GameModeButtons/Header")?.gameObject.SetActive(false);
+            panel.Find("MaskedBlackScreen/GameModeButtons/Divider")?.gameObject.SetActive(false);
+
+            // 暗幕はロビーから戻ると親が MainUI 直下へ戻って参照が古くなるため、毎回名前で取り直す。
+            // バニラは設定/アカウント/クレジットの暗転にも使い回すので、Calamity のときだけ伏せる。
+            if (CalamityMenuState.Active)
+                GameObject.Find("Tint")?.SetActive(false);
         }
-        catch (Exception ex) { Logger.Exception(ex, "MainMenuManagerPatch.PruneRightPanelDecor"); }
+        catch (Exception ex) { Logger.Exception(ex, "MainMenuManagerPatch.HideRightPanelChrome"); }
     }
 
-    // ボタンが一つも無い枝は伏せる。ボタンを含む枝は残すが、その枝自身が持つ絵は落とす
-    // (タブを載せている台紙がそこにあるため)。ボタン自身の枝には入らない — 絵柄やラベルは
-    // ボタンの子なので、消すとタブが空になる。
-    private static void PruneDecor(Transform node)
+    // 下敷きはゲームモード選択のときだけ隠す。オンライン画面 (ゲーム作成/コード入力/検索) は
+    // 文字が多く下敷きが要るので、そちらへ移ったら戻す。画面の出し入れはバニラが握っていて
+    // 通知も無いので、毎フレーム現在の画面を見て決める。
+    private static float BackdropAlpha = -1f;
+
+    private static void UpdateRightPanelBackdrop()
     {
-        for (int i = 0; i < node.childCount; i++)
-        {
-            Transform child = node.GetChild(i);
+        Transform panel = TitleLogoPatch.RightPanel != null ? TitleLogoPatch.RightPanel.transform : null;
+        if (panel == null) return;
 
-            if (child.GetComponent<PassiveButton>() != null) continue;
+        Transform backdrop = panel.Find("MaskedBlackScreen");
+        if (backdrop == null) return;
 
-            if (child.GetComponentsInChildren<PassiveButton>(true).Length > 0)
-            {
-                DisableOwnRenderers(child);
-                PruneDecor(child);
-                continue;
-            }
+        var sr = backdrop.GetComponent<SpriteRenderer>();
+        if (sr == null) return;
 
-            child.gameObject.SetActive(false);
-        }
-    }
+        Color c = sr.color;
+        if (BackdropAlpha < 0f) BackdropAlpha = c.a;
 
-    private static void DisableOwnRenderers(Transform node)
-    {
-        foreach (SpriteRenderer sr in node.GetComponents<SpriteRenderer>()) sr.enabled = false;
-        foreach (TextMeshPro tmp in node.GetComponents<TextMeshPro>()) tmp.enabled = false;
+        Transform modes = backdrop.Find("GameModeButtons");
+        bool onModeScreen = modes != null && modes.gameObject.activeInHierarchy;
+
+        // renderer を切るのではなくアルファだけ 0 にする。描画そのものを止めると子の見え方まで変わる。
+        float want = onModeScreen ? 0f : BackdropAlpha;
+        if (!Mathf.Approximately(c.a, want)) sr.color = new Color(c.r, c.g, c.b, want);
     }
 
     [HarmonyPatch(typeof(MainMenuManager), nameof(MainMenuManager.Start))]
@@ -191,6 +175,8 @@ public static class MainMenuManagerPatch
         // RightPanel slide animation runs in both vanilla and Calamity modes —
         // Calamity Multiplayer button needs it to slide RightPanel in.
         if (GameObject.Find("MainUI") == null) ShowingPanel = false;
+
+        UpdateRightPanelBackdrop();
 
         if (TitleLogoPatch.RightPanel != null)
         {
