@@ -26,6 +26,12 @@ namespace EndKnot.Modules;
 //
 // 失敗時は元テクスチャに一切触らず (再初期化は小テクスチャ完成後にしか呼ばない)、Health.log に理由を残す。
 // メインメニュー到達ごとに再走査するが、既に圧縮形式になっているものは飛ばすので冪等。
+//
+// ⚠️ 実機結果 (2026-09-02・Windows/D3D11): ReinitializeWithTextureFormatImpl は非 readable テクスチャに対して
+// ネイティブ側でも false を返す (6 枚とも `reinit ok=False`、元は無傷)。この経路では削減できないため
+// 設定 SlimVanillaTextures は既定 OFF。残る手段は木槌演出そのものを縮小スプライトで自前再生し原本を
+// Resources.UnloadAsset する方式 (アニメクリップの再現が要る) で、必要になった時に別途設計する。
+// なお非 readable テクスチャは PC では GPU メモリのみに常駐するため、削減の主な受益者は Android ホスト。
 public static class TextureSlimmer
 {
     private static readonly string[] TargetPrefixes = ["hammerSlam_"];
