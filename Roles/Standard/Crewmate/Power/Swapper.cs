@@ -256,7 +256,7 @@ public class Swapper : RoleBase
         SwapMsg(pc, $"/sw {playerId}", true);
     }
 
-    private static void SwapperOnClick(byte playerId, MeetingHud __instance)
+    private static void SwapperOnClick(byte playerId)
     {
         Logger.Msg($"Click: ID {playerId}", "Swapper UI");
 
@@ -270,6 +270,9 @@ public class Swapper : RoleBase
 
         if (PlayerControl.LocalPlayer.GetCustomRole() == CustomRoles.Swapper && PlayerControl.LocalPlayer.IsAlive())
         {
+            MeetingHud __instance = MeetingHud.Instance;
+            if (!__instance) return;
+
             __instance.playerStates.ToList().ForEach(x =>
             {
                 Transform swapButton = x.transform.FindChild("ShootButton");
@@ -300,7 +303,7 @@ public class Swapper : RoleBase
 
             var button = targetBox.GetComponent<PassiveButton>();
             button.OnClick.RemoveAllListeners();
-            button.OnClick.AddListener((Action)(() => SwapperOnClick(pva.PlayerId, __instance)));
+            button.OnClick.AddListener((Action)(() => SwapperOnClick(pva.PlayerId)));
         }
     }
 
