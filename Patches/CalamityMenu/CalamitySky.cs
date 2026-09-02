@@ -105,7 +105,9 @@ public static class CalamitySky
         _spawnTimer = 0f;
         _nextSpawnDelay = Random.Range(0.3f, 1.2f);
         _lightningTimer = 0f;
-        _nextLightningDelay = Random.Range(6f, 14f);
+        // 初回だけ前詰め: メニューが出た直後の数秒に1回光らせて空が生きていることを見せる。
+        // 2回目以降は UpdateLightning 側の通常間隔 (8〜22秒) に戻る。
+        _nextLightningDelay = Random.Range(1.5f, 4f);
 
         BuildLightningQuad();
     }

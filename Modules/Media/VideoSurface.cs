@@ -27,6 +27,10 @@ public sealed class VideoSurface
     public bool IsActive { get; private set; }
     public bool Prepared { get; private set; }
 
+    /// <summary>ネイティブ側の準備が済んでいるか。<see cref="Prepared"/> は <see cref="Tick"/> が
+    /// 拾い上げて描画を始めた後に立つので、ポーリング前の進み具合を見たいときはこちらを使う。</summary>
+    public bool NativePrepared => _player != null && _player.isPrepared;
+
     private VideoPlayer _player;
     private RenderTexture _renderTexture;
     private Texture2D _videoTexture;
