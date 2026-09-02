@@ -2110,6 +2110,7 @@ public static class GameSettingMenuPatch
 
         while (GMButtons.Count > gms.Count)
         {
+            try { PurgeUnityEventListeners(GMButtons[^1]); } catch { /* Destroy 自体は必ず走らせる */ }
             Object.Destroy(GMButtons[^1]);
             GMButtons.RemoveAt(GMButtons.Count - 1);
         }
@@ -2557,17 +2558,32 @@ public static class GameSettingMenuPatch
             if (TemplateGameSettingsButton) keep.Add(TemplateGameSettingsButton.gameObject.GetInstanceID());
 
             var orphans = 0;
+            int orphanListeners = 0, orphanValueChanged = 0, orphanMenus = 0, orphanMats = 0;
             for (int i = TempParent.childCount - 1; i >= 0; i--)
             {
                 GameObject child = TempParent.GetChild(i).gameObject;
                 if (!keep.Contains(child.GetInstanceID()))
                 {
                     orphans++;
+                    try
+                    {
+                        (int l, int vc, int m, int mats) = PurgeUnityEventListeners(child);
+                        orphanListeners += l;
+                        orphanValueChanged += vc;
+                        orphanMenus += m;
+                        orphanMats += mats;
+                    }
+                    catch { /* Destroy 自体は必ず走らせる */ }
+
                     Object.Destroy(child);
                 }
             }
 
-            if (orphans > 0) Logger.Info($"orphan sweep: destroyed {orphans} unreferenced cached object(s)", "MenuLeak");
+            if (orphans > 0)
+            {
+                Logger.Info($"orphan sweep: destroyed {orphans} unreferenced cached object(s)", "MenuLeak");
+                Modules.HealthLog.Note($"UIPURGE src=orphan roots={orphans} listeners={orphanListeners} valueChanged={orphanValueChanged} menus={orphanMenus} mats={orphanMats} t={Utils.TimeStamp}");
+            }
         }
         catch (Exception e) { Logger.Warn($"orphan sweep failed: {e.Message}", "MenuLeak"); }
 
@@ -2711,12 +2727,13 @@ public static class GameSettingMenuPatch
     // GCHandle で固定し、target 側 (GameOptionsMenu ラッパー) が il2cpp ハンドルでメニューを固定する。
     // メニューは Children 経由で全行を保持し、各行の OnValueChanged がまたその管理デリゲートを指す —
     // どちらの UnityEvent 系処理にも触れないフィールドなので個別に null 化する。
-    private static (int Listeners, int ValueChanged, int Menus) PurgeUnityEventListeners(GameObject root)
+    internal static (int Listeners, int ValueChanged, int Menus, int Materials) PurgeUnityEventListeners(GameObject root, bool destroyMaterials = true)
     {
         int n = 0;
         int valueChanged = 0;
         int menus = 0;
-        if (!root) return (n, valueChanged, menus);
+        int mats = 0;
+        if (!root) return (n, valueChanged, menus, mats);
 
         try
         {
@@ -2799,7 +2816,49 @@ public static class GameSettingMenuPatch
         }
         catch (Exception e) { Logger.Warn($"purge listeners (GameOptionsMenu) failed: {e.Message}", "MenuLeak"); }
 
-        return (n, valueChanged, menus);
+        // Renderer.material のゲッターは共有マテリアルを複製して行ごとに新インスタンスを作る (バニラの
+        // SetHeader 等がネイティブ側でこれを叩く)。GameObject を Destroy しても Unity は instanced
+        // Material を自動回収しない (シーン遷移の UnloadUnusedAssets まで残る) ので、破棄経路側で
+        // 明示的に Destroy する。sharedMaterial/sharedMaterials は取得時にインスタンス化しないので
+        // 安全に走査でき、名前が "(Instance)" で終わる個体だけが複製済みマテリアル。
+        if (destroyMaterials)
+        {
+            try
+            {
+                var renderers = root.GetComponentsInChildren<Renderer>(true);
+                if (renderers != null)
+                {
+                    for (int i = 0; i < renderers.Length; i++)
+                    {
+                        Renderer r = renderers[i];
+                        if (r == null) continue;
+
+                        // TextMeshPro は自分のフォントマテリアル複製を OnDestroy で自前破棄する。先に壊すと
+                        // TMP が破棄済みマテリアルから再複製して逆に増えるので、TMP 保有の Renderer は触らない。
+                        if (r.GetComponent<TMP_Text>() != null) continue;
+
+                        // sharedMaterials[0] は sharedMaterial と同一個体なので、二重 Destroy/二重計上を避けるため
+                        // 配列側だけを走査する (単一マテリアルの Renderer でも要素 1 の配列が返る)。
+                        Material[] multi = r.sharedMaterials;
+                        if (multi != null)
+                        {
+                            for (int j = 0; j < multi.Length; j++)
+                            {
+                                Material m = multi[j];
+                                if (m != null && m.name.EndsWith("(Instance)"))
+                                {
+                                    Object.Destroy(m);
+                                    mats++;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception e) { Logger.Warn($"purge materials failed: {e.Message}", "MenuLeak"); }
+        }
+
+        return (n, valueChanged, menus, mats);
     }
 
     // root を数本ずつ Destroy して、フレーム末の子孫破棄コストを複数フレームへ分散する。
@@ -2845,6 +2904,7 @@ public static class GameSettingMenuPatch
         var listenersRemoved = 0;
         var valueChangedRemoved = 0;
         var menusCleared = 0;
+        var materialsDestroyed = 0;
 
         for (var i = 0; i < doomedRoots.Count; i++)
         {
@@ -2857,10 +2917,11 @@ public static class GameSettingMenuPatch
             {
                 try
                 {
-                    (int l, int vc, int m) = PurgeUnityEventListeners(doomedRoots[i]);
+                    (int l, int vc, int m, int mats) = PurgeUnityEventListeners(doomedRoots[i]);
                     listenersRemoved += l;
                     valueChangedRemoved += vc;
                     menusCleared += m;
+                    materialsDestroyed += mats;
                 }
                 catch (Exception e) { Logger.Warn($"purge listeners failed at root {i}: {e.Message}", "MenuLeak"); }
 
@@ -2882,7 +2943,7 @@ public static class GameSettingMenuPatch
         }
 
         // フレームごとの gap 分布: 太った root がどのバッチに居るかは、この列の突出値の位置で分かる。
-        Modules.HealthLog.Note($"UIPURGE end roots={doomedRoots.Count} frameGapsMs={frameGaps.ToString().TrimEnd(',')} listeners={listenersRemoved} valueChanged={valueChangedRemoved} menus={menusCleared} t={Utils.TimeStamp}");
+        Modules.HealthLog.Note($"UIPURGE end roots={doomedRoots.Count} frameGapsMs={frameGaps.ToString().TrimEnd(',')} listeners={listenersRemoved} valueChanged={valueChangedRemoved} menus={menusCleared} mats={materialsDestroyed} t={Utils.TimeStamp}");
         Modules.TransitionTimeline.Mark("UIPURGE:end");
         UiCachePurgeInFlight = false;
     }
