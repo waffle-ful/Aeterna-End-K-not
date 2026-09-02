@@ -37,6 +37,84 @@ public static class MainMenuManagerPatch
         ShowingPanel = true;
     }
 
+    // ゲームモード選択を開くたびに、パネルの枠を落とす。MainMenuManager.Start の
+    // 一発だけでは足りない — TitleLogoPatch はメインメニューの構成物が見つからないと
+    // 途中で抜けるので、枠が残ったままここへ来る経路がある。
+    // 暗幕 (Tint) は Calamity メニューのときだけ伏せる。あれはバニラが設定/アカウント/
+    // クレジットの暗転にも使い回す共有オブジェクトで、常時殺すとそちらの演出まで消える。
+    // ロビーから戻ると親が MainUI 直下へ戻って掴んでおいた参照が古くなるため、毎回名前で取り直す。
+    [HarmonyPatch(typeof(MainMenuManager), nameof(MainMenuManager.OpenGameModeMenu))]
+    [HarmonyPostfix]
+    public static void HideRightPanelChrome()
+    {
+        try
+        {
+            if (TitleLogoPatch.RightPanel != null)
+            {
+                var frame = TitleLogoPatch.RightPanel.GetComponent<SpriteRenderer>();
+                if (frame != null) frame.enabled = false;
+            }
+
+            if (CalamityMenuState.Active)
+                GameObject.Find("Tint")?.SetActive(false);
+
+            // 器の装飾 (背景板・黒フチ・見出し・区切り線) は落として、押せるものだけ残す。
+            // 中身はバニラが遅れて組み立てることがあるので、直後ともう一度あとで掃く。
+            PruneRightPanelDecor();
+            LateTask.New(PruneRightPanelDecor, 0.3f, "Prune right panel decor", true);
+        }
+        catch (Exception ex) { Logger.Exception(ex, "MainMenuManagerPatch.HideRightPanelChrome"); }
+    }
+
+    private static void PruneRightPanelDecor()
+    {
+        if (TitleLogoPatch.RightPanel == null) return;
+
+        try
+        {
+            Transform panel = TitleLogoPatch.RightPanel.transform;
+
+            // 器そのものが持つ絵 (背景板・黒フチ) を落とす。
+            DisableOwnRenderers(panel);
+
+            // Calamity メニューでは BACK ボタンが閉じ手段なので、器の左に付くつまみは要らない。
+            // バニラのメニューへ退避しているときは唯一の閉じ手段なので残す。
+            if (CalamityMenuState.Active)
+                panel.Find("CloseRightPanelButton")?.gameObject.SetActive(false);
+
+            PruneDecor(panel);
+        }
+        catch (Exception ex) { Logger.Exception(ex, "MainMenuManagerPatch.PruneRightPanelDecor"); }
+    }
+
+    // ボタンが一つも無い枝は伏せる。ボタンを含む枝は残すが、その枝自身が持つ絵は落とす
+    // (タブを載せている台紙がそこにあるため)。ボタン自身の枝には入らない — 絵柄やラベルは
+    // ボタンの子なので、消すとタブが空になる。
+    private static void PruneDecor(Transform node)
+    {
+        for (int i = 0; i < node.childCount; i++)
+        {
+            Transform child = node.GetChild(i);
+
+            if (child.GetComponent<PassiveButton>() != null) continue;
+
+            if (child.GetComponentsInChildren<PassiveButton>(true).Length > 0)
+            {
+                DisableOwnRenderers(child);
+                PruneDecor(child);
+                continue;
+            }
+
+            child.gameObject.SetActive(false);
+        }
+    }
+
+    private static void DisableOwnRenderers(Transform node)
+    {
+        foreach (SpriteRenderer sr in node.GetComponents<SpriteRenderer>()) sr.enabled = false;
+        foreach (TextMeshPro tmp in node.GetComponents<TextMeshPro>()) tmp.enabled = false;
+    }
+
     [HarmonyPatch(typeof(MainMenuManager), nameof(MainMenuManager.Start))]
     [HarmonyPatch(typeof(OptionsMenuBehaviour), nameof(OptionsMenuBehaviour.Open))]
     [HarmonyPatch(typeof(AnnouncementPopUp), nameof(AnnouncementPopUp.Show))]
