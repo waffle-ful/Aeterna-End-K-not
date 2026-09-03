@@ -1723,6 +1723,8 @@ public static class Options
 
         Patches.VentMinimapPatch.SetupCustomOption();
 
+        Modules.WordLimit.SetupCustomOption();
+
         BGMManager.SetupCustomOption();
 
         Modules.YouTubeChat.YouTubeChatOptions.SetupCustomOption();

@@ -9667,7 +9667,33 @@
   /* ==============================
     Word Limit
   ============================== */
+  "MenuTitle.WordLimit": "★ Word Limit ★",
+  "EnableWordLimit": "Enable speech restriction",
+  "WordLimitRule": "Restriction",
+  "WordLimitRule.NoHiragana": "No hiragana",
+  "WordLimitRule.NoKatakana": "No katakana",
+  "WordLimitRule.NoKanji": "No kanji",
+  "WordLimitRule.NoAlphabet": "No alphabet",
+  "WordLimitRule.RequiredWord": "Must include the required word (set with /wordlimit)",
+  "WordLimitPunishment": "Punishment",
+  "WordLimitPunishment.Warning": "Warning only",
+  "WordLimitPunishment.Death": "Death",
+  "WordLimitGraceCount": "Free passes before punishment",
+  "WordLimitMinLength": "Ignore messages shorter than this (characters)",
+  "WordLimitOnlyInMeeting": "Only enforce during meetings",
   "WordLimitExemptHost": "Never kill the host for this (still warned)",
+  "WordLimit.Forgiven": "<color=#ffff99>That broke the rule, but you're let off this time ({0} more free pass(es) left).</color>",
+  "WordLimit.Warned": "<color=#ff9999>That broke the speech restriction. Watch your words.</color>",
+  "WordLimit.WillDie": "<color=#ff4444>That broke the speech restriction. You'll die once this meeting ends.</color>",
+  "CommandForms.WordLimit": "wordlimit",
+  "CommandDescription.WordLimit": "Sets (or shows) the required word for the RequiredWord restriction.",
+  "CommandArgs.WordLimit.Word": "word",
+  "Message.WordLimitRequiredWordUnset": "No required word is set yet. Use /wordlimit <word> to set one.",
+  "Message.WordLimitRequiredWordCurrent": "Current required word: {0}",
+  "Message.WordLimitRequiredWordSet": "Required word set to: {0}",
+  /* ==============================
+    Coming Out
+  ============================== */
   ============================== */
   "Achievement.ALightInTheShadows": "A Light In The Shadows",
   "Achievement.ALightInTheShadows.Description": "Walk near the Beacon during the lights sabotage",
@@ -11061,6 +11087,7 @@
   "DeathReason.Stopped": "Stopped",
   "DeathReason.Erased": "Erased",
   "DeathReason.Censored": "Censored",
+  "DeathReason.WordLimit": "Broke The Rule",
   "DeathReason.Stung": "Stung",
   "DeathReason.Suicide": "Suicide",
   "DeathReason.Sunken": "Sunken",
