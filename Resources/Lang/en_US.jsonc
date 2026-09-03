@@ -308,6 +308,7 @@
   "MenuTitle.Sabotage": "★ Sabotage ★",
   "MenuTitle.Settings": "★ Settings ★",
   "MenuTitle.TaskSettings": "★ Task Management ★",
+  "MenuTitle.Whitelist": "★ Whitelist ★",
   "MessageTitle.Attention": "<#ff0000><#ffa500>⚠</color> ATTENTION! <#ffa500>⚠</color></color>",
   "MessengerTitle": "<#ff0000>Message from {0}</color>",
   "MimicMsgTitle": "★[ Mimic ]★",
@@ -9582,7 +9583,24 @@
   "AccurateCheckMode": "Can know specific role when tasks are not done",
   "YouMuted": "<#ffff00>You've been muted by <u>{0}</u> for <#ff0000>{1}</color> seconds.",
   /* ==============================
-    Achievements           
+    Whitelist
+  ============================== */
+  "EnableWhitelist": "Enable join whitelist",
+  "WhitelistKickNonListed": "Kick players who aren't on the whitelist",
+  "WhitelistExemptModerators": "Exempt moderators from the whitelist",
+  "Message.KickedByWhitelist": "{0} was kicked because they aren't on the whitelist.",
+  "Message.WhitelistNotifyOnly": "{0} isn't on the whitelist (notify-only, not kicked).",
+  "Message.WhitelistListEmpty": "The whitelist is empty.",
+  "Message.WhitelistListTitle": "<color=#00c1ff>Whitelist</color>",
+  "Message.WhitelistReloaded": "Whitelist reloaded from disk.",
+  "Message.WhitelistTargetNotFound": "Couldn't find that player.",
+  "Message.WhitelistAddedByFriendCode": "Added {0} to the whitelist (friend code {1}).",
+  "Message.WhitelistAddedByPuid": "{0} has no friend code, so they were added by account ID ({1}) instead.",
+  "Message.WhitelistAddFailed": "Couldn't read that player's friend code or device ID.",
+  "Message.WhitelistRemoved": "Removed from the whitelist.",
+  /* ==============================
+    Consecutive-Join Kick
+  ============================== */
   ============================== */
   "Achievement.ALightInTheShadows": "A Light In The Shadows",
   "Achievement.ALightInTheShadows.Description": "Walk near the Beacon during the lights sabotage",
@@ -10304,6 +10322,7 @@
   "CommandDescription.Exo": "Cast an exorcism as the Exorcist, killing anyone who sends a chat message during the effect",
   "CommandDescription.Fabricate": "Set a fake death reason for your next kill as the Fabricator",
   "CommandDescription.Abort": "Forcibly ends the current game in a draw (chat version of Shift+L+Enter). For when the game is stuck.",
+  "CommandDescription.Whitelist": "Manages the join whitelist: list, add, remove or reload.",
   "CommandDescription.Fix": "Fixes the black screen bug for a specific player.",
   "CommandDescription.Forge": "As the Forger, forge a fake role for a player.",
   "CommandDescription.GiveKill": "Grant a player the ability to kill in the lobby.",
@@ -10472,6 +10491,7 @@
   "CommandForms.Exo": "exo",
   "CommandForms.Fabricate": "fabricate",
   "CommandForms.Abort": "abort,forceend,fe,haison",
+  "CommandForms.Whitelist": "wl,whitelist",
   "CommandForms.Fix": "fix,blackscreenfix,fixblackscreen",
   "CommandForms.Forge": "forge",
   "CommandForms.GiveKill": "givekill,gk",

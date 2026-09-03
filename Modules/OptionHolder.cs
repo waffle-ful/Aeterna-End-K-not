@@ -1709,6 +1709,8 @@ public static class Options
         ApplyVIPList = new BooleanOptionItem(19306, "ApplyVIPList", true, TabGroup.SystemSettings);
         ApplyAdminList = new BooleanOptionItem(19330, "ApplyAdminList", true, TabGroup.SystemSettings);
 
+        Modules.WhitelistManager.SetupCustomOption();
+
         BGMManager.SetupCustomOption();
 
         Modules.YouTubeChat.YouTubeChatOptions.SetupCustomOption();
