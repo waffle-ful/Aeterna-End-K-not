@@ -1959,6 +1959,42 @@ internal static class MeetingHudHandleRpcPatch
             byte srcPlayerId = reader.ReadByte();
             byte suspectRaw = reader.ReadByte();
             Logger.Info($"HandleRpc CastVote: src={srcPlayerId}, suspectRaw={suspectRaw}, remaining={reader.BytesRemaining}", "MeetingHudHandleRpcPatch");
+
+            // MeetingHud は共有 NetId なので、この経路の srcPlayerId は送信者の自己申告でしかなく、
+            // 受信層に送信者 identity が無いため照合できない。細工された srcPlayerId は
+            // HandleCastVote 経由で他人の Role.OnVote を代理起動できてしまうので、帰結が最も重い
+            // 2 つだけを拒否する。キック/BAN は付けない — 状態不整合を踏んだ正規クライアントを巻き込むため。
+
+            // ホストの票は CmdCastVote でローカル処理され、この RPC には乗らない
+            if (PlayerControl.LocalPlayer && srcPlayerId == PlayerControl.LocalPlayer.PlayerId)
+            {
+                Logger.Warn($"Rejected CastVote claiming to be the host (src={srcPlayerId})", "MeetingHudHandleRpcPatch");
+                return false;
+            }
+
+            PlayerVoteArea pvaSrc = null;
+            PlayerVoteArea[] states = __instance.playerStates;
+
+            if (states != null)
+            {
+                foreach (PlayerVoteArea pva in states)
+                {
+                    if (pva.PlayerId == srcPlayerId)
+                    {
+                        pvaSrc = pva;
+                        break;
+                    }
+                }
+            }
+
+            // 投票済みの票を流し込み直すと Role.OnVote が再起動する。キャンセルされた票は
+            // CleanupCanceledVote の UnsetVote() で DidVote が戻るため、正規の投票し直しは通る
+            if (pvaSrc && pvaSrc.DidVote)
+            {
+                Logger.Warn($"Rejected CastVote from a player who already voted (src={srcPlayerId})", "MeetingHudHandleRpcPatch");
+                return false;
+            }
+
             MeetingHudCastVotePatch.CastVoteChecked(__instance, srcPlayerId, suspectRaw);
             return false;
         }

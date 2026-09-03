@@ -22,6 +22,10 @@ public static class MeetingTargetPicker
     // 将来 WantsButton に足したとき、復帰値が他処理との実行順まかせになるのを防ぐ)。
     private static readonly Dictionary<byte, RoleTypes> Snapshot = [];
 
+    // この会議で押下を受理済みの保持者。バニラ側の「1 会議 1 回」はクライアント UI のロックなので、
+    // 受信層に送信者の identity が無いこの経路には効かない。ホスト側でも同じ上限を掛ける。
+    private static readonly HashSet<byte> Consumed = [];
+
     // PlayerGameOptionsSender がタスクゲートを 0 にする対象。
     public static bool IsHolder(byte playerId)
     {
@@ -62,11 +66,13 @@ public static class MeetingTargetPicker
     public static void Reset()
     {
         Snapshot.Clear();
+        Consumed.Clear();
     }
 
     public static void OnMeetingStart()
     {
         Snapshot.Clear();
+        Consumed.Clear();
 
         if (!Enabled || !AmongUsClient.Instance.AmHost || GameStates.IsEnded) return;
 
@@ -139,6 +145,15 @@ public static class MeetingTargetPicker
         PlayerControl target = Utils.GetPlayerById(targetId);
         if (!judge || !target || !judge.IsAlive()) return;
         if (Starspawn.IsDayBreak) return;
+
+        // 検証を全て通った押下だけを消費する (無効なペイロードで正規の押下権を奪えないようにするため、
+        // 判定はここまで下げる)。裁判の帰結は対象次第で保持者の自決にも第三者の処刑にもなるため、
+        // 自己対象の拒否だけでは足りず、回数そのものを関所にする。
+        if (!Consumed.Add(judgeId))
+        {
+            Logger.Warn($"Rejected repeated overrule payload (id {judgeId})", "MeetingTargetPicker");
+            return;
+        }
 
         Logger.Info($"{judge.GetNameWithRole()} picked {target.GetNameWithRole()} via the meeting button", "MeetingTargetPicker");
 

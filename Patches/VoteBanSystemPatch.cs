@@ -14,8 +14,12 @@ internal static class CmdAddVotePatch
 
         PlayerControl pc = PlayerControl.LocalPlayer;
         PlayerControl target = Utils.GetClientById(clientId)?.Character;
-        if (target != null) Main.PlayerStates[pc.PlayerId].Role.OnVoteKick(pc, target);
-        Logger.Info($" {pc.GetNameWithRole()} => {target.GetNameWithRole()}", "VoteKick");
+
+        if (target != null)
+        {
+            Main.PlayerStates[pc.PlayerId].Role.OnVoteKick(pc, target);
+            Logger.Info($" {pc.GetNameWithRole()} => {target.GetNameWithRole()}", "VoteKick");
+        }
 
         return false;
     }
@@ -28,10 +32,16 @@ internal static class AddVotePatch
     {
         if (!AmongUsClient.Instance.AmHost) return true;
 
+        // srcClient は共有 NetId 経由で届くペイロードの自己申告で、受信層に送信者の identity が無い。
+        // 実体解決に失敗した場合まで先へ進めない (ログ行も含めて null 参照させない)。
         PlayerControl pc = Utils.GetClientById(srcClient)?.Character;
         PlayerControl target = Utils.GetClientById(clientId)?.Character;
-        if (pc != null && target != null) Main.PlayerStates[pc.PlayerId].Role.OnVoteKick(pc, target);
-        Logger.Info($" {pc.GetNameWithRole()} => {target.GetNameWithRole()}", "VoteKick");
+
+        if (pc != null && target != null)
+        {
+            Main.PlayerStates[pc.PlayerId].Role.OnVoteKick(pc, target);
+            Logger.Info($" {pc.GetNameWithRole()} => {target.GetNameWithRole()}", "VoteKick");
+        }
 
         if (AmongUsClient.Instance.ClientId == srcClient || __instance != VoteBanSystem.Instance) return false;
 
