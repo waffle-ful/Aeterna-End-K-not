@@ -9061,6 +9061,12 @@
   /* ==============================
     Device Time Limit
   ============================== */
+  "MenuTitle.NumericOptionInput": "★ 数値の直接入力 ★",
+  "EnableNumericOptionInput": "数値オプションの値を直接入力できるボタンを出す",
+  "NumericOptionInput.ParseError": "数値として認識できませんでした。",
+  /* ==============================
+    Vent Network Map
+  ============================== */
   "WordLimitExemptHost": "ホストだけは死亡させない (警告は入る)",
   ============================== */
   "Achievement.ALightInTheShadows": "<size=75%>陰に潜む光</size>",
