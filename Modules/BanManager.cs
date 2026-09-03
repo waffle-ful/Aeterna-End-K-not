@@ -87,6 +87,15 @@ public static class BanManager
         return reader.ReadToEnd();
     }
 
+    // GetHashedPuid hashes even an empty/short ProductUserId into a stable-looking string, so callers
+    // that use the hash as an identity key (whitelist/rejoin-tracking) must check this first —
+    // otherwise every client with no real PUID (seen on Modded/Custom servers, cf. CheckBanPlayer below)
+    // collapses onto the same key.
+    public static bool HasValidPuid(this ClientData player)
+    {
+        return player != null && !player.ProductUserId.IsNullOrWhiteSpace() && player.ProductUserId.Length == 32;
+    }
+
     public static string GetHashedPuid(this ClientData player)
     {
         if (player == null) return string.Empty;
