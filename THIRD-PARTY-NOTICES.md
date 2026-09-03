@@ -18,6 +18,17 @@ End K not 本体は GPL-3.0 です（[`LICENSE`](./LICENSE)）。以下は別の
 | Mini.RegionInstall | miniduikboot — [Mini.RegionInstall](https://github.com/miniduikboot/Mini.RegionInstall) | GPL-3.0 | release packages (`BepInEx/plugins`) |
 | CrowdedMod | andry08 & CrowdedMods — [CrowdedMod](https://github.com/CrowdedMods/CrowdedMod) | MIT | source, adapted in `Patches/Crowded.cs` |
 | MiraAPI (UI sprites) | All-Of-Us-Mods — [MiraAPI](https://github.com/All-Of-Us-Mods/MiraAPI) | LGPL-2.1 | `Resources/Images/`: `ActiveNextButton.png`, `InactiveNextButton.png`, `Checkmark.png`, `CheckMarkBox.png` |
+| TownOfHost-Pko | satokazoku et al. — [TownOfHost-Pko](https://github.com/satokazoku/TownOfHost-Pko) | GPL-3.0 | source, adapted in `Patches/NumericOptionInputPatch.cs` and `Modules/ConsecutiveJoinKick.cs` |
+| Lotus (LotusContinued) | Lotus-AU — [LotusContinued](https://github.com/Lotus-AU/LotusContinued) | GPL-3.0 | source, adapted in `Modules/WhitelistManager.cs` |
+
+The GPL-3.0 entries above are ported source rather than bundled binaries. End K not is itself
+GPL-3.0, so those files stay under the same license; the full text is in [`LICENSE`](./LICENSE).
+Features that were rewritten from scratch after reading another mod, rather than adapted from its
+source, are credited in the README credit list instead of this table.
+
+上表の GPL-3.0 の項目は、同梱バイナリではなくソースコードの移植です。本体も GPL-3.0 なので
+ライセンスはそのまま引き継がれます（全文は [`LICENSE`](./LICENSE)）。他 Mod を参考にしつつ
+書き起こした機能は、この表ではなく README のクレジット一覧に記載しています。
 
 Bundled audio, sound-effect and video assets are credited in [`README.md`](./README.md#クレジット) /
 [`README-EN.md`](./README-EN.md#credits).

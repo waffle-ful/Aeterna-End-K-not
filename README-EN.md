@@ -216,7 +216,8 @@ End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/End
 - **[CrowdedMod](https://github.com/CrowdedMods/CrowdedMod)** (andry08 / CrowdedMods, MIT) — large-lobby support
 - **[Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles)** (Gurge44 et al., GPL-3.0) — base mod: the role engine, the large majority of roles, and an ongoing source of bug fixes
 - **[ExtremeRoles](https://github.com/yukieiji/ExtremeRoles)** (yukieiji) — Assassin, Merlin, Airship patches
-- **[Lotus (LotusContinued)](https://github.com/NikoCat233/LotusContinued)** (GPL-3.0) — reference for the main menu rework, object helper code, ideas for Alchemist / Chameleon / Escapist / Necromancer / Deathknight / Romantic and its variants / Vengeance, auto play again, some tab icons
+- **[Lotus (LotusContinued)](https://github.com/Lotus-AU/LotusContinued)** / [NikoCat233 fork](https://github.com/NikoCat233/LotusContinued) (GPL-3.0) — reference for the main menu rework, object helper code, ideas for Alchemist / Chameleon / Escapist / Necromancer / Deathknight / Romantic and its variants / Vengeance, auto play again, some tab icons, settings-conflict detection with host warnings, whitelist join restriction
+- **[MalumMenu](https://github.com/scp222thj/MalumMenu)** (scp222thj, GPL-3.0) — player position dots on the minimap (cited by Town Of Next: Edited as a source for its vent map)
 - **[Mini.RegionInstall](https://github.com/miniduikboot/Mini.RegionInstall)** (miniduikboot, GPL-3.0) — custom region installer (shipped in the release packages)
 - **[MiraAPI](https://github.com/All-Of-Us-Mods/MiraAPI)** (All-Of-Us-Mods, LGPL-2.1) — role info tab code, UI sprites (two next-page buttons, two checkmarks), double task panel
 - **[More Gamemodes](https://github.com/Rabek009/MoreGamemodes)** (Rabek009) — Custom Net Objects (CNO), chat control and clearing, ShipStatus and vote/ejection handling, vent interaction blocking, main menu image code
@@ -225,26 +226,28 @@ End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/End
 - **[Revolutionary Host Roles](https://github.com/sansaaaaai/Revolutionary-host-roles)** (sansaaaaai) — settings menu rework, custom buttons, Reloader, Staff, Incender
 - **[Stellar Roles](https://github.com/Mr-Fluuff/StellarRolesAU)** (Mr-Fluuff) — many role ideas, some custom button images
 - **[Submerged](https://github.com/SubmergedAmongUs/Submerged)** (SubmergedAmongUs) — map select button handling for Submerged
-- **[SuperNewRoles](https://github.com/SuperNewRoles/SuperNewRoles)** (SuperNewRoles team, GPL-3.0) — WaveCannon, credentials display, switch horse mode, search mod game, custom buttons, Libra, Meeting Sheriff, Toilet Fan, Evil Gambler, Penguin, Mad Suicide
+- **[SuperNewRoles](https://github.com/SuperNewRoles/SuperNewRoles)** / [ykundesu repo](https://github.com/ykundesu/SuperNewRoles) (SuperNewRoles team, GPL-3.0) — WaveCannon, credentials display, switch horse mode, search mod game, custom buttons, Libra, Meeting Sheriff, Toilet Fan, Evil Gambler, Penguin, Mad Suicide
 - **[template-unity](https://github.com/vpmedia/template-unity)** (vpmedia, MIT) — reference for the Mersenne Twister implementation
 - **[TheOtherRoles](https://github.com/TheOtherRolesAU/TheOtherRoles)** — Camouflager, Guesser, and more
 - **[TheOtherRoles-GM](https://github.com/yukinogatari/TheOtherRoles-GM)** (yukinogatari) — several roles
 - **TOR_GM_Haoming_Edition** — Evil Tracker, Schrödinger's Cat, and more
 - **[TOHEX / TONEX](https://github.com/TOHEX-Official/TownOfHostEdited-Xi)** — Swapper, storing message history
-- **[TOU-Mira](https://github.com/AU-Avengers/TOU-Mira)** (AU-Avengers, GPL-3.0) — dleks map selection, kill button cooldown display, HudManager work, role info tab
+- **[TOU-Mira](https://github.com/AU-Avengers/TOU-Mira)** (AU-Avengers, GPL-3.0) — dleks map selection, kill button cooldown display, HudManager work, role info tab; also cited by Town Of Next: Edited as a source for its vent network map
 - **[Town Of Host](https://github.com/tukasa0001/TownOfHost)** (tukasa0001 et al.) — the root of the whole lineage; random spawn and sabotage handling
 - **[Town Of Host-H](https://github.com/Hyz-sui/TownOfHost-H)** (Hyz-sui) — reference for the 10.24 update
-- **[Town Of Host-K](https://github.com/KYMario/TownOfHost-K)** (KYMario et al., GPL-3.0) — source of many ported roles, streaming-support features, the official-server packet-splitting safety net
+- **[Town Of Host-K](https://github.com/KYMario/TownOfHost-K)** (KYMario et al., GPL-3.0) — source of many ported roles, streaming-support features, the official-server packet-splitting safety net, device usage time limits
 - **[Town Of Host Re-Edited](https://github.com/Loonie-Toons/)** — EHR's fork origin; PhantomRolePatch
-- **[Town Of Host_ForE](https://github.com/AsumuAkaguma/TownOfHost_ForE)** (AsumuAkaguma) — BGM customization, part of the comment-fetching code
+- **[Town Of Host_ForE](https://github.com/AsumuAkaguma/TownOfHost_ForE)** (AsumuAkaguma, GPL-3.0) — BGM customization, part of the comment-fetching code, chat character-type restriction (WordLimit), meeting start reason notification
 - **[Town Of Host_Y](https://github.com/Yumenopai/TownOfHost_Y)** (Yumenopai) — AntiAdminer / CursedWolf / Workaholic / Greedy / Stalker / Ignitor / Rabbit, role display during meetings and meeting extensions, attribute names, game announcement changes, settings UI, role basis changing mid-game
-- **[Town of Host: Enhanced (TOHE)](https://github.com/EnhancedNetwork/TownofHost-Enhanced)** (The Enhanced Network team) — many roles, various patches
-- **[Town Of Host Edited / Town Of Next](https://github.com/KARPED1EM/TownOfNext)** (KARPED1EM) — EHR is a continuation of TOHE; chat message character limit, main menu animations, input patches, text box
+- **[Town of Host: Enhanced (TOHE)](https://github.com/EnhancedNetwork/TownofHost-Enhanced)** (The Enhanced Network team, GPL-3.0) — many roles, various patches, friend-code matching on join
+- **[Town Of Host Edited / Town Of Next](https://github.com/KARPED1EM/TownOfNext)** / [TownOfHostEdited](https://github.com/KARPED1EM/TownOfHostEdited) / [TownOfNext](https://github.com/TownOfNext/TownOfNext) (KARPED1EM, GPL-3.0) — EHR is a continuation of TOHE; chat message character limit, main menu animations, input patches, text box; also cited by Town Of Next: Edited as a source for its vent network map
+- **[Town Of Next: Edited (TONE)](https://github.com/qin-qwq/TownofNext-Edited)** (qin-qwq, GPL-3.0) — vent network map display. TONE itself cites [TownOfNext](https://github.com/TownOfNext/TownOfNext), [TOU-Mira](https://github.com/AU-Avengers/TOU-Mira) and [MalumMenu](https://github.com/scp222thj/MalumMenu) as sources for this feature
 - **[Town-Of-Moss](https://github.com/Koke1024/Town-Of-Moss)** (Koke1024) — reactor meltdown boost
 - **[Town Of Us - Reactivated](https://github.com/eDonnes124/Town-Of-Us-R)** (eDonnes124, GPL-3.0) — the Submerged compatibility layer, host meeting display
 - **[TownOfHost-Optimized](https://github.com/Limeau/TownofHost-Optimized)** (Limeau) — role ideas (Tank, Deadlined, Journalist, Grappler, Negotiator, Hypnotist, etc.)
-- **[TownOfHost-Pko](https://github.com/satokazoku/TownOfHost-Pko)** (satokazoku et al., GPL-3.0) — source of many ported roles, WaveCannon design reference
-- **[TownOfHost-TheOtherRoles](https://github.com/music-discussion/TownOfHost-TheOtherRoles)** (music-discussion) — many role ideas, exile confirm, split RPC packs
+- **[TownOfHost-Pko](https://github.com/satokazoku/TownOfHost-Pko)** (satokazoku et al., GPL-3.0) — source of many ported roles, WaveCannon design reference, direct numeric input for settings, consecutive-join kick, auto abort
+- **[TownOfHost-TheOtherRoles](https://github.com/music-discussion/TownOfHost-TheOtherRoles)** / [discus-sions repo](https://github.com/discus-sions/TownOfHost-TheOtherRoles) (music-discussion) — many role ideas, exile confirm, split RPC packs
+- **[TownOfHost-hamo](https://github.com/rar006/TownOfHost-hamo)** (rar006, GPL-3.0) — coming-out feature (`/co`, `/aco`, `/colist`)
 - **[TownOfHostPlus](https://github.com/SkullCreeper/TownOfHostPlus)** (SkullCreeper) — Marshall / Poisoner / Necroview / Sidekick
 - **[TownOfPlus](https://github.com/tugaru1975/TownOfPlus)** (tugaru1975) — zoom
 - **[UnityDoorstop](https://github.com/NeighTools/UnityDoorstop)** (NeighTools, LGPL-2.1) — `winhttp.dll` / `doorstop_config.ini` used for packaging
