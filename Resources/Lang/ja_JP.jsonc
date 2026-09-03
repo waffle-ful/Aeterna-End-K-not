@@ -294,6 +294,7 @@
   "MeetingManagerMessageTitle": "★ 会議マネージャー ★",
   "MenuTitle.AFKDetection": "★ AFK 検出 ★",
   "MenuTitle.AGMR.RandomGroup": "ランダムグループ {index}",
+  "MenuTitle.AutoAbort": "★ 自動廃村 ★",
   "MenuTitle.AutoFactionMinMaxSettings": "★ 陣営の自動サイズ ★",
   "MenuTitle.AutoGMRotation": "★ ゲームモード 自動切替 ★",
   "MenuTitle.CTA": "★ カスタム チームの割り当て ★",
@@ -9025,6 +9026,15 @@
   "Message.KickPreviousResult": "ロビーに残っていた前回参加者を {0} 人キックしました。",
   /* ==============================
     Auto-Abort
+  ============================== */
+  "EnableAutoAbort": "試合が成立しなくなったら自動で廃村する",
+  "AutoAbortDisconnectCount": "自動廃村までの生存者切断数",
+  "AutoAbortMinAlivePlayers": "生存者がこの人数を下回ったら自動廃村 (0で無効)",
+  "AutoAbortDelaySeconds": "自動廃村が実行されるまでの待機時間",
+  "AutoAbortNotifyBeforeAbort": "自動廃村の前に全員へ知らせる",
+  "Message.AutoAbortNotice": "<color=#ffaa00>切断者が多いため、まもなくこの試合は自動的に廃村されます。</color>",
+  /* ==============================
+    Option Sanity Check
   ============================== */
   "WordLimitExemptHost": "ホストだけは死亡させない (警告は入る)",
   ============================== */
