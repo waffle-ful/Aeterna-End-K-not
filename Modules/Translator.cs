@@ -7,6 +7,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace EndKnot;
 
@@ -14,6 +15,14 @@ public static class Translator
 {
     private const string LanguageFolderName = "Language";
     private static Dictionary<string, Dictionary<int, string>> TranslateMaps;
+
+    // 遅延ロード: 起動時は英語 (+ その時点で決まる実効言語) だけ読み、他の埋込jsoncはDictionary化しない。
+    // プラグイン Load 時点では TranslationController が未生成なので、実際のUI言語は最初の GetString 参照時に
+    // 1本だけ同期ロードされる (実機 ja_JP 12577 キーで 32ms)。索引はリソース名だけを持つ。
+    private static readonly Regex LanguageIdHeaderRegex = new("\"LanguageID\"\\s*:\\s*\"(\\d+)\"", RegexOptions.Compiled);
+    private static Dictionary<int, string> LangResourceByLangId = [];
+    private static HashSet<int> LoadedLangs = [];
+    private static readonly object LangLoadLock = new();
 
     // EKN 役職コードの実行時名前上書き (例: "EkmCustomRole1" → 定義側の name)。
     // 言語別データは持たず、英語スロットに書くだけで GetString の「その言語で無ければ英語へフォールバック」
@@ -49,6 +58,12 @@ public static class Translator
 
     public static void LoadLangs()
     {
+        // 再読込 (F5+T) では、セッション中に参照済みだった言語も落とさず読み直す。
+        int[] previouslyLoaded = LoadedLangs.ToArray();
+        TranslateMaps = [];
+        LoadedLangs = [];
+        LangResourceByLangId = [];
+
         try
         {
             // Get the directory containing the JSON files (e.g., EndKnot.Resources.Lang)
@@ -57,50 +72,38 @@ public static class Translator
             var assembly = Assembly.GetExecutingAssembly();
             string[] jsonFileNames = GetJsonFileNames(assembly, jsonDirectory);
 
-            TranslateMaps = [];
-
             if (jsonFileNames.Length == 0)
             {
                 Logger.Warn("Json Translation files does not exist.", "Translator");
-                return;
             }
-
-            foreach (string jsonFileName in jsonFileNames)
+            else
             {
-                using Stream resourceStream = assembly.GetManifestResourceStream(jsonFileName);
-                if (resourceStream == null) continue;
-
-                try
+                // Only the LanguageID is needed up front, so peek the stream head instead of
+                // deserializing all 21 embedded jsonc files (this is what used to keep ~30MB
+                // of unused language tables resident for the whole session).
+                byte[] headerBuffer = new byte[512];
+                foreach (string jsonFileName in jsonFileNames)
                 {
-                    // actually you can directly deserialize from resource stream
-                    var jsonDictionary = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(
-                        resourceStream,
-                        JsoncOptions);
-
-                    if (jsonDictionary == null)
+                    try
                     {
-                        Logger.Warn($"Failed to deserialize JSON file: {jsonFileName}. Is it a vaild jsonc?", "Translator");
-                        continue;
-                    }
+                        using Stream headStream = assembly.GetManifestResourceStream(jsonFileName);
+                        if (headStream == null) continue;
 
-                    // read LanguageID
-                    if (!jsonDictionary.TryGetValue("LanguageID", out var langElem) ||
-                        !int.TryParse(langElem.GetString(), out int languageId))
+                        int read = headStream.Read(headerBuffer, 0, headerBuffer.Length);
+                        string headText = Encoding.UTF8.GetString(headerBuffer, 0, read);
+                        Match m = LanguageIdHeaderRegex.Match(headText);
+                        if (!m.Success)
+                        {
+                            Logger.Warn($"Invalid JSON format in {jsonFileName}: Missing or invalid 'LanguageID' field near file head.", "Translator");
+                            continue;
+                        }
+
+                        LangResourceByLangId[int.Parse(m.Groups[1].Value)] = jsonFileName;
+                    }
+                    catch (Exception ex)
                     {
-                        Logger.Warn($"Invalid JSON format in {jsonFileName}: Missing or invalid 'LanguageID' field.", "Translator");
-                        continue;
+                        Logger.Error($"Error indexing {jsonFileName}: {ex}", "Translator");
                     }
-
-                    jsonDictionary.Remove("LanguageID");
-
-                    // We expect every element in the jsonc file is a string value.
-                    // But just in case someone added a number or other stuff in it,
-                    // we put a check in the MergeJsonIntoTranslationMap function.
-                    MergeJsonIntoTranslationMap(TranslateMaps, languageId, jsonDictionary);
-                }
-                catch (Exception ex)
-                {
-                    Logger.Error($"Error parsing {jsonFileName}: {ex}", "Translator");
                 }
             }
         }
@@ -109,8 +112,33 @@ public static class Translator
         // Loading custom translation files
         if (!Directory.Exists($"{Main.DataPath}/{LanguageFolderName}")) Directory.CreateDirectory($"{Main.DataPath}/{LanguageFolderName}");
 
-        try { OriginalRoleNames = Main.CustomRoleValues.ToDictionary(x => x, x => Enum.GetValues<SupportedLangs>().ToDictionary(s => s, s => GetString($"{x}", s))); }
+        try { OriginalRoleNames = Main.CustomRoleValues.ToDictionary(x => x, x => new Dictionary<SupportedLangs, string>()); }
         catch (Exception e) { Utils.ThrowException(e); }
+
+        SupportedLangs effectiveLang = SupportedLangs.English;
+        try
+        {
+            int modLanguageId = Options.IsLoaded ? Options.ModLanguage.GetValue() : 0;
+            if (modLanguageId != 0)
+                effectiveLang = (SupportedLangs)(modLanguageId + 99);
+            else if (Main.ForceOwnLanguage.Value)
+                effectiveLang = GetUserTrueLang();
+            else
+                effectiveLang = TranslationController.InstanceExists
+                    ? TranslationController.Instance.currentLanguage.languageID
+                    : SupportedLangs.English;
+        }
+        catch { effectiveLang = SupportedLangs.English; }
+
+        LoadLangResource((int)SupportedLangs.English);
+        LoadLangResource((int)effectiveLang);
+        foreach (int langId in previouslyLoaded) LoadLangResource(langId);
+
+        if (Main.LoadAllLanguages?.Value == true)
+        {
+            foreach (int langId in LangResourceByLangId.Keys.ToList())
+                LoadLangResource(langId);
+        }
 
         // Creating a translation template
         CreateTemplateFile();
@@ -120,9 +148,88 @@ public static class Translator
             if (File.Exists($"{Main.DataPath}/{LanguageFolderName}/{lang}.dat"))
             {
                 UpdateCustomTranslation($"{lang}.dat" /*, lang*/);
-                LoadCustomTranslation($"{lang}.dat", lang);
+                if (LoadedLangs.Contains((int)lang))
+                    LoadCustomTranslation($"{lang}.dat", lang);
             }
         }
+
+        try { Logger.Info($"Translator: languages loaded=[{string.Join(",", LoadedLangs.OrderBy(x => x))}] deferred={LangResourceByLangId.Count - LoadedLangs.Count}", "Translator"); }
+        catch { }
+    }
+
+    // 起動時に読まなかった言語を初回参照時に1本だけ読む。TranslateMaps へ merge した後は
+    // 通常の GetString(str, SupportedLangs) 経路にそのまま乗る。
+    private static void LoadLangResource(int langId)
+    {
+        lock (LangLoadLock)
+        {
+            if (LoadedLangs.Contains(langId)) return;
+
+            if (!LangResourceByLangId.TryGetValue(langId, out string resourceName))
+            {
+                LoadedLangs.Add(langId);
+                try { Logger.Warn($"Translator: no language resource indexed for langId={langId}", "Translator"); } catch { }
+                return;
+            }
+
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            try
+            {
+                var assembly = Assembly.GetExecutingAssembly();
+                using Stream resourceStream = assembly.GetManifestResourceStream(resourceName);
+                if (resourceStream == null)
+                {
+                    LoadedLangs.Add(langId);
+                    return;
+                }
+
+                var jsonDictionary = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(
+                    resourceStream,
+                    JsoncOptions);
+
+                if (jsonDictionary == null)
+                {
+                    Logger.Warn($"Failed to deserialize JSON file: {resourceName}. Is it a vaild jsonc?", "Translator");
+                    LoadedLangs.Add(langId);
+                    return;
+                }
+
+                jsonDictionary.Remove("LanguageID");
+
+                // We expect every element in the jsonc file is a string value.
+                // But just in case someone added a number or other stuff in it,
+                // we put a check in the MergeJsonIntoTranslationMap function.
+                MergeJsonIntoTranslationMap(TranslateMaps, langId, jsonDictionary);
+                LoadedLangs.Add(langId);
+
+                SupportedLangs lang = (SupportedLangs)langId;
+                if (OriginalRoleNames != null)
+                {
+                    foreach (CustomRoles role in OriginalRoleNames.Keys)
+                        OriginalRoleNames[role][lang] = GetString($"{role}", lang);
+                }
+
+                string datFile = $"{lang}.dat";
+                if (File.Exists($"{Main.DataPath}/{LanguageFolderName}/{datFile}"))
+                    LoadCustomTranslation(datFile, lang);
+
+                try { Logger.Info($"Translator: loaded {resourceName} lang={langId} keys={jsonDictionary.Count} ({sw.ElapsedMilliseconds}ms)", "Translator"); }
+                catch { }
+            }
+            catch (Exception ex)
+            {
+                try { Logger.Error($"Error parsing {resourceName}: {ex}", "Translator"); } catch { }
+                LoadedLangs.Add(langId);
+            }
+        }
+    }
+
+    // 未ロードの言語が要求されたら同期的に1本だけ読み込む。GetString の毎回チェックは
+    // HashSet.Contains の1回判定なので通常経路 (既ロード言語) への負担はない。
+    public static void EnsureLangLoaded(SupportedLangs langId)
+    {
+        if (LoadedLangs != null && LoadedLangs.Contains((int)langId)) return;
+        LoadLangResource((int)langId);
     }
 
     private static void MergeJsonIntoTranslationMap(Dictionary<string, Dictionary<int, string>> translationMaps, int languageId, Dictionary<string, JsonElement> jsonDictionary)
@@ -207,6 +314,8 @@ public static class Translator
         {
             if (RuntimeOverrides.Count > 0 && RuntimeOverrides.TryGetValue(str, out string overrideValue))
                 return overrideValue;
+
+            if (!LoadedLangs.Contains((int)langId)) EnsureLangLoaded(langId);
 
             if (TranslateMaps.TryGetValue(str, out var dic))
             {
@@ -358,6 +467,7 @@ public static class Translator
         LoadLangs();
         var sb = new StringBuilder();
         SupportedLangs lang = TranslationController.Instance.currentLanguage.languageID;
+        EnsureLangLoaded(lang);
 
         foreach (KeyValuePair<string, Dictionary<int, string>> title in TranslateMaps)
         {
@@ -370,7 +480,9 @@ public static class Translator
 
     public static string FixRoleName(this string infoLong, CustomRoles role)
     {
-        if (!OriginalRoleNames.TryGetValue(role, out var d) || !d.TryGetValue(GetUserTrueLang(), out var o)) return infoLong;
+        SupportedLangs userLang = GetUserTrueLang();
+        EnsureLangLoaded(userLang);
+        if (!OriginalRoleNames.TryGetValue(role, out var d) || !d.TryGetValue(userLang, out var o)) return infoLong;
         string modifiedName = role.ToColoredString();
         return infoLong.Contains(modifiedName) ? infoLong : infoLong.Replace(o, modifiedName, StringComparison.OrdinalIgnoreCase);
     }
