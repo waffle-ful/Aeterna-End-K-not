@@ -320,8 +320,19 @@ public static class ModUpdater
             using (var archive = new ZipArchive(stream, ZipArchiveMode.Read))
             {
                 // Specify the relative path within the ZIP archive where "EndKnot.dll" is located
+                // Release zips may use backslash separators (Windows-made archives), so match by
+                // normalized path instead of an exact GetEntry lookup.
                 const string entryPath = "BepInEx/plugins/EndKnot.dll";
-                ZipArchiveEntry entry = archive.GetEntry(entryPath) ?? throw new($"'{entryPath}' not found in the ZIP archive");
+                ZipArchiveEntry entry = null;
+                foreach (ZipArchiveEntry e in archive.Entries)
+                {
+                    if (e.FullName.Replace('\\', '/').Equals(entryPath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        entry = e;
+                        break;
+                    }
+                }
+                if (entry == null) throw new($"'{entryPath}' not found in the ZIP archive");
 
                 // Extract "EndKnot.dll" to the temporary file
                 await using Stream entryStream = entry.Open();
