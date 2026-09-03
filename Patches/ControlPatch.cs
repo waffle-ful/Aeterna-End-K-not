@@ -371,15 +371,39 @@ internal static class ControllerManagerUpdatePatch
         catch { }
     }
 
+    // 毎フレーム複数回呼ばれるので、LINQ (デリゲート+列挙子の確保) と params 配列の確保を避ける。
+    private static bool KeysDown(KeyCode a, KeyCode b)
+    {
+        if (!(Input.GetKeyDown(a) || Input.GetKeyDown(b))) return false;
+        if (!(Input.GetKey(a) && Input.GetKey(b))) return false;
+        Logger.Info($"Shortcut Key: {(Input.GetKeyDown(a) ? a : b)} in [{a},{b}]", "GetKeysDown");
+        return true;
+    }
+
+    private static bool KeysDown(KeyCode a, KeyCode b, KeyCode c)
+    {
+        if (!(Input.GetKeyDown(a) || Input.GetKeyDown(b) || Input.GetKeyDown(c))) return false;
+        if (!(Input.GetKey(a) && Input.GetKey(b) && Input.GetKey(c))) return false;
+        Logger.Info($"Shortcut Key: {(Input.GetKeyDown(a) ? a : Input.GetKeyDown(b) ? b : c)} in [{a},{b},{c}]", "GetKeysDown");
+        return true;
+    }
+
     private static bool KeysDown(params KeyCode[] keys)
     {
-        if (keys.Any(Input.GetKeyDown) && keys.All(Input.GetKey))
+        bool anyDown = false;
+
+        for (int i = 0; i < keys.Length; i++)
         {
-            Logger.Info($"Shortcut Key: {keys.Where(Input.GetKeyDown).First()} in [{string.Join(",", keys)}]", "GetKeysDown");
-            return true;
+            if (!Input.GetKey(keys[i])) return false;
+            if (Input.GetKeyDown(keys[i])) anyDown = true;
         }
 
-        return false;
+        if (!anyDown) return false;
+
+        KeyCode first = keys[0];
+        for (int i = 0; i < keys.Length; i++) if (Input.GetKeyDown(keys[i])) { first = keys[i]; break; }
+        Logger.Info($"Shortcut Key: {first} in [{string.Join(",", keys)}]", "GetKeysDown");
+        return true;
     }
 
 /*

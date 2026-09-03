@@ -1936,6 +1936,8 @@ internal static class FixedUpdatePatch
         // 抜けても失うものはない。
         if (!player || player.Data == null || player.Data.Disconnected) return;
 
+        var alloc = Modules.AllocProbe.Now(); // pcloop 内の区間帰属 ("pc." 系統は tickKB へ二重計上されない)
+
         byte playerId = player.PlayerId;
         byte lpId = PlayerControl.LocalPlayer.PlayerId;
         bool self = playerId == lpId; // Updates that are independent of the player are only executed for the local player.
@@ -2123,6 +2125,8 @@ internal static class FixedUpdatePatch
             }
         }
 
+        alloc = Modules.AllocProbe.Mark("pc.core", alloc);
+
         if (!lowLoad)
         {
             // Ability Use Gain every 5 seconds
@@ -2164,6 +2168,8 @@ internal static class FixedUpdatePatch
                 else NameSkip++;
             }
         }
+
+        alloc = Modules.AllocProbe.Mark("pc.abil", alloc);
 
         if (GameStates.IsEnded || !Main.IntroDestroyed || GameStates.IsMeeting || ExileController.Instance || AntiBlackout.SkipTasks) return;
 
@@ -2514,6 +2520,8 @@ internal static class FixedUpdatePatch
             // Camouflage
             if (Camouflage.IsCamouflage) target.cosmetics.nameText.text = $"<size=0>{target.cosmetics.nameText.text}</size>";
         }
+
+        Modules.AllocProbe.Mark("pc.name", alloc);
     }
 
     public static void AddExtraAbilityUsesOnFinishedTasks(PlayerControl player)
