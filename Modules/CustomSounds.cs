@@ -406,6 +406,13 @@ public static class CustomSoundsManager
         (float[] buffer, int read, int channels, int sampleRate) = DecodeOgg(key);
         long decodeMs = sw.ElapsedMilliseconds;
 
+        (bool dsApplied, string dsMessage) = TryDownsampleBgm(key, buffer, ref read, channels, ref sampleRate);
+        if (dsMessage != null)
+        {
+            if (dsApplied) Logger.Info(dsMessage, "CustomSounds");
+            else Logger.Warn(dsMessage, "CustomSounds");
+        }
+
         AudioClip clip = CreateClip(key, buffer, read, channels, sampleRate, out long copyMs);
         Logger.Info($"[OGG: Channels={channels}, SampleRate={sampleRate}, SamplesRead={read}, decodeMs={decodeMs}, copyMs={copyMs}]", "CustomSounds");
         return clip;
@@ -533,6 +540,107 @@ public static class CustomSoundsManager
         return (buffer, read, channels, sampleRate);
     }
 
+    // ── BGM メモリ節約: 半分サンプルレートへのダウンサンプル ──────────────────
+    // BGM 1 曲の常駐 PCM (44.1kHz float ステレオで 33〜50MB、最大 4 曲同時常駐) を半分にする。
+    // 2:1 間引き前に半帯域ローパス (23 タップ windowed-sinc、カットオフ = 入力ナイキストの半分)
+    // を通してエイリアシングを防ぐ。BGM 級 (PooledBufferMinFloats 以上) のみに掛け、SFX は素通し。
+    private static readonly float[] HalfBandTaps = BuildHalfBandTaps();
+
+    private static float[] BuildHalfBandTaps()
+    {
+        const int n = 23;
+        const int m = (n - 1) / 2;
+        const double fc = 0.25; // 入力サンプルレートに対する正規化カットオフ (ナイキストの半分)
+
+        double[] h = new double[n];
+        double sum = 0;
+
+        for (int i = 0; i < n; i++)
+        {
+            int k = i - m;
+            double sinc = k == 0 ? 2 * fc : Math.Sin(2 * Math.PI * fc * k) / (Math.PI * k);
+            double window = 0.54 - 0.46 * Math.Cos(2 * Math.PI * i / (n - 1)); // Hamming
+            h[i] = sinc * window;
+            sum += h[i];
+        }
+
+        float[] taps = new float[n];
+        for (int i = 0; i < n; i++) taps[i] = (float)(h[i] / sum); // DC ゲイン 1 に正規化
+        return taps;
+    }
+
+    // buf を interleaved フレームとみなし 2:1 間引き (半帯域 FIR 込み) して先頭へ書き戻す。
+    // 出力フレーム n は入力フレーム [2n-11, 2n+11] (範囲外は端でクランプ) の加重和。
+    // 出力フレーム 0..11 は自分の書き込み位置より後ろの入力フレームをまだ必要とする出力と衝突しうる
+    // ため、先に別バッファへ退避してから n>=12 を直接上書きし、最後に退避分を先頭へ書き戻す。
+    private static int DownsampleHalfInPlace(float[] buf, int read, int channels)
+    {
+        int frames = read / channels;
+        int outFrames = frames / 2;
+        if (outFrames <= 0) return 0;
+
+        const int taps = 23;
+        const int half = 11;
+
+        int savedFrames = Math.Min(12, outFrames);
+        float[] saved = new float[savedFrames * channels];
+
+        for (int n = 0; n < savedFrames; n++)
+            for (int c = 0; c < channels; c++)
+                saved[n * channels + c] = ComputeHalfBandFrame(buf, frames, channels, n, c, taps, half);
+
+        for (int n = 12; n < outFrames; n++)
+            for (int c = 0; c < channels; c++)
+                buf[n * channels + c] = ComputeHalfBandFrame(buf, frames, channels, n, c, taps, half);
+
+        Array.Copy(saved, 0, buf, 0, saved.Length);
+
+        return outFrames * channels;
+    }
+
+    private static float ComputeHalfBandFrame(float[] buf, int frames, int channels, int outFrame, int channel, int taps, int half)
+    {
+        float acc = 0f;
+
+        for (int k = 0; k < taps; k++)
+        {
+            int srcFrame = 2 * outFrame + k - half;
+            if (srcFrame < 0) srcFrame = 0;
+            else if (srcFrame >= frames) srcFrame = frames - 1;
+
+            acc += HalfBandTaps[k] * buf[srcFrame * channels + channel];
+        }
+
+        return acc;
+    }
+
+    // BGM 級 (PooledBufferMinFloats 以上・44.1kHz 以上) のデコード結果だけを対象に半分レート化する。
+    // 失敗時は元の buffer/rate をそのまま使う (この曲だけ節約を諦める)。
+    // ログはここでは出さず (applied, message) を返す — 呼び出し側が自スレッドの Logger 可否に応じて
+    // 出し方を選ぶ (BgmDecodeLoop の裏スレッドは Logger 直呼び禁止、下の BgmDownsampleLogs 参照)。
+    private static (bool Applied, string Message) TryDownsampleBgm(string key, float[] buffer, ref int read, int channels, ref int sampleRate)
+    {
+        if (Main.BgmMemorySaver == null || !Main.BgmMemorySaver.Value) return (false, null);
+        if (sampleRate < 44100 || read < PooledBufferMinFloats) return (false, null);
+
+        try
+        {
+            var sw = Stopwatch.StartNew();
+            int origRate = sampleRate;
+            int origRead = read;
+
+            int newRead = DownsampleHalfInPlace(buffer, read, channels);
+
+            read = newRead;
+            sampleRate /= 2;
+            return (true, $"BGM downsampled: key={key} {origRate}->{sampleRate}Hz floats={origRead}->{read} ({sw.ElapsedMilliseconds}ms)");
+        }
+        catch (Exception ex)
+        {
+            return (false, $"BGM downsample failed for {key}: {ex.Message}");
+        }
+    }
+
     private static AudioClip CreateClip(string key, float[] buffer, int read, int channels, int sampleRate, out long copyMs)
     {
         var sw = Stopwatch.StartNew();
@@ -551,10 +659,11 @@ public static class CustomSoundsManager
     // ── デコードバッファの LOH プール ─────────────────────────────────────
     // BGM 1 曲のデコードバッファは最大 ~40MB の float[] で、毎回 new すると LOH/gen2 圧が
     // 状態遷移窓 (ロビー入り・ゲーム終了直後の複数曲プリロード) に集中し、遷移中の GC 停止を
-    // 底上げする。BGM 級 (>= 1M float) だけ最大 2 本 (worker のデコード中 1 + pump のクリップ化中 1)
-    // 使い回す。SFX 級の小物はプールしない (確保が安価で、在庫を小物で埋めると BGM が借りられない)。
+    // 底上げする。BGM 級 (>= 1M float) だけ最大 1 本使い回す (worker のデコード中と pump の
+    // クリップ化中が同時に走る一瞬は在庫を待たず新規確保に譲り、低スペック機の常駐 WS を優先する)。
+    // SFX 級の小物はプールしない (確保が安価で、在庫を小物で埋めると BGM が借りられない)。
     private const int PooledBufferMinFloats = 1_000_000;
-    private const long PoolIdleTrimSeconds = 300; // 5分未使用なら在庫を返上 (低スペック機の常駐 WS 削減)
+    private const long PoolIdleTrimSeconds = 60; // 60秒未使用なら在庫を返上 (低スペック機の常駐 WS 削減)
     private static readonly ConcurrentQueue<float[]> DecodeBufferPool = [];
     private static long _poolLastUseTs;
 
@@ -562,7 +671,7 @@ public static class CustomSoundsManager
     {
         _poolLastUseTs = Utils.TimeStamp;
 
-        // 足りない在庫 (過去最大曲より短い) は捨てる — 在庫は自然に「最大曲長 2 本」へ収束する
+        // 足りない在庫 (過去最大曲より短い) は捨てる — 在庫は自然に「最大曲長 1 本」へ収束する
         while (DecodeBufferPool.TryDequeue(out float[] pooled))
             if (pooled.Length >= minLen)
                 return pooled;
@@ -574,10 +683,10 @@ public static class CustomSoundsManager
     {
         if (buffer == null || buffer.Length < PooledBufferMinFloats) return;
         _poolLastUseTs = Utils.TimeStamp;
-        if (DecodeBufferPool.Count < 2) DecodeBufferPool.Enqueue(buffer);
+        if (DecodeBufferPool.Count < 1) DecodeBufferPool.Enqueue(buffer);
     }
 
-    /// <summary>BGM デコードが長く走っていない (曲替えの無いロビー放置等) 間、~45MB×2 の在庫を
+    /// <summary>BGM デコードが長く走っていない (曲替えの無いロビー放置等) 間、~45MB の在庫を
     /// 抱え続けないための解放弁。次の曲替えで再確保されるが、確保は PreloadWorker の裏スレッドで
     /// 起きるためフレームヒッチにはならない (プールの本義 = 遷移窓の LOH/gen2 圧集中の緩和は、
     /// 曲替えが続く間はトリムが発火しないことで保たれる)。毎秒スケジューラから呼ぶ。</summary>
@@ -674,6 +783,10 @@ public static class CustomSoundsManager
 
     private static readonly ConcurrentQueue<string> BgmDecodeRequests = [];
     private static readonly ConcurrentQueue<string> BgmDecodeFailures = [];
+    // TryDownsampleBgm の結果メッセージ (裏スレッドの BgmDecodeLoop は Logger 直呼び禁止 — LogText は
+    // 全 Logger 呼び出しで共有する static StringBuilder なのでメインスレッドの Logger 呼び出しと競合する)。
+    // メインスレッドの PreloadTick でまとめて Logger.Info/Warn へ出す。
+    private static readonly ConcurrentQueue<(bool Applied, string Message)> BgmDownsampleLogs = [];
     // in-flight 集合 (依頼済み・未完了)。追加/削除はメインスレッドのみ — 二重デコード防止。
     private static readonly HashSet<string> BgmInflight = new(StringComparer.OrdinalIgnoreCase);
     private static Thread bgmWorker;
@@ -726,6 +839,8 @@ public static class CustomSoundsManager
                     case ".ogg":
                     {
                         (float[] buffer, int read, int channels, int sampleRate) = DecodeOgg(key);
+                        (bool dsApplied, string dsMessage) = TryDownsampleBgm(key, buffer, ref read, channels, ref sampleRate);
+                        if (dsMessage != null) BgmDownsampleLogs.Enqueue((dsApplied, dsMessage));
                         System.Threading.Interlocked.Increment(ref bgmDecodedInQueue);
                         PreloadDecoded.Enqueue((key, buffer, read, channels, sampleRate, name));
                         break;
@@ -779,6 +894,13 @@ public static class CustomSoundsManager
         {
             BgmInflight.Remove(failed);
             BGMManager.OnPreloadFailed(failed);
+        }
+
+        // TryDownsampleBgm の結果ログをメインスレッドでまとめて出す (裏スレッドは Logger 直呼び禁止)。
+        while (BgmDownsampleLogs.TryDequeue(out (bool Applied, string Message) log))
+        {
+            if (log.Applied) Logger.Info(log.Message, "CustomSounds");
+            else Logger.Warn(log.Message, "CustomSounds");
         }
 
         // ワーカー退出レース対策: 「TryDequeue 空振り → 退出」の隙間にメインスレッドが enqueue した
