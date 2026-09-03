@@ -296,7 +296,8 @@ internal static class RPCHandlerPatch
         return true;
     }
 
-    public static bool Prefix(PlayerControl __instance, [HarmonyArgument(0)] byte callId, [HarmonyArgument(1)] MessageReader reader)
+    public static bool Prefix(PlayerControl __instance, [HarmonyArgument(0)] byte callId, [HarmonyArgument(1)] MessageReader reader) { var alloc = EndKnot.Modules.AllocProbe.Now(); try { return PrefixCore(__instance, callId, reader); } finally { EndKnot.Modules.AllocProbe.Mark("rpc", alloc); } }
+    public static bool PrefixCore(PlayerControl __instance, [HarmonyArgument(0)] byte callId, [HarmonyArgument(1)] MessageReader reader)
     {
         var rpcType = (RpcCalls)callId;
         MessageReader subReader = MessageReader.Get(reader);
@@ -386,7 +387,8 @@ internal static class RPCHandlerPatch
         return true;
     }
 
-    public static void Postfix(PlayerControl __instance, [HarmonyArgument(0)] byte callId, [HarmonyArgument(1)] MessageReader reader)
+    public static void Postfix(PlayerControl __instance, [HarmonyArgument(0)] byte callId, [HarmonyArgument(1)] MessageReader reader) { var alloc = EndKnot.Modules.AllocProbe.Now(); try { PostfixCore(__instance, callId, reader); } finally { EndKnot.Modules.AllocProbe.Mark("rpc", alloc); } }
+    public static void PostfixCore(PlayerControl __instance, [HarmonyArgument(0)] byte callId, [HarmonyArgument(1)] MessageReader reader)
     {
         try
         {
@@ -1845,7 +1847,8 @@ internal static class RPC
 [HarmonyPatch(typeof(PlayerPhysics), nameof(PlayerPhysics.HandleRpc))]
 internal static class PlayerPhysicsRPCHandlerPatch
 {
-    public static bool Prefix(PlayerPhysics __instance, byte callId, MessageReader reader)
+    public static bool Prefix(PlayerPhysics __instance, byte callId, MessageReader reader) { var alloc = EndKnot.Modules.AllocProbe.Now(); try { return PrefixCore(__instance, callId, reader); } finally { EndKnot.Modules.AllocProbe.Mark("rpc", alloc); } }
+    public static bool PrefixCore(PlayerPhysics __instance, byte callId, MessageReader reader)
     {
         bool host = __instance.IsHost();
         if (!host && EAC.PlayerPhysicsRpcCheck(__instance, callId, reader)) return false;

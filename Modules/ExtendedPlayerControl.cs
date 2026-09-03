@@ -124,18 +124,8 @@ internal static class ExtendedPlayerControl
 
         public Vent GetClosestVent()
         {
-            if (ShipStatus.Instance?.AllVents == null) return null;
-
-            Vector2 pos = player.Pos();
-            Vent closest = null;
-
-            foreach (var vent in ShipStatus.Instance.AllVents)
-            {
-                if (!closest || Vector2.Distance(pos, vent.transform.position) < Vector2.Distance(pos, closest.transform.position))
-                    closest = vent;
-            }
-
-            return closest;
+            // 位置はマップごとに 1 回だけ interop 越しに読む (毎 tick の全ベント走査は il2cpp 側のゴミの主因の一つ)
+            return VentPositionCache.Closest(player.Pos());
         }
 
         public List<Vent> GetVentsFromClosest()

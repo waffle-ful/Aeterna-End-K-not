@@ -30,7 +30,9 @@ internal static class LateTask
                 // 名前付きの重い区間 (帰属計器の本命) を上書きして計器が無意味化する。
                 if (name is not "" and not "No Name Task") Modules.HealthLog.NoteOp(name);
 
-                action();
+                var alloc = Modules.AllocProbe.Now();
+                try { action(); }
+                finally { Modules.AllocProbe.Mark("latetask", alloc); }
             
                 if (name is not "" and not "No Name Task" && log)
                     Logger.Info($"\"{name}\" is finished", "LateTask");

@@ -108,7 +108,8 @@ internal static class ChatControllerUpdatePatch
     private static SpriteRenderer OpenBanMenuIcon;
     private static SpriteRenderer OpenKeyboardIcon;
 
-    public static void Prefix()
+    public static void Prefix() { var alloc = EndKnot.Modules.AllocProbe.Now(); try { PrefixCore(); } finally { EndKnot.Modules.AllocProbe.Mark("chatupd", alloc); } }
+    public static void PrefixCore()
     {
         if (AmongUsClient.Instance.AmHost && DataManager.Settings.Multiplayer.ChatMode == QuickChatModes.QuickChatOnly)
             DataManager.Settings.Multiplayer.ChatMode = QuickChatModes.FreeChatOrQuickChat;
@@ -146,7 +147,8 @@ internal static class ChatControllerUpdatePatch
         else __instance.freeChatField.textArea.outputText.color = Color.black;
     }
 
-    public static void Postfix(ChatController __instance)
+    public static void Postfix(ChatController __instance) { var alloc = EndKnot.Modules.AllocProbe.Now(); try { PostfixCore(__instance); } finally { EndKnot.Modules.AllocProbe.Mark("chatupd", alloc); } }
+    public static void PostfixCore(ChatController __instance)
     {
         // テーマ装飾はバニラ側の色リセットとの上書き合戦なので毎フレームは要らない。interop プロパティ
         // 書き ~10 回/frame + LoadSprite 辞書引き×3 を 0.25s に間引く (復元遅延は最大 0.25s で知覚不能)。

@@ -27,7 +27,7 @@ internal static class HudManagerPatch
     public static Color? CooldownTimerFlashColor = null;
     public static string AchievementUnlockedText = string.Empty;
 
-    private static TaskPanelBehaviour RoleTab;
+    internal static TaskPanelBehaviour RoleTab; // TaskPanelBehaviourPatch が RolePanel 判定に使う
 
     // ── 毎 tick 経路 (FixedUpdateCaller 経由 50Hz) のアロケ対策キャッシュ群 ──
     // HUD の文字列は人間が読む表示なので 50Hz の再構築は過剰 — 5 tick に 1 回 (10Hz) の
@@ -59,6 +59,8 @@ internal static class HudManagerPatch
 
             PlayerControl player = PlayerControl.LocalPlayer;
             if (!player) return;
+
+            var alloc = AllocProbe.Now(); // hud 系統の内訳 (hud.* は tickKB へ二重計上されない)
 
             // 10Hz の「テキストレーン」(このメソッド共通)。HUD の文字列再構築 + TMP 再レイアウトを
             // 5 tick に 1 回へ間引く。ボタン可視/有効などの機能系は従来どおり毎 tick。
@@ -149,7 +151,8 @@ internal static class HudManagerPatch
                             }
                         }
 
-                        OverriddenRolesText.text = string.Join(string.Empty, resultText.Values);
+                        string overridden = string.Join(string.Empty, resultText.Values);
+                        if (OverriddenRolesText.text != overridden) OverriddenRolesText.text = overridden;
                     }
                     else if (OverriddenRolesText.text.Length > 0)
                         OverriddenRolesText.text = string.Empty;
@@ -170,7 +173,8 @@ internal static class HudManagerPatch
                             AutoGMRotationStatusText.fontSize = AutoGMRotationStatusText.fontSizeMax = AutoGMRotationStatusText.fontSizeMin = 2.5f;
                         }
 
-                        AutoGMRotationStatusText.text = BuildAutoGMRotationStatusText(false);
+                        string rotationStatus = BuildAutoGMRotationStatusText(false);
+                        if (AutoGMRotationStatusText.text != rotationStatus) AutoGMRotationStatusText.text = rotationStatus;
                         AutoGMRotationStatusText.enabled = AutoGMRotationStatusText.text != string.Empty && GameStates.IsLobby;
                     }
                     else if (AutoGMRotationStatusText && AutoGMRotationStatusText.enabled)
@@ -190,6 +194,8 @@ internal static class HudManagerPatch
                 __instance.SabotageButton?.Hide();
             }
             else if (Options.CurrentGameMode != CustomGameMode.Standard) __instance.ReportButton?.Hide();
+
+            alloc = AllocProbe.Mark("hud.a", alloc);
 
             // The following will not be executed unless the game is in progress
             if (!AmongUsClient.Instance.IsGameStarted) return;
@@ -308,6 +314,8 @@ internal static class HudManagerPatch
                     if (role.PetActivatedAbility() && Options.CurrentGameMode == CustomGameMode.Standard && player.GetRoleTypes() != RoleTypes.Engineer && !role.OnlySpawnsWithPets() && !role.AlwaysUsesPhantomBase() && !hasBasisChangingAddon && role is not CustomRoles.Changeling and not CustomRoles.Ninja and not CustomRoles.Duality and not CustomRoles.Witch and not CustomRoles.HexMaster and not CustomRoles.Silencer && (!role.SimpleAbilityTrigger() || !Options.UsePhantomBasis.GetBool() || !(player.IsNeutralKiller() && Options.UsePhantomBasisForNKs.GetBool())) && !(Options.UseMeetingShapeshift.GetBool() && player.UsesMeetingShapeshift()) && !endKnotNamed && !role.IsVanilla())
                         __instance.AbilityButton?.Hide();
 
+                    alloc = AllocProbe.Mark("hud.b1", alloc);
+
                     if (!LowerInfoText)
                     {
                         LowerInfoText = Object.Instantiate(__instance.KillButton.cooldownTimerText, __instance.transform, true);
@@ -321,7 +329,7 @@ internal static class HudManagerPatch
 
                     if (textLane)
                     {
-                        LowerInfoText.text = Options.CurrentGameMode switch
+                        string lowerInfo = Options.CurrentGameMode switch
                         {
                             CustomGameMode.SoloPVP => SoloPVP.GetHudText(),
                             CustomGameMode.FFA => FreeForAll.GetHudText(),
@@ -372,21 +380,27 @@ internal static class HudManagerPatch
                         {
                             if (CooldownTimerFlashColor.HasValue) cdHUDText = $"<b>{Utils.ColorString(CooldownTimerFlashColor.Value, cdHUDText.RemoveHtmlTags())}</b>";
 
-                            LowerInfoText.text = $"{cdHUDText}\n{LowerInfoText.text}";
+                            lowerInfo = $"{cdHUDText}\n{lowerInfo}";
                         }
 
                         if (AchievementUnlockedText != string.Empty)
                         {
-                            LowerInfoText.text = LowerInfoText.text == string.Empty
+                            lowerInfo = lowerInfo == string.Empty
                                 ? AchievementUnlockedText
-                                : $"{AchievementUnlockedText}\n\n{LowerInfoText.text}\n\n\n\n";
+                                : $"{AchievementUnlockedText}\n\n{lowerInfo}\n\n\n\n";
                         }
 
-                        LowerInfoText.enabled = hasCD || LowerInfoText.text != string.Empty;
+                        // 同値なら TMP へ書かない: text の代入は il2cpp 側の文字列確保と再レイアウトを伴い、
+                        // 10Hz でも Boehm ヒープを育てて試合中の周期 GC 停止の原資になる。
+                        if (LowerInfoText.text != lowerInfo) LowerInfoText.text = lowerInfo;
+
+                        LowerInfoText.enabled = hasCD || lowerInfo != string.Empty;
                     }
 
                     if ((!AmongUsClient.Instance.IsGameStarted && AmongUsClient.Instance.NetworkMode != NetworkModes.FreePlay) || GameStates.IsMeeting)
                         LowerInfoText.enabled = false;
+
+                    alloc = AllocProbe.Mark("hud.b2", alloc);
 
                     bool allowedRole = role is CustomRoles.Necromancer or CustomRoles.Deathknight or CustomRoles.Renegade or CustomRoles.Sidekick;
 
@@ -411,6 +425,8 @@ internal static class HudManagerPatch
                         __instance.AbilityButton?.SetEnabled();
 
                     __instance.SabotageButton?.ToggleVisible(player.GetRoleTypes() is RoleTypes.ImpostorGhost or RoleTypes.Impostor or RoleTypes.Phantom or RoleTypes.Shapeshifter or RoleTypes.Viper);
+
+                    alloc = AllocProbe.Mark("hud.b3", alloc);
 
                     float abilityUseLimit = player.GetAbilityUseLimit();
 
@@ -501,6 +517,8 @@ internal static class HudManagerPatch
                 if (Input.GetKeyDown(KeyCode.Return)) RepairSender.InputEnter();
             }
 #endif
+
+            AllocProbe.Mark("hud.b4", alloc);
         }
         catch (NullReferenceException e)
         {
@@ -1433,18 +1451,34 @@ internal static class TaskPanelBehaviourPatch
         panel.SetTaskText(finalTextBuilder.ToString());
     }
 
+    private static float nextTabTextAt; // タブ文字列の再構築は 10Hz で足りる
+
     [HarmonyPatch(nameof(TaskPanelBehaviour.Update))]
-    public static bool Prefix(TaskPanelBehaviour __instance)
+    public static bool Prefix(TaskPanelBehaviour __instance) { var alloc = EndKnot.Modules.AllocProbe.Now(); try { return PrefixCore(__instance); } finally { EndKnot.Modules.AllocProbe.Mark("taskpanel", alloc); } }
+    public static bool PrefixCore(TaskPanelBehaviour __instance)
     {
-        if (__instance.gameObject.name != "RolePanel")
+        // RolePanel かどうかは name 文字列 (毎フレームの il2cpp 文字列化) でなく、生きている RoleTab 参照との一致で決める。
+        // アドレスのキャッシュはシーン跨ぎの再利用で別パネルを誤判定するので使わない。
+        TaskPanelBehaviour roleTab = HudManagerPatch.RoleTab;
+        bool isRolePanel = roleTab && roleTab.Pointer == __instance.Pointer;
+
+        if (!isRolePanel)
         {
             if (Utils.IsTaskingGameMode())
             {
                 if (!TabText) TabText = __instance.tab.transform.FindChild("TabText_TMP").GetComponent<TextMeshPro>();
-                bool fakeTasks = Options.CurrentGameMode is CustomGameMode.Standard or CustomGameMode.HideAndSeek && !Utils.HasTasks(PlayerControl.LocalPlayer.Data, forRecompute: false);
-                string sideText = TranslationController.Instance.GetString(fakeTasks ? StringNames.FakeTasks : StringNames.Tasks);
-                if (fakeTasks) sideText = Utils.ColorString(Utils.GetRoleColor(CustomRoles.ImpostorEndKnot), sideText.TrimEnd(':'));
-                TabText.SetText($"{sideText}{Utils.GetTaskCount(PlayerControl.LocalPlayer.PlayerId, Utils.IsActive(SystemTypes.Comms))}");
+
+                float now = Time.unscaledTime;
+
+                if (now >= nextTabTextAt)
+                {
+                    nextTabTextAt = now + 0.1f;
+                    bool fakeTasks = Options.CurrentGameMode is CustomGameMode.Standard or CustomGameMode.HideAndSeek && !Utils.HasTasks(PlayerControl.LocalPlayer.Data, forRecompute: false);
+                    string sideText = TranslationController.Instance.GetString(fakeTasks ? StringNames.FakeTasks : StringNames.Tasks);
+                    if (fakeTasks) sideText = Utils.ColorString(Utils.GetRoleColor(CustomRoles.ImpostorEndKnot), sideText.TrimEnd(':'));
+                    string tabText = $"{sideText}{Utils.GetTaskCount(PlayerControl.LocalPlayer.PlayerId, Utils.IsActive(SystemTypes.Comms))}";
+                    if (TabText.text != tabText) TabText.SetText(tabText); // 同値なら書かない (il2cpp 文字列確保+再レイアウト回避)
+                }
             }
             else
             {
