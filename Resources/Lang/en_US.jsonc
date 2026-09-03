@@ -9655,6 +9655,12 @@
   /* ==============================
     Device Time Limit
   ============================== */
+  "MenuTitle.NumericOptionInput": "★ Numeric Option Input ★",
+  "EnableNumericOptionInput": "Show a button to type numeric option values directly",
+  "NumericOptionInput.ParseError": "That doesn't look like a number.",
+  /* ==============================
+    Vent Network Map
+  ============================== */
   "WordLimitExemptHost": "Never kill the host for this (still warned)",
   ============================== */
   "Achievement.ALightInTheShadows": "A Light In The Shadows",
