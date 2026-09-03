@@ -644,6 +644,8 @@ public static class GameStartRandomMap
             return false;
         }
 
+        OptionSanityCheck.RunAndReport();
+
         GameStartManagerPatch.UpdateSpriteStartButton = true;
 
         if (Options.RandomMapsMode.GetBool())

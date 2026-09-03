@@ -306,6 +306,7 @@
   "MenuTitle.Guessers": "★ ゲッサー モード ★",
   "MenuTitle.MapsSettings": "★ マップ ★",
   "MenuTitle.Meeting": "★ 会議 ★",
+  "MenuTitle.OptionSanityCheck": "★ 設定の矛盾チェック ★",
   "MenuTitle.Other": "★ 異なる ★",
   "MenuTitle.Sabotage": "★ サボタージュ ★",
   "MenuTitle.Settings": "★ 設定 ★",
@@ -9035,6 +9036,18 @@
   "Message.AutoAbortNotice": "<color=#ffaa00>切断者が多いため、まもなくこの試合は自動的に廃村されます。</color>",
   /* ==============================
     Option Sanity Check
+  ============================== */
+  "EnableOptionSanityCheck": "ゲーム開始時に矛盾した設定を警告する",
+  "OptionSanityAutoFix": "矛盾した設定を自動で補正する (この試合限定、保存中の設定は変更しない)",
+  "OptionSanityAlsoWarnInLobbyChat": "警告をホストのチャットにも流す",
+  "Message.OptionSanityTitle": "<color=#ffcc3c>⚠ 設定の矛盾チェック</color>",
+  "OptionSanity.ZeroMaxWithChance": "出現率が0%より大きいのに最大数が0で、絶対に出現しない役職があります: {0}",
+  "OptionSanity.FactionMinAboveMax": "最小人数が最大人数を上回っている陣営があります: {0}",
+  "OptionSanity.NkEnabledButMaxZero": "ニュートラルキラーの役職が有効なのに、その最大人数が0になっています。",
+  "OptionSanity.NoTaskCountButTaskWin": "タスク勝利が有効なのに、タスク総数 (コモン+ショート+ロング) が0になっています。",
+  "OptionSanity.TooManyImpostors": "インポスター ({0}人) がロビー人数 ({1}人) の半分以上を占めています。",
+  /* ==============================
+    Report Reason Notice
   ============================== */
   "WordLimitExemptHost": "ホストだけは死亡させない (警告は入る)",
   ============================== */
