@@ -9073,7 +9073,33 @@
   /* ==============================
     Word Limit
   ============================== */
+  "MenuTitle.WordLimit": "★ 言葉狩り ★",
+  "EnableWordLimit": "発言の縛りを有効にする",
+  "WordLimitRule": "縛りの内容",
+  "WordLimitRule.NoHiragana": "ひらがな禁止",
+  "WordLimitRule.NoKatakana": "カタカナ禁止",
+  "WordLimitRule.NoKanji": "漢字禁止",
+  "WordLimitRule.NoAlphabet": "アルファベット禁止",
+  "WordLimitRule.RequiredWord": "指定した語を必ず含める (/wordlimit で設定)",
+  "WordLimitPunishment": "違反時の罰",
+  "WordLimitPunishment.Warning": "警告のみ",
+  "WordLimitPunishment.Death": "死亡",
+  "WordLimitGraceCount": "罰が始まるまでの見逃し回数",
+  "WordLimitMinLength": "この文字数未満の発言は判定しない",
+  "WordLimitOnlyInMeeting": "会議中だけ取り締まる",
   "WordLimitExemptHost": "ホストだけは死亡させない (警告は入る)",
+  "WordLimit.Forgiven": "<color=#ffff99>今のは禁句だったようですが、今回は見逃します (残り {0} 回)。</color>",
+  "WordLimit.Warned": "<color=#ff9999>今のは禁句です。言葉に気をつけて。</color>",
+  "WordLimit.WillDie": "<color=#ff4444>今のは禁句です。この会議が終わると死亡します。</color>",
+  "CommandForms.WordLimit": "wordlimit,言葉狩り",
+  "CommandDescription.WordLimit": "禁句縛りの必須語を設定する (省略時は現在の設定を表示)。",
+  "CommandArgs.WordLimit.Word": "語",
+  "Message.WordLimitRequiredWordUnset": "まだ必須語は未設定です。/wordlimit <語> で設定できます。",
+  "Message.WordLimitRequiredWordCurrent": "現在の必須語: {0}",
+  "Message.WordLimitRequiredWordSet": "必須語を「{0}」に設定しました。",
+  /* ==============================
+    Coming Out
+  ============================== */
   ============================== */
   "Achievement.ALightInTheShadows": "<size=75%>陰に潜む光</size>",
   "Achievement.ALightInTheShadows.Description": "<size=75%>停電中に <#a3fdff>ビーコン</color>の近くを歩く",
@@ -10385,6 +10411,7 @@
   "DeathReason.Stopped": "静止死",
   "DeathReason.Erased": "消滅",
   "DeathReason.Censored": "検閲",
+  "DeathReason.WordLimit": "禁句違反",
   "DeathReason.Stung": "刺死",
   "DeathReason.Suicide": "自殺",
   "DeathReason.Sunken": "沈没",

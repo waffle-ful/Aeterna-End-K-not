@@ -339,6 +339,10 @@ internal static class ChatCommands
             new("AllowJoin", "[id/name|clear]", Command.UsageLevels.HostOrModerator, Command.UsageTimes.Always, AllowJoinCommand, true, false, [GetString("CommandArgs.AllowJoin.Target")]),
             new("Exempt", "[add|remove] [id/name]", Command.UsageLevels.HostOrModerator, Command.UsageTimes.Always, ExemptCommand, true, false),
             new("KickPrevious", "", Command.UsageLevels.HostOrModerator, Command.UsageTimes.Always, KickPreviousCommand, true, false),
+            new("WordLimit", "{word}", Command.UsageLevels.HostOrModerator, Command.UsageTimes.Always, WordLimitCommand, true, false, [GetString("CommandArgs.WordLimit.Word")]),
+            new("Co", "{role}", Command.UsageLevels.Everyone, Command.UsageTimes.Always, CoCommand, true, false, [GetString("CommandArgs.Co.Role")]),
+            new("Aco", "{addon}", Command.UsageLevels.Everyone, Command.UsageTimes.Always, AcoCommand, true, false, [GetString("CommandArgs.Aco.Addon")]),
+            new("Colist", "", Command.UsageLevels.Everyone, Command.UsageTimes.Always, ColistCommand, true, false)
         ];
     }
 
@@ -3693,6 +3697,26 @@ internal static class ChatCommands
         Utils.SendMessage(string.Format(GetString("Message.KickPreviousResult"), count), player.PlayerId);
     }
 
+    private static void WordLimitCommand(PlayerControl player, string text, string[] args)
+    {
+        if (args.Length < 2)
+        {
+            string current = Modules.WordLimit.GetRequiredWord();
+            Utils.SendMessage(current.Length == 0 ? GetString("Message.WordLimitRequiredWordUnset") : string.Format(GetString("Message.WordLimitRequiredWordCurrent"), current), player.PlayerId);
+            return;
+        }
+
+        string word = string.Join(' ', args[1..]);
+        Modules.WordLimit.SetRequiredWord(word);
+        Utils.SendMessage(string.Format(GetString("Message.WordLimitRequiredWordSet"), word), player.PlayerId);
+    }
+
+    // 非モッド客の生テキストは host に届く前にバニラ側でそのまま周囲へ広まってしまうため、
+    // "本人にだけ理由を返す" が保証できるのはモッドクライアントだけ (CommandDescription に明記)。
+    private static void CoCommand(PlayerControl player, string text, string[] args)
+    {
+        if (args.Length < 2 || !GetRoleByName(string.Join(' ', args[1..]), out CustomRoles role))
+        {
     // ── Dev-only debug commands ──────────────────────────────────────────────────
 
     private static void InspectCommand(PlayerControl player, string text, string[] args)

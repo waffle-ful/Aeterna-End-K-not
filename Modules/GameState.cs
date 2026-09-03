@@ -104,6 +104,9 @@ public class PlayerState(byte playerId)
         // WordKiller
         Censored,
 
+        // WordLimit
+        WordLimit,
+
         etc = -1
     }
 
@@ -383,7 +386,8 @@ public class PlayerState(byte playerId)
         if (AmongUsClient.Instance.AmHost)
         {
             if (Enchanter.EnchantedPlayers.Contains(PlayerId))
-                deathReason = AllDeathReason[..^8].RandomElement();
+                // 末尾の役職固有な死因は偽装プールに入れない。DeathReason の末尾に足したら、この数も一緒に増やすこと。
+                deathReason = AllDeathReason[..^9].RandomElement();
 
             RPC.SendDeathReason(PlayerId, deathReason, IsDead);
             Utils.CheckAndSpawnAdditionalRenegade(GameData.Instance.GetPlayerById(PlayerId));
