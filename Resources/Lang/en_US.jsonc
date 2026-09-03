@@ -306,6 +306,7 @@
   "MenuTitle.Guessers": "★ Guesser Mode ★",
   "MenuTitle.MapsSettings": "★ Maps ★",
   "MenuTitle.Meeting": "★ Meeting ★",
+  "MenuTitle.OptionSanityCheck": "★ Setting Sanity Check ★",
   "MenuTitle.Other": "★ Different ★",
   "MenuTitle.Sabotage": "★ Sabotage ★",
   "MenuTitle.Settings": "★ Settings ★",
@@ -9629,6 +9630,18 @@
   "Message.AutoAbortNotice": "<color=#ffaa00>Too many players have disconnected — this match will be auto-aborted shortly.</color>",
   /* ==============================
     Option Sanity Check
+  ============================== */
+  "EnableOptionSanityCheck": "Warn about contradictory settings when the game starts",
+  "OptionSanityAutoFix": "Automatically correct contradictory settings (memory only, doesn't touch the saved preset)",
+  "OptionSanityAlsoWarnInLobbyChat": "Also post the warning to the host's chat",
+  "Message.OptionSanityTitle": "<color=#ffcc3c>⚠ Setting Sanity Check</color>",
+  "OptionSanity.ZeroMaxWithChance": "These roles have a spawn chance above 0% but a maximum of 0, so they can never appear: {0}",
+  "OptionSanity.FactionMinAboveMax": "These factions have a minimum role count greater than their maximum: {0}",
+  "OptionSanity.NkEnabledButMaxZero": "At least one Neutral Killing role is enabled, but the max Neutral Killing role count is 0.",
+  "OptionSanity.NoTaskCountButTaskWin": "Task-based victory is enabled, but the total task count (Common+Short+Long) is 0.",
+  "OptionSanity.TooManyImpostors": "Impostors ({0}) make up half or more of the lobby ({1} players).",
+  /* ==============================
+    Report Reason Notice
   ============================== */
   "WordLimitExemptHost": "Never kill the host for this (still warned)",
   ============================== */

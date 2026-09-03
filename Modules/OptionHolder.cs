@@ -1715,6 +1715,8 @@ public static class Options
 
         Modules.AutoAbort.SetupCustomOption();
 
+        Modules.OptionSanityCheck.SetupCustomOption();
+
         BGMManager.SetupCustomOption();
 
         Modules.YouTubeChat.YouTubeChatOptions.SetupCustomOption();
