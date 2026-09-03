@@ -9661,6 +9661,12 @@
   /* ==============================
     Vent Network Map
   ============================== */
+  "MenuTitle.VentNetworkMap": "★ Vent Network Map ★",
+  "EnableVentNetworkMap": "Draw vent connections on the map",
+  "VentMapShowPlayerDots": "Show everyone's position after death / while spectating",
+  /* ==============================
+    Word Limit
+  ============================== */
   "WordLimitExemptHost": "Never kill the host for this (still warned)",
   ============================== */
   "Achievement.ALightInTheShadows": "A Light In The Shadows",
