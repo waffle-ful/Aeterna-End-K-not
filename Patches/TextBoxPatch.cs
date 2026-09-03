@@ -45,7 +45,8 @@ public static class TextBoxPatch
     // accepts the clone; the chat-only patches (autocomplete / char filter / char limit) keep ignoring it.
     private static bool IsChatOrSearchTextBox(TextBoxTMP textBox) =>
         textBox.gameObject.HasParentInHierarchy("ChatScreenRoot/ChatScreenContainer")
-        || (GameSettingMenuPatch.InputField && GameSettingMenuPatch.InputField.textArea == textBox);
+        || (GameSettingMenuPatch.InputField && GameSettingMenuPatch.InputField.textArea == textBox)
+        || (NumericOptionInputPatch.ActiveField && NumericOptionInputPatch.ActiveField.textArea == textBox); // 数値入力欄も検索欄と同じ入力経路で受ける
 
     // True for the live chat field only (not the settings-menu clone). Only these boxes use LastText mirror.
     private static bool WeManageText(TextBoxTMP tb) => Translator.GetUserTrueLang() != SupportedLangs.Russian && tb.gameObject.HasParentInHierarchy("ChatScreenRoot/ChatScreenContainer");

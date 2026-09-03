@@ -234,6 +234,22 @@ public static class TestBridge
             return;
         }
 
+        // Layer 3c: OS レベルのキーボード注入。テキスト欄 (設定検索・数値入力) に文字を打つ経路は
+        // Unity の Input.inputString しか無いので、click/chat では代用できない。
+        if (directive.StartsWith("type ", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecuteType(directive[5..]); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR type failed"); }
+            return;
+        }
+
+        if (directive.StartsWith("key ", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecuteKey(directive[4..].Trim()); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR key failed"); }
+            return;
+        }
+
         // Layer A: mod オプション操作(OptionItem ツリー直アクセス。/changesetting は vanilla 設定専用)。
         if (directive.StartsWith("getopt ", StringComparison.OrdinalIgnoreCase))
         {
@@ -388,7 +404,7 @@ public static class TestBridge
 
         if (directive.Equals("help", StringComparison.OrdinalIgnoreCase))
         {
-            WriteOut("HELP directives: state | screenshot | click <h|label:x> | press <h|x y> | getopt <pattern> | setopt <name|#id> <idx|on|off|~real> | forcerole <id|name|host|clear> [EnumName] | start | hostlobby | autostart <on|off> | tp <x> <y> | tp <playerId> | walk <x> <y> | walk <playerId> | walk stop | vote <playerId|skip> | overrule <targetId> [judgeId] | chat <text> | use <kill|vent|pet|ability|report|sabotage> | vent enter <id> | vent exit | errors [n] | grep <pattern> [n] | bcensus | sleep <sec> | wait <phase=X|players=N|marker:text|join|arrived> [timeoutSec] | wait cancel | /<chatcommand>");
+            WriteOut("HELP directives: state | screenshot | click <h|label:x> | press <h|x y> | type <text> | key <enter|escape|tab|backspace> | getopt <pattern> | setopt <name|#id> <idx|on|off|~real> | forcerole <id|name|host|clear> [EnumName] | start | hostlobby | autostart <on|off> | tp <x> <y> | tp <playerId> | walk <x> <y> | walk <playerId> | walk stop | vote <playerId|skip> | overrule <targetId> [judgeId] | chat <text> | use <kill|vent|pet|ability|report|sabotage> | vent enter <id> | vent exit | errors [n] | grep <pattern> [n] | bcensus | sleep <sec> | wait <phase=X|players=N|marker:text|join|arrived> [timeoutSec] | wait cancel | /<chatcommand>");
             return;
         }
 
@@ -1233,6 +1249,92 @@ public static class TestBridge
 
             WriteOut($"OK press [{clientX}, {clientY}] ({geom})");
         }, 0.1f, "TestBridge.PressUp", log: false);
+    }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct KeybdInput
+    {
+        public ushort wVk;
+        public ushort wScan;
+        public uint dwFlags;
+        public uint time;
+        public IntPtr dwExtraInfo;
+    }
+
+    // INPUT は union を含む (x64 で 40 バイト)。KEYBDINPUT 以外は使わないので末尾に詰め物で幅を合わせる。
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct Win32Input
+    {
+        public uint type;
+        public KeybdInput ki;
+        public long pad;
+    }
+
+    private const uint InputKeyboard = 1;
+    private const uint KeyEventUnicode = 0x0004;
+    private const uint KeyEventKeyUp = 0x0002;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
+    private static extern uint SendInput(uint nInputs, Win32Input[] pInputs, int cbSize);
+
+    private static bool FocusGameWindow()
+    {
+        IntPtr hWnd = ResolveGameWindow(out _, out _);
+        if (hWnd == IntPtr.Zero) return false;
+        try { SetForegroundWindow(hWnd); } catch { /* ignore */ }
+        return true;
+    }
+
+    // type <text> — 文字を Unicode キーイベントとして注入する (フォーカス中のテキスト欄に入る)。
+    private static void ExecuteType(string text)
+    {
+        if (!OperatingSystem.IsWindows()) { WriteOut("ERR type windows only"); return; }
+        if (string.IsNullOrEmpty(text)) { WriteOut("ERR type usage: type <text>"); return; }
+        if (!FocusGameWindow()) { WriteOut("ERR type no window handle"); return; }
+
+        var inputs = new Win32Input[text.Length * 2];
+        for (int i = 0; i < text.Length; i++)
+        {
+            inputs[i * 2] = new Win32Input { type = InputKeyboard, ki = new KeybdInput { wScan = text[i], dwFlags = KeyEventUnicode } };
+            inputs[i * 2 + 1] = new Win32Input { type = InputKeyboard, ki = new KeybdInput { wScan = text[i], dwFlags = KeyEventUnicode | KeyEventKeyUp } };
+        }
+
+        int size = System.Runtime.InteropServices.Marshal.SizeOf<Win32Input>();
+        uint sent = SendInput((uint)inputs.Length, inputs, size);
+        WriteOut(sent == inputs.Length ? $"OK type {text.Length} chars" : $"ERR type sent {sent}/{inputs.Length} events (err={System.Runtime.InteropServices.Marshal.GetLastWin32Error()})");
+    }
+
+    // key <name> — 仮想キーを down → 0.1s 後に up で注入する (Unity のフレームポーリング取りこぼし対策)。
+    private static void ExecuteKey(string name)
+    {
+        if (!OperatingSystem.IsWindows()) { WriteOut("ERR key windows only"); return; }
+
+        ushort vk = name.ToLowerInvariant() switch
+        {
+            "enter" or "return" => 0x0D,
+            "escape" or "esc" => 0x1B,
+            "tab" => 0x09,
+            "backspace" => 0x08,
+            "delete" => 0x2E,
+            "left" => 0x25,
+            "right" => 0x27,
+            _ => 0
+        };
+
+        if (vk == 0) { WriteOut("ERR key usage: key <enter|escape|tab|backspace|delete|left|right>"); return; }
+        if (!FocusGameWindow()) { WriteOut("ERR key no window handle"); return; }
+
+        int size = System.Runtime.InteropServices.Marshal.SizeOf<Win32Input>();
+        var down = new[] { new Win32Input { type = InputKeyboard, ki = new KeybdInput { wVk = vk } } };
+        if (SendInput(1, down, size) != 1) { WriteOut($"ERR key down failed (err={System.Runtime.InteropServices.Marshal.GetLastWin32Error()})"); return; }
+
+        LateTask.New(() =>
+        {
+            var up = new[] { new Win32Input { type = InputKeyboard, ki = new KeybdInput { wVk = vk, dwFlags = KeyEventKeyUp } } };
+            try { SendInput(1, up, size); }
+            catch (Exception e) { Utils.ThrowException(e); }
+            WriteOut($"OK key {name}");
+        }, 0.1f, "TestBridge.KeyUp", log: false);
     }
 
     private static void RestoreWindow(IntPtr hWnd, Win32Rect rect)
