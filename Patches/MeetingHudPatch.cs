@@ -1169,6 +1169,8 @@ internal static class MeetingHudStartPatch
 
                 TemplateManager.SendTemplate("OnMeeting", noErr: true, importance: MessageImportance.Low);
                 if (MeetingStates.FirstMeeting) TemplateManager.SendTemplate("OnFirstMeeting", noErr: true, importance: MessageImportance.Low);
+
+                ReportReasonNotice.ScheduleSend();
             }, 8f, log: false);
 
             NotifyRoleSkillOnMeetingStart();

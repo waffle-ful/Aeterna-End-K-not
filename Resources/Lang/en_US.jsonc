@@ -308,6 +308,7 @@
   "MenuTitle.Meeting": "★ Meeting ★",
   "MenuTitle.OptionSanityCheck": "★ Setting Sanity Check ★",
   "MenuTitle.Other": "★ Different ★",
+  "MenuTitle.ReportReasonNotice": "★ Report Reason Notice ★",
   "MenuTitle.Sabotage": "★ Sabotage ★",
   "MenuTitle.Settings": "★ Settings ★",
   "MenuTitle.TaskSettings": "★ Task Management ★",
@@ -9642,6 +9643,17 @@
   "OptionSanity.TooManyImpostors": "Impostors ({0}) make up half or more of the lobby ({1} players).",
   /* ==============================
     Report Reason Notice
+  ============================== */
+  "EnableReportReasonNotice": "Announce why the meeting was called, a while after it starts",
+  "ReportReasonDelay": "Delay after the other meeting-start messages",
+  "ReportReasonShowReporter": "Show who called the meeting",
+  "ReportReasonShowVictim": "Show whose body was found",
+  "ReportReason.Body": "{0} reported {1}'s body.",
+  "ReportReason.Emergency": "{0} called an emergency meeting.",
+  "ReportReason.AnonymousReporter": "Someone",
+  "ReportReason.AnonymousVictim": "someone",
+  /* ==============================
+    Device Time Limit
   ============================== */
   "WordLimitExemptHost": "Never kill the host for this (still warned)",
   ============================== */

@@ -308,6 +308,7 @@
   "MenuTitle.Meeting": "★ 会議 ★",
   "MenuTitle.OptionSanityCheck": "★ 設定の矛盾チェック ★",
   "MenuTitle.Other": "★ 異なる ★",
+  "MenuTitle.ReportReasonNotice": "★ 会議開始理由の通知 ★",
   "MenuTitle.Sabotage": "★ サボタージュ ★",
   "MenuTitle.Settings": "★ 設定 ★",
   "MenuTitle.TaskSettings": "★ タスク マネジメント ★",
@@ -9048,6 +9049,17 @@
   "OptionSanity.TooManyImpostors": "インポスター ({0}人) がロビー人数 ({1}人) の半分以上を占めています。",
   /* ==============================
     Report Reason Notice
+  ============================== */
+  "EnableReportReasonNotice": "会議が始まった理由を、少し間を置いてから知らせる",
+  "ReportReasonDelay": "他の会議開始メッセージが出てからの待機時間",
+  "ReportReasonShowReporter": "会議を始めた人の名前を出す",
+  "ReportReasonShowVictim": "誰の死体が見つかったかを出す",
+  "ReportReason.Body": "{0} が {1} の死体を通報しました。",
+  "ReportReason.Emergency": "{0} が緊急会議を招集しました。",
+  "ReportReason.AnonymousReporter": "誰か",
+  "ReportReason.AnonymousVictim": "何者か",
+  /* ==============================
+    Device Time Limit
   ============================== */
   "WordLimitExemptHost": "ホストだけは死亡させない (警告は入る)",
   ============================== */
