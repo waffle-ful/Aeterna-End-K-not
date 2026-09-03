@@ -9067,6 +9067,12 @@
   /* ==============================
     Vent Network Map
   ============================== */
+  "MenuTitle.VentNetworkMap": "★ ベント接続網マップ ★",
+  "EnableVentNetworkMap": "マップにベントの接続関係を描く",
+  "VentMapShowPlayerDots": "死亡後・観戦中は全員の現在地を表示する",
+  /* ==============================
+    Word Limit
+  ============================== */
   "WordLimitExemptHost": "ホストだけは死亡させない (警告は入る)",
   ============================== */
   "Achievement.ALightInTheShadows": "<size=75%>陰に潜む光</size>",
