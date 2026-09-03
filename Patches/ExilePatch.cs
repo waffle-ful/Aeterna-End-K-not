@@ -174,6 +174,7 @@ internal static class ExileControllerWrapUpPatch
 
         GameStates.AlreadyDied |= !Utils.IsAllAlive;
         RemoveDisableDevicesPatch.UpdateDisableDevices();
+        DisableDevice.ResetTimeLimitForRound();
         SoundManager.Instance.ChangeAmbienceVolume(DataManager.Settings.Audio.AmbienceVolume);
         Logger.Info("Start task phase", "Phase");
 

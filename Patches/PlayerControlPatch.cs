@@ -2134,8 +2134,8 @@ internal static class FixedUpdatePatch
             if (AmongUsClient.Instance.AmHost && inTask && alive && Options.LadderDeath.GetBool())
                 FallFromLadder.FixedUpdate(player);
 
-            if (inTask && self && Options.DisableDevices.GetBool())
-                DisableDevice.FixedUpdate(player);
+            if (inTask && self && AmongUsClient.Instance.AmHost && (Options.DisableDevices.GetBool() || DisableDevice.TimeLimitEnabled))
+                DisableDevice.FixedUpdate();
 
             // IsShifted ガード: タグ持ち (dev/mod/vip) プレイヤーは ApplySuffix が変装中も生名を
             // 返し続けるため、RpcSetNameMirrorCachePatch のキャッシュ同期と組み合わさると
