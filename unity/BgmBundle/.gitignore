@@ -9,6 +9,7 @@ obj/
 *.sln
 # BGM 素材はライセンス上リポジトリに置かない (tools/build-bgm-bundle.ps1 が Resources/Sounds/BGM からコピーする)
 Assets/BGM/
+Assets/SFX/
 # ProjectSettings は ProjectVersion.txt (エディタ版固定) 以外は既定で良い
 ProjectSettings/*
 !ProjectSettings/ProjectVersion.txt
