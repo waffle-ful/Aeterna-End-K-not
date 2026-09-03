@@ -1,6 +1,7 @@
 #if !ANDROID
 using System;
 using System.IO;
+using EndKnot.Modules;
 using EndKnot.Modules.CalamityMenu;
 using EndKnot.Modules.Media;
 using UnityEngine;
@@ -26,6 +27,11 @@ public static class CalamityFire
     private static GameObject _prewarmHolder;
     private static bool _prewarmAttempted;
     private static float _prewarmStartedAt;
+    private static bool _playMarked;
+
+    // _prewarmed が Park 済み (一時停止・ゲーム中) かどうか。true の間は Tick() の prewarm 分岐が
+    // 一切触らない。スプラッシュ中の先行準備 (false) は再生を続けて装着時の絵を生かす。
+    private static bool _prewarmPaused;
 
     /// <summary>
     /// メニューが構築されるより前 (スプラッシュ中) に VideoPlayer の準備を始めておく。
@@ -49,8 +55,7 @@ public static class CalamityFire
             string path = ResolveVideoPath();
             if (path == null) { Logger.Info($"Prewarm skipped: no {FireVideoFileName}", "CalamityFire"); return; }
 
-            _prewarmHolder = new GameObject("EndKnotFirePrewarm");
-            UnityEngine.Object.DontDestroyOnLoad(_prewarmHolder);
+            EnsurePrewarmHolder();
 
             var surface = new VideoSurface();
             if (!surface.TryCreate(path, _prewarmHolder.transform))
@@ -60,9 +65,14 @@ public static class CalamityFire
                 return;
             }
 
+            // まだ画面に置いていないので、テクスチャ生成が終わっても表に出さない。
+            surface.SetVisible(false);
+
             _prewarmed = surface;
+            _prewarmPaused = false;
             _prewarmStartedAt = Time.realtimeSinceStartup;
             Logger.Info("fire video prewarm started", "CalamityFire");
+            BootTimeline.Mark("fire.prewarm");
         }
         catch (Exception e)
         {
@@ -95,15 +105,25 @@ public static class CalamityFire
                     _surface = _prewarmed;
                     _prewarmed = null;
 
+                    // シーンには一切ぶら下げない — GameObject は _prewarmHolder (DontDestroyOnLoad)
+                    // の子のまま、位置/回転だけ背景レイヤーへ合わせる。scale は FitCover が
+                    // localScale で決めるので触らない (親が identity 変換なのでこれで world 一致する)。
                     Transform t = _surface.GameObject.transform;
-                    t.SetParent(backgroundLayer, false);
-                    t.localPosition = Vector3.zero;
+                    t.position = backgroundLayer.position;
+                    t.rotation = backgroundLayer.rotation;
                     _surface.GameObject.layer = backgroundLayer.gameObject.layer;
                     _surface.Renderer.sortingOrder = -99;
                     _layer = backgroundLayer;
 
-                    DisposePrewarmHolder();
+                    // prewarm/park 中は非表示・一時停止だったものを表へ戻す。Resume は未準備なら
+                    // no-op で、その場合は下の Tick→OnPrepared 経路が Play まで面倒を見る。
+                    _surface.SetVisible(true);
+                    _surface.Resume();
+                    if (_surface.Prepared) FitCover(); // 最初のレンダリングから正しいサイズにする
+
                     Logger.Info($"fire video mounted from prewarm, nativePrepared={_surface.NativePrepared}, waited={Time.realtimeSinceStartup - _prewarmStartedAt:F2}s", "CalamityFire");
+                    BootTimeline.Mark("fire.mount");
+                    _surface.OnFirstFrame = () => BootTimeline.Mark("fire.frame");
                     return;
                 }
 
@@ -116,18 +136,28 @@ public static class CalamityFire
             string path = ResolveVideoPath();
             if (path == null) { Logger.Info($"Build skipped: no {FireVideoFileName}", "CalamityFire"); return; }
 
+            // prewarm と同じく、シーンには一切ぶら下げず _prewarmHolder (DontDestroyOnLoad) を
+            // 親にする。位置/回転だけ背景レイヤーへ合わせる (scale は FitCover が localScale で決める)。
+            EnsurePrewarmHolder();
             _surface = new VideoSurface();
-            if (!_surface.TryCreate(path, backgroundLayer))
+            if (!_surface.TryCreate(path, _prewarmHolder.transform))
             {
                 Logger.Warn("Build aborted: VideoSurface.TryCreate failed", "CalamityFire");
                 DisposeSurface();
                 return;
             }
 
+            Transform freshT = _surface.GameObject.transform;
+            freshT.position = backgroundLayer.position;
+            freshT.rotation = backgroundLayer.rotation;
+            _surface.GameObject.layer = backgroundLayer.gameObject.layer;
+
             // 背景 (CalamityBG, sortingOrder=-100) の直前・ロゴ/ボタンより後ろ。
             _surface.Renderer.sortingOrder = -99;
             _layer = backgroundLayer;
             Logger.Info($"fire video mounted, path={path}", "CalamityFire");
+            BootTimeline.Mark("fire.mount");
+            _surface.OnFirstFrame = () => BootTimeline.Mark("fire.frame");
         }
         catch (Exception e)
         {
@@ -139,26 +169,96 @@ public static class CalamityFire
     // FixedUpdateCaller から無条件で毎フレーム叩かれる (メニュー以外では _surface==null で即 return)。
     public static void Tick()
     {
-        if (_surface == null) return;
+        if (_surface == null)
+        {
+            // メニュー構築前 (スプラッシュ中) は非表示のまま prewarm 分を進め続ける。準備完了後も
+            // 再生とテクスチャ複写を続けておくと、装着した最初のフレームから生きた炎が映る
+            // (完了直後に止めると装着時の絵が準備時点の 1 枚目に固定される)。スプラッシュは数秒
+            // なのでこの間の複写コストは無視できる。退場後 (Park 済み = _prewarmPaused) は
+            // 一切触らず、メニュー以外では即 return する Tick() 全体の契約をゲーム中も保つ。
+            if (_prewarmed != null && !_prewarmPaused)
+            {
+                try
+                {
+                    bool wasPrepared = _prewarmed.Prepared;
+                    _prewarmed.Tick();
+                    if (_prewarmed.Prepared && !wasPrepared) BootTimeline.Mark("fire.prepared");
+                }
+                catch (Exception e)
+                {
+                    Utils.ThrowException(e);
+                }
+            }
+
+            return;
+        }
 
         try
         {
-            // メニューシーンが破棄された: GameObject 側はシーンごと片付くが、HideAndDontSave の
-            // RenderTexture/Texture2D/Sprite は明示 Dispose しないと回収されない (LoadingScreenVideo と同じ罠)。
+            // _layer はメニューシーンの一部 (BackgroundLayer) — シーンが破棄されると Unity の
+            // 比較演算子で null に見える。GameObject 自体は最初から _prewarmHolder
+            // (DontDestroyOnLoad) の子で一切シーンにぶら下げていないので生き延びており、
+            // 破棄はせず表示だけ止めて次の再入場に備える (Park)。
             if (_layer == null)
             {
-                DisposeSurface();
+                Park();
                 return;
             }
 
             _surface.Tick();
-            if (_surface.Prepared) FitCover();
+            if (_surface.Prepared)
+            {
+                if (!_playMarked) { _playMarked = true; BootTimeline.Mark("fire.play"); }
+                FitCover();
+            }
         }
         catch (Exception e)
         {
             Utils.ThrowException(e);
             DisposeSurface();
         }
+    }
+
+    // メニュー退出時に Dispose せず、次の再入場に備えて非表示・一時停止のまま持ち越す。
+    // GameObject は最初から _prewarmHolder の子なので移し替えは不要 — 毎回作り直すと
+    // Prepare に約2秒かかり、その間だけ背景から火が消えてしまう。
+    private static void Park()
+    {
+        try
+        {
+            if (_surface == null) return;
+
+            // シーン破棄と競合して GameObject 側が既に無くなっていることがある — その場合は
+            // 持ち越す先が無いので素直に手放す。
+            if (_surface.GameObject == null)
+            {
+                DisposeSurface();
+                return;
+            }
+
+            _surface.SetVisible(false);
+            _surface.Pause();
+
+            _prewarmed = _surface;
+            _surface = null;
+            _layer = null;
+            _prewarmPaused = true;
+
+            Logger.Info("fire video parked for menu re-entry", "CalamityFire");
+        }
+        catch (Exception e)
+        {
+            Utils.ThrowException(e);
+            DisposeSurface();
+        }
+    }
+
+    // 火の GameObject を一生涯間借りさせる箱を用意する (無ければ作る・あれば使い回す)。
+    private static void EnsurePrewarmHolder()
+    {
+        if (_prewarmHolder != null) return;
+        _prewarmHolder = new GameObject("EndKnotFirePrewarm");
+        UnityEngine.Object.DontDestroyOnLoad(_prewarmHolder);
     }
 
     // ① BepInEx/plugins/EndKnot/Media/menu_fire.webm → ② DLL 埋込リソース抽出、の順で解決
@@ -225,7 +325,7 @@ public static class CalamityFire
         DisposePrewarmHolder();
     }
 
-    // 中身を backgroundLayer へ移し替えた後の空き箱を片付ける。
+    // 火の GameObject ごと片付けるとき (DisposePrewarm から) だけ呼ばれる箱の破棄。
     private static void DisposePrewarmHolder()
     {
         if (_prewarmHolder == null) return;
