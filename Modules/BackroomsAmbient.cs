@@ -107,6 +107,14 @@ public static class BackroomsAmbient
 
             string diskPath = AmbientPath + AmbientName + ".wav";
 
+            // ディスク差し替えが無ければ SFX バンドル (Vorbis 圧縮のまま常駐) を優先する。float PCM 版
+            // (3.7MB 常駐) はバンドル不在か設定 OFF のときだけ作る。
+            if (!File.Exists(diskPath) && SfxBundle.IsEnabled && SfxBundle.TryGetClip(AmbientName, out AudioClip bundled))
+            {
+                _clip = bundled;
+                return _clip;
+            }
+
             // disk に user override 版があれば優先、なければ埋込リソースをメモリ内でデコードする。
             // (ディスクへ書き出す方式は素材の再配布条項に当たるため廃止)
             byte[] data;
