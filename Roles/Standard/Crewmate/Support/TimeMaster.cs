@@ -284,7 +284,7 @@ internal class TimeMaster : RoleBase
             hasValue = true;
             activateSabComms = true;
         }
-        else if (!commsSaboActive && DesyncCommsActive)
+        else if (!commsSaboActive && DesyncCommsActive && !DisableDevice.DesyncComms.Contains(player.PlayerId))
         {
             DesyncCommsActive = false;
             hasValue = true;
