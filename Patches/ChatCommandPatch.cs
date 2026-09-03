@@ -334,7 +334,8 @@ internal static class ChatCommands
             new("Burst", "{count} [direct]", Command.UsageLevels.Host, Command.UsageTimes.Always, BurstCommand, true, true, [GetString("CommandArgs.Burst.Count"), GetString("CommandArgs.Burst.Direct")]),
             new("Nest", "{total} [options]", Command.UsageLevels.Host, Command.UsageTimes.Always, NestCommand, true, true, [GetString("CommandArgs.Nest.Total"), GetString("CommandArgs.Nest.Options")]),
             new("Map", "[list|load <file>|reload|exit|import|export|info]", Command.UsageLevels.Host, Command.UsageTimes.InLobby, MapCommand, true, true),
-            new("Role", "[list | import | set [n] [slot] | unset [slot/all]]", Command.UsageLevels.Host, Command.UsageTimes.InLobby, RoleCommand, true, true)
+            new("Role", "[list | import | set [n] [slot] | unset [slot/all]]", Command.UsageLevels.Host, Command.UsageTimes.InLobby, RoleCommand, true, true),
+            new("Whitelist", "[list|add <id/name>|remove <id/name>|reload]", Command.UsageLevels.HostOrModerator, Command.UsageTimes.Always, WhitelistCommand, true, false),
         ];
     }
 
@@ -3564,6 +3565,71 @@ internal static class ChatCommands
 
         File.AppendAllText($"{Main.DataPath}/EndKnot_DATA/Moderators.txt", $"\n{fc}");
         Utils.SendMessage(GetString("PlayerAddedToModList"), player.PlayerId);
+    }
+
+    // ID かロビー内の名前 (スペース区切りの複数語も可) で現在接続中のプレイヤーを探す。/wl /aj /ex 共通。
+    private static PlayerControl ResolveConnectedPlayerByArg(string arg)
+    {
+        if (byte.TryParse(arg, out byte id))
+        {
+            PlayerControl byId = Utils.GetPlayerById(id);
+            if (byId != null) return byId;
+        }
+
+        return PlayerControl.AllPlayerControls.ToArray().FirstOrDefault(pc => (pc.Data?.PlayerName ?? "").RemoveHtmlTags().Trim().Equals(arg, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static void WhitelistCommand(PlayerControl player, string text, string[] args)
+    {
+        string sub = args.Length >= 2 ? args[1].ToLowerInvariant() : "list";
+        string arg = args.Length >= 3 ? string.Join(' ', args.Skip(2)) : "";
+
+        switch (sub)
+        {
+            case "list":
+                string list = string.Join('\n', Modules.WhitelistManager.ListEntries());
+                Utils.SendMessage(list.Length == 0 ? GetString("Message.WhitelistListEmpty") : list, player.PlayerId, GetString("Message.WhitelistListTitle"));
+                break;
+
+            case "reload":
+                Modules.WhitelistManager.Reload();
+                Utils.SendMessage(GetString("Message.WhitelistReloaded"), player.PlayerId);
+                break;
+
+            case "add":
+            {
+                if (arg.Length == 0) break;
+
+                PlayerControl target = ResolveConnectedPlayerByArg(arg);
+                if (target == null) { Utils.SendMessage(GetString("Message.WhitelistTargetNotFound"), player.PlayerId); break; }
+
+                (bool success, string key, bool byPuid) = Modules.WhitelistManager.AddFromPlayer(target);
+                Utils.SendMessage(success ? string.Format(GetString(byPuid ? "Message.WhitelistAddedByPuid" : "Message.WhitelistAddedByFriendCode"), target.Data?.PlayerName, key) : GetString("Message.WhitelistAddFailed"), player.PlayerId);
+                break;
+            }
+
+            case "remove":
+            {
+                if (arg.Length == 0) break;
+
+                // 現在ロビーに居る相手なら FriendCode/PUID の両方で試す。見つからなければ生のキー文字列として扱う
+                PlayerControl target = ResolveConnectedPlayerByArg(arg);
+                bool removed = false;
+
+                if (target != null)
+                {
+                    ClientData client = target.GetClient();
+                    string fc = client?.FriendCode?.Replace(':', '#').Trim() ?? "";
+                    if (fc.Length > 0) removed = Modules.WhitelistManager.RemoveKey(fc);
+                    if (!removed && client != null && client.HasValidPuid()) removed = Modules.WhitelistManager.RemoveKey(client.GetHashedPuid());
+                }
+
+                if (!removed) removed = Modules.WhitelistManager.RemoveKey(arg);
+
+                Utils.SendMessage(removed ? GetString("Message.WhitelistRemoved") : GetString("Message.WhitelistTargetNotFound"), player.PlayerId);
+                break;
+            }
+        }
     }
 
     // ── Dev-only debug commands ──────────────────────────────────────────────────

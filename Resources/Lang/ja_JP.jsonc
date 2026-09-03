@@ -308,6 +308,7 @@
   "MenuTitle.Sabotage": "★ サボタージュ ★",
   "MenuTitle.Settings": "★ 設定 ★",
   "MenuTitle.TaskSettings": "★ タスク マネジメント ★",
+  "MenuTitle.Whitelist": "★ ホワイトリスト ★",
   "MessageTitle.Attention": "<#ff0000><#ffa500>⚠</color> 注意！ <#ffa500>⚠</color></color>",
   "MessengerTitle": "<#ff0000> {0} からのメッセージ</color>",
   "MimicMsgTitle": "★[ ミミック ]★",
@@ -8988,7 +8989,24 @@
   "AccurateCheckMode": "タスクを終えていないときに特定の役職が分かる",
   "YouMuted": "<size=80%><u>{0}</u>により <#ff0000>{1}</color>秒間 ミュートにされました。</size>",
   /* ==============================
-    Achievements           
+    Whitelist
+  ============================== */
+  "EnableWhitelist": "参加ホワイトリストを有効にする",
+  "WhitelistKickNonListed": "ホワイトリストに無い参加者をキックする",
+  "WhitelistExemptModerators": "モデレーターは対象外にする",
+  "Message.KickedByWhitelist": "{0} はホワイトリストに載っていないためキックされました。",
+  "Message.WhitelistNotifyOnly": "{0} はホワイトリストに載っていません (通知のみ、キックはしていません)。",
+  "Message.WhitelistListEmpty": "ホワイトリストは空です。",
+  "Message.WhitelistListTitle": "<color=#00c1ff>ホワイトリスト</color>",
+  "Message.WhitelistReloaded": "ホワイトリストをファイルから再読み込みしました。",
+  "Message.WhitelistTargetNotFound": "対象のプレイヤーが見つかりません。",
+  "Message.WhitelistAddedByFriendCode": "{0} をホワイトリストに追加しました (フレンドコード {1})。",
+  "Message.WhitelistAddedByPuid": "{0} にはフレンドコードが無いため、代わりにアカウントID ({1}) で追加しました。",
+  "Message.WhitelistAddFailed": "フレンドコードも端末IDも取得できませんでした。",
+  "Message.WhitelistRemoved": "ホワイトリストから削除しました。",
+  /* ==============================
+    Consecutive-Join Kick
+  ============================== */
   ============================== */
   "Achievement.ALightInTheShadows": "<size=75%>陰に潜む光</size>",
   "Achievement.ALightInTheShadows.Description": "<size=75%>停電中に <#a3fdff>ビーコン</color>の近くを歩く",
@@ -9693,6 +9711,7 @@
   "CommandDescription.Exo": "エクソシストとして除霊を発動する。効果時間中にチャットを送ったプレイヤーは死亡する",
   "CommandDescription.Fabricate": "ファブリケーター として 次のキルに偽装する死因を設定",
   "CommandDescription.Abort": "現在のゲームを引き分けで強制終了する (廃村)。Shift+L+Enter のチャット版。",
+  "CommandDescription.Whitelist": "参加ホワイトリストを管理する: list / add / remove / reload。",
   "CommandDescription.Fix": "特定のプレイヤーの暗転バグを修正する。",
   "CommandDescription.Forge": "<#ff1919>偽造者</color>として、1人のプレイヤーを 1つの偽の役割で偽造する。",
   "CommandDescription.GNO": "数字のミニ-ゲームを推測する",
@@ -9816,6 +9835,7 @@
   "CommandForms.Exo": "exo,除霊",
   "CommandForms.Fabricate": "fabricate",
   "CommandForms.Abort": "abort,forceend,fe,haison,廃村",
+  "CommandForms.Whitelist": "wl,whitelist,ホワイトリスト",
   "CommandForms.Fix": "fix,blackscreenfix,fixblackscreen",
   "CommandForms.Forge": "forge",
   "CommandForms.GNO": "gno",
