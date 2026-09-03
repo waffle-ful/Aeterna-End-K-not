@@ -66,6 +66,38 @@ public static class MemCensus
             }
             catch { sb.Append(" texMB=?"); }
 
+            // AudioClip の native 常駐概算 MB。PCM 展開済み (DecompressOnLoad かつ Loaded) のみ
+            // samples×channels×4 バイトで加算する。CompressedInMemory は clip.samples が展開後の
+            // サンプル数を返すため合算すると圧縮前提の AssetBundle BGM を数十倍過大計上する。
+            try
+            {
+                var auds = Resources.FindObjectsOfTypeAll(Il2CppType.Of<AudioClip>());
+                double totalAudBytes = 0;
+                int audCompressed = 0, audUnloaded = 0;
+
+                foreach (var o in auds)
+                {
+                    AudioClip a = o != null ? o.TryCast<AudioClip>() : null;
+                    if (a == null) continue;
+
+                    try
+                    {
+                        if (a.loadType == AudioClipLoadType.Streaming || a.loadState != AudioDataLoadState.Loaded)
+                            audUnloaded++;
+                        else if (a.loadType == AudioClipLoadType.CompressedInMemory)
+                            audCompressed++;
+                        else if (a.loadType == AudioClipLoadType.DecompressOnLoad)
+                            totalAudBytes += (double)a.samples * a.channels * 4;
+                    }
+                    catch { }
+                }
+
+                sb.Append(" audMB=").Append((long)(totalAudBytes / (1024 * 1024)))
+                  .Append(" audCmp=").Append(audCompressed)
+                  .Append(" audUnl=").Append(audUnloaded);
+            }
+            catch { sb.Append(" audMB=?"); }
+
             // AllOptions が実行中に伸びると index キーの行キャッシュ (BehaviourList/CategoryHeaderList) が
             // ずれ、メニューを開くたびに末尾分の行が旧個体を残したまま再生成される。成長の有無と犯人名を直接記録する。
             try
@@ -85,6 +117,7 @@ public static class MemCensus
             TopNames<Material>("mat", 10, now, src);
             TopNames<Sprite>("spr", 10, now, src);
             TopTextures(10, now, src);
+            TopAudioClips(10, now, src);
 
             // il2cpp (Boehm) 側の型別生存オブジェクト帰属。CENSUS と同じ発火点・同じ間引きに乗せる。
             // 自動発火 (src=lobby) は既定 OFF — 手動発火 (manual/bridge) は設定に関係なく常に走る。
@@ -159,6 +192,51 @@ public static class MemCensus
             HealthLog.Note(sb.ToString().TrimEnd());
         }
         catch (Exception e) { Logger.Warn($"census top tex failed: {e.Message}", "MemCensus"); }
+    }
+
+    // AudioClip の実消費上位。CompressedInMemory は clip.samples が展開後サンプル数を返すため
+    // PCM 換算をそのまま出すと過大表示になる — desc 先頭に ~ を付け MB は 0.0 のまま区別できるようにする。
+    private static void TopAudioClips(int top, long now, string src)
+    {
+        try
+        {
+            var arr = Resources.FindObjectsOfTypeAll(Il2CppType.Of<AudioClip>());
+            if (arr == null) return;
+
+            var list = new List<(string Desc, double Bytes)>(256);
+
+            foreach (var o in arr)
+            {
+                AudioClip a = o != null ? o.TryCast<AudioClip>() : null;
+                if (a == null) continue;
+
+                try
+                {
+                    string n = string.IsNullOrEmpty(a.name) ? "<noname>" : a.name.Replace(' ', '_');
+                    string desc = $"{n}_{a.loadType}_{a.loadState}_{a.frequency}Hz_{a.channels}ch";
+
+                    if (a.loadType == AudioClipLoadType.CompressedInMemory)
+                        list.Add(("~" + desc, 0));
+                    else if (a.loadType == AudioClipLoadType.DecompressOnLoad && a.loadState == AudioDataLoadState.Loaded)
+                        list.Add((desc, (double)a.samples * a.channels * 4));
+                    else
+                        list.Add((desc, 0));
+                }
+                catch { }
+            }
+
+            var sb = new StringBuilder("CENSUSTOP kind=aud t=").Append(now).Append(" src=").Append(src).Append(' ');
+
+            foreach (var kv in list.Where(x => !x.Desc.StartsWith('~')).OrderByDescending(x => x.Bytes).Take(top))
+                sb.Append(kv.Desc).Append('x').Append((kv.Bytes / (1024 * 1024)).ToString("0.0")).Append("MB ");
+
+            // 圧縮クリップは PCM 換算が無いので順位に乗らない。別枠で loadState を見えるようにする。
+            foreach (var kv in list.Where(x => x.Desc.StartsWith('~')).Take(top))
+                sb.Append(kv.Desc).Append(' ');
+
+            HealthLog.Note(sb.ToString().TrimEnd());
+        }
+        catch (Exception e) { Logger.Warn($"census top aud failed: {e.Message}", "MemCensus"); }
     }
 
     // CENSUSTOP kind=tex の上位テクスチャは「何 MB か」までしか分からず、常駐の犯人 (どの
