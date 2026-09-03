@@ -791,6 +791,12 @@ public static class CustomSoundsManager
     private static readonly HashSet<string> BgmInflight = new(StringComparer.OrdinalIgnoreCase);
     private static Thread bgmWorker;
 
+    // BgmBundle 経由で LoadAudioData() を呼んだ後、非同期ロード完了を PreloadTick で待つ分 (裏スレッドへは流さない)。
+    // Reissued は Unloaded 停滞時の LoadAudioData() 再発行を 1 回だけに絞るためのフラグ。
+    private static readonly List<(string Name, AudioClip Clip, Stopwatch Sw, bool Reissued)> BundlePending = [];
+    private const double BundleLoadTimeoutSeconds = 15;
+    private const double BundleLoadReissueSeconds = 2;
+
     // PreloadDecoded 内に滞留している「BGM 級」アイテム数 (Interlocked 専用)。裏デコードの
     // backpressure はこれを見る — 共有キューの IsEmpty を見ると起動時の SFX 一括プリロードの
     // 未消化分 (小物) にまで足止めされ、ロビー BGM の立ち上がりが不必要に遅れる。
@@ -798,13 +804,30 @@ public static class CustomSoundsManager
 
     // planner の GC 先撃ちタイミング判定用。「デコード中/クリップ化中/依頼残あり」の間は false。
     internal static bool IsBgmPipelineIdle
-        => BgmInflight.Count == 0 && bgmClipInProgress == null && BgmDecodeRequests.IsEmpty && PreloadDecoded.IsEmpty;
+        => BgmInflight.Count == 0 && bgmClipInProgress == null && BgmDecodeRequests.IsEmpty && PreloadDecoded.IsEmpty && BundlePending.Count == 0;
 
     // メインスレッド専用。
     internal static void RequestBgmDecode(string name)
     {
         if (!OperatingSystem.IsWindows() || name == null) return;
         if (!BgmInflight.Add(name)) return;
+
+        // ユーザーが resources/BGM/ に差し替えファイルを置いている場合はバンドルより優先する
+        // (BGMManager.ResolveSource と同じ優先順位)。
+        try
+        {
+            if (BgmBundle.IsEnabled && !BGMManager.HasUserOverride(name) && BgmBundle.TryGetClip(name, out AudioClip bundleClip))
+            {
+                bundleClip.LoadAudioData();
+                BundlePending.Add((name, bundleClip, Stopwatch.StartNew(), false));
+                return;
+            }
+        }
+        catch (Exception e)
+        {
+            BgmInflight.Remove(name);
+            Logger.Warn($"BGM bundle request failed for {name}, falling back to OGG decode: {e.Message}", "CustomSounds");
+        }
 
         BgmDecodeRequests.Enqueue(name);
         EnsureBgmWorker();
@@ -894,6 +917,42 @@ public static class CustomSoundsManager
         {
             BgmInflight.Remove(failed);
             BGMManager.OnPreloadFailed(failed);
+        }
+
+        // バンドル経由の BGM は LoadAudioData() が非同期 (数フレーム) なので loadState をここで拾う。
+        for (int i = BundlePending.Count - 1; i >= 0; i--)
+        {
+            (string name, AudioClip clip, Stopwatch sw, bool reissued) = BundlePending[i];
+            AudioDataLoadState state = clip.loadState;
+
+            if (state == AudioDataLoadState.Loaded)
+            {
+                BundlePending.RemoveAt(i);
+                BgmInflight.Remove(name);
+                BGMManager.PrimeCache(name, clip);
+                Logger.Info($"BGM bundle clip ready: {name} ({sw.ElapsedMilliseconds}ms)", "CustomSounds");
+                continue;
+            }
+
+            // Failed に加え、LoadAudioData() が停滞したまま進まなくなるケースもタイムアウトで
+            // 失敗扱いにする (放置すると BgmInflight にこの名前が居座り続け、IsBgmPipelineIdle も
+            // 永久に false のままになって GC 先撃ちタイミングが失われる)。
+            if (state == AudioDataLoadState.Failed || sw.Elapsed.TotalSeconds > BundleLoadTimeoutSeconds)
+            {
+                BundlePending.RemoveAt(i);
+                BgmInflight.Remove(name);
+                BGMManager.OnPreloadFailed(name);
+                Logger.Warn($"BGM bundle clip load failed: {name} (state={state})", "CustomSounds");
+                continue;
+            }
+
+            // Unloaded のまま既定秒数動かない場合は LoadAudioData() の呼び出しが取りこぼされた
+            // 疑いがあるので 1 回だけ再発行する (以後は BundleLoadTimeoutSeconds の失敗判定に委ねる)。
+            if (!reissued && state == AudioDataLoadState.Unloaded && sw.Elapsed.TotalSeconds >= BundleLoadReissueSeconds)
+            {
+                clip.LoadAudioData();
+                BundlePending[i] = (name, clip, sw, true);
+            }
         }
 
         // TryDownsampleBgm の結果ログをメインスレッドでまとめて出す (裏スレッドは Logger 直呼び禁止)。

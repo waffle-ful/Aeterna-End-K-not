@@ -44,6 +44,10 @@
         <Compile Remove="tests\**"/>
         <EmbeddedResource Remove="tests\**"/>
         <None Remove="tests\**"/>
+        <!-- BGM AssetBundle を焼く Unity Editor プロジェクト (UnityEditor 参照) は別ツールチェーン — 本体ビルドから除外 -->
+        <Compile Remove="unity\**"/>
+        <EmbeddedResource Remove="unity\**"/>
+        <None Remove="unity\**"/>
     </ItemGroup>
 
     <!-- LobbyShare secrets: if the operator has filled in Modules/LobbyShareSecrets.cs
