@@ -300,6 +300,8 @@ public static class MainMenuManagerPatch
 
         __instance.PlayOnlineButton.OnClick.AddListener((UnityAction)(() =>
         {
+            PatchPhases.EnsureComplete("menu-click");
+
             GameOptionsManager.Instance.Initialize();
 
             if (GameOptionsManager.Instance.normalGameHostOptions.MapId == 3 || (GameOptionsManager.Instance.normalGameHostOptions.MapId > 5 && !SubmergedCompatibility.Loaded))
@@ -310,6 +312,8 @@ public static class MainMenuManagerPatch
         }));
 
         LateTask.New(() => ModUpdater.ShowAvailableUpdate(), 0.5f, "ShowUpdatePopupVanilla");
+
+        BootTimeline.Mark("menu.vanilla.start");
     }
 
     private static PassiveButton CreateButton(string name, Vector3 localPosition, Color32 normalColor, Color32 hoverColor, Action action, string label, Vector2? scale = null)

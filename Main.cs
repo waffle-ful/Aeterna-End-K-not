@@ -296,6 +296,7 @@ public class Main : BasePlugin
     public static ConfigEntry<bool> LoadingVideoEnabled { get; private set; }
     public static ConfigEntry<string> LoadingVideoFile { get; private set; }
     public static ConfigEntry<bool> MenuFireEnabled { get; private set; }
+    public static ConfigEntry<bool> DeferredPatching { get; private set; }
 
     // Preset Name Options
     public static ConfigEntry<string> Preset1 { get; private set; }
@@ -491,6 +492,8 @@ public class Main : BasePlugin
 
     public override void Load()
     {
+        BootTimeline.Mark("load.begin");
+
         // Config.Bind は束縛と同時に新キーを cfg へ書き出すので、旧キーの読み取りは
         // 1 回目の Bind より前に済ませておく必要がある。
         SnapshotConfigFileBeforeBind();
@@ -621,6 +624,7 @@ public class Main : BasePlugin
         LoadingVideoEnabled = Config.Bind("Client Options", "LoadingVideoEnabled", true, "Play a short loading-screen video (host-local, no network traffic) over the fade-to-black during scene transitions (game start / next game). Falls back silently to no video if no file is available.");
         LoadingVideoFile = Config.Bind("Client Options", "LoadingVideoFile", "", "Optional file name (relative to BepInEx/plugins/EndKnot/Media/) or absolute path of a custom loading-screen video (.mp4) to use instead of the bundled default.");
         MenuFireEnabled = Config.Bind("Client Options", "MenuFireEnabled", true, "Show the animated fire effect on the main menu background (host-local, no network traffic).");
+        DeferredPatching = Config.Bind("Client Options", "DeferredPatching", true, "Apply in-game Harmony patches after the main menu appears instead of during startup (faster boot). Turn off if the main menu misbehaves.");
 
         AddComponent<ClientControlGUI>();
         Log.LogInfo("ClientControlGUI registered");
@@ -696,6 +700,8 @@ public class Main : BasePlugin
         LastShapeshifterCooldown = Config.Bind("Other", "LastShapeshifterCooldown", (float)30);
 
         HasArgumentException = false;
+
+        BootTimeline.Mark("load.cfg");
 
         try
         {
@@ -1266,8 +1272,11 @@ public class Main : BasePlugin
         }
         catch (Exception ex) { Logger.Fatal(ex.ToString(), "Main"); }
 
+        BootTimeline.Mark("load.roles");
+
         CustomWinnerHolder.Reset();
         Translator.Init();
+        BootTimeline.Mark("load.lang");
         BanManager.Init();
         TemplateManager.Init();
         SpamManager.Init();
@@ -1295,13 +1304,15 @@ public class Main : BasePlugin
 
         PrivateTagManager.LoadTagsFromFile();
 
-        Harmony.PatchAll(Assembly.GetExecutingAssembly());
+        Modules.PatchPhases.RunPhase1(Harmony, Assembly.GetExecutingAssembly());
 
         if (!OperatingSystem.IsAndroid())
         {
             // there are some issues with TextBoxPatch on Android
             Harmony.PatchAll(typeof(TextBoxPatch));
         }
+
+        BootTimeline.Mark("load.patch");
 
         if (!DebugModeManager.AmDebugger)
             ConsoleManager.DetachConsole();
@@ -1366,6 +1377,8 @@ public class Main : BasePlugin
             }
         }
         catch (Exception e) { Utils.ThrowException(e); }
+
+        BootTimeline.Mark("load.end");
     }
 
     private static void HandleRoleColorFiles()

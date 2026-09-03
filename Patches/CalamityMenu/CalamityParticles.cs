@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using EndKnot.Modules;
 using EndKnot.Modules.CalamityMenu;
 using UnityEngine;
 
@@ -49,6 +50,8 @@ public static class CalamityParticles
         // they're no longer spawned. Fireflies (embers) and ash blend with the city/fire.
         for (int i = 0; i < 70; i++) SpawnFirefly(randomY: true);
         for (int i = 0; i < 35; i++) SpawnAsh(randomY: true);
+
+        BootTimeline.Mark("particles.init");
     }
 
     public static void UpdateAll(float dt)

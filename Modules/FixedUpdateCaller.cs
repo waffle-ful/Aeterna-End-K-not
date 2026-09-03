@@ -23,6 +23,8 @@ public static class FixedUpdateCaller
 
         try
         {
+            BootTimeline.NoteFirstTick();
+
             PerSecondUpdateScheduler.OnFixedUpdate();
 
             try { HealthLog.Tick(); }

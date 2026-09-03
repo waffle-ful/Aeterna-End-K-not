@@ -78,7 +78,13 @@ internal static class SplashLogoAnimatorPatch
 
         // メインメニューの背景動画 (火) の準備をここで始める。準備完了まで実測で約2秒かかるので、
         // メニュー構築時に始めると開幕の数秒だけ火が消えた画になる。初回のみ実行される。
+        BootTimeline.Mark("splash.update");
         EndKnot.Patches.CalamityMenu.CalamityFire.Prewarm();
+        // InnerNetClient.FixedUpdate はメニュー到達後に初めて回るため、スプラッシュ中の準備進行 (テクスチャ生成) はここから進める。
+        EndKnot.Patches.CalamityMenu.CalamityFire.Tick();
+        // スプラッシュは静止画なので、後回しにしたパッチの適用をここで進めておくと
+        // メニュー到達時の分割適用 (フレーム落ち) を減らせる。
+        EndKnot.Modules.PatchPhases.Pump(30f);
     }
 }
 

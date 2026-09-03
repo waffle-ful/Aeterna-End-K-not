@@ -179,6 +179,8 @@ public static class AutoRehost
     // して「実 GameId を持つ部屋に入れたら成功」とする。既に MainMenu に居るので ChangeScene しない。
     public static void RequestStartupHost()
     {
+        PatchPhases.EnsureComplete("autorehost");
+
         if (_pending) return; // 既に立て直し/起動ホスト進行中
 
         _pending = true;
