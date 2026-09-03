@@ -1493,6 +1493,8 @@ internal static class ReportDeadBodyPatch
         MeetingStarted = true;
         LateTask.New(() => MeetingStarted = false, 1f, "ResetMeetingStarted");
 
+        ReportReasonNotice.OnReportConfirmed(player, target);
+
         if (ClientControlGUI.HudHidden)
         {
             ClientControlGUI.HudHidden = false;

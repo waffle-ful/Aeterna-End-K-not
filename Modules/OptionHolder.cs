@@ -1717,6 +1717,8 @@ public static class Options
 
         Modules.OptionSanityCheck.SetupCustomOption();
 
+        Modules.ReportReasonNotice.SetupCustomOption();
+
         BGMManager.SetupCustomOption();
 
         Modules.YouTubeChat.YouTubeChatOptions.SetupCustomOption();
