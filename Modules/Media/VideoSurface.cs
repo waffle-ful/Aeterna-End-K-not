@@ -27,6 +27,9 @@ public sealed class VideoSurface
     public bool IsActive { get; private set; }
     public bool Prepared { get; private set; }
 
+    // 実際に最初のフレームがコピーされた瞬間を計測層へ通知するためのフック (呼び出し元が任意設定)。
+    public Action OnFirstFrame;
+
     /// <summary>ネイティブ側の準備が済んでいるか。<see cref="Prepared"/> は <see cref="Tick"/> が
     /// 拾い上げて描画を始めた後に立つので、ポーリング前の進み具合を見たいときはこちらを使う。</summary>
     public bool NativePrepared => _player != null && _player.isPrepared;
@@ -39,6 +42,28 @@ public sealed class VideoSurface
     private float _createdAtRealtime;
     private bool _pendingLogged;
     private bool _firstCopyLogged;
+    private bool _visible = true;
+
+    // OnPrepared が Renderer.enabled をこの値で確定させる。prewarm 中は見せたくないので
+    // 準備が整うより前に false へ落としておけるようにする。
+    public void SetVisible(bool visible)
+    {
+        _visible = visible;
+        if (Renderer != null) Renderer.enabled = visible;
+    }
+
+    public void Pause()
+    {
+        try { _player?.Pause(); }
+        catch (Exception e) { Utils.ThrowException(e); }
+    }
+
+    public void Resume()
+    {
+        if (_player == null || !Prepared) return;
+        try { _player.Play(); }
+        catch (Exception e) { Utils.ThrowException(e); }
+    }
 
     public bool TryCreate(string absolutePath, Transform parent)
     {
@@ -123,6 +148,7 @@ public sealed class VideoSurface
                 {
                     _firstCopyLogged = true;
                     Logger.Info($"first frame copied (CopyTexture), renderer.enabled={Renderer.enabled}, sorting={Renderer.sortingLayerID}/{Renderer.sortingOrder}, scale={Renderer.transform.localScale.x:F2}, layer={GameObject.layer}, worldPos={Renderer.transform.position}", "LoadingScreenVideo");
+                    try { OnFirstFrame?.Invoke(); } catch (Exception e) { Utils.ThrowException(e); }
                 }
                 return;
             }
@@ -177,7 +203,7 @@ public sealed class VideoSurface
         _videoSprite.hideFlags = HideFlags.HideAndDontSave;
 
         Renderer.sprite = _videoSprite;
-        Renderer.enabled = true;
+        Renderer.enabled = _visible;
 
         Prepared = true;
         _player.Play();

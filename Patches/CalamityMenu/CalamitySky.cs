@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using EndKnot.Modules;
 using EndKnot.Modules.CalamityMenu;
 using UnityEngine;
 
@@ -105,9 +106,9 @@ public static class CalamitySky
         _spawnTimer = 0f;
         _nextSpawnDelay = Random.Range(0.3f, 1.2f);
         _lightningTimer = 0f;
-        // 初回だけ前詰め: メニューが出た直後の数秒に1回光らせて空が生きていることを見せる。
+        // 初回だけ前詰め: メニューが出た直後の1秒前後に1回光らせて空が生きていることを見せる。
         // 2回目以降は UpdateLightning 側の通常間隔 (8〜22秒) に戻る。
-        _nextLightningDelay = Random.Range(1.5f, 4f);
+        _nextLightningDelay = Random.Range(0.4f, 1.2f);
 
         BuildLightningQuad();
     }
@@ -435,6 +436,7 @@ public static class CalamitySky
             _nextLightningDelay = Random.Range(8f, 22f);
             _lightningMaxLife = 0.35f;
             _lightningLife = _lightningMaxLife;
+            BootTimeline.Mark("sky.lightning1");
         }
     }
 

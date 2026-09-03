@@ -1,4 +1,5 @@
 using System;
+using EndKnot.Modules;
 using EndKnot.Modules.CalamityMenu;
 using HarmonyLib;
 using UnityEngine;
@@ -44,6 +45,7 @@ public static class CalamityMenuPatch
         if (!CalamityMenuState.Active) return;
 
         Logger.Info("Calamity menu setup begin", "CalamityMenuPatch");
+        BootTimeline.Mark("menu.start.begin");
 
         // Reset per-scene state so VanillaSuppressor re-runs on scene reload
         CalamityMenuState.VanillaSuppressed = false;
@@ -95,6 +97,7 @@ public static class CalamityMenuPatch
         MainMenuManagerPatch.ShowingPanel = false;
 
         Logger.Info("Calamity menu setup done", "CalamityMenuPatch");
+        BootTimeline.Mark("menu.start.end");
     }
 
     private static void SafeStep(string name, Action action)
@@ -107,6 +110,9 @@ public static class CalamityMenuPatch
     [HarmonyPostfix]
     public static void LateUpdate_Postfix()
     {
+        BootTimeline.OnMenuFrame();
+        PatchPhases.Pump(30f);
+
         if (!CalamityMenuState.Active) return;
         CalamityParticles.UpdateAll(Time.deltaTime);
         CalamitySky.UpdateAll(Time.deltaTime);
