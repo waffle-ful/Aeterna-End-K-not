@@ -9655,6 +9655,24 @@
   /* ==============================
     Device Time Limit
   ============================== */
+  "MenuTitle.DeviceTimeLimit": "★ Device Time Limit ★",
+  "EnableDeviceTimeLimit": "Limit how long each device can be used",
+  "DeviceTimeLimitMode": "Time limit resets",
+  "DeviceTimeLimitMode.PerGame": "Once per match",
+  "DeviceTimeLimitMode.PerRound": "Every round",
+  "AdminTimeLimit": "Admin table usage limit (0 = unlimited)",
+  "CameraTimeLimit": "Security cameras usage limit (0 = unlimited)",
+  "DoorLogTimeLimit": "Door log usage limit (0 = unlimited)",
+  "VitalTimeLimit": "Vitals usage limit (0 = unlimited)",
+  "DeviceTimeLimitNotifyOnExhausted": "Notify the player when their time runs out",
+  "DeviceTimeLimit.Admin": "Admin table",
+  "DeviceTimeLimit.Camera": "security cameras",
+  "DeviceTimeLimit.DoorLog": "door log",
+  "DeviceTimeLimit.Vital": "vitals",
+  "DeviceTimeLimit.Exhausted": "<color=#ff9999>You've used up your time on the {0}.</color>",
+  /* ==============================
+    Numeric Option Input
+  ============================== */
   "MenuTitle.NumericOptionInput": "★ Numeric Option Input ★",
   "EnableNumericOptionInput": "Show a button to type numeric option values directly",
   "NumericOptionInput.ParseError": "That doesn't look like a number.",

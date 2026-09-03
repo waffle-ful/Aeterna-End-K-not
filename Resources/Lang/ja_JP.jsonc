@@ -9061,6 +9061,24 @@
   /* ==============================
     Device Time Limit
   ============================== */
+  "MenuTitle.DeviceTimeLimit": "★ デバイス使用時間制限 ★",
+  "EnableDeviceTimeLimit": "デバイスの使用時間に上限を設ける",
+  "DeviceTimeLimitMode": "上限のリセットタイミング",
+  "DeviceTimeLimitMode.PerGame": "試合につき1回",
+  "DeviceTimeLimitMode.PerRound": "ラウンドごと",
+  "AdminTimeLimit": "アドミンの使用上限 (0=無制限)",
+  "CameraTimeLimit": "カメラの使用上限 (0=無制限)",
+  "DoorLogTimeLimit": "ドアログの使用上限 (0=無制限)",
+  "VitalTimeLimit": "バイタルの使用上限 (0=無制限)",
+  "DeviceTimeLimitNotifyOnExhausted": "使用時間が尽きたら本人に知らせる",
+  "DeviceTimeLimit.Admin": "アドミン",
+  "DeviceTimeLimit.Camera": "カメラ",
+  "DeviceTimeLimit.DoorLog": "ドアログ",
+  "DeviceTimeLimit.Vital": "バイタル",
+  "DeviceTimeLimit.Exhausted": "<color=#ff9999>{0}の使用可能時間が切れました。</color>",
+  /* ==============================
+    Numeric Option Input
+  ============================== */
   "MenuTitle.NumericOptionInput": "★ 数値の直接入力 ★",
   "EnableNumericOptionInput": "数値オプションの値を直接入力できるボタンを出す",
   "NumericOptionInput.ParseError": "数値として認識できませんでした。",

@@ -2582,6 +2582,8 @@ public static class Options
             .SetParent(DisableDevicesIgnoreConditions)
             .SetColor(new Color32(255, 153, 153, byte.MaxValue));
 
+        DisableDevice.SetupTimeLimitOptions();
+
         LoadingPercentage = 78;
 
         #endregion
