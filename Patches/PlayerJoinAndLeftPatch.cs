@@ -588,6 +588,7 @@ internal static class OnPlayerJoinedPatch
         }
 
         BanManager.CheckBanPlayer(client);
+        if (!WhitelistManager.CheckJoiningPlayer(client)) ConsecutiveJoinKick.CheckJoiningPlayer(client);
 
         if (AmongUsClient.Instance.AmHost)
         {

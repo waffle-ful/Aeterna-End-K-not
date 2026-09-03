@@ -297,6 +297,7 @@
   "MenuTitle.AutoFactionMinMaxSettings": "Auto Team Sizes",
   "MenuTitle.AutoGMRotation": "Automatic Game Mode Rotation",
   "MenuTitle.CTA": "★ Custom Team Assignment ★",
+  "MenuTitle.ConsecutiveJoinKick": "★ Consecutive-Join Kick ★",
   "MenuTitle.CrewAdvancedGameEndChecking": "Advanced Game End Checking",
   "MenuTitle.Disable": "★ Disable ★",
   "MenuTitle.Ejections": "★ Ejection ★",
@@ -9601,6 +9602,25 @@
   /* ==============================
     Consecutive-Join Kick
   ============================== */
+  "EnableConsecutiveJoinKick": "Kick players who just rejoined from the last match",
+  "ConsecutiveJoinKickNotifyOnly": "Notify only, don't actually kick",
+  "ConsecutiveJoinKickExemptModerators": "Exempt moderators",
+  "ConsecutiveJoinKickSkipAbortedGames": "Don't remember matches that ended in an auto-abort/draw",
+  "ConsecutiveJoinKickCooldownGames": "Number of past matches to remember",
+  "Message.KickedByConsecutiveJoin": "{0} was kicked for rejoining right after the last match.",
+  "Message.ConsecutiveJoinNotifyOnly": "{0} rejoined right after the last match (notify-only, not kicked).",
+  "Message.ConsecutiveJoinExemptListEmpty": "The exempt list is empty.",
+  "Message.AllowJoinUsage": "Usage: /aj <id/name>  |  /aj clear",
+  "Message.AllowJoinCleared": "Cleared the one-time allow list.",
+  "Message.AllowJoinGranted": "{0} may rejoin once, even if flagged.",
+  "Message.ExemptListTitle": "<color=#00c1ff>Exempt list</color>",
+  "Message.ExemptRemoved": "Removed {0} from the exempt list.",
+  "Message.ExemptAdded": "Added {0} to the exempt list.",
+  "Message.KickPreviousResult": "Kicked {0} previous-match player(s) still in the lobby.",
+  /* ==============================
+    Auto-Abort
+  ============================== */
+  "WordLimitExemptHost": "Never kill the host for this (still warned)",
   ============================== */
   "Achievement.ALightInTheShadows": "A Light In The Shadows",
   "Achievement.ALightInTheShadows.Description": "Walk near the Beacon during the lights sabotage",
@@ -10323,6 +10343,9 @@
   "CommandDescription.Fabricate": "Set a fake death reason for your next kill as the Fabricator",
   "CommandDescription.Abort": "Forcibly ends the current game in a draw (chat version of Shift+L+Enter). For when the game is stuck.",
   "CommandDescription.Whitelist": "Manages the join whitelist: list, add, remove or reload.",
+  "CommandDescription.AllowJoin": "Lets a previously-flagged player rejoin once, or clears the one-time allow list.",
+  "CommandDescription.Exempt": "Manages the consecutive-join-kick exempt list.",
+  "CommandDescription.KickPrevious": "Kicks every previous-match player still sitting in the lobby.",
   "CommandDescription.Fix": "Fixes the black screen bug for a specific player.",
   "CommandDescription.Forge": "As the Forger, forge a fake role for a player.",
   "CommandDescription.GiveKill": "Grant a player the ability to kill in the lobby.",
@@ -10492,6 +10515,10 @@
   "CommandForms.Fabricate": "fabricate",
   "CommandForms.Abort": "abort,forceend,fe,haison",
   "CommandForms.Whitelist": "wl,whitelist",
+  "CommandForms.AllowJoin": "aj,allowjoin",
+  "CommandForms.Exempt": "ex,exempt",
+  "CommandForms.KickPrevious": "kp,kickprev",
+  "CommandArgs.AllowJoin.Target": "Player ID/name, or \"clear\"",
   "CommandForms.Fix": "fix,blackscreenfix,fixblackscreen",
   "CommandForms.Forge": "forge",
   "CommandForms.GiveKill": "givekill,gk",

@@ -1711,6 +1711,8 @@ public static class Options
 
         Modules.WhitelistManager.SetupCustomOption();
 
+        Modules.ConsecutiveJoinKick.SetupCustomOption();
+
         BGMManager.SetupCustomOption();
 
         Modules.YouTubeChat.YouTubeChatOptions.SetupCustomOption();
