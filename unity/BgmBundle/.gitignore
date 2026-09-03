@@ -1,0 +1,19 @@
+# Unity が生成する作業ディレクトリ (プロジェクトを開けば再生成される)
+Library/
+Temp/
+Logs/
+UserSettings/
+Build/
+obj/
+*.csproj
+*.sln
+# BGM 素材はライセンス上リポジトリに置かない (tools/build-bgm-bundle.ps1 が Resources/Sounds/BGM からコピーする)
+Assets/BGM/
+# ProjectSettings は ProjectVersion.txt (エディタ版固定) 以外は既定で良い
+ProjectSettings/*
+!ProjectSettings/ProjectVersion.txt
+# ルートの .gitignore (*.meta / Packages/*) を上書き: Unity プロジェクトとして必要な分は追跡する
+!Assets/**/*.meta
+!Packages/
+!Packages/manifest.json
+Packages/packages-lock.json
