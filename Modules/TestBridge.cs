@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
@@ -383,6 +383,19 @@ public static class TestBridge
         {
             try { ExecuteBcensus(); }
             catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR bcensus failed"); }
+            return;
+        }
+
+        // cpusets show|off|auto|cache:N — CPU Sets の実行時切替 (A/B 用・再起動不要)。
+        if (directive.Equals("cpusets", StringComparison.OrdinalIgnoreCase) || directive.StartsWith("cpusets ", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                string arg = directive.Length > 7 ? directive[8..].Trim() : "show";
+                string res = arg.Equals("show", StringComparison.OrdinalIgnoreCase) ? CpuSetsOptimizer.Show() : CpuSetsOptimizer.Apply(arg);
+                WriteOut(res.StartsWith("ERR") ? res : res.StartsWith("SKIP") ? "SKIP cpusets " + res[5..] : "OK cpusets " + res);
+            }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR cpusets failed"); }
             return;
         }
 
