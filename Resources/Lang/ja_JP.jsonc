@@ -297,6 +297,7 @@
   "MenuTitle.AutoFactionMinMaxSettings": "★ 陣営の自動サイズ ★",
   "MenuTitle.AutoGMRotation": "★ ゲームモード 自動切替 ★",
   "MenuTitle.CTA": "★ カスタム チームの割り当て ★",
+  "MenuTitle.ConsecutiveJoinKick": "★ 連続参加キック ★",
   "MenuTitle.CrewAdvancedGameEndChecking": "★ ゲーム終了の高度判定 ★",
   "MenuTitle.Disable": "★ 無効化 ★",
   "MenuTitle.Ejections": "★ 追放 ★",
@@ -9007,6 +9008,25 @@
   /* ==============================
     Consecutive-Join Kick
   ============================== */
+  "EnableConsecutiveJoinKick": "前の試合から続けて参加した人をキックする",
+  "ConsecutiveJoinKickNotifyOnly": "キックせず通知だけする",
+  "ConsecutiveJoinKickExemptModerators": "モデレーターは対象外にする",
+  "ConsecutiveJoinKickSkipAbortedGames": "自動廃村/引き分けで終わった試合は記憶しない",
+  "ConsecutiveJoinKickCooldownGames": "記憶しておく試合数",
+  "Message.KickedByConsecutiveJoin": "{0} は前の試合から続けて参加したためキックされました。",
+  "Message.ConsecutiveJoinNotifyOnly": "{0} が前の試合から続けて参加しました (通知のみ、キックはしていません)。",
+  "Message.ConsecutiveJoinExemptListEmpty": "免除リストは空です。",
+  "Message.AllowJoinUsage": "使い方: /aj <ID/名前>  |  /aj clear",
+  "Message.AllowJoinCleared": "今回だけの許可リストをクリアしました。",
+  "Message.AllowJoinGranted": "{0} は次の1回だけ、対象でも参加できます。",
+  "Message.ExemptListTitle": "<color=#00c1ff>免除リスト</color>",
+  "Message.ExemptRemoved": "{0} を免除リストから外しました。",
+  "Message.ExemptAdded": "{0} を免除リストに追加しました。",
+  "Message.KickPreviousResult": "ロビーに残っていた前回参加者を {0} 人キックしました。",
+  /* ==============================
+    Auto-Abort
+  ============================== */
+  "WordLimitExemptHost": "ホストだけは死亡させない (警告は入る)",
   ============================== */
   "Achievement.ALightInTheShadows": "<size=75%>陰に潜む光</size>",
   "Achievement.ALightInTheShadows.Description": "<size=75%>停電中に <#a3fdff>ビーコン</color>の近くを歩く",
@@ -9712,6 +9732,9 @@
   "CommandDescription.Fabricate": "ファブリケーター として 次のキルに偽装する死因を設定",
   "CommandDescription.Abort": "現在のゲームを引き分けで強制終了する (廃村)。Shift+L+Enter のチャット版。",
   "CommandDescription.Whitelist": "参加ホワイトリストを管理する: list / add / remove / reload。",
+  "CommandDescription.AllowJoin": "キック対象のプレイヤーを次の1回だけ参加させる。または、その一時許可リストをクリアする。",
+  "CommandDescription.Exempt": "連続参加キックの免除リストを管理する。",
+  "CommandDescription.KickPrevious": "ロビーに残っている前回参加者を一括でキックする。",
   "CommandDescription.Fix": "特定のプレイヤーの暗転バグを修正する。",
   "CommandDescription.Forge": "<#ff1919>偽造者</color>として、1人のプレイヤーを 1つの偽の役割で偽造する。",
   "CommandDescription.GNO": "数字のミニ-ゲームを推測する",
@@ -9836,6 +9859,10 @@
   "CommandForms.Fabricate": "fabricate",
   "CommandForms.Abort": "abort,forceend,fe,haison,廃村",
   "CommandForms.Whitelist": "wl,whitelist,ホワイトリスト",
+  "CommandForms.AllowJoin": "aj,allowjoin,再参加許可",
+  "CommandForms.Exempt": "ex,exempt,免除",
+  "CommandForms.KickPrevious": "kp,kickprev,一括キック",
+  "CommandArgs.AllowJoin.Target": "プレイヤーID/名前、または \"clear\"",
   "CommandForms.Fix": "fix,blackscreenfix,fixblackscreen",
   "CommandForms.Forge": "forge",
   "CommandForms.GNO": "gno",
