@@ -60,7 +60,7 @@ internal static class ControllerManagerUpdatePatch
                             OptionShower.CurrentPage = i;
                     }*/
 
-                    if (KeysDown(KeyCode.Return) && GameSettingMenu.Instance && GameSettingMenu.Instance.isActiveAndEnabled)
+                    if (KeysDown(KeyCode.Return) && GameSettingMenu.Instance && GameSettingMenu.Instance.isActiveAndEnabled && !NumericOptionInputPatch.IsInputOpen)
                         GameSettingMenuPatch.SearchForOptionsAction?.Invoke();
 
                     // Tab accepts the top search suggestion into the settings search box (Enter then searches).

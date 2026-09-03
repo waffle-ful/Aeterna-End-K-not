@@ -3008,7 +3008,9 @@ public static class FixInputChatField
         // textArea/Background 欠損の個体でも InputField にキャッシュされうる (ゴースト掃除を非致命化した結果、
         // "search box clone has no outputText" の Warn を出した clone もキャッシュまで到達する)。無ガードだと
         // ここが毎フレーム NRE になり、しかも return false 済みでバニラの UpdateCharCount まで止まる。
-        if (GameSettingMenuPatch.InputField && __instance == GameSettingMenuPatch.InputField && __instance.gameObject.activeSelf && __instance.Background && __instance.textArea)
+        bool isSearchField = GameSettingMenuPatch.InputField && __instance == GameSettingMenuPatch.InputField;
+        bool isNumericField = NumericOptionInputPatch.ActiveField && __instance == NumericOptionInputPatch.ActiveField;
+        if ((isSearchField || isNumericField) && __instance.gameObject.activeSelf && __instance.Background && __instance.textArea)
         {
             Vector2 size = __instance.Background.size;
             size.y = Math.Max(0.62f, __instance.textArea.TextHeight + 0.2f);
