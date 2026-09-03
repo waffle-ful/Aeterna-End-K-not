@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -231,6 +231,7 @@ public class Main : BasePlugin
     public static ConfigEntry<bool> ShowFps { get; private set; }
     public static ConfigEntry<bool> AutoStart { get; private set; }
     public static ConfigEntry<bool> ForceOwnLanguage { get; private set; }
+    public static ConfigEntry<string> CpuSetsMode { get; private set; }
     public static ConfigEntry<bool> ForceOwnLanguageRoleName { get; private set; }
     public static ConfigEntry<bool> EnableCustomButton { get; private set; }
     public static ConfigEntry<bool> EnableCustomSoundEffect { get; private set; }
@@ -598,6 +599,8 @@ public class Main : BasePlugin
         EnableTestBridge = Config.Bind("Client Options", "EnableTestBridge", false, "Enable the remote test bridge (TestBridge): polls <Desktop>/EndKnot_Logs/bridge-cmd.txt for chat-command directives and writes results to bridge-out.log. Plain text files in, plain text out, so any external driver can use it. Windows-only, host-only. Default off.");
         EnableBoehmCensus = Config.Bind("Client Options", "EnableBoehmCensus", false, "Enable the automatic il2cpp (Boehm) heap liveness census (BoehmCensus) that fires alongside the lobby-entry CENSUS snapshot. It briefly disables the il2cpp GC and walks the entire live-object graph, which is more invasive than the other census passes, so it stays opt-in. The TestBridge 'bcensus' directive and manual /census both run it regardless of this setting. Default off.");
         ShowStartupFadeIn = Config.Bind("Client Options", "ShowStartupFadeIn", false, "Show the black overlay + title reveal (CalamityFadeIn, 7.5s) on the very first main-menu load. Default off: the menu is usable well before the reveal finishes, so the overlay only hides an otherwise-ready screen and makes startup feel slower.");
+        CpuSetsMode = Config.Bind("Client Options", "CpuSetsMode", "Off", "Experimental: restrict this process to one CPU cache domain via the Windows CPU Sets API (no admin, reverts on exit). Values: Off / Auto / Cache:N. Auto picks the highest efficiency class (Intel P-cores) or, on multi-CCX/CCD AMD parts, the largest last-level-cache domain; it does nothing on single-domain CPUs. Cache:N pins to last-level-cache index N (see the CpuSets line in LogOutput.log for the topology). The TestBridge directive 'cpusets show|off|auto|cache:N' switches it at runtime for A/B tests. Default Off.");
+        Log.LogInfo($"CpuSets: {CpuSetsOptimizer.Apply(CpuSetsMode.Value)}");
         SlimVanillaTextures = Config.Bind("Client Options", "SlimVanillaTextures", false,"Try to shrink and compress a few oversized vanilla textures at runtime once the main menu is reached (TextureSlimmer): the judge-gavel animation frames (hammerSlam_01..06, 6 x 9MB uncompressed RGBA32) would be re-initialised in place at half resolution + BC3. DEFAULT OFF: on the current Windows build the engine refuses to re-initialise a non-readable texture (2026-09-02 measured: all 6 frames return false, originals untouched, ~100ms hitch at the menu for nothing). Kept as an opt-in probe for other platforms; the result is logged as TEXSLIM in EndKnot-Health.log.");
         TestBridgeAutoScreenshot = Config.Bind("Client Options", "TestBridgeAutoScreenshot", false, "When TestBridge is enabled, also capture a screenshot on a fixed interval (see TestBridgeScreenshotInterval) in addition to the manual 'screenshot' directive.");
         TestBridgeScreenshotInterval = Config.Bind("Client Options", "TestBridgeScreenshotInterval", 20, "Seconds between automatic screenshots when TestBridgeAutoScreenshot is on.");

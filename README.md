@@ -220,6 +220,7 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 - **[CrowdedMod](https://github.com/CrowdedMods/CrowdedMod)** (andry08 / CrowdedMods、MIT) — 大人数ロビー対応
 - **[Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles)** (Gurge44 他、GPL-3.0) — ベース Mod。役職エンジンと大多数の役職、継続的なバグ修正の取り込み元
 - **[ExtremeRoles](https://github.com/yukieiji/ExtremeRoles)** (yukieiji) — アサシン、マーリン、エアシップ関連のパッチ
+- **[Game Optimizer (CPUs / Threads Optimizer)](https://github.com/charlie754/Game-Optimizer-CPUs-Threads-Optimizer)** (charlie754、MIT) — CPU Sets によるキャッシュドメイン隔離の発想 (`CpuSetsMode` 設定)。コードは Win32 API から独自実装
 - **[Lotus (LotusContinued)](https://github.com/Lotus-AU/LotusContinued)** / [NikoCat233 fork](https://github.com/NikoCat233/LotusContinued) (GPL-3.0) — メインメニュー刷新の参考、オブジェクト操作の補助処理、Alchemist / Chameleon / Escapist / Necromancer / Deathknight / Romantic 系 / Vengeance の着想、自動リプレイ、タブアイコン、設定矛盾の検出とホスト警告、ホワイトリスト入室制限
 - **[MalumMenu](https://github.com/scp222thj/MalumMenu)** (scp222thj、GPL-3.0) — ミニマップ上のプレイヤー位置表示（Town Of Next: Edited がベント地図の参照元として挙げているもの）
 - **[Mini.RegionInstall](https://github.com/miniduikboot/Mini.RegionInstall)** (miniduikboot、GPL-3.0) — カスタムリージョンの追加（配布パッケージに同梱）
