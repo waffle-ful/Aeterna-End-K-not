@@ -1713,6 +1713,8 @@ public static class Options
 
         Modules.ConsecutiveJoinKick.SetupCustomOption();
 
+        Modules.AutoAbort.SetupCustomOption();
+
         BGMManager.SetupCustomOption();
 
         Modules.YouTubeChat.YouTubeChatOptions.SetupCustomOption();

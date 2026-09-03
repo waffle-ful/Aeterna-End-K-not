@@ -294,6 +294,7 @@
   "MeetingManagerMessageTitle": "★ Meeting Management ★",
   "MenuTitle.AFKDetection": "★ AFK Detection ★",
   "MenuTitle.AGMR.RandomGroup": "Random Group {index}",
+  "MenuTitle.AutoAbort": "★ Auto-Abort ★",
   "MenuTitle.AutoFactionMinMaxSettings": "Auto Team Sizes",
   "MenuTitle.AutoGMRotation": "Automatic Game Mode Rotation",
   "MenuTitle.CTA": "★ Custom Team Assignment ★",
@@ -9619,6 +9620,15 @@
   "Message.KickPreviousResult": "Kicked {0} previous-match player(s) still in the lobby.",
   /* ==============================
     Auto-Abort
+  ============================== */
+  "EnableAutoAbort": "Automatically abort the match when it can no longer be finished",
+  "AutoAbortDisconnectCount": "Alive disconnects before auto-abort",
+  "AutoAbortMinAlivePlayers": "Auto-abort if alive players drop below this many (0 = off)",
+  "AutoAbortDelaySeconds": "Delay before auto-abort fires",
+  "AutoAbortNotifyBeforeAbort": "Warn everyone before auto-aborting",
+  "Message.AutoAbortNotice": "<color=#ffaa00>Too many players have disconnected — this match will be auto-aborted shortly.</color>",
+  /* ==============================
+    Option Sanity Check
   ============================== */
   "WordLimitExemptHost": "Never kill the host for this (still warned)",
   ============================== */
