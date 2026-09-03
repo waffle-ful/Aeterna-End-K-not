@@ -1725,6 +1725,8 @@ public static class Options
 
         Modules.WordLimit.SetupCustomOption();
 
+        Modules.ComingOut.SetupCustomOption();
+
         BGMManager.SetupCustomOption();
 
         Modules.YouTubeChat.YouTubeChatOptions.SetupCustomOption();

@@ -3717,6 +3717,29 @@ internal static class ChatCommands
     {
         if (args.Length < 2 || !GetRoleByName(string.Join(' ', args[1..]), out CustomRoles role))
         {
+            Utils.SendMessage(GetString("ComingOut.RoleNotFound"), player.PlayerId);
+            return;
+        }
+
+        Modules.ComingOut.TryDeclare(player, role, false);
+    }
+
+    private static void AcoCommand(PlayerControl player, string text, string[] args)
+    {
+        if (args.Length < 2 || !GetRoleByName(string.Join(' ', args[1..]), out CustomRoles role))
+        {
+            Utils.SendMessage(GetString("ComingOut.RoleNotFound"), player.PlayerId);
+            return;
+        }
+
+        Modules.ComingOut.TryDeclare(player, role, true);
+    }
+
+    private static void ColistCommand(PlayerControl player, string text, string[] args)
+    {
+        Modules.ComingOut.SendList(player);
+    }
+
     // ── Dev-only debug commands ──────────────────────────────────────────────────
 
     private static void InspectCommand(PlayerControl player, string text, string[] args)
