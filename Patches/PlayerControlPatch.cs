@@ -1995,9 +1995,10 @@ internal static class FixedUpdatePatch
                 {
                     LevelKickBufferTime = 20;
 
-                    if (player.GetClient().ProductUserId != "")
+                    ClientData lowLevelClient = player.GetClient();
+                    if (lowLevelClient != null && lowLevelClient.ProductUserId != "")
                     {
-                        string hashedPuid = player.GetClient().GetHashedPuid();
+                        string hashedPuid = lowLevelClient.GetHashedPuid();
                         if (!BanManager.TempBanWhiteList.Contains(hashedPuid)) BanManager.TempBanWhiteList.Add(hashedPuid);
                     }
 
@@ -2184,7 +2185,10 @@ internal static class FixedUpdatePatch
                     player.cosmetics.nameText.text = $"<color=#ff0000><size=1.4>v{ver.version}</size>\n{player.name}</color>";
             }
             else
-                player.cosmetics.nameText.text = Main.ShowPlayerInfoInLobby.Value && !player.AmOwner ? $"<#888888><size=1.2>{player.GetClient().PlatformData.Platform} | {player.FriendCode} | {player.GetClient().GetHashedPuid()}</size></color>\n{player.Data?.PlayerName}" : player.Data?.PlayerName;
+            {
+                ClientData client = player.GetClient();
+                player.cosmetics.nameText.text = client != null && Main.ShowPlayerInfoInLobby.Value && !player.AmOwner ? $"<#888888><size=1.2>{client.PlatformData.Platform} | {player.FriendCode} | {client.GetHashedPuid()}</size></color>\n{player.Data?.PlayerName}" : player.Data?.PlayerName;
+            }
         }
 
         if (GameStates.IsInGame)
