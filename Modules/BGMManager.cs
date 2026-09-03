@@ -476,9 +476,29 @@ public static class BGMManager
     // ここで検出して取り除き、呼び出し側には「未キャッシュ」として再デコードさせる。
     private static AudioClip TryGetCachedClip(string name)
     {
-        if (name == null || !BgmCache.TryGetValue(name, out AudioClip cached)) return null;
-        if (cached) return cached;
-        BgmCache.Remove(name);
+        if (name == null) return null;
+
+        if (BgmCache.TryGetValue(name, out AudioClip cached))
+        {
+            if (cached) return cached;
+            BgmCache.Remove(name);
+        }
+
+        // ReleaseGraceSeconds の猶予中に同じ名前が再要求された場合は PendingRelease から拾い戻す
+        // (再デコード/再 LoadAudioData を起こさない — バンドルクリップの二重ロードと OGG の
+        // 二重デコードを両方防ぐ)。
+        for (int i = PendingRelease.Count - 1; i >= 0; i--)
+        {
+            (string pendingName, AudioClip clip, float _) = PendingRelease[i];
+            if (!string.Equals(pendingName, name, StringComparison.Ordinal)) continue;
+
+            PendingRelease.RemoveAt(i);
+            if (!clip) return null;
+
+            BgmCache[name] = clip;
+            return clip;
+        }
+
         return null;
     }
 
@@ -517,6 +537,22 @@ public static class BGMManager
         }
     }
 
+    // ResolveSource と同じ優先順位判定 (ユーザー差し替えファイルの有無だけ)。BgmBundle 経路は
+    // ユーザーファイルが無い時だけ使うため、裏デコードへ回す前にメインスレッドでこれを見る。
+    internal static bool HasUserOverride(string name)
+    {
+        lock (ResolveLock)
+        {
+            if (!Directory.Exists(BGMPath)) return false;
+
+            foreach (string ext in SupportedExtensions)
+                if (File.Exists(BGMPath + name + ext))
+                    return true;
+
+            return false;
+        }
+    }
+
     // preload ポンプ (メインスレッド) からクリップ化済み BGM を受け取る。二重デコードと
     // レースした場合は先勝ち (後着の clip は破棄して native リークを防ぐ)。
     internal static void PrimeCache(string name, AudioClip clip)
@@ -525,7 +561,10 @@ public static class BGMManager
 
         if (BgmCache.TryGetValue(name, out AudioClip existing) && existing)
         {
-            UnityEngine.Object.Destroy(clip);
+            // バンドルクリップは名前ごとの単一インスタンス — 二重 PrimeCache は同じ参照が
+            // 既にキャッシュ済みなだけなので何もしない (unload すると再生中のクリップを壊す)。
+            if (BgmBundle.IsBundleClip(clip)) { if (existing.Pointer != clip.Pointer) clip.UnloadAudioData(); }
+            else UnityEngine.Object.Destroy(clip);
             return;
         }
 
@@ -533,7 +572,8 @@ public static class BGMManager
         // 「せっかく作ったから」で持つと全曲常駐に逆戻りする。
         if (!IsFileWantedOrPending(name))
         {
-            UnityEngine.Object.Destroy(clip);
+            if (BgmBundle.IsBundleClip(clip)) clip.UnloadAudioData();
+            else UnityEngine.Object.Destroy(clip);
             Logger.Info($"Discarding preloaded BGM {name} (no longer wanted)", "BGMManager");
             gcWanted = true;
             return;
@@ -724,10 +764,20 @@ public static class BGMManager
 
         for (int i = PendingRelease.Count - 1; i >= 0; i--)
         {
-            (string _, AudioClip clip, float due) = PendingRelease[i];
+            (string name, AudioClip clip, float due) = PendingRelease[i];
             if (Time.realtimeSinceStartup < due) continue;
             PendingRelease.RemoveAt(i);
-            if (clip) UnityEngine.Object.Destroy(clip);
+            if (clip)
+            {
+                if (BgmBundle.IsBundleClip(clip))
+                {
+                    // バンドルクリップは名前ごとの単一インスタンス — 猶予中に再度 wanted になって
+                    // BgmCache へ戻っていたら、それは今使っている参照なので unload しない。
+                    bool stillLive = BgmCache.TryGetValue(name, out AudioClip live) && live && live.Pointer == clip.Pointer;
+                    if (!stillLive) clip.UnloadAudioData();
+                }
+                else UnityEngine.Object.Destroy(clip);
+            }
             gcWanted = true;
         }
 
