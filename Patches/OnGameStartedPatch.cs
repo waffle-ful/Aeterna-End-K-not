@@ -459,6 +459,7 @@ internal static class ChangeRoleSettings
                 ChatManager.ResetHistory();
                 EndKnot.Modules.VoiceVox.VoiceVoxManager.Reset();
                 PerSecondUpdateScheduler.Reset();
+                WordLimit.Reset();
             }
             catch (Exception e) { Utils.ThrowException(e); }
             
