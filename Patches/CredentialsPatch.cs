@@ -18,13 +18,15 @@ internal static class PingTrackerUpdatePatch
     public static PingTracker Instance;
     private static readonly StringBuilder Sb = new();
     private static long LastUpdate;
+    private static bool TextDirty = true; // Sb を作り直した後だけ TMP へ書く (毎フレームの文字列化は不要)
 
     private static readonly float[] FpsBuffer = new float[10];
     private static int FpsIndex;
     private static int FpsCount;
     private static Color32 FpsColor = new(0, 165, 255, 255);
 
-    public static bool Prefix(PingTracker __instance)
+    public static bool Prefix(PingTracker __instance) { var alloc = EndKnot.Modules.AllocProbe.Now(); try { return PrefixCore(__instance); } finally { EndKnot.Modules.AllocProbe.Mark("ping", alloc); } }
+    public static bool PrefixCore(PingTracker __instance)
     {
         FpsSampler.TickFrame();
         PingTracker instance = !Instance ? __instance : Instance;
@@ -38,12 +40,13 @@ internal static class PingTrackerUpdatePatch
             return false;
         }
 
-        if (instance.name != "EndKnot_SettingsText")
+        if (TextDirty && instance.name != "EndKnot_SettingsText")
         {
             instance.aspectPosition.DistanceFromEdge = !client.IsGameStarted ? instance.lobbyPos : instance.gamePos;
 
             instance.text.alignment = TextAlignmentOptions.Center;
             instance.text.text = Sb.ToString();
+            TextDirty = false;
         }
 
         if (!Instance) Instance = __instance;
@@ -107,6 +110,7 @@ internal static class PingTrackerUpdatePatch
         }
 
         if (inGame) Sb.Append("\r\n.");
+        TextDirty = true;
         return false;
     }
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -497,7 +501,8 @@ internal static class TitleLogoPatch
 [HarmonyPatch(typeof(ModManager), nameof(ModManager.LateUpdate))]
 internal static class ModManagerLateUpdatePatch
 {
-    public static bool Prefix(ModManager __instance)
+    public static bool Prefix(ModManager __instance) { var alloc = EndKnot.Modules.AllocProbe.Now(); try { return PrefixCore(__instance); } finally { EndKnot.Modules.AllocProbe.Mark("modmgr", alloc); } }
+    public static bool PrefixCore(ModManager __instance)
     {
         __instance.ShowModStamp();
 

@@ -1257,7 +1257,8 @@ internal static class GameDataHandlerPatch
         yield break;
     }
 
-    public static bool Prefix(InnerNetClient __instance, MessageReader reader, int msgNum, ref Il2CppSystem.Collections.IEnumerator __result)
+    public static bool Prefix(InnerNetClient __instance, MessageReader reader, int msgNum, ref Il2CppSystem.Collections.IEnumerator __result) { var alloc = EndKnot.Modules.AllocProbe.Now(); try { return PrefixCore(__instance, reader, msgNum, ref __result); } finally { EndKnot.Modules.AllocProbe.Mark("gamedata", alloc); } }
+    public static bool PrefixCore(InnerNetClient __instance, MessageReader reader, int msgNum, ref Il2CppSystem.Collections.IEnumerator __result)
     {
         var tag = (GameDataTag)reader.Tag;
 

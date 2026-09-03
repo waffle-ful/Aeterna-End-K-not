@@ -6507,7 +6507,8 @@ internal static class ChatUpdatePatch
 
     private static int _styledControllerId;
 
-    public static void Postfix(ChatController __instance)
+    public static void Postfix(ChatController __instance) { var alloc = EndKnot.Modules.AllocProbe.Now(); try { PostfixCore(__instance); } finally { EndKnot.Modules.AllocProbe.Mark("chatupd", alloc); } }
+    public static void PostfixCore(ChatController __instance)
     {
         // プレハブへのバブル装飾は個体ごとに1回で足りる (プレハブはシーン再構築まで不変)。
         // 毎フレームやると CastFast のラッパー生成+interop プロパティ書きが常時コストになる。

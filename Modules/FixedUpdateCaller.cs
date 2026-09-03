@@ -19,7 +19,7 @@ public static class FixedUpdateCaller
     // ReSharper disable once UnusedMember.Global
     public static void Postfix()
     {
-        long alloc = AllocProbe.Now(); // 系統別アロケ帰属 (詳細は AllocProbe)
+        var alloc = AllocProbe.Now(); // 系統別アロケ帰属 (詳細は AllocProbe)
 
         try
         {
@@ -111,7 +111,9 @@ public static class FixedUpdateCaller
                     HudManager hudManager = HudManager.Instance;
 
                     HudManagerPatch.Postfix(hudManager);
+                    alloc = AllocProbe.Mark("hud", alloc);
                     Zoom.Postfix();
+                    alloc = AllocProbe.Mark("zoom", alloc);
                     HudSpritePatch.Postfix(hudManager);
                 }
             }
@@ -121,7 +123,7 @@ public static class FixedUpdateCaller
                 else Utils.ThrowException(e);
             }
 
-            alloc = AllocProbe.Mark("hud", alloc);
+            alloc = AllocProbe.Mark("hudspr", alloc);
 
             // YouTube chat polling は HUD の有無と無関係に進める（ロビーから動かす前提）
             try { YouTubeChatManager.Tick(UnityEngine.Time.fixedDeltaTime); }
