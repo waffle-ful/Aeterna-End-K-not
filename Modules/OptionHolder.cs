@@ -1719,6 +1719,8 @@ public static class Options
 
         Modules.ReportReasonNotice.SetupCustomOption();
 
+        Patches.NumericOptionInputPatch.SetupCustomOption();
+
         BGMManager.SetupCustomOption();
 
         Modules.YouTubeChat.YouTubeChatOptions.SetupCustomOption();
