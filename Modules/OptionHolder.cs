@@ -1721,6 +1721,8 @@ public static class Options
 
         Patches.NumericOptionInputPatch.SetupCustomOption();
 
+        Patches.VentMinimapPatch.SetupCustomOption();
+
         BGMManager.SetupCustomOption();
 
         Modules.YouTubeChat.YouTubeChatOptions.SetupCustomOption();
