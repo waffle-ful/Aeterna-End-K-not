@@ -460,6 +460,7 @@ internal static class ChangeRoleSettings
                 EndKnot.Modules.VoiceVox.VoiceVoxManager.Reset();
                 PerSecondUpdateScheduler.Reset();
                 WordLimit.Reset();
+                ComingOut.Reset();
             }
             catch (Exception e) { Utils.ThrowException(e); }
             
