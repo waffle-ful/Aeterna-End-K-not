@@ -524,5 +524,6 @@ relay/README.md
 relay/DEPLOY.md
 relay/CONTRACT.md
 
-# BGM AssetBundle (tools/build-bgm-bundle.ps1 の生成物・素材と同じ扱い)
+# BGM / SFX AssetBundle (tools/build-bgm-bundle.ps1 の生成物・素材と同じ扱い)
 Resources/Sounds/BGM/*.bundle
+Resources/Sounds/*.bundle

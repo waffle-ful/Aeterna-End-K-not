@@ -375,6 +375,14 @@ public static class CustomSoundsManager
     {
         if (!audioCache.TryGetValue(key, out var clip) || !clip)
         {
+            // 埋込 (= ユーザー差し替え無し) で SFX バンドルに入っている音は圧縮クリップをそのまま使う。
+            // バンドル側で DontUnloadUnusedAsset 済み・fake-null は TryGetClip が再取得する。
+            if (IsEmbeddedKey(key) && SfxBundle.IsEnabled && SfxBundle.TryGetClip(ClipNameOf(key), out AudioClip bundled))
+            {
+                audioCache[key] = bundled;
+                return bundled;
+            }
+
             string ext = Path.GetExtension(key).ToLowerInvariant();
             clip = ext switch
             {
@@ -724,6 +732,7 @@ public static class CustomSoundsManager
     private const int MaxPreloadSamples = 8_000_000;
     private static int preloadTicks;
     private static bool preloadStarted;
+    private static HashSet<string> preloadBundleNames = [];
     // BgmName != null なら BGMManager 管轄のトラック (BgmCache へ届ける)。null なら SFX (audioCache へ)。
     private static readonly ConcurrentQueue<(string Key, float[] Buffer, int Read, int Channels, int SampleRate, string BgmName)> PreloadDecoded = [];
 
@@ -907,6 +916,8 @@ public static class CustomSoundsManager
             if (sfxOn && ++preloadTicks >= PreloadStartDelayTicks)
             {
                 preloadStarted = true;
+                // バンドル収録分は PCM デコードしない (裏スレッドから Unity API は触れないので写しを渡す)
+                preloadBundleNames = SfxBundle.IsEnabled ? SfxBundle.ClipNamesSnapshot() : [];
                 var worker = new Thread(PreloadSfx) { IsBackground = true, Priority = System.Threading.ThreadPriority.BelowNormal, Name = "EndKnot.SoundPreload" };
                 worker.Start();
             }
@@ -1058,6 +1069,7 @@ public static class CustomSoundsManager
                 {
                     string key = ResolveSoundKey(name); // ディスクの差し替え優先、無ければ埋込リソース
                     if (key == null) continue;
+                    if (IsEmbeddedKey(key) && preloadBundleNames.Contains(name)) continue; // SFX バンドル収録分は LoadClip が圧縮クリップを返す
 
                     switch (Path.GetExtension(key).ToLowerInvariant())
                     {

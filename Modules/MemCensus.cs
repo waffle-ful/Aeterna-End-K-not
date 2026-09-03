@@ -98,6 +98,52 @@ public static class MemCensus
             }
             catch { sb.Append(" audMB=?"); }
 
+            // Mesh の native 概算 MB。頂点バッファ (vertexCount×stride の buffer 和) + インデックス
+            // (index 数 × 2 or 4B)。readable な mesh は CPU 側にも同量が居るので readable 分は別掲する。
+            try
+            {
+                var meshes = Resources.FindObjectsOfTypeAll(Il2CppType.Of<Mesh>());
+                double meshBytes = 0, meshReadableBytes = 0;
+
+                foreach (var o in meshes)
+                {
+                    Mesh m = o != null ? o.TryCast<Mesh>() : null;
+                    if (m == null) continue;
+
+                    try
+                    {
+                        double bytes = 0;
+                        int vc = m.vertexCount;
+                        int vbc = m.vertexBufferCount;
+                        for (int i = 0; i < vbc; i++) bytes += (double)vc * m.GetVertexBufferStride(i);
+                        int idxSize = m.indexFormat == UnityEngine.Rendering.IndexFormat.UInt16 ? 2 : 4;
+                        int subs = m.subMeshCount;
+                        for (int s = 0; s < subs; s++) bytes += (double)m.GetIndexCount(s) * idxSize;
+                        meshBytes += bytes;
+                        if (m.isReadable) meshReadableBytes += bytes;
+                    }
+                    catch { }
+                }
+
+                sb.Append(" meshMB=").Append((long)(meshBytes / (1024 * 1024)))
+                  .Append(" meshRdMB=").Append((long)(meshReadableBytes / (1024 * 1024)));
+            }
+            catch { sb.Append(" meshMB=?"); }
+
+            // Unity 側の allocator 総量。VMMap の Private Data (Unity native + Boehm) と突き合わせて
+            // 「Unity が知っている分」と「知らない分 (CoreCLR 非 GC 領域等)」を割るための計器。
+            // 各 API は IL2CPP で剥がれている可能性があるので 1 本ずつ try で隔離する。
+            AppendProfilerCounter(sb, "uAllocMB", () => UnityEngine.Profiling.Profiler.GetTotalAllocatedMemoryLong());
+            AppendProfilerCounter(sb, "uResMB", () => UnityEngine.Profiling.Profiler.GetTotalReservedMemoryLong());
+            AppendProfilerCounter(sb, "uUnusedMB", () => UnityEngine.Profiling.Profiler.GetTotalUnusedReservedMemoryLong());
+            AppendProfilerCounter(sb, "monoMB", () => UnityEngine.Profiling.Profiler.GetMonoHeapSizeLong());
+            AppendProfilerCounter(sb, "monoUsedMB", () => UnityEngine.Profiling.Profiler.GetMonoUsedSizeLong());
+            AppendProfilerCounter(sb, "gfxMB", () => UnityEngine.Profiling.Profiler.GetAllocatedMemoryForGraphicsDriver());
+            AppendProfilerCounter(sb, "wsMB", () => { using var p = System.Diagnostics.Process.GetCurrentProcess(); return p.WorkingSet64; });
+            AppendProfilerCounter(sb, "clrMB", () => GC.GetTotalMemory(false));
+            // ProfilerRecorder 12 本の生成/破棄と全テクスチャ一覧 (1 行 ≈10KB) は手動発火 (bridge/manual) だけ。
+            if (src != "lobby") ScheduleProfilerRecorderSample(now, src);
+
             // AllOptions が実行中に伸びると index キーの行キャッシュ (BehaviourList/CategoryHeaderList) が
             // ずれ、メニューを開くたびに末尾分の行が旧個体を残したまま再生成される。成長の有無と犯人名を直接記録する。
             try
@@ -126,6 +172,7 @@ public static class MemCensus
                 try { BoehmCensus.RunNow(src); } catch (Exception e) { Logger.Warn($"boehm census hook failed: {e.Message}", "MemCensus"); }
 
             AttributeTopTextureOwners(TopTexOwnerCount, now, src);
+            if (src != "lobby") TextureListCensus(now, src);
         }
         catch (Exception e) { Logger.Warn($"census failed: {e.Message}", "MemCensus"); }
     }
@@ -385,6 +432,82 @@ public static class MemCensus
         TextureFormat.RGBAFloat => 16,
         _ => 4, // 未知/RGBA32系は 4B/px
     };
+
+    // 全 Texture2D の一覧 (名前・寸法・フォーマット・readable・概算 MB)。CENSUSTOP kind=tex は上位 10 本
+    // だけなので、vanilla 側の一覧と名前で突き合わせて「mod が足したテクスチャ」を割り出す用。
+    // readable (CPU 側にもコピーが居る) は名前末尾に '*' を付ける。
+    private static void TextureListCensus(long now, string src)
+    {
+        try
+        {
+            var arr = Resources.FindObjectsOfTypeAll(Il2CppType.Of<Texture2D>());
+            if (arr == null) return;
+            var sb = new StringBuilder("CENSUSTEXALL t=").Append(now).Append(" src=").Append(src).Append(" n=").Append(arr.Length).Append(' ');
+            foreach (var o in arr)
+            {
+                Texture2D t = o != null ? o.TryCast<Texture2D>() : null;
+                if (t == null) continue;
+                try
+                {
+                    double mb = (double)t.width * t.height * BytesPerPixel(t.format) * (t.mipmapCount > 1 ? 4.0 / 3.0 : 1.0) / (1024 * 1024);
+                    string name = string.IsNullOrEmpty(t.name) ? "<noname>" : t.name.Replace(' ', '_');
+                    sb.Append(name).Append(t.isReadable ? "*" : "").Append('_').Append(t.width).Append('x').Append(t.height).Append('_').Append(t.format).Append('/').Append(mb.ToString("0.0")).Append("MB ");
+                }
+                catch { }
+            }
+            HealthLog.Note(sb.ToString());
+        }
+        catch (Exception e) { HealthLog.Note($"CENSUSTEXALL t={now} src={src} fail={e.GetType().Name}"); }
+    }
+
+    private static void AppendProfilerCounter(StringBuilder sb, string key, Func<long> read)
+    {
+        try { sb.Append(' ').Append(key).Append('=').Append(read() / (1024 * 1024)); }
+        catch { sb.Append(' ').Append(key).Append("=?"); }
+    }
+
+    // ProfilerRecorder の Memory カテゴリ計数器 (Release Player でも読める系)。値は次フレーム以降に
+    // 確定するので 2 秒後に CENSUSPROF 行として別出しする。取れない環境では行ごと "?" になる。
+    private static readonly string[] RecorderNames =
+    {
+        "Total Used Memory", "Total Reserved Memory", "System Used Memory",
+        "Texture Memory", "Mesh Memory", "Audio Used Memory", "Audio Reserved Memory",
+        "Gfx Used Memory", "GC Used Memory", "Profiler Used Memory", "Material Count", "Object Count",
+    };
+
+    private static void ScheduleProfilerRecorderSample(long now, string src)
+    {
+        try
+        {
+            var recs = new List<(string name, Unity.Profiling.ProfilerRecorder rec)>();
+            foreach (var n in RecorderNames)
+            {
+                try { recs.Add((n, Unity.Profiling.ProfilerRecorder.StartNew(Unity.Profiling.ProfilerCategory.Memory, n))); }
+                catch { }
+            }
+
+            if (recs.Count == 0) { HealthLog.Note($"CENSUSPROF t={now} src={src} n=0"); return; }
+
+            LateTask.New(() =>
+            {
+                var sb = new StringBuilder("CENSUSPROF t=").Append(now).Append(" src=").Append(src);
+                foreach (var (name, rec) in recs)
+                {
+                    string key = name.Replace(" Memory", "").Replace(" ", "");
+                    try
+                    {
+                        long v = rec.Valid ? rec.LastValue : -1;
+                        bool isCount = name.EndsWith("Count");
+                        sb.Append(' ').Append(key).Append('=').Append(v < 0 ? "?" : (isCount ? v.ToString() : (v / (1024 * 1024)).ToString()));
+                    }
+                    catch { sb.Append(' ').Append(key).Append("=!"); }
+                    try { rec.Dispose(); } catch { }
+                }
+                HealthLog.Note(sb.ToString());
+            }, 2f, log: false);
+        }
+        catch (Exception e) { HealthLog.Note($"CENSUSPROF t={now} src={src} fail={e.GetType().Name}"); }
+    }
 
     private static void Append<T>(StringBuilder sb, string key) where T : UnityEngine.Object
     {
