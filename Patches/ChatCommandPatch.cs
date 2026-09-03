@@ -336,6 +336,9 @@ internal static class ChatCommands
             new("Map", "[list|load <file>|reload|exit|import|export|info]", Command.UsageLevels.Host, Command.UsageTimes.InLobby, MapCommand, true, true),
             new("Role", "[list | import | set [n] [slot] | unset [slot/all]]", Command.UsageLevels.Host, Command.UsageTimes.InLobby, RoleCommand, true, true),
             new("Whitelist", "[list|add <id/name>|remove <id/name>|reload]", Command.UsageLevels.HostOrModerator, Command.UsageTimes.Always, WhitelistCommand, true, false),
+            new("AllowJoin", "[id/name|clear]", Command.UsageLevels.HostOrModerator, Command.UsageTimes.Always, AllowJoinCommand, true, false, [GetString("CommandArgs.AllowJoin.Target")]),
+            new("Exempt", "[add|remove] [id/name]", Command.UsageLevels.HostOrModerator, Command.UsageTimes.Always, ExemptCommand, true, false),
+            new("KickPrevious", "", Command.UsageLevels.HostOrModerator, Command.UsageTimes.Always, KickPreviousCommand, true, false),
         ];
     }
 
@@ -3630,6 +3633,64 @@ internal static class ChatCommands
                 break;
             }
         }
+    }
+
+    private static void AllowJoinCommand(PlayerControl player, string text, string[] args)
+    {
+        if (args.Length < 2)
+        {
+            Utils.SendMessage(GetString("Message.AllowJoinUsage"), player.PlayerId);
+            return;
+        }
+
+        if (args[1].Equals("clear", StringComparison.OrdinalIgnoreCase))
+        {
+            Modules.ConsecutiveJoinKick.ClearTempAllow();
+            Utils.SendMessage(GetString("Message.AllowJoinCleared"), player.PlayerId);
+            return;
+        }
+
+        string target = string.Join(' ', args.Skip(1));
+        if (Modules.ConsecutiveJoinKick.AllowNextJoin(target, out string displayName))
+            Utils.SendMessage(string.Format(GetString("Message.AllowJoinGranted"), displayName), player.PlayerId);
+        else
+            Utils.SendMessage(GetString("Message.WhitelistTargetNotFound"), player.PlayerId);
+    }
+
+    private static void ExemptCommand(PlayerControl player, string text, string[] args)
+    {
+        if (args.Length < 2 || args[1].ToLowerInvariant() is "list" or "l")
+        {
+            Utils.SendMessage(Modules.ConsecutiveJoinKick.GetExemptListText(), player.PlayerId, GetString("Message.ExemptListTitle"));
+            return;
+        }
+
+        bool isRemove = args[1].ToLowerInvariant() is "remove" or "delete";
+        // add/remove どちらもキーワードを剥がす。キーワード省略の短縮形 (/ex <名前>) も通す。
+        bool hasKeyword = isRemove || args[1].ToLowerInvariant() is "add";
+        string target = hasKeyword ? string.Join(' ', args.Skip(2)) : string.Join(' ', args.Skip(1));
+        if (target.Length == 0)
+        {
+            Utils.SendMessage(Modules.ConsecutiveJoinKick.GetExemptListText(), player.PlayerId, GetString("Message.ExemptListTitle"));
+            return;
+        }
+
+        if (isRemove)
+        {
+            bool removed = Modules.ConsecutiveJoinKick.RemoveExempt(target, out string removedName);
+            Utils.SendMessage(removed ? string.Format(GetString("Message.ExemptRemoved"), removedName) : GetString("Message.WhitelistTargetNotFound"), player.PlayerId);
+        }
+        else
+        {
+            bool added = Modules.ConsecutiveJoinKick.AddExempt(target, out string addedName);
+            Utils.SendMessage(added ? string.Format(GetString("Message.ExemptAdded"), addedName) : GetString("Message.WhitelistTargetNotFound"), player.PlayerId);
+        }
+    }
+
+    private static void KickPreviousCommand(PlayerControl player, string text, string[] args)
+    {
+        int count = Modules.ConsecutiveJoinKick.KickAllFlagged();
+        Utils.SendMessage(string.Format(GetString("Message.KickPreviousResult"), count), player.PlayerId);
     }
 
     // ── Dev-only debug commands ──────────────────────────────────────────────────
