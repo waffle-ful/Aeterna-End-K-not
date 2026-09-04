@@ -117,7 +117,9 @@ internal static class Logger
 
         if (!Main.Loaded)
         {
-            LateTask.New(() => CustomLogger.Instance.Log(level.ToString(), LogText, multiLine), 1f, "Log Retry", log: false);
+            // LogText is shared and cleared on the next call, so the deferred write must keep its own copy.
+            string snapshot = LogText.ToString();
+            LateTask.New(() => CustomLogger.Instance.Log(level.ToString(), new StringBuilder(snapshot), multiLine), 1f, "Log Retry", log: false);
             return;
         }
 
