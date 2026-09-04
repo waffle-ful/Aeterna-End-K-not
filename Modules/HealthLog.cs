@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using HarmonyLib;
@@ -50,6 +50,13 @@ public static class HealthLog
     private static string _lastOpName;
     private static long _lastOpAtMs;
 
+    // lastOp は「最後に始まった op」しか答えられないため、長い op の直後に短い op が挟まると帰属を奪われる
+    // (実例: BoehmCensus 438ms のヒッチが直後の RestoreDecoratedNameAfterMessage に帰属した)。
+    // そこで NoteOp が来るたびに1つ前の op を「終わった」と見なして所要時間を確定し、
+    // 前回 Tick 以降に終わった op のうち最長のものを maxOp として HITCH 行へ併記する。
+    private static string _maxOpName;
+    private static long _maxOpMs;
+
     // --- fps 計器: 直近窓の描画フレームレート。Tick は InnerNetClient.FixedUpdate 駆動 (~30Hz 定数) なので
     // Tick 回数を数えても描画 fps にならない (実測: 描画118fps中に29-30を返した) — Time.frameCount の
     // 差分で真の描画フレーム数を取る。前景/背景 (スロットル) の判別はこの値の高低で行う。
@@ -60,8 +67,21 @@ public static class HealthLog
     /// <summary>重い区間の入口で呼ぶと、その区間中/直後の HITCH 行に lastOp として帰属が載る。メインスレッド専用。</summary>
     public static void NoteOp(string name)
     {
+        long nowMs = HitchClock.ElapsedMilliseconds;
+
+        // 直前の op はここで終わったものとして所要時間を確定する (窓内の最長 op を保持)
+        if (_lastOpName != null)
+        {
+            long durMs = nowMs - _lastOpAtMs;
+            if (durMs > _maxOpMs)
+            {
+                _maxOpMs = durMs;
+                _maxOpName = _lastOpName;
+            }
+        }
+
         _lastOpName = name;
-        _lastOpAtMs = HitchClock.ElapsedMilliseconds;
+        _lastOpAtMs = nowMs;
     }
 
     // op の開始がヒッチ窓 (前回 Tick 以降 = gapMs+誤差) の内側にある時だけ帰属を出す。
@@ -74,12 +94,17 @@ public static class HealthLog
         return nowMs - _lastOpAtMs <= gapMs + 100 ? op : null;
     }
 
+    private const long MaxOpReportThresholdMs = 20; // これ未満の op はヒッチの説明にならないので併記しない
+
     private static string GetLastOpSuffix(long nowMs, long gapMs)
     {
         string op = _lastOpName;
-        if (op == null) return "";
+        string maxOp = _maxOpMs >= MaxOpReportThresholdMs ? $" maxOp={_maxOpName} maxOpMs={_maxOpMs}" : "";
+
+        if (op == null) return maxOp;
+
         long age = nowMs - _lastOpAtMs;
-        return age <= gapMs + 100 ? $" lastOp={op} opAgeMs={age}" : "";
+        return age <= gapMs + 100 ? $" lastOp={op} opAgeMs={age}{maxOp}" : maxOp;
     }
     private static bool _lastFullScreen;
     private static int _lastScreenW, _lastScreenH; // 直近 Tick 時点の画面モード (reschg⇔framestall 相関計器)
@@ -350,6 +375,10 @@ public static class HealthLog
 
             AllocProbe.EndTickWindow(gapMs);
         }
+
+        // maxOp は「前回 Tick 以降に終わった op」の集計なので、Tick ごとに窓を開け直す
+        _maxOpName = null;
+        _maxOpMs = 0;
 
         _lastTickMs = nowMs;
         _lastBoehmUsed = boehmNow;
