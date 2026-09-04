@@ -16,6 +16,13 @@ internal static class CustomRolesHelper
 {
     public static bool CanCheck = false;
 
+    // enum ⇄ 文字列の往復は結果が enum 値だけで決まる純関数なので 1 回きりにする。
+    // どれも毎 tick の HUD / 能力判定経路 (GetRoleTypes / GetVNRole / GetErasedRole) から呼ばれ、
+    // ToString + Replace + Enum.Parse を毎回走らせると呼び出し 1 回ごとに数百 B の managed ゴミになる。
+    private static readonly Dictionary<CustomRoles, RoleTypes?> VnRoleTypeCache = [];
+    private static readonly Dictionary<RoleTypes, CustomRoles> DesyncEndKnotRoleCache = [];
+    private static readonly Dictionary<CustomRoles, bool> EndKnotNamedCache = [];
+
     private static readonly List<CustomRoles> OnlySpawnsWithPetsRoleList =
     [
         CustomRoles.Tunneler,
@@ -124,7 +131,15 @@ internal static class CustomRolesHelper
             if (role.IsGhostRole()) return CustomRoles.GuardianAngel;
             if (role.IsVanilla()) return role;
             if (role is CustomRoles.GM) return CustomRoles.Crewmate;
-            if (checkDesyncRole && role.IsDesyncRole()) return Enum.Parse<CustomRoles>(role.GetDYRole() + "EndKnot");
+            if (checkDesyncRole && role.IsDesyncRole())
+            {
+                RoleTypes dyRole = role.GetDYRole();
+
+                if (!DesyncEndKnotRoleCache.TryGetValue(dyRole, out CustomRoles endKnotRole))
+                    DesyncEndKnotRoleCache[dyRole] = endKnotRole = Enum.Parse<CustomRoles>(dyRole + "EndKnot");
+
+                return endKnotRole;
+            }
             if ((Options.UsePhantomBasis.GetBool() || role.AlwaysUsesPhantomBase()) && role.SimpleAbilityTrigger()) return CustomRoles.Phantom;
 
             bool UsePets = Options.UsePets.GetBool();
@@ -506,7 +521,7 @@ internal static class CustomRolesHelper
 
             CustomRoles vnRole = role.GetVNRole(true);
 
-            if (vnRole.ToString().EndsWith("EndKnot")) return vnRole;
+            if (vnRole.IsEndKnotNamed()) return vnRole;
 
             return vnRole switch
             {
@@ -1884,8 +1899,22 @@ internal static class CustomRolesHelper
 
         public RoleTypes GetRoleTypes()
         {
-            if (Enum.TryParse(role.GetVNRole(true).ToString().Replace("EndKnot", ""), true, out RoleTypes type)) return type;
+            CustomRoles vnRole = role.GetVNRole(true);
+
+            if (!VnRoleTypeCache.TryGetValue(vnRole, out RoleTypes? parsed))
+                VnRoleTypeCache[vnRole] = parsed = Enum.TryParse(vnRole.ToString().Replace("EndKnot", ""), true, out RoleTypes type) ? type : null;
+
+            if (parsed.HasValue) return parsed.Value;
             return role.IsImpostor() ? RoleTypes.Impostor : RoleTypes.Crewmate;
+        }
+
+        // role.ToString().EndsWith("EndKnot") と同じ判定 (enum 値ごとに 1 回だけ文字列化)。
+        public bool IsEndKnotNamed()
+        {
+            if (!EndKnotNamedCache.TryGetValue(role, out bool named))
+                EndKnotNamedCache[role] = named = role.ToString().EndsWith("EndKnot");
+
+            return named;
         }
 
         public bool IsDesyncRole()
