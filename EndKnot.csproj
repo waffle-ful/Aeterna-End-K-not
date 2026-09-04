@@ -46,6 +46,7 @@
         <None Remove="tests\**"/>
         <!-- BGM AssetBundle を焼く Unity Editor プロジェクト (UnityEditor 参照) は別ツールチェーン — 本体ビルドから除外 -->
         <Compile Remove="unity\**"/>
+        <Compile Remove="tools\**"/>
         <EmbeddedResource Remove="unity\**"/>
         <None Remove="unity\**"/>
     </ItemGroup>

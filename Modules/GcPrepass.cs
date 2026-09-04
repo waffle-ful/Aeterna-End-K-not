@@ -46,6 +46,55 @@ public static class GcPrepass
         catch { return -1; }
     }
 
+    // 因果分離用の片側 GC 撃ち。Collect(reason) と違いゲート (EnablePreemptiveGc) も debounce も無い —
+    // TestBridge から明示的に叩く実験用ディレクティブなので、常に即時実行する。
+    public static string ProbeCollect(string mode)
+    {
+        int bgc0 = BoehmCollectionCount();
+        int gen0Before = GC.CollectionCount(0);
+        int gen2Before = GC.CollectionCount(2);
+        long boehmMB0 = BoehmUsedBytes();
+        boehmMB0 = boehmMB0 < 0 ? -1 : boehmMB0 / 1048576;
+        long clrMB0 = GC.GetTotalMemory(false) / 1048576;
+
+        var sw = Stopwatch.StartNew();
+        string modeLabel = mode;
+
+        switch (mode)
+        {
+            case "clr":
+                GC.Collect(0, GCCollectionMode.Forced, blocking: true);
+                break;
+            case "clr2":
+                GC.Collect();
+                break;
+            case "boehm":
+                try { il2cpp_gc_collect(2); }
+                catch { modeLabel = mode + "(noexport)"; }
+                break;
+            case "both":
+                GC.Collect();
+                try { il2cpp_gc_collect(2); }
+                catch { modeLabel = mode + "(noexport)"; }
+                break;
+            default:
+                return "ERR gc unknown mode (clr|clr2|boehm|both)";
+        }
+
+        long ms = sw.ElapsedMilliseconds;
+        int bgc1 = BoehmCollectionCount();
+        int gen0After = GC.CollectionCount(0);
+        int gen2After = GC.CollectionCount(2);
+        long boehmMB1 = BoehmUsedBytes();
+        boehmMB1 = boehmMB1 < 0 ? -1 : boehmMB1 / 1048576;
+        long clrMB1 = GC.GetTotalMemory(false) / 1048576;
+
+        string line = $"GCPROBE mode={modeLabel} ms={ms} bgc={bgc0}->{bgc1} gen0={gen0Before}->{gen0After} gen2={gen2Before}->{gen2After} boehmMB={boehmMB0}->{boehmMB1} clrMB={clrMB0}->{clrMB1} t={Utils.TimeStamp}";
+        HealthLog.Note(line);
+        TransitionTimeline.Mark($"GCPROBE:{modeLabel}({ms}ms)");
+        return line;
+    }
+
     public static void Collect(string reason)
     {
         if (Main.EnablePreemptiveGc == null || !Main.EnablePreemptiveGc.Value) return;
