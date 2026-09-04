@@ -297,6 +297,8 @@ public class Main : BasePlugin
     public static ConfigEntry<string> LoadingVideoFile { get; private set; }
     public static ConfigEntry<bool> MenuFireEnabled { get; private set; }
     public static ConfigEntry<bool> DeferredPatching { get; private set; }
+    public static ConfigEntry<bool> BatchedPatching { get; private set; }
+    public static ConfigEntry<bool> DelegateTypeCache { get; private set; }
     public static ConfigEntry<bool> AllocTypeSampling { get; private set; }
     public static ConfigEntry<bool> AllocIl2Tracking { get; private set; }
 
@@ -626,7 +628,9 @@ public class Main : BasePlugin
         LoadingVideoEnabled = Config.Bind("Client Options", "LoadingVideoEnabled", true, "Play a short loading-screen video (host-local, no network traffic) over the fade-to-black during scene transitions (game start / next game). Falls back silently to no video if no file is available.");
         LoadingVideoFile = Config.Bind("Client Options", "LoadingVideoFile", "", "Optional file name (relative to BepInEx/plugins/EndKnot/Media/) or absolute path of a custom loading-screen video (.mp4) to use instead of the bundled default.");
         MenuFireEnabled = Config.Bind("Client Options", "MenuFireEnabled", true, "Show the animated fire effect on the main menu background (host-local, no network traffic).");
-        DeferredPatching = Config.Bind("Client Options", "DeferredPatching", true, "Apply in-game Harmony patches after the main menu appears instead of during startup (faster boot). Turn off if the main menu misbehaves.");
+        DeferredPatching = Config.Bind("Client Options", "DeferredPatching", true, "Apply in-game Harmony patches during the splash screen instead of during startup (faster boot). Turn off if the main menu misbehaves; combine with BatchedPatching=false and DelegateTypeCache=false for the plain PatchAll path.");
+        BatchedPatching = Config.Bind("Client Options", "BatchedPatching", true, "Compile each patched game method once per startup phase instead of once per patch class (faster boot). Turn off if a patch silently stops working.");
+        DelegateTypeCache = Config.Bind("Client Options", "DelegateTypeCache", true, "Reuse one delegate type per signature for Harmony native trampolines instead of loading a new assembly per patched method (much faster boot). Affects every Harmony user in the process. Turn off if patches fail to apply.");
         AllocTypeSampling = Config.Bind("Client Options", "AllocTypeSampling", false, "Record which managed types allocate the most memory during play (adds one ALLOCTYPE line per 5 seconds to the health log). Measurement only: it makes every garbage collection noticeably more expensive, so leave it off for normal play.");
         AllocIl2Tracking = Config.Bind("Client Options", "AllocIl2Tracking", true, "Also attribute il2cpp (Boehm) heap growth to the same subsystems in the ALLOC health-log line. Cheap; the source of the periodic in-game garbage-collection hitch is read from this.");
 
