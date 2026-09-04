@@ -17,7 +17,7 @@ public static class BootTimeline
     private const float MenuWindowSeconds = 10f;
 
     private static readonly DateTime T0;
-    private static readonly List<(string Name, long Ms)> Marks = new();
+    private static readonly List<(string Name, long Ms, long JitMs, long JitCount)> Marks = new();
     private static readonly HashSet<string> MarkNames = new();
     private static readonly List<string> Gaps = new();
 
@@ -28,6 +28,7 @@ public static class BootTimeline
     private static float _menuInteractiveRealtime;
     private static int _menuInteractiveFrame;
     private static float _lastMenuFrameRealtime;
+    private static long _lastMenuFrameJitMs;
 
     static BootTimeline()
     {
@@ -43,7 +44,16 @@ public static class BootTimeline
         {
             if (MarkNames.Contains(name) || Marks.Count >= MaxMarks) return;
             MarkNames.Add(name);
-            Marks.Add((name, NowMs));
+            // 区間ごとの JIT 費用 (CoreCLR 全体の累積・スレッド問わず) を併記して、
+            // 「パース/初期化が重いのか JIT が重いのか」を BOOT 行だけで読めるようにする。
+            long jitMs = 0, jitCount = 0;
+            try
+            {
+                jitMs = (long)System.Runtime.JitInfo.GetCompilationTime().TotalMilliseconds;
+                jitCount = System.Runtime.JitInfo.GetCompiledMethodCount();
+            }
+            catch { }
+            Marks.Add((name, NowMs, jitMs, jitCount));
         }
         catch { }
     }
@@ -75,6 +85,7 @@ public static class BootTimeline
                 _menuInteractiveRealtime = Time.realtimeSinceStartup;
                 _menuInteractiveFrame = Time.frameCount;
                 _lastMenuFrameRealtime = _menuInteractiveRealtime;
+                try { _lastMenuFrameJitMs = (long)System.Runtime.JitInfo.GetCompilationTime().TotalMilliseconds; } catch { }
                 return;
             }
 
@@ -82,10 +93,17 @@ public static class BootTimeline
             float gapMs = (now - _lastMenuFrameRealtime) * 1000f;
             _lastMenuFrameRealtime = now;
 
+            // メニュー到達後の間隙が JIT (初回実行) 由来かを見分けるため、間隙 1 件ごとに
+            // 直前フレームからの JIT 累積差分 (ms) を "/j" で併記する。
+            long jitNow = 0;
+            try { jitNow = (long)System.Runtime.JitInfo.GetCompilationTime().TotalMilliseconds; } catch { }
+            long jitDelta = jitNow - _lastMenuFrameJitMs;
+            _lastMenuFrameJitMs = jitNow;
+
             if (gapMs >= MenuFrameHitchMs && Gaps.Count < MaxGaps)
             {
                 long sinceInteractiveMs = (long)((now - _menuInteractiveRealtime) * 1000f);
-                Gaps.Add($"+{sinceInteractiveMs}:{(long)gapMs}");
+                Gaps.Add($"+{sinceInteractiveMs}:{(long)gapMs}/j{jitDelta}");
             }
 
             if (now - _menuInteractiveRealtime >= MenuWindowSeconds)
@@ -103,22 +121,26 @@ public static class BootTimeline
         {
             var marksSb = new StringBuilder();
             var deltasSb = new StringBuilder();
-            long prevMs = 0;
+            var jitSb = new StringBuilder();
+            long prevMs = 0, prevJitMs = 0, prevJitCount = 0;
             bool first = true;
 
-            foreach ((string name, long ms) in Marks)
+            foreach ((string name, long ms, long jitMs, long jitCount) in Marks)
             {
-                if (!first) { marksSb.Append(','); deltasSb.Append(','); }
+                if (!first) { marksSb.Append(','); deltasSb.Append(','); jitSb.Append(','); }
                 marksSb.Append(name).Append(':').Append(ms);
                 deltasSb.Append(name).Append(":+").Append(ms - prevMs);
+                jitSb.Append(name).Append(":+").Append(jitMs - prevJitMs).Append('/').Append(jitCount - prevJitCount);
                 prevMs = ms;
+                prevJitMs = jitMs;
+                prevJitCount = jitCount;
                 first = false;
             }
 
             int frames10s = Time.frameCount - _menuInteractiveFrame;
             double fps10s = frames10s / (double)MenuWindowSeconds;
 
-            string line = $"BOOT total={_menuInteractiveMs} marks={marksSb} deltas={deltasSb} frames10s={frames10s} fps10s={fps10s:0.0} gaps=[{string.Join(",", Gaps)}] patch2={PatchPhases.DeferredCount}/{PatchPhases.Phase2Ms}ms/{PatchPhases.Phase2Frames}f t={Utils.TimeStamp}";
+            string line = $"BOOT total={_menuInteractiveMs} marks={marksSb} deltas={deltasSb} frames10s={frames10s} fps10s={fps10s:0.0} gaps=[{string.Join(",", Gaps)}] jit={jitSb} patch2={PatchPhases.DeferredCount}/{PatchPhases.Phase2Ms}ms/{PatchPhases.Phase2Frames}f t={Utils.TimeStamp}";
 
             HealthLog.Note(line);
             Logger.Info(line, "BootTimeline");

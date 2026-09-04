@@ -551,6 +551,10 @@ public class Main : BasePlugin
         // これでコンソールが何で詰まってもメインスレッドは巻き込まれない。
         Log.LogInfo($"AsyncConsoleLog: {AsyncConsoleLog.Install()}");
 
+        // Config.Bind は既定で 1 束縛ごとに cfg 全文を同期書き出しする (100 本超で起動 ≈0.2s)。
+        // 束縛中は自動保存を止め、束縛が終わったら 1 回だけ書き出す。
+        Config.SaveOnConfigSet = false;
+
         //Client Options
         HideName = Config.Bind("Client Options", "Hide Game Code Name", "EndKnot");
         HideColor = Config.Bind("Client Options", "Hide Game Code Color", $"{ModColor}");
@@ -708,6 +712,10 @@ public class Main : BasePlugin
         LastShapeshifterCooldown = Config.Bind("Other", "LastShapeshifterCooldown", (float)30);
 
         HasArgumentException = false;
+
+        try { Config.Save(); }
+        catch (Exception ex) { Log.LogError($"Config.Save after bind failed: {ex.Message}"); }
+        finally { Config.SaveOnConfigSet = true; }
 
         BootTimeline.Mark("load.cfg");
 
