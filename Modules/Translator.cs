@@ -16,6 +16,10 @@ public static class Translator
     private const string LanguageFolderName = "Language";
     private static Dictionary<string, Dictionary<int, string>> TranslateMaps;
 
+    // Init() より前に GetString を引く経路 (起動直後に走る OnGUI オーバーレイなど) があるので、
+    // 「翻訳テーブルがまだ無い」を呼び出し側から見えるようにしておく。
+    public static bool IsInitialized => TranslateMaps != null;
+
     // 遅延ロード: 起動時は英語 (+ その時点で決まる実効言語) だけ読み、他の埋込jsoncはDictionary化しない。
     // プラグイン Load 時点では TranslationController が未生成なので、実際のUI言語は最初の GetString 参照時に
     // 1本だけ同期ロードされる (実機 ja_JP 12577 キーで 32ms)。索引はリソース名だけを持つ。
@@ -281,7 +285,7 @@ public static class Translator
             else if (Main.ForceOwnLanguage.Value)
                 langId = GetUserTrueLang();
             else
-                langId = TranslationController.InstanceExists
+                langId = TranslationController.InstanceExists && TranslationController.Instance.currentLanguage != null
                 ? TranslationController.Instance.currentLanguage.languageID
                 : SupportedLangs.English;
         }
@@ -319,6 +323,8 @@ public static class Translator
             if (RuntimeOverrides.Count > 0 && RuntimeOverrides.TryGetValue(str, out string overrideValue))
                 return overrideValue;
 
+            if (TranslateMaps == null) return $"*{str}"; // Init() 前 (起動直後) はテーブルが無い
+
             if (!LoadedLangs.Contains((int)langId)) EnsureLangLoaded(langId);
 
             if (TranslateMaps.TryGetValue(str, out var dic))
@@ -342,6 +348,7 @@ public static class Translator
 
     public static string GetString(StringNames stringName)
     {
+        if (!TranslationController.InstanceExists) return $"*{stringName}"; // 起動直後は本体側も未生成
         return TranslationController.Instance.GetString(stringName);
     }
     public static string GetString(SystemTypes room)
