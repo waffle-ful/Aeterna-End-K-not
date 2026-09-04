@@ -739,29 +739,43 @@ public static class HudSpritePatch
             
             SetButtonColors();
 
-            __instance.KillButton.graphic.sprite = newKillButton;
-            __instance.AbilityButton.graphic.sprite = newAbilityButton;
-            __instance.ImpostorVentButton.graphic.sprite = newVentButton;
-            __instance.SabotageButton.graphic.sprite = newSabotageButton;
-            __instance.PetButton.graphic.sprite = newPetButton;
-            __instance.ReportButton.graphic.sprite = newReportButton;
+            // ボタンと graphic は 1 tick に 1 回だけ interop 越しに取る (プロパティ get ごとに wrapper が生まれる)。
+            var killGraphic = __instance.KillButton.graphic;
+            var abilityGraphic = __instance.AbilityButton.graphic;
+            var ventGraphic = __instance.ImpostorVentButton.graphic;
+            var sabotageGraphic = __instance.SabotageButton.graphic;
+            var petGraphic = __instance.PetButton.graphic;
+            var reportGraphic = __instance.ReportButton.graphic;
 
-            __instance.KillButton.graphic.SetCooldownNormalizedUvs();
-            __instance.AbilityButton.graphic.SetCooldownNormalizedUvs();
-            __instance.ImpostorVentButton.graphic.SetCooldownNormalizedUvs();
-            __instance.SabotageButton.graphic.SetCooldownNormalizedUvs();
-            __instance.PetButton.graphic.SetCooldownNormalizedUvs();
-            __instance.ReportButton.graphic.SetCooldownNormalizedUvs();
+            killGraphic.sprite = newKillButton;
+            abilityGraphic.sprite = newAbilityButton;
+            ventGraphic.sprite = newVentButton;
+            sabotageGraphic.sprite = newSabotageButton;
+            petGraphic.sprite = newPetButton;
+            reportGraphic.sprite = newReportButton;
+
+            killGraphic.SetCooldownNormalizedUvs();
+            abilityGraphic.SetCooldownNormalizedUvs();
+            ventGraphic.SetCooldownNormalizedUvs();
+            sabotageGraphic.SetCooldownNormalizedUvs();
+            petGraphic.SetCooldownNormalizedUvs();
+            reportGraphic.SetCooldownNormalizedUvs();
             __instance.SecondaryAbilityButton.graphic.SetCooldownNormalizedUvs();
-            
+
             ForceUpdate = false;
 
+            // 配列 + foreach は毎 tick の managed 確保になるので直接 7 回呼ぶ。
             void SetButtonColors()
             {
                 var roleColor = Utils.GetRoleColor(player.GetCustomRole());
 
-                foreach (var button in new ActionButton[] { __instance.KillButton, __instance.AbilityButton, __instance.ImpostorVentButton, __instance.SabotageButton, __instance.PetButton, __instance.ReportButton, __instance.SecondaryAbilityButton })
-                    button.buttonLabelText.SetOutlineColor(roleColor);
+                __instance.KillButton.buttonLabelText.SetOutlineColor(roleColor);
+                __instance.AbilityButton.buttonLabelText.SetOutlineColor(roleColor);
+                __instance.ImpostorVentButton.buttonLabelText.SetOutlineColor(roleColor);
+                __instance.SabotageButton.buttonLabelText.SetOutlineColor(roleColor);
+                __instance.PetButton.buttonLabelText.SetOutlineColor(roleColor);
+                __instance.ReportButton.buttonLabelText.SetOutlineColor(roleColor);
+                __instance.SecondaryAbilityButton.buttonLabelText.SetOutlineColor(roleColor);
             }
         }
         catch (Exception e)

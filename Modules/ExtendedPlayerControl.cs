@@ -2531,12 +2531,11 @@ internal static class ExtendedPlayerControl
 
         public RoleTypes GetRoleTypes()
         {
-            try
-            {
-                if (Main.HasJustStarted) throw new("HasJustStarted");
-                return player.GetRoleMap().RoleType;
-            }
-            catch
+            // 開始直後と RoleMap 未登録はそのまま下の推定に落とす (例外を制御フローに使うと
+            // 毎 tick の HUD 経路で例外 1 本 ≈ 数十 µs + managed ゴミになる)。
+            if (!Main.HasJustStarted && StartGameHostPatch.RpcSetRoleReplacer.RoleMap.TryGetValue((player.PlayerId, player.PlayerId), out (RoleTypes RoleType, CustomRoles CustomRole) mapped))
+                return mapped.RoleType;
+
             {
                 return player.GetCustomSubRoles() switch
                 {

@@ -150,16 +150,40 @@ internal static class GhostRolesManager
     
     public static readonly Dictionary<CustomRoles, Type> GhostRoleTypes = [];
 
+    // 「ゴースト役職ではない」も覚える。IsGhostRole() は GetVNRole 経由で毎 tick 何度も通るので、
+    // 不在のたびに全型走査 + 例外で答えていたら役職判定 1 回ごとに例外 1 本になる。
+    private static readonly HashSet<CustomRoles> NotGhostRoles = [];
+
     public static IGhostRole CreateGhostRoleInstance(CustomRoles ghostRole, bool check = false)
     {
         try
         {
             if (!GhostRoleTypes.TryGetValue(ghostRole, out Type ghostRoleClass))
             {
-                ghostRoleClass = Main.AllTypes.First(x => typeof(IGhostRole).IsAssignableFrom(x) && !x.IsInterface && x.Name == $"{ghostRole}");
-                GhostRoleTypes[ghostRole] = ghostRoleClass;
+                if (!NotGhostRoles.Contains(ghostRole))
+                {
+                    string name = ghostRole.ToString();
+
+                    foreach (Type x in Main.AllTypes)
+                    {
+                        if (!x.IsInterface && x.Name == name && typeof(IGhostRole).IsAssignableFrom(x))
+                        {
+                            ghostRoleClass = x;
+                            break;
+                        }
+                    }
+
+                    if (ghostRoleClass != null) GhostRoleTypes[ghostRole] = ghostRoleClass;
+                    else NotGhostRoles.Add(ghostRole);
+                }
+
+                if (ghostRoleClass == null)
+                {
+                    if (!check) Logger.Error($"Ghost role {ghostRole} not found", "CreateGhostRoleInstance");
+                    return null;
+                }
             }
-            
+
             var ghostRoleInstance = (IGhostRole)Activator.CreateInstance(ghostRoleClass);
             return ghostRoleInstance;
         }
