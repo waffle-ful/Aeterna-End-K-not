@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using UnityEngine;
 
 namespace EndKnot.Modules.StreamOverlay;
@@ -24,6 +24,9 @@ public class DevBuildBanner : MonoBehaviour
     private bool ShouldShow()
     {
         if (_faulted || !Main.IsDevBuild) return false;
+        // 起動直後は Translator.Init() より前に OnGUI が回る。翻訳テーブルが揃うまでは描かない
+        // (ここで GetString を引くと NRE で _faulted が立ち、以後そのセッションは二度と出なくなる)。
+        if (!Translator.IsInitialized) return false;
         // ゲーム中は役職 HUD と重なるので出さない (見せたいのはロビー画面)
         return !GameStates.InGame;
     }

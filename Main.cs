@@ -257,7 +257,6 @@ public class Main : BasePlugin
     public static ConfigEntry<string> YouTubePostRefreshToken { get; private set; }
     public static ConfigEntry<string> YouTubePostMessages { get; private set; }
     public static ConfigEntry<bool> YouTubePostExplained { get; private set; }
-    public static ConfigEntry<bool> StreamerModeAsked { get; private set; }
     public static ConfigEntry<bool> EnableVoiceVox { get; private set; }
     public static ConfigEntry<string> VoiceVoxEngineUrl { get; private set; }
     public static ConfigEntry<float> VoiceVoxVolume { get; private set; }
@@ -589,7 +588,6 @@ public class Main : BasePlugin
         YouTubePostRefreshToken = Config.Bind("Client Options", "YouTubePostRefreshToken", "", "OAuth refresh token used to mint short-lived access tokens for posting to YouTube live chat. Leave empty to disable posting.");
         YouTubePostMessages = Config.Bind("Client Options", "YouTubePostMessages", "", "Newline-separated rotation of promotional messages that the stream-rotation post option cycles through.");
         YouTubePostExplained = Config.Bind("Client Options", "YouTubePostExplained", false, "Internal: whether the one-time in-game setup explanation for YouTube auto-post has been shown.");
-        StreamerModeAsked = Config.Bind("Client Options", "StreamerModeAsked", false);
         EnableVoiceVox = Config.Bind("Client Options", "EnableVoiceVox", false);
         VoiceVoxEngineUrl = Config.Bind("Client Options", "VoiceVoxEngineUrl", "http://127.0.0.1:50021");
         VoiceVoxVolume = Config.Bind("Client Options", "VoiceVoxVolume", 1.0f);
