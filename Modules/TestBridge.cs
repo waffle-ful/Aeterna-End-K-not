@@ -386,6 +386,20 @@ public static class TestBridge
             return;
         }
 
+        // Layer D4: CLR gen0 GC / CLR フル GC / il2cpp (Boehm) GC を片側ずつ強制発火する
+        // ヒッチ帰属の因果分離用ディレクティブ。
+        if (directive.StartsWith("gc ", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                string mode = directive[3..].Trim().ToLowerInvariant();
+                string r = GcPrepass.ProbeCollect(mode);
+                WriteOut(r.StartsWith("ERR", StringComparison.Ordinal) ? r : "OK " + r);
+            }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR gc failed"); }
+            return;
+        }
+
         // cpusets show|off|auto|cache:N — CPU Sets の実行時切替 (A/B 用・再起動不要)。
         if (directive.Equals("cpusets", StringComparison.OrdinalIgnoreCase) || directive.StartsWith("cpusets ", StringComparison.OrdinalIgnoreCase))
         {
@@ -417,7 +431,7 @@ public static class TestBridge
 
         if (directive.Equals("help", StringComparison.OrdinalIgnoreCase))
         {
-            WriteOut("HELP directives: state | screenshot | click <h|label:x> | press <h|x y> | type <text> | key <enter|escape|tab|backspace> | getopt <pattern> | setopt <name|#id> <idx|on|off|~real> | forcerole <id|name|host|clear> [EnumName] | start | hostlobby | autostart <on|off> | tp <x> <y> | tp <playerId> | walk <x> <y> | walk <playerId> | walk stop | vote <playerId|skip> | overrule <targetId> [judgeId] | chat <text> | use <kill|vent|pet|ability|report|sabotage> | vent enter <id> | vent exit | errors [n] | grep <pattern> [n] | bcensus | sleep <sec> | wait <phase=X|players=N|marker:text|join|arrived> [timeoutSec] | wait cancel | /<chatcommand>");
+            WriteOut("HELP directives: state | screenshot | click <h|label:x> | press <h|x y> | type <text> | key <enter|escape|tab|backspace> | getopt <pattern> | setopt <name|#id> <idx|on|off|~real> | forcerole <id|name|host|clear> [EnumName] | start | hostlobby | autostart <on|off> | tp <x> <y> | tp <playerId> | walk <x> <y> | walk <playerId> | walk stop | vote <playerId|skip> | overrule <targetId> [judgeId] | chat <text> | use <kill|vent|pet|ability|report|sabotage> | vent enter <id> | vent exit | errors [n] | grep <pattern> [n] | bcensus | gc <clr|clr2|boehm|both> | sleep <sec> | wait <phase=X|players=N|marker:text|join|arrived> [timeoutSec] | wait cancel | /<chatcommand>");
             return;
         }
 
