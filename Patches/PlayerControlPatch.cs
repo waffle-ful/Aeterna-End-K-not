@@ -1934,7 +1934,9 @@ internal static class FixedUpdatePatch
         // 突然の切断では PlayerControl の破棄と Data の除去が数フレームずれるため、毎フレーム全プレイヤーを
         // 回るこの経路が「本体は生きているが Data が無い」中間状態を踏む。この関数に切断処理は無いので
         // 抜けても失うものはない。
-        if (!player || player.Data == null || player.Data.Disconnected) return;
+        if (!player) return;
+        NetworkedPlayerInfo playerData = player.Data; // Data の get は毎回 wrapper を作るので 1 回だけ
+        if (playerData == null || playerData.Disconnected) return;
 
         var alloc = Modules.AllocProbe.Now(); // pcloop 内の区間帰属 ("pc." 系統は tickKB へ二重計上されない)
 

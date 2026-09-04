@@ -1,17 +1,26 @@
 ﻿using System;
+using System.Collections.Generic;
 using AmongUs.GameOptions;
 using EndKnot.Gamemodes;
 using EndKnot.Patches;
 using EndKnot.Roles;
+using TMPro;
 using UnityEngine;
 
 namespace EndKnot;
 
 public static class CustomButton
 {
+    // name → Sprite の直引き。毎 tick 呼ばれる経路なので、リソースパスの補間文字列と
+    // LoadSprite 側のキー連結を毎回作らない。破棄済み (fake-null) はミス扱いで取り直す。
+    private static readonly Dictionary<string, Sprite> ByName = [];
+
     public static Sprite Get(string name)
     {
-        return Utils.LoadSprite($"EndKnot.Resources.Images.Skills.{name}.png", 115f);
+        if (ByName.TryGetValue(name, out Sprite sprite) && sprite) return sprite;
+        sprite = Utils.LoadSprite($"EndKnot.Resources.Images.Skills.{name}.png", 115f);
+        if (sprite) ByName[name] = sprite;
+        return sprite;
     }
 }
 
@@ -22,6 +31,48 @@ public static class HudSpritePatch
     public static bool ForceUpdate;
     public static Sprite[] DefaultIcons = [];
     private static long LastErrorTime;
+
+    // ボタン 7 本の graphic / buttonLabelText は HudManager が生きている間は不変なので、HudManager 単位で
+    // 一度だけ interop 越しに取る (Refresh は 1 tick に複数回呼ばれるが実フェッチは初回だけ) (プロパティ get は毎回 managed wrapper を作る = 毎 tick 14 個のゴミ)。
+    // 破棄済み HudManager と同じアドレスで新しい HudManager が生まれた場合に備え、ポインタ一致だけでなく
+    // 取得済み TMP の生存も毎 tick 1 回確認する (破棄済みなら fake-null で偽になる)。
+    private static class Parts
+    {
+        private static IntPtr HudPtr;
+        public static SpriteRenderer KillGraphic, AbilityGraphic, VentGraphic, SabotageGraphic, PetGraphic, ReportGraphic, SecondaryGraphic;
+        public static TextMeshPro KillLabel, AbilityLabel, VentLabel, SabotageLabel, PetLabel, ReportLabel, SecondaryLabel;
+
+        public static void Refresh(HudManager hud)
+        {
+            if (hud.Pointer == HudPtr && KillLabel) return;
+
+            var kill = hud.KillButton;
+            var ability = hud.AbilityButton;
+            var vent = hud.ImpostorVentButton;
+            var sabotage = hud.SabotageButton;
+            var pet = hud.PetButton;
+            var report = hud.ReportButton;
+            var secondary = hud.SecondaryAbilityButton;
+
+            KillGraphic = kill.graphic;
+            AbilityGraphic = ability.graphic;
+            VentGraphic = vent.graphic;
+            SabotageGraphic = sabotage.graphic;
+            PetGraphic = pet.graphic;
+            ReportGraphic = report.graphic;
+            SecondaryGraphic = secondary.graphic;
+
+            KillLabel = kill.buttonLabelText;
+            AbilityLabel = ability.buttonLabelText;
+            VentLabel = vent.buttonLabelText;
+            SabotageLabel = sabotage.buttonLabelText;
+            PetLabel = pet.buttonLabelText;
+            ReportLabel = report.buttonLabelText;
+            SecondaryLabel = secondary.buttonLabelText;
+
+            HudPtr = hud.Pointer;
+        }
+    }
 
     public static void Postfix(HudManager __instance)
     {
@@ -739,28 +790,22 @@ public static class HudSpritePatch
             
             SetButtonColors();
 
-            // ボタンと graphic は 1 tick に 1 回だけ interop 越しに取る (プロパティ get ごとに wrapper が生まれる)。
-            var killGraphic = __instance.KillButton.graphic;
-            var abilityGraphic = __instance.AbilityButton.graphic;
-            var ventGraphic = __instance.ImpostorVentButton.graphic;
-            var sabotageGraphic = __instance.SabotageButton.graphic;
-            var petGraphic = __instance.PetButton.graphic;
-            var reportGraphic = __instance.ReportButton.graphic;
+            Parts.Refresh(__instance);
 
-            killGraphic.sprite = newKillButton;
-            abilityGraphic.sprite = newAbilityButton;
-            ventGraphic.sprite = newVentButton;
-            sabotageGraphic.sprite = newSabotageButton;
-            petGraphic.sprite = newPetButton;
-            reportGraphic.sprite = newReportButton;
+            Parts.KillGraphic.sprite = newKillButton;
+            Parts.AbilityGraphic.sprite = newAbilityButton;
+            Parts.VentGraphic.sprite = newVentButton;
+            Parts.SabotageGraphic.sprite = newSabotageButton;
+            Parts.PetGraphic.sprite = newPetButton;
+            Parts.ReportGraphic.sprite = newReportButton;
 
-            killGraphic.SetCooldownNormalizedUvs();
-            abilityGraphic.SetCooldownNormalizedUvs();
-            ventGraphic.SetCooldownNormalizedUvs();
-            sabotageGraphic.SetCooldownNormalizedUvs();
-            petGraphic.SetCooldownNormalizedUvs();
-            reportGraphic.SetCooldownNormalizedUvs();
-            __instance.SecondaryAbilityButton.graphic.SetCooldownNormalizedUvs();
+            Parts.KillGraphic.SetCooldownNormalizedUvs();
+            Parts.AbilityGraphic.SetCooldownNormalizedUvs();
+            Parts.VentGraphic.SetCooldownNormalizedUvs();
+            Parts.SabotageGraphic.SetCooldownNormalizedUvs();
+            Parts.PetGraphic.SetCooldownNormalizedUvs();
+            Parts.ReportGraphic.SetCooldownNormalizedUvs();
+            Parts.SecondaryGraphic.SetCooldownNormalizedUvs();
 
             ForceUpdate = false;
 
@@ -769,13 +814,14 @@ public static class HudSpritePatch
             {
                 var roleColor = Utils.GetRoleColor(player.GetCustomRole());
 
-                __instance.KillButton.buttonLabelText.SetOutlineColor(roleColor);
-                __instance.AbilityButton.buttonLabelText.SetOutlineColor(roleColor);
-                __instance.ImpostorVentButton.buttonLabelText.SetOutlineColor(roleColor);
-                __instance.SabotageButton.buttonLabelText.SetOutlineColor(roleColor);
-                __instance.PetButton.buttonLabelText.SetOutlineColor(roleColor);
-                __instance.ReportButton.buttonLabelText.SetOutlineColor(roleColor);
-                __instance.SecondaryAbilityButton.buttonLabelText.SetOutlineColor(roleColor);
+                Parts.Refresh(__instance);
+                Parts.KillLabel.SetOutlineColor(roleColor);
+                Parts.AbilityLabel.SetOutlineColor(roleColor);
+                Parts.VentLabel.SetOutlineColor(roleColor);
+                Parts.SabotageLabel.SetOutlineColor(roleColor);
+                Parts.PetLabel.SetOutlineColor(roleColor);
+                Parts.ReportLabel.SetOutlineColor(roleColor);
+                Parts.SecondaryLabel.SetOutlineColor(roleColor);
             }
         }
         catch (Exception e)
