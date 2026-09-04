@@ -46,26 +46,36 @@ public static class FixedUpdateCaller
             catch (Exception e) { Utils.ThrowException(e); }
 
             // Claude 遠隔テストブリッジ(既定OFF)。コマンドファイルのポーリング+自動スクショを 1/sec ゲートで回す。
+            var sub = AllocProbe.Now(); // misc の内訳 (misc.* は tickKB へ二重計上されない)
             try { if (PerSecondUpdateScheduler.ShouldRunUpdate("test-bridge")) TestBridge.Tick(); }
             catch (Exception e) { Utils.ThrowException(e); }
+
+            sub = AllocProbe.Mark("misc.bridge", sub);
 
             // 当たり判定可視化 (/hitbox・既定OFF) の TTL 掃除。Enabled でなくても残存形状の破棄が要るため無条件で回す。
             try { HitboxDebug.Tick(); }
             catch (Exception e) { Utils.ThrowException(e); }
 
+            sub = AllocProbe.Mark("misc.hitbox", sub);
+
             // BGM の番犬。死亡/GM ホストへのスロット切替と、外部要因で音源を失った時の復帰。1/sec ゲート。
             try { if (PerSecondUpdateScheduler.ShouldRunUpdate("bgm-watchdog")) BGMManager.Tick(); }
             catch (Exception e) { Utils.ThrowException(e); }
 
+            sub = AllocProbe.Mark("misc.bgm", sub);
+
             // BGM デコードバッファ在庫 (最大 ~45MB×2) のアイドル解放。曲替えが止まって5分で発火。
             try { if (PerSecondUpdateScheduler.ShouldRunUpdate("decode-pool-trim")) CustomSoundsManager.TrimIdleDecodePool(); }
             catch (Exception e) { Utils.ThrowException(e); }
+
+            sub = AllocProbe.Mark("misc.pool", sub);
 
             // チャット open/close 状態を毎フレーム overlay に反映。ローカルプレイヤー非依存で回す
             // (メニュー・非ゲーム中でもチャットが開くため、LocalPlayer ガードの中では遅すぎる)。
             try { TextBoxPatch.CheckChatOpen(); }
             catch (Exception e) { Utils.ThrowException(e); }
 
+            AllocProbe.Mark("misc.chat", sub);
             alloc = AllocProbe.Mark("misc", alloc);
 
             var amongUsClient = AmongUsClient.Instance;

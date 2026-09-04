@@ -19,15 +19,32 @@ public static class AllocProbe
     {
         public readonly long Managed;
         public readonly long Il2;
+        public readonly long Ts; // Stopwatch.GetTimestamp() — 区間の実時間 (ヒッチ帰属計器)
 
-        public Cursor(long managed, long il2)
+        public Cursor(long managed, long il2, long ts)
         {
             Managed = managed;
             Il2 = il2;
+            Ts = ts;
         }
     }
 
-    private static readonly Dictionary<string, (long Bytes, int Calls, long Il2)> Buckets = new(16);
+    // Calls = ブラケット通過回数 (確保の有無を問わない — 時間集計のため毎回積む)。
+    // Ticks/MaxTicks = 系統が使った実時間 (窓合計 / 最大 1 回)。GC 外のサブ秒ヒッチ (50〜65ms・gc0d=0) が
+    // mod ブラケット内で起きているか外 (バニラ本体 / 未ブラケットのパッチ / レンダ) かを分ける計器。
+    private static readonly Dictionary<string, (long Bytes, int Calls, long Il2, long Ticks, long MaxTicks)> Buckets = new(16);
+    private static readonly double TicksPerMs = System.Diagnostics.Stopwatch.Frequency / 1000.0;
+
+    // 直前の HealthLog.Tick 以降にブラケット内で使った実時間 (親系統のみ合算) と最大 1 回の系統。
+    // HITCH 行が「その窓の停止のうち mod ブラケット内は何 ms か」を答えるための窓 (Tick 毎にリセット)。
+    private static int MainThreadId; // 初回 FrameEnd (FixedUpdate) で確定。0 の間は AddTime を捨てる
+    private static long tickWinTicks;
+    private static long tickWinTopTicks;
+    private static string tickWinTopName;
+
+    // Tick 間隔のヒストグラム (ms 帯 ≥20/30/40/50/70/100)。HITCH 閾値 50ms の手前に山があるか裾だけかを ALLOC 行で見る。
+    private static readonly int[] GapBins = new int[6];
+    private static readonly int[] GapEdges = { 20, 30, 40, 50, 70, 100 };
     private static readonly StringBuilder Sb = new(320);
     private static float nextDump;
     private static long windowGlobalStart = -1;
@@ -40,23 +57,67 @@ public static class AllocProbe
 
     private static long Il2Now() => TrackIl2 ? GcPrepass.BoehmUsedBytes() : 0;
 
-    public static Cursor Now() => new(GC.GetAllocatedBytesForCurrentThread(), Il2Now());
+    public static Cursor Now() => new(GC.GetAllocatedBytesForCurrentThread(), Il2Now(), System.Diagnostics.Stopwatch.GetTimestamp());
 
-    // prev から現在までの確保量を bucket に積み、次区間の起点を返す。
+    // prev から現在までの確保量と実時間を bucket に積み、次区間の起点を返す。
     public static Cursor Mark(string bucket, Cursor prev)
     {
         long now = GC.GetAllocatedBytesForCurrentThread();
         long il2 = Il2Now();
+        long ts = System.Diagnostics.Stopwatch.GetTimestamp();
         long delta = now - prev.Managed;
         long il2Delta = il2 - prev.Il2; // Boehm GC を跨ぐと負 → その区間の il2 は数えない
+        long dt = Math.Max(ts - prev.Ts, 0);
 
-        if (delta > 0 || il2Delta > 0)
+        Buckets.TryGetValue(bucket, out (long Bytes, int Calls, long Il2, long Ticks, long MaxTicks) acc);
+        Buckets[bucket] = (acc.Bytes + Math.Max(delta, 0), acc.Calls + 1, acc.Il2 + Math.Max(il2Delta, 0), acc.Ticks + dt, Math.Max(acc.MaxTicks, dt));
+        NoteTickWindow(bucket, dt);
+
+        return new Cursor(now, il2, ts);
+    }
+
+    // ブラケットで囲めない同期処理 (ログ I/O 等) の実時間だけを積む (アロケは数えない)。
+    public static void AddTime(string bucket, long startTs)
+    {
+        // Buckets はメインスレッド専用 (Dictionary は非同期安全でない)。Health.log は他スレッドからも書かれ得るので弾く。
+        if (MainThreadId != System.Threading.Thread.CurrentThread.ManagedThreadId) return;
+        long dt = Math.Max(System.Diagnostics.Stopwatch.GetTimestamp() - startTs, 0);
+        Buckets.TryGetValue(bucket, out (long Bytes, int Calls, long Il2, long Ticks, long MaxTicks) acc);
+        Buckets[bucket] = (acc.Bytes, acc.Calls + 1, acc.Il2, acc.Ticks + dt, Math.Max(acc.MaxTicks, dt));
+        NoteTickWindow(bucket, dt);
+    }
+
+    private static void NoteTickWindow(string bucket, long dt)
+    {
+        if (bucket.IndexOf('.') < 0) tickWinTicks += dt; // "親.子" は親の内側なので合算しない
+
+        if (dt > tickWinTopTicks)
         {
-            Buckets.TryGetValue(bucket, out (long Bytes, int Calls, long Il2) acc);
-            Buckets[bucket] = (acc.Bytes + Math.Max(delta, 0), acc.Calls + 1, acc.Il2 + Math.Max(il2Delta, 0));
+            tickWinTopTicks = dt;
+            tickWinTopName = bucket;
+        }
+    }
+
+    // HITCH 行用: 直前 Tick 以降の mod ブラケット合計 ms と最大 1 回の系統。ヒッチ時だけ呼ばれる (文字列合成はここだけ)。
+    public static string TickWindowSuffix()
+    {
+        if (tickWinTopName == null) return " modMs=0";
+        return $" modMs={(long)(tickWinTicks / TicksPerMs)} top={tickWinTopName}:{(long)(tickWinTopTicks / TicksPerMs)}";
+    }
+
+    // 毎 Tick の締め (HealthLog.Tick から)。gapMs をヒストグラムへ積み、Tick 窓の時間集計をリセットする。
+    public static void EndTickWindow(long gapMs)
+    {
+        for (int i = GapEdges.Length - 1; i >= 0; i--)
+        {
+            if (gapMs < GapEdges[i]) continue;
+            GapBins[i]++;
+            break;
         }
 
-        return new Cursor(now, il2);
+        tickWinTicks = 0;
+        tickWinTopTicks = 0;
+        tickWinTopName = null;
     }
 
     // 毎 tick の締め。5 秒ごとに集計行を吐いてリセットする。
@@ -68,6 +129,7 @@ public static class AllocProbe
         {
             nextDump = now + 5f;
             windowFrameStart = Time.frameCount;
+            MainThreadId = System.Threading.Thread.CurrentThread.ManagedThreadId;
         }
 
         if (now < nextDump) return;
@@ -106,6 +168,7 @@ public static class AllocProbe
         if (globalDelta >= 0 && globalDelta < 256 * 1024 && tickTotal < 256 * 1024 && il2Total < 256 * 1024)
         {
             Buckets.Clear();
+            Array.Clear(GapBins, 0, GapBins.Length);
             AllocTypeSampler.DropWindow();
             return;
         }
@@ -127,11 +190,25 @@ public static class AllocProbe
             Sb.Append(" il2WinKB=").Append(il2WinDelta >= 0 ? il2WinDelta / 1024 : -1);
         }
 
+        // gap = Tick 間隔の度数 (≥20/≥30/≥40/≥50/≥70/≥100 ms)。HITCH 行はレート制限されるので真の頻度はこちらで読む。
+        Sb.Append(" gap=");
+        for (int i = 0; i < GapBins.Length; i++)
+        {
+            if (i > 0) Sb.Append('/');
+            Sb.Append(GapBins[i]);
+        }
+
+        Array.Clear(GapBins, 0, GapBins.Length);
+
         foreach (var kv in Buckets)
         {
-            if (kv.Value.Bytes < 16 * 1024 && kv.Value.Il2 < 16 * 1024) continue; // 16KB/5s 未満の系統は省略
+            long ms = (long)(kv.Value.Ticks / TicksPerMs);
+            long maxMs = (long)(kv.Value.MaxTicks / TicksPerMs);
+            // 16KB/5s 未満かつ 1ms/5s 未満の系統は省略
+            if (kv.Value.Bytes < 16 * 1024 && kv.Value.Il2 < 16 * 1024 && ms < 1) continue;
             Sb.Append(' ').Append(kv.Key).Append('=').Append(kv.Value.Bytes / 1024).Append("KB/").Append(kv.Value.Calls);
             if (TrackIl2) Sb.Append('~').Append(kv.Value.Il2 / 1024); // ~ の後が同区間の il2cpp 側 KB
+            if (ms >= 1 || maxMs >= 1) Sb.Append(':').Append(ms).Append('/').Append(maxMs); // : の後が窓合計 ms / 最大 1 回 ms
         }
 
         Sb.Append(" t=").Append(Utils.TimeStamp);
