@@ -1147,6 +1147,7 @@ internal static class TaskPanelBehaviourPatch
         // 新しいパネルは必ず本文を書く (破棄済みパネルと同じネイティブアドレスが再利用されても
         // ポインタ一致だけで「書き込み済み」と誤判定しないように、キャッシュを捨てる)。
         RoleTabText = null;
+        ForgetRolePanelParts();
 
         UpdateRoleTab(newPanel, role);
         return newPanel;
@@ -1516,57 +1517,104 @@ internal static class TaskPanelBehaviourPatch
         TaskPanelBehaviour roleTab = HudManagerPatch.RoleTab;
         bool isRolePanel = roleTab && roleTab.Pointer == __instance.Pointer;
 
+        // taskpanel.tab / taskpanel.role は taskpanel の内訳 (親.子 は tickKB へ二重計上されない)。
+        var sub = EndKnot.Modules.AllocProbe.Now();
+
         if (!isRolePanel)
         {
-            if (Utils.IsTaskingGameMode())
-            {
-                if (!TabText) TabText = __instance.tab.transform.FindChild("TabText_TMP").GetComponent<TextMeshPro>();
-
-                float now = Time.unscaledTime;
-
-                if (now >= nextTabTextAt)
-                {
-                    nextTabTextAt = now + 0.1f;
-                    bool fakeTasks = Options.CurrentGameMode is CustomGameMode.Standard or CustomGameMode.HideAndSeek && !Utils.HasTasks(PlayerControl.LocalPlayer.Data, forRecompute: false);
-                    string sideText = TranslationController.Instance.GetString(fakeTasks ? StringNames.FakeTasks : StringNames.Tasks);
-                    if (fakeTasks) sideText = Utils.ColorString(Utils.GetRoleColor(CustomRoles.ImpostorEndKnot), sideText.TrimEnd(':'));
-                    string tabText = $"{sideText}{Utils.GetTaskCount(PlayerControl.LocalPlayer.PlayerId, Utils.IsActive(SystemTypes.Comms))}";
-                    if (TabText.text != tabText) TabText.SetText(tabText); // 同値なら書かない (il2cpp 文字列確保+再レイアウト回避)
-                }
-            }
-            else
-            {
-                __instance.transform.localPosition = new Vector3(10000f, 10000f, 0f);
-                return false;
-            }
-            
-            return true;
+            try { return UpdateTaskPanel(__instance); }
+            finally { EndKnot.Modules.AllocProbe.Mark("taskpanel.tab", sub); }
         }
 
-        Transform transform = __instance.background.transform;
-        Vector3 vector = __instance.background.sprite.bounds.extents;
-        Vector3 vector2 = __instance.tab.sprite.bounds.extents;
+        try { UpdateRolePanel(__instance); }
+        finally { EndKnot.Modules.AllocProbe.Mark("taskpanel.role", sub); }
 
-        transform.localScale = __instance.taskText.textBounds.size.x > 0f
+        return false;
+    }
+
+    private static bool UpdateTaskPanel(TaskPanelBehaviour __instance)
+    {
+        if (Utils.IsTaskingGameMode())
+        {
+            if (!TabText) TabText = __instance.tab.transform.FindChild("TabText_TMP").GetComponent<TextMeshPro>();
+
+            float now = Time.unscaledTime;
+
+            if (now >= nextTabTextAt)
+            {
+                nextTabTextAt = now + 0.1f;
+                bool fakeTasks = Options.CurrentGameMode is CustomGameMode.Standard or CustomGameMode.HideAndSeek && !Utils.HasTasks(PlayerControl.LocalPlayer.Data, forRecompute: false);
+                string sideText = TranslationController.Instance.GetString(fakeTasks ? StringNames.FakeTasks : StringNames.Tasks);
+                if (fakeTasks) sideText = Utils.ColorString(Utils.GetRoleColor(CustomRoles.ImpostorEndKnot), sideText.TrimEnd(':'));
+                string tabText = $"{sideText}{Utils.GetTaskCount(PlayerControl.LocalPlayer.PlayerId, Utils.IsActive(SystemTypes.Comms))}";
+                if (TabText.text != tabText) TabText.SetText(tabText); // 同値なら書かない (il2cpp 文字列確保+再レイアウト回避)
+            }
+        }
+        else
+        {
+            __instance.transform.localPosition = new Vector3(10000f, 10000f, 0f);
+            return false;
+        }
+
+        return true;
+    }
+
+    // RolePanel の子 (background / tab / taskText とそれぞれの transform) はパネルが生きている間は不変なので、
+    // パネル単位で一度だけ interop 越しに取る (プロパティ get は毎フレーム managed wrapper を作る = 1 パネル 60Hz で十数個)。
+    // 新しい RolePanel の生成時 (CreateRoleTab) に必ず捨てる — 破棄済みパネルと同じアドレスが再利用されても
+    // ポインタ一致だけで古い子を使わないため。念のため生存も毎フレーム 1 回確認する。
+    private static IntPtr RolePanelPartsPtr;
+    private static Transform RolePanelTf, RolePanelBgTf, RolePanelTabTf;
+    private static SpriteRenderer RolePanelBg, RolePanelTabSr;
+    private static TextMeshPro RolePanelTaskText;
+
+    internal static void ForgetRolePanelParts()
+    {
+        RolePanelPartsPtr = IntPtr.Zero;
+        RolePanelTf = RolePanelBgTf = RolePanelTabTf = null;
+        RolePanelBg = RolePanelTabSr = null;
+        RolePanelTaskText = null;
+    }
+
+    private static void UpdateRolePanel(TaskPanelBehaviour __instance)
+    {
+        if (RolePanelPartsPtr != __instance.Pointer || !RolePanelTf)
+        {
+            RolePanelTf = __instance.transform;
+            RolePanelBg = __instance.background;
+            RolePanelBgTf = RolePanelBg.transform;
+            RolePanelTabSr = __instance.tab;
+            RolePanelTabTf = RolePanelTabSr.transform;
+            RolePanelTaskText = __instance.taskText;
+            RolePanelPartsPtr = __instance.Pointer;
+        }
+
+        Transform transform = RolePanelBgTf;
+        Bounds bgBounds = RolePanelBg.sprite.bounds;
+        Vector3 vector = bgBounds.extents;
+        Vector3 vector2 = RolePanelTabSr.sprite.bounds.extents;
+        Vector3 textSize = RolePanelTaskText.textBounds.size;
+
+        transform.localScale = textSize.x > 0f
             ? new Vector3(
-                __instance.taskText.textBounds.size.x + 0.4f,
-                __instance.taskText.textBounds.size.y + 0.3f,
+                textSize.x + 0.4f,
+                textSize.y + 0.3f,
                 1f)
             : Vector3.zero;
 
         vector.y = -vector.y;
         vector = vector.Mul(transform.localScale);
-        __instance.background.transform.localPosition = vector;
+        transform.localPosition = vector;
 
-        vector2 = vector2.Mul(__instance.tab.transform.localScale);
+        vector2 = vector2.Mul(RolePanelTabTf.localScale);
         vector2.y = -vector2.y;
         vector2.x += vector.x * 2f;
-        __instance.tab.transform.localPosition = vector2;
+        RolePanelTabTf.localPosition = vector2;
 
-        if (!GameManager.Instance) return false;
+        if (!GameManager.Instance) return;
 
         var closePosition = new Vector3(
-            -__instance.background.sprite.bounds.size.x * __instance.background.transform.localScale.x,
+            -bgBounds.size.x * transform.localScale.x,
             __instance.closedPosition.y,
             __instance.closedPosition.z);
         __instance.closedPosition = closePosition;
@@ -1579,11 +1627,9 @@ internal static class TaskPanelBehaviourPatch
             Mathf.SmoothStep(__instance.closedPosition.x, __instance.openPosition.x, __instance.timer),
             Mathf.SmoothStep(__instance.closedPosition.y, __instance.openPosition.y, __instance.timer),
             __instance.openPosition.z);
-        __instance.transform.localPosition = AspectPosition.ComputePosition(
+        RolePanelTf.localPosition = AspectPosition.ComputePosition(
             AspectPosition.EdgeAlignments.LeftTop,
             relativePos);
-
-        return false;
     }
 
     [HarmonyPatch(nameof(TaskPanelBehaviour.SetTaskText))]
