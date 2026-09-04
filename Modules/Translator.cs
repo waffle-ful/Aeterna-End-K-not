@@ -108,6 +108,7 @@ public static class Translator
             }
         }
         catch (Exception ex) { Logger.Error($"Error: {ex}", "Translator"); }
+        Modules.BootTimeline.Mark("lang.index");
 
         // Loading custom translation files
         if (!Directory.Exists($"{Main.DataPath}/{LanguageFolderName}")) Directory.CreateDirectory($"{Main.DataPath}/{LanguageFolderName}");
@@ -131,7 +132,9 @@ public static class Translator
         catch { effectiveLang = SupportedLangs.English; }
 
         LoadLangResource((int)SupportedLangs.English);
+        Modules.BootTimeline.Mark("lang.en");
         LoadLangResource((int)effectiveLang);
+        Modules.BootTimeline.Mark("lang.eff");
         foreach (int langId in previouslyLoaded) LoadLangResource(langId);
 
         if (Main.LoadAllLanguages?.Value == true)
@@ -142,6 +145,7 @@ public static class Translator
 
         // Creating a translation template
         CreateTemplateFile();
+        Modules.BootTimeline.Mark("lang.template");
 
         foreach (SupportedLangs lang in Enum.GetValues<SupportedLangs>())
         {
@@ -392,7 +396,8 @@ public static class Translator
 
             try
             {
-                List<string> textStrings = [];
+                // 12.5k 鍵 × List.Contains の総当たりで毎起動 ≈0.3s 掛かっていたので集合判定にする。
+                HashSet<string> textStrings = [];
 
                 using (StreamReader reader = new(path, Encoding.GetEncoding("UTF-8")))
                 {
@@ -418,6 +423,9 @@ public static class Translator
                     if (!textStrings.Contains(templateString))
                         sb.Append($"{templateString}:\n");
                 }
+
+                // 欠落鍵が無いのに空行だけ追記して .dat を毎起動 1 行ずつ太らせない。
+                if (sb.Length == 0) return;
 
                 using FileStream fileStream = new(path, FileMode.Append, FileAccess.Write);
                 using StreamWriter writer = new(fileStream);

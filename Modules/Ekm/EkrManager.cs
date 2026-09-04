@@ -165,6 +165,13 @@ internal sealed class EkrHolderState
     // (最初の評価では送らず種を置くだけ — ゲーム開始時の通常の NotifyRoles で既に出ているため)。
     public string LastProgressSent;
 
+    // 進捗テキストの再構築を変数が書き換わった tick だけに絞るための版。変数の書込みは全て fiber の
+    // var_set/var_add → DrainFiberWrites を通るので、そこで 1 つ進める。置換 (Regex) と色付けを毎
+    // FixedUpdate 走らせると保持者 1 人あたり ≈1.8KB/tick の managed ゴミになる (実測)。
+    public int VarsVersion;
+    public int ProgressBuiltVersion = -1;
+    public string ProgressBuilt;
+
     // §4 ホスト露出を反映した実効値。**InitRuntime で1回だけ焼き込む** — オプションの読みをゲーム開始
     // 時点の1箇所に集約し、ゲーム中のオプション変更は次ゲームからにする (既存役職と同じ規約)。
     public float EffectiveSpeedMult = 1f;
@@ -2371,6 +2378,8 @@ public static class EkrManager
     {
         if (fiber.WrittenVars.Count == 0) return;
 
+        state.VarsVersion++;
+
         // §1.1 深さ1: 連鎖起点 (じょうたいトリガ由来) の fiber の書込みは別枠へ積む。
         (fiber.FromVarChain ? state.PendingChainVarWrites : state.PendingVarWrites).UnionWith(fiber.WrittenVars);
         fiber.WrittenVars.Clear();
@@ -2525,7 +2534,16 @@ public static class EkrManager
         if (def == null || def.ProgressText.Length == 0) return;
         if (!pc || !pc.IsAlive() || !Main.IntroDestroyed) return;
 
-        string current = BuildProgressText(state.Slot, pc.PlayerId);
+        string current;
+
+        if (state.ProgressBuilt != null && state.ProgressBuiltVersion == state.VarsVersion)
+            current = state.ProgressBuilt;
+        else
+        {
+            current = BuildProgressText(state.Slot, pc.PlayerId);
+            state.ProgressBuilt = current;
+            state.ProgressBuiltVersion = state.VarsVersion;
+        }
 
         // 初回は種を置くだけ (ゲーム開始時の通常の NotifyRoles で既に表示済み)。
         if (state.LastProgressSent == null)

@@ -1975,6 +1975,8 @@ internal static class FixedUpdatePatch
 
         long now = TimeStamp;
 
+        alloc = Modules.AllocProbe.Mark("pc.core.self", alloc);
+
         if (AmongUsClient.Instance.AmHost)
         {
             AFKDetector.OnFixedUpdate(player);
@@ -2013,6 +2015,8 @@ internal static class FixedUpdatePatch
                     }
                 }
             }
+
+            alloc = Modules.AllocProbe.Mark("pc.core.afk", alloc);
 
             if (!GameStates.IsLobby)
             {
@@ -2060,6 +2064,8 @@ internal static class FixedUpdatePatch
                     PlagueBearer.PlayerIdList.Remove(playerId);
                 }
 
+                alloc = Modules.AllocProbe.Mark("pc.core.role", alloc);
+
                 bool checkPos = inTask && !ExileController.Instance && !AntiBlackout.SkipTasks && alive && !Pelican.IsEaten(playerId) && Main.IntroDestroyed;
                 if (checkPos) Asthmatic.OnCheckPlayerPosition(player);
 
@@ -2071,6 +2077,8 @@ internal static class FixedUpdatePatch
                         state.Role.OnGlobalFixedUpdate(player, lowLoad);
                     }
                 }
+
+                alloc = Modules.AllocProbe.Mark("pc.core.glob", alloc);
 
                 if (Main.PlayerStates.TryGetValue(playerId, out PlayerState playerState) && inTask && alive)
                 {
@@ -2095,6 +2103,8 @@ internal static class FixedUpdatePatch
                 if (inTask && alive && !lowLoad)
                     Asthmatic.OnFixedUpdate();
 
+                alloc = Modules.AllocProbe.Mark("pc.core.sub", alloc);
+
                 if (!lowLoad && Options.UsePets.GetBool() && inTask && (!LastUpdate.TryGetValue(playerId, out long lastPetNotify) || lastPetNotify < now))
                 {
                     if (Main.AbilityCD.TryGetValue(playerId, out (long StartTimeStamp, int TotalCooldown) timer))
@@ -2118,6 +2128,8 @@ internal static class FixedUpdatePatch
                         LastUpdate[playerId] = now;
                     }
                 }
+
+                alloc = Modules.AllocProbe.Mark("pc.core.pet", alloc);
 
                 if (!lowLoad) Randomizer.OnFixedUpdateForPlayers(player);
 

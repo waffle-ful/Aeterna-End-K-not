@@ -39,7 +39,19 @@ public static class ManagedCensus
     // HealthLog の HB (5秒 grid) から毎回呼ばれ、間隔を満たしたときだけ実走する。
     public static void MaybeTick(long now, string state)
     {
+        // 初回はメニュー到達直後の HB に当たる (棚卸し 12MB + 強制フル GC で ≈0.3s の間隙)。
+        // 起点時刻だけ記録して、最初の棚卸しは 120s 後・強制 GC は 300s 後に送る。
+        if (_lastSweepTs == 0)
+        {
+            _lastSweepTs = now;
+            _lastForcedGcTs = now;
+            return;
+        }
+
         if (now - _lastSweepTs < SweepIntervalSeconds) return;
+
+        // 初回の実走は _fields のリフレクション構築込みで重いので、試合中 (InTask/Meeting) の HB には乗せない。
+        if (_fields == null && state is not ("Lobby" or "Menu" or "Ended")) return;
         _lastSweepTs = now;
 
         // 強制フル GC はメインスレッドを数十〜数百 ms 止めるので、ゲーム中 (InTask/Meeting) は踏まない。
