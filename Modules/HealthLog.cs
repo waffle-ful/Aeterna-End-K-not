@@ -340,11 +340,15 @@ public static class HealthLog
                     // ⚠️ Boehm GC 回数は Il2CppInterop ラッパー越しなので raw DllImport (BoehmUsedBytes) より高い。
                     // Tick は FixedUpdateCaller から毎フレーム走るため、ここ (ヒッチ検出時のみ) で取る。
                     // 差分ではなく累計を出し、連続する HITCH 行の差として読む — 毎フレーム標本を持たずに済む。
-                    Write($"HITCH gapMs={gapMs} state={state} gc0d={GC.CollectionCount(0) - _lastGc0Count} gc2d={GC.CollectionCount(2) - _lastGc2Count} bgc={GcPrepass.BoehmCollectionCount()} boehmMB={(boehmNow > 0 ? boehmNow / 1048576 : -1)} boehmDeltaKB={boehmDeltaKb} fps={_fpsLast}{GetLastOpSuffix(nowMs, gapMs)} t={now}");
+                    // modMs/top = 直前 Tick 以降に mod ブラケット内で使った実時間と最大の系統 (AllocProbe)。gapMs に対して
+                    // 小さければ停止は mod ブラケット外 (バニラ本体 / レンダ / 未ブラケットのパッチ) で起きている。
+                    Write($"HITCH gapMs={gapMs} state={state} gc0d={GC.CollectionCount(0) - _lastGc0Count} gc2d={GC.CollectionCount(2) - _lastGc2Count} bgc={GcPrepass.BoehmCollectionCount()} boehmMB={(boehmNow > 0 ? boehmNow / 1048576 : -1)} boehmDeltaKB={boehmDeltaKb} fps={_fpsLast}{GetLastOpSuffix(nowMs, gapMs)}{AllocProbe.TickWindowSuffix()} t={now}");
                 }
                 else
                     _hitchSuppressed++;
             }
+
+            AllocProbe.EndTickWindow(gapMs);
         }
 
         _lastTickMs = nowMs;
@@ -896,8 +900,10 @@ public static class HealthLog
     public static void Timeline(string line)
     {
         if (TimelinePath == null) return;
+        long ts = System.Diagnostics.Stopwatch.GetTimestamp();
         try { File.AppendAllText(TimelinePath, $"sid={StartTs} {line}\n"); }
         catch { }
+        finally { AllocProbe.AddTime("logio", ts); }
     }
 
     public static void RecordGameStart(CustomGameMode mode, int players, string rolesStr)
@@ -1008,8 +1014,11 @@ public static class HealthLog
     private static void Write(string line)
     {
         if (FilePath == null) return;
+        // 同期 I/O (open/write/close 毎行) の実時間を logio 系統へ積む — ディスク側のスパイクがヒッチに化けていないかの計器
+        long ts = System.Diagnostics.Stopwatch.GetTimestamp();
         try { File.AppendAllText(FilePath, line + "\n"); }
         catch { }
+        finally { AllocProbe.AddTime("logio", ts); }
     }
 }
 
