@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
@@ -410,10 +410,16 @@ internal static class HudManagerPatch
 
                     bool allowedRole = role is CustomRoles.Necromancer or CustomRoles.Deathknight or CustomRoles.Renegade or CustomRoles.Sidekick;
 
+                    // hud.b3.kill / .vent / .sab は hud.b3 の内訳 (親.子 は tickKB へ二重計上されない)。外側の alloc は触らない。
+                    var sub = AllocProbe.Now();
+
+                    // Data.Role は 1 tick に 2 箇所 (CanUseKillButton / CanVent) で書くので wrapper を 1 回だけ取る
+                    RoleBehaviour roleBehaviour = player.Data.Role;
+
                     if (player.CanUseKillButton() && (allowedRole || !usesPetInsteadOfKill))
                     {
                         killButton?.ToggleVisible(player.IsAlive() && GameStates.IsInTask);
-                        player.Data.Role.CanUseKillButton = true;
+                        roleBehaviour.CanUseKillButton = true;
                     }
                     else
                     {
@@ -421,17 +427,23 @@ internal static class HudManagerPatch
                         killButton?.ToggleVisible(false);
                     }
 
+                    sub = AllocProbe.Mark("hud.b3.kill", sub);
+
                     if (Options.CurrentGameMode != CustomGameMode.Standard)
                         reportButton.Hide();
 
-                    ventButton?.ToggleVisible((player.CanUseImpostorVentButton() || (player.inVent && player.GetRoleTypes() != RoleTypes.Engineer)) && GameStates.IsInTask);
-                    player.Data.Role.CanVent = player.CanUseVent();
+                    bool impostorVentButton = player.CanUseImpostorVentButton(); // CanUseVent 側でも要るので 1 回で済ませる
+                    ventButton?.ToggleVisible((impostorVentButton || (player.inVent && player.GetRoleTypes() != RoleTypes.Engineer)) && GameStates.IsInTask);
+                    roleBehaviour.CanVent = player.CanUseVentWith(impostorVentButton);
+
+                    sub = AllocProbe.Mark("hud.b3.vent", sub);
 
                     if ((usesPetInsteadOfKill && player.Is(CustomRoles.Nimble) && player.GetRoleTypes() == RoleTypes.Engineer) || player.Is(CustomRoles.GM))
                         abilityButton?.SetEnabled();
 
                     sabotageButton?.ToggleVisible(player.GetRoleTypes() is RoleTypes.ImpostorGhost or RoleTypes.Impostor or RoleTypes.Phantom or RoleTypes.Shapeshifter or RoleTypes.Viper);
 
+                    AllocProbe.Mark("hud.b3.sab", sub);
                     alloc = AllocProbe.Mark("hud.b3", alloc);
 
                     float abilityUseLimit = player.GetAbilityUseLimit();
