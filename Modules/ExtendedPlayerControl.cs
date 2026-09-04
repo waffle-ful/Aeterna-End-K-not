@@ -82,7 +82,30 @@ internal static class ExtendedPlayerControl
 
         public bool CanUseVent()
         {
-            try { return player.CanUseVent(player.GetClosestVent()?.Id ?? int.MaxValue); }
+            try
+            {
+                // 最寄りベントは 1 回だけ引く (Pos() は transform 越しの interop 呼び。以前は 2 回引いていた)
+                int? closestVentId = player.GetClosestVent()?.Id;
+                return player.CanUseVentCore(closestVentId ?? int.MaxValue, closestVentId, null);
+            }
+            catch (Exception e)
+            {
+                ThrowException(e);
+                return true;
+            }
+        }
+
+        /// <summary>
+        /// CanUseVent() と同じ判定を、呼び出し側が既に求めた CanUseImpostorVentButton() の結果を再利用して返す。
+        /// 毎 tick の HUD 経路 (ベントボタン表示 + Data.Role.CanVent 更新) が同じ判定を 2 度走らせないための入口。
+        /// </summary>
+        public bool CanUseVentWith(bool impostorVentButton)
+        {
+            try
+            {
+                int? closestVentId = player.GetClosestVent()?.Id;
+                return player.CanUseVentCore(closestVentId ?? int.MaxValue, closestVentId, impostorVentButton);
+            }
             catch (Exception e)
             {
                 ThrowException(e);
@@ -92,7 +115,12 @@ internal static class ExtendedPlayerControl
 
         public bool CanUseVent(int ventId)
         {
-            int? closestVentId = player.GetClosestVent()?.Id;
+            return player.CanUseVentCore(ventId, player.GetClosestVent()?.Id, null);
+        }
+
+        // impostorVentButton は CanUseImpostorVentButton() の既知の結果 (null なら此処で求める)
+        private bool CanUseVentCore(int ventId, int? closestVentId, bool? impostorVentButton)
+        {
             if (player.inVent && closestVentId == ventId) return true;
 
             switch (Options.CurrentGameMode)
@@ -107,10 +135,11 @@ internal static class ExtendedPlayerControl
                     return Deathrace.CanUseVent(player, ventId);
             }
 
-            if (player.Is(CustomRoles.Trainee) && MeetingStates.FirstMeeting) return false;
-            if (player.Is(CustomRoles.Blocked) && closestVentId != ventId) return false;
+            // 安い側の条件を先に (Is() は interop の null 判定 1 本を伴う)
+            if (MeetingStates.FirstMeeting && player.Is(CustomRoles.Trainee)) return false;
+            if (closestVentId != ventId && player.Is(CustomRoles.Blocked)) return false;
             if (!GameStates.IsInTask || ExileController.Instance || AntiBlackout.SkipTasks || Main.Invisible.Contains(player.PlayerId)) return false;
-            if (player.CanUseImpostorVentButton() || player.GetRoleTypes() == RoleTypes.Engineer)
+            if ((impostorVentButton ?? player.CanUseImpostorVentButton()) || player.GetRoleTypes() == RoleTypes.Engineer)
             {
                 foreach (var state in Main.PlayerStates.Values)
                     if (!state.Role.CanUseVent(player, ventId)) return false;
@@ -1585,6 +1614,14 @@ internal static class ExtendedPlayerControl
 
             if (player.GetRoleTypes() == RoleTypes.Engineer) return false;
 
+            // Standard の 3 分岐で Is() を 3 回引くと interop の null 判定が 3 本走る。上の IsAlive() で player 非 null は
+            // 確定しているので PlayerStates を 1 回だけ引き、Is() と同じ規則 (ロビー中は付加役職なし) で判定する。
+            bool lobby = GameStates.IsLobby;
+            Main.PlayerStates.TryGetValue(player.PlayerId, out PlayerState ownState);
+            bool IsLocal(CustomRoles r) => r > CustomRoles.NotAssigned
+                ? !lobby && ownState != null && ownState.SubRoles.Contains(r)
+                : (ownState?.MainRole ?? CustomRoles.Crewmate) == r;
+
             return Options.CurrentGameMode switch
             {
                 CustomGameMode.SoloPVP => SoloPVP.CanVent,
@@ -1602,10 +1639,10 @@ internal static class ExtendedPlayerControl
                 CustomGameMode.Deathrace => Deathrace.CanUseVent(player, player.GetClosestVent().Id),
 
                 CustomGameMode.Standard when CopyCat.PlayerIdList.Contains(player.PlayerId) => true,
-                CustomGameMode.Standard when player.Is(CustomRoles.Nimble) || Options.EveryoneCanVent.GetBool() => true,
-                CustomGameMode.Standard when player.Is(CustomRoles.Bloodlust) || player.Is(CustomRoles.Renegade) => true,
+                CustomGameMode.Standard when IsLocal(CustomRoles.Nimble) || Options.EveryoneCanVent.GetBool() => true,
+                CustomGameMode.Standard when IsLocal(CustomRoles.Bloodlust) || IsLocal(CustomRoles.Renegade) => true,
 
-                _ => Main.PlayerStates.TryGetValue(player.PlayerId, out PlayerState state) && state.Role.CanUseImpostorVentButton(player)
+                _ => ownState != null && ownState.Role.CanUseImpostorVentButton(player)
             };
         }
 
@@ -2609,9 +2646,13 @@ internal static class ExtendedPlayerControl
 
         public bool IsAlive()
         {
-            if (!player || player.Is(CustomRoles.GM)) return false;
+            if (!player) return false;
 
-            return GameStates.IsLobby || !Main.PlayerStates.TryGetValue(player.PlayerId, out PlayerState ps) || !ps.IsDead;
+            // GM 判定と死亡判定で PlayerStates を 1 回だけ引く (以前は Is(GM) 経由で interop null 判定 + 辞書引きが二重だった)
+            bool known = Main.PlayerStates.TryGetValue(player.PlayerId, out PlayerState ps);
+            if (known && ps.MainRole == CustomRoles.GM) return false;
+
+            return GameStates.IsLobby || !known || !ps.IsDead;
         }
         public bool IsAliveWithConditions()
         {
