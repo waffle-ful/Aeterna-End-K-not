@@ -2370,10 +2370,16 @@ internal static class ExtendedPlayerControl
 
         public bool IsValidTargetForKillButton()
         {
+            PlayerControl lp = PlayerControl.LocalPlayer;
+            return player.IsValidTargetForKillButton(lp.Data.Role, lp.GetTruePosition());
+        }
+
+        // LocalPlayer 側の役職と真位置を呼び出し側が持っている場合の版 (毎 tick の全ターゲット走査で取り直しを避ける)。判定内容は上と同一。
+        public bool IsValidTargetForKillButton(RoleBehaviour localRole, Vector2 lpPos)
+        {
             // Code from AU code for kill button check target, without distance check but check colliders
-            if (PlayerControl.LocalPlayer.Data.Role.IsValidTarget(player.Data) && player.Collider.enabled)
+            if (localRole.IsValidTarget(player.Data) && player.Collider.enabled)
             {
-                Vector2 lpPos = PlayerControl.LocalPlayer.GetTruePosition();
                 Vector2 vector = player.GetTruePosition() - lpPos;
                 float magnitude = vector.magnitude;
                 if (!PhysicsHelpers.AnyNonTriggersBetween(lpPos, vector.normalized, magnitude, Constants.ShipAndObjectsMask))

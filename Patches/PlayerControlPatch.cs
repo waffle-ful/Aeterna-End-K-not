@@ -2022,6 +2022,7 @@ internal static class FixedUpdatePatch
 
             if (!GameStates.IsLobby)
             {
+                var roleStart = alloc; // pc.core.role は下のサブ区間 3 本の合計 (サブ計測を足しても総量の意味を変えない)
                 if (player.Is(CustomRoles.Spurt) && !Mathf.Approximately(Main.AllPlayerSpeed[playerId], Spurt.StartingSpeed[playerId]) && !inTask && !GameStates.IsMeeting) // fix ludicrous bug
                 {
                     Main.AllPlayerSpeed[playerId] = Spurt.StartingSpeed[playerId];
@@ -2045,8 +2046,12 @@ internal static class FixedUpdatePatch
 
                 SabotageSystemTypeUpdateSystemPatch.SabotageDoubleTrigger.Update(Time.deltaTime);
 
+                alloc = Modules.AllocProbe.Mark("pc.core.role.pre", alloc);
+
                 if (Main.PlayerStates.TryGetValue(playerId, out PlayerState s) && s.Role.IsEnable)
                     s.Role.OnFixedUpdate(player);
+
+                alloc = Modules.AllocProbe.Mark("pc.core.role.fx", alloc);
 
                 if (inTask && player.Is(CustomRoles.PlagueBearer) && PlagueBearer.IsPlaguedAll(player))
                 {
@@ -2066,7 +2071,8 @@ internal static class FixedUpdatePatch
                     PlagueBearer.PlayerIdList.Remove(playerId);
                 }
 
-                alloc = Modules.AllocProbe.Mark("pc.core.role", alloc);
+                Modules.AllocProbe.Mark("pc.core.role.plague", alloc);
+                alloc = Modules.AllocProbe.Mark("pc.core.role", roleStart);
 
                 bool checkPos = inTask && !ExileController.Instance && !AntiBlackout.SkipTasks && alive && !Pelican.IsEaten(playerId) && Main.IntroDestroyed;
                 if (checkPos) Asthmatic.OnCheckPlayerPosition(player);
