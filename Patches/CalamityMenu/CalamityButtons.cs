@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Reflection;
 using AmongUs.GameOptions;
 using EndKnot.Patches;
@@ -20,9 +21,11 @@ public static class CalamityButtons
     public static void Build(MainMenuManager mm, Transform buttonLayer)
     {
         // Spacing 0.5, group center shifted to y=-0.1 to leave room for logo above
-        var defs = new (string label, float y, Action onClick)[]
+        _labels.Clear();
+
+        var defs = new (string key, float y, Action onClick)[]
         {
-            (Translator.GetString("MainMenu.Calamity.SinglePlayer"), +0.9f,
+            ("MainMenu.Calamity.SinglePlayer", +0.9f,
                 () =>
                 {
                     Logger.Info("SinglePlayer clicked", "CalamityButtons");
@@ -47,24 +50,44 @@ public static class CalamityButtons
             // OnClick.Invoke() with temporary playButton activation — vanilla listeners
             // still no-op, so reverted to the direct OpenGameModeMenu call. Workaround
             // for users: click Multi twice. Real fix needs vanilla AU 2026 source review.
-            (Translator.GetString("MainMenu.Calamity.Multiplayer"),  +0.4f,
+            ("MainMenu.Calamity.Multiplayer",  +0.4f,
                 () => GoToMultiplayer(mm)),
 
-            (Translator.GetString("MainMenu.Calamity.Settings"),     -0.1f,
+            ("MainMenu.Calamity.Settings",     -0.1f,
                 () => { CalamityVisibility.HideMenuContent(); mm.settingsButton.OnClick.Invoke(); }),
 
-            (Translator.GetString("MainMenu.Calamity.MyAccount"),    -0.6f,
+            ("MainMenu.Calamity.MyAccount",    -0.6f,
                 () => OpenMyAccount(mm)),
 
-            (Translator.GetString("MainMenu.Calamity.Credits"),      -1.1f,
+            ("MainMenu.Calamity.Credits",      -1.1f,
                 () => { CalamityVisibility.HideMenuContent(); mm.creditsButton.OnClick.Invoke(); }),
 
-            (Translator.GetString("MainMenu.Calamity.Quit"),         -1.6f,
+            ("MainMenu.Calamity.Quit",         -1.6f,
                 () => mm.quitButton.OnClick.Invoke()),
         };
 
-        foreach (var (label, y, onClick) in defs)
-            CreateTextButton(buttonLayer, label, new Vector3(0f, y, 0f), onClick);
+        foreach (var (key, y, onClick) in defs)
+            _labels.Add((CreateTextButton(buttonLayer, Translator.GetString(key), new Vector3(0f, y, 0f), onClick), key));
+    }
+
+    // ボタン文言は構築時に解決されるが、mod 側の言語設定 (ModLanguage) はオプション構築の完了後に
+    // しか読めない。構築完了時に呼び直して、設定言語で引き直す (当たり判定も文字幅に合わせ直す)。
+    private static readonly List<(TextMeshPro Tmp, string Key)> _labels = new();
+
+    public static void RefreshLabels()
+    {
+        foreach ((TextMeshPro tmp, string key) in _labels)
+        {
+            try
+            {
+                if (tmp == null) continue;
+                string label = Translator.GetString(key);
+                if (tmp.text == label) continue;
+                tmp.text = label;
+                FitCollider(tmp, label);
+            }
+            catch (Exception e) { Logger.Warn($"RefreshLabels {key}: {e.Message}", "CalamityButtons"); }
+        }
     }
 
     // Calamity メニューから matchmaking へ抜ける実経路。Calamity ボタンと自動部屋立て直し
@@ -99,7 +122,7 @@ public static class CalamityButtons
         catch (Exception ex) { Logger.Exception(ex, "OpenMyAccount"); }
     }
 
-    private static void CreateTextButton(Transform parent, string label, Vector3 pos, Action onClick)
+    private static TextMeshPro CreateTextButton(Transform parent, string label, Vector3 pos, Action onClick)
     {
         var go = new GameObject($"CalamityBtn_{label}");
         go.transform.SetParent(parent);
@@ -125,23 +148,8 @@ public static class CalamityButtons
         // hover/click zone hugs the visible text. A previous fixed 5×0.65 box triggered
         // hover several units left/right of the label. ForceMeshUpdate makes textBounds
         // current (ButtonLayer is active-in-hierarchy here); pad slightly for easy aiming.
-        const float PadX = 0.35f;
-        const float PadY = 0.30f;
-        tmp.ForceMeshUpdate();
-        var b = tmp.textBounds;
-
-        var col = go.AddComponent<BoxCollider2D>();
-        if (b.size.x > 0.01f && b.size.y > 0.01f)
-        {
-            col.size   = new Vector2(b.size.x + PadX, b.size.y + PadY);
-            col.offset = new Vector2(b.center.x, b.center.y);
-        }
-        else
-        {
-            // Fallback if the mesh hasn't been generated yet — approximate from font size.
-            col.size   = new Vector2(label.Length * FontSize * 0.5f, FontSize * 0.7f);
-            col.offset = Vector2.zero;
-        }
+        go.AddComponent<BoxCollider2D>();
+        FitCollider(tmp, label);
 
         var btn         = go.AddComponent<PassiveButton>();
         btn.OnClick     = new();
@@ -153,6 +161,30 @@ public static class CalamityButtons
         btn.OnMouseOut .AddListener((UnityAction)(() => SetHover(go.transform, tmp, false)));
 
         SetHover(go.transform, tmp, false);
+        return tmp;
+    }
+
+    private static void FitCollider(TextMeshPro tmp, string label)
+    {
+        const float PadX = 0.35f;
+        const float PadY = 0.30f;
+        tmp.ForceMeshUpdate();
+        var b = tmp.textBounds;
+
+        var col = tmp.GetComponent<BoxCollider2D>();
+        if (col == null) return;
+
+        if (b.size.x > 0.01f && b.size.y > 0.01f)
+        {
+            col.size   = new Vector2(b.size.x + PadX, b.size.y + PadY);
+            col.offset = new Vector2(b.center.x, b.center.y);
+        }
+        else
+        {
+            // Fallback if the mesh hasn't been generated yet — approximate from font size.
+            col.size   = new Vector2(label.Length * FontSize * 0.5f, FontSize * 0.7f);
+            col.offset = Vector2.zero;
+        }
     }
 
     private static void SetHover(Transform t, TextMeshPro tmp, bool hover)
