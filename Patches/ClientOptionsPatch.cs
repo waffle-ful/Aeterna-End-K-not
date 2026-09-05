@@ -155,6 +155,11 @@ public static class OptionsMenuBehaviourStartPatch
 
                 static void Unload()
                 {
+                    // モッドを降ろす = 以後こちらから番犬/相棒アプリを止める手段が無くなるので、先に畳む。
+                    // (Unload がコンポーネントを破棄して ExitHook.OnDestroy が走るかは保証が無いため明示的に呼ぶ。
+                    //  二重呼び出しは ExitHook 側のラッチが潰す)
+                    EndKnot.Modules.ExitHook.FireNow("switch-vanilla");
+
                     if (ClientControlGUI.Instance) Object.Destroy(ClientControlGUI.Instance);
                     MainMenuManagerPatch.ShowRightPanelImmediately();
 
