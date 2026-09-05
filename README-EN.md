@@ -95,6 +95,8 @@ Even with the mod loaded, boot time and resident memory are kept as close to van
 | Metric | Vanilla | BepInEx only | Previous v0.9.6 | Current v0.9.7 (dev) |
 |---|---:|---:|---:|---:|
 | Boot time (s) | 5.9 | 8.1 | 16.4 | **11.1** (−33%) |
+| Time to interactive (s) | 10.5 | 12.9 | 21.6 | **16.4** (−24%) |
+| Time to hosted lobby (s) | 19.6 | — | — | 25.1 |
 | Menu resident memory (MB) | 587 | 723 | 937 | **841** (−96MB) |
 | Lobby resident memory (MB) | — | — | 970 | **908** |
 | In-game managed allocation (KB / 5 s) | — | — | 1,228 | **324** (−74%) |
@@ -102,7 +104,7 @@ Even with the mod loaded, boot time and resident memory are kept as close to van
 
 <p align="center"><img src=".github/perf-chart.png" alt="End K not performance comparison chart" width="90%"></p>
 
-Conditions and all metrics are in the **[performance report](https://waffle-ful.github.io/Aeterna-End-K-not/perf.html)** (Japanese). Values in parentheses are deltas versus the previous release. Vanilla lobby / in-game figures are not measured because there is no way to automate them.
+Conditions and all metrics are in the **[performance report](https://waffle-ful.github.io/Aeterna-End-K-not/perf.html)** (Japanese). Values in parentheses are deltas versus the previous release. Lobby time uses scripted menu clicks for vanilla and the auto-host feature for the current build; most of the gap is the current build's internal wait before it sends the create request. Vanilla lobby / in-game figures are not measured because there is no way to automate them.
 
 ## Role list
 

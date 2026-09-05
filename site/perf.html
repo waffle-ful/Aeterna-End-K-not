@@ -134,6 +134,12 @@ const METRICS = [
   { key: 'boot',      group: '起動',   name: '起動時間',           unit: '秒',  fmt: v => v.toFixed(1), n: '5 回',
     desc: 'プロセス開始からメインメニューの初期化開始まで',
     v: { vanilla: 5.86, bepinex: 8.13, old: 16.36, current: 11.07 } },
+  { key: 'tti',       group: '起動',   name: '操作可能まで',         unit: '秒',  fmt: v => v.toFixed(1), n: '5 回',
+    desc: '起動処理 (アカウント確認・お知らせ) の終了まで。終了時点で画面にモーダルが無いことを確認済み',
+    v: { vanilla: 10.5, bepinex: 12.9, old: 21.6, current: 16.4 } },
+  { key: 'lobby',     group: '起動',   name: '公式ロビー作成まで',   unit: '秒',  fmt: v => v.toFixed(1), n: '3 回',
+    desc: 'プロセス開始からロビー成立まで。バニラはメニュー操作を自動化 (クリック間の待ち 6.4 秒を含む)、現行版は自動ホスト機能の最短経路 (要求までの内部待ち約 9 秒を含む)',
+    v: { vanilla: 19.6, bepinex: null, old: null, current: 25.1 } },
   { key: 'menu_ws',   group: 'メニュー', name: 'メニュー常駐メモリ', unit: 'MB', fmt: v => Math.round(v).toLocaleString(), n: '5 起動 × 8 標本',
     desc: 'メインメニュー静止 75 秒後の Working Set',
     v: { vanilla: 587, bepinex: 723, old: 937, current: 841 } },
@@ -167,6 +173,7 @@ const CONDITIONS = [
 const NOTES = [
   'Working Set は OS の裁量で ±15MB 程度揺れるため、この幅の差は有意ではありません。',
   '前公開版と現行版は Backrooms ロビー・BGM・カスタムマップなど機能を同じ既定設定で有効にしたまま計測しています。',
+  'ロビー作成までの時間はバニラの方が短く、差の大半は現行版がロビー作成要求を出すまでの内部待ちです (ログ上のサーバー応答は 0.2 秒)。',
   'バニラと BepInEx のみのロビー・試合中は、ホスト単独で自動再現する手段がないため計測対象外です。',
   '試合中のかくつき回数と FPS は前公開版の記録形式が異なり比較できないため掲載していません。',
 ];
@@ -193,7 +200,7 @@ const NOTES = [
   $('#lede').textContent = `同じ PC・同じ日に 4 条件を交互に起動して計測しました。現行版は前公開版と比べて起動が ${Math.abs(pct(b.current, b.old)).toFixed(0)}% 短く、メニューでの常駐メモリが ${Math.round(w.old - w.current)}MB 少なくなっています。バニラとの差は、mod を載せる土台 (BepInEx) の分を含めて残っています。`;
 
   // ---- tiles ----
-  const tileKeys = ['boot', 'menu_ws', 'lobby_ws', 'game_alloc'].filter(k => M[k].v.current != null);
+  const tileKeys = ['boot', 'tti', 'menu_ws', 'game_alloc'].filter(k => M[k].v.current != null);
   $('#tiles').innerHTML = tileKeys.map(k => {
     const m = M[k], cur = m.v.current;
     const dOld = fmtDelta(m, cur, m.v.old), dVan = fmtDelta(m, cur, m.v.vanilla);
