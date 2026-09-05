@@ -11,6 +11,16 @@ namespace EndKnot.Modules;
 [HarmonyPatch(typeof(InnerNetClient), nameof(InnerNetClient.FixedUpdate))]
 public static class FixedUpdateCaller
 {
+    // kill ボタンのターゲット走査 1 回分だけ有効な LocalPlayer 側の役職と真位置 (走査の前に設定し、直後に役職は null へ戻す)。
+    private static RoleBehaviour KillScanLocalRole;
+    private static UnityEngine.Vector2 KillScanLocalPos;
+
+    private static bool IsValidKillTargetThisTick(PlayerControl pc)
+    {
+        RoleBehaviour role = KillScanLocalRole;
+        return role != null ? pc.IsValidTargetForKillButton(role, KillScanLocalPos) : pc.IsValidTargetForKillButton();
+    }
+
     private static int NonLowLoadPlayerIndex;
 
     private static long LastFileLoadTS;
@@ -195,12 +205,18 @@ public static class FixedUpdateCaller
 
             if (!PlayerControl.LocalPlayer) return;
 
+            var killStart = alloc;
+
             if (amongUsClient.IsGameStarted)
                 Utils.CountAlivePlayers();
 
+            alloc = AllocProbe.Mark("kill.count", alloc);
+
             try
             {
-                if (HudManager.InstanceExists && GameStates.IsInTask && !ExileController.Instance && !AntiBlackout.SkipTasks && PlayerControl.LocalPlayer.CanUseKillButton())
+                PlayerControl lp = PlayerControl.LocalPlayer; // 1 tick 内で 1 回だけ wrapper を取る
+
+                if (HudManager.InstanceExists && GameStates.IsInTask && !ExileController.Instance && !AntiBlackout.SkipTasks && lp.CanUseKillButton())
                 {
                     Predicate<PlayerControl> predicate = amongUsClient.AmHost
                         ? Options.CurrentGameMode switch
@@ -208,22 +224,29 @@ public static class FixedUpdateCaller
                             CustomGameMode.BedWars => BedWars.IsNotInLocalPlayersTeam,
                             CustomGameMode.CaptureTheFlag => CaptureTheFlag.IsNotInLocalPlayersTeam,
                             CustomGameMode.KingOfTheZones => KingOfTheZones.IsNotInLocalPlayersTeam,
-                            _ => ExtendedPlayerControl.IsValidTargetForKillButton
+                            _ => IsValidKillTargetThisTick
                         }
-                        : ExtendedPlayerControl.IsValidTargetForKillButton;
+                        : IsValidKillTargetThisTick;
 
-                    PlayerControl closest = FastVector2.TryGetClosestPlayerInRangeTo(PlayerControl.LocalPlayer, PlayerControl.LocalPlayer.GetKillDistance(), out PlayerControl closestPlayer, predicate) ? closestPlayer : null;
+                    // 走査中の全ターゲットで同じ値を読む LocalPlayer 側の役職と真位置は、ターゲット毎に取り直さず tick 内で 1 回にする。
+                    KillScanLocalRole = lp.Data.Role;
+                    KillScanLocalPos = lp.GetTruePosition();
+
+                    PlayerControl closest = FastVector2.TryGetClosestPlayerInRangeTo(lp, lp.GetKillDistance(), out PlayerControl closestPlayer, predicate) ? closestPlayer : null;
+
+                    KillScanLocalRole = null;
 
                     KillButton killButton = HudManager.Instance.KillButton;
+                    PlayerControl currentTarget = killButton.currentTarget;
 
-                    if (killButton.currentTarget && killButton.currentTarget != closest)
-                        killButton.currentTarget.ToggleHighlight(false, RoleTeamTypes.Impostor);
+                    if (currentTarget && currentTarget != closest)
+                        currentTarget.ToggleHighlight(false, RoleTeamTypes.Impostor);
 
                     killButton.currentTarget = closest;
 
-                    if (killButton.currentTarget)
+                    if (closest)
                     {
-                        killButton.currentTarget.ToggleHighlight(true, RoleTeamTypes.Impostor);
+                        closest.ToggleHighlight(true, RoleTeamTypes.Impostor);
                         killButton.SetEnabled();
                     }
                     else
@@ -232,6 +255,8 @@ public static class FixedUpdateCaller
             }
             catch { }
 
+            alloc = AllocProbe.Mark("kill.scan", alloc);
+
             try
             {
                 if (amongUsClient.AmHost && GameStates.InGame && !GameStates.IsEnded)
@@ -239,7 +264,8 @@ public static class FixedUpdateCaller
             }
             catch (Exception e) { Utils.ThrowException(e); }
 
-            alloc = AllocProbe.Mark("kill", alloc);
+            alloc = AllocProbe.Mark("kill.lovers", alloc);
+            alloc = AllocProbe.Mark("kill", killStart);
 
             bool lobby = GameStates.IsLobby;
 
