@@ -62,6 +62,7 @@ public static class AutoRehost
     private const float DialogTimeout = 8f;     // ダイアログが開かなければ OpenCreateGame を再試行する猶予
     private const float StabilizeSeconds = 60f; // 新部屋がこの秒数もてば成功確定 → attempts リセット
     private const float SuccessPopupSeconds = 6f;
+    private const float LoginWaitSeconds = 20f;  // 起動時ホストが EOS ログイン完了を待つ上限 (通常 ~6s で完了)
     // ===================
 
     private static int MaxAttempts => Mathf.Max(1, Options.AutoRehostMaxAttempts?.GetInt() ?? 3);
@@ -156,7 +157,7 @@ public static class AutoRehost
     // 設定ロード完了 + クリーンなメニューになるまで待ってから起動時ホストを開始 (オプション未ロードレース回避)。
     private static void WaitForLoadThenHost(int tries)
     {
-        if (tries > 90)
+        if (tries > 360)
         {
             Logger.Warn("Auto-rehost: startup host aborted (not ready within ~90s)", "AutoRehost");
             return;
@@ -168,7 +169,8 @@ public static class AutoRehost
 
         if (!ready)
         {
-            LateTask.New(() => WaitForLoadThenHost(tries + 1), 1f, "AutoRehost.StartupWait", log: false);
+            // 0.25s 刻み (1s だと設定ロード完了から平均 0.5s 余計に待つ)。上限 tries=90 で ~90s 相当 → 360 に合わせる。
+            LateTask.New(() => WaitForLoadThenHost(tries + 1), 0.25f, "AutoRehost.StartupWait", log: false);
             return;
         }
 
@@ -235,7 +237,8 @@ public static class AutoRehost
             catch (Exception ex) { Logger.Warn($"ChangeScene(MainMenu) failed: {ex.Message}", "AutoRehost"); }
         }
 
-        LateTask.New(() => Tick(mySeq), 1f, "AutoRehost.Tick", log: false);
+        // 起動時ホスト (シーン切替なし) は 1s の初回待ちが丸ごと無駄なので短く。切替ありは従来どおり 1s。
+        LateTask.New(() => Tick(mySeq), changeScene ? 1f : PollInterval, "AutoRehost.Tick", log: false);
     }
 
     private static void Tick(int mySeq)
@@ -271,7 +274,25 @@ public static class AutoRehost
                 bool atMenu = UnityEngine.Object.FindObjectOfType<MainMenuManager>() != null;
                 bool noMatchmaking = UnityEngine.Object.FindObjectOfType<MMOnlineManager>() == null;
                 bool optsLoaded = Options.IsLoaded; // 起動時ホストで未ロード設定を参照しないためのゲート (切断rehost時は常にtrue)
-                bool clean = notJoined && lobbyNull && atMenu && noMatchmaking && optsLoaded;
+
+                // 起動時ホスト (_oldGameId == -1) はコールドブート中の EOS ログインと並走する。以前は設定構築の
+                // 8 秒が偶然ログイン完了 (~5.7s) を覆っていたが、構築が速くなった今はログイン前に Confirm() が
+                // 届きうるので loginFlowFinished を待つ。上限 LoginWaitSeconds を超えたら記録して従来どおり進む
+                // (オフライン/認証異常で永久に詰まらせない — その先は AutoRestart の領分)。
+                var loggedIn = true;
+                if (_oldGameId == -1)
+                {
+                    try { loggedIn = EOSManager.Instance == null || EOSManager.Instance.loginFlowFinished; }
+                    catch { loggedIn = true; }
+
+                    if (!loggedIn && now > _deadline - WatchdogSeconds + LoginWaitSeconds)
+                    {
+                        Logger.Warn($"Auto-rehost: platform login not finished within {LoginWaitSeconds:N0}s; proceeding anyway", "AutoRehost");
+                        loggedIn = true;
+                    }
+                }
+
+                bool clean = notJoined && lobbyNull && atMenu && noMatchmaking && optsLoaded && loggedIn;
 
                 if (!clean)
                 {
@@ -281,7 +302,7 @@ public static class AutoRehost
                     if (now >= _nextWaitLogAt)
                     {
                         _nextWaitLogAt = now + 2f;
-                        Logger.Info($"Auto-rehost WaitClean: not clean yet (IsNotJoined={notJoined} LobbyNull={lobbyNull} MainMenu={atMenu} NoMatchmaking={noMatchmaking} OptsLoaded={optsLoaded})", "AutoRehost");
+                        Logger.Info($"Auto-rehost WaitClean: not clean yet (IsNotJoined={notJoined} LobbyNull={lobbyNull} MainMenu={atMenu} NoMatchmaking={noMatchmaking} OptsLoaded={optsLoaded} LoggedIn={loggedIn})", "AutoRehost");
                     }
                     return;
                 }

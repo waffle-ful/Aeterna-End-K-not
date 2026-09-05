@@ -38,6 +38,9 @@ public static class BootTimeline
 
     private static long NowMs => (long)(DateTime.Now - T0).TotalMilliseconds;
 
+    /// <summary>プロセス最初のメインメニュー到達 (menu.interactive) 済みか。起動中の作業配分 (スプラッシュ中は控えめ) の判定用。</summary>
+    public static bool MenuReached => _menuStarted;
+
     public static void Mark(string name)
     {
         try

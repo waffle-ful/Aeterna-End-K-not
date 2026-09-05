@@ -1576,6 +1576,15 @@ public static class Options
 
         var titleId = 100100;
 
+        // 役職/アドオンの設定構築は「1 件ごとに 1 フレーム譲る」と約 500 件 × 1 フレーム (vsync 60fps) ≈ 8 秒が
+        // メニュー到達後に食い込み、起動時ホストや設定メニューがそれを待たされる (2026-09-05 実機帰属)。
+        // 1 件あたりの処理はミリ秒未満なので、フレームごとの作業時間で区切って譲る。スプラッシュ中は
+        // 主スレッド作業がシーン非同期ロードをほぼ 1:1 で遅らせるため控えめに、メニュー到達後は太く使う。
+        var frameBudget = System.Diagnostics.Stopwatch.StartNew();
+        var loadWork = System.Diagnostics.Stopwatch.StartNew();
+        int yieldedFrames = 0;
+        bool FrameBudgetSpent() => frameBudget.ElapsedMilliseconds >= (BootTimeline.MenuReached ? 12 : 4);
+
         LoadingPercentage = 5;
         MainLoadingText = "Building Add-on Settings";
 
@@ -1605,12 +1614,18 @@ public static class Options
             {
                 index++;
                 RoleLoadingText = $"{addon.GetType().Name} ({index}/{addonType.Value.Length})";
-                Log();
 
                 addon.SetupCustomOption();
+
+                if (FrameBudgetSpent())
+                {
+                    yieldedFrames++;
+                    yield return null;
+                    frameBudget.Restart();
+                }
             }
 
-            yield return null;
+            Logger.Info($"{MainLoadingText}: {index} built", "Options");
         }
 
         LoadingPercentage = 15;
@@ -1670,16 +1685,22 @@ public static class Options
             {
                 index++;
                 RoleLoadingText = $"{index}/{allRoles} ({roleClass.GetType().Name})";
-                Log();
 
                 try { roleClass.SetupCustomOption(); }
                 catch (Exception e) { Logger.Exception(e, $"{MainLoadingText} - {RoleLoadingText}"); }
 
-                yield return null;
+                if (FrameBudgetSpent())
+                {
+                    yieldedFrames++;
+                    yield return null;
+                    frameBudget.Restart();
+                }
             }
 
-            yield return null;
+            Logger.Info($"{MainLoadingText}: {index} built", "Options");
         }
+
+        Logger.Info($"Role/add-on settings built in {loadWork.ElapsedMilliseconds}ms over {yieldedFrames} yielded frames (menuReached={BootTimeline.MenuReached})", "Options");
 
         void Log() => Logger.Info(" " + RoleLoadingText, MainLoadingText);
 
