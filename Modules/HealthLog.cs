@@ -52,10 +52,14 @@ public static class HealthLog
 
     // lastOp は「最後に始まった op」しか答えられないため、長い op の直後に短い op が挟まると帰属を奪われる
     // (実例: BoehmCensus 438ms のヒッチが直後の RestoreDecoratedNameAfterMessage に帰属した)。
-    // そこで NoteOp が来るたびに1つ前の op を「終わった」と見なして所要時間を確定し、
-    // 前回 Tick 以降に終わった op のうち最長のものを maxOp として HITCH 行へ併記する。
+    // そこで op の所要時間を確定し、前回 Tick 以降に終わった op のうち最長のものを maxOp として HITCH 行へ併記する。
+    // 終了の判定は「次の NoteOp」と「次の Tick」の早い方 — NoteOp はメインスレッド同期区間の入口に置く
+    // 約束なので、Tick (FixedUpdate 駆動) が回ってきた時点でメインスレッドは空いており op は終わっている。
+    // 次の NoteOp だけを終了とみなすと、op が疎らな区間 (Menu 滞在中の名前付き LateTask 等) では次の呼び出しまでの
+    // 待ち時間がまるごと所要時間に化ける (実例: gapMs=115 のヒッチに maxOpMs=118980 が併記された)。
     private static string _maxOpName;
     private static long _maxOpMs;
+    private static bool _lastOpClosed; // 直近 op の所要時間を確定済みか (Tick と NoteOp の二重計上を防ぐ)
 
     // --- fps 計器: 直近窓の描画フレームレート。Tick は InnerNetClient.FixedUpdate 駆動 (~30Hz 定数) なので
     // Tick 回数を数えても描画 fps にならない (実測: 描画118fps中に29-30を返した) — Time.frameCount の
@@ -69,19 +73,26 @@ public static class HealthLog
     {
         long nowMs = HitchClock.ElapsedMilliseconds;
 
-        // 直前の op はここで終わったものとして所要時間を確定する (窓内の最長 op を保持)
-        if (_lastOpName != null)
-        {
-            long durMs = nowMs - _lastOpAtMs;
-            if (durMs > _maxOpMs)
-            {
-                _maxOpMs = durMs;
-                _maxOpName = _lastOpName;
-            }
-        }
+        CloseLastOp(nowMs); // 直前の op はここで終わったものとして所要時間を確定する (窓内の最長 op を保持)
 
         _lastOpName = name;
         _lastOpAtMs = nowMs;
+        _lastOpClosed = false;
+    }
+
+    /// <summary>直近 op の所要時間を確定して maxOp 候補に入れる。二度目以降は何もしない。</summary>
+    private static void CloseLastOp(long nowMs)
+    {
+        if (_lastOpName == null || _lastOpClosed) return;
+
+        _lastOpClosed = true;
+
+        long durMs = nowMs - _lastOpAtMs;
+        if (durMs > _maxOpMs)
+        {
+            _maxOpMs = durMs;
+            _maxOpName = _lastOpName;
+        }
     }
 
     // op の開始がヒッチ窓 (前回 Tick 以降 = gapMs+誤差) の内側にある時だけ帰属を出す。
@@ -350,6 +361,11 @@ public static class HealthLog
             _fpsLastFrameCount = fc;
             _fpsWinStartMs = nowMs;
         }
+
+        // Tick が回ってきた = メインスレッドが空いた = 直近 op は終わっている。HITCH 行を書く前に
+        // 確定させて、この Tick の maxOp 候補に入れる (op が疎らでも待ち時間を所要時間に化けさせない)。
+        // 初回 Tick (_lastTickMs == 0) も対象 — 起動直後の op を 2 窓分に膨らませないため。
+        CloseLastOp(nowMs);
 
         if (_lastTickMs != 0)
         {

@@ -54,20 +54,62 @@ public static class ModUpdater
         InfoPopupV2 = Object.Instantiate(TwitchManager.Instance.TwitchPopup);
         InfoPopupV2.name = "InfoPopupV2";
 
-        if (!OperatingSystem.IsAndroid() && !IsChecked)
+        if (!OperatingSystem.IsAndroid() && !IsChecked && _checkTask == null)
         {
-            bool done = CheckReleaseFromGithub(Main.BetaBuildUrl.Value != "").GetAwaiter().GetResult();
-            if (HasUpdate) UpdatePopupPending = true;
-            Logger.Msg("done: " + done, "CheckRelease");
-            Logger.Info("hasupdate: " + HasUpdate, "CheckRelease");
-            Logger.Info("forceupdate: " + ForceUpdate, "CheckRelease");
-            Logger.Info("downloadUrl: " + DownloadUrl, "CheckRelease");
-            Logger.Info("latestVersionl: " + LatestVersion, "CheckRelease");
+            // GitHub への問い合わせを主スレッドで同期待ちするとメニュー構築が HTTP 往復分 (0.5〜1 秒) 止まる
+            // (2026-09-05 実機: 「Checking GitHub Release」からメニュー setup まで約 1 秒の空白)。
+            // バックグラウンドで走らせ、完了は主スレッドの LateTask で拾う。完了まで UpdatePopupPending を
+            // 立てておくのは、告知ポップアップの順序 (更新案内 → 告知) を従来どおり保つため。
+            UpdatePopupPending = true;
+            Logger.Msg("Checking GitHub Release", "CheckRelease");
+            _checkTask = FetchReleasesJsonAsync();
+            LateTask.New(() => PollCheckResult(0), 0.25f, "ModUpdater.PollCheck", log: false);
         }
     }
 
+    private static Task<string> _checkTask;
+
+    private static void PollCheckResult(int tries)
+    {
+        if (_checkTask == null) return;
+
+        if (!_checkTask.IsCompleted && tries < 120) // 上限 30s (HttpClient 既定タイムアウトは 100s だがそこまで待たない)
+        {
+            LateTask.New(() => PollCheckResult(tries + 1), 0.25f, "ModUpdater.PollCheck", log: false);
+            return;
+        }
+
+        var done = false;
+        if (_checkTask.IsCompletedSuccessfully)
+            done = ParseReleases(_checkTask.Result, Main.BetaBuildUrl.Value != ""); // 解析と静的フィールド書込は主スレッドで
+        else
+        {
+            IsBroken = true;
+            string why = _checkTask.IsCompleted ? _checkTask.Exception?.GetBaseException().Message ?? "faulted" : "timed out (30s)";
+            Logger.Error($"Error while checking release from GitHub: {why}", "CheckRelease", false);
+        }
+
+        UpdatePopupPending = HasUpdate;
+        Logger.Msg("done: " + done, "CheckRelease");
+        Logger.Info("hasupdate: " + HasUpdate, "CheckRelease");
+        Logger.Info("forceupdate: " + ForceUpdate, "CheckRelease");
+        Logger.Info("downloadUrl: " + DownloadUrl, "CheckRelease");
+        Logger.Info("latestVersionl: " + LatestVersion, "CheckRelease");
+
+        if (!HasUpdate) OnUpdatePopupClosed(true); // 待たせていた告知があれば流す
+    }
+
+    private static bool IsCheckInFlight => _checkTask is { IsCompleted: false };
+
     public static void ShowAvailableUpdate()
     {
+        if (IsCheckInFlight)
+        {
+            // 確認がまだ帰っていない — 結果が出てから同じ判定をやり直す (先に FirstNotify を倒すと二度と出ない)
+            LateTask.New(ShowAvailableUpdate, 0.5f, "ModUpdater.ShowAfterCheck", log: false);
+            return;
+        }
+
         if (!FirstNotify || !HasUpdate)
         {
             UpdatePopupPending = false;
@@ -119,32 +161,32 @@ public static class ModUpdater
         return result;
     }
 
-    public static async Task<bool> CheckReleaseFromGithub(bool beta = false)
+    // Threading contract (VoiceVoxManager / YouTubeChatManager と同じ硬い規則): バックグラウンドで走るのは
+    // managed HTTP と string だけ。JObject (IL2CPP 版 Newtonsoft) の解析と静的フィールド書込は主スレッド
+    // (PollCheckResult) で行う — 主スレッドがメニュー構築で IL2CPP を触っている最中に別スレッドから
+    // IL2CPP オブジェクトを作ると interop/GC 競合の温床になる。
+    private static async Task<string> FetchReleasesJsonAsync()
     {
-        Logger.Msg("Checking GitHub Release", "CheckRelease");
         // End K not's releases are all marked pre-release, and GitHub's /releases/latest
         // endpoint excludes pre-releases (returns 404 when there are only pre-releases).
         // Use the list endpoint and take the most recent entry (sorted by created_at desc).
         const string url = URLGithub + "/releases";
 
+        using HttpClient client = new();
+        client.DefaultRequestHeaders.Add("User-Agent", "EndKnot Updater");
+        using HttpResponseMessage response = await client.GetAsync(new Uri(url), HttpCompletionOption.ResponseContentRead).ConfigureAwait(false);
+
+        if (!response.IsSuccessStatusCode)
+            throw new HttpRequestException($"Response Status Code: {response.StatusCode}");
+
+        return await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+    }
+
+    // 主スレッド専用: 取得済み JSON を解析して HasUpdate / DownloadUrl / LatestVersion 等を確定する。
+    private static bool ParseReleases(string result, bool beta)
+    {
         try
         {
-            string result;
-
-            using (HttpClient client = new())
-            {
-                client.DefaultRequestHeaders.Add("User-Agent", "EndKnot Updater");
-                using HttpResponseMessage response = await client.GetAsync(new Uri(url), HttpCompletionOption.ResponseContentRead);
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    Logger.Error($"Response Status Code: {response.StatusCode}", "CheckRelease");
-                    return false;
-                }
-
-                result = await response.Content.ReadAsStringAsync();
-            }
-
             // This IL2CPP Newtonsoft only surfaces JObject.Parse (not JArray/JToken.Parse),
             // and /releases returns a top-level JSON array, so wrap it in an object first.
             JObject wrapper = JObject.Parse("{\"releases\":" + result + "}");
