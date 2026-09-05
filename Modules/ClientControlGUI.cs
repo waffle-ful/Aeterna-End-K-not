@@ -103,16 +103,9 @@ public class ClientControlGUI : MonoBehaviour
         SceneManager.remove_sceneLoaded((Action<Scene, LoadSceneMode>)OnSceneLoaded);
     }
 
-    // ゲームを正常終了(×ボタン等)した時に番犬へ停止を指示する。これがないと、ユーザーが自分で
-    // 終了したのに番犬が「AU が落ちた」と誤認して蘇生させる無限ループになる。
-    // クラッシュ/強制終了では OnApplicationQuit は呼ばれないので、そちらは番犬が正しく立て直す。
-    private void OnApplicationQuit()
-    {
-        WatchdogLauncher.OnGameQuit();
-
-        // 相棒アプリ (AI実況) は AU の子プロセスなので、正常終了時はここで明示的に畳む。
-        EndKnot.Modules.Companion.CompanionLauncher.OnGameQuit();
-    }
+    // 終了時の番犬/相棒アプリの後始末は Modules/ExitHook.cs が持つ。
+    // このコンポーネントは実行時に破棄されうる (ShowClientControlGUI OFF / SwitchVanilla) ので、
+    // 唯一の終了フックを置く場所としては不適切。
 
     // Resets HUD visibility flag on scene change; HudManager is recreated each load so its new instance is always active
     // Textures use HideFlags.HideAndDontSave so they survive scene transitions without any rebuild needed
