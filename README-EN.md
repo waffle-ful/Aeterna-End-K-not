@@ -88,6 +88,22 @@ On top of EHR's role engine, End K not adds features for **streaming, long-runni
 - **Calamity-themed main menu** *(work in progress)* — A custom Calamity-style title screen (referencing [CalamityModPublic](https://github.com/CalamityTeam/CalamityModPublic)).
 - **GPL-3.0 open source** — Full source available; you may study, modify, and redistribute under GPL-3.0.
 
+## Performance
+
+Even with the mod loaded, boot time and resident memory are kept as close to vanilla as possible. On the same PC and day, "vanilla / BepInEx only / previous release v0.9.6 / current v0.9.7 (dev)" were cold-started 5 times each in rotation; the table shows medians.
+
+| Metric | Vanilla | BepInEx only | Previous v0.9.6 | Current v0.9.7 (dev) |
+|---|---:|---:|---:|---:|
+| Boot time (s) | 5.9 | 8.1 | 16.4 | **11.1** (−33%) |
+| Menu resident memory (MB) | 587 | 723 | 937 | **841** (−96MB) |
+| Lobby resident memory (MB) | — | — | 970 | **908** |
+| In-game managed allocation (KB / 5 s) | — | — | 1,228 | **324** (−74%) |
+| In-game managed heap (MB) | — | — | 79 | **32** |
+
+<p align="center"><img src=".github/perf-chart.png" alt="End K not performance comparison chart" width="90%"></p>
+
+Conditions and all metrics are in the **[performance report](https://waffle-ful.github.io/Aeterna-End-K-not/perf.html)** (Japanese). Values in parentheses are deltas versus the previous release. Vanilla lobby / in-game figures are not measured because there is no way to automate them.
+
 ## Role list
 
 **682 roles in total.** Breakdown by faction:

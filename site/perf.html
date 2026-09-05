@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>End K not 性能比較</title>
+<meta name="description" content="End K not の起動時間・常駐メモリ・試合中負荷を、前公開版・BepInEx のみ・バニラと同一 PC で実測比較したレポート。">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=IBM+Plex+Sans+JP:wght@400;500;600&display=swap">
+<style>
+img{max-width:100%}
+
+  :root {
+    --bg-0: #0F1417; --bg-1: #151C21; --bg-2: #1E272C; --bg-hover: #2A353B;
+    --accent: #E9A648; --ok: #86C287; --danger: #E08578; --info: #8FC2D2;
+    --text: #E8EFF0; --muted: #8FA3A8; --hinoki: #C9A87C;
+    --c-current: #E9A648; --c-vanilla: #B9CBCF; --c-old: #7E9298; --c-bepinex: #4F6167;
+    --mincho: "Cormorant Garamond", "Yu Mincho", "Hiragino Mincho ProN", serif;
+    --sans: "IBM Plex Sans JP", "Yu Gothic UI", "Hiragino Sans", system-ui, sans-serif;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg-0); color: var(--text); font-family: var(--sans); font-size: 15px; line-height: 1.6; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 48px 24px 72px; }
+
+  header { display: flex; flex-direction: column; gap: 10px; padding-bottom: 28px; margin-bottom: 32px; box-shadow: 0 1px 0 rgba(201,168,124,.22); }
+  .eyebrow { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--hinoki); }
+  h1 { font-family: var(--mincho); font-weight: 500; font-size: 46px; line-height: 1.12; margin: 0; text-wrap: balance; letter-spacing: .01em; }
+  h1 .en { font-size: 28px; color: var(--muted); font-style: italic; margin-left: .4em; white-space: nowrap; }
+  .lede { max-width: 64ch; color: var(--muted); margin: 0; }
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; margin-bottom: 44px; }
+  .tile { background: var(--bg-1); padding: 18px 20px 16px; border-radius: 3px; box-shadow: inset 0 -2px 0 var(--accent); display: flex; flex-direction: column; gap: 3px; }
+  .tile .label { font-size: 12.5px; color: var(--muted); letter-spacing: .04em; }
+  .tile .value { font-size: 40px; font-weight: 600; line-height: 1.05; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+  .tile .value small { font-size: 16px; font-weight: 500; color: var(--muted); margin-left: 4px; }
+  .tile .delta { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  .tile .delta b { color: var(--ok); font-weight: 600; }
+  .tile .delta b.worse { color: var(--danger); }
+
+  h2 { font-family: var(--mincho); font-weight: 500; font-size: 27px; margin: 0 0 6px; letter-spacing: .01em; }
+  .section-sub { color: var(--muted); font-size: 13.5px; margin: 0 0 18px; max-width: 72ch; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 20px; font-size: 13px; color: var(--muted); margin: 0 0 18px; }
+  .legend span { display: inline-flex; align-items: center; gap: 8px; }
+  .legend span.hi { color: var(--text); }
+  .sw { width: 12px; height: 12px; border-radius: 2px; display: inline-block; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; margin-bottom: 44px; }
+  .card { background: var(--bg-1); border-radius: 3px; padding: 18px 20px 14px; display: flex; flex-direction: column; gap: 10px; }
+  .card .title { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .card .title h3 { margin: 0; font-size: 15.5px; font-weight: 600; }
+  .card .title .unit { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .card .better { font-size: 12px; color: var(--muted); margin-top: -8px; }
+  .card .better b { color: var(--ok); font-weight: 600; }
+  .card .better b.worse { color: var(--danger); }
+  .card .note { font-size: 12px; color: var(--muted); border-top: 1px solid rgba(201,168,124,.14); padding-top: 8px; margin-top: 2px; }
+
+  .bars { display: grid; grid-template-columns: 9.6em 1fr 5.4em; row-gap: 8px; column-gap: 10px; align-items: center; font-variant-numeric: tabular-nums; }
+  .bars .name { font-size: 13px; color: var(--muted); white-space: nowrap; }
+  .bars .name.hi { color: var(--text); font-weight: 600; }
+  .bars .track { height: 18px; position: relative; }
+  .bars .bar { position: absolute; left: 0; top: 0; height: 18px; border-radius: 0 4px 4px 0; transition: width .5s cubic-bezier(.2,.8,.2,1); }
+  .bars .track.na::before { content: ""; position: absolute; left: 0; top: 8px; width: 24px; height: 2px; background: var(--bg-2); }
+  .bars .val { font-size: 13.5px; text-align: right; color: var(--text); white-space: nowrap; }
+  .bars .val.hi { font-weight: 600; }
+  .bars .val.dash { color: var(--muted); }
+  .bars .track:hover .bar { filter: brightness(1.15); }
+  .tip { position: fixed; pointer-events: none; background: var(--bg-2); color: var(--text); font-size: 12.5px; line-height: 1.5; padding: 6px 10px; border-radius: 3px; box-shadow: 0 0 0 1px rgba(201,168,124,.25), 0 6px 20px rgba(0,0,0,.45); opacity: 0; transform: translate(-50%, calc(-100% - 12px)); white-space: nowrap; z-index: 9; transition: opacity .12s; }
+  .tip.on { opacity: 1; }
+  .tip .m { color: var(--muted); }
+
+  .tablewrap { overflow-x: auto; background: var(--bg-1); border-radius: 3px; padding: 6px 4px; margin-bottom: 40px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+  th, td { padding: 9px 12px; text-align: right; white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  thead th { color: var(--muted); font-weight: 500; font-size: 12.5px; letter-spacing: .04em; border-bottom: 1px solid rgba(201,168,124,.28); }
+  thead th.cur { color: var(--accent); }
+  tbody tr { border-bottom: 1px solid rgba(255,255,255,.04); }
+  tbody td.best { color: var(--text); font-weight: 600; background: rgba(233,166,72,.09); }
+  tbody td.dim { color: var(--muted); }
+  tbody td.delta { color: var(--ok); }
+  tbody td.delta.worse { color: var(--danger); }
+  tbody td.delta.dash { color: var(--muted); }
+  tbody td .u { color: var(--muted); font-size: 11.5px; margin-left: 3px; }
+
+  .foot { font-size: 12.5px; color: var(--muted); max-width: 80ch; }
+  .foot ol { padding-left: 1.3em; margin: 6px 0 0; }
+  .foot li { margin-bottom: 5px; }
+  .foot .cond { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 6px 0 16px; }
+  .foot .cond dt { color: var(--hinoki); }
+  .foot .cond dd { margin: 0; }
+
+  :focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { .bars .bar { transition: none; } }
+  @media (max-width: 600px) { h1 { font-size: 32px; } h1 .en { display: block; margin: 4px 0 0; font-size: 20px; } .bars { grid-template-columns: 6.2em 1fr 4.8em; } .tile .value { font-size: 34px; } }
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Performance report · 2026-09-05 · Among Us 2026.8.18 (Epic)</div>
+    <h1>End K not 性能比較<span class="en">v0.9.7 dev · v0.9.6 · vanilla</span></h1>
+    <p class="lede" id="lede"></p>
+  </header>
+
+  <section class="tiles" id="tiles" aria-label="主要指標"></section>
+
+  <h2>指標別の比較</h2>
+  <p class="section-sub">横棒は短いほど良い指標です。数値は各条件の中央値。「—」は計測対象外で、バニラと BepInEx のみにはロビー・試合中を自動で回す手段がありません。</p>
+  <div class="legend" id="legend"></div>
+  <section class="grid" id="charts"></section>
+
+  <h2>数表</h2>
+  <p class="section-sub">中央値。行ごとの最良値を強調表示。右 2 列は現行版から見た差分 (前公開版比 / バニラ比)。</p>
+  <div class="tablewrap"><table id="table"></table></div>
+
+  <h2>計測条件</h2>
+  <div class="foot" id="foot"></div>
+</div>
+<div class="tip" id="tip" role="tooltip"></div>
+
+<script>
+const ARMS = [
+  { key: 'current', name: '現行 v0.9.7 (開発版)', color: 'var(--c-current)', hi: true },
+  { key: 'vanilla', name: 'バニラ',        color: 'var(--c-vanilla)' },
+  { key: 'old',     name: '前公開版 v0.9.6', color: 'var(--c-old)' },
+  { key: 'bepinex', name: 'BepInEx のみ',  color: 'var(--c-bepinex)' },
+];
+
+// 中央値。null = 計測対象外。
+const METRICS = [
+  { key: 'boot',      group: '起動',   name: '起動時間',           unit: '秒',  fmt: v => v.toFixed(1), n: '5 回',
+    desc: 'プロセス開始からメインメニューの初期化開始まで',
+    v: { vanilla: 5.86, bepinex: 8.13, old: 16.36, current: 11.07 } },
+  { key: 'menu_ws',   group: 'メニュー', name: 'メニュー常駐メモリ', unit: 'MB', fmt: v => Math.round(v).toLocaleString(), n: '5 起動 × 8 標本',
+    desc: 'メインメニュー静止 75 秒後の Working Set',
+    v: { vanilla: 587, bepinex: 723, old: 937, current: 841 } },
+  { key: 'menu_priv', group: 'メニュー', name: 'メニュー プライベートバイト', unit: 'MB', fmt: v => Math.round(v).toLocaleString(), n: '5 起動 × 8 標本',
+    desc: '同上 (Private Bytes)',
+    v: { vanilla: 1022, bepinex: 1102, old: 1292, current: 1214 } },
+  { key: 'lobby_ws',  group: 'ロビー', name: 'ロビー常駐メモリ',   unit: 'MB', fmt: v => Math.round(v).toLocaleString(), n: '2 セッション × 8 標本',
+    desc: '公式ロビー入場 60 秒後の Working Set (ホスト単独)',
+    v: { vanilla: null, bepinex: null, old: 970, current: 908 } },
+  { key: 'game_ws',   group: '試合中', name: '試合中 常駐メモリ',   unit: 'MB', fmt: v => Math.round(v).toLocaleString(), n: '90 秒窓',
+    desc: 'ソロ試合放置 90 秒の Working Set 中央値',
+    v: { vanilla: null, bepinex: null, old: 1065, current: 1019 } },
+  { key: 'game_alloc', group: '試合中', name: '試合中 managed 確保量', unit: 'KB / 5 秒', fmt: v => Math.round(v).toLocaleString(), n: '90 秒窓',
+    desc: 'mod 側 (CLR) の 5 秒あたりメモリ確保量。少ないほど GC 停止が減る',
+    v: { vanilla: null, bepinex: null, old: 1228, current: 324 } },
+  { key: 'game_heap', group: '試合中', name: '試合中 managed ヒープ', unit: 'MB', fmt: v => Math.round(v).toLocaleString(), n: '90 秒窓',
+    desc: 'mod 側 (CLR) の生存ヒープ量の中央値',
+    v: { vanilla: null, bepinex: null, old: 79, current: 32 } },
+];
+
+const CONDITIONS = [
+  ['機材', 'Ryzen 5 3600 / Windows 11 / Among Us 2026.8.18 Epic 版・同一 PC・同一日'],
+  ['起動', 'Epic ランチャー経由のコールドスタート。4 条件を交互に 5 周 (機械ドリフト相殺)'],
+  ['起動時間', 'プロセス開始時刻を原点に、ゲーム本体のログでメインメニューの初期化開始を検知した時刻 (全条件で同じ外部時計・mod 内部の計時と ±35ms で一致)'],
+  ['ロビー・試合中', '公式ロビーをホスト単独で作成し、入場 60 秒後に 8 標本。試合はソロで開始し 90 秒放置、5 秒ごとの集計行の中央値 (各 2 セッション)'],
+  ['メモリ', 'Process.WorkingSet64 / PrivateMemorySize64 を 2 秒間隔 8 標本、起動ごとに中央値 → 5 起動の中央値'],
+  ['現行版', 'v0.9.7 開発版 (2026-09-05 ビルド)。リリース版とは数値が前後する可能性があります'],
+  ['前公開版', 'v0.9.6-beta (2026-09-01 公開) を同一ソースからビルドし同じ手順で計測'],
+  ['BepInEx のみ', 'mod DLL を外した BepInEx + Il2CppInterop の土台だけ。mod の上乗せ分を切り分けるための基準'],
+];
+const NOTES = [
+  'Working Set は OS の裁量で ±15MB 程度揺れるため、この幅の差は有意ではありません。',
+  '前公開版と現行版は Backrooms ロビー・BGM・カスタムマップなど機能を同じ既定設定で有効にしたまま計測しています。',
+  'バニラと BepInEx のみのロビー・試合中は、ホスト単独で自動再現する手段がないため計測対象外です。',
+  '試合中のかくつき回数と FPS は前公開版の記録形式が異なり比較できないため掲載していません。',
+];
+</script>
+<script id="fill"></script>
+<script>
+(function () {
+  const $ = (s) => document.querySelector(s);
+  const armByKey = Object.fromEntries(ARMS.map(a => [a.key, a]));
+  const M = Object.fromEntries(METRICS.map(m => [m.key, m]));
+  const pct = (a, b) => (a - b) / b * 100;
+  const fmtDelta = (m, cur, ref) => {
+    if (cur == null || ref == null) return null;
+    const d = cur - ref, p = pct(cur, ref);
+    const good = m.higher ? d > 0 : d < 0;
+    const sign = d > 0 ? '+' : '−';
+    const abs = Math.abs(d);
+    const num = m.key === 'boot' ? abs.toFixed(1) : Math.round(abs).toLocaleString();
+    return { text: `${sign}${num} ${m.unit.split(' ')[0]} (${sign}${Math.abs(p).toFixed(0)}%)`, good, zero: Math.abs(p) < 1 };
+  };
+
+  // ---- lede ----
+  const b = M.boot.v, w = M.menu_ws.v;
+  $('#lede').textContent = `同じ PC・同じ日に 4 条件を交互に起動して計測しました。現行版は前公開版と比べて起動が ${Math.abs(pct(b.current, b.old)).toFixed(0)}% 短く、メニューでの常駐メモリが ${Math.round(w.old - w.current)}MB 少なくなっています。バニラとの差は、mod を載せる土台 (BepInEx) の分を含めて残っています。`;
+
+  // ---- tiles ----
+  const tileKeys = ['boot', 'menu_ws', 'lobby_ws', 'game_alloc'].filter(k => M[k].v.current != null);
+  $('#tiles').innerHTML = tileKeys.map(k => {
+    const m = M[k], cur = m.v.current;
+    const dOld = fmtDelta(m, cur, m.v.old), dVan = fmtDelta(m, cur, m.v.vanilla);
+    const parts = [];
+    if (dOld) parts.push(`前公開版比 <b class="${dOld.good ? '' : 'worse'}">${dOld.text}</b>`);
+    if (dVan) parts.push(`バニラ比 <b class="${dVan.good ? '' : 'worse'}">${dVan.text}</b>`);
+    return `<div class="tile"><div class="label">${m.name} · 現行版</div><div class="value">${m.fmt(cur)}<small>${m.unit}</small></div><div class="delta">${parts.join('<br>')}</div></div>`;
+  }).join('');
+
+  // ---- legend ----
+  $('#legend').innerHTML = ARMS.map(a => `<span class="${a.hi ? 'hi' : ''}"><i class="sw" style="background:${a.color}"></i>${a.name}</span>`).join('');
+
+  // ---- charts ----
+  const tip = $('#tip');
+  $('#charts').innerHTML = METRICS.map(m => {
+    const vals = ARMS.map(a => m.v[a.key]).filter(v => v != null);
+    if (!vals.length) return '';
+    const max = Math.max(...vals);
+    const best = m.higher ? Math.max(...vals) : Math.min(...vals);
+    const rows = ARMS.map(a => {
+      const v = m.v[a.key];
+      if (v == null) return `<div class="name">${a.name}</div><div class="track na"></div><div class="val dash">—</div>`;
+      const wpct = Math.max(2, v / max * 100);
+      return `<div class="name ${a.hi ? 'hi' : ''}">${a.name}</div>
+        <div class="track" data-arm="${a.key}" data-metric="${m.key}" tabindex="0"><div class="bar" style="width:${wpct}%;background:${a.color}"></div></div>
+        <div class="val ${a.hi ? 'hi' : ''}">${m.fmt(v)}</div>`;
+    }).join('');
+    const d = fmtDelta(m, m.v.current, m.v.old);
+    const better = d ? `<div class="better">現行版は前公開版より <b class="${d.good ? '' : 'worse'}">${d.text}</b>${d.good ? ' 改善' : ''}</div>` : '';
+    return `<div class="card"><div class="title"><h3>${m.name}</h3><span class="unit">${m.unit} · ${m.higher ? '長いほど良い' : '短いほど良い'}</span></div>${better}<div class="bars">${rows}</div><div class="note">${m.desc} · n=${m.n}</div></div>`;
+  }).join('');
+
+  const show = (el, x, y) => {
+    const m = M[el.dataset.metric], a = armByKey[el.dataset.arm];
+    tip.innerHTML = `<b>${a.name}</b> ${m.fmt(m.v[a.key])} ${m.unit}<br><span class="m">${m.name} · 中央値</span>`;
+    tip.style.left = x + 'px'; tip.style.top = y + 'px'; tip.classList.add('on');
+  };
+  document.querySelectorAll('.track[data-arm]').forEach(el => {
+    el.addEventListener('mousemove', e => show(el, e.clientX, e.clientY));
+    el.addEventListener('mouseleave', () => tip.classList.remove('on'));
+    el.addEventListener('focus', () => { const r = el.getBoundingClientRect(); show(el, r.left + r.width / 2, r.top); });
+    el.addEventListener('blur', () => tip.classList.remove('on'));
+  });
+
+  // ---- table ----
+  const head = `<thead><tr><th>指標</th>${ARMS.map(a => `<th class="${a.hi ? 'cur' : ''}">${a.name}</th>`).join('')}<th>vs 前公開版</th><th>vs バニラ</th></tr></thead>`;
+  const body = METRICS.map(m => {
+    const vals = ARMS.map(a => m.v[a.key]).filter(v => v != null);
+    if (!vals.length) return '';
+    const best = m.higher ? Math.max(...vals) : Math.min(...vals);
+    const cells = ARMS.map(a => {
+      const v = m.v[a.key];
+      if (v == null) return `<td class="dim">—</td>`;
+      return `<td class="${v === best ? 'best' : (a.hi ? '' : 'dim')}">${m.fmt(v)}<span class="u">${m.unit.split(' ')[0]}</span></td>`;
+    }).join('');
+    const dc = (d) => d ? `<td class="delta ${d.good ? '' : 'worse'}">${d.text}</td>` : `<td class="delta dash">—</td>`;
+    return `<tr><td>${m.name}</td>${cells}${dc(fmtDelta(m, m.v.current, m.v.old))}${dc(fmtDelta(m, m.v.current, m.v.vanilla))}</tr>`;
+  }).join('');
+  $('#table').innerHTML = head + `<tbody>${body}</tbody>`;
+
+  // ---- foot ----
+  $('#foot').innerHTML = `<dl class="cond">${CONDITIONS.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl><ol>${NOTES.map(n => `<li>${n}</li>`).join('')}</ol>`;
+})();
+</script>
+
+</body>
+</html>
