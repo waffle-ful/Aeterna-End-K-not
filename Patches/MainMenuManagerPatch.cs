@@ -14,6 +14,21 @@ public static class MainMenuManagerPatch
 {
     public static PassiveButton Template;
     public static PassiveButton UpdateButton;
+
+    // 更新ボタンの文言は MainMenuManager.Start 時に解決されるが、mod 側の言語設定 (ModLanguage) は
+    // オプション構築の完了後にしか読めない。構築完了時に呼び直して設定言語で引き直す。
+    public static void RefreshUpdateButtonLabel()
+    {
+        try
+        {
+            if (UpdateButton == null) return;
+            Transform textTf = UpdateButton.transform.Find("FontPlacer/Text_TMP");
+            if (textTf == null) return;
+            var buttonText = textTf.GetComponent<TMP_Text>();
+            if (buttonText != null) buttonText.text = Translator.GetString("updateButton");
+        }
+        catch (Exception e) { Logger.Warn($"RefreshUpdateButtonLabel: {e.Message}", "MainMenuManagerPatch"); }
+    }
     private static PassiveButton GitHubButton;
     private static PassiveButton DiscordButton;
     private static PassiveButton WebsiteButton;

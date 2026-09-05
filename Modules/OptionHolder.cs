@@ -984,11 +984,13 @@ public static class Options
     [HarmonyPostfix]
     public static void OptionsLoadStart()
     {
-        Logger.Info("Options.Load Start", "Options");
+        Logger.Info($"Options.Load Start (deferToMenu={Main.DeferOptionsBuildToMenu.Value} menuReached={BootTimeline.MenuReached})", "Options");
+        BootTimeline.Mark("opts.prelude.begin");
         AddSteamID.AddSteamAppIdFile();
         Utils.LoadComboInfo();
         Main.LoadRoleClasses();
         ChatCommands.LoadCommands();
+        BootTimeline.Mark("opts.prelude.end");
 
         Main.Instance.StartCoroutine(Load());
     }
@@ -996,6 +998,10 @@ public static class Options
     private static void PostLoadTasks()
     {
         Logger.Info("Options.Load End", "Options");
+        BootTimeline.Mark("opts.end");
+        // 構築をメニュー後へ回すと、メニューの文言は ModLanguage 確定前に解決されている。ここで引き直す。
+        Patches.CalamityMenu.CalamityButtons.RefreshLabels();
+        MainMenuManagerPatch.RefreshUpdateButtonLabel();
         GroupOptions();
         GroupAddons();
         LoadUserData();
@@ -1367,6 +1373,15 @@ public static class Options
 
         yield return null;
 
+        // 計測用の切替: 設定テーブルの構築をメニュー到達後へ丸ごと後送りする。スプラッシュ中の主スレッド
+        // 作業はシーン非同期ロードをほぼ 1:1 で遅らせるので、メニュー表示を早める代わりにメニュー直後の
+        // 数秒を構築に使う。起動時ホストは IsLoaded と EOS ログイン完了の両方を待つので順序は崩れない。
+        if (Main.DeferOptionsBuildToMenu.Value)
+        {
+            while (!BootTimeline.MenuReached) yield return null;
+            BootTimeline.Mark("opts.resume");
+        }
+
         int defaultPresetNumber = OptionSaver.GetDefaultPresetNumber();
 
         Preset = new PresetOptionItem(defaultPresetNumber, TabGroup.SystemSettings)
@@ -1582,21 +1597,56 @@ public static class Options
         // 主スレッド作業がシーン非同期ロードをほぼ 1:1 で遅らせるため控えめに、メニュー到達後は太く使う。
         var frameBudget = System.Diagnostics.Stopwatch.StartNew();
         var loadWork = System.Diagnostics.Stopwatch.StartNew();
+        var chunkWork = System.Diagnostics.Stopwatch.StartNew();
         int yieldedFrames = 0;
-        bool FrameBudgetSpent() => frameBudget.ElapsedMilliseconds >= (BootTimeline.MenuReached ? 12 : 4);
+        long maxSyncSpanMs = 0;
+        int maxSyncAt = 0;
+        var chunkLog = new System.Text.StringBuilder();
+        bool FrameBudgetSpent()
+        {
+            long spent = frameBudget.ElapsedMilliseconds;
+            if (spent > maxSyncSpanMs) { maxSyncSpanMs = spent; maxSyncAt = LoadingPercentage; }
+            return spent >= (BootTimeline.MenuReached ? 8 : 4);
+        }
+        void EndChunk(string name)
+        {
+            chunkLog.Append(name).Append('=').Append(chunkWork.ElapsedMilliseconds).Append("ms ");
+            chunkWork.Restart();
+        }
 
         LoadingPercentage = 5;
         MainLoadingText = "Building Add-on Settings";
 
         Type IAddonType = typeof(IAddon);
 
-        Dictionary<AddonTypes, IAddon[]> addonTypes = Main.AllTypes
+        // 型の収集と表示名ソートだけを先に済ませ、インスタンス化はフレーム予算で区切って回す
+        // (LINQ の中では譲れないので、以前はここが予算チェック無しの同期チャンクだった)。
+        List<Type> addonTypeList = Main.AllTypes
             .Where(t => IAddonType.IsAssignableFrom(t) && !t.IsInterface)
             .OrderBy(t => Translator.GetString(t.Name))
-            .Select(type => (IAddon)Activator.CreateInstance(type))
-            .Where(x => x != null)
+            .ToList();
+
+        EndChunk("addonScan");
+
+        var addonInstances = new List<IAddon>(addonTypeList.Count);
+
+        foreach (Type type in addonTypeList)
+        {
+            if (Activator.CreateInstance(type) is IAddon addonInstance) addonInstances.Add(addonInstance);
+
+            if (FrameBudgetSpent())
+            {
+                yieldedFrames++;
+                yield return null;
+                frameBudget.Restart();
+            }
+        }
+
+        Dictionary<AddonTypes, IAddon[]> addonTypes = addonInstances
             .GroupBy(x => x.Type)
             .ToDictionary(x => x.Key, x => x.ToArray());
+
+        EndChunk("addonNew");
 
         foreach (KeyValuePair<AddonTypes, IAddon[]> addonType in addonTypes)
         {
@@ -1628,43 +1678,72 @@ public static class Options
             Logger.Info($"{MainLoadingText}: {index} built", "Options");
         }
 
+        EndChunk("addonSetup");
+
         LoadingPercentage = 15;
         MainLoadingText = "Building Role Settings";
 
         Type IVanillaType = typeof(IVanillaSettingHolder);
 
-        Main.AllTypes
+        List<Type> vanillaHolderTypes = Main.AllTypes
             .Where(t => IVanillaType.IsAssignableFrom(t) && !t.IsInterface)
             .OrderBy(t => Translator.GetString(t.Name))
-            .Select(type => (IVanillaSettingHolder)Activator.CreateInstance(type))
-            .Do(x =>
+            .ToList();
+
+        foreach (Type type in vanillaHolderTypes)
+        {
+            var x = (IVanillaSettingHolder)Activator.CreateInstance(type);
+
+            new TextOptionItem(titleId, "ROT.Vanilla", x.Tab)
+                .SetGameMode(CustomGameMode.Standard)
+                .SetColor(Color.white)
+                .SetHeader(true);
+
+            titleId += 10;
+
+            RoleLoadingText = x.GetType().Name;
+            Log();
+
+            x.SetupCustomOption();
+
+            if (FrameBudgetSpent())
             {
-                new TextOptionItem(titleId, "ROT.Vanilla", x.Tab)
-                    .SetGameMode(CustomGameMode.Standard)
-                    .SetColor(Color.white)
-                    .SetHeader(true);
+                yieldedFrames++;
+                yield return null;
+                frameBudget.Restart();
+            }
+        }
 
-                titleId += 10;
-
-                RoleLoadingText = x.GetType().Name;
-                Log();
-
-                x.SetupCustomOption();
-            });
+        EndChunk("vanilla");
 
         Type IType = typeof(IGhostRole);
 
-        Main.AllTypes
+        List<Type> ghostRoleTypes = Main.AllTypes
             .Where(t => IType.IsAssignableFrom(t) && !t.IsInterface)
             .OrderBy(t => Translator.GetString(t.Name))
-            .Select(type => (IGhostRole)Activator.CreateInstance(type))
-            .Do(x => x.SetupCustomOption());
+            .ToList();
+
+        foreach (Type type in ghostRoleTypes)
+        {
+            ((IGhostRole)Activator.CreateInstance(type)).SetupCustomOption();
+
+            if (FrameBudgetSpent())
+            {
+                yieldedFrames++;
+                yield return null;
+                frameBudget.Restart();
+            }
+        }
+
+        EndChunk("ghost");
 
         Dictionary<RoleOptionType, RoleBase[]> roleClassesDict = Main.AllRoleClasses
             .Where(x => x.GetType().Name != "VanillaRole")
             .GroupBy(x => ((CustomRoles)Enum.Parse(typeof(CustomRoles), ignoreCase: true, value: x.GetType().Name)).GetRoleOptionType())
             .OrderBy(x => (int)x.Key)
             .ToDictionary(x => x.Key, x => x.ToArray());
+
+        EndChunk("roleDict");
 
         foreach (KeyValuePair<RoleOptionType, RoleBase[]> roleClasses in roleClassesDict)
         {
@@ -1700,7 +1779,14 @@ public static class Options
             Logger.Info($"{MainLoadingText}: {index} built", "Options");
         }
 
-        Logger.Info($"Role/add-on settings built in {loadWork.ElapsedMilliseconds}ms over {yieldedFrames} yielded frames (menuReached={BootTimeline.MenuReached})", "Options");
+        EndChunk("roles");
+        BootTimeline.Mark("opts.roles.end");
+        Logger.Info($"Role/add-on settings built in {loadWork.ElapsedMilliseconds}ms over {yieldedFrames} yielded frames (menuReached={BootTimeline.MenuReached}) maxSync={maxSyncSpanMs}ms@{maxSyncAt}% [{chunkLog.ToString().TrimEnd()}]", "Options");
+        loadWork.Restart();
+        yieldedFrames = 0;
+        maxSyncSpanMs = 0;
+        maxSyncAt = 0;
+        frameBudget.Restart();
 
         void Log() => Logger.Info(" " + RoleLoadingText, MainLoadingText);
 
@@ -1761,6 +1847,7 @@ public static class Options
         Modules.OutfitShuffle.SetupCustomOption();
 
         LoadingPercentage = 61;
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
 
         AutoKickStart = new BooleanOptionItem(19310, "AutoKickStart", false, TabGroup.SystemSettings);
 
@@ -1781,6 +1868,7 @@ public static class Options
             .SetParent(AutoKickStopWords);
 
         LoadingPercentage = 62;
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
 
         AutoWarnStopWords = new BooleanOptionItem(19316, "AutoWarnStopWords", false, TabGroup.SystemSettings);
         MinWaitAutoStart = new FloatOptionItem(44420, "MinWaitAutoStart", new(0f, 10f, 0.5f), 2f, TabGroup.SystemSettings);
@@ -1898,6 +1986,7 @@ public static class Options
 
 
         LoadingPercentage = 63;
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
 
 
         AutoDisplayKillLog = new BooleanOptionItem(19321, "AutoDisplayKillLog", true, TabGroup.SystemSettings)
@@ -1966,6 +2055,7 @@ public static class Options
             .SetColor(new Color32(255, 192, 203, byte.MaxValue));
 
         LoadingPercentage = 64;
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
 
         #endregion
 
@@ -1977,36 +2067,52 @@ public static class Options
 
         // SoloPVP
         SoloPVP.SetupCustomOption();
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
         // FFA
         FreeForAll.SetupCustomOption();
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
         // Move And Stop
         StopAndGo.SetupCustomOption();
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
         // Hot Potato
         HotPotato.SetupCustomOption();
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
         // Speedrun
         Speedrun.SetupCustomOption();
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
         // Hide And Seek
         CustomHnS.SetupCustomOption();
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
         // Capture The Flag
         CaptureTheFlag.SetupCustomOption();
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
         // Natural Disasters
         NaturalDisasters.SetupCustomOption();
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
         // Room Rush
         RoomRush.SetupCustomOption();
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
         // King Of The Zones
         KingOfTheZones.SetupCustomOption();
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
         // Quiz
         Quiz.SetupCustomOption();
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
         // The Mind Game
         TheMindGame.SetupCustomOption();
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
         // Bed Wars
         BedWars.SetupCustomOption();
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
         // Deathrace
         Deathrace.SetupCustomOption();
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
         // Mingle
         Mingle.SetupCustomOption();
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
         // Snowdown
         Snowdown.SetupCustomOption();
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
 
         yield return null;
 
@@ -2015,6 +2121,7 @@ public static class Options
         #region Game Settings
 
         LoadingPercentage = 65;
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
         MainLoadingText = "Building game settings";
 
         new TextOptionItem(100023, "MenuTitle.Ejections", TabGroup.GameSettings)
@@ -2043,6 +2150,7 @@ public static class Options
             .SetColor(new Color32(255, 238, 232, byte.MaxValue));
 
         LoadingPercentage = 66;
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
 
         ShowTeamNextToRoleNameOnEject = new BooleanOptionItem(19812, "ShowTeamNextToRoleNameOnEject", true, TabGroup.GameSettings)
             .SetGameMode(CustomGameMode.Standard)
@@ -2062,6 +2170,7 @@ public static class Options
             .SetColor(new Color32(255, 238, 232, byte.MaxValue));
 
         LoadingPercentage = 67;
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
 
 
         // Map Settings
@@ -2074,6 +2183,7 @@ public static class Options
             .SetColor(new Color32(19, 188, 233, byte.MaxValue));
 
         LoadingPercentage = 68;
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
 
         SkeldChance = new IntegerOptionItem(19910, "SkeldChance", new(0, 100, 5), 0, TabGroup.GameSettings)
             .SetParent(RandomMapsMode)
@@ -2117,6 +2227,7 @@ public static class Options
             .AddReplacement(("{map}", Translator.GetString(x.ToString()))));
 
         LoadingPercentage = 69;
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
 
 
         // Random Spawn
@@ -2221,6 +2332,7 @@ public static class Options
 
 
         LoadingPercentage = 70;
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
 
         yield return null;
 
@@ -2300,6 +2412,7 @@ public static class Options
             .SetColor(new Color32(243, 96, 96, byte.MaxValue));
 
         LoadingPercentage = 71;
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
 
 
         // Sabotage Cooldown Control
@@ -2363,6 +2476,7 @@ public static class Options
             .SetGameMode(CustomGameMode.Standard);
 
         LoadingPercentage = 72;
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
 
         LightsOutSpecialSettings = new BooleanOptionItem(22500, "LightsOutSpecialSettings", false, TabGroup.GameSettings)
             .SetColor(new Color32(243, 96, 96, byte.MaxValue))
@@ -2405,6 +2519,7 @@ public static class Options
             .SetGameMode(CustomGameMode.Standard);
 
         LoadingPercentage = 73;
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
 
 
         new TextOptionItem(100026, "MenuTitle.Disable", TabGroup.GameSettings)
@@ -2440,6 +2555,7 @@ public static class Options
             .SetColor(new Color32(255, 153, 153, byte.MaxValue));
 
         LoadingPercentage = 74;
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
         
         DisableMeeting = new BooleanOptionItem(22700, "DisableMeeting", false, TabGroup.GameSettings)
             .SetGameMode(CustomGameMode.Standard)
@@ -2503,6 +2619,7 @@ public static class Options
             .SetColor(new Color32(255, 153, 153, byte.MaxValue));
 
         LoadingPercentage = 75;
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
 
         DisableDevices = new BooleanOptionItem(22900, "DisableDevices", false, TabGroup.GameSettings)
             .SetColor(new Color32(255, 153, 153, byte.MaxValue));
@@ -2520,6 +2637,7 @@ public static class Options
             .SetColor(new Color32(255, 153, 153, byte.MaxValue));
 
         LoadingPercentage = 76;
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
 
         DisableMiraHQDevices = new BooleanOptionItem(22908, "DisableMiraHQDevices", false, TabGroup.GameSettings)
             .SetParent(DisableDevices)
@@ -2558,6 +2676,7 @@ public static class Options
             .SetColor(new Color32(255, 153, 153, byte.MaxValue));
 
         LoadingPercentage = 77;
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
 
         DisableAirshipRecordsAdmin = new BooleanOptionItem(22917, "DisableAirshipRecordsAdmin", false, TabGroup.GameSettings)
             .SetParent(DisableAirshipDevices)
@@ -2606,6 +2725,7 @@ public static class Options
         DisableDevice.SetupTimeLimitOptions();
 
         LoadingPercentage = 78;
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
 
         #endregion
 
@@ -2706,6 +2826,7 @@ public static class Options
             .SetParent(DisableShortTasks);
 
         LoadingPercentage = 79;
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
 
         DisableStabilizeSteering = new BooleanOptionItem(23004, "DisableStabilizeSteering", false, TabGroup.TaskSettings)
             .SetParent(DisableShortTasks);
@@ -2723,6 +2844,7 @@ public static class Options
             .SetParent(DisableShortTasks);
 
         LoadingPercentage = 80;
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
 
         DisableBuyBeverage = new BooleanOptionItem(23009, "DisableBuyBeverage", false, TabGroup.TaskSettings)
             .SetParent(DisableShortTasks);
@@ -2740,6 +2862,7 @@ public static class Options
             .SetParent(DisableShortTasks);
 
         LoadingPercentage = 81;
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
 
         DisableRepairDrill = new BooleanOptionItem(23014, "DisableRepairDrill", false, TabGroup.TaskSettings)
             .SetParent(DisableShortTasks);
@@ -2754,6 +2877,7 @@ public static class Options
             .SetParent(DisableShortTasks);
 
         LoadingPercentage = 82;
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
 
         DisableMonitorTree = new BooleanOptionItem(23018, "DisableMonitorTree", false, TabGroup.TaskSettings)
             .SetParent(DisableShortTasks);
@@ -2771,6 +2895,7 @@ public static class Options
             .SetParent(DisableShortTasks);
 
         LoadingPercentage = 83;
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
 
         DisableCleanToilet = new BooleanOptionItem(23023, "DisableCleanToilet", false, TabGroup.TaskSettings)
             .SetParent(DisableShortTasks);
@@ -2803,6 +2928,7 @@ public static class Options
             .SetParent(DisableShortTasks);
 
         LoadingPercentage = 84;
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
 
 
         // Disable Common Tasks
@@ -2846,6 +2972,7 @@ public static class Options
             .SetParent(DisableCommonTasks);
 
         LoadingPercentage = 85;
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
 
         // Disable Long Tasks
         DisableLongTasks = new BooleanOptionItem(23150, "DisableLongTasks", false, TabGroup.TaskSettings)
@@ -2864,6 +2991,7 @@ public static class Options
             .SetParent(DisableLongTasks);
 
         LoadingPercentage = 86;
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
 
         DisableAlignEngineOutput = new BooleanOptionItem(23155, "DisableAlignEngineOutput", false, TabGroup.TaskSettings)
             .SetParent(DisableLongTasks);
@@ -2884,6 +3012,7 @@ public static class Options
             .SetParent(DisableLongTasks);
 
         LoadingPercentage = 87;
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
 
         DisableReplaceWaterJug = new BooleanOptionItem(23161, "DisableReplaceWaterJug", false, TabGroup.TaskSettings)
             .SetParent(DisableLongTasks);
@@ -2907,6 +3036,7 @@ public static class Options
             .SetParent(DisableLongTasks);
 
         LoadingPercentage = 88;
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
 
         DisableCrankGenerator = new BooleanOptionItem(23168, "DisableCrankGenerator", false, TabGroup.TaskSettings)
             .SetParent(DisableLongTasks);
@@ -2930,6 +3060,7 @@ public static class Options
             .SetParent(DisableLongTasks);
 
         LoadingPercentage = 89;
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
 
 
         // Disable Divert Power, Weather Nodes etc. situational Tasks
@@ -2952,6 +3083,7 @@ public static class Options
             .SetParent(DisableOtherTasks);
 
         LoadingPercentage = 90;
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
         MainLoadingText = "Building Guesser Mode settings";
 
         yield return null;
@@ -2973,6 +3105,7 @@ public static class Options
             .SetParent(GuesserMode);
 
         LoadingPercentage = 91;
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
 
         NeutralKillersCanGuess = new BooleanOptionItem(19712, "NeutralKillersCanGuess", false, TabGroup.TaskSettings)
             .SetParent(GuesserMode);
@@ -3038,6 +3171,7 @@ public static class Options
             .SetGameMode(CustomGameMode.Standard);
 
         LoadingPercentage = 92;
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
         MainLoadingText = "Building game settings";
 
         #endregion
@@ -3060,6 +3194,7 @@ public static class Options
             .SetGameMode(CustomGameMode.Standard);
 
         LoadingPercentage = 93;
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
 
         AllAliveMeeting = new BooleanOptionItem(23400, "AllAliveMeeting", false, TabGroup.GameSettings)
             .SetGameMode(CustomGameMode.Standard)
@@ -3144,6 +3279,7 @@ public static class Options
         ChaosPotSupport.SetupOptions(44445);
 
         LoadingPercentage = 94;
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
 
 
         AdditionalEmergencyCooldown = new BooleanOptionItem(23500, "AdditionalEmergencyCooldown", false, TabGroup.GameSettings)
@@ -3165,6 +3301,7 @@ public static class Options
             .SetColor(new Color32(147, 241, 240, byte.MaxValue));
 
         LoadingPercentage = 95;
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
 
         VoteMode = new BooleanOptionItem(23600, "VoteMode", false, TabGroup.GameSettings)
             .SetColor(new Color32(147, 241, 240, byte.MaxValue))
@@ -3195,6 +3332,7 @@ public static class Options
             .SetGameMode(CustomGameMode.Standard);
 
         LoadingPercentage = 96;
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
 
 
         new TextOptionItem(100028, "MenuTitle.Other", TabGroup.GameSettings)
@@ -3215,6 +3353,7 @@ public static class Options
             .SetColor(new Color32(100, 220, 255, byte.MaxValue));
 
         LoadingPercentage = 97;
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
 
 
         FixFirstKillCooldown = new BooleanOptionItem(23900, "FixFirstKillCooldown", false, TabGroup.GameSettings)
@@ -3242,6 +3381,7 @@ public static class Options
             .SetColor(new Color32(193, 255, 209, byte.MaxValue));
 
         LoadingPercentage = 98;
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
 
 
         KillFlashDuration = new FloatOptionItem(24100, "KillFlashDuration", new(0.1f, 0.45f, 0.05f), 0.3f, TabGroup.GameSettings)
@@ -3308,6 +3448,7 @@ public static class Options
             .SetColor(new Color32(217, 218, 255, byte.MaxValue));
 
         LoadingPercentage = 99;
+        if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
 
 
         GhostCanSeeOtherRoles = new BooleanOptionItem(24300, "GhostCanSeeOtherRoles", true, TabGroup.GameSettings)
@@ -3501,6 +3642,7 @@ public static class Options
 
         OptionSaver.Load();
 
+        Logger.Info($"System settings built in {loadWork.ElapsedMilliseconds}ms over {yieldedFrames} yielded frames maxSync={maxSyncSpanMs}ms@{maxSyncAt}%", "Options");
         IsLoaded = true;
 
         PostLoadTasks();

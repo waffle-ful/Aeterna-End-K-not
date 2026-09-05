@@ -24,6 +24,9 @@ public static class BootTimeline
     private static bool _menuStarted;
     private static bool _emitted;
     private static bool _firstTickNoted;
+    private static bool _eosTokenMarked;
+    private static bool _eosFlowMarked;
+    private static int _eosTokenProbeFailures;
     private static long _menuInteractiveMs;
     private static float _menuInteractiveRealtime;
     private static int _menuInteractiveFrame;
@@ -95,6 +98,34 @@ public static class BootTimeline
             float now = Time.realtimeSinceStartup;
             float gapMs = (now - _lastMenuFrameRealtime) * 1000f;
             _lastMenuFrameRealtime = now;
+
+            // EOS ログイン鎖の 2 つの節目 (プラットフォームログイン完了 = トークン取得 / ログインフロー完了 =
+            // ロビー作成が許される時刻) を、パッチ無しでフレームごとの読み取りだけで刻む。
+            if (!_eosFlowMarked)
+            {
+                EOSManager eos = null;
+                try { eos = EOSManager.Instance; } catch { }
+
+                if (eos != null)
+                {
+                    // UserIDToken の getter はログイン完了前に NullReference を投げる (バニラ挙動) ので、
+                    // 例外を 1 度見たら以降は 15 フレームに 1 回だけ読み直す。
+                    if (!_eosTokenMarked && (_eosTokenProbeFailures == 0 || Time.frameCount % 15 == 0))
+                    {
+                        try
+                        {
+                            if (!string.IsNullOrEmpty(eos.UserIDToken)) { _eosTokenMarked = true; Mark("eos.token"); }
+                        }
+                        catch { _eosTokenProbeFailures++; }
+                    }
+
+                    try
+                    {
+                        if (eos.loginFlowFinished) { _eosFlowMarked = true; Mark("eos.flowdone"); }
+                    }
+                    catch { _eosFlowMarked = true; }
+                }
+            }
 
             // メニュー到達後の間隙が JIT (初回実行) 由来かを見分けるため、間隙 1 件ごとに
             // 直前フレームからの JIT 累積差分 (ms) を "/j" で併記する。
