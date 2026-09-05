@@ -114,6 +114,20 @@ public static class HealthLog
     private static long LastNormalLogTs;
     private static string LastState = "?";
     private static System.Diagnostics.Process Proc;
+    private static bool _overlayNoted; // OVERLAY 行はプロセスにつき 1 回 (セッション再開では再記録しない)
+
+    // 描画 (Present) をフックする外部モジュール。主スレッドが GfxDevice の present 待ちで長時間止まる
+    // ハングの読み解きで、どのオーバーレイが同居していたかをログ側だけで判定できるようにする。
+    private static readonly string[] OverlayModuleNames =
+    [
+        "nvspcap64.dll",            // GeForce Experience / NVIDIA app ゲーム内オーバーレイ
+        "NvCamera64.dll",           // NVIDIA Ansel
+        "EOSOVH-Win64-Shipping.dll", // Epic Online Services オーバーレイ
+        "GameOverlayRenderer64.dll", // Steam
+        "DiscordHook64.dll",
+        "RTSSHooks64.dll",          // RivaTuner / MSI Afterburner
+        "graphics-hook64.dll",      // OBS ゲームキャプチャ
+    ];
     private static long _gameStartTime;
 
     // --- 直近送信リングバッファ (zero I/O) ---
@@ -504,6 +518,14 @@ public static class HealthLog
 
             string hb = $"t={now} up={now - StartTs} state={state} host={(host ? 1 : 0)} server={server} players={players} wsMB={wsMB} gcMB={gcMB} gc2={gen2} nmSent={nmSent} nmSkip={nmSkip} eosTry={eosTry} eosFlow={eosFlow} idTok={idTok} ping={ping} rsndD={rsndD} unack={unack} pNoAck={pNoAck} inIdle={GetInputIdleSeconds()} fps={_fpsLast}{lastSendSuffix}";
             Write($"HB {hb}");
+
+            // オーバーレイ類は起動後に注入されるので、少し経ってから 1 度だけモジュール一覧を引く。
+            if (!_overlayNoted && now - StartTs >= 10)
+            {
+                _overlayNoted = true;
+                try { NoteOverlayModules(now); }
+                catch { }
+            }
 
             // リンク劣化の遷移だけを ANOM へ。読み取り専用で送信はしない。
             try { NoteLinkHealth(now, ping, rsndD, unack, pNoAck); }
@@ -1011,6 +1033,46 @@ public static class HealthLog
     {
         EnsureInit();
         Write(line);
+    }
+
+    // OVERLAY 行: 既知の描画フックモジュールの有無 (1/0) と、名前に overlay/hook を含む未知のモジュール。
+    // 起動後に注入される類なので、HB 側で up>=10s を待ってから 1 回だけ呼ぶ。
+    private static void NoteOverlayModules(long now)
+    {
+        if (Proc == null) return;
+
+        var found = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var others = new System.Collections.Generic.List<string>();
+
+        foreach (System.Diagnostics.ProcessModule m in Proc.Modules)
+        {
+            string name;
+            try { name = m.ModuleName; }
+            catch { continue; }
+            if (string.IsNullOrEmpty(name)) continue;
+
+            bool known = false;
+            foreach (string k in OverlayModuleNames)
+            {
+                if (string.Equals(k, name, StringComparison.OrdinalIgnoreCase))
+                {
+                    found.Add(k);
+                    known = true;
+                    break;
+                }
+            }
+
+            if (!known && (name.Contains("overlay", StringComparison.OrdinalIgnoreCase) || name.Contains("hook", StringComparison.OrdinalIgnoreCase)))
+                others.Add(name);
+        }
+
+        var sb = new System.Text.StringBuilder("OVERLAY");
+        foreach (string k in OverlayModuleNames)
+            sb.Append(' ').Append(k[..k.IndexOf('.')]).Append('=').Append(found.Contains(k) ? 1 : 0);
+
+        if (others.Count > 0) sb.Append(" other=[").Append(string.Join(",", others)).Append(']');
+        sb.Append(" t=").Append(now);
+        Write(sb.ToString());
     }
 
     // phase3 判定層(EarlyWarning 等)専用の窓口。Note() と違い Health + Timeline の両方に書く

@@ -353,6 +353,7 @@ public static class Translator
     }
     public static string GetString(SystemTypes room)
     {
+        if (!TranslationController.InstanceExists) return $"*{room}"; // 起動直後は本体側も未生成
         return TranslationController.Instance.GetString(room);
     }
     // 名前→StringNames の1回構築辞書。以前の実装 (AllStringNames 線形走査 + 要素ごとの enum ToString) は

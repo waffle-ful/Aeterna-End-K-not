@@ -636,6 +636,11 @@ public class Main : BasePlugin
         AllocTypeSampling = Config.Bind("Client Options", "AllocTypeSampling", false, "Record which managed types allocate the most memory during play (adds one ALLOCTYPE line per 5 seconds to the health log). Measurement only: it makes every garbage collection noticeably more expensive, so leave it off for normal play.");
         AllocIl2Tracking = Config.Bind("Client Options", "AllocIl2Tracking", true, "Also attribute il2cpp (Boehm) heap growth to the same subsystems in the ALLOC health-log line. Cheap; the source of the periodic in-game garbage-collection hitch is read from this.");
 
+        // 番犬/相棒アプリの出口フック。ClientControlGUI は実行時に破棄されうるので
+        // 終了検知をそちらに預けない。
+        AddComponent<EndKnot.Modules.ExitHook>();
+        Log.LogInfo("ExitHook registered");
+
         AddComponent<ClientControlGUI>();
         Log.LogInfo("ClientControlGUI registered");
 
