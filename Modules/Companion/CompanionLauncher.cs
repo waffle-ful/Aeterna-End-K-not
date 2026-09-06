@@ -230,10 +230,19 @@ public static class CompanionLauncher
 
         // 依存の自動インストール (初回のみ、deps-ok-v2.flag で判定) → 本体起動。メッセージは cmd の
         // コードページ事故を避けるため ASCII のみ。ゲーム内向けの日本語案内は lang キー側で行う。
+        //
+        // 同梱 python\python.exe (release zip 同梱・EndKnot_DATA/companion/python/) があれば最優先で使う。
+        // これは release.ps1 が焼く実体で依存パッケージまでインストール済みのため、pip install も
+        // deps-ok-v2.flag もスキップして直接起動する。無ければ PATH の python にフォールバックし、
+        // 従来どおり初回だけ pip install する (ソースから動かす手動セットアップ用)。
         const string cmd =
             "@echo off\r\n" +
             "title EndKnot AI Commentary\r\n" +
             "cd /d \"%~dp0\"\r\n" +
+            "if exist \"python\\python.exe\" (\r\n" +
+            "  set PYEXE=python\\python.exe\r\n" +
+            "  goto :run\r\n" +
+            ")\r\n" +
             // where python は Microsoft Store のエイリアス (実行すると Store が開くだけの偽物) にもヒットするため、
             // 実際に --version が通るかで判定する。
             "python --version >nul 2>nul\r\n" +
@@ -246,11 +255,12 @@ public static class CompanionLauncher
             "  timeout /t 60 >nul\r\n" +
             "  exit /b 1\r\n" +
             ")\r\n" +
+            "set PYEXE=python\r\n" +
             // flag はバージョン付き。requirements に依存を足したら番号を上げると既存ユーザーでも一度だけ再インストールが走る
             // (v2 で websockets を追加 — 立ち絵アバター配信用)。
             "if not exist deps-ok-v2.flag (\r\n" +
             "  echo Installing dependencies [first run only]...\r\n" +
-            "  python -m pip install -r requirements.txt\r\n" +
+            "  \"%PYEXE%\" -m pip install -r requirements.txt\r\n" +
             "  if errorlevel 1 (\r\n" +
             "    echo Dependency install failed. See output above.\r\n" +
             "    echo [This window closes automatically in 60 seconds.]\r\n" +
@@ -259,7 +269,8 @@ public static class CompanionLauncher
             "  )\r\n" +
             "  echo ok> deps-ok-v2.flag\r\n" +
             ")\r\n" +
-            "python companion.py --events \"%EK_COMPANION_EVENTS%\" %EK_COMPANION_ARGS%\r\n";
+            ":run\r\n" +
+            "\"%PYEXE%\" companion.py --events \"%EK_COMPANION_EVENTS%\" %EK_COMPANION_ARGS%\r\n";
 
         File.WriteAllText(RunCmdPath, cmd);
         return true;

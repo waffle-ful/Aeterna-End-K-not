@@ -14,6 +14,10 @@
 release-v*/
 release-*/
 
+# Embedded Python for the AI-commentary companion (built by tools/build-companion-python.ps1,
+# ~60-100MB of pip-installed wheels — regenerate locally, don't commit).
+packaging/companion-python/
+
 # Translation work-in-progress / dump files
 dupes_out.txt
 extra-ja.txt
@@ -451,6 +455,8 @@ tools/*
 !tools/log-doctor.ps1
 # ...and the BGM AssetBundle build script (reproduces the embedded bundle from the source tracks).
 !tools/build-bgm-bundle.ps1
+# ...and the companion-app embedded Python build script (release.ps1 depends on its output).
+!tools/build-companion-python.ps1
 # ...and the post-stream retrospective report tool (stream-report).
 !tools/stream-report.ps1
 # ...and the AI commentary companion app, which streamers run alongside the mod (API key stays in each user's env).
