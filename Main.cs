@@ -648,6 +648,9 @@ public class Main : BasePlugin
         AddComponent<ClientControlGUI>();
         Log.LogInfo("ClientControlGUI registered");
 
+        AddComponent<EndKnot.Modules.Setup.StreamSetupGUI>();
+        Log.LogInfo("StreamSetupGUI registered");
+
         AddComponent<EndKnot.Modules.YouTubeChat.YouTubeChatBubble>();
         Log.LogInfo("YouTubeChatBubble registered");
 

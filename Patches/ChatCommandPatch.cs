@@ -203,6 +203,7 @@ internal static class ChatCommands
             new("BBZoom", "[<3-50>|reset]", Command.UsageLevels.Host, Command.UsageTimes.InLobby, BBZoomCommand, true, true),
             new("BBTestRoom", "[edge|box|both|off]", Command.UsageLevels.Host, Command.UsageTimes.InLobby, BBTestRoomCommand, true, true),
             new("Rehost", "", Command.UsageLevels.Host, Command.UsageTimes.InLobby, RehostCommand, true, true),
+            new("Setup", "", Command.UsageLevels.Host, Command.UsageTimes.Always, SetupCommand, true, true),
             new("Template", "{tag}", Command.UsageLevels.Everyone, Command.UsageTimes.Always, TemplateCommand, true, false, [GetString("CommandArgs.Template.Tag")]),
             new("MessageWait", "{duration}", Command.UsageLevels.Host, Command.UsageTimes.Always, MessageWaitCommand, true, false, [GetString("CommandArgs.MessageWait.Duration")]),
             new("Death", "[id]", Command.UsageLevels.Everyone, Command.UsageTimes.AfterDeath, DeathCommand, true, false, [GetString("CommandArgs.Death.Id")]),
@@ -3325,6 +3326,13 @@ internal static class ChatCommands
         // ExitGamePatch.Prefix が自然に AutoRehost.OnDisconnect(Error) を呼ぶ (_pending ガードで二重発火しない)。
         try { AmongUsClient.Instance.ExitGame(DisconnectReasons.Error); }
         catch (Exception ex) { Logger.Warn($"/rehost ExitGame failed: {ex.Message}", "DebugRehost"); }
+    }
+
+    // 配信セットアップ画面 (host-local IMGUI) をチャットから開く。ネットワーク送信は一切無い
+    // (Command の isCanceled=true でチャット自体もローカルに留まる)。
+    private static void SetupCommand(PlayerControl player, string text, string[] args)
+    {
+        EndKnot.Modules.Setup.StreamSetupGUI.Open();
     }
 
     private static void MyRoleCommand(PlayerControl player, string text, string[] args)
