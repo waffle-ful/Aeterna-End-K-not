@@ -99,6 +99,10 @@ python companion.py --events "..." --audio-device "CABLE Input"
 --tts voicevox --duo
 ```
 
+声と2人組モードは既定が「1人 + Gemini のネイティブ音声」なので、毎回この構成で
+使いたいときは BepInEx cfg の `AICommentaryArgs` に書いておくのが確実です
+(環境変数はパソコンを移すと消えます)。
+
 - 1つの出来事を2人で数ターン (最大4発話) 転がします。盛り上がりどころ
   (干渉/追放/試合結果/通報など) ほど長く、参加やチャットは2〜3発話で軽く。
   次の出来事が待っているときは早めに切り上げて実況を遅らせません。
@@ -107,6 +111,9 @@ python companion.py --events "..." --audio-device "CABLE Input"
 - 場繋ぎトークは約12秒の沈黙で2人が交互に切り出し、必ず相方が返します。
 - 相方の声は `--voicevox-speaker2` (既定: 四国めたん)、呼び名は `--duo-name` /
   `--duo-name2` (既定: ずんこ/めたん) で変えられます。
+- VOICEVOX がまだ起動していないときは最大120秒だけ起動を待ってから合流します
+  (`--voicevox-wait` 秒数で変更、`0` で待たない)。待っても繋がらなかったときは
+  Gemini の声で続行し、その旨を `companion-log.jsonl` に残します。
 - `--duo-tts2 gemini` にすると相方の声が Gemini のネイティブ音声になります
   (`--voice2 Kore` などで声を選択)。VOICEVOX キャラに依存しないので、権利フリーの
   VRM と組み合わせれば収益化配信でも扱いやすい構成です (呼び名の既定はジェミー)。
