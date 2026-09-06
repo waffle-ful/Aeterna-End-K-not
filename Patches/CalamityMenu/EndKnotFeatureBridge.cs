@@ -51,6 +51,16 @@ public static class EndKnotFeatureBridge
 
         _updateButtonGo.SetActive(ModUpdater.HasUpdate);
 
+        // Stream setup window (upper-left mirror of the update button)
+        CreateTextButton(
+            overlayLayer,
+            GetString("Setup.MenuButton"),
+            new Vector3(-3.2f, 2.0f, 0f),
+            new Color(0.45f, 0.85f, 1.0f, 1f),  // soft cyan
+            new Color(0.70f, 0.95f, 1.0f, 1f),  // brighter cyan on hover
+            2.2f,
+            EndKnot.Modules.Setup.StreamSetupGUI.Open);
+
         // Seasonal special message
         CreateSpecialMessage(overlayLayer);
 
