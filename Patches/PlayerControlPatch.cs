@@ -1493,6 +1493,8 @@ internal static class ReportDeadBodyPatch
         MeetingStarted = true;
         LateTask.New(() => MeetingStarted = false, 1f, "ResetMeetingStarted");
 
+        try { EndKnot.Modules.Companion.CompanionEventEmitter.OnMeetingCalled(player, target); } catch { } // AI実況相棒アプリ向けイベント (OFF 時は即 return)
+
         ReportReasonNotice.OnReportConfirmed(player, target);
 
         if (ClientControlGUI.HudHidden)
