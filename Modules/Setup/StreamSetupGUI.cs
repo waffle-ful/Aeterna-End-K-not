@@ -556,6 +556,7 @@ public class StreamSetupGUI : MonoBehaviour
             DrawPythonRow(ref y, w);
             DrawGeminiRow(ref y, w);
             DrawVoiceVoxRow(ref y, w);
+            DrawVoiceStyleRows(ref y, w);
             DrawBottomRow(ref y, w);
         }
         else
@@ -701,6 +702,67 @@ public class StreamSetupGUI : MonoBehaviour
 
         y += Padding * 1.2f;
     }
+
+    // AICommentaryArgs (cfg 手書き) の代わりに声/実況スタイルの3トグルを描く。値は毎フレーム
+    // Main.AICommentaryArgs.Value をその場でパースして読む (ConfigEntry の読取+文字列分割のみで
+    // 重い処理を伴わないため、DrawBottomRow の Main.EnableAICommentary 直読みと同じ扱いで良い)。
+    private void DrawVoiceStyleRows(ref float y, float w)
+    {
+        Section(ref y, w, GetString("Setup.Voice.SectionTitle"));
+
+        CompanionArgs.Parsed args = CompanionArgs.Parse(Main.AICommentaryArgs?.Value ?? "");
+
+        bool voiceVoxChosen = args.Tts is "voicevox" or "voicevox-text";
+        Color ttsColor = voiceVoxChosen ? ColorOk : ColorNeutral;
+        string ttsGlyph = voiceVoxChosen ? OkGlyph : NeutralGlyph;
+        string ttsStatus = voiceVoxChosen ? GetString("Setup.Voice.Tts.VoiceVox") : GetString("Setup.Voice.Tts.Gemini");
+
+        RowHeader(ref y, w, ttsGlyph, ttsColor, GetString("Setup.Voice.Tts.Name"), ttsStatus, ttsColor);
+        RowButtons(ref y, w, (GetString("Setup.Voice.ToggleButton"), OnToggleTtsClicked), null);
+
+        if (voiceVoxChosen && StreamSetupState.VoiceVoxStatus != StreamSetupState.VoiceVoxState.Ok)
+            RowHint(ref y, w, GetString("Setup.Voice.NeedVoiceVoxHint"));
+
+        y += Padding * 0.8f;
+
+        bool duoOn = args.Duo;
+        Color duoColor = duoOn ? ColorOk : ColorNeutral;
+        string duoStatus = duoOn ? GetString("Setup.Voice.Duo.On") : GetString("Setup.Voice.Duo.Off");
+
+        RowHeader(ref y, w, duoOn ? OkGlyph : NeutralGlyph, duoColor, GetString("Setup.Voice.Duo.Name"), duoStatus, duoColor);
+        RowButtons(ref y, w, (GetString("Setup.Voice.ToggleButton"), OnToggleDuoClicked), null);
+
+        // companion.py 側は起動時に args.tts != "voicevox" だと --duo を1人モードへ無音降格する
+        // (声の row で VOICEVOX に切り替えないと2人組は成立しない)。
+        if (duoOn && !voiceVoxChosen)
+            RowHint(ref y, w, GetString("Setup.Voice.Duo.NeedVoiceVoxHint"));
+
+        y += Padding * 0.8f;
+
+        bool quietOn = args.QuietMeeting;
+        Color quietColor = quietOn ? ColorOk : ColorNeutral;
+        string quietStatus = quietOn ? GetString("Setup.Voice.QuietMeeting.On") : GetString("Setup.Voice.QuietMeeting.Off");
+
+        RowHeader(ref y, w, quietOn ? OkGlyph : NeutralGlyph, quietColor, GetString("Setup.Voice.QuietMeeting.Name"), quietStatus, quietColor);
+        RowButtons(ref y, w, (GetString("Setup.Voice.ToggleButton"), OnToggleQuietMeetingClicked), null);
+
+        string voiceHintKey = StreamSetupState.VoiceHint switch
+        {
+            StreamSetupState.VoiceHintKind.DuoAutoSwitchedTts => "Setup.Voice.Duo.AutoSwitchedTtsHint",
+            StreamSetupState.VoiceHintKind.TtsAutoDisabledDuo => "Setup.Voice.Tts.AutoDisabledDuoHint",
+            StreamSetupState.VoiceHintKind.Restarting => "Setup.Voice.RestartHint",
+            _ => null
+        };
+        if (voiceHintKey != null) RowHint(ref y, w, GetString(voiceHintKey));
+
+        y += Padding * 1.2f;
+    }
+
+    private static void OnToggleTtsClicked() => StreamSetupState.ToggleTts();
+
+    private static void OnToggleDuoClicked() => StreamSetupState.ToggleDuo();
+
+    private static void OnToggleQuietMeetingClicked() => StreamSetupState.ToggleQuietMeeting();
 
     private void DrawBottomRow(ref float y, float w)
     {
