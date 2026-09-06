@@ -29,8 +29,17 @@ public static class YouTubeChatPoster
 {
     private static readonly HttpClient client = new() { Timeout = TimeSpan.FromSeconds(15) };
 
-    private static string accessToken;
-    private static DateTime accessTokenExpiryUtc = DateTime.MinValue;
+    // Token と有効期限は必ず一緒に差し替える。別々のフィールドだと、書込みの半分だけが見えた
+    // スレッドが「新トークン + 古い期限」のような不整合な組を読める (テアリング)。1個の不変
+    // インスタンスへまとめ、参照の差し替え1回で原子的に更新する。
+    private sealed class TokenCache
+    {
+        internal readonly string Token;
+        internal readonly DateTime ExpiryUtc;
+        internal TokenCache(string token, DateTime expiryUtc) { Token = token; ExpiryUtc = expiryUtc; }
+    }
+
+    private static volatile TokenCache _tokenCache;
 
     private static string cachedLiveChatId;
     private static string cachedLiveChatIdVideoId;
@@ -49,9 +58,22 @@ public static class YouTubeChatPoster
         !string.IsNullOrWhiteSpace(Main.YouTubePostClientSecret?.Value) &&
         !string.IsNullOrWhiteSpace(Main.YouTubePostRefreshToken?.Value);
 
+    // セットアップ画面 (Modules/Setup) の「今の配信を探す」とロビー入室時の自動検出が書き込む。
+    // ResolveVideoId の優先順位で /yt セッションの次・保存済み URL の前に挟まる。
+    public static volatile string AutoDetectedVideoId;
+
+    private static bool autoDetectAttempted;
+
+    // 手動検出ボタンとロビー入室時の自動検出が同時に走って API を二重で叩かないようにする
+    // in-flight ガード (postGate とは別ゲート。投稿とは独立して検出だけ多重発火しうるため)。
+    private static int detectGate;
+
     public static void Tick(float deltaTime)
     {
         if (OperatingSystem.IsAndroid()) return;
+
+        MaybeAutoDetectOnLobbyEnter();
+
         if (YouTubePostOptions.Enabled == null || !YouTubePostOptions.Enabled.GetBool()) return;
 
         // オンにした直後にホストへ丁寧なセットアップ説明を1回だけ出す（トークン未設定でも出す＝
@@ -74,6 +96,10 @@ public static class YouTubeChatPoster
         secondsSinceLastPost = 0f;
         Dispatch(videoId, text);
     }
+
+    // セットアップ画面のテスト投稿が「配信未検出」と「その他の失敗」を区別するためだけに使う。
+    // videoId 文字列そのものは公開しない。
+    public static bool HasResolvedVideoId => !string.IsNullOrEmpty(ResolveVideoId());
 
     // /ytpost <text> からの手動投稿・疎通テスト用。
     public static void PostRaw(string text)
@@ -182,13 +208,190 @@ public static class YouTubeChatPoster
         Utils.SendMessage(Translator.GetString("YouTubePost.SetupGuide"), PlayerControl.LocalPlayer.PlayerId);
     }
 
-    // 投稿先の videoId を解決する。/yt 実行中の読み取りセッションを優先し、無ければ
-    // 保存済み配信 URL (Main.YouTubeStreamUrl) から解決する。両方無ければ null (= no-op)。
+    // 投稿先の videoId を解決する。/yt 実行中の読み取りセッションを優先し、次に自動検出した
+    // videoId (AutoDetectedVideoId)、最後に保存済み配信 URL (Main.YouTubeStreamUrl) から解決する。
+    // 全部無ければ null (= no-op)。
     private static string ResolveVideoId()
     {
         string id = YouTubeChatManager.CurrentVideoId;
         if (!string.IsNullOrEmpty(id)) return id;
+        if (!string.IsNullOrEmpty(AutoDetectedVideoId)) return AutoDetectedVideoId;
         return YouTubeChatManager.ExtractVideoId(Main.YouTubeStreamUrl?.Value);
+    }
+
+    // ロビーに入っている間、投稿オプションが ON かつ /yt セッションが無い場合に限り、
+    // ロビーへ入るたび (IsLobby が false→true になった時) に 1 回だけ配信の自動検出を試みる
+    // (1 quota unit)。オプションが OFF のときは投稿先が使われないので叩かない。
+    private static void MaybeAutoDetectOnLobbyEnter()
+    {
+        if (!GameStates.IsLobby)
+        {
+            autoDetectAttempted = false;
+            return;
+        }
+
+        if (autoDetectAttempted) return;
+        if (AmongUsClient.Instance == null || !AmongUsClient.Instance.AmHost) return;
+        if (YouTubePostOptions.Enabled == null || !YouTubePostOptions.Enabled.GetBool()) return;
+        if (!IsConfigured) return;
+        if (!string.IsNullOrEmpty(YouTubeChatManager.CurrentVideoId)) return; // /yt セッションが既にある
+
+        autoDetectAttempted = true;
+        DetectStream(null);
+    }
+
+    // 投稿先の自動検出。GET liveBroadcasts?broadcastStatus=active で認可アカウントの配信中の枠を
+    // 探す。セットアップ画面の手動ボタンとロビー入室時の自動検出の両方から呼ばれるため、
+    // detectGate で多重実行を防ぐ。
+    // onDone(found, title, tokenInvalid) はどのスレッドからでも呼ばれうる (呼び出し元が volatile
+    // へ書き戻す前提)。tokenInvalid は「配信が無い」と「トークンが失効した」を GUI 側で
+    // 区別できるようにするためのフラグ。
+    public static void DetectStream(Action<bool, string, bool> onDone)
+    {
+        if (!IsConfigured)
+        {
+            onDone?.Invoke(false, null, false);
+            return;
+        }
+
+        if (System.Threading.Interlocked.CompareExchange(ref detectGate, 1, 0) != 0)
+        {
+            // 別の検出が既に進行中。API を二重で叩かず、今回分は「見つからなかった」扱いで返す。
+            onDone?.Invoke(false, null, false);
+            return;
+        }
+
+        Task.Run(async () =>
+        {
+            bool found = false;
+            bool tokenInvalid = false;
+            string title = null;
+            try
+            {
+                string token = await EnsureAccessTokenAsync();
+                if (token == null)
+                {
+                    tokenInvalid = true;
+                }
+                else
+                {
+                    using var request = new HttpRequestMessage(HttpMethod.Get,
+                        "https://www.googleapis.com/youtube/v3/liveBroadcasts?part=id,snippet&broadcastStatus=active");
+                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                    using var response = await client.SendAsync(request);
+                    string body = await response.Content.ReadAsStringAsync();
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        var items = JsonNode.Parse(body)?["items"]?.AsArray();
+                        if (items is { Count: > 0 })
+                        {
+                            string videoId = items[0]?["id"]?.ToString();
+                            title = items[0]?["snippet"]?["title"]?.ToString();
+                            if (!string.IsNullOrEmpty(videoId))
+                            {
+                                AutoDetectedVideoId = videoId;
+                                found = true;
+                            }
+                        }
+                        else
+                        {
+                            // 「配信中の枠が無い」と確定した時だけ古い videoId を捨てる。通信失敗では
+                            // 保持したままにする (一時的なエラーで投稿先を失わないため)。
+                            AutoDetectedVideoId = null;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn($"DetectStream failed: {ex.GetType().Name}", "YouTubeChatPoster");
+            }
+            finally
+            {
+                System.Threading.Interlocked.Exchange(ref detectGate, 0);
+                onDone?.Invoke(found, title, tokenInvalid);
+            }
+        });
+    }
+
+    // セットアップ画面のテスト投稿用。/ytpost と同じ経路 (トークン取得→liveChatId解決→POST) を使うが、
+    // 成功可否に加えて HTTP ステータス (401/403/404/その他) を返すので、失敗理由を画面に出し分けられる。
+    // 戻り値は Dispatch と同じ意味 (実際に送信キューへ入れられたか)。呼び出し元はこれが true の時だけ
+    // クールダウンを焼くこと (in-flight/連投下限で弾かれた分まで数えると無言でボタンが効かなくなる)。
+    public static bool TestPost(string text, Action<bool, int> onDone)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return false;
+        if (!IsConfigured) return false;
+
+        string videoId = ResolveVideoId();
+        if (string.IsNullOrEmpty(videoId)) return false;
+
+        long now = Utils.TimeStamp;
+        if (now - lastPostTs < MinPostGapSeconds) return false;
+        if (System.Threading.Interlocked.CompareExchange(ref postGate, 1, 0) != 0) return false;
+        lastPostTs = now;
+
+        Task.Run(async () =>
+        {
+            bool ok = false;
+            int status = 0;
+            try
+            {
+                string token = await EnsureAccessTokenAsync();
+                if (token == null)
+                {
+                    status = 401;
+                }
+                else
+                {
+                    string liveChatId = await ResolveLiveChatIdAsync(videoId, token);
+                    if (liveChatId == null)
+                    {
+                        status = 404;
+                    }
+                    else
+                    {
+                        var body = new JsonObject
+                        {
+                            ["snippet"] = new JsonObject
+                            {
+                                ["liveChatId"] = liveChatId,
+                                ["type"] = "textMessageEvent",
+                                ["textMessageDetails"] = new JsonObject { ["messageText"] = text }
+                            }
+                        };
+
+                        using var content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");
+                        using var request = new HttpRequestMessage(HttpMethod.Post, "https://www.googleapis.com/youtube/v3/liveChat/messages?part=snippet") { Content = content };
+                        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+                        using var response = await client.SendAsync(request);
+                        status = (int)response.StatusCode;
+                        ok = response.IsSuccessStatusCode;
+
+                        if (!ok && response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                        {
+                            // PostAsync と同じ理由: activeLiveChatId はローテーションするため、古い
+                            // キャッシュを抱えたままだと以後のテスト投稿も 404 で固定されてしまう。
+                            cachedLiveChatId = null;
+                            cachedLiveChatIdVideoId = null;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn($"TestPost failed: {ex.GetType().Name}", "YouTubeChatPoster");
+            }
+            finally
+            {
+                System.Threading.Interlocked.Exchange(ref postGate, 0);
+                onDone?.Invoke(ok, status);
+            }
+        });
+
+        return true;
     }
 
     private static string BuildNextRotationMessage()
@@ -357,7 +560,8 @@ public static class YouTubeChatPoster
 
     private static async Task<string> EnsureAccessTokenAsync()
     {
-        if (accessToken != null && DateTime.UtcNow < accessTokenExpiryUtc) return accessToken;
+        TokenCache cache = _tokenCache;
+        if (cache != null && DateTime.UtcNow < cache.ExpiryUtc) return cache.Token;
 
         try
         {
@@ -385,10 +589,11 @@ public static class YouTubeChatPoster
 
             int expiresIn = node["expires_in"] != null ? node["expires_in"].GetValue<int>() : 3600;
 
-            accessToken = token;
-            // 期限前に余裕を持って再交換 (60秒バッファ)。
-            accessTokenExpiryUtc = DateTime.UtcNow.AddSeconds(Math.Max(60, expiresIn - 60));
-            return accessToken;
+            // 期限前に余裕を持って再交換 (60秒バッファ)。Token と期限を1個の不変インスタンスに
+            // まとめてから参照を差し替えることで、他スレッドから途中状態を読ませない。
+            DateTime expiryUtc = DateTime.UtcNow.AddSeconds(Math.Max(60, expiresIn - 60));
+            _tokenCache = new TokenCache(token, expiryUtc);
+            return token;
         }
         catch (Exception ex)
         {
