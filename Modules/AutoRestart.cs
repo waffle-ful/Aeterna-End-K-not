@@ -100,6 +100,16 @@ public static class AutoRestart
         Escalate("eos re-login stuck", authDeath: true);
     }
 
+    // AutoRehost の起動時ログイン見張りから呼ばれる。EOS ログインフローが最終段手前で停止し、やり直しでも
+    // 完了しなかった = このプロセスでは公式ロビーを作れない。exchange code は再起動で新しく貰えるので EGL 再起動は不要。
+    public static void OnBootLoginStall()
+    {
+        if (!(Options.AutoRehostAfterKick?.GetBool() ?? false)) return;
+
+        Logger.Warn("Auto-restart: boot EOS login flow stalled and the retry did not finish it — restarting to get a fresh login", "AutoRestart");
+        Escalate("boot login stalled", authDeath: false);
+    }
+
     // メニュー落ちゾンビ検知 (HealthLog 段2) から呼ばれる。GameState=Ended のまま
     // メインメニューに落ちた矛盾状態は DisconnectPopup も DC イベントも出さず、AutoRehost の WaitClean
     // (IsNotJoined 必須) も永久に通らないため、プロセス再起動が唯一の回復パス。トークン死が先に検出されて

@@ -109,10 +109,23 @@ $RestartFlag = Join-Path $HealthDir 'restart_request.flag'
 # プレーン再起動はトークン未リフレッシュで必ずブート死し 150s の起動猶予を空費するため(BUG-17)、
 # Start-Au はこの旗を見たら起動の前に Restart-EpicLauncher を先行実行して 1回目から復帰させる。
 $EglRefreshFlag = Join-Path $HealthDir 'egl_refresh_request.flag'
+# 修正済み DLL のホットスワップ (2026-09-06 配信中の無人ホットフィックス投入用)。
+# 修正セッションが hotswap\EndKnot.dll (+pdb) を置いて hotswap_request.flag を立てる。番犬は
+#   ・AU が居ない瞬間 (通常の立て直し) → Start-Au の直前に plugins へ差し替える
+#   ・AU 生存中 → 心拍の state が Lobby/Menu (試合中でない) の時だけ再起動要求を出して差し替える
+#   ・差し替え後の launch がブート死 → EndKnot.dll.prev から自動巻き戻し
+# 結果は hotswap_result.txt に 1 行 (APPLIED / BOOT-OK / ROLLED-BACK / EXPIRED) で残す。
+$HotswapDir     = Join-Path $HealthDir 'hotswap'
+$HotswapFlag    = Join-Path $HealthDir 'hotswap_request.flag'
+$HotswapResult  = Join-Path $HealthDir 'hotswap_result.txt'
+$HotswapMaxAgeSec = 1800   # これより古い要求は EXPIRED (置きっぱなしの DLL を翌日に誤投入しない)
+$AuInstallDirFallback = 'C:\Program Files\Epic Games\AmongUs'   # exe を捕捉できていない時の plugins 解決先
 $script:RelaunchTimes = New-Object System.Collections.Generic.List[datetime]
 $script:LastRelaunch  = [datetime]::MinValue
 $script:GraceUntil    = [datetime]::MinValue
 $script:CapturedExe   = $null
+$script:HotswapApplied = $false   # 直近の launch がホットスワップ後の初回起動か (ブート死なら巻き戻す)
+$script:HotswapWaitLog = [datetime]::MinValue
 $script:LastOkFileLog = [datetime]::MinValue
 $script:StartedAt     = Get-Date
 # ブート死ループ検知: 直近の(再)起動が心拍を出したかを launch 1回につき1回だけ判定するための状態。
@@ -403,12 +416,71 @@ function Resolve-LaunchTarget {
     return $null
 }
 
+function Get-PluginsDir {
+    $root = $null
+    if ($script:CapturedExe) { try { $root = Split-Path $script:CapturedExe -Parent } catch { } }
+    if (-not $root -and $AuExePathOverride) { try { $root = Split-Path $AuExePathOverride -Parent } catch { } }
+    if (-not $root) { $root = $AuInstallDirFallback }
+    return (Join-Path $root 'BepInEx\plugins')
+}
+
+function Write-HotswapResult {
+    param([string]$Verdict, [string]$Detail = '')
+    try { Set-Content -Path $HotswapResult -Value ("{0} {1} {2}" -f $Verdict, ([DateTime]::Now.ToString('o')), $Detail) -Encoding utf8 } catch { }
+}
+
+# 置かれている差し替え DLL を plugins へ入れる。AU が居ない瞬間 (Start-Au の直前) にだけ呼ぶ。
+function Invoke-HotswapApply {
+    $staged = Join-Path $HotswapDir 'EndKnot.dll'
+    if (-not (Test-Path $staged)) { return $false }
+    if (Get-AuProcess) { Write-WatchLog "ホットスワップ: AU が生存中のため差し替えを見送ります (DLL ロック)。" 'DarkGray'; return $false }
+    $plugins = Get-PluginsDir
+    $dst = Join-Path $plugins 'EndKnot.dll'
+    if (-not (Test-Path $dst)) { Write-WatchLog "ホットスワップ: 差し替え先が見つかりません: $dst" 'Red'; Write-HotswapResult 'FAILED' "no-target $dst"; return $false }
+    try {
+        Copy-Item -Path $dst -Destination "$dst.prev" -Force
+        Copy-Item -Path $staged -Destination $dst -Force
+        $stagedPdb = Join-Path $HotswapDir 'EndKnot.pdb'
+        if (Test-Path $stagedPdb) { Copy-Item -Path $stagedPdb -Destination (Join-Path $plugins 'EndKnot.pdb') -Force }
+        Remove-Item -Path $staged -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path $stagedPdb -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path $HotswapFlag -Force -ErrorAction SilentlyContinue
+        $script:HotswapApplied = $true
+        Write-WatchLog "ホットスワップ [hotswap-applied]: plugins\EndKnot.dll を差し替えました (旧版は EndKnot.dll.prev)。この launch がブート死したら自動で巻き戻します。" 'Cyan'
+        Write-HotswapResult 'APPLIED' "plugins=$plugins"
+        return $true
+    } catch {
+        Write-WatchLog "ホットスワップに失敗: $($_.Exception.Message)" 'Red'
+        Write-HotswapResult 'FAILED' $_.Exception.Message
+        return $false
+    }
+}
+
+# 差し替え後の初回 launch がブート死した時の巻き戻し。
+function Invoke-HotswapRollback {
+    param([string]$Why)
+    $script:HotswapApplied = $false
+    $dst = Join-Path (Get-PluginsDir) 'EndKnot.dll'
+    if (-not (Test-Path "$dst.prev")) { Write-WatchLog "ホットスワップ巻き戻し: EndKnot.dll.prev が無いため巻き戻せません。" 'Red'; Write-HotswapResult 'ROLLBACK-FAILED' 'no-prev'; return }
+    try {
+        Copy-Item -Path "$dst.prev" -Destination $dst -Force
+        Write-WatchLog "ホットスワップ巻き戻し [hotswap-rollback]: $Why — EndKnot.dll.prev を戻しました。" 'Red'
+        Write-HotswapResult 'ROLLED-BACK' $Why
+    } catch {
+        Write-WatchLog "ホットスワップ巻き戻しに失敗: $($_.Exception.Message)" 'Red'
+        Write-HotswapResult 'ROLLBACK-FAILED' $_.Exception.Message
+    }
+}
+
 function Start-Au {
     $target = Resolve-LaunchTarget
     if (-not $target) {
         Write-WatchLog "起動手段が見つかりません。設定の EpicLaunchUrl か AuExePathOverride を入れてください。" 'Red'
         return $false
     }
+
+    # 差し替え待ちの DLL があれば、プロセスが居ないこの瞬間に plugins へ入れる (通常の立て直しにも相乗りする)。
+    if (Test-Path (Join-Path $HotswapDir 'EndKnot.dll')) { Invoke-HotswapApply | Out-Null }
 
     # 認証死起因の再起動要求 (egl_refresh_request.flag)。プレーン再起動は EOS トークン未リフレッシュで
     # 必ずブート死し、番犬が 150s の起動猶予を空費してから egl-restart に至る (BUG-17)。ゲーム側が
@@ -657,12 +729,63 @@ while ($true) {
         }
     }
 
+    # --- ホットスワップ直後の launch の生死判定 (LaunchJudged と独立) ---
+    # 差し替え DLL が壊れている典型は「プラグインだけ読めずバニラが普通に起動 = 心拍が永遠に出ない」。
+    # 旧プロセスの心拍がまだ新鮮なうちは正常表示ブロックが LaunchJudged を立ててしまい、ブート死分岐には
+    # 届かないので、ここで「launch から 120s 経っても新プロセスの心拍が 1 行も無い」を独自に見る。
+    if ($script:HotswapApplied -and $script:LastRelaunch -ne [datetime]::MinValue) {
+        $sinceHs = ($now - $script:LastRelaunch).TotalSeconds
+        $hsHbSeen = $health.Exists -and ($health.LastWrite -gt $script:LastRelaunch)
+        if ($sinceHs -ge 120 -and -not $hsHbSeen) {
+            Invoke-HotswapRollback -Why ("no heartbeat {0:N0}s after hotswap launch" -f $sinceHs)
+            try { Set-Content -Path $RestartFlag -Value ([DateTime]::Now.ToString('o')) -Encoding utf8 } catch { }
+            if ($proc) { Stop-Au }
+            continue
+        }
+    }
+
+    # --- 修正セッションからのホットスワップ要求 ---
+    # AU が居なければ通常の立て直し (Start-Au) が差し替えを相乗りで済ませる。生存中は試合を潰さないよう
+    # 心拍の state が Lobby/Menu の時だけ再起動要求 (restart_request.flag) を出して落とし、次の巡回で差し替える。
+    if ((Test-Path $HotswapFlag) -and (Test-Path (Join-Path $HotswapDir 'EndKnot.dll'))) {
+        try { $hsAge = ($now - (Get-Item $HotswapFlag).LastWriteTime).TotalSeconds } catch { $hsAge = 99999 }
+        if ($hsAge -gt $HotswapMaxAgeSec) {
+            try { Remove-Item $HotswapFlag -Force -ErrorAction SilentlyContinue; Remove-Item (Join-Path $HotswapDir '*') -Force -ErrorAction SilentlyContinue } catch { }
+            Write-WatchLog ("ホットスワップ要求が古い({0:N0}s)ため破棄しました (差し替え DLL も削除)。" -f $hsAge) 'DarkGray'
+            Write-HotswapResult 'EXPIRED' ("age={0:N0}s" -f $hsAge)
+        } elseif ($proc -and $health.Fresh) {
+            # 最終行は ALLOC 等の state 無し行のことが多いので、末尾から最後の HB 行を探して state を読む。
+            $hsState = ''
+            try {
+                $hbLines = @(Get-Content -Path $HealthLog -Tail 80 -Encoding utf8 -ErrorAction SilentlyContinue | Where-Object { $_ -match '^HB ' })
+                if ($hbLines.Count -gt 0 -and $hbLines[$hbLines.Count - 1] -match 'state=([A-Za-z]+)') { $hsState = $Matches[1] }
+            } catch { }
+            # Ended = 試合後ロビー (GameState が Ended のまま座る) も試合中ではないので許可する (09-06 実測)。
+            if (($hsState -eq 'Lobby' -or $hsState -eq 'Menu' -or $hsState -eq 'Ended') -and (Test-RelaunchAllowed)) {
+                Write-WatchLog "ホットスワップ [hotswap-restart]: state=$hsState のため AU を落として差し替えます (自動ホストで復帰)。" 'Cyan'
+                Write-HotswapResult 'RESTARTING' "state=$hsState"
+                try { Set-Content -Path $RestartFlag -Value ([DateTime]::Now.ToString('o')) -Encoding utf8 } catch { }
+                Stop-Au
+                continue
+            }
+            if (($now - $script:HotswapWaitLog).TotalSeconds -ge 120) {
+                $script:HotswapWaitLog = $now
+                Write-WatchLog "ホットスワップ待機中: state=$hsState (Lobby/Menu/Ended になるまで差し替えを保留)。" 'DarkGray'
+            }
+        }
+    }
+
     # --- 正常表示 (コンソールには毎回、ファイルへは5分毎だけ書いてログを異常中心に保つ) ---
     if ($proc -and $health.Fresh) {
         # 心拍が出ている = ブートは成功している。ブート死ループの疑いを解除する。
         if ($script:BootDeaths -gt 0) { Write-WatchLog "心拍を確認。ブート死ループの疑いを解除します (連続カウントをリセット)。" 'Green' }
         $script:BootDeaths   = 0
         $script:LaunchJudged = $true
+        if ($script:HotswapApplied -and $health.LastWrite -gt $script:LastRelaunch) {
+            $script:HotswapApplied = $false
+            Write-WatchLog "ホットスワップ [hotswap-boot-ok]: 差し替え後の AU が心拍を出しました。" 'Green'
+            Write-HotswapResult 'BOOT-OK' ''
+        }
 
         # --- ハングダンプの先行採取 ---
         # Fresh (age < 90s) のまま WER の AppHang クローズ (~84s) に殺されるとダンプが永遠に取れないため、
@@ -797,6 +920,8 @@ while ($true) {
         } else {
             $script:BootDeaths++
             Write-WatchLog ("ブート死を検出 [bootdeath]: 起動後に心拍が一度も出ないままプロセスが消えました (連続 {0} 回目 / しきい値 {1})。" -f $script:BootDeaths, $BootDeathHoldThreshold) 'Red'
+            # 差し替え直後のブート死は DLL 起因が第一容疑 → 旧版へ戻してから立て直す (EGL 再認証より先)。
+            if ($script:HotswapApplied) { Invoke-HotswapRollback -Why 'boot death right after hotswap' }
             # ブート死の典型 (FATAL ERROR: Unable to get Epic Account ID / EGL 接続エラー) は
             # EGL の再起動で直る一過性のことが実測で多い。3連ホールドまで待たず、1回目から
             # 次の立て直しの前に EGL をリフレッシュして即復帰を狙う (2026-07-07 実機知見)。

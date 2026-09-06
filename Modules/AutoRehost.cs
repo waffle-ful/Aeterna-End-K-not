@@ -10,7 +10,8 @@ namespace EndKnot.Modules;
 // 公式 kick (Hacking) / 通信エラー / タイムアウトでホストがオンライン部屋から切断されたら、
 // 一定秒数 (既定 10 秒) 待ってから「同じリージョン・同じ設定」で新しいオンライン部屋を自動で立て直す。
 // 立て直し後は EHR 既存の自律ループ (AutoPlayAgain / AutoStart) と LobbyShare の自動再投稿が引き継ぐ。
-// 対象は公式・Modded 両方 (公式除外ガードは入れない。ループ保護は AutoRehostMaxAttempts のみ)。認証(EOS)には触れない。
+// 対象は公式・Modded 両方 (公式除外ガードは入れない。ループ保護は AutoRehostMaxAttempts のみ)。
+// 認証(EOS)に触るのは起動時ログイン見張り (BootLoginTick) の 1 回きりのやり直しだけで、AutoRehostAfterKick が ON のときに限る。
 //
 // 【設計 — 2026-06-03 v3 / 大規模調査後の作り直し】
 // 明示 4 フェーズのステートマシン: WaitClean → OpenDialog → WaitDialog → WaitJoin。
@@ -62,8 +63,107 @@ public static class AutoRehost
     private const float DialogTimeout = 8f;     // ダイアログが開かなければ OpenCreateGame を再試行する猶予
     private const float StabilizeSeconds = 60f; // 新部屋がこの秒数もてば成功確定 → attempts リセット
     private const float SuccessPopupSeconds = 6f;
-    private const float LoginWaitSeconds = 20f;  // 起動時ホストが EOS ログイン完了を待つ上限 (通常 ~6s で完了)
+    private const float LoginWaitSeconds = 20f;  // 起動時ホストが EOS ログイン完了を待つ目安 (通常 ~6s で完了。超過は警告のみで、ホストはしない)
+
+    // 起動時 EOS ログインフローの停止見張り。健全起動はプロセス開始から ~15s で loginFlowFinished になる。
+    // 停止したまま (tryingToLogin=true / loginFlowFinished=false) ホストすると公式鯖に即 Hacking で蹴られるので、
+    // 一定時間で LoginWithCorrectPlatform() を 1 回やり直し、それでも完了しなければプロセス再起動へ倒す。
+    private const float BootLoginRetrySeconds = 40f;
+    private const float BootLoginEscalateSeconds = 60f;
+    private const float BootLoginPollSeconds = 5f;
+    private const float BootLoginWatchMaxSeconds = 600f;
     // ===================
+
+    private static bool _loginWaitWarned;
+    private static int _bootWatchSeq;
+    private static float _bootWatchStartedAt;
+    private static float _bootTryingSince;
+    private static bool _bootRetryFired;
+    private static float _bootRetryAt;
+
+    // メインメニュー到達ごとに武装する (完了済みなら初回 tick で静かに終わる)。TestBridge の eosstall からも再武装される。
+    public static void StartBootLoginWatch()
+    {
+        _bootWatchSeq++;
+        _bootWatchStartedAt = Time.realtimeSinceStartup;
+        _bootTryingSince = 0f;
+        _bootRetryFired = false;
+        _bootRetryAt = 0f;
+        int seq = _bootWatchSeq;
+        LateTask.New(() => BootLoginTick(seq), BootLoginPollSeconds, "AutoRehost.BootLoginWatch", log: false);
+    }
+
+    private static void BootLoginTick(int seq)
+    {
+        if (seq != _bootWatchSeq) return;
+
+        EOSManager eos = EOSManager.Instance;
+        float now = Time.realtimeSinceStartup;
+
+        if (eos == null)
+        {
+            // まだ生成前 (見張りの方が早かった) — 完了扱いにせず次の tick で見直す
+            if (now - _bootWatchStartedAt <= BootLoginWatchMaxSeconds)
+                LateTask.New(() => BootLoginTick(seq), BootLoginPollSeconds, "AutoRehost.BootLoginWatch", log: false);
+            return;
+        }
+
+        bool finished, trying;
+        try
+        {
+            finished = eos.loginFlowFinished;
+            trying = eos.tryingToLogin;
+        }
+        catch { return; }
+
+        if (finished)
+        {
+            if (_bootRetryFired)
+            {
+                Logger.Info($"Boot login watch: login flow finished {now - _bootRetryAt:F0}s after retry", "AutoRehost");
+                HealthLog.NoteAnom("ANOM live kind=eos stage=bootstallrecovered");
+            }
+            return;
+        }
+
+        if (now - _bootWatchStartedAt > BootLoginWatchMaxSeconds) return;
+
+        if (!trying) _bootTryingSince = 0f;
+        else if (_bootTryingSince == 0f) _bootTryingSince = now;
+
+        // やり直し/再起動は AutoRehostAfterKick が ON の運用 (無人ホスト) だけ。OFF なら計測のみで EOS 状態には触らない。
+        bool mayAct = Options.AutoRehostAfterKick?.GetBool() ?? false;
+
+        if (!_bootRetryFired)
+        {
+            if (mayAct && _bootTryingSince != 0f && now - _bootTryingSince >= BootLoginRetrySeconds)
+            {
+                _bootRetryFired = true;
+                _bootRetryAt = now;
+                Logger.Warn($"Boot login watch: EOS login flow still unfinished after {now - _bootTryingSince:F0}s of tryingToLogin — retrying LoginWithCorrectPlatform once", "AutoRehost");
+                HealthLog.NoteAnom("ANOM live kind=eos stage=bootstall action=retry");
+                try
+                {
+                    eos.tryingToLogin = false;
+                    eos.LoginWithCorrectPlatform();
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error($"Boot login watch: LoginWithCorrectPlatform threw: {ex.Message}", "AutoRehost");
+                    HealthLog.NoteAnom($"ANOM live kind=eos stage=bootstallretryfail msg=\"{ex.Message}\"");
+                }
+            }
+        }
+        else if (now - _bootRetryAt >= BootLoginEscalateSeconds)
+        {
+            Logger.Warn($"Boot login watch: login flow still unfinished {now - _bootRetryAt:F0}s after retry — escalating to process restart", "AutoRehost");
+            HealthLog.NoteAnom("ANOM live kind=eos stage=bootstallescalate");
+            AutoRestart.OnBootLoginStall();
+            return;
+        }
+
+        LateTask.New(() => BootLoginTick(seq), BootLoginPollSeconds, "AutoRehost.BootLoginWatch", log: false);
+    }
 
     private static int MaxAttempts => Mathf.Max(1, Options.AutoRehostMaxAttempts?.GetInt() ?? 3);
 
@@ -112,6 +212,8 @@ public static class AutoRehost
     // ディスクから自動復元される) で新しいオンライン部屋を立てる。マーカーは一度読んだら消す (再発火防止)。
     public static void OnMainMenuStart()
     {
+        StartBootLoginWatch();
+
         try
         {
             string marker = StartupHostMarkerPath();
@@ -228,6 +330,7 @@ public static class AutoRehost
         _cleanSince = 0f;
         _openedAt = 0f;
         _nextWaitLogAt = 0f;
+        _loginWaitWarned = false;
         _deadline = Time.realtimeSinceStartup + WatchdogSeconds;
 
         Logger.Info($"Auto-rehost attempt {_attempts}/{MaxAttempts}: {(changeScene ? "leaving to MainMenu" : "hosting from current MainMenu")}", "AutoRehost");
@@ -277,18 +380,20 @@ public static class AutoRehost
 
                 // 起動時ホスト (_oldGameId == -1) はコールドブート中の EOS ログインと並走する。以前は設定構築の
                 // 8 秒が偶然ログイン完了 (~5.7s) を覆っていたが、構築が速くなった今はログイン前に Confirm() が
-                // 届きうるので loginFlowFinished を待つ。上限 LoginWaitSeconds を超えたら記録して従来どおり進む
-                // (オフライン/認証異常で永久に詰まらせない — その先は AutoRestart の領分)。
+                // 届きうるので loginFlowFinished を待つ。未完了のままホストすると公式鯖に即 Hacking で蹴られる
+                // (2026-09-03 / 09-06 実機) ので、上限超過でも進まない — 見張り (BootLoginTick) のやり直しを待ち、
+                // それでも駄目なら試行タイムアウト → GiveUp → AutoRestart の再起動へ倒す。
                 var loggedIn = true;
                 if (_oldGameId == -1)
                 {
                     try { loggedIn = EOSManager.Instance == null || EOSManager.Instance.loginFlowFinished; }
                     catch { loggedIn = true; }
 
-                    if (!loggedIn && now > _deadline - WatchdogSeconds + LoginWaitSeconds)
+                    if (!loggedIn && !_loginWaitWarned && now > _deadline - WatchdogSeconds + LoginWaitSeconds)
                     {
-                        Logger.Warn($"Auto-rehost: platform login not finished within {LoginWaitSeconds:N0}s; proceeding anyway", "AutoRehost");
-                        loggedIn = true;
+                        _loginWaitWarned = true;
+                        Logger.Warn($"Auto-rehost: platform login not finished within {LoginWaitSeconds:N0}s; holding (no host until loginFlowFinished)", "AutoRehost");
+                        HealthLog.NoteAnom("ANOM live kind=rehost stage=loginhold");
                     }
                 }
 

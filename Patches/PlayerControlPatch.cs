@@ -2191,6 +2191,8 @@ internal static class FixedUpdatePatch
 
         alloc = Modules.AllocProbe.Mark("pc.abil", alloc);
 
+        var nameStart = alloc; // pc.name は下のサブ区間 4 本の合計 (サブ計測を足しても総量の意味を変えない)
+
         if (GameStates.IsEnded || !Main.IntroDestroyed || GameStates.IsMeeting || ExileController.Instance || AntiBlackout.SkipTasks) return;
 
         bool shouldUpdateRegardlessOfLowLoad = self && GameStates.InGame && PlayerControl.LocalPlayer.IsAlive() && ((PlayerControl.AllPlayerControls.Count > 30 && LastSelfNameUpdateTS != now && Options.CurrentGameMode is CustomGameMode.StopAndGo or CustomGameMode.HotPotato or CustomGameMode.Speedrun or CustomGameMode.RoomRush or CustomGameMode.KingOfTheZones or CustomGameMode.Quiz or CustomGameMode.Mingle) || DirtyName.Remove(lpId));
@@ -2257,6 +2259,8 @@ internal static class FixedUpdatePatch
                 else roleText += progressText;
             }
 
+            alloc = Modules.AllocProbe.Mark("pc.name.role", alloc);
+
             PlayerControl seer = PlayerControl.LocalPlayer;
             PlayerControl target = player;
 
@@ -2314,7 +2318,11 @@ internal static class FixedUpdatePatch
             // Name Color Manager
             realName = realName.ApplyNameColorData(seer, target, false);
 
+            alloc = Modules.AllocProbe.Mark("pc.name.real", alloc);
+
             Suffix.Append(BuildSuffix(seer, target, meeting: GameStates.IsMeeting));
+
+            alloc = Modules.AllocProbe.Mark("pc.name.bsuf", alloc);
 
             List<string> additionalSuffixes = [];
 
@@ -2531,6 +2539,8 @@ internal static class FixedUpdatePatch
             else
                 roleText = string.Empty;
             
+            alloc = Modules.AllocProbe.Mark("pc.name.mark", alloc);
+
             string suffix = Suffix.ToString().Trim();
             string newLineBeforeSuffix = !(Options.CurrentGameMode == CustomGameMode.BedWars && !self && GameStates.InGame) ? "\n" : " - ";
             string deathReason = !seer.IsAlive() && seer.KnowDeathReason(target) ? $"{newLineBeforeSuffix}<size=1.5>『{ColorString(GetRoleColor(CustomRoles.Doctor), GetVitalText(target.PlayerId))}』</size>" : string.Empty;
@@ -2539,9 +2549,11 @@ internal static class FixedUpdatePatch
 
             // Camouflage
             if (Camouflage.IsCamouflage) target.cosmetics.nameText.text = $"<size=0>{target.cosmetics.nameText.text}</size>";
+
+            Modules.AllocProbe.Mark("pc.name.fin", alloc);
         }
 
-        Modules.AllocProbe.Mark("pc.name", alloc);
+        Modules.AllocProbe.Mark("pc.name", nameStart);
     }
 
     public static void AddExtraAbilityUsesOnFinishedTasks(PlayerControl player)
