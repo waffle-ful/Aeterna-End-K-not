@@ -298,6 +298,22 @@ public static class TestBridge
             return;
         }
 
+        // Layer B2: ロビー/ゲームから抜けてメインメニューへ戻る (hostlobby / eosstall の前段)。
+        if (directive.Equals("leavelobby", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecuteLeaveLobby(); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR leavelobby failed"); }
+            return;
+        }
+
+        // Layer B2: 起動時 EOS ログインフロー停止の模擬 (AutoRehost の見張りとホスト抑止の実機検証口)。
+        if (directive.Equals("eosstall", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecuteEosStall(); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR eosstall failed"); }
+            return;
+        }
+
         // Layer A2: AutoStart (ConfigEntry — setopt の OptionItem ツリー外) のフリップ。
         if (directive.StartsWith("autostart ", StringComparison.OrdinalIgnoreCase))
         {
@@ -431,7 +447,7 @@ public static class TestBridge
 
         if (directive.Equals("help", StringComparison.OrdinalIgnoreCase))
         {
-            WriteOut("HELP directives: state | screenshot | click <h|label:x> | press <h|x y> | type <text> | key <enter|escape|tab|backspace> | getopt <pattern> | setopt <name|#id> <idx|on|off|~real> | forcerole <id|name|host|clear> [EnumName] | start | hostlobby | autostart <on|off> | tp <x> <y> | tp <playerId> | walk <x> <y> | walk <playerId> | walk stop | vote <playerId|skip> | overrule <targetId> [judgeId] | chat <text> | use <kill|vent|pet|ability|report|sabotage> | vent enter <id> | vent exit | errors [n] | grep <pattern> [n] | bcensus | gc <clr|clr2|boehm|both> | sleep <sec> | wait <phase=X|players=N|marker:text|join|arrived> [timeoutSec] | wait cancel | /<chatcommand>");
+            WriteOut("HELP directives: state | screenshot | click <h|label:x> | press <h|x y> | type <text> | key <enter|escape|tab|backspace> | getopt <pattern> | setopt <name|#id> <idx|on|off|~real> | forcerole <id|name|host|clear> [EnumName] | start | hostlobby | leavelobby | eosstall | autostart <on|off> | tp <x> <y> | tp <playerId> | walk <x> <y> | walk <playerId> | walk stop | vote <playerId|skip> | overrule <targetId> [judgeId] | chat <text> | use <kill|vent|pet|ability|report|sabotage> | vent enter <id> | vent exit | errors [n] | grep <pattern> [n] | bcensus | gc <clr|clr2|boehm|both> | sleep <sec> | wait <phase=X|players=N|marker:text|join|arrived> [timeoutSec] | wait cancel | /<chatcommand>");
             return;
         }
 
@@ -1663,6 +1679,25 @@ public static class TestBridge
 
         AutoRehost.RequestStartupHost();
         WriteOut("OK hostlobby requested (region/map/settings restored from disk — follow with: wait phase=Lobby 90)");
+    }
+
+    private static void ExecuteLeaveLobby()
+    {
+        if (GameStates.IsNotJoined) { WriteOut("ERR leavelobby not in a lobby/game"); return; }
+
+        AmongUsClient.Instance.ExitGame(DisconnectReasons.ExitGame);
+        WriteOut("OK leavelobby requested (follow with: wait phase=Menu 30)");
+    }
+
+    private static void ExecuteEosStall()
+    {
+        EOSManager eos = EOSManager.Instance;
+        if (eos == null) { WriteOut("ERR eosstall EOSManager missing"); return; }
+
+        eos.loginFlowFinished = false;
+        eos.tryingToLogin = true;
+        AutoRehost.StartBootLoginWatch();
+        WriteOut("OK eosstall simulated (loginFlowFinished=false tryingToLogin=true; boot login watch re-armed — retry fires after ~40s, hostlobby holds until the flow finishes)");
     }
 
     private static void ExecuteAutoStart(string rest)

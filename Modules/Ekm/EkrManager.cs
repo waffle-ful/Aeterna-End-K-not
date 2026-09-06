@@ -2263,6 +2263,11 @@ public static class EkrManager
     // 立ち上がり検出・on_second の 1Hz 間引き・fiber の手動ポンプ (常駐コルーチン禁止) をここでまとめて行う。
     public static void Pump(CustomRoles slot, PlayerControl pc)
     {
+        // 帰属計器: この 5 区間 (ekr.poll / ekr.arw / ekr.pass / ekr.fiber / ekr.edge) は親 pc.core.role.fx の
+        // 内側を隙間なく分割する (キー名に "." があるものは親へ合算されない)。ekr.pass の内訳だけが
+        // TickPassives 側の ekr.pass.* で、ekr.arw は ekr.pass の外側の兄弟区間。
+        AllocProbe.Cursor ekrAlloc = AllocProbe.Now();
+
         // v1.2: EKR 全体で1本のポーリングエンジン (自己スロットリング — 0.25秒に満たない呼び出しは
         // 内部で即 return する)。ホルダーごとに毎 FixedUpdate 呼ばれる Pump に相乗りさせる (専用の
         // 毎フレーム経路を新しく作らない・spec §5「専用の毎フレーム経路を作らない」)。
@@ -2281,10 +2286,14 @@ public static class EkrManager
         // Wave 6: 発射体 (cno_launch) の 0.1 秒 tick も同じ相乗り駆動。
         PumpFlightsIfDue();
 
+        ekrAlloc = AllocProbe.Mark("ekr.poll", ekrAlloc);
+
         if (!Runtime.TryGetValue(pc.PlayerId, out EkrHolderState state)) return;
 
         // Wave 2 (spec §2.3): seconds 経過の矢印は毎フレームここで自動 Remove する (専用ポーリング無し)。
         ExpireArrowsIfDue(state, pc.PlayerId);
+
+        ekrAlloc = AllocProbe.Mark("ekr.arw", ekrAlloc);
 
         EkrDefinition def = GetDefinition(slot);
 
@@ -2292,6 +2301,8 @@ public static class EkrManager
         // (spec §1.1 は「logic 無しでも passives 単独で可」・logic の暴走 auto-disable は
         // 「ブロックを止める」処置であって常時とくせいを剥奪する処置ではない)。
         TickPassives(pc, state, def?.ParsedPassives ?? EkrPassives.Default);
+
+        ekrAlloc = AllocProbe.Mark("ekr.pass", ekrAlloc);
 
         if (state.LogicDisabled) return;
         if (def?.ParsedLogic == null) return;
@@ -2353,6 +2364,8 @@ public static class EkrManager
             }
         }
 
+        ekrAlloc = AllocProbe.Mark("ekr.fiber", ekrAlloc);
+
         // Wave 3 (契約 §1.1 評価点①): fiber pump の切れ目。ここまでに溜まった変数書込みと生存数から
         // じょうたいトリガのエッジを判定する。
         FlushStateEdges(state, pc.PlayerId);
@@ -2360,6 +2373,8 @@ public static class EkrManager
         // Wave 3 (契約 §3): 進捗テキストが変わっていたら名札の再送を予約する (notify/inspect/reveal と
         // 同じ per-holder ≤1/秒バケットを共有・新バケットを作らない)。
         TickProgressText(state, pc);
+
+        AllocProbe.Mark("ekr.edge", ekrAlloc);
     }
 
     // ── Wave 3: じょうたいトリガのエッジ発火エンジン ────────────
@@ -2567,7 +2582,11 @@ public static class EkrManager
 
     private static void TickPassives(PlayerControl pc, EkrHolderState state, EkrPassives passives)
     {
+        AllocProbe.Cursor passAlloc = AllocProbe.Now();
+
         bool alive = pc.IsAlive();
+
+        passAlloc = AllocProbe.Mark("ekr.pass.alive", passAlloc);
 
         // 最後に生きていた座標のスナップショット (corpse=vanish が死体をマップ外へ飛ばすため —
         // EkrLogicOpcodes.ResolveSelfPosition の死後フォールバック用)。
@@ -2591,6 +2610,8 @@ public static class EkrManager
                 state.MoveHistLast = livePos;
             }
         }
+
+        passAlloc = AllocProbe.Mark("ekr.pass.pos", passAlloc);
 
         if (!Main.IntroDestroyed) return;
 
@@ -2617,6 +2638,8 @@ public static class EkrManager
             Main.AllPlayerSpeed[pc.PlayerId] = state.PassiveSpeedBaseline * state.EffectiveSpeedMult;
             pc.MarkDirtySettings();
         }
+
+        passAlloc = AllocProbe.Mark("ekr.pass.spd", passAlloc);
 
         // doom: タスク中のみ進行・会議 (追放演出含む) で一時停止・0 到達で自殺死亡 (spec §1.1)。
         if (!passives.HasDoom || !alive) return;
