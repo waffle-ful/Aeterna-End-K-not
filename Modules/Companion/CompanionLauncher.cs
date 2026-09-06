@@ -53,6 +53,10 @@ public static class CompanionLauncher
     private static bool _lastWant;
     private static bool _reconcileInit;
 
+    // セットアップ画面 (別スレッド) からの再起動要求。Stop/Start は _proc の check-then-set を伴い
+    // メインスレッド専用なので、要求はフラグだけ立てて実処理はこのメソッド (main thread, 1Hz) に集約する。
+    private static volatile bool _restartPending;
+
     public static void ReconcileWithOption()
     {
         if (!IsSupported) return;
@@ -60,6 +64,12 @@ public static class CompanionLauncher
         bool want;
         try { want = Main.EnableAICommentary?.Value ?? false; }
         catch { return; }
+
+        if (_restartPending)
+        {
+            _restartPending = false;
+            if (want) { Stop(); Start(edge: true); }
+        }
 
         if (!_reconcileInit)
         {
@@ -169,20 +179,42 @@ public static class CompanionLauncher
     // 「キーを設定した後に Steam ごと再起動しないと反映されない」問題を回避できる。
     private static string FindApiKey()
     {
+        TryGetApiKey(out string key, out _);
+        return key;
+    }
+
+    // FindApiKey と同じ優先順位 (Process → User → Machine) で探し、どのスコープから見つかったかも返す。
+    // セットアップ画面が「別の場所のキーが優先されています」を判定するために公開する。
+    public static bool TryGetApiKey(out string key, out string scope)
+    {
+        key = null;
+        scope = null;
+
         try
         {
-            string key = Environment.GetEnvironmentVariable("GEMINI_API_KEY");
-            if (!string.IsNullOrWhiteSpace(key)) return key;
+            string k = Environment.GetEnvironmentVariable("GEMINI_API_KEY");
+            if (!string.IsNullOrWhiteSpace(k)) { key = k; scope = "process"; return true; }
 
-            key = Environment.GetEnvironmentVariable("GEMINI_API_KEY", EnvironmentVariableTarget.User);
-            if (!string.IsNullOrWhiteSpace(key)) return key;
+            k = Environment.GetEnvironmentVariable("GEMINI_API_KEY", EnvironmentVariableTarget.User);
+            if (!string.IsNullOrWhiteSpace(k)) { key = k; scope = "user"; return true; }
 
-            key = Environment.GetEnvironmentVariable("GEMINI_API_KEY", EnvironmentVariableTarget.Machine);
-            if (!string.IsNullOrWhiteSpace(key)) return key;
+            k = Environment.GetEnvironmentVariable("GEMINI_API_KEY", EnvironmentVariableTarget.Machine);
+            if (!string.IsNullOrWhiteSpace(k)) { key = k; scope = "machine"; return true; }
         }
-        catch (Exception e) { Logger.Warn($"FindApiKey failed: {e.Message}", "CompanionLauncher"); }
+        catch (Exception e) { Logger.Warn($"TryGetApiKey failed: {e.Message}", "CompanionLauncher"); }
 
-        return null;
+        return false;
+    }
+
+    // セットアップ画面 (バックグラウンドスレッド) がキーを保存した直後に呼ぶ。子プロセスは起動時
+    // にしか親の環境ブロックを継承しないため、生きている相棒を一度止めてから edge 起動し直さないと
+    // 新しいキーが反映されない。Stop/Start は _proc の check-then-set を伴うためメインスレッド専用
+    // ―― ここではフラグを立てるだけにして、実際の Stop/Start は ReconcileWithOption (main thread) に
+    // 任せる。AI実況オプションが OFF のときは何も起動しない (保存だけしてONは別ボタンに委ねる)。
+    public static void RestartNow()
+    {
+        if (!IsSupported) return;
+        _restartPending = true;
     }
 
     // 埋め込みの companion.py / requirements.txt と起動用 cmd をディスクへ書き出す。
