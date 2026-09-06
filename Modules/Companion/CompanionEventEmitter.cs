@@ -162,6 +162,45 @@ public static class CompanionEventEmitter
         Emit("leave", w => w.WriteString("name", name));
     }
 
+    // プレイヤーのゲーム内チャット (全員に見える発言のみ)。コマンド ("/" 始まり) と空文は載せない。
+    // YouTube 側の "chat" とは別種別にして、相棒アプリが「視聴者」と「プレイヤー」を区別できるようにする。
+    public static void OnPlayerChat(PlayerControl player, string text)
+    {
+        if (!Enabled || player == null || string.IsNullOrWhiteSpace(text)) return;
+
+        string trimmed = text.Trim();
+        if (trimmed.StartsWith('/')) return;
+
+        // 死亡者のチャットは生存者に見えない (幽霊同士の会話) ので載せない。
+        // ロビー/終了後は IsAlive() が観戦ホスト等で false になるため判定しない。
+        if (!GameStates.IsLobby && !GameStates.IsEnded && !player.IsAlive()) return;
+
+        string name = player.GetRealName(true).RemoveHtmlTags();
+        string phase = GameStates.IsMeeting ? "meeting" : GameStates.InGame ? "ingame" : "lobby";
+
+        Emit("playerChat", w =>
+        {
+            w.WriteString("name", name);
+            w.WriteString("text", trimmed.RemoveHtmlTags());
+            w.WriteString("phase", phase);
+        });
+    }
+
+    // 会議招集 (通報 or 緊急ボタン)。会議画面で全員に表示される情報のみ (通報者名・被通報者名)。
+    public static void OnMeetingCalled(PlayerControl reporter, NetworkedPlayerInfo target)
+    {
+        if (!Enabled || reporter == null) return;
+
+        string reporterName = reporter.GetRealName(true).RemoveHtmlTags();
+        string victimName = target != null ? (target.Object ? target.Object.GetRealName(true).RemoveHtmlTags() : target.PlayerName) : null;
+
+        Emit("meetingCall", w =>
+        {
+            w.WriteString("reporter", reporterName);
+            if (victimName != null) w.WriteString("victim", victimName);
+        });
+    }
+
     public static void OnIntervention(string kind, string kindName, string author)
     {
         if (!Enabled) return;
