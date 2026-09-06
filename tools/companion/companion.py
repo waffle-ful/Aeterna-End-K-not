@@ -24,6 +24,7 @@ import queue
 import random
 import re
 import sys
+import contextlib
 import threading
 import time
 from collections import deque
@@ -81,6 +82,23 @@ TURN_STALL_TIMEOUT_SEC = 45.0  # 応答ターンが開いたまま無音・無�
 SUMMARY_MAX_LINES = 12  # 再接続時に引き継ぐ「あらすじ」の行数
 RECENT_SAY_KEEP = 5     # 反復禁止用に覚えておく直近発話の数
 RECAP_STALE_SEC = 6 * 3600  # recap.txt がこれより古ければ前回配信の残骸とみなして捨てる
+
+# ---- 2人組の常時対話 (--duo) ----
+DUO_FILLER_INTERVAL_SEC = 12.0          # 2人組は沈黙をこれだけで埋める (1人モードの 27s は「独り言」の間合い)
+DUO_DORMANT_FILLER_INTERVAL_SEC = 90.0  # 実イベントが途絶えた休眠中も、相方との雑談だけは低頻度で続ける
+DUO_VOLLEY_MAX_TURNS = 4                # 1つの話題で続ける掛け合いの最大ターン数 (発話数)
+DEFAULT_UTTERANCES_PER_MIN = 12         # 任意発話 (掛け合いの続き・場繋ぎ) の上限。実イベントの実況は数えるだけで止めない
+
+# ---- 会議中のプレイヤー発言 (playerChat) ----
+MEETING_CHAT_BATCH_SEC = 10.0      # 会議中の発言はこの秒数ぶん束ねて1ブロックで渡す (1行ずつ被せない)
+MEETING_CHAT_BATCH_MAX = 8         # 束ねる最大行数
+MEETING_REACT_MIN_GAP_SEC = 20.0   # 会議中の議論への反応はこの間隔以上あける (議論の邪魔をしない)
+
+# ---- Live セッションの寿命 ----
+# サーバーは寿命が近づくと GoAway を送る。受け取ったら発話の切れ目で自分から閉じ、
+# 直前の session_resumption ハンドルで即座に張り直す (文脈は引き継がれるので「実況再開」の挨拶は不要)。
+# 放置すると "failed to close the connection after receiving a GoAway" の 1008 で強制切断される。
+RESUME_HANDLE_STALE_SEC = 10 * 60  # ディスクに残したハンドルがこれより古ければ使わない (プロセス再起動またぎ用)
 
 PERSONA_FILE = Path(__file__).with_name("persona.txt")
 
@@ -142,7 +160,45 @@ def duo_rules(my_name: str, partner_name: str) -> str:
             f"- 【相方】タグで相方の直前の発言が届く。掛け合いの相手として短く返すこと。\n"
             f"- 相方の発言の単なる復唱はしない。相槌+自分の視点をひとこと足すのが基本。\n"
             f"- 相方に話しかけるときは「{partner_name}」と名前で呼ぶ。\n"
-            f"- 自分の名前をいちいち名乗らない。\n")
+            f"- 自分の名前をいちいち名乗らない。\n"
+            f"- 掛け合いは数ターン続くことがある。相槌だけで終わらせず、相方の言葉を受けて話題を少し転がす\n"
+            f"  (質問を返す・別の角度を出す・視聴者に振る) と会話が続く。\n"
+            f"- 【プレイヤーの発言】はゲーム内のプレイヤー本人の言葉、【視聴者チャット】は配信を見ている人の言葉。\n"
+            f"  混同しない。プレイヤーには名前を呼んで返し、視聴者には配信者として返す。\n"
+            f"- 【会議の議論】はプレイヤー同士の推理合戦。実況者として盛り上げるだけで、自分は推理の結論を言わない。\n"
+            f"- 【あなた宛て】が付いた発言は自分の名前を呼ばれている。本人として、相手の名前を呼んで直接答える。\n")
+
+
+# ---- 発話予算・セッション張り直し ----
+
+class SpeechBudget:
+    """任意発話 (掛け合いの続き・場繋ぎ) の毎分上限。直近60秒の発話数を数える素朴なスライディング窓。
+
+    実イベントの実況は止めない (数えるだけ)。止めるのは「続けなくても困らない」発話だけなので、
+    盛り上がりどころでは会話が伸び、静かな時間帯では自然に間引かれる。
+    """
+
+    def __init__(self, per_min: int) -> None:
+        self.per_min = max(1, int(per_min))
+        self.times: deque[float] = deque()
+
+    def _trim(self, now: float) -> None:
+        while self.times and now - self.times[0] > 60.0:
+            self.times.popleft()
+
+    def record(self) -> None:
+        now = time.monotonic()
+        self._trim(now)
+        self.times.append(now)
+
+    def allow_optional(self) -> bool:
+        now = time.monotonic()
+        self._trim(now)
+        return len(self.times) < self.per_min
+
+
+class SessionRotate(Exception):
+    """GoAway を受けたので発話の切れ目で自分から閉じて張り直す (エラーではない正常系)。"""
 
 
 # ---- 共有状態 (phase 追跡・あらすじ・活動時刻) ----
@@ -159,6 +215,13 @@ class StreamState:
         self.pending_gesture: str | None = None  # 同上・身振りクリップ名 (avatar.js の GESTURES)
         self.recap_file = recap_file
         self.restored = False          # 起動時に前プロセスの recap を復元できたか
+        self.meeting_chat: list[tuple[float, str, str]] = []  # 会議中のプレイヤー発言 (受信時刻, 名前, 本文) の束ね待ち
+        self.last_meeting_react = 0.0  # 会議の議論ブロックを最後に渡した時刻
+        self.budget = SpeechBudget(DEFAULT_UTTERANCES_PER_MIN)  # 任意発話の毎分予算 (--max-utterances-per-min で上書き)
+        self.resume_handles: dict[str, str] = {}  # Live セッション再開ハンドル (話者タグ→handle)。GoAway 張り直しで使う
+        self.resume_file: Path | None = None      # ハンドルの永続先 (プロセス再起動またぎ)
+        self.go_away_pending = False   # サーバーから GoAway が来た (発話の切れ目で SessionRotate を投げる)
+        self.resumed_session = False   # 今の接続は再開ハンドル付き (文脈が続いているので挨拶やり直し不要)
         # プロセス再起動 (auto-rehost 等) をまたいで記憶を引き継ぐ。os._exit で落ちても
         # note() のたびに書いてあるので取りこぼさない。古すぎるファイルは前回配信の残骸。
         if recap_file is not None and recap_file.exists():
@@ -171,6 +234,29 @@ class StreamState:
             except Exception as ex:
                 print(f"[recap] 復元エラー (無視して続行): {ex}")
 
+    def load_resume_handles(self, path: Path) -> None:
+        """前プロセスが残した再開ハンドルを読む。古いものは寿命切れなので捨てる。"""
+        self.resume_file = path
+        try:
+            if path.exists() and time.time() - path.stat().st_mtime <= RESUME_HANDLE_STALE_SEC:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                if isinstance(data, dict):
+                    self.resume_handles = {str(k): str(v) for k, v in data.items() if v}
+                    if self.resume_handles:
+                        print(f"[live] 前回の再開ハンドルを復元しました ({', '.join(self.resume_handles)})")
+        except Exception as ex:
+            print(f"[live] 再開ハンドル復元エラー (無視して続行): {ex}")
+
+    def set_resume_handle(self, tag: str, handle: str | None) -> None:
+        if handle:
+            self.resume_handles[tag] = handle
+        else:
+            self.resume_handles.pop(tag, None)
+        if self.resume_file is not None:
+            try:
+                self.resume_file.write_text(json.dumps(self.resume_handles), encoding="utf-8")
+            except Exception as ex:
+                print(f"[live] 再開ハンドル保存エラー: {ex}")
     def note(self, line: str) -> None:
         """あらすじ用の1行メモ (【】タグは付けない素の日本語)。書くたびにディスクへも保存する。"""
         self.recap.append(line)
@@ -532,6 +618,8 @@ EMOTION_CHOICES = {
     "_joins": ("happy", "excited"),
     "leave": ("sad", "shy"),
     "demo": ("excited", "happy", "laugh"),
+    "meetingCall": ("surprised", "doubt", "pale"),
+    "playerChat": ("happy", "laugh", "wink"),
 }
 PHASE_EMOTION_CHOICES = {
     "ingame": ("happy", "excited"),
@@ -573,6 +661,10 @@ def gesture_for_event(ev: dict) -> str | None:
         return "slump"       # うなだれて見送る
     if t == "eject":
         return "startle"     # のけぞって驚く
+    if t == "meetingCall":
+        return "startle"     # 通報/ボタンでのけぞる
+    if t == "playerChat":
+        return "nod"         # プレイヤーの言葉にうなずく
     if t == "gameEnd":
         return "slump" if ev.get("noVictors") else "cheer"
     if t == "phase":
@@ -615,6 +707,28 @@ def format_event(ev: dict, state: StreamState, quiet_meeting: bool) -> str | Non
         if time.monotonic() - ev.get("_recv", 0) > CHAT_EVENT_MAX_AGE_SEC:
             return None
         return f"【視聴者チャット】{ev.get('author', '?')}: {text[:80]} — 一言だけ軽く反応して。"
+    if t == "playerChat":
+        text = str(ev.get("text", "")).strip()
+        name = str(ev.get("name", "?"))
+        if not text or text.startswith(("/", "!", "！")):
+            return None
+        if time.monotonic() - ev.get("_recv", 0) > CHAT_EVENT_MAX_AGE_SEC:
+            return None
+        if ev.get("phase") == "meeting" or state.phase == "meeting":
+            # 会議中は1行ずつ被せず、数秒ぶん束ねて「議論の流れ」として渡す (pop_meeting_block)
+            state.meeting_chat.append((time.monotonic(), name, text[:80]))
+            return None
+        return (f"【プレイヤーの発言】{name}: {text[:80]} — ゲーム内のプレイヤー本人の言葉。"
+                f"名前を呼んで一言返すか、軽くいじって盛り上げて。")
+    if t == "meetingCall":
+        reporter = ev.get("reporter", "誰か")
+        victim = ev.get("victim")
+        if victim:
+            state.note(f"{reporter} が {victim} の死体を通報")
+            return (f"【イベント】「{reporter}」が「{victim}」の死体を発見して通報した！会議が始まる。"
+                    f"驚きと緊張感を実況して。ただし犯人の推測はしない。")
+        state.note(f"{reporter} が緊急ボタン")
+        return f"【イベント】「{reporter}」が緊急ボタンを押した！何を話し合うのかワクワクする一言を。"
     if t == "eject":
         if ev.get("skipped"):
             state.note("会議は追放なしで終了")
@@ -742,6 +856,44 @@ DEMO_TEMPLATES = [
 ]
 
 
+def pop_meeting_block(state: StreamState, now: float) -> str | None:
+    """会議中に溜めたプレイヤー発言を、束ねる窓が満ちたら1ブロックの指示文にして返す。
+
+    会議は議論が主役なので、1行ずつ被せずに MEETING_CHAT_BATCH_SEC ぶんまとめ、
+    反応の間隔も MEETING_REACT_MIN_GAP_SEC 以上あける。会議が終わった時点の残りは捨てる
+    (会議明けに蒸し返しても遅い)。
+    """
+    if not state.meeting_chat:
+        return None
+    if state.phase != "meeting":
+        state.meeting_chat.clear()
+        return None
+    oldest = state.meeting_chat[0][0]
+    if (now - oldest) < MEETING_CHAT_BATCH_SEC and len(state.meeting_chat) < MEETING_CHAT_BATCH_MAX:
+        return None
+    if (now - state.last_meeting_react) < MEETING_REACT_MIN_GAP_SEC:
+        return None
+    lines = state.meeting_chat[-MEETING_CHAT_BATCH_MAX:]
+    state.meeting_chat.clear()
+    state.last_meeting_react = now
+    body = "\n".join(f"{n}: {t}" for _, n, t in lines)
+    return ("【会議の議論】プレイヤー同士の会議チャット (時系列):\n" + body +
+            "\n— 議論を聞いている実況者として、流れを1〜2文で短く盛り上げて。"
+            "特定のプレイヤーを怪しいと断定したり、自分の推理を言ったりはしない。")
+
+
+def addressed_speaker(raw: list[dict], names: tuple[str, ...]) -> str | None:
+    """チャット/プレイヤー発言の中で実況者の名前が呼ばれていれば、その名前を返す (名指しへの本人回答用)。"""
+    for ev in raw:
+        if ev.get("type") not in ("chat", "playerChat"):
+            continue
+        text = str(ev.get("text", ""))
+        for n in names:
+            if n and n in text:
+                return n
+    return None
+
+
 def anti_repeat_block(state: StreamState) -> str:
     """直近の自分の発話を提示して「同じ話をするな」を実弾で伝える。
 
@@ -814,8 +966,9 @@ async def commentary_loop(events: asyncio.Queue, args: argparse.Namespace, state
                           player: AudioPlayer, tts: VoiceVoxTts | None, gate: TurnGate,
                           send_text, first_connect: bool) -> None:
     """イベントのバッチ化→送信、場繋ぎ、発話被り防止の本体 (音声/テキスト両モード共通)。"""
-    if first_connect:
-        # recap を復元できた新プロセスは「配信の続き」なのでオープニングをやり直さない
+    if first_connect and not state.resumed_session:
+        # recap を復元できた新プロセスは「配信の続き」なのでオープニングをやり直さない。
+        # 再開ハンドル付きで繋がった場合は会話そのものが続いているので、何も言わずに続ける。
         await send_text(REJOIN_PROMPT if state.restored else GREETING_PROMPT)
 
     def output_busy() -> bool:
@@ -874,6 +1027,11 @@ async def commentary_loop(events: asyncio.Queue, args: argparse.Namespace, state
             state.last_real_event = time.monotonic()  # filler 休眠の解除 (chat/join 含む全実イベント)
 
         now = time.monotonic()
+        meeting_block = pop_meeting_block(state, now)
+        if meeting_block:
+            batch.append(meeting_block)
+        if state.go_away_pending and not batch and not output_busy():
+            raise SessionRotate()  # 発話の切れ目で自分から閉じ、再開ハンドルで張り直す
         if batch:
             # 喋り終わるまで待ってから送る (発話の被り/自己中断防止)
             while output_busy() or (now - gate.last_send) < MIN_SEND_GAP_SEC:
@@ -885,6 +1043,7 @@ async def commentary_loop(events: asyncio.Queue, args: argparse.Namespace, state
             if batch_gesture:
                 state.pending_gesture = batch_gesture
             await send_text("\n".join(batch[-5:]))  # 溜まりすぎたら新しい5件だけ
+            state.budget.record()
             last_activity = now
         elif (now - last_activity) > FILLER_INTERVAL_SEC and not output_busy():
             if args.quiet_meeting and state.phase == "meeting":
@@ -894,6 +1053,62 @@ async def commentary_loop(events: asyncio.Queue, args: argparse.Namespace, state
             state.pending_gesture = random.choice(FILLER_GESTURES)
             await send_text(build_filler_prompt(state))
             last_activity = now
+
+
+# ---- Live セッションの寿命管理 (GoAway 先回り + 再開ハンドル + コンテキスト圧縮) ----
+
+def apply_session_lifetime(config: types.LiveConnectConfig, state: StreamState, tag: str) -> None:
+    """接続設定に「長生きさせる」2点を足す。
+
+    - context_window_compression: 履歴が膨らんでもサーバー側で古い部分を畳む (寿命上限の主因を外す)
+    - session_resumption: 直前のハンドルがあれば会話ごと引き継ぐ。無ければ空で送って新規発行させる
+    """
+    config.context_window_compression = types.ContextWindowCompressionConfig(
+        sliding_window=types.SlidingWindow())
+    handle = state.resume_handles.get(tag)
+    config.session_resumption = types.SessionResumptionConfig(handle=handle) if handle else types.SessionResumptionConfig()
+
+
+@contextlib.asynccontextmanager
+async def connect_live(client: genai.Client, model: str, config: types.LiveConnectConfig,
+                       state: StreamState, tag: str):
+    """再開ハンドル付き接続。ハンドルが期限切れ等で拒否されたら捨てて新規で繋ぎ直す (1回だけ)。
+
+    接続に失敗したときだけ張り直す。接続後 (本体実行中) の例外はそのまま呼び出し元へ通す。
+    """
+    state.go_away_pending = False
+    had_handle = bool(state.resume_handles.get(tag))
+    cm = client.aio.live.connect(model=model, config=config)
+    try:
+        session = await cm.__aenter__()
+    except Exception as ex:
+        if not had_handle:
+            raise
+        print(f"[live:{tag}] 再開ハンドルでの接続に失敗したため新規接続します: {str(ex)[:120]}")
+        state.set_resume_handle(tag, None)
+        config.session_resumption = types.SessionResumptionConfig()
+        had_handle = False
+        cm = client.aio.live.connect(model=model, config=config)
+        session = await cm.__aenter__()
+    state.resumed_session = had_handle
+    try:
+        yield session
+    except BaseException as ex:
+        await cm.__aexit__(type(ex), ex, ex.__traceback__)
+        raise
+    else:
+        await cm.__aexit__(None, None, None)
+
+
+def handle_lifetime_message(resp, state: StreamState, tag: str) -> None:
+    """受信メッセージのうち寿命系 (再開ハンドル更新 / GoAway) を処理する。receiver の先頭で呼ぶ。"""
+    upd = getattr(resp, "session_resumption_update", None)
+    if upd is not None and getattr(upd, "resumable", False) and getattr(upd, "new_handle", None):
+        state.set_resume_handle(tag, upd.new_handle)
+    ga = getattr(resp, "go_away", None)
+    if ga is not None and not state.go_away_pending:
+        state.go_away_pending = True
+        print(f"[live:{tag}] サーバーから GoAway (残り {getattr(ga, 'time_left', '?')})。発話の切れ目で張り直します")
 
 
 # ---- Gemini Live セッション本体 (音声モード) ----
@@ -924,14 +1139,16 @@ async def run_session(client: genai.Client, args: argparse.Namespace, events: as
         config.speech_config = types.SpeechConfig(
             voice_config=types.VoiceConfig(
                 prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=args.voice)))
+    apply_session_lifetime(config, state, "solo")
 
-    async with client.aio.live.connect(model=args.model, config=config) as session:
+    async with connect_live(client, args.model, config, state, "solo") as session:
         print(f"[live] 接続完了 (model={args.model}"
               + (f", voice={args.voice}" if args.voice else "")
               + (f", 声はVoiceVox styleId={tts.style_id} (Gemini音声は破棄)" if tts is not None else "")
+              + (", 再開ハンドルで文脈継続" if state.resumed_session else "")
               + ")")
         # 再接続は文脈喪失 (=意味不明発言) の第一容疑なので、引き継いだあらすじごと区切りを記録する
-        conv.log("session", first=first_connect, model=args.model, recap=recap_used)
+        conv.log("session", first=first_connect, model=args.model, recap=recap_used, resumed=state.resumed_session)
         gate = TurnGate()
         say_buf = ""  # 現在の発話の transcript 蓄積 (turn_complete でログへ吐く)
 
@@ -962,6 +1179,7 @@ async def run_session(client: genai.Client, args: argparse.Namespace, events: as
             nonlocal say_buf, tts_buf, turn_had_transcript, turn_text_parts
             while True:
                 async for resp in session.receive():
+                    handle_lifetime_message(resp, state, "solo")
                     # VoiceVox モードでは resp.data プロパティ自体に触らない (音声は捨てる上、
                     # text/thought パーツ混在時に SDK が warning を吐くのはこのプロパティ内)
                     if tts is None and resp.data:
@@ -1094,27 +1312,19 @@ async def run_text_session(client: genai.Client, args: argparse.Namespace, event
 DUO_GREETING = ("【イベント】配信の実況を開始した。相方の「{partner}」と2人での実況。"
                 "視聴者に向けて短くオープニングの挨拶をして、相方にも一言呼びかけて。")
 
-# 掛け合いの返しを送るイベント種別 (小さいイベント join/leave/chat まで毎回返すと
-# クォータが素直に2倍になるので、盛り上がりどころだけ2人で転がす)
-DUO_REPLY_TYPES = {"intervention", "eject", "gameEnd", "sabotage", "demo"}
-
-
-def duo_reply_prompt(partner_name: str, say: str, state: StreamState) -> str:
-    return (f"【相方】{partner_name}: 「{say[:200]}」\n"
-            "相方のこの発言に、掛け合いの相手として1〜2文で短く返して。"
-            "同じ内容の復唱ではなく、自分の視点をひとこと足すこと。" + anti_repeat_block(state))
-
-
-def duo_should_reply(raw: list[dict], state: StreamState, args: argparse.Namespace) -> bool:
-    if args.quiet_meeting and state.phase == "meeting":
-        return False
-    for ev in raw:
-        t = ev.get("type")
-        if t in DUO_REPLY_TYPES:
-            return True
-        if t == "phase" and ev.get("phase") in ("ingame", "lobby"):
-            return True
-    return False
+def duo_reply_prompt(partner_name: str, say: str, state: StreamState, turn: int = 1, last: bool = False) -> str:
+    """掛け合いの返し。1ターン目は素直な返し、2ターン目以降は話題を転がす指示、最終ターンは締めの指示。"""
+    head = f"【相方】{partner_name}: 「{say[:200]}」\n"
+    if last:
+        body = ("相方のこの発言を受けて、この話題を1文で軽く締めて (次の出来事を待つ空気にする)。"
+                "復唱はしない。")
+    elif turn >= 2:
+        body = ("会話を続けて。相方の言葉を受けて、質問を返す・別の角度を出す・視聴者に振る、"
+                "のどれかで話題を少しだけ転がして (1〜2文)。復唱はしない。")
+    else:
+        body = ("相方のこの発言に、掛け合いの相手として1〜2文で短く返して。"
+                "同じ内容の復唱ではなく、自分の視点をひとこと足すこと。")
+    return head + body + anti_repeat_block(state)
 
 
 class LiveSpeaker:
@@ -1173,6 +1383,7 @@ class LiveSpeaker:
         """
         while True:
             async for resp in self.session.receive():
+                handle_lifetime_message(resp, self.state, self.tag)
                 if self.tts is None:
                     data = getattr(resp, "data", None)
                     if data:
@@ -1233,22 +1444,72 @@ class LiveSpeaker:
             await asyncio.sleep(0.3)
 
 
+# 掛け合いの長さ (発話数)。大きい話題ほど2人で長く転がし、小さい話題は短く済ませる。
+DUO_BIG_TYPES = {"intervention", "eject", "gameEnd", "sabotage", "demo", "meetingCall"}
+DUO_MEDIUM_TYPES = {"chat", "playerChat", "join", "_joins"}
+# 冷静な B (ツッコミ/分析担当) が切り出す方が映える話題。それ以外は盛り上げ役の A が切り出す。
+DUO_B_LEADS = {"eject", "meetingCall", "sabotage"}
+
+
+def duo_volley_turns(raw: list[dict], state: StreamState, args: argparse.Namespace) -> int:
+    if (args.quiet_meeting and state.phase == "meeting") or any(ev.get("type") == "_meetingBlock" for ev in raw):
+        return 2  # 会議中の議論ブロックは B が短く反応し A が一言添えるだけ (議論の邪魔をしない)
+    types_seen = {ev.get("type") for ev in raw}
+    if types_seen & DUO_BIG_TYPES or any(ev.get("type") == "phase" and ev.get("phase") in ("ingame", "lobby") for ev in raw):
+        return random.choice((3, 3, DUO_VOLLEY_MAX_TURNS))
+    if types_seen & DUO_MEDIUM_TYPES:
+        return random.choice((2, 2, 3))
+    return random.choice((1, 2))
+
+
+def duo_pick_initiator(raw: list[dict], a: "LiveSpeaker", b: "LiveSpeaker") -> "LiveSpeaker":
+    """イベントの切り出し役。名指しされた本人 > B 向きの話題 > 既定 A。"""
+    called = addressed_speaker(raw, (a.name, b.name))
+    if called == b.name:
+        return b
+    if called == a.name:
+        return a
+    for ev in raw:
+        t = ev.get("type")
+        if t in DUO_B_LEADS or t == "_meetingBlock" or (t == "phase" and ev.get("phase") == "meeting"):
+            return b
+    return a
+
+
 async def duo_loop(events: asyncio.Queue, args: argparse.Namespace, state: StreamState,
                    a: LiveSpeaker, b: LiveSpeaker, first_connect: bool) -> None:
-    """commentary_loop の2人組版: イベントは A (盛り上げ役) が実況し、大きめの話題だけ B が返す。
-    場繋ぎは A/B 交互に切り出して、もう片方が必ず返す (掛け合いが会話感の主成分)。"""
+    """commentary_loop の2人組版: 1つの話題を数ターンの掛け合い (volley) で転がす。
 
-    async def exchange(initiator: LiveSpeaker, responder: LiveSpeaker, prompt: str,
-                       want_reply: bool) -> None:
-        await initiator.send(prompt)
-        await initiator.wait_quiet()
-        if want_reply and initiator.last_say:
-            await responder.send(duo_reply_prompt(initiator.name, initiator.last_say, state))
-            await responder.wait_quiet()
+    - イベントは切り出し役 (話題で A/B を選ぶ) が実況し、相方が返し、さらに数ターン続ける。
+      新しいイベントが待っているか発話予算を使い切ったら早めに切り上げる (実況の遅延を出さない)。
+    - 場繋ぎは A/B 交互に切り出し、必ず掛け合いにする。休眠中も低頻度で相方との雑談は続ける。
+    - 会議中は束ねた議論ブロック (pop_meeting_block) に B が短く反応し、A が一言添えるだけ。
+    """
 
-    if first_connect:
+    async def volley(initiator: LiveSpeaker, responder: LiveSpeaker, prompt: str, turns: int) -> None:
+        cur, other = initiator, responder
+        await cur.send(prompt)
+        await cur.wait_quiet()
+        state.budget.record()
+        for i in range(1, max(1, turns)):
+            if not cur.last_say:
+                break
+            # 2ターン目 (相方の最初の返し) は必ず入れる。それ以降は「続けても困らない」発話なので
+            # 新イベント待ち・予算切れ・GoAway なら切り上げる
+            if i >= 2 and (not events.empty() or not state.budget.allow_optional() or state.go_away_pending):
+                break
+            last = i == turns - 1
+            await other.send(duo_reply_prompt(cur.name, cur.last_say, state, turn=i, last=last))
+            await other.wait_quiet()
+            state.budget.record()
+            cur, other = other, cur
+
+    def anyone_busy() -> bool:
+        return a.busy() or b.busy() or self_speaking(a, b)
+
+    if first_connect and not state.resumed_session:
         greeting = REJOIN_PROMPT if state.restored else DUO_GREETING.format(partner=b.name)
-        await exchange(a, b, greeting, want_reply=not state.restored)
+        await volley(a, b, greeting, turns=1 if state.restored else 3)
 
     filler_flip = False   # 場繋ぎの切り出し役を A/B 交互にする
     last_activity = time.monotonic()
@@ -1288,25 +1549,39 @@ async def duo_loop(events: asyncio.Queue, args: argparse.Namespace, state: Strea
             state.last_real_event = time.monotonic()
 
         now = time.monotonic()
+        meeting_block = pop_meeting_block(state, now)
+        if meeting_block:
+            batch.append(meeting_block)
+            raw = raw + [{"type": "_meetingBlock"}]  # 議論ブロック: B が切り出し・2発話固定 (控えめ)
+        if state.go_away_pending and not batch and not anyone_busy():
+            raise SessionRotate()  # 発話の切れ目で自分から閉じ、再開ハンドルで張り直す
         if batch:
-            while a.busy() or b.busy() or self_speaking(a, b) or (now - last_send) < MIN_SEND_GAP_SEC:
+            while anyone_busy() or (now - last_send) < MIN_SEND_GAP_SEC:
                 await asyncio.sleep(0.3)
                 now = time.monotonic()
             if batch_emotion:
                 state.pending_emotion = batch_emotion
             if batch_gesture:
                 state.pending_gesture = batch_gesture
-            await exchange(a, b, "\n".join(batch[-5:]), duo_should_reply(raw, state, args))
+            initiator = duo_pick_initiator(raw, a, b)
+            responder = b if initiator is a else a
+            prompt = "\n".join(batch[-5:])
+            called = addressed_speaker(raw, (a.name, b.name))
+            if called == initiator.name:
+                prompt = "【あなた宛て】上の発言であなたの名前が呼ばれている。本人として相手の名前を呼んで直接答えて。\n" + prompt
+            await volley(initiator, responder, prompt, duo_volley_turns(raw, state, args))
             last_send = last_activity = time.monotonic()
-        elif (now - last_activity) > FILLER_INTERVAL_SEC and not (a.busy() or b.busy() or self_speaking(a, b)):
+        elif not anyone_busy():
             if args.quiet_meeting and state.phase == "meeting":
                 continue
-            if (now - state.last_real_event) > args.dormant_after:
+            dormant = (now - state.last_real_event) > args.dormant_after
+            interval = DUO_DORMANT_FILLER_INTERVAL_SEC if dormant else DUO_FILLER_INTERVAL_SEC
+            if (now - last_activity) <= interval or not state.budget.allow_optional():
                 continue
             initiator, responder = (b, a) if filler_flip else (a, b)
             filler_flip = not filler_flip
             state.pending_gesture = random.choice(FILLER_GESTURES)
-            await exchange(initiator, responder, build_filler_prompt(state), want_reply=True)
+            await volley(initiator, responder, build_filler_prompt(state), turns=2 if dormant else random.choice((2, 3)))
             last_send = last_activity = time.monotonic()
 
 
@@ -1347,30 +1622,43 @@ async def run_duo_session(client: genai.Client, args: argparse.Namespace, events
     # B の prebuilt voice 指定は Gemini ネイティブ音声のときだけ意味がある
     cfg_b = build_config(load_persona2(), args.duo_name2, args.duo_name,
                          voice=args.voice2 if tts_b is None else "")
+    apply_session_lifetime(cfg_a, state, "a")
+    apply_session_lifetime(cfg_b, state, "b")
 
     b_voice_desc = f"styleId{tts_b.style_id}" if tts_b is not None else f"Gemini音声{f'({args.voice2})' if args.voice2 else ''}"
-    async with client.aio.live.connect(model=args.model, config=cfg_a) as sa, \
-               client.aio.live.connect(model=args.model, config=cfg_b) as sb:
-        print(f"[duo] 2人組セッション接続完了 (model={args.model}, "
-              f"{args.duo_name}=styleId{tts_a.style_id} / {args.duo_name2}={b_voice_desc})")
-        conv.log("session", first=first_connect, model=args.model, recap=recap, duo=True)
-        a = LiveSpeaker(args.duo_name, "a", sa, tts_a, obs, state, conv, player)
-        b = LiveSpeaker(args.duo_name2, "b", sb, tts_b, obs, state, conv, player)
+    # 2本とも再開ハンドル付きで繋がった時だけ「続き」扱い (片方だけ新規なら挨拶を軽くやり直す方が自然)
+    async with connect_live(client, args.model, cfg_a, state, "a") as sa:
+        resumed_a = state.resumed_session
+        async with connect_live(client, args.model, cfg_b, state, "b") as sb:
+            state.resumed_session = resumed_a and state.resumed_session
+            print(f"[duo] 2人組セッション接続完了 (model={args.model}, "
+                  f"{args.duo_name}=styleId{tts_a.style_id} / {args.duo_name2}={b_voice_desc}"
+                  + (", 再開ハンドルで文脈継続" if state.resumed_session else "") + ")")
+            conv.log("session", first=first_connect, model=args.model, recap=recap, duo=True,
+                     resumed=state.resumed_session)
+            await _run_duo_body(args, events, player, obs, state, first_connect, conv, tts_a, tts_b, sa, sb)
 
-        async def obs_ticker() -> None:
-            while True:
-                obs.tick(player.is_speaking())
-                await asyncio.sleep(0.2)
 
-        tasks = [asyncio.create_task(a.receiver()), asyncio.create_task(b.receiver()),
-                 asyncio.create_task(obs_ticker())]
-        try:
-            await duo_loop(events, args, state, a, b, first_connect)
-        finally:
-            for t in tasks:
-                t.cancel()
-            a.flush_say()
-            b.flush_say()
+async def _run_duo_body(args: argparse.Namespace, events: asyncio.Queue, player: AudioPlayer, obs: ObsFiles,
+                        state: StreamState, first_connect: bool, conv: ConvLog,
+                        tts_a: VoiceVoxTts, tts_b: VoiceVoxTts | None, sa, sb) -> None:
+    a = LiveSpeaker(args.duo_name, "a", sa, tts_a, obs, state, conv, player)
+    b = LiveSpeaker(args.duo_name2, "b", sb, tts_b, obs, state, conv, player)
+
+    async def obs_ticker() -> None:
+        while True:
+            obs.tick(player.is_speaking())
+            await asyncio.sleep(0.2)
+
+    tasks = [asyncio.create_task(a.receiver()), asyncio.create_task(b.receiver()),
+             asyncio.create_task(obs_ticker())]
+    try:
+        await duo_loop(events, args, state, a, b, first_connect)
+    finally:
+        for t in tasks:
+            t.cancel()
+        a.flush_say()
+        b.flush_say()
 
 
 # ---- アバター(立ち絵)配信サーバ ----
@@ -1581,6 +1869,9 @@ async def main_async(args: argparse.Namespace) -> None:
     state = StreamState(recap_file)
     if state.restored:
         print(f"[recap] 前プロセスのあらすじを復元しました ({len(state.recap)}行): {recap_file}")
+    if recap_file is not None:
+        state.load_resume_handles(recap_file.with_name("resume-handles.json"))
+    state.budget = SpeechBudget(args.max_utterances_per_min)
     asyncio.create_task(tail_events(events_path, events))
 
     # アバター(立ち絵)配信サーバ + 口パク情報のブロードキャスト (~30Hz)
@@ -1632,6 +1923,15 @@ async def main_async(args: argparse.Namespace) -> None:
                 await run_text_session(client, args, events, player, obs, state, first, conv, tts)
             else:
                 await run_session(client, args, events, player, obs, state, first, conv, tts)
+        except SessionRotate:
+            # GoAway による自発的な張り直し。ハンドルで会話が続くので待たずに即再接続。
+            # ただし接続直後の GoAway (レート制限等) が続くと接続を焼き続けるので、短命なら少し待つ
+            print("[live] GoAway に合わせてセッションを張り直します (文脈は再開ハンドルで継続)")
+            conv.log("session_end", reason="go_away_rotate")
+            first = False
+            if time.monotonic() - started < 30:
+                await asyncio.sleep(5.0)
+            continue
         except Exception as ex:
             print(f"[live] セッション終了/エラー: {ex}")
             conv.log("session_end", error=str(ex))
@@ -1774,6 +2074,9 @@ def main() -> None:
                              "環境変数 GEMINI_VOICE でも指定可。空ならモデル既定)")
     parser.add_argument("--quiet-meeting", action="store_true",
                         help="会議中は場繋ぎ・チャット反応を止めてプレイヤーの議論を邪魔しない")
+    parser.add_argument("--max-utterances-per-min", type=int, default=DEFAULT_UTTERANCES_PER_MIN,
+                        help="掛け合いの続きや場繋ぎなど任意発話の毎分上限 (実イベントの実況は制限しない。default: "
+                             f"{DEFAULT_UTTERANCES_PER_MIN})")
     parser.add_argument("--dormant-after", type=float, default=300.0,
                         help="実イベントがこの秒数無いとき場繋ぎを休眠してトークン消費を止める (default: 300)")
     parser.add_argument("--subtitle", default=str(here / "subtitle.txt"),

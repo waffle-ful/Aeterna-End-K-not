@@ -344,6 +344,7 @@ internal static class RPCHandlerPatch
                         Logger.Info($"({__instance.FriendCode}|{__instance.GetClient()?.GetHashedPuid()}) {__instance.GetNameWithRole().RemoveHtmlTags()}: {text}", "ReceiveChat");
                         MeetingSilentProbe.OnChat(__instance);
                         ChatCommands.OnReceiveChat(__instance, text, out bool canceled);
+                        if (!canceled) try { EndKnot.Modules.Companion.CompanionEventEmitter.OnPlayerChat(__instance, text); } catch { } // AI実況相棒アプリ向けイベント (OFF 時は即 return)
 
                         if (canceled)
                         {

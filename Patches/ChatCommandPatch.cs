@@ -623,7 +623,10 @@ internal static class ChatCommands
         }
         
         if (!canceled)
+        {
             ChatManager.SendMessage(PlayerControl.LocalPlayer, text);
+            try { EndKnot.Modules.Companion.CompanionEventEmitter.OnPlayerChat(PlayerControl.LocalPlayer, text); } catch { } // AI実況相棒アプリ向けイベント (OFF 時は即 return)
+        }
 
         return !canceled;
     }
