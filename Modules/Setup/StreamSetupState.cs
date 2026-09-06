@@ -21,6 +21,7 @@ internal static class StreamSetupState
     internal enum KeyErrorKind { None, ClipboardInvalid, SaveFailed }
     internal enum KeyVerifyKind { None, Ok, Invalid, Unknown, NoKey }
     internal enum VoiceVoxState { Unknown, Ok, NotRunning }
+    internal enum VoiceHintKind { None, Restarting, DuoAutoSwitchedTts, TtsAutoDisabledDuo }
 
     // メインスレッドがこのフラグを見て、下の状態から表示文字列を組み直す (組み直したら false に戻す)。
     internal static volatile bool Dirty = true;
@@ -45,6 +46,11 @@ internal static class StreamSetupState
     internal static volatile string VoiceVoxVersion = ""; // 言語非依存
     internal static volatile bool VoiceVoxBusy;
 
+    // ── 声/実況スタイルのトグル (AICommentaryArgs) ──
+    // トグル操作直後だけ1行のヒントを出す (通常は再起動案内、連動切替が起きた時はその案内)。
+    // 次の Refresh (ウィンドウ再オープン等) で None に戻す。
+    internal static volatile VoiceHintKind VoiceHint = VoiceHintKind.None;
+
     // メインスレッド (StreamSetupGUI.Update) が消費するクリップボードクリア要求。
     // 保存ワーカーはバックグラウンドスレッドで動くため、Unity API 呼び出しをここへ持ち越す。
     internal static volatile bool ClipboardClearPending;
@@ -58,6 +64,7 @@ internal static class StreamSetupState
     // ウィンドウを開いた時・保存が成功した時に呼ぶ。Python / キー / VOICEVOX をまとめて再検出する。
     internal static void Refresh()
     {
+        VoiceHint = VoiceHintKind.None;
         new Thread(RefreshWorker) { IsBackground = true, Name = "EndKnotStreamSetupRefresh" }.Start();
     }
 
@@ -297,6 +304,67 @@ internal static class StreamSetupState
             VoiceVoxVersion = "";
         }
         finally { VoiceVoxBusy = false; }
+    }
+
+    // ── 声/実況スタイルのトグル ──
+    // クリップボード保存系と違い形式検証もレジストリ書込も無い軽量な ConfigEntry 書込みなので、
+    // SaveClientIdFromClipboard (StreamSetupYouTubeState.cs) と同じくボタンハンドラのメインスレッドで
+    // 直接行う (別スレッドへ逃がさない)。
+
+    // companion.py は起動時に args.tts != "voicevox" だと --duo を無音で1人実況に降格する
+    // (tools/companion/companion.py の duo 判定ブロック)。トグルだけが無反応に見える事故を防ぐため、
+    // 声と2人組は片方の変更がもう片方を道連れにする形で連動させる。
+    internal static void ToggleTts()
+    {
+        CompanionArgs.Parsed p = CompanionArgs.Parse(Main.AICommentaryArgs?.Value ?? "");
+        bool toVoiceVox = !(p.Tts == "voicevox" || p.Tts == "voicevox-text");
+        p.Tts = toVoiceVox ? "voicevox" : "gemini";
+
+        VoiceHintKind hint = VoiceHintKind.Restarting;
+        if (!toVoiceVox && p.Duo)
+        {
+            p.Duo = false;
+            hint = VoiceHintKind.TtsAutoDisabledDuo;
+        }
+
+        ApplyVoiceArgs(p, hint);
+    }
+
+    internal static void ToggleDuo()
+    {
+        CompanionArgs.Parsed p = CompanionArgs.Parse(Main.AICommentaryArgs?.Value ?? "");
+        p.Duo = !p.Duo;
+
+        VoiceHintKind hint = VoiceHintKind.Restarting;
+        if (p.Duo)
+        {
+            // duo ON にする瞬間は相方を Gemini ネイティブ音声に固定する (VOICEVOX キャラ非依存・
+            // 「声と実況スタイル」の3トグルだけで完結させるため相方の声選択そのものは初版の対象外)。
+            p.DuoTts2 = "gemini";
+
+            if (p.Tts != "voicevox")
+            {
+                p.Tts = "voicevox";
+                hint = VoiceHintKind.DuoAutoSwitchedTts;
+            }
+        }
+
+        ApplyVoiceArgs(p, hint);
+    }
+
+    internal static void ToggleQuietMeeting()
+    {
+        CompanionArgs.Parsed p = CompanionArgs.Parse(Main.AICommentaryArgs?.Value ?? "");
+        p.QuietMeeting = !p.QuietMeeting;
+        ApplyVoiceArgs(p, VoiceHintKind.Restarting);
+    }
+
+    private static void ApplyVoiceArgs(CompanionArgs.Parsed p, VoiceHintKind hint)
+    {
+        Main.AICommentaryArgs.Value = CompanionArgs.Compose(p);
+        VoiceHint = hint;
+        CompanionLauncher.RestartNow();
+        Dirty = true;
     }
 
     // ローカルエンジンとはいえ応答文字列はプロセス外から来るので、TMP/GUI 表示前に無害化する。
