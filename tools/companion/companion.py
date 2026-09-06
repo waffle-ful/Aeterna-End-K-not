@@ -62,7 +62,7 @@ from urllib.parse import unquote, urlparse
 
 # ---- 設定 (CLI/環境変数で上書き可) ----
 
-DEFAULT_MODEL = os.environ.get("GEMINI_LIVE_MODEL", "gemini-2.5-flash-native-audio-preview-09-2025")
+DEFAULT_MODEL = os.environ.get("GEMINI_LIVE_MODEL", "gemini-3.1-flash-live-preview")
 # --tts voicevox-text 用 (通常 generate_content のターン制テキスト経路)。ただし無料枠は
 # audio dialog 系が太くテキスト系は極端に細いので、現状の主役は「Live native-audio の音声を
 # 捨てて文字起こしをずん子合成に回す」--tts voicevox の方 (非効率だが枠の実態に合う)。
@@ -382,16 +382,25 @@ def _wav_to_pcm(wav: bytes) -> bytes | None:
         return None
 
 
-def resolve_voicevox_style(url: str, speaker_name: str, explicit_style: int) -> tuple[int, str] | None:
+# 直近の解決失敗の理由 ("engine" = エンジンに繋がらない / "speaker" = 話者名が無い)。
+# 待ち直しの可否とログの原因表示を分けるために使う (対処が全く違うため)。
+_LAST_VOICEVOX_ERROR = ""
+
+
+def resolve_voicevox_style(url: str, speaker_name: str, explicit_style: int,
+                           quiet: bool = False) -> tuple[int, str] | None:
     """/speakers から話者名の部分一致で styleId を解決する。「ノーマル」スタイル優先。"""
     import urllib.request
+    global _LAST_VOICEVOX_ERROR
+    _LAST_VOICEVOX_ERROR = ""
     if explicit_style >= 0:
         return explicit_style, f"styleId={explicit_style} (明示指定)"
     try:
         with urllib.request.urlopen(f"{url}/speakers", timeout=5) as resp:
             speakers = json.load(resp)
     except Exception as ex:
-        print(f"[voicevox] エンジンに接続できません ({url}): {ex}")
+        _LAST_VOICEVOX_ERROR = "engine"
+        if not quiet: print(f"[voicevox] エンジンに接続できません ({url}): {ex}")
         return None
     for sp in speakers:
         name = sp.get("name", "")
@@ -402,7 +411,39 @@ def resolve_voicevox_style(url: str, speaker_name: str, explicit_style: int) -> 
                     return st["id"], f"{name} (ノーマル, styleId={st['id']})"
             if styles:
                 return styles[0]["id"], f"{name} ({styles[0].get('name')}, styleId={styles[0]['id']})"
-    print(f"[voicevox] 話者「{speaker_name}」が /speakers に見つかりません (VOICEVOX 0.19+ が必要です)")
+    _LAST_VOICEVOX_ERROR = "speaker"
+    if not quiet:
+        print(f"[voicevox] 話者「{speaker_name}」が /speakers に見つかりません (VOICEVOX 0.19+ が必要です)")
+    return None
+
+
+async def resolve_voicevox_style_wait(url: str, speaker_name: str, explicit_style: int,
+                                      wait_sec: float, label: str) -> tuple[int, str] | None:
+    """VOICEVOX の起動待ちを含めて styleId を解決する。
+
+    相棒アプリは AU のオプション ON で立ち上がるので、VOICEVOX を後から起動する順番だと
+    起動時1回の解決に失敗して声が Gemini に落ち、--duo も1人モードに降格したまま戻らない。
+    エンジンに繋がらない間だけ待ち直す (話者名の間違いは待っても直らないので即あきらめる)。
+    """
+    resolved = resolve_voicevox_style(url, speaker_name, explicit_style)
+    if resolved is not None or _LAST_VOICEVOX_ERROR != "engine" or wait_sec <= 0:
+        return resolved
+
+    print(f"[voicevox] {label}の声のために VOICEVOX の起動を最大 {wait_sec:.0f} 秒待ちます "
+          f"(待ちたくない時は --voicevox-wait 0)")
+    deadline = time.monotonic() + wait_sec
+    while time.monotonic() < deadline:
+        await asyncio.sleep(3)
+        resolved = resolve_voicevox_style(url, speaker_name, explicit_style, quiet=True)
+        if resolved is not None:
+            waited = wait_sec - max(0.0, deadline - time.monotonic())
+            print(f"[voicevox] VOICEVOX に接続できました ({waited:.0f} 秒待ち)")
+            return resolved
+        if _LAST_VOICEVOX_ERROR != "engine":
+            # 待っている間にエンジンは起きたが、話者名が違う — 待ち直しでは直らないので理由を出して抜ける。
+            resolve_voicevox_style(url, speaker_name, explicit_style)
+            return None
+    print(f"[voicevox] {wait_sec:.0f} 秒待ちましたが VOICEVOX ({url}) に接続できませんでした")
     return None
 
 
@@ -1829,10 +1870,14 @@ async def main_async(args: argparse.Namespace) -> None:
 
     tts: VoiceVoxTts | None = None
     if args.tts in ("voicevox", "voicevox-text"):
-        resolved = resolve_voicevox_style(args.voicevox_url, args.voicevox_speaker, args.voicevox_style)
+        resolved = await resolve_voicevox_style_wait(args.voicevox_url, args.voicevox_speaker,
+                                                     args.voicevox_style, args.voicevox_wait, "実況")
         if resolved is None:
             print("[voicevox] VoiceVox が使えないため Gemini 音声にフォールバックします "
                   "(VOICEVOX を起動して相棒を再起動すればずん子ボイスになります)")
+            # 最小化コンソールの print は誰も見ないので、後から追えるようログにも残す。
+            conv.log("voicevox_fallback", role="a", reason=_LAST_VOICEVOX_ERROR or "unknown",
+                     url=args.voicevox_url, speaker=args.voicevox_speaker, waited=args.voicevox_wait)
             args.tts = "gemini"
             if not args.model_explicit:
                 args.model = DEFAULT_MODEL  # テキスト用モデルのままだと AUDIO 応答が返らない
@@ -1850,14 +1895,18 @@ async def main_async(args: argparse.Namespace) -> None:
     if args.duo:
         if tts is None or args.tts != "voicevox":
             print("[duo] --duo は --tts voicevox が前提です。1人モードで続行します")
+            conv.log("duo_downgrade", reason="voicevox_unavailable" if tts is None else f"tts={args.tts}")
         elif args.duo_tts2 == "gemini":
             duo_active = True  # tts_b=None のまま = 相方は Gemini ネイティブ音声
             print(f"[duo] 相方ボイス: Gemini ネイティブ音声"
                   + (f" ({args.voice2})" if args.voice2 else " (モデル既定)"))
         else:
-            resolved2 = resolve_voicevox_style(args.voicevox_url, args.voicevox_speaker2, args.voicevox_style2)
+            resolved2 = await resolve_voicevox_style_wait(args.voicevox_url, args.voicevox_speaker2,
+                                                          args.voicevox_style2, args.voicevox_wait, "相方")
             if resolved2 is None:
                 print(f"[duo] 相方の話者「{args.voicevox_speaker2}」が見つからないため1人モードで続行します")
+                conv.log("duo_downgrade", reason=f"speaker2_{_LAST_VOICEVOX_ERROR or 'unknown'}",
+                         speaker2=args.voicevox_speaker2)
             else:
                 style2, desc2 = resolved2
                 tts_b = VoiceVoxTts(args.voicevox_url, style2, player, obs, args.voicevox_speed2, tag="b")
@@ -2047,6 +2096,10 @@ def main() -> None:
                         help="styleId を直接指定 (指定時は --voicevox-speaker の名前解決を飛ばす)")
     parser.add_argument("--voicevox-speed", type=float, default=1.0,
                         help="読み上げ速度 (speedScale, default: 1.0)")
+    parser.add_argument("--voicevox-wait", type=float,
+                        default=float(os.environ.get("EK_COMPANION_VOICEVOX_WAIT", "120")),
+                        help="VOICEVOX エンジンに繋がらない時に起動を待つ秒数 (default: 120、0 で待たない)。"
+                             "AU のオプション ON で相棒が先に立ち上がる順番を救う")
     parser.add_argument("--duo", action="store_true",
                         default=os.environ.get("EK_COMPANION_DUO", "") == "1",
                         help="2人組実況モード。Live セッションを2本張り、AI vtuber 2体が掛け合いで実況する "
