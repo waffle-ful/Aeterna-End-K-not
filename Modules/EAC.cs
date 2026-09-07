@@ -1418,19 +1418,24 @@ internal static class CheckInvalidMovementPatch
 
     public static void Postfix(PlayerControl __instance)
     {
-        if (!AmongUsClient.Instance.AmHost || !GameStates.IsInTask || ExileController.Instance || !Options.EnableMovementChecking.GetBool() || Main.HasJustStarted || !Main.IntroDestroyed || MeetingStates.FirstMeeting || Main.RealOptionsData.GetFloat(FloatOptionNames.PlayerSpeedMod) >= 1.9f || AmongUsClient.Instance.Ping >= 300 || Options.CurrentGameMode == CustomGameMode.NaturalDisasters || GameStates.CurrentServerType != GameStates.ServerType.Vanilla || !__instance || __instance.PlayerId >= 200 || !__instance.IsAlive() || __instance.inVent) return;
+        // 判定順は「managed だけで決まる条件 → il2cpp 呼びを伴う条件」。既定 OFF の機能なので、OFF の卓では
+        // il2cpp 呼びを 1 本も払わずに抜ける (毎 tick × 全員の経路・2026-09-07 第37弾)。全条件が純粋な述語なので結果は不変。
+        if (!Options.EnableMovementChecking.GetBool() || !FixedUpdatePatch.AmHostTick || Main.HasJustStarted || !Main.IntroDestroyed || MeetingStates.FirstMeeting || Options.CurrentGameMode == CustomGameMode.NaturalDisasters || !GameStates.IsInTask || ExileController.Instance || Main.RealOptionsData.GetFloat(FloatOptionNames.PlayerSpeedMod) >= 1.9f || AmongUsClient.Instance.Ping >= 300 || GameStates.CurrentServerType != GameStates.ServerType.Vanilla || !__instance || __instance.PlayerId >= 200 || !__instance.IsAlive() || __instance.inVent) return;
 
-        Vector2 pos = __instance.Pos();
         long now = Utils.TimeStamp;
+        Vector2 pos;
 
         if (!LastPosition.TryGetValue(__instance.PlayerId, out Vector2 lastPosition))
         {
+            pos = __instance.Pos();
             SetCurrentData();
             return;
         }
 
+        // Pos() は 1 呼び ≈700B なので、1 秒に 1 回の判定へ進むと決まってから読む
         if (LastCheck.TryGetValue(__instance.PlayerId, out long lastCheck) && lastCheck == now) return;
 
+        pos = __instance.Pos();
         SetCurrentData();
 
         if (!FastVector2.DistanceWithinRange(lastPosition, pos, 10f) && PhysicsHelpers.AnythingBetween(__instance.Collider, lastPosition, pos, Constants.ShipOnlyMask, false))
