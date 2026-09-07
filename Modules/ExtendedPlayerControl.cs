@@ -1678,6 +1678,10 @@ internal static class ExtendedPlayerControl
 
                 if (queue.Count > 0 && player.NetTransform.isActiveAndEnabled && !player.NetTransform.isPaused)
                 {
+                    // queue._array の読み出しは毎回新しい配列 wrapper を作り 1 回 ≈695B の managed 確保になる
+                    // (2026-09-07 実測: Length / indexer 側は 0)。先に確保無しの直読みを試し、駄目な時だけ従来経路。
+                    if (NetPosQueueReader.TryReadLast(queue, out Vector2 last)) return last;
+
                     var array = queue._array;
                     int tail = queue._tail;
                     int index = (tail - 1 + array.Length) % array.Length; // handle wrap-around

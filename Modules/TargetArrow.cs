@@ -126,9 +126,10 @@ internal static class TargetArrow
     ///     Issue NotifyRoles when there are updates
     /// </summary>
     /// <param name="seer"></param>
-    public static void OnFixedUpdate(PlayerControl seer)
+    // inTask は呼び側 (FixedUpdatePatch) が 1 人分で 1 回だけ読んだ GameStates.IsInTask (il2cpp 呼びの重複を畳む)
+    public static void OnFixedUpdate(PlayerControl seer, bool inTask)
     {
-        if (!GameStates.IsInTask) return;
+        if (!inTask) return;
 
         bool seerIsDead = !seer.IsAlive();
 
