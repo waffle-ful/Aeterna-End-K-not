@@ -106,7 +106,8 @@ internal static class KickRiskDetector
     }
 
     /// <summary>関所 (SendOrDisconnect Prefix) の計装から毎パケット呼ぶ。例外は握り潰す。</summary>
-    public static void Scan(MessageWriter msg)
+    /// <param name="buf">PacketRateGate.CopyUsedBytes が写した使用済みバイト列 (先頭 usedLen バイトだけ有効)。</param>
+    public static void Scan(MessageWriter msg, byte[] buf, int usedLen)
     {
         if (!Enabled) return;
 
@@ -117,11 +118,10 @@ internal static class KickRiskDetector
             if (AmongUsClient.Instance == null || !AmongUsClient.Instance.AmHost) return;
             if (GameStates.CurrentServerType != GameStates.ServerType.Vanilla) return;
 
-            byte[] buf = msg.Buffer;
             if (buf == null) return;
 
             int headerLen = msg.SendOption == SendOption.Reliable ? 3 : 1;
-            int limit = Math.Min(msg.Length, buf.Length);
+            int limit = Math.Min(usedLen, buf.Length);
             int pos = headerLen;
             var budget = ScanCap;
 

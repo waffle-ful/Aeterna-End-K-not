@@ -1592,6 +1592,7 @@ public static class Utils
             return;
         }
 
+        HealthLog.NoteOp("ShowActiveRoles.build");
         StringBuilder sb = new("<size=80%>");
         sb.Append($"<color={GetRoleColorCode(CustomRoles.GM)}>{GetRoleName(CustomRoles.GM)}</color>: {(Main.GM.Value ? GetString("RoleRate") : GetString("RoleOff"))}");
 
@@ -1629,7 +1630,10 @@ public static class Utils
         });
 
         roles.DoIf(x => x.Value.Count > 0, x => sb.Append($"\n\n<u>{GetString($"TabGroup.{x.Key}")}:</u>\n{string.Join(", ", x.Value)}"));
-        SendMessage("\n", playerId, sb.ToString().Replace("color=", string.Empty).Trim());
+        string built = sb.ToString().Replace("color=", string.Empty).Trim();
+        HealthLog.NoteOp("ShowActiveRoles.send");
+        SendMessage("\n", playerId, built);
+        HealthLog.EndOp();
     }
 
     public static void ShowChildrenSettings(OptionItem option, StringBuilder sb, int deep = 0, bool f1 = false, bool disableColor = true)
@@ -1915,7 +1919,13 @@ public static class Utils
     public static void ShowHelp(byte id)
     {
         PlayerControl player = GetPlayerById(id);
-        SendMessage(Command.AllCommands.FindAll(x => x.CanUseCommand(player, false) && !x.CommandForms.Contains("help")).Aggregate("<size=70%>", (s, c) => s + $"\n<b>/{c.CommandForms.TakeWhile(f => f.All(char.IsAscii)).MinBy(f => f.Length)}{(c.Arguments.Length == 0 ? string.Empty : $" {c.Arguments.Split(' ').Select((x, i) => id == 0 ? ColorString(GetColor(i), x) : x).Join(delimiter: " ")}")}</b> \u2192 {c.Description}"), id, GetString("CommandList"));
+        HealthLog.NoteOp("ShowHelp.filter");
+        List<Command> usable = Command.AllCommands.FindAll(x => x.CanUseCommand(player, false) && !x.CommandForms.Contains("help"));
+        HealthLog.NoteOp("ShowHelp.build");
+        string helpText = usable.Aggregate("<size=70%>", (s, c) => s + $"\n<b>/{c.CommandForms.TakeWhile(f => f.All(char.IsAscii)).MinBy(f => f.Length)}{(c.Arguments.Length == 0 ? string.Empty : $" {c.Arguments.Split(' ').Select((x, i) => id == 0 ? ColorString(GetColor(i), x) : x).Join(delimiter: " ")}")}</b> \u2192 {c.Description}");
+        HealthLog.NoteOp("ShowHelp.send");
+        SendMessage(helpText, id, GetString("CommandList"));
+        HealthLog.EndOp();
         return;
 
         Color GetColor(int i) => i switch
@@ -2013,6 +2023,7 @@ public static class Utils
     private static Stopwatch TempReviveHostRevertStopwatch = new();
     private static Stopwatch TempReviveHostTimeSinceRevivalStopwatch = new();
     private static string[] CachedLetterOnlyHexColors = [];
+    private static (int cr, int cg, int cb)[] CachedLetterOnlyRgb = [];
     private static readonly Regex ColorTagRegex = new(@"<\s*(?:color\s*=\s*)?#([0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?)\s*>", RegexOptions.Compiled);
     private static readonly Dictionary<(int R, int G, int B), string> CachedColorReplacements = [];
     private static readonly char[] HexLetters = ['a', 'b', 'c', 'd', 'e', 'f'];
@@ -2188,8 +2199,11 @@ public static class Utils
                 // if (importance != MessageImportance.High && GameStates.InGame && !title.Contains("#ffff00") && !title.Contains('⚠') && !text.Contains('⚠') && title != GetString("NoSpamAnymoreUseCmd"))
                 //     sendOption = SendOption.None;
                 
+                HealthLog.NoteOp("SM.xform.color");
                 text = ReplaceHexColorsWithSafeColors(text);
+                HealthLog.NoteOp("SM.xform.digit");
                 text = ReplaceDigitsOutsideRichText(text);
+                HealthLog.NoteOp("SM.body");
             }
             
             if (importance == MessageImportance.Low)
@@ -2773,18 +2787,20 @@ public static class Utils
                 }
             }
 
-            foreach (var hex in GenerateLetterOnlyHexColors())
-            {
-                int cr = Convert.ToInt32(hex[..2], 16);
-                int cg = Convert.ToInt32(hex.Substring(2, 2), 16);
-                int cb = Convert.ToInt32(hex.Substring(4, 2), 16);
+            // 46656 候補を毎回 Convert.ToInt32(substring) で解いていたのが未キャッシュ色 1 つにつき ≈25ms
+            // (2026-09-07 実測・/h の 200ms 凍結の正体)。(r,g,b) は 1 回だけ前計算して整数配列を走査する。
+            string[] hexes = GenerateLetterOnlyHexColors();
+            (int cr, int cg, int cb)[] rgbs = GetLetterOnlyRgb(hexes);
 
+            for (var i = 0; i < hexes.Length; i++)
+            {
+                (int cr, int cg, int cb) = rgbs[i];
                 double d = ColorDistance(r, g, b, cr, cg, cb);
 
                 if (d < bestDist)
                 {
                     bestDist = d;
-                    bestValue = hex;
+                    bestValue = hexes[i];
                 }
             }
 
@@ -2799,6 +2815,22 @@ public static class Utils
             int dg = g1 - g2;
             int db = b1 - b2;
             return dr * dr + dg * dg + db * db;
+        }
+
+        static (int cr, int cg, int cb)[] GetLetterOnlyRgb(string[] hexes)
+        {
+            if (CachedLetterOnlyRgb.Length == hexes.Length) return CachedLetterOnlyRgb;
+
+            var rgbs = new (int cr, int cg, int cb)[hexes.Length];
+
+            for (var i = 0; i < hexes.Length; i++)
+            {
+                string hex = hexes[i];
+                rgbs[i] = (Convert.ToInt32(hex[..2], 16), Convert.ToInt32(hex.Substring(2, 2), 16), Convert.ToInt32(hex.Substring(4, 2), 16));
+            }
+
+            CachedLetterOnlyRgb = rgbs;
+            return rgbs;
         }
 
         static string[] GenerateLetterOnlyHexColors()
@@ -3324,7 +3356,8 @@ public static class Utils
             if (!AmongUsClient.Instance.AmHost) return;
             if (!SetUpRoleTextPatch.IsInIntro && ((SpecifySeer && SpecifySeer.IsModdedClient() && (Options.CurrentGameMode == CustomGameMode.Standard || SpecifySeer.IsHost())) || (GameStates.IsMeeting && !ForMeeting) || GameStates.IsLobby)) return;
 
-            HealthLog.NoteOp("NotifyRoles");
+            HealthLog.NoteOp("NotifyRoles.build"); // 配信 7 人卓で latetask 46〜106ms の最大単独犯 (2026-09-07 第36弾) — 構築と送信を分けて読む
+            long nrT0 = Stopwatch.GetTimestamp();
 
             var apc = Main.CachedAllPlayerControls();
             SeerList = SpecifySeer ? [SpecifySeer] : apc;
@@ -3343,7 +3376,12 @@ public static class Utils
 
             // 500 byte ごとの手動分割は廃止。RpcSetName が内部で kick 上限より手前の chunk 分割を管理する。
             // packed message ヘッダ + GameId ぶんで「空」の閾値が大きくなるため <= 3 → <= 11。
+            HealthLog.NoteOp("NotifyRoles.send");
+            long nrT1 = Stopwatch.GetTimestamp();
+            int nrBytes = sender.stream.Length; // SendMessage 後は stream が畳まれて 0 になる
             sender.SendMessage(!hasValue || sender.stream.Length <= 11);
+            HealthLog.EndOp();
+            long nrT2 = Stopwatch.GetTimestamp();
 
             if (Options.CurrentGameMode != CustomGameMode.Standard) return;
 
@@ -3353,7 +3391,8 @@ public static class Utils
             if (seers.Length == 0) seers = "\u2205";
             if (targets.Length == 0) targets = "\u2205";
 
-            Logger.Info($" Seers: {seers} ---- Targets: {targets}", "NR");
+            // build / send の実時間 (ms) を既存行に載せる — HITCH 行 (≥50ms) に頼らず 7 人卓の配信ログから人数スケールを読むため
+            Logger.Info($" Seers: {seers} ---- Targets: {targets} | build={(nrT1 - nrT0) * 1000.0 / Stopwatch.Frequency:F1}ms send={(nrT2 - nrT1) * 1000.0 / Stopwatch.Frequency:F1}ms bytes={nrBytes}", "NR");
         }
         catch (Exception e) { ThrowException(e); }
     }

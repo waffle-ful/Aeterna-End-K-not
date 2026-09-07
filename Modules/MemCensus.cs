@@ -35,6 +35,9 @@ public static class MemCensus
         {
             long now = Utils.TimeStamp;
             if (src == "lobby" && now - _lastRunTs < 30) return; // 遷移バタつきによる多重発火ガード
+            // 自動発火は 200〜458ms (重いのは texOwners) ホスト画面を止める (2026-09-07 配信 7 人卓で ×7 実測)。
+            // 客が居るロビーでは打たず、ソロ〜2 人 (自分+検証用 1 台) のときだけ自動で残す。手動 (/census・bridge) は常に可。
+            if (src == "lobby" && PlayerControl.AllPlayerControls.Count > 2) return;
             if (src == "lobby") _lastRunTs = now; // 手動発火(bridge/manual)は自動発火の30s抑制を消費しない
             HealthLog.NoteOp("MemCensus");
 
@@ -162,6 +165,7 @@ public static class MemCensus
             TopNames<GameObject>("go", 20, now, src);
             TopNames<Material>("mat", 10, now, src);
             TopNames<Sprite>("spr", 10, now, src);
+            HealthLog.NoteOp("MemCensus.top");
             TopTextures(10, now, src);
             TopAudioClips(10, now, src);
 
@@ -171,8 +175,10 @@ public static class MemCensus
             if (boehmAllowed)
                 try { BoehmCensus.RunNow(src); } catch (Exception e) { Logger.Warn($"boehm census hook failed: {e.Message}", "MemCensus"); }
 
+            HealthLog.NoteOp("MemCensus.texOwners");
             AttributeTopTextureOwners(TopTexOwnerCount, now, src);
             if (src != "lobby") TextureListCensus(now, src);
+            HealthLog.EndOp();
         }
         catch (Exception e) { Logger.Warn($"census failed: {e.Message}", "MemCensus"); }
     }
