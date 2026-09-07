@@ -77,7 +77,10 @@ internal static class ExternalRpcPetPatch
 
         if (GameStates.IsLobby)
         {
-            TryLobbyKill(pc);
+            // ロビーのペット RPC は客がロビーで送る唯一の PlayerPhysics RPC なので、Hacking 切断と
+            // 同秒に押していたかを Session 行と突合できるよう、早期 return の前に必ず 1 行残す。
+            bool handled = TryLobbyKill(pc);
+            Logger.Info($"lobby pet: {pc.GetRealName()} owner={pc.OwnerId} pid={pc.PlayerId} dead={Main.LobbyDead.Contains(pc.PlayerId)} kill={handled}", "LobbyPet");
             return;
         }
 

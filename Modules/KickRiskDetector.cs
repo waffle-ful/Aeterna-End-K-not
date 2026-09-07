@@ -66,6 +66,13 @@ internal static class KickRiskDetector
     /// </summary>
     private static readonly Dictionary<int, double> RecentlyLeftOwners = [];
 
+    /// <summary>
+    /// 直近に退出したプレイヤーの同一性 netId → 退出時刻 (秒)。所有者 id 経由の猶予 (<see cref="RecentlyLeftOwners"/>)
+    /// は退出者本人の client id が接続表から引けるかに依存するため、退出処理の途中で出る despawn を取りこぼす。
+    /// netId を直接覚えておけば、その窓でも「退出した本人の後片付け」と分かる。
+    /// </summary>
+    private static readonly Dictionary<uint, double> RecentlyLeftNetIds = [];
+
     /// <summary>退出直後の Despawn を P4 から除外する猶予 (秒)。Repeat Despawn の 2.5 秒に余裕を持たせた値。</summary>
     private const double LeaveGraceSeconds = 10d;
 
@@ -93,6 +100,40 @@ internal static class KickRiskDetector
     private static bool LeftRecently(int owner)
     {
         return RecentlyLeftOwners.TryGetValue(owner, out double leftAt) && Clock.Elapsed.TotalSeconds - leftAt <= LeaveGraceSeconds;
+    }
+
+    /// <summary>退出したプレイヤーの同一性 netId を記録する (OnPlayerLeftPatch の Prefix から、バニラ本体より先に呼ばれる)。</summary>
+    public static void NoteLeftNetId(uint netId)
+    {
+        if (netId == 0U) return;
+
+        double now = Clock.Elapsed.TotalSeconds;
+        RecentlyLeftNetIds[netId] = now;
+
+        if (RecentlyLeftNetIds.Count > 64)
+        {
+            var stale = new List<uint>();
+
+            foreach (KeyValuePair<uint, double> kvp in RecentlyLeftNetIds)
+                if (now - kvp.Value > LeaveGraceSeconds)
+                    stale.Add(kvp.Key);
+
+            for (var i = 0; i < stale.Count; i++) RecentlyLeftNetIds.Remove(stale[i]);
+        }
+    }
+
+    /// <summary>その netId が「猶予内に退出した本人のもの」か。true なら P4 を鳴らさない。</summary>
+    private static bool NetIdLeftRecently(uint netId)
+    {
+        return RecentlyLeftNetIds.TryGetValue(netId, out double leftAt) && Clock.Elapsed.TotalSeconds - leftAt <= LeaveGraceSeconds;
+    }
+
+    /// <summary>P4 の判定に使った実値 (所有者 id / 接続中か / 猶予内退出か) を1行に畳む。診断用。</summary>
+    private static string DescribeOwner(uint netId)
+    {
+        if (!IdentityOwner.TryGetValue(netId, out int owner)) return "owner=unknown";
+
+        return $"owner={owner} live={Utils.GetClientById(owner) != null} leftRecently={LeftRecently(owner)}";
     }
 
     private static readonly Dictionary<string, (int Count, double LastLog)> Seen = [];
@@ -274,8 +315,23 @@ internal static class KickRiskDetector
                     // スナップショットはローカルオブジェクト由来で退出後も残る — "Repeat Despawn"
                     // (PlayerJoinAndLeftPatch, 離脱 2.5 秒後) はホスト側 .Despawn() を呼ばないため
                     // 実測 15/29 で自己ヒットしていた。送信時点で所有クライアントがまだ接続中のときだけ違法。
+                    // ⚠️ 所有クライアント id 経由の猶予 (LeftRecently) だけでは実測で足りていない:
+                    // 2026-09-06 の観測で P4 発火 15/15 が同一秒の Disconnected と一致していた = 退出者の
+                    // 後片付け despawn を拾い続けている。id 側の突き合わせが何処で外れるかは未確定なので、
+                    // 退出者の netId を直接覚えて突き合わせる (id の対応関係に依存しない抑止)。
+                    if (NetIdLeftRecently(netId))
+                    {
+                        // 抑止の根拠を残す: この行の owner を Session 行の ClientID と突き合わせれば、
+                        // id 経由の猶予が何処で外れているのか (別 incarnation の id か / 別プレイヤーか) が分かる。
+                        Logger.Info($"P4 suppressed: despawn of recently-left netId={netId} ({DescribeOwner(netId)})", "KickRiskDetector");
+                        return;
+                    }
+
                     if (!IdentityOwner.TryGetValue(netId, out int owner) || (Utils.GetClientById(owner) != null && !LeftRecently(owner)))
-                        Report("P4", $"Despawn targets a LIVE player's identity object netId={netId}", packetLen);
+                    {
+                        // 残った発火がどの経路かを次の観測で切り分けられるよう、判定の実値を添える。
+                        Report("P4", $"Despawn targets a LIVE player's identity object netId={netId} ({DescribeOwner(netId)})", packetLen);
+                    }
 
                     return;
                 }
