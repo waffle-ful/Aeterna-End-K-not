@@ -644,6 +644,31 @@ internal static class OnPlayerJoinedPatch
 [HarmonyPatch(typeof(AmongUsClient), nameof(AmongUsClient.OnPlayerLeft))]
 internal static class OnPlayerLeftPatch
 {
+    // 退出の記録はバニラ本体より先に取る: 後片付けの Despawn が本体内で飛ぶ経路があっても取りこぼさないため。
+    // (Postfix だけの記録では KickRiskDetector の P4 が退出者の despawn を拾い続けていた — 2026-09-06 実測 15/15。)
+    public static void Prefix([HarmonyArgument(0)] ClientData data)
+    {
+        try
+        {
+            if (data == null) return;
+
+            EndKnot.Modules.KickRiskDetector.NoteClientLeft(data.Id);
+
+            PlayerControl pc = data.Character;
+            if (!pc) return;
+
+            EndKnot.Modules.KickRiskDetector.NoteLeftNetId(pc.NetId);
+
+            // ⚠️ GameData 未登録の PlayerControl では Data のゲッター自体が例外を投げる (`!= null` では防げない)
+            try
+            {
+                if (pc.Data != null) EndKnot.Modules.KickRiskDetector.NoteLeftNetId(pc.Data.NetId);
+            }
+            catch { /* best-effort */ }
+        }
+        catch { /* 計器の失敗で退出処理を止めない */ }
+    }
+
     public static void Postfix(AmongUsClient __instance, [HarmonyArgument(0)] ClientData data, [HarmonyArgument(1)] DisconnectReasons reason)
     {
         try { EndKnot.Modules.TestBridge.OnPlayerLeft(data, reason); } catch { } // ブリッジ OFF 時は即 return する軽量フック
