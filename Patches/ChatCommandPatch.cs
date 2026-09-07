@@ -313,6 +313,7 @@ internal static class ChatCommands
             new("Medium", "{answer}", Command.UsageLevels.Everyone, Command.UsageTimes.InMeeting, (_, _, _) => { }, true, false, [GetString("CommandArgs.Medium.Answer")]),
             new("Revenge", "{id}", Command.UsageLevels.Everyone, Command.UsageTimes.AfterDeath, (_, _, _) => { }, true, false, [GetString("CommandArgs.Revenge.Id")]),
             new("GiveKill", "{id}", Command.UsageLevels.Host, Command.UsageTimes.InLobby, GiveKillCommand, true, false, [GetString("CommandArgs.GiveKill.Id")]),
+            new("GivePet", "{id} [petId]", Command.UsageLevels.Host, Command.UsageTimes.InLobby, GivePetCommand, true, false, [GetString("CommandArgs.GiveKill.Id"), GetString("CommandArgs.GivePet.PetId")]),
             new("LobbyKillAction", "{targetId}", Command.UsageLevels.Modded, Command.UsageTimes.InLobby, LobbyKillActionCommand, true, true),
 
             // Dev-only debug commands
@@ -1130,10 +1131,32 @@ internal static class ChatCommands
         Utils.SendMessage(string.Format(Translator.GetString("LobbyKill.Granted"), target.GetRealName()), player.PlayerId);
     }
 
+    private static void GivePetCommand(PlayerControl player, string text, string[] args)
+    {
+        if (args.Length < 2 || !byte.TryParse(args[1], out byte targetId))
+        {
+            Utils.SendMessage(Translator.GetString("LobbyKill.InvalidTarget"), player.PlayerId);
+            return;
+        }
+
+        PlayerControl target = Utils.GetPlayerById(targetId);
+        if (target == null)
+        {
+            Utils.SendMessage(Translator.GetString("LobbyKill.InvalidTarget"), player.PlayerId);
+            return;
+        }
+
+        string petId = args.Length >= 3 && !string.IsNullOrWhiteSpace(args[2]) ? args[2] : PetsHelper.GetPetId();
+        PetsHelper.SetPet(target, petId);
+        Logger.Info($"give pet: {target.GetRealName()} owner={target.OwnerId} pid={target.PlayerId} pet={petId}", "LobbyPet");
+        Utils.SendMessage(string.Format(Translator.GetString("LobbyPet.Granted"), target.GetRealName(), petId), player.PlayerId);
+    }
+
     private static void LobbyKillActionCommand(PlayerControl killer, string text, string[] args)
     {
         if (!AmongUsClient.Instance.AmHost) return;
-        if (args.Length < 1 || !byte.TryParse(args[0], out byte targetId)) return;
+        // args[0] はコマンド語自身 (text.Split(' ')) — 対象 id は args[1]。args[0] を読んでいた間は常に空振りしていた。
+        if (args.Length < 2 || !byte.TryParse(args[1], out byte targetId)) return;
         if (!Main.LobbyKillers.Contains(killer.PlayerId)) return;
         if (Main.LobbyDead.Contains(killer.PlayerId) || Main.LobbyDead.Contains(targetId)) return;
 
