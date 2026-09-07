@@ -1854,23 +1854,31 @@ internal static class FixedUpdatePatch
     public static long NameSent;
     public static long NameSkip;
 
+    // AmongUsClient.AmHost は interop の getter 呼び (runtime_invoke + bool の box) で、毎 tick × 全員 × 数回の呼びが
+    // il2cpp 側のゴミになる (2026-09-07 第36弾: pc.head 200B/呼 ≈ bool 呼び 4 本)。tick 内で変わらない値なので
+    // FixedUpdateCaller が tick 冒頭に 1 回だけ読んで、この経路はそれを参照する。
+    internal static bool AmHostTick;
+
     private static long LastErrorTS;
     private static long LastSelfNameUpdateTS;
 
     public static void Postfix(PlayerControl __instance, bool lowLoad)
     {
+        // pc.head = DoPostfix より前 (kill 猶予 / CNO / 通報待ち / 幽霊役職 / 死者間引き) の帰属。pcloop の子。
+        var headCur = Modules.AllocProbe.Now();
+
         try
         {
             if (__instance.PlayerId >= 200) return;
 
             CheckMurderPatch.Update(__instance.PlayerId);
 
-            if (AmongUsClient.Instance.AmHost && __instance.AmOwner)
+            if (AmHostTick && __instance.AmOwner)
                 CustomNetObject.FixedUpdate();
 
             byte id = __instance.PlayerId;
 
-            if (AmongUsClient.Instance.AmHost && GameStates.IsInTask && ReportDeadBodyPatch.CanReport != null && ReportDeadBodyPatch.CanReport.GetValueOrDefault(id, true) && !id.IsPlayerRoleBlocked() && ReportDeadBodyPatch.WaitReport.TryGetValue(id, out List<NetworkedPlayerInfo> waitReports) && waitReports.Count > 0)
+            if (AmHostTick && GameStates.IsInTask && ReportDeadBodyPatch.CanReport != null && ReportDeadBodyPatch.CanReport.GetValueOrDefault(id, true) && !id.IsPlayerRoleBlocked() && ReportDeadBodyPatch.WaitReport.TryGetValue(id, out List<NetworkedPlayerInfo> waitReports) && waitReports.Count > 0)
             {
                 NetworkedPlayerInfo info = waitReports[0];
                 waitReports.Clear();
@@ -1878,7 +1886,7 @@ internal static class FixedUpdatePatch
                 __instance.ReportDeadBody(info);
             }
 
-            if (AmongUsClient.Instance.AmHost)
+            if (AmHostTick)
             {
                 if (GhostRolesManager.AssignedGhostRoles.TryGetValue(id, out (CustomRoles Role, IGhostRole Instance) ghostRole))
                 {
@@ -1904,11 +1912,19 @@ internal static class FixedUpdatePatch
                 int buffer = Options.DeepLowLoad.GetBool() ? 150 : 60;
                 DeadBufferTime.TryAdd(id, buffer);
                 DeadBufferTime[id]--;
-                if (DeadBufferTime[id] > 0) return;
+
+                if (DeadBufferTime[id] > 0)
+                {
+                    Modules.AllocProbe.Mark("pc.head", headCur);
+                    return;
+                }
+
                 DeadBufferTime[id] = buffer;
             }
         }
         catch (Exception e) { ThrowException(e); }
+
+        Modules.AllocProbe.Mark("pc.head", headCur);
 
         try { DoPostfix(__instance, lowLoad); }
         catch (Exception ex)
@@ -1968,7 +1984,7 @@ internal static class FixedUpdatePatch
             TargetArrow.OnFixedUpdate(player);
             LocateArrow.OnFixedUpdate(player);
 
-            if (AmongUsClient.Instance.AmHost)
+            if (AmHostTick)
             {
                 Camouflage.OnFixedUpdate(player);
 
@@ -1981,7 +1997,7 @@ internal static class FixedUpdatePatch
 
         alloc = Modules.AllocProbe.Mark("pc.core.self", alloc);
 
-        if (AmongUsClient.Instance.AmHost)
+        if (AmHostTick)
         {
             AFKDetector.OnFixedUpdate(player);
 
@@ -2158,10 +2174,10 @@ internal static class FixedUpdatePatch
                 AddExtraAbilityUsesOnFinishedTasks(player);
             }
 
-            if (AmongUsClient.Instance.AmHost && inTask && alive && Options.LadderDeath.GetBool())
+            if (AmHostTick && inTask && alive && Options.LadderDeath.GetBool())
                 FallFromLadder.FixedUpdate(player);
 
-            if (inTask && self && AmongUsClient.Instance.AmHost && (Options.DisableDevices.GetBool() || DisableDevice.TimeLimitEnabled))
+            if (inTask && self && AmHostTick && (Options.DisableDevices.GetBool() || DisableDevice.TimeLimitEnabled))
                 DisableDevice.FixedUpdate();
 
             // IsShifted ガード: タグ持ち (dev/mod/vip) プレイヤーは ApplySuffix が変装中も生名を
@@ -2223,7 +2239,7 @@ internal static class FixedUpdatePatch
 
         if (GameStates.IsInGame)
         {
-            if (!AmongUsClient.Instance.AmHost && Options.CurrentGameMode != CustomGameMode.Standard) return;
+            if (!AmHostTick && Options.CurrentGameMode != CustomGameMode.Standard) return;
 
             bool shouldSeeTargetAddons = self || new[] { PlayerControl.LocalPlayer, player }.All(x => x.Is(Team.Impostor));
 
