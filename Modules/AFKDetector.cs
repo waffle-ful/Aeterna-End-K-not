@@ -59,11 +59,12 @@ public static class AFKDetector
         TempIgnoredPlayers.Remove(pc.PlayerId);
     }
 
-    public static void OnFixedUpdate(PlayerControl pc)
+    // inTask / exile は呼び側 (FixedUpdatePatch) が 1 人分で 1 回だけ読んだ GameStates.IsInTask / ExileController.Instance
+    public static void OnFixedUpdate(PlayerControl pc, bool inTask, bool exile)
     {
         if (EnableDetector == null || MinPlayersToActivate == null) return;
 
-        if (!EnableDetector.GetBool() || !GameStates.IsInTask || ExileController.Instance || Main.AllAlivePlayerControlsCount < MinPlayersToActivate.GetInt() || !PlayerData.TryGetValue(pc.PlayerId, out Data data)) return;
+        if (!EnableDetector.GetBool() || !inTask || exile || Main.AllAlivePlayerControlsCount < MinPlayersToActivate.GetInt() || !PlayerData.TryGetValue(pc.PlayerId, out Data data)) return;
 
         // 速度が MinSpeed に固定されている間は本人の意思で動けない (Stasis の全員凍結 / Freezer の
         // 単体凍結など)。動けない人を AFK と数えるとタイマー切れで警告ストームが一斉に走るので、

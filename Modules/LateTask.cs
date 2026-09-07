@@ -31,9 +31,16 @@ internal static class LateTask
                 if (name is not "" and not "No Name Task") Modules.HealthLog.NoteOp(name);
 
                 var alloc = Modules.AllocProbe.Now();
+                long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
                 try { action(); }
                 finally { Modules.AllocProbe.Mark("latetask", alloc); }
-            
+
+                // HITCH (≥50ms) に届かない中量級の latetask も所要時間を残す — 名前付きのみ・10ms 以上。
+                // 配信 7 人卓で 46〜109ms を記録した Reset SkipTasks / Aftermeeting Blackout Buster / FixKillCooldownTask が
+                // 送信前計装の 64KB 複製税 (2026-09-07 第35弾で修正) だったかを、修正後の値で判定するための計器。
+                double ms = (System.Diagnostics.Stopwatch.GetTimestamp() - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+                if (ms >= 10 && name is not "" and not "No Name Task") Logger.Info($"\"{name}\" ms={ms:F1}", "LT");
+
                 if (name is not "" and not "No Name Task" && log)
                     Logger.Info($"\"{name}\" is finished", "LateTask");
             }

@@ -1866,6 +1866,12 @@ internal static class FixedUpdatePatch
     {
         // pc.head = DoPostfix より前 (kill 猶予 / CNO / 通報待ち / 幽霊役職 / 死者間引き) の帰属。pcloop の子。
         var headCur = Modules.AllocProbe.Now();
+        // 2026-09-07 第37弾: IsInTask (= MeetingHud.Instance の op_Implicit) と ExileController.Instance (op_Implicit) は
+        // 1 本 ≈32B の il2cpp 確保。この 1 人分の処理で 7 回 / 4 回読んでいたのを 1 回に畳み、DoPostfix と各モジュールへ渡す。
+        // tick 単位 (全員共通) のキャッシュにしないのは、下の通報処理でループ中に MeetingHud が生成されて反転しうるため。
+        // try の外で読む: 中で例外が出ても DoPostfix には実値が渡る (false 固定で渡すと Spurt 復元等のゲートが反転する)。
+        bool inTask = GameStates.IsInTask;
+        bool exile = ExileController.Instance;
 
         try
         {
@@ -1873,17 +1879,22 @@ internal static class FixedUpdatePatch
 
             CheckMurderPatch.Update(__instance.PlayerId);
 
-            if (AmHostTick && __instance.AmOwner)
+            byte id = __instance.PlayerId;
+            // AmOwner (il2cpp getter) を PlayerId 比較 (field 読み) に置換 — DoPostfix の self と同じ判定式
+            bool self = id == PlayerControl.LocalPlayer.PlayerId;
+
+            // CNO の毎 tick 送信は 1 tick に 1 回だけ発火させる必要があるので、PlayerId 比較で絞った上で AmOwner でも確認する
+            // (AllPlayerControls に PlayerId 未確定のエントリが同居した場合の二重発火を防ぐ。getter を払うのはホスト自身の 1 体分だけ)
+            if (AmHostTick && self && __instance.AmOwner)
                 CustomNetObject.FixedUpdate();
 
-            byte id = __instance.PlayerId;
-
-            if (AmHostTick && GameStates.IsInTask && ReportDeadBodyPatch.CanReport != null && ReportDeadBodyPatch.CanReport.GetValueOrDefault(id, true) && !id.IsPlayerRoleBlocked() && ReportDeadBodyPatch.WaitReport.TryGetValue(id, out List<NetworkedPlayerInfo> waitReports) && waitReports.Count > 0)
+            if (AmHostTick && inTask && ReportDeadBodyPatch.CanReport != null && ReportDeadBodyPatch.CanReport.GetValueOrDefault(id, true) && !id.IsPlayerRoleBlocked() && ReportDeadBodyPatch.WaitReport.TryGetValue(id, out List<NetworkedPlayerInfo> waitReports) && waitReports.Count > 0)
             {
                 NetworkedPlayerInfo info = waitReports[0];
                 waitReports.Clear();
                 Logger.Info($"{__instance.GetNameWithRole().RemoveHtmlTags()}: Now that it is possible to report, we will process the report.", "ReportDeadBody");
                 __instance.ReportDeadBody(info);
+                inTask = GameStates.IsInTask; // 通報で会議が始まっていれば以降は会議中として扱う (従来と同じ読み直し)
             }
 
             if (AmHostTick)
@@ -1903,11 +1914,11 @@ internal static class FixedUpdatePatch
                             break;
                     }
                 }
-                else if (!Main.HasJustStarted && GameStates.IsInTask && !ExileController.Instance && GhostRolesManager.ShouldHaveGhostRole(__instance))
+                else if (!Main.HasJustStarted && inTask && !exile && GhostRolesManager.ShouldHaveGhostRole(__instance))
                     GhostRolesManager.AssignGhostRole(__instance);
             }
 
-            if (GameStates.InGame && Options.DontUpdateDeadPlayers.GetBool() && !(__instance.IsHost() && __instance.AmOwner) && !__instance.IsAlive() && !__instance.GetCustomRole().NeedsUpdateAfterDeath() && !__instance.HasAbilityCD() && Options.CurrentGameMode is not CustomGameMode.RoomRush and not CustomGameMode.Quiz)
+            if (GameStates.InGame && Options.DontUpdateDeadPlayers.GetBool() && !(self && __instance.IsHost()) && !__instance.IsAlive() && !__instance.GetCustomRole().NeedsUpdateAfterDeath() && !__instance.HasAbilityCD() && Options.CurrentGameMode is not CustomGameMode.RoomRush and not CustomGameMode.Quiz)
             {
                 int buffer = Options.DeepLowLoad.GetBool() ? 150 : 60;
                 DeadBufferTime.TryAdd(id, buffer);
@@ -1926,7 +1937,7 @@ internal static class FixedUpdatePatch
 
         Modules.AllocProbe.Mark("pc.head", headCur);
 
-        try { DoPostfix(__instance, lowLoad); }
+        try { DoPostfix(__instance, lowLoad, inTask, exile); }
         catch (Exception ex)
         {
             if (OnGameJoinedPatch.JoiningGame && ex is NullReferenceException) return;
@@ -1947,7 +1958,7 @@ internal static class FixedUpdatePatch
         }
     }
 
-    private static void DoPostfix(PlayerControl player, bool lowLoad)
+    private static void DoPostfix(PlayerControl player, bool lowLoad, bool inTask, bool exile)
     {
         // 突然の切断では PlayerControl の破棄と Data の除去が数フレームずれるため、毎フレーム全プレイヤーを
         // 回るこの経路が「本体は生きているが Data が無い」中間状態を踏む。この関数に切断処理は無いので
@@ -1962,7 +1973,6 @@ internal static class FixedUpdatePatch
         byte lpId = PlayerControl.LocalPlayer.PlayerId;
         bool self = playerId == lpId; // Updates that are independent of the player are only executed for the local player.
 
-        bool inTask = GameStates.IsInTask;
         bool alive = player.IsAlive();
 
         if (self)
@@ -1981,12 +1991,12 @@ internal static class FixedUpdatePatch
 
         if (!lowLoad)
         {
-            TargetArrow.OnFixedUpdate(player);
-            LocateArrow.OnFixedUpdate(player);
+            TargetArrow.OnFixedUpdate(player, inTask);
+            LocateArrow.OnFixedUpdate(player, inTask);
 
             if (AmHostTick)
             {
-                Camouflage.OnFixedUpdate(player);
+                Camouflage.OnFixedUpdate(player, self);
 
                 if (self && Options.CurrentGameMode is CustomGameMode.Standard or CustomGameMode.FFA or CustomGameMode.CaptureTheFlag or CustomGameMode.NaturalDisasters or CustomGameMode.Snowdown && IntroCutsceneDestroyPatch.IntroDestroyTS + 20 == TimeStamp)
                     NotifyRoles();
@@ -1999,7 +2009,7 @@ internal static class FixedUpdatePatch
 
         if (AmHostTick)
         {
-            AFKDetector.OnFixedUpdate(player);
+            AFKDetector.OnFixedUpdate(player, inTask, exile);
 
             if (GameStates.IsLobby && ((ModUpdater.HasUpdate && ModUpdater.ForceUpdate) || ModUpdater.IsBroken || !Main.AllowPublicRoom) && AmongUsClient.Instance.IsGamePublic)
                 AmongUsClient.Instance.ChangeGamePublic(false);
@@ -2041,13 +2051,18 @@ internal static class FixedUpdatePatch
             if (!GameStates.IsLobby)
             {
                 var roleStart = alloc; // pc.core.role は下のサブ区間 3 本の合計 (サブ計測を足しても総量の意味を変えない)
-                if (player.Is(CustomRoles.Spurt) && !Mathf.Approximately(Main.AllPlayerSpeed[playerId], Spurt.StartingSpeed[playerId]) && !inTask && !GameStates.IsMeeting) // fix ludicrous bug
+                // Is(addon) は毎回 `!player` (op_Implicit) を払う。この関数は入口で player の生存を確認済みなので、
+                // PlayerStates を 1 回引いて SubRoles を直接見る (GetCustomSubRoles と同じ台帳・同じ結果)。
+                List<CustomRoles> ownSubRoles = Main.PlayerStates.TryGetValue(playerId, out PlayerState ownState) ? ownState.SubRoles : null;
+                bool hasHaste = ownSubRoles != null && ownSubRoles.Contains(CustomRoles.Haste);
+
+                if (ownSubRoles != null && ownSubRoles.Contains(CustomRoles.Spurt) && !Mathf.Approximately(Main.AllPlayerSpeed[playerId], Spurt.StartingSpeed[playerId]) && !inTask && !GameStates.IsMeeting) // fix ludicrous bug
                 {
                     Main.AllPlayerSpeed[playerId] = Spurt.StartingSpeed[playerId];
                     player.MarkDirtySettings();
                 }
 
-                if (!Main.KillTimers.TryAdd(playerId, 10f) && (!player.inVent || player.Is(CustomRoles.Haste)) && Main.KillTimers[playerId] > 0)
+                if (!Main.KillTimers.TryAdd(playerId, 10f) && (!player.inVent || hasHaste) && Main.KillTimers[playerId] > 0)
                     Main.KillTimers[playerId] -= Time.fixedDeltaTime;
 
                 if (self)
@@ -2056,7 +2071,7 @@ internal static class FixedUpdatePatch
                         QuizMaster.Data.LastSabotage = active;
                 }
 
-                if (!lowLoad && player.IsModdedClient() && player.Is(CustomRoles.Haste))
+                if (!lowLoad && hasHaste && player.IsModdedClient())
                     player.ForceKillTimerContinue = true;
 
                 if (DoubleTrigger.FirstTriggerTimer.Count > 0)
@@ -2092,7 +2107,7 @@ internal static class FixedUpdatePatch
                 Modules.AllocProbe.Mark("pc.core.role.plague", alloc);
                 alloc = Modules.AllocProbe.Mark("pc.core.role", roleStart);
 
-                bool checkPos = inTask && !ExileController.Instance && !AntiBlackout.SkipTasks && alive && !Pelican.IsEaten(playerId) && Main.IntroDestroyed;
+                bool checkPos = inTask && !exile && !AntiBlackout.SkipTasks && alive && !Pelican.IsEaten(playerId) && Main.IntroDestroyed;
                 if (checkPos) Asthmatic.OnCheckPlayerPosition(player);
 
                 foreach (PlayerState state in Main.PlayerStates.Values)
@@ -2308,7 +2323,7 @@ internal static class FixedUpdatePatch
             if (!self && Main.PlayerStates.TryGetValue(target.PlayerId, out var tState) && tState.Role is Venerer { ChangedSkin: true })
                 realName = string.Empty;
 
-            if (target.AmOwner && inTask)
+            if (self && inTask) // target == player なので AmOwner と同値 (il2cpp getter を払わない)
             {
                 if (target.Is(CustomRoles.Arsonist) && target.IsDouseDone())
                     realName = ColorString(GetRoleColor(CustomRoles.Arsonist), GetString(Options.UsePets.GetBool() ? "PetToWin" : "EnterVentToWin"));

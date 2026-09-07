@@ -305,9 +305,10 @@ public static class Camouflage
             .EndRpc();
     }
 
-    public static void OnFixedUpdate(PlayerControl pc)
+    // self は呼び側の PlayerId 比較 (= AmOwner と同値・il2cpp getter を払わない)
+    public static void OnFixedUpdate(PlayerControl pc, bool self)
     {
-        if (pc.AmOwner) CheckCamouflage();
+        if (self) CheckCamouflage();
 
         if (!WaitingForSkinChange.Contains(pc.PlayerId) || pc.inVent || pc.walkingToVent || pc.onLadder || pc.inMovingPlat) return;
 
