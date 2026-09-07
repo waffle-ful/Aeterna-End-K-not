@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text;
 using Hazel;
+using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using InnerNet;
 
 namespace EndKnot.Modules;
@@ -155,15 +156,17 @@ public static class PacketRateGate
         try
         {
             // リングバッファ/タグ覗き見は移動同期の Unreliable ホットパスに触れないよう Reliable のみに限定する。
-            // タグ覗き見は msg.Buffer を直接参照するゼロコピー実装 (PeekTopTagZeroCopy 参照)。
+            // タグ覗き見は使用済みバイト列を 1 回だけ写したスクラッチから読む (CopyUsedBytes 参照)。
             // EarlyWarning.OnPacket はコピー無しで安いので全種で呼ぶ。
             if (msg.SendOption == SendOption.Reliable)
             {
                 byte tag = 0;
                 byte innerTag = 0;
                 byte nested = 0;
-                try { tag = PeekTopTagZeroCopy(msg); } catch { /* best-effort */ }
-                try { if (tag is 5 or 6 or 26) PeekInnerZeroCopy(msg, tag, out innerTag, out nested); } catch { /* best-effort */ }
+                // 使用済みバイト列は 1 回だけ写して peek / scan で共有する (下の CopyUsedBytes 参照)。
+                byte[] used = CopyUsedBytes(msg, out int usedLen);
+                try { tag = PeekTopTagZeroCopy(used, usedLen, msg.SendOption); } catch { /* best-effort */ }
+                try { if (tag is 5 or 6 or 26) PeekInnerZeroCopy(used, usedLen, msg.SendOption, tag, out innerTag, out nested); } catch { /* best-effort */ }
 
                 AppendRing(msg.Length, tag, innerTag, nested, msg.SendOption, gated: false);
                 TickSecondMeter();
@@ -171,7 +174,7 @@ public static class PacketRateGate
                 // 公式鯖で 100% キックが確定している 5 パターンを
                 // 送信直前に検出してログに残す。ブロックはしない。ここが全送信の唯一の関所なので、
                 // 「キックされずに生き残った窓」でも混入を捕まえられる。
-                KickRiskDetector.Scan(msg);
+                KickRiskDetector.Scan(msg, used, usedLen);
             }
 
             EarlyWarning.OnPacket("Chokepoint", msg.Length, msg.Length, msg.SendOption.ToString());
@@ -466,23 +469,46 @@ public static class PacketRateGate
 
     // msg.Buffer は MessageWriter.Get(sendOption) が Clear() 内で先頭に SendOption 1byte を書き込んでから
     // ペイロードを積む実装 (Hazel-Networking 標準) なので、ToByteArray(false) が剥がすのと同じ 1byte ヘッダを
-    // コピー無しで直接スキップし、先頭サブメッセージの length(u16 LE)+tag だけを Buffer から直接読む。
+    // 直接スキップし、先頭サブメッセージの length(u16 LE)+tag だけを写したバイト列から読む。
     // 想定外の内部レイアウトだった場合は長さの整合性チェックで弾いて 0 (不明) を返す best-effort な診断用途。
-    private static byte PeekTopTagZeroCopy(MessageWriter msg)
+    // ⚠️ msg.Buffer は Il2CppStructArray<byte> で、byte[] へ暗黙変換すると Hazel の 64KB バッファ全体が
+    // 毎回複製される (2026-09-07 実測 ≈7ms/回・送信 1 本につき peek×2 + scan×1 で ≈20ms)。
+    // 使用済み長さ (msg.Length) ぶんだけを常駐スクラッチへ写して、peek と scan で共有する。
+    private static byte[] _usedScratch = new byte[2048];
+
+    /// <summary>msg の使用済みバイト列 (先頭から msg.Length) を常駐スクラッチへ写して返す。有効長は usedLen (それ以降は前回の残骸)。
+    /// メインスレッド専用・呼び出し中に別の送信が割り込まない前提 (RecordInstrumentation の同期区間内でのみ使う)。</summary>
+    private static byte[] CopyUsedBytes(MessageWriter msg, out int usedLen)
+    {
+        usedLen = 0;
+        Il2CppStructArray<byte> src = msg.Buffer;
+        if (src == null) return null;
+
+        int len = Math.Min(msg.Length, (int)src.Length);
+        if (len <= 0) return null;
+
+        if (_usedScratch.Length < len) _usedScratch = new byte[Math.Max(len, _usedScratch.Length * 2)];
+        byte[] dst = _usedScratch;
+        for (var i = 0; i < len; i++) dst[i] = src[i]; // インデクサは il2cpp メモリの直接読み (複製無し)
+
+        usedLen = len;
+        return dst;
+    }
+
+    private static byte PeekTopTagZeroCopy(byte[] buffer, int usedLen, SendOption option)
     {
         // Hazel の MessageWriter.Clear は Reliable だと先頭 3byte (SendOption 1 + reliable ID 2)、
         // None だと 1byte をヘッダとして確保する (ToByteArray(false) が剥がすのと同じ量)。
-        int headerLen = msg.SendOption == SendOption.Reliable ? 3 : 1;
+        int headerLen = option == SendOption.Reliable ? 3 : 1;
         const int SubHeaderLen = 3; // ushort length + byte tag
 
-        byte[] buffer = msg.Buffer;
-        if (buffer == null || msg.Length < headerLen + SubHeaderLen || buffer.Length < headerLen + SubHeaderLen) return 0;
+        if (buffer == null || usedLen < headerLen + SubHeaderLen) return 0;
 
         int subLength = buffer[headerLen] | (buffer[headerLen + 1] << 8);
         byte tag = buffer[headerLen + 2];
 
         // 整合性チェック: 覗いた長さが msg 全体を超えるなら想定したレイアウトが外れている → 諦める。
-        if (subLength < 0 || headerLen + SubHeaderLen + subLength > msg.Length) return 0;
+        if (subLength < 0 || headerLen + SubHeaderLen + subLength > usedLen) return 0;
 
         return tag;
     }
@@ -495,16 +521,15 @@ public static class PacketRateGate
     // gameId が tag26 だけ packed (可変長) なのは呼び出し側の実装差 (CustomNetObject / GameOptionsSender が
     // WritePacked、Tag5/6 本体が Write(int)) に合わせたもの。PacketSplitPatch.DividePackedMessage と同じ前提。
     // 想定外レイアウトなら整合性チェックで諦めて 0 を返す best-effort な診断用途。
-    private static void PeekInnerZeroCopy(MessageWriter msg, byte topTag, out byte innerTag, out byte nestedCount)
+    private static void PeekInnerZeroCopy(byte[] buffer, int usedLen, SendOption option, byte topTag, out byte innerTag, out byte nestedCount)
     {
         innerTag = 0;
         nestedCount = 0;
 
-        byte[] buffer = msg.Buffer;
         if (buffer == null) return;
 
-        int headerLen = msg.SendOption == SendOption.Reliable ? 3 : 1;
-        int limit = Math.Min(msg.Length, buffer.Length);
+        int headerLen = option == SendOption.Reliable ? 3 : 1;
+        int limit = usedLen;
         int pos = headerLen;
         if (pos + 3 > limit) return;
 

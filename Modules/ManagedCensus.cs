@@ -52,6 +52,9 @@ public static class ManagedCensus
 
         // 初回の実走は _fields のリフレクション構築込みで重いので、試合中 (InTask/Meeting) の HB には乗せない。
         if (_fields == null && state is not ("Lobby" or "Menu" or "Ended")) return;
+        // 自動棚卸しは 73〜91ms ホスト画面を止める (2026-09-07 配信 7 人卓で実測)。MemCensus と同じく客が居る間は打たない
+        // (次の HB で再判定するので _lastSweepTs は進めない)。手動 (/census) は常に可。
+        if (PlayerControl.AllPlayerControls.Count > 2) return;
         _lastSweepTs = now;
 
         // 強制フル GC はメインスレッドを数十〜数百 ms 止めるので、ゲーム中 (InTask/Meeting) は踏まない。

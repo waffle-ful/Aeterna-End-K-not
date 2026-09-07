@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using HarmonyLib;
 using InnerNet;
 using UnityEngine;
@@ -80,6 +82,14 @@ public static class HealthLog
         _lastOpClosed = false;
     }
 
+    /// <summary>重い区間の出口で呼ぶ。直近 op をここで閉じ、以後の空白時間 (次の op か Tick まで) をその op に帰属させない。</summary>
+    public static void EndOp()
+    {
+        long nowMs = HitchClock.ElapsedMilliseconds;
+        CloseLastOp(nowMs);
+        _lastOpName = null;
+    }
+
     /// <summary>直近 op の所要時間を確定して maxOp 候補に入れる。二度目以降は何もしない。</summary>
     private static void CloseLastOp(long nowMs)
     {
@@ -93,6 +103,26 @@ public static class HealthLog
             _maxOpMs = durMs;
             _maxOpName = _lastOpName;
         }
+
+        // 窓内の区間別合計 (短い区間が多数回で積もる型のヒッチを maxOp だけでは見抜けないため)
+        if (durMs > 0) OpSum[_lastOpName] = OpSum.GetValueOrDefault(_lastOpName) + durMs;
+    }
+
+    private static readonly Dictionary<string, long> OpSum = [];
+
+    /// <summary>窓内の区間別合計の上位 4 件 (合計 5ms 以上のみ)。ヒッチ行の説明用。</summary>
+    private static string GetOpSumSuffix()
+    {
+        if (OpSum.Count == 0) return "";
+        var sb = new StringBuilder();
+        var n = 0;
+        foreach (KeyValuePair<string, long> kv in OpSum.OrderByDescending(x => x.Value))
+        {
+            if (kv.Value < 5 || n >= 4) break;
+            sb.Append(n == 0 ? " opsum=" : ",").Append(kv.Key).Append(':').Append(kv.Value);
+            n++;
+        }
+        return sb.ToString();
     }
 
     // op の開始がヒッチ窓 (前回 Tick 以降 = gapMs+誤差) の内側にある時だけ帰属を出す。
@@ -110,7 +140,7 @@ public static class HealthLog
     private static string GetLastOpSuffix(long nowMs, long gapMs)
     {
         string op = _lastOpName;
-        string maxOp = _maxOpMs >= MaxOpReportThresholdMs ? $" maxOp={_maxOpName} maxOpMs={_maxOpMs}" : "";
+        string maxOp = (_maxOpMs >= MaxOpReportThresholdMs ? $" maxOp={_maxOpName} maxOpMs={_maxOpMs}" : "") + GetOpSumSuffix();
 
         if (op == null) return maxOp;
 
@@ -409,6 +439,7 @@ public static class HealthLog
         // maxOp は「前回 Tick 以降に終わった op」の集計なので、Tick ごとに窓を開け直す
         _maxOpName = null;
         _maxOpMs = 0;
+        OpSum.Clear();
 
         _lastTickMs = nowMs;
         _lastBoehmUsed = boehmNow;

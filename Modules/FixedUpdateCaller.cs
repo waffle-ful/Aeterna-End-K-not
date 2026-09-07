@@ -268,6 +268,7 @@ public static class FixedUpdateCaller
             alloc = AllocProbe.Mark("kill", killStart);
 
             bool lobby = GameStates.IsLobby;
+            FixedUpdatePatch.AmHostTick = amongUsClient.AmHost; // 個別 tick 経路の getter 呼びを 1 回に畳む (FixedUpdatePatch.AmHostTick 参照)
 
             if (lobby || (Main.IntroDestroyed && GameStates.InGame && !GameStates.IsMeeting && !ExileController.Instance && !AntiBlackout.SkipTasks))
             {
@@ -285,11 +286,16 @@ public static class FixedUpdateCaller
                 {
                     try
                     {
+                        // 帰属計器: pcloop の子 (pc.*) は DoPostfix 内だけを覆っていて、7 人卓で il2 の約 2/3 が
+                        // 子の外に残った (2026-09-07 第35弾)。ループ本体 / Postfix 頭 / モード別 / 移動検査を個別に切る。
+                        var pcCur = AllocProbe.Now();
                         PlayerControl pc = PlayerControl.AllPlayerControls[index];
 
                         if (!pc || pc.PlayerId >= 200) continue;
 
+                        pcCur = AllocProbe.Mark("pcloop.iter", pcCur);
                         FixedUpdatePatch.Postfix(pc, NonLowLoadPlayerIndex != index);
+                        pcCur = AllocProbe.Now();
 
                         if (lobby) continue;
 
@@ -321,12 +327,15 @@ public static class FixedUpdateCaller
                                 break;
                         }
 
+                        pcCur = AllocProbe.Mark("pcloop.mode", pcCur);
                         CheckInvalidMovementPatch.Postfix(pc);
+                        AllocProbe.Mark("pcloop.cim", pcCur);
                     }
                     catch (Exception e) { Utils.ThrowException(e); }
                 }
 
                 alloc = AllocProbe.Mark("pcloop", alloc);
+
 
                 if (lobby) return;
 
