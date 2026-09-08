@@ -874,7 +874,7 @@ public static class HealthLog
         catch { return false; }
     }
 
-    private static bool TryGetNetStats(out int resent, out int relSent, out int ackd, out int pingsNoAck, out int ping)
+    internal static bool TryGetNetStats(out int resent, out int relSent, out int ackd, out int pingsNoAck, out int ping)
     {
         resent = relSent = ackd = pingsNoAck = ping = 0;
 
