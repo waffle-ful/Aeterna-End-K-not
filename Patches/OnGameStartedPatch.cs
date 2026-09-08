@@ -1365,6 +1365,9 @@ internal static class StartGameHostPatch
         // wire 時刻計器。ホストローカルログのみ・送信への影響ゼロ。
         float probeSetStart = Time.realtimeSinceStartup;
 
+        // 開始送信窓のリンク統計を段ごとに残す計器 (Modules/StartWindowProbe.cs)。同じく送信ゼロ。
+        StartWindowProbe.BeginGame();
+
         foreach (PlayerControl pc in PlayerControl.AllPlayerControls)
         {
             if (!pc.Data)
@@ -1386,6 +1389,8 @@ internal static class StartGameHostPatch
                 if (qa.Dropped) yield break;
             }
         }
+
+        StartWindowProbe.MarkPhase("set");
 
         Logger.Info("Successfully set everyone's data as Disconnected", "StartGameHost");
         Logger.Info($"BlackoutProbe: Disconnected=true wired {Time.realtimeSinceStartup - probeSetStart:F2}s after set start (chunks={Utils.LastSendGameDataChunks}, gateQueue={PacketRateGate.PendingCount}, video={Modules.Media.LoadingScreenVideo.IsShowing})", "BlackoutProbe");
@@ -1436,6 +1441,7 @@ internal static class StartGameHostPatch
             }
 
             Logger.Info($"BlackoutProbe: waited {setToRolesGap:F2}s between the Disconnected set and the self-role dispatch (directWindow={directWindow}, closeBypass={closeBypass})", "BlackoutProbe");
+            StartWindowProbe.MarkPhase("gap");
         }
         else
             Logger.Warn("delay_set_to_roles.txt requests no gap: the self-role RPCs can overtake the Disconnected set (known to stall the client intro)", "BlackoutProbe");
@@ -1450,6 +1456,8 @@ internal static class StartGameHostPatch
         // ここが v3 の急所: この時点で SetRole 系はクライアントへ発ち、クライアントは intro 構築を
         // 始められる。復元 (下の Disconnected=false) がこれよりどれだけ遅れて wire に乗るかを測る。
         Logger.Info($"BlackoutProbe: roles dispatched {Time.realtimeSinceStartup - probeRolesStart:F2}s after roles start (gateQueue={PacketRateGate.PendingCount})", "BlackoutProbe");
+
+        StartWindowProbe.MarkPhase("roles");
 
         // v3 根治 (2026-07-20): この 1.2s 固定待ち (初回コミット由来=EHR上流設計) が「復元がクライアントの
         // intro 構築に間に合わない」危険窓の正体 (BlackoutProbe 実測: 復元 wire は常に roles+1.24s で、
@@ -1486,6 +1494,9 @@ internal static class StartGameHostPatch
 
         Logger.Info($"BlackoutProbe: restore wired +{Time.realtimeSinceStartup - probeRolesStart:F2}s after roles dispatch start (queue-drain {Time.realtimeSinceStartup - probeRestoreQueued:F2}s, gateQueue={PacketRateGate.PendingCount}, video={Modules.Media.LoadingScreenVideo.IsShowing})", "BlackoutProbe");
 
+        StartWindowProbe.MarkPhase("restore");
+        StartWindowProbe.Report();
+
         // restore がワイヤに乗ったら窓は即クローズ (finally は中断時の保険として残す)。
         PacketRateGate.StartWindowBypass = false;
         DataFlagRateLimiter.StartWindowBypass = false;
@@ -1495,6 +1506,9 @@ internal static class StartGameHostPatch
         {
             PacketRateGate.StartWindowBypass = false;
             DataFlagRateLimiter.StartWindowBypass = false;
+
+            // 窓が途中で終わった時 (qa.Dropped の yield break / 例外) も、揃っている段だけは残す。
+            StartWindowProbe.Report();
         }
 
         // 窓の外へ移したローディングバー演出 (95→100)。送信には無関係な純演出。
