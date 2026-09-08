@@ -1304,8 +1304,10 @@ internal static class StartGameHostPatch
         // (開始を無期限に人質へ取らない) が、その事実を恒久チャネルへ残す = 連言仮説の 1-bit 計器を兼ねる。
         // ⚠️ 順序契約: この待ちは必ず drain 待ちより【前】に置く — 後に置くと、劣化スロットル (12/s) の
         // まま drain がタイムアウト → 直送窓が落ちて v4 暗転根治が壊れる。
-        // ⚠️ 待ち上限 4s + 劣化時 drain 上限 10s = 最悪 14s。バニラ客は roles dispatch まで ~20s で
-        // 自主退出するため、合計をこの予算内に必ず収めること。
+        // ⚠️ 待ち上限 4s + 劣化時 drain 上限 10s + SetToRolesGap 既定 1.5s = 最悪 15.5s。バニラ客は
+        // roles dispatch まで ~20s で自主退出するため、合計をこの予算内に必ず収めること。
+        // ⚠️ delay_set_to_roles.txt と delay_disconnected_restore.txt に大きな値を同時に入れると
+        // 理論上 34s まで伸びてこの予算を壊す (通常運用ではどちらも不在)。デバッグ用途でのみ使うこと。
         // Rollback bit: EndKnot_DATA/disable_start_link_wait.txt で待ち自体をスキップ (再ビルド不要)。
         if (!DisableStartLinkWait() && HealthLog.IsLinkDegradedNow(out string linkDetail0))
         {
@@ -1372,9 +1374,10 @@ internal static class StartGameHostPatch
             pc.Data.Disconnected = true;
         }
 
-        // Upstream yields on qa.Wait() here so the Disconnected=true data is on the wire BEFORE
-        // SetRoleSelf below — without the wait, the immediate self-role RPCs can overtake this
-        // still-queued GameData (same ordering-inversion class as the Release() pacing bug).
+        // Upstream yields on qa.Wait() here to get the Disconnected=true data on the wire before
+        // SetRoleSelf below. ⚠ 2026-09-08 実測: レート制限待ちが無ければこれは常に 0.00s で返り、
+        // 実質の間隔を作らない (追い越しを止めているのは下の SetToRolesGap の実時間待ちの方)。
+        // ここは「キューに積んだまま先へ進まない」ことだけを保証する。
         {
             var qa = Utils.SendGameData();
             if (qa != null)
@@ -1385,7 +1388,57 @@ internal static class StartGameHostPatch
         }
 
         Logger.Info("Successfully set everyone's data as Disconnected", "StartGameHost");
-        Logger.Info($"BlackoutProbe: Disconnected=true wired {Time.realtimeSinceStartup - probeSetStart:F2}s after set start (gateQueue={PacketRateGate.PendingCount}, video={Modules.Media.LoadingScreenVideo.IsShowing})", "BlackoutProbe");
+        Logger.Info($"BlackoutProbe: Disconnected=true wired {Time.realtimeSinceStartup - probeSetStart:F2}s after set start (chunks={Utils.LastSendGameDataChunks}, gateQueue={PacketRateGate.PendingCount}, video={Modules.Media.LoadingScreenVideo.IsShowing})", "BlackoutProbe");
+
+        // 客側のイントロ起動条件は「本人役職の SetRole を受けた瞬間に全員 Disconnected=true」で、外れると
+        // 客は二度と再評価しないためその客は一生イントロが始まらない (= 暗転)。上の qa 待ちは 0.00s で返るので
+        // 間隔を作れず、単一パケットの set でも後発の本人役職 RPC に追い越される (2026-09-08 実測)。
+        // ここで実時間の間隔を空けて set の先着を担保する。秒数は SetToRolesGap() 参照。
+        // ⚠️ この待ちの間だけ直送窓 (StartWindowBypass) は必ず閉じる。開けたまま実時間 yield すると、
+        // 窓中に走る無関係な送信が予算免除のまま流れる露出を作り直してしまう (v4 が意図的に潰した面)。
+        // 兄弟 MeetingStartWire と同じ「drain → 開ける → 送る → 閉じる」の形を保つため、待ちの後に
+        // 同じドレインを掛け直してから開け直す。ゲートは FIFO なので roles/restore の順序は入れ替わらない。
+        float setToRolesGap = SetToRolesGap();
+
+        if (setToRolesGap > 0f)
+        {
+            // A/B 用の切り戻し: EndKnot_DATA/keep_bypass_during_gap.txt を置くと待ちの間も直送窓を開けたままにする
+            // (= bypass 修正前の挙動)。既定は閉じる。
+            bool closeBypass = !KeepBypassDuringGap();
+
+            if (closeBypass)
+            {
+                PacketRateGate.StartWindowBypass = false;
+                DataFlagRateLimiter.StartWindowBypass = false;
+            }
+
+            yield return new WaitForSecondsRealtime(setToRolesGap);
+
+            if (directWindow && closeBypass)
+            {
+                float regainStart = Time.realtimeSinceStartup;
+                float regainTimeout = PacketRateGate.DegradedThrottleActive ? 10f : 6f;
+
+                while ((PacketRateGate.PendingCount > 0 || DataFlagRateLimiter.PendingCount > 0) && Time.realtimeSinceStartup - regainStart < regainTimeout)
+                    yield return null;
+
+                if (PacketRateGate.PendingCount > 0 || DataFlagRateLimiter.PendingCount > 0)
+                {
+                    directWindow = false;
+                    Logger.Error($"BlackoutProbe: post-gap drain timed out after {regainTimeout:F0}s (gateQueue={PacketRateGate.PendingCount}, dataQueue={DataFlagRateLimiter.PendingCount}) — falling back to gated sends for this game", "BlackoutProbe");
+                }
+            }
+
+            if (closeBypass)
+            {
+                PacketRateGate.StartWindowBypass = directWindow;
+                DataFlagRateLimiter.StartWindowBypass = directWindow;
+            }
+
+            Logger.Info($"BlackoutProbe: waited {setToRolesGap:F2}s between the Disconnected set and the self-role dispatch (directWindow={directWindow}, closeBypass={closeBypass})", "BlackoutProbe");
+        }
+        else
+            Logger.Warn("delay_set_to_roles.txt requests no gap: the self-role RPCs can overtake the Disconnected set (known to stall the client intro)", "BlackoutProbe");
 
         // v4: ローディングバー演出 (旧: ここで 95→100 の1秒) は直送窓の外 (restore 完了後) へ移動。
         // 窓中の実時間 yield を無くし、無関係な送信が予算免除を受ける露出を数フレームに縮める。
@@ -1403,10 +1456,15 @@ internal static class StartGameHostPatch
         // 暗転/クリーンの差はクライアント側ロードのレースのみ)。TOHK の契約「イントロが始まるまでに戻す」
         // (StandardIntro.cs:140) に合わせ、roles dispatch 直後に即復元する。
         // Rollback bit: create EndKnot_DATA/delay_disconnected_restore.txt to restore the old 1.2s wait.
-        if (DelayDisconnectedRestore())
+        // 2026-09-08 実機: 即復元だとクライアントの開始コルーチンが止まることがある (下の
+        // DisconnectedRestoreDelay のコメント参照) が、遅らせるとイントロの陣営表示が代わりに壊れるため
+        // 既定は即復元のまま据え置く。
+        float restoreDelay = DisconnectedRestoreDelay();
+
+        if (restoreDelay > 0f)
         {
-            Logger.Warn("delay_disconnected_restore.txt present: restoring old 1.2s wait before Disconnected restore (known to lose the client-intro race)", "BlackoutProbe");
-            yield return new WaitForSecondsRealtime(1.2f);
+            Logger.Warn($"delay_disconnected_restore.txt present: waiting {restoreDelay:F2}s before Disconnected restore", "BlackoutProbe");
+            yield return new WaitForSecondsRealtime(restoreDelay);
         }
 
         foreach (PlayerControl pc in PlayerControl.AllPlayerControls)
@@ -1445,10 +1503,48 @@ internal static class StartGameHostPatch
         loadingBarManager.ToggleLoadingBar(false);
     }
 
-    private static bool DelayDisconnectedRestore()
+    // 0 = 遅延なし (既定)。ファイルが在れば 1.2 秒、本文に 0.1〜10 の数値が書いてあればその秒数まで待つ。
+    // クライアントの開始コルーチンは「自役職の受信 → 約 1.9 秒の固定待ち → イントロ開始」と進み、この窓の中に
+    // Disconnected 復元が着弾するとそのコルーチンが二度と進まなくなる (2026-09-08 実機実測: 窓の中で 8/20 が
+    // 発症・3.5 秒まで遅らせると 0/10)。ただし遅らせると今度はイントロの陣営表示 (teamToShow) が窓の終端で
+    // 組まれるときに全員切断のままになり、乗組員/仲間が 1 人も映らなくなる。両立しないので既定は遅延なしのまま、
+    // 遅らせたいときだけこのファイルで切り替える。
+    // 既定 1.5 秒。実測 (2026-09-08 ABAB・4 客 × 9 ゲーム) は 0 秒で 6/12 発症・0.5 秒で 1/12・1.0 秒で 0/12 で、
+    // 1.5 秒はそこへ 0.5 秒の余裕を足した値。5 人構成は set が単一パケット (chunks=1) に収まる最も易しい条件で、
+    // 人数が増えるほど set は複数チャンクに割れて着弾が遅れるため、実測値ちょうどでは足りない。
+    // 調整/切り戻し: EndKnot_DATA/delay_set_to_roles.txt の本文に 0〜10 の秒数 (0 = 間隔なし = 旧挙動)。
+    private const float DefaultSetToRolesGap = 1.5f;
+
+    private static bool KeepBypassDuringGap()
     {
-        try { return System.IO.File.Exists($"{Main.DataPath}/EndKnot_DATA/delay_disconnected_restore.txt"); }
+        try { return System.IO.File.Exists($"{Main.DataPath}/EndKnot_DATA/keep_bypass_during_gap.txt"); }
         catch { return false; }
+    }
+
+    private static float SetToRolesGap()
+    {
+        try
+        {
+            string path = $"{Main.DataPath}/EndKnot_DATA/delay_set_to_roles.txt";
+            if (!System.IO.File.Exists(path)) return DefaultSetToRolesGap;
+
+            string body = System.IO.File.ReadAllText(path).Trim();
+            return float.TryParse(body, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float v) && v is >= 0f and <= 10f ? v : DefaultSetToRolesGap;
+        }
+        catch { return DefaultSetToRolesGap; }
+    }
+
+    private static float DisconnectedRestoreDelay()
+    {
+        try
+        {
+            string path = $"{Main.DataPath}/EndKnot_DATA/delay_disconnected_restore.txt";
+            if (!System.IO.File.Exists(path)) return 0f;
+
+            string body = System.IO.File.ReadAllText(path).Trim();
+            return float.TryParse(body, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float v) && v is > 0f and <= 10f ? v : 1.2f;
+        }
+        catch { return 0f; }
     }
 
     private static bool DisableStartDirectWindow()

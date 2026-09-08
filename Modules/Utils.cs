@@ -4320,9 +4320,14 @@ public static class Utils
     // depend on this data having hit the wire (DataFlagRateLimiter is FIFO, so last done = all done).
     // Upstream waits per-player (qa.Wait() in StartGameHost); this keeps that ordering guarantee
     // while preserving the fork's batched chunking.
+    // 直近の SendGameData() が何パケットに割れたか (ホストローカル診断用)。全員分の Data は人数と装飾名の
+    // 長さ次第で SafeChunkLength を越えて複数チャンクになり、チャンク間の到着順は保証されない。
+    public static int LastSendGameDataChunks;
+
     public static DataFlagRateLimiter.QueuedAction SendGameData()
     {
         int messages = 0;
+        int chunks = 0;
         DataFlagRateLimiter.QueuedAction lastQueued = null;
         int packingLimit = AmongUsClient.Instance.GetMaxMessagePackingLimit();
 
@@ -4364,11 +4369,13 @@ public static class Utils
         finally { NetworkedPlayerInfoSerializePatch.IntentionalSends--; }
 
         FlushWriter();
+        LastSendGameDataChunks = chunks;
         return lastQueued;
 
         void FlushWriter()
         {
             writer.EndMessage();
+            chunks++;
 
             // IMPORTANT: capture this specific writer instance
             var capturedWriter = writer;
