@@ -4217,7 +4217,27 @@ public static class Utils
             // RpcChangeOutfitByData は sender の state machine を通さず stream に直書きするため、
             // 蓄積済み stream に相乗りして単一チャンクが kick 上限 (~1024 byte) を超えないよう先に切り出す。
             if (writer != null && writer.stream.Length > CustomRpcSender.SafeChunkLength) writer.FlushCurrentStream();
-            return pc.RpcChangeOutfitByData(newOutfit, writer?.stream, sendOption);
+            bool changed = pc.RpcChangeOutfitByData(newOutfit, writer?.stream, sendOption);
+
+            // 書き込んだ GameData 束 (tag5) はここで閉じる。RpcChangeOutfitByData が見た目リフレッシュのために
+            // 同梱する self-Shapeshift は、Shapeshifter 基底を持たない本人のクライアントでは
+            // AbilityButton.SetFromSettings が NullReferenceException になる (モッド側は Finalizer で
+            // 握り潰すが、非モッド客には届かない)。この例外は InnerNetClient.HandleGameDataInner の
+            // コルーチン内で出るため、同じ束に後から積んだメッセージがまとめて捨てられる。
+            // 束を閉じておけば以降の書き込みは別の束に載り、巻き添えで落ちない。
+            //
+            // 閉じるのは書き込みの「後」でなければならない。上の RpcChangeOutfitByData は tag5 を自分では
+            // 開かず、開いている束へ tag1 (Data) と tag2 (RPC) を直書きする前提なので、先に閉じると壊れる。
+            // FlushCurrentStream は InRootMessage では何もしないため、その状態では EndMessage で束を閉じる。
+            if (changed && writer != null)
+            {
+                if (writer.CurrentState == CustomRpcSender.State.InRootMessage)
+                    writer.EndMessage(startNew: true);
+                else
+                    writer.FlushCurrentStream();
+            }
+
+            return changed;
         }
 
         if (!AmongUsClient.Instance.AmHost) return false;

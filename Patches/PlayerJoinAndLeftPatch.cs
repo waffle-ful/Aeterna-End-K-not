@@ -25,6 +25,8 @@ internal static class OnGameJoinedPatch
 {
     public static bool JoiningGame;
     public static bool ClearedLogs;
+    private static bool ShownOverlayHangWarning;
+    private static bool ShownLobbyKillWarning;
 
     public static void Postfix(AmongUsClient __instance)
     {
@@ -87,6 +89,40 @@ internal static class OnGameJoinedPatch
 
         if (AmongUsClient.Instance.AmHost)
         {
+            // ホストの環境・設定まわりの注意を 1 セッション 1 回ずつ出す。
+            // オーバーレイの検出は起動 10 秒後なので、間に合わなければ次のロビーで出す。
+            if (!ShownOverlayHangWarning || !ShownLobbyKillWarning)
+            {
+                LateTask.New(() =>
+                {
+                    if (!GameStates.IsLobby || !AmongUsClient.Instance || !AmongUsClient.Instance.AmHost) return;
+
+                    PlayerControl lp = PlayerControl.LocalPlayer;
+                    if (!lp) return;
+
+                    // NVIDIA のゲーム内オーバーレイが同居していると、起動直後の無応答ハングと
+                    // ロビー放置中の数十秒 framestall が出ることがある。モッド側では回避できないので注意だけ出す。
+                    // null = 検出がまだ走っていない (次のロビーで再挑戦) / 空 = 判定済みで該当なし (以後見ない)
+                    string[] overlays = Modules.HealthLog.DetectedHangRiskOverlays;
+
+                    if (!ShownOverlayHangWarning && overlays != null)
+                    {
+                        ShownOverlayHangWarning = true;
+
+                        if (overlays.Length > 0)
+                            Utils.SendMessage(GetString("OverlayHangWarning"), lp.PlayerId, GetString("OverlayHangWarningTitle"));
+                    }
+
+                    // ロビーキルは実験的機能。既定は OFF だが、保存済みの設定は既定値より優先されるため
+                    // 以前から ON にしているホストは更新後も ON のまま始まる。ON の間は毎セッション注意を出す。
+                    if (!ShownLobbyKillWarning && Options.LobbyKillEnabled?.GetBool() == true)
+                    {
+                        ShownLobbyKillWarning = true;
+                        Utils.SendMessage(GetString("LobbyKillEnabled.Warning"), lp.PlayerId, GetString("LobbyKillEnabled.WarningTitle"));
+                    }
+                }, 12f, log: false);
+            }
+
             GameStartManagerPatch.GameStartManagerUpdatePatch.ExitTimer = -1;
             Main.DoBlockNameChange = false;
             EAC.DeNum = 0;
