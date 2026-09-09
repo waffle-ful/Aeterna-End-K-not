@@ -229,52 +229,52 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 
 ## クレジット
 
-> **この Mod の役職・機能は、そのほとんどが先行 Mod に由来します。** 下記プロジェクトの開発者の皆さんに深く感謝します。直接参照したプロジェクトも、ベースにした Mod がクレジットしているプロジェクトも、まとめてこの一覧に並べています。個別の役職がどこ由来かは、リポジトリの git log（移植コミットには移植元と Co-authored-by を記載しています）で追跡できます。
+> **この Mod の役職・機能は、そのほとんどが先行 Mod に由来します。** 下記プロジェクトの開発者の皆さんに深く感謝します。直接参照したプロジェクトも、ベースにした Mod がクレジットしているプロジェクトも、まとめて名前を挙げています。「—」以降については、**当リポジトリのコミットやソースに出典が残っていて「何を取ったか」を言えるものだけ**その内容を書き、それ以外はそのプロジェクト自体の紹介にしています（由来を細かく特定できない項目も、感謝の対象であることに変わりはありません）。個別の由来は git log（移植コミットには移植元と Co-authored-by を記載しています）でも追跡できます。
 
-- **[au.libhalt.net](https://au.libhalt.net/)** — マッドジェスター
-- **[AutoRejoin](https://github.com/Maxi0fc/AutoRejoin)** (Maxi0fc) — 自動再入室
+- **[au.libhalt.net](https://au.libhalt.net/)** — Among Us の Mod 情報・配布サイト
+- **[AutoRejoin](https://github.com/Maxi0fc/AutoRejoin)** (Maxi0fc) — 切断後の自動再入室を追加するクライアント Mod
 - **[BetterAmongUs](https://github.com/D1GQ/BetterAmongUs)** (D1GQ、GPL-3.0) — modded クライアント判別フラグの一覧
 - **[Calamity Mod (Terraria)](https://github.com/CalamityTeam/CalamityModPublic)** (Calamity Team) — メインメニューのテーマ・デザインの参考
 - **[CrowdedMod](https://github.com/CrowdedMods/CrowdedMod)** (andry08 / CrowdedMods、MIT) — 大人数ロビー対応
 - **[Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles)** (Gurge44 他、GPL-3.0) — ベース Mod。役職エンジンと大多数の役職、継続的なバグ修正の取り込み元
-- **[ExtremeRoles](https://github.com/yukieiji/ExtremeRoles)** (yukieiji) — アサシン、マーリン、エアシップ関連のパッチ
+- **[ExtremeRoles](https://github.com/yukieiji/ExtremeRoles)** (yukieiji) — エアシップ関連のパッチ
 - **[Game Optimizer (CPUs / Threads Optimizer)](https://github.com/charlie754/Game-Optimizer-CPUs-Threads-Optimizer)** (charlie754、MIT) — CPU Sets によるキャッシュドメイン隔離の発想 (`CpuSetsMode` 設定)。コードは Win32 API から独自実装
-- **[Lotus (LotusContinued)](https://github.com/Lotus-AU/LotusContinued)** / [NikoCat233 fork](https://github.com/NikoCat233/LotusContinued) (GPL-3.0) — メインメニュー刷新の参考、オブジェクト操作の補助処理、Alchemist / Chameleon / Escapist / Necromancer / Deathknight / Romantic 系 / Vengeance の着想、自動リプレイ、タブアイコン、設定矛盾の検出とホスト警告、ホワイトリスト入室制限
-- **[MalumMenu](https://github.com/scp222thj/MalumMenu)** (scp222thj、GPL-3.0) — ミニマップ上のプレイヤー位置表示（Town Of Next: Edited がベント地図の参照元として挙げているもの）
+- **[Lotus (LotusContinued)](https://github.com/Lotus-AU/LotusContinued)** / [NikoCat233 fork](https://github.com/NikoCat233/LotusContinued) (GPL-3.0) — 設定矛盾の検出とホスト警告、ホワイトリスト入室制限
+- **[MalumMenu](https://github.com/scp222thj/MalumMenu)** (scp222thj、GPL-3.0) — ミニマップ上のプレイヤー位置表示（ベント接続網の地図表示の孫引き元）
 - **[Mini.RegionInstall](https://github.com/miniduikboot/Mini.RegionInstall)** (miniduikboot、GPL-3.0) — カスタムリージョンの追加（配布パッケージに同梱）
-- **[MiraAPI](https://github.com/All-Of-Us-Mods/MiraAPI)** (All-Of-Us-Mods、LGPL-2.1) — 役職情報タブのコード、UI スプライト（ページ送りボタン 2 点・チェックマーク 2 点）、ダブルタスクパネル
-- **[More Gamemodes](https://github.com/Rabek009/MoreGamemodes)** (Rabek009) — カスタムネットオブジェクト (CNO)、チャット制御と消去、ShipStatus / 投票追放まわり、ベント使用制限、メインメニュー画像の処理
-- **[Nebula on the Ship (NoS)](https://github.com/Dolly1016/Nebula)** (Dolly1016 他、GPL-3.0 / NebulaAPI は LGPL-3.0) — ミラージュ (Mirage) をはじめとする役職、ドクター、スナイパー、メモリ最適化とアドオン API の設計参考
+- **[MiraAPI](https://github.com/All-Of-Us-Mods/MiraAPI)** (All-Of-Us-Mods、LGPL-2.1) — UI スプライト（ページ送りボタン 2 点・チェックマーク 2 点）
+- **[More Gamemodes](https://github.com/Rabek009/MoreGamemodes)** (Rabek009) — カスタムネットオブジェクト (CNO)、チャット制御と消去、プレイヤー操作まわりの補助処理
+- **[Nebula on the Ship (NoS)](https://github.com/Dolly1016/Nebula)** (Dolly1016 他、GPL-3.0 / NebulaAPI は LGPL-3.0) — incremental GC の無効化と GC の先撃ち。独自役職と独自 API を多数持つ Mod
 - **[Reactor](https://github.com/NuclearPowered/Reactor)** / [XtraCube fork](https://github.com/XtraCube/Reactor) — modded ハンドシェイク、コンパイラ生成オブジェクト・ステートマシンのラッパー、カスタムサーバーの 5 秒タイムアウト解除
-- **[Revolutionary Host Roles](https://github.com/sansaaaaai/Revolutionary-host-roles)** (sansaaaaai) — 設定メニューの改修、カスタムボタン、リローダー、スタッフ、インセンダー
-- **[Stellar Roles](https://github.com/Mr-Fluuff/StellarRolesAU)** (Mr-Fluuff) — 多数の役職案、カスタムボタン画像
+- **[Revolutionary Host Roles](https://github.com/sansaaaaai/Revolutionary-host-roles)** (sansaaaaai) — 独自役職とホスト向け機能を追加する TOH 系列の Mod
+- **[Stellar Roles](https://github.com/Mr-Fluuff/StellarRolesAU)** (Mr-Fluuff) — 独自役職を多数持つ Among Us の役職 Mod
 - **[Submerged](https://github.com/SubmergedAmongUs/Submerged)** (SubmergedAmongUs) — マップ選択ボタンの扱い（Submerged 対応）
-- **[SuperNewRoles](https://github.com/SuperNewRoles/SuperNewRoles)** / [ykundesu 版](https://github.com/ykundesu/SuperNewRoles) (SuperNewRoles 開発チーム、GPL-3.0) — 波動砲 (WaveCannon)、クレジット表示、Horse Mode 切替、Mod 部屋検索、カスタムボタン、天秤、ミーティングシェリフ、トイレファン、イビルギャンブラー、ペンギン、マッドスーサイド
+- **[SuperNewRoles](https://github.com/SuperNewRoles/SuperNewRoles)** / [ykundesu 版](https://github.com/ykundesu/SuperNewRoles) (SuperNewRoles 開発チーム、GPL-3.0) — 波動砲 (WaveCannon)、Mod 部屋検索、ロゴ・スタンプの表示、デバイス使用の制限、動画表示まわり、一部の役職
 - **[template-unity](https://github.com/vpmedia/template-unity)** (vpmedia、MIT) — メルセンヌ・ツイスタ実装の参照元
-- **[TheOtherRoles](https://github.com/TheOtherRolesAU/TheOtherRoles)** — カモフラージャー、ゲッサー ほか
-- **[TheOtherRoles-GM](https://github.com/yukinogatari/TheOtherRoles-GM)** (yukinogatari) — 一部役職
-- **TOR_GM_Haoming_Edition** — イビルトラッカー、シュレディンガーの猫 ほか
-- **[TOHEX / TONEX](https://github.com/TOHEX-Official/TownOfHostEdited-Xi)** — Swapper、チャット履歴の保存
-- **[TOU-Mira](https://github.com/AU-Avengers/TOU-Mira)** (AU-Avengers、GPL-3.0) — dleks マップ選択、キルボタンのクールダウン表示、HudManager まわり、役職情報タブ。加えて Town Of Next: Edited がベント接続網の地図表示の参照元として挙げています
-- **[Town Of Host](https://github.com/tukasa0001/TownOfHost)** (tukasa0001 他) — TOH 系列の祖。ランダムスポーンやサボタージュまわりの処理
-- **[Town Of Host-H](https://github.com/Hyz-sui/TownOfHost-H)** (Hyz-sui) — 10.24 アップデート対応
+- **[TheOtherRoles](https://github.com/TheOtherRolesAU/TheOtherRoles)** — Submerged 判定まわりの処理
+- **[TheOtherRoles-GM](https://github.com/yukinogatari/TheOtherRoles-GM)** (yukinogatari) — TheOtherRoles の派生 Mod
+- **TOR_GM_Haoming_Edition** — TheOtherRoles-GM の派生 Mod
+- **[TOHEX / TONEX](https://github.com/TOHEX-Official/TownOfHostEdited-Xi)** — Town Of Host Edited 系列のホスト Mod
+- **[TOU-Mira](https://github.com/AU-Avengers/TOU-Mira)** (AU-Avengers、GPL-3.0) — dleks マップ選択、キルボタンのクールダウン表示
+- **[Town Of Host](https://github.com/tukasa0001/TownOfHost)** (tukasa0001 他) — TOH 系列の祖。サボタージュ系システムまわりの処理
+- **[Town Of Host-H](https://github.com/Hyz-sui/TownOfHost-H)** (Hyz-sui) — Town Of Host の派生ホスト Mod
 - **[Town Of Host-K](https://github.com/KYMario/TownOfHost-K)** (KYMario 他、GPL-3.0) — 多くの役職の移植元、配信サポート機能、公式鯖パケット分割対策、デバイス使用時間の上限
-- **[Town Of Host Re-Edited](https://github.com/Loonie-Toons/)** — EHR の fork 元、PhantomRolePatch
-- **[Town Of Host_ForE](https://github.com/AsumuAkaguma/TownOfHost_ForE)** (AsumuAkaguma、GPL-3.0) — BGM カスタマイズ機能、コメント取得処理の一部、チャット文字種制限 (WordLimit)、会議開始理由の通知
-- **[Town Of Host_Y](https://github.com/Yumenopai/TownOfHost_Y)** (Yumenopai) — AntiAdminer / CursedWolf / Workaholic / Greedy / Stalker / Ignitor / Rabbit、会議時の役職表示と会議拡張、属性名、ゲーム内アナウンスの変更、設定 UI、ゲーム中の役職ベース変更
-- **[Town of Host: Enhanced (TOHE)](https://github.com/EnhancedNetwork/TownofHost-Enhanced)** (The Enhanced Network 開発チーム、GPL-3.0) — 多くの役職、各種パッチ、入室時のフレンドコード照合
-- **[Town Of Host Edited / Town Of Next](https://github.com/KARPED1EM/TownOfNext)** / [TownOfHostEdited](https://github.com/KARPED1EM/TownOfHostEdited) / [TownOfNext](https://github.com/TownOfNext/TownOfNext) (KARPED1EM、GPL-3.0) — EHR は TOHE の後継。チャット文字数制限の変更、メインメニューのアニメーション、入力まわりのパッチ、テキストボックス。加えて Town Of Next: Edited がベント接続網の地図表示の参照元として挙げています
-- **[Town Of Next: Edited (TONE)](https://github.com/qin-qwq/TownofNext-Edited)** (qin-qwq、GPL-3.0) — ベント接続網の地図表示。TONE 自身はこの機能について [TownOfNext](https://github.com/TownOfNext/TownOfNext)・[TOU-Mira](https://github.com/AU-Avengers/TOU-Mira)・[MalumMenu](https://github.com/scp222thj/MalumMenu) を参照元に挙げています
+- **[Town Of Host Re-Edited](https://github.com/Loonie-Toons/)** — EHR の fork 元
+- **[Town Of Host_ForE](https://github.com/AsumuAkaguma/TownOfHost_ForE)** (AsumuAkaguma、GPL-3.0) — BGM カスタマイズ機能、チャット文字種制限 (WordLimit)、会議開始理由の通知
+- **[Town Of Host_Y](https://github.com/Yumenopai/TownOfHost_Y)** (Yumenopai) — 一部の役職、設定 UI、ズームまわりの処理
+- **[Town of Host: Enhanced (TOHE)](https://github.com/EnhancedNetwork/TownofHost-Enhanced)** (The Enhanced Network 開発チーム、GPL-3.0) — 入室時のフレンドコード照合。独自役職を多数持つホスト Mod
+- **[Town Of Host Edited / Town Of Next](https://github.com/KARPED1EM/TownOfNext)** / [TownOfHostEdited](https://github.com/KARPED1EM/TownOfHostEdited) / [TownOfNext](https://github.com/TownOfNext/TownOfNext) (KARPED1EM、GPL-3.0) — EHR の系譜上の前身。ゲーム中の役職情報メニュー
+- **[Town Of Next: Edited (TONE)](https://github.com/qin-qwq/TownofNext-Edited)** (qin-qwq、GPL-3.0) — ベント接続網の地図表示。TONE 自身はこの機能のソース中で [TownOfNext](https://github.com/TownOfNext/TownOfNext)・[TOU-Mira](https://github.com/AU-Avengers/TOU-Mira)・[MalumMenu](https://github.com/scp222thj/MalumMenu) を参照元に挙げています
 - **[Town-Of-Moss](https://github.com/Koke1024/Town-Of-Moss)** (Koke1024) — 原子炉メルトダウンの加速処理
-- **[Town Of Us - Reactivated](https://github.com/eDonnes124/Town-Of-Us-R)** (eDonnes124、GPL-3.0) — Submerged 互換レイヤー、ホストの会議表示
-- **[TownOfHost-Optimized](https://github.com/Limeau/TownofHost-Optimized)** (Limeau) — Tank / Deadlined / Journalist / Grappler / Negotiator / Hypnotist などの役職案
+- **[Town Of Us - Reactivated](https://github.com/eDonnes124/Town-Of-Us-R)** (eDonnes124、GPL-3.0) — ホストの会議表示
+- **[TownOfHost-Optimized](https://github.com/Limeau/TownofHost-Optimized)** (Limeau) — Town Of Host の最適化を進めた派生 Mod
 - **[TownOfHost-Pko](https://github.com/satokazoku/TownOfHost-Pko)** (satokazoku 他、GPL-3.0) — 多くの役職の移植元、波動砲の設計参考、設定数値の直接入力、連続参加キック、自動廃村
-- **[TownOfHost-TheOtherRoles](https://github.com/music-discussion/TownOfHost-TheOtherRoles)** / [discus-sions 版](https://github.com/discus-sions/TownOfHost-TheOtherRoles) (music-discussion) — 多数の役職案、追放確認、RPC パケットの分割送信
+- **[TownOfHost-TheOtherRoles](https://github.com/music-discussion/TownOfHost-TheOtherRoles)** / [discus-sions 版](https://github.com/discus-sions/TownOfHost-TheOtherRoles) (music-discussion) — RPC パケットの分割送信、会議画面まわりの処理
 - **[TownOfHost-hamo](https://github.com/rar006/TownOfHost-hamo)** (rar006、GPL-3.0) — カミングアウト機能 (`/co` `/aco` `/colist`)
-- **[TownOfHostPlus](https://github.com/SkullCreeper/TownOfHostPlus)** (SkullCreeper) — Marshall / Poisoner / Necroview / Sidekick
+- **[TownOfHostPlus](https://github.com/SkullCreeper/TownOfHostPlus)** (SkullCreeper) — Town Of Host に独自役職を追加した Mod
 - **[TownOfPlus](https://github.com/tugaru1975/TownOfPlus)** (tugaru1975) — ズーム
 - **[UnityDoorstop](https://github.com/NeighTools/UnityDoorstop)** (NeighTools、LGPL-2.1) — 配布パッケージの `winhttp.dll` / `doorstop_config.ini`
-- **[Vanilla Enhancements](https://github.com/xChipseq/VanillaEnhancements)** (xChipseq、GPL-3.0) — 会議画面のパッチ
+- **[Vanilla Enhancements](https://github.com/xChipseq/VanillaEnhancements)** (xChipseq、GPL-3.0) — バニラの使い勝手を改善するクライアント Mod
 
 ### 開発者・翻訳者への謝辞
 
