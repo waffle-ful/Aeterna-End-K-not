@@ -169,6 +169,19 @@ public static class HealthLog
         "RTSSHooks64.dll",          // RivaTuner / MSI Afterburner
         "graphics-hook64.dll",      // OBS ゲームキャプチャ
     ];
+
+    // 起動直後の無応答ハングと、ロビー放置中の数十秒 framestall で実際にスタックへ乗っていたモジュール。
+    // NVIDIA のゲーム内オーバーレイを切った状態では 20 回連続で再現しなかったため、
+    // 同居が確認できたらホストへ注意を出す (2026-09-04 実測)。Steam / Discord / OBS は関与が確認できて
+    // いないので対象にしない (配信では OBS の同居が常態)。
+    private static readonly string[] HangRiskOverlayModules =
+    [
+        "nvspcap64.dll",
+        "NvCamera64.dll",
+    ];
+
+    // 上記のうち実際にロードされていたもの。空なら未検出、null なら未判定。
+    public static string[] DetectedHangRiskOverlays { get; private set; }
     private static long _gameStartTime;
 
     // --- 直近送信リングバッファ (zero I/O) ---
@@ -1120,6 +1133,13 @@ public static class HealthLog
         if (others.Count > 0) sb.Append(" other=[").Append(string.Join(",", others)).Append(']');
         sb.Append(" t=").Append(now);
         Write(sb.ToString());
+
+        var risky = new System.Collections.Generic.List<string>();
+        foreach (string k in HangRiskOverlayModules)
+            if (found.Contains(k))
+                risky.Add(k);
+
+        DetectedHangRiskOverlays = risky.ToArray();
     }
 
     // phase3 判定層(EarlyWarning 等)専用の窓口。Note() と違い Health + Timeline の両方に書く
