@@ -3238,8 +3238,22 @@ public static class Options
             .SetGameMode(CustomGameMode.Standard)
             .SetColor(new Color32(147, 241, 240, byte.MaxValue));
 
-        LobbyKillEnabled = new BooleanOptionItem(44451, "LobbyKillEnabled", true, TabGroup.GameSettings)
+        LobbyKillEnabled = new BooleanOptionItem(44451, "LobbyKillEnabled", false, TabGroup.GameSettings)
             .SetColor(new Color32(255, 102, 102, byte.MaxValue));
+
+        // 実験的機能。公式サーバーでロビーキルを短時間に連続実行したクライアントが Hacking 判定で
+        // 切断される事例が出ており、機序が未特定のため既定は OFF。ON にした時だけ注意を出す。
+        // load 時は before==after で来るため誤発火しない。
+        LobbyKillEnabled.RegisterUpdateValueEvent((_, before, after) =>
+        {
+            if (before != 0 || after != 1) return;
+            if (!AmongUsClient.Instance || !AmongUsClient.Instance.AmHost || !GameStates.IsLobby) return;
+
+            PlayerControl lp = PlayerControl.LocalPlayer;
+            if (!lp) return;
+
+            Utils.SendMessage(Translator.GetString("LobbyKillEnabled.Warning"), lp.PlayerId, Translator.GetString("LobbyKillEnabled.WarningTitle"), importance: MessageImportance.High);
+        });
 
         LobbyKillRange = new FloatOptionItem(44452, "LobbyKillRange", new(0.5f, 3.5f, 0.25f), 1.5f, TabGroup.GameSettings)
             .SetParent(LobbyKillEnabled)
