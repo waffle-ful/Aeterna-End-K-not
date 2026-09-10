@@ -229,7 +229,7 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 
 ## クレジット
 
-> **この Mod の役職・機能は、そのほとんどが先行 Mod に由来します。** 下記プロジェクトの開発者の皆さんに深く感謝します。直接参照したプロジェクトも、ベースにした Mod がクレジットしているプロジェクトも、まとめて名前を挙げています。「—」以降については、**当リポジトリのコミットやソースに出典が残っていて「何を取ったか」を言えるものだけ**その内容を書き、それ以外はそのプロジェクト自体の紹介にしています（由来を細かく特定できない項目も、感謝の対象であることに変わりはありません）。個別の由来は git log（移植コミットには移植元と Co-authored-by を記載しています）でも追跡できます。
+> **この Mod の役職・機能は、そのほとんどが先行 Mod に由来します。** 下記プロジェクトの開発者の皆さんに深く感謝します。
 
 - **[au.libhalt.net](https://au.libhalt.net/)** — Among Us の Mod 情報・配布サイト
 - **[AutoRejoin](https://github.com/Maxi0fc/AutoRejoin)** (Maxi0fc) — 切断後の自動再入室を追加するクライアント Mod
@@ -240,7 +240,7 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 - **[ExtremeRoles](https://github.com/yukieiji/ExtremeRoles)** (yukieiji) — エアシップ関連のパッチ
 - **[Game Optimizer (CPUs / Threads Optimizer)](https://github.com/charlie754/Game-Optimizer-CPUs-Threads-Optimizer)** (charlie754、MIT) — CPU Sets によるキャッシュドメイン隔離の発想 (`CpuSetsMode` 設定)。コードは Win32 API から独自実装
 - **[Lotus (LotusContinued)](https://github.com/Lotus-AU/LotusContinued)** / [NikoCat233 fork](https://github.com/NikoCat233/LotusContinued) (GPL-3.0) — 設定矛盾の検出とホスト警告、ホワイトリスト入室制限
-- **[MalumMenu](https://github.com/scp222thj/MalumMenu)** (scp222thj、GPL-3.0) — ミニマップ上のプレイヤー位置表示（ベント接続網の地図表示の孫引き元）
+- **[MalumMenu](https://github.com/scp222thj/MalumMenu)** (scp222thj、GPL-3.0) — ミニマップ上のプレイヤー位置表示
 - **[Mini.RegionInstall](https://github.com/miniduikboot/Mini.RegionInstall)** (miniduikboot、GPL-3.0) — カスタムリージョンの追加（配布パッケージに同梱）
 - **[MiraAPI](https://github.com/All-Of-Us-Mods/MiraAPI)** (All-Of-Us-Mods、LGPL-2.1) — UI スプライト（ページ送りボタン 2 点・チェックマーク 2 点）
 - **[More Gamemodes](https://github.com/Rabek009/MoreGamemodes)** (Rabek009) — カスタムネットオブジェクト (CNO)、チャット制御と消去、プレイヤー操作まわりの補助処理
@@ -264,7 +264,7 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 - **[Town Of Host_Y](https://github.com/Yumenopai/TownOfHost_Y)** (Yumenopai) — 一部の役職、設定 UI、ズームまわりの処理
 - **[Town of Host: Enhanced (TOHE)](https://github.com/EnhancedNetwork/TownofHost-Enhanced)** (The Enhanced Network 開発チーム、GPL-3.0) — 入室時のフレンドコード照合。独自役職を多数持つホスト Mod
 - **[Town Of Host Edited / Town Of Next](https://github.com/KARPED1EM/TownOfNext)** / [TownOfHostEdited](https://github.com/KARPED1EM/TownOfHostEdited) / [TownOfNext](https://github.com/TownOfNext/TownOfNext) (KARPED1EM、GPL-3.0) — EHR の系譜上の前身。ゲーム中の役職情報メニュー
-- **[Town Of Next: Edited (TONE)](https://github.com/qin-qwq/TownofNext-Edited)** (qin-qwq、GPL-3.0) — ベント接続網の地図表示。TONE 自身はこの機能のソース中で [TownOfNext](https://github.com/TownOfNext/TownOfNext)・[TOU-Mira](https://github.com/AU-Avengers/TOU-Mira)・[MalumMenu](https://github.com/scp222thj/MalumMenu) を参照元に挙げています
+- **[Town Of Next: Edited (TONE)](https://github.com/qin-qwq/TownofNext-Edited)** (qin-qwq、GPL-3.0) — ベント接続網の地図表示（[TownOfNext](https://github.com/TownOfNext/TownOfNext)・[TOU-Mira](https://github.com/AU-Avengers/TOU-Mira)・[MalumMenu](https://github.com/scp222thj/MalumMenu) 由来）
 - **[Town-Of-Moss](https://github.com/Koke1024/Town-Of-Moss)** (Koke1024) — 原子炉メルトダウンの加速処理
 - **[Town Of Us - Reactivated](https://github.com/eDonnes124/Town-Of-Us-R)** (eDonnes124、GPL-3.0) — ホストの会議表示
 - **[TownOfHost-Optimized](https://github.com/Limeau/TownofHost-Optimized)** (Limeau) — Town Of Host の最適化を進めた派生 Mod
