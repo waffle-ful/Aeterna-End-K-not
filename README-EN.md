@@ -225,7 +225,7 @@ End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/End
 
 ## Credits
 
-> **The vast majority of this mod's roles and features come from earlier mods.** Huge thanks to the developers of the projects below. The list names both the projects this fork referenced directly and the projects credited by the mods it builds on. What follows the em dash is **what we took, but only where this repository's commits or sources still record it**; for every other entry it is a short description of the project itself (an entry whose provenance we cannot pin down is no less appreciated). Individual provenance can also be traced through this repository's git log, where port commits record the upstream source and Co-authored-by lines.
+> **The vast majority of this mod's roles and features come from earlier mods.** Huge thanks to the developers of the projects below.
 
 - **[au.libhalt.net](https://au.libhalt.net/)** — an Among Us mod information and distribution site
 - **[AutoRejoin](https://github.com/Maxi0fc/AutoRejoin)** (Maxi0fc) — a client mod that adds automatic rejoining after a disconnect
@@ -236,7 +236,7 @@ End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/End
 - **[ExtremeRoles](https://github.com/yukieiji/ExtremeRoles)** (yukieiji) — Airship patches
 - **[Game Optimizer (CPUs / Threads Optimizer)](https://github.com/charlie754/Game-Optimizer-CPUs-Threads-Optimizer)** (charlie754, MIT) — the idea of isolating cache domains with CPU Sets (the `CpuSetsMode` setting); our code is written directly against the Win32 API
 - **[Lotus (LotusContinued)](https://github.com/Lotus-AU/LotusContinued)** / [NikoCat233 fork](https://github.com/NikoCat233/LotusContinued) (GPL-3.0) — settings-conflict detection with host warnings, whitelist join restriction
-- **[MalumMenu](https://github.com/scp222thj/MalumMenu)** (scp222thj, GPL-3.0) — player position dots on the minimap (the second-hand source behind the vent network map)
+- **[MalumMenu](https://github.com/scp222thj/MalumMenu)** (scp222thj, GPL-3.0) — player position dots on the minimap
 - **[Mini.RegionInstall](https://github.com/miniduikboot/Mini.RegionInstall)** (miniduikboot, GPL-3.0) — custom region installer (shipped in the release packages)
 - **[MiraAPI](https://github.com/All-Of-Us-Mods/MiraAPI)** (All-Of-Us-Mods, LGPL-2.1) — UI sprites (two next-page buttons, two checkmarks)
 - **[More Gamemodes](https://github.com/Rabek009/MoreGamemodes)** (Rabek009) — Custom Net Objects (CNO), chat control and clearing, player-control helper code
@@ -260,7 +260,7 @@ End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/End
 - **[Town Of Host_Y](https://github.com/Yumenopai/TownOfHost_Y)** (Yumenopai) — some roles, settings UI, zoom handling
 - **[Town of Host: Enhanced (TOHE)](https://github.com/EnhancedNetwork/TownofHost-Enhanced)** (The Enhanced Network team, GPL-3.0) — friend-code matching on join; a host mod with a large set of original roles
 - **[Town Of Host Edited / Town Of Next](https://github.com/KARPED1EM/TownOfNext)** / [TownOfHostEdited](https://github.com/KARPED1EM/TownOfHostEdited) / [TownOfNext](https://github.com/TownOfNext/TownOfNext) (KARPED1EM, GPL-3.0) — EHR's predecessor in the lineage; the in-game role info menu
-- **[Town Of Next: Edited (TONE)](https://github.com/qin-qwq/TownofNext-Edited)** (qin-qwq, GPL-3.0) — vent network map display. TONE itself cites, in the source of that feature, [TownOfNext](https://github.com/TownOfNext/TownOfNext), [TOU-Mira](https://github.com/AU-Avengers/TOU-Mira) and [MalumMenu](https://github.com/scp222thj/MalumMenu) as sources for this feature
+- **[Town Of Next: Edited (TONE)](https://github.com/qin-qwq/TownofNext-Edited)** (qin-qwq, GPL-3.0) — vent network map display (via [TownOfNext](https://github.com/TownOfNext/TownOfNext), [TOU-Mira](https://github.com/AU-Avengers/TOU-Mira) and [MalumMenu](https://github.com/scp222thj/MalumMenu))
 - **[Town-Of-Moss](https://github.com/Koke1024/Town-Of-Moss)** (Koke1024) — reactor meltdown boost
 - **[Town Of Us - Reactivated](https://github.com/eDonnes124/Town-Of-Us-R)** (eDonnes124, GPL-3.0) — host meeting display
 - **[TownOfHost-Optimized](https://github.com/Limeau/TownofHost-Optimized)** (Limeau) — a Town Of Host derivative focused on optimization
