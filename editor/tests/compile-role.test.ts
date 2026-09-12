@@ -1003,3 +1003,69 @@ describe("compile-role: Wave 7 ブロック (win / win_join)", () => {
         expect(r.ok, r.ok ? "" : (r as { error: string }).error).toBe(true);
     });
 });
+
+// Wave 8 (2026-08-30) — はなす・わすれる
+describe("compile-role: Wave 8 ブロック (on_chat / forget)", () => {
+    it("ekr_when_on_chat は MATCH が空/空白のみなら match キーごと省略する", () => {
+        expect(compileTopBlocksToRules([
+            { type: "ekr_when_on_chat", fields: { MATCH: "" }, next: { block: { type: "ekr_do_stop" } } },
+        ])).toEqual([{ when: "on_chat", do: [{ op: "stop" }] }]);
+        expect(compileTopBlocksToRules([
+            { type: "ekr_when_on_chat", fields: { MATCH: "   " }, next: { block: { type: "ekr_do_stop" } } },
+        ])).toEqual([{ when: "on_chat", do: [{ op: "stop" }] }]);
+    });
+
+    it("ekr_when_on_chat は MATCH が非空なら原文のまま match に転記する", () => {
+        expect(compileTopBlocksToRules([
+            { type: "ekr_when_on_chat", fields: { MATCH: "ことば" }, next: { block: { type: "ekr_do_stop" } } },
+        ])).toEqual([{ when: "on_chat", do: [{ op: "stop" }], match: "ことば" }]);
+    });
+
+    it("ekr_do_forget は slot を転記する", () => {
+        expect(compileTopBlocksToRules([
+            { type: "ekr_when_on_meeting_end", next: { block: { type: "ekr_do_forget", fields: { SLOT: "1" } } } },
+        ])).toEqual([{ when: "on_meeting_end", do: [{ op: "forget", slot: 1 }] }]);
+    });
+
+    it("「ことだまや」型 (on_chat(match)→remember(ctx) → on_meeting_end→kill(saved1)) が validateRoleLogic まで通る", () => {
+        const w = ws([
+            {
+                type: "ekr_when_on_chat",
+                fields: { MATCH: "うそ" },
+                next: { block: { type: "ekr_do_remember", fields: { TARGET: "ctx", SLOT: "1" } } },
+            },
+            {
+                type: "ekr_when_on_meeting_end",
+                next: { block: { type: "ekr_do_kill", fields: { TARGET: "saved1" } } },
+            },
+        ]);
+        const compiled = compileWorkspaceToLogicInput(w, []);
+        expect(compiled).not.toBeNull();
+        const r = validateRoleLogic(compiled);
+        expect(r.ok, r.ok ? "" : (r as { error: string }).error).toBe(true);
+        if (r.ok) {
+            expect(r.logic.rules).toEqual([
+                { when: "on_chat", match: "うそ", do: [{ op: "remember", slot: 1, target: "ctx" }] },
+                { when: "on_meeting_end", do: [{ op: "kill", target: "saved1" }] },
+            ]);
+        }
+    });
+
+    it("解呪合成 (remember → forget) が validateRoleLogic まで通る", () => {
+        const w = ws([
+            {
+                type: "ekr_when_on_pet",
+                next: { block: { type: "ekr_do_remember", fields: { TARGET: "nearest", SLOT: "1" } } },
+            },
+            {
+                type: "ekr_when_on_chat",
+                fields: { MATCH: "ゆるして" },
+                next: { block: { type: "ekr_do_forget", fields: { SLOT: "1" } } },
+            },
+        ]);
+        const compiled = compileWorkspaceToLogicInput(w, []);
+        expect(compiled).not.toBeNull();
+        const r = validateRoleLogic(compiled);
+        expect(r.ok, r.ok ? "" : (r as { error: string }).error).toBe(true);
+    });
+});

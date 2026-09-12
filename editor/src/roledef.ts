@@ -104,6 +104,9 @@ export const LOGIC_WHEN_VALUES = [
     // (CTXLESS_WHENS/L14 の対象に追加 — lint-role.ts 側で同じ扱い)。
     "on_sabotage",
     "on_revive",
+    // Wave 8 (§1 2026-08-30): 会議中の公開チャット。
+    // ctx = 発言者 (自分の発言でも発火)。任意フィールド `match` を持つ唯一のイベント。
+    "on_chat",
 ] as const;
 export type LogicWhen = (typeof LOGIC_WHEN_VALUES)[number];
 
@@ -197,6 +200,11 @@ export const REMEMBER_TARGET_VALUES = TARGET_SINGLE_VALUES;
 // どれか一つのレンジが将来変わっても連動しないようにする)。
 export const REMEMBER_SLOT_MIN = 1;
 export const REMEMBER_SLOT_MAX = 2;
+
+// Wave 8 (§1/§3 2026-08-30) — on_chat.match。trim 後 1..20字・省略可。
+// マッチ判定の正規化 (ToLowerInvariant+Contains) は C# ランタイム側の仕事 — TS では長さのみ検証する。
+export const CHAT_MATCH_MIN = 1;
+export const CHAT_MATCH_MAX = 20;
 // notify.target は「複数セレクタを受理する唯一の op」(spec §3 型規律)。省略時は self。
 export const NOTIFY_TARGET_VALUES = TARGET_ANY_VALUES;
 export const NOTIFY_TARGET_DEFAULT: TargetAny = "self";
@@ -475,7 +483,10 @@ export type LogicNode =
     // キーを足さない — notify と同じ作法)。win は neutral 文書限定 (doc レベル検証 —
     // validateEkrDefinition。ノード層では team が見えない — C# の分担と同じ)。
     | { op: "win"; target?: (typeof WIN_TARGET_VALUES)[number] }
-    | { op: "win_join"; target?: (typeof WIN_TARGET_VALUES)[number] };
+    | { op: "win_join"; target?: (typeof WIN_TARGET_VALUES)[number] }
+    // Wave 8 (§2) — remember の該当 slot を消す。空 slot は no-op。
+    // target を持たない (marker_save/vote_swap と同じくローカル状態のみを触る op)。
+    | { op: "forget"; slot: 1 | 2 };
 
 export interface LogicRule {
     when: LogicWhen;
@@ -496,6 +507,9 @@ export interface LogicRule {
     // cause は Wave 4 で on_linked_death でも任意受理になった (上の R2 コメント参照)。
     radius?: NearRadius;
     who?: NearWho;
+    // Wave 8 (契約 §1/§3): on_chat 専用の任意フィールド。省略 = どの発言にも発火。
+    // 他イベントでは付与禁止 (検証 reject)。
+    match?: string;
     do: LogicNode[];
 }
 
@@ -870,6 +884,17 @@ function sanitizeAngleBrackets(s: string): string {
     return s.replace(/</g, "〈").replace(/>/g, "〉");
 }
 
+// Wave 8 (契約 §3) — on_chat.match。trim 後 1..20字 (範囲外は reject)。値は原文のまま保持する
+// (マッチ判定の正規化は C# ランタイム側の仕事 — TS はここで長さのみ検査する)。trim して空になる
+// 値は「省略扱い」にせず reject する (既存の厳格側の扱いに合わせる — 呼び出し元は raw.match !==
+// undefined のときだけこの関数を呼ぶので、省略そのものはここに来ない)。
+function expectMatchText(raw: unknown, path: string): string {
+    if (typeof raw !== "string" || raw.trim().length < CHAT_MATCH_MIN || raw.trim().length > CHAT_MATCH_MAX) {
+        fail(`${path} は 1〜20 文字の文字列で指定してください`);
+    }
+    return raw;
+}
+
 function expectEnum<T extends string>(raw: unknown, options: readonly T[], path: string): T {
     if (typeof raw !== "string" || !(options as readonly string[]).includes(raw)) {
         fail(`${path} の値が正しくありません (${JSON.stringify(raw)})`);
@@ -1221,6 +1246,11 @@ function validateNode(raw: unknown, varNames: ReadonlySet<string>, path: string,
             const target = expectEnum(raw.target, WIN_TARGET_VALUES, `${path}.target`);
             return { node: { op: "win_join", target }, depth: 1, count: 1 };
         }
+        // Wave 8 (契約 §2) — わすれる。slot は remember と同じ枠 (1..2)・target 無し。
+        case "forget": {
+            const slot = expectRangeInt(raw.slot, REMEMBER_SLOT_MIN, REMEMBER_SLOT_MAX, `${path}.slot`) as 1 | 2;
+            return { node: { op: "forget", slot }, depth: 1, count: 1 };
+        }
         default:
             fail(`${path}.op が不明です (${JSON.stringify(op)})`);
     }
@@ -1268,6 +1298,15 @@ function validateRule(raw: unknown, varNames: ReadonlySet<string>, index: number
         }
     }
 
+    // Wave 8 (契約 §1/§3): on_chat は任意フィールド match (trim 後 1..20字・省略可)。
+    // 他イベントに付いていたら slot と同じ対称検査で reject する。
+    let match: string | undefined;
+    if (when === "on_chat") {
+        if (raw.match !== undefined) match = expectMatchText(raw.match, `rules[${index}].match`);
+    } else if (raw.match !== undefined) {
+        fail(`rules[${index}].match はイベント "${when}" では使えません (on_chat 専用です)`);
+    }
+
     // Wave 3 (契約 §1.2/§1.3): on_var は var/cmp/value の3つとも必須。on_alive_count は cmp/value
     // のみ必須 (var は他イベント同様 reject)。それ以外のイベントは3フィールドとも付与禁止。
     let varName: string | undefined;
@@ -1312,6 +1351,7 @@ function validateRule(raw: unknown, varNames: ReadonlySet<string>, index: number
     if (value !== undefined) rule.value = value;
     if (radius !== undefined) rule.radius = radius;
     if (who !== undefined) rule.who = who;
+    if (match !== undefined) rule.match = match;
     return rule;
 }
 

@@ -65,6 +65,9 @@ internal sealed class EkrActionSink : IEkrActionSink
         // Wave 7: win/win_join は会議中も有効 (ローカル latch への
         // 書込みのみ・送信ゼロ — Executioner 型「会議中勝利が本体」のデザインを許す。終了処理自体は
         // CheckGameEndPatch の評価タイミング任せなので追放演出窓とも衝突しない)。
+        //
+        // Wave 8: forget も会議中有効 (ローカル状態のみ・送信ゼロ — 「呪い主に取引を持ちかけて解呪する」
+        // 合成の前提。remember の会議中解禁と同じ理由)。
         bool meetingOrExile = GameStates.IsMeeting || ExileController.Instance;
 
         bool isMeetingOnly = node.Op is "cancel_vote" or "vote_block" or "vote_swap" or "exile";
@@ -73,7 +76,7 @@ internal sealed class EkrActionSink : IEkrActionSink
         {
             if (!meetingOrExile) return;
         }
-        else if (node.Op is not "notify" and not "cancel_attack" and not "remember" and not "inspect" and not "reveal" and not "vote_weight_set" and not "link" and not "unlink" and not "win" and not "win_join" && meetingOrExile) return;
+        else if (node.Op is not "notify" and not "cancel_attack" and not "remember" and not "inspect" and not "reveal" and not "vote_weight_set" and not "link" and not "unlink" and not "win" and not "win_join" and not "forget" && meetingOrExile) return;
 
         switch (node.Op)
         {
@@ -120,6 +123,8 @@ internal sealed class EkrActionSink : IEkrActionSink
             // Wave 7
             case "win": Win(node, ctx); break;
             case "win_join": WinJoin(node, ctx); break;
+            // Wave 8
+            case "forget": Forget(node, ctx); break;
         }
     }
 
@@ -382,6 +387,16 @@ internal sealed class EkrActionSink : IEkrActionSink
         if (!targetPc) return; // ctx 無し文脈・失効 saved 参照は no-op (spec §3)
 
         state.Saved[node.Slot - 1] = targetPc.PlayerId;
+    }
+
+    // Wave 8 (spec §2): remember の該当 slot を消す。空 slot は no-op。
+    // ⚠ ホルダー生存ガードは付けない — on_death 起点 fiber からの実行を許す (marker_save と同じ扱い)。
+    private static void Forget(EkrNode node, EkrActionContext ctx)
+    {
+        EkrHolderState state = EkrManager.GetHolderState(ctx.HolderId);
+        if (state == null) return;
+
+        state.Saved[node.Slot - 1] = byte.MaxValue;
     }
 
     // spec §2: 攻撃を止められるのは on_attacked の同期プロローグ内だけ。wait 後は攻撃が既に
