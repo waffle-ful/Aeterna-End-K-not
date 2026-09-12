@@ -48,11 +48,18 @@ import type { LogicNode, LogicRule, RoleLogic } from "../roledef";
 // CTXLESS_WHENS (L14) に on_revive を追加 (holder限定・ctx無し — 契約 §3)。
 // Wave 7 (§5 2026-08-30): 新ルールなし (計29のまま)。win/win_join の
 // `linked`/`ctx` 参照は selectorTokens が target フィールドを総称で読むため L26/L14 に自動で乗る。
+// Wave 8 (§4 2026-08-30): L30 を追加 (計30ルール)。
+// L30 = L23 の兄弟 — on_chat 配下 (会議中にしか発火しない) にタスク中専用 op (TASK_ONLY_LINT_OPS =
+// L23 と同じ会議中白名単の補集合)。L16 拡張 = forget(N) があるのにどの rule にも remember(N) が
+// 無い (存在チェックのみ・順序不問 — 参照整合性シリーズの兄弟)。
+// 改定: TASK_ONLY_LINT_OPS に recruit/effect_give/cno_launch を追加 (会議中 op 白名単に載って
+// おらず、L23/L30 の対象漏れだった)。MEETING_ONLY_LINT_WHENS に on_chat を追加 (on_chat は会議中
+// にしか発火しないため、会議専用 op を置いても L18 が誤って警告していた)。
 
 export type LintRuleId =
     | "L1" | "L2" | "L3" | "L4" | "L5" | "L6" | "L7" | "L8" | "L9" | "L10" | "L11" | "L12" | "L13"
     | "L14" | "L15" | "L16" | "L17" | "L18" | "L19" | "L20" | "L21"
-    | "L22" | "L23" | "L24" | "L25" | "L26" | "L27" | "L28" | "L29";
+    | "L22" | "L23" | "L24" | "L25" | "L26" | "L27" | "L28" | "L29" | "L30";
 
 export interface LintWarning {
     rule: LintRuleId;
@@ -254,12 +261,15 @@ function hasExileAfterWait(nodes: LogicNode[]): boolean {
 // on_far は「一度近づいてから離れる」の往復が要るぶん頻度が一段落ちる)。
 const L12_WHENS: ReadonlySet<string> = new Set(["on_cno_touch", "on_near", "on_room_enter", "on_room_exit"]);
 
-const MEETING_ONLY_LINT_WHENS: ReadonlySet<string> = new Set(["on_meeting_start", "on_meeting_vote", "on_meeting_pick"]);
+// on_chat は会議中にしか発火しない (契約 §4) ので、会議専用 op を置いても no-op にはならない。
+const MEETING_ONLY_LINT_WHENS: ReadonlySet<string> = new Set(["on_meeting_start", "on_meeting_vote", "on_meeting_pick", "on_chat"]);
 const MEETING_ONLY_LINT_OPS: readonly LogicNode["op"][] = ["vote_block", "vote_swap", "exile"];
 
 // R2 (契約 §3c L23): 会議中は no-op になる「体を動かす」系の op。
 // C# 側の会議中ゲート (EkrLogicOpcodes の関所) が黙って落とすものと同じ顔ぶれを並べる —
 // 会議中も有効な notify / remember / inspect / reveal / vote_weight_set はここに入れない。
+// Wave 8 (契約 §2/§4 L30): forget も会議中白名単に入った (会議中の解呪を許す) op なので、
+// ここには追加しない — L30 (on_chat 配下・§4) はこのリストの補集合として forget を素通しする。
 const TASK_ONLY_LINT_OPS: readonly LogicNode["op"][] = [
     "teleport", "teleport_other", "kill", "speed", "set_kill_cooldown",
     "cno_spawn", "cno_move", "cno_despawn", "cno_show",
@@ -268,6 +278,10 @@ const TASK_ONLY_LINT_OPS: readonly LogicNode["op"][] = [
     // 矢印3種も会議中は no-op (spec §3 の会議中 op 白名単に入っていない)。
     // spec §6 の L23 の例示列挙は §3 の白名単より狭く、その漏れをここで埋めている。
     "arrow_show", "arrow_mark", "arrow_hide",
+    // recruit/effect_give/cno_launch も会議中 op 白名単 (notify/cancel_attack/remember/inspect/
+    // reveal/vote_weight_set/link/unlink/win/win_join/forget) に載っていない=会議中は no-op。
+    // この配列は白名単の補集合と一致させる (白名単が増減したらここも合わせて見直す)。
+    "recruit", "effect_give", "cno_launch",
 ];
 
 function makeWarning(rule: LintRuleId, ruleIndex: number, when: string, message: string, suggestion: string): LintWarning {
@@ -308,9 +322,9 @@ function extractProgressVarRefs(text: string): string[] {
 }
 
 /**
- * 検証済みの RoleLogic に対して spec §6 の 29 ルール (v1.2 で L11/L12、v1.3 で L13、Wave 1 で
+ * 検証済みの RoleLogic に対して spec §6 の 30 ルール (v1.2 で L11/L12、v1.3 で L13、Wave 1 で
  * L14〜L17、Wave 2 で L18〜L20、2026-08-14 に L21、Wave 3 で L22〜L25 のうち L24/L25、Wave 4 で
- * L26/L27、Wave 5 で L28、Wave 6 で L29) を静的検査する。ブロックの組み方に対するヒントであり、export 自体は妨げない
+ * L26/L27、Wave 5 で L28、Wave 6 で L29、Wave 8 で L30) を静的検査する。ブロックの組み方に対するヒントであり、export 自体は妨げない
  * (呼び出し元は結果を警告フッタに表示するだけ)。
  *
  * `progressText` は L25 が progress.text 内の `{変数名}` 参照も一緒に検査するための任意引数
@@ -595,6 +609,31 @@ export function lintRoleLogic(logic: RoleLogic, progressText?: string): LintWarn
                 "L16", ruleIndex, rule.when,
                 "「おぼえた人1と2の票をいれかえる」を使っていますが、1と2の両方をおぼえていません。",
                 "おぼえていない人の票は入れかえられないよ。先に「1をおぼえる」と「2をおぼえる」の両方を入れよう。",
+            ));
+        }
+
+        // L16 拡張 (Wave 8・契約 §4): forget(N) があるのにどの rule にも remember(N) が無い
+        // (存在チェックのみ・順序は問わない — L15/L16 の参照整合性シリーズの兄弟)。
+        let missingForgetSlot: number | null = null;
+        forEachNode(rule.do, (n) => {
+            if (missingForgetSlot !== null) return;
+            if (n.op === "forget" && !rememberedSlots.has(n.slot)) missingForgetSlot = n.slot;
+        });
+        if (missingForgetSlot !== null) {
+            warnings.push(makeWarning(
+                "L16", ruleIndex, rule.when,
+                `おぼえていない人 (おぼえた人${missingForgetSlot}) を わすれようとしています。`,
+                "おぼえていない人は わすれられないよ。",
+            ));
+        }
+
+        // L30 (Wave 8・契約 §4): on_chat は会議中にしか発火しないので、L23 と同じ会議中白名単の
+        // 補集合 (TASK_ONLY_LINT_OPS) が配下にあると何も起きない。
+        if (rule.when === "on_chat" && TASK_ONLY_LINT_OPS.some((op) => hasOp(rule.do, op))) {
+            warnings.push(makeWarning(
+                "L30", ruleIndex, rule.when,
+                "はなせるのは かいぎ中だけだから、その処理は何も起きないよ。",
+                "「会議が終わったとき」とくみあわせよう。",
             ));
         }
 

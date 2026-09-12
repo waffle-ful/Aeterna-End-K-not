@@ -55,6 +55,10 @@ public sealed class EkrRule
     // "anyone" は文書 reject)。他イベントでは両方とも null。
     public string Radius;
     public string Who;
+
+    // Wave 8: on_chat 専用の任意フィールド。null = どの発言でも発火。
+    // 値は trim + ToLowerInvariant 済み・1..20 字 (実行側は Contains 判定のみ行う)。
+    public string Match;
 }
 
 // op ごとの引数はフラットに全部持つ (spec §3 の「args ラッパー無し」に対応)。未使用フィールドは既定値のまま。
@@ -177,7 +181,9 @@ public sealed class EkrLogicDef
         "on_near", "on_far", "on_room_enter", "on_room_exit", "on_linked_death",
         // Wave 6: サボタージュ成立 (グローバル・ctx=起こした人) と
         // 蘇生 (ホルダー限定・ctx 無し — 蘇生させた人は RpcRevive のシグネチャに存在しないため渡せない)。
-        "on_sabotage", "on_revive"
+        "on_sabotage", "on_revive",
+        // Wave 8: 会議中の公開チャット (グローバル・ctx=発言者・自分の発言も含む)。
+        "on_chat"
     ];
 
     // Wave 3 (§1.2): 比較演算子。**綴りは ExprKinds の流用** (新語彙を作らない)。
@@ -294,6 +300,40 @@ public sealed class EkrLogicDef
         }
 
         who = farWhoEl.GetString();
+        return true;
+    }
+
+    // Wave 8: on_chat の rule 直下フィールド match (任意)。他イベントに付いていたら on_cno_touch の
+    // slot と同じく文書 reject する (対称検査)。trim して空になる match は「省略扱い」にせず reject する
+    // (未定義の変数名や空の役職名と同じ厳格側の扱い)。
+    private static bool TryReadChatMatch(JsonElement ruleEl, string when, out string match, out string error)
+    {
+        match = null;
+        error = null;
+
+        if (!ruleEl.TryGetProperty("match", out JsonElement matchEl)) return true;
+
+        if (when != "on_chat")
+        {
+            error = $"when=\"{when}\" の rule に match は指定できません (on_chat 専用です)";
+            return false;
+        }
+
+        if (matchEl.ValueKind != JsonValueKind.String)
+        {
+            error = "on_chat の match が不正です (1〜20 文字の文字列)";
+            return false;
+        }
+
+        string trimmed = matchEl.GetString().Trim();
+
+        if (trimmed.Length is < 1 or > 20)
+        {
+            error = "on_chat の match が不正です (1〜20 文字の文字列)";
+            return false;
+        }
+
+        match = trimmed.ToLowerInvariant();
         return true;
     }
 
@@ -426,7 +466,9 @@ public sealed class EkrLogicDef
         // Wave 6: 発射体プリミティブ
         "cno_launch",
         // Wave 7: 勝利条件
-        "win", "win_join"
+        "win", "win_join",
+        // Wave 8: 記憶解除
+        "forget"
     ];
 
     private static readonly HashSet<string> ExprKinds =
@@ -579,6 +621,9 @@ public sealed class EkrLogicDef
             // Wave 4 (契約 §1/§6): on_near/on_far の radius/who (他イベントへの付着 reject を含む)。
             if (!TryReadProximityFields(ruleEl, when, out string ruleRadius, out string ruleWho, out error)) return false;
 
+            // Wave 8 (契約 §3): on_chat の match (他イベントへの付着 reject を含む)。
+            if (!TryReadChatMatch(ruleEl, when, out string ruleMatch, out error)) return false;
+
             // Wave 3 (契約 §1.2/§1.3): じょうたいトリガの必須フィールド。slot と同じ厳格側 —
             // 付ける場所を間違えたら「静かに効かない」ではなく文書 reject にする。
             if (!TryReadStateTriggerFields(ruleEl, when, knownVarNames, out string ruleVar, out string ruleCmp, out int ruleCmpValue, out error))
@@ -631,7 +676,8 @@ public sealed class EkrLogicDef
                 CmpValue = ruleCmpValue,
                 IsStateTrigger = IsStateTriggerEvent(when),
                 Radius = ruleRadius,
-                Who = ruleWho
+                Who = ruleWho,
+                Match = ruleMatch
             });
         }
 
@@ -815,6 +861,11 @@ public sealed class EkrLogicDef
             case "remember":
                 if (!TryGetInt(nodeEl, "slot", 1, 2, out n.Slot, out err)) return false;
                 if (!TryGetEnum(nodeEl, "target", SingleSelectors, out n.Target, out err)) return false;
+                break;
+
+            // Wave 8 (spec §2): remember の該当 slot を消す。予算なし (ローカル状態のみ)。
+            case "forget":
+                if (!TryGetInt(nodeEl, "slot", 1, 2, out n.Slot, out err)) return false;
                 break;
 
             // Wave 1 (spec §3): 引数なし。on_attacked 配下でのみ有効 (スコープ検証は ValidateCancelAttackScope)。

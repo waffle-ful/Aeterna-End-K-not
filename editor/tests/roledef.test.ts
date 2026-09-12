@@ -1875,3 +1875,83 @@ describe("logic 検証 Wave 7 (win / win_join)", () => {
         if (r.ok) expect(r.def.logic?.rules[0].do).toHaveLength(2);
     });
 });
+
+describe("logic 検証 Wave 8 (on_chat / forget)", () => {
+    function withRule(rule: Record<string, unknown>): Record<string, unknown> {
+        return { ...baseValid(), logic: { version: 1, rules: [rule] } };
+    }
+
+    it("on_chat: match は省略可 (省略時は AST にキーが無い)", () => {
+        const r = validateEkrDefinition(withRule({ when: "on_chat", do: [{ op: "stop" }] }));
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(r.def.logic?.rules[0]).toEqual({ when: "on_chat", do: [{ op: "stop" }] });
+            expect("match" in r.def.logic!.rules[0]).toBe(false);
+        }
+    });
+
+    it("on_chat.match: 1〜20文字 (境界値) は原文のまま保持される", () => {
+        for (const match of ["あ", "あ".repeat(20)]) {
+            const r = validateEkrDefinition(withRule({ when: "on_chat", match, do: [{ op: "stop" }] }));
+            expect(r.ok, `len=${match.length}`).toBe(true);
+            if (r.ok) expect(r.def.logic?.rules[0].match).toBe(match);
+        }
+    });
+
+    it("on_chat.match: 前後の空白を含んでいても trim せず原文のまま保持される (trim は判定のみに使う)", () => {
+        const r = validateEkrDefinition(withRule({ when: "on_chat", match: " ことば ", do: [{ op: "stop" }] }));
+        expect(r.ok).toBe(true);
+        if (r.ok) expect(r.def.logic?.rules[0].match).toBe(" ことば ");
+    });
+
+    it("on_chat.match: 非文字列・21文字以上は reject", () => {
+        expect(validateEkrDefinition(withRule({ when: "on_chat", match: 123, do: [{ op: "stop" }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_chat", match: "あ".repeat(21), do: [{ op: "stop" }] })).ok).toBe(false);
+    });
+
+    it("on_chat.match: trim して空になる値 (空文字・空白のみ) は「省略扱い」にせず reject する", () => {
+        expect(validateEkrDefinition(withRule({ when: "on_chat", match: "", do: [{ op: "stop" }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_chat", match: "   ", do: [{ op: "stop" }] })).ok).toBe(false);
+    });
+
+    it("on_chat: slot/kind/cause/who は使えない (契約 §3.1)", () => {
+        expect(validateEkrDefinition(withRule({ when: "on_chat", slot: 1, do: [{ op: "stop" }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_chat", kind: "kill", do: [{ op: "stop" }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_chat", cause: "vote", do: [{ op: "stop" }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_chat", who: "anyone", do: [{ op: "stop" }] })).ok).toBe(false);
+    });
+
+    it("match は on_chat 以外のイベントでは使えない (reject)", () => {
+        const r = validateEkrDefinition(withRule({ when: "on_pet", match: "ことば", do: [{ op: "stop" }] }));
+        expect(r.ok).toBe(false);
+        if (!r.ok) expect(r.error).toContain("on_chat 専用です");
+    });
+
+    it("forget: slot(1..2) を受理し、範囲外・欠落は reject", () => {
+        for (const slot of [1, 2]) {
+            const r = validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "forget", slot }] }));
+            expect(r.ok, String(slot)).toBe(true);
+            if (r.ok) expect(r.def.logic?.rules[0].do[0]).toEqual({ op: "forget", slot });
+        }
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "forget", slot: 0 }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "forget", slot: 3 }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "forget" }] })).ok).toBe(false);
+    });
+
+    it("forget は leaf ノード (depth 1, count 1)", () => {
+        const r = validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "forget", slot: 1 }, { op: "forget", slot: 2 }] }));
+        expect(r.ok).toBe(true);
+        if (r.ok) expect(r.def.logic?.rules[0].do).toHaveLength(2);
+    });
+
+    it("forget は陣営制限なし・会議中も on_death 起点でも受理される (文書レベルの静的 reject は追加しない)", () => {
+        for (const when of ["on_meeting_vote", "on_death"] as const) {
+            const r = validateEkrDefinition(withRule({ when, do: [{ op: "forget", slot: 1 }] }));
+            expect(r.ok, when).toBe(true);
+        }
+    });
+
+    it("25 種類すべてが LOGIC_WHEN_VALUES 経由で受理される (Wave 8 の新イベント込み)", () => {
+        expect(validateEkrDefinition(withRule({ when: "on_chat", do: [{ op: "stop" }] })).ok).toBe(true);
+    });
+});

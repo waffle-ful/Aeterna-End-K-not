@@ -765,6 +765,11 @@ describe("lint-role: L18 (会議専用 op が会議系イベント以外の rule
         const l = logic([{ when: "on_meeting_vote", do: [{ op: "cancel_vote" }] }]);
         expect(ruleIds(lintRoleLogic(l))).not.toContain("L18");
     });
+
+    it("on_chat 配下では L18 を警告しない (on_chat は会議中にしか発火しないため)", () => {
+        const l = logic([{ when: "on_chat", do: [{ op: "exile", target: "ctx" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L18");
+    });
 });
 
 describe("lint-role: L19 (on_meeting_vote 配下・wait より後の cancel_vote)", () => {
@@ -828,6 +833,11 @@ describe("lint-role: L23 (会議中に決まる死にかた × タスク中し�
     it("cause:kill (タスク中に決まる死にかた) なら teleport でも警告しない", () => {
         const l = logic([{ when: "on_death", cause: "kill", do: [{ op: "teleport", to: "marker1" }] }]);
         expect(ruleIds(lintRoleLogic(l))).not.toContain("L23");
+    });
+
+    it("cause:vote の下の recruit も警告する (会議中 op 白名単の補集合)", () => {
+        const l = logic([{ when: "on_death", cause: "vote", do: [{ op: "recruit", target: "nearest" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L23");
     });
 });
 
@@ -1350,5 +1360,76 @@ describe("lint-role: L14 の Wave 6 対象拡大 (on_revive は ctx 無し)", ()
     it("on_sabotage は ctx を持つので L14 を警告しない", () => {
         const l = logic([{ when: "on_sabotage", do: [{ op: "notify", text: "!", seconds: 1, target: "ctx" }] }]);
         expect(ruleIds(lintRoleLogic(l))).not.toContain("L14");
+    });
+});
+
+// Wave 8 (§4 2026-08-30) — L30 + L16 拡張 (forget)
+describe("lint-role: L30 (on_chat 配下・タスク中しか効かないちから — L23 の兄弟)", () => {
+    it("on_chat + teleport は L30 を警告する", () => {
+        const l = logic([{ when: "on_chat", do: [{ op: "teleport", to: "random" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L30");
+    });
+
+    it("on_chat + kill は L30 を警告する", () => {
+        const l = logic([{ when: "on_chat", do: [{ op: "kill", target: "ctx" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L30");
+    });
+
+    it("on_chat + notify/remember/forget (会議中も有効な op) は L30 を警告しない", () => {
+        const l = logic([
+            { when: "on_chat", do: [{ op: "notify", text: "やあ", seconds: 3, target: "ctx" }] },
+            { when: "on_chat", do: [{ op: "remember", slot: 1, target: "ctx" }] },
+            { when: "on_chat", do: [{ op: "forget", slot: 1 }] },
+        ]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L30");
+    });
+
+    it("on_chat + exile/vote_block (会議専用 op) は L30 を警告しない (TASK_ONLY_LINT_OPS の対象外)", () => {
+        const l = logic([
+            { when: "on_chat", do: [{ op: "exile", target: "ctx" }] },
+            { when: "on_chat", do: [{ op: "vote_block", target: "ctx" }] },
+        ]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L30");
+    });
+
+    it("if の中にネストした teleport も検知する", () => {
+        const nested: LogicNode = { op: "if", cond: { e: "lit", v: 1 }, then: [{ op: "teleport", to: "random" }] };
+        const l = logic([{ when: "on_chat", do: [nested] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L30");
+    });
+
+    it("on_chat 以外の when では同じ op でも L30 を警告しない", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "teleport", to: "random" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L30");
+    });
+
+    it("on_chat + effect_give も警告する (会議中 op 白名単の補集合)", () => {
+        const l = logic([{ when: "on_chat", do: [{ op: "effect_give", target: "nearest", kind: "slow", seconds: 5 }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L30");
+    });
+});
+
+describe("lint-role: L16 拡張 (forget(N) があるのに remember(N) が無い)", () => {
+    it("remember が無いのに forget(1) すると警告する", () => {
+        const l = logic([{ when: "on_chat", do: [{ op: "forget", slot: 1 }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L16");
+    });
+
+    it("同じ番号の remember が別の rule にあれば警告しない (番号違いは警告する)", () => {
+        const ok = logic([
+            { when: "on_pet", do: [{ op: "remember", slot: 1, target: "nearest" }] },
+            { when: "on_chat", do: [{ op: "forget", slot: 1 }] },
+        ]);
+        expect(ruleIds(lintRoleLogic(ok))).not.toContain("L16");
+        const ng = logic([
+            { when: "on_pet", do: [{ op: "remember", slot: 1, target: "nearest" }] },
+            { when: "on_chat", do: [{ op: "forget", slot: 2 }] },
+        ]);
+        expect(ruleIds(lintRoleLogic(ng))).toContain("L16");
+    });
+
+    it("forget を使わなければ remember の有無に関わらず警告しない", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "remember", slot: 1, target: "nearest" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L16");
     });
 });

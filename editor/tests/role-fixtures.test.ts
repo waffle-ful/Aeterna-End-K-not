@@ -15,6 +15,8 @@ import koorinotamaShowcaseRaw from "./fixtures/role-koorinotama-showcase.ekrole.
 import beamShowcaseRaw from "./fixtures/role-beam-showcase.ekrole.json?raw";
 import collectorShowcaseRaw from "./fixtures/role-collector-showcase.ekrole.json?raw";
 import parasiteShowcaseRaw from "./fixtures/role-parasite-showcase.ekrole.json?raw";
+import majoShowcaseRaw from "./fixtures/role-majo-showcase.ekrole.json?raw";
+import kotodamaShowcaseRaw from "./fixtures/role-kotodama-showcase.ekrole.json?raw";
 import { ROLECODE_PREFIX, decodeRoleCode, encodeRoleCode } from "../src/rolecode";
 import { LOGIC_WHEN_VALUES, validateEkrDefinition, type LogicNode, type LogicWhen } from "../src/roledef";
 import { lintRoleLogic } from "../src/logic/lint-role";
@@ -63,7 +65,7 @@ describe("golden fixture: role-full-course.ekrole.json (10イベント・主要o
         ]);
     });
 
-    it("24 種類のイベントを1回ずつカバーしている (Wave 4 で on_near/on_far/on_room_enter/on_room_exit/on_linked_death・Wave 6 で on_sabotage/on_revive を追加)", () => {
+    it("25 種類のイベントを1回ずつカバーしている (Wave 4 で on_near/on_far/on_room_enter/on_room_exit/on_linked_death・Wave 6 で on_sabotage/on_revive・Wave 8 で on_chat を追加)", () => {
         const parsed = JSON.parse(fullCourseRaw);
         const result = validateEkrDefinition(parsed);
         if (!result.ok) throw new Error(result.error);
@@ -100,6 +102,8 @@ describe("golden fixture: role-full-course.ekrole.json (10イベント・主要o
             // 入れられない (crewmate 文書は検証 reject — win の C# パース網羅は
             // role-collector-showcase.ekrole.json が担う)。
             "win_join",
+            // Wave 8 (§2): わすれる。
+            "forget",
         ];
         for (const op of expectedOps) {
             expect(ops.has(op), `op "${op}" が fixture 内で使われていない`).toBe(true);
@@ -241,6 +245,19 @@ describe("golden fixture: role-full-course.ekrole.json (10イベント・主要o
 
         const onRevive = rules.find((r) => r.when === "on_revive");
         expect(onRevive?.do.length).toBeGreaterThan(0);
+    });
+
+    // Wave 8 (§1/§2): はなす・わすれる。C# 側 (EkrDefinitionTests) が
+    // 同じファイルの同じ値を読む想定なので、片側だけ実装が抜けるとどちらかが落ちる。
+    it("on_chat (match 付き) と forget の rule 形が保持される", () => {
+        const parsed = JSON.parse(fullCourseRaw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        const rules = result.def.logic?.rules ?? [];
+
+        const onChat = rules.find((r) => r.when === "on_chat");
+        expect(onChat?.match).toBe("ゆるして");
+        expect(onChat?.do.some((n) => n.op === "forget")).toBe(true);
     });
 
     it("リンター (spec §6・Wave 3 で L24/L25 含む) は警告0件 — golden fixture は模範的な組み方で書く", () => {
@@ -496,6 +513,57 @@ describe.each([
     });
 
     it("リンター (spec §6) は警告0件", () => {
+        const parsed = JSON.parse(raw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        if (!result.def.logic) throw new Error("fixture は logic を持つ前提");
+        expect(lintRoleLogic(result.def.logic)).toEqual([]);
+    });
+
+    it("rolecode (EKR1.) のエンコード→デコード ラウンドトリップで AST が deep-equal になる", () => {
+        const parsed = JSON.parse(raw);
+        const validated = validateEkrDefinition(parsed);
+        if (!validated.ok) throw new Error(validated.error);
+
+        const code = encodeRoleCode(JSON.stringify(validated.def));
+        expect(code.startsWith(ROLECODE_PREFIX)).toBe(true);
+
+        const roundTripped = validateEkrDefinition(JSON.parse(decodeRoleCode(code)));
+        if (!roundTripped.ok) throw new Error(roundTripped.error);
+
+        expect(roundTripped.def).toEqual(validated.def);
+        expect(encodeRoleCode(JSON.stringify(roundTripped.def))).toBe(code);
+    });
+});
+
+// Wave 8 (§5 2026-08-30): テンプレギャラリー見本2本。
+// まじょ (on_pet → remember(nearest) → on_meeting_end → kill(saved1)・on_chat(ゆるして)→forget で
+// 解呪) と ことだまや (on_chat(match) → remember(ctx) → on_meeting_end → kill(saved1) の NGワード型)。
+// どちらも WordKiller 型の呪い合成 (§1 の正規の組み方) の実物 fixture。
+describe.each([
+    { name: "role-majo-showcase.ekrole.json", raw: majoShowcaseRaw },
+    { name: "role-kotodama-showcase.ekrole.json", raw: kotodamaShowcaseRaw },
+])("golden fixture: $name (Wave 8 テンプレギャラリー見本・はなす/わすれる)", ({ raw }) => {
+    it("validate に合格する", () => {
+        const parsed = JSON.parse(raw);
+        const result = validateEkrDefinition(parsed);
+        expect(result.ok, result.ok ? "" : (result as { error: string }).error).toBe(true);
+    });
+
+    it("on_chat / remember / kill(saved1) の呪い合成を使っている", () => {
+        const parsed = JSON.parse(raw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        if (!result.def.logic) throw new Error("fixture は logic を持つ前提");
+
+        expect(result.def.logic.rules.some((r) => r.when === "on_chat")).toBe(true);
+        const ops = new Set<string>();
+        for (const rule of result.def.logic.rules) collectOps(rule.do, ops);
+        expect(ops.has("remember")).toBe(true);
+        expect(ops.has("kill")).toBe(true);
+    });
+
+    it("リンター (spec §6・L30/L16 拡張 含む) は警告0件", () => {
         const parsed = JSON.parse(raw);
         const result = validateEkrDefinition(parsed);
         if (!result.ok) throw new Error(result.error);

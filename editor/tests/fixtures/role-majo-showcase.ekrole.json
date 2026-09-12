@@ -1,0 +1,41 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "まじょ",
+  "author": "EKN Sample",
+  "description": "とくいわざで のろいをかけ、会議明けにキルする。ゆるされると のろいはとける",
+  "color": "#7b3fa0",
+  "team": "impostor",
+  "canKill": false,
+  "killCooldown": 25,
+  "canVent": false,
+  "visionMultiplier": 1,
+  "winCondition": "team",
+  "logic": {
+    "version": 1,
+    "variables": [],
+    "rules": [
+      {
+        "when": "on_pet",
+        "do": [
+          { "op": "remember", "slot": 1, "target": "nearest" },
+          { "op": "notify", "text": "のろいをかけた…", "seconds": 2 }
+        ]
+      },
+      {
+        "when": "on_meeting_end",
+        "do": [
+          { "op": "kill", "target": "saved1" }
+        ]
+      },
+      {
+        "when": "on_chat",
+        "match": "ゆるして",
+        "do": [
+          { "op": "forget", "slot": 1 },
+          { "op": "notify", "text": "のろいがとけた…", "seconds": 2, "target": "ctx" }
+        ]
+      }
+    ]
+  }
+}

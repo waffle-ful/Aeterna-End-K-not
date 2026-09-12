@@ -1070,4 +1070,102 @@ public class EkrDefinitionTests
         Assert.All(joins, n => Assert.Equal("self", n.Target));
         Assert.Single(def.ParsedLogic.Rules, r => r.When == "on_death" && r.Do.Exists(n => n.Op == "win_join"));
     }
+
+    // ── Wave 8: チャット入力 (on_chat) + 記憶解除 (forget) ────────────────────────────────────
+
+    // §3: match は文字列・trim 後 1..20字・省略可。他イベントに置かれていたら文書 reject。
+    // trim して空になる match は「省略扱い」にせず reject する。
+    [Theory]
+    [InlineData("\"when\":\"on_chat\"", true)] // match 省略 = どの発言でも発火
+    [InlineData("\"when\":\"on_chat\",\"match\":\"ことば\"", true)]
+    [InlineData("\"when\":\"on_chat\",\"match\":\"12345678901234567890\"", true)] // 20字ちょうど
+    [InlineData("\"when\":\"on_chat\",\"match\":\"123456789012345678901\"", false)] // 21字は範囲外
+    [InlineData("\"when\":\"on_chat\",\"match\":\"  \"", false)] // trim で空になる match
+    [InlineData("\"when\":\"on_pet\",\"match\":\"ことば\"", false)] // イベント違い
+    public void OnChatMatch_MatchesTheContract(string ruleHead, bool expectOk)
+    {
+        string json = Wrap("\"logic\":{\"version\":1,\"rules\":[{" + ruleHead + ",\"do\":[{\"op\":\"stop\"}]}]}");
+
+        Assert.Equal(expectOk, EkrDefinition.TryParse(json, out _, out _));
+    }
+
+    // §1: match の照合値は trim + ToLowerInvariant 済みで格納する (実行側は Contains のみ行う)。
+    [Fact]
+    public void OnChatMatch_IsStoredTrimmedAndLowercased()
+    {
+        string json = Wrap("\"logic\":{\"version\":1,\"rules\":[{\"when\":\"on_chat\",\"match\":\" NgWord \",\"do\":[{\"op\":\"stop\"}]}]}");
+
+        Assert.True(EkrDefinition.TryParse(json, out EkrDefinition def, out string error), error);
+        Assert.Equal("ngword", def.ParsedLogic.Rules[0].Match);
+    }
+
+    [Fact]
+    public void OnChatMatch_OmittedIsNull()
+    {
+        string json = Wrap("\"logic\":{\"version\":1,\"rules\":[{\"when\":\"on_chat\",\"do\":[{\"op\":\"stop\"}]}]}");
+
+        Assert.True(EkrDefinition.TryParse(json, out EkrDefinition def, out string error), error);
+        Assert.Null(def.ParsedLogic.Rules[0].Match);
+    }
+
+    // §2: forget の slot は 1..2 必須 (remember と同じ受理表)。
+    [Theory]
+    [InlineData("{\"op\":\"forget\",\"slot\":1}", true)]
+    [InlineData("{\"op\":\"forget\",\"slot\":2}", true)]
+    [InlineData("{\"op\":\"forget\",\"slot\":0}", false)]
+    [InlineData("{\"op\":\"forget\",\"slot\":3}", false)]
+    [InlineData("{\"op\":\"forget\"}", false)]
+    public void Forget_SlotMatchesTheContract(string opJson, bool shouldAccept)
+    {
+        bool ok = EkrDefinition.TryParse(LogicWithOp(opJson), out _, out string error);
+        Assert.True(ok == shouldAccept, shouldAccept ? error : "本来 reject されるべき op が受理されました: " + opJson);
+    }
+
+    // 契約 §5 のテンプレギャラリー見本2本 (まじょ・ことだまや) が C# パーサを通ること。
+    [Theory]
+    [InlineData("role-majo-showcase.ekrole.json", "forget")]
+    [InlineData("role-kotodama-showcase.ekrole.json", "remember")]
+    public void Wave8TemplateGalleryFixtures_AreAcceptedByCSharpValidator(string fileName, string containsOp)
+    {
+        string json = File.ReadAllText(FixturePath(fileName));
+        Assert.True(EkrDefinition.TryParse(json, out EkrDefinition def, out string error), error);
+
+        var ops = new List<EkrNode>();
+
+        foreach (EkrRule rule in def.ParsedLogic.Rules)
+            CollectOps(rule.Do, containsOp, ops);
+
+        Assert.NotEmpty(ops);
+    }
+
+    // 共有 fixture から Wave 8 語彙 (on_chat の match / forget) が AST まで通ること。TS 側
+    // (role-fixtures.test.ts の op 網羅アサーション) と同じファイルの同じ値を読む
+    // (Wave 7 の FullCourseFixture_ExposesWave7Vocabulary と対称)。
+    [Fact]
+    public void FullCourseFixture_ExposesWave8Vocabulary()
+    {
+        string json = File.ReadAllText(FixturePath("role-full-course.ekrole.json"));
+        Assert.True(EkrDefinition.TryParse(json, out EkrDefinition def, out string error), error);
+
+        var forgets = new List<EkrNode>();
+
+        foreach (EkrRule rule in def.ParsedLogic.Rules)
+            CollectOps(rule.Do, "forget", forgets);
+
+        Assert.Single(forgets);
+        Assert.Equal(1, forgets[0].Slot);
+
+        EkrRule chatRule = Assert.Single(def.ParsedLogic.Rules, r => r.When == "on_chat");
+        Assert.NotNull(chatRule.Match);
+    }
+
+    // ことだまや見本の本線: on_chat(match) → remember(1,ctx) が AST まで通ること。
+    [Fact]
+    public void KotodamaShowcaseFixture_ExposesOnChatVocabulary()
+    {
+        string json = File.ReadAllText(FixturePath("role-kotodama-showcase.ekrole.json"));
+        Assert.True(EkrDefinition.TryParse(json, out EkrDefinition def, out string error), error);
+
+        Assert.Contains(def.ParsedLogic.Rules, r => r.When == "on_chat");
+    }
 }

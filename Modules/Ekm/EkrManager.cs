@@ -1121,6 +1121,10 @@ public static class EkrManager
         // 単なるデバウンス辞書なので、早めに捨てても「1 回余分に発火しうる」安全側にしか振れない。
         LastSabotageFireTime.Clear();
 
+        // Wave 8: チャットのデバウンス辞書もラウンド境界で捨てる (サボの per-系統デバウンスと同じ理由 —
+        // 単なるデバウンス辞書なので早めに捨てても安全側にしか振れない)。
+        RecentChatFireTime.Clear();
+
         // Wave 6 (契約 §1.1 中断: slot 剥奪): 飛行台帳も同じ非対称で片付ける — このスロットの保持者の
         // ものと、どのスロットの保持者でもなくなった孤児だけを断つ (無関係スロットの飛行中の弾を
         // 巻き添えにしない)。_cc と違い実体の後始末が要る (EndFlight が slot 台帳ごと Despawn する)。
@@ -1468,10 +1472,14 @@ public static class EkrManager
     // onlyRuleIndex: Wave 4 の近接ポーラー (on_near/on_far) 専用 — 複数 rule が別 radius/who を持ち
     // ラッチが per-rule なので、発火をラッチが立ったその 1 rule にスコープする (FireCnoTouch の
     // requiredSlot と同じ思想の rule 軸版)。他イベントは null (全 rule 走査)。
+    // chatText: Wave 8 の on_chat 専用 (trim+ToLowerInvariant 済み)。rule.Match が指定されていれば
+    // Contains 判定で絞る。他イベントは null。
+    // 戻り値: 少なくとも1本 fiber を起票したか (Wave 8 の on_chat デデュープ台帳が「実際に発火した
+    // ときだけ記録する」ために読む — 既存呼び出し元は戻り値を無視してよい)。
     // ⚠️ on_attacked の kind は同期プロローグ側 (FireAttackedPrologue) が別途フィルタする。
-    private static void FireEvent(CustomRoles slot, byte holderId, string eventName, byte ctxId, int? requiredSlot = null, string filter = null, int? onlyRuleIndex = null)
+    private static bool FireEvent(CustomRoles slot, byte holderId, string eventName, byte ctxId, int? requiredSlot = null, string filter = null, int? onlyRuleIndex = null, string chatText = null)
     {
-        if (!Runtime.TryGetValue(holderId, out EkrHolderState state) || state.LogicDisabled) return;
+        if (!Runtime.TryGetValue(holderId, out EkrHolderState state) || state.LogicDisabled) return false;
 
         // spec §2 死亡時の意味論 (2026-08-09): 死後の新規イベントは on_death 以外発火しない
         // (会議系イベントも含む — 死者はもう何も観測しない)。on_death 自体はホルダーが死亡確定した
@@ -1479,13 +1487,14 @@ public static class EkrManager
         if (eventName != "on_death")
         {
             PlayerControl holderPc = holderId.GetPlayer();
-            if (!holderPc || !holderPc.IsAlive()) return;
+            if (!holderPc || !holderPc.IsAlive()) return false;
         }
 
         EkrDefinition def = GetDefinition(slot);
-        if (def?.ParsedLogic == null) return;
+        if (def?.ParsedLogic == null) return false;
 
         List<EkrRule> rules = def.ParsedLogic.Rules;
+        bool spawned = false;
 
         for (var i = 0; i < rules.Count; i++)
         {
@@ -1494,11 +1503,15 @@ public static class EkrManager
             if (rule.When != eventName) continue;
             if (requiredSlot.HasValue && rule.Slot != requiredSlot.Value) continue;
             if (rule.Cause != null && rule.Cause != filter) continue; // R2: on_death の死因フィルタ (未指定 = 全死因)
+            if (rule.When == "on_chat" && rule.Match != null && (chatText == null || !chatText.Contains(rule.Match, StringComparison.Ordinal))) continue; // Wave 8: match 指定時は部分一致のみ
             if (state.Fibers.Count >= EkmLogicRuntime.MaxFibersPerHolder) continue; // spec §5: 超過は新規発火をドロップ
 
             var context = new EkrActionContext { HolderId = holderId, CtxId = ctxId, Slot = slot };
             state.Fibers.Add(EkmLogicRuntime.Spawn(rule.Do, state.Variables, context, EkrActionSink.InOpcodeKill));
+            spawned = true;
         }
+
+        return spawned;
     }
 
     public static void FirePet(CustomRoles slot, PlayerControl pc) => FireEvent(slot, pc.PlayerId, "on_pet", byte.MaxValue);
@@ -2062,6 +2075,56 @@ public static class EkrManager
         FireEvent(slot, pc.PlayerId, "on_revive", byte.MaxValue);
     }
 
+    // ── Wave 8: チャット入力 (on_chat) ─────────────────────
+
+    // 契約 §1: per-(ホルダー, 発言者) 1秒デデュープ。改造クライアントの連投で fiber 枠 (≤8) を
+    // 独占させない (on_attacked の打診デデュープと同じ思想)。単なるデバウンス辞書なので、会議境界
+    // (FireMeetingStart) とラウンド境界 (ResetSlot) のどちらで捨てても「1 回余分に発火しうる」
+    // 安全側にしか振れない。
+    private const float ChatDedupeSeconds = 1f;
+    private static readonly Dictionary<(byte Holder, byte Speaker), float> RecentChatFireTime = new();
+
+    // 契約 §1/§5: 会議中 (Discussion/Voting) の公開チャット・生存者のみ・自分の発言も含む
+    // (詠唱型を許す) グローバル型 — 全ホルダーへ ctx=発言者で配る (FireSabotage と同型の fan-out)。
+    // WordKiller.OnAnyoneChat と同じガード列を踏襲する (Patches/ChatCommandPatch.cs の
+    // 送信側/受信側フックの隣から呼ぶ)。読み取り専用・送信ゼロ。
+    public static void FireChat(PlayerControl speaker, string text)
+    {
+        if (!AmongUsClient.Instance.AmHost) return;
+        if (!GameStates.IsMeeting) return;
+        if (!speaker || speaker.PlayerId >= 200 || !speaker.IsAlive()) return;
+
+        // 投票終了〜会議クローズの窓 (WordKiller と同じ vote-state ガード — 追放ワープアップの
+        // Reliable バーストと重なるキック帯の回避)。
+        if (MeetingHud.Instance && MeetingHud.Instance.state is MeetingHud.MeetingStates.Results or MeetingHud.MeetingStates.Proceeding) return;
+
+        if (string.IsNullOrWhiteSpace(text) || text.TrimStart().StartsWith('/')) return;
+
+        string lowered = text.Trim().ToLowerInvariant();
+        float now = Time.realtimeSinceStartup;
+
+        foreach ((CustomRoles slot, HashSet<byte> holders) in PlayersBySlot)
+        {
+            if (holders.Count == 0) continue;
+
+            EkrDefinition def = GetDefinition(slot);
+            if (def?.ParsedLogic == null) continue;
+
+            foreach (byte holderId in holders)
+            {
+                var key = (holderId, speaker.PlayerId);
+
+                if (RecentChatFireTime.TryGetValue(key, out float last) && now - last < ChatDedupeSeconds) continue;
+
+                // FireEvent は fiber を spawn するだけ (Runtime 辞書は不変) なので直接列挙で安全。
+                // デデュープ台帳は「実際に発火したときだけ」記録する — match 不一致等で発火ゼロだった
+                // 発言まで記録すると、直後の一致発言が窓に巻き込まれて無音でドロップする
+                // (改造クライアントの「無関係な発言で前打ちしてから唱える」回避策を防ぐ)。
+                if (FireEvent(slot, holderId, "on_chat", speaker.PlayerId, chatText: lowered)) RecentChatFireTime[key] = now;
+            }
+        }
+    }
+
     // 会議開始 (ボタン/通報どちらでも1回・spec §2)。全 EKR ホルダー共通の「走行中 fiber は全キャンセル」
     // を先に行ってから on_meeting_start を発火する (キャンセル後に発火 — 新しく生える fiber は対象外)。
     // fiber キャンセルは純管理メモリ操作 (Il2Cpp 側へは触らない) なのでここでインラインに行うが、
@@ -2103,6 +2166,10 @@ public static class EkrManager
         // Wave 6 (契約 §2): サボの per-系統デバウンスは会議境界で捨てる (会議明けは新しいタスクフェーズ —
         // 前フェーズの残り時間で最初の1回が無音死しないように)。
         LastSabotageFireTime.Clear();
+
+        // Wave 8: チャットのデバウンス辞書も会議境界で捨てる。on_chat は会議中にしか発火しないので
+        // 前会議の記録は次の会議では無意味 — 持ち越さず、毎会議まっさらな 1 秒窓から始める。
+        RecentChatFireTime.Clear();
 
         // Wave 2 (spec §3): vote_block/vote_swap/exile は会議スコープの状態 (trap 10 — Init() 経由の
         // ラウンド境界リセットではなく、実際の会議境界であるここで捨てる)。
