@@ -506,6 +506,7 @@ internal static class ChatCommands
         }
 
         if (AmongUsClient.Instance.AmHost) WordKiller.OnAnyoneChat(PlayerControl.LocalPlayer, text);
+        if (AmongUsClient.Instance.AmHost) EkrManager.FireChat(PlayerControl.LocalPlayer, text);
 
         CheckAnagramGuess(PlayerControl.LocalPlayer.PlayerId, text);
 
@@ -6317,6 +6318,7 @@ internal static class ChatCommands
         // 禁止ワードを言っても死なない」という抜け道になる (逆にモッド客だけ死ぬ非対称も生む)。
         // 判定は文字列の Contains のみで送信を伴わないので、スロットルの目的 (スパム抑制) とも衝突しない。
         WordKiller.OnAnyoneChat(player, text);
+        EkrManager.FireChat(player, text);
 
         if (LastSentCommand.TryGetValue(player.PlayerId, out long ts) && ts + 2 >= now && !player.IsModdedClient())
         {

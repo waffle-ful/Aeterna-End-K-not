@@ -129,6 +129,8 @@ export const WHEN_LABELS: Record<LogicWhen, string> = {
     // Wave 6 (§2/§3 2026-08-29) — 残イベント2種。
     on_sabotage: "だれかがサボタージュをおこしたとき",
     on_revive: "いきかえったとき",
+    // Wave 8 (§1 2026-08-30) — 会議中の公開チャット。
+    on_chat: "だれかが はなしたとき",
 };
 
 const WHEN_TOOLTIPS: Record<LogicWhen, string> = {
@@ -168,6 +170,8 @@ const WHEN_TOOLTIPS: Record<LogicWhen, string> = {
     // Wave 6 (§2/§3 2026-08-29) — 残イベント2種。
     on_sabotage: "だれかがサボタージュ (電気・酸素・爆弾・通信など) を成功させたときに実行します (このときの「あいて」= サボタージュをおこした人)。だれの役職でも、生きている全員に実行されます。おなじサボタージュを連打しても、しばらくは続けて実行されません。",
     on_revive: "自分が生き返ったときに実行します (「あいて」はいません)。変数やここまでの進み具合はそのまま続きます。",
+    // Wave 8 (§1 2026-08-30) — 会議中の公開チャット。
+    on_chat: "会議中の発言に反応します (このときの「あいて」= 発言した人。自分の発言でも反応します)。死んだ人の発言や「/」で始まる発言には反応しません。ことばを入れなければ、どんな発言にも反応します (入れると、その言葉をふくむ発言だけに反応します)。同じ人の連続した発言は、1秒に1回だけ反応します。",
 };
 
 // ---------------------------------------------------------------------------
@@ -241,9 +245,10 @@ function jsonBlockDefs(): unknown[] {
     // Wave 4 (§1/§3): on_near (RADIUS+WHO)・on_far (RADIUS+WHO)・
     // on_linked_death (CAUSE) もドロップダウンを持つので個別定義 (on_room_enter/on_room_exit は
     // フィールドを持たないので生成のまま)。
+    // Wave 8 (§1) — on_chat も任意の MATCH テキスト欄を持つので個別定義。
     const eventBlocks = LOGIC_WHEN_VALUES
         .filter((when) => when !== "on_cno_touch" && when !== "on_attacked" && when !== "on_death" && when !== "on_alive_count" && when !== "on_var"
-            && when !== "on_near" && when !== "on_far" && when !== "on_linked_death")
+            && when !== "on_near" && when !== "on_far" && when !== "on_linked_death" && when !== "on_chat")
         .map((when) => ({
             type: `ekr_when_${when}`,
             message0: WHEN_LABELS[when],
@@ -326,6 +331,17 @@ function jsonBlockDefs(): unknown[] {
             nextStatement: null,
             colour: HUE_EVENT,
             tooltip: WHEN_TOOLTIPS.on_linked_death,
+        },
+        // Wave 8 (§1 2026-08-30) — 会議中の公開チャット。
+        // ことば欄は空 = だれでも (compile-role.ts が trim して空なら match キーごと省略する)。
+        {
+            type: "ekr_when_on_chat",
+            message0: "だれかが「 %1 」と はなしたとき (空 = だれでも)",
+            args0: [{ type: "field_input", name: "MATCH", text: "" }],
+            inputsInline: true,
+            nextStatement: null,
+            colour: HUE_EVENT,
+            tooltip: WHEN_TOOLTIPS.on_chat,
         },
 
         // 制御
@@ -607,6 +623,16 @@ function jsonBlockDefs(): unknown[] {
             nextStatement: null,
             colour: HUE_ULTIMATE,
             tooltip: "えらんだ人を「おぼえた人1／2」として覚えておきます (2人まで)。あとで「キルする」や「ワープさせる」で指定できます。おぼえた人が死んだり切断したりすると忘れ、そのときは何も起きません。会議をまたいでも覚えていますが、ゲームが始まると忘れます。",
+        },
+        // Wave 8 (§2 2026-08-30) — remember の該当 slot を消す。
+        {
+            type: "ekr_do_forget",
+            message0: "おぼえた人 %1 を わすれる",
+            args0: [{ type: "field_dropdown", name: "SLOT", options: [["1", "1"], ["2", "2"]] }],
+            previousStatement: null,
+            nextStatement: null,
+            colour: HUE_ULTIMATE,
+            tooltip: "「おぼえた人1／2」をわすれます (おぼえていなければ何も起きません)。会議中でも使えます。",
         },
         {
             type: "ekr_do_portal_place",
@@ -1081,6 +1107,7 @@ export function buildRoleToolbox(): Blockly.utils.toolbox.ToolboxDefinition {
                 contents: [
                     { kind: "block", type: "ekr_do_marker_save" },
                     { kind: "block", type: "ekr_do_remember" },
+                    { kind: "block", type: "ekr_do_forget" },
                     { kind: "block", type: "ekr_do_teleport_other" },
                     { kind: "block", type: "ekr_do_portal_place" },
                     { kind: "block", type: "ekr_do_pull" },

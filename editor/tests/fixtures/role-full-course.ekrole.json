@@ -299,6 +299,14 @@
           { "op": "var_set", "name": "うらみ", "value": { "e": "lit", "v": 0 } },
           { "op": "notify", "text": "また、動ける…", "seconds": 3 }
         ]
+      },
+      {
+        "when": "on_chat",
+        "match": "ゆるして",
+        "do": [
+          { "op": "forget", "slot": 1 },
+          { "op": "notify", "text": "ゆるそう…", "seconds": 3, "target": "ctx" }
+        ]
       }
     ]
   }

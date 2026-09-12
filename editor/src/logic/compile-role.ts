@@ -15,7 +15,7 @@
 // 分かりやすい日本語エラーに変換してくれる。
 //
 // ブロック type 命名規約 (blocks-role.ts と1対1で対応させること):
-//   ekr_when_<when-id>          … イベントハット (24種 — 正典は roledef.ts の LOGIC_WHEN_VALUES。
+//   ekr_when_<when-id>          … イベントハット (25種 — 正典は roledef.ts の LOGIC_WHEN_VALUES。
 //                                  id は spec §2 の when 値そのもの)
 //   ekr_if / ekr_if_else        … 制御構文 if (else 無し/else 付きの2ブロックに分離、mutator 不使用)
 //   ekr_do_<op>                 … その他の制御/アクション opcode (spec §3)
@@ -176,6 +176,9 @@ function blockToNode(b: SerializedBlock): Record<string, unknown> {
         // Wave 1 (spec §3 2026-08-11) — おぼえる / こうげきをふせぐ
         case "ekr_do_remember":
             return { op: "remember", slot: toNum(b.fields?.SLOT), target: b.fields?.TARGET };
+        // Wave 8 (§2) — おぼえた人をわすれる。
+        case "ekr_do_forget":
+            return { op: "forget", slot: toNum(b.fields?.SLOT) };
         case "ekr_do_cancel_attack":
             // 配置 (on_attacked 配下かどうか) の検査は roledef.ts の validateRoleLogic が行う —
             // compile 側は契約を一切強制しない (ファイル冒頭の方針)。
@@ -331,6 +334,13 @@ export function compileTopBlocksToRules(topBlocks: SerializedBlock[]): unknown[]
             if (when === "on_linked_death") {
                 const cause = b.fields?.CAUSE;
                 if (typeof cause === "string" && cause !== "") rule.cause = cause;
+            }
+
+            // Wave 8 (§1) — on_chat の match。テキスト欄が空/空白のみ
+            // なら「だれでも」= フィールドごと省略 (on_near.who の "anyone" 省略と同じ作法)。
+            if (when === "on_chat") {
+                const match = b.fields?.MATCH;
+                if (typeof match === "string" && match.trim() !== "") rule.match = match;
             }
 
             rules.push(rule);
