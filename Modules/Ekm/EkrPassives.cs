@@ -54,6 +54,10 @@ public sealed class EkrPassives
     // よわさ (時間がくると死ぬ)。0 = 無効。有効時は 30..600 秒。
     public int DoomSeconds { get; private set; }
 
+    // Wave 9: かちのかぞえかた (0..3・既定 1 = 従来どおり1人ぶん)。RoleBase.ManipulateGameEndCheckCrew の
+    // countsAs にそのまま渡る。team == "crewmate" のときだけ効く (契約 §3)。
+    public int CountsAs { get; private set; } = 1;
+
     // R2: ほかの人からの見え方だけを偽る陣営。null = 偽装なし。
     // ⚠️ 効くのは**表示層だけ** — 本人の勝敗・選出・実陣営は一切変わらない。既存の占い/判定役職
     // (Teller 系・Sheriff のキル可否等) は実陣営を読むので、そちらには素の陣営が見える (受容済み)。
@@ -157,6 +161,17 @@ public sealed class EkrPassives
             }
 
             p.DoomSeconds = seconds;
+        }
+
+        if (root.TryGetProperty("countsAs", out JsonElement countsAsEl))
+        {
+            if (!EkrJson.TryReadInt(countsAsEl, out int countsAs) || countsAs is < 0 or > 3)
+            {
+                error = "とくせいの「かちのかぞえかた」が範囲外です (0〜3)";
+                return false;
+            }
+
+            p.CountsAs = countsAs;
         }
 
         // R2 (契約 §4): `"disguise": { "team": "crewmate" | "impostor" | "neutral" }`。

@@ -21,6 +21,25 @@ public class EkrDefinitionTests
 
     // ── TS fixture の相互運用 ────────────────────────────────────────────
 
+    // fixtures/ に置かれた .ekrole.json を**1本残らず** C# のバリデータへ通す。
+    // 個別 fixture のテストは InlineData で名指しされているため、新しい見本を足しても
+    // 名指しを忘れると C# 側のパース網から漏れる (Wave 9 でこの穴を塞いだ)。
+    public static IEnumerable<object[]> AllFixtures()
+    {
+        foreach (string path in Directory.EnumerateFiles(Path.Combine(AppContext.BaseDirectory, "fixtures"), "*.ekrole.json"))
+            yield return [Path.GetFileName(path)];
+    }
+
+    [Theory]
+    [MemberData(nameof(AllFixtures))]
+    public void EveryFixture_IsAcceptedByCSharpValidator(string fileName)
+    {
+        string json = File.ReadAllText(FixturePath(fileName));
+
+        Assert.True(EkrDefinition.TryParse(json, out EkrDefinition def, out string error), $"{fileName}: {error}");
+        Assert.NotNull(def);
+    }
+
     [Fact]
     public void FullCourseFixture_IsAcceptedByCSharpValidator()
     {
@@ -1167,5 +1186,98 @@ public class EkrDefinitionTests
         Assert.True(EkrDefinition.TryParse(json, out EkrDefinition def, out string error), error);
 
         Assert.Contains(def.ParsedLogic.Rules, r => r.When == "on_chat");
+    }
+
+    // ── Wave 9: えらんで はつどう (基底開放: Shapeshifter) + かちのかぞえかた ────────────────────
+
+    // 契約 §5-1: basis は省略→pet、null・文字列以外・未知の値は文書 reject。
+    // ⚠️ 明示 null を省略と区別できるのは Basis を素の JsonElement (Undefined / Null を持てる) で
+    // 受けているから。Nullable<JsonElement> にすると JSON null がラッパー段階で潰れて省略に合流し、
+    // TS 側の判定 (null は reject) と割れる。
+    [Theory]
+    [InlineData(null, true, EkrBasis.Pet)] // 省略
+    [InlineData("\"pet\"", true, EkrBasis.Pet)]
+    [InlineData("\"shapeshift\"", true, EkrBasis.Shapeshift)]
+    [InlineData("null", false, EkrBasis.Pet)]
+    [InlineData("123", false, EkrBasis.Pet)]
+    [InlineData("\"phantom\"", false, EkrBasis.Pet)]
+    public void Basis_MatchesTheContract(string basisJson, bool expectOk, EkrBasis expected)
+    {
+        string json = Wrap(basisJson == null ? "\"canVent\":true" : $"\"basis\":{basisJson}");
+
+        Assert.Equal(expectOk, EkrDefinition.TryParse(json, out EkrDefinition def, out _));
+        if (expectOk) Assert.Equal(expected, def.ParsedBasis);
+    }
+
+    // canSabotage は省略→null (陣営なり)、真偽値以外 (null 含む) は文書 reject。
+    [Theory]
+    [InlineData(null, true, null)] // 省略 = 陣営どおり
+    [InlineData("true", true, true)]
+    [InlineData("false", true, false)]
+    [InlineData("null", false, null)]
+    [InlineData("\"true\"", false, null)]
+    [InlineData("1", false, null)]
+    public void CanSabotage_MatchesTheContract(string sabotageJson, bool expectOk, bool? expected)
+    {
+        string json = Wrap(sabotageJson == null ? "\"canVent\":true" : $"\"canSabotage\":{sabotageJson}");
+
+        Assert.Equal(expectOk, EkrDefinition.TryParse(json, out EkrDefinition def, out _));
+        if (expectOk) Assert.Equal(expected, def.ParsedCanSabotage);
+    }
+
+    // 契約 §5-2: abilityCooldown は省略→30、null・数値以外・5未満・180超は文書 reject (Clamp しない)。
+    [Theory]
+    [InlineData(null, true, 30f)] // 省略
+    [InlineData("30", true, 30f)]
+    [InlineData("5", true, 5f)]
+    [InlineData("180", true, 180f)]
+    [InlineData("4.9", false, 0f)]
+    [InlineData("180.1", false, 0f)]
+    [InlineData("null", false, 0f)]
+    [InlineData("\"30\"", false, 0f)]
+    public void AbilityCooldown_MatchesTheContract(string cdJson, bool expectOk, float expected)
+    {
+        string json = Wrap(cdJson == null ? "\"canVent\":true" : $"\"abilityCooldown\":{cdJson}");
+
+        Assert.Equal(expectOk, EkrDefinition.TryParse(json, out EkrDefinition def, out _));
+        if (expectOk) Assert.Equal(expected, def.AbilityCooldownSeconds);
+    }
+
+    // basis == "pet" で abilityCooldown を明示していても reject しない (リンタのヒント層だけの制約)。
+    [Fact]
+    public void AbilityCooldown_DoesNotRejectWhenBasisIsPet()
+    {
+        string json = Wrap("\"basis\":\"pet\",\"abilityCooldown\":45");
+
+        Assert.True(EkrDefinition.TryParse(json, out EkrDefinition def, out string error), error);
+        Assert.Equal(45f, def.AbilityCooldownSeconds);
+    }
+
+    // hostOptions に abilityCooldown を追加できる (killCooldown と同じ扱い)。
+    [Fact]
+    public void HostOptions_AcceptsAbilityCooldownKey()
+    {
+        Assert.Contains("abilityCooldown", EkrHostOption.FixedKeys);
+        Assert.True(EkrDefinition.TryParse(Wrap("\"hostOptions\":[{\"key\":\"abilityCooldown\",\"label\":\"あ\"}]"), out EkrDefinition def, out string error), error);
+        Assert.Equal("abilityCooldown", Assert.Single(def.ParsedHostOptions).Key);
+    }
+
+    // 契約 §5-3: passives.countsAs は省略→1、整数以外(null含む)・0..3 外は文書 reject。
+    [Theory]
+    [InlineData(null, true, 1)] // 省略
+    [InlineData("0", true, 0)]
+    [InlineData("3", true, 3)]
+    [InlineData("2.0", true, 2)] // 整数等価トークンは既存規則どおり受理
+    [InlineData("-1", false, 0)]
+    [InlineData("4", false, 0)]
+    [InlineData("2.5", false, 0)]
+    [InlineData("null", false, 0)]
+    [InlineData("\"2\"", false, 0)]
+    public void PassivesCountsAs_MatchesTheContract(string countsAsJson, bool expectOk, int expected)
+    {
+        string json = Wrap(countsAsJson == null ? "\"canVent\":true" : $"\"passives\":{{\"countsAs\":{countsAsJson}}}");
+
+        Assert.Equal(expectOk, EkrDefinition.TryParse(json, out EkrDefinition def, out _));
+        if (expectOk) Assert.Equal(expected, def.ParsedPassives.CountsAs);
     }
 }

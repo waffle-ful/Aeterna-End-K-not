@@ -441,7 +441,10 @@ internal static class HudManagerPatch
                     if ((usesPetInsteadOfKill && player.Is(CustomRoles.Nimble) && player.GetRoleTypes() == RoleTypes.Engineer) || player.Is(CustomRoles.GM))
                         abilityButton?.SetEnabled();
 
-                    sabotageButton?.ToggleVisible(player.GetRoleTypes() is RoleTypes.ImpostorGhost or RoleTypes.Impostor or RoleTypes.Phantom or RoleTypes.Shapeshifter or RoleTypes.Viper);
+                    // 役職メーカーの役職は canSabotage (省略時は陣営どおり) に従う — 基底を借りているだけの
+                    // クルー/第三陣営が、基底の RoleTypes だけを根拠にサボを持たないようにする。
+                    sabotageButton?.ToggleVisible(player.GetRoleTypes() is RoleTypes.ImpostorGhost or RoleTypes.Impostor or RoleTypes.Phantom or RoleTypes.Shapeshifter or RoleTypes.Viper
+                                                  && EndKnot.Modules.Ekm.EkrManager.AllowsSabotage(player.GetCustomRole()));
 
                     AllocProbe.Mark("hud.b3.sab", sub);
                     alloc = AllocProbe.Mark("hud.b3", alloc);

@@ -26,6 +26,9 @@
 
 import {
     DEFAULT_WIN_CONDITION,
+    EKR_BASIS_DEFAULT,
+    EKR_BASIS_VALUES,
+    type EkrBasis,
     type EkrDefinition,
     type EkrTeam,
     HOST_OPTION_FIXED_KEYS,
@@ -41,6 +44,8 @@ import {
     type LogicVariable,
     type LogicWhen,
     PASSIVE_CORPSE_VALUES,
+    PASSIVE_COUNTS_AS_MAX,
+    PASSIVE_COUNTS_AS_MIN,
     PASSIVE_DOOM_SECONDS_MAX,
     PASSIVE_DOOM_SECONDS_MIN,
     PASSIVE_KILL_DISTANCE_VALUES,
@@ -55,6 +60,7 @@ import {
     SUPPORTED_TEAM,
     SUPPORTED_TEAMS,
     defaultEkrDefinition,
+    normalizeAbilityCooldown,
     normalizeColor,
     normalizeKillCooldown,
     normalizeVisionMultiplier,
@@ -87,6 +93,11 @@ interface FormState {
     killCooldown: number;
     canVent: boolean;
     visionMultiplier: number;
+    // Wave 9 (契約 §1): はつどうのしかた + とくいわざの まちじかん。
+    basis: EkrBasis;
+    abilityCooldown: number;
+    // Wave 9 追記: サボタージュを つかえる。undefined = 「陣営どおり」(キー省略)。
+    canSabotage: boolean | undefined;
     // Wave 1: とくせい (spec §1.1)。「バニラ既定 = キーの欠落」なので、既定のままの項目は
     // ここにも入らない (下書きの形と書き出しの形を一致させておく)。
     passives: RolePassives;
@@ -110,6 +121,33 @@ export function normalizeTeamDraft(raw: unknown): EkrTeam {
     return typeof raw === "string" && (SUPPORTED_TEAMS as readonly string[]).includes(raw) ? (raw as EkrTeam) : SUPPORTED_TEAM;
 }
 
+/**
+ * basis の下書き/読込値を寛容に復元する (Wave 9・normalizeTeamDraft と同じ方針)。不正な値は
+ * 既定 ("pet") へ。roledef.ts 側の validateEkrDefinition は不正な basis を reject するだけで
+ * フォールバックしない — フォールバックはこのフォーム層だけの責務。
+ */
+export function normalizeBasisDraft(raw: unknown): EkrBasis {
+    return typeof raw === "string" && (EKR_BASIS_VALUES as readonly string[]).includes(raw) ? (raw as EkrBasis) : EKR_BASIS_DEFAULT;
+}
+
+/**
+ * canSabotage の下書き/読込値を寛容に復元する (Wave 9 追記)。壊れた/不明な値は
+ * 「陣営どおり」(undefined) へ — canSabotage は元々 undefined が正当値なので、
+ * normalizeTeamDraft/normalizeBasisDraft と違い「壊れていたら既定へフォールバック」ではなく
+ * 「boolean でなければ undefined」という単純な寛容化になる。
+ */
+export function normalizeCanSabotageDraft(raw: unknown): boolean | undefined {
+    return typeof raw === "boolean" ? raw : undefined;
+}
+
+/** rm-can-sabotage の3値 <select> (""=陣営どおり/"true"/"false") ↔ canSabotage (boolean|undefined) の変換。 */
+function canSabotageToSelectValue(v: boolean | undefined): string {
+    return v === undefined ? "" : String(v);
+}
+function selectValueToCanSabotage(raw: string): boolean | undefined {
+    return raw === "" ? undefined : raw === "true";
+}
+
 /** rm-team の <option> 文言と揃える JP ラベル (プレビューの陣営行に使う)。 */
 const TEAM_LABELS: Record<EkrTeam, string> = {
     crewmate: "クルーメイト",
@@ -130,6 +168,9 @@ function defaultFormState(): FormState {
         killCooldown: d.killCooldown,
         canVent: d.canVent,
         visionMultiplier: d.visionMultiplier,
+        basis: d.basis,
+        abilityCooldown: d.abilityCooldown,
+        canSabotage: d.canSabotage,
         passives: {},
         progressText: "",
         hostOptions: [],
@@ -155,6 +196,11 @@ function refreshKillCdVisibility(): void {
     $("rm-kill-cd-row").hidden = !$<HTMLInputElement>("rm-can-kill").checked;
 }
 
+/** Wave 9 (契約 §1.2): とくいわざの まちじかん欄は「だれかを えらぶ」を選んだときだけ表示する。 */
+function refreshAbilityCdVisibility(): void {
+    $("rm-ability-cd-row").hidden = $<HTMLSelectElement>("rm-basis").value !== "shapeshift";
+}
+
 /** フォーム入力欄 → 生の値 (未検証・未クランプ)。name/author はユーザーの入力途中の値をそのまま読む。
  *  team は <select> なので不正値は原理上入らないが、念のため normalizeTeamDraft を通す (writeForm と対称)。 */
 function readForm(): Omit<FormState, "passives" | "hostOptions" | "logicVariables" | "logicBlockly" | "logicNoBlocklyPassthrough"> {
@@ -169,6 +215,11 @@ function readForm(): Omit<FormState, "passives" | "hostOptions" | "logicVariable
         killCooldown: Number($<HTMLInputElement>("rm-kill-cd").value),
         canVent: $<HTMLInputElement>("rm-can-vent").checked,
         visionMultiplier: Number($<HTMLInputElement>("rm-vision").value),
+        // Wave 9 (契約 §1): はつどうのしかた + とくいわざの まちじかん。
+        basis: normalizeBasisDraft($<HTMLSelectElement>("rm-basis").value),
+        abilityCooldown: Number($<HTMLInputElement>("rm-ability-cd").value),
+        // Wave 9 追記: サボタージュを つかえる。""(陣営どおり) は undefined に変換する。
+        canSabotage: selectValueToCanSabotage($<HTMLSelectElement>("rm-can-sabotage").value),
         // Wave 3 (契約 §3): なまえのよこに出す文字。description と同じ「空欄=キー省略」の単純テキスト欄。
         progressText: $<HTMLInputElement>("rm-progress-text").value,
     };
@@ -192,8 +243,12 @@ function writeForm(s: Omit<FormState, "passives" | "hostOptions" | "logicVariabl
     $<HTMLInputElement>("rm-kill-cd").value = String(normalizeKillCooldown(s.killCooldown));
     $<HTMLInputElement>("rm-can-vent").checked = s.canVent;
     $<HTMLInputElement>("rm-vision").value = String(normalizeVisionMultiplier(s.visionMultiplier));
+    $<HTMLSelectElement>("rm-basis").value = normalizeBasisDraft(s.basis);
+    $<HTMLInputElement>("rm-ability-cd").value = String(normalizeAbilityCooldown(s.abilityCooldown));
+    $<HTMLSelectElement>("rm-can-sabotage").value = canSabotageToSelectValue(normalizeCanSabotageDraft(s.canSabotage));
     $<HTMLInputElement>("rm-progress-text").value = s.progressText;
     refreshKillCdVisibility();
+    refreshAbilityCdVisibility();
 }
 
 // ---------------------------------------------------------------------------
@@ -267,6 +322,20 @@ function readPassivesForm(): RolePassives {
     return p;
 }
 
+/**
+ * Wave 9 (契約 §3): passives.countsAs はフォーム UI を持たない (契約: ホスト露出なし・見本で
+ * 足りる)。UI が表現できない値をコピー/保存のたびに黙って落とさないための保持だけの変数
+ * (noBlocklyPassthrough と同じ発想 — フォームでは編集できないが、読み込んだ値は保つ)。
+ */
+let passivesPassthrough: Pick<RolePassives, "countsAs"> = {};
+
+/** フォームの passives (readPassivesForm) + UI を持たない countsAs (passivesPassthrough) を合成する。
+ *  buildDefinitionFromForm/saveFormToStorage/リンタへの受け渡しは必ずこちらを経由すること
+ *  (readPassivesForm を直接使うと countsAs が消える)。 */
+function currentPassives(): RolePassives {
+    return { ...passivesPassthrough, ...readPassivesForm() };
+}
+
 /** RolePassives → とくせいフォーム (キーが無い項目は表示用の既定値を入れておく) */
 function writePassivesForm(p: RolePassives): void {
     $<HTMLInputElement>("rm-p-speed").value = String(clampToRange(p.speedMult, PASSIVE_SPEED_MULT_MIN, PASSIVE_SPEED_MULT_MAX, PASSIVE_FORM_DEFAULTS.speedMult));
@@ -306,6 +375,11 @@ function sanitizePassivesDraft(raw: unknown): RolePassives {
             p.disguise = { team: team as EkrTeam };
         }
     }
+    // Wave 9 (契約 §3): countsAs は UI を持たないため writePassivesForm では書き戻さないが、
+    // 下書き自体には保持する (wire() が passivesPassthrough へ引き継ぐ)。
+    if (typeof r.countsAs === "number" && Number.isInteger(r.countsAs) && r.countsAs >= PASSIVE_COUNTS_AS_MIN && r.countsAs <= PASSIVE_COUNTS_AS_MAX) {
+        p.countsAs = r.countsAs;
+    }
     return p;
 }
 
@@ -342,6 +416,8 @@ const HOST_OPTION_FIXED_LABELS: Record<HostOptionFixedKey, string> = {
     voteWeight: "票のちから",
     killCooldown: "キルクールダウン",
     vision: "視界の広さ",
+    // Wave 9 (契約 §1.2): とくいわざの まちじかん。
+    abilityCooldown: "とくいわざの まちじかん",
 };
 
 let hostOptionsDraft: HostOption[] = [];
@@ -547,7 +623,7 @@ function saveFormToStorage(): void {
     try {
         const state: FormState = {
             ...readForm(),
-            passives: readPassivesForm(),
+            passives: currentPassives(),
             hostOptions: hostOptionsDraft,
             logicVariables,
             logicBlockly: currentBlocklyState(),
@@ -583,6 +659,9 @@ function loadFormFromStorage(): FormState {
             killCooldown: normalizeKillCooldown(parsed.killCooldown),
             canVent: typeof parsed.canVent === "boolean" ? parsed.canVent : d.canVent,
             visionMultiplier: normalizeVisionMultiplier(parsed.visionMultiplier),
+            basis: normalizeBasisDraft(parsed.basis),
+            abilityCooldown: normalizeAbilityCooldown(parsed.abilityCooldown),
+            canSabotage: normalizeCanSabotageDraft(parsed.canSabotage),
             passives: sanitizePassivesDraft(parsed.passives),
             progressText: typeof parsed.progressText === "string" ? parsed.progressText : d.progressText,
             hostOptions: sanitizeHostOptionsDraft(parsed.hostOptions),
@@ -613,11 +692,17 @@ function buildDefinitionFromForm(): EkrDefinition | null {
         canVent: raw.canVent,
         visionMultiplier: raw.visionMultiplier,
         winCondition: DEFAULT_WIN_CONDITION,
+        basis: raw.basis,
+        abilityCooldown: raw.abilityCooldown,
+        // undefined (陣営どおり) のときは validateEkrDefinition 側で省略と同じに扱われる
+        // (value["canSabotage"] は object に無いキーでも常に undefined を返すため、代入自体は無害)。
+        canSabotage: raw.canSabotage,
     };
     const logic = currentLogicCandidate();
     if (logic !== undefined) candidate.logic = logic;
     // とくせい: 既定のまま (キー0個) なら passives キー自体を書き出さない (バニラ既定 = 欠落)。
-    const passives = readPassivesForm();
+    // countsAs はフォーム欄を持たないため currentPassives() (passivesPassthrough 込み) を使う。
+    const passives = currentPassives();
     if (Object.keys(passives).length > 0) candidate.passives = passives;
 
     // Wave 3 (契約 §3): なまえのよこに出す文字。空欄なら progress キー自体を書き出さない。
@@ -730,10 +815,19 @@ function loadCode(): void {
         killCooldown: r.def.killCooldown,
         canVent: r.def.canVent,
         visionMultiplier: r.def.visionMultiplier,
+        // Wave 9 (契約 §1): basis/abilityCooldown は team と同じく常に解決済みの値を持つ。
+        basis: r.def.basis,
+        abilityCooldown: r.def.abilityCooldown,
+        // Wave 9 追記: キーが無い役職コードは「陣営どおり」(undefined) として読み込む。
+        canSabotage: r.def.canSabotage,
         // Wave 3 (契約 §3): キーが無い役職コードは空欄として読み込む (description と同じ扱い)。
         progressText: r.def.progress?.text ?? "",
     });
     writePassivesForm(r.def.passives ?? {});
+    // Wave 9 (契約 §3): countsAs は writePassivesForm の対象外 (UI 欄が無い) なので、
+    // 読み込んだ値を passivesPassthrough へ引き継ぐ (引き継がないと再コピー時に無音で消える —
+    // passives.disguise と同じ「トップレベル新キーはフォーム層5経路すべて配線する」不変条件)。
+    passivesPassthrough = { countsAs: r.def.passives?.countsAs };
     // Wave 3 (契約 §4): adoptLoadedLogic() が末尾で renderVariablesList() → renderHostOptionsList()
     // を呼ぶため、その前に hostOptionsDraft を差し替えておく (key ドロップダウンの選択肢が
     // 新しい logicVariables を反映した状態で hostOptionsDraft の中身も一緒に描画されるように)。
@@ -908,7 +1002,16 @@ function refreshLogicPanel(): void {
 
     // Wave 3 (契約 §6 L25): progress.text の変数参照もリンタに渡す (トリム前の生値で良い —
     // extractProgressVarRefs は {変数名} トークンだけを見るので前後の空白は影響しない)。
-    const warnings = lintRoleLogic(validated.logic, $<HTMLInputElement>("rm-progress-text").value);
+    // Wave 9 (契約 §6 L31〜L33): team/basis/abilityCooldown/countsAs もまとめて渡す。
+    const raw = readForm();
+    const warnings = lintRoleLogic(validated.logic, $<HTMLInputElement>("rm-progress-text").value, {
+        team: raw.team,
+        basis: raw.basis,
+        abilityCooldown: raw.abilityCooldown,
+        // countsAs はフォーム欄を持たないため currentPassives() (passivesPassthrough 込み) を使う
+        // (L31 の対象は読み込んだコードの countsAs — readPassivesForm() だけだと常に undefined になる)。
+        countsAs: currentPassives().countsAs,
+    });
     footer.replaceChildren();
     if (warnings.length === 0) {
         footer.hidden = true;
@@ -1184,6 +1287,9 @@ function wire(): void {
     const draft = loadFormFromStorage();
     writeForm(draft);
     writePassivesForm(draft.passives);
+    // Wave 9 (契約 §3): countsAs は writePassivesForm の対象外 (UI 欄が無い) — loadCode() と同じく
+    // passivesPassthrough へ引き継ぐ (引き継がないと下書き復元のたびに無音で消える)。
+    passivesPassthrough = { countsAs: draft.passives.countsAs };
     hostOptionsDraft = draft.hostOptions;
     logicVariables = draft.logicVariables;
     pendingBlocklyRestore = draft.logicBlockly;
@@ -1196,8 +1302,28 @@ function wire(): void {
     $<HTMLInputElement>("rm-desc").addEventListener("input", onFormEdit);
     $<HTMLTextAreaElement>("rm-desc-long").addEventListener("input", onFormEdit);
     $<HTMLInputElement>("rm-color").addEventListener("input", onFormEdit);
-    $<HTMLSelectElement>("rm-team").addEventListener("change", onFormEdit);
+    $<HTMLSelectElement>("rm-team").addEventListener("change", () => {
+        onFormEdit();
+        // Wave 9 (契約 §6 L31): かちのかぞえかたのヒントは陣営に依存するため再検査する。
+        refreshLogicPanel();
+    });
     $<HTMLInputElement>("rm-can-vent").addEventListener("change", onFormEdit);
+    // Wave 9 追記: サボタージュを つかえる (3状態セレクタ・リンタ対象外なので refreshLogicPanel 不要)。
+    $<HTMLSelectElement>("rm-can-sabotage").addEventListener("change", onFormEdit);
+
+    // Wave 9 (契約 §1): はつどうのしかた + とくいわざの まちじかん。
+    $<HTMLSelectElement>("rm-basis").addEventListener("change", () => {
+        refreshAbilityCdVisibility();
+        onFormEdit();
+        refreshLogicPanel();
+    });
+    $<HTMLInputElement>("rm-ability-cd").addEventListener("change", () => {
+        const el = $<HTMLInputElement>("rm-ability-cd");
+        const raw = el.value.trim();
+        el.value = String(normalizeAbilityCooldown(raw === "" ? NaN : Number(raw)));
+        onFormEdit();
+        refreshLogicPanel();
+    });
     // Wave 3 (契約 §3): なまえのよこに出す文字。description と同じ単純テキスト欄の配線。
     $<HTMLInputElement>("rm-progress-text").addEventListener("input", () => {
         onFormEdit();

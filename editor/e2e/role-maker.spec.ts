@@ -603,3 +603,39 @@ test.describe("役職メーカー (ロジックタブの全画面フローティ
         expect(cap.errors, "未捕捉の例外あり").toEqual([]);
     });
 });
+
+test.describe("役職メーカー (Wave 9・かちのかぞえかたのヒント L31)", () => {
+    // passives.countsAs は UI 欄を持たない (契約 §3) ため、role-maker-wave9.test.ts (vitest/jsdom)
+    // は「値が消えないこと」までしか確認できない (jsdom は Blockly を実描画できないため、リンタ
+    // フッタの実表示は role-maker.spec.ts (実 Chromium) のここでのみ検証できる)。
+    test("team: impostor + passives.countsAs: 2 の下書きを読み込むと、ロジックタブでL31のヒントが出る", async ({ page }) => {
+        const cap = capture(page);
+        await page.addInitScript(() => {
+            localStorage.setItem(
+                "ekm.roleMaker",
+                JSON.stringify({
+                    name: "かちのかぞえかたテスト",
+                    team: "impostor",
+                    passives: { countsAs: 2 },
+                    logicBlockly: { blocks: { languageVersion: 0, blocks: [{ type: "ekr_when_on_pet", next: { block: { type: "ekr_do_stop" } } }] } },
+                }),
+            );
+        });
+
+        await page.goto("/");
+        await dismissStartScreen(page);
+
+        await page.locator("#btn-role-maker").click();
+        await expect(page.locator("#dlg-role-maker")).toBeVisible();
+
+        await page.locator('#rm-tabs .rm-tab[data-rm-tab="logic"]').click();
+        await expect(page.locator("#rm-blockly-container svg.blocklySvg")).toBeVisible({ timeout: 30000 });
+
+        await expect(page.locator("#rm-lint-footer")).toBeVisible();
+        await expect(page.locator("#rm-lint-footer")).toContainText("クルーのときだけ");
+
+        console.log("=== page console ===\n" + (cap.console.join("\n") || "(なし)"));
+        console.log("=== page errors ===\n" + (cap.errors.join("\n") || "(なし)"));
+        expect(cap.errors, "未捕捉の例外あり").toEqual([]);
+    });
+});
