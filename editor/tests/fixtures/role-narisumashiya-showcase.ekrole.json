@@ -1,0 +1,31 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "なりすましや",
+  "author": "EKN Sample",
+  "description": "しんじつは インポスター。しらべても『シェリフ』に見える",
+  "color": "#c0392b",
+  "team": "impostor",
+  "canKill": true,
+  "killCooldown": 25,
+  "canVent": true,
+  "visionMultiplier": 1,
+  "winCondition": "team",
+  "basis": "pet",
+  "abilityCooldown": 30,
+  "passives": {
+    "disguise": { "team": "crewmate", "role": "Sheriff", "deep": true }
+  },
+  "logic": {
+    "version": 1,
+    "variables": [],
+    "rules": [
+      {
+        "when": "on_kill",
+        "do": [
+          { "op": "notify", "text": "しごと、かんりょう…", "seconds": 3 }
+        ]
+      }
+    ]
+  }
+}

@@ -68,6 +68,8 @@ import {
     validateRoleLogic,
 } from "../roledef";
 import { decodeRoleCode, encodeRoleCode } from "../rolecode";
+// Wave 12 (契約 §2): 「見せる役職名」の選択肢は生成物からの import (ADDON_META と同型)。
+import { ROLE_BY_ID, ROLE_META } from "../generated/ekr-roles";
 import { compileWorkspaceToLogicInput, findEmptyWhenBlocks, type SerializedWorkspace } from "./compile-role";
 import { formatLintWarning, lintRoleLogic } from "./lint-role";
 
@@ -282,6 +284,35 @@ function clampIntToRange(raw: unknown, min: number, max: number, fallback: numbe
 function refreshPassiveRowVisibility(): void {
     $("rm-p-shield-row").hidden = !$<HTMLInputElement>("rm-p-shield").checked;
     $("rm-p-doom-row").hidden = !$<HTMLInputElement>("rm-p-doom").checked;
+    // Wave 12 (契約 §2): 「べつの陣営に見せる」を選んでいないときは役職名/deep 欄ごと隠す
+    // (見せる陣営が無いのに役職名だけ選べても意味が無いため)。
+    const disguised = $<HTMLSelectElement>("rm-p-disguise").value !== "";
+    $("rm-p-disguise-role-row").hidden = !disguised;
+    $("rm-p-disguise-deep-row").hidden = !disguised;
+}
+
+/**
+ * 「見せる役職名」<select> の選択肢を、選ばれている disguise team に属する役職だけへ作り直す
+ * (契約 §2.1: 値集合は「team と役職の陣営が一致」する組み合わせのみ)。呼ぶたびに先頭の
+ * 「とくに指定しない」以外を作り直すため、team を切り替えるたびに呼び直すこと (呼び忘れると
+ * 前の陣営の役職が選べたまま残る)。keepValue が新しい選択肢集合に無い場合は空欄へ落ちる
+ * (壊れた下書き/team 切り替え直後の安全弁)。
+ */
+function populateDisguiseRoleOptions(team: string, keepValue: string): void {
+    const select = $<HTMLSelectElement>("rm-p-disguise-role");
+    select.replaceChildren();
+    const blank = document.createElement("option");
+    blank.value = "";
+    blank.textContent = "とくに指定しない (陣営の名前だけ)";
+    select.appendChild(blank);
+    for (const role of ROLE_META) {
+        if (role.team !== team) continue;
+        const opt = document.createElement("option");
+        opt.value = role.id;
+        opt.textContent = role.ja;
+        select.appendChild(opt);
+    }
+    select.value = ROLE_BY_ID.get(keepValue)?.team === team ? keepValue : "";
 }
 
 /** とくせいフォーム → RolePassives (既定のままの項目はキーごと落とす・値は必ず範囲内) */
@@ -307,8 +338,14 @@ function readPassivesForm(): RolePassives {
         p.corpse = corpse as RolePassives["corpse"];
     }
 
+    // Wave 12 (契約 §4): ころした死体は だれのか わからない (キー欠落 = 既定 false・checkbox 未チェック)。
+    if ($<HTMLInputElement>("rm-p-anonymous-kills").checked) p.anonymousKills = true;
+
     const vote = clampIntToRange($<HTMLInputElement>("rm-p-vote").value, PASSIVE_VOTE_WEIGHT_MIN, PASSIVE_VOTE_WEIGHT_MAX, PASSIVE_FORM_DEFAULTS.voteWeight);
     if (vote !== PASSIVE_FORM_DEFAULTS.voteWeight) p.voteWeight = vote;
+
+    // Wave 12 (契約 §5): じぶんの票は 見えない。
+    if ($<HTMLInputElement>("rm-p-anonymous-vote").checked) p.anonymousVote = true;
 
     if ($<HTMLInputElement>("rm-p-doom").checked) {
         p.doom = {
@@ -318,7 +355,16 @@ function readPassivesForm(): RolePassives {
 
     const disguise = $<HTMLSelectElement>("rm-p-disguise").value;
     if ((SUPPORTED_TEAMS as readonly string[]).includes(disguise)) {
-        p.disguise = { team: disguise as EkrTeam };
+        const d: NonNullable<RolePassives["disguise"]> = { team: disguise as EkrTeam };
+        // Wave 12 (契約 §2): 見せる役職名。role select の選択肢は既に team でフィルタ済みだが、
+        // 念のためここでも team 一致を確認する (populateDisguiseRoleOptions を経由しない直接 DOM 操作
+        // からの取りこぼしに対する二重の安全弁)。
+        const roleVal = $<HTMLSelectElement>("rm-p-disguise-role").value;
+        if (roleVal !== "" && ROLE_BY_ID.get(roleVal)?.team === disguise) {
+            d.role = roleVal;
+        }
+        if ($<HTMLInputElement>("rm-p-disguise-deep").checked) d.deep = true;
+        p.disguise = d;
     }
 
     return p;
@@ -345,10 +391,17 @@ function writePassivesForm(p: RolePassives): void {
     $<HTMLInputElement>("rm-p-shield").checked = p.shield !== undefined;
     $<HTMLInputElement>("rm-p-shield-count").value = String(clampIntToRange(p.shield?.count, PASSIVE_SHIELD_COUNT_MIN, PASSIVE_SHIELD_COUNT_MAX, PASSIVE_FORM_DEFAULTS.shieldCount));
     $<HTMLSelectElement>("rm-p-corpse").value = (PASSIVE_CORPSE_VALUES as readonly string[]).includes(p.corpse ?? "") ? p.corpse! : "normal";
+    $<HTMLInputElement>("rm-p-anonymous-kills").checked = p.anonymousKills === true;
     $<HTMLInputElement>("rm-p-vote").value = String(clampIntToRange(p.voteWeight, PASSIVE_VOTE_WEIGHT_MIN, PASSIVE_VOTE_WEIGHT_MAX, PASSIVE_FORM_DEFAULTS.voteWeight));
+    $<HTMLInputElement>("rm-p-anonymous-vote").checked = p.anonymousVote === true;
     $<HTMLInputElement>("rm-p-doom").checked = p.doom !== undefined;
     $<HTMLInputElement>("rm-p-doom-seconds").value = String(clampIntToRange(p.doom?.seconds, PASSIVE_DOOM_SECONDS_MIN, PASSIVE_DOOM_SECONDS_MAX, PASSIVE_FORM_DEFAULTS.doomSeconds));
-    $<HTMLSelectElement>("rm-p-disguise").value = (SUPPORTED_TEAMS as readonly string[]).includes(p.disguise?.team ?? "") ? p.disguise!.team : "";
+    const disguiseTeam = (SUPPORTED_TEAMS as readonly string[]).includes(p.disguise?.team ?? "") ? p.disguise!.team : "";
+    $<HTMLSelectElement>("rm-p-disguise").value = disguiseTeam;
+    // Wave 12 (契約 §2): role select は team に応じて選択肢を作り直してから値を入れる
+    // (populateDisguiseRoleOptions が team 不一致なら空欄へ落とすので、ここで別途チェック不要)。
+    populateDisguiseRoleOptions(disguiseTeam, p.disguise?.role ?? "");
+    $<HTMLInputElement>("rm-p-disguise-deep").checked = p.disguise?.deep === true;
     refreshPassiveRowVisibility();
 }
 
@@ -372,9 +425,17 @@ function sanitizePassivesDraft(raw: unknown): RolePassives {
         p.doom = { seconds: clampIntToRange((r.doom as Record<string, unknown>).seconds, PASSIVE_DOOM_SECONDS_MIN, PASSIVE_DOOM_SECONDS_MAX, PASSIVE_FORM_DEFAULTS.doomSeconds) };
     }
     if (typeof r.disguise === "object" && r.disguise !== null) {
-        const team = (r.disguise as Record<string, unknown>).team;
+        const dr = r.disguise as Record<string, unknown>;
+        const team = dr.team;
         if (typeof team === "string" && (SUPPORTED_TEAMS as readonly string[]).includes(team)) {
-            p.disguise = { team: team as EkrTeam };
+            const d: NonNullable<RolePassives["disguise"]> = { team: team as EkrTeam };
+            // Wave 12 (契約 §2): role/deep も寛容に復元する (team 不一致・型不一致は黙って落とす —
+            // 他の下書きフィールドと同じ「壊れていても既定へフォールバック」方針)。
+            if (typeof dr.role === "string" && ROLE_BY_ID.get(dr.role)?.team === team) {
+                d.role = dr.role;
+            }
+            if (typeof dr.deep === "boolean") d.deep = dr.deep;
+            p.disguise = d;
         }
     }
     // Wave 9 (契約 §3): countsAs は UI を持たないため writePassivesForm では書き戻さないが、
@@ -382,6 +443,9 @@ function sanitizePassivesDraft(raw: unknown): RolePassives {
     if (typeof r.countsAs === "number" && Number.isInteger(r.countsAs) && r.countsAs >= PASSIVE_COUNTS_AS_MIN && r.countsAs <= PASSIVE_COUNTS_AS_MAX) {
         p.countsAs = r.countsAs;
     }
+    // Wave 12 (契約 §4/§5): anonymousKills/anonymousVote も真偽値のときだけ復元する。
+    if (typeof r.anonymousKills === "boolean") p.anonymousKills = r.anonymousKills;
+    if (typeof r.anonymousVote === "boolean") p.anonymousVote = r.anonymousVote;
     return p;
 }
 
@@ -394,10 +458,27 @@ function passiveChipTexts(p: RolePassives): string[] {
         chips.push(`🎯 キルできるきょり: ${label}`);
     }
     if (p.shield !== undefined) chips.push(`🛡 さいしょの ${p.shield.count} 回のこうげきをふせぐ`);
-    if (p.corpse !== undefined) chips.push(p.corpse === "noReport" ? "🩸 じぶんの死体は通報できない" : "🩸 じぶんの死体はすぐ消える");
+    if (p.corpse !== undefined) {
+        const corpseLabel = p.corpse === "noReport" ? "じぶんの死体は通報できない"
+            : p.corpse === "vanish" ? "じぶんの死体はすぐ消える"
+            : "じぶんの死体は だれのか わからない"; // "anonymous" (Wave 12)
+        chips.push(`🩸 ${corpseLabel}`);
+    }
+    // Wave 12 (契約 §4): ころした死体は だれのか わからない (自分の死体とは別枠のチップ)。
+    if (p.anonymousKills) chips.push("🩸 ころした死体は だれのか わからない");
     if (p.voteWeight !== undefined) chips.push(p.voteWeight === 0 ? "🗳 票をもっていない" : `🗳 票のちから ${p.voteWeight}`);
+    // Wave 12 (契約 §5): じぶんの票は 見えない。
+    if (p.anonymousVote) chips.push("🗳 じぶんの票は 見えない");
     if (p.doom !== undefined) chips.push(`⏳ ${p.doom.seconds} 秒たつと死んでしまう`);
-    if (p.disguise !== undefined) chips.push(`🎭 ${TEAM_LABELS[p.disguise.team]} に見える (見た目だけ)`);
+    if (p.disguise !== undefined) {
+        // Wave 12 (契約 §2): role が指定されていれば役職名も見せる・deep なら情報役職にも効く旨を添える。
+        const roleName = p.disguise.role !== undefined ? ROLE_BY_ID.get(p.disguise.role)?.ja : undefined;
+        let chip = roleName !== undefined
+            ? `🎭 ${roleName} (${TEAM_LABELS[p.disguise.team]}) に見える (見た目だけ)`
+            : `🎭 ${TEAM_LABELS[p.disguise.team]} に見える (見た目だけ)`;
+        if (p.disguise.deep) chip += "。しらべられても ばれない";
+        chips.push(chip);
+    }
     return chips;
 }
 
@@ -1005,14 +1086,20 @@ function refreshLogicPanel(): void {
     // Wave 3 (契約 §6 L25): progress.text の変数参照もリンタに渡す (トリム前の生値で良い —
     // extractProgressVarRefs は {変数名} トークンだけを見るので前後の空白は影響しない)。
     // Wave 9 (契約 §6 L31〜L33): team/basis/abilityCooldown/countsAs もまとめて渡す。
+    // Wave 12 (契約 §7 L41/L42): voteWeight/anonymousVote/disguiseTeam/disguiseDeep も渡す。
     const raw = readForm();
+    const passivesForLint = currentPassives();
     const warnings = lintRoleLogic(validated.logic, $<HTMLInputElement>("rm-progress-text").value, {
         team: raw.team,
         basis: raw.basis,
         abilityCooldown: raw.abilityCooldown,
         // countsAs はフォーム欄を持たないため currentPassives() (passivesPassthrough 込み) を使う
         // (L31 の対象は読み込んだコードの countsAs — readPassivesForm() だけだと常に undefined になる)。
-        countsAs: currentPassives().countsAs,
+        countsAs: passivesForLint.countsAs,
+        voteWeight: passivesForLint.voteWeight,
+        anonymousVote: passivesForLint.anonymousVote,
+        disguiseTeam: passivesForLint.disguise?.team,
+        disguiseDeep: passivesForLint.disguise?.deep,
     });
     footer.replaceChildren();
     if (warnings.length === 0) {
@@ -1367,9 +1454,33 @@ function wire(): void {
     clampPassiveNumberOnChange("rm-p-vote", PASSIVE_VOTE_WEIGHT_MIN, PASSIVE_VOTE_WEIGHT_MAX, PASSIVE_FORM_DEFAULTS.voteWeight, true);
     clampPassiveNumberOnChange("rm-p-doom-seconds", PASSIVE_DOOM_SECONDS_MIN, PASSIVE_DOOM_SECONDS_MAX, PASSIVE_FORM_DEFAULTS.doomSeconds, true);
 
-    for (const id of ["rm-p-killdist", "rm-p-corpse", "rm-p-disguise"]) {
+    for (const id of ["rm-p-killdist", "rm-p-corpse"]) {
         $<HTMLSelectElement>(id).addEventListener("change", onFormEdit);
     }
+    // Wave 12 (契約 §4): ころした死体は だれのか わからない (リンタ対象外の単純 checkbox)。
+    $<HTMLInputElement>("rm-p-anonymous-kills").addEventListener("change", onFormEdit);
+    // Wave 12 (契約 §7 L41): 票のちから (rm-p-vote) は anonymousVote と組み合わせてリンタが見るため、
+    // クランプ後 (onFormEdit を呼ぶ既存リスナーの後) に refreshLogicPanel も呼ぶ。
+    $<HTMLInputElement>("rm-p-vote").addEventListener("change", refreshLogicPanel);
+    $<HTMLInputElement>("rm-p-anonymous-vote").addEventListener("change", () => {
+        onFormEdit();
+        refreshLogicPanel();
+    });
+    // Wave 12 (契約 §2): べつの陣営に見せる — team を切り替えたら役職名 select を作り直す
+    // (populateDisguiseRoleOptions が team 不一致の残留値を空欄へ落とす)。
+    $<HTMLSelectElement>("rm-p-disguise").addEventListener("change", () => {
+        const team = $<HTMLSelectElement>("rm-p-disguise").value;
+        populateDisguiseRoleOptions(team, $<HTMLSelectElement>("rm-p-disguise-role").value);
+        refreshPassiveRowVisibility();
+        onFormEdit();
+        refreshLogicPanel();
+    });
+    $<HTMLSelectElement>("rm-p-disguise-role").addEventListener("change", onFormEdit);
+    // Wave 12 (契約 §7 L42): deep はリンタが team との一致を見るため refreshLogicPanel も呼ぶ。
+    $<HTMLInputElement>("rm-p-disguise-deep").addEventListener("change", () => {
+        onFormEdit();
+        refreshLogicPanel();
+    });
     for (const id of ["rm-p-shield", "rm-p-doom"]) {
         $<HTMLInputElement>(id).addEventListener("change", () => {
             refreshPassiveRowVisibility();

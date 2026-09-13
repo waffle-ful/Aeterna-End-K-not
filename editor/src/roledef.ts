@@ -26,6 +26,8 @@
 
 // Wave 10 (契約 §2) — 「つけられるアドオン」の値集合は生成物からの import (手書き二重管理はしない)。
 import { ADDON_VALUES } from "./generated/ekr-addons";
+// Wave 12 (契約 §2) — 「見せる役職名」の値集合 (Standard の出現可能役職) も生成物からの import。
+import { ROLE_BY_ID, ROLE_VALUES } from "./generated/ekr-roles";
 
 export const EKR_VERSION = 1;
 
@@ -420,7 +422,8 @@ export const PASSIVE_SPEED_MULT_MAX = 3.0;
 export const PASSIVE_KILL_DISTANCE_VALUES = ["short", "medium", "long"] as const;
 export const PASSIVE_SHIELD_COUNT_MIN = 1;
 export const PASSIVE_SHIELD_COUNT_MAX = 9;
-export const PASSIVE_CORPSE_VALUES = ["normal", "noReport", "vanish"] as const;
+// Wave 12 (契約 §3): "anonymous" (じぶんの死体は だれのか わからない) を追加。
+export const PASSIVE_CORPSE_VALUES = ["normal", "noReport", "vanish", "anonymous"] as const;
 export const PASSIVE_VOTE_WEIGHT_MIN = 0;
 export const PASSIVE_VOTE_WEIGHT_MAX = 3;
 export const PASSIVE_DOOM_SECONDS_MIN = 30;
@@ -437,10 +440,22 @@ export interface RolePassives {
     corpse?: (typeof PASSIVE_CORPSE_VALUES)[number];
     voteWeight?: number;
     doom?: { seconds: number };
-    // R2 (契約 §4): 表示層だけの陣営偽装。
-    disguise?: { team: EkrTeam };
+    // R2 (契約 §4): 表示層だけの陣営偽装。Wave 12 (契約 §2) で role/deep を追加。
+    // role: 見せる役職名 (カタログ・省略 = 陣営の汎用名のまま)。team と役職の陣営が一致しない
+    // 組み合わせは validatePassives が reject する。
+    // deep: true = §2.2 の情報を返す読み手 (inspect/Oracle/FortuneTeller等) にも見かけを返す。
+    // 既定 (false) は canSabotage のような tri-state ではない単純フラグなので、明示 false も
+    // validatePassives がキーの欠落へ畳み込む (このオブジェクトの型としては boolean のまま —
+    // 検証を通った後の値は常に true か省略のどちらか)。
+    disguise?: { team: EkrTeam; role?: string; deep?: boolean };
     // Wave 9 (契約 §3): 勝敗カウントに数える人数。
     countsAs?: number;
+    // Wave 12 (契約 §4): ころした死体は だれのか わからない (RealKiller 自体は登録したまま)。
+    // 既定 (false) は単純フラグ (disguise.deep と同じ理由) なので、明示 false もキーの欠落へ畳み込む。
+    anonymousKills?: boolean;
+    // Wave 12 (契約 §5): じぶんの票は 見えない (会議結果画面から自分の1票ぶんを落とす)。
+    // anonymousKills と同じく明示 false はキーの欠落へ畳み込む。
+    anonymousVote?: boolean;
 }
 
 export interface LogicVariable {
@@ -1053,6 +1068,12 @@ function expectEnum<T extends string>(raw: unknown, options: readonly T[], path:
     return raw as T;
 }
 
+/** 真偽値の必須フィールド (passives.disguise.deep/anonymousKills/anonymousVote 等): null・型不一致は拒否。 */
+function expectBool(raw: unknown, path: string): boolean {
+    if (typeof raw !== "boolean") fail(`${path} は true/false である必要があります`);
+    return raw;
+}
+
 /** dummy_spawn.killable 専用 (spec §3 v1.1)。canKill/canVent (R0 field) と同じく、1/0 等は許容せず
  *  真の JSON boolean のみを受理する (compile-role.ts が Blockly の "1"/"0" 文字列から変換してから渡す)。 */
 function expectBoolean(raw: unknown, path: string): boolean {
@@ -1641,11 +1662,43 @@ export function validatePassives(value: unknown): PassivesValidationResult {
             p.doom = { seconds };
         }
 
-        // R2 (契約 §4): 他の人からの見え方だけを偽る陣営。shield/doom と同じネスト形。
+        // R2 (契約 §4)・Wave 12 (契約 §2) で role/deep を追加: 他の人からの見え方だけを偽る陣営。
+        // shield/doom と同じネスト形。role は「見せる陣営 (team) と同じ陣営の役職」のみ受理する
+        // (両側同一検証 — 契約 §6「陣営不一致は reject」)。
         if (value.disguise !== undefined) {
             if (!isRecord(value.disguise)) fail("passives.disguise は { team: 陣営 } の形である必要があります");
             const team = expectEnum(value.disguise.team, SUPPORTED_TEAMS, "passives.disguise.team");
-            p.disguise = { team: team as EkrTeam };
+            const disguise: NonNullable<RolePassives["disguise"]> = { team: team as EkrTeam };
+            if (value.disguise.role !== undefined) {
+                const role = expectEnum(value.disguise.role, ROLE_VALUES, "passives.disguise.role");
+                const meta = ROLE_BY_ID.get(role);
+                if (!meta || meta.team !== team) {
+                    fail("passives.disguise.role は passives.disguise.team と同じ陣営の役職である必要があります");
+                }
+                disguise.role = role;
+            }
+            // deep の既定は false であり、他の値に応じて意味が変わる tri-state
+            // (canSabotage の「陣営どおり」vs 明示 false) ではないため、明示 false も
+            // 「既定はキーの欠落で表す」規約どおり畳み込む (cno_launch.speed の既定畳み込みと同じ方針)。
+            // 型検査 (真偽値であること) 自体は false でも通す — reject するのは型不一致のときだけ。
+            if (value.disguise.deep !== undefined) {
+                const deep = expectBool(value.disguise.deep, "passives.disguise.deep");
+                if (deep) disguise.deep = true;
+            }
+            p.disguise = disguise;
+        }
+
+        // Wave 12 (契約 §4): ころした死体は だれのか わからない。anonymousKills/anonymousVote は
+        // どちらも既定 false の単純フラグ (canSabotage のような tri-state ではない) なので、
+        // 明示 false も畳み込んでキーごと省略する (disguise.deep と同じ方針)。
+        if (value.anonymousKills !== undefined) {
+            const v = expectBool(value.anonymousKills, "passives.anonymousKills");
+            if (v) p.anonymousKills = true;
+        }
+        // Wave 12 (契約 §5): じぶんの票は 見えない。
+        if (value.anonymousVote !== undefined) {
+            const v = expectBool(value.anonymousVote, "passives.anonymousVote");
+            if (v) p.anonymousVote = true;
         }
 
         return { ok: true, passives: p };

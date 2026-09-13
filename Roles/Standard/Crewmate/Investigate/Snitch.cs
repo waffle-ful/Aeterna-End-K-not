@@ -90,7 +90,7 @@ public class Snitch : RoleBase
 
     public static bool IsSnitchTarget(PlayerControl target)
     {
-        return (target.Is(CustomRoleTypes.Impostor) && !target.Is(CustomRoles.Trickster)) || (target.IsNeutralKiller() && CanFindNeutralKiller) || (target.Is(CustomRoleTypes.Coven) && CanFindCoven) || (target.Is(CustomRoles.Madmate) && CanFindMadmate) || (target.Is(CustomRoles.Rascal) && CanFindMadmate);
+        return (target.Is(CustomRoleTypes.Impostor) && !Modules.Ekm.EkrManager.IsDeepDisguisedAwayFrom(target.GetCustomRole(), Modules.Ekm.EkrTeam.Impostor) && !target.Is(CustomRoles.Trickster)) || (target.IsNeutralKiller() && CanFindNeutralKiller) || (target.Is(CustomRoleTypes.Coven) && CanFindCoven) || (target.Is(CustomRoles.Madmate) && CanFindMadmate) || (target.Is(CustomRoles.Rascal) && CanFindMadmate);
     }
 
     public static string GetWarningMark(PlayerControl seer, PlayerControl target)

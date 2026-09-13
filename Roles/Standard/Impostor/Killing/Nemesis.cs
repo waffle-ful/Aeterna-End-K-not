@@ -88,7 +88,7 @@ internal class Nemesis : RoleBase
         if (msg == "/rv")
         {
             string text = GetString("PlayerIdList");
-            text = Main.EnumerateAlivePlayerControls().Aggregate(text, (current, npc) => current + "\n" + npc.PlayerId + " → (" + npc.GetDisplayRoleName() + ") " + npc.GetRealName());
+            text = Main.EnumerateAlivePlayerControls().Aggregate(text, (current, npc) => current + "\n" + npc.PlayerId + " → (" + pc.GetDisplayRoleName(npc) + ") " + npc.GetRealName());
 
             Utils.SendMessage(text, pc.PlayerId, importance: MessageImportance.High);
             return true;

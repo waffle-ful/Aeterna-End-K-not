@@ -679,7 +679,14 @@ public static class Utils
         // 存在せず、実在の第三陣営役職も各自の名前で見えるため (2026-08-14)。
         if (!self && Modules.Ekm.EkrManager.GetDisguiseTeam(targetMainRole) is { } ekrDisguise)
         {
-            switch (ekrDisguise)
+            // Wave 12: disguise.role が指定されていれば、汎用の陣営名の代わりにその役職の名前と色を見せる
+            // (Info/InfoLong はここでは触らない — 名札/会議の役職テキストだけの差し替え)。
+            if (Modules.Ekm.EkrManager.GetDisguiseRole(targetMainRole) is { } ekrDisguiseRole)
+            {
+                roleText = GetRoleName(ekrDisguiseRole);
+                roleColor = GetRoleColor(ekrDisguiseRole);
+            }
+            else switch (ekrDisguise)
             {
                 case Modules.Ekm.EkrTeam.Crewmate:
                     roleText = GetRoleName(CustomRoles.CrewmateEndKnot);
@@ -4161,7 +4168,7 @@ public static class Utils
                (target.Is(CustomRoles.Gravestone) && !target.IsAlive()) ||
                (Main.LoversPlayers.TrueForAll(x => x.PlayerId == seer.PlayerId || x.PlayerId == target.PlayerId) && Main.LoversPlayers.Count == 2 && Lovers.LoverKnowRoles.GetBool()) ||
                (seer.Is(CustomRoleTypes.Coven) && target.Is(CustomRoleTypes.Coven)) ||
-               (seer.Is(CustomRoleTypes.Impostor) && target.Is(CustomRoleTypes.Impostor) && Options.ImpKnowAlliesRole.GetBool() && CustomTeamManager.ArentInCustomTeam(seer.PlayerId, target.PlayerId) && !seer.Is(CustomRoles.OneWolf) && !target.Is(CustomRoles.OneWolf)) ||
+               (seer.Is(CustomRoleTypes.Impostor) && target.Is(CustomRoleTypes.Impostor) && Options.ImpKnowAlliesRole.GetBool() && CustomTeamManager.ArentInCustomTeam(seer.PlayerId, target.PlayerId) && !seer.Is(CustomRoles.OneWolf) && !target.Is(CustomRoles.OneWolf) && !Modules.Ekm.EkrManager.IsDisguisedAwayFrom(target.GetCustomRole(), Modules.Ekm.EkrTeam.Impostor)) ||
                (seer.IsMadmate() && target.Is(CustomRoleTypes.Impostor) && Options.MadmateKnowWhosImp.GetBool()) ||
                (seer.Is(CustomRoleTypes.Impostor) && target.IsMadmate() && Options.ImpKnowWhosMadmate.GetBool()) ||
                (seer.Is(CustomRoles.Crewpostor) && target.Is(CustomRoleTypes.Impostor) && Options.CrewpostorKnowsAllies.GetBool()) ||

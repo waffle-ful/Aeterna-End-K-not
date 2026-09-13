@@ -1173,7 +1173,7 @@ internal sealed class EkrActionSink : IEkrActionSink
     {
         if (node.Depth == "team")
         {
-            Team team = targetPc.GetTeam();
+            Team team = EkrManager.GetApparentTeam(targetPc);
 
             if (node.FailChance > 0 && IRandom.Instance.Next(100) < node.FailChance)
             {
@@ -1184,7 +1184,7 @@ internal sealed class EkrActionSink : IEkrActionSink
             return string.Format(Translator.GetString("EkrInspectResult"), targetPc.GetRealName(), Translator.GetString($"Team{team}"));
         }
 
-        CustomRoles trueRole = targetPc.GetCustomRole();
+        CustomRoles trueRole = EkrManager.GetApparentRole(targetPc);
         CustomRoles shown = trueRole;
 
         if (node.FailChance > 0 && IRandom.Instance.Next(100) < node.FailChance)

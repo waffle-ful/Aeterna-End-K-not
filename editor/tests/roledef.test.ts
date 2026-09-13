@@ -1093,6 +1093,133 @@ describe("passives 検証 (Wave 1・spec §1.1)", () => {
     });
 });
 
+// ---------------------------------------------------------------------------
+// Wave 12 (契約 §2〜§7 2026-09-14 併合) — みられかた
+// ---------------------------------------------------------------------------
+
+describe("passives 検証 Wave 12 (契約 §2/§3・disguise.role/deep + corpse:\"anonymous\")", () => {
+    function withPassives(passives: unknown): Record<string, unknown> {
+        return { ...baseValid(), passives };
+    }
+
+    it("corpse は anonymous も受理する (4値目)", () => {
+        const r = validateEkrDefinition(withPassives({ corpse: "anonymous" }));
+        expect(r.ok).toBe(true);
+        if (r.ok) expect(r.def.passives).toEqual({ corpse: "anonymous" });
+    });
+
+    it("disguise.role: team と同じ陣営の役職なら受理される", () => {
+        // baseValid() の team は crewmate (defaultEkrDefinition 既定)。
+        const r = validateEkrDefinition(withPassives({ disguise: { team: "crewmate", role: "Sheriff" } }));
+        expect(r.ok).toBe(true);
+        if (r.ok) expect(r.def.passives?.disguise).toEqual({ team: "crewmate", role: "Sheriff" });
+    });
+
+    it("disguise.role: team と役職の陣営が不一致なら reject (両側同一検証)", () => {
+        // Amnesiac は neutral 役職 — team: crewmate と組み合わせると陣営不一致。
+        expect(validateEkrDefinition(withPassives({ disguise: { team: "crewmate", role: "Amnesiac" } })).ok).toBe(false);
+    });
+
+    it("disguise.role: カタログに無い役職名は reject", () => {
+        expect(validateEkrDefinition(withPassives({ disguise: { team: "crewmate", role: "NotARealRole" } })).ok).toBe(false);
+        expect(validateEkrDefinition(withPassives({ disguise: { team: "crewmate", role: 1 } })).ok).toBe(false);
+        expect(validateEkrDefinition(withPassives({ disguise: { team: "crewmate", role: null } })).ok).toBe(false);
+    });
+
+    it("disguise.role: 省略は陣営の汎用名のまま (従来どおり)", () => {
+        const r = validateEkrDefinition(withPassives({ disguise: { team: "impostor" } }));
+        expect(r.ok).toBe(true);
+        if (r.ok) expect(r.def.passives?.disguise).toEqual({ team: "impostor" });
+    });
+
+    // deep の既定 (false) は canSabotage のような tri-state (「陣営どおり」vs 明示 false が別意味)
+    // ではなく単純な既定オフのフラグなので、明示 false も「既定はキーの欠落で表す」規約どおり
+    // 畳み込む (cno_launch.speed の既定畳み込みと同じ方針)。型検査自体は false でも通す。
+    it("disguise.deep: 真偽値のみ受理・省略/明示 false はどちらもキー自体を持たない (畳み込み)", () => {
+        const withTrue = validateEkrDefinition(withPassives({ disguise: { team: "impostor", deep: true } }));
+        expect(withTrue.ok).toBe(true);
+        if (withTrue.ok) expect(withTrue.def.passives?.disguise).toEqual({ team: "impostor", deep: true });
+
+        const withFalse = validateEkrDefinition(withPassives({ disguise: { team: "impostor", deep: false } }));
+        expect(withFalse.ok).toBe(true);
+        if (withFalse.ok) expect(withFalse.def.passives?.disguise).toEqual({ team: "impostor" });
+
+        expect(validateEkrDefinition(withPassives({ disguise: { team: "impostor", deep: "yes" } })).ok).toBe(false);
+        expect(validateEkrDefinition(withPassives({ disguise: { team: "impostor", deep: null } })).ok).toBe(false);
+    });
+
+    // 畳み込みが「一度検証を通した形は不動点」を崩していないことを直接確認する
+    // (golden fixture の roundtrip テストは既に正準形の入力しか流さないので、この観点は見えない)。
+    it("disguise.deep: false を含む入力を検証→再エンコードしても、2回目の検証結果と一致する (不動点)", () => {
+        const first = validateEkrDefinition(withPassives({ disguise: { team: "impostor", deep: false } }));
+        if (!first.ok) throw new Error(first.error);
+        const reValidated = validateEkrDefinition(JSON.parse(JSON.stringify(first.def)));
+        if (!reValidated.ok) throw new Error(reValidated.error);
+        expect(reValidated.def).toEqual(first.def);
+    });
+
+    it("disguise.role + deep を同時に指定できる", () => {
+        const r = validateEkrDefinition(withPassives({ disguise: { team: "neutral", role: "Amnesiac", deep: true } }));
+        expect(r.ok).toBe(true);
+        if (r.ok) expect(r.def.passives?.disguise).toEqual({ team: "neutral", role: "Amnesiac", deep: true });
+    });
+});
+
+describe("passives 検証 Wave 12 (契約 §4/§5・anonymousKills/anonymousVote)", () => {
+    function withPassives(passives: unknown): Record<string, unknown> {
+        return { ...baseValid(), passives };
+    }
+
+    it("anonymousKills は真偽値のみ受理・省略はキー自体を持たない", () => {
+        const r = validateEkrDefinition(withPassives({ anonymousKills: true }));
+        expect(r.ok).toBe(true);
+        if (r.ok) expect(r.def.passives).toEqual({ anonymousKills: true });
+
+        expect(validateEkrDefinition(withPassives({ anonymousKills: "true" })).ok).toBe(false);
+        expect(validateEkrDefinition(withPassives({ anonymousKills: 1 })).ok).toBe(false);
+        expect(validateEkrDefinition(withPassives({ anonymousKills: null })).ok).toBe(false);
+
+        const omitted = validateEkrDefinition(baseValid());
+        if (!omitted.ok) throw new Error(omitted.error);
+        expect(omitted.def.passives).toBeUndefined();
+    });
+
+    it("anonymousVote は真偽値のみ受理・省略はキー自体を持たない", () => {
+        const r = validateEkrDefinition(withPassives({ anonymousVote: true }));
+        expect(r.ok).toBe(true);
+        if (r.ok) expect(r.def.passives).toEqual({ anonymousVote: true });
+
+        expect(validateEkrDefinition(withPassives({ anonymousVote: "true" })).ok).toBe(false);
+        expect(validateEkrDefinition(withPassives({ anonymousVote: 0 })).ok).toBe(false);
+        expect(validateEkrDefinition(withPassives({ anonymousVote: null })).ok).toBe(false);
+    });
+
+    // anonymousKills/anonymousVote は既定 false の単純フラグ (canSabotage のような tri-state
+    // ではない) なので、明示 false も「既定はキーの欠落で表す」規約どおり畳み込む。
+    // 型検査自体は false でも通す (reject するのは型不一致のときだけ)。
+    it("anonymousKills: false / anonymousVote: false は畳み込まれ、passives キー自体が無くなる (このケースは他に既知キーが無いため)", () => {
+        const r = validateEkrDefinition(withPassives({ anonymousKills: false, anonymousVote: false }));
+        expect(r.ok).toBe(true);
+        if (r.ok) expect("passives" in r.def).toBe(false);
+    });
+
+    it("anonymousKills: false は、他の既知キーと同居していれば passives 自体は残りキーだけで保持される", () => {
+        const r = validateEkrDefinition(withPassives({ anonymousKills: false, voteWeight: 2 }));
+        expect(r.ok).toBe(true);
+        if (r.ok) expect(r.def.passives).toEqual({ voteWeight: 2 });
+    });
+
+    // 畳み込みが不動点を崩していないことを直接確認する (fixture の roundtrip
+    // テストは正準形の入力しか流さないためこの観点は見えない)。
+    it("anonymousVote: false を含む入力を検証→再エンコードしても、2回目の検証結果と一致する (不動点)", () => {
+        const first = validateEkrDefinition(withPassives({ anonymousVote: false, voteWeight: 2 }));
+        if (!first.ok) throw new Error(first.error);
+        const reValidated = validateEkrDefinition(JSON.parse(JSON.stringify(first.def)));
+        if (!reValidated.ok) throw new Error(reValidated.error);
+        expect(reValidated.def).toEqual(first.def);
+    });
+});
+
 describe("logic 検証 Wave 1 (on_attacked / cancel_attack / remember / セレクタ拡張)", () => {
     function baseLogic(overrides: Record<string, unknown> = {}): Record<string, unknown> {
         return {

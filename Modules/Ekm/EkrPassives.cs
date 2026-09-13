@@ -45,7 +45,7 @@ public sealed class EkrPassives
     // まもり (さいしょの N 回ふせぐ)。0 = 無効。
     public int ShieldCount { get; private set; }
 
-    // じぶんの死体のあつかい: "normal" | "noReport" | "vanish"
+    // じぶんの死体のあつかい: "normal" | "noReport" | "vanish" | "anonymous" (だれの死体か分からない)
     public string Corpse { get; private set; } = "normal";
 
     // 票のちから (0..3・既定 1)。0 = 票なし。
@@ -62,6 +62,22 @@ public sealed class EkrPassives
     // ⚠️ 効くのは**表示層だけ** — 本人の勝敗・選出・実陣営は一切変わらない。既存の占い/判定役職
     // (Teller 系・Sheriff のキル可否等) は実陣営を読むので、そちらには素の陣営が見える (受容済み)。
     public EkrTeam? DisguiseTeam { get; private set; }
+
+    // Wave 12: 見える役職名 (disguise.role)。null = 役職名までは偽装しない (陣営の汎用表示のまま)。
+    // 値集合の検証 (存在 + 陣営一致) は TryParse 側で行い、ここには通った CustomRoles だけが入る。
+    public CustomRoles? DisguiseRole { get; private set; }
+
+    // Wave 12: しらべられても ばれない (disguise.deep)。true = §2.2 の情報役職にも見かけを返す。
+    // 既定 false = 表示層のみ (R2 までの挙動)。
+    public bool DisguiseDeep { get; private set; }
+
+    // Wave 12: ころした死体はだれのかわからない (anonymousKills)。RealKiller 自体は登録したまま、
+    // 死体の表示だけ匿名化する (ExtendedPlayerControl.cs / Camouflage.cs の corpse 表示アーム側で読む)。
+    public bool AnonymousKills { get; private set; }
+
+    // Wave 12: じぶんの票はみえない (anonymousVote)。会議結果へ渡す VoterState 配列からホルダーの
+    // 分を落とす (集計自体は先に済んでいるので実票には影響しない)。
+    public bool AnonymousVote { get; private set; }
 
     public bool HasSpeed => SpeedMult < 0.999f || SpeedMult > 1.001f;
     public bool HasShield => ShieldCount > 0;
@@ -132,9 +148,9 @@ public sealed class EkrPassives
 
             string corpse = corpseEl.GetString();
 
-            if (corpse is not ("normal" or "noReport" or "vanish"))
+            if (corpse is not ("normal" or "noReport" or "vanish" or "anonymous"))
             {
-                error = "とくせいの「じぶんの死体のあつかい」の値が不正です (normal / noReport / vanish)";
+                error = "とくせいの「じぶんの死体のあつかい」の値が不正です (normal / noReport / vanish / anonymous)";
                 return false;
             }
 
@@ -186,7 +202,9 @@ public sealed class EkrPassives
                 return false;
             }
 
-            switch (dTeamEl.GetString())
+            string dTeamRaw = dTeamEl.GetString();
+
+            switch (dTeamRaw)
             {
                 case "crewmate": p.DisguiseTeam = EkrTeam.Crewmate; break;
                 case "impostor": p.DisguiseTeam = EkrTeam.Impostor; break;
@@ -195,6 +213,67 @@ public sealed class EkrPassives
                     error = "とくせいの「べつの陣営に見せる」には crewmate / impostor / neutral のどれかを指定してください";
                     return false;
             }
+
+            // Wave 12: disguise.role — 見える役職名。カタログに存在し、かつ team と陣営が
+            // 一致する役職名だけを受理する (陣営とちぐはぐな役職名は文書 reject)。
+            if (disguiseEl.TryGetProperty("role", out JsonElement dRoleEl))
+            {
+                if (dRoleEl.ValueKind != JsonValueKind.String || !EkrRoleCatalog.All.TryGetValue(dRoleEl.GetString(), out string dRoleTeam))
+                {
+                    error = "とくせいの「べつの陣営に見せる」の「役職」が不明です";
+                    return false;
+                }
+
+                if (dRoleTeam != dTeamRaw)
+                {
+                    error = "とくせいの「べつの陣営に見せる」の「役職」は team と同じ陣営でなければなりません";
+                    return false;
+                }
+
+                if (!System.Enum.TryParse(dRoleEl.GetString(), out CustomRoles disguiseRole))
+                {
+                    error = "とくせいの「べつの陣営に見せる」の「役職」が不明です";
+                    return false;
+                }
+
+                p.DisguiseRole = disguiseRole;
+            }
+
+            // Wave 12: disguise.deep — しらべられても ばれない (既定 false = 表示層のみ)。
+            if (disguiseEl.TryGetProperty("deep", out JsonElement dDeepEl))
+            {
+                if (dDeepEl.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                {
+                    error = "とくせいの「べつの陣営に見せる」の「しらべられても ばれない」は真偽値で指定してください";
+                    return false;
+                }
+
+                p.DisguiseDeep = dDeepEl.GetBoolean();
+            }
+        }
+
+        // Wave 12: anonymousKills — ころした死体はだれのかわからない (既定 false)。
+        if (root.TryGetProperty("anonymousKills", out JsonElement akEl))
+        {
+            if (akEl.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+            {
+                error = "とくせいの「ころした死体はだれのかわからない」は真偽値で指定してください";
+                return false;
+            }
+
+            p.AnonymousKills = akEl.GetBoolean();
+        }
+
+        // Wave 12: anonymousVote — じぶんの票はみえない (既定 false)。
+        if (root.TryGetProperty("anonymousVote", out JsonElement avEl))
+        {
+            if (avEl.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+            {
+                error = "とくせいの「じぶんの票はみえない」は真偽値で指定してください";
+                return false;
+            }
+
+            p.AnonymousVote = avEl.GetBoolean();
         }
 
         passives = p;

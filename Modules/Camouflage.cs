@@ -227,7 +227,8 @@ public static class Camouflage
         {
             var killer = target.GetRealKiller();
 
-            if (Options.AnonymousBodies.GetBool() || target.Is(CustomRoles.Hidden) || (killer != null && killer.Is(CustomRoles.Concealer)))
+            // Wave 12: corpse:"anonymous" (自分の死体) / anonymousKills (ころした死体) — ExtendedPlayerControl.cs の同型アームと対称。
+            if (Options.AnonymousBodies.GetBool() || target.Is(CustomRoles.Hidden) || (killer != null && killer.Is(CustomRoles.Concealer)) || Modules.Ekm.EkrManager.IsAnonymousCorpse(target.PlayerId) || (killer != null && Modules.Ekm.EkrManager.HasAnonymousKills(killer.PlayerId)))
                 newOutfit = new NetworkedPlayerInfo.PlayerOutfit().Set(Translator.GetString("Dead"), 15, "", "", "", "", "");
             else if (Options.RemovePetsAtDeadPlayers.GetBool())
                 newOutfit.PetId = string.Empty;

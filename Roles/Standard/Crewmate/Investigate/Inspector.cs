@@ -274,8 +274,8 @@ public class Inspector : RoleBase
                         {
                             LateTask.New(() =>
                             {
-                                Utils.SendMessage(string.Format(GetString("InspectorTargetReveal"), target2.GetRealName(), GetString(target2.GetTeam().ToString())), target1.PlayerId, CustomRoles.Inspector.ColoredTextByRole(GetString("InspectorCheckTitle")), importance: MessageImportance.High);
-                                Utils.SendMessage(string.Format(GetString("InspectorTargetReveal"), target1.GetRealName(), GetString(target1.GetTeam().ToString())), target2.PlayerId, CustomRoles.Inspector.ColoredTextByRole(GetString("InspectorCheckTitle")), importance: MessageImportance.High);
+                                Utils.SendMessage(string.Format(GetString("InspectorTargetReveal"), target2.GetRealName(), GetString(Modules.Ekm.EkrManager.GetApparentTeam(target2).ToString())), target1.PlayerId, CustomRoles.Inspector.ColoredTextByRole(GetString("InspectorCheckTitle")), importance: MessageImportance.High);
+                                Utils.SendMessage(string.Format(GetString("InspectorTargetReveal"), target1.GetRealName(), GetString(Modules.Ekm.EkrManager.GetApparentTeam(target1).ToString())), target2.PlayerId, CustomRoles.Inspector.ColoredTextByRole(GetString("InspectorCheckTitle")), importance: MessageImportance.High);
                             }, 0.3f, "Inspector 6");
                         }
                     }
@@ -295,8 +295,8 @@ public class Inspector : RoleBase
 
     public static bool AreInSameTeam(PlayerControl first, PlayerControl second)
     {
-        CustomRoles firstRole = first.GetCustomRole();
-        CustomRoles secondRole = second.GetCustomRole();
+        CustomRoles firstRole = Modules.Ekm.EkrManager.GetApparentRole(first);
+        CustomRoles secondRole = Modules.Ekm.EkrManager.GetApparentRole(second);
 
         RoleBase firstRoleClass = Main.PlayerStates[first.PlayerId].Role;
         RoleBase secondRoleClass = Main.PlayerStates[second.PlayerId].Role;
@@ -304,8 +304,8 @@ public class Inspector : RoleBase
         List<CustomRoles> firstSubRoles = first.GetCustomSubRoles();
         List<CustomRoles> secondSubRoles = second.GetCustomSubRoles();
 
-        Team firstTeam = first.GetTeam();
-        Team secondTeam = second.GetTeam();
+        Team firstTeam = Modules.Ekm.EkrManager.GetApparentTeam(first);
+        Team secondTeam = Modules.Ekm.EkrManager.GetApparentTeam(second);
 
         switch (firstRoleClass)
         {
