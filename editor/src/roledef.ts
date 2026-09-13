@@ -36,6 +36,17 @@ export const KILL_COOLDOWN_MIN = 1;
 export const KILL_COOLDOWN_MAX = 180;
 export const KILL_COOLDOWN_DEFAULT = 25;
 
+// Wave 9 (契約 §1) — 「はつどうのしかた」。省略 = "pet" (完全後方互換)。
+export const EKR_BASIS_VALUES = ["pet", "shapeshift"] as const;
+export type EkrBasis = (typeof EKR_BASIS_VALUES)[number];
+export const EKR_BASIS_DEFAULT: EkrBasis = "pet";
+
+// Wave 9 (契約 §1.2) — 「とくいわざの まちじかん」。killCooldown と違い、範囲外はクランプせず
+// 文書全体を reject する (validateEkrDefinition 参照)。
+export const ABILITY_COOLDOWN_MIN = 5;
+export const ABILITY_COOLDOWN_MAX = 180;
+export const ABILITY_COOLDOWN_DEFAULT = 30;
+
 export const VISION_MULTIPLIER_MIN = 0.25;
 export const VISION_MULTIPLIER_MAX = 5;
 export const VISION_MULTIPLIER_DEFAULT = 1;
@@ -335,8 +346,10 @@ export interface RoleProgress {
 }
 
 // hostOptions (契約 §4.1): 固定6キー + var:<変数名> の動的キー。
+// Wave 9 (契約 §1.2): "abilityCooldown" を末尾に追加。C# 側 (EkrHostOption.FixedKeys) と
+// 綴り・並びの両方を一致させること。
 export const HOST_OPTION_FIXED_KEYS = [
-    "shield.count", "doom.seconds", "speedMult", "voteWeight", "killCooldown", "vision",
+    "shield.count", "doom.seconds", "speedMult", "voteWeight", "killCooldown", "vision", "abilityCooldown",
 ] as const;
 export type HostOptionFixedKey = (typeof HOST_OPTION_FIXED_KEYS)[number];
 const HOST_OPTION_FIXED_KEY_SET: ReadonlySet<string> = new Set(HOST_OPTION_FIXED_KEYS);
@@ -374,6 +387,10 @@ export const PASSIVE_VOTE_WEIGHT_MIN = 0;
 export const PASSIVE_VOTE_WEIGHT_MAX = 3;
 export const PASSIVE_DOOM_SECONDS_MIN = 30;
 export const PASSIVE_DOOM_SECONDS_MAX = 600;
+// Wave 9 (契約 §3) — 「かちのかぞえかた」。整数 0..3・既定 1 (省略時はキー自体を出力しない、
+// 他の passives キーと同じ扱い)。crewmate 以外での指定は reject しない (lint-role.ts L31 でヒント)。
+export const PASSIVE_COUNTS_AS_MIN = 0;
+export const PASSIVE_COUNTS_AS_MAX = 3;
 
 export interface RolePassives {
     speedMult?: number;
@@ -384,6 +401,8 @@ export interface RolePassives {
     doom?: { seconds: number };
     // R2 (契約 §4): 表示層だけの陣営偽装。
     disguise?: { team: EkrTeam };
+    // Wave 9 (契約 §3): 勝敗カウントに数える人数。
+    countsAs?: number;
 }
 
 export interface LogicVariable {
@@ -534,6 +553,15 @@ export interface EkrDefinition {
     canVent: boolean;
     visionMultiplier: number;
     winCondition: string;
+    // Wave 9 (契約 §1): 「はつどうのしかた」。team と同じ扱い (省略 = 既定・常に解決済みの値を持つ)。
+    basis: EkrBasis;
+    // Wave 9 (契約 §1.2): 「とくいわざの まちじかん」。killCooldown と同じ扱いだが、範囲外は
+    // クランプせず reject する (validateEkrDefinition 参照)。
+    abilityCooldown: number;
+    // Wave 9 追記: 「サボタージュを つかえる」。basis/abilityCooldown とは異なり、省略 (=陣営どおり)
+    // と明示 false を区別する必要があるため常時解決済みにはしない (passives.countsAs と同じ
+    // 「省略はキー自体を出力しない」扱い)。defaultEkrDefinition() には含めない。
+    canSabotage?: boolean;
     // 省略 = R0 動作 (完全後方互換)。defaultEkrDefinition() には含めない
     // (rolecode.test.ts の凍結フィクスチャがこのキー無し形状に依存する)。
     logic?: RoleLogic;
@@ -577,6 +605,8 @@ export function defaultEkrDefinition(): EkrDefinition {
         canVent: false,
         visionMultiplier: VISION_MULTIPLIER_DEFAULT,
         winCondition: DEFAULT_WIN_CONDITION,
+        basis: EKR_BASIS_DEFAULT,
+        abilityCooldown: ABILITY_COOLDOWN_DEFAULT,
     };
 }
 
@@ -640,6 +670,17 @@ export function normalizeVisionMultiplier(raw: unknown): number {
     return Number.isFinite(n) ? clampNum(n, VISION_MULTIPLIER_MIN, VISION_MULTIPLIER_MAX) : VISION_MULTIPLIER_DEFAULT;
 }
 
+/**
+ * abilityCooldown の唯一のクランプ実装 (フォーム下書き復元・書き込み専用の安全弁 —
+ * normalizeKillCooldown と同じ方針)。validateEkrDefinition 本体は範囲外を reject する
+ * (killCooldown と異なりクランプしない — 契約 §1.2) が、ここでは壊れた下書きでも
+ * フォーム自体は必ず開ける状態にするため、意図して緩いままにしてある。
+ */
+export function normalizeAbilityCooldown(raw: unknown): number {
+    const n = typeof raw === "number" ? raw : NaN;
+    return Number.isFinite(n) ? clampNum(n, ABILITY_COOLDOWN_MIN, ABILITY_COOLDOWN_MAX) : ABILITY_COOLDOWN_DEFAULT;
+}
+
 // ---------------------------------------------------------------------------
 // R0 フィールド読み取りヘルパー (値型/参照型で挙動が違う — ファイル冒頭のコメント参照)
 // ---------------------------------------------------------------------------
@@ -670,6 +711,20 @@ function readNumberField(value: Record<string, unknown>, key: string, defaultVal
     return { ok: true, v: Number.isFinite(raw) ? raw : defaultVal };
 }
 
+/**
+ * 真偽値の任意フィールド (canSabotage): 省略→undefined (省略のまま) / null・型不一致→拒否。
+ * canKill/canVent (readBoolField・省略→false) と違い、省略と明示 false を区別する必要がある
+ * フィールド用 (Wave 9 で新設・契約)。
+ */
+function readOptionalBoolField(value: Record<string, unknown>, key: string): FieldRead<boolean | undefined> {
+    const raw = value[key];
+    if (raw === undefined) return { ok: true, v: undefined };
+    if (raw === null || typeof raw !== "boolean") {
+        return { ok: false, error: `役職コードの読み取りに失敗しました (${key} は true/false である必要があります)` };
+    }
+    return { ok: true, v: raw };
+}
+
 /** string フィールド (name/author/color/team/winCondition): 省略/null→既定値 / 型不一致→拒否 */
 function readStringField(value: Record<string, unknown>, key: string, defaultVal: string): FieldRead<string> {
     const raw = value[key];
@@ -678,6 +733,20 @@ function readStringField(value: Record<string, unknown>, key: string, defaultVal
         return { ok: false, error: `役職コードの読み取りに失敗しました (${key} は文字列である必要があります)` };
     }
     return { ok: true, v: raw };
+}
+
+/**
+ * 文字列 enum フィールド (basis): 省略→既定値 / null・型不一致・未知の値→拒否。
+ * team (readStringField 経由で null も省略と同じ既定値扱いにしたうえで、別途 SUPPORTED_TEAMS を
+ * チェックする2段構成) とは異なり、null も拒否する1段構成 (Wave 9 で新設・契約 §1)。
+ */
+function readEnumField<T extends string>(value: Record<string, unknown>, key: string, options: readonly T[], defaultVal: T): FieldRead<T> {
+    const raw = value[key];
+    if (raw === undefined) return { ok: true, v: defaultVal };
+    if (raw === null || typeof raw !== "string" || !(options as readonly string[]).includes(raw)) {
+        return { ok: false, error: `役職コードの読み取りに失敗しました (${key} は ${options.join(" / ")} のいずれかである必要があります)` };
+    }
+    return { ok: true, v: raw as T };
 }
 
 /**
@@ -745,6 +814,13 @@ export function validateEkrDefinition(value: unknown): EkrValidationResult {
     if (!canVentField.ok) return canVentField;
     const canVent = canVentField.v;
 
+    // canSabotage (Wave 9 追記): 省略 = 陣営どおり (impostor のみ使える)。明示すればどの陣営でも
+    // 上書きできる。canKill/canVent と違い、省略と明示 false を区別するため readOptionalBoolField
+    // を使う (null・型不一致は reject)。
+    const canSabotageField = readOptionalBoolField(value, "canSabotage");
+    if (!canSabotageField.ok) return canSabotageField;
+    const canSabotage = canSabotageField.v;
+
     const killCooldownField = readNumberField(value, "killCooldown", KILL_COOLDOWN_DEFAULT);
     if (!killCooldownField.ok) return killCooldownField;
     const killCooldown = clampNum(killCooldownField.v, KILL_COOLDOWN_MIN, KILL_COOLDOWN_MAX);
@@ -752,6 +828,27 @@ export function validateEkrDefinition(value: unknown): EkrValidationResult {
     const visionField = readNumberField(value, "visionMultiplier", VISION_MULTIPLIER_DEFAULT);
     if (!visionField.ok) return visionField;
     const visionMultiplier = clampNum(visionField.v, VISION_MULTIPLIER_MIN, VISION_MULTIPLIER_MAX);
+
+    // basis (Wave 9・契約 §1): 省略は既定 "pet" に収束するが、null・未知の値は拒否する
+    // (team は null も省略と同じ既定値扱いだが、basis は null も型不一致として reject する —
+    // 契約 §1 が両側同一でそう定めている非対称)。
+    const basisField = readEnumField(value, "basis", EKR_BASIS_VALUES, EKR_BASIS_DEFAULT);
+    if (!basisField.ok) return basisField;
+    const basis = basisField.v;
+
+    // abilityCooldown (Wave 9): killCooldown と異なり、範囲外はクランプせず reject する。
+    // ⚠️ 非有限 (1e400 → Infinity) も reject 側。readNumberField の既定値フォールバックは
+    // クランプ系フィールド用の規約で、こちらへ転用するとローダー (C# は非有限を reject) と割れる。
+    const abilityCooldownRaw = value["abilityCooldown"];
+    if (abilityCooldownRaw !== undefined && typeof abilityCooldownRaw === "number" && !Number.isFinite(abilityCooldownRaw)) {
+        return { ok: false, error: `役職コードの読み取りに失敗しました (abilityCooldown は ${ABILITY_COOLDOWN_MIN}〜${ABILITY_COOLDOWN_MAX} の範囲である必要があります)` };
+    }
+    const abilityCooldownField = readNumberField(value, "abilityCooldown", ABILITY_COOLDOWN_DEFAULT);
+    if (!abilityCooldownField.ok) return abilityCooldownField;
+    if (abilityCooldownField.v < ABILITY_COOLDOWN_MIN || abilityCooldownField.v > ABILITY_COOLDOWN_MAX) {
+        return { ok: false, error: `役職コードの読み取りに失敗しました (abilityCooldown は ${ABILITY_COOLDOWN_MIN}〜${ABILITY_COOLDOWN_MAX} の範囲である必要があります。現在 ${abilityCooldownField.v})` };
+    }
+    const abilityCooldown = abilityCooldownField.v;
 
     // winCondition: team と違い R0 でも他の値をそのまま保持する (C# 側にエラー分岐が無い —
     // ゲーム側が現状常に通常のクルー勝利にフォールバックして使うだけの未使用フィールド)。
@@ -770,7 +867,10 @@ export function validateEkrDefinition(value: unknown): EkrValidationResult {
     let descriptionLong = descLongField.v.replace(/\r\n/g, "\n").trim();
     if (descriptionLong.length > ROLE_DESCRIPTION_LONG_MAX) descriptionLong = dropUnterminatedTag(descriptionLong.slice(0, ROLE_DESCRIPTION_LONG_MAX));
 
-    const def: EkrDefinition = { ekr: 1, requires, name, author, color, team, canKill, killCooldown, canVent, visionMultiplier, winCondition };
+    const def: EkrDefinition = { ekr: 1, requires, name, author, color, team, canKill, killCooldown, canVent, visionMultiplier, winCondition, basis, abilityCooldown };
+
+    // canSabotage: 省略 (undefined) はキー自体を出力しない (陣営どおり = 欠落で表す)。
+    if (canSabotage !== undefined) def.canSabotage = canSabotage;
 
     // 空欄はキーごと落とす (欠落 = 既定文言)。logic/passives と同じ「既定はキーの欠落で表す」作法。
     if (description.length > 0) def.description = description;
@@ -1456,6 +1556,9 @@ export function validatePassives(value: unknown): PassivesValidationResult {
         }
         if (value.voteWeight !== undefined) {
             p.voteWeight = expectRangeInt(value.voteWeight, PASSIVE_VOTE_WEIGHT_MIN, PASSIVE_VOTE_WEIGHT_MAX, "passives.voteWeight");
+        }
+        if (value.countsAs !== undefined) {
+            p.countsAs = expectRangeInt(value.countsAs, PASSIVE_COUNTS_AS_MIN, PASSIVE_COUNTS_AS_MAX, "passives.countsAs");
         }
         if (value.doom !== undefined) {
             if (!isRecord(value.doom)) fail("passives.doom は { seconds: 秒数 } の形である必要があります");

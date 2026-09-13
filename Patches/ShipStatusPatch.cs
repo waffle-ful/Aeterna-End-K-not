@@ -104,6 +104,10 @@ internal static class UpdateSystemPatch
         AFKDetector.SetNotAFK(player.PlayerId);
 
         if ((Options.CurrentGameMode is not (CustomGameMode.Standard or CustomGameMode.Snowdown) || Options.DisableSabotage.GetBool()) && systemType == SystemTypes.Sabotage) return false;
+
+        // 役職メーカー: サボを許していない役職コードの保持者は、非モッド客の画面にボタンが出ていても
+        // 実行させない (基底を借りているクルー/第三陣営はボタン自体をホスト側で隠せないため、ここが関所)。
+        if (systemType == SystemTypes.Sabotage && !EndKnot.Modules.Ekm.EkrManager.AllowsSabotage(player.GetCustomRole())) return false;
         if (player.Is(CustomRoles.Fool) && systemType is SystemTypes.Comms or SystemTypes.Electrical) return false;
 
         if (SubmergedCompatibility.IsSubmerged() && systemType is not (SystemTypes.Electrical or SystemTypes.Comms)) return true;

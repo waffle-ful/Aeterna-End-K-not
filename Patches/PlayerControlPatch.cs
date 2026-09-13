@@ -1018,6 +1018,10 @@ internal static class ShapeshiftPatch
 
         if (!Pelican.IsEaten(shapeshifter.PlayerId) && !GameStates.IsVoting && isSSneeded && Main.PlayerStates.TryGetValue(shapeshifter.PlayerId, out PlayerState shapeshifterState))
             isSSneeded = shapeshifterState.Role.OnShapeshift(shapeshifter, target, shapeshifting);
+        else if (EkrManager.IsEkrShapeshiftBasis(role))
+            // 役職メーカーの「だれかを えらぶ」はボタンを借りているだけなので、能力が発火しない状況
+            // (捕食中・投票中) でも本物の変身だけは通さない。ここを外すと押下が素通りして実際に変身する。
+            isSSneeded = false;
 
         bool forceCancel = role.ForceCancelShapeshift() || !shapeshifter.IsAlive();
 
@@ -2033,7 +2037,7 @@ internal static class FixedUpdatePatch
                     if (lowLevelClient != null && lowLevelClient.ProductUserId != "")
                     {
                         string hashedPuid = lowLevelClient.GetHashedPuid();
-                        if (!BanManager.TempBanWhiteList.Contains(hashedPuid)) BanManager.TempBanWhiteList.Add(hashedPuid);
+                        BanManager.AddTempBan(hashedPuid);
                     }
 
                     if (!Main.EnumeratePlayerControls().All(x => x.Data.PlayerLevel <= 1))

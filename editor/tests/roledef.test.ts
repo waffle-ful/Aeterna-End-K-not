@@ -2,9 +2,14 @@
 
 import { describe, expect, it } from "vitest";
 import {
+    ABILITY_COOLDOWN_DEFAULT,
+    ABILITY_COOLDOWN_MAX,
+    ABILITY_COOLDOWN_MIN,
     ALIVE_COUNT_VALUE_MAX,
     ALIVE_COUNT_VALUE_MIN,
     DEFAULT_COLOR,
+    EKR_BASIS_DEFAULT,
+    EKR_BASIS_VALUES,
     HOST_OPTIONS_MAX,
     KILL_COOLDOWN_DEFAULT,
     KILL_COOLDOWN_MAX,
@@ -18,6 +23,7 @@ import {
     VISION_MULTIPLIER_MAX,
     VISION_MULTIPLIER_MIN,
     defaultEkrDefinition,
+    normalizeAbilityCooldown,
     normalizeColor,
     normalizeKillCooldown,
     normalizeVisionMultiplier,
@@ -266,6 +272,88 @@ describe("役職コード検証規則 (EkrDefinition.cs 契約ミラー)", () =>
         delete omitted.winCondition;
         expect(validateEkrDefinition(omitted)).toMatchObject({ ok: true, def: { winCondition: "team" } });
         expect(validateEkrDefinition({ ...baseValid(), winCondition: null })).toMatchObject({ ok: true, def: { winCondition: "team" } });
+    });
+});
+
+// Wave 9 (契約 §1/§1.2): 「はつどうのしかた」+「とくいわざの まちじかん」
+describe("basis / abilityCooldown 検証 (Wave 9・契約 §1/§1.2)", () => {
+    it("basis は pet/shapeshift の2値を受理し、省略/null は既定 pet に収束する", () => {
+        for (const basis of EKR_BASIS_VALUES) {
+            const r = validateEkrDefinition({ ...baseValid(), basis });
+            expect(r.ok, `basis=${basis}`).toBe(true);
+            if (r.ok) expect(r.def.basis).toBe(basis);
+        }
+        const omitted = baseValid();
+        delete omitted.basis;
+        expect(validateEkrDefinition(omitted)).toMatchObject({ ok: true, def: { basis: EKR_BASIS_DEFAULT } });
+    });
+
+    it("basis: null・未知の文字列・型不一致は文書全体 reject (省略のときだけ既定へ収束する — team と違う非対称性)", () => {
+        expect(validateEkrDefinition({ ...baseValid(), basis: null }).ok).toBe(false);
+        expect(validateEkrDefinition({ ...baseValid(), basis: "phantom" }).ok).toBe(false);
+        expect(validateEkrDefinition({ ...baseValid(), basis: "" }).ok).toBe(false);
+        expect(validateEkrDefinition({ ...baseValid(), basis: 1 }).ok).toBe(false);
+        expect(validateEkrDefinition({ ...baseValid(), basis: ["shapeshift"] }).ok).toBe(false);
+    });
+
+    it(`abilityCooldown は ${ABILITY_COOLDOWN_MIN}〜${ABILITY_COOLDOWN_MAX} を受理し、省略は既定 ${ABILITY_COOLDOWN_DEFAULT}`, () => {
+        expect(validateEkrDefinition({ ...baseValid(), abilityCooldown: ABILITY_COOLDOWN_MIN })).toMatchObject({ ok: true, def: { abilityCooldown: ABILITY_COOLDOWN_MIN } });
+        expect(validateEkrDefinition({ ...baseValid(), abilityCooldown: ABILITY_COOLDOWN_MAX })).toMatchObject({ ok: true, def: { abilityCooldown: ABILITY_COOLDOWN_MAX } });
+        expect(validateEkrDefinition({ ...baseValid(), abilityCooldown: 20.5 })).toMatchObject({ ok: true, def: { abilityCooldown: 20.5 } });
+        const omitted = baseValid();
+        delete omitted.abilityCooldown;
+        expect(validateEkrDefinition(omitted)).toMatchObject({ ok: true, def: { abilityCooldown: ABILITY_COOLDOWN_DEFAULT } });
+    });
+
+    it("abilityCooldown: killCooldown と異なり範囲外はクランプせず reject する", () => {
+        expect(validateEkrDefinition({ ...baseValid(), abilityCooldown: ABILITY_COOLDOWN_MIN - 1 }).ok).toBe(false);
+        expect(validateEkrDefinition({ ...baseValid(), abilityCooldown: ABILITY_COOLDOWN_MAX + 1 }).ok).toBe(false);
+        expect(validateEkrDefinition({ ...baseValid(), abilityCooldown: 0 }).ok).toBe(false);
+    });
+
+    it("abilityCooldown: null・型不一致・非有限 (NaN/Infinity) はすべて拒否 (クランプ系の killCooldown とは別扱い・ローダーと同一)", () => {
+        expect(validateEkrDefinition({ ...baseValid(), abilityCooldown: null }).ok).toBe(false);
+        expect(validateEkrDefinition({ ...baseValid(), abilityCooldown: "30" }).ok).toBe(false);
+        expect(validateEkrDefinition({ ...baseValid(), abilityCooldown: NaN }).ok).toBe(false);
+        expect(validateEkrDefinition({ ...baseValid(), abilityCooldown: Infinity }).ok).toBe(false);
+    });
+
+    it("basis == \"pet\" のまま abilityCooldown を指定しても reject しない (効かないだけ・リンタ L32 でヒント)", () => {
+        const r = validateEkrDefinition({ ...baseValid(), basis: "pet", abilityCooldown: 90 });
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(r.def.basis).toBe("pet");
+            expect(r.def.abilityCooldown).toBe(90);
+        }
+    });
+});
+
+// Wave 9 追記: 「サボタージュを つかえる」。basis/abilityCooldown と違い、省略と明示 false を
+// 区別する必要があるため常時解決済みの値にはしない (passives.countsAs と同じ「省略はキー省略」扱い)。
+describe("canSabotage 検証 (Wave 9 追記)", () => {
+    it("省略/null は passives と同じくキー自体を持たない (陣営どおり)", () => {
+        const omitted = validateEkrDefinition(baseValid());
+        if (!omitted.ok) throw new Error(omitted.error);
+        expect(omitted.def.canSabotage).toBeUndefined();
+        expect("canSabotage" in omitted.def).toBe(false);
+    });
+
+    it("true/false を明示すればそのまま保持される (省略と明示 false を区別する)", () => {
+        const t = validateEkrDefinition({ ...baseValid(), canSabotage: true });
+        if (!t.ok) throw new Error(t.error);
+        expect(t.def.canSabotage).toBe(true);
+
+        const f = validateEkrDefinition({ ...baseValid(), canSabotage: false });
+        if (!f.ok) throw new Error(f.error);
+        expect(f.def.canSabotage).toBe(false);
+        expect("canSabotage" in f.def).toBe(true);
+    });
+
+    it("null・真偽値以外は文書全体 reject (canKill/canVent と同じ非 nullable 値型の扱い)", () => {
+        expect(validateEkrDefinition({ ...baseValid(), canSabotage: null }).ok).toBe(false);
+        expect(validateEkrDefinition({ ...baseValid(), canSabotage: "true" }).ok).toBe(false);
+        expect(validateEkrDefinition({ ...baseValid(), canSabotage: 1 }).ok).toBe(false);
+        expect(validateEkrDefinition({ ...baseValid(), canSabotage: [] }).ok).toBe(false);
     });
 });
 
@@ -961,6 +1049,24 @@ describe("passives 検証 (Wave 1・spec §1.1)", () => {
         expect(validateEkrDefinition(withPassives({ voteWeight: 1.5 })).ok).toBe(false);
     });
 
+    // Wave 9 (契約 §3): 「かちのかぞえかた」。crewmate 以外での指定は reject しない
+    // (lint-role.ts L31 でヒントするだけ — ここでは型/範囲だけを検証する)。
+    it("countsAs は 0〜3 の整数のみ、省略はキー自体を持たない", () => {
+        for (const v of [0, 1, 2, 3]) {
+            const r = validateEkrDefinition(withPassives({ countsAs: v }));
+            expect(r.ok, String(v)).toBe(true);
+            if (r.ok) expect(r.def.passives).toEqual({ countsAs: v });
+        }
+        expect(validateEkrDefinition(withPassives({ countsAs: -1 })).ok).toBe(false);
+        expect(validateEkrDefinition(withPassives({ countsAs: 4 })).ok).toBe(false);
+        expect(validateEkrDefinition(withPassives({ countsAs: 1.5 })).ok).toBe(false);
+        expect(validateEkrDefinition(withPassives({ countsAs: null })).ok).toBe(false);
+
+        const omitted = validateEkrDefinition(baseValid());
+        if (!omitted.ok) throw new Error(omitted.error);
+        expect(omitted.def.passives).toBeUndefined();
+    });
+
     it("doom.seconds は 30〜600 の整数のみ (seconds 欠落は拒否)", () => {
         expect(validateEkrDefinition(withPassives({ doom: { seconds: 30 } })).ok).toBe(true);
         expect(validateEkrDefinition(withPassives({ doom: { seconds: 600 } })).ok).toBe(true);
@@ -1280,6 +1386,17 @@ describe("normalize* ヘルパー (UI と検証が共有する唯一のクラン
         expect(normalizeColor("#ABC")).toBe(DEFAULT_COLOR);
         expect(normalizeColor(123)).toBe(DEFAULT_COLOR);
     });
+
+    // Wave 9 (契約 §1.2): abilityCooldown のフォーム層クランプ。validateEkrDefinition 本体は
+    // 範囲外を reject するが、この関数は下書き復元用の緩いクランプ (normalizeKillCooldown と同じ方針)。
+    it("normalizeAbilityCooldown: 有限数はクランプ、非有限/非数値は既定値", () => {
+        expect(normalizeAbilityCooldown(45)).toBe(45);
+        expect(normalizeAbilityCooldown(0)).toBe(ABILITY_COOLDOWN_MIN);
+        expect(normalizeAbilityCooldown(9999)).toBe(ABILITY_COOLDOWN_MAX);
+        expect(normalizeAbilityCooldown(NaN)).toBe(ABILITY_COOLDOWN_DEFAULT);
+        expect(normalizeAbilityCooldown("30")).toBe(ABILITY_COOLDOWN_DEFAULT);
+        expect(normalizeAbilityCooldown(undefined)).toBe(ABILITY_COOLDOWN_DEFAULT);
+    });
 });
 
 // ---------------------------------------------------------------------------
@@ -1449,8 +1566,8 @@ describe("hostOptions 検証 (Wave 3・契約 §4.1)", () => {
         expect(empty.def.hostOptions).toBeUndefined();
     });
 
-    it("固定6キーはすべて受理される (min/max無し)", () => {
-        for (const key of ["shield.count", "doom.seconds", "speedMult", "voteWeight", "killCooldown", "vision"]) {
+    it("固定7キー (Wave 9 で abilityCooldown 追加) はすべて受理される (min/max無し)", () => {
+        for (const key of ["shield.count", "doom.seconds", "speedMult", "voteWeight", "killCooldown", "vision", "abilityCooldown"]) {
             const r = validateEkrDefinition({ ...baseValid(), hostOptions: [{ key, label: "らべる" }] });
             expect(r.ok, key).toBe(true);
         }
@@ -1496,12 +1613,11 @@ describe("hostOptions 検証 (Wave 3・契約 §4.1)", () => {
 
     it(`最大 ${HOST_OPTIONS_MAX} 件まで。超過は reject`, () => {
         expect(HOST_OPTIONS_MAX).toBe(8); // 上の定数が変わったらこのテストの前提を見直す合図
-        // 重複キーを避けるため、固定キー6種 + var:2種 (2変数宣言) で8件ちょうど作る
-        const fixedKeys = ["shield.count", "doom.seconds", "speedMult", "voteWeight", "killCooldown", "vision"];
+        // 重複キーを避けるため、固定キー7種 (Wave 9 で abilityCooldown 追加) + var:1種 で8件ちょうど作る
+        const fixedKeys = ["shield.count", "doom.seconds", "speedMult", "voteWeight", "killCooldown", "vision", "abilityCooldown"];
         const eight = [
             ...fixedKeys.map((key, i) => ({ key, label: `A${i}` })),
             { key: "var:たま", label: "たまの数", min: 0, max: 10 },
-            { key: "var:ぎん", label: "ぎんの数", min: 0, max: 10 },
         ];
         const threeVarsLogic = {
             version: 1,
@@ -1510,8 +1626,8 @@ describe("hostOptions 検証 (Wave 3・契約 §4.1)", () => {
         };
         expect(validateEkrDefinition({ ...baseValid(), logic: threeVarsLogic, hostOptions: eight }).ok).toBe(true);
 
-        // 9件目 (var:どう) を足すと重複キー無しのまま純粋に件数だけ超過する
-        const nine = [...eight, { key: "var:どう", label: "どうの数", min: 0, max: 10 }];
+        // 9件目 (var:ぎん) を足すと重複キー無しのまま純粋に件数だけ超過する
+        const nine = [...eight, { key: "var:ぎん", label: "ぎんの数", min: 0, max: 10 }];
         expect(nine.length).toBe(HOST_OPTIONS_MAX + 1);
         expect(validateEkrDefinition({ ...baseValid(), logic: threeVarsLogic, hostOptions: nine }).ok).toBe(false);
     });

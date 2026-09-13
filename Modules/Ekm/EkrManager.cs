@@ -295,6 +295,18 @@ public static class EkrManager
     // IsCrewmate() 系の排除法から呼ばれる = 毎フレーム級。辞書1回で答えが出る形にしておく。
     public static bool IsEkrImpostor(CustomRoles role) => SlotTeams.TryGetValue(role, out EkrTeam team) && team == EkrTeam.Impostor;
 
+    // Wave 9: サボタージュを使えるか。EKR 以外は常に true (家の既存判定に任せる)。
+    // 役職コードが明示していれば その値、していなければ陣営どおり (インポスター陣営だけ true)。
+    public static bool AllowsSabotage(CustomRoles role)
+    {
+        if (!IsEkrRole(role)) return true;
+
+        return GetDefinition(role)?.ParsedCanSabotage ?? IsEkrImpostor(role);
+    }
+
+    // Wave 9: 束縛中の役職コードの基底が shapeshift か。毎フレーム級 (GetVNRole/GetDYRole/付与判定) で呼ばれる。
+    public static bool IsEkrShapeshiftBasis(CustomRoles role) => IsEkrRole(role) && GetDefinition(role)?.ParsedBasis == EkrBasis.Shapeshift;
+
     public static bool IsEkrNeutral(CustomRoles role) => SlotTeams.TryGetValue(role, out EkrTeam team) && team == EkrTeam.Neutral;
 
     // neutral のサブカテゴリだけは定義依存 (契約 §1: canKill から導出)。未束縛スロットは canKill=false
@@ -851,6 +863,7 @@ public static class EkrManager
             "voteWeight" => def.ParsedPassives.VoteWeight,
             "killCooldown" => def.KillCooldown,
             "vision" => def.VisionMultiplier,
+            "abilityCooldown" => def.AbilityCooldownSeconds,
             _ => 0f
         };
     }
@@ -886,6 +899,9 @@ public static class EkrManager
     public static float GetEffectiveKillCooldown(CustomRoles slot, float fallback) => HostOptionOr(slot, "killCooldown", fallback, 1f, 300f);
 
     public static float GetEffectiveVision(CustomRoles slot, float fallback) => HostOptionOr(slot, "vision", fallback, 0.1f, 3f);
+
+    // Wave 9: basis == shapeshift のときだけ EkmTemplateRole.ApplyGameOptions が読む。
+    public static float GetEffectiveAbilityCooldown(CustomRoles slot, float fallback) => HostOptionOr(slot, "abilityCooldown", fallback, 5f, 180f);
 
     // 説明文の実行時上書き (plan §7 Tier 1 #2)。Info/InfoLong は ExtendedPlayerControl.GetRoleInfo が読む
     // 2キーで、頂上の役職パネル・イントロ・/h r・オプションメニューのツールチップが全部ここへ集約されている
@@ -1515,6 +1531,9 @@ public static class EkrManager
     }
 
     public static void FirePet(CustomRoles slot, PlayerControl pc) => FireEvent(slot, pc.PlayerId, "on_pet", byte.MaxValue);
+
+    // Wave 9: basis == shapeshift 用。「えらんだ人」を ctx に乗せる (契約 §2)。
+    public static void FirePet(CustomRoles slot, PlayerControl pc, byte ctxId) => FireEvent(slot, pc.PlayerId, "on_pet", ctxId);
 
     // v1.2 (spec §2 on_cno_touch): slotNumber1Based は接触した「自分の CNO/ダミー」の slot (1..3)。
     // ctx = 触れた人。呼び出し元は PollCnoTouchIfDue (0.25秒ポーリングエンジン) のみ。

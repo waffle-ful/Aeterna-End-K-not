@@ -1,0 +1,54 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "えらびキル",
+  "author": "EKN Realtest",
+  "description": "キルもできて、とくいわざで だれかを えらべる",
+  "color": "#a05fd0",
+  "team": "crewmate",
+  "canKill": true,
+  "killCooldown": 25,
+  "canVent": false,
+  "canSabotage": true,
+  "visionMultiplier": 1,
+  "winCondition": "team",
+  "basis": "shapeshift",
+  "abilityCooldown": 10,
+  "logic": {
+    "version": 1,
+    "variables": [
+      {
+        "name": "かず",
+        "init": 0
+      }
+    ],
+    "rules": [
+      {
+        "when": "on_pet",
+        "do": [
+          {
+            "op": "var_add",
+            "name": "かず",
+            "delta": {
+            "e": "lit",
+            "v": 1
+          }
+          },
+          {
+            "op": "inspect",
+            "target": "ctx",
+            "depth": "team"
+          },
+          {
+            "op": "notify",
+            "text": "えらんだ {かず} 回目",
+            "seconds": 3
+          }
+        ]
+      }
+    ]
+  },
+  "progress": {
+    "text": "W9-{かず}"
+  }
+}
