@@ -1,0 +1,51 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "れんぱつや",
+  "author": "EKN Sample",
+  "description": "きえるボタンで たまを 2ほん とばす (さいたんCDの れんだアーム)",
+  "color": "#b03f5a",
+  "team": "crewmate",
+  "canKill": false,
+  "killCooldown": 25,
+  "canVent": false,
+  "visionMultiplier": 1,
+  "winCondition": "team",
+  "basis": "phantom",
+  "abilityCooldown": 5,
+  "logic": {
+    "version": 1,
+    "variables": [],
+    "rules": [
+      {
+        "when": "on_pet",
+        "do": [
+          {
+            "op": "cno_spawn",
+            "slot": 1,
+            "text": "●",
+            "size": 8,
+            "at": "self"
+          },
+          {
+            "op": "cno_launch",
+            "slot": 1,
+            "dir": "move"
+          },
+          {
+            "op": "cno_spawn",
+            "slot": 2,
+            "text": "○",
+            "size": 8,
+            "at": "self"
+          },
+          {
+            "op": "cno_launch",
+            "slot": 2,
+            "dir": "move"
+          }
+        ]
+      }
+    ]
+  }
+}

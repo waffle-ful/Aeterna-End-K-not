@@ -549,10 +549,10 @@ public class EkrDefinitionTests
         foreach (EkrRule rule in def.ParsedLogic.Rules)
             CollectOps(rule.Do, "effect_give", effects);
 
-        // 4 kind すべてを1回以上 (movement 3種 + vision 1種)
+        // 5 kind すべてを1回以上 (movement 3種 + vision 1種 + visibility 1種 [Wave 11])
         var kinds = new HashSet<string>();
         foreach (EkrNode n in effects) kinds.Add(n.EffectKind);
-        Assert.Equal(new HashSet<string> { "haste", "slow", "freeze", "blind" }, kinds);
+        Assert.Equal(new HashSet<string> { "haste", "slow", "freeze", "blind", "invisible" }, kinds);
 
         // freeze は上限 10 秒 (§1) — fixture は境界を割る値で持つ
         EkrNode freeze = effects.Find(n => n.EffectKind == "freeze");
@@ -563,6 +563,14 @@ public class EkrDefinitionTests
         // target 受理集合は単数セレクタ全種 (self / linked とも通る)
         Assert.Contains(effects, n => n.Target == "self");
         Assert.Contains(effects, n => n.Target == "linked");
+
+        // Wave 11: invisible は hideFrom/corpse/interval を保持する (kind 別の付帯フィールド)。
+        EkrNode invisible = effects.Find(n => n.EffectKind == "invisible");
+        Assert.NotNull(invisible);
+        Assert.Equal(8f, invisible.Seconds);
+        Assert.Equal("everyone", invisible.HideFrom);
+        Assert.Equal("stay", invisible.Corpse);
+        Assert.Equal(3, invisible.EffectInterval);
 
         // recruit.slot は IntArg に入る (0 = 省略)
         var recruits = new List<EkrNode>();
@@ -614,6 +622,61 @@ public class EkrDefinitionTests
         string json = Wrap("\"logic\":{\"version\":1,\"rules\":[{\"when\":\"on_pet\",\"do\":[" + nodeJson + "]}]}");
         bool ok = EkrDefinition.TryParse(json, out _, out string error);
         Assert.True(ok == shouldAccept, shouldAccept ? error : "本来 reject されるべき node が受理されました: " + nodeJson);
+    }
+
+    // Wave 11 (契約 §3): kind:"invisible" の省略可フィールド (hideFrom/corpse/interval)。
+    // 省略時の既定は "everyone"/"vanish"/5・seconds 上限は 20。kind != "invisible" で指定 = reject。
+    // null/未知値/範囲外もすべて reject (§6-3)。
+    [Theory]
+    [InlineData("{\"op\":\"effect_give\",\"target\":\"self\",\"kind\":\"invisible\",\"seconds\":8}", true)]
+    [InlineData("{\"op\":\"effect_give\",\"target\":\"self\",\"kind\":\"invisible\",\"seconds\":1}", true)]
+    [InlineData("{\"op\":\"effect_give\",\"target\":\"self\",\"kind\":\"invisible\",\"seconds\":20}", true)]
+    [InlineData("{\"op\":\"effect_give\",\"target\":\"self\",\"kind\":\"invisible\",\"seconds\":21}", false)] // §1 の上限 (haste/slow/blind の 30 ではなく 20)
+    [InlineData("{\"op\":\"effect_give\",\"target\":\"self\",\"kind\":\"invisible\",\"seconds\":0}", false)]
+    // hideFrom
+    [InlineData("{\"op\":\"effect_give\",\"target\":\"self\",\"kind\":\"invisible\",\"seconds\":8,\"hideFrom\":\"everyone\"}", true)]
+    [InlineData("{\"op\":\"effect_give\",\"target\":\"self\",\"kind\":\"invisible\",\"seconds\":8,\"hideFrom\":\"crewmates\"}", true)]
+    [InlineData("{\"op\":\"effect_give\",\"target\":\"self\",\"kind\":\"invisible\",\"seconds\":8,\"hideFrom\":\"enemies\"}", true)]
+    [InlineData("{\"op\":\"effect_give\",\"target\":\"self\",\"kind\":\"invisible\",\"seconds\":8,\"hideFrom\":\"nobody\"}", false)]
+    [InlineData("{\"op\":\"effect_give\",\"target\":\"self\",\"kind\":\"invisible\",\"seconds\":8,\"hideFrom\":null}", false)]
+    [InlineData("{\"op\":\"effect_give\",\"target\":\"self\",\"kind\":\"haste\",\"seconds\":8,\"hideFrom\":\"everyone\"}", false)] // kind 違反
+    // corpse
+    [InlineData("{\"op\":\"effect_give\",\"target\":\"self\",\"kind\":\"invisible\",\"seconds\":8,\"corpse\":\"vanish\"}", true)]
+    [InlineData("{\"op\":\"effect_give\",\"target\":\"self\",\"kind\":\"invisible\",\"seconds\":8,\"corpse\":\"stay\"}", true)]
+    [InlineData("{\"op\":\"effect_give\",\"target\":\"self\",\"kind\":\"invisible\",\"seconds\":8,\"corpse\":\"none\"}", false)]
+    [InlineData("{\"op\":\"effect_give\",\"target\":\"self\",\"kind\":\"invisible\",\"seconds\":8,\"corpse\":null}", false)]
+    [InlineData("{\"op\":\"effect_give\",\"target\":\"self\",\"kind\":\"blind\",\"seconds\":8,\"corpse\":\"vanish\"}", false)] // kind 違反
+    // interval (1..60・整数等価トークンは既存規則どおり受理)
+    [InlineData("{\"op\":\"effect_give\",\"target\":\"self\",\"kind\":\"invisible\",\"seconds\":8,\"interval\":1}", true)]
+    [InlineData("{\"op\":\"effect_give\",\"target\":\"self\",\"kind\":\"invisible\",\"seconds\":8,\"interval\":60}", true)]
+    [InlineData("{\"op\":\"effect_give\",\"target\":\"self\",\"kind\":\"invisible\",\"seconds\":8,\"interval\":3.0}", true)]
+    [InlineData("{\"op\":\"effect_give\",\"target\":\"self\",\"kind\":\"invisible\",\"seconds\":8,\"interval\":0}", false)]
+    [InlineData("{\"op\":\"effect_give\",\"target\":\"self\",\"kind\":\"invisible\",\"seconds\":8,\"interval\":61}", false)]
+    [InlineData("{\"op\":\"effect_give\",\"target\":\"self\",\"kind\":\"invisible\",\"seconds\":8,\"interval\":2.5}", false)]
+    [InlineData("{\"op\":\"effect_give\",\"target\":\"self\",\"kind\":\"invisible\",\"seconds\":8,\"interval\":\"3\"}", false)]
+    [InlineData("{\"op\":\"effect_give\",\"target\":\"self\",\"kind\":\"freeze\",\"seconds\":8,\"interval\":5}", false)] // kind 違反
+    public void InvisibleEffectFields_MatchTheContract(string nodeJson, bool shouldAccept)
+    {
+        string json = Wrap("\"logic\":{\"version\":1,\"rules\":[{\"when\":\"on_pet\",\"do\":[" + nodeJson + "]}]}");
+        bool ok = EkrDefinition.TryParse(json, out _, out string error);
+        Assert.True(ok == shouldAccept, shouldAccept ? error : "本来 reject されるべき node が受理されました: " + nodeJson);
+    }
+
+    // Wave 11: hideFrom/corpse/interval を省略すると既定 "everyone"/"vanish"/5 が焼き込まれる。
+    [Fact]
+    public void InvisibleEffectFields_DefaultWhenOmitted()
+    {
+        string json = Wrap("\"logic\":{\"version\":1,\"rules\":[{\"when\":\"on_pet\",\"do\":[{\"op\":\"effect_give\",\"target\":\"self\",\"kind\":\"invisible\",\"seconds\":8}]}]}");
+        Assert.True(EkrDefinition.TryParse(json, out EkrDefinition def, out string error), error);
+
+        var effects = new List<EkrNode>();
+        foreach (EkrRule rule in def.ParsedLogic.Rules)
+            CollectOps(rule.Do, "effect_give", effects);
+
+        EkrNode invisible = Assert.Single(effects);
+        Assert.Equal("everyone", invisible.HideFrom);
+        Assert.Equal("vanish", invisible.Corpse);
+        Assert.Equal(5, invisible.EffectInterval);
     }
 
     // §2: recruit.slot 省略時は IntArg = 0 のまま (「自分と同じ役職」の後方互換パス)。
@@ -1217,7 +1280,7 @@ public class EkrDefinitionTests
 
     // ── Wave 9: えらんで はつどう (基底開放: Shapeshifter) + かちのかぞえかた ────────────────────
 
-    // 契約 §5-1: basis は省略→pet、null・文字列以外・未知の値は文書 reject。
+    // 契約 §5-1/Wave 11 §2: basis は省略→pet、null・文字列以外・未知の値は文書 reject。
     // ⚠️ 明示 null を省略と区別できるのは Basis を素の JsonElement (Undefined / Null を持てる) で
     // 受けているから。Nullable<JsonElement> にすると JSON null がラッパー段階で潰れて省略に合流し、
     // TS 側の判定 (null は reject) と割れる。
@@ -1227,7 +1290,8 @@ public class EkrDefinitionTests
     [InlineData("\"shapeshift\"", true, EkrBasis.Shapeshift)]
     [InlineData("null", false, EkrBasis.Pet)]
     [InlineData("123", false, EkrBasis.Pet)]
-    [InlineData("\"phantom\"", false, EkrBasis.Pet)]
+    [InlineData("\"phantom\"", true, EkrBasis.Phantom)]
+    [InlineData("\"vanish\"", false, EkrBasis.Pet)]
     public void Basis_MatchesTheContract(string basisJson, bool expectOk, EkrBasis expected)
     {
         string json = Wrap(basisJson == null ? "\"canVent\":true" : $"\"basis\":{basisJson}");

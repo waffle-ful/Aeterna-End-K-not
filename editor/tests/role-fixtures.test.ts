@@ -23,8 +23,12 @@ import tamaShowcaseRaw from "./fixtures/role-tama-showcase.ekrole.json?raw";
 import kiyomeyaShowcaseRaw from "./fixtures/role-kiyomeya-showcase.ekrole.json?raw";
 import hashiriyaShowcaseRaw from "./fixtures/role-hashiriya-showcase.ekrole.json?raw";
 import noroiyaShowcaseRaw from "./fixtures/role-noroiya-showcase.ekrole.json?raw";
+import kieyaShowcaseRaw from "./fixtures/role-kieya-showcase.ekrole.json?raw";
+import kakushiyaShowcaseRaw from "./fixtures/role-kakushiya-showcase.ekrole.json?raw";
+import mienakusuruyaShowcaseRaw from "./fixtures/role-mienakusuruya-showcase.ekrole.json?raw";
+import kagenonakamaShowcaseRaw from "./fixtures/role-kagenonakama-showcase.ekrole.json?raw";
 import { ROLECODE_PREFIX, decodeRoleCode, encodeRoleCode } from "../src/rolecode";
-import { LOGIC_WHEN_VALUES, type EkrTeam, validateEkrDefinition, type LogicNode, type LogicWhen } from "../src/roledef";
+import { ABILITY_COOLDOWN_DEFAULT, LOGIC_WHEN_VALUES, type EkrTeam, validateEkrDefinition, type LogicNode, type LogicWhen } from "../src/roledef";
 import { lintRoleLogic } from "../src/logic/lint-role";
 
 function collectOps(nodes: LogicNode[], into: Set<string>): void {
@@ -177,24 +181,24 @@ describe("golden fixture: role-full-course.ekrole.json (10イベント・主要o
         expect(onVentExit?.do.length).toBeGreaterThan(0);
     });
 
-    // Wave 5 (§1/§2): 持続効果と変換先スロット指名。C# 側
-    // (EkrDefinitionTests.FullCourseFixture_ExposesWave5Vocabulary) が同じファイルの同じ値を読むので、
-    // 片側だけ実装が抜けるとどちらかが落ちる。
-    it("effect_give の4種と recruit.slot が保持される (kind 別の seconds 上限も含む)", () => {
+    // Wave 5 (§1/§2): 持続効果と変換先スロット指名。Wave 11 (§3) で invisible + hideFrom/corpse/
+    // interval を追加して5 kind になった。C# 側 (EkrDefinitionTests.FullCourseFixture_
+    // ExposesWave5Vocabulary) が同じファイルの同じ値を読むので、片側だけ実装が抜けるとどちらかが落ちる。
+    it("effect_give の5種と recruit.slot が保持される (kind 別の seconds 上限・invisible の付帯フィールド込み)", () => {
         const parsed = JSON.parse(fullCourseRaw);
         const result = validateEkrDefinition(parsed);
         if (!result.ok) throw new Error(result.error);
         const rules = result.def.logic?.rules ?? [];
 
-        const effects: { target: string; kind: string; seconds: number }[] = [];
+        const effects: { target: string; kind: string; seconds: number; hideFrom?: string; corpse?: string; interval?: number }[] = [];
         for (const rule of rules) {
             for (const n of rule.do) {
-                if (n.op === "effect_give") effects.push({ target: n.target, kind: n.kind, seconds: n.seconds });
+                if (n.op === "effect_give") effects.push({ target: n.target, kind: n.kind, seconds: n.seconds, hideFrom: n.hideFrom, corpse: n.corpse, interval: n.interval });
             }
         }
 
-        // 4 kind すべてを1回以上 (movement 3種 + vision 1種)。
-        expect(new Set(effects.map((e) => e.kind))).toEqual(new Set(["slow", "blind", "freeze", "haste"]));
+        // 5 kind すべてを1回以上 (movement 3種 + vision 1種 + Wave 11 の invisible)。
+        expect(new Set(effects.map((e) => e.kind))).toEqual(new Set(["slow", "blind", "freeze", "haste", "invisible"]));
         // freeze は上限 10 秒 (契約 §1) — fixture は境界を割る値で持つ。
         const freeze = effects.find((e) => e.kind === "freeze");
         expect(freeze?.seconds).toBe(8);
@@ -202,6 +206,12 @@ describe("golden fixture: role-full-course.ekrole.json (10イベント・主要o
         // linked セレクタと self がどちらも受理されること (§1 の target 受理集合 = 単数セレクタ全種)。
         expect(effects.some((e) => e.target === "linked")).toBe(true);
         expect(effects.some((e) => e.target === "self")).toBe(true);
+
+        // Wave 11 (§3/§6): invisible の hideFrom/corpse/interval。hideFrom は既定 "everyone" を
+        // 明示 (golden fixture はリンター警告0件が前提 — L39 は crewmates/enemies 限定なので
+        // ここでは踏まない)・corpse/interval は既定値以外で明示する。
+        const invisible = effects.find((e) => e.kind === "invisible");
+        expect(invisible).toEqual({ target: "self", kind: "invisible", seconds: 8, hideFrom: "everyone", corpse: "stay", interval: 3 });
 
         // recruit.slot: 指名あり (§2)。省略時にフィールドを持たないことは compile-role 側で検証する。
         const recruit = rules.flatMap((r) => r.do).find((n) => n.op === "recruit");
@@ -865,6 +875,196 @@ describe("golden fixture: role-noroiya-showcase.ekrole.json (Wave 10 テンプ�
 
     it("rolecode (EKR1.) のエンコード→デコード ラウンドトリップで AST が deep-equal になる", () => {
         const parsed = JSON.parse(noroiyaShowcaseRaw);
+        const validated = validateEkrDefinition(parsed);
+        if (!validated.ok) throw new Error(validated.error);
+
+        const code = encodeRoleCode(JSON.stringify(validated.def));
+        expect(code.startsWith(ROLECODE_PREFIX)).toBe(true);
+
+        const roundTripped = validateEkrDefinition(JSON.parse(decodeRoleCode(code)));
+        if (!roundTripped.ok) throw new Error(roundTripped.error);
+
+        expect(roundTripped.def).toEqual(validated.def);
+        expect(encodeRoleCode(JSON.stringify(roundTripped.def))).toBe(code);
+    });
+});
+
+// Wave 11 (§10): テンプレギャラリー見本4本。basis "phantom" (きえるボタン) と effect_give の
+// kind "invisible" (すがたをけす) のパース網羅を担う。省略可フィールド3つ (hideFrom / corpse /
+// interval) は、既定のまま・3値すべて・L40 の境界値 (interval 3 = 鳴らない側) を4本で分担する。
+describe("golden fixture: role-kieya-showcase.ekrole.json (Wave 11 見本・おしたら きえる の基本形)", () => {
+    it("validate に合格する", () => {
+        const parsed = JSON.parse(kieyaShowcaseRaw);
+        const result = validateEkrDefinition(parsed);
+        expect(result.ok, result.ok ? "" : (result as { error: string }).error).toBe(true);
+    });
+
+    it("basis phantom の on_pet が effect_give(self, invisible, 8) を持つ (省略可3フィールドは既定のまま)", () => {
+        const parsed = JSON.parse(kieyaShowcaseRaw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        if (!result.def.logic) throw new Error("fixture は logic を持つ前提");
+
+        expect(result.def.basis).toBe("phantom");
+        expect(result.def.abilityCooldown).toBe(40);
+        const give = result.def.logic.rules.flatMap((r) => r.do).find((n) => n.op === "effect_give");
+        expect(give).toEqual({ op: "effect_give", target: "self", kind: "invisible", seconds: 8 });
+    });
+
+    it("リンター (basis 条件付きの L32/L33 含む) は警告0件", () => {
+        const parsed = JSON.parse(kieyaShowcaseRaw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        if (!result.def.logic) throw new Error("fixture は logic を持つ前提");
+        expect(lintRoleLogic(result.def.logic, undefined, { basis: result.def.basis, abilityCooldown: result.def.abilityCooldown })).toEqual([]);
+    });
+
+    it("rolecode (EKR1.) のエンコード→デコード ラウンドトリップで AST が deep-equal になる", () => {
+        const parsed = JSON.parse(kieyaShowcaseRaw);
+        const validated = validateEkrDefinition(parsed);
+        if (!validated.ok) throw new Error(validated.error);
+
+        const code = encodeRoleCode(JSON.stringify(validated.def));
+        expect(code.startsWith(ROLECODE_PREFIX)).toBe(true);
+
+        const roundTripped = validateEkrDefinition(JSON.parse(decodeRoleCode(code)));
+        if (!roundTripped.ok) throw new Error(roundTripped.error);
+
+        expect(roundTripped.def).toEqual(validated.def);
+        expect(encodeRoleCode(JSON.stringify(roundTripped.def))).toBe(code);
+    });
+});
+
+describe("golden fixture: role-kakushiya-showcase.ekrole.json (Wave 11 見本・死体が残る側と on_kill 連鎖)", () => {
+    it("validate に合格する", () => {
+        const parsed = JSON.parse(kakushiyaShowcaseRaw);
+        const result = validateEkrDefinition(parsed);
+        expect(result.ok, result.ok ? "" : (result as { error: string }).error).toBe(true);
+    });
+
+    // 同じ役職の中で2経路が別の corpse を持つ (on_pet = stay / on_kill = 省略 → 既定 vanish) —
+    // 持続効果の台帳が「最後の適用」を保持していることの器。
+    it("on_pet は hideFrom everyone + corpse stay、on_kill は省略のまま", () => {
+        const parsed = JSON.parse(kakushiyaShowcaseRaw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        if (!result.def.logic) throw new Error("fixture は logic を持つ前提");
+
+        expect(result.def.basis).toBe("phantom");
+        expect(result.def.team).toBe("neutral");
+        expect(result.def.canKill).toBe(true);
+        expect(result.def.canVent).toBe(true);
+
+        const onPet = result.def.logic.rules.find((r) => r.when === "on_pet");
+        expect(onPet?.do.find((n) => n.op === "effect_give")).toEqual({ op: "effect_give", target: "self", kind: "invisible", seconds: 6, hideFrom: "everyone", corpse: "stay" });
+
+        const onKill = result.def.logic.rules.find((r) => r.when === "on_kill");
+        expect(onKill?.do.find((n) => n.op === "effect_give")).toEqual({ op: "effect_give", target: "self", kind: "invisible", seconds: 3 });
+    });
+
+    it("リンター は警告0件", () => {
+        const parsed = JSON.parse(kakushiyaShowcaseRaw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        if (!result.def.logic) throw new Error("fixture は logic を持つ前提");
+        expect(lintRoleLogic(result.def.logic, undefined, { basis: result.def.basis, abilityCooldown: result.def.abilityCooldown })).toEqual([]);
+    });
+
+    it("rolecode (EKR1.) のエンコード→デコード ラウンドトリップで AST が deep-equal になる", () => {
+        const parsed = JSON.parse(kakushiyaShowcaseRaw);
+        const validated = validateEkrDefinition(parsed);
+        if (!validated.ok) throw new Error(validated.error);
+
+        const code = encodeRoleCode(JSON.stringify(validated.def));
+        expect(code.startsWith(ROLECODE_PREFIX)).toBe(true);
+
+        const roundTripped = validateEkrDefinition(JSON.parse(decodeRoleCode(code)));
+        if (!roundTripped.ok) throw new Error(roundTripped.error);
+
+        expect(roundTripped.def).toEqual(validated.def);
+        expect(encodeRoleCode(JSON.stringify(roundTripped.def))).toBe(code);
+    });
+});
+
+describe("golden fixture: role-mienakusuruya-showcase.ekrole.json (Wave 11 見本・他人を消す)", () => {
+    it("validate に合格する", () => {
+        const parsed = JSON.parse(mienakusuruyaShowcaseRaw);
+        const result = validateEkrDefinition(parsed);
+        expect(result.ok, result.ok ? "" : (result as { error: string }).error).toBe(true);
+    });
+
+    it("basis pet のまま nearest を消す (per-target 台帳と phantom:true 経路の器)", () => {
+        const parsed = JSON.parse(mienakusuruyaShowcaseRaw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        if (!result.def.logic) throw new Error("fixture は logic を持つ前提");
+
+        expect(result.def.basis).toBe("pet");
+        // abilityCooldown は省略しても既定 30 に解決される (canSabotage と違い省略=undefined ではない)。
+        // この見本は pet 基底なので、ホストが「ファントム化」を ON にするまでこの値は効かない (契約 §2.2)。
+        expect(result.def.abilityCooldown).toBe(ABILITY_COOLDOWN_DEFAULT);
+        const give = result.def.logic.rules.flatMap((r) => r.do).find((n) => n.op === "effect_give");
+        expect(give).toEqual({ op: "effect_give", target: "nearest", kind: "invisible", seconds: 5, hideFrom: "crewmates" });
+    });
+
+    // 契約 §7: L39 = hideFrom crewmates は Standard 以外で no-op になる注意喚起。この見本は
+    // それを踏むための器なので、L39 が1件だけ出るのが正しい状態 (0件なら L39 が鳴っていない)。
+    it("リンター: L39 (crewmates は ふつうの ゲームモードだけ) だけが警告される", () => {
+        const parsed = JSON.parse(mienakusuruyaShowcaseRaw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        if (!result.def.logic) throw new Error("fixture は logic を持つ前提");
+        const warnings = lintRoleLogic(result.def.logic, undefined, { basis: result.def.basis, abilityCooldown: result.def.abilityCooldown });
+        expect(warnings.map((w) => w.rule)).toEqual(["L39"]);
+    });
+
+    it("rolecode (EKR1.) のエンコード→デコード ラウンドトリップで AST が deep-equal になる", () => {
+        const parsed = JSON.parse(mienakusuruyaShowcaseRaw);
+        const validated = validateEkrDefinition(parsed);
+        if (!validated.ok) throw new Error(validated.error);
+
+        const code = encodeRoleCode(JSON.stringify(validated.def));
+        expect(code.startsWith(ROLECODE_PREFIX)).toBe(true);
+
+        const roundTripped = validateEkrDefinition(JSON.parse(decodeRoleCode(code)));
+        if (!roundTripped.ok) throw new Error(roundTripped.error);
+
+        expect(roundTripped.def).toEqual(validated.def);
+        expect(encodeRoleCode(JSON.stringify(roundTripped.def))).toBe(code);
+    });
+});
+
+describe("golden fixture: role-kagenonakama-showcase.ekrole.json (Wave 11 見本・なかまには見える)", () => {
+    it("validate に合格する", () => {
+        const parsed = JSON.parse(kagenonakamaShowcaseRaw);
+        const result = validateEkrDefinition(parsed);
+        expect(result.ok, result.ok ? "" : (result as { error: string }).error).toBe(true);
+    });
+
+    it("hideFrom enemies + interval 3 (述語付き経路の器)", () => {
+        const parsed = JSON.parse(kagenonakamaShowcaseRaw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        if (!result.def.logic) throw new Error("fixture は logic を持つ前提");
+
+        expect(result.def.basis).toBe("phantom");
+        expect(result.def.team).toBe("impostor");
+        expect(result.def.abilityCooldown).toBe(20);
+        const give = result.def.logic.rules.flatMap((r) => r.do).find((n) => n.op === "effect_give");
+        expect(give).toEqual({ op: "effect_give", target: "self", kind: "invisible", seconds: 10, hideFrom: "enemies", interval: 3 });
+    });
+
+    it("リンター: L39 (なかまいがいから も通常ゲームモード限定) だけが警告される (interval 3 は L40 の閾値ちょうどなので警告しない)", () => {
+        const parsed = JSON.parse(kagenonakamaShowcaseRaw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        if (!result.def.logic) throw new Error("fixture は logic を持つ前提");
+        const warnings = lintRoleLogic(result.def.logic, undefined, { basis: result.def.basis, abilityCooldown: result.def.abilityCooldown });
+        expect(warnings.map((w) => w.rule)).toEqual(["L39"]);
+    });
+
+    it("rolecode (EKR1.) のエンコード→デコード ラウンドトリップで AST が deep-equal になる", () => {
+        const parsed = JSON.parse(kagenonakamaShowcaseRaw);
         const validated = validateEkrDefinition(parsed);
         if (!validated.ok) throw new Error(validated.error);
 

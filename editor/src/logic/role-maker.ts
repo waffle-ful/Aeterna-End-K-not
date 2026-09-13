@@ -196,9 +196,11 @@ function refreshKillCdVisibility(): void {
     $("rm-kill-cd-row").hidden = !$<HTMLInputElement>("rm-can-kill").checked;
 }
 
-/** Wave 9 (契約 §1.2): とくいわざの まちじかん欄は「だれかを えらぶ」を選んだときだけ表示する。 */
+/** Wave 9 (契約 §1.2)・Wave 11 (契約 §2 CD 行): とくいわざの まちじかん欄は
+ *  「だれかを えらぶ」「きえるボタンをおす」を選んだときに表示する ("ボタンをおす" のときだけ
+ *  非表示 — その場合はホストが「ファントム化」を ON にしたときだけ効くので L32 でヒントする)。 */
 function refreshAbilityCdVisibility(): void {
-    $("rm-ability-cd-row").hidden = $<HTMLSelectElement>("rm-basis").value !== "shapeshift";
+    $("rm-ability-cd-row").hidden = $<HTMLSelectElement>("rm-basis").value === "pet";
 }
 
 /** フォーム入力欄 → 生の値 (未検証・未クランプ)。name/author はユーザーの入力途中の値をそのまま読む。

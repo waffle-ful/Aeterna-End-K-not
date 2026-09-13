@@ -43,7 +43,8 @@
         "do": [
           { "op": "var_set", "name": "うらみ", "value": { "e": "lit", "v": 0 } },
           { "op": "notify", "text": "夜が来た…", "seconds": 3 },
-          { "op": "vote_weight_set", "value": 2 }
+          { "op": "vote_weight_set", "value": 2 },
+          { "op": "effect_give", "target": "self", "kind": "invisible", "seconds": 8, "hideFrom": "everyone", "corpse": "stay", "interval": 3 }
         ]
       },
       {

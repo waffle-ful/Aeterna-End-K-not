@@ -1,0 +1,29 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "きえや",
+  "author": "EKN Sample",
+  "description": "きえるボタンをおすと、8びょうだけ すがたが きえる",
+  "color": "#8fa3c8",
+  "team": "crewmate",
+  "canKill": false,
+  "killCooldown": 25,
+  "canVent": false,
+  "visionMultiplier": 1,
+  "winCondition": "team",
+  "basis": "phantom",
+  "abilityCooldown": 40,
+  "logic": {
+    "version": 1,
+    "variables": [],
+    "rules": [
+      {
+        "when": "on_pet",
+        "do": [
+          { "op": "effect_give", "target": "self", "kind": "invisible", "seconds": 8 },
+          { "op": "notify", "text": "きえた！", "seconds": 2 }
+        ]
+      }
+    ]
+  }
+}

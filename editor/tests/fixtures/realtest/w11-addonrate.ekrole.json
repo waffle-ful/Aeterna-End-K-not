@@ -1,0 +1,30 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "つけつづけや",
+  "author": "EKN Sample",
+  "description": "まいびょう じぶんに 俊足をつけようとする (レート関所の アーム)",
+  "color": "#c0a03f",
+  "team": "crewmate",
+  "canKill": false,
+  "killCooldown": 25,
+  "canVent": false,
+  "visionMultiplier": 1,
+  "winCondition": "team",
+  "logic": {
+    "version": 1,
+    "variables": [],
+    "rules": [
+      {
+        "when": "on_second",
+        "do": [
+          {
+            "op": "addon_give",
+            "target": "self",
+            "addon": "Flash"
+          }
+        ]
+      }
+    ]
+  }
+}

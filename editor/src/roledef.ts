@@ -40,7 +40,8 @@ export const KILL_COOLDOWN_MAX = 180;
 export const KILL_COOLDOWN_DEFAULT = 25;
 
 // Wave 9 (契約 §1) — 「はつどうのしかた」。省略 = "pet" (完全後方互換)。
-export const EKR_BASIS_VALUES = ["pet", "shapeshift"] as const;
+// Wave 11 (契約 §2) — "phantom" (きえるボタンをおす) を追加。
+export const EKR_BASIS_VALUES = ["pet", "shapeshift", "phantom"] as const;
 export type EkrBasis = (typeof EKR_BASIS_VALUES)[number];
 export const EKR_BASIS_DEFAULT: EkrBasis = "pet";
 
@@ -305,16 +306,38 @@ export const RECRUIT_TARGET_VALUES = ["ctx", "linked", "saved1", "saved2", "near
 // ---------------------------------------------------------------------------
 // effect_give の効果種別。実効値 (haste ×1.5 / slow ×0.5 / freeze = 移動不能 / blind 視界 0.3) は
 // エンジン側の固定値で、作者には数値を開けない (契約 §1.1 — radius tier と同じ方針)。
+// Wave 11 (契約 §3) — "invisible" (すがたをけす) を追加。こちらは hideFrom/corpse/interval の
+// 3つの省略可フィールドを作者が決められる (下記 EFFECT_HIDE_FROM_VALUES 等)。
 // ⚠️ C# 側 (Modules/Ekm/EkmLogicRuntime.cs の EkrEffectKinds) と同じ並び・同じ綴りを保つこと。
-export const EFFECT_KIND_VALUES = ["haste", "slow", "freeze", "blind"] as const;
+export const EFFECT_KIND_VALUES = ["haste", "slow", "freeze", "blind", "invisible"] as const;
 export type EffectKind = (typeof EFFECT_KIND_VALUES)[number];
 // seconds の下限は共通 1、上限は kind 別 — freeze だけ短い (移動権の剥奪なので drag の 1..10 と同格)。
+// invisible も他とは別枠の上限 (契約 §3)。
 export const EFFECT_SECONDS_MIN = 1;
 export const EFFECT_SECONDS_MAX = 30;
 export const EFFECT_FREEZE_SECONDS_MAX = 10;
+export const EFFECT_INVISIBLE_SECONDS_MAX = 20;
 export function effectMaxSeconds(kind: EffectKind): number {
-    return kind === "freeze" ? EFFECT_FREEZE_SECONDS_MAX : EFFECT_SECONDS_MAX;
+    if (kind === "freeze") return EFFECT_FREEZE_SECONDS_MAX;
+    if (kind === "invisible") return EFFECT_INVISIBLE_SECONDS_MAX;
+    return EFFECT_SECONDS_MAX;
 }
+
+// Wave 11 (契約 §3) — kind:"invisible" のときだけ有効な省略可フィールド3つ。
+// kind が invisible 以外のときにこれらが存在すれば文書 reject (validateNode 参照)。
+// hideFrom: 省略 = "everyone" (みんなから)。"crewmates" = インポスターには見える (家の phantom:true
+// 経路)。"enemies" = なかまには見える (述語付きの新設経路)。
+export const EFFECT_HIDE_FROM_VALUES = ["everyone", "crewmates", "enemies"] as const;
+export type EffectHideFrom = (typeof EFFECT_HIDE_FROM_VALUES)[number];
+export const EFFECT_HIDE_FROM_DEFAULT: EffectHideFrom = "everyone";
+// corpse: 省略 = "vanish" (しんだら きえる)。"stay" = しんだら のこる (キル直前に可視化してから死体を置く)。
+export const EFFECT_CORPSE_VALUES = ["vanish", "stay"] as const;
+export type EffectCorpse = (typeof EFFECT_CORPSE_VALUES)[number];
+export const EFFECT_CORPSE_DEFAULT: EffectCorpse = "vanish";
+// interval: かけなおしの間隔 (秒)。整数 1..60・既定 5 (per-holder のレート — 3未満はリンタ L40 が警告)。
+export const EFFECT_INTERVAL_MIN = 1;
+export const EFFECT_INTERVAL_MAX = 60;
+export const EFFECT_INTERVAL_DEFAULT = 5;
 // effect_give.target は単数セレクタ全種 (self も可 — 「じぶんをはやくする」は正当)。
 export const EFFECT_TARGET_VALUES = TARGET_SINGLE_VALUES;
 // recruit.slot (契約 §2): 変換先スロットの指名。省略 = 自分と同じ役職 (正準形では書き出さない)。
@@ -508,7 +531,16 @@ export type LogicNode =
     // 省略 = 自分と同じ役職 (完全後方互換・正準形ではフィールドごと省略)。
     | { op: "recruit"; target: (typeof RECRUIT_TARGET_VALUES)[number]; slot?: number }
     // Wave 5 (契約 §1) — 相手に持続効果をかける。target/kind/seconds すべて必須 (既定を作らない)。
-    | { op: "effect_give"; target: (typeof EFFECT_TARGET_VALUES)[number]; kind: EffectKind; seconds: number }
+    // Wave 11 (契約 §3) — hideFrom/corpse/interval は kind:"invisible" のときだけ持てる省略可フィールド。
+    | {
+          op: "effect_give";
+          target: (typeof EFFECT_TARGET_VALUES)[number];
+          kind: EffectKind;
+          seconds: number;
+          hideFrom?: EffectHideFrom;
+          corpse?: EffectCorpse;
+          interval?: number;
+      }
     // Wave 6 (§1) — とばす。slot は cno_spawn と同じ枠を共有する。dir は
     // launch 時に1回だけ解決 (追尾しない)。speed は任意・省略 = medium (既定値は検証層で畳み込むため
     // 明示 "medium" も AST では省略される — validateNode 参照)。
@@ -1331,13 +1363,25 @@ function validateNode(raw: unknown, varNames: ReadonlySet<string>, path: string,
             const slot = expectRangeInt(raw.slot, RECRUIT_SLOT_MIN, RECRUIT_SLOT_MAX, `${path}.slot`);
             return { node: { op: "recruit", target, slot }, depth: 1, count: 1 };
         }
-        // Wave 5 (§1/§3) — こうかをかける。3フィールドとも必須なので
-        // 畳み込み (省略) は無し。seconds の上限は kind 別 (freeze ≤10 / 他 ≤30)。
+        // Wave 5 (§1/§3) — こうかをかける。target/kind/seconds の3フィールドは必須なので
+        // 畳み込み (省略) は無し。seconds の上限は kind 別 (freeze ≤10 / invisible ≤20 / 他 ≤30)。
+        // Wave 11 (契約 §3/§6) — hideFrom/corpse/interval は kind:"invisible" のときだけ持てる
+        // 省略可フィールド。他 kind で存在すれば on_cno_touch.slot と同じ対称検査で reject する。
         case "effect_give": {
             const target = expectEnum(raw.target, EFFECT_TARGET_VALUES, `${path}.target`);
             const kind = expectEnum(raw.kind, EFFECT_KIND_VALUES, `${path}.kind`);
             const seconds = expectRangeNumber(raw.seconds, EFFECT_SECONDS_MIN, effectMaxSeconds(kind), `${path}.seconds`);
-            return { node: { op: "effect_give", target, kind, seconds }, depth: 1, count: 1 };
+            if (kind !== "invisible") {
+                if (raw.hideFrom !== undefined) fail(`${path}.hideFrom は kind "invisible" 専用です`);
+                if (raw.corpse !== undefined) fail(`${path}.corpse は kind "invisible" 専用です`);
+                if (raw.interval !== undefined) fail(`${path}.interval は kind "invisible" 専用です`);
+                return { node: { op: "effect_give", target, kind, seconds }, depth: 1, count: 1 };
+            }
+            const node: Extract<LogicNode, { op: "effect_give" }> = { op: "effect_give", target, kind, seconds };
+            if (raw.hideFrom !== undefined) node.hideFrom = expectEnum(raw.hideFrom, EFFECT_HIDE_FROM_VALUES, `${path}.hideFrom`);
+            if (raw.corpse !== undefined) node.corpse = expectEnum(raw.corpse, EFFECT_CORPSE_VALUES, `${path}.corpse`);
+            if (raw.interval !== undefined) node.interval = expectRangeInt(raw.interval, EFFECT_INTERVAL_MIN, EFFECT_INTERVAL_MAX, `${path}.interval`);
+            return { node, depth: 1, count: 1 };
         }
         // Wave 6 (§1/§4) — とばす。slot は cno_spawn と同じ枠 (1..3)。
         // speed は任意・省略 = medium。契約 §1/§4 は「既定値は書き出さない」を明記しており (recruit.slot

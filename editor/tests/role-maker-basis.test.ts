@@ -7,14 +7,14 @@ import { normalizeBasisDraft } from "../src/logic/role-maker";
 import { EKR_BASIS_DEFAULT, EKR_BASIS_VALUES } from "../src/roledef";
 
 describe("normalizeBasisDraft (role-maker.ts のフォーム下書き復元)", () => {
-    it("pet/shapeshift の2値はそのまま通す", () => {
+    it("pet/shapeshift/phantom の3値はそのまま通す (Wave 11 で phantom 追加)", () => {
         for (const basis of EKR_BASIS_VALUES) {
             expect(normalizeBasisDraft(basis)).toBe(basis);
         }
     });
 
     it("不正な basis 文字列 (未知の値・大文字小文字違い含む) は既定 pet へフォールバックする", () => {
-        for (const bad of ["phantom", "PET", "Shapeshift", " pet", ""]) {
+        for (const bad of ["vanish", "PET", "Shapeshift", "Phantom", " pet", ""]) {
             expect(normalizeBasisDraft(bad)).toBe(EKR_BASIS_DEFAULT);
         }
     });

@@ -1,0 +1,35 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "かくしや",
+  "author": "EKN Sample",
+  "description": "きえるボタンで すがたを けし、ころしたあとも いっしゅん きえる。しんでも しにがいは のこる",
+  "color": "#6b5b8c",
+  "team": "neutral",
+  "canKill": true,
+  "killCooldown": 25,
+  "canVent": true,
+  "visionMultiplier": 1,
+  "winCondition": "team",
+  "basis": "phantom",
+  "abilityCooldown": 35,
+  "logic": {
+    "version": 1,
+    "variables": [],
+    "rules": [
+      {
+        "when": "on_pet",
+        "do": [
+          { "op": "effect_give", "target": "self", "kind": "invisible", "seconds": 6, "hideFrom": "everyone", "corpse": "stay" },
+          { "op": "notify", "text": "かくれた…", "seconds": 2 }
+        ]
+      },
+      {
+        "when": "on_kill",
+        "do": [
+          { "op": "effect_give", "target": "self", "kind": "invisible", "seconds": 3 }
+        ]
+      }
+    ]
+  }
+}

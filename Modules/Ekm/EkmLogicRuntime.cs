@@ -131,8 +131,15 @@ public sealed class EkrNode
     public int FailChance;
     public int Noise;
 
-    // Wave 5 (effect_give): かける効果の種類 ("haste" | "slow" | "freeze" | "blind")。
+    // Wave 5 (effect_give): かける効果の種類 ("haste" | "slow" | "freeze" | "blind" | "invisible")。
     public string EffectKind;
+
+    // Wave 11 (effect_give kind:"invisible" 専用の省略可フィールド)。
+    // hideFrom ("everyone" 既定 | "crewmates" | "enemies")・corpse ("vanish" 既定 | "stay")・
+    // interval (整数 1..60・既定 5・per-holder のかけなおし間隔)。kind != "invisible" で指定 = 文書 reject。
+    public string HideFrom;
+    public string Corpse;
+    public int EffectInterval;
 
     // Wave 6 (cno_launch): とばす向き ("move" | "ctx" | "marker1".."marker4") と
     // 速さ tier ("slow" | "medium" | "fast")。速さは任意フィールドで、省略時はパース時に "medium" を焼き込む
@@ -437,10 +444,16 @@ public sealed class EkrLogicDef
     // OtherSelectors は Wave 4 で linked を含むため専用リストにする。
     private static readonly string[] LinkTargetSelectors = ["ctx", "saved1", "saved2", "nearest", "random"];
 
-    // Wave 5: effect_give の効果種別と kind 別の秒数上限。
-    // freeze だけ上限が短い (移動権の剥奪なので drag の 1..10 と同格 — 契約 §1)。
+    // Wave 5/11: effect_give の効果種別と kind 別の秒数上限。
+    // freeze だけ上限が短い (移動権の剥奪なので drag の 1..10 と同格 — 契約 §1)。invisible も専用の上限
+    // (Wave 11 契約 §3: 1..20)。
     // ⚠️ TS 側 (editor/src/roledef.ts) と同じ並び・同じ綴りを保つこと (drift 検出は共有 fixture)。
-    public static readonly string[] EkrEffectKinds = ["haste", "slow", "freeze", "blind"];
+    public static readonly string[] EkrEffectKinds = ["haste", "slow", "freeze", "blind", "invisible"];
+
+    // Wave 11 (契約 §3): kind:"invisible" の省略可フィールドの受理値。
+    // ⚠️ TS 側と同じ並び・同じ綴りを保つこと (drift 検出は共有 fixture)。
+    public static readonly string[] EkrInvisibleHideFromValues = ["everyone", "crewmates", "enemies"];
+    public static readonly string[] EkrInvisibleCorpseValues = ["vanish", "stay"];
 
     // Wave 6: cno_launch の dir / speed 受理値。
     // ⚠️ TS 側 (editor/src/roledef.ts) と同じ並び・同じ綴りを保つこと (drift 検出は共有 fixture)。
@@ -448,7 +461,7 @@ public sealed class EkrLogicDef
 
     public static readonly string[] EkrLaunchSpeeds = ["slow", "medium", "fast"];
 
-    public static float EffectMaxSeconds(string kind) => kind == "freeze" ? 10f : 30f;
+    public static float EffectMaxSeconds(string kind) => kind switch { "freeze" => 10f, "invisible" => 20f, _ => 30f };
 
     // Wave 10 (契約 §4/§5): addon_give/addon_remove.target は self 可・linked 不可
     // (LinkTargetSelectors に self を足したもの)。
@@ -1074,10 +1087,10 @@ public sealed class EkrLogicDef
 
                 break;
 
-            // ── Wave 5: 持続効果 ────────────────────────────────
+            // ── Wave 5/11: 持続効果 ────────────────────────────────
 
             // §1: target/kind/seconds すべて必須 (既定を作らない — 「相手にかける」が本義)。
-            // seconds の上限は kind 別 (freeze ≤10 / 他 ≤30)。
+            // seconds の上限は kind 別 (freeze ≤10 / invisible ≤20 / 他 ≤30)。
             case "effect_give":
                 if (!TryGetEnum(nodeEl, "target", SingleSelectors, out n.Target, out err)) return false;
                 if (!TryGetEnum(nodeEl, "kind", EkrEffectKinds, out n.EffectKind, out err)) return false;
@@ -1090,6 +1103,33 @@ public sealed class EkrLogicDef
                 }
 
                 n.Seconds = effectSec;
+
+                // Wave 11 (契約 §3): hideFrom / corpse / interval は kind:"invisible" のときだけの
+                // 省略可フィールド (省略時の既定は "everyone" / "vanish" / 5)。他 kind での指定・
+                // null・未知値・範囲外はすべて文書 reject。
+                n.HideFrom = "everyone";
+                n.Corpse = "vanish";
+                n.EffectInterval = 5;
+
+                bool hasHideFrom = nodeEl.TryGetProperty("hideFrom", out _);
+                bool hasCorpse = nodeEl.TryGetProperty("corpse", out _);
+                bool hasInterval = nodeEl.TryGetProperty("interval", out _);
+
+                if (n.EffectKind != "invisible")
+                {
+                    if (hasHideFrom || hasCorpse || hasInterval)
+                    {
+                        err = "hideFrom / corpse / interval は「すがたをけす」(kind:invisible) のときだけ使えます";
+                        return false;
+                    }
+                }
+                else
+                {
+                    if (hasHideFrom && !TryGetEnum(nodeEl, "hideFrom", EkrInvisibleHideFromValues, out n.HideFrom, out err)) return false;
+                    if (hasCorpse && !TryGetEnum(nodeEl, "corpse", EkrInvisibleCorpseValues, out n.Corpse, out err)) return false;
+                    if (hasInterval && !TryGetInt(nodeEl, "interval", 1, 60, out n.EffectInterval, out err)) return false;
+                }
+
                 break;
 
             // ── Wave 6: 発射体プリミティブ ──────────────────────

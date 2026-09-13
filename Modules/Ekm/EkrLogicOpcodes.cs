@@ -1398,9 +1398,37 @@ internal sealed class EkrActionSink : IEkrActionSink
         // ⚠ ホルダー生存ガードは意図的に付けない — §1.3 は on_death 起点 fiber からの実行を許す
         // (「死んだら爆発で周囲を凍らせる」型)。死んだ本人への適用は上の死者 no-op で自然に落ちる。
 
-        if (!EkrManager.TryConsumeEffectBudget(state)) return; // 超過は静かにドロップ (§1.4)
+        bool isInvisible = node.EffectKind == "invisible";
 
-        EkrManager.ApplyEffect(targetPc.PlayerId, node.EffectKind, node.Seconds, ctx.HolderId);
+        // Wave 11 (ヘッダ訂正6): 同時に透明にできる対象数の上限 (既存対象への再適用は除外)。
+        // 予算を消費する前に見る — ドロップは予算不消費。
+        if (isInvisible && !EkrManager.AllowsNewInvisibleTarget(targetPc.PlayerId))
+        {
+            Logger.Info($"EKR effect drop: {targetPc.GetRealName()} invisible reason=cap3 holder={Utils.GetPlayerById(ctx.HolderId)?.GetRealName() ?? ctx.HolderId.ToString()}", "EkrManager");
+            return;
+        }
+
+        // Wave 11 (契約 §3 予算②・ヘッダ訂正7): invisible だけの追加ハード関所。予算を消費する前に見る —
+        // ドロップは予算不消費 (§1.4) のため、SnapTo 残量ゲートは per-holder interval 消費より先。
+        if (isInvisible && !EkrManager.SnapToBudgetAllowsInvisible(targetPc))
+        {
+            Logger.Info($"EKR effect drop: {targetPc.GetRealName()} invisible reason=snapto holder={Utils.GetPlayerById(ctx.HolderId)?.GetRealName() ?? ctx.HolderId.ToString()}", "EkrManager");
+            return;
+        }
+
+        // Wave 11 (契約 §3 interval・ヘッダ訂正10): invisible だけ node 指定の per-holder 間隔 (作者が
+        // 1..60 で決める) を専用タイムスタンプで管理する。他 kind は既存の固定 2 秒間隔のまま。
+        bool withinBudget = isInvisible
+            ? EkrManager.TryConsumeEffectBudget(ref state.LastInvisibleGiveTime, node.EffectInterval)
+            : EkrManager.TryConsumeEffectBudget(ref state.LastEffectGiveTime, EkrManager.EffectPerHolderInterval);
+        if (!withinBudget)
+        {
+            // 超過は予算不消費でドロップ (§1.4)。invisible だけ理由付きで 1 行残す (レート関所が効いた証拠を実機で読むため)。
+            if (isInvisible) Logger.Info($"EKR effect drop: {targetPc.GetRealName()} invisible reason=rate holder={Utils.GetPlayerById(ctx.HolderId)?.GetRealName() ?? ctx.HolderId.ToString()}", "EkrManager");
+            return;
+        }
+
+        EkrManager.ApplyEffect(targetPc.PlayerId, node.EffectKind, node.Seconds, ctx.HolderId, node.HideFrom, node.Corpse);
     }
 
     private static void Exile(EkrNode node, EkrActionContext ctx)
