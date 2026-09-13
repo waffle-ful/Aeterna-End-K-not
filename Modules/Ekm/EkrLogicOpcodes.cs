@@ -125,6 +125,9 @@ internal sealed class EkrActionSink : IEkrActionSink
             case "win_join": WinJoin(node, ctx); break;
             // Wave 8
             case "forget": Forget(node, ctx); break;
+            // Wave 10
+            case "addon_give": AddonGive(node, ctx); break;
+            case "addon_remove": AddonRemove(node, ctx); break;
         }
     }
 
@@ -1414,5 +1417,30 @@ internal sealed class EkrActionSink : IEkrActionSink
 
         PlayerControl holderPc = ctx.HolderId.GetPlayer();
         Patches.CheckForEndVotingPatch.ForceExile(targetPc, holderPc);
+    }
+
+    // ── Wave 10 (契約 §4/§5): addon_give/addon_remove ──────────
+    // no-op 条件・レート・実行順は EkrManager.TryAddonGive/TryAddonRemove が正典。ここは解決だけ。
+
+    private static void AddonGive(EkrNode node, EkrActionContext ctx)
+    {
+        EkrHolderState state = EkrManager.GetHolderState(ctx.HolderId);
+        if (state == null) return;
+
+        PlayerControl targetPc = ResolveSingle(node.Target, ctx);
+        if (!targetPc) return; // 壊れた参照は静かに no-op・予算不消費 (§4)
+
+        EkrManager.TryAddonGive(state, ctx.HolderId, targetPc, node.Addon);
+    }
+
+    private static void AddonRemove(EkrNode node, EkrActionContext ctx)
+    {
+        EkrHolderState state = EkrManager.GetHolderState(ctx.HolderId);
+        if (state == null) return;
+
+        PlayerControl targetPc = ResolveSingle(node.Target, ctx);
+        if (!targetPc) return; // 壊れた参照は静かに no-op・予算不消費 (§5)
+
+        EkrManager.TryAddonRemove(state, ctx.HolderId, targetPc, node.Addon);
     }
 }

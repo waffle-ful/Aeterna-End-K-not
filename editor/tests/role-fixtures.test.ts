@@ -20,6 +20,9 @@ import kotodamaShowcaseRaw from "./fixtures/role-kotodama-showcase.ekrole.json?r
 import yubisashiShowcaseRaw from "./fixtures/role-yubisashi-showcase.ekrole.json?raw";
 import futaribunShowcaseRaw from "./fixtures/role-futaribun-showcase.ekrole.json?raw";
 import tamaShowcaseRaw from "./fixtures/role-tama-showcase.ekrole.json?raw";
+import kiyomeyaShowcaseRaw from "./fixtures/role-kiyomeya-showcase.ekrole.json?raw";
+import hashiriyaShowcaseRaw from "./fixtures/role-hashiriya-showcase.ekrole.json?raw";
+import noroiyaShowcaseRaw from "./fixtures/role-noroiya-showcase.ekrole.json?raw";
 import { ROLECODE_PREFIX, decodeRoleCode, encodeRoleCode } from "../src/rolecode";
 import { LOGIC_WHEN_VALUES, type EkrTeam, validateEkrDefinition, type LogicNode, type LogicWhen } from "../src/roledef";
 import { lintRoleLogic } from "../src/logic/lint-role";
@@ -107,6 +110,8 @@ describe("golden fixture: role-full-course.ekrole.json (10イベント・主要o
             "win_join",
             // Wave 8 (§2): わすれる。
             "forget",
+            // Wave 10 (§4/§5): つける・はがす。
+            "addon_give", "addon_remove",
         ];
         for (const op of expectedOps) {
             expect(ops.has(op), `op "${op}" が fixture 内で使われていない`).toBe(true);
@@ -727,6 +732,139 @@ describe("golden fixture: role-tama-showcase.ekrole.json (Wave 9 降格分・既
 
     it("rolecode (EKR1.) のエンコード→デコード ラウンドトリップで AST が deep-equal になる", () => {
         const parsed = JSON.parse(tamaShowcaseRaw);
+        const validated = validateEkrDefinition(parsed);
+        if (!validated.ok) throw new Error(validated.error);
+
+        const code = encodeRoleCode(JSON.stringify(validated.def));
+        expect(code.startsWith(ROLECODE_PREFIX)).toBe(true);
+
+        const roundTripped = validateEkrDefinition(JSON.parse(decodeRoleCode(code)));
+        if (!roundTripped.ok) throw new Error(roundTripped.error);
+
+        expect(roundTripped.def).toEqual(validated.def);
+        expect(encodeRoleCode(JSON.stringify(roundTripped.def))).toBe(code);
+    });
+});
+
+// Wave 10 (§10 2026-09-13): テンプレギャラリー見本3本。つける・はがす (アドオン付与) の
+// 最小構成 (救護型/自己強化型/呪い合成型)。
+describe("golden fixture: role-hashiriya-showcase.ekrole.json (Wave 10 テンプレギャラリー見本・タスクで つよくなる)", () => {
+    it("validate に合格する", () => {
+        const parsed = JSON.parse(hashiriyaShowcaseRaw);
+        const result = validateEkrDefinition(parsed);
+        expect(result.ok, result.ok ? "" : (result as { error: string }).error).toBe(true);
+    });
+
+    it("addon_give(self, Flash) を使っている", () => {
+        const parsed = JSON.parse(hashiriyaShowcaseRaw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        if (!result.def.logic) throw new Error("fixture は logic を持つ前提");
+
+        const give = result.def.logic.rules.flatMap((r) => r.do).find((n) => n.op === "addon_give");
+        expect(give).toEqual({ op: "addon_give", target: "self", addon: "Flash" });
+    });
+
+    it("リンター (spec §6・Wave 10 の L34〜L38 含む) は警告0件", () => {
+        const parsed = JSON.parse(hashiriyaShowcaseRaw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        if (!result.def.logic) throw new Error("fixture は logic を持つ前提");
+        expect(lintRoleLogic(result.def.logic)).toEqual([]);
+    });
+
+    it("rolecode (EKR1.) のエンコード→デコード ラウンドトリップで AST が deep-equal になる", () => {
+        const parsed = JSON.parse(hashiriyaShowcaseRaw);
+        const validated = validateEkrDefinition(parsed);
+        if (!validated.ok) throw new Error(validated.error);
+
+        const code = encodeRoleCode(JSON.stringify(validated.def));
+        expect(code.startsWith(ROLECODE_PREFIX)).toBe(true);
+
+        const roundTripped = validateEkrDefinition(JSON.parse(decodeRoleCode(code)));
+        if (!roundTripped.ok) throw new Error(roundTripped.error);
+
+        expect(roundTripped.def).toEqual(validated.def);
+        expect(encodeRoleCode(JSON.stringify(roundTripped.def))).toBe(code);
+    });
+});
+
+// きよめや (救護型) は addon_remove の "all" を使う唯一の fixture なので、契約 §8 L38 の
+// (info) ヒントが1件出ることをそのまま golden にする — 他の showcase と違い「警告0件」ではない。
+describe("golden fixture: role-kiyomeya-showcase.ekrole.json (Wave 10 テンプレギャラリー見本・ぜんぶ はがして あげる)", () => {
+    it("validate に合格する", () => {
+        const parsed = JSON.parse(kiyomeyaShowcaseRaw);
+        const result = validateEkrDefinition(parsed);
+        expect(result.ok, result.ok ? "" : (result as { error: string }).error).toBe(true);
+    });
+
+    it("addon_remove(nearest, all) を使っている", () => {
+        const parsed = JSON.parse(kiyomeyaShowcaseRaw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        if (!result.def.logic) throw new Error("fixture は logic を持つ前提");
+
+        const remove = result.def.logic.rules.flatMap((r) => r.do).find((n) => n.op === "addon_remove");
+        expect(remove).toEqual({ op: "addon_remove", target: "nearest", addon: "all" });
+    });
+
+    it("リンター: L38 (all を はがす) だけが警告される", () => {
+        const parsed = JSON.parse(kiyomeyaShowcaseRaw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        if (!result.def.logic) throw new Error("fixture は logic を持つ前提");
+        const warnings = lintRoleLogic(result.def.logic);
+        expect(warnings.map((w) => w.rule)).toEqual(["L38"]);
+    });
+
+    it("rolecode (EKR1.) のエンコード→デコード ラウンドトリップで AST が deep-equal になる", () => {
+        const parsed = JSON.parse(kiyomeyaShowcaseRaw);
+        const validated = validateEkrDefinition(parsed);
+        if (!validated.ok) throw new Error(validated.error);
+
+        const code = encodeRoleCode(JSON.stringify(validated.def));
+        expect(code.startsWith(ROLECODE_PREFIX)).toBe(true);
+
+        const roundTripped = validateEkrDefinition(JSON.parse(decodeRoleCode(code)));
+        if (!roundTripped.ok) throw new Error(roundTripped.error);
+
+        expect(roundTripped.def).toEqual(validated.def);
+        expect(encodeRoleCode(JSON.stringify(roundTripped.def))).toBe(code);
+    });
+});
+
+describe("golden fixture: role-noroiya-showcase.ekrole.json (Wave 10 テンプレギャラリー見本・つけて おぼえて はがす)", () => {
+    it("validate に合格する", () => {
+        const parsed = JSON.parse(noroiyaShowcaseRaw);
+        const result = validateEkrDefinition(parsed);
+        expect(result.ok, result.ok ? "" : (result as { error: string }).error).toBe(true);
+    });
+
+    it("addon_give(nearest, Unlucky) + remember(1, nearest) → addon_remove(saved1, Unlucky) の呪い合成を使っている", () => {
+        const parsed = JSON.parse(noroiyaShowcaseRaw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        if (!result.def.logic) throw new Error("fixture は logic を持つ前提");
+
+        expect(result.def.team).toBe("impostor");
+        const onPet = result.def.logic.rules.find((r) => r.when === "on_pet");
+        expect(onPet?.do.some((n) => n.op === "addon_give" && n.target === "nearest" && n.addon === "Unlucky")).toBe(true);
+        expect(onPet?.do.some((n) => n.op === "remember" && n.slot === 1 && n.target === "nearest")).toBe(true);
+
+        const onMeetingEnd = result.def.logic.rules.find((r) => r.when === "on_meeting_end");
+        expect(onMeetingEnd?.do).toEqual([{ op: "addon_remove", target: "saved1", addon: "Unlucky" }]);
+    });
+
+    it("リンター (spec §6・Wave 10 の L34〜L38 含む) は警告0件 (give/remove が別ルールなので L36 は発火しない)", () => {
+        const parsed = JSON.parse(noroiyaShowcaseRaw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        if (!result.def.logic) throw new Error("fixture は logic を持つ前提");
+        expect(lintRoleLogic(result.def.logic)).toEqual([]);
+    });
+
+    it("rolecode (EKR1.) のエンコード→デコード ラウンドトリップで AST が deep-equal になる", () => {
+        const parsed = JSON.parse(noroiyaShowcaseRaw);
         const validated = validateEkrDefinition(parsed);
         if (!validated.ok) throw new Error(validated.error);
 

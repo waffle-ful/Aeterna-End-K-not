@@ -32,6 +32,8 @@
         <Compile Include="..\..\Modules\Ekm\EkrDefinition.cs" Link="src\Ekm\EkrDefinition.cs" />
         <Compile Include="..\..\Modules\Ekm\EkrPassives.cs" Link="src\Ekm\EkrPassives.cs" />
         <Compile Include="..\..\Modules\Ekm\EkmLogicRuntime.cs" Link="src\Ekm\EkmLogicRuntime.cs" />
+        <!-- Wave 10: アドオン名一覧 (生成物)。Unity/BepInEx 非依存なので他の Ekm ソースと同じ区画に置ける。 -->
+        <Compile Include="..\..\Modules\Ekm\EkrAddonCatalog.cs" Link="src\Ekm\EkrAddonCatalog.cs" />
         <Compile Include="..\..\Modules\Random\IRandom.cs" Link="src\Random\IRandom.cs" />
         <Compile Include="..\..\Modules\Random\MersenneTwister.cs" Link="src\Random\MersenneTwister.cs" />
         <Compile Include="..\..\Modules\Random\Xorshift.cs" Link="src\Random\Xorshift.cs" />
@@ -52,6 +54,14 @@
          テストで先に落とす。 -->
     <ItemGroup>
         <None Include="..\..\Resources\EkRoles\*.ekrole.json" Link="embedded-roles\%(Filename)%(Extension)">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+    </ItemGroup>
+
+    <!-- Wave 10: アドオン一覧の生成物 (TS 側)。EkrAddonCatalog.All との集合一致を実行時に検査するため、
+         テキストとしてそのまま読む (TS のコンパイルはしない)。 -->
+    <ItemGroup>
+        <None Include="..\..\editor\src\generated\ekr-addons.ts" Link="generated\ekr-addons.ts">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
     </ItemGroup>

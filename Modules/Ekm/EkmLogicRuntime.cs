@@ -143,6 +143,10 @@ public sealed class EkrNode
     // Wave 2 (vote_weight_set.value 0..3): 汎用の整数引数置き場 (他 op の Slot/Size とは意味論が
     // 別物なので専用フィールドにする — 「票のちから」を CNO slot と誤読させない)。
     public int IntArg;
+
+    // Wave 10 (addon_give/addon_remove): つける/はがす対象のアドオン名 (CustomRoles の enum 名そのもの)。
+    // addon_remove だけ追加で "all" を受理する。
+    public string Addon;
 }
 
 public sealed class EkrExpr
@@ -446,6 +450,16 @@ public sealed class EkrLogicDef
 
     public static float EffectMaxSeconds(string kind) => kind == "freeze" ? 10f : 30f;
 
+    // Wave 10 (契約 §4/§5): addon_give/addon_remove.target は self 可・linked 不可
+    // (LinkTargetSelectors に self を足したもの)。
+    private static readonly string[] AddonTargetSelectors = ["self", "ctx", "saved1", "saved2", "nearest", "random"];
+
+    // Wave 10 (契約 §2/§7): addon の値集合 = EkrAddonCatalog.All (IAddon 実装 121 種の CustomRoles 名)。
+    // 完全一致・大小区別で検証する (Enum.TryParse は使わない — ゴースト役職/陣営変換タグの enum 名まで
+    // 通ってしまうため)。addon_remove だけ "all" を追加で受理する。
+    private static readonly string[] AddonGiveValues = [.. EkrAddonCatalog.All];
+    private static readonly string[] AddonRemoveValues = [.. EkrAddonCatalog.All, "all"];
+
     private static readonly HashSet<string> ControlOps = ["if", "wait", "stop", "var_set", "var_add"];
 
     private static readonly HashSet<string> ActionOps =
@@ -468,7 +482,9 @@ public sealed class EkrLogicDef
         // Wave 7: 勝利条件
         "win", "win_join",
         // Wave 8: 記憶解除
-        "forget"
+        "forget",
+        // Wave 10: アドオン付与
+        "addon_give", "addon_remove"
     ];
 
     private static readonly HashSet<string> ExprKinds =
@@ -1102,6 +1118,20 @@ public sealed class EkrLogicDef
                 }
                 else n.Target = "self";
 
+                break;
+
+            // ── Wave 10: アドオン付与 ─────────────────────────
+
+            // §4: target は self 可・linked 不可。addon は §2 集合の完全一致。
+            case "addon_give":
+                if (!TryGetEnum(nodeEl, "target", AddonTargetSelectors, out n.Target, out err)) return false;
+                if (!TryGetEnum(nodeEl, "addon", AddonGiveValues, out n.Addon, out err)) return false;
+                break;
+
+            // §5: addon_give と同じ target 受理値。addon だけ "all" を追加で受理する。
+            case "addon_remove":
+                if (!TryGetEnum(nodeEl, "target", AddonTargetSelectors, out n.Target, out err)) return false;
+                if (!TryGetEnum(nodeEl, "addon", AddonRemoveValues, out n.Addon, out err)) return false;
                 break;
         }
 

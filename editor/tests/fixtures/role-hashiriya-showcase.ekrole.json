@@ -1,0 +1,27 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "はしりや",
+  "author": "EKN Sample",
+  "description": "タスクをこなすたび、じぶんに 俊足のアドオンをつける",
+  "color": "#c08f3f",
+  "team": "crewmate",
+  "canKill": false,
+  "killCooldown": 25,
+  "canVent": false,
+  "visionMultiplier": 1,
+  "winCondition": "team",
+  "logic": {
+    "version": 1,
+    "variables": [],
+    "rules": [
+      {
+        "when": "on_task_complete",
+        "do": [
+          { "op": "addon_give", "target": "self", "addon": "Flash" },
+          { "op": "notify", "text": "足が軽い！", "seconds": 2 }
+        ]
+      }
+    ]
+  }
+}

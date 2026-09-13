@@ -19,7 +19,8 @@
 import * as Blockly from "blockly/core";
 import "blockly/blocks"; // math_number/logic_boolean 等の標準ブロックを Blockly.Blocks へ登録する副作用 import
 import * as jaMsg from "blockly/msg/ja";
-import { ALIVE_COUNT_VALUE_MAX, ALIVE_COUNT_VALUE_MIN, LOGIC_WHEN_VALUES, RECRUIT_SLOT_MAX, type LogicWhen } from "../roledef";
+import { ADDON_REMOVE_ALL, ALIVE_COUNT_VALUE_MAX, ALIVE_COUNT_VALUE_MIN, LOGIC_WHEN_VALUES, RECRUIT_SLOT_MAX, type LogicWhen } from "../roledef";
+import { ADDON_BY_ID, ADDON_META, type AddonGroup } from "../generated/ekr-addons";
 
 // 標準ブロック (logic_boolean 等) はラベルを %{BKY_...} メッセージキーで持つため、ロケールを
 // ロードしないと生キーがそのまま表示される。カスタムブロックは全て日本語直書きなので影響しない。
@@ -192,6 +193,9 @@ const TARGET_SINGLE_OPTIONS: [string, string][] = [
 ];
 // teleport_other は「相手を飛ばす」op なので じぶん を出さない (spec §3 のアクション表どおり)。
 const TARGET_OTHER_OPTIONS: [string, string][] = TARGET_SINGLE_OPTIONS.filter(([, v]) => v !== "self");
+// Wave 10 (契約 §4/§5/§7) — つける/はがすの対象。単数セレクタから「つないだ人」を除いた集合
+// (アドオンは張り替え対象を持たないので、専用に指す意味が無い — ADDON_TARGET_VALUES と揃える)。
+const ADDON_TARGET_OPTIONS: [string, string][] = TARGET_SINGLE_OPTIONS.filter(([, v]) => v !== "linked");
 // Wave 5 (§2): recruit の「かえるさき」。先頭の "" = 「じぶんとおなじ」で、
 // compile-role が正準形からフィールドごと省略する (ATTACK_KIND_OPTIONS の「すべて」と同じ作法)。
 // スロット番号はロビー構成への相対参照 (中身はホストが決める) なので、絶対語彙の禁止には触れない。
@@ -1009,6 +1013,65 @@ function defineDynamicVariableBlocks(): void {
     };
 }
 
+// ---------------------------------------------------------------------------
+// Wave 10 (契約 §2/§4/§5/§7) — つける・はがす (アドオン付与)
+// ---------------------------------------------------------------------------
+// ADDON ドロップダウンは動的ではない (生成物 ADDON_META は固定の 121 件) が、選んだ項目に応じて
+// ブロックのツールチップを差し替える (§7「表示は ja + ツールチップに info」) 必要があるため、
+// ekr_expr_var/ekr_do_var_set と同じく命令形で登録する (JSON block defs の tooltip は
+// 静的な文字列しか持てず、選択に追随できない)。
+const ADDON_GROUP_LABELS: Record<AddonGroup, string> = {
+    Helpful: "つよくなる",
+    Harmful: "よわくなる",
+    ImpOnly: "インポスターむけ",
+    Mixed: "そのほか",
+};
+
+// 生成物 ADDON_META は群ごとにまとまった順序で焼かれているため、ラベルに群名を前置するだけで
+// ドロップダウンが見た目の4分割になる (群をまたいで並べ替えない — 生成物の順序をそのまま使う)。
+const ADDON_DROPDOWN_OPTIONS: [string, string][] = ADDON_META.map((a) => [`[${ADDON_GROUP_LABELS[a.group]}] ${a.ja}`, a.id]);
+const ADDON_REMOVE_DROPDOWN_OPTIONS: [string, string][] = [["ぜんぶ", ADDON_REMOVE_ALL], ...ADDON_DROPDOWN_OPTIONS];
+
+/** 選ばれたアドオン id からブロックのツールチップ文言を作る (§7 の info 表示口)。 */
+function addonTooltip(addonId: string): string {
+    if (addonId === ADDON_REMOVE_ALL) return "手持ちのアドオンを ぜんぶ はがします。ゴースト役職や陣営の変化はそのままです。";
+    return ADDON_BY_ID.get(addonId)?.info ?? "";
+}
+
+function defineAddonBlocks(): void {
+    Blockly.Blocks["ekr_do_addon_give"] = {
+        init(this: Blockly.Block): void {
+            this.appendDummyInput()
+                .appendField(new Blockly.FieldDropdown(ADDON_TARGET_OPTIONS), "TARGET")
+                .appendField("に")
+                .appendField(new Blockly.FieldDropdown(ADDON_DROPDOWN_OPTIONS), "ADDON")
+                .appendField("を つける");
+            this.setInputsInline(true);
+            this.setPreviousStatement(true, null);
+            this.setNextStatement(true, null);
+            this.setColour(HUE_LINK);
+            // Blockly の setTooltip は関数も受け付け、表示のたびに呼び直される (今えらんでいる
+            // ADDON の値を毎回読み直せる — ドロップダウンの選択が変わってもツールチップが追随する)。
+            this.setTooltip(() => addonTooltip(String(this.getFieldValue("ADDON"))));
+        },
+    };
+
+    Blockly.Blocks["ekr_do_addon_remove"] = {
+        init(this: Blockly.Block): void {
+            this.appendDummyInput()
+                .appendField(new Blockly.FieldDropdown(ADDON_TARGET_OPTIONS), "TARGET")
+                .appendField("から")
+                .appendField(new Blockly.FieldDropdown(ADDON_REMOVE_DROPDOWN_OPTIONS), "ADDON")
+                .appendField("を はがす");
+            this.setInputsInline(true);
+            this.setPreviousStatement(true, null);
+            this.setNextStatement(true, null);
+            this.setColour(HUE_LINK);
+            this.setTooltip(() => addonTooltip(String(this.getFieldValue("ADDON"))));
+        },
+    };
+}
+
 let blocksDefined = false;
 
 /** ブロック定義をまとめて登録する。何度呼んでも二重登録しない。 */
@@ -1017,6 +1080,7 @@ export function defineRoleBlocks(): void {
     blocksDefined = true;
     Blockly.defineBlocksWithJsonArray(jsonBlockDefs());
     defineDynamicVariableBlocks();
+    defineAddonBlocks();
 }
 
 // ---------------------------------------------------------------------------
@@ -1124,6 +1188,8 @@ export function buildRoleToolbox(): Blockly.utils.toolbox.ToolboxDefinition {
                     { kind: "block", type: "ekr_do_unlink" },
                     { kind: "block", type: "ekr_do_recruit" },
                     { kind: "block", type: "ekr_do_effect_give" },
+                    { kind: "block", type: "ekr_do_addon_give" },
+                    { kind: "block", type: "ekr_do_addon_remove" },
                 ],
             },
             {

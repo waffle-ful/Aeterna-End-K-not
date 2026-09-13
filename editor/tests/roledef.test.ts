@@ -2071,3 +2071,59 @@ describe("logic 検証 Wave 8 (on_chat / forget)", () => {
         expect(validateEkrDefinition(withRule({ when: "on_chat", do: [{ op: "stop" }] })).ok).toBe(true);
     });
 });
+
+describe("logic 検証 Wave 10 (addon_give / addon_remove — つける・はがす)", () => {
+    function withRule(rule: Record<string, unknown>): Record<string, unknown> {
+        return { ...baseValid(), logic: { version: 1, rules: [rule] } };
+    }
+
+    it("addon_give: target は self/ctx/saved1/saved2/nearest/random を受理し、linked は reject", () => {
+        for (const target of ["self", "ctx", "saved1", "saved2", "nearest", "random"]) {
+            const r = validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "addon_give", target, addon: "Flash" }] }));
+            expect(r.ok, target).toBe(true);
+        }
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "addon_give", target: "linked", addon: "Flash" }] })).ok).toBe(false);
+    });
+
+    it("addon_give: addon は ADDON_VALUES の完全一致 (大小区別)・集合外/ゴースト役職名/陣営変換タグは reject", () => {
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "addon_give", target: "ctx", addon: "Flash" }] })).ok).toBe(true);
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "addon_give", target: "ctx", addon: "flash" }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "addon_give", target: "ctx", addon: "NotARealAddon" }] })).ok).toBe(false);
+        // GA/Charmed 等は CustomRoles enum の末尾 (ゴースト役職/陣営変換タグ) であって addon ではない。
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "addon_give", target: "ctx", addon: "GA" }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "addon_give", target: "ctx", addon: "Charmed" }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "addon_give", target: "ctx", addon: "all" }] })).ok).toBe(false);
+    });
+
+    it("addon_give: target/addon は必須 (欠落は reject)", () => {
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "addon_give", addon: "Flash" }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "addon_give", target: "ctx" }] })).ok).toBe(false);
+    });
+
+    it("addon_give は leaf ノード (depth 1, count 1)・self も受理する", () => {
+        const r = validateEkrDefinition(withRule({
+            when: "on_pet",
+            do: [{ op: "addon_give", target: "self", addon: "Flash" }, { op: "addon_give", target: "ctx", addon: "Torch" }],
+        }));
+        expect(r.ok).toBe(true);
+        if (r.ok) expect(r.def.logic?.rules[0].do).toHaveLength(2);
+    });
+
+    it("addon_remove: addon は ADDON_VALUES に加えて \"all\" も受理する", () => {
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "addon_remove", target: "ctx", addon: "Flash" }] })).ok).toBe(true);
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "addon_remove", target: "ctx", addon: "all" }] })).ok).toBe(true);
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "addon_remove", target: "ctx", addon: "ALL" }] })).ok).toBe(false);
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "addon_remove", target: "ctx", addon: "NotARealAddon" }] })).ok).toBe(false);
+    });
+
+    it("addon_remove: target は addon_give と同じ集合 (linked は reject)", () => {
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "addon_remove", target: "self", addon: "all" }] })).ok).toBe(true);
+        expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "addon_remove", target: "linked", addon: "all" }] })).ok).toBe(false);
+    });
+
+    it("addon_give/addon_remove は会議中も (静的には) 受理される — no-op 化は共通ゲートの実行時挙動でありリンタ (L35) の役目", () => {
+        for (const when of ["on_meeting_vote", "on_meeting_start"] as const) {
+            expect(validateEkrDefinition(withRule({ when, do: [{ op: "addon_give", target: "ctx", addon: "Flash" }] })).ok, when).toBe(true);
+        }
+    });
+});

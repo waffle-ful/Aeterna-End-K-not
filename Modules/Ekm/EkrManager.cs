@@ -211,6 +211,10 @@ internal sealed class EkrHolderState
 
     // §5 recruit: per-holder ≤1/10秒 のスタンプ (EKR 全体 ≤1/5秒 は EkrManager._lastGlobalRecruitTime)。
     public float LastRecruitTime = -1f;
+
+    // Wave 10 (契約 §6): addon_give/addon_remove 合算で per-holder ≤1/3秒 のスタンプ
+    // (EKR 全体 ≤2/秒 は EkrManager._lastGlobalAddonTime)。
+    public float LastAddonTime = -1f;
 }
 
 // EKN 役職メーカー R0 の実行時マネージャ。
@@ -3661,6 +3665,137 @@ public static class EkrManager
         Logger.Info($"EKR recruit: {targetPc.GetRealName()} => {slot} (by holder {holderId})", "EkrManager");
     }
 
+    // ── Wave 10 (契約 §4/§5/§6): アドオン付与 ───────────────────
+    // give/remove 合算で per-holder ≤1/3秒、EKR 全体 ≤2/秒 (最小間隔 0.5秒で表現)。超過は静かにドロップし、
+    // スタンプは実際に付与/剥奪が進んだときだけ更新する (recruit と同じ作法)。
+
+    private const float AddonPerHolderInterval = 3f;
+    private const float AddonGlobalInterval = 0.5f;
+    private static float _lastGlobalAddonTime = -1f;
+
+    // GameState.SetSubRole/SetAddonCountTypes の分岐が SetCustomRole + NotifyRoles(target,target) 1本
+    // 以外の追加送信を出すアドオン。付与自体は禁止せず、成功時に全体レートのスタンプだけ多く進めて
+    // 頻度を抑える (per-holder のレートは変えない)。
+    //   - Madmate: NotifyRoles(SpecifySeer)/NotifyRoles(SpecifyTarget) を個別に2本発行する
+    //     (GameState.cs の SetAddonCountTypes) — 非モッド客がいると名札更新が全員分に広がる。
+    //   - BananaMan: 0.2秒後に RpcChangeSkin を追加送信する (GameState.cs の SetSubRole)。
+    private static readonly HashSet<CustomRoles> HeavyAddons = [CustomRoles.Madmate, CustomRoles.BananaMan];
+
+    // 重いアドオンを付与した直後は、次の付与/剥奪までの全体最小間隔を通常の0.5秒でなく3秒にする
+    // (スタンプを now でなく now + 2.5f に進めることで表現する)。
+    private const float HeavyAddonGlobalOffset = 2.5f;
+
+    // 契約 §4: 「つける」。no-op 条件 (死者/切断/壊れた参照/すでに持っている/エンジン既存の関所) は
+    // すべて予算不消費。
+    internal static void TryAddonGive(EkrHolderState state, byte holderId, PlayerControl targetPc, string addon)
+    {
+        // 壊れた参照・死者/切断は静かに no-op (§4)。ダミー (EkrDummyCno) は PlayerControl ではないため
+        // self/ctx/saved/nearest/random のどの解決でも実体化せず、この null チェックで自然に落ちる。
+        if (!targetPc || !targetPc.IsAlive() || targetPc.Data == null || targetPc.Data.Disconnected) return;
+
+        // パース時 (EkmLogicRuntime.TryParseNode) に §2 集合の完全一致で既に検証済みだが、
+        // 実行時にも同じ強さで確認する (Win() の slot 範囲再確認と同じ防御の再確認)。
+        if (!EkrAddonCatalog.All.Contains(addon) || !Enum.TryParse(addon, out CustomRoles role)) return;
+
+        if (targetPc.Is(role)) return; // すでに持っている (§4)
+
+        // §3: エンジン既存の関所。ExtendedPlayerControl.RpcSetCustomRole 内蔵の Cleansed ガードでも
+        // 同じ条件で no-op になるが、あちら任せだと予算のスタンプを先に進めてから無音で弾かれる形になり
+        // 「no-op は予算不消費」の契約が破れる。判定をここでも前倒しして先に弾く。
+        if (!Roles.Cleanser.CleansedCanGetAddon.GetBool() && targetPc.Is(CustomRoles.Cleansed)) return;
+        if (!CustomRolesHelper.CheckAddonConflict(role, targetPc)) return;
+
+        // §3: IsNotAssignableMidGame の9種はエンジンが自動で弾くわけではなく、Merchant/Catalyst/Curser/
+        // Dealer/Bandit/MoonDancer が候補選定の時点で明示的に除外している規約 — ここでも同じ規約を踏襲する。
+        if (role.IsNotAssignableMidGame()) return;
+
+        float now = Time.realtimeSinceStartup;
+        if (state.LastAddonTime >= 0f && now - state.LastAddonTime < AddonPerHolderInterval) return;
+        if (_lastGlobalAddonTime >= 0f && now - _lastGlobalAddonTime < AddonGlobalInterval) return;
+
+        state.LastAddonTime = now;
+        _lastGlobalAddonTime = HeavyAddons.Contains(role) ? now + HeavyAddonGlobalOffset : now;
+
+        targetPc.RpcSetCustomRole(role);
+        Utils.NotifyRoles(SpecifySeer: targetPc, SpecifyTarget: targetPc);
+
+        Logger.Info($"EKR addon_give: {targetPc.GetRealName()} += {role} (by holder {holderId})", "EkrManager");
+    }
+
+    // GameState.RemoveSubRole は SubRoles からの削除と Flash/Dynamo/Spurt の速度復元だけを行う。
+    // SetSubRole/SetAddonCountTypes が同時に書き換える countTypes (Madmate/Bloodlust) と
+    // Main.LoversPlayers (Lovers) はここでは戻らないため、剥がした直後に EKR 側で明示的に戻す。
+    private static void RestoreStateAfterAddonRemove(PlayerState targetState, byte targetId, CustomRoles removed)
+    {
+        if (removed is CustomRoles.Madmate or CustomRoles.Bloodlust)
+        {
+            // SetMainRole が countTypes を焼き直す手順と同じ順番 (主役職の既定値 → CustomTeam 上書き →
+            // 残りの SubRoles を再適用) をなぞる。他方 (Bloodlust/Madmate) がまだ残っていれば
+            // SetAddonCountTypes がそちらの値で上書きし直す。
+            targetState.countTypes = targetState.MainRole.GetCountTypes();
+
+            if (CustomTeamManager.GetCustomTeam(targetId) != null && !CustomTeamManager.IsSettingEnabledForPlayerTeam(targetId, CTAOption.WinWithOriginalTeam))
+                targetState.countTypes = CountTypes.CustomTeam;
+
+            targetState.SubRoles.ForEach(targetState.SetAddonCountTypes);
+        }
+        else if (removed == CustomRoles.Lovers)
+        {
+            // 相方の Lovers はそのまま残す (剥がさない) — 対象の1人分だけ台帳から外す。
+            Main.LoversPlayers.RemoveAll(x => x.PlayerId == targetId);
+        }
+    }
+
+    // 契約 §5: 「はがす」。「自分がつけた分だけ」制約は持たない — 開始時に配られたアドオンも剥がせる。
+    internal static void TryAddonRemove(EkrHolderState state, byte holderId, PlayerControl targetPc, string addon)
+    {
+        if (!targetPc || !targetPc.IsAlive() || targetPc.Data == null || targetPc.Data.Disconnected) return;
+        if (!Main.PlayerStates.TryGetValue(targetPc.PlayerId, out PlayerState targetState)) return;
+
+        if (addon == "all")
+        {
+            // §5: 集合 (= §2 の全アドオン) のうち手持ちのものだけを対象にする。ゴースト役職・陣営変換
+            // タグは §2 集合の外なので触らない。RemoveSubRole が SubRoles を書き換えるため、
+            // 走査対象は先にスナップショットを取る (GameState.cs の SubRoles.ToArray() と同じ作法)。
+            CustomRoles[] toRemove = targetState.SubRoles.ToArray().Where(x => EkrAddonCatalog.All.Contains(x.ToString())).ToArray();
+
+            if (toRemove.Length == 0) return; // no-op 条件は予算判定より先に見る (空の all で予算を焼かない)
+
+            float nowAll = Time.realtimeSinceStartup;
+            if (state.LastAddonTime >= 0f && nowAll - state.LastAddonTime < AddonPerHolderInterval) return;
+            if (_lastGlobalAddonTime >= 0f && nowAll - _lastGlobalAddonTime < AddonGlobalInterval) return;
+
+            state.LastAddonTime = nowAll;
+            _lastGlobalAddonTime = nowAll;
+
+            foreach (CustomRoles role in toRemove)
+            {
+                targetState.RemoveSubRole(role);
+                RestoreStateAfterAddonRemove(targetState, targetPc.PlayerId, role);
+            }
+
+            Utils.NotifyRoles(SpecifySeer: targetPc, SpecifyTarget: targetPc);
+
+            Logger.Info($"EKR addon_remove: {targetPc.GetRealName()} -= all ({toRemove.Length}) (by holder {holderId})", "EkrManager");
+            return;
+        }
+
+        if (!EkrAddonCatalog.All.Contains(addon) || !Enum.TryParse(addon, out CustomRoles single)) return;
+        if (!targetPc.Is(single)) return; // 持っていない (§5)
+
+        float now = Time.realtimeSinceStartup;
+        if (state.LastAddonTime >= 0f && now - state.LastAddonTime < AddonPerHolderInterval) return;
+        if (_lastGlobalAddonTime >= 0f && now - _lastGlobalAddonTime < AddonGlobalInterval) return;
+
+        state.LastAddonTime = now;
+        _lastGlobalAddonTime = now;
+
+        targetState.RemoveSubRole(single);
+        RestoreStateAfterAddonRemove(targetState, targetPc.PlayerId, single);
+        Utils.NotifyRoles(SpecifySeer: targetPc, SpecifyTarget: targetPc);
+
+        Logger.Info($"EKR addon_remove: {targetPc.GetRealName()} -= {single} (by holder {holderId})", "EkrManager");
+    }
 
     // ── Wave 5: 持続効果エンジン ─────────────────────────────────
     //

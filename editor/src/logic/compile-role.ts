@@ -259,6 +259,11 @@ function blockToNode(b: SerializedBlock): Record<string, unknown> {
                 strength: b.fields?.STRENGTH,
                 seconds: toNum(b.fields?.SECONDS),
             };
+        // Wave 10 (契約 §4/§5) — つける・はがす
+        case "ekr_do_addon_give":
+            return { op: "addon_give", target: b.fields?.TARGET, addon: b.fields?.ADDON };
+        case "ekr_do_addon_remove":
+            return { op: "addon_remove", target: b.fields?.TARGET, addon: b.fields?.ADDON };
         default:
             if (b.type.startsWith(DO_BLOCK_PREFIX)) return { op: b.type.slice(DO_BLOCK_PREFIX.length) };
             // 未知のブロック型 → そのまま「不明な op」として通す (blockToExpr と同じ方針)。

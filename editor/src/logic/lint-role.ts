@@ -17,7 +17,8 @@
 // v1.3 (2026-08-11): L13 を追加 (pull/drag/field 新設の輸出・L3/L11 の兄弟)。L9/L12 の対象 op に
 // field を追加 (CNO 生成系防御3点セット + 会議明け10秒ドロップ + on_cno_touch 誤用検知の対象)。
 
-import { ABILITY_COOLDOWN_DEFAULT, type EkrBasis, type EkrTeam, type LogicNode, type LogicRule, type RoleLogic } from "../roledef";
+import { ABILITY_COOLDOWN_DEFAULT, ADDON_REMOVE_ALL, type EkrBasis, type EkrTeam, type LogicNode, type LogicRule, type RoleLogic } from "../roledef";
+import { ADDON_BY_ID } from "../generated/ekr-addons";
 
 // Wave 1 (2026-08-11): L14〜L17 を追加 (計17ルール)。L14 = ctx 無しイベント配下の ctx セレクタ、
 // L15 = 未保存マーカーへの行き先、L16 = 未生成 CNO / 未保存 saved の参照、L17 = wait より後の
@@ -62,12 +63,19 @@ import { ABILITY_COOLDOWN_DEFAULT, type EkrBasis, type EkrTeam, type LogicNode, 
 // (abilityCooldown) が基底 "pet" のまま指定されている、L33 = 基底 "shapeshift" なのに on_pet の
 // ルールが1つも無い。3つとも rule 単位ではなく文書単位のヒントなので ruleIndex は -1 で表す
 // (L25 の progress.text 側検査と同じ扱い)。
+// Wave 10 (§8 2026-09-13): L34〜L38 を追加 (計38ルール)。addon_give/addon_remove (つける・はがす)
+// の新設に伴うヒント群。L34 = addon_give のアドオンがクライアント描画依存 (生成物の clientOnly
+// フラグ)、L35 = L27/L28/L29 の兄弟 (on_second 配下の addon_give/addon_remove)、L36 = 同じ rule 内で
+// 同じ相手に同じアドオンを give→remove (または逆) している、L37 = addon_give が「はじめからしか
+// つけられない」9種 (midGameForbidden) または「とちゅうで つけても きほんは かわらない」7種
+// (basisChanging)、L38 = addon_remove の対象が Lovers または all。改定: TASK_ONLY_LINT_OPS に
+// addon_give/addon_remove を追加 (会議中 op 白名単に載っておらず、recruit と同じ側)。
 
 export type LintRuleId =
     | "L1" | "L2" | "L3" | "L4" | "L5" | "L6" | "L7" | "L8" | "L9" | "L10" | "L11" | "L12" | "L13"
     | "L14" | "L15" | "L16" | "L17" | "L18" | "L19" | "L20" | "L21"
     | "L22" | "L23" | "L24" | "L25" | "L26" | "L27" | "L28" | "L29" | "L30"
-    | "L31" | "L32" | "L33";
+    | "L31" | "L32" | "L33" | "L34" | "L35" | "L36" | "L37" | "L38";
 
 export interface LintWarning {
     rule: LintRuleId;
@@ -294,6 +302,9 @@ const TASK_ONLY_LINT_OPS: readonly LogicNode["op"][] = [
     // reveal/vote_weight_set/link/unlink/win/win_join/forget) に載っていない=会議中は no-op。
     // この配列は白名単の補集合と一致させる (白名単が増減したらここも合わせて見直す)。
     "recruit", "effect_give", "cno_launch",
+    // Wave 10 (契約 §4/§6): addon_give/addon_remove も会議中は共通ゲートで no-op
+    // (会議中 op 白名単に載っていない — recruit と同じ側)。
+    "addon_give", "addon_remove",
 ];
 
 function makeWarning(rule: LintRuleId, ruleIndex: number, when: string, message: string, suggestion: string): LintWarning {
@@ -342,9 +353,10 @@ export interface LintDocContext {
 }
 
 /**
- * 検証済みの RoleLogic に対して spec §6 の 33 ルール (v1.2 で L11/L12、v1.3 で L13、Wave 1 で
+ * 検証済みの RoleLogic に対して spec §6 の 38 ルール (v1.2 で L11/L12、v1.3 で L13、Wave 1 で
  * L14〜L17、Wave 2 で L18〜L20、2026-08-14 に L21、Wave 3 で L22〜L25 のうち L24/L25、Wave 4 で
- * L26/L27、Wave 5 で L28、Wave 6 で L29、Wave 8 で L30、Wave 9 で L31〜L33) を静的検査する。
+ * L26/L27、Wave 5 で L28、Wave 6 で L29、Wave 8 で L30、Wave 9 で L31〜L33、Wave 10 で L34〜L38) を
+ * 静的検査する。
  * ブロックの組み方に対するヒントであり、export 自体は妨げない (呼び出し元は結果を警告フッタに
  * 表示するだけ)。
  *
@@ -463,6 +475,14 @@ export function lintRoleLogic(logic: RoleLogic, progressText?: string, docContex
                     "L29", ruleIndex, rule.when,
                     "まいびょう とばすと よさんぎれで きえちゃうよ。",
                     "きっかけ (ペットや サボ) で とばそう",
+                ));
+            }
+            // L35 (Wave 10・契約 §8): L5/L27/L28/L29 の兄弟 — on_second 配下の addon_give/addon_remove。
+            if (hasOp(rule.do, "addon_give") || hasOp(rule.do, "addon_remove")) {
+                warnings.push(makeWarning(
+                    "L35", ruleIndex, rule.when,
+                    "まいびょう つけても 3びょうに 1かいしか きかないよ。",
+                    "きっかけを決めて1回だけ つけよう (はがすのも同じだよ)。",
                 ));
             }
         }
@@ -662,6 +682,68 @@ export function lintRoleLogic(logic: RoleLogic, progressText?: string, docContex
                 "L30", ruleIndex, rule.when,
                 "はなせるのは かいぎ中だけだから、その処理は何も起きないよ。",
                 "「会議が終わったとき」とくみあわせよう。",
+            ));
+        }
+
+        // L34 (Wave 10・契約 §8): addon_give のアドオンがクライアント描画依存群 (生成物の
+        // clientOnly フラグ)。モッドを入れていない人には効果が見えない (options sender/ホスト側
+        // 判定だけが効くアドオンとは別枠)。
+        let hasClientOnlyGive = false;
+        // L36 (Wave 10・契約 §8): 同じ rule 内で同じ相手 (target) に同じアドオンを give→remove
+        // (または逆) している。訪問順は見ず、rule 内に両方があるかどうかだけを見る (静的近似)。
+        const givePairs = new Set<string>();
+        const removePairs = new Set<string>();
+        // L37 (Wave 10・契約 §8): addon_give が §3 の「はじめからしか つけられない」9種
+        // (midGameForbidden) または「とちゅうで つけても きほんは かわらない」7種 (basisChanging)。
+        let hasMidGameForbiddenGive = false;
+        let hasBasisChangingGive = false;
+        // L38 (Wave 10・契約 §8): addon_remove の対象が Lovers または all。
+        let hasRemoveLoversOrAll = false;
+        forEachNode(rule.do, (n) => {
+            if (n.op === "addon_give") {
+                const meta = ADDON_BY_ID.get(n.addon);
+                if (meta?.clientOnly) hasClientOnlyGive = true;
+                if (meta?.midGameForbidden) hasMidGameForbiddenGive = true;
+                if (meta?.basisChanging) hasBasisChangingGive = true;
+                givePairs.add(`${n.target}:${n.addon}`);
+            } else if (n.op === "addon_remove") {
+                if (n.addon === "Lovers" || n.addon === ADDON_REMOVE_ALL) hasRemoveLoversOrAll = true;
+                removePairs.add(`${n.target}:${n.addon}`);
+            }
+        });
+        if (hasClientOnlyGive) {
+            warnings.push(makeWarning(
+                "L34", ruleIndex, rule.when,
+                "モッドを いれていない ひとには きかないことが あるよ。",
+                "見た目だけの こうかは、モッドを 入れていない ひとには 見えないよ。",
+            ));
+        }
+        if ([...givePairs].some((key) => removePairs.has(key))) {
+            warnings.push(makeWarning(
+                "L36", ruleIndex, rule.when,
+                "つけて すぐ はがしています。",
+                "おなじ あいてに おなじアドオンを つけて はがすと、なにも おきないよ。",
+            ));
+        }
+        if (hasMidGameForbiddenGive) {
+            warnings.push(makeWarning(
+                "L37", ruleIndex, rule.when,
+                "はじめからしか つけられないアドオンです。",
+                "とちゅうで つけても なにも おきないよ。",
+            ));
+        }
+        if (hasBasisChangingGive) {
+            warnings.push(makeWarning(
+                "L37", ruleIndex, rule.when,
+                "とちゅうで つけても きほんは かわらないよ。",
+                "はじめから つけたときだけ、はつどうの しかたが かわるよ。",
+            ));
+        }
+        if (hasRemoveLoversOrAll) {
+            warnings.push(makeWarning(
+                "L38", ruleIndex, rule.when,
+                "ラバーズを はがすと あいてが ひとりに なるよ。",
+                "はがす前に、そのことを かんがえておこう。",
             ));
         }
 
