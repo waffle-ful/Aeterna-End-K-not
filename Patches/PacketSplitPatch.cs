@@ -25,6 +25,7 @@ internal static class PacketSplitPatch
     public static bool Prefix(InnerNetClient __instance, MessageWriter msg)
     {
         PacketRateGate.RecordInstrumentation(msg);
+        StartWindowProbe.Inspect(msg); // 開始窓の間だけ復号ログ (窓外は比較 1 回で返る)
 
         if (msg.Length <= DetectThreshold)
             return !PacketRateGate.TryGate(__instance, msg);
