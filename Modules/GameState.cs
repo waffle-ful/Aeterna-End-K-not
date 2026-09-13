@@ -255,7 +255,7 @@ public class PlayerState(byte playerId)
         Logger.Info($" ID {PlayerId} ({Player?.GetRealName()}) => {role}, CountTypes => {countTypes}", "SetSubRole");
     }
 
-    private void SetAddonCountTypes(CustomRoles role)
+    internal void SetAddonCountTypes(CustomRoles role)
     {
         switch (role)
         {

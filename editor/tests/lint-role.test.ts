@@ -839,6 +839,13 @@ describe("lint-role: L23 (会議中に決まる死にかた × タスク中し�
         const l = logic([{ when: "on_death", cause: "vote", do: [{ op: "recruit", target: "nearest" }] }]);
         expect(ruleIds(lintRoleLogic(l))).toContain("L23");
     });
+
+    it("cause:vote の下の addon_give/addon_remove も警告する (Wave 10・会議中 op 白名単の補集合)", () => {
+        const give = logic([{ when: "on_death", cause: "vote", do: [{ op: "addon_give", target: "nearest", addon: "Flash" }] }]);
+        expect(ruleIds(lintRoleLogic(give))).toContain("L23");
+        const remove = logic([{ when: "on_death", cause: "vote", do: [{ op: "addon_remove", target: "nearest", addon: "Flash" }] }]);
+        expect(ruleIds(lintRoleLogic(remove))).toContain("L23");
+    });
 });
 
 describe("lint-role: L21 (wait より後の exile — L17/L19 の兄弟)", () => {
@@ -1407,6 +1414,13 @@ describe("lint-role: L30 (on_chat 配下・タスク中しか効かないちか�
         const l = logic([{ when: "on_chat", do: [{ op: "effect_give", target: "nearest", kind: "slow", seconds: 5 }] }]);
         expect(ruleIds(lintRoleLogic(l))).toContain("L30");
     });
+
+    it("on_chat + addon_give/addon_remove も警告する (Wave 10・会議中 op 白名単の補集合)", () => {
+        const give = logic([{ when: "on_chat", do: [{ op: "addon_give", target: "ctx", addon: "Flash" }] }]);
+        expect(ruleIds(lintRoleLogic(give))).toContain("L30");
+        const remove = logic([{ when: "on_chat", do: [{ op: "addon_remove", target: "ctx", addon: "Flash" }] }]);
+        expect(ruleIds(lintRoleLogic(remove))).toContain("L30");
+    });
 });
 
 describe("lint-role: L16 拡張 (forget(N) があるのに remember(N) が無い)", () => {
@@ -1526,5 +1540,168 @@ describe("lint-role: L33 (「だれかを えらぶ」なのに on_pet のルー
         const l = logic([{ when: "on_game_start", do: [{ op: "stop" }] }]);
         expect(ruleIds(lintRoleLogic(l, undefined, { basis: "pet" }))).not.toContain("L33");
         expect(ruleIds(lintRoleLogic(l))).not.toContain("L33");
+    });
+});
+
+// Wave 10 (§8 2026-09-13 併合): L34〜L38 (つける・はがす)
+describe("lint-role: L34 (addon_give のアドオンがクライアント描画依存 — 生成物の clientOnly フラグ)", () => {
+    it("addon_give(Blind) は L34 を警告する (clientOnly: true)", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "addon_give", target: "ctx", addon: "Blind" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L34");
+    });
+
+    it("addon_give(Flash) (clientOnly ではない) は L34 を警告しない", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "addon_give", target: "ctx", addon: "Flash" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L34");
+    });
+
+    it("addon_remove(Blind) は L34 の対象外 (L34 は addon_give だけを見る)", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "addon_remove", target: "ctx", addon: "Blind" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L34");
+    });
+
+    it("if の中にネストした addon_give(Blind) も検知する", () => {
+        const nested: LogicNode = { op: "if", cond: { e: "lit", v: 1 }, then: [{ op: "addon_give", target: "ctx", addon: "Blind" }] };
+        const l = logic([{ when: "on_pet", do: [nested] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L34");
+    });
+});
+
+describe("lint-role: L35 (on_second 配下の addon_give/addon_remove — L5/L27/L28/L29 の兄弟)", () => {
+    it("on_second + addon_give (直下) は L35 を警告する", () => {
+        const l = logic([{ when: "on_second", do: [{ op: "addon_give", target: "ctx", addon: "Flash" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L35");
+    });
+
+    it("on_second + addon_remove (直下) も L35 を警告する", () => {
+        const l = logic([{ when: "on_second", do: [{ op: "addon_remove", target: "ctx", addon: "Flash" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L35");
+    });
+
+    it("on_second + addon_give (if の中にネスト) も検知する", () => {
+        const nested: LogicNode = { op: "if", cond: { e: "lit", v: 1 }, then: [{ op: "addon_give", target: "ctx", addon: "Flash" }] };
+        const l = logic([{ when: "on_second", do: [nested] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L35");
+    });
+
+    it("on_pet (on_second 以外) の addon_give/addon_remove は L35 を警告しない", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "addon_give", target: "ctx", addon: "Flash" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L35");
+    });
+});
+
+describe("lint-role: L36 (同じ rule 内で同じ相手に同じアドオンを give→remove または逆)", () => {
+    it("同じ target/addon の addon_give → addon_remove は L36 を警告する", () => {
+        const l = logic([{
+            when: "on_pet",
+            do: [
+                { op: "addon_give", target: "ctx", addon: "Flash" },
+                { op: "addon_remove", target: "ctx", addon: "Flash" },
+            ],
+        }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L36");
+    });
+
+    it("逆順 (addon_remove → addon_give) でも L36 を警告する (順序は問わない静的近似)", () => {
+        const l = logic([{
+            when: "on_pet",
+            do: [
+                { op: "addon_remove", target: "ctx", addon: "Flash" },
+                { op: "addon_give", target: "ctx", addon: "Flash" },
+            ],
+        }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L36");
+    });
+
+    it("target が違えば L36 を警告しない", () => {
+        const l = logic([{
+            when: "on_pet",
+            do: [
+                { op: "addon_give", target: "ctx", addon: "Flash" },
+                { op: "addon_remove", target: "nearest", addon: "Flash" },
+            ],
+        }]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L36");
+    });
+
+    it("addon が違えば L36 を警告しない", () => {
+        const l = logic([{
+            when: "on_pet",
+            do: [
+                { op: "addon_give", target: "ctx", addon: "Flash" },
+                { op: "addon_remove", target: "ctx", addon: "Torch" },
+            ],
+        }]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L36");
+    });
+
+    it("別の rule に分かれていれば L36 を警告しない (rule 単位のヒント)", () => {
+        const l = logic([
+            { when: "on_pet", do: [{ op: "addon_give", target: "ctx", addon: "Flash" }] },
+            { when: "on_meeting_end", do: [{ op: "addon_remove", target: "saved1", addon: "Flash" }] },
+        ]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L36");
+    });
+
+    it("addon_give だけ・addon_remove だけでは L36 を警告しない", () => {
+        const giveOnly = logic([{ when: "on_pet", do: [{ op: "addon_give", target: "ctx", addon: "Flash" }] }]);
+        expect(ruleIds(lintRoleLogic(giveOnly))).not.toContain("L36");
+        const removeOnly = logic([{ when: "on_pet", do: [{ op: "addon_remove", target: "ctx", addon: "Flash" }] }]);
+        expect(ruleIds(lintRoleLogic(removeOnly))).not.toContain("L36");
+    });
+});
+
+describe("lint-role: L37 (addon_give が『はじめからしか つけられない』9種 / 『とちゅうで つけても きほんは かわらない』7種)", () => {
+    it("addon_give(Busy) (midGameForbidden) は L37 を警告する", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "addon_give", target: "ctx", addon: "Busy" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L37");
+    });
+
+    it("addon_give(Bloodlust) (basisChanging) も L37 を警告する", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "addon_give", target: "ctx", addon: "Bloodlust" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L37");
+    });
+
+    it("addon_give(Flash) (どちらのフラグも無い) は L37 を警告しない", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "addon_give", target: "ctx", addon: "Flash" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L37");
+    });
+
+    it("addon_remove(Busy) は L37 の対象外 (L37 は addon_give だけを見る)", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "addon_remove", target: "ctx", addon: "Busy" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L37");
+    });
+
+    it("midGameForbidden と basisChanging を両方使うと L37 が2件出る (別々の警告)", () => {
+        const l = logic([{
+            when: "on_pet",
+            do: [
+                { op: "addon_give", target: "ctx", addon: "Busy" },
+                { op: "addon_give", target: "nearest", addon: "Bloodlust" },
+            ],
+        }]);
+        expect(lintRoleLogic(l).filter((w) => w.rule === "L37")).toHaveLength(2);
+    });
+});
+
+describe("lint-role: L38 (addon_remove の対象が Lovers または all)", () => {
+    it("addon_remove(Lovers) は L38 を警告する", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "addon_remove", target: "ctx", addon: "Lovers" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L38");
+    });
+
+    it("addon_remove(all) も L38 を警告する", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "addon_remove", target: "ctx", addon: "all" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L38");
+    });
+
+    it("addon_remove(Flash) (Lovers でも all でもない) は L38 を警告しない", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "addon_remove", target: "ctx", addon: "Flash" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L38");
+    });
+
+    it("addon_give(Lovers) は L38 の対象外 (L38 は addon_remove だけを見る)", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "addon_give", target: "ctx", addon: "Lovers" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L38");
     });
 });

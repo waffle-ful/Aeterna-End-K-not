@@ -884,6 +884,17 @@ describe("compile-role: Wave 4 ブロック (on_near / on_far / on_room_enter / 
         ])).toEqual([{ when: "on_pet", do: [{ op: "effect_give", target: "nearest", kind: "freeze", seconds: 5 }] }]);
     });
 
+    // Wave 10 (§4/§5)
+    it("ekr_do_addon_give / ekr_do_addon_remove をコンパイルする", () => {
+        expect(compileTopBlocksToRules([
+            { type: "ekr_when_on_pet", next: { block: { type: "ekr_do_addon_give", fields: { TARGET: "ctx", ADDON: "Flash" } } } },
+        ])).toEqual([{ when: "on_pet", do: [{ op: "addon_give", target: "ctx", addon: "Flash" }] }]);
+
+        expect(compileTopBlocksToRules([
+            { type: "ekr_when_on_pet", next: { block: { type: "ekr_do_addon_remove", fields: { TARGET: "self", ADDON: "all" } } } },
+        ])).toEqual([{ when: "on_pet", do: [{ op: "addon_remove", target: "self", addon: "all" }] }]);
+    });
+
     it("「つなぐ→リンク死で道連れ」ワークスペースが validateRoleLogic まで通る", () => {
         const w = ws([
             { type: "ekr_when_on_kill", next: { block: { type: "ekr_do_link", fields: { TARGET: "ctx" } } } },

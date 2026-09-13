@@ -1,0 +1,27 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "きよめや",
+  "author": "EKN Sample",
+  "description": "とくいわざで、あいての わるいアドオンを ぜんぶ はがしてあげる",
+  "color": "#6fb0c0",
+  "team": "crewmate",
+  "canKill": false,
+  "killCooldown": 25,
+  "canVent": false,
+  "visionMultiplier": 1,
+  "winCondition": "team",
+  "logic": {
+    "version": 1,
+    "variables": [],
+    "rules": [
+      {
+        "when": "on_pet",
+        "do": [
+          { "op": "addon_remove", "target": "nearest", "addon": "all" },
+          { "op": "notify", "text": "きよめた…", "seconds": 2 }
+        ]
+      }
+    ]
+  }
+}

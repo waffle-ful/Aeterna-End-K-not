@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text.RegularExpressions;
 using EndKnot.Modules.Ekm;
 using Xunit;
 
@@ -38,6 +39,32 @@ public class EkrDefinitionTests
 
         Assert.True(EkrDefinition.TryParse(json, out EkrDefinition def, out string error), $"{fileName}: {error}");
         Assert.NotNull(def);
+    }
+
+    // Wave 10 (契約 §2/§9): 生成物 (editor/src/generated/ekr-addons.ts) の id 集合と
+    // EkrAddonCatalog.All (Modules/Ekm/EkrAddonCatalog.cs) の名前集合が一致することを保証する。
+    // 差分が出たら tools/gen-ekr-addons.ps1 を再実行して両方の生成物を焼き直す。
+    [Fact]
+    public void AddonCatalog_MatchesGeneratedTs()
+    {
+        string ts = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "generated", "ekr-addons.ts"));
+
+        var tsIds = new HashSet<string>();
+        foreach (Match m in Regex.Matches(ts, "\\{ id: \"([^\"]+)\""))
+            tsIds.Add(m.Groups[1].Value);
+
+        Assert.NotEmpty(tsIds);
+
+        var csOnly = new List<string>();
+        foreach (string name in EkrAddonCatalog.All)
+            if (!tsIds.Contains(name)) csOnly.Add(name);
+
+        var tsOnly = new List<string>();
+        foreach (string name in tsIds)
+            if (!EkrAddonCatalog.All.Contains(name)) tsOnly.Add(name);
+
+        Assert.True(csOnly.Count == 0 && tsOnly.Count == 0,
+            $"アドオン集合が一致しません。C# のみ: [{string.Join(", ", csOnly)}] / TS のみ: [{string.Join(", ", tsOnly)}]");
     }
 
     [Fact]
@@ -828,7 +855,7 @@ public class EkrDefinitionTests
     [InlineData("{\"op\":\"recruit\",\"target\":\"self\"}", false)]
     [InlineData("{\"op\":\"recruit\",\"target\":\"all\"}", false)]
     [InlineData("{\"op\":\"recruit\"}", false)] // target 必須
-    [InlineData("{\"op\":\"addon_give\",\"target\":\"ctx\"}", false)] // 未知 op は従来どおり reject (Wave 5 送り §0)
+    [InlineData("{\"op\":\"addon_give\",\"target\":\"ctx\"}", false)] // addon 欠落で reject
     public void Wave4Ops_MatchTheContract(string opJson, bool shouldAccept)
     {
         bool ok = EkrDefinition.TryParse(LogicWithOp(opJson), out _, out string error);
