@@ -1,0 +1,69 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "でくつかい",
+  "author": "EKN Realtest",
+  "description": "はじめに にんぎょうを だす。とくいわざで だれかを えらべる (キルなし)",
+  "color": "#c07f3f",
+  "team": "crewmate",
+  "canKill": false,
+  "killCooldown": 25,
+  "canVent": false,
+  "visionMultiplier": 1,
+  "winCondition": "team",
+  "basis": "shapeshift",
+  "abilityCooldown": 10,
+  "logic": {
+    "version": 1,
+    "variables": [
+      {
+        "name": "かず",
+        "init": 0
+      }
+    ],
+    "rules": [
+      {
+        "when": "on_game_start",
+        "do": [
+          {
+            "op": "wait",
+            "seconds": 15
+          },
+          {
+            "op": "dummy_spawn",
+            "slot": 1,
+            "name": "でく",
+            "killable": false,
+            "at": "self"
+          },
+          {
+            "op": "notify",
+            "text": "にんぎょうを だした",
+            "seconds": 3
+          }
+        ]
+      },
+      {
+        "when": "on_pet",
+        "do": [
+          {
+            "op": "var_add",
+            "name": "かず",
+            "delta": {
+              "e": "lit",
+              "v": 1
+            }
+          },
+          {
+            "op": "notify",
+            "text": "えらんだ {かず} 回目",
+            "seconds": 3
+          }
+        ]
+      }
+    ]
+  },
+  "progress": {
+    "text": "W9-{かず}"
+  }
+}
