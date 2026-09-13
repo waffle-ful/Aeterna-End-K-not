@@ -1,0 +1,29 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "きようもどき",
+  "author": "EKN Sample",
+  "description": "きえるボタンで じぶんに 器用を つけようとする (きていへんこうアドオンが はじかれることの かくにん用)",
+  "color": "#7a6a4a",
+  "team": "crewmate",
+  "canKill": false,
+  "killCooldown": 25,
+  "canVent": false,
+  "visionMultiplier": 1,
+  "winCondition": "team",
+  "basis": "phantom",
+  "abilityCooldown": 10,
+  "logic": {
+    "version": 1,
+    "variables": [],
+    "rules": [
+      {
+        "when": "on_pet",
+        "do": [
+          { "op": "addon_give", "target": "self", "addon": "Nimble" },
+          { "op": "notify", "text": "つけてみた", "seconds": 2 }
+        ]
+      }
+    ]
+  }
+}

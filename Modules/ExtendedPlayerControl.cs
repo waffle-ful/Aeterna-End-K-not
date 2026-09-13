@@ -1863,6 +1863,112 @@ internal static class ExtendedPlayerControl
             Logger.Info($"Made {player.GetNameWithRole()} visible", "RpcMakeVisible");
         }
 
+        // Wave 11 (契約 §3 hideFrom:"enemies"): 述語付きオーバーロード。canSee(pc) が真の客は
+        // 見せたまま (何も送らない)・偽の客だけ隠す。上の bool 引数の2本 (everyone/crewmates) は
+        // 変更しない — 別メソッドとして追加する。
+        public void RpcMakeInvisible(Func<PlayerControl, bool> canSee)
+        {
+            if (!AmongUsClient.Instance.AmHost) return;
+            if (!Main.Invisible.Add(player.PlayerId)) return;
+
+            player.RpcChangePet("");
+
+            if (!canSee(PlayerControl.LocalPlayer))
+                player.MakeInvisible();
+
+            NotifyRoles(SpecifyTarget: player);
+
+            bool hasValue = false;
+            var sender = CustomRpcSender.Create("RpcMakeInvisible", SendOption.Reliable);
+            sender.StartPackedMessage();
+
+            foreach (PlayerControl pc in PlayerControl.AllPlayerControls)
+            {
+                if (pc.AmOwner || pc.OwnerId < 0 || pc == player || canSee(pc)) continue;
+
+                sender.StartMessage(pc.OwnerId);
+
+                if (pc.IsModdedClient())
+                {
+                    sender.StartRpc(player.NetId, (byte)CustomRPC.Invisibility).WritePacked(1).EndRpc();
+                }
+                else
+                {
+                    sender.StartRpc(player.NetTransform.NetId, RpcCalls.SnapTo)
+                        .WriteVector2(new Vector2(50f, 50f))
+                        .Write(player.NetTransform.lastSequenceId)
+                        .EndRpc();
+                    sender.StartRpc(player.NetTransform.NetId, RpcCalls.SnapTo)
+                        .WriteVector2(new Vector2(50f, 50f))
+                        .Write((ushort)(player.NetTransform.lastSequenceId + 16383))
+                        .EndRpc();
+
+                    NumSnapToCallsThisRound += 2;
+                }
+
+                sender.EndMessage();
+                hasValue = true;
+            }
+
+            sender.SendMessage(dispose: !hasValue);
+
+            Logger.Info($"Made {player.GetNameWithRole()} invisible (predicate)", "RpcMakeInvisible");
+        }
+
+        // Wave 11: 上の述語付き RpcMakeInvisible と対になる解除。
+        public void RpcMakeVisible(Func<PlayerControl, bool> canSee)
+        {
+            if (!AmongUsClient.Instance.AmHost) return;
+            if (!Main.Invisible.Remove(player.PlayerId)) return;
+
+            if (Options.UsePets.GetBool()) PetsHelper.SetPet(player, PetsHelper.GetPetId());
+
+            if (!canSee(PlayerControl.LocalPlayer))
+                player.MakeVisible();
+
+            NotifyRoles(SpecifyTarget: player);
+
+            bool hasValue = false;
+            var sender = CustomRpcSender.Create("RpcMakeVisible", SendOption.Reliable);
+            sender.StartPackedMessage();
+
+            foreach (PlayerControl pc in PlayerControl.AllPlayerControls)
+            {
+                if (pc.AmOwner || pc.OwnerId < 0 || pc == player || canSee(pc)) continue;
+
+                sender.StartMessage(pc.OwnerId);
+
+                if (pc.IsModdedClient())
+                {
+                    sender.StartRpc(player.NetId, (byte)CustomRPC.Invisibility).WritePacked(0).EndRpc();
+                }
+                else
+                {
+                    sender.StartRpc(player.NetTransform.NetId, RpcCalls.SnapTo)
+                        .WriteVector2(new Vector2(50f, 50f))
+                        .Write((ushort)(player.NetTransform.lastSequenceId + 32767))
+                        .EndRpc();
+                    sender.StartRpc(player.NetTransform.NetId, RpcCalls.SnapTo)
+                        .WriteVector2(new Vector2(50f, 50f))
+                        .Write((ushort)(player.NetTransform.lastSequenceId + 32767 + 16383))
+                        .EndRpc();
+                    sender.StartRpc(player.NetTransform.NetId, RpcCalls.SnapTo)
+                        .WriteVector2(player.transform.position)
+                        .Write(player.NetTransform.lastSequenceId)
+                        .EndRpc();
+
+                    NumSnapToCallsThisRound += 3;
+                }
+
+                sender.EndMessage();
+                hasValue = true;
+            }
+
+            sender.SendMessage(dispose: !hasValue);
+
+            Logger.Info($"Made {player.GetNameWithRole()} visible (predicate)", "RpcMakeVisible");
+        }
+
         public void RpcResetInvisibility(bool phantom = false)
         {
             if (!AmongUsClient.Instance.AmHost) return;
@@ -2272,6 +2378,11 @@ internal static class ExtendedPlayerControl
 
                 if (AmongUsClient.Instance.AmClient)
                     player.MurderPlayer(target, MurderResultFlags.Succeeded);
+
+                // Wave 11 (契約 §3 corpse:"stay"): 「しんだら のこる」を選んだ透明化は、キル直前に
+                // 可視化してから死体を置く (下の Main.Invisible 分岐が自然に外れる)。
+                if (Main.Invisible.Contains(target.PlayerId) && Modules.Ekm.EkrManager.KeepsCorpseWhenInvisible(target.PlayerId))
+                    Modules.Ekm.EkrManager.RevealForCorpseStay(target.PlayerId);
 
                 var sender = CustomRpcSender.Create("RpcMurderPlayer", SendOption.Reliable);
                 sender.StartMessage();

@@ -1,0 +1,64 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "よみがえりや",
+  "author": "EKN Sample",
+  "description": "いきかえると かいすうが ふえる (へんすうが つづいているかの かくにん用)",
+  "color": "#8f7fc0",
+  "team": "crewmate",
+  "canKill": false,
+  "killCooldown": 25,
+  "canVent": false,
+  "visionMultiplier": 1,
+  "winCondition": "team",
+  "logic": {
+    "version": 1,
+    "variables": [
+      {
+        "name": "かい",
+        "init": 0
+      }
+    ],
+    "rules": [
+      {
+        "when": "on_pet",
+        "do": [
+          {
+            "op": "var_add",
+            "name": "かい",
+            "delta": {
+              "e": "lit",
+              "v": 1
+            }
+          },
+          {
+            "op": "notify",
+            "text": "かぞえた",
+            "seconds": 2
+          }
+        ]
+      },
+      {
+        "when": "on_revive",
+        "do": [
+          {
+            "op": "var_add",
+            "name": "かい",
+            "delta": {
+              "e": "lit",
+              "v": 1
+            }
+          },
+          {
+            "op": "notify",
+            "text": "いきかえった",
+            "seconds": 3
+          }
+        ]
+      }
+    ]
+  },
+  "progress": {
+    "text": "かい{かい}"
+  }
+}

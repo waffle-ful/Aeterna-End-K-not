@@ -8,6 +8,8 @@ import {
     ALIVE_COUNT_VALUE_MAX,
     ALIVE_COUNT_VALUE_MIN,
     DEFAULT_COLOR,
+    EFFECT_CORPSE_VALUES,
+    EFFECT_HIDE_FROM_VALUES,
     EKR_BASIS_DEFAULT,
     EKR_BASIS_VALUES,
     HOST_OPTIONS_MAX,
@@ -276,8 +278,8 @@ describe("役職コード検証規則 (EkrDefinition.cs 契約ミラー)", () =>
 });
 
 // Wave 9 (契約 §1/§1.2): 「はつどうのしかた」+「とくいわざの まちじかん」
-describe("basis / abilityCooldown 検証 (Wave 9・契約 §1/§1.2)", () => {
-    it("basis は pet/shapeshift の2値を受理し、省略/null は既定 pet に収束する", () => {
+describe("basis / abilityCooldown 検証 (Wave 9・契約 §1/§1.2・Wave 11 で phantom 追加)", () => {
+    it("basis は pet/shapeshift/phantom の3値を受理し、省略/null は既定 pet に収束する", () => {
         for (const basis of EKR_BASIS_VALUES) {
             const r = validateEkrDefinition({ ...baseValid(), basis });
             expect(r.ok, `basis=${basis}`).toBe(true);
@@ -290,7 +292,7 @@ describe("basis / abilityCooldown 検証 (Wave 9・契約 §1/§1.2)", () => {
 
     it("basis: null・未知の文字列・型不一致は文書全体 reject (省略のときだけ既定へ収束する — team と違う非対称性)", () => {
         expect(validateEkrDefinition({ ...baseValid(), basis: null }).ok).toBe(false);
-        expect(validateEkrDefinition({ ...baseValid(), basis: "phantom" }).ok).toBe(false);
+        expect(validateEkrDefinition({ ...baseValid(), basis: "vanish" }).ok).toBe(false);
         expect(validateEkrDefinition({ ...baseValid(), basis: "" }).ok).toBe(false);
         expect(validateEkrDefinition({ ...baseValid(), basis: 1 }).ok).toBe(false);
         expect(validateEkrDefinition({ ...baseValid(), basis: ["shapeshift"] }).ok).toBe(false);
@@ -1814,6 +1816,62 @@ describe("logic 検証 Wave 4 (on_near / on_far / on_room_enter / on_room_exit /
         }));
         expect(r.ok).toBe(true);
         if (r.ok) expect(r.def.logic?.rules[0].do).toHaveLength(1);
+    });
+
+    // Wave 11 (契約 §3/§6) — effect_give の kind:"invisible" (すがたをけす) と
+    // hideFrom/corpse/interval の3つの省略可フィールド。
+    describe("effect_give kind:\"invisible\" (Wave 11・契約 §3/§6)", () => {
+        it("invisible は seconds 1..20 (他 kind の 1..30 とは別枠)", () => {
+            expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "effect_give", target: "self", kind: "invisible", seconds: 20 }] })).ok).toBe(true);
+            expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "effect_give", target: "self", kind: "invisible", seconds: 21 }] })).ok).toBe(false);
+            expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "effect_give", target: "self", kind: "invisible", seconds: 1 }] })).ok).toBe(true);
+            expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "effect_give", target: "self", kind: "invisible", seconds: 0 }] })).ok).toBe(false);
+        });
+
+        it("hideFrom/corpse/interval は省略可・明示値はそのまま保持される (畳み込みなし)", () => {
+            const omitted = validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "effect_give", target: "self", kind: "invisible", seconds: 5 }] }));
+            if (!omitted.ok) throw new Error(omitted.error);
+            const node = omitted.def.logic?.rules[0].do[0];
+            expect(node).toEqual({ op: "effect_give", target: "self", kind: "invisible", seconds: 5 });
+
+            for (const hideFrom of EFFECT_HIDE_FROM_VALUES) {
+                const r = validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "effect_give", target: "self", kind: "invisible", seconds: 5, hideFrom }] }));
+                expect(r.ok, hideFrom).toBe(true);
+                if (r.ok) expect((r.def.logic?.rules[0].do[0] as Record<string, unknown>).hideFrom).toBe(hideFrom);
+            }
+            for (const corpse of EFFECT_CORPSE_VALUES) {
+                const r = validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "effect_give", target: "self", kind: "invisible", seconds: 5, corpse }] }));
+                expect(r.ok, corpse).toBe(true);
+                if (r.ok) expect((r.def.logic?.rules[0].do[0] as Record<string, unknown>).corpse).toBe(corpse);
+            }
+            const withInterval = validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "effect_give", target: "self", kind: "invisible", seconds: 5, interval: 3 }] }));
+            if (!withInterval.ok) throw new Error(withInterval.error);
+            expect((withInterval.def.logic?.rules[0].do[0] as Record<string, unknown>).interval).toBe(3);
+        });
+
+        it("interval は整数 1..60・範囲外/非整数/null/型不一致は reject", () => {
+            expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "effect_give", target: "self", kind: "invisible", seconds: 5, interval: 1 }] })).ok).toBe(true);
+            expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "effect_give", target: "self", kind: "invisible", seconds: 5, interval: 60 }] })).ok).toBe(true);
+            expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "effect_give", target: "self", kind: "invisible", seconds: 5, interval: 0 }] })).ok).toBe(false);
+            expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "effect_give", target: "self", kind: "invisible", seconds: 5, interval: 61 }] })).ok).toBe(false);
+            expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "effect_give", target: "self", kind: "invisible", seconds: 5, interval: 2.5 }] })).ok).toBe(false);
+            expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "effect_give", target: "self", kind: "invisible", seconds: 5, interval: null }] })).ok).toBe(false);
+            expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "effect_give", target: "self", kind: "invisible", seconds: 5, interval: "3" }] })).ok).toBe(false);
+        });
+
+        it("hideFrom/corpse は未知値・null・型不一致を reject", () => {
+            expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "effect_give", target: "self", kind: "invisible", seconds: 5, hideFrom: "aliens" }] })).ok).toBe(false);
+            expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "effect_give", target: "self", kind: "invisible", seconds: 5, hideFrom: null }] })).ok).toBe(false);
+            expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "effect_give", target: "self", kind: "invisible", seconds: 5, corpse: "gone" }] })).ok).toBe(false);
+            expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "effect_give", target: "self", kind: "invisible", seconds: 5, corpse: null }] })).ok).toBe(false);
+        });
+
+        it("kind != \"invisible\" のときに hideFrom/corpse/interval が存在すれば reject (kind ごとに個別に検査)", () => {
+            expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "effect_give", target: "self", kind: "haste", seconds: 5, hideFrom: "everyone" }] })).ok).toBe(false);
+            expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "effect_give", target: "self", kind: "slow", seconds: 5, corpse: "vanish" }] })).ok).toBe(false);
+            expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "effect_give", target: "self", kind: "blind", seconds: 5, interval: 5 }] })).ok).toBe(false);
+            expect(validateEkrDefinition(withRule({ when: "on_pet", do: [{ op: "effect_give", target: "self", kind: "freeze", seconds: 5, interval: 5 }] })).ok).toBe(false);
+        });
     });
 
     it("link/unlink/recruit は leaf ノード (depth 1, count 1)", () => {

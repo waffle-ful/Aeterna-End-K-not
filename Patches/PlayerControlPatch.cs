@@ -2369,7 +2369,7 @@ internal static class FixedUpdatePatch
             
             // 仲間側の分岐は「透明」表示自体が相手をインポスターだと明かすので、一匹狼は名前色と同じく除外する
             // (この行は役職テキストのゲートを通らず単独で積まれるため、他所を塞いでもここだけ残る)。
-            if (!GameStates.IsMeeting && Options.CurrentGameMode == CustomGameMode.Standard && Main.Invisible.Contains(target.PlayerId) && ((self && seer.IsAlive() && target.GetCustomRole() is not (CustomRoles.Swooper or CustomRoles.Wraith or CustomRoles.Chameleon)) || (seer.IsImpostor() && target.IsImpostor() && !seer.Is(CustomRoles.OneWolf) && !target.Is(CustomRoles.OneWolf))))
+            if (!GameStates.IsMeeting && Options.CurrentGameMode == CustomGameMode.Standard && Main.Invisible.Contains(target.PlayerId) && ((self && seer.IsAlive() && target.GetCustomRole() is not (CustomRoles.Swooper or CustomRoles.Wraith or CustomRoles.Chameleon)) || (seer.IsImpostor() && target.IsImpostor() && !seer.Is(CustomRoles.OneWolf) && !target.Is(CustomRoles.OneWolf))) && !Modules.Ekm.EkrManager.CanSeeInvisible(seer, target))
                 additionalSuffixes.Add(ColorString(Palette.White_75Alpha, "\n" + GetString("Invisible")));
 
             switch (target.GetCustomRole())

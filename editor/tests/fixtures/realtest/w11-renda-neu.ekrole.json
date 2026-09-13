@@ -1,0 +1,33 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "れんだや(第三)",
+  "author": "EKN Sample",
+  "description": "れんだや の ニュートラル枠 版 (スロット陣営が一致しないと束縛できないため)",
+  "color": "#9a3f6a",
+  "team": "neutral",
+  "canKill": false,
+  "killCooldown": 25,
+  "canVent": false,
+  "visionMultiplier": 1,
+  "winCondition": "team",
+  "logic": {
+    "version": 1,
+    "variables": [],
+    "rules": [
+      {
+        "when": "on_second",
+        "do": [
+          {
+            "op": "effect_give",
+            "target": "self",
+            "kind": "invisible",
+            "seconds": 1,
+            "hideFrom": "everyone",
+            "interval": 1
+          }
+        ]
+      }
+    ]
+  }
+}

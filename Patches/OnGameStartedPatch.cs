@@ -846,10 +846,11 @@ internal static class StartGameHostPatch
 
                         KeyValuePair<byte, CustomRoles> kp = RoleResult.FirstOrDefault(x => x.Key == player.PlayerId);
 
-                        // 役職メーカーの「だれかを えらぶ」はシェイプシフトボタンを能力に使うので、基底を変える
-                        // アドオンとは同居できない (能力の土台ごと奪われる)。CheckAddonConflict の arm は
-                        // この 7 種を通らない — ここが唯一の付与口なので、除外はこの位置に置くこと。
-                        if (EndKnot.Modules.Ekm.EkrManager.IsEkrShapeshiftBasis(kp.Value)) continue;
+                        // 役職メーカーの「だれかを えらぶ」「きえるボタンをおす」はシェイプシフト/ファントムの
+                        // ボタンを能力に使うので、基底を変えるアドオンとは同居できない (能力の土台ごと奪われる)。
+                        // CheckAddonConflict の arm はこの 7 種を通らない — ここが唯一の付与口なので、
+                        // 除外はこの位置に置くこと。
+                        if (EndKnot.Modules.Ekm.EkrManager.IsEkrShapeshiftBasis(kp.Value) || EndKnot.Modules.Ekm.EkrManager.GetEffectiveBasis(kp.Value) == EndKnot.Modules.Ekm.EkrBasis.Phantom) continue;
 
                         bool bloodlustBanned = hasBanned && banned.Any(x => x.Key == kp.Value && x.Value.Contains(CustomRoles.Bloodlust));
                         bool nimbleBanned = hasBanned && banned.Any(x => x.Key == kp.Value && x.Value.Contains(CustomRoles.Nimble));
@@ -1309,10 +1310,11 @@ internal static class StartGameHostPatch
         // (開始を無期限に人質へ取らない) が、その事実を恒久チャネルへ残す = 連言仮説の 1-bit 計器を兼ねる。
         // ⚠️ 順序契約: この待ちは必ず drain 待ちより【前】に置く — 後に置くと、劣化スロットル (12/s) の
         // まま drain がタイムアウト → 直送窓が落ちて v4 暗転根治が壊れる。
-        // ⚠️ 待ち上限 4s + 劣化時 drain 上限 10s + SetToRolesGap 既定 1.5s = 最悪 15.5s。バニラ客は
-        // roles dispatch まで ~20s で自主退出するため、合計をこの予算内に必ず収めること。
-        // ⚠️ delay_set_to_roles.txt と delay_disconnected_restore.txt に大きな値を同時に入れると
-        // 理論上 34s まで伸びてこの予算を壊す (通常運用ではどちらも不在)。デバッグ用途でのみ使うこと。
+        // ⚠️ 待ち上限 4s + 劣化時 drain 上限 10s + SetToRolesGap 既定 1.5s = 最悪 15.5s (復元の既定 0.5s 待ちは
+        // roles dispatch の後なので客の自主退出には効かない)。バニラ客は roles dispatch まで ~20s で自主退出するため、
+        // 合計をこの予算内に必ず収めること。
+        // ⚠️ delay_set_to_roles.txt と delay_disconnected_restore.txt に大きな値を入れると理論上 34s まで伸びて
+        // この予算を壊す (通常運用ではどちらのファイルも不在 = 既定値)。デバッグ用途でのみ使うこと。
         // Rollback bit: EndKnot_DATA/disable_start_link_wait.txt で待ち自体をスキップ (再ビルド不要)。
         if (!DisableStartLinkWait() && HealthLog.IsLinkDegradedNow(out string linkDetail0))
         {
@@ -1464,20 +1466,43 @@ internal static class StartGameHostPatch
 
         StartWindowProbe.MarkPhase("roles");
 
-        // v3 根治 (2026-07-20): この 1.2s 固定待ち (初回コミット由来=EHR上流設計) が「復元がクライアントの
-        // intro 構築に間に合わない」危険窓の正体 (BlackoutProbe 実測: 復元 wire は常に roles+1.24s で、
-        // 暗転/クリーンの差はクライアント側ロードのレースのみ)。TOHK の契約「イントロが始まるまでに戻す」
-        // (StandardIntro.cs:140) に合わせ、roles dispatch 直後に即復元する。
-        // Rollback bit: create EndKnot_DATA/delay_disconnected_restore.txt to restore the old 1.2s wait.
-        // 2026-09-08 実機: 即復元だとクライアントの開始コルーチンが止まることがある (下の
-        // DisconnectedRestoreDelay のコメント参照) が、遅らせるとイントロの陣営表示が代わりに壊れるため
-        // 既定は即復元のまま据え置く。
+        // 2026-07-20: 旧来の 1.2s 固定待ちは「復元がクライアントの intro 構築に間に合わない」側の危険窓だったので
+        // 一度は即復元にした (TOHK の契約「イントロが始まるまでに戻す」StandardIntro.cs:140)。
+        // 2026-09-13 実機 (客 4 台・20 ゲーム): 本人役職 (targeted) と復元 (broadcast) を同じ瞬間に出すと
+        // 中継で復元が先着する客が出て、イントロ起動条件 (全員 Disconnected) が落ちる (即時 5/40 客ゲーム vs
+        // 0.5s 後 0/40)。復元は本人役職の 0.5s 後に送る。クライアントの陣営表示は最初の判定から 1.9s 以内に
+        // 復元が着けば壊れないので、0.5s は窓の内側。EndKnot_DATA/delay_disconnected_restore.txt の本文
+        // (0〜10 秒・0 = 即時) で上書きできる。
         float restoreDelay = DisconnectedRestoreDelay();
 
         if (restoreDelay > 0f)
         {
-            Logger.Warn($"delay_disconnected_restore.txt present: waiting {restoreDelay:F2}s before Disconnected restore", "BlackoutProbe");
+            // 上の gap 待ちと同じ型: 実時間 yield の間は直送窓を閉じ (無関係な送信を予算免除のまま流さない)、
+            // 待ちの後にドレインを掛け直してから開け直す。ゲートは FIFO なので順序は入れ替わらない。
+            PacketRateGate.StartWindowBypass = false;
+            DataFlagRateLimiter.StartWindowBypass = false;
+
             yield return new WaitForSecondsRealtime(restoreDelay);
+
+            if (directWindow)
+            {
+                float regainStart = Time.realtimeSinceStartup;
+                float regainTimeout = PacketRateGate.DegradedThrottleActive ? 10f : 6f;
+
+                while ((PacketRateGate.PendingCount > 0 || DataFlagRateLimiter.PendingCount > 0) && Time.realtimeSinceStartup - regainStart < regainTimeout)
+                    yield return null;
+
+                if (PacketRateGate.PendingCount > 0 || DataFlagRateLimiter.PendingCount > 0)
+                {
+                    directWindow = false;
+                    Logger.Error($"BlackoutProbe: pre-restore drain timed out after {regainTimeout:F0}s (gateQueue={PacketRateGate.PendingCount}, dataQueue={DataFlagRateLimiter.PendingCount}) — falling back to gated sends for the restore", "BlackoutProbe");
+                }
+            }
+
+            PacketRateGate.StartWindowBypass = directWindow;
+            DataFlagRateLimiter.StartWindowBypass = directWindow;
+
+            Logger.Info($"BlackoutProbe: waited {restoreDelay:F2}s after the self-role dispatch before the Disconnected restore (directWindow={directWindow})", "BlackoutProbe");
         }
 
         foreach (PlayerControl pc in PlayerControl.AllPlayerControls)
@@ -1553,17 +1578,20 @@ internal static class StartGameHostPatch
         catch { return DefaultSetToRolesGap; }
     }
 
+    // 復元の待ち (本人役職の送信からの秒数)。既定 0.5s。ファイルがあればその本文 (0〜10・0 = 即時) を採る。
+    private const float DefaultDisconnectedRestoreDelay = 0.5f;
+
     private static float DisconnectedRestoreDelay()
     {
         try
         {
             string path = $"{Main.DataPath}/EndKnot_DATA/delay_disconnected_restore.txt";
-            if (!System.IO.File.Exists(path)) return 0f;
+            if (!System.IO.File.Exists(path)) return DefaultDisconnectedRestoreDelay;
 
             string body = System.IO.File.ReadAllText(path).Trim();
-            return float.TryParse(body, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float v) && v is > 0f and <= 10f ? v : 1.2f;
+            return float.TryParse(body, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float v) && v is >= 0f and <= 10f ? v : DefaultDisconnectedRestoreDelay;
         }
-        catch { return 0f; }
+        catch { return DefaultDisconnectedRestoreDelay; }
     }
 
     private static bool DisableStartDirectWindow()

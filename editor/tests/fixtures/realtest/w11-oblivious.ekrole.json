@@ -1,0 +1,35 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "わすれさせや",
+  "author": "EKN Sample",
+  "description": "とくいわざで そばのひとに 無関心をつける (しにがいを つうほうできなくなる)",
+  "color": "#7a7f8c",
+  "team": "crewmate",
+  "canKill": false,
+  "killCooldown": 25,
+  "canVent": false,
+  "visionMultiplier": 1,
+  "winCondition": "team",
+  "logic": {
+    "version": 1,
+    "variables": [],
+    "rules": [
+      {
+        "when": "on_pet",
+        "do": [
+          {
+            "op": "addon_give",
+            "target": "nearest",
+            "addon": "Oblivious"
+          },
+          {
+            "op": "notify",
+            "text": "わすれさせた",
+            "seconds": 2
+          }
+        ]
+      }
+    ]
+  }
+}

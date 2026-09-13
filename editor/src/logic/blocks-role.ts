@@ -136,7 +136,7 @@ export const WHEN_LABELS: Record<LogicWhen, string> = {
 
 const WHEN_TOOLTIPS: Record<LogicWhen, string> = {
     on_game_start: "タスクフェーズが始まったときに1回だけ実行します。「秒待つ」を挟んだ続きは会議が始まると取り消されるので、開始すぐに会議になる設定だと動かないことがあります。",
-    on_pet: "とくいわざのボタン (能力ボタン) を発動したときに実行します。「だれかを えらぶ」のときは えらんだ人が『あいて』になります。",
+    on_pet: "とくいわざのボタン (能力ボタン) を発動したときに実行します。「だれかを えらぶ」のときは えらんだ人が『あいて』になります。「きえるボタンをおす」でも このきっかけです (あいては いません)。",
     on_kill: "自分のキルが成立した直後に実行します。",
     on_death: "自分が死亡したときに実行します (追放されたときや会議で亡くなったときも含みます。切断は含みません)。",
     on_meeting_start: "会議がはじまるとき (会議画面が開く直前) に実行します。通報・緊急ボタンのどちらでも発火します。",
@@ -867,28 +867,9 @@ function jsonBlockDefs(): unknown[] {
             tooltip: "えらんだ人が、自分と同じ役職になります。会議中は効きません。同じ役職の人には効きません。しばらく間をあけないと連続では効きません。なかまに した/された ときも「ゲームがはじまったとき」が動くよ。じぶんがインポスターの役職なら、なかまにした人も本物のインポスターになるよ (インポスターの人数がふえる)。「かえるさき」でスロット番号をえらぶと、その役職にすることもできるよ (そのスロットに役職が入っていないときは なにも起きません)。",
         },
 
-        // 持続効果 (Wave 5 §1 — こうかをかける)
-        {
-            type: "ekr_do_effect_give",
-            message0: "%1 を %2 %3 秒",
-            args0: [
-                { type: "field_dropdown", name: "TARGET", options: TARGET_SINGLE_OPTIONS },
-                {
-                    type: "field_dropdown", name: "KIND", options: [
-                        ["はやくする", "haste"], ["おそくする", "slow"],
-                        ["こおらせる", "freeze"], ["くらくする", "blind"],
-                    ],
-                },
-                { type: "field_number", name: "SECONDS", value: 5, min: 1, max: 30, precision: 1 },
-            ],
-            inputsInline: true,
-            previousStatement: null,
-            nextStatement: null,
-            colour: HUE_LINK,
-            // 契約 §1.1: 実効値 (×1.5 / ×0.5 / 視界 0.3) は作者に開けないので、tooltip も数字を出さない。
-            // freeze だけ上限 10 秒なので、そこは明記する (超えると保存時にエラーになるため)。
-            tooltip: "えらんだ人に、しばらくのあいだ こうかをかけます。はやくする / おそくする / こおらせる (うごけなくする) / くらくする (見えるはんいをせまくする) の4つから えらべます。おなじ人に かけなおすと、あとからかけた方が勝ちます (かさなりません)。会議がはじまると ぜんぶ消えます。かける人が死んでも、じかんが終わるまで こうかは のこります。こおらせるは 1〜10 秒、ほかは 1〜30 秒までです。",
-        },
+        // 持続効果 (Wave 5 §1 — こうかをかける) は ekr_do_effect_give として下の
+        // defineEffectGiveBlock() で命令形登録する (Wave 11 で kind:"invisible" 選択時だけ
+        // 追加フィールドを出すため、KIND の動的ドロップダウンは JSON block defs では表現できない)。
 
         // 変数・式 (動的ドロップダウンが不要なもののみ。var_set/var_add/変数の値 は命令形で別途登録)
         {
@@ -1014,6 +995,85 @@ function defineDynamicVariableBlocks(): void {
 }
 
 // ---------------------------------------------------------------------------
+// Wave 11 (契約 §3/§7) — こうかをかける (effect_give)。KIND が "invisible" のときだけ、
+// だれから きえる (HIDEFROM) / しんだら (CORPSE) / かけなおしの かんかく (INTERVAL) の3つを
+// 追加で表示する。KIND の選択に応じて表示する input を切り替える必要があるため (JSON block defs は
+// 静的な shape しか持てない)、ekr_expr_var/ekr_do_addon_give と同じく命令形で登録する。
+// mutator は使わない (このファイルは ekr_if/ekr_if_else で mutator を避けて2ブロックへ分ける
+// 方針を採っている — Blockly.Mutator の代わりに KIND フィールドの validator から直接
+// input.setVisible() を呼ぶだけの単純な表示切替に留める)。
+// ⚠️ 表示の有無はあくまで見た目の都合であり、契約の強制はしない — kind が "invisible" 以外のときに
+// これら3フィールドを出力しないのは compile-role.ts の仕事 (ekr_do_inspect の DEPTH 条件付き
+// NOISE 出力と同じ二層構造)。ブロックのシリアライズ値そのものは非表示中も保持される。
+const EFFECT_KIND_OPTIONS: [string, string][] = [
+    ["はやくする", "haste"], ["おそくする", "slow"],
+    ["こおらせる", "freeze"], ["くらくする", "blind"],
+    ["すがたをけす", "invisible"],
+];
+const EFFECT_HIDE_FROM_OPTIONS: [string, string][] = [
+    ["みんなから", "everyone"],
+    ["インポスターいがいから", "crewmates"],
+    ["なかまいがいから", "enemies"],
+];
+const EFFECT_CORPSE_OPTIONS: [string, string][] = [
+    ["きえる", "vanish"],
+    ["のこる", "stay"],
+];
+// invisible 選択時だけ表示する3つの Input 名 (フィールド名 HIDEFROM/CORPSE/INTERVAL とは別枠)。
+const EFFECT_INVISIBLE_INPUT_NAMES = ["EG_HIDEFROM", "EG_CORPSE", "EG_INTERVAL"] as const;
+
+/** KIND の現在値に応じて invisible 専用の3 input の表示/非表示を切り替える。 */
+function updateEffectGiveShape(block: Blockly.Block, kind: unknown): void {
+    const invisible = kind === "invisible";
+    for (const name of EFFECT_INVISIBLE_INPUT_NAMES) {
+        block.getInput(name)?.setVisible(invisible);
+    }
+    if (block instanceof Blockly.BlockSvg && block.rendered) block.render();
+}
+
+function defineEffectGiveBlock(): void {
+    Blockly.Blocks["ekr_do_effect_give"] = {
+        init(this: Blockly.Block): void {
+            const block = this;
+            this.appendDummyInput()
+                .appendField(new Blockly.FieldDropdown(TARGET_SINGLE_OPTIONS), "TARGET")
+                .appendField("を")
+                .appendField(new Blockly.FieldDropdown(EFFECT_KIND_OPTIONS, (newValue: string) => {
+                    updateEffectGiveShape(block, newValue);
+                    return newValue;
+                }), "KIND")
+                .appendField(new Blockly.FieldNumber(5, 1, 30, 1), "SECONDS")
+                .appendField("秒");
+            this.appendDummyInput("EG_HIDEFROM")
+                .appendField("だれから きえる")
+                .appendField(new Blockly.FieldDropdown(EFFECT_HIDE_FROM_OPTIONS), "HIDEFROM");
+            this.appendDummyInput("EG_CORPSE")
+                .appendField("しんだら")
+                .appendField(new Blockly.FieldDropdown(EFFECT_CORPSE_OPTIONS), "CORPSE");
+            this.appendDummyInput("EG_INTERVAL")
+                .appendField("かけなおしの かんかく (びょう)")
+                .appendField(new Blockly.FieldNumber(5, 1, 60, 1), "INTERVAL");
+            this.setInputsInline(true);
+            this.setPreviousStatement(true, null);
+            this.setNextStatement(true, null);
+            this.setColour(HUE_LINK);
+            // 契約 §1.1: 実効値 (×1.5 / ×0.5 / 視界 0.3) は作者に開けないので、tooltip も数字を出さない。
+            // freeze だけ上限 10 秒・invisible だけ上限 20 秒なので、そこは明記する (超えると保存時に
+            // エラーになるため)。
+            this.setTooltip(
+                "えらんだ人に、しばらくのあいだ こうかをかけます。はやくする / おそくする / こおらせる " +
+                "(うごけなくする) / くらくする (見えるはんいをせまくする) / すがたをけす の5つから えらべます。" +
+                "おなじ人に かけなおすと、あとからかけた方が勝ちます (かさなりません)。会議がはじまると " +
+                "ぜんぶ消えます。かける人が死んでも、じかんが終わるまで こうかは のこります。こおらせるは " +
+                "1〜10 秒、すがたをけすは 1〜20 秒、ほかは 1〜30 秒までです。「すがたをけす」を えらぶと、" +
+                "だれから きえるか・しんだら 死体が のこるか・かけなおしの かんかくも えらべます。",
+            );
+            updateEffectGiveShape(this, this.getFieldValue("KIND"));
+        },
+    };
+}
+
+// ---------------------------------------------------------------------------
 // Wave 10 (契約 §2/§4/§5/§7) — つける・はがす (アドオン付与)
 // ---------------------------------------------------------------------------
 // ADDON ドロップダウンは動的ではない (生成物 ADDON_META は固定の 121 件) が、選んだ項目に応じて
@@ -1080,6 +1140,7 @@ export function defineRoleBlocks(): void {
     blocksDefined = true;
     Blockly.defineBlocksWithJsonArray(jsonBlockDefs());
     defineDynamicVariableBlocks();
+    defineEffectGiveBlock();
     defineAddonBlocks();
 }
 

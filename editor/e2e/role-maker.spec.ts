@@ -330,6 +330,90 @@ test.describe("役職メーカー (EKN R1, ブロックロジック)", () => {
         expect(cap.errors, "未捕捉の例外あり").toEqual([]);
     });
 
+    // Wave 11 (契約 §3/§7) — ekr_do_effect_give は KIND の値に応じて HIDEFROM/CORPSE/INTERVAL の
+    // 表示/非表示を切り替える命令形ブロック (blocks-role.ts の defineEffectGiveBlock)。
+    // vitest は blocks-role.ts を import しないため、この動的な表示切替が実際に動くかは
+    // 実 Blockly を通した Playwright でしか検証できない (v1.1 ブロックの往復確認と同じ理由)。
+    test("ekr_do_effect_give: KIND を invisible に切り替えると追加フィールドが現れ、コード化で hideFrom/corpse/interval が出力される", async ({ page }) => {
+        const cap = capture(page);
+        await page.addInitScript(() => {
+            localStorage.setItem(
+                "ekm.roleMaker",
+                JSON.stringify({
+                    name: "きえるテスト役職",
+                    logicBlockly: {
+                        blocks: {
+                            languageVersion: 0,
+                            blocks: [
+                                {
+                                    type: "ekr_when_on_pet",
+                                    next: {
+                                        block: {
+                                            type: "ekr_do_effect_give",
+                                            fields: {
+                                                TARGET: "self", KIND: "invisible", SECONDS: 6,
+                                                HIDEFROM: "enemies", CORPSE: "stay", INTERVAL: 3,
+                                            },
+                                        },
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                }),
+            );
+        });
+
+        await page.goto("/");
+        await dismissStartScreen(page);
+        await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+
+        await page.locator("#btn-role-maker").click();
+        await expect(page.locator("#dlg-role-maker")).toBeVisible();
+        await page.locator('#rm-tabs .rm-tab[data-rm-tab="logic"]').click();
+        await expect(page.locator("#rm-blockly-container svg.blocklySvg")).toBeVisible({ timeout: 30000 });
+
+        // 復元時に KIND が既に invisible なので、追加3フィールドは初期状態から見えているはず
+        // (updateEffectGiveShape を init() 内でも一度呼んでいることの確認)。
+        // ⚠️ Blockly の SVG はブロックが非表示中でもフィールドの DOM/textContent を残すことがある
+        // ため (Playwright の toContainText は textContent ベースで CSS 非表示を無視してしまう)、
+        // ここは実際の見た目 (:visible 疑似クラス) で数える — ドロップダウンは
+        // TARGET/KIND (常時) + HIDEFROM/CORPSE (invisible 選択時のみ) の4つが visible のはず。
+        const placedBlock = page.locator("#rm-blockly-container .blocklyBlockCanvas .blocklyDraggable").first();
+        await expect(placedBlock).toBeVisible({ timeout: 5000 });
+        await expect(page.locator("#rm-blockly-container .blocklyDropdownText:visible")).toHaveCount(4);
+
+        await expect(page.locator("#rm-logic-validity")).toBeHidden();
+
+        await page.locator("#rm-copy").click();
+        await expect(page.locator("#rm-status")).toContainText("コピーしました");
+        const code = await page.evaluate(() => navigator.clipboard.readText());
+        const jsonText = await page.evaluate(async (c: string) => {
+            const mod = await import("/src/rolecode.ts");
+            return mod.decodeRoleCode(c);
+        }, code);
+        const parsed = JSON.parse(jsonText) as { logic?: { rules: { when: string; do: unknown[] }[] } };
+        expect(parsed.logic).toBeDefined();
+        expect(parsed.logic!.rules[0].do[0]).toEqual({
+            op: "effect_give", target: "self", kind: "invisible", seconds: 6,
+            hideFrom: "enemies", corpse: "stay", interval: 3,
+        });
+
+        // KIND を「はやくする」(haste) へ戻すと、追加3フィールドが非表示になる。
+        const kindField = placedBlock.locator(".blocklyDropdownText").nth(1);
+        await kindField.click();
+        const hasteItem = page.locator(".blocklyMenuItem", { hasText: "はやくする" });
+        await expect(hasteItem).toBeVisible({ timeout: 5000 });
+        await hasteItem.click();
+
+        // HIDEFROM/CORPSE の2ドロップダウンが非表示になり、TARGET/KIND の2つだけが残る。
+        await expect(page.locator("#rm-blockly-container .blocklyDropdownText:visible")).toHaveCount(2);
+
+        console.log("=== page console ===\n" + (cap.console.join("\n") || "(なし)"));
+        console.log("=== page errors ===\n" + (cap.errors.join("\n") || "(なし)"));
+        expect(cap.errors, "未捕捉の例外あり").toEqual([]);
+    });
+
     // Wave 3 (§1.2 2026-08-14) — ekr_when_on_var は blocks-role.ts が
     // Blockly.Blocks["ekr_when_on_var"] として命令形で登録する唯一の新イベントブロック (他の
     // ekr_when_* は defineBlocksWithJsonArray 経由)。命令形登録は型チェックが利かない生文字列

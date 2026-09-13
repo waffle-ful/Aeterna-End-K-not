@@ -96,8 +96,12 @@ internal sealed class EkrHolderState
     // v1.3: field ≤1/2秒/ホルダー (spec §5 — CNO 生成系防御3点の per-holder レート枠)。
     public float LastFieldPlaceTime = -1f;
 
-    // Wave 5: effect_give ≤1/2秒/ホルダー。
+    // Wave 5: effect_give ≤1/2秒/ホルダー (invisible 以外の kind)。
     public float LastEffectGiveTime = -1f;
+
+    // Wave 11 (ヘッダ訂正10): effect_give(invisible) 専用のタイムスタンプ。node の interval
+    // (1..60・既定5) を invisible だけの間隔にし、他 kind の 2 秒間隔と混ざらないようにする。
+    public float LastInvisibleGiveTime = -1f;
 
     // Wave 6: cno_launch ≤1/2秒/ホルダー。
     public float LastCnoLaunchTime = -1f;
@@ -310,6 +314,31 @@ public static class EkrManager
 
     // Wave 9: 束縛中の役職コードの基底が shapeshift か。毎フレーム級 (GetVNRole/GetDYRole/付与判定) で呼ばれる。
     public static bool IsEkrShapeshiftBasis(CustomRoles role) => IsEkrRole(role) && GetDefinition(role)?.ParsedBasis == EkrBasis.Shapeshift;
+
+    // Wave 11: 束縛中の役職コードの定義そのものが basis:"phantom" か (ホスト設定での化けは含まない —
+    // それは GetEffectiveBasis が見る)。
+    public static bool IsEkrPhantomBasis(CustomRoles role) => IsEkrRole(role) && GetDefinition(role)?.ParsedBasis == EkrBasis.Phantom;
+
+    // Wave 11: 束縛中の役職コードの定義が basis:"pet" (省略時の既定を含む) か。
+    public static bool IsEkrPetBasis(CustomRoles role) => IsEkrRole(role) && GetDefinition(role)?.ParsedBasis == EkrBasis.Pet;
+
+    // Wave 11 (契約 §2.2): 実効基底。定義が pet で、かつホストが UsePhantomBasis (非インポスターは
+    // UsePhantomBasisForNKs も) を ON にしていて役職コードが on_pet ロジックを持つ (= SimpleAbilityTrigger)
+    // なら、実際にはファントムボタンへ化けている。OnVanish / ApplyGameOptions / アドオン除外判定は
+    // すべてここを通す (定義の basis そのものではなく)。
+    public static EkrBasis GetEffectiveBasis(CustomRoles role)
+    {
+        if (!IsEkrRole(role)) return EkrBasis.Pet;
+
+        EkrBasis basis = GetDefinition(role)?.ParsedBasis ?? EkrBasis.Pet;
+        if (basis != EkrBasis.Pet) return basis;
+
+        bool hostFlippedToPhantom = Options.UsePhantomBasis.GetBool()
+            && (IsEkrImpostor(role) || Options.UsePhantomBasisForNKs.GetBool())
+            && role.SimpleAbilityTrigger();
+
+        return hostFlippedToPhantom ? EkrBasis.Phantom : EkrBasis.Pet;
+    }
 
     public static bool IsEkrNeutral(CustomRoles role) => SlotTeams.TryGetValue(role, out EkrTeam team) && team == EkrTeam.Neutral;
 
@@ -3802,19 +3831,22 @@ public static class EkrManager
     // effect_give は「相手に一定時間だけ効く状態」を付ける op。対象は EKR ホルダーとは限らないので、
     // 台帳は EkrHolderState ではなく **per-target の static テーブル** に持つ (キー = (targetId, channel))。
     //
-    // チャンネルは2本だけ (§1.2): movement (haste/slow/freeze 共有) と vision (blind)。同じチャンネルへの
-    // 再適用は**後勝ち上書き**でスタックしない — 期限も新しい効果のものになり、切れたら「素の値」へ戻る。
-    // ホルダー跨ぎも同一チャンネル (別ホルダーの haste 中に freeze が来たら freeze が勝つ)。
+    // チャンネルは3本 (§1.2 + Wave 11 §3): movement (haste/slow/freeze 共有)・vision (blind)・
+    // visibility (invisible)。同じチャンネルへの再適用は**後勝ち上書き**でスタックしない — 期限も
+    // 新しい効果のものになり、切れたら「素の値」へ戻る。ホルダー跨ぎも同一チャンネル
+    // (別ホルダーの haste 中に freeze が来たら freeze が勝つ)。
     //
-    // 送信面 (§1.3): 新しい送信種はゼロ。実費は対象1人の SyncSettings 再送 (MarkDirtySettings) だけで、
-    // バニラ客にもそのまま効く既存経路に乗る。movement は Main.AllPlayerSpeed への書き込み、vision は
-    // 書き込みすら無い宣言型 (PlayerGameOptionsSender が HasBlindEffect を読む) なので復元問題が構造的に無い。
+    // 送信面 (§1.3): movement/vision は新しい送信種ゼロ (実費は対象1人の SyncSettings 再送
+    // [MarkDirtySettings] だけ・movement は Main.AllPlayerSpeed への書き込み、vision は書き込みすら無い
+    // 宣言型 [PlayerGameOptionsSender が HasBlindEffect を読む] なので復元問題が構造的に無い)。
+    // visibility は既存の汎用透明化 (RpcMakeInvisible/RpcMakeVisible) にそのまま乗る。
     //
     // 期限管理は PollCnoTouchIfDue と同族の 0.25s Pump ライダー (専用の毎フレーム経路を作らない)。
     // 期限粒度 ±0.25s は仕様。
 
     internal const int EffectChannelMovement = 0;
     internal const int EffectChannelVision = 1;
+    internal const int EffectChannelVisibility = 2;
 
     private sealed class EkrEffectEntry
     {
@@ -3825,27 +3857,74 @@ public static class EkrManager
         public float Baseline;
         public float Written;
 
+        // visibility のみ: 適用時の hideFrom / corpse (解除は同じ hideFrom の経路を使う・corpse は
+        // Kill 直前フックが読む)。
+        public string HideFrom;
+        public string Corpse;
+
         public byte HolderId; // ログ用 (付与元)
     }
 
     private static readonly Dictionary<(byte TargetId, int Channel), EkrEffectEntry> Effects = [];
 
-    // §1.4 予算: per-holder ≤1/2秒 + EKR 全体 ≤2/秒 (teleport 系と同じ2段構え・超過は静かにドロップ)。
-    private const float EffectPerHolderInterval = 2f;
+    // §1.4 予算: per-holder ≤1/2秒 (invisible だけ node の interval・§3・専用タイムスタンプ) +
+    // EKR 全体 ≤2/秒 (teleport 系と同じ2段構え・超過は静かにドロップ)。
+    internal const float EffectPerHolderInterval = 2f;
     private static readonly List<float> _recentEffectTimes = [];
 
-    internal static bool TryConsumeEffectBudget(EkrHolderState state)
+    // per-holder のタイムスタンプは呼び出し側 (state.LastEffectGiveTime / state.LastInvisibleGiveTime)
+    // を ref で渡させる — invisible の interval が他 kind の 2 秒間隔と混ざらないようにするため
+    // (kind ごとに別のフィールドを ref で渡す)。
+    internal static bool TryConsumeEffectBudget(ref float lastHolderTime, float perHolderInterval)
     {
         float now = Time.realtimeSinceStartup;
 
-        if (state.LastEffectGiveTime >= 0f && now - state.LastEffectGiveTime < EffectPerHolderInterval) return false;
+        if (lastHolderTime >= 0f && now - lastHolderTime < perHolderInterval) return false;
 
         _recentEffectTimes.RemoveAll(t => now - t >= 1f);
         if (_recentEffectTimes.Count >= 2) return false;
 
-        state.LastEffectGiveTime = now;
+        lastHolderTime = now;
         _recentEffectTimes.Add(now);
         return true;
+    }
+
+    // Wave 11 (ヘッダ訂正6): 同時に透明にできる対象数の上限。会議開始等の一括解除が
+    // N × K × 3 SnapTo を1フレームへ集中させるのを防ぐハード層。
+    // 既存対象への再適用 (hideFrom 変更含む) は上限に数えない。
+    private const int MaxSimultaneousInvisible = 3;
+
+    internal static bool AllowsNewInvisibleTarget(byte targetId)
+    {
+        if (Effects.ContainsKey((targetId, EffectChannelVisibility))) return true;
+
+        int count = 0;
+        foreach ((byte TargetId, int Channel) key in Effects.Keys)
+        {
+            if (key.Channel != EffectChannelVisibility) continue;
+            if (++count >= MaxSimultaneousInvisible) return false;
+        }
+
+        return true;
+    }
+
+    // Wave 11 (契約 §3 予算②・ヘッダ訂正7): invisible だけの追加ハード関所。適用 (非モッド客 2 本) +
+    // 解除 (非モッド客 3 本) の両方をこのサイクルの残量計算に含める — K = 対象以外の非モッド客数
+    // (= このサイクルで実際に SnapTo が飛ぶ人数)。per-holder interval を消費する前に呼ぶこと
+    // (ドロップは予算不消費)。
+    internal static bool SnapToBudgetAllowsInvisible(PlayerControl target)
+    {
+        if (GameStates.CurrentServerType != GameStates.ServerType.Vanilla) return true;
+
+        int nonModdedViewers = 0;
+
+        foreach (PlayerControl pc in PlayerControl.AllPlayerControls)
+        {
+            if (pc.AmOwner || pc.OwnerId < 0 || pc == target || pc.IsModdedClient()) continue;
+            nonModdedViewers++;
+        }
+
+        return Utils.NumSnapToCallsThisRound + 5 * nonModdedViewers <= CcMaxSnapToPressureToStart;
     }
 
     // 設定同期の dirty マーク。🔴 AntiBlackout.SkipTasks 中は PlayerGameOptionsSender.SendOptionsArray が
@@ -3886,6 +3965,43 @@ public static class EkrManager
         return Effects.ContainsKey((playerId, EffectChannelMovement));
     }
 
+    // Wave 11 (契約 §3 hideFrom): 「なかま」判定。seer 自身は対象外 (自分向けの表示は既存の self 分岐が
+    // 別に担当するため、ここでは常に false — 呼び出し元の CanSeeInvisible / RpcMakeInvisible/Visible の
+    // canSee 述語がそう前提している)。Neutral どうしは同じ役職のときだけなかま。
+    private static bool IsAllyForInvisibility(PlayerControl target, PlayerControl seer)
+    {
+        if (!target || !seer || target.PlayerId == seer.PlayerId) return false;
+
+        Team team = target.GetTeam();
+        if (seer.GetTeam() != team) return false;
+
+        return team != Team.Neutral || seer.GetCustomRole() == target.GetCustomRole();
+    }
+
+    // Wave 11: 名札の「透明」表示 (Utils.cs / PlayerControlPatch.cs) から呼ぶ。hideFrom:"enemies" で
+    // 隠れている相手を、なかま (seer) にだけ通常の名札へ戻すための一点判定。
+    public static bool CanSeeInvisible(PlayerControl seer, PlayerControl target)
+    {
+        if (!seer || !target || seer.PlayerId == target.PlayerId) return false;
+        if (!Effects.TryGetValue((target.PlayerId, EffectChannelVisibility), out EkrEffectEntry entry) || entry.HideFrom != "enemies") return false;
+
+        return IsAllyForInvisibility(target, seer);
+    }
+
+    // Wave 11 (契約 §3 corpse): kind:"invisible" の corpse=="stay" か (passives.corpse とは別枠 —
+    // HasVanishingCorpse の兄弟)。
+    public static bool KeepsCorpseWhenInvisible(byte playerId)
+    {
+        return Effects.TryGetValue((playerId, EffectChannelVisibility), out EkrEffectEntry entry) && entry.Corpse == "stay";
+    }
+
+    // Wave 11: corpse=="stay" の死体化フック (ExtendedPlayerControl.Kill の1行) から呼ぶ。台帳に保持した
+    // hideFrom の経路そのままで可視化する (ClearEffect の visibility 分岐に委譲)。
+    public static void RevealForCorpseStay(byte playerId)
+    {
+        ClearEffect(playerId, EffectChannelVisibility, "corpse-stay");
+    }
+
     // §1.1 実効値 (固定・作者には開けない)。haste ×1.5 / slow ×0.5 / freeze = MinSpeed。
     private static float EffectSpeedValue(string kind, float baseline)
     {
@@ -3897,7 +4013,7 @@ public static class EkrManager
         };
     }
 
-    internal static void ApplyEffect(byte targetId, string kind, float seconds, byte holderId)
+    internal static void ApplyEffect(byte targetId, string kind, float seconds, byte holderId, string hideFrom = null, string corpse = null)
     {
         PlayerControl target = targetId.GetPlayer();
         if (!target || !target.IsAlive() || target.Data == null || target.Data.Disconnected) return;
@@ -3909,6 +4025,37 @@ public static class EkrManager
             Effects[(targetId, EffectChannelVision)] = new EkrEffectEntry { Kind = kind, EndAt = endAt, HolderId = holderId };
             MarkSettingsDirty(target);
             Logger.Info($"EKR effect: {target.GetRealName()} <= {kind} {seconds}s (by holder {holderId})", "EkrManager");
+            return;
+        }
+
+        if (kind == "invisible")
+        {
+            // 後勝ちで hideFrom が変わる場合は解除→再適用する — RpcMakeInvisible/RpcMakeVisible は
+            // Main.Invisible.Add/Remove の冪等 return に阻まれ、経路 (phantom/canSee) を素通りで
+            // 差し替えられないため (§3)。
+            if (Effects.TryGetValue((targetId, EffectChannelVisibility), out EkrEffectEntry existing) && existing.HideFrom != hideFrom)
+                ClearEffect(targetId, EffectChannelVisibility, "overwrite");
+
+            Effects[(targetId, EffectChannelVisibility)] = new EkrEffectEntry { Kind = kind, EndAt = endAt, HolderId = holderId, HideFrom = hideFrom, Corpse = corpse };
+
+            switch (hideFrom)
+            {
+                case "crewmates":
+                    target.RpcMakeInvisible(phantom: true);
+                    break;
+                // Wave 11 (ヘッダ訂正12): crewmates の bool 版と同じ扱い — Standard 以外は no-op
+                // (家の既存ガードと対称。台帳エントリ自体は crewmates と同様に残る)。
+                case "enemies" when Options.CurrentGameMode == CustomGameMode.Standard:
+                    target.RpcMakeInvisible(seer => IsAllyForInvisibility(target, seer));
+                    break;
+                case "enemies":
+                    break;
+                default:
+                    target.RpcMakeInvisible();
+                    break;
+            }
+
+            Logger.Info($"EKR effect: {target.GetRealName()} <= invisible {seconds}s hideFrom={hideFrom} corpse={corpse} (by holder {holderId})", "EkrManager");
             return;
         }
 
@@ -3952,6 +4099,21 @@ public static class EkrManager
         {
             // 宣言型なので「テーブルから消して再送」だけ (§1.3 — 復元問題が構造的に無い)。
             MarkSettingsDirty(pc);
+            return;
+        }
+
+        if (channel == EffectChannelVisibility)
+        {
+            if (pc)
+            {
+                switch (entry.HideFrom)
+                {
+                    case "crewmates": pc.RpcMakeVisible(phantom: true); break;
+                    case "enemies": pc.RpcMakeVisible(seer => IsAllyForInvisibility(pc, seer)); break;
+                    default: pc.RpcMakeVisible(); break;
+                }
+            }
+
             return;
         }
 

@@ -70,12 +70,20 @@ import { ADDON_BY_ID } from "../generated/ekr-addons";
 // つけられない」9種 (midGameForbidden) または「とちゅうで つけても きほんは かわらない」7種
 // (basisChanging)、L38 = addon_remove の対象が Lovers または all。改定: TASK_ONLY_LINT_OPS に
 // addon_give/addon_remove を追加 (会議中 op 白名単に載っておらず、recruit と同じ側)。
+// Wave 11 (§7 2026-09-13): L39/L40 を追加 (計40ルール)。基底 "phantom" (きえるボタンをおす) と
+// effect_give の kind:"invisible" (すがたをけす) 新設に伴うヒント群。改定: L32 の文言を
+// 「ホストが『ファントム化』を ON にしたときだけ効く」旨に更新 (条件は basis=="pet" のまま不変 —
+// phantom 基底自身は abilityCooldown がそのまま効くため)。L33 の条件を basis!="pet" に広げ
+// (shapeshift/phantom のどちらでも on_pet ルールが要る)、文言も両方の基底に触れるよう改定。
+// L39 = effect_give(invisible, hideFrom:"crewmates"|"enemies") — 通常ゲームモード限定の注意
+// (家の既存ガードは crewmates/enemies のどちらの述語付き経路も Standard 限定)。
+// L40 = effect_give(invisible, interval < 3) — かけなおしの乱れ撃ち (kick リスク) の注意。
 
 export type LintRuleId =
     | "L1" | "L2" | "L3" | "L4" | "L5" | "L6" | "L7" | "L8" | "L9" | "L10" | "L11" | "L12" | "L13"
     | "L14" | "L15" | "L16" | "L17" | "L18" | "L19" | "L20" | "L21"
     | "L22" | "L23" | "L24" | "L25" | "L26" | "L27" | "L28" | "L29" | "L30"
-    | "L31" | "L32" | "L33" | "L34" | "L35" | "L36" | "L37" | "L38";
+    | "L31" | "L32" | "L33" | "L34" | "L35" | "L36" | "L37" | "L38" | "L39" | "L40";
 
 export interface LintWarning {
     rule: LintRuleId;
@@ -353,10 +361,10 @@ export interface LintDocContext {
 }
 
 /**
- * 検証済みの RoleLogic に対して spec §6 の 38 ルール (v1.2 で L11/L12、v1.3 で L13、Wave 1 で
+ * 検証済みの RoleLogic に対して spec §6 の 40 ルール (v1.2 で L11/L12、v1.3 で L13、Wave 1 で
  * L14〜L17、Wave 2 で L18〜L20、2026-08-14 に L21、Wave 3 で L22〜L25 のうち L24/L25、Wave 4 で
- * L26/L27、Wave 5 で L28、Wave 6 で L29、Wave 8 で L30、Wave 9 で L31〜L33、Wave 10 で L34〜L38) を
- * 静的検査する。
+ * L26/L27、Wave 5 で L28、Wave 6 で L29、Wave 8 で L30、Wave 9 で L31〜L33、Wave 10 で L34〜L38、
+ * Wave 11 で L39/L40) を静的検査する。
  * ブロックの組み方に対するヒントであり、export 自体は妨げない (呼び出し元は結果を警告フッタに
  * 表示するだけ)。
  *
@@ -699,6 +707,13 @@ export function lintRoleLogic(logic: RoleLogic, progressText?: string, docContex
         let hasBasisChangingGive = false;
         // L38 (Wave 10・契約 §8): addon_remove の対象が Lovers または all。
         let hasRemoveLoversOrAll = false;
+        // L39 (Wave 11・契約 §7): effect_give(invisible, hideFrom:"crewmates"|"enemies") —
+        // 「インポスターいがいから きえる」「なかまいがいから きえる」はどちらも通常のゲームモード
+        // 限定 (家の既存ガード)。
+        let hasHideFromModeLimited = false;
+        // L40 (Wave 11・契約 §7): effect_give(invisible, interval < 3) — かけなおしの間隔が
+        // 短すぎる乱れ撃ち (kick リスクの温床)。
+        let hasShortInvisibleInterval = false;
         forEachNode(rule.do, (n) => {
             if (n.op === "addon_give") {
                 const meta = ADDON_BY_ID.get(n.addon);
@@ -709,6 +724,9 @@ export function lintRoleLogic(logic: RoleLogic, progressText?: string, docContex
             } else if (n.op === "addon_remove") {
                 if (n.addon === "Lovers" || n.addon === ADDON_REMOVE_ALL) hasRemoveLoversOrAll = true;
                 removePairs.add(`${n.target}:${n.addon}`);
+            } else if (n.op === "effect_give" && n.kind === "invisible") {
+                if (n.hideFrom === "crewmates" || n.hideFrom === "enemies") hasHideFromModeLimited = true;
+                if (n.interval !== undefined && n.interval < 3) hasShortInvisibleInterval = true;
             }
         });
         if (hasClientOnlyGive) {
@@ -744,6 +762,20 @@ export function lintRoleLogic(logic: RoleLogic, progressText?: string, docContex
                 "L38", ruleIndex, rule.when,
                 "ラバーズを はがすと あいてが ひとりに なるよ。",
                 "はがす前に、そのことを かんがえておこう。",
+            ));
+        }
+        if (hasHideFromModeLimited) {
+            warnings.push(makeWarning(
+                "L39", ruleIndex, rule.when,
+                "インポスターいがいから / なかまいがいから きえるのは ふつうの ゲームモードだけだよ。",
+                "べつのゲームモードでは、このこうかは なにも おきないよ。",
+            ));
+        }
+        if (hasShortInvisibleInterval) {
+            warnings.push(makeWarning(
+                "L40", ruleIndex, rule.when,
+                "かけなおしの かんかくが みじかすぎるよ。みだれうちは キックの もとだよ (3びょう いじょうが あんしん)。",
+                "かんかくを 3びょう いじょうに ひろげよう。",
             ));
         }
 
@@ -811,22 +843,26 @@ export function lintRoleLogic(logic: RoleLogic, progressText?: string, docContex
         ));
     }
 
-    // L32 (Wave 9・契約 §1.2): とくいわざの まちじかん (abilityCooldown) は
-    // 「だれかを えらぶ」(basis == "shapeshift") のときだけ効く。
+    // L32 (Wave 9・契約 §1.2・Wave 11 で文言改定): とくいわざの まちじかん (abilityCooldown) は
+    // 「だれかを えらぶ」(basis == "shapeshift") や「きえるボタンをおす」(basis == "phantom") では
+    // そのまま効くが、「ボタンをおす」(basis == "pet") のままだと、ホストが「ファントム化」を
+    // ON にしたときだけ効く (OFF のままなら使われない)。条件は basis == "pet" のまま不変
+    // (phantom 基底自身は abilityCooldown がそのまま効くため、警告の対象外)。
     if (docContext?.abilityCooldown !== undefined && docContext.abilityCooldown !== ABILITY_COOLDOWN_DEFAULT && docContext.basis === "pet") {
         warnings.push(makeWarning(
             "L32", -1, "basis",
-            "まちじかんは『だれかを えらぶ』のときだけ 効きます。",
-            "いまは『ボタンをおす』なので、この まちじかんは 使われません。",
+            "とくいわざの まちじかんは『ボタンをおす』では ホストが『ファントム化』を ON にしたときだけ 効くよ。",
+            "OFFのままなら、この まちじかんは 使われないよ。",
         ));
     }
 
-    // L33 (Wave 9・契約 §2): 「だれかを えらぶ」(basis == "shapeshift") なのに、
-    // とくいわざのルール (on_pet) が1つも無い。
-    if (docContext?.basis === "shapeshift" && !logic.rules.some((r) => r.when === "on_pet")) {
+    // L33 (Wave 9・契約 §2・Wave 11 で対象拡大): 「だれかを えらぶ」(shapeshift) や
+    // 「きえるボタンをおす」(phantom) なのに、とくいわざのルール (on_pet) が1つも無い。
+    // docContext が省略された (basis が分からない) ときはこれまでどおり検査をスキップする。
+    if (docContext?.basis !== undefined && docContext.basis !== "pet" && !logic.rules.some((r) => r.when === "on_pet")) {
         warnings.push(makeWarning(
             "L33", -1, "basis",
-            "『だれかを えらぶ』なのに、とくいわざの ルールが ありません。",
+            "『だれかを えらぶ』『きえるボタンをおす』なのに とくいわざの ルールがありません。",
             "「とくいわざボタンを おしたとき」を ついかしよう。",
         ));
     }
