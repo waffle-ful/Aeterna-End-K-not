@@ -20,6 +20,9 @@ public static class BanManager
     private static readonly string BanListPath = $"{Main.DataPath}/EndKnot_DATA/BanList.txt";
     private static readonly string ModeratorListPath = $"{Main.DataPath}/EndKnot_DATA/Moderators.txt";
     private static readonly string WhiteListListPath = $"{Main.DataPath}/EndKnot_DATA/WhiteList.txt";
+    private static readonly string TempBanListPath = $"{Main.DataPath}/EndKnot_DATA/TempBanList.txt";
+    private const long TempBanTtlSeconds = 86400;
+    private static readonly string EmptyPuidHash = ComputeHashedPuid("");
     private static readonly List<string> EACList = [];
     public static readonly List<string> TempBanWhiteList = []; // To prevent writing to the banlist
 
@@ -53,10 +56,58 @@ public static class BanManager
                 Logger.Warn("Creating a new WhiteList.txt file", "BanManager");
                 File.Create(WhiteListListPath).Close();
             }
-            
+
+            if (!File.Exists(TempBanListPath))
+            {
+                Logger.Warn("Creating a new TempBanList.txt file", "BanManager");
+                File.Create(TempBanListPath).Close();
+            }
+
+            LoadTempBanList();
+
             Main.Instance.StartCoroutine(LoadEACList());
         }
         catch (Exception ex) { Logger.Exception(ex, "BanManager"); }
+    }
+
+    private static void LoadTempBanList()
+    {
+        TempBanWhiteList.Clear();
+
+        try
+        {
+            long nowSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            List<string> validLines = [];
+
+            foreach (string line in File.ReadAllLines(TempBanListPath))
+            {
+                if (line.IsNullOrWhiteSpace()) continue;
+
+                string[] parts = line.Split(',');
+                if (parts.Length != 2 || !long.TryParse(parts[1], out long timestamp)) continue;
+                if (nowSeconds - timestamp >= TempBanTtlSeconds) continue;
+
+                validLines.Add(line);
+                if (!TempBanWhiteList.Contains(parts[0])) TempBanWhiteList.Add(parts[0]);
+            }
+
+            File.WriteAllLines(TempBanListPath, validLines);
+        }
+        catch (Exception ex) { Logger.Exception(ex, "LoadTempBanList"); }
+    }
+
+    public static void AddTempBan(string hashedPuid)
+    {
+        if (hashedPuid.IsNullOrWhiteSpace() || hashedPuid == EmptyPuidHash || TempBanWhiteList.Contains(hashedPuid)) return;
+
+        TempBanWhiteList.Add(hashedPuid);
+
+        try
+        {
+            long nowSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            File.AppendAllText(TempBanListPath, $"{hashedPuid},{nowSeconds}\n");
+        }
+        catch (Exception ex) { Logger.Exception(ex, "AddTempBan"); }
     }
 
     public static IEnumerator LoadEACList()
@@ -98,9 +149,11 @@ public static class BanManager
 
     public static string GetHashedPuid(this ClientData player)
     {
-        if (player == null) return string.Empty;
+        return player == null ? string.Empty : ComputeHashedPuid(player.ProductUserId);
+    }
 
-        string puid = player.ProductUserId;
+    private static string ComputeHashedPuid(string puid)
+    {
         using var sha256 = SHA256.Create();
         // get sha-256 hash
         byte[] sha256Bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(puid));
@@ -166,14 +219,16 @@ public static class BanManager
     {
         if (!AmongUsClient.Instance.AmHost || !Options.ApplyBanList.GetBool() || player == null) return;
 
-        if (TempBanWhiteList.Contains(player.GetHashedPuid()))
+        var server = GameStates.CurrentServerType;
+        if (server == GameStates.ServerType.Local) return;
+
+        if (player.HasValidPuid() && TempBanWhiteList.Contains(player.GetHashedPuid()))
         {
             AmongUsClient.Instance.KickPlayer(player.Id, false);
             Logger.Info($"{player.PlayerName} was in temp ban list", "BAN");
+            return;
         }
 
-        var server = GameStates.CurrentServerType;
-        if (server == GameStates.ServerType.Local) return;
         if (server != GameStates.ServerType.Vanilla && (player.ProductUserId.IsNullOrWhiteSpace() || player.ProductUserId.Length != 32)) return;
 
         string friendcode = player.FriendCode.Replace(':', '#');
@@ -206,7 +261,12 @@ public static class BanManager
                 Logger.Info($"{player.PlayerName} was banned because of a spoofed friend code", "EAC");
                 return;
             }
+        }
 
+        // An empty friend code still carries a hashed PUID, so only skip the list checks when the PUID
+        // itself is invalid (an invalid PUID collapses onto the same hash for every client).
+        if (friendcode != string.Empty || player.HasValidPuid())
+        {
             if (CheckBanList(friendcode, player.GetHashedPuid()))
             {
                 AmongUsClient.Instance.KickPlayer(player.Id, true);
@@ -272,7 +332,7 @@ public static class BanManager
 
         switch (code)
         {
-            case "" when hashedPuid == "":
+            case "" when hashedPuid != "":
                 onlyCheckPuid = true;
                 break;
             case "":
