@@ -105,6 +105,20 @@ public abstract class EkmTemplateRole : RoleBase
         return def is { CanVent: true };
     }
 
+    // Wave 9 (契約 §1 canSabotage): サボの実質の関所は `SabotageSystemPatch.CheckSabotage` が見る
+    // ここで、`ShipStatusPatch` の EKR 関所は「塞ぐ」向きしか持たない。override が無いと
+    // `RoleBase.CanUseSabotage` (= インポスター基底かどうか) に落ちるため、クルー/第三陣営を基底に
+    // 借りている役職コードは `canSabotage: true` でもサボを実行できず、ホスト画面ではサボボタンを
+    // 押しても通常マップが開いてしまう (HudPatch のマップモード判定も同じ既定を見ている)。
+    public override bool CanUseSabotage(PlayerControl pc)
+    {
+        // 明示 false / 省略 × クルー基底は、陣営が何であれ塞ぐ (幽霊の RoleTypes 判定にも効く)。
+        if (!EkrManager.AllowsSabotage(pc.GetCustomRole())) return false;
+
+        // 以降は Jackal/Traitor 等と同じ「既定 or 独自条件 && 生存」の形。
+        return base.CanUseSabotage(pc) || pc.IsAlive();
+    }
+
     public override void ApplyGameOptions(IGameOptions opt, byte playerId)
     {
         EkrDefinition def = EkrManager.GetDefinition(Slot);
