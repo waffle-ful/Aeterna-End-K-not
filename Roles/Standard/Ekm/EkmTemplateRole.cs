@@ -1,6 +1,7 @@
 using System;
 using AmongUs.GameOptions;
 using EndKnot.Modules.Ekm;
+using UnityEngine;
 
 namespace EndKnot.Roles;
 
@@ -146,10 +147,32 @@ public abstract class EkmTemplateRole : RoleBase
 
         // Wave 9: basis shapeshift はバニラのシェイプシフトボタンを借りる (Illusionist 前例と同じ設定)。
         // 変身は常に即拒否するので Duration は実質未使用の固定値。
+        // イントロ直後の PreventKill 窓では OnShapeshift/OnVanish が呼ばれず CD だけリセットされる
+        // (初回押下が無音で不発)。窓の長さは固定 10 秒ではなく Options.StartingKillCooldown なので、
+        // それに合わせてクランプする (Torpedo.cs / Mirage.cs と同型)。
         if (def.ParsedBasis == EkrBasis.Shapeshift)
         {
-            AURoleOptions.ShapeshifterCooldown = EkrManager.GetEffectiveAbilityCooldown(Slot, def.AbilityCooldownSeconds);
+            float shapeshiftCd = EkrManager.GetEffectiveAbilityCooldown(Slot, def.AbilityCooldownSeconds);
+
+            if (IntroCutsceneDestroyPatch.PreventKill)
+                shapeshiftCd = Mathf.Max(shapeshiftCd, (Options.StartingKillCooldown?.GetFloat() ?? 10f) + 2f);
+
+            AURoleOptions.ShapeshifterCooldown = shapeshiftCd;
             AURoleOptions.ShapeshifterDuration = 1f;
+        }
+
+        // Wave 11: basis phantom (定義そのもの、またはホスト設定で化けた pet) はバニラのファントム
+        // (vanish) ボタンを借りる。バニッシュは常に即拒否するので Duration は実質未使用の固定値
+        // (家の一括値 PlayerGameOptionsSender.cs と同値)。PreventKill 窓のクランプは shapeshift と同型。
+        if (EkrManager.GetEffectiveBasis(Slot) == EkrBasis.Phantom)
+        {
+            float phantomCd = EkrManager.GetEffectiveAbilityCooldown(Slot, def.AbilityCooldownSeconds);
+
+            if (IntroCutsceneDestroyPatch.PreventKill)
+                phantomCd = Mathf.Max(phantomCd, (Options.StartingKillCooldown?.GetFloat() ?? 10f) + 2f);
+
+            AURoleOptions.PhantomCooldown = phantomCd;
+            AURoleOptions.PhantomDuration = 0.1f;
         }
     }
 
@@ -208,10 +231,15 @@ public abstract class EkmTemplateRole : RoleBase
         return false;
     }
 
+    // Wave 11 (契約 §2): basis phantom の本配線。家のファントム関所には会議中/死亡ガードが無いため、
+    // ここで守る。バニラの透明化は常に拒否する (return false 固定 — 姿を消すかどうかは作者が
+    // effect_give(invisible) を組んで決める)。
     public override bool OnVanish(PlayerControl pc)
     {
-        FireAbilityButton(pc);
-        return true;
+        if (pc && pc.IsAlive() && GameStates.IsInTask && !ExileController.Instance && EkrManager.GetEffectiveBasis(Slot) == EkrBasis.Phantom)
+            EkrManager.FirePet(Slot, pc);
+
+        return false;
     }
 
     private void FireAbilityButton(PlayerControl pc)

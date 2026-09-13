@@ -884,6 +884,54 @@ describe("compile-role: Wave 4 ブロック (on_near / on_far / on_room_enter / 
         ])).toEqual([{ when: "on_pet", do: [{ op: "effect_give", target: "nearest", kind: "freeze", seconds: 5 }] }]);
     });
 
+    // Wave 11 (§3/§8) — hideFrom/corpse/interval は kind:"invisible" のときだけ出力する。
+    // ブロックはこの3フィールドを常に持つ (KIND が invisible 以外のときは非表示なだけ) ので、
+    // compile-role.ts 側で kind による出力ガードが効いていることをここで確認する。
+    it("ekr_do_effect_give(kind:invisible 以外) は HIDEFROM/CORPSE/INTERVAL フィールドが付いていても出力しない", () => {
+        expect(compileTopBlocksToRules([
+            {
+                type: "ekr_when_on_pet",
+                next: {
+                    block: {
+                        type: "ekr_do_effect_give",
+                        fields: { TARGET: "self", KIND: "haste", SECONDS: 5, HIDEFROM: "crewmates", CORPSE: "stay", INTERVAL: 1 },
+                    },
+                },
+            },
+        ])).toEqual([{ when: "on_pet", do: [{ op: "effect_give", target: "self", kind: "haste", seconds: 5 }] }]);
+    });
+
+    it("ekr_do_effect_give(kind:invisible) は HIDEFROM/CORPSE/INTERVAL を既定値以外のときだけ出力する", () => {
+        // 既定値 (everyone/vanish/5) はフィールドごと省略 (on_near.who の "anyone" 省略と同じ作法)。
+        expect(compileTopBlocksToRules([
+            {
+                type: "ekr_when_on_pet",
+                next: {
+                    block: {
+                        type: "ekr_do_effect_give",
+                        fields: { TARGET: "self", KIND: "invisible", SECONDS: 8, HIDEFROM: "everyone", CORPSE: "vanish", INTERVAL: 5 },
+                    },
+                },
+            },
+        ])).toEqual([{ when: "on_pet", do: [{ op: "effect_give", target: "self", kind: "invisible", seconds: 8 }] }]);
+
+        // 既定値以外はそのまま転記する。
+        expect(compileTopBlocksToRules([
+            {
+                type: "ekr_when_on_pet",
+                next: {
+                    block: {
+                        type: "ekr_do_effect_give",
+                        fields: { TARGET: "self", KIND: "invisible", SECONDS: 6, HIDEFROM: "enemies", CORPSE: "stay", INTERVAL: 3 },
+                    },
+                },
+            },
+        ])).toEqual([{
+            when: "on_pet",
+            do: [{ op: "effect_give", target: "self", kind: "invisible", seconds: 6, hideFrom: "enemies", corpse: "stay", interval: 3 }],
+        }]);
+    });
+
     // Wave 10 (§4/§5)
     it("ekr_do_addon_give / ekr_do_addon_remove をコンパイルする", () => {
         expect(compileTopBlocksToRules([

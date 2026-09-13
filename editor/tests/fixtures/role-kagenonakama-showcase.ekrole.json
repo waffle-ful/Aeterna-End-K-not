@@ -1,0 +1,29 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "かげのなかま",
+  "author": "EKN Sample",
+  "description": "きえるボタンで すがたを けす。なかまの インポスターには みえたまま",
+  "color": "#b4474f",
+  "team": "impostor",
+  "canKill": true,
+  "killCooldown": 25,
+  "canVent": true,
+  "visionMultiplier": 1,
+  "winCondition": "team",
+  "basis": "phantom",
+  "abilityCooldown": 20,
+  "logic": {
+    "version": 1,
+    "variables": [],
+    "rules": [
+      {
+        "when": "on_pet",
+        "do": [
+          { "op": "effect_give", "target": "self", "kind": "invisible", "seconds": 10, "hideFrom": "enemies", "interval": 3 },
+          { "op": "notify", "text": "かげにとけた", "seconds": 2 }
+        ]
+      }
+    ]
+  }
+}

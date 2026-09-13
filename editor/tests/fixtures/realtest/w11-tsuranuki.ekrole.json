@@ -1,0 +1,49 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "つらぬきや",
+  "author": "EKN Sample",
+  "description": "こおりのたまが ひとに あたっても きえずに つらぬく (デデュープの アーム)",
+  "color": "#a8e6ff",
+  "team": "crewmate",
+  "canKill": false,
+  "killCooldown": 25,
+  "canVent": false,
+  "visionMultiplier": 1,
+  "winCondition": "team",
+  "logic": {
+    "version": 1,
+    "variables": [],
+    "rules": [
+      {
+        "when": "on_pet",
+        "do": [
+          {
+            "op": "cno_spawn",
+            "slot": 1,
+            "text": "❆",
+            "size": 6,
+            "at": "self"
+          },
+          {
+            "op": "cno_launch",
+            "slot": 1,
+            "dir": "move"
+          }
+        ]
+      },
+      {
+        "when": "on_cno_touch",
+        "slot": 1,
+        "do": [
+          {
+            "op": "effect_give",
+            "target": "ctx",
+            "kind": "freeze",
+            "seconds": 5
+          }
+        ]
+      }
+    ]
+  }
+}

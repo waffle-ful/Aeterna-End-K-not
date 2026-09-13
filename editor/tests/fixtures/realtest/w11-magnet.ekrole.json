@@ -1,0 +1,35 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "ひきよせや",
+  "author": "EKN Sample",
+  "description": "とくいわざで じぶんに マグネットをつける (陣営で とおる・はじかれるが わかれる)",
+  "color": "#4a7f9a",
+  "team": "crewmate",
+  "canKill": false,
+  "killCooldown": 25,
+  "canVent": false,
+  "visionMultiplier": 1,
+  "winCondition": "team",
+  "logic": {
+    "version": 1,
+    "variables": [],
+    "rules": [
+      {
+        "when": "on_pet",
+        "do": [
+          {
+            "op": "addon_give",
+            "target": "self",
+            "addon": "Magnet"
+          },
+          {
+            "op": "notify",
+            "text": "つけてみた",
+            "seconds": 2
+          }
+        ]
+      }
+    ]
+  }
+}

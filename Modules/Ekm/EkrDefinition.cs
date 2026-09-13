@@ -16,10 +16,13 @@ public enum EkrTeam
 
 // Wave 9: 能力ボタンの土台。Pet = 従来のペットボタン。Shapeshift = バニラのシェイプシフトボタン
 // (相手を選ぶピッカー付き) を借りて即座に拒否する — 見た目は変わらないが on_pet がターゲット付きで発火する。
+// Wave 11: Phantom = バニラのファントム (vanish) ボタンを借りて即座に拒否する (CTXLESS・見た目はバニラの
+// ファントム役職と同じ)。実際に姿を消すかどうかは作者が effect_give(kind:"invisible") を組んで決める。
 public enum EkrBasis
 {
     Pet,
-    Shapeshift
+    Shapeshift,
+    Phantom
 }
 
 // Wave 3: ホストがロビーで変えられるようにする数値1件の宣言。
@@ -135,8 +138,9 @@ public sealed class EkrDefinition
     [JsonPropertyName("killCooldown")]
     public float KillCooldown { get; set; } = 25f;
 
-    // Wave 9: basis == shapeshift のときだけ効く「とくいわざの まちじかん」。KillCooldown と違い
-    // 範囲外は Clamp せず文書 reject する。素の JsonElement で受ける理由は Basis と同じ。
+    // Wave 9/11: basis != pet (shapeshift / phantom、またはホスト設定で phantom に化けた pet) のときだけ
+    // 効く「とくいわざの まちじかん」。KillCooldown と違い範囲外は Clamp せず文書 reject する。
+    // 素の JsonElement で受ける理由は Basis と同じ。
     [JsonPropertyName("abilityCooldown")]
     public JsonElement AbilityCooldown { get; set; }
 
@@ -319,8 +323,9 @@ public sealed class EkrDefinition
             {
                 case "pet": ParsedBasis = EkrBasis.Pet; break;
                 case "shapeshift": ParsedBasis = EkrBasis.Shapeshift; break;
+                case "phantom": ParsedBasis = EkrBasis.Phantom; break;
                 default:
-                    error = $"basis=\"{Basis.GetString()}\" は使えません (使えるのは pet / shapeshift の2つです)";
+                    error = $"basis=\"{Basis.GetString()}\" は使えません (使えるのは pet / shapeshift / phantom の3つです)";
                     return false;
             }
         }

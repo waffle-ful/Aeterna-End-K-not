@@ -1,0 +1,45 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "かえや",
+  "author": "EKN Sample",
+  "description": "とくいわざで そばのひとを マッドメイトにし、キルで バナナマンをつける",
+  "color": "#9a5a3f",
+  "team": "neutral",
+  "canKill": true,
+  "killCooldown": 25,
+  "canVent": false,
+  "visionMultiplier": 1,
+  "winCondition": "team",
+  "logic": {
+    "version": 1,
+    "variables": [],
+    "rules": [
+      {
+        "when": "on_pet",
+        "do": [
+          {
+            "op": "addon_give",
+            "target": "nearest",
+            "addon": "Madmate"
+          },
+          {
+            "op": "notify",
+            "text": "かえた",
+            "seconds": 2
+          }
+        ]
+      },
+      {
+        "when": "on_kill",
+        "do": [
+          {
+            "op": "addon_give",
+            "target": "ctx",
+            "addon": "BananaMan"
+          }
+        ]
+      }
+    ]
+  }
+}

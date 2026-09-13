@@ -505,6 +505,9 @@ internal static class CustomRolesHelper
                 // Wave 9: インポスター陣営 × basis shapeshift は本物の Shapeshifter 基底。
                 _ when EkrManager.IsEkrImpostor(role) && EkrManager.IsEkrShapeshiftBasis(role) => CustomRoles.Shapeshifter,
 
+                // Wave 11: インポスター陣営 × basis phantom (定義そのもの) は本物の Phantom 基底。
+                _ when EkrManager.IsEkrImpostor(role) && EkrManager.IsEkrPhantomBasis(role) => CustomRoles.Phantom,
+
                 // EKN 役職メーカー: ベント可の定義が束縛されたスロットは Engineer 基底。
                 // キル可のスロットは checkDesyncRole=true の経路 (このメソッド冒頭の IsDesyncRole 分岐) で
                 // desync Impostor に確定し、この switch まで来ない。checkDesyncRole=false で呼ばれた場合は
@@ -724,6 +727,10 @@ internal static class CustomRolesHelper
 
                 // Wave 9: クルー/第三陣営 × basis shapeshift は desync Shapeshifter 基底 (キル可否は不問)。
                 _ when EkrManager.IsEkrRole(role) && !EkrManager.IsEkrImpostor(role) && EkrManager.IsEkrShapeshiftBasis(role) => RoleTypes.Shapeshifter,
+
+                // Wave 11: クルー/第三陣営 × basis phantom (定義そのもの) は desync Phantom 基底 (キル可否は
+                // 不問 — canKill によるここより後ろの desync Impostor arm より必ず先に評価すること)。
+                _ when EkrManager.IsEkrRole(role) && !EkrManager.IsEkrImpostor(role) && EkrManager.IsEkrPhantomBasis(role) => RoleTypes.Phantom,
 
                 // EKN 役職メーカー: キル可の定義が束縛されたスロットは desync Impostor 基底 (Sheriff 系と同じ)。
                 // R2: インポスター陣営のスロットだけは除外する — あちらは desync ではなく**本物の**
@@ -1077,7 +1084,9 @@ internal static class CustomRolesHelper
             // 「直接の型が OnPet を宣言しているか」判定では常に false になる (DeclaringType == EkmTemplateRole)。
             // 束縛中の役職コードが on_pet ルールを持つときだけペット能力扱いにする (HUD ボタン活性の要)。
             // Wave 9: basis shapeshift はシェイプシフトボタン側で能力を出すため、ペットボタンは二重に出さない。
-            if (EkrManager.IsEkrRole(role)) return EkrManager.HasOnPetLogic(role) && !EkrManager.IsEkrShapeshiftBasis(role);
+            // Wave 11: 実効基底が phantom (定義そのもの、またはホスト設定で化けた pet) も同じ理由でファントム
+            // ボタン側に能力を出すため除外する。
+            if (EkrManager.IsEkrRole(role)) return EkrManager.HasOnPetLogic(role) && !EkrManager.IsEkrShapeshiftBasis(role) && EkrManager.GetEffectiveBasis(role) != EkrBasis.Phantom;
 
             Type type = role.GetRoleClass().GetType();
             return type.GetMethod("OnPet")?.DeclaringType == type;
@@ -1289,6 +1298,12 @@ internal static class CustomRolesHelper
                 CustomRoles.Stealth => !Stealth.UseLegacyVersion.GetBool(),
                 CustomRoles.Trapster => !Trapster.LegacyTrapster.GetBool(),
                 CustomRoles.EarnestWolf => EarnestWolf.OverKillCount?.GetInt() > 0,
+
+                // Wave 11 (契約 §2.2): basis pet の役職コードで on_pet ロジックを持つものは、ホストが
+                // UsePhantomBasis を ON にするとファントムボタンへ化ける対象になる (基底そのものが
+                // shapeshift/phantom の役職コードは対象外 — こちらは自前のボタンを持つ)。
+                _ when EkrManager.IsEkrRole(role) && EkrManager.IsEkrPetBasis(role) && EkrManager.HasOnPetLogic(role) => true,
+
                 _ => role is CustomRoles.Dasher
                              or CustomRoles.CTFPlayer
                              or CustomRoles.BedWarsPlayer
@@ -2286,13 +2301,14 @@ internal static class CustomRolesHelper
             CustomRoles.Bait when pc.Is(CustomRoles.Disregarded) => false,
             CustomRoles.Busy when !pc.GetTaskState().HasTasks => false,
             CustomRoles.Truant when pc.Is(CustomRoles.SoulHunter) => false,
-            // Wave 9 (契約 §4): 基底変更アドオンは basis shapeshift の EKR 役職へ付与しない
-            // (ペットボタンの土台がシェイプシフトなので、これらが前提とするペットボタン活性が成立しない)。
-            _ when EkrManager.IsEkrShapeshiftBasis(pc.GetCustomRole()) && role is CustomRoles.Physicist or CustomRoles.Finder or CustomRoles.Noisy or CustomRoles.Examiner or CustomRoles.Nimble or CustomRoles.Bloodlust or CustomRoles.Venom => false,
-            // Wave 9: 非インポスター陣営の desync Shapeshifter (crew/neutral × basis shapeshift) は
-            // GetRoleTypes() が Shapeshifter になるため、本来インポスター系のこれらアドオンの対象に
-            // 新たに入ってしまう — 陣営で弾く。
-            _ when EkrManager.IsEkrShapeshiftBasis(pc.GetCustomRole()) && !EkrManager.IsEkrImpostor(pc.GetCustomRole()) && role is CustomRoles.Focused or CustomRoles.Reach or CustomRoles.Constricted or CustomRoles.Magnet or CustomRoles.Haste => false,
+            // Wave 9 (契約 §4)・Wave 11 (実効基底 phantom にも適用): 基底変更アドオンは basis
+            // shapeshift/phantom の EKR 役職へ付与しない (ペットボタンの土台がシェイプシフト/ファントムなので、
+            // これらが前提とするペットボタン活性が成立しない)。
+            _ when (EkrManager.IsEkrShapeshiftBasis(pc.GetCustomRole()) || EkrManager.GetEffectiveBasis(pc.GetCustomRole()) == EkrBasis.Phantom) && role is CustomRoles.Physicist or CustomRoles.Finder or CustomRoles.Noisy or CustomRoles.Examiner or CustomRoles.Nimble or CustomRoles.Bloodlust or CustomRoles.Venom => false,
+            // Wave 9・Wave 11: 非インポスター陣営の desync Shapeshifter/Phantom (crew/neutral × basis
+            // shapeshift/phantom) は GetRoleTypes() がそれぞれ Shapeshifter/Phantom になるため、本来
+            // インポスター系のこれらアドオンの対象に新たに入ってしまう — 陣営で弾く。
+            _ when (EkrManager.IsEkrShapeshiftBasis(pc.GetCustomRole()) || EkrManager.GetEffectiveBasis(pc.GetCustomRole()) == EkrBasis.Phantom) && !EkrManager.IsEkrImpostor(pc.GetCustomRole()) && role is CustomRoles.Focused or CustomRoles.Reach or CustomRoles.Constricted or CustomRoles.Magnet or CustomRoles.Haste => false,
             CustomRoles.Nimble when !pc.IsCrewmate() => false,
             CustomRoles.Physicist when !pc.IsCrewmate() || pc.GetCustomRole().IsDesyncRole() || (pc.Is(CustomRoles.TimeMaster) && !TimeMaster.TimeMasterCanUseVitals.GetBool()) => false,
             CustomRoles.Finder when !pc.IsCrewmate() || pc.GetCustomRole().IsDesyncRole() => false,

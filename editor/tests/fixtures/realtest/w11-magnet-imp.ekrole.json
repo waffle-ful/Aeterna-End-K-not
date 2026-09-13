@@ -1,0 +1,35 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "ひきよせや(インポスター)",
+  "author": "EKN Sample",
+  "description": "ひきよせや の インポスター枠 版 (Magnet が インポスターには つかないことの アーム)",
+  "color": "#4a7f9a",
+  "team": "impostor",
+  "canKill": false,
+  "killCooldown": 25,
+  "canVent": false,
+  "visionMultiplier": 1,
+  "winCondition": "team",
+  "logic": {
+    "version": 1,
+    "variables": [],
+    "rules": [
+      {
+        "when": "on_pet",
+        "do": [
+          {
+            "op": "addon_give",
+            "target": "self",
+            "addon": "Magnet"
+          },
+          {
+            "op": "notify",
+            "text": "つけてみた",
+            "seconds": 2
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -23,7 +23,7 @@
 //   ekr_expr_var                … 変数参照 (自前のドロップダウン。Blockly 標準の変数機構は使わない)
 //   ekr_expr_arith/compare/logic/not/rand … 演算子式 (spec §4 の kind をまとめたブロック群)
 
-import type { LogicVariable } from "../roledef";
+import { EFFECT_INTERVAL_DEFAULT, type LogicVariable } from "../roledef";
 
 export interface SerializedBlock {
     type: string;
@@ -243,9 +243,26 @@ function blockToNode(b: SerializedBlock): Record<string, unknown> {
             if (typeof slot === "number") return { op: "recruit", target: b.fields?.TARGET, slot };
             return { op: "recruit", target: b.fields?.TARGET };
         }
-        // Wave 5 (§1) — こうかをかける
-        case "ekr_do_effect_give":
-            return { op: "effect_give", target: b.fields?.TARGET, kind: b.fields?.KIND, seconds: toNum(b.fields?.SECONDS) };
+        // Wave 5 (§1) — こうかをかける。Wave 11 (§3): hideFrom/corpse/interval は
+        // kind:"invisible" のときだけ出力する (他 kind へ出すと validateRoleLogic 側が reject
+        // するため — ekr_do_inspect の DEPTH 条件付きフィールドと同じ作法)。ブロックはこの3フィールドを
+        // 常に持つ (KIND が invisible 以外のときは非表示なだけ) ので、既定値と一致する明示値は
+        // フィールドごと省略し正準形を最小に保つ (on_near.who の "anyone" 省略と同じ作法)。
+        case "ekr_do_effect_give": {
+            const target = b.fields?.TARGET;
+            const kind = b.fields?.KIND;
+            const seconds = toNum(b.fields?.SECONDS);
+            const node: Record<string, unknown> = { op: "effect_give", target, kind, seconds };
+            if (kind === "invisible") {
+                const hideFrom = b.fields?.HIDEFROM;
+                if (typeof hideFrom === "string" && hideFrom !== "" && hideFrom !== "everyone") node.hideFrom = hideFrom;
+                const corpse = b.fields?.CORPSE;
+                if (typeof corpse === "string" && corpse !== "" && corpse !== "vanish") node.corpse = corpse;
+                const interval = toNum(b.fields?.INTERVAL);
+                if (Number.isFinite(interval) && interval !== EFFECT_INTERVAL_DEFAULT) node.interval = interval;
+            }
+            return node;
+        }
         // v1.3 (spec §3 2026-08-11 追記) — ひっぱる・ひきずる・フィールド
         case "ekr_do_pull":
             return { op: "pull" };

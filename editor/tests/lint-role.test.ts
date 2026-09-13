@@ -1541,6 +1541,63 @@ describe("lint-role: L33 (「だれかを えらぶ」なのに on_pet のルー
         expect(ruleIds(lintRoleLogic(l, undefined, { basis: "pet" }))).not.toContain("L33");
         expect(ruleIds(lintRoleLogic(l))).not.toContain("L33");
     });
+
+    // Wave 11 (契約 §2/§7): "phantom" (きえるボタンをおす) も "shapeshift" と同じく
+    // on_pet ルールが要る。
+    it("basis == \"phantom\" で on_pet ルールが無ければ L33 を警告する", () => {
+        const l = logic([{ when: "on_game_start", do: [{ op: "stop" }] }]);
+        expect(ruleIds(lintRoleLogic(l, undefined, { basis: "phantom" }))).toContain("L33");
+    });
+
+    it("basis == \"phantom\" でも on_pet ルールが1つあれば警告しない", () => {
+        const l = logic([
+            { when: "on_game_start", do: [{ op: "stop" }] },
+            { when: "on_pet", do: [{ op: "effect_give", target: "self", kind: "invisible", seconds: 5 }] },
+        ]);
+        expect(ruleIds(lintRoleLogic(l, undefined, { basis: "phantom" }))).not.toContain("L33");
+    });
+});
+
+// Wave 11 (契約 §7): effect_give(invisible) の2ヒント。
+describe("lint-role: L39 (invisible × hideFrom:\"crewmates\"/\"enemies\" は通常ゲームモード限定)", () => {
+    it("hideFrom:\"crewmates\" は L39 を警告する", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "effect_give", target: "self", kind: "invisible", seconds: 5, hideFrom: "crewmates" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L39");
+    });
+
+    it("hideFrom:\"enemies\" も L39 を警告する (crewmates と同じ述語付き経路・Standard 限定)", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "effect_give", target: "self", kind: "invisible", seconds: 5, hideFrom: "enemies" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L39");
+    });
+
+    it("hideFrom:\"everyone\" (既定) は L39 を警告しない", () => {
+        const everyone = logic([{ when: "on_pet", do: [{ op: "effect_give", target: "self", kind: "invisible", seconds: 5, hideFrom: "everyone" }] }]);
+        expect(ruleIds(lintRoleLogic(everyone))).not.toContain("L39");
+    });
+
+    it("kind が invisible 以外なら hideFrom は付かないので L39 の対象にならない", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "effect_give", target: "self", kind: "haste", seconds: 5 }] }]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L39");
+    });
+});
+
+describe("lint-role: L40 (invisible の interval < 3 はみだれうちの kick リスク)", () => {
+    it("interval < 3 (1/2) は L40 を警告する", () => {
+        const one = logic([{ when: "on_pet", do: [{ op: "effect_give", target: "self", kind: "invisible", seconds: 5, interval: 1 }] }]);
+        expect(ruleIds(lintRoleLogic(one))).toContain("L40");
+        const two = logic([{ when: "on_pet", do: [{ op: "effect_give", target: "self", kind: "invisible", seconds: 5, interval: 2 }] }]);
+        expect(ruleIds(lintRoleLogic(two))).toContain("L40");
+    });
+
+    it("interval == 3 (境界値) は L40 を警告しない (< 3 のときだけ)", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "effect_give", target: "self", kind: "invisible", seconds: 5, interval: 3 }] }]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L40");
+    });
+
+    it("interval 省略 (既定5) は L40 を警告しない", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "effect_give", target: "self", kind: "invisible", seconds: 5 }] }]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L40");
+    });
 });
 
 // Wave 10 (§8 2026-09-13 併合): L34〜L38 (つける・はがす)

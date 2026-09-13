@@ -97,6 +97,34 @@ describe("役職メーカー: はつどうのしかた + とくいわざの ま�
         expect(($("rm-ability-cd") as HTMLInputElement).value).toBe("45");
     });
 
+    // Wave 11 (契約 §2): 「きえるボタンをおす」(phantom) も「だれかを えらぶ」と同じく
+    // まちじかん欄を表示する (`!== "pet"` に条件を広げた分岐)。
+    it("「きえるボタンをおす」に切り替えても まちじかん欄が現れ、フォーム→定義→コード→読込の往復で保たれる", async () => {
+        const rm = await freshRoleMaker();
+        rm.initRoleMaker();
+        setValidName();
+
+        const basisSelect = $("rm-basis") as HTMLSelectElement;
+        basisSelect.value = "phantom";
+        fireChange(basisSelect);
+        expect($("rm-ability-cd-row").hidden).toBe(false);
+
+        const abilityCdInput = $("rm-ability-cd") as HTMLInputElement;
+        abilityCdInput.value = "20";
+        fireChange(abilityCdInput);
+
+        const code = await copyAndReadCode();
+        const def = JSON.parse(decodeRoleCode(code)) as { basis?: string; abilityCooldown?: number };
+        expect(def.basis).toBe("phantom");
+        expect(def.abilityCooldown).toBe(20);
+
+        ($("rm-load-text") as HTMLTextAreaElement).value = code;
+        ($("rm-load-btn") as HTMLButtonElement).click();
+        expect(($("rm-basis") as HTMLSelectElement).value).toBe("phantom");
+        expect($("rm-ability-cd-row").hidden).toBe(false);
+        expect(($("rm-ability-cd") as HTMLInputElement).value).toBe("20");
+    });
+
     it("まちじかん欄の入力値は 5〜180 にクランプされて書き戻される (契約の reject とは別の、フォーム層の安全弁)", async () => {
         const rm = await freshRoleMaker();
         rm.initRoleMaker();
