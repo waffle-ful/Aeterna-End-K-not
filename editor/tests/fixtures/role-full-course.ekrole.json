@@ -28,8 +28,9 @@
     "voteWeight": 2,
     "doom": { "seconds": 300 },
     "killDistance": "short",
-    "disguise": { "team": "neutral" },
-    "countsAs": 2
+    "disguise": { "team": "neutral", "role": "Amnesiac", "deep": true },
+    "countsAs": 2,
+    "anonymousKills": true
   },
   "logic": {
     "version": 1,
