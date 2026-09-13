@@ -34,6 +34,10 @@
         <Compile Include="..\..\Modules\Ekm\EkmLogicRuntime.cs" Link="src\Ekm\EkmLogicRuntime.cs" />
         <!-- Wave 10: アドオン名一覧 (生成物)。Unity/BepInEx 非依存なので他の Ekm ソースと同じ区画に置ける。 -->
         <Compile Include="..\..\Modules\Ekm\EkrAddonCatalog.cs" Link="src\Ekm\EkrAddonCatalog.cs" />
+        <!-- Wave 12: disguise.role の値集合 (生成物)。EkrPassives.cs がこれを直接参照するので同居させる。 -->
+        <Compile Include="..\..\Modules\Ekm\EkrRoleCatalog.cs" Link="src\Ekm\EkrRoleCatalog.cs" />
+        <!-- Wave 12: disguise.role の値検証 (CustomRoles enum 名) に要る。純粋な enum で Unity 非依存。 -->
+        <Compile Include="..\..\CustomRoles.cs" Link="src\CustomRoles.cs" />
         <Compile Include="..\..\Modules\Random\IRandom.cs" Link="src\Random\IRandom.cs" />
         <Compile Include="..\..\Modules\Random\MersenneTwister.cs" Link="src\Random\MersenneTwister.cs" />
         <Compile Include="..\..\Modules\Random\Xorshift.cs" Link="src\Random\Xorshift.cs" />
@@ -62,6 +66,10 @@
          テキストとしてそのまま読む (TS のコンパイルはしない)。 -->
     <ItemGroup>
         <None Include="..\..\editor\src\generated\ekr-addons.ts" Link="generated\ekr-addons.ts">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <!-- Wave 12: disguise.role の値一覧 (TS 側生成物)。EkrRoleCatalog.All との集合一致を実行時に検査する。 -->
+        <None Include="..\..\editor\src\generated\ekr-roles.ts" Link="generated\ekr-roles.ts">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
     </ItemGroup>

@@ -1,0 +1,32 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "かげぼうし",
+  "author": "EKN Sample",
+  "description": "だれを ころしたかも、じぶんの死体が だれのかも わからない",
+  "color": "#4a4a4a",
+  "team": "neutral",
+  "canKill": true,
+  "killCooldown": 25,
+  "canVent": false,
+  "visionMultiplier": 1,
+  "winCondition": "team",
+  "basis": "pet",
+  "abilityCooldown": 30,
+  "passives": {
+    "corpse": "anonymous",
+    "anonymousKills": true
+  },
+  "logic": {
+    "version": 1,
+    "variables": [],
+    "rules": [
+      {
+        "when": "on_kill",
+        "do": [
+          { "op": "notify", "text": "かげに かえる…", "seconds": 3 }
+        ]
+      }
+    ]
+  }
+}
