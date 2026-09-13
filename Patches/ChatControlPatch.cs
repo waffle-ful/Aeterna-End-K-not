@@ -109,9 +109,12 @@ internal static class ChatControllerUpdatePatch
     private static SpriteRenderer OpenKeyboardIcon;
 
     public static void Prefix() { var alloc = EndKnot.Modules.AllocProbe.Now(); try { PrefixCore(); } finally { EndKnot.Modules.AllocProbe.Mark("chatupd", alloc); } }
+    // TestBridge の chatmode ディレクティブが立てる: 真の間はホストのクイックチャット専用設定を上書きしない
+    public static bool AllowQuickChatOnly;
+
     public static void PrefixCore()
     {
-        if (AmongUsClient.Instance.AmHost && DataManager.Settings.Multiplayer.ChatMode == QuickChatModes.QuickChatOnly)
+        if (!AllowQuickChatOnly && AmongUsClient.Instance.AmHost && DataManager.Settings.Multiplayer.ChatMode == QuickChatModes.QuickChatOnly)
             DataManager.Settings.Multiplayer.ChatMode = QuickChatModes.FreeChatOrQuickChat;
     }
 
