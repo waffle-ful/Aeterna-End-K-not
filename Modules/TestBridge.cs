@@ -1,4 +1,5 @@
 ﻿using System;
+using AmongUs.Data;
 using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
@@ -62,6 +63,13 @@ public static class TestBridge
         catch { _dir = null; }
     }
 
+    // Tick は FixedUpdate 毎 (50Hz) に呼ばれる (2026-09-13: 旧 1/sec ゲートを撤廃 — 1 行/秒のキュー処理が
+    // 連投テストと応答レイテンシの上限になっていた)。cmd ファイルの stat は 100ms 間隔に絞り、
+    // 自動スクショ/ロビーコード/idle 警告は従来どおり 1s 間隔。実行はキューから 1 tick 1 本 (= 最大 50 行/秒)。
+    private static long _lastCmdPollMs;
+    private static long _lastSlowTickMs;
+    private const int CmdPollIntervalMs = 100;
+
     public static void Tick()
     {
         if (!OperatingSystem.IsWindows()) return;
@@ -70,8 +78,15 @@ public static class TestBridge
         EnsureInit();
         if (_dir == null) return;
 
-        try { DrainCommandFile(); }
+        long nowMs = Environment.TickCount64;
+        bool pollFile = nowMs - _lastCmdPollMs >= CmdPollIntervalMs;
+        if (pollFile) _lastCmdPollMs = nowMs;
+
+        try { DrainCommandFile(pollFile); }
         catch (Exception e) { Utils.ThrowException(e); }
+
+        if (nowMs - _lastSlowTickMs < 1000) return;
+        _lastSlowTickMs = nowMs;
 
         try { HandleAutoScreenshot(); }
         catch (Exception e) { Utils.ThrowException(e); }
@@ -104,13 +119,13 @@ public static class TestBridge
         catch { }
     }
 
-    private static void DrainCommandFile()
+    private static void DrainCommandFile(bool pollFile)
     {
         // wait 中: 後続ディレクティブはキューに滞留させたまま条件だけを評価する。
         // cmd ファイルは読み続ける(`wait cancel` の割り込みと観測系の追い越しを受けるため)。
         if (_activeWait != null)
         {
-            if (PendingDirectives.Count < MaxBatchLines) ReadCmdFileIntoQueue(duringWait: true);
+            if (pollFile && PendingDirectives.Count + ObservationDirectives.Count < MaxBatchLines) ReadCmdFileIntoQueue(duringWait: true);
             if (TryConsumeWaitCancel()) return;
 
             // wait 開始「後」に届いた観測専用ディレクティブ (state/screenshot/errors/grep) は副作用が無いので
@@ -132,6 +147,7 @@ public static class TestBridge
 
         if (PendingDirectives.Count == 0)
         {
+            if (!pollFile) return;
             ReadCmdFileIntoQueue();
             if (PendingDirectives.Count == 0) return;
         }
@@ -161,7 +177,7 @@ public static class TestBridge
             if (duringWait && IsObservationDirective(line)) ObservationDirectives.Enqueue(line);
             else PendingDirectives.Enqueue(line);
 
-            if (PendingDirectives.Count >= MaxBatchLines) break;
+            if (PendingDirectives.Count + ObservationDirectives.Count >= MaxBatchLines) break;
         }
     }
 
@@ -281,6 +297,22 @@ public static class TestBridge
             return;
         }
 
+        // ホストのロビーチャット種別を切り替える (quick = クイックチャット専用ロビー、free = 既定)。次に作るロビーから効く。
+        if (directive.StartsWith("chatmode ", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                var mode = directive[9..].Trim();
+                bool quick = mode.Equals("quick", StringComparison.OrdinalIgnoreCase);
+                ChatControllerUpdatePatch.AllowQuickChatOnly = quick;
+                DataManager.Settings.Multiplayer.ChatMode = quick ? QuickChatModes.QuickChatOnly : QuickChatModes.FreeChatOrQuickChat;
+                DataManager.Settings.Save();
+                WriteOut($"OK chatmode {(quick ? "quick" : "free")} (current={DataManager.Settings.Multiplayer.ChatMode})");
+            }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR chatmode failed"); }
+            return;
+        }
+
         // Layer B: カウントダウン無しの即時ゲーム開始。
         if (directive.Equals("start", StringComparison.OrdinalIgnoreCase))
         {
@@ -327,6 +359,33 @@ public static class TestBridge
         {
             try { ExecuteTp(directive[3..].Trim()); }
             catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR tp failed"); }
+            return;
+        }
+
+        // Layer C2: サボタージュの発動/修理 (2026-09-13)。ホストの `click SabotageButton` / `press` はサボ画面が開かず
+        // (役職ゲートでタスクマップに化ける)、エミュ側も対象アイコンに届かなかったため、サボマップのボタンが送るのと
+        // 同じ RpcUpdateSystem(Sabotage, type) をホスト自身で撃つ。ホスト経路なので ShipStatusPatch のゲート
+        // (DisableSabotage / EKR AllowsSabotage / Fool) も同じく通る = 「ゲートで弾かれた」を active=false で観測できる。
+        if (directive.StartsWith("sabotage ", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecuteSabotage(directive[9..].Trim()); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR sabotage failed"); }
+            return;
+        }
+
+        if (directive.StartsWith("fixsabotage ", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecuteFixSabotage(directive[12..].Trim()); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR fixsabotage failed"); }
+            return;
+        }
+
+        // Layer C3: ホスト発言を本物の UI 経路 (ChatController.SendChat → Prefix パッチ) で送る (2026-09-13)。
+        // `chat` は RpcSendChat 直呼びで送信側フック (WordKiller / EKR FireChat 等) が鳴らない。
+        if (directive.StartsWith("chatui ", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecuteChatUi(directive[7..]); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR chatui failed"); }
             return;
         }
 
@@ -447,7 +506,7 @@ public static class TestBridge
 
         if (directive.Equals("help", StringComparison.OrdinalIgnoreCase))
         {
-            WriteOut("HELP directives: state | screenshot | click <h|label:x> | press <h|x y> | type <text> | key <enter|escape|tab|backspace> | getopt <pattern> | setopt <name|#id> <idx|on|off|~real> | forcerole <id|name|host|clear> [EnumName] | start | hostlobby | leavelobby | eosstall | autostart <on|off> | tp <x> <y> | tp <playerId> | walk <x> <y> | walk <playerId> | walk stop | vote <playerId|skip> | overrule <targetId> [judgeId] | chat <text> | use <kill|vent|pet|ability|report|sabotage> | vent enter <id> | vent exit | errors [n] | grep <pattern> [n] | bcensus | gc <clr|clr2|boehm|both> | sleep <sec> | wait <phase=X|players=N|marker:text|join|arrived> [timeoutSec] | wait cancel | /<chatcommand>");
+            WriteOut("HELP directives: state | screenshot | click <h|label:x> | press <h|x y> | type <text> | key <enter|escape|tab|backspace> | getopt <pattern> | setopt <name|#id> <idx|on|off|~real> | forcerole <id|name|host|clear> [EnumName] | start | hostlobby | leavelobby | eosstall | autostart <on|off> | tp <x> <y> | tp <playerId> | walk <x> <y> | walk <playerId> | walk stop | vote <playerId|skip> | overrule <targetId> [judgeId] | chat <text> | chatui <text> | sabotage <comms|reactor|o2|lights|lab|heli|mushroom|cd0> | fixsabotage <type> | use <kill|vent|pet|ability|report|sabotage> | vent enter <id> | vent exit | errors [n] | grep <pattern> [n] | bcensus | gc <clr|clr2|boehm|both> | sleep <sec> | wait <phase=X|players=N|marker:text|join|arrived> [timeoutSec] | wait cancel | /<chatcommand>");
             return;
         }
 
@@ -898,7 +957,9 @@ public static class TestBridge
         AppendHudButton(sb, "pet", hud.PetButton); sb.Append(',');
         AppendHudButton(sb, "ability", hud.AbilityButton); sb.Append(',');
         AppendHudButton(sb, "report", hud.ReportButton); sb.Append(',');
-        AppendHudButton(sb, "sabotage", hud.SabotageButton);
+        AppendHudButton(sb, "sabotage", hud.SabotageButton); sb.Append(',');
+        // kill/pet/ability の false がイントロ明けの PreventKill 窓によるものかを添える (偽陰性の判定材料)
+        sb.Append("\"preventKill\":").Append(IntroCutsceneDestroyPatch.PreventKill ? "true" : "false");
         sb.Append('}');
     }
 
@@ -2027,6 +2088,133 @@ public static class TestBridge
 
     // ── Layer C4: 実チャット ───────────────────────────────────────────
 
+    private static bool TryParseSabotageType(string name, out SystemTypes type)
+    {
+        type = name.ToLowerInvariant() switch
+        {
+            "comms" or "communications" => SystemTypes.Comms,
+            "reactor" => SystemTypes.Reactor,
+            "o2" or "oxygen" or "lifesupp" => SystemTypes.LifeSupp,
+            "lights" or "electrical" => SystemTypes.Electrical,
+            "lab" or "laboratory" or "seismic" => SystemTypes.Laboratory,
+            "heli" or "helisabotage" or "crash" => SystemTypes.HeliSabotage,
+            "mushroom" or "mixup" => SystemTypes.MushroomMixupSabotage,
+            _ => (SystemTypes)255
+        };
+
+        return (byte)type != 255;
+    }
+
+    private static string DescribeSabotageState(SystemTypes type)
+    {
+        try
+        {
+            // active は Utils.IsActive(type) を使う (Polus の Reactor=false 固定・Comms の具象クラス切替・
+            // mushroom 専用読み等の map 依存分岐がここに集約されている。自前 TryCast だと偽陰性を返す)。
+            var sabo = ShipStatus.Instance.Systems[SystemTypes.Sabotage].CastFast<SabotageSystemType>();
+            bool active = Utils.IsActive(type);
+            return $"active={(active ? "true" : "false")} anyActive={(sabo.AnyActive ? "true" : "false")} cd={sabo.Timer:0.0}";
+        }
+        catch (Exception e) { return $"state? ({e.GetType().Name})"; }
+    }
+
+    // sabotage <comms|reactor|o2|lights|lab|heli|mushroom> — サボマップのボタンと同じ RPC をホスト自身で撃つ。
+    // sabotage cd0 — サボクールダウンを 0 にする (開始直後の初期 CD で弾かれる回を潰す)。
+    private static void ExecuteSabotage(string rest)
+    {
+        if (!AmongUsClient.Instance || !AmongUsClient.Instance.AmHost) { WriteOut("ERR sabotage: not host"); return; }
+        if (!ShipStatus.Instance || !GameStates.InGame || GameStates.IsMeeting) { WriteOut("ERR sabotage: not in task phase"); return; }
+
+        if (rest.Equals("cd0", StringComparison.OrdinalIgnoreCase))
+        {
+            var sabo = ShipStatus.Instance.Systems[SystemTypes.Sabotage].CastFast<SabotageSystemType>();
+            sabo.Timer = 0f;
+            sabo.IsDirty = true;
+            WriteOut("OK sabotage cd0");
+            return;
+        }
+
+        if (!TryParseSabotageType(rest, out SystemTypes type)) { WriteOut($"ERR sabotage unknown type: {rest} (comms|reactor|o2|lights|lab|heli|mushroom|cd0)"); return; }
+        if (!ShipStatus.Instance.Systems.ContainsKey(type)) { WriteOut($"ERR sabotage {type}: not on this map"); return; }
+
+        string before = DescribeSabotageState(type);
+        ShipStatus.Instance.RpcUpdateSystem(SystemTypes.Sabotage, (byte)type);
+        string after = DescribeSabotageState(type);
+
+        // 発動したかは IActivatable.IsActive で機械判定する (ゲート棄却・CD 中は OK を返さない)。
+        WriteOut(after.StartsWith("active=true") ? $"OK sabotage {type} {after}" : $"ERR sabotage {type} not activated ({after}; before {before}) — cd>0 なら `sabotage cd0`、ゲート棄却なら役職/DisableSabotage を疑う");
+    }
+
+    // fixsabotage <type> — 修理側の amount は Adventurer.cs の実績値 (Reactor/Comms/Heli=16,17・Lab/O2=66,67・Lights=全スイッチ)。
+    private static void ExecuteFixSabotage(string rest)
+    {
+        if (!AmongUsClient.Instance || !AmongUsClient.Instance.AmHost) { WriteOut("ERR fixsabotage: not host"); return; }
+        if (!ShipStatus.Instance || !GameStates.InGame) { WriteOut("ERR fixsabotage: not in game"); return; }
+        if (!TryParseSabotageType(rest, out SystemTypes type)) { WriteOut($"ERR fixsabotage unknown type: {rest}"); return; }
+        if (!ShipStatus.Instance.Systems.ContainsKey(type)) { WriteOut($"ERR fixsabotage {type}: not on this map"); return; }
+
+        ShipStatus ship = ShipStatus.Instance;
+
+        switch (type)
+        {
+            case SystemTypes.Reactor:
+            case SystemTypes.Comms:
+            case SystemTypes.HeliSabotage:
+                ship.RpcUpdateSystem(type, 16);
+                ship.RpcUpdateSystem(type, 17);
+                break;
+            case SystemTypes.Laboratory:
+            case SystemTypes.LifeSupp:
+                ship.RpcUpdateSystem(type, 67);
+                ship.RpcUpdateSystem(type, 66);
+                break;
+            case SystemTypes.Electrical:
+                var sw = ship.Systems[SystemTypes.Electrical].CastFast<SwitchSystem>();
+                sw.ActualSwitches = sw.ExpectedSwitches;
+                sw.IsDirty = true;
+                break;
+            case SystemTypes.MushroomMixupSabotage:
+                WriteOut("ERR fixsabotage mushroom: 時間経過でしか解けない"); return;
+        }
+
+        WriteOut($"OK fixsabotage {type} {DescribeSabotageState(type)}");
+    }
+
+    // 文字境界を割らずに UTF-8 バイト数を budget 以下へ切り詰める (ChatControlPatch.SplitByUtf8Bytes と同じ 1/2/3B 見積り)。
+    private static string ClampUtf8Bytes(string s, int budget)
+    {
+        int bytes = 0;
+        for (int i = 0; i < s.Length; i++)
+        {
+            char c = s[i];
+            int cb = c < 0x80 ? 1 : c < 0x800 ? 2 : 3;
+            if (bytes + cb > budget) return s[..i];
+            bytes += cb;
+        }
+
+        return s;
+    }
+
+    // chatui <text> — 入力欄に文字を置いて ChatController.SendChat() を呼ぶ = 人間が Enter を押したのと同じ経路。
+    // vanilla の連投抑止 (timeSinceLastMessage < 3s) はホストローカルの UI 側チェックなので、連投テストのために外す。
+    private static void ExecuteChatUi(string text)
+    {
+        if (text.Length == 0) { WriteOut("ERR chatui empty"); return; }
+        if (!HudManager.InstanceExists) { WriteOut("ERR no HudManager"); return; }
+
+        ChatController chat = HudManager.Instance.Chat;
+        if (!chat || !chat.freeChatField || !chat.freeChatField.textArea) { WriteOut("ERR chatui: chat field unavailable"); return; }
+
+        // 公式鯖は chat を UTF-8 バイト (~1KB 帯) で判定し、単一 RPC が閾値超だと PacketSplit も切れない
+        // (ChatControlPatch の ChatChunkByteBudget=700 と同じ保護)。テストツールなので分割せず安全長へ切る。
+        text = ClampUtf8Bytes(text, 700);
+
+        chat.freeChatField.textArea.SetText(text);
+        chat.timeSinceLastMessage = 3f;
+        chat.SendChat();
+        WriteOut($"OK chatui ({text.Length} chars)");
+    }
+
     private static void ExecuteChat(string text)
     {
         if (text.Length == 0) { WriteOut("ERR chat empty"); return; }
@@ -2686,14 +2874,22 @@ public static class TestBridge
         return sb.ToString();
     }
 
+    private static long _outBytesSinceRotateCheck = 64 * 1024; // 初回は必ずチェックさせる (閾値ちょうどから始める — MaxValue 初期化は加算で負数へ巻き戻り永久に走らない)
+
     private static void WriteOut(string line)
     {
         if (_outPath == null) return;
 
         try
         {
-            try
+            string payload = $"[{Utils.TimeStamp}] {line}\n";
+
+            // ローテート判定の File.Exists+FileInfo は毎回やらず、書込累積が閾値を超えた時だけ実サイズを見る
+            // (50Hz 化で WriteOut が最大 ~100/秒 = InnerNetClient.FixedUpdate 上の同期 I/O になったため)。
+            _outBytesSinceRotateCheck += System.Text.Encoding.UTF8.GetByteCount(payload);
+            if (_outBytesSinceRotateCheck >= 64 * 1024)
             {
+                _outBytesSinceRotateCheck = 0;
                 if (File.Exists(_outPath) && new FileInfo(_outPath).Length > MaxOutFileBytes)
                 {
                     string prev = Path.Combine(_dir, "bridge-out.prev.log");
@@ -2706,9 +2902,8 @@ public static class TestBridge
                     catch { }
                 }
             }
-            catch { }
 
-            File.AppendAllText(_outPath, $"[{Utils.TimeStamp}] {line}\n");
+            File.AppendAllText(_outPath, payload);
         }
         catch { }
     }

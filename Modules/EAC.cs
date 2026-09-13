@@ -1130,8 +1130,8 @@ internal static class EAC
             {
                 if (pc.IsTrusted()) break;
 
-                string hashedPuid = pc.GetClient().GetHashedPuid();
-                if (!BanManager.TempBanWhiteList.Contains(hashedPuid)) BanManager.TempBanWhiteList.Add(hashedPuid);
+                ClientData client = pc.GetClient();
+                if (client != null && client.HasValidPuid()) BanManager.AddTempBan(client.GetHashedPuid());
 
                 AmongUsClient.Instance.KickPlayer(pc.OwnerId, true);
                 string msg2 = string.Format(GetString("Message.TempBannedByEAC"), pc.Data?.PlayerName, text);

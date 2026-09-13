@@ -55,9 +55,9 @@ public static class FixedUpdateCaller
             try { if (PerSecondUpdateScheduler.ShouldRunUpdate("companion-reconcile")) Companion.CompanionLauncher.ReconcileWithOption(); }
             catch (Exception e) { Utils.ThrowException(e); }
 
-            // Claude 遠隔テストブリッジ(既定OFF)。コマンドファイルのポーリング+自動スクショを 1/sec ゲートで回す。
+            // 遠隔テストブリッジ(既定OFF)。毎 tick 呼び、ファイル stat 100ms / 周辺処理 1s の間引きは Tick 内で行う。
             var sub = AllocProbe.Now(); // misc の内訳 (misc.* は tickKB へ二重計上されない)
-            try { if (PerSecondUpdateScheduler.ShouldRunUpdate("test-bridge")) TestBridge.Tick(); }
+            try { TestBridge.Tick(); }
             catch (Exception e) { Utils.ThrowException(e); }
 
             sub = AllocProbe.Mark("misc.bridge", sub);

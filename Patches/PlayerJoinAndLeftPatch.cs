@@ -602,7 +602,7 @@ internal static class OnPlayerJoinedPatch
 
         if (AmongUsClient.Instance.AmHost && !client.ProductUserId.IsNullOrWhiteSpace() && client.ProductUserId.Length == 32 && client.FriendCode == "" && Options.KickPlayerFriendCodeNotExist.GetBool() && GameStates.CurrentServerType is not GameStates.ServerType.Local)
         {
-            if (!BanManager.TempBanWhiteList.Contains(client.GetHashedPuid())) BanManager.TempBanWhiteList.Add(client.GetHashedPuid());
+            BanManager.AddTempBan(client.GetHashedPuid());
 
             AmongUsClient.Instance.KickPlayer(client.Id, false);
             Logger.SendInGame(string.Format(GetString("Message.KickedByNoFriendCode"), client.PlayerName), Color.yellow);
