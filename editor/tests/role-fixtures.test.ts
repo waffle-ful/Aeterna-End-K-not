@@ -17,8 +17,11 @@ import collectorShowcaseRaw from "./fixtures/role-collector-showcase.ekrole.json
 import parasiteShowcaseRaw from "./fixtures/role-parasite-showcase.ekrole.json?raw";
 import majoShowcaseRaw from "./fixtures/role-majo-showcase.ekrole.json?raw";
 import kotodamaShowcaseRaw from "./fixtures/role-kotodama-showcase.ekrole.json?raw";
+import yubisashiShowcaseRaw from "./fixtures/role-yubisashi-showcase.ekrole.json?raw";
+import futaribunShowcaseRaw from "./fixtures/role-futaribun-showcase.ekrole.json?raw";
+import tamaShowcaseRaw from "./fixtures/role-tama-showcase.ekrole.json?raw";
 import { ROLECODE_PREFIX, decodeRoleCode, encodeRoleCode } from "../src/rolecode";
-import { LOGIC_WHEN_VALUES, validateEkrDefinition, type LogicNode, type LogicWhen } from "../src/roledef";
+import { LOGIC_WHEN_VALUES, type EkrTeam, validateEkrDefinition, type LogicNode, type LogicWhen } from "../src/roledef";
 import { lintRoleLogic } from "../src/logic/lint-role";
 
 function collectOps(nodes: LogicNode[], into: Set<string>): void {
@@ -112,8 +115,8 @@ describe("golden fixture: role-full-course.ekrole.json (10イベント・主要o
 
     // Wave 1 (spec §1.1): passives の全キーを実物の .ekrole.json で1度ずつ使う
     // (C# 側の検証と突き合わせる共有資材にするため — 型/レンジの実装差分はここで露見する)。
-    // R2 (§4): disguise を追加して7キーになった。
-    it("passives の7キーすべてを使っている (検証を通り、そのまま保持される)", () => {
+    // R2 (§4): disguise を追加して7キーになった。Wave 9 (§3): countsAs を追加して8キーになった。
+    it("passives の8キーすべてを使っている (検証を通り、そのまま保持される)", () => {
         const parsed = JSON.parse(fullCourseRaw);
         const result = validateEkrDefinition(parsed);
         if (!result.ok) throw new Error(result.error);
@@ -125,7 +128,26 @@ describe("golden fixture: role-full-course.ekrole.json (10イベント・主要o
             voteWeight: 2,
             doom: { seconds: 300 },
             disguise: { team: "neutral" },
+            countsAs: 2,
         });
+    });
+
+    // Wave 9 (§1/§1.2): basis/abilityCooldown。C# 側 (EkrDefinitionTests) が同じファイルの
+    // 同じ値を読むので、片側だけ実装が抜けるとどちらかが落ちる。
+    it("basis と abilityCooldown を保持する", () => {
+        const parsed = JSON.parse(fullCourseRaw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        expect(result.def.basis).toBe("shapeshift");
+        expect(result.def.abilityCooldown).toBe(45);
+    });
+
+    // Wave 9 追記: canSabotage (陣営どおりを明示的に上書きする任意フィールド)。
+    it("canSabotage: true を保持する", () => {
+        const parsed = JSON.parse(fullCourseRaw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        expect(result.def.canSabotage).toBe(true);
     });
 
     // R2 (契約 §3b): on_attacked の kind / on_death の cause も共有 fixture に載せて
@@ -260,12 +282,17 @@ describe("golden fixture: role-full-course.ekrole.json (10イベント・主要o
         expect(onChat?.do.some((n) => n.op === "forget")).toBe(true);
     });
 
-    it("リンター (spec §6・Wave 3 で L24/L25 含む) は警告0件 — golden fixture は模範的な組み方で書く", () => {
+    it("リンター (spec §6・Wave 3 で L24/L25・Wave 9 で L31〜L33 含む) は警告0件 — golden fixture は模範的な組み方で書く", () => {
         const parsed = JSON.parse(fullCourseRaw);
         const result = validateEkrDefinition(parsed);
         if (!result.ok) throw new Error(result.error);
         if (!result.def.logic) throw new Error("fixture は logic を持つ前提");
-        expect(lintRoleLogic(result.def.logic, result.def.progress?.text)).toEqual([]);
+        expect(lintRoleLogic(result.def.logic, result.def.progress?.text, {
+            team: result.def.team as EkrTeam,
+            basis: result.def.basis,
+            abilityCooldown: result.def.abilityCooldown,
+            countsAs: result.def.passives?.countsAs,
+        })).toEqual([]);
     });
 
     it("rolecode (EKR1.) のエンコード→デコード ラウンドトリップで AST が deep-equal になる", () => {
@@ -573,6 +600,133 @@ describe.each([
 
     it("rolecode (EKR1.) のエンコード→デコード ラウンドトリップで AST が deep-equal になる", () => {
         const parsed = JSON.parse(raw);
+        const validated = validateEkrDefinition(parsed);
+        if (!validated.ok) throw new Error(validated.error);
+
+        const code = encodeRoleCode(JSON.stringify(validated.def));
+        expect(code.startsWith(ROLECODE_PREFIX)).toBe(true);
+
+        const roundTripped = validateEkrDefinition(JSON.parse(decodeRoleCode(code)));
+        if (!roundTripped.ok) throw new Error(roundTripped.error);
+
+        expect(roundTripped.def).toEqual(validated.def);
+        expect(encodeRoleCode(JSON.stringify(roundTripped.def))).toBe(code);
+    });
+});
+
+// Wave 9 (§8 2026-09-12): テンプレギャラリー見本2本 + 降格分1本。
+// ゆびさしや (basis shapeshift・on_pet の ctx で inspect) は非キル desync Shapeshifter の
+// パース網羅を担う。ふたりぶん (basis pet・passives.countsAs) は勝利カウント会計の器。
+describe.each([
+    { name: "role-yubisashi-showcase.ekrole.json", raw: yubisashiShowcaseRaw },
+])("golden fixture: $name (Wave 9 テンプレギャラリー見本・えらんで はつどう)", ({ raw }) => {
+    it("validate に合格する", () => {
+        const parsed = JSON.parse(raw);
+        const result = validateEkrDefinition(parsed);
+        expect(result.ok, result.ok ? "" : (result as { error: string }).error).toBe(true);
+    });
+
+    it("basis: shapeshift の on_pet が ctx (inspect target:ctx) を使っている", () => {
+        const parsed = JSON.parse(raw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        if (!result.def.logic) throw new Error("fixture は logic を持つ前提");
+
+        expect(result.def.basis).toBe("shapeshift");
+        expect(result.def.abilityCooldown).toBe(20);
+        const onPet = result.def.logic.rules.find((r) => r.when === "on_pet");
+        expect(onPet?.do.some((n) => n.op === "inspect" && n.target === "ctx")).toBe(true);
+    });
+
+    // Wave 9 追記: canSabotage 省略 = 陣営どおり (crewmate なのでサボタージュ不可)。
+    it("canSabotage は省略のまま (陣営どおり)", () => {
+        const parsed = JSON.parse(raw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        expect(result.def.canSabotage).toBeUndefined();
+    });
+
+    it("リンター (spec §6・basis 条件付き L14 含む) は警告0件", () => {
+        const parsed = JSON.parse(raw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        if (!result.def.logic) throw new Error("fixture は logic を持つ前提");
+        expect(lintRoleLogic(result.def.logic, undefined, { basis: result.def.basis, abilityCooldown: result.def.abilityCooldown })).toEqual([]);
+    });
+
+    it("rolecode (EKR1.) のエンコード→デコード ラウンドトリップで AST が deep-equal になる", () => {
+        const parsed = JSON.parse(raw);
+        const validated = validateEkrDefinition(parsed);
+        if (!validated.ok) throw new Error(validated.error);
+
+        const code = encodeRoleCode(JSON.stringify(validated.def));
+        expect(code.startsWith(ROLECODE_PREFIX)).toBe(true);
+
+        const roundTripped = validateEkrDefinition(JSON.parse(decodeRoleCode(code)));
+        if (!roundTripped.ok) throw new Error(roundTripped.error);
+
+        expect(roundTripped.def).toEqual(validated.def);
+        expect(encodeRoleCode(JSON.stringify(roundTripped.def))).toBe(code);
+    });
+});
+
+describe("golden fixture: role-futaribun-showcase.ekrole.json (Wave 9・かちのかぞえかた)", () => {
+    it("validate に合格し、passives.countsAs を保持する (logic 無しの純とくせい役職)", () => {
+        const parsed = JSON.parse(futaribunShowcaseRaw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        expect(result.def.basis).toBe("pet");
+        expect(result.def.passives).toEqual({ countsAs: 2, shield: { count: 1 } });
+        expect(result.def.logic).toBeUndefined();
+    });
+
+    it("rolecode (EKR1.) のエンコード→デコード ラウンドトリップで deep-equal になる", () => {
+        const parsed = JSON.parse(futaribunShowcaseRaw);
+        const validated = validateEkrDefinition(parsed);
+        if (!validated.ok) throw new Error(validated.error);
+
+        const code = encodeRoleCode(JSON.stringify(validated.def));
+        const roundTripped = validateEkrDefinition(JSON.parse(decodeRoleCode(code)));
+        if (!roundTripped.ok) throw new Error(roundTripped.error);
+
+        expect(roundTripped.def).toEqual(validated.def);
+        expect(encodeRoleCode(JSON.stringify(roundTripped.def))).toBe(code);
+    });
+});
+
+// 降格分 (§8 item3): 候補1「能力回数の経済」を既存語彙 (var + on_task_complete + if) だけで
+// 組んだ見本。粒度規範「合成で組める→見本」の初適用例。
+describe("golden fixture: role-tama-showcase.ekrole.json (Wave 9 降格分・既存語彙での能力回数経済)", () => {
+    it("validate に合格する", () => {
+        const parsed = JSON.parse(tamaShowcaseRaw);
+        const result = validateEkrDefinition(parsed);
+        expect(result.ok, result.ok ? "" : (result as { error: string }).error).toBe(true);
+    });
+
+    it("var_add + if + progress.text の組み方で たまの経済を表現している", () => {
+        const parsed = JSON.parse(tamaShowcaseRaw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        if (!result.def.logic) throw new Error("fixture は logic を持つ前提");
+
+        expect(result.def.progress).toEqual({ text: "のこり{たま}発" });
+        const ops = new Set<string>();
+        for (const rule of result.def.logic.rules) collectOps(rule.do, ops);
+        expect(ops.has("if")).toBe(true);
+        expect(ops.has("var_add")).toBe(true);
+        expect(ops.has("teleport")).toBe(true);
+    });
+
+    it("リンター (spec §6) は警告0件", () => {
+        const parsed = JSON.parse(tamaShowcaseRaw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        if (!result.def.logic) throw new Error("fixture は logic を持つ前提");
+        expect(lintRoleLogic(result.def.logic, result.def.progress?.text)).toEqual([]);
+    });
+
+    it("rolecode (EKR1.) のエンコード→デコード ラウンドトリップで AST が deep-equal になる", () => {
+        const parsed = JSON.parse(tamaShowcaseRaw);
         const validated = validateEkrDefinition(parsed);
         if (!validated.ok) throw new Error(validated.error);
 

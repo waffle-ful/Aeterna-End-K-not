@@ -353,10 +353,29 @@
             </select>
           </label>
 
+          <!-- はつどうのしかた (Wave 9・契約 §1): とくいわざボタンをおすか、だれかを選ぶか。 -->
+          <label>はつどうのしかた
+            <select id="rm-basis">
+              <option value="pet">ボタンをおす</option>
+              <option value="shapeshift">だれかを えらぶ</option>
+            </select>
+          </label>
+          <label id="rm-ability-cd-row" hidden>とくいわざを再び使えるまでの秒数 <input id="rm-ability-cd" type="number" min="5" max="180" step="0.5" value="30" /></label>
+
           <label class="rm-flag-row"><input type="checkbox" id="rm-can-kill" /> キルできる</label>
           <label id="rm-kill-cd-row" hidden>キルを再び使えるまでの秒数 <input id="rm-kill-cd" type="number" min="1" max="180" step="1" value="25" /></label>
 
           <label class="rm-flag-row"><input type="checkbox" id="rm-can-vent" /> ベントを使える</label>
+
+          <!-- サボタージュを つかえる (Wave 9 追記): 省略 (陣営どおり) と明示 true/false を区別する
+               3状態セレクタ。既定は「陣営どおり」(インポスターだけ使える)。 -->
+          <label>サボタージュを つかえる
+            <select id="rm-can-sabotage">
+              <option value="">陣営どおり (おすすめ)</option>
+              <option value="true">つかえる</option>
+              <option value="false">つかえない</option>
+            </select>
+          </label>
 
           <label>視界の広さ (倍率) <input id="rm-vision" type="number" min="0.25" max="5" step="0.05" value="1" /></label>
 

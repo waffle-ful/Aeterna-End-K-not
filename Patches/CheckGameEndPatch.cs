@@ -834,7 +834,9 @@ internal static class GameEndChecker
             for (int i = 0; i < crewStatesCount; i++)
             {
                 var playerState = CrewStates[i];
-                if (!Options.CrewAdvancedGameEndCheckingSettings.TryGetValue(playerState.MainRole, out var option) || !option.GetBool()) continue;
+                // Wave 9: EKR 役職はホスト側トグル無しで常時有効 (CrewAdvancedGameEndCheckingSettings に
+                // スロット用エントリを足すと option id が既存プリセットを壊すため作らない)。
+                if (!EkrManager.IsEkrRole(playerState.MainRole) && (!Options.CrewAdvancedGameEndCheckingSettings.TryGetValue(playerState.MainRole, out var option) || !option.GetBool())) continue;
 
                 bool skip = false;
                 for (int s = 0; s < playerState.SubRoles.Count; s++)

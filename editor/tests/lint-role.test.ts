@@ -1433,3 +1433,98 @@ describe("lint-role: L16 拡張 (forget(N) があるのに remember(N) が無い
         expect(ruleIds(lintRoleLogic(l))).not.toContain("L16");
     });
 });
+
+// Wave 9 (§6 2026-09-12 併合): L14 の on_pet 条件分岐 + L31〜L33
+describe("lint-role: L14 の Wave 9 対象分岐 (on_pet は basis == \"shapeshift\" のときだけ ctx あり)", () => {
+    it("basis 省略 (docContext 無し) では on_pet + target:ctx は従来どおり L14 を警告する", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "kill", target: "ctx" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).toContain("L14");
+    });
+
+    it("docContext.basis == \"pet\" でも on_pet + target:ctx は L14 を警告する", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "kill", target: "ctx" }] }]);
+        expect(ruleIds(lintRoleLogic(l, undefined, { basis: "pet" }))).toContain("L14");
+    });
+
+    it("docContext.basis == \"shapeshift\" なら on_pet + target:ctx は L14 を警告しない", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "kill", target: "ctx" }] }]);
+        expect(ruleIds(lintRoleLogic(l, undefined, { basis: "shapeshift" }))).not.toContain("L14");
+    });
+
+    it("basis == \"shapeshift\" でも on_pet 以外の ctx 無しイベントは引き続き L14 を警告する", () => {
+        const l = logic([{ when: "on_game_start", do: [{ op: "kill", target: "ctx" }] }]);
+        expect(ruleIds(lintRoleLogic(l, undefined, { basis: "shapeshift" }))).toContain("L14");
+    });
+
+    it("basis == \"shapeshift\" の on_pet + pull (ctx 暗黙 op) も警告しない", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "pull" }] }]);
+        expect(ruleIds(lintRoleLogic(l, undefined, { basis: "shapeshift" }))).not.toContain("L14");
+    });
+});
+
+describe("lint-role: L31 (かちのかぞえかたは crewmate だけ効く)", () => {
+    it("countsAs != 1 かつ team != crewmate なら L31 を警告する", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "stop" }] }]);
+        expect(ruleIds(lintRoleLogic(l, undefined, { team: "impostor", countsAs: 2 }))).toContain("L31");
+        expect(ruleIds(lintRoleLogic(l, undefined, { team: "neutral", countsAs: 0 }))).toContain("L31");
+    });
+
+    it("team == crewmate なら countsAs != 1 でも警告しない", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "stop" }] }]);
+        expect(ruleIds(lintRoleLogic(l, undefined, { team: "crewmate", countsAs: 2 }))).not.toContain("L31");
+    });
+
+    it("countsAs == 1 (既定と同じ) なら team に関わらず警告しない", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "stop" }] }]);
+        expect(ruleIds(lintRoleLogic(l, undefined, { team: "impostor", countsAs: 1 }))).not.toContain("L31");
+    });
+
+    it("countsAs / team が docContext に無ければ警告しない", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "stop" }] }]);
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L31");
+        expect(ruleIds(lintRoleLogic(l, undefined, { team: "impostor" }))).not.toContain("L31");
+    });
+});
+
+describe("lint-role: L32 (とくいわざの まちじかんは「だれかを えらぶ」のときだけ効く)", () => {
+    it("abilityCooldown が既定 (30) 以外 かつ basis == \"pet\" なら L32 を警告する", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "stop" }] }]);
+        expect(ruleIds(lintRoleLogic(l, undefined, { basis: "pet", abilityCooldown: 90 }))).toContain("L32");
+    });
+
+    it("basis == \"shapeshift\" なら abilityCooldown をいくつにしても警告しない", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "stop" }] }]);
+        expect(ruleIds(lintRoleLogic(l, undefined, { basis: "shapeshift", abilityCooldown: 90 }))).not.toContain("L32");
+    });
+
+    it("abilityCooldown が既定値 (30) のままなら basis == \"pet\" でも警告しない", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "stop" }] }]);
+        expect(ruleIds(lintRoleLogic(l, undefined, { basis: "pet", abilityCooldown: 30 }))).not.toContain("L32");
+    });
+
+    it("abilityCooldown が docContext に無ければ警告しない", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "stop" }] }]);
+        expect(ruleIds(lintRoleLogic(l, undefined, { basis: "pet" }))).not.toContain("L32");
+    });
+});
+
+describe("lint-role: L33 (「だれかを えらぶ」なのに on_pet のルールが無い)", () => {
+    it("basis == \"shapeshift\" で on_pet ルールが無ければ L33 を警告する", () => {
+        const l = logic([{ when: "on_game_start", do: [{ op: "stop" }] }]);
+        expect(ruleIds(lintRoleLogic(l, undefined, { basis: "shapeshift" }))).toContain("L33");
+    });
+
+    it("basis == \"shapeshift\" でも on_pet ルールが1つあれば警告しない", () => {
+        const l = logic([
+            { when: "on_game_start", do: [{ op: "stop" }] },
+            { when: "on_pet", do: [{ op: "kill", target: "ctx" }] },
+        ]);
+        expect(ruleIds(lintRoleLogic(l, undefined, { basis: "shapeshift" }))).not.toContain("L33");
+    });
+
+    it("basis == \"pet\" (または docContext 無し) では on_pet が無くても警告しない", () => {
+        const l = logic([{ when: "on_game_start", do: [{ op: "stop" }] }]);
+        expect(ruleIds(lintRoleLogic(l, undefined, { basis: "pet" }))).not.toContain("L33");
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L33");
+    });
+});

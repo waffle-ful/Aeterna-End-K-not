@@ -129,6 +129,14 @@ public abstract class EkmTemplateRole : RoleBase
         // 未指定 (-1) はホスト設定のまま。
         if (def.ParsedPassives.KillDistance >= 0)
             opt.SetInt(Int32OptionNames.KillDistance, def.ParsedPassives.KillDistance);
+
+        // Wave 9: basis shapeshift はバニラのシェイプシフトボタンを借りる (Illusionist 前例と同じ設定)。
+        // 変身は常に即拒否するので Duration は実質未使用の固定値。
+        if (def.ParsedBasis == EkrBasis.Shapeshift)
+        {
+            AURoleOptions.ShapeshifterCooldown = EkrManager.GetEffectiveAbilityCooldown(Slot, def.AbilityCooldownSeconds);
+            AURoleOptions.ShapeshifterDuration = 1f;
+        }
     }
 
     // Wave 1 (spec §2 on_attacked): 自分へのキル試行の一点関門。まもり (passives.shield) の消費判定と
@@ -158,12 +166,32 @@ public abstract class EkmTemplateRole : RoleBase
 
     // Wave 1 (spec §2 発動トリガ統合): on_pet は「とくいわざボタンをおしたとき」= 能力ボタンの発動全般。
     // AST の id は on_pet のまま (契約不変) で、役職基盤がペット以外のボタンを提供する場合はそちらでも
-    // 同じイベントを発行する。現行の EKR 基盤 (Crewmate / CanVent=Engineer / CanKill=desync Impostor) は
-    // シェイプシフト/バニッシュを持たないため、いまは将来の基盤拡張に備えた配線。
+    // 同じイベントを発行する。basis pet の EKR 基盤 (Crewmate / CanVent=Engineer / CanKill=desync
+    // Impostor) はシェイプシフト/バニッシュを持たないため、その場合はまだ将来の基盤拡張に備えた配線のまま。
+    // basis shapeshift (Wave 9) は下のブロックで本配線する。
     public override bool OnShapeshift(PlayerControl shapeshifter, PlayerControl target, bool shapeshifting)
     {
-        if (shapeshifting) FireAbilityButton(shapeshifter); // 戻り (shapeshifting=false) では二重発火させない
-        return true;
+        if (!shapeshifting) return true; // 戻り (shapeshifting=false) では発火させない
+
+        EkrDefinition def = EkrManager.GetDefinition(Slot);
+
+        if (def?.ParsedBasis != EkrBasis.Shapeshift)
+        {
+            FireAbilityButton(shapeshifter);
+            return true;
+        }
+
+        // Wave 9: basis shapeshift はバニラのシェイプシフトボタンを借りるだけで、実際に変身はさせない
+        // (契約 §1: 押して相手を選んだ瞬間に on_pet が発火し、変身は即座に拒否される)。
+        if (def.ParsedLogic == null) return false;
+
+        bool validTarget = target && target.PlayerId < 200 && target.PlayerId != shapeshifter.PlayerId &&
+                           target.IsAlive() && target.Data != null && !target.Data.Disconnected;
+
+        if (!validTarget) return false;
+
+        EkrManager.FirePet(Slot, shapeshifter, target.PlayerId);
+        return false;
     }
 
     public override bool OnVanish(PlayerControl pc)
@@ -214,6 +242,13 @@ public abstract class EkmTemplateRole : RoleBase
     public override void OnFixedUpdate(PlayerControl pc)
     {
         EkrManager.Pump(Slot, pc);
+    }
+
+    // Wave 9 (契約 §3): かちのかぞえかた。クルー陣営のときだけ効く (第三陣営/インポスターは 1 人ぶん固定)。
+    public override void ManipulateGameEndCheckCrew(PlayerState playerState, out bool keepGameGoing, out int countsAs)
+    {
+        keepGameGoing = false;
+        countsAs = EkrManager.GetTeam(Slot) == EkrTeam.Crewmate ? EkrManager.GetDefinition(Slot)?.ParsedPassives.CountsAs ?? 1 : 1;
     }
 
     // ── Wave 3 (progress): 名前の横に出す作者の文字 ──

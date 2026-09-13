@@ -14,13 +14,21 @@ public enum EkrTeam
     Neutral
 }
 
+// Wave 9: 能力ボタンの土台。Pet = 従来のペットボタン。Shapeshift = バニラのシェイプシフトボタン
+// (相手を選ぶピッカー付き) を借りて即座に拒否する — 見た目は変わらないが on_pet がターゲット付きで発火する。
+public enum EkrBasis
+{
+    Pet,
+    Shapeshift
+}
+
 // Wave 3: ホストがロビーで変えられるようにする数値1件の宣言。
 // 「どの数値か」は固定キー表 (EkrHostOption.FixedKeys) か `var:<変数名>` のどちらかで指名する。
 public sealed class EkrHostOption
 {
     // 契約 §4.1 の許容キー (固定キー系)。値域は契約側の既存定義が正なので min/max は指定させない。
     // ⚠️ TS 側 (editor/src/roledef.ts) と同じ綴り・同じ並びを保つこと (drift 検出は共有 fixture)。
-    public static readonly string[] FixedKeys = ["shield.count", "doom.seconds", "speedMult", "voteWeight", "killCooldown", "vision"];
+    public static readonly string[] FixedKeys = ["shield.count", "doom.seconds", "speedMult", "voteWeight", "killCooldown", "vision", "abilityCooldown"];
 
     public const string VarPrefix = "var:";
 
@@ -110,14 +118,41 @@ public sealed class EkrDefinition
     [JsonIgnore]
     public EkrTeam ParsedTeam { get; private set; } = EkrTeam.Crewmate;
 
+    // Wave 9: 能力ボタンの土台 (「はつどうのしかた」)。
+    // ⚠️ Nullable<JsonElement> ではなく素の JsonElement で受けること。Nullable<T> は System.Text.Json の
+    // 標準変換で JSON null をラッパー段階で潰してしまい、「省略」と「明示 null」が同じ HasValue=false に
+    // 化ける (Progress / HostOptions が抱えている既知の制約)。素の JsonElement なら省略 = Undefined /
+    // 明示 null = Null と区別でき、TS 側の「null は文書 reject」と同じ判定にできる。
+    [JsonPropertyName("basis")]
+    public JsonElement Basis { get; set; }
+
+    [JsonIgnore]
+    public EkrBasis ParsedBasis { get; private set; } = EkrBasis.Pet;
+
     [JsonPropertyName("canKill")]
     public bool CanKill { get; set; }
 
     [JsonPropertyName("killCooldown")]
     public float KillCooldown { get; set; } = 25f;
 
+    // Wave 9: basis == shapeshift のときだけ効く「とくいわざの まちじかん」。KillCooldown と違い
+    // 範囲外は Clamp せず文書 reject する。素の JsonElement で受ける理由は Basis と同じ。
+    [JsonPropertyName("abilityCooldown")]
+    public JsonElement AbilityCooldown { get; set; }
+
+    [JsonIgnore]
+    public float AbilityCooldownSeconds { get; private set; } = 30f;
+
     [JsonPropertyName("canVent")]
     public bool CanVent { get; set; }
+
+    // Wave 9: サボタージュを使えるか。省略 = 陣営どおり (インポスター陣営は使える・クルー/第三陣営は使えない)。
+    // 明示すればどちらの陣営でも上書きできる。3値を持たせるため素の JsonElement で受ける (Basis と同じ理由)。
+    [JsonPropertyName("canSabotage")]
+    public JsonElement CanSabotage { get; set; }
+
+    [JsonIgnore]
+    public bool? ParsedCanSabotage { get; private set; }
 
     [JsonPropertyName("visionMultiplier")]
     public float VisionMultiplier { get; set; } = 1f;
@@ -271,8 +306,52 @@ public sealed class EkrDefinition
                 return false;
         }
 
+        // Wave 9 (契約 §5-1): basis。省略は pet 扱い、文字列以外 (null 含む) / 未知の値は文書 reject。
+        if (Basis.ValueKind != JsonValueKind.Undefined)
+        {
+            if (Basis.ValueKind != JsonValueKind.String)
+            {
+                error = "はつどうのしかた (basis) の値が不正です";
+                return false;
+            }
+
+            switch (Basis.GetString())
+            {
+                case "pet": ParsedBasis = EkrBasis.Pet; break;
+                case "shapeshift": ParsedBasis = EkrBasis.Shapeshift; break;
+                default:
+                    error = $"basis=\"{Basis.GetString()}\" は使えません (使えるのは pet / shapeshift の2つです)";
+                    return false;
+            }
+        }
+
         KillCooldown = Math.Clamp(float.IsFinite(KillCooldown) ? KillCooldown : 25f, 1f, 180f);
         VisionMultiplier = Math.Clamp(float.IsFinite(VisionMultiplier) ? VisionMultiplier : 1f, 0.25f, 5f);
+
+        // Wave 9 (契約 §5-2): abilityCooldown。省略は 30 扱い、範囲外は Clamp せず文書 reject する。
+        if (AbilityCooldown.ValueKind != JsonValueKind.Undefined)
+        {
+            if (AbilityCooldown.ValueKind != JsonValueKind.Number || !AbilityCooldown.TryGetDouble(out double cd) ||
+                double.IsNaN(cd) || double.IsInfinity(cd) || cd < 5.0 || cd > 180.0)
+            {
+                error = "とくいわざの まちじかん (abilityCooldown) が範囲外です (5〜180)";
+                return false;
+            }
+
+            AbilityCooldownSeconds = (float)cd;
+        }
+
+        // Wave 9: canSabotage。省略は陣営なり (null のまま)、真偽値以外は文書 reject。
+        if (CanSabotage.ValueKind != JsonValueKind.Undefined)
+        {
+            if (CanSabotage.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+            {
+                error = "サボタージュを つかえるか (canSabotage) の値が不正です (true / false)";
+                return false;
+            }
+
+            ParsedCanSabotage = CanSabotage.ValueKind == JsonValueKind.True;
+        }
 
         WinCondition = (WinCondition ?? "team").Trim().ToLowerInvariant();
         // Wave 7: このフィールドは歴史的受理のみ — どの値も消費しない。

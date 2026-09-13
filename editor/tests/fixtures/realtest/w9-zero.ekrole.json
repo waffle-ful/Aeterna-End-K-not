@@ -1,0 +1,18 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "かぞえない",
+  "author": "EKN Realtest",
+  "description": "クルーの数に 入らない",
+  "color": "#909090",
+  "team": "crewmate",
+  "canKill": false,
+  "killCooldown": 25,
+  "canVent": false,
+  "visionMultiplier": 1,
+  "winCondition": "team",
+  "basis": "pet",
+  "passives": {
+    "countsAs": 0
+  }
+}

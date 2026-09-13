@@ -12,6 +12,9 @@
   "canVent": true,
   "visionMultiplier": 1.2,
   "winCondition": "team",
+  "basis": "shapeshift",
+  "abilityCooldown": 45,
+  "canSabotage": true,
   "progress": { "text": "うらみ{うらみ}" },
   "hostOptions": [
     { "key": "shield.count", "label": "かげのまもり" },
@@ -25,7 +28,8 @@
     "voteWeight": 2,
     "doom": { "seconds": 300 },
     "killDistance": "short",
-    "disguise": { "team": "neutral" }
+    "disguise": { "team": "neutral" },
+    "countsAs": 2
   },
   "logic": {
     "version": 1,

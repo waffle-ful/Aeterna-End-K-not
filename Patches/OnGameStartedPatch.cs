@@ -846,6 +846,11 @@ internal static class StartGameHostPatch
 
                         KeyValuePair<byte, CustomRoles> kp = RoleResult.FirstOrDefault(x => x.Key == player.PlayerId);
 
+                        // 役職メーカーの「だれかを えらぶ」はシェイプシフトボタンを能力に使うので、基底を変える
+                        // アドオンとは同居できない (能力の土台ごと奪われる)。CheckAddonConflict の arm は
+                        // この 7 種を通らない — ここが唯一の付与口なので、除外はこの位置に置くこと。
+                        if (EndKnot.Modules.Ekm.EkrManager.IsEkrShapeshiftBasis(kp.Value)) continue;
+
                         bool bloodlustBanned = hasBanned && banned.Any(x => x.Key == kp.Value && x.Value.Contains(CustomRoles.Bloodlust));
                         bool nimbleBanned = hasBanned && banned.Any(x => x.Key == kp.Value && x.Value.Contains(CustomRoles.Nimble));
                         bool physicistBanned = hasBanned && banned.Any(x => x.Key == kp.Value && x.Value.Contains(CustomRoles.Physicist));

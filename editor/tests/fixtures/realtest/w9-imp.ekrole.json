@@ -1,0 +1,53 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "えらびインポ",
+  "author": "EKN Realtest",
+  "description": "とくいわざで だれかを えらぶ (インポスター陣営)",
+  "color": "#d04040",
+  "team": "impostor",
+  "canKill": true,
+  "killCooldown": 25,
+  "canVent": false,
+  "visionMultiplier": 1,
+  "winCondition": "team",
+  "basis": "shapeshift",
+  "abilityCooldown": 10,
+  "logic": {
+    "version": 1,
+    "variables": [
+      {
+        "name": "かず",
+        "init": 0
+      }
+    ],
+    "rules": [
+      {
+        "when": "on_pet",
+        "do": [
+          {
+            "op": "var_add",
+            "name": "かず",
+            "delta": {
+            "e": "lit",
+            "v": 1
+          }
+          },
+          {
+            "op": "inspect",
+            "target": "ctx",
+            "depth": "team"
+          },
+          {
+            "op": "notify",
+            "text": "えらんだ {かず} 回目",
+            "seconds": 3
+          }
+        ]
+      }
+    ]
+  },
+  "progress": {
+    "text": "W9-{かず}"
+  }
+}

@@ -17,7 +17,7 @@
 // v1.3 (2026-08-11): L13 を追加 (pull/drag/field 新設の輸出・L3/L11 の兄弟)。L9/L12 の対象 op に
 // field を追加 (CNO 生成系防御3点セット + 会議明け10秒ドロップ + on_cno_touch 誤用検知の対象)。
 
-import type { LogicNode, LogicRule, RoleLogic } from "../roledef";
+import { ABILITY_COOLDOWN_DEFAULT, type EkrBasis, type EkrTeam, type LogicNode, type LogicRule, type RoleLogic } from "../roledef";
 
 // Wave 1 (2026-08-11): L14〜L17 を追加 (計17ルール)。L14 = ctx 無しイベント配下の ctx セレクタ、
 // L15 = 未保存マーカーへの行き先、L16 = 未生成 CNO / 未保存 saved の参照、L17 = wait より後の
@@ -55,11 +55,19 @@ import type { LogicNode, LogicRule, RoleLogic } from "../roledef";
 // 改定: TASK_ONLY_LINT_OPS に recruit/effect_give/cno_launch を追加 (会議中 op 白名単に載って
 // おらず、L23/L30 の対象漏れだった)。MEETING_ONLY_LINT_WHENS に on_chat を追加 (on_chat は会議中
 // にしか発火しないため、会議専用 op を置いても L18 が誤って警告していた)。
+// Wave 9 (§6 2026-09-12): L31〜L33 を追加 (計33ルール)。基底 (basis) を開いたことで on_pet の
+// ctx 有無が basis 次第になったため、L14 の CTXLESS 判定を on_pet だけ basis 条件付きにする
+// (basis == "shapeshift" のときは on_pet に「あいて」がいる)。L31 = かちのかぞえかた
+// (passives.countsAs) が crewmate 以外で指定されている、L32 = とくいわざの まちじかん
+// (abilityCooldown) が基底 "pet" のまま指定されている、L33 = 基底 "shapeshift" なのに on_pet の
+// ルールが1つも無い。3つとも rule 単位ではなく文書単位のヒントなので ruleIndex は -1 で表す
+// (L25 の progress.text 側検査と同じ扱い)。
 
 export type LintRuleId =
     | "L1" | "L2" | "L3" | "L4" | "L5" | "L6" | "L7" | "L8" | "L9" | "L10" | "L11" | "L12" | "L13"
     | "L14" | "L15" | "L16" | "L17" | "L18" | "L19" | "L20" | "L21"
-    | "L22" | "L23" | "L24" | "L25" | "L26" | "L27" | "L28" | "L29" | "L30";
+    | "L22" | "L23" | "L24" | "L25" | "L26" | "L27" | "L28" | "L29" | "L30"
+    | "L31" | "L32" | "L33";
 
 export interface LintWarning {
     rule: LintRuleId;
@@ -149,6 +157,10 @@ function hasGenerationOpBeforeElapsed(nodes: LogicNode[], ops: ReadonlySet<Logic
 // ctx を持つので入れない。
 // Wave 6 (契約 §3): on_revive も ctx 無し (holder 限定)。on_sabotage は
 // グローバル型で ctx (=起こした人) を持つのでここには入れない。
+// Wave 9 (契約 §2): on_pet は basis == "shapeshift" のときだけ ctx を持つ (えらんだ人)。
+// この集合には引き続き on_pet を含めたまま残し、呼び出し側 (下の L14 判定) で
+// basis == "shapeshift" のときだけ on_pet を対象から外す (docContext 省略時は
+// 従来どおり ctx 無し扱いのまま — 後方互換)。
 const CTXLESS_WHENS: ReadonlySet<string> = new Set([
     "on_game_start", "on_pet", "on_meeting_start", "on_meeting_end", "on_task_complete", "on_vent_enter", "on_second",
     "on_var", "on_alive_count", "on_vent_exit",
@@ -321,17 +333,30 @@ function extractProgressVarRefs(text: string): string[] {
     return out;
 }
 
+/** L31〜L33 (Wave 9) が必要とする文書レベルの情報。logic (RoleLogic) には無いフィールドだけを渡す。 */
+export interface LintDocContext {
+    team?: EkrTeam;
+    basis?: EkrBasis;
+    abilityCooldown?: number;
+    countsAs?: number;
+}
+
 /**
- * 検証済みの RoleLogic に対して spec §6 の 30 ルール (v1.2 で L11/L12、v1.3 で L13、Wave 1 で
+ * 検証済みの RoleLogic に対して spec §6 の 33 ルール (v1.2 で L11/L12、v1.3 で L13、Wave 1 で
  * L14〜L17、Wave 2 で L18〜L20、2026-08-14 に L21、Wave 3 で L22〜L25 のうち L24/L25、Wave 4 で
- * L26/L27、Wave 5 で L28、Wave 6 で L29、Wave 8 で L30) を静的検査する。ブロックの組み方に対するヒントであり、export 自体は妨げない
- * (呼び出し元は結果を警告フッタに表示するだけ)。
+ * L26/L27、Wave 5 で L28、Wave 6 で L29、Wave 8 で L30、Wave 9 で L31〜L33) を静的検査する。
+ * ブロックの組み方に対するヒントであり、export 自体は妨げない (呼び出し元は結果を警告フッタに
+ * 表示するだけ)。
  *
  * `progressText` は L25 が progress.text 内の `{変数名}` 参照も一緒に検査するための任意引数
  * (契約 §6 L25 — progress は logic とは別のトップレベルキーなので、RoleLogic には含まれない)。
  * 省略時は progress.text 側の検査をスキップする (呼び出し元が progress を持たない場合に対応)。
+ *
+ * `docContext` は L31〜L33 (Wave 9) と L14 の on_pet 条件分岐が必要とする team/basis/
+ * abilityCooldown/countsAs をまとめて渡す任意引数。省略時はこれらの検査を全てスキップし、
+ * on_pet は従来どおり ctx 無し扱いになる (呼び出し元がまだ basis を持たない場合の後方互換)。
  */
-export function lintRoleLogic(logic: RoleLogic, progressText?: string): LintWarning[] {
+export function lintRoleLogic(logic: RoleLogic, progressText?: string, docContext?: LintDocContext): LintWarning[] {
     const warnings: LintWarning[] = [];
 
     // L15/L16 は rule をまたいで解決する (「どの rule にも無い」が条件 — spec §6)。
@@ -496,11 +521,14 @@ export function lintRoleLogic(logic: RoleLogic, progressText?: string): LintWarn
             ));
         }
 
-        // L14 (Wave 1): 「あいて」がいないきっかけの中で「あいて」を使っている。
-        // 対象は ①セレクタ値 (target/at/to) の "ctx" と ②引数を持たない **ctx 暗黙 op**
-        // (`pull`/`drag` — フィールドは無いが実行時は ctx に依存するので、ctx 無しイベント配下では
-        // 丸ごと no-op になるため、L14 の対象へ拡張してある)。
-        if (CTXLESS_WHENS.has(rule.when)
+        // L14 (Wave 1・Wave 9 で on_pet を basis 条件付きに改定): 「あいて」がいないきっかけの中で
+        // 「あいて」を使っている。対象は ①セレクタ値 (target/at/to) の "ctx" と ②引数を持たない
+        // **ctx 暗黙 op** (`pull`/`drag` — フィールドは無いが実行時は ctx に依存するので、ctx 無し
+        // イベント配下では丸ごと no-op になるため、L14 の対象へ拡張してある)。
+        // on_pet は basis == "shapeshift" のときだけ「あいて」を持つ (契約 §2) ので、その場合は
+        // CTXLESS_WHENS に含まれていても対象から外す。
+        const onPetHasCtx = rule.when === "on_pet" && docContext?.basis === "shapeshift";
+        if (CTXLESS_WHENS.has(rule.when) && !onPetHasCtx
             && (anySelectorToken(rule.do, (t) => t === "ctx") || hasOp(rule.do, "pull") || hasOp(rule.do, "drag"))) {
             warnings.push(makeWarning(
                 "L14", ruleIndex, rule.when,
@@ -689,6 +717,36 @@ export function lintRoleLogic(logic: RoleLogic, progressText?: string): LintWarn
                 ));
             }
         }
+    }
+
+    // L31 (Wave 9・契約 §3): かちのかぞえかた (passives.countsAs) は crewmate だけ効く。
+    // rule に紐づかない文書単位のヒントなので ruleIndex は -1・when は擬似値にする (L25 と同型)。
+    if (docContext?.countsAs !== undefined && docContext.countsAs !== 1 && docContext.team !== undefined && docContext.team !== "crewmate") {
+        warnings.push(makeWarning(
+            "L31", -1, "passives",
+            "かちのかぞえかたは クルーのときだけ 効きます。",
+            "いまの陣営では、この設定は 効果がありません。",
+        ));
+    }
+
+    // L32 (Wave 9・契約 §1.2): とくいわざの まちじかん (abilityCooldown) は
+    // 「だれかを えらぶ」(basis == "shapeshift") のときだけ効く。
+    if (docContext?.abilityCooldown !== undefined && docContext.abilityCooldown !== ABILITY_COOLDOWN_DEFAULT && docContext.basis === "pet") {
+        warnings.push(makeWarning(
+            "L32", -1, "basis",
+            "まちじかんは『だれかを えらぶ』のときだけ 効きます。",
+            "いまは『ボタンをおす』なので、この まちじかんは 使われません。",
+        ));
+    }
+
+    // L33 (Wave 9・契約 §2): 「だれかを えらぶ」(basis == "shapeshift") なのに、
+    // とくいわざのルール (on_pet) が1つも無い。
+    if (docContext?.basis === "shapeshift" && !logic.rules.some((r) => r.when === "on_pet")) {
+        warnings.push(makeWarning(
+            "L33", -1, "basis",
+            "『だれかを えらぶ』なのに、とくいわざの ルールが ありません。",
+            "「とくいわざボタンを おしたとき」を ついかしよう。",
+        ));
     }
 
     return warnings;

@@ -1,0 +1,19 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "ふたりぶん",
+  "author": "EKN Sample",
+  "description": "いるだけで、クルーの人数を2人ぶんとして数える",
+  "color": "#5fa06f",
+  "team": "crewmate",
+  "canKill": false,
+  "killCooldown": 25,
+  "canVent": false,
+  "visionMultiplier": 1,
+  "winCondition": "team",
+  "basis": "pet",
+  "passives": {
+    "countsAs": 2,
+    "shield": { "count": 1 }
+  }
+}
