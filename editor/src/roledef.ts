@@ -24,6 +24,9 @@
 // 「壊れたデータでもフォーム自体は必ず開ける」ことに依存しているため (これらのヘルパーを厳格化すると
 // 下書き復元が壊れる)。
 
+// Wave 10 (契約 §2) — 「つけられるアドオン」の値集合は生成物からの import (手書き二重管理はしない)。
+import { ADDON_VALUES } from "./generated/ekr-addons";
+
 export const EKR_VERSION = 1;
 
 export const ROLE_NAME_MAX = 24;
@@ -319,6 +322,18 @@ export const RECRUIT_SLOT_MIN = 1;
 export const RECRUIT_SLOT_MAX = 18;
 
 // ---------------------------------------------------------------------------
+// Wave 10 (2026-09-13) — つける・はがす (アドオン付与)
+// ---------------------------------------------------------------------------
+// addon_give/addon_remove.target は単数セレクタから `linked` を除いた集合 + self
+// (アドオンは張り替え対象を持たないので、つないだ人だけを専用に指す意味が無い)。
+export const ADDON_TARGET_VALUES = ["self", "ctx", "saved1", "saved2", "nearest", "random"] as const;
+// addon_give.addon は生成物 ADDON_VALUES (121種) の完全一致 (大小区別)。ゴースト役職/陣営変換タグは
+// enum 末尾に居るが集合外なので reject する (Enum.TryParse に丸投げしない側に倒す)。
+// addon_remove.addon はこれに加えて "all" (集合内すべてを剥がす) も受理する。
+export const ADDON_REMOVE_ALL = "all";
+export const ADDON_REMOVE_VALUES: readonly string[] = [...ADDON_VALUES, ADDON_REMOVE_ALL];
+
+// ---------------------------------------------------------------------------
 // Wave 6 (2026-08-29) — とばすもの (発射体プリミティブ)
 // ---------------------------------------------------------------------------
 // cno_launch.dir (契約 §1): launch 時に1回だけ解決し、以後は追尾しない。
@@ -505,7 +520,11 @@ export type LogicNode =
     | { op: "win_join"; target?: (typeof WIN_TARGET_VALUES)[number] }
     // Wave 8 (§2) — remember の該当 slot を消す。空 slot は no-op。
     // target を持たない (marker_save/vote_swap と同じくローカル状態のみを触る op)。
-    | { op: "forget"; slot: 1 | 2 };
+    | { op: "forget"; slot: 1 | 2 }
+    // Wave 10 (契約 §4) — つける。addon は生成物 ADDON_VALUES の完全一致 (大小区別)。
+    | { op: "addon_give"; target: (typeof ADDON_TARGET_VALUES)[number]; addon: string }
+    // Wave 10 (契約 §5) — はがす。addon は ADDON_VALUES に加えて "all" も受理する。
+    | { op: "addon_remove"; target: (typeof ADDON_TARGET_VALUES)[number]; addon: string };
 
 export interface LogicRule {
     when: LogicWhen;
@@ -1350,6 +1369,18 @@ function validateNode(raw: unknown, varNames: ReadonlySet<string>, path: string,
         case "forget": {
             const slot = expectRangeInt(raw.slot, REMEMBER_SLOT_MIN, REMEMBER_SLOT_MAX, `${path}.slot`) as 1 | 2;
             return { node: { op: "forget", slot }, depth: 1, count: 1 };
+        }
+        // Wave 10 (契約 §4) — つける。target/addon とも必須 (既定を作らない — effect_give と同じ作法)。
+        case "addon_give": {
+            const target = expectEnum(raw.target, ADDON_TARGET_VALUES, `${path}.target`);
+            const addon = expectEnum(raw.addon, ADDON_VALUES, `${path}.addon`);
+            return { node: { op: "addon_give", target, addon }, depth: 1, count: 1 };
+        }
+        // Wave 10 (契約 §5) — はがす。addon は ADDON_VALUES に加えて "all" も受理する。
+        case "addon_remove": {
+            const target = expectEnum(raw.target, ADDON_TARGET_VALUES, `${path}.target`);
+            const addon = expectEnum(raw.addon, ADDON_REMOVE_VALUES, `${path}.addon`);
+            return { node: { op: "addon_remove", target, addon }, depth: 1, count: 1 };
         }
         default:
             fail(`${path}.op が不明です (${JSON.stringify(op)})`);

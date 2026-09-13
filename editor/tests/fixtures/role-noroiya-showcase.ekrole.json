@@ -1,0 +1,34 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "のろいや",
+  "author": "EKN Sample",
+  "description": "とくいわざで あいてに アンラッキーのアドオンをつけ、会議明けにはがす",
+  "color": "#4a2f6b",
+  "team": "impostor",
+  "canKill": false,
+  "killCooldown": 25,
+  "canVent": false,
+  "visionMultiplier": 1,
+  "winCondition": "team",
+  "logic": {
+    "version": 1,
+    "variables": [],
+    "rules": [
+      {
+        "when": "on_pet",
+        "do": [
+          { "op": "addon_give", "target": "nearest", "addon": "Unlucky" },
+          { "op": "remember", "slot": 1, "target": "nearest" },
+          { "op": "notify", "text": "のろいをかけた…", "seconds": 2 }
+        ]
+      },
+      {
+        "when": "on_meeting_end",
+        "do": [
+          { "op": "addon_remove", "target": "saved1", "addon": "Unlucky" }
+        ]
+      }
+    ]
+  }
+}
