@@ -2351,10 +2351,11 @@ public static class Utils
             // 追記すると単一チャンクが SafeChunkLength を超える場合、書く前に見積りでフラッシュする。
             // (実測: SetName+SendChat ペア ~450B×2 が 902B 単一チャンクに合体、公式 kick 閾値 ~1024 に肉薄)
             // Length>10 は「裸の GameData エンベロープ (ヘッダ7B のみ)」を空ブロードキャストしない保険。
-            // 閾値は SetName 系チャンクの実測キック境界 (787B 通過 / 817B キック, 2026-07-14) に
-            // 合わせて SetNameChunkFlushThreshold (750) を使う。fullRpcSize は GameDataTo ラッパ / RPC ヘッダを
-            // 含まない過小見積もりのため、3 RPC ぶんのラッパ相当をマージンとして上乗せする。
-            if (writer.stream.Length > 10 && writer.stream.Length + fullRpcSize + (CustomRpcSenderExtensions.SetNameWrapperOverhead * 3) > CustomRpcSenderExtensions.SetNameChunkFlushThreshold)
+            // 閾値は ChatCombinerChunkFlushThreshold (750)。SetName 単体のチャンク上限 (950) とは分けてある —
+            // ここは SetName + SendChat + SetName の合体で形が違い、950 まで積む挙動は実測していない。
+            // fullRpcSize は GameDataTo ラッパ / RPC ヘッダを含まない過小見積もりのため、
+            // 3 RPC ぶんのラッパ相当をマージンとして上乗せする。
+            if (writer.stream.Length > 10 && writer.stream.Length + fullRpcSize + (CustomRpcSenderExtensions.SetNameWrapperOverhead * 3) > CustomRpcSenderExtensions.ChatCombinerChunkFlushThreshold)
             {
                 writer.SendMessage();
                 writer = CustomRpcSender.Create("Utils.SendMessage(1)", sendOption);
@@ -3202,7 +3203,7 @@ public static class Utils
     }
 
     // 自由長テキスト (lang InfoLong の切り出し / CTA 作者自由記述) が名前ペイロードに合流する経路の上流クランプ。
-    // 最終防波堤 (CustomRpcSenderExtensions.ClampNameForOfficialServer, NameBudget=705B) はキックこそ防ぐが
+    // 最終防波堤 (CustomRpcSenderExtensions.ClampNameForOfficialServer, NameBudget) はキックこそ防ぐが
     // 末尾から無差別に切るため、役職マーク/suffix 側が犠牲になる — 「何を削るか」は発生源で決める。
     // 公式鯖以外では名前長の制約が無いので素通し。切り詰め時は rune 境界 + 未終端タグ除去 + "..."。
     private static string ClampFreeTextForVanillaServer(string text, int byteBudget)
@@ -3254,8 +3255,8 @@ public static class Utils
                         }
 
                         // 296字クランプは byte 盲目で、日本語は 1字3B — 191字 (488B) でも名前組み立て後に
-                        // NameBudget (705B) を超え、末尾の役職マーク/suffix が丸ごと切り落とされる
-                        // (2026-08-20 実測: ドッスン 488B + 組み立てオーバーヘッド 245B = 733B でクランプ発生。
+                        // NameBudget を超え、末尾の役職マーク/suffix が丸ごと切り落とされる
+                        // (2026-08-20 実測: ドッスン 488B + 組み立てオーバーヘッド 245B = 733B。
                         // ja の切り出し分布で 400B 超は 15/691 件)。公式鯖のときだけ rune 境界で byte 予算へ切り詰める。
                         // ラテン文字言語は 296字 ≈ 296B なので上の字数クランプが先に効き、挙動不変。
                         // 380 = 説明文の取り分 400B − ラッパー <#ffffff></color> (17B) − "..." (3B)。

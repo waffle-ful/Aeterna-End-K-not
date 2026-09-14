@@ -4760,6 +4760,271 @@ internal static class ChatCommands
             return;
         }
 
+        // /nest budget <bytes>|reset   — 名前予算を実行時に上書きする (dev 限定・出荷状態は常に既定値)
+        // /nest namepad <bytes>|off     — すべての SetName に詰め物を足す
+        // 単発アーム (/nest name) は「静止・1 本だけ」なので、毎 tick・多宛先で飛ぶ本番の形を測れない。
+        // この 2 本を併用すると、長い名前が**本番 NotifyRoles の関所**をそのまま流れる状態を作れる。
+        if (args.Length >= 3 && args[1].Equals("budget", StringComparison.OrdinalIgnoreCase))
+        {
+            if (args[2].Equals("reset", StringComparison.OrdinalIgnoreCase)) CustomRpcSenderExtensions.NameBudgetOverride = 0;
+            else if (int.TryParse(args[2], out int nb)) CustomRpcSenderExtensions.NameBudgetOverride = Math.Clamp(nb, 0, 4000);
+            else
+            {
+                Utils.SendMessage("[nest] Usage: /nest budget <bytes>|reset", player.PlayerId);
+                return;
+            }
+
+            string bline = $"NEST budget override={CustomRpcSenderExtensions.NameBudgetOverride} effective={CustomRpcSenderExtensions.EffectiveNameBudget} default={CustomRpcSenderExtensions.NameBudget} pad={CustomRpcSenderExtensions.NamePadBytes}";
+            HealthLog.NoteAnom(bline);
+            Logger.Info(bline, "DevCmd");
+            Utils.SendMessage($"[nest] name budget is now {CustomRpcSenderExtensions.EffectiveNameBudget}B (default {CustomRpcSenderExtensions.NameBudget}B, override {CustomRpcSenderExtensions.NameBudgetOverride}).", player.PlayerId);
+            return;
+        }
+
+        // /nest ring — 直近のパケットリング (秒ごとの本数/バイト) をログへ。実験の前後で読む計器。
+        if (args.Length >= 2 && args[1].Equals("ring", StringComparison.OrdinalIgnoreCase))
+        {
+            string dump = $"NEST ring budget={CustomRpcSenderExtensions.EffectiveNameBudget} pad={CustomRpcSenderExtensions.NamePadBytes} {PacketRateGate.DumpRecent()}";
+            HealthLog.NoteAnom(dump);
+            Logger.Info(dump, "DevCmd");
+            Utils.SendMessage("[nest] packet ring dumped to Health/Timeline.", player.PlayerId);
+            return;
+        }
+
+        // /nest chunk <bytes>|reset — チャンク閾値の実行時上書き。予算と必ず連動させて使う。
+        if (args.Length >= 3 && args[1].Equals("chunk", StringComparison.OrdinalIgnoreCase))
+        {
+            if (args[2].Equals("reset", StringComparison.OrdinalIgnoreCase)) CustomRpcSenderExtensions.ChunkThresholdOverride = 0;
+            else if (int.TryParse(args[2], out int ct)) CustomRpcSenderExtensions.ChunkThresholdOverride = Math.Clamp(ct, 0, 4000);
+            else
+            {
+                Utils.SendMessage("[nest] Usage: /nest chunk <bytes>|reset", player.PlayerId);
+                return;
+            }
+
+            string cline = $"NEST chunk override={CustomRpcSenderExtensions.ChunkThresholdOverride} effective={CustomRpcSenderExtensions.EffectiveChunkThreshold} budget={CustomRpcSenderExtensions.EffectiveNameBudget}";
+            HealthLog.NoteAnom(cline);
+            Logger.Info(cline, "DevCmd");
+            // 予算が閾値を超えていると名前 1 件ごとに空のエンベロープが増える (パケット数が倍になる) ので警告する。
+            string chunkWarn = CustomRpcSenderExtensions.EffectiveNameBudget + CustomRpcSenderExtensions.SetNameWrapperOverhead > CustomRpcSenderExtensions.EffectiveChunkThreshold
+                ? " ⚠ budget exceeds the chunk threshold — every long name will emit an extra EMPTY envelope."
+                : string.Empty;
+            Utils.SendMessage($"[nest] chunk threshold is now {CustomRpcSenderExtensions.EffectiveChunkThreshold}B (default {CustomRpcSenderExtensions.SetNameChunkFlushThreshold}B), budget {CustomRpcSenderExtensions.EffectiveNameBudget}B.{chunkWarn}", player.PlayerId);
+            return;
+        }
+
+        if (args.Length >= 3 && args[1].Equals("namepad", StringComparison.OrdinalIgnoreCase))
+        {
+            if (args[2].Equals("off", StringComparison.OrdinalIgnoreCase)) CustomRpcSenderExtensions.NamePadBytes = 0;
+            else if (int.TryParse(args[2], out int np)) CustomRpcSenderExtensions.NamePadBytes = Math.Clamp(np, 0, 4000);
+            else
+            {
+                Utils.SendMessage("[nest] Usage: /nest namepad <bytes>|off", player.PlayerId);
+                return;
+            }
+
+            string pline = $"NEST namepad pad={CustomRpcSenderExtensions.NamePadBytes} effectiveBudget={CustomRpcSenderExtensions.EffectiveNameBudget} phase={(GameStates.IsLobby ? "lobby" : "ingame")}";
+            HealthLog.NoteAnom(pline);
+            Logger.Info(pline, "DevCmd");
+
+            // 自分でバーストを起こす — レバーを回しただけでは名前は飛ばず、次に何かが NotifyRoles を
+            // 呼ぶまで待つことになり、「いつ測ったか」が実験ごとに変わってしまう。NoCache で全員分を
+            // 強制的に組み直し、1.5 秒後にパケットリングを吐いて本数とバイト数を読めるようにする。
+            if (!GameStates.IsLobby)
+            {
+                Utils.NotifyRoles(NoCache: true, ForceLoop: true);
+
+                LateTask.New(() =>
+                {
+                    string ring = $"NEST namepad burst pad={CustomRpcSenderExtensions.NamePadBytes} budget={CustomRpcSenderExtensions.EffectiveNameBudget} {PacketRateGate.DumpRecent()}";
+                    HealthLog.NoteAnom(ring);
+                    Logger.Info(ring, "DevCmd");
+                }, 1.5f, "Nest Namepad Ring");
+            }
+            // 詰め物が予算に丸ごと食われると「長い名前が流れている」つもりで実際は短いまま = 偽の生還になる。
+            Utils.SendMessage($"[nest] name padding is now {CustomRpcSenderExtensions.NamePadBytes}B (budget {CustomRpcSenderExtensions.EffectiveNameBudget}B — raise it with '/nest budget' or the padding gets clamped away).", player.PlayerId);
+            return;
+        }
+
+        // /nest name <packetBytes> [tgt=self|<pid>] [to=all|<pid>] [tag] [raw] [norestore]
+        // 「名前ペイロードの長さ」がキックの述語なのかを 1-bit で分離するためのアーム。
+        // 既存の観測 (787B 通過 / 817・838・903B キック) はすべて**会議明けの NotifyRoles**、つまり
+        // fan-out バースト (宛先数が閾値を超えるとキックされる既知の条件) と同じ瞬間に取られており、「長さ」と「同一フレームの本数」が分離できていない。
+        // このアームは静止状態で SetName を**1 本だけ**撃つためのもの。
+        // ⚠️ CustomRpcSenderExtensions.RpcSetName は絶対に通さないこと。あれは内部で
+        //    ClampNameForOfficialServer を掛ける (CustomRpcSender.cs:667-672) ので 1200B のつもりが 705B に切られ、
+        //    「長い名前が生還した」という嘘の陰性を作る。さらに LastNotifyNames / LastSentClampedNames の
+        //    dedup があり、同じ値の再射が無音の no-op になる (= 梯子が途中から空撃ちになる)。
+        // ⚠️ 引数は**パケット長**で指定する。比較したい既存の実測値 (787/817/903) が名前の文字数ではなく
+        //    単一チャンクのバイト数なので、名前側を伸縮させてパケット長を合わせる。
+        if (args.Length >= 3 && args[1].Equals("name", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!int.TryParse(args[2], out int wantBytes))
+            {
+                Utils.SendMessage("[nest] Usage: /nest name <packetBytes> [tgt=self|<pid>] [to=all|<pid>] [tag] [raw] [norestore]", player.PlayerId);
+                return;
+            }
+
+            // 下限はヘッダだけで埋まる長さより上、上限は PacketSplitPatch の再分割域 (>1000B) も試せるところまで。
+            wantBytes = Math.Clamp(wantBytes, 32, 4000);
+
+            PlayerControl subject = PlayerControl.LocalPlayer;
+            var toClient = -1;
+            var tagged = false;
+            var nameRaw = false;
+            var restore = true;
+
+            foreach (string a in args.Skip(3))
+            {
+                if (a.StartsWith("tgt=", StringComparison.OrdinalIgnoreCase))
+                {
+                    string v = a[4..];
+                    if (v.Equals("self", StringComparison.OrdinalIgnoreCase)) continue;
+
+                    PlayerControl found = byte.TryParse(v, out byte tpid) ? Main.EnumeratePlayerControls().FirstOrDefault(x => x.PlayerId == tpid) : null;
+
+                    if (!found)
+                    {
+                        Utils.SendMessage($"[nest] tgt={v}: no such player.", player.PlayerId);
+                        return;
+                    }
+
+                    subject = found;
+                }
+                else if (a.StartsWith("to=", StringComparison.OrdinalIgnoreCase))
+                {
+                    string v = a[3..];
+                    if (v.Equals("all", StringComparison.OrdinalIgnoreCase)) continue;
+
+                    PlayerControl dest = byte.TryParse(v, out byte dpid) ? Main.EnumeratePlayerControls().FirstOrDefault(x => x.PlayerId == dpid) : null;
+
+                    if (!dest)
+                    {
+                        Utils.SendMessage($"[nest] to={v}: no such player.", player.PlayerId);
+                        return;
+                    }
+
+                    toClient = dest.OwnerId;
+                }
+                else if (a.Equals("tag", StringComparison.OrdinalIgnoreCase)) tagged = true;
+                else if (a.Equals("raw", StringComparison.OrdinalIgnoreCase)) nameRaw = true;
+                else if (a.Equals("norestore", StringComparison.OrdinalIgnoreCase)) restore = false;
+            }
+
+            if (!subject || !subject.Data)
+            {
+                Utils.SendMessage("[nest] subject has no NetworkedPlayerInfo — aborted.", player.PlayerId);
+                return;
+            }
+
+            uint subjectNet = subject.NetId;
+            uint subjectDataNet = subject.Data.NetId;
+
+            // 中身は 1 文字 1 バイトの ASCII 固定。`tag` を付けた時だけ同じパケット長を TMP タグ入りで作る
+            // (「長さ」と「内容クラス」を後で分離するための対照アーム)。
+            string MakeName(int padChars)
+            {
+                var body = new string('a', Math.Max(0, padChars));
+                return tagged ? $"<size=252%><color=#7a00ff>{body}</color></size>" : body;
+            }
+
+            MessageWriter BuildPacket(string nm)
+            {
+                MessageWriter w = MessageWriter.Get(SendOption.Reliable);
+
+                if (toClient < 0)
+                {
+                    w.StartMessage(5);
+                    w.Write(AmongUsClient.Instance.GameId);
+                }
+                else
+                {
+                    w.StartMessage(6);
+                    w.Write(AmongUsClient.Instance.GameId);
+                    w.WritePacked(toClient);
+                }
+
+                w.StartMessage(2);
+                w.WritePacked(subjectNet);
+                w.Write((byte)RpcCalls.SetName);
+                w.Write(subjectDataNet);
+                w.Write(nm);
+                // 本番経路 (CustomRpcSender.cs:722) と同じ第3引数。ワイヤ形を実運用と1バイトも変えないため。
+                w.Write(false);
+                w.EndMessage();
+                w.EndMessage();
+                return w;
+            }
+
+            // パケット長を wantBytes ちょうどへ寄せる。Hazel の文字列は packed 長 + UTF-8 本体なので
+            // 128 / 16384 の境界で 1 バイト跳ねる。収束しない時は最も近い長さで撃ち、実測値を必ず報告する。
+            int namePad = wantBytes;
+            string name = MakeName(namePad);
+            MessageWriter packet = BuildPacket(name);
+
+            for (var i = 0; i < 8 && packet.Length != wantBytes; i++)
+            {
+                int next = namePad + (wantBytes - packet.Length);
+                if (next < 0) next = 0;
+                if (next == namePad) break;
+
+                namePad = next;
+                packet.Recycle();
+                name = MakeName(namePad);
+                packet = BuildPacket(name);
+            }
+
+            int packetLen = packet.Length;
+            int nameBytes = System.Text.Encoding.UTF8.GetByteCount(name);
+            int namePendingBefore = PacketRateGate.PendingCount;
+            bool prevNameBypass = PacketRateGate.StartWindowBypass;
+
+            try
+            {
+                if (nameRaw) PacketRateGate.StartWindowBypass = true;
+                HealthLog.RecordHostAction("NestName", packetLen, "Reliable");
+                AmongUsClient.Instance.SendOrDisconnect(packet);
+            }
+            finally
+            {
+                if (nameRaw) PacketRateGate.StartWindowBypass = prevNameBypass;
+                packet.Recycle();
+            }
+
+            int namePendingAfter = PacketRateGate.PendingCount;
+
+            // 陰性を「証拠」と誤読しないための無効化条件。長さ実験では、意図と実送信長がずれた回は捨てる。
+            var nameWarn = string.Empty;
+            if (packetLen != wantBytes) nameWarn += $" ⚠ packet is {packetLen}B, not the requested {wantBytes}B — judge this arm by the measured length.";
+            if (packetLen > 1000) nameWarn += " ⚠ >1000B: PacketSplitPatch re-splits this into ≤800B chunks, so it is NOT a single large packet on the wire.";
+            if (namePendingAfter > 0) nameWarn += $" ⚠ {namePendingAfter} packet(s) still queued — not on the wire yet.";
+
+            string nameLine = $"NEST name want={wantBytes} packet={packetLen} nameBytes={nameBytes} namePad={namePad} tagged={tagged} subject=pid{subject.PlayerId}/net{subjectNet}/data{subjectDataNet} to={(toClient < 0 ? "all(tag5)" : $"client{toClient}(tag6)")} raw={nameRaw} queued={namePendingBefore}->{namePendingAfter} phase={(GameStates.IsLobby ? "lobby" : "ingame")} server={GameStates.CurrentServerType}{nameWarn}";
+            HealthLog.NoteAnom(nameLine);
+            Logger.Info(nameLine, "DevCmd");
+            Utils.SendMessage($"[nest] name sent: packet={packetLen}B (requested {wantBytes}B), nameBytes={nameBytes}, subject=pid{subject.PlayerId}, to={(toClient < 0 ? "all" : $"client{toClient}")}{(tagged ? ", tagged" : string.Empty)}{(nameRaw ? ", raw" : string.Empty)}.{nameWarn}", player.PlayerId);
+
+            // 表示を戻す。台帳 (LastNotifyNames) には一切触れていないので、放置すると次に名前が実際に
+            // 変わるまで巨大な文字列が残る。復元は 4 秒後 = アーム間隔 (10 秒以上) の内側に収める。
+            if (restore)
+            {
+                PlayerControl restoreSubject = subject;
+                string realName = Main.AllPlayerNames.GetValueOrDefault(restoreSubject.PlayerId, restoreSubject.Data.PlayerName ?? string.Empty);
+
+                LateTask.New(() =>
+                {
+                    if (!restoreSubject || !restoreSubject.Data) return;
+
+                    MessageWriter back = BuildPacket(realName);
+                    AmongUsClient.Instance.SendOrDisconnect(back);
+                    back.Recycle();
+                    Logger.Info($"NEST name restore pid={restoreSubject.PlayerId} len={realName.Length}", "DevCmd");
+                }, 4f, "Nest Name Restore");
+            }
+
+            return;
+        }
+
         // /nest xspawn [owner=none|self|<int>] [pid=<0-255>|self] [noreg]
         // CustomNetObject を通さずに PlayerControl プレハブを手組み spawn する。CNO と唯一違うのは
         // 「ownerId」「spawn 本体の PlayerId」「3本の再登録 spawn の有無」を任意に振れる点だけ。
@@ -5042,7 +5307,7 @@ internal static class ChatCommands
 
         if (args.Length < 2 || !int.TryParse(args[1], out int total) || total <= 0)
         {
-            Utils.SendMessage("[nest] Usage: /nest <total> [real|safe|thin|none] [via=t6self|t5|bare6] [tgt=self|cno|other|selfdata|xprobe|bogus|selfnt|selfphys] [dst=self|real|spread] [op=data|despawn] [body=<0-255>] [per=<k>] [pad=<chars>] [spoof] [raw] [force]  |  /nest limit|info|xspawn|xdespawn", player.PlayerId);
+            Utils.SendMessage("[nest] Usage: /nest <total> [real|safe|thin|none] [via=t6self|t5|bare6] [tgt=self|cno|other|selfdata|xprobe|bogus|selfnt|selfphys] [dst=self|real|spread] [op=data|despawn] [body=<0-255>] [per=<k>] [pad=<chars>] [spoof] [raw] [force]  |  /nest limit|info|name|budget|chunk|namepad|ring|xspawn|xdespawn", player.PlayerId);
             return;
         }
 
