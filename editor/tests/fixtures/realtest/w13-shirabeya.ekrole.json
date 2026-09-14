@@ -1,0 +1,28 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "しらべや",
+  "author": "EKN Realtest",
+  "description": "かいぎで あいてを えらぶと、その人の 役職が わかる",
+  "color": "#3498db",
+  "team": "crewmate",
+  "canKill": false,
+  "killCooldown": 25,
+  "canVent": false,
+  "visionMultiplier": 1,
+  "winCondition": "team",
+  "basis": "pet",
+  "abilityCooldown": 15,
+  "logic": {
+    "version": 1,
+    "variables": [],
+    "rules": [
+      {
+        "when": "on_meeting_pick",
+        "do": [
+          { "op": "inspect", "target": "ctx", "depth": "role" }
+        ]
+      }
+    ]
+  }
+}
