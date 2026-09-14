@@ -16,7 +16,9 @@ namespace EndKnot.Patches;
 internal static class PacketSplitPatch
 {
     // このサイズを超えたパケットのみ分割処理に入る (vanilla 標準の通常 traffic には触れない)。
-    // 公式 anti-cheat の実測: 902 は安全 / 1221 で kick。活性化後は内部を SafeChunkLength まで刻む。
+    // 実測 (2026-09-14 公式鯖・単発): ≤999B は無傷、1200B も通過 (公式に明記された 1 メッセージ上限)、
+    // 1500B はサーバーが ACK を返さず輸送側で切断、2000B は reason=Hacking。1000 はその手前に置いた検知点。
+    // 活性化後は内部を SafeChunkLength まで刻む。
     private const int DetectThreshold = 1000;
 
     // WriteMessage が各メッセージ前に書くヘッダ (ushort length + byte tag)

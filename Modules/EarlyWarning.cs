@@ -34,11 +34,14 @@ public static class EarlyWarning
             bool isOfficialServer = GameStates.CurrentServerType == GameStates.ServerType.Vanilla;
             if (!isOfficialServer) return;
 
-            // 実測: SetName 系 GameDataTo チャンクは 817B/838B で reason=Hacking キック (2026-07-11/07-14)。
-            // 旧閾値 900/1000 では 838B キックが無音で通過したため、危険帯 (~800) に合わせて引き下げ。
-            if (maxChunkLen >= 800)
+            // 危険帯は 1 パケットの大きさで決まる (2026-09-14 公式鯖 実測): ≤999B は無傷、
+            // 1200B も通過 (公式に明記された 1 メッセージ上限)、1500B はサーバーが ACK を返さず輸送側で切断、
+            // 2000B は reason=Hacking。チャンク閾値 950 の通常送信がそのまま警告になっては計器の意味が無いので、
+            // critical は上限帯 (1200B 超) に、注意は 1000B 超 (PacketSplitPatch が再分割に入る点) に置く。
+            // ⚠️ かつての 817/838B は「長さで蹴られた」観測とされていたが、会議明け一斉更新の本数と交絡した誤帰属。
+            if (maxChunkLen >= 1200)
                 Warn("packet", $"kind=packet name=\"{name}\" total={totalLen} maxChunk={maxChunkLen} opt={sendOption}", critical: true, "EarlyWarning.PacketNearKick");
-            else if (maxChunkLen >= 760)
+            else if (maxChunkLen >= 1000)
                 Warn("packet", $"kind=packet name=\"{name}\" total={totalLen} maxChunk={maxChunkLen} opt={sendOption}", critical: false, null);
         }
         catch { }

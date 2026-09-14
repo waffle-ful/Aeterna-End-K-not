@@ -596,18 +596,46 @@ public class CustomRpcSender
 
 public static class CustomRpcSenderExtensions
 {
-    // 公式鯖 anti-cheat の kick 上限は SetName 系 GameDataTo チャンクでは ~800 byte 帯にある
-    // (実測: 787B は通過 / 817B・838B・903B は reason=Hacking キック — 2026-07-11 / 2026-07-14 会議後 NotifyRoles)。
+    // チャンク上限。書込前見積もり (GetSetNameRpcSize = ラッパ込みの上限見積もり) で強制する。
     // 旧値 800 (SafeChunkLength) は「800 超過を書込後に検知して flush」だったため 800 台のチャンクが日常的に漏れていた。
-    // 750 を書込前見積もり (GetSetNameRpcSize = ラッパ込みの上限見積もり) で強制し、チャンクを 750 以下に保つ。
-    public const int SetNameChunkFlushThreshold = 750;
+    // 950 の根拠 (2026-09-14 公式鯖 実測):
+    //   単発 SetName は ≤999B のパケットがロビー・ゲーム内の両方で合法 (903B は tag5 / tag6 個人宛て /
+    //   他人の名前の書き換え の 4 条件で生還)。壁は 1500B (サーバーが ACK を返さず輸送側で切断) と 2000B (Hacking)。
+    //   5 人卓の実 NotifyRoles バーストでも 950/905 は 3/3 生還し、パケット数は 750/705 の基準線以下だった。
+    // ⚠️ かつて「817〜903B でキック」とされていた観測は会議明け NotifyRoles の fan-out と交絡した誤帰属。
+    public const int SetNameChunkFlushThreshold = 950;
+
+    // チャット (SetName + SendChat + SetName の 3 本合体) 用のチャンク上限。SetName 単体とは
+    // パケットの形が違い、上の 950 はこの形では実測していないので、据え置きの 750 のまま分けて持つ。
+    public const int ChatCombinerChunkFlushThreshold = 750;
 
     // seer 切替毎に積まれる GameDataTo ラッパの最大 byte (msg header 3 + packed GameId ≤5 + packed clientId ≤5)。
     // 毎件の見積もりに含めて過大側に倒す = チャンク実測が閾値を超えないことを保証する。
     public const int SetNameWrapperOverhead = 13;
 
-    // 公式鯖の単発 SetName 超過キック対策の名前予算 (RPC ヘッダ類の余白込み。実測の裏付け: 単発 SetName 903B でキック)
+    // 装飾名 1 件の予算 (RPC ヘッダ類の余白込み)。
+    // 🔴 この関係式は飾りではない — 予算がチャンク閾値を超えると、1 件ごとに下の FlushAndRecreate が
+    //    走って空のエンベロープがワイヤへ出る。2026-09-14 の実測では、予算だけ 900 に上げたところ
+    //    バーストのパケットが 17 → 41 (うち 20 本が中身ゼロ) に倍増し、公式鯖に Hacking キックされた。
+    //    引き上げるときは必ず SetNameChunkFlushThreshold と連動させること。
     public const int NameBudget = SetNameChunkFlushThreshold - SetNameWrapperOverhead - 32;
+
+    // dev 実験用の実行時上書き (0 = 既定値を使う)。長い名前を本番 NotifyRoles 経路に流して
+    // 予算の実効上限を実機で測るためだけのもので、出荷状態では必ず 0。
+    public static int NameBudgetOverride;
+
+    // dev 実験用: チャンク閾値の実行時上書き (0 = 既定)。予算と閾値は
+    // 「1 件の装飾名がチャンクに収まる」関係で結ばれていて、予算だけ上げると
+    // 空の packed エンベロープが 1 件ごとに増える (実測: パケット数が 17 -> 41 に倍増しキック)。
+    // 検証では必ず連動させること。
+    public static int ChunkThresholdOverride;
+
+    public static int EffectiveChunkThreshold => ChunkThresholdOverride > 0 ? ChunkThresholdOverride : SetNameChunkFlushThreshold;
+
+    // dev 実験用: すべての SetName に詰め物を足し、「長い名前が実パイプラインを実レートで流れる」状態を作る (0 = 無効)。
+    public static int NamePadBytes;
+
+    public static int EffectiveNameBudget => NameBudgetOverride > 0 ? NameBudgetOverride : NameBudget;
 
     // NameBudget クランプの共有ヘルパ: 公式鯖のみ、予算超過時に rune 境界で末尾を切り捨て、
     // 閉じていない末尾タグを除去した文字列を返す (CNO スプライトと同型の壊れ方対策)。
@@ -618,7 +646,9 @@ public static class CustomRpcSenderExtensions
     {
         clamped = false;
         if (GameStates.CurrentServerType != GameStates.ServerType.Vanilla || string.IsNullOrEmpty(name)) return name;
-        if (System.Text.Encoding.UTF8.GetByteCount(name) <= NameBudget) return name;
+        int budget = EffectiveNameBudget;
+
+        if (System.Text.Encoding.UTF8.GetByteCount(name) <= budget) return name;
 
         var sb = new System.Text.StringBuilder();
         var bytes = 0;
@@ -626,7 +656,7 @@ public static class CustomRpcSenderExtensions
         foreach (System.Text.Rune rune in name.EnumerateRunes())
         {
             int rb = rune.Utf8SequenceLength;
-            if (bytes + rb > NameBudget) break;
+            if (bytes + rb > budget) break;
             sb.Append(rune.ToString());
             bytes += rb;
         }
@@ -644,6 +674,8 @@ public static class CustomRpcSenderExtensions
         int targetClientId = seerIsNull ? -1 : seer.OwnerId;
 
         name = name.Replace("color=", string.Empty);
+
+        if (NamePadBytes > 0) name += new string('a', NamePadBytes);
 
         switch (seerIsNull)
         {
@@ -681,10 +713,10 @@ public static class CustomRpcSenderExtensions
                 if (Main.LastSentClampedNames.TryGetValue(clampKey, out string lastClamped) && lastClamped == name) return;
 
                 Main.LastSentClampedNames[clampKey] = name;
-                Logger.Error($"SetName for player {player.PlayerId} is {nameBytes}B > {NameBudget}B — clamped to avoid official-server Hacking kick. Shrink the name decoration (role text / addons / suffix)!", "RpcSetName.NameBudget");
+                Logger.Error($"SetName for player {player.PlayerId} is {nameBytes}B > {EffectiveNameBudget}B — clamped to avoid official-server Hacking kick. Shrink the name decoration (role text / addons / suffix)!", "RpcSetName.NameBudget");
                 // 分割不能な単発超過に対する唯一の防波堤が発動した記録。log.html 限定だと
                 // 「クランプが効いていたのに別経路でキックされた」のか切り分けられなくなる (上の dedup 済み)。
-                HealthLog.NoteAnom($"WARN kind=namebudget pid={player.PlayerId} bytes={nameBytes} budget={NameBudget} t={Utils.TimeStamp}");
+                HealthLog.NoteAnom($"WARN kind=namebudget pid={player.PlayerId} bytes={nameBytes} budget={EffectiveNameBudget} t={Utils.TimeStamp}");
             }
             else
             {
@@ -713,7 +745,7 @@ public static class CustomRpcSenderExtensions
 
         sender.checkLength = false;
 
-        if (sender.stream.Length + GetSetNameRpcSize(player.NetId, name) > SetNameChunkFlushThreshold)
+        if (sender.stream.Length + GetSetNameRpcSize(player.NetId, name) > EffectiveChunkThreshold)
             FlushAndRecreate(ref sender);
 
         sender.AutoStartRpc(player.NetId, RpcCalls.SetName, targetClientId)
@@ -724,13 +756,18 @@ public static class CustomRpcSenderExtensions
 
         // 後段ガード: 見積もりに載らないヘッダや、RpcSetName 以外から同じ sender に書かれた分の
         // 積み上がりで実測長が閾値を超えていたら、次の書込を待たずここで送ってしまう。
-        if (sender.stream.Length > SetNameChunkFlushThreshold)
+        if (sender.stream.Length > EffectiveChunkThreshold)
             FlushAndRecreate(ref sender);
 
         return;
 
         static void FlushAndRecreate(ref CustomRpcSender sender)
         {
+            // 何も書かれていない sender を送ると、中身ゼロのエンベロープがそのままワイヤへ出る。
+            // 1 件で閾値を超える名前は先に吐くものが無いので、ここは黙って戻ってよい
+            // (吐いていた頃はバーストのパケット数が倍になり、公式鯖のキックを招いた)。
+            if (sender.messages == 0) return;
+
             bool packed = sender.packed;
             sender.SendMessage();
             sender = CustomRpcSender.Create(sender.name, sender.sendOption);
