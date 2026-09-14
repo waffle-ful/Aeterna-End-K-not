@@ -1826,6 +1826,8 @@ public static class Options
 
         Modules.ReportReasonNotice.SetupCustomOption();
 
+        Modules.MeetingHeader.SetupCustomOption();
+
         Patches.NumericOptionInputPatch.SetupCustomOption();
 
         Patches.VentMinimapPatch.SetupCustomOption();

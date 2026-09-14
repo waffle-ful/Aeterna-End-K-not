@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using AmongUs.Data;
@@ -469,6 +469,7 @@ internal static class ChangeRoleSettings
             IRandom.SetInstanceById(Options.RoleAssigningAlgorithm.GetValue());
 
             MeetingStates.MeetingNum = 0;
+            MeetingHeader.Reset();
             MeetingStates.MeetingCalled = false;
             MeetingStates.FirstMeeting = true;
             // 全ゲームモード共通のリセット必須 — StartGate (Standard+FTM 限定) だけに任せると

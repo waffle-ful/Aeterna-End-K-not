@@ -306,6 +306,7 @@
   "MenuTitle.Guessers": "★ ゲッサー モード ★",
   "MenuTitle.MapsSettings": "★ マップ ★",
   "MenuTitle.Meeting": "★ 会議 ★",
+  "MenuTitle.MeetingHeader": "★ 会議画面の見出し ★",
   "MenuTitle.OptionSanityCheck": "★ 設定の矛盾チェック ★",
   "MenuTitle.Other": "★ 異なる ★",
   "MenuTitle.ReportReasonNotice": "★ 会議開始理由の通知 ★",
@@ -9166,6 +9167,16 @@
   "ReportReason.Emergency": "{0} が緊急会議を招集しました。",
   "ReportReason.AnonymousReporter": "誰か",
   "ReportReason.AnonymousVictim": "何者か",
+  /* ==============================
+    Meeting Header
+  ============================== */
+  "EnableMeetingHeader": "会議画面の左上に見出しを出す",
+  "MeetingHeaderShowDay": "何日目かを出す",
+  "MeetingHeaderShowCause": "会議が始まった理由を出す",
+  "MeetingHeader.Day": "Day.{0}",
+  "MeetingHeader.EmergencyButton": "緊急会議ボタン",
+  "MeetingHeader.BodyReport": "{0}の死体通報",
+  "MeetingHeader.Forced": "強制会議",
   /* ==============================
     Device Time Limit
   ============================== */

@@ -3375,6 +3375,9 @@ public static class Utils
             var sender = CustomRpcSender.Create("NotifyRoles", SendOption, log: false);
             sender.StartPackedMessage();
 
+            // 会議ヘッダーの相乗り先は seer x target のループの外で 1 度だけ決める。
+            if (ForMeeting) MeetingHeader.Recompute();
+
             for (byte seerIndex = 0; seerIndex < SeerList.Count; seerIndex++)
             {
                 PlayerControl seer = SeerList[seerIndex];
@@ -3789,6 +3792,8 @@ public static class Utils
             if (selfName.EndsWith("</size>")) selfName = selfName.Remove(selfName.Length - 7);
             if (selfName.EndsWith("</color>")) selfName = selfName.Remove(selfName.Length - 8);
 
+            if (forMeeting) selfName = MeetingHeader.Apply(selfName, seer.PlayerId);
+
             CustomRpcSenderExtensions.RpcSetName(ref sender, seer, selfName, seer);
             hasValue = true;
 
@@ -4127,10 +4132,12 @@ public static class Utils
                             if (targetName.EndsWith("</size>")) targetName = targetName.Remove(targetName.Length - 7);
                             if (targetName.EndsWith("</color>")) targetName = targetName.Remove(targetName.Length - 8);
 
+                            if (forMeeting) targetName = MeetingHeader.Apply(targetName, target.PlayerId);
+
                             CustomRpcSenderExtensions.RpcSetName(ref sender, target, targetName, seer);
                             hasValue = true;
                             senderWasCleared = false;
-                            // 500 byte 手動分割は廃止 (RpcSetName が 1100 byte chunk を内部管理)
+                            // 500 byte 手動分割は廃止 (RpcSetName が chunk 分割を内部管理)
                         }
                     }
                     catch (Exception ex)
@@ -4722,6 +4729,8 @@ public static class Utils
 
     public static void AfterMeetingTasks()
     {
+        MeetingHeader.OnMeetingEnd();
+
         // T2残党退避 (2026-07-31): FTM 退避で保留していた毎フレ SetName broadcast をここで解禁。
         IntroCutsceneDestroyPatch.NameBroadcastHold = false;
 

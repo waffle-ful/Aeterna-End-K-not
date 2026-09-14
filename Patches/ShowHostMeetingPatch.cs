@@ -68,7 +68,9 @@ public static class ShowHostMeetingPatch
     {
         if (!GameStates.IsOnlineGame) return;
 
-        __instance.ProceedButton.gameObject.transform.localPosition = new(-2.5f, 2.2f, 0);
+        // 上段は会議画面の見出しに明け渡し、ホスト表示は下段の空きへ回す
+        // (投票スキップと残り時間の間は人数に関係なく空いている)。
+        __instance.ProceedButton.gameObject.transform.localPosition = new(-1f, -2.2f, 0);
         __instance.ProceedButton.gameObject.GetComponent<SpriteRenderer>().enabled = false;
         __instance.ProceedButton.GetComponent<PassiveButton>().enabled = false;
         __instance.HostIcon.enabled = true;
