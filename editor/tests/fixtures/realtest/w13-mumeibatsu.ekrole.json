@@ -1,0 +1,34 @@
+{
+ "ekr": 1,
+ "requires": [],
+ "name": "むめいばつ",
+ "author": "EKN Realtest",
+ "description": "じぶんの ひょうは だれのか わからない。かいぎで えらんだ 人を ついほうする",
+ "color": "#7f8c8d",
+ "team": "crewmate",
+ "canKill": true,
+ "killCooldown": 10,
+ "canVent": false,
+ "visionMultiplier": 1,
+ "winCondition": "team",
+ "basis": "pet",
+ "abilityCooldown": 15,
+ "passives": {
+  "anonymousVote": true
+ },
+ "logic": {
+  "version": 1,
+  "variables": [],
+  "rules": [
+   {
+    "when": "on_meeting_pick",
+    "do": [
+     {
+      "op": "exile",
+      "target": "ctx"
+     }
+    ]
+   }
+  ]
+ }
+}
