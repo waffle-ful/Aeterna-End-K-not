@@ -1,0 +1,45 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "ためや",
+  "author": "EKN Sample",
+  "description": "タスクで たまをためて、ペットでつかうと はやくなる",
+  "color": "#f39c12",
+  "team": "crewmate",
+  "canKill": false,
+  "killCooldown": 25,
+  "canVent": false,
+  "visionMultiplier": 1,
+  "winCondition": "team",
+  "progress": { "text": "たま{たま}こ" },
+  "logic": {
+    "version": 1,
+    "variables": [
+      { "name": "たま", "init": 0 }
+    ],
+    "rules": [
+      {
+        "when": "on_task_complete",
+        "do": [
+          { "op": "var_add", "name": "たま", "delta": { "e": "lit", "v": 1 } }
+        ]
+      },
+      {
+        "when": "on_pet",
+        "do": [
+          {
+            "op": "if",
+            "cond": { "e": "op", "kind": "gt", "a": { "e": "var", "name": "たま" }, "b": { "e": "lit", "v": 0 } },
+            "then": [
+              { "op": "var_add", "name": "たま", "delta": { "e": "lit", "v": -1 } },
+              { "op": "speed", "mult": 1.5, "seconds": 5 }
+            ],
+            "else": [
+              { "op": "notify", "text": "たまがない", "seconds": 2 }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -143,7 +143,7 @@ public class Enigma : RoleBase
 
             EnigmaClue clue = clues[rd.Next(0, clues.Count - 1)];
             string title = clue.Title;
-            string msg = clue.GetMessage(killer, showStageClue);
+            string msg = clue.GetMessage(killer, showStageClue, playerId);
 
             ShownClues[playerId].Add(clue);
 
@@ -158,15 +158,16 @@ public class Enigma : RoleBase
         public int ClueStage { get; init; }
         public EnigmaClueType EnigmaClueType { get; init; }
 
+
         public abstract string Title { get; }
-        public abstract string GetMessage(PlayerControl killer, bool showStageClue);
+        public abstract string GetMessage(PlayerControl killer, bool showStageClue, byte seerId);
     }
 
     private class EnigmaHatClue : EnigmaClue
     {
         public override string Title => GetString("EnigmaClueHatTitle");
 
-        public override string GetMessage(PlayerControl killer, bool showStageClue)
+        public override string GetMessage(PlayerControl killer, bool showStageClue, byte seerId)
         {
             NetworkedPlayerInfo.PlayerOutfit killerOutfit = Camouflage.PlayerSkins[killer.PlayerId];
             if (killerOutfit.HatId == "hat_EmptyHat") return GetString("EnigmaClueHat2");
@@ -184,7 +185,7 @@ public class Enigma : RoleBase
     {
         public override string Title => GetString("EnigmaClueVisorTitle");
 
-        public override string GetMessage(PlayerControl killer, bool showStageClue)
+        public override string GetMessage(PlayerControl killer, bool showStageClue, byte seerId)
         {
             NetworkedPlayerInfo.PlayerOutfit killerOutfit = Camouflage.PlayerSkins[killer.PlayerId];
             if (killerOutfit.VisorId == "visor_EmptyVisor") return GetString("EnigmaClueVisor2");
@@ -202,7 +203,7 @@ public class Enigma : RoleBase
     {
         public override string Title => GetString("EnigmaClueSkinTitle");
 
-        public override string GetMessage(PlayerControl killer, bool showStageClue)
+        public override string GetMessage(PlayerControl killer, bool showStageClue, byte seerId)
         {
             NetworkedPlayerInfo.PlayerOutfit killerOutfit = Camouflage.PlayerSkins[killer.PlayerId];
             if (killerOutfit.SkinId == "skin_EmptySkin") return GetString("EnigmaClueSkin2");
@@ -220,7 +221,7 @@ public class Enigma : RoleBase
     {
         public override string Title => GetString("EnigmaCluePetTitle");
 
-        public override string GetMessage(PlayerControl killer, bool showStageClue)
+        public override string GetMessage(PlayerControl killer, bool showStageClue, byte seerId)
         {
             NetworkedPlayerInfo.PlayerOutfit killerOutfit = Camouflage.PlayerSkins[killer.PlayerId];
             if (killerOutfit.PetId == "pet_EmptyPet") return GetString("EnigmaCluePet2");
@@ -240,7 +241,7 @@ public class Enigma : RoleBase
 
         public override string Title => GetString("EnigmaClueNameTitle");
 
-        public override string GetMessage(PlayerControl killer, bool showStageClue)
+        public override string GetMessage(PlayerControl killer, bool showStageClue, byte seerId)
         {
             string killerName = killer.GetRealName();
             string letter = killerName.Where(char.IsLetter).RandomElement().ToString().ToLower();
@@ -293,7 +294,7 @@ public class Enigma : RoleBase
 
         public override string Title => GetString("EnigmaClueNameLengthTitle");
 
-        public override string GetMessage(PlayerControl killer, bool showStageClue)
+        public override string GetMessage(PlayerControl killer, bool showStageClue, byte seerId)
         {
             int length = killer.GetRealName().Length;
 
@@ -341,7 +342,7 @@ public class Enigma : RoleBase
     {
         public override string Title => GetString("EnigmaClueColorTitle");
 
-        public override string GetMessage(PlayerControl killer, bool showStageClue)
+        public override string GetMessage(PlayerControl killer, bool showStageClue, byte seerId)
         {
             NetworkedPlayerInfo.PlayerOutfit killerOutfit = Camouflage.PlayerSkins[killer.PlayerId];
 
@@ -368,7 +369,7 @@ public class Enigma : RoleBase
     {
         public override string Title => GetString("EnigmaClueLocationTitle");
 
-        public override string GetMessage(PlayerControl killer, bool showStageClue)
+        public override string GetMessage(PlayerControl killer, bool showStageClue, byte seerId)
         {
             var room = string.Empty;
             PlainShipRoom targetRoom = Main.PlayerStates[killer.PlayerId].LastRoom;
@@ -386,7 +387,7 @@ public class Enigma : RoleBase
     {
         public override string Title => GetString("EnigmaClueStatusTitle");
 
-        public override string GetMessage(PlayerControl killer, bool showStageClue)
+        public override string GetMessage(PlayerControl killer, bool showStageClue, byte seerId)
         {
             return killer.inVent ? GetString("EnigmaClueStatus1") : killer.onLadder ? GetString("EnigmaClueStatus2") : GetString(!killer.IsAlive() ? "EnigmaClueStatus3" : "EnigmaClueStatus4");
         }
@@ -396,9 +397,9 @@ public class Enigma : RoleBase
     {
         public override string Title => GetString("EnigmaClueRoleTitle");
 
-        public override string GetMessage(PlayerControl killer, bool showStageClue)
+        public override string GetMessage(PlayerControl killer, bool showStageClue, byte seerId)
         {
-            CustomRoles role = killer.GetCustomRole();
+            CustomRoles role = Modules.Ekm.EkrManager.GetApparentRole(killer);
 
             var str = "EnigmaClueRole3";
             if (role.IsImpostor()) str = "EnigmaClueRole1";
@@ -408,7 +409,8 @@ public class Enigma : RoleBase
             return ClueStage switch
             {
                 1 => GetString(str),
-                2 when showStageClue => string.Format(GetString("EnigmaClueRole5"), killer.GetDisplayRoleName()),
+                // Wave 12: seer 付きの GetDisplayRoleName (単引数は self に迂回して disguise を素通りする)。
+                2 when showStageClue => string.Format(GetString("EnigmaClueRole5"), seerId.GetPlayer()?.GetDisplayRoleName(killer) ?? killer.GetDisplayRoleName()),
                 2 => GetString(str),
                 _ => null
             };
@@ -421,7 +423,7 @@ public class Enigma : RoleBase
 
         public override string Title => GetString("EnigmaClueLevelTitle");
 
-        public override string GetMessage(PlayerControl killer, bool showStageClue)
+        public override string GetMessage(PlayerControl killer, bool showStageClue, byte seerId)
         {
             uint level = killer.Data.PlayerLevel;
 
@@ -457,7 +459,7 @@ public class Enigma : RoleBase
     {
         public override string Title => GetString("EnigmaClueFriendCodeTitle");
 
-        public override string GetMessage(PlayerControl killer, bool showStageClue)
+        public override string GetMessage(PlayerControl killer, bool showStageClue, byte seerId)
         {
             string friendCode = killer.Data.FriendCode.Replace(':', '#');
             return string.Format(GetString("EnigmaClueFriendCode"), friendCode);

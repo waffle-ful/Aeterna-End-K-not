@@ -91,7 +91,7 @@ public class Psychic : RoleBase
 
         if (Main.PlayerStates[seer.PlayerId].Role is not Psychic ph) return false;
 
-        if (seer.Is(CustomRoles.Madmate)) return target.GetCustomRole().IsNeutral() || target.GetCustomRole().GetCrewmateRoleCategory() == RoleOptionType.Crewmate_Killing;
+        if (seer.Is(CustomRoles.Madmate)) return Modules.Ekm.EkrManager.GetApparentRole(target).IsNeutral() || Modules.Ekm.EkrManager.GetApparentRole(target).GetCrewmateRoleCategory() == RoleOptionType.Crewmate_Killing;
 
         return ph.RedPlayer != null && ph.RedPlayer.Contains(target.PlayerId);
     }
@@ -106,10 +106,10 @@ public class Psychic : RoleBase
         if (!IsEnable || !AmongUsClient.Instance.AmHost) return;
 
         List<PlayerControl> BadListPc = Main.EnumerateAlivePlayerControls().Where(x =>
-            (x.Is(CustomRoleTypes.Impostor) && !x.Is(CustomRoles.Trickster)) || x.Is(CustomRoles.Madmate) || x.Is(CustomRoles.Rascal) || Framer.FramedPlayers.Contains(x.PlayerId) || Enchanter.EnchantedPlayers.Contains(x.PlayerId) || x.IsConverted() ||
-            (x.GetCustomRole().GetCrewmateRoleCategory() == RoleOptionType.Crewmate_Killing && CkshowEvil.GetBool()) ||
-            (x.GetCustomRole().GetNeutralRoleCategory() is RoleOptionType.Neutral_Evil or RoleOptionType.Neutral_Pariah && NEshowEvil.GetBool()) ||
-            (x.GetCustomRole().GetNeutralRoleCategory() == RoleOptionType.Neutral_Benign && NBshowEvil.GetBool())
+            (Modules.Ekm.EkrManager.GetApparentTeam(x) == Team.Impostor && !x.Is(CustomRoles.Trickster)) || x.Is(CustomRoles.Madmate) || x.Is(CustomRoles.Rascal) || Framer.FramedPlayers.Contains(x.PlayerId) || Enchanter.EnchantedPlayers.Contains(x.PlayerId) || x.IsConverted() ||
+            (Modules.Ekm.EkrManager.GetApparentRole(x).GetCrewmateRoleCategory() == RoleOptionType.Crewmate_Killing && CkshowEvil.GetBool()) ||
+            (Modules.Ekm.EkrManager.GetApparentRole(x).GetNeutralRoleCategory() is RoleOptionType.Neutral_Evil or RoleOptionType.Neutral_Pariah && NEshowEvil.GetBool()) ||
+            (Modules.Ekm.EkrManager.GetApparentRole(x).GetNeutralRoleCategory() == RoleOptionType.Neutral_Benign && NBshowEvil.GetBool())
         ).ToList();
 
         List<byte> BadList = [];

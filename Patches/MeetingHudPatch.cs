@@ -81,7 +81,8 @@ internal static class CheckForEndVotingPatch
                     // Dictator の強制追放はバニラ Judge の「判決が下された」木槌演出で見せる (失敗時 nonce=0 → 通常追放)。
                     // ⚠️ QueueOverrule → RpcVotingComplete の隣接順序は不可分 (クライアントは queue 受信済みが gavel の前提) — 間に遅延や送信を挟まない
                     ushort dictatorGavelNonce = JudgeGavelPresenter.QueueOverrule(pc.PlayerId, pva.VotedForId);
-                    __instance.RpcVotingComplete(states.ToArray(), voteTarget.Data, false, dictatorGavelNonce != 0, dictatorGavelNonce);
+                    // Wave 12 (anonymousVote): 送信ペイロードだけ縮める。Statistics 等が見る states 本体は変えない。
+                    __instance.RpcVotingComplete(EkrManager.FilterAnonymousVotes(states.ToArray()), voteTarget.Data, false, dictatorGavelNonce != 0, dictatorGavelNonce);
 
                     Statistics.OnVotingComplete(states.ToArray(), voteTarget.Data, false, true);
 
@@ -364,7 +365,8 @@ internal static class CheckForEndVotingPatch
             if (Main.LastVotedPlayerInfo != null)
                 ConfirmEjections(Main.LastVotedPlayerInfo, braked);
 
-            __instance.RpcVotingComplete(states.ToArray(), exiledPlayer, tie, false, 0);
+            // Wave 12 (anonymousVote): 送信ペイロードだけ縮める。Statistics/Missioneer が見た states 本体は変えない。
+            __instance.RpcVotingComplete(EkrManager.FilterAnonymousVotes(states.ToArray()), exiledPlayer, tie, false, 0);
 
             Statistics.OnVotingComplete(states.ToArray(), exiledPlayer, tie, false);
 
@@ -630,7 +632,8 @@ internal static class CheckForEndVotingPatch
 
         // ⚠️ QueueOverrule → RpcVotingComplete の隣接順序は不可分 (クライアントは queue 受信済みが gavel の前提) — 間に遅延や送信を挟まない
         ushort gavelNonce = judgeGavel ? JudgeGavelPresenter.QueueOverrule(exiler ? exiler.PlayerId : target.PlayerId, target.PlayerId) : (ushort)0;
-        MeetingHud.Instance.RpcVotingComplete(states, target.Data, false, gavelNonce != 0, gavelNonce);
+        // Wave 12 (anonymousVote): 送信ペイロードだけ縮める。Statistics が見る states 本体は変えない。
+        MeetingHud.Instance.RpcVotingComplete(EkrManager.FilterAnonymousVotes(states), target.Data, false, gavelNonce != 0, gavelNonce);
         Statistics.OnVotingComplete(states, target.Data, false, true);
 
         CheckForDeathOnExile(PlayerState.DeathReason.Vote, target.PlayerId);
@@ -1060,7 +1063,7 @@ internal static class MeetingHudStartPatch
                 (target.Is(CustomRoles.Gravestone) && Main.VisibleTasksCount && !target.IsAlive()) ||
                 (Main.LoversPlayers.TrueForAll(x => x.PlayerId == target.PlayerId || x.PlayerId == seer.PlayerId) && Main.LoversPlayers.Count == 2 && Lovers.LoverKnowRoles.GetBool()) ||
                 (seer.Is(CustomRoleTypes.Coven) && target.Is(CustomRoleTypes.Coven)) ||
-                (target.Is(CustomRoleTypes.Impostor) && seer.Is(CustomRoleTypes.Impostor) && Options.ImpKnowAlliesRole.GetBool() && CustomTeamManager.ArentInCustomTeam(seer.PlayerId, target.PlayerId) && !seer.Is(CustomRoles.OneWolf) && !target.Is(CustomRoles.OneWolf)) ||
+                (target.Is(CustomRoleTypes.Impostor) && seer.Is(CustomRoleTypes.Impostor) && Options.ImpKnowAlliesRole.GetBool() && CustomTeamManager.ArentInCustomTeam(seer.PlayerId, target.PlayerId) && !seer.Is(CustomRoles.OneWolf) && !target.Is(CustomRoles.OneWolf) && !EkrManager.IsDisguisedAwayFrom(target.GetCustomRole(), EkrTeam.Impostor)) ||
                 (target.Is(CustomRoleTypes.Impostor) && seer.IsMadmate() && Options.MadmateKnowWhosImp.GetBool()) ||
                 (target.IsMadmate() && seer.Is(CustomRoleTypes.Impostor) && Options.ImpKnowWhosMadmate.GetBool()) ||
                 (target.Is(CustomRoleTypes.Impostor) && seer.Is(CustomRoles.Crewpostor) && Options.AlliesKnowCrewpostor.GetBool()) ||

@@ -1762,3 +1762,55 @@ describe("lint-role: L38 (addon_remove の対象が Lovers または all)", () =
         expect(ruleIds(lintRoleLogic(l))).not.toContain("L38");
     });
 });
+
+// Wave 12 (契約 §7 2026-09-14): L41/L42 (みられかた)。どちらも rule に紐づかない文書単位の
+// ヒント (L31〜L33 と同型・ruleIndex は -1) なので docContext 経由でのみ検査される。
+describe("lint-role: L41 (anonymousVote が有効なのに票の重みが目立つ)", () => {
+    it("anonymousVote: true + voteWeight >= 2 は L41 を警告する", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "stop" }] }]);
+        expect(ruleIds(lintRoleLogic(l, undefined, { anonymousVote: true, voteWeight: 2 }))).toContain("L41");
+        expect(ruleIds(lintRoleLogic(l, undefined, { anonymousVote: true, voteWeight: 3 }))).toContain("L41");
+    });
+
+    it("anonymousVote: true + vote_weight_set の使用も L41 を警告する (voteWeight 省略でも)", () => {
+        const l = logic([{ when: "on_game_start", do: [{ op: "vote_weight_set", value: 2 }] }]);
+        expect(ruleIds(lintRoleLogic(l, undefined, { anonymousVote: true }))).toContain("L41");
+    });
+
+    it("anonymousVote: true でも voteWeight < 2 かつ vote_weight_set 未使用なら警告しない", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "stop" }] }]);
+        expect(ruleIds(lintRoleLogic(l, undefined, { anonymousVote: true, voteWeight: 1 }))).not.toContain("L41");
+        expect(ruleIds(lintRoleLogic(l, undefined, { anonymousVote: true }))).not.toContain("L41");
+    });
+
+    it("anonymousVote が無効/未指定なら voteWeight や vote_weight_set があっても警告しない", () => {
+        const l = logic([{ when: "on_game_start", do: [{ op: "vote_weight_set", value: 3 }] }]);
+        expect(ruleIds(lintRoleLogic(l, undefined, { anonymousVote: false, voteWeight: 3 }))).not.toContain("L41");
+        expect(ruleIds(lintRoleLogic(l, undefined, { voteWeight: 3 }))).not.toContain("L41");
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L41");
+    });
+});
+
+describe("lint-role: L42 (disguise.deep なのに見せる陣営が自陣営と同じ)", () => {
+    it("disguiseDeep: true + disguiseTeam == team は L42 を警告する", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "stop" }] }]);
+        expect(ruleIds(lintRoleLogic(l, undefined, { team: "crewmate", disguiseTeam: "crewmate", disguiseDeep: true }))).toContain("L42");
+    });
+
+    it("disguiseDeep: true でも disguiseTeam != team なら警告しない (別陣営に見せる正当ユース)", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "stop" }] }]);
+        expect(ruleIds(lintRoleLogic(l, undefined, { team: "impostor", disguiseTeam: "crewmate", disguiseDeep: true }))).not.toContain("L42");
+    });
+
+    it("disguiseDeep: false (既定) なら disguiseTeam == team でも警告しない", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "stop" }] }]);
+        expect(ruleIds(lintRoleLogic(l, undefined, { team: "crewmate", disguiseTeam: "crewmate", disguiseDeep: false }))).not.toContain("L42");
+        expect(ruleIds(lintRoleLogic(l, undefined, { team: "crewmate", disguiseTeam: "crewmate" }))).not.toContain("L42");
+    });
+
+    it("disguiseTeam / team が docContext に無ければ警告しない", () => {
+        const l = logic([{ when: "on_pet", do: [{ op: "stop" }] }]);
+        expect(ruleIds(lintRoleLogic(l, undefined, { disguiseDeep: true }))).not.toContain("L42");
+        expect(ruleIds(lintRoleLogic(l))).not.toContain("L42");
+    });
+});

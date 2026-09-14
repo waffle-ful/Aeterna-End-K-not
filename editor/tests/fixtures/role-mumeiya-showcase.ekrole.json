@@ -1,0 +1,31 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "むめいや",
+  "author": "EKN Sample",
+  "description": "じぶんの票は だれにも見えない",
+  "color": "#7f8c8d",
+  "team": "crewmate",
+  "canKill": false,
+  "killCooldown": 25,
+  "canVent": false,
+  "visionMultiplier": 1,
+  "winCondition": "team",
+  "basis": "pet",
+  "abilityCooldown": 30,
+  "passives": {
+    "anonymousVote": true
+  },
+  "logic": {
+    "version": 1,
+    "variables": [],
+    "rules": [
+      {
+        "when": "on_game_start",
+        "do": [
+          { "op": "vote_weight_set", "value": 2 }
+        ]
+      }
+    ]
+  }
+}

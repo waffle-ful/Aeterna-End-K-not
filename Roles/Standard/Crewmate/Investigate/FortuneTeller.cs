@@ -86,7 +86,7 @@ public class FortuneTeller : RoleBase
                 .Zip(players, (array, player) => (RoleList: array.ToList(), Player: player))
                 .ToArray();
 
-            roleList.Do(x => x.RoleList.Insert(IRandom.Instance.Next(x.RoleList.Count), x.Player.GetCustomRole()));
+            roleList.Do(x => x.RoleList.Insert(IRandom.Instance.Next(x.RoleList.Count), Modules.Ekm.EkrManager.GetApparentRole(x.Player)));
             AllPlayerRoleList = roleList.ToDictionary(x => x.Player.PlayerId, x => x.RoleList);
 
             Logger.Info(string.Join(" ---- ", AllPlayerRoleList.Select(x => $"ID {x.Key} ({x.Key.GetPlayer().GetNameWithRole()}): {string.Join(", ", x.Value)}")), "FortuneTeller Roles");
@@ -124,7 +124,7 @@ public class FortuneTeller : RoleBase
         string msg;
 
         if ((player.AllTasksCompleted() || AccurateCheckMode.GetBool()) && ShowSpecificRole.GetBool())
-            msg = string.Format(GetString("FortuneTellerCheck.TaskDone"), target.GetRealName(), target.GetCustomRole().ToColoredString());
+            msg = string.Format(GetString("FortuneTellerCheck.TaskDone"), target.GetRealName(), Modules.Ekm.EkrManager.GetApparentRole(target).ToColoredString());
         else
         {
             string roles = string.Join(", ", AllPlayerRoleList[target.PlayerId].Select(x => x.ToColoredString()));

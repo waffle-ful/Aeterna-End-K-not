@@ -367,6 +367,88 @@ public static class EkrManager
         return disguise.HasValue && disguise.Value != team;
     }
 
+    // Wave 12 (契約 §2.2): §2.2 の情報役職 (Snitch 等) 用 — disguise.deep が立っているときだけ
+    // 「その陣営として見られているか」を偽装先へ倒す。表示層のみの偽装 (deep:false) では
+    // 実陣営ベースの述語 (target.Is(CustomRoleTypes.X) 等) を一切変えない — Framer/Madmate 等の
+    // 別経路の「陣営っぽい判定」を巻き込まないよう、既存の Is(...) 述語はそのまま残して
+    // この関数を && で足すだけにする。
+    public static bool IsDeepDisguisedAwayFrom(CustomRoles role, EkrTeam team)
+    {
+        return HasDeepDisguise(role) && IsDisguisedAwayFrom(role, team);
+    }
+
+    // Wave 12: passives.disguise.role の見える役職名 (表示層のみ)。null = 役職名までは偽装しない。
+    public static CustomRoles? GetDisguiseRole(CustomRoles role)
+    {
+        return IsEkrRole(role) ? GetDefinition(role)?.ParsedPassives?.DisguiseRole : null;
+    }
+
+    // Wave 12: passives.disguise.deep が立っているか (情報を返す読み手にも見かけを渡すか)。
+    private static bool HasDeepDisguise(CustomRoles role)
+    {
+        return IsEkrRole(role) && GetDefinition(role)?.ParsedPassives?.DisguiseDeep == true;
+    }
+
+    // Wave 12 (契約 §2.2): 「見かけ陣営」の読み口を一本化する。deep が立っていない/EKR 以外は実陣営。
+    // Sheriff の誤爆判定・GetTeam()・IsCrewmate・CountTypes・勝敗/選出には使わない (実陣営のまま)。
+    public static Team GetApparentTeam(PlayerControl target)
+    {
+        if (!target) return Team.None;
+
+        CustomRoles role = target.GetCustomRole();
+        if (HasDeepDisguise(role) && GetDisguiseTeam(role) is { } disguiseTeam)
+        {
+            return disguiseTeam switch
+            {
+                EkrTeam.Crewmate => Team.Crewmate,
+                EkrTeam.Impostor => Team.Impostor,
+                EkrTeam.Neutral => Team.Neutral,
+                _ => target.GetTeam()
+            };
+        }
+
+        return target.GetTeam();
+    }
+
+    // Wave 12 (契約 §2.2): 「見かけ役職」の読み口を一本化する。disguise.role が指定されていなければ
+    // (team だけの偽装) 名札と同じ陣営の汎用名 (CrewmateEndKnot / ImpostorEndKnot) を返す。第三陣営偽装と
+    // 偽装なしは実役職。役職を問う読み手と名札の答えが食い違わないようにするため。
+    public static CustomRoles GetApparentRole(PlayerControl target)
+    {
+        if (!target) return CustomRoles.NotAssigned;
+
+        CustomRoles role = target.GetCustomRole();
+        if (!HasDeepDisguise(role)) return role;
+        if (GetDisguiseRole(role) is { } disguiseRole) return disguiseRole;
+
+        // 見せる役職名が無い (team だけの偽装) ときは名札と同じ汎用名を返す — 役職を問う読み手にも
+        // 「クルーメイト」「インポスター」と答える。第三陣営偽装は名札も実役職名のままなので実役職。
+        return GetDisguiseTeam(role) switch
+        {
+            EkrTeam.Crewmate => CustomRoles.CrewmateEndKnot,
+            EkrTeam.Impostor => CustomRoles.ImpostorEndKnot,
+            _ => role,
+        };
+    }
+
+    // Wave 12: anonymousVote ホルダーか (会議の VoterState 配列から落とす対象)。
+    public static bool IsAnonymousVoteHolder(byte playerId)
+    {
+        return GetPassivesFor(playerId)?.AnonymousVote == true;
+    }
+
+    // Wave 12: anonymousKills ホルダーか (自分が殺した死体を匿名化する)。
+    public static bool HasAnonymousKills(byte playerId)
+    {
+        return GetPassivesFor(playerId)?.AnonymousKills == true;
+    }
+
+    // Wave 12: corpse:"anonymous" か (自分の死体を匿名化する)。
+    public static bool IsAnonymousCorpse(byte playerId)
+    {
+        return GetPassivesFor(playerId)?.Corpse == "anonymous";
+    }
+
     // ── 埋込出荷役職 (DLL 同梱 Resources/EkRoles/<EnumName>.ekrole.json) ─────────────────
     // 「役職メーカーで開発して、そのまま本体の正式役職として出荷する」レーン。起動時に Bound へ恒久
     // 束縛され、以後はユーザースロットと完全に同じ評価経路に乗る (選出・IsEnable・Fire 系・opcode 予算)。
@@ -2934,6 +3016,31 @@ public static class EkrManager
         }
 
         Logger.Info($"EKR vote_swap: {t1} <-> {t2} (by {holderId})", "EkrManager");
+    }
+
+    // Wave 12 (契約 §5): anonymousVote ホルダーの VoterState を RpcVotingComplete へ渡す配列から落とす。
+    // 集計 (votingData) は既に済んでいる呼び出し点の後で使うこと — ここは表示用配列の縮小のみ。
+    // 呼び元3箇所 (CheckForEndVoting の Dictator 分岐 / 通常分岐 / ForceExile) すべてで
+    // RpcVotingComplete 直前にこれを通す。
+    public static MeetingHud.VoterState[] FilterAnonymousVotes(MeetingHud.VoterState[] states)
+    {
+        if (states == null || states.Length == 0) return states;
+
+        MeetingHud.VoterState[] filtered = states.Where(st => !IsAnonymousVoteHolder(st.VoterId)).ToArray();
+
+        // 全票が匿名化対象 (投票者が匿名ホルダー 1 人だけの Dictator / ForceExile 等) だと空配列になる。
+        // 空の VoterState[] をバニラ客へ流す安全性は未確認なので、そのときは匿名化を諦めて元の配列を送る
+        // (投票者 1 人の結果は誰の票かが構造的に分かるので、隠す価値も無い)。
+        if (filtered.Length == 0)
+        {
+            Logger.Info("EKR anonymousVote: 投票が匿名ホルダーの分だけなので匿名化せず送る", "EkrManager");
+            return states;
+        }
+
+        if (filtered.Length != states.Length)
+            Logger.Info($"EKR anonymousVote: {states.Length - filtered.Length} 件の投票を匿名化して落とした", "EkrManager");
+
+        return filtered;
     }
 
     // ── Wave 2: exile ─────────────────────────────────────────
