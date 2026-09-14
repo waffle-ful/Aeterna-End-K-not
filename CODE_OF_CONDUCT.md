@@ -32,6 +32,8 @@ We don't act on anonymous reports, but we keep private reports to the maintainer
 
 ## Enforcement
 
-The project maintainer (and Discord moderators, where applicable) will decide outcomes case by case. Possible actions include warnings, temporary bans, or permanent bans from the project's spaces.
+The project maintainer (and Discord moderators, where applicable) will decide outcomes case by case. Possible actions include warnings, or temporary/permanent removal from the spaces the project runs: this GitHub repository and the project Discord.
+
+End K not itself has no maintainer-controlled blocklist. We cannot stop a specific player from using the mod or from joining lobbies, and we do not plan to add a way. `/kick` and `/ban` are tools each host uses on their own lobby, and each host's ban list stays on their own machine.
 
 By participating in End K not, you agree to follow this Code of Conduct.
