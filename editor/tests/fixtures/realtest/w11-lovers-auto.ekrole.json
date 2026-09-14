@@ -1,0 +1,30 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "こいびとや(自動)",
+  "author": "EKN Sample",
+  "description": "まいびょう そばのひとに 恋人を つけようとする (つかない)",
+  "color": "#c0a03f",
+  "team": "crewmate",
+  "canKill": false,
+  "killCooldown": 25,
+  "canVent": false,
+  "visionMultiplier": 1,
+  "winCondition": "team",
+  "logic": {
+    "version": 1,
+    "variables": [],
+    "rules": [
+      {
+        "when": "on_second",
+        "do": [
+          {
+            "op": "addon_give",
+            "target": "nearest",
+            "addon": "Lovers"
+          }
+        ]
+      }
+    ]
+  }
+}

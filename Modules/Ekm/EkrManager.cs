@@ -322,7 +322,7 @@ public static class EkrManager
     // Wave 11: 束縛中の役職コードの定義が basis:"pet" (省略時の既定を含む) か。
     public static bool IsEkrPetBasis(CustomRoles role) => IsEkrRole(role) && GetDefinition(role)?.ParsedBasis == EkrBasis.Pet;
 
-    // Wave 11 (契約 §2.2): 実効基底。定義が pet で、かつホストが UsePhantomBasis (非インポスターは
+    // Wave 11 (契約 §2.2): 実効基底。定義が pet で、かつホストが UsePhantomBasis (ニュートラルキラーは
     // UsePhantomBasisForNKs も) を ON にしていて役職コードが on_pet ロジックを持つ (= SimpleAbilityTrigger)
     // なら、実際にはファントムボタンへ化けている。OnVanish / ApplyGameOptions / アドオン除外判定は
     // すべてここを通す (定義の basis そのものではなく)。
@@ -333,8 +333,11 @@ public static class EkrManager
         EkrBasis basis = GetDefinition(role)?.ParsedBasis ?? EkrBasis.Pet;
         if (basis != EkrBasis.Pet) return basis;
 
+        // 家の述語 (CustomRolesHelper.GetVNRole / GetDYRole / PetActivatedAbility / HudPatch) と同じ式にする —
+        // UsePhantomBasisForNKs が縛るのはニュートラルキラー (role.IsNK()) だけ。ここだけ別の式だと
+        // 「家はファントムへ化けさせるが EKR は pet 扱い」の割れ (ボタン二重表示・on_pet 不発) が出る。
         bool hostFlippedToPhantom = Options.UsePhantomBasis.GetBool()
-            && (IsEkrImpostor(role) || Options.UsePhantomBasisForNKs.GetBool())
+            && (IsEkrImpostor(role) || !role.IsNK() || Options.UsePhantomBasisForNKs.GetBool())
             && role.SimpleAbilityTrigger();
 
         return hostFlippedToPhantom ? EkrBasis.Phantom : EkrBasis.Pet;

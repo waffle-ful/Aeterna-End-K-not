@@ -1,0 +1,38 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "みえなくするや(第三キラー)",
+  "author": "EKN Sample",
+  "description": "みえなくするや の ニュートラルキラー版 (canKill:true・UsePhantomBasisForNKs の 対照アーム)",
+  "color": "#4f9a94",
+  "team": "neutral",
+  "canKill": true,
+  "killCooldown": 25,
+  "canVent": false,
+  "visionMultiplier": 1,
+  "winCondition": "team",
+  "basis": "pet",
+  "logic": {
+    "version": 1,
+    "variables": [],
+    "rules": [
+      {
+        "when": "on_pet",
+        "do": [
+          {
+            "op": "effect_give",
+            "target": "nearest",
+            "kind": "invisible",
+            "seconds": 5,
+            "hideFrom": "crewmates"
+          },
+          {
+            "op": "notify",
+            "text": "けしてあげた",
+            "seconds": 2
+          }
+        ]
+      }
+    ]
+  }
+}

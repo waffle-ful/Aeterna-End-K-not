@@ -1,0 +1,51 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "かくしや(20秒)",
+  "author": "EKN Sample",
+  "description": "かくしや の 20 秒 (invisible の上限)版 (ベント不可・死体 stay の 観測用)",
+  "color": "#6b5b8c",
+  "team": "neutral",
+  "canKill": true,
+  "killCooldown": 25,
+  "canVent": true,
+  "visionMultiplier": 1,
+  "winCondition": "team",
+  "basis": "phantom",
+  "abilityCooldown": 35,
+  "logic": {
+    "version": 1,
+    "variables": [],
+    "rules": [
+      {
+        "when": "on_pet",
+        "do": [
+          {
+            "op": "effect_give",
+            "target": "self",
+            "kind": "invisible",
+            "seconds": 20,
+            "hideFrom": "everyone",
+            "corpse": "stay"
+          },
+          {
+            "op": "notify",
+            "text": "かくれた…",
+            "seconds": 2
+          }
+        ]
+      },
+      {
+        "when": "on_kill",
+        "do": [
+          {
+            "op": "effect_give",
+            "target": "self",
+            "kind": "invisible",
+            "seconds": 3
+          }
+        ]
+      }
+    ]
+  }
+}
