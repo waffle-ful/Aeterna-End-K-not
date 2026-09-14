@@ -1500,6 +1500,7 @@ internal static class ReportDeadBodyPatch
         try { EndKnot.Modules.Companion.CompanionEventEmitter.OnMeetingCalled(player, target); } catch { } // AI実況相棒アプリ向けイベント (OFF 時は即 return)
 
         ReportReasonNotice.OnReportConfirmed(player, target);
+        MeetingHeader.OnReportConfirmed(player, target, synthetic);
 
         if (ClientControlGUI.HudHidden)
         {

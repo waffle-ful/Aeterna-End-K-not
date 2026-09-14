@@ -306,6 +306,7 @@
   "MenuTitle.Guessers": "★ Guesser Mode ★",
   "MenuTitle.MapsSettings": "★ Maps ★",
   "MenuTitle.Meeting": "★ Meeting ★",
+  "MenuTitle.MeetingHeader": "★ Meeting Header ★",
   "MenuTitle.OptionSanityCheck": "★ Setting Sanity Check ★",
   "MenuTitle.Other": "★ Different ★",
   "MenuTitle.ReportReasonNotice": "★ Report Reason Notice ★",
@@ -9760,6 +9761,16 @@
   "ReportReason.Emergency": "{0} called an emergency meeting.",
   "ReportReason.AnonymousReporter": "Someone",
   "ReportReason.AnonymousVictim": "someone",
+  /* ==============================
+    Meeting Header
+  ============================== */
+  "EnableMeetingHeader": "Show a header at the top-left of the meeting screen",
+  "MeetingHeaderShowDay": "Show the day count",
+  "MeetingHeaderShowCause": "Show why the meeting started",
+  "MeetingHeader.Day": "Day.{0}",
+  "MeetingHeader.EmergencyButton": "Emergency Button",
+  "MeetingHeader.BodyReport": "{0}'s body reported",
+  "MeetingHeader.Forced": "Forced Meeting",
   /* ==============================
     Device Time Limit
   ============================== */
