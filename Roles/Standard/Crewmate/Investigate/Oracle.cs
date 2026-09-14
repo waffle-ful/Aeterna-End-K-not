@@ -87,7 +87,7 @@ public class Oracle : RoleBase
             return false;
         }
 
-        Team team = target.GetTeam();
+        Team team = Modules.Ekm.EkrManager.GetApparentTeam(target);
 
         if (IRandom.Instance.Next(100) < FailChance.GetInt())
             team = Main.TeamValues[1..].Without(team).RandomElement();

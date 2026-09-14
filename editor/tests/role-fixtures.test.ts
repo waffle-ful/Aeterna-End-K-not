@@ -27,6 +27,10 @@ import kieyaShowcaseRaw from "./fixtures/role-kieya-showcase.ekrole.json?raw";
 import kakushiyaShowcaseRaw from "./fixtures/role-kakushiya-showcase.ekrole.json?raw";
 import mienakusuruyaShowcaseRaw from "./fixtures/role-mienakusuruya-showcase.ekrole.json?raw";
 import kagenonakamaShowcaseRaw from "./fixtures/role-kagenonakama-showcase.ekrole.json?raw";
+import narisumashiyaShowcaseRaw from "./fixtures/role-narisumashiya-showcase.ekrole.json?raw";
+import kageboushiShowcaseRaw from "./fixtures/role-kagebooshi-showcase.ekrole.json?raw";
+import mumeiyaShowcaseRaw from "./fixtures/role-mumeiya-showcase.ekrole.json?raw";
+import tameyaShowcaseRaw from "./fixtures/role-tameya-showcase.ekrole.json?raw";
 import { ROLECODE_PREFIX, decodeRoleCode, encodeRoleCode } from "../src/rolecode";
 import { ABILITY_COOLDOWN_DEFAULT, LOGIC_WHEN_VALUES, type EkrTeam, validateEkrDefinition, type LogicNode, type LogicWhen } from "../src/roledef";
 import { lintRoleLogic } from "../src/logic/lint-role";
@@ -125,7 +129,10 @@ describe("golden fixture: role-full-course.ekrole.json (10イベント・主要o
     // Wave 1 (spec §1.1): passives の全キーを実物の .ekrole.json で1度ずつ使う
     // (C# 側の検証と突き合わせる共有資材にするため — 型/レンジの実装差分はここで露見する)。
     // R2 (§4): disguise を追加して7キーになった。Wave 9 (§3): countsAs を追加して8キーになった。
-    it("passives の8キーすべてを使っている (検証を通り、そのまま保持される)", () => {
+    // Wave 12 (契約 §2/§4): disguise.role/deep + anonymousKills を追加して9キーになった
+    // (disguise.team=neutral と実 team=crewmate が異なるため deep:true でも L42 は踏まない —
+    // 下の「リンター…は警告0件」テストの対象範囲内)。
+    it("passives の9キーすべてを使っている (検証を通り、そのまま保持される)", () => {
         const parsed = JSON.parse(fullCourseRaw);
         const result = validateEkrDefinition(parsed);
         if (!result.ok) throw new Error(result.error);
@@ -136,8 +143,9 @@ describe("golden fixture: role-full-course.ekrole.json (10イベント・主要o
             corpse: "noReport",
             voteWeight: 2,
             doom: { seconds: 300 },
-            disguise: { team: "neutral" },
+            disguise: { team: "neutral", role: "Amnesiac", deep: true },
             countsAs: 2,
+            anonymousKills: true,
         });
     });
 
@@ -297,7 +305,10 @@ describe("golden fixture: role-full-course.ekrole.json (10イベント・主要o
         expect(onChat?.do.some((n) => n.op === "forget")).toBe(true);
     });
 
-    it("リンター (spec §6・Wave 3 で L24/L25・Wave 9 で L31〜L33 含む) は警告0件 — golden fixture は模範的な組み方で書く", () => {
+    // Wave 12 (契約 §7): voteWeight/anonymousVote/disguiseTeam/disguiseDeep も docContext に渡す。
+    // disguise.team (neutral) が実 team (crewmate) と異なるため、disguise.deep: true でも L42 は
+    // 踏まない (自陣営に見せているときだけ踏む) — anonymousVote は省略のままなので L41 も踏まない。
+    it("リンター (spec §6・Wave 3 で L24/L25・Wave 9 で L31〜L33・Wave 12 で L41/L42 含む) は警告0件 — golden fixture は模範的な組み方で書く", () => {
         const parsed = JSON.parse(fullCourseRaw);
         const result = validateEkrDefinition(parsed);
         if (!result.ok) throw new Error(result.error);
@@ -307,6 +318,10 @@ describe("golden fixture: role-full-course.ekrole.json (10イベント・主要o
             basis: result.def.basis,
             abilityCooldown: result.def.abilityCooldown,
             countsAs: result.def.passives?.countsAs,
+            voteWeight: result.def.passives?.voteWeight,
+            anonymousVote: result.def.passives?.anonymousVote,
+            disguiseTeam: result.def.passives?.disguise?.team as EkrTeam | undefined,
+            disguiseDeep: result.def.passives?.disguise?.deep,
         })).toEqual([]);
     });
 
@@ -1065,6 +1080,189 @@ describe("golden fixture: role-kagenonakama-showcase.ekrole.json (Wave 11 見本
 
     it("rolecode (EKR1.) のエンコード→デコード ラウンドトリップで AST が deep-equal になる", () => {
         const parsed = JSON.parse(kagenonakamaShowcaseRaw);
+        const validated = validateEkrDefinition(parsed);
+        if (!validated.ok) throw new Error(validated.error);
+
+        const code = encodeRoleCode(JSON.stringify(validated.def));
+        expect(code.startsWith(ROLECODE_PREFIX)).toBe(true);
+
+        const roundTripped = validateEkrDefinition(JSON.parse(decodeRoleCode(code)));
+        if (!roundTripped.ok) throw new Error(roundTripped.error);
+
+        expect(roundTripped.def).toEqual(validated.def);
+        expect(encodeRoleCode(JSON.stringify(roundTripped.def))).toBe(code);
+    });
+});
+
+// Wave 12 (契約 §10 2026-09-14): テンプレギャラリー見本4本。「みられかた」
+// (disguise.role/deep の深化 + anonymousKills/anonymousVote の匿名化) のパース網羅を担う。
+describe("golden fixture: role-narisumashiya-showcase.ekrole.json (Wave 12 見本・占われても保安官)", () => {
+    it("validate に合格する", () => {
+        const parsed = JSON.parse(narisumashiyaShowcaseRaw);
+        const result = validateEkrDefinition(parsed);
+        expect(result.ok, result.ok ? "" : (result as { error: string }).error).toBe(true);
+    });
+
+    it("disguise.role=Sheriff・deep:true を保持する (見せる陣営 crewmate と役職の陣営が一致)", () => {
+        const parsed = JSON.parse(narisumashiyaShowcaseRaw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        expect(result.def.team).toBe("impostor");
+        expect(result.def.passives?.disguise).toEqual({ team: "crewmate", role: "Sheriff", deep: true });
+    });
+
+    // disguise.team (crewmate) が実 team (impostor) と異なるため、deep:true でも L42 は踏まない。
+    it("リンター は警告0件", () => {
+        const parsed = JSON.parse(narisumashiyaShowcaseRaw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        if (!result.def.logic) throw new Error("fixture は logic を持つ前提");
+        const warnings = lintRoleLogic(result.def.logic, undefined, {
+            team: result.def.team as EkrTeam,
+            disguiseTeam: result.def.passives?.disguise?.team as EkrTeam | undefined,
+            disguiseDeep: result.def.passives?.disguise?.deep,
+        });
+        expect(warnings).toEqual([]);
+    });
+
+    it("rolecode (EKR1.) のエンコード→デコード ラウンドトリップで AST が deep-equal になる", () => {
+        const parsed = JSON.parse(narisumashiyaShowcaseRaw);
+        const validated = validateEkrDefinition(parsed);
+        if (!validated.ok) throw new Error(validated.error);
+
+        const code = encodeRoleCode(JSON.stringify(validated.def));
+        expect(code.startsWith(ROLECODE_PREFIX)).toBe(true);
+
+        const roundTripped = validateEkrDefinition(JSON.parse(decodeRoleCode(code)));
+        if (!roundTripped.ok) throw new Error(roundTripped.error);
+
+        expect(roundTripped.def).toEqual(validated.def);
+        expect(encodeRoleCode(JSON.stringify(roundTripped.def))).toBe(code);
+    });
+});
+
+describe("golden fixture: role-kagebooshi-showcase.ekrole.json (Wave 12 見本・だれを ころしたかも わからない)", () => {
+    it("validate に合格する", () => {
+        const parsed = JSON.parse(kageboushiShowcaseRaw);
+        const result = validateEkrDefinition(parsed);
+        expect(result.ok, result.ok ? "" : (result as { error: string }).error).toBe(true);
+    });
+
+    it("corpse: anonymous と anonymousKills: true を保持する (neutral killer)", () => {
+        const parsed = JSON.parse(kageboushiShowcaseRaw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        expect(result.def.team).toBe("neutral");
+        expect(result.def.canKill).toBe(true);
+        expect(result.def.passives).toEqual({ corpse: "anonymous", anonymousKills: true });
+    });
+
+    it("リンター は警告0件", () => {
+        const parsed = JSON.parse(kageboushiShowcaseRaw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        if (!result.def.logic) throw new Error("fixture は logic を持つ前提");
+        expect(lintRoleLogic(result.def.logic)).toEqual([]);
+    });
+
+    it("rolecode (EKR1.) のエンコード→デコード ラウンドトリップで AST が deep-equal になる", () => {
+        const parsed = JSON.parse(kageboushiShowcaseRaw);
+        const validated = validateEkrDefinition(parsed);
+        if (!validated.ok) throw new Error(validated.error);
+
+        const code = encodeRoleCode(JSON.stringify(validated.def));
+        expect(code.startsWith(ROLECODE_PREFIX)).toBe(true);
+
+        const roundTripped = validateEkrDefinition(JSON.parse(decodeRoleCode(code)));
+        if (!roundTripped.ok) throw new Error(roundTripped.error);
+
+        expect(roundTripped.def).toEqual(validated.def);
+        expect(encodeRoleCode(JSON.stringify(roundTripped.def))).toBe(code);
+    });
+});
+
+// むめいや は anonymousVote + vote_weight_set を意図的に組み合わせる (契約 §10) — L41 の
+// (info) ヒントが1件出ることをそのまま golden にする (role-kiyomeya-showcase の L38 と同じ扱い)。
+describe("golden fixture: role-mumeiya-showcase.ekrole.json (Wave 12 見本・じぶんの票は見えない)", () => {
+    it("validate に合格する", () => {
+        const parsed = JSON.parse(mumeiyaShowcaseRaw);
+        const result = validateEkrDefinition(parsed);
+        expect(result.ok, result.ok ? "" : (result as { error: string }).error).toBe(true);
+    });
+
+    it("passives.anonymousVote: true と vote_weight_set(2) を保持する", () => {
+        const parsed = JSON.parse(mumeiyaShowcaseRaw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        if (!result.def.logic) throw new Error("fixture は logic を持つ前提");
+        expect(result.def.passives).toEqual({ anonymousVote: true });
+        const setOp = result.def.logic.rules.flatMap((r) => r.do).find((n) => n.op === "vote_weight_set");
+        expect(setOp).toEqual({ op: "vote_weight_set", value: 2 });
+    });
+
+    it("リンター: L41 (票が多いと だれの票か でばれやすい) だけが警告される", () => {
+        const parsed = JSON.parse(mumeiyaShowcaseRaw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        if (!result.def.logic) throw new Error("fixture は logic を持つ前提");
+        const warnings = lintRoleLogic(result.def.logic, undefined, {
+            team: result.def.team as EkrTeam,
+            voteWeight: result.def.passives?.voteWeight,
+            anonymousVote: result.def.passives?.anonymousVote,
+        });
+        expect(warnings.map((w) => w.rule)).toEqual(["L41"]);
+    });
+
+    it("rolecode (EKR1.) のエンコード→デコード ラウンドトリップで AST が deep-equal になる", () => {
+        const parsed = JSON.parse(mumeiyaShowcaseRaw);
+        const validated = validateEkrDefinition(parsed);
+        if (!validated.ok) throw new Error(validated.error);
+
+        const code = encodeRoleCode(JSON.stringify(validated.def));
+        expect(code.startsWith(ROLECODE_PREFIX)).toBe(true);
+
+        const roundTripped = validateEkrDefinition(JSON.parse(decodeRoleCode(code)));
+        if (!roundTripped.ok) throw new Error(roundTripped.error);
+
+        expect(roundTripped.def).toEqual(validated.def);
+        expect(encodeRoleCode(JSON.stringify(roundTripped.def))).toBe(code);
+    });
+});
+
+// ためや (§1 の「回数の経済」降格分・粒度規範 §9 の再確認): var + on_task_complete + if +
+// progress だけで組んだ見本 (role-tama-showcase の Wave 9 版と同じ語彙・別の見た目)。
+describe("golden fixture: role-tameya-showcase.ekrole.json (Wave 12 見本・回数の経済)", () => {
+    it("validate に合格する", () => {
+        const parsed = JSON.parse(tameyaShowcaseRaw);
+        const result = validateEkrDefinition(parsed);
+        expect(result.ok, result.ok ? "" : (result as { error: string }).error).toBe(true);
+    });
+
+    it("var_add + if + progress.text の組み方で たまの経済を表現している (task で貯めて pet で使う)", () => {
+        const parsed = JSON.parse(tameyaShowcaseRaw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        if (!result.def.logic) throw new Error("fixture は logic を持つ前提");
+
+        expect(result.def.progress).toEqual({ text: "たま{たま}こ" });
+        expect(result.def.logic.variables).toEqual([{ name: "たま", init: 0 }]);
+        const ops = new Set<string>();
+        for (const rule of result.def.logic.rules) collectOps(rule.do, ops);
+        expect(ops.has("if")).toBe(true);
+        expect(ops.has("var_add")).toBe(true);
+        expect(ops.has("speed")).toBe(true);
+    });
+
+    it("リンター は警告0件", () => {
+        const parsed = JSON.parse(tameyaShowcaseRaw);
+        const result = validateEkrDefinition(parsed);
+        if (!result.ok) throw new Error(result.error);
+        if (!result.def.logic) throw new Error("fixture は logic を持つ前提");
+        expect(lintRoleLogic(result.def.logic, result.def.progress?.text)).toEqual([]);
+    });
+
+    it("rolecode (EKR1.) のエンコード→デコード ラウンドトリップで AST が deep-equal になる", () => {
+        const parsed = JSON.parse(tameyaShowcaseRaw);
         const validated = validateEkrDefinition(parsed);
         if (!validated.ok) throw new Error(validated.error);
 

@@ -42,7 +42,7 @@ public class Inquisitor : RoleBase
         if (!voter || !target || voter.PlayerId == target.PlayerId || Main.DontCancelVoteList.Contains(voter.PlayerId)) return false;
 
         var players = ExcludeDeadPlayers.GetBool() ? Main.EnumerateAlivePlayerControls() : Main.EnumeratePlayerControls();
-        List<(byte Id, CustomRoles Role)> knownRoles = [.. from pc in players where Utils.KnowsTargetRole(target, pc) select (pc.PlayerId, pc.GetCustomRole())];
+        List<(byte Id, CustomRoles Role)> knownRoles = [.. from pc in players where Utils.KnowsTargetRole(target, pc) select (pc.PlayerId, Modules.Ekm.EkrManager.GetApparentRole(pc))];
 
         string result;
 

@@ -78,12 +78,19 @@ import { ADDON_BY_ID } from "../generated/ekr-addons";
 // L39 = effect_give(invisible, hideFrom:"crewmates"|"enemies") — 通常ゲームモード限定の注意
 // (家の既存ガードは crewmates/enemies のどちらの述語付き経路も Standard 限定)。
 // L40 = effect_give(invisible, interval < 3) — かけなおしの乱れ撃ち (kick リスク) の注意。
+// Wave 12 (契約 §7 2026-09-14): L41/L42 を追加 (計42ルール)。「みられかた」(disguise.role/deep +
+// anonymousKills/anonymousVote) 新設に伴うヒント2つ。どちらも rule に紐づかない文書単位のヒント
+// (L31〜L33 と同型・ruleIndex は -1)。
+// L41 = passives.anonymousVote が有効なのに票の重みが目立つ (passives.voteWeight ≥ 2 または
+// vote_weight_set の使用) — 匿名票なのに票数だけで本人が推測されてしまう組み合わせ。
+// L42 = passives.disguise.deep が有効なのに disguise.team が自陣営と同じ — しらべても同じ答えが
+// 返るだけなので deep を付ける意味が無い。
 
 export type LintRuleId =
     | "L1" | "L2" | "L3" | "L4" | "L5" | "L6" | "L7" | "L8" | "L9" | "L10" | "L11" | "L12" | "L13"
     | "L14" | "L15" | "L16" | "L17" | "L18" | "L19" | "L20" | "L21"
     | "L22" | "L23" | "L24" | "L25" | "L26" | "L27" | "L28" | "L29" | "L30"
-    | "L31" | "L32" | "L33" | "L34" | "L35" | "L36" | "L37" | "L38" | "L39" | "L40";
+    | "L31" | "L32" | "L33" | "L34" | "L35" | "L36" | "L37" | "L38" | "L39" | "L40" | "L41" | "L42";
 
 export interface LintWarning {
     rule: LintRuleId;
@@ -352,19 +359,26 @@ function extractProgressVarRefs(text: string): string[] {
     return out;
 }
 
-/** L31〜L33 (Wave 9) が必要とする文書レベルの情報。logic (RoleLogic) には無いフィールドだけを渡す。 */
+/** L31〜L33 (Wave 9)・L41/L42 (Wave 12) が必要とする文書レベルの情報。
+ *  logic (RoleLogic) には無いフィールドだけを渡す。 */
 export interface LintDocContext {
     team?: EkrTeam;
     basis?: EkrBasis;
     abilityCooldown?: number;
     countsAs?: number;
+    // Wave 12 (契約 §7 L41): passives.voteWeight / passives.anonymousVote。
+    voteWeight?: number;
+    anonymousVote?: boolean;
+    // Wave 12 (契約 §7 L42): passives.disguise の team/deep (role は L42 の判定に不要)。
+    disguiseTeam?: EkrTeam;
+    disguiseDeep?: boolean;
 }
 
 /**
- * 検証済みの RoleLogic に対して spec §6 の 40 ルール (v1.2 で L11/L12、v1.3 で L13、Wave 1 で
+ * 検証済みの RoleLogic に対して spec §6 の 42 ルール (v1.2 で L11/L12、v1.3 で L13、Wave 1 で
  * L14〜L17、Wave 2 で L18〜L20、2026-08-14 に L21、Wave 3 で L22〜L25 のうち L24/L25、Wave 4 で
  * L26/L27、Wave 5 で L28、Wave 6 で L29、Wave 8 で L30、Wave 9 で L31〜L33、Wave 10 で L34〜L38、
- * Wave 11 で L39/L40) を静的検査する。
+ * Wave 11 で L39/L40、Wave 12 で L41/L42) を静的検査する。
  * ブロックの組み方に対するヒントであり、export 自体は妨げない (呼び出し元は結果を警告フッタに
  * 表示するだけ)。
  *
@@ -864,6 +878,33 @@ export function lintRoleLogic(logic: RoleLogic, progressText?: string, docContex
             "L33", -1, "basis",
             "『だれかを えらぶ』『きえるボタンをおす』なのに とくいわざの ルールがありません。",
             "「とくいわざボタンを おしたとき」を ついかしよう。",
+        ));
+    }
+
+    // L41 (Wave 12・契約 §7): passives.anonymousVote が有効なのに、票の重み (voteWeight ≥ 2 または
+    // vote_weight_set の使用) が目立つ組み合わせ。「じぶんの票は見えない」はずが、重い票だけ数の上で
+    // 目立ってしまい「だれの票か」が絞り込まれやすくなる。rule に紐づかない文書単位のヒントなので
+    // ruleIndex は -1 (L31〜L33 と同型)。
+    if (docContext?.anonymousVote === true) {
+        const hasHeavyVoteWeight = (docContext.voteWeight ?? 0) >= 2
+            || logic.rules.some((r) => hasOp(r.do, "vote_weight_set"));
+        if (hasHeavyVoteWeight) {
+            warnings.push(makeWarning(
+                "L41", -1, "passives",
+                "票が多いと「だれの票か」でばれやすいよ",
+                "票のちからを1のままにするか、`anonymousVote` を外そう。",
+            ));
+        }
+    }
+
+    // L42 (Wave 12・契約 §7): passives.disguise.deep が有効なのに、見せる陣営 (disguise.team) が
+    // 自分のほんとうの陣営と同じ。しらべても同じ答え (自陣営) が返るだけなので deep を付ける意味が無い。
+    if (docContext?.disguiseDeep === true && docContext.disguiseTeam !== undefined
+        && docContext.team !== undefined && docContext.disguiseTeam === docContext.team) {
+        warnings.push(makeWarning(
+            "L42", -1, "passives",
+            "しらべられても同じ答えだから、`deep` はいらないよ",
+            "べつの陣営に見せるときだけ deep を使おう。",
         ));
     }
 

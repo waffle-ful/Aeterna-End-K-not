@@ -406,10 +406,14 @@
                 <option value="normal">ふつう</option>
                 <option value="noReport">通報できない</option>
                 <option value="vanish">すぐ消える</option>
+                <option value="anonymous">だれのか わからない</option>
               </select>
             </label>
 
+            <label class="rm-flag-row"><input type="checkbox" id="rm-p-anonymous-kills" /> ころした死体は だれのか わからない</label>
+
             <label>票のちから (0 = 票なし) <input id="rm-p-vote" type="number" min="0" max="3" step="1" value="1" /></label>
+            <label class="rm-flag-row"><input type="checkbox" id="rm-p-anonymous-vote" /> じぶんの票は 見えない</label>
 
             <label class="rm-flag-row"><input type="checkbox" id="rm-p-doom" /> よわさ (時間がくると死ぬ)</label>
             <label id="rm-p-doom-row" hidden>たおれるまでの秒数 <input id="rm-p-doom-seconds" type="number" min="30" max="600" step="1" value="60" /></label>
@@ -422,7 +426,13 @@
                 <option value="neutral">ニュートラル</option>
               </select>
             </label>
-            <p class="note rm-disguise-note">ほかの人からの見え方だけが変わります。勝ち負け・出現・ほんとうの陣営はそのままです。ニュートラルに見せる場合は役職名はそのままで色だけ変わります。</p>
+            <label id="rm-p-disguise-role-row" hidden>見せる役職名 (にんい)
+              <select id="rm-p-disguise-role">
+                <option value="">とくに指定しない (陣営の名前だけ)</option>
+              </select>
+            </label>
+            <label id="rm-p-disguise-deep-row" class="rm-flag-row" hidden><input type="checkbox" id="rm-p-disguise-deep" /> しらべられても ばれない</label>
+            <p class="note rm-disguise-note">ほかの人からの見え方だけが変わります。勝ち負け・出現・ほんとうの陣営はそのままです。ニュートラルに見せる場合は役職名はそのままで色だけ変わります。「しらべられても ばれない」は占い系のちからにだけ効きます。保安官の誤爆やゲスの正否は、ほんとうの陣営で決まります。</p>
           </div>
 
           <!-- なまえのよこに出す文字 (Wave 3・契約 §3): 進捗テキスト。{変数名} で変数の値に置き換わる。 -->
