@@ -1,0 +1,30 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "ひきよせや(自動・インポスター)",
+  "author": "EKN Sample",
+  "description": "まいびょう じぶんに マグネットを つけようとする (はじかれる)",
+  "color": "#c0a03f",
+  "team": "impostor",
+  "canKill": true,
+  "killCooldown": 25,
+  "canVent": true,
+  "visionMultiplier": 1,
+  "winCondition": "team",
+  "logic": {
+    "version": 1,
+    "variables": [],
+    "rules": [
+      {
+        "when": "on_second",
+        "do": [
+          {
+            "op": "addon_give",
+            "target": "self",
+            "addon": "Magnet"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "きようや(自動)",
+  "author": "EKN Sample",
+  "description": "はじまると じぶんに 器用を つける",
+  "color": "#c0a03f",
+  "team": "crewmate",
+  "canKill": false,
+  "killCooldown": 25,
+  "canVent": false,
+  "visionMultiplier": 1,
+  "winCondition": "team",
+  "logic": {
+    "version": 1,
+    "variables": [],
+    "rules": [
+      {
+        "when": "on_game_start",
+        "do": [
+          {
+            "op": "addon_give",
+            "target": "self",
+            "addon": "Nimble"
+          }
+        ]
+      }
+    ]
+  }
+}

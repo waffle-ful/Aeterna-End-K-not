@@ -1,0 +1,30 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "さぼしらせや",
+  "author": "EKN Sample",
+  "description": "だれかが サボタージュすると しらせる (on_sabotage の 客側 観測用)",
+  "color": "#c0a03f",
+  "team": "crewmate",
+  "canKill": false,
+  "killCooldown": 25,
+  "canVent": false,
+  "visionMultiplier": 1,
+  "winCondition": "team",
+  "logic": {
+    "version": 1,
+    "variables": [],
+    "rules": [
+      {
+        "when": "on_sabotage",
+        "do": [
+          {
+            "op": "notify",
+            "text": "サボタージュだ！",
+            "seconds": 8
+          }
+        ]
+      }
+    ]
+  }
+}

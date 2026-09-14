@@ -1,0 +1,38 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "みえなくするや(20秒)",
+  "author": "EKN Sample",
+  "description": "みえなくするや の 20 秒 (invisible の上限)版 (客画面の スクショを とる 時間かせぎ用)",
+  "color": "#4f9a94",
+  "team": "crewmate",
+  "canKill": false,
+  "killCooldown": 25,
+  "canVent": false,
+  "visionMultiplier": 1,
+  "winCondition": "team",
+  "basis": "pet",
+  "logic": {
+    "version": 1,
+    "variables": [],
+    "rules": [
+      {
+        "when": "on_pet",
+        "do": [
+          {
+            "op": "effect_give",
+            "target": "nearest",
+            "kind": "invisible",
+            "seconds": 20,
+            "hideFrom": "crewmates"
+          },
+          {
+            "op": "notify",
+            "text": "けしてあげた",
+            "seconds": 2
+          }
+        ]
+      }
+    ]
+  }
+}
