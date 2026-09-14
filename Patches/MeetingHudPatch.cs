@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -1370,6 +1370,9 @@ internal static class MeetingHudStartPatch
         Crowded.MeetingHudStartPatch.Postfix(__instance);
         Talkative.StartMeetingPatch.Postfix();
 
+        MeetingHeader.VerifySlotOrder(__instance);
+        MeetingHeader.CreateOverlay(__instance);
+
         ChaosPotSupport.BuildRoleListFromCurrentGame();
         if (ChaosPotSupport.Enable.GetBool() && Options.CurrentGameMode == CustomGameMode.Standard)
         {
@@ -1377,12 +1380,38 @@ internal static class MeetingHudStartPatch
             if (!string.IsNullOrEmpty(meetingText) && __instance.playerStates.Length > 0)
             {
                 PlayerVoteArea anchor = __instance.playerStates[0];
-                TextMeshPro chaosPotInfo = Object.Instantiate(anchor.NameText, anchor.PlayerIcon.transform, true);
+
+                // 会議画面の上段は見出し・見出し文・各種ボタンで、左中央は役職情報のパネルで埋まっているので、
+                // 陣営情報はその下の帯へ置く。位置はカードの行間を物差しにして測る (親の倍率に依存しないため)。
+                float anchorY = anchor.transform.localPosition.y;
+                float bottomRowY = anchorY;
+                var rowSpacing = 0f;
+
+                foreach (PlayerVoteArea pva in __instance.playerStates)
+                {
+                    if (!pva) continue;
+
+                    float y = pva.transform.localPosition.y;
+                    if (y < bottomRowY) bottomRowY = y;
+
+                    float gap = anchorY - y;
+                    if (gap > 0.05f && (rowSpacing == 0f || gap < rowSpacing)) rowSpacing = gap;
+                }
+
+                if (rowSpacing == 0f) rowSpacing = 0.77f; // 1 行しか無いときの目安
+
+                TextMeshPro chaosPotInfo = Object.Instantiate(anchor.NameText, anchor.transform, true);
                 chaosPotInfo.gameObject.SetActive(false);
                 chaosPotInfo.gameObject.name = "ChaosPotInfo";
-                chaosPotInfo.transform.localPosition = new(3.13f, 1.71f, 0f);
+
+                // 名前欄の子 (役職テキスト) まで複製されるので捨てる。残すと陣営情報の下に役職名の写しが出る。
+                for (int index = chaosPotInfo.transform.childCount - 1; index >= 0; index--)
+                    Object.Destroy(chaosPotInfo.transform.GetChild(index).gameObject);
+                // 人数が少なくて上段が 1 列しか無いときでも、見出しの真上に戻ってこないよう最低 1 列ぶんは右へ寄せる。
+                float infoY = Mathf.Clamp(bottomRowY - anchorY - rowSpacing * 0.7f, rowSpacing * -4.6f, rowSpacing * -4.2f);
+                chaosPotInfo.transform.localPosition = new(rowSpacing * -1.6f, infoY, -1f);
                 chaosPotInfo.transform.localScale = Vector3.one;
-                chaosPotInfo.fontSize = 1.5f;
+                chaosPotInfo.fontSize = 1.4f;
                 chaosPotInfo.alignment = TextAlignmentOptions.TopLeft;
                 chaosPotInfo.enableWordWrapping = false;
                 chaosPotInfo.color = Color.white;
