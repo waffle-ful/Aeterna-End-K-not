@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using static EndKnot.Translator;
@@ -37,6 +37,11 @@ public static class MeetingHeader
     private const string NameCauseSize = "85%";
     private const string OverlayDaySize = "85%";
     private const string OverlayCauseSize = "115%";
+
+    // 日数の色。モッドの色 (cyan) を、白地でも黒地でも読める明るさまで落とした値。
+    // 相対輝度 0.288 = 黒に対し 6.8:1 / 白に対し 3.1:1 で、両方とも大きめの字の基準 (3:1) を満たす。
+    // これより明るい cyan は白地側が 3:1 を割るので、ブランド色に寄せられる上限がここ。
+    private const string DayColor = "#00a3a3";
 
     private static OptionItem EnableMeetingHeader;
     private static OptionItem ShowDay;
@@ -228,7 +233,7 @@ public static class MeetingHeader
 
     private static string BuildDayText(string size)
     {
-        return $"<size={size}><#fc9003>{string.Format(GetString("MeetingHeader.Day"), GetDay())}</color></size>";
+        return $"<size={size}><{DayColor}>{string.Format(GetString("MeetingHeader.Day"), GetDay())}</color></size>";
     }
 
     private static string BuildCauseText(string size)
