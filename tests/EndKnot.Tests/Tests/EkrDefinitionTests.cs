@@ -67,6 +67,36 @@ public class EkrDefinitionTests
             $"アドオン集合が一致しません。C# のみ: [{string.Join(", ", csOnly)}] / TS のみ: [{string.Join(", ", tsOnly)}]");
     }
 
+    // Wave 12 (契約 §2/§8-6): 生成物 (editor/src/generated/ekr-roles.ts) の id+team 集合と
+    // EkrRoleCatalog.All (Modules/Ekm/EkrRoleCatalog.cs) が一致することを保証する。
+    // 差分が出たら tools/gen-ekr-roles.ps1 を再実行して両方の生成物を焼き直す。
+    [Fact]
+    public void RoleCatalog_MatchesGeneratedTs()
+    {
+        string ts = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "generated", "ekr-roles.ts"));
+
+        var tsRoles = new Dictionary<string, string>();
+        foreach (Match m in Regex.Matches(ts, "\\{ id: \"([^\"]+)\", team: \"([^\"]+)\""))
+            tsRoles[m.Groups[1].Value] = m.Groups[2].Value;
+
+        Assert.NotEmpty(tsRoles);
+
+        var csOnly = new List<string>();
+        var teamMismatch = new List<string>();
+        foreach (KeyValuePair<string, string> kv in EkrRoleCatalog.All)
+        {
+            if (!tsRoles.TryGetValue(kv.Key, out string tsTeam)) csOnly.Add(kv.Key);
+            else if (tsTeam != kv.Value) teamMismatch.Add($"{kv.Key} (cs={kv.Value}, ts={tsTeam})");
+        }
+
+        var tsOnly = new List<string>();
+        foreach (string name in tsRoles.Keys)
+            if (!EkrRoleCatalog.All.ContainsKey(name)) tsOnly.Add(name);
+
+        Assert.True(csOnly.Count == 0 && tsOnly.Count == 0 && teamMismatch.Count == 0,
+            $"役職集合が一致しません。C# のみ: [{string.Join(", ", csOnly)}] / TS のみ: [{string.Join(", ", tsOnly)}] / 陣営不一致: [{string.Join(", ", teamMismatch)}]");
+    }
+
     [Fact]
     public void FullCourseFixture_IsAcceptedByCSharpValidator()
     {
@@ -108,6 +138,12 @@ public class EkrDefinitionTests
         Assert.Equal("force", Assert.Single(def.ParsedLogic.Rules, r => r.When == "on_attacked").Kind);
         Assert.Equal("poison-curse", Assert.Single(def.ParsedLogic.Rules, r => r.When == "on_death").Cause);
         Assert.Equal(EkrTeam.Neutral, def.ParsedPassives.DisguiseTeam);
+
+        // Wave 12: disguise.role/deep + anonymousKills も同じ fixture に同居している。
+        Assert.Equal(CustomRoles.Amnesiac, def.ParsedPassives.DisguiseRole);
+        Assert.True(def.ParsedPassives.DisguiseDeep);
+        Assert.True(def.ParsedPassives.AnonymousKills);
+        Assert.False(def.ParsedPassives.AnonymousVote);
     }
 
     // plan §7 Tier 1 #2: 説明文2欄。TS 側 (role-fixtures.test.ts) が同じファイルの同じ値を見ている。
@@ -1370,5 +1406,95 @@ public class EkrDefinitionTests
 
         Assert.Equal(expectOk, EkrDefinition.TryParse(json, out EkrDefinition def, out _));
         if (expectOk) Assert.Equal(expected, def.ParsedPassives.CountsAs);
+    }
+
+    // ── Wave 12 (契約 §6): disguise.role / disguise.deep / corpse:"anonymous" / anonymousKills / anonymousVote ──
+
+    [Fact]
+    public void DisguiseRole_UnknownName_IsRejected()
+    {
+        string json = Wrap("\"passives\":{\"disguise\":{\"team\":\"crewmate\",\"role\":\"NoSuchRole\"}}");
+        Assert.False(EkrDefinition.TryParse(json, out _, out string error));
+        Assert.NotNull(error);
+    }
+
+    [Fact]
+    public void DisguiseRole_TeamMismatch_IsRejected()
+    {
+        // Sheriff はカタログ上 crewmate なので、team:impostor と組ませると陣営不一致で reject。
+        string json = Wrap("\"passives\":{\"disguise\":{\"team\":\"impostor\",\"role\":\"Sheriff\"}}");
+        Assert.False(EkrDefinition.TryParse(json, out _, out string error));
+        Assert.NotNull(error);
+    }
+
+    [Fact]
+    public void DisguiseRole_ValidNameMatchingTeam_IsAccepted()
+    {
+        string json = Wrap("\"passives\":{\"disguise\":{\"team\":\"crewmate\",\"role\":\"Sheriff\"}}");
+        Assert.True(EkrDefinition.TryParse(json, out EkrDefinition def, out string error), error);
+        Assert.Equal(EkrTeam.Crewmate, def.ParsedPassives.DisguiseTeam);
+        Assert.Equal(CustomRoles.Sheriff, def.ParsedPassives.DisguiseRole);
+    }
+
+    [Theory]
+    [InlineData("true", true, true)]
+    [InlineData("false", true, false)]
+    [InlineData("1", false, false)] // 真偽値以外は reject
+    [InlineData("\"true\"", false, false)]
+    [InlineData("null", false, false)]
+    public void DisguiseDeep_AcceptsBooleanOnly(string deepJson, bool expectOk, bool expected)
+    {
+        string json = Wrap($"\"passives\":{{\"disguise\":{{\"team\":\"crewmate\",\"deep\":{deepJson}}}}}");
+        Assert.Equal(expectOk, EkrDefinition.TryParse(json, out EkrDefinition def, out _));
+        if (expectOk) Assert.Equal(expected, def.ParsedPassives.DisguiseDeep);
+    }
+
+    [Fact]
+    public void DisguiseDeep_DefaultsToFalse_WhenDisguiseHasNoDeepField()
+    {
+        string json = Wrap("\"passives\":{\"disguise\":{\"team\":\"neutral\"}}");
+        Assert.True(EkrDefinition.TryParse(json, out EkrDefinition def, out string error), error);
+        Assert.False(def.ParsedPassives.DisguiseDeep);
+        Assert.Null(def.ParsedPassives.DisguiseRole);
+    }
+
+    [Fact]
+    public void Corpse_AcceptsAnonymousAsAFourthValue()
+    {
+        string json = Wrap("\"passives\":{\"corpse\":\"anonymous\"}");
+        Assert.True(EkrDefinition.TryParse(json, out EkrDefinition def, out string error), error);
+        Assert.Equal("anonymous", def.ParsedPassives.Corpse);
+    }
+
+    [Theory]
+    [InlineData("true", true, true)]
+    [InlineData("false", true, false)]
+    [InlineData("null", false, false)]
+    [InlineData("\"yes\"", false, false)]
+    public void AnonymousKills_AcceptsBooleanOnly(string valueJson, bool expectOk, bool expected)
+    {
+        string json = Wrap($"\"passives\":{{\"anonymousKills\":{valueJson}}}");
+        Assert.Equal(expectOk, EkrDefinition.TryParse(json, out EkrDefinition def, out _));
+        if (expectOk) Assert.Equal(expected, def.ParsedPassives.AnonymousKills);
+    }
+
+    [Theory]
+    [InlineData("true", true, true)]
+    [InlineData("false", true, false)]
+    [InlineData("null", false, false)]
+    [InlineData("\"yes\"", false, false)]
+    public void AnonymousVote_AcceptsBooleanOnly(string valueJson, bool expectOk, bool expected)
+    {
+        string json = Wrap($"\"passives\":{{\"anonymousVote\":{valueJson}}}");
+        Assert.Equal(expectOk, EkrDefinition.TryParse(json, out EkrDefinition def, out _));
+        if (expectOk) Assert.Equal(expected, def.ParsedPassives.AnonymousVote);
+    }
+
+    [Fact]
+    public void AnonymousKillsAndVote_OmittedDefaultsToFalse()
+    {
+        Assert.True(EkrDefinition.TryParse(Wrap("\"canVent\":true"), out EkrDefinition def, out string error), error);
+        Assert.False(def.ParsedPassives.AnonymousKills);
+        Assert.False(def.ParsedPassives.AnonymousVote);
     }
 }

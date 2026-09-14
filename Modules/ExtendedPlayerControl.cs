@@ -2322,7 +2322,9 @@ internal static class ExtendedPlayerControl
             if (player.AmOwner && !player.HasKillButton() && player.PlayerId != target.PlayerId && Options.CurrentGameMode == CustomGameMode.Standard)
                 Achievements.Type.InnocentKiller.Complete();
 
-            if (Options.AnonymousBodies.GetBool() || realKiller.Is(CustomRoles.Concealer) || target.Is(CustomRoles.Hidden))
+            // Wave 12: corpse:"anonymous" (自分の死体) / anonymousKills (ころした死体) は
+            // 既存の匿名死体アームにそのまま相乗りする (挙動は Hidden と同一 — Dead 衣装 + 色 15)。
+            if (Options.AnonymousBodies.GetBool() || realKiller.Is(CustomRoles.Concealer) || target.Is(CustomRoles.Hidden) || Modules.Ekm.EkrManager.IsAnonymousCorpse(target.PlayerId) || Modules.Ekm.EkrManager.HasAnonymousKills(realKiller.PlayerId))
             {
                 Main.AllPlayerSpeed[target.PlayerId] = Main.MinSpeed;
                 target.SyncSettings();
