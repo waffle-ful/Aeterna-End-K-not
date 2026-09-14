@@ -1,0 +1,31 @@
+{
+  "ekr": 1,
+  "requires": [],
+  "name": "なりすましもどき",
+  "author": "EKN Realtest",
+  "description": "見た目だけ『シェリフ』。しらべられると ほんとうの すがたが ばれる",
+  "color": "#e08e6d",
+  "team": "impostor",
+  "canKill": true,
+  "killCooldown": 25,
+  "canVent": true,
+  "visionMultiplier": 1,
+  "winCondition": "team",
+  "basis": "pet",
+  "abilityCooldown": 30,
+  "passives": {
+    "disguise": { "team": "crewmate", "role": "Sheriff", "deep": false }
+  },
+  "logic": {
+    "version": 1,
+    "variables": [],
+    "rules": [
+      {
+        "when": "on_kill",
+        "do": [
+          { "op": "notify", "text": "もどきの しごと", "seconds": 3 }
+        ]
+      }
+    ]
+  }
+}
