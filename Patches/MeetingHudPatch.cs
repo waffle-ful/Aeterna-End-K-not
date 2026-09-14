@@ -1254,10 +1254,14 @@ internal static class MeetingHudStartPatch
 
             StringBuilder sb = new();
 
+            CustomRoles seerRole = seer.GetCustomRole();
+
+            // 赤は名前色タグより内側に置く (外側から包むと TMP は内側の色を採用して赤が消える)
+            if (seerRole == CustomRoles.Psychic && Psychic.IsRedForPsy(target, seer) && seer.IsAlive())
+                pva.NameText.text = Utils.ColorString(Utils.GetRoleColor(CustomRoles.Impostor), pva.NameText.text);
+
             // Name Color Manager
             pva.NameText.text = pva.NameText.text.ApplyNameColorData(seer, target, true);
-
-            CustomRoles seerRole = seer.GetCustomRole();
 
             switch (seer.GetCustomRoleTypes())
             {
@@ -1289,9 +1293,6 @@ internal static class MeetingHudStartPatch
                     break;
                 case CustomRoles.Revolutionist when seer.IsDrawPlayer(target):
                     sb.Append(Utils.ColorString(Utils.GetRoleColor(CustomRoles.Revolutionist), "●"));
-                    break;
-                case CustomRoles.Psychic when Psychic.IsRedForPsy(target, seer) && seer.IsAlive():
-                    pva.NameText.text = Utils.ColorString(Utils.GetRoleColor(CustomRoles.Impostor), pva.NameText.text);
                     break;
                 case CustomRoles.Demon:
                     sb.Append(Demon.TargetMark(seer, target));
