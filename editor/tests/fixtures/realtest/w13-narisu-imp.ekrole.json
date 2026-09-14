@@ -1,0 +1,39 @@
+{
+ "ekr": 1,
+ "requires": [],
+ "name": "なかまうち なりすまし",
+ "author": "EKN Realtest",
+ "description": "インポスターの なかまには 『アンブッシャー』に 見える",
+ "color": "#e74c3c",
+ "team": "impostor",
+ "canKill": true,
+ "killCooldown": 10,
+ "canVent": true,
+ "visionMultiplier": 1,
+ "winCondition": "team",
+ "basis": "pet",
+ "abilityCooldown": 15,
+ "passives": {
+  "disguise": {
+   "team": "impostor",
+   "role": "Ambusher",
+   "deep": false
+  }
+ },
+ "logic": {
+  "version": 1,
+  "variables": [],
+  "rules": [
+   {
+    "when": "on_game_start",
+    "do": [
+     {
+      "op": "notify",
+      "text": "なかまには アンブッシャーに 見えている",
+      "seconds": 3
+     }
+    ]
+   }
+  ]
+ }
+}
