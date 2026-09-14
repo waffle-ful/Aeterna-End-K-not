@@ -94,6 +94,8 @@ public static class GameStartManagerPatch
                 // Reset lobby countdown timer
                 TimerStartTS = Utils.TimeStamp;
 
+                LobbyCodeRainbow.Setup(__instance);
+
                 HideName = Object.Instantiate(__instance.GameRoomNameCode, __instance.GameRoomNameCode.transform);
 
                 HideName.text = ColorUtility.TryParseHtmlString(Main.HideColor.Value, out _)
@@ -189,11 +191,13 @@ public static class GameStartManagerPatch
                     {
                         if (__instance.GameRoomNameCode) __instance.GameRoomNameCode.color = new(255, 255, 255, 0);
                         if (GameStartManagerStartPatch.HideName) GameStartManagerStartPatch.HideName.enabled = true;
+                        LobbyCodeRainbow.Apply(__instance, hidden: true);
                     }
                     else
                     {
                         if (__instance.GameRoomNameCode) __instance.GameRoomNameCode.color = new(255, 255, 255, 255);
                         if (GameStartManagerStartPatch.HideName) GameStartManagerStartPatch.HideName.enabled = false;
+                        LobbyCodeRainbow.Apply(__instance, hidden: false);
                     }
                 }
 

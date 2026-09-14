@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -225,6 +225,7 @@ public class Main : BasePlugin
     // Client Options
     public static ConfigEntry<string> HideName { get; private set; }
     public static ConfigEntry<string> HideColor { get; private set; }
+    public static ConfigEntry<bool> RainbowLobbyCode { get; private set; }
     public static ConfigEntry<int> MessageWait { get; private set; }
     public static ConfigEntry<bool> GM { get; private set; }
     public static ConfigEntry<bool> UnlockFps { get; private set; }
@@ -559,6 +560,7 @@ public class Main : BasePlugin
         //Client Options
         HideName = Config.Bind("Client Options", "Hide Game Code Name", "EndKnot");
         HideColor = Config.Bind("Client Options", "Hide Game Code Color", $"{ModColor}");
+        RainbowLobbyCode = Config.Bind("Client Options", "RainbowLobbyCode", true);
         AutoStart = Config.Bind("Client Options", "AutoStart", false);
         GM = Config.Bind("Client Options", "GM", false);
         UnlockFps = Config.Bind("Client Options", "UnlockFPS", false);
