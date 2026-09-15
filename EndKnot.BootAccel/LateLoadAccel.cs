@@ -15,17 +15,16 @@ namespace EndKnot.BootAccel
     // plugin's Load) off the path to the first rendered frame.
     //
     // Stock BepInEx runs Execute synchronously inside its il2cpp_runtime_invoke detour, at the
-    // very first Internal_ActiveSceneChanged, i.e. before Unity has presented a single frame. The
-    // game's Epic Online Services login only starts ticking from EOSManager.Update on the first
-    // frames, and the main menu waits for that login; so every millisecond spent in Execute before
-    // the first frame delays the menu one for one, while the same work done a frame later overlaps
-    // the login's network round trips.
+    // very first Internal_ActiveSceneChanged, i.e. before Unity has presented a single frame.
+    // Time spent there pushes the main menu back; once the first frame is past, the same work no
+    // longer moves menu arrival at all (measured: displacing Execute a further three seconds
+    // leaves it unchanged). So the win is in clearing the first frame, and there is no reason to
+    // wait any longer than that.
     //
     // This patch replicates the detour callback's scene-change handling (Unity log source +
-    // interop preload) but skips Execute there, keeps the detour alive one more frame, and calls
-    // Execute from the first "Update" invoke that follows a "LateUpdate" (= the second frame has
-    // begun, so the first frame has been presented). A time fallback runs Execute at the next
-    // invoke after LateLoadFallbackMs in case that pattern never shows up.
+    // interop preload) but skips Execute there, keeps the detour alive, and runs Execute once
+    // Time.frameCount has advanced two frames past the scene change. A time fallback runs Execute
+    // at the next invoke after LateLoadFallbackMs in case the frame count never moves.
     //
     // Compatibility note: plugins now load after Unity's own scene-change listeners for the first
     // scene, and after the first frame. Anything that patched those listeners for scene #1 would
@@ -130,7 +129,7 @@ namespace EndKnot.BootAccel
                 bool trigger = false;
 
                 // Two frames past the scene change: the frame the scene was activated in has been
-                // presented, so the EOS overlay and login are already ticking.
+                // presented, which is the whole condition worth waiting for.
                 if (_frameCount != null && _frameCount() >= _frameAtScene + 2) trigger = true;
 
                 if (!trigger && _sinceScene.ElapsedMilliseconds > LateLoadFallbackMs) trigger = true;
