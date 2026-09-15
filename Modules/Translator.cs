@@ -346,6 +346,41 @@ public static class Translator
         return $"*{str}";
     }
 
+    // GetString が実際に描画に使う言語。ModLanguage 設定 → ForceOwnLanguage → ゲーム本体の言語、の順で
+    // 決まる (上の GetString と同じ解決順)。GetUserTrueLang は OS のカルチャしか見ないので、
+    // 「プレイヤーが実際に読んでいる言語」を知りたい側はこちらを使う。
+    public static SupportedLangs GetEffectiveLang()
+    {
+        try
+        {
+            int modLanguageId = Options.IsLoaded ? Options.ModLanguage.GetValue() : 0;
+            if (modLanguageId != 0) return (SupportedLangs)(modLanguageId + 99);
+            if (Main.ForceOwnLanguage.Value) return GetUserTrueLang();
+
+            return TranslationController.InstanceExists && TranslationController.Instance.currentLanguage != null
+                ? TranslationController.Instance.currentLanguage.languageID
+                : SupportedLangs.English;
+        }
+        catch { return SupportedLangs.English; }
+    }
+
+    // key がその言語で個別に定義されているかどうか (英語へのフォールバックなし)。GetString と違い
+    // 「無ければ英語で代用する」ではなく「無ければ機能自体を出さない」判定に使う (合言葉プール等)。
+    public static bool HasTranslation(string key, SupportedLangs langId)
+    {
+        try
+        {
+            if (TranslateMaps == null) return false;
+            if (!LoadedLangs.Contains((int)langId)) EnsureLangLoaded(langId);
+            return TranslateMaps.TryGetValue(key, out var dic) && dic.TryGetValue((int)langId, out var res) && !string.IsNullOrEmpty(res);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"Error checking translation for [{key}]: {ex}", "Translator");
+            return false;
+        }
+    }
+
     public static string GetString(StringNames stringName)
     {
         if (!TranslationController.InstanceExists) return $"*{stringName}"; // 起動直後は本体側も未生成

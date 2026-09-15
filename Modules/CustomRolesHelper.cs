@@ -411,6 +411,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Judge => CustomRoles.Crewmate,
                 CustomRoles.Councillor => CustomRoles.Impostor,
                 CustomRoles.WordKiller => CustomRoles.Impostor,
+                CustomRoles.Babel => CustomRoles.Impostor,
                 CustomRoles.Mortician => CustomRoles.Crewmate,
                 CustomRoles.Medium => CustomRoles.Crewmate,
                 CustomRoles.Bard => CustomRoles.Impostor,
@@ -956,6 +957,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Gambler or
                 CustomRoles.Councillor or
                 CustomRoles.WordKiller or
+                CustomRoles.Babel or
                 CustomRoles.Saboteur or
                 CustomRoles.Puppeteer or
                 CustomRoles.TimeThief or
@@ -1486,6 +1488,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Chronomancer => RoleOptionType.Impostor_Killing,
                 CustomRoles.Councillor => RoleOptionType.Impostor_Killing,
                 CustomRoles.WordKiller => RoleOptionType.Impostor_Killing,
+                CustomRoles.Babel => RoleOptionType.Impostor_Killing,
                 CustomRoles.EvilGuesser => RoleOptionType.Impostor_Killing,
                 CustomRoles.Fireworker => RoleOptionType.Impostor_Killing,
                 CustomRoles.Greedy => RoleOptionType.Impostor_Killing,
@@ -2256,6 +2259,8 @@ internal static class CustomRolesHelper
             CustomRoles.Damocles when pc.GetCustomRole() is CustomRoles.Bomber or CustomRoles.Nuker or CustomRoles.Mercenary or CustomRoles.Cantankerous => false,
             CustomRoles.Damocles when pc.GetRoleTypes() is not (RoleTypes.Impostor or RoleTypes.Phantom or RoleTypes.Shapeshifter or RoleTypes.Viper) => false,
             CustomRoles.Damocles when pc.Is(CustomRoleTypes.Coven) && !pc.Is(CustomRoles.CovenLeader) => false,
+            // そのロビー言語の合言葉プールが無ければ配らない (Translator.GetString は未定義キーを黙って英語へ落とすため)。
+            CustomRoles.Shibboleth when !Translator.HasTranslation("Shibboleth.WordPool", Translator.GetEffectiveLang()) => false,
             CustomRoles.Flash when pc.Is(CustomRoles.Giant) || pc.Is(CustomRoles.Spurt) || pc.GetCustomRole() is CustomRoles.Tank or CustomRoles.Zombie or CustomRoles.Swiftclaw or CustomRoles.Express => false,
             CustomRoles.Giant when pc.Is(CustomRoles.Flash) || pc.Is(CustomRoles.Spurt) || pc.GetCustomRole() is CustomRoles.RoomRusher or CustomRoles.Tank or CustomRoles.Zombie or CustomRoles.Swiftclaw or CustomRoles.Express => false,
             CustomRoles.Necroview when pc.Is(CustomRoles.Visionary) => false,

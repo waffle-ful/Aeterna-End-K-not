@@ -591,6 +591,7 @@ internal static class CheckForEndVotingPatch
                 Gaslighter.OnExile(playerIds);
                 if (Wasp.On) Wasp.OnExile(playerIds);
                 if (CustomRoles.SpellCaster.RoleExist()) SpellCaster.OnExile(playerIds);
+                if (CustomRoles.Shibboleth.RoleExist()) Shibboleth.OnExile(playerIds);
             }
 
             foreach (byte playerId in playerIds)
@@ -1485,6 +1486,9 @@ internal static class MeetingHudUpdatePatch
             // EKR logic: 会議中は RoleBase.OnFixedUpdate が止まるため、fiber はここから進める
             // (on_meeting_start の notify [チャット私信] を会議中に届かせる)。
             if (AmongUsClient.Instance.AmHost) EkrManager.PumpMeetingFibers();
+
+            // 会議中は OnFixedUpdate が止まるため、Babel の縛り定期通知もここから進める。
+            if (AmongUsClient.Instance.AmHost) Babel.PeriodicNotify();
 
             // Meeting Skip with vote counting on keystroke (F6)
             if (AmongUsClient.Instance.AmHost && Input.GetKeyDown(KeyCode.F6)) __instance.CheckForEndVoting();
