@@ -108,16 +108,22 @@ function Add-Range {
 }
 
 # 直接登録パターン: group 1 = 先頭 (id) 式 / Span = 消費 id 数 / AllowBare = 素識別子を許すか
+# `Options.` は省略可 — 呼び出し側の多くは `using static EndKnot.Options;` を置いて素で呼ぶ。
+# 前置きを必須にすると素呼びの登録 (アドオンの基底 id ほぼ全部) が 1 件も見えず、衝突が無音で通る。
 # SetupAdtRoleOptions は teamSpawnOptions で 4/8 が変わるため別扱い (下)。
 $directPatterns = @(
-    @{ Rx = [regex]'Options\.SetupSingleRoleOptions\s*\(\s*([^,]+?)\s*,';  Span = 2; AllowBare = $true  },
-    @{ Rx = [regex]'Options\.SetupRoleOptions\s*\(\s*([^,]+?)\s*,';        Span = 2; AllowBare = $true  },
-    @{ Rx = [regex]'Options\.OverrideTasksData\.Create\s*\(\s*([^,]+?)\s*,'; Span = 4; AllowBare = $true },
+    @{ Rx = [regex]'(?:Options\.)?SetupSingleRoleOptions\s*\(\s*([^,]+?)\s*,';  Span = 2; AllowBare = $true  },
+    @{ Rx = [regex]'(?:Options\.)?SetupRoleOptions\s*\(\s*([^,]+?)\s*,';        Span = 2; AllowBare = $true  },
+    @{ Rx = [regex]'(?:Options\.)?OverrideTasksData\.Create\s*\(\s*([^,]+?)\s*,'; Span = 4; AllowBare = $true },
     @{ Rx = [regex]'Options\.Create\w+\s*\(\s*([^,)]+?)\s*[,)]';           Span = 1; AllowBare = $true  },
-    @{ Rx = [regex]'new\s+\w*OptionItem\s*\(\s*([^,]+?)\s*,';              Span = 1; AllowBare = $false }
+    @{ Rx = [regex]'new\s+\w*OptionItem\s*\(\s*([^,]+?)\s*,';              Span = 1; AllowBare = $false },
+    # 素呼びの CD/ペット/投票キャンセル設定。名前を総当たり (Create\w+) にすると CreateSprite 等まで拾って
+    # 偽の衝突を作るので、既知の 3 つだけを名指しする。先頭の負の後読みは `.CreatePetUseSetting(` の
+    # チェーン形 ($chainRx の担当) を除くため。
+    @{ Rx = [regex]'(?<![.\w])(?:CreateCDSetting|CreatePetUseSetting|CreateVoteCancellingUseSetting)\s*\(\s*([^,)]+?)\s*[,)]'; Span = 1; AllowBare = $true }
 )
 # SetupAdtRoleOptions(<id>, ... [, teamSpawnOptions: true]) : 4 (通常) / 8 (team時)
-$adtRx = [regex]'Options\.SetupAdtRoleOptions\s*\(\s*([^,]+?)\s*,([^)]*)\)'
+$adtRx = [regex]'(?:Options\.)?SetupAdtRoleOptions\s*\(\s*([^,]+?)\s*,([^)]*)\)'
 
 $startSetupRx = [regex]'StartSetup\s*\(\s*([^,)]+?)\s*[,)]'
 $chainRx      = [regex]'\.(AutoSetupOption|CreatePetUseSetting|CreateVoteCancellingUseSetting)\s*\('
