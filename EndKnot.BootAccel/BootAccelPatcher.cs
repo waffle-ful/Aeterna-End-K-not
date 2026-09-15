@@ -52,7 +52,7 @@ namespace EndKnot.BootAccel
         private static int _hashTotal;
         private static long _accelTicks;
 
-        private static ManualLogSource AccelLog
+        internal static ManualLogSource AccelLog
         {
             get { return _log ?? (_log = Logger.CreateLogSource("BootAccel")); }
         }
@@ -75,6 +75,12 @@ namespace EndKnot.BootAccel
                 {
                     AccelLog.LogInfo(DisableFileName + " present; boot proceeds unaccelerated");
                     return;
+                }
+
+                if (cacheDir != null && File.Exists(Path.Combine(cacheDir, LateLoadAccel.DisableFileName)))
+                {
+                    _lateLoadDisabled = true;
+                    AccelLog.LogInfo(LateLoadAccel.DisableFileName + " present; plugins load at the stock point");
                 }
 
                 if (cacheDir != null)
@@ -108,6 +114,8 @@ namespace EndKnot.BootAccel
         }
 
         // Returns true when at least one target was patched.
+        private static bool _lateLoadDisabled;
+
         private static bool InstallAll(Harmony harmony)
         {
             bool any = false;
@@ -123,6 +131,9 @@ namespace EndKnot.BootAccel
 
             if (HashAccel.Resolve())
                 any |= Patch(harmony, HashAccel.Target, typeof(HashAccel), "HashStream_Prefix", "HashStream_Postfix");
+
+            if (!_lateLoadDisabled && LateLoadAccel.Resolve())
+                any |= Patch(harmony, LateLoadAccel.Target, typeof(LateLoadAccel), "OnInvokeMethod_Prefix", null);
 
             return any;
         }

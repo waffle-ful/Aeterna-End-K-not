@@ -644,31 +644,19 @@ public class Main : BasePlugin
 
         // 番犬/相棒アプリの出口フック。ClientControlGUI は実行時に破棄されうるので
         // 終了検知をそちらに預けない。
+        BootTimeline.Mark("load.bind");
         AddComponent<EndKnot.Modules.ExitHook>();
         Log.LogInfo("ExitHook registered");
-
-        AddComponent<ClientControlGUI>();
-        Log.LogInfo("ClientControlGUI registered");
-
-        AddComponent<EndKnot.Modules.Setup.StreamSetupGUI>();
-        Log.LogInfo("StreamSetupGUI registered");
-
-        AddComponent<EndKnot.Modules.YouTubeChat.YouTubeChatBubble>();
-        Log.LogInfo("YouTubeChatBubble registered");
-
-        AddComponent<EndKnot.Modules.StreamOverlay.LobbyCodeBubble>();
-        Log.LogInfo("LobbyCodeBubble registered");
-
-        AddComponent<EndKnot.Modules.StreamOverlay.AudienceInfoBubble>();
-        Log.LogInfo("AudienceInfoBubble registered");
-
-        AddComponent<EndKnot.Modules.Audience.AudienceCutscene>();
-        Log.LogInfo("AudienceCutscene registered");
-
-        AddComponent<EndKnot.Modules.StreamOverlay.DevBuildBanner>();
-        Log.LogInfo("DevBuildBanner registered");
-
         coroutines = AddComponent<Coroutines>();
+        // ホストローカルの GUI 部品は最初の描画フレームより前には要らないので、スプラッシュ中の
+        // フレームで順に足す (Modules.PatchPhases.Defer)。Load を短くするほど EOS ログインの開始が早まる。
+        Modules.PatchPhases.Defer("ClientControlGUI", () => AddComponent<ClientControlGUI>());
+        Modules.PatchPhases.Defer("StreamSetupGUI", () => AddComponent<EndKnot.Modules.Setup.StreamSetupGUI>());
+        Modules.PatchPhases.Defer("YouTubeChatBubble", () => AddComponent<EndKnot.Modules.YouTubeChat.YouTubeChatBubble>());
+        Modules.PatchPhases.Defer("LobbyCodeBubble", () => AddComponent<EndKnot.Modules.StreamOverlay.LobbyCodeBubble>());
+        Modules.PatchPhases.Defer("AudienceInfoBubble", () => AddComponent<EndKnot.Modules.StreamOverlay.AudienceInfoBubble>());
+        Modules.PatchPhases.Defer("AudienceCutscene", () => AddComponent<EndKnot.Modules.Audience.AudienceCutscene>());
+        Modules.PatchPhases.Defer("DevBuildBanner", () => AddComponent<EndKnot.Modules.StreamOverlay.DevBuildBanner>());
         Logger.Enable();
         Logger.Disable("NotifyRoles");
         Logger.Disable("SwitchSystem");
@@ -1307,9 +1295,11 @@ public class Main : BasePlugin
         CustomWinnerHolder.Reset();
         Translator.Init();
         BootTimeline.Mark("load.lang");
-        BanManager.Init();
-        TemplateManager.Init();
-        SpamManager.Init();
+        // ロビー以降でしか使わない管理者データはスプラッシュ中に読む (上の Defer と同じ理由)。
+        Modules.PatchPhases.Defer("BanManager", BanManager.Init);
+        Modules.PatchPhases.Defer("TemplateManager", TemplateManager.Init);
+        Modules.PatchPhases.Defer("SpamManager", SpamManager.Init);
+        BootTimeline.Mark("load.init");
 
         IRandom.SetInstance(new NetRandomWrapper());
 
@@ -1327,14 +1317,17 @@ public class Main : BasePlugin
         ClassInjector.RegisterTypeInIl2Cpp<MeetingHudPagingBehaviour>();
         ClassInjector.RegisterTypeInIl2Cpp<ShapeShifterPagingBehaviour>();
         ClassInjector.RegisterTypeInIl2Cpp<VitalsPagingBehaviour>();
+        BootTimeline.Mark("load.inject");
 
         NormalGameOptionsV11.RecommendedImpostors = NormalGameOptionsV11.MaxImpostors = Enumerable.Repeat(128, 128).ToArray();
         NormalGameOptionsV11.MinPlayers = Enumerable.Repeat(4, 128).ToArray();
         HideNSeekGameOptionsV11.MinPlayers = Enumerable.Repeat(4, 128).ToArray();
 
-        PrivateTagManager.LoadTagsFromFile();
+        Modules.PatchPhases.Defer("PrivateTags", PrivateTagManager.LoadTagsFromFile);
+        BootTimeline.Mark("load.tags");
 
         Modules.PatchPhases.RunPhase1(Harmony, Assembly.GetExecutingAssembly());
+        BootTimeline.Mark("load.phase1");
 
         if (!OperatingSystem.IsAndroid())
         {
