@@ -1,0 +1,58 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!-- AmongUsPath は開発者ごとに違うので未コミットの local.props で与える (EndKnot.csproj と同じ仕組み)。
+         ここでは既定値を置かない — 未設定を下の Error で明示的に落とすため。 -->
+    <Import Project="..\local.props" Condition="Exists('..\local.props')"/>
+
+    <PropertyGroup>
+        <TargetFramework>net6.0</TargetFramework>
+        <LangVersion>latest</LangVersion>
+        <Nullable>disable</Nullable>
+        <AssemblyName>EndKnot.BootAccel</AssemblyName>
+        <RootNamespace>EndKnot.BootAccel</RootNamespace>
+        <Description>End K not Boot Accelerator</Description>
+        <Authors>waffle-ful</Authors>
+        <Platforms>AnyCPU</Platforms>
+        <Configurations>Debug;Release</Configurations>
+        <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+        <!-- 出荷物は BepInEx/patchers へ置く単体 DLL (+pdb)。参照アセンブリは全てローダ側に
+             既に存在するので、1本たりとも出力へコピーさせない。 -->
+        <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+        <GenerateDependencyFile>false</GenerateDependencyFile>
+        <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
+        <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+        <DebugType>portable</DebugType>
+        <Deterministic>true</Deterministic>
+        <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+        <AssemblyVersion>1.0.0.0</AssemblyVersion>
+        <FileVersion>1.0.0.0</FileVersion>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="BepInEx.Core" Version="6.0.0-be.735" Private="false" ExcludeAssets="runtime;native"/>
+        <PackageReference Include="BepInEx.Unity.IL2CPP" Version="6.0.0-be.735" Private="false" ExcludeAssets="runtime;native"/>
+        <PackageReference Include="HarmonyX" Version="2.10.2" Private="false" ExcludeAssets="runtime;native"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- BepInEx.Preloader.Core は nuget で配られていない — ゲームフォルダの BepInEx/core が唯一の入手元。 -->
+        <Reference Include="BepInEx.Preloader.Core">
+            <HintPath>$(AmongUsPath)\BepInEx\core\BepInEx.Preloader.Core.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <!-- 出荷 zip が BepInEx/core へ注入するのと同じ修正版バイナリ。実行時の対象解決は
+             リフレクションで行うため、これはシグネチャを合わせるための参照のみ。 -->
+        <Reference Include="Il2CppInterop.Runtime">
+            <HintPath>$(MSBuildThisFileDirectory)..\packaging\il2cppinterop\Il2CppInterop.Runtime.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+    </ItemGroup>
+
+    <Target Name="ValidateAmongUsPath" BeforeTargets="BeforeBuild;ResolveAssemblyReferences">
+        <Error Condition="'$(AmongUsPath)' == ''"
+               Text="AmongUsPath が未設定です。BepInEx.Preloader.Core.dll はゲームフォルダの BepInEx/core にしか無いため、このプロジェクトはゲームパスを必要とします。リポジトリ直下の local.props に &lt;AmongUsPath&gt;...&lt;/AmongUsPath&gt; を書くか、-p:AmongUsPath=&quot;&lt;ゲームフォルダ&gt;&quot; を渡してください。"/>
+        <Error Condition="'$(AmongUsPath)' != '' And !Exists('$(AmongUsPath)\BepInEx\core\BepInEx.Preloader.Core.dll')"
+               Text="'$(AmongUsPath)\BepInEx\core\BepInEx.Preloader.Core.dll' が見つかりません。AmongUsPath は BepInEx 6 を配置済みの Among Us インストール先を指す必要があります。"/>
+    </Target>
+
+</Project>
