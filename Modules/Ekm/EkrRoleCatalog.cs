@@ -203,6 +203,7 @@ internal static class EkrRoleCatalog
         ["Atlas"] = "impostor",
         ["Augmenter"] = "impostor",
         ["Autoscopy"] = "impostor",
+        ["Babel"] = "impostor",
         ["Ballooner"] = "impostor",
         ["Bard"] = "impostor",
         ["Blackmailer"] = "impostor",

@@ -598,6 +598,7 @@ public enum CustomRoles
     Mirage,
     Torpedo,
     Replay,
+    Babel,
 
     // EKN custom role slots (reserved - do not reorder)
     EkmCustomRole1,
@@ -778,5 +779,8 @@ public enum CustomRoles
     DemonicSupporter, // Ghost role
     DemonicCrusher, // Ghost role
     AsistingAngel, // Ghost role
-    Focused
+    Focused,
+
+    // Shibboleth (addon; sub-role only, so it belongs after NotAssigned like the rest of this block)
+    Shibboleth
 }

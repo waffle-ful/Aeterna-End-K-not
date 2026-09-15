@@ -95,6 +95,7 @@ internal static class EkrAddonCatalog
         "Mimic",
         "OneWolf",
         "Serial",
+        "Shibboleth",
         "SlowStarter",
         "Stealer",
         "Swift",

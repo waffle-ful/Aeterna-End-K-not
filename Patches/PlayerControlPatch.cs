@@ -1769,6 +1769,8 @@ internal static class ReportDeadBodyPatch
 
             Damocles.OnMeetingStart();
 
+            if (CustomRoles.Shibboleth.RoleExist()) Shibboleth.OnMeetingStart();
+
             if (player.Is(CustomRoles.Stressed)) Stressed.OnReport(player);
 
             Stressed.OnMeetingStart();

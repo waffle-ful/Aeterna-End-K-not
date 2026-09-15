@@ -100,6 +100,7 @@ export const ADDON_META: readonly AddonMeta[] = [
   { id: "Mimic", group: "ImpOnly", ja: "ミミック", en: "Mimic", info: "死亡プレイヤーの役職を確認できる", infoEn: "You see dead players' roles", midGameForbidden: false, basisChanging: false, clientOnly: false },
   { id: "OneWolf", group: "ImpOnly", ja: "一匹狼", en: "One Wolf", info: "他のインポスターがクルーに見える", infoEn: "Other Impostors appear as Crewmates", midGameForbidden: false, basisChanging: false, clientOnly: false },
   { id: "Serial", group: "ImpOnly", ja: "シリアル", en: "Serial", info: "キルクールが短くなる", infoEn: "Reduced kill cooldown", midGameForbidden: false, basisChanging: false, clientOnly: false },
+  { id: "Shibboleth", group: "ImpOnly", ja: "合言葉", en: "Shibboleth", info: "毎会議、合言葉を口にしないと会議終了後に死ぬ", infoEn: "Say the secret word every meeting, or die when it ends", midGameForbidden: false, basisChanging: false, clientOnly: false },
   { id: "SlowStarter", group: "ImpOnly", ja: "スロースターター", en: "Slow Starter", info: "条件を満たすまでキルできない", infoEn: "Cannot kill until conditions are met", midGameForbidden: false, basisChanging: false, clientOnly: false },
   { id: "Stealer", group: "ImpOnly", ja: "泥棒", en: "Stealer", info: "殺害で 投票を獲得しよう", infoEn: "Gain votes with kills", midGameForbidden: false, basisChanging: false, clientOnly: false },
   { id: "Swift", group: "ImpOnly", ja: "疾風", en: "Swift", info: "キルに突進モーションが入らない", infoEn: "Your kills don't cause a lunge", midGameForbidden: false, basisChanging: false, clientOnly: false },
