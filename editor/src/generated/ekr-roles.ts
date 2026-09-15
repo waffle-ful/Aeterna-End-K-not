@@ -203,6 +203,7 @@ export const ROLE_META: readonly RoleMeta[] = [
   { id: "Atlas", team: "impostor", ja: "アトラス", en: "Atlas" },
   { id: "Augmenter", team: "impostor", ja: "オーグメンター", en: "Augmenter" },
   { id: "Autoscopy", team: "impostor", ja: "ダークアクター", en: "Dark Actor" },
+  { id: "Babel", team: "impostor", ja: "バベル", en: "Babel" },
   { id: "Ballooner", team: "impostor", ja: "バルーナー", en: "Ballooner" },
   { id: "Bard", team: "impostor", ja: "吟遊詩人", en: "Bard" },
   { id: "Blackmailer", team: "impostor", ja: "恐喝者", en: "Blackmailer" },

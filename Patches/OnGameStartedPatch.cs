@@ -428,6 +428,7 @@ internal static class ChangeRoleSettings
                 DoubleTrigger.Init();
                 Workhorse.Init();
                 Damocles.Initialize();
+                Shibboleth.Init();
                 Stressed.Init();
                 Asthmatic.Init();
                 DoubleShot.Init();
