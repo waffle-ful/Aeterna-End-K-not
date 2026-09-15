@@ -40,6 +40,15 @@
         <Compile Remove="Installer\**"/>
         <EmbeddedResource Remove="Installer\**"/>
         <None Remove="Installer\**"/>
+        <!-- BepInEx preloader patcher (EndKnot.BootAccel) は BepInEx/patchers へ置く別アセンブリ —
+             本体 DLL に混ぜるとプラグイン側で二重ロードになるため、本体ビルドから除外 -->
+        <Compile Remove="EndKnot.BootAccel\**"/>
+        <EmbeddedResource Remove="EndKnot.BootAccel\**"/>
+        <None Remove="EndKnot.BootAccel\**"/>
+        <!-- ドキュメント配下に参照用のコードが置かれても本体 DLL には混ぜない -->
+        <Compile Remove="docs\**"/>
+        <EmbeddedResource Remove="docs\**"/>
+        <None Remove="docs\**"/>
         <!-- 純ロジック向けユニットテスト (tests/EndKnot.Tests) は別プロジェクト — 本体ビルドから除外 -->
         <Compile Remove="tests\**"/>
         <EmbeddedResource Remove="tests\**"/>
