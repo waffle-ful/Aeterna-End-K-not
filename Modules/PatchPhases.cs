@@ -65,9 +65,49 @@ public static class PatchPhases
         "VitalsMinigame", "VoteBanSystem",
     };
 
+    // Type.Name of vanilla types whose patches must be live before the first rendered frame or
+    // during the splash itself. Everything else that is not in GameTypeNames is "menu" work: it is
+    // patched from the splash pump (the main thread is otherwise idle there, waiting on the EOS
+    // login round trips) and finished synchronously by MenuGate before MainMenuManager.Awake.
+    // Keeping Main.Load short matters because the EOS login only starts ticking after the first
+    // frame, so every millisecond spent patching inside Load delays the menu one for one.
+    public static readonly HashSet<string> SplashTypeNames = new()
+    {
+        "SplashManager", "EOSManager", "TranslationController", "ResolutionManager", "Constants",
+        "HashRandom", "MainMenuManager",
+        // Their Awake is patched and they can be siblings of MainMenuManager in the menu scene;
+        // Unity does not order Awake across objects, so they cannot wait for MenuGate.
+        "NotificationPopper", "AccountTab", "CreateOptionsPicker",
+    };
+
     private const float CeilingSeconds = 15f;
 
     private static readonly Queue<Type> _deferred = new();
+    private static readonly Queue<Type> _menuDeferred = new();
+    private static int _menuDeferredTotal;
+    private static bool _menuComplete;
+
+    // Boot work that Main.Load does not need before the first rendered frame (lobby-time managers,
+    // host-local GUI components). Runs from the splash pump under the same per-frame budget as the
+    // deferred patches, ahead of them, and is force-drained by the menu gate. Same rationale as the
+    // menu patch queue: the first frame is on the EOS login critical path, splash frames are not.
+    private static readonly Queue<(string Name, Action Work)> _deferredWork = new();
+
+    public static void Defer(string name, Action work) => _deferredWork.Enqueue((name, work));
+
+    private static void RunDeferredWork(Stopwatch budget, float budgetMs)
+    {
+        while (_deferredWork.Count > 0 && (budget == null || budget.Elapsed.TotalMilliseconds < budgetMs))
+        {
+            (string name, Action work) = _deferredWork.Dequeue();
+            var sw = Stopwatch.StartNew();
+
+            try { work(); }
+            catch (Exception e) { Logger.Error($"deferred boot work failed: {name}: {e}", "PatchPhases"); }
+
+            Logger.Info($"deferred boot work {name} in {sw.ElapsedMilliseconds} ms", "PatchPhases");
+        }
+    }
 
     // Targets whose compile was swallowed by the batching decorator and still has to run.
     private static readonly Queue<BatchingPatcher> _pendingCompile = new();
@@ -110,6 +150,8 @@ public static class PatchPhases
             harmony.PatchAll(asm);
             EndCollect();
             FlushAll("phase1-all");
+            RunDeferredWork(null, 0f);
+            _menuComplete = true;
             _complete = true;
             _phase1Profile = Profile("phase1-all");
             Logger.Info(_phase1Profile, "PatchPhases");
@@ -124,10 +166,14 @@ public static class PatchPhases
 
         foreach (Type type in AccessTools.GetTypesFromAssembly(asm))
         {
-            if (Classify(type))
+            switch (Classify(type))
             {
-                _deferred.Enqueue(type);
-                continue;
+                case Phase.Game:
+                    _deferred.Enqueue(type);
+                    continue;
+                case Phase.Menu:
+                    _menuDeferred.Enqueue(type);
+                    continue;
             }
 
             harmony.CreateClassProcessor(type).Patch();
@@ -140,7 +186,8 @@ public static class PatchPhases
 
         sw.Stop();
         _deferredTotal = _deferred.Count;
-        _phase1Profile = $"phase1 {patched} classes in {sw.ElapsedMilliseconds} ms (classes {classMs} ms), deferred {_deferred.Count} | {Profile("phase1")}";
+        _menuDeferredTotal = _menuDeferred.Count;
+        _phase1Profile = $"phase1 {patched} classes in {sw.ElapsedMilliseconds} ms (classes {classMs} ms), deferred {_deferred.Count} game + {_menuDeferred.Count} menu | {Profile("phase1")}";
     }
 
     // True iff every Harmony target this class declares (class-level and method-level) resolves
@@ -149,10 +196,12 @@ public static class PatchPhases
     // through phase 1's harmless CreateClassProcessor(type).Patch() call same as today. A class
     // that resolves its target via TargetMethod/TargetMethods/Prepare instead of a typeof also
     // stays in phase 1, because that target can't be read back from attributes alone.
-    private static bool Classify(Type t)
+    private enum Phase { Splash, Menu, Game }
+
+    private static Phase Classify(Type t)
     {
         object[] classAttrs = t.GetCustomAttributes(typeof(HarmonyPatch), true);
-        if (classAttrs.Length == 0) return false;
+        if (classAttrs.Length == 0) return Phase.Splash;
 
         var declaringTypes = new List<Type>();
 
@@ -167,20 +216,23 @@ public static class PatchPhases
                 declaringTypes.Add(((HarmonyPatch)attr).info.declaringType);
         }
 
-        // 安全弁 (HostJoinGate) 自身は必ず段階 1。
-        if (t == typeof(HostJoinGate)) return false;
+        // 安全弁 (HostJoinGate / MenuGate) 自身は必ず段階 1。
+        if (t == typeof(HostJoinGate) || t == typeof(MenuGate)) return Phase.Splash;
 
         // クラス属性が typeof 無しの bare でメソッド側に対象型を書く慣用句も、typed な対象が
         // 全てゲーム側なら後回しにできる。typed な対象が 1 つも無い (TargetMethod 等) なら段階 1。
         int typed = 0;
+        bool allGame = true;
         foreach (Type declaringType in declaringTypes)
         {
             if (declaringType == null) continue;
             typed++;
-            if (!GameTypeNames.Contains(declaringType.Name)) return false;
+            if (SplashTypeNames.Contains(declaringType.Name)) return Phase.Splash;
+            if (!GameTypeNames.Contains(declaringType.Name)) allGame = false;
         }
 
-        return typed > 0;
+        if (typed == 0) return Phase.Splash;
+        return allGame ? Phase.Game : Phase.Menu;
     }
 
     // Called every splash/menu frame. With batching, the first call processes every deferred
@@ -200,7 +252,7 @@ public static class PatchPhases
             _phase2Stopwatch = Stopwatch.StartNew();
             BootTimeline.Mark("patch2.begin");
             _factoryWarned = false;
-            if (Batching) ProcessDeferredClasses();
+            if (Batching) { ProcessMenuClasses(); ProcessDeferredClasses(); }
         }
 
         Phase2Frames++;
@@ -213,14 +265,67 @@ public static class PatchPhases
 
         var budget = Stopwatch.StartNew();
 
+        RunDeferredWork(budget, budgetMs);
+
+        while (_menuDeferred.Count > 0 && budget.Elapsed.TotalMilliseconds < budgetMs)
+            PatchOne(_menuDeferred.Dequeue());
+
         while (_deferred.Count > 0 && budget.Elapsed.TotalMilliseconds < budgetMs)
             PatchOne(_deferred.Dequeue());
 
         while (_pendingCompile.Count > 0 && budget.Elapsed.TotalMilliseconds < budgetMs)
             CompileOne(_pendingCompile.Dequeue());
 
+        if (_deferredWork.Count == 0 && _menuDeferred.Count == 0 && !_menuComplete && (_pendingCompile.Count == 0 || !Batching))
+            MenuComplete("drained");
+
         if (_deferred.Count == 0 && _pendingCompile.Count == 0)
             Complete("drained");
+    }
+
+    // Synchronous safety net for the menu phase: every patch outside GameTypeNames is in place
+    // before MainMenuManager.Awake runs. Cheap no-op once the splash pump has drained the queues.
+    // The batched compiles share one queue with the game phase, so on a splash too short to drain
+    // it this also compiles whatever game targets are still pending (menu ones were queued first).
+    public static void EnsureMenuComplete(string reason)
+    {
+        if (_menuComplete || _complete) return;
+
+        _phase2Stopwatch ??= Stopwatch.StartNew();
+
+        RunDeferredWork(null, 0f);
+
+        if (Batching) ProcessMenuClasses();
+
+        while (_menuDeferred.Count > 0)
+            PatchOne(_menuDeferred.Dequeue());
+
+        FlushAll(reason);
+        MenuComplete(reason);
+    }
+
+    private static void MenuComplete(string reason)
+    {
+        if (_menuComplete) return;
+
+        _menuComplete = true;
+        BootTimeline.Mark("patchmenu.end");
+        Logger.Info($"menu phase done {_menuDeferredTotal} classes reason={reason} at {_phase2Stopwatch?.ElapsedMilliseconds ?? 0} ms", "PatchPhases");
+    }
+
+    private static void ProcessMenuClasses()
+    {
+        if (_menuDeferred.Count == 0) return;
+
+        var sw = Stopwatch.StartNew();
+        int n = _menuDeferred.Count;
+        BeginCollect();
+
+        while (_menuDeferred.Count > 0)
+            PatchOne(_menuDeferred.Dequeue());
+
+        EndCollect();
+        Logger.Info($"menu phase {n} classes resolved in {sw.ElapsedMilliseconds} ms, {_pendingCompile.Count} targets pending", "PatchPhases");
     }
 
     // Synchronous safety net: patch every remaining deferred class right now. Cheap no-op once
@@ -232,12 +337,18 @@ public static class PatchPhases
 
         _phase2Stopwatch ??= Stopwatch.StartNew();
 
-        if (Batching) ProcessDeferredClasses();
+        RunDeferredWork(null, 0f);
+
+        if (Batching) { ProcessMenuClasses(); ProcessDeferredClasses(); }
+
+        while (_menuDeferred.Count > 0)
+            PatchOne(_menuDeferred.Dequeue());
 
         while (_deferred.Count > 0)
             PatchOne(_deferred.Dequeue());
 
         FlushAll(reason);
+        MenuComplete(reason);
         Complete(reason);
     }
 
@@ -275,6 +386,18 @@ public static class PatchPhases
     {
         if (_complete) return;
 
+        // _complete short-circuits Pump / EnsureComplete / EnsureMenuComplete for the rest of the
+        // session, so nothing may still be queued once it is set.
+        RunDeferredWork(null, 0f);
+
+        if (_menuDeferred.Count > 0)
+        {
+            if (Batching) ProcessMenuClasses();
+            while (_menuDeferred.Count > 0) PatchOne(_menuDeferred.Dequeue());
+            FlushAll(reason + "-menu");
+        }
+
+        MenuComplete(reason);
         _complete = true;
         Phase2Ms = _phase2Stopwatch?.ElapsedMilliseconds ?? 0;
 
@@ -660,5 +783,16 @@ public static class PatchPhases
         [HarmonyPatch(typeof(InnerNetClient), nameof(InnerNetClient.JoinGame))]
         [HarmonyPrefix]
         public static void Prefix() => EnsureComplete("host|join");
+    }
+
+    // Menu-phase gate: MainMenuManager.Awake is the first vanilla entry point of the main menu
+    // scene, so finishing the menu queue here guarantees every non-game patch is armed before any
+    // menu code (Start / LateUpdate / button handlers) can run. Same bare-attribute idiom as above.
+    [HarmonyPatch]
+    private static class MenuGate
+    {
+        [HarmonyPatch(typeof(MainMenuManager), nameof(MainMenuManager.Awake))]
+        [HarmonyPrefix]
+        public static void Prefix() => EnsureMenuComplete("menu-awake");
     }
 }
