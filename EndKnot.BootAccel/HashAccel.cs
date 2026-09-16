@@ -48,6 +48,39 @@ namespace EndKnot.BootAccel
             return true;
         }
 
+        // HashStream is public, so a stream from an unrelated caller can match a plugin by size and
+        // leading bytes and have its MD5 cached under that plugin's path — served for the wrong file
+        // on the next boot, with no exception and no log. Attribution is therefore only offered to
+        // the scan that owns these files, identified from the call stack.
+        //
+        // The scan is not patched to mark itself: TypeLoader.FindPluginTypes is a generic method, and
+        // a Harmony patch on one closed instantiation of it never runs — 2026-09-16 it patched without
+        // error while the flag it set stayed at zero, so nothing was ever attributed or cached.
+        // Plugin DLLs are hashed once each per boot, so walking that stack a handful of times costs
+        // nothing beside the MD5 it decides.
+        private const string ScanOwner = "BepInEx.Bootstrap.TypeLoader";
+
+        private static bool InPluginScan()
+        {
+            try
+            {
+                var st = new StackTrace(1, false);
+                for (int i = 0; i < st.FrameCount; i++)
+                {
+                    MethodBase m = st.GetFrame(i).GetMethod();
+                    if (m == null) continue;
+                    Type t = m.DeclaringType;
+                    if (t != null && t.FullName == ScanOwner) return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                BootAccelPatcher.Warn("scan owner probe: " + ex.GetType().Name + ": " + ex.Message);
+            }
+
+            return false;
+        }
+
         private static void EnsureFiles()
         {
             if (_files != null) return;
@@ -152,6 +185,10 @@ namespace EndKnot.BootAccel
 
             try
             {
+                // Outside the plugin scan the stream cannot be one of these files, whatever its size
+                // and leading bytes say; let the original run and cache nothing.
+                if (!InPluginScan()) return true;
+
                 // Position 0 matters: the original hashes from the current position forward, while
                 // attribution here goes by total Length. TypeLoader always hands over a fresh
                 // stream at 0, so anything else is a caller we cannot account for.
