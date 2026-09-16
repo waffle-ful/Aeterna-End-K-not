@@ -73,6 +73,15 @@ namespace EndKnot
         /// </summary>
         internal static bool SuppressSnapToWire;
 
+        /// <summary>
+        /// player-like CNO の outfit 適用 (Shapeshift trick) を spawn からさらに遅らせる実験用の追加秒数。
+        /// 既定 0 = 出荷経路の挙動は一切変わらない。
+        /// 高レートの一斉 spawn 中、バニラ客が spawn (tag4) と Shapeshift (tag2) を同一 Update で処理して
+        /// 初期化未完の PlayerControl に Shapeshift を当てているかを、送信レートを据え置いたまま
+        /// spawn→Shapeshift の間隔だけ広げて切り分けるために使う。
+        /// </summary>
+        internal static float PlayerLikeOutfitExtraDelay;
+
         private const float FanoutNestsPerSecond = 12f;
         private const float FanoutBurstAllowanceNests = 24f;
         private static float FanoutTokens = FanoutBurstAllowanceNests;
@@ -1049,7 +1058,7 @@ namespace EndKnot
 
                         // outfit 適用 (Shapeshift) の後に置く — SetOutfit が renderer を触りうるため
                         EnsureHostVisible();
-                    }, 0.5f, "CustomNetObject.OnAfterCreate");
+                    }, 0.5f + PlayerLikeOutfitExtraDelay, "CustomNetObject.OnAfterCreate");
                 }
             }
         }
@@ -1258,6 +1267,7 @@ namespace EndKnot
                 _spawnExperimentBypassCount = 0; // dev 実験トグルの本数キャップをゲーム境界でリセット
                 FanoutBudgetBypass = false; // 実験スイッチはゲーム境界で必ず既定へ戻す (残すと出荷ガードが外れたままになる)
                 SuppressSnapToWire = false;
+                PlayerLikeOutfitExtraDelay = 0f;
             }
             catch (Exception e) { Utils.ThrowException(e); }
         }

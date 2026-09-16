@@ -4667,7 +4667,7 @@ internal static class ChatCommands
         float nestsPerBody = fanoutTargets + 8f;
         float nestsPerSec = nestsPerBody / per;
 
-        string startLine = $"NEST fan start total={total} per={per}s targets={fanoutTargets} nestsPerBody={nestsPerBody:F0} nestsPerSec={nestsPerSec:F1} nosnap={CustomNetObject.SuppressSnapToWire} nobudget={CustomNetObject.FanoutBudgetBypass} phase={(GameStates.IsLobby ? "lobby" : "ingame")} server={GameStates.CurrentServerType}";
+        string startLine = $"NEST fan start total={total} per={per}s targets={fanoutTargets} nestsPerBody={nestsPerBody:F0} nestsPerSec={nestsPerSec:F1} nosnap={CustomNetObject.SuppressSnapToWire} nobudget={CustomNetObject.FanoutBudgetBypass} outfitGap={CustomNetObject.PlayerLikeOutfitExtraDelay:F2}s phase={(GameStates.IsLobby ? "lobby" : "ingame")} server={GameStates.CurrentServerType}";
         HealthLog.NoteAnom(startLine);
         Logger.Info(startLine, "DevCmd");
         Utils.SendMessage($"[nest] fan run: {total} bodies @ {per}s, targets={fanoutTargets} => {nestsPerSec:F1} nests/s (safe band is 20). '/nest fan stop' / '/nest fan clear'.", reporter);
@@ -4716,6 +4716,7 @@ internal static class ChatCommands
         // 残したままだと以降の CNO が位置同期を止め、fan-out 予算も外れたままになる。
         CustomNetObject.FanoutBudgetBypass = false;
         CustomNetObject.SuppressSnapToWire = false;
+        CustomNetObject.PlayerLikeOutfitExtraDelay = 0f;
 
         float totalElapsed = Time.realtimeSinceStartup - runStart;
         string endLine = $"NEST fan run ended bodies={spawnedThisRun} elapsedSec={totalElapsed:F1} cumulativeNests~{spawnedThisRun * nestsPerBody:F0} targets={fanoutTargets} stopRequested={NestFanStopRequested}";
@@ -4748,6 +4749,7 @@ internal static class ChatCommands
         NestFanBodies.Clear();
         CustomNetObject.FanoutBudgetBypass = false;
         CustomNetObject.SuppressSnapToWire = false;
+        CustomNetObject.PlayerLikeOutfitExtraDelay = 0f;
         HealthLog.NoteAnom($"NEST fan cleared bodies={count} sameConnection={sameConnection} (dev switches restored)");
         Utils.SendMessage($"[nest] fan cleared: {count} bodies despawned{(sameConnection ? string.Empty : " (connection changed — local only)")}. Budget/SnapTo switches restored.", reporter);
     }
@@ -5383,7 +5385,7 @@ internal static class ChatCommands
             return;
         }
 
-        // /nest fan <bodies|stop|clear> [per=0.3] [snap] [budget]
+        // /nest fan <bodies|stop|clear> [per=0.3] [snap] [budget] [outfitgap=0]
         // fan-out 密度の実験アーム。RandomDummy を per 秒間隔で bodies 体作る。既定では
         // fan-out 予算を素通りさせ (でないと 12 nests/s で頭打ちになり閾値へ届かない)、
         // 定期 SnapTo のワイヤ送信を止める (本数ベースの別ルールと混ざらないようにする)。
@@ -5396,6 +5398,7 @@ internal static class ChatCommands
                 NestFanStopRequested = true;
                 CustomNetObject.FanoutBudgetBypass = false;
                 CustomNetObject.SuppressSnapToWire = false;
+                CustomNetObject.PlayerLikeOutfitExtraDelay = 0f;
                 Utils.SendMessage($"[nest] fan run stop requested ({NestFanBodies.Count} bodies so far).", player.PlayerId);
                 return;
             }
@@ -5421,7 +5424,7 @@ internal static class ChatCommands
 
             if (!int.TryParse(sub, out int fanTotal) || fanTotal < 1)
             {
-                Utils.SendMessage("[nest] Usage: /nest fan <bodies|stop|clear> [per=0.3] [snap] [budget]", player.PlayerId);
+                Utils.SendMessage("[nest] Usage: /nest fan <bodies|stop|clear> [per=0.3] [snap] [budget] [outfitgap=0]", player.PlayerId);
                 return;
             }
 
@@ -5437,6 +5440,7 @@ internal static class ChatCommands
             var fanPer = 0.3f;
             var keepSnap = false;
             var keepBudget = false;
+            var outfitGap = 0f;
 
             for (var i = 3; i < args.Length; i++)
             {
@@ -5445,10 +5449,12 @@ internal static class ChatCommands
                 if (a.Equals("snap", StringComparison.OrdinalIgnoreCase)) keepSnap = true;
                 else if (a.Equals("budget", StringComparison.OrdinalIgnoreCase)) keepBudget = true;
                 else if (a.StartsWith("per=", StringComparison.OrdinalIgnoreCase) && float.TryParse(a[4..], out float fp) && fp >= 0.1f) fanPer = fp;
+                else if (a.StartsWith("outfitgap=", StringComparison.OrdinalIgnoreCase) && float.TryParse(a[10..], out float og) && og is >= 0f and <= 5f) outfitGap = og;
             }
 
             CustomNetObject.FanoutBudgetBypass = !keepBudget;
             CustomNetObject.SuppressSnapToWire = !keepSnap;
+            CustomNetObject.PlayerLikeOutfitExtraDelay = outfitGap;
             NestFanRunning = true;
             NestFanStopRequested = false;
             NestFanConnection = AmongUsClient.Instance.connection;
