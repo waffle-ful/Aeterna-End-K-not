@@ -98,7 +98,8 @@ public sealed class PlayerGameOptionsSender(PlayerControl player) : GameOptionsS
 
             if (allSender is PlayerGameOptionsSender { IsDirty: true } sender)
             {
-                if (PackedWriter != null && (PackedWriter.Length > 500 || PackedWriterMessages >= AmongUsClient.Instance.GetMaxMessagePackingLimit()))
+                // 子ゼロの packing バンドルは単独で 100% キックされる — 分割条件に「子が 1 つ以上」を掛ける
+                if (PackedWriter != null && PackedWriterMessages > 0 && (PackedWriter.Length > 500 || PackedWriterMessages >= AmongUsClient.Instance.GetMaxMessagePackingLimit()))
                 {
                     PackedWriter.EndMessage();
                     var capturedWriter = PackedWriter;

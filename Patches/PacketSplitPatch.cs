@@ -1,4 +1,4 @@
-// The chokepoint packet-splitting approach here is adapted, with thanks, from
+﻿// The chokepoint packet-splitting approach here is adapted, with thanks, from
 // Town Of Host-K by KYMario (GPL-3.0) — https://github.com/KYMario/TownOfHost-K
 using System;
 using EndKnot.Modules;
@@ -24,10 +24,21 @@ internal static class PacketSplitPatch
     // WriteMessage が各メッセージ前に書くヘッダ (ushort length + byte tag)
     private const int MsgHeader = 3;
 
+    // 実験アーム用の 1 回限りのバイパス。次の 1 パケットだけ分割せずそのまま出す。
+    // 「1 メッセージあたりの上限がどこにあるか」は単一チャンクで撃たないと測れない。
+    internal static bool BypassSplitOnce;
+
     public static bool Prefix(InnerNetClient __instance, MessageWriter msg)
     {
         PacketRateGate.RecordInstrumentation(msg);
         StartWindowProbe.Inspect(msg); // 開始窓の間だけ復号ログ (窓外は比較 1 回で返る)
+
+        if (BypassSplitOnce)
+        {
+            BypassSplitOnce = false;
+            Logger.Warn($"PacketSplit bypassed for one packet ({msg.Length}B)", "PacketSplitPatch");
+            return !PacketRateGate.TryGate(__instance, msg);
+        }
 
         if (msg.Length <= DetectThreshold)
             return !PacketRateGate.TryGate(__instance, msg);

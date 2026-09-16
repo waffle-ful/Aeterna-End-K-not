@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -61,6 +61,18 @@ namespace EndKnot
         /// 唯一効くレバーは時間方向の間引き。12 nests/s + 瞬間許容 24 nests なら、どの呼び出し元が
         /// 何体積んでも 10 秒窓の累計 ≤144 nests で生存実績域 (≤160) に収まる。
         /// </summary>
+        /// <summary>
+        /// fan-out 予算を素通りさせる実験用スイッチ。既定 false = 出荷経路の挙動は一切変わらない。
+        /// 公式サーバーが fan-out で数えている量 (宛先の幅か、窓内の累計か) を実測で分離するときだけ立てる。
+        /// </summary>
+        internal static bool FanoutBudgetBypass;
+
+        /// <summary>
+        /// CNO の定期 SnapTo をワイヤへ出さなくする実験用スイッチ (ホストローカルの位置反映は止めない)。
+        /// SnapTo は本数ベースの別ルールで独立にキックされるので、fan-out 側の密度を上げる実測では外す。
+        /// </summary>
+        internal static bool SuppressSnapToWire;
+
         private const float FanoutNestsPerSecond = 12f;
         private const float FanoutBurstAllowanceNests = 24f;
         private static float FanoutTokens = FanoutBurstAllowanceNests;
@@ -72,7 +84,7 @@ namespace EndKnot
         /// </summary>
         private static float ReserveFanoutBudget(int nests)
         {
-            if (nests <= 0) return 0f;
+            if (nests <= 0 || FanoutBudgetBypass) return 0f;
             float now = Time.realtimeSinceStartup;
             if (FanoutLastRefillTime <= 0f || now < FanoutLastRefillTime) FanoutLastRefillTime = now;
             FanoutTokens = Mathf.Min(FanoutBurstAllowanceNests, FanoutTokens + ((now - FanoutLastRefillTime) * FanoutNestsPerSecond));
@@ -603,7 +615,7 @@ namespace EndKnot
                 }
 
                 // _localOnly は wire-only guard — 上のホストローカル SnapTo (自画面反映) は止めない
-                if (_localOnly) return;
+                if (_localOnly || SuppressSnapToWire) return;
 
                 ushort num = (ushort)(playerControl.NetTransform.lastSequenceId + 2U);
                 // targeted 配信 CNO (_singleClientId != -1) は SnapTo も同じ宛先へ。-1 は従来どおりブロードキャスト
@@ -1244,6 +1256,8 @@ namespace EndKnot
                 FanoutLastRefillTime = 0f;
                 UsedPlayerIds.Clear(); // Despawn を経ずに破壊された CNO の枠リークをゲーム境界で必ず回収する
                 _spawnExperimentBypassCount = 0; // dev 実験トグルの本数キャップをゲーム境界でリセット
+                FanoutBudgetBypass = false; // 実験スイッチはゲーム境界で必ず既定へ戻す (残すと出荷ガードが外れたままになる)
+                SuppressSnapToWire = false;
             }
             catch (Exception e) { Utils.ThrowException(e); }
         }
