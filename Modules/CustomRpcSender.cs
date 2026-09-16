@@ -46,6 +46,15 @@ public class CustomRpcSender
     // これを超えて蓄積した stream は次の分割ポイントで別パケットに切り出す。
     public const int SafeChunkLength = 800;
 
+    // MessageWriter.Get(Reliable) が先頭に持つ基底 3 byte (sendOption 1 + reliable id 2)
+    // + StartMessage(26) のヘッダ 3 byte (length 2 + tag 1)。
+    private const int PackedEnvelopeBaseLength = 6;
+
+    /// <summary>「tag26 を開いただけで子を 1 件も書いていない stream」の実長 (実測 11 byte)。
+    /// 🔴 この形を公式鯖へ送ると 11 byte・1 本で 100% Hacking キックされる (2026-09-16 実測) ので、
+    /// 空のまま送らないための判定はこの値で行う。GameId の packed 長は可変なので定数にはできない。</summary>
+    public static int EmptyPackedStreamLength => PackedEnvelopeBaseLength + HazelExtensions.GetPackedUIntSize((uint)AmongUsClient.Instance.GameId);
+
     // When false, the >500 byte auto-split in StartMessage/StartPackedMessage/StartRpc is skipped.
     // RpcSetName sets this false and does its own accurate SafeChunkLength (UTF-8) chunking instead.
     //
@@ -177,9 +186,10 @@ public class CustomRpcSender
 
             if (currentState == State.InRootPackedMessage)
             {
-                // PackedMessage 中身が「GameId だけ書いた空状態」なら dispose 扱いに格上げ
-                // (StartMessage(26) ヘッダ tag1 + length2 = 3 byte + WritePacked(GameId) ぶんが「空」の実サイズ)
-                if (3 + HazelExtensions.GetPackedUIntSize((uint)AmongUsClient.Instance.GameId) >= stream.Length)
+                // PackedMessage 中身が「GameId だけ書いた空状態」なら dispose 扱いに格上げ。
+                // ⚠️ 基底 3 byte を勘定に入れること — ヘッダ 3 + packed(GameId) だけで比べると
+                // 左辺が常に実長より 3 小さく、この分岐は恒等的に偽になる (空の tag26 がそのままワイヤへ出る)。
+                if (stream.Length <= EmptyPackedStreamLength)
                     dispose = true;
                 else
                     EndMessage();
@@ -220,6 +230,9 @@ public class CustomRpcSender
             int maxChunkLen = stream.Length;
             foreach (MessageWriter ds in doneStreams)
             {
+                // 下の送信ループが落とす空エンベロープは計器にも数えない (送信量を過大に見せないため)。
+                if (ds.Length <= EmptyPackedStreamLength) continue;
+
                 totalLen += ds.Length;
                 if (ds.Length > maxChunkLen) maxChunkLen = ds.Length;
             }
@@ -231,6 +244,20 @@ public class CustomRpcSender
 
                 doneStreams.ForEach(x =>
                 {
+                    // 子を 1 件も持たない packed エンベロープは、それ 1 本で公式鯖に Hacking キックされる。
+                    // 分割ポイント (StartPackedMessage / FlushCurrentStream / EndMessage(startNew:true)) は
+                    // 呼び出し元の事前ゲート頼みなので、ワイヤへ出る最後の一箇所で落とす。
+                    // ⚠️ `packed` は EndMessage が packed ルートを閉じる時点で false に戻るため、ここでは使えない。
+                    // 長さだけで判定して問題ない — 子を 1 件でも持つ envelope は最小でも
+                    // ヘッダ + GameId + 子 (tag6 なら 8 byte 以上) でこの閾値を必ず超える。
+                    // 閾値以下になるのは子ゼロの tag26 / 子ゼロの root tag5 / 何も書いていない stream だけで、
+                    // どれも運ぶ情報が無い。
+                    if (x.Length <= EmptyPackedStreamLength)
+                    {
+                        x.Recycle();
+                        return;
+                    }
+
                     if (x.Length >= 1400 && sendOption == SendOption.Reliable)
                     {
                         Logger.Warn($"Large reliable packet \"{name}\" is sending ({x.Length} bytes)", "CustomRpcSender");

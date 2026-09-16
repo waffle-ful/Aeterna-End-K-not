@@ -97,7 +97,9 @@ public static class NameNotifyManager
         // ~1024 (公式 kick 閾値) 超に合体し得る。さらに RpcSetName が sender.checkLength=false にした後は
         // そのチェックすら効かない。書く前に見積りで溢れるなら現 stream を doneStreams へ退避して分割する。
         int estimatedSize = 16 + HazelExtensions.GetStringWriteSize(text) + HazelExtensions.GetStringWriteSize(expireTS.ToString());
-        if (sender.stream.Length > 10 && sender.stream.Length + estimatedSize > CustomRpcSender.SafeChunkLength)
+        // 退避する中身が無いのに分割すると空のチャンクが doneStreams に積まれる。packed sender の
+        // 「空」は tag26 ヘッダぶんだけ長いので、そのぶんを見込んだ閾値で判定する。
+        if (sender.stream.Length > (sender.packed ? CustomRpcSender.EmptyPackedStreamLength : 10) && sender.stream.Length + estimatedSize > CustomRpcSender.SafeChunkLength)
         {
             switch (sender.CurrentState)
             {
