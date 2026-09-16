@@ -5316,7 +5316,7 @@ internal static class ChatCommands
 
         if (args.Length < 2 || !int.TryParse(args[1], out int total) || total <= 0)
         {
-            Utils.SendMessage("[nest] Usage: /nest <total> [real|safe|thin|none] [via=t6self|t5|bare6|bare5] [tgt=self|cno|other|selfdata|xprobe|bogus|selfnt|selfphys] [dst=self|real|spread] [op=data|despawn] [body=<0-255>] [per=<k>] [pad=<chars>] [spoof] [raw] [force]  |  /nest limit|info|name|budget|chunk|namepad|ring|xspawn|xdespawn", player.PlayerId);
+            Utils.SendMessage("[nest] Usage: /nest <total> [real|safe|thin|none] [via=t6self|t5|bare6|bare5|t26empty] [tgt=self|cno|other|selfdata|xprobe|bogus|selfnt|selfphys] [dst=self|real|spread] [op=data|despawn] [body=<0-255>] [per=<k>] [pad=<chars>] [spoof] [raw] [force]  |  /nest limit|info|name|budget|chunk|namepad|ring|xspawn|xdespawn", player.PlayerId);
             return;
         }
 
@@ -5584,6 +5584,20 @@ internal static class ChatCommands
         // `packed` と `broadcast` は独立軸。
         var packed = via is not ("bare6" or "bare5");
         var broadcast = via is "t5" or "bare5";
+        // `t26empty` = 子メッセージを 1 つも持たない tag26 バンドルを total 本送る。名前の一斉更新で
+        // 本数だけが倍増したときの「中身ゼロのパケットそのものが違法か、増えた本数が効いているのか」を
+        // 分けるための乗り物で、ソロ (宛先 0) で撃てば宛先数の軸が同時に動かない。
+        // ⚠️ 2026-09-16 実測: この形は **11B・1 本で 100% Hacking キック** (同一ロビーで tag26{tag6(子0)} 21B と
+        // 素の tag6(子0) 13B は無傷)。出荷経路が空のバンドルを送らないことは別途保証が要る。
+        var emptyEnvelope = via == "t26empty";
+        // 子を持たないので per= (1 パケットに詰める子の数) は意味を持たない。total = 封筒の本数。
+        if (emptyEnvelope) per = 1;
+
+        if (emptyEnvelope && !empty)
+        {
+            Utils.SendMessage("[nest] via=t26empty requires the 'none' payload — the envelope carries no child message, so any other payload would only mislabel the report line.", player.PlayerId);
+            return;
+        }
         string padName = pad > 0 ? new string('█', pad) : string.Empty;
 
         var dests = new List<int>();
@@ -5687,7 +5701,7 @@ internal static class ChatCommands
                 s.WritePacked(gameId);
             }
 
-            for (var c = 0; c < childCount; c++)
+            for (var c = 0; c < (emptyEnvelope ? 0 : childCount); c++)
             {
                 int di = (startIndex + c) % dests.Count;
                 // spoof 時は本番同様「この子の宛先プレイヤーの PlayerId」を先頭 Data に書く (末尾 Data で復元)
@@ -5784,7 +5798,7 @@ internal static class ChatCommands
                 AmongUsClient.Instance.SendOrDisconnect(s);
                 s.Recycle();
                 envelopes++;
-                sentChildren += childCount;
+                sentChildren += emptyEnvelope ? 0 : childCount;
             }
         }
         finally
