@@ -683,6 +683,35 @@ internal static class StartGameHostPatch
             Logger.Fatal($"LobbyBehaviour.Instance is null in {nameof(StartGameHostPatch)}.{nameof(StartGameHost)}", "StartGameHost");
         }
 
+        // 開始完了を意図的に遅らせる実験アーム (/nest hold <sec>)。既定 0 = 無効。
+        // マシン高負荷で ship の非同期ロードが飢餓したときと同じワイヤ形 — ロビー despawn の直後から
+        // ホストが無送信のまま N 秒沈黙し、そのあとで ship spawn が届く — を任意の N で再現する。
+        // 「ホストが開始後 ~50 秒ゲームデータを送らないと切られる」のか「客が落ちた後に届いた spawn が
+        // 弾かれる」のかは、自然発生の標本では同時に動いてしまい分離できない。
+        if (ChatCommands.StartHoldSeconds > 0f)
+        {
+            float holdSec = ChatCommands.StartHoldSeconds;
+            ChatCommands.StartHoldSeconds = 0f; // 1 回で使い切る (残留で次のゲームを壊さない)
+            float holdStart = Time.realtimeSinceStartup;
+            float nextHoldNoteAt = holdStart + 5f;
+            Logger.Warn($"NEST hold: delaying ship spawn by {holdSec}s", "StartGameHost");
+            Modules.HealthLog.NoteAnom($"NEST hold start sec={holdSec} t={Utils.TimeStamp} rt={holdStart:F3}");
+
+            while (Time.realtimeSinceStartup - holdStart < holdSec)
+            {
+                if (Time.realtimeSinceStartup >= nextHoldNoteAt)
+                {
+                    var heldSec = (int)(Time.realtimeSinceStartup - holdStart);
+                    Modules.HealthLog.NoteAnom($"NEST hold elapsedSec={heldSec} t={Utils.TimeStamp} connected={AUClient.connection != null}");
+                    nextHoldNoteAt += 5f;
+                }
+
+                yield return null;
+            }
+
+            Modules.HealthLog.NoteAnom($"NEST hold end sec={holdSec} t={Utils.TimeStamp} — ship spawn resumes now");
+        }
+
         if (!ShipStatus.Instance)
         {
             int index = Mathf.Clamp(GameOptionsManager.Instance.CurrentGameOptions.MapId, 0, Constants.MapNames.Length - 1);
