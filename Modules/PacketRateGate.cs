@@ -303,7 +303,8 @@ public static class PacketRateGate
         _recentResendTotal = 0;
         // サーバー側の netId 表も作り直されている = 「この接続で spawn した netId」の記憶も捨てる。
         // ここで捨てた待機 Reliable の中に spawn が居ると、その netId はサーバーに存在しないまま
-        // ローカルにだけ残る → 後の Despawn が P5 (ブロードキャスト × 未 spawn netId) になる。
+        // ローカルにだけ残る → 後の Despawn がサーバーの知らない netId 宛になる
+        // (2026-09-16 実測ではこれ自体は蹴られないが、届かない送信であることに変わりはない)。
         KickRiskDetector.OnConnectionReset();
         // 捨てた待機 Reliable の中にオプション差分同期が居ると、ホストは「送った」ことにして
         // スナップショットを更新済みなのに客には届いていない状態になる。差分送信は該当 id が

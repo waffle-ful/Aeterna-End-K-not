@@ -4652,7 +4652,7 @@ internal static class ChatCommands
         int count = NestDummies.Count;
         var sent = 0;
         // ⚠️ 接続が変わっていたら despawn を「送らない」。新しい接続のサーバーはこの netId を知らないので、
-        // t5 ブロードキャスト Despawn は P5 (未 spawn netId × t5 = 100% Hacking キック) になる。
+        // 送っても届かない (2026-09-16 実測: 未 spawn netId への Despawn は素のブロードキャストなら蹴られない)。
         bool sameConnection = AmongUsClient.Instance && ReferenceEquals(AmongUsClient.Instance.connection, NestDummyConnection);
 
         foreach (PlayerControl dummy in NestDummies.ToArray())
@@ -5316,14 +5316,14 @@ internal static class ChatCommands
 
         if (args.Length < 2 || !int.TryParse(args[1], out int total) || total <= 0)
         {
-            Utils.SendMessage("[nest] Usage: /nest <total> [real|safe|thin|none] [via=t6self|t5|bare6] [tgt=self|cno|other|selfdata|xprobe|bogus|selfnt|selfphys] [dst=self|real|spread] [op=data|despawn] [body=<0-255>] [per=<k>] [pad=<chars>] [spoof] [raw] [force]  |  /nest limit|info|name|budget|chunk|namepad|ring|xspawn|xdespawn", player.PlayerId);
+            Utils.SendMessage("[nest] Usage: /nest <total> [real|safe|thin|none] [via=t6self|t5|bare6|bare5] [tgt=self|cno|other|selfdata|xprobe|bogus|selfnt|selfphys] [dst=self|real|spread] [op=data|despawn] [body=<0-255>] [per=<k>] [pad=<chars>] [spoof] [raw] [force]  |  /nest limit|info|name|budget|chunk|namepad|ring|xspawn|xdespawn", player.PlayerId);
             return;
         }
 
         total = Math.Clamp(total, 1, 200);
         var payload = "real";
         // 子の「乗り物」— 2026-07-31 実測で t6self は子1個・26B でも即 Hacking キックされることが判明したので、
-        // 個数軸を測るには合法な乗り物 (t5=ブロードキャスト GameData) が要る。bare6 は t26 包装の有無の切り分け用。
+        // 個数軸を測るには合法な乗り物 (t5=ブロードキャスト GameData) が要る。bare6 / bare5 は t26 包装の有無の切り分け用。
         var via = "t6self";
         // Data の対象 NetObject。thin/none は既定で自分の PlayerControl、real/safe は常にプローブ CNO。
         // `tgt=cno` で thin もプローブ CNO を対象にできる (「Data 1枚が違法」か「自分宛 Data が違法」かの分離用)。
@@ -5578,8 +5578,12 @@ internal static class ChatCommands
         var real = payload == "real";
         var thin = payload == "thin";
         var empty = payload == "none";
-        var packed = via != "bare6";
-        var broadcast = via == "t5";
+        // ⚠️ `via=t5` は **tag26 に包まれた tag5** であって素の tag5 ではない。この包みは子 0 個・18B でも
+        // 公式鯖に 100% Hacking キックされる (2026-09-16 実測) ので、t5 を乗り物にしたアームでは
+        // 対象 netId の合法性を測れない。`bare5` = tag26 無しの素の tag5 (本番の全員宛と同形)。
+        // `packed` と `broadcast` は独立軸。
+        var packed = via is not ("bare6" or "bare5");
+        var broadcast = via is "t5" or "bare5";
         string padName = pad > 0 ? new string('█', pad) : string.Empty;
 
         var dests = new List<int>();
