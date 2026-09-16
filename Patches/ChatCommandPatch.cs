@@ -4521,6 +4521,17 @@ internal static class ChatCommands
     private static bool NestDummyRunning;
     private static bool NestDummyStopRequested;
 
+    // /nest hold <sec> — 開始完了 (ship spawn) を N 秒遅らせる実験アームの残り秒数。0 = 無効。
+    // ロビーで撃っておくと次の開始で StartGameHost が 1 回だけ消費する。
+    internal static float StartHoldSeconds;
+
+    // /nest fan (fan-out 密度実験) の状態。RandomDummy は本番でキックを踏んだのと同じ形の CNO —
+    // 1 体につき spawn ブロードキャストと outfit 適用、さらに非ホスト人数ぶんの per-player 配信が付く。
+    private static readonly List<RandomDummy> NestFanBodies = [];
+    private static object NestFanConnection;
+    private static bool NestFanRunning;
+    private static bool NestFanStopRequested;
+
     // GameData に登録されていない PlayerControl (手組み spawn / CNO) では `PlayerControl.Data` の
     // ゲッターが例外を投げる。プローブ系は必ずこれを通す。
     private static uint SafeDataNetId(PlayerControl pc)
@@ -4642,6 +4653,103 @@ internal static class ChatCommands
 
         if (AmongUsClient.Instance && ReferenceEquals(AmongUsClient.Instance.connection, NestDummyConnection))
             Utils.SendMessage($"[nest] dummy run ended at {NestDummies.Count}. Run '/nest dummy clear' when done observing.", reporter);
+    }
+
+    // fan-out 述語の分離用。per-player 配信の「幅」(宛先の数) は客の台数で頭打ちになるが、
+    // 「窓内の累計」は体数/秒で自由に動かせる。幅を低いまま累計だけ閾値の数倍まで上げて、
+    // キックが出るかどうかを見る。出れば累計側が述語 (幅が必要という読みが死ぬ)。
+    private static IEnumerator NestFanRun(int total, float per, byte reporter)
+    {
+        int fanoutTargets = Main.EnumeratePlayerControls().Count(p => !p.AmOwner);
+
+        // 1 体あたりの identity 系 nests = per-player 配信 (宛先数ぶん) + 人数に依らない付帯分
+        // (spawn ブロードキャストと outfit 適用で ~8)。生存実績域は 20 nests/s。
+        float nestsPerBody = fanoutTargets + 8f;
+        float nestsPerSec = nestsPerBody / per;
+
+        string startLine = $"NEST fan start total={total} per={per}s targets={fanoutTargets} nestsPerBody={nestsPerBody:F0} nestsPerSec={nestsPerSec:F1} nosnap={CustomNetObject.SuppressSnapToWire} nobudget={CustomNetObject.FanoutBudgetBypass} phase={(GameStates.IsLobby ? "lobby" : "ingame")} server={GameStates.CurrentServerType}";
+        HealthLog.NoteAnom(startLine);
+        Logger.Info(startLine, "DevCmd");
+        Utils.SendMessage($"[nest] fan run: {total} bodies @ {per}s, targets={fanoutTargets} => {nestsPerSec:F1} nests/s (safe band is 20). '/nest fan stop' / '/nest fan clear'.", reporter);
+
+        var spawnedThisRun = 0;
+        float runStart = Time.realtimeSinceStartup;
+
+        while (spawnedThisRun < total && !NestFanStopRequested)
+        {
+            if (!AmongUsClient.Instance || !ReferenceEquals(AmongUsClient.Instance.connection, NestFanConnection))
+            {
+                // 切断 = 実験の主要な観測イベント。何体目 / 何秒で落ちたかが結果そのもの。
+                float elapsed = Time.realtimeSinceStartup - runStart;
+                string dcLine = $"NEST fan CONNECTION LOST after {spawnedThisRun} bodies ({elapsed:F1}s, cumulative ~{spawnedThisRun * nestsPerBody:F0} nests, targets={fanoutTargets}) — check DCRING reason + KICKRISK.";
+                HealthLog.NoteAnom(dcLine);
+                Logger.Warn(dcLine, "DevCmd");
+                break;
+            }
+
+            if (GameStates.IsEnded)
+            {
+                HealthLog.NoteAnom($"NEST fan aborted (game ended) after {spawnedThisRun} bodies");
+                break;
+            }
+
+            Vector2 basePos = PlayerControl.LocalPlayer.Pos();
+            var rng = IRandom.Instance;
+            // IRandom.Next は正の範囲しか受け付けないので、正の抽選をずらして ±3 のオフセットにする
+            NestFanBodies.Add(new RandomDummy(basePos + new Vector2(rng.Next(1, 8) - 4f, rng.Next(1, 8) - 4f)));
+            spawnedThisRun++;
+
+            if (spawnedThisRun % 5 == 0)
+            {
+                float elapsed = Time.realtimeSinceStartup - runStart;
+                string cp = $"NEST fan checkpoint bodies={spawnedThisRun} elapsedSec={elapsed:F1} cumulativeNests~{spawnedThisRun * nestsPerBody:F0} pending={PacketRateGate.PendingCount}";
+                HealthLog.NoteAnom(cp);
+                Logger.Info(cp, "DevCmd");
+            }
+
+            yield return new WaitForSecondsRealtime(per);
+        }
+
+        NestFanRunning = false;
+
+        // 実験スイッチは run が終わったら必ず戻す — 抑止が要るのは spawn の最中だけで、
+        // 残したままだと以降の CNO が位置同期を止め、fan-out 予算も外れたままになる。
+        CustomNetObject.FanoutBudgetBypass = false;
+        CustomNetObject.SuppressSnapToWire = false;
+
+        float totalElapsed = Time.realtimeSinceStartup - runStart;
+        string endLine = $"NEST fan run ended bodies={spawnedThisRun} elapsedSec={totalElapsed:F1} cumulativeNests~{spawnedThisRun * nestsPerBody:F0} targets={fanoutTargets} stopRequested={NestFanStopRequested}";
+        HealthLog.NoteAnom(endLine);
+        Logger.Info(endLine, "DevCmd");
+
+        if (AmongUsClient.Instance && ReferenceEquals(AmongUsClient.Instance.connection, NestFanConnection))
+            Utils.SendMessage($"[nest] fan run ended at {spawnedThisRun} bodies ({totalElapsed:F1}s, ~{spawnedThisRun * nestsPerBody:F0} nests). '/nest fan clear' when done observing.", reporter);
+    }
+
+    private static IEnumerator NestFanClear(byte reporter)
+    {
+        yield return null;
+
+        var count = 0;
+        bool sameConnection = AmongUsClient.Instance && ReferenceEquals(AmongUsClient.Instance.connection, NestFanConnection);
+
+        foreach (RandomDummy body in NestFanBodies.ToArray())
+        {
+            if (body == null) continue;
+
+            // 接続が変わっていたら despawn を送らない (別セッションの netId を触ることになる)
+            if (sameConnection) body.Despawn(canPool: false);
+            count++;
+
+            // 片付け自体がバーストにならないよう間隔を空ける
+            yield return new WaitForSecondsRealtime(0.4f);
+        }
+
+        NestFanBodies.Clear();
+        CustomNetObject.FanoutBudgetBypass = false;
+        CustomNetObject.SuppressSnapToWire = false;
+        HealthLog.NoteAnom($"NEST fan cleared bodies={count} sameConnection={sameConnection} (dev switches restored)");
+        Utils.SendMessage($"[nest] fan cleared: {count} bodies despawned{(sameConnection ? string.Empty : " (connection changed — local only)")}. Budget/SnapTo switches restored.", reporter);
     }
 
     private static IEnumerator NestDummyClear(byte reporter)
@@ -5235,6 +5343,119 @@ internal static class ChatCommands
             return;
         }
 
+        // /nest nosplit
+        // 次の 1 パケットだけ内部分割を止める。1000B 超のアームは通常この分割で複数チャンクに
+        // なるため、「単一メッセージの上限」を測るときは先にこれを撃ってから /nest name を撃つ。
+        if (args.Length >= 2 && args[1].Equals("nosplit", StringComparison.OrdinalIgnoreCase))
+        {
+            PacketSplitPatch.BypassSplitOnce = true;
+            Utils.SendMessage("[nest] next outgoing packet will skip the internal split (one shot).", player.PlayerId);
+            return;
+        }
+
+        // /nest hold <sec>|off
+        // 次のゲーム開始で ship spawn を <sec> 秒遅らせる。ロビーで撃って開始すると、ホストが
+        // 無送信のまま沈黙する窓を任意の長さで作れる。客ゼロで撃てば「送らなすぎ」だけが動く。
+        if (args.Length >= 2 && args[1].Equals("hold", StringComparison.OrdinalIgnoreCase))
+        {
+            string holdArg = args.Length >= 3 ? args[2].ToLowerInvariant() : string.Empty;
+
+            if (holdArg is "off" or "0")
+            {
+                StartHoldSeconds = 0f;
+                Utils.SendMessage("[nest] start hold cleared.", player.PlayerId);
+                return;
+            }
+
+            if (!float.TryParse(holdArg, out float holdSec) || holdSec <= 0f)
+            {
+                Utils.SendMessage($"[nest] Usage: /nest hold <sec>|off (current: {StartHoldSeconds}s)", player.PlayerId);
+                return;
+            }
+
+            // 開始が長時間止まると客は自主退出する (バニラは ~20 秒で諦める)。上限は観測に要る幅だけ。
+            const float HoldCap = 180f;
+            if (holdSec > HoldCap) holdSec = HoldCap;
+
+            StartHoldSeconds = holdSec;
+            HealthLog.NoteAnom($"NEST hold armed sec={holdSec}");
+            Utils.SendMessage($"[nest] start hold armed: next game start will stall {holdSec}s before the ship spawn (consumed once).", player.PlayerId);
+            return;
+        }
+
+        // /nest fan <bodies|stop|clear> [per=0.3] [snap] [budget]
+        // fan-out 密度の実験アーム。RandomDummy を per 秒間隔で bodies 体作る。既定では
+        // fan-out 予算を素通りさせ (でないと 12 nests/s で頭打ちになり閾値へ届かない)、
+        // 定期 SnapTo のワイヤ送信を止める (本数ベースの別ルールと混ざらないようにする)。
+        if (args.Length >= 2 && args[1].Equals("fan", StringComparison.OrdinalIgnoreCase))
+        {
+            string sub = args.Length >= 3 ? args[2].ToLowerInvariant() : string.Empty;
+
+            if (sub == "stop")
+            {
+                NestFanStopRequested = true;
+                CustomNetObject.FanoutBudgetBypass = false;
+                CustomNetObject.SuppressSnapToWire = false;
+                Utils.SendMessage($"[nest] fan run stop requested ({NestFanBodies.Count} bodies so far).", player.PlayerId);
+                return;
+            }
+
+            if (sub == "clear")
+            {
+                NestFanStopRequested = true;
+                Main.Instance.StartCoroutine(NestFanClear(player.PlayerId));
+                return;
+            }
+
+            if (NestFanRunning)
+            {
+                Utils.SendMessage($"[nest] fan run already active ({NestFanBodies.Count} bodies) — '/nest fan stop' first.", player.PlayerId);
+                return;
+            }
+
+            if (GameStates.IsLobby || !GameStates.IsInTask)
+            {
+                Utils.SendMessage("[nest] fan needs an in-task game (CNO spawn is gated outside it).", player.PlayerId);
+                return;
+            }
+
+            if (!int.TryParse(sub, out int fanTotal) || fanTotal < 1)
+            {
+                Utils.SendMessage("[nest] Usage: /nest fan <bodies|stop|clear> [per=0.3] [snap] [budget]", player.PlayerId);
+                return;
+            }
+
+            // ホスト操作不能リスクを考え総数はハードキャップ (本番のダミー最大と同じ桁)
+            const int FanHardCap = 60;
+
+            if (fanTotal > FanHardCap)
+            {
+                Utils.SendMessage($"[nest] bodies capped at {FanHardCap}.", player.PlayerId);
+                fanTotal = FanHardCap;
+            }
+
+            var fanPer = 0.3f;
+            var keepSnap = false;
+            var keepBudget = false;
+
+            for (var i = 3; i < args.Length; i++)
+            {
+                string a = args[i];
+
+                if (a.Equals("snap", StringComparison.OrdinalIgnoreCase)) keepSnap = true;
+                else if (a.Equals("budget", StringComparison.OrdinalIgnoreCase)) keepBudget = true;
+                else if (a.StartsWith("per=", StringComparison.OrdinalIgnoreCase) && float.TryParse(a[4..], out float fp) && fp >= 0.1f) fanPer = fp;
+            }
+
+            CustomNetObject.FanoutBudgetBypass = !keepBudget;
+            CustomNetObject.SuppressSnapToWire = !keepSnap;
+            NestFanRunning = true;
+            NestFanStopRequested = false;
+            NestFanConnection = AmongUsClient.Instance.connection;
+            Main.Instance.StartCoroutine(NestFanRun(fanTotal, fanPer, player.PlayerId));
+            return;
+        }
+
         // /nest retype <netId|self|selfnt|selfphys|xprobe>
         // CNO / 偽死体が spawn 直後に送っている「再登録 spawn」(spawnId=2 / ownerId=-2 / 1コンポーネント /
         // 本体 0 バイト) を**任意の netId に対して単発で**送る。M-retype の**逆向き**テスト:
@@ -5316,7 +5537,7 @@ internal static class ChatCommands
 
         if (args.Length < 2 || !int.TryParse(args[1], out int total) || total <= 0)
         {
-            Utils.SendMessage("[nest] Usage: /nest <total> [real|safe|thin|none] [via=t6self|t5|bare6|bare5|t26empty] [tgt=self|cno|other|selfdata|xprobe|bogus|selfnt|selfphys] [dst=self|real|spread] [op=data|despawn] [body=<0-255>] [per=<k>] [pad=<chars>] [spoof] [raw] [force]  |  /nest limit|info|name|budget|chunk|namepad|ring|xspawn|xdespawn", player.PlayerId);
+            Utils.SendMessage("[nest] Usage: /nest <total> [real|safe|thin|none] [via=t6self|t5|bare6|bare5|t26empty] [tgt=self|cno|other|selfdata|xprobe|bogus|selfnt|selfphys] [dst=self|real|spread] [op=data|despawn] [body=<0-255>] [per=<k>] [pad=<chars>] [spoof] [raw] [force]  |  /nest limit|info|name|budget|chunk|namepad|ring|xspawn|xdespawn|dummy|fan|hold", player.PlayerId);
             return;
         }
 

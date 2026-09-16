@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using AmongUs.GameOptions;
@@ -192,9 +192,11 @@ public abstract class GameOptionsSender
                         OnFrameResumed();
                     }
 
+                    // 子を 1 つも持たない packing バンドルは単独で 100% キックされるため、
+                    // 分割条件には必ず「子が 1 つ以上ある」を掛ける (子数の上限判定が 0 件で成立する形を塞ぐ)。
                     // 分割閾値は公式鯖 kick 上限 (~1024) に対するヘッダ余裕込みで SafeChunkLength (800) に揃える
                     // (旧値 1000 は RPC.cs SyncCustomSettingsRPC と同じ独立マジックナンバーの兄弟だった)
-                    if (PackedWriter != null && (PackedWriter.Length > CustomRpcSender.SafeChunkLength || PackedWriterMessages >= AmongUsClient.Instance.GetMaxMessagePackingLimit()))
+                    if (PackedWriter != null && PackedWriterMessages > 0 && (PackedWriter.Length > CustomRpcSender.SafeChunkLength || PackedWriterMessages >= AmongUsClient.Instance.GetMaxMessagePackingLimit()))
                     {
                         PackedWriter.EndMessage();
                         EarlyWarning.OnPacket("GameOptionsSender.PackedFlush", PackedWriter.Length, PackedWriter.Length, "Reliable");
