@@ -26,6 +26,44 @@ internal static class ExtendedPlayerControl
     public static readonly HashSet<byte> TempExiled = [];
     public static bool DontLowerSendTimer;
 
+    // イントロ中・開始直後のキル抑止中・会議明けの暗転対策中は死亡処理そのものが取り消されるので、その間に成立した自滅は明けるまで持ち越す。
+    // そのまま通すと死亡扱いだけが残り、本人は生き続ける。
+    private static readonly HashSet<byte> SuicidesAwaitingKillWindow = [];
+
+    private static void DeferSuicideUntilKillAllowed(PlayerControl player, PlayerState.DeathReason deathReason, PlayerControl realKiller)
+    {
+        byte id = player.PlayerId;
+        // PlayerState は試合ごとに作り直されるので、持ち越し中に次の試合へ移ったかをこれで見分ける。
+        if (!Main.PlayerStates.TryGetValue(id, out PlayerState gameState) || !SuicidesAwaitingKillWindow.Add(id)) return;
+
+        // 抑止明けに複数人の死亡が同じ瞬間へ重ならないよう、持ち越した順に少しずつずらす。
+        float stagger = (SuicidesAwaitingKillWindow.Count - 1) * 0.4f;
+        float wait = Main.IntroDestroyed
+            ? Math.Max((Options.StartingKillCooldown?.GetFloat() ?? 10f) - (TimeStamp - IntroCutsceneDestroyPatch.IntroDestroyTS), 0f) + 0.5f + stagger
+            : 1f + stagger;
+        LateTask.New(Retry, wait, "Deferred Suicide");
+        return;
+
+        void Retry()
+        {
+            if (!GameStates.InGame || GameStates.IsEnded || !player || !Main.PlayerStates.TryGetValue(id, out PlayerState current) || !ReferenceEquals(current, gameState))
+            {
+                SuicidesAwaitingKillWindow.Remove(id);
+                return;
+            }
+
+            // 会議中や追放演出中は自滅が成立しないので、明けるまで待つ。
+            if (!Main.IntroDestroyed || IntroCutsceneDestroyPatch.PreventKill || AntiBlackout.SkipTasks || !GameStates.IsInTask || ExileController.Instance)
+            {
+                LateTask.New(Retry, 1f, log: false);
+                return;
+            }
+
+            SuicidesAwaitingKillWindow.Remove(id);
+            player.Suicide(deathReason, realKiller);
+        }
+    }
+
     // RpcGuardAndKill バースト防止用 (2026-05-28 実機 Hacking kick で確定):
     //   IntroPatch.cs:1207 + FixKillCooldownTask 等で短時間に複数の SetKillCooldown が
     //   呼ばれると、各々 0.1s 後の LateTask で RpcGuardAndKill (= MurderPlayer Reliable
@@ -1078,6 +1116,12 @@ internal static class ExtendedPlayerControl
         public void Suicide(PlayerState.DeathReason deathReason = PlayerState.DeathReason.Suicide, PlayerControl realKiller = null)
         {
             if (!player.IsAlive() || player.Data.IsDead || !GameStates.IsInTask || ExileController.Instance) return;
+
+            if (Options.CurrentGameMode == CustomGameMode.Standard && (!Main.IntroDestroyed || IntroCutsceneDestroyPatch.PreventKill || AntiBlackout.SkipTasks))
+            {
+                DeferSuicideUntilKillAllowed(player, deathReason, realKiller);
+                return;
+            }
 
             PlayerState state = Main.PlayerStates[player.PlayerId];
 
