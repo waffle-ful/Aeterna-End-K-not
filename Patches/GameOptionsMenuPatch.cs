@@ -55,6 +55,7 @@ public static class ModGameOptionsMenu
             TabGroup.CrewmateRoles => new Color32(140, 255, 255, 255),
             TabGroup.NeutralRoles => new Color32(255, 171, 27, 255),
             TabGroup.CovenRoles => new Color32(123, 63, 187, 255),
+            TabGroup.Combinations => CombinationRoles.TabColor32,
             _ => new Color32(0, 165, 255, 255)
         } : Main.GameModeColors.TryGetValue(gm, out var c) ? c : new Color32(0, 165, 255, 255);
         return color;
@@ -1033,6 +1034,7 @@ public static class ToggleOptionPatch
                 TabGroup.CrewmateRoles => new Color32(140, 255, 255, 255),
                 TabGroup.NeutralRoles => new Color32(255, 171, 27, 255),
                 TabGroup.CovenRoles => new Color32(123, 63, 187, 255),
+                TabGroup.Combinations => CombinationRoles.TabColor32,
                 _ => new Color32(0, 165, 255, 255)
             } : Main.GameModeColors.TryGetValue(gm, out var c) ? c : new Color32(0, 165, 255, 255);
             __instance.CheckMark.sprite = Utils.LoadSprite("EndKnot.Resources.Images.Checkmark.png", 100f);

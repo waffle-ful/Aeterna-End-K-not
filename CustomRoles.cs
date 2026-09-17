@@ -628,6 +628,9 @@ public enum CustomRoles
     EkmNeuRole4,
     EkmNeuRole5,
 
+    // Combination roles (2人1組で配られる)
+    Driver,
+    Braid,
 
     // Sub-role after 1000 (buffer reserved for ~500 future main roles)
     NotAssigned = 1000,

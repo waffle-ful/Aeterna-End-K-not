@@ -418,6 +418,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Swooper => CustomRoles.Impostor,
                 CustomRoles.Crewpostor => CustomRoles.Engineer,
                 CustomRoles.Hypocrite => CustomRoles.Crewmate,
+                CustomRoles.Braid => Driver.BraidCanVent.GetBool() ? CustomRoles.Engineer : CustomRoles.Crewmate,
                 CustomRoles.Cherokious => CustomRoles.Engineer,
                 CustomRoles.Pawn => CustomRoles.Crewmate,
                 CustomRoles.Observer => CustomRoles.Crewmate,
@@ -1015,7 +1016,8 @@ internal static class CustomRolesHelper
                 CustomRoles.Autoscopy or
                 CustomRoles.EvilBusker or
                 CustomRoles.Atlas or
-                CustomRoles.Dominion;
+                CustomRoles.Dominion or
+                CustomRoles.Driver;
         }
 
         public bool IsNeutral(bool check = false)
@@ -1057,7 +1059,8 @@ internal static class CustomRolesHelper
                 CustomRoles.Crewpostor or
                 CustomRoles.Convict or
                 CustomRoles.Renegade or
-                CustomRoles.Parasite;
+                CustomRoles.Parasite or
+                CustomRoles.Braid;
         }
 
         public bool IsTasklessCrewmate()
@@ -1833,6 +1836,7 @@ internal static class CustomRolesHelper
 
         public RoleOptionType GetRoleOptionType()
         {
+            if (role.IsCombinationRole()) return RoleOptionType.Combination;
             if (role.IsCoven()) return RoleOptionType.Coven_Miscellaneous;
             if (role.IsImpostor() || role.IsMadmate()) return role.GetImpostorRoleCategory();
             if (role.IsCrewmate()) return role.GetCrewmateRoleCategory();
@@ -2051,6 +2055,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Nuker => Bomber.NukerChance.GetInt() > 0,
                 CustomRoles.Bard => Arrogance.BardChance.GetInt() > 0,
                 CustomRoles.Sunnyboy => Jester.SunnyboyChance.GetInt() > 0,
+                _ when role.IsCombinationPartner() => role.GetCombinationPrimary().GetCount() > 0,
                 _ => role.GetCount() > 0
             };
         }
@@ -2076,6 +2081,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Hypocrite => CountTypes.Impostor,
                 CustomRoles.Crewpostor => CountTypes.Impostor,
                 CustomRoles.Renegade => CountTypes.Impostor,
+                CustomRoles.Braid => CountTypes.Crew,
                 CustomRoles.Gaslighter => Gaslighter.WinCondition.GetValue() == 2 ? CountTypes.Gaslighter : CountTypes.Crew,
                 CustomRoles.Stalker when Stalker.SnatchesWin.GetBool() => CountTypes.Crew,
                 CustomRoles.SchrodingersCat => SchrodingersCat.WinsWithCrewIfNotAttacked.GetBool() ? CountTypes.Crew : CountTypes.OutOfGame,
@@ -2167,6 +2173,7 @@ internal static class CustomRolesHelper
                 RoleOptionType.Neutral_Pariah => ColorUtility.TryParseHtmlString("#a10e49", out var c) ? c : Color.magenta,
                 RoleOptionType.Neutral_Killing => Palette.ImpostorRed,
                 RoleOptionType.Coven_Miscellaneous => Utils.GetRoleColor(CustomRoles.CovenLeader),
+                RoleOptionType.Combination => CombinationRoles.TabColor,
                 _ => Utils.GetRoleColor(CustomRoles.Vigilante)
             };
         }
@@ -2191,6 +2198,7 @@ internal static class CustomRolesHelper
                 RoleOptionType.Neutral_Pariah => TabGroup.NeutralRoles,
                 RoleOptionType.Neutral_Killing => TabGroup.NeutralRoles,
                 RoleOptionType.Coven_Miscellaneous => TabGroup.CovenRoles,
+                RoleOptionType.Combination => TabGroup.Combinations,
                 _ => TabGroup.OtherRoles
             };
         }
@@ -2386,7 +2394,8 @@ public enum RoleOptionType
     Neutral_Evil,
     Neutral_Pariah,
     Neutral_Killing,
-    Coven_Miscellaneous
+    Coven_Miscellaneous,
+    Combination
 }
 
 public enum AddonTypes

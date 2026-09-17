@@ -1441,7 +1441,7 @@ public static class Options
 
         foreach (RoleOptionType roleOptionType in Main.RoleOptionTypeValues)
         {
-            if (roleOptionType is RoleOptionType.Coven_Miscellaneous or RoleOptionType.Impostor_Madmate) continue;
+            if (roleOptionType is RoleOptionType.Coven_Miscellaneous or RoleOptionType.Impostor_Madmate or RoleOptionType.Combination) continue;
 
             TabGroup tab = roleOptionType.GetTabFromOptionType();
             Color roleOptionTypeColor = roleOptionType.GetRoleOptionTypeColor();
@@ -3877,12 +3877,14 @@ public static class Options
         public readonly OptionItem NumLongTasks;
         public readonly OptionItem NumShortTasks;
 
-        private OverrideTasksData(int idStart, TabGroup tab, CustomRoles role)
+        // parent が省略された時は role 自身の出現率オプションを親にする。コンビネーション役職の相方は
+        // 自分の出現率オプションを持たないため、その場合は主役職の出現率オプションを明示的に渡す。
+        private OverrideTasksData(int idStart, TabGroup tab, CustomRoles role, OptionItem parent = null)
         {
             Dictionary<string, string> replacementDic = new() { { "%role%", role.ToColoredString() } };
 
             DoOverride = new BooleanOptionItem(idStart++, "doOverride", false, tab)
-                .SetParent(CustomRoleSpawnChances[role])
+                .SetParent(parent ?? CustomRoleSpawnChances[role])
                 .SetValueFormat(OptionFormat.None);
 
             DoOverride.ReplacementDictionary = replacementDic;
@@ -3911,9 +3913,9 @@ public static class Options
                 Logger.Warn("OverrideTasksData created for duplicate CustomRoles", "OverrideTasksData");
         }
 
-        public static OverrideTasksData Create(int idStart, TabGroup tab, CustomRoles role)
+        public static OverrideTasksData Create(int idStart, TabGroup tab, CustomRoles role, OptionItem parent = null)
         {
-            return new(idStart, tab, role);
+            return new(idStart, tab, role, parent);
         }
     }
 

@@ -29,6 +29,7 @@ public static class RoleMenuTokens
     public static readonly Color32 Crew  = H(0x45,0xC8,0xC0); // NOT cta
     public static readonly Color32 Neu   = H(0xE0,0xA3,0x3A);
     public static readonly Color32 Cov   = H(0xA0,0x6C,0xE0);
+    public static readonly Color32 Combi = H(0xF7,0xC1,0x14);
     public static readonly Color32 Addon = H(0x8A,0x8F,0x9A);
     public static readonly Color32 Mod   = H(0x6F,0xA0,0xF0);
 
@@ -73,7 +74,7 @@ public static class RoleMenuTokens
 
     public static Color32 FactionColor(TabGroup t)=>t switch{
         TabGroup.ImpostorRoles=>Imp, TabGroup.CrewmateRoles=>Crew,
-        TabGroup.NeutralRoles=>Neu, TabGroup.CovenRoles=>Cov, _=>Mod};
+        TabGroup.NeutralRoles=>Neu, TabGroup.CovenRoles=>Cov, TabGroup.Combinations=>Combi, _=>Mod};
 
     public static readonly Color32 ChipOnFill   = new(0x3F,0xB6,0xAE,36);
     public static readonly Color32 ModPillFill  = new(0xD9,0xA4,0x41,41);

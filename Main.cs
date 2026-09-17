@@ -1005,6 +1005,8 @@ public class Main : BasePlugin
                 { CustomRoles.Crewpostor, "#ff1919" },
                 { CustomRoles.Hypocrite, "#ff1919" },
                 { CustomRoles.Renegade, "#ff1919" },
+                { CustomRoles.Driver, "#ff1919" },
+                { CustomRoles.Braid, "#ff7f50" },
                 { CustomRoles.Virus, "#2E8B57" },
                 { CustomRoles.Investigator, "#BA55D3" },
                 { CustomRoles.Pursuer, "#617218" },

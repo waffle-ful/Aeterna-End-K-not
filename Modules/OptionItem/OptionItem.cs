@@ -377,6 +377,7 @@ public enum TabGroup
     CrewmateRoles,
     NeutralRoles,
     CovenRoles,
+    Combinations,
     Addons,
     OtherRoles,
     PresetExplorer
