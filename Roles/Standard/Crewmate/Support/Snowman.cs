@@ -25,6 +25,7 @@ public class Snowman : RoleBase
     private float OldProportion;
     private Vector2 OldPosition;
     private float stoptimer;
+    private bool WasLightsOut;
 
     public override bool IsEnable => PlayerIdList.Count > 0;
 
@@ -66,6 +67,7 @@ public class Snowman : RoleBase
         NowWalkCount = 0f;
         OldPosition = new Vector2(50f, 50f);
         stoptimer = 0f;
+        WasLightsOut = false;
     }
 
     public override void Remove(byte playerId)
@@ -76,14 +78,28 @@ public class Snowman : RoleBase
     public override void ApplyGameOptions(IGameOptions opt, byte playerId)
     {
         opt.SetFloat(FloatOptionNames.CrewLightMod, NowVision);
+
+        // マッドメイトの雪だるまは、停電中だけ溶ける前の視界で見渡せる。
+        if (Utils.IsActive(SystemTypes.Electrical) && playerId.GetPlayer() is { } pc && pc.Is(CustomRoles.Madmate))
+            opt.SetFloat(FloatOptionNames.CrewLightMod, FirstVision * 5);
     }
 
     public override void OnFixedUpdate(PlayerControl pc)
     {
         if (!AmongUsClient.Instance.AmHost || !pc.IsAlive()) return;
         if (GameStates.IsLobby || GameStates.IsMeeting) return; // 会議中は Pos() が凍結し静止判定が誤発火 → ビジョン融解が進むため除外
+
+        bool lightsOut = Utils.IsActive(SystemTypes.Electrical);
+
+        // 停電の開始/復旧で全員へ設定を送り直す経路はこの役職を含まないので、マッドメイト時の視界切り替えは自分で送る。
+        if (lightsOut != WasLightsOut)
+        {
+            WasLightsOut = lightsOut;
+            if (pc.Is(CustomRoles.Madmate)) pc.MarkDirtySettings();
+        }
+
         if (pc.GetTaskState().IsTaskFinished) return;
-        if (Utils.IsActive(SystemTypes.Electrical) && ElectricalIgnoreMelt) return;
+        if (lightsOut && ElectricalIgnoreMelt) return;
 
         Vector2 currentPos = pc.Pos();
 

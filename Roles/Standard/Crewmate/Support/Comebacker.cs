@@ -17,6 +17,10 @@ public class Comebacker : RoleBase
     private int OldVentId;
     private string ComebackPosString;
 
+    // マッドメイト時に記録地点への矢印を配ったインポスターと、その地点。地点が変わるたびに張り替える。
+    private List<byte> MadArrowImps = [];
+    private Vector3? MadArrowPos;
+
     public override bool IsEnable => PlayerIdList.Count > 0;
 
     public override void SetupCustomOption()
@@ -40,11 +44,31 @@ public class Comebacker : RoleBase
         OldPosition = null;
         OldVentId = -1;
         ComebackPosString = string.Empty;
+        MadArrowImps = [];
+        MadArrowPos = null;
     }
 
     public override void Remove(byte playerId)
     {
         PlayerIdList.Remove(playerId);
+        ClearMadArrows();
+    }
+
+    public override void OnReportDeadBody()
+    {
+        if (Utils.GetPlayerById(ComebackerId)?.IsAlive() != true) ClearMadArrows();
+    }
+
+    private void ClearMadArrows()
+    {
+        if (MadArrowPos.HasValue)
+        {
+            foreach (byte impId in MadArrowImps)
+                LocateArrow.Remove(impId, MadArrowPos.Value);
+        }
+
+        MadArrowImps.Clear();
+        MadArrowPos = null;
     }
 
     public override void ApplyGameOptions(IGameOptions opt, byte playerId)
@@ -55,8 +79,12 @@ public class Comebacker : RoleBase
 
     public override void OnEnterVent(PlayerControl pc, Vent vent)
     {
+        bool mad = pc.Is(CustomRoles.Madmate);
+
         if (OldPosition.HasValue)
         {
+            if (mad) NotifyImpostorsOfReturn(pc, ComebackPosString);
+
             Vector2 tp = OldPosition.Value;
             int storedVentId = OldVentId;
             LateTask.New(() =>
@@ -74,11 +102,46 @@ public class Comebacker : RoleBase
         PlainShipRoom room = pc.GetPlainShipRoom();
         ComebackPosString = room != null ? GetString(room.RoomId.ToString()) : string.Empty;
 
+        if (mad) ShareWaypointWithImpostors(vent.transform.position);
+
         Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
+    }
+
+    // マッドメイトのカムバッカーが記録地点へ戻ると、生存インポスター全員に知らせる。
+    private void NotifyImpostorsOfReturn(PlayerControl pc, string roomName)
+    {
+        string msg = string.Format(GetString("ComebackerMadReturn"), ComebackerId.ColoredPlayerName(), roomName);
+        foreach (PlayerControl imp in Main.EnumerateAlivePlayerControls())
+        {
+            if (imp.PlayerId == pc.PlayerId || !imp.Is(CustomRoleTypes.Impostor)) continue;
+            imp.Notify(msg, 4f);
+        }
+    }
+
+    // 記録地点を生存インポスター全員へ矢印で共有する (集合場所)。
+    private void ShareWaypointWithImpostors(Vector3 pos)
+    {
+        ClearMadArrows();
+        MadArrowPos = pos;
+
+        foreach (PlayerControl imp in Main.EnumerateAlivePlayerControls())
+        {
+            if (imp.PlayerId == ComebackerId || !imp.Is(CustomRoleTypes.Impostor)) continue;
+            LocateArrow.Add(imp.PlayerId, pos);
+            MadArrowImps.Add(imp.PlayerId);
+            Utils.NotifyRoles(SpecifySeer: imp, SpecifyTarget: imp);
+        }
     }
 
     public override string GetSuffix(PlayerControl seer, PlayerControl target, bool hud = false, bool meeting = false)
     {
+        // インポスターから見た、マッドメイトのカムバッカーの記録地点
+        if (MadArrowPos.HasValue && !meeting && seer.PlayerId == target.PlayerId && MadArrowImps.Contains(seer.PlayerId))
+        {
+            if (Utils.GetPlayerById(ComebackerId)?.IsAlive() != true) return string.Empty;
+            return Utils.ColorString(Palette.ImpostorRed, LocateArrow.GetArrow(seer, MadArrowPos.Value));
+        }
+
         if (seer.PlayerId != ComebackerId || seer.PlayerId != target.PlayerId) return string.Empty;
         if (meeting || !seer.IsAlive() || ComebackPosString == string.Empty) return string.Empty;
         return Utils.ColorString(Utils.GetRoleColor(CustomRoles.Comebacker), string.Format(GetString("ComebackerLowerText"), ComebackPosString));
