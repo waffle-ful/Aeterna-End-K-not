@@ -71,6 +71,8 @@ public class Shyboy : RoleBase
     {
         if (!AmongUsClient.Instance.AmHost || !pc.IsAlive()) return;
         if (GameStates.IsLobby || GameStates.IsMeeting) return;
+        // 開始直後のキル抑止中は自滅も成立しない (死亡扱いだけ残って生き続ける) ので、抑止が明けてから数え始める。
+        if (IntroCutsceneDestroyPatch.PreventKill) return;
 
         AfterMeeting += Time.fixedDeltaTime;
 
