@@ -1148,6 +1148,8 @@ public static class Utils
             case CustomRoles.ProbabilityKing:
             case CustomRoles.GambleKiller:
             case CustomRoles.Torpedo:
+            case CustomRoles.Vega:
+            case CustomRoles.Altair:
                 hasTasks = false;
                 break;
             case CustomRoles.Amnesiac:
@@ -1649,6 +1651,26 @@ public static class Utils
         HealthLog.NoteOp("ShowActiveRoles.send");
         SendMessage("\n", playerId, built);
         HealthLog.EndOp();
+    }
+
+    public static void ShowWinSettings(byte playerId = byte.MaxValue)
+    {
+        if (Options.HideGameSettings.GetBool() && playerId != byte.MaxValue)
+        {
+            SendMessage(GetString("Message.HideGameSettings"), playerId, importance: MessageImportance.Low);
+            return;
+        }
+
+        StringBuilder sb = new(GetString("ShowwinSetting"));
+
+        foreach (KeyValuePair<CustomRoles, SoloWinOption> data in SoloWinOption.AllData
+                     .Where(x => x.Key.IsEnable() || x.Key is CustomRoles.Impostor or CustomRoles.Crewmate)
+                     .OrderBy(x => x.Value.OptionWin.GetInt()))
+        {
+            sb.Append('\n').Append(data.Key.GetCombinationName()).Append(": ").Append(data.Value.OptionWin.GetInt());
+        }
+
+        SendMessage(sb.ToString().RemoveHtmlTags(), playerId);
     }
 
     public static void ShowChildrenSettings(OptionItem option, StringBuilder sb, int deep = 0, bool f1 = false, bool disableColor = true)

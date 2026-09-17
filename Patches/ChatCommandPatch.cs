@@ -6192,6 +6192,10 @@ internal static class ChatCommands
             case "all":
                 Utils.ShowAllActiveSettings(player.PlayerId);
                 break;
+            case "w":
+            case "win":
+                Utils.ShowWinSettings(player.PlayerId);
+                break;
             default:
                 Utils.ShowActiveSettings(player.PlayerId);
                 break;

@@ -707,6 +707,8 @@ internal static class CustomRolesHelper
                 CustomRoles.GambleKiller => RoleTypes.Impostor,
                 CustomRoles.Torpedo => RoleTypes.Phantom,
                 CustomRoles.Replay => RoleTypes.Phantom,
+                CustomRoles.Vega => RoleTypes.Impostor,
+                CustomRoles.Altair => RoleTypes.Impostor,
 
                 CustomRoles.CovenLeader => RoleTypes.Impostor,
                 CustomRoles.SpellCaster => RoleTypes.Impostor,
@@ -847,7 +849,9 @@ internal static class CustomRolesHelper
                 CustomRoles.Jackpot or
                 CustomRoles.ProbabilityKing or
                 CustomRoles.GambleKiller or
-                CustomRoles.Torpedo;
+                CustomRoles.Torpedo or
+                CustomRoles.Vega or
+                CustomRoles.Altair;
         }
 
         public bool IsGhostRole()
@@ -2088,6 +2092,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Stalker => !Stalker.SnatchesWin.GetBool() ? CountTypes.Stalker : CountTypes.Crew,
                 CustomRoles.Arsonist => Arsonist.ArsonistKeepsGameGoing.GetBool() ? CountTypes.Arsonist : CountTypes.Crew,
                 CustomRoles.Remotekiller => CountTypes.Remotekiller,
+                CustomRoles.Altair => CountTypes.Vega,
                 CustomRoles.Strawdoll => CountTypes.OutOfGame,
                 CustomRoles.CurseMaker => CountTypes.OutOfGame,
                 CustomRoles.Missioneer => CountTypes.OutOfGame,
@@ -2499,6 +2504,7 @@ public enum CountTypes
     ProbabilityKing,
     GambleKiller,
     Torpedo,
+    Vega,
 
     Coven,
 
