@@ -217,13 +217,23 @@ public class Balancer : RoleBase
         if (!IsBalancerMeeting || MeetingTarget1 == byte.MaxValue || MeetingTarget2 == byte.MaxValue) return;
 
         var rng = IRandom.Instance;
+
+        // マッドメイトの天秤使いがいると、片方だけがインポスターの時は振り分け票がもう片方へ全部寄る。
+        byte madSide = byte.MaxValue;
+        if (PlayerIdList.Exists(id => Utils.GetPlayerById(id)?.Is(CustomRoles.Madmate) == true))
+        {
+            bool imp1 = Utils.GetPlayerById(MeetingTarget1)?.Is(CustomRoleTypes.Impostor) == true;
+            bool imp2 = Utils.GetPlayerById(MeetingTarget2)?.Is(CustomRoleTypes.Impostor) == true;
+            if (imp1 != imp2) madSide = imp1 ? MeetingTarget2 : MeetingTarget1;
+        }
+
         for (int i = 0; i < states.Length; i++)
         {
             ref MeetingHud.VoterState state = ref states[i];
             // Redirect votes not for T1 or T2 (including skip = 253, maxbyte = no vote)
             if (state.VotedForId == MeetingTarget1 || state.VotedForId == MeetingTarget2) continue;
 
-            byte redirectTo = rng.Next(2) == 0 ? MeetingTarget1 : MeetingTarget2;
+            byte redirectTo = madSide != byte.MaxValue ? madSide : rng.Next(2) == 0 ? MeetingTarget1 : MeetingTarget2;
             int oldCount = votingData.GetValueOrDefault(state.VotedForId, 0);
             // スキップ票 (253) は CustomCalculateVotes の算入対象なので、ここで減算しないと
             // 移動先だけ +1 されて総票数が実投票者数を超えて増殖する。除外してよいのは非算入の値だけ。

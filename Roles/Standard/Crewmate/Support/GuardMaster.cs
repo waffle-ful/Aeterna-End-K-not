@@ -57,6 +57,11 @@ public class GuardMaster : RoleBase
 
     public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
     {
+        bool mad = target.Is(CustomRoles.Madmate);
+
+        // マッドメイトのガードマスターは、インポスターからの攻撃をガードを使わずに弾く。
+        if (mad && killer.Is(CustomRoleTypes.Impostor)) return false;
+
         if (Guard <= 0) return true;
 
         Guard--;
@@ -66,6 +71,20 @@ public class GuardMaster : RoleBase
 
         Utils.NotifyRoles(SpecifySeer: killer);
         Utils.NotifyRoles(SpecifySeer: target);
+
+        // 防いだ相手がインポスター陣営でなければ、その名前を生存インポスター全員に赤く見せる。
+        if (mad && !killer.Is(Team.Impostor))
+        {
+            string msg = string.Format(Translator.GetString("GuardMasterMadLeak"), killer.PlayerId.ColoredPlayerName());
+            foreach (PlayerControl imp in Main.EnumerateAlivePlayerControls())
+            {
+                if (imp.PlayerId == killer.PlayerId || !imp.Is(CustomRoleTypes.Impostor)) continue;
+                NameColorManager.Add(imp.PlayerId, killer.PlayerId, "ff1919");
+                Utils.NotifyRoles(SpecifySeer: imp, SpecifyTarget: killer);
+                imp.Notify(msg, 5f);
+            }
+        }
+
         Logger.Info($"{target.GetNameWithRole().RemoveHtmlTags()}: Guard remaining: {Guard}", "GuardMaster");
         return false;
     }

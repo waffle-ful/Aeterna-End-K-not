@@ -59,7 +59,24 @@ public class Walker : RoleBase
 
         int required = OptionWalkTaskCount.GetInt();
         if (before < required && visited.Count >= required)
+        {
             ForceCompleteTasks(pc);
+            if (pc.Is(CustomRoles.Madmate)) ResetImpostorKillCooldowns(pc);
+        }
+    }
+
+    // マッドメイトの散歩人が周回し終えると、生存インポスター全員のキルクールが一度だけ空になる。
+    private static void ResetImpostorKillCooldowns(PlayerControl walker)
+    {
+        string msg = string.Format(GetString("WalkerMadKillCooldownReset"), walker.PlayerId.ColoredPlayerName());
+        foreach (PlayerControl imp in Main.EnumerateAlivePlayerControls())
+        {
+            if (!imp.Is(CustomRoleTypes.Impostor)) continue;
+            imp.SetKillCooldown(0.01f);
+            // ホスト側の残りタイマーは「長くなる方向」にしか更新されないので、直接書き戻す。
+            Main.KillTimers[imp.PlayerId] = 0.01f;
+            imp.Notify(msg, 5f);
+        }
     }
 
     private static void ForceCompleteTasks(PlayerControl pc)

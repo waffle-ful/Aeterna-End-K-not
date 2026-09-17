@@ -20,6 +20,7 @@ public class Android : RoleBase
     public static OptionItem AutoRechargeAmount;
     public static OptionItem AutoRechargeInterval;
     public static OptionItem AutoRechargeStationary;
+    public static OptionItem MadKillCharge;
 
     private byte AndroidId;
     private float Battery;
@@ -75,6 +76,9 @@ public class Android : RoleBase
             .SetValueFormat(OptionFormat.Seconds);
         AutoRechargeStationary = new BooleanOptionItem(Id + 20, "AndroidAutoRechargeStationary", false, TabGroup.CrewmateRoles)
             .SetParent(AutoRecharge);
+        MadKillCharge = new FloatOptionItem(Id + 21, "AndroidMadKillCharge", new(0f, 100f, 1f), 25f, TabGroup.CrewmateRoles)
+            .SetParent(Options.CustomRoleSpawnChances[CustomRoles.Android])
+            .SetValueFormat(OptionFormat.Percent);
     }
 
     public override void Init() => PlayerIdList = [];
@@ -140,6 +144,38 @@ public class Android : RoleBase
 
         if (completedTaskCount + 1 >= totalTaskCount)
             allTasksDone = true;
+
+        pc.SyncSettings();
+
+        if (lastBatt <= 0f)
+            pc.RpcResetAbilityCooldown();
+
+        Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
+    }
+
+    // マッドメイトのアンドロイドは、インポスターがキルするたびに充電される。
+    public static void OnAnyoneMurder(PlayerControl killer, PlayerControl target)
+    {
+        if (PlayerIdList.Count == 0 || killer == null || target == null || killer.PlayerId == target.PlayerId) return;
+        if (!killer.Is(CustomRoleTypes.Impostor)) return;
+
+        foreach (byte id in PlayerIdList)
+        {
+            if (id == killer.PlayerId || !Main.PlayerStates.TryGetValue(id, out PlayerState state) || state.Role is not Android android) continue;
+            PlayerControl pc = Utils.GetPlayerById(id);
+            if (pc == null || !pc.IsAlive() || !pc.Is(CustomRoles.Madmate)) continue;
+            android.ChargeByKill(pc);
+        }
+    }
+
+    private void ChargeByKill(PlayerControl pc)
+    {
+        float amount = MadKillCharge.GetFloat() * 0.01f;
+        if (amount <= 0f || Battery >= 1f) return;
+
+        float lastBatt = Battery;
+        Battery += amount;
+        if (Battery > 1f) Battery = 1f;
 
         pc.SyncSettings();
 

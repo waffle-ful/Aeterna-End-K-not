@@ -89,6 +89,8 @@ public class Shyboy : RoleBase
         foreach (PlayerControl other in Main.AllAlivePlayerControlsToList)
         {
             if (other.PlayerId == ShyboyId) continue;
+            // マッドメイトの恥ずかしがり屋は、インポスターのそばなら平気でいられる。
+            if (pc.Is(CustomRoles.Madmate) && other.Is(CustomRoleTypes.Impostor)) continue;
             if (Vector2.Distance(pos, other.Pos()) <= DetectionRadius)
             {
                 nearOthers = true;

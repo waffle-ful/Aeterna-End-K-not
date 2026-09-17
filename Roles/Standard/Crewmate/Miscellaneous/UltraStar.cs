@@ -140,6 +140,8 @@ public class UltraStar : RoleBase
         {
             if (other.PlayerId == pc.PlayerId) continue;
             if (!pc.CanMove || !other.CanMove) continue;
+            // マッドメイトのスターはインポスター陣営を轢かない。
+            if (pc.Is(CustomRoles.Madmate) && other.Is(Team.Impostor)) continue;
             if (FastVector2.DistanceWithinRange(pos, other.Pos(), 0.4f))
             {
                 target = other;

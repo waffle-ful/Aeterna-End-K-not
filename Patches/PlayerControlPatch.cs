@@ -810,6 +810,8 @@ internal static class MurderPlayerPatch
             
             Empress.OnAnyoneMurder(killer);
 
+            Android.OnAnyoneMurder(killer, target);
+
             if (Options.CurrentGameMode == CustomGameMode.Speedrun)
                 Speedrun.ResetTimer(killer);
 

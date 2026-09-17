@@ -111,6 +111,8 @@ public class VentOpener : RoleBase
         bool neutral = OptionNeutral.GetBool();
 
         bool booted = false;
+        bool madOpener = pc.Is(CustomRoles.Madmate);
+        List<byte> madLeaked = [];
 
         foreach ((byte playerId, int ventId) in CurrentVent.ToList())
         {
@@ -129,14 +131,29 @@ public class VentOpener : RoleBase
                 || (role.IsNeutral() && neutral);
 
             if (!match) continue;
+            // マッドメイトのベント開放者はインポスター陣営を追い出さない。
+            if (madOpener && target.Is(Team.Impostor)) continue;
 
             target.MyPhysics.RpcBootFromVent(ventId);
             expelledPlayers.Add(target.PlayerId);
             booted = true;
+            if (madOpener) madLeaked.Add(target.PlayerId);
         }
 
         if (booted)
             pc.KillFlash();
+
+        // 追い出したクルーの名前は、生存インポスター全員にも伝わる。
+        if (madLeaked.Count > 0)
+        {
+            string msg = string.Format(Translator.GetString("VentOpenerMadLeak"), string.Join(", ", madLeaked.Select(id => id.ColoredPlayerName())));
+            foreach (PlayerControl impostor in Main.EnumerateAlivePlayerControls())
+            {
+                if (impostor.PlayerId == pc.PlayerId || !impostor.Is(CustomRoleTypes.Impostor)) continue;
+                impostor.KillFlash();
+                impostor.Notify(msg, 5f);
+            }
+        }
 
         if ((booted || fuhatu) && count > 0)
         {
