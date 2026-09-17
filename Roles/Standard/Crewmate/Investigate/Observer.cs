@@ -13,6 +13,7 @@ public class Observer : RoleBase
     private static OptionItem OptionMaxMonitoring;
     private static OptionItem OptionTaskAwakening;
     private static OptionItem OptionAwakeningTaskCount;
+    private static OptionItem OptionMadKillCooldownReduction;
 
     private byte ObserverId;
     private int remaining;
@@ -34,6 +35,10 @@ public class Observer : RoleBase
 
         OptionAwakeningTaskCount = new IntegerOptionItem(Id + 12, "ObserverAwakeningTaskCount", new(1, 99, 1), 5, TabGroup.CrewmateRoles)
             .SetParent(OptionTaskAwakening);
+
+        OptionMadKillCooldownReduction = new FloatOptionItem(Id + 13, "ObserverMadKillCooldownReduction", new(0f, 60f, 2.5f), 10f, TabGroup.CrewmateRoles)
+            .SetParent(Options.CustomRoleSpawnChances[CustomRoles.Observer])
+            .SetValueFormat(OptionFormat.Seconds);
     }
 
     public override void Init()
@@ -74,11 +79,35 @@ public class Observer : RoleBase
         PlayerControl target = Utils.GetPlayerById(observerTarget);
         if (target == null || target.IsAlive()) return;
 
-        Utils.GetPlayerById(ObserverId)?.KillFlash();
+        foreach (PlayerControl alive in Main.EnumerateAlivePlayerControls())
+            alive.KillFlash();
         Utils.SendMessage(string.Format(GetString("ObserverTargetDied"), observerTarget.ColoredPlayerName()), ObserverId, importance: MessageImportance.High);
+
+        if (pc.Is(CustomRoles.Madmate)) ShortenImpostorKillCooldowns(observerTarget);
 
         observerTarget = byte.MaxValue;
         remaining = Math.Max(0, remaining - 1);
+    }
+
+    // マッドメイトの監視者が見張っていた相手が倒れると、生存インポスター全員の残りキルクールが縮む。
+    private static void ShortenImpostorKillCooldowns(byte deadId)
+    {
+        float reduction = OptionMadKillCooldownReduction.GetFloat();
+        if (reduction <= 0f) return;
+
+        string msg = string.Format(GetString("ObserverMadKillCooldownReduced"), deadId.ColoredPlayerName(), reduction);
+        foreach (PlayerControl imp in Main.EnumerateAlivePlayerControls())
+        {
+            if (!imp.Is(CustomRoleTypes.Impostor)) continue;
+            if (Main.KillTimers.TryGetValue(imp.PlayerId, out float timer) && timer > 0f)
+            {
+                float shortened = Math.Max(timer - reduction, 0.01f);
+                imp.SetKillCooldown(shortened);
+                // ホスト側の残りタイマーは「長くなる方向」にしか更新されないので、短縮後の値を直接書き戻す。
+                Main.KillTimers[imp.PlayerId] = shortened;
+            }
+            Utils.SendMessage(msg, imp.PlayerId, GetString("ObserverMadTitle"), importance: MessageImportance.High);
+        }
     }
 
     public override void OnReportDeadBody()
