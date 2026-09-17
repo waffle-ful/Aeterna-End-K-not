@@ -8,6 +8,17 @@ End K not 本体は GPL-3.0 です（[`LICENSE`](./LICENSE)）。以下は別の
 それぞれ独自のライセンスに従います。`EndKnot.dll` に埋め込まれているもの、
 配布パッケージに同梱されているものの両方を含みます。
 
+End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles)
+(Gurge44 et al., GPL-3.0), and many of its roles are ported from
+[TownOfHost-K](https://github.com/KYMario/TownOfHost-K) (KYMario et al., GPL-3.0).
+Both are under the same license as End K not; see [`LICENSE`](./LICENSE) and the
+[README credits](./README.md#クレジット).
+
+End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles)（Gurge44 他、GPL-3.0）の
+派生プロジェクトで、多くの役職は [TownOfHost-K](https://github.com/KYMario/TownOfHost-K)（KYMario 他、GPL-3.0）
+から移植しています。どちらも本体と同じライセンスです（[`LICENSE`](./LICENSE) と
+[README のクレジット](./README.md#クレジット)を参照）。
+
 | Component | Author / Project | License | Where |
 |---|---|---|---|
 | NVorbis 0.10.5 | Andrew Ward — [NVorbis](https://github.com/NVorbis/NVorbis) | MIT | embedded in `EndKnot.dll` (Ogg Vorbis decoding) |
