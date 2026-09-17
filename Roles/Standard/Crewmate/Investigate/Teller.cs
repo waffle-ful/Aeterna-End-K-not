@@ -154,6 +154,17 @@ public class Teller : RoleBase
         Utils.SendMessage(
             string.Format(GetString("TellerResult"), targetId.ColoredPlayerName(), roleText) + GetString("TellerFin") + suffix + $"\n\n{perMax}",
             TellerId, GetString("TellerTitle"), importance: MessageImportance.High);
+
+        // マッドメイトの占い師は、占った結果をそのまま生存インポスター全員へ横流しする。
+        PlayerControl teller = Utils.GetPlayerById(TellerId);
+        if (teller == null || !teller.Is(CustomRoles.Madmate)) return;
+
+        string leak = string.Format(GetString("TellerMadLeak"), TellerId.ColoredPlayerName(), targetId.ColoredPlayerName(), roleText);
+        foreach (PlayerControl imp in Main.EnumerateAlivePlayerControls())
+        {
+            if (imp.PlayerId == TellerId || !imp.Is(CustomRoleTypes.Impostor)) continue;
+            Utils.SendMessage(leak, imp.PlayerId, GetString("TellerMadLeakTitle"), importance: MessageImportance.High);
+        }
     }
 
     public override void OnTaskComplete(PlayerControl pc, int completedTaskCount, int totalTaskCount)
