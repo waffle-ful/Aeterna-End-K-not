@@ -396,6 +396,15 @@ public static class TestBridge
             return;
         }
 
+        // Layer C: 任意プレイヤーのタスク完了。非モッド客はタスク画面を自動操作できないため、
+        // ホストから RpcCompleteTask を撃って GameData.CompleteTask 経由の OnTaskComplete 系を鳴らす。
+        if (directive.StartsWith("task ", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecuteTask(directive[5..].Trim()); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR task failed"); }
+            return;
+        }
+
         // Layer C: ベント出入り(RpcEnterVent/RpcExitVent 直呼び。使用可否判定は挟まない実機検証口)。
         if (directive.StartsWith("vent ", StringComparison.OrdinalIgnoreCase))
         {
@@ -1807,6 +1816,85 @@ public static class TestBridge
 
         bool ok = Utils.TP(lp.NetTransform, dest, true);
         WriteOut(ok ? $"OK tp -> [{F(dest.x)}, {F(dest.y)}]" : "ERR tp rejected (noCheckState 経路で false になるのは SnapTo cap 超過がほぼ唯一 — KICKRISK 抑制中)");
+    }
+
+    // task <playerId|name> [count|all] — 未完了の通常タスクを先頭から count 個 (既定 1) 完了させる。
+    // 複数個は 0.4s 間隔で順送りし、全件送り終えた時点で `OK task done` を出す。
+    private static void ExecuteTask(string rest)
+    {
+        if (AmongUsClient.Instance == null || !AmongUsClient.Instance.AmHost) { WriteOut("ERR not host"); return; }
+        if (!GameStates.IsInTask) { WriteOut("ERR task only works in task phase"); return; }
+
+        string[] parts = rest.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length is < 1 or > 2) { WriteOut("ERR task usage: task <playerId|name> [count|all]"); return; }
+
+        PlayerControl target;
+
+        if (byte.TryParse(parts[0], out byte pid))
+        {
+            target = Utils.GetPlayerById(pid);
+            if (!target) { WriteOut($"ERR task no player with id {pid}"); return; }
+        }
+        else
+        {
+            target = ResolvePlayerByName(parts[0], out string error);
+            if (!target) { WriteOut($"ERR task {error}"); return; }
+        }
+
+        if (target.Data == null || target.Data.Tasks == null) { WriteOut("ERR task target has no task data"); return; }
+
+        List<uint> pending = [];
+        var tasks = target.Data.Tasks;
+
+        for (var i = 0; i < tasks.Count; i++)
+        {
+            NetworkedPlayerInfo.TaskInfo t = tasks[i];
+            if (t != null && !t.Complete) pending.Add(t.Id);
+        }
+
+        if (pending.Count == 0) { WriteOut($"ERR task {target.PlayerId} has no incomplete tasks (total {tasks.Count})"); return; }
+
+        // 客側の myTasks 先頭には Id=0 のヒント文タスクが挿入されており、Id=0 の完了 RPC はそちらに当たって
+        // 客の画面では完了にならない。部分完了で客とホストの表示をずらさないよう Id=0 は最後に回す。
+        if (pending.Remove(0u)) pending.Add(0u);
+
+        int count = 1;
+
+        if (parts.Length == 2)
+        {
+            if (parts[1].Equals("all", StringComparison.OrdinalIgnoreCase)) count = pending.Count;
+            else if (!int.TryParse(parts[1], out count) || count < 1) { WriteOut($"ERR task bad count: {parts[1]}"); return; }
+        }
+
+        count = Math.Min(count, pending.Count);
+        byte targetId = target.PlayerId;
+
+        for (var i = 0; i < count; i++)
+        {
+            uint taskId = pending[i];
+            bool last = i == count - 1;
+
+            LateTask.New(() =>
+            {
+                PlayerControl pc = Utils.GetPlayerById(targetId);
+
+                if (!pc || !GameStates.IsInTask)
+                {
+                    WriteOut($"ERR task {targetId} aborted before task {taskId}");
+                    return;
+                }
+
+                pc.RpcCompleteTask(taskId);
+
+                if (last)
+                {
+                    TaskState ts = pc.GetTaskState();
+                    WriteOut($"OK task done {targetId} x{count} (progress {ts.CompletedTasksCount}/{ts.AllTasksCount})");
+                }
+            }, 0.4f * i, "TestBridge.Task", log: false);
+        }
+
+        WriteOut($"OK task queued {targetId} x{count} (incomplete {pending.Count})");
     }
 
     private static void ExecuteUse(string button)
