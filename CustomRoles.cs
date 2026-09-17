@@ -631,6 +631,8 @@ public enum CustomRoles
     // Combination roles (2人1組で配られる)
     Driver,
     Braid,
+    Vega,
+    Altair,
 
     // Sub-role after 1000 (buffer reserved for ~500 future main roles)
     NotAssigned = 1000,

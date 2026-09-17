@@ -1007,6 +1007,8 @@ public class Main : BasePlugin
                 { CustomRoles.Renegade, "#ff1919" },
                 { CustomRoles.Driver, "#ff1919" },
                 { CustomRoles.Braid, "#ff7f50" },
+                { CustomRoles.Vega, "#f1d9d9" },
+                { CustomRoles.Altair, "#b0c4de" },
                 { CustomRoles.Virus, "#2E8B57" },
                 { CustomRoles.Investigator, "#BA55D3" },
                 { CustomRoles.Pursuer, "#617218" },
@@ -1640,6 +1642,7 @@ public enum CustomWinner
     Cherokious = CustomRoles.Cherokious,
     Phantasm = CustomRoles.Phantasm,
     Remotekiller = CustomRoles.Remotekiller,
+    Vega = CustomRoles.Vega,
     Strawdoll = CustomRoles.Strawdoll,
     CurseMaker = CustomRoles.CurseMaker,
     Missioneer = CustomRoles.Missioneer,
@@ -1725,6 +1728,8 @@ public enum AdditionalWinners
     Twins = CustomRoles.Twins,
     Faction = CustomRoles.Faction,
     LastNeutral = CustomRoles.LastNeutral,
+    Vega = CustomRoles.Vega,
+    Altair = CustomRoles.Altair,
 
     // Wave 7: EKR win_join の便乗勝者の表示帰属。値は「かたせた側の
     // EKR スロット」— OutroPatch が CustomRoles へキャストして束縛役職名で表示する (全 19 スロット)。

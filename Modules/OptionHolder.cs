@@ -2171,6 +2171,12 @@ public static class Options
             .SetGameMode(CustomGameMode.Standard)
             .SetColor(new Color32(255, 238, 232, byte.MaxValue));
 
+        // Solo win priority (SoloWinOption): a higher value takes the win away from whichever team
+        // currently has it, an equal value rides along as an additional winner (ResetAndSetAndChWinner).
+        SoloWinOption.Create(707700, TabGroup.GameSettings, CustomRoles.Impostor);
+        SoloWinOption.Create(707701, TabGroup.GameSettings, CustomRoles.Crewmate);
+        SoloWinOption.Create(707702, TabGroup.GameSettings, CustomRoles.Jackal);
+
         LoadingPercentage = 67;
         if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
 

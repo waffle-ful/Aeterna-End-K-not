@@ -15,7 +15,8 @@ public static class CombinationRoles
     // 主役職 → 相方
     public static readonly Dictionary<CustomRoles, CustomRoles> Pairs = new()
     {
-        [CustomRoles.Driver] = CustomRoles.Braid
+        [CustomRoles.Driver] = CustomRoles.Braid,
+        [CustomRoles.Vega] = CustomRoles.Altair
     };
 
     private static Dictionary<CustomRoles, CustomRoles> partnerToPrimary;

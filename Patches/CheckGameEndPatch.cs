@@ -195,6 +195,12 @@ internal static class GameEndChecker
                 case CustomWinner.RuthlessRomantic:
                     WinnerIds.Add(Romantic.PartnerId);
                     break;
+                case CustomWinner.Vega:
+                    WinnerIds.UnionWith(Main.EnumeratePlayerControls()
+                        .Where(pc => pc.Is(CustomRoles.Vega) || pc.Is(CustomRoles.Altair))
+                        .Select(pc => pc.PlayerId));
+
+                    break;
             }
 
             if (WinnerTeam is not CustomWinner.Draw and not CustomWinner.None and not CustomWinner.Error)
@@ -318,6 +324,17 @@ internal static class GameEndChecker
                         AdditionalWinnerTeams.Add(AdditionalWinners.LastNeutral);
                     }
 
+                    // Vega/Altair ride-along win
+                    if (Vega.AddWin.GetBool() && (pc.Is(CustomRoles.Vega) || pc.Is(CustomRoles.Altair)) && !WinnerIds.Contains(pc.PlayerId))
+                    {
+                        byte partnerId = pc.Is(CustomRoles.Vega) ? Vega.AltairId : Vega.VegaId;
+                        if (partnerId != byte.MaxValue && (WinnerIds.Contains(partnerId) || (Main.PlayerStates.TryGetValue(partnerId, out PlayerState vps) && WinnerRoles.Contains(vps.MainRole))))
+                        {
+                            WinnerIds.Add(pc.PlayerId);
+                            AdditionalWinnerTeams.Add((AdditionalWinners)role);
+                        }
+                    }
+
                     // EKR「いっしょにかたせる」(win_join) の便乗
                     // ラッチを勝者へ合流する (無条件便乗 — どの陣営が勝っても加わる)。切断者は
                     // CachedAllPlayerControls に居ないので自然に除外される (契約 §2)。第1ループでなく
@@ -344,6 +361,11 @@ internal static class GameEndChecker
                         AdditionalWinnerTeams.Add(AdditionalWinners.AsistingAngel);
                     }
                 }
+
+                // Win-priority arbitration (SoloWinOption): lets a role claim or ride along on the win
+                // via CustomWinnerHolder.ResetAndSetAndChWinner, now that the winners above are settled.
+                foreach (PlayerControl pc in Main.CachedAllPlayerControls())
+                    Main.PlayerStates[pc.PlayerId].Role.CheckWinner(reason);
 
                 Faction.OnGameEnd();
 
@@ -866,8 +888,9 @@ internal static class GameEndChecker
                 CountTypes countTypes = role.GetCountTypes();
                 if (countTypes is CountTypes.Crew or CountTypes.Impostor or CountTypes.None or CountTypes.OutOfGame or CountTypes.CustomTeam or CountTypes.Coven) continue;
 
-                CustomRoles? keyRole = role.IsRecruitingRole() ? null : role;
-                var keyWinner = (CustomWinner)role;
+                // Altair shares Vega's key so the two don't count as separate NK types alive.
+                CustomRoles? keyRole = role.IsRecruitingRole() ? null : role is CustomRoles.Altair ? CustomRoles.Vega : role;
+                var keyWinner = role is CustomRoles.Altair ? CustomWinner.Vega : (CustomWinner)role;
                 int value = 0;
 
                 for (int j = 0; j < aapc.Count; j++)
