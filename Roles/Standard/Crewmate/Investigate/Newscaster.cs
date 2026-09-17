@@ -46,6 +46,17 @@ public class Newscaster : RoleBase
     private static OptionItem MaxEncountersShown;
     private static OptionItem MaxRouteRoomsShown;
     private static OptionItem EncounterRange;
+    private static OptionItem MadFakeNewsChance;
+
+    // マッドメイトのキャスターが混ぜる誤報で、死因のすり替え先に使う候補。
+    private static readonly PlayerState.DeathReason[] FakeDeathReasons =
+    [
+        PlayerState.DeathReason.Kill,
+        PlayerState.DeathReason.Suicide,
+        PlayerState.DeathReason.Poison,
+        PlayerState.DeathReason.Bombed,
+        PlayerState.DeathReason.Shot
+    ];
 
     // 全生存プレイヤー間の「出会い」「経路」。キーは観測対象のプレイヤー (Newscaster 保持者ではない)。
     private static Dictionary<byte, HashSet<byte>> Encounters = [];
@@ -58,6 +69,8 @@ public class Newscaster : RoleBase
     private static byte LastReporterId = byte.MaxValue;
     private static byte LastVictimId = byte.MaxValue;
     private static SystemTypes? LastReportRoomId;
+    // 速報に載せる誤報の部屋。通報の瞬間に1回だけ抽選し、同じ会議の中では何度読んでも同じ部屋を返す。
+    private static SystemTypes? LastReportFakeRoomId;
     private static List<byte> LastReporterEncountersSnapshot = [];
     private static List<SystemTypes> LastReporterRouteSnapshot = [];
 
@@ -81,7 +94,8 @@ public class Newscaster : RoleBase
             .AutoSetupOption(ref ReporterKnowsInterviewer, true)
             .AutoSetupOption(ref MaxEncountersShown, 5, new IntegerValueRule(1, 15, 1), OptionFormat.Pieces)
             .AutoSetupOption(ref MaxRouteRoomsShown, 6, new IntegerValueRule(1, 15, 1), OptionFormat.Pieces)
-            .AutoSetupOption(ref EncounterRange, 2f, new FloatValueRule(0.5f, 5f, 0.1f));
+            .AutoSetupOption(ref EncounterRange, 2f, new FloatValueRule(0.5f, 5f, 0.1f))
+            .AutoSetupOption(ref MadFakeNewsChance, 50, new IntegerValueRule(0, 100, 5), OptionFormat.Percent);
     }
 
     public override void Init()
@@ -96,6 +110,7 @@ public class Newscaster : RoleBase
         LastReporterId = byte.MaxValue;
         LastVictimId = byte.MaxValue;
         LastReportRoomId = null;
+        LastReportFakeRoomId = null;
         LastReporterEncountersSnapshot = [];
         LastReporterRouteSnapshot = [];
 
@@ -183,6 +198,18 @@ public class Newscaster : RoleBase
         LastReporterId = player.PlayerId;
         LastVictimId = target.PlayerId;
         LastReportRoomId = Main.PlayerStates[player.PlayerId].LastRoom?.RoomId;
+        LastReportFakeRoomId = null;
+
+        bool madCaster = false;
+        foreach (byte id in PlayerIdList)
+        {
+            if (id.GetPlayer() is not { } caster || !caster.Is(CustomRoles.Madmate)) continue;
+            madCaster = true;
+            break;
+        }
+
+        if (madCaster && RollFakeNews())
+            LastReportFakeRoomId = PickFakeRoom(LastReportRoomId);
 
         LastReporterEncountersSnapshot = Encounters.TryGetValue(player.PlayerId, out HashSet<byte> encountered) ? encountered.ToList() : [];
         LastReporterRouteSnapshot = Routes.TryGetValue(player.PlayerId, out List<SystemTypes> route) ? route.ToList() : [];
@@ -227,7 +254,8 @@ public class Newscaster : RoleBase
 
         string reporterName = LastReporterId.ColoredPlayerName();
         string victimName = LastVictimId.ColoredPlayerName();
-        string roomName = LastReportRoomId.HasValue ? GetString(LastReportRoomId.Value.ToString()) : GetString("FailToTrack");
+        SystemTypes? room = LastReportFakeRoomId ?? LastReportRoomId;
+        string roomName = room.HasValue ? GetString(room.Value.ToString()) : GetString("FailToTrack");
 
         return string.Format(GetString("NewscasterBroadcastBody"), reporterName, victimName, roomName);
     }
@@ -275,7 +303,9 @@ public class Newscaster : RoleBase
 
         bool mode1 = msg == "1";
         bool selfReported = LastReporterId == pc.PlayerId;
-        string body = selfReported ? BuildCorpseExamination(mode1) : BuildReporterInterview(mode1);
+        // マッドメイトのキャスターは、自分の取材にだけ確率で誤報を混ぜる。
+        bool fake = pc.Is(CustomRoles.Madmate) && RollFakeNews();
+        string body = selfReported ? BuildCorpseExamination(mode1, fake) : BuildReporterInterview(mode1, fake);
 
         pc.RpcRemoveAbilityUse(notify: false);
 
@@ -288,13 +318,55 @@ public class Newscaster : RoleBase
         return true;
     }
 
-    private static string BuildReporterInterview(bool mode1)
+    private static bool RollFakeNews()
+    {
+        int chance = MadFakeNewsChance.GetInt();
+        return chance > 0 && IRandom.Instance.Next(0, 100) < chance;
+    }
+
+    // 実際とは違う部屋を1つ選ぶ。候補が取れなければ null (= 誤報を混ぜない)。
+    private static SystemTypes? PickFakeRoom(SystemTypes? exclude)
+    {
+        ShipStatus ss = ShipStatus.Instance;
+        if (!ss) return null;
+
+        List<SystemTypes> rooms = [];
+        foreach (PlainShipRoom r in ss.AllRooms)
+        {
+            if (!r) continue;
+            SystemTypes id = r.RoomId;
+            if (id == exclude || id is SystemTypes.Hallway or SystemTypes.Outside or SystemTypes.Ventilation || id.ToString().Contains("Decontamination")) continue;
+            if (!rooms.Contains(id)) rooms.Add(id);
+        }
+
+        return rooms.Count == 0 ? null : rooms.RandomElement();
+    }
+
+    private static string BuildReporterInterview(bool mode1, bool fake)
     {
         string reporterName = LastReporterId.ColoredPlayerName();
 
         if (mode1)
         {
             List<byte> shown = LastReporterEncountersSnapshot.Take(MaxEncountersShown.GetInt()).ToList();
+
+            if (fake)
+            {
+                // 出会っていない生存者を1人、一覧へ紛れ込ませる (枠が埋まっていれば1人と差し替える)。
+                List<byte> strangers = [];
+                foreach (PlayerControl x in Main.EnumerateAlivePlayerControls())
+                {
+                    if (x.PlayerId != LastReporterId && !shown.Contains(x.PlayerId))
+                        strangers.Add(x.PlayerId);
+                }
+
+                if (strangers.Count > 0)
+                {
+                    byte stranger = strangers.RandomElement();
+                    if (shown.Count >= MaxEncountersShown.GetInt() && shown.Count > 0) shown[IRandom.Instance.Next(0, shown.Count)] = stranger;
+                    else shown.Insert(IRandom.Instance.Next(0, shown.Count + 1), stranger);
+                }
+            }
             if (shown.Count == 0) return string.Format(GetString("NewscasterEncounterListEmpty"), reporterName);
 
             string names = string.Join(", ", shown.Select(id => id.ColoredPlayerName()));
@@ -303,13 +375,22 @@ public class Newscaster : RoleBase
 
         List<SystemTypes> route = LastReporterRouteSnapshot;
         List<SystemTypes> shownRooms = route.Count > MaxRouteRoomsShown.GetInt() ? route.Skip(route.Count - MaxRouteRoomsShown.GetInt()).ToList() : route;
+
+        if (fake && shownRooms.Count > 0)
+        {
+            // スナップショット本体は書き換えない (同じ会議で2回目の取材が来ても元の経路から作り直す)。
+            shownRooms = shownRooms.ToList();
+            int index = IRandom.Instance.Next(0, shownRooms.Count);
+            SystemTypes? swapped = PickFakeRoom(shownRooms[index]);
+            if (swapped.HasValue) shownRooms[index] = swapped.Value;
+        }
         if (shownRooms.Count == 0) return string.Format(GetString("NewscasterRouteListEmpty"), reporterName);
 
         string rooms = string.Join(" → ", shownRooms.Select(r => GetString(r.ToString())));
         return string.Format(GetString("NewscasterRouteList"), reporterName, rooms);
     }
 
-    private static string BuildCorpseExamination(bool mode1)
+    private static string BuildCorpseExamination(bool mode1, bool fake)
     {
         string victimName = LastVictimId.ColoredPlayerName();
         PlayerState victimState = Main.PlayerStates[LastVictimId];
@@ -324,7 +405,15 @@ public class Newscaster : RoleBase
 
         if (mode1)
         {
-            string reason = GetString($"DeathReason.{victimState.deathReason}");
+            PlayerState.DeathReason shownReason = victimState.deathReason;
+
+            if (fake)
+            {
+                List<PlayerState.DeathReason> others = FakeDeathReasons.Where(x => x != shownReason).ToList();
+                shownReason = others.RandomElement();
+            }
+
+            string reason = GetString($"DeathReason.{shownReason}");
             return string.Format(GetString("NewscasterCauseOfDeath"), victimName, reason);
         }
 
@@ -332,6 +421,13 @@ public class Newscaster : RoleBase
             return string.Format(GetString("NewscasterTimeOfDeathUnknown"), victimName);
 
         int seconds = (int)Math.Max(0, (victimState.RealKiller.TimeStamp - RoundStartTimeStamp).TotalSeconds);
+
+        // 誤報では死亡時刻を 10〜30 秒前後にずらす。
+        if (fake)
+        {
+            int shift = IRandom.Instance.Next(10, 31);
+            seconds = seconds > shift && IRandom.Instance.Next(0, 2) == 0 ? seconds - shift : seconds + shift;
+        }
         string key = MeetingStates.MeetingNum > 1 ? "NewscasterTimeOfDeathSinceMeeting" : "NewscasterTimeOfDeathSinceStart";
         return string.Format(GetString(key), victimName, seconds);
     }

@@ -91,6 +91,17 @@ public class PortalButton : RoleBase
     // (AntiBlackout の RevertToActualRoleTypes 系)。MeetingNum で1会議1回に絞る。
     private static int LastRespawnMeetingNum = -1;
 
+    // ---- マッドメイト時の偽ボタン ----
+    // マッドメイトの保持者は本物のボタンを持ち上げられない代わりに、見た目が同じ偽ボタンを置ける。
+    // 偽ボタンは置いた人ごとに1個まで。押した人は足止めされ、生存インポスター全員に居場所が矢印で知らされる。
+    private static OptionItem MadFakeStunDuration;
+    private static OptionItem MadFakeArrowDuration;
+    private static readonly Dictionary<byte, Vector2> FakePos = [];
+    private static readonly Dictionary<byte, PortalButtonMarker> FakeMarkers = [];
+    // (偽ボタンの持ち主, 案内を見せた人)。本物と同じヒステリシスで案内の連射を防ぐ。
+    private static readonly HashSet<(byte Owner, byte Player)> FakePromptShown = [];
+    private static readonly HashSet<byte> StunnedIds = [];
+
     // ---- per-instance (「今どの保持者が持ち歩いているか」だけは個人の状態) ----
     private bool Holding;
     private long HoldStartTS;
@@ -100,6 +111,9 @@ public class PortalButton : RoleBase
     // 「保持者以外の全員が自分の名前の横に保持者の残り時間を見る」ことになる。
     private byte OwnerId = byte.MaxValue;
 
+    // 偽ボタンを押した人へ向けてインポスターに配った矢印 (インポスター, 押した人)。偽ボタンの持ち主のインスタンスが持つ。
+    private readonly List<(byte Imp, byte Victim)> HuntArrows = [];
+
     public override bool IsEnable => On;
 
     public override void SetupCustomOption()
@@ -107,7 +121,9 @@ public class PortalButton : RoleBase
         StartSetup(Id)
             .AutoSetupOption(ref AbilityCooldown, 15, new IntegerValueRule(1, 120, 1), OptionFormat.Seconds)
             .AutoSetupOption(ref AbilityUseLimit, 5f, new FloatValueRule(0f, 20f, 1f), OptionFormat.Times)
-            .AutoSetupOption(ref HoldTimeLimit, 30, new IntegerValueRule(5, 120, 1), OptionFormat.Seconds);
+            .AutoSetupOption(ref HoldTimeLimit, 30, new IntegerValueRule(5, 120, 1), OptionFormat.Seconds)
+            .AutoSetupOption(ref MadFakeStunDuration, 5, new IntegerValueRule(1, 15, 1), OptionFormat.Seconds)
+            .AutoSetupOption(ref MadFakeArrowDuration, 10, new IntegerValueRule(1, 30, 1), OptionFormat.Seconds);
     }
 
     public override void Init()
@@ -126,12 +142,18 @@ public class PortalButton : RoleBase
         MarkerPos = null;
         CarrierId = null;
         LastRespawnMeetingNum = -1;
+
+        FakePos.Clear();
+        FakeMarkers.Clear();
+        FakePromptShown.Clear();
+        StunnedIds.Clear();
     }
 
     public override void Add(byte playerId)
     {
         On = true;
         OwnerId = playerId;
+        HuntArrows.Clear();
         Holding = false;
         HoldStartTS = 0;
         playerId.SetAbilityUseLimit(AbilityUseLimit.GetFloat());
@@ -211,6 +233,12 @@ public class PortalButton : RoleBase
     {
         if (!pc.IsAlive() || !GameStates.IsInTask) return;
 
+        if (pc.Is(CustomRoles.Madmate))
+        {
+            PlaceFakeButton(pc);
+            return;
+        }
+
         if (Holding)
         {
             PlaceMarker(pc, Translator.GetString("PortalButton.Placed"));
@@ -288,6 +316,158 @@ public class PortalButton : RoleBase
         }
     }
 
+    private static void PlaceFakeButton(PlayerControl pc)
+    {
+        if (pc.GetAbilityUseLimit() < 1f)
+        {
+            pc.Notify(Translator.GetString("PortalButton.NoUsesLeft"));
+            return;
+        }
+
+        pc.RpcRemoveAbilityUse();
+
+        DespawnFake(pc.PlayerId);
+        SpawnFakeAt(pc.PlayerId, pc.Pos());
+
+        pc.Notify(Translator.GetString("PortalButton.MadFakePlaced"));
+        Logger.Info($"{pc.GetNameWithRole().RemoveHtmlTags()} が偽の緊急ボタンを {pc.Pos()} に設置", "PortalButton");
+    }
+
+    private static void SpawnFakeAt(byte owner, Vector2 pos)
+    {
+        FakePos[owner] = pos;
+        FakeMarkers[owner] = new PortalButtonMarker(pos);
+
+        // 本物と同じく、生やした瞬間に近くに居た人には案内を出さない (会議明けのバースト防止)。
+        FakePromptShown.RemoveWhere(x => x.Owner == owner);
+
+        foreach (PlayerControl pc in Main.AllAlivePlayerControlsToArray)
+        {
+            if (pc.PlayerId >= 200) continue;
+            if (FastVector2.DistanceWithinRange(pos, pc.Pos(), PromptResetRange))
+                FakePromptShown.Add((owner, pc.PlayerId));
+        }
+    }
+
+    private static void DespawnFake(byte owner)
+    {
+        if (FakeMarkers.Remove(owner, out PortalButtonMarker marker)) marker?.Despawn();
+        FakePos.Remove(owner);
+        FakePromptShown.RemoveWhere(x => x.Owner == owner);
+    }
+
+    // 偽ボタンの上に立っているか。ゲートは本物の IsOnButton と揃える (会議明けの張り直し待ちの窓では CNO が無いので押せない)。
+    private static bool IsOnFakeButton(PlayerControl pc, out byte owner)
+    {
+        owner = byte.MaxValue;
+        if (!On || FakePos.Count == 0 || !GameStates.IsInTask || GameStates.IsMeeting || ExileController.Instance) return false;
+        if (!pc || pc.PlayerId >= 200 || !pc.IsAlive()) return false;
+
+        Vector2 pos = pc.Pos();
+
+        foreach ((byte fakeOwner, Vector2 fakePos) in FakePos)
+        {
+            if (!FakeMarkers.ContainsKey(fakeOwner)) continue;
+            if (!FastVector2.DistanceWithinRange(fakePos, pos, PressRange)) continue;
+
+            owner = fakeOwner;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static void PressFake(PlayerControl pc, byte owner)
+    {
+        // 持ち主とインポスター陣営には罠が効かない。偽物だと分かるだけでボタンは残る。
+        if (pc.PlayerId == owner || pc.Is(Team.Impostor))
+        {
+            pc.Notify(Translator.GetString("PortalButton.MadFakeIsFake"));
+            return;
+        }
+
+        DespawnFake(owner);
+        pc.Notify(Translator.GetString("PortalButton.MadFakePressed"));
+        Logger.Info($"{pc.GetNameWithRole().RemoveHtmlTags()} が偽の緊急ボタンを押した (持ち主: {owner})", "PortalButton");
+
+        byte victimId = pc.PlayerId;
+
+        if (StunnedIds.Add(victimId))
+        {
+            float speed = Main.AllPlayerSpeed[victimId];
+            Main.AllPlayerSpeed[victimId] = Main.MinSpeed;
+            pc.MarkDirtySettings();
+            // 足止め中は位置が動かないので、放置判定から外しておかないと足止め時間次第で AFK 扱いになる。
+            AFKDetector.ExemptedPlayers.Add(victimId);
+
+            LateTask.New(() =>
+            {
+                if (!StunnedIds.Remove(victimId)) return;
+                AFKDetector.ExemptedPlayers.Remove(victimId);
+                if (!GameStates.InGame || GameStates.IsEnded) return;
+                Main.AllPlayerSpeed[victimId] = speed;
+                Utils.GetPlayerById(victimId)?.MarkDirtySettings();
+            }, MadFakeStunDuration.GetInt(), "PortalButton Fake Stun");
+        }
+
+        if (!Main.PlayerStates.TryGetValue(owner, out PlayerState ownerState) || ownerState.Role is not PortalButton ownerRole) return;
+
+        string caught = string.Format(Translator.GetString("PortalButton.MadFakeCaught"), victimId.ColoredPlayerName());
+        List<(byte Imp, byte Victim)> added = [];
+
+        foreach (PlayerControl imp in Main.EnumerateAlivePlayerControls())
+        {
+            if (imp.PlayerId == victimId || !imp.Is(CustomRoleTypes.Impostor)) continue;
+            TargetArrow.Add(imp.PlayerId, victimId);
+            ownerRole.HuntArrows.Add((imp.PlayerId, victimId));
+            added.Add((imp.PlayerId, victimId));
+            imp.Notify(caught, MadFakeArrowDuration.GetInt());
+        }
+
+        if (added.Count == 0) return;
+
+        LateTask.New(() =>
+        {
+            if (!GameStates.InGame || GameStates.IsEnded) return;
+
+            foreach ((byte imp, byte victim) in added)
+            {
+                if (!ownerRole.HuntArrows.Remove((imp, victim))) continue;
+                TargetArrow.Remove(imp, victim);
+            }
+        }, MadFakeArrowDuration.GetInt(), "PortalButton Fake Arrow");
+    }
+
+    public override void OnReportDeadBody()
+    {
+        foreach ((byte imp, byte victim) in HuntArrows)
+            TargetArrow.Remove(imp, victim);
+        HuntArrows.Clear();
+    }
+
+    private static void CheckFakePrompt(PlayerControl pc)
+    {
+        if (FakePos.Count == 0 || MeetingTriggered || GameStates.IsMeeting || pc.PlayerId >= 200) return;
+
+        Vector2 pos = pc.Pos();
+
+        foreach ((byte owner, Vector2 fakePos) in FakePos)
+        {
+            if (owner == pc.PlayerId) continue;
+
+            if (!FastVector2.DistanceWithinRange(fakePos, pos, PressRange))
+            {
+                if (!FastVector2.DistanceWithinRange(fakePos, pos, PromptResetRange))
+                    FakePromptShown.Remove((owner, pc.PlayerId));
+                continue;
+            }
+
+            // 本物と同じ案内を出す (見分けが付いてしまうと罠にならない)。
+            if (FakePromptShown.Add((owner, pc.PlayerId)))
+                pc.Notify(Translator.GetString("PortalButton.PetToCall"));
+        }
+    }
+
     public override void OnFixedUpdate(PlayerControl pc)
     {
         if (!Holding || !GameStates.IsInTask) return;
@@ -307,6 +487,8 @@ public class PortalButton : RoleBase
     // 踏んだだけでは何も起きない。範囲に入った人へ「ペットで会議発動！」の案内を1回だけ出す。
     public override void OnCheckPlayerPosition(PlayerControl pc)
     {
+        CheckFakePrompt(pc);
+
         if (MarkerPos == null || MeetingTriggered) return;
 
         // 呼び出し側 (PlayerControlPatch) が inTask / 生存 / ExileController 無し / IntroDestroyed を
@@ -335,6 +517,8 @@ public class PortalButton : RoleBase
     // ならないので、役職の OnPet ではなく全員が通る PetActionsPatch.OnPetUse から呼ばれる。
     public static bool IsOnButton(PlayerControl pc)
     {
+        if (IsOnFakeButton(pc, out _)) return true;
+
         if (!On || MarkerPos == null || !GameStates.IsInTask || GameStates.IsMeeting) return false;
 
         // 会議中は CNO が消えている (PortalButtonMarker.OnMeeting) のに MarkerPos は生きたままなので、
@@ -354,6 +538,12 @@ public class PortalButton : RoleBase
     public static void PressByPet(PlayerControl pc)
     {
         if (MeetingTriggered) return;
+
+        if (IsOnFakeButton(pc, out byte fakeOwner))
+        {
+            PressFake(pc, fakeOwner);
+            return;
+        }
 
         // クリティカルサボタージュ中は緊急会議を起こせない (Ghostbuttoner と同じ判定リスト)。
         if (Utils.IsActive(SystemTypes.Reactor)
@@ -410,6 +600,8 @@ public class PortalButton : RoleBase
         // 本物の緊急ボタンと同じく、会議明けからクールタイムを数え直す。
         EmergencyClockStartTS = Utils.TimeStamp;
 
+        RespawnFakeButtons();
+
         // 会議で CNO は Despawn 済み (PortalButtonMarker.OnMeeting)。移設されたボタンは
         // ラウンドを跨いで残る契約なので同じ座標へ張り直す。AfterMeetingTasks は
         // Utils.AfterMeetingTasks の foreach (EnumeratePlayerControls) の中から呼ばれるため、
@@ -429,6 +621,28 @@ public class PortalButton : RoleBase
         }, RespawnDelay, "PortalButton Respawn Marker");
     }
 
+    // 偽ボタンも本物と同じく会議で CNO が消えるので、同じ遅延で同じ座標へ張り直す。
+    private static void RespawnFakeButtons()
+    {
+        FakeMarkers.Clear();
+        if (FakePos.Count == 0) return;
+
+        List<(byte Owner, Vector2 Pos)> snapshot = FakePos.Select(x => (x.Key, x.Value)).ToList();
+
+        // 複数の CNO を同じフレームで一斉に生やさないよう、1個ずつ 0.2 秒ずらす。
+        for (int i = 0; i < snapshot.Count; i++)
+        {
+            (byte owner, Vector2 pos) = snapshot[i];
+
+            LateTask.New(() =>
+            {
+                if (!GameStates.InGame || GameStates.IsEnded) return;
+                if (!FakePos.TryGetValue(owner, out Vector2 current) || current != pos || FakeMarkers.ContainsKey(owner)) return;
+                SpawnFakeAt(owner, pos);
+            }, RespawnDelay + (i * 0.2f), "PortalButton Respawn Fake Marker");
+        }
+    }
+
     private static void DespawnMarker()
     {
         Marker?.Despawn();
@@ -439,6 +653,16 @@ public class PortalButton : RoleBase
     public override string GetSuffix(PlayerControl seer, PlayerControl target, bool hud = false, bool meeting = false)
     {
         if (meeting) return string.Empty;
+
+        // 偽ボタンの持ち主のインスタンスが、インポスター本人の名前の下へ獲物への矢印を出す。
+        if (HuntArrows.Count > 0 && seer.PlayerId == target.PlayerId)
+        {
+            string arrows = string.Empty;
+            foreach ((byte imp, byte victim) in HuntArrows)
+                if (imp == seer.PlayerId) arrows += TargetArrow.GetArrows(seer, victim);
+            if (arrows.Length > 0) return Utils.ColorString(Palette.ImpostorRed, arrows);
+        }
+
         // seer がこのインスタンスの持ち主本人であることまで確認する (BuildSuffix は全インスタンスを舐めるため)
         if (seer.PlayerId != OwnerId || seer.PlayerId != target.PlayerId) return string.Empty;
         if (!Holding) return string.Empty;

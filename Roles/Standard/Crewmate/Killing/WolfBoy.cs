@@ -105,6 +105,13 @@ public class WolfBoy : RoleBase
     {
         if (shotLimit <= 0) return false;
 
+        // マッドメイトの狼少年は仲間のインポスターを撃てない (弾も減らない)。
+        if (killer.Is(CustomRoles.Madmate) && target.Is(CustomRoleTypes.Impostor))
+        {
+            killer.Notify(GetString("WolfBoyMadCannotShootImpostor"));
+            return false;
+        }
+
         SetKillCooldown(killer.PlayerId);
         return true;
     }
@@ -119,7 +126,16 @@ public class WolfBoy : RoleBase
         // Count kill toward win condition
         if (OptionWinKillCount.GetInt() > 0)
         {
-            bool count = target.IsMadmate()
+            // マッドメイトの狼少年はインポスター側の勝利を目指すので、数える相手が裏返る:
+            // クルーを撃てば数え、マッドメイトは数えない。ニュートラルの扱いは通常時の設定に従う。
+            bool count = killer.Is(CustomRoles.Madmate)
+                ? !target.IsMadmate() && target.GetCustomRoleTypes() switch
+                {
+                    CustomRoleTypes.Crewmate => true,
+                    CustomRoleTypes.Neutral => OptionCountNeutral.GetBool(),
+                    _ => false
+                }
+                : target.IsMadmate()
                 ? OptionCountMadmate.GetBool()
                 : target.GetCustomRoleTypes() switch
                 {

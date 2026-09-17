@@ -25,6 +25,9 @@ public class AmateurTeller : RoleBase
     private byte UseTarget;
     private List<byte> PastTargets = [];
 
+    // マッドメイト時に監視対象への矢印を配ったインポスター。会議で矢印を回収するために持つ。
+    private List<byte> MadArrowImps = [];
+
     private enum VoteMode { Normal, SelfVote }
 
     public override bool IsEnable => PlayerIdList.Count > 0;
@@ -73,6 +76,7 @@ public class AmateurTeller : RoleBase
         awakened = !OptionTaskAwakening.GetBool();
         UseTarget = byte.MaxValue;
         PastTargets = [];
+        MadArrowImps = [];
     }
 
     public override void Remove(byte playerId)
@@ -95,6 +99,9 @@ public class AmateurTeller : RoleBase
             TargetArrow.Remove(AmateurTellerId, UseTarget);
             if (OptionTargetCanSeeArrow.GetBool())
                 TargetArrow.Remove(UseTarget, AmateurTellerId);
+            foreach (byte impId in MadArrowImps)
+                TargetArrow.Remove(impId, UseTarget);
+            MadArrowImps.Clear();
             PastTargets.Add(UseTarget);
             UseTarget = byte.MaxValue;
         }
@@ -104,6 +111,27 @@ public class AmateurTeller : RoleBase
     public override void AfterMeetingTasks()
     {
         // Arrows were removed in OnReportDeadBody; nothing extra needed here
+
+        // 獲物の★は相手ごとの送り直しでしか客へ届かないので、会議明けに印付けしたインポスターへ送り直す。
+        if (MadArrowImps.Count == 0 || UseTarget == byte.MaxValue) return;
+
+        List<byte> imps = [.. MadArrowImps];
+        byte targetId = UseTarget;
+
+        LateTask.New(() =>
+        {
+            if (!GameStates.IsInTask || GameStates.IsEnded) return;
+            PlayerControl target = Utils.GetPlayerById(targetId);
+            if (target == null) return;
+
+            foreach (byte impId in imps)
+            {
+                PlayerControl imp = Utils.GetPlayerById(impId);
+                if (imp == null) continue;
+                Utils.NotifyRoles(SpecifySeer: imp, SpecifyTarget: target);
+                Utils.NotifyRoles(SpecifySeer: imp, SpecifyTarget: imp);
+            }
+        }, 1.5f, "AmateurTeller Prey Mark Refresh");
     }
 
     public override bool CheckReportDeadBody(PlayerControl pc, NetworkedPlayerInfo target, PlayerControl killer)
@@ -164,6 +192,19 @@ public class AmateurTeller : RoleBase
         Utils.SendMessage(
             string.Format(GetString("AmateurTellerSetTarget"), targetId.ColoredPlayerName()),
             AmateurTellerId, importance: MessageImportance.High);
+
+        // マッドメイトの見習い占い師は、監視対象を生存インポスター全員の獲物として印付けする。
+        PlayerControl teller = Utils.GetPlayerById(AmateurTellerId);
+        if (teller == null || !teller.Is(CustomRoles.Madmate)) return;
+
+        string mark = string.Format(GetString("AmateurTellerMadMark"), AmateurTellerId.ColoredPlayerName(), targetId.ColoredPlayerName());
+        foreach (PlayerControl imp in Main.EnumerateAlivePlayerControls())
+        {
+            if (imp.PlayerId == targetId || imp.PlayerId == AmateurTellerId || !imp.Is(CustomRoleTypes.Impostor)) continue;
+            TargetArrow.Add(imp.PlayerId, targetId);
+            MadArrowImps.Add(imp.PlayerId);
+            Utils.SendMessage(mark, imp.PlayerId, GetString("AmateurTellerMadMarkTitle"), importance: MessageImportance.High);
+        }
     }
 
     public override void OnTaskComplete(PlayerControl pc, int completedTaskCount, int totalTaskCount)
@@ -189,9 +230,20 @@ public class AmateurTeller : RoleBase
         byte seerId = seer.PlayerId;
         byte targetId = target.PlayerId;
 
+        // AT's view: arrow toward their UseTarget under their own name
+        if (seerId == AmateurTellerId && targetId == seerId && UseTarget != byte.MaxValue)
+            return $"<color=#6b3ec3>{TargetArrow.GetArrows(seer, UseTarget)}</color>";
+
         // AT's view: show ★ on their UseTarget
         if (seerId == AmateurTellerId && targetId == UseTarget)
             return $"<color=#6b3ec3>★</color>";
+
+        // インポスターから見た、マッドメイトの見習い占い師が印付けした獲物
+        if (MadArrowImps.Contains(seerId))
+        {
+            if (targetId == UseTarget) return $"<color=#6b3ec3>★</color>";
+            if (targetId == seerId && UseTarget != byte.MaxValue) return Utils.ColorString(Palette.ImpostorRed, TargetArrow.GetArrows(seer, UseTarget));
+        }
 
         // AT's view: show past target info as team/role
         if (seerId == AmateurTellerId && PastTargets.Contains(targetId))

@@ -100,6 +100,7 @@ public static class NameColorManager
         if (seer.IsMadmate() && target.Is(CustomRoleTypes.Impostor) && !seer.Is(CustomRoles.Braid) && Options.MadmateKnowWhosImp.GetBool()) color = Main.ImpostorColor;
         if (seer.Is(CustomRoleTypes.Impostor) && target.IsMadmate() && !target.Is(CustomRoles.Braid) && Options.ImpKnowWhosMadmate.GetBool()) color = Utils.GetRoleColorCode(CustomRoles.Madmate);
         if (seer.IsMadmate() && target.IsMadmate() && Options.MadmateKnowWhosMadmate.GetBool()) color = Utils.GetRoleColorCode(CustomRoles.Madmate);
+        if (PonkotuTeller.MadBonds.Count > 0 && PonkotuTeller.IsBonded(seer.PlayerId, target.PlayerId)) color = seer.Is(CustomRoleTypes.Impostor) ? Utils.GetRoleColorCode(CustomRoles.Madmate) : Main.ImpostorColor;
         if (Blackmailer.On && seerRoleClass is Blackmailer { IsEnable: true } bm && bm.BlackmailedPlayerIds.Contains(target.PlayerId)) color = Utils.GetRoleColorCode(CustomRoles.BloodKnight);
 
         if (Commander.On && seer.Is(Team.Impostor))

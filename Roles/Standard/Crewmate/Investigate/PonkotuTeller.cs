@@ -30,6 +30,10 @@ public class PonkotuTeller : RoleBase
 
     private enum VoteMode { Normal, SelfVote }
 
+    // マッドメイトのポンコツ占い師が占いを的中させたインポスターとの組 (Mad, Imp)。
+    // 組になった2人は互いの名前色で相手を見分けられる (NameColorManager から読む)。
+    public static readonly HashSet<(byte Mad, byte Imp)> MadBonds = [];
+
     public override bool IsEnable => PlayerIdList.Count > 0;
 
     public override void SetupCustomOption()
@@ -70,6 +74,7 @@ public class PonkotuTeller : RoleBase
     public override void Init()
     {
         PlayerIdList = [];
+        MadBonds.Clear();
     }
 
     public override void Add(byte playerId)
@@ -163,6 +168,47 @@ public class PonkotuTeller : RoleBase
         int successRate = OptionSuccessRate.GetInt();
         bool success = successRate > 0 && IRandom.Instance.Next(0, 100) < successRate;
         SendDivinationMessage(targetId, role, uncertain: !success);
+
+        if (success) TryBondWithImpostor(target);
+    }
+
+    // 名前色は相手ごとの送り直しでしか客へ届かないので、会議明けに組ごとに送り直す。
+    public override void AfterMeetingTasks()
+    {
+        byte tellerId = PonkotuTellerId;
+
+        LateTask.New(() =>
+        {
+            if (!GameStates.IsInTask || GameStates.IsEnded) return;
+
+            foreach ((byte mad, byte imp) in MadBonds)
+            {
+                if (mad != tellerId) continue;
+                PlayerControl madPc = Utils.GetPlayerById(mad);
+                PlayerControl impPc = Utils.GetPlayerById(imp);
+                if (madPc == null || impPc == null) continue;
+                Utils.NotifyRoles(SpecifySeer: madPc, SpecifyTarget: impPc);
+                Utils.NotifyRoles(SpecifySeer: impPc, SpecifyTarget: madPc);
+            }
+        }, 1.5f, "PonkotuTeller Bond Name Refresh");
+    }
+
+    public static bool IsBonded(byte seerId, byte targetId)
+    {
+        return MadBonds.Contains((seerId, targetId)) || MadBonds.Contains((targetId, seerId));
+    }
+
+    // 占いが的中した相手がインポスターなら、占い師と相手の双方に正体を明かす。外れた占いでは何も起きない。
+    private void TryBondWithImpostor(PlayerControl target)
+    {
+        PlayerControl teller = Utils.GetPlayerById(PonkotuTellerId);
+        if (teller == null || !teller.Is(CustomRoles.Madmate)) return;
+        if (!target.Is(CustomRoleTypes.Impostor)) return;
+        if (!MadBonds.Add((PonkotuTellerId, target.PlayerId))) return;
+
+        string title = GetString("PonkotuTellerMadBondTitle");
+        Utils.SendMessage(string.Format(GetString("PonkotuTellerMadBondToMad"), target.PlayerId.ColoredPlayerName()), PonkotuTellerId, title, importance: MessageImportance.High);
+        Utils.SendMessage(string.Format(GetString("PonkotuTellerMadBondToImp"), PonkotuTellerId.ColoredPlayerName()), target.PlayerId, title, importance: MessageImportance.High);
     }
 
     private void SendDivinationMessage(byte targetId, CustomRoles role, bool uncertain)
