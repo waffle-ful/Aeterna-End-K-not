@@ -64,8 +64,6 @@ Supported Among Us version: **2026.8.18**
 
 On top of EHR's role engine, End K not adds features for **streaming, long-running hosting, and presentation.**
 
-> Most of the roles come from EHR and earlier mods such as the TownOfHost lineage, either inherited directly or reimplemented with reference to them. Credits for each project are collected under [Credits](#credits).
-
 ### 🎥 Streaming & long-running hosting
 
 - **Per-crew text-to-speech (VOICEVOX integration)** — Reads each player's chat aloud in its own voice. The host's own copy of [VOICEVOX](https://voicevox.hiroshiba.jp/) does the speaking, so the audio stays on the host's machine (your stream) and never reaches the game. You can pin a voice to a player name or a friend code. *(See [Credits](#credits) for the attribution required when streaming.)*
@@ -80,7 +78,6 @@ On top of EHR's role engine, End K not adds features for **streaming, long-runni
 
 - **Backrooms lobby** — A Backrooms-themed lobby. The host and the players who joined without the mod see different things.
 - **EKM custom map editor** — A dedicated editor for building custom maps is bundled ([`editor/`](./editor)); maps you create can be loaded in-game *(work in progress)*.
-- **Riptide** — A loud Impostor role. A giant wave sweeps the whole map, kills anyone it catches, and speeds up after every meeting.
 - **Lobby decorations** — Place decorations such as hot springs and portals in the lobby.
 
 ### 🎨 UI & policy
