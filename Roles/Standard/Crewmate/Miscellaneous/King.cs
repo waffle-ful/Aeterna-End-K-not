@@ -13,6 +13,7 @@ public class King : RoleBase
     private static OptionItem OptionExileVoteCount;
     private static OptionItem OptionInvolvementCount;
     private static OptionItem OptionDeathReason;
+    private static OptionItem OptionMadExtraInvolvement;
 
     private byte KingId;
     private bool aboooonTriggered;
@@ -36,6 +37,10 @@ public class King : RoleBase
              PlayerState.DeathReason.FollowingSuicide.ToString()],
             0, TabGroup.CrewmateRoles)
             .SetParent(Options.CustomRoleSpawnChances[CustomRoles.King]);
+
+        OptionMadExtraInvolvement = new IntegerOptionItem(Id + 13, "KingMadExtraInvolvement", new(0, 15, 1), 1, TabGroup.CrewmateRoles)
+            .SetParent(Options.CustomRoleSpawnChances[CustomRoles.King])
+            .SetValueFormat(OptionFormat.Players);
     }
 
     public override void Init()
@@ -64,7 +69,9 @@ public class King : RoleBase
     public override bool KnowRole(PlayerControl seer, PlayerControl target)
     {
         if (base.KnowRole(seer, target)) return true;
-        return seer.IsCrewmate() && target.Is(CustomRoles.King);
+        if (seer.IsCrewmate() && target.Is(CustomRoles.King)) return true;
+        // マッドメイトの王は、インポスターからも王だと分かる。
+        return seer.Is(CustomRoleTypes.Impostor) && target.Is(CustomRoles.King) && target.Is(CustomRoles.Madmate);
     }
 
     public override void AfterMeetingTasks()
@@ -96,6 +103,8 @@ public class King : RoleBase
 
         PlayerControl king = Utils.GetPlayerById(KingId);
         int count = OptionInvolvementCount.GetInt();
+        // マッドメイトの王が追放されると、道連れが増える。
+        if (king != null && king.Is(CustomRoles.Madmate)) count += OptionMadExtraInvolvement.GetInt();
         if (count <= 0) return;
 
         List<PlayerControl> crews = Main.AllAlivePlayerControlsToList
