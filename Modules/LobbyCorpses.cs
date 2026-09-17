@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using AmongUs.GameOptions;
 using HarmonyLib;
 using Hazel;
 using InnerNet;
@@ -24,10 +25,19 @@ internal static class LobbyCorpses
     private static Vector2? BasePos;
     private static readonly List<Vector2> CurrentPositions = [];
 
+    // 撒いたホストローカルの実体。撒き直し (入室してきた客への再送) でホスト側を作り直さないための台帳。
+    private static readonly List<DeadBody> SpawnedBodies = [];
+
     // 多重 join coalesce 用 state
     private static bool SpawnInProgress;
     private static bool ReplayPending;
     private static float NextReplayTime;
+
+    // 撒き直し対象の client。入室してきた客にだけ送る (全員へ再 broadcast すると同じ座標に実体が積み上がる)
+    private static readonly HashSet<int> PendingJoinClientIds = [];
+
+    // 宛先がこの数以上なら targeted をやめて broadcast 1 回にする (宛先ぶん送信量が倍々になるため)
+    private const int TargetedReplayLimit = 3;
 
     // 二重発火抑止: InitialSpawn が join 後に発火していれば該当 client は
     // すでに body を受け取っているので Replay は不要
@@ -47,12 +57,14 @@ internal static class LobbyCorpses
     // GameStates.IsLobby は「ネットワーク層が Joined を抜けた瞬間」にしかフリップしないため、
     // 開始コミット〜遷移完了の隙間に劣化ゲートの延期リトライが滑り込むと、開始直後スポーン窓 (P6 近傍)
     // で corpse burst を新規開始してしまう。そのレースをこのラッチで封じる。
-    private static bool GameStartCommitted;
+    public static bool GameStartCommitted { get; private set; }
 
     public static void Reset()
     {
         BasePos = null;
         CurrentPositions.Clear();
+        SpawnedBodies.Clear();
+        PendingJoinClientIds.Clear();
         SpawnInProgress = false;
         ReplayPending = false;
         NextReplayTime = 0f;
@@ -73,10 +85,11 @@ internal static class LobbyCorpses
 
     // 入室時 replay (OnPlayerJoined から)。
     // 3 秒スライディング debounce — 連続入室は最後の join から 3 秒経った時点で 1 回だけ実行
-    public static void RequestReplay()
+    public static void RequestReplay(int clientId)
     {
         LastJoinTime = Time.time;
         NextReplayTime = Time.time + 3f;
+        if (clientId >= 0) PendingJoinClientIds.Add(clientId);
         if (ReplayPending) return;
         ReplayPending = true;
         Main.Instance.StartCoroutine(DebouncedReplay());
@@ -93,6 +106,9 @@ internal static class LobbyCorpses
         ReplayPending = false;
         if (!GameStates.IsLobby) yield break;
 
+        int[] targets = PendingJoinClientIds.Count is > 0 and < TargetedReplayLimit ? [..PendingJoinClientIds] : [-1];
+        PendingJoinClientIds.Clear();
+
         // 直近の join より新しい spawn がすでに走っていれば、該当 client は
         // その broadcast を受信済み → replay は無駄なのでスキップ
         if (LastSpawnTime > LastJoinTime)
@@ -101,10 +117,15 @@ internal static class LobbyCorpses
             yield break;
         }
 
-        StartSpawn();
+        // ホスト側に実体が残っていれば「既にある死体を客へ見せ直すだけ」なので、ホスト側は作らない
+        // (作ると同じ座標にホストだけ積み上がる)。1 体も残っていないなら撒き直しでなく新規サイクルとして
+        // 全員へ送る (ロビー中に設定を入れた直後などはここに来る)。
+        SpawnedBodies.RemoveAll(x => !x);
+        bool newCycle = SpawnedBodies.Count == 0;
+        StartSpawn(newCycle ? [-1] : targets, newCycle);
     }
 
-    private static void StartSpawn()
+    private static void StartSpawn(int[] targets = null, bool hostLocalBody = true)
     {
         if (SpawnInProgress) return;
         if (GameStartCommitted) return;
@@ -129,7 +150,7 @@ internal static class LobbyCorpses
                 {
                     DeferralPending = false;
                     if (!GameStates.IsLobby || GameStates.InGame) return;
-                    StartSpawn();
+                    StartSpawn(targets, hostLocalBody);
                 }, 5f, "LobbyCorpses.DeferredSpawn");
             }
             else
@@ -140,8 +161,7 @@ internal static class LobbyCorpses
 
         DeferredSpawnAttempts = 0;
 
-        // 初回呼出時に位置を確定。replay 時は同じ位置で再 broadcast → 既存 client では
-        // 同位置 stack で視覚的に等価 (no per-client targeting in RpcCreateDeadBody)
+        // 初回呼出時に位置を確定。撒き直しは同じ位置を使う (装飾が動き回らないように)
         if (CurrentPositions.Count == 0)
         {
             BasePos ??= PlayerControl.LocalPlayer.GetTruePosition();
@@ -158,10 +178,10 @@ internal static class LobbyCorpses
         }
 
         SpawnInProgress = true;
-        Main.Instance.StartCoroutine(SpawnCoroutine());
+        Main.Instance.StartCoroutine(SpawnCoroutine(targets ?? [-1], hostLocalBody));
     }
 
-    private static IEnumerator SpawnCoroutine()
+    private static IEnumerator SpawnCoroutine(int[] targets, bool hostLocalBody)
     {
         PlayerControl lp = PlayerControl.LocalPlayer;
         // host の真の名前を static に退避。
@@ -174,26 +194,47 @@ internal static class LobbyCorpses
             : lp.Data.PlayerName;
         byte colorId = (byte)lp.Data.DefaultOutfit.ColorId;
         int spawned = 0;
+        var aborted = false;
+        Action<DeadBody> onCreated = null;
+
+        if (hostLocalBody)
+        {
+            SpawnedBodies.Clear();
+            onCreated = body => { if (body) SpawnedBodies.Add(body); };
+        }
 
         // 公式鯖 anti-cheat 緩和: 偽死体の高速 spawn は host を reason=Hacking で落とすため、
         // 1 体ずつ間隔を空けて撒く (FakeBodyBurst.Gentle)。体数はホスト設定 (LobbyCorpseCount) を尊重し
         // レートのみ絞る。kill switch (disable_overkill_body_cap.txt) で旧 4 体/フレームに戻せる。
-        for (int i = 0; i < CurrentPositions.Count; i++)
+        foreach (int target in targets)
         {
-            // 開始コミット/ロビー離脱を検知したら残りを撒かない (走り出したループは StartSpawn 入口の
-            // GameStartCommitted ゲートの射程外。劣化 spacing 1.5s ではテイルが最大 ~43s まで伸び、
-            // 開始バーストへ装飾 spawn が食い込む窓になる — 2026-08-31 確認)。yield break でなく
-            // break で抜けて、後続の復元 Action enqueue と SpawnInProgress 解除は必ず走らせる。
-            if (GameStartCommitted || !GameStates.IsLobby) break;
+            for (int i = 0; i < CurrentPositions.Count; i++)
+            {
+                // 開始コミット/ロビー離脱を検知したら残りを撒かない (走り出したループは StartSpawn 入口の
+                // GameStartCommitted ゲートの射程外。劣化 spacing 1.5s ではテイルが最大 ~43s まで伸び、
+                // 開始バーストへ装飾 spawn が食い込む窓になる — 2026-08-31 確認)。yield break でなく
+                // break で抜けて、後続の復元 Action enqueue と SpawnInProgress 解除は必ず走らせる。
+                if (GameStartCommitted || !GameStates.IsLobby)
+                {
+                    aborted = true;
+                    break;
+                }
 
-            Utils.RpcCreateDeadBody(
-                CurrentPositions[i],
-                colorId,
-                lp,
-                SendOption.Reliable);
-            spawned++;
-            if (FakeBodyBurst.Gentle) yield return new WaitForSecondsRealtime(FakeBodyBurst.CurrentSpacingSeconds);
-            else if (i % 4 == 3) yield return null;
+                Utils.RpcCreateDeadBody(
+                    CurrentPositions[i],
+                    colorId,
+                    lp,
+                    SendOption.Reliable,
+                    onCreated,
+                    target,
+                    hostLocalBody);
+
+                spawned++;
+                if (FakeBodyBurst.Gentle) yield return new WaitForSecondsRealtime(FakeBodyBurst.CurrentSpacingSeconds);
+                else if (i % 4 == 3) yield return null;
+            }
+
+            if (aborted) break;
         }
 
         // 復元 Action を同じ rate limiter キューに積む → 5 体 spawn の直後に必ず実行される。
@@ -240,6 +281,13 @@ internal static class LobbyCorpses
 
         // クライアント側 host label を再 sync するだけ。outfit / SetDirtyBit には触らない
         lp.RpcSetName(name);
+    }
+
+    // 開始が中止された (色不正などで BeginGame を弾いた) ときに開始コミットのラッチを降ろす。
+    // 降ろさないと、そのロビーでは以後 1 体も撒かれない。
+    public static void OnGameStartAborted()
+    {
+        GameStartCommitted = false;
     }
 
     // ゲーム開始ガード: BeginGame Prefix から呼ばれる。
@@ -295,6 +343,6 @@ internal static class LobbyCorpsesJoinHook
         if (client == null) return;
         if (!GameStates.IsLobby) return;
 
-        LobbyCorpses.RequestReplay();
+        LobbyCorpses.RequestReplay(client.Id);
     }
 }
