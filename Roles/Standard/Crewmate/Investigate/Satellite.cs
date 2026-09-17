@@ -158,6 +158,20 @@ public class Satellite : RoleBase
             : string.Format(GetString("SatelliteResultNoRooms"), targetId.ColoredPlayerName());
 
         Utils.SendMessage(body + string.Format(GetString("SatelliteUsesLeft"), usecount), SatelliteId, title, importance: MessageImportance.High);
+
+        // マッドメイトのサテライトは、確認結果を生存インポスター全員へも横流しする。
+        PlayerControl satellite = Utils.GetPlayerById(SatelliteId);
+        if (satellite == null || !satellite.Is(CustomRoles.Madmate)) return;
+
+        string leak = string.Format(GetString("SatelliteMadLeak"), SatelliteId.ColoredPlayerName()) + "\n" + body;
+        List<Message> leaks = [];
+        foreach (PlayerControl imp in Main.EnumerateAlivePlayerControls())
+        {
+            if (imp.PlayerId == SatelliteId || !imp.Is(CustomRoleTypes.Impostor)) continue;
+            leaks.Add(new Message(leak, imp.PlayerId, GetString("SatelliteMadLeakTitle")));
+        }
+
+        leaks.SendMultipleMessages(MessageImportance.High);
     }
 
     public override void AfterMeetingTasks()

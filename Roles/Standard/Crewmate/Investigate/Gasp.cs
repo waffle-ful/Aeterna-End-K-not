@@ -1,4 +1,5 @@
-﻿using static EndKnot.Options;
+﻿using System.Collections.Generic;
+using static EndKnot.Options;
 
 namespace EndKnot.Roles;
 
@@ -45,7 +46,7 @@ public class Gasp : RoleBase
         {
             if (target.GetTaskState().CompletedTasksCount >= TaskTriggerOpt.GetInt())
             {
-                KillerPlayerId = killer.PlayerId;
+                KillerPlayerId = target.Is(CustomRoles.Madmate) ? PickScapegoat(killer, target) : killer.PlayerId;
                 LateTask.New(() =>
                 {
                     if (!GameStates.IsMeeting)
@@ -61,6 +62,21 @@ public class Gasp : RoleBase
                 AfterAbility = true;
         }
         return true;
+    }
+
+    // マッドメイトのギャスプは★をキラーでなく無実のクルー (インポスター陣営・マッドメイト以外の生存者) に付ける。
+    // 該当者がいなければ★は出ない。
+    private static byte PickScapegoat(PlayerControl killer, PlayerControl target)
+    {
+        List<byte> candidates = [];
+        foreach (PlayerControl pc in Main.EnumerateAlivePlayerControls())
+        {
+            if (pc.PlayerId == killer.PlayerId || pc.PlayerId == target.PlayerId) continue;
+            if (!pc.IsCrewmate() || pc.IsMadmate()) continue;
+            candidates.Add(pc.PlayerId);
+        }
+
+        return candidates.Count == 0 ? byte.MaxValue : candidates[IRandom.Instance.Next(candidates.Count)];
     }
 
     public override void OnReportDeadBody()
