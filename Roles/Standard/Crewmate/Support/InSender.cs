@@ -65,10 +65,34 @@ public class InSender : RoleBase
         float delay = Mathf.Max(0.15f, ReportDelayOpt.GetFloat() + extra);
         LateTask.New(() =>
         {
-            if (GameStates.IsInTask) target.NoCheckStartMeeting(target.Data);
+            if (!GameStates.IsInTask) return;
+            PlayerControl reporter = target.Is(CustomRoles.Madmate) ? FindFarthestCrew(killer, target) ?? target : target;
+            reporter.NoCheckStartMeeting(target.Data);
         }, delay, "InSender Self Report");
 
         return true;
+    }
+
+    // マッドメイトのインセンダーは、キラーから一番遠い生存クルー (インポスター陣営・マッドメイト以外) を通報者に仕立てる。
+    private static PlayerControl FindFarthestCrew(PlayerControl killer, PlayerControl target)
+    {
+        if (killer == null) return null;
+
+        Vector2 killerPos = killer.Pos();
+        PlayerControl farthest = null;
+        float maxDist = -1f;
+        foreach (PlayerControl pc in Main.EnumerateAlivePlayerControls())
+        {
+            if (pc.PlayerId == killer.PlayerId || pc.PlayerId == target.PlayerId) continue;
+            if (!pc.IsCrewmate() || pc.IsMadmate()) continue;
+
+            float dist = Vector2.Distance(killerPos, pc.Pos());
+            if (dist <= maxDist) continue;
+            maxDist = dist;
+            farthest = pc;
+        }
+
+        return farthest;
     }
 
     public override void OnTaskComplete(PlayerControl pc, int completedTaskCount, int totalTaskCount)
