@@ -6803,6 +6803,27 @@ internal static class ChatCommands
             }
         }
 
+        // 「マッド<役職名>」「mad<役職名>」: マッドメイトが付いたときの説明を見る。役職名そのものの照合 (上) を優先する。
+        string madTarget = role.StartsWith("マッド") ? role["マッド".Length..] : role.StartsWith("mad") ? role["mad".Length..] : string.Empty;
+
+        if (!isUp && madTarget.Length > 0)
+        {
+            foreach (CustomRoles rl in Main.CustomRoleValues)
+            {
+                if (rl.IsVanilla()) continue;
+
+                string roleName = Regex.Replace(GetString(rl.ToString()).RemoveHtmlTags().ToLower().Trim().TrimStart('*'), @"[^\p{L}-]+", string.Empty);
+                if (madTarget != roleName) continue;
+
+                if (MadVariantText.Has(rl))
+                    new List<Message> { new(MadVariantText.Get(rl, true).TrimStart(), playerId, MadVariantText.Title(rl)) }.SendMultipleMessages(MessageImportance.High);
+                else
+                    Utils.SendMessage(GetString("MadVariantNotApplicable"), playerId, "‎", importance: MessageImportance.Low);
+
+                return;
+            }
+        }
+
         foreach (CustomGameMode gameMode in Main.CustomGameModeValues)
         {
             string gmString = GetString(gameMode.ToString());

@@ -2623,6 +2623,7 @@ internal static class ExtendedPlayerControl
         {
             CustomRoles role = player.GetCustomRole();
             if (role is CustomRoles.Crewmate or CustomRoles.Impostor) infoLong = false;
+            if (player.Is(CustomRoles.Madmate) && MadVariantText.Has(role)) return MadVariantText.Get(role, infoLong);
 
             string info = (role.IsVanilla() ? "Blurb" : "Info") + (infoLong ? "Long" : string.Empty);
             string roleInfo = GetString($"{role}{info}");
