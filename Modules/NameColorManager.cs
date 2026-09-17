@@ -88,6 +88,9 @@ public static class NameColorManager
         // Coven
         if (seer.Is(CustomRoleTypes.Coven) && target.Is(CustomRoleTypes.Coven)) color = Main.CovenColor;
 
+        // Vega and Altair always recognize each other, unlike a generic NK pair.
+        if ((seer.Is(CustomRoles.Vega) && target.Is(CustomRoles.Altair)) || (seer.Is(CustomRoles.Altair) && target.Is(CustomRoles.Vega))) color = Vega.TeamColorHex;
+
         // Impostors and Madmates
         // 一匹狼は仲間インポスターとの相互認識から外れる。役職テキスト側 (KnowsTargetRole) と同じ除外を
         // 名前色側にも掛けないと、テキストは隠れているのに名前だけ赤いままで正体が割れる。

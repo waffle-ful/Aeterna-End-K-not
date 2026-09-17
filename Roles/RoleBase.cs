@@ -200,6 +200,10 @@ public abstract class RoleBase : IComparable<RoleBase>
         countsAs = 1;
     }
 
+    // Runs once per player after a winner is confirmed, so a role can claim or ride along on the
+    // win via CustomWinnerHolder.ResetAndSetAndChWinner (SoloWinOption win-priority arbitration).
+    public virtual void CheckWinner(GameOverReason reason) { }
+
     protected bool IsThisRole(PlayerControl pc)
     {
         return pc.GetCustomRole() == Enum.Parse<CustomRoles>(GetType().Name, true);
