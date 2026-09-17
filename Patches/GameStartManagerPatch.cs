@@ -645,6 +645,7 @@ public static class GameStartRandomMap
             string msg = GetString("Error.InvalidColor");
             msg += "\n" + string.Join(",", invalidColor.Select(p => $"{p.GetRealName()}"));
             Utils.SendMessage(msg, importance: MessageImportance.Low);
+            LobbyCorpses.OnGameStartAborted();
             return false;
         }
 

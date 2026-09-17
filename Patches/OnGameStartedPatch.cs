@@ -291,6 +291,19 @@ internal static class ChangeRoleSettings
                 MapRoomDoorsUpdatePatch.DoorTimerTexts.Values.DoIf(x => x, x => Object.Destroy(x.gameObject));
             }
             catch (Exception e) { Utils.ThrowException(e); }
+
+            try
+            {
+                // ロビーと試合は同じシーンなので、ロビーに置いた死体 (装飾の LobbyCorpses / ロビーキル) は
+                // ゲームが始まっても実体が残る。残ったまま最初の会議に入ると、その死体の親 PlayerId が
+                // 「通報済み」に流し込まれ、その人が本当に死んだときの死体が試合中ずっと通報できなくなる。
+                // 始まったばかりのゲームに正当な死体は 1 体も無いので、ここで全部片付ける。
+                // このメソッドはモッドを入れている客でも走るので、客側の残骸も同時に消える。
+                foreach (DeadBody body in Object.FindObjectsOfType<DeadBody>())
+                    if (body)
+                        Object.Destroy(body.gameObject);
+            }
+            catch (Exception e) { Utils.ThrowException(e); }
             
             SabotageMapPatch.TimerTexts = [];
             MapRoomDoorsUpdatePatch.DoorTimerTexts = [];

@@ -5877,7 +5877,17 @@ public static class Utils
     /// (ダミー撃破の偽死体を通報不可にする等) はここで実体を受け取ること。座標での照合は、同じ場所で
     /// 起きた本物のキルの死体を巻き添えにするので使わない。
     /// </param>
-    public static void RpcCreateDeadBody(Vector3 position, byte colorId, PlayerControl deadBodyParent, SendOption sendOption = SendOption.Reliable, Action<DeadBody> onCreated = null)
+    /// <param name="targetClientId">
+    /// 0 以上なら その client にだけ送る (入室してきた客への撒き直し用)。全員へ再 broadcast すると、すでに
+    /// 受け取っている客の側で同じ座標に死体の実体が積み上がる。ホストは既にローカル実体を持っているので、
+    /// この場合はホスト側の生成もしない。
+    /// </param>
+    /// <param name="hostLocalBody">
+    /// false ならホスト側の実体を作らず送信だけする。「すでにホストが持っている死体を客へ撒き直す」用途で、
+    /// true のまま撒き直すとホスト側にだけ同じ座標の実体が積み上がる。
+    /// ⚠️ false のときは実体を作らないので <paramref name="onCreated" /> も呼ばれない。
+    /// </param>
+    public static void RpcCreateDeadBody(Vector3 position, byte colorId, PlayerControl deadBodyParent, SendOption sendOption = SendOption.Reliable, Action<DeadBody> onCreated = null, int targetClientId = -1, bool hostLocalBody = true)
     {
         if (!deadBodyParent || !AmongUsClient.Instance.AmHost) return;
         if (!Main.IntroDestroyed && !GameStates.IsLobby) return;
@@ -5886,12 +5896,22 @@ public static class Utils
         {
             // rate limiter で遅延実行される間に deadBodyParent が破棄される可能性があるので再チェック
             if (!deadBodyParent) return;
+
+            // 入口と同じ条件を実行時にも置く。入口の判定は enqueue の時点でしか効かないので、ホストが Play を
+            // 押した瞬間にキューへ残っていたロビー装飾ぶんは開始後に生成され、そのまま試合へ持ち込まれる
+            // (開始直後のバーストに MurderPlayer 束を足すことにもなる)。GameStates.IsLobby はネットワーク層が
+            // Joined を抜けるまで true のままなので、開始コミットのラッチも併せて見る。
+            if (!Main.IntroDestroyed && (!GameStates.IsLobby || LobbyCorpses.GameStartCommitted)) return;
             // ⚠️ `onCreated?.Invoke(CreateDeadBody(...))` と1行に畳んではいけない。null 条件演算子は
             // 引数の評価ごと短絡するので、コールバック未指定 (= 呼出元のほぼ全て) のとき
             // ホストローカルの死体生成が丸ごとスキップされ「客には見えるがホストには見えない偽死体」になる
             // (2026-08-06 の 3c4f10aa で混入・ロビー死体装飾が消えた真因)
-            DeadBody hostBody = CreateDeadBody(position, colorId, deadBodyParent);
-            onCreated?.Invoke(hostBody);
+            if (hostLocalBody)
+            {
+                DeadBody hostBody = CreateDeadBody(position, colorId, deadBodyParent);
+                onCreated?.Invoke(hostBody);
+            }
+
             PlayerControl playerControl = Object.Instantiate(AmongUsClient.Instance.PlayerPrefab, Vector2.zero, Quaternion.identity);
             playerControl.PlayerId = deadBodyParent.PlayerId;
             playerControl.isNew = false;
@@ -5901,7 +5921,7 @@ public static class Utils
             var sender = CustomRpcSender.Create("Utils.RpcCreateDeadBody", sendOption, true, false);
             sender.checkLength = false; // ⚠️ writer キャッシュ + StartRpc 後の raw 直書き = CNO と同型。分割は PacketSplitPatch に任せる
             MessageWriter writer = sender.stream;
-            sender.StartMessage();
+            sender.StartMessage(targetClientId);
             writer.StartMessage(4);
             SpawnGameDataMessage item = AmongUsClient.Instance.CreateSpawnMessage(playerControl, -2, SpawnFlags.None);
             item.SerializeValues(writer);
