@@ -81,6 +81,16 @@ public class NiceLogger : RoleBase
 
         pc.SyncSettings();
         Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
+
+        // マッドメイトのロガーは、監視ポイントを置いた部屋を生存インポスター全員へ知らせる。
+        if (!pc.Is(CustomRoles.Madmate)) return;
+
+        string placed = string.Format(Translator.GetString("NiceLoggerMadPlaced"), NiceLoggerId.ColoredPlayerName(), SetRoom);
+        foreach (PlayerControl imp in Main.EnumerateAlivePlayerControls())
+        {
+            if (imp.PlayerId == NiceLoggerId || !imp.Is(CustomRoleTypes.Impostor)) continue;
+            imp.Notify(placed, 8f);
+        }
     }
 
     public override void OnFixedUpdate(PlayerControl pc)
@@ -136,6 +146,19 @@ public class NiceLogger : RoleBase
         }
         else
             messages.Add(new Message("<size=70%>" + string.Format(Translator.GetString("NiceLoggerAbility2"), SetRoom), NiceLoggerId, title));
+
+        // マッドメイトのロガーは、同じ記録を生存インポスター全員へも横流しする。
+        if (logger.Is(CustomRoles.Madmate))
+        {
+            string leakTitle = Utils.ColorString(Palette.ImpostorRed, Translator.GetString("NiceLoggerMadLeakTitle"));
+            List<Message> own = [.. messages];
+            foreach (PlayerControl imp in Main.EnumerateAlivePlayerControls())
+            {
+                if (imp.PlayerId == NiceLoggerId || !imp.Is(CustomRoleTypes.Impostor)) continue;
+                foreach (Message m in own)
+                    messages.Add(new Message(m.Text, imp.PlayerId, leakTitle));
+            }
+        }
 
         LateTask.New(() => messages.SendMultipleMessages(), 4f, "NiceLoggerSend");
     }

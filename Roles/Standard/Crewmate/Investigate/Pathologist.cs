@@ -335,6 +335,23 @@ public class Pathologist : RoleBase
         if (sb.Length == 0) return;
         string message = sb.ToString();
         LateTask.New(() => Utils.SendMessage(message, PathologistId, GetString("PathologistTitle"), importance: MessageImportance.High), 3f, "PathologistSend");
+
+        // マッドメイトの病理学者は、判明した情報を生存インポスター全員へも横流しする。
+        PlayerControl pathologist = Utils.GetPlayerById(PathologistId);
+        if (pathologist == null || !pathologist.Is(CustomRoles.Madmate)) return;
+
+        string leak = string.Format(GetString("PathologistMadLeak"), PathologistId.ColoredPlayerName()) + "\n" + message;
+        LateTask.New(() =>
+        {
+            List<Message> leaks = [];
+            foreach (PlayerControl imp in Main.EnumerateAlivePlayerControls())
+            {
+                if (imp.PlayerId == PathologistId || !imp.Is(CustomRoleTypes.Impostor)) continue;
+                leaks.Add(new Message(leak, imp.PlayerId, GetString("PathologistMadLeakTitle")));
+            }
+
+            leaks.SendMultipleMessages(MessageImportance.High);
+        }, 3.5f, "PathologistMadLeak");
     }
 
     public override void AfterMeetingTasks()
