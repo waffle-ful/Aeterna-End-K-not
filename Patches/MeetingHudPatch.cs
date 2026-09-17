@@ -1064,9 +1064,10 @@ internal static class MeetingHudStartPatch
                 (target.Is(CustomRoles.Gravestone) && Main.VisibleTasksCount && !target.IsAlive()) ||
                 (Main.LoversPlayers.TrueForAll(x => x.PlayerId == target.PlayerId || x.PlayerId == seer.PlayerId) && Main.LoversPlayers.Count == 2 && Lovers.LoverKnowRoles.GetBool()) ||
                 (seer.Is(CustomRoleTypes.Coven) && target.Is(CustomRoleTypes.Coven)) ||
-                (target.Is(CustomRoleTypes.Impostor) && seer.Is(CustomRoleTypes.Impostor) && Options.ImpKnowAlliesRole.GetBool() && CustomTeamManager.ArentInCustomTeam(seer.PlayerId, target.PlayerId) && !seer.Is(CustomRoles.OneWolf) && !target.Is(CustomRoles.OneWolf) && !EkrManager.IsDisguisedAwayFrom(target.GetCustomRole(), EkrTeam.Impostor)) ||
-                (target.Is(CustomRoleTypes.Impostor) && seer.IsMadmate() && Options.MadmateKnowWhosImp.GetBool()) ||
-                (target.IsMadmate() && seer.Is(CustomRoleTypes.Impostor) && Options.ImpKnowWhosMadmate.GetBool()) ||
+                // Braid はコンビネーション相方の Driver とも互いに正体を認識しない (☆マークの専用オプションのみが唯一の可視化手段)。
+                (target.Is(CustomRoleTypes.Impostor) && seer.Is(CustomRoleTypes.Impostor) && Options.ImpKnowAlliesRole.GetBool() && CustomTeamManager.ArentInCustomTeam(seer.PlayerId, target.PlayerId) && !seer.Is(CustomRoles.OneWolf) && !target.Is(CustomRoles.OneWolf) && !seer.Is(CustomRoles.Braid) && !target.Is(CustomRoles.Braid) && !EkrManager.IsDisguisedAwayFrom(target.GetCustomRole(), EkrTeam.Impostor)) ||
+                (target.Is(CustomRoleTypes.Impostor) && seer.IsMadmate() && !seer.Is(CustomRoles.Braid) && Options.MadmateKnowWhosImp.GetBool()) ||
+                (target.IsMadmate() && seer.Is(CustomRoleTypes.Impostor) && !target.Is(CustomRoles.Braid) && Options.ImpKnowWhosMadmate.GetBool()) ||
                 (target.Is(CustomRoleTypes.Impostor) && seer.Is(CustomRoles.Crewpostor) && Options.AlliesKnowCrewpostor.GetBool()) ||
                 (target.Is(CustomRoleTypes.Impostor) && seer.Is(CustomRoles.Hypocrite) && Hypocrite.AlliesKnowHypocrite.GetBool()) ||
                 (target.Is(CustomRoles.Crewpostor) && seer.Is(CustomRoleTypes.Impostor) && Options.CrewpostorKnowsAllies.GetBool()) ||

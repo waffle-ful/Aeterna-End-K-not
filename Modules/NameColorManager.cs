@@ -91,10 +91,11 @@ public static class NameColorManager
         // Impostors and Madmates
         // 一匹狼は仲間インポスターとの相互認識から外れる。役職テキスト側 (KnowsTargetRole) と同じ除外を
         // 名前色側にも掛けないと、テキストは隠れているのに名前だけ赤いままで正体が割れる。
-        if (seer.Is(CustomRoleTypes.Impostor) && target.Is(CustomRoleTypes.Impostor) && !seer.Is(CustomRoles.OneWolf) && !target.Is(CustomRoles.OneWolf) && CustomTeamManager.ArentInCustomTeam(seer.PlayerId, target.PlayerId)) color = target.Is(CustomRoles.Egoist) && Options.ImpEgoistVisibalToAllies.GetBool() && seer != target ? Utils.GetRoleColorCode(CustomRoles.Egoist) : Main.ImpostorColor;
+        // Braid はコンビネーション相方の Driver とも互いに正体を認識しない (☆マークの専用オプションのみが唯一の可視化手段)。
+        if (seer.Is(CustomRoleTypes.Impostor) && target.Is(CustomRoleTypes.Impostor) && !seer.Is(CustomRoles.OneWolf) && !target.Is(CustomRoles.OneWolf) && !seer.Is(CustomRoles.Braid) && !target.Is(CustomRoles.Braid) && CustomTeamManager.ArentInCustomTeam(seer.PlayerId, target.PlayerId)) color = target.Is(CustomRoles.Egoist) && Options.ImpEgoistVisibalToAllies.GetBool() && seer != target ? Utils.GetRoleColorCode(CustomRoles.Egoist) : Main.ImpostorColor;
         if (seer.Is(CustomRoleTypes.Impostor) && target.Is(CustomRoles.DoubleAgent)) color = Main.ImpostorColor;
-        if (seer.IsMadmate() && target.Is(CustomRoleTypes.Impostor) && Options.MadmateKnowWhosImp.GetBool()) color = Main.ImpostorColor;
-        if (seer.Is(CustomRoleTypes.Impostor) && target.IsMadmate() && Options.ImpKnowWhosMadmate.GetBool()) color = Utils.GetRoleColorCode(CustomRoles.Madmate);
+        if (seer.IsMadmate() && target.Is(CustomRoleTypes.Impostor) && !seer.Is(CustomRoles.Braid) && Options.MadmateKnowWhosImp.GetBool()) color = Main.ImpostorColor;
+        if (seer.Is(CustomRoleTypes.Impostor) && target.IsMadmate() && !target.Is(CustomRoles.Braid) && Options.ImpKnowWhosMadmate.GetBool()) color = Utils.GetRoleColorCode(CustomRoles.Madmate);
         if (seer.IsMadmate() && target.IsMadmate() && Options.MadmateKnowWhosMadmate.GetBool()) color = Utils.GetRoleColorCode(CustomRoles.Madmate);
         if (Blackmailer.On && seerRoleClass is Blackmailer { IsEnable: true } bm && bm.BlackmailedPlayerIds.Contains(target.PlayerId)) color = Utils.GetRoleColorCode(CustomRoles.BloodKnight);
 

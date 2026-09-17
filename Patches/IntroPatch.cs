@@ -1092,11 +1092,13 @@ internal static class BeginImpostorPatch
             }
         }
 
+        // Braid はコンビネーション相方の Driver とも互いに正体を認識しない (☆マークの専用オプションのみが唯一の可視化手段) ので、
+        // ここの汎用「インポスターは味方 Madmate を知っている」チームリストからは除外する。
         if (PlayerControl.LocalPlayer.IsImpostor() && Options.ImpKnowWhosMadmate.GetBool())
         {
             foreach (var pc in Main.CachedAllPlayerControls())
             {
-                if (pc.IsMadmate() && !pc.AmOwner)
+                if (pc.IsMadmate() && !pc.Is(CustomRoles.Braid) && !pc.AmOwner)
                     yourTeam.Add(pc);
             }
         }
@@ -1106,7 +1108,7 @@ internal static class BeginImpostorPatch
             yourTeam = new();
             yourTeam.Add(PlayerControl.LocalPlayer);
 
-            if (Options.MadmateKnowWhosImp.GetBool())
+            if (Options.MadmateKnowWhosImp.GetBool() && !PlayerControl.LocalPlayer.Is(CustomRoles.Braid))
             {
                 foreach (var pc in Main.CachedAllPlayerControls())
                 {

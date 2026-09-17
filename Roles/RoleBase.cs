@@ -222,8 +222,18 @@ public abstract class RoleBase : IComparable<RoleBase>
         else if (role.IsNeutral(true)) tab = TabGroup.NeutralRoles;
         else if (role.IsCrewmate()) tab = TabGroup.CrewmateRoles;
 
+        // コンビは1組固定。出現率の行は主役職の1行だけで、表示名はペア名にする
+        if (role.IsCombinationPrimary())
+        {
+            tab = TabGroup.Combinations;
+            single = true;
+        }
+
         if (single) Options.SetupSingleRoleOptions(id++, tab, role, hideMaxSetting: true);
         else Options.SetupRoleOptions(id++, tab, role);
+
+        if (role.IsCombinationPrimary())
+            Options.CustomRoleSpawnChances[role].AddReplacement((Translator.GetString($"{role}"), role.GetCombinationName(false)));
 
         return new(id, tab, role);
     }
