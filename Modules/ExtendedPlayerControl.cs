@@ -2568,6 +2568,7 @@ internal static class ExtendedPlayerControl
             if (Akazukin.ShouldDisplayDeathReason(target.PlayerId)) return true;
             return (player.Is(CustomRoles.Doctor)
                     || player.Is(CustomRoles.Autopsy)
+                    || (player.Is(CustomRoles.Driver) && Braid.DriverSeesDeathReason)
                     || Options.EveryoneSeesDeathReasons.GetBool()
                     || target.Is(CustomRoles.Gravestone)
                     || (!player.IsAlive() && Options.GhostCanSeeDeathReason.GetBool()))

@@ -394,6 +394,10 @@ internal static class CustomRoleSelector
         if (rd.Next(0, 100) < Arrogance.BardChance.GetInt() && finalRolesList.Remove(CustomRoles.Arrogance)) finalRolesList.Add(CustomRoles.Bard);
         if (rd.Next(0, 100) < Bomber.NukerChance.GetInt() && finalRolesList.Remove(CustomRoles.Bomber)) finalRolesList.Add(CustomRoles.Nuker);
 
+        // 事前指定のうち実際に席へ着いた分だけを数える (観戦者化・退出した指定は RoleResult に載らない)
+        List<CustomRoles> seatedPreSetRoles = preSetRoles.Where(x => RoleResult.TryGetValue(x.Key, out CustomRoles r) && r == x.Value).Select(x => x.Value).ToList();
+        CombinationRoles.EnsurePartners(finalRolesList, seatedPreSetRoles, allPlayers.Count);
+
         RoleResult.AddRange(allPlayers.Shuffle().Zip(finalRolesList.Shuffle()).ToDictionary(x => x.First.PlayerId, x => x.Second), false);
         Logger.Info(string.Join(", ", RoleResult.Values.Select(x => x.ToString())), "RoleResults");
 

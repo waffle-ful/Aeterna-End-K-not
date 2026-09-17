@@ -447,13 +447,14 @@ internal static class CheckMurderPatch
             return false;
         }
 
-        if (killer.IsMadmate() && target.Is(CustomRoleTypes.Impostor) && !Options.MadmateCanKillImp.GetBool())
+        // Braid はコンビネーション相方の Driver との間では通常のクルーと同じ扱い (この汎用 Madmate ガードの対象外)。
+        if (killer.IsMadmate() && !killer.Is(CustomRoles.Braid) && target.Is(CustomRoleTypes.Impostor) && !Options.MadmateCanKillImp.GetBool())
         {
             Notify("MadmateKillImpostor");
             return false;
         }
 
-        if (killer.Is(CustomRoleTypes.Impostor) && target.IsMadmate() && !Options.ImpCanKillMadmate.GetBool())
+        if (killer.Is(CustomRoleTypes.Impostor) && target.IsMadmate() && !target.Is(CustomRoles.Braid) && !Options.ImpCanKillMadmate.GetBool())
         {
             Notify("ImpostorKillMadmate");
             return false;

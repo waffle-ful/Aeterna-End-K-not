@@ -471,6 +471,7 @@ public static class Utils
     private static bool KillFlashCheck(PlayerControl killer, PlayerControl target, PlayerControl seer)
     {
         if (seer.Is(CustomRoles.GM) || seer.Is(CustomRoles.Seer)) return true;
+        if (seer.Is(CustomRoles.Driver) && seer.IsAlive() && Braid.DriverSeesKillFlash) return true;
 
         // if (!seer.IsAlive() || killer == seer || target == seer) return false;
 
@@ -617,6 +618,7 @@ public static class Utils
             TabGroup.CrewmateRoles => new(0.2f, 0.4f, 0.5f),
             TabGroup.NeutralRoles => new(0.5f, 0.4f, 0.2f),
             TabGroup.CovenRoles => new(0.5f, 0.2f, 0.4f),
+            TabGroup.Combinations => new(0.5f, 0.42f, 0.1f),
             TabGroup.Addons => new(0.4f, 0.2f, 0.3f),
             TabGroup.OtherRoles => new(0.4f, 0.4f, 0.4f),
             TabGroup.PresetExplorer => new(0.5f, 0.5f, 0.5f),
@@ -1166,6 +1168,7 @@ public static class Utils
             case CustomRoles.Cherokious:
             case CustomRoles.Crewpostor:
             case CustomRoles.Hypocrite:
+            case CustomRoles.Braid:
             case CustomRoles.Accumulator:
                 if (forRecompute && !p.IsDead) hasTasks = false;
                 if (p.IsDead) hasTasks = false;
@@ -1267,12 +1270,13 @@ public static class Utils
         }
 
         return (__instance.IsMadmate() && PlayerControl.LocalPlayer.IsMadmate() && Options.MadmateKnowWhosMadmate.GetBool()) ||
-               (__instance.IsMadmate() && PlayerControl.LocalPlayer.Is(CustomRoleTypes.Impostor) && Options.ImpKnowWhosMadmate.GetBool()) ||
-               (__instance.Is(CustomRoleTypes.Impostor) && PlayerControl.LocalPlayer.IsMadmate() && Options.MadmateKnowWhosImp.GetBool()) ||
+               (__instance.IsMadmate() && !__instance.Is(CustomRoles.Braid) && PlayerControl.LocalPlayer.Is(CustomRoleTypes.Impostor) && Options.ImpKnowWhosMadmate.GetBool()) ||
+               (__instance.Is(CustomRoleTypes.Impostor) && PlayerControl.LocalPlayer.IsMadmate() && !PlayerControl.LocalPlayer.Is(CustomRoles.Braid) && Options.MadmateKnowWhosImp.GetBool()) ||
                (__instance.Is(CustomRoles.Mimic) && Main.VisibleTasksCount && !__instance.IsAlive()) ||
                (__instance.Is(CustomRoleTypes.Impostor) && PlayerControl.LocalPlayer.Is(CustomRoles.Crewpostor) && Options.AlliesKnowCrewpostor.GetBool()) ||
                (__instance.Is(CustomRoleTypes.Impostor) && PlayerControl.LocalPlayer.Is(CustomRoles.Hypocrite) && Hypocrite.AlliesKnowHypocrite.GetBool()) ||
-               __instance.Is(CustomRoleTypes.Impostor) && PlayerControl.LocalPlayer.Is(CustomRoleTypes.Impostor) && Options.ImpKnowAlliesRole.GetBool() && CustomTeamManager.ArentInCustomTeam(PlayerControl.LocalPlayer.PlayerId, __instance.PlayerId) && !PlayerControl.LocalPlayer.Is(CustomRoles.OneWolf) && !__instance.Is(CustomRoles.OneWolf) ||
+               // Braid はコンビネーション相方の Driver とも互いに正体を認識しない (☆マークの専用オプションのみが唯一の可視化手段)。
+               __instance.Is(CustomRoleTypes.Impostor) && PlayerControl.LocalPlayer.Is(CustomRoleTypes.Impostor) && Options.ImpKnowAlliesRole.GetBool() && CustomTeamManager.ArentInCustomTeam(PlayerControl.LocalPlayer.PlayerId, __instance.PlayerId) && !PlayerControl.LocalPlayer.Is(CustomRoles.OneWolf) && !__instance.Is(CustomRoles.OneWolf) && !PlayerControl.LocalPlayer.Is(CustomRoles.Braid) && !__instance.Is(CustomRoles.Braid) ||
                (__instance.Is(CustomRoleTypes.Coven) && PlayerControl.LocalPlayer.Is(CustomRoleTypes.Coven)) ||
                (Main.LoversPlayers.TrueForAll(x => x.PlayerId == __instance.PlayerId || x.AmOwner) && Main.LoversPlayers.Count == 2 && Lovers.LoverKnowRoles.GetBool()) ||
                (CustomTeamManager.AreInSameCustomTeam(__instance.PlayerId, PlayerControl.LocalPlayer.PlayerId) && CustomTeamManager.IsSettingEnabledForPlayerTeam(__instance.PlayerId, CTAOption.KnowRoles)) ||
@@ -1436,7 +1440,7 @@ public static class Utils
 
             Color normalColor = taskState.IsTaskFinished ? taskCompleteColor : nonCompleteColor;
 
-            if (Main.PlayerStates.TryGetValue(playerId, out PlayerState ps) && ps.MainRole is CustomRoles.Hypocrite or CustomRoles.Crewpostor or CustomRoles.Cherokious or CustomRoles.Pawn)
+            if (Main.PlayerStates.TryGetValue(playerId, out PlayerState ps) && ps.MainRole is CustomRoles.Hypocrite or CustomRoles.Crewpostor or CustomRoles.Braid or CustomRoles.Cherokious or CustomRoles.Pawn)
                 normalColor = GetRoleColor(ps.MainRole);
 
             Color textColor = comms ? Color.gray : normalColor;
@@ -1609,20 +1613,24 @@ public static class Utils
             [TabGroup.CrewmateRoles] = [],
             [TabGroup.NeutralRoles] = [],
             [TabGroup.CovenRoles] = [],
+            [TabGroup.Combinations] = [],
             [TabGroup.Addons] = [],
             [TabGroup.OtherRoles] = []
         };
 
         (Options.CurrentGameMode == CustomGameMode.HideAndSeek ? CustomHnS.AllHnSRoles.FindAll(x => x.IsEnable()) : (Options.CustomRoleSpawnChances.Keys.Concat(Options.CustomAdtRoleSpawnRate.Keys).Except(CustomHnS.AllHnSRoles).Distinct().Where(x => x.IsEnable()).OrderBy(x => GetString($"{x}")).ToList())).ForEach(x =>
         {
-            string roleDisplay = x.ToColoredString();
+            // コンビは主役職の1行にペア名でまとめる
+            if (x.IsCombinationPartner()) return;
+            string roleDisplay = x.IsCombinationPrimary() ? x.GetCombinationName() : x.ToColoredString();
 
             int count = x.GetCount();
             if (count > 1) roleDisplay += $" ×{count}";
 
             List<string> usedList;
 
-            if (x.IsGhostRole()) usedList = roles[TabGroup.OtherRoles];
+            if (x.IsCombinationRole()) usedList = roles[TabGroup.Combinations];
+            else if (x.IsGhostRole()) usedList = roles[TabGroup.OtherRoles];
             else if (x.IsAdditionRole()) usedList = roles[TabGroup.Addons];
             else if (x.IsCrewmate()) usedList = roles[TabGroup.CrewmateRoles];
             else if (x.IsImpostor() || x.IsMadmate()) usedList = roles[TabGroup.ImpostorRoles];
@@ -4176,9 +4184,10 @@ public static class Utils
                (target.Is(CustomRoles.Gravestone) && !target.IsAlive()) ||
                (Main.LoversPlayers.TrueForAll(x => x.PlayerId == seer.PlayerId || x.PlayerId == target.PlayerId) && Main.LoversPlayers.Count == 2 && Lovers.LoverKnowRoles.GetBool()) ||
                (seer.Is(CustomRoleTypes.Coven) && target.Is(CustomRoleTypes.Coven)) ||
-               (seer.Is(CustomRoleTypes.Impostor) && target.Is(CustomRoleTypes.Impostor) && Options.ImpKnowAlliesRole.GetBool() && CustomTeamManager.ArentInCustomTeam(seer.PlayerId, target.PlayerId) && !seer.Is(CustomRoles.OneWolf) && !target.Is(CustomRoles.OneWolf) && !Modules.Ekm.EkrManager.IsDisguisedAwayFrom(target.GetCustomRole(), Modules.Ekm.EkrTeam.Impostor)) ||
-               (seer.IsMadmate() && target.Is(CustomRoleTypes.Impostor) && Options.MadmateKnowWhosImp.GetBool()) ||
-               (seer.Is(CustomRoleTypes.Impostor) && target.IsMadmate() && Options.ImpKnowWhosMadmate.GetBool()) ||
+               // Braid はコンビネーション相方の Driver とも互いに正体を認識しない (☆マークの専用オプションのみが唯一の可視化手段)。
+               (seer.Is(CustomRoleTypes.Impostor) && target.Is(CustomRoleTypes.Impostor) && Options.ImpKnowAlliesRole.GetBool() && CustomTeamManager.ArentInCustomTeam(seer.PlayerId, target.PlayerId) && !seer.Is(CustomRoles.OneWolf) && !target.Is(CustomRoles.OneWolf) && !seer.Is(CustomRoles.Braid) && !target.Is(CustomRoles.Braid) && !Modules.Ekm.EkrManager.IsDisguisedAwayFrom(target.GetCustomRole(), Modules.Ekm.EkrTeam.Impostor)) ||
+               (seer.IsMadmate() && target.Is(CustomRoleTypes.Impostor) && !seer.Is(CustomRoles.Braid) && Options.MadmateKnowWhosImp.GetBool()) ||
+               (seer.Is(CustomRoleTypes.Impostor) && target.IsMadmate() && !target.Is(CustomRoles.Braid) && Options.ImpKnowWhosMadmate.GetBool()) ||
                (seer.Is(CustomRoles.Crewpostor) && target.Is(CustomRoleTypes.Impostor) && Options.CrewpostorKnowsAllies.GetBool()) ||
                (seer.Is(CustomRoles.Hypocrite) && target.Is(CustomRoleTypes.Impostor) && Hypocrite.KnowsAllies.GetBool()) ||
                (seer.Is(CustomRoleTypes.Impostor) && target.Is(CustomRoles.Hypocrite) && Hypocrite.AlliesKnowHypocrite.GetBool()) ||
