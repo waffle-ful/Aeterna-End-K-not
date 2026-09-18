@@ -11,7 +11,7 @@ public class EvilTeller : RoleBase
     private static List<byte> PlayerIdList = [];
 
     private static OptionItem KillCooldown;
-    private static OptionItem AbilityCooldown;
+    public static OptionItem AbilityCooldown;
     private static OptionItem MaxTellCount;
     private static OptionItem TellTime;
     private static OptionItem TellDistance;

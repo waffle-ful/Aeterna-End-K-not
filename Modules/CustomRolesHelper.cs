@@ -1212,7 +1212,8 @@ internal static class CustomRolesHelper
                 CustomRoles.BedWarsPlayer or
                 CustomRoles.Revenant or
                 CustomRoles.Akazukin or // 捕食中は死んでいるが OnFixedUpdate で復活予約と猶予切れを回している
-                CustomRoles.Weatherman
+                CustomRoles.Weatherman or
+                CustomRoles.AntiReporter // 死んでも通報妨害のタイマーを回し続けないと相手のロックが解けない
                 // EKR logic: on_death 起点の fiber は死後も実行を続ける契約
                 // (「死んだら爆発」演出)。EkrManager.Pump() が毎 tick 呼ばれ続けないと wait() の解決が
                 // DontUpdateDeadPlayers (既定 ON) の間引き間隔 (60〜150 tick ≈ 1〜3秒) ぶん遅延する。
