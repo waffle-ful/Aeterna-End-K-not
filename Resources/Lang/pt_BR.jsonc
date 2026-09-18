@@ -9890,6 +9890,7 @@
   ============================== */
   "GanPresidentCanBeMadmate": "<color=#30916f>Presidente</color> pode ser convertido",
   "GanSheriffCanBeMadmate": "<color=#f8cd46>Xerife</color> pode ser convertido",
+  "GanSnitchCanBeMadmate": "<color=#b8fb4f>Snitch</color> can be converted",
   "GhostCanSeeDeathReason": "Fantasmas podem ver a causa da morte",
   "GhostCanSeeOtherRoles": "Fantasmas podem ver as funções dos jogadores",
 
@@ -11231,6 +11232,8 @@
   "LostRoleByEvilEraser": "Você perdeu sua função por causa do <color=#ff1919>Apagador Maligno</color>",
   "LostRoleByNiceEraser": "Você perdeu sua função por causa do <color=#00a5ff>Apagador do Bem</color>",
   "Mad-": "Cúmplice",
+  "MadmateCanFixLightsOut": "<color=#ff1919>Madmates</color> Can Fix Lights",
+  "MadmateCanSeeKillFlash": "<color=#ff1919>Madmates</color> Can See Kill Flash",
   "MadmateHasImpostorVision": "<color=#ff1919>Cúmplices</color> tem Visão de <color=#ff1919>Impostor</color>",
   "MadmateInfo": "Ajude os <color=#ff1919>Impostores</color>",
   "MadmateInfoLong": "(Atributos):\nOs Cúmplices ajudam os Impostores a vencer o jogo. Eles estão disponíveis apenas para Tripulantes, mas podem identificar Impostores dependendo das configurações do anfitrião. Certas funções como Xerife, Agente e Prefeito podem se tornar Cúmplices. As habilidades de algumas funções mudam quando se tornam Cúmplices. Por exemplo, a bomba de luz do Atordoador funciona em Tripulantes e Neutros em vez de Impostores. O Juíz pode julgar qualquer um.",

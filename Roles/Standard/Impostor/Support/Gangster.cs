@@ -18,6 +18,7 @@ public class Gangster : RoleBase
     public static OptionItem MarshallCanBeMadmate;
     public static OptionItem InvestigatorCanBeMadmate;
     public static OptionItem PresidentCanBeMadmate;
+    public static OptionItem SnitchCanBeMadmate;
 
     public override bool IsEnable => PlayerIdList.Count > 0;
 
@@ -40,6 +41,7 @@ public class Gangster : RoleBase
         MarshallCanBeMadmate = new BooleanOptionItem(Id + 18, "GanMarshallCanBeMadmate", false, TabGroup.ImpostorRoles).SetParent(Options.CustomRoleSpawnChances[CustomRoles.Gangster]);
         InvestigatorCanBeMadmate = new BooleanOptionItem(Id + 19, "GanInvestigatorCanBeMadmate", false, TabGroup.ImpostorRoles).SetParent(Options.CustomRoleSpawnChances[CustomRoles.Gangster]);
         PresidentCanBeMadmate = new BooleanOptionItem(Id + 20, "GanPresidentCanBeMadmate", false, TabGroup.ImpostorRoles).SetParent(Options.CustomRoleSpawnChances[CustomRoles.Gangster]);
+        SnitchCanBeMadmate = new BooleanOptionItem(Id + 21, "GanSnitchCanBeMadmate", false, TabGroup.ImpostorRoles).SetParent(Options.CustomRoleSpawnChances[CustomRoles.Gangster]);
     }
 
     public override void Init()
@@ -125,13 +127,14 @@ public class Gangster : RoleBase
                    (pc.Is(CustomRoles.Marshall) && !MarshallCanBeMadmate.GetBool()) ||
                    (pc.Is(CustomRoles.Investigator) && !InvestigatorCanBeMadmate.GetBool()) ||
                    (pc.Is(CustomRoles.President) && !PresidentCanBeMadmate.GetBool()) ||
+                   (pc.Is(CustomRoles.Snitch) && !SnitchCanBeMadmate.GetBool()) ||
                    pc.Is(CustomRoles.Swapper) ||
                    pc.Is(CustomRoles.Speedrunner) ||
-                   pc.Is(CustomRoles.Snitch) ||
                    pc.Is(CustomRoles.LazyGuy) ||
-                   pc.Is(CustomRoles.Lazy) ||
                    pc.Is(CustomRoles.Loyal) ||
-                   pc.Is(CustomRoles.Egoist)
+                   pc.Is(CustomRoles.SuperStar) ||
+                   pc.Is(CustomRoles.Egoist) ||
+                   pc.Is(CustomRoles.Schizophrenic)
                );
     }
 }

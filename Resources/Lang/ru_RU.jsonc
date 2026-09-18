@@ -9890,6 +9890,7 @@
   ============================== */
   "GanPresidentCanBeMadmate": "<color=#30916f>Президент</color> может быть рекрутирован",
   "GanSheriffCanBeMadmate": "<color=#f8cd46>Шериф</color> может быть рекрутирован",
+  "GanSnitchCanBeMadmate": "<color=#b8fb4f>Snitch</color> can be converted",
   "GhostCanSeeDeathReason": "Призраки видят причины смерти",
   "GhostCanSeeOtherRoles": "Призраки видят роли",
 
@@ -11231,6 +11232,8 @@
   "LostRoleByEvilEraser": "<color=#00a5ff>Злой Стиратель</color> стёр твою роль!",
   "LostRoleByNiceEraser": "<color=#00a5ff>Добрый Стиратель</color> стёр твою роль!",
   "Mad-": "Безумный ",
+  "MadmateCanFixLightsOut": "<color=#ff1919>Madmates</color> Can Fix Lights",
+  "MadmateCanSeeKillFlash": "<color=#ff1919>Madmates</color> Can See Kill Flash",
   "MadmateHasImpostorVision": "У <color=#ff1919>Безумцев</color> зрение <color=#ff1919>Предателей</color>",
   "MadmateInfo": "Помогайте Предателям",
   "MadmateInfoLong": "(Атрибут/Безумец):\\nБезумец может назначаться игрокам разными способами. Он может выпадать, назначаться при первом нажатии кнопки убийства, назначаться голосом за себя, назначаться Гангстером и т.д.\\n\\nВ зависимости от настроек, некоторые роли не смогут стать Безумцем. Также, в случае, если данный атрибут выпадает, нейтралы не смогут стать Безумцами.\\nЧлены экипажа, превращённые в Безумцев, оборачивают свои способности против членов экипажа (например, Безумец Гренадёр будет ослеплять членов экипажа, а не предателей).",

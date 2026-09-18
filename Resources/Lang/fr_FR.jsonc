@@ -9890,6 +9890,7 @@
   ============================== */
   "GanPresidentCanBeMadmate": "Le <color=#30916f>Président</color> peut être Recruté",
   "GanSheriffCanBeMadmate": "<color=#f8cd46>Sheriff</color> can be converted",
+  "GanSnitchCanBeMadmate": "<color=#b8fb4f>Snitch</color> can be converted",
   "GhostCanSeeDeathReason": "Les Fantômes peuvent voir les causes de mort des autres.",
   "GhostCanSeeOtherRoles": "Les Fantômes peuvent voir les Rôles des autres",
 
@@ -11231,6 +11232,8 @@
   "LostRoleByEvilEraser": "You lost your role because of the <color=#ff1919>Evil Eraser</color>",
   "LostRoleByNiceEraser": "You lost your role because of the <color=#00a5ff>Nice Eraser</color>",
   "Mad-": "Mad ",
+  "MadmateCanFixLightsOut": "<color=#ff1919>Madmates</color> Can Fix Lights",
+  "MadmateCanSeeKillFlash": "<color=#ff1919>Madmates</color> Can See Kill Flash",
   "MadmateHasImpostorVision": "<color=#ff1919>Madmates</color> Have <color=#ff1919>Impostor</color> Vision",
   "MadmateInfo": "Aidez les Imposteurs",
   "MadmateInfoLong": "(Modificateur):\\nLes Complices aident les Imposteurs à gagner la partie. Ce Modifcateur n'est  disponibles que pour les Coéquipiers. Certains rôles, comme le Shérif, le Cafteur et le maire, peuvent devenir Complices. Les capacités de certains rôles changent quand ils deviennent des Complices. Par exemple, la Bombe éclairante de l'Aveugleur fonctionne sur les Coéquipiers et les Neutres au lieu des Imposteurs.",

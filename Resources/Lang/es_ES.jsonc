@@ -9890,6 +9890,7 @@
   ============================== */
   "GanPresidentCanBeMadmate": "<color=#30916f>Presidente</color> puede ser convertido",
   "GanSheriffCanBeMadmate": "<color=#f8cd46>Alguacil</color> puede ser convertido",
+  "GanSnitchCanBeMadmate": "<color=#b8fb4f>Snitch</color> can be converted",
   "GhostCanSeeDeathReason": "Los Fantasmas Pueden Ver la Causa de Muerte",
   "GhostCanSeeOtherRoles": "Fantasmas Pueden Ver Otros Roles",
 
@@ -11231,6 +11232,8 @@
   "LostRoleByEvilEraser": "You lost your role because of the <color=#ff1919>Evil Eraser</color>",
   "LostRoleByNiceEraser": "Perdiste tu rol por el <color=#00a5ff>Buen Borrador</color>",
   "Mad-": "Mad ",
+  "MadmateCanFixLightsOut": "<color=#ff1919>Madmates</color> Can Fix Lights",
+  "MadmateCanSeeKillFlash": "<color=#ff1919>Madmates</color> Can See Kill Flash",
   "MadmateHasImpostorVision": "<color=#ff1919>Malvados</color> Tienen Visión de <color=#ff1919>Impostor</color>",
   "MadmateInfo": "Ayuda a los impostores",
   "MadmateInfoLong": "(Complementos):\\n Como el malvado  tienes que ayudar a los Impostores a ganar el juego. Solo están disponibles para Tripulantes pero pueden identificar Impostores dependiendo de las configuraciones del host. Ciertos roles como Alguacil, Soplón y Alcalde pueden volverse Madmates. Por ejemplo, la bomba cegadora del Granadero funciona en los Tripulantes y Neutrales en lugar de los Impostores. El Juez puede juzgar a cualquiera.",
