@@ -18,7 +18,7 @@ internal class NonReport : IAddon
     {
         SetupAdtRoleOptions(20180, CustomRoles.NonReport, canSetNum: true, teamSpawnOptions: true);
 
-        Mode = new StringOptionItem(20190, "NonReportMode", Modes, 2, TabGroup.Addons)
+        Mode = new StringOptionItem(20190, "NonReportMode", Modes, 0, TabGroup.Addons)
             .SetParent(CustomRoleSpawnChances[CustomRoles.NonReport]);
     }
 
