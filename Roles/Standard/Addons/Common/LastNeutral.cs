@@ -18,7 +18,7 @@ internal class LastNeutral : IAddon
             .SetParent(CustomRoleSpawnChances[CustomRoles.LastNeutral])
             .SetValueFormat(OptionFormat.Seconds);
 
-        GiveOpportunist = new BooleanOptionItem(20491, "LastNeutralGiveOpportunist", true, TabGroup.Addons)
+        GiveOpportunist = new BooleanOptionItem(20491, "LastNeutralGiveOpportunist", false, TabGroup.Addons)
             .SetParent(CustomRoleSpawnChances[CustomRoles.LastNeutral]);
     }
 

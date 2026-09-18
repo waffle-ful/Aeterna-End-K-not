@@ -13,7 +13,13 @@ internal class SlowStarter : IAddon
 
     public void SetupCustomOption()
     {
-        SetupAdtRoleOptions(20280, CustomRoles.SlowStarter, canSetNum: true, teamSpawnOptions: true);
+        SetupAdtRoleOptions(20280, CustomRoles.SlowStarter, canSetNum: true, teamSpawnOptions: true, maxCount: 3);
+
+        // インポスター限定アドオンなので、陣営トグルのうちインポスター以外は常に効かない (CheckAddonConflict の ImpOnly ゲートが先に落とす)
+        (_, OptionItem neutral, OptionItem crew, OptionItem coven) = AddonCanBeSettings[CustomRoles.SlowStarter];
+        neutral.SetHidden(true);
+        crew.SetHidden(true);
+        coven.SetHidden(true);
 
         AliveImpThreshold = new IntegerOptionItem(20290, "SlowStarterAliveImpThreshold", new(1, 3, 1), 2, TabGroup.Addons)
             .SetParent(CustomRoleSpawnChances[CustomRoles.SlowStarter]);

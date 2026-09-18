@@ -3924,7 +3924,7 @@ public static class Utils
                             if ((!seer.IsAlive() || seerIsLover) && targetIsLover)
                                 TargetMark.Append(CustomRoles.Lovers.ColoredTextByRole(" ♥"));
 
-                            if (seer.Is(CustomRoles.Connecting) && target.Is(CustomRoles.Connecting))
+                            if ((!seer.IsAlive() || seer.Is(CustomRoles.Connecting)) && target.Is(CustomRoles.Connecting))
                                 TargetMark.Append(ColorString(GetRoleColor(CustomRoles.Connecting), " Ψ"));
 
                             if (Twins.ArePartners(seer.PlayerId, target.PlayerId))
@@ -4261,7 +4261,7 @@ public static class Utils
                (seer.Is(CustomRoleTypes.Impostor) && target.Is(CustomRoles.Crewpostor) && Options.AlliesKnowCrewpostor.GetBool()) ||
                (seer.IsMadmate() && target.IsMadmate() && Options.MadmateKnowWhosMadmate.GetBool()) ||
                ((seer.Is(CustomRoles.Sidekick) || seer.Is(CustomRoles.Jackal)) && (target.Is(CustomRoles.Sidekick) || target.Is(CustomRoles.Jackal))) ||
-               (seer.Is(CustomRoles.Connecting) && target.Is(CustomRoles.Connecting)) ||
+               ((!seer.IsAlive() || seer.Is(CustomRoles.Connecting)) && target.Is(CustomRoles.Connecting)) ||
                Twins.ArePartners(seer.PlayerId, target.PlayerId) ||
                Faction.AreAllies(seer, target) ||
                (target.Is(CustomRoles.Workaholic) && Workaholic.WorkaholicVisibleToEveryone.GetBool()) ||

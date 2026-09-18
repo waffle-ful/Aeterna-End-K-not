@@ -11,7 +11,7 @@ internal class MagicHand : IAddon
     {
         SetupAdtRoleOptions(20120, CustomRoles.MagicHand, canSetNum: true, teamSpawnOptions: true);
 
-        KillDistance = new IntegerOptionItem(20130, "MagicHandKillDistance", new(0, 2, 1), 2, TabGroup.Addons)
+        KillDistance = new IntegerOptionItem(20130, "MagicHandKillDistance", new(0, 2, 1), 0, TabGroup.Addons)
             .SetParent(CustomRoleSpawnChances[CustomRoles.MagicHand]);
     }
 }
