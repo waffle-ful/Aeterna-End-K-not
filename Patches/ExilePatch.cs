@@ -70,7 +70,10 @@ internal static class ExileControllerWrapUpPatch
             if (Executioner.CheckExileTarget(exiled)) decidedWinner = true;
 
             if (CustomWinnerHolder.WinnerTeam != CustomWinner.Terrorist)
+            {
                 Main.PlayerStates[exiled.PlayerId].SetDead();
+                Twins.CheckFollowingSuicide(exiled.PlayerId, isExiled: true);
+            }
         }
 
         if (exiled != null) Akazukin.OnAnyExile(exiled.PlayerId);
