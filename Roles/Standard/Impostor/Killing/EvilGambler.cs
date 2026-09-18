@@ -41,7 +41,8 @@ public class EvilGambler : RoleBase
     public override void Add(byte playerId)
     {
         PlayerIdList.Add(playerId);
-        NowCooldown = NotcollectkillCooldown.GetFloat();
+        // 原典 (TOHK) は専用 KillCooldown を持たず IKiller の既定値 = ロビー設定のキルクールを使う
+        NowCooldown = Options.DefaultKillCooldown;
     }
 
     public override void Remove(byte playerId)
@@ -66,6 +67,6 @@ public class EvilGambler : RoleBase
 
     public override void AfterMeetingTasks()
     {
-        NowCooldown = NotcollectkillCooldown.GetFloat();
+        NowCooldown = Options.DefaultKillCooldown;
     }
 }

@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using AmongUs.GameOptions;
+using EndKnot.Modules;
 
 namespace EndKnot.Roles;
 
@@ -14,6 +15,7 @@ public class EarnestWolf : RoleBase
     private static OptionItem NormalKillDistance;
     private static OptionItem OverKillDistance;
     private static OptionItem CantReportOpt;
+    private static OptionItem OverKillDontKillM;
 
     private bool OverKillMode;
     private float CurrentKillCooldown;
@@ -46,6 +48,9 @@ public class EarnestWolf : RoleBase
             .SetParent(Options.CustomRoleSpawnChances[CustomRoles.EarnestWolf]);
 
         CantReportOpt = new BooleanOptionItem(Id + 15, "EarnestWolfCantReport", false, TabGroup.ImpostorRoles)
+            .SetParent(Options.CustomRoleSpawnChances[CustomRoles.EarnestWolf]);
+
+        OverKillDontKillM = new BooleanOptionItem(Id + 16, "EarnestWolfOverKillDontKillM", false, TabGroup.ImpostorRoles)
             .SetParent(Options.CustomRoleSpawnChances[CustomRoles.EarnestWolf]);
     }
 
@@ -143,6 +148,16 @@ public class EarnestWolf : RoleBase
             killer.SyncSettings();
         }, 0.2f, "EarnestWolf.PostKill");
 
+        if (OverKillDontKillM.GetBool())
+        {
+            // 原典はターゲット自身を見かけの killer にして通常のキルモーションを出さない。
+            // EHR の Suicide (RealKiller = killer) が同じ見た目になる (Swift の自滅キルと同型)。
+            target.SetRealKiller(killer);
+            target.Suicide(PlayerState.DeathReason.Kill, killer);
+            RPC.PlaySoundRPC(killer.PlayerId, Sounds.KillSound);
+            return false;
+        }
+
         return true;
     }
 
@@ -170,6 +185,13 @@ public class EarnestWolf : RoleBase
     public override string GetSuffix(PlayerControl seer, PlayerControl target, bool hud = false, bool meeting = false)
     {
         if (seer.PlayerId != EarnestWolfId || seer.PlayerId != target.PlayerId || meeting) return string.Empty;
+        return OverKillMode ? "<color=#ff1919>◎</color>" : string.Empty;
+    }
+
+    // Insider の味方能力マーク集約 (Utils.cs) から呼ばれる。自分の行に立つ OverKill 表示と同じ条件。
+    public string GetInsiderMark(PlayerControl target, bool forMeeting)
+    {
+        if (forMeeting || target.PlayerId != EarnestWolfId) return string.Empty;
         return OverKillMode ? "<color=#ff1919>◎</color>" : string.Empty;
     }
 

@@ -106,8 +106,8 @@ public class ProBowler : RoleBase
 
     public override bool OnCheckMurder(PlayerControl killer, PlayerControl target)
     {
-        if (NowKilling) return false;
-        if (Bowl == null) return true;
+        // 転がし中 (NowKilling) は自分のボウル分岐に入らないだけで、通常キルは素通りさせる。
+        if (NowKilling || Bowl == null) return true;
 
         NowKilling = true;
         killer.SetKillCooldown(KillCooldownOpt.GetFloat());

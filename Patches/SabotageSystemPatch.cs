@@ -527,6 +527,9 @@ public static class SabotageSystemTypeUpdateSystemPatch
 
         if (SecurityGuard.BlockSabo.Count > 0) return false;
 
+        // OnSabotage は押した本人の役職にしか届かないため、味方の本物サボもここで塞ぐ
+        if (EvilBlender.UseingId != byte.MaxValue) return false;
+
         if (Doorjammer.BlockSabotagesFromJammedRooms.GetBool() && Doorjammer.JammedRooms.Count > 0)
         {
             var room = player.GetPlainShipRoom();
