@@ -18,6 +18,7 @@ public class EvilMagician : RoleBase
     private static OptionItem MagicUseKillCount;
     private static OptionItem ResetKillCount;
     private static OptionItem ResetMagicTarget;
+    private static OptionItem MeetingMark;
 
     private byte EvilMagicianId;
     private float CurrentCooldown;
@@ -54,6 +55,9 @@ public class EvilMagician : RoleBase
             .SetParent(Options.CustomRoleSpawnChances[CustomRoles.EvilMagician]);
 
         ResetMagicTarget = new BooleanOptionItem(Id + 16, "EvilMagicianResetMagicTarget", false, TabGroup.ImpostorRoles)
+            .SetParent(Options.CustomRoleSpawnChances[CustomRoles.EvilMagician]);
+
+        MeetingMark = new BooleanOptionItem(Id + 17, "EvilMagicianMeetingMark", false, TabGroup.ImpostorRoles)
             .SetParent(Options.CustomRoleSpawnChances[CustomRoles.EvilMagician]);
     }
 
@@ -131,7 +135,7 @@ public class EvilMagician : RoleBase
         foreach (PlayerControl p in Main.AllAlivePlayerControlsToList)
         {
             if (p.PlayerId == pc.PlayerId) continue;
-            if (p.GetCustomRole().IsImpostor()) continue;
+            if (p.Is(Team.Impostor)) continue;
             if (MagicTargets.Contains(p.PlayerId)) continue;
             float d = Vector2.Distance(pc.Pos(), p.Pos());
             if (d >= radius || d >= minDist) continue;
@@ -225,5 +229,11 @@ public class EvilMagician : RoleBase
             : Color.gray;
 
         return Utils.ColorString(color, text + ")");
+    }
+
+    public override string GetSuffix(PlayerControl seer, PlayerControl target, bool hud = false, bool meeting = false)
+    {
+        if (!meeting || !MeetingMark.GetBool() || !MagicTargets.Contains(target.PlayerId)) return string.Empty;
+        return Utils.ColorString(Palette.ImpostorRed, "♢");
     }
 }
