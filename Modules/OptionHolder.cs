@@ -347,6 +347,8 @@ public static class Options
     public static OptionItem MaxMadmateRoles;
 
     public static OptionItem MadmateHasImpostorVision;
+    public static OptionItem MadmateCanFixLightsOut;
+    public static OptionItem MadmateCanSeeKillFlash;
 
     public static OptionItem ImpCanKillMadmate;
     public static OptionItem MadmateCanKillImp;
@@ -1509,6 +1511,12 @@ public static class Options
             .SetGameMode(CustomGameMode.Standard);
 
         MadmateHasImpostorVision = new BooleanOptionItem(156, "MadmateHasImpostorVision", true, TabGroup.ImpostorRoles)
+            .SetGameMode(CustomGameMode.Standard);
+
+        MadmateCanFixLightsOut = new BooleanOptionItem(158, "MadmateCanFixLightsOut", true, TabGroup.ImpostorRoles)
+            .SetGameMode(CustomGameMode.Standard);
+
+        MadmateCanSeeKillFlash = new BooleanOptionItem(159, "MadmateCanSeeKillFlash", false, TabGroup.ImpostorRoles)
             .SetGameMode(CustomGameMode.Standard);
 
         RenegadeKillCD = new FloatOptionItem(157, "RenegadeKillCD", new(0f, 180f, 0.5f), 25f, TabGroup.ImpostorRoles)

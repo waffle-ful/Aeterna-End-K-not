@@ -9890,6 +9890,7 @@
   ============================== */
   "GanPresidentCanBeMadmate": "<color=#30916f>总统</color>可以被招募",
   "GanSheriffCanBeMadmate": "<color=#f8cd46>警长</color>可以被招募",
+  "GanSnitchCanBeMadmate": "<color=#b8fb4f>Snitch</color> can be converted",
   "GhostCanSeeDeathReason": "鬼魂可知道其他玩家的死因",
   "GhostCanSeeOtherRoles": "鬼魂可看他人身份",
 
@@ -11231,6 +11232,8 @@
   "LostRoleByEvilEraser": "你的职业被<color=#ff1919>邪恶的抹除者</color>抹除了",
   "LostRoleByNiceEraser": "您的职业被<color=#00a5ff>正义抹除者</color>抹除了",
   "Mad-": "背叛的 ",
+  "MadmateCanFixLightsOut": "<color=#ff1919>Madmates</color> Can Fix Lights",
+  "MadmateCanSeeKillFlash": "<color=#ff1919>Madmates</color> Can See Kill Flash",
   "MadmateHasImpostorVision": "<color=#ff1919>叛徒</color>有<color=#ff1919>内鬼</color>的视野",
   "MadmateInfo": "为自己的信仰 前仆后继！",
   "MadmateInfoLong": "(附加职业):\\n只有船员会成为叛徒，叛徒需要帮助内鬼阵营获得胜利，当内鬼阵营失败时叛徒也会失败。叛徒与内鬼是否互知根据房主设定。\\n\\n摆烂人与网红不会成为叛徒，部分船员职业是否可以成为叛徒依据房主设定。此外，当以下职业成为叛徒后技能将发生变动：\\n\\n时间操控者 => 做任务减少会议时间。\\n保镖 => 凶手是内鬼的时不发动技能。\\n掷雷兵 => 闪光弹只对船员生效。\\n警长 => 默认可以击杀任何人。（具体可以击杀的阵营根据房主设定）\\n正义赌怪 => 可以猜测船员。\\n愚者 => 准确地看到所有邪恶中立以及带刀船员玩家显示为红名。\\n法官 => 可以随意审判。\\n和平之鸽 => 技能只针对船员。",

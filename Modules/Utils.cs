@@ -472,6 +472,7 @@ public static class Utils
     {
         if (seer.Is(CustomRoles.GM) || seer.Is(CustomRoles.Seer)) return true;
         if (seer.Is(CustomRoles.Driver) && seer.IsAlive() && Braid.DriverSeesKillFlash) return true;
+        if (seer.Is(CustomRoles.Madmate) && Options.MadmateCanSeeKillFlash.GetBool()) return true;
 
         // if (!seer.IsAlive() || killer == seer || target == seer) return false;
 
@@ -1882,10 +1883,11 @@ public static class Utils
         if (intro)
         {
             bool isLovers = subRoles.Contains(CustomRoles.Lovers) && Main.PlayerStates[id].MainRole is not CustomRoles.LovingCrewmate and not CustomRoles.LovingImpostor;
-            subRoles.RemoveAll(x => x is CustomRoles.NotAssigned or CustomRoles.LastImpostor or CustomRoles.Lovers);
+            // 実体のMain.PlayerStates[id].SubRolesは変えず、表示用の別リストに差し替える
+            // (RemoveAllだと本人のLovers/LastImpostorがイントロ表示のたびに永久に失われる)。
+            subRoles = subRoles.Where(x => x is not (CustomRoles.NotAssigned or CustomRoles.LastImpostor or CustomRoles.Lovers)).ToList();
 
-            // Amnesia本人は自分がAmnesiaだと自覚できない — イントロの追加ロール表示からも外す
-            // (実体のMain.PlayerStates[id].SubRolesは変えず、表示用の別リストに差し替える)。
+            // Amnesia本人は自分がAmnesiaだと自覚できない — イントロの追加ロール表示からも外す。
             if (Amnesia.TryGetConcealedRole(id, out _))
                 subRoles = subRoles.Where(x => x != CustomRoles.Amnesia).ToList();
 

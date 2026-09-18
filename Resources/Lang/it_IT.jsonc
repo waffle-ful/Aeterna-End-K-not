@@ -9890,6 +9890,7 @@
   ============================== */
   "GanPresidentCanBeMadmate": "<color=#30916f>Presidente</color> può essere convertito",
   "GanSheriffCanBeMadmate": "<color=#f8cd46>Sceriffo</color> può essere convertito",
+  "GanSnitchCanBeMadmate": "<color=#b8fb4f>Snitch</color> can be converted",
   "GhostCanSeeDeathReason": "I Fantasmi possono vedere le Cause di Morte",
   "GhostCanSeeOtherRoles": "I Fantasmi possono vedere gli altri ruoli",
 
@@ -11231,6 +11232,8 @@
   "LostRoleByEvilEraser": "Hai perso il tuo ruolo a causa del <color=#ff1919>Revocatore</color>",
   "LostRoleByNiceEraser": "Hai perso il tuo ruolo a causa della <color=#00a5ff>Barbiere</color>",
   "Mad-": "Pazzo ",
+  "MadmateCanFixLightsOut": "<color=#ff1919>Madmates</color> Can Fix Lights",
+  "MadmateCanSeeKillFlash": "<color=#ff1919>Madmates</color> Can See Kill Flash",
   "MadmateHasImpostorVision": "I <color=#ff1919>Follenauti</color> hanno il campo visivo <color=#ff1919>Impostore</color>",
   "MadmateInfo": "Aiuta gli Impostori",
   "MadmateInfoLong": "(Modificatori):\\nIn qualità di Follenauta, aiuti gli Impostori a vincere la partita. Questo ruolo è disponibile solo per i Crewmate, ma puoi identificare gli Impostori in base alle impostazioni dell'host. Alcuni ruoli come lo Sceriffo, l'Informatore e il Sindaco possono diventare Follenauti. Le abilità di alcuni ruoli cambiano quando diventano Follenauti. Ad esempio, la granata flash del Granatiere colpisce Crewmate e Neutrali invece degli Impostori. Il Giudice può giudicare chiunque.",

@@ -9890,6 +9890,7 @@
   ============================== */
   "GanPresidentCanBeMadmate": "可以招募<color=#30916f>總統</color>",
   "GanSheriffCanBeMadmate": "可以招募<color=#f8cd46>警長</color>",
+  "GanSnitchCanBeMadmate": "<color=#b8fb4f>Snitch</color> can be converted",
   "GhostCanSeeDeathReason": "幽靈可以看見死因",
   "GhostCanSeeOtherRoles": "幽靈可以看見他人職業",
 
@@ -11231,6 +11232,8 @@
   "LostRoleByEvilEraser": "您的職業被 <color=#ff1919>邪惡的抹除者</color>抹除了",
   "LostRoleByNiceEraser": "您的職業被<color=#00a5ff>正義的抹除者</color>抹除了",
   "Mad-": "背叛的 ",
+  "MadmateCanFixLightsOut": "<color=#ff1919>Madmates</color> Can Fix Lights",
+  "MadmateCanSeeKillFlash": "<color=#ff1919>Madmates</color> Can See Kill Flash",
   "MadmateHasImpostorVision": "<color=#ff1919>叛徒</color>有<color=#ff1919>偽裝者</color>視野",
   "MadmateInfo": "幫助偽裝者",
   "MadmateInfoLong": "(附加職業):\\n只有船員會成為叛徒，叛徒需要幫助偽裝者陣營獲勝，當偽裝者陣營失敗時叛徒也會失敗。根據房主設定，叛徒與偽裝者可能可以互認。\\n\\n擺爛人、告密者、網紅不會成為叛徒。此外，當以下職業成為叛徒之後技能將發生變動:\\n\\n時間大師 => 做任務減少會議時間。\\n保鑣 => 兇手是偽裝者時不發動技能。\\n擲彈兵 => 閃光彈只對船員生效。\\n警長 => 預設可以殺死任何人。(具體可以殺死的陣營依據房主設定)\\n正義賭怪 => 可以猜測船員。\\n告密者 => 完成任務後與偽裝者互認。\\n愚者 => 準確看到所有帶刀中立以及帶刀船員玩家顯示為紅名。\\n法官 => 可以隨意審判。\\n和平之鴿 => 技能只對船員生效",

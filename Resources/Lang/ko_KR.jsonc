@@ -9890,6 +9890,7 @@
   ============================== */
   "GanPresidentCanBeMadmate": "<color=#30916f>President</color> can be converted",
   "GanSheriffCanBeMadmate": "<color=#f8cd46>Sheriff</color> can be converted",
+  "GanSnitchCanBeMadmate": "<color=#b8fb4f>Snitch</color> can be converted",
   "GhostCanSeeDeathReason": "Ghost Can See Cause Of Death",
   "GhostCanSeeOtherRoles": "Ghosts Can See Other Roles",
 
@@ -11231,6 +11232,8 @@
   "LostRoleByEvilEraser": "You lost your role because of the <color=#ff1919>Evil Eraser</color>",
   "LostRoleByNiceEraser": "You lost your role because of the <color=#00a5ff>Nice Eraser</color>",
   "Mad-": "Mad ",
+  "MadmateCanFixLightsOut": "<color=#ff1919>Madmates</color> Can Fix Lights",
+  "MadmateCanSeeKillFlash": "<color=#ff1919>Madmates</color> Can See Kill Flash",
   "MadmateHasImpostorVision": "<color=#ff1919>Madmates</color> Have <color=#ff1919>Impostor</color> Vision",
   "MadmateInfo": "임포스터를 도우세요",
   "MadmateInfoLong": "(Add-ons):\\nMadmates assist the Impostors in winning the game. They are only available to Crewmates but can identify Impostors depending on the host's settings. Certain roles like Sheriff, Snitch, and Mayor can become Madmates. The abilities of some roles change when they become Madmates. For example, the Grenadier's flash bomb works on Crewmates and Neutrals instead of Impostors. The Judge can judge anyone.",
