@@ -7,9 +7,23 @@ internal class Faction : IAddon
 {
     public AddonTypes Type => AddonTypes.Mixed;
 
+    public static OptionItem CantKillFaction;
+    public static OptionItem CanSeeFactionMate;
+
     public void SetupCustomOption()
     {
         Options.SetupAdtRoleOptions(20460, CustomRoles.Faction, canSetNum: true, teamSpawnOptions: true);
+
+        // ニュートラル限定なので、それ以外の陣営トグルは常に効かない
+        (OptionItem imp, _, OptionItem crew, OptionItem coven) = Options.AddonCanBeSettings[CustomRoles.Faction];
+        imp.SetHidden(true);
+        crew.SetHidden(true);
+        coven.SetHidden(true);
+
+        CantKillFaction = new BooleanOptionItem(20470, "CantKillFaction", false, TabGroup.Addons)
+            .SetParent(Options.CustomRoleSpawnChances[CustomRoles.Faction]);
+        CanSeeFactionMate = new BooleanOptionItem(20471, "CanSeeFactionMate", false, TabGroup.Addons)
+            .SetParent(Options.CustomRoleSpawnChances[CustomRoles.Faction]);
     }
 
     public static void Init()
@@ -31,7 +45,7 @@ internal class Faction : IAddon
 
     public static bool AreAllies(PlayerControl seer, PlayerControl target)
     {
-        return seer.Is(CustomRoles.Faction) && target.Is(CustomRoles.Faction);
+        return CanSeeFactionMate.GetBool() && seer.Is(CustomRoles.Faction) && target.Is(CustomRoles.Faction);
     }
 
     public static void OnGameEnd()
