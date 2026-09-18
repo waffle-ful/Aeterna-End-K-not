@@ -43,7 +43,11 @@ public class LastImpostor : IAddon
 
     private static bool CanBeLastImpostor(PlayerControl pc)
     {
-        return pc.IsAlive() && !pc.Is(CustomRoles.LastImpostor) && pc.Is(CustomRoleTypes.Impostor);
+        // 浄化された相手への付与は RpcSetCustomRole (ExtendedPlayerControl.cs:100) が無音で落とす。
+        // 撃つ前に弾かないと、属性が付いていないのに CurrentId だけ埋まってキルクールが変わり、
+        // しかも以後この試合で誰にも付与されなくなる (逆に CurrentId を立てないと毎 tick 撃ち続ける)。
+        return pc.IsAlive() && !pc.Is(CustomRoles.LastImpostor) && pc.Is(CustomRoleTypes.Impostor) &&
+               (Cleanser.CleansedCanGetAddon.GetBool() || !pc.Is(CustomRoles.Cleansed));
     }
 
     public static void SetSubRole()
