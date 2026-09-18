@@ -675,6 +675,16 @@ public static class Utils
         string roleText = GetRoleName(targetMainRole);
         Color roleColor = GetRoleColor(loversShowDifferentRole ? CustomRoles.Impostor : targetMainRole);
 
+        // Amnesia本人は自分の本当の役職を自覚できない。seerId == targetId (自視点) だけに掛け、
+        // ゴーストの他人視点 (self==trueだがseerId!=targetId) や終了後の結果画面 (pure) には掛けない。
+        CustomRoles amnesiaShown = CustomRoles.NotAssigned;
+        bool amnesiaConcealed = seerId == targetId && !pure && !GameStates.IsEnded && Amnesia.TryGetConcealedRole(targetId, out amnesiaShown);
+        if (amnesiaConcealed)
+        {
+            roleText = GetRoleName(amnesiaShown);
+            roleColor = GetRoleColor(amnesiaShown);
+        }
+
         // R2: 役職メーカーの passives.disguise。DoubleAgent と同じ
         // 「見えている相手への表示を差し替える」型で、本人の勝敗・選出・実陣営は変えない。
         // 第三陣営への偽装だけは役職名をそのままにして色だけ変える (モッドに「汎用の第三陣営役職」が
@@ -710,7 +720,8 @@ public static class Utils
         {
             foreach (CustomRoles subRole in targetSubRoles)
             {
-                if (subRole is not CustomRoles.LastImpostor and not CustomRoles.Madmate and not CustomRoles.Charmed and not CustomRoles.Lovers and not CustomRoles.Contagious and not CustomRoles.Bloodlust and not CustomRoles.Entranced and not CustomRoles.Egoist)
+                if (subRole is not CustomRoles.LastImpostor and not CustomRoles.Madmate and not CustomRoles.Charmed and not CustomRoles.Lovers and not CustomRoles.Contagious and not CustomRoles.Bloodlust and not CustomRoles.Entranced and not CustomRoles.Egoist
+                    && !(subRole == CustomRoles.Amnesia && amnesiaConcealed))
                 {
                     string str = GetString("Prefix." + subRole);
                     if (!subRole.IsAdditionRole()) str = GetString(subRole.ToString());
@@ -1872,6 +1883,11 @@ public static class Utils
         {
             bool isLovers = subRoles.Contains(CustomRoles.Lovers) && Main.PlayerStates[id].MainRole is not CustomRoles.LovingCrewmate and not CustomRoles.LovingImpostor;
             subRoles.RemoveAll(x => x is CustomRoles.NotAssigned or CustomRoles.LastImpostor or CustomRoles.Lovers);
+
+            // Amnesia本人は自分がAmnesiaだと自覚できない — イントロの追加ロール表示からも外す
+            // (実体のMain.PlayerStates[id].SubRolesは変えず、表示用の別リストに差し替える)。
+            if (Amnesia.TryGetConcealedRole(id, out _))
+                subRoles = subRoles.Where(x => x != CustomRoles.Amnesia).ToList();
 
             if (isLovers) sb.Append(CustomRoles.Lovers.ColoredTextByRole(" ♥"));
 
@@ -3456,6 +3472,10 @@ public static class Utils
             Team seerTeam = seer.GetTeam();
             CustomRoles seerRole = seer.GetCustomRole();
 
+            // Amnesia本人は自分の本当の役職を自覚できない — このメソッド内の自視点名表示すべてに掛ける。
+            bool seerAmnesiaConcealed = Amnesia.TryGetConcealedRole(seer.PlayerId, out CustomRoles seerAmnesiaRole);
+            CustomRoles seerDisplayRole = seerAmnesiaConcealed ? seerAmnesiaRole : seerRole;
+
             if (SetUpRoleTextPatch.IsInIntro && (seerRole.IsDesyncRole() || seer.Is(CustomRoles.Bloodlust)) && Options.CurrentGameMode == CustomGameMode.Standard)
             {
                 const string iconTextLeft = "<color=#ffffff>⇨</color>";
@@ -3463,7 +3483,7 @@ public static class Utils
                 const string roleNameUp = "</size><size=1450%>\n \n</size>";
 
                 var selfTeamName = $"<size=450%>{iconTextLeft} <font=\"VCR SDF\" material=\"VCR Black Outline\">{ColorString(seerTeam.GetColor(), $"{seerTeam}")}</font> {iconTextRight}</size><size=500%>\n \n</size>";
-                selfName = $"{selfTeamName}\r\n<size=150%>{seerRole.ToColoredString()}</size>{roleNameUp}";
+                selfName = $"{selfTeamName}\r\n<size=150%>{seerDisplayRole.ToColoredString()}</size>{roleNameUp}";
 
                 CustomRpcSenderExtensions.RpcSetName(ref sender, seer, selfName, seer);
                 return true;
@@ -3735,7 +3755,8 @@ public static class Utils
                         string mHelp = !showLongInfo || description.Long ? "\n" + GetString("MyRoleCommandHelp") : string.Empty;
                         string color = seerTeam.GetTextColor();
                         string teamStr = seerTeam == Team.Impostor && seer.IsMadmate() ? "Madmate" : seerTeam.ToString();
-                        string info = (showLongInfo ? description.Text : seer.GetRoleInfo()) + mHelp;
+                        // Amnesia本人は自分の本当の能力説明を自覚できない — 陣営の総称ロールの説明文を代わりに見せる。
+                        string info = (seerAmnesiaConcealed ? GetString($"{seerAmnesiaRole}Info") : (showLongInfo ? description.Text : seer.GetRoleInfo())) + mHelp;
                         seerRealName = $"<color={color}>{GetString($"YouAre{teamStr}")}</color>\n<size=90%>{info}</size>";
                     }
                 }
@@ -3749,7 +3770,7 @@ public static class Utils
             // Combine the seer's job title and SelfTaskText with the seer's player name and SelfMark
             string selfRoleName = noRoleText ? string.Empty : $"<size={fontSize}>{seer.GetDisplayRoleName()}{selfTaskText}</size>";
             string selfDeathReason = seer.KnowDeathReason(seer) && !noRoleText ? $"\n<size=1.5>『{CustomRoles.Doctor.ColoredTextByRole(GetVitalText(seer.PlayerId))}』</size>" : string.Empty;
-            selfName = $"{ColorString(noRoleText ? Color.white : seer.GetRoleColor(), seerRealName)}{selfDeathReason}{SelfMark}";
+            selfName = $"{ColorString(noRoleText ? Color.white : (seerAmnesiaConcealed ? GetRoleColor(seerAmnesiaRole) : seer.GetRoleColor()), seerRealName)}{selfDeathReason}{SelfMark}";
 
             if (Options.CurrentGameMode != CustomGameMode.Standard || GameStates.IsLobby) goto GameMode2;
 
