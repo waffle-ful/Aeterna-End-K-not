@@ -132,8 +132,8 @@ public class EarnestWolf : RoleBase
         OverKillVictims.Add(target.PlayerId);
 
         int maxCount = OverKillCount.GetInt();
-        if (maxCount > 0 && KillsDoneInOverKill >= maxCount)
-            OverKillMode = false;
+        // キル成立でモード解除 (無限モード=0のみ維持、原典準拠)
+        OverKillMode = maxCount == 0;
 
         LateTask.New(() =>
         {
@@ -151,12 +151,6 @@ public class EarnestWolf : RoleBase
         if (!CantReportOpt.GetBool()) return true;
         if (target == null) return true;
         return !OverKillVictims.Contains(target.PlayerId);
-    }
-
-    public override void OnReportDeadBody()
-    {
-        // reset OverKill CD multiplier each meeting but keep mode/count
-        CurrentKillCooldown = KillCooldown.GetFloat();
     }
 
     public override string GetProgressText(byte playerId, bool comms)
