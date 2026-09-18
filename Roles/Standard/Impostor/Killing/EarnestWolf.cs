@@ -152,6 +152,11 @@ public class EarnestWolf : RoleBase
         {
             // 原典はターゲット自身を見かけの killer にして通常のキルモーションを出さない。
             // EHR の Suicide (RealKiller = killer) が同じ見た目になる (Swift の自滅キルと同型)。
+            // Suicide 直呼びは Veteran/Pestilence/SchrodingersCat は見るが Medic シールドと
+            // Pelican 捕食中は見ないため、ここで別途弾く (Archer と同型)。
+            if (Pelican.IsEaten(target.PlayerId) || Medic.ProtectList.Contains(target.PlayerId) || target.IsProtected())
+                return false;
+
             target.SetRealKiller(killer);
             target.Suicide(PlayerState.DeathReason.Kill, killer);
             RPC.PlaySoundRPC(killer.PlayerId, Sounds.KillSound);

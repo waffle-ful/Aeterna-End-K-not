@@ -13,7 +13,7 @@ public class EvilBomber : RoleBase
     private static List<byte> PlayerIdList = [];
 
     private static OptionItem BombMaxCount;
-    private static OptionItem AbilityCooldown;
+    public static OptionItem AbilityCooldown;
     private static OptionItem BombKillDelay;
     private static OptionItem BlastRange;
 

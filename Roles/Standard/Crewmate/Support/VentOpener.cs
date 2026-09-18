@@ -180,7 +180,10 @@ public class VentOpener : RoleBase
         if (completedTaskCount + 1 >= OptionCanTaskcount.GetInt())
         {
             NotifiedUnlock = true;
-            Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
+
+            // TaskState.Update はこのフックを CompletedTasksCount++ より前に呼ぶ。ここで同期に送ると
+            // まだ未解放の値が飛んでしまうので、加算が済んだ次の tick へずらす。
+            LateTask.New(() => Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc), 0.1f, "VentOpener.UnlockNotify");
         }
     }
 

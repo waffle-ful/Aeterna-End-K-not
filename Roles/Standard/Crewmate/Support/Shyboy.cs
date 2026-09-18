@@ -98,6 +98,8 @@ public class Shyboy : RoleBase
             float dist = delta.magnitude;
             if (dist > DetectionRadius) continue;
             // 壁越しは検知しない (隠れて凌ぐ動線を成立させる)。
+            // 壁本体 (ShipAndObjects) と影レイヤー (Shadow) は別マスクなので両方見る (Archer と同型)。
+            if (dist > 0f && PhysicsHelpers.AnyNonTriggersBetween(pos, delta.normalized, dist, Constants.ShipAndObjectsMask)) continue;
             if (dist > 0f && PhysicsHelpers.AnyNonTriggersBetween(pos, delta.normalized, dist, Constants.ShadowMask)) continue;
 
             nearOthers = true;
