@@ -2367,14 +2367,22 @@ internal static class CustomRolesHelper
             CustomRoles.Reach when pc.Is(CustomRoles.MagicHand) => false,
             CustomRoles.Constricted when pc.Is(CustomRoles.MagicHand) => false,
             CustomRoles.Serial when pc.Is(CustomRoles.Mare) || pc.Is(CustomRoles.Bloodlust) || pc.Is(CustomRoles.Tired) => false,
-            CustomRoles.Amanojaku when pc.Is(CustomRoles.Lovers) || pc.Is(CustomRoles.Romantic) => false,
+            CustomRoles.Amanojaku when pc.Is(CustomRoles.Lovers) || pc.Is(CustomRoles.Romantic) || pc.IsImpostor() => false,
             CustomRoles.SlowStarter when pc.Is(CustomRoles.LastImpostor) || pc.Is(CustomRoles.Tired) => false,
             CustomRoles.News when pc.Is(CustomRoles.Hidden) => false,
             // Batch 6
             CustomRoles.OneWolf when !pc.IsImpostor() => false,
             CustomRoles.OneWolf when pc.Is(CustomRoles.Egoist) => false,
             CustomRoles.Twins when pc.Is(CustomRoles.Lovers) || pc.Is(CustomRoles.Romantic) || pc.IsImpostor() || pc.GetCustomRole().IsNK() => false,
-            CustomRoles.Faction when pc.IsCrewmate() || pc.IsImpostor() => false,
+            CustomRoles.Twins when pc.IsMadmate() && !Twins.CanAssingMadmate.GetBool() => false,
+            CustomRoles.Twins when pc.GetCustomRole().IsNonNK() && !Twins.CanAssingCantKillNeutral.GetBool() => false,
+            CustomRoles.Faction when pc.IsCrewmate() || pc.IsImpostor() || pc.Is(Team.Coven) => false,
+            // 原典どおりインポスター陣営と狼少年に限る
+            CustomRoles.Connecting when !pc.IsImpostor() && !pc.IsMadmate() && !pc.Is(CustomRoles.WolfBoy) => false,
+            // キル距離を伸ばす属性なので、実際にキルできる者にしか意味がない
+            CustomRoles.MagicHand when !pc.IsImpostor() && !pc.IsNeutralKiller() && !pc.Is(CustomRoles.Sheriff) && !pc.Is(CustomRoles.WolfBoy) => false,
+            // インポスターは停電の影響を受けないので、視界確保の属性が無駄枠になる
+            CustomRoles.Moon when pc.IsImpostor() => false,
             CustomRoles.Faction when pc.Is(CustomRoles.Lovers) => false,
             CustomRoles.LastNeutral when !pc.GetCustomRole().IsNeutral() => false,
             CustomRoles.LastNeutral when pc.Is(CustomRoles.Lovers) => false,
