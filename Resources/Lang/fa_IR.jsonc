@@ -9890,6 +9890,7 @@
   ============================== */
   "GanPresidentCanBeMadmate": "<color=#30916f>President</color> can be converted",
   "GanSheriffCanBeMadmate": "<color=#f8cd46>Sheriff</color> can be converted",
+  "GanSnitchCanBeMadmate": "<color=#b8fb4f>Snitch</color> can be converted",
   "GhostCanSeeDeathReason": "روح می‌تواند علت مرگ را ببیند",
   "GhostCanSeeOtherRoles": "ارواح می‌توانند نقش‌های دیگر را ببینند",
 
@@ -11231,6 +11232,8 @@
   "LostRoleByEvilEraser": "You lost your role because of the <color=#ff1919>Evil Eraser</color>",
   "LostRoleByNiceEraser": "You lost your role because of the <color=#00a5ff>Nice Eraser</color>",
   "Mad-": "Mad ",
+  "MadmateCanFixLightsOut": "<color=#ff1919>Madmates</color> Can Fix Lights",
+  "MadmateCanSeeKillFlash": "<color=#ff1919>Madmates</color> Can See Kill Flash",
   "MadmateHasImpostorVision": "<color=#ff1919>Madmates</color> دید <color=#ff1919>Impostor</color> را دارند",
   "MadmateInfo": "به ایمپاسترها کمک کن",
   "MadmateInfoLong": "(افزونه‌ها):\\nمدمیت‌ها (Madmates) به ایمپاسترها (Impostors) در برنده شدن بازی کمک می‌کنند. آن‌ها فقط برای کرومیت‌ها (Crewmates) در دسترس هستند اما بسته به تنظیمات هاست می‌توانند ایمپاسترها (Impostors) را شناسایی کنند. نقش‌های خاصی مانند شریف (Sheriff)، اسنیچ (Snitch) و شهردار (Mayor) می‌توانند به مدمیت (Madmates) تبدیل شوند. قابلیت‌های برخی نقش‌ها وقتی به مدمیت (Madmate) تبدیل می‌شوند تغییر می‌کند. برای مثال، بمب فلش گرنیدیر (Grenadier) به جای ایمپاسترها (Impostors) روی کرومیت‌ها (Crewmates) و خنثی‌ها (Neutrals) کار می‌کند. قاضی (Judge) می‌تواند هر کسی را قضاوت کند.",

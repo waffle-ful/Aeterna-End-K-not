@@ -11916,6 +11916,7 @@
   ============================== */
   "GanPresidentCanBeMadmate": "<color=#30916f>President</color> can be converted",
   "GanSheriffCanBeMadmate": "<color=#f8cd46>Sheriff</color> can be converted",
+  "GanSnitchCanBeMadmate": "<color=#b8fb4f>Snitch</color> can be converted",
   "GhostCanSeeDeathReason": "Ghost Can See Cause Of Death",
   "GhostCanSeeOtherRoles": "Ghosts Can See Other Roles",
 
@@ -13309,6 +13310,8 @@
   "LostRoleByEvilEraser": "You lost your role because of the <color=#ff1919>Evil Eraser</color>",
   "LostRoleByNiceEraser": "You lost your role because of the <color=#00a5ff>Nice Eraser</color>",
   "Mad-": "Mad ",
+  "MadmateCanFixLightsOut": "<color=#ff1919>Madmates</color> Can Fix Lights",
+  "MadmateCanSeeKillFlash": "<color=#ff1919>Madmates</color> Can See Kill Flash",
   "MadmateHasImpostorVision": "<color=#ff1919>Madmates</color> Have <color=#ff1919>Impostor</color> Vision",
   "MadmateInfo": "Help the Impostors",
   "MadmateInfoLong": "(<#ff1919>Madmates</color>):\n<size=80%>Madmates assist the Impostors in winning the game. Only Crewmates can become Madmates. Some roles rewrite their own description once converted (read it with /h r mad[role name]). Some role abilities change on conversion — for example, Grenadier's flash affects Crewmates and Neutrals instead of Impostors. Whether Madmates know who the Impostors are depends on host settings.</size>",
