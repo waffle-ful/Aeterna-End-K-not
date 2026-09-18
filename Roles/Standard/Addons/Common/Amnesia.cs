@@ -56,6 +56,19 @@ internal class Amnesia : IAddon
     public static bool IsAbilityBlocked(PlayerControl pc)
         => pc != null && DontCanUseAbility && PlayerIdList.Contains(pc.PlayerId);
 
+    // 本人が自分の役職を自覚できない間 (=まだ Amnesia のサブロールが付いている間) だけ、
+    // 表示側で「陣営の総称ロール」に差し替えるための判定。PlayerIdList は Init() の20秒後
+    // タイマーで埋まるため、開始直後の隠蔽判定にはサブロール自体を見る必要がある。
+    public static bool TryGetConcealedRole(byte playerId, out CustomRoles shown)
+    {
+        shown = CustomRoles.NotAssigned;
+        if (!Main.PlayerStates.TryGetValue(playerId, out PlayerState state)) return false;
+        if (!state.SubRoles.Contains(CustomRoles.Amnesia)) return false;
+
+        shown = state.MainRole.GetCustomRoleTypes() == CustomRoleTypes.Impostor ? CustomRoles.ImpostorEndKnot : CustomRoles.CrewmateEndKnot;
+        return true;
+    }
+
     private static void RemoveAmnesia(byte playerId)
     {
         if (!PlayerIdList.Remove(playerId)) return;
@@ -70,7 +83,7 @@ internal class Amnesia : IAddon
         if (!IsEnable) return;
         if (!OptionCanRealizeTask.GetBool()) return;
         if (!PlayerIdList.Contains(pc.PlayerId)) return;
-        if (pc.GetTaskState().CompletedTasksCount < OptionRealizeTaskCount.GetInt()) return;
+        if (pc.GetTaskState().CompletedTasksCount + 1 < OptionRealizeTaskCount.GetInt()) return;
         RemoveAmnesia(pc.PlayerId);
     }
 

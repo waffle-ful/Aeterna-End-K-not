@@ -242,6 +242,10 @@ public static class NameColorManager
         // Global (important)
         if (Bubble.EncasedPlayers.TryGetValue(target.PlayerId, out long ts) && (ts + Bubble.NotifyDelay.GetInt() < Utils.TimeStamp || seer.Is(CustomRoles.Bubble))) color = Utils.GetRoleColorCode(CustomRoles.Bubble);
 
+        // Amnesia本人は自分の役職色も分からない — 自視点だけ陣営の総称ロール色に差し替える。
+        // 上の判定を全部上書きするために、色決定の一番最後・early return の直前に置く。
+        if (seer.PlayerId == target.PlayerId && Amnesia.TryGetConcealedRole(target.PlayerId, out CustomRoles amnesiaShown)) color = Utils.GetRoleColorCode(amnesiaShown);
+
         // If the color was determined, return true, else, check if the seer can see the target's role color without knowing the color
         if (color != "") return true;
 

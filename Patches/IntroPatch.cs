@@ -325,18 +325,26 @@ internal static class SetUpRoleTextPatch
 
                 var s = Main.PlayerStates[lp.PlayerId].SubRoles;
 
+                // Amnesia本人は自分の本当の役職を自覚できない — イントロ画面も陣営の総称ロールで見せる。
+                CustomRoles amnesiaShown = CustomRoles.NotAssigned;
+                bool amnesiaConcealed = Amnesia.TryGetConcealedRole(lp.PlayerId, out amnesiaShown);
+                CustomRoles displayRole = amnesiaConcealed ? amnesiaShown : role;
+
                 if (!role.IsVanilla())
                 {
-                    __instance.YouAreText.color = Utils.GetRoleColor(role);
-                    __instance.RoleText.text = Utils.GetRoleName(role);
-                    __instance.RoleText.color = Utils.GetRoleColor(role);
-                    __instance.RoleBlurbText.color = Utils.GetRoleColor(role);
-                    __instance.RoleBlurbText.text = (s.Count > 0 ? "<size=50%>" : string.Empty) + lp.GetRoleInfo() + (s.Count > 0 ? "</size>" : string.Empty);
+                    __instance.YouAreText.color = Utils.GetRoleColor(displayRole);
+                    __instance.RoleText.text = Utils.GetRoleName(displayRole);
+                    __instance.RoleText.color = Utils.GetRoleColor(displayRole);
+                    __instance.RoleBlurbText.color = Utils.GetRoleColor(displayRole);
+                    __instance.RoleBlurbText.text = amnesiaConcealed
+                        ? GetString($"{displayRole}Info")
+                        : (s.Count > 0 ? "<size=50%>" : string.Empty) + lp.GetRoleInfo() + (s.Count > 0 ? "</size>" : string.Empty);
                 }
 
                 foreach (CustomRoles subRole in s)
                 {
                     if (role is CustomRoles.LovingCrewmate or CustomRoles.LovingImpostor && subRole == CustomRoles.Lovers) continue;
+                    if (amnesiaConcealed && subRole == CustomRoles.Amnesia) continue;
                     __instance.RoleBlurbText.text += "\n<size=30%>" + Utils.ColorString(Utils.GetRoleColor(subRole), GetString($"{subRole}Info"));
                 }
 

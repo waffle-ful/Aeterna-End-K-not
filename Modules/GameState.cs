@@ -519,6 +519,7 @@ public class TaskState
 
                 if (addons.Contains(CustomRoles.Deadlined)) Deadlined.SetDone(player);
                 if (addons.Contains(CustomRoles.Stressed)) Stressed.OnTaskComplete(player);
+                if (addons.Contains(CustomRoles.Amnesia)) Amnesia.OnTaskComplete(player);
                 if (addons.Contains(CustomRoles.Unlucky) && alive && IRandom.Instance.Next(0, 100) < Options.UnluckyTaskSuicideChance.GetInt()) player.Suicide();
 
                 if (GhostRolesManager.AssignedGhostRoles.TryGetValue(player.PlayerId, out (CustomRoles Role, IGhostRole Instance) ghostRole))
