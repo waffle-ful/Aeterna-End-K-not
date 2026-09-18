@@ -1264,7 +1264,8 @@ internal static class CustomRolesHelper
                 CustomRoles.Stressed or
                 CustomRoles.Lazy or
                 CustomRoles.Rascal or
-                CustomRoles.LastImpostor;
+                CustomRoles.LastImpostor or
+                CustomRoles.LastNeutral;
         }
 
         public bool ForceCancelShapeshift()
