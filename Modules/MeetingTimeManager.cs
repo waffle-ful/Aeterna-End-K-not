@@ -38,6 +38,15 @@ public static class MeetingTimeManager
     {
         try
         {
+            // 天秤 (Balancer) の決選会議は本会議とは別の専用会議時間で走る (通常のボーナス加算対象外)
+            if (Balancer.IsBalancerMeeting)
+            {
+                DiscussionTime = 0;
+                VotingTime = Balancer.OptionMeetingTime.GetInt();
+                Logger.Info($"Discussion Time: {DiscussionTime}s, Voting Time: {VotingTime}s", "MeetingTimeManager.OnReportDeadBody");
+                return;
+            }
+
             if (Options.AllAliveMeeting.GetBool() && Utils.IsAllAlive)
             {
                 DiscussionTime = 0;

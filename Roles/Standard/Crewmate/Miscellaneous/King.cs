@@ -14,6 +14,8 @@ public class King : RoleBase
     private static OptionItem OptionInvolvementCount;
     private static OptionItem OptionDeathReason;
     private static OptionItem OptionMadExtraInvolvement;
+    private static OptionItem OptionRemoveAddonCount;
+    private static OptionItem OptionRemoveRoleCount;
 
     private byte KingId;
     private bool aboooonTriggered;
@@ -39,6 +41,14 @@ public class King : RoleBase
             .SetParent(Options.CustomRoleSpawnChances[CustomRoles.King]);
 
         OptionMadExtraInvolvement = new IntegerOptionItem(Id + 13, "KingMadExtraInvolvement", new(0, 15, 1), 1, TabGroup.CrewmateRoles)
+            .SetParent(Options.CustomRoleSpawnChances[CustomRoles.King])
+            .SetValueFormat(OptionFormat.Players);
+
+        OptionRemoveAddonCount = new IntegerOptionItem(Id + 14, "KingAddon", new(0, 15, 1), 5, TabGroup.CrewmateRoles)
+            .SetParent(Options.CustomRoleSpawnChances[CustomRoles.King])
+            .SetValueFormat(OptionFormat.Players);
+
+        OptionRemoveRoleCount = new IntegerOptionItem(Id + 15, "KingRole", new(0, 15, 1), 5, TabGroup.CrewmateRoles)
             .SetParent(Options.CustomRoleSpawnChances[CustomRoles.King])
             .SetValueFormat(OptionFormat.Players);
     }
@@ -130,7 +140,54 @@ public class King : RoleBase
             Logger.Info($"{crew.name} was involved by King", "KingAboooon");
         }
 
-        LateTask.New(() => Utils.NotifyRoles(ForceLoop: true, NoCache: true), 0.4f, "KingAboooonNotify");
+        // 巻き込みを免れたクルーから、属性剥奪と役職剥奪を別々に抽選する。属性剥奪は「有利属性」に限る
+        // (マッドメイト/カップル等の陣営を動かす属性は Mixed 判定で対象外のまま)。
+        List<CustomRoles> helpfulAddons = Options.GroupedAddons.TryGetValue(AddonTypes.Helpful, out List<CustomRoles> list) ? list : [];
+        int addonCount = OptionRemoveAddonCount.GetInt();
+        List<PlayerControl> addonPool = [..crews];
+        for (int i = 0; i < addonCount && addonPool.Count > 0; i++)
+        {
+            int idx = IRandom.Instance.Next(0, addonPool.Count);
+            PlayerControl crew = addonPool[idx];
+            addonPool.RemoveAt(idx);
+            if (!crew.IsAlive()) { i--; continue; }
+
+            PlayerState state = Main.PlayerStates[crew.PlayerId];
+            state.SubRoles.ToArray().DoIf(helpfulAddons.Contains, state.RemoveSubRole);
+            Logger.Info($"{crew.name}'s helpful addons were removed by King", "KingAddon");
+        }
+
+        // 役職リセットは SetMainRole が1人ごとに全員宛ての NotifyRoles を2回撃つため、会議明けに
+        // まとめて撃たず 0.15 秒ずつ順送りにする。最後の再描画はその後ろへ回す。
+        int roleCount = OptionRemoveRoleCount.GetInt();
+        List<PlayerControl> rolePool = [..crews];
+        var resetTargets = new List<PlayerControl>();
+        for (int i = 0; i < roleCount && rolePool.Count > 0; i++)
+        {
+            int idx = IRandom.Instance.Next(0, rolePool.Count);
+            PlayerControl crew = rolePool[idx];
+            rolePool.RemoveAt(idx);
+            if (!crew.IsAlive()) { i--; continue; }
+
+            resetTargets.Add(crew);
+        }
+
+        float delay = 0.1f;
+        foreach (PlayerControl crew in resetTargets)
+        {
+            PlayerControl target = crew;
+            LateTask.New(() =>
+            {
+                if (!GameStates.IsInGame || !target.IsAlive()) return;
+
+                target.RpcSetCustomRole(CustomRoles.Crewmate);
+                Logger.Info($"{target.name}'s role was reset to Crewmate by King", "KingRole");
+            }, delay, "KingRoleReset");
+
+            delay += 0.15f;
+        }
+
+        LateTask.New(() => Utils.NotifyRoles(ForceLoop: true, NoCache: true), Mathf.Max(0.4f, delay + 0.2f), "KingAboooonNotify");
     }
 
     public static void ManipulateVotingResult(Dictionary<byte, int> votingData, MeetingHud.VoterState[] states)

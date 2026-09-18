@@ -16,6 +16,7 @@ public class UltraStar : RoleBase
     private static OptionItem CanseeAllplayer;
     public static OptionItem CanKillOpt;
     private static OptionItem KillCooldownOpt;
+    private static OptionItem CheckKillOpt;
     public static OptionItem PetCooldownOpt;
 
     private byte UltraStarId;
@@ -42,6 +43,9 @@ public class UltraStar : RoleBase
         KillCooldownOpt = new FloatOptionItem(Id + 13, "KillCooldown", new(0f, 180f, 0.5f), 30f, TabGroup.CrewmateRoles)
             .SetParent(CanKillOpt)
             .SetValueFormat(OptionFormat.Seconds);
+
+        CheckKillOpt = new BooleanOptionItem(Id + 11, "UltraStarcheckkill", false, TabGroup.CrewmateRoles)
+            .SetParent(CanKillOpt);
 
         PetCooldownOpt = new FloatOptionItem(Id + 15, "Cooldown", new(1f, 60f, 0.5f), 15f, TabGroup.CrewmateRoles)
             .SetParent(CustomRoleSpawnChances[CustomRoles.UltraStar])
@@ -151,7 +155,9 @@ public class UltraStar : RoleBase
 
         if (target == null) return;
         KillCoolRemaining = KillCooldownOpt.GetFloat();
-        pc.Kill(target);
+        // checkkill が有効な間は、対象役職の守り側フック (King 等) にひかせられる。無効時は原典既定どおり素通り。
+        if (!CheckKillOpt.GetBool() || Main.PlayerStates[target.PlayerId].Role.OnCheckMurderAsTarget(pc, target))
+            pc.Kill(target);
         pc.MarkDirtySettings();
     }
 

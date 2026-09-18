@@ -46,6 +46,8 @@ public class Snowman : RoleBase
 
         OptionElectricalIgnoreMelt = new BooleanOptionItem(Id + 13, "SnowmanElectricalIgnoreMelt", true, TabGroup.CrewmateRoles)
             .SetParent(Options.CustomRoleSpawnChances[CustomRoles.Snowman]);
+
+        Options.OverrideTasksData.Create(Id + 14, TabGroup.CrewmateRoles, CustomRoles.Snowman);
     }
 
     public override void Init()

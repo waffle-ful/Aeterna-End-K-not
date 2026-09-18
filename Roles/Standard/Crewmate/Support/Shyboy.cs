@@ -93,11 +93,15 @@ public class Shyboy : RoleBase
             if (other.PlayerId == ShyboyId) continue;
             // マッドメイトの恥ずかしがり屋は、インポスターのそばなら平気でいられる。
             if (pc.Is(CustomRoles.Madmate) && other.Is(CustomRoleTypes.Impostor)) continue;
-            if (Vector2.Distance(pos, other.Pos()) <= DetectionRadius)
-            {
-                nearOthers = true;
-                break;
-            }
+
+            Vector2 delta = other.Pos() - pos;
+            float dist = delta.magnitude;
+            if (dist > DetectionRadius) continue;
+            // 壁越しは検知しない (隠れて凌ぐ動線を成立させる)。
+            if (dist > 0f && PhysicsHelpers.AnyNonTriggersBetween(pos, delta.normalized, dist, Constants.ShadowMask)) continue;
+
+            nearOthers = true;
+            break;
         }
 
         if (nearOthers)
