@@ -2220,7 +2220,7 @@ internal static class FixedUpdatePatch
             if (AmHostTick && inTask && alive && Options.LadderDeath.GetBool())
                 FallFromLadder.FixedUpdate(player);
 
-            if (inTask && self && AmHostTick && (Options.DisableDevices.GetBool() || DisableDevice.TimeLimitEnabled || CustomRoles.InfoPoor.IsEnable()))
+            if (inTask && self && AmHostTick && (Options.DisableDevices.GetBool() || DisableDevice.TimeLimitEnabled || CustomRoles.InfoPoor.IsEnable() || Rogue.On))
                 DisableDevice.FixedUpdate();
 
             // IsShifted ガード: タグ持ち (dev/mod/vip) プレイヤーは ApplySuffix が変装中も生名を
