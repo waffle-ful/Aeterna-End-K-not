@@ -2468,6 +2468,9 @@ internal static class ExtendedPlayerControl
                 if (Main.PlayerStates.TryGetValue(target.PlayerId, out var playerState) && !playerState.IsDead)
                     playerState.SetDead();
 
+                // 後追い判定は死亡が確定してから (SetRealKiller はこれより前に走るので使えない)
+                Twins.CheckFollowingSuicide(target.PlayerId);
+
                 LateTask.New(() =>
                 {
                     if (ReportDeadBodyPatch.MeetingStarted || GameStates.IsMeeting || GameStates.IsEnded) return;

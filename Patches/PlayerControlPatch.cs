@@ -478,6 +478,18 @@ internal static class CheckMurderPatch
             return false;
         }
 
+        if (killer.Is(CustomRoles.Faction) && target.Is(CustomRoles.Faction) && Faction.CantKillFaction.GetBool())
+        {
+            Notify("FactionKillEachOther");
+            return false;
+        }
+
+        if (!OneWolf.OnCheckMurder(killer, target))
+        {
+            Notify("OneWolfKillEachOther");
+            return false;
+        }
+
         if (!Tired.CheckMurderLimit(killer.PlayerId))
         {
             Notify("TiredReachedMaxKillsPerRound");
@@ -815,6 +827,8 @@ internal static class MurderPlayerPatch
             InSender.OnAnyoneMurder(killer, target);
 
             Gasp.OnAnyoneMurder(killer, target);
+
+            OneWolf.OnMurderPlayer(killer, target);
 
             if (Options.CurrentGameMode == CustomGameMode.Speedrun)
                 Speedrun.ResetTimer(killer);
