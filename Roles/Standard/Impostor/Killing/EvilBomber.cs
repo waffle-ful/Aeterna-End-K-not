@@ -113,6 +113,7 @@ public class EvilBomber : RoleBase
         foreach (PlayerControl p in Main.AllAlivePlayerControlsToList)
         {
             if (p.PlayerId == pc.PlayerId) continue;
+            if (p.GetCustomRole().IsImpostor()) continue;
             if (PendingExplosions.ContainsKey(p.PlayerId)) continue;
             float d = Vector2.Distance(pc.Pos(), p.Pos());
             if (d >= minDist) continue;

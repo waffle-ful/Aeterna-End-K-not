@@ -190,6 +190,7 @@ public class TeleportKiller : RoleBase
             {
                 if (!target.IsAlive()) return;
                 if (target.inVent || target.MyPhysics.Animations.IsPlayingEnterVentAnimation()) return;
+                if (target.GetCustomRole().IsImpostor()) return;
 
                 PlayerState.DeathReason reason = TeleportKillerChangeDeathReason.GetBool()
                     ? PlayerState.DeathReason.Spell

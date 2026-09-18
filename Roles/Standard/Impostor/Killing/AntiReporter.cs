@@ -10,7 +10,9 @@ public class AntiReporter : RoleBase
 {
     private const int Id = 700600;
     private static List<byte> PlayerIdList = [];
-    private static Dictionary<byte, float> ReportCrashTimers = [];
+
+    // 妨害中の相手は全アンチリポーターで共有する (タイマー自体は保持者ごと)。
+    private static HashSet<byte> BlockedTargets = [];
 
     public static OptionItem AbilityCooldown;
     private static OptionItem MaxUseCount;
@@ -19,6 +21,7 @@ public class AntiReporter : RoleBase
 
     private byte AntiReporterId;
     private int UseCount;
+    private Dictionary<byte, float> ReportCrashTimers;
 
     public override bool IsEnable => PlayerIdList.Count > 0;
 
@@ -45,7 +48,7 @@ public class AntiReporter : RoleBase
     public override void Init()
     {
         PlayerIdList = [];
-        ReportCrashTimers = [];
+        BlockedTargets = [];
     }
 
     public override void Add(byte playerId)
@@ -53,11 +56,23 @@ public class AntiReporter : RoleBase
         PlayerIdList.Add(playerId);
         AntiReporterId = playerId;
         UseCount = MaxUseCount.GetInt();
+        ReportCrashTimers = [];
     }
 
     public override void Remove(byte playerId)
     {
         PlayerIdList.Remove(playerId);
+
+        // 保持者が抜けるとタイマーも一緒に消えるので、妨害中の相手を通報可能に戻しておく。
+        if (ReportCrashTimers == null) return;
+
+        foreach (byte id in ReportCrashTimers.Keys)
+        {
+            BlockedTargets.Remove(id);
+            ReportDeadBodyPatch.CanReport[id] = true;
+        }
+
+        ReportCrashTimers.Clear();
     }
 
     public override void ApplyGameOptions(IGameOptions opt, byte playerId)
@@ -109,7 +124,8 @@ public class AntiReporter : RoleBase
         foreach (PlayerControl p in Main.AllAlivePlayerControlsToList)
         {
             if (p.PlayerId == pc.PlayerId) continue;
-            if (ReportCrashTimers.ContainsKey(p.PlayerId)) continue;
+            if (p.GetCustomRole().IsImpostor()) continue;
+            if (BlockedTargets.Contains(p.PlayerId)) continue;
             float d = Vector2.Distance(pc.Pos(), p.Pos());
             if (d >= minDist) continue;
             minDist = d;
@@ -119,6 +135,7 @@ public class AntiReporter : RoleBase
         if (nearestTarget == null) return;
 
         ReportCrashTimers[nearestTarget.PlayerId] = 0f;
+        BlockedTargets.Add(nearestTarget.PlayerId);
         ReportDeadBodyPatch.CanReport[nearestTarget.PlayerId] = false;
         UseCount--;
         pc.SyncSettings();
@@ -139,6 +156,7 @@ public class AntiReporter : RoleBase
             if (timer >= resetSeconds)
             {
                 ReportCrashTimers.Remove(targetId);
+                BlockedTargets.Remove(targetId);
                 ReportDeadBodyPatch.CanReport[targetId] = true;
             }
             else
@@ -153,7 +171,11 @@ public class AntiReporter : RoleBase
         if (ResetMeeting.GetBool())
         {
             foreach (byte id in ReportCrashTimers.Keys)
+            {
+                BlockedTargets.Remove(id);
                 ReportDeadBodyPatch.CanReport[id] = true;
+            }
+
             ReportCrashTimers.Clear();
         }
     }
