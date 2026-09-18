@@ -380,6 +380,13 @@ public static class TestBridge
             return;
         }
 
+        if (directive.StartsWith("switch ", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecuteSwitch(directive[7..].Trim()); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR switch failed"); }
+            return;
+        }
+
         // Layer C3: ホスト発言を本物の UI 経路 (ChatController.SendChat → Prefix パッチ) で送る (2026-09-13)。
         // `chat` は RpcSendChat 直呼びで送信側フック (WordKiller / EKR FireChat 等) が鳴らない。
         if (directive.StartsWith("chatui ", StringComparison.OrdinalIgnoreCase))
@@ -515,7 +522,7 @@ public static class TestBridge
 
         if (directive.Equals("help", StringComparison.OrdinalIgnoreCase))
         {
-            WriteOut("HELP directives: state | screenshot | click <h|label:x> | press <h|x y> | type <text> | key <enter|escape|tab|backspace> | getopt <pattern> | setopt <name|#id> <idx|on|off|~real> | forcerole <id|name|host|clear> [EnumName] | start | hostlobby | leavelobby | eosstall | autostart <on|off> | tp <x> <y> | tp <playerId> | walk <x> <y> | walk <playerId> | walk stop | vote <playerId|skip> | overrule <targetId> [judgeId] | chat <text> | chatui <text> | sabotage <comms|reactor|o2|lights|lab|heli|mushroom|cd0> | fixsabotage <type> | use <kill|vent|pet|ability|report|sabotage> | vent enter <id> | vent exit | errors [n] | grep <pattern> [n] | bcensus | gc <clr|clr2|boehm|both> | sleep <sec> | wait <phase=X|players=N|marker:text|join|arrived> [timeoutSec] | wait cancel | /<chatcommand>");
+            WriteOut("HELP directives: state | screenshot | click <h|label:x> | press <h|x y> | type <text> | key <enter|escape|tab|backspace> | getopt <pattern> | setopt <name|#id> <idx|on|off|~real> | forcerole <id|name|host|clear> [EnumName] | start | hostlobby | leavelobby | eosstall | autostart <on|off> | tp <x> <y> | tp <playerId> | tp <playerId|name> <x> <y> | switch <0-4> [playerId|name] | walk <x> <y> | walk <playerId> | walk stop | vote <playerId|skip> | overrule <targetId> [judgeId] | chat <text> | chatui <text> | sabotage <comms|reactor|o2|lights|lab|heli|mushroom|cd0> | fixsabotage <type> | use <kill|vent|pet|ability|report|sabotage> | vent enter <id> | vent exit | errors [n] | grep <pattern> [n] | bcensus | gc <clr|clr2|boehm|both> | sleep <sec> | wait <phase=X|players=N|marker:text|join|arrived> [timeoutSec] | wait cancel | /<chatcommand>");
             return;
         }
 
@@ -1797,6 +1804,7 @@ public static class TestBridge
         string[] parts = rest.Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
         Vector2 dest;
+        PlayerControl mover = lp;
 
         if (parts.Length == 1 && byte.TryParse(parts[0], out byte pid))
         {
@@ -1808,14 +1816,40 @@ public static class TestBridge
                  float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float x) &&
                  float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float y))
             dest = new(x, y);
+        else if (parts.Length == 3 &&
+                 float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float tx) &&
+                 float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out float ty))
+        {
+            // 非モッド客は歩かせる以外に位置を作れず、walk は壁や柱に張り付いて狙った座標に乗らない。
+            // 位置が述語になる機能 (デバイス圏内判定など) の確認用に、ホストから客を 1 発で置けるようにする。
+            if (byte.TryParse(parts[0], out byte moverId))
+            {
+                mover = Utils.GetPlayerById(moverId);
+                if (!mover) { WriteOut($"ERR tp no player with id {moverId}"); return; }
+            }
+            else
+            {
+                mover = ResolvePlayerByName(parts[0], out string moverErr);
+                if (!mover) { WriteOut($"ERR tp {moverErr}"); return; }
+            }
+
+            // PlayerId 200 以上は CNO のダミー。CNO の SnapTo は CustomNetObject 側が SendOption.None で
+            // 束ねて送る決まりなので、ここから Reliable で撃つと約束を破り、共有の SnapTo 予算も食う。
+            if (mover.PlayerId >= 200) { WriteOut($"ERR tp {mover.PlayerId} is a CNO dummy (use the CNO's own update path)"); return; }
+
+            dest = new(tx, ty);
+        }
         else
         {
-            WriteOut("ERR tp usage: tp <x> <y> | tp <playerId>");
+            WriteOut("ERR tp usage: tp <x> <y> | tp <playerId> | tp <playerId|name> <x> <y>");
             return;
         }
 
-        bool ok = Utils.TP(lp.NetTransform, dest, true);
-        WriteOut(ok ? $"OK tp -> [{F(dest.x)}, {F(dest.y)}]" : "ERR tp rejected (noCheckState 経路で false になるのは SnapTo cap 超過がほぼ唯一 — KICKRISK 抑制中)");
+        if (!mover.NetTransform) { WriteOut($"ERR tp {mover.GetRealName()} has no NetTransform"); return; }
+
+        bool ok = Utils.TP(mover.NetTransform, dest, true);
+        string who = mover.PlayerId == lp.PlayerId ? string.Empty : $" {mover.GetRealName()}";
+        WriteOut(ok ? $"OK tp{who} -> [{F(dest.x)}, {F(dest.y)}]" : "ERR tp rejected (noCheckState 経路で false になるのは SnapTo cap 超過がほぼ唯一 — KICKRISK 抑制中)");
     }
 
     // task <playerId|name> [count|all] — 未完了の通常タスクを先頭から count 個 (既定 1) 完了させる。
@@ -2266,6 +2300,60 @@ public static class TestBridge
         }
 
         WriteOut($"OK fixsabotage {type} {DescribeSabotageState(type)}");
+    }
+
+    // 配電盤のノブ 1 つ分の操作。`use` に console 操作は無く、`fixsabotage lights` は ActualSwitches へ直接代入するので
+    // SwitchSystem.UpdateSystem を通らない = 「そのプレイヤーには直させない」系のゲートが観測できない。
+    // ここはノブが送るのと同じ UpdateSystem(Electrical, player, index) をホスト側で撃つ。
+    // player を差し替えられるので、同じゲームの中で素のプレイヤーと属性持ちを並べて比べられる。
+    private static void ExecuteSwitch(string rest)
+    {
+        if (!AmongUsClient.Instance || !AmongUsClient.Instance.AmHost) { WriteOut("ERR switch: not host"); return; }
+        if (!ShipStatus.Instance || !GameStates.InGame || GameStates.IsMeeting) { WriteOut("ERR switch: not in task phase"); return; }
+        if (!ShipStatus.Instance.Systems.ContainsKey(SystemTypes.Electrical)) { WriteOut("ERR switch: this map has no electrical panel"); return; }
+
+        string[] parts = rest.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        if (parts.Length is < 1 or > 2 || !byte.TryParse(parts[0], out byte index) || index > 4)
+        {
+            WriteOut("ERR switch usage: switch <0-4> [playerId|name]");
+            return;
+        }
+
+        PlayerControl player = PlayerControl.LocalPlayer;
+        if (!player) { WriteOut("ERR switch: no local player"); return; }
+
+        if (parts.Length == 2)
+        {
+            if (byte.TryParse(parts[1], out byte pid))
+            {
+                player = Utils.GetPlayerById(pid);
+                if (!player) { WriteOut($"ERR switch no player with id {pid}"); return; }
+            }
+            else
+            {
+                player = ResolvePlayerByName(parts[1], out string nameErr);
+                if (!player) { WriteOut($"ERR switch {nameErr}"); return; }
+            }
+
+            if (player.PlayerId >= 200) { WriteOut($"ERR switch {player.PlayerId} is a CNO dummy"); return; }
+        }
+
+        var sw = ShipStatus.Instance.Systems[SystemTypes.Electrical].CastFast<SwitchSystem>();
+        byte before = sw.ActualSwitches;
+
+        ShipStatus.Instance.UpdateSystem(SystemTypes.Electrical, player, index);
+
+        byte after = sw.ActualSwitches;
+        WriteOut($"OK switch {index} by {player.GetRealName()}: actual {Bits5(before)} -> {Bits5(after)} expected {Bits5(sw.ExpectedSwitches)} changed={(before != after ? "true" : "false")}");
+    }
+
+    // ノブ 5 個の上下を左が index 0 になる並びで見せる (SwitchSystem は 1 ビット = 1 ノブ)。
+    private static string Bits5(byte value)
+    {
+        var chars = new char[5];
+        for (var i = 0; i < 5; i++) chars[i] = (value & (1 << i)) != 0 ? '1' : '0';
+        return new(chars);
     }
 
     // 文字境界を割らずに UTF-8 バイト数を budget 以下へ切り詰める (ChatControlPatch.SplitByUtf8Bytes と同じ 1/2/3B 見積り)。
