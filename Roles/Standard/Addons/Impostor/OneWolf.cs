@@ -35,8 +35,8 @@ internal class OneWolf : IAddon
                 RoleTypes owAppearsAs = ow.IsAlive() ? RoleTypes.Crewmate : RoleTypes.CrewmateGhost;
                 RoleTypes impAppearsAs = imp.IsAlive() ? RoleTypes.Crewmate : RoleTypes.CrewmateGhost;
 
-                ow.RpcSetRoleDesync(owAppearsAs, imp.OwnerId);
-                imp.RpcSetRoleDesync(impAppearsAs, ow.OwnerId);
+                ow.RpcSetRoleDesync(owAppearsAs, imp.OwnerId, setRoleMap: true);
+                imp.RpcSetRoleDesync(impAppearsAs, ow.OwnerId, setRoleMap: true);
             }
         }
 

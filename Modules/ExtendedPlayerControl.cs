@@ -2210,6 +2210,7 @@ internal static class ExtendedPlayerControl
                 Main.AllPlayerKillCooldown[player.PlayerId] = Seeker.KillCooldown.GetFloat();
 
             if (player.PlayerId == LastImpostor.CurrentId) LastImpostor.SetKillCooldown();
+            if (player.PlayerId == LastNeutral.CurrentId) LastNeutral.SetKillCooldown();
 
             if (player.Is(CustomRoles.Mare))
             {
