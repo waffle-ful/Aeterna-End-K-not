@@ -9,7 +9,7 @@ public class Balancer : RoleBase
     private const int Id = 702200;
     public static List<byte> PlayerIdList = [];
 
-    private static OptionItem OptionMeetingTime;
+    public static OptionItem OptionMeetingTime;
     private static OptionItem OptionCanUseAllAlive;
 
     // Global state for the active Balancer meeting (at most one at a time)
@@ -157,6 +157,12 @@ public class Balancer : RoleBase
         byte t1 = SelectedTarget1.TryGetValue(BalancerId, out byte st1) ? st1 : byte.MaxValue;
         byte t2 = SelectedTarget2.TryGetValue(BalancerId, out byte st2) ? st2 : byte.MaxValue;
 
+        // 選択状態は会議をまたいで残さない。1人目だけ選んだ状態で会議が終わると、次会議で
+        // 自己投票なしにいきなり2人目確定へ飛んでしまう。
+        IsSelecting[BalancerId] = false;
+        SelectedTarget1[BalancerId] = byte.MaxValue;
+        SelectedTarget2[BalancerId] = byte.MaxValue;
+
         if (t1 == byte.MaxValue || t2 == byte.MaxValue) return;
 
         PlayerControl balancerPc = Utils.GetPlayerById(BalancerId);
@@ -165,10 +171,6 @@ public class Balancer : RoleBase
         PlayerControl p1 = Utils.GetPlayerById(t1);
         PlayerControl p2 = Utils.GetPlayerById(t2);
         if (p1 == null || !p1.IsAlive() || p2 == null || !p2.IsAlive()) return;
-
-        // Clear targets now so a subsequent normal meeting doesn't re-schedule the Balancer meeting
-        SelectedTarget1[BalancerId] = byte.MaxValue;
-        SelectedTarget2[BalancerId] = byte.MaxValue;
 
         LateTask.New(() =>
         {

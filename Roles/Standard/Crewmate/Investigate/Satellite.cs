@@ -114,6 +114,14 @@ public class Satellite : RoleBase
             return true;
         }
 
+        // Phase 2: voting yourself again toggles the mode off without consuming a use.
+        if (target != null && target.PlayerId == SatelliteId)
+        {
+            SatelliteActivated = false;
+            Utils.SendMessage(GetString("SatelliteCancelMode"), SatelliteId, importance: MessageImportance.High);
+            return true;
+        }
+
         // Phase 2: vote a target to reveal a room
         SatelliteActivated = false;
 

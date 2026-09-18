@@ -50,6 +50,8 @@ public class VentMaster : RoleBase
     {
         if (!AmongUsClient.Instance.AmHost) return;
         if (!GameStates.IsInTask) return;
+        // 入った本人が別のベントマスターなら、他のベントマスターへも通知しない。
+        if (pc.Is(CustomRoles.VentMaster)) return;
 
         bool madWatching = false;
         foreach (PlayerControl vm in Main.AllAlivePlayerControlsToList)

@@ -41,7 +41,7 @@ public class ShrineMaiden : RoleBase
         OptionVoteMode = new StringOptionItem(Id + 11, "ShrineMaidenVoteMode", ["Normal", "Self Vote"], 1, TabGroup.CrewmateRoles)
             .SetParent(Options.CustomRoleSpawnChances[CustomRoles.ShrineMaiden]);
 
-        OptionTaskAwakening = new BooleanOptionItem(Id + 12, "ShrineMaidenTaskAwakening", false, TabGroup.CrewmateRoles)
+        OptionTaskAwakening = new BooleanOptionItem(Id + 12, "ShrineMaidenTaskAwakening", true, TabGroup.CrewmateRoles)
             .SetParent(Options.CustomRoleSpawnChances[CustomRoles.ShrineMaiden]);
 
         OptionAwakeningTaskCount = new IntegerOptionItem(Id + 13, "ShrineMaidenAwakeningTaskCount", new(1, 99, 1), 5, TabGroup.CrewmateRoles)
