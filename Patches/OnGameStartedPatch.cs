@@ -1179,6 +1179,7 @@ internal static class StartGameHostPatch
                 Dynamo.Add();
                 Spurt.Add();
                 Allergic.Init();
+                Amnesia.Init();
                 Reroll.Init();
                 Lovers.Init();
                 Twins.Init();
