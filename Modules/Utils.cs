@@ -3971,6 +3971,30 @@ public static class Utils
                             {
                                 if (Puppeteer.PuppeteerList.ContainsKey(target.PlayerId))
                                     TargetMark.Append($"<color={GetRoleColorCode(CustomRoles.Impostor)}>◆</color>");
+
+                                foreach (PlayerControl impostor in Main.AllAlivePlayerControlsToList)
+                                {
+                                    if (impostor.PlayerId == seer.PlayerId || !impostor.Is(Team.Impostor)) continue;
+
+                                    switch (Main.PlayerStates[impostor.PlayerId].Role)
+                                    {
+                                        case CharismaStar charismaStar:
+                                            TargetMark.Append(charismaStar.GetInsiderMark(target, forMeeting));
+                                            break;
+                                        case EvilTeller evilTeller:
+                                            TargetMark.Append(evilTeller.GetInsiderMark(target, forMeeting));
+                                            break;
+                                        case ConnectSaver connectSaver:
+                                            TargetMark.Append(connectSaver.GetInsiderMark(target, forMeeting));
+                                            break;
+                                        case ProgressKiller progressKiller:
+                                            TargetMark.Append(progressKiller.GetInsiderMark(target));
+                                            break;
+                                        case EarnestWolf earnestWolf:
+                                            TargetMark.Append(earnestWolf.GetInsiderMark(target, forMeeting));
+                                            break;
+                                    }
+                                }
                             }
 
                             BeforeEnd2:

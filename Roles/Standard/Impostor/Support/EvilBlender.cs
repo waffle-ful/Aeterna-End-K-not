@@ -16,6 +16,7 @@ public class EvilBlender : RoleBase
 
     public static OptionItem AbilityCooldown;
     private static OptionItem SabotageLimitTime;
+    private static OptionItem KillCooldown;
 
     private byte EvilBlenderId;
     private bool IsUsed;
@@ -33,6 +34,10 @@ public class EvilBlender : RoleBase
             .SetValueFormat(OptionFormat.Seconds);
 
         SabotageLimitTime = new FloatOptionItem(Id + 11, "EvilBlenderSabotageLimittime", new(10f, 90f, 1f), 45f, TabGroup.ImpostorRoles)
+            .SetParent(Options.CustomRoleSpawnChances[CustomRoles.EvilBlender])
+            .SetValueFormat(OptionFormat.Seconds);
+
+        KillCooldown = new FloatOptionItem(Id + 12, "KillCooldown", new(0f, 180f, 0.5f), 20f, TabGroup.ImpostorRoles)
             .SetParent(Options.CustomRoleSpawnChances[CustomRoles.EvilBlender])
             .SetValueFormat(OptionFormat.Seconds);
     }
@@ -56,6 +61,15 @@ public class EvilBlender : RoleBase
     public override void Remove(byte playerId)
     {
         On = false;
+
+        // 発動者が抜けると IsEnable が false になり OnReportDeadBody の解除経路が走らなくなる。
+        // UseingId を残したままだと全員の本物サボが試合終了まで塞がれるので、ここで畳む。
+        if (UseingId == playerId) EndMiniSab();
+    }
+
+    public override void SetKillCooldown(byte id)
+    {
+        Main.AllPlayerKillCooldown[id] = KillCooldown.GetFloat();
     }
 
     public override void ApplyGameOptions(IGameOptions opt, byte playerId)

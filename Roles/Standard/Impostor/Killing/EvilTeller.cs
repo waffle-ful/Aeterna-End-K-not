@@ -139,6 +139,7 @@ public class EvilTeller : RoleBase
         {
             if (p.PlayerId == pc.PlayerId) continue;
             if (p.Is(CustomRoleTypes.Impostor)) continue;
+            if (SeenTargets.ContainsKey(p.PlayerId)) continue;
             float d = Vector2.Distance(pc.Pos(), p.Pos());
             if (d > dist || d >= minDist) continue;
             minDist = d;
@@ -247,5 +248,12 @@ public class EvilTeller : RoleBase
         int remaining = MaxTellCount.GetInt() - SeenTargets.Count;
         Color color = remaining > 0 ? Palette.ImpostorRed : Color.gray;
         return Utils.ColorString(color, $"({remaining})");
+    }
+
+    // Insider の味方能力マーク集約 (Utils.cs) から呼ばれる。自視点の GetSuffix の◆条件と同じ。
+    public string GetInsiderMark(PlayerControl target, bool forMeeting)
+    {
+        if (forMeeting || !CurrentTarget.HasValue || target.PlayerId != CurrentTarget.Value.TargetId) return string.Empty;
+        return "<color=#ff1919>◆</color>";
     }
 }
