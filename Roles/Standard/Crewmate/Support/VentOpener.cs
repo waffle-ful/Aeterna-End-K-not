@@ -27,6 +27,7 @@ public class VentOpener : RoleBase
     private bool Defo;
     private int count;
     private List<byte> expelledPlayers = [];
+    private bool NotifiedUnlock;
 
     public override bool IsEnable => PlayerIdList.Count > 0;
 
@@ -78,6 +79,8 @@ public class VentOpener : RoleBase
         count = OptionCount.GetInt();
         Defo = count == 0;
         expelledPlayers = [];
+        // 必要タスク数0=最初から解放済みなので「解放された」通知の対象外。
+        NotifiedUnlock = OptionCanTaskcount.GetInt() <= 0;
     }
 
     public override void Remove(byte playerId)
@@ -169,6 +172,16 @@ public class VentOpener : RoleBase
     {
         bool taskDone = pc.GetTaskState().CompletedTasksCount >= OptionCanTaskcount.GetInt();
         return (Defo || count > 0) && taskDone;
+    }
+
+    public override void OnTaskComplete(PlayerControl pc, int completedTaskCount, int totalTaskCount)
+    {
+        if (NotifiedUnlock) return;
+        if (completedTaskCount + 1 >= OptionCanTaskcount.GetInt())
+        {
+            NotifiedUnlock = true;
+            Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
+        }
     }
 
     public static void OnAnyoneEnterVent(PlayerControl pc, Vent vent)

@@ -79,6 +79,8 @@ public class Android : RoleBase
         MadKillCharge = new FloatOptionItem(Id + 21, "AndroidMadKillCharge", new(0f, 100f, 1f), 25f, TabGroup.CrewmateRoles)
             .SetParent(Options.CustomRoleSpawnChances[CustomRoles.Android])
             .SetValueFormat(OptionFormat.Percent);
+
+        Options.OverrideTasksData.Create(Id + 22, TabGroup.CrewmateRoles, CustomRoles.Android);
     }
 
     public override void Init() => PlayerIdList = [];
@@ -260,7 +262,7 @@ public class Android : RoleBase
 
     public override string GetSuffix(PlayerControl seer, PlayerControl target, bool hud = false, bool meeting = false)
     {
-        if (seer.PlayerId != target.PlayerId || meeting) return string.Empty;
+        if (seer.PlayerId != target.PlayerId) return string.Empty;
         if (seer.PlayerId != AndroidId) return string.Empty;
         return "<u>" + GetNowBattery() + "</u>";
     }
