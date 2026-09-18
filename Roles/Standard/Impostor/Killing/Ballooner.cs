@@ -11,7 +11,7 @@ public class Ballooner : RoleBase
     private static List<byte> PlayerIdList = [];
 
     private static OptionItem KillCooldown;
-    private static OptionItem AbilityCooldown;
+    public static OptionItem AbilityCooldown;
     private static OptionItem MinBoomDis;
     private static OptionItem MaxBoomDis;
     private static OptionItem ChargeWalk;
