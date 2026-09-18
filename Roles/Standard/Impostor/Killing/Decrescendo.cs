@@ -57,7 +57,7 @@ public class Decrescendo : RoleBase
             .SetParent(DecreaseVision)
             .SetValueFormat(OptionFormat.Multiplier);
 
-        CantUseVentWhenWeakened = new BooleanOptionItem(Id + 17, "DecrescendoCantUseVent", true, TabGroup.ImpostorRoles)
+        CantUseVentWhenWeakened = new BooleanOptionItem(Id + 17, "DecrescendoCantUseVent", false, TabGroup.ImpostorRoles)
             .SetParent(Options.CustomRoleSpawnChances[CustomRoles.Decrescendo]);
     }
 

@@ -277,7 +277,10 @@ public class Pathologist : RoleBase
                     if (killerId != byte.MaxValue && Camouflage.PlayerSkins.TryGetValue(killerId, out var outfit))
                     {
                         int colorId = outfit.ColorId;
-                        string colorName = Palette.GetColorName(colorId);
+                        // 実際の色名は当てにいかず、暗色/明色の2群に丸めて返す (TOHK Inspector 準拠)
+                        string colorName = colorId is 0 or 1 or 2 or 6 or 8 or 9 or 12 or 15 or 16
+                            ? Palette.GetColorName(6)
+                            : Palette.GetColorName(7);
                         sb.AppendFormat(GetString("PathologistInfoColor"), tid.ColoredPlayerName(), colorName);
                     }
                     else
