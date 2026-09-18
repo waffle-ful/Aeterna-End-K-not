@@ -88,6 +88,22 @@ internal static class SurveillanceMinigameBeginInfoPoorPatch
     }
 }
 
+// Polus / Airship / The Fungle のカメラは SurveillanceMinigame ではなくこちらを使う
+[HarmonyPatch(typeof(PlanetSurveillanceMinigame), nameof(PlanetSurveillanceMinigame.Begin))]
+internal static class PlanetSurveillanceMinigameBeginInfoPoorPatch
+{
+    public static bool Prefix(PlanetSurveillanceMinigame __instance)
+    {
+        if (PlayerControl.LocalPlayer.Is(CustomRoles.InfoPoor))
+        {
+            __instance.Close();
+            return false;
+        }
+
+        return true;
+    }
+}
+
 [HarmonyPatch(typeof(Vent), nameof(Vent.Start))]
 internal static class VentStartPatch
 {

@@ -249,6 +249,7 @@ internal static class SwitchSystemUpdatePatch
         }
 
         if (player.Is(CustomRoles.Fool)) return false;
+        if (player.Is(CustomRoles.Water)) return false;
 
         if (Options.BlockDisturbancesToSwitches.GetBool())
         {

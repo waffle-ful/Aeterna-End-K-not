@@ -585,7 +585,7 @@ internal static class CustomRoleSelector
                 case CustomRoles.Gravestone when Options.EveryoneSeesDeadPlayersRoles.GetBool():
                 case CustomRoles.Mare or CustomRoles.Glow or CustomRoles.Sleep when Main.CurrentMap == MapNames.Fungle:
                 case CustomRoles.Madmate when Options.MadmateSpawnMode.GetInt() != 0:
-                case CustomRoles.Lovers or CustomRoles.LastImpostor or CustomRoles.Workhorse or CustomRoles.Undead or CustomRoles.Insane:
+                case CustomRoles.Lovers or CustomRoles.LastImpostor or CustomRoles.LastNeutral or CustomRoles.Workhorse or CustomRoles.Undead or CustomRoles.Insane:
                 case CustomRoles.Nimble or CustomRoles.Physicist or CustomRoles.Bloodlust or CustomRoles.Finder or CustomRoles.Noisy or CustomRoles.Examiner or CustomRoles.Venom: // Assigned at a different function due to role base change
                     continue;
             }

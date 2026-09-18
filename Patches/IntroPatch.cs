@@ -1608,6 +1608,10 @@ internal static class IntroCutsceneDestroyPatch
 
         lp.RpcChangeRoleBasis(lp.GetCustomRole());
 
+        // 上の ChangeRoleBasis はホストの役職を全クライアントへ書き直すため、
+        // イントロ中に張った一匹狼の per-client 偽装が消える。張り直す。
+        OneWolf.ApplyDesync();
+
         LateTask.New(() =>
         {
             lp.SetKillCooldown(10f);
