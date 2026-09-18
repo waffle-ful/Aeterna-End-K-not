@@ -159,7 +159,8 @@ public class CharismaStar : RoleBase
         if (GatherChoosePlayers.Contains(target.PlayerId)) return true;
         GatherChoosePlayers.Add(target.PlayerId);
         LateTask.New(() => Utils.NotifyRoles(SpecifySeer: killer), 0.2f, "CharismaStar.MarkNotify");
-        killer.SetKillCooldown();
+        // マークは無料 (キルクールを消費しない)。直前の Prefix が積んだ debounce だけ外して即再クリックを許す。
+        CheckMurderPatch.TimeSinceLastKill.Remove(killer.PlayerId);
         return false;
     }
 
@@ -186,6 +187,13 @@ public class CharismaStar : RoleBase
         if (meeting) return string.Empty;
         if (seer.PlayerId != CharismaStarId) return string.Empty;
         if (!GatherChoosePlayers.Contains(target.PlayerId)) return string.Empty;
+        return Utils.ColorString(Palette.ImpostorRed, "◎");
+    }
+
+    // Insider の味方能力マーク集約 (Utils.cs) から呼ばれる。自視点の GetSuffix と同じ条件を再利用。
+    public string GetInsiderMark(PlayerControl target, bool forMeeting)
+    {
+        if (forMeeting || !GatherChoosePlayers.Contains(target.PlayerId)) return string.Empty;
         return Utils.ColorString(Palette.ImpostorRed, "◎");
     }
 }

@@ -46,11 +46,11 @@ public class ConnectSaver : RoleBase
             .SetParent(Options.CustomRoleSpawnChances[CustomRoles.ConnectSaver])
             .SetValueFormat(OptionFormat.Seconds);
 
-        OptionMax = new IntegerOptionItem(Id + 12, "Maximum", new(1, 99, 1), 1, TabGroup.ImpostorRoles)
+        OptionMax = new IntegerOptionItem(Id + 12, "ConnectSaverMaxUses", new(1, 99, 1), 1, TabGroup.ImpostorRoles)
             .SetParent(Options.CustomRoleSpawnChances[CustomRoles.ConnectSaver])
             .SetValueFormat(OptionFormat.Times);
 
-        OptionMinimumPlayerCount = new IntegerOptionItem(Id + 13, "ConnectSaverMinPlayerCount", new(0, 15, 1), 4, TabGroup.ImpostorRoles)
+        OptionMinimumPlayerCount = new IntegerOptionItem(Id + 13, "ConnectSaverMinPlayerCount", new(0, 15, 1), 6, TabGroup.ImpostorRoles)
             .SetParent(Options.CustomRoleSpawnChances[CustomRoles.ConnectSaver])
             .SetValueFormat(OptionFormat.Players);
 
@@ -241,5 +241,13 @@ public class ConnectSaver : RoleBase
         }
 
         return string.Empty;
+    }
+
+    // Insider の味方能力マーク集約 (Utils.cs) から呼ばれる。自視点の GetSuffix の◎条件と同じ。
+    public string GetInsiderMark(PlayerControl target, bool forMeeting)
+    {
+        if (forMeeting || !IsUsing) return string.Empty;
+        if (target.PlayerId != target1 && target.PlayerId != target2) return string.Empty;
+        return Utils.ColorString(Palette.Purple, "◎");
     }
 }

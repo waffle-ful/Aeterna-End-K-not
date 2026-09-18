@@ -31,7 +31,7 @@ public class Limiter : RoleBase
             .SetParent(Options.CustomRoleSpawnChances[CustomRoles.Limiter])
             .SetValueFormat(OptionFormat.Seconds);
 
-        LastTurnKillCool = new FloatOptionItem(Id + 11, "LimiterLastTurnKillCool", new(0f, 180f, 0.5f), 5f, TabGroup.ImpostorRoles)
+        LastTurnKillCool = new FloatOptionItem(Id + 11, "LimiterLastTurnKillCool", new(0f, 180f, 0.5f), 25f, TabGroup.ImpostorRoles)
             .SetParent(Options.CustomRoleSpawnChances[CustomRoles.Limiter])
             .SetValueFormat(OptionFormat.Seconds);
 

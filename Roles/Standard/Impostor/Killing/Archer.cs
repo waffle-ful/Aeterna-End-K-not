@@ -268,7 +268,9 @@ public class Archer : RoleBase
         var vector = nextpos - last;
         float dis = vector.magnitude;
         if (forTeleport) dis = Mathf.Clamp(dis + 2f, 0.01f, 99f);
-        return !PhysicsHelpers.AnyNonTriggersBetween(last, vector.normalized, dis, Constants.ShipAndObjectsMask);
+        if (PhysicsHelpers.AnyNonTriggersBetween(last, vector.normalized, dis, Constants.ShipAndObjectsMask)) return false;
+        // 影レイヤーの遮蔽物は別マスクなので個別に判定する必要がある。
+        return !PhysicsHelpers.AnyNonTriggersBetween(last, vector.normalized, dis, Constants.ShadowMask);
     }
 
     private bool AdvanceArrow(PlayerControl pc, int step)
@@ -309,7 +311,8 @@ public class Archer : RoleBase
         byte nearestId = distances.OrderBy(x => x.Value).First().Key;
         PlayerControl nearest = Utils.GetPlayerById(nearestId);
 
-        if (nearest != null && nearest.IsAlive())
+        // Suicide 直呼びは Veteran/Pestilence/SchrodingersCat は見るが Medic シールドと Pelican 捕食中は見ないため、ここで別途弾く。
+        if (nearest != null && nearest.IsAlive() && !Pelican.IsEaten(nearest.PlayerId) && !Medic.ProtectList.Contains(nearest.PlayerId))
         {
             nearest.SetRealKiller(pc);
             nearest.Suicide(PlayerState.DeathReason.Sniped, pc);

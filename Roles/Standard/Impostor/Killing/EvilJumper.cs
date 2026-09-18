@@ -200,10 +200,11 @@ public class EvilJumper : RoleBase
         else
             Mark.TP(nextPos);
 
-        LateTask.New(() => RangeKill(pc), 0.01f, "EvilJumper.RangeKill");
-
+        // 最終ホップは着地後に即座に終了処理へ入るため、範囲キル判定を予約しない (原典どおり)。
         if (NowJumpCount >= totalHops)
             EndJump(pc);
+        else
+            LateTask.New(() => RangeKill(pc), 0.01f, "EvilJumper.RangeKill");
 
         NowJumpCount++;
         Timer = 0f;
