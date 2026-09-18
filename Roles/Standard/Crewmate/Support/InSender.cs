@@ -53,10 +53,19 @@ public class InSender : RoleBase
         Awakened = !TaskAwakeningOpt.GetBool();
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    // OnCheckMurderAsTarget はキル打診 (check: true の下見) でも呼ばれるため、実際に死んだ後の
+    // post-murder ディスパッチ (Patches/PlayerControlPatch.cs の MurderPlayerPatch.Postfix) からのみ発火させる。
+    public static void OnAnyoneMurder(PlayerControl killer, PlayerControl target)
     {
-        if (!Awakened) return true;
-        if (!CanUseActiveCommsOpt.GetBool() && Utils.IsActive(SystemTypes.Comms)) return true;
+        if (!On || killer == null || target == null || killer.PlayerId == target.PlayerId) return;
+        if (Main.PlayerStates.TryGetValue(target.PlayerId, out PlayerState state) && state.Role is InSender inSender)
+            inSender.SelfReport(killer, target);
+    }
+
+    private void SelfReport(PlayerControl killer, PlayerControl target)
+    {
+        if (!Awakened) return;
+        if (!CanUseActiveCommsOpt.GetBool() && Utils.IsActive(SystemTypes.Comms)) return;
 
         float extra = 0f;
         if (MaxDelayOpt.GetFloat() > 0)
@@ -69,8 +78,6 @@ public class InSender : RoleBase
             PlayerControl reporter = target.Is(CustomRoles.Madmate) ? FindFarthestCrew(killer, target) ?? target : target;
             reporter.NoCheckStartMeeting(target.Data);
         }, delay, "InSender Self Report");
-
-        return true;
     }
 
     // マッドメイトのインセンダーは、キラーから一番遠い生存クルー (インポスター陣営・マッドメイト以外) を通報者に仕立てる。

@@ -123,6 +123,7 @@ public class EvilSatellite : RoleBase
         AllAlivePlayerRoute.Clear();
         AllAlivePlayerLastRoom.Clear();
         SatelliteActivated = false;
+        SentPlayerId.Clear();
     }
 
     public override string GetProgressText(byte playerId, bool comms)

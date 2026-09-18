@@ -40,28 +40,35 @@ public class Gasp : RoleBase
         KillerPlayerId = byte.MaxValue;
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    // OnCheckMurderAsTarget はキル打診 (check: true の下見) でも呼ばれるため、実際に死んだ後の
+    // post-murder ディスパッチ (Patches/PlayerControlPatch.cs の MurderPlayerPatch.Postfix) からのみ発火させる。
+    public static void OnAnyoneMurder(PlayerControl killer, PlayerControl target)
     {
-        if (!AfterAbility)
+        if (!On || killer == null || target == null || killer.PlayerId == target.PlayerId) return;
+        if (Main.PlayerStates.TryGetValue(target.PlayerId, out PlayerState state) && state.Role is Gasp gasp)
+            gasp.Mark(killer, target);
+    }
+
+    private void Mark(PlayerControl killer, PlayerControl target)
+    {
+        if (AfterAbility) return;
+
+        if (target.GetTaskState().CompletedTasksCount >= TaskTriggerOpt.GetInt())
         {
-            if (target.GetTaskState().CompletedTasksCount >= TaskTriggerOpt.GetInt())
+            KillerPlayerId = target.Is(CustomRoles.Madmate) ? PickScapegoat(killer, target) : killer.PlayerId;
+            LateTask.New(() =>
             {
-                KillerPlayerId = target.Is(CustomRoles.Madmate) ? PickScapegoat(killer, target) : killer.PlayerId;
-                LateTask.New(() =>
+                if (!GameStates.IsMeeting)
                 {
-                    if (!GameStates.IsMeeting)
-                    {
-                        CanSeeMark = true;
-                        Utils.NotifyRoles(ForceLoop: true);
-                    }
-                    else
-                        AfterAbility = true;
-                }, 0.1f, "GaspMark");
-            }
-            else
-                AfterAbility = true;
+                    CanSeeMark = true;
+                    Utils.NotifyRoles(ForceLoop: true);
+                }
+                else
+                    AfterAbility = true;
+            }, 0.1f, "GaspMark");
         }
-        return true;
+        else
+            AfterAbility = true;
     }
 
     // マッドメイトのギャスプは★をキラーでなく無実のクルー (インポスター陣営・マッドメイト以外の生存者) に付ける。
