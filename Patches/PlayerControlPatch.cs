@@ -812,6 +812,10 @@ internal static class MurderPlayerPatch
 
             Android.OnAnyoneMurder(killer, target);
 
+            InSender.OnAnyoneMurder(killer, target);
+
+            Gasp.OnAnyoneMurder(killer, target);
+
             if (Options.CurrentGameMode == CustomGameMode.Speedrun)
                 Speedrun.ResetTimer(killer);
 
