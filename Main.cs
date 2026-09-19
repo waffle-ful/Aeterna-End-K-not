@@ -75,8 +75,14 @@ public class Main : BasePlugin
 
     private static string StarData => Environment.GetEnvironmentVariable("STAR_DATA_PATH");    
 
+    // Android: ランチャーがデータ置き場を環境変数で渡してくればそれを、無ければ BepInEx の
+    // 書込可能ルートを使う (ゲーム本体のディレクトリは書込不可)。
     public static readonly string DataPath =
-        OperatingSystem.IsAndroid() ? StarData : ".";
+        OperatingSystem.IsAndroid() ? (string.IsNullOrEmpty(StarData) ? Paths.BepInExRootPath : StarData) : ".";
+
+    // BepInEx/resources/ の実体。PC はゲームの作業ディレクトリ直下、Android は BepInEx ルート直下。
+    public static readonly string ResourcesPath =
+        OperatingSystem.IsAndroid() ? $"{Paths.BepInExRootPath.Replace(@"\", "/")}/resources/" : $"{Environment.CurrentDirectory.Replace(@"\", "/")}/BepInEx/resources/";
 
     public static readonly Version Version = Version.Parse(PluginVersion.Split('-')[0]);
 
@@ -510,6 +516,17 @@ public class Main : BasePlugin
     public override void Load()
     {
         BootTimeline.Mark("load.begin");
+#if ANDROID
+        // Android のゲーム本体は libil2cpp.so で、"GameAssembly" 名の P/Invoke はそのままでは解決できない。
+        // 未解決だと呼び出しごとに DllNotFoundException → catch (1 回 ≈3ms) が毎フレームの計器で積み上がるため、
+        // ローダーが把握している本体パスへ最初に束ねる。
+        try
+        {
+            System.Runtime.InteropServices.NativeLibrary.SetDllImportResolver(typeof(Main).Assembly, (name, asm, path) =>
+                name == "GameAssembly" ? System.Runtime.InteropServices.NativeLibrary.Load(Environment.GetEnvironmentVariable("BEPINEX_GAME_ASSEMBLY_PATH") is { Length: > 0 } ga ? ga : "libil2cpp.so", asm, path) : IntPtr.Zero);
+        }
+        catch (Exception e) { Logger.Warn($"GameAssembly resolver not installed: {e.Message}", "Android"); }
+#endif
 
         // Config.Bind は束縛と同時に新キーを cfg へ書き出すので、旧キーの読み取りは
         // 1 回目の Bind より前に済ませておく必要がある。

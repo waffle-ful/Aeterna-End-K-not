@@ -14,7 +14,7 @@ namespace EndKnot.Modules;
 
 public static class CustomSoundsManager
 {
-    internal static readonly string SoundsPath = $"{Environment.CurrentDirectory.Replace(@"\", "/")}/BepInEx/resources/";
+    internal static readonly string SoundsPath = Main.ResourcesPath;
     private static readonly string[] SupportedExtensions = [".wav", ".ogg", ".mp3"];
 
     // PlaySoundRPC の broadcast を (player, sound) ごとに「同一秒に 1 回」へ間引く dedup 用。
@@ -652,7 +652,7 @@ public static class CustomSoundsManager
     private static AudioClip CreateClip(string key, float[] buffer, int read, int channels, int sampleRate, out long copyMs)
     {
         var sw = Stopwatch.StartNew();
-        Il2CppStructArray<float> il2cppBuffer = new(read);
+        Il2CppStructArray<float> il2cppBuffer = new((long)read);
         // Managed float[] -> Il2CppStructArray<float> via Marshal.Copy (per-element indexer is a trap)。
         // BGM 級 (23M サンプル) でインデクサループは実測 ~1000ms、一括コピーなら数十 ms。
         System.Runtime.InteropServices.Marshal.Copy(buffer, 0, IntPtr.Add(il2cppBuffer.Pointer, IntPtr.Size * 4), read);
@@ -753,8 +753,8 @@ public static class CustomSoundsManager
             int n = Math.Min(chunkFloats, s.Read - s.Copied);
 
             Il2CppStructArray<float> chunk = n == chunkFloats
-                ? bgmChunkBuffer ??= new Il2CppStructArray<float>(chunkFloats)
-                : new Il2CppStructArray<float>(n);
+                ? bgmChunkBuffer ??= new Il2CppStructArray<float>((long)(chunkFloats))
+                : new Il2CppStructArray<float>((long)(n));
 
             System.Runtime.InteropServices.Marshal.Copy(s.Buffer, s.Copied, IntPtr.Add(chunk.Pointer, IntPtr.Size * 4), n);
             // SetData の第 2 引数はサンプルフレーム単位 (チャンネル込みではない) — chunkFloats は
@@ -1186,12 +1186,12 @@ public static class CustomSoundsManager
                 i++;
             }
 
-            LeftChannel = new Il2CppStructArray<float>(SampleCount);
+            LeftChannel = new Il2CppStructArray<float>((long)(SampleCount));
             System.Runtime.InteropServices.Marshal.Copy(left, 0, IntPtr.Add(LeftChannel.Pointer, IntPtr.Size * 4), SampleCount);
 
             if (ChannelCount == 2)
             {
-                RightChannel = new Il2CppStructArray<float>(SampleCount);
+                RightChannel = new Il2CppStructArray<float>((long)(SampleCount));
                 System.Runtime.InteropServices.Marshal.Copy(right, 0, IntPtr.Add(RightChannel.Pointer, IntPtr.Size * 4), SampleCount);
             }
             else RightChannel = null;
@@ -1202,7 +1202,7 @@ public static class CustomSoundsManager
         {
             if (RightChannel == null) return LeftChannel;
 
-            var stereoData = new Il2CppStructArray<float>(SampleCount * 2);
+            var stereoData = new Il2CppStructArray<float>((long)(SampleCount * 2));
 
             for (int i = 0; i < SampleCount; i++)
             {

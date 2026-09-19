@@ -57,7 +57,7 @@ public static class EkmShadow
             go.layer = BackroomsConfig.ShadowCasterLayer; // layer10 (Shadow)
 
             EdgeCollider2D ec = go.AddComponent<EdgeCollider2D>();
-            Il2CppStructArray<Vector2> arr = new(n);
+            Il2CppStructArray<Vector2> arr = new((long)(n));
             for (int i = 0; i < n; i++) arr[i] = pts[i];
             ec.points = arr;
 

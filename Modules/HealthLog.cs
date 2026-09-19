@@ -371,7 +371,8 @@ public static class HealthLog
 
             // ロビー復帰毎に 1 回、型別オブジェクト census を残す (per-game 破棄漏れの犯人型特定計器)
             if (state == "Lobby")
-                try { MemCensus.ScheduleAfterLobbyEnter(); }
+                // Android: 数百 ms〜1 秒の棚卸しはフレーム停止として体感されるため走らせない (PC 専用の帰属計器)
+                if (!OperatingSystem.IsAndroid()) try { MemCensus.ScheduleAfterLobbyEnter(); }
                 catch { }
         }
 
@@ -592,7 +593,7 @@ public static class HealthLog
             catch { }
 
             // マネージド保持リークの帰属計器。間隔判定は MaybeTick 側。
-            try { ManagedCensus.MaybeTick(now, state); }
+            if (!OperatingSystem.IsAndroid()) try { ManagedCensus.MaybeTick(now, state); }
             catch { }
 
             // 平常時のタグ別送信サマリ。ゲーム中だけ出す (Menu/Lobby は比較対象にならないうえ無駄に嵩む)。

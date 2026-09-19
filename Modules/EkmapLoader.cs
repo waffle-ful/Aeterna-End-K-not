@@ -864,7 +864,7 @@ public static class EkmapLoader
         // Marshal.Copy 直書き方式 (Il2CppStructArray インデクサ罠回避)
         Texture2D tex = new(2, 2, TextureFormat.ARGB32, false);
         tex.filterMode = FilterMode.Point;
-        var il2cppBytes = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<byte>(pngBytes.Length);
+        var il2cppBytes = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<byte>((long)pngBytes.Length);
         System.Runtime.InteropServices.Marshal.Copy(
             pngBytes, 0, IntPtr.Add(il2cppBytes.Pointer, IntPtr.Size * 4), pngBytes.Length);
         // markNonReadable=true: GPU 転送後に CPU 側コピー解放 (以後 width/height 等メタデータ参照のみ可・ピクセル読み不可)

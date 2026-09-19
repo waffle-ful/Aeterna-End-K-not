@@ -210,7 +210,9 @@ public static class BackroomsCasters
         go.transform.position = new Vector3(mid.x, mid.y, 0f);
         go.layer = BackroomsConfig.ShadowCasterLayer;
         EdgeCollider2D ec = go.AddComponent<EdgeCollider2D>();
-        Il2CppStructArray<Vector2> arr = new(2)
+        // 注意: 引数は long を明示する。net10 (numeric IntPtr) では int リテラルが nint nativeObject 側に解決され
+        // 「ポインタ=長さ」の壊れた配列になる (Android 実機で SIGSEGV)。
+        Il2CppStructArray<Vector2> arr = new((long)2)
         {
             [0] = p0 - mid,
             [1] = p1 - mid

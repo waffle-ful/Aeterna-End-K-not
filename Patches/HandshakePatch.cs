@@ -63,6 +63,9 @@ public enum ReactorProtocolVersion : byte
     Latest = V3
 }
 
+#if !ANDROID
+// Android 版では GetConnectionData への detour 経由で元関数が NRE を投げ握手が壊れる (IncorrectVersion 切断)。
+// 公式サーバーは Reactor 握手が無くても受けるため Android では張らない。
 [HarmonyPatch(typeof(InnerNetClient), nameof(InnerNetClient.GetConnectionData))]
 public static class HandshakePatch
 {
@@ -73,11 +76,13 @@ public static class HandshakePatch
         // Due to reasons currently unknown, the useDtlsLayout parameter sometimes doesn't reflect whether DTLS
         // is actually supposed to be enabled. This causes a bad handshake message and a quick disconnect.
         // The field on AmongUsClient appears to be more reliable, so override this parameter with what it is supposed to be.
+        if (AmongUsClient.Instance == null) { Logger.Warn("GetConnectionData Prefix: AmongUsClient.Instance is null; useDtlsLayout left as " + useDtlsLayout, "Handshake"); return; }
         useDtlsLayout = AmongUsClient.Instance.useDtls;
     }
 
     public static void Postfix(ref Il2CppStructArray<byte> __result)
     {
+        if (__result == null) { Logger.Warn("GetConnectionData Postfix: original returned null; leaving handshake untouched", "Handshake"); return; }
         var handshake = new MessageWriter(1000);
 
         // Original data
@@ -98,3 +103,4 @@ public static class HandshakePatch
         handshake.Recycle();
     }
 }
+#endif

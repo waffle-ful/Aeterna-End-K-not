@@ -30,14 +30,14 @@ public static class ServerDropdownPatch
         int totalColumns = Mathf.Max(1, Mathf.CeilToInt(displayRegions.Count / 5f));
         int rowLimit = Mathf.Min(displayRegions.Count, 5);
         __instance.defaultButtonSelected = __instance.firstOption;
-        __instance.firstOption.ChangeButtonText(translationController.GetStringWithDefault(currentRegion.TranslateName, currentRegion.Name, new Il2CppReferenceArray<Il2CppSystem.Object>(0)));
+        __instance.firstOption.ChangeButtonText(translationController.GetStringWithDefault(currentRegion.TranslateName, currentRegion.Name, new Il2CppReferenceArray<Il2CppSystem.Object>((long)(0))));
 
         for (var index = 0; index < displayRegions.Count; index++)
         {
             IRegionInfo regionInfo = displayRegions[index];
             var buttonPool = __instance.ButtonPool.Get<ServerListButton>();
             buttonPool.transform.localPosition = new Vector3(((index / 5) - ((totalColumns - 1) / 2f)) * 3.15f, __instance.y_posButton - (0.5f * (index % 5)), -1f);
-            buttonPool.Text.text = translationController.GetStringWithDefault(regionInfo.TranslateName, regionInfo.Name, new Il2CppReferenceArray<Il2CppSystem.Object>(0));
+            buttonPool.Text.text = translationController.GetStringWithDefault(regionInfo.TranslateName, regionInfo.Name, new Il2CppReferenceArray<Il2CppSystem.Object>((long)(0)));
             buttonPool.Text.ForceMeshUpdate();
             buttonPool.Button.OnClick.RemoveAllListeners();
             buttonPool.Button.OnClick.AddListener((Action)(() => __instance.ChooseOption(regionInfo)));

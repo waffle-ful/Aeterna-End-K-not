@@ -294,7 +294,7 @@ internal static class Crowded
             // IL2CPP GC heap, smashing a random neighbor object's header and crashing minutes later with the
             // uncatchable "Internal CLR error (0x80131506)" when the marshaler next reads the clobbered string.
             // Size for the full byte PlayerId range (0-255) so Timers[anyPlayerId] is always in bounds.
-            __instance.Timers = new Il2CppStructArray<float>(256);
+            __instance.Timers = new Il2CppStructArray<float>((long)(256));
         }
     }
 

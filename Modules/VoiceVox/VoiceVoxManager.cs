@@ -175,7 +175,7 @@ internal static class VoiceVoxManager
     private static void PlayWav(byte[] bytes)
     {
         // Managed byte[] -> Il2CppStructArray<byte> via Marshal.Copy (per-element indexer is a trap).
-        var il2cppBytes = new Il2CppStructArray<byte>(bytes.Length);
+        var il2cppBytes = new Il2CppStructArray<byte>((long)(bytes.Length));
         Marshal.Copy(bytes, 0, IntPtr.Add(il2cppBytes.Pointer, IntPtr.Size * 4), bytes.Length);
 
         var wav = new CustomSoundsManager.WAV(il2cppBytes);

@@ -30,10 +30,12 @@ public static class GcPrepass
     private static readonly System.Collections.Generic.Dictionary<string, long> LastRunTs = [];
 
     // Boehm (il2cpp 側) ヒープの使用バイト数。エクスポート欠落時は -1 (HITCH 計器のフォールバック値と一致)。
+    private static bool _usedSizeUnavailable;
     public static long BoehmUsedBytes()
     {
+        if (_usedSizeUnavailable) return -1;
         try { return il2cpp_gc_get_used_size(); }
-        catch { return -1; }
+        catch { _usedSizeUnavailable = true; return -1; } // エクスポート欠落環境で毎回例外を投げ続けない
     }
 
     // Boehm 側の GC 実行回数。used_size の増減だけでは「マークは走ったが解放が無かった」GC が

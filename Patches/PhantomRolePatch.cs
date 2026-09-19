@@ -122,7 +122,7 @@ public static class PhantomRoleUseAbilityPatch
                 }
 
                 HudManager.Instance.AbilityButton.SetSecondImage(__instance.Ability);
-                HudManager.Instance.AbilityButton.OverrideText(TranslationController.Instance.GetString(StringNames.PhantomAbilityUndo, new Il2CppReferenceArray<Il2CppSystem.Object>(0)));
+                HudManager.Instance.AbilityButton.OverrideText(TranslationController.Instance.GetString(StringNames.PhantomAbilityUndo, new Il2CppReferenceArray<Il2CppSystem.Object>((long)(0))));
                 __instance.Player.CmdCheckVanish(GameManager.Instance.LogicOptions.GetRoleFloat(FloatOptionNames.PhantomDuration));
             }
         }
