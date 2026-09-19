@@ -238,7 +238,7 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 - **[Game Optimizer (CPUs / Threads Optimizer)](https://github.com/charlie754/Game-Optimizer-CPUs-Threads-Optimizer)** (charlie754、MIT) — CPU Sets によるキャッシュドメイン隔離の発想 (`CpuSetsMode` 設定)。コードは Win32 API から独自実装
 - **[Lotus (LotusContinued)](https://github.com/Lotus-AU/LotusContinued)** / [NikoCat233 fork](https://github.com/NikoCat233/LotusContinued) (GPL-3.0) — 設定矛盾の検出とホスト警告、ホワイトリスト入室制限
 - **[MalumMenu](https://github.com/scp222thj/MalumMenu)** (scp222thj、GPL-3.0) — ミニマップ上のプレイヤー位置表示
-- **[Mini.RegionInstall](https://github.com/miniduikboot/Mini.RegionInstall)** (miniduikboot、GPL-3.0) — カスタムリージョンの追加（配布パッケージに同梱）
+- **[Mini.RegionInstall](https://github.com/miniduikboot/Mini.RegionInstall)** (miniduikboot、GPL-3.0) — カスタムリージョンの追加
 - **[MiraAPI](https://github.com/All-Of-Us-Mods/MiraAPI)** (All-Of-Us-Mods、LGPL-2.1) — UI スプライト（ページ送りボタン 2 点・チェックマーク 2 点）
 - **[More Gamemodes](https://github.com/Rabek009/MoreGamemodes)** (Rabek009) — カスタムネットオブジェクト (CNO)、チャット制御と消去、プレイヤー操作まわりの補助処理
 - **[Nebula on the Ship (NoS)](https://github.com/Dolly1016/Nebula)** (Dolly1016 他、GPL-3.0 / NebulaAPI は LGPL-3.0) — incremental GC の無効化と GC の先撃ち。独自役職と独自 API を多数持つ Mod
@@ -296,7 +296,6 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 - NVorbis (MIT) — Ogg Vorbis のデコード
 - NLayer (MIT) — MP3 のデコード
 - BepInEx / Il2CppInterop / Unity Doorstop (LGPL-2.1) — Mod の読み込み基盤
-- Mini.RegionInstall (GPL-3.0、作者 duikbo) — カスタムリージョンの追加
 
 ### Music Credits
 自称芸術家みーさん様のBGMが使われています
