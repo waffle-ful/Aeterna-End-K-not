@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Fusion Core</string>
+    <string name="selector_title">Select a game</string>
+    <string name="selector_subtitle">Supported packages are listed below.</string>
+    <string name="selector_action_settings">Settings</string>
+    <string name="settings_title">Settings</string>
+    <string name="settings_action_back">Back</string>
+    <string name="settings_libunity_title">Download unstripped libunity</string>
+    <string name="settings_libunity_desc">You should turn this on if the game you\'re using crashes due to Unity getting mad.</string>
+    <string name="selector_empty_not_configured">No supported packages configured..</string>
+    <string name="selector_empty_not_installed">No supported packages are currently installed.</string>
+    <string name="selector_storage_permission_prompt">Grant "All files access" so Fusion Core can write BepInEx files to Documents.</string>
+    <string name="selector_storage_permission_required">All files access is required to continue.</string>
+    <string name="selector_storage_permission_open_failed">Could not open storage permission settings.</string>
+    <string name="bootstrap_title">Launching selected game</string>
+    <string name="bootstrap_status_preparing">Preparing target package…</string>
+    <string name="bootstrap_status_copy_assets">Copying Unity data…</string>
+    <string name="bootstrap_status_detecting_version">Detecting Unity version…</string>
+    <string name="bootstrap_status_downloading_libunity">Downloading unstripped libunity…</string>
+    <string name="bootstrap_status_extracting_runtime">Extracting runtime files…</string>
+    <string name="bootstrap_status_registering_libraries">Registering native libraries…</string>
+    <string name="bootstrap_status_installing_hooks">Installing hooks…</string>
+    <string name="bootstrap_status_launching">Launching game…</string>
+    <string name="bootstrap_status_error">Launch failed</string>
+    <string name="bootstrap_download_progress">%1$d%% (%2$s / %3$s)</string>
+    <string name="game_icon">Game Icon</string>
+    <string name="low_level">Low Level</string>
+    <string name="selector_action_folder">Open Mod Folder</string>
+    <string name="loading">Loading...</string>
+    <string name="settings_activity_override">Launch Activity</string>
+    <string name="settings_activity_override_desc">Manually specify the activity to launch.</string>
+    <string name="game_settings_title">Game Settings</string>
+    <string name="settings_no_target">No target package provided</string>
+    <string name="settings_cannot_read_activities">Could not read activity list!</string>
+    <string name="settings_version_format">Version %1$s (%2$d)</string>
+    <string name="settings_package_not_found">Package not found: %1$s</string>
+    <string name="selector_no_file_manager">No file manager found capable of opening this directory</string>
+    <string name="selector_folder_create_failed">Failed to make folder: %1$s</string>
+    <string name="settings_automatic">Automatic</string>
+</resources>
