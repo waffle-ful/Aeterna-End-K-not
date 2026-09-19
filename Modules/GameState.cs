@@ -237,6 +237,16 @@ public class PlayerState(byte playerId)
             case CustomRoles.Urgent when !SubRoles.Contains(CustomRoles.Urgent):
                 Main.NumEmergencyMeetingsUsed[PlayerId]--;
                 break;
+            // 告発者のマッドメイト用タスク数はゲーム開始時の配布でしか効かないので、
+            // 途中でマッドメイトになった場合はタスクを配り直して同じ本数に揃える。
+            case CustomRoles.Madmate when Main.IntroDestroyed && GameStates.InGame && !SubRoles.Contains(CustomRoles.Madmate) && Player != null && Player.Is(CustomRoles.Snitch):
+                LateTask.New(() =>
+                {
+                    Player.RpcResetTasks();
+                    // RpcResetTasks はホスト以外では何もしないので、配り直された本数を自分で取り直す。
+                    if (!AmongUsClient.Instance.AmHost) LateTask.New(() => TaskState.Init(Player), 1f, log: false);
+                }, 0.2f, log: false);
+                break;
         }
 
         if (replaceAll)
