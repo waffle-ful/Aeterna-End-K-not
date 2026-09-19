@@ -26,7 +26,7 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles)�
 | Unity Doorstop 4.5.1 (`winhttp.dll`, `doorstop_config.ini`) | NeighTools — [UnityDoorstop](https://github.com/NeighTools/UnityDoorstop) | LGPL-2.1 | release packages |
 | BepInEx (IL2CPP) | BepInEx team — [BepInEx](https://github.com/BepInEx/BepInEx) | LGPL-2.1 | release packages |
 | Il2CppInterop | BepInEx team — [Il2CppInterop](https://github.com/BepInEx/Il2CppInterop) | LGPL-2.1 | release packages (`BepInEx/core`) |
-| Mini.RegionInstall | miniduikboot — [Mini.RegionInstall](https://github.com/miniduikboot/Mini.RegionInstall) | GPL-3.0 | release packages (`BepInEx/plugins`) |
+| Mini.RegionInstall | miniduikboot — [Mini.RegionInstall](https://github.com/miniduikboot/Mini.RegionInstall) | GPL-3.0 | source, adapted in `Modules/RegionInstaller.cs` |
 | CrowdedMod | andry08 & CrowdedMods — [CrowdedMod](https://github.com/CrowdedMods/CrowdedMod) | MIT | source, adapted in `Patches/Crowded.cs` |
 | MiraAPI (UI sprites) | All-Of-Us-Mods — [MiraAPI](https://github.com/All-Of-Us-Mods/MiraAPI) | LGPL-2.1 | `Resources/Images/`: `ActiveNextButton.png`, `InactiveNextButton.png`, `Checkmark.png`, `CheckMarkBox.png` |
 | TownOfHost-Pko | satokazoku et al. — [TownOfHost-Pko](https://github.com/satokazoku/TownOfHost-Pko) | GPL-3.0 | source, adapted in `Patches/NumericOptionInputPatch.cs` and `Modules/ConsecutiveJoinKick.cs` |

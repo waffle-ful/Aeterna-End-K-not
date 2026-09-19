@@ -16,10 +16,12 @@ namespace EndKnot.BootAccel
     //
     // Stock BepInEx runs Execute synchronously inside its il2cpp_runtime_invoke detour, at the
     // very first Internal_ActiveSceneChanged, i.e. before Unity has presented a single frame.
-    // Time spent there pushes the main menu back; once the first frame is past, the same work no
-    // longer moves menu arrival at all (measured: displacing Execute a further three seconds
-    // leaves it unchanged). So the win is in clearing the first frame, and there is no reason to
-    // wait any longer than that.
+    // Displacing the trigger point later than frame 2 does not move menu arrival any further
+    // (measured: waiting a further three seconds before running Execute leaves menu arrival
+    // unchanged), so there is no reason to arm past that. Execute's own duration once it runs
+    // still matters, though: it overlaps the EOS login chain that starts ticking only after the
+    // first frame, and runs serially with it at a fraction of Execute's length, so time spent
+    // inside Execute is only partly hidden by that overlap and is worth trimming on its own.
     //
     // This patch replicates the detour callback's scene-change handling (Unity log source +
     // interop preload) but skips Execute there, keeps the detour alive, and runs Execute once
@@ -193,9 +195,27 @@ namespace EndKnot.BootAccel
             }
         }
 
+        private static void LogStep(string step)
+        {
+            long ms = -1;
+            try { ms = (long)(DateTime.Now - Process.GetCurrentProcess().StartTime).TotalMilliseconds; } catch { }
+            BootAccelPatcher.AccelLog.LogInfo("lateload: " + step + " at " + ms + " ms since process start");
+        }
+
         private static void RunExecute(long waitedMs)
         {
             var sw = Stopwatch.StartNew();
+            long sinceProcessStartMs = -1;
+            try { sinceProcessStartMs = (long)(DateTime.Now - Process.GetCurrentProcess().StartTime).TotalMilliseconds; } catch { }
+            // Execute 内訳の計器: plugin ごとの開始 / Load 完了 / Finished 開始をプロセス開始基準 ms で残す。
+            try
+            {
+                IL2CPPChainloader cl = IL2CPPChainloader.Instance;
+                cl.PluginLoad += (info, asm, plugin) => LogStep("plugin.load.begin " + info.Metadata.Name);
+                cl.PluginLoaded += info => LogStep("plugin.loaded " + info.Metadata.Name);
+                cl.Finished += () => LogStep("finished.begin");
+            }
+            catch (Exception ex) { BootAccelPatcher.AccelLog.LogWarning("execute instrumentation failed: " + ex.Message); }
             try
             {
                 IL2CPPChainloader.Instance.Execute();
@@ -207,7 +227,7 @@ namespace EndKnot.BootAccel
             }
 
             BootAccelPatcher.AccelLog.LogInfo("lateload: chainloader Execute ran " + (waitedMs < 0 ? "via fallback" : waitedMs + " ms after the first scene change")
-                + " (frame " + _frameAtScene + " -> " + (_frameCount != null ? _frameCount() : -1) + "), took " + sw.ElapsedMilliseconds + " ms");
+                + " (frame " + _frameAtScene + " -> " + (_frameCount != null ? _frameCount() : -1) + "), took " + sw.ElapsedMilliseconds + " ms, execute.begin=" + sinceProcessStartMs + " ms since process start");
         }
 
         private static IntPtr CallOriginal(IntPtr method, IntPtr obj, IntPtr parameters, IntPtr exc)

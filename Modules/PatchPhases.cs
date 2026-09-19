@@ -93,19 +93,39 @@ public static class PatchPhases
     // menu patch queue: the first frame is on the EOS login critical path, splash frames are not.
     private static readonly Queue<(string Name, Action Work)> _deferredWork = new();
 
-    public static void Defer(string name, Action work) => _deferredWork.Enqueue((name, work));
+    // ENDKNOT_BOOT_DEFER=0: run every Defer(...) item synchronously at its call site instead of
+    // queuing it for the splash pump. Same-binary A/B lever for the boot work this phase moves.
+    public static readonly bool BootDeferEnabled = Environment.GetEnvironmentVariable("ENDKNOT_BOOT_DEFER") != "0";
+
+    // _complete short-circuits Pump/EnsureComplete/EnsureMenuComplete (see Complete()), so a Defer
+    // reaching here after that point would otherwise sit in the queue forever; run it in place.
+    public static void Defer(string name, Action work)
+    {
+        if (!BootDeferEnabled || _complete)
+        {
+            RunOne(name, work);
+            return;
+        }
+
+        _deferredWork.Enqueue((name, work));
+    }
+
+    private static void RunOne(string name, Action work)
+    {
+        var sw = Stopwatch.StartNew();
+
+        try { work(); }
+        catch (Exception e) { Logger.Error($"deferred boot work failed: {name}: {e}", "PatchPhases"); }
+
+        Logger.Info($"deferred boot work {name} in {sw.ElapsedMilliseconds} ms", "PatchPhases");
+    }
 
     private static void RunDeferredWork(Stopwatch budget, float budgetMs)
     {
         while (_deferredWork.Count > 0 && (budget == null || budget.Elapsed.TotalMilliseconds < budgetMs))
         {
             (string name, Action work) = _deferredWork.Dequeue();
-            var sw = Stopwatch.StartNew();
-
-            try { work(); }
-            catch (Exception e) { Logger.Error($"deferred boot work failed: {name}: {e}", "PatchPhases"); }
-
-            Logger.Info($"deferred boot work {name} in {sw.ElapsedMilliseconds} ms", "PatchPhases");
+            RunOne(name, work);
         }
     }
 

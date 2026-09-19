@@ -85,7 +85,15 @@ public class Main : BasePlugin
     public static string CredentialsText;
 
     // Cache
-    public static readonly Type[] AllTypes = Assembly.GetExecutingAssembly().GetTypes();
+    public static readonly Type[] AllTypes = LoadAllTypes();
+
+    // 起動計測: 全型ロードの所要を types.loaded マークで読む (Execute 内訳の帰属用)。
+    private static Type[] LoadAllTypes()
+    {
+        Type[] types = Assembly.GetExecutingAssembly().GetTypes();
+        BootTimeline.Mark("types.loaded");
+        return types;
+    }
     public static readonly CustomRoles[] CustomRoleValues = Enum.GetValues<CustomRoles>();
     public static readonly CustomGameMode[] CustomGameModeValues = Enum.GetValues<CustomGameMode>();
     public static readonly CountTypes[] CountTypesValues = Enum.GetValues<CountTypes>();
@@ -495,6 +503,9 @@ public class Main : BasePlugin
         }
         catch { /* 移行は best-effort。失敗しても新キーの既定値で動く */ }
     }
+
+    // 起動計測: chainloader の plugin 発見/Assembly.Load から本 ctor 到達までと、ctor から Load までを分けて読むためのマーク。
+    public Main() => BootTimeline.Mark("ctor");
 
     public override void Load()
     {
@@ -1330,6 +1341,8 @@ public class Main : BasePlugin
         Modules.PatchPhases.Defer("PrivateTags", PrivateTagManager.LoadTagsFromFile);
         BootTimeline.Mark("load.tags");
 
+        Modules.PatchPhases.Defer("region.install", Modules.RegionInstaller.Install);
+
         Modules.PatchPhases.RunPhase1(Harmony, Assembly.GetExecutingAssembly());
         BootTimeline.Mark("load.phase1");
 
@@ -1369,29 +1382,54 @@ public class Main : BasePlugin
 
         IL2CPPChainloader.Instance.Finished += () =>
         {
+            BootTimeline.Mark("finished.begin");
             CustomLogger.ClearLog();
             Loaded = true;
 
             // 古いログダンプフォルダの保持期間掃除 (14日+直近20個保持・リネームで保護)。列挙と記録だけ即時、削除は裏スレッド。
-            try { Modules.LogDumpRetention.Prune(); }
-            catch (Exception e) { Utils.ThrowException(e); }
+            Modules.PatchPhases.Defer("finished.logDumpRetention", () =>
+            {
+                try { Modules.LogDumpRetention.Prune(); }
+                catch (Exception e) { Utils.ThrowException(e); }
+            });
 
-            StartCoroutine(ModNewsFetcher.FetchNews());
+            Modules.PatchPhases.Defer("finished.modNews", () =>
+            {
+                try { StartCoroutine(ModNewsFetcher.FetchNews()); }
+                catch (Exception e) { Utils.ThrowException(e); }
+            });
 
-            try { DevManager.StartFetchingTags(); }
-            catch (Exception e) { Utils.ThrowException(e); }
+            Modules.PatchPhases.Defer("finished.devTags", () =>
+            {
+                try { DevManager.StartFetchingTags(); }
+                catch (Exception e) { Utils.ThrowException(e); }
+            });
 
-            try { SubmergedCompatibility.Initialize(); }
-            catch (Exception e) { Utils.ThrowException(e); }
+            Modules.PatchPhases.Defer("finished.submerged", () =>
+            {
+                try { SubmergedCompatibility.Initialize(); }
+                catch (Exception e) { Utils.ThrowException(e); }
+            });
 
-            try { HandleRoleColorFiles(); }
-            catch (Exception e) { Utils.ThrowException(e); }
+            Modules.PatchPhases.Defer("finished.roleColorFiles", () =>
+            {
+                try { HandleRoleColorFiles(); }
+                catch (Exception e) { Utils.ThrowException(e); }
+            });
 
-            if (AutoHaunt.Value)
-                Modules.AutoHaunt.Start();
+            Modules.PatchPhases.Defer("finished.autoHaunt", () =>
+            {
+                try { if (AutoHaunt.Value) Modules.AutoHaunt.Start(); }
+                catch (Exception e) { Utils.ThrowException(e); }
+            });
 
-            Logger.Msg("========= EndKnot loaded! =========", "Plugin Load");
-            Logger.Msg($"EndKnot Version: {PluginVersion}, Test Build: {TestBuild}", "Plugin Load");
+            // 最初の同期ログ書き込みは実測 ≈200ms かかる (ロガー初期化) ので、バナーもスプラッシュ中へ回す。
+            Modules.PatchPhases.Defer("finished.banner", () =>
+            {
+                Logger.Msg("========= EndKnot loaded! =========", "Plugin Load");
+                Logger.Msg($"EndKnot Version: {PluginVersion}, Test Build: {TestBuild}", "Plugin Load");
+            });
+            BootTimeline.Mark("finished.end");
         };
 
         try
