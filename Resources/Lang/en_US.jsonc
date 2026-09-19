@@ -2384,6 +2384,8 @@
   "PathologistMadInfoLong": "(<s>Crewmates</s> → I m p o s t o r  team):\n<size=80%>The dead speak. Speak. S p e a k. Not just to you.\n_ __ ___ ___ +++ ___ ___ __ _\nDifficulty: ★★★☆☆★★\n\n[<s>Skills</s> CONTRACT]\n・<b>Post-<sup>Mortem</sup> Le<sub>a</sub>k</b>\nVote a player in a meeting to track them. If they die before the next meeting, you receive clues about their death.\nEvery clue is <u>leaked</u> to <b>ALL</b> living Impostors. leaked. <sub>leaked.</sub>\n<i>A copy of the report goes into the <size=130%>d</size>ark.</i>\n<sup>cause</sup> <sub>color</sub> <sup>role</sup> <sub>EXPOSED?</sub>\ni  h e a r  t h e m.  t h e  d e a d  a r e  t a l k i n g.\n\n<i>Every death has a story. Now THEY read it too.</i></size>",
   "PathologistMaxUses": "Number of Examinations",
   "PathologistVoteMode": "Ability Vote Mode",
+  "PathologistVoteModeNormal": "Normal",
+  "PathologistVoteModeSelfVote": "Self Vote",
   "PathologistInfoCount": "Info Pieces per Examination",
   "PathologistTaskAwakening": "Require Tasks to Awaken",
   "PathologistAwakeningTaskCount": "Tasks Required to Awaken",
