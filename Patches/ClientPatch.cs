@@ -75,16 +75,77 @@ internal static class SplashLogoAnimatorPatch
     {
         __instance.sceneChanger.AllowFinishLoadingScene();
         __instance.startedSceneLoad = true;
-
-        // メインメニューの背景動画 (火) の準備をここで始める。準備完了まで実測で約2秒かかるので、
-        // メニュー構築時に始めると開幕の数秒だけ火が消えた画になる。初回のみ実行される。
         BootTimeline.Mark("splash.update");
-        EndKnot.Patches.CalamityMenu.CalamityFire.Prewarm();
-        // InnerNetClient.FixedUpdate はメニュー到達後に初めて回るため、スプラッシュ中の準備進行 (テクスチャ生成) はここから進める。
-        EndKnot.Patches.CalamityMenu.CalamityFire.Tick();
-        // スプラッシュは静止画なので、後回しにしたパッチの適用をここで進めておくと
-        // メニュー到達時の分割適用 (フレーム落ち) を減らせる。
-        EndKnot.Modules.PatchPhases.Pump(30f);
+
+        // PatchPhases.LateSplashWork=false (or forced off by env var): 元の挙動どおり、火の prewarm
+        // とパッチ pump をこのスプラッシュフレームから直接進める -- CalamityFire.Prewarm() 単体で
+        // 約270ms、続く最初の PatchPhases.Pump 呼び出しで約110msのメインスレッド停止がこの1フレームに
+        // 集中する。true の場合はどちらも SplashLateWork.Tick (opts.prelude.end 以降にだけ動く) へ委ね、
+        // CalamityFire.Tick() も SplashLateWork 側が毎フレーム回すので、ここでは何もしない。
+        if (!EndKnot.Modules.PatchPhases.LateSplashWork)
+        {
+            EndKnot.Patches.CalamityMenu.CalamityFire.Prewarm();
+            // InnerNetClient.FixedUpdate はメニュー到達後に初めて回るため、スプラッシュ中の準備進行 (テクスチャ生成) はここから進める。
+            EndKnot.Patches.CalamityMenu.CalamityFire.Tick();
+            // スプラッシュは静止画なので、後回しにしたパッチの適用をここで進めておくと
+            // メニュー到達時の分割適用 (フレーム落ち) を減らせる。
+            EndKnot.Modules.PatchPhases.Pump(30f);
+        }
+    }
+}
+
+// EOSManager.Update はスプラッシュからメニューまで毎フレーム回るので、遅延 prewarm/pump の駆動源に使う。
+// EosBootMarksPatch (Main.EosBootMarks でオフにできる) とは別のパッチクラスにしてあるのは、その設定が
+// オフでも遅延させた prewarm/pump は動き続けなければならないため。
+[HarmonyPatch(typeof(EOSManager), nameof(EOSManager.Update))]
+internal static class SplashLateWorkPatch
+{
+    public static void Postfix() => SplashLateWork.Tick();
+}
+
+// PatchPhases.LateSplashWork=true のときの splash 時 prewarm/pump 駆動。opts.prelude.end の Mark から
+// メニュー到達までの主スレッドが空いている区間だけで、CalamityFire.Prewarm() とパッチ pump を進める。
+// opts.prelude.end が何らかの理由で刻まれない起動 (オプション prelude の例外など) でも prewarm/pump が
+// 置き去りにならないよう、最初の Tick から FallbackSeconds 経過で待たずに始める。
+internal static class SplashLateWork
+{
+    private const float FallbackSeconds = 6f;
+
+    private static bool _started;
+    private static bool _fireErrored;
+    private static bool _pumpErrored;
+    private static float _firstTickRealtime = -1f;
+
+    public static void Tick()
+    {
+        if (!EndKnot.Modules.PatchPhases.LateSplashWork) return;
+        if (BootTimeline.MenuReached) return;
+
+        float now = UnityEngine.Time.realtimeSinceStartup;
+        if (_firstTickRealtime < 0f) _firstTickRealtime = now;
+        if (!BootTimeline.PreludeEnded && now - _firstTickRealtime < FallbackSeconds) return;
+
+        try
+        {
+            if (!_started)
+            {
+                _started = true;
+                BootTimeline.Mark(BootTimeline.PreludeEnded ? "latework.begin" : "latework.fallback");
+                EndKnot.Patches.CalamityMenu.CalamityFire.Prewarm();
+            }
+
+            EndKnot.Patches.CalamityMenu.CalamityFire.Tick();
+        }
+        catch (Exception e)
+        {
+            if (!_fireErrored) { _fireErrored = true; Logger.Error(e.ToString(), "SplashLateWork.Fire"); }
+        }
+
+        try { EndKnot.Modules.PatchPhases.Pump(30f); }
+        catch (Exception e)
+        {
+            if (!_pumpErrored) { _pumpErrored = true; Logger.Error(e.ToString(), "SplashLateWork.Pump"); }
+        }
     }
 }
 
