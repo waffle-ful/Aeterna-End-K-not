@@ -120,7 +120,7 @@ public class Decrescendo : RoleBase
     public override string GetProgressText(byte playerId, bool comms)
     {
         if (playerId != DecrescendoId) return string.Empty;
-        if (Decrescending) return Utils.ColorString(Color.gray, "(弱化中)");
+        if (Decrescending) return Utils.ColorString(Color.gray, "(´・ω・｀)");
         return Utils.ColorString(Palette.ImpostorRed, $"({KillCount}/{DecKillCount.GetInt()})");
     }
 }
