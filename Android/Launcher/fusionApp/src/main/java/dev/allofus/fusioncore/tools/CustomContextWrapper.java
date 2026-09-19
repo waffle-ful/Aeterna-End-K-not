@@ -1,0 +1,122 @@
+package dev.allofus.fusioncore.tools;
+
+import android.content.Context;
+import android.content.ContextWrapper;
+import android.content.SharedPreferences;
+import android.os.Build;
+import android.util.Log;
+import android.view.Display;
+
+
+import org.jetbrains.annotations.Nullable;
+
+import java.io.File;
+
+public class CustomContextWrapper extends ContextWrapper {
+    Context fusionContext;
+    Context gameContext;
+
+    public CustomContextWrapper(Context gameContext, Context fusionContext) {
+        super(gameContext);
+        this.gameContext = gameContext;
+        this.fusionContext = fusionContext;
+        this.getApplicationInfo().dataDir = Utilities.getExternalFusionCoreDirectory(gameContext.getPackageName()).getAbsolutePath();
+        // this prevents the game from resolving its own libraries
+        // that way we can override them properly with our own versions
+        this.getApplicationInfo().nativeLibraryDir = "";
+    }
+
+    public Context getOriginalActivity() {
+        return fusionContext;
+    }
+
+//    @Override
+//    public Resources getResources() {
+//        return this.appContext.getResources();
+//    }
+
+
+//    @Override
+//    public ApplicationInfo getApplicationInfo() {
+//        return super.getApplicationInfo();
+//    }
+
+    @Override
+    public SharedPreferences getSharedPreferences(String name, int mode) {
+        return this.fusionContext.getSharedPreferences(name, mode);
+    }
+
+    public boolean deleteSharedPreferences(String name) {
+        return this.fusionContext.deleteSharedPreferences(name);
+    }
+
+    public boolean moveSharedPreferencesFrom(Context sourceContext, String name) {
+        return this.fusionContext.moveSharedPreferencesFrom(sourceContext, name);
+    }
+
+    @Override
+    public File getFilesDir() {
+        return this.fusionContext.getFilesDir();
+    }
+
+    @Override
+    public File getCacheDir() {
+        return this.fusionContext.getCacheDir();
+    }
+
+    @Nullable
+    @Override
+    public File getExternalCacheDir() {
+        return this.fusionContext.getExternalCacheDir();
+    }
+
+
+    @Override
+    public File[] getExternalCacheDirs() {
+        return this.fusionContext.getExternalCacheDirs();
+    }
+
+    @Override
+    public File getExternalFilesDir(String type) {
+        if (type == null) {
+            return Utilities.getExternalFusionCoreDirectory(gameContext.getPackageName());
+        }
+
+        return new File(Utilities.getExternalFusionCoreDirectory(gameContext.getPackageName()), type);
+    }
+
+    @Override
+    public Display getDisplay() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            return this.fusionContext.getDisplay();
+        }
+        return null;
+    }
+
+    @Override
+    public Object getSystemService(String name) {
+        return this.fusionContext.getSystemService(name);
+    }
+
+    @Override
+    public Context getBaseContext() {
+        return super.getBaseContext();
+    }
+
+    @Override
+    public Context getApplicationContext() {
+        return fusionContext.getApplicationContext();
+    }
+
+    @Override
+    public File getObbDir() {
+        Log.i("f", "2");
+        return null;
+//        return this.appContext.getObbDir();
+    }
+
+    @Override
+    public File[] getObbDirs() {
+        return this.fusionContext.getObbDirs();
+    }
+}
