@@ -27,7 +27,7 @@ public static class BackroomsAmbient
     // BGM 本体より少し小さく重ねる。アンビエントは「空気」なので前に出すぎないように
     private const float AmbientMix = 0.6f;
 
-    public static readonly string AmbientPath = $"{Environment.CurrentDirectory.Replace(@"\", "/")}/BepInEx/resources/Backrooms/";
+    public static readonly string AmbientPath = $"{Main.ResourcesPath}Backrooms/";
 
     // AudioClip は HideFlags.DontUnloadUnusedAsset を付けてシーン unload を生き残らせる。
     // これを忘れると Resources.UnloadUnusedAssets() (scene 遷移時 auto 呼び) で消されて
@@ -228,7 +228,7 @@ public static class BackroomsAmbient
                 throw new IOException($"WAV unsupported (audioFormat={audioFormat}, bps={bps})");
         }
 
-        Il2CppStructArray<float> il2cppBuf = new(totalSamples);
+        Il2CppStructArray<float> il2cppBuf = new((long)totalSamples);
         // Managed float[] -> Il2CppStructArray<float> via Marshal.Copy (per-element indexer is a trap)。
         // lobby-ambient.wav は ~3.5M サンプルあり、インデクサループはロビー入室時に ~150ms 級のヒッチ源になる。
         System.Runtime.InteropServices.Marshal.Copy(interleaved, 0, IntPtr.Add(il2cppBuf.Pointer, IntPtr.Size * 4), totalSamples);

@@ -407,7 +407,7 @@ public static class BackroomsShadow
         ];
 
         EdgeCollider2D ec = room.AddComponent<EdgeCollider2D>();
-        Il2CppStructArray<Vector2> arr = new(pts.Length);
+        Il2CppStructArray<Vector2> arr = new((long)(pts.Length));
         for (int i = 0; i < pts.Length; i++) arr[i] = pts[i];
         ec.points = arr;
 

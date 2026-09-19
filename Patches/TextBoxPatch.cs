@@ -61,7 +61,11 @@ public static class TextBoxPatch
 
     // Wholesale replacement that parks the caret at the end. Use this instead of bare SetText() for any
     // history/tab/paste path where the caret position from the previous content is meaningless.
-    public static void SetChatFieldText(TextBoxTMP area, string text) { if (!area) return; text ??= ""; if (text.Length > 4096) text = text[..4096]; area.SetText(text); area.compoText = ""; LastCompoText = ""; int cap = area.characterLimit > 0 ? area.characterLimit : text.Length; area.caretPos = Math.Clamp(text.Length, 0, cap); try { area.MoveCaret(); } catch { } area.SetPipePosition(); }
+    public static void SetChatFieldText(TextBoxTMP area, string text) { if (!area) return; text ??= ""; if (text.Length > 4096) text = text[..4096]; area.SetText(text); area.compoText = ""; LastCompoText = "";
+#if !ANDROID
+        int cap = area.characterLimit > 0 ? area.characterLimit : text.Length; area.caretPos = Math.Clamp(text.Length, 0, cap); try { area.MoveCaret(); } catch { }
+#endif
+        area.SetPipePosition(); }
 
     // Crash-safe read of a chat-style field's text. For the live chat field we NEVER call IL2CPP get_text
     // (its `text` field can hold a dangling String* from a freed/reused slot, which get_text marshals into
@@ -511,7 +515,11 @@ public static class TextBoxPatch
     public static bool UpdatePatch(TextBoxTMP __instance)
     {
         if (!IsChatOrSearchTextBox(__instance)) return true;
-
+#if ANDROID
+        // Android 版 TextBoxTMP はキャレットを持たず TouchScreenKeyboard で入力するため、
+        // PC 向けの入力差し替えは行わずバニラの Update に任せる。
+        return true;
+#else
         if (!__instance.enabled || !__instance.hasFocus) return false;
 
         bool weManage = WeManageText(__instance);
@@ -551,6 +559,7 @@ public static class TextBoxPatch
         __instance.Pipe.enabled = (int)__instance.pipeBlinkTimer % 2 == 0;
 
         return false;
+#endif
     }
 
     // Originally by KARPED1EM. Reference: https://github.com/KARPED1EM/TownOfNext/blob/TONX/TONX/Patches/TextBoxPatch.cs

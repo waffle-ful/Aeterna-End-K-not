@@ -17,9 +17,13 @@ internal static class EosBootMarksPatch
     [HarmonyPostfix]
     private static void RefreshAll_Postfix() => BootTimeline.Mark("eos.inv.begin");
 
+#if !ANDROID
+    // Android 版は CheckEquipped 内で NRE が出るため (Cosmetics 非アクティブ)、Harmony で包むと
+    // トランポリン例外として表面化する。計測マークなので Android では張らない。
     [HarmonyPatch(typeof(InventoryManager), nameof(InventoryManager.CheckEquipped))]
     [HarmonyPostfix]
     private static void CheckEquipped_Postfix() => BootTimeline.Mark("eos.inv.end");
+#endif
 
     [HarmonyPatch(typeof(PlayerStatsData), nameof(PlayerStatsData.InitializeStats))]
     [HarmonyPostfix]

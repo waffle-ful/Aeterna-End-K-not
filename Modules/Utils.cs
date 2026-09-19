@@ -5659,7 +5659,7 @@ public static class Utils
             }
 
             var length = stream.Length;
-            var byteTexture = new Il2CppStructArray<byte>(length);
+            var byteTexture = new Il2CppStructArray<byte>((long)(length));
             // ReSharper disable once MustUseReturnValue - we know how many bytes we need to read, so we can skip the returned value check
             stream.Read(new Span<byte>(IntPtr.Add(byteTexture.Pointer, IntPtr.Size * 4).ToPointer(), (int)length));
             // markNonReadable=true: GPU アップロード後に CPU 側ピクセルコピーを解放 (常駐テクスチャメモリ半減)。

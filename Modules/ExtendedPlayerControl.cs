@@ -410,7 +410,7 @@ internal static class ExtendedPlayerControl
         {
             if (!AmongUsClient.Instance.AmHost || !GameStates.IsInGame || !player) return;
 
-            player.Data.RpcSetTasks(new Il2CppStructArray<byte>(0));
+            player.Data.RpcSetTasks(new Il2CppStructArray<byte>((long)(0)));
             if (init) Main.PlayerStates[player.PlayerId].InitTask(player);
         }
 

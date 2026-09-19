@@ -16,7 +16,7 @@ public static class BGMManager
 
     public static OptionItem ClimaxCount;
 
-    public static readonly string BGMPath = $"{Environment.CurrentDirectory.Replace(@"\", "/")}/BepInEx/resources/BGM/";
+    public static readonly string BGMPath = $"{Main.ResourcesPath}BGM/";
 
     private static AudioSource currentSource;
     private static string currentSlot = string.Empty;
