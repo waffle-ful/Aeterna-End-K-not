@@ -215,7 +215,7 @@ Use `/r <role name>` or `/myrole` in-game to check each role's effects and setti
 | Nimble | Knighted | Urgent | Trainee |
 | Energetic | Bloodlust | Swift | Underdog |
 | Haunter | Haste | Cleansed | Examiner |
-| Circumvent | Stealer | Contagious | Schizophrenic |
+| Circumvent | Stealer | Contagious | DoubleCount |
 | Hidden | Truant | Physicist | Gravestone |
 | Charmed | Phantasm | Amanojaku | AsistingAngel |
 | Connecting | DemonicCrusher | DemonicSupporter | DemonicTracker |

@@ -722,7 +722,7 @@ public enum CustomRoles
     Reach,
     Rookie,
     Trainee,
-    Schizophrenic,
+    DoubleCount,
     Seer,
     Shade, // Ghost role
     Shy,

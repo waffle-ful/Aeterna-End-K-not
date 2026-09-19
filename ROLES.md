@@ -215,7 +215,7 @@
 | 器用 (Nimble) | 騎士 (Knighted) | 緊急 (Urgent) | 訓練生 (Trainee) |
 | 元気いっぱい (Energetic) | 殺気 (Bloodlust) | 疾風 (Swift) | 弱者 (Underdog) |
 | 呪霊 (Haunter) | 焦る (Haste) | 浄化 (Cleansed) | 調査官 (Examiner) |
-| 通気阻止 (Circumvent) | 泥棒 (Stealer) | 伝染病 (Contagious) | 統合失調症 (Schizophrenic) |
+| 通気阻止 (Circumvent) | 泥棒 (Stealer) | 伝染病 (Contagious) | 二重カウント (DoubleCount) |
 | 匿名 (Hidden) | 不登校 (Truant) | 物理学者 (Physicist) | 墓石 (Gravestone) |
 | 魅了した (Charmed) | 妖怪 (Phantasm) | 天邪鬼 (Amanojaku) | アシストエンジェル (AsistingAngel) |
 | コネクティング (Connecting) | デーモンクラッシャー (DemonicCrusher) | デーモンサポーター (DemonicSupporter) | デーモントラッカー (DemonicTracker) |

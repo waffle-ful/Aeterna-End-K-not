@@ -226,7 +226,7 @@ internal static class CheckForEndVotingPatch
                 if (CheckRole(ps.PlayerId, CustomRoles.Vindicator) && !Options.VindicatorHideVote.GetBool()) Loop.Times(Options.VindicatorAdditionalVote.GetInt(), _ => AddVote());
                 if (CheckRole(ps.PlayerId, CustomRoles.Knighted)) AddVote();
 
-                if (CheckRole(ps.PlayerId, CustomRoles.Schizophrenic) && Options.DualVotes.GetBool())
+                if (CheckRole(ps.PlayerId, CustomRoles.DoubleCount) && Options.DualVotes.GetBool())
                 {
                     int count = statesList.Count(x => x.VoterId == ps.PlayerId && x.VotedForId == ps.VotedForId);
                     Loop.Times(count, _ => AddVote());
@@ -757,7 +757,7 @@ internal static class ExtendedMeetingHud
                 if (CheckForEndVotingPatch.CheckRole(ps.PlayerId, CustomRoles.Glitch) && !Glitch.CanVote.GetBool()) voteNum = 0;
                 if (CheckForEndVotingPatch.CheckRole(ps.PlayerId, CustomRoles.Shifter) && !Shifter.CanVote.GetBool()) voteNum = 0;
                 if (CheckForEndVotingPatch.CheckRole(ps.PlayerId, CustomRoles.Vindicator)) voteNum += Options.VindicatorAdditionalVote.GetInt();
-                if (CheckForEndVotingPatch.CheckRole(ps.PlayerId, CustomRoles.Schizophrenic) && Options.DualVotes.GetBool()) voteNum += voteNum;
+                if (CheckForEndVotingPatch.CheckRole(ps.PlayerId, CustomRoles.DoubleCount) && Options.DualVotes.GetBool()) voteNum += voteNum;
                 if (CheckForEndVotingPatch.CheckRole(ps.PlayerId, CustomRoles.Stealer)) voteNum += (int)(Main.EnumeratePlayerControls().Count(x => x.GetRealKiller()?.PlayerId == ps.PlayerId) * Options.VotesPerKill.GetFloat());
                 if (CheckForEndVotingPatch.CheckRole(ps.PlayerId, CustomRoles.Pickpocket)) voteNum += (int)(Main.EnumeratePlayerControls().Count(x => x.GetRealKiller()?.PlayerId == ps.PlayerId) * Pickpocket.VotesPerKill.GetFloat());
 

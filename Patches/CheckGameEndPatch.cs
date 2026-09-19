@@ -906,12 +906,12 @@ internal static class GameEndChecker
                 RoleCounts[(keyRole, keyWinner)] = value;
             }
 
-            if (CustomRoles.Schizophrenic.IsEnable())
+            if (CustomRoles.DoubleCount.IsEnable())
             {
                 for (int aliveIndex = 0; aliveIndex < aapc.Count; aliveIndex++)
                 {
                     var x = aapc[aliveIndex];
-                    if (!x.Is(CustomRoles.Schizophrenic)) continue;
+                    if (!x.Is(CustomRoles.DoubleCount)) continue;
 
                     if (x.Is(Team.Impostor)) imp++;
                     else if (x.Is(Team.Crewmate)) crew++;
