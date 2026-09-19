@@ -123,6 +123,7 @@ public class Investigator : RoleBase
                     IsRevealed[(player.PlayerId, arTarget.PlayerId)] = true;
                     player.RpcSetRevealedPlayer(arTarget, true);
                     NotifyRoles(SpecifySeer: player, SpecifyTarget: arTarget);
+                    RevealToImpostors(player, arTarget);
                     RPC.ResetCurrentRevealTarget(player.PlayerId);
                 }
                 else
@@ -141,6 +142,28 @@ public class Investigator : RoleBase
                     }
                 }
             }
+        }
+    }
+
+    // マッドメイトの調査員は、調べ上げた相手の役職を生存インポスター全員にも見せる。
+    // 名前欄はペアごとの明示指定でしか更新されないので、インポスター1人ずつ撃つ。
+    private static void RevealToImpostors(PlayerControl investigator, PlayerControl target)
+    {
+        if (!investigator.Is(CustomRoles.Madmate)) return;
+
+        // トリックスターに見せる偽の役職名は覗く側ごとに持つので、インポスターの分も埋めておく
+        // (埋めないと、そのインポスターの画面にトリックスターを描く時に落ちる)。調査員と同じ嘘を見せる。
+        RandomRole.TryGetValue(investigator.PlayerId, out string fakeRole);
+
+        foreach (PlayerControl imp in Main.EnumerateAlivePlayerControls())
+        {
+            if (imp.PlayerId == investigator.PlayerId || !imp.Is(CustomRoleTypes.Impostor)) continue;
+
+            if (fakeRole != null) RandomRole.TryAdd(imp.PlayerId, fakeRole);
+
+            IsRevealed[(imp.PlayerId, target.PlayerId)] = true;
+            imp.RpcSetRevealedPlayer(target, true);
+            NotifyRoles(SpecifySeer: imp, SpecifyTarget: target);
         }
     }
 
