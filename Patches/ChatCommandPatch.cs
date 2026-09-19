@@ -2260,7 +2260,7 @@ internal static class ChatCommands
         {
             if (args.Length < 2)
             {
-                Utils.SendMessage(President.GetHelpMessage(), player.PlayerId, importance: MessageImportance.High);
+                Utils.SendMessage(President.GetHelpMessage(player), player.PlayerId, importance: MessageImportance.High);
                 return;
             }
 
