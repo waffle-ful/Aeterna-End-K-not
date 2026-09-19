@@ -55,7 +55,7 @@ public class Pathologist : RoleBase
             .SetParent(Options.CustomRoleSpawnChances[CustomRoles.Pathologist])
             .SetValueFormat(OptionFormat.Times);
 
-        OptionVoteMode = new StringOptionItem(Id + 11, "PathologistVoteMode", ["Normal", "Self Vote"], 0, TabGroup.CrewmateRoles)
+        OptionVoteMode = new StringOptionItem(Id + 11, "PathologistVoteMode", ["PathologistVoteModeNormal", "PathologistVoteModeSelfVote"], 0, TabGroup.CrewmateRoles)
             .SetParent(Options.CustomRoleSpawnChances[CustomRoles.Pathologist]);
 
         OptionInfoCount = new IntegerOptionItem(Id + 21, "PathologistInfoCount", new(1, 6, 1), 1, TabGroup.CrewmateRoles)
