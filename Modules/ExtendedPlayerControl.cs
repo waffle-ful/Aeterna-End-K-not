@@ -2626,6 +2626,12 @@ internal static class ExtendedPlayerControl
         public string GetRoleInfo(bool infoLong = false)
         {
             CustomRoles role = player.GetCustomRole();
+
+            // アムネジアの本人は自分の役職を自覚できないので、説明文も陣営の総称ロールのものへ差し替える。
+            // 呼び出し元はいずれも本人視点 (役職タブ / イントロ / 初回会議の説明 / 役職コマンド) なので中央で塞ぐ。
+            // 終了画面は正体を明かす場なので対象外。
+            if (!GameStates.IsEnded && Amnesia.TryGetConcealedRole(player.PlayerId, out CustomRoles concealedRole)) role = concealedRole;
+
             if (role is CustomRoles.Crewmate or CustomRoles.Impostor) infoLong = false;
             if (player.Is(CustomRoles.Madmate) && MadVariantText.Has(role)) return MadVariantText.Get(role, infoLong);
 

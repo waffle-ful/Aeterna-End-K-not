@@ -822,6 +822,8 @@ internal static class MeetingHudStartPatch
                 if (pc.IsModdedClient()) continue;
 
                 CustomRoles role = pc.GetCustomRole();
+                if (Amnesia.TryGetConcealedRole(pc.PlayerId, out CustomRoles amnesiaShownRole)) role = amnesiaShownRole;
+
                 StringBuilder sb = new();
                 StringBuilder titleSb = new();
                 StringBuilder settings = new();
@@ -850,8 +852,13 @@ internal static class MeetingHudStartPatch
                 // Send each subrole (addon) as its own titled chat box so a vanilla recipient
                 // sees the addon name in the chat-bubble header instead of buried in a
                 // continuation chunk whose title still shows the main role.
+                // アムネジアの本人にはアドオン欄からもアムネジアを伏せる。
+                bool hideAmnesia = Amnesia.TryGetConcealedRole(pc.PlayerId, out _);
+
                 foreach (CustomRoles subRole in Main.PlayerStates[pc.PlayerId].SubRoles)
                 {
+                    if (hideAmnesia && subRole == CustomRoles.Amnesia) continue;
+
                     string subBody = GetString($"{subRole}InfoLong").FixRoleName(subRole);
                     string subTitle = $"{subRole.ToColoredString()} {Utils.GetRoleMode(subRole)}";
                     string searchSubStr = GetString(subRole.ToString());
