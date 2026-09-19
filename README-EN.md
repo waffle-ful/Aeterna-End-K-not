@@ -234,7 +234,7 @@ End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/End
 - **[Game Optimizer (CPUs / Threads Optimizer)](https://github.com/charlie754/Game-Optimizer-CPUs-Threads-Optimizer)** (charlie754, MIT) — the idea of isolating cache domains with CPU Sets (the `CpuSetsMode` setting); our code is written directly against the Win32 API
 - **[Lotus (LotusContinued)](https://github.com/Lotus-AU/LotusContinued)** / [NikoCat233 fork](https://github.com/NikoCat233/LotusContinued) (GPL-3.0) — settings-conflict detection with host warnings, whitelist join restriction
 - **[MalumMenu](https://github.com/scp222thj/MalumMenu)** (scp222thj, GPL-3.0) — player position dots on the minimap
-- **[Mini.RegionInstall](https://github.com/miniduikboot/Mini.RegionInstall)** (miniduikboot, GPL-3.0) — custom region installer (shipped in the release packages)
+- **[Mini.RegionInstall](https://github.com/miniduikboot/Mini.RegionInstall)** (miniduikboot, GPL-3.0) — custom region installer
 - **[MiraAPI](https://github.com/All-Of-Us-Mods/MiraAPI)** (All-Of-Us-Mods, LGPL-2.1) — UI sprites (two next-page buttons, two checkmarks)
 - **[More Gamemodes](https://github.com/Rabek009/MoreGamemodes)** (Rabek009) — Custom Net Objects (CNO), chat control and clearing, player-control helper code
 - **[Nebula on the Ship (NoS)](https://github.com/Dolly1016/Nebula)** (Dolly1016 et al., GPL-3.0; NebulaAPI is LGPL-3.0) — disabling incremental GC and running GC ahead of time; a mod with many roles of its own and its own API
@@ -292,7 +292,6 @@ Some components are embedded into `EndKnot.dll`, others ship inside the release 
 - NVorbis (MIT) — Ogg Vorbis decoding
 - NLayer (MIT) — MP3 decoding
 - BepInEx / Il2CppInterop / Unity Doorstop (LGPL-2.1) — the mod loading stack
-- Mini.RegionInstall (GPL-3.0, by duikbo) — custom region installer
 
 ### Music Credits
 

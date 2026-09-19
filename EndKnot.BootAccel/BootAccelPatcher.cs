@@ -91,6 +91,8 @@ namespace EndKnot.BootAccel
                         + " gameAssembly=" + AccelCache.GameAssemblySize + "/" + AccelCache.GameAssemblyMtimeTicks);
                 }
 
+                RetireMiniRegionInstall();
+
                 if (!InstallAll(new Harmony(PatcherGuid)))
                 {
                     // Nothing got patched, so no accelerated call will ever arrive to hook the
@@ -101,6 +103,29 @@ namespace EndKnot.BootAccel
             catch (Exception ex)
             {
                 Warn("initialize failed, boot proceeds unaccelerated: " + ex);
+            }
+        }
+
+        // Region installation moved in-house (Modules/RegionInstaller.cs); the old plugin's region
+        // add/remove logic would otherwise still run once from the file before the retired name
+        // takes effect on the next boot. Renaming (not deleting) keeps the DLL recoverable and
+        // keeps BepInEx's own plugin cache from re-discovering it by GUID.
+        private static void RetireMiniRegionInstall()
+        {
+            try
+            {
+                string pluginPath = BepInEx.Paths.PluginPath;
+                if (pluginPath == null) return;
+
+                string path = Path.Combine(pluginPath, "Mini.RegionInstall.dll");
+                if (!File.Exists(path)) return;
+
+                File.Move(path, path + ".retired");
+                AccelLog.LogInfo("retired Mini.RegionInstall.dll (superseded by in-house region install)");
+            }
+            catch (Exception ex)
+            {
+                Warn("Mini.RegionInstall retire failed: " + ex.GetType().Name + ": " + ex.Message);
             }
         }
 
