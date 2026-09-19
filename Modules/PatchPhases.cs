@@ -97,6 +97,11 @@ public static class PatchPhases
     // queuing it for the splash pump. Same-binary A/B lever for the boot work this phase moves.
     public static readonly bool BootDeferEnabled = Environment.GetEnvironmentVariable("ENDKNOT_BOOT_DEFER") != "0";
 
+    // ENDKNOT_BOOT_LATEWARM=0: run the splash-time fire prewarm and patch pump at their original
+    // call site (every SplashManager.Update frame) instead of waiting for the option prelude mark.
+    // Same-binary A/B lever for the boot work this phase moves.
+    public static readonly bool LateSplashWork = Environment.GetEnvironmentVariable("ENDKNOT_BOOT_LATEWARM") != "0";
+
     // _complete short-circuits Pump/EnsureComplete/EnsureMenuComplete (see Complete()), so a Defer
     // reaching here after that point would otherwise sit in the queue forever; run it in place.
     public static void Defer(string name, Action work)
@@ -112,6 +117,7 @@ public static class PatchPhases
 
     private static void RunOne(string name, Action work)
     {
+        LastItem = name;
         var sw = Stopwatch.StartNew();
 
         try { work(); }
@@ -157,6 +163,11 @@ public static class PatchPhases
     public static int DeferredCount => _deferredTotal;
     public static long Phase2Ms { get; private set; }
     public static int Phase2Frames { get; private set; }
+
+    // Pump() の直近1回に費やした時間 (ms) と、そのとき最後に処理した項目名。ヒッチ計測用の
+    // 読み取り専用スナップショットで、Pump() 自身の予算計算には使わない。
+    public static long LastPumpMs { get; private set; }
+    public static string LastItem { get; private set; }
 
     public static void RunPhase1(Harmony harmony, Assembly asm)
     {
@@ -264,7 +275,7 @@ public static class PatchPhases
     // EnsureComplete.
     public static void Pump(float budgetMs)
     {
-        if (_complete) return;
+        if (_complete) { LastPumpMs = 0; return; }
 
         if (_firstPumpRealtime < 0f)
         {
@@ -280,6 +291,7 @@ public static class PatchPhases
         if (Time.realtimeSinceStartup - _firstPumpRealtime >= CeilingSeconds)
         {
             EnsureComplete("ceiling");
+            LastPumpMs = 0;
             return;
         }
 
@@ -301,12 +313,15 @@ public static class PatchPhases
 
         if (_deferred.Count == 0 && _pendingCompile.Count == 0)
             Complete("drained");
+
+        LastPumpMs = budget.ElapsedMilliseconds;
     }
 
     // Synchronous safety net for the menu phase: every patch outside GameTypeNames is in place
     // before MainMenuManager.Awake runs. Cheap no-op once the splash pump has drained the queues.
-    // The batched compiles share one queue with the game phase, so on a splash too short to drain
-    // it this also compiles whatever game targets are still pending (menu ones were queued first).
+    // The batched compiles share one queue with the game phase; FlushMenu compiles only the
+    // pending targets whose declaring type is outside GameTypeNames and leaves the rest queued
+    // for the pump or EnsureComplete to compile before a game can start.
     public static void EnsureMenuComplete(string reason)
     {
         if (_menuComplete || _complete) return;
@@ -320,7 +335,7 @@ public static class PatchPhases
         while (_menuDeferred.Count > 0)
             PatchOne(_menuDeferred.Dequeue());
 
-        FlushAll(reason);
+        FlushMenu(reason);
         MenuComplete(reason);
     }
 
@@ -391,6 +406,8 @@ public static class PatchPhases
 
     private static void PatchOne(Type type)
     {
+        LastItem = type.Name;
+
         try
         {
             _harmony.CreateClassProcessor(type).Patch();
@@ -474,9 +491,43 @@ public static class PatchPhases
         Logger.Info($"flush {reason}: {n} targets compiled in {sw.ElapsedMilliseconds} ms", "PatchPhases");
     }
 
+    // Same drain as FlushAll but only for targets whose original method is outside GameTypeNames
+    // -- those are the ones a menu frame can actually invoke. Targets on a GameTypeNames type are
+    // re-queued in their original order; EnsureComplete's own FlushAll (or the splash/menu pump)
+    // compiles them later, before a game can start.
+    private static void FlushMenu(string reason)
+    {
+        if (_pendingCompile.Count == 0) return;
+
+        var sw = Stopwatch.StartNew();
+        int compiled = 0;
+        var gameTargets = new Queue<BatchingPatcher>();
+
+        while (_pendingCompile.Count > 0)
+        {
+            BatchingPatcher patcher = _pendingCompile.Dequeue();
+            string declaringName = patcher.Original?.DeclaringType?.Name;
+
+            if (declaringName != null && GameTypeNames.Contains(declaringName))
+            {
+                gameTargets.Enqueue(patcher);
+                continue;
+            }
+
+            CompileOne(patcher);
+            compiled++;
+        }
+
+        while (gameTargets.Count > 0)
+            _pendingCompile.Enqueue(gameTargets.Dequeue());
+
+        Logger.Info($"flush {reason}: {compiled} menu targets compiled in {sw.ElapsedMilliseconds} ms, {_pendingCompile.Count} game targets left to the pump", "PatchPhases");
+    }
+
     private static void CompileOne(BatchingPatcher patcher)
     {
         _pendingSet.Remove(patcher);
+        LastItem = patcher.Original != null ? Describe(patcher.Original) : patcher.GetType().Name;
 
         try
         {

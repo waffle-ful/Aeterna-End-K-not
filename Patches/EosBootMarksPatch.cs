@@ -28,4 +28,13 @@ internal static class EosBootMarksPatch
     [HarmonyPatch(typeof(EOSManager), nameof(EOSManager.EndFinalPartsOfLoginFlowFullAccount))]
     [HarmonyPostfix]
     private static void EndFinalParts_Postfix() => BootTimeline.Mark("eos.flowend");
+
+    // EOSManager は splash からメニューまで毎フレーム Update が回るので、splash 区間の
+    // フレーム間隔ヒッチ計測 (BootTimeline.OnBootFrame) の駆動源として使う。SplashLateWork.Tick は
+    // ここではなく Patches/ClientPatch.cs の別パッチクラスから駆動する -- この計測パッチは
+    // Main.EosBootMarks でオフにできるが、遅延 prewarm/pump はオフにされても動き続けなければ
+    // ならない。
+    [HarmonyPatch(typeof(EOSManager), nameof(EOSManager.Update))]
+    [HarmonyPostfix]
+    private static void Update_Postfix() => BootTimeline.OnBootFrame();
 }
