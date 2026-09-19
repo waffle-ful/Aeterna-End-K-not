@@ -14,6 +14,13 @@ internal static class DecreeExtension
     {
         return President.DecreeSettings[decree][0].GetBool();
     }
+
+    // マッドメイトの大統領は、クルーを強くする布告だけ出せない。
+    // 会議を終わらせる布告や情報を公開する布告はインポスター陣営の利になるのでそのまま使える。
+    public static bool IsBlockedForMadmate(this President.Decree decree, PlayerControl pc)
+    {
+        return pc != null && pc.Is(CustomRoles.Madmate) && decree is President.Decree.GovernmentSupport or President.Decree.GovernmentRecruiting;
+    }
 }
 
 public class President : RoleBase
@@ -151,7 +158,7 @@ public class President : RoleBase
 
         if (!int.TryParse(message, out int num) || num is > 6 or < 1)
         {
-            Utils.SendMessage(GetHelpMessage(), pc.PlayerId);
+            Utils.SendMessage(GetHelpMessage(pc), pc.PlayerId);
             return;
         }
 
@@ -159,7 +166,7 @@ public class President : RoleBase
 
         var decree = (Decree)num;
 
-        if (!decree.IsEnabled() || president.UsedDecrees.Contains(decree))
+        if (!decree.IsEnabled() || president.UsedDecrees.Contains(decree) || decree.IsBlockedForMadmate(pc))
         {
             Utils.SendMessage(Translator.GetString("President.DecreeAlreadyUsedMessage"), pc.PlayerId);
             return;
@@ -216,9 +223,9 @@ public class President : RoleBase
         president.Used = true;
     }
 
-    public static string GetHelpMessage()
+    public static string GetHelpMessage(PlayerControl pc = null)
     {
-        return Enum.GetValues<Decree>().Where(x => x.IsEnabled()).Aggregate("<size=80%>", (acc, x) => $"{acc}{Translator.GetString($"President.Decree.{x}")}: {(int)x}\n") + $"\n{Translator.GetString("President.Help")}</size>";
+        return Enum.GetValues<Decree>().Where(x => x.IsEnabled() && !x.IsBlockedForMadmate(pc)).Aggregate("<size=80%>", (acc, x) => $"{acc}{Translator.GetString($"President.Decree.{x}")}: {(int)x + 1}\n") + $"\n{Translator.GetString("President.Help")}</size>";
     }
 
     public override void AfterMeetingTasks()
