@@ -1248,7 +1248,7 @@ public static class Utils
                    pc.Is(CustomRoles.Loyal) ||
                    pc.Is(CustomRoles.SuperStar) ||
                    pc.Is(CustomRoles.Egoist) ||
-                   pc.Is(CustomRoles.Schizophrenic)
+                   pc.Is(CustomRoles.DoubleCount)
                );
     }
 

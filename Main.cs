@@ -1161,7 +1161,7 @@ public class Main : BasePlugin
                 { CustomRoles.Youtuber, "#fb749b" },
                 { CustomRoles.Egoist, "#5600ff" },
                 { CustomRoles.Stealer, "#ff1919" },
-                { CustomRoles.Schizophrenic, "#3a648f" },
+                { CustomRoles.DoubleCount, "#3a648f" },
                 { CustomRoles.Mimic, "#ff1919" },
                 { CustomRoles.Guesser, "#f8cd46" },
                 { CustomRoles.Necroview, "#663399" },
