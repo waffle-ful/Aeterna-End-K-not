@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using EndKnot.Modules;
 using EndKnot.Patches;
+using EndKnot.Roles;
 using HarmonyLib;
 using Rewired;
 using TMPro;
@@ -505,6 +506,8 @@ public static class InGameRoleInfoMenu
         if (!Fill || !Menu) Init();
 
         CustomRoles role = player.GetCustomRole();
+        if (!GameStates.IsEnded && Amnesia.TryGetConcealedRole(player.PlayerId, out CustomRoles amnesiaShownRole)) role = amnesiaShownRole;
+
         StringBuilder sb = new();
         StringBuilder titleSb = new();
         StringBuilder settings = new();
@@ -525,6 +528,10 @@ public static class InGameRoleInfoMenu
         sb.Replace(searchStr.ToLower(), role.ToColoredString());
         sb.Append("</size>");
         List<CustomRoles> subRoles = Main.PlayerStates[player.PlayerId].SubRoles;
+
+        // アムネジアの本人にはアドオン欄からもアムネジアを伏せる。実体を書き換えないよう表示用の別リストにする。
+        if (!GameStates.IsEnded && Amnesia.TryGetConcealedRole(player.PlayerId, out _)) subRoles = subRoles.Where(x => x != CustomRoles.Amnesia).ToList();
+
         if (subRoles.Count > 0) addons.Append(GetString("AddonListTitle"));
 
         addons.Append("<size=75%>");

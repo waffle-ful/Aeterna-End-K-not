@@ -3371,6 +3371,7 @@ internal static class ChatCommands
     private static void MyRoleCommand(PlayerControl player, string text, string[] args)
     {
         CustomRoles role = player.GetCustomRole();
+        if (!GameStates.IsEnded && Amnesia.TryGetConcealedRole(player.PlayerId, out CustomRoles amnesiaShownRole)) role = amnesiaShownRole;
 
         if (GameStates.IsInGame)
         {
@@ -3394,8 +3395,13 @@ internal static class ChatCommands
             sb.Replace(searchStr, role.ToColoredString());
             sb.Replace(searchStr.ToLower(), role.ToColoredString());
 
+            // アムネジアの本人にはアドオン一覧からもアムネジアを伏せる。
+            bool hideAmnesia = !GameStates.IsEnded && Amnesia.TryGetConcealedRole(player.PlayerId, out _);
+
             foreach (CustomRoles subRole in Main.PlayerStates[player.PlayerId].SubRoles)
             {
+                if (hideAmnesia && subRole == CustomRoles.Amnesia) continue;
+
                 sb.Append($"\n\n{subRole.ToColoredString()} {Utils.GetRoleMode(subRole)} {GetString($"{subRole}InfoLong").FixRoleName(subRole)}");
                 string searchSubStr = GetString(subRole.ToString());
                 sb.Replace(searchSubStr, subRole.ToColoredString());

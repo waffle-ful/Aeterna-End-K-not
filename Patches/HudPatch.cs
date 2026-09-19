@@ -227,6 +227,7 @@ internal static class HudManagerPatch
                     }
 
                     CustomRoles role = player.GetCustomRole();
+                    if (!GameStates.IsEnded && Amnesia.TryGetConcealedRole(player.PlayerId, out CustomRoles amnesiaShownRole)) role = amnesiaShownRole;
 
                     if (!RoleTab) RoleTab = TaskPanelBehaviourPatch.CreateRoleTab(role);
 
@@ -1273,13 +1274,16 @@ internal static class TaskPanelBehaviourPatch
             roleWithInfoBuilder.Append(string.Join(' ', split[half..]));
         }
 
-        StringBuilder finalTextBuilder = new StringBuilder(Utils.ColorString(player.GetRoleColor(), roleWithInfoBuilder.ToString()));
+        StringBuilder finalTextBuilder = new StringBuilder(Utils.ColorString(Utils.GetRoleColor(role), roleWithInfoBuilder.ToString()));
 
         switch (Options.CurrentGameMode)
         {
             case CustomGameMode.Standard:
             {
                 List<CustomRoles> subRoles = player.GetCustomSubRoles();
+
+                // アムネジアの本人にはアドオン欄からもアムネジアを伏せる (自分が忘れている自覚も持たせない)。
+                if (!GameStates.IsEnded && Amnesia.TryGetConcealedRole(player.PlayerId, out _)) subRoles = subRoles.Where(x => x != CustomRoles.Amnesia).ToList();
 
                 if (subRoles.Count > 0)
                 {
