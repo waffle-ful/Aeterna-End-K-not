@@ -64,5 +64,12 @@
         android:hardwareAccelerated="true"
         android:launchMode="singleTask"
         android:exported="false" />
+    <!-- Standard-launch stub for the game's secondary activities (ads, web sign-in) -->
+    <activity
+        android:name="dev.allofus.fusioncore.SecondaryStubActivity"
+        android:theme="@android:style/Theme.Translucent.NoTitleBar"
+        android:configChanges="mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|orientation|screenLayout|uiMode|screenSize|smallestScreenSize|fontScale|layoutDirection|density"
+        android:hardwareAccelerated="true"
+        android:exported="false" />
   </application>
 </manifest>

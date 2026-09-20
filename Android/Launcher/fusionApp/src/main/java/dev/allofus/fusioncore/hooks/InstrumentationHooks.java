@@ -20,6 +20,7 @@ import java.util.Arrays;
 
 import dev.allofus.fusioncore.BuildConfig;
 import dev.allofus.fusioncore.R;
+import dev.allofus.fusioncore.SecondaryStubActivity;
 import dev.allofus.fusioncore.StubActivity;
 import top.canyie.pine.Pine;
 import top.canyie.pine.callback.MethodHook;
@@ -41,13 +42,15 @@ public class InstrumentationHooks {
 
     /** Loader that dynamically started game activities are instantiated from. */
     private static volatile ClassLoader gameClassLoader;
+    private static volatile String mainActivityClassName;
 
-    public static void install(Context fusionContext, ClassLoader gameLoader) {
+    public static void install(Context fusionContext, ClassLoader gameLoader, String mainActivityClass) {
         if (areHooksInstalled) {
             Log.d(TAG, "Instrumentation hooks already installed");
             return;
         }
         gameClassLoader = gameLoader;
+        mainActivityClassName = mainActivityClass;
 
         try {
             Class<?> instrumentationClass = Instrumentation.class;
@@ -101,6 +104,12 @@ public class InstrumentationHooks {
                 if (!(callFrame.thisObject instanceof Activity activity)) {
                     return;
                 }
+                // Only the main game activity gets the loading overlay: the bridge clears it
+                // there once the runtime is up, while secondary activities (ads, sign-in)
+                // would keep it on screen forever.
+                if (!activity.getClass().getName().equals(mainActivityClassName)) {
+                    return;
+                }
 
                 ViewGroup decorView = (ViewGroup) activity.getWindow().getDecorView();
                 Context themedFusionContext = new ContextThemeWrapper(fusionContext, androidx.appcompat.R.style.Theme_AppCompat);
@@ -116,6 +125,7 @@ public class InstrumentationHooks {
                     return;
                 }
                 applyGameClassLoader((Activity) callFrame.thisObject);
+                applySavedStateClassLoader((Activity) callFrame.thisObject, callFrame.args);
             }
         };
 
@@ -198,13 +208,35 @@ public class InstrumentationHooks {
         }
     }
 
+    /**
+     * The framework hands the restored state Bundle to the activity with the launcher's
+     * loader; its lazily unparcelled values pin that loader on first read, so the game
+     * loader has to be set before the game's onCreate touches it.
+     */
+    private static void applySavedStateClassLoader(Activity activity, Object[] args) {
+        ClassLoader loader = gameClassLoader;
+        if (loader == null || args == null || args.length == 0) {
+            return;
+        }
+        if (!(args[0] instanceof Bundle savedState)) {
+            return;
+        }
+        if (!isDynamicIntent(activity.getIntent())) {
+            return;
+        }
+        savedState.setClassLoader(loader);
+    }
+
     private static int readTargetOrientation(Intent intent) {
         int orientation = intent.getIntExtra(EXTRA_TARGET_ORIENTATION,
                 ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
         if (orientation != ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED) {
             return orientation;
         }
-        Intent original = resolveOriginalIntent(intent);
+        ClassLoader loader = gameClassLoader != null
+                ? gameClassLoader
+                : InstrumentationHooks.class.getClassLoader();
+        Intent original = resolveOriginalIntent(intent, loader);
         if (original != null) {
             return original.getIntExtra(EXTRA_TARGET_ORIENTATION,
                     ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
@@ -247,8 +279,14 @@ public class InstrumentationHooks {
 
                 if (isDynamicIntent(intent)) return;
 
-                callFrame.args[intentIdx] = getInjectedIntent(intent);
-                Log.d(TAG, "execStartActivity: intercepted unregistered activity: " + targetClass);
+                // Only the main game activity belongs in the single-task stub; anything else
+                // (ad controllers, sign-in pages) needs a fresh standard-launch activity.
+                Class<?> stub = targetClass.equals(mainActivityClassName)
+                        ? StubActivity.class
+                        : SecondaryStubActivity.class;
+                callFrame.args[intentIdx] = getInjectedIntent(intent, stub);
+                Log.d(TAG, "execStartActivity: intercepted unregistered activity: " + targetClass
+                        + " via " + stub.getSimpleName());
             } else {
                 Log.e(TAG, "No arguments to handle execStartActivity!");
             }
@@ -286,9 +324,18 @@ public class InstrumentationHooks {
 
             Intent intent = (Intent) callFrame.args[intentIdx];
 
+            // The framework only calls setExtrasClassLoader after newActivity returns, and the
+            // first get* on a binder-delivered Bundle pins its loader into every lazily
+            // unparcelled value. Set ours before touching any extra.
+            ClassLoader extrasLoader = gameClassLoader != null
+                    ? gameClassLoader
+                    : InstrumentationHooks.class.getClassLoader();
+            intent.setExtrasClassLoader(extrasLoader);
+
             if (!isDynamicIntent(intent)) return;
 
-            Intent original = resolveOriginalIntent(intent);
+            Intent original = resolveOriginalIntent(intent, extrasLoader);
+            materializeFusionConfig(intent);
 
             if (original != null && original.getComponent() != null) {
                 callFrame.args[intentIdx] = original;
@@ -310,13 +357,14 @@ public class InstrumentationHooks {
         }
     }
 
-    private static Intent resolveOriginalIntent(Intent currentIntent) {
+    private static Intent resolveOriginalIntent(Intent currentIntent, ClassLoader extrasLoader) {
         try {
-            currentIntent.setExtrasClassLoader(InstrumentationHooks.class.getClassLoader());
+            currentIntent.setExtrasClassLoader(extrasLoader);
 
             Intent originalIntent = currentIntent.getParcelableExtra(EXTRA_ORIGINAL_INTENT);
 
             if (originalIntent != null && originalIntent.getComponent() != null) {
+                originalIntent.setExtrasClassLoader(extrasLoader);
                 Log.d(TAG, "Resolved original intent for " + originalIntent.getComponent().getClassName());
                 return originalIntent;
             }
@@ -326,11 +374,29 @@ public class InstrumentationHooks {
         return null;
     }
 
-    private static Intent getInjectedIntent(Intent intent) {
+    /**
+     * Reads the config extra once on the Java side so the value is unparcelled under a
+     * known loader and cached in the Bundle; the native reader then gets the cached object.
+     */
+    private static void materializeFusionConfig(Intent intent) {
+        try {
+            Object config = intent.getParcelableExtra(EXTRA_FUSION_CONFIG);
+            if (config == null) {
+                Log.w(TAG, "newActivity: fusion config extra missing from intent");
+            } else {
+                Log.d(TAG, "newActivity: fusion config materialized via "
+                        + config.getClass().getClassLoader().getClass().getSimpleName());
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "newActivity: failed to unparcel fusion config", e);
+        }
+    }
+
+    private static Intent getInjectedIntent(Intent intent, Class<?> stubClass) {
         Intent newIntent = new Intent(intent);
         newIntent.putExtra(EXTRA_IS_DYNAMIC_ACTIVITY, true);
         newIntent.putExtra(EXTRA_ORIGINAL_INTENT, intent);
-        newIntent.setComponent(new ComponentName(BuildConfig.APPLICATION_ID, StubActivity.class.getName()));
+        newIntent.setComponent(new ComponentName(BuildConfig.APPLICATION_ID, stubClass.getName()));
         return newIntent;
     }
 

@@ -157,7 +157,7 @@ public class BootstrapActivity extends AppCompatActivity {
         setPhaseStatus(getString(R.string.bootstrap_status_installing_hooks));
         try {
             PackageManagerHooks.installHooks(getPackageManager());
-            InstrumentationHooks.install(getApplicationContext(), gameClassLoader);
+            InstrumentationHooks.install(getApplicationContext(), gameClassLoader, launcherComponent.getClassName());
             UnityPlayerHooks.installHooks(gameContext, gameClassLoader);
             ResourceHooks.installHooks(gameContext.getResources(), getApplicationContext().getResources());
         } catch (Exception e) {
