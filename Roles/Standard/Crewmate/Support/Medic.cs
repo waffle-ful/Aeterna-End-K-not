@@ -221,7 +221,15 @@ public class Medic : RoleBase
     {
         if (!ProtectList.Contains(target.PlayerId)) return false;
 
-        killer.SetKillCooldown(ResetCooldown.GetFloat());
+        // シールドが割れない設定だと同じ相手を何度でも弾く。毎フレーム判定で攻められた時に
+        // 以下の通知・フラッシュ・GuardAndKill・実績カウンタまで毎フレーム流すと、
+        // 公式鯖では秒十数本の GameDataTo が積み上がって数秒で切断される。
+        // 弾いたこと自体 (戻り値 true) は毎回変わらず、合図だけを間引く。
+        // 割れる設定なら 1 回で終わるので常に出す。
+        bool announce = AttackDefense.ResetBlockedAttackerCooldown(killer, ResetCooldown.GetFloat()) || ShieldBreaksOnKillAttempt.GetBool();
+
+        if (!announce) return true;
+
         Utils.NotifyRoles(SpecifySeer: target, SpecifyTarget: killer);
 
         var medics = Main.CachedAllPlayerControls().Where(x => PlayerIdList.Contains(x.PlayerId) && x.IsAlive()).ToArray();

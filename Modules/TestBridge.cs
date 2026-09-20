@@ -2251,7 +2251,11 @@ public static class TestBridge
     // 基底で分岐して、その基底の押下がホスト側で入る関数を呼ぶ。
     private static void UseAbilityAsPlayer(PlayerControl actor, PlayerControl explicitTarget, string who, string preventKillNote)
     {
-        RoleTypes basis = actor.Data?.Role?.Role ?? RoleTypes.Crewmate;
+        // desync 役職は「ホストから見た基底」と「本人の画面に出ている基底」が食い違う
+        // (ホスト視点では Scientist 等に見えるのに、本人は Phantom のまま)。客の押下を代行するので、
+        // 見るべきは本人側の基底 — 役職定義から引き直す。
+        CustomRoles customRole = actor.GetCustomRole();
+        RoleTypes basis = customRole.IsDesyncRole() ? customRole.GetDYRole() : actor.Data?.Role?.Role ?? RoleTypes.Crewmate;
 
         switch (basis)
         {

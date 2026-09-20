@@ -104,6 +104,43 @@ public static class AttackDefense
     }
 
     /// <summary>
+    ///     ブロックのたびにキラーのキルクールダウンを戻す守りのための、キラー単位の最短間隔。
+    /// </summary>
+    private static readonly Dictionary<byte, float> LastBlockedAttackerReset = [];
+
+    private const float BlockedAttackerResetMinInterval = 1f;
+
+    /// <summary>ゲーム開始時に呼ぶ。前のゲームの時刻が残っていても実害は無いが、状態は持ち越さない。</summary>
+    public static void ResetBlockedAttackerThrottle()
+    {
+        LastBlockedAttackerReset.Clear();
+    }
+
+    /// <summary>
+    ///     「弾いたのでキルクールダウンを戻す」を、キラー単位で最短 1 秒に間引いて行う。
+    ///     消費しない守り (王 / メディック / スーパー無敵 / リコシェ / ベントオープナー) は同じ相手を
+    ///     何度でも弾くため、毎フレーム判定で攻める役職 (陰陽師 / Torpedo / 人形 / ケミスト) に当たると
+    ///     ブロックのたびに <see cref="ExtendedPlayerControl.SetKillCooldown" /> が走る。その中の
+    ///     <c>SyncSettings()</c> はフル GameOptions を dirty-check 無しで送り直すので、
+    ///     公式鯖では秒十数本の GameDataTo が積み上がって数秒で切断される (2026-09-21 実機で 2 回確認)。
+    ///     弾いた合図としては 1 回で足りるので、ここで間引く。
+    /// </summary>
+    /// <returns>true = 実際に戻した。false = 直前に戻したばかりなので間引いた (呼び出し側が演出を持つならそれも省ける)。</returns>
+    public static bool ResetBlockedAttackerCooldown(PlayerControl killer, float time = -1f)
+    {
+        if (killer == null) return false;
+
+        float now = UnityEngine.Time.time;
+
+        if (LastBlockedAttackerReset.TryGetValue(killer.PlayerId, out float last) && now - last < BlockedAttackerResetMinInterval)
+            return false;
+
+        LastBlockedAttackerReset[killer.PlayerId] = now;
+        killer.SetKillCooldown(time);
+        return true;
+    }
+
+    /// <summary>
     ///     反撃の応酬で関所へ無限に潜らないための再入ガード。
     ///     反撃はキルの関所の中 (OnCheckMurderAsTarget) から飛ぶので、
     ///     撃ち返された相手がさらに撃ち返すと同じ呼び出しの中で積み重なる。

@@ -648,7 +648,8 @@ internal static class CheckMurderPatch
         {
             if (IRandom.Instance.Next(0, 100) < Options.LuckyProbability.GetInt())
             {
-                killer.SetKillCooldown(15f);
+                // アドオンのラッキーは消費されないので、毎フレーム攻められると合図だけが洪水になる。
+                AttackDefense.ResetBlockedAttackerCooldown(killer, 15f);
                 return false;
             }
         }

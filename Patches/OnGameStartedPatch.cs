@@ -355,6 +355,7 @@ internal static class ChangeRoleSettings
             RandomSpawn.CustomNetworkTransformHandleRpcPatch.HasSpawned = [];
             CovenBase.CovenMeetingStartPatch.MeetingNum = 0;
 
+            AttackDefense.ResetBlockedAttackerThrottle();
             AFKDetector.ShieldedPlayers.Clear();
             Main.Invisible.Clear();
             ChatCommands.MutedPlayers.Clear();

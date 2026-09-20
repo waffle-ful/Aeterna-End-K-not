@@ -41,7 +41,7 @@ internal class Luckey : RoleBase
 
         if (rd.Next(0, 100) < Options.LuckeyProbability.GetInt())
         {
-            killer.SetKillCooldown(15f);
+            AttackDefense.ResetBlockedAttackerCooldown(killer, 15f);
             return false;
         }
 
