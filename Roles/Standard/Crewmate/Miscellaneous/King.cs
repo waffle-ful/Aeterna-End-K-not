@@ -80,7 +80,7 @@ public class King : RoleBase
 
     public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
-        if (!check) killer.SetKillCooldown();
+        if (!check) AttackDefense.ResetBlockedAttackerCooldown(killer);
 
         return false;
     }

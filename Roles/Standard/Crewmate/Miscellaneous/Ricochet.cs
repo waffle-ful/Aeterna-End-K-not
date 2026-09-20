@@ -95,7 +95,7 @@ public class Ricochet : RoleBase
         {
             if (check) return false;
 
-            killer.SetKillCooldown(5f);
+            AttackDefense.ResetBlockedAttackerCooldown(killer, 5f);
             return false;
         }
 

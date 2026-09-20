@@ -32,6 +32,7 @@ internal static class PacketSplitPatch
     {
         PacketRateGate.RecordInstrumentation(msg);
         StartWindowProbe.Inspect(msg); // 開始窓の間だけ復号ログ (窓外は比較 1 回で返る)
+        OversizePacketProbe.Inspect(msg); // 閾値超の 1 本だけ中身と呼び出し元を控える (閾値以下は長さ比較 1 回)
 
         if (BypassSplitOnce)
         {

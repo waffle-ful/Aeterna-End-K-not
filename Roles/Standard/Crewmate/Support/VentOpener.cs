@@ -213,7 +213,7 @@ public class VentOpener : RoleBase
         {
             if (check) return false;
 
-            killer.SetKillCooldown();
+            AttackDefense.ResetBlockedAttackerCooldown(killer);
             return false;
         }
         return true;
