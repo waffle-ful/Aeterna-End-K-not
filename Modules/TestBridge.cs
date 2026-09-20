@@ -225,6 +225,16 @@ public static class TestBridge
             return;
         }
 
+        // 数秒で消える演出 (開票アニメ・キルフラッシュ等) を撮るための遅延シャッター。
+        // 外から screenshot を撃つと往復 (3〜15 秒) が窓より長くて間に合わないので、
+        // 「撮る時刻」をゲーム内に予約しておく。
+        if (directive.StartsWith("delayshot ", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecuteDelayShot(directive[10..].Trim()); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR delayshot failed"); }
+            return;
+        }
+
         // Layer 1: 構造化スナップショット。Menu 画面でも動く(host 非依存)。
         if (directive.Equals("state", StringComparison.OrdinalIgnoreCase))
         {
@@ -531,7 +541,7 @@ public static class TestBridge
 
         if (directive.Equals("help", StringComparison.OrdinalIgnoreCase))
         {
-            WriteOut("HELP directives: state | screenshot | click <h|label:x> | press <h|x y> | scroll <x> <y> <notches> | type <text> | key <enter|escape|tab|backspace> | getopt <pattern> | setopt <name|#id> <idx|on|off|~real> | forcerole <id|name|host|clear> [EnumName] | start | hostlobby | leavelobby | eosstall | autostart <on|off> | tp <x> <y> | tp <playerId> | tp <playerId|name> <x> <y> | switch <0-4> [playerId|name] | walk <x> <y> | walk <playerId> | walk stop | vote <playerId|skip> | vote <voterId> <playerId|skip> | overrule <targetId> [judgeId] | chat <text> | chatui <text> | sabotage <comms|reactor|o2|lights|lab|heli|mushroom|cd0> | fixsabotage <type> | use <kill|vent|pet|ability|report|sabotage> | vent enter <id> | vent exit | errors [n] | grep <pattern> [n] | bcensus | gc <clr|clr2|boehm|both> | sleep <sec> | wait <phase=X|players=N|marker:text|join|arrived> [timeoutSec] | wait cancel | /<chatcommand>");
+            WriteOut("HELP directives: state | screenshot | delayshot <ms> | click <h|label:x> | press <h|x y> | scroll <x> <y> <notches> | type <text> | key <enter|escape|tab|backspace> | getopt <pattern> | setopt <name|#id> <idx|on|off|~real> | forcerole <id|name|host|clear> [EnumName] | start | hostlobby | leavelobby | eosstall | autostart <on|off> | tp <x> <y> | tp <playerId> | tp <playerId|name> <x> <y> | switch <0-4> [playerId|name] | walk <x> <y> | walk <playerId> | walk stop | vote <playerId|skip> | vote <voterId> <playerId|skip> | overrule <targetId> [judgeId] | chat <text> | chatui <text> | sabotage <comms|reactor|o2|lights|lab|heli|mushroom|cd0> | fixsabotage <type> | use <kill|vent|pet|ability|report|sabotage> | vent enter <id> | vent exit | errors [n] | grep <pattern> [n] | bcensus | gc <clr|clr2|boehm|both> | sleep <sec> | wait <phase=X|players=N|marker:text|join|arrived> [timeoutSec] | wait cancel | /<chatcommand>");
             return;
         }
 
@@ -584,6 +594,28 @@ public static class TestBridge
         if (now - _lastAutoShotTs < interval) return;
 
         if (RequestScreenshot("auto")) _lastAutoShotTs = now;
+    }
+
+    // delayshot <ms> — ms ミリ秒後にプロセス内スクショを 1 枚撮る。
+    // 使い方: 窓を開く操作の「直前」にこれを予約してから操作を撃つ
+    // (例: `delayshot 800` → `vote 1 skip` で、開票アニメの最中にシャッターが落ちる)。
+    // ディレクティブは 1 tick に 1 行ずつ実行されるので、予約と操作の間隔は 20ms 程度しかずれない。
+    private static void ExecuteDelayShot(string rest)
+    {
+        if (!int.TryParse(rest, NumberStyles.Integer, CultureInfo.InvariantCulture, out int ms))
+        {
+            WriteOut("ERR delayshot usage: delayshot <ms>");
+            return;
+        }
+
+        ms = Math.Clamp(ms, 0, 10000);
+
+        LateTask.New(() =>
+        {
+            if (!RequestScreenshot($"delayshot+{ms}ms")) WriteOut("ERR delayshot busy");
+        }, ms / 1000f, "TestBridge.DelayShot", log: false);
+
+        WriteOut($"OK delayshot scheduled in {ms}ms");
     }
 
     private static bool RequestScreenshot(string reason)
