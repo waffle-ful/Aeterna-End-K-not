@@ -67,6 +67,14 @@ internal class CursedWolf : RoleBase
         On = false;
     }
 
+    /// <summary>
+    ///     回数 + 反撃
+    /// </summary>
+    public override int? GetDefensePower(PlayerControl target, AttackKind kind)
+    {
+        return MurderOnly(kind, target.GetAbilityUseLimit() > 0 ? (int?)AttackDefense.Powerful : null);
+    }
+
     public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         if (target.GetAbilityUseLimit() <= 0) return true;
@@ -83,7 +91,7 @@ internal class CursedWolf : RoleBase
         target.RpcRemoveAbilityUse();
         Logger.Info($"{target.GetNameWithRole().RemoveHtmlTags()} : {target.GetAbilityUseLimit()} curses remain", "CursedWolf");
 
-        if (KillAttacker)
+        if (KillAttacker && AttackDefense.Retaliate(target, killer))
         {
             Main.PlayerStates[killer.PlayerId].deathReason = PlayerState.DeathReason.Curse;
             killer.SetRealKiller(target);

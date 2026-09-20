@@ -209,6 +209,8 @@ public class Pestilence : RoleBase
 
         if (check) return false;
 
+        if (!AttackDefense.Retaliate(target, killer)) return false;
+
         killer.SetRealKiller(target);
         target.Kill(killer);
         target.SetKillCooldown(1f);

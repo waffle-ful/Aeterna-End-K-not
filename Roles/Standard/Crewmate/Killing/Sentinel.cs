@@ -154,7 +154,7 @@ internal class Sentinel : RoleBase
 
             if (state.NearbyKillers.Any(x => x.PlayerId == killer.PlayerId))
             {
-                state.Sentinel.RpcCheckAndMurder(killer);
+                AttackDefense.Retaliate(state.Sentinel, killer, performKill: true);
                 return false;
             }
         }

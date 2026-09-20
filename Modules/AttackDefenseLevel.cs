@@ -1,4 +1,5 @@
-﻿using EndKnot.Roles;
+﻿using System.Collections.Generic;
+using EndKnot.Roles;
 
 namespace EndKnot;
 
@@ -65,7 +66,10 @@ public static class AttackDefense
         if (kind == AttackKind.Retaliation) return Unstoppable;
         if (killer == null) return Basic;
 
-        if (killer.Is(CustomRoles.Pestilence) || killer.Is(CustomRoles.KillingMachine)) return Unstoppable;
+        // KillingMachine の攻撃だけ抗えない (Lv3)。十字軍の身代わり (Lv2) を今も素通りしている事実の追認。
+        // ⚠️ Pestilence はここに入れない。無敵なのは守りの側 (反射盾) で、
+        //    キル自体は通常クールダウンの普通の攻撃 = 基本 (Lv1)。
+        if (killer.Is(CustomRoles.KillingMachine)) return Unstoppable;
 
         return Main.PlayerStates.TryGetValue(killer.PlayerId, out PlayerState state) && state.Role != null
             ? state.Role.GetAttackPower(killer, kind)
@@ -96,4 +100,36 @@ public static class AttackDefense
     {
         return Pierces(GetAttackPower(killer, kind), GetDefensePower(target, kind));
     }
+
+    /// <summary>
+    ///     反撃の応酬で関所へ無限に潜らないための再入ガード。
+    ///     反撃はキルの関所の中 (OnCheckMurderAsTarget) から飛ぶので、
+    ///     撃ち返された相手がさらに撃ち返すと同じ呼び出しの中で積み重なる。
+    /// </summary>
+    private static readonly HashSet<byte> RetaliationInProgress = [];
+
+    /// <summary>
+    ///     反撃キル (ベテラン等が殺し返す) を関所に通す。true = 反撃が成立する。
+    ///     攻撃レベルは抗えない (Lv3) なので、無敵 (Lv3) 以外の守りは貫く。
+    ///     陣営ルール (CTA / AFKシールド / 陣営同士) はここでも守られる。
+    /// </summary>
+    /// <param name="performKill">
+    ///     true = 判定が通ったらそのまま殺すところまでやる (呼び出し側に後始末が無い時)。
+    /// </param>
+    public static bool Retaliate(PlayerControl avenger, PlayerControl victim, bool performKill = false)
+    {
+        if (avenger == null || victim == null) return false;
+
+        // 既にこの相手への反撃処理の中にいる = 撃ち返しの撃ち返し。従来どおり素通しして深追いしない。
+        if (!RetaliationInProgress.Add(victim.PlayerId)) return true;
+
+        try
+        {
+            return performKill
+                ? avenger.RpcCheckAndMurder(victim, kind: AttackKind.Retaliation)
+                : CheckMurderPatch.PassesGate(avenger, victim, kind: AttackKind.Retaliation);
+        }
+        finally { RetaliationInProgress.Remove(victim.PlayerId); }
+    }
+
 }

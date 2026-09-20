@@ -93,6 +93,9 @@ public class Remotekiller : RoleBase
 
         // Execute the remote kill
         MarkedTargetId = byte.MaxValue;
+
+        // 抗えない (Lv3) の処刑。Pestilence だけは従来どおり素通し (反撃もさせない)。
+        if (target.Is(CustomRoles.Pestilence) || !CheckMurderPatch.PassesGate(pc, target, kind: AttackKind.Execution)) return;
         RPC.PlaySoundRPC(pc.PlayerId, Sounds.KillSound);
 
         target.RpcExileV2();

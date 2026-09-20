@@ -1151,6 +1151,15 @@ internal static class ExtendedPlayerControl
                     return;
             }
 
+            // 間接死 (爆弾・毒・呪い・時限死) も中央の関所を通す。
+            // これで陣営ルールと全ての防御役職が、キルボタン以外の攻撃にも初めて効くようになる。
+            // 判定は SetDead() より前に済ませること — 防御が後から成立すると死亡状態だけ残る。
+            // ⚠️ 上の switch で返した5役職は既に答えを出しているので二重には通らない。
+            //    EkmTemplateRole だけは EKn API 側の打診契約が未決のため、まもりの二重消費を避けて外す。
+            if (Options.CurrentGameMode == CustomGameMode.Standard && realKiller && realKiller.PlayerId != player.PlayerId &&
+                state.Role is not EkmTemplateRole && !CheckMurderPatch.PassesGate(realKiller, player, kind: AttackKind.Indirect))
+                return;
+
             state.deathReason = deathReason;
             state.SetDead();
 

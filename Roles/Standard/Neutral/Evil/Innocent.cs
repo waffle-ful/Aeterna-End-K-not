@@ -55,7 +55,9 @@ internal class Innocent : RoleBase
 
     public override bool OnCheckMurder(PlayerControl killer, PlayerControl target)
     {
-        target.Kill(killer);
+        // 誤射の返り討ち。反撃と同じい抗えない (Lv3) で関所を通す。
+        if (AttackDefense.Retaliate(target, killer)) target.Kill(killer);
+
         return false;
     }
 }

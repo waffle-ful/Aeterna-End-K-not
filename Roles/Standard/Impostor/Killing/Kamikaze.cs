@@ -98,7 +98,7 @@ internal class Kamikaze : RoleBase
 
                     if (GameStates.IsInTask && !ExileController.Instance)
                         victim.Suicide(PlayerState.DeathReason.Kamikazed, kamikazePc);
-                    else
+                    else if (CheckMurderPatch.PassesGate(kamikazePc, victim, kind: AttackKind.Execution))
                     {
                         victim.SetRealKiller(kamikazePc);
                         PlayerState state = Main.PlayerStates[victim.PlayerId];

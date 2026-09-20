@@ -421,6 +421,30 @@ internal static class CheckMurderPatch
 
         if (!target) target = killer;
 
+        if (!PassesGate(killer, target, check, kind)) return false;
+
+        if (!check) GhostNoiseSender.OnTargetMurdered(target);
+        if (!check) killer.Kill(target);
+
+        if (killer.Is(CustomRoles.Doppelganger)) Doppelganger.OnCheckMurderEnd(killer, target);
+        if (killer.Is(CustomRoles.Autoscopy)) Autoscopy.OnCheckMurderEnd(killer, target);
+
+        return true;
+    }
+
+    /// <summary>
+    ///     関所の判定だけを走らせ、最後のキルは呼び出し側に任せる。
+    ///     <see cref="RpcCheckAndMurder" /> を通らない経路 (間接死・処刑系・反撃) を
+    ///     梯子へ載せるための入口で、<c>AttackDefense.Pierces</c> を直接呼ぶ近道と違い
+    ///     陣営ルール (CTA / AFKシールド / マッドメイト↔インポスター等) もきちんと通る。
+    /// </summary>
+    /// <returns>true = 攻撃が成立する。呼び出し側が自分のやり方で殺してよい。</returns>
+    public static bool PassesGate(PlayerControl killer, PlayerControl target, bool check = false, AttackKind kind = AttackKind.Murder)
+    {
+        if (!AmongUsClient.Instance.AmHost) return false;
+
+        if (!target) target = killer;
+
         if (CustomTeamManager.AreInSameCustomTeam(killer.PlayerId, target.PlayerId) && !CustomTeamManager.IsSettingEnabledForPlayerTeam(killer.PlayerId, CTAOption.KillEachOther))
         {
             Notify("SameCTATeam");
@@ -502,31 +526,39 @@ internal static class CheckMurderPatch
             return false;
         }
 
-        if ((Romantic.PartnerId == target.PlayerId && Romantic.IsPartnerProtected) ||
-            Medic.OnAnyoneCheckMurder(killer, target) ||
-            Randomizer.IsShielded(target) ||
-            Aid.ShieldedPlayers.ContainsKey(target.PlayerId) ||
-            Blessed.ShieldActive.Contains(target.PlayerId) ||
-            Benefactor.ShieldedPlayers.Contains(target.PlayerId) ||
-            Gaslighter.IsShielded(target) ||
-            !Farmer.OnAnyoneCheckMurder(target) ||
-            !PotionMaster.OnAnyoneCheckMurder(target) ||
-            !Grappler.OnAnyoneCheckMurder(target) ||
-            !Adventurer.OnAnyoneCheckMurder(target) ||
-            !Sentinel.OnAnyoneCheckMurder(killer) ||
-            !ToiletMaster.OnAnyoneCheckMurder(killer, target))
+        // ここから下は「役職の守り」。上の陣営ルールと違い、攻撃レベルが上回れば貫ける。
+        // 貫いた守りは呼ばないので、身代わり死・反撃・回数消費も起きない (spec §4-4)。
+        int atk = AttackDefense.GetAttackPower(killer, kind);
+
+        // 他役職から与えられた保護はまとめて強力 (Lv2)。
+        // ⚠️ Farmer 以下の6つは `!Xxx.OnAnyoneCheckMurder(...)` と呼び出し規約が反転している。
+        if (!AttackDefense.Pierces(atk, AttackDefense.Powerful) &&
+            ((Romantic.PartnerId == target.PlayerId && Romantic.IsPartnerProtected) ||
+             Medic.OnAnyoneCheckMurder(killer, target) ||
+             Randomizer.IsShielded(target) ||
+             Aid.ShieldedPlayers.ContainsKey(target.PlayerId) ||
+             Blessed.ShieldActive.Contains(target.PlayerId) ||
+             Benefactor.ShieldedPlayers.Contains(target.PlayerId) ||
+             Gaslighter.IsShielded(target) ||
+             !Farmer.OnAnyoneCheckMurder(target) ||
+             !PotionMaster.OnAnyoneCheckMurder(target) ||
+             !Grappler.OnAnyoneCheckMurder(target) ||
+             !Adventurer.OnAnyoneCheckMurder(target) ||
+             !Sentinel.OnAnyoneCheckMurder(killer) ||
+             !ToiletMaster.OnAnyoneCheckMurder(killer, target)))
         {
             Notify("SomeSortOfProtection");
             return false;
         }
 
-        if (!Gardener.OnAnyoneCheckMurder(killer, target))
+        // 鉢植え・ソーシャライトは消費型なので基本 (Lv1)。
+        if (!AttackDefense.Pierces(atk, AttackDefense.Basic) && !Gardener.OnAnyoneCheckMurder(killer, target))
         {
             Notify("GardenerPlantNearby");
             return false;
         }
 
-        if (!Socialite.OnAnyoneCheckMurder(killer, target))
+        if (!AttackDefense.Pierces(atk, AttackDefense.Basic) && !Socialite.OnAnyoneCheckMurder(killer, target))
         {
             Notify("SocialiteTarget");
             return false;
@@ -538,7 +570,7 @@ internal static class CheckMurderPatch
             return false;
         }
 
-        if (Mathematician.State.ProtectedPlayerId == target.PlayerId)
+        if (!AttackDefense.Pierces(atk, AttackDefense.Powerful) && Mathematician.State.ProtectedPlayerId == target.PlayerId)
         {
             Notify("MathematicianProtected");
             return false;
@@ -550,13 +582,13 @@ internal static class CheckMurderPatch
             return false;
         }
 
-        if (!Bodyguard.OnAnyoneCheckMurder(killer, target))
+        if (!AttackDefense.Pierces(atk, AttackDefense.Powerful) && !Bodyguard.OnAnyoneCheckMurder(killer, target))
         {
             Notify("BodyguardProtected");
             return false;
         }
 
-        if (Echo.On)
+        if (Echo.On && !AttackDefense.Pierces(atk, AttackDefense.Powerful))
         {
             foreach (Echo echo in Echo.Instances)
             {
@@ -568,7 +600,7 @@ internal static class CheckMurderPatch
             }
         }
 
-        if (GhostRolesManager.AssignedGhostRoles.Values.Any(x => x.Instance is GA ga && ga.ProtectionList.Contains(target.PlayerId)))
+        if (!AttackDefense.Pierces(atk, AttackDefense.Powerful) && GhostRolesManager.AssignedGhostRoles.Values.Any(x => x.Instance is GA ga && ga.ProtectionList.Contains(target.PlayerId)))
         {
             Notify("GAGuarded");
 
@@ -578,13 +610,13 @@ internal static class CheckMurderPatch
             return false;
         }
 
-        if (AsistingAngel.IsShielding(target.PlayerId))
+        if (!AttackDefense.Pierces(atk, AttackDefense.Powerful) && AsistingAngel.IsShielding(target.PlayerId))
         {
             Notify("GAGuarded");
             return false;
         }
 
-        if (SoulHunter.IsSoulHunterTarget(killer.PlayerId) && target.Is(CustomRoles.SoulHunter))
+        if (!AttackDefense.Pierces(atk, AttackDefense.Powerful) && SoulHunter.IsSoulHunterTarget(killer.PlayerId) && target.Is(CustomRoles.SoulHunter))
         {
             Notify("SoulHunterTargetNotifyNoKill");
             return false;
@@ -606,7 +638,7 @@ internal static class CheckMurderPatch
             Jackal.AfterPlayerDiedTask(killer);
 
         // 打診では乱数を振らない。照準表示から毎フレーム振り直すと、確率で防ぐ能力が実質0%に溶ける。
-        if (!check && target.Is(CustomRoles.Lucky))
+        if (!check && target.Is(CustomRoles.Lucky) && !AttackDefense.Pierces(atk, AttackDefense.Basic))
         {
             if (IRandom.Instance.Next(0, 100) < Options.LuckyProbability.GetInt())
             {
@@ -615,7 +647,11 @@ internal static class CheckMurderPatch
             }
         }
 
-        if (Crusader.ForCrusade.Contains(target.PlayerId))
+        // 十字軍の身代わりは強力 (Lv2)。
+        // ⚠️ Pestilence だけは貫かずに従来の「逆に十字軍が死んで守られた側は生き残る」分岐へ残す
+        //    (梯子どおり貫かせると、この守り自体が消えて守られた側が死ぬ = 既存挙動の破壊になる)。
+        if (Crusader.ForCrusade.Contains(target.PlayerId) &&
+            (killer.Is(CustomRoles.Pestilence) || !AttackDefense.Pierces(atk, AttackDefense.Powerful)))
         {
             foreach (PlayerControl player in Main.EnumeratePlayerControls())
             {
@@ -631,6 +667,8 @@ internal static class CheckMurderPatch
                     switch (killer.Is(CustomRoles.Pestilence))
                     {
                         case false when !killer.Is(CustomRoles.KillingMachine):
+                            if (!AttackDefense.Retaliate(player, killer)) return false;
+
                             player.Kill(killer);
                             Crusader.ForCrusade.Remove(target.PlayerId);
                             killer.RpcGuardAndKill(target);
@@ -651,7 +689,7 @@ internal static class CheckMurderPatch
             case CustomRoles.Medic when !check:
                 Medic.IsDead(target);
                 break;
-            case CustomRoles.Spiritcaller when Spiritcaller.Protected:
+            case CustomRoles.Spiritcaller when Spiritcaller.Protected && !AttackDefense.Pierces(atk, AttackDefense.Powerful):
                 if (check) return false;
 
                 killer.RpcGuardAndKill(target);
@@ -702,12 +740,6 @@ internal static class CheckMurderPatch
             Notify("RookieKillRoundOne");
             return false;
         }
-
-        if (!check) GhostNoiseSender.OnTargetMurdered(target);
-        if (!check) killer.Kill(target);
-
-        if (killer.Is(CustomRoles.Doppelganger)) Doppelganger.OnCheckMurderEnd(killer, target);
-        if (killer.Is(CustomRoles.Autoscopy)) Autoscopy.OnCheckMurderEnd(killer, target);
 
         return true;
 
