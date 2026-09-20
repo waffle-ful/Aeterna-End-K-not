@@ -373,6 +373,16 @@ public class Dad : RoleBase
         NotifyIfNecessary(pc, notify);
     }
 
+    /// <summary>
+    ///     キルでは死なない。追放は Alcohol を消費して1回ずつ凌ぐ別機構なので基本 (Lv1) 止まり。
+    /// </summary>
+    public override int? GetDefensePower(PlayerControl target, AttackKind kind)
+    {
+        if (kind == AttackKind.Exile) return AttackDefense.Basic;
+
+        return MurderOnly(kind, AttackDefense.Unstoppable);
+    }
+
     public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         if (check) return false;
@@ -386,13 +396,12 @@ public class Dad : RoleBase
         return false;
     }
 
-    public static bool OnVotedOut(byte id)
+    public override bool OnVotedOut(PlayerControl pc)
     {
-        Dad dad = Instances.FirstOrDefault(d => d.DadId == id);
-        if (dad == null) return false;
+        if (pc == null || pc.PlayerId != DadId) return false;
 
-        dad.Alcohol -= AlcoholDecreaseOnVotedOut.GetInt();
-        dad.NotifyIfNecessary(Utils.GetPlayerById(dad.DadId));
+        Alcohol -= AlcoholDecreaseOnVotedOut.GetInt();
+        NotifyIfNecessary(pc);
         Logger.Info("Ejection prohibited", "Dad");
         return true;
     }

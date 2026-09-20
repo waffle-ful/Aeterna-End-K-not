@@ -285,8 +285,7 @@ internal static class CheckForEndVotingPatch
                 if (data.Value > max)
                 {
                     voteLog.Info($"{data.Key} has higher votes ({data.Value})");
-                    if (Dad.OnVotedOut(data.Key)) continue;
-                    if (Safecracker.OnVotedOut(data.Key)) continue;
+                    if (AttackDefense.BlocksExile(data.Key)) continue;
 
                     exileId = data.Key;
                     max = data.Value;

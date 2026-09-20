@@ -167,6 +167,16 @@ public abstract class RoleBase : IComparable<RoleBase>
         return kind is AttackKind.Exile or AttackKind.Guess ? AttackDefense.None : level;
     }
 
+    /// <summary>
+    ///     最多得票になった時に呼ばれる追放の関所。true = 追放を阻止した。
+    ///     キルの関所とは別建てで、既定は全員「耐えない」。
+    ///     回数消費などの副作用はここで起こしてよい (打診に相当する呼び方が無いため)。
+    /// </summary>
+    public virtual bool OnVotedOut(PlayerControl pc)
+    {
+        return false;
+    }
+
     public virtual void OnMurder(PlayerControl killer, PlayerControl target) { }
 
     public virtual void OnVoteKick(PlayerControl pc, PlayerControl target)

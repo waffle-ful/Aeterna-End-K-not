@@ -132,4 +132,19 @@ public static class AttackDefense
         finally { RetaliationInProgress.Remove(victim.PlayerId); }
     }
 
+    /// <summary>
+    ///     追放の関所。最多得票になった時点で呼ばれ、true = 追放が阻止された。
+    ///     キルの関所とは別建てで、murder 系の防御レベルは
+    ///     <see cref="RoleBase.MurderOnly" /> により既定で波及しない (spec §2)。
+    /// </summary>
+    public static bool BlocksExile(byte id)
+    {
+        if (!Main.PlayerStates.TryGetValue(id, out PlayerState state) || state.Role == null) return false;
+
+        PlayerControl pc = Utils.GetPlayerById(id);
+        if (pc == null) return false;
+
+        int atk = GetAttackPower(null, AttackKind.Exile);
+        return !Pierces(atk, GetDefensePower(pc, AttackKind.Exile)) && state.Role.OnVotedOut(pc);
+    }
 }
