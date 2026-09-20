@@ -376,7 +376,13 @@ internal static class CheckMurderPatch
                 bool CheckMurder() => target.Is(CustomRoles.Fragile) || Ambusher.FragilePlayers.ContainsKey(target.PlayerId) || Main.PlayerStates[killer.PlayerId].Role.OnCheckMurder(killer, target);
             }
 
-            if (!killer.RpcCheckAndMurder(target, true)) return false;
+            // 通常キルも本番の判定を通す。打診 (check:true) は副作用を起こさないので、
+            // ここを打診のままにすると回数型・確率型の守りも反撃・身代わりも一度も発火しない。
+            // キルは下の Unlucky / Mare / Swift / Magnet を挟んでから撃つため、判定だけの入口を使う。
+            if (!PassesGate(killer, target)) return false;
+
+            if (killer.Is(CustomRoles.Doppelganger)) Doppelganger.OnCheckMurderEnd(killer, target);
+            if (killer.Is(CustomRoles.Autoscopy)) Autoscopy.OnCheckMurderEnd(killer, target);
 
             if (killer.Is(CustomRoles.Unlucky))
             {
@@ -582,7 +588,7 @@ internal static class CheckMurderPatch
             return false;
         }
 
-        if (!AttackDefense.Pierces(atk, AttackDefense.Powerful) && !Bodyguard.OnAnyoneCheckMurder(killer, target))
+        if (!AttackDefense.Pierces(atk, AttackDefense.Powerful) && !Bodyguard.OnAnyoneCheckMurder(killer, target, check))
         {
             Notify("BodyguardProtected");
             return false;
