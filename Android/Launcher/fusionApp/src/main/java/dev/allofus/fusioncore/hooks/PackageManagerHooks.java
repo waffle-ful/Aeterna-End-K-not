@@ -8,7 +8,17 @@ import top.canyie.pine.Pine;
 import top.canyie.pine.callback.MethodHook;
 public class PackageManagerHooks {
     private static final String TAG = "FusionCore";
-    public static void installHooks(PackageManager manager) {
+
+    /** Pine hooks are process-wide; installing them twice would stack callbacks. Latched before
+     *  hooking on purpose: a half-installed set is never retried (fewer hooks is the safer failure). */
+    private static boolean areHooksInstalled = false;
+
+    public static synchronized void installHooks(PackageManager manager) {
+        if (areHooksInstalled) {
+            Log.d(TAG, "PackageManager hooks already installed");
+            return;
+        }
+        areHooksInstalled = true;
         try {
             hookSetComponentEnabledSetting(manager);
         } catch (Exception e) {

@@ -19,23 +19,33 @@ public class NativeLibraryManager {
 
     private static final ArrayList<String> CacheLibraries = new ArrayList<>();
 
+    /** Pine hooks are process-wide; the callback reads this so a re-run only swaps the config. */
+    private static volatile FusionConfig activeConfig;
+    private static boolean areHooksInstalled = false;
+
     public static void addFusionLibrary(String fusionLibName)
     {
-        FusionLibraries.add(fusionLibName);
+        if (!FusionLibraries.contains(fusionLibName)) FusionLibraries.add(fusionLibName);
     }
 
     public static void addGameLibrary(String gameLibName)
     {
-        GameLibraries.add(gameLibName);
+        if (!GameLibraries.contains(gameLibName)) GameLibraries.add(gameLibName);
     }
 
     public static void addCacheLibrary(String dataLibName)
     {
-        CacheLibraries.add(dataLibName);
+        if (!CacheLibraries.contains(dataLibName)) CacheLibraries.add(dataLibName);
     }
 
     // this redirects library loading to the libraries we want the game to use
-    public static void setupLibraryHooks(FusionConfig config) {
+    public static synchronized void setupLibraryHooks(FusionConfig config) {
+        activeConfig = config;
+        if (areHooksInstalled) {
+            Log.d(TAG, "findLibrary hook already installed; config refreshed");
+            return;
+        }
+
         Method findLibraryMethod = findLibraryMethodViaReflection();
 
         if (findLibraryMethod == null) {
@@ -46,6 +56,10 @@ public class NativeLibraryManager {
         Pine.hook(findLibraryMethod, new MethodHook() {
             @Override
             public void beforeCall(Pine.CallFrame callFrame) {
+                FusionConfig config = activeConfig;
+                if (config == null || callFrame.args[0] == null) {
+                    return;
+                }
                 var libName = callFrame.args[0].toString();
 
                 Log.i(TAG, "beforeFindLibrary " + libName);
@@ -79,6 +93,7 @@ public class NativeLibraryManager {
                 }
             }
         });
+        areHooksInstalled = true;
     }
 
     private static Method findLibraryMethodViaReflection() {

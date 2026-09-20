@@ -13,7 +13,16 @@ import top.canyie.pine.callback.MethodHook;
 public class ResourceHooks {
     private static final String TAG = "ResourceHooks";
 
-    public static void installHooks(Resources gameResources, Resources ourResources) {
+    /** Pine hooks are process-wide; installing them twice would stack callbacks. Latched before
+     *  hooking on purpose: a half-installed set is never retried (fewer hooks is the safer failure). */
+    private static boolean areHooksInstalled = false;
+
+    public static synchronized void installHooks(Resources gameResources, Resources ourResources) {
+        if (areHooksInstalled) {
+            Log.d(TAG, "Resource hooks already installed");
+            return;
+        }
+        areHooksInstalled = true;
 
         try {
             // getIdentifier needs a separate hook because null values get converted to integer 0
