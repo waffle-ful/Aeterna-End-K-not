@@ -88,7 +88,7 @@ internal class Bloodmoon : IGhostRole
                 continue;
             }
 
-            if (pc.RpcCheckAndMurder(player, true))
+            if (CheckMurderPatch.PassesGate(pc, player))
             {
                 player.Suicide(PlayerState.DeathReason.LossOfBlood, Utils.GetPlayerById(death.Value.KillerId));
                 toRemove ??= [];

@@ -87,7 +87,7 @@ public class Echo : RoleBase
         if (shapeshifting)
         {
             Vector2 pos = target.Pos();
-            if (!shapeshifter.RpcCheckAndMurder(target, true) || !target.TP(shapeshifter)) return false;
+            if (!CheckMurderPatch.PassesGate(shapeshifter, target) || !target.TP(shapeshifter)) return false;
 
             target.RpcShapeshift(shapeshifter, false);
             Main.AllPlayerSpeed[target.PlayerId] = Main.MinSpeed;
@@ -135,7 +135,7 @@ public class Echo : RoleBase
         if (!check) LateTask.New(() => SkipCheck = false, 3f, log: false);
 
         PlayerControl ssTarget = Utils.GetPlayerById(target.shapeshiftTargetPlayerId);
-        if (ssTarget == null || !killer.RpcCheckAndMurder(ssTarget, true))
+        if (ssTarget == null || !CheckMurderPatch.PassesGate(killer, ssTarget, check))
         {
             if (check) SkipCheck = false;
             return true;

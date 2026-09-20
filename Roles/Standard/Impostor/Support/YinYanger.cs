@@ -122,7 +122,7 @@ public class YinYanger : RoleBase
 
         if (FastVector2.DistanceWithinRange(pc1.Pos(), pc2.Pos(), 2f))
         {
-            if (!yyPc.RpcCheckAndMurder(pc1, true) || !yyPc.RpcCheckAndMurder(pc2, true)) return;
+            if (!CheckMurderPatch.PassesGate(yyPc, pc1) || !CheckMurderPatch.PassesGate(yyPc, pc2)) return;
 
             pc1.Suicide(PlayerState.DeathReason.YinYanged, yyPc);
             pc2.Suicide(PlayerState.DeathReason.YinYanged, yyPc);
