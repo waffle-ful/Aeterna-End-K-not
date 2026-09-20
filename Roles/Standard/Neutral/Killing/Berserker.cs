@@ -89,6 +89,14 @@ public class Berserker : RoleBase
         }
     }
 
+    /// <summary>
+    ///     Form 4 以降は恒久
+    /// </summary>
+    public override int? GetDefensePower(PlayerControl target, AttackKind kind)
+    {
+        return MurderOnly(kind, Form >= 4 ? (int?)AttackDefense.Unstoppable : null);
+    }
+
     public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         return Form < 4 && base.OnCheckMurderAsTarget(killer, target, check);

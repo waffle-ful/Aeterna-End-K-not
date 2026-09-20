@@ -46,6 +46,14 @@ public class Ankylosaurus : RoleBase
         opt.SetFloat(FloatOptionNames.ImpostorLightMod, vision);
     }
 
+    /// <summary>
+    ///     回数
+    /// </summary>
+    public override int? GetDefensePower(PlayerControl target, AttackKind kind)
+    {
+        return MurderOnly(kind, LivesLeft > 0 ? (int?)AttackDefense.Basic : null);
+    }
+
     public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         bool survive = LivesLeft > 0;

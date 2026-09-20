@@ -66,6 +66,14 @@ public class Adrenaline : RoleBase
         playerId.SetAbilityUseLimit(MaxSurvives.GetFloat());
     }
 
+    /// <summary>
+    ///     回数 + 条件
+    /// </summary>
+    public override int? GetDefensePower(PlayerControl target, AttackKind kind)
+    {
+        return MurderOnly(kind, target.GetAbilityUseLimit() >= 1 && target.GetTaskState().CompletedTasksCount >= MinTasksRequired.GetInt() && Timer == null ? (int?)AttackDefense.Basic : null);
+    }
+
     public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         if (!base.OnCheckMurderAsTarget(killer, target, check) || target.GetAbilityUseLimit() < 1 || target.GetTaskState().CompletedTasksCount < MinTasksRequired.GetInt() || Timer != null) return true;

@@ -171,6 +171,14 @@ public class Telekinetic : RoleBase
         }
     }
 
+    /// <summary>
+    ///     時限シールド
+    /// </summary>
+    public override int? GetDefensePower(PlayerControl target, AttackKind kind)
+    {
+        return MurderOnly(kind, Shielded ? (int?)AttackDefense.Powerful : null);
+    }
+
     public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         return !Shielded;

@@ -221,6 +221,14 @@ public class WeaponMaster : RoleBase
         }
     }
 
+    /// <summary>
+    ///     1回きり (盾モード)
+    /// </summary>
+    public override int? GetDefensePower(PlayerControl target, AttackKind kind)
+    {
+        return MurderOnly(kind, Mode == 3 && !shieldUsed ? (int?)AttackDefense.Basic : null);
+    }
+
     public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         if (Mode == 3 && !shieldUsed)

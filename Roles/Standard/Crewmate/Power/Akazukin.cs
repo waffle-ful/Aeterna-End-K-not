@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using AmongUs.GameOptions;
@@ -162,6 +162,14 @@ public class Akazukin : RoleBase
 
     public static bool ShouldDisplayDeathReason(byte id)
         => PseudoDead.ContainsKey(id) && DisplayDeathReasonInName != null && DisplayDeathReasonInName.GetBool();
+
+    /// <summary>
+    ///     本当の死は起きず仮死へ遷移する
+    /// </summary>
+    public override int? GetDefensePower(PlayerControl target, AttackKind kind)
+    {
+        return MurderOnly(kind, AttackDefense.Unstoppable);
+    }
 
     public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {

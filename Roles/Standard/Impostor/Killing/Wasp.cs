@@ -137,6 +137,14 @@ public class Wasp : RoleBase
         }
     }
 
+    /// <summary>
+    ///     ラウンド1回
+    /// </summary>
+    public override int? GetDefensePower(PlayerControl target, AttackKind kind)
+    {
+        return MurderOnly(kind, EvadeKills.GetBool() && !EvadedKillThisRound ? (int?)AttackDefense.Basic : null);
+    }
+
     public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         if (!EvadeKills.GetBool() || EvadedKillThisRound) return true;

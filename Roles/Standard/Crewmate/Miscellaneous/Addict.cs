@@ -123,6 +123,14 @@ public class Addict : RoleBase
         ImmortalTimer = null;
     }
 
+    /// <summary>
+    ///     時限シールド
+    /// </summary>
+    public override int? GetDefensePower(PlayerControl target, AttackKind kind)
+    {
+        return MurderOnly(kind, ImmortalTimer != null ? (int?)AttackDefense.Powerful : null);
+    }
+
     public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         return ImmortalTimer == null;
