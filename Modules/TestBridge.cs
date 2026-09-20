@@ -1,11 +1,13 @@
 ﻿using System;
 using AmongUs.Data;
+using AmongUs.GameOptions;
 using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using EndKnot.Patches;
 using HarmonyLib;
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using InnerNet;
@@ -2061,7 +2063,57 @@ public static class TestBridge
         WriteOut($"OK task queued {targetId} x{count} (incomplete {pending.Count})");
     }
 
-    private static void ExecuteUse(string button)
+    // use <button> [playerId|name] [targetId|name]
+    // 引数が 1 つならホスト自身の HUD ボタンを押す (従来どおり)。
+    // プレイヤーを添えると、その人が押した時にホスト側で走る処理をそのまま呼ぶ。
+    // 非モッド客はバニラのボタンしか持たないので、こちらから押させる手段が他に無い。
+    private static void ExecuteUse(string rest)
+    {
+        string[] parts = rest.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0) { WriteOut("ERR use usage: use <kill|vent|pet|ability|report|sabotage> [playerId|name|host] [targetId|name]"); return; }
+
+        if (parts.Length == 1) { UseLocalButton(parts[0]); return; }
+
+        if (AmongUsClient.Instance == null || !AmongUsClient.Instance.AmHost) { WriteOut("ERR not host"); return; }
+
+        PlayerControl actor = ResolvePlayerToken(parts[1], out string actorErr);
+        if (!actor) { WriteOut($"ERR use {actorErr}"); return; }
+
+        PlayerControl explicitTarget = null;
+
+        if (parts.Length >= 3)
+        {
+            explicitTarget = ResolvePlayerToken(parts[2], out string targetErr);
+            if (!explicitTarget) { WriteOut($"ERR use {targetErr}"); return; }
+        }
+
+        UseAsPlayer(parts[0].ToLowerInvariant(), actor, explicitTarget);
+    }
+
+    // playerId / 表示名 / host のどれでもプレイヤーを引けるようにする (tp・task と同じ語彙)。
+    private static PlayerControl ResolvePlayerToken(string token, out string error)
+    {
+        error = null;
+
+        if (token.Equals("host", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!PlayerControl.LocalPlayer) { error = "no local player"; return null; }
+
+            return PlayerControl.LocalPlayer;
+        }
+
+        if (byte.TryParse(token, out byte pid))
+        {
+            PlayerControl byId = Utils.GetPlayerById(pid);
+            if (!byId) { error = $"no player with id {pid}"; return null; }
+
+            return byId;
+        }
+
+        return ResolvePlayerByName(token, out error);
+    }
+
+    private static void UseLocalButton(string button)
     {
         if (!HudManager.InstanceExists) { WriteOut("ERR no HudManager"); return; }
 
@@ -2095,6 +2147,164 @@ public static class TestBridge
         }
 
         WriteOut($"OK use {button}");
+    }
+
+    // 客 (バニラ) が押した時にホスト側で走る処理を、そのままホストから呼ぶ。
+    // RPC を偽造するのではなく、受信後に通る関数を直に叩くので、役職の判定・クールタイム・
+    // 通知はすべて本物と同じ経路を通る。
+    private static void UseAsPlayer(string button, PlayerControl actor, PlayerControl explicitTarget)
+    {
+        string who = SafeName(actor);
+
+        if (actor.PlayerId >= 200) { WriteOut($"ERR use {actor.PlayerId} is a CNO dummy (not a real client)"); return; }
+        if (!actor.IsAlive()) { WriteOut($"ERR use {button}: {who} is dead"); return; }
+
+        string preventKillNote = button is "kill" or "pet" or "ability" && IntroCutsceneDestroyPatch.PreventKill
+            ? " (WARN PreventKill active: triggers are silently swallowed until \"PreventKillReset\" — wait marker:PreventKillReset first)"
+            : string.Empty;
+
+        switch (button)
+        {
+            case "pet":
+            {
+                if (!actor.MyPhysics) { WriteOut($"ERR use pet: {who} has no MyPhysics"); return; }
+                if (!Options.UsePets.GetBool()) { WriteOut("ERR use pet: UsePets is OFF (pet abilities are disabled this game)"); return; }
+
+                // 客のペット RPC を受けた時とまったく同じ入口。連打抑止 (1 秒) もここで効く。
+                ExternalRpcPetPatch.Prefix(actor.MyPhysics, (byte)RpcCalls.Pet);
+                WriteOut($"OK use pet {who}{preventKillNote}");
+                return;
+            }
+
+            case "kill":
+            {
+                PlayerControl victim = explicitTarget ?? ExternalRpcPetPatch.SelectKillButtonTarget(actor);
+                if (!victim) { WriteOut($"ERR use kill: no target in range of {who} (pass a target explicitly)"); return; }
+                if (victim.PlayerId == actor.PlayerId) { WriteOut("ERR use kill: target is the killer"); return; }
+
+                // 客のキルボタンは CmdCheckMurder → ホストの CheckMurder へ届く。その Prefix を直に呼ぶ。
+                CheckMurderPatch.Prefix(actor, victim);
+                WriteOut($"OK use kill {who} -> {SafeName(victim)}{preventKillNote}");
+                return;
+            }
+
+            case "report":
+            {
+                if (explicitTarget != null)
+                {
+                    if (explicitTarget.Data == null) { WriteOut("ERR use report: target has no player data"); return; }
+
+                    actor.ReportDeadBody(explicitTarget.Data);
+                    WriteOut($"OK use report {who} -> body of {SafeName(explicitTarget)}");
+                    return;
+                }
+
+                actor.ReportDeadBody(null);
+                WriteOut($"OK use report {who} (emergency button)");
+                return;
+            }
+
+            case "vent":
+            {
+                // 他人の netId での RpcEnterVent/RpcExitVent 自体は既存の前例がある
+                // (Patches/ControlPatch.cs のデバッグホットキーが同じ形で全員を潜らせる)。
+                // 死体への RpcEnterVent だけは IL2CPP ネイティブヒープを壊すので、
+                // 入口の生存ガード (この関数の冒頭) が外せない前提になっている。
+                if (!actor.MyPhysics) { WriteOut($"ERR use vent: {who} has no MyPhysics"); return; }
+                if (ShipStatus.Instance == null) { WriteOut("ERR use vent: no ShipStatus"); return; }
+
+                if (actor.inVent)
+                {
+                    Vent current = actor.GetClosestVent();
+                    if (current == null) { WriteOut("ERR use vent: no vent resolved for exit"); return; }
+
+                    actor.MyPhysics.RpcExitVent(current.Id);
+                    WriteOut($"OK use vent {who} exit {current.Id}");
+                    return;
+                }
+
+                Vent nearest = actor.GetClosestVent();
+                if (nearest == null) { WriteOut($"ERR use vent: no vent near {who}"); return; }
+
+                actor.MyPhysics.RpcEnterVent(nearest.Id);
+                WriteOut($"OK use vent {who} enter {nearest.Id}");
+                return;
+            }
+
+            case "ability":
+            {
+                UseAbilityAsPlayer(actor, explicitTarget, who, preventKillNote);
+                return;
+            }
+
+            case "sabotage":
+                WriteOut("ERR use sabotage: no per-player path (use the `sabotage` directive — サボは誰が撃っても同じ系統操作)");
+                return;
+
+            default:
+                WriteOut($"ERR use unknown button: {button} (kill|vent|pet|ability|report)");
+                return;
+        }
+    }
+
+    // 「能力ボタン」は役職基底 (客の画面に出ているバニラのボタン) ごとに別の RPC になる。
+    // 基底で分岐して、その基底の押下がホスト側で入る関数を呼ぶ。
+    private static void UseAbilityAsPlayer(PlayerControl actor, PlayerControl explicitTarget, string who, string preventKillNote)
+    {
+        RoleTypes basis = actor.Data?.Role?.Role ?? RoleTypes.Crewmate;
+
+        switch (basis)
+        {
+            case RoleTypes.Shapeshifter:
+            {
+                // 変身の相手が要る。省略時は近くの誰か、居なければ自分 (= 変身解除の押下と同じ形)。
+                PlayerControl target = explicitTarget ?? ExternalRpcPetPatch.SelectKillButtonTarget(actor) ?? actor;
+                CheckShapeshiftPatch.Prefix(actor, target, true);
+                WriteOut($"OK use ability {who} (shapeshift -> {SafeName(target)}){preventKillNote}");
+                return;
+            }
+
+            case RoleTypes.Phantom:
+            {
+                PhantomRolePatch.CheckTrigger(actor);
+                WriteOut($"OK use ability {who} (phantom vanish){preventKillNote}");
+                return;
+            }
+
+            case RoleTypes.GuardianAngel:
+            {
+                PlayerControl target = explicitTarget ?? ExternalRpcPetPatch.SelectKillButtonTarget(actor);
+                if (!target) { WriteOut($"ERR use ability: {who} is a Guardian Angel and needs a target (pass one explicitly)"); return; }
+
+                CheckProtectPatch.Prefix(actor, target);
+                WriteOut($"OK use ability {who} (protect -> {SafeName(target)}){preventKillNote}");
+                return;
+            }
+
+            case RoleTypes.Engineer:
+            {
+                if (!actor.MyPhysics) { WriteOut($"ERR use ability: {who} has no MyPhysics"); return; }
+
+                Vent nearest = actor.GetClosestVent();
+                if (nearest == null) { WriteOut($"ERR use ability: no vent near {who}"); return; }
+
+                actor.MyPhysics.RpcEnterVent(nearest.Id);
+                WriteOut($"OK use ability {who} (engineer vent {nearest.Id}){preventKillNote}");
+                return;
+            }
+
+            default:
+            {
+                // 残りの基底 (クルー・追跡者・科学者・騒音探知機など) は固有の能力 RPC を持たない。
+                // これらの役職の能力はペット押下に載っているので、そちらへ倒す。
+                if (!actor.MyPhysics) { WriteOut($"ERR use ability: {who} has no MyPhysics"); return; }
+                if (!Options.UsePets.GetBool()) { WriteOut($"ERR use ability: {who}'s basis is {basis} and its ability rides on the pet button, but UsePets is OFF"); return; }
+
+                ExternalRpcPetPatch.Prefix(actor.MyPhysics, (byte)RpcCalls.Pet);
+                WriteOut($"OK use ability {who} (basis {basis} -> pet){preventKillNote}");
+                return;
+            }
+        }
     }
 
     // vent enter <id> / vent exit — MyPhysics.RpcEnterVent/RpcExitVent 直呼び(既存経路の前例:
