@@ -42,7 +42,7 @@ internal class Bodyguard : RoleBase
             .SetParent(CustomRoleSpawnChances[CustomRoles.Bodyguard]);
     }
 
-    public static bool OnAnyoneCheckMurder(PlayerControl killer, PlayerControl target)
+    public static bool OnAnyoneCheckMurder(PlayerControl killer, PlayerControl target, bool check = false)
     {
         if (killer.IsCrewmate() || killer.PlayerId == target.PlayerId || killer.Is(CustomRoles.Bodyguard)) return true;
 
@@ -60,7 +60,11 @@ internal class Bodyguard : RoleBase
                     continue;
                 }
 
-                if (BodyguardKillsKiller.GetBool() && bodyguard.BodyguardPC.RpcCheckAndMurder(killer, true))
+                // 身代わりが成立するかどうかだけを答え、打診では誰も死なせない。
+                if (check) return false;
+
+                // 撃ち返しは他の反撃役職 (ベテラン / ゴッデス / 呪狼 / 十字軍) と同じ入口を通す。
+                if (BodyguardKillsKiller.GetBool() && AttackDefense.Retaliate(bodyguard.BodyguardPC, killer))
                     bodyguard.BodyguardPC.Kill(killer);
                 else
                     killer.SetKillCooldown();
