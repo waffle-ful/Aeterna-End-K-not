@@ -26,6 +26,12 @@ public static class CalamityVisibility
     // inactive Scaler or any other hierarchy.
     public static Transform PopoverDesiredParent;
 
+    // 直近にログへ出したバニラダイアログの名前 (同じ物を毎フレーム書かないための重複除け)。
+    private static string _lastModalLogged;
+
+    // メニュー構築時点で広告ポップアップが既に active だったか (常時 active な個体の除外用)。
+    private static bool? _adsIdleActive;
+
     private static int _tickDiagFrame;
     private static bool _prevShouldStayOpen;
     private static bool _prevPopExists;
@@ -164,6 +170,8 @@ public static class CalamityVisibility
         FreeplayShouldStayOpen = false;
         PopoverDesiredParent = null;
         _tickDiagFrame = 0;
+        _lastModalLogged = null;
+        _adsIdleActive = null;
         _prevShouldStayOpen = false;
         _prevPopExists = false;
         _prevContentExists = false;
@@ -337,10 +345,39 @@ public static class CalamityVisibility
     }
 
     // 自前の閉じ手段(OK/キャンセル/閉じる)を持つモーダル。BACK ボタン不要。Calamity ボタン経由でなく
-    // 突然湧くので Tick() が能動的に隠す必要がある: DisconnectPopup(切断/エラー/kick/BAN)、更新の
-    // InfoPopup/InfoPopupV2、AnnouncementPopUp(お知らせ/公式鯖警告)。
+    // 突然湧くので Tick() が能動的に隠す必要がある: モバイルの広告ポップアップ、
+    // DisconnectPopup(切断/エラー/kick/BAN)、更新の InfoPopup/InfoPopupV2、
+    // AnnouncementPopUp(お知らせ/公式鯖警告)。
     private static bool IsSelfContainedModalOpen()
     {
+        // モバイルの「広告を見てスターを獲得」ダイアログ。AdsMenu 自体はメニューに常駐する容れ物
+        // なので、開いている間だけ active になる子 (adsPopUp) を見る。容れ物の activeInHierarchy を
+        // 見ると常に true になり、Calamity が永久に隠れる。
+        //
+        // バニラのダイアログは型ごとに明示検出する。開閉アニメ用の TransitionOpen は
+        // WaitingForHostPopup のように閉じていてもメインメニューで activeInHierarchy=true のまま
+        // 居座る個体があり、横断スキャンでは開いている物と区別できない (2026-09-20 実測)。
+        var adsMenu = Object.FindObjectOfType<AdsMenu>(true);
+        var adsPopUp = adsMenu != null ? adsMenu.adsPopUp : null;
+        bool adsOpen = adsPopUp != null && adsPopUp.gameObject.activeInHierarchy;
+
+        // メニューを組んだ時点で既に active な個体は「閉じているのに active のまま居座る型」なので
+        // 以後このメニュー滞在中は無視する。取りこぼして文字が重なるのは見た目だけの事故だが、
+        // 過検出はメニューが一切表示されなくなる事故になるため、必ず保守側へ倒す。
+        _adsIdleActive ??= adsOpen;
+        if (_adsIdleActive == true) adsOpen = false;
+
+        if (adsOpen)
+        {
+            if (_lastModalLogged != adsPopUp.name)
+            {
+                _lastModalLogged = adsPopUp.name;
+                Logger.Info($"vanilla dialog open: {adsPopUp.name}", "CalamityVisibility");
+            }
+
+            return true;
+        }
+
         if (Object.FindObjectOfType<DisconnectPopup>(true) is { } dp && dp.gameObject.activeInHierarchy) return true;
         if (Object.FindObjectOfType<AnnouncementPopUp>(true) is { } ap && ap.gameObject.activeInHierarchy) return true;
 
