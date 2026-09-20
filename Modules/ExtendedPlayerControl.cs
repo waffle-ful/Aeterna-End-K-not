@@ -2619,7 +2619,8 @@ internal static class ExtendedPlayerControl
                     || (player.Is(CustomRoles.Driver) && Braid.DriverSeesDeathReason)
                     || Options.EveryoneSeesDeathReasons.GetBool()
                     || target.Is(CustomRoles.Gravestone)
-                    || (!player.IsAlive() && Options.GhostCanSeeDeathReason.GetBool()))
+                    || (!player.IsAlive() && Options.GhostCanSeeDeathReason.GetBool())
+                    || (player.Is(CustomRoles.Madmate) && Options.MadmateCanSeeDeathReason.GetBool()))
                    && !target.IsAlive();
         }
 

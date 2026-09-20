@@ -349,6 +349,9 @@ public static class Options
     public static OptionItem MadmateHasImpostorVision;
     public static OptionItem MadmateCanFixLightsOut;
     public static OptionItem MadmateCanSeeKillFlash;
+    public static OptionItem MadmateCanFixComms;
+    public static OptionItem MadmateCanSeeOtherVotes;
+    public static OptionItem MadmateCanSeeDeathReason;
 
     public static OptionItem ImpCanKillMadmate;
     public static OptionItem MadmateCanKillImp;
@@ -624,6 +627,7 @@ public static class Options
     public static OptionItem DisableDevicesIgnoreImpostors;
     public static OptionItem DisableDevicesIgnoreNeutrals;
     public static OptionItem DisableDevicesIgnoreCrewmates;
+    public static OptionItem DisableDevicesIgnoreMadmates;
     public static OptionItem DisableDevicesIgnoreAfterAnyoneDied;
 
     // Maps
@@ -1517,6 +1521,15 @@ public static class Options
             .SetGameMode(CustomGameMode.Standard);
 
         MadmateCanSeeKillFlash = new BooleanOptionItem(159, "MadmateCanSeeKillFlash", false, TabGroup.ImpostorRoles)
+            .SetGameMode(CustomGameMode.Standard);
+
+        MadmateCanFixComms = new BooleanOptionItem(160, "MadmateCanFixComms", true, TabGroup.ImpostorRoles)
+            .SetGameMode(CustomGameMode.Standard);
+
+        MadmateCanSeeOtherVotes = new BooleanOptionItem(161, "MadmateCanSeeOtherVotes", false, TabGroup.ImpostorRoles)
+            .SetGameMode(CustomGameMode.Standard);
+
+        MadmateCanSeeDeathReason = new BooleanOptionItem(162, "MadmateCanSeeDeathReason", false, TabGroup.ImpostorRoles)
             .SetGameMode(CustomGameMode.Standard);
 
         RenegadeKillCD = new FloatOptionItem(157, "RenegadeKillCD", new(0f, 180f, 0.5f), 25f, TabGroup.ImpostorRoles)
@@ -2731,6 +2744,10 @@ public static class Options
             .SetColor(new Color32(255, 153, 153, byte.MaxValue));
 
         DisableDevicesIgnoreCrewmates = new BooleanOptionItem(22923, "IgnoreCrewmates", false, TabGroup.GameSettings)
+            .SetParent(DisableDevicesIgnoreConditions)
+            .SetColor(new Color32(255, 153, 153, byte.MaxValue));
+
+        DisableDevicesIgnoreMadmates = new BooleanOptionItem(22928, "IgnoreMadmates", false, TabGroup.GameSettings)
             .SetParent(DisableDevicesIgnoreConditions)
             .SetColor(new Color32(255, 153, 153, byte.MaxValue));
 

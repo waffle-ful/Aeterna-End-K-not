@@ -109,6 +109,7 @@ internal static class UpdateSystemPatch
         // 実行させない (基底を借りているクルー/第三陣営はボタン自体をホスト側で隠せないため、ここが関所)。
         if (systemType == SystemTypes.Sabotage && !EndKnot.Modules.Ekm.EkrManager.AllowsSabotage(player.GetCustomRole())) return false;
         if (player.Is(CustomRoles.Fool) && systemType is SystemTypes.Comms or SystemTypes.Electrical) return false;
+        if (player.Is(CustomRoles.Madmate) && !Options.MadmateCanFixComms.GetBool() && systemType == SystemTypes.Comms) return false;
 
         if (SubmergedCompatibility.IsSubmerged() && systemType is not (SystemTypes.Electrical or SystemTypes.Comms)) return true;
 
