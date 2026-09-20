@@ -30,7 +30,7 @@ internal class Opportunist : RoleBase
         AURoleOptions.EngineerInVentMaxTime = MaxInVentTime.GetFloat();
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         return !OppoImmuneToAttacksWhenTasksDone.GetBool() || !target.Is(CustomRoles.Opportunist) || !target.AllTasksCompleted();
     }

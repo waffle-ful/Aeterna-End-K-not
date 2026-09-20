@@ -67,13 +67,15 @@ internal class CursedWolf : RoleBase
         On = false;
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         if (target.GetAbilityUseLimit() <= 0) return true;
 
         if (killer.Is(CustomRoles.Pestilence)) return true;
 
         if (killer == target) return true;
+
+        if (check) return false;
 
         float kcd = Main.KillTimers[target.PlayerId] + Main.AllPlayerKillCooldown[target.PlayerId];
 

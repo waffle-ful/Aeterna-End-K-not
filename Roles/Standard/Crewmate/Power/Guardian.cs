@@ -15,7 +15,7 @@ internal class Guardian : RoleBase
         On = false;
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         return !target.AllTasksCompleted();
     }

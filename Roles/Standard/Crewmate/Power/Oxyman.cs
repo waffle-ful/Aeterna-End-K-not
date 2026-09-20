@@ -134,7 +134,7 @@ public class Oxyman : RoleBase
         }
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         return GetCurrentLevel() != Level.Invulnerable;
     }

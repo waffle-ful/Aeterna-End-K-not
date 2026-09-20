@@ -66,9 +66,11 @@ public class Adrenaline : RoleBase
         playerId.SetAbilityUseLimit(MaxSurvives.GetFloat());
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
-        if (!base.OnCheckMurderAsTarget(killer, target) || target.GetAbilityUseLimit() < 1 || target.GetTaskState().CompletedTasksCount < MinTasksRequired.GetInt() || Timer != null) return true;
+        if (!base.OnCheckMurderAsTarget(killer, target, check) || target.GetAbilityUseLimit() < 1 || target.GetTaskState().CompletedTasksCount < MinTasksRequired.GetInt() || Timer != null) return true;
+
+        if (check) return false;
 
         target.RpcRemoveAbilityUse(notify: false);
         Timer = new CountdownTimer(Time.GetInt(), () =>

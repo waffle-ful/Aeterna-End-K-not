@@ -299,7 +299,7 @@ public class Gambler : RoleBase
         return true;
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         return !IsShielded.Contains(target.PlayerId);
     }

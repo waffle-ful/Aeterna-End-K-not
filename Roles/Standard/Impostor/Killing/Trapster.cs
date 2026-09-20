@@ -75,8 +75,10 @@ internal class Trapster : RoleBase
         }
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
+        if (check) return true;
+
         if (TrapOnlyWorksOnTheBodyTrapster.GetBool() && !GameStates.IsMeeting && LegacyTrapster.GetBool())
             TrapsterBody.Add(target.PlayerId);
 

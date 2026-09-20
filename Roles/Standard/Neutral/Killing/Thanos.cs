@@ -121,7 +121,7 @@ public class Thanos : RoleBase
         return true;
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         return ActiveStone is not Stone.Reality;
     }

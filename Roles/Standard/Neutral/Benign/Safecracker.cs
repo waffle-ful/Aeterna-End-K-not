@@ -249,11 +249,13 @@ public class Safecracker : RoleBase
         return seer.PlayerId == SafecrackerId && target.Is(CustomRoleTypes.Impostor) && IsUnlocked(KnowImpostorsTaskRate);
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         if (killer == null || target == null || target.PlayerId != SafecrackerId) return true;
         if (KillGuardUsed >= MaxKillGuardCount.GetInt()) return true;
         if (!IsUnlocked(KillGuardTaskRate)) return true;
+
+        if (check) return false;
 
         KillGuardUsed++;
         killer.SetKillCooldown();

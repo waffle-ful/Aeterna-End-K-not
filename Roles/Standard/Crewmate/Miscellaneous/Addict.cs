@@ -123,7 +123,7 @@ public class Addict : RoleBase
         ImmortalTimer = null;
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         return ImmortalTimer == null;
     }

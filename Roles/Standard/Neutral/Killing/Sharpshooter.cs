@@ -134,9 +134,10 @@ public class Sharpshooter : RoleBase
         }
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         if (AbilityEndTS == 0) return true;
+        if (check) return true;
         RevertAbility();
         target.MarkDirtySettings();
         target.RevertFreeze(RealPosition);

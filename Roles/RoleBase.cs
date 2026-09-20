@@ -119,7 +119,18 @@ public abstract class RoleBase : IComparable<RoleBase>
         return target != null && killer != null;
     }
 
-    public virtual bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    /// <summary>
+    ///     この役職が攻撃を受けた時の防御処理。false = 攻撃を防いだ。
+    /// </summary>
+    /// <param name="check">
+    ///     true = 打診。実際に殺さず「殺せるか」だけを問い合わせる呼び出しで、
+    ///     照準表示などから毎フレーム飛んでくる。回数の消費・反撃・身代わり死・演出といった
+    ///     副作用は必ず抑止すること。抑止しないと、狙いを定めているだけで防御が溶ける。
+    ///     ⚠️ 抑止してよいのは副作用だけで、戻り値は打診と実行で必ず一致させる
+    ///     (食い違うと照準の表示と実際のキル結果がずれる)。乱数を使う防御だけは例外で、
+    ///     打診には「通る」を返し、乱数は実行時にだけ振る。
+    /// </param>
+    public virtual bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         return target != null && killer != null;
     }

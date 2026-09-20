@@ -373,8 +373,10 @@ public class Dad : RoleBase
         NotifyIfNecessary(pc, notify);
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
+        if (check) return false;
+
         LateTask.New(() =>
         {
             Alcohol -= AlcoholDecreaseOnKilled.GetInt();

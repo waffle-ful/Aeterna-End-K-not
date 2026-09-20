@@ -141,10 +141,12 @@ public class Wildling : RoleBase
         killer.Notify(Translator.GetString("BKInProtect"));
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         if (Timer != null)
         {
+            if (check) return false;
+
             killer.RpcGuardAndKill(target);
             target.Notify(Translator.GetString("BKOffsetKill"));
             return false;

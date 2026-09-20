@@ -77,7 +77,7 @@ public class Ricochet : RoleBase
         rc.ProtectAgainst = reader.ReadByte();
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         if (killer == null) return false;
 
@@ -85,6 +85,8 @@ public class Ricochet : RoleBase
 
         if (ProtectAgainst == killer.PlayerId)
         {
+            if (check) return false;
+
             killer.SetKillCooldown(5f);
             return false;
         }

@@ -146,9 +146,12 @@ public class Demon : RoleBase
         return false;
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         if (killer == null || target == null || killer.Is(CustomRoles.Demon)) return true;
+
+        // 体力を削らずに、この一撃で倒れきるかどうかだけを答える。
+        if (check) return DemonHealth[target.PlayerId] - SelfDamage.GetInt() < 1;
 
         if (DemonHealth[target.PlayerId] - SelfDamage.GetInt() < 1)
         {

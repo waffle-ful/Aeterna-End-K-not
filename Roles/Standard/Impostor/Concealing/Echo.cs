@@ -117,14 +117,27 @@ public class Echo : RoleBase
         target.TP(pos);
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         if (SkipCheck || !target.IsShifted()) return true;
+
+        // 入れ替わった相手への問い合わせがここへ戻ってくるのを防ぐ。
+        // 打診なら、答えを出した時点で元に戻して何も残さない。
         SkipCheck = true;
-        LateTask.New(() => SkipCheck = false, 3f, log: false);
+        if (!check) LateTask.New(() => SkipCheck = false, 3f, log: false);
 
         PlayerControl ssTarget = Utils.GetPlayerById(target.shapeshiftTargetPlayerId);
-        if (ssTarget == null || !killer.RpcCheckAndMurder(ssTarget, true)) return true;
+        if (ssTarget == null || !killer.RpcCheckAndMurder(ssTarget, true))
+        {
+            if (check) SkipCheck = false;
+            return true;
+        }
+
+        if (check)
+        {
+            SkipCheck = false;
+            return false;
+        }
 
         RevertSwap(target, ssTarget);
         LateTask.New(() => killer.Kill(ssTarget), 0.2f, log: false);

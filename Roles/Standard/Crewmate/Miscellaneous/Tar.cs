@@ -71,10 +71,12 @@ public class Tar : RoleBase
         });
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         if (Timer != null)
         {
+            if (check) return false;
+
             Vector2 pos = target.Pos();
             killer.TP(Main.LIMap ? ShipStatus.Instance.AllVents.MaxBy(x => Vector2.Distance(pos, x.transform.position)).transform.position : RandomSpawn.SpawnMap.GetSpawnMap().Positions.Values.MaxBy(x => Vector2.Distance(pos, x)));
             Timer.Complete();

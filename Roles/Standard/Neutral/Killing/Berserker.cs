@@ -89,9 +89,9 @@ public class Berserker : RoleBase
         }
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
-        return Form < 4 && base.OnCheckMurderAsTarget(killer, target);
+        return Form < 4 && base.OnCheckMurderAsTarget(killer, target, check);
     }
 
     public override bool OnCheckMurder(PlayerControl killer, PlayerControl target)
