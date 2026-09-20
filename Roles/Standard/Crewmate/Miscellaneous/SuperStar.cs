@@ -34,6 +34,14 @@ internal class SuperStar : RoleBase
         On = false;
     }
 
+    /// <summary>
+    ///     近くに他人が居る間だけ。位置判定は OnCheckMurderAsTarget 側
+    /// </summary>
+    public override int? GetDefensePower(PlayerControl target, AttackKind kind)
+    {
+        return MurderOnly(kind, AttackDefense.Basic);
+    }
+
     public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         return !FastVector2.TryGetClosestPlayerInRangeTo(target, 2f, out _, x => x.PlayerId != killer.PlayerId);

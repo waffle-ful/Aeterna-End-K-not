@@ -403,6 +403,14 @@ internal class Bargainer : RoleBase
         }
     }
 
+    /// <summary>
+    ///     絆創膏を持っている間
+    /// </summary>
+    public override int? GetDefensePower(PlayerControl target, AttackKind kind)
+    {
+        return MurderOnly(kind, ActiveItems.Any(x => x.Item == Item.BandAid) ? (int?)AttackDefense.Powerful : null);
+    }
+
     public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         return ActiveItems.All(x => x.Item != Item.BandAid);

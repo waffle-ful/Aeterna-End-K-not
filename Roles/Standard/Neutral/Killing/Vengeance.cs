@@ -79,6 +79,14 @@ public class Vengeance : RoleBase
         return CanVent.GetBool();
     }
 
+    /// <summary>
+    ///     1回きり
+    /// </summary>
+    public override int? GetDefensePower(PlayerControl target, AttackKind kind)
+    {
+        return MurderOnly(kind, !IsRevenge ? (int?)AttackDefense.Basic : null);
+    }
+
     public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         if (killer.PlayerId == target.PlayerId) return true;

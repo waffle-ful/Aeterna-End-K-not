@@ -149,6 +149,14 @@ public class Amogus : RoleBase
         }
     }
 
+    /// <summary>
+    ///     最終形態 Sumogus 到達後
+    /// </summary>
+    public override int? GetDefensePower(PlayerControl target, AttackKind kind)
+    {
+        return MurderOnly(kind, CurrentLevel >= Levels.Sumogus ? (int?)AttackDefense.Unstoppable : null);
+    }
+
     public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         return CurrentLevel < Levels.Sumogus;

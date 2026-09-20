@@ -24,6 +24,14 @@ internal class Luckey : RoleBase
         On = false;
     }
 
+    /// <summary>
+    ///     確率
+    /// </summary>
+    public override int? GetDefensePower(PlayerControl target, AttackKind kind)
+    {
+        return MurderOnly(kind, AttackDefense.Basic);
+    }
+
     public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         // 打診では乱数を振らない。照準表示から毎フレーム振り直すと、確率で防ぐ能力が実質0%に溶ける。

@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using AmongUs.GameOptions;
 using UnityEngine;
 
@@ -136,6 +136,14 @@ public class Jackpot : RoleBase
     {
         Money += MoneyPerKill.GetInt();
         killer.Notify(string.Format(GetString("Jackpot.KillReward"), MoneyPerKill.GetInt(), Money));
+    }
+
+    /// <summary>
+    ///     ジャックポット中
+    /// </summary>
+    public override int? GetDefensePower(PlayerControl target, AttackKind kind)
+    {
+        return MurderOnly(kind, IsJackpotActive ? (int?)AttackDefense.Powerful : null);
     }
 
     public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)

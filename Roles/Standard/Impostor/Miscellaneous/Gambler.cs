@@ -299,6 +299,14 @@ public class Gambler : RoleBase
         return true;
     }
 
+    /// <summary>
+    ///     自前シールド
+    /// </summary>
+    public override int? GetDefensePower(PlayerControl target, AttackKind kind)
+    {
+        return MurderOnly(kind, IsShielded.Contains(target.PlayerId) ? (int?)AttackDefense.Powerful : null);
+    }
+
     public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         return !IsShielded.Contains(target.PlayerId);

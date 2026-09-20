@@ -199,6 +199,14 @@ public class VentOpener : RoleBase
         CurrentVent.Remove(pc.PlayerId);
     }
 
+    /// <summary>
+    ///     締め出した相手からのキルだけ弾く (相手依存の絞り込みは OnCheckMurderAsTarget 側)
+    /// </summary>
+    public override int? GetDefensePower(PlayerControl target, AttackKind kind)
+    {
+        return MurderOnly(kind, OptionBlockKill.GetBool() && expelledPlayers.Count > 0 ? (int?)AttackDefense.Powerful : null);
+    }
+
     public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         if (OptionBlockKill.GetBool() && expelledPlayers.Contains(killer.PlayerId))

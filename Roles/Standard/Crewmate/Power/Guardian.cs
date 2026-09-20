@@ -15,6 +15,14 @@ internal class Guardian : RoleBase
         On = false;
     }
 
+    /// <summary>
+    ///     全タスク完了後は恒久
+    /// </summary>
+    public override int? GetDefensePower(PlayerControl target, AttackKind kind)
+    {
+        return MurderOnly(kind, target.AllTasksCompleted() ? (int?)AttackDefense.Unstoppable : null);
+    }
+
     public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         return !target.AllTasksCompleted();
