@@ -19,6 +19,7 @@ dependencies {
 android {
     namespace = "dev.allofus.fusioncore"
     compileSdk = 37
+    ndkVersion = "28.2.13676358"
 
     buildFeatures {
         prefab = true
@@ -31,11 +32,11 @@ android {
     }
 
     defaultConfig {
-        minSdk = 24
+        minSdk = 27
         targetSdk = 36
-        applicationId = "dev.allofus.fusioncore"
+        applicationId = "dev.waffleful.endknot"
         versionCode = 1
-        versionName = "0.0.1"
+        versionName = "0.1.0"
         ndk {
             abiFilters.add("arm64-v8a")
             // abiFilters.add("armeabi-v7a")
@@ -49,18 +50,24 @@ android {
         }
     }
 
+    // Release signing is optional: without a keystore the release build is simply left unsigned.
+    val releaseKeystore = file(System.getenv("KEYSTORE_PATH") ?: "keystore.jks").takeIf { it.exists() }
     signingConfigs {
-        create("release") {
-            storeFile = file(System.getenv("KEYSTORE_PATH") ?: "keystore.jks")
-            storePassword = System.getenv("KEYSTORE_PASSWORD")
-            keyAlias = System.getenv("KEY_ALIAS")
-            keyPassword = System.getenv("KEY_PASSWORD")
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = releaseKeystore
+                storePassword = System.getenv("KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("KEY_ALIAS")
+                keyPassword = System.getenv("KEY_PASSWORD")
+            }
         }
     }
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("release")
+            if (releaseKeystore != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             // we don't need minify tbh
             isMinifyEnabled = false
             // this can mess up ResourceHooks

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Fusion Core</string>
+    <string name="app_name">End K not</string>
     <string name="selector_title">Select a game</string>
     <string name="selector_subtitle">Supported packages are listed below.</string>
     <string name="selector_action_settings">Settings</string>
@@ -10,7 +10,7 @@
     <string name="settings_libunity_desc">You should turn this on if the game you\'re using crashes due to Unity getting mad.</string>
     <string name="selector_empty_not_configured">No supported packages configured..</string>
     <string name="selector_empty_not_installed">No supported packages are currently installed.</string>
-    <string name="selector_storage_permission_prompt">Grant "All files access" so Fusion Core can write BepInEx files to Documents.</string>
+    <string name="selector_storage_permission_prompt">Grant "All files access" so End K not can write BepInEx files to Documents.</string>
     <string name="selector_storage_permission_required">All files access is required to continue.</string>
     <string name="selector_storage_permission_open_failed">Could not open storage permission settings.</string>
     <string name="bootstrap_title">Launching selected game</string>
@@ -38,4 +38,6 @@
     <string name="selector_no_file_manager">No file manager found capable of opening this directory</string>
     <string name="selector_folder_create_failed">Failed to make folder: %1$s</string>
     <string name="settings_automatic">Automatic</string>
+    <string name="selector_target_not_installed">Among Us is not installed on this device.</string>
+    <string name="selector_auto_launch_hint">Among Us will launch in a moment. Tap the card to launch now, or open Settings first.</string>
 </resources>

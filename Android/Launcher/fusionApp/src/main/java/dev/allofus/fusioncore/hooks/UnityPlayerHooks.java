@@ -25,9 +25,16 @@ public class UnityPlayerHooks {
 
     private static final ThreadLocal<Activity> pendingActivity = new ThreadLocal<>();
 
-    // this is used to inject CustomContextWrapper into the game activity
-    public static void installHooks(Context gameContext) {
-        var classLoader = gameContext.getClassLoader();
+    public static boolean areHooksInstalled = false;
+
+    // this is used to inject CustomContextWrapper into the game activity.
+    // The loader passed here must be the same instance that instantiates the game's
+    // activities; hooking a class from a different loader would never fire.
+    public static void installHooks(Context gameContext, ClassLoader classLoader) {
+        if (areHooksInstalled) {
+            Log.d(TAG, "UnityPlayer hooks already installed");
+            return;
+        }
         if (classLoader == null) {
             throw new IllegalStateException("ClassLoader is null");
         }
@@ -53,7 +60,8 @@ public class UnityPlayerHooks {
             throw new IllegalStateException("Failed to find UnityPlayer class or constructor");
         }
 
-        Log.i(TAG, "Found UnityPlayer class: " + unityPlayerClass.getName());
+        Log.i(TAG, "Found UnityPlayer class: " + unityPlayerClass.getName()
+                + " via loader " + unityPlayerClass.getClassLoader());
 
         ArrayList<Field> activityFields = new ArrayList<>();
         var clazz = unityPlayerClass;
@@ -140,5 +148,7 @@ public class UnityPlayerHooks {
                 }
             });
         }
+
+        areHooksInstalled = true;
     }
 }
