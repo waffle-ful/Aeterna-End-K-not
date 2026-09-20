@@ -87,6 +87,10 @@ public class JackalHadouHo : RoleBase
     public bool CanSideKick;
 
     private bool SkMode;
+
+    // 弾を作れない理由 (自票したときに返す)。無言で素通しすると「自投票が普通に通った = 壊れている」に見える
+    private string SkBlockedKey = "JackalHadouHoSkDisabled";
+
     private byte SkCandidateId = byte.MaxValue;
     private float SkNearTimer;
     private float SkCooldownTimer;
@@ -163,6 +167,7 @@ public class JackalHadouHo : RoleBase
         JhhId = playerId;
         JhhPC = playerId.GetPlayer();
         CanSideKick = !NextNoSideKick && CanMakeSidekickOpt.GetBool();
+        SkBlockedKey = NextNoSideKick ? "JackalHadouHoSkInherited" : "JackalHadouHoSkDisabled";
         NextNoSideKick = false;
         IsLoaded = false;
         ResetState();
@@ -804,8 +809,14 @@ public class JackalHadouHo : RoleBase
     public override bool OnVote(PlayerControl voter, PlayerControl target)
     {
         if (voter.PlayerId != JhhId) return false;
-        if (!CanSideKick || !voter.IsAlive()) return false;
-        if (target == null) return false;
+        if (!voter.IsAlive() || target == null) return false;
+
+        if (!CanSideKick)
+        {
+            // 自票は弾を作る操作そのもの。理由を返さないと「自投票がそのまま通った」だけが見えて壊れて見える
+            if (target.PlayerId == JhhId) Utils.SendMessage(GetString(SkBlockedKey), JhhId);
+            return false;
+        }
 
         // 自投票: モード切替
         if (target.PlayerId == JhhId)
@@ -853,6 +864,7 @@ public class JackalHadouHo : RoleBase
         }
 
         CanSideKick = false;
+        SkBlockedKey = "JackalHadouHoSkUsedUp";
         target.RpcSetCustomRole(CustomRoles.Tama);
         target.RpcChangeRoleBasis(CustomRoles.Tama);
 

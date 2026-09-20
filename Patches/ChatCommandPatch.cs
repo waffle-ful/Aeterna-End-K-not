@@ -2826,9 +2826,8 @@ internal static class ChatCommands
 
         if (voteId > PlayerControl.AllPlayerControls.Count) return;
 
-        PlayerControl votedPlayer = voteId.GetPlayer();
-        if (!player.UsesMeetingShapeshift() && Main.PlayerStates.TryGetValue(player.PlayerId, out PlayerState state) && votedPlayer != null && state.Role.OnVote(player, votedPlayer)) return;
-
+        // Role.OnVote はここでは呼ばない — CastVoteChecked の先の HandleCastVote が同じ票でもう一度呼ぶため、
+        // 副作用のある OnVote (メッセージ送信・モード切替) が /vote のときだけ二重発火する
         MeetingHudCastVotePatch.CastVoteChecked(MeetingHud.Instance, player.PlayerId, voteId);
     }
 

@@ -1680,7 +1680,7 @@ internal static class MeetingHudOnDestroyPatch
 
 // AU 2026.8.18: CastVote の引数が InnerNet.PlayerId (struct) 化され、interop 生成メソッドの
 // メタデータと Harmony DMD の相性で「struct 引数メソッドへのパッチ」が InvalidProgramException になる。
-// そのため CastVote 自体にはパッチせず、ホストに票が届く全入口 (ホスト自票=CmdCastVote /
+// そのため CastVote 自体にはパッチせず、ホストに票が届く全入口 (ホストの実 UI 投票=Confirm /
 // クライアント票=HandleRpc(RpcCalls.CastVote) / mod 内直呼び) で CastVoteChecked を通し、
 // 許可された票だけ proxy の CastVote (パッチ非経由) に流す方式へ移設。
 [HarmonyPatch(typeof(MeetingHud), nameof(MeetingHud.CmdCastVote))]
@@ -1707,9 +1707,28 @@ internal static class MeetingHudCastVotePatch
     // 全入口共通: EHR の投票判定を通し、許可された票だけバニラの CastVote (proxy 直呼び・DMD 非経由) に流す
     public static void CastVoteChecked(MeetingHud meetingHud, byte srcPlayerId, byte suspectPlayerId)
     {
+        // Confirm (ホストの実 UI 投票) で判定済みの票がここへ戻ってきた場合は判定を繰り返さない
+        // — 二度通すと Role.OnVote が 1 回の投票で 2 回発火する。
+        // 関所は 1 票で使い切る (立ちっぱなしのまま他人の票が来ると判定ごと素通りするため)
+        if (MeetingHudConfirmPatch.HostVoteChecked)
+        {
+            MeetingHudConfirmPatch.HostVoteChecked = false;
+            meetingHud.CastVote(srcPlayerId, suspectPlayerId);
+            return;
+        }
+
         bool proceed = HandleCastVote(meetingHud, srcPlayerId, suspectPlayerId, out (MeetingHud MeetingHud, PlayerVoteArea SourcePVA, PlayerControl SourcePC)? cancelInfo);
         if (proceed) meetingHud.CastVote(srcPlayerId, suspectPlayerId);
         if (cancelInfo.HasValue) CleanupCanceledVote(cancelInfo.Value);
+    }
+
+    // ホストの実 UI 投票 (Confirm) 専用の入口。判定とキャンセル時の後始末だけ行い、
+    // 投票そのものはバニラの原処理に任せる (返り値 = バニラに投票させてよいか)
+    public static bool CheckHostUiVote(MeetingHud meetingHud, byte srcPlayerId, byte suspectPlayerId)
+    {
+        bool proceed = HandleCastVote(meetingHud, srcPlayerId, suspectPlayerId, out (MeetingHud MeetingHud, PlayerVoteArea SourcePVA, PlayerControl SourcePC)? cancelInfo);
+        if (cancelInfo.HasValue) CleanupCanceledVote(cancelInfo.Value);
+        return proceed;
     }
 
     private static bool HandleCastVote(MeetingHud __instance, byte srcPlayerId, byte suspectPlayerId, out (MeetingHud MeetingHud, PlayerVoteArea SourcePVA, PlayerControl SourcePC)? cancelInfo)
@@ -1835,6 +1854,49 @@ internal static class MeetingHudCastVotePatch
         info.SourcePVA.VotedForId = byte.MaxValue;
 
         Logger.Info($"Vote for {info.SourcePC.GetNameWithRole()} canceled", "MeetingHudCastVotePatch.CleanupCanceledVote");
+    }
+}
+
+// ホスト自身が会議画面で投じる票の入口。CmdCastVote proxy はホストの実 UI 投票では呼ばれず
+// (2026-09-20 実機確定: 実クリック投票で CmdCastVote の診断ログ 0 件・HandleCastVote の Vote 行も
+// ホストにだけ出ないのに、票は成立して客へ同期する)、ホストの票だけが EHR の投票判定を素通りしていた。
+// 確認ボタンが叩く Confirm は byte 引数のまま残っているのでパッチでき、ここをホスト自票の漏斗にする。
+[HarmonyPatch(typeof(MeetingHud), nameof(MeetingHud.Confirm))]
+internal static class MeetingHudConfirmPatch
+{
+    // 原処理へ流した票が CmdCastVote 経由で CastVoteChecked へ戻ってきたときに、判定を二度通さないための関所
+    public static bool HostVoteChecked;
+
+    public static bool Prefix(MeetingHud __instance, [HarmonyArgument(0)] byte suspectStateIdx)
+    {
+        HostVoteChecked = false;
+
+        if (!AmongUsClient.Instance.AmHost) return true;
+
+        PlayerControl lp = PlayerControl.LocalPlayer;
+        if (!lp) return true;
+
+        byte suspectPlayerId = MeetingHudCastVotePatch.ResolveSuspectIdx(__instance, suspectStateIdx);
+        Logger.Info($"Confirm: src={lp.PlayerId}, suspectStateIdx={suspectStateIdx} => suspect={suspectPlayerId}", "MeetingHudConfirmPatch");
+
+        if (MeetingHudCastVotePatch.CheckHostUiVote(__instance, lp.PlayerId, suspectPlayerId))
+        {
+            HostVoteChecked = true;
+            return true;
+        }
+
+        // 票は能力に消費された / 拒否された。確認ボタンを開いたままにすると投票不能に見えるので選択を解除する
+        try { __instance.Select(-1); }
+        catch (Exception ex) { Logger.Warn($"Select(-1) failed after a canceled host vote: {ex.Message}", "MeetingHudConfirmPatch"); }
+
+        return false;
+    }
+
+    // Postfix は原処理が例外を投げると走らない。関所が立ちっぱなしになると以降の票 (客の投票を含む) が
+    // 判定ごと素通りするので、例外経路でも必ず落ちる Finalizer で落とす
+    public static void Finalizer()
+    {
+        HostVoteChecked = false;
     }
 }
 
@@ -2010,7 +2072,7 @@ internal static class MeetingHudHandleRpcPatch
             // HandleCastVote 経由で他人の Role.OnVote を代理起動できてしまうので、帰結が最も重い
             // 2 つだけを拒否する。キック/BAN は付けない — 状態不整合を踏んだ正規クライアントを巻き込むため。
 
-            // ホストの票は CmdCastVote でローカル処理され、この RPC には乗らない
+            // ホストの票はローカル (Confirm → CastVote) で処理され、この RPC には乗らない
             if (PlayerControl.LocalPlayer && srcPlayerId == PlayerControl.LocalPlayer.PlayerId)
             {
                 Logger.Warn($"Rejected CastVote claiming to be the host (src={srcPlayerId})", "MeetingHudHandleRpcPatch");
