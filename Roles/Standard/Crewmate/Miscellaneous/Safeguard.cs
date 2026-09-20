@@ -61,7 +61,7 @@ public class Safeguard : RoleBase
         }
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         return Timer == null;
     }

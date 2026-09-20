@@ -51,7 +51,7 @@ public class Tank : RoleBase
         Main.AllPlayerSpeed[playerId] = Speed.GetFloat();
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         return CanBeKilled.GetBool();
     }

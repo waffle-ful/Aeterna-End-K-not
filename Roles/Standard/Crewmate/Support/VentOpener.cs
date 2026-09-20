@@ -199,10 +199,12 @@ public class VentOpener : RoleBase
         CurrentVent.Remove(pc.PlayerId);
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         if (OptionBlockKill.GetBool() && expelledPlayers.Contains(killer.PlayerId))
         {
+            if (check) return false;
+
             killer.SetKillCooldown();
             return false;
         }

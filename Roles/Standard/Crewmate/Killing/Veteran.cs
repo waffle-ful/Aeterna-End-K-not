@@ -123,12 +123,14 @@ internal class Veteran : RoleBase
             pc.Notify(Translator.GetString("OutOfAbilityUsesDoMoreTasks"));
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         if (!killer.IsAlive()) return false;
         
         if (VeteranInProtect.Contains(target.PlayerId) && killer.PlayerId != target.PlayerId)
         {
+            if (check) return false;
+
             if (!killer.Is(CustomRoles.Pestilence))
             {
                 killer.SetRealKiller(target);

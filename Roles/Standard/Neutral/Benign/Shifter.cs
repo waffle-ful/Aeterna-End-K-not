@@ -135,7 +135,7 @@ public class Shifter : RoleBase
         hud.KillButton?.OverrideText(Translator.GetString("ShifterKillButtonText"));
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         return CanBeKilled.GetBool();
     }

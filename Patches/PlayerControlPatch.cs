@@ -602,10 +602,11 @@ internal static class CheckMurderPatch
             return false;
         }
 
-        if (Jackal.On && Jackal.ResetKillCooldownWhenSbGetKilled.GetBool() && !killer.Is(CustomRoles.Sidekick) && !target.Is(CustomRoles.Sidekick) && !killer.Is(CustomRoles.Jackal) && !target.Is(CustomRoles.Jackal) && !GameStates.IsMeeting)
+        if (!check && Jackal.On && Jackal.ResetKillCooldownWhenSbGetKilled.GetBool() && !killer.Is(CustomRoles.Sidekick) && !target.Is(CustomRoles.Sidekick) && !killer.Is(CustomRoles.Jackal) && !target.Is(CustomRoles.Jackal) && !GameStates.IsMeeting)
             Jackal.AfterPlayerDiedTask(killer);
 
-        if (target.Is(CustomRoles.Lucky))
+        // 打診では乱数を振らない。照準表示から毎フレーム振り直すと、確率で防ぐ能力が実質0%に溶ける。
+        if (!check && target.Is(CustomRoles.Lucky))
         {
             if (IRandom.Instance.Next(0, 100) < Options.LuckyProbability.GetInt())
             {
@@ -620,6 +621,13 @@ internal static class CheckMurderPatch
             {
                 if (player.Is(CustomRoles.Crusader) && player.IsAlive())
                 {
+                    if (check)
+                    {
+                        // 身代わりが成立するかどうかだけを答え、誰も死なせない。
+                        if (killer.Is(CustomRoles.Pestilence) || !killer.Is(CustomRoles.KillingMachine)) return false;
+                        continue;
+                    }
+
                     switch (killer.Is(CustomRoles.Pestilence))
                     {
                         case false when !killer.Is(CustomRoles.KillingMachine):
@@ -644,6 +652,8 @@ internal static class CheckMurderPatch
                 Medic.IsDead(target);
                 break;
             case CustomRoles.Spiritcaller when Spiritcaller.Protected:
+                if (check) return false;
+
                 killer.RpcGuardAndKill(target);
                 Notify("SomeSortOfProtection");
                 return false;
@@ -651,6 +661,8 @@ internal static class CheckMurderPatch
 
         if (MeetingStates.FirstMeeting && Main.ShieldPlayer == target.FriendCode && !string.IsNullOrWhiteSpace(target.FriendCode))
         {
+            if (check) return false;
+
             Main.ShieldPlayer = string.Empty;
             killer.SetKillCooldown(15f);
             killer.Notify(GetString("TriedToKillLastGameFirstKill"), 10f);
@@ -659,6 +671,8 @@ internal static class CheckMurderPatch
 
         if (Options.MadmateSpawnMode.GetInt() == 1 && Main.MadmateNum < CustomRoles.Madmate.GetCount() && target.CanBeMadmate())
         {
+            if (check) return false;
+
             Main.MadmateNum++;
             target.RpcSetCustomRole(CustomRoles.Madmate);
             ExtendedPlayerControl.RpcSetCustomRole(target.PlayerId, CustomRoles.Madmate);
@@ -677,7 +691,7 @@ internal static class CheckMurderPatch
         // 呼ばないことで、貫かれた防御が身代わり死・反撃・回数消費を起こさない。
         // 宣言していない役職 (null) は従来通り無条件に呼ぶ。
         if (!AttackDefense.Pierces(killer, target, kind)
-            && !Main.PlayerStates[target.PlayerId].Role.OnCheckMurderAsTarget(killer, target))
+            && !Main.PlayerStates[target.PlayerId].Role.OnCheckMurderAsTarget(killer, target, check))
         {
             Notify("SomeSortOfProtection");
             return false;

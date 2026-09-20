@@ -403,7 +403,7 @@ internal class Bargainer : RoleBase
         }
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         return ActiveItems.All(x => x.Item != Item.BandAid);
     }

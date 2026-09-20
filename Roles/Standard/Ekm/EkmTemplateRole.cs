@@ -178,9 +178,9 @@ public abstract class EkmTemplateRole : RoleBase
 
     // Wave 1 (spec §2 on_attacked): 自分へのキル試行の一点関門。まもり (passives.shield) の消費判定と
     // on_attacked の同期プロローグはすべて EkrManager 側 (per-holder 状態を触るのはあちらの責務)。
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
-        if (!base.OnCheckMurderAsTarget(killer, target)) return false;
+        if (!base.OnCheckMurderAsTarget(killer, target, check)) return false;
 
         return EkrManager.FireAttacked(Slot, target, killer);
     }

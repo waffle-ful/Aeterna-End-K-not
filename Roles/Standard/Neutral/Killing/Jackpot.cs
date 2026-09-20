@@ -138,7 +138,7 @@ public class Jackpot : RoleBase
         killer.Notify(string.Format(GetString("Jackpot.KillReward"), MoneyPerKill.GetInt(), Money));
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         return !IsJackpotActive;
     }

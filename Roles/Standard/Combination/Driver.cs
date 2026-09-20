@@ -72,9 +72,11 @@ public class Driver : RoleBase
         if (Braid.DriverSeesVotes) opt.SetBool(BoolOptionNames.AnonymousVotes, false);
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         if (!Braid.DriverGuardUnlocked || !GuardChargeAvailable) return true;
+
+        if (check) return false;
 
         GuardChargeAvailable = false;
         Utils.NotifyRoles(SpecifySeer: killer);

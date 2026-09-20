@@ -149,13 +149,15 @@ public class Strawdoll : RoleBase
     }
 
     // When Strawdoll is attacked while shapeshifted: reprisal kill the curse target
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         if (killer.PlayerId == target.PlayerId) return true;
         if (!IsShapeshifted) return true;
 
         PlayerControl curseTarget = Utils.GetPlayerById(TargetId);
         if (curseTarget == null || !curseTarget.IsAlive()) return true;
+
+        if (check) return false;
 
         LateTask.New(() =>
         {

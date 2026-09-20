@@ -149,8 +149,10 @@ internal class Merchant : RoleBase
         AddonsSold[player.PlayerId]++;
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
+        if (check) return !IsBribedKiller(killer, target) && GetCurrentAmountOfMoney(target.PlayerId) < OptionMoneyRequiredToBribe.GetInt();
+
         if (IsBribedKiller(killer, target))
         {
             NotifyBribery(killer, target);

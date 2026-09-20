@@ -116,7 +116,7 @@ public class Rogue : RoleBase
         pc.RpcShapeshift(target, !Options.DisableAllShapeshiftAnimations.GetBool());
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         return !GotRewards.Contains(Reward.Shield);
     }

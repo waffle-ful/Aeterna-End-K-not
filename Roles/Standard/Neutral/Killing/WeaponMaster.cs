@@ -221,10 +221,12 @@ public class WeaponMaster : RoleBase
         }
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         if (Mode == 3 && !shieldUsed)
         {
+            if (check) return false;
+
             shieldUsed = true;
             SendRPC();
             return false;

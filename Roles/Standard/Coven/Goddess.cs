@@ -71,9 +71,11 @@ public class Goddess : CovenBase
         AURoleOptions.PhantomDuration = 0.1f;
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         if (Timer == null || killer.Is(CustomRoles.Pestilence) || !killer.IsAlive()) return true;
+
+        if (check) return false;
 
         killer.SetRealKiller(target);
         Main.PlayerStates[killer.PlayerId].deathReason = PlayerState.DeathReason.Stoned;

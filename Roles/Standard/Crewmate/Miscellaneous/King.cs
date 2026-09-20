@@ -70,9 +70,10 @@ public class King : RoleBase
         PlayerIdList.Remove(playerId);
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
-        killer.SetKillCooldown();
+        if (!check) killer.SetKillCooldown();
+
         return false;
     }
 

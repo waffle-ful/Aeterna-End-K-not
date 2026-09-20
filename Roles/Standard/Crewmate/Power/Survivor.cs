@@ -144,7 +144,7 @@ public class Survivor : RoleBase
         else pc.Notify(Translator.GetString("SurvivorCantShieldYet"));
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         return ShieldTimer == null;
     }

@@ -163,9 +163,11 @@ public class Akazukin : RoleBase
     public static bool ShouldDisplayDeathReason(byte id)
         => PseudoDead.ContainsKey(id) && DisplayDeathReasonInName != null && DisplayDeathReasonInName.GetBool();
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         if (killer == null || target == null) return true;
+
+        if (check) return false;
 
         if (PseudoDead.ContainsKey(target.PlayerId))
         {
