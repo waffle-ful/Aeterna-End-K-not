@@ -1156,7 +1156,12 @@ internal static class ExtendedPlayerControl
             // 判定は SetDead() より前に済ませること — 防御が後から成立すると死亡状態だけ残る。
             // ⚠️ 上の switch で返した5役職は既に答えを出しているので二重には通らない。
             //    EkmTemplateRole だけは EKn API 側の打診契約が未決のため、まもりの二重消費を避けて外す。
+            // ⚠️ 身代わり死 (Sacrifice) も外す — これはキラーからの攻撃ではなく本人の自発死で、
+            //    realKiller は手柄の帰属のためだけに渡されている。関所へ入れると
+            //    「関所の中から撃たれた Suicide がまた関所へ入る」経路ができ、
+            //    互いの保護半径に居るボディーガード2人が無限に身代わりし合ってスタックを食い潰す。
             if (Options.CurrentGameMode == CustomGameMode.Standard && realKiller && realKiller.PlayerId != player.PlayerId &&
+                deathReason != PlayerState.DeathReason.Sacrifice &&
                 state.Role is not EkmTemplateRole && !CheckMurderPatch.PassesGate(realKiller, player, kind: AttackKind.Indirect))
                 return;
 
