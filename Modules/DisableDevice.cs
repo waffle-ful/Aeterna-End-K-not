@@ -198,6 +198,7 @@ internal static class DisableDevice
                 bool ignore = (Options.DisableDevicesIgnoreImpostors.GetBool() && pc.Is(CustomRoleTypes.Impostor)) ||
                               (Options.DisableDevicesIgnoreNeutrals.GetBool() && pc.Is(CustomRoleTypes.Neutral)) ||
                               (Options.DisableDevicesIgnoreCrewmates.GetBool() && pc.Is(CustomRoleTypes.Crewmate)) ||
+                              (Options.DisableDevicesIgnoreMadmates.GetBool() && pc.Is(CustomRoles.Madmate)) ||
                               (Options.DisableDevicesIgnoreAfterAnyoneDied.GetBool() && GameStates.AlreadyDied);
 
                 ignore &= !force;
@@ -336,6 +337,7 @@ public class RemoveDisableDevicesPatch
                       (Options.DisableDevicesIgnoreImpostors.GetBool() && player.Is(CustomRoleTypes.Impostor)) ||
                       (Options.DisableDevicesIgnoreNeutrals.GetBool() && player.Is(CustomRoleTypes.Neutral)) ||
                       (Options.DisableDevicesIgnoreCrewmates.GetBool() && player.Is(CustomRoleTypes.Crewmate)) ||
+                      (Options.DisableDevicesIgnoreMadmates.GetBool() && player.Is(CustomRoles.Madmate)) ||
                       (Options.DisableDevicesIgnoreAfterAnyoneDied.GetBool() && GameStates.AlreadyDied);
 
         ignore &= !rogueForce;
