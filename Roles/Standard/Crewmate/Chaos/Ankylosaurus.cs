@@ -56,18 +56,16 @@ public class Ankylosaurus : RoleBase
 
     public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
-        bool survive = LivesLeft > 0;
+        // 関所は false = 阻止。ライフが残っている間だけ耐え、尽きたら普通に倒れる。
+        if (LivesLeft <= 0) return true;
 
-        if (check) return survive;
-        
-        if (survive)
-        {
-            LivesLeft--;
-            Utils.SendRPC(CustomRPC.SyncRoleData, target.PlayerId, LivesLeft);
-            killer.SetKillCooldown(KCD.GetFloat());
-        }
-        
-        return survive;
+        if (check) return false;
+
+        LivesLeft--;
+        Utils.SendRPC(CustomRPC.SyncRoleData, target.PlayerId, LivesLeft);
+        killer.SetKillCooldown(KCD.GetFloat());
+
+        return false;
     }
 
     public override string GetProgressText(byte playerId, bool comms)
