@@ -53,6 +53,8 @@ public static class AttackDefense
     /// </summary>
     public static bool Pierces(int attack, int? defense)
     {
+        if (Options.EnableAttackDefenseLevels is { } option && !option.GetBool()) return false;
+
         return defense != null && attack > defense.Value;
     }
 
