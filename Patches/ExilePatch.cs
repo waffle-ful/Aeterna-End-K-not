@@ -73,6 +73,7 @@ internal static class ExileControllerWrapUpPatch
             {
                 Main.PlayerStates[exiled.PlayerId].SetDead();
                 Twins.CheckFollowingSuicide(exiled.PlayerId, isExiled: true);
+                Madmate.CheckRevenge(exiled.PlayerId);
             }
         }
 

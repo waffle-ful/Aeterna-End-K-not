@@ -352,6 +352,12 @@ public static class Options
     public static OptionItem MadmateCanFixComms;
     public static OptionItem MadmateCanSeeOtherVotes;
     public static OptionItem MadmateCanSeeDeathReason;
+    public static OptionItem MadmateRevengePlayer;
+    public static OptionItem MadmateRevengeImpostor;
+    public static OptionItem MadmateRevengeCrewmate;
+    public static OptionItem MadmateRevengeMadmate;
+    public static OptionItem MadmateRevengeNeutral;
+    public static OptionItem MadmateRevengeCoven;
 
     public static OptionItem ImpCanKillMadmate;
     public static OptionItem MadmateCanKillImp;
@@ -1530,6 +1536,29 @@ public static class Options
             .SetGameMode(CustomGameMode.Standard);
 
         MadmateCanSeeDeathReason = new BooleanOptionItem(162, "MadmateCanSeeDeathReason", false, TabGroup.ImpostorRoles)
+            .SetGameMode(CustomGameMode.Standard);
+
+        MadmateRevengePlayer = new BooleanOptionItem(163, "MadmateRevengePlayer", false, TabGroup.ImpostorRoles)
+            .SetGameMode(CustomGameMode.Standard);
+
+        MadmateRevengeImpostor = new BooleanOptionItem(164, "MadmateRevengeImpostor", false, TabGroup.ImpostorRoles)
+            .SetParent(MadmateRevengePlayer)
+            .SetGameMode(CustomGameMode.Standard);
+
+        MadmateRevengeCrewmate = new BooleanOptionItem(165, "MadmateRevengeCrewmate", true, TabGroup.ImpostorRoles)
+            .SetParent(MadmateRevengePlayer)
+            .SetGameMode(CustomGameMode.Standard);
+
+        MadmateRevengeMadmate = new BooleanOptionItem(166, "MadmateRevengeMadmate", true, TabGroup.ImpostorRoles)
+            .SetParent(MadmateRevengePlayer)
+            .SetGameMode(CustomGameMode.Standard);
+
+        MadmateRevengeNeutral = new BooleanOptionItem(167, "MadmateRevengeNeutral", true, TabGroup.ImpostorRoles)
+            .SetParent(MadmateRevengePlayer)
+            .SetGameMode(CustomGameMode.Standard);
+
+        MadmateRevengeCoven = new BooleanOptionItem(168, "MadmateRevengeCoven", true, TabGroup.ImpostorRoles)
+            .SetParent(MadmateRevengePlayer)
             .SetGameMode(CustomGameMode.Standard);
 
         RenegadeKillCD = new FloatOptionItem(157, "RenegadeKillCD", new(0f, 180f, 0.5f), 25f, TabGroup.ImpostorRoles)

@@ -250,6 +250,15 @@ public static class TestBridge
             return;
         }
 
+        // Layer 3b-2: OS レベルのホイール注入。スクロールビュー (バニラ設定パネル等) の
+        // 画面外にある行は click/press では触れないので、これでしか届かない。
+        if (directive.StartsWith("scroll ", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecuteScroll(directive[7..].Trim()); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR scroll failed"); }
+            return;
+        }
+
         // Layer 3c: OS レベルのキーボード注入。テキスト欄 (設定検索・数値入力) に文字を打つ経路は
         // Unity の Input.inputString しか無いので、click/chat では代用できない。
         if (directive.StartsWith("type ", StringComparison.OrdinalIgnoreCase))
@@ -522,7 +531,7 @@ public static class TestBridge
 
         if (directive.Equals("help", StringComparison.OrdinalIgnoreCase))
         {
-            WriteOut("HELP directives: state | screenshot | click <h|label:x> | press <h|x y> | type <text> | key <enter|escape|tab|backspace> | getopt <pattern> | setopt <name|#id> <idx|on|off|~real> | forcerole <id|name|host|clear> [EnumName] | start | hostlobby | leavelobby | eosstall | autostart <on|off> | tp <x> <y> | tp <playerId> | tp <playerId|name> <x> <y> | switch <0-4> [playerId|name] | walk <x> <y> | walk <playerId> | walk stop | vote <playerId|skip> | overrule <targetId> [judgeId] | chat <text> | chatui <text> | sabotage <comms|reactor|o2|lights|lab|heli|mushroom|cd0> | fixsabotage <type> | use <kill|vent|pet|ability|report|sabotage> | vent enter <id> | vent exit | errors [n] | grep <pattern> [n] | bcensus | gc <clr|clr2|boehm|both> | sleep <sec> | wait <phase=X|players=N|marker:text|join|arrived> [timeoutSec] | wait cancel | /<chatcommand>");
+            WriteOut("HELP directives: state | screenshot | click <h|label:x> | press <h|x y> | scroll <x> <y> <notches> | type <text> | key <enter|escape|tab|backspace> | getopt <pattern> | setopt <name|#id> <idx|on|off|~real> | forcerole <id|name|host|clear> [EnumName] | start | hostlobby | leavelobby | eosstall | autostart <on|off> | tp <x> <y> | tp <playerId> | tp <playerId|name> <x> <y> | switch <0-4> [playerId|name] | walk <x> <y> | walk <playerId> | walk stop | vote <playerId|skip> | vote <voterId> <playerId|skip> | overrule <targetId> [judgeId] | chat <text> | chatui <text> | sabotage <comms|reactor|o2|lights|lab|heli|mushroom|cd0> | fixsabotage <type> | use <kill|vent|pet|ability|report|sabotage> | vent enter <id> | vent exit | errors [n] | grep <pattern> [n] | bcensus | gc <clr|clr2|boehm|both> | sleep <sec> | wait <phase=X|players=N|marker:text|join|arrived> [timeoutSec] | wait cancel | /<chatcommand>");
             return;
         }
 
@@ -1092,6 +1101,7 @@ public static class TestBridge
 
     private const uint MouseEventLeftDown = 0x0002;
     private const uint MouseEventLeftUp = 0x0004;
+    private const uint MouseEventWheel = 0x0800;
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern bool SetCursorPos(int x, int y);
@@ -1369,6 +1379,94 @@ public static class TestBridge
 
             WriteOut($"OK press [{clientX}, {clientY}] ({geom})");
         }, 0.1f, "TestBridge.PressUp", log: false);
+    }
+
+    // scroll <x> <y> <notches> — スクロールビューの画面外の行へ届くための唯一の経路。
+    // カーソルをその座標へ置いてからホイールを 1 ノッチずつ注入する (Unity の ScrollRect は
+    // 「カーソルがビューの上にある」ことを要求するので、座標指定は必須)。
+    // press と違いウィンドウが画面外に出ている場合の MoveWindow 退避は行わない — 届かなければ ERR を返す。
+    private static void ExecuteScroll(string rest)
+    {
+        if (!OperatingSystem.IsWindows()) { WriteOut("ERR scroll windows only"); return; }
+
+        string[] parts = rest.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        if (parts.Length != 3
+            || !float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float fx)
+            || !float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float fy)
+            || !int.TryParse(parts[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out int notches))
+        {
+            WriteOut("ERR scroll usage: scroll <x> <y> <notches> (notches: 下方向がマイナス)");
+            return;
+        }
+
+        if (notches == 0) { WriteOut("ERR scroll: notches must not be 0"); return; }
+        notches = Math.Clamp(notches, -20, 20);
+
+        var clientX = (int)fx;
+        var clientY = (int)fy;
+
+        IntPtr hWnd = ResolveGameWindow(out Win32Rect clientRect, out string winClass);
+        if (hWnd == IntPtr.Zero) { WriteOut("ERR scroll no window handle"); return; }
+
+        int clientW = clientRect.Right - clientRect.Left;
+        int clientH = clientRect.Bottom - clientRect.Top;
+        int screenW = Screen.width;
+        int screenH = Screen.height;
+
+        string geom = $"win=0x{hWnd.ToInt64():X} class={(winClass.Length > 0 ? winClass : "?")} client={clientW}x{clientH} screen={screenW}x{screenH}";
+
+        // 範囲チェックは換算「前」に、座標の出所 (スクリーンショット) と同じバックバッファ基準で行う。
+        if (screenW > 0 && screenH > 0 && (clientX < 0 || clientY < 0 || clientX >= screenW || clientY >= screenH))
+            WriteOut($"WARN scroll target outside the captured frame: [{clientX}, {clientY}] {geom}");
+
+        if (screenW > 0 && screenH > 0 && clientW > 0 && clientH > 0 && (clientW != screenW || clientH != screenH))
+        {
+            clientX = (int)Math.Round(clientX * (double)clientW / screenW);
+            clientY = (int)Math.Round(clientY * (double)clientH / screenH);
+            geom += " scaled";
+        }
+
+        try { SetForegroundWindow(hWnd); } catch { }
+
+        var clientPoint = new Win32Point { X = clientX, Y = clientY };
+        if (!ClientToScreen(hWnd, ref clientPoint)) { WriteOut("ERR scroll ClientToScreen failed"); return; }
+
+        try
+        {
+            SetCursorPos(clientPoint.X, clientPoint.Y);
+            GetCursorPos(out Win32Point actual);
+
+            if (actual.X != clientPoint.X || actual.Y != clientPoint.Y)
+            {
+                WriteOut($"ERR scroll cursor mismatch: wanted [{clientPoint.X}, {clientPoint.Y}] got [{actual.X}, {actual.Y}] (ウィンドウが画面外の可能性)");
+                return;
+            }
+        }
+        catch (Exception e)
+        {
+            Utils.ThrowException(e);
+            WriteOut("ERR scroll injection setup failed");
+            return;
+        }
+
+        // 1 ノッチずつ、フレームを跨いで送る。まとめて 1 発だと Unity 側が 1 回分しか拾わないことがある。
+        int step = notches > 0 ? 1 : -1;
+        int remaining = Math.Abs(notches);
+        var delay = 0f;
+
+        for (var i = 0; i < remaining; i++)
+        {
+            LateTask.New(() =>
+            {
+                try { mouse_event(MouseEventWheel, 0, 0, unchecked((uint)(step * 120)), IntPtr.Zero); }
+                catch (Exception e) { Utils.ThrowException(e); }
+            }, delay, "TestBridge.ScrollTick", log: false);
+
+            delay += 0.06f;
+        }
+
+        LateTask.New(() => WriteOut($"OK scroll [{clientX}, {clientY}] notches={notches} ({geom})"), delay, "TestBridge.ScrollDone", log: false);
     }
 
     [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
@@ -2153,33 +2251,50 @@ public static class TestBridge
         PlayerControl lp = PlayerControl.LocalPlayer;
         if (!lp) { WriteOut("ERR no local player"); return; }
 
+        // 引数 1 個 = ホスト自身の投票。2 個 = 代理投票 (voter を明示)。
+        // 代理投票が要るのは、非モッド客 (エミュ) が自分では投票しないため「全員が投票した瞬間 = 開票」を
+        // 作れず、開票の数秒間でしか見えない挙動 (匿名投票の見え方など) をタイマー満了に頼らず観測できないから。
+        string[] parts = rest.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        const string usage = "ERR vote usage: vote <playerId|skip> | vote <voterId> <playerId|skip>";
+
+        if (parts.Length is < 1 or > 2) { WriteOut(usage); return; }
+
+        PlayerControl voter = lp;
+
+        if (parts.Length == 2)
+        {
+            if (!byte.TryParse(parts[0], out byte voterId)) { WriteOut("ERR vote bad voterId"); return; }
+
+            voter = Utils.GetPlayerById(voterId);
+            if (voter == null) { WriteOut($"ERR vote no such voter: {voterId}"); return; }
+            if (!voter.IsAlive()) { WriteOut($"ERR vote voter {voterId} is dead"); return; }
+        }
+
+        string suspectArg = parts[^1];
         byte suspect;
 
-        if (rest.Equals("skip", StringComparison.OrdinalIgnoreCase))
+        if (suspectArg.Equals("skip", StringComparison.OrdinalIgnoreCase))
             suspect = 253; // vanilla の skip vote id
-        else if (!byte.TryParse(rest, out suspect))
-        {
-            WriteOut("ERR vote usage: vote <playerId|skip>");
-            return;
-        }
+        else if (!byte.TryParse(suspectArg, out suspect)) { WriteOut(usage); return; }
 
         try
         {
-            if (meeting.DidVote(lp.PlayerId)) { WriteOut("ERR vote already voted"); return; }
+            if (meeting.DidVote(voter.PlayerId)) { WriteOut($"ERR vote already voted ({voter.PlayerId})"); return; }
         }
         catch { }
 
         // CastVoteChecked = EHR の投票判定 (OnVote 等) を通してからバニラ CastVote に流す共通入口。
         // CancelsVote 系役職/死亡ガードはサイレントに投票を握り潰すので、
         // 呼び出し後に DidVote で「実際に反映されたか」を検証してから OK/ERR を出し分ける。
-        Patches.MeetingHudCastVotePatch.CastVoteChecked(meeting, lp.PlayerId, suspect);
+        Patches.MeetingHudCastVotePatch.CastVoteChecked(meeting, voter.PlayerId, suspect);
 
         bool landed;
-        try { landed = meeting.DidVote(lp.PlayerId); }
+        try { landed = meeting.DidVote(voter.PlayerId); }
         catch { landed = true; } // 検証不能時は楽観扱い(SYS 写しで役職側の拒否メッセージは別途見える)
 
         string targetStr = suspect == 253 ? "skip" : suspect.ToString();
-        WriteOut(landed ? $"OK vote {targetStr}" : $"ERR vote {targetStr} silently canceled (role logic / dead)");
+        string voterStr = voter.PlayerId == lp.PlayerId ? string.Empty : $" by {voter.PlayerId}";
+        WriteOut(landed ? $"OK vote {targetStr}{voterStr}" : $"ERR vote {targetStr}{voterStr} silently canceled (role logic / dead)");
     }
 
     // ── Layer C3b: Judge 木槌演出つき強制追放 (実機検証口) ─────────────
