@@ -145,6 +145,27 @@ public class Abyssbringer : RoleBase
         }
     }
 
+    // ブラックホールは毎フレーム同じ相手を舐めるため、守られて弾かれた相手をすぐ再判定しない。
+    // 関所は弾くたびにキラーへ通知を送るので、間隔を空けないと送信が毎フレームに膨らむ。
+    private const long GateRetryCooldownSeconds = 2;
+    private readonly Dictionary<byte, long> GateRetryAfter = [];
+
+    private bool CanConsume(PlayerControl abyssbringer, PlayerControl target)
+    {
+        long now = Utils.TimeStamp;
+
+        if (GateRetryAfter.TryGetValue(target.PlayerId, out long retryAfter) && now < retryAfter) return false;
+
+        if (CheckMurderPatch.PassesGate(abyssbringer, target, kind: AttackKind.Execution))
+        {
+            GateRetryAfter.Remove(target.PlayerId);
+            return true;
+        }
+
+        GateRetryAfter[target.PlayerId] = now + GateRetryCooldownSeconds;
+        return false;
+    }
+
     public override void OnFixedUpdate(PlayerControl pc)
     {
         if (Count++ < 3) return;
@@ -180,7 +201,7 @@ public class Abyssbringer : RoleBase
                     blackHole.Position = newPosition;
                 }
 
-                if (GameStates.IsInTask && !ExileController.Instance && FastVector2.DistanceWithinRange(pos, blackHole.Position, BlackHoleRadius.GetFloat()) && !nearestPlayer.Is(CustomRoles.Pestilence))
+                if (GameStates.IsInTask && !ExileController.Instance && FastVector2.DistanceWithinRange(pos, blackHole.Position, BlackHoleRadius.GetFloat()) && !nearestPlayer.Is(CustomRoles.Pestilence) && CanConsume(pc, nearestPlayer))
                 {
                     nearestPlayer.RpcExileV2();
                     RPC.PlaySoundRPC(pc.PlayerId, Sounds.KillSound);

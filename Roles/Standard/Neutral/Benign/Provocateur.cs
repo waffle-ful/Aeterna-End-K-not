@@ -60,6 +60,9 @@ internal class Provocateur : RoleBase
 
     public override bool OnCheckMurder(PlayerControl killer, PlayerControl target)
     {
+        // 挑発キルも反撃と同じい抗えない (Lv3)。
+        if (!AttackDefense.Retaliate(killer, target)) return false;
+
         Main.PlayerStates[target.PlayerId].deathReason = PlayerState.DeathReason.PissedOff;
         killer.Kill(target);
         Provoked.TryAdd(killer.PlayerId, target.PlayerId);

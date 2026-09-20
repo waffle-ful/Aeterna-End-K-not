@@ -141,7 +141,10 @@ public abstract class RoleBase : IComparable<RoleBase>
     /// </summary>
     public virtual int GetAttackPower(PlayerControl killer, AttackKind kind)
     {
-        return AttackDefense.Basic;
+        // 処刑系 (RpcExileV2 直呼び) は、どの役職も今は Pestilence だけを手書きで見ている。
+        // 抗えない (Lv3) を既定にすることが、その事実の追認になる (spec §8-3)。
+        // 弱い処刑を持つ役職は override する (例: Hangman は変身中で強力 = Lv2)。
+        return kind == AttackKind.Execution ? AttackDefense.Unstoppable : AttackDefense.Basic;
     }
 
     /// <summary>

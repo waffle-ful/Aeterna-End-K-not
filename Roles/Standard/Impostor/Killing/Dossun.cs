@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using EndKnot.Modules;
 using UnityEngine;
@@ -215,7 +215,9 @@ public class Dossun : RoleBase
             Vector2 tpBase = target.Pos();
             bool crushed = PhysicsHelpers.AnyNonTriggersBetween(victimPos, dir, CrushCheckDistance, Constants.ShipAndObjectsMask);
 
-            if (crushed)
+            // 抗えない (Lv3) の圧殺。Pestilence は従来どおり素通しで、
+            // 防がれた相手は殺さずにノックバックへ倒す。
+            if (crushed && !target.Is(CustomRoles.Pestilence) && CheckMurderPatch.PassesGate(dossun, target, kind: AttackKind.Execution))
             {
                 // 壁との間に挟まれた → CheckMurder バイパスで確定キル (WaveCannon/Abyssbringer と同じパターン)
                 target.RpcExileV2();

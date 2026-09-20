@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using AmongUs.GameOptions;
@@ -492,6 +492,10 @@ public class Riptide : RoleBase
     // ============================================================
     private void KillByRiptide(PlayerControl riptidePlayer, PlayerControl target, RiptideWaveState killingWave)
     {
+        // 抗えない (Lv3) の波。Pestilence は従来どおり素通しで、
+        // それ以外は陣営ルールと Lv3 防御だけが止められる。
+        if (target.Is(CustomRoles.Pestilence) || !CheckMurderPatch.PassesGate(riptidePlayer, target, kind: AttackKind.Execution)) return;
+
         byte pid = target.PlayerId;
 
         // target が killingWave 以外の波にも入っている場合、全波の SlowedPlayers から除去し

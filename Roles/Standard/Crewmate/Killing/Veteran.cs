@@ -123,6 +123,14 @@ internal class Veteran : RoleBase
             pc.Notify(Translator.GetString("OutOfAbilityUsesDoMoreTasks"));
     }
 
+    /// <summary>
+    ///     反撃態勢中だけ
+    /// </summary>
+    public override int? GetDefensePower(PlayerControl target, AttackKind kind)
+    {
+        return MurderOnly(kind, VeteranInProtect.Contains(target.PlayerId) ? (int?)AttackDefense.Powerful : null);
+    }
+
     public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         if (!killer.IsAlive()) return false;
@@ -133,6 +141,9 @@ internal class Veteran : RoleBase
 
             if (!killer.Is(CustomRoles.Pestilence))
             {
+                // 反撃も関所を通す (抗えない = Lv3)。抜けない相手には死亡理由を書き換えずに引き下がる。
+                if (!AttackDefense.Retaliate(target, killer)) return false;
+
                 killer.SetRealKiller(target);
                 Main.PlayerStates[killer.PlayerId].deathReason = PlayerState.DeathReason.Shot;
                 target.Kill(killer);
