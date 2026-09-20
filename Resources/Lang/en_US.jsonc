@@ -11861,6 +11861,7 @@
   /* ==============================
     Cooldowns and Timers           
   ============================== */
+  "EnableAttackDefenseLevels": "Attack & Defense Levels (a kill only lands when its attack beats the protection)",
   "FixFirstKillCooldown": "Reset First Kill Cooldown",
   "FirstTurnMeeting": "Force First Turn Meeting",
   "FirstTurnMeetingCantAbility": "Disable Role Abilities During Forced Meeting",
