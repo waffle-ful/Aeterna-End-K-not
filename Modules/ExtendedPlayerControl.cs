@@ -2493,9 +2493,9 @@ internal static class ExtendedPlayerControl
             }
         }
 
-        public bool RpcCheckAndMurder(PlayerControl target, bool check = false)
+        public bool RpcCheckAndMurder(PlayerControl target, bool check = false, AttackKind kind = AttackKind.Murder)
         {
-            return CheckMurderPatch.RpcCheckAndMurder(player, target, check);
+            return CheckMurderPatch.RpcCheckAndMurder(player, target, check, kind);
         }
 
         // synthetic (Wave 3 契約 §2): この経路は「役職やコマンドが起こす

@@ -415,7 +415,7 @@ internal static class CheckMurderPatch
         return false;
     }
 
-    public static bool RpcCheckAndMurder(PlayerControl killer, PlayerControl target, bool check = false)
+    public static bool RpcCheckAndMurder(PlayerControl killer, PlayerControl target, bool check = false, AttackKind kind = AttackKind.Murder)
     {
         if (!AmongUsClient.Instance.AmHost) return false;
 
@@ -673,7 +673,11 @@ internal static class CheckMurderPatch
             return false;
         }
 
-        if (!Main.PlayerStates[target.PlayerId].Role.OnCheckMurderAsTarget(killer, target))
+        // 防御レベルを宣言している役職は、攻撃が上回った時点で防御処理ごと跳ばす。
+        // 呼ばないことで、貫かれた防御が身代わり死・反撃・回数消費を起こさない。
+        // 宣言していない役職 (null) は従来通り無条件に呼ぶ。
+        if (!AttackDefense.Pierces(killer, target, kind)
+            && !Main.PlayerStates[target.PlayerId].Role.OnCheckMurderAsTarget(killer, target))
         {
             Notify("SomeSortOfProtection");
             return false;

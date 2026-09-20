@@ -124,6 +124,35 @@ public abstract class RoleBase : IComparable<RoleBase>
         return target != null && killer != null;
     }
 
+    /// <summary>
+    ///     この役職の現在の攻撃力。
+    ///     状態で変わる役職は override して分岐する (例: Hangman は変身中だけ Powerful)。
+    /// </summary>
+    public virtual int GetAttackPower(PlayerControl killer, AttackKind kind)
+    {
+        return AttackDefense.Basic;
+    }
+
+    /// <summary>
+    ///     この役職の現在の防御力。
+    ///     null = 【従来互換】レベル判定を掛けず、従来通り常に <see cref="OnCheckMurderAsTarget" /> を呼ぶ。
+    ///     移行が済んでいない役職は null のままでよく、その間は挙動が1ビットも変わらない。
+    /// </summary>
+    public virtual int? GetDefensePower(PlayerControl target, AttackKind kind)
+    {
+        return null;
+    }
+
+    /// <summary>
+    ///     murder 系 (Murder / Indirect / Execution / Retaliation) にだけ防御レベルを適用するヘルパー。
+    ///     Exile と Guess へ波及させると、恒久無敵系の役職がまとめて追放・推理免疫になり、
+    ///     投票で誰も処理できなくなる (spec §2)。追放耐性は OnVotedOut 鎖で別途宣言する。
+    /// </summary>
+    protected static int? MurderOnly(AttackKind kind, int? level)
+    {
+        return kind is AttackKind.Exile or AttackKind.Guess ? AttackDefense.None : level;
+    }
+
     public virtual void OnMurder(PlayerControl killer, PlayerControl target) { }
 
     public virtual void OnVoteKick(PlayerControl pc, PlayerControl target)
