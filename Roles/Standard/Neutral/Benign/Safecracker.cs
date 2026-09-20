@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using AmongUs.GameOptions;
 using EndKnot.Modules;
 using UnityEngine;
@@ -249,6 +249,17 @@ public class Safecracker : RoleBase
         return seer.PlayerId == SafecrackerId && target.Is(CustomRoleTypes.Impostor) && IsUnlocked(KnowImpostorsTaskRate);
     }
 
+    /// <summary>
+    ///     キルも追放も回数型 (タスクで開放) なので基本 (Lv1)。開放枠はそれぞれ別勘定。
+    /// </summary>
+    public override int? GetDefensePower(PlayerControl target, AttackKind kind)
+    {
+        if (kind == AttackKind.Exile)
+            return target.PlayerId == SafecrackerId && ExiledGuardUsed < MaxExiledGuardCount.GetInt() && IsUnlocked(ExiledGuardTaskRate) ? AttackDefense.Basic : AttackDefense.None;
+
+        return MurderOnly(kind, target.PlayerId == SafecrackerId && KillGuardUsed < MaxKillGuardCount.GetInt() && IsUnlocked(KillGuardTaskRate) ? (int?)AttackDefense.Basic : null);
+    }
+
     public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         if (killer == null || target == null || target.PlayerId != SafecrackerId) return true;
@@ -266,23 +277,23 @@ public class Safecracker : RoleBase
 
     /// <summary>
     /// 追放の決定処理から呼ばれる。true を返すとこのプレイヤーは追放されない。
-    /// 呼び出し位置は Dad.OnVotedOut と同じ (最多得票候補になった時点)。
+    /// 開放条件と残り回数は梯子 (<see cref="GetDefensePower" />) とここの両方で見る —
+    /// 梯子はホスト設定で丸ごと無効にできるので、このメソッド単体で正しくなければならない。
     /// </summary>
-    public static bool OnVotedOut(byte id)
+    public override bool OnVotedOut(PlayerControl pc)
     {
-        if (!On) return false;
-        if (!Main.PlayerStates.TryGetValue(id, out PlayerState state) || state.Role is not Safecracker safecracker) return false;
-        if (safecracker.ExiledGuardUsed >= MaxExiledGuardCount.GetInt()) return false;
-        if (!safecracker.IsUnlocked(ExiledGuardTaskRate)) return false;
+        if (!On || pc == null || pc.PlayerId != SafecrackerId) return false;
+        if (ExiledGuardUsed >= MaxExiledGuardCount.GetInt()) return false;
+        if (!IsUnlocked(ExiledGuardTaskRate)) return false;
 
         // 集計 Prefix は1つの会議で複数回走りうる。回数制限のある能力なので、
         // 同じ会議での2回目以降は「守るが消費しない」に倒す (1会議の追放は高々1人)。
-        if (safecracker.ExiledGuardUsedThisMeeting) return true;
+        if (ExiledGuardUsedThisMeeting) return true;
 
-        safecracker.ExiledGuardUsedThisMeeting = true;
-        safecracker.ExiledGuardUsed++;
-        safecracker.PendingExiledGuardNotice = true;
-        Logger.Info($"Ejection prohibited ({safecracker.ExiledGuardUsed}/{MaxExiledGuardCount.GetInt()})", "Safecracker");
+        ExiledGuardUsedThisMeeting = true;
+        ExiledGuardUsed++;
+        PendingExiledGuardNotice = true;
+        Logger.Info($"Ejection prohibited ({ExiledGuardUsed}/{MaxExiledGuardCount.GetInt()})", "Safecracker");
         return true;
     }
 
