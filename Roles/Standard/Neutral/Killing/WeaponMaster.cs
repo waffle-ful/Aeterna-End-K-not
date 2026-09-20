@@ -206,7 +206,7 @@ public class WeaponMaster : RoleBase
 
                 return true;
             case 2:
-                if (killer.RpcCheckAndMurder(target, true))
+                if (CheckMurderPatch.PassesGate(killer, target))
                 {
                     target.Suicide(PlayerState.DeathReason.Kill, killer);
                     killer.SetKillCooldown();

@@ -240,7 +240,7 @@ internal class Warlock : RoleBase
                     KeyValuePair<PlayerControl, float> min = cpdistance.OrderBy(c => c.Value).FirstOrDefault();
                     PlayerControl targetw = min.Key;
 
-                    if (cp.RpcCheckAndMurder(targetw, true))
+                    if (CheckMurderPatch.PassesGate(cp, targetw))
                     {
                         ResetCooldowns(true, true, true, pc);
 

@@ -174,7 +174,7 @@ public class Gambler : RoleBase
                     break;
                 case 3: // No lunge (Swift kill)
                     killer.Notify(GetString("GamblerGet.NoLunge"));
-                    if (killer.RpcCheckAndMurder(target, true)) target.Kill(target);
+                    if (CheckMurderPatch.PassesGate(killer, target)) target.Kill(target);
                     return false;
                 case 4: // Swap with random player
                     killer.Notify(GetString("GamblerGet.Swap"));

@@ -173,7 +173,7 @@ public class Torpedo : RoleBase
         //    同じ「範囲を巻き込む」設計の Chemist の手榴弾 (Chemist.cs:389-391) は
         //    `RpcCheckAndMurder(x, true)` で先に濾しているので、それに揃える。
         List<PlayerControl> victims = Main.AllAlivePlayerControlsToList
-            .Where(x => x.PlayerId != pc.PlayerId && !x.Data.Disconnected && FastVector2.DistanceWithinRange(current, x.Pos(), radius) && pc.RpcCheckAndMurder(x, true))
+            .Where(x => x.PlayerId != pc.PlayerId && !x.Data.Disconnected && FastVector2.DistanceWithinRange(current, x.Pos(), radius) && CheckMurderPatch.PassesGate(pc, x))
             .ToList();
 
         if (victims.Count > 0)

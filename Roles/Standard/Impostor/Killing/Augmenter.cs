@@ -35,7 +35,7 @@ public class Augmenter : RoleBase
     {
         PlayerControl newTarget = Utils.GetPlayerById(Target);
 
-        if (newTarget == null || !newTarget.IsAlive() || !killer.RpcCheckAndMurder(newTarget, true))
+        if (newTarget == null || !newTarget.IsAlive() || !CheckMurderPatch.PassesGate(killer, newTarget))
         {
             killer.Notify(string.Format(Translator.GetString("AugmenterFail"), Target.ColoredPlayerName()));
             return true;

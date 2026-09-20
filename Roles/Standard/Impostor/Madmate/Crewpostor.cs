@@ -59,7 +59,7 @@ internal class Crewpostor : RoleBase
                 {
                     target.SetRealKiller(player);
 
-                    if (player.RpcCheckAndMurder(target, true))
+                    if (CheckMurderPatch.PassesGate(player, target))
                     {
                         target.Suicide(PlayerState.DeathReason.Kill, player);
                         player.RpcGuardAndKill();

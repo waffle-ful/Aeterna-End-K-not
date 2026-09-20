@@ -94,7 +94,7 @@ internal class AntiAdminer : RoleBase
             pc.RpcResetAbilityCooldown();
             pc.Notify(Translator.GetString("AADone"));
 
-            foreach (PlayerControl player in PlayersNearDevices.Keys.ToValidPlayers().Where(x => x.IsAlive() && pc.RpcCheckAndMurder(x, true)))
+            foreach (PlayerControl player in PlayersNearDevices.Keys.ToValidPlayers().Where(x => x.IsAlive() && CheckMurderPatch.PassesGate(pc, x)))
                 player.Suicide(realKiller: pc);
         }, onTick: () =>
         {

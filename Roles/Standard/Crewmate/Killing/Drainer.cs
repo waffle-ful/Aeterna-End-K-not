@@ -102,7 +102,7 @@ public class Drainer : RoleBase
                 PlayerControl venter = Utils.GetPlayerById(venterId.Key);
                 if (venter == null) continue;
 
-                if (pc != null && pc.RpcCheckAndMurder(venter, true))
+                if (pc != null && CheckMurderPatch.PassesGate(pc, venter))
                 {
                     venter.MyPhysics.RpcBootFromVent(ventId);
 
