@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Fusion Core</string>
+    <string name="app_name">End K not</string>
     <string name="selector_title">选择游戏</string>
     <string name="selector_subtitle">下方列出支持的游戏包。</string>
     <string name="selector_action_settings">设置</string>
@@ -10,7 +10,7 @@
     <string name="settings_libunity_desc">如果使用的游戏因 Unity 问题而崩溃，请开启此选项。</string>
     <string name="selector_empty_not_configured">未配置任何支持的游戏包。</string>
     <string name="selector_empty_not_installed">当前未安装任何支持的游戏。</string>
-    <string name="selector_storage_permission_prompt">授予"所有文件访问权限"，以便 Fusion Core 将 BepInEx 文件写入 Documents 目录。</string>
+    <string name="selector_storage_permission_prompt">授予"所有文件访问权限"，以便 End K not 将 BepInEx 文件写入 Documents 目录。</string>
     <string name="selector_storage_permission_required">需要"所有文件访问权限"才能继续。</string>
     <string name="selector_storage_permission_open_failed">无法打开存储权限设置。</string>
     <string name="bootstrap_title">正在启动所选游戏</string>

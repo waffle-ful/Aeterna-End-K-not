@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">End K not</string>
+    <string name="selector_title">ゲームを選択</string>
+    <string name="selector_target_not_installed">この端末に Among Us がインストールされていません。</string>
+    <string name="selector_auto_launch_hint">まもなく Among Us を起動します。カードをタップするとすぐに起動、先に設定を開くこともできます。</string>
+    <string name="selector_storage_permission_prompt">End K not が BepInEx のファイルを書き込めるように「すべてのファイルへのアクセス」を許可してください。</string>
+    <string name="selector_storage_permission_required">続行するには「すべてのファイルへのアクセス」が必要です。</string>
+</resources>

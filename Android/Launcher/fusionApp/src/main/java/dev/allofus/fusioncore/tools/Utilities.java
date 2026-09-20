@@ -22,8 +22,11 @@ import java.util.zip.ZipInputStream;
 public class Utilities {
     private static final String TAG = "FusionCore";
 
+    /** Root folder under external storage that holds per-game BepInEx data. */
+    public static final String STORAGE_ROOT_DIR = "EndKnot";
+
     public static File getExternalFusionCoreDirectory(@Nullable String targetPackage) {
-        File fusionStorage = new File(Environment.getExternalStorageDirectory(), "FusionCore");
+        File fusionStorage = new File(Environment.getExternalStorageDirectory(), STORAGE_ROOT_DIR);
         if (targetPackage != null) {
             fusionStorage = new File(fusionStorage, targetPackage);
         }

@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.app.Instrumentation;
 import android.content.ComponentName;
 import android.content.Context;
+import android.content.ContextWrapper;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.os.Bundle;
@@ -13,6 +14,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 
@@ -37,11 +39,15 @@ public class InstrumentationHooks {
 
     public static boolean areHooksInstalled = false;
 
-    public static void install(Context fusionContext) {
+    /** Loader that dynamically started game activities are instantiated from. */
+    private static volatile ClassLoader gameClassLoader;
+
+    public static void install(Context fusionContext, ClassLoader gameLoader) {
         if (areHooksInstalled) {
             Log.d(TAG, "Instrumentation hooks already installed");
             return;
         }
+        gameClassLoader = gameLoader;
 
         try {
             Class<?> instrumentationClass = Instrumentation.class;
@@ -104,7 +110,17 @@ public class InstrumentationHooks {
             }
         };
 
+        MethodHook classLoaderHook = new MethodHook() {
+            @Override public void beforeCall(Pine.CallFrame callFrame) {
+                if (!(callFrame.thisObject instanceof Activity)) {
+                    return;
+                }
+                applyGameClassLoader((Activity) callFrame.thisObject);
+            }
+        };
+
         Method onCreate = Activity.class.getDeclaredMethod("onCreate", Bundle.class);
+        Pine.hook(onCreate, classLoaderHook);
         Pine.hook(onCreate, orientationHook);
         Pine.hook(onCreate, loadingViewHook);
 
@@ -127,6 +143,58 @@ public class InstrumentationHooks {
                     + " to " + activity.getClass().getName());
         } catch (Exception e) {
             Log.e(TAG, "Failed to apply target orientation", e);
+        }
+    }
+
+    /**
+     * Points the activity's base context at the game class loader so that
+     * framework paths going through Context.getClassLoader() (view inflation,
+     * fragment instantiation, etc.) resolve game classes. The field is a hidden
+     * framework member, so failure is tolerated and only logged.
+     */
+    private static void applyGameClassLoader(Activity activity) {
+        ClassLoader loader = gameClassLoader;
+        if (loader == null) {
+            return;
+        }
+        try {
+            Intent intent = activity.getIntent();
+            if (!isDynamicIntent(intent)) {
+                return;
+            }
+
+            Context base = activity;
+            while (base instanceof ContextWrapper) {
+                Context next = ((ContextWrapper) base).getBaseContext();
+                if (next == null || next == base) {
+                    break;
+                }
+                base = next;
+            }
+
+            Field field = null;
+            Class<?> clazz = base.getClass();
+            while (clazz != null && field == null) {
+                try {
+                    field = clazz.getDeclaredField("mClassLoader");
+                } catch (NoSuchFieldException e) {
+                    clazz = clazz.getSuperclass();
+                }
+            }
+            if (field == null) {
+                Log.w(TAG, "mClassLoader field not found on " + base.getClass().getName()
+                        + "; leaving base context loader untouched");
+                return;
+            }
+
+            field.setAccessible(true);
+            field.set(base, loader);
+            boolean applied = activity.getClassLoader() == loader;
+            Log.i(TAG, "Base context class loader override for " + activity.getClass().getName()
+                    + ": applied=" + applied);
+        } catch (Throwable t) {
+            Log.w(TAG, "Failed to override base context class loader for "
+                    + activity.getClass().getName() + ": " + t);
         }
     }
 
@@ -195,6 +263,7 @@ public class InstrumentationHooks {
 
             int intentIdx = -1;
             int strIdx = -1;
+            int loaderIdx = -1;
 
             for (int i = 0; i < callFrame.args.length; i++) {
                 Object arg = callFrame.args[i];
@@ -204,6 +273,9 @@ public class InstrumentationHooks {
                 }
                 else if (String.class.isAssignableFrom(arg.getClass())) {
                     strIdx = i;
+                }
+                else if (ClassLoader.class.isAssignableFrom(arg.getClass())) {
+                    loaderIdx = i;
                 }
             }
 
@@ -221,6 +293,14 @@ public class InstrumentationHooks {
             if (original != null && original.getComponent() != null) {
                 callFrame.args[intentIdx] = original;
                 callFrame.args[strIdx] = original.getComponent().getClassName();
+                ClassLoader loader = gameClassLoader;
+                if (loaderIdx >= 0 && loader != null) {
+                    callFrame.args[loaderIdx] = loader;
+                    Log.i(TAG, "newActivity: using game class loader for "
+                            + original.getComponent().getClassName());
+                } else if (loaderIdx >= 0) {
+                    Log.w(TAG, "newActivity: game class loader not registered, keeping original loader");
+                }
                 Log.d(TAG, "newActivity: intercepted StubActivity for dynamic origin");
             } else {
                 Log.e(TAG, "Failed to resolve original intent or component was null!");

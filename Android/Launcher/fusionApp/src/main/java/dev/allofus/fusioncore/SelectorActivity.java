@@ -45,8 +45,12 @@ public class SelectorActivity extends AppCompatActivity {
     private static final String TAG = "FusionCore";
     private static final int REQUEST_MANAGE_EXTERNAL_STORAGE = 1001;
     private static final String[] UNITY_ABIS = {"arm64-v8a", "armeabi-v7a", "x86_64", "x86"};
+    private static final String TARGET_PACKAGE = "com.innersloth.spacemafia";
+    private static final long AUTO_LAUNCH_DELAY_MS = 1500L;
 
     private String pendingLaunchPackage;
+    private Handler handler;
+    private final Runnable autoLaunchRunnable = () -> maybeLaunchBootstrap(TARGET_PACKAGE);
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -57,23 +61,42 @@ public class SelectorActivity extends AppCompatActivity {
         int basePadding = Math.round(getResources().getDisplayMetrics().density * 16f);
         Utilities.applyWindowInsets(root, basePadding);
 
-        var handler = new Handler(getMainLooper());
+        handler = new Handler(getMainLooper());
         handler.postDelayed(()->{
-            populateList();
+            boolean targetInstalled = populateList();
             if (!hasExternalStorageManagerAccess()) {
+                if (targetInstalled) {
+                    pendingLaunchPackage = TARGET_PACKAGE;
+                }
                 requestExternalStorageManagerAccess();
             } else {
                 CrashDetector.init(this);
+                if (targetInstalled) {
+                    handler.postDelayed(autoLaunchRunnable, AUTO_LAUNCH_DELAY_MS);
+                }
             }
         }, 100);
     }
 
-    private void populateList() {
+    @Override
+    protected void onPause() {
+        super.onPause();
+        if (handler != null) {
+            handler.removeCallbacks(autoLaunchRunnable);
+        }
+    }
+
+    private boolean populateList() {
         ListView listView = findViewById(R.id.selector_list);
         TextView emptyView = findViewById(R.id.selector_empty);
+        emptyView.setText(R.string.selector_target_not_installed);
         listView.setEmptyView(emptyView);
 
         List<AppEntry> installedTargets = resolveInstalledTargets();
+        if (!installedTargets.isEmpty()) {
+            TextView subtitle = findViewById(R.id.selector_subtitle);
+            subtitle.setText(R.string.selector_auto_launch_hint);
+        }
         Drawable defaultIcon = getPackageManager().getDefaultActivityIcon();
         ArrayAdapter<AppEntry> adapter = new ArrayAdapter<>(
                 this,
@@ -107,6 +130,7 @@ public class SelectorActivity extends AppCompatActivity {
 
                     ImageButton settingsButton = convertView.findViewById(R.id.selector_action_settings);
                     settingsButton.setOnClickListener(v -> {
+                        handler.removeCallbacks(autoLaunchRunnable);
                         var intent = new Intent(getContext(), GameSettingsActivity.class);
                         intent.putExtra(GameSettingsActivity.EXTRA_PACKAGE_NAME, entry.packageName);
                         startActivity(intent);
@@ -114,6 +138,7 @@ public class SelectorActivity extends AppCompatActivity {
 
                     ImageButton folderButton = convertView.findViewById(R.id.selector_action_folder);
                     folderButton.setOnClickListener(v -> {
+                        handler.removeCallbacks(autoLaunchRunnable);
                         File folder = Utilities.getExternalFusionCoreDirectory(entry.packageName);
 
                         if (!folder.exists() && !folder.mkdirs()) {
@@ -124,7 +149,7 @@ public class SelectorActivity extends AppCompatActivity {
                         }
 
                         try {
-                            String relativePath = "FusionCore/" + entry.packageName;
+                            String relativePath = Utilities.STORAGE_ROOT_DIR + "/" + entry.packageName;
                             Uri directoryUri = Uri.parse("content://com.android.externalstorage.documents/document/primary%3A" + Uri.encode(relativePath));
 
                             Intent intent = new Intent(Intent.ACTION_VIEW);
@@ -146,6 +171,7 @@ public class SelectorActivity extends AppCompatActivity {
         };
         listView.setAdapter(adapter);
         findViewById(R.id.selector_loading).setVisibility(View.GONE);
+        return !installedTargets.isEmpty();
     }
 
     @Override
@@ -194,6 +220,9 @@ public class SelectorActivity extends AppCompatActivity {
                 continue;
             }
             if (packageName.equals(getPackageName())) {
+                continue;
+            }
+            if (!TARGET_PACKAGE.equals(packageName)) {
                 continue;
             }
 
@@ -328,6 +357,7 @@ public class SelectorActivity extends AppCompatActivity {
             });
 
     private void maybeLaunchBootstrap(String packageName) {
+        handler.removeCallbacks(autoLaunchRunnable);
         if (!hasExternalStorageManagerAccess()) {
             pendingLaunchPackage = packageName;
             requestExternalStorageManagerAccess();

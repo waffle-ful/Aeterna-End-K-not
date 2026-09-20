@@ -22,13 +22,13 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.Locale;
 
-import dev.allofus.fusioncore.hooks.ClassHooks;
-import dev.allofus.fusioncore.hooks.ClassLoaderHooks;
 import dev.allofus.fusioncore.hooks.InstrumentationHooks;
 import dev.allofus.fusioncore.hooks.PackageManagerHooks;
 import dev.allofus.fusioncore.hooks.ResourceHooks;
 import dev.allofus.fusioncore.hooks.UnityPlayerHooks;
+import dev.allofus.fusioncore.tools.CustomContextWrapper;
 import dev.allofus.fusioncore.tools.FusionConfig;
+import dev.allofus.fusioncore.tools.GameClassLoaderFactory;
 import dev.allofus.fusioncore.tools.LibUnityDownloader;
 import dev.allofus.fusioncore.tools.NativeLibraryManager;
 import dev.allofus.fusioncore.tools.Utilities;
@@ -42,6 +42,7 @@ public class BootstrapActivity extends AppCompatActivity {
     public static final String EXTRA_USE_ORIGINAL_LIBUNITY = "og_libunity";
     public static final String BACKUP_UNITY_VERSION = "2017.0.0";
     private static final String GLOBAL_METADATA_FILE = "global-metadata.dat";
+    private static ClassLoader sGameClassLoader;
 
     private TextView statusView;
     private TextView progressDetailsView;
@@ -77,6 +78,22 @@ public class BootstrapActivity extends AppCompatActivity {
             return;
         }
 
+        // Build our own loader for the game code, parented to the launcher's loader.
+        // It is created once per process: the game's ApplicationInfo is modified at runtime
+        // after the first launch, and every hook must keep seeing the same loader instance.
+        // Never call gameContext.getClassLoader() - that would create a second, unrelated loader.
+        ClassLoader gameClassLoader;
+        try {
+            if (sGameClassLoader == null) {
+                sGameClassLoader = GameClassLoaderFactory.create(gameContext.getApplicationInfo(), getClassLoader());
+            }
+            gameClassLoader = sGameClassLoader;
+            CustomContextWrapper.setGameClassLoader(gameClassLoader);
+        } catch (Exception e) {
+            failAndFinish("Failed to create class loader for target package: " + targetPackage, e);
+            return;
+        }
+
         Intent launchIntent = getPackageManager().getLaunchIntentForPackage(targetPackage);
         if (launchIntent == null) {
             failAndFinish("No launch intent for target package: " + targetPackage, null);
@@ -91,7 +108,7 @@ public class BootstrapActivity extends AppCompatActivity {
         var overrideActivity = FusionSettings.getActivityOverrideForGame(this, targetPackage);
         try {
             if (!overrideActivity.equals(getString(R.string.settings_automatic))) {
-                var overrideClass = gameContext.getClassLoader().loadClass(overrideActivity);
+                var overrideClass = gameClassLoader.loadClass(overrideActivity);
                 if (overrideClass != null) {
                     launcherComponent = new ComponentName(targetPackage, overrideActivity);
                     Log.i(TAG, "Using override activity " + overrideActivity);
@@ -131,7 +148,7 @@ public class BootstrapActivity extends AppCompatActivity {
 
         Class<?> launcherClass;
         try {
-            launcherClass = gameContext.getClassLoader().loadClass(launcherComponent.getClassName());
+            launcherClass = gameClassLoader.loadClass(launcherComponent.getClassName());
         } catch (ClassNotFoundException e) {
             Log.e(TAG, "Failed to get class for launcher activity!");
             return;
@@ -139,11 +156,9 @@ public class BootstrapActivity extends AppCompatActivity {
 
         setPhaseStatus(getString(R.string.bootstrap_status_installing_hooks));
         try {
-            ClassLoaderHooks.installHooks(gameContext.getClassLoader());
-            ClassHooks.installHooks(gameContext.getClassLoader());
             PackageManagerHooks.installHooks(getPackageManager());
-            InstrumentationHooks.install(getApplicationContext());
-            UnityPlayerHooks.installHooks(gameContext);
+            InstrumentationHooks.install(getApplicationContext(), gameClassLoader);
+            UnityPlayerHooks.installHooks(gameContext, gameClassLoader);
             ResourceHooks.installHooks(gameContext.getResources(), getApplicationContext().getResources());
         } catch (Exception e) {
             Log.e(TAG, "Failed to install base hooks", e);
