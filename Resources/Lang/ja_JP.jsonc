@@ -13189,6 +13189,9 @@
   "JackalHadouHoSkInvalid": "そのプレイヤーは弾になれません。",
   "JackalHadouHoSkCandidate": "候補設定: {0}。次ラウンドで1.5マス以内に1.5秒近づいてください。",
   "JackalHadouHoSkSuccess": "{0} が弾になりました。",
+  "JackalHadouHoSkUsedUp": "弾はもう作りました。作れるのは1試合に1発だけです。",
+  "JackalHadouHoSkInherited": "弾から受け継いだ砲なので、新しい弾は作れません。",
+  "JackalHadouHoSkDisabled": "このロビーでは弾を作れない設定です。",
   "JackalHadouHoLoaded": "装填完了！次の発射は超ビームです。",
   "JackalHadouHo.DirectionDetect": "発射方向に少し動いて。直後にチャージ開始するから",
 

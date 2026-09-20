@@ -13812,6 +13812,9 @@
   "JackalHadouHoSkInvalid": "That player cannot be a Tama.",
   "JackalHadouHoSkCandidate": "Candidate set: {0}. Approach within 1.5 tiles for 1.5s next round.",
   "JackalHadouHoSkSuccess": "{0} is now your Tama.",
+  "JackalHadouHoSkUsedUp": "You already made your Tama — only one per game.",
+  "JackalHadouHoSkInherited": "You inherited this cannon as a Tama, so you cannot make a new one.",
+  "JackalHadouHoSkDisabled": "Making a Tama is turned off in this lobby.",
   "JackalHadouHoLoaded": "Loaded! Your next shot is a super beam.",
   "JackalHadouHo.DirectionDetect": "Move briefly in your firing direction. Beam charges right after.",
 
