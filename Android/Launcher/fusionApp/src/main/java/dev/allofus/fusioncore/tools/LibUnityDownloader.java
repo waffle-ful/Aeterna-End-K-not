@@ -10,13 +10,28 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.security.MessageDigest;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
 
 public final class LibUnityDownloader {
     private static final String TAG = "FusionCore";
-    private static final String LIBUNITY_DOWNLOAD_URL = "https://github.com/All-Of-Us-Mods/FusionCore.UnityDependencies/releases/download/";
+
+    /**
+     * Base URLs tried in order. Each must serve
+     * {@code <base><unityVersion>/libunity.so.<abi>} and the matching {@code libunity.sym.so.<abi>}.
+     * A mirror that has the same release assets can be appended here without other changes.
+     */
+    private static final String[] DOWNLOAD_BASE_URLS = {
+            "https://github.com/All-Of-Us-Mods/FusionCore.UnityDependencies/releases/download/",
+    };
+
+    private static final int ATTEMPTS_PER_URL = 3;
+    private static final long RETRY_BACKOFF_MS = 1000L;
+
     private static final String LIBUNITY_CACHE_META_FILE = "libunity.cache.properties";
 
     public interface DownloadProgressListener {
@@ -71,7 +86,7 @@ public final class LibUnityDownloader {
         File outputLibUnity = new File(outputDir, "libunity.so");
         File outputLibUnitySym = new File(outputDir, "libunity.sym.so");
         File cacheMetaFile = new File(outputDir, LIBUNITY_CACHE_META_FILE);
-        
+
         String downloadVersion = version.trim();
         String cacheKey = downloadVersion + "|" + currentAbi;
 
@@ -81,25 +96,29 @@ public final class LibUnityDownloader {
             return true;
         }
 
-        String baseUrl = LIBUNITY_DOWNLOAD_URL + downloadVersion + "/";
-        String libUrl = baseUrl + "libunity.so." + currentAbi;
-        String symUrl = baseUrl + "libunity.sym.so." + currentAbi;
+        String libAsset = "libunity.so." + currentAbi;
+        String symAsset = "libunity.sym.so." + currentAbi;
+        Map<String, String> expected = LibUnityChecksums.resolve(downloadVersion, libAsset, symAsset);
+        String libSha = expected.get(libAsset);
+        String symSha = expected.get(symAsset);
+        if (libSha == null || symSha == null) {
+            Log.w(TAG, "No known digest for Unity " + downloadVersion + " (" + currentAbi + "); download will not be verified");
+        }
 
-        Log.i(TAG, "Downloading libunity and symbols from " + baseUrl);
-
-        boolean libUnityDownloaded = downloadUrlToFile(libUrl, outputLibUnity, progressListener);
-        if (!libUnityDownloaded) {
+        String libSeen = downloadWithRetries(downloadVersion, libAsset, libSha, outputLibUnity, progressListener);
+        if (libSeen == null) {
             notifyDownloadFinished(progressListener, false, false);
             return false;
         }
 
-        boolean libUnitySymDownloaded = downloadUrlToFile(symUrl, outputLibUnitySym, progressListener);
-        if (!libUnitySymDownloaded) {
+        String symSeen = downloadWithRetries(downloadVersion, symAsset, symSha, outputLibUnitySym, progressListener);
+        if (symSeen == null) {
             notifyDownloadFinished(progressListener, false, false);
             return false;
         }
 
-        if (!writeLibUnityCacheMeta(cacheMetaFile, cacheKey, outputLibUnity.length(), outputLibUnitySym.length())) {
+        if (!writeLibUnityCacheMeta(cacheMetaFile, cacheKey, outputLibUnity.length(), outputLibUnitySym.length(),
+                libSeen, symSeen, libSha != null && symSha != null)) {
             Log.w(TAG, "Downloaded files but failed to update cache metadata");
         }
 
@@ -108,10 +127,70 @@ public final class LibUnityDownloader {
         return true;
     }
 
-    private static boolean downloadUrlToFile(String urlString, File outputFile, DownloadProgressListener progressListener) {
+    /**
+     * Tries every base URL, each up to {@link #ATTEMPTS_PER_URL} times with linear backoff.
+     * Returns the sha256 of the file that ended up in place, or null when every attempt failed.
+     */
+    private static String downloadWithRetries(String version,
+                                              String assetName,
+                                              String expectedSha256,
+                                              File outputFile,
+                                              DownloadProgressListener progressListener) {
+        for (String base : DOWNLOAD_BASE_URLS) {
+            String url = base + version + "/" + assetName;
+            for (int attempt = 1; attempt <= ATTEMPTS_PER_URL; attempt++) {
+                Log.i(TAG, "Downloading " + assetName + " from " + base + " (attempt " + attempt + "/" + ATTEMPTS_PER_URL + ")");
+                DownloadOutcome outcome = downloadUrlToFile(url, outputFile, expectedSha256, progressListener);
+                if (outcome.sha256 != null) {
+                    return outcome.sha256;
+                }
+                if (outcome.permanent) {
+                    // A wrong digest or a missing asset will not change on retry; move to the next source.
+                    Log.w(TAG, "Giving up on " + base + " for " + assetName + " (permanent failure)");
+                    break;
+                }
+                if (attempt < ATTEMPTS_PER_URL) {
+                    try {
+                        Thread.sleep(RETRY_BACKOFF_MS * attempt);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        return null;
+                    }
+                }
+            }
+        }
+        Log.e(TAG, "All download sources failed for " + assetName + " (" + version + ")");
+        return null;
+    }
+
+    /**
+     * Downloads one file to a temp path, hashing it as it streams, and moves it into place only
+     * when the size matches the server's Content-Length and the digest matches the expectation
+     * (when one is known).
+     */
+    private static final class DownloadOutcome {
+        /** sha256 hex of the file now in place, or null on failure. */
+        final String sha256;
+        /** true when retrying the same URL cannot succeed (HTTP 4xx, digest mismatch, local I/O). */
+        final boolean permanent;
+
+        private DownloadOutcome(String sha256, boolean permanent) {
+            this.sha256 = sha256;
+            this.permanent = permanent;
+        }
+
+        static DownloadOutcome success(String sha256) { return new DownloadOutcome(sha256, false); }
+        static DownloadOutcome transientFailure() { return new DownloadOutcome(null, false); }
+        static DownloadOutcome permanentFailure() { return new DownloadOutcome(null, true); }
+    }
+
+    private static DownloadOutcome downloadUrlToFile(String urlString,
+                                                     File outputFile,
+                                                     String expectedSha256,
+                                                     DownloadProgressListener progressListener) {
         HttpURLConnection connection = null;
         File tempFile = new File(outputFile.getParentFile(), outputFile.getName() + ".download");
-        
+
         try {
             connection = (HttpURLConnection) new URL(urlString).openConnection();
             connection.setRequestMethod("GET");
@@ -122,13 +201,16 @@ public final class LibUnityDownloader {
             int statusCode = connection.getResponseCode();
             if (statusCode < 200 || statusCode >= 300) {
                 Log.e(TAG, "Failed to download file from " + urlString + ", HTTP " + statusCode);
-                return false;
+                return statusCode >= 400 && statusCode < 500 && statusCode != 429
+                        ? DownloadOutcome.permanentFailure()
+                        : DownloadOutcome.transientFailure();
             }
 
             long totalBytes = connection.getContentLengthLong();
             notifyDownloadStarted(progressListener, urlString, totalBytes);
 
-            byte[] buffer = new byte[8192];
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] buffer = new byte[65536];
             long downloadedBytes = 0L;
             long lastProgressDispatchMs = 0L;
 
@@ -137,6 +219,7 @@ public final class LibUnityDownloader {
                 int count;
                 while ((count = is.read(buffer)) != -1) {
                     fos.write(buffer, 0, count);
+                    digest.update(buffer, 0, count);
                     downloadedBytes += count;
 
                     long now = System.currentTimeMillis();
@@ -145,24 +228,40 @@ public final class LibUnityDownloader {
                         lastProgressDispatchMs = now;
                     }
                 }
+                fos.getFD().sync();
             }
 
             notifyDownloadProgress(progressListener, downloadedBytes, totalBytes);
 
+            if (totalBytes > 0 && downloadedBytes != totalBytes) {
+                Log.e(TAG, "Incomplete download from " + urlString + ": " + downloadedBytes + "/" + totalBytes + " bytes");
+                return DownloadOutcome.transientFailure();
+            }
+            if (downloadedBytes <= 0) {
+                Log.e(TAG, "Empty download from " + urlString);
+                return DownloadOutcome.transientFailure();
+            }
+
+            String actualSha256 = toHex(digest.digest());
+            if (expectedSha256 != null && !expectedSha256.equalsIgnoreCase(actualSha256)) {
+                Log.e(TAG, "Digest mismatch for " + urlString + ": expected " + expectedSha256 + ", got " + actualSha256);
+                return DownloadOutcome.permanentFailure();
+            }
+
             if (outputFile.exists() && !outputFile.delete()) {
                 Log.e(TAG, "Failed to replace existing file: " + outputFile.getAbsolutePath());
-                return false;
+                return DownloadOutcome.permanentFailure();
             }
 
             if (!tempFile.renameTo(outputFile)) {
                 Log.e(TAG, "Failed to move downloaded file into place: " + outputFile.getAbsolutePath());
-                return false;
+                return DownloadOutcome.permanentFailure();
             }
 
-            return true;
+            return DownloadOutcome.success(actualSha256);
         } catch (Exception e) {
             Log.e(TAG, "Failed to download " + urlString, e);
-            return false;
+            return DownloadOutcome.transientFailure();
         } finally {
             if (connection != null) {
                 connection.disconnect();
@@ -171,6 +270,14 @@ public final class LibUnityDownloader {
                 Log.w(TAG, "Failed to clean temporary file: " + tempFile.getAbsolutePath());
             }
         }
+    }
+
+    private static String toHex(byte[] bytes) {
+        StringBuilder sb = new StringBuilder(bytes.length * 2);
+        for (byte b : bytes) {
+            sb.append(String.format(Locale.ROOT, "%02x", b));
+        }
+        return sb.toString();
     }
 
     private static void notifyDownloadStarted(DownloadProgressListener listener, String url, long totalBytes) {
@@ -226,11 +333,20 @@ public final class LibUnityDownloader {
         }
     }
 
-    private static boolean writeLibUnityCacheMeta(File cacheMetaFile, String cacheKey, long libunitySize, long libunitySymSize) {
+    private static boolean writeLibUnityCacheMeta(File cacheMetaFile,
+                                                  String cacheKey,
+                                                  long libunitySize,
+                                                  long libunitySymSize,
+                                                  String libunitySha256,
+                                                  String libunitySymSha256,
+                                                  boolean verified) {
         Properties meta = new Properties();
         meta.setProperty("cacheKey", cacheKey);
         meta.setProperty("libunitySize", Long.toString(libunitySize));
         meta.setProperty("libunitySymSize", Long.toString(libunitySymSize));
+        meta.setProperty("libunitySha256", libunitySha256);
+        meta.setProperty("libunitySymSha256", libunitySymSha256);
+        meta.setProperty("verified", Boolean.toString(verified));
 
         try (FileOutputStream fos = new FileOutputStream(cacheMetaFile, false)) {
             meta.store(fos, "libunity cache metadata");
@@ -246,7 +362,7 @@ public final class LibUnityDownloader {
             return null;
         }
 
-        String normalized = abiValue.trim().toLowerCase();
+        String normalized = abiValue.trim().toLowerCase(Locale.ROOT);
         if (normalized.isEmpty()) {
             return null;
         }
