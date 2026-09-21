@@ -36,7 +36,7 @@
 # --------------------------------------------------
 # Language Stats (GitHub Linguist Settings)
 # --------------------------------------------------
-# 1. 
+# 1. スクリプト類（PowerShell, Python, Shell, Batch）
 *.ps1       linguist-detectable=false
 *.psm1      linguist-detectable=false
 *.psd1      linguist-detectable=false
@@ -45,7 +45,7 @@
 *.bat       linguist-detectable=false
 *.cmd       linguist-detectable=false
 
-# 2. 
+# 2. Web・スタイル類（CSS, HTML, JS）
 *.css       linguist-detectable=false
 *.scss      linguist-detectable=false
 *.html      linguist-detectable=false
@@ -54,8 +54,9 @@
 *.jsx       linguist-detectable=false
 *.mjs       linguist-detectable=false
 *.cjs       linguist-detectable=false
+*.java      linguist-detectable=false
 
-# 3.
+# 4.
 *.json      linguist-vendored
 *.jsonc     linguist-vendored
 *.xml       linguist-vendored
