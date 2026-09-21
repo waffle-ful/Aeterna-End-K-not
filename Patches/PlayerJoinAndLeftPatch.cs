@@ -28,6 +28,26 @@ internal static class OnGameJoinedPatch
     private static bool ShownOverlayHangWarning;
     private static bool ShownLobbyKillWarning;
 
+    // ロビーキルの注意をホスト画面にポップアップで出す。ShowPopUp は HudManager.Instance.Dialogue
+    // (共有 DialogueBox) を使うので、無人ホストでモーダルが残り続けないよう一定時間で閉じる。
+    private static void ShowLobbyKillWarningPopup()
+    {
+        if (!HudManager.InstanceExists) return;
+
+        try { HudManager.Instance.ShowPopUp($"{GetString("LobbyKillEnabled.WarningTitle")}\n\n{GetString("LobbyKillEnabled.Warning")}"); }
+        catch { return; }
+
+        LateTask.New(() =>
+        {
+            try
+            {
+                DialogueBox dlg = HudManager.Instance != null ? HudManager.Instance.Dialogue : null;
+                if (dlg != null) dlg.gameObject.SetActive(false);
+            }
+            catch { }
+        }, 30f, "LobbyKillWarning.DismissPopup", log: false);
+    }
+
     public static void Postfix(AmongUsClient __instance)
     {
         JoiningGame = true;
@@ -115,10 +135,12 @@ internal static class OnGameJoinedPatch
 
                     // ロビーキルは実験的機能。既定は OFF だが、保存済みの設定は既定値より優先されるため
                     // 以前から ON にしているホストは更新後も ON のまま始まる。ON の間は毎セッション注意を出す。
+                    // チャットだけだと流れて見落とされるので、注意はポップアップでも出す (本文はチャットにも残す)。
                     if (!ShownLobbyKillWarning && Options.LobbyKillEnabled?.GetBool() == true)
                     {
                         ShownLobbyKillWarning = true;
                         Utils.SendMessage(GetString("LobbyKillEnabled.Warning"), lp.PlayerId, GetString("LobbyKillEnabled.WarningTitle"));
+                        ShowLobbyKillWarningPopup();
                     }
                 }, 12f, log: false);
             }
