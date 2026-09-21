@@ -8,7 +8,7 @@ internal class KillingMachine : RoleBase
     public static bool On;
 
     private static OptionItem MnKillCooldown;
-    private static OptionItem BypassShields;
+    public static OptionItem BypassShields;
     public override bool IsEnable => On;
 
     public override void SetupCustomOption()
@@ -66,6 +66,12 @@ internal class KillingMachine : RoleBase
 
         if (BypassShields.GetBool())
         {
+            // シールドは攻撃レベル (Lv3) の側で貫く。関所そのものは必ず通す —
+            // 素通りさせていた頃は、守りの梯子だけでなく陣営・システムのルール
+            // (CTA 同チームのキル禁止 / AFK シールド / ジャッカル↔サイドキック /
+            //  前ゲーム初キルシールド / MadmateSpawnMode の変換) まで飛んでいた。
+            if (!CheckMurderPatch.PassesGate(killer, target)) return false;
+
             if (killer.Is(CustomRoles.Swift))
             {
                 target.Suicide(PlayerState.DeathReason.Kill, killer);

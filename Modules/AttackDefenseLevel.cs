@@ -69,9 +69,11 @@ public static class AttackDefense
         if (killer == null) return Basic;
 
         // KillingMachine の攻撃だけ抗えない (Lv3)。十字軍の身代わり (Lv2) を今も素通りしている事実の追認。
+        // ⚠️ 「シールドを貫く」設定が切られている時は普通の攻撃 (Lv1) に戻す。
+        //    梯子側で固定していた頃は、設定を OFF にしてもシールドを貫き続けていた。
         // ⚠️ Pestilence はここに入れない。無敵なのは守りの側 (反射盾) で、
         //    キル自体は通常クールダウンの普通の攻撃 = 基本 (Lv1)。
-        if (killer.Is(CustomRoles.KillingMachine)) return Unstoppable;
+        if (killer.Is(CustomRoles.KillingMachine)) return KillingMachine.BypassShields.GetBool() ? Unstoppable : Basic;
 
         return Main.PlayerStates.TryGetValue(killer.PlayerId, out PlayerState state) && state.Role != null
             ? state.Role.GetAttackPower(killer, kind)

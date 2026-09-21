@@ -660,6 +660,9 @@ internal static class CheckMurderPatch
         // 十字軍の身代わりは強力 (Lv2)。
         // ⚠️ Pestilence だけは貫かずに従来の「逆に十字軍が死んで守られた側は生き残る」分岐へ残す
         //    (梯子どおり貫かせると、この守り自体が消えて守られた側が死ぬ = 既存挙動の破壊になる)。
+        // ⚠️ KillingMachine の名指し除外は撤去済み。「シールドを貫く」設定が入っていれば
+        //    攻撃が Lv3 になってこのブロック自体に入らないので、除外は梯子が代わりに表している。
+        //    設定を切った時は普通の Lv1 攻撃として身代わりが成立するのが正しい。
         if (Crusader.ForCrusade.Contains(target.PlayerId) &&
             (killer.Is(CustomRoles.Pestilence) || !AttackDefense.Pierces(atk, AttackDefense.Powerful)))
         {
@@ -667,16 +670,12 @@ internal static class CheckMurderPatch
             {
                 if (player.Is(CustomRoles.Crusader) && player.IsAlive())
                 {
-                    if (check)
-                    {
-                        // 身代わりが成立するかどうかだけを答え、誰も死なせない。
-                        if (killer.Is(CustomRoles.Pestilence) || !killer.Is(CustomRoles.KillingMachine)) return false;
-                        continue;
-                    }
+                    // 身代わりが成立するかどうかだけを答え、誰も死なせない。
+                    if (check) return false;
 
                     switch (killer.Is(CustomRoles.Pestilence))
                     {
-                        case false when !killer.Is(CustomRoles.KillingMachine):
+                        case false:
                             if (!AttackDefense.Retaliate(player, killer)) return false;
 
                             player.Kill(killer);
