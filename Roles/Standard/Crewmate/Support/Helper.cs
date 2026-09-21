@@ -30,6 +30,10 @@ public class Helper : RoleBase
     {
         var randomPlayer = Main.EnumeratePlayerControls().Without(pc).Where(x => x.Is(Team.Crewmate)).Select(x => (pc: x, ts: x.GetTaskState())).Where(x => !x.ts.IsTaskFinished && x.ts.HasTasks).Select(x => x.pc).RandomElement();
         var incompleteTasks = randomPlayer.myTasks.FindAll((Predicate<PlayerTask>)(x => !x.IsComplete));
+        // 非モッド客の myTasks には Id 0 の説明タスクが並ぶことがあり、CompleteTask の Id 検索が
+        // そちらに当たって本命のタスクが完了表示にならない。選べる限り Id 0 以外から選ぶ。
+        var pickable = incompleteTasks.FindAll((Predicate<PlayerTask>)(x => x.Id != 0));
+        if (pickable.Count > 0) incompleteTasks = pickable;
         RPC.PlaySoundRPC(randomPlayer.PlayerId, Sounds.TaskUpdateSound);
         randomPlayer.RpcCompleteTask(incompleteTasks[IRandom.Instance.Next(0, incompleteTasks.Count)].Id);
         randomPlayer.Notify(string.Format(Translator.GetString("HelperCompletedTaskForYou"), CustomRoles.Helper.ToColoredString()));

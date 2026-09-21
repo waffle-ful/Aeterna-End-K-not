@@ -57,7 +57,9 @@ internal class Benefactor : RoleBase
         if (!IsEnable) return;
 
         ShieldedPlayers.Clear();
-        TaskIndex.SetAllValues([]);
+        // SetAllValues は全キーへ同一インスタンスを配るため、ここで使うとベネファクター全員が
+        // 1 本の List を共有し、他人が守ったタスクまで自分の担当として数えてしまう。
+        foreach (byte pid in TaskIndex.Keys.ToArray()) TaskIndex[pid] = [];
     }
 
     public static void OnTaskComplete(PlayerControl player, PlayerTask task) // Special case for Benefactor

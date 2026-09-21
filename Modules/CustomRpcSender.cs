@@ -692,6 +692,27 @@ public static class CustomRpcSenderExtensions
         return CustomNetObject.DropUnterminatedTag(sb.ToString());
     }
 
+    // 予算超過時の内訳ダンプ。装飾名は「素名 / 役職テキスト / アドオン / suffix」が改行で積まれるので、
+    // 行ごとの byte 数と先頭 10 文字を並べれば、どの装飾が膨らんだのかを発生 1 回で特定できる。
+    private static string DescribeNameLines(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return "(empty)";
+
+        string[] lines = name.Split('\n');
+        var sb = new System.Text.StringBuilder();
+
+        for (var i = 0; i < lines.Length && i < 12; i++)
+        {
+            string plain = lines[i].RemoveHtmlTags().Replace("\r", string.Empty).Trim();
+            if (plain.Length > 10) plain = plain[..10];
+            sb.Append($"[{i}:{System.Text.Encoding.UTF8.GetByteCount(lines[i])}B:{plain}]");
+        }
+
+        if (lines.Length > 12) sb.Append($"[+{lines.Length - 12}]");
+
+        return sb.ToString();
+    }
+
     // SetName を packed message に一括蓄積する。UTF-8 byte で正確に計算し、SetNameChunkFlushThreshold を
     // 超える手前で現 message を送って sender を作り直す (chunk 分割)。sender は ref で受けて差し替える。
     // checkLength=false にして StartMessage/StartPackedMessage の 500 byte 自動分割は無効化し、ここで管理する。
@@ -730,6 +751,7 @@ public static class CustomRpcSenderExtensions
 
             if (wasClamped)
             {
+                string overBudget = name; // 切り詰める前の姿 — 内訳ダンプはこちらを見る
                 name = clamped;
 
                 // クランプ後 dedup: 変わったのが切り捨てられる末尾 (Sonar 矢印等の毎秒動く suffix) だけなら
@@ -740,7 +762,7 @@ public static class CustomRpcSenderExtensions
                 if (Main.LastSentClampedNames.TryGetValue(clampKey, out string lastClamped) && lastClamped == name) return;
 
                 Main.LastSentClampedNames[clampKey] = name;
-                Logger.Error($"SetName for player {player.PlayerId} is {nameBytes}B > {EffectiveNameBudget}B — clamped to avoid official-server Hacking kick. Shrink the name decoration (role text / addons / suffix)!", "RpcSetName.NameBudget");
+                Logger.Error($"SetName for player {player.PlayerId} is {nameBytes}B > {EffectiveNameBudget}B — clamped to avoid official-server Hacking kick. Shrink the name decoration (role text / addons / suffix)! lines={DescribeNameLines(overBudget)}", "RpcSetName.NameBudget");
                 // 分割不能な単発超過に対する唯一の防波堤が発動した記録。log.html 限定だと
                 // 「クランプが効いていたのに別経路でキックされた」のか切り分けられなくなる (上の dedup 済み)。
                 HealthLog.NoteAnom($"WARN kind=namebudget pid={player.PlayerId} bytes={nameBytes} budget={EffectiveNameBudget} t={Utils.TimeStamp}");

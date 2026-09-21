@@ -1027,7 +1027,9 @@ internal static class MeetingHudStartPatch
     {
         Logger.Info("------------Meeting Start------------", "Phase");
         GameStates.AlreadyDied |= !Utils.IsAllAlive;
-        ReportDeadBodyPatch.WaitReport.SetAllValues([]);
+        // SetAllValues は全キーへ同一インスタンスを配るため、List 値の辞書に使うと全員のキューが
+        // 1 本の実体に化ける (誰かが積んだ通報を別人の drain が引き当てる)。キーごとに新品を配る。
+        foreach (byte pid in ReportDeadBodyPatch.WaitReport.Keys.ToArray()) ReportDeadBodyPatch.WaitReport[pid] = [];
         MeetingStates.MeetingCalled = true;
         MeetingStates.MeetingNum++;
         CheckForEndVotingPatch.TempExiledPlayer = null;
