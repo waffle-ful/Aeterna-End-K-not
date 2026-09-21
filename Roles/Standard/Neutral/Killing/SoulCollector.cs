@@ -52,7 +52,7 @@ public class SoulCollector : RoleBase
 
     public override bool OnCheckMurder(PlayerControl killer, PlayerControl target)
     {
-        if (!killer.RpcCheckAndMurder(target, check: true)) return false;
+        if (!CheckMurderPatch.PassesGate(killer, target)) return false;
         
         ToExile.Add(target.PlayerId);
         Main.AllPlayerSpeed[target.PlayerId] = Main.MinSpeed;

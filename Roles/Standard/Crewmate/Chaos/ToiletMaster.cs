@@ -346,13 +346,14 @@ public class ToiletMaster : RoleBase
         return false;
     }
 
-    public static bool OnAnyoneCheckMurder(PlayerControl killer, PlayerControl target)
+    public static bool OnAnyoneCheckMurder(PlayerControl killer, PlayerControl target, bool check = false)
     {
         foreach (ToiletMaster tm in Instances)
         {
             if (tm.ActivePoops.TryGetValue(killer.PlayerId, out (Poop Poop, long TimeStamp, object Data) poop) && poop.Poop == Poop.Purple)
             {
-                if (PurplePoopNotifyOnKillAttempt.GetBool())
+                // 打診では知らせない。照準のたびに的へ通知が飛ぶと送信量も無駄に増える。
+                if (!check && PurplePoopNotifyOnKillAttempt.GetBool())
                     target.Notify(Translator.GetString("TM.TryKillNotify"));
 
                 return false;

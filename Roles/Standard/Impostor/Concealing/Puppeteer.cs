@@ -223,7 +223,7 @@ internal class Puppeteer : RoleBase
 
         float killRange = GameManager.Instance.LogicOptions.GetKillDistance();
         if (minDistance > killRange || !player.CanMove || !closestTarget.CanMove) return;
-        if (!player.RpcCheckAndMurder(closestTarget, true)) return;
+        if (!CheckMurderPatch.PassesGate(player, closestTarget)) return;
 
         byte puppeteerId = PuppeteerList[playerId];
         RPC.PlaySoundRPC(puppeteerId, Sounds.KillSound);

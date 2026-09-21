@@ -155,11 +155,19 @@ public class Mastermind : RoleBase
 
         foreach (byte id in PlayerIdList) (Main.PlayerStates[id].Role as Mastermind)?.NotifyMastermindTargetSurvived();
 
-        if (target.Is(CustomRoles.Pestilence) || Veteran.VeteranInProtect.Contains(target.PlayerId) || target.Is(CustomRoles.Mastermind))
+        // 手書きで見ていた Pestilence / 警戒中ベテランに加えて、関所の陣営ルールと全ての守りが効く。
+        // 守り切られた場合は従来どおり、操られた側が身代わりに死ぬ分岐へ倒す。
+        if (target.Is(CustomRoles.Pestilence) || Veteran.VeteranInProtect.Contains(target.PlayerId) || target.Is(CustomRoles.Mastermind) ||
+            !CheckMurderPatch.PassesGate(killer, target))
         {
-            Main.PlayerStates[killer.PlayerId].deathReason = PlayerState.DeathReason.Suicide;
-            Main.PlayerStates[killer.PlayerId].SetDead();
-            target.Kill(killer);
+            // 関所の中で相手が撃ち返していた場合 (ゴッデス等) は既に倒れているので、二度殺さない。
+            if (killer.IsAlive())
+            {
+                Main.PlayerStates[killer.PlayerId].deathReason = PlayerState.DeathReason.Suicide;
+                Main.PlayerStates[killer.PlayerId].SetDead();
+                target.Kill(killer);
+            }
+
             TempKCDs.Remove(killer.PlayerId);
 
             if (target.AmOwner)

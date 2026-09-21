@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using EndKnot.Modules;
@@ -432,7 +432,12 @@ public class SuperCannonShot
 
     private void Kill(PlayerControl target)
     {
+        // 弾かれた相手も「この一発では処理済み」にしておく。
+        // 関所は弾くたびキラーへ通知を送るので、印を後回しにすると同じ相手への送信が毎フレーム繰り返される。
         AlreadyKilled.Add(target.PlayerId);
+
+        // 抗えない (Lv3) の砲撃。陣営ルールと Lv3 防御だけが止められる。
+        if (!CheckMurderPatch.PassesGate(Shooter, target, kind: AttackKind.Execution)) return;
 
         // CheckMurder バイパスで確定キル (WaveCannon.CheckBeamKills と同じパターン)
         target.RpcExileV2();

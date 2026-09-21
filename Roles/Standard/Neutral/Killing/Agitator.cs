@@ -159,6 +159,7 @@ public class Agitator : RoleBase
         PlayerControl target = Utils.GetPlayerById(CurrentBombedPlayer);
         PlayerControl killer = Utils.GetPlayerById(PlayerIdList[0]);
         if (!target || !killer || target.Is(CustomRoles.Pestilence)) return;
+        if (!CheckMurderPatch.PassesGate(killer, target, kind: AttackKind.Execution)) return;
 
         target.RpcExileV2();
         target.SetRealKiller(killer);

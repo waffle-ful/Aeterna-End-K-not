@@ -46,18 +46,26 @@ public class Ankylosaurus : RoleBase
         opt.SetFloat(FloatOptionNames.ImpostorLightMod, vision);
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    /// <summary>
+    ///     回数
+    /// </summary>
+    public override int? GetDefensePower(PlayerControl target, AttackKind kind)
     {
-        bool survive = LivesLeft > 0;
-        
-        if (survive)
-        {
-            LivesLeft--;
-            Utils.SendRPC(CustomRPC.SyncRoleData, target.PlayerId, LivesLeft);
-            killer.SetKillCooldown(KCD.GetFloat());
-        }
-        
-        return survive;
+        return MurderOnly(kind, LivesLeft > 0 ? (int?)AttackDefense.Basic : null);
+    }
+
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
+    {
+        // 関所は false = 阻止。ライフが残っている間だけ耐え、尽きたら普通に倒れる。
+        if (LivesLeft <= 0) return true;
+
+        if (check) return false;
+
+        LivesLeft--;
+        Utils.SendRPC(CustomRPC.SyncRoleData, target.PlayerId, LivesLeft);
+        killer.SetKillCooldown(KCD.GetFloat());
+
+        return false;
     }
 
     public override string GetProgressText(byte playerId, bool comms)

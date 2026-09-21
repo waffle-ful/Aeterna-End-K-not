@@ -1,4 +1,4 @@
-using AmongUs.GameOptions;
+﻿using AmongUs.GameOptions;
 using EndKnot.Modules;
 using static EndKnot.Options;
 
@@ -72,9 +72,19 @@ public class Driver : RoleBase
         if (Braid.DriverSeesVotes) opt.SetBool(BoolOptionNames.AnonymousVotes, false);
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    /// <summary>
+    ///     Braid から貰ったガード
+    /// </summary>
+    public override int? GetDefensePower(PlayerControl target, AttackKind kind)
+    {
+        return MurderOnly(kind, Braid.DriverGuardUnlocked && GuardChargeAvailable ? (int?)AttackDefense.Powerful : null);
+    }
+
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         if (!Braid.DriverGuardUnlocked || !GuardChargeAvailable) return true;
+
+        if (check) return false;
 
         GuardChargeAvailable = false;
         Utils.NotifyRoles(SpecifySeer: killer);

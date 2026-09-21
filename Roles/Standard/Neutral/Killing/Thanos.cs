@@ -103,6 +103,9 @@ public class Thanos : RoleBase
 
         if (ActiveStone is Stone.Space)
         {
+            // 抗えない (Lv3) の処刑。Pestilence だけは従来どおり素通し (反撃もさせない)。
+            if (target.Is(CustomRoles.Pestilence) || !CheckMurderPatch.PassesGate(killer, target, kind: AttackKind.Execution)) return false;
+
             RPC.PlaySoundRPC(killer.PlayerId, Sounds.KillSound);
             ActiveStone = null;
             Utils.SendRPC(CustomRPC.SyncRoleData, ThanosId, 2);
@@ -121,7 +124,15 @@ public class Thanos : RoleBase
         return true;
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    /// <summary>
+    ///     リアリティ・ストーン装備中
+    /// </summary>
+    public override int? GetDefensePower(PlayerControl target, AttackKind kind)
+    {
+        return MurderOnly(kind, ActiveStone is Stone.Reality ? (int?)AttackDefense.Powerful : null);
+    }
+
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         return ActiveStone is not Stone.Reality;
     }

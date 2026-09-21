@@ -60,7 +60,7 @@ public class Vortex : RoleBase
 
     public override bool OnCheckMurder(PlayerControl killer, PlayerControl target)
     {
-        if (!killer.RpcCheckAndMurder(target, true)) return false;
+        if (!CheckMurderPatch.PassesGate(killer, target)) return false;
 
         if (!target.TPToRandomVent())
         {

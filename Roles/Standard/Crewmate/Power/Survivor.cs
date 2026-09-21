@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using AmongUs.GameOptions;
 using EndKnot.Modules;
@@ -144,7 +144,15 @@ public class Survivor : RoleBase
         else pc.Notify(Translator.GetString("SurvivorCantShieldYet"));
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    /// <summary>
+    ///     時限シールド
+    /// </summary>
+    public override int? GetDefensePower(PlayerControl target, AttackKind kind)
+    {
+        return MurderOnly(kind, ShieldTimer != null ? (int?)AttackDefense.Powerful : null);
+    }
+
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         return ShieldTimer == null;
     }

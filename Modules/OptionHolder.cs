@@ -771,6 +771,7 @@ public static class Options
     public static OptionItem LadderDeath;
     public static OptionItem LadderDeathChance;
 
+    public static OptionItem EnableAttackDefenseLevels;
     public static OptionItem FixFirstKillCooldown;
     public static OptionItem FirstTurnMeeting;
     public static OptionItem FirstTurnMeetingCantAbility;
@@ -3431,6 +3432,11 @@ public static class Options
         LoadingPercentage = 97;
         if (FrameBudgetSpent()) { yieldedFrames++; yield return null; frameBudget.Restart(); }
 
+
+        EnableAttackDefenseLevels = new BooleanOptionItem(23899, "EnableAttackDefenseLevels", true, TabGroup.GameSettings)
+            .SetGameMode(CustomGameMode.Standard)
+            .SetHeader(true)
+            .SetColor(new Color32(193, 255, 209, byte.MaxValue));
 
         FixFirstKillCooldown = new BooleanOptionItem(23900, "FixFirstKillCooldown", false, TabGroup.GameSettings)
             .SetColor(new Color32(193, 255, 209, byte.MaxValue));

@@ -71,15 +71,22 @@ public class Grappler : RoleBase
         InUse = reader.ReadBoolean();
     }
 
-    public static bool OnAnyoneCheckMurder(PlayerControl target)
+    public static bool OnAnyoneCheckMurder(PlayerControl target, bool check = false)
     {
         if (Utils.IsAnySabotageActive()) return true;
 
         foreach (Grappler instance in Instances)
         {
-            if (instance.InUse)
+            PlayerControl grappler = instance.GrapplerId.GetPlayer();
+
+            // Instances は役職変更でしか掃除されず、InUse は会議明けの再計算が死者を素通りするので
+            // 死んだ本人の分が残る。生死を見ないと死体の座標へ的を引き寄せてキルだけ消える。
+            if (instance.InUse && grappler != null && grappler.IsAliveWithConditions())
             {
-                target.TP(instance.GrapplerId.GetPlayer());
+                // 打診で引き寄せると、撃たない相手のために能力1回ぶんと的の座標を失う。
+                if (check) return false;
+
+                target.TP(grappler);
                 instance.InUse = false;
                 Utils.SendRPC(CustomRPC.SyncRoleData, instance.GrapplerId, instance.InUse);
                 return false;

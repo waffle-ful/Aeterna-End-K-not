@@ -96,8 +96,10 @@ public class DummySpawner : RoleBase
         return false;
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
+        if (check) return true;
+
         if (SpawnedDummies.TryGetValue(target.PlayerId, out var dummies))
         {
             dummies.ToArray().Do(d => d?.Despawn());

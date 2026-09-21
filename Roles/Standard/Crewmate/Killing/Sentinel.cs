@@ -26,7 +26,11 @@ public class PatrollingState(byte sentinelId, int patrolDuration, float patrolRa
 
     private CountdownTimer Timer;
 
-    public IEnumerable<PlayerControl> NearbyKillers => FastVector2.GetPlayersInRange(StartingPosition, PatrolRadius).Where(x => !x.Is(Team.Crewmate) && (!Sentinel.IsMadmate() || !x.Is(Team.Impostor)) && SentinelId != x.PlayerId);
+    public IEnumerable<PlayerControl> NearbyKillers => Sentinel == null ? [] : FastVector2.GetPlayersInRange(StartingPosition, PatrolRadius).Where(x => !x.Is(Team.Crewmate) && (!Sentinel.IsMadmate() || !x.Is(Team.Impostor)) && SentinelId != x.PlayerId);
+
+    // 巡回は本人が生きている間だけの仕掛け。CountdownTimer はホルダーの FixedUpdate に依存しないので、
+    // 死亡を見ないと死体の座標で PatrolDuration 秒ぶん効果が残り続ける。
+    public bool HolderIsAlive => Sentinel != null && Sentinel.IsAliveWithConditions();
     
     public void SetPlayer()
     {
@@ -51,6 +55,13 @@ public class PatrollingState(byte sentinelId, int patrolDuration, float patrolRa
     {
         if (!IsPatrolling) return;
 
+        // ホルダーが死んだら巡回ごと畳む。ブロックも反撃も道連れも起こさない。
+        if (!HolderIsAlive)
+        {
+            StopPatrolling();
+            return;
+        }
+
         List<byte> killers = NearbyKillers.Select(x => x.PlayerId).ToList();
         int timeLeft = (int)Timer.Remaining.TotalSeconds;
 
@@ -66,10 +77,23 @@ public class PatrollingState(byte sentinelId, int patrolDuration, float patrolRa
         LastNearbyKillers = killers;
     }
 
+    // Dispose はコルーチンを止めるだけで onCanceled を呼ばないので、後始末はここで揃える。
+    private void StopPatrolling()
+    {
+        IsPatrolling = false;
+        Timer?.Dispose();
+        Timer = null;
+        LastNearbyKillers = [];
+    }
+
     private void FinishPatrolling()
     {
         Timer = null;
         IsPatrolling = false;
+
+        // 最後の1秒でホルダーが死んだ場合は onTick の番が来ない。道連れの手前でもう一度見る。
+        if (!HolderIsAlive) return;
+
         NearbyKillers.Do(x => x.Suicide(PlayerState.DeathReason.Patrolled, Sentinel));
         Sentinel.MarkDirtySettings();
     }
@@ -144,7 +168,7 @@ internal class Sentinel : RoleBase
         GetPatrollingState(pc.PlayerId)?.StartPatrolling();
     }
 
-    public static bool OnAnyoneCheckMurder(PlayerControl killer)
+    public static bool OnAnyoneCheckMurder(PlayerControl killer, bool check = false)
     {
         if (killer == null || !PatrolStates.Any(x => x.IsPatrolling)) return true;
 
@@ -152,9 +176,16 @@ internal class Sentinel : RoleBase
         {
             if (!state.IsPatrolling) continue;
 
+            // PatrolStates は役職変更でしか掃除されない。死亡と次の onTick の間に隙間があるので
+            // 関所側でも生死を見る。ループの外で return すると生きている2人目の出番が消える。
+            if (!state.HolderIsAlive) continue;
+
             if (state.NearbyKillers.Any(x => x.PlayerId == killer.PlayerId))
             {
-                state.Sentinel.RpcCheckAndMurder(killer);
+                // 打診で撃ち返すと、まだ誰も殴っていない相手を照準だけで殺してしまう。
+                if (check) return false;
+
+                AttackDefense.Retaliate(state.Sentinel, killer, performKill: true);
                 return false;
             }
         }

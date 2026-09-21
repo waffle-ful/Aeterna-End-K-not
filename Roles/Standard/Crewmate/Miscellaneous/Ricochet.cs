@@ -77,7 +77,15 @@ public class Ricochet : RoleBase
         rc.ProtectAgainst = reader.ReadByte();
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    /// <summary>
+    ///     指定した1人からのみ。絞り込みは OnCheckMurderAsTarget 側
+    /// </summary>
+    public override int? GetDefensePower(PlayerControl target, AttackKind kind)
+    {
+        return MurderOnly(kind, AttackDefense.Basic);
+    }
+
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         if (killer == null) return false;
 
@@ -85,7 +93,9 @@ public class Ricochet : RoleBase
 
         if (ProtectAgainst == killer.PlayerId)
         {
-            killer.SetKillCooldown(5f);
+            if (check) return false;
+
+            AttackDefense.ResetBlockedAttackerCooldown(killer, 5f);
             return false;
         }
 

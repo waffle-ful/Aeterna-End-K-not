@@ -203,9 +203,13 @@ public class Pestilence : RoleBase
         return false;
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         if (killer == null || target == null || !killer.IsAlive()) return false;
+
+        if (check) return false;
+
+        if (!AttackDefense.Retaliate(target, killer)) return false;
 
         killer.SetRealKiller(target);
         target.Kill(killer);

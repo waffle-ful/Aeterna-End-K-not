@@ -135,7 +135,15 @@ public class Shifter : RoleBase
         hud.KillButton?.OverrideText(Translator.GetString("ShifterKillButtonText"));
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    /// <summary>
+    ///     ホスト設定で固定
+    /// </summary>
+    public override int? GetDefensePower(PlayerControl target, AttackKind kind)
+    {
+        return MurderOnly(kind, !CanBeKilled.GetBool() ? (int?)AttackDefense.Unstoppable : null);
+    }
+
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         return CanBeKilled.GetBool();
     }

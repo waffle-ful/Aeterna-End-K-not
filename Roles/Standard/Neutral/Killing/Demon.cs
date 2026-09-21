@@ -146,11 +146,25 @@ public class Demon : RoleBase
         return false;
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    /// <summary>
+    ///     体力が残る一撃だけ。削りきる一撃は梯子に載せず、従来どおり体力側の後始末を通す
+    /// </summary>
+    public override int? GetDefensePower(PlayerControl target, AttackKind kind)
+    {
+        return MurderOnly(kind, DemonHealth.TryGetValue(target.PlayerId, out int hp) && hp - SelfDamage.GetInt() >= 1 ? (int?)AttackDefense.Powerful : null);
+    }
+
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         if (killer == null || target == null || killer.Is(CustomRoles.Demon)) return true;
 
-        if (DemonHealth[target.PlayerId] - SelfDamage.GetInt() < 1)
+        // 体力プールが無ければ守るものが無い (体力0で Remove 済み)。
+        if (!DemonHealth.TryGetValue(target.PlayerId, out int health)) return true;
+
+        // 体力を削らずに、この一撃で倒れきるかどうかだけを答える。
+        if (check) return health - SelfDamage.GetInt() < 1;
+
+        if (health - SelfDamage.GetInt() < 1)
         {
             DemonHealth.Remove(target.PlayerId);
             Utils.NotifyRoles(SpecifySeer: target, SpecifyTarget: killer);

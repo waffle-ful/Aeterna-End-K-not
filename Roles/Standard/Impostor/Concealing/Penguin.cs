@@ -257,7 +257,7 @@ public class Penguin : RoleBase
         }
         else
         {
-            if (!IsGoose && !killer.RpcCheckAndMurder(target, true)) return false;
+            if (!IsGoose && !CheckMurderPatch.PassesGate(killer, target)) return false;
 
             doKill = false;
             AddVictim(target);

@@ -149,8 +149,18 @@ internal class Merchant : RoleBase
         AddonsSold[player.PlayerId]++;
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    /// <summary>
+    ///     賄賂。成立条件はキラー依存なので絞り込みは OnCheckMurderAsTarget 側
+    /// </summary>
+    public override int? GetDefensePower(PlayerControl target, AttackKind kind)
     {
+        return MurderOnly(kind, AttackDefense.Powerful);
+    }
+
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
+    {
+        if (check) return !IsBribedKiller(killer, target) && GetCurrentAmountOfMoney(target.PlayerId) < OptionMoneyRequiredToBribe.GetInt();
+
         if (IsBribedKiller(killer, target))
         {
             NotifyBribery(killer, target);

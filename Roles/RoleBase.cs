@@ -119,9 +119,62 @@ public abstract class RoleBase : IComparable<RoleBase>
         return target != null && killer != null;
     }
 
-    public virtual bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    /// <summary>
+    ///     この役職が攻撃を受けた時の防御処理。false = 攻撃を防いだ。
+    /// </summary>
+    /// <param name="check">
+    ///     true = 打診。実際に殺さず「殺せるか」だけを問い合わせる呼び出しで、
+    ///     照準表示などから毎フレーム飛んでくる。回数の消費・反撃・身代わり死・演出といった
+    ///     副作用は必ず抑止すること。抑止しないと、狙いを定めているだけで防御が溶ける。
+    ///     ⚠️ 抑止してよいのは副作用だけで、戻り値は打診と実行で必ず一致させる
+    ///     (食い違うと照準の表示と実際のキル結果がずれる)。乱数を使う防御だけは例外で、
+    ///     打診には「通る」を返し、乱数は実行時にだけ振る。
+    /// </param>
+    public virtual bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         return target != null && killer != null;
+    }
+
+    /// <summary>
+    ///     この役職の現在の攻撃力。
+    ///     状態で変わる役職は override して分岐する (例: Hangman は変身中だけ Powerful)。
+    /// </summary>
+    public virtual int GetAttackPower(PlayerControl killer, AttackKind kind)
+    {
+        // 処刑系 (RpcExileV2 直呼び) は、どの役職も今は Pestilence だけを手書きで見ている。
+        // 抗えない (Lv3) を既定にすることが、その事実の追認になる (spec §8-3)。
+        // 弱い処刑を持つ役職は override する (例: Hangman は変身中で強力 = Lv2)。
+        return kind == AttackKind.Execution ? AttackDefense.Unstoppable : AttackDefense.Basic;
+    }
+
+    /// <summary>
+    ///     この役職の現在の防御力。
+    ///     null = 【従来互換】レベル判定を掛けず、従来通り常に <see cref="OnCheckMurderAsTarget" /> を呼ぶ。
+    ///     移行が済んでいない役職は null のままでよく、その間は挙動が1ビットも変わらない。
+    /// </summary>
+    public virtual int? GetDefensePower(PlayerControl target, AttackKind kind)
+    {
+        return null;
+    }
+
+    /// <summary>
+    ///     murder 系 (Murder / Indirect / Execution / Retaliation) にだけ防御レベルを適用するヘルパー。
+    ///     Exile と Guess へ波及させると、恒久無敵系の役職がまとめて追放・推理免疫になり、
+    ///     投票で誰も処理できなくなる (spec §2)。追放耐性は OnVotedOut 鎖で別途宣言する。
+    /// </summary>
+    protected static int? MurderOnly(AttackKind kind, int? level)
+    {
+        return kind is AttackKind.Exile or AttackKind.Guess ? AttackDefense.None : level;
+    }
+
+    /// <summary>
+    ///     最多得票になった時に呼ばれる追放の関所。true = 追放を阻止した。
+    ///     キルの関所とは別建てで、既定は全員「耐えない」。
+    ///     回数消費などの副作用はここで起こしてよい (打診に相当する呼び方が無いため)。
+    /// </summary>
+    public virtual bool OnVotedOut(PlayerControl pc)
+    {
+        return false;
     }
 
     public virtual void OnMurder(PlayerControl killer, PlayerControl target) { }

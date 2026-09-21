@@ -70,9 +70,18 @@ public class King : RoleBase
         PlayerIdList.Remove(playerId);
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    /// <summary>
+    ///     無条件
+    /// </summary>
+    public override int? GetDefensePower(PlayerControl target, AttackKind kind)
     {
-        killer.SetKillCooldown();
+        return MurderOnly(kind, AttackDefense.Unstoppable);
+    }
+
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
+    {
+        if (!check) AttackDefense.ResetBlockedAttackerCooldown(killer);
+
         return false;
     }
 

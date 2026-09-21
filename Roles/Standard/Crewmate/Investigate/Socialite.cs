@@ -83,14 +83,31 @@ public class Socialite : RoleBase
         Utils.SendRPC(CustomRPC.SyncRoleData, SocialiteId, 1, MarkedPlayerId);
     }
 
-    public static bool OnAnyoneCheckMurder(PlayerControl killer, PlayerControl target)
+    public static bool OnAnyoneCheckMurder(PlayerControl killer, PlayerControl target, bool check = false)
     {
         foreach (Socialite socialite in Instances)
         {
-            if (socialite.MarkedPlayerId == target.PlayerId && socialite.GuestList.Add(killer.PlayerId))
+            PlayerControl socialitePC = Utils.GetPlayerById(socialite.SocialiteId);
+
+            // Instances は役職変更でしか掃除されず、マークも会議の召集まで消えない。
+            // 生死を見ないと死んだ本人のマークが死後もキルを弾き続ける。
+            if (socialitePC == null || !socialitePC.IsAliveWithConditions()) continue;
+
+            if (socialite.MarkedPlayerId != target.PlayerId) continue;
+
+            // 打診で記帳すると、撃たない相手のためにゲスト枠を1つ失う。
+            // 弾くかどうかは「まだ記帳されていないか」で、実キル側の Add の戻り値と揃う。
+            if (check)
+            {
+                if (!socialite.GuestList.Contains(killer.PlayerId)) return false;
+
+                continue;
+            }
+
+            if (socialite.GuestList.Add(killer.PlayerId))
             {
                 Utils.SendRPC(CustomRPC.SyncRoleData, socialite.SocialiteId, 2, killer.PlayerId);
-                Utils.NotifyRoles(SpecifySeer: Utils.GetPlayerById(socialite.SocialiteId), SpecifyTarget: killer);
+                Utils.NotifyRoles(SpecifySeer: socialitePC, SpecifyTarget: killer);
                 return false;
             }
         }

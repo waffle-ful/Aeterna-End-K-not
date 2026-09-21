@@ -104,7 +104,7 @@ internal class Samurai : RoleBase
 
             if (kvp.Value + KillDelay.GetInt() <= now)
             {
-                if (pc.RpcCheckAndMurder(player, true))
+                if (CheckMurderPatch.PassesGate(pc, player))
                     player.Suicide(realKiller: pc);
             }
         }
@@ -138,7 +138,7 @@ internal class Samurai : RoleBase
             PlayerControl player = Utils.GetPlayerById(id);
             if (player == null || !player.IsAlive()) continue;
 
-            if (SamuraiPC.RpcCheckAndMurder(player, true)) player.Suicide(realKiller: SamuraiPC);
+            if (CheckMurderPatch.PassesGate(SamuraiPC, player)) player.Suicide(realKiller: SamuraiPC);
         }
 
         Delays.Clear();

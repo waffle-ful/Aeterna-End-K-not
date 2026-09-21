@@ -35,7 +35,7 @@ public class Postponer : RoleBase
 
     public override bool OnCheckMurder(PlayerControl killer, PlayerControl target)
     {
-        if (!base.OnCheckMurder(killer, target) || !killer.RpcCheckAndMurder(target, check: true)) return false;
+        if (!base.OnCheckMurder(killer, target) || !CheckMurderPatch.PassesGate(killer, target)) return false;
         
         if (target.Is(CustomRoles.Bait)) return true;
         

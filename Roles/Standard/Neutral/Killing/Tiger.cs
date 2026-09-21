@@ -182,7 +182,7 @@ internal class Tiger : RoleBase
     {
         if (EnrageTimer == null || !FastVector2.TryGetClosestPlayerInRangeTo(killer, Radius.GetFloat(), out PlayerControl victim, x => x.PlayerId != target.PlayerId)) return;
 
-        if (killer.RpcCheckAndMurder(victim, true))
+        if (CheckMurderPatch.PassesGate(killer, victim))
             victim.Suicide(realKiller: killer);
     }
 
