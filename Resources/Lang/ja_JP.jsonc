@@ -944,7 +944,7 @@
   "GardenerInfo": "植物を植えてキルを防ぐ",
   "GardenerInfoLong": "(<#8cffff>クルーメイト</color>):\n<size=80%>植物の番人が、キルゾーンを塞ぐ。\n_____________________________________\n難易度：★★★☆☆\n\n[スキル]\n・<b><color=#8cffff>植物設置</color></b>\nペットで植物を設置する。次の会議後に成長し、成長した植物の近くでは直接のキルができなくなる。ただし植物がキルを1回防ぐと消滅する。\n\n<i>自然の力が、最も静かな守りとなる。</i></size>",
   "Gardener.PlantAlreadyExistsNearby": "<#ff0000>近くに既に植物がある — ここには新しく植えられない！</color>",
-  "Gardener.PlantCreated": "<#00ff00>植物を植えた！</color>\\n次の会議の後から表示される。",
+  "Gardener.PlantCreated": "<#00ff00>植物を植えた！</color>\\n次の会議の後から育って守りになる。",
   "Gardener.PlantRange": "植物のキル阻止 範囲",
   "GardenerPlantNearby": "植物の近くではキルできない",
   "Gaulois": "ゴロワ",

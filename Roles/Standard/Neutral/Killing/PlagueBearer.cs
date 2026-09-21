@@ -197,8 +197,13 @@ public class Pestilence : RoleBase
 
     public override bool OnCheckMurder(PlayerControl killer, PlayerControl target)
     {
+        // キルは関所を通す。無敵なのは守りの側 (反射盾) であって、
+        // 攻撃は通常クールダウンの普通のキル (基本 Lv1) — 役職説明の
+        // 「唯一の弱点は自分がキルすること（通常CD）」が根拠。
+        // 直接 Kill していた頃は、守りの梯子だけでなくロールブロック・AFK シールド・
+        // 同チームのキル禁止といった陣営ルールまで素通りしていた。
         if (base.OnCheckMurder(killer, target))
-            killer.Kill(target);
+            killer.RpcCheckAndMurder(target);
 
         return false;
     }
