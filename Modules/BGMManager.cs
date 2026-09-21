@@ -40,6 +40,10 @@ public static class BGMManager
         public int    weight { get; set; } = 1;
         public string title  { get; set; }
         public string author { get; set; }
+
+        // マップ指定 (任意)。"Fungle" と書くとそのマップでだけ候補になる。カンマ区切りで複数可。
+        // 省略 = 全マップ共通。
+        public string map    { get; set; }
     }
 
     // ── Playlist loading ─────────────────────────────────────────────────────
@@ -136,26 +140,84 @@ public static class BGMManager
         return chosen;
     }
 
+    // 現在のマップ。ゲーム設定がまだ無い (メインメニュー) 間は null。
+    private static MapNames? GetCurrentMapSafe()
+    {
+        try { return Main.NormalOptions == null ? null : Main.CurrentMap; }
+        catch { return null; }
+    }
+
+    // 綴りが MapNames のどれにも当たらない map 指定は「指定なし」と同じ扱いにする
+    // (スロットの候補がゼロ = 無音になるのを避けるため)。警告は値ごとに 1 回だけ。
+    private static readonly HashSet<string> WarnedMapValues = new(StringComparer.OrdinalIgnoreCase);
+
+    // 戻り値 = このエントリがマップ指定を持つか。matches = その指定が現在のマップに当たるか。
+    private static bool TryMatchMap(string spec, MapNames? current, out bool matches)
+    {
+        matches = false;
+        if (string.IsNullOrWhiteSpace(spec)) return false;
+
+        bool known = false;
+        foreach (string part in spec.Split(','))
+        {
+            string name = part.Trim();
+            if (name.Length == 0) continue;
+
+            // Enum.TryParse は "42" のような数値文字列を、定義の無い値でも成功させてしまう。
+            // それを通すと「どのマップにも当たらないのに map 指定あり」= 永久に選ばれない曲になるので、
+            // 定義済みの名前かどうかまで確かめる。
+            if (!Enum.TryParse(name, true, out MapNames parsed) || !Enum.IsDefined(typeof(MapNames), parsed))
+            {
+                if (WarnedMapValues.Add(name))
+                    Logger.Warn($"Unknown map name '{name}' in BGM playlist - entry treated as map-independent", "BGMManager");
+                continue;
+            }
+
+            known = true;
+            if (current.HasValue && parsed == current.Value) matches = true;
+        }
+
+        return known;
+    }
+
+    // マップ専用曲が現在のマップに一致するならそれだけを候補にする。一致が無ければマップ指定なしの
+    // 曲を候補にする。マップ専用曲しか無いマップでは候補ゼロ = 無音 (フォールバックは無い)。
+    private static List<BGMEntry> FilterByMap(List<BGMEntry> entries)
+    {
+        MapNames? current = GetCurrentMapSafe();
+        List<BGMEntry> matched = null, generic = null;
+
+        foreach (BGMEntry e in entries)
+        {
+            if (!TryMatchMap(e.map, current, out bool hit)) { (generic ??= []).Add(e); continue; }
+            if (hit) (matched ??= []).Add(e);
+        }
+
+        return matched ?? generic ?? [];
+    }
+
     private static BGMEntry PickTrackFresh(string slot)
     {
         var pl = EnsurePlaylist();
         if (!pl.TryGetValue(slot, out List<BGMEntry> entries) || entries == null || entries.Count == 0)
             return null;
 
-        if (entries.Count == 1) return entries[0];
+        List<BGMEntry> candidates = FilterByMap(entries);
+        if (candidates.Count == 0) return null;
+        if (candidates.Count == 1) return candidates[0];
 
         int total = 0;
-        foreach (var e in entries) total += e.weight;
-        if (total <= 0) return entries[0];
+        foreach (var e in candidates) total += e.weight;
+        if (total <= 0) return candidates[0];
 
         int roll = BgmRandom.Next(total);
         int acc = 0;
-        foreach (var e in entries)
+        foreach (var e in candidates)
         {
             acc += e.weight;
             if (roll < acc) return e;
         }
-        return entries[^1];
+        return candidates[^1];
     }
 
     // ── Public API ────────────────────────────────────────────────────────────
@@ -236,8 +298,12 @@ public static class BGMManager
         return alive <= threshold ? "climax" : "intask";
     }
 
+    // 「曲がある」= 現在のマップで実際に鳴らせる曲があること。マップ指定付きの曲しか無いスロットは
+    // 他のマップでは候補ゼロ = 無音になるので、ここで false を返して呼び出し元にフォールバックさせる。
     private static bool HasTracks(string slot)
-        => EnsurePlaylist().TryGetValue(slot, out List<BGMEntry> entries) && entries is { Count: > 0 };
+        => EnsurePlaylist().TryGetValue(slot, out List<BGMEntry> entries)
+           && entries is { Count: > 0 }
+           && FilterByMap(entries).Count > 0;
 
     // ローカル(=ホスト)の生死のみを見る。BGM はホストの手元でしか鳴らないので、EHR の IsAlive() ではなく
     // バニラの Data.IsDead が正しい真実 (IsAlive() はゲーム後ロビーで GM/観戦ホストが常に false になる)。
@@ -715,8 +781,45 @@ public static class BGMManager
         return slots;
     }
 
+    // 直前の planner 実行時点のマップ (マップ変更の検知用)。
+    private static MapNames? lastPlannedMap;
+
+    // マップ別の曲を持つスロットだけピンを外す。全部外すと、マップと無関係なスロットまで再抽選 →
+    // 要らない裏デコードの依頼と破棄が空回りする。
+    private static void ClearMapDependentPins()
+    {
+        Dictionary<string, List<BGMEntry>> pl = EnsurePlaylist();
+        List<string> stale = null;
+
+        foreach (string slot in PinnedPicks.Keys)
+        {
+            if (!pl.TryGetValue(slot, out List<BGMEntry> entries) || entries == null) continue;
+
+            foreach (BGMEntry e in entries)
+            {
+                if (string.IsNullOrWhiteSpace(e.map)) continue;
+
+                (stale ??= []).Add(slot);
+                break;
+            }
+        }
+
+        if (stale == null) return;
+
+        foreach (string slot in stale) PinnedPicks.Remove(slot);
+    }
+
     private static void PlannerTick()
     {
+        // マップが変わったらマップ別の抽選をやり直す。解除しないと、ロビーでマップを変えても
+        // 先読み済みの曲が鳴り続ける。鳴っている曲は currentEntry 側で保護されるので止まらない。
+        MapNames? map = GetCurrentMapSafe();
+        if (map != lastPlannedMap)
+        {
+            lastPlannedMap = map;
+            ClearMapDependentPins();
+        }
+
         HashSet<string> wantedSlots = ComputeWantedSlots();
 
         var wantedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -823,6 +926,19 @@ public static class BGMManager
             "//   meeting ... 会議中 / During meeting\n" +
             "//   result  ... リザルト画面 / Results screen\n" +
             "//\n" +
+            "// 【マップ指定 / Map-specific tracks】\n" +
+            "//   \"map\" を書くと、そのマップのときだけ候補になります（省略 = 全マップ共通）。\n" +
+            "//   Add \"map\" to use a track only on that map (omit = any map).\n" +
+            "//   指定できる名前 / Valid names: Skeld, MiraHQ, Polus, Dleks, Airship, Fungle\n" +
+            "//   カンマ区切りで複数指定できます / Comma-separated: \"Polus,Airship\"\n" +
+            "//   そのマップ用の曲があるときはそちらが優先され、共通の曲は鳴りません。\n" +
+            "//   A map-specific track takes priority over the shared ones on that map.\n" +
+            "//   そのスロットの曲が全部マップ指定つきだと、当てはまらないマップでは無音になります。\n" +
+            "//   マップ指定なしの曲を 1 つ入れておくと安全です。\n" +
+            "//   If every track in a slot has a map, other maps fall silent - keep one track without \"map\".\n" +
+            "//   menu はまだマップが決まっていないので、map 指定の曲は選ばれません。\n" +
+            "//   The menu slot runs before a map is chosen, so map-specific tracks never play there.\n" +
+            "//\n" +
             "// 【注意 / Note】\n" +
             "//   スロットを書くとそのスロットのデフォルト BGM は上書きされます。\n" +
             "//   If a slot is listed here, it replaces the built-in BGM for that slot.\n" +
@@ -832,7 +948,8 @@ public static class BGMManager
             "    { \"file\": \"my_lobby_track2\", \"weight\": 1, \"title\": \"Chill Vibes\",     \"author\": \"Artist B\" }\n" +
             "  ],\n" +
             "  \"intask\": [\n" +
-            "    { \"file\": \"my_intask\",       \"weight\": 1, \"title\": \"Focus Mode\",      \"author\": \"Artist C\" }\n" +
+            "    { \"file\": \"my_intask\",       \"weight\": 1, \"title\": \"Focus Mode\",      \"author\": \"Artist C\" },\n" +
+            "    { \"file\": \"my_fungle\",       \"weight\": 1, \"title\": \"Jungle Walk\",     \"author\": \"Artist C\", \"map\": \"Fungle\" }\n" +
             "  ],\n" +
             "  \"climax\": [\n" +
             "    { \"file\": \"my_climax\",       \"weight\": 1, \"title\": \"Final Countdown\", \"author\": \"Artist C\" }\n" +
