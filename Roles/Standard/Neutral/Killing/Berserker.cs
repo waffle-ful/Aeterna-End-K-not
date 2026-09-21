@@ -105,7 +105,10 @@ public class Berserker : RoleBase
     public override bool OnCheckMurder(PlayerControl killer, PlayerControl target)
     {
         if (Form < 4) return base.OnCheckMurder(killer, target);
-        killer.Kill(target);
+
+        // Form 4 の「無敵」は守りの側 (GetDefensePower) の話で、攻撃は普通のまま (Lv1)。
+        // 直接 Kill していた頃は関所ごと飛ばしていたので、守りの梯子も陣営ルールも素通りしていた。
+        killer.RpcCheckAndMurder(target);
         return false;
     }
 
