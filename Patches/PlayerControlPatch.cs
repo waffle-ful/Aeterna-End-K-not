@@ -538,9 +538,10 @@ internal static class CheckMurderPatch
 
         // 他役職から与えられた保護はまとめて強力 (Lv2)。
         // ⚠️ Farmer 以下の6つは `!Xxx.OnAnyoneCheckMurder(...)` と呼び出し規約が反転している。
+        // 打診 (check) を渡す先は副作用を持つものだけ。残りは素の照会なので渡す必要がない。
         if (!AttackDefense.Pierces(atk, AttackDefense.Powerful) &&
             ((Romantic.PartnerId == target.PlayerId && Romantic.IsPartnerProtected) ||
-             Medic.OnAnyoneCheckMurder(killer, target) ||
+             Medic.OnAnyoneCheckMurder(killer, target, check) ||
              Randomizer.IsShielded(target) ||
              Aid.ShieldedPlayers.ContainsKey(target.PlayerId) ||
              Blessed.ShieldActive.Contains(target.PlayerId) ||
@@ -548,23 +549,23 @@ internal static class CheckMurderPatch
              Gaslighter.IsShielded(target) ||
              !Farmer.OnAnyoneCheckMurder(target) ||
              !PotionMaster.OnAnyoneCheckMurder(target) ||
-             !Grappler.OnAnyoneCheckMurder(target) ||
-             !Adventurer.OnAnyoneCheckMurder(target) ||
-             !Sentinel.OnAnyoneCheckMurder(killer) ||
-             !ToiletMaster.OnAnyoneCheckMurder(killer, target)))
+             !Grappler.OnAnyoneCheckMurder(target, check) ||
+             !Adventurer.OnAnyoneCheckMurder(target, check) ||
+             !Sentinel.OnAnyoneCheckMurder(killer, check) ||
+             !ToiletMaster.OnAnyoneCheckMurder(killer, target, check)))
         {
             Notify("SomeSortOfProtection");
             return false;
         }
 
         // 鉢植え・ソーシャライトは消費型なので基本 (Lv1)。
-        if (!AttackDefense.Pierces(atk, AttackDefense.Basic) && !Gardener.OnAnyoneCheckMurder(killer, target))
+        if (!AttackDefense.Pierces(atk, AttackDefense.Basic) && !Gardener.OnAnyoneCheckMurder(killer, target, check))
         {
             Notify("GardenerPlantNearby");
             return false;
         }
 
-        if (!AttackDefense.Pierces(atk, AttackDefense.Basic) && !Socialite.OnAnyoneCheckMurder(killer, target))
+        if (!AttackDefense.Pierces(atk, AttackDefense.Basic) && !Socialite.OnAnyoneCheckMurder(killer, target, check))
         {
             Notify("SocialiteTarget");
             return false;
@@ -600,7 +601,9 @@ internal static class CheckMurderPatch
             {
                 if (echo.EchoPC.shapeshiftTargetPlayerId == target.PlayerId)
                 {
-                    echo.OnTargetCheckMurder(killer, target);
+                    // 打診で入れ替えを戻すと、撃たない相手の照準だけで身代わりが死ぬ。
+                    if (!check) echo.OnTargetCheckMurder(killer, target);
+
                     return false;
                 }
             }
@@ -610,7 +613,7 @@ internal static class CheckMurderPatch
         {
             Notify("GAGuarded");
 
-            if (killer.AmOwner)
+            if (!check && killer.AmOwner)
                 Achievements.Type.IForgotThisRoleExists.CompleteAfterGameEnd();
 
             return false;
