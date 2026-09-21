@@ -53,7 +53,8 @@ public class Crusader : RoleBase
 
     public override bool CanUseKillButton(PlayerControl pc)
     {
-        return !Main.PlayerStates[pc.PlayerId].IsDead
+        return pc != null
+               && !Main.PlayerStates[pc.PlayerId].IsDead
                && pc.GetAbilityUseLimit() >= 1;
     }
 
