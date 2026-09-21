@@ -298,6 +298,7 @@ public static class Options
     public static OptionItem ServerInviteRegion;
 
     public static OptionItem ReportCommandEnabled;
+    public static OptionItem StrictSendRateAccounting;
 
     public static OptionItem DisableShieldAnimations;
     public static OptionItem DisableShapeshiftAnimations;
@@ -3352,6 +3353,15 @@ public static class Options
         // spamming reports can only be stopped by banning them.
         ReportCommandEnabled = new BooleanOptionItem(44467, "ReportCommandEnabled", true, TabGroup.SystemSettings)
             .SetColor(new Color32(0, 165, 255, byte.MaxValue));
+
+        // 公式サーバーへの送信本数の数え方。既定 (OFF) は 1 秒ごとに計数を 0 に戻す固定窓で、
+        // 窓の変わり目で上限の約 2 倍が出る (上限 23/s の側で実測 40 本/秒)。ON にすると直近 1 秒の
+        // スライド窓で数え、設定した上限どおりに収まる。
+        // ⚠️ ON は送信を実効で遅くするため、ゲーム開始前のキュー排水に約 2 倍かかる。排水が
+        // 間に合わないと開始直送窓をあきらめてゲート経由へ落ち、大人数卓でイントロ暗転が出やすくなりうる
+        // (大人数での実測が未了のため既定 OFF)。Hacking キックが出るなら ON にして様子を見る用。
+        StrictSendRateAccounting = new BooleanOptionItem(44468, "StrictSendRateAccounting", false, TabGroup.SystemSettings)
+            .SetColor(new Color32(255, 102, 102, byte.MaxValue));
 
         ChaosPotSupport.SetupOptions(44445);
 

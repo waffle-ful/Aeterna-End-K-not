@@ -46,13 +46,19 @@ public static class PacketRateGate
     /// <summary>ゲート待ちの Reliable パケット数。ゲーム開始バースト (役職テーブル N² 本) の
     /// 排水完了を外から判定する用途 (FirstTurnMeetingTrigger が会議を早く始めすぎない為のシグナル)。</summary>
     public static int PendingCount => PendingReliableQueue.Count;
-    // 送出時刻を覚えておき「直近 1 秒に出した本数」で判定する。1 秒ごとに計数を 0 に戻す固定窓だと、
-    // 窓の末尾で上限ぶん・次の窓の先頭でもう一度上限ぶんを連続で出せてしまい、1 秒のスライド窓で見ると
-    // 上限の 2 倍近くがワイヤへ出る。公式サーバーが見ているのは秒あたりの実本数なので数え方を揃える。
+    // 予算の数え方は 2 系統ある。既定は固定窓 (1 秒ごとに計数を 0 に戻す) で、これは窓の末尾で上限ぶん・
+    // 次の窓の先頭でもう一度上限ぶんを連続で出せるため、1 秒のスライド窓で見ると上限の 2 倍近くが
+    // ワイヤへ出る。StrictSendRateAccounting を ON にすると送出時刻を覚えて「直近 1 秒に出した本数」で
+    // 判定し、公式サーバーが実際に数えている本数と会計が一致する。
     private static readonly Stopwatch Clock = Stopwatch.StartNew();
+    private static readonly Stopwatch WindowTimer = Stopwatch.StartNew();
     private static readonly Queue<long> SentHistory = new();
+    private static int SentThisWindow;
     private static long LastHealthSampleMs = -1;
     private static int LastPingMs;
+
+    // 毎パケット GetBool() を叩かないよう 1Hz サンプリングで拾う (SampleLinkHealth が更新)。
+    private static bool StrictAccounting;
     private static object LastConnection;
     private static bool SafetyValveActive;
 
@@ -321,6 +327,8 @@ public static class PacketRateGate
         // 二度と変わらない限り再送しないので、ここで無効化して次の broadcast を全件に戻す。
         RPC.InvalidateOptionSyncSnapshot();
         SentHistory.Clear();
+        SentThisWindow = 0;
+        WindowTimer.Restart();
         // 再接続直後は劣化判定を 1 秒だけ据え置く。すぐ上で DegradedThrottleActive を false へ倒しているのに
         // 同じ呼び出しの中で再評価が走ると、死んだ旧リンクの ping を掴んだまま即座に true へ戻りうる
         // (TryGate は DetectReconnect → SampleLinkHealth の順で両方を呼ぶ)。
@@ -337,9 +345,21 @@ public static class PacketRateGate
         return 1000 + Math.Max(0, LastPingMs - ping);
     }
 
-    /// <summary>窓から出た記録を捨てて、直近の窓で出した本数を返す。</summary>
+    /// <summary>この窓で使った本数。スライド窓では窓から出た記録を捨ててから数える。</summary>
     private static int UsedThisWindow()
     {
+        if (!StrictAccounting)
+        {
+            // 固定窓: 1 秒経ったら計数を 0 に戻す (従来の挙動)。
+            if (WindowTimer.ElapsedMilliseconds >= WindowMs())
+            {
+                WindowTimer.Restart();
+                SentThisWindow = 0;
+            }
+
+            return SentThisWindow;
+        }
+
         long cutoff = Clock.ElapsedMilliseconds - WindowMs();
 
         while (SentHistory.Count > 0 && SentHistory.Peek() <= cutoff)
@@ -348,9 +368,11 @@ public static class PacketRateGate
         return SentHistory.Count;
     }
 
+    // どちらの数え方に切り替えても破綻しないよう、両方の計数を常に進める。
     private static void NoteSent()
     {
         SentHistory.Enqueue(Clock.ElapsedMilliseconds);
+        SentThisWindow++;
     }
 
     /// <summary>~1Hz でリンク健全性を再評価して予算を切り替える。
@@ -367,6 +389,9 @@ public static class PacketRateGate
 
         LastHealthSampleMs = now;
         LastPingMs = AmongUsClient.Instance.Ping;
+        try { StrictAccounting = Options.StrictSendRateAccounting?.GetBool() == true; }
+        catch { StrictAccounting = false; }
+
         UpdateDegradedThrottle();
     }
 
