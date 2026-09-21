@@ -84,6 +84,9 @@ public class PatrollingState(byte sentinelId, int patrolDuration, float patrolRa
         Timer?.Dispose();
         Timer = null;
         LastNearbyKillers = [];
+
+        // 巡回中は本人の視界を落としているので、畳んだら戻してやる。
+        Sentinel?.MarkDirtySettings();
     }
 
     private void FinishPatrolling()
@@ -92,10 +95,10 @@ public class PatrollingState(byte sentinelId, int patrolDuration, float patrolRa
         IsPatrolling = false;
 
         // 最後の1秒でホルダーが死んだ場合は onTick の番が来ない。道連れの手前でもう一度見る。
-        if (!HolderIsAlive) return;
+        if (HolderIsAlive) NearbyKillers.Do(x => x.Suicide(PlayerState.DeathReason.Patrolled, Sentinel));
 
-        NearbyKillers.Do(x => x.Suicide(PlayerState.DeathReason.Patrolled, Sentinel));
-        Sentinel.MarkDirtySettings();
+        // 視界は生死に関わらず戻す。
+        Sentinel?.MarkDirtySettings();
     }
 }
 
