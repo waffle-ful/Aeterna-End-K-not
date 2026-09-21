@@ -2202,6 +2202,8 @@ internal static class ExtendedPlayerControl
 
         public void ResetKillCooldown(bool sync = true)
         {
+            if (!player) return;
+
             Main.PlayerStates[player.PlayerId].Role.SetKillCooldown(player.PlayerId);
 
             Main.AllPlayerKillCooldown[player.PlayerId] = player.GetCustomRole() switch
