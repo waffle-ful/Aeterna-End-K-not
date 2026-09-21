@@ -77,9 +77,13 @@ public class Grappler : RoleBase
 
         foreach (Grappler instance in Instances)
         {
-            if (instance.InUse)
+            PlayerControl grappler = instance.GrapplerId.GetPlayer();
+
+            // Instances は役職変更でしか掃除されず、InUse は会議明けの再計算が死者を素通りするので
+            // 死んだ本人の分が残る。生死を見ないと死体の座標へ的を引き寄せてキルだけ消える。
+            if (instance.InUse && grappler != null && grappler.IsAliveWithConditions())
             {
-                target.TP(instance.GrapplerId.GetPlayer());
+                target.TP(grappler);
                 instance.InUse = false;
                 Utils.SendRPC(CustomRPC.SyncRoleData, instance.GrapplerId, instance.InUse);
                 return false;

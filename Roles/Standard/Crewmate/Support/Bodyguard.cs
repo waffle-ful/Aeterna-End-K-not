@@ -50,7 +50,10 @@ internal class Bodyguard : RoleBase
         {
             try
             {
-                if (bodyguard.BodyguardPC == null || bodyguard.BodyguardPC.PlayerId == target.PlayerId) continue;
+                // Instances は役職変更でしか掃除されないので、死んだ本人も残り続ける。
+                // 生死を見ないと死体や幽霊の座標で半径判定が通り、Suicide が no-op のまま
+                // キルだけキャンセルされる (= 誰も死なない永久バリア)。
+                if (bodyguard.BodyguardPC == null || !bodyguard.BodyguardPC.IsAliveWithConditions() || bodyguard.BodyguardPC.PlayerId == target.PlayerId) continue;
 
                 if (!FastVector2.DistanceWithinRange(bodyguard.BodyguardPC.Pos(), target.Pos(), BodyguardProtectRadius.GetFloat())) continue;
 
