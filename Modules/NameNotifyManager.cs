@@ -57,7 +57,10 @@ public static class NameNotifyManager
             && Time.time - last.Time < ResendMinInterval)
             return;
 
-        LastSent[pc.PlayerId] = (text, Time.time, sendOption);
+        // overrideAll は表示をまるごと差し替えるので、間引きの記録は残さない。
+        // 残すと「差し替えの直後に来た同じ文面」が 1 秒弱だけ届かなくなる。
+        if (overrideAll) LastSent.Remove(pc.PlayerId);
+        else LastSent[pc.PlayerId] = (text, Time.time, sendOption);
 
         if (pc.IsNonHostModdedClient()) SendRPC(pc.PlayerId, text, expireTS, overrideAll, sendOption);
         Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc, SendOption: sendOption);
