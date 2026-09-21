@@ -61,7 +61,7 @@ public class Gardener : RoleBase
         Plants.ForEach(x => x.SpawnIfNotSpawned());
     }
 
-    public static bool OnAnyoneCheckMurder(PlayerControl killer, PlayerControl target)
+    public static bool OnAnyoneCheckMurder(PlayerControl killer, PlayerControl target, bool check = false)
     {
         if (!On || Plants.Count == 0) return true;
 
@@ -70,6 +70,9 @@ public class Gardener : RoleBase
 
         if (Plants.FindFirst(x => x.Spawned && positions.Exists(p => FastVector2.DistanceWithinRange(p, x.Position, range)), out Plant plant))
         {
+            // 打診は照準の事前濾しなので結論だけ返す。鉢植えを消すと撃たない相手に消費される。
+            if (check) return false;
+
             plant.Despawn();
             Plants.Remove(plant);
             killer.SetKillCooldown();

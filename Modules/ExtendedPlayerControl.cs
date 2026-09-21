@@ -1151,6 +1151,20 @@ internal static class ExtendedPlayerControl
                     return;
             }
 
+            // 間接死 (爆弾・毒・呪い・時限死) も中央の関所を通す。
+            // これで陣営ルールと全ての防御役職が、キルボタン以外の攻撃にも初めて効くようになる。
+            // 判定は SetDead() より前に済ませること — 防御が後から成立すると死亡状態だけ残る。
+            // ⚠️ 上の switch で返した5役職は既に答えを出しているので二重には通らない。
+            //    EkmTemplateRole だけは EKn API 側の打診契約が未決のため、まもりの二重消費を避けて外す。
+            // ⚠️ 身代わり死 (Sacrifice) も外す — これはキラーからの攻撃ではなく本人の自発死で、
+            //    realKiller は手柄の帰属のためだけに渡されている。関所へ入れると
+            //    「関所の中から撃たれた Suicide がまた関所へ入る」経路ができ、
+            //    互いの保護半径に居るボディーガード2人が無限に身代わりし合ってスタックを食い潰す。
+            if (Options.CurrentGameMode == CustomGameMode.Standard && realKiller && realKiller.PlayerId != player.PlayerId &&
+                deathReason != PlayerState.DeathReason.Sacrifice &&
+                state.Role is not EkmTemplateRole && !CheckMurderPatch.PassesGate(realKiller, player, kind: AttackKind.Indirect))
+                return;
+
             state.deathReason = deathReason;
             state.SetDead();
 
@@ -2493,9 +2507,9 @@ internal static class ExtendedPlayerControl
             }
         }
 
-        public bool RpcCheckAndMurder(PlayerControl target, bool check = false)
+        public bool RpcCheckAndMurder(PlayerControl target, bool check = false, AttackKind kind = AttackKind.Murder)
         {
-            return CheckMurderPatch.RpcCheckAndMurder(player, target, check);
+            return CheckMurderPatch.RpcCheckAndMurder(player, target, check, kind);
         }
 
         // synthetic (Wave 3 契約 §2): この経路は「役職やコマンドが起こす

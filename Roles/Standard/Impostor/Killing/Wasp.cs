@@ -137,9 +137,21 @@ public class Wasp : RoleBase
         }
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    /// <summary>
+    ///     ラウンド1回
+    /// </summary>
+    public override int? GetDefensePower(PlayerControl target, AttackKind kind)
+    {
+        return MurderOnly(kind, EvadeKills.GetBool() && !EvadedKillThisRound ? (int?)AttackDefense.Basic : null);
+    }
+
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         if (!EvadeKills.GetBool() || EvadedKillThisRound) return true;
+
+        // 乱数が選ぶのはこの後の演出だけで、避けること自体は必ず成立する。
+        // 打診では演出もタイマーも起こさず、避けるという答えだけを返す。
+        if (check) return false;
 
         if (IRandom.Instance.Next(2) == 0)
         {

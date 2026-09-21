@@ -44,7 +44,9 @@ internal class Butcher : RoleBase
 
     public override bool OnCheckMurder(PlayerControl killer, PlayerControl target)
     {
-        if (!killer.RpcCheckAndMurder(target, true)) return false;
+        // ここは CheckMurderPatch.Prefix の PassesGate より手前で、弾くとその PassesGate まで届かない。
+        // 打診にすると守りが消費されないまま毎回弾かれる永久バリアになるので、本番判定を通す。
+        if (!CheckMurderPatch.PassesGate(killer, target)) return false;
 
         if (killer.PlayerId != target.PlayerId && !target.Is(CustomRoles.Disregarded) && Main.IntroDestroyed && GameStates.IsInTask && !ExileController.Instance && !AntiBlackout.SkipTasks)
         {

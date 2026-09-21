@@ -116,7 +116,15 @@ public class Rogue : RoleBase
         pc.RpcShapeshift(target, !Options.DisableAllShapeshiftAnimations.GetBool());
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    /// <summary>
+    ///     Shield 報酬取得後は恒久
+    /// </summary>
+    public override int? GetDefensePower(PlayerControl target, AttackKind kind)
+    {
+        return MurderOnly(kind, GotRewards.Contains(Reward.Shield) ? (int?)AttackDefense.Unstoppable : null);
+    }
+
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         return !GotRewards.Contains(Reward.Shield);
     }

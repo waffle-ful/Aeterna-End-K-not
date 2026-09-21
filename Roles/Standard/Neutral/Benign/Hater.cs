@@ -116,7 +116,7 @@ public class Hater : RoleBase
             }
         }
 
-        if (MisFireKillTarget.GetBool() && killer.RpcCheckAndMurder(target, true))
+        if (MisFireKillTarget.GetBool() && CheckMurderPatch.PassesGate(killer, target))
         {
             target.SetRealKiller(killer);
             killer.Kill(target);

@@ -129,6 +129,7 @@ internal class Revolutionist : RoleBase
         foreach (KeyValuePair<byte, long> x in RevolutionistStart)
         {
             PlayerControl tar = Utils.GetPlayerById(x.Key);
+            // 会議で仕掛けが中断された革命家自身の時間切れ死 (攻撃ではない) なので梯子には載せない。
             if (tar == null || tar.Is(CustomRoles.Pestilence)) continue;
 
             Main.PlayerStates[tar.PlayerId].deathReason = PlayerState.DeathReason.Sacrifice;

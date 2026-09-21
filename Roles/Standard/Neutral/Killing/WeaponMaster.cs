@@ -206,7 +206,7 @@ public class WeaponMaster : RoleBase
 
                 return true;
             case 2:
-                if (killer.RpcCheckAndMurder(target, true))
+                if (CheckMurderPatch.PassesGate(killer, target))
                 {
                     target.Suicide(PlayerState.DeathReason.Kill, killer);
                     killer.SetKillCooldown();
@@ -221,10 +221,20 @@ public class WeaponMaster : RoleBase
         }
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    /// <summary>
+    ///     1回きり (盾モード)
+    /// </summary>
+    public override int? GetDefensePower(PlayerControl target, AttackKind kind)
+    {
+        return MurderOnly(kind, Mode == 3 && !shieldUsed ? (int?)AttackDefense.Basic : null);
+    }
+
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         if (Mode == 3 && !shieldUsed)
         {
+            if (check) return false;
+
             shieldUsed = true;
             SendRPC();
             return false;

@@ -660,7 +660,13 @@ public class WaveCannon : RoleBase
             Vector2 lateral = delta - Direction * along;
             if (lateral.magnitude > halfWidth) continue;
 
+            // 抗えない (Lv3) の砲撃。ベテランもメディックも貫くのは従来どおりで、
+            // 新しく効くのは陣営ルール (CTA 同チーム・AFKシールド等) と Lv3 防御だけ。
+            // 弾かれた相手も「この一発では処理済み」にしておく。
+            // 関所は弾くたびキラーへ通知を送るので、印を後回しにすると同じ相手への送信が毎フレーム繰り返される。
             AlreadyKilled.Add(target.PlayerId);
+
+            if (!CheckMurderPatch.PassesGate(shooter, target, kind: AttackKind.Execution)) continue;
 
             // CheckMurder バイパスで確定キル (Abyssbringer.cs:183-196 と同じパターン)
             target.RpcExileV2();

@@ -24,13 +24,24 @@ internal class Luckey : RoleBase
         On = false;
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    /// <summary>
+    ///     確率
+    /// </summary>
+    public override int? GetDefensePower(PlayerControl target, AttackKind kind)
     {
+        return MurderOnly(kind, AttackDefense.Basic);
+    }
+
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
+    {
+        // 打診では乱数を振らない。照準表示から毎フレーム振り直すと、確率で防ぐ能力が実質0%に溶ける。
+        if (check) return true;
+
         var rd = IRandom.Instance;
 
         if (rd.Next(0, 100) < Options.LuckeyProbability.GetInt())
         {
-            killer.SetKillCooldown(15f);
+            AttackDefense.ResetBlockedAttackerCooldown(killer, 15f);
             return false;
         }
 

@@ -55,7 +55,15 @@ public class GuardMaster : RoleBase
         Awakened = !TaskAwakeningOpt.GetBool() || AwakeningTaskcountOpt.GetInt() < 1;
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    /// <summary>
+    ///     回数 (マッドのガードマスターは対インポスターだけ消費せず弾く)
+    /// </summary>
+    public override int? GetDefensePower(PlayerControl target, AttackKind kind)
+    {
+        return MurderOnly(kind, Guard > 0 || target.Is(CustomRoles.Madmate) ? (int?)AttackDefense.Basic : null);
+    }
+
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         bool mad = target.Is(CustomRoles.Madmate);
 
@@ -63,6 +71,8 @@ public class GuardMaster : RoleBase
         if (mad && killer.Is(CustomRoleTypes.Impostor)) return false;
 
         if (Guard <= 0) return true;
+
+        if (check) return false;
 
         Guard--;
         NameColorManager.Add(killer.PlayerId, target.PlayerId, "8FBC8B");

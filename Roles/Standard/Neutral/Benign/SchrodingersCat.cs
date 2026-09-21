@@ -41,8 +41,18 @@ internal class SchrodingersCat : RoleBase
         On = false;
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    /// <summary>
+    ///     死なずにキラーの役職を簒奪する
+    /// </summary>
+    public override int? GetDefensePower(PlayerControl target, AttackKind kind)
     {
+        return MurderOnly(kind, AttackDefense.Unstoppable);
+    }
+
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
+    {
+        if (check) return false;
+
         CustomRoles killerRole = killer.GetCustomRole();
 
         if (!StealsExactImpostorRole.GetBool() && (killerRole.IsImpostor() || killerRole.IsMadmate())) killerRole = CustomRoles.Renegade;

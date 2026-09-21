@@ -142,7 +142,7 @@ public class Death : CovenBase
         Main.AllPlayerKillCooldown[id] = Reaper.KillCooldown.GetFloat();
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         return false;
     }

@@ -124,7 +124,7 @@ public class Sharpshooter : RoleBase
         else
         {
             var killRange = GameManager.Instance.LogicOptions.GetKillDistance();
-            if (!FastVector2.TryGetClosestPlayerInRangeTo(pc, killRange, out PlayerControl closestPlayer) || !pc.RpcCheckAndMurder(closestPlayer, check: true)) return;
+            if (!FastVector2.TryGetClosestPlayerInRangeTo(pc, killRange, out PlayerControl closestPlayer) || !CheckMurderPatch.PassesGate(pc, closestPlayer)) return;
             if (!Options.UsePets.GetBool()) pc.RpcResetAbilityCooldown();
             RevertAbility();
             pc.SetKillCooldown();
@@ -134,9 +134,10 @@ public class Sharpshooter : RoleBase
         }
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         if (AbilityEndTS == 0) return true;
+        if (check) return true;
         RevertAbility();
         target.MarkDirtySettings();
         target.RevertFreeze(RealPosition);

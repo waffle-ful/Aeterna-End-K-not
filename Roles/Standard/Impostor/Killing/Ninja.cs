@@ -143,7 +143,7 @@ internal class Ninja : RoleBase
 
                 if (Main.Invisible.Contains(killer.PlayerId) && !target.Is(CustomRoles.Bait))
                 {
-                    if (!killer.RpcCheckAndMurder(target, true)) return false;
+                    if (!CheckMurderPatch.PassesGate(killer, target)) return false;
 
                     RPC.PlaySoundRPC(killer.PlayerId, Sounds.KillSound);
                     target.Suicide(PlayerState.DeathReason.Swooped, killer);
@@ -192,7 +192,7 @@ internal class Ninja : RoleBase
             float time = InvisibilityTimeAfterAssassinateOpt.GetFloat();
             PlayerControl target = Utils.GetPlayerById(MarkedPlayer);
 
-            if (time >= 1f && target != null && target.IsAlive() && !Pelican.IsEaten(target.PlayerId) && !target.inVent && pc.RpcCheckAndMurder(target, check: true))
+            if (time >= 1f && target != null && target.IsAlive() && !Pelican.IsEaten(target.PlayerId) && !target.inVent && CheckMurderPatch.PassesGate(pc, target))
             {
                 pc.RpcMakeInvisible(phantom: true);
 

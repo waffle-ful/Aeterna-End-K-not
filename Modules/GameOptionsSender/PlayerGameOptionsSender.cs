@@ -43,6 +43,33 @@ public sealed class PlayerGameOptionsSender(PlayerControl player) : GameOptionsS
         }
     }
 
+    // 強制即送信は dirty-check を通らないので、毎フレーム呼ぶ経路があると
+    // フル GameOptions 配列がその回数ぶん飛ぶ。秒あたりの本数を測るための計器。
+    private static long ForceSendMeterSecond;
+    private static int ForceSendMeterCount;
+    private static int ForceSendMeterTotal;
+
+    private static void NoteForceSend()
+    {
+        try
+        {
+            long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+            if (now != ForceSendMeterSecond)
+            {
+                if (ForceSendMeterCount >= 5)
+                    Logger.Warn($"FORCESENDOPT n={ForceSendMeterCount}/s total={ForceSendMeterTotal}", "PlayerGameOptionsSender");
+
+                ForceSendMeterSecond = now;
+                ForceSendMeterCount = 0;
+            }
+
+            ForceSendMeterCount++;
+            ForceSendMeterTotal++;
+        }
+        catch { /* 計器は送信を止めてはいけない */ }
+    }
+
     public static void ForceSendImmediately(byte playerId)
     {
         for (var index = 0; index < AllSenders.Count; index++)
@@ -61,6 +88,7 @@ public sealed class PlayerGameOptionsSender(PlayerControl player) : GameOptionsS
                     break;
                 }
 
+                NoteForceSend();
                 ForceWaitFrame = true;
                 sender.SendGameOptions();
                 sender.IsDirty = false;

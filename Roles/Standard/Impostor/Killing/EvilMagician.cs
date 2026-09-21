@@ -177,6 +177,9 @@ public class EvilMagician : RoleBase
             PlayerControl target = Utils.GetPlayerById(id);
             if (target == null || !target.IsAlive()) continue;
 
+            // 抗えない (Lv3) の処刑。Pestilence だけは従来どおり素通し (反撃もさせない)。
+            if (target.Is(CustomRoles.Pestilence)) continue;
+
             if (ShowDeadbody.GetBool())
             {
                 target.Suicide(PlayerState.DeathReason.Spell, pc);

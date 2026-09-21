@@ -11098,6 +11098,7 @@
   /* ==============================
     Cooldowns and Timers           
   ============================== */
+  "EnableAttackDefenseLevels": "攻撃がまもりを上回った時だけキルが通るようにする",
   "FixFirstKillCooldown": "初手のキルクールダウンをリセットする",
   "FirstTurnMeeting": "開始直後に強制会議を発生させる",
   "FirstTurnMeetingCantAbility": "強制会議中は役職能力を発動させない",

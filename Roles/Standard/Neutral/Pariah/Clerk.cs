@@ -59,7 +59,7 @@ public class Clerk : RoleBase
             HasBoost.Add(target.PlayerId);
             Utils.SendMessage(string.Format(Translator.GetString("Clerk.DidTax"), target.PlayerId.ColoredPlayerName()), voter.PlayerId, CustomRoles.Clerk.ToColoredString(), importance: MessageImportance.High);
         }
-        else if (!target.Is(CustomRoles.Pestilence))
+        else if (!target.Is(CustomRoles.Pestilence) && CheckMurderPatch.PassesGate(voter, target, kind: AttackKind.Execution))
         {
             target.SetRealKiller(voter);
             PlayerState state = Main.PlayerStates[target.PlayerId];

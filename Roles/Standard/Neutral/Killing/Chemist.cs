@@ -387,7 +387,7 @@ internal class Chemist : RoleBase
             float radius = GrenadeExplodeRadius.GetFloat();
 
             Main.EnumerateAlivePlayerControls()
-                .Where(x => x.PlayerId != ChemistPC.PlayerId && FastVector2.DistanceWithinRange(x.Pos(), pos, radius) && ChemistPC.RpcCheckAndMurder(x, true))
+                .Where(x => x.PlayerId != ChemistPC.PlayerId && FastVector2.DistanceWithinRange(x.Pos(), pos, radius) && CheckMurderPatch.PassesGate(ChemistPC, x))
                 .Do(x => x.Suicide(realKiller: ChemistPC));
         }
     }
@@ -432,7 +432,7 @@ internal class Chemist : RoleBase
     {
         if (BombedBodies.Contains(target.PlayerId))
         {
-            if (ChemistPC.RpcCheckAndMurder(reporter, true)) reporter.Suicide(realKiller: ChemistPC);
+            if (CheckMurderPatch.PassesGate(ChemistPC, reporter)) reporter.Suicide(realKiller: ChemistPC);
 
             return false;
         }
@@ -455,13 +455,13 @@ internal class Chemist : RoleBase
             {
                 PlayerControl srcPlayer = Utils.GetPlayerById(kvp.Key);
 
-                if (srcPlayer != null && srcPlayer.IsAlive() && ChemistPC.RpcCheckAndMurder(srcPlayer, true))
+                if (srcPlayer != null && srcPlayer.IsAlive() && CheckMurderPatch.PassesGate(ChemistPC, srcPlayer))
                     srcPlayer.Suicide(realKiller: ChemistPC);
 
                 foreach (byte id in kvp.Value.OtherAcidPlayers)
                 {
                     PlayerControl player = Utils.GetPlayerById(id);
-                    if (player == null || !player.IsAlive() || !ChemistPC.RpcCheckAndMurder(player, true)) continue;
+                    if (player == null || !player.IsAlive() || !CheckMurderPatch.PassesGate(ChemistPC, player)) continue;
 
                     player.Suicide(realKiller: ChemistPC);
                 }

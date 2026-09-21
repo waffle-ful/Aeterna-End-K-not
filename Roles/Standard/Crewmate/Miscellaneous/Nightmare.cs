@@ -20,7 +20,15 @@ public class Nightmare : RoleBase
         Options.SetupRoleOptions(642630, TabGroup.CrewmateRoles, CustomRoles.Nightmare);
     }
 
-    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target)
+    /// <summary>
+    ///     停電中だけ
+    /// </summary>
+    public override int? GetDefensePower(PlayerControl target, AttackKind kind)
+    {
+        return MurderOnly(kind, Utils.IsActive(SystemTypes.Electrical) ? (int?)AttackDefense.Powerful : null);
+    }
+
+    public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         return !Utils.IsActive(SystemTypes.Electrical);
     }
