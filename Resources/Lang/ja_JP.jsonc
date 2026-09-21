@@ -11557,6 +11557,7 @@
   "ServerInviteEnabled": "<size=90%>Modサーバー参加案内パネルを表示</size>",
   "ServerInviteCommandEnabled": "<size=90%>┗ /server コマンドを有効化</size>",
   "ReportCommandEnabled": "/report コマンドを有効化",
+  "StrictSendRateAccounting": "<size=85%>送信レートを厳密に数える <color=#ff6666>(実験的)</color></size>",
   "ServerInviteRegion": "<size=90%>┗ 推奨サーバーのリージョン</size>",
   "Message.HideGameSettings": "<size=90%>ゲーム設定は ホストによって秘匿されています。</size>",
   "Message.HostLeftGameInGame": "<size=80%>★警告★ ホストは ゲームに残り、次回のゲームが通常に開始しなくなります。\\nロビーを退出する または ホストがロビーを開くまで待機を、お願いします。</size>",

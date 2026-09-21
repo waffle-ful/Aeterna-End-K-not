@@ -37,7 +37,7 @@ public static class DataFlagRateLimiter
     // =========================
 
     private static readonly Queue<QueuedAction> ReliableQueue = new();
-    private static readonly Queue<(long At, int Cost)> ReliableHistory = new();
+    private static readonly Channel Reliable = new();
 
     private const int ReliableRateLimitPerSecond = 23;
 
@@ -46,19 +46,30 @@ public static class DataFlagRateLimiter
     // =========================
 
     private static readonly Queue<QueuedAction> UnreliableQueue = new();
-    private static readonly Queue<(long At, int Cost)> UnreliableHistory = new();
+    private static readonly Channel Unreliable = new();
 
     private const int UnreliableRateLimitPerSecond = 23;
 
+    /// <summary>1 チャンネルぶんの予算計数。固定窓とスライド窓の両方を常に進めておき、読む側で切り替える。</summary>
+    private sealed class Channel
+    {
+        public readonly Queue<(long At, int Cost)> History = new();
+        public readonly Stopwatch WindowTimer = Stopwatch.StartNew();
+        public int SentThisWindow;
+    }
+
     // =========================
-    // 予算の数え方 (スライド窓)
+    // 予算の数え方
     // =========================
 
-    // 送出時刻を覚えておき「直近 1 秒に出した合計」で判定する。固定窓 (1 秒ごとに計数を 0 に戻す方式) だと
-    // 窓の末尾で上限ぶん・次の窓の先頭でもう一度上限ぶんを連続で出せてしまい、1 秒のスライド窓で見ると
-    // 上限の 2 倍近くがワイヤへ出る (実測 23/s 設定で 40 本/秒)。公式サーバーは秒あたりの実本数を見るので、
-    // 数え方をスライド窓に揃える。
+    // 既定は固定窓 (1 秒ごとに計数を 0 に戻す)。これは窓の末尾で上限ぶん・次の窓の先頭でもう一度
+    // 上限ぶんを連続で出せるため、1 秒のスライド窓で見ると上限の 2 倍近くがワイヤへ出る (23/s 設定で
+    // 実測 40 本/秒)。StrictSendRateAccounting を ON にすると送出時刻を覚えて「直近 1 秒に出した合計」で
+    // 判定し、公式サーバーが実際に数えている本数と会計が一致する。
     private static readonly Stopwatch Clock = Stopwatch.StartNew();
+
+    // 毎エンキュー GetBool() を叩かないよう 1Hz サンプリングで拾う (WindowMs が更新)。
+    private static bool StrictAccounting;
 
     // 窓の長さ。ping が改善した分だけ窓を伸ばして保守側へ倒す (従来の計数リセット条件と同じ意図)。
     private static long WindowMs()
@@ -69,6 +80,8 @@ public static class DataFlagRateLimiter
         {
             LastPingSampleMs = Clock.ElapsedMilliseconds;
             LastPingMs = ping;
+            try { StrictAccounting = Options.StrictSendRateAccounting?.GetBool() == true; }
+            catch { StrictAccounting = false; }
         }
 
         return 1000 + Math.Max(0, LastPingMs - ping);
@@ -76,18 +89,39 @@ public static class DataFlagRateLimiter
 
     private static long LastPingSampleMs;
 
-    /// <summary>窓から出た記録を捨てて、直近の窓で使った合計を返す。</summary>
-    private static int Used(Queue<(long At, int Cost)> history)
+    /// <summary>この窓で使った合計。スライド窓では窓から出た記録を捨ててから数える。</summary>
+    private static int Used(Channel ch)
     {
-        long cutoff = Clock.ElapsedMilliseconds - WindowMs();
+        long window = WindowMs();
+
+        if (!StrictAccounting)
+        {
+            // 固定窓: 1 秒経ったら計数を 0 に戻す (従来の挙動)。
+            if (ch.WindowTimer.ElapsedMilliseconds >= window)
+            {
+                ch.WindowTimer.Restart();
+                ch.SentThisWindow = 0;
+            }
+
+            return ch.SentThisWindow;
+        }
+
+        long cutoff = Clock.ElapsedMilliseconds - window;
         var used = 0;
 
-        while (history.Count > 0 && history.Peek().At <= cutoff)
-            history.Dequeue();
+        while (ch.History.Count > 0 && ch.History.Peek().At <= cutoff)
+            ch.History.Dequeue();
 
-        foreach ((long _, int cost) in history) used += cost;
+        foreach ((long _, int cost) in ch.History) used += cost;
 
         return used;
+    }
+
+    // どちらの数え方に切り替えても破綻しないよう、両方の計数を常に進める。
+    private static void NoteSent(Channel ch, int cost)
+    {
+        ch.History.Enqueue((Clock.ElapsedMilliseconds, cost));
+        ch.SentThisWindow += cost;
     }
 
     // =========================
@@ -121,11 +155,11 @@ public static class DataFlagRateLimiter
         switch (channel)
         {
             case SendOption.Reliable:
-                EnqueueInternal(ReliableQueue, ReliableHistory, ReliableRateLimitPerSecond, qa);
+                EnqueueInternal(ReliableQueue, Reliable, ReliableRateLimitPerSecond, qa);
                 break;
 
             case SendOption.None: // Unreliable
-                EnqueueInternal(UnreliableQueue, UnreliableHistory, UnreliableRateLimitPerSecond, qa);
+                EnqueueInternal(UnreliableQueue, Unreliable, UnreliableRateLimitPerSecond, qa);
                 break;
         }
 
@@ -135,8 +169,8 @@ public static class DataFlagRateLimiter
     // Called once per frame
     public static void OnFixedUpdate()
     {
-        ProcessQueue(ReliableQueue, ReliableHistory, ReliableRateLimitPerSecond);
-        ProcessQueue(UnreliableQueue, UnreliableHistory, UnreliableRateLimitPerSecond);
+        ProcessQueue(ReliableQueue, Reliable, ReliableRateLimitPerSecond);
+        ProcessQueue(UnreliableQueue, Unreliable, UnreliableRateLimitPerSecond);
     }
 
     // =========================
@@ -145,15 +179,15 @@ public static class DataFlagRateLimiter
 
     private static void EnqueueInternal(
         Queue<QueuedAction> queue,
-        Queue<(long At, int Cost)> history,
+        Channel ch,
         int limit,
         QueuedAction qa)
     {
         // Try immediate execution if no backlog
-        if (queue.Count == 0 && (Used(history) + qa.Cost <= limit || StartWindowBypass))
+        if (queue.Count == 0 && (Used(ch) + qa.Cost <= limit || StartWindowBypass))
         {
             Execute(qa);
-            history.Enqueue((Clock.ElapsedMilliseconds, qa.Cost));
+            NoteSent(ch, qa.Cost);
             return;
         }
 
@@ -162,10 +196,10 @@ public static class DataFlagRateLimiter
 
     private static void ProcessQueue(
         Queue<QueuedAction> queue,
-        Queue<(long At, int Cost)> history,
+        Channel ch,
         int limit)
     {
-        int used = Used(history);
+        int used = Used(ch);
 
         while (queue.Count > 0)
         {
@@ -177,7 +211,7 @@ public static class DataFlagRateLimiter
             queue.Dequeue();
 
             Execute(next);
-            history.Enqueue((Clock.ElapsedMilliseconds, next.Cost));
+            NoteSent(ch, next.Cost);
             used += next.Cost;
         }
     }
@@ -204,8 +238,15 @@ public static class DataFlagRateLimiter
         ClearQueue(ReliableQueue);
         ClearQueue(UnreliableQueue);
 
-        ReliableHistory.Clear();
-        UnreliableHistory.Clear();
+        ResetChannel(Reliable);
+        ResetChannel(Unreliable);
+    }
+
+    private static void ResetChannel(Channel ch)
+    {
+        ch.History.Clear();
+        ch.SentThisWindow = 0;
+        ch.WindowTimer.Restart();
     }
 
     private static void ClearQueue(Queue<QueuedAction> queue)

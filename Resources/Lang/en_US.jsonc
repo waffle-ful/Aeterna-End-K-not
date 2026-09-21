@@ -12320,6 +12320,7 @@
   "ServerInviteEnabled": "Show Modded Server Invite Panel",
   "ServerInviteCommandEnabled": "Enable /server Command",
   "ReportCommandEnabled": "Enable /report Command",
+  "StrictSendRateAccounting": "Strict Send Rate Accounting <color=#ff6666>(Experimental)</color>",
   "ServerInviteRegion": "Recommended Server Region",
   "Message.HideGameSettings": "Game settings have been hidden by the host.",
   "Message.HostLeftGameInGame": "★Warning★ Host left the game, in next time game wouldn't start normally. Please, exit the lobby or wait until new Host opens a lobby.",
