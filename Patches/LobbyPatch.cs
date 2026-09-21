@@ -36,7 +36,7 @@ public static class LobbyFixedUpdatePatch
                     Paint.name = "Lobby Paint";
                     Paint.transform.localPosition = new(0.042f, -2.59f, -10.5f);
                     var renderer = Paint.GetComponent<SpriteRenderer>();
-                    renderer.sprite = Utils.LoadSprite("EndKnot.Resources.Images.LobbyPaint.png", 290f);
+                    renderer.sprite = Utils.LoadSprite("EndKnot.Resources.Images.LobbyPaint.png", 800f);
                 }
             }
 
