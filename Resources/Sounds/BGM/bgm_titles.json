@@ -9,7 +9,7 @@
   ],
   "intask": [
     { "file": "intask_liminal", "weight": 1, "title": "Liminal Landscapes - Paisajes Liminales", "author": "Iuvenis", "map": "Fungle" },
-    { "file": "lobby_alt", "weight": 1, "title": "時計仕掛けの歪なワルツ ", "author": "こおろぎ" }
+    { "file": "intask_terror", "weight": 1, "title": "terror heights (Dark ambience)", "author": "RibhavAgrawal" }
   ],
   "climax": [
     { "file": "climax_orch", "weight": 1, "title": "感動的な動機のシネマティック トレーラー", "author": "Naipak Maksym" }
