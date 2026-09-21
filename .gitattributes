@@ -41,15 +41,21 @@
 *.psm1      linguist-detectable=false
 *.psd1      linguist-detectable=false
 *.py        linguist-detectable=false
-*.sh        linguist-vendored
-*.bat       linguist-vendored
-*.cmd       linguist-vendored
+*.sh        linguist-detectable=false
+*.bat       linguist-detectable=false
+*.cmd       linguist-detectable=false
 
-# 2.
+# 2. 
 *.css       linguist-detectable=false
 *.scss      linguist-detectable=false
+*.html      linguist-detectable=false
+*.htm       linguist-detectable=false
+*.js        linguist-detectable=false
+*.jsx       linguist-detectable=false
+*.mjs       linguist-detectable=false
+*.cjs       linguist-detectable=false
 
-# 3. データ・設定ファイル・ビルドツールの除外
+# 3.
 *.json      linguist-vendored
 *.jsonc     linguist-vendored
 *.xml       linguist-vendored
