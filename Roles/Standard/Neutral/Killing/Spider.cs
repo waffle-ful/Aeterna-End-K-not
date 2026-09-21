@@ -189,7 +189,9 @@ public class Spider : RoleBase
 
     public override void OnReportDeadBody()
     {
-        Webs.SetAllValues([]);
+        // SetAllValues は全キーへ同一インスタンスを配るため、ここで使うと全ての巣が 1 本の
+        // 捕獲テーブルを共有し、1 つの巣に掛かった相手が全ての巣に掛かった扱いになる。
+        foreach (Vector2 pos in Webs.Keys.ToArray()) Webs[pos] = [];
     }
 
     public static void OnAnyoneApplyGameOptions(IGameOptions opt, byte id)
