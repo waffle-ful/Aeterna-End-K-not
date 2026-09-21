@@ -32,3 +32,28 @@
 *.wav       binary
 *.ttf       binary
 *.otf       binary
+
+# --------------------------------------------------
+# Language Stats (GitHub Linguist Settings)
+# --------------------------------------------------
+# 1. 
+*.ps1       linguist-detectable=false
+*.psm1      linguist-detectable=false
+*.psd1      linguist-detectable=false
+*.py        linguist-detectable=false
+*.sh        linguist-vendored
+*.bat       linguist-vendored
+*.cmd       linguist-vendored
+
+# 2.
+*.css       linguist-detectable=false
+*.scss      linguist-detectable=false
+
+# 3. データ・設定ファイル・ビルドツールの除外
+*.json      linguist-vendored
+*.jsonc     linguist-vendored
+*.xml       linguist-vendored
+*.yml       linguist-vendored
+*.yaml      linguist-vendored
+*.props     linguist-vendored
+*.targets   linguist-vendored
