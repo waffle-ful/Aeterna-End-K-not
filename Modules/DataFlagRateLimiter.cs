@@ -37,8 +37,7 @@ public static class DataFlagRateLimiter
     // =========================
 
     private static readonly Queue<QueuedAction> ReliableQueue = new();
-    private static readonly Stopwatch ReliableTimer = Stopwatch.StartNew();
-    private static int ReliableSent;
+    private static readonly Queue<(long At, int Cost)> ReliableHistory = new();
 
     private const int ReliableRateLimitPerSecond = 23;
 
@@ -47,10 +46,49 @@ public static class DataFlagRateLimiter
     // =========================
 
     private static readonly Queue<QueuedAction> UnreliableQueue = new();
-    private static readonly Stopwatch UnreliableTimer = Stopwatch.StartNew();
-    private static int UnreliableSent;
+    private static readonly Queue<(long At, int Cost)> UnreliableHistory = new();
 
     private const int UnreliableRateLimitPerSecond = 23;
+
+    // =========================
+    // 予算の数え方 (スライド窓)
+    // =========================
+
+    // 送出時刻を覚えておき「直近 1 秒に出した合計」で判定する。固定窓 (1 秒ごとに計数を 0 に戻す方式) だと
+    // 窓の末尾で上限ぶん・次の窓の先頭でもう一度上限ぶんを連続で出せてしまい、1 秒のスライド窓で見ると
+    // 上限の 2 倍近くがワイヤへ出る (実測 23/s 設定で 40 本/秒)。公式サーバーは秒あたりの実本数を見るので、
+    // 数え方をスライド窓に揃える。
+    private static readonly Stopwatch Clock = Stopwatch.StartNew();
+
+    // 窓の長さ。ping が改善した分だけ窓を伸ばして保守側へ倒す (従来の計数リセット条件と同じ意図)。
+    private static long WindowMs()
+    {
+        int ping = AmongUsClient.Instance != null ? AmongUsClient.Instance.Ping : 0;
+
+        if (Clock.ElapsedMilliseconds - LastPingSampleMs >= 1000)
+        {
+            LastPingSampleMs = Clock.ElapsedMilliseconds;
+            LastPingMs = ping;
+        }
+
+        return 1000 + Math.Max(0, LastPingMs - ping);
+    }
+
+    private static long LastPingSampleMs;
+
+    /// <summary>窓から出た記録を捨てて、直近の窓で使った合計を返す。</summary>
+    private static int Used(Queue<(long At, int Cost)> history)
+    {
+        long cutoff = Clock.ElapsedMilliseconds - WindowMs();
+        var used = 0;
+
+        while (history.Count > 0 && history.Peek().At <= cutoff)
+            history.Dequeue();
+
+        foreach ((long _, int cost) in history) used += cost;
+
+        return used;
+    }
 
     // =========================
     // PUBLIC API
@@ -83,11 +121,11 @@ public static class DataFlagRateLimiter
         switch (channel)
         {
             case SendOption.Reliable:
-                EnqueueInternal(ReliableQueue, ref ReliableSent, ReliableRateLimitPerSecond, qa);
+                EnqueueInternal(ReliableQueue, ReliableHistory, ReliableRateLimitPerSecond, qa);
                 break;
 
             case SendOption.None: // Unreliable
-                EnqueueInternal(UnreliableQueue, ref UnreliableSent, UnreliableRateLimitPerSecond, qa);
+                EnqueueInternal(UnreliableQueue, UnreliableHistory, UnreliableRateLimitPerSecond, qa);
                 break;
         }
 
@@ -97,8 +135,8 @@ public static class DataFlagRateLimiter
     // Called once per frame
     public static void OnFixedUpdate()
     {
-        ProcessQueue(ReliableQueue, ref ReliableSent, ReliableTimer, ReliableRateLimitPerSecond);
-        ProcessQueue(UnreliableQueue, ref UnreliableSent, UnreliableTimer, UnreliableRateLimitPerSecond);
+        ProcessQueue(ReliableQueue, ReliableHistory, ReliableRateLimitPerSecond);
+        ProcessQueue(UnreliableQueue, UnreliableHistory, UnreliableRateLimitPerSecond);
     }
 
     // =========================
@@ -107,15 +145,15 @@ public static class DataFlagRateLimiter
 
     private static void EnqueueInternal(
         Queue<QueuedAction> queue,
-        ref int sent,
+        Queue<(long At, int Cost)> history,
         int limit,
         QueuedAction qa)
     {
         // Try immediate execution if no backlog
-        if (queue.Count == 0 && (sent + qa.Cost <= limit || StartWindowBypass))
+        if (queue.Count == 0 && (Used(history) + qa.Cost <= limit || StartWindowBypass))
         {
             Execute(qa);
-            sent += qa.Cost;
+            history.Enqueue((Clock.ElapsedMilliseconds, qa.Cost));
             return;
         }
 
@@ -124,29 +162,23 @@ public static class DataFlagRateLimiter
 
     private static void ProcessQueue(
         Queue<QueuedAction> queue,
-        ref int sent,
-        Stopwatch timer,
+        Queue<(long At, int Cost)> history,
         int limit)
     {
-        // Reset window every second
-        if (timer.ElapsedMilliseconds >= 1000 + Math.Max(0, LastPingMs - AmongUsClient.Instance.Ping))
-        {
-            LastPingMs = AmongUsClient.Instance.Ping;
-            timer.Restart();
-            sent = 0;
-        }
+        int used = Used(history);
 
         while (queue.Count > 0)
         {
             var next = queue.Peek();
 
-            if (sent + next.Cost > limit)
+            if (used + next.Cost > limit)
                 break;
 
             queue.Dequeue();
 
             Execute(next);
-            sent += next.Cost;
+            history.Enqueue((Clock.ElapsedMilliseconds, next.Cost));
+            used += next.Cost;
         }
     }
 
@@ -172,11 +204,8 @@ public static class DataFlagRateLimiter
         ClearQueue(ReliableQueue);
         ClearQueue(UnreliableQueue);
 
-        ReliableSent = 0;
-        UnreliableSent = 0;
-
-        ReliableTimer.Restart();
-        UnreliableTimer.Restart();
+        ReliableHistory.Clear();
+        UnreliableHistory.Clear();
     }
 
     private static void ClearQueue(Queue<QueuedAction> queue)

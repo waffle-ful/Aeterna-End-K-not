@@ -46,8 +46,12 @@ public static class PacketRateGate
     /// <summary>ゲート待ちの Reliable パケット数。ゲーム開始バースト (役職テーブル N² 本) の
     /// 排水完了を外から判定する用途 (FirstTurnMeetingTrigger が会議を早く始めすぎない為のシグナル)。</summary>
     public static int PendingCount => PendingReliableQueue.Count;
-    private static readonly Stopwatch WindowTimer = Stopwatch.StartNew();
-    private static int SentThisWindow;
+    // 送出時刻を覚えておき「直近 1 秒に出した本数」で判定する。1 秒ごとに計数を 0 に戻す固定窓だと、
+    // 窓の末尾で上限ぶん・次の窓の先頭でもう一度上限ぶんを連続で出せてしまい、1 秒のスライド窓で見ると
+    // 上限の 2 倍近くがワイヤへ出る。公式サーバーが見ているのは秒あたりの実本数なので数え方を揃える。
+    private static readonly Stopwatch Clock = Stopwatch.StartNew();
+    private static readonly Queue<long> SentHistory = new();
+    private static long LastHealthSampleMs = -1;
     private static int LastPingMs;
     private static object LastConnection;
     private static bool SafetyValveActive;
@@ -196,11 +200,11 @@ public static class PacketRateGate
             if (GameStates.CurrentServerType is not (GameStates.ServerType.Local or GameStates.ServerType.Vanilla)) return false;
 
             DetectReconnect(instance);
-            ResetWindowIfNeeded();
+            SampleLinkHealth();
 
-            if (PendingReliableQueue.Count == 0 && (SentThisWindow < CurrentGateLimit || StartWindowBypass))
+            if (PendingReliableQueue.Count == 0 && (UsedThisWindow() < CurrentGateLimit || StartWindowBypass))
             {
-                SentThisWindow++;
+                NoteSent();
                 return false;
             }
 
@@ -233,7 +237,7 @@ public static class PacketRateGate
             if (instance == null) return;
 
             DetectReconnect(instance);
-            ResetWindowIfNeeded();
+            SampleLinkHealth();
             SampleResendMeter(instance);
 
             if (PendingReliableQueue.Count > QueueSafetyValve)
@@ -241,6 +245,8 @@ public static class PacketRateGate
                 // 異常事態: desync の方が無音キックより悪いのでドロップはしないが、同一フレームで
                 // 全件を吐き出すとゲートが防ぐべきバーストを自分で作ってしまうため、ペースを付けて
                 // 複数フレームに分散する (予算チェックは無視してよいが、フレーム分散は必須)。
+                // 出した本数は予算に計上する — サーバー側は弁の作動を知らず実本数だけを数えるので、
+                // ここで計上を飛ばすと弁が動いている間だけ会計が実態から乖離する。
                 if (!SafetyValveActive)
                 {
                     SafetyValveActive = true;
@@ -251,18 +257,22 @@ public static class PacketRateGate
                 }
 
                 int n = Math.Min(SafetyValveDrainPerFrame, PendingReliableQueue.Count);
+
                 for (int i = 0; i < n; i++)
+                {
                     SendQueued(instance, PendingReliableQueue.Dequeue());
+                    NoteSent();
+                }
 
                 return;
             }
 
             SafetyValveActive = false;
 
-            while (PendingReliableQueue.Count > 0 && SentThisWindow < CurrentGateLimit)
+            while (PendingReliableQueue.Count > 0 && UsedThisWindow() < CurrentGateLimit)
             {
                 SendQueued(instance, PendingReliableQueue.Dequeue());
-                SentThisWindow++;
+                NoteSent();
             }
         }
         catch (Exception e)
@@ -310,24 +320,54 @@ public static class PacketRateGate
         // スナップショットを更新済みなのに客には届いていない状態になる。差分送信は該当 id が
         // 二度と変わらない限り再送しないので、ここで無効化して次の broadcast を全件に戻す。
         RPC.InvalidateOptionSyncSnapshot();
-        SentThisWindow = 0;
+        SentHistory.Clear();
+        // 再接続直後は劣化判定を 1 秒だけ据え置く。すぐ上で DegradedThrottleActive を false へ倒しているのに
+        // 同じ呼び出しの中で再評価が走ると、死んだ旧リンクの ping を掴んだまま即座に true へ戻りうる
+        // (TryGate は DetectReconnect → SampleLinkHealth の順で両方を呼ぶ)。
+        LastHealthSampleMs = Clock.ElapsedMilliseconds;
         SafetyValveActive = false;
         StartWindowBypass = false;
         DataFlagRateLimiter.StartWindowBypass = false;
-        WindowTimer.Restart();
     }
 
-    private static void ResetWindowIfNeeded()
+    // 窓の長さ。ping が改善した分だけ窓を伸ばして保守側へ倒す。
+    private static long WindowMs()
+    {
+        int ping = AmongUsClient.Instance != null ? AmongUsClient.Instance.Ping : 0;
+        return 1000 + Math.Max(0, LastPingMs - ping);
+    }
+
+    /// <summary>窓から出た記録を捨てて、直近の窓で出した本数を返す。</summary>
+    private static int UsedThisWindow()
+    {
+        long cutoff = Clock.ElapsedMilliseconds - WindowMs();
+
+        while (SentHistory.Count > 0 && SentHistory.Peek() <= cutoff)
+            SentHistory.Dequeue();
+
+        return SentHistory.Count;
+    }
+
+    private static void NoteSent()
+    {
+        SentHistory.Enqueue(Clock.ElapsedMilliseconds);
+    }
+
+    /// <summary>~1Hz でリンク健全性を再評価して予算を切り替える。
+    /// 判定は HealthLog.IsLinkDegradedNow (ping>=300 / pNoAck>=2 / 直近10秒の Reliable 再送>=5本) と同一軸。
+    /// ⚠️ 予算の会計 (<see cref="UsedThisWindow"/>) とは必ず分離しておくこと — 予算リセットと同じ分岐に
+    /// 同居させると、会計をスライド窓へ移した時にリンク劣化判定ごと止まり、DegradedThrottleActive が
+    /// false に固着して pre-start drain のタイムアウト延長が効かなくなる。</summary>
+    private static void SampleLinkHealth()
     {
         if (AmongUsClient.Instance == null) return;
 
-        if (WindowTimer.ElapsedMilliseconds >= 1000 + Math.Max(0, LastPingMs - AmongUsClient.Instance.Ping))
-        {
-            LastPingMs = AmongUsClient.Instance.Ping;
-            WindowTimer.Restart();
-            SentThisWindow = 0;
-            UpdateDegradedThrottle();
-        }
+        long now = Clock.ElapsedMilliseconds;
+        if (LastHealthSampleMs >= 0 && now - LastHealthSampleMs < 1000) return;
+
+        LastHealthSampleMs = now;
+        LastPingMs = AmongUsClient.Instance.Ping;
+        UpdateDegradedThrottle();
     }
 
     /// <summary>窓ロールオーバー毎 (~1Hz) にリンク健全性を再評価して予算を切り替える。
