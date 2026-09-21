@@ -217,9 +217,13 @@ public class Medic : RoleBase
         return false;
     }
 
-    public static bool OnAnyoneCheckMurder(PlayerControl killer, PlayerControl target)
+    public static bool OnAnyoneCheckMurder(PlayerControl killer, PlayerControl target, bool check = false)
     {
         if (!ProtectList.Contains(target.PlayerId)) return false;
+
+        // 打診では合図を出さない。間引きの状態を進めると実キルの合図が消えるし、
+        // SetKillCooldown が撃たない相手のクールダウンを書き換えてしまう。
+        if (check) return true;
 
         // シールドが割れない設定だと同じ相手を何度でも弾く。毎フレーム判定で攻められた時に
         // 以下の通知・フラッシュ・GuardAndKill・実績カウンタまで毎フレーム流すと、

@@ -380,7 +380,7 @@ internal class Adventurer : RoleBase
         }
     }
 
-    public static bool OnAnyoneCheckMurder(PlayerControl target)
+    public static bool OnAnyoneCheckMurder(PlayerControl target, bool check = false)
     {
         var any = false;
 
@@ -389,7 +389,10 @@ internal class Adventurer : RoleBase
             if (s.Role is Adventurer { IsEnable: true } av && av.ShieldedPlayers.Contains(target.PlayerId))
             {
                 any = true;
-                av.ShieldedPlayers.Remove(target.PlayerId);
+
+                // 打診はシールドを消費しない。消費型なので、撃たない相手への照準で使い切ってしまう。
+                if (!check) av.ShieldedPlayers.Remove(target.PlayerId);
+
                 break;
             }
         }
