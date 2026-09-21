@@ -11,9 +11,26 @@ public static class NameNotifyManager
     public static Dictionary<byte, Dictionary<string, long>> Notifies = [];
     private static long LastUpdate;
 
+    /// <summary>
+    ///     宛先ごとの「最後に実送信した合図」。毎フレーム判定で攻める役職 (陰陽師 / Torpedo / 人形 /
+    ///     ケミスト) に当たると同じ文面が秒 50 回届くが、ホスト側の名前は変わらないので
+    ///     <see cref="Utils.NotifyRoles" /> は空エンベロープになって捨てられる。一方
+    ///     <see cref="SendRPC(byte,string,long,bool,SendOption)" /> は dedup が無く、しかも宛先指定なしの
+    ///     <b>全員宛ブロードキャスト</b>なので、モッド客が1人でも居ると Reliable が秒 50 本ワイヤに出る。
+    ///     文面が変わらない間は下の間隔まで間引く。
+    /// </summary>
+    private static readonly Dictionary<byte, (string Text, float Time, SendOption Option)> LastSent = [];
+
+    /// <summary>同じ文面を送り直す最短間隔 (秒)。弾いた合図の <c>ResetBlockedAttackerCooldown</c> と揃えている。</summary>
+    private const float ResendMinInterval = 1f;
+
+    /// <summary>この長さ未満で消える合図は間引かない (間引くとモッド客側だけ先に消えてちらつく)。</summary>
+    private const float ThrottleMinDuration = 2f;
+
     public static void Reset()
     {
         Notifies = [];
+        LastSent.Clear();
     }
 
     public static void Notify(this PlayerControl pc, string text, float time = 6f, bool overrideAll = false, bool log = true, SendOption sendOption = SendOption.Reliable)
@@ -31,6 +48,16 @@ public static class NameNotifyManager
             Notifies[pc.PlayerId] = new() { { text, expireTS } };
         else
             notifies[text] = expireTS;
+
+        // 上で expireTS は更新済みなので、間引いてもホスト側の表示は途切れない。
+        // overrideAll は「他の合図を消す」意味を持つので間引かない。
+        if (!overrideAll && time >= ThrottleMinDuration
+            && LastSent.TryGetValue(pc.PlayerId, out (string Text, float Time, SendOption Option) last)
+            && last.Text == text && last.Option == sendOption
+            && Time.time - last.Time < ResendMinInterval)
+            return;
+
+        LastSent[pc.PlayerId] = (text, Time.time, sendOption);
 
         if (pc.IsNonHostModdedClient()) SendRPC(pc.PlayerId, text, expireTS, overrideAll, sendOption);
         Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc, SendOption: sendOption);
