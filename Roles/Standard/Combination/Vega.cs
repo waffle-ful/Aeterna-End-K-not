@@ -6,6 +6,7 @@ using static EndKnot.Options;
 
 namespace EndKnot.Roles;
 
+// Migrated from TOHK Vega.
 // コンビネーション役職の主役職。desync Impostor 基底の中立キラーで、キルボタンは実際には殺さず、
 // 相方 Altair と「逢い引き」して両者を強化する。オプションは相方の分も含めてここに全部ぶら下げる
 // (Modules/CombinationRoles.cs の Pairs 登録により相方は自分の出現率オプションを持たない)。

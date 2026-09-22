@@ -2,6 +2,7 @@ using AmongUs.GameOptions;
 
 namespace EndKnot.Roles;
 
+// Migrated from TOHK Altair.
 // コンビネーション役職の相方。desync Impostor 基底の中立キラーで、Vega との逢い引きで強化される。
 // 出現率オプションは持たない (Vega.cs にぶら下がる。Modules/CombinationRoles.cs の Pairs 登録により
 // 抽選プールには入らない)。

@@ -3,6 +3,7 @@ using static EndKnot.Options;
 
 namespace EndKnot.Roles;
 
+// Migrated from TOHK Braid.
 // コンビネーション役職の相方。クルー(またはベント可ならエンジニア)基底でタスクを行い、
 // インポスター陣営で勝利する。インポスターとは互いに正体を認識しない — 唯一の可視化手段は
 // Driver.BraidCanSeeDriver / Driver.DriverCanSeeBraid の ☆ マークのみ。
