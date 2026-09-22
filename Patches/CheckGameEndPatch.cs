@@ -313,7 +313,9 @@ internal static class GameEndChecker
                         case CustomRoles.Follower when roleBase is Follower tc && tc.BetPlayer != byte.MaxValue && (WinnerIds.Contains(tc.BetPlayer) || (Main.PlayerStates.TryGetValue(tc.BetPlayer, out PlayerState ps) && (WinnerRoles.Contains(ps.MainRole) || (WinnerTeam == CustomWinner.Bloodlust && ps.SubRoles.Contains(CustomRoles.Bloodlust))))):
                         case CustomRoles.Romantic when WinnerIds.Contains(Romantic.PartnerId) || (Main.PlayerStates.TryGetValue(Romantic.PartnerId, out PlayerState ps1) && (WinnerRoles.Contains(ps1.MainRole) || (WinnerTeam == CustomWinner.Bloodlust && ps1.SubRoles.Contains(CustomRoles.Bloodlust)))):
                         case CustomRoles.Lawyer when Lawyer.Target.TryGetValue(pc.PlayerId, out byte lawyertarget) && (WinnerIds.Contains(lawyertarget) || (Main.PlayerStates.TryGetValue(lawyertarget, out PlayerState ps2) && (WinnerRoles.Contains(ps2.MainRole) || (WinnerTeam == CustomWinner.Bloodlust && ps2.SubRoles.Contains(CustomRoles.Bloodlust))))):
-                        case CustomRoles.Turncoat when roleBase is Turncoat tcoat && tcoat.IsTargetDied && pc.IsAlive() && !WinnerIds.Contains(tcoat.TargetId) && !(Main.PlayerStates.TryGetValue(tcoat.TargetId, out PlayerState tps) && WinnerRoles.Contains(tps.MainRole)):
+                        // 裏切者の勝利条件はターゲットの「敗北」であって「死亡」ではない。
+                        // 生き残っていても所属陣営が負けていれば勝ちになる。
+                        case CustomRoles.Turncoat when roleBase is Turncoat tcoat && tcoat.TargetId != byte.MaxValue && pc.IsAlive() && !WinnerIds.Contains(tcoat.TargetId) && !(Main.PlayerStates.TryGetValue(tcoat.TargetId, out PlayerState tps) && WinnerRoles.Contains(tps.MainRole)):
                             WinnerIds.Add(pc.PlayerId);
                             AdditionalWinnerTeams.Add((AdditionalWinners)role);
                             break;

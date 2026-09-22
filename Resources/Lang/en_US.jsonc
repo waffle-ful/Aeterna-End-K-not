@@ -13703,7 +13703,7 @@
 
   "Turncoat": "Turncoat",
   "TurncoatInfo": "Secretly bet against a random player",
-  "TurncoatInfoLong": "(<#ffab1b>Neutrals</color>):\n<size=80%>Secretly bet against a random player — if they die and you survive, you win.\n_____________________________________\nDifficulty: ★★☆☆☆\n\n[Win Condition]\n・<b><color=#ffab1b>Secret Target</color></b>\nA random player is secretly assigned to you at the start (marked with ★ only you can see). If your target dies and you are still alive at the end of the game, you win as an additional winner. Manipulate events to ensure they don't survive.\n\n<i>Loyalty is just a wager on the right person.</i></size>",
+  "TurncoatInfoLong": "(<#ffab1b>Neutrals</color>):\n<size=80%>Secretly bet against a random player — if their side loses and you survive, you win.\n_____________________________________\nDifficulty: ★★☆☆☆\n\n[Win Condition]\n・<b><color=#ffab1b>Secret Target</color></b>\nA random player is secretly assigned to you at the start (marked with ★ only you can see). If that player is not among the winners at the end of the game and you are still alive, you win as an additional winner. They do not have to die — their side only has to lose. Their role is revealed to you once they are dead.\n\n<i>Loyalty is just a wager on the right person.</i></size>",
   "Turncoat.CanTargetImpostor": "Can Target Impostors",
   "Turncoat.CanTargetNeutral": "Can Target Neutrals",
   "Turncoat.CanTargetMadmate": "Can Target Madmates",
