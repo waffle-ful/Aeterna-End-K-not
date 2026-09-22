@@ -1,4 +1,5 @@
-﻿using AmongUs.GameOptions;
+﻿using System.Collections.Generic;
+using AmongUs.GameOptions;
 using EndKnot.Modules;
 using static EndKnot.Options;
 using static EndKnot.Translator;
@@ -9,6 +10,7 @@ public class Banker : RoleBase
 {
     private const int Id = 703700;
     public static bool On;
+    public static List<Banker> Instances = [];
 
     public static OptionItem InitialCoins;
     public static OptionItem TaskAddCoin;
@@ -47,12 +49,14 @@ public class Banker : RoleBase
     public override void Init()
     {
         On = false;
+        Instances = [];
         BankerId = byte.MaxValue;
     }
 
     public override void Add(byte playerId)
     {
         On = true;
+        Instances.Add(this);
         BankerId = playerId;
         TaskMode = true;
         HaveCoin = InitialCoins.GetInt();
@@ -61,7 +65,10 @@ public class Banker : RoleBase
 
     public override void Remove(byte playerId)
     {
-        if (BankerId == playerId) On = false;
+        // On は全インスタンス共有なので、最後の1人が抜けるまで折らない。
+        // 折ってしまうと生き残っている2人目以降の毎フレーム処理と会議処理が呼ばれなくなる。
+        Instances.RemoveAll(x => x.BankerId == playerId);
+        if (Instances.Count == 0) On = false;
     }
 
     public override void SetKillCooldown(byte id)
@@ -93,14 +100,13 @@ public class Banker : RoleBase
         Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
     }
 
-    public override bool OnCheckMurder(PlayerControl killer, PlayerControl target)
+    // コインはキルが成立してから数える。打診の段階で足すと、相手の守りで不発になった
+    // 攻撃でもコインが増えて追加勝利の条件が水増しされる。
+    public override void OnMurder(PlayerControl killer, PlayerControl target)
     {
-        if (!TaskMode)
-        {
-            HaveCoin += KillAddCoin.GetInt();
-            Utils.NotifyRoles(SpecifySeer: killer, SpecifyTarget: killer);
-        }
-        return true;
+        if (killer.PlayerId != BankerId || TaskMode) return;
+        HaveCoin += KillAddCoin.GetInt();
+        Utils.NotifyRoles(SpecifySeer: killer, SpecifyTarget: killer);
     }
 
     public override void OnEnterVent(PlayerControl pc, Vent vent)
