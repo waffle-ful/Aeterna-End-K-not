@@ -2095,13 +2095,16 @@ internal static class CustomRolesHelper
                 CustomRoles.Arsonist => Arsonist.ArsonistKeepsGameGoing.GetBool() ? CountTypes.Arsonist : CountTypes.Crew,
                 CustomRoles.Remotekiller => CountTypes.Remotekiller,
                 CustomRoles.Altair => CountTypes.Vega,
-                CustomRoles.Strawdoll => CountTypes.OutOfGame,
-                CustomRoles.CurseMaker => CountTypes.OutOfGame,
-                CustomRoles.Missioneer => CountTypes.OutOfGame,
+                // 原典はいずれも「ニュートラルの既定 = クルーとして数える」。OutOfGame にすると
+                // 勝敗計算から丸ごと消えてしまい、インポスターは殺さずに勝てるうえ、
+                // この役職が最後の1人になると「誰も勝たない」で試合が終わる。
+                CustomRoles.Strawdoll => CountTypes.Crew,
+                CustomRoles.CurseMaker => CountTypes.Crew,
+                CustomRoles.Missioneer => CountTypes.Crew,
                 CustomRoles.JackalHadouHo => CountTypes.Jackal,
                 CustomRoles.Tama => CountTypes.Jackal,
-                CustomRoles.SantaClaus => CountTypes.OutOfGame,
-                CustomRoles.MassMedia => CountTypes.OutOfGame,
+                CustomRoles.SantaClaus => CountTypes.Crew,
+                CustomRoles.MassMedia => CountTypes.Crew,
                 CustomRoles.Shifter => CountTypes.OutOfGame,
                 CustomRoles.NoteKiller when !NoteKiller.CountsAsNeutralKiller => CountTypes.Crew,
                 CustomRoles.DoubleAgent => CountTypes.Crew,
