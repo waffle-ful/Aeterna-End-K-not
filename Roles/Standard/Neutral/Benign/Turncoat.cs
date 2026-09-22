@@ -10,6 +10,7 @@ public class Turncoat : RoleBase
 {
     private const int Id = 703900;
     public static bool On;
+    public static List<Turncoat> Instances = [];
 
     private static OptionItem CanTargetImpostor;
     private static OptionItem CanTargetNeutral;
@@ -34,6 +35,7 @@ public class Turncoat : RoleBase
     public override void Init()
     {
         On = false;
+        Instances = [];
         TurncoatId = byte.MaxValue;
         TargetId = byte.MaxValue;
         IsTargetDied = false;
@@ -42,6 +44,7 @@ public class Turncoat : RoleBase
     public override void Add(byte playerId)
     {
         On = true;
+        Instances.Add(this);
         TurncoatId = playerId;
         TargetId = byte.MaxValue;
         IsTargetDied = false;
@@ -51,7 +54,8 @@ public class Turncoat : RoleBase
 
     public override void Remove(byte playerId)
     {
-        if (TurncoatId == playerId) On = false;
+        Instances.RemoveAll(x => x.TurncoatId == playerId);
+        if (Instances.Count == 0) On = false;
     }
 
     private void AssignTarget(byte playerId)
@@ -64,13 +68,19 @@ public class Turncoat : RoleBase
                 if (pc.PlayerId == playerId) return false;
                 if (pc.Is(CustomRoles.GM)) return false;
                 if (pc.Is(CustomRoles.Turncoat)) return false;
+
+                // EHR の CustomRoleTypes に Madmate は無い (アドオン扱い)。マッドメイトは
+                // 素の役職としてはクルーに化けるので、先にここで拾わないと
+                // CanTargetMadmate がマッドメイトではなくカヴンに掛かってしまう。
+                if (pc.Is(CustomRoles.Madmate) || pc.GetCustomRole().IsMadmate()) return CanTargetMadmate.GetBool();
+
                 CustomRoleTypes roleType = pc.GetCustomRole().GetCustomRoleTypes();
                 return roleType switch
                 {
                     CustomRoleTypes.Crewmate => true,
                     CustomRoleTypes.Impostor => CanTargetImpostor.GetBool(),
                     CustomRoleTypes.Neutral => CanTargetNeutral.GetBool(),
-                    _ => CanTargetMadmate.GetBool()
+                    _ => false
                 };
             })
             .ToList();
@@ -118,6 +128,9 @@ public class Turncoat : RoleBase
     {
         if (base.KnowRole(seer, target)) return true;
         if (!KnowTargetRole.GetBool()) return false;
+        // 原典はターゲットが死んで初めて役職を明かす。開幕から見えると
+        // 「どの陣営を負けさせればいいか」が初手で確定してしまう。
+        if (!IsTargetDied) return false;
         return seer.PlayerId == TurncoatId && target.PlayerId == TargetId;
     }
 
