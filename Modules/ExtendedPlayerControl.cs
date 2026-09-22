@@ -729,7 +729,7 @@ internal static class ExtendedPlayerControl
                                 rememberRoleType = player.IsHost() ? RoleTypes.Crewmate : RoleTypes.Impostor;
 
                                 // For Desync Shapeshifter
-                                if (newRoleDY is RoleTypes.Shapeshifter or RoleTypes.Phantom)
+                                if (newRoleDY is RoleTypes.Shapeshifter or RoleTypes.Phantom or RoleTypes.Engineer)
                                     rememberRoleType = newRoleDY;
                             }
                             else
@@ -780,10 +780,12 @@ internal static class ExtendedPlayerControl
                             {
                                 // desync→desync の自己エントリ。上の (false, true) 分岐と同じ規約を当てる:
                                 // ホストには Crewmate を見せて、バニラ側のインポスター機能 (サボタージュ等) が
-                                // 生えないようにする。Shapeshifter/Phantom 基底だけは能力ボタンのため素通し。
+                                // 生えないようにする。Shapeshifter/Phantom/Engineer 基底だけは素通し —
+                                // Shapeshifter/Phantom は能力ボタンが vanilla の RoleBehaviour からしか生えないため、
+                                // Engineer はクルー側の基底でサボタージュを持たず、ベントの CD と滞在上限が要るため。
                                 // newRoleIsDesync で限定しているので (false, false) = 通常役職→通常役職は不変。
                                 rememberRoleType = player.IsHost() ? RoleTypes.Crewmate : RoleTypes.Impostor;
-                                if (newRoleDY is RoleTypes.Shapeshifter or RoleTypes.Phantom) rememberRoleType = newRoleDY;
+                                if (newRoleDY is RoleTypes.Shapeshifter or RoleTypes.Phantom or RoleTypes.Engineer) rememberRoleType = newRoleDY;
                             }
                             else
                                 rememberRoleType = newRoleType;
