@@ -82,6 +82,21 @@ public class Strawdoll : RoleBase
 
     public override void Remove(byte playerId)
     {
+        // 役職が入れ替わると以後この instance は更新されず、変身したままの見た目が次の会議まで残る。
+        // 台帳から外す前に戻す。抜けた本人 (切断経路でも Remove が呼ばれる) と試合終了後は撃たない
+        // — 終了後の復元は終了のブロードキャストの手前で全員ぶんまとめて走る。
+        if (playerId == _strawdollId && IsShapeshifted)
+        {
+            IsShapeshifted = false;
+            ReprisalPending = false;
+            TargetId = byte.MaxValue;
+
+            PlayerControl pc = Utils.GetPlayerById(playerId);
+
+            if (pc != null && pc.Data != null && !pc.Data.Disconnected && !GameStates.IsEnded)
+                pc.RpcShapeshift(pc, !DisableAllShapeshiftAnimations.GetBool());
+        }
+
         PlayerIdList.Remove(playerId);
     }
 

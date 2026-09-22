@@ -68,6 +68,20 @@ public class Rogue : RoleBase
         MorphCooldown = 0;
     }
 
+    public override void Remove(byte playerId)
+    {
+        // 役職が入れ替わると以後この instance は更新されず、モーフを解く OnFixedUpdate が走らなくなるので、
+        // 変身したままの見た目が次の会議まで残る。抜けた本人 (切断経路でも Remove が呼ばれる) と
+        // 試合終了後は撃たない — 終了後の復元は終了のブロードキャストの手前で全員ぶんまとめて走る。
+        PlayerControl pc = Utils.GetPlayerById(playerId);
+
+        if (pc != null && pc.Data != null && !pc.Data.Disconnected && !GameStates.IsEnded && pc.IsShifted())
+        {
+            MorphCooldown = 0;
+            pc.RpcShapeshift(pc, !Options.DisableAllShapeshiftAnimations.GetBool());
+        }
+    }
+
     public override void SetKillCooldown(byte id)
     {
         Main.AllPlayerKillCooldown[id] = GotRewards.Contains(Reward.DecreasedKillCooldown) ? KillCooldown.GetFloat() / 2f : KillCooldown.GetFloat();
