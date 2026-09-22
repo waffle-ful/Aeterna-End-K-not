@@ -107,6 +107,29 @@ public class SantaClaus : RoleBase
         HavePresent++;
         Logger.Info($"SantaClaus task complete: HavePresent={HavePresent}/{MaxHavePresentOpt.GetInt()}", "SantaClaus");
         Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
+
+        // OnTaskComplete は CompletedTasksCount を進める前に呼ばれる (Modules/GameState.cs:525 ↔ :564) ので
+        // 「今のこれで終わり」の判定には +1 が要る。
+        RefillTasks(pc, totalTaskCount > 0 && completedTaskCount + 1 >= totalTaskCount);
+    }
+
+    // プレゼントの素はタスクなので、タスクを配り終えるとそこでプレゼントが増えなくなる。
+    // 所持上限に空きがある限りタスクを配り直して、集める → 配る のループを続けられるようにする。
+    private void RefillTasks(PlayerControl pc, bool allTasksDone)
+    {
+        if (!AmongUsClient.Instance.AmHost) return;
+        if (pc == null || !pc.IsAlive()) return;
+        if (HavePresent >= MaxHavePresentOpt.GetInt()) return;
+        if (!allTasksDone) return;
+
+        byte id = pc.PlayerId;
+
+        LateTask.New(() =>
+        {
+            PlayerControl p = Utils.GetPlayerById(id);
+            if (p == null || !p.IsAlive() || GameStates.IsMeeting || GameStates.IsEnded) return;
+            p.RpcResetTasks();
+        }, 1f, "SantaClaus RefillTasks");
     }
 
     public override void OnEnterVent(PlayerControl pc, Vent vent)
@@ -146,6 +169,10 @@ public class SantaClaus : RoleBase
         Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
         // 配達した部屋の記録は会議メッセージ用に保持（MeetingNotifyRoom 相当）
         DeliveryRooms.Add(roomNameAtDelivery);
+
+        // 配達で所持数が減ったので、タスクを配り終えていたらここでも配り直す。
+        TaskState taskState = pc.GetTaskState();
+        RefillTasks(pc, taskState is { AllTasksCount: > 0, RemainingTasksCount: <= 0 });
     }
 
     private readonly List<string> DeliveryRooms = [];
