@@ -11,6 +11,6 @@
     <string name="itch_sign_in_done">itch.io にログインしました。</string>
     <string name="itch_sign_in_failed">itch.io のログインが完了しませんでした。もう一度お試しください。</string>
     <string name="selector_auto_launch_hint">まもなく Among Us を起動します。カードをタップするとすぐに起動、先に設定を開くこともできます。</string>
-    <string name="selector_storage_permission_prompt">End K not が BepInEx のファイルを書き込めるように「すべてのファイルへのアクセス」を許可してください。</string>
-    <string name="selector_storage_permission_required">続行するには「すべてのファイルへのアクセス」が必要です。</string>
+    <string name="bootstrap_status_installing_libunity">同梱の Unity ランタイムを配置しています…</string>
+    <string name="bootstrap_launcher_update_required">この End K not は Unity %1$s 向けですが、インストール済みの Among Us は Unity %2$s です。End K not を更新してください。</string>
 </resources>

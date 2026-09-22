@@ -27,6 +27,7 @@ public class CustomContextWrapper extends ContextWrapper {
         super(gameContext);
         this.gameContext = gameContext;
         this.fusionContext = fusionContext;
+        Utilities.initStorage(fusionContext);
         this.getApplicationInfo().dataDir = Utilities.getExternalFusionCoreDirectory(gameContext.getPackageName()).getAbsolutePath();
         // this prevents the game from resolving its own libraries
         // that way we can override them properly with our own versions

@@ -23,6 +23,8 @@ public class CrashDetector {
     public static final String TAG = "CrashDetector";
 
     public static void init(Context context) {
+        // Before the handler is registered: it resolves the crash-note folder when it fires.
+        Utilities.initStorage(context);
         setupUncaughtExceptionHandler(context);
 
         ActivityManager activityManager = context.getSystemService(ActivityManager.class);

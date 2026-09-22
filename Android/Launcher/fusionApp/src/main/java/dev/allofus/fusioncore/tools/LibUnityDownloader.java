@@ -298,7 +298,8 @@ public final class LibUnityDownloader {
         }
     }
 
-    private static boolean isCachedLibUnityValid(File outputLibUnity, File outputLibUnitySym, File cacheMetaFile, String expectedCacheKey) {
+    /** Package-visible so the bundled copy (LibUnityBundle) shares the same cache contract. */
+    static boolean isCachedLibUnityValid(File outputLibUnity, File outputLibUnitySym, File cacheMetaFile, String expectedCacheKey) {
         if (!outputLibUnity.exists() || !outputLibUnity.isFile() || outputLibUnity.length() <= 0) {
             return false;
         }
@@ -333,7 +334,7 @@ public final class LibUnityDownloader {
         }
     }
 
-    private static boolean writeLibUnityCacheMeta(File cacheMetaFile,
+    static boolean writeLibUnityCacheMeta(File cacheMetaFile,
                                                   String cacheKey,
                                                   long libunitySize,
                                                   long libunitySymSize,
@@ -357,7 +358,7 @@ public final class LibUnityDownloader {
         }
     }
 
-    private static String normalizeAbiForDownload(String abiValue) {
+    static String normalizeAbiForDownload(String abiValue) {
         if (abiValue == null) {
             return null;
         }
