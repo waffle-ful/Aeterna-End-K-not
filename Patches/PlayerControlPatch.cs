@@ -1573,6 +1573,16 @@ internal static class ReportDeadBodyPatch
         //    Hereinafter, it is confirmed that the meeting is allowed, and the meeting will start.
         //=============================================================================================
 
+        // 入口で必ず1行出す。下の早期 return は関数ごと降りるので、これが無いと
+        // 「この会議で EHR 側の会議処理が走ったか」をログから確かめる手段が無くなる。
+        // 呼び出し口は2つ: 通報/緊急ボタン (Prefix の末尾 · 直前に通報ログが出る) と
+        // NoCheckStartMeeting (通報ログを出さない)。
+        // ⚠️ synthetic は呼び出し口の判別には使えない — Bait の自己通報が
+        // NoCheckStartMeeting へ synthetic:false を渡すため、false でも通報経路とは限らない。
+        Logger.Info($"AfterReportTasks entered (MeetingStarted={MeetingStarted}, synthetic={synthetic}, by={player?.Data?.PlayerName ?? "?"})", "ReportDeadBody");
+
+        // 冪等ガード。ここに2本目として届くのは NoCheckStartMeeting 経由だけで、通報経路は
+        // Prefix 冒頭の同じ条件で先に弾かれる。2本目が落ちても1本目が既に完走して会議を開いている。
         if (MeetingStarted) return;
         MeetingStarted = true;
         LateTask.New(() => MeetingStarted = false, 1f, "ResetMeetingStarted");
@@ -1855,8 +1865,15 @@ internal static class ReportDeadBodyPatch
 
             Stressed.OnMeetingStart();
 
-            // 転向した猫の役職インスタンスは差し替わって消えるので、キルバックの保険は
-            // 役職インスタンスの OnReportDeadBody ではなくここから呼ぶ。
+        }
+        catch (Exception e) { ThrowException(e); }
+
+        // 転向した猫の役職インスタンスは差し替わって消えるので、キルバックの保険は
+        // 役職インスタンスの OnReportDeadBody ではなくここから呼ぶ。
+        // ⚠️ 上の try とは分けること — 同じ try に入れると Damocles/Shibboleth/Stressed のどれかが
+        // 例外を投げた回だけ保険が無音で飛ぶ (キラーが会議を挟んで生き延びる)。
+        try
+        {
             SchrodingersCat.OnAnyoneReportDeadBody();
         }
         catch (Exception e) { ThrowException(e); }
