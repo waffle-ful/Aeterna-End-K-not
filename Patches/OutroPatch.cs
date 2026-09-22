@@ -62,6 +62,19 @@ internal static class EndGamePatch
 
         foreach ((byte id, PlayerState state) in Main.PlayerStates)
         {
+            // 変身したまま決着すると、見た目は戻っても名前だけ相手のまま結果画面に残る。
+            // 変身時に名前を上書きするのは ShapeshiftPatch.Prefix が仕込む 1.2 秒後の書き戻しだけで、
+            // その Prefix は GameStates.IsInTask で降りるため、試合終了後の解除では一度も作られない。
+            // 会議開始時にも同じ穴があり、そちらは ReportDeadBodyPatch 側が同型の書き戻しで塞いでいる。
+            // ⚠️ この下の役職別の復元より手前に置くこと — Turncoat の解除は RpcShapeshift の Postfix で
+            // CheckShapeshift を false にするので、後ろに置くと IsShifted() が偽になって素通りする。
+            // ⚠️ 名前を明示的に戻す Doppelganger / Autoscopy より手前でもある (向こうの復元が後勝ちで正しい)。
+            if (Main.ShapeshiftIsAnimated.GetValueOrDefault(id) && Main.AllPlayerNames.TryGetValue(id, out string ssRealName))
+            {
+                PlayerControl sspc = Utils.GetPlayerById(id);
+                if (sspc != null && sspc.IsShifted()) sspc.RpcSetName(ssRealName);
+            }
+
             // ⚠️ PlayerIdList は見ない。Remove() が切断時に呼ばれて空になるため、
             // 本人が途中切断すると被害者(最大 DoppelMaxSteals 人)の復元が丸ごと飛ぶ。
             // 各 dict は Init() でのみクリアされるので、その存在チェックだけで十分に絞れる。
