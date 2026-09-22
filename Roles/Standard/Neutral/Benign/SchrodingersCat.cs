@@ -86,6 +86,7 @@ internal class SchrodingersCat : RoleBase
         {
             byte killerId = killer.PlayerId;
             PendingKillBacks.Add(killerId);
+            Logger.Info($"KillBack reserved for {killerId} (pending={PendingKillBacks.Count})", "SchrodingersCat");
 
             LateTask.New(() =>
             {
@@ -107,11 +108,18 @@ internal class SchrodingersCat : RoleBase
     /// </summary>
     public static void OnAnyoneReportDeadBody()
     {
-        if (PendingKillBacks.Count == 0) return;
         if (!AmongUsClient.Instance.AmHost) return;
+
+        // 台帳が空でも必ず1行出す。「保険の行まで到達しなかった」と「到達したが台帳が空だった」は
+        // この行の有無でしか分離できない。
+        Logger.Info($"Meeting insurance reached (pending={PendingKillBacks.Count})", "SchrodingersCat");
+
+        if (PendingKillBacks.Count == 0) return;
 
         byte[] killerIds = PendingKillBacks.ToArray();
         PendingKillBacks.Clear();
+
+        Logger.Info($"Meeting insurance fired for {killerIds.Length} pending killer(s): {string.Join(", ", killerIds)}", "SchrodingersCat");
 
         foreach (byte killerId in killerIds) KillBack(killerId);
     }
