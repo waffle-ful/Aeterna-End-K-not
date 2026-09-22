@@ -4,6 +4,7 @@ using static EndKnot.Options;
 
 namespace EndKnot.Roles;
 
+// Migrated from TOHK Driver.
 // コンビネーション役職の主役職。相方 Braid のタスク進捗に応じて能力が解放される。
 // オプションは相方の分も含めてここに全部ぶら下げる (Modules/CombinationRoles.cs の Pairs 登録により
 // 相方は自分の出現率オプションを持たない)。
