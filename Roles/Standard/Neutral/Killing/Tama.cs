@@ -68,6 +68,11 @@ public class Tama : RoleBase
     public override void ApplyGameOptions(IGameOptions opt, byte id)
     {
         opt.SetVision(true);
+
+        // 装填できない設定のときだけ基底が Engineer になり、この 2 つが効く (それ以外は Impostor 基底で無効)。
+        // 弾は会議後の変換でしか生まれないので、基底は RpcChangeRoleBasis の経路だけを通る。
+        AURoleOptions.EngineerCooldown = JackalHadouHo.TamaVentCooldown.GetFloat();
+        AURoleOptions.EngineerInVentMaxTime = JackalHadouHo.TamaMaxInVentTime.GetFloat();
     }
 
     // 原典の弾は常にベントを使える。装填できない設定にしたとき、これが無いと
@@ -146,6 +151,16 @@ public class Tama : RoleBase
                 tamaPlayer.TP(pos, log: false);
             }
         }
+    }
+
+    public override string GetSuffix(PlayerControl seer, PlayerControl target, bool hud = false, bool meeting = false)
+    {
+        if (meeting || seer.PlayerId != TamaId || seer.PlayerId != target.PlayerId || !seer.IsAlive()) return string.Empty;
+
+        if (!JackalHadouHo.TamaCanLoad.GetBool()) return $"<color=#5e5e5e>{GetString("Tama.HudLoadDisabled")}</color>";
+        if (HasLoaded) return $"<color=#00b4eb>{GetString("Tama.HudLoaded")}</color>";
+        if (!IsOwnerAlive()) return $"<color=#5e5e5e>{GetString("Tama.HudOwnerDead")}</color>";
+        return $"<color=#00b4eb>{GetString("Tama.HudReady")}</color>";
     }
 
     public override void OnReportDeadBody()

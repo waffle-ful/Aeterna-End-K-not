@@ -3034,6 +3034,9 @@ public static class PlayerControlCheckUseZiplinePatch
             if (__instance.IsImpostor() && Options.DisableZiplineForImps.GetBool()) return false;
             if (__instance.GetCustomRole().IsNeutral() && Options.DisableZiplineForNeutrals.GetBool()) return false;
             if (__instance.IsCrewmate() && Options.DisableZiplineForCrew.GetBool()) return false;
+
+            // 波動砲のチャージ中は移動を縛られている側なので、ジップラインでも抜け出せない
+            if (JackalHadouHo.IsInShotSequence(__instance.PlayerId)) return false;
         }
 
         return true;

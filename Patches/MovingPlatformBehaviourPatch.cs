@@ -36,9 +36,14 @@ public static class MovingPlatformBehaviourPatch
 
     [HarmonyPatch(nameof(MovingPlatformBehaviour.Use), typeof(PlayerControl))]
     [HarmonyPrefix]
-    public static bool UsePrefix()
+    public static bool UsePrefix([HarmonyArgument(0)] PlayerControl player)
     {
-        return !IsDisabled;
+        if (IsDisabled) return false;
+
+        // 波動砲のチャージ中は移動を縛られている側なので、動く床でも抜け出せない
+        if (player != null && Roles.JackalHadouHo.IsInShotSequence(player.PlayerId)) return false;
+
+        return true;
     }
 
     [HarmonyPatch(nameof(MovingPlatformBehaviour.SetSide))]

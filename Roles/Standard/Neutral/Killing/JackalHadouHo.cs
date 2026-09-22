@@ -36,14 +36,22 @@ public class JackalHadouHo : RoleBase
     private static OptionItem SidekickCooldownOpt;
     private static OptionItem BeamColorModeOpt;
     private static OptionItem SuperCannonTypeOpt;
+    private static OptionItem FireCooldown;
     public static OptionItem TamaCanLoad;
     public static OptionItem TamaLoadCooldown;
+    public static OptionItem TamaVentCooldown;
+    public static OptionItem TamaMaxInVentTime;
 
     private const int BeamCharCount = 20;
     private const int BeamSizeUnit = 30;
     private const float BeamHalfWidthUnit = 0.12f;
     private const float BeamLengthUnit = 0.015f;
     private const float BeamHitboxMargin = 0.85f;
+    // 判定半幅は太さ 1 単位あたりの比例値。見た目 (<size=太さ×30>) は太さに完全比例するので、
+    // 固定オフセットを足すと太い設定ほど見た目と判定がズレる (太さ 2 = 1.09 を保つ校正値)。
+    private const float BeamHalfWidthPerThickness = 0.545f;
+    // チャージ開始でキルボタンを塞ぐ長さ (原典の値)
+    private const float ChargeKillCooldown = 60f;
     private const int WarningCharCount = 20;
     private const float GateForwardOffset = 1.5f;
     private const float GateUpOffset = 0.3f;
@@ -151,6 +159,16 @@ public class JackalHadouHo : RoleBase
             .SetValueFormat(OptionFormat.Seconds);
         SuperCannonTypeOpt = new StringOptionItem(Id + 28, "JackalHadouHoSuperCannonType", SuperCannonShot.TypeOptionNames, 0, TabGroup.NeutralRoles)
             .SetParent(CustomRoleSpawnChances[CustomRoles.JackalHadouHo]);
+        FireCooldown = new FloatOptionItem(Id + 29, "JackalHadouHoFireCooldown", new(0f, 180f, 0.5f), 30f, TabGroup.NeutralRoles)
+            .SetParent(CustomRoleSpawnChances[CustomRoles.JackalHadouHo])
+            .SetValueFormat(OptionFormat.Seconds);
+        // ベントの 2 つは装填できない設定の弾 (Engineer 基底) に効くので、TamaCanLoad の下には置かない
+        TamaVentCooldown = new FloatOptionItem(Id + 30, "TamaVentCooldown", new(0f, 180f, 0.5f), 0f, TabGroup.NeutralRoles)
+            .SetParent(CanMakeSidekickOpt)
+            .SetValueFormat(OptionFormat.Seconds);
+        TamaMaxInVentTime = new FloatOptionItem(Id + 31, "TamaMaxInVentTime", new(0f, 180f, 0.5f), 0f, TabGroup.NeutralRoles)
+            .SetParent(CanMakeSidekickOpt)
+            .SetValueFormat(OptionFormat.Seconds);
     }
 
     public override void Init()
@@ -205,9 +223,7 @@ public class JackalHadouHo : RoleBase
         opt.SetVision(HasImpostorVisionOpt.GetBool());
         AURoleOptions.PhantomDuration = 0.1f;
 
-        // 超チャージ全シーケンスを上限として cooldown を確保
-        float cd = SuperChargeDuration.GetFloat() + WarningDuration.GetFloat() + FiringDuration.GetFloat()
-            + KillCooldown.GetFloat();
+        float cd = FireCooldown.GetFloat();
 
         // イントロ直後の PreventKill 窓では OnVanish/OnShapeshift が呼ばれず CD だけリセットされる (初回押下が無音で不発)。
         // 窓の長さは固定 10 秒ではなく Options.StartingKillCooldown なので、それに合わせてクランプする。
@@ -234,6 +250,10 @@ public class JackalHadouHo : RoleBase
     {
         if (!pc.IsAlive() || CurrentPhase != Phase.Idle || !GameStates.IsInTask) return;
         IsSuperShot = IsLoaded;
+
+        // 発射シーケンス中はキルボタンで逃げ道を作れない
+        pc.SetKillCooldown(ChargeKillCooldown);
+
         float detectDur = DirectionDetectDuration.GetFloat();
         if (detectDur <= 0f)
         {
@@ -304,6 +324,8 @@ public class JackalHadouHo : RoleBase
 
         // 全プレイヤーにキルフラッシュ
         FlashAll();
+
+        Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
 
         // 超チャージ中は周期キルフラッシュで予告。
         // KillFlash は per-player の Reliable RPC → 0.1s 周期だと 10×N msg/s で PacketRateGate (25/s)
@@ -646,7 +668,8 @@ public class JackalHadouHo : RoleBase
                     CustomSoundsManager.RpcStopControllableAll(FireSoundName, FireSoundFadeSeconds);
                     RestoreSkin(pc);
                     RestoreSpeed(pc);
-                    pc.SetKillCooldown();
+                    // チャージ中に 60 秒へ上書きしているので、引数なしの倍化に任せず通常値を撃ち直す
+                    pc.SetKillCooldown(KillCooldown.GetFloat());
                     if (!HasHit && SelfDestructOnMissOpt.GetBool())
                     {
                         pc.Suicide();
@@ -654,6 +677,7 @@ public class JackalHadouHo : RoleBase
                     CurrentPhase = Phase.Idle;
                     PhaseEntryDone = false;
                     IsSuperShot = false;
+                    Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
                 }
                 break;
         }
@@ -755,7 +779,7 @@ public class JackalHadouHo : RoleBase
         int thick = IsSuperShot ? SuperBeamThickness.GetInt() : NormalBeamThickness.GetInt();
         int size = thick * BeamSizeUnit;
         Vector2 eyePos = BeamStartPoint();
-        float halfWidth = BeamHalfWidthUnit * thick + BeamHitboxMargin;
+        float halfWidth = BeamHalfWidthPerThickness * thick;
         float beamLength = BeamLengthUnit * size * BeamCharCount;
 
         // /hitbox 可視化: 下の判定式と同じ値をそのまま描く (ホストローカルのみ)
@@ -901,7 +925,34 @@ public class JackalHadouHo : RoleBase
     public void SetLoaded(bool loaded)
     {
         IsLoaded = loaded;
-        if (JhhPC != null && loaded)
-            JhhPC.Notify(GetString("JackalHadouHoLoaded"));
+        if (JhhPC == null) return;
+
+        if (loaded) JhhPC.Notify(GetString("JackalHadouHoLoaded"));
+        else Utils.NotifyRoles(SpecifySeer: JhhPC, SpecifyTarget: JhhPC);
+    }
+
+    // 発射シーケンス中は移動が縛られている。ジップラインと動く床で抜け出せないようにするための問い合わせ口
+    public static bool IsInShotSequence(byte playerId)
+    {
+        return On && Instances.Exists(x => x.JhhId == playerId && x.CurrentPhase != Phase.Idle);
+    }
+
+    public override string GetSuffix(PlayerControl seer, PlayerControl target, bool hud = false, bool meeting = false)
+    {
+        if (meeting || seer.PlayerId != JhhId || seer.PlayerId != target.PlayerId || !seer.IsAlive()) return string.Empty;
+
+        if (CurrentPhase != Phase.Idle)
+            return $"<color=#ff0000>{GetString(IsSuperShot ? "JackalHadouHo.HudSuperCharging" : "JackalHadouHo.HudCharging")}</color>";
+
+        if (IsLoaded) return $"<color=#ff0000>{GetString("JackalHadouHo.HudLoaded")}</color>";
+
+        if (SkCandidateId != byte.MaxValue)
+        {
+            PlayerControl candidate = SkCandidateId.GetPlayer();
+            if (candidate != null)
+                return $"<color=#00b4eb>{string.Format(GetString("JackalHadouHo.HudCandidate"), candidate.GetRealName())}</color>";
+        }
+
+        return $"<color=#00b4eb>{GetString("JackalHadouHo.HudReady")}</color>";
     }
 }
