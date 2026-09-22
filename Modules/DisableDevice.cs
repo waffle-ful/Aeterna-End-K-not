@@ -180,7 +180,7 @@ internal static class DisableDevice
                 }
             }
 
-        if (!DoDisable && !rogueForce && !TimeLimitEnabled && !CustomRoles.InfoPoor.IsEnable()) return;
+        if (!DoDisable && !rogueForce && !TimeLimitEnabled && !CustomRoles.InfoPoor.IsEnable() && !CustomRoles.MassMedia.IsEnable()) return;
 
         foreach (PlayerControl pc in Main.EnumeratePlayerControls())
         {
@@ -192,8 +192,8 @@ internal static class DisableDevice
                 var mapId = Main.NormalOptions.MapId;
                 Vector2 PlayerPos = pc.Pos();
 
-                // 情報弱者 (InfoPoor) は「デバイス無効化」機能の設定とは無関係に、本人だけ全デバイスが使えない
-                bool force = rogueForce || pc.Is(CustomRoles.InfoPoor);
+                // 情報弱者 (InfoPoor) と MassMedia は「デバイス無効化」機能の設定とは無関係に、本人だけ全デバイスが使えない
+                bool force = rogueForce || pc.Is(CustomRoles.InfoPoor) || pc.Is(CustomRoles.MassMedia);
 
                 bool ignore = (Options.DisableDevicesIgnoreImpostors.GetBool() && pc.Is(CustomRoleTypes.Impostor)) ||
                               (Options.DisableDevicesIgnoreNeutrals.GetBool() && pc.Is(CustomRoleTypes.Neutral)) ||

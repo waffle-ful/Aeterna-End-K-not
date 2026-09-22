@@ -91,7 +91,7 @@ public class MassMedia : RoleBase
 
         TargetId = target.PlayerId;
         WasTargetAlive = true;
-        killer.SetKillCooldown(999f);
+        killer.SetKillCooldown(999f); // target=null→自分に補正されるので、この呼び出し自体が既にキル演出 (無敵フラッシュ) を出す
         TargetArrow.Add(MassMediaId, TargetId);
         SendRPC();
         Utils.NotifyRoles(SpecifySeer: killer);
@@ -203,6 +203,10 @@ public class MassMedia : RoleBase
             return true;
         }
 
+        // 推理は1会議に1回だけ。票はキャンセルされて投票 UI が戻るので、ここで降ろさないと
+        // 外しても当たるまで撃ち直せてしまう。
+        GuessMode = false;
+
         if (voted.PlayerId == GuessId)
         {
             Win = true;
@@ -211,6 +215,7 @@ public class MassMedia : RoleBase
         }
         else
         {
+            SendRPC();
             CheckForEndVotingPatch.TryAddAfterMeetingDeathPlayers(PlayerState.DeathReason.Misfire, voter.PlayerId);
             Utils.SendMessage(GetString("MassMediaGuessWrong"), voter.PlayerId, Utils.ColorString(Utils.GetRoleColor(CustomRoles.MassMedia), GetString("MassMedia")));
         }
