@@ -1176,6 +1176,12 @@ public static class Utils
             case CustomRoles.Lawyer:
             case CustomRoles.Specter:
             case CustomRoles.Duality:
+            // 銀行家 / サンタ / ミッショニアはタスクを自分の能力の燃料に使うが、原典と同じく
+            // クルーのタスク勝利には算入しない。サンタとミッショニアはタスクを配り直すので、
+            // 算入したままだとクルーのタスク進捗が配り直しのたびに巻き戻る。
+            case CustomRoles.Banker:
+            case CustomRoles.SantaClaus:
+            case CustomRoles.Missioneer:
                 if (forRecompute) hasTasks = false;
                 break;
             case CustomRoles.Pawn:
