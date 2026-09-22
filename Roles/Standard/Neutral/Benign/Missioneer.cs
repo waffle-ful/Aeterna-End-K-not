@@ -19,6 +19,7 @@ public class Missioneer : RoleBase
     private const float DesyncStaggerStep = 0.05f;
 
     public static bool On;
+    public static List<Missioneer> Instances = [];
 
     private static OptionItem KillCooldown;
     private static OptionItem MeetingAssignmentCount;
@@ -31,6 +32,7 @@ public class Missioneer : RoleBase
     private static OptionItem KillPoint;
     private static OptionItem MovePoint;
     private static OptionItem TaskPoint;
+    private static OptionItem EnabledKillTask;
 
     private byte MissioneerId;
     private MissionKind NowMission;
@@ -68,8 +70,8 @@ public class Missioneer : RoleBase
     {
         StartSetup(Id)
             .AutoSetupOption(ref KillCooldown, 20f, new FloatValueRule(0f, 120f, 0.5f), OptionFormat.Seconds)
-            .AutoSetupOption(ref MeetingAssignmentCount, 3, new IntegerValueRule(1, 5, 1))
-            .AutoSetupOption(ref WinAssignmentPoint, 30, new IntegerValueRule(1, 300, 1))
+            .AutoSetupOption(ref MeetingAssignmentCount, 3, new IntegerValueRule(0, 5, 1))
+            .AutoSetupOption(ref WinAssignmentPoint, 30, new IntegerValueRule(0, 300, 1))
             .AutoSetupOption(ref AddWinAssignmentPoint, 20, new IntegerValueRule(0, 300, 1))
             .AutoSetupOption(ref Lv1Point, 0, new IntegerValueRule(0, 25, 1))
             .AutoSetupOption(ref Lv2Point, 1, new IntegerValueRule(0, 25, 1))
@@ -79,16 +81,24 @@ public class Missioneer : RoleBase
             .AutoSetupOption(ref MovePoint, 2, new IntegerValueRule(0, 25, 1))
             .AutoSetupOption(ref TaskPoint, 1, new IntegerValueRule(0, 25, 1))
             .CreateOverrideTasksData();
+
+        // CreateOverrideTasksData は id を 4 つ消費して 1 しか進めないので、連鎖の後ろに
+        // AutoSetupOption を足すと衝突する。既存の id を動かさないよう、この 1 本だけ手で置く
+        // (Id+13〜Id+16 = OverrideTasksData、Id+17 が最初の空き)。
+        EnabledKillTask = new BooleanOptionItem(Id + 17, "Missioneer.EnabledKillTask", true, TabGroup.NeutralRoles)
+            .SetParent(Options.CustomRoleSpawnChances[CustomRoles.Missioneer]);
     }
 
     public override void Init()
     {
         On = false;
+        Instances = [];
     }
 
     public override void Add(byte playerId)
     {
         On = true;
+        Instances.Add(this);
         MissioneerId = playerId;
         NowMission = MissionKind.None;
         NowPoint = 0;
@@ -107,7 +117,10 @@ public class Missioneer : RoleBase
 
     public override void Remove(byte playerId)
     {
-        if (MissioneerId == playerId) On = false;
+        // On は全インスタンス共有なので、最後の1人が抜けるまで折らない。
+        // 折ってしまうと生き残っている2人目以降の会議ごとのミッション再抽選が止まる。
+        Instances.RemoveAll(x => x.MissioneerId == playerId);
+        if (Instances.Count == 0) On = false;
     }
 
     public override void SetKillCooldown(byte id)
@@ -198,23 +211,34 @@ public class Missioneer : RoleBase
     {
         if (!IsKillMission()) return false;
 
+        // ここはキルを通すかどうかを決めるだけ。ミッションの達成判定は
+        // キルが実際に成立してから (OnMurder) 行う — 打診の段階で得点を確定させると、
+        // 相手の守りで不発になった攻撃でもポイントが入り、勝利条件まで届いてしまう。
+        return NowMission switch
+        {
+            MissionKind.Kill => true,
+            MissionKind.KillToVent => true,
+            MissionKind.KillPlayer => target.PlayerId == TargetPlayerId,
+            MissionKind.KillRoom => target.GetPlainShipRoom()?.RoomId == TargetRoom,
+            _ => false
+        };
+    }
+
+    public override void OnMurder(PlayerControl killer, PlayerControl target)
+    {
+        if (killer.PlayerId != MissioneerId || !IsKillMission()) return;
+
         switch (NowMission)
         {
-            case MissionKind.Kill:
-                CompleteMission();
-                return true;
             case MissionKind.KillToVent:
                 Gotovent = true;
                 SendRPC();
-                return true;
+                break;
+            case MissionKind.Kill:
             case MissionKind.KillPlayer when target.PlayerId == TargetPlayerId:
-                CompleteMission();
-                return true;
             case MissionKind.KillRoom when target.GetPlainShipRoom()?.RoomId == TargetRoom:
                 CompleteMission();
-                return true;
-            default:
-                return false;
+                break;
         }
     }
 
@@ -253,8 +277,12 @@ public class Missioneer : RoleBase
         var result = new Dictionary<byte, MissionKind>();
         var others = Main.AllAlivePlayerControlsToList.Where(p => p.PlayerId != MissioneerId).ToList();
 
+        // キル系ミッションを配らない設定のときは抽選プールから外す
+        MissionKind[] pool = EnabledKillTask.GetBool() ? AllMissions : AllMissions.Where(m => (int)m >= 10).ToArray();
+        if (pool.Length == 0) return result;
+
         for (int i = 0; i < count && i < others.Count; i++)
-            result[others[i].PlayerId] = AllMissions[IRandom.Instance.Next(AllMissions.Length)];
+            result[others[i].PlayerId] = pool[IRandom.Instance.Next(pool.Length)];
 
         return result;
     }
@@ -292,7 +320,9 @@ public class Missioneer : RoleBase
     {
         if (pc.PlayerId != MissioneerId) return;
         if (NowMission == MissionKind.Task) CompleteMission();
-        else if (NowMission == MissionKind.AllTaskComp && completedTaskCount >= totalTaskCount) CompleteMission();
+        // OnTaskComplete は CompletedTasksCount を進める前に呼ばれる (Modules/GameState.cs:525 ↔ :564)。
+        // +1 が無いと「全タスク完了」は最後の1本を終えても成立せず、このミッションが死んでいた。
+        else if (NowMission == MissionKind.AllTaskComp && completedTaskCount + 1 >= totalTaskCount) CompleteMission();
     }
 
     public override bool OnVote(PlayerControl voter, PlayerControl target)
@@ -362,6 +392,11 @@ public class Missioneer : RoleBase
         TargetRoom = null;
         NowMission = mission;
 
+        // 原典はミッションを設定するたびにタスクを配り直す。これが無いと全タスクを終えたあと
+        // Task / AllTaskComp のミッションが二度と達成できなくなる。
+        PlayerControl self = Utils.GetPlayerById(MissioneerId);
+        if (self != null && self.IsAlive()) self.RpcResetTasks();
+
         if (mission is MissionKind.KillPlayer or MissionKind.SeePlayer)
         {
             var others = Main.AllAlivePlayerControlsToList.Where(p => p.PlayerId != MissioneerId).ToArray();
@@ -406,6 +441,19 @@ public class Missioneer : RoleBase
         if (!AmongUsClient.Instance.AmHost) return;
         PlayerControl pc = Utils.GetPlayerById(MissioneerId);
         if (pc == null || !pc.IsAlive()) return;
+
+        // 会議でターゲットが死んでいたらミッションが達成不能になるので生存者から引き直す
+        if (NowMission is MissionKind.KillPlayer or MissionKind.SeePlayer && !Utils.GetPlayerById(TargetPlayerId).IsAlive())
+        {
+            PlayerControl[] candidates = Main.AllAlivePlayerControlsToList.Where(x => x.PlayerId != MissioneerId).ToArray();
+
+            if (candidates.Length > 0)
+            {
+                TargetPlayerId = candidates[IRandom.Instance.Next(candidates.Length)].PlayerId;
+                Logger.Info($"Missioneer target re-rolled to {TargetPlayerId}", "Missioneer");
+                Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
+            }
+        }
 
         if (IsKillMission())
         {
