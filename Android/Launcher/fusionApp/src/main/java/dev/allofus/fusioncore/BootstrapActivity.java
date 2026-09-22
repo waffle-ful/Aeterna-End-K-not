@@ -51,6 +51,13 @@ public class BootstrapActivity extends AppCompatActivity {
         return sGameClassLoader != null;
     }
 
+    /** True once the game activity itself has been started; the class loader exists well before that. */
+    private static volatile boolean sGameActivityStarted;
+
+    static boolean isGameActivityStarted() {
+        return sGameActivityStarted;
+    }
+
     private TextView statusView;
     private TextView progressDetailsView;
     private ProgressBar spinnerProgress;
@@ -192,6 +199,7 @@ public class BootstrapActivity extends AppCompatActivity {
                     intentWrapped.putExtra(InstrumentationHooks.EXTRA_FUSION_CONFIG, config);
                     intentWrapped.putExtra(InstrumentationHooks.EXTRA_TARGET_ORIENTATION, targetOrientation);
 
+                    sGameActivityStarted = true;
                     startActivity(intentWrapped);
                     finish();
                 } catch (Throwable t) {
