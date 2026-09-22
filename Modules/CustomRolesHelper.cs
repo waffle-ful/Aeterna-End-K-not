@@ -693,7 +693,8 @@ internal static class CustomRolesHelper
                 CustomRoles.Strawdoll => RoleTypes.Impostor,
                 CustomRoles.CurseMaker => RoleTypes.Impostor,
                 CustomRoles.JackalHadouHo => RoleTypes.Phantom,
-                CustomRoles.Tama => RoleTypes.Impostor,
+                // 装填できない設定の弾はキルボタンを使わないので、ベントの CD と滞在上限が効く Engineer 基底にする
+                CustomRoles.Tama => JackalHadouHo.TamaCanLoad == null || JackalHadouHo.TamaCanLoad.GetBool() ? RoleTypes.Impostor : RoleTypes.Engineer,
                 CustomRoles.MassMedia => RoleTypes.Impostor,
                 CustomRoles.Traitor => Traitor.LegacyTraitor.GetBool() ? RoleTypes.Shapeshifter : RoleTypes.Impostor,
                 CustomRoles.PlagueBearer => RoleTypes.Impostor,
