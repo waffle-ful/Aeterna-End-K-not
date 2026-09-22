@@ -13733,8 +13733,10 @@
   "StrawdollTargetDead": "Your cursed target is dead",
   "StrawdollAlreadyWatching": "Already in watch mode",
   "StrawdollPetToSetTarget": "Pet to curse a nearby player",
-  "StrawdollTargetHUD": "Cursed: {0} (Press Kill to watch)",
+  "StrawdollTargetHUD": "Cursed: {0} (Vanish to watch)",
   "StrawdollWatchingHUD": "Watching ({0}/{1} reprisals)",
+  "StrawdollShapeCooldown": "Watch Mode Cooldown",
+  "StrawdollNonSnapTarget": "Cursed Target Dies in Place",
 
   "CurseMaker": "CurseMaker",
   "CurseMakerInfo": "Stay close to mark a player with Pet; Pet away from everyone to detonate — killing all marked and yourself",

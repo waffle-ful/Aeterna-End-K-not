@@ -14,9 +14,11 @@ public class Strawdoll : RoleBase
     public static List<byte> PlayerIdList = [];
 
     private static OptionItem KillCooldown;
+    private static OptionItem ShapeCooldown;
     private static OptionItem WinKilledCountOpt;
     private static OptionItem CanVent;
     private static OptionItem TpToVent;
+    private static OptionItem NonSnapTarget;
     private static OptionItem ReprisalDistance;
     private static OptionItem StopTime;
 
@@ -52,6 +54,13 @@ public class Strawdoll : RoleBase
         StopTime = new FloatOptionItem(Id + 15, "StrawdollStopTime", new(0f, 10f, 0.5f), 3f, TabGroup.NeutralRoles)
             .SetParent(CustomRoleSpawnChances[CustomRoles.Strawdoll])
             .SetValueFormat(OptionFormat.Seconds);
+
+        ShapeCooldown = new FloatOptionItem(Id + 16, "StrawdollShapeCooldown", new(0f, 180f, 0.5f), 10f, TabGroup.NeutralRoles)
+            .SetParent(CustomRoleSpawnChances[CustomRoles.Strawdoll])
+            .SetValueFormat(OptionFormat.Seconds);
+
+        NonSnapTarget = new BooleanOptionItem(Id + 17, "StrawdollNonSnapTarget", false, TabGroup.NeutralRoles)
+            .SetParent(CustomRoleSpawnChances[CustomRoles.Strawdoll]);
     }
 
     public override void Init()
@@ -81,8 +90,18 @@ public class Strawdoll : RoleBase
 
     public override void ApplyGameOptions(IGameOptions opt, byte id)
     {
-        opt.SetVision(true);
-        AURoleOptions.PhantomCooldown = KillCooldown.GetFloat();
+        opt.SetFloat(FloatOptionNames.CrewLightMod, Main.DefaultCrewmateVision);
+        opt.SetFloat(FloatOptionNames.ImpostorLightMod, Main.DefaultCrewmateVision);
+        opt.SetVision(false);
+
+        float cd = ShapeCooldown.GetFloat();
+
+        // イントロ直後の PreventKill 窓では OnVanish が呼ばれず CD だけリセットされる (初回押下が無音で不発)。
+        // 窓の長さは固定 10 秒ではなく Options.StartingKillCooldown なので、それに合わせてクランプする。
+        if (IntroCutsceneDestroyPatch.PreventKill)
+            cd = Mathf.Max(cd, (Options.StartingKillCooldown?.GetFloat() ?? 10f) + 2f);
+
+        AURoleOptions.PhantomCooldown = cd;
         AURoleOptions.PhantomDuration = 0.1f;
     }
 
@@ -100,7 +119,7 @@ public class Strawdoll : RoleBase
             return;
         }
 
-        if (!FastVector2.TryGetClosestPlayerTo(pc, out PlayerControl target))
+        if (!FastVector2.TryGetClosestPlayerInRangeTo(pc, pc.GetKillDistance(), out PlayerControl target))
         {
             pc.Notify(GetString("StrawdollNoTarget"));
             return;
@@ -159,6 +178,10 @@ public class Strawdoll : RoleBase
         return MurderOnly(kind, IsShapeshifted && curseTarget != null && curseTarget.IsAlive() ? (int?)AttackDefense.Powerful : null);
     }
 
+    // 原典のキルボタンは呪い対象を指す照準で、キル自体は起こさない。
+    // 呪いの指定は EHR ではペットに載っているので、キルボタンは使わない。
+    public override bool CanUseKillButton(PlayerControl pc) => false;
+
     public override bool OnCheckMurderAsTarget(PlayerControl killer, PlayerControl target, bool check = false)
     {
         if (killer.PlayerId == target.PlayerId) return true;
@@ -168,6 +191,10 @@ public class Strawdoll : RoleBase
         if (curseTarget == null || !curseTarget.IsAlive()) return true;
 
         if (check) return false;
+
+        // 身代わり死体は藁人形が立っていた場所に出す (対象本人の居場所は明かさない)。
+        if (!NonSnapTarget.GetBool())
+            curseTarget.TP(target.Pos(), log: false);
 
         LateTask.New(() =>
         {
@@ -182,15 +209,25 @@ public class Strawdoll : RoleBase
             }
 
             ct.Suicide(PlayerState.DeathReason.Spell, killer);
-            KilledCount++;
-            Logger.Info($"Strawdoll reprisal #{KilledCount}: killed {ct.GetNameWithRole()}", "Strawdoll");
 
-            if (KilledCount >= WinKilledCountOpt.GetInt() && GameStates.IsInTask)
+            // 相手の守りで身代わりが成立しなかったときは数えない。Suicide は関所で弾かれると
+            // 何もせず return するので、成否は相手の生死で見る。呪い自体は原典と同じく消費する。
+            if (ct.IsAlive())
             {
-                CustomWinnerHolder.ResetAndSetWinner(CustomWinner.Strawdoll);
-                CustomWinnerHolder.WinnerIds.Add(target.PlayerId);
-                SendRPC();
-                return;
+                Logger.Info($"Strawdoll reprisal blocked by {ct.GetNameWithRole()}", "Strawdoll");
+            }
+            else
+            {
+                KilledCount++;
+                Logger.Info($"Strawdoll reprisal #{KilledCount}: killed {ct.GetNameWithRole()}", "Strawdoll");
+
+                if (KilledCount >= WinKilledCountOpt.GetInt() && GameStates.IsInTask)
+                {
+                    CustomWinnerHolder.ResetAndSetWinner(CustomWinner.Strawdoll);
+                    CustomWinnerHolder.WinnerIds.Add(target.PlayerId);
+                    SendRPC();
+                    return;
+                }
             }
 
             IsShapeshifted = false;
@@ -266,6 +303,14 @@ public class Strawdoll : RoleBase
 
     public override string GetSuffix(PlayerControl seer, PlayerControl target, bool hud = false, bool meeting = false)
     {
+        // 呪い対象の★は藁人形本人にだけ見える (変身前のみ)
+        if (seer.PlayerId == _strawdollId && target.PlayerId != seer.PlayerId)
+        {
+            if (!IsShapeshifted && TargetId != byte.MaxValue && target.PlayerId == TargetId)
+                return "<color=#7b4122>★</color>";
+            return string.Empty;
+        }
+
         if (seer.PlayerId != _strawdollId || seer.PlayerId != target.PlayerId) return string.Empty;
         if (!hud && !seer.IsModdedClient()) return string.Empty;
 
