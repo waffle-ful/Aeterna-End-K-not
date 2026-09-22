@@ -26,7 +26,10 @@
     <uses-feature
         android:name="android.hardware.camera"
         android:required="false" />
-    <application android:label="@string/app_name" android:icon="@mipmap/app_icon" android:enableOnBackInvokedCallback="true" android:extractNativeLibs="true">
+    <!-- Nothing here is worth restoring on another device, and the itch.io sign-in token must not
+         leave the device through cloud or device-to-device backup. -->
+    <application android:label="@string/app_name" android:icon="@mipmap/app_icon" android:enableOnBackInvokedCallback="true" android:extractNativeLibs="true"
+        android:allowBackup="false">
     <meta-data android:name="unity.splash-mode" android:value="0" />
     <meta-data android:name="unity.splash-enable" android:value="False" />
     <meta-data android:name="unity.launch-fullscreen" android:value="True" />
