@@ -6,6 +6,11 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.ContextWrapper;
 import android.content.Intent;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.Collections;
+import android.content.pm.PackageManager;
+import android.content.pm.PackageInfo;
 import android.content.pm.ActivityInfo;
 import android.os.Bundle;
 import android.util.Log;
@@ -43,6 +48,8 @@ public class InstrumentationHooks {
     /** Loader that dynamically started game activities are instantiated from. */
     private static volatile ClassLoader gameClassLoader;
     private static volatile String mainActivityClassName;
+    /** Activities declared in this launcher's own manifest; they must not be routed through a stub. */
+    private static volatile Set<String> launcherActivities = Collections.emptySet();
 
     public static void install(Context fusionContext, ClassLoader gameLoader, String mainActivityClass) {
         if (areHooksInstalled) {
@@ -51,6 +58,7 @@ public class InstrumentationHooks {
         }
         gameClassLoader = gameLoader;
         mainActivityClassName = mainActivityClass;
+        launcherActivities = loadDeclaredActivities(fusionContext);
 
         try {
             Class<?> instrumentationClass = Instrumentation.class;
@@ -277,6 +285,14 @@ public class InstrumentationHooks {
 
                 String targetClass = intent.getComponent().getClassName();
 
+                // Game code builds intents with the launcher-owned activity context, so the
+                // component package alone cannot tell a launcher activity from a game one.
+                if (launcherActivities.contains(targetClass)) {
+                    Log.d(TAG, "execStartActivity: Passing through launcher activity " + targetClass);
+                    return;
+                }
+
+
                 if (isDynamicIntent(intent)) return;
 
                 // Only the main game activity belongs in the single-task stub; anything else
@@ -293,6 +309,24 @@ public class InstrumentationHooks {
         } catch (Exception e) {
             Log.e(TAG, "Error in execStartActivity beforeCall", e);
         }
+    }
+
+    private static Set<String> loadDeclaredActivities(Context context) {
+        Set<String> names = new HashSet<>();
+        try {
+            PackageInfo info = context.getPackageManager().getPackageInfo(context.getPackageName(), PackageManager.GET_ACTIVITIES);
+            if (info.activities != null) {
+                for (ActivityInfo activity : info.activities) {
+                    names.add(activity.name);
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to read declared activities; only the known stubs are exempt", e);
+        }
+        names.add(StubActivity.class.getName());
+        names.add(SecondaryStubActivity.class.getName());
+        Log.i(TAG, "Launcher activities exempt from stub routing: " + names.size());
+        return Collections.unmodifiableSet(names);
     }
 
     private static void handleNewActivityBeforeCall(Pine.CallFrame callFrame) {

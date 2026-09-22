@@ -4,7 +4,6 @@ import android.content.res.Resources;
 import android.util.Log;
 
 import java.lang.reflect.Method;
-import java.util.ArrayList;
 import java.util.Arrays;
 
 import top.canyie.pine.Pine;
@@ -58,16 +57,19 @@ public class ResourceHooks {
                 }
             });
 
-            ArrayList<String> blacklist = new ArrayList<>();
-            blacklist.add(getIdentifierMethod.toString());
-            blacklist.add(Resources.class.getMethod("getConfiguration").toString());
-            blacklist.add(Resources.class.getMethod("getDisplayMetrics").toString());
-
-            for (Method method : Resources.class.getDeclaredMethods()) {
-                if (blacklist.contains(method.toString()) || method.getReturnType().equals(Void.TYPE)) {
-                    continue;
-                }
-
+            // Only the string lookups below have been observed to need the cross-package
+            // fallback (game code resolving its own string ids through the launcher's
+            // Resources). Every hooked method carries a Pine bridge on each call, so hot
+            // framework paths such as getSystem / getAssets / getLayout / getInteger stay
+            // unhooked; a lookup that misses there throws NotFoundException and is visible
+            // in logcat, while these string entry points are hooked individually because
+            // the AOT-compiled getString may inline getText and bypass its hook.
+            Method[] fallbackMethods = {
+                    Resources.class.getMethod("getText", int.class),
+                    Resources.class.getMethod("getString", int.class),
+                    Resources.class.getMethod("getString", int.class, Object[].class),
+            };
+            for (Method method : fallbackMethods) {
                 Pine.hook(method, new MethodHook() {
                     @Override
                     public void afterCall(Pine.CallFrame callFrame) {

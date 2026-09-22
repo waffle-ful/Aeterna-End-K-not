@@ -1,5 +1,6 @@
 package dev.allofus.fusioncore;
 
+import android.app.ActivityManager;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
@@ -339,8 +340,55 @@ public class SelectorActivity extends AppCompatActivity {
                 }
             });
 
+    private boolean moveGameTaskToFront() {
+        ActivityManager am = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
+        if (am == null) return false;
+        String stub = StubActivity.class.getName();
+        for (ActivityManager.AppTask task : am.getAppTasks()) {
+            ActivityManager.RecentTaskInfo info = task.getTaskInfo();
+            if (info == null) continue;
+            boolean isGameTask = (info.topActivity != null && stub.equals(info.topActivity.getClassName()))
+                    || (info.baseActivity != null && stub.equals(info.baseActivity.getClassName()))
+                    || (info.baseIntent != null && info.baseIntent.getComponent() != null
+                        && stub.equals(info.baseIntent.getComponent().getClassName()));
+            if (isGameTask) {
+                Log.i(TAG, "Moving game task to front");
+                task.moveToFront();
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void maybeLaunchBootstrap(String packageName) {
         handler.removeCallbacks(autoLaunchRunnable);
+
+        if (BootstrapActivity.isGameActivityStarted()) {
+            // The game already runs in this process. Bootstrapping it a second time would
+            // create a second UnityPlayer, which Unity aborts on; bring the running game
+            // back to the front instead.
+            // Starting StubActivity here would create a plain stub (the game intent is only
+            // swapped for the game activity in newActivity), so move the game task instead.
+            Log.i(TAG, "Game already loaded in this process; returning to it");
+            if (!moveGameTaskToFront()) {
+                // The game task is gone but this process still holds the old UnityPlayer, so
+                // it cannot bootstrap again; end the process so the next tap starts clean.
+                Log.w(TAG, "Game task not found; ending the process so the next launch bootstraps again");
+                finish();
+                android.os.Process.killProcess(android.os.Process.myPid());
+                return;
+            }
+            finish();
+            return;
+        }
+        if (BootstrapActivity.isGameLoaded()) {
+            // Bootstrap is still preparing the game in this process. Starting the stub now
+            // would create a plain StubActivity that the later game intent could only reach
+            // through onNewIntent, so the game would never start; leave the bootstrap alone.
+            Log.i(TAG, "Bootstrap already in progress in this process; not starting again");
+            finish();
+            return;
+        }
 
         try {
             var packageInfo = getPackageManager().getPackageInfo(packageName, PackageManager.GET_PERMISSIONS);
