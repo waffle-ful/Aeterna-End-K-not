@@ -45,6 +45,19 @@
       </intent-filter>
     </activity>
     <activity
+        android:name="dev.allofus.fusioncore.ItchAuthCallbackActivity"
+        android:theme="@android:style/Theme.Translucent.NoTitleBar"
+        android:launchMode="singleTask"
+        android:noHistory="true"
+        android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <data android:scheme="endknot" android:host="itch-auth" />
+      </intent-filter>
+    </activity>
+    <activity
         android:name="dev.allofus.fusioncore.BootstrapActivity"
         android:theme="@style/Theme.Material3.Dark.NoActionBar"
         android:screenOrientation="locked"

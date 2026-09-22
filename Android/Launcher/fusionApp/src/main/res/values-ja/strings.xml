@@ -3,6 +3,13 @@
     <string name="app_name">End K not</string>
     <string name="selector_title">ゲームを選択</string>
     <string name="selector_target_not_installed">この端末に Among Us がインストールされていません。</string>
+    <string name="selector_itch_signed_in">itch.io: ログイン済み</string>
+    <string name="selector_itch_not_signed_in">itch.io: 未ログイン</string>
+    <string name="selector_itch_sign_in">itch.io でログイン</string>
+    <string name="selector_itch_sign_out">ログアウト</string>
+    <string name="selector_itch_hint_not_signed_in">先に itch.io でログインしてください。カードをタップするとアカウント無しで起動します。</string>
+    <string name="itch_sign_in_done">itch.io にログインしました。</string>
+    <string name="itch_sign_in_failed">itch.io のログインが完了しませんでした。もう一度お試しください。</string>
     <string name="selector_auto_launch_hint">まもなく Among Us を起動します。カードをタップするとすぐに起動、先に設定を開くこともできます。</string>
     <string name="selector_storage_permission_prompt">End K not が BepInEx のファイルを書き込めるように「すべてのファイルへのアクセス」を許可してください。</string>
     <string name="selector_storage_permission_required">続行するには「すべてのファイルへのアクセス」が必要です。</string>

@@ -17,6 +17,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
+import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.ListView;
@@ -39,16 +40,20 @@ import java.util.Set;
 import java.util.zip.ZipFile;
 
 import dev.allofus.fusioncore.tools.CrashDetector;
+import dev.allofus.fusioncore.tools.ItchAuth;
 import dev.allofus.fusioncore.tools.Utilities;
 
 public class SelectorActivity extends AppCompatActivity {
     private static final String TAG = "FusionCore";
     private static final int REQUEST_MANAGE_EXTERNAL_STORAGE = 1001;
     private static final String[] UNITY_ABIS = {"arm64-v8a", "armeabi-v7a", "x86_64", "x86"};
-    private static final String TARGET_PACKAGE = "com.innersloth.spacemafia";
+    static final String TARGET_PACKAGE = "com.innersloth.spacemafia";
+    /** Set on the intent that brings the player back after the itch.io sign-in page. */
+    static final String EXTRA_AFTER_SIGN_IN = "after_sign_in";
     private static final long AUTO_LAUNCH_DELAY_MS = 1500L;
 
     private String pendingLaunchPackage;
+    private boolean targetInstalled;
     private Handler handler;
     private final Runnable autoLaunchRunnable = () -> maybeLaunchBootstrap(TARGET_PACKAGE);
 
@@ -62,20 +67,64 @@ public class SelectorActivity extends AppCompatActivity {
         Utilities.applyWindowInsets(root, basePadding);
 
         handler = new Handler(getMainLooper());
+        findViewById(R.id.selector_itch_button).setOnClickListener(v -> {
+            handler.removeCallbacks(autoLaunchRunnable);
+            if (ItchAuth.isSignedIn(this, TARGET_PACKAGE)) {
+                ItchAuth.signOut(this, TARGET_PACKAGE);
+                refreshItchStatus();
+            } else {
+                ItchAuth.startSignIn(this);
+            }
+        });
         handler.postDelayed(()->{
-            boolean targetInstalled = populateList();
+            targetInstalled = populateList();
+            boolean signedIn = refreshItchStatus();
             if (!hasExternalStorageManagerAccess()) {
-                if (targetInstalled) {
+                if (targetInstalled && signedIn) {
                     pendingLaunchPackage = TARGET_PACKAGE;
                 }
                 requestExternalStorageManagerAccess();
             } else {
                 CrashDetector.init(this);
-                if (targetInstalled) {
+                // Launch by itself only once an itch.io account is attached; otherwise wait for
+                // the player to sign in or to tap the card.
+                if (targetInstalled && signedIn) {
                     handler.postDelayed(autoLaunchRunnable, AUTO_LAUNCH_DELAY_MS);
                 }
             }
         }, 100);
+    }
+
+    /** Updates the itch.io row and the hint under the title; returns whether a token is stored. */
+    private boolean refreshItchStatus() {
+        boolean signedIn = ItchAuth.isSignedIn(this, TARGET_PACKAGE);
+        TextView status = findViewById(R.id.selector_itch_status);
+        Button button = findViewById(R.id.selector_itch_button);
+        status.setText(signedIn ? R.string.selector_itch_signed_in : R.string.selector_itch_not_signed_in);
+        button.setText(signedIn ? R.string.selector_itch_sign_out : R.string.selector_itch_sign_in);
+        TextView subtitle = findViewById(R.id.selector_subtitle);
+        if (!signedIn) {
+            subtitle.setText(R.string.selector_itch_hint_not_signed_in);
+        } else if (findViewById(R.id.selector_loading).getVisibility() == View.GONE) {
+            subtitle.setText(R.string.selector_auto_launch_hint);
+        }
+        return signedIn;
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        if (!intent.getBooleanExtra(EXTRA_AFTER_SIGN_IN, false)) {
+            return;
+        }
+        // Coming back from the itch.io page: the activity already exists, so refresh the row and
+        // start the game the same way a fresh launch would once an account is attached.
+        boolean signedIn = refreshItchStatus();
+        if (signedIn && targetInstalled && hasExternalStorageManagerAccess()) {
+            handler.removeCallbacks(autoLaunchRunnable);
+            handler.postDelayed(autoLaunchRunnable, AUTO_LAUNCH_DELAY_MS);
+        }
     }
 
     @Override
