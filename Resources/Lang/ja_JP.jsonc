@@ -13689,6 +13689,7 @@
   "Remotekiller.KillCooldown": "マーククールダウン",
   "Remotekiller.HasImpostorVision": "インポスター視界を持つ",
   "Remotekiller.CanVent": "ベントを使用可能",
+  "Remotekiller.KillAnimation": "キル時にテレポートする",
   "Remotekiller.MarkButtonText": "マーク",
   "Remotekiller.VentButtonText": "実行",
   "Remotekiller.Marked": "マーク済み：{0}",
