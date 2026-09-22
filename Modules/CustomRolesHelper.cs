@@ -59,6 +59,10 @@ internal static class CustomRolesHelper
         CustomRoles.WaveCannon,
         CustomRoles.Sandbox,
         CustomRoles.Dossun,
+        // 藁人形は呪いの指定が、カースメーカーは呪いの中断と起爆が、ペットボタンでしか行えない。
+        // ペット無効のロビーに出すと藁人形は何もできず、カースメーカーは呪いを起爆できない。
+        CustomRoles.Strawdoll,
+        CustomRoles.CurseMaker,
 
         // Add-ons
         CustomRoles.Energetic,
