@@ -2279,7 +2279,9 @@ internal static class FixedUpdatePatch
             if (AmHostTick && inTask && alive && Options.LadderDeath.GetBool())
                 FallFromLadder.FixedUpdate(player);
 
-            if (inTask && self && AmHostTick && (Options.DisableDevices.GetBool() || DisableDevice.TimeLimitEnabled || CustomRoles.InfoPoor.IsEnable() || Rogue.On))
+            // 内側 (DisableDevice.FixedUpdate 冒頭) の早期 return と同じ顔ぶれを並べること。
+            // ここが古いままだと、その役職が居てもデバイス無効化の設定が OFF の卓で関数ごと呼ばれない。
+            if (inTask && self && AmHostTick && (Options.DisableDevices.GetBool() || DisableDevice.TimeLimitEnabled || CustomRoles.InfoPoor.IsEnable() || CustomRoles.MassMedia.IsEnable() || Rogue.On))
                 DisableDevice.FixedUpdate();
 
             // IsShifted ガード: タグ持ち (dev/mod/vip) プレイヤーは ApplySuffix が変装中も生名を
