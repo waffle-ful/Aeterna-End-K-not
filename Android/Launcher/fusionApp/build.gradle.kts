@@ -84,6 +84,15 @@ android {
         }
     }
 
+    // The mod DLL is bundled from the C# build output (`dotnet build EndKnot.csproj -c Android`
+    // writes build-android/apk-assets/plugins/). The directory may be absent when only the
+    // launcher is being built; the APK then ships without a bundled plugin.
+    sourceSets {
+        getByName("main") {
+            assets.srcDirs("../../../build-android/apk-assets")
+        }
+    }
+
     lint {
         abortOnError = false
     }

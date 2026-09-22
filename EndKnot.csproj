@@ -143,4 +143,27 @@
              例外スタックトレースの file:line が解決できなくなる (握りつぶし例外の発生源が特定不能になる)。 -->
         <Copy SourceFiles="$(OutputPath)$(AssemblyName).pdb" DestinationFolder="$(AmongUs)/BepInEx/plugins/" Condition="Exists('$(OutputPath)$(AssemblyName).pdb')" ContinueOnError="WarnAndContinue"/>
     </Target>
+    <!-- Android: the launcher APK bundles the plugin DLL as an asset and installs it into
+         BepInEx/plugins on the device when the bundled build differs from the installed one.
+         The Gradle module picks this directory up as an extra assets source set. The
+         properties file next to the DLL is the identity the launcher compares (SHA-256 of the
+         DLL plus the human-readable plugin version). -->
+    <PropertyGroup Condition="'$(Configuration)' == 'Android'">
+        <AndroidApkAssetsDir Condition="'$(AndroidApkAssetsDir)' == ''">$(MSBuildProjectDirectory)\build-android\apk-assets\plugins\</AndroidApkAssetsDir>
+    </PropertyGroup>
+    <Target Name="AndroidApkAssets" AfterTargets="Build" Condition="'$(Configuration)' == 'Android'">
+        <GetAssemblyIdentity AssemblyFiles="$(TargetPath)">
+            <Output TaskParameter="Assemblies" ItemName="_PluginAssemblyIdentity" />
+        </GetAssemblyIdentity>
+        <PropertyGroup>
+            <_PluginVersion>%(_PluginAssemblyIdentity.Version)</_PluginVersion>
+        </PropertyGroup>
+        <GetFileHash Files="$(TargetPath)" Algorithm="SHA256" HashEncoding="hex">
+            <Output TaskParameter="Hash" PropertyName="_PluginSha256" />
+        </GetFileHash>
+        <MakeDir Directories="$(AndroidApkAssetsDir)" />
+        <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(AndroidApkAssetsDir)" />
+        <WriteLinesToFile File="$(AndroidApkAssetsDir)$(AssemblyName).dll.properties" Overwrite="true" Lines="version=$(_PluginVersion);sha256=$([System.String]::Copy('$(_PluginSha256)').ToLowerInvariant())" />
+        <Message Importance="high" Text="Android APK assets: $(AssemblyName).dll $(_PluginVersion) sha256=$(_PluginSha256)" />
+    </Target>
 </Project>

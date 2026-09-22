@@ -32,6 +32,7 @@ import dev.allofus.fusioncore.tools.GameClassLoaderFactory;
 import dev.allofus.fusioncore.tools.LibUnityDownloader;
 import dev.allofus.fusioncore.tools.NativeLibraryManager;
 import dev.allofus.fusioncore.tools.Utilities;
+import dev.allofus.fusioncore.tools.PluginInstaller;
 import dev.allofus.fusioncore.tools.VersionLookup;
 
 public class BootstrapActivity extends AppCompatActivity {
@@ -360,6 +361,11 @@ public class BootstrapActivity extends AppCompatActivity {
 
         Utilities.extractZipFromAssets(appContext, "BepInEx-arm64.zip", bepInExDir);
         Utilities.extractZipFromAssets(appContext, "dotnet-arm64.zip", dotnetDir);
+
+        setPhaseStatus(getString(R.string.bootstrap_status_installing_plugin));
+        if (!PluginInstaller.installBundledPlugins(appContext, bepInExDir)) {
+            Log.w(TAG, "Bundled plugin install did not complete; continuing with whatever is in plugins/");
+        }
 
         setPhaseStatus(getString(R.string.bootstrap_status_registering_libraries));
         File[] nativeLibs = new File(gameLibDir).listFiles();
