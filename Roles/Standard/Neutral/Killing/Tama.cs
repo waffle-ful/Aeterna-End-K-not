@@ -70,6 +70,19 @@ public class Tama : RoleBase
         opt.SetVision(true);
     }
 
+    // 原典の弾は常にベントを使える。装填できない設定にしたとき、これが無いと
+    // キルボタンもベントも無い完全な無力役職になる。
+    public override bool CanUseImpostorVentButton(PlayerControl pc) => true;
+
+    // 原典は弾とジャッカル陣営が互いの役職を見える。弾の唯一の能力は「主に装填する」ことなので、
+    // 誰が主か分からないと総当たりするしかない (装填の打診は主以外へは無言で false を返す)。
+    public override bool KnowRole(PlayerControl seer, PlayerControl target)
+    {
+        if (base.KnowRole(seer, target)) return true;
+        if (OwnerId == byte.MaxValue) return false;
+        return (seer.PlayerId == TamaId && target.PlayerId == OwnerId) || (seer.PlayerId == OwnerId && target.PlayerId == TamaId);
+    }
+
     private bool IsOwnerAlive()
     {
         if (OwnerId == byte.MaxValue) return false;
