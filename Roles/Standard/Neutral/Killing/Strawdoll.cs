@@ -126,6 +126,12 @@ public class Strawdoll : RoleBase
         }
 
         TargetId = target.PlayerId;
+
+        // 呪いの指定が成ったときだけクールダウンを張る (射程に誰も居ない空振りで封じない)。
+        // Phantom 基底の役職は汎用のペット CD 経路が Utils.AddAbilityCD の早期 return に落ちるので
+        // ここで直接張る。張った時点で HasAbilityCD() が真になり、ペット側の無条件付与も通らない。
+        pc.AddAbilityCD((int)KillCooldown.GetFloat());
+
         SendRPC();
         Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
         pc.Notify(string.Format(GetString("StrawdollTargetSet"), target.GetRealName()));
