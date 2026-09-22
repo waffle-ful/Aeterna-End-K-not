@@ -87,6 +87,23 @@ internal static class GameEndChecker
 
             foreach (var pc in Main.CachedAllPlayerControls())
             {
+                // 変身は終了のブロードキャストより手前で解くこと。結果画面の並びは各クライアントが
+                // 試合終了の瞬間に作るスナップショットで、体は元の見た目から・ラベルは今の見た目から
+                // 取られるため、変身したままだと「体は本人・名前は変装先」のちぐはぐになる。
+                // OnGameEnd まで待つ形では客のスナップショットに間に合わない
+                // (2026-09-22 実機: 解除が終了ブロードキャストの後に出ていた)。
+                if (pc.IsShifted())
+                {
+                    Logger.Info($"Reverting shapeshift before end broadcast: {pc.GetNameWithRole().RemoveHtmlTags()}", "CheckGameEnd");
+
+                    // 名前が先 — 解除で IsShifted() が偽になる。素の名前なので長さの上限には掛からない。
+                    if (Main.ShapeshiftIsAnimated.GetValueOrDefault(pc.PlayerId) && Main.AllPlayerNames.TryGetValue(pc.PlayerId, out string ssRealName))
+                        pc.RpcSetName(ssRealName);
+
+                    // 終了画面へ移る場面で卵の演出に用は無く、アニメ無しのほうが反映が即時になる。
+                    pc.RpcShapeshift(pc, false);
+                }
+
                 Camouflage.RpcSetSkin(pc, true, true, true);
             }
 
