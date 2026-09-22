@@ -204,10 +204,17 @@ public class JackalHadouHo : RoleBase
     {
         opt.SetVision(HasImpostorVisionOpt.GetBool());
         AURoleOptions.PhantomDuration = 0.1f;
+
         // 超チャージ全シーケンスを上限として cooldown を確保
-        AURoleOptions.PhantomCooldown =
-            SuperChargeDuration.GetFloat() + WarningDuration.GetFloat() + FiringDuration.GetFloat()
+        float cd = SuperChargeDuration.GetFloat() + WarningDuration.GetFloat() + FiringDuration.GetFloat()
             + KillCooldown.GetFloat();
+
+        // イントロ直後の PreventKill 窓では OnVanish/OnShapeshift が呼ばれず CD だけリセットされる (初回押下が無音で不発)。
+        // 窓の長さは固定 10 秒ではなく Options.StartingKillCooldown なので、それに合わせてクランプする。
+        if (IntroCutsceneDestroyPatch.PreventKill)
+            cd = Mathf.Max(cd, (Options.StartingKillCooldown?.GetFloat() ?? 10f) + 2f);
+
+        AURoleOptions.PhantomCooldown = cd;
     }
 
     public override bool OnVanish(PlayerControl pc)
@@ -659,11 +666,14 @@ public class JackalHadouHo : RoleBase
             if (Main.PlayerStates[p.PlayerId].Role is Tama tama && tama.OwnerId == JhhId && tama.HasLoaded)
             {
                 p.Suicide(PlayerState.DeathReason.Bombed);
-                IsLoaded = false;
                 tama.HasLoaded = false;
                 break;
             }
         }
+
+        // 弾が切断/転職で居なくなっていても装填フラグは必ず降ろす。
+        // ループの中で降ろしていると、消えた弾のぶんだけ超発射が撃ち放題になる。
+        IsLoaded = false;
     }
 
     private Vector2 GatePosition() => StartPosition + new Vector2(Direction.x * GateForwardOffset, GateUpOffset);
@@ -770,11 +780,13 @@ public class JackalHadouHo : RoleBase
             AlreadyKilled.Add(target.PlayerId);
 
             if (!CheckMurderPatch.PassesGate(shooter, target, kind: AttackKind.Execution)) continue;
+            PlayerState state = Main.PlayerStates[target.PlayerId];
+            // 生フィールド代入だと客へ SetRealKiller の RPC が飛ばず、非ホスト側の死因表示がズレる。
+            target.SetRealKiller(shooter);
+            state.deathReason = PlayerState.DeathReason.Kill;
             target.RpcExileV2();
             RPC.PlaySoundRPC(shooter.PlayerId, Sounds.KillSound);
-            PlayerState state = Main.PlayerStates[target.PlayerId];
-            state.deathReason = PlayerState.DeathReason.Kill;
-            state.RealKiller = (DateTime.Now, shooter.PlayerId);
+            target.Data.IsDead = true;
             state.SetDead();
             Utils.AfterPlayerDeathTasks(target);
             HasHit = true;
@@ -843,7 +855,7 @@ public class JackalHadouHo : RoleBase
         // モード ON 時の候補指定
         if (SkMode)
         {
-            if (!target.IsAlive() || !Jackal.CanBeSidekick(target))
+            if (!target.IsAlive() || !CanBecomeTama(target))
             {
                 Utils.SendMessage(GetString("JackalHadouHoSkInvalid"), JhhId);
                 SkMode = false;
@@ -859,9 +871,16 @@ public class JackalHadouHo : RoleBase
         return false;
     }
 
+    // 弾にできる相手。原典は波動砲ジャッカル自身と弾を名指しで除外している
+    // (Jackal.CanBeSidekick は勧誘役職しか弾かないので、JHH が2人以上出ると相手をそのまま弾にできてしまう)。
+    private static bool CanBecomeTama(PlayerControl target)
+    {
+        return Jackal.CanBeSidekick(target) && !target.Is(CustomRoles.JackalHadouHo) && !target.Is(CustomRoles.Tama);
+    }
+
     private void DoSideKick(PlayerControl target)
     {
-        if (!Jackal.CanBeSidekick(target))
+        if (!CanBecomeTama(target))
         {
             Utils.SendMessage(GetString("JackalHadouHoSkInvalid"), JhhId);
             return;
