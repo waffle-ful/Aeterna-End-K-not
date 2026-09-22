@@ -13695,8 +13695,8 @@
 
   "Monochromer": "Monochromer",
   "MonochroInfo": "Identify killers among a grey world",
-  "MonochromerInfo": "Identify killers among a grey world",
-  "MonochromerInfoLong": "(<#ffab1b>Neutrals</color>):\n<size=80%>Identify killers among the crew — and survive to claim the win.\n_____________________________________\nDifficulty: ★★★☆☆\n\n[Skills]\n・<b><color=#ffab1b>Killer Sense</color></b>\nImpostors and Neutral Killers appear to you with a ★ marker. If a killer's role color is revealed, the ★ is colored accordingly.\n\n[Win Condition]\n・<b><color=#ffab1b>Survive</color></b>\nSurvive until the end to win alongside the winning team — or steal the win entirely if the game ends by any means other than tasks.\n\n<i>In a grey world, only you see in color.</i></size>",
+  "MonochromerInfo": "Identify killers among a grey world and steal the Crewmates win",
+  "MonochromerInfoLong": "(<#ffab1b>Neutrals</color>):\n<size=80%>Identify killers among the crew — and ride the Crewmates victory.\n_____________________________________\nDifficulty: ★★★☆☆\n\n[Skills]\n・<b><color=#ffab1b>Killer Sense</color></b>\nImpostors and Neutral Killers appear to you with a ★ marker. If a killers role color is revealed, the ★ is colored accordingly.\n\n[Win Condition]\n・<b><color=#ffab1b>Survive a Crewmate Win</color></b>\nIf the Crewmates win while you are alive, you steal the victory outright. If they win by finishing tasks, you win alongside them instead. Any other teams victory leaves you with nothing.\n\n<i>In a grey world, only you see in color.</i></size>",
   "Monochromer.HasImpostorVision": "Has Impostor Vision",
   "Monochromer.CanSeeKillers": "Can See Killer Markers",
   "Monochromer.ShowKillerRoleColor": "Marker Uses Killer Role Color",
