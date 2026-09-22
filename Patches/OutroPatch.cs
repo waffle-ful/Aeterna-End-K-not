@@ -120,6 +120,9 @@ internal static class EndGamePatch
             // Shadow のカモ解除はタイマー完了時にしか無く、試合終了ではキャンセル側へ倒れて解けない
             if (state.Role is Shadow shadow) shadow.RestoreOnGameEnd(id);
 
+            // Turncoat の変身も解除経路が全部「試合が続いている」前提で、決着した瞬間に止まる
+            if (state.Role is Turncoat turncoat) turncoat.RestoreOnGameEnd(id);
+
             // 顔の入れ替え組は、上の名前/Level 復元と違って見た目を戻す口がリセット設定に依存する。
             // 既定の「リセットなし」では一度も走らないので、ここで無条件に戻す。
             Doppelganger.RestoreOutfitOnGameEnd(id);
