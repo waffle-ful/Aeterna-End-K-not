@@ -184,6 +184,22 @@ internal static class RpcSetTasksPatch
             if (role is CustomRoles.Phantasm or CustomRoles.Haunter) Main.PlayerStates[pc.PlayerId].TaskState.AllTasksCount = numLongTasks + numShortTasks;
         }
 
+        // サンタクロースとミッショナーはタスクそのものが能力の土台なので、本数はホスト設定で動かせない
+        // (サンタ = ショート3本を配り終えるたびにプレゼント1個、ミッショナー = タスク系ミッションの達成条件)。
+        switch (role)
+        {
+            case CustomRoles.SantaClaus:
+                hasCommonTasks = false;
+                numLongTasks = 0;
+                numShortTasks = 3;
+                break;
+            case CustomRoles.Missioneer:
+                hasCommonTasks = false;
+                numLongTasks = 1;
+                numShortTasks = 2;
+                break;
+        }
+
         if (pc.Is(CustomRoles.Busy))
         {
             numLongTasks += Options.BusyLongTasks.GetInt();

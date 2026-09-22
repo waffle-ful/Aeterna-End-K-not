@@ -1854,6 +1854,10 @@ internal static class ReportDeadBodyPatch
             if (player.Is(CustomRoles.Stressed)) Stressed.OnReport(player);
 
             Stressed.OnMeetingStart();
+
+            // 転向した猫の役職インスタンスは差し替わって消えるので、キルバックの保険は
+            // 役職インスタンスの OnReportDeadBody ではなくここから呼ぶ。
+            SchrodingersCat.OnAnyoneReportDeadBody();
         }
         catch (Exception e) { ThrowException(e); }
 

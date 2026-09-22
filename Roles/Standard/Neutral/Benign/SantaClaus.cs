@@ -56,6 +56,15 @@ public class SantaClaus : RoleBase
             .AutoSetupOption(ref AddWinModeOpt, false)
             .AutoSetupOption(ref GiftAddonOpt, true)
             .CreateOverrideTasksData();
+
+        // プレゼントの素はタスクなので、本数はショート3本に固定する (タスク配布側で強制)。
+        // 動かせない設定を画面に残さないよう 4 本とも隠す。CreateOverrideTasksData の呼び出し自体は
+        // 後続オプションの id を動かさないために残す。
+        OverrideTasksData tasks = OverrideTasksData.AllData[CustomRoles.SantaClaus];
+        tasks.DoOverride.SetHidden(true);
+        tasks.AssignCommonTasks.SetHidden(true);
+        tasks.NumLongTasks.SetHidden(true);
+        tasks.NumShortTasks.SetHidden(true);
     }
 
     public override void Init()

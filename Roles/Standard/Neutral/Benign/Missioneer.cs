@@ -87,6 +87,15 @@ public class Missioneer : RoleBase
         // (Id+13〜Id+16 = OverrideTasksData、Id+17 が最初の空き)。
         EnabledKillTask = new BooleanOptionItem(Id + 17, "Missioneer.EnabledKillTask", true, TabGroup.NeutralRoles)
             .SetParent(Options.CustomRoleSpawnChances[CustomRoles.Missioneer]);
+
+        // タスク系ミッションの土台なので、本数はロング1本+ショート2本に固定する (タスク配布側で強制)。
+        // 動かせない設定を画面に残さないよう 4 本とも隠す。CreateOverrideTasksData の呼び出し自体は
+        // EnabledKillTask の id (Id + 17) を動かさないために残す。
+        OverrideTasksData tasks = OverrideTasksData.AllData[CustomRoles.Missioneer];
+        tasks.DoOverride.SetHidden(true);
+        tasks.AssignCommonTasks.SetHidden(true);
+        tasks.NumLongTasks.SetHidden(true);
+        tasks.NumShortTasks.SetHidden(true);
     }
 
     public override void Init()
