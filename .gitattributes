@@ -54,7 +54,6 @@
 *.jsx       linguist-detectable=false
 *.mjs       linguist-detectable=false
 *.cjs       linguist-detectable=false
-*.java      linguist-detectable=false
 
 # 4.
 *.json      linguist-vendored
