@@ -14,14 +14,17 @@ public class CurseMaker : RoleBase
     private const int Id = 704200;
     public static List<byte> PlayerIdList = [];
 
-    private static OptionItem PetCooldown;
+    private static OptionItem KillCooldown;
     private static OptionItem CurseDistance;
     private static OptionItem NoroiTime;
     private static OptionItem DelTurn;
     public static OptionItem CanSoloWin;
+    private static OptionItem KillDistanceOverride;
 
     private byte _curseMakerId;
     private byte ChargingTargetId;
+    // 起爆がそのまま試合を終わらせたときだけ単独勝利する。原典と同じく短い猶予で自然に失効する。
+    private bool CanClaimWin;
     private float ChargeTimer;
     private Dictionary<byte, int> CursedPlayers = [];
 
@@ -31,7 +34,7 @@ public class CurseMaker : RoleBase
     {
         SetupRoleOptions(Id, TabGroup.NeutralRoles, CustomRoles.CurseMaker);
 
-        PetCooldown = new FloatOptionItem(Id + 10, "KillCooldown", new(0f, 180f, 0.5f), 20f, TabGroup.NeutralRoles)
+        KillCooldown = new FloatOptionItem(Id + 10, "KillCooldown", new(0f, 180f, 0.5f), 20f, TabGroup.NeutralRoles)
             .SetParent(CustomRoleSpawnChances[CustomRoles.CurseMaker])
             .SetValueFormat(OptionFormat.Seconds);
 
@@ -47,6 +50,10 @@ public class CurseMaker : RoleBase
             .SetParent(CustomRoleSpawnChances[CustomRoles.CurseMaker]);
 
         CanSoloWin = new BooleanOptionItem(Id + 14, "CurseMakerCanSoloWin", true, TabGroup.NeutralRoles)
+            .SetParent(CustomRoleSpawnChances[CustomRoles.CurseMaker]);
+
+        // 0 = Short, 1 = Medium, 2 = Long (vanilla Int32OptionNames.KillDistance と同じ意味)
+        KillDistanceOverride = new IntegerOptionItem(Id + 15, "CurseMakerKillDistance", new(0, 2, 1), 0, TabGroup.NeutralRoles)
             .SetParent(CustomRoleSpawnChances[CustomRoles.CurseMaker]);
     }
 
@@ -71,17 +78,43 @@ public class CurseMaker : RoleBase
 
     public override void SetKillCooldown(byte id)
     {
-        Main.AllPlayerKillCooldown[id] = PetCooldown.GetFloat();
+        Main.AllPlayerKillCooldown[id] = KillCooldown.GetFloat();
     }
 
-    public override bool CanUseKillButton(PlayerControl pc) => false;
+    // 原典どおりキルボタンは「呪いの充填を始める照準」。実際には誰も殺さない。
+    // ペットに全部まとめると、充填開始で付いたクールダウンがキャンセルと起爆まで塞いでしまう。
+    public override bool CanUseKillButton(PlayerControl pc) => pc.IsAlive();
+
+    public override bool OnCheckMurder(PlayerControl killer, PlayerControl target)
+    {
+        if (ChargingTargetId != byte.MaxValue)
+        {
+            killer.Notify(GetString("CurseMakerAlreadyCharging"));
+            return false;
+        }
+
+        if (CursedPlayers.ContainsKey(target.PlayerId))
+        {
+            killer.Notify(string.Format(GetString("CurseMakerAlreadyCursed"), target.GetRealName()));
+            return false;
+        }
+
+        ChargingTargetId = target.PlayerId;
+        ChargeTimer = 0f;
+        SendRPCCharging();
+        killer.SetKillCooldown();
+        Utils.NotifyRoles(SpecifySeer: killer, SpecifyTarget: killer);
+        killer.Notify(string.Format(GetString("CurseMakerCharging"), target.GetRealName()));
+        return false;
+    }
 
     public override void ApplyGameOptions(IGameOptions opt, byte id)
     {
         opt.SetVision(false);
+        opt.SetInt(Int32OptionNames.KillDistance, KillDistanceOverride.GetInt());
     }
 
-    // Pet: context-sensitive — start charge, cancel charge, or detonate
+    // Pet: charge cancel, or detonation. Starting a charge is on the kill button.
     public override void OnPet(PlayerControl pc)
     {
         if (!pc.IsAlive()) return;
@@ -94,23 +127,6 @@ public class CurseMaker : RoleBase
             SendRPCCharging();
             Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
             pc.Notify(GetString("CurseMakerChargeCanceled"));
-            return;
-        }
-
-        // Start charge on nearby player
-        if (FastVector2.TryGetClosestPlayerInRangeTo(pc, CurseDistance.GetFloat(), out PlayerControl target))
-        {
-            if (CursedPlayers.ContainsKey(target.PlayerId))
-            {
-                pc.Notify(string.Format(GetString("CurseMakerAlreadyCursed"), target.GetRealName()));
-                return;
-            }
-
-            ChargingTargetId = target.PlayerId;
-            ChargeTimer = 0f;
-            SendRPCCharging();
-            Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
-            pc.Notify(string.Format(GetString("CurseMakerCharging"), target.GetRealName()));
             return;
         }
 
@@ -143,8 +159,11 @@ public class CurseMaker : RoleBase
 
             if (soloWin && GameStates.IsInTask)
             {
-                CustomWinnerHolder.ResetAndSetWinner(CustomWinner.CurseMaker);
-                CustomWinnerHolder.WinnerIds.Add(pc.PlayerId);
+                // ここで勝者を確定させると「1人呪って起爆」だけで試合を奪える。
+                // 勝者が決まったあとの CheckWinner で名乗り出る形にして、
+                // 起爆が実際に試合を終わらせたときだけ勝てるようにする。
+                CanClaimWin = true;
+                LateTask.New(() => CanClaimWin = false, 2f, log: false);
             }
 
             pc.Suicide(PlayerState.DeathReason.Bombed);
@@ -162,6 +181,9 @@ public class CurseMaker : RoleBase
             ChargeTimer = 0f;
             SendRPCCharging();
             Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
+            // 対象を見失った失敗は通常のクールダウンを食わせず即リトライ可能にする。
+            Main.AllPlayerKillCooldown[pc.PlayerId] = 0.0001f;
+            pc.SyncSettings();
             return;
         }
 
@@ -186,11 +208,23 @@ public class CurseMaker : RoleBase
             ChargeTimer = 0f;
             SendRPCCharging();
             Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
+            // 射程外に出た失敗も同様に即リトライ可能にする。
+            Main.AllPlayerKillCooldown[pc.PlayerId] = 0.0001f;
+            pc.SyncSettings();
         }
+    }
+
+    public override void CheckWinner(GameOverReason reason)
+    {
+        if (!CanClaimWin) return;
+        CanClaimWin = false;
+        CustomWinnerHolder.ResetAndSetWinner(CustomWinner.CurseMaker);
+        CustomWinnerHolder.WinnerIds.Add(_curseMakerId);
     }
 
     public override void OnReportDeadBody()
     {
+        CanClaimWin = false;
         ChargingTargetId = byte.MaxValue;
         ChargeTimer = 0f;
 
@@ -206,6 +240,11 @@ public class CurseMaker : RoleBase
 
         toRemove.ForEach(id => CursedPlayers.Remove(id));
         SendRPCFullSync();
+
+        // 誰が呪われたかは伏せたまま、人数だけ全員へ知らせる。
+        PlayerControl curseMaker = Utils.GetPlayerById(_curseMakerId);
+        if (curseMaker != null && curseMaker.IsAlive() && CursedPlayers.Count > 0)
+            Utils.SendMessage(string.Format(GetString("CurseMakerMeetingAnnounce"), CursedPlayers.Count));
     }
 
     private void SendRPCCharging()
