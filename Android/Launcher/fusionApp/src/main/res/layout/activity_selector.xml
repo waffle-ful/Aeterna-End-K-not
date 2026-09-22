@@ -35,6 +35,29 @@
         android:paddingBottom="14dp" />
 
     <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingBottom="10dp">
+
+        <TextView
+            android:id="@+id/selector_itch_status"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/selector_itch_not_signed_in"
+            android:textColor="?android:attr/textColorPrimary"
+            android:textSize="15sp" />
+
+        <Button
+            android:id="@+id/selector_itch_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/selector_itch_sign_in" />
+    </LinearLayout>
+
+    <LinearLayout
         android:id="@+id/selector_loading"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

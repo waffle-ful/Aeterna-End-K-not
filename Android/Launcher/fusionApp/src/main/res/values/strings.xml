@@ -40,5 +40,12 @@
     <string name="selector_folder_create_failed">Failed to make folder: %1$s</string>
     <string name="settings_automatic">Automatic</string>
     <string name="selector_target_not_installed">Among Us is not installed on this device.</string>
+    <string name="selector_itch_signed_in">itch.io: signed in</string>
+    <string name="selector_itch_not_signed_in">itch.io: not signed in</string>
+    <string name="selector_itch_sign_in">Sign in with itch.io</string>
+    <string name="selector_itch_sign_out">Sign out</string>
+    <string name="selector_itch_hint_not_signed_in">Sign in with itch.io first, or tap the card to launch without an account.</string>
+    <string name="itch_sign_in_done">Signed in to itch.io.</string>
+    <string name="itch_sign_in_failed">itch.io sign-in did not complete. Please try again.</string>
     <string name="selector_auto_launch_hint">Among Us will launch in a moment. Tap the card to launch now, or open Settings first.</string>
 </resources>

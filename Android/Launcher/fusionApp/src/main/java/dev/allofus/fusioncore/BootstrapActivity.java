@@ -45,6 +45,11 @@ public class BootstrapActivity extends AppCompatActivity {
     private static final String GLOBAL_METADATA_FILE = "global-metadata.dat";
     private static ClassLoader sGameClassLoader;
 
+    /** True once the game's class loader exists in this process, i.e. the game has been bootstrapped. */
+    static boolean isGameLoaded() {
+        return sGameClassLoader != null;
+    }
+
     private TextView statusView;
     private TextView progressDetailsView;
     private ProgressBar spinnerProgress;

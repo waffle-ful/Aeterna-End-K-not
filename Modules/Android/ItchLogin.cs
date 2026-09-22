@@ -17,11 +17,62 @@ namespace EndKnot.Modules.Android
         private static int attempts;
         private static readonly ManualLogSource Log = BepInEx.Logging.Logger.CreateLogSource("EndKnot.ItchLogin");
 
+        // The launcher stores the itch.io token in its private files directory for the game package
+        // (exported by the native side as FUSION_APP_DATA_DIR). A key placed by hand in BepInEx/config
+        // is still honoured and moved into the private directory on first sight, since the shared
+        // storage copy is readable by every app on the device.
+        private static string ResolveKeyPath()
+        {
+            var privateDir = Environment.GetEnvironmentVariable("FUSION_APP_DATA_DIR");
+            var privatePath = string.IsNullOrEmpty(privateDir) ? null : Path.Combine(privateDir, KeyFileName);
+            var legacyPath = Path.Combine(Paths.ConfigPath, KeyFileName);
+            if (privatePath != null && File.Exists(privatePath))
+            {
+                if (File.Exists(legacyPath))
+                {
+                    try { File.Delete(legacyPath); Log.LogMessage("[ItchLogin] removed shared-storage key copy"); }
+                    catch (Exception e) { Log.LogWarning("[ItchLogin] could not remove shared-storage key copy: " + e.Message); }
+                }
+                return privatePath;
+            }
+            if (!File.Exists(legacyPath)) return privatePath ?? legacyPath;
+            if (privatePath == null) return legacyPath;
+            try
+            {
+                Directory.CreateDirectory(privateDir);
+                File.Copy(legacyPath, privatePath, true);
+                File.Delete(legacyPath);
+                Log.LogMessage("[ItchLogin] moved key file into the private directory");
+                return privatePath;
+            }
+            catch (Exception e)
+            {
+                Log.LogWarning("[ItchLogin] key migration failed, using shared-storage copy: " + e.Message);
+                return legacyPath;
+            }
+        }
+
+        // Renames a token that EOS keeps rejecting so the launcher stops showing the account as signed in
+        // and stops launching straight into the game; the player signs in again from the launcher.
+        private static void MarkKeyFailed()
+        {
+            try
+            {
+                var path = ResolveKeyPath();
+                if (path == null || !File.Exists(path)) return;
+                var failed = path + ".failed";
+                if (File.Exists(failed)) File.Delete(failed);
+                File.Move(path, failed);
+                Log.LogWarning("[ItchLogin] key file set aside as " + Path.GetFileName(failed));
+            }
+            catch (Exception e) { Log.LogWarning("[ItchLogin] could not set the key file aside: " + e.Message); }
+        }
+
         public static string ReadKey()
         {
             try
             {
-                var path = Path.Combine(Paths.ConfigPath, KeyFileName);
+                var path = ResolveKeyPath();
                 if (!File.Exists(path)) { Log.LogWarning("[ItchLogin] key file missing: " + path); return null; }
                 var key = File.ReadAllText(path).Trim().Trim('﻿');
                 Log.LogMessage("[ItchLogin] key file found, length=" + key.Length);
@@ -51,7 +102,7 @@ namespace EndKnot.Modules.Android
             {
                 var key = ReadKey();
                 if (key == null) { Log.LogWarning("[ItchLogin] no key → vanilla (Google) path"); return true; }
-                if (++attempts > MaxAttempts) { Log.LogWarning("[ItchLogin] itch login failed " + MaxAttempts + " times → vanilla path (guest)"); return true; }
+                if (++attempts > MaxAttempts) { Log.LogWarning("[ItchLogin] itch login failed " + MaxAttempts + " times → vanilla path (guest)"); MarkKeyFailed(); return true; }
                 try
                 {
                     // Il2CppSystem.Nullable<T>(T) は interop の boxed 値型 (class 扱い) で参照ブランチに落ちて中身を壊すため、
