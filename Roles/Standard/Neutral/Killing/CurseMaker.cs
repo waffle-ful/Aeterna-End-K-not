@@ -21,11 +21,17 @@ public class CurseMaker : RoleBase
     public static OptionItem CanSoloWin;
     private static OptionItem KillDistanceOverride;
 
+    // 充填開始の SetKillCooldown は 0.3 秒後に ResetKillCooldown を積む。失敗がそれより早く起きると
+    // 巻き戻しが即リトライの猶予を消してしまうので、猶予は 0.3 秒 + フレーム揺らぎを覆う長さにする。
+    private const float RetryGraceDuration = 0.6f;
+
     private byte _curseMakerId;
     private byte ChargingTargetId;
     // 起爆がそのまま試合を終わらせたときだけ単独勝利する。原典と同じく短い猶予で自然に失効する。
     private bool CanClaimWin;
     private float ChargeTimer;
+    // 充填失敗の即リトライ猶予の期限 (Time.time 基準)。0 = 猶予なし。
+    private float RetryGraceUntil;
     private Dictionary<byte, int> CursedPlayers = [];
 
     public override bool IsEnable => PlayerIdList.Count > 0;
@@ -68,6 +74,7 @@ public class CurseMaker : RoleBase
         _curseMakerId = playerId;
         ChargingTargetId = byte.MaxValue;
         ChargeTimer = 0f;
+        RetryGraceUntil = 0f;
         CursedPlayers = [];
     }
 
@@ -78,7 +85,10 @@ public class CurseMaker : RoleBase
 
     public override void SetKillCooldown(byte id)
     {
-        Main.AllPlayerKillCooldown[id] = KillCooldown.GetFloat();
+        // 充填開始のときに積まれた巻き戻しは、失敗より古い予約なので即リトライの猶予を上書きさせない。
+        Main.AllPlayerKillCooldown[id] = RetryGraceUntil > 0f && Time.time <= RetryGraceUntil
+            ? 0.0001f
+            : KillCooldown.GetFloat();
     }
 
     // 原典どおりキルボタンは「呪いの充填を始める照準」。実際には誰も殺さない。
@@ -101,6 +111,7 @@ public class CurseMaker : RoleBase
 
         ChargingTargetId = target.PlayerId;
         ChargeTimer = 0f;
+        RetryGraceUntil = 0f;
         SendRPCCharging();
         killer.SetKillCooldown();
         Utils.NotifyRoles(SpecifySeer: killer, SpecifyTarget: killer);
@@ -182,8 +193,7 @@ public class CurseMaker : RoleBase
             SendRPCCharging();
             Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
             // 対象を見失った失敗は通常のクールダウンを食わせず即リトライ可能にする。
-            Main.AllPlayerKillCooldown[pc.PlayerId] = 0.0001f;
-            pc.SyncSettings();
+            GrantChargeRetry(pc);
             return;
         }
 
@@ -196,6 +206,9 @@ public class CurseMaker : RoleBase
                 CursedPlayers.TryAdd(target.PlayerId, 0);
                 ChargingTargetId = byte.MaxValue;
                 ChargeTimer = 0f;
+                // 呪いが成立したらリトライの猶予は用済み。残しておくと、直前の失敗で張った窓が
+                // まだ生きている間に SetKillCooldown が呼ばれたとき通常値でなく 0.0001 が返る。
+                RetryGraceUntil = 0f;
                 SendRPCCursed(target.PlayerId);
                 SendRPCCharging();
                 Utils.NotifyRoles();
@@ -209,9 +222,15 @@ public class CurseMaker : RoleBase
             SendRPCCharging();
             Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
             // 射程外に出た失敗も同様に即リトライ可能にする。
-            Main.AllPlayerKillCooldown[pc.PlayerId] = 0.0001f;
-            pc.SyncSettings();
+            GrantChargeRetry(pc);
         }
+    }
+
+    private void GrantChargeRetry(PlayerControl pc)
+    {
+        RetryGraceUntil = Time.time + RetryGraceDuration;
+        Main.AllPlayerKillCooldown[pc.PlayerId] = 0.0001f;
+        pc.SyncSettings();
     }
 
     public override void CheckWinner(GameOverReason reason)
@@ -227,6 +246,7 @@ public class CurseMaker : RoleBase
         CanClaimWin = false;
         ChargingTargetId = byte.MaxValue;
         ChargeTimer = 0f;
+        RetryGraceUntil = 0f;
 
         List<byte> toRemove = [];
         foreach ((byte id, int turns) in CursedPlayers)
