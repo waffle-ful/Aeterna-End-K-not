@@ -13716,6 +13716,7 @@
   "Remotekiller.KillCooldown": "Mark Cooldown",
   "Remotekiller.HasImpostorVision": "Has Impostor Vision",
   "Remotekiller.CanVent": "Can Vent",
+  "Remotekiller.KillAnimation": "Teleport On Kill",
   "Remotekiller.MarkButtonText": "Mark",
   "Remotekiller.VentButtonText": "Execute",
   "Remotekiller.Marked": "Marked: {0}",
