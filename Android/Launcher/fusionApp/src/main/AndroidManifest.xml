@@ -1,31 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools" android:installLocation="preferExternal">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
   <supports-screens android:smallScreens="true" android:normalScreens="true" android:largeScreens="true" android:xlargeScreens="true" android:anyDensity="true" />
   <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE"/>
   <uses-permission android:name="android.permission.INTERNET"/>
   <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
-  <uses-permission android:name="com.android.vending.BILLING" />
-  <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
-  <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
-  <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
-      tools:ignore="AllFilesAccessPolicy,ScopedStorage" />
-  <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"
-      tools:ignore="PhotoAndVideoPolicy,SelectedPhotoAccess" />
-  <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"
-      tools:ignore="PhotoAndVideoPolicy,SelectedPhotoAccess" />
-  <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
-  <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
-      tools:ignore="PackageVisibilityPolicy,QueryAllPackagesPermission" />
-  <uses-permission android:name="android.permission.CAMERA" />
-  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
-  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <!-- Package visibility is limited to what the launcher actually touches: the game it hosts,
+       and a browser for the itch.io sign-in page. -->
+  <queries>
+    <package android:name="com.innersloth.spacemafia" />
+    <intent>
+      <action android:name="android.intent.action.VIEW" />
+      <category android:name="android.intent.category.BROWSABLE" />
+      <data android:scheme="https" />
+    </intent>
+    <intent>
+      <action android:name="android.support.customtabs.action.CustomTabsService" />
+    </intent>
+  </queries>
   <uses-feature android:glEsVersion="0x00030000" />
   <uses-feature android:name="android.hardware.vulkan.version" android:required="false" />
   <uses-feature android:name="android.software.home_screen" android:required="true" />
   <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
-    <uses-feature
-        android:name="android.hardware.camera"
-        android:required="false" />
     <!-- Nothing here is worth restoring on another device, and the itch.io sign-in token must not
          leave the device through cloud or device-to-device backup. -->
     <application android:label="@string/app_name" android:icon="@mipmap/app_icon" android:enableOnBackInvokedCallback="true" android:extractNativeLibs="true"

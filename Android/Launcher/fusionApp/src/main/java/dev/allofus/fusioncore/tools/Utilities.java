@@ -3,7 +3,6 @@ package dev.allofus.fusioncore.tools;
 import android.content.Context;
 import android.content.res.AssetManager;
 import android.os.Build;
-import android.os.Environment;
 import android.util.Log;
 import android.view.View;
 import android.view.WindowInsets;
@@ -22,14 +21,26 @@ import java.util.zip.ZipInputStream;
 public class Utilities {
     private static final String TAG = "FusionCore";
 
-    /** Root folder under external storage that holds per-game BepInEx data. */
-    public static final String STORAGE_ROOT_DIR = "EndKnot";
+    /**
+     * Root of the per-game data (BepInEx tree, Unity data copy, crash notes). It lives in the
+     * launcher's private files directory, so no storage permission is needed and nothing is
+     * readable by other apps; the game's own data directory is pointed here as well.
+     */
+    private static volatile File sStorageRoot;
+
+    /** Remembers the private files directory; idempotent, safe from any component. */
+    public static void initStorage(Context context) {
+        if (sStorageRoot == null) {
+            sStorageRoot = context.getApplicationContext().getFilesDir();
+        }
+    }
 
     public static File getExternalFusionCoreDirectory(@Nullable String targetPackage) {
-        File fusionStorage = new File(Environment.getExternalStorageDirectory(), STORAGE_ROOT_DIR);
-        if (targetPackage != null) {
-            fusionStorage = new File(fusionStorage, targetPackage);
+        File root = sStorageRoot;
+        if (root == null) {
+            throw new IllegalStateException("Utilities.initStorage was not called");
         }
+        File fusionStorage = targetPackage != null ? new File(root, targetPackage) : root;
         if (!fusionStorage.exists()) {
             fusionStorage.mkdirs();
         }

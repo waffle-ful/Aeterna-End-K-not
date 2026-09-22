@@ -29,6 +29,7 @@ import dev.allofus.fusioncore.hooks.UnityPlayerHooks;
 import dev.allofus.fusioncore.tools.CustomContextWrapper;
 import dev.allofus.fusioncore.tools.FusionConfig;
 import dev.allofus.fusioncore.tools.GameClassLoaderFactory;
+import dev.allofus.fusioncore.tools.LibUnityBundle;
 import dev.allofus.fusioncore.tools.LibUnityDownloader;
 import dev.allofus.fusioncore.tools.NativeLibraryManager;
 import dev.allofus.fusioncore.tools.Utilities;
@@ -59,6 +60,7 @@ public class BootstrapActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_bootstrap);
+        Utilities.initStorage(this);
         statusView = findViewById(R.id.bootstrap_status);
         progressDetailsView = findViewById(R.id.bootstrap_progress_details);
         spinnerProgress = findViewById(R.id.bootstrap_progress);
@@ -147,6 +149,9 @@ public class BootstrapActivity extends AppCompatActivity {
                     targetPackage,
                     useOriginalLibUnity
             );
+        } catch (LauncherUpdateRequiredException e) {
+            failAndStay(getString(R.string.bootstrap_launcher_update_required, e.builtFor, e.installed));
+            return;
         } catch (Throwable t) {
             failAndFinish("Failed while preparing Fusion runtime.", t);
             return;
@@ -280,6 +285,37 @@ public class BootstrapActivity extends AppCompatActivity {
         });
     }
 
+    /** Shows a message the player has to act on and leaves the screen up instead of closing it. */
+    private void failAndStay(String message) {
+        runOnMainThread(() -> {
+            Log.e(TAG, message);
+            if (statusView != null) {
+                statusView.setText(message);
+            }
+            if (spinnerProgress != null) {
+                spinnerProgress.setVisibility(View.GONE);
+            }
+            if (downloadProgress != null) {
+                downloadProgress.setVisibility(View.GONE);
+            }
+            if (progressDetailsView != null) {
+                progressDetailsView.setVisibility(View.GONE);
+            }
+        });
+    }
+
+    /** The installed game moved to a Unity version this build does not carry. */
+    private static final class LauncherUpdateRequiredException extends RuntimeException {
+        final String builtFor;
+        final String installed;
+
+        LauncherUpdateRequiredException(String builtFor, String installed) {
+            super("Launcher bundles Unity " + builtFor + " but the game uses " + installed);
+            this.builtFor = builtFor;
+            this.installed = installed;
+        }
+    }
+
     private void runOnMainThread(Runnable runnable) {
         if (Looper.myLooper() == Looper.getMainLooper()) {
             runnable.run();
@@ -336,25 +372,38 @@ public class BootstrapActivity extends AppCompatActivity {
             Log.i(TAG, "Skipping libunity download");
         } else {
             Log.i(TAG, "Determined Unity version: " + version);
-            if (LibUnityDownloader.downloadAndCacheSafely(codeCacheScoped, version, targetGameAbi, new LibUnityDownloader.DownloadProgressListener() {
-                @Override
-                public void onDownloadStarted(String url, long totalBytes) {
-                    setDownloadStatus(0L, totalBytes);
+            setPhaseStatus(getString(R.string.bootstrap_status_installing_libunity));
+            LibUnityBundle.Result bundled = LibUnityBundle.install(appContext, codeCacheScoped, version, targetGameAbi);
+            Log.i(TAG, "Bundled libunity for " + version + " (" + targetGameAbi + "): " + bundled);
+            if (bundled == LibUnityBundle.Result.NOT_BUNDLED) {
+                if (!BuildConfig.ALLOW_LIBUNITY_DOWNLOAD) {
+                    // A store build carries exactly one runtime and never fetches code at run
+                    // time; a game update past it means the launcher itself needs updating.
+                    throw new LauncherUpdateRequiredException(BuildConfig.BUNDLED_UNITY_VERSION, version);
                 }
+                if (LibUnityDownloader.downloadAndCacheSafely(codeCacheScoped, version, targetGameAbi, new LibUnityDownloader.DownloadProgressListener() {
+                    @Override
+                    public void onDownloadStarted(String url, long totalBytes) {
+                        setDownloadStatus(0L, totalBytes);
+                    }
 
-                @Override
-                public void onDownloadProgress(long downloadedBytes, long totalBytes) {
-                    setDownloadStatus(downloadedBytes, totalBytes);
-                }
+                    @Override
+                    public void onDownloadProgress(long downloadedBytes, long totalBytes) {
+                        setDownloadStatus(downloadedBytes, totalBytes);
+                    }
 
-                @Override
-                public void onDownloadFinished(boolean success, boolean usedCache) {
-                    // No-op: next phase will handle this.
+                    @Override
+                    public void onDownloadFinished(boolean success, boolean usedCache) {
+                        // No-op: next phase will handle this.
+                    }
+                })) {
+                    Log.i(TAG, "Successfully downloaded libunity for version " + version + " and ABI " + targetGameAbi);
+                } else {
+                    Log.e(TAG, "Failed to download libunity for version " + version + " and ABI " + targetGameAbi + ", falling back to original.");
+                    useOriginalLibUnity = true;
                 }
-            })) {
-                Log.i(TAG, "Successfully downloaded libunity for version " + version + " and ABI " + targetGameAbi);
-            } else {
-                Log.e(TAG, "Failed to download libunity for version " + version + " and ABI " + targetGameAbi + ", falling back to original.");
+            } else if (bundled == LibUnityBundle.Result.FAILED) {
+                Log.e(TAG, "Bundled libunity could not be installed, falling back to original.");
                 useOriginalLibUnity = true;
             }
         }

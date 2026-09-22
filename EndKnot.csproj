@@ -39,6 +39,15 @@
     <ItemGroup>
         <EmbeddedResource Include=".\Resources\**"/>
     </ItemGroup>
+    <!-- Android: the desktop-only media stays out of the mobile DLL. The BGM AssetBundle is a
+         Windows build (an arm64 bundle replaces it later), the raw .ogg tracks only back that
+         bundle, and the menu fire / loading videos are compiled out on Android. -->
+    <ItemGroup Condition="'$(Configuration)' == 'Android'">
+        <EmbeddedResource Remove="Resources\Sounds\BGM\*.ogg" />
+        <EmbeddedResource Remove="Resources\Sounds\BGM\endknot_bgm.bundle" />
+        <EmbeddedResource Remove="Resources\Media\menu_fire.webm" />
+        <EmbeddedResource Remove="Resources\Media\loading_default.mp4" />
+    </ItemGroup>
 
     <ItemGroup>
         <Compile Remove="CTA\**"/>

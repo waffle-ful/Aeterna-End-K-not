@@ -6,12 +6,9 @@ import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.drawable.Drawable;
-import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
 import android.os.Handler;
-import android.provider.Settings;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -32,6 +29,7 @@ import androidx.core.content.ContextCompat;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -45,7 +43,6 @@ import dev.allofus.fusioncore.tools.Utilities;
 
 public class SelectorActivity extends AppCompatActivity {
     private static final String TAG = "FusionCore";
-    private static final int REQUEST_MANAGE_EXTERNAL_STORAGE = 1001;
     private static final String[] UNITY_ABIS = {"arm64-v8a", "armeabi-v7a", "x86_64", "x86"};
     static final String TARGET_PACKAGE = "com.innersloth.spacemafia";
     /** Set on the intent that brings the player back after the itch.io sign-in page. */
@@ -61,6 +58,7 @@ public class SelectorActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_selector);
+        Utilities.initStorage(this);
 
         View root = findViewById(R.id.selector_root);
         int basePadding = Math.round(getResources().getDisplayMetrics().density * 16f);
@@ -79,18 +77,11 @@ public class SelectorActivity extends AppCompatActivity {
         handler.postDelayed(()->{
             targetInstalled = populateList();
             boolean signedIn = refreshItchStatus();
-            if (!hasExternalStorageManagerAccess()) {
-                if (targetInstalled && signedIn) {
-                    pendingLaunchPackage = TARGET_PACKAGE;
-                }
-                requestExternalStorageManagerAccess();
-            } else {
-                CrashDetector.init(this);
-                // Launch by itself only once an itch.io account is attached; otherwise wait for
-                // the player to sign in or to tap the card.
-                if (targetInstalled && signedIn) {
-                    handler.postDelayed(autoLaunchRunnable, AUTO_LAUNCH_DELAY_MS);
-                }
+            CrashDetector.init(this);
+            // Launch by itself only once an itch.io account is attached; otherwise wait for
+            // the player to sign in or to tap the card.
+            if (targetInstalled && signedIn) {
+                handler.postDelayed(autoLaunchRunnable, AUTO_LAUNCH_DELAY_MS);
             }
         }, 100);
     }
@@ -121,7 +112,7 @@ public class SelectorActivity extends AppCompatActivity {
         // Coming back from the itch.io page: the activity already exists, so refresh the row and
         // start the game the same way a fresh launch would once an account is attached.
         boolean signedIn = refreshItchStatus();
-        if (signedIn && targetInstalled && hasExternalStorageManagerAccess()) {
+        if (signedIn && targetInstalled) {
             handler.removeCallbacks(autoLaunchRunnable);
             handler.postDelayed(autoLaunchRunnable, AUTO_LAUNCH_DELAY_MS);
         }
@@ -185,33 +176,6 @@ public class SelectorActivity extends AppCompatActivity {
                         startActivity(intent);
                     });
 
-                    ImageButton folderButton = convertView.findViewById(R.id.selector_action_folder);
-                    folderButton.setOnClickListener(v -> {
-                        handler.removeCallbacks(autoLaunchRunnable);
-                        File folder = Utilities.getExternalFusionCoreDirectory(entry.packageName);
-
-                        if (!folder.exists() && !folder.mkdirs()) {
-                            String message = getString(R.string.selector_folder_create_failed, folder.getAbsolutePath());
-                            Toast.makeText(getContext(), message, Toast.LENGTH_LONG).show();
-                            Log.e(TAG, message);
-                            return;
-                        }
-
-                        try {
-                            String relativePath = Utilities.STORAGE_ROOT_DIR + "/" + entry.packageName;
-                            Uri directoryUri = Uri.parse("content://com.android.externalstorage.documents/document/primary%3A" + Uri.encode(relativePath));
-
-                            Intent intent = new Intent(Intent.ACTION_VIEW);
-                            intent.setDataAndType(directoryUri, "vnd.android.document/directory");
-                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-
-                            startActivity(intent);
-                        } catch (Exception e) {
-                            Log.e(TAG, "Unable to open folder", e);
-                            Toast.makeText(getContext(), getString(R.string.selector_no_file_manager), Toast.LENGTH_LONG).show();
-                        }
-                    });
-
                     convertView.setOnClickListener((v) -> maybeLaunchBootstrap(entry.packageName));
                 }
 
@@ -223,36 +187,6 @@ public class SelectorActivity extends AppCompatActivity {
         return !installedTargets.isEmpty();
     }
 
-    @Override
-    protected void onResume() {
-        super.onResume();
-        if (pendingLaunchPackage != null && hasExternalStorageManagerAccess()) {
-            String packageName = pendingLaunchPackage;
-            pendingLaunchPackage = null;
-            launchBootstrap(packageName);
-        }
-    }
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-
-        if (requestCode != REQUEST_MANAGE_EXTERNAL_STORAGE || pendingLaunchPackage == null) {
-            return;
-        }
-
-        if (hasExternalStorageManagerAccess()) {
-            CrashDetector.init(this);
-            if (pendingLaunchPackage != null) {
-                String packageName = pendingLaunchPackage;
-                pendingLaunchPackage = null;
-                launchBootstrap(packageName);
-            }
-            return;
-        }
-
-        Toast.makeText(this, getString(R.string.selector_storage_permission_required), Toast.LENGTH_LONG).show();
-    }
 
     private List<AppEntry> resolveInstalledTargets() {
         PackageManager pm = getPackageManager();
@@ -407,19 +341,21 @@ public class SelectorActivity extends AppCompatActivity {
 
     private void maybeLaunchBootstrap(String packageName) {
         handler.removeCallbacks(autoLaunchRunnable);
-        if (!hasExternalStorageManagerAccess()) {
-            pendingLaunchPackage = packageName;
-            requestExternalStorageManagerAccess();
-            return;
-        }
 
         try {
             var packageInfo = getPackageManager().getPackageInfo(packageName, PackageManager.GET_PERMISSIONS);
             var perms = packageInfo.requestedPermissions;
             if (perms != null) {
+                // Only permissions this launcher declares itself can be granted; the game may
+                // list more, and asking for those would just be refused every launch.
+                var ownInfo = getPackageManager().getPackageInfo(getPackageName(), PackageManager.GET_PERMISSIONS);
+                Set<String> declared = new HashSet<>();
+                if (ownInfo.requestedPermissions != null) {
+                    declared.addAll(Arrays.asList(ownInfo.requestedPermissions));
+                }
                 ArrayList<String> newPerms = new ArrayList<>();
                 for (var p : perms) {
-                    if (ContextCompat.checkSelfPermission(this, p) != PackageManager.PERMISSION_GRANTED) {
+                    if (declared.contains(p) && ContextCompat.checkSelfPermission(this, p) != PackageManager.PERMISSION_GRANTED) {
                         newPerms.add(p);
                     }
                 }
@@ -435,35 +371,6 @@ public class SelectorActivity extends AppCompatActivity {
         }
 
         launchBootstrap(packageName);
-    }
-
-    private boolean hasExternalStorageManagerAccess() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-            return true;
-        }
-        return Environment.isExternalStorageManager();
-    }
-
-    private void requestExternalStorageManagerAccess() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-            return;
-        }
-
-        Toast.makeText(this, getString(R.string.selector_storage_permission_prompt), Toast.LENGTH_LONG).show();
-        Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
-        intent.setData(Uri.parse("package:" + getPackageName()));
-        try {
-            startActivityForResult(intent, REQUEST_MANAGE_EXTERNAL_STORAGE);
-        } catch (Exception e) {
-            Log.w(TAG, "Failed to open app-specific all-files access screen, opening generic page", e);
-            Intent fallbackIntent = new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
-            try {
-                startActivityForResult(fallbackIntent, REQUEST_MANAGE_EXTERNAL_STORAGE);
-            } catch (Exception inner) {
-                Log.e(TAG, "Failed to open all-files access settings", inner);
-                Toast.makeText(this, getString(R.string.selector_storage_permission_open_failed), Toast.LENGTH_LONG).show();
-            }
-        }
     }
 
     private record AppEntry(String packageName, String label, Drawable icon, String versionName,
