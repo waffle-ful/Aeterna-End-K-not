@@ -243,8 +243,10 @@ internal static class GameEndChecker
                         case CustomRoles.Walker when WinnerTeam == CustomWinner.Crewmate && pc.IsAlive() && !Walker.HasCompletedTour(pc.PlayerId) && !pc.GetTaskState().IsTaskFinished:
                             WinnerIds.Remove(pc.PlayerId);
                             break;
-                        case CustomRoles.Monochromer when pc.IsAlive() && WinnerTeam != CustomWinner.Monochromer && reason != GameOverReason.CrewmatesByTask:
-                            ResetAndSetWinner(CustomWinner.Monochromer);
+                        // モノクラーが勝利を奪えるのはクルー陣営が勝った試合だけ。
+                        // タスク勝利のときは奪わず追加勝利に回る (下の分岐)。
+                        case CustomRoles.Monochromer when pc.IsAlive() && reason != GameOverReason.CrewmatesByTask && WinnerTeam is CustomWinner.Crewmate or CustomWinner.Monochromer:
+                            if (WinnerTeam != CustomWinner.Monochromer) ResetAndSetWinner(CustomWinner.Monochromer);
                             WinnerIds.Add(pc.PlayerId);
                             break;
                         case CustomRoles.Supernova when pc.IsAlive() && WinnerTeam != CustomWinner.Supernova:
