@@ -220,6 +220,14 @@ public class MassMedia : RoleBase
             Utils.SendMessage(GetString("MassMediaGuessWrong"), voter.PlayerId, Utils.ColorString(Utils.GetRoleColor(CustomRoles.MassMedia), GetString("MassMedia")));
         }
 
+        // 当たりでは追放者が出ないので、他の人からは票が理由なく消えて会議が終わったように見える。
+        // 何が起きたかを全員へ知らせる。
+        Utils.SendMessage(GetString("MassMediaMeetingEnded"));
+
+        // 推理した時点で会議は打ち切る。追放者は出さないので、当たりなら生き残ったまま勝ち、
+        // 外したときの誤爆死は会議明けの処理で届く。実際に閉じるのは票の取り消しが客へ流れた後。
+        CheckForEndVotingPatch.RequestEndMeetingAfterVoteCleanup(voter.PlayerId);
+
         return true;
     }
 

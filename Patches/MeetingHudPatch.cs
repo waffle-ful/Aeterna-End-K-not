@@ -22,6 +22,12 @@ internal static class CheckForEndVotingPatch
     public static NetworkedPlayerInfo TempExiledPlayer;
     public static bool ShouldSkip;
 
+    // 投票を能力に使った瞬間に会議を打ち切る役職の予約席。閉じるのは票の取り消し RPC を客へ
+    // 流し切った後 (CleanupCanceledVote の末尾) — 先に結果表示へ入れてしまうと、後から届く
+    // ClearVote がその客の投票 UI を開き直す。
+    public static bool EndMeetingAfterVoteCleanup;
+    public static byte EndMeetingVoterId = byte.MaxValue;
+
     public static bool Prefix(MeetingHud __instance)
     {
         if (!AmongUsClient.Instance.AmHost) return true;
@@ -643,6 +649,59 @@ internal static class CheckForEndVotingPatch
         Logger.Info($"{target.GetNameWithRole().RemoveHtmlTags()} force-exiled by EKR exile op (holder {(exiler ? exiler.PlayerId : target.PlayerId)})", "EkrManager");
     }
 
+    // 追放者を出さずに会議を即終了する。上の Dictator 強制追放 (:68-102) の順序をなぞり、
+    // 追放対象に依存する手順 (SetRealKiller / ConfirmEjections / 木槌演出) だけ落とした形。
+    // 追放者なしの送り方は通常集計で追放者が出なかったとき (:371-379) と同じ exiledPlayer=null・tie=false。
+    // 閉じるのは MeetingHud.Update 側 (結果表示 5 秒) に任せる。
+    private static void ForceEndMeetingWithoutExile(byte voterId)
+    {
+        if (!AmongUsClient.Instance.AmHost || !MeetingHud.Instance) return;
+
+        // 既に結果表示・追放演出へ入っている会議には撃たない (RpcVotingComplete の二重送信になる)
+        if (ExileController.Instance || MeetingHud.Instance.state is MeetingHud.MeetingStates.Results or MeetingHud.MeetingStates.Proceeding) return;
+
+        // 空の VoterState[] をバニラ客へ流す形は避けたいので、会議を打ち切った本人の 1 件だけ載せる。
+        // 投票先は 254 (未投票) — その票は取り消されて実在しないため、通常集計が時間切れの
+        // 未投票者に送るのと同じ値にする (投票先の票アイコンは出ない)。
+        var states = new[]
+        {
+            new MeetingHud.VoterState { VoterId = voterId, VotedForId = 254 }
+        };
+
+        Main.LastVotedPlayerInfo = null;
+        ExileControllerWrapUpPatch.LastExiled = null;
+
+        MeetingHud.Instance.RpcVotingComplete(EkrManager.FilterAnonymousVotes(states), null, false, false, 0);
+        Statistics.OnVotingComplete(states, null, false, false);
+
+        // 追放者が出ない終了でも会議明けの死 (呪い・感染等) は解決させる — 通常集計が
+        // 追放者なしのとき exileId=255 でここを通すのと同じ形。
+        CheckForDeathOnExile(PlayerState.DeathReason.Vote, byte.MaxValue);
+
+        MeetingHudRpcClosePatch.AllowClose = true;
+
+        Logger.Info($"Meeting force-ended without an ejection (by {voterId})", "Special Phase");
+    }
+
+    // 票の取り消しを流し終えた入口から呼ぶ (予約は EndMeetingAfterVoteCleanup)。
+    internal static void RunPendingForceEndMeeting()
+    {
+        if (!EndMeetingAfterVoteCleanup) return;
+
+        EndMeetingAfterVoteCleanup = false;
+        byte voterId = EndMeetingVoterId;
+        EndMeetingVoterId = byte.MaxValue;
+
+        ForceEndMeetingWithoutExile(voterId);
+    }
+
+    // 投票を能力に使った役職が「この票で会議を終わらせる」と予約する入口。
+    internal static void RequestEndMeetingAfterVoteCleanup(byte voterId)
+    {
+        EndMeetingAfterVoteCleanup = true;
+        EndMeetingVoterId = voterId;
+    }
+
     private static void RevengeOnExile(byte playerId /*, PlayerState.DeathReason deathReason*/)
     {
         PlayerControl player = Utils.GetPlayerById(playerId);
@@ -1034,6 +1093,9 @@ internal static class MeetingHudStartPatch
         MeetingStates.MeetingNum++;
         CheckForEndVotingPatch.TempExiledPlayer = null;
         CheckForEndVotingPatch.EjectionText = string.Empty;
+        // 前の会議で使われなかった予約が残ると、次の会議で無関係な票キャンセルが会議を閉じてしまう
+        CheckForEndVotingPatch.EndMeetingAfterVoteCleanup = false;
+        CheckForEndVotingPatch.EndMeetingVoterId = byte.MaxValue;
         SlowStarter.OnMeetingStart();
     }
 
@@ -1855,6 +1917,10 @@ internal static class MeetingHudCastVotePatch
         info.SourcePVA.VotedForId = byte.MaxValue;
 
         Logger.Info($"Vote for {info.SourcePC.GetNameWithRole()} canceled", "MeetingHudCastVotePatch.CleanupCanceledVote");
+
+        // 票を能力に使って会議を打ち切る役職はここで閉じる。ホストの実 UI 投票 (Confirm) と
+        // クライアント票 (CmdCastVote) の両入口がこの後始末を通るので、片方だけ素通りすることがない。
+        CheckForEndVotingPatch.RunPendingForceEndMeeting();
     }
 }
 
