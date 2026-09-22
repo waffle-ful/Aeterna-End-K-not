@@ -13202,6 +13202,18 @@
   "JackalHadouHoSkDisabled": "このロビーでは弾を作れない設定です。",
   "JackalHadouHoLoaded": "装填完了！次の発射は超ビームです。",
   "JackalHadouHo.DirectionDetect": "発射方向に少し動いて。直後にチャージ開始するから",
+  "JackalHadouHoFireCooldown": "発射のクールダウン",
+  "JackalHadouHo.HudCharging": "チャージ中",
+  "JackalHadouHo.HudSuperCharging": "超チャージ中",
+  "JackalHadouHo.HudLoaded": "装填済",
+  "JackalHadouHo.HudCandidate": "弾の候補: {0}",
+  "JackalHadouHo.HudReady": "発射準備完了",
+  "TamaVentCooldown": "弾のベントのクールダウン (装填不可のときのみ)",
+  "Tama.HudLoadDisabled": "装填は無効",
+  "Tama.HudLoaded": "装填済",
+  "Tama.HudOwnerDead": "主が倒れた",
+  "Tama.HudReady": "主を倒すと装填",
+  "TamaMaxInVentTime": "弾のベント滞在上限 (装填不可のときのみ・0で無制限)",
 
   /* --- Tama (弾) --- */
   "Tama": "弾",
