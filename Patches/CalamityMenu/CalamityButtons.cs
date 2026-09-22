@@ -50,16 +50,19 @@ public static class CalamityButtons
             // OnClick.Invoke() with temporary playButton activation — vanilla listeners
             // still no-op, so reverted to the direct OpenGameModeMenu call. Workaround
             // for users: click Multi twice. Real fix needs vanilla AU 2026 source review.
-            ("MainMenu.Calamity.Multiplayer",  +0.4f,
+            ("MainMenu.Calamity.Multiplayer",  +0.48f,
                 () => GoToMultiplayer(mm)),
 
-            ("MainMenu.Calamity.Settings",     -0.1f,
+            ("MainMenu.Calamity.Shop",         +0.07f,
+                () => OpenShop(mm)),
+
+            ("MainMenu.Calamity.Settings",     -0.35f,
                 () => { CalamityVisibility.HideMenuContent(); mm.settingsButton.OnClick.Invoke(); }),
 
-            ("MainMenu.Calamity.MyAccount",    -0.6f,
+            ("MainMenu.Calamity.MyAccount",    -0.77f,
                 () => OpenMyAccount(mm)),
 
-            ("MainMenu.Calamity.Credits",      -1.1f,
+            ("MainMenu.Calamity.Credits",      -1.18f,
                 () => { CalamityVisibility.HideMenuContent(); mm.creditsButton.OnClick.Invoke(); }),
 
             ("MainMenu.Calamity.Quit",         -1.6f,
@@ -120,6 +123,44 @@ public static class CalamityButtons
             CalamityVisibility.BeginAccountWindow(am);
         }
         catch (Exception ex) { Logger.Exception(ex, "OpenMyAccount"); }
+    }
+
+    // The vanilla cosmetics store (StoreMenu) lives in the MainMenu scene but VanillaSuppressor
+    // keeps its root inactive so it doesn't bleed through the Calamity background. Wake the root
+    // on demand, then fire the vanilla Shop button's OnClick (same pattern as Settings/Credits)
+    // so the store opens through its own wiring. CalamityVisibility tracks it and puts the root
+    // back to sleep once the store closes (its own close button, or our BACK button).
+    private static void OpenShop(MainMenuManager mm)
+    {
+        Logger.Info("Shop clicked", "CalamityButtons");
+        try
+        {
+            var store = Object.FindObjectOfType<StoreMenu>(true);
+            if (store != null && !store.gameObject.activeSelf) store.gameObject.SetActive(true);
+
+            CalamityVisibility.BeginStoreMenu(store);
+            Main.Instance.StartCoroutine(OpenShopDeferred(mm, store));
+        }
+        catch (Exception ex) { Logger.Exception(ex, "OpenShop"); }
+    }
+
+    // The store root has been inactive since boot, so its first activation runs the vanilla
+    // Start() on the following frame — and that initialisation puts the store back into its
+    // closed state. Let it settle for two frames before asking the store to open, otherwise the
+    // first open after boot is undone immediately (the second open worked because Start had run).
+    private static System.Collections.IEnumerator OpenShopDeferred(MainMenuManager mm, StoreMenu store)
+    {
+        yield return null;
+        yield return null;
+        try
+        {
+            // BACK (or a scene change) may have ended this open while we waited; don't resurrect it.
+            if (!CalamityVisibility.IsStorePending(store)) yield break;
+
+            if (store != null && !store.gameObject.activeSelf) store.gameObject.SetActive(true);
+            if (mm.shopButton != null) mm.shopButton.OnClick.Invoke();
+        }
+        catch (Exception ex) { Logger.Exception(ex, "OpenShopDeferred"); }
     }
 
     private static TextMeshPro CreateTextButton(Transform parent, string label, Vector3 pos, Action onClick)

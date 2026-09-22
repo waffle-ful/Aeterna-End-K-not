@@ -113,6 +113,47 @@ public static class VanillaSuppressor
         CalamityMenuState.VanillaSuppressed = true;
     }
 
+    // Idempotent subset of Apply for when a vanilla screen (the cosmetics store) hands control
+    // back to the main menu and switches its own furniture back on. Only touches things that
+    // are safe to re-disable at any time; the one-shot structural work (LeftPanel reparent,
+    // SimpleButton base) stays in Apply.
+    public static void ReapplyAfterVanillaReturn(MainMenuManager mm)
+    {
+        if (!CalamityMenuState.Active) return;
+
+        Object.FindObjectOfType<EjectMainMenu>()?.gameObject.SetActive(false);
+        Object.FindObjectOfType<VersionShower>()?.gameObject.SetActive(false);
+        Object.FindObjectOfType<PlayerParticles>()?.gameObject.SetActive(false);
+        DisableByName("FriendsButton");
+        DisableByName("NewRequest");
+        DisableByName("StoreMenu");
+
+        foreach (var btn in new[]
+        {
+            mm.playButton?.gameObject,
+            mm.myAccountButton?.gameObject,
+            mm.settingsButton?.gameObject,
+            mm.creditsButton?.gameObject,
+            mm.quitButton?.gameObject,
+            mm.inventoryButton?.gameObject,
+            mm.shopButton?.gameObject,
+            mm.freePlayButton?.gameObject,
+            mm.howToPlayButton?.gameObject,
+        })
+            btn?.SetActive(false);
+
+        foreach (SpriteRenderer sr in Object.FindObjectsOfType<SpriteRenderer>(true))
+        {
+            if (sr == null || sr.sprite == null) continue;
+            string spriteName = sr.sprite.name;
+            if (spriteName == "Dropship" || spriteName == "idle")
+                sr.enabled = false;
+        }
+
+        if (mm.screenTint != null) mm.screenTint.enabled = false;
+        GameObject.Find("Tint")?.SetActive(false);
+    }
+
     private static void DisableByName(string name)
     {
         GameObject.Find(name)?.SetActive(false);

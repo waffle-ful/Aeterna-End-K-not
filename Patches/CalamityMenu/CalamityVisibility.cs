@@ -62,6 +62,60 @@ public static class CalamityVisibility
         HideMenuContent(showBack: true);
     }
 
+    // The vanilla cosmetics store, opened on demand by the Calamity "Shop" button. Its root is
+    // kept inactive by VanillaSuppressor; CalamityButtons.OpenShop wakes it, and we put it back to
+    // sleep once the store's content is gone (vanilla close button) or BACK is pressed.
+    private static bool _storeActive;
+    private static bool _storeSeenActive;
+    private static StoreMenu _store;
+
+    public static void BeginStoreMenu(StoreMenu store)
+    {
+        _store = store;
+        _storeActive = true;
+        _storeSeenActive = false;
+        HideMenuContent(showBack: true);
+    }
+
+    // True while the open started by BeginStoreMenu(store) is still the live one.
+    public static bool IsStorePending(StoreMenu store)
+        => _storeActive && store != null && _store == store;
+
+    // Root activeInHierarchy is not a usable signal (we activate the root ourselves and the
+    // vanilla close may leave it on), so look at the store's own content panels instead.
+    private static bool IsStoreContentOpen()
+    {
+        if (_store == null) return false;
+        return (_store.normalMenu   != null && _store.normalMenu.activeInHierarchy)
+            || (_store.featuredMenu != null && _store.featuredMenu.activeInHierarchy);
+    }
+
+    private static void EndStoreMenu()
+    {
+        if (_store != null)
+        {
+            try { if (IsStoreContentOpen()) _store.Close(); }
+            catch (System.Exception e) { Logger.Warn($"StoreMenu.Close: {e.Message}", "CalamityVisibility"); }
+
+            if (_store.gameObject.activeSelf) _store.gameObject.SetActive(false);
+        }
+
+        _store = null;
+        _storeActive = false;
+        _storeSeenActive = false;
+
+        // The vanilla close path re-enables main-menu furniture that VanillaSuppressor had put
+        // away (the eject button was the visible one), so put it away again.
+        var mm = Object.FindObjectOfType<MainMenuManager>();
+        if (mm != null)
+        {
+            // The vanilla open path switches mainMenuUI off; its close path switches it back on.
+            // BACK bypasses that close path, so restore it here (the news button lives under it).
+            if (mm.mainMenuUI != null && !mm.mainMenuUI.activeSelf) mm.mainMenuUI.SetActive(true);
+            VanillaSuppressor.ReapplyAfterVanillaReturn(mm);
+        }
+    }
+
     private static void EndAccountWindow()
     {
         if (_accountWindow != null && _accountWindow.activeSelf) _accountWindow.SetActive(false);
@@ -179,6 +233,9 @@ public static class CalamityVisibility
         _accountWindowSeenActive = false;
         _accountWindow = null;
         _accountManager = null;
+        _storeActive = false;
+        _storeSeenActive = false;
+        _store = null;
     }
 
     // メニュー構築時に BACK ボタンを先に作って非表示で置いておく。
@@ -275,6 +332,8 @@ public static class CalamityVisibility
 
         if (_accountWindowActive) { EndAccountWindow(); return; }
 
+        if (_storeActive) { EndStoreMenu(); return; }
+
         var pop = Object.FindObjectOfType<FreeplayPopover>(true);
         if (pop != null && IsFreeplayOpen(pop))
         {
@@ -319,6 +378,17 @@ public static class CalamityVisibility
             if (_accountWindow.activeInHierarchy) { _accountWindowSeenActive = true; return true; }
             if (!_accountWindowSeenActive) return true; // grace: not activated yet this frame
             EndAccountWindow();
+            return false;
+        }
+
+        // Cosmetics store: same shape as the account window (seen-active latch, auto-detect
+        // the vanilla close, BACK as the fallback when the content never showed up).
+        if (_storeActive)
+        {
+            if (_store == null) return true; // can't auto-detect; BACK closes it
+            if (IsStoreContentOpen()) { _storeSeenActive = true; return true; }
+            if (!_storeSeenActive) return true; // grace: not activated yet this frame
+            EndStoreMenu();
             return false;
         }
 
