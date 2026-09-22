@@ -13739,6 +13739,7 @@
   "MassMediaGuessCanceled": "推理をキャンセルしました。",
   "MassMediaGuessCorrect": "正解！スクープを世に放った！",
   "MassMediaGuessWrong": "外れ……記事は崩れ去った。",
+  "MassMediaMeetingEnded": "マスメディアの推理で会議が打ち切られました。",
   "EightballCommandIndexes": "/8ballコマンドの応答数（カスタム翻訳ファイルで応答を追加できます。定義していない番号は空の応答になります）",
   "EnableAnagramCommand": "/anagramコマンドを使えるようにする",
   "EnableImpostorChat": "インポスター陣営チャットを有効化（/ic）",

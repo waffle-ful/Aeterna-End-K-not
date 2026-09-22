@@ -13888,6 +13888,7 @@
   "MassMediaGuessCanceled": "Guess canceled.",
   "MassMediaGuessCorrect": "Correct! The scoop goes live!",
   "MassMediaGuessWrong": "Wrong target... the story falls apart.",
+  "MassMediaMeetingEnded": "The meeting was cut short by the Mass Media's deduction.",
 
   /* ==============================
     Faction Information
