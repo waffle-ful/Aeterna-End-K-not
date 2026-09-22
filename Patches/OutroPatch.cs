@@ -62,17 +62,28 @@ internal static class EndGamePatch
 
         foreach ((byte id, PlayerState state) in Main.PlayerStates)
         {
-            // 変身したまま決着すると、見た目は戻っても名前だけ相手のまま結果画面に残る。
-            // 変身時に名前を上書きするのは ShapeshiftPatch.Prefix が仕込む 1.2 秒後の書き戻しだけで、
-            // その Prefix は GameStates.IsInTask で降りるため、試合終了後の解除では一度も作られない。
-            // 会議開始時にも同じ穴があり、そちらは ReportDeadBodyPatch 側が同型の書き戻しで塞いでいる。
-            // ⚠️ この下の役職別の復元より手前に置くこと — Turncoat の解除は RpcShapeshift の Postfix で
+            // 変身したまま決着したときの後始末。会議開始時には ReportDeadBodyPatch 側に同型の処理が
+            // あるが、試合終了側には無かった。
+            // ⚠️ 役職ごとの RestoreOnGameEnd では塞げない — あれは役職の持ち主の id で呼ばれるのに対し、
+            // 他人を変身させる役職 (Illusionist / Echo) の被害者は持ち主ではないため手が届かない。
+            // 変身している本人を全員ぶん見るこの形でないと拾えない。
+            // ⚠️ この下の役職別の復元より手前に置くこと — 解除は RpcShapeshift の Postfix で
             // CheckShapeshift を false にするので、後ろに置くと IsShifted() が偽になって素通りする。
             // ⚠️ 名前を明示的に戻す Doppelganger / Autoscopy より手前でもある (向こうの復元が後勝ちで正しい)。
-            if (Main.ShapeshiftIsAnimated.GetValueOrDefault(id) && Main.AllPlayerNames.TryGetValue(id, out string ssRealName))
+            PlayerControl sspc = Utils.GetPlayerById(id);
+
+            if (sspc != null && sspc.IsShifted())
             {
-                PlayerControl sspc = Utils.GetPlayerById(id);
-                if (sspc != null && sspc.IsShifted()) sspc.RpcSetName(ssRealName);
+                // 名前が先。下の解除で IsShifted() が偽になるうえ、vanilla の解除は見た目しか戻さない
+                // (名前を変装先のものにするのは ShapeshiftPatch.Prefix が仕込む 1.2 秒後の書き戻しで、
+                // その Prefix は GameStates.IsInTask で降りるため終了後は一度も作られない)。
+                // 素の名前なので長さの上限には掛からない。
+                if (Main.ShapeshiftIsAnimated.GetValueOrDefault(id) && Main.AllPlayerNames.TryGetValue(id, out string ssRealName))
+                    sspc.RpcSetName(ssRealName);
+
+                // 解除はアニメ無しで撃つ。終了画面へ移る場面で卵の演出に用は無く、
+                // 見た目の反映が即時になるぶん確実になる。
+                sspc.RpcShapeshift(sspc, false);
             }
 
             // ⚠️ PlayerIdList は見ない。Remove() が切断時に呼ばれて空になるため、
