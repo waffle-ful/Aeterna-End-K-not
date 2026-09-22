@@ -25,6 +25,7 @@ public class Strawdoll : RoleBase
     private byte _strawdollId;
     private byte TargetId;
     private bool IsShapeshifted;
+    private bool ReprisalPending;
     private int KilledCount;
     private Vector2 ShapePosition;
 
@@ -74,6 +75,7 @@ public class Strawdoll : RoleBase
         _strawdollId = playerId;
         TargetId = byte.MaxValue;
         IsShapeshifted = false;
+        ReprisalPending = false;
         KilledCount = 0;
         ShapePosition = Vector2.zero;
     }
@@ -198,12 +200,18 @@ public class Strawdoll : RoleBase
 
         if (check) return false;
 
+        // 身代わりの解決が終わるまで近接自滅判定を閉じる。スナップは呪い対象を藁人形の足元 (距離 0) に
+        // 置くので、開けたままだと解決前に自滅判定が発火して身代わりごと流れる。
+        ReprisalPending = true;
+
         // 身代わり死体は藁人形が立っていた場所に出す (対象本人の居場所は明かさない)。
         if (!NonSnapTarget.GetBool())
             curseTarget.TP(target.Pos(), log: false);
 
         LateTask.New(() =>
         {
+            ReprisalPending = false;
+
             PlayerControl ct = Utils.GetPlayerById(TargetId);
             if (ct == null || !ct.IsAlive())
             {
@@ -266,7 +274,7 @@ public class Strawdoll : RoleBase
     public override void OnFixedUpdate(PlayerControl pc)
     {
         float reprisalDist = ReprisalDistance.GetFloat();
-        if (reprisalDist <= 0f || !pc.IsAlive() || !IsShapeshifted) return;
+        if (reprisalDist <= 0f || ReprisalPending || !pc.IsAlive() || !IsShapeshifted) return;
 
         PlayerControl curseTarget = Utils.GetPlayerById(TargetId);
         if (curseTarget == null || !curseTarget.IsAlive()) return;
@@ -290,6 +298,7 @@ public class Strawdoll : RoleBase
         }
 
         IsShapeshifted = false;
+        ReprisalPending = false;
         TargetId = byte.MaxValue;
         ShapePosition = Vector2.zero;
         SendRPC();
