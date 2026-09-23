@@ -3,3 +3,4 @@ project(unityLibrary CXX)
 
 add_subdirectory(main)
 add_subdirectory(fusion)
+add_subdirectory(bridge)

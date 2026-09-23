@@ -27,6 +27,7 @@ import dev.allofus.fusioncore.BuildConfig;
 import dev.allofus.fusioncore.R;
 import dev.allofus.fusioncore.SecondaryStubActivity;
 import dev.allofus.fusioncore.StubActivity;
+import dev.allofus.fusioncore.bridge.UnityActivityHost;
 import dev.allofus.fusioncore.tools.FallbackResources;
 import dev.allofus.fusioncore.tools.FusionInstrumentation;
 
@@ -138,7 +139,9 @@ public class InstrumentationHooks {
         // Only the main game activity gets the loading overlay: the bridge clears it
         // there once the runtime is up, while secondary activities (ads, sign-in)
         // would keep it on screen forever.
-        if (!activity.getClass().getName().equals(mainActivityClassName)) {
+        String activityClass = activity.getClass().getName();
+        if (!activityClass.equals(mainActivityClassName)
+                && !activityClass.equals(UnityActivityHost.BRIDGE_ACTIVITY_CLASS)) {
             return;
         }
         Context fusionContext = loadingViewContext;
@@ -403,12 +406,20 @@ public class InstrumentationHooks {
 
             if (original != null && original.getComponent() != null) {
                 args[intentIdx] = original;
-                args[strIdx] = original.getComponent().getClassName();
+                String targetClass = original.getComponent().getClassName();
+                args[strIdx] = targetClass;
                 ClassLoader loader = gameClassLoader;
+                // The main activity is instantiated as the bridge subclass, which only its own
+                // loader (parented to the game loader) can define. Everything else keeps the
+                // game's class under the game loader.
+                if (targetClass.equals(mainActivityClassName) && UnityActivityHost.isActive()) {
+                    args[strIdx] = UnityActivityHost.BRIDGE_ACTIVITY_CLASS;
+                    loader = UnityActivityHost.getBridgeLoader();
+                    Log.i(TAG, "newActivity: routing " + targetClass + " to " + UnityActivityHost.BRIDGE_ACTIVITY_CLASS);
+                }
                 if (loaderIdx >= 0 && loader != null) {
                     args[loaderIdx] = loader;
-                    Log.i(TAG, "newActivity: using game class loader for "
-                            + original.getComponent().getClassName());
+                    Log.i(TAG, "newActivity: using game class loader for " + targetClass);
                 } else if (loaderIdx >= 0) {
                     Log.w(TAG, "newActivity: game class loader not registered, keeping original loader");
                 }

@@ -47,5 +47,4 @@ Release builds are signed only when `KEYSTORE_PATH`, `KEYSTORE_PASSWORD`, `KEY_A
 
 - [FusionCore](https://github.com/All-Of-Us-Mods/FusionCore), [BepInExFusion](https://github.com/All-Of-Us-Mods/BepInExFusion)
   and [Il2CppInteropFusion](https://github.com/All-Of-Us-Mods/Il2CppInteropFusion) by All-Of-Us-Mods.
-- [Pine](https://github.com/canyie/pine) by canyie (Java method hooking).
 - Third-party licenses are listed in the repository root [`THIRD-PARTY-NOTICES.md`](../../THIRD-PARTY-NOTICES.md).

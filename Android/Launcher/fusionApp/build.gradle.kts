@@ -7,8 +7,6 @@ plugins {
     id("kotlin-parcelize")
 }
 
-// we have a custom pine build that fixes 16KB library problem.
-val pineAar = file("../libs/canyie-pine.aar")
 
 // ---- Unity runtime shipped inside the APK ----
 // The unstripped libunity (plus its symbol file, which the native side needs for a lookup) is
@@ -68,6 +66,62 @@ val fetchLibUnity = tasks.register("fetchLibUnity") {
         fetch("libunity.sym.so.$bundledLibUnityAbi", File(dir, "libunity.sym.so"), bundledLibUnitySymSha256)
     }
 }
+// The game's main activity is instantiated as a subclass shipped in its own dex
+// (assets/bridge/fusion-bridge.dex) and defined under the game class loader, so it can extend
+// the game's classes. Only that one class goes into the dex; src/bridge/stubs holds the
+// compile-time stand-ins for the game classes and for the launcher-side host.
+val bridgeAssetsDir = layout.buildDirectory.dir("bridge-assets")
+val bridgeClassesDir = layout.buildDirectory.dir("bridge-classes")
+val bridgeClassPath = "dev/allofus/fusioncore/bridge/FusionEosUnityPlayerActivity.class"
+// SDK locations come from AGP: the boot classpath is the
+// android.jar of compileSdk, and d8 is taken from the newest installed build-tools.
+val bridgeBootClasspath = androidComponents.sdkComponents.bootClasspath
+val bridgeD8 = androidComponents.sdkComponents.sdkDirectory.map { sdk ->
+    val exe = if (System.getProperty("os.name").lowercase().contains("windows")) "d8.bat" else "d8"
+    val candidates = sdk.asFile.resolve("build-tools").listFiles()
+            ?.filter { File(it, exe).isFile }
+            ?.sortedBy { it.name }
+    val chosen = candidates?.lastOrNull()
+            ?: throw GradleException("No build-tools with $exe under ${sdk.asFile}")
+    File(chosen, exe)
+}
+
+val compileBridge = tasks.register<JavaCompile>("compileBridge") {
+    description = "Compiles the game-activity bridge subclass against stubs"
+    source(fileTree("src/bridge"))
+    classpath = files(bridgeBootClasspath)
+    destinationDirectory.set(bridgeClassesDir)
+    options.release.set(17)
+    options.isWarnings = false
+}
+
+val dexBridge = tasks.register<Exec>("dexBridge") {
+    description = "Dexes the bridge subclass into assets/bridge/fusion-bridge.dex"
+    dependsOn(compileBridge)
+    val outDir = bridgeAssetsDir.map { it.dir("bridge") }
+    inputs.dir(bridgeClassesDir)
+    inputs.files(bridgeBootClasspath)
+    inputs.file(bridgeD8)
+    outputs.dir(bridgeAssetsDir)
+    doFirst {
+        outDir.get().asFile.mkdirs()
+        val args = mutableListOf(bridgeD8.get().absolutePath, "--min-api", "27")
+        bridgeBootClasspath.get().forEach { args += listOf("--lib", it.asFile.absolutePath) }
+        args += listOf(
+            "--classpath", bridgeClassesDir.get().asFile.absolutePath,
+            "--output", outDir.get().asFile.absolutePath,
+            File(bridgeClassesDir.get().asFile, bridgeClassPath).absolutePath
+        )
+        commandLine(args)
+    }
+    doLast {
+        val produced = File(outDir.get().asFile, "classes.dex")
+        val target = File(outDir.get().asFile, "fusion-bridge.dex")
+        if (target.exists()) target.delete()
+        if (!produced.renameTo(target)) throw GradleException("d8 did not produce classes.dex for the bridge")
+    }
+}
+
 dependencies {
     implementation("androidx.core:core:1.19.0")
     implementation("androidx.annotation:annotation:1.10.0")
@@ -76,7 +130,6 @@ dependencies {
     implementation("androidx.coordinatorlayout:coordinatorlayout:1.3.0")
     implementation("com.google.android.material:material:1.14.0")
     implementation("com.google.protobuf:protobuf-javalite:4.36.1")
-    implementation(files(pineAar))
 }
 
 android {
@@ -163,7 +216,8 @@ android {
     sourceSets {
         getByName("main") {
             // A plain File (not a Provider): preBuild depends on fetchLibUnity, which fills it.
-            assets.srcDirs("../../../build-android/apk-assets", libUnityAssetsDir.get().asFile)
+            assets.srcDirs("../../../build-android/apk-assets", libUnityAssetsDir.get().asFile,
+                    bridgeAssetsDir.get().asFile)
         }
     }
 
@@ -189,5 +243,5 @@ protobuf {
 }
 
 tasks.named("preBuild") {
-    dependsOn(fetchLibUnity)
+    dependsOn(fetchLibUnity, dexBridge)
 }
