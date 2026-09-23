@@ -146,6 +146,49 @@ namespace EndKnot.Modules.Android
         {
             public static void Postfix(AdsMenu __instance) => Log.LogMessage("[Ads] AdsMenu.OnEnable adButton=" + (__instance.adButton != null) + " active=" + (__instance.adButton != null && __instance.adButton.activeSelf) + " ShowAdsScreen=" + AmongUs.Data.Legacy.LegacySaveManager.ShowAdsScreen);
         }
+
+        // vanilla は「広告を見る」を押した時点で adButton を消し、失敗した時に戻す処理が無い (次に OnEnable が走るまで消えたまま)。
+        // 失敗の通知を受けた時だけ戻す。成功時は vanilla の報酬フローに任せる。
+        [HarmonyPatch(typeof(AdsMenu), nameof(AdsMenu.AdReadyCallback))]
+        internal static class AdsMenuReadyPatch
+        {
+            public static void Postfix(AdsMenu __instance, bool isReady)
+            {
+                if (isReady || __instance.adButton == null) return;
+                __instance.adButton.SetActive(true);
+                Log.LogMessage("[Ads] ad not ready — adButton restored");
+            }
+        }
+
+        // 広告 SDK が「ロード済みだが表示不可」(日次上限などの capping) を返した時、vanilla は rewardedAd を null にした直後に
+        // もう一度 rewardedAd.IsAdReady() を呼んで NRE になり、AdsMenu の waitingAdResponse が戻らずボタンが押せなくなる。
+        // vanilla が意図していた通り adMenuCallbak(false) を届けて原本を飛ばす。ready な場合は原本に任せる。
+        [HarmonyPatch(typeof(AdsManager), nameof(AdsManager.RewardedOnAdLoadedEvent))]
+        internal static class AdsManagerLoadedPatch
+        {
+            public static bool Prefix(AdsManager __instance)
+            {
+                // 原本は冒頭で rewardedAd を無条件に参照するので、null の時に原本へ戻しても同じ NRE になる。
+                // 正常にロード済みの時だけ原本へ任せ、それ以外 (null / not ready) は全部こちらで失敗として畳む。
+                try
+                {
+                    var ad = __instance.rewardedAd;
+                    if (ad != null && ad.IsAdReady()) return true;
+                }
+                catch (Exception e) { Log.LogError("[Ads] RewardedOnAdLoadedEvent prefix: IsAdReady threw, falling back: " + e); return true; }
+
+                try
+                {
+                    __instance.rewardedAd = null;
+                    Log.LogWarning("[Ads] rewarded ad loaded but not ready (SDK capping / pacing) — reporting failure to AdsMenu");
+                    __instance.adMenuCallbak?.Invoke(false);
+                }
+                catch (Exception e) { Log.LogError("[Ads] RewardedOnAdLoadedEvent prefix: failure callback threw: " + e); }
+
+                // rewardedAd を消した後は原本に戻せない (戻すと NRE) ので、例外の有無にかかわらず原本は飛ばす。
+                return false;
+            }
+        }
     }
 }
 #endif
