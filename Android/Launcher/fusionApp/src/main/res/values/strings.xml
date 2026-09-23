@@ -43,4 +43,5 @@
     <string name="selector_auto_launch_hint">Among Us will launch in a moment. Tap the card to launch now, or open Settings first.</string>
     <string name="bootstrap_status_installing_libunity">Installing bundled Unity runtime…</string>
     <string name="bootstrap_launcher_update_required">This version of End K not was built for Unity %1$s, but the installed Among Us uses Unity %2$s. Please update End K not.</string>
+    <string name="bootstrap_game_layout_unsupported">This version of End K not does not recognize the installed Among Us build. Please update End K not.</string>
 </resources>

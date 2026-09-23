@@ -33,4 +33,5 @@
     <string name="settings_automatic">自動</string>
     <string name="bootstrap_status_installing_libunity">正在安裝內建的 Unity 執行階段…</string>
     <string name="bootstrap_launcher_update_required">此版本的 End K not 是為 Unity %1$s 建置的，但已安裝的 Among Us 使用 Unity %2$s。請更新 End K not。</string>
+    <string name="bootstrap_game_layout_unsupported">此版本的 End K not 無法識別已安裝的 Among Us 版本。請更新 End K not。</string>
 </resources>

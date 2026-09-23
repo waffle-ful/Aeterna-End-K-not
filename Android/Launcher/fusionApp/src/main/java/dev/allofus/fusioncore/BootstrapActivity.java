@@ -23,8 +23,7 @@ import java.io.IOException;
 import java.util.Locale;
 
 import dev.allofus.fusioncore.hooks.InstrumentationHooks;
-import dev.allofus.fusioncore.hooks.PackageManagerHooks;
-import dev.allofus.fusioncore.hooks.UnityPlayerHooks;
+import dev.allofus.fusioncore.bridge.UnityActivityHost;
 import dev.allofus.fusioncore.tools.CustomContextWrapper;
 import dev.allofus.fusioncore.tools.FallbackResources;
 import dev.allofus.fusioncore.tools.FusionConfig;
@@ -178,10 +177,21 @@ public class BootstrapActivity extends AppCompatActivity {
         }
 
         setPhaseStatus(getString(R.string.bootstrap_status_installing_hooks));
+        // The bridge subclass hands the UnityPlayer its Context. It replays the game's
+        // onCreate, so a game build it does not recognize is a launcher update, not a
+        // degraded start.
+        if (!UnityActivityHost.install(getApplicationContext(), gameContext, gameClassLoader,
+                launcherComponent.getClassName())) {
+            if (!overrideActivity.equals(getString(R.string.settings_automatic))) {
+                // An activity override from the settings screen cannot be served by the bridge.
+                failAndFinish("Activity override '" + overrideActivity + "' is not supported; set it back to automatic.", null);
+            } else {
+                failAndStay(getString(R.string.bootstrap_game_layout_unsupported));
+            }
+            return;
+        }
         try {
-            PackageManagerHooks.installHooks(getPackageManager());
             InstrumentationHooks.install(getApplicationContext(), gameClassLoader, launcherComponent.getClassName());
-            UnityPlayerHooks.installHooks(gameContext, gameClassLoader);
             android.content.res.Resources launcherResources = getApplicationContext().getResources();
             InstrumentationHooks.setFallbackResources(gameContext.getResources(), launcherResources);
             FallbackResources.install(getApplicationContext(), gameContext.getResources(), launcherResources);
