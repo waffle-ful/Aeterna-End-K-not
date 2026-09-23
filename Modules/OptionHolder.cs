@@ -1694,7 +1694,10 @@ public static class Options
             }
         }
 
+        List<IAddon> legacyAddons = addonInstances.FindAll(x => IsLegacyType(x.GetType()));
+
         Dictionary<AddonTypes, IAddon[]> addonTypes = addonInstances
+            .Where(x => !legacyAddons.Contains(x))
             .GroupBy(x => x.Type)
             .ToDictionary(x => x.Key, x => x.ToArray());
 
@@ -1728,6 +1731,31 @@ public static class Options
             }
 
             Logger.Info($"{MainLoadingText}: {index} built", "Options");
+        }
+
+        if (legacyAddons.Count > 0)
+        {
+            MainLoadingText = "Building Add-on Settings (Legacy)";
+
+            new TextOptionItem(titleId, "ROT.LegacyAddons", TabGroup.Addons)
+                .SetGameMode(CustomGameMode.Standard)
+                .SetColor(new Color32(150, 150, 150, byte.MaxValue))
+                .SetHeader(true);
+
+            titleId += 10;
+
+            foreach (IAddon addon in legacyAddons)
+            {
+                RoleLoadingText = addon.GetType().Name;
+                addon.SetupCustomOption();
+
+                if (FrameBudgetSpent())
+                {
+                    yieldedFrames++;
+                    yield return null;
+                    frameBudget.Restart();
+                }
+            }
         }
 
         EndChunk("addonSetup");
@@ -1771,7 +1799,7 @@ public static class Options
         Type IType = typeof(IGhostRole);
 
         List<Type> ghostRoleTypes = Main.AllTypes
-            .Where(t => IType.IsAssignableFrom(t) && !t.IsInterface)
+            .Where(t => IType.IsAssignableFrom(t) && !t.IsInterface && !IsLegacyType(t))
             .OrderBy(t => Translator.GetString(t.Name))
             .ToList();
 
@@ -1790,7 +1818,7 @@ public static class Options
         EndChunk("ghost");
 
         Dictionary<RoleOptionType, RoleBase[]> roleClassesDict = Main.AllRoleClasses
-            .Where(x => x.GetType().Name != "VanillaRole")
+            .Where(x => x.GetType().Name != "VanillaRole" && !IsLegacyType(x.GetType()))
             .GroupBy(x => ((CustomRoles)Enum.Parse(typeof(CustomRoles), ignoreCase: true, value: x.GetType().Name)).GetRoleOptionType())
             .OrderBy(x => (int)x.Key)
             .ToDictionary(x => x.Key, x => x.ToArray());
@@ -1832,6 +1860,48 @@ public static class Options
         }
 
         EndChunk("roles");
+
+        // 古い役職タブ: 陣営ごとに見出しを付けて最後にまとめて構築する (オプション ID は元のまま)
+        var legacyRoleGroups = Main.AllRoleClasses
+            .Where(x => IsLegacyType(x.GetType()))
+            .Select(x => (Tab: ((CustomRoles)Enum.Parse(typeof(CustomRoles), ignoreCase: true, value: x.GetType().Name)).GetRoleOptionType().GetTabFromOptionType(), Setup: (Action)x.SetupCustomOption, Name: x.GetType().Name))
+            .Concat(Main.AllTypes
+                .Where(t => IType.IsAssignableFrom(t) && !t.IsInterface && IsLegacyType(t))
+                .Select(t => (Tab: TabGroup.OtherRoles, Setup: (Action)((IGhostRole)Activator.CreateInstance(t)).SetupCustomOption, Name: t.Name)))
+            .GroupBy(x => x.Tab)
+            .OrderBy(x => (int)x.Key)
+            .ToArray();
+
+        foreach (var group in legacyRoleGroups)
+        {
+            MainLoadingText = $"Building Role Settings: Legacy {group.Key}";
+
+            new TextOptionItem(titleId, $"TabGroup.{group.Key}", TabGroup.LegacyRoles)
+                .SetHeader(true)
+                .SetGameMode(CustomGameMode.Standard)
+                .SetColor(group.Key.GetTabColor());
+
+            titleId += 10;
+
+            foreach (var entry in group.OrderBy(x => Translator.GetString(x.Name)))
+            {
+                RoleLoadingText = entry.Name;
+                OptionItem.TabOverride = TabGroup.LegacyRoles;
+
+                try { entry.Setup(); }
+                catch (Exception e) { Logger.Exception(e, $"{MainLoadingText} - {RoleLoadingText}"); }
+                finally { OptionItem.TabOverride = null; }
+
+                if (FrameBudgetSpent())
+                {
+                    yieldedFrames++;
+                    yield return null;
+                    frameBudget.Restart();
+                }
+            }
+        }
+
+        EndChunk("legacyRoles");
         BootTimeline.Mark("opts.roles.end");
         Logger.Info($"Role/add-on settings built in {loadWork.ElapsedMilliseconds}ms over {yieldedFrames} yielded frames (menuReached={BootTimeline.MenuReached}) maxSync={maxSyncSpanMs}ms@{maxSyncAt}% [{chunkLog.ToString().TrimEnd()}]", "Options");
         loadWork.Restart();
@@ -1841,6 +1911,8 @@ public static class Options
         frameBudget.Restart();
 
         void Log() => Logger.Info(" " + RoleLoadingText, MainLoadingText);
+
+        static bool IsLegacyType(Type t) => Enum.TryParse(t.Name, true, out CustomRoles r) && r.IsLegacy();
 
 
         LoadingPercentage = 60;

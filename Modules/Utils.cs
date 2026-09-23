@@ -622,6 +622,7 @@ public static class Utils
             TabGroup.Combinations => new(0.5f, 0.42f, 0.1f),
             TabGroup.Addons => new(0.4f, 0.2f, 0.3f),
             TabGroup.OtherRoles => new(0.4f, 0.4f, 0.4f),
+            TabGroup.LegacyRoles => new(0.3f, 0.3f, 0.3f),
             TabGroup.PresetExplorer => new(0.5f, 0.5f, 0.5f),
             _ => new(0.3f, 0.3f, 0.3f)
         };

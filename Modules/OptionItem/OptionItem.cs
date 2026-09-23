@@ -21,7 +21,7 @@ public abstract class OptionItem
         Id = id;
         Name = name;
         DefaultValue = defaultValue;
-        Tab = tab;
+        Tab = TabOverride is { } overrideTab && tab is >= TabGroup.ImpostorRoles and <= TabGroup.OtherRoles ? overrideTab : tab;
         IsSingleValue = isSingleValue;
 
         NameColor = Color.white;
@@ -56,6 +56,9 @@ public abstract class OptionItem
     public string Name { get; }
     public int DefaultValue { get; }
     public TabGroup Tab { get; }
+
+    // 構築中の役職オプションを別タブへ寄せる (役職タブ宛てのものだけ差し替える)
+    public static TabGroup? TabOverride;
     public bool IsSingleValue { get; }
 
     public Color NameColor { get; set; }
@@ -380,6 +383,7 @@ public enum TabGroup
     Combinations,
     Addons,
     OtherRoles,
+    LegacyRoles,
     PresetExplorer
 }
 
