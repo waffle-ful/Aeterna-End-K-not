@@ -143,7 +143,7 @@ android {
             }
             // we don't need minify tbh
             isMinifyEnabled = false
-            // this can mess up ResourceHooks
+            // resource ids from the game APK are resolved at runtime, so nothing may be stripped
             //noinspection NotShrinkingResources
             isShrinkResources = false
             proguardFiles("proguard-unity.txt", getDefaultProguardFile("proguard-android-optimize.txt"))

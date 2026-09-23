@@ -24,9 +24,9 @@ import java.util.Locale;
 
 import dev.allofus.fusioncore.hooks.InstrumentationHooks;
 import dev.allofus.fusioncore.hooks.PackageManagerHooks;
-import dev.allofus.fusioncore.hooks.ResourceHooks;
 import dev.allofus.fusioncore.hooks.UnityPlayerHooks;
 import dev.allofus.fusioncore.tools.CustomContextWrapper;
+import dev.allofus.fusioncore.tools.FallbackResources;
 import dev.allofus.fusioncore.tools.FusionConfig;
 import dev.allofus.fusioncore.tools.GameClassLoaderFactory;
 import dev.allofus.fusioncore.tools.LibUnityBundle;
@@ -182,7 +182,9 @@ public class BootstrapActivity extends AppCompatActivity {
             PackageManagerHooks.installHooks(getPackageManager());
             InstrumentationHooks.install(getApplicationContext(), gameClassLoader, launcherComponent.getClassName());
             UnityPlayerHooks.installHooks(gameContext, gameClassLoader);
-            ResourceHooks.installHooks(gameContext.getResources(), getApplicationContext().getResources());
+            android.content.res.Resources launcherResources = getApplicationContext().getResources();
+            InstrumentationHooks.setFallbackResources(gameContext.getResources(), launcherResources);
+            FallbackResources.install(getApplicationContext(), gameContext.getResources(), launcherResources);
         } catch (Exception e) {
             Log.e(TAG, "Failed to install base hooks", e);
         }

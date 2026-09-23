@@ -27,6 +27,7 @@ import dev.allofus.fusioncore.BuildConfig;
 import dev.allofus.fusioncore.R;
 import dev.allofus.fusioncore.SecondaryStubActivity;
 import dev.allofus.fusioncore.StubActivity;
+import dev.allofus.fusioncore.tools.FallbackResources;
 import top.canyie.pine.Pine;
 import top.canyie.pine.callback.MethodHook;
 
@@ -47,6 +48,14 @@ public class InstrumentationHooks {
 
     /** Loader that dynamically started game activities are instantiated from. */
     private static volatile ClassLoader gameClassLoader;
+    private static volatile android.content.res.Resources fallbackGameResources;
+    private static volatile android.content.res.Resources fallbackLauncherResources;
+
+    /** Resources that game activities fall back to for ids missing from their own package. */
+    public static void setFallbackResources(android.content.res.Resources game, android.content.res.Resources launcher) {
+        fallbackGameResources = game;
+        fallbackLauncherResources = launcher;
+    }
     private static volatile String mainActivityClassName;
     /** Activities declared in this launcher's own manifest; they must not be routed through a stub. */
     private static volatile Set<String> launcherActivities = Collections.emptySet();
@@ -134,6 +143,7 @@ public class InstrumentationHooks {
                 }
                 applyGameClassLoader((Activity) callFrame.thisObject);
                 applySavedStateClassLoader((Activity) callFrame.thisObject, callFrame.args);
+                applyFallbackResources((Activity) callFrame.thisObject);
             }
         };
 
@@ -213,6 +223,22 @@ public class InstrumentationHooks {
         } catch (Throwable t) {
             Log.w(TAG, "Failed to override base context class loader for "
                     + activity.getClass().getName() + ": " + t);
+        }
+    }
+
+    private static void applyFallbackResources(Activity activity) {
+        android.content.res.Resources game = fallbackGameResources;
+        android.content.res.Resources launcher = fallbackLauncherResources;
+        if (game == null || launcher == null) {
+            return;
+        }
+        try {
+            if (!isDynamicIntent(activity.getIntent())) {
+                return;
+            }
+            FallbackResources.install(activity, game, launcher);
+        } catch (Throwable t) {
+            Log.w(TAG, "Failed to install fallback resources on " + activity.getClass().getName() + ": " + t);
         }
     }
 
