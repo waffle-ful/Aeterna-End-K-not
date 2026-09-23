@@ -237,6 +237,22 @@ public static class TestBridge
             return;
         }
 
+        // 動きのある演出 (雨・稲妻など) をコマ送りで見るための連写。Screens/burst_<ts>/ へ保存。
+        if (directive.StartsWith("burst ", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecuteBurst(directive[6..].Trim()); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR burst failed"); }
+            return;
+        }
+
+        // シーン上の SpriteRenderer とカメラ設定を rdump.txt へ書き出す (背景の構造調査用)。
+        if (directive.Equals("rdump", StringComparison.OrdinalIgnoreCase) || directive.StartsWith("rdump ", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecuteRendererDump(directive.Length > 6 ? directive[6..].Trim() : ""); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR rdump failed"); }
+            return;
+        }
+
         // Layer 1: 構造化スナップショット。Menu 画面でも動く(host 非依存)。
         if (directive.Equals("state", StringComparison.OrdinalIgnoreCase))
         {
@@ -543,7 +559,7 @@ public static class TestBridge
 
         if (directive.Equals("help", StringComparison.OrdinalIgnoreCase))
         {
-            WriteOut("HELP directives: state | screenshot | delayshot <ms> | click <h|label:x> | press <h|x y> | scroll <x> <y> <notches> | type <text> | key <enter|escape|tab|backspace> | getopt <pattern> | setopt <name|#id> <idx|on|off|~real> | forcerole <id|name|host|clear> [EnumName] | start | hostlobby | leavelobby | eosstall | autostart <on|off> | tp <x> <y> | tp <playerId> | tp <playerId|name> <x> <y> | switch <0-4> [playerId|name] | walk <x> <y> | walk <playerId> | walk stop | vote <playerId|skip> | vote <voterId> <playerId|skip> | overrule <targetId> [judgeId] | chat <text> | chatui <text> | sabotage <comms|reactor|o2|lights|lab|heli|mushroom|cd0> | fixsabotage <type> | use <kill|vent|pet|ability|report|sabotage> | vent enter <id> | vent exit | errors [n] | grep <pattern> [n] | bcensus | gc <clr|clr2|boehm|both> | sleep <sec> | wait <phase=X|players=N|marker:text|join|arrived> [timeoutSec] | wait cancel | /<chatcommand>");
+            WriteOut("HELP directives: state | screenshot | delayshot <ms> | burst <count> [everyNFrames] | rdump [filter] | click <h|label:x> | press <h|x y> | scroll <x> <y> <notches> | type <text> | key <enter|escape|tab|backspace> | getopt <pattern> | setopt <name|#id> <idx|on|off|~real> | forcerole <id|name|host|clear> [EnumName] | start | hostlobby | leavelobby | eosstall | autostart <on|off> | tp <x> <y> | tp <playerId> | tp <playerId|name> <x> <y> | switch <0-4> [playerId|name] | walk <x> <y> | walk <playerId> | walk stop | vote <playerId|skip> | vote <voterId> <playerId|skip> | overrule <targetId> [judgeId] | chat <text> | chatui <text> | sabotage <comms|reactor|o2|lights|lab|heli|mushroom|cd0> | fixsabotage <type> | use <kill|vent|pet|ability|report|sabotage> | vent enter <id> | vent exit | errors [n] | grep <pattern> [n] | bcensus | gc <clr|clr2|boehm|both> | sleep <sec> | wait <phase=X|players=N|marker:text|join|arrived> [timeoutSec] | wait cancel | /<chatcommand>");
             return;
         }
 
@@ -618,6 +634,152 @@ public static class TestBridge
         }, ms / 1000f, "TestBridge.DelayShot", log: false);
 
         WriteOut($"OK delayshot scheduled in {ms}ms");
+    }
+
+    // burst <枚数> [何フレームおき=1] — 連続フレームを JPEG で保存する。上限 120 枚。
+    // 通常スクショの保持枚数 (PruneOldScreenshots) とは別フォルダなので消されない。
+    private static void ExecuteBurst(string rest)
+    {
+        string[] parts = rest.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        if (parts.Length == 0 || !int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out int count))
+        {
+            WriteOut("ERR burst usage: burst <count> [everyNFrames]");
+            return;
+        }
+
+        int every = 1;
+        if (parts.Length > 1 && !int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out every)) every = 1;
+
+        count = Math.Clamp(count, 1, 120);
+        every = Math.Clamp(every, 1, 60);
+
+        if (_captureInFlight || Main.Instance == null)
+        {
+            WriteOut("ERR burst busy");
+            return;
+        }
+
+        string folder = $"burst_{Utils.TimeStamp}";
+        string dir = Path.Combine(_screensDir, folder);
+        Directory.CreateDirectory(dir);
+
+        _captureInFlight = true;
+
+        try { Main.Instance.StartCoroutine(BurstCoroutine(dir, folder, count, every)); }
+        catch (Exception e)
+        {
+            Utils.ThrowException(e);
+            _captureInFlight = false;
+            WriteOut("ERR burst start failed");
+            return;
+        }
+
+        WriteOut($"OK burst started {count} frames every {every} -> Screens/{folder}/");
+    }
+
+    private static IEnumerator BurstCoroutine(string dir, string folder, int count, int every)
+    {
+        int saved = 0;
+        float start = Time.realtimeSinceStartup;
+
+        for (int i = 0; i < count; i++)
+        {
+            for (int k = 1; k < every; k++) yield return null;
+            yield return new WaitForEndOfFrame();
+
+            Texture2D tex = null;
+
+            try
+            {
+                int w = Screen.width;
+                int h = Screen.height;
+                if (w <= 0 || h <= 0) break;
+
+                tex = new Texture2D(w, h, TextureFormat.RGB24, false);
+                tex.ReadPixels(new Rect(0, 0, w, h), 0, 0);
+                tex.Apply();
+
+                byte[] bytes = Il2CppBytesToManaged(tex.EncodeToJPG(70));
+
+                if (bytes is { Length: > 0 })
+                {
+                    float t = Time.realtimeSinceStartup - start;
+                    File.WriteAllBytes(Path.Combine(dir, $"{i:D3}_{(int)(t * 1000):D6}ms.jpg"), bytes);
+                    saved++;
+                }
+            }
+            catch (Exception e)
+            {
+                Utils.ThrowException(e);
+                break;
+            }
+            finally
+            {
+                if (tex) Object.Destroy(tex);
+            }
+        }
+
+        _captureInFlight = false;
+        WriteOut($"burst done {saved}/{count} -> Screens/{folder}/");
+    }
+
+    // rdump [名前フィルタ] — カメラ設定と全 SpriteRenderer (非アクティブ含む) を rdump.txt に書く。
+    private static void ExecuteRendererDump(string filter)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"# rdump {DateTime.Now:yyyy-MM-dd HH:mm:ss} map={(ShipStatus.Instance ? ShipStatus.Instance.name : "none")} filter='{filter}'");
+
+        foreach (Camera cam in Camera.allCameras)
+        {
+            if (!cam) continue;
+            Vector3 p = cam.transform.position;
+            sb.AppendLine($"CAM {GetPath(cam.transform)} depth={cam.depth} clear={cam.clearFlags} bg={ColorStr(cam.backgroundColor)} mask=0x{cam.cullingMask:X} ortho={cam.orthographic}/{cam.orthographicSize:0.##} near={cam.nearClipPlane:0.##} far={cam.farClipPlane:0.##} pos=({p.x:0.##},{p.y:0.##},{p.z:0.##})");
+        }
+
+        var shaders = new List<string>();
+        foreach (Object o in Resources.FindObjectsOfTypeAll(Il2CppInterop.Runtime.Il2CppType.Of<Shader>()))
+        {
+            Shader s = o != null ? o.TryCast<Shader>() : null;
+            if (s) shaders.Add(s.name);
+        }
+        sb.AppendLine($"SHADERS {string.Join(" | ", shaders.Distinct().OrderBy(x => x))}");
+
+        int n = 0;
+
+        foreach (SpriteRenderer sr in Object.FindObjectsOfType<SpriteRenderer>(true))
+        {
+            if (!sr) continue;
+
+            string path = GetPath(sr.transform);
+            if (filter.Length > 0 && !path.Contains(filter, StringComparison.OrdinalIgnoreCase)) continue;
+
+            Bounds b = sr.bounds;
+            Vector3 wp = sr.transform.position;
+            string sprite = sr.sprite ? sr.sprite.name : "-";
+            string shader = sr.sharedMaterial && sr.sharedMaterial.shader ? sr.sharedMaterial.shader.name : "-";
+
+            var comps = new List<string>();
+            foreach (MonoBehaviour mb in sr.GetComponents<MonoBehaviour>())
+                if (mb) comps.Add(mb.GetIl2CppType().Name);
+
+            sb.AppendLine($"SR {path} act={sr.gameObject.activeInHierarchy} en={sr.enabled} layer={sr.gameObject.layer} sl={sr.sortingLayerName} so={sr.sortingOrder} z={wp.z:0.###} " +
+                          $"ctr=({b.center.x:0.##},{b.center.y:0.##}) size=({b.size.x:0.##},{b.size.y:0.##}) col={ColorStr(sr.color)} sprite={sprite} shader={shader} draw={sr.drawMode} comps=[{string.Join(",", comps)}]");
+            n++;
+        }
+
+        string outPath = Path.Combine(_dir, "rdump.txt");
+        File.WriteAllText(outPath, sb.ToString(), Encoding.UTF8);
+        WriteOut($"OK rdump {n} renderers -> rdump.txt");
+
+        static string ColorStr(Color c) => $"{c.r:0.##}/{c.g:0.##}/{c.b:0.##}/{c.a:0.##}";
+
+        static string GetPath(Transform t)
+        {
+            string s = t.name;
+            for (Transform p = t.parent; p; p = p.parent) s = p.name + "/" + s;
+            return s;
+        }
     }
 
     private static bool RequestScreenshot(string reason)

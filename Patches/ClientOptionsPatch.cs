@@ -44,6 +44,8 @@ public static class OptionsMenuBehaviourStartPatch
     private static ClientOptionItem EnableVoiceVox;
     private static ClientOptionItem VoiceVoxReadHostOwnChat;
     private static ClientOptionItem EnableAICommentary;
+    private static ClientOptionItem MapAtmosphere;
+    private static ClientOptionItem MapAtmosphereFlash;
 #if DEBUG
     private static ClientOptionItem GodMode;
 #endif
@@ -346,6 +348,12 @@ public static class OptionsMenuBehaviourStartPatch
 
         if (EnableAICommentary == null || !EnableAICommentary.ToggleButton)
             EnableAICommentary = ClientOptionItem.Create("EnableAICommentary", Main.EnableAICommentary, __instance);
+
+        if (MapAtmosphere == null || !MapAtmosphere.ToggleButton)
+            MapAtmosphere = ClientOptionItem.Create("MapAtmosphere", Main.MapAtmosphere, __instance);
+
+        if (MapAtmosphereFlash == null || !MapAtmosphereFlash.ToggleButton)
+            MapAtmosphereFlash = ClientOptionItem.Create("MapAtmosphereFlash", Main.MapAtmosphereFlash, __instance);
 
 #if DEBUG
         if ((GodMode == null || GodMode.ToggleButton == null) && DebugModeManager.AmDebugger)

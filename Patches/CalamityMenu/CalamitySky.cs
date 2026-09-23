@@ -494,7 +494,7 @@ public static class CalamitySky
         return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), size, 0, SpriteMeshType.FullRect);
     }
 
-    private static Sprite MakeSolidSprite(Color tint)
+    internal static Sprite MakeSolidSprite(Color tint)
     {
         var tex = new Texture2D(4, 4, TextureFormat.RGBA32, false);
         var pixels = new Color[16];

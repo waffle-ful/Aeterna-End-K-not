@@ -12669,6 +12669,8 @@
   "VoiceVoxEnable": "Read Crew Chat Aloud (VoiceVox TTS)",
   "VoiceVoxReadHostOwnChat": "VoiceVox: Also Read My Own Messages",
   "EnableAICommentary": "AI Commentary Events (Companion App)",
+  "MapAtmosphere": "Map Atmosphere (Storm on MIRA HQ)",
+  "MapAtmosphereFlash": "Lightning Flash",
   "LobbyShare.Title": "Lobby Share",
   "LobbyShare.AnnounceFailed": "Failed to announce lobby ({0}): {1}",
   "LobbyShare.ReportTitle": "Report",
