@@ -20,7 +20,7 @@ import android.view.View;
 import android.view.ViewGroup;
 
 import java.lang.reflect.Field;
-import java.lang.reflect.Method;
+import java.util.List;
 import java.util.Arrays;
 
 import dev.allofus.fusioncore.BuildConfig;
@@ -28,12 +28,13 @@ import dev.allofus.fusioncore.R;
 import dev.allofus.fusioncore.SecondaryStubActivity;
 import dev.allofus.fusioncore.StubActivity;
 import dev.allofus.fusioncore.tools.FallbackResources;
-import top.canyie.pine.Pine;
-import top.canyie.pine.callback.MethodHook;
+import dev.allofus.fusioncore.tools.FusionInstrumentation;
 
 /**
- * Hooks to Instrumentation.execStartActivity and Instrumentation.newActivity
+ * Redirects Instrumentation.execStartActivity and Instrumentation.newActivity
  * for enabling dynamic loading of activities not declared in AndroidManifest.xml.
+ * The process instrumentation is replaced by a {@link FusionInstrumentation} wrapper
+ * that calls back into the handlers here.
  */
 public class InstrumentationHooks {
 
@@ -57,103 +58,107 @@ public class InstrumentationHooks {
         fallbackLauncherResources = launcher;
     }
     private static volatile String mainActivityClassName;
+    /** Launcher context the loading overlay is inflated from. */
+    private static volatile Context loadingViewContext;
     /** Activities declared in this launcher's own manifest; they must not be routed through a stub. */
     private static volatile Set<String> launcherActivities = Collections.emptySet();
 
-    public static void install(Context fusionContext, ClassLoader gameLoader, String mainActivityClass) {
+    public static synchronized void install(Context fusionContext, ClassLoader gameLoader, String mainActivityClass) {
         if (areHooksInstalled) {
-            Log.d(TAG, "Instrumentation hooks already installed");
+            Log.d(TAG, "Instrumentation wrapper already installed");
             return;
         }
         gameClassLoader = gameLoader;
         mainActivityClassName = mainActivityClass;
+        loadingViewContext = fusionContext;
         launcherActivities = loadDeclaredActivities(fusionContext);
 
         try {
-            Class<?> instrumentationClass = Instrumentation.class;
-
-            // The execStartActivity hook will replace the unregistered activity with StubActivity.
-            hookAllMethodsByName(instrumentationClass, "execStartActivity", new MethodHook() {
-                @Override public void beforeCall(Pine.CallFrame callFrame) { handleExecStartBeforeCall(callFrame); }
-            });
-
-            // The newActivity hook restores the unregistered activity's intent from the StubActivity intent.
-            hookAllMethodsByName(instrumentationClass, "newActivity", new MethodHook() {
-                @Override public void beforeCall(Pine.CallFrame callFrame) { handleNewActivityBeforeCall(callFrame); }
-            });
-
-            hookActivityOnCreate(fusionContext);
-
+            installInstrumentation();
             areHooksInstalled = true;
-            Log.d(TAG, "Successfully installed Instrumentation hooks");
+            Log.d(TAG, "Successfully installed Instrumentation wrapper");
         } catch (Exception e) {
-            Log.e(TAG, "Failed to install Instrumentation hooks", e);
+            Log.e(TAG, "Failed to install Instrumentation wrapper", e);
         }
     }
 
-    private static void hookAllMethodsByName(Class<?> clazz, String methodName, MethodHook hook) {
+    /**
+     * Swaps ActivityThread.mInstrumentation for the wrapper. Activities attached before this
+     * point keep their own reference to the original instance for startActivity, which only
+     * matters for the launcher's own screens; instantiation and lifecycle calls always go
+     * through the ActivityThread field.
+     *
+     * <p>The two framework members read here are on the unsupported (grey) list, so plain
+     * reflection reaches them without any hidden-API exemption; no ordering against the
+     * remaining runtime hooks is required.
+     */
+    private static void installInstrumentation() throws ReflectiveOperationException {
+        Class<?> activityThreadClass = Class.forName("android.app.ActivityThread");
+        Object activityThread = activityThreadClass.getMethod("currentActivityThread").invoke(null);
+        if (activityThread == null) {
+            throw new IllegalStateException("currentActivityThread() returned null");
+        }
+        Field field = activityThreadClass.getDeclaredField("mInstrumentation");
+        field.setAccessible(true);
+        Instrumentation current = (Instrumentation) field.get(activityThread);
+        if (current instanceof FusionInstrumentation) {
+            Log.d(TAG, "Instrumentation wrapper already in place");
+            return;
+        }
+        FusionInstrumentation wrapper = new FusionInstrumentation(current);
+        field.set(activityThread, wrapper);
+        Log.i(TAG, "Instrumentation wrapper installed over " + current.getClass().getName());
+
+        Log.i(TAG, "Instrumentation execStartActivity overloads resolved: "
+                + wrapper.getResolvedExecStartCount() + "/" + FusionInstrumentation.EXEC_START_SIGNATURE_COUNT);
+        for (String failure : wrapper.getUnresolvedExecStart()) {
+            Log.w(TAG, "Instrumentation execStartActivity overload unresolved: " + failure);
+        }
+
+        List<String> uncovered = FusionInstrumentation.reportUncoveredOverloads();
+        if (uncovered.isEmpty()) {
+            Log.i(TAG, "Instrumentation execStartActivity overloads: all covered (other methods inherit)");
+        } else {
+            for (String signature : uncovered) {
+                Log.w(TAG, "Instrumentation execStartActivity overload not covered: " + signature);
+            }
+        }
+    }
+
+    /** Runs before the activity's onCreate; icicle is the saved state the framework hands over. */
+    public static void beforeActivityCreate(Activity activity, Bundle icicle) {
+        applyGameClassLoader(activity);
+        applySavedStateClassLoader(activity, icicle);
+        applyFallbackResources(activity);
+        applyTargetOrientation(activity);
+    }
+
+    /** Runs after the activity's onCreate has returned. */
+    public static void afterActivityCreate(Activity activity) {
+        // Only the main game activity gets the loading overlay: the bridge clears it
+        // there once the runtime is up, while secondary activities (ads, sign-in)
+        // would keep it on screen forever.
+        if (!activity.getClass().getName().equals(mainActivityClassName)) {
+            return;
+        }
+        Context fusionContext = loadingViewContext;
+        if (fusionContext == null) {
+            return;
+        }
         try {
-            Method[] methods = clazz.getDeclaredMethods();
-            for (Method m : methods) {
-                if (!m.getName().equals(methodName)) {
-                    continue;
-                }
-                Pine.hook(m, hook);
-            }
-        } catch (SecurityException e) {
-            Log.e(TAG, "Failed to hook methods " + methodName + " for class " + clazz.getName());
+            ViewGroup decorView = (ViewGroup) activity.getWindow().getDecorView();
+            Context themedFusionContext = new ContextThemeWrapper(fusionContext, androidx.appcompat.R.style.Theme_AppCompat);
+            LayoutInflater inflater = LayoutInflater.from(themedFusionContext);
+            View loadingView = inflater.inflate(R.layout.loading_view, decorView, false);
+            decorView.addView(loadingView);
+            Log.i(TAG, "Loading view attached to " + activity.getClass().getName());
+        } catch (Throwable t) {
+            Log.w(TAG, "Failed to attach loading view to " + activity.getClass().getName() + ": " + t);
         }
     }
 
-    private static void hookActivityOnCreate(Context fusionContext) throws NoSuchMethodException {
-        MethodHook orientationHook = new MethodHook() {
-            @Override public void beforeCall(Pine.CallFrame callFrame) {
-                if (!(callFrame.thisObject instanceof Activity)) {
-                    return;
-                }
-                applyTargetOrientation((Activity) callFrame.thisObject);
-            }
-        };
-
-        MethodHook loadingViewHook = new MethodHook() {
-            @Override
-            public void afterCall(Pine.CallFrame callFrame) throws Throwable {
-                if (!(callFrame.thisObject instanceof Activity activity)) {
-                    return;
-                }
-                // Only the main game activity gets the loading overlay: the bridge clears it
-                // there once the runtime is up, while secondary activities (ads, sign-in)
-                // would keep it on screen forever.
-                if (!activity.getClass().getName().equals(mainActivityClassName)) {
-                    return;
-                }
-
-                ViewGroup decorView = (ViewGroup) activity.getWindow().getDecorView();
-                Context themedFusionContext = new ContextThemeWrapper(fusionContext, androidx.appcompat.R.style.Theme_AppCompat);
-                LayoutInflater inflater = LayoutInflater.from(themedFusionContext);
-                View loadingView = inflater.inflate(R.layout.loading_view, decorView, false);
-                decorView.addView(loadingView);
-            }
-        };
-
-        MethodHook classLoaderHook = new MethodHook() {
-            @Override public void beforeCall(Pine.CallFrame callFrame) {
-                if (!(callFrame.thisObject instanceof Activity)) {
-                    return;
-                }
-                applyGameClassLoader((Activity) callFrame.thisObject);
-                applySavedStateClassLoader((Activity) callFrame.thisObject, callFrame.args);
-                applyFallbackResources((Activity) callFrame.thisObject);
-            }
-        };
-
-        Method onCreate = Activity.class.getDeclaredMethod("onCreate", Bundle.class);
-        Pine.hook(onCreate, classLoaderHook);
-        Pine.hook(onCreate, orientationHook);
-        Pine.hook(onCreate, loadingViewHook);
-
-        Method onResume = Activity.class.getDeclaredMethod("onResume");
-        Pine.hook(onResume, orientationHook);
+    public static void beforeActivityResume(Activity activity) {
+        applyTargetOrientation(activity);
     }
 
     private static void applyTargetOrientation(Activity activity) {
@@ -247,12 +252,9 @@ public class InstrumentationHooks {
      * loader; its lazily unparcelled values pin that loader on first read, so the game
      * loader has to be set before the game's onCreate touches it.
      */
-    private static void applySavedStateClassLoader(Activity activity, Object[] args) {
+    private static void applySavedStateClassLoader(Activity activity, Bundle savedState) {
         ClassLoader loader = gameClassLoader;
-        if (loader == null || args == null || args.length == 0) {
-            return;
-        }
-        if (!(args[0] instanceof Bundle savedState)) {
+        if (loader == null || savedState == null) {
             return;
         }
         if (!isDynamicIntent(activity.getIntent())) {
@@ -278,14 +280,15 @@ public class InstrumentationHooks {
         return ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
     }
 
-    private static void handleExecStartBeforeCall(Pine.CallFrame callFrame) {
+    /** Rewrites the Intent argument in place so an unregistered activity is routed via a stub. */
+    public static void handleExecStartBeforeCall(Object[] args) {
         try {
-            Log.i(TAG, "handling exec start for " + Arrays.toString(callFrame.args));
+            Log.i(TAG, "handling exec start for " + Arrays.toString(args));
             int intentIdx = -1;
 
-            if (callFrame.args != null) {
-                for (int i = 0; i < callFrame.args.length; i++) {
-                    Object arg = callFrame.args[i];
+            if (args != null) {
+                for (int i = 0; i < args.length; i++) {
+                    Object arg = args[i];
                     if (arg == null) continue;
                     if (Intent.class.isAssignableFrom(arg.getClass())) {
                         intentIdx = i;
@@ -298,7 +301,7 @@ public class InstrumentationHooks {
                     return;
                 }
 
-                Intent intent = (Intent) callFrame.args[intentIdx];
+                Intent intent = (Intent) args[intentIdx];
                 if (intent == null) {
                     Log.e(TAG, "Intent was null!");
                     return;
@@ -326,7 +329,7 @@ public class InstrumentationHooks {
                 Class<?> stub = targetClass.equals(mainActivityClassName)
                         ? StubActivity.class
                         : SecondaryStubActivity.class;
-                callFrame.args[intentIdx] = getInjectedIntent(intent, stub);
+                args[intentIdx] = getInjectedIntent(intent, stub);
                 Log.d(TAG, "execStartActivity: intercepted unregistered activity: " + targetClass
                         + " via " + stub.getSimpleName());
             } else {
@@ -355,16 +358,17 @@ public class InstrumentationHooks {
         return Collections.unmodifiableSet(names);
     }
 
-    private static void handleNewActivityBeforeCall(Pine.CallFrame callFrame) {
+    /** Restores the original intent, class name and loader in place for a stub-routed activity. */
+    public static void handleNewActivityBeforeCall(Object[] args) {
         try {
-            if (callFrame.args == null) return;
+            if (args == null) return;
 
             int intentIdx = -1;
             int strIdx = -1;
             int loaderIdx = -1;
 
-            for (int i = 0; i < callFrame.args.length; i++) {
-                Object arg = callFrame.args[i];
+            for (int i = 0; i < args.length; i++) {
+                Object arg = args[i];
                 if (arg == null) continue;
                 if (Intent.class.isAssignableFrom(arg.getClass())) {
                     intentIdx = i;
@@ -382,7 +386,7 @@ public class InstrumentationHooks {
                 return;
             }
 
-            Intent intent = (Intent) callFrame.args[intentIdx];
+            Intent intent = (Intent) args[intentIdx];
 
             // The framework only calls setExtrasClassLoader after newActivity returns, and the
             // first get* on a binder-delivered Bundle pins its loader into every lazily
@@ -398,11 +402,11 @@ public class InstrumentationHooks {
             materializeFusionConfig(intent);
 
             if (original != null && original.getComponent() != null) {
-                callFrame.args[intentIdx] = original;
-                callFrame.args[strIdx] = original.getComponent().getClassName();
+                args[intentIdx] = original;
+                args[strIdx] = original.getComponent().getClassName();
                 ClassLoader loader = gameClassLoader;
                 if (loaderIdx >= 0 && loader != null) {
-                    callFrame.args[loaderIdx] = loader;
+                    args[loaderIdx] = loader;
                     Log.i(TAG, "newActivity: using game class loader for "
                             + original.getComponent().getClassName());
                 } else if (loaderIdx >= 0) {
