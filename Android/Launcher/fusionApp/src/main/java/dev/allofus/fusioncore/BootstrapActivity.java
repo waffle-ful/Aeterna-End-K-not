@@ -3,6 +3,7 @@ package dev.allofus.fusioncore;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.net.Uri;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.os.Bundle;
@@ -30,6 +31,7 @@ import dev.allofus.fusioncore.tools.FusionConfig;
 import dev.allofus.fusioncore.tools.GameClassLoaderFactory;
 import dev.allofus.fusioncore.tools.LibUnityBundle;
 import dev.allofus.fusioncore.tools.LibUnityDownloader;
+import dev.allofus.fusioncore.tools.LogBundle;
 import dev.allofus.fusioncore.tools.Utilities;
 import dev.allofus.fusioncore.tools.PluginInstaller;
 import dev.allofus.fusioncore.tools.VersionLookup;
@@ -56,8 +58,12 @@ public class BootstrapActivity extends AppCompatActivity {
         return sGameActivityStarted;
     }
 
+    /** Where the player gets a newer launcher when this build no longer matches the game. */
+    private static final String RELEASES_URL = "https://github.com/waffle-ful/Aeterna-End-K-not/releases/latest";
+
     private TextView statusView;
     private TextView progressDetailsView;
+    private View actionsRow;
     private ProgressBar spinnerProgress;
     private ProgressBar downloadProgress;
 
@@ -73,6 +79,17 @@ public class BootstrapActivity extends AppCompatActivity {
         setPhaseStatus(getString(R.string.bootstrap_status_preparing));
 
         String targetPackage = getIntent().getStringExtra(EXTRA_TARGET_PACKAGE);
+        actionsRow = findViewById(R.id.bootstrap_actions);
+        findViewById(R.id.bootstrap_action_update).setOnClickListener(v -> {
+            Intent open = new Intent(Intent.ACTION_VIEW, Uri.parse(RELEASES_URL));
+            try {
+                startActivity(open);
+            } catch (Exception e) {
+                Toast.makeText(this, RELEASES_URL, Toast.LENGTH_LONG).show();
+            }
+        });
+        String logsPackage = targetPackage != null ? targetPackage : SelectorActivity.TARGET_PACKAGE;
+        findViewById(R.id.bootstrap_action_share_logs).setOnClickListener(v -> LogBundle.shareAsync(this, logsPackage));
         if (targetPackage == null || targetPackage.isEmpty()) {
             failAndFinish("No target package specified in intent extras!", null);
             return;
@@ -325,6 +342,9 @@ public class BootstrapActivity extends AppCompatActivity {
             }
             if (progressDetailsView != null) {
                 progressDetailsView.setVisibility(View.GONE);
+            }
+            if (actionsRow != null) {
+                actionsRow.setVisibility(View.VISIBLE);
             }
         });
     }
