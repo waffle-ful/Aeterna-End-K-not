@@ -68,6 +68,30 @@ public final class PluginInstaller {
         return allOk;
     }
 
+    /** Version of the bundled mod as written by the C# build, or null when this build carries none. */
+    public static String bundledVersion(Context context) {
+        AssetManager assets = context.getAssets();
+        String[] entries;
+        try {
+            entries = assets.list(ASSET_DIR);
+        } catch (IOException e) {
+            return null;
+        }
+        if (entries == null) {
+            return null;
+        }
+        for (String entry : entries) {
+            if (!entry.endsWith(".dll")) {
+                continue;
+            }
+            Properties bundled = readAssetProperties(assets, ASSET_DIR + "/" + entry + PROPERTIES_SUFFIX);
+            if (bundled != null && bundled.getProperty(KEY_VERSION) != null) {
+                return bundled.getProperty(KEY_VERSION);
+            }
+        }
+        return null;
+    }
+
     private static boolean installOne(AssetManager assets, File bepInExDir, String dllName) {
         Properties bundled = readAssetProperties(assets, ASSET_DIR + "/" + dllName + PROPERTIES_SUFFIX);
         if (bundled == null) {

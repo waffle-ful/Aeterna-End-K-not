@@ -11,16 +11,10 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.util.Log;
-import android.view.LayoutInflater;
 import android.view.View;
-import android.view.ViewGroup;
-import android.widget.ArrayAdapter;
 import android.widget.Button;
-import android.widget.ImageButton;
 import android.widget.ImageView;
-import android.widget.ListView;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
@@ -40,20 +34,28 @@ import java.util.zip.ZipFile;
 
 import dev.allofus.fusioncore.tools.CrashDetector;
 import dev.allofus.fusioncore.tools.ItchAuth;
+import dev.allofus.fusioncore.tools.LogBundle;
+import dev.allofus.fusioncore.tools.PluginInstaller;
 import dev.allofus.fusioncore.tools.Utilities;
 
+/** Home screen: one launch card for Among Us, status rows, and the secondary actions. */
 public class SelectorActivity extends AppCompatActivity {
     private static final String TAG = "FusionCore";
     private static final String[] UNITY_ABIS = {"arm64-v8a", "armeabi-v7a", "x86_64", "x86"};
     static final String TARGET_PACKAGE = "com.innersloth.spacemafia";
     /** Set on the intent that brings the player back after the itch.io sign-in page. */
     static final String EXTRA_AFTER_SIGN_IN = "after_sign_in";
-    private static final long AUTO_LAUNCH_DELAY_MS = 1500L;
+    private static final int AUTO_LAUNCH_SECONDS = 3;
 
     private String pendingLaunchPackage;
     private boolean targetInstalled;
     private Handler handler;
-    private final Runnable autoLaunchRunnable = () -> maybeLaunchBootstrap(TARGET_PACKAGE);
+    private int countdownLeft;
+    private final Runnable countdownTick = this::onCountdownTick;
+
+    private View launchCard;
+    private TextView launchHint;
+    private View launchProgress;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -65,9 +67,13 @@ public class SelectorActivity extends AppCompatActivity {
         int basePadding = Math.round(getResources().getDisplayMetrics().density * 16f);
         Utilities.applyWindowInsets(root, basePadding);
 
+        launchCard = findViewById(R.id.home_launch_card);
+        launchHint = findViewById(R.id.home_launch_hint);
+        launchProgress = findViewById(R.id.home_launch_progress);
+
         handler = new Handler(getMainLooper());
         findViewById(R.id.selector_itch_button).setOnClickListener(v -> {
-            handler.removeCallbacks(autoLaunchRunnable);
+            stopCountdown();
             if (ItchAuth.isSignedIn(this, TARGET_PACKAGE)) {
                 ItchAuth.signOut(this, TARGET_PACKAGE);
                 refreshItchStatus();
@@ -75,32 +81,82 @@ public class SelectorActivity extends AppCompatActivity {
                 ItchAuth.startSignIn(this);
             }
         });
-        handler.postDelayed(()->{
-            targetInstalled = populateList();
+        launchCard.setOnClickListener(v -> {
+            if (targetInstalled) {
+                maybeLaunchBootstrap(TARGET_PACKAGE);
+            }
+        });
+        findViewById(R.id.selector_action_settings).setOnClickListener(v -> {
+            stopCountdown();
+            Intent intent = new Intent(this, GameSettingsActivity.class);
+            intent.putExtra(GameSettingsActivity.EXTRA_PACKAGE_NAME, TARGET_PACKAGE);
+            startActivity(intent);
+        });
+        findViewById(R.id.home_share_logs).setOnClickListener(v -> {
+            stopCountdown();
+            LogBundle.shareAsync(this, TARGET_PACKAGE);
+        });
+        handler.postDelayed(() -> {
+            if (isFinishing() || isDestroyed()) {
+                return;
+            }
+            targetInstalled = populateHome();
             boolean signedIn = refreshItchStatus();
             CrashDetector.init(this);
             // Launch by itself only once an itch.io account is attached; otherwise wait for
             // the player to sign in or to tap the card.
             if (targetInstalled && signedIn) {
-                handler.postDelayed(autoLaunchRunnable, AUTO_LAUNCH_DELAY_MS);
+                startCountdown();
             }
         }, 100);
     }
 
-    /** Updates the itch.io row and the hint under the title; returns whether a token is stored. */
+    /** Updates the itch.io row and the launch hint; returns whether a token is stored. */
     private boolean refreshItchStatus() {
         boolean signedIn = ItchAuth.isSignedIn(this, TARGET_PACKAGE);
         TextView status = findViewById(R.id.selector_itch_status);
         Button button = findViewById(R.id.selector_itch_button);
         status.setText(signedIn ? R.string.selector_itch_signed_in : R.string.selector_itch_not_signed_in);
         button.setText(signedIn ? R.string.selector_itch_sign_out : R.string.selector_itch_sign_in);
-        TextView subtitle = findViewById(R.id.selector_subtitle);
-        if (!signedIn) {
-            subtitle.setText(R.string.selector_itch_hint_not_signed_in);
-        } else if (findViewById(R.id.selector_loading).getVisibility() == View.GONE) {
-            subtitle.setText(R.string.selector_auto_launch_hint);
+        if (!targetInstalled) {
+            launchHint.setText(R.string.selector_target_not_installed);
+        } else if (!signedIn) {
+            launchHint.setText(R.string.home_launch_sign_in_first);
+        } else if (countdownLeft <= 0) {
+            launchHint.setText(R.string.home_launch_tap);
         }
         return signedIn;
+    }
+
+    private void startCountdown() {
+        stopCountdown();
+        countdownLeft = AUTO_LAUNCH_SECONDS;
+        launchProgress.setVisibility(View.VISIBLE);
+        onCountdownTick();
+    }
+
+    private void onCountdownTick() {
+        if (countdownLeft <= 0) {
+            launchProgress.setVisibility(View.INVISIBLE);
+            maybeLaunchBootstrap(TARGET_PACKAGE);
+            return;
+        }
+        launchHint.setText(getString(R.string.home_launch_countdown, countdownLeft));
+        countdownLeft--;
+        handler.postDelayed(countdownTick, 1000L);
+    }
+
+    private void stopCountdown() {
+        if (handler != null) {
+            handler.removeCallbacks(countdownTick);
+        }
+        if (countdownLeft > 0) {
+            countdownLeft = 0;
+            launchProgress.setVisibility(View.INVISIBLE);
+            if (targetInstalled) {
+                launchHint.setText(R.string.home_launch_tap);
+            }
+        }
     }
 
     @Override
@@ -114,78 +170,51 @@ public class SelectorActivity extends AppCompatActivity {
         // start the game the same way a fresh launch would once an account is attached.
         boolean signedIn = refreshItchStatus();
         if (signedIn && targetInstalled) {
-            handler.removeCallbacks(autoLaunchRunnable);
-            handler.postDelayed(autoLaunchRunnable, AUTO_LAUNCH_DELAY_MS);
+            startCountdown();
         }
     }
 
     @Override
     protected void onPause() {
         super.onPause();
-        if (handler != null) {
-            handler.removeCallbacks(autoLaunchRunnable);
-        }
+        stopCountdown();
     }
 
-    private boolean populateList() {
-        ListView listView = findViewById(R.id.selector_list);
-        TextView emptyView = findViewById(R.id.selector_empty);
-        emptyView.setText(R.string.selector_target_not_installed);
-        listView.setEmptyView(emptyView);
-
-        List<AppEntry> installedTargets = resolveInstalledTargets();
-        if (!installedTargets.isEmpty()) {
-            TextView subtitle = findViewById(R.id.selector_subtitle);
-            subtitle.setText(R.string.selector_auto_launch_hint);
+    @Override
+    protected void onDestroy() {
+        if (handler != null) {
+            handler.removeCallbacksAndMessages(null);
         }
-        Drawable defaultIcon = getPackageManager().getDefaultActivityIcon();
-        ArrayAdapter<AppEntry> adapter = new ArrayAdapter<>(
-                this,
-                R.layout.item_selector_target,
-                installedTargets
-        ) {
-            @NonNull
-            @Override
-            public View getView(int position, View convertView, @NonNull ViewGroup parent) {
-                RowHolder holder;
-                if (convertView == null) {
-                    convertView = LayoutInflater.from(getContext())
-                            .inflate(R.layout.item_selector_target, parent, false);
-                    holder = new RowHolder(
-                            convertView.findViewById(R.id.row_icon),
-                            convertView.findViewById(R.id.row_name),
-                            convertView.findViewById(R.id.row_package),
-                            convertView.findViewById(R.id.row_version)
-                    );
-                    convertView.setTag(holder);
-                } else {
-                    holder = (RowHolder) convertView.getTag();
-                }
+        super.onDestroy();
+    }
 
-                AppEntry entry = getItem(position);
-                if (entry != null) {
-                    holder.icon.setImageDrawable(entry.icon != null ? entry.icon : defaultIcon);
-                    holder.name.setText(entry.label);
-                    holder.packageName.setText(entry.packageName);
-                    holder.version.setText(Utilities.formatVersionText(entry.versionName, entry.versionCode));
+    /** Fills the launch card and the status rows; returns whether the game is installed. */
+    private boolean populateHome() {
+        List<AppEntry> installedTargets = resolveInstalledTargets();
+        AppEntry game = installedTargets.isEmpty() ? null : installedTargets.get(0);
 
-                    ImageButton settingsButton = convertView.findViewById(R.id.selector_action_settings);
-                    settingsButton.setOnClickListener(v -> {
-                        handler.removeCallbacks(autoLaunchRunnable);
-                        var intent = new Intent(getContext(), GameSettingsActivity.class);
-                        intent.putExtra(GameSettingsActivity.EXTRA_PACKAGE_NAME, entry.packageName);
-                        startActivity(intent);
-                    });
+        ImageView icon = findViewById(R.id.home_launch_icon);
+        TextView gameVersion = findViewById(R.id.home_game_version);
+        TextView modVersion = findViewById(R.id.home_mod_version);
+        TextView missing = findViewById(R.id.selector_empty);
 
-                    convertView.setOnClickListener((v) -> maybeLaunchBootstrap(entry.packageName));
-                }
+        if (game != null) {
+            icon.setImageDrawable(game.icon != null ? game.icon : getPackageManager().getDefaultActivityIcon());
+            gameVersion.setText(Utilities.formatVersionText(game.versionName, game.versionCode));
+            missing.setVisibility(View.GONE);
+            launchCard.setEnabled(true);
+            launchCard.setAlpha(1f);
+        } else {
+            icon.setImageDrawable(getPackageManager().getDefaultActivityIcon());
+            gameVersion.setText(R.string.home_row_game_none);
+            missing.setVisibility(View.VISIBLE);
+            launchCard.setEnabled(false);
+            launchCard.setAlpha(0.6f);
+        }
 
-                return convertView;
-            }
-        };
-        listView.setAdapter(adapter);
-        findViewById(R.id.selector_loading).setVisibility(View.GONE);
-        return !installedTargets.isEmpty();
+        String bundled = PluginInstaller.bundledVersion(this);
+        modVersion.setText(bundled != null ? "v" + bundled : getString(R.string.home_row_mod_none));
+        return game != null;
     }
 
 
@@ -213,7 +242,7 @@ public class SelectorActivity extends AppCompatActivity {
             ApplicationInfo info;
             try {
                 info = pm.getApplicationInfo(packageName, 0);
-            } 
+            }
             catch (PackageManager.NameNotFoundException e) {
                 continue;
             }
@@ -333,9 +362,11 @@ public class SelectorActivity extends AppCompatActivity {
                     } else {
                         Log.e(TAG, "Permission denied: " +permission);
                     }
+                }
 
-                    String packageName = pendingLaunchPackage;
-                    pendingLaunchPackage = null;
+                String packageName = pendingLaunchPackage;
+                pendingLaunchPackage = null;
+                if (packageName != null) {
                     launchBootstrap(packageName);
                 }
             });
@@ -361,7 +392,7 @@ public class SelectorActivity extends AppCompatActivity {
     }
 
     private void maybeLaunchBootstrap(String packageName) {
-        handler.removeCallbacks(autoLaunchRunnable);
+        stopCountdown();
 
         if (BootstrapActivity.isGameActivityStarted()) {
             // The game already runs in this process. Bootstrapping it a second time would
@@ -432,9 +463,5 @@ public class SelectorActivity extends AppCompatActivity {
             }
             return label + " (" + packageName + ")";
         }
-    }
-
-    private record RowHolder(ImageView icon, TextView name, TextView packageName,
-                             TextView version) {
     }
 }
