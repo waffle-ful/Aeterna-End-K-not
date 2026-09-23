@@ -16,7 +16,10 @@ $out  = Join-Path $proj 'Build\endknot_bgm'
 $sfxSources = @(
     (Join-Path $repo 'Resources\Sounds\WaveCannonFire.ogg'),
     (Join-Path $repo 'Resources\Sounds\WaveCannonCharge.ogg'),
-    (Join-Path $repo 'Resources\Sounds\Backrooms\lobby-ambient.wav')
+    (Join-Path $repo 'Resources\Sounds\Backrooms\lobby-ambient.wav'),
+    (Join-Path $repo 'Resources\Sounds\MapAtmosphere\MiraRainLoop.ogg'),
+    (Join-Path $repo 'Resources\Sounds\MapAtmosphere\MiraThunderNear.ogg'),
+    (Join-Path $repo 'Resources\Sounds\MapAtmosphere\MiraThunderFar.ogg')
 )
 $dstSfx = Join-Path $proj 'Assets\SFX'
 $outSfx = Join-Path $proj 'Build\endknot_sfx'

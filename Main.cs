@@ -304,6 +304,8 @@ public class Main : BasePlugin
     public static ConfigEntry<int> TestBridgeScreenshotInterval { get; private set; }
     public static ConfigEntry<int> TestBridgeScreenshotKeep { get; private set; }
     public static ConfigEntry<bool> EnableAICommentary { get; private set; }
+    public static ConfigEntry<bool> MapAtmosphere { get; private set; }
+    public static ConfigEntry<bool> MapAtmosphereFlash { get; private set; }
     public static ConfigEntry<string> AICommentaryArgs { get; private set; }
     public static ConfigEntry<bool> GcUafBootProbe { get; private set; }
     public static ConfigEntry<bool> DeferOptionsBuildToMenu { get; private set; }
@@ -656,6 +658,8 @@ public class Main : BasePlugin
         TestBridgeScreenshotKeep = Config.Bind("Client Options", "TestBridgeScreenshotKeep", 30, "Max number of screenshots to keep under EndKnot_Logs/Screens (oldest deleted first).");
         MigrateLegacyBridgeConfig();
         EnableAICommentary = Config.Bind("Client Options", "EnableAICommentary", false, "Enable the AI commentary companion event layer: writes host-local JSON Lines events (join/leave/chat/intervention/phase/demo) to EndKnot_DATA/companion-events.jsonl for an external companion app to tail. No network sending. Also enables a lobby-idle auto demo of the viewer-intervention cutscene. When on, the companion app itself is also auto-launched as a child process (requires Python and the GEMINI_API_KEY environment variable; see EndKnot_DATA/companion/README). Default off.");
+        MapAtmosphere = Config.Bind("Client Options", "MapAtmosphere", true, "Local-only storm atmosphere on MIRA HQ (dark sky, rain, lightning). Drawn on this client only; nothing is sent.");
+        MapAtmosphereFlash = Config.Bind("Client Options", "MapAtmosphereFlash", true, "Full-screen white flash when lightning strikes in the map atmosphere. Turn off to keep the bolts without the flash.");
         AICommentaryArgs = Config.Bind("Client Options", "AICommentaryArgs", "", "Extra command-line arguments passed to the auto-launched AI commentary companion app (e.g. --voice Kore --quiet-meeting --audio-device \"CABLE Input\").");
         GcUafBootProbe = Config.Bind("Debug", "GcUafBootProbe", false, "Run a one-time boot-time probe (GcUafProbe) that deterministically tests whether the incremental GC collects a freshly-written interop string field before the field is read back. Logs GCUAF-PROBE: VULNERABLE or SAFE. Default off; only meant for diagnosing the coreclr AV bug.");
         DeferOptionsBuildToMenu = Config.Bind("Debug", "DeferOptionsBuildToMenu", true, "Build the mod option tables only after the main menu is reached instead of during the splash screen. The main menu appears about half a second sooner; the build then runs in small per-frame slices during the first second of the menu (a few short hitches). Set false to build everything during the splash screen as before. Logged as BOOT marks (opts.*).");
