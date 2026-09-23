@@ -82,6 +82,57 @@ internal static class CustomRolesHelper
                 CustomRoles.Weatherman;
         }
 
+        // 「古い役職」タブ (アドオンはアドオンタブ末尾の区画) へ寄せる役職
+        public bool IsLegacy()
+        {
+            return role is
+                // Crewmate
+                CustomRoles.Snowman or
+                CustomRoles.Nightmare or
+                CustomRoles.TaskManager or
+                CustomRoles.ToiletFan or
+                CustomRoles.DoubleAgent or
+                CustomRoles.DonutDelivery or
+                CustomRoles.Safeguard or
+                CustomRoles.Autocrat or
+                CustomRoles.Walker or
+                CustomRoles.Shyboy or
+                CustomRoles.PonkotuTeller or
+                CustomRoles.Bestower or
+                CustomRoles.Clairvoyant or
+                CustomRoles.Shiftguard or
+                CustomRoles.Android or
+                CustomRoles.InSender or
+                CustomRoles.Doctor or
+                // Impostor
+                CustomRoles.Parasite or
+                CustomRoles.Greedy or
+                CustomRoles.Capitalist or
+                CustomRoles.Swiftclaw or
+                CustomRoles.Disperser or
+                CustomRoles.Inhibitor or
+                CustomRoles.Nullifier or
+                // Neutral
+                CustomRoles.Strawdoll or
+                CustomRoles.CurseMaker or
+                CustomRoles.Doppelganger or
+                CustomRoles.Weatherman or
+                CustomRoles.Pulse or
+                CustomRoles.Reckless or
+                CustomRoles.Specter or
+                CustomRoles.Spirit or
+                // Ghost
+                CustomRoles.DemonicVenter or
+                // Add-ons
+                CustomRoles.Underdog or
+                CustomRoles.Transparent or
+                CustomRoles.Water or
+                CustomRoles.Swift or
+                CustomRoles.Anchor or
+                CustomRoles.Shy or
+                CustomRoles.Taskcounter;
+        }
+
         public bool IsForOtherGameMode()
         {
             return CustomHnS.AllHnSRoles.Contains(role) || role is

@@ -389,6 +389,7 @@ public static class LobbyViewSettingsPanePatch
                     case TabGroup.Combinations:
                     case TabGroup.Addons:
                     case TabGroup.OtherRoles:
+                    case TabGroup.LegacyRoles:
                         PassiveButton cloneRoleTabButton = Object.Instantiate(__instance.rolesTabButton, __instance.rolesTabButton.transform.parent);
                         cloneRoleTabButton.buttonText.DestroyTranslator();
                         cloneRoleTabButton.name = tabGroup.ToString();
@@ -397,10 +398,15 @@ public static class LobbyViewSettingsPanePatch
                         if (indexRoles != 0)
                         {
                             newXPos = cloneRoleTabButton.transform.localPosition;
-                            // Combinations はカヴンの上段、Addons はその他の上段に重ねる
-                            newXPos.x += 2.45f * (tabGroup is TabGroup.Combinations ? indexRoles - 1 : indexRoles);
+                            // Combinations はカヴンの上段、Addons はその他の上段、LegacyRoles はニュートラルの上段に重ねる
+                            newXPos.x += 2.45f * (tabGroup switch
+                            {
+                                TabGroup.Combinations => indexRoles - 1,
+                                TabGroup.LegacyRoles => indexRoles - 3,
+                                _ => indexRoles
+                            });
 
-                            if (tabGroup is TabGroup.Addons or TabGroup.Combinations)
+                            if (tabGroup is TabGroup.Addons or TabGroup.Combinations or TabGroup.LegacyRoles)
                                 newXPos.y += 0.6f;
                             else
                                 indexRoles++;
@@ -576,7 +582,7 @@ public static class LobbyViewSettingsPanePatch
                     buttonTab.gameObject.SetActive(true);
                     break;
                 case CustomGameMode.HideAndSeek:
-                    if (tabName is TabGroup.CovenRoles or TabGroup.Combinations or TabGroup.Addons or TabGroup.OtherRoles)
+                    if (tabName is TabGroup.CovenRoles or TabGroup.Combinations or TabGroup.Addons or TabGroup.OtherRoles or TabGroup.LegacyRoles)
                         buttonTab.gameObject.SetActive(false);
                     break;
                 default:
@@ -586,7 +592,8 @@ public static class LobbyViewSettingsPanePatch
                                    or TabGroup.CovenRoles
                                    or TabGroup.Combinations
                                    or TabGroup.Addons
-                                   or TabGroup.OtherRoles)
+                                   or TabGroup.OtherRoles
+                                   or TabGroup.LegacyRoles)
                         buttonTab.gameObject.SetActive(false);
                     break;
             }
@@ -639,6 +646,7 @@ public static class LobbyViewSettingsPanePatch
                 case TabGroup.Combinations:
                 case TabGroup.Addons:
                 case TabGroup.OtherRoles:
+                case TabGroup.LegacyRoles:
                     DrawRoles(__instance, tab);
                     break;
             }
@@ -804,6 +812,7 @@ public static class LobbyViewSettingsPanePatch
             TabGroup.Combinations => (Color)CombinationRoles.TabColor32,
             TabGroup.Addons => new(1f, 0f, 1f),
             TabGroup.OtherRoles => new(0.4f, 0.4f, 0.4f),
+            TabGroup.LegacyRoles => new(0.6f, 0.6f, 0.6f),
             _ => new(0.3f, 0.3f, 0.3f)
         };
         Color roleColorHeaderRole = tabName.GetTabColor();
@@ -851,7 +860,7 @@ public static class LobbyViewSettingsPanePatch
                 if (!data && option is TextOptionItem toi)
                 {
                     CategoryHeaderRoleVariant categoryHeaderRoleVariant = Object.Instantiate(viewSettings.categoryHeaderRoleOrigin, viewSettings.settingsContainer);
-                    categoryHeaderRoleVariant.SetHeader(tabName is TabGroup.ImpostorRoles ? StringNames.ImpostorRolesHeader : StringNames.CrewmateRolesHeader, 61);
+                    categoryHeaderRoleVariant.SetHeader(tabName is TabGroup.ImpostorRoles || realName == $"TabGroup.{TabGroup.ImpostorRoles}" ? StringNames.ImpostorRolesHeader : StringNames.CrewmateRolesHeader, 61);
                     categoryHeaderRoleVariant.name = realName;
 
                     categoryHeaderRoleVariant.Title.text = titleName;
@@ -951,7 +960,7 @@ public static class LobbyViewSettingsPanePatch
                             int chanceAddOnPerGame = Options.CustomAdtRoleSpawnRate.TryGetValue(role, out IntegerOptionItem valueAddOnOpt) ? valueAddOnOpt.GetInt() : 0;
                             int numPerGame = Options.CustomRoleCounts.TryGetValue(role, out OptionItem valueInt) ? valueInt.GetInt() : 0;
 
-                            viewSettingsInfoPanelRoleVariant.SetInfo(titleName, numPerGame, chancePerGame, 61, option.NameColor, RoleManager.Instance.AllRoles[0].RoleIconSolid /*<- Role Icons sets here*/, tabName is not TabGroup.ImpostorRoles, roleDisabled);
+                            viewSettingsInfoPanelRoleVariant.SetInfo(titleName, numPerGame, chancePerGame, 61, option.NameColor, RoleManager.Instance.AllRoles[0].RoleIconSolid /*<- Role Icons sets here*/, tabName is TabGroup.LegacyRoles ? !(role.IsImpostor() || role.IsMadmate()) : tabName is not TabGroup.ImpostorRoles, roleDisabled);
 
                             if (roleDisabled)
                             {

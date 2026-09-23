@@ -8,7 +8,7 @@ namespace EndKnot;
 // so the menu can be rolled back at runtime without touching the Model (OptionItem) at all.
 //
 // Scope: the two-pane layout only ever intercepts the six role tabs
-// (TabGroup.ImpostorRoles .. TabGroup.OtherRoles). Settings tabs (System/Game/Task) and the
+// (TabGroup.ImpostorRoles .. TabGroup.LegacyRoles). Settings tabs (System/Game/Task) and the
 // PresetExplorer always fall through to the existing renderer — they are flat top-level option
 // groups with no Parent/Children master-detail structure.
 public static class NewRoleMenuState

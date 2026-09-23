@@ -122,7 +122,7 @@ public static class RoleMenuTabBar
     {
         try
         {
-            bool isRoleTab = tab is >= TabGroup.ImpostorRoles and <= TabGroup.OtherRoles;
+            bool isRoleTab = tab is >= TabGroup.ImpostorRoles and <= TabGroup.LegacyRoles;
 
             // World position of the button center (button.transform.position).
             // We drive chrome from world coords so non-uniform parent scale doesn't matter.
@@ -229,10 +229,10 @@ public static class RoleMenuTabBar
                 ModGameOptionsMenu.Track(ulGo);
             }
 
-            // ---- vertical divider between role tabs and system tab (idx == 6) ----
-            if (idx == 6 && orderedTabs.Count > idx)
+            // ---- vertical divider between role tabs and system tab (idx == number of role tabs) ----
+            if (idx == orderedTabs.Count(t => t is >= TabGroup.ImpostorRoles and <= TabGroup.LegacyRoles) && orderedTabs.Count > idx)
             {
-                // x = midpoint between previous tab (idx 5) and this tab (idx 6)
+                // x = midpoint between the last role tab (idx - 1) and this tab (idx)
                 float prevX = idx > 0
                     ? (-(orderedTabs.Count - 1) * NewRoleMenuLayout.TopTabStepX / 2f) + ((idx - 1) * NewRoleMenuLayout.TopTabStepX)
                     : btnWorld.x;
