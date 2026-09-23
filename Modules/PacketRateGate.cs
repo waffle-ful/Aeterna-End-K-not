@@ -186,6 +186,8 @@ public static class PacketRateGate
                 // 「キックされずに生き残った窓」でも混入を捕まえられる。
                 KickRiskDetector.Scan(msg, used, usedLen);
             }
+            else
+                InboundRing.NoteUnreliableSend(msg); // 本数と大分類だけ (コピー無し)
 
             EarlyWarning.OnPacket("Chokepoint", msg.Length, msg.Length, msg.SendOption.ToString());
         }

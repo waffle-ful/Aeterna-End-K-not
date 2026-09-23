@@ -51,6 +51,7 @@ internal static class OnGameJoinedPatch
     public static void Postfix(AmongUsClient __instance)
     {
         JoiningGame = true;
+        InboundRing.OnGameJoined();
 
         // 自動再ホスト直後などシーン再構築中は AmongUsClient.Instance / Main.GameTimer / SoundManager 等が
         // 一過性に null (fake-null) になり、無ガードの raw deref (例: L`if (AmongUsClient.Instance.AmHost)`) が
@@ -565,6 +566,10 @@ internal static class DisconnectInternalPatch
             Logger.Warn($"reason={reason} stringReason={stringReason} {dump}", "PacketRateGate");
             HealthLog.NoteAnom($"DCRING reason={reason} {dump}");
         }
+        catch { }
+
+        // 受信側と Unreliable 送信は DCRING に写らないので隣に残す (ロビー作成 +14 秒の無送信キックの切り分け用)。
+        try { HealthLog.NoteAnom($"DCRX reason={reason} {InboundRing.Describe()}"); }
         catch { }
     }
 }
