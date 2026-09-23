@@ -65,8 +65,9 @@ public class CrashDetector {
                 Log.i(TAG, "already recorded exit info at " + exitInfo.getTimestamp() + " (reason " + exitInfo.getReason() + ")");
                 continue;
             }
-            writeExitInfo(context, exitInfo, outputFile);
-            Log.i(TAG, "wrote exit info (reason " + exitInfo.getReason() + " at " + exitInfo.getTimestamp() + ") to " + outputFile.getAbsolutePath());
+            if (writeExitInfo(context, exitInfo, outputFile)) {
+                Log.i(TAG, "wrote exit info (reason " + exitInfo.getReason() + " at " + exitInfo.getTimestamp() + ") to " + outputFile.getAbsolutePath());
+            }
         }
     }
 
@@ -129,7 +130,7 @@ public class CrashDetector {
     }
 
     @RequiresApi(api = Build.VERSION_CODES.R)
-    private static void writeExitInfo(Context context, ApplicationExitInfo exitInfo, File outputFile) {
+    private static boolean writeExitInfo(Context context, ApplicationExitInfo exitInfo, File outputFile) {
         try (var writer = new FileWriter(outputFile, false)) {
             writer.write("FusionCore Exit Log:\n");
             writer.write(buildDeviceData(context));
@@ -140,14 +141,14 @@ public class CrashDetector {
             if (exitInfo.getReason() == ApplicationExitInfo.REASON_CRASH) {
                 writer.write("Note: Java runtime crashes do not populate ApplicationExitInfo trace streams.\n");
                 writer.write("Description: " + exitInfo.getDescription() + "\n");
-                return;
+                return true;
             }
 
             var inputStream = exitInfo.getTraceInputStream();
             if (inputStream == null) {
                 writer.write("failed to get trace input stream\n");
                 Log.e(TAG, "No trace input stream");
-                return;
+                return true;
             }
 
             byte[] rawBytes;
@@ -159,13 +160,13 @@ public class CrashDetector {
                 if (read < 0) {
                     writer.write("failed to read trace input stream\n");
                     Log.e(TAG, "No trace input stream bytes");
-                    return;
+                    return true;
                 }
             }
             if (rawBytes == null || rawBytes.length == 0) {
                 writer.write("failed to read trace input stream\n");
                 Log.e(TAG, "No trace input stream bytes");
-                return;
+                return true;
             }
 
             writer.write("=".repeat(50) + "\n");
@@ -178,6 +179,7 @@ public class CrashDetector {
                 var tombstoneDecoded = dev.allofus.fusioncore.proto.TombstoneProtos.Tombstone.parseFrom(rawBytes);
                 writer.write(tombstoneDecoded.toString());
             }
+            return true;
 
         } catch (Exception e) {
             Log.e(TAG, "failed to extract exit info data", e);
@@ -185,6 +187,7 @@ public class CrashDetector {
             if (outputFile.delete()) {
                 Log.i(TAG, "removed partial exit info file " + outputFile.getName());
             }
+            return false;
         }
     }
 
