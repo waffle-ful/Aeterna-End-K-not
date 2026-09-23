@@ -27,8 +27,14 @@ public final class GameClassLoaderFactory {
      * Creates a class loader for the game described by {@code info}.
      * Must be called before anything mutates the shared {@link ApplicationInfo}
      * (for example the native library directory override applied at runtime).
+     * <p>
+     * {@code preferredLibDirs} are searched for native libraries before the game's own
+     * directory, in the given order. {@link dalvik.system.BaseDexClassLoader#findLibrary}
+     * returns the first directory that holds the file at lookup time, so a launcher-provided
+     * {@code libmain.so} or a patched {@code libil2cpp.so} wins over the game's copy, and a
+     * missing file simply falls through to the game's original.
      */
-    public static ClassLoader create(ApplicationInfo info, ClassLoader parent) {
+    public static ClassLoader create(ApplicationInfo info, ClassLoader parent, File... preferredLibDirs) {
         List<String> dexPaths = new ArrayList<>();
         if (info.sourceDir != null && !info.sourceDir.isEmpty()) {
             dexPaths.add(info.sourceDir);
@@ -45,7 +51,26 @@ public final class GameClassLoaderFactory {
         }
 
         String dexPath = String.join(File.pathSeparator, dexPaths);
-        String librarySearchPath = info.nativeLibraryDir;
+        List<String> libDirs = new ArrayList<>();
+        if (preferredLibDirs != null) {
+            for (File dir : preferredLibDirs) {
+                if (dir == null) {
+                    continue;
+                }
+                // DexPathList keeps only the entries that are directories when the loader is
+                // built and silently drops the rest, so a directory that is filled later (the
+                // code cache right after an install) must already exist here.
+                if (!dir.isDirectory() && !dir.mkdirs()) {
+                    Log.w(TAG, "Native library directory unavailable, skipping: " + dir);
+                    continue;
+                }
+                libDirs.add(dir.getAbsolutePath());
+            }
+        }
+        if (info.nativeLibraryDir != null && !info.nativeLibraryDir.isEmpty()) {
+            libDirs.add(info.nativeLibraryDir);
+        }
+        String librarySearchPath = String.join(File.pathSeparator, libDirs);
 
         Log.i(TAG, "Creating game class loader: dexPath=" + dexPath
                 + " librarySearchPath=" + librarySearchPath

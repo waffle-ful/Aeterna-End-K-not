@@ -31,7 +31,6 @@ import dev.allofus.fusioncore.tools.FusionConfig;
 import dev.allofus.fusioncore.tools.GameClassLoaderFactory;
 import dev.allofus.fusioncore.tools.LibUnityBundle;
 import dev.allofus.fusioncore.tools.LibUnityDownloader;
-import dev.allofus.fusioncore.tools.NativeLibraryManager;
 import dev.allofus.fusioncore.tools.Utilities;
 import dev.allofus.fusioncore.tools.PluginInstaller;
 import dev.allofus.fusioncore.tools.VersionLookup;
@@ -100,7 +99,13 @@ public class BootstrapActivity extends AppCompatActivity {
         ClassLoader gameClassLoader;
         try {
             if (sGameClassLoader == null) {
-                sGameClassLoader = GameClassLoaderFactory.create(gameContext.getApplicationInfo(), getClassLoader());
+                // Native library search order: patched libs in code_cache (libunity / libil2cpp),
+                // then the launcher's own libs (libmain), then the game's original directory.
+                // The files in the first two directories are written before the game asks for them.
+                File codeCacheScoped = new File(getApplicationContext().getCodeCacheDir(), targetPackage);
+                File launcherLibDir = new File(getApplicationContext().getApplicationInfo().nativeLibraryDir);
+                sGameClassLoader = GameClassLoaderFactory.create(gameContext.getApplicationInfo(), getClassLoader(),
+                        codeCacheScoped, launcherLibDir);
             }
             gameClassLoader = sGameClassLoader;
             CustomContextWrapper.setGameClassLoader(gameClassLoader);
@@ -334,16 +339,6 @@ public class BootstrapActivity extends AppCompatActivity {
 
     private void initializeFusion(FusionConfig config) {
         Log.i(TAG, "Initializing Fusion for " + config.gamePackageId + " via " + config.gameLauncherName);
-
-        try {
-            NativeLibraryManager.addFusionLibrary("main");
-            NativeLibraryManager.addFusionLibrary("fusion");
-            NativeLibraryManager.addCacheLibrary("il2cpp");
-            NativeLibraryManager.addCacheLibrary("unity");
-            NativeLibraryManager.setupLibraryHooks(config);
-        } catch (Throwable t) {
-            Log.e(TAG, "Failed to initialize Fusion in launcher beforeCall", t);
-        }
     }
 
     private FusionConfig prepareConfig(Context appContext,
@@ -427,20 +422,6 @@ public class BootstrapActivity extends AppCompatActivity {
         setPhaseStatus(getString(R.string.bootstrap_status_installing_plugin));
         if (!PluginInstaller.installBundledPlugins(appContext, bepInExDir)) {
             Log.w(TAG, "Bundled plugin install did not complete; continuing with whatever is in plugins/");
-        }
-
-        setPhaseStatus(getString(R.string.bootstrap_status_registering_libraries));
-        File[] nativeLibs = new File(gameLibDir).listFiles();
-        if (nativeLibs != null) {
-            for (File file : nativeLibs) {
-                String name = file.getName();
-                if (name.startsWith("lib") && name.endsWith(".so") && name.length() > 6) {
-                    String extractedName = name.substring(3, name.length() - 3);
-                    NativeLibraryManager.addGameLibrary(extractedName);
-                }
-            }
-        } else {
-            Log.e(TAG, "Failed to list game native libraries! BepInEx may not work correctly.");
         }
 
         return new FusionConfig(
