@@ -16,7 +16,6 @@
     <string name="bootstrap_status_detecting_version">正在偵測 Unity 版本…</string>
     <string name="bootstrap_status_downloading_libunity">正在下載未剝離的 libunity…</string>
     <string name="bootstrap_status_extracting_runtime">正在解壓縮執行時檔案…</string>
-    <string name="bootstrap_status_registering_libraries">正在註冊原生函式庫…</string>
     <string name="bootstrap_status_installing_hooks">正在安裝鉤子…</string>
     <string name="bootstrap_status_launching">正在啟動遊戲…</string>
     <string name="bootstrap_status_error">啟動失敗</string>
