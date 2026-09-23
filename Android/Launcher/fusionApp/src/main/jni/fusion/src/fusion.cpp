@@ -155,6 +155,7 @@ extern "C" [[maybe_unused]] bool fusion_bootstrap_from_libmain(JNIEnv *env)
         log(LogLevel::ERROR, TAG, "Failed to initialize SafeHook");
         return false;
     }
+    safehook_probe_code_patch();
 
     log(LogLevel::INFO, TAG, "Installing il2cpp hooks...");
     il2cpp_install_init_hook(il2cpp_init_hook);

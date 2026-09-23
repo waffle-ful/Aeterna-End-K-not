@@ -7,6 +7,9 @@
 #include <sys/mman.h>
 #include <bits/sysconf.h>
 #include <mutex>
+#include <cstdio>
+#include <cstring>
+#include <string>
 
 #define TAG "SafeHook"
 
@@ -409,4 +412,69 @@ void safehook_destroy_hook(void *target)
         log_format(LogLevel::INFO, TAG, "Successfully unhooked target at offset 0x{:X}",
                           reinterpret_cast<uintptr_t>(offset));
     }
+}
+
+// Returns the permission string of the mapping that contains `address` (e.g. "rw-p"), or "none".
+static std::string mapping_permissions(uintptr_t address)
+{
+    FILE *maps = fopen("/proc/self/maps", "r");
+    if (!maps)
+    {
+        return "?";
+    }
+
+    std::string result = "none";
+    char line[512];
+    while (fgets(line, sizeof(line), maps))
+    {
+        unsigned long long start = 0, end = 0;
+        char permissions[8] = {};
+        if (sscanf(line, "%llx-%llx %7s", &start, &end, permissions) == 3 && start <= address && address < end)
+        {
+            result = permissions;
+            break;
+        }
+    }
+
+    fclose(maps);
+    return result;
+}
+
+bool safehook_probe_code_patch()
+{
+    auto *region = static_cast<uint8_t *>(mmap(nullptr, page_size * 2, PROT_READ | PROT_WRITE,
+                                               MAP_PRIVATE | MAP_ANONYMOUS, -1, 0));
+    if (region == MAP_FAILED)
+    {
+        log_format(LogLevel::WARN, TAG, "CodePatch boundary probe skipped: mmap failed ({})", strerror(errno));
+        return false;
+    }
+
+    uint8_t *neighbor = region + page_size;
+    auto neighbor_address = reinterpret_cast<uintptr_t>(neighbor);
+    uint8_t buffer[16];
+    for (size_t i = 0; i < sizeof(buffer); ++i)
+    {
+        buffer[i] = static_cast<uint8_t>(0xA0 + i);
+    }
+
+    // Case 1: the patch ends exactly on the page boundary. The neighbor page must be left untouched.
+    DobbyCodePatch(neighbor - sizeof(buffer), buffer, sizeof(buffer));
+    std::string exact_end = mapping_permissions(neighbor_address);
+    bool exact_end_ok = exact_end == "rw-p";
+
+    // Case 2: the patch crosses the boundary by 4 bytes. The neighbor page must be patched and end up executable.
+    DobbyCodePatch(neighbor - (sizeof(buffer) - 4), buffer, sizeof(buffer));
+    std::string crossing = mapping_permissions(neighbor_address);
+    bool crossing_written = memcmp(neighbor, buffer + (sizeof(buffer) - 4), 4) == 0;
+    bool crossing_ok = crossing == "r-xp" && crossing_written;
+
+    bool ok = exact_end_ok && crossing_ok;
+    log_format(ok ? LogLevel::INFO : LogLevel::ERROR, TAG,
+               "CodePatch boundary probe: exact-end neighbor={} ({}), crossing neighbor={} written={} ({}) -> {}",
+               exact_end, exact_end_ok ? "ok" : "neighbor lost write access", crossing, crossing_written,
+               crossing_ok ? "ok" : "crossing patch not applied", ok ? "PASS" : "FAIL");
+
+    munmap(region, page_size * 2);
+    return ok;
 }
