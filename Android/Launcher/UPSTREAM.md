@@ -22,3 +22,5 @@ git subtree pull --prefix=Android/Launcher https://github.com/All-Of-Us-Mods/Fus
   build metadata). Anything that upstream could take back should be sent there as a pull request.
 - `.github/workflows/build.yml` from upstream is intentionally removed here; it does not apply
   to a subtree inside this repository.
+- `fusionApp/src/main/jniLibs/arm64-v8a/libdobby.so` is rebuilt from Dobby `f4643b8d` with the
+  page-boundary fix in `third_party/dobby/` (see its README); upstream ships an unpatched binary.

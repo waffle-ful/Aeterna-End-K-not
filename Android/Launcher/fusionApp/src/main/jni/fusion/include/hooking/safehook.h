@@ -25,4 +25,8 @@ void *safehook_create_hook(void *target_function, void *hook_function, bool use_
 // Destroys the hook created by safehook_create_hook, restoring the original function.
 void safehook_destroy_hook(void *target);
 
+// Verifies that DobbyCodePatch only touches the pages a patch actually covers. A patch that ends exactly
+// on a page boundary must not change the permissions of the following page. Logs the result; returns true on PASS.
+bool safehook_probe_code_patch();
+
 #endif //FUSIONCORE_SAFEHOOK_H
