@@ -1023,7 +1023,7 @@ public static class BedWars
             [BedWarsTeam.Blue] = new(new(-17.47f, -1.09f), SystemTypes.Cockpit, new(-19.86f, 0.78f), new(-22.49f, -0.1f), new(-22.1f, -1.15f)),
             [BedWarsTeam.Yellow] = new(new(6.04f, -10.45f), SystemTypes.Security, new(8.59f, -10.85f), new(8.4f, -12.47f), new(10.29f, -16.15f)),
             [BedWarsTeam.Red] = new(new(33.7f, -0.88f), SystemTypes.CargoBay, new(38.41f, 1.29f), new(38.41f, -0.69f), new(37.37f, -3.46f)),
-            [BedWarsTeam.Green] = new(new(4.54f, 15.61f), SystemTypes.MeetingRoom, new(12f, 9.11f), new(12.66f, 6.29f), new(16.11f, 15.26f))
+            [BedWarsTeam.Green] = new(new(4.54f, 15.61f), SystemTypes.MeetingRoom, new(3.4f, 9f), new(3.7f, 6.6f), new(16.11f, 15.26f))
         },
         [MapNames.Fungle] = new()
         {
