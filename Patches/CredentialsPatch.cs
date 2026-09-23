@@ -55,6 +55,8 @@ internal static class PingTrackerUpdatePatch
         if (now == LastUpdate) return false;
         LastUpdate = now;
 
+        if (string.IsNullOrEmpty(Main.CredentialsText)) VersionShowerStartPatch.BuildCredentialsText();
+
         bool inGame = GameStates.InGame;
         Sb.Clear()
             .Append(GameStates.IsLobby ? "\r\n<size=2>" : "<size=1.5>")
@@ -143,7 +145,9 @@ internal static class PingTrackerUpdatePatch
 [HarmonyPatch(typeof(VersionShower), nameof(VersionShower.Start))]
 internal static class VersionShowerStartPatch
 {
-    private static void Postfix(VersionShower __instance)
+    // Calamity メニューはタイトルの VersionShower を Start 前に伏せるので、Start の Postfix だけに
+    // 頼るとクレジットが空のままになる。PingTracker 側からも未生成なら組み立てる。
+    public static void BuildCredentialsText()
     {
 #pragma warning disable CS0162 // Unreachable code detected
         // ReSharper disable once HeuristicUnreachableCode
@@ -156,6 +160,11 @@ internal static class VersionShowerStartPatch
                                $" <size=70%><color=#8c8c8c>based on</color> <color=#00ffcc>Endless Host Roles</color> <color=#8c8c8c>by</color> <color=#c8c800>Gurge44</color></size>";
 
         if (Main.IsAprilFools) Main.CredentialsText = "<color=#00bfff>Endless Madness</color> v11.45.14 <color=#a54aff>by</color> <color=#ffff00>No one</color>";
+    }
+
+    private static void Postfix(VersionShower __instance)
+    {
+        BuildCredentialsText();
 
         ErrorText.Create(__instance.text);
 
