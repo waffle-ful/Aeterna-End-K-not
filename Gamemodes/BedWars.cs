@@ -897,12 +897,12 @@ public static class BedWars
         {
             Suffix.Clear();
 
-            if (NameNotifyManager.GetNameNotify(pc, out string notify) && notify.Length > 0)
-                Suffix.AppendLine(notify);
+            bool hasNotify = NameNotifyManager.GetNameNotify(pc, out string notify) && notify.Length > 0;
+            if (hasNotify) Suffix.AppendLine(notify);
 
             if (!pc.IsAlive()) return $"<#ffffff>{Suffix.ToString().Trim()}</color>";
 
-            Suffix.AppendLine(IsGracePeriod ? Translator.GetString("Bedwars.GracePeriod") : GetHealthInfo());
+            Suffix.AppendLine(IsGracePeriod ? GetGracePeriodText(hasNotify) : GetHealthInfo());
 
             var topLines = 12;
             
@@ -949,6 +949,16 @@ public static class BedWars
             }
 
             return $"<#ffffff>{Info.ToString().Trim()}</color>";
+        }
+
+        // 通知 (開始直後の部屋一覧など) と同時に出す間は見出しだけにして、名前欄の予算に収める。
+        private static string GetGracePeriodText(bool headingOnly)
+        {
+            string text = Translator.GetString("Bedwars.GracePeriod");
+            if (!headingOnly) return text;
+
+            int br = text.IndexOf('\n');
+            return br < 0 ? text : text[..br] + "</size>";
         }
 
         private string GetArmorInfo()
@@ -1736,23 +1746,24 @@ public static class BedWars
                 if (i++ == SelectedSlot) bottomText = display.Name.Invoke();
             }
 
+            // 名前欄の予算 (NameBudget) に効くので、色タグは短縮形にして枠全体を黒の 1 タグで囲み、
+            // 選択中の区切りだけ白で上書きする。
             while (itemsDisplays.Count < InventorySlots)
-                itemsDisplays.Add(Utils.ColorString(Color.clear, "---"));
+                itemsDisplays.Add("<#0000>---</color>");
 
-            const string baseColor = "<#000000>";
-            
+            const string selectedSeparator = "<#fff>┃</color>";
+
             var finalSb = new StringBuilder();
-            finalSb.Append(baseColor);
-            finalSb.AppendLine("▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁");
-            finalSb.Append("</color>");
+            finalSb.Append("<#000>");
+            finalSb.Append("▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁");
+            finalSb.Append('\n');
             i = 0;
 
             foreach (string itemsDisplay in itemsDisplays)
             {
                 bool selected = i == SelectedSlot || i - 1 == SelectedSlot;
-                if (!selected) finalSb.Append(baseColor);
-                finalSb.Append(selected ? '┃' : '│');
-                if (!selected) finalSb.Append("</color>");
+                if (selected) finalSb.Append(selectedSeparator);
+                else finalSb.Append('│');
                 finalSb.Append(' ');
                 finalSb.Append(itemsDisplay);
                 finalSb.Append(' ');
@@ -1760,15 +1771,14 @@ public static class BedWars
             }
 
             bool lastSelected = i - 1 == SelectedSlot;
-            if (!lastSelected) finalSb.Append(baseColor);
-            finalSb.Append(lastSelected ? '┃' : '│');
-            if (!lastSelected) finalSb.Append("</color>");
-            finalSb.AppendLine(baseColor);
+            if (lastSelected) finalSb.Append(selectedSeparator);
+            else finalSb.Append('│');
+            finalSb.Append('\n');
             finalSb.Append("▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔");
-            finalSb.AppendLine("</color>");
-
-            finalSb.AppendLine();
-            finalSb.Append(Utils.ColorString(Color.white, bottomText));
+            finalSb.Append("</color>\n\n");
+            finalSb.Append("<#fff>");
+            finalSb.Append(bottomText);
+            finalSb.Append("</color>");
 
             return finalSb.ToString();
         }
