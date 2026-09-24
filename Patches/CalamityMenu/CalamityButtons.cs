@@ -66,7 +66,7 @@ public static class CalamityButtons
                 () => { CalamityVisibility.HideMenuContent(); mm.creditsButton.OnClick.Invoke(); }),
 
             ("MainMenu.Calamity.Quit",         -1.6f,
-                () => mm.quitButton.OnClick.Invoke()),
+                () => QuitGame(mm)),
         };
 
         foreach (var (key, y, onClick) in defs)
@@ -90,6 +90,29 @@ public static class CalamityButtons
                 FitCollider(tmp, label);
             }
             catch (Exception e) { Logger.Warn($"RefreshLabels {key}: {e.Message}", "CalamityButtons"); }
+        }
+    }
+
+    // 終了ボタン。Android では Application.Quit の il2cpp ランタイム停止 (常駐スレッドの Abort) が
+    // 未捕捉例外で SIGABRT になり、終了のたびにクラッシュとして記録される。モバイルの vanilla は
+    // 終了ボタン自体を出さないので、Android では設定を書き出してからプロセスを直接落とす。
+    private static void QuitGame(MainMenuManager mm)
+    {
+        if (!OperatingSystem.IsAndroid())
+        {
+            mm.quitButton.OnClick.Invoke();
+            return;
+        }
+
+        try { PlayerPrefs.Save(); }
+        catch (Exception ex) { Logger.Warn($"PlayerPrefs.Save failed before quit: {ex.Message}", "CalamityButtons"); }
+
+        Logger.Info("Quit requested on Android; terminating the process directly", "CalamityButtons");
+        try { System.Diagnostics.Process.GetCurrentProcess().Kill(); }
+        catch (Exception ex)
+        {
+            Logger.Warn($"Process.Kill failed, falling back to Application.Quit: {ex.Message}", "CalamityButtons");
+            mm.quitButton.OnClick.Invoke();
         }
     }
 

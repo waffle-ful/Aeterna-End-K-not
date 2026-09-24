@@ -28,6 +28,7 @@ import dev.allofus.fusioncore.tools.CustomContextWrapper;
 import dev.allofus.fusioncore.tools.FallbackResources;
 import dev.allofus.fusioncore.tools.FusionConfig;
 import dev.allofus.fusioncore.tools.GameClassLoaderFactory;
+import dev.allofus.fusioncore.tools.BootTimeline;
 import dev.allofus.fusioncore.tools.LogBundle;
 import dev.allofus.fusioncore.tools.Utilities;
 import dev.allofus.fusioncore.tools.ItchAuth;
@@ -69,6 +70,7 @@ public class BootstrapActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_bootstrap);
+        BootTimeline.mark("bootstrap");
         Utilities.initStorage(this);
         titleView = findViewById(R.id.bootstrap_title);
         statusView = findViewById(R.id.bootstrap_status);
@@ -124,6 +126,7 @@ public class BootstrapActivity extends AppCompatActivity {
             }
             gameClassLoader = sGameClassLoader;
             CustomContextWrapper.setGameClassLoader(gameClassLoader);
+            BootTimeline.mark("classloader");
         } catch (Exception e) {
             failAndFinish("Failed to create class loader for target package: " + targetPackage, e);
             return;
@@ -193,12 +196,15 @@ public class BootstrapActivity extends AppCompatActivity {
         } catch (Exception e) {
             Log.e(TAG, "Failed to install base hooks", e);
         }
+        BootTimeline.mark("hooks");
 
         var className = launcherComponent.getClassName();
 
         try {
             setPhaseStatus(getString(R.string.bootstrap_status_launching));
             initializeFusion(config);
+            BootTimeline.mark("launch");
+            BootTimeline.publish();
             runOnMainThread(() -> {
                 try {
                     var intent = new Intent(this, launcherClass);
@@ -340,6 +346,7 @@ public class BootstrapActivity extends AppCompatActivity {
             applyGlobalMetadataOverride(dataOnSdCard, copiedData);
         }
 
+        BootTimeline.mark("assets");
         setPhaseStatus(getString(R.string.bootstrap_status_detecting_version));
         String version = VersionLookup.TryLookup(copiedData);
         if (version == null) {
@@ -358,6 +365,7 @@ public class BootstrapActivity extends AppCompatActivity {
             }
         }
 
+        BootTimeline.mark("version");
         setPhaseStatus(getString(R.string.bootstrap_status_extracting_runtime));
 
         File dotnetDir = new File(appContext.getCodeCacheDir(), "dotnet");
@@ -366,10 +374,12 @@ public class BootstrapActivity extends AppCompatActivity {
         Utilities.extractZipFromAssets(appContext, "BepInEx-arm64.zip", bepInExDir);
         Utilities.extractZipFromAssets(appContext, "dotnet-arm64.zip", dotnetDir);
 
+        BootTimeline.mark("runtime");
         setPhaseStatus(getString(R.string.bootstrap_status_installing_plugin));
         if (!PluginInstaller.installBundledPlugins(appContext, bepInExDir)) {
             Log.w(TAG, "Bundled plugin install did not complete; continuing with whatever is in plugins/");
         }
+        BootTimeline.mark("plugin");
 
         // The itch.io token reaches the game only through this process's environment: it is never
         // put into the config or an Intent, and no plaintext copy stays on disk.
@@ -377,6 +387,7 @@ public class BootstrapActivity extends AppCompatActivity {
         if (!ItchAuth.exportToEnvironment(appContext, targetPackage)) {
             Log.i(TAG, "No itch.io token stored; the game signs in on its own");
         }
+        BootTimeline.mark("token");
 
         return new FusionConfig(
                 targetPackage,
