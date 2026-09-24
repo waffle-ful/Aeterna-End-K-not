@@ -7,7 +7,6 @@
 
 struct FusionConfig {
     bool initialized;
-    bool useOriginalLibUnity;
     std::string gameLibraryDirectory;
     std::string appLibraryDirectory;
     std::string appDataDirectory;

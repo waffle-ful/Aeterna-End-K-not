@@ -8,7 +8,6 @@
 #include <hooking/il2cpp.h>
 #include <hooking/safehook.h>
 #include <hooking/allocator.h>
-#include <hooking/libunity.h>
 #include <dotnet.h>
 #include <external/dobby.h>
 #include <utilities/java.h>
@@ -27,19 +26,8 @@ static bool execute_fusion_config(const FusionConfig &config)
     fs::path codeCache(config.codeCacheDirectory);
 
     fs::path libIl2Cpp = gameLibsPath / "libil2cpp.so";
-    fs::path libUnity;
-
-    if (config.useOriginalLibUnity)
-    {
-        libUnity = gameLibsPath / "libunity.so";
-    }
-    else
-    {
-        libUnity = codeCache / "libunity.so";
-    }
-
-    std::string libUnityPath = libUnity.string();
-    try_hook_libunity(libUnityPath, (gameLibsPath / "libunity.so").string());
+    // The game's own libunity is used unmodified.
+    std::string libUnityPath = (gameLibsPath / "libunity.so").string();
 
     fs::path patchedLibIl2Cpp = codeCache / "libil2cpp.so";
     allocate_setup_injected(libIl2Cpp.c_str(), patchedLibIl2Cpp.c_str(), 1024 * 1024);

@@ -25,8 +25,6 @@ class FusionConfig(
     @JvmField var unityDataDirectory: String,
     /** The Unity version of the game. */
     @JvmField var unityVersion: String,
-    /** Whether to use the original libunity.so from the game or the one provided by Fusion. */
-    @JvmField var useOriginalLibUnity: Boolean,
     /** Variables to encode in the FUSION_VARIABLES environment variable. */
     @JvmField var fusionVariables: Array<String>,
     /** Auxiliary folders to load BepInEx plugins from. */
