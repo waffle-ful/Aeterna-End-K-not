@@ -1658,8 +1658,11 @@ public static class GameSettingMenuPatch
 {
     public static readonly System.Collections.Generic.List<GameObject> GMButtons = [];
 
-    private static readonly Vector3 ButtonPositionLeft = new(-3.9f, -0.55f, 0f);
-    private static readonly Vector3 ButtonPositionRight = new(-2.4f, -0.55f, 0f);
+    private static readonly Vector3 ButtonPositionLeft = new(-3.9f, -0.44f, 0f);
+    private static readonly Vector3 ButtonPositionRight = new(-2.4f, -0.44f, 0f);
+    // 13 buttons fill 7 rows; the preset selector takes the empty right slot of the last row, so the
+    // row pitch has to keep that row above the panel's bottom edge.
+    private const float ButtonRowStep = 0.27f;
 
     private static readonly Vector3 ButtonSize = new(0.45f, 0.35f, 1f);
 
@@ -1777,7 +1780,7 @@ public static class GameSettingMenuPatch
             else
             {
                 // ReSharper disable once PossibleLossOfFraction
-                Vector3 offset = new(0f, (0.3f * (((int)tab + 1) / 2)), 0f);
+                Vector3 offset = new(0f, (ButtonRowStep * (((int)tab + 1) / 2)), 0f);
                 button.transform.localPosition = (((int)tab + 1) % 2 == 0 ? ButtonPositionLeft : ButtonPositionRight) - offset;
                 button.transform.localScale = ButtonSize;
             }
@@ -1914,7 +1917,7 @@ public static class GameSettingMenuPatch
 
             preset = ModGameOptionsMenu.Track(Object.Instantiate(modeValueTemplate, parentLeftPanel));
 
-            preset.transform.localPosition = new(-1.8f, 0f, -2f);
+            preset.transform.localPosition = new(-1.8f, 0.06f, -2f);
             preset.transform.localScale = new(0.65f, 0.63f, 1f);
             var renderer = preset.GetComponentInChildren<SpriteRenderer>();
             renderer.color = Color.white;
@@ -1925,7 +1928,7 @@ public static class GameSettingMenuPatch
             presetTmp.SetText(Translator.GetString($"Preset_{OptionItem.CurrentPreset + 1}"));
             PresetValueText = presetTmp; // keep a handle so ReloadUI can refresh the label without rebuilding the UI
 
-            float size = !russian ? 2.45f : 1.45f;
+            float size = !russian ? 2.0f : 1.45f;
             presetTmp.fontSizeMax = presetTmp.fontSizeMin = size;
 
 
