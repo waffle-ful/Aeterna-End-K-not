@@ -30,6 +30,7 @@ import dev.allofus.fusioncore.tools.FusionConfig;
 import dev.allofus.fusioncore.tools.GameClassLoaderFactory;
 import dev.allofus.fusioncore.tools.LogBundle;
 import dev.allofus.fusioncore.tools.Utilities;
+import dev.allofus.fusioncore.tools.ItchAuth;
 import dev.allofus.fusioncore.tools.PluginInstaller;
 import dev.allofus.fusioncore.tools.VersionLookup;
 
@@ -368,6 +369,13 @@ public class BootstrapActivity extends AppCompatActivity {
         setPhaseStatus(getString(R.string.bootstrap_status_installing_plugin));
         if (!PluginInstaller.installBundledPlugins(appContext, bepInExDir)) {
             Log.w(TAG, "Bundled plugin install did not complete; continuing with whatever is in plugins/");
+        }
+
+        // The itch.io token reaches the game only through this process's environment: it is never
+        // put into the config or an Intent, and no plaintext copy stays on disk.
+        ItchAuth.reconcile(appContext, targetPackage);
+        if (!ItchAuth.exportToEnvironment(appContext, targetPackage)) {
+            Log.i(TAG, "No itch.io token stored; the game signs in on its own");
         }
 
         return new FusionConfig(

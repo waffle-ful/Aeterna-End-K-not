@@ -100,14 +100,25 @@ public class SelectorActivity extends AppCompatActivity {
             if (isFinishing() || isDestroyed()) {
                 return;
             }
-            targetInstalled = populateHome();
-            boolean signedIn = refreshItchStatus();
-            CrashDetector.init(this);
-            // Launch by itself only once an itch.io account is attached; otherwise wait for
-            // the player to sign in or to tap the card.
-            if (targetInstalled && signedIn) {
-                startCountdown();
-            }
+            // Consume a rejection the game left behind and encrypt any plaintext token from an
+            // earlier build before the row reports the sign-in state. The one-time migration
+            // touches the Keystore and syncs a file, so it stays off the main thread.
+            new Thread(() -> {
+                ItchAuth.reconcile(this, TARGET_PACKAGE);
+                runOnUiThread(() -> {
+                    if (isFinishing() || isDestroyed()) {
+                        return;
+                    }
+                    targetInstalled = populateHome();
+                    boolean signedIn = refreshItchStatus();
+                    CrashDetector.init(this);
+                    // Launch by itself only once an itch.io account is attached; otherwise wait for
+                    // the player to sign in or to tap the card.
+                    if (targetInstalled && signedIn) {
+                        startCountdown();
+                    }
+                });
+            }, "itch-reconcile").start();
         }, 100);
     }
 
