@@ -5,7 +5,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="?attr/colorSurfaceContainerLowest"
+    android:background="@color/ek_soot"
     android:fitsSystemWindows="true">
 
     <com.google.android.material.appbar.AppBarLayout
@@ -88,8 +88,9 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="4dp"
-                            android:textAppearance="?attr/textAppearanceLabelSmall"
-                            android:textColor="?attr/colorOutline"
+                            android:textAppearance="?attr/textAppearanceLabelMedium"
+                            android:fontFamily="monospace"
+                            android:textColor="@color/ek_slate_dim"
                             tools:text="Version 1.0.0 (100)" />
                     </LinearLayout>
                 </LinearLayout>
@@ -198,6 +199,7 @@
                                     android:layout_weight="1"
                                     android:inputType="none"
                                     android:enabled="false"
+                                    android:textColor="@color/ek_slate_dim"
                                     android:text="@string/settings_automatic" />
                             </com.google.android.material.textfield.TextInputLayout>
                         </LinearLayout>
