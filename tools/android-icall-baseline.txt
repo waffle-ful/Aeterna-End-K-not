@@ -1,0 +1,25 @@
+# Unity internal calls the game's stripped libunity.so does not provide, reached only from mod code
+# that does not run on Android. Format: <ICall> | <top-level mod type>. Checked by
+# tools/check-android-icalls.ps1; a pair missing here fails the check.
+
+# Streaming overlays: their components are not added on Android (Main.Load).
+UnityEngine.GUIStyle::set_clipping | EndKnot.Modules.YouTubeChat.YouTubeChatBubble
+UnityEngine.GUIStyle::set_fixedWidth | EndKnot.Modules.YouTubeChat.YouTubeChatBubble
+UnityEngine.GUIStyle::set_richText | EndKnot.Modules.YouTubeChat.YouTubeChatBubble
+UnityEngine.GUIStyle::set_fixedWidth | EndKnot.Modules.Setup.StreamSetupGUI
+UnityEngine.GUIStyle::set_richText | EndKnot.Modules.Setup.StreamSetupGUI
+UnityEngine.GUIStyleState::get_background | EndKnot.Modules.Setup.StreamSetupGUI
+UnityEngine.GUIStyle::set_richText | EndKnot.Modules.Audience.AudienceCutscene
+UnityEngine.GUIStyle::set_richText | EndKnot.Modules.StreamOverlay.AudienceInfoBubble
+UnityEngine.GUIStyle::set_richText | EndKnot.Modules.StreamOverlay.DevBuildBanner
+UnityEngine.GUIStyle::set_richText | EndKnot.Modules.StreamOverlay.LobbyCodeBubble
+
+# Texture slimming is not scheduled on Android (MainMenuManagerPatch).
+UnityEngine.Graphics::CopyTexture_Full | EndKnot.Modules.TextureSlimmer
+
+# Memory census counters: each read is wrapped and reports "?" when the engine lacks it.
+UnityEngine.Profiling.Profiler::GetAllocatedMemoryForGraphicsDriver | EndKnot.Modules.MemCensus
+UnityEngine.Profiling.Profiler::GetMonoHeapSizeLong | EndKnot.Modules.MemCensus
+UnityEngine.Profiling.Profiler::GetTotalReservedMemoryLong | EndKnot.Modules.MemCensus
+UnityEngine.Profiling.Profiler::GetTotalUnusedReservedMemoryLong | EndKnot.Modules.MemCensus
+Unity.Profiling.ProfilerRecorder::GetValid_Injected | EndKnot.Modules.MemCensus
