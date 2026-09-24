@@ -1462,7 +1462,7 @@ internal static class ChatCommands
         PlayerControl pc = id.GetPlayer();
         if (pc == null) return;
 
-        Color color = ColorUtility.TryParseHtmlString($"#{args[2].ToLower()}", out Color c) ? c : Color.red;
+        Color color = HtmlColor.TryParse($"#{args[2].ToLower()}", out Color c) ? c : Color.red;
         string tag = Utils.ColorString(color, string.Join(' ', args[3..]) + " ");
         PrivateTagManager.AddTag(pc.FriendCode, tag);
 
@@ -6228,7 +6228,7 @@ internal static class ChatCommands
         Main.HideName.Value = args.Length > 1 ? string.Join(' ', args[1..]) : Main.HideName.DefaultValue.ToString();
 
         GameStartManagerPatch.GameStartManagerStartPatch.HideName.text =
-            ColorUtility.TryParseHtmlString(Main.HideColor.Value, out _)
+            HtmlColor.TryParse(Main.HideColor.Value, out _)
                 ? $"<color={Main.HideColor.Value}>{Main.HideName.Value}</color>"
                 : $"<color={Main.ModColor}>{Main.HideName.Value}</color>";
     }

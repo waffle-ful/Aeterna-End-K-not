@@ -171,7 +171,7 @@ internal static class SetUpRoleTextPatch
         {
             case CustomGameMode.SoloPVP:
             {
-                Color color = ColorUtility.TryParseHtmlString("#f55252", out Color c) ? c : new(255, 255, 255, 255);
+                Color color = HtmlColor.TryParse("#f55252", out Color c) ? c : new(255, 255, 255, 255);
                 __instance.YouAreText.transform.gameObject.SetActive(false);
                 __instance.RoleText.text = GetString("SoloPVP");
                 __instance.RoleText.color = Utils.GetRoleColor(lp.GetCustomRole());
@@ -181,7 +181,7 @@ internal static class SetUpRoleTextPatch
             }
             case CustomGameMode.FFA:
             {
-                Color color = ColorUtility.TryParseHtmlString("#00ffff", out Color c) ? c : new(255, 255, 255, 255);
+                Color color = HtmlColor.TryParse("#00ffff", out Color c) ? c : new(255, 255, 255, 255);
                 __instance.YouAreText.transform.gameObject.SetActive(false);
                 __instance.RoleText.text = GetString("Killer");
                 __instance.RoleText.color = color;
@@ -191,7 +191,7 @@ internal static class SetUpRoleTextPatch
             }
             case CustomGameMode.StopAndGo:
             {
-                Color color = ColorUtility.TryParseHtmlString("#00ffa5", out Color c) ? c : new(255, 255, 255, 255);
+                Color color = HtmlColor.TryParse("#00ffa5", out Color c) ? c : new(255, 255, 255, 255);
                 __instance.YouAreText.transform.gameObject.SetActive(false);
                 __instance.RoleText.text = GetString("StopAndGo");
                 __instance.RoleText.color = color;
@@ -201,7 +201,7 @@ internal static class SetUpRoleTextPatch
             }
             case CustomGameMode.HotPotato:
             {
-                Color color = ColorUtility.TryParseHtmlString("#e8cd46", out Color c) ? c : new(255, 255, 255, 255);
+                Color color = HtmlColor.TryParse("#e8cd46", out Color c) ? c : new(255, 255, 255, 255);
                 __instance.YouAreText.transform.gameObject.SetActive(false);
                 __instance.RoleText.text = GetString("HotPotato");
                 __instance.RoleText.color = color;
@@ -221,7 +221,7 @@ internal static class SetUpRoleTextPatch
             }
             case CustomGameMode.CaptureTheFlag:
             {
-                Color color = ColorUtility.TryParseHtmlString("#1313c2", out Color c) ? c : new(255, 255, 255, 255);
+                Color color = HtmlColor.TryParse("#1313c2", out Color c) ? c : new(255, 255, 255, 255);
                 __instance.YouAreText.transform.gameObject.SetActive(false);
                 __instance.RoleText.text = GetString("CTFPlayer");
                 __instance.RoleText.color = color;
@@ -231,7 +231,7 @@ internal static class SetUpRoleTextPatch
             }
             case CustomGameMode.NaturalDisasters:
             {
-                Color color = ColorUtility.TryParseHtmlString("#03fc4a", out Color c) ? c : new(255, 255, 255, 255);
+                Color color = HtmlColor.TryParse("#03fc4a", out Color c) ? c : new(255, 255, 255, 255);
                 __instance.YouAreText.transform.gameObject.SetActive(false);
                 __instance.RoleText.text = GetString("NDPlayer");
                 __instance.RoleText.color = color;
@@ -241,7 +241,7 @@ internal static class SetUpRoleTextPatch
             }
             case CustomGameMode.RoomRush:
             {
-                Color color = ColorUtility.TryParseHtmlString("#ffab1b", out Color c) ? c : new(255, 255, 255, 255);
+                Color color = HtmlColor.TryParse("#ffab1b", out Color c) ? c : new(255, 255, 255, 255);
                 __instance.YouAreText.transform.gameObject.SetActive(false);
                 __instance.RoleText.text = GetString("RRPlayer");
                 __instance.RoleText.color = color;
@@ -251,7 +251,7 @@ internal static class SetUpRoleTextPatch
             }
             case CustomGameMode.KingOfTheZones:
             {
-                Color color = ColorUtility.TryParseHtmlString("#ff0000", out Color c) ? c : new(255, 255, 255, 255);
+                Color color = HtmlColor.TryParse("#ff0000", out Color c) ? c : new(255, 255, 255, 255);
                 __instance.YouAreText.transform.gameObject.SetActive(false);
                 __instance.RoleText.text = GetString("KOTZPlayer");
                 __instance.RoleText.color = color;
@@ -903,7 +903,7 @@ internal static class BeginCrewmatePatch
             {
                 if (team.RoleRevealScreenTitle != "*") __instance.TeamTitle.text = team.RoleRevealScreenTitle;
 
-                if (team.RoleRevealScreenBackgroundColor != "*" && ColorUtility.TryParseHtmlString(team.RoleRevealScreenBackgroundColor, out Color bgColor)) __instance.TeamTitle.color = __instance.BackgroundBar.material.color = bgColor;
+                if (team.RoleRevealScreenBackgroundColor != "*" && HtmlColor.TryParse(team.RoleRevealScreenBackgroundColor, out Color bgColor)) __instance.TeamTitle.color = __instance.BackgroundBar.material.color = bgColor;
 
                 __instance.ImpostorText.gameObject.SetActive(team.RoleRevealScreenSubtitle != "*");
                 __instance.ImpostorText.text = team.RoleRevealScreenSubtitle;
@@ -930,7 +930,7 @@ internal static class BeginCrewmatePatch
             case CustomGameMode.FFA:
             {
                 __instance.TeamTitle.text = GetString("Killer");
-                Color color = FreeForAll.PlayerTeams.TryGetValue(PlayerControl.LocalPlayer.PlayerId, out int team) && FreeForAll.TeamColors.TryGetValue(team, out var teamColorHex) && ColorUtility.TryParseHtmlString(teamColorHex, out Color teamColor) ? teamColor : new(0, 255, 255, byte.MaxValue);
+                Color color = FreeForAll.PlayerTeams.TryGetValue(PlayerControl.LocalPlayer.PlayerId, out int team) && FreeForAll.TeamColors.TryGetValue(team, out var teamColorHex) && HtmlColor.TryParse(teamColorHex, out Color teamColor) ? teamColor : new(0, 255, 255, byte.MaxValue);
                 __instance.TeamTitle.color = __instance.BackgroundBar.material.color = color;
                 PlayerControl.LocalPlayer.Data.Role.IntroSound = GetIntroSound(RoleTypes.Shapeshifter);
                 __instance.ImpostorText.gameObject.SetActive(true);

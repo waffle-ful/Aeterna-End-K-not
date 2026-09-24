@@ -473,7 +473,7 @@ internal static class CheckForEndVotingPatch
                     CustomTeamManager.CustomTeam team = CustomTeamManager.GetCustomTeam(player.PlayerId);
 
                     if (team != null)
-                        name += Utils.ColorString(team.RoleRevealScreenBackgroundColor == "*" || !ColorUtility.TryParseHtmlString(team.RoleRevealScreenBackgroundColor, out Color color) ? Color.yellow : color, team.RoleRevealScreenTitle == "*" ? team.TeamName : team.RoleRevealScreenTitle);
+                        name += Utils.ColorString(team.RoleRevealScreenBackgroundColor == "*" || !HtmlColor.TryParse(team.RoleRevealScreenBackgroundColor, out Color color) ? Color.yellow : color, team.RoleRevealScreenTitle == "*" ? team.TeamName : team.RoleRevealScreenTitle);
                     else
                     {
                         Team playerTeam = player.GetTeam();

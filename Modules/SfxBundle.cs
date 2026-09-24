@@ -113,7 +113,8 @@ internal static class SfxBundle
 
         try
         {
-            var assets = _bundle.LoadAllAssets(Il2CppType.Of<AudioClip>());
+            // BgmBundle と同じ理由で非同期版を同期的に使う (allAssets は完了まで待つ)。
+            var assets = _bundle.LoadAllAssetsAsync(Il2CppType.Of<AudioClip>()).allAssets;
             if (assets == null) return false;
 
             Clips.Clear();

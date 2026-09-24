@@ -283,7 +283,7 @@ internal class Commander : RoleBase
         }
         else if (isTargetTarget)
             return CustomRoles.Sprayer.ColoredTextByRole(Translator.GetString("CommanderTarget"));
-        else if (isTargetDontKill) return Utils.ColorString(ColorUtility.TryParseHtmlString("#0daeff", out Color color) ? color : Utils.GetRoleColor(CustomRoles.TaskManager), Translator.GetString("CommanderDontKill"));
+        else if (isTargetDontKill) return Utils.ColorString(HtmlColor.TryParse("#0daeff", out Color color) ? color : Utils.GetRoleColor(CustomRoles.TaskManager), Translator.GetString("CommanderDontKill"));
 
         return string.Empty;
     }

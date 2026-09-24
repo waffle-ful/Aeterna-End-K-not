@@ -2181,7 +2181,7 @@ internal static class CustomRolesHelper
     {
         public Color GetColor()
         {
-            return ColorUtility.TryParseHtmlString(team switch
+            return HtmlColor.TryParse(team switch
             {
                 Team.Coven => Main.CovenColor,
                 Team.Crewmate => Main.CrewmateColor,
@@ -2236,7 +2236,7 @@ internal static class CustomRolesHelper
                 RoleOptionType.Crewmate_Chaos => Utils.GetRoleColor(CustomRoles.Tornado),
                 RoleOptionType.Neutral_Benign => Utils.GetRoleColor(CustomRoles.Chameleon),
                 RoleOptionType.Neutral_Evil => Utils.GetRoleColor(CustomRoles.Vector),
-                RoleOptionType.Neutral_Pariah => ColorUtility.TryParseHtmlString("#a10e49", out var c) ? c : Color.magenta,
+                RoleOptionType.Neutral_Pariah => HtmlColor.TryParse("#a10e49", out var c) ? c : Color.magenta,
                 RoleOptionType.Neutral_Killing => Palette.ImpostorRed,
                 RoleOptionType.Coven_Miscellaneous => Utils.GetRoleColor(CustomRoles.CovenLeader),
                 RoleOptionType.Combination => CombinationRoles.TabColor,

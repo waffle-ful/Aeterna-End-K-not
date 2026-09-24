@@ -711,7 +711,7 @@ public static class Utils
                     roleColor = GetRoleColor(CustomRoles.ImpostorEndKnot);
                     break;
                 case Modules.Ekm.EkrTeam.Neutral:
-                    if (ColorUtility.TryParseHtmlString(Main.NeutralColor, out Color neutralColor)) roleColor = neutralColor;
+                    if (HtmlColor.TryParse(Main.NeutralColor, out Color neutralColor)) roleColor = neutralColor;
                     break;
             }
         }
@@ -3738,7 +3738,7 @@ public static class Utils
                     if (team != null)
                     {
                         seerRealName = ColorString(
-                            team.RoleRevealScreenBackgroundColor == "*" || !ColorUtility.TryParseHtmlString(team.RoleRevealScreenBackgroundColor, out Color teamColor)
+                            team.RoleRevealScreenBackgroundColor == "*" || !HtmlColor.TryParse(team.RoleRevealScreenBackgroundColor, out Color teamColor)
                                 ? Color.yellow
                                 : teamColor,
                             // CTA の title/subtitle は作者自由記述で長さ上限が無い — InfoLong と同じ理由で
@@ -5376,7 +5376,7 @@ public static class Utils
             var summary = $"{ColorString(Main.PlayerColors[id], name)} - {GetDisplayRoleName(id, pure: true)}{taskCount}{GetKillCountText(id)} ({GetVitalText(id, true)})";
 
             CustomTeamManager.CustomTeam customTeam = CustomTeamManager.GetCustomTeam(id);
-            if (customTeam != null) summary += $" ({ColorString(customTeam.RoleRevealScreenBackgroundColor == "*" || !ColorUtility.TryParseHtmlString(customTeam.RoleRevealScreenBackgroundColor, out Color color) ? Color.yellow : color, customTeam.RoleRevealScreenTitle == "*" ? customTeam.TeamName : customTeam.RoleRevealScreenTitle)})";
+            if (customTeam != null) summary += $" ({ColorString(customTeam.RoleRevealScreenBackgroundColor == "*" || !HtmlColor.TryParse(customTeam.RoleRevealScreenBackgroundColor, out Color color) ? Color.yellow : color, customTeam.RoleRevealScreenTitle == "*" ? customTeam.TeamName : customTeam.RoleRevealScreenTitle)})";
 
             switch (Options.CurrentGameMode)
             {

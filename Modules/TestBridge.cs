@@ -763,7 +763,7 @@ public static class TestBridge
             foreach (MonoBehaviour mb in sr.GetComponents<MonoBehaviour>())
                 if (mb) comps.Add(mb.GetIl2CppType().Name);
 
-            sb.AppendLine($"SR {path} act={sr.gameObject.activeInHierarchy} en={sr.enabled} layer={sr.gameObject.layer} sl={sr.sortingLayerName} so={sr.sortingOrder} z={wp.z:0.###} " +
+            sb.AppendLine($"SR {path} act={sr.gameObject.activeInHierarchy} en={sr.enabled} layer={sr.gameObject.layer} sl={sr.sortingLayerID} so={sr.sortingOrder} z={wp.z:0.###} " +
                           $"ctr=({b.center.x:0.##},{b.center.y:0.##}) size=({b.size.x:0.##},{b.size.y:0.##}) col={ColorStr(sr.color)} sprite={sprite} shader={shader} draw={sr.drawMode} comps=[{string.Join(",", comps)}]");
             n++;
         }

@@ -47,7 +47,7 @@ public static class CalamityLogo
             sr.sortingLayerID = auSr.sortingLayerID;
             sr.sortingOrder   = auSr.sortingOrder + 1;
 
-            Logger.Info($"Logo sprite: {logoSprite.name} {logoSprite.rect.width}x{logoSprite.rect.height}px lossyScale={auSr.transform.lossyScale} layer={auSr.sortingLayerName}/{auSr.sortingOrder}", "CalamityLogo");
+            Logger.Info($"Logo sprite: {logoSprite.name} {logoSprite.rect.width}x{logoSprite.rect.height}px lossyScale={auSr.transform.lossyScale} layer={auSr.sortingLayerID}/{auSr.sortingOrder}", "CalamityLogo");
         }
         else
         {

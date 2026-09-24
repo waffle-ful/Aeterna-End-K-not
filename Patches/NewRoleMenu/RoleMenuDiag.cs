@@ -274,7 +274,7 @@ public static class RoleMenuDiag
                 Bounds b = sr.bounds;
                 if (p.x < b.min.x || p.x > b.max.x || p.y < b.min.y || p.y > b.max.y) continue; // point not covered
                 float z = sr.transform.position.z;
-                Logger.Info($"  HIT '{PathOf(sr.transform)}' sprite='{sr.sprite.name}' rgb=({c.r:F2},{c.g:F2},{c.b:F2}) a={c.a:F2} layer='{sr.sortingLayerName}' order={sr.sortingOrder} z={z:F2} wx=({b.min.x:F2}..{b.max.x:F2}) wy=({b.min.y:F2}..{b.max.y:F2})", "RoleMenuDiag");
+                Logger.Info($"  HIT '{PathOf(sr.transform)}' sprite='{sr.sprite.name}' rgb=({c.r:F2},{c.g:F2},{c.b:F2}) a={c.a:F2} layer={sr.sortingLayerID} order={sr.sortingOrder} z={z:F2} wx=({b.min.x:F2}..{b.max.x:F2}) wy=({b.min.y:F2}..{b.max.y:F2})", "RoleMenuDiag");
                 // frontmost: higher sortingOrder wins; tie-break smaller z (closer to camera in AU)
                 if (front == null || sr.sortingOrder > front.sortingOrder ||
                     (sr.sortingOrder == front.sortingOrder && z < front.transform.position.z))
@@ -282,7 +282,7 @@ public static class RoleMenuDiag
             }
 
             if (front != null)
-                Logger.Info($"  >>> FRONTMOST = '{PathOf(front.transform)}' sprite='{front.sprite.name}' rgb=({front.color.r:F2},{front.color.g:F2},{front.color.b:F2}) order={front.sortingOrder} layer='{front.sortingLayerName}'", "RoleMenuDiag");
+                Logger.Info($"  >>> FRONTMOST = '{PathOf(front.transform)}' sprite='{front.sprite.name}' rgb=({front.color.r:F2},{front.color.g:F2},{front.color.b:F2}) order={front.sortingOrder} layer={front.sortingLayerID}", "RoleMenuDiag");
             else
                 Logger.Info("  (no active sprite covers the point — left is genuinely empty/clipped)", "RoleMenuDiag");
 
@@ -325,7 +325,7 @@ public static class RoleMenuDiag
                     Bounds b = sr.bounds;
                     if (p.x < b.min.x || p.x > b.max.x || p.y < b.min.y || p.y > b.max.y) continue;
                     if (hits++ >= 8) break;
-                    Logger.Info($"[ProbeCol] y={y:F1} '{sr.gameObject.name}' layer='{sr.sortingLayerName}'({sr.sortingLayerID}) order={sr.sortingOrder} rgb=({c.r:F2},{c.g:F2},{c.b:F2}) a={c.a:F2} z={sr.transform.position.z:F2} mat='{(sr.sharedMaterial != null ? sr.sharedMaterial.name : "null")}'", "ProbeCol");
+                    Logger.Info($"[ProbeCol] y={y:F1} '{sr.gameObject.name}' layer={sr.sortingLayerID} order={sr.sortingOrder} rgb=({c.r:F2},{c.g:F2},{c.b:F2}) a={c.a:F2} z={sr.transform.position.z:F2} mat='{(sr.sharedMaterial != null ? sr.sharedMaterial.name : "null")}'", "ProbeCol");
                 }
                 if (hits == 0) Logger.Info($"[ProbeCol] y={y:F1} (no opaque SR covers it)", "ProbeCol");
             }

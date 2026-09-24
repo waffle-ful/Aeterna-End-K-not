@@ -234,7 +234,7 @@ public static class BackroomsCasters
             SpriteRenderer sr = vis.AddComponent<SpriteRenderer>();
             sr.sprite = LineSprite;
             sr.color = visColor;
-            sr.sortingLayerName = "Default";
+            sr.sortingLayerID = 0; // Default
             sr.sortingOrder = 120; // 全部の前に出す
         }
 

@@ -734,8 +734,11 @@ internal static class StartGameHostPatch
             // 飢餓し、バニラ客は ~20 秒で自主退出・公式鯖は開始 ~51 秒でホストを Hacking キックする。
             // Unity の非同期ロード統合予算は backgroundLoadingPriority に従う (既定 BelowNormal ≒ 2ms/frame) ため、
             // fps が落ちるほどロードが進まなくなる悪循環になる — ship ロード中だけ High (≒50ms/frame) へ引き上げる。
+            // エンジンコードを削ったプレイヤー (Android) には backgroundLoadingPriority の実装が無いので触らない。
+#if !ANDROID
             UnityEngine.ThreadPriority prevLoadingPriority = Application.backgroundLoadingPriority;
             Application.backgroundLoadingPriority = UnityEngine.ThreadPriority.High;
+#endif
             float shipLoadStartRealtime = Time.realtimeSinceStartup;
             float nextShipLoadWarnAt = shipLoadStartRealtime + 5f;
 
@@ -760,7 +763,9 @@ internal static class StartGameHostPatch
                 yield return null;
             }
 
+#if !ANDROID
             Application.backgroundLoadingPriority = prevLoadingPriority;
+#endif
 
             GameObject result = AUClient.ShipLoadingAsyncHandle.Result;
             ShipStatus.Instance = result.GetComponent<ShipStatus>();
