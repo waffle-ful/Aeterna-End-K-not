@@ -199,11 +199,12 @@ public static class MainMenuManagerPatch
         if (TitleLogoPatch.RightPanel != null)
         {
             Vector3 pos1 = TitleLogoPatch.RightPanel.transform.localPosition;
-            Vector3 lerp1 = Vector3.Lerp(pos1, TitleLogoPatch.RightPanelOp + new Vector3(ShowingPanel ? 0f : 10f, 0f, 0f), Time.deltaTime * (ShowingPanel ? 3f : 2f));
+            float park = TitleLogoPatch.RightPanelParkOffset;
+            Vector3 lerp1 = Vector3.Lerp(pos1, TitleLogoPatch.RightPanelOp + new Vector3(ShowingPanel ? 0f : park, 0f, 0f), Time.deltaTime * (ShowingPanel ? 3f : 2f));
 
             if (ShowingPanel
                     ? TitleLogoPatch.RightPanel.transform.localPosition.x > TitleLogoPatch.RightPanelOp.x + 0.03f
-                    : TitleLogoPatch.RightPanel.transform.localPosition.x < TitleLogoPatch.RightPanelOp.x + 9f
+                    : TitleLogoPatch.RightPanel.transform.localPosition.x < TitleLogoPatch.RightPanelOp.x + park - 1f
                 )
                 TitleLogoPatch.RightPanel.transform.localPosition = lerp1;
         }

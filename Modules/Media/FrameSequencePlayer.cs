@@ -99,6 +99,24 @@ public sealed class FrameSequencePlayer : IMediaSurface
         _lastRealtime = Time.realtimeSinceStartup; // 止めていた間の時間は進めない
     }
 
+    // 1 コマの解凍コストは端末ごとに違うので、最初の DecodeSampleCount コマ分だけ計って 1 行にまとめる
+    // (毎コマ出すとログが溢れる)。重ければパックの幅を下げる判断材料。
+    private const int DecodeSampleCount = 60;
+    private int _decodeSamples;
+    private long _decodeTotalTicks;
+    private long _decodeMaxTicks;
+
+    private void ReportDecodeCost(long ticks)
+    {
+        if (_decodeSamples >= DecodeSampleCount) return;
+        _decodeSamples++;
+        _decodeTotalTicks += ticks;
+        if (ticks > _decodeMaxTicks) _decodeMaxTicks = ticks;
+        if (_decodeSamples < DecodeSampleCount) return;
+        double toMs = 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+        Logger.Info($"decode cost over {DecodeSampleCount} frames: avg {_decodeTotalTicks * toMs / DecodeSampleCount:0.0}ms, max {_decodeMaxTicks * toMs:0.0}ms ({_pack.Width}x{_pack.Height} alpha={_pack.StackedAlpha})", "FrameSequence");
+    }
+
     // 呼び出し側から毎 FixedUpdate 叩かれる。コマが変わった時だけ解凍する。
     public void Tick()
     {
@@ -113,11 +131,13 @@ public sealed class FrameSequencePlayer : IMediaSurface
             int frame = (int)(_clock * _pack.Fps) % _pack.FrameCount;
             if (frame == _shownFrame && Prepared) return;
 
+            long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
             if (!ShowFrame(frame))
             {
                 IsActive = false; // 毎フレ例外スパム禁止: 二度と描かない
                 return;
             }
+            ReportDecodeCost(System.Diagnostics.Stopwatch.GetTimestamp() - t0);
 
             _shownFrame = frame;
 

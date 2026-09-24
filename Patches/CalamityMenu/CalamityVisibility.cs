@@ -394,10 +394,10 @@ public static class CalamityVisibility
 
         // RightPanel (Multiplayer): keep menu hidden while ShowingPanel is true OR while
         // the panel is still mid-slide off-screen. RightPanel.x ~ Op.x means slid in,
-        // ~ Op.x+10 means fully off-screen.
+        // ~ Op.x+ParkOffset means fully off-screen.
         if (MainMenuManagerPatch.ShowingPanel) return true;
         if (TitleLogoPatch.RightPanel != null
-            && TitleLogoPatch.RightPanel.transform.localPosition.x < TitleLogoPatch.RightPanelOp.x + 9f)
+            && TitleLogoPatch.RightPanel.transform.localPosition.x < TitleLogoPatch.RightPanelOp.x + TitleLogoPatch.RightPanelParkOffset - 1f)
             return true;
 
         var pop = Object.FindObjectOfType<FreeplayPopover>(true);
