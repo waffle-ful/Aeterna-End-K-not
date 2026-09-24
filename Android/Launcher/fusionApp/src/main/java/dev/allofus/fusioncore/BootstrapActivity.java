@@ -21,7 +21,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.util.Locale;
 
 import dev.allofus.fusioncore.hooks.InstrumentationHooks;
 import dev.allofus.fusioncore.bridge.UnityActivityHost;
@@ -29,8 +28,6 @@ import dev.allofus.fusioncore.tools.CustomContextWrapper;
 import dev.allofus.fusioncore.tools.FallbackResources;
 import dev.allofus.fusioncore.tools.FusionConfig;
 import dev.allofus.fusioncore.tools.GameClassLoaderFactory;
-import dev.allofus.fusioncore.tools.LibUnityBundle;
-import dev.allofus.fusioncore.tools.LibUnityDownloader;
 import dev.allofus.fusioncore.tools.LogBundle;
 import dev.allofus.fusioncore.tools.Utilities;
 import dev.allofus.fusioncore.tools.PluginInstaller;
@@ -41,7 +38,6 @@ public class BootstrapActivity extends AppCompatActivity {
     private static final String TAG = "FusionCore";
 
     public static final String EXTRA_TARGET_PACKAGE = "target_package";
-    public static final String EXTRA_USE_ORIGINAL_LIBUNITY = "og_libunity";
     public static final String BACKUP_UNITY_VERSION = "2017.0.0";
     private static final String GLOBAL_METADATA_FILE = "global-metadata.dat";
     private static ClassLoader sGameClassLoader;
@@ -117,7 +113,7 @@ public class BootstrapActivity extends AppCompatActivity {
         ClassLoader gameClassLoader;
         try {
             if (sGameClassLoader == null) {
-                // Native library search order: patched libs in code_cache (libunity / libil2cpp),
+                // Native library search order: patched libs in code_cache (libil2cpp),
                 // then the launcher's own libs (libmain), then the game's original directory.
                 // The files in the first two directories are written before the game asks for them.
                 File codeCacheScoped = new File(getApplicationContext().getCodeCacheDir(), targetPackage);
@@ -154,7 +150,6 @@ public class BootstrapActivity extends AppCompatActivity {
 
         final int targetOrientation = resolveTargetOrientation(launcherComponent);
 
-        boolean useOriginalLibUnity = getIntent().getBooleanExtra(EXTRA_USE_ORIGINAL_LIBUNITY, false);
         FusionConfig config;
 
         try {
@@ -162,8 +157,7 @@ public class BootstrapActivity extends AppCompatActivity {
                     getApplicationContext(),
                     gameContext,
                     launcherComponent,
-                    targetPackage,
-                    useOriginalLibUnity
+                    targetPackage
             );
         } catch (LauncherUpdateRequiredException e) {
             failAndStay(getString(R.string.bootstrap_launcher_update_required, e.builtFor, e.installed));
@@ -248,52 +242,7 @@ public class BootstrapActivity extends AppCompatActivity {
         });
     }
 
-    private void setDownloadStatus(long downloadedBytes, long totalBytes) {
-        runOnMainThread(() -> {
-            if (spinnerProgress != null) {
-                spinnerProgress.setVisibility(View.GONE);
-            }
-            long progress = Math.max(0L, Math.min(100L, (downloadedBytes * 100L) / totalBytes));
-            if (downloadProgress != null) {
-                downloadProgress.setVisibility(View.VISIBLE);
-                boolean hasTotal = totalBytes > 0L;
-                downloadProgress.setIndeterminate(!hasTotal);
-                if (hasTotal) {
-                    int percent = (int) progress;
-                    downloadProgress.setProgress(percent);
-                }
-            }
-            if (statusView != null) {
-                statusView.setText(getString(R.string.bootstrap_status_downloading_libunity));
-            }
-            if (progressDetailsView != null) {
-                progressDetailsView.setVisibility(View.VISIBLE);
-                int percent = totalBytes > 0L
-                        ? (int) progress
-                        : 0;
-                progressDetailsView.setText(getString(
-                        R.string.bootstrap_download_progress,
-                        percent,
-                        formatBytes(downloadedBytes),
-                        totalBytes > 0L ? formatBytes(totalBytes) : "?"
-                ));
-            }
-        });
-    }
 
-    private String formatBytes(long bytes) {
-        if (bytes < 1024L) {
-            return bytes + " B";
-        }
-        double value = bytes;
-        String[] units = new String[]{"B", "KB", "MB", "GB"};
-        int unitIndex = 0;
-        while (value >= 1024.0 && unitIndex < units.length - 1) {
-            value /= 1024.0;
-            unitIndex++;
-        }
-        return String.format(Locale.US, "%.1f %s", value, units[unitIndex]);
-    }
 
     private void failAndFinish(String message, Throwable error) {
         runOnMainThread(() -> {
@@ -335,13 +284,13 @@ public class BootstrapActivity extends AppCompatActivity {
         });
     }
 
-    /** The installed game moved to a Unity version this build does not carry. */
+    /** The installed game moved to a Unity version this build was not made for. */
     private static final class LauncherUpdateRequiredException extends RuntimeException {
         final String builtFor;
         final String installed;
 
         LauncherUpdateRequiredException(String builtFor, String installed) {
-            super("Launcher bundles Unity " + builtFor + " but the game uses " + installed);
+            super("Launcher is built for Unity " + builtFor + " but the game uses " + installed);
             this.builtFor = builtFor;
             this.installed = installed;
         }
@@ -362,17 +311,24 @@ public class BootstrapActivity extends AppCompatActivity {
     private FusionConfig prepareConfig(Context appContext,
                                        Context gameContext,
                                        ComponentName launcherComponent,
-                                       String targetPackage,
-                                       boolean useOriginalLibUnity) {
+                                       String targetPackage) {
 
         String gameLibDir = gameContext.getApplicationInfo().nativeLibraryDir;
         String appLibDir = appContext.getApplicationInfo().nativeLibraryDir;
 
-        String targetGameAbi = resolveTargetGameAbi(gameLibDir);
         File appDataDir = new File(appContext.getFilesDir(), targetPackage);
 
         File dataOnSdCard = Utilities.getExternalFusionCoreDirectory(targetPackage);
         File codeCacheScoped = new File(appContext.getCodeCacheDir(), targetPackage);
+
+        // Earlier launcher builds copied an unstripped libunity into this directory. It comes first
+        // in the native library search order, so a leftover copy must not stay behind.
+        for (String stale : new String[]{"libunity.so", "libunity.sym.so", "libunity.cache.properties"}) {
+            File file = new File(codeCacheScoped, stale);
+            if (file.exists() && !file.delete()) {
+                Log.w(TAG, "Could not remove stale " + file);
+            }
+        }
 
         setPhaseStatus(getString(R.string.bootstrap_status_copy_assets));
         File copiedData = new File(appDataDir, "Data_copy");
@@ -388,44 +344,16 @@ public class BootstrapActivity extends AppCompatActivity {
         if (version == null) {
             Log.e(TAG, "Failed to determine Unity version! BepInEx may not work correctly.");
             version = BACKUP_UNITY_VERSION;
-            useOriginalLibUnity = true;
-        } else if (useOriginalLibUnity) {
-            Log.i(TAG, "Skipping libunity download");
         } else {
             Log.i(TAG, "Determined Unity version: " + version);
-            setPhaseStatus(getString(R.string.bootstrap_status_installing_libunity));
-            LibUnityBundle.Result bundled = LibUnityBundle.install(appContext, codeCacheScoped, version, targetGameAbi);
-            Log.i(TAG, "Bundled libunity for " + version + " (" + targetGameAbi + "): " + bundled);
-            if (bundled == LibUnityBundle.Result.NOT_BUNDLED) {
-                if (!BuildConfig.ALLOW_LIBUNITY_DOWNLOAD) {
-                    // A store build carries exactly one runtime and never fetches code at run
-                    // time; a game update past it means the launcher itself needs updating.
+            if (!version.trim().equals(BuildConfig.BUNDLED_UNITY_VERSION)) {
+                // The game's own libunity is used, but the bundled Unity support libraries that
+                // BepInEx builds its interop against are tied to one version: a game update past
+                // it means the launcher itself needs updating. Debug builds carry on regardless.
+                if (!BuildConfig.DEBUG) {
                     throw new LauncherUpdateRequiredException(BuildConfig.BUNDLED_UNITY_VERSION, version);
                 }
-                if (LibUnityDownloader.downloadAndCacheSafely(codeCacheScoped, version, targetGameAbi, new LibUnityDownloader.DownloadProgressListener() {
-                    @Override
-                    public void onDownloadStarted(String url, long totalBytes) {
-                        setDownloadStatus(0L, totalBytes);
-                    }
-
-                    @Override
-                    public void onDownloadProgress(long downloadedBytes, long totalBytes) {
-                        setDownloadStatus(downloadedBytes, totalBytes);
-                    }
-
-                    @Override
-                    public void onDownloadFinished(boolean success, boolean usedCache) {
-                        // No-op: next phase will handle this.
-                    }
-                })) {
-                    Log.i(TAG, "Successfully downloaded libunity for version " + version + " and ABI " + targetGameAbi);
-                } else {
-                    Log.e(TAG, "Failed to download libunity for version " + version + " and ABI " + targetGameAbi + ", falling back to original.");
-                    useOriginalLibUnity = true;
-                }
-            } else if (bundled == LibUnityBundle.Result.FAILED) {
-                Log.e(TAG, "Bundled libunity could not be installed, falling back to original.");
-                useOriginalLibUnity = true;
+                Log.w(TAG, "Game uses Unity " + version + " but the launcher is built for " + BuildConfig.BUNDLED_UNITY_VERSION);
             }
         }
 
@@ -453,7 +381,6 @@ public class BootstrapActivity extends AppCompatActivity {
                 dotnetDir.getAbsolutePath(),
                 copiedData.getAbsolutePath(),
                 version,
-                useOriginalLibUnity,
                 new String[]{},
                 new String[]{}
         );
@@ -505,16 +432,5 @@ public class BootstrapActivity extends AppCompatActivity {
         }
     }
 
-    private String resolveTargetGameAbi(String gameLibDir) {
-        if (gameLibDir == null || gameLibDir.isEmpty()) {
-            return null;
-        }
 
-        String abi = new File(gameLibDir).getName();
-        if (abi.isEmpty()) {
-            return null;
-        }
-
-        return abi;
-    }
 }

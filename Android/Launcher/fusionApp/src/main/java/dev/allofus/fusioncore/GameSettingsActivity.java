@@ -15,7 +15,6 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.content.res.AppCompatResources;
-import androidx.appcompat.widget.SwitchCompat;
 import androidx.core.content.pm.PackageInfoCompat;
 
 import com.google.android.material.appbar.MaterialToolbar;
@@ -32,7 +31,6 @@ public class GameSettingsActivity extends AppCompatActivity {
     private TextView tvVersionInfo;
 
     private AutoCompleteTextView actvOverrideActivity;
-    private SwitchCompat switchLibUnity;
 
     private String targetPackageName;
 
@@ -53,7 +51,6 @@ public class GameSettingsActivity extends AppCompatActivity {
         }
 
         resolveAndDisplayPackageInfo(targetPackageName);
-        switchLibUnity.setChecked(FusionSettings.getUseUnstrippedLibUnityForGame(this, targetPackageName));
         // The launch activity is always resolved automatically, so the field is read-only.
         FusionSettings.dropActivityOverrideForGame(this, targetPackageName);
         actvOverrideActivity.setText(getString(R.string.settings_automatic), false);
@@ -79,7 +76,6 @@ public class GameSettingsActivity extends AppCompatActivity {
         tvVersionInfo = findViewById(R.id.tvVersionInfo);
 
         actvOverrideActivity = findViewById(R.id.activity_override_actv);
-        switchLibUnity = findViewById(R.id.switchLibUnity);
     }
 
     private void setupToolbar() {
@@ -117,7 +113,5 @@ public class GameSettingsActivity extends AppCompatActivity {
     }
 
     private void setupListeners() {
-        switchLibUnity.setOnCheckedChangeListener((buttonView, isChecked) ->
-                FusionSettings.setUseUnstrippedLibUnityForGame(this, targetPackageName, isChecked));
     }
 }

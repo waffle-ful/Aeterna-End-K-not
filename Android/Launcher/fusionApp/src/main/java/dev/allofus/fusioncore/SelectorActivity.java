@@ -340,8 +340,6 @@ public class SelectorActivity extends AppCompatActivity {
     private void launchBootstrap(String packageName) {
         Intent intent = new Intent(this, BootstrapActivity.class);
         intent.putExtra(BootstrapActivity.EXTRA_TARGET_PACKAGE, packageName);
-        intent.putExtra(BootstrapActivity.EXTRA_USE_ORIGINAL_LIBUNITY,
-                !FusionSettings.getUseUnstrippedLibUnityForGame(this, packageName));
         intent.addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION | Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         startActivity(intent);
         //noinspection deprecation

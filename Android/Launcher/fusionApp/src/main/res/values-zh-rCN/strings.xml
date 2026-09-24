@@ -15,19 +15,15 @@
     <string name="selector_action_settings">设置</string>
     <string name="settings_title">设置</string>
     <string name="settings_action_back">返回</string>
-    <string name="settings_libunity_title">下载未剥离的 libunity</string>
-    <string name="settings_libunity_desc">如果使用的游戏因 Unity 问题而崩溃，请开启此选项。</string>
     <string name="bootstrap_title">正在启动游戏</string>
     <string name="bootstrap_status_preparing">正在准备启动…</string>
     <string name="bootstrap_status_copy_assets">正在复制 Unity 数据…</string>
     <string name="bootstrap_status_detecting_version">正在检测 Unity 版本…</string>
-    <string name="bootstrap_status_downloading_libunity">正在下载未剥离的 libunity…</string>
     <string name="bootstrap_status_extracting_runtime">正在解压运行时文件…</string>
     <string name="bootstrap_status_installing_plugin">正在安装内置模组…</string>
     <string name="bootstrap_status_installing_hooks">正在安装钩子…</string>
     <string name="bootstrap_status_launching">正在启动游戏…</string>
     <string name="bootstrap_status_error">启动失败</string>
-    <string name="bootstrap_download_progress">%1$d%% (%2$s / %3$s)</string>
     <string name="bootstrap_action_get_update">获取更新</string>
     <string name="game_icon">游戏图标</string>
     <string name="loading">加载中…</string>
@@ -51,7 +47,6 @@
     <string name="logs_share_title">分享 End K not 日志</string>
     <string name="logs_share_failed">无法准备日志：%1$s</string>
     <string name="logs_share_empty">暂时没有可分享的日志。</string>
-    <string name="bootstrap_status_installing_libunity">正在安装内置的 Unity 运行时…</string>
     <string name="bootstrap_launcher_update_required">此版本的 End K not 面向 Unity %1$s，但已安装的 Among Us 使用 Unity %2$s。请更新 End K not。</string>
     <string name="bootstrap_game_layout_unsupported">此版本的 End K not 无法识别已安装的 Among Us 版本。请更新 End K not。</string>
 </resources>

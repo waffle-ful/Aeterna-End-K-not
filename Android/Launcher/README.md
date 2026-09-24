@@ -12,8 +12,8 @@ already be installed on the device from an official store. This launcher does no
 
 - Finds the installed Among Us package (`com.innersloth.spacemafia`) and launches it with the
   modding runtime injected. If it is installed, launch starts automatically after a short delay;
-  tap the card to launch immediately, or open the game settings first (unstripped `libunity`
-  download, launch activity override).
+  tap the card to launch immediately, or open the game settings first (shows the launch
+  activity in use). The game's own Unity runtime is used as-is.
 - Stores BepInEx files under `<external storage>/EndKnot/<package name>/` and shows them via the
   folder button.
 

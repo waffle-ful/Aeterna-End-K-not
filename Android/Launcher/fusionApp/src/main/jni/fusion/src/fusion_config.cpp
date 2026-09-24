@@ -53,7 +53,6 @@ FusionConfig fusion_parse_config(JNIEnv *env, jobject jFusionConfig)
         return config;
     }
 
-    GET_JBOOLEAN_FIELD(useOriginalLibUnity);
     GET_JSTRING_FIELD(gameLibraryDirectory);
     GET_JSTRING_FIELD(appLibraryDirectory);
     GET_JSTRING_FIELD(appDataDirectory);
@@ -71,7 +70,6 @@ FusionConfig fusion_parse_config(JNIEnv *env, jobject jFusionConfig)
 
 void fusion_print_config(const FusionConfig &config)
 {
-    log_format(LogLevel::DEBUG, TAG, "Use Original libunity.so: {}", config.useOriginalLibUnity);
     log_format(LogLevel::DEBUG, TAG, "Game Library Directory: {}", config.gameLibraryDirectory);
     log_format(LogLevel::DEBUG, TAG, "App Library Directory: {}", config.appLibraryDirectory);
     log_format(LogLevel::DEBUG, TAG, "App Data Directory: {}", config.appDataDirectory);

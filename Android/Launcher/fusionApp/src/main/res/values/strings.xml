@@ -15,19 +15,15 @@
     <string name="selector_action_settings">Settings</string>
     <string name="settings_title">Settings</string>
     <string name="settings_action_back">Back</string>
-    <string name="settings_libunity_title">Download unstripped libunity</string>
-    <string name="settings_libunity_desc">You should turn this on if the game you\'re using crashes due to Unity getting mad.</string>
     <string name="bootstrap_title">Launching selected game</string>
     <string name="bootstrap_status_preparing">Preparing target package…</string>
     <string name="bootstrap_status_copy_assets">Copying Unity data…</string>
     <string name="bootstrap_status_detecting_version">Detecting Unity version…</string>
-    <string name="bootstrap_status_downloading_libunity">Downloading unstripped libunity…</string>
     <string name="bootstrap_status_extracting_runtime">Extracting runtime files…</string>
     <string name="bootstrap_status_installing_plugin">Installing bundled mod…</string>
     <string name="bootstrap_status_installing_hooks">Installing hooks…</string>
     <string name="bootstrap_status_launching">Launching game…</string>
     <string name="bootstrap_status_error">Launch failed</string>
-    <string name="bootstrap_download_progress">%1$d%% (%2$s / %3$s)</string>
     <string name="bootstrap_action_get_update">Get the update</string>
     <string name="game_icon">Game Icon</string>
     <string name="loading">Loading...</string>
@@ -51,7 +47,6 @@
     <string name="logs_share_title">Share End K not logs</string>
     <string name="logs_share_failed">Could not prepare the logs: %1$s</string>
     <string name="logs_share_empty">No logs to share yet.</string>
-    <string name="bootstrap_status_installing_libunity">Installing bundled Unity runtime…</string>
     <string name="bootstrap_launcher_update_required">This version of End K not was built for Unity %1$s, but the installed Among Us uses Unity %2$s. Please update End K not.</string>
     <string name="bootstrap_game_layout_unsupported">This version of End K not does not recognize the installed Among Us build. Please update End K not.</string>
 </resources>
