@@ -221,6 +221,14 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
+        <Button
+            android:id="@+id/home_open_role_maker"
+            style="?attr/materialButtonOutlinedStyle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"
+            android:text="@string/home_action_role_maker" />
+
         <!-- Secondary actions -->
         <LinearLayout
             android:layout_width="match_parent"

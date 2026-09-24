@@ -12,6 +12,7 @@
     <string name="home_row_mod_none">未内置</string>
     <string name="home_row_game_none">未安装</string>
     <string name="home_action_share_logs">分享日志</string>
+    <string name="home_action_role_maker">打开角色制作器</string>
     <string name="selector_action_settings">设置</string>
     <string name="settings_title">设置</string>
     <string name="settings_action_back">返回</string>

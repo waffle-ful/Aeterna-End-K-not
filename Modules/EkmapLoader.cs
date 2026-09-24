@@ -25,7 +25,10 @@ public static class EkmapLoader
     {
         try
         {
-            string docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            // On Android the Documents folder resolves to an unwritable system path; the launcher's
+            // private data directory (exported as FUSION_APP_DATA_DIR) takes its place there.
+            string docs = Environment.GetEnvironmentVariable("FUSION_APP_DATA_DIR");
+            if (string.IsNullOrEmpty(docs)) docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
             if (string.IsNullOrEmpty(docs)) return null;
             return docs.Replace(@"\", "/") + "/EndKnot/EKMaps/";
         }

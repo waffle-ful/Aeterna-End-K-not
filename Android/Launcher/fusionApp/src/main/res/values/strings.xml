@@ -12,6 +12,7 @@
     <string name="home_row_mod_none">not bundled</string>
     <string name="home_row_game_none">not installed</string>
     <string name="home_action_share_logs">Share logs</string>
+    <string name="home_action_role_maker">Open the role maker</string>
     <string name="selector_action_settings">Settings</string>
     <string name="settings_title">Settings</string>
     <string name="settings_action_back">Back</string>
