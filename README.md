@@ -1,4 +1,4 @@
-# End K not
+<h1 align="center"><img src=".github/endknot-logo.png" alt="Aeterna-End-K-not" width="80%"></h1>
 
 <p align="center">
   <img src=".github/join-us-banner.png" alt="End K not — JOIN US..." width="70%">
