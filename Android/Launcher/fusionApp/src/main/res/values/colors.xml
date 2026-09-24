@@ -1,4 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-  <color name="staticSplashScreenBackgroundColor">#231F20</color>
+  <color name="staticSplashScreenBackgroundColor">#0E0B0A</color>
+
+  <color name="ek_soot">#0E0B0A</color>
+  <color name="ek_ash">#1A1614</color>
+  <color name="ek_ash_raised">#231E1B</color>
+  <color name="ek_ash_line">#2E2622</color>
+  <color name="ek_cinder">#4A3F38</color>
+  <color name="ek_ember">#FF7320</color>
+  <color name="ek_ember_dim">#3A1C0C</color>
+  <color name="ek_afterglow">#FFF2D9</color>
+  <color name="ek_slate">#A6B3E6</color>
+  <color name="ek_slate_dim">#6F7799</color>
+  <color name="ek_error">#FF8A70</color>
 </resources>

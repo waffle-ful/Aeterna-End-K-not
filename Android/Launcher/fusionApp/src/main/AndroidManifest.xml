@@ -49,7 +49,7 @@
         android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode|density" />
     <activity
         android:name="dev.allofus.fusioncore.SelectorActivity"
-        android:theme="@style/Theme.Material3.Dark.NoActionBar" android:exported="true"
+        android:theme="@style/Theme.EndKnot" android:exported="true"
         android:configChanges="mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|orientation|screenLayout|uiMode|screenSize|smallestScreenSize|fontScale|layoutDirection|density"
         >
       <intent-filter>
@@ -72,14 +72,14 @@
     </activity>
     <activity
         android:name="dev.allofus.fusioncore.BootstrapActivity"
-        android:theme="@style/Theme.Material3.Dark.NoActionBar"
+        android:theme="@style/Theme.EndKnot"
         android:screenOrientation="locked"
         android:configChanges="mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|orientation|screenLayout|uiMode|screenSize|smallestScreenSize|fontScale|layoutDirection|density"
         android:launchMode="singleTask"
         android:exported="false" />
     <activity
         android:name="dev.allofus.fusioncore.GameSettingsActivity"
-        android:theme="@style/Theme.Material3.Dark.NoActionBar"
+        android:theme="@style/Theme.EndKnot"
         android:configChanges="mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|orientation|screenLayout|uiMode|screenSize|smallestScreenSize|fontScale|layoutDirection|density"
         android:exported="false" />
     <!-- StubActivity for dynamic loading of unregistered activities -->

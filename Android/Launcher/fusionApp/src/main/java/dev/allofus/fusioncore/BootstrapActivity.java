@@ -63,7 +63,7 @@ public class BootstrapActivity extends AppCompatActivity {
     private TextView statusView;
     private TextView progressDetailsView;
     private View actionsRow;
-    private ProgressBar spinnerProgress;
+    private View spinnerProgress;
     private ProgressBar downloadProgress;
 
     @Override

@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.EndKnot" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="android:windowBackground">@color/ek_soot</item>
+        <item name="android:colorBackground">@color/ek_soot</item>
+        <item name="android:textColorPrimary">@color/ek_afterglow</item>
+        <item name="android:textColorSecondary">@color/ek_slate</item>
+        <item name="android:statusBarColor">@color/ek_soot</item>
+        <item name="android:navigationBarColor">@color/ek_soot</item>
+
+        <item name="colorPrimary">@color/ek_ember</item>
+        <item name="colorOnPrimary">@color/ek_soot</item>
+        <item name="colorPrimaryContainer">@color/ek_ember_dim</item>
+        <item name="colorOnPrimaryContainer">@color/ek_afterglow</item>
+        <item name="colorSecondary">@color/ek_slate</item>
+        <item name="colorOnSecondary">@color/ek_soot</item>
+        <item name="colorSecondaryContainer">@color/ek_ash_raised</item>
+        <item name="colorOnSecondaryContainer">@color/ek_afterglow</item>
+        <item name="colorTertiary">@color/ek_slate</item>
+
+        <item name="colorSurface">@color/ek_soot</item>
+        <item name="colorOnSurface">@color/ek_afterglow</item>
+        <item name="colorOnSurfaceVariant">@color/ek_slate</item>
+        <item name="colorSurfaceContainerLowest">@color/ek_soot</item>
+        <item name="colorSurfaceContainerLow">@color/ek_ash</item>
+        <item name="colorSurfaceContainer">@color/ek_ash</item>
+        <item name="colorSurfaceContainerHigh">@color/ek_ash_raised</item>
+        <item name="colorSurfaceContainerHighest">@color/ek_ash_raised</item>
+        <item name="colorOutline">@color/ek_cinder</item>
+        <item name="colorOutlineVariant">@color/ek_ash_line</item>
+        <item name="colorError">@color/ek_error</item>
+        <item name="colorOnError">@color/ek_soot</item>
+
+        <item name="materialButtonOutlinedStyle">@style/Widget.EndKnot.Button.Outlined</item>
+    </style>
+
+    <style name="Widget.EndKnot.Button.Outlined" parent="Widget.Material3.Button.OutlinedButton">
+        <item name="android:textColor">@color/ek_afterglow</item>
+        <item name="strokeColor">@color/ek_cinder</item>
+        <item name="shapeAppearance">@style/ShapeAppearance.EndKnot.Small</item>
+        <item name="android:minHeight">52dp</item>
+    </style>
+
+    <style name="Widget.EndKnot.Button.Text" parent="Widget.Material3.Button.TextButton">
+        <item name="android:textColor">@color/ek_ember</item>
+    </style>
+
+    <style name="ShapeAppearance.EndKnot.Small" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">10dp</item>
+    </style>
+
+    <!-- Status readout: label left, monospaced value right. -->
+    <style name="TextAppearance.EndKnot.Label" parent="TextAppearance.Material3.LabelLarge">
+        <item name="android:textColor">@color/ek_slate</item>
+    </style>
+
+    <style name="TextAppearance.EndKnot.Readout" parent="TextAppearance.Material3.BodyLarge">
+        <item name="android:fontFamily">monospace</item>
+        <item name="android:textColor">@color/ek_afterglow</item>
+        <item name="android:letterSpacing">0.02</item>
+    </style>
+</resources>

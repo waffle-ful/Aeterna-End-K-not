@@ -1,5 +1,6 @@
 package dev.allofus.fusioncore;
 
+import android.animation.ValueAnimator;
 import android.app.ActivityManager;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
@@ -12,6 +13,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.util.Log;
 import android.view.View;
+import android.view.animation.LinearInterpolator;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.TextView;
@@ -37,6 +39,8 @@ import dev.allofus.fusioncore.tools.ItchAuth;
 import dev.allofus.fusioncore.tools.LogBundle;
 import dev.allofus.fusioncore.tools.PluginInstaller;
 import dev.allofus.fusioncore.tools.Utilities;
+import dev.allofus.fusioncore.ui.FuseView;
+import dev.allofus.fusioncore.ui.Motion;
 
 /** Home screen: one launch card for Among Us, status rows, and the secondary actions. */
 public class SelectorActivity extends AppCompatActivity {
@@ -57,7 +61,8 @@ public class SelectorActivity extends AppCompatActivity {
 
     private View launchCard;
     private TextView launchHint;
-    private View launchProgress;
+    private FuseView launchProgress;
+    private ValueAnimator burnAnimator;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -148,15 +153,28 @@ public class SelectorActivity extends AppCompatActivity {
     private void startCountdown() {
         stopCountdown();
         countdownLeft = AUTO_LAUNCH_SECONDS;
-        launchProgress.setVisibility(View.VISIBLE);
+        launchProgress.setBurn(0f);
+        launchProgress.setLit(true);
+        if (Motion.enabled(this)) {
+            burnAnimator = ValueAnimator.ofFloat(0f, 1f);
+            burnAnimator.setDuration(AUTO_LAUNCH_SECONDS * 1000L);
+            burnAnimator.setInterpolator(new LinearInterpolator());
+            burnAnimator.addUpdateListener(a -> launchProgress.setBurn((float) a.getAnimatedValue()));
+            burnAnimator.start();
+        }
         onCountdownTick();
     }
 
     private void onCountdownTick() {
         if (countdownLeft <= 0) {
-            launchProgress.setVisibility(View.INVISIBLE);
+            cancelBurn();
+            launchProgress.setLit(false);
             maybeLaunchBootstrap(TARGET_PACKAGE);
             return;
+        }
+        if (burnAnimator == null) {
+            // Animation is off in system settings: step the ember once per second instead.
+            launchProgress.setBurn(1f - countdownLeft / (float) AUTO_LAUNCH_SECONDS);
         }
         launchHint.setText(getString(R.string.home_launch_countdown, countdownLeft));
         countdownLeft--;
@@ -181,12 +199,20 @@ public class SelectorActivity extends AppCompatActivity {
         if (handler != null) {
             handler.removeCallbacks(countdownTick);
         }
+        cancelBurn();
         if (countdownLeft > 0) {
             countdownLeft = 0;
-            launchProgress.setVisibility(View.INVISIBLE);
+            launchProgress.setLit(false);
             if (targetInstalled) {
                 launchHint.setText(R.string.home_launch_tap);
             }
+        }
+    }
+
+    private void cancelBurn() {
+        if (burnAnimator != null) {
+            burnAnimator.cancel();
+            burnAnimator = null;
         }
     }
 
@@ -216,6 +242,7 @@ public class SelectorActivity extends AppCompatActivity {
         if (handler != null) {
             handler.removeCallbacksAndMessages(null);
         }
+        cancelBurn();
         super.onDestroy();
     }
 

@@ -5,15 +5,14 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:gravity="center"
-    android:background="?android:attr/colorBackground"
+    android:background="@color/ek_soot"
     android:padding="24dp">
 
-    <ProgressBar
+    <dev.allofus.fusioncore.ui.EmberView
         android:id="@+id/bootstrap_progress"
-        style="?android:attr/progressBarStyleLarge"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:indeterminate="true" />
+        android:layout_width="96dp"
+        android:layout_height="96dp"
+        android:importantForAccessibility="no" />
 
     <ProgressBar
         android:id="@+id/bootstrap_download_progress"
@@ -24,6 +23,8 @@
         android:max="100"
         android:indeterminate="false"
         android:progress="0"
+        android:progressTint="@color/ek_ember"
+        android:progressBackgroundTint="@color/ek_ash_line"
         android:visibility="gone" />
 
     <TextView
@@ -33,7 +34,7 @@
         android:layout_marginTop="16dp"
         android:gravity="center"
         android:text="@string/bootstrap_title"
-        android:textColor="?android:attr/textColorPrimary"
+        android:textColor="@color/ek_afterglow"
         android:textSize="20sp"
         android:textStyle="bold" />
 
@@ -44,7 +45,7 @@
         android:layout_marginTop="8dp"
         android:gravity="center"
         android:text="@string/bootstrap_status_preparing"
-        android:textColor="?android:attr/textColorSecondary"
+        android:textColor="@color/ek_slate"
         android:textSize="14sp" />
 
     <TextView
@@ -53,7 +54,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="6dp"
         android:gravity="center"
-        android:textColor="?android:attr/textColorSecondary"
+        android:textColor="@color/ek_slate"
         android:textSize="12sp"
         android:visibility="gone" />
 

@@ -4,29 +4,31 @@
     android:id="@+id/selector_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="?attr/colorSurfaceContainerLowest"
+    android:background="@color/ek_soot"
     android:fillViewport="true">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="16dp">
+        android:paddingStart="4dp"
+        android:paddingEnd="4dp">
 
-        <!-- Header: app icon, name, one-line role -->
+        <!-- Header: mark, wordmark, subtitle -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:paddingTop="8dp"
-            android:paddingBottom="20dp">
+            android:paddingTop="12dp"
+            android:paddingBottom="28dp">
 
             <ImageView
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:layout_marginEnd="14dp"
-                android:src="@mipmap/app_icon"
+                android:layout_width="72dp"
+                android:layout_height="72dp"
+                android:layout_marginStart="-10dp"
+                android:layout_marginEnd="6dp"
+                android:src="@drawable/ek_mark"
                 android:contentDescription="@null" />
 
             <LinearLayout
@@ -35,201 +37,218 @@
                 android:layout_weight="1"
                 android:orientation="vertical">
 
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/app_name"
-                    android:textAppearance="?attr/textAppearanceHeadlineSmall"
-                    android:textStyle="bold" />
+                <ImageView
+                    android:layout_width="wrap_content"
+                    android:layout_height="30dp"
+                    android:adjustViewBounds="true"
+                    android:scaleType="fitStart"
+                    android:src="@drawable/ek_wordmark"
+                    android:contentDescription="@string/app_name" />
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
                     android:text="@string/home_subtitle"
                     android:textAppearance="?attr/textAppearanceBodyMedium"
-                    android:textColor="?attr/colorOnSurfaceVariant" />
+                    android:textColor="@color/ek_slate" />
             </LinearLayout>
         </LinearLayout>
 
-        <!-- Launch card: the one primary action -->
+        <!-- Launch card; the fuse at the bottom shows the auto-launch countdown -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/home_launch_card"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="20dp"
             android:clickable="true"
             android:focusable="true"
-            app:cardCornerRadius="24dp"
+            app:cardCornerRadius="18dp"
             app:cardElevation="0dp"
-            app:strokeWidth="0dp"
-            app:cardBackgroundColor="?attr/colorPrimaryContainer">
+            app:strokeWidth="1dp"
+            app:strokeColor="@color/ek_ash_line"
+            app:rippleColor="#33FF7320"
+            app:cardBackgroundColor="@color/ek_ash">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:gravity="center"
-                android:paddingTop="28dp"
-                android:paddingBottom="28dp"
+                android:paddingTop="22dp"
+                android:paddingBottom="10dp"
                 android:paddingStart="20dp"
                 android:paddingEnd="20dp">
 
-                <ImageView
-                    android:id="@+id/home_launch_icon"
-                    android:layout_width="56dp"
-                    android:layout_height="56dp"
-                    android:layout_marginBottom="12dp"
-                    android:contentDescription="@string/game_icon" />
-
-                <TextView
-                    android:id="@+id/home_launch_title"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/home_launch_title"
-                    android:textAppearance="?attr/textAppearanceTitleLarge"
-                    android:textStyle="bold"
-                    android:textColor="?attr/colorOnPrimaryContainer" />
-
-                <TextView
-                    android:id="@+id/home_launch_hint"
+                <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
-                    android:gravity="center"
-                    android:text="@string/loading"
-                    android:textAppearance="?attr/textAppearanceBodyMedium"
-                    android:textColor="?attr/colorOnPrimaryContainer" />
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
 
-                <com.google.android.material.progressindicator.LinearProgressIndicator
+                    <ImageView
+                        android:id="@+id/home_launch_icon"
+                        android:layout_width="52dp"
+                        android:layout_height="52dp"
+                        android:layout_marginEnd="16dp"
+                        android:contentDescription="@string/game_icon" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/home_launch_title"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="@string/home_launch_title"
+                            android:textAppearance="?attr/textAppearanceTitleLarge"
+                            android:textStyle="bold"
+                            android:textColor="@color/ek_afterglow" />
+
+                        <TextView
+                            android:id="@+id/home_launch_hint"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:text="@string/loading"
+                            android:textAppearance="?attr/textAppearanceBodyMedium"
+                            android:textColor="@color/ek_slate" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <dev.allofus.fusioncore.ui.FuseView
                     android:id="@+id/home_launch_progress"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="14dp"
-                    android:indeterminate="true"
-                    android:visibility="invisible"
-                    app:indicatorColor="?attr/colorOnPrimaryContainer"
-                    app:trackColor="?attr/colorPrimaryContainer"
-                    app:trackCornerRadius="2dp" />
+                    android:layout_height="32dp"
+                    android:layout_marginTop="12dp"
+                    android:layout_marginStart="-6dp"
+                    android:layout_marginEnd="-6dp"
+                    android:importantForAccessibility="no" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Status rows -->
-        <com.google.android.material.card.MaterialCardView
+        <!-- Status readout -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            app:cardCornerRadius="16dp"
-            app:cardElevation="0dp"
-            app:strokeWidth="1dp"
-            app:strokeColor="?attr/colorOutlineVariant"
-            app:cardBackgroundColor="?attr/colorSurfaceContainerLow">
+            android:layout_marginTop="28dp"
+            android:orientation="vertical"
+            android:showDividers="middle|end"
+            android:divider="@drawable/ek_divider">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:showDividers="middle"
-                android:divider="?android:attr/listDivider">
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingTop="12dp"
+                android:paddingBottom="12dp">
 
                 <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/home_row_itch"
+                    android:textAppearance="@style/TextAppearance.EndKnot.Label" />
+
+                <TextView
+                    android:id="@+id/selector_itch_status"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:paddingStart="16dp"
-                    android:paddingEnd="8dp"
-                    android:paddingTop="6dp"
-                    android:paddingBottom="6dp">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginEnd="12dp"
-                        android:minWidth="72dp"
-                        android:text="@string/home_row_itch"
-                        android:textAppearance="?attr/textAppearanceBodyMedium"
-                        android:textColor="?attr/colorOnSurfaceVariant" />
-
-                    <TextView
-                        android:id="@+id/selector_itch_status"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:layout_marginEnd="8dp"
-                        android:maxLines="1"
-                        android:ellipsize="end"
-                        android:text="@string/selector_itch_not_signed_in"
-                        android:textAppearance="?attr/textAppearanceBodyMedium" />
-
-                    <Button
-                        android:id="@+id/selector_itch_button"
-                        style="?attr/materialButtonOutlinedStyle"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/selector_itch_sign_in" />
+                    android:layout_marginTop="2dp"
+                    android:maxLines="1"
+                    android:ellipsize="end"
+                    android:text="@string/selector_itch_not_signed_in"
+                    android:textAppearance="?attr/textAppearanceBodyLarge"
+                    android:textColor="@color/ek_afterglow" />
                 </LinearLayout>
 
-                <LinearLayout
-                    android:layout_width="match_parent"
+                <Button
+                    android:id="@+id/selector_itch_button"
+                    style="@style/Widget.EndKnot.Button.Text"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:padding="16dp">
+                    android:layout_marginEnd="-12dp"
+                    android:text="@string/selector_itch_sign_in" />
+            </LinearLayout>
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginEnd="12dp"
-                        android:minWidth="72dp"
-                        android:text="@string/home_row_game"
-                        android:textAppearance="?attr/textAppearanceBodyMedium"
-                        android:textColor="?attr/colorOnSurfaceVariant" />
-
-                    <TextView
-                        android:id="@+id/home_game_version"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="@string/loading"
-                        android:textAppearance="?attr/textAppearanceBodyLarge" />
-                </LinearLayout>
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingTop="12dp"
+                android:paddingBottom="12dp">
 
                 <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/home_row_game"
+                    android:textAppearance="@style/TextAppearance.EndKnot.Label" />
+
+                <TextView
+                    android:id="@+id/home_game_version"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:padding="16dp">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginEnd="12dp"
-                        android:minWidth="72dp"
-                        android:text="@string/home_row_mod"
-                        android:textAppearance="?attr/textAppearanceBodyMedium"
-                        android:textColor="?attr/colorOnSurfaceVariant" />
-
-                    <TextView
-                        android:id="@+id/home_mod_version"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="@string/loading"
-                        android:textAppearance="?attr/textAppearanceBodyLarge" />
+                    android:layout_marginTop="2dp"
+                    android:text="@string/loading"
+                    android:textAppearance="@style/TextAppearance.EndKnot.Readout" />
                 </LinearLayout>
             </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
 
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingTop="12dp"
+                android:paddingBottom="12dp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/home_row_mod"
+                    android:textAppearance="@style/TextAppearance.EndKnot.Label" />
+
+                <TextView
+                    android:id="@+id/home_mod_version"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="@string/loading"
+                    android:textAppearance="@style/TextAppearance.EndKnot.Readout" />
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Secondary actions -->
         <Button
             android:id="@+id/home_open_role_maker"
             style="?attr/materialButtonOutlinedStyle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="8dp"
+            android:layout_marginTop="28dp"
+            android:layout_marginBottom="4dp"
             android:text="@string/home_action_role_maker" />
 
-        <!-- Secondary actions -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -242,7 +261,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:layout_marginEnd="8dp"
+                android:layout_marginEnd="6dp"
                 android:text="@string/home_action_share_logs" />
 
             <Button
@@ -251,7 +270,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:layout_marginStart="8dp"
+                android:layout_marginStart="6dp"
                 android:text="@string/selector_action_settings" />
         </LinearLayout>
 
