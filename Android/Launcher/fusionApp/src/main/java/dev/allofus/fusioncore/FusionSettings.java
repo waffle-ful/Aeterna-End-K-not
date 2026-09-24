@@ -23,11 +23,16 @@ public final class FusionSettings {
         prefs(context).edit().putBoolean(targetPackage + ":" + KEY_DOWNLOAD_UNSTRIPPED_LIBUNITY, enabled).apply();
     }
 
-    public static String getActivityOverrideForGame(Context context, String targetPackage) {
-        return prefs(context).getString(targetPackage + ":" + KEY_ACTIVITY_OVERRIDE, context.getString(R.string.settings_automatic));
-    }
-
-    public static void setActivityOverrideForGame(Context context, String targetPackage, String activityName) {
-        prefs(context).edit().putString(targetPackage + ":" + KEY_ACTIVITY_OVERRIDE, activityName).apply();
+    // The launch activity is always resolved automatically (the bridge only serves the game's
+    // main activity). Older builds stored an override, sometimes as the localized "automatic"
+    // label, so any stored value is legacy and is dropped rather than compared to a label.
+    public static boolean dropActivityOverrideForGame(Context context, String targetPackage) {
+        String key = targetPackage + ":" + KEY_ACTIVITY_OVERRIDE;
+        SharedPreferences prefs = prefs(context);
+        if (!prefs.contains(key)) {
+            return false;
+        }
+        prefs.edit().remove(key).apply();
+        return true;
     }
 }

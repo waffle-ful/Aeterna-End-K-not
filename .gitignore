@@ -536,3 +536,7 @@ relay/CONTRACT.md
 Resources/Sounds/BGM/*.bundle
 Resources/Sounds/*.bundle
 build-android/
+
+# Android の署名鍵 (どこに置かれても追跡しない)
+*.jks
+*.keystore

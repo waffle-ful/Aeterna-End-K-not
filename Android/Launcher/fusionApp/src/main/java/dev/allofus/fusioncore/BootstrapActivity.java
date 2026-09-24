@@ -61,6 +61,7 @@ public class BootstrapActivity extends AppCompatActivity {
     /** Where the player gets a newer launcher when this build no longer matches the game. */
     private static final String RELEASES_URL = "https://github.com/waffle-ful/Aeterna-End-K-not/releases/latest";
 
+    private TextView titleView;
     private TextView statusView;
     private TextView progressDetailsView;
     private View actionsRow;
@@ -72,6 +73,7 @@ public class BootstrapActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_bootstrap);
         Utilities.initStorage(this);
+        titleView = findViewById(R.id.bootstrap_title);
         statusView = findViewById(R.id.bootstrap_status);
         progressDetailsView = findViewById(R.id.bootstrap_progress_details);
         spinnerProgress = findViewById(R.id.bootstrap_progress);
@@ -141,22 +143,8 @@ public class BootstrapActivity extends AppCompatActivity {
             launcherComponent = launchIntent.resolveActivity(getPackageManager());
         }
 
-        var overrideActivity = FusionSettings.getActivityOverrideForGame(this, targetPackage);
-        try {
-            if (!overrideActivity.equals(getString(R.string.settings_automatic))) {
-                var overrideClass = gameClassLoader.loadClass(overrideActivity);
-                if (overrideClass != null) {
-                    launcherComponent = new ComponentName(targetPackage, overrideActivity);
-                    Log.i(TAG, "Using override activity " + overrideActivity);
-                    runOnUiThread(() -> Toast.makeText(this, "Using override activity " + overrideActivity, Toast.LENGTH_LONG).show());
-                } else {
-                    Log.i(TAG, "Failed to find override activity " + overrideActivity);
-                    runOnUiThread(()-> Toast.makeText(this, "Failed to find override activity.", Toast.LENGTH_LONG).show());
-                }
-            }
-        } catch (Exception e) {
-            runOnUiThread(()-> Toast.makeText(this, "Exception when finding override activity.", Toast.LENGTH_LONG).show());
-            Log.e(TAG, "Failed to get override activity "+ overrideActivity, e);
+        if (FusionSettings.dropActivityOverrideForGame(this, targetPackage)) {
+            Log.i(TAG, "Dropped a stored launch activity override; the main activity is used.");
         }
 
         if (launcherComponent == null) {
@@ -199,12 +187,7 @@ public class BootstrapActivity extends AppCompatActivity {
         // degraded start.
         if (!UnityActivityHost.install(getApplicationContext(), gameContext, gameClassLoader,
                 launcherComponent.getClassName())) {
-            if (!overrideActivity.equals(getString(R.string.settings_automatic))) {
-                // An activity override from the settings screen cannot be served by the bridge.
-                failAndFinish("Activity override '" + overrideActivity + "' is not supported; set it back to automatic.", null);
-            } else {
-                failAndStay(getString(R.string.bootstrap_game_layout_unsupported));
-            }
+            failAndStay(getString(R.string.bootstrap_game_layout_unsupported));
             return;
         }
         try {
@@ -331,6 +314,9 @@ public class BootstrapActivity extends AppCompatActivity {
     private void failAndStay(String message) {
         runOnMainThread(() -> {
             Log.e(TAG, message);
+            if (titleView != null) {
+                titleView.setText(R.string.bootstrap_status_error);
+            }
             if (statusView != null) {
                 statusView.setText(message);
             }
