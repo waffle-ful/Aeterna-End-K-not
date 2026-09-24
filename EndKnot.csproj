@@ -41,7 +41,7 @@
     </ItemGroup>
     <!-- Android: the desktop-only media stays out of the mobile DLL. The BGM AssetBundle is a
          Windows build (an arm64 bundle replaces it later), the raw .ogg tracks only back that
-         bundle, and the menu fire / loading videos are compiled out on Android. -->
+         bundle, and the menu fire / loading videos play from frame packs (.ekfp) on Android. -->
     <ItemGroup Condition="'$(Configuration)' == 'Android'">
         <EmbeddedResource Remove="Resources\Sounds\BGM\*.ogg" />
         <EmbeddedResource Remove="Resources\Sounds\BGM\endknot_bgm.bundle" />
@@ -61,6 +61,9 @@
     <ItemGroup Condition="'$(Configuration)' != 'Android'">
         <EmbeddedResource Remove="Resources\Sounds\BGM\endknot_bgm.android.bundle" />
         <EmbeddedResource Remove="Resources\Sounds\endknot_sfx.android.bundle" />
+        <!-- Frame packs are the Android replacement for the videos; desktop plays the videos with
+             VideoPlayer and only reads a pack dropped into plugins/EndKnot/Media. -->
+        <EmbeddedResource Remove="Resources\Media\*.ekfp" />
     </ItemGroup>
 
     <ItemGroup>

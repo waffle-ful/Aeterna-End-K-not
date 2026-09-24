@@ -10,7 +10,7 @@ namespace EndKnot.Modules.Media;
 // Unity VideoPlayer 再生カプセル。SuperNewRoles Modules/AnnouncementImageSupport.cs の
 // CreateVideoRenderer / OnVideoPrepared / 毎フレームコピー機構をそのまま踏襲する(前例の無い
 // Unity API を発明しない)。ネットワーク送信は一切行わない(ホストローカル描画のみ)。
-public sealed class VideoSurface
+public sealed class VideoSurface : IMediaSurface
 {
     private const float PixelsPerUnit = 100f;
 
@@ -28,7 +28,7 @@ public sealed class VideoSurface
     public bool Prepared { get; private set; }
 
     // 実際に最初のフレームがコピーされた瞬間を計測層へ通知するためのフック (呼び出し元が任意設定)。
-    public Action OnFirstFrame;
+    public Action OnFirstFrame { get; set; }
 
     /// <summary>ネイティブ側の準備が済んでいるか。<see cref="Prepared"/> は <see cref="Tick"/> が
     /// 拾い上げて描画を始めた後に立つので、ポーリング前の進み具合を見たいときはこちらを使う。</summary>
