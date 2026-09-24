@@ -48,8 +48,12 @@ public static class TextBoxPatch
         || (GameSettingMenuPatch.InputField && GameSettingMenuPatch.InputField.textArea == textBox)
         || (NumericOptionInputPatch.ActiveField && NumericOptionInputPatch.ActiveField.textArea == textBox); // 数値入力欄も検索欄と同じ入力経路で受ける
 
+    // Set by Main when this class is actually registered with Harmony. Where it is not (Android runs the
+    // vanilla TextBoxTMP untouched), nothing ever writes LastText, so the mirror must not be trusted.
+    internal static bool Installed;
+
     // True for the live chat field only (not the settings-menu clone). Only these boxes use LastText mirror.
-    private static bool WeManageText(TextBoxTMP tb) => Translator.GetUserTrueLang() != SupportedLangs.Russian && tb.gameObject.HasParentInHierarchy("ChatScreenRoot/ChatScreenContainer");
+    private static bool WeManageText(TextBoxTMP tb) => Installed && Translator.GetUserTrueLang() != SupportedLangs.Russian && tb.gameObject.HasParentInHierarchy("ChatScreenRoot/ChatScreenContainer");
 
     // Identity guard: checks both Unity fake-null AND that the IL2CPP instance ID matches what we recorded
     // at creation time. A freed-then-reused slot passes Unity's fake-null but will have a different ID.
