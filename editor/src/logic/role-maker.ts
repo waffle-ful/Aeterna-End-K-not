@@ -1503,6 +1503,10 @@ function wire(): void {
     for (const id of ["btn-role-maker", "start-role-maker"]) {
         document.getElementById(id)?.addEventListener("click", openRoleMaker);
     }
+    // 3 つ目の入口: #role-maker 付きの URL (ランチャーなど外部から役職メーカーへ直行する導線)
+    if (location.hash === "#role-maker") {
+        openRoleMaker();
+    }
 }
 
 /** 役職メーカーを開く (全画面モーダル)。入口が増えてもここだけを呼ぶこと */

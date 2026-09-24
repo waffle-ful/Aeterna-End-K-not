@@ -12,6 +12,7 @@
     <string name="home_row_mod_none">同梱なし</string>
     <string name="home_row_game_none">未インストール</string>
     <string name="home_action_share_logs">ログを共有</string>
+    <string name="home_action_role_maker">役職メーカーを開く</string>
     <string name="selector_action_settings">設定</string>
     <string name="settings_title">設定</string>
     <string name="settings_action_back">戻る</string>

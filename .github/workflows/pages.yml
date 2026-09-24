@@ -3,7 +3,7 @@ name: Pages
 on:
   push:
     branches: [main]
-    paths: ['site/**']
+    paths: ['site/**', 'editor/**', '.github/workflows/pages.yml']
   workflow_dispatch:
 
 permissions:
@@ -23,9 +23,25 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: editor/package-lock.json
+      - name: Build the editor
+        working-directory: editor
+        run: |
+          npm ci
+          npm run build
+      - name: Assemble the site
+        run: |
+          mkdir -p _site
+          cp -r site/. _site/
+          mkdir -p _site/editor
+          cp -r editor/dist/. _site/editor/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: _site
       - id: deployment
         uses: actions/deploy-pages@v4

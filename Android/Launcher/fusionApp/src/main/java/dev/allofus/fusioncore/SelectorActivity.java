@@ -43,6 +43,8 @@ public class SelectorActivity extends AppCompatActivity {
     private static final String TAG = "FusionCore";
     private static final String[] UNITY_ABIS = {"arm64-v8a", "armeabi-v7a", "x86_64", "x86"};
     static final String TARGET_PACKAGE = "com.innersloth.spacemafia";
+    /** The web role maker; a role made there is pasted into the game with /role import. */
+    private static final String ROLE_MAKER_URL = "https://waffle-ful.github.io/Aeterna-End-K-not/editor/#role-maker";
     /** Set on the intent that brings the player back after the itch.io sign-in page. */
     static final String EXTRA_AFTER_SIGN_IN = "after_sign_in";
     private static final int AUTO_LAUNCH_SECONDS = 3;
@@ -91,6 +93,10 @@ public class SelectorActivity extends AppCompatActivity {
             Intent intent = new Intent(this, GameSettingsActivity.class);
             intent.putExtra(GameSettingsActivity.EXTRA_PACKAGE_NAME, TARGET_PACKAGE);
             startActivity(intent);
+        });
+        findViewById(R.id.home_open_role_maker).setOnClickListener(v -> {
+            stopCountdown();
+            openWebPage(ROLE_MAKER_URL);
         });
         findViewById(R.id.home_share_logs).setOnClickListener(v -> {
             stopCountdown();
@@ -155,6 +161,20 @@ public class SelectorActivity extends AppCompatActivity {
         launchHint.setText(getString(R.string.home_launch_countdown, countdownLeft));
         countdownLeft--;
         handler.postDelayed(countdownTick, 1000L);
+    }
+
+    /** Opens a web page in a custom tab, falling back to the default browser. */
+    private void openWebPage(String url) {
+        android.net.Uri uri = android.net.Uri.parse(url);
+        try {
+            new androidx.browser.customtabs.CustomTabsIntent.Builder().build().launchUrl(this, uri);
+        } catch (Exception e) {
+            try {
+                startActivity(new Intent(Intent.ACTION_VIEW, uri));
+            } catch (Exception inner) {
+                Log.e(TAG, "No browser available", inner);
+            }
+        }
     }
 
     private void stopCountdown() {
