@@ -20,6 +20,25 @@ public static class BackroomsLobby
     // OnGameStart 経路では scene unload に任せて参照クリアだけ
     private static readonly List<Renderer> DisabledRenderers = [];
 
+    // 診断出力用。エンジンコードを削ったプレイヤー (Android) には LayerToName / vSyncCount の実装が無い。
+    private static string LayerLabel(int layer)
+    {
+#if ANDROID
+        return layer.ToString();
+#else
+        return LayerMask.LayerToName(layer);
+#endif
+    }
+
+    private static string VSyncLabel()
+    {
+#if ANDROID
+        return "?";
+#else
+        return QualitySettings.vSyncCount.ToString();
+#endif
+    }
+
     public static void DumpLobbyColliders(byte targetPid)
     {
         if (LobbyBehaviour.Instance == null)
@@ -46,12 +65,12 @@ public static class BackroomsLobby
             layerHist.TryGetValue(layer, out int n);
             layerHist[layer] = n + 1;
 
-            sb.AppendLine($"{c.gameObject.name} | L{layer} ({LayerMask.LayerToName(layer)}) | {c.GetType().Name} | en={c.enabled} | ship={isShip}");
+            sb.AppendLine($"{c.gameObject.name} | L{layer} ({LayerLabel(layer)}) | {c.GetType().Name} | en={c.enabled} | ship={isShip}");
         }
 
         sb.AppendLine("--- Layer histogram ---");
         foreach ((int layer, int n) in layerHist)
-            sb.AppendLine($"L{layer} ({LayerMask.LayerToName(layer)}): {n}");
+            sb.AppendLine($"L{layer} ({LayerLabel(layer)}): {n}");
 
         sb.AppendLine($"ShipOnlyMask = 0x{shipMask:X8}");
         sb.AppendLine($"Total ShipOnly = {shipCount}");
@@ -538,7 +557,7 @@ public static class BackroomsLobby
         // 黒 overlay として壁を覆う (v7) ため sprite は H/V 共通の BaselineSprite (procedural white)
         sr.sprite = BaselineSprite;
         sr.color = isH ? WallGhostColorH : WallGhostColorV;
-        sr.sortingLayerName = "Default";
+        sr.sortingLayerID = 0; // Default
         sr.sortingOrder = 60;
     }
 
@@ -559,7 +578,7 @@ public static class BackroomsLobby
         SpriteRenderer faceSr = face.AddComponent<SpriteRenderer>();
         faceSr.sprite = WallPngSprite ?? WallSpriteH;
         faceSr.color = Color.white;
-        faceSr.sortingLayerName = "Default";
+        faceSr.sortingLayerID = 0; // Default
         faceSr.sortingOrder = -5;
 
         // 上端 20% の dark band (立体感の源)。ShowWallHTopBand で ON/OFF (「壁が浮く」切り分け用)。
@@ -570,7 +589,7 @@ public static class BackroomsLobby
         SpriteRenderer topSr = top.AddComponent<SpriteRenderer>();
         topSr.sprite = BaselineSprite;
         topSr.color = WallDarkColor;
-        topSr.sortingLayerName = "Default";
+        topSr.sortingLayerID = 0; // Default
         topSr.sortingOrder = -3;
         topSr.enabled = BackroomsConfig.ShowWallHTopBand;
 
@@ -614,7 +633,7 @@ public static class BackroomsLobby
             sr.sprite = BaselineSprite;
             sr.color = FloorBaseColor;
         }
-        sr.sortingLayerName = "Default";
+        sr.sortingLayerID = 0; // Default
         sr.sortingOrder = sortingOrder;
         Vector3 wp = parent.transform.position;
         ApplyFloorVariation(sr, floor.transform, wp.x, wp.y);
@@ -666,7 +685,7 @@ public static class BackroomsLobby
             SpriteRenderer sr = sub.AddComponent<SpriteRenderer>();
             sr.sprite = stainSp;
             sr.color = blobColor;
-            sr.sortingLayerName = "Default";
+            sr.sortingLayerID = 0; // Default
             sr.sortingOrder = -9; // floor (-10) より前、wall (-5) より後
         }
     }
@@ -737,7 +756,7 @@ public static class BackroomsLobby
         //   右 AO: body 側=左 で濃が欲しい → flipX=false でそのまま
         sr.flipX = isLeft;
         sr.color = new Color(0f, 0f, 0f, 0.45f);
-        sr.sortingLayerName = "Default";
+        sr.sortingLayerID = 0; // Default
         // sortingOrder=-6: vignette mesh (-7) より前、wall body (-5/-4/-3) より後。
         // 柱の左右 0.075u 隙間は vision raycast の解像度より狭く、cell ごとに
         // vignette が「開く/閉じる」して AO がポツポツ見えてた問題への対処 (2026-05-23)
@@ -758,7 +777,7 @@ public static class BackroomsLobby
         SpriteRenderer sr = shadow.AddComponent<SpriteRenderer>();
         sr.sprite = WallShadowGradientSprite;
         sr.color = new Color(0f, 0f, 0f, 0.45f); // sprite alpha と掛けで実効平均 ~0.22
-        sr.sortingLayerName = "Default";
+        sr.sortingLayerID = 0; // Default
         sr.sortingOrder = -9; // floor (-10) より前、wall body (-5/-4/-3) より後
     }
 
@@ -788,7 +807,7 @@ public static class BackroomsLobby
         SpriteRenderer fsr = face.AddComponent<SpriteRenderer>();
         fsr.sprite = WallPngSprite ?? WallSpriteH ?? BaselineSprite;
         fsr.color = Color.white;
-        fsr.sortingLayerName = "Default";
+        fsr.sortingLayerID = 0; // Default
         fsr.sortingOrder = -3;
 
         GameObject band = new("WallVBottomCapBand");
@@ -798,7 +817,7 @@ public static class BackroomsLobby
         SpriteRenderer bsr = band.AddComponent<SpriteRenderer>();
         bsr.sprite = BaselineSprite;
         bsr.color = WallDarkColor;
-        bsr.sortingLayerName = "Default";
+        bsr.sortingLayerID = 0; // Default
         bsr.sortingOrder = -3;
 
         // 終端 cell は下に floor が来るので下方向 AO を生やす (柱が床に「ぶつかって終わる」根本)。
@@ -816,7 +835,7 @@ public static class BackroomsLobby
         SpriteRenderer bsr = body.AddComponent<SpriteRenderer>();
         bsr.sprite = BaselineSprite;
         bsr.color = WallDarkColor;
-        bsr.sortingLayerName = "Default";
+        bsr.sortingLayerID = 0; // Default
         bsr.sortingOrder = -4;
 
         // West edge highlight: 0.025 wide, slightly lighter than body
@@ -827,7 +846,7 @@ public static class BackroomsLobby
         SpriteRenderer wsr = west.AddComponent<SpriteRenderer>();
         wsr.sprite = BaselineSprite;
         wsr.color = WallEdgeHighlight;
-        wsr.sortingLayerName = "Default";
+        wsr.sortingLayerID = 0; // Default
         wsr.sortingOrder = -3;
 
         // East edge highlight
@@ -838,7 +857,7 @@ public static class BackroomsLobby
         SpriteRenderer esr = east.AddComponent<SpriteRenderer>();
         esr.sprite = BaselineSprite;
         esr.color = WallEdgeHighlight;
-        esr.sortingLayerName = "Default";
+        esr.sortingLayerID = 0; // Default
         esr.sortingOrder = -3;
     }
 
@@ -1305,7 +1324,7 @@ public static class BackroomsLobby
             bool isOn = r.enabled && r.gameObject.activeInHierarchy;
             if (isOn) totalEnabled++; else totalDisabled++;
             if (!byRoot.TryGetValue(key, out (int en, int dis, string layer) v))
-                v = (0, 0, LayerMask.LayerToName(root.gameObject.layer));
+                v = (0, 0, LayerLabel(root.gameObject.layer));
             if (isOn) v.en++; else v.dis++;
             byRoot[key] = v;
         }
@@ -3009,7 +3028,7 @@ public static class BackroomsLobby
         _overlaySR = _overlayGO.AddComponent<SpriteRenderer>();
         _overlaySR.sprite = BaselineSprite;
         _overlaySR.color = OverlayYellowBase;
-        _overlaySR.sortingLayerName = "Default";
+        _overlaySR.sortingLayerID = 0; // Default
         _overlaySR.sortingOrder = 100;
 
         _flickerNextEvalAt = Time.time + UnityEngine.Random.Range(60f, 120f); // 初回まで 1-2 分
@@ -3476,7 +3495,7 @@ public static class BackroomsLobby
         }
 
         mr.material = _visionMat;
-        mr.sortingLayerName = "Default";
+        mr.sortingLayerID = 0; // Default
         // sortingOrder spec (2026-05-27 v3): 二段 dark mesh + per-wall ghost 構成
         //   floor=-10 < Lower dark=-7 < walls=-5/-4/-3 < player/corpse=0 < Upper dark=+50 < ghost=+60 < overlay=+100
         //   Lower (-7, corner ray あり / sharp): floor を dark zone で覆う。壁 (-3 以上) は素通り
@@ -3487,7 +3506,7 @@ public static class BackroomsLobby
         //   CastRayLength は tFar 返却で donut 穴が壁の向こうまで広がり、視界内の壁は full color で見える
         mr.sortingOrder = -7;
 
-        Logger.Info($"Vision created: shader='{_visionMat.shader?.name}' sortingLayer='{mr.sortingLayerName}' order={mr.sortingOrder} worldPos={_visionGO.transform.position} layer={_visionGO.layer}", "BackroomsGen");
+        Logger.Info($"Vision created: shader='{_visionMat.shader?.name}' sortingLayer={mr.sortingLayerID} order={mr.sortingOrder} worldPos={_visionGO.transform.position} layer={_visionGO.layer}", "BackroomsGen");
 
         if (EnableUpperVisionMesh)
         {
@@ -3514,7 +3533,7 @@ public static class BackroomsLobby
         else
             _upperVisionMat = new Material(Shader.Find("Hidden/Internal-Colored")) { color = VignetteWarmDark };
         umr.material = _upperVisionMat;
-        umr.sortingLayerName = "Default";
+        umr.sortingLayerID = 0; // Default
         umr.sortingOrder = 50;
 
         Logger.Info($"Upper vision created: sortingOrder={umr.sortingOrder}", "BackroomsGen");
@@ -3761,7 +3780,7 @@ public static class BackroomsLobby
             $"HW: CPU={SystemInfo.processorType} x{SystemInfo.processorCount}core | " +
             $"GPU={SystemInfo.graphicsDeviceName} ({SystemInfo.graphicsMemorySize}MB, {SystemInfo.graphicsDeviceType}) | " +
             $"RAM={SystemInfo.systemMemorySize}MB | " +
-            $"fpsCap: target={Application.targetFrameRate} vSync={QualitySettings.vSyncCount} (vSync>0 なら FPS は モニタ refresh で頭打ち)",
+            $"fpsCap: target={Application.targetFrameRate} vSync={VSyncLabel()} (vSync>0 なら FPS は モニタ refresh で頭打ち)",
             "BackroomsPerf");
     }
 
@@ -4557,8 +4576,8 @@ public static class BackroomsLobby
         {
             MeshRenderer sq = HudManager.Instance.ShadowQuad;
             sb.AppendLine($"-- HudManager.ShadowQuad --");
-            sb.AppendLine($"  GO name: {sq.gameObject.name} active={sq.gameObject.activeInHierarchy} layer={sq.gameObject.layer}({LayerMask.LayerToName(sq.gameObject.layer)})");
-            sb.AppendLine($"  enabled={sq.enabled} sortingLayer='{sq.sortingLayerName}' order={sq.sortingOrder}");
+            sb.AppendLine($"  GO name: {sq.gameObject.name} active={sq.gameObject.activeInHierarchy} layer={sq.gameObject.layer}({LayerLabel(sq.gameObject.layer)})");
+            sb.AppendLine($"  enabled={sq.enabled} sortingLayer={sq.sortingLayerID} order={sq.sortingOrder}");
             sb.AppendLine($"  material shader='{sq.material?.shader?.name}'");
             sb.AppendLine($"  worldPos={sq.transform.position}");
 
@@ -4625,7 +4644,7 @@ public static class BackroomsLobby
         for (int i = 0; i < 32; i++)
         {
             if ((Constants.ShadowMask & (1 << i)) == 0) continue;
-            sb.AppendLine($"  Layer {i}: '{LayerMask.LayerToName(i)}'");
+            sb.AppendLine($"  Layer {i}: '{LayerLabel(i)}'");
         }
 
         Logger.Info(sb.ToString(), "BackroomsShadowDiag");

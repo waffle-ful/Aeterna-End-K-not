@@ -209,7 +209,10 @@ public class ClientControlGUI : MonoBehaviour
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter,
             wordWrap  = true,
+            // Android labels carry no rich-text chip (see Label), and the stripped player lacks the setter
+#if !ANDROID
             richText  = true,
+#endif
             normal    = { background = RoundedTexture(width, height, radius, normal,  Lift(normal,  0.10f)), textColor = Color.white },
             hover     = { background = RoundedTexture(width, height, radius, hover,   Lift(hover,   0.10f)), textColor = Color.white },
             active    = { background = RoundedTexture(width, height, radius, active,  Lift(active,  0.06f)), textColor = Color.white }
@@ -395,8 +398,11 @@ public class ClientControlGUI : MonoBehaviour
         var outerRect = new Rect(_windowRect.x + Padding, scrollY, visibleW, scrollH);
         var innerRect = new Rect(0, 0, contentW, _contentH);
 
+        // The stripped Android player lacks the fixedWidth setter; the scrollbar keeps the skin's default width there
+#if !ANDROID
         GUI.skin.verticalScrollbar.fixedWidth      = ScrollbarColumnWidth;
         GUI.skin.verticalScrollbarThumb.fixedWidth = ScrollbarColumnWidth;
+#endif
 
         // Horizontal scroll is disabled; vertical scroll appears when _contentH > scrollH
         _scroll = GUI.BeginScrollView(outerRect, _scroll, innerRect, false, false);

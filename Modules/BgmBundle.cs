@@ -136,7 +136,9 @@ internal static class BgmBundle
 
         try
         {
-            var assets = _bundle.LoadAllAssets(Il2CppType.Of<AudioClip>());
+            // 同期版 LoadAllAssets はエンジンコードを削ったプレイヤーにネイティブ実装が無い。
+            // 非同期版の allAssets は読み込み完了までその場で待って返すので、呼び出し側からは同期のまま。
+            var assets = _bundle.LoadAllAssetsAsync(Il2CppType.Of<AudioClip>()).allAssets;
             if (assets == null) return false;
 
             Clips.Clear();

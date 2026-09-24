@@ -115,7 +115,7 @@ public static class NewRoleMenuView
             float wz  = RoleMenuLayout.PosZ;
 
             if (RoleMenuDiag.PaneDiag && panelSr != null)
-                Logger.Info($"[PaneDiag] PanelSprite mat='{(panelSr.sharedMaterial != null ? panelSr.sharedMaterial.name : "null")}' layer='{panelSr.sortingLayerName}'({panelSr.sortingLayerID}) order={panelSr.sortingOrder}", "PaneDiag");
+                Logger.Info($"[PaneDiag] PanelSprite mat='{(panelSr.sharedMaterial != null ? panelSr.sharedMaterial.name : "null")}' layer={panelSr.sortingLayerID} order={panelSr.sortingOrder}", "PaneDiag");
 
             // Use the EXACT world bounds of PanelSprite so panes align pixel-perfectly.
             Bounds pb = panelSr != null ? panelSr.bounds : new Bounds(new Vector3(-1.6f, 0.2f), new Vector3(9.12f, 4.25f));
@@ -171,7 +171,7 @@ public static class NewRoleMenuView
                     maskBg.transform.position = new Vector3((wxL + wxR) / 2f, (clipWyT + ExpandedWyB) / 2f, pos.z);
                     Logger.Info($"[MaskBg] → {tgtW:F2}×{tgtH:F2} center=({(wxL+wxR)/2f:F2},{(clipWyT+ExpandedWyB)/2f:F2})", "MaskBg");
                     if (RoleMenuDiag.PaneDiag)
-                        Logger.Info($"[PaneDiag] MaskBg mat='{(maskBg.sharedMaterial != null ? maskBg.sharedMaterial.name : "null")}' layer='{maskBg.sortingLayerName}'({maskBg.sortingLayerID}) order={maskBg.sortingOrder}", "PaneDiag");
+                        Logger.Info($"[PaneDiag] MaskBg mat='{(maskBg.sharedMaterial != null ? maskBg.sharedMaterial.name : "null")}' layer={maskBg.sortingLayerID} order={maskBg.sortingOrder}", "PaneDiag");
                 }
             }
             else

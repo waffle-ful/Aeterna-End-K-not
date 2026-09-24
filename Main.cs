@@ -571,7 +571,10 @@ public class Main : BasePlugin
         // これを怠ると配信者が OBS 等へ alt-tab した瞬間 FixedUpdate が停止し、
         // サーバーへの ping が途切れて "Sent 6 pings that remote has not responded to" で切断される
         // (2026-07-05 の Dossun テスト連続 DC / 24 秒フレームストール事件の一次対策)。
+        // モバイルではバックグラウンド時の扱いを OS が決め、エンジンコードを削ったプレイヤーには setter の実装も無い。
+#if !ANDROID
         Application.runInBackground = true;
+#endif
 
         // conhost の QuickEdit 事故クリック (選択モード) がコンソール書き込みごとメインスレッドを
         // 無期限ブロックするのを防ぐ (2026-08-04 ハングダンプで確定した有人限定ハングの根治)。
@@ -683,12 +686,15 @@ public class Main : BasePlugin
         // ホストローカルの GUI 部品は最初の描画フレームより前には要らないので、スプラッシュ中の
         // フレームで順に足す (Modules.PatchPhases.Defer)。Load を短くするほど EOS ログインの開始が早まる。
         Modules.PatchPhases.Defer("ClientControlGUI", () => AddComponent<ClientControlGUI>());
+        // 配信向けのオーバーレイは Android 版では出さない (配信は PC ホストの用途)。
+#if !ANDROID
         Modules.PatchPhases.Defer("StreamSetupGUI", () => AddComponent<EndKnot.Modules.Setup.StreamSetupGUI>());
         Modules.PatchPhases.Defer("YouTubeChatBubble", () => AddComponent<EndKnot.Modules.YouTubeChat.YouTubeChatBubble>());
         Modules.PatchPhases.Defer("LobbyCodeBubble", () => AddComponent<EndKnot.Modules.StreamOverlay.LobbyCodeBubble>());
         Modules.PatchPhases.Defer("AudienceInfoBubble", () => AddComponent<EndKnot.Modules.StreamOverlay.AudienceInfoBubble>());
         Modules.PatchPhases.Defer("AudienceCutscene", () => AddComponent<EndKnot.Modules.Audience.AudienceCutscene>());
         Modules.PatchPhases.Defer("DevBuildBanner", () => AddComponent<EndKnot.Modules.StreamOverlay.DevBuildBanner>());
+#endif
         Logger.Enable();
         Logger.Disable("NotifyRoles");
         Logger.Disable("SwitchSystem");
@@ -1383,14 +1389,14 @@ public class Main : BasePlugin
         GameModeColors = new()
         {
             [CustomGameMode.Standard] = Color.white,
-            [CustomGameMode.SoloPVP] = ColorUtility.TryParseHtmlString("#f55252", out Color c) ? c : Color.white,
+            [CustomGameMode.SoloPVP] = HtmlColor.TryParse("#f55252", out Color c) ? c : Color.white,
             [CustomGameMode.FFA] = Color.cyan,
-            [CustomGameMode.StopAndGo] = ColorUtility.TryParseHtmlString("#00ffa5", out c) ? c : Color.white,
-            [CustomGameMode.HotPotato] = ColorUtility.TryParseHtmlString("#e8cd46", out c) ? c : Color.white,
-            [CustomGameMode.HideAndSeek] = ColorUtility.TryParseHtmlString("#345eeb", out c) ? c : Color.white,
+            [CustomGameMode.StopAndGo] = HtmlColor.TryParse("#00ffa5", out c) ? c : Color.white,
+            [CustomGameMode.HotPotato] = HtmlColor.TryParse("#e8cd46", out c) ? c : Color.white,
+            [CustomGameMode.HideAndSeek] = HtmlColor.TryParse("#345eeb", out c) ? c : Color.white,
             [CustomGameMode.Speedrun] = Utils.GetRoleColor(CustomRoles.Speedrunner),
-            [CustomGameMode.CaptureTheFlag] = ColorUtility.TryParseHtmlString("#1313c2", out c) ? c : Color.white,
-            [CustomGameMode.NaturalDisasters] = ColorUtility.TryParseHtmlString("#03fc4a", out c) ? c : Color.white,
+            [CustomGameMode.CaptureTheFlag] = HtmlColor.TryParse("#1313c2", out c) ? c : Color.white,
+            [CustomGameMode.NaturalDisasters] = HtmlColor.TryParse("#03fc4a", out c) ? c : Color.white,
             [CustomGameMode.RoomRush] = Team.Neutral.GetColor(),
             [CustomGameMode.KingOfTheZones] = Color.red,
             [CustomGameMode.Quiz] = Utils.GetRoleColor(CustomRoles.QuizMaster),
@@ -1500,7 +1506,7 @@ public class Main : BasePlugin
         RoleColors.Clear();
         foreach ((CustomRoles role, string hexColor) in RoleHtmlColors)
         {
-            if (ColorUtility.TryParseHtmlString(hexColor, out Color color))
+            if (HtmlColor.TryParse(hexColor, out Color color))
                 RoleColors[role] = color;
         }
     }

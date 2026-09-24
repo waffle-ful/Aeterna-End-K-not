@@ -51,7 +51,8 @@ public static class EndKnotFeatureBridge
 
         _updateButtonGo.SetActive(ModUpdater.HasUpdate);
 
-        // Stream setup window (upper-left mirror of the update button)
+        // Stream setup window (upper-left mirror of the update button). Streaming overlays are PC-only.
+#if !ANDROID
         CreateTextButton(
             overlayLayer,
             GetString("Setup.MenuButton"),
@@ -60,6 +61,7 @@ public static class EndKnotFeatureBridge
             new Color(0.70f, 0.95f, 1.0f, 1f),  // brighter cyan on hover
             2.2f,
             EndKnot.Modules.Setup.StreamSetupGUI.Open);
+#endif
 
         // Seasonal special message
         CreateSpecialMessage(overlayLayer);

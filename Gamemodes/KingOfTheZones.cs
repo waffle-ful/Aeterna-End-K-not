@@ -110,7 +110,7 @@ public static class KingOfTheZones
     public static void SetupCustomOption()
     {
         var id = 69_219_001;
-        Color color = ColorUtility.TryParseHtmlString("#ff0000", out Color c) ? c : Color.red;
+        Color color = HtmlColor.TryParse("#ff0000", out Color c) ? c : Color.red;
         const CustomGameMode gameMode = CustomGameMode.KingOfTheZones;
 
         AutoSetNumTeams = new BooleanOptionItem(id++, "KingOfTheZones.AutoSetNumTeams", true, TabGroup.GameSettings)

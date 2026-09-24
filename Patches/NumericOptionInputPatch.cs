@@ -451,7 +451,8 @@ public static class NumericOptionInputPatch
         {
             Vector2 world = Camera.main.ScreenToWorldPoint(Input.mousePosition);
             bool onField = false;
-            foreach (var h in Physics2D.OverlapPointAll(world))
+            // OverlapPointAll はエンジンコードを削ったプレイヤーにネイティブ実装が無いので、ごく小さい円で点判定する。
+            foreach (var h in Physics2D.OverlapCircleAll(world, 0.001f))
                 if (h && h.transform.IsChildOf(InputFieldInstance.transform)) { onField = true; break; }
 
             if (!onField)

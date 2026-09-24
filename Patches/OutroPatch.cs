@@ -545,7 +545,7 @@ internal static class SetEverythingUpPatch
             CustomTeamManager.CustomTeam team = CustomTeamManager.WinnerTeam;
             customWinnerText = string.Format(GetString("CustomWinnerText"), team.TeamName);
             customWinnerColor = team.RoleRevealScreenBackgroundColor == "*" ? Main.NeutralColor : team.RoleRevealScreenBackgroundColor;
-            __instance.BackgroundBar.material.color = ColorUtility.TryParseHtmlString(team.RoleRevealScreenBackgroundColor, out Color color) ? color : Utils.GetRoleColor(CustomRoles.Sprayer);
+            __instance.BackgroundBar.material.color = HtmlColor.TryParse(team.RoleRevealScreenBackgroundColor, out Color color) ? color : Utils.GetRoleColor(CustomRoles.Sprayer);
             additionalWinnerText = $"\n{team.TeamMembers.Where(r => Main.PlayerStates.Any(x => x.Value.MainRole == r && CustomWinnerHolder.WinnerIds.Contains(x.Key))).Join(x => x.ToColoredString())}{GetString("Win")}";
             goto Skip;
         }
