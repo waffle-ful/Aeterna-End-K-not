@@ -250,7 +250,18 @@ public static class BootTimeline
             int frames10s = Time.frameCount - _menuInteractiveFrame;
             double fps10s = frames10s / (double)MenuWindowSeconds;
 
-            string line = $"BOOT total={_menuInteractiveMs} marks={marksSb} deltas={deltasSb} frames10s={frames10s} fps10s={fps10s:0.0} gaps=[{string.Join(",", Gaps)}] jit={jitSb} patch2={PatchPhases.DeferredCount}/{PatchPhases.Phase2Ms}ms/{PatchPhases.Phase2Frames}f t={Utils.TimeStamp} sframes={_bootFrames} sexcess={_bootExcessMs:0} sgaps=[{string.Join(",", BootGaps)}]";
+            // Android のランチャーは自分の段 (Selector → Bootstrap → 資産コピー → ランタイム展開 → プラグイン配置 →
+            // フック → 起動) をプロセス起動からの経過ミリ秒で環境変数に残す。同じプロセスなので mod 側の
+            // マークと同じ時間軸に並ぶ。PC では未設定で空。
+            string launcher = "";
+            try
+            {
+                string stages = Environment.GetEnvironmentVariable("ENDKNOT_BOOT_LAUNCHER");
+                if (!string.IsNullOrEmpty(stages)) launcher = $" launcher=[{stages.Replace(' ', ',')}]";
+            }
+            catch { }
+
+            string line = $"BOOT total={_menuInteractiveMs}{launcher} marks={marksSb} deltas={deltasSb} frames10s={frames10s} fps10s={fps10s:0.0} gaps=[{string.Join(",", Gaps)}] jit={jitSb} patch2={PatchPhases.DeferredCount}/{PatchPhases.Phase2Ms}ms/{PatchPhases.Phase2Frames}f t={Utils.TimeStamp} sframes={_bootFrames} sexcess={_bootExcessMs:0} sgaps=[{string.Join(",", BootGaps)}]";
 
             HealthLog.Note(line);
             Logger.Info(line, "BootTimeline");

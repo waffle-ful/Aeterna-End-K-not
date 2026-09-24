@@ -369,6 +369,8 @@ public class SelectorActivity extends AppCompatActivity {
     }
 
     private void launchBootstrap(String packageName) {
+        dev.allofus.fusioncore.tools.BootTimeline.reset();
+        dev.allofus.fusioncore.tools.BootTimeline.mark("selector");
         Intent intent = new Intent(this, BootstrapActivity.class);
         intent.putExtra(BootstrapActivity.EXTRA_TARGET_PACKAGE, packageName);
         intent.addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION | Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);

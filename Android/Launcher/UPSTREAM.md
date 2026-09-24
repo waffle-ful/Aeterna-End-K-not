@@ -5,7 +5,7 @@ This directory is a `git subtree` of [FusionCore](https://github.com/All-Of-Us-M
 
 - Upstream repository: https://github.com/All-Of-Us-Mods/FusionCore
 - Imported commit: `e3aa9b4` (`e3aa9b4ffc3545d545810161f4401bf6cffc29ab`, upstream `main`)
-- Imported on: 2026-09-20
+- Imported on: 2026-09-20 (upstream `main` re-checked on 2026-09-25: still `e3aa9b4`, nothing to pull)
 
 ## Pulling upstream changes
 
