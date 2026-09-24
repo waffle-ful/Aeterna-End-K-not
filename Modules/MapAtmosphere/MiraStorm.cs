@@ -15,7 +15,8 @@ namespace EndKnot.Modules.MapAtmosphere;
 //   稲妻 — 空の層に稲妻を走らせ、画面全体を一瞬白く光らせる。遅れて雷鳴 (近い=短い遅延・遠い=長い遅延)。
 //   室内 — 画面下の部屋名と同じ RoomTracker の判定で屋外度を出し、室内では手前の雨と雨音を絞る。
 //   凪   — ときどき雨と雨音がほぼ消える静かな時間を挟み、近い雷で破る。一定の調子が続くと背景に慣れてしまうため。
-//   突風 — 雨を大きく傾けて濃くし、うなる風音を重ねる。
+//   突風 — 雨を大きく傾けて濃くし、うなる風音を重ねる。強さは毎回変える。
+//   揺らぎ — 雨脚の強弱と風向きをゆっくり漂わせ、同じ降り方が続かないようにする。
 //   明滅 — 近い雷鳴の直後に画面が暗く瞬き、照明が落ちかけたように見せる (描画だけで視界の広さは変えない)。
 // Mira の空は画像ではなくカメラの backgroundColor (SolidColor) なので、背景色は退出時に必ず元へ戻す。
 // 加算シェーダは AU ビルドに無いため、発光は全て Sprites/Default のアルファ合成で作る。
@@ -35,7 +36,7 @@ public static class MiraStorm
     private const float SkyTile = 4f;     // storm_sky.png 512px / ppu128
     private const float RainFarTile = 2f; // rain_far.png 256px / ppu128
     private const float RainNearTile = 2.667f; // rain_near.png 256px / ppu96
-    private const float RainAngle = 12f;  // 風で斜めに降らせる角度
+    private const float RainAngle = 12f;  // 風で斜めに降らせる角度 (この前後を漂う)
 
     private static readonly Color StormBg = new(0.03f, 0.035f, 0.05f, 1f);
     private static readonly Color TintColor = new(0.04f, 0.06f, 0.11f, 0.2f);
@@ -66,14 +67,18 @@ public static class MiraStorm
 
     // 凪: _rain は雨の強さ (1=通常)。Falling で絞り、Holding で静けさを保ち、近い雷と共に Rising で一気に戻す。
     private static Phase _lullPhase;
-    private static float _rain = 1f, _lullTimer, _lullHold;
-    private const float LullFloor = 0.05f;
+    private static float _rain = 1f, _lullTimer, _lullHold, _lullFloor;
+    private const float DeepLull = 0.12f; // これより静かな凪だけ、水溜りを見えない何かに歩かせる
 
     // 突風: _gust は風の強さ (0〜1)。
     private static Phase _gustPhase;
-    private static float _gust, _gustTimer, _gustHold;
+    private static float _gust, _gustTimer, _gustHold, _gustPeak;
     private const float GustAngle = 14f;
     private const float WindVolume = 0.5f;
+
+    // 揺らぎ: _swell は雨脚の強弱 (凪の _rain に掛ける)。_windAngle は雨の傾き。どちらも目標を時々引き直して追従する。
+    private static float _swell = 1f, _swellTarget = 1f, _swellTimer;
+    private static float _windAngle = RainAngle, _windTarget = RainAngle, _windTimer;
 
     // 屋外度: 1=屋外 (バルコニー/発射台)・0.5=廊下・0=部屋の中。急に切り替わらないよう滑らかに追従させる。
     private static float _outdoor = 1f;
@@ -181,6 +186,10 @@ public static class MiraStorm
         _gustPhase = Phase.None;
         _gust = 0f;
         _gustTimer = Random.Range(15f, 30f);
+        _swell = _swellTarget = Random.Range(0.7f, 1.1f);
+        _swellTimer = Random.Range(8f, 20f);
+        _windAngle = _windTarget = RainAngle + Random.Range(-4f, 4f);
+        _windTimer = Random.Range(10f, 25f);
 
         Animate(0f);
         Logger.Info("MiraStorm built", "MiraStorm");
@@ -213,6 +222,8 @@ public static class MiraStorm
 
         UpdateLull(dt);
         UpdateGust(dt);
+        UpdateSwell(dt);
+        float rain = _rain * _swell;
 
         // 空: カメラ位置の 15% だけ動く視差 + ゆっくりした横流れ (突風の間は速く流れる)。タイル1枚分で巻き戻す。
         _skyDrift += dt * (0.12f + 0.5f * _gust);
@@ -221,9 +232,9 @@ public static class MiraStorm
         float sy = -Mathf.Repeat(camPos.y * 0.15f, SkyTile);
         _skyTf.localPosition = new Vector3(sx + SkyTile * 0.5f, sy + SkyTile * 0.5f, SkyZ);
 
-        // 雨: 層ごとに落下速度を変えて奥行きを出す。風が強いほど傾いて速くなる。
-        float speed = 1f + 0.35f * _gust;
-        _rainFarTf.localRotation = _rainNearTf.localRotation = Quaternion.Euler(0f, 0f, RainAngle + GustAngle * _gust);
+        // 雨: 層ごとに落下速度を変えて奥行きを出す。風が強いほど傾いて速くなり、雨脚が強いほど少し速く落ちる。
+        float speed = (0.8f + 0.2f * _swell) * (1f + 0.35f * _gust);
+        _rainFarTf.localRotation = _rainNearTf.localRotation = Quaternion.Euler(0f, 0f, _windAngle + GustAngle * _gust);
         _rainFarOffset = Mathf.Repeat(_rainFarOffset + dt * 7f * speed, RainFarTile);
         _rainNearOffset = Mathf.Repeat(_rainNearOffset + dt * 12f * speed, RainNearTile);
         _rainFar.size = new Vector2(cover + RainFarTile * 2f, cover + RainFarTile * 2f);
@@ -235,14 +246,14 @@ public static class MiraStorm
 
         _outdoor = Mathf.MoveTowards(_outdoor, OutdoorTarget(), dt * 1.2f);
         _fadeIn = Mathf.MoveTowards(_fadeIn, 1f, dt / FadeInSeconds);
-        float nearAlpha = NearRainAlpha * Mathf.Lerp(0.12f, 1f, _outdoor) * _rain * (1f + 0.6f * _gust);
+        float nearAlpha = NearRainAlpha * Mathf.Lerp(0.12f, 1f, _outdoor) * rain * (1f + 0.6f * _gust);
         _rainNear.color = new Color(1f, 1f, 1f, Mathf.Min(1f, nearAlpha) * _fadeIn);
-        _rainFar.color = new Color(1f, 1f, 1f, Mathf.Max(_rain, 0.12f) * _fadeIn); // 奥の層は霧雨程度に残す
+        _rainFar.color = new Color(1f, 1f, 1f, Mathf.Clamp(rain, 0.12f, 1f) * _fadeIn); // 奥の層は霧雨程度に残す
         _tint.color = new Color(TintColor.r, TintColor.g, TintColor.b, (TintColor.a + Flicker(dt)) * _fadeIn);
-        UpdateAudio(dt);
+        UpdateAudio(dt, rain);
 
         UpdateLightning(dt, w, h);
-        MiraPuddles.Animate(dt, _fadeIn, _glow, _rain);
+        MiraPuddles.Animate(dt, _fadeIn, _glow, rain);
     }
 
     private static void UpdateLightning(float dt, float w, float h)
@@ -327,8 +338,6 @@ public static class MiraStorm
             _flickerOnThunder = false;
         }
 
-        MiraPuddles.OnStrike();
-
         Logger.Info($"MiraStorm strike lullBreak={lullBreak} silent={_thunderDelay < 0f} double={_doubleStrike} near={_thunderNear} outdoor={_outdoor:0.00} rain={(_rainSrc ? $"{_rainSrc.volume:0.00}/{_rainSrc.isPlaying}" : "none")}", "MiraStorm");
     }
 
@@ -339,14 +348,16 @@ public static class MiraStorm
             case Phase.None:
                 if (_strikeAge >= 0f || _thunderDelay >= 0f || (_lullTimer -= dt) > 0f) break;
                 _lullPhase = Phase.Falling;
-                Logger.Info("MiraStorm lull begins", "MiraStorm");
+                // 毎回無音まで落とさず、小降りで止まる浅い凪も混ぜる。
+                _lullFloor = Random.value < 0.6f ? Random.Range(0.03f, DeepLull) : Random.Range(0.18f, 0.35f);
+                Logger.Info($"MiraStorm lull begins floor={_lullFloor:0.00}", "MiraStorm");
                 break;
             case Phase.Falling:
-                _rain = Mathf.MoveTowards(_rain, LullFloor, dt / 3.5f);
-                if (_rain > LullFloor) break;
+                _rain = Mathf.MoveTowards(_rain, _lullFloor, dt / 3.5f);
+                if (_rain > _lullFloor) break;
                 _lullPhase = Phase.Holding;
                 _lullHold = Random.Range(5f, 9f);
-                MiraPuddles.OnLull();
+                if (_lullFloor < DeepLull) MiraPuddles.OnLull();
                 break;
             case Phase.Holding:
                 if ((_lullHold -= dt) > 0f) break;
@@ -374,13 +385,14 @@ public static class MiraStorm
                 if (calm || (_gustTimer -= dt) > 0f) break;
                 _gustPhase = Phase.Rising;
                 _gustHold = Random.Range(2f, 4f);
+                _gustPeak = Random.Range(0.45f, 1f);
                 PlayWind();
-                Logger.Info($"MiraStorm gust wind={(_windSrc ? _windSrc.isPlaying : false)}", "MiraStorm");
+                Logger.Info($"MiraStorm gust peak={_gustPeak:0.00} wind={(_windSrc ? _windSrc.isPlaying : false)}", "MiraStorm");
                 break;
             case Phase.Rising:
-                _gust = Mathf.MoveTowards(_gust, 1f, dt / 1.8f);
+                _gust = Mathf.MoveTowards(_gust, _gustPeak, dt / 1.8f);
                 if (calm) _gustPhase = Phase.Falling;
-                else if (_gust >= 1f) _gustPhase = Phase.Holding;
+                else if (_gust >= _gustPeak) _gustPhase = Phase.Holding;
                 break;
             case Phase.Holding:
                 if (calm || (_gustHold -= dt) <= 0f) _gustPhase = Phase.Falling;
@@ -392,6 +404,27 @@ public static class MiraStorm
                 _gustTimer = Random.Range(18f, 40f);
                 break;
         }
+    }
+
+    // 雨脚は小降り〜本降りの間を、風向きは基準の角度の前後を、それぞれ時々目標を引き直してゆっくり追う。
+    // 凪の最中は凪だけに任せるため、雨脚の目標は引き直さない。
+    private static void UpdateSwell(float dt)
+    {
+        if (_lullPhase == Phase.None && (_swellTimer -= dt) <= 0f)
+        {
+            _swellTimer = Random.Range(8f, 20f);
+            _swellTarget = Random.value < 0.2f ? Random.Range(1.1f, 1.3f) : Random.Range(0.5f, 1f); // ときどき一段強い本降り
+        }
+
+        _swell = Mathf.MoveTowards(_swell, _swellTarget, dt / 6f);
+
+        if ((_windTimer -= dt) <= 0f)
+        {
+            _windTimer = Random.Range(10f, 25f);
+            _windTarget = RainAngle + Random.Range(-5f, 5f);
+        }
+
+        _windAngle = Mathf.MoveTowards(_windAngle, _windTarget, dt * 0.8f);
     }
 
     // 照明が落ちかけたような暗い瞬き。点滅なので画面フラッシュを切っている人には出さない。
@@ -457,7 +490,7 @@ public static class MiraStorm
         _windSrc.Play();
     }
 
-    private static void UpdateAudio(float dt)
+    private static void UpdateAudio(float dt, float rainLevel)
     {
         float sfx = DataManager.Settings?.Audio != null ? DataManager.Settings.Audio.SfxVolume : 1f;
 
@@ -475,7 +508,7 @@ public static class MiraStorm
                 }
             }
 
-            _rainSrc.volume = sfx * RainVolume * Mathf.Lerp(0.22f, 1f, _outdoor) * _rain * (1f + 0.25f * _gust) * _fadeIn;
+            _rainSrc.volume = sfx * RainVolume * Mathf.Lerp(0.22f, 1f, _outdoor) * Mathf.Min(rainLevel, 1.15f) * (1f + 0.25f * _gust) * _fadeIn;
         }
 
         if (_windSrc) _windSrc.volume = sfx * WindVolume * Mathf.Lerp(0.35f, 1f, _outdoor) * Mathf.Max(_rain, 0.1f) * _fadeIn;
