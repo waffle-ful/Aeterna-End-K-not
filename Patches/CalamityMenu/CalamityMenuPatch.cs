@@ -74,7 +74,7 @@ public static class CalamityMenuPatch
         // RightPanel fallback init: if TitleLogoPatch.Postfix returned early (LeftPanel was
         // already suppressed by our Prefix), TitleLogoPatch.RightPanel/RightPanelOp stay
         // null/(0,0,0). Re-resolve here so MainMenuManagerPatch.LateUpdate's slide animation
-        // and CalamityVisibility have correct anchors. Then push it 10 units off-screen X.
+        // and CalamityVisibility have correct anchors. Then push it off-screen X (RightPanelParkOffset).
         var rp = TitleLogoPatch.RightPanel != null ? TitleLogoPatch.RightPanel : GameObject.Find("RightPanel");
         if (rp != null)
         {
@@ -86,7 +86,7 @@ public static class CalamityMenuPatch
                 TitleLogoPatch.RightPanelOp = rp.transform.localPosition;
                 Logger.Info("RightPanel fallback-initialized in CalamityMenuPatch (TitleLogoPatch early-returned)", "CalamityMenuPatch");
             }
-            rp.transform.localPosition = TitleLogoPatch.RightPanelOp + new Vector3(10f, 0f, 0f);
+            rp.transform.localPosition = TitleLogoPatch.RightPanelOp + new Vector3(TitleLogoPatch.RightPanelParkOffset, 0f, 0f);
 
             // TitleLogoPatch が途中で抜けていた場合でも枠は出さない (タブは子なので renderer だけ切る)。
             var rpsr = rp.GetComponent<SpriteRenderer>();

@@ -341,6 +341,21 @@ internal static class TitleLogoPatch
     private static GameObject BottomButtonBounds;
 
     public static Vector3 RightPanelOp;
+
+    // RightPanel を画面外へ退避させる X オフセット。16:9 なら 10 ユニットで足りるが、
+    // 縦横比の広い端末 (スマホの 21:9 など) は画面の横幅がその分広いので、余った分だけ遠くへ置く。
+    // 退避判定 (完全に隠れたか) もこの値基準で見る。
+    public static float RightPanelParkOffset
+    {
+        get
+        {
+            var cam = Camera.main;
+            if (cam == null || !cam.orthographic) return 10f;
+            float extra = cam.orthographicSize * (cam.aspect - 16f / 9f);
+            // 広い画面では枠線の太さぶん (1 ユニット) さらに余裕を取る (21:9 実機で縁が 1 本残った)。
+            return extra > 0f ? 10f + extra + 1f : 10f;
+        }
+    }
     
     private static bool IsEasterPeriod(int daysBefore = 2, int daysAfter = 1)
     {
@@ -454,7 +469,7 @@ internal static class TitleLogoPatch
         if (rpap) Object.Destroy(rpap);
 
         RightPanelOp = RightPanel.transform.localPosition;
-        RightPanel.transform.localPosition = RightPanelOp + new Vector3(10f, 0f, 0f);
+        RightPanel.transform.localPosition = RightPanelOp + new Vector3(RightPanelParkOffset, 0f, 0f);
 
         // パネル自体の枠は描かない — ゲームモードのタブだけを背景の上に浮かせる。
         // GameObject ごと伏せるとタブが子なので一緒に消えるので、SpriteRenderer だけを切る。
