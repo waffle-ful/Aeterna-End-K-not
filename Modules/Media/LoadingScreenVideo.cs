@@ -1,4 +1,3 @@
-#if !ANDROID
 using System;
 using System.IO;
 using System.Reflection;
@@ -7,17 +6,19 @@ using UnityEngine;
 namespace EndKnot.Modules.Media;
 
 // シーン遷移中 (ゲーム開始/次ゲームへ) に流すローディング画面動画。ネットワーク送信ゼロ・
-// ホストローカル描画のみ。マウント先は HudManager (DDOL) 配下なのでシーン遷移を生き延びる。
+// ホストローカル描画のみ。VideoPlayer が無い環境ではフレームパック (loading_default.ekfp、または
+// LoadingVideoFile に指定した .ekfp) を FrameSequencePlayer で流す。マウント先は HudManager (DDOL) 配下なのでシーン遷移を生き延びる。
 // Show()/Hide() は host-only 機能ではない (非ホストクライアントでも呼ばれる想定)。
 public static class LoadingScreenVideo
 {
     private const string MediaSubDir = "EndKnot/Media";
     private const string DefaultVideoFileName = "loading_default.mp4";
     private const string EmbeddedDefaultResourceName = "EndKnot.Resources.Media.loading_default.mp4";
+    private const string DefaultFramePackFileName = "loading_default.ekfp";
     private const float AutoHideSeconds = 40f;
 
     private static GameObject _container;
-    private static VideoSurface _surface;
+    private static IMediaSurface _surface;
     private static float _shownAtRealtime;
 
     public static bool IsShowing => _surface is { IsActive: true };
@@ -25,7 +26,6 @@ public static class LoadingScreenVideo
     public static void Show()
     {
         // 計装ログ: 無音早期 return がどこで起きたかを実機ログで特定できるようにする (host-local のみ)。
-        if (!VideoSurface.IsSupported) { Logger.Info("Show skipped: VideoPlayer type unavailable", "LoadingScreenVideo"); return; }
         if (Main.LoadingVideoEnabled is not { Value: true }) { Logger.Info("Show skipped: disabled by config", "LoadingScreenVideo"); return; }
         // kill switch (再ビルド・再起動不要の A/B 手段): EndKnot_DATA/disable_star_video.txt が存在する間は再生しない。
         // Show() はゲーム開始/終了時にしか呼ばれないため毎回素直にファイルを見る (barrier の 30 秒キャッシュは不要)。
@@ -35,9 +35,6 @@ public static class LoadingScreenVideo
         try
         {
             if (!HudManager.InstanceExists) { Logger.Info("Show skipped: no HudManager", "LoadingScreenVideo"); return; }
-
-            string path = ResolveVideoPath();
-            if (string.IsNullOrWhiteSpace(path)) { Logger.Info("Show skipped: no video file", "LoadingScreenVideo"); return; }
 
             HudManager hud = HudManager.Instance;
             if (!hud.FullScreen) { Logger.Info("Show skipped: no FullScreen sprite", "LoadingScreenVideo"); return; }
@@ -51,15 +48,15 @@ public static class LoadingScreenVideo
             // 実際に描画されている FullScreen と同じ layer を明示継承する (FlashColor の clone 方式と等価)。
             _container.layer = hud.FullScreen.gameObject.layer;
 
-            _surface = new VideoSurface();
-            if (!_surface.TryCreate(path, _container.transform))
+            _surface = MediaSurfaces.Create(ResolveFramePackFile(), ResolveVideoPath, _container.transform, "LoadingScreenVideo");
+            if (_surface == null)
             {
-                Logger.Info("Show aborted: TryCreate failed", "LoadingScreenVideo");
+                Logger.Info("Show aborted: no media could be created", "LoadingScreenVideo");
                 Hide();
                 return;
             }
 
-            Logger.Info($"Show: video created, path={path}", "LoadingScreenVideo");
+            Logger.Info($"Show: video created ({_surface.GetType().Name})", "LoadingScreenVideo");
 
             // z だけでは同一 sorting layer/order 内の順序にしか効かない。hud.FullScreen (画面全体の
             // 暗転スプライト) より確実に前面へ出すため、sorting layer/order 自体を追随させる。
@@ -164,7 +161,7 @@ public static class LoadingScreenVideo
             if (!Directory.Exists(mediaDir)) Directory.CreateDirectory(mediaDir);
 
             string configuredFile = Main.LoadingVideoFile?.Value;
-            if (!string.IsNullOrWhiteSpace(configuredFile))
+            if (!string.IsNullOrWhiteSpace(configuredFile) && !configuredFile.EndsWith(".ekfp", StringComparison.OrdinalIgnoreCase))
             {
                 string candidate = Path.IsPathRooted(configuredFile) ? configuredFile : Path.Combine(mediaDir, configuredFile);
                 if (File.Exists(candidate)) return candidate;
@@ -180,6 +177,15 @@ public static class LoadingScreenVideo
             Utils.ThrowException(e);
             return null;
         }
+    }
+
+    // LoadingVideoFile に .ekfp が指定されていればそれを、無ければ既定のフレームパックを使う。
+    private static string ResolveFramePackFile()
+    {
+        string configuredFile = Main.LoadingVideoFile?.Value;
+        if (!string.IsNullOrWhiteSpace(configuredFile) && configuredFile.EndsWith(".ekfp", StringComparison.OrdinalIgnoreCase))
+            return configuredFile;
+        return DefaultFramePackFileName;
     }
 
     // 既定動画は生成プロセスがまだ mp4 を用意していない可能性があるため、リソースが
@@ -203,16 +209,3 @@ public static class LoadingScreenVideo
         }
     }
 }
-#else
-namespace EndKnot.Modules.Media;
-
-// Android ビルド (VideoModule 非搭載) 用の no-op スタブ。呼び出し側 (Patches/*) を
-// #if で分岐させずに済むよう、同じ公開 API だけを残す。
-public static class LoadingScreenVideo
-{
-    public static bool IsShowing => false;
-    public static void Show() { }
-    public static void Hide() { }
-    public static void Tick() { }
-}
-#endif

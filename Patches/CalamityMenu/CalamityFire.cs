@@ -1,4 +1,3 @@
-#if !ANDROID
 using System;
 using System.IO;
 using EndKnot.Modules;
@@ -8,7 +7,8 @@ using UnityEngine;
 
 namespace EndKnot.Patches.CalamityMenu;
 
-// Calamity メニュー背景の火エフェクト (VideoPlayer 再生・ホストローカル描画のみ・送信ゼロ)。
+// Calamity メニュー背景の火エフェクト (ホストローカル描画のみ・送信ゼロ)。VideoPlayer が無い環境では
+// 同じ素材から作ったフレームパック (menu_fire.ekfp) を FrameSequencePlayer で流す。
 // 素材はアルファ付き VP8 WebM (オフラインで輝度→アルファを焼いたもの)。加算シェーダ路線は
 // 2026-07-24 の実機シェーダ census (全31種列挙) で AU ビルドに加算系が皆無と確定して廃案 —
 // アルファは動画自体に持たせ、実証済みの Sprites/Default アルファ合成で重ねるのが正。
@@ -16,14 +16,15 @@ public static class CalamityFire
 {
     private const string FireVideoFileName = "menu_fire.webm";
     private const string EmbeddedResourceName = "EndKnot.Resources.Media.menu_fire.webm";
+    private const string FramePackFileName = "menu_fire.ekfp";
 
-    private static VideoSurface _surface;
+    private static IMediaSurface _surface;
     private static Transform _layer;
 
     // 起動時に先行して用意しておく火 (下の Prewarm を参照)。メニューが組み上がった時点で
     // _surface へ引き継ぐ。_surface と別フィールドなのは Tick を確実に素通りさせるため —
     // 未装着の間に Tick が走ると、まだ画面に置いていない映像を再生開始してしまう。
-    private static VideoSurface _prewarmed;
+    private static IMediaSurface _prewarmed;
     private static GameObject _prewarmHolder;
     private static bool _prewarmAttempted;
     private static float _prewarmStartedAt;
@@ -46,21 +47,17 @@ public static class CalamityFire
         // 不発時は理由を残す: この機能の効果は「起動直後の数秒だけ見える差」なので、
         // ログが無いと prewarm が働かなかったのかどうかすら実機で判別できない。
         if (!CalamityMenuState.Active) { Logger.Info("Prewarm skipped: Calamity menu inactive", "CalamityFire"); return; }
-        if (!VideoSurface.IsSupported) { Logger.Info("Prewarm skipped: VideoPlayer type unavailable", "CalamityFire"); return; }
         if (Main.MenuFireEnabled is not { Value: true }) { Logger.Info("Prewarm skipped: disabled by config", "CalamityFire"); return; }
         if (File.Exists($"{Main.DataPath}/EndKnot_DATA/disable_menu_fire.txt")) { Logger.Warn("Prewarm skipped: kill switch ENGAGED (disable_menu_fire.txt)", "CalamityFire"); return; }
 
         try
         {
-            string path = ResolveVideoPath();
-            if (path == null) { Logger.Info($"Prewarm skipped: no {FireVideoFileName}", "CalamityFire"); return; }
-
             EnsurePrewarmHolder();
 
-            var surface = new VideoSurface();
-            if (!surface.TryCreate(path, _prewarmHolder.transform))
+            IMediaSurface surface = MediaSurfaces.Create(FramePackFileName, ResolveVideoPath, _prewarmHolder.transform, "CalamityFire");
+            if (surface == null)
             {
-                surface.Dispose();
+                Logger.Info("Prewarm skipped: no fire media", "CalamityFire");
                 DisposePrewarmHolder();
                 return;
             }
@@ -88,7 +85,6 @@ public static class CalamityFire
         // 火を出さないと決まった場合は、先行準備済みの分もここで手放す (抱えたままにすると
         // 画面に出ないデコーダをセッション中ずっと保持することになる)。
         if (backgroundLayer == null) { DisposePrewarm(); return; }
-        if (!VideoSurface.IsSupported) { DisposePrewarm(); Logger.Info("Build skipped: VideoPlayer type unavailable", "CalamityFire"); return; }
         if (Main.MenuFireEnabled is not { Value: true }) { DisposePrewarm(); Logger.Info("Build skipped: disabled by config", "CalamityFire"); return; }
         // kill switch (再ビルド不要の A/B 手段): 存在する間は火を出さない。
         if (File.Exists($"{Main.DataPath}/EndKnot_DATA/disable_menu_fire.txt")) { DisposePrewarm(); Logger.Warn("Build skipped: kill switch ENGAGED (disable_menu_fire.txt)", "CalamityFire"); return; }
@@ -133,17 +129,13 @@ public static class CalamityFire
                 DisposePrewarm();
             }
 
-            string path = ResolveVideoPath();
-            if (path == null) { Logger.Info($"Build skipped: no {FireVideoFileName}", "CalamityFire"); return; }
-
             // prewarm と同じく、シーンには一切ぶら下げず _prewarmHolder (DontDestroyOnLoad) を
             // 親にする。位置/回転だけ背景レイヤーへ合わせる (scale は FitCover が localScale で決める)。
             EnsurePrewarmHolder();
-            _surface = new VideoSurface();
-            if (!_surface.TryCreate(path, _prewarmHolder.transform))
+            _surface = MediaSurfaces.Create(FramePackFileName, ResolveVideoPath, _prewarmHolder.transform, "CalamityFire");
+            if (_surface == null)
             {
-                Logger.Warn("Build aborted: VideoSurface.TryCreate failed", "CalamityFire");
-                DisposeSurface();
+                Logger.Warn("Build aborted: fire media could not be created", "CalamityFire");
                 return;
             }
 
@@ -155,7 +147,7 @@ public static class CalamityFire
             // 背景 (CalamityBG, sortingOrder=-100) の直前・ロゴ/ボタンより後ろ。
             _surface.Renderer.sortingOrder = -99;
             _layer = backgroundLayer;
-            Logger.Info($"fire video mounted, path={path}", "CalamityFire");
+            Logger.Info($"fire video mounted ({_surface.GetType().Name})", "CalamityFire");
             BootTimeline.Mark("fire.mount");
             _surface.OnFirstFrame = () => BootTimeline.Mark("fire.frame");
         }
@@ -334,14 +326,3 @@ public static class CalamityFire
         _prewarmHolder = null;
     }
 }
-#else
-namespace EndKnot.Patches.CalamityMenu;
-
-// Android ビルド (VideoModule 非搭載) 用の no-op スタブ。
-public static class CalamityFire
-{
-    public static void Prewarm() { }
-    public static void Build(UnityEngine.Transform backgroundLayer) { }
-    public static void Tick() { }
-}
-#endif
