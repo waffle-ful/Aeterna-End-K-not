@@ -1377,6 +1377,7 @@ public class Main : BasePlugin
         {
             // there are some issues with TextBoxPatch on Android
             Harmony.PatchAll(typeof(TextBoxPatch));
+            TextBoxPatch.Installed = true;
         }
 
         BootTimeline.Mark("load.patch");
