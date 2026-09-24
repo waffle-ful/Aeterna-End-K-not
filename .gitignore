@@ -448,6 +448,12 @@ tools/*
 !tools/check-option-ids.ps1
 # ...and the lang-key sync checker, which the build & CI depend on.
 !tools/check-lang-keys.ps1
+# ...and the Android engine-call checker (the Android build runs on the game's stripped libunity).
+!tools/check-android-icalls.ps1
+!tools/android-icall-baseline.txt
+!tools/AndroidIcallAudit/
+tools/AndroidIcallAudit/bin/
+tools/AndroidIcallAudit/obj/
 # ...and the crash-recovery watchdog, which is embedded into the DLL & shipped as a feature.
 !tools/EndKnotWatchdog.ps1
 !tools/番犬スタート.cmd
