@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <application>
+        <!-- Debug builds only: lets the editor be started from adb for measurements. -->
+        <activity
+            android:name="dev.allofus.fusioncore.EditorActivity"
+            android:exported="true"
+            tools:replace="android:exported" />
+    </application>
+</manifest>
