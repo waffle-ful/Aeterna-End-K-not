@@ -54,14 +54,9 @@ public class GameSettingsActivity extends AppCompatActivity {
 
         resolveAndDisplayPackageInfo(targetPackageName);
         switchLibUnity.setChecked(FusionSettings.getUseUnstrippedLibUnityForGame(this, targetPackageName));
-        // The launch activity is always resolved automatically (the bridge only handles the
-        // game's main activity), so the field is read-only and any stored value is removed;
-        // the reader then falls back to the "automatic" label of the current locale.
-        String automatic = getString(R.string.settings_automatic);
-        if (!automatic.equals(FusionSettings.getActivityOverrideForGame(this, targetPackageName))) {
-            FusionSettings.setActivityOverrideForGame(this, targetPackageName, null);
-        }
-        actvOverrideActivity.setText(automatic, false);
+        // The launch activity is always resolved automatically, so the field is read-only.
+        FusionSettings.dropActivityOverrideForGame(this, targetPackageName);
+        actvOverrideActivity.setText(getString(R.string.settings_automatic), false);
         setupAdvancedFold();
         setupListeners();
     }
