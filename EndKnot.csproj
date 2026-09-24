@@ -45,8 +45,22 @@
     <ItemGroup Condition="'$(Configuration)' == 'Android'">
         <EmbeddedResource Remove="Resources\Sounds\BGM\*.ogg" />
         <EmbeddedResource Remove="Resources\Sounds\BGM\endknot_bgm.bundle" />
+        <EmbeddedResource Remove="Resources\Sounds\endknot_sfx.bundle" />
         <EmbeddedResource Remove="Resources\Media\menu_fire.webm" />
         <EmbeddedResource Remove="Resources\Media\loading_default.mp4" />
+    </ItemGroup>
+    <!-- The arm64 AssetBundles (tools/build-bgm-bundle.ps1 -Android) take the Windows bundles' place
+         on Android under the same resource names, so BgmBundle / SfxBundle read them unchanged.
+         Missing files just leave the bundle path unavailable (BGM silent, SFX fall back to embedded). -->
+    <ItemGroup Condition="'$(Configuration)' == 'Android'">
+        <EmbeddedResource Remove="Resources\Sounds\BGM\endknot_bgm.android.bundle" />
+        <EmbeddedResource Remove="Resources\Sounds\endknot_sfx.android.bundle" />
+        <EmbeddedResource Include="Resources\Sounds\BGM\endknot_bgm.android.bundle" LogicalName="EndKnot.Resources.Sounds.BGM.endknot_bgm.bundle" Condition="Exists('Resources\Sounds\BGM\endknot_bgm.android.bundle')" />
+        <EmbeddedResource Include="Resources\Sounds\endknot_sfx.android.bundle" LogicalName="EndKnot.Resources.Sounds.endknot_sfx.bundle" Condition="Exists('Resources\Sounds\endknot_sfx.android.bundle')" />
+    </ItemGroup>
+    <ItemGroup Condition="'$(Configuration)' != 'Android'">
+        <EmbeddedResource Remove="Resources\Sounds\BGM\endknot_bgm.android.bundle" />
+        <EmbeddedResource Remove="Resources\Sounds\endknot_sfx.android.bundle" />
     </ItemGroup>
 
     <ItemGroup>

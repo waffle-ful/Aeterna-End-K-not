@@ -16,15 +16,21 @@ public static class BundleBuilder
     private const string SfxBundleName = "endknot_sfx";
     private const float VorbisQuality = 0.7f;
 
-    public static void Build()
+    public static void Build() => BuildFor(BuildTarget.StandaloneWindows64, "Build");
+
+    // Android (arm64) 版。出力先を分けて Windows 版と混ざらないようにする (Build/android/)。
+    // Android Build Support モジュールが無い Editor ではここで失敗する。
+    public static void BuildAndroid() => BuildFor(BuildTarget.Android, Path.Combine("Build", "android"));
+
+    private static void BuildFor(BuildTarget target, string outSubDir)
     {
         string[] names = Import(SourceFolder, BundleName, preload: false);
         string[] sfxNames = Import(SfxSourceFolder, SfxBundleName, preload: true);
 
-        string outDir = Path.Combine(Directory.GetCurrentDirectory(), "Build");
+        string outDir = Path.Combine(Directory.GetCurrentDirectory(), outSubDir);
         Directory.CreateDirectory(outDir);
 
-        AssetBundleManifest manifest = BuildPipeline.BuildAssetBundles(outDir, BuildAssetBundleOptions.ChunkBasedCompression, BuildTarget.StandaloneWindows64);
+        AssetBundleManifest manifest = BuildPipeline.BuildAssetBundles(outDir, BuildAssetBundleOptions.ChunkBasedCompression, target);
         if (manifest == null)
         {
             Debug.LogError("BundleBuilder: BuildAssetBundles returned null");
@@ -32,7 +38,7 @@ public static class BundleBuilder
             return;
         }
 
-        Debug.Log($"BundleBuilder: built [{string.Join(",", manifest.GetAllAssetBundles())}] clips=[{string.Join(",", names)}] sfx=[{string.Join(",", sfxNames)}]");
+        Debug.Log($"BundleBuilder: built [{string.Join(",", manifest.GetAllAssetBundles())}] target={target} clips=[{string.Join(",", names)}] sfx=[{string.Join(",", sfxNames)}]");
     }
 
     private static string[] Import(string folder, string bundleName, bool preload)

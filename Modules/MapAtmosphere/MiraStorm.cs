@@ -275,7 +275,7 @@ public static class MiraStorm
 
     private static void SetupAudio()
     {
-        if (!OperatingSystem.IsWindows()) return;
+        if (!CustomSoundsManager.AudioPlatformSupported) return;
 
         AudioClip rain = GetClip("MiraRainLoop");
 

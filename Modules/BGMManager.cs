@@ -331,7 +331,7 @@ public static class BGMManager
 
     public static void Tick()
     {
-        if (!IsEnabled() || !OperatingSystem.IsWindows()) return;
+        if (!IsEnabled() || !CustomSoundsManager.AudioPlatformSupported) return;
 
         // 状態別遅延プリロード。watchdog より先に毎秒無条件で回す (メニュー/ロビー/リザルトでも
         // 先読みと解放は進めたいので、下の InGame ガードより前に置く)。
@@ -434,7 +434,7 @@ public static class BGMManager
     {
         try
         {
-            if (!IsEnabled() || !OperatingSystem.IsWindows()) return;
+            if (!IsEnabled() || !CustomSoundsManager.AudioPlatformSupported) return;
 
             BGMEntry entry;
             if (currentSlot == slot && currentEntry != null)
