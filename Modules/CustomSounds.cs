@@ -14,6 +14,11 @@ namespace EndKnot.Modules;
 
 public static class CustomSoundsManager
 {
+    // 音声経路 (SFX / BGM / 環境音 / AssetBundle) を持つプラットフォーム。デコードは NVorbis (マネージド) と
+    // Unity の AudioClip だけなので Android でも成立する。Android 版は Windows 用 AssetBundle の代わりに
+    // arm64 用バンドルを埋め込む (EndKnot.csproj の Android 構成)。
+    public static bool AudioPlatformSupported => OperatingSystem.IsWindows() || OperatingSystem.IsAndroid();
+
     internal static readonly string SoundsPath = Main.ResourcesPath;
     private static readonly string[] SupportedExtensions = [".wav", ".ogg", ".mp3"];
 
@@ -68,7 +73,7 @@ public static class CustomSoundsManager
     {
         try
         {
-            if (!Constants.ShouldPlaySfx() || !Main.EnableCustomSoundEffect.Value || !OperatingSystem.IsWindows()) return;
+            if (!Constants.ShouldPlaySfx() || !Main.EnableCustomSoundEffect.Value || !AudioPlatformSupported) return;
 
             string key = ResolveSoundKey(sound);
             if (key == null)
@@ -90,7 +95,7 @@ public static class CustomSoundsManager
     {
         try
         {
-            if (!Constants.ShouldPlaySfx() || !Main.EnableCustomSoundEffect.Value || !OperatingSystem.IsWindows()) return null;
+            if (!Constants.ShouldPlaySfx() || !Main.EnableCustomSoundEffect.Value || !AudioPlatformSupported) return null;
 
             string key = ResolveSoundKey(sound);
             if (key == null)
@@ -245,7 +250,7 @@ public static class CustomSoundsManager
     {
         try
         {
-            if (!OperatingSystem.IsWindows()) return 0f;
+            if (!AudioPlatformSupported) return 0f;
 
             string key = ResolveSoundKey(sound);
             if (key == null) return 0f;
@@ -818,7 +823,7 @@ public static class CustomSoundsManager
     // メインスレッド専用。
     internal static void RequestBgmDecode(string name)
     {
-        if (!OperatingSystem.IsWindows() || name == null) return;
+        if (!AudioPlatformSupported || name == null) return;
         if (!BgmInflight.Add(name)) return;
 
         // ユーザーが resources/BGM/ に差し替えファイルを置いている場合はバンドルより優先する
@@ -906,7 +911,7 @@ public static class CustomSoundsManager
     // FixedUpdateCaller から毎 fixed update で呼ばれる (メインスレッド専用ポンプ)。
     public static void PreloadTick()
     {
-        if (!OperatingSystem.IsWindows()) return;
+        if (!AudioPlatformSupported) return;
 
         // SFX の起動時一括プリロード (従来どおり、起動 ~10 秒後に 1 回だけ)。OFF の間は温めない
         // (再生されない音のデコード分だけ純増になるため)。ON に切り替えられたら始動する。

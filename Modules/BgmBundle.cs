@@ -29,7 +29,9 @@ internal static class BgmBundle
     private static readonly Dictionary<string, AudioClip> Clips = new(StringComparer.OrdinalIgnoreCase);
     private static readonly HashSet<IntPtr> BundleClipPointers = [];
 
-    internal static bool IsEnabled => OperatingSystem.IsWindows() && (Main.BgmUseAssetBundle?.Value ?? false);
+    // Android には OGG が同梱されていない (csproj の Android 構成で除外) ので、設定で OFF にしても
+    // フォールバック先が無い。バンドル経路を常時 ON にして「OFF = 永久無音」を避ける。
+    internal static bool IsEnabled => CustomSoundsManager.AudioPlatformSupported && (OperatingSystem.IsAndroid() || (Main.BgmUseAssetBundle?.Value ?? false));
 
     // 初回呼び出しで遅延初期化する。失敗したら以後ずっと false を返す (毎回再試行しない)。
     internal static bool TryGetClip(string name, out AudioClip clip)

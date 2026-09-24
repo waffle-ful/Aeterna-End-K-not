@@ -24,7 +24,7 @@ internal static class SfxBundle
     private static readonly Dictionary<string, AudioClip> Clips = new(StringComparer.OrdinalIgnoreCase);
     private static readonly HashSet<IntPtr> BundleClipPointers = [];
 
-    internal static bool IsEnabled => OperatingSystem.IsWindows() && (Main.SfxUseAssetBundle?.Value ?? false);
+    internal static bool IsEnabled => CustomSoundsManager.AudioPlatformSupported && (Main.SfxUseAssetBundle?.Value ?? false);
 
     // 初回呼び出しで遅延初期化する。失敗したら以後ずっと false を返す (毎回再試行しない)。
     internal static bool TryGetClip(string name, out AudioClip clip)

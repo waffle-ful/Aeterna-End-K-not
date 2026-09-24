@@ -41,7 +41,7 @@ public static class BackroomsAmbient
     {
         try
         {
-            if (!OperatingSystem.IsWindows()) return;
+            if (!CustomSoundsManager.AudioPlatformSupported) return;
             if (!(Main.EnableBGM?.Value ?? false)) return;
 
             AudioClip clip = LoadClip();
