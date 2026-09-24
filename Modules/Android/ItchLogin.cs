@@ -17,64 +17,66 @@ namespace EndKnot.Modules.Android
         private static int attempts;
         private static readonly ManualLogSource Log = BepInEx.Logging.Logger.CreateLogSource("EndKnot.ItchLogin");
 
-        // The launcher stores the itch.io token in its private files directory for the game package
-        // (exported by the native side as FUSION_APP_DATA_DIR). A key placed by hand in BepInEx/config
-        // is still honoured and moved into the private directory on first sight, since the shared
-        // storage copy is readable by every app on the device.
-        private static string ResolveKeyPath()
+        public const string TokenEnv = "ENDKNOT_ITCH_TOKEN";
+        public const string FailedMarkerName = "EndKnot.ItchApiKey.failed";
+        private static bool keyFromEnvironment;
+
+        // The launcher keeps the token encrypted (Android Keystore) and hands it to this process through an
+        // environment variable just before the runtime starts. A plaintext file is only read for launchers
+        // older than that scheme, or a key placed by hand for development; it is never written or copied here.
+        private static string PrivateDir => Environment.GetEnvironmentVariable("FUSION_APP_DATA_DIR");
+
+        private static string ResolvePlaintextPath()
         {
-            var privateDir = Environment.GetEnvironmentVariable("FUSION_APP_DATA_DIR");
+            var privateDir = PrivateDir;
             var privatePath = string.IsNullOrEmpty(privateDir) ? null : Path.Combine(privateDir, KeyFileName);
+            if (privatePath != null && File.Exists(privatePath)) return privatePath;
             var legacyPath = Path.Combine(Paths.ConfigPath, KeyFileName);
-            if (privatePath != null && File.Exists(privatePath))
-            {
-                if (File.Exists(legacyPath))
-                {
-                    try { File.Delete(legacyPath); Log.LogMessage("[ItchLogin] removed shared-storage key copy"); }
-                    catch (Exception e) { Log.LogWarning("[ItchLogin] could not remove shared-storage key copy: " + e.Message); }
-                }
-                return privatePath;
-            }
-            if (!File.Exists(legacyPath)) return privatePath ?? legacyPath;
-            if (privatePath == null) return legacyPath;
-            try
-            {
-                Directory.CreateDirectory(privateDir);
-                File.Copy(legacyPath, privatePath, true);
-                File.Delete(legacyPath);
-                Log.LogMessage("[ItchLogin] moved key file into the private directory");
-                return privatePath;
-            }
-            catch (Exception e)
-            {
-                Log.LogWarning("[ItchLogin] key migration failed, using shared-storage copy: " + e.Message);
-                return legacyPath;
-            }
+            return File.Exists(legacyPath) ? legacyPath : privatePath ?? legacyPath;
         }
 
-        // Renames a token that EOS keeps rejecting so the launcher stops showing the account as signed in
-        // and stops launching straight into the game; the player signs in again from the launcher.
+        // Tells the launcher the stored token keeps being rejected so it signs the account out and stops
+        // launching straight into the game; the player signs in again from the launcher.
         private static void MarkKeyFailed()
         {
             try
             {
-                var path = ResolveKeyPath();
+                if (keyFromEnvironment)
+                {
+                    var privateDir = PrivateDir;
+                    if (string.IsNullOrEmpty(privateDir)) { Log.LogWarning("[ItchLogin] token rejected but FUSION_APP_DATA_DIR is unset; the launcher will keep offering it"); return; }
+                    Directory.CreateDirectory(privateDir);
+                    File.WriteAllText(Path.Combine(privateDir, FailedMarkerName), "rejected" + Environment.NewLine);
+                    Environment.SetEnvironmentVariable(TokenEnv, null);
+                    Log.LogWarning("[ItchLogin] token rejected; failure marker written for the launcher");
+                    return;
+                }
+                var path = ResolvePlaintextPath();
                 if (path == null || !File.Exists(path)) return;
                 var failed = path + ".failed";
                 if (File.Exists(failed)) File.Delete(failed);
                 File.Move(path, failed);
                 Log.LogWarning("[ItchLogin] key file set aside as " + Path.GetFileName(failed));
             }
-            catch (Exception e) { Log.LogWarning("[ItchLogin] could not set the key file aside: " + e.Message); }
+            catch (Exception e) { Log.LogWarning("[ItchLogin] could not report the rejected key: " + e.Message); }
         }
 
         public static string ReadKey()
         {
             try
             {
-                var path = ResolveKeyPath();
-                if (!File.Exists(path)) { Log.LogWarning("[ItchLogin] key file missing: " + path); return null; }
-                var key = File.ReadAllText(path).Trim().Trim('﻿');
+                var fromEnv = Environment.GetEnvironmentVariable(TokenEnv);
+                if (!string.IsNullOrWhiteSpace(fromEnv))
+                {
+                    keyFromEnvironment = true;
+                    var env = fromEnv.Trim();
+                    Log.LogMessage("[ItchLogin] token from launcher environment, length=" + env.Length);
+                    return env;
+                }
+                keyFromEnvironment = false;
+                var path = ResolvePlaintextPath();
+                if (path == null || !File.Exists(path)) { Log.LogWarning("[ItchLogin] no token in environment and no key file: " + path); return null; }
+                var key = File.ReadAllText(path).Trim().Trim((char)0xFEFF);
                 Log.LogMessage("[ItchLogin] key file found, length=" + key.Length);
                 return key.Length == 0 ? null : key;
             }
