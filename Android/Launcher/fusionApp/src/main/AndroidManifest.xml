@@ -43,6 +43,11 @@
     <service android:name="com.google.android.play.core.assetpacks.ExtractionForegroundService"
         android:exported="false" />
     <activity
+        android:name="dev.allofus.fusioncore.EditorActivity"
+        android:theme="@style/Theme.Material3.Dark.NoActionBar"
+        android:exported="false"
+        android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode|density" />
+    <activity
         android:name="dev.allofus.fusioncore.SelectorActivity"
         android:theme="@style/Theme.Material3.Dark.NoActionBar" android:exported="true"
         android:configChanges="mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|orientation|screenLayout|uiMode|screenSize|smallestScreenSize|fontScale|layoutDirection|density"

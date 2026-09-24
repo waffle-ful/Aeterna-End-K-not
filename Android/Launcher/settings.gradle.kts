@@ -22,3 +22,7 @@ plugins {
 }
 
 include(":fusionApp")
+include(":symbolon-core")
+include(":symbolon-ui")
+include(":symbolon-desktop")
+include(":symbolon-android")
