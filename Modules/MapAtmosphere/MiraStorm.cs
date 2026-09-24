@@ -14,6 +14,9 @@ namespace EndKnot.Modules.MapAtmosphere;
 //          タイル描画の SpriteRenderer をタイル1枚分の周期で動かして巻き戻すので、UV スクロール用シェーダは要らない。
 //   稲妻 — 空の層に稲妻を走らせ、画面全体を一瞬白く光らせる。遅れて雷鳴 (近い=短い遅延・遠い=長い遅延)。
 //   室内 — 画面下の部屋名と同じ RoomTracker の判定で屋外度を出し、室内では手前の雨と雨音を絞る。
+//   凪   — ときどき雨と雨音がほぼ消える静かな時間を挟み、近い雷で破る。一定の調子が続くと背景に慣れてしまうため。
+//   突風 — 雨を大きく傾けて濃くし、うなる風音を重ねる。
+//   明滅 — 近い雷鳴の直後に画面が暗く瞬き、照明が落ちかけたように見せる (描画だけで視界の広さは変えない)。
 // Mira の空は画像ではなくカメラの backgroundColor (SolidColor) なので、背景色は退出時に必ず元へ戻す。
 // 加算シェーダは AU ビルドに無いため、発光は全て Sprites/Default のアルファ合成で作る。
 public static class MiraStorm
@@ -55,6 +58,22 @@ public static class MiraStorm
     private static float _strikeAge = -1f;
     private static float _strikeLen;
     private static bool _doubleStrike;
+    private static float _glow; // 稲妻の光り具合 (水溜りの映り込みに渡す)
+    private static bool _flickerOnThunder;
+    private static float _flickerAge = -1f;
+
+    private enum Phase { None, Rising, Holding, Falling }
+
+    // 凪: _rain は雨の強さ (1=通常)。Falling で絞り、Holding で静けさを保ち、近い雷と共に Rising で一気に戻す。
+    private static Phase _lullPhase;
+    private static float _rain = 1f, _lullTimer, _lullHold;
+    private const float LullFloor = 0.05f;
+
+    // 突風: _gust は風の強さ (0〜1)。
+    private static Phase _gustPhase;
+    private static float _gust, _gustTimer, _gustHold;
+    private const float GustAngle = 14f;
+    private const float WindVolume = 0.5f;
 
     // 屋外度: 1=屋外 (バルコニー/発射台)・0.5=廊下・0=部屋の中。急に切り替わらないよう滑らかに追従させる。
     private static float _outdoor = 1f;
@@ -64,7 +83,7 @@ public static class MiraStorm
     private const float NearRainAlpha = 0.55f;
 
     private const float RainVolume = 0.35f;
-    private static AudioSource _rainSrc, _thunderSrc;
+    private static AudioSource _rainSrc, _thunderSrc, _windSrc;
     private static float _thunderDelay = -1f;
     private static bool _thunderNear;
     private static readonly Dictionary<string, AudioClip> Clips = [];
@@ -137,6 +156,8 @@ public static class MiraStorm
         _flash = MakeLayer("Flash", solid, FlashZ, false, out _);
         _flash.color = new Color(FlashColor.r, FlashColor.g, FlashColor.b, 0f);
 
+        MiraPuddles.Build(ship.transform);
+
         _outdoor = OutdoorTarget();
         _fadeIn = 0f;
         _rainRetry = 0f;
@@ -151,6 +172,15 @@ public static class MiraStorm
         _strikeTimer = 0f;
         _nextStrike = Random.Range(3f, 6f); // 入場直後に1回鳴らして嵐だと分からせる
         _strikeAge = -1f;
+        _flickerAge = -1f;
+        _flickerOnThunder = false;
+
+        _lullPhase = Phase.None;
+        _rain = 1f;
+        _lullTimer = Random.Range(40f, 75f);
+        _gustPhase = Phase.None;
+        _gust = 0f;
+        _gustTimer = Random.Range(15f, 30f);
 
         Animate(0f);
         Logger.Info("MiraStorm built", "MiraStorm");
@@ -181,16 +211,21 @@ public static class MiraStorm
         float w = h * _cam.aspect;
         float cover = Mathf.Sqrt(w * w + h * h) * 1.15f; // 回転した雨層でも画面の四隅を覆う
 
-        // 空: カメラ位置の 15% だけ動く視差 + ゆっくりした横流れ。タイル1枚分で巻き戻す。
-        _skyDrift += dt * 0.12f;
+        UpdateLull(dt);
+        UpdateGust(dt);
+
+        // 空: カメラ位置の 15% だけ動く視差 + ゆっくりした横流れ (突風の間は速く流れる)。タイル1枚分で巻き戻す。
+        _skyDrift += dt * (0.12f + 0.5f * _gust);
         _sky.size = new Vector2(w + SkyTile * 2f, h + SkyTile * 2f);
         float sx = -Mathf.Repeat(camPos.x * 0.15f + _skyDrift, SkyTile);
         float sy = -Mathf.Repeat(camPos.y * 0.15f, SkyTile);
         _skyTf.localPosition = new Vector3(sx + SkyTile * 0.5f, sy + SkyTile * 0.5f, SkyZ);
 
-        // 雨: 層ごとに落下速度を変えて奥行きを出す。
-        _rainFarOffset = Mathf.Repeat(_rainFarOffset + dt * 7f, RainFarTile);
-        _rainNearOffset = Mathf.Repeat(_rainNearOffset + dt * 12f, RainNearTile);
+        // 雨: 層ごとに落下速度を変えて奥行きを出す。風が強いほど傾いて速くなる。
+        float speed = 1f + 0.35f * _gust;
+        _rainFarTf.localRotation = _rainNearTf.localRotation = Quaternion.Euler(0f, 0f, RainAngle + GustAngle * _gust);
+        _rainFarOffset = Mathf.Repeat(_rainFarOffset + dt * 7f * speed, RainFarTile);
+        _rainNearOffset = Mathf.Repeat(_rainNearOffset + dt * 12f * speed, RainNearTile);
         _rainFar.size = new Vector2(cover + RainFarTile * 2f, cover + RainFarTile * 2f);
         _rainNear.size = new Vector2(cover + RainNearTile * 2f, cover + RainNearTile * 2f);
         _rainFarTf.localPosition = (Vector3)(_rainFarTf.localRotation * new Vector3(0f, -_rainFarOffset, 0f)) + new Vector3(0f, 0f, RainFarZ);
@@ -200,12 +235,14 @@ public static class MiraStorm
 
         _outdoor = Mathf.MoveTowards(_outdoor, OutdoorTarget(), dt * 1.2f);
         _fadeIn = Mathf.MoveTowards(_fadeIn, 1f, dt / FadeInSeconds);
-        _rainNear.color = new Color(1f, 1f, 1f, NearRainAlpha * Mathf.Lerp(0.12f, 1f, _outdoor) * _fadeIn);
-        _rainFar.color = new Color(1f, 1f, 1f, _fadeIn);
-        _tint.color = new Color(TintColor.r, TintColor.g, TintColor.b, TintColor.a * _fadeIn);
+        float nearAlpha = NearRainAlpha * Mathf.Lerp(0.12f, 1f, _outdoor) * _rain * (1f + 0.6f * _gust);
+        _rainNear.color = new Color(1f, 1f, 1f, Mathf.Min(1f, nearAlpha) * _fadeIn);
+        _rainFar.color = new Color(1f, 1f, 1f, Mathf.Max(_rain, 0.12f) * _fadeIn); // 奥の層は霧雨程度に残す
+        _tint.color = new Color(TintColor.r, TintColor.g, TintColor.b, (TintColor.a + Flicker(dt)) * _fadeIn);
         UpdateAudio(dt);
 
         UpdateLightning(dt, w, h);
+        MiraPuddles.Animate(dt, _fadeIn, _glow, _rain);
     }
 
     private static void UpdateLightning(float dt, float w, float h)
@@ -225,6 +262,7 @@ public static class MiraStorm
             if (Main.MapAtmosphereFlash?.Value != true) flash = 0f;
             flash *= Mathf.Lerp(0.6f, 1f, _outdoor); // 室内では窓越しの光くらいに抑える
 
+            _glow = Mathf.Max(flash, bolt * 0.35f);
             _bolt.color = new Color(1f, 1f, 1f, bolt);
             _flash.color = new Color(FlashColor.r, FlashColor.g, FlashColor.b, flash * 0.32f);
             float lit = 1f + Mathf.Max(bolt * 0.6f, flash * 1.4f);
@@ -235,20 +273,42 @@ public static class MiraStorm
                 _strikeAge = -1f;
                 _bolt.color = new Color(1f, 1f, 1f, 0f);
                 _flash.color = new Color(FlashColor.r, FlashColor.g, FlashColor.b, 0f);
+                _glow = 0f;
             }
             return;
         }
 
         _sky.color = new Color(0.55f, 0.55f, 0.62f, _fadeIn);
 
+        if (_lullPhase is Phase.Falling or Phase.Holding) return; // 凪の間は凪を破る1発まで落とさない
+
         _strikeTimer += dt;
         if (_strikeTimer < _nextStrike) return;
 
+        StartStrike(false, w, h);
+    }
+
+    // lullBreak: 凪を破る1発。必ず近く、光ってから鳴るまでが短い。
+    // それ以外は「光→雷鳴」の型に慣れさせないよう、鳴るだけ・光るだけを混ぜる。
+    private static void StartStrike(bool lullBreak, float w, float h)
+    {
         _strikeTimer = 0f;
         _nextStrike = Random.Range(7f, 20f);
+        float roll = lullBreak ? 1f : Random.value;
+
+        if (roll < 0.15f)
+        {
+            // 見えないところで落ちた: 遠雷だけ
+            _thunderNear = false;
+            _thunderDelay = Random.Range(0.1f, 0.6f);
+            _flickerOnThunder = false;
+            Logger.Info("MiraStorm rumble only", "MiraStorm");
+            return;
+        }
+
         _strikeAge = 0f;
         _strikeLen = Random.Range(0.45f, 0.7f);
-        _doubleStrike = Random.value < 0.3f;
+        _doubleStrike = Random.value < (lullBreak ? 0.6f : 0.3f);
 
         _bolt.sprite = _boltSprites[Random.Range(0, _boltSprites.Length)];
         _bolt.flipX = Random.value < 0.5f;
@@ -257,10 +317,98 @@ public static class MiraStorm
         _boltTf.localPosition = new Vector3(Random.Range(-w * 0.4f, w * 0.4f), h * 0.05f, BoltZ);
 
         // 近い雷ほど光ってから鳴るまでが短い。
-        _thunderNear = Random.value < 0.45f;
-        _thunderDelay = _thunderNear ? Random.Range(0.15f, 0.5f) : Random.Range(1.2f, 2.8f);
+        _thunderNear = lullBreak || Random.value < 0.45f;
+        _thunderDelay = lullBreak ? Random.Range(0.08f, 0.2f) : _thunderNear ? Random.Range(0.15f, 0.5f) : Random.Range(1.2f, 2.8f);
+        _flickerOnThunder = _thunderNear && (lullBreak || Random.value < 0.5f);
 
-        Logger.Info($"MiraStorm strike double={_doubleStrike} near={_thunderNear} outdoor={_outdoor:0.00} rain={(_rainSrc ? $"{_rainSrc.volume:0.00}/{_rainSrc.isPlaying}" : "none")}", "MiraStorm");
+        if (roll < 0.27f) // 光るだけで鳴らない
+        {
+            _thunderDelay = -1f;
+            _flickerOnThunder = false;
+        }
+
+        MiraPuddles.OnStrike();
+
+        Logger.Info($"MiraStorm strike lullBreak={lullBreak} silent={_thunderDelay < 0f} double={_doubleStrike} near={_thunderNear} outdoor={_outdoor:0.00} rain={(_rainSrc ? $"{_rainSrc.volume:0.00}/{_rainSrc.isPlaying}" : "none")}", "MiraStorm");
+    }
+
+    private static void UpdateLull(float dt)
+    {
+        switch (_lullPhase)
+        {
+            case Phase.None:
+                if (_strikeAge >= 0f || _thunderDelay >= 0f || (_lullTimer -= dt) > 0f) break;
+                _lullPhase = Phase.Falling;
+                Logger.Info("MiraStorm lull begins", "MiraStorm");
+                break;
+            case Phase.Falling:
+                _rain = Mathf.MoveTowards(_rain, LullFloor, dt / 3.5f);
+                if (_rain > LullFloor) break;
+                _lullPhase = Phase.Holding;
+                _lullHold = Random.Range(5f, 9f);
+                MiraPuddles.OnLull();
+                break;
+            case Phase.Holding:
+                if ((_lullHold -= dt) > 0f) break;
+                _lullPhase = Phase.Rising;
+                float h = _cam.orthographicSize * 2f;
+                StartStrike(true, h * _cam.aspect, h);
+                break;
+            case Phase.Rising:
+                _rain = Mathf.MoveTowards(_rain, 1f, dt / 0.8f);
+                if (_rain < 1f) break;
+                _lullPhase = Phase.None;
+                _lullTimer = Random.Range(45f, 90f);
+                Logger.Info($"MiraStorm lull ends next={_lullTimer:0}s", "MiraStorm");
+                break;
+        }
+    }
+
+    private static void UpdateGust(float dt)
+    {
+        bool calm = _lullPhase is Phase.Falling or Phase.Holding;
+
+        switch (_gustPhase)
+        {
+            case Phase.None:
+                if (calm || (_gustTimer -= dt) > 0f) break;
+                _gustPhase = Phase.Rising;
+                _gustHold = Random.Range(2f, 4f);
+                PlayWind();
+                Logger.Info($"MiraStorm gust wind={(_windSrc ? _windSrc.isPlaying : false)}", "MiraStorm");
+                break;
+            case Phase.Rising:
+                _gust = Mathf.MoveTowards(_gust, 1f, dt / 1.8f);
+                if (calm) _gustPhase = Phase.Falling;
+                else if (_gust >= 1f) _gustPhase = Phase.Holding;
+                break;
+            case Phase.Holding:
+                if (calm || (_gustHold -= dt) <= 0f) _gustPhase = Phase.Falling;
+                break;
+            case Phase.Falling:
+                _gust = Mathf.MoveTowards(_gust, 0f, dt / 3f);
+                if (_gust > 0f) break;
+                _gustPhase = Phase.None;
+                _gustTimer = Random.Range(18f, 40f);
+                break;
+        }
+    }
+
+    // 照明が落ちかけたような暗い瞬き。点滅なので画面フラッシュを切っている人には出さない。
+    private static float Flicker(float dt)
+    {
+        if (_flickerAge < 0f) return 0f;
+        _flickerAge += dt;
+        float t = _flickerAge;
+
+        if (t >= 0.4f || Main.MapAtmosphereFlash?.Value != true)
+        {
+            _flickerAge = -1f;
+            return 0f;
+        }
+
+        float dim = t < 0.07f ? 0.55f : t < 0.13f ? 0.1f : t < 0.2f ? 0.45f : t < 0.34f ? 0.05f : 0.3f;
+        return dim * Mathf.Lerp(1f, 0.6f, _outdoor);
     }
 
     // RoomTracker は画面下の部屋名表示と同じ判定 (コライダー判定なので矩形近似より正確)。部屋外=廊下は null。
@@ -291,6 +439,22 @@ public static class MiraStorm
         _thunderSrc = _root.AddComponent<AudioSource>();
         _thunderSrc.playOnAwake = false;
         _thunderSrc.spatialBlend = 0f;
+
+        // 風音は凪で途中から絞れるよう、ワンショットでなく音量を毎フレーム追従させる。
+        _windSrc = _root.AddComponent<AudioSource>();
+        _windSrc.playOnAwake = false;
+        _windSrc.spatialBlend = 0f;
+        _windSrc.volume = 0f;
+    }
+
+    private static void PlayWind()
+    {
+        if (!_windSrc) return;
+        AudioClip clip = GetClip("MiraWindGust");
+        if (!clip) return;
+        _windSrc.clip = clip;
+        _windSrc.pitch = Random.Range(0.92f, 1.06f);
+        _windSrc.Play();
     }
 
     private static void UpdateAudio(float dt)
@@ -311,13 +475,18 @@ public static class MiraStorm
                 }
             }
 
-            _rainSrc.volume = sfx * RainVolume * Mathf.Lerp(0.22f, 1f, _outdoor) * _fadeIn;
+            _rainSrc.volume = sfx * RainVolume * Mathf.Lerp(0.22f, 1f, _outdoor) * _rain * (1f + 0.25f * _gust) * _fadeIn;
         }
+
+        if (_windSrc) _windSrc.volume = sfx * WindVolume * Mathf.Lerp(0.35f, 1f, _outdoor) * Mathf.Max(_rain, 0.1f) * _fadeIn;
 
         if (_thunderDelay < 0f) return;
         _thunderDelay -= dt;
         if (_thunderDelay > 0f) return;
         _thunderDelay = -1f;
+
+        if (_flickerOnThunder) _flickerAge = 0f;
+        _flickerOnThunder = false;
 
         if (!_thunderSrc) return;
         AudioClip clip = GetClip(_thunderNear ? "MiraThunderNear" : "MiraThunderFar");
@@ -354,12 +523,15 @@ public static class MiraStorm
     private static void Teardown()
     {
         _thunderDelay = -1f;
-        _rainSrc = _thunderSrc = null;
+        _rainSrc = _thunderSrc = _windSrc = null;
+        _flickerAge = -1f;
         if (_bgOverridden && _cam) _cam.backgroundColor = _origBg;
         _bgOverridden = false;
 
+        MiraPuddles.Teardown();
         if (_root) Object.Destroy(_root);
         _root = null;
+        _glow = 0f;
         _ship = null;
         _strikeAge = -1f;
     }

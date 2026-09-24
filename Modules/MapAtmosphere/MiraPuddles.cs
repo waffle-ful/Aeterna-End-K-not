@@ -1,0 +1,414 @@
+using UnityEngine;
+using Random = UnityEngine.Random;
+
+namespace EndKnot.Modules.MapAtmosphere;
+
+// Mira HQ 屋外 (発射台・バルコニー) の水溜り。MiraStorm が組み立て・毎フレーム更新・片付けを呼ぶ。
+// 床は壁と一緒に一枚絵 (Walls/launchPadWalls z=7・Walls/CafeteriaWalls z=4) に焼き込まれているので、
+// 床のすぐ手前の z に敷けば、人や小物 (z≒0〜3) の下に入る。木箱なども同じ絵なので置き場所は手で避けてある。
+// 空・雨と違ってワールドに固定するため、カメラに追従する嵐のルートとは別のルートを船の下に持つ。
+// 水面の演出は全てゲームの状態と無関係に作る (他人の位置や死亡を映すと、見えないはずの情報が漏れる)。
+//   足元の波紋 — 自分の足元だけ。他人に出すと透明化中のプレイヤーの居場所が分かってしまう。
+//   歩く波紋   — 雨が止んだ静けさの中で、誰も居ない水溜りを足跡の波紋が横切る。
+//   映る影     — 稲光で水面が明るくなった一瞬だけ、逆さのクルーの影が映る。水の形で切り抜いてあるので乾いた床には出ない。
+internal static class MiraPuddles
+{
+    private const string Res = "EndKnot.Resources.Images.MapAtmosphere.";
+
+    private const float LaunchPadZ = 6.5f;
+    private const float BalconyZ = 3.6f;
+    private const float Squash = 0.58f; // 見下ろし斜めの視点に合わせて縦を潰す
+    private const float WaterRadius = 0.28f; // 画像の幅に対する水の部分の半径 (おおよそ)
+
+    private enum Floor { Concrete, Wood }
+
+    // x, y, 画像の幅 (ワールド単位・水の部分はその半分ほど), 形の番号, 床の種類
+    private static readonly (float X, float Y, float W, int Shape, Floor Floor)[] Spots =
+    [
+        (-4.2f, 2.8f, 2.4f, 0, Floor.Concrete),
+        (-3.5f, 0.45f, 2.0f, 1, Floor.Concrete),
+        (-5.3f, 0.4f, 1.4f, 2, Floor.Concrete),
+        (-10.4f, 3.7f, 2.4f, 3, Floor.Concrete),
+        (-10.9f, 2.3f, 1.4f, 2, Floor.Concrete),
+        (21.6f, -2.1f, 2.2f, 2, Floor.Wood),
+        (26.2f, -1.95f, 2.6f, 0, Floor.Wood),
+        (28.0f, -2.3f, 1.5f, 1, Floor.Wood),
+        (20.3f, -1.8f, 1.2f, 3, Floor.Concrete) // 兵器室前の六角タイル (明るい床)
+    ];
+
+    // どちらの床も濡れると黒ずむ。明るい床は青灰の水色で、暗い木目は色を沈めてツヤ (映り込み) で水だと見せる。
+    // 暗い床に明るい色を重ねると白いもやに見えてしまう。
+    private static readonly Color ConcreteTint = new(0.2f, 0.29f, 0.43f, 0.58f);
+    private static readonly Color WoodTint = new(0.06f, 0.08f, 0.13f, 0.5f);
+    private const float ConcreteSheen = 0.5f;
+    private const float WoodSheen = 0.55f;
+
+    private const int RipplesPerPuddle = 10;
+
+    // 波紋の種類: 寿命 (秒), 最大の大きさ, 濃さ
+    private static readonly (float Life, float Size, float Alpha) RainRipple = (0.7f, 0.42f, 0.85f);
+    private static readonly (float Life, float Size, float Alpha) StepRipple = (1f, 0.6f, 1f);
+    private static readonly (float Life, float Size, float Alpha) StandRipple = (1.1f, 0.35f, 0.5f);
+    private static readonly (float Life, float Size, float Alpha) PhantomRipple = (1.6f, 0.6f, 1f);
+
+    private const float PhantomChance = 0.5f;
+    private const float ReflectionChance = 0.25f;
+    private const float FigureFadeSeconds = 0.45f; // 光が引いた後も少しだけ残る
+    private static readonly Color FigureColor = new(0f, 0.005f, 0.015f, 0.95f);
+
+    // puddle{i}_figure.png の影の足元 (スプライト内の座標・中心が原点)。画像は水の形で切り抜き済み。
+    private static readonly Vector2[] FigureFoot =
+    [
+        new(0.12f, 0.325f),
+        new(0.008f, 0.278f),
+        new(-0.13f, 0.037f),
+        new(0.12f, 0.269f)
+    ];
+    private const float NearbyRange = 6f; // 見える範囲の水溜りだけを選ぶ
+
+    private sealed class Puddle
+    {
+        public float W, Z, BaseSheen, Timer;
+        public Vector2 Center;
+        public Color Tint;
+        public SpriteRenderer Body, Sheen, Figure;
+        public int Shape;
+        public SpriteRenderer[] Ripples;
+        public Transform[] RippleTf;
+        public float[] Age, Life, Size, Alpha;
+    }
+
+    private static GameObject _root;
+    private static Puddle[] _puddles;
+
+    private static Vector2 _lastFeet;
+    private static float _stepTimer;
+
+    // 歩く波紋
+    private static Puddle _walkPuddle;
+    private static Vector2 _walkFrom, _walkDir;
+    private static int _walkStep;
+    private static float _walkTimer;
+    private const int WalkSteps = 6;
+    private const float WalkInterval = 0.6f;
+
+    // 映る影
+    private static Puddle _figurePuddle;
+    private static float _figureAlpha;
+    private static bool _figureLit;
+
+    public static void Build(Transform ship)
+    {
+        _root = new GameObject("EK_MiraPuddles") { layer = 0 };
+        _root.transform.SetParent(ship, false);
+
+        var body = new Sprite[4];
+        var sheen = new Sprite[4];
+        var figure = new Sprite[4];
+
+        for (int i = 0; i < 4; i++)
+        {
+            body[i] = Utils.LoadSprite(Res + $"puddle{i}.png", 320f);
+            sheen[i] = Utils.LoadSprite(Res + $"puddle{i}_sheen.png", 320f);
+            figure[i] = Utils.LoadSprite(Res + $"puddle{i}_figure.png", 320f);
+        }
+
+        Sprite ripple = Utils.LoadSprite(Res + "ripple.png", 128f);
+
+        _puddles = new Puddle[Spots.Length];
+
+        for (int i = 0; i < Spots.Length; i++)
+        {
+            (float x, float y, float w, int shape, Floor floor) = Spots[i];
+            bool wood = floor == Floor.Wood;
+            float z = x > 15f ? BalconyZ : LaunchPadZ;
+
+            var p = new Puddle
+            {
+                W = w,
+                Z = z,
+                Shape = shape,
+                Center = new Vector2(x, y),
+                Tint = wood ? WoodTint : ConcreteTint,
+                BaseSheen = wood ? WoodSheen : ConcreteSheen,
+                Timer = Random.Range(0f, 0.3f),
+                Ripples = new SpriteRenderer[RipplesPerPuddle],
+                RippleTf = new Transform[RipplesPerPuddle],
+                Age = new float[RipplesPerPuddle],
+                Life = new float[RipplesPerPuddle],
+                Size = new float[RipplesPerPuddle],
+                Alpha = new float[RipplesPerPuddle]
+            };
+
+            // 同じ形が並んでも見分けが付かないよう、左右反転と僅かな回転で崩す。
+            bool flip = Random.value < 0.5f;
+            float rot = Random.Range(-12f, 12f);
+            var scale = new Vector3(w * (flip ? -1f : 1f), w * Squash, 1f);
+
+            p.Body = Make($"Puddle{i}", body[shape], new Vector3(x, y, z), scale, rot);
+            p.Sheen = Make($"Puddle{i}Sheen", sheen[shape], new Vector3(x, y, z - 0.01f), scale, rot);
+
+            // 影は水溜りの子にして、反転・回転・縦潰しを水の形とそろえる。ツヤの筋より手前・波紋より奥。
+            p.Figure = Make($"Puddle{i}Figure", figure[shape], Vector3.zero, Vector3.one, 0f);
+            p.Figure.transform.SetParent(p.Body.transform, false);
+            p.Figure.transform.localPosition = new Vector3(0f, 0f, -0.015f);
+
+            for (int r = 0; r < RipplesPerPuddle; r++)
+            {
+                p.Ripples[r] = Make($"Puddle{i}Ripple{r}", ripple, new Vector3(x, y, z - 0.02f), Vector3.zero, 0f);
+                p.RippleTf[r] = p.Ripples[r].transform;
+                p.Age[r] = -1f;
+            }
+
+            _puddles[i] = p;
+        }
+
+        _figurePuddle = null;
+        _walkPuddle = null;
+        _stepTimer = 0f;
+        _lastFeet = LocalFeet() ?? Vector2.zero;
+    }
+
+    private static SpriteRenderer Make(string name, Sprite sprite, Vector3 pos, Vector3 scale, float rot)
+    {
+        var go = new GameObject(name) { layer = 0 };
+        Transform tf = go.transform;
+        tf.SetParent(_root.transform, false);
+        tf.localPosition = pos;
+        tf.localRotation = Quaternion.Euler(0f, 0f, rot);
+        tf.localScale = scale;
+        SpriteRenderer sr = go.AddComponent<SpriteRenderer>();
+        sr.sprite = sprite;
+        sr.color = Color.clear;
+        return sr;
+    }
+
+    // 雨が止みきった時に MiraStorm が呼ぶ。近くの誰も居ない水溜りを、見えない何かに歩かせる。
+    public static void OnLull()
+    {
+        if (!_root || _puddles == null || Random.value >= PhantomChance) return;
+        if (LocalFeet() is not { } feet) return;
+
+        Puddle p = Nearest(feet, 1.8f);
+        if (p == null) return;
+
+        _walkPuddle = p;
+        _walkDir = Random.insideUnitCircle.normalized;
+        if (_walkDir == Vector2.zero) _walkDir = Vector2.right;
+        _walkFrom = -_walkDir * WaterRadius;
+        _walkStep = 0;
+        _walkTimer = Random.Range(0.5f, 1.5f);
+        Logger.Info($"MiraPuddles phantom walk puddle={System.Array.IndexOf(_puddles, p)}", "MiraStorm");
+    }
+
+    // 稲妻が落ちた瞬間に MiraStorm が呼ぶ。光っている間だけ、近くの水溜りにクルーの影を映す。
+    public static void OnStrike()
+    {
+        if (!_root || _puddles == null || _figurePuddle != null || Random.value >= ReflectionChance) return;
+        if (LocalFeet() is not { } feet) return;
+
+        Puddle p = Nearest(feet, 1.8f);
+        if (p == null) return;
+
+        _figurePuddle = p;
+        _figureAlpha = 0f;
+        _figureLit = false;
+        Logger.Info($"MiraPuddles reflection puddle={System.Array.IndexOf(_puddles, p)}", "MiraStorm");
+    }
+
+    // fade: 全体の立ち上がり (0→1)。glow: 稲妻の光り具合 (0〜1)。水面が空を映して一瞬明るくなる。
+    // rain: 雨の強さ (0〜1)。雨が止むと雨粒の波紋も止み、他の波紋だけが残る。
+    // 水溜りだけの不具合で空や雨まで止めないよう、例外はここで受けて水溜りだけを片付ける。
+    public static void Animate(float dt, float fade, float glow, float rain)
+    {
+        if (!_root || _puddles == null) return;
+
+        try
+        {
+            AnimateCore(dt, fade, glow, rain);
+        }
+        catch (System.Exception e)
+        {
+            Utils.ThrowException(e);
+            Teardown();
+        }
+    }
+
+    private static void AnimateCore(float dt, float fade, float glow, float rain)
+    {
+        foreach (Puddle p in _puddles)
+        {
+            Color t = p.Tint;
+            // 光った瞬間は映り込みの筋だけを強く光らせる。濡れ色まで明るくすると周りの床と見分けが付かなくなる。
+            p.Body.color = new Color(t.r, t.g, t.b, t.a * fade);
+            p.Sheen.color = new Color(0.9f, 0.94f, 1f, Mathf.Min(1f, p.BaseSheen + glow * 1.6f) * fade);
+
+            // 雨粒の波紋: 小さな楕円の輪を水溜りの内側に落とし、広げながら消す。
+            p.Timer -= dt;
+
+            if (p.Timer <= 0f)
+            {
+                p.Timer = Random.Range(0.1f, 0.3f) / p.W / Mathf.Max(rain, 0.05f);
+                Vector2 off = Random.insideUnitCircle * (WaterRadius * 0.8f);
+                Spawn(p, p.Center + new Vector2(off.x * p.W, off.y * p.W * Squash), RainRipple);
+            }
+
+            for (int r = 0; r < p.Ripples.Length; r++)
+            {
+                if (p.Age[r] < 0f) continue;
+                p.Age[r] += dt;
+                float k = p.Age[r] / p.Life[r];
+
+                if (k >= 1f)
+                {
+                    p.Age[r] = -1f;
+                    p.Ripples[r].color = Color.clear;
+                    continue;
+                }
+
+                float size = Mathf.Lerp(0.08f, p.Size[r], 1f - (1f - k) * (1f - k));
+                p.RippleTf[r].localScale = new Vector3(size, size * Squash, 1f);
+                float a = (1f - k) * p.Alpha[r] * fade;
+                p.Ripples[r].color = new Color(0.85f, 0.9f, 1f, Mathf.Min(1f, a + glow * 0.3f * (1f - k)));
+            }
+        }
+
+        UpdateFootsteps(dt);
+        UpdateWalk(dt);
+        UpdateFigure(dt, fade, glow);
+    }
+
+    private static void UpdateFootsteps(float dt)
+    {
+        if (LocalFeet() is not { } feet) return;
+
+        bool moving = (feet - _lastFeet).magnitude > dt * 0.5f;
+        _lastFeet = feet;
+
+        if ((_stepTimer -= dt) > 0f) return;
+
+        Puddle p = PuddleAt(feet);
+
+        if (p == null)
+        {
+            _stepTimer = 0.1f;
+            return;
+        }
+
+        Spawn(p, feet + Random.insideUnitCircle * 0.03f, moving ? StepRipple : StandRipple);
+        _stepTimer = moving ? 0.26f : Random.Range(1.2f, 1.8f);
+    }
+
+    private static void UpdateWalk(float dt)
+    {
+        if (_walkPuddle == null || (_walkTimer -= dt) > 0f) return;
+
+        Puddle p = _walkPuddle;
+        // 左右の足を交互に、進行方向と直角へ少しずらす。
+        var side = new Vector2(-_walkDir.y, _walkDir.x) * (0.05f * (_walkStep % 2 == 0 ? 1f : -1f));
+        Vector2 local = _walkFrom + _walkDir * (WaterRadius * 2f * _walkStep / (WalkSteps - 1)) + side;
+        Spawn(p, p.Center + new Vector2(local.x * p.W, local.y * p.W * Squash), PhantomRipple);
+
+        _walkTimer = WalkInterval * Random.Range(0.9f, 1.15f);
+        if (++_walkStep >= WalkSteps) _walkPuddle = null;
+    }
+
+    private static void UpdateFigure(float dt, float fade, float glow)
+    {
+        Puddle p = _figurePuddle;
+        if (p == null) return;
+
+        // 光っている間は光に合わせて濃くなり、光が引いてもすぐには消えずに薄れていく。
+        _figureAlpha = Mathf.Max(Mathf.Clamp01(glow * 1.6f), _figureAlpha - dt / FigureFadeSeconds);
+        p.Figure.color = new Color(FigureColor.r, FigureColor.g, FigureColor.b, FigureColor.a * _figureAlpha * fade);
+
+        // 消えきったら、影の足元に波紋を1つだけ残す (何かがそこから離れたように)。
+        // 呼ばれたフレームはまだ光る前なので、一度光ってから消えたところで終える。
+        if (_figureAlpha > 0f) _figureLit = true;
+        if (!_figureLit || _figureAlpha > 0f) return;
+        p.Figure.color = Color.clear;
+        Vector2 foot = FigureFoot[p.Shape];
+        Spawn(p, _root.transform.InverseTransformPoint(p.Figure.transform.TransformPoint(foot.x, foot.y, 0f)), PhantomRipple);
+        _figurePuddle = null;
+    }
+
+    // 大きな水溜りでは雨粒の波紋だけで枠がほぼ埋まる (実測 10 枠中 8)。雨粒以外は空きが無ければ一番消えかけの輪を譲らせる。
+    private static void Spawn(Puddle p, Vector2 pos, (float Life, float Size, float Alpha) kind)
+    {
+        int slot = -1;
+        float oldest = -1f;
+
+        for (int r = 0; r < p.Ripples.Length; r++)
+        {
+            if (p.Age[r] < 0f)
+            {
+                slot = r;
+                break;
+            }
+
+            float k = p.Age[r] / p.Life[r];
+            if (kind == RainRipple || k <= oldest) continue;
+            oldest = k;
+            slot = r;
+        }
+
+        if (slot < 0) return;
+        p.Age[slot] = 0f;
+        p.Life[slot] = kind.Life;
+        p.Size[slot] = kind.Size;
+        p.Alpha[slot] = kind.Alpha;
+        p.RippleTf[slot].localPosition = new Vector3(pos.x, pos.y, p.Z - 0.02f);
+        p.RippleTf[slot].localScale = Vector3.zero;
+    }
+
+    // 生きている自分の足元 (船のローカル座標)。幽霊は浮いているので水を踏まない。
+    private static Vector2? LocalFeet()
+    {
+        PlayerControl lp = PlayerControl.LocalPlayer;
+        if (!lp || lp.Data == null || lp.Data.IsDead || lp.inVent) return null;
+        return _root.transform.InverseTransformPoint(lp.GetTruePosition());
+    }
+
+    private static bool Contains(Puddle p, Vector2 pos)
+    {
+        float r = WaterRadius * p.W;
+        float dx = (pos.x - p.Center.x) / r;
+        float dy = (pos.y - p.Center.y) / (r * Squash);
+        return dx * dx + dy * dy <= 1f;
+    }
+
+    private static Puddle PuddleAt(Vector2 pos)
+    {
+        foreach (Puddle p in _puddles)
+            if (Contains(p, pos)) return p;
+
+        return null;
+    }
+
+    // 自分が立っていない、近くのある程度大きな水溜り。
+    private static Puddle Nearest(Vector2 from, float minW)
+    {
+        Puddle best = null;
+        float bestDist = NearbyRange;
+
+        foreach (Puddle p in _puddles)
+        {
+            if (p.W < minW || Contains(p, from)) continue;
+            float d = Vector2.Distance(from, p.Center);
+            if (d >= bestDist) continue;
+            best = p;
+            bestDist = d;
+        }
+
+        return best;
+    }
+
+    public static void Teardown()
+    {
+        if (_root) Object.Destroy(_root);
+        _root = null;
+        _puddles = null;
+        _figurePuddle = null;
+        _walkPuddle = null;
+    }
+}

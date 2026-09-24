@@ -25,7 +25,8 @@ $sfxSources = @(
     (Join-Path $repo 'Resources\Sounds\Backrooms\lobby-ambient.wav'),
     (Join-Path $repo 'Resources\Sounds\MapAtmosphere\MiraRainLoop.ogg'),
     (Join-Path $repo 'Resources\Sounds\MapAtmosphere\MiraThunderNear.ogg'),
-    (Join-Path $repo 'Resources\Sounds\MapAtmosphere\MiraThunderFar.ogg')
+    (Join-Path $repo 'Resources\Sounds\MapAtmosphere\MiraThunderFar.ogg'),
+    (Join-Path $repo 'Resources\Sounds\MapAtmosphere\MiraWindGust.ogg')
 )
 $dstSfx = Join-Path $proj 'Assets\SFX'
 $outSfx = Join-Path $proj "$buildDir\endknot_sfx"
