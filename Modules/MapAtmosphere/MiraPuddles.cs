@@ -1,3 +1,6 @@
+using System.IO;
+using System.Reflection;
+using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
@@ -10,6 +13,8 @@ namespace EndKnot.Modules.MapAtmosphere;
 // 水面の演出は全てゲームの状態と無関係に作る (他人の位置や死亡を映すと、見えないはずの情報が漏れる)。
 //   足元の波紋 — 自分の足元だけ。他人に出すと透明化中のプレイヤーの居場所が分かってしまう。
 //   歩く波紋   — 雨が止んだ静けさの中で、誰も居ない水溜りを足跡の波紋が横切る。
+//   にじみ     — 死体が水溜りの上に倒れている時だけ、死体の飛沫と同じボディ色が死体から水の中へ広がる。
+//                死体そのものが見えている場所に限るので新しい情報は増えない。死体が消えたらすぐ引く。
 internal static class MiraPuddles
 {
     private const string Res = "EndKnot.Resources.Images.MapAtmosphere.";
@@ -58,6 +63,17 @@ internal static class MiraPuddles
         public float W, Z, BaseSheen, Timer;
         public Vector2 Center;
         public Color Tint;
+        public int Shape;
+
+        // にじみ: 水の形に切り抜いた小さなテクスチャを、死体の位置から描き広げる。
+        public SpriteRenderer StainSr;
+        public Texture2D StainTex;
+        public Il2CppStructArray<Color32> StainPixels;
+        public Color StainColor;
+        public Vector2 StainOrigin; // テクスチャ上の起点 (ピクセル)
+        public float StainAge = -1f, StainFade, StainRedraw;
+        public float Phase1, Phase2, Phase3;
+        public bool Stained;
         public SpriteRenderer Body, Sheen;
         public SpriteRenderer[] Ripples;
         public Transform[] RippleTf;
@@ -76,6 +92,15 @@ internal static class MiraPuddles
     private static int _walkStep;
     private static float _walkTimer;
     private const int WalkSteps = 6;
+
+    // にじみ
+    private static float _bodyScan;
+    private const float BodyScanInterval = 0.5f;
+    private const float StainSpreadSeconds = 10f;
+    private const float StainClearSeconds = 0.3f;
+    private const float StainAlpha = 0.85f;
+    private const int StainRes = 80; // 水溜りの画像 (320px) を 1/4 に落とした解像度
+    private static byte[][] _waterAlpha; // 形ごとの水の濃さ (StainRes 四方)
     private const float WalkInterval = 0.6f;
 
     public static void Build(Transform ship)
@@ -106,6 +131,7 @@ internal static class MiraPuddles
             {
                 W = w,
                 Z = z,
+                Shape = shape,
                 Center = new Vector2(x, y),
                 Tint = wood ? WoodTint : ConcreteTint,
                 BaseSheen = wood ? WoodSheen : ConcreteSheen,
@@ -137,6 +163,7 @@ internal static class MiraPuddles
         }
 
         _walkPuddle = null;
+        _bodyScan = 0f;
         _stepTimer = 0f;
         _lastFeet = LocalFeet() ?? Vector2.zero;
     }
@@ -193,8 +220,11 @@ internal static class MiraPuddles
 
     private static void AnimateCore(float dt, float fade, float glow, float rain)
     {
+        ScanBodies(dt);
+
         foreach (Puddle p in _puddles)
         {
+            UpdateStain(p, dt, fade);
             Color t = p.Tint;
             // 光った瞬間は映り込みの筋だけを強く光らせる。濡れ色まで明るくすると周りの床と見分けが付かなくなる。
             p.Body.color = new Color(t.r, t.g, t.b, t.a * fade);
@@ -267,6 +297,172 @@ internal static class MiraPuddles
 
         _walkTimer = WalkInterval * Random.Range(0.9f, 1.15f);
         if (++_walkStep >= WalkSteps) _walkPuddle = null;
+    }
+
+    // 死体の出入りは頻繁でないので間隔を空けて探す。非表示にされた死体 (消す系の能力) は無いものとして扱う。
+    private static void ScanBodies(float dt)
+    {
+        if ((_bodyScan -= dt) > 0f) return;
+        _bodyScan = BodyScanInterval;
+
+        foreach (Puddle p in _puddles) p.Stained = false;
+
+        foreach (DeadBody body in Object.FindObjectsOfType<DeadBody>())
+        {
+            if (!body || !IsVisible(body)) continue;
+            Vector3 world = body.TruePosition;
+            Puddle p = PuddleAt(_root.transform.InverseTransformPoint(world));
+            if (p == null || p.Stained) continue;
+            if (p.StainAge < 0f && !StartStain(p, body, world)) continue;
+            p.Stained = true;
+        }
+    }
+
+    private static bool StartStain(Puddle p, DeadBody body, Vector3 world)
+    {
+        if (BodyColor(body) is not { } c || WaterAlpha(p.Shape) == null) return false;
+
+        if (!p.StainTex)
+        {
+            p.StainTex = new Texture2D(StainRes, StainRes, TextureFormat.ARGB32, false) { wrapMode = TextureWrapMode.Clamp, hideFlags = HideFlags.HideAndDontSave };
+            p.StainPixels = new Il2CppStructArray<Color32>((long)(StainRes * StainRes));
+            Sprite sprite = Sprite.Create(p.StainTex, new Rect(0f, 0f, StainRes, StainRes), new Vector2(0.5f, 0.5f), StainRes, 0, SpriteMeshType.FullRect);
+            sprite.hideFlags |= HideFlags.HideAndDontSave;
+            // 水溜りの子にして、反転・回転・縦潰しを水の形とそろえる。濡れ色より手前・ツヤの筋より奥。
+            p.StainSr = Make($"Puddle{System.Array.IndexOf(_puddles, p)}Stain", sprite, Vector3.zero, Vector3.one, 0f);
+            p.StainSr.transform.SetParent(p.Body.transform, false);
+            p.StainSr.transform.localPosition = new Vector3(0f, 0f, -0.005f);
+        }
+
+        // 飛沫の色そのままだと濡れた床の上で浮くので、少し沈めて水の色に寄せる。
+        p.StainColor = new Color(c.r * 0.7f, c.g * 0.7f, c.b * 0.7f, 1f);
+        Vector3 local = p.Body.transform.InverseTransformPoint(world);
+        p.StainOrigin = new Vector2((local.x + 0.5f) * StainRes, (local.y + 0.5f) * StainRes);
+        p.Phase1 = Random.Range(0f, 6.3f);
+        p.Phase2 = Random.Range(0f, 6.3f);
+        p.Phase3 = Random.Range(0f, 6.3f);
+        p.StainAge = 0f;
+        p.StainFade = 1f;
+        p.StainRedraw = 0f;
+        Logger.Info($"MiraPuddles stain puddle={System.Array.IndexOf(_puddles, p)}", "MiraStorm");
+        return true;
+    }
+
+    private static void UpdateStain(Puddle p, float dt, float fade)
+    {
+        if (p.StainAge < 0f) return;
+
+        p.StainFade = p.Stained ? 1f : Mathf.MoveTowards(p.StainFade, 0f, dt / StainClearSeconds);
+
+        if (p.StainFade <= 0f)
+        {
+            p.StainAge = -1f;
+            p.StainSr.color = Color.clear;
+            return;
+        }
+
+        Color c = p.StainColor;
+        // 広がるにつれて色が深まる。
+        float deepen = 0.6f + 0.4f * Mathf.Clamp01(p.StainAge / StainSpreadSeconds);
+        p.StainSr.color = new Color(c.r, c.g, c.b, StainAlpha * deepen * p.StainFade * fade);
+
+        if (p.StainAge >= StainSpreadSeconds) return; // 広がりきったら描き直さない
+        p.StainAge += dt;
+        if ((p.StainRedraw -= dt) > 0f && p.StainAge < StainSpreadSeconds) return;
+        p.StainRedraw = 1f / 20f;
+        DrawStain(p, Mathf.Clamp01(p.StainAge / StainSpreadSeconds));
+    }
+
+    // 死体の下の小さな溜まりから、縁が波打つ輪でじわじわ押し出す。縁の出っ張りは方向ごとに伸びる速さが違い、
+    // 時間とともに形を変えながら這うように進む。縁は表面張力で少し濃く盛り上がって見せる。
+    // 画像の縦はゲーム内で潰れるので、距離は潰した後の見た目で測って丸く広がって見えるようにする。
+    private static void DrawStain(Puddle p, float k)
+    {
+        byte[] water = WaterAlpha(p.Shape);
+        float radius = StainRes * 0.95f * (0.08f + 0.92f * Mathf.Pow(k, 0.8f));
+        float wobble = 0.12f + 0.18f * k; // 進むほど縁の凸凹が育つ
+        float drift = p.StainAge * 0.15f; // 出っ張りの向きがゆっくり移ろう
+        Il2CppStructArray<Color32> px = p.StainPixels;
+
+        for (int y = 0, i = 0; y < StainRes; y++)
+        {
+            float dy = (y + 0.5f - p.StainOrigin.y) * Squash;
+
+            for (int x = 0; x < StainRes; x++, i++)
+            {
+                byte a = water[i];
+
+                if (a == 0)
+                {
+                    px[i] = new Color32(255, 255, 255, 0);
+                    continue;
+                }
+
+                float dx = x + 0.5f - p.StainOrigin.x;
+                float d = Mathf.Sqrt(dx * dx + dy * dy);
+                float th = Mathf.Atan2(dy, dx);
+                float shape = Mathf.Sin(3f * th + p.Phase1 + drift) + 0.55f * Mathf.Sin(5f * th + p.Phase2 - drift * 1.3f) + 0.3f * Mathf.Sin(9f * th + p.Phase3 + drift * 0.7f);
+                float edge = radius * (1f + wobble * shape);
+                float m = Mathf.Clamp01((edge - d) / 5f);
+                float core = 0.65f + 0.35f * Mathf.Clamp01(1f - d / Mathf.Max(edge, 1f)); // 起点ほど濃い
+                float rim = 0.3f * Mathf.Clamp01(1f - Mathf.Abs(edge - d - 3f) / 3f); // 縁の盛り上がり
+                px[i] = new Color32(255, 255, 255, (byte)Mathf.Min(255f, a * m * (core + rim)));
+            }
+        }
+
+        p.StainTex.SetPixels32(px);
+        p.StainTex.Apply(false);
+    }
+
+    // 水の形は水溜りの画像のアルファから取る。ゲーム内の画像は読み出し不可で読み込まれているので、埋め込みから読み直して縮める。
+    private static byte[] WaterAlpha(int shape)
+    {
+        _waterAlpha ??= new byte[4][];
+        if (_waterAlpha[shape] != null) return _waterAlpha[shape];
+
+        using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(Res + $"puddle{shape}.png");
+        if (stream == null) return null;
+        var ms = new MemoryStream();
+        stream.CopyTo(ms);
+
+        var tex = new Texture2D(2, 2, TextureFormat.ARGB32, false);
+
+        try
+        {
+            if (!tex.LoadImage(ms.ToArray(), false)) return null;
+            Il2CppStructArray<Color32> src = tex.GetPixels32();
+            int w = tex.width, h = tex.height;
+            var alpha = new byte[StainRes * StainRes];
+
+            for (int y = 0; y < StainRes; y++)
+            for (int x = 0; x < StainRes; x++)
+                alpha[y * StainRes + x] = src[(y * h / StainRes + h / StainRes / 2) * w + x * w / StainRes + w / StainRes / 2].a;
+
+            return _waterAlpha[shape] = alpha;
+        }
+        finally
+        {
+            Object.Destroy(tex);
+        }
+    }
+
+    private static bool IsVisible(DeadBody body)
+    {
+        if (!body.gameObject.activeInHierarchy || body.bodyRenderers == null) return false;
+
+        foreach (SpriteRenderer r in body.bodyRenderers)
+            if (r && r.enabled && r.gameObject.activeInHierarchy) return true;
+
+        return false;
+    }
+
+    // 死体の飛沫はボディ色のマテリアルで塗られている。見た目の色をそのまま拾うので、変装中に倒れた死体なども画面どおりになる。
+    private static Color? BodyColor(DeadBody body)
+    {
+        SpriteRenderer sr = body.bloodSplatter ? body.bloodSplatter : body.bodyRenderers.Length > 0 ? body.bodyRenderers[0] : null;
+        if (!sr) return null;
+        Material m = sr.material;
+        return m && m.HasProperty("_BodyColor") ? m.GetColor("_BodyColor") : null;
     }
 
     // 大きな水溜りでは雨粒の波紋だけで枠がほぼ埋まる (実測 10 枠中 8)。雨粒以外は空きが無ければ一番消えかけの輪を譲らせる。
@@ -343,6 +539,16 @@ internal static class MiraPuddles
 
     public static void Teardown()
     {
+        // にじみのテクスチャとスプライトは HideAndDontSave なので、ルートを壊しても残る。
+        if (_puddles != null)
+        {
+            foreach (Puddle p in _puddles)
+            {
+                if (p.StainSr && p.StainSr.sprite) Object.Destroy(p.StainSr.sprite);
+                if (p.StainTex) Object.Destroy(p.StainTex);
+            }
+        }
+
         if (_root) Object.Destroy(_root);
         _root = null;
         _puddles = null;
