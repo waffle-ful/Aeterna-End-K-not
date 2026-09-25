@@ -53,6 +53,7 @@ public static class EndKnotFeatureBridge
 
         // Stream setup window (upper-left mirror of the update button). Streaming overlays are PC-only.
 #if !ANDROID
+        if (!CalamityDusk.Built)
         CreateTextButton(
             overlayLayer,
             GetString("Setup.MenuButton"),
@@ -184,6 +185,13 @@ public static class EndKnotFeatureBridge
         x = AddLink(parent, "GitHub", x, y, fontSize, () => OpenUrlIfSet(GitHubUrl));
         x = AddSeparator(parent, x, y, fontSize);
         x = AddLink(parent, "YouTube", x, y, fontSize, () => OpenUrlIfSet(YouTubeUrl));
+
+#if !ANDROID
+        // 配信セットアップは右下に同じ文字サイズで置き、左下のリンク列と釣り合わせる。
+        float setupWidth = AddLink(parent, GetString("Setup.MenuButton"), 0f, y, fontSize, EndKnot.Modules.Setup.StreamSetupGUI.Open);
+        Transform setup = parent.GetChild(parent.childCount - 1);
+        setup.localPosition = new Vector3(halfW - 0.35f - setupWidth * 0.5f, y, 0f);
+#endif
 
         PassiveButton news = mm.newsButton;
         if (news == null) return;
