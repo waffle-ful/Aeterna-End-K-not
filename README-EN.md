@@ -12,7 +12,7 @@
   Windows will show a blue warning on first run; <a href="#if-windows-shows-a-blue-warning">getting past it takes two clicks</a>.</sub>
 </p>
 
-[![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/sEYAFzD3a)
+[![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/sEYAFzD3a) [![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-EA4AAA?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/waffle-ful)
 
 ---
 
@@ -213,6 +213,16 @@ End K not is a **free, GPL-3.0 mod**. All features are and will remain free, and
 Donations go toward the costs of keeping End K not in development, such as development tools. Donating does not unlock any features or priority support.
 
 ▶ **[About donations (`FUNDING.md`, Japanese)](./FUNDING.md)**
+
+<p align="center">
+  <a href="https://github.com/sponsors/waffle-ful"><img src="https://img.shields.io/badge/GitHub%20Sponsors-Support%20us-EA4AAA?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Support us on GitHub Sponsors"></a>
+</p>
+
+### 💖 Sponsors
+
+The people keeping End K not going (listed only if they wish).
+
+No sponsors yet. We'd love for you to be the first!
 
 ## License
 
