@@ -5,33 +5,40 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.DashPathEffect;
 import android.graphics.Paint;
-import android.graphics.RadialGradient;
-import android.graphics.Shader;
+import android.graphics.Path;
 import android.util.AttributeSet;
 import android.view.View;
 
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 
+import java.util.Random;
+
 import dev.allofus.fusioncore.R;
 
 /**
- * A fuse drawn across the launch card. {@link #setBurn} moves the ember from the left end
- * (nothing burnt) to the right end (burnt through); the rope ahead of it stays, the rope
- * behind it is left as a dotted trail of ash.
+ * A fuse drawn in crayon across the launch card. {@link #setBurn} moves the spark from the
+ * left end (nothing burnt) to the right end (burnt through); the rope ahead of it stays,
+ * the rope behind it is left as a smudged trail of ash. While lit the drawing boils, being
+ * redrawn slightly differently several times a second.
  */
 public class FuseView extends View {
-    private final Paint ropePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint ashPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint glowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint corePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final int ember;
-    private final int afterglow;
+    private static final int BOIL_DRAWINGS = 3;
+
+    private final Paint ropePaint;
+    private final Paint ropeEchoPaint;
+    private final Paint ashPaint;
+    private final Paint sparkPaint;
+    private final Paint emberPaint;
+    private final Paint corePaint;
+    private final Paint[] allPaints;
     private final float density;
+    private final Path[] rope = new Path[BOIL_DRAWINGS];
+    private final Path[] ropeEcho = new Path[BOIL_DRAWINGS];
     private float burn;
     private boolean lit;
-    private float flicker = 1f;
-    private ValueAnimator flickerAnimator;
+    private long frame;
+    private ValueAnimator boilAnimator;
 
     public FuseView(Context context) {
         this(context, null);
@@ -40,28 +47,25 @@ public class FuseView extends View {
     public FuseView(Context context, @Nullable AttributeSet attrs) {
         super(context, attrs);
         density = getResources().getDisplayMetrics().density;
-        ember = ContextCompat.getColor(context, R.color.ek_ember);
-        afterglow = ContextCompat.getColor(context, R.color.ek_afterglow);
+        int ember = ContextCompat.getColor(context, R.color.ek_ember);
+        int afterglow = ContextCompat.getColor(context, R.color.ek_afterglow);
 
-        ropePaint.setStyle(Paint.Style.STROKE);
-        ropePaint.setStrokeCap(Paint.Cap.ROUND);
-        ropePaint.setStrokeWidth(2.5f * density);
-        ropePaint.setColor(withAlpha(afterglow, 0.42f));
-
-        ashPaint.setStyle(Paint.Style.STROKE);
-        ashPaint.setStrokeCap(Paint.Cap.ROUND);
-        ashPaint.setStrokeWidth(1.5f * density);
-        ashPaint.setColor(ContextCompat.getColor(context, R.color.ek_cinder));
-        ashPaint.setPathEffect(new DashPathEffect(new float[] {0.5f * density, 5f * density}, 0));
-
-        corePaint.setColor(0xFFFFDEA0);
+        ropePaint = Crayon.stroke(withAlpha(afterglow, 0.55f), 3.2f * density);
+        ropeEchoPaint = Crayon.stroke(withAlpha(afterglow, 0.3f), 1.6f * density);
+        ashPaint = Crayon.stroke(ContextCompat.getColor(context, R.color.ek_cinder), 2.2f * density);
+        ashPaint.setPathEffect(new DashPathEffect(new float[] {
+                1f * density, 4f * density, 2.5f * density, 6f * density, 0.5f * density, 3f * density}, 0));
+        sparkPaint = Crayon.stroke(ember, 1.7f * density);
+        emberPaint = Crayon.stroke(ember, 2.4f * density);
+        corePaint = Crayon.stroke(0xFFFFDEA0, 1.8f * density);
+        allPaints = new Paint[] {ropePaint, ropeEchoPaint, ashPaint, sparkPaint, emberPaint, corePaint};
     }
 
-    /** An unlit fuse is drawn at full length with no ember. */
+    /** An unlit fuse is drawn at full length with no spark. */
     public void setLit(boolean value) {
         if (lit != value) {
             lit = value;
-            updateFlicker();
+            updateBoil();
             invalidate();
         }
     }
@@ -73,74 +77,105 @@ public class FuseView extends View {
     }
 
     @Override
+    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+        super.onSizeChanged(w, h, oldw, oldh);
+        float pad = 6f * density;
+        float cy = h / 2f;
+        for (int i = 0; i < BOIL_DRAWINGS; i++) {
+            rope[i] = Crayon.wobblyLine(pad, w - pad, cy, 2.2f * density, 7f * density, 101 + i);
+            ropeEcho[i] = Crayon.wobblyLine(pad + 2f * density, w - pad - 3f * density,
+                    cy + 0.9f * density, 2.6f * density, 9f * density, 211 + i);
+        }
+    }
+
+    @Override
     protected void onVisibilityChanged(View changedView, int visibility) {
         super.onVisibilityChanged(changedView, visibility);
-        updateFlicker();
+        updateBoil();
     }
 
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
-        updateFlicker();
+        updateBoil();
     }
 
     @Override
     protected void onDetachedFromWindow() {
-        stopFlicker();
+        stopBoil();
         super.onDetachedFromWindow();
     }
 
-    private void updateFlicker() {
+    private void updateBoil() {
         if (lit && isShown() && Motion.enabled(getContext())) {
-            if (flickerAnimator == null) {
-                flickerAnimator = ValueAnimator.ofFloat(0f, 1f);
-                flickerAnimator.setDuration(900);
-                flickerAnimator.setRepeatCount(ValueAnimator.INFINITE);
-                flickerAnimator.addUpdateListener(a -> {
-                    float t = (float) a.getAnimatedValue() * (float) (Math.PI * 2);
-                    flicker = 0.9f + 0.06f * (float) Math.sin(t * 3) + 0.04f * (float) Math.sin(t * 7 + 1.3f);
-                    invalidate();
+            if (boilAnimator == null) {
+                boilAnimator = ValueAnimator.ofFloat(0f, 1f);
+                boilAnimator.setDuration(1000);
+                boilAnimator.setRepeatCount(ValueAnimator.INFINITE);
+                boilAnimator.addUpdateListener(a -> {
+                    long now = Crayon.frameNow();
+                    if (now != frame) {
+                        frame = now;
+                        invalidate();
+                    }
                 });
-                flickerAnimator.start();
+                boilAnimator.start();
             }
         } else {
-            stopFlicker();
+            stopBoil();
         }
     }
 
-    private void stopFlicker() {
-        if (flickerAnimator != null) {
-            flickerAnimator.cancel();
-            flickerAnimator = null;
+    private void stopBoil() {
+        if (boilAnimator != null) {
+            boilAnimator.cancel();
+            boilAnimator = null;
         }
-        flicker = 1f;
+        frame = 0;
     }
 
     @Override
     protected void onDraw(Canvas canvas) {
-        float pad = 6f * density;
-        float left = pad;
-        float right = getWidth() - pad;
-        float cy = getHeight() / 2f;
-        if (!lit) {
-            canvas.drawLine(left, cy, right, cy, ropePaint);
+        if (rope[0] == null) {
             return;
         }
-        float x = left + (right - left) * burn;
-
-        if (x > left) {
-            canvas.drawLine(left, cy, x, cy, ashPaint);
+        int drawing = (int) (frame % BOIL_DRAWINGS);
+        for (Paint p : allPaints) {
+            Crayon.shiftGrain(p, frame);
         }
-        if (x < right) {
-            canvas.drawLine(x, cy, right, cy, ropePaint);
+        if (!lit) {
+            canvas.drawPath(rope[drawing], ropePaint);
+            canvas.drawPath(ropeEcho[drawing], ropeEchoPaint);
+            return;
         }
+        float pad = 6f * density;
+        float cy = getHeight() / 2f;
+        float x = pad + (getWidth() - 2f * pad) * burn;
 
-        float glowR = 14f * density * flicker;
-        glowPaint.setShader(new RadialGradient(x, cy, glowR,
-                new int[] {withAlpha(ember, 0.85f), withAlpha(ember, 0.28f), withAlpha(ember, 0f)},
-                new float[] {0f, 0.35f, 1f}, Shader.TileMode.CLAMP));
-        canvas.drawCircle(x, cy, glowR, glowPaint);
-        canvas.drawCircle(x, cy, 2.6f * density * flicker, corePaint);
+        canvas.save();
+        canvas.clipRect(0, 0, x, getHeight());
+        canvas.drawPath(rope[drawing], ashPaint);
+        canvas.restore();
+
+        canvas.save();
+        canvas.clipRect(x, 0, getWidth(), getHeight());
+        canvas.drawPath(rope[drawing], ropePaint);
+        canvas.drawPath(ropeEcho[drawing], ropeEchoPaint);
+        canvas.restore();
+
+        long seed = frame * 7919L;
+        canvas.drawPath(Crayon.burst(x, cy, 3.5f * density, 7f * density, 13f * density, 9, seed), sparkPaint);
+        canvas.drawPath(Crayon.scribbleFill(x, cy, 4f * density, 1.6f * density, seed + 1), emberPaint);
+        canvas.drawPath(Crayon.wobblyCircle(x, cy, 1.6f * density, 0.8f * density, seed + 2), corePaint);
+
+        // A couple of loose flecks thrown back over the ash.
+        Random random = new Random(seed + 3);
+        for (int i = 0; i < 3; i++) {
+            float fx = x - (4f + random.nextFloat() * 14f) * density;
+            float fy = cy + (random.nextFloat() - 0.5f) * 18f * density;
+            float len = (1f + random.nextFloat() * 2f) * density;
+            canvas.drawLine(fx, fy, fx - len, fy + len * 0.4f, sparkPaint);
+        }
     }
 
     static int withAlpha(int color, float alpha) {
