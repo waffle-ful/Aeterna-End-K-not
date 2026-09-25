@@ -357,4 +357,6 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 
 ---
 
-Among Us is © 2018–2026 Innersloth LLC. End K not は Innersloth と提携・公認されていません。Among Us の素材の一部は Innersloth LLC の財産です。
+This mod is not affiliated with Among Us or Innersloth LLC, and the content contained therein is not endorsed or otherwise sponsored by Innersloth LLC. Portions of the materials contained herein are property of Innersloth LLC. © Innersloth LLC.
+
+この mod は Among Us および Innersloth LLC と提携しておらず、その内容は Innersloth LLC によって公認・後援されたものではありません。ここに含まれる素材の一部は Innersloth LLC の財産です。Among Us is © 2018–2026 Innersloth LLC.
