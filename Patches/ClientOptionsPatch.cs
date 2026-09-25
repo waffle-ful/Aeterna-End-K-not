@@ -147,26 +147,49 @@ public static class OptionsMenuBehaviourStartPatch
                     Zoom.SetZoomSize(reset: true);
                     AmongUsClient.Instance.ExitGame(DisconnectReasons.ExitGame);
                     SceneChanger.ChangeScene("MainMenu");
-                    LateTask.New(() => HudManager.Instance.ShowPopUp(Translator.GetString("RejoinRequiredDueToVanillaSwitch")), 1.9f, log: false);
-                    LateTask.New(Unload, 2f, log: false);
+                    LateTask.New(() => Unload(true), 2f, log: false);
                 }
                 else
-                    Unload();
+                    Unload(false);
 
                 return;
 
-                static void Unload()
+                static void Unload(bool leftGame)
                 {
                     // モッドを降ろす = 以後こちらから番犬/相棒アプリを止める手段が無くなるので、先に畳む。
                     // (Unload がコンポーネントを破棄して ExitHook.OnDestroy が走るかは保証が無いため明示的に呼ぶ。
                     //  二重呼び出しは ExitHook 側のラッチが潰す)
                     EndKnot.Modules.ExitHook.FireNow("switch-vanilla");
 
-                    if (ClientControlGUI.Instance) Object.Destroy(ClientControlGUI.Instance);
-                    MainMenuManagerPatch.ShowRightPanelImmediately();
+                    // 表示の後始末が失敗してもパッチ解除までは必ず進める (ここで例外が抜けると Mod が残ったままになる)。
+                    try
+                    {
+                        if (ClientControlGUI.Instance) Object.Destroy(ClientControlGUI.Instance);
+                    }
+                    catch (Exception e) { Logger.Warn($"UI cleanup before unload failed: {e.Message}", "SwitchVanilla"); }
 
                     Main.Instance.Harmony.UnpatchSelf();
                     Main.Instance.Unload();
+
+                    // 今のメインメニューはパッチが組み替えた状態のまま残るので、パッチ無しで組み直す。
+                    // コルーチンはプラグイン本体で回るのでパッチ解除後も LateTask は動く。
+                    SceneChanger.ChangeScene("MainMenu");
+                    if (leftGame) LateTask.New(ShowRejoinPopup, 1.5f, log: false);
+                }
+
+                static void ShowRejoinPopup()
+                {
+                    // Mod のポップアップはシーンの読み直しで消えるので、常駐する Twitch 用ポップアップを複製して使う。
+                    if (!Twitch.TwitchManager.Instance) return;
+                    GenericPopup popup = Object.Instantiate(Twitch.TwitchManager.Instance.TwitchPopup);
+                    // 複製元は折り返しが切られていて、長文が枠の外へはみ出す。
+                    popup.TextAreaTMP.enableWordWrapping = true;
+                    popup.TextAreaTMP.fontSizeMax = popup.TextAreaTMP.fontSize;
+                    popup.TextAreaTMP.fontSizeMin = 1f;
+                    popup.TextAreaTMP.enableAutoSizing = true;
+                    popup.TextAreaTMP.GetComponent<RectTransform>().sizeDelta = new(2.6f, 1.1f);
+                    popup.TextAreaTMP.transform.localPosition += Vector3.down * 0.17f;
+                    popup.Show(Translator.GetString("RejoinRequiredDueToVanillaSwitch"));
                 }
             }
         }
