@@ -57,9 +57,9 @@ public static class EndKnotFeatureBridge
             overlayLayer,
             GetString("Setup.MenuButton"),
             new Vector3(-3.2f, 2.0f, 0f),
-            new Color(0.45f, 0.85f, 1.0f, 1f),  // soft cyan
-            new Color(0.70f, 0.95f, 1.0f, 1f),  // brighter cyan on hover
-            2.2f,
+            new Color(0.90f, 0.80f, 0.68f, 0.95f),  // parchment
+            new Color(1.00f, 0.92f, 0.80f, 1f),     // brighter parchment on hover
+            2.0f,
             EndKnot.Modules.Setup.StreamSetupGUI.Open);
 #endif
 
@@ -69,7 +69,8 @@ public static class EndKnotFeatureBridge
         // VanillaSuppressor hides VersionShower in Calamity mode, so social buttons reclaim
         // their bottom-of-screen slot. EHR/TOHForE-style brand-colored buttons, cloned from the
         // vanilla quit button (the vanilla Start_Postfix skips its own Template in Calamity mode).
-        CreateSocialRow(mm.quitButton, overlayLayer, -2.1f);
+        if (CalamityDusk.Built) CreateLinkRow(mm, overlayLayer);
+        else CreateSocialRow(mm.quitButton, overlayLayer, -2.1f);
 
         LateTask.New(() => ModUpdater.ShowAvailableUpdate(), 0.5f, "ShowUpdatePopupCalamity");
     }
@@ -159,6 +160,80 @@ public static class EndKnotFeatureBridge
         int month = (h + k - 7 * l + 114) / 31;
         int day   = ((h + k - 7 * l + 114) % 31) + 1;
         return new DateTime(year, month, day);
+    }
+
+    // ── Link row (bottom-left small text links, used with the dusk backdrop) ─
+
+    private static readonly Color LinkColor      = new(0.90f, 0.80f, 0.68f, 0.85f);
+    private static readonly Color LinkHoverColor = new(1.00f, 0.93f, 0.80f, 1f);
+
+    // 絵の邪魔をしないよう、SNS とニュースを左下に小さな文字で一列に並べる。
+    // ニュースは vanilla ボタンを見えなく・押せなくして、クリック処理だけ借りる
+    // (公式サーバー警告を手動で開ける経路は vanilla のまま残す)。
+    private static void CreateLinkRow(MainMenuManager mm, Transform parent)
+    {
+        Camera cam = Camera.main;
+        float halfH = cam != null ? cam.orthographicSize : 3f;
+        float halfW = halfH * (cam != null ? cam.aspect : 16f / 9f);
+        float x = -halfW + 0.35f;
+        float y = -halfH + 0.32f;
+        const float fontSize = 1.5f;
+
+        x = AddLink(parent, "Discord", x, y, fontSize, () => OpenUrlIfSet(DiscordUrl));
+        x = AddSeparator(parent, x, y, fontSize);
+        x = AddLink(parent, "GitHub", x, y, fontSize, () => OpenUrlIfSet(GitHubUrl));
+        x = AddSeparator(parent, x, y, fontSize);
+        x = AddLink(parent, "YouTube", x, y, fontSize, () => OpenUrlIfSet(YouTubeUrl));
+
+        PassiveButton news = mm.newsButton;
+        if (news == null) return;
+        string label = "News";
+        try
+        {
+            string s = TranslationController.Instance?.GetString(StringNames.NewsLabel);
+            if (!string.IsNullOrWhiteSpace(s)) label = s.Trim();
+        }
+        catch (Exception ex) { Logger.Exception(ex, "EndKnotFeatureBridge.NewsLabel"); }
+        foreach (Renderer r in news.GetComponentsInChildren<Renderer>(true)) r.enabled = false;
+        foreach (Collider2D c in news.GetComponentsInChildren<Collider2D>(true)) c.enabled = false;
+        x = AddSeparator(parent, x, y, fontSize);
+        AddLink(parent, label, x, y, fontSize, () =>
+        {
+            if (mm != null && mm.newsButton != null) mm.newsButton.OnClick.Invoke();
+        });
+    }
+
+    private static float AddLink(Transform parent, string label, float x, float y, float fontSize, Action onClick)
+    {
+        GameObject go = CreateTextButton(parent, label, Vector3.zero, LinkColor, LinkHoverColor, fontSize, onClick);
+        var tmp = go.GetComponent<TextMeshPro>();
+        tmp.fontStyle    = FontStyles.Normal;
+        tmp.outlineColor = new Color32(34, 18, 28, 220);
+        tmp.outlineWidth = 0.2f;
+        tmp.ForceMeshUpdate();
+        float width = tmp.textBounds.size.x > 0.01f ? tmp.textBounds.size.x : label.Length * fontSize * 0.09f;
+        go.transform.localPosition = new Vector3(x + width * 0.5f, y, 0f);
+        var col = go.GetComponent<BoxCollider2D>();
+        col.size   = new Vector2(width + 0.15f, fontSize * 0.22f);
+        col.offset = new Vector2(tmp.textBounds.center.x, tmp.textBounds.center.y);
+        return x + width;
+    }
+
+    private static float AddSeparator(Transform parent, float x, float y, float fontSize)
+    {
+        var go = new GameObject("EHRLinkSep");
+        go.transform.SetParent(parent);
+        go.transform.localScale = Vector3.one;
+        var tmp = go.AddComponent<TextMeshPro>();
+        tmp.text         = "·";
+        tmp.fontSize     = fontSize;
+        tmp.alignment    = TextAlignmentOptions.Center;
+        tmp.color        = new Color(0.90f, 0.80f, 0.68f, 0.55f);
+        tmp.sortingOrder = 10;
+        CalamityFonts.Apply(tmp);
+        const float gap = 0.32f;
+        go.transform.localPosition = new Vector3(x + gap * 0.5f, y, 0f);
+        return x + gap;
     }
 
     // ── Social buttons (EHR/TOHForE-style brand-colored vanilla buttons) ─

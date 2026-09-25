@@ -12,8 +12,11 @@ namespace EndKnot.Patches.CalamityMenu;
 
 public static class CalamityButtons
 {
-    private static readonly Color NormalColor = new(0.65f, 0.70f, 0.88f, 1f);
+    // 夕暮れの紙の色 (生成り) + 濃いプラムの縁取り。ホバー中の行だけ虹色が文字の上を流れる。
+    private static readonly Color NormalColor = new(0.94f, 0.86f, 0.74f, 1f);
     private static readonly Color HoverColor  = Color.white;
+    private static readonly Color32 OutlineColor = new(34, 18, 28, 235);
+    private static TextMeshPro _rainbowTmp;
     private const float NormalScale = 1.00f;
     private const float HoverScale  = 1.08f;
     private const float FontSize    = 2.5f;
@@ -201,8 +204,8 @@ public static class CalamityButtons
         tmp.enableAutoSizing   = false;
         tmp.alignment          = TextAlignmentOptions.Center;
         tmp.fontStyle          = FontStyles.Bold;
-        tmp.outlineColor       = new Color32(0, 0, 0, 200);
-        tmp.outlineWidth       = 0.18f;
+        tmp.outlineColor       = OutlineColor;
+        tmp.outlineWidth       = 0.24f;
         tmp.color              = NormalColor;
         tmp.sortingOrder       = 10;
         tmp.characterSpacing   = -3f;
@@ -255,6 +258,41 @@ public static class CalamityButtons
     {
         tmp.color          = hover ? HoverColor  : NormalColor;
         t.localScale       = Vector3.one * (hover ? HoverScale : NormalScale);
+        if (hover) _rainbowTmp = tmp;
+        else if (_rainbowTmp == tmp) _rainbowTmp = null;
+    }
+
+    // ホバー中の行の頂点色を毎フレーム塗り替えて、左から右へ流れる虹にする (メッシュの作り直しはしない)。
+    public static void Tick()
+    {
+        TextMeshPro tmp = _rainbowTmp;
+        if (tmp == null) return;
+        if (!tmp.isActiveAndEnabled) { _rainbowTmp = null; return; }
+
+        TMP_TextInfo info = tmp.textInfo;
+        if (info == null || info.characterCount == 0) return;
+        float t = Time.time * 0.35f;
+        int n = info.characterCount;
+        for (int i = 0; i < n; i++)
+        {
+            TMP_CharacterInfo ch = info.characterInfo[i];
+            if (!ch.isVisible) continue;
+            var colors = info.meshInfo[ch.materialReferenceIndex].colors32;
+            int v = ch.vertexIndex;
+            Color32 left  = RainbowAt(t - (float)i / n * 0.8f);
+            Color32 right = RainbowAt(t - (i + 1f) / n * 0.8f);
+            colors[v]     = left;
+            colors[v + 1] = left;
+            colors[v + 2] = right;
+            colors[v + 3] = right;
+        }
+        tmp.UpdateVertexData(TMP_VertexDataUpdateFlags.Colors32);
+    }
+
+    private static Color32 RainbowAt(float h)
+    {
+        Color c = Color.HSVToRGB(Mathf.Repeat(h, 1f), 0.45f, 1f);
+        return new Color32((byte)(c.r * 255f), (byte)(c.g * 255f), (byte)(c.b * 255f), 255);
     }
 
     private static void MultiplayerMapIdFix()
