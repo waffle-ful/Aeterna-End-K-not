@@ -150,7 +150,7 @@ internal class Nemesis : RoleBase
 
         NemesisRevenged[pc.PlayerId]++;
 
-        CustomSoundsManager.RPCPlayCustomSoundAll("AWP");
+        CustomSoundsManager.RPCPlayCustomSoundAll("SniperShot");
 
         LateTask.New(() =>
         {

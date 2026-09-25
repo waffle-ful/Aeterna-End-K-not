@@ -244,7 +244,7 @@ public class Sniper : RoleBase
 
         if (!AmongUsClient.Instance.AmHost || Pelican.IsEaten(sniperId) || Medic.ProtectList.Contains(sniperId)) return false;
 
-        sniper.RPCPlayCustomSound("AWP");
+        sniper.RPCPlayCustomSound("SniperShot");
 
         Dictionary<PlayerControl, float> targets = GetSnipeTargets(sniper);
 

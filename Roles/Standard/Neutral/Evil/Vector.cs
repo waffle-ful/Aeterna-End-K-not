@@ -69,11 +69,11 @@ internal class Vector : RoleBase
         VectorVentCount.TryAdd(pc.PlayerId, 0);
         VectorVentCount[pc.PlayerId]++;
         if (!pc.IsModdedClient()) Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
-        if (pc.AmOwner) CustomSoundsManager.Play("MarioJump");
+        if (pc.AmOwner) CustomSoundsManager.Play("VectorBounce");
 
         if (AmongUsClient.Instance.AmHost && VectorVentCount[pc.PlayerId] >= VectorVentNumWin)
         {
-            pc.RPCPlayCustomSound("MarioCoin");
+            pc.RPCPlayCustomSound("VectorPickup");
             CustomWinnerHolder.SetWinnerOrAdditonalWinner(CustomWinner.Vector);
             CustomWinnerHolder.WinnerIds.Add(pc.PlayerId);
         }

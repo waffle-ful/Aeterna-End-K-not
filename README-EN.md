@@ -234,6 +234,7 @@ End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/End
 
 > **The vast majority of this mod's roles and features come from earlier mods.** Huge thanks to the developers of the projects below.
 
+- **[astra1dev](https://github.com/astra1dev)** — advice on IMGUI window display settings
 - **[au.libhalt.net](https://au.libhalt.net/)** — an Among Us mod information and distribution site
 - **[AutoRejoin](https://github.com/Maxi0fc/AutoRejoin)** (Maxi0fc) — a client mod that adds automatic rejoining after a disconnect
 - **[BetterAmongUs](https://github.com/D1GQ/BetterAmongUs)** (D1GQ, GPL-3.0) — the modded-client support flag list
@@ -242,6 +243,7 @@ End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/End
 - **[Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles)** (Gurge44 et al., GPL-3.0) — base mod: the role engine, the large majority of roles, and an ongoing source of bug fixes
 - **[ExtremeRoles](https://github.com/yukieiji/ExtremeRoles)** (yukieiji) — Airship patches
 - **[Game Optimizer (CPUs / Threads Optimizer)](https://github.com/charlie754/Game-Optimizer-CPUs-Threads-Optimizer)** (charlie754, MIT) — the idea of isolating cache domains with CPU Sets (the `CpuSetsMode` setting); our code is written directly against the Win32 API
+- **ImaMapleTree / 단풍잎 / Tealeaf** — ability activation via the pet button
 - **[Lotus (LotusContinued)](https://github.com/Lotus-AU/LotusContinued)** / [NikoCat233 fork](https://github.com/NikoCat233/LotusContinued) (GPL-3.0) — settings-conflict detection with host warnings, whitelist join restriction
 - **[MalumMenu](https://github.com/scp222thj/MalumMenu)** (scp222thj, GPL-3.0) — player position dots on the minimap
 - **[Mini.RegionInstall](https://github.com/miniduikboot/Mini.RegionInstall)** (miniduikboot, GPL-3.0) — custom region installer
@@ -270,6 +272,7 @@ End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/End
 - **[Town Of Next: Edited (TONE)](https://github.com/qin-qwq/TownofNext-Edited)** (qin-qwq, GPL-3.0) — vent network map display (via [TownOfNext](https://github.com/TownOfNext/TownOfNext), [TOU-Mira](https://github.com/AU-Avengers/TOU-Mira) and [MalumMenu](https://github.com/scp222thj/MalumMenu))
 - **[Town-Of-Moss](https://github.com/Koke1024/Town-Of-Moss)** (Koke1024) — reactor meltdown boost
 - **[Town Of Us - Reactivated](https://github.com/eDonnes124/Town-Of-Us-R)** (eDonnes124, GPL-3.0) — host meeting display
+- **Town of Us Rewritten** (Det) — Discord activity (rich presence) display
 - **[TownOfHost-Optimized](https://github.com/Limeau/TownofHost-Optimized)** (Limeau) — a Town Of Host derivative focused on optimization
 - **[TownOfHost-Pko](https://github.com/satokazoku/TownOfHost-Pko)** (satokazoku et al., GPL-3.0) — source of many ported roles, WaveCannon design reference, direct numeric input for settings, consecutive-join kick, auto abort
 - **[TownOfHost-TheOtherRoles](https://github.com/music-discussion/TownOfHost-TheOtherRoles)** / [discus-sions repo](https://github.com/discus-sions/TownOfHost-TheOtherRoles) (music-discussion) — split RPC packs, meeting screen handling
@@ -301,7 +304,10 @@ Some components are embedded into `EndKnot.dll`, others ship inside the release 
 
 - NVorbis (MIT) — Ogg Vorbis decoding
 - NLayer (MIT) — MP3 decoding
-- BepInEx / Il2CppInterop / Unity Doorstop (LGPL-2.1) — the mod loading stack
+- BepInEx / Unity Doorstop (LGPL-2.1), Il2CppInterop (LGPL-3.0) — the mod loading stack
+- HarmonyX / MonoMod / Mono.Cecil / AsmResolver / Cpp2IL / Iced and others (MIT), Dobby (Apache-2.0) — libraries used by the loading stack
+- .NET runtime (MIT) — the runtime the mod runs on
+- Python with its packages, three.js and others — the AI commentary companion
 
 ### Music Credits
 

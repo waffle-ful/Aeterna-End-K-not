@@ -245,6 +245,7 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 
 > **この Mod の役職・機能は、そのほとんどが先行 Mod に由来します。** 下記プロジェクトの開発者の皆さんに深く感謝します。
 
+- **[astra1dev](https://github.com/astra1dev)** — IMGUI ウィンドウの表示設定まわりの助言
 - **[au.libhalt.net](https://au.libhalt.net/)** — Among Us の Mod 情報・配布サイト
 - **[AutoRejoin](https://github.com/Maxi0fc/AutoRejoin)** (Maxi0fc) — 切断後の自動再入室を追加するクライアント Mod
 - **[BetterAmongUs](https://github.com/D1GQ/BetterAmongUs)** (D1GQ、GPL-3.0) — modded クライアント判別フラグの一覧
@@ -253,6 +254,7 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 - **[Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles)** (Gurge44 他、GPL-3.0) — ベース Mod。役職エンジンと大多数の役職、継続的なバグ修正の取り込み元
 - **[ExtremeRoles](https://github.com/yukieiji/ExtremeRoles)** (yukieiji) — エアシップ関連のパッチ
 - **[Game Optimizer (CPUs / Threads Optimizer)](https://github.com/charlie754/Game-Optimizer-CPUs-Threads-Optimizer)** (charlie754、MIT) — CPU Sets によるキャッシュドメイン隔離の発想 (`CpuSetsMode` 設定)。コードは Win32 API から独自実装
+- **ImaMapleTree / 단풍잎 / Tealeaf** — ペットボタンによる能力発動の処理
 - **[Lotus (LotusContinued)](https://github.com/Lotus-AU/LotusContinued)** / [NikoCat233 fork](https://github.com/NikoCat233/LotusContinued) (GPL-3.0) — 設定矛盾の検出とホスト警告、ホワイトリスト入室制限
 - **[MalumMenu](https://github.com/scp222thj/MalumMenu)** (scp222thj、GPL-3.0) — ミニマップ上のプレイヤー位置表示
 - **[Mini.RegionInstall](https://github.com/miniduikboot/Mini.RegionInstall)** (miniduikboot、GPL-3.0) — カスタムリージョンの追加
@@ -281,6 +283,7 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 - **[Town Of Next: Edited (TONE)](https://github.com/qin-qwq/TownofNext-Edited)** (qin-qwq、GPL-3.0) — ベント接続網の地図表示（[TownOfNext](https://github.com/TownOfNext/TownOfNext)・[TOU-Mira](https://github.com/AU-Avengers/TOU-Mira)・[MalumMenu](https://github.com/scp222thj/MalumMenu) 由来）
 - **[Town-Of-Moss](https://github.com/Koke1024/Town-Of-Moss)** (Koke1024) — 原子炉メルトダウンの加速処理
 - **[Town Of Us - Reactivated](https://github.com/eDonnes124/Town-Of-Us-R)** (eDonnes124、GPL-3.0) — ホストの会議表示
+- **Town of Us Rewritten** (Det) — Discord のアクティビティ表示
 - **[TownOfHost-Optimized](https://github.com/Limeau/TownofHost-Optimized)** (Limeau) — Town Of Host の最適化を進めた派生 Mod
 - **[TownOfHost-Pko](https://github.com/satokazoku/TownOfHost-Pko)** (satokazoku 他、GPL-3.0) — 多くの役職の移植元、波動砲の設計参考、設定数値の直接入力、連続参加キック、自動廃村
 - **[TownOfHost-TheOtherRoles](https://github.com/music-discussion/TownOfHost-TheOtherRoles)** / [discus-sions 版](https://github.com/discus-sions/TownOfHost-TheOtherRoles) (music-discussion) — RPC パケットの分割送信、会議画面まわりの処理
@@ -312,7 +315,10 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 
 - NVorbis (MIT) — Ogg Vorbis のデコード
 - NLayer (MIT) — MP3 のデコード
-- BepInEx / Il2CppInterop / Unity Doorstop (LGPL-2.1) — Mod の読み込み基盤
+- BepInEx / Unity Doorstop (LGPL-2.1)・Il2CppInterop (LGPL-3.0) — Mod の読み込み基盤
+- HarmonyX / MonoMod / Mono.Cecil / AsmResolver / Cpp2IL / Iced ほか (MIT)・Dobby (Apache-2.0) — 読み込み基盤が使うライブラリ
+- .NET ランタイム (MIT) — Mod の実行環境
+- Python と同梱パッケージ・three.js ほか — AI 実況相棒
 
 ### Music Credits
 自称芸術家みーさん様のBGMが使われています
