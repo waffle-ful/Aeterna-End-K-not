@@ -5,8 +5,8 @@ It is a rebranded build of [FusionCore](https://github.com/All-Of-Us-Mods/Fusion
 All-Of-Us-Mods, used under the GNU General Public License v3.0 (see [`LICENSE`](./LICENSE) and
 [`UPSTREAM.md`](./UPSTREAM.md) for how upstream is tracked).
 
-This project is not affiliated with or endorsed by Innersloth. Use at your own risk; Among Us must
-already be installed on the device from an official store. This launcher does not ship the game.
+This mod is not affiliated with Among Us or Innersloth LLC, and the content contained therein is not endorsed or otherwise sponsored by Innersloth LLC. Portions of the materials contained herein are property of Innersloth LLC. © Innersloth LLC.
+Use at your own risk; Among Us must already be installed on the device from an official store. This launcher does not ship the game.
 
 ## What it does
 

@@ -345,4 +345,4 @@ For per-role porting credits, see [`CHANGELOG.md`](./CHANGELOG.md) and individua
 
 ---
 
-Among Us is © 2018–2026 Innersloth LLC. End K not is not affiliated with or endorsed by Innersloth. Portions of the materials used are property of Innersloth LLC.
+This mod is not affiliated with Among Us or Innersloth LLC, and the content contained therein is not endorsed or otherwise sponsored by Innersloth LLC. Portions of the materials contained herein are property of Innersloth LLC. © Innersloth LLC. Among Us is © 2018–2026 Innersloth LLC.
