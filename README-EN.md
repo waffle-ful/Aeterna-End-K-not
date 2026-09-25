@@ -210,7 +210,7 @@ End K not is run by the following members.
 
 End K not is a **free, GPL-3.0 mod**. All features are and will remain free, and donations are never required.
 
-Donations go toward keeping End K not developed and running (servers, API usage, assets, and so on). Donating does not unlock any features or priority support.
+Donations go toward the costs of keeping End K not in development, such as development tools. Donating does not unlock any features or priority support.
 
 ▶ **[About donations (`FUNDING.md`, Japanese)](./FUNDING.md)**
 
