@@ -21,6 +21,7 @@ public static class BanManager
     private static readonly string ModeratorListPath = $"{Main.DataPath}/EndKnot_DATA/Moderators.txt";
     private static readonly string WhiteListListPath = $"{Main.DataPath}/EndKnot_DATA/WhiteList.txt";
     private static readonly string TempBanListPath = $"{Main.DataPath}/EndKnot_DATA/TempBanList.txt";
+    private static readonly string DefaultBanAppliedPath = $"{Main.DataPath}/EndKnot_DATA/DefaultBanApplied.txt";
     private const long TempBanTtlSeconds = 86400;
     private static readonly string EmptyPuidHash = ComputeHashedPuid("");
     private static readonly List<string> EACList = [];
@@ -63,6 +64,7 @@ public static class BanManager
                 File.Create(TempBanListPath).Close();
             }
 
+            ApplyDefaultBanList();
             LoadTempBanList();
 
             Main.Instance.StartCoroutine(LoadEACList());
@@ -94,6 +96,46 @@ public static class BanManager
             File.WriteAllLines(TempBanListPath, validLines);
         }
         catch (Exception ex) { Logger.Exception(ex, "LoadTempBanList"); }
+    }
+
+    // 同梱の既定 BanList を 1 エントリにつき 1 回だけ BanList.txt へ追記する。
+    // 追記済みのフレンドコードは DefaultBanApplied.txt に残し、ホストが BanList.txt から消した行は復活させない。
+    private static void ApplyDefaultBanList()
+    {
+        try
+        {
+            HashSet<string> applied = File.Exists(DefaultBanAppliedPath)
+                ? File.ReadAllLines(DefaultBanAppliedPath).Select(x => x.Trim()).Where(x => x != "").ToHashSet()
+                : [];
+
+            string banList = File.ReadAllText(BanListPath);
+            List<string> toAppend = [];
+            List<string> newlyApplied = [];
+
+            foreach (string raw in GetResourcesTxt("EndKnot.Resources.Config.DefaultBanList.txt").Split('\n'))
+            {
+                string line = raw.Trim();
+                if (line == "" || line.StartsWith('#')) continue;
+
+                string code = line.Split(',')[0].Trim();
+                if (code == "" || applied.Contains(code)) continue;
+
+                if (!banList.Contains(code)) toAppend.Add(line);
+                newlyApplied.Add(code);
+            }
+
+            if (newlyApplied.Count == 0) return;
+
+            if (toAppend.Count > 0)
+            {
+                string prefix = banList.Length > 0 && !banList.EndsWith('\n') ? "\n" : "";
+                File.AppendAllText(BanListPath, prefix + string.Join("\n", toAppend) + "\n");
+            }
+
+            File.AppendAllLines(DefaultBanAppliedPath, newlyApplied);
+            Logger.Info($"Default ban list applied: {toAppend.Count} added, {newlyApplied.Count - toAppend.Count} already present", "BanManager");
+        }
+        catch (Exception ex) { Logger.Exception(ex, "ApplyDefaultBanList"); }
     }
 
     public static void AddTempBan(string hashedPuid)
