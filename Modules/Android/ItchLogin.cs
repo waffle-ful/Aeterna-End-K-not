@@ -143,22 +143,44 @@ namespace EndKnot.Modules.Android
         }
 
         // EOSConnectPlatformLoginCallback(ref LoginCallbackInfo) は ref 構造体引数なので Harmony パッチ不可 (引数無し Postfix でも実機 SIGSEGV)
+        // ゲームはランチャーのプロセス内で動くため、広告 SDK はランチャーのパッケージ名を bundleId として
+        // ゲームの app key と一緒に送ってしまう (実測)。app key に登録されていないアプリからの広告トラフィックに
+        // なるので、Android 版では SDK を初期化せず、報酬広告の入口も出さない。
+        [HarmonyPatch(typeof(AdsManager), nameof(AdsManager.InitLevelPlay))]
+        internal static class AdsManagerInitPatch
+        {
+            public static bool Prefix()
+            {
+                Log.LogMessage("[Ads] LevelPlay init skipped");
+                return false;
+            }
+        }
+
         [HarmonyPatch(typeof(AdsMenu), nameof(AdsMenu.OnEnable))]
         internal static class AdsMenuPatch
         {
-            public static void Postfix(AdsMenu __instance) => Log.LogMessage("[Ads] AdsMenu.OnEnable adButton=" + (__instance.adButton != null) + " active=" + (__instance.adButton != null && __instance.adButton.activeSelf) + " ShowAdsScreen=" + AmongUs.Data.Legacy.LegacySaveManager.ShowAdsScreen);
+            public static void Postfix(AdsMenu __instance)
+            {
+                if (__instance.adButton != null) __instance.adButton.SetActive(false);
+                // 初期化を待つ間の読み込み表示も、初期化が来ないので出したままにしない。
+                if (__instance.loadingObject != null) __instance.loadingObject.SetActive(false);
+                Log.LogMessage("[Ads] AdsMenu.OnEnable adButton hidden=" + (__instance.adButton != null) + " ShowAdsScreen=" + AmongUs.Data.Legacy.LegacySaveManager.ShowAdsScreen);
+            }
         }
 
-        // vanilla は「広告を見る」を押した時点で adButton を消し、失敗した時に戻す処理が無い (次に OnEnable が走るまで消えたまま)。
-        // 失敗の通知を受けた時だけ戻す。成功時は vanilla の報酬フローに任せる。
+        [HarmonyPatch(typeof(AdsMenu), nameof(AdsMenu.ClickAdButton))]
+        internal static class AdsMenuClickPatch
+        {
+            public static bool Prefix() => false;
+        }
+
+        // 準備の通知がどんな結果で届いても adButton は隠したままにする。
         [HarmonyPatch(typeof(AdsMenu), nameof(AdsMenu.AdReadyCallback))]
         internal static class AdsMenuReadyPatch
         {
-            public static void Postfix(AdsMenu __instance, bool isReady)
+            public static void Postfix(AdsMenu __instance)
             {
-                if (isReady || __instance.adButton == null) return;
-                __instance.adButton.SetActive(true);
-                Log.LogMessage("[Ads] ad not ready — adButton restored");
+                if (__instance.adButton != null) __instance.adButton.SetActive(false);
             }
         }
 
