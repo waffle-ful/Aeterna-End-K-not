@@ -11,6 +11,7 @@ public static class CalamityLogo
     private static Transform _logoTransform;
     private static Vector3   _logoBasePos;
     private static float     _shakeTime;
+    private static bool      _paperLogo;
 
     // 炎色の背後グロー (ゆっくり明滅)。
     private static SpriteRenderer _glowSr;
@@ -35,7 +36,22 @@ public static class CalamityLogo
         var basePos = new Vector3(0f, 1.95f, 0f);
         GameObject logoGo;
 
-        if (logoSprite != null)
+        // 夕暮れの背景では End K not 自身のロゴを主役にする (名前が入っているので副題は出さない)
+        Sprite duskLogo = CalamityDusk.Built ? Utils.LoadSprite("EndKnot.Resources.Images.MainMenu.Dusk.dusk_logo.png", 100f) : null;
+
+        if (duskLogo != null)
+        {
+            logoGo = new GameObject("EndKnotLogoSprite");
+            logoGo.transform.SetParent(logoLayer);
+            logoGo.transform.localPosition = basePos;
+            const float logoWidth = 4.3f;
+            logoGo.transform.localScale = Vector3.one * (logoWidth / (duskLogo.rect.width / duskLogo.pixelsPerUnit));
+
+            var sr = logoGo.AddComponent<SpriteRenderer>();
+            sr.sprite       = duskLogo;
+            sr.sortingOrder = 20;
+        }
+        else if (logoSprite != null)
         {
             logoGo = new GameObject("CalamityLogoSprite");
             logoGo.transform.SetParent(logoLayer);
@@ -73,6 +89,7 @@ public static class CalamityLogo
 
         _logoTransform = logoGo.transform;
         _logoBasePos   = basePos;
+        _paperLogo     = duskLogo != null;
 
         // ── 炎色の背後グロー ─────────────────────────────────────────────
         // ロゴのすぐ後ろ (sortingOrder = ロゴ-1) に大きめのソフト光球を敷き、Tick で明滅させる。
@@ -92,7 +109,7 @@ public static class CalamityLogo
 
         // ── "End K not" subtitle + divider (startup only) ────────────────
         // Multi → lobby → Exit shouldn't show "End K not" again.
-        if (!_subtitleShown)
+        if (!_subtitleShown && duskLogo == null)
         {
             _subtitleShown = true;
 
@@ -106,9 +123,9 @@ public static class CalamityLogo
             sub.alignment        = TextAlignmentOptions.Center;
             sub.fontStyle        = FontStyles.Bold;
             sub.characterSpacing = 6f;
-            sub.color            = new Color(0.65f, 0.70f, 0.90f, 0.90f);
-            sub.outlineColor     = new Color32(10, 5, 40, 200);
-            sub.outlineWidth     = 0.18f;
+            sub.color            = new Color(0.99f, 0.80f, 0.56f, 0.95f);
+            sub.outlineColor     = new Color32(34, 18, 28, 235);
+            sub.outlineWidth     = 0.24f;
             sub.sortingOrder     = 20;
             CalamityFonts.Apply(sub);
 
@@ -120,7 +137,7 @@ public static class CalamityLogo
             line.text         = "──────────────────";
             line.fontSize     = 1.2f;
             line.alignment    = TextAlignmentOptions.Center;
-            line.color        = new Color(0.40f, 0.45f, 0.65f, 0.50f);
+            line.color        = new Color(0.96f, 0.72f, 0.50f, 0.45f);
             line.sortingOrder = 20;
             CalamityFonts.Apply(line);
         }
@@ -131,9 +148,20 @@ public static class CalamityLogo
     {
         if (_logoTransform == null) return;
         _shakeTime += dt;
-        float ox = Mathf.Sin(_shakeTime * 11.0f) * 0.020f + Mathf.Sin(_shakeTime * 7.3f) * 0.008f;
-        float oy = Mathf.Sin(_shakeTime *  8.0f + 0.7f) * 0.012f + Mathf.Sin(_shakeTime * 14.1f) * 0.005f;
-        _logoTransform.localPosition = _logoBasePos + new Vector3(ox, oy, 0f);
+        if (_paperLogo)
+        {
+            // 棒に刺した切り絵のように、ゆっくり傾いて少しだけ浮き沈みする
+            float tilt = Mathf.Sin(_shakeTime * Mathf.PI * 2f / 7f) * 0.8f;
+            float bob  = Mathf.Sin(_shakeTime * Mathf.PI * 2f / 5.3f + 0.6f) * 0.025f;
+            _logoTransform.localPosition = _logoBasePos + new Vector3(0f, bob, 0f);
+            _logoTransform.localRotation = Quaternion.Euler(0f, 0f, tilt);
+        }
+        else
+        {
+            float ox = Mathf.Sin(_shakeTime * 11.0f) * 0.020f + Mathf.Sin(_shakeTime * 7.3f) * 0.008f;
+            float oy = Mathf.Sin(_shakeTime *  8.0f + 0.7f) * 0.012f + Mathf.Sin(_shakeTime * 14.1f) * 0.005f;
+            _logoTransform.localPosition = _logoBasePos + new Vector3(ox, oy, 0f);
+        }
 
         // 炎色グローの明滅 (二周波でゆらぎを出す)。
         if (_glowSr != null)

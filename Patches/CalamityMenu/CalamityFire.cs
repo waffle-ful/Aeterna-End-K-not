@@ -41,6 +41,8 @@ public static class CalamityFire
     /// </summary>
     public static void Prewarm()
     {
+        // 夕暮れの背景 (CalamityDusk) では炎を使わないので、誰も見ない動画の準備を始めない
+        if (CalamityDusk.Enabled) return;
         if (_prewarmAttempted) return;
         _prewarmAttempted = true;
 

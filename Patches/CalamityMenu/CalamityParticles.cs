@@ -48,7 +48,9 @@ public static class CalamityParticles
         // The purple glow orbs were ambient mood for the old dark abstract background; against
         // the photoreal galaxy + city-night image they read as random floating bubbles, so
         // they're no longer spawned. Fireflies (embers) and ash blend with the city/fire.
-        for (int i = 0; i < 70; i++) SpawnFirefly(randomY: true);
+        // 夕暮れの背景では暖色の火の粉は「火事」に読めるので出さず、灰だけ舞わせる
+        int fireflies = CalamityDusk.Built ? 0 : 70;
+        for (int i = 0; i < fireflies; i++) SpawnFirefly(randomY: true);
         for (int i = 0; i < 35; i++) SpawnAsh(randomY: true);
 
         BootTimeline.Mark("particles.init");

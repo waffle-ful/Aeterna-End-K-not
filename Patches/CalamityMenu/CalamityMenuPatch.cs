@@ -61,10 +61,11 @@ public static class CalamityMenuPatch
         if (Main.ShowStartupFadeIn?.Value ?? false)
             SafeStep("FadeIn",  () => CalamityFadeIn.Build(CalamityMenuState.Root.transform));
         SafeStep("Suppressor",  () => VanillaSuppressor.Apply(__instance));
-        SafeStep("Background",  () => CalamityBackground.Build(MenuRoot.GetLayer("BackgroundLayer")));
-        SafeStep("Fire",        () => CalamityFire.Build(MenuRoot.GetLayer("BackgroundLayer")));
+        // 夕暮れの廃墟 (CalamityDusk) が組めなかった時だけ旧背景 (写真 + 炎動画 + 流星) に戻す
+        SafeStep("Background",  () => { if (!CalamityDusk.Build(MenuRoot.GetLayer("BackgroundLayer"))) CalamityBackground.Build(MenuRoot.GetLayer("BackgroundLayer")); });
+        SafeStep("Fire",        () => { if (!CalamityDusk.Built) CalamityFire.Build(MenuRoot.GetLayer("BackgroundLayer")); });
         SafeStep("Particles",   () => CalamityParticles.Init(MenuRoot.GetLayer("ParticleLayer")));
-        SafeStep("Sky",         () => CalamitySky.Init(MenuRoot.GetLayer("ParticleLayer")));
+        SafeStep("Sky",         () => { if (!CalamityDusk.Built) CalamitySky.Init(MenuRoot.GetLayer("ParticleLayer")); });
         SafeStep("Logo",        () => CalamityLogo.Build(MenuRoot.GetLayer("LogoLayer")));
         SafeStep("Buttons",     () => CalamityButtons.Build(__instance, MenuRoot.GetLayer("ButtonLayer")));
         // BACK ボタンはここで先に作って伏せておく (クリック時生成は固まる — 詳細は PrepareBackButton)
@@ -115,10 +116,30 @@ public static class CalamityMenuPatch
 
         if (!CalamityMenuState.Active) return;
         CalamityParticles.UpdateAll(Time.deltaTime);
-        CalamitySky.UpdateAll(Time.deltaTime);
+        if (CalamityDusk.Built)
+        {
+            if (!_duskTickFailed) TickOnce(ref _duskTickFailed, "CalamityDusk.Tick", () => CalamityDusk.Tick(Time.deltaTime));
+        }
+        else CalamitySky.UpdateAll(Time.deltaTime);
         EndKnotFeatureBridge.Tick();
         CalamityVisibility.Tick();
         CalamityFadeIn.Tick();
         CalamityLogo.Tick(Time.deltaTime);
+        if (!_buttonsTickFailed) TickOnce(ref _buttonsTickFailed, "CalamityButtons.Tick", CalamityButtons.Tick);
+    }
+
+    // Per-frame animation must not take the rest of the menu frame down with it: the first
+    // exception is logged once and that animation stops for the rest of the process.
+    private static bool _duskTickFailed;
+    private static bool _buttonsTickFailed;
+
+    private static void TickOnce(ref bool failed, string name, Action tick)
+    {
+        try { tick(); }
+        catch (Exception ex)
+        {
+            failed = true;
+            Logger.Exception(ex, $"CalamityMenuPatch.{name}");
+        }
     }
 }
