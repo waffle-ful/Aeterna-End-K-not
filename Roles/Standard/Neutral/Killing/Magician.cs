@@ -237,7 +237,7 @@ public class Magician : RoleBase
 
                 if (!AmongUsClient.Instance.AmHost || Pelican.IsEaten(pc.PlayerId) || Medic.ProtectList.Contains(pc.PlayerId)) return;
 
-                pc.RPCPlayCustomSound("AWP");
+                pc.RPCPlayCustomSound("SniperShot");
 
                 Dictionary<PlayerControl, float> targets = GetSnipeTargets(pc);
 
