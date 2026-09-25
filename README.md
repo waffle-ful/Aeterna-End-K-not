@@ -12,7 +12,7 @@
   初回起動時に Windows の青い警告が出ますが、<a href="#windows-の青い警告が出たときは">対処法はこちら</a>。</sub>
 </p>
 
-[![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/sEYAFzD3a)
+[![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/sEYAFzD3a) [![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-EA4AAA?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/waffle-ful)
 
 ---
 
@@ -224,6 +224,16 @@ End K not は **GPL-3.0 の無料 Mod** です。全機能は今後も無料で�
 いただいた寄付は、開発ツールの利用料など、開発を続けるための費用に充てます。寄付の有無で機能やサポートに差はつけません。
 
 ▶ **[寄付について (`FUNDING.md`)](./FUNDING.md)**
+
+<p align="center">
+  <a href="https://github.com/sponsors/waffle-ful"><img src="https://img.shields.io/badge/GitHub%20Sponsors-%E5%BF%9C%E6%8F%B4%E3%81%99%E3%82%8B-EA4AAA?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="GitHub Sponsors で応援する"></a>
+</p>
+
+### 💖 スポンサー
+
+End K not を支えてくださっている皆さんです (掲載はご希望の方のみ)。
+
+現在募集中です。最初のおひとりをお待ちしています！
 
 ## ライセンス
 
