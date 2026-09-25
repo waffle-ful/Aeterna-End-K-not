@@ -48,7 +48,7 @@ public class Main : BasePlugin
     // 開発中は「次に出す公開版の番号 + -dev」を名乗る (公開版は release.ps1 が -alpha へ確定し、
     // finalize 後に自動で次の -dev へ戻す)。数値が常に公開版より大きいので、インストーラーは
     // 番号比較だけで「開発ビルドを配布版で上書きしようとしている」を検出できる。
-    public const string PluginVersion = "0.9.9-dev";
+    public const string PluginVersion = "0.9.9-beta";
     // BepInEx は [BepInPlugin] の version を SemVer 2.0.0 (コアは必ず MAJOR.MINOR.PATCH の3要素)
     // で解析し、失敗時のみ System.Version (サフィックス不可) にフォールバックする。公開版と開発版の
     // 合間に臨時版を出すときの "0.9.8.5-beta" のような4要素+サフィックスはどちらにも通らず、
@@ -57,7 +57,7 @@ public class Main : BasePlugin
     // ("0.9.8.5-beta" → "0.9.8-beta.5")。3要素はそのまま (release.ps1 が bump 時に両方書き込む)。
     // PluginVersion 自体はホスト/クライアント互換性判定 (Version.Split('-')[0]) や表示に使うため
     // 4要素表記のまま変えない — BepInEx へ渡す文字列だけをこちらで別に持つ。
-    public const string BepInLoaderVersion = "0.9.9-dev";
+    public const string BepInLoaderVersion = "0.9.9-beta";
     // ロビー名サフィックス (Utils.GetSuffix) / Discord RPC / チャットテンプレの {ModVersion} の表示用。
     // 別管理にすると更新漏れで古い番号が出続けるため PluginVersion に追従させる
     // (実際 0.4.0 のまま長期間ズレていた)。開発ビルドは "-dev" が名前に出るので、
