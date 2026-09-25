@@ -57,7 +57,10 @@ public static class MainMenuManagerPatch
     // という並びで、MaskedBlackScreen が全画面共通の下敷き。
     // ここで落とすのは「ローカル/オンラインを選ぶ画面」の飾りだけに限定する — 総当たりで
     // 伏せると、まだ中身の入っていないオンライン画面の入れ物まで巻き込んで空白になる。
+    // クレジット / マイアカウントも同じ器に開くので、最初に開いたのがそちらでも枠のつまみが残らないようにする。
     [HarmonyPatch(typeof(MainMenuManager), nameof(MainMenuManager.OpenGameModeMenu))]
+    [HarmonyPatch(typeof(MainMenuManager), nameof(MainMenuManager.OpenCredits))]
+    [HarmonyPatch(typeof(MainMenuManager), nameof(MainMenuManager.OpenAccountMenu))]
     [HarmonyPostfix]
     public static void HideRightPanelChrome()
     {

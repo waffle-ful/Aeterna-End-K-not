@@ -126,14 +126,78 @@ public static class CalamityVisibility
         _accountWindowSeenActive = false;
     }
 
+    // バニラのニュースボタンはメニューのトップでだけ見せる (Calamity のボタン層の外にあるので、
+    // 何か開いたときに一緒に伏せないと裏に残って見える)。
+    private static GameObject _newsButton;
+    private static bool _newsHidden;
+
+    // BACK を出したい状態か。パネル側の画面が自前の「戻る」を持つ間は、BACK を一時的に伏せる。
+    private static bool _backWanted;
+
+    // クレジットは右パネルの中に開くが、バニラの × は画面の中身を消すだけでパネルを引っ込めない。
+    // 一度開いた画面が消えたらパネルごと閉じる。
+    private static bool _creditsSeenOpen;
+
     public static void HideMenuContent(bool showBack = true)
     {
         if (_menuHidden) return;
         SetLayerActive("ButtonLayer", false);
         SetLayerActive("LogoLayer", false);
         SetLayerActive("OverlayLayer", false);
+        HideNewsButton();
         if (showBack) ShowBackButton();
+        _backWanted = showBack;
         _menuHidden = true;
+    }
+
+    private static void HideNewsButton()
+    {
+        if (_newsButton == null) _newsButton = Object.FindObjectOfType<MainMenuManager>()?.newsButton?.gameObject;
+        if (_newsButton == null || !_newsButton.activeSelf) return;
+        _newsButton.SetActive(false);
+        _newsHidden = true;
+    }
+
+    private static void RestoreNewsButton()
+    {
+        if (_newsHidden && _newsButton != null) _newsButton.SetActive(true);
+        _newsHidden = false;
+    }
+
+    private static void ClosePanelIfCreditsClosed()
+    {
+        if (!MainMenuManagerPatch.ShowingPanel)
+        {
+            _creditsSeenOpen = false;
+            return;
+        }
+
+        var screen = TitleLogoPatch.RightPanel != null ? TitleLogoPatch.RightPanel.transform.Find("CreditsSizer/CreditsScreen") : null;
+        if (screen == null) return;
+
+        if (screen.gameObject.activeInHierarchy)
+        {
+            _creditsSeenOpen = true;
+            return;
+        }
+
+        if (!_creditsSeenOpen) return;
+        _creditsSeenOpen = false;
+        Logger.Info("credits screen closed in place; hiding the right panel", "CalamityVisibility");
+        MainMenuManagerPatch.HideRightPanel();
+    }
+
+    // オンライン / コード入力 / ゲーム作成の画面は見出しに自前の「戻る」を持つ。
+    private static bool PanelHasOwnBackButton()
+    {
+        var panel = TitleLogoPatch.RightPanel != null ? TitleLogoPatch.RightPanel.transform : null;
+        if (panel == null || !MainMenuManagerPatch.ShowingPanel) return false;
+
+        return IsActive(panel.Find("MaskedBlackScreen/OnlineButtons/Header/BackButton"))
+            || IsActive(panel.Find("MaskedBlackScreen/EnterCodeButtons/Header/BackButton"))
+            || IsActive(panel.parent != null ? panel.parent.Find("CreateGameScreen/ParentContent/BackButton") : null);
+
+        static bool IsActive(Transform t) => t != null && t.gameObject.activeInHierarchy;
     }
 
     public static void Tick()
@@ -208,12 +272,25 @@ public static class CalamityVisibility
 
         if (!_menuHidden) return;
 
+        ClosePanelIfCreditsClosed();
+
+        // バニラの閉じ処理 (ショップ等) がメニューの家具を戻すことがあるので、隠している間は伏せ直す。
+        if (_newsHidden && _newsButton != null && _newsButton.activeSelf) _newsButton.SetActive(false);
+
+        if (_backWanted && _backButton != null)
+        {
+            bool showBack = !PanelHasOwnBackButton();
+            if (_backButton.activeSelf != showBack) _backButton.SetActive(showBack);
+        }
+
         if (IsAnyPopoverOpen()) return;
 
         SetLayerActive("ButtonLayer", true);
         SetLayerActive("LogoLayer", true);
         SetLayerActive("OverlayLayer", true);
         if (_backButton != null) _backButton.SetActive(false);
+        RestoreNewsButton();
+        _backWanted = false;
         _menuHidden = false;
     }
 
@@ -236,6 +313,10 @@ public static class CalamityVisibility
         _storeActive = false;
         _storeSeenActive = false;
         _store = null;
+        _newsButton = null;
+        _newsHidden = false;
+        _backWanted = false;
+        _creditsSeenOpen = false;
     }
 
     // メニュー構築時に BACK ボタンを先に作って非表示で置いておく。
@@ -322,11 +403,20 @@ public static class CalamityVisibility
     private static void CloseAnyPopover()
     {
         Logger.Info("CloseAnyPopover entered (BACK button)", "CalamityVisibility");
+
+        // ステータスはマイアカウントの上に重なる別窓。BACK はトップへ戻るボタンなので一緒に閉じる
+        // (残したままメニューを戻すと、ステータスの上にメニューが重なる)。
+        var stats = Object.FindObjectOfType<StatsPopup>();
+        if (stats != null) stats.gameObject.SetActive(false);
         // Multiplayer RightPanel: HideRightPanel just sets ShowingPanel=false; the slide
         // animation in MainMenuManager_LateUpdate handles sliding it off-screen.
         if (MainMenuManagerPatch.ShowingPanel)
         {
             MainMenuManagerPatch.HideRightPanel();
+
+            // マイアカウントも右パネルに開くので、ここで一緒に畳まないと上部のアカウントバーが残り、
+            // アカウントカードを開かなかった場合はメニューも戻らない (BACK がもう1回要る)。
+            if (_accountWindowActive) EndAccountWindow();
             return;
         }
 
@@ -368,6 +458,8 @@ public static class CalamityVisibility
 
     private static bool IsAnyPopoverOpen()
     {
+        if (Object.FindObjectOfType<StatsPopup>() != null) return true;
+
         // Account / display-name window. Keep the menu hidden while it's up; if it gets
         // closed by any means (BACK, or a future vanilla close path), tear our state down
         // so the menu re-appears. A "seen active" latch avoids a one-frame race where the
