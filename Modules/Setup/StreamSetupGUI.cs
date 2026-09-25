@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using EndKnot.Modules.Companion;
 using EndKnot.Modules.YouTubeChat;
 using UnityEngine;
@@ -70,10 +70,10 @@ public class StreamSetupGUI : MonoBehaviour
     private string _posterStatusText = "";
 
     // 判定結果を表す色。役職の Palette とは無関係な、UI 状態専用の配色。
-    private static readonly Color ColorOk = new(0.45f, 0.85f, 0.45f);
-    private static readonly Color ColorMissing = new(0.95f, 0.40f, 0.40f);
-    private static readonly Color ColorWarn = new(0.95f, 0.75f, 0.35f);
-    private static readonly Color ColorNeutral = new(0.65f, 0.72f, 0.82f);
+    private static readonly Color ColorOk = new(0.66f, 0.84f, 0.52f);
+    private static readonly Color ColorMissing = new(0.96f, 0.48f, 0.40f);
+    private static readonly Color ColorWarn = new(0.98f, 0.74f, 0.38f);
+    private static readonly Color ColorNeutral = new(0.76f, 0.67f, 0.62f);
 
     // 既定 GUI スキンのフォントに Unicode 記号 (✓/✗) が入っているか未確認のため、
     // ASCII のみで状態を表す。実機で問題なければ記号への差し替えは1箇所で済む。
@@ -320,7 +320,7 @@ public class StreamSetupGUI : MonoBehaviour
 
         _sWindow = new GUIStyle
         {
-            normal = { background = RoundedTexture(winW, winH, 22, new Color(0.06f, 0.07f, 0.15f, 1f), new Color(0.10f, 0.16f, 0.30f, 1f)) }
+            normal = { background = RoundedTexture(winW, winH, 22, new Color(0.12f, 0.07f, 0.10f, 1f), new Color(0.40f, 0.24f, 0.26f, 1f)) }
         };
 
         _sTitleBar = new GUIStyle
@@ -329,7 +329,7 @@ public class StreamSetupGUI : MonoBehaviour
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter,
             richText = false,
-            normal = { textColor = new Color(0.72f, 0.90f, 1.00f, 1f) }
+            normal = { textColor = new Color(0.96f, 0.88f, 0.75f, 1f) }
         };
 
         _sDragHint = new GUIStyle
@@ -338,7 +338,7 @@ public class StreamSetupGUI : MonoBehaviour
             fontStyle = FontStyle.Italic,
             alignment = TextAnchor.MiddleCenter,
             richText = false,
-            normal = { textColor = new Color(0.45f, 0.58f, 0.72f, 1f) }
+            normal = { textColor = new Color(0.64f, 0.52f, 0.48f, 1f) }
         };
 
         _sSection = new GUIStyle
@@ -347,7 +347,7 @@ public class StreamSetupGUI : MonoBehaviour
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleLeft,
             richText = false,
-            normal = { textColor = new Color(0.58f, 0.82f, 1.00f, 1f) }
+            normal = { textColor = new Color(0.98f, 0.70f, 0.42f, 1f) }
         };
 
         _sRowName = new GUIStyle
@@ -357,7 +357,7 @@ public class StreamSetupGUI : MonoBehaviour
             alignment = TextAnchor.MiddleLeft,
             wordWrap = false,
             richText = false,
-            normal = { textColor = Color.white }
+            normal = { textColor = new Color(0.96f, 0.90f, 0.80f, 1f) }
         };
 
         _sStatus = new GUIStyle
@@ -366,7 +366,7 @@ public class StreamSetupGUI : MonoBehaviour
             alignment = TextAnchor.MiddleLeft,
             wordWrap = false,
             richText = false,
-            normal = { textColor = Color.white }
+            normal = { textColor = new Color(0.96f, 0.90f, 0.80f, 1f) }
         };
 
         _sHint = new GUIStyle
@@ -376,7 +376,7 @@ public class StreamSetupGUI : MonoBehaviour
             alignment = TextAnchor.MiddleLeft,
             wordWrap = true,
             richText = false,
-            normal = { textColor = new Color(0.68f, 0.76f, 0.86f, 1f) }
+            normal = { textColor = new Color(0.80f, 0.70f, 0.62f, 1f) }
         };
 
         int btnW = Mathf.Max(1, Mathf.RoundToInt(ButtonWidth));
@@ -390,9 +390,9 @@ public class StreamSetupGUI : MonoBehaviour
             alignment = TextAnchor.MiddleCenter,
             wordWrap = true,
             richText = false,
-            normal = { background = RoundedTexture(btnW, btnH, btnRadius, new Color(0.07f, 0.22f, 0.40f, 1f), new Color(0.12f, 0.36f, 0.62f, 1f)), textColor = Color.white },
-            hover = { background = RoundedTexture(btnW, btnH, btnRadius, new Color(0.12f, 0.32f, 0.54f, 1f), new Color(0.20f, 0.46f, 0.74f, 1f)), textColor = Color.white },
-            active = { background = RoundedTexture(btnW, btnH, btnRadius, new Color(0.04f, 0.14f, 0.28f, 1f), new Color(0.08f, 0.22f, 0.40f, 1f)), textColor = Color.white }
+            normal = { background = RoundedTexture(btnW, btnH, btnRadius, new Color(0.30f, 0.16f, 0.22f, 1f), new Color(0.52f, 0.30f, 0.34f, 1f)), textColor = new Color(0.98f, 0.92f, 0.82f, 1f) },
+            hover = { background = RoundedTexture(btnW, btnH, btnRadius, new Color(0.42f, 0.23f, 0.30f, 1f), new Color(0.70f, 0.44f, 0.42f, 1f)), textColor = new Color(0.98f, 0.92f, 0.82f, 1f) },
+            active = { background = RoundedTexture(btnW, btnH, btnRadius, new Color(0.20f, 0.10f, 0.15f, 1f), new Color(0.34f, 0.19f, 0.23f, 1f)), textColor = new Color(0.98f, 0.92f, 0.82f, 1f) }
         };
 
         int closeSize = Mathf.Max(1, Mathf.RoundToInt(30f * Scale));
@@ -404,9 +404,9 @@ public class StreamSetupGUI : MonoBehaviour
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter,
             richText = false,
-            normal = { background = RoundedTexture(closeSize, closeSize, closeRadius, new Color(0.35f, 0.10f, 0.10f, 1f), new Color(0.55f, 0.16f, 0.16f, 1f)), textColor = Color.white },
-            hover = { background = RoundedTexture(closeSize, closeSize, closeRadius, new Color(0.55f, 0.16f, 0.16f, 1f), new Color(0.75f, 0.22f, 0.22f, 1f)), textColor = Color.white },
-            active = { background = RoundedTexture(closeSize, closeSize, closeRadius, new Color(0.22f, 0.06f, 0.06f, 1f), new Color(0.35f, 0.10f, 0.10f, 1f)), textColor = Color.white }
+            normal = { background = RoundedTexture(closeSize, closeSize, closeRadius, new Color(0.46f, 0.15f, 0.10f, 1f), new Color(0.66f, 0.26f, 0.16f, 1f)), textColor = new Color(0.98f, 0.92f, 0.82f, 1f) },
+            hover = { background = RoundedTexture(closeSize, closeSize, closeRadius, new Color(0.62f, 0.22f, 0.14f, 1f), new Color(0.84f, 0.38f, 0.22f, 1f)), textColor = new Color(0.98f, 0.92f, 0.82f, 1f) },
+            active = { background = RoundedTexture(closeSize, closeSize, closeRadius, new Color(0.28f, 0.09f, 0.06f, 1f), new Color(0.44f, 0.15f, 0.10f, 1f)), textColor = new Color(0.98f, 0.92f, 0.82f, 1f) }
         };
     }
 
@@ -865,7 +865,7 @@ public class StreamSetupGUI : MonoBehaviour
                 !string.IsNullOrEmpty(StreamSetupYouTubeState.DeviceUserCode))
             {
                 Color prev = GUI.color;
-                GUI.color = new Color(0.72f, 0.90f, 1.00f, 1f);
+                GUI.color = new Color(0.96f, 0.88f, 0.75f, 1f);
                 GUI.Label(new Rect(GlyphColumnWidth, y, w - GlyphColumnWidth, RowLineHeight * 1.2f), StreamSetupYouTubeState.DeviceUserCode, _sTitleBar);
                 GUI.color = prev;
                 y += RowLineHeight * 1.2f;
