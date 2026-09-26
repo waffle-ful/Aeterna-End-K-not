@@ -35,6 +35,7 @@ internal static class ExitGamePatch
         // 配信者向け: 公式 kick / エラー / タイムアウトで切断されたら新しい部屋を自動で立て直す。
         // この Prefix 時点でしか AmHost / NetworkMode が正しく取れないので、ここで判定を始める。
         // (立て直す場合は OfficialServerNotice を抑制したいので、Hacking 警告より先に呼ぶ)
+        AutoRejoin.OnDisconnect(reason);
         AutoRehost.OnDisconnect(reason);
 
         if (reason == DisconnectReasons.Hacking)

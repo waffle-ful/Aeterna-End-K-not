@@ -9,6 +9,7 @@ using System.Linq;
 using System.Text;
 using EndKnot.Patches;
 using HarmonyLib;
+using Hazel;
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using InnerNet;
 using TMPro;
@@ -53,6 +54,12 @@ public static class TestBridge
             // HealthLog と同じ配置式(EndKnot_Logs 直下)。Windows 限定機能だが式自体は揃えておく。
             string basePath = OperatingSystem.IsAndroid() ? Main.DataPath : Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
             _dir = Path.Combine(basePath, "EndKnot_Logs");
+
+            // 同じ PC で複数のインストール (Epic / Steam など) を動かす時は、名前付きの別フォルダで入出力を分ける
+            string instance = Main.TestBridgeInstance?.Value?.Trim();
+            if (!string.IsNullOrEmpty(instance) && instance.All(ch => ch is (>= 'a' and <= 'z') or (>= 'A' and <= 'Z') or (>= '0' and <= '9') or '-' or '_'))
+                _dir = Path.Combine(_dir, "bridge-" + instance);
+
             Directory.CreateDirectory(_dir);
 
             _cmdPath = Path.Combine(_dir, "bridge-cmd.txt");
@@ -367,6 +374,48 @@ public static class TestBridge
             return;
         }
 
+        // コードでロビーへ参加する。キー入力を使わない (前面化も不要) ので、裏で動いている 2 台目の
+        // クライアントからでも入れる。成立は wait phase=Lobby で待つ。
+        if (directive.StartsWith("joinlobby ", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecuteJoinLobby(directive[10..].Trim()); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR joinlobby failed"); }
+            return;
+        }
+
+        // 子を持たない tag26 を 1 本だけ送る。公式鯖はこれを受けた送り手を必ず Hacking で切るので、
+        // 客側の切断後処理 (自動再入室など) を実機で確かめる陽性対照になる。
+        if (directive.Equals("kickself", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                if (!GameStates.IsOnlineGame || GameStates.IsNotJoined) { WriteOut("ERR kickself needs an online lobby"); return; }
+                MessageWriter w = MessageWriter.Get(SendOption.Reliable);
+                w.StartMessage(26);
+                w.WritePacked(AmongUsClient.Instance.GameId);
+                w.EndMessage();
+                AmongUsClient.Instance.SendOrDisconnect(w);
+                w.Recycle();
+                WriteOut("OK kickself sent (empty tag26)");
+            }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR kickself failed"); }
+            return;
+        }
+
+        // 自分の側だけで reason=Hacking の切断を起こす。サーバーは何も検知しないので部屋 BAN が付かず、
+        // 他のクライアントには普通の退出に見える。客側の切断後処理を、同じ部屋へ入り直せる形で確かめる用。
+        if (directive.Equals("fakehacking", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                if (!GameStates.IsOnlineGame || GameStates.IsNotJoined) { WriteOut("ERR fakehacking needs an online lobby"); return; }
+                WriteOut("OK fakehacking (local disconnect reason=Hacking)");
+                AmongUsClient.Instance.HandleDisconnect(DisconnectReasons.Hacking, null);
+            }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR fakehacking failed"); }
+            return;
+        }
+
         // Layer B2: ロビー/ゲームから抜けてメインメニューへ戻る (hostlobby / eosstall の前段)。
         if (directive.Equals("leavelobby", StringComparison.OrdinalIgnoreCase))
         {
@@ -567,7 +616,7 @@ public static class TestBridge
 
         if (directive.Equals("help", StringComparison.OrdinalIgnoreCase))
         {
-            WriteOut("HELP directives: state | screenshot | delayshot <ms> | burst <count> [everyNFrames] | rdump [filter] | click <h|label:x> | press <h|x y> | scroll <x> <y> <notches> | type <text> | key <enter|escape|tab|backspace> | getopt <pattern> | setopt <name|#id> <idx|on|off|~real> | forcerole <id|name|host|clear> [EnumName] | start | hostlobby | leavelobby | eosstall | autostart <on|off> | tp <x> <y> | tp <playerId> | tp <playerId|name> <x> <y> | switch <0-4> [playerId|name] | walk <x> <y> | walk <playerId> | walk stop | vote <playerId|skip> | vote <voterId> <playerId|skip> | overrule <targetId> [judgeId] | chat <text> | chatui <text> | sabotage <comms|reactor|o2|lights|lab|heli|mushroom|cd0> | fixsabotage <type> | use <kill|vent|pet|ability|report|sabotage> | vent enter <id> | vent exit | errors [n] | grep <pattern> [n] | bcensus | gc <clr|clr2|boehm|both> | sleep <sec> | wait <phase=X|players=N|marker:text|join|arrived> [timeoutSec] | wait cancel | /<chatcommand>");
+            WriteOut("HELP directives: state | screenshot | delayshot <ms> | burst <count> [everyNFrames] | rdump [filter] | click <h|label:x> | press <h|x y> | scroll <x> <y> <notches> | type <text> | key <enter|escape|tab|backspace> | getopt <pattern> | setopt <name|#id> <idx|on|off|~real> | forcerole <id|name|host|clear> [EnumName] | start | hostlobby | joinlobby <code> | leavelobby | kickself | fakehacking | eosstall | autostart <on|off> | tp <x> <y> | tp <playerId> | tp <playerId|name> <x> <y> | switch <0-4> [playerId|name] | walk <x> <y> | walk <playerId> | walk stop | vote <playerId|skip> | vote <voterId> <playerId|skip> | overrule <targetId> [judgeId] | chat <text> | chatui <text> | sabotage <comms|reactor|o2|lights|lab|heli|mushroom|cd0> | fixsabotage <type> | use <kill|vent|pet|ability|report|sabotage> | vent enter <id> | vent exit | errors [n] | grep <pattern> [n] | bcensus | gc <clr|clr2|boehm|both> | sleep <sec> | wait <phase=X|players=N|marker:text|join|arrived> [timeoutSec] | wait cancel | /<chatcommand>");
             return;
         }
 
@@ -1326,6 +1375,17 @@ public static class TestBridge
     private static extern bool SetForegroundWindow(IntPtr hWnd);
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    // OS レベルの入力 (SendInput / マウス注入) は「その時点で前面にあるウィンドウ」に届く。前面化は
+    // Windows に拒否されることがある (別アプリが操作中など) ので、ゲームが前面だと確かめられない限り送らない。
+    private static bool BringGameToFront(IntPtr hWnd)
+    {
+        try { SetForegroundWindow(hWnd); } catch { /* ignore */ }
+        return GetForegroundWindow() == hWnd;
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern void mouse_event(uint dwFlags, int dx, int dy, uint dwData, IntPtr dwExtraInfo);
 
     private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
@@ -1513,7 +1573,7 @@ public static class TestBridge
             geom += " scaled";
         }
 
-        try { SetForegroundWindow(hWnd); } catch { }
+        if (!BringGameToFront(hWnd)) { WriteOut("ERR press game window is not in front (input would go to another app)"); return; }
 
         var clientPoint = new Win32Point { X = clientX, Y = clientY };
         if (!ClientToScreen(hWnd, ref clientPoint)) { WriteOut("ERR press ClientToScreen failed"); return; }
@@ -1631,7 +1691,7 @@ public static class TestBridge
             geom += " scaled";
         }
 
-        try { SetForegroundWindow(hWnd); } catch { }
+        if (!BringGameToFront(hWnd)) { WriteOut("ERR scroll game window is not in front (input would go to another app)"); return; }
 
         var clientPoint = new Win32Point { X = clientX, Y = clientY };
         if (!ClientToScreen(hWnd, ref clientPoint)) { WriteOut("ERR scroll ClientToScreen failed"); return; }
@@ -1683,13 +1743,15 @@ public static class TestBridge
         public IntPtr dwExtraInfo;
     }
 
-    // INPUT は union を含む (x64 で 40 バイト)。KEYBDINPUT 以外は使わないので末尾に詰め物で幅を合わせる。
+    // INPUT は union を含む (x64 で 40 バイト・x86 で 28 バイト)。KEYBDINPUT 以外は使わないので末尾に詰め物で幅を合わせる。
+    // 詰め物を long にすると x86 で 8 バイト境界に揃えられて 32 バイトになり SendInput が err=87 で弾くので、uint 2 つにする。
     [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
     private struct Win32Input
     {
         public uint type;
         public KeybdInput ki;
-        public long pad;
+        public uint pad0;
+        public uint pad1;
     }
 
     private const uint InputKeyboard = 1;
@@ -1702,9 +1764,7 @@ public static class TestBridge
     private static bool FocusGameWindow()
     {
         IntPtr hWnd = ResolveGameWindow(out _, out _);
-        if (hWnd == IntPtr.Zero) return false;
-        try { SetForegroundWindow(hWnd); } catch { /* ignore */ }
-        return true;
+        return hWnd != IntPtr.Zero && BringGameToFront(hWnd);
     }
 
     // type <text> — 文字を Unicode キーイベントとして注入する (フォーカス中のテキスト欄に入る)。
@@ -1712,7 +1772,7 @@ public static class TestBridge
     {
         if (!OperatingSystem.IsWindows()) { WriteOut("ERR type windows only"); return; }
         if (string.IsNullOrEmpty(text)) { WriteOut("ERR type usage: type <text>"); return; }
-        if (!FocusGameWindow()) { WriteOut("ERR type no window handle"); return; }
+        if (!FocusGameWindow()) { WriteOut("ERR type game window is not in front (keys would go to another app)"); return; }
 
         var inputs = new Win32Input[text.Length * 2];
         for (int i = 0; i < text.Length; i++)
@@ -1744,7 +1804,7 @@ public static class TestBridge
         };
 
         if (vk == 0) { WriteOut("ERR key usage: key <enter|escape|tab|backspace|delete|left|right>"); return; }
-        if (!FocusGameWindow()) { WriteOut("ERR key no window handle"); return; }
+        if (!FocusGameWindow()) { WriteOut("ERR key game window is not in front (keys would go to another app)"); return; }
 
         int size = System.Runtime.InteropServices.Marshal.SizeOf<Win32Input>();
         var down = new[] { new Win32Input { type = InputKeyboard, ki = new KeybdInput { wVk = vk } } };
@@ -2058,6 +2118,18 @@ public static class TestBridge
 
         AutoRehost.RequestStartupHost();
         WriteOut("OK hostlobby requested (region/map/settings restored from disk — follow with: wait phase=Lobby 90)");
+    }
+
+    private static void ExecuteJoinLobby(string code)
+    {
+        if (!GameStates.IsNotJoined) { WriteOut("ERR joinlobby already in a lobby/game (leave first)"); return; }
+        if (UnityEngine.Object.FindObjectOfType<MainMenuManager>() == null) { WriteOut("ERR joinlobby not at MainMenu"); return; }
+
+        int gameId = GameCode.GameNameToInt(code.ToUpperInvariant());
+        if (gameId == -1) { WriteOut($"ERR joinlobby invalid code '{code}'"); return; }
+
+        AmongUsClient.Instance.StartCoroutine(AmongUsClient.Instance.CoFindGameInfoFromCodeAndJoin(gameId));
+        WriteOut($"OK joinlobby {code.ToUpperInvariant()} requested (follow with: wait phase=Lobby 60)");
     }
 
     private static void ExecuteLeaveLobby()

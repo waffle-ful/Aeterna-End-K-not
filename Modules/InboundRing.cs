@@ -15,7 +15,7 @@ namespace EndKnot.Modules;
 // ここでは受信メッセージの見出し (root tag / 先頭サブ tag / RPC 番号 / 長さ) だけを秒単位で溜め、
 // 切断時に DCRX として DCRING の隣へ残す。あわせて DCRING に写らない Unreliable 送信の本数と、
 // ロビー齢 / プロセス齢を同じ行に載せる。
-// 生還したロビーの対照群として、ホストのオンラインロビーでは作成 +20 秒に LOBBYRX を 1 行出す。
+// 生還したロビーの対照群として、オンラインロビーでは入室 +20 秒に LOBBYRX を 1 行出す (ホスト・客とも)。
 public static class InboundRing
 {
     private const int RingSize = 512;
@@ -171,13 +171,13 @@ public static class InboundRing
             _joinedAtUnix = Now;
             int epoch = ++_joinEpoch;
 
-            if (!AmongUsClient.Instance || !AmongUsClient.Instance.AmHost) return;
+            if (!AmongUsClient.Instance) return;
             if (AmongUsClient.Instance.NetworkMode != NetworkModes.OnlineGame) return;
 
             LateTask.New(() =>
             {
                 if (epoch != _joinEpoch || !GameStates.IsLobby) return;
-                HealthLog.NoteAnom($"LOBBYRX {Describe()}");
+                HealthLog.NoteAnom($"LOBBYRX host={(AmongUsClient.Instance && AmongUsClient.Instance.AmHost ? 1 : 0)} {Describe()}");
             }, ControlDumpDelaySec, "InboundRing control dump", log: false);
         }
         catch { }
