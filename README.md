@@ -12,7 +12,7 @@
   初回起動時に Windows の青い警告が出ますが、<a href="#windows-の青い警告が出たときは">対処法はこちら</a>。</sub>
 </p>
 
-[![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/sEYAFzD3a) [![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-EA4AAA?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/waffle-ful)
+[![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/nnQMCEkHpC) [![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-EA4AAA?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/waffle-ful)
 
 ---
 
@@ -56,7 +56,7 @@ End K not は**ホストのクライアントにだけ**入れれば動きます
 このMod は非公式のものであり、Among Us の開発元である Innersloth は一切関与していません。**このMod の問題に関して Innersloth へ問い合わせないでください。**
 
 > [!WARNING]
-> End K not は **beta 段階**です。未テスト役職や WIP 機能を含みます。不具合報告や提案は [GitHub Issues](../../issues) または [Discord](https://discord.gg/sEYAFzD3a) へお願いします。
+> End K not は **beta 段階**です。未テスト役職や WIP 機能を含みます。不具合報告や提案は [GitHub Issues](../../issues) または [Discord](https://discord.gg/nnQMCEkHpC) へお願いします。
 
 対応 Among Us バージョン : **2026.8.18**
 
@@ -201,7 +201,7 @@ zip には BepInEx 本体・設定ファイル・カスタムリージョン追�
 
 ## コミュニティ
 
-- **Discord** : https://discord.gg/sEYAFzD3a — バグ報告・質問・雑談（推奨）
+- **Discord** : https://discord.gg/nnQMCEkHpC — バグ報告・質問・雑談（推奨）
 - **Issues** : [GitHub Issues](../../issues) — 確認が遅れる場合があります
 - [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md) | [`CONTRIBUTING.md`](./CONTRIBUTING.md) | [`SECURITY.md`](./SECURITY.md) | [`SUPPORT.md`](./SUPPORT.md)
 

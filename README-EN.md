@@ -12,7 +12,7 @@
   Windows will show a blue warning on first run; <a href="#if-windows-shows-a-blue-warning">getting past it takes two clicks</a>.</sub>
 </p>
 
-[![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/sEYAFzD3a) [![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-EA4AAA?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/waffle-ful)
+[![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/nnQMCEkHpC) [![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-EA4AAA?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/waffle-ful)
 
 ---
 
@@ -56,7 +56,7 @@ Only the lobby host installs the mod. Everyone else joins and plays the extra ro
 This mod is unofficial and is **not affiliated with or endorsed by Innersloth**. **Please do not contact Innersloth regarding any issues with this mod.**
 
 > [!WARNING]
-> End K not is in **beta**. Some roles are untested and several features are works-in-progress. Please report bugs and suggestions on [GitHub Issues](../../issues) or our [Discord](https://discord.gg/sEYAFzD3a).
+> End K not is in **beta**. Some roles are untested and several features are works-in-progress. Please report bugs and suggestions on [GitHub Issues](../../issues) or our [Discord](https://discord.gg/nnQMCEkHpC).
 
 Supported Among Us version: **2026.8.18**
 
@@ -190,7 +190,7 @@ Edit `bgm_titles.json` to control title / author display while a BGM plays. File
 
 ## Community
 
-- **Discord**: https://discord.gg/sEYAFzD3a — bug reports, questions, general chat (preferred)
+- **Discord**: https://discord.gg/nnQMCEkHpC — bug reports, questions, general chat (preferred)
 - **Issues**: [GitHub Issues](../../issues) — may take a while to respond
 - [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md) | [`CONTRIBUTING.md`](./CONTRIBUTING.md) | [`SECURITY.md`](./SECURITY.md) | [`SUPPORT.md`](./SUPPORT.md)
 
