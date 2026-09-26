@@ -54,7 +54,7 @@ public static class CalamityFonts
 
     private static TMP_FontAsset GetDuskFont()
     {
-        if (!UseDuskFont || _duskFailed || OperatingSystem.IsAndroid()) return null;
+        if (!UseDuskFont || _duskFailed) return null;
         if (_dusk != null) return _dusk;
         try
         {
