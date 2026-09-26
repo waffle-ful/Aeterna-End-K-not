@@ -198,6 +198,9 @@ namespace EndKnot
         //  その要求は CheckMurderPatch の `target.PlayerId >= 200` で拒否される = 空振りする。)
         protected virtual bool IsPlayerLike => false;
 
+        // スプライト文字 CNO が見た目用の Shapeshift で名前の先頭に付ける印。客側はこれの有無でプレイヤー型 CNO と見分ける
+        internal const string SpriteNamePrefix = "<size=14><br></size>";
+
         // CreateNetObject 完了後に呼ばれる派生クラス用 hook。
         // player-like CNO はここで Utils.RpcChangeSkin 等で個別 outfit を適用する。
         protected virtual void OnAfterCreate() { }
@@ -341,7 +344,7 @@ namespace EndKnot
                 sender.checkLength = false; // ⚠️ 下の writer キャッシュを壊さないため必須 — 理由は CreateNetObject 側の同コメント参照
                 MessageWriter writer = sender.stream;
                 sender.StartMessage();
-                PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].PlayerName = "<size=14><br></size>" + sprite;
+                PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].PlayerName = SpriteNamePrefix + sprite;
                 PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].ColorId = 0;
                 PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].HatId = "";
                 PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].SkinId = "";
@@ -967,7 +970,7 @@ namespace EndKnot
 
                         MessageWriter writer = sender.stream;
                         sender.StartMessage(onlyVisibleTo && !onlyVisibleTo.AmOwner ? onlyVisibleTo.OwnerId : -1);
-                        PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].PlayerName = "<size=14><br></size>" + sprite;
+                        PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].PlayerName = SpriteNamePrefix + sprite;
                         PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].ColorId = 0;
                         PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].HatId = "";
                         PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].SkinId = "";

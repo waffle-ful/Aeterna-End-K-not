@@ -165,6 +165,6 @@ public static class NameNotifyManager
         else
             notifies[text] = expireTS;
 
-        Logger.Info($"New name notify for {Main.AllPlayerNames[playerId]}: {text} ({expireTS - Utils.TimeStamp}s)", "Name Notify");
+        Logger.Info($"New name notify for {Main.AllPlayerNames.GetValueOrDefault(playerId, $"ID {playerId}")}: {text} ({expireTS - Utils.TimeStamp}s)", "Name Notify");
     }
 }

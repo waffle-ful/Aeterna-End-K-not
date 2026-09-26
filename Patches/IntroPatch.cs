@@ -358,7 +358,7 @@ internal static class SetUpRoleTextPatch
             LateTask.New(() =>
             {
                 if (AmongUsClient.Instance.IsGameOver || GameStates.IsLobby || lp == null) return;
-                lp.SetName(Main.AllPlayerNames[lp.PlayerId]);
+                if (Main.AllPlayerNames.TryGetValue(lp.PlayerId, out string realName)) lp.SetName(realName);
             }, 1f, "Reset Name For Modded Client");
         }
         
