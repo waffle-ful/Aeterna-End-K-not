@@ -1,0 +1,49 @@
+name: 役職・機能のリクエスト / Role or feature request
+description: 新しい役職のアイデアや、欲しい機能 / Ideas for new roles or features
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        アイデアありがとうございます！すべてを実装できるとは限りませんが、全部読んでいます。
+        Thanks for the idea! Not everything can be implemented, but every request gets read.
+
+        既存の役職は [役職一覧](https://github.com/waffle-ful/Aeterna-End-K-not/blob/main/ROLES.md) / [Role list](https://github.com/waffle-ful/Aeterna-End-K-not/blob/main/ROLES-EN.md) で確認できます。
+        You can check existing roles in the role list above.
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: 種類 / Type
+      options:
+        - 新しい役職 / New role
+        - 新しいアドオン / New add-on
+        - 既存の役職の調整 / Change to an existing role
+        - 役職以外の機能 / Other feature
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: 内容 / Idea
+      description: "役職なら陣営・能力・勝利条件など / For roles: team, ability, win condition, etc."
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: どんな遊びになるか / Why it would be fun
+      description: どんな場面が生まれそうか、今の何が物足りないか / What moments it creates, or what feels missing now
+    validations:
+      required: false
+
+  - type: input
+    id: source
+    attributes:
+      label: 他の Mod にある場合 / If it exists in another mod
+      description: Mod 名と役職名（分かれば） / Mod name and role name, if known
+      placeholder: "TownOfHost-K: ○○"
+    validations:
+      required: false
