@@ -182,6 +182,9 @@ public class Gemini : RoleBase
         Dummies.Add(new GeminiDummy(pos, pc));
         LastPlacedPos = pos;
 
+        // 周りに見えると分身だと一目でばれるので、演出は本人の画面にだけ出す
+        ExplosionFx.PlayFor(ExplosionFx.Kind.GeminiSplit, pos, 1f, pc);
+
         pc.Notify(Translator.GetString("Gemini.DummyPlaced"));
         Logger.Info($"{pc.GetNameWithRole().RemoveHtmlTags()} が {pos} に分身を設置 (現在 {Dummies.Count}/{max} 体)", "Gemini");
     }
@@ -201,6 +204,9 @@ public class Gemini : RoleBase
 
         GeminiDummy dummy = CustomNetObject.AllObjects.OfType<GeminiDummy>().FirstOrDefault(d => d.playerControl == target);
         if (dummy == null) return false;
+
+        // 分身が消えること自体は全員に見えているので、砕ける演出は全員に出してよい
+        ExplosionFx.Play(ExplosionFx.Kind.GeminiShatter, dummy.Position, 1f);
 
         // リストからの除去は要らない (PlaceDummy 側の掃除が Despawn 済みを弾く)。
         dummy.Despawn();
