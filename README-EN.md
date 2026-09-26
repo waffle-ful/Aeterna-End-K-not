@@ -49,7 +49,7 @@ Run the installer. It works out whether you're on Steam or Epic and handles the 
 
 ## About this mod
 
-**End K not** is an unofficial personal fork of [Endless Host Roles (EHR)](https://github.com/Gurge44/EndlessHostRoles) for Among Us. It ships **682 roles**.
+**End K not** is an unofficial personal fork for Among Us that inherits roles and systems from both [Endless Host Roles (EHR)](https://github.com/Gurge44/EndlessHostRoles) and [TownOfHost-K (TOHK)](https://github.com/KYMario/TownOfHost-K). It ships **682 roles**.
 
 Only the lobby host installs the mod. Everyone else joins and plays the extra roles with nothing installed. Official servers and custom servers both run the full feature set.
 
@@ -228,7 +228,7 @@ No sponsors yet. We'd love for you to be the first!
 
 This project is licensed under the **GNU General Public License v3.0**. See [`LICENSE`](./LICENSE) for details.
 
-End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles). **Modifications since April 2026** were made by waffle-ful; the modification history is tracked in this repository's git log and [`CHANGELOG.md`](./CHANGELOG.md), in compliance with GPL-3.0 §5.
+End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) and [TownOfHost-K](https://github.com/KYMario/TownOfHost-K). **Modifications since April 2026** were made by waffle-ful; the modification history is tracked in this repository's git log and [`CHANGELOG.md`](./CHANGELOG.md), in compliance with GPL-3.0 §5.
 
 ## Credits
 

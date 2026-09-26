@@ -10,7 +10,7 @@
         <GenerateAssemblyFileVersionAttribute>false</GenerateAssemblyFileVersionAttribute>
         <GenerateAssemblyInformationalVersionAttribute>false</GenerateAssemblyInformationalVersionAttribute>
         <GenerateAssemblyVersionAttribute>false</GenerateAssemblyVersionAttribute>
-        <Description>End K not (fork of EHR)</Description>
+        <Description>End K not (fork of EHR and TOHK)</Description>
         <Authors>waffle-ful</Authors>
         <LangVersion>preview</LangVersion>
         <AmongUs>$(AmongUsPath)</AmongUs>

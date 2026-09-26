@@ -49,7 +49,7 @@ End K not は**ホストのクライアントにだけ**入れれば動きます
 
 ## このMod について
 
-**End K not** は、[Endless Host Roles (EHR)](https://github.com/Gurge44/EndlessHostRoles) をベースにした Among Us の非公式個人フォークです。いま実装している役職は **682**。
+**End K not** は、[Endless Host Roles (EHR)](https://github.com/Gurge44/EndlessHostRoles) と [TownOfHost-K (TOHK)](https://github.com/KYMario/TownOfHost-K) の両方から役職と仕組みを受け継いだ、Among Us の非公式個人フォークです。いま実装している役職は **682**。
 
 導入するのはホストのクライアントだけで、他のプレイヤーは Mod なしのまま追加役職を遊べます。公式サーバーとカスタムサーバー、どちらでも同じように動きます。
 
@@ -239,7 +239,7 @@ End K not を支えてくださっている皆さんです (掲載はご希望�
 
 このプロジェクトは **GNU General Public License v3.0** の下で公開されています。詳細は [`LICENSE`](./LICENSE) を参照してください。
 
-End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) の派生プロジェクトです。**2026 年 4 月以降の改変**は waffle-ful により行われており、改変履歴は本リポジトリの git log および [`CHANGELOG.md`](./CHANGELOG.md) で追跡できます (GPL-3.0 §5 準拠)。
+End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) と [TownOfHost-K](https://github.com/KYMario/TownOfHost-K) の派生プロジェクトです。**2026 年 4 月以降の改変**は waffle-ful により行われており、改変履歴は本リポジトリの git log および [`CHANGELOG.md`](./CHANGELOG.md) で追跡できます (GPL-3.0 §5 準拠)。
 
 ## クレジット
 

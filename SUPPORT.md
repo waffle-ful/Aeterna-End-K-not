@@ -1,6 +1,6 @@
 # Support
 
-End K not is a small personal fork of [Endless Host Roles (EHR)](https://github.com/Gurge44/EndlessHostRoles). Support is best-effort.
+End K not is a small personal fork of [Endless Host Roles (EHR)](https://github.com/Gurge44/EndlessHostRoles) and [TownOfHost-K (TOHK)](https://github.com/KYMario/TownOfHost-K). Support is best-effort.
 
 ## Where to ask
 
