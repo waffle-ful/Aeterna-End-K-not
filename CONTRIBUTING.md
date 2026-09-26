@@ -4,8 +4,8 @@ Thanks for your interest in contributing. End K not is a small personal fork, so
 
 ## Getting in touch
 
-- **Bug reports / feature requests**: open a GitHub Issue or https://discord.gg/sEYAFzD3a
-- **Discussion / questions**: https://discord.gg/sEYAFzD3a
+- **Bug reports / feature requests**: open a GitHub Issue or https://discord.gg/nnQMCEkHpC
+- **Discussion / questions**: https://discord.gg/nnQMCEkHpC
 
 You don't need to file an issue before opening a small PR. For larger changes (new roles, refactors, gamemode tweaks), please open an issue or ask on Discord first so we can confirm the change is wanted before you spend time on it.
 

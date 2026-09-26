@@ -5,8 +5,8 @@ body:
   - type: markdown
     attributes:
       value: |
-        報告ありがとうございます。Discord でも受け付けています（そちらのほうが早く返事できます）: https://discord.gg/sEYAFzD3a
-        Thanks for the report! Discord usually gets a faster reply: https://discord.gg/sEYAFzD3a
+        報告ありがとうございます。Discord でも受け付けています（そちらのほうが早く返事できます）: https://discord.gg/nnQMCEkHpC
+        Thanks for the report! Discord usually gets a faster reply: https://discord.gg/nnQMCEkHpC
 
         セキュリティ上の問題は Issue にせず [SECURITY.md](https://github.com/waffle-ful/Aeterna-End-K-not/blob/main/SECURITY.md) の手順でお知らせください。
         For security issues, please follow [SECURITY.md](https://github.com/waffle-ful/Aeterna-End-K-not/blob/main/SECURITY.md) instead of filing a public issue.
