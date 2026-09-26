@@ -28,7 +28,7 @@ public static class CalamityButtons
 
         var defs = new (string key, float y, Action onClick)[]
         {
-            ("MainMenu.Calamity.SinglePlayer", +0.9f,
+            ("MainMenu.Calamity.SinglePlayer", +0.85f,
                 () =>
                 {
                     Logger.Info("SinglePlayer clicked", "CalamityButtons");
@@ -56,19 +56,22 @@ public static class CalamityButtons
             ("MainMenu.Calamity.Multiplayer",  +0.48f,
                 () => GoToMultiplayer(mm)),
 
-            ("MainMenu.Calamity.Shop",         +0.07f,
+            ("MainMenu.Calamity.Inventory",    +0.11f,
+                () => OpenInventory(mm)),
+
+            ("MainMenu.Calamity.Shop",         -0.26f,
                 () => OpenShop(mm)),
 
-            ("MainMenu.Calamity.Settings",     -0.35f,
+            ("MainMenu.Calamity.Settings",     -0.63f,
                 () => { CalamityVisibility.HideMenuContent(); mm.settingsButton.OnClick.Invoke(); }),
 
-            ("MainMenu.Calamity.MyAccount",    -0.77f,
+            ("MainMenu.Calamity.MyAccount",    -1.0f,
                 () => OpenMyAccount(mm)),
 
-            ("MainMenu.Calamity.Credits",      -1.18f,
+            ("MainMenu.Calamity.Credits",      -1.37f,
                 () => { CalamityVisibility.HideMenuContent(); mm.creditsButton.OnClick.Invoke(); }),
 
-            ("MainMenu.Calamity.Quit",         -1.6f,
+            ("MainMenu.Calamity.Quit",         -1.74f,
                 () => QuitGame(mm)),
         };
 
@@ -176,6 +179,16 @@ public static class CalamityButtons
     // first open after boot is undone immediately (the second open worked because Start had run).
     private static System.Collections.IEnumerator OpenShopDeferred(MainMenuManager mm, StoreMenu store)
     {
+        // The menu is clickable before the vanilla start-up (login, inventory, store data) has
+        // finished, and the vanilla shop button ignores clicks until then. Wait for it here so an
+        // early click still opens a fully loaded store (bean count, purchases) once it's ready.
+        while (mm != null && (!mm.finishStartup || (store != null && !store.Initialized)))
+        {
+            if (!CalamityVisibility.IsStorePending(store)) yield break;
+            yield return null;
+        }
+
+        if (store != null && !store.gameObject.activeSelf) store.gameObject.SetActive(true);
         yield return null;
         yield return null;
         try
@@ -187,6 +200,35 @@ public static class CalamityButtons
             if (mm.shopButton != null) mm.shopButton.OnClick.Invoke();
         }
         catch (Exception ex) { Logger.Exception(ex, "OpenShopDeferred"); }
+    }
+
+    // The vanilla inventory button only works once the vanilla start-up has finished (it ignores
+    // clicks before that), so an early click waits here instead of doing nothing.
+    private static void OpenInventory(MainMenuManager mm)
+    {
+        Logger.Info("Inventory clicked", "CalamityButtons");
+        try
+        {
+            CalamityVisibility.BeginInventory();
+            Main.Instance.StartCoroutine(OpenInventoryDeferred(mm));
+        }
+        catch (Exception ex) { Logger.Exception(ex, "OpenInventory"); }
+    }
+
+    private static System.Collections.IEnumerator OpenInventoryDeferred(MainMenuManager mm)
+    {
+        while (mm != null && !mm.finishStartup)
+        {
+            if (!CalamityVisibility.IsInventoryPending) yield break;
+            yield return null;
+        }
+
+        try
+        {
+            if (!CalamityVisibility.IsInventoryPending) yield break;
+            if (mm != null && mm.inventoryButton != null) mm.inventoryButton.OnClick.Invoke();
+        }
+        catch (Exception ex) { Logger.Exception(ex, "OpenInventoryDeferred"); }
     }
 
     private static TextMeshPro CreateTextButton(Transform parent, string label, Vector3 pos, Action onClick)

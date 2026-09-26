@@ -383,6 +383,14 @@ public static class TestBridge
             return;
         }
 
+        // Layer B2: ログイン失敗ダイアログの模擬表示 (メニューで AccountManager が寝ていても見えるかの検証口)。
+        if (directive.Equals("signinfail", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecuteSignInFail(); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR signinfail failed"); }
+            return;
+        }
+
         // Layer A2: AutoStart (ConfigEntry — setopt の OptionItem ツリー外) のフリップ。
         if (directive.StartsWith("autostart ", StringComparison.OrdinalIgnoreCase))
         {
@@ -2069,6 +2077,17 @@ public static class TestBridge
         eos.tryingToLogin = true;
         AutoRehost.StartBootLoginWatch();
         WriteOut("OK eosstall simulated (loginFlowFinished=false tryingToLogin=true; boot login watch re-armed — retry fires after ~40s, hostlobby holds until the flow finishes)");
+    }
+
+    private static void ExecuteSignInFail()
+    {
+        if (!AccountManager.InstanceExists) { WriteOut("ERR signinfail AccountManager missing"); return; }
+
+        AccountManager am = AccountManager.Instance;
+        bool wasActive = am.gameObject.activeSelf;
+        am.SignInFail(EOSManager.EOS_ERRORS.NoConnectionError, (Il2CppSystem.Action)(() => Logger.Info("signinfail dialog closed", "TestBridge")));
+        bool visible = am.genericInfoDisplayBox != null && am.genericInfoDisplayBox.gameObject.activeInHierarchy;
+        WriteOut($"OK signinfail shown (amWasActive={wasActive} amActive={am.gameObject.activeSelf} dialogVisible={visible})");
     }
 
     private static void ExecuteAutoStart(string rest)
