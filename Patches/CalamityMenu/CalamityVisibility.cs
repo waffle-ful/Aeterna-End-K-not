@@ -45,6 +45,97 @@ public static class CalamityVisibility
     private static GameObject _accountWindow;
     private static AccountManager _accountManager;
 
+    // The vanilla inventory (PlayerCustomizationMenu), opened by the Calamity "Inventory" button.
+    // Vanilla instantiates it on demand and destroys it on close; its close path also brings back
+    // main-menu furniture that VanillaSuppressor had put away, so re-suppress once it is gone.
+    private static bool _inventoryActive;
+    private static bool _inventorySeenActive;
+    private static PlayerCustomizationMenu _inventory;
+
+    public static void BeginInventory()
+    {
+        _inventory = null;
+        _inventoryActive = true;
+        _inventorySeenActive = false;
+        HideMenuContent(showBack: true);
+    }
+
+    public static bool IsInventoryPending => _inventoryActive && !_inventorySeenActive;
+
+    private static bool IsInventoryOpen()
+    {
+        if (_inventory == null) _inventory = Object.FindObjectOfType<PlayerCustomizationMenu>();
+        return _inventory != null && _inventory.gameObject.activeInHierarchy;
+    }
+
+    private static void EndInventory()
+    {
+        if (_inventory != null)
+        {
+            try
+            {
+                // Our own restore below replaces the vanilla OnClose (which would re-show the
+                // suppressed furniture after we put it away).
+                _inventory.OnClose = null;
+                _inventory.Close(false);
+            }
+            catch (System.Exception e) { Logger.Warn($"PlayerCustomizationMenu.Close: {e.Message}", "CalamityVisibility"); }
+        }
+
+        _inventory = null;
+        _inventoryActive = false;
+        _inventorySeenActive = false;
+
+        var mm = Object.FindObjectOfType<MainMenuManager>();
+        if (mm != null)
+        {
+            if (mm.mainMenuUI != null && !mm.mainMenuUI.activeSelf) mm.mainMenuUI.SetActive(true);
+            VanillaSuppressor.ReapplyAfterVanillaReturn(mm);
+        }
+    }
+
+    // AccountManager woken by AccountDialogWake for a vanilla login dialog. Put back to sleep once
+    // no dialog has been on screen for a short while (dialogs can hand over to the next one).
+    private static AccountManager _accountDialogManager;
+    private static bool _accountDialogSeen;
+    private static int _accountDialogClosedFrames;
+
+    public static void BeginAccountDialog(AccountManager am)
+    {
+        _accountDialogManager = am;
+        _accountDialogSeen = false;
+        _accountDialogClosedFrames = 0;
+    }
+
+    private static void TickAccountDialog()
+    {
+        if (_accountDialogManager == null) return;
+
+        if (AccountDialogWake.IsAnyOpen(_accountDialogManager))
+        {
+            _accountDialogSeen = true;
+            _accountDialogClosedFrames = 0;
+            return;
+        }
+
+        // The login flow can sit between two of these screens while it waits on the server; the
+        // next screen would open hidden if AccountManager were already asleep again.
+        if (EOSManager.InstanceExists && !EOSManager.Instance.HasFinishedLoginFlow())
+        {
+            _accountDialogClosedFrames = 0;
+            return;
+        }
+
+        if (++_accountDialogClosedFrames < (_accountDialogSeen ? 30 : 120)) return;
+
+        if (!_accountWindowActive && _accountDialogManager.gameObject.activeSelf)
+            _accountDialogManager.gameObject.SetActive(false);
+
+        _accountDialogManager = null;
+        _accountDialogSeen = false;
+        _accountDialogClosedFrames = 0;
+    }
+
     // Called by CalamityButtons.OpenMyAccount right after enabling AccountManager and firing
     // the vanilla My Account OnClick. Locates the AccountWindow so we can detect/close it.
     public static void BeginAccountWindow(AccountManager am)
@@ -86,8 +177,14 @@ public static class CalamityVisibility
     private static bool IsStoreContentOpen()
     {
         if (_store == null) return false;
-        return (_store.normalMenu   != null && _store.normalMenu.activeInHierarchy)
-            || (_store.featuredMenu != null && _store.featuredMenu.activeInHierarchy);
+        // The purchase confirmation hides normalMenu/featuredMenu while it is up, so the
+        // confirm panels and the wait modal count as "open" too.
+        return (_store.normalMenu      != null && _store.normalMenu.activeInHierarchy)
+            || (_store.featuredMenu    != null && _store.featuredMenu.activeInHierarchy)
+            || (_store.confirmMenu     != null && _store.confirmMenu.activeInHierarchy)
+            || (_store.starConfirmMenu != null && _store.starConfirmMenu.activeInHierarchy)
+            || (_store.cosmicubePreviewMenu != null && _store.cosmicubePreviewMenu.gameObject.activeInHierarchy)
+            || (_store.plsWaitModal    != null && _store.plsWaitModal.gameObject.activeInHierarchy);
     }
 
     private static void EndStoreMenu()
@@ -265,6 +362,8 @@ public static class CalamityVisibility
             _prevContentExists = false;
         }
 
+        TickAccountDialog();
+
         // 自前の閉じ手段を持つモーダル(切断/エラー・更新・お知らせ)が突然湧いたら、Calamity ボタン経由で
         // なくても能動的に隠す。BACK ボタンは出さない(モーダル自身に閉じるボタンがあるので不要・邪魔)。
         if (!_menuHidden && IsSelfContainedModalOpen())
@@ -310,6 +409,12 @@ public static class CalamityVisibility
         _accountWindowSeenActive = false;
         _accountWindow = null;
         _accountManager = null;
+        _inventoryActive = false;
+        _inventorySeenActive = false;
+        _inventory = null;
+        _accountDialogManager = null;
+        _accountDialogSeen = false;
+        _accountDialogClosedFrames = 0;
         _storeActive = false;
         _storeSeenActive = false;
         _store = null;
@@ -424,6 +529,8 @@ public static class CalamityVisibility
 
         if (_storeActive) { EndStoreMenu(); return; }
 
+        if (_inventoryActive) { EndInventory(); return; }
+
         var pop = Object.FindObjectOfType<FreeplayPopover>(true);
         if (pop != null && IsFreeplayOpen(pop))
         {
@@ -484,6 +591,15 @@ public static class CalamityVisibility
             return false;
         }
 
+        // Inventory: same seen-active latch; the instance only exists after the vanilla open.
+        if (_inventoryActive)
+        {
+            if (IsInventoryOpen()) { _inventorySeenActive = true; return true; }
+            if (!_inventorySeenActive) return true; // grace: vanilla has not opened it yet
+            EndInventory();
+            return false;
+        }
+
         // RightPanel (Multiplayer): keep menu hidden while ShowingPanel is true OR while
         // the panel is still mid-slide off-screen. RightPanel.x ~ Op.x means slid in,
         // ~ Op.x+ParkOffset means fully off-screen.
@@ -539,6 +655,9 @@ public static class CalamityVisibility
 
             return true;
         }
+
+        // ログイン系のダイアログ (サインイン・年齢確認・ログイン失敗など)。
+        if (_accountDialogManager != null && AccountDialogWake.IsAnyOpen(_accountDialogManager)) return true;
 
         if (Object.FindObjectOfType<DisconnectPopup>(true) is { } dp && dp.gameObject.activeInHierarchy) return true;
         if (Object.FindObjectOfType<AnnouncementPopUp>(true) is { } ap && ap.gameObject.activeInHierarchy) return true;
