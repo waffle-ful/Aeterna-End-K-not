@@ -39,6 +39,13 @@ End K not は**ホストのクライアントにだけ**入れれば動きます
 - **ドッスン (Dossun)** — 巨大ブロックを設置し、自分が動くと連動して動く。轢いたり、吹き飛ばしたり。
 - **スーパーノヴァ (Supernova)** — 立ち止まったら爆発する星。周りを巻き込んで吹き飛ばし、最後まで生き残れば本来の勝者を押しのけて単独勝利。
 
+<p align="center">
+  <img src=".github/roles/gemini.gif" alt="ジェミニ" width="32%">
+  <img src=".github/roles/crosswind.gif" alt="横風" width="32%">
+  <img src=".github/roles/supernova.gif" alt="スーパーノヴァ" width="32%">
+  <br><sub>左から ジェミニ ・ 横風 ・ スーパーノヴァ</sub>
+</p>
+
 ### そして、試すのがこわくない。
 
 インストーラーを実行するだけ。Steam 版か Epic 版かは自動で判別して、導入まで全部やってくれます。合わなければ、フォルダの中の `winhttp.dll` の名前を変えるだけで**完全に素の Among Us へ戻ります。** 入れるのも、やめるのも一瞬です。
