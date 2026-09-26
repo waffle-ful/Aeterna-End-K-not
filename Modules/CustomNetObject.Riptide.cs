@@ -21,7 +21,7 @@ namespace EndKnot
     {
         // 較正 (2026-06-04 公式 anti-cheat 対策で 6→2 sub-CNO 構成に改定):
         //   size=40 absolute × 8 col W × 2 sub-CNO レイアウト → マップ全体カバー
-        //   1 CNO ≈ 53u × 53u, perp ±10f オフセットで 2 sub-CNO を並べて連続した波として見せる
+        //   1 CNO ≈ 23.6u × 25u (2026-09-26 実測), perp ±10f オフセットで 2 sub-CNO を並べて連続した波として見せる
         private const int FontSizeAbsolute = 40;
 
         // 方向別スプライト — 全て 8 col × 8 row、グラデーションで進行方向を表現
