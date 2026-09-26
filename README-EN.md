@@ -39,6 +39,13 @@ End K not reads each player's chat aloud in **its own voice**, so your audience 
 - **Dossun** — Places a giant block that moves with you. Crush them, or knock them flying.
 - **Supernova** — A star that detonates the moment you stand still. Take everyone nearby with you, and if you last until the end, you shove the real winner aside and take the win alone.
 
+<p align="center">
+  <img src=".github/roles/gemini.gif" alt="Gemini" width="32%">
+  <img src=".github/roles/crosswind.gif" alt="Crosswind" width="32%">
+  <img src=".github/roles/supernova.gif" alt="Supernova" width="32%">
+  <br><sub>Left to right: Gemini · Crosswind · Supernova</sub>
+</p>
+
 ### And trying it costs you nothing.
 
 Run the installer. It works out whether you're on Steam or Epic and handles the rest. If it isn't for you, rename one file (`winhttp.dll`) and you're back to **plain Among Us.** Getting in and getting out both take seconds.
