@@ -134,7 +134,9 @@ public class Gangster : RoleBase
                    pc.Is(CustomRoles.Loyal) ||
                    pc.Is(CustomRoles.SuperStar) ||
                    pc.Is(CustomRoles.Egoist) ||
-                   pc.Is(CustomRoles.DoubleCount)
+                   pc.Is(CustomRoles.DoubleCount) ||
+                   pc.Is(CustomRoles.DoubleAgent) ||
+                   pc.Is(CustomRoles.Shiftguard)
                );
     }
 }

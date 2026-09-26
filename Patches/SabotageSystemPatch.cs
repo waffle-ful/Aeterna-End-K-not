@@ -588,16 +588,31 @@ public static class SabotageSystemTypeUpdateSystemPatch
             if (Main.CurrentMap == MapNames.Skeld)
                 LateTask.New(DoorsReset.OpenAllDoors, 1f, "Opening All Doors On Sabotage (Skeld)");
 
+            // マッドメイトのセンサーが生存中は、他の(非マッドの)センサーの矢印を実際の妨害者でなく
+            // マッド本人へ向ける囮になる。マッド自身の矢印は従来どおり実際の妨害者を指す。
+            PlayerControl madSensor = null;
+            foreach (PlayerControl candidate in Main.CachedAlivePlayerControls())
+            {
+                if (candidate.Is(CustomRoles.Sensor) && candidate.Is(CustomRoles.Madmate))
+                {
+                    madSensor = candidate;
+                    break;
+                }
+            }
+
             foreach (PlayerControl pc in Main.CachedAlivePlayerControls())
             {
                 if (pc.Is(CustomRoles.Sensor) && pc.GetAbilityUseLimit() >= 1f)
                 {
                     pc.RpcRemoveAbilityUse();
-                    TargetArrow.Add(pc.PlayerId, player.PlayerId);
+
+                    byte arrowTarget = madSensor != null && pc.PlayerId != madSensor.PlayerId ? madSensor.PlayerId : player.PlayerId;
+
+                    TargetArrow.Add(pc.PlayerId, arrowTarget);
                     Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
                     LateTask.New(() =>
                     {
-                        TargetArrow.Remove(pc.PlayerId, player.PlayerId);
+                        TargetArrow.Remove(pc.PlayerId, arrowTarget);
                         Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
                     }, Sensor.ArrowDuration.GetInt(), "Sensor Arrow");
                 }

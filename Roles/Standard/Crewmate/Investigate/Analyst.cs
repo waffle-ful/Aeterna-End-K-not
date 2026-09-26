@@ -24,6 +24,9 @@ internal class Analyst : RoleBase
     public static Dictionary<byte, int> VentCount = [];
     public (byte ID, long TIME) CurrentTarget = (byte.MaxValue, Utils.TimeStamp);
 
+    // マッドメイトの分析官が採寸を終えた相手 (直近1人分だけ追跡)。この相手をインポスターが撃つと、その場でキルクールが即リセットされる。
+    private static byte MadMeasuredTarget = byte.MaxValue;
+
     public override bool IsEnable => PlayerId != byte.MaxValue;
 
     public override void SetupCustomOption()
@@ -108,6 +111,7 @@ internal class Analyst : RoleBase
         PlayerId = byte.MaxValue;
         VentCount = [];
         CurrentTarget = (byte.MaxValue, Utils.TimeStamp);
+        MadMeasuredTarget = byte.MaxValue;
     }
 
     public override void Add(byte id)
@@ -115,6 +119,7 @@ internal class Analyst : RoleBase
         PlayerId = id;
         id.SetAbilityUseLimit(UseLimitOpt.GetInt());
         CurrentTarget = (byte.MaxValue, Utils.TimeStamp);
+        MadMeasuredTarget = byte.MaxValue;
     }
 
     public override void SetKillCooldown(byte id)
@@ -147,6 +152,25 @@ internal class Analyst : RoleBase
     public override void OnFixedUpdate(PlayerControl pc)
     {
         if (!IsEnable) return;
+
+        if (MadMeasuredTarget != byte.MaxValue)
+        {
+            PlayerControl measured = Utils.GetPlayerById(MadMeasuredTarget);
+            if (measured != null && !measured.IsAlive())
+            {
+                PlayerControl realKiller = measured.GetRealKiller();
+                if (realKiller != null && realKiller.IsAlive() && realKiller.Is(CustomRoleTypes.Impostor))
+                {
+                    realKiller.SetKillCooldown(0f);
+                    // ホスト側の残りタイマーは「長くなる方向」にしか更新されないので、直接書き戻す。
+                    Main.KillTimers[realKiller.PlayerId] = 0f;
+                    realKiller.Notify(GetString("AnalystMadKillCooldownReset"));
+                }
+
+                MadMeasuredTarget = byte.MaxValue;
+            }
+        }
+
         if (CurrentTarget.ID == byte.MaxValue) return;
 
         PlayerControl target = Utils.GetPlayerById(CurrentTarget.ID);
@@ -165,6 +189,8 @@ internal class Analyst : RoleBase
             pc.RpcRemoveAbilityUse(notify: false);
             pc.Notify(GetAnalyzeResult(target), 10f);
             pc.SetKillCooldown();
+
+            if (pc.Is(CustomRoles.Madmate)) MadMeasuredTarget = target.PlayerId;
         }
     }
 

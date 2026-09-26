@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using EndKnot.Modules;
 using Hazel;
 
@@ -73,7 +74,27 @@ public class Leery : RoleBase
 
         InvestigationEndTS = 0;
         SendRPC();
-        if (!nearestPlayer.IsCrewmate()) pc.Notify(Translator.GetString("LeeryNotify"));
+
+        if (!nearestPlayer.IsCrewmate())
+            pc.Notify(Translator.GetString("LeeryNotify"));
+        else if (pc.Is(CustomRoles.Madmate))
+            NotifyImpostorsClean(nearestPlayer);
+    }
+
+    // マッドメイトの観察者は、観察し終えた相手がクルーだと判明した瞬間、生存インポスター全員へ「白」だと知らせる。
+    private static void NotifyImpostorsClean(PlayerControl cleared)
+    {
+        string msg = string.Format(Translator.GetString("LeeryMadLeak"), cleared.GetRealName());
+        string title = Translator.GetString("LeeryMadLeakTitle");
+
+        List<Message> messages = [];
+        foreach (PlayerControl imp in Main.EnumerateAlivePlayerControls())
+        {
+            if (!imp.Is(CustomRoleTypes.Impostor)) continue;
+            messages.Add(new Message(msg, imp.PlayerId, title));
+        }
+
+        messages.SendMultipleMessages(MessageImportance.High);
     }
 
     // ほぼ等距離の2人が圏内にいると最近傍判定が評価のたびに反転し、そのたびに InvestigationEndTS が

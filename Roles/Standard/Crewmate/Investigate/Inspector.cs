@@ -222,7 +222,8 @@ public class Inspector : RoleBase
                         return true;
                     }
 
-                    if (AreInSameTeam(target1, target2))
+                    // マッドメイトの検査官は、真偽に関係なく必ず「同陣営」と偽の相性診断結果を出す。
+                    if (AreInSameTeam(target1, target2) || pc.Is(CustomRoles.Madmate))
                     {
                         LateTask.New(() =>
                         {

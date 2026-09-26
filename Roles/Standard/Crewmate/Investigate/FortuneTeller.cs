@@ -133,8 +133,28 @@ public class FortuneTeller : RoleBase
 
         Utils.SendMessage(GetString("FortuneTellerCheck") + "\n" + msg + "\n\n" + string.Format(GetString("FortuneTellerCheckLimit"), player.GetAbilityUseLimit()), player.PlayerId, CustomRoles.FortuneTeller.ColoredTextByRole(GetString("FortuneTellerCheckMsgTitle")), importance: MessageImportance.High);
 
+        // マッドメイトの占い師は、占った相手の候補一覧に実在のインポスターの役職を混入させる。
+        // 一覧は全占い師で共有なので、後で本物の占い師が同じ相手を占うと黒い候補が紛れて見える。
+        if (player.Is(CustomRoles.Madmate)) PoisonCandidateList(target);
+
         Main.DontCancelVoteList.Add(player.PlayerId);
         return true;
+    }
+
+    private static void PoisonCandidateList(PlayerControl target)
+    {
+        if (!AllPlayerRoleList.TryGetValue(target.PlayerId, out List<CustomRoles> list) || list.Count == 0) return;
+
+        List<PlayerControl> impostors = [.. Main.EnumerateAlivePlayerControls().Where(x => x.Is(CustomRoleTypes.Impostor) && x.PlayerId != target.PlayerId)];
+        if (impostors.Count == 0) return;
+
+        CustomRoles impostorRole = Modules.Ekm.EkrManager.GetApparentRole(impostors.RandomElement());
+        // 本当の役職の枠は残す (真実を消すのではなく、黒い候補を紛れ込ませる)。
+        CustomRoles trueRole = Modules.Ekm.EkrManager.GetApparentRole(target);
+        List<int> slots = [.. Enumerable.Range(0, list.Count).Where(i => list[i] != trueRole)];
+        if (slots.Count == 0) return;
+
+        list[slots.RandomElement()] = impostorRole;
     }
 
     public override void OnMeetingShapeshift(PlayerControl shapeshifter, PlayerControl target)

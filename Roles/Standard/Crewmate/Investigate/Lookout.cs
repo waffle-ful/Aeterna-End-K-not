@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using System.Collections.Generic;
+using UnityEngine;
 
 namespace EndKnot.Roles;
 
@@ -48,6 +49,20 @@ internal class Lookout : RoleBase
             if (i % 3 == 0 && i != aapc.Count - 1) sb.AppendLine();
         }
 
-        pc.Notify(sb.ToString());
+        string text = sb.ToString();
+        pc.Notify(text);
+
+        // マッドメイトの見張りは、同じ名前+ID一覧を生存インポスター全員へも横流しする。
+        if (!pc.Is(CustomRoles.Madmate)) return;
+
+        string leakTitle = Utils.ColorString(Palette.ImpostorRed, Translator.GetString("LookoutMadLeakTitle"));
+        List<Message> messages = [];
+        foreach (PlayerControl imp in Main.EnumerateAlivePlayerControls())
+        {
+            if (imp.PlayerId == pc.PlayerId || !imp.Is(CustomRoleTypes.Impostor)) continue;
+            messages.Add(new Message(text, imp.PlayerId, leakTitle));
+        }
+
+        messages.SendMultipleMessages(MessageImportance.High);
     }
 }

@@ -132,9 +132,31 @@ public class Catcher : RoleBase
             if (FastVector2.DistanceWithinRange(trapPos, pos, range))
             {
                 CaughtRoles[pc.PlayerId] = pc.GetCustomRole();
+                NotifyMadmateOfCatch(pc);
                 break;
             }
         }
+    }
+
+    // マッドメイトの捕獲者は、罠が発動した瞬間に部屋名だけを生存インポスター全員へ知らせる (誰が掛かったかは伏せる)。
+    private void NotifyMadmateOfCatch(PlayerControl caught)
+    {
+        PlayerControl catcher = CatcherId.GetPlayer();
+        if (catcher == null || !catcher.Is(CustomRoles.Madmate)) return;
+
+        PlainShipRoom room = caught.GetPlainShipRoom();
+        string roomName = Translator.GetString(!room ? "Outside" : $"{room.RoomId}");
+        string msg = string.Format(Translator.GetString("Catcher.MadTrap"), roomName);
+        string title = Translator.GetString("Catcher.MadTrapTitle");
+
+        List<Message> messages = [];
+        foreach (PlayerControl imp in Main.EnumerateAlivePlayerControls())
+        {
+            if (imp.PlayerId == CatcherId || !imp.Is(CustomRoleTypes.Impostor)) continue;
+            messages.Add(new Message(msg, imp.PlayerId, title));
+        }
+
+        messages.SendMultipleMessages(MessageImportance.High);
     }
 
     public override void OnReportDeadBody()

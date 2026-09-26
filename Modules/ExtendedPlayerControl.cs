@@ -2638,7 +2638,9 @@ internal static class ExtendedPlayerControl
                     || Options.EveryoneSeesDeathReasons.GetBool()
                     || target.Is(CustomRoles.Gravestone)
                     || (!player.IsAlive() && Options.GhostCanSeeDeathReason.GetBool())
-                    || (player.Is(CustomRoles.Madmate) && Options.MadmateCanSeeDeathReason.GetBool()))
+                    || (player.Is(CustomRoles.Madmate) && Options.MadmateCanSeeDeathReason.GetBool())
+                    // マッドメイトの医者が生存している間は、インポスターにも死因を見せる。
+                    || (Doctor.On && player.Is(CustomRoleTypes.Impostor) && Main.EnumerateAlivePlayerControls().Any(x => x.Is(CustomRoles.Doctor) && x.Is(CustomRoles.Madmate))))
                    && !target.IsAlive();
         }
 

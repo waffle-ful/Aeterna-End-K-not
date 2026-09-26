@@ -41,8 +41,22 @@ public class MeetingManager : RoleBase
 
             string text = textFactory();
             string title = CustomRoles.MeetingManager.ColoredTextByRole(GetString("MeetingManagerMessageTitle"));
+            string leakTitle = Utils.ColorString(Palette.ImpostorRed, GetString("MeetingManagerMadLeakTitle"));
             List<Message> messages = [];
-            foreach (byte id in PlayerIdList) messages.Add(new Message(text, id, title));
+            foreach (byte id in PlayerIdList)
+            {
+                messages.Add(new Message(text, id, title));
+
+                // マッドメイトの会議管理者は、受け取った会議情報を生存インポスター全員へも横流しする。
+                PlayerControl holder = id.GetPlayer();
+                if (holder == null || !holder.Is(CustomRoles.Madmate)) continue;
+
+                foreach (PlayerControl imp in Main.EnumerateAlivePlayerControls())
+                {
+                    if (imp.PlayerId == id || !imp.Is(CustomRoleTypes.Impostor)) continue;
+                    messages.Add(new Message(text, imp.PlayerId, leakTitle));
+                }
+            }
             messages.SendMultipleMessages(MessageImportance.High);
         }, 1f, "Meeting Manager Messages");
     }

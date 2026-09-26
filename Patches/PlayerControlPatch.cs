@@ -2494,6 +2494,8 @@ internal static class FixedUpdatePatch
                     break;
             }
 
+            if (seer.Is(CustomRoleTypes.Impostor)) Mark.Append(Scout.GetTargetMark(seer, target));
+
             switch (seer.GetCustomRole())
             {
                 case CustomRoles.Lookout when seer.IsAlive() && target.IsAlive():

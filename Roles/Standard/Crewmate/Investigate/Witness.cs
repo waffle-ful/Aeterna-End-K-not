@@ -8,6 +8,9 @@ internal class Witness : RoleBase
 {
     public static HashSet<byte> AllKillers = [];
 
+    // 偽証で付けた⚠は本物のキルとは別に持つ (同じ相手でも片方の期限切れがもう片方を消さないように)。
+    private static HashSet<byte> FalseKillers = [];
+
     public static bool On;
     public override bool IsEnable => On;
 
@@ -35,6 +38,7 @@ internal class Witness : RoleBase
     {
         On = false;
         AllKillers = [];
+        FalseKillers = [];
     }
 
     public override void SetKillCooldown(byte id)
@@ -60,12 +64,23 @@ internal class Witness : RoleBase
     public override bool OnCheckMurder(PlayerControl killer, PlayerControl target)
     {
         killer.SetKillCooldown();
-        killer.Notify($"<size=3><#{(AllKillers.Contains(target.PlayerId) ? "ffff00>⚠" : "00ff00>✓")}</color></size>");
+        killer.Notify($"<size=3><#{(AllKillers.Contains(target.PlayerId) || FalseKillers.Contains(target.PlayerId) ? "ffff00>⚠" : "00ff00>✓")}</color></size>");
+
+        // マッドメイトの証人は偽証を行う: 押した相手を実際の殺害の有無に関わらず
+        // WitnessTime 秒だけ⚠が付くようにし、クルー側の証人を欺く。
+        if (killer.Is(CustomRoles.Madmate))
+        {
+            FalseKillers.Add(target.PlayerId);
+            byte falseTargetId = target.PlayerId;
+            LateTask.New(() => FalseKillers.Remove(falseTargetId), WitnessTime.GetInt(), log: false);
+        }
+
         return false;
     }
 
     public override void OnReportDeadBody()
     {
         AllKillers.Clear();
+        FalseKillers.Clear();
     }
 }

@@ -150,6 +150,13 @@ public class Enigma : RoleBase
             MsgToSend[playerId] = msg;
 
             MsgToSendTitle[playerId] = title;
+
+            // マッドメイトのエニグマは、同じ手がかりをキラー本人にも見せて何が漏れたか分からせる。
+            if (enigmaPlayer.Is(CustomRoles.Madmate) && killer.PlayerId != playerId)
+            {
+                MsgToSend[killer.PlayerId] = msg;
+                MsgToSendTitle[killer.PlayerId] = GetString("EnigmaMadLeakTitle");
+            }
         }
     }
 
