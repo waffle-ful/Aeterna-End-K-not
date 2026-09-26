@@ -156,6 +156,7 @@ public class EvilBomber : RoleBase
     {
         CustomSoundsManager.RPCPlayCustomSoundAll("Boom");
         float range = BlastRange.GetFloat();
+        ExplosionFx.Play(ExplosionFx.Kind.Fire, pos, range);
 
         foreach (PlayerControl tg in Main.AllAlivePlayerControlsToList)
         {

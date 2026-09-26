@@ -109,6 +109,7 @@ internal class Supernova : RoleBase
     private static void Explode(PlayerControl pc)
     {
         float radius = ExplosionRadius.GetFloat();
+        ExplosionFx.Play(ExplosionFx.Kind.Supernova, pc.Pos(), radius);
 
         foreach (PlayerControl tg in Main.EnumeratePlayerControls())
         {

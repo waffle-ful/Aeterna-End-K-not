@@ -138,6 +138,7 @@ internal class Bubble : RoleBase
 
             Vector2 center = encasedPc.Pos();
             float radius = ExplosionRadius.GetFloat();
+            ExplosionFx.Play(ExplosionFx.Kind.Fire, center, radius);
 
             // Suicide → ForceRebuildCachesPlayerControls が生きキャッシュを再構築するため、スナップショットで回す
             var alivePlayers = Main.CachedAlivePlayerControls().ToList();

@@ -183,9 +183,13 @@ public enum CustomRPC
     LobbyDecorClear,
     ControllableSound, // sub-op byte: 0=offset付き再生 / 1=名前指定フェード停止 (モッドクライアント効果音同期)
 
+    // モッドクライアント向けの見た目だけの演出 (爆発など)。先頭の件数 + 各演出の kind byte で多重化する。
+    // 新しい演出は ExplosionFx.Kind に値を足すだけで、この ID を増やさない。
+    PlayVisualFx = 247,
+
     // EKM (custom map system) — reserved 2026-06-12.
-    // Network-zero by default; the explicit 251 keeps 247-250 free for future game-mode
-    // syncs, which grow by appending after ControllableSound (246).
+    // Network-zero by default; the explicit 251 keeps 248-250 free for future game-mode
+    // syncs.
     EkmSync = 251,
 
     // Upstream EHR catchup
@@ -195,7 +199,7 @@ public enum CustomRPC
 
     // EKN Wave 2 (on_meeting_pick 会議ボタン) — 2026-08-11 予約。
     // ⚠️ 末尾に追記できる最後の値 (255) を使った。以後の新規 RPC は EkmSync のコメントが指す
-    // 247-250 (ゲームモード同期用に空けてある予約枠) を使うか、既存 ID の sub-op 多重化
+    // 248-250 (ゲームモード同期用に空けてある予約枠) を使うか、既存 ID の sub-op 多重化
     // (EkmSync / ControllableSound と同じ形) で対応すること — 素朴な「末尾へ追記」はもうできない。
     EkrMeetingPick = 255
 
@@ -1452,6 +1456,11 @@ internal static class RPCHandlerPatch
                 case CustomRPC.LobbyDecorClear:
                 {
                     LobbyDecor.ReceiveClearRPC();
+                    break;
+                }
+                case CustomRPC.PlayVisualFx:
+                {
+                    ExplosionFx.ReceiveRPC(reader);
                     break;
                 }
             }

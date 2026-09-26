@@ -160,6 +160,7 @@ public class Ballooner : RoleBase
         bool suicideEnabled = Suicide.GetBool();
         bool targetImpostor = TargetImpostor.GetBool();
         float radius = NowBoomDis;
+        ExplosionFx.Play(ExplosionFx.Kind.Fire, pc.Pos(), radius);
 
         foreach (PlayerControl tg in Main.AllAlivePlayerControlsToList)
         {

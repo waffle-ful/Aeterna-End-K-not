@@ -351,6 +351,8 @@ public class Magician : RoleBase
         {
             foreach (KeyValuePair<Vector2, long> bomb in Bombs.Where(bomb => bomb.Value + BombDelay.GetInt() < now).ToArray())
             {
+                ExplosionFx.Play(ExplosionFx.Kind.Fire, bomb.Key, BombRadius.GetFloat());
+
                 foreach (PlayerControl tg in FastVector2.GetPlayersInRange(bomb.Key, BombRadius.GetFloat()))
                 {
                     if (tg.PlayerId == pc.PlayerId)
