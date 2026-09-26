@@ -312,6 +312,7 @@ public class Main : BasePlugin
     public static ConfigEntry<bool> TestBridgeAutoScreenshot { get; private set; }
     public static ConfigEntry<int> TestBridgeScreenshotInterval { get; private set; }
     public static ConfigEntry<int> TestBridgeScreenshotKeep { get; private set; }
+    public static ConfigEntry<string> TestBridgeInstance { get; private set; }
     public static ConfigEntry<bool> EnableAICommentary { get; private set; }
     public static ConfigEntry<bool> MapAtmosphere { get; private set; }
     public static ConfigEntry<bool> MapAtmosphereFlash { get; private set; }
@@ -667,6 +668,7 @@ public class Main : BasePlugin
         SlimVanillaTextures = Config.Bind("Client Options", "SlimVanillaTextures", false,"Try to shrink and compress a few oversized vanilla textures at runtime once the main menu is reached (TextureSlimmer): the judge-gavel animation frames (hammerSlam_01..06, 6 x 9MB uncompressed RGBA32) would be re-initialised in place at half resolution + BC3. DEFAULT OFF: on the current Windows build the engine refuses to re-initialise a non-readable texture (2026-09-02 measured: all 6 frames return false, originals untouched, ~100ms hitch at the menu for nothing). Kept as an opt-in probe for other platforms; the result is logged as TEXSLIM in EndKnot-Health.log.");
         TestBridgeAutoScreenshot = Config.Bind("Client Options", "TestBridgeAutoScreenshot", false, "When TestBridge is enabled, also capture a screenshot on a fixed interval (see TestBridgeScreenshotInterval) in addition to the manual 'screenshot' directive.");
         TestBridgeScreenshotInterval = Config.Bind("Client Options", "TestBridgeScreenshotInterval", 20, "Seconds between automatic screenshots when TestBridgeAutoScreenshot is on.");
+        TestBridgeInstance = Config.Bind("Client Options", "TestBridgeInstance", "", "Name for this game's TestBridge when several Among Us installs run on one PC. Empty = <Desktop>/EndKnot_Logs (default). Set e.g. 'steam' to use <Desktop>/EndKnot_Logs/bridge-steam/ instead, so each install gets its own bridge files. Letters, digits, '-' and '_' only.");
         TestBridgeScreenshotKeep = Config.Bind("Client Options", "TestBridgeScreenshotKeep", 30, "Max number of screenshots to keep under EndKnot_Logs/Screens (oldest deleted first).");
         MigrateLegacyBridgeConfig();
         EnableAICommentary = Config.Bind("Client Options", "EnableAICommentary", false, "Enable the AI commentary companion event layer: writes host-local JSON Lines events (join/leave/chat/intervention/phase/demo) to EndKnot_DATA/companion-events.jsonl for an external companion app to tail. No network sending. Also enables a lobby-idle auto demo of the viewer-intervention cutscene. When on, the companion app itself is also auto-launched as a child process (requires Python and the GEMINI_API_KEY environment variable; see EndKnot_DATA/companion/README). Default off.");

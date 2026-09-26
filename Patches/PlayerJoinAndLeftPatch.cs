@@ -62,6 +62,7 @@ internal static class OnGameJoinedPatch
 
         // 自動部屋立て直し: 新しい部屋に join した = 成功シグナル (旧 GameId と比較。内部でガード)
         Modules.AutoRehost.NotifyJoinedNewLobby();
+        Modules.AutoRejoin.OnGameJoined();
 
         // 新しいロビー = PlayerId 空間の振り直し。外見台帳は PlayerId をキーにしていて
         // セッションを跨いで意味を持たないので、持ち越すと無関係な新入りが前の部屋の別人の
