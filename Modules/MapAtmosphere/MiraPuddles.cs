@@ -2,7 +2,6 @@ using System.IO;
 using System.Reflection;
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using UnityEngine;
-using Random = UnityEngine.Random;
 
 namespace EndKnot.Modules.MapAtmosphere;
 
@@ -132,10 +131,10 @@ internal static class MiraPuddles
                 W = w,
                 Z = z,
                 Shape = shape,
-                Center = new Vector2(x, y),
+                Center = FxMath.V2(x, y),
                 Tint = wood ? WoodTint : ConcreteTint,
                 BaseSheen = wood ? WoodSheen : ConcreteSheen,
-                Timer = Random.Range(0f, 0.3f),
+                Timer = FxMath.Range(0f, 0.3f),
                 Ripples = new SpriteRenderer[RipplesPerPuddle],
                 RippleTf = new Transform[RipplesPerPuddle],
                 Age = new float[RipplesPerPuddle],
@@ -145,16 +144,16 @@ internal static class MiraPuddles
             };
 
             // 同じ形が並んでも見分けが付かないよう、左右反転と僅かな回転で崩す。
-            bool flip = Random.value < 0.5f;
-            float rot = Random.Range(-12f, 12f);
-            var scale = new Vector3(w * (flip ? -1f : 1f), w * Squash, 1f);
+            bool flip = FxMath.Value < 0.5f;
+            float rot = FxMath.Range(-12f, 12f);
+            var scale = FxMath.V3(w * (flip ? -1f : 1f), w * Squash, 1f);
 
-            p.Body = Make($"Puddle{i}", body[shape], new Vector3(x, y, z), scale, rot);
-            p.Sheen = Make($"Puddle{i}Sheen", sheen[shape], new Vector3(x, y, z - 0.01f), scale, rot);
+            p.Body = Make($"Puddle{i}", body[shape], FxMath.V3(x, y, z), scale, rot);
+            p.Sheen = Make($"Puddle{i}Sheen", sheen[shape], FxMath.V3(x, y, z - 0.01f), scale, rot);
 
             for (int r = 0; r < RipplesPerPuddle; r++)
             {
-                p.Ripples[r] = Make($"Puddle{i}Ripple{r}", ripple, new Vector3(x, y, z - 0.02f), Vector3.zero, 0f);
+                p.Ripples[r] = Make($"Puddle{i}Ripple{r}", ripple, FxMath.V3(x, y, z - 0.02f), Vector3.zero, 0f);
                 p.RippleTf[r] = p.Ripples[r].transform;
                 p.Age[r] = -1f;
             }
@@ -174,29 +173,29 @@ internal static class MiraPuddles
         Transform tf = go.transform;
         tf.SetParent(_root.transform, false);
         tf.localPosition = pos;
-        tf.localRotation = Quaternion.Euler(0f, 0f, rot);
+        tf.localRotation = FxMath.RotZ(rot);
         tf.localScale = scale;
         SpriteRenderer sr = go.AddComponent<SpriteRenderer>();
         sr.sprite = sprite;
-        sr.color = Color.clear;
+        sr.color = default;
         return sr;
     }
 
     // 雨が止みきった時に MiraStorm が呼ぶ。近くの誰も居ない水溜りを、見えない何かに歩かせる。
     public static void OnLull()
     {
-        if (!_root || _puddles == null || Random.value >= PhantomChance) return;
+        if (!_root || _puddles == null || FxMath.Value >= PhantomChance) return;
         if (LocalFeet() is not { } feet) return;
 
         Puddle p = Nearest(feet, 1.8f);
         if (p == null) return;
 
         _walkPuddle = p;
-        _walkDir = Random.insideUnitCircle.normalized;
-        if (_walkDir == Vector2.zero) _walkDir = Vector2.right;
+        float walkAng = FxMath.Range(0f, 2f * FxMath.PI);
+        _walkDir = FxMath.V2(FxMath.Cos(walkAng), FxMath.Sin(walkAng));
         _walkFrom = -_walkDir * WaterRadius;
         _walkStep = 0;
-        _walkTimer = Random.Range(0.5f, 1.5f);
+        _walkTimer = FxMath.Range(0.5f, 1.5f);
         Logger.Info($"MiraPuddles phantom walk puddle={System.Array.IndexOf(_puddles, p)}", "MiraStorm");
     }
 
@@ -227,17 +226,18 @@ internal static class MiraPuddles
             UpdateStain(p, dt, fade);
             Color t = p.Tint;
             // 光った瞬間は映り込みの筋だけを強く光らせる。濡れ色まで明るくすると周りの床と見分けが付かなくなる。
-            p.Body.color = new Color(t.r, t.g, t.b, t.a * fade);
-            p.Sheen.color = new Color(0.9f, 0.94f, 1f, Mathf.Min(1f, p.BaseSheen + glow * 1.6f) * fade);
+            p.Body.color = FxMath.Rgba(t.r, t.g, t.b, t.a * fade);
+            p.Sheen.color = FxMath.Rgba(0.9f, 0.94f, 1f, FxMath.Min(1f, p.BaseSheen + glow * 1.6f) * fade);
 
             // 雨粒の波紋: 小さな楕円の輪を水溜りの内側に落とし、広げながら消す。
             p.Timer -= dt;
 
             if (p.Timer <= 0f)
             {
-                p.Timer = Random.Range(0.1f, 0.3f) / p.W / Mathf.Max(rain, 0.05f);
-                Vector2 off = Random.insideUnitCircle * (WaterRadius * 0.8f);
-                Spawn(p, p.Center + new Vector2(off.x * p.W, off.y * p.W * Squash), RainRipple);
+                p.Timer = FxMath.Range(0.1f, 0.3f) / p.W / FxMath.Max(rain, 0.05f);
+                Vector2 off = FxMath.InsideUnitCircle();
+                float reach = WaterRadius * 0.8f * p.W;
+                Spawn(p, FxMath.V2(p.Center.x + off.x * reach, p.Center.y + off.y * reach * Squash), RainRipple);
             }
 
             for (int r = 0; r < p.Ripples.Length; r++)
@@ -249,14 +249,14 @@ internal static class MiraPuddles
                 if (k >= 1f)
                 {
                     p.Age[r] = -1f;
-                    p.Ripples[r].color = Color.clear;
+                    p.Ripples[r].color = default;
                     continue;
                 }
 
-                float size = Mathf.Lerp(0.08f, p.Size[r], 1f - (1f - k) * (1f - k));
-                p.RippleTf[r].localScale = new Vector3(size, size * Squash, 1f);
+                float size = FxMath.Lerp(0.08f, p.Size[r], 1f - (1f - k) * (1f - k));
+                p.RippleTf[r].localScale = FxMath.V3(size, size * Squash, 1f);
                 float a = (1f - k) * p.Alpha[r] * fade;
-                p.Ripples[r].color = new Color(0.85f, 0.9f, 1f, Mathf.Min(1f, a + glow * 0.3f * (1f - k)));
+                p.Ripples[r].color = FxMath.Rgba(0.85f, 0.9f, 1f, FxMath.Min(1f, a + glow * 0.3f * (1f - k)));
             }
         }
 
@@ -268,7 +268,8 @@ internal static class MiraPuddles
     {
         if (LocalFeet() is not { } feet) return;
 
-        bool moving = (feet - _lastFeet).magnitude > dt * 0.5f;
+        float mx = feet.x - _lastFeet.x, my = feet.y - _lastFeet.y;
+        bool moving = mx * mx + my * my > dt * 0.5f * (dt * 0.5f);
         _lastFeet = feet;
 
         if ((_stepTimer -= dt) > 0f) return;
@@ -281,8 +282,9 @@ internal static class MiraPuddles
             return;
         }
 
-        Spawn(p, feet + Random.insideUnitCircle * 0.03f, moving ? StepRipple : StandRipple);
-        _stepTimer = moving ? 0.26f : Random.Range(1.2f, 1.8f);
+        Vector2 jitter = FxMath.InsideUnitCircle();
+        Spawn(p, FxMath.V2(feet.x + jitter.x * 0.03f, feet.y + jitter.y * 0.03f), moving ? StepRipple : StandRipple);
+        _stepTimer = moving ? 0.26f : FxMath.Range(1.2f, 1.8f);
     }
 
     private static void UpdateWalk(float dt)
@@ -291,11 +293,11 @@ internal static class MiraPuddles
 
         Puddle p = _walkPuddle;
         // 左右の足を交互に、進行方向と直角へ少しずらす。
-        var side = new Vector2(-_walkDir.y, _walkDir.x) * (0.05f * (_walkStep % 2 == 0 ? 1f : -1f));
+        var side = FxMath.V2(-_walkDir.y, _walkDir.x) * (0.05f * (_walkStep % 2 == 0 ? 1f : -1f));
         Vector2 local = _walkFrom + _walkDir * (WaterRadius * 2f * _walkStep / (WalkSteps - 1)) + side;
-        Spawn(p, p.Center + new Vector2(local.x * p.W, local.y * p.W * Squash), PhantomRipple);
+        Spawn(p, p.Center + FxMath.V2(local.x * p.W, local.y * p.W * Squash), PhantomRipple);
 
-        _walkTimer = WalkInterval * Random.Range(0.9f, 1.15f);
+        _walkTimer = WalkInterval * FxMath.Range(0.9f, 1.15f);
         if (++_walkStep >= WalkSteps) _walkPuddle = null;
     }
 
@@ -326,21 +328,21 @@ internal static class MiraPuddles
         {
             p.StainTex = new Texture2D(StainRes, StainRes, TextureFormat.ARGB32, false) { wrapMode = TextureWrapMode.Clamp, hideFlags = HideFlags.HideAndDontSave };
             p.StainPixels = new Il2CppStructArray<Color32>((long)(StainRes * StainRes));
-            Sprite sprite = Sprite.Create(p.StainTex, new Rect(0f, 0f, StainRes, StainRes), new Vector2(0.5f, 0.5f), StainRes, 0, SpriteMeshType.FullRect);
+            Sprite sprite = Sprite.Create(p.StainTex, new Rect(0f, 0f, StainRes, StainRes), FxMath.V2(0.5f, 0.5f), StainRes, 0, SpriteMeshType.FullRect);
             sprite.hideFlags |= HideFlags.HideAndDontSave;
             // 水溜りの子にして、反転・回転・縦潰しを水の形とそろえる。濡れ色より手前・ツヤの筋より奥。
             p.StainSr = Make($"Puddle{System.Array.IndexOf(_puddles, p)}Stain", sprite, Vector3.zero, Vector3.one, 0f);
             p.StainSr.transform.SetParent(p.Body.transform, false);
-            p.StainSr.transform.localPosition = new Vector3(0f, 0f, -0.005f);
+            p.StainSr.transform.localPosition = FxMath.V3(0f, 0f, -0.005f);
         }
 
         // 飛沫の色そのままだと濡れた床の上で浮くので、少し沈めて水の色に寄せる。
-        p.StainColor = new Color(c.r * 0.7f, c.g * 0.7f, c.b * 0.7f, 1f);
+        p.StainColor = FxMath.Rgba(c.r * 0.7f, c.g * 0.7f, c.b * 0.7f, 1f);
         Vector3 local = p.Body.transform.InverseTransformPoint(world);
-        p.StainOrigin = new Vector2((local.x + 0.5f) * StainRes, (local.y + 0.5f) * StainRes);
-        p.Phase1 = Random.Range(0f, 6.3f);
-        p.Phase2 = Random.Range(0f, 6.3f);
-        p.Phase3 = Random.Range(0f, 6.3f);
+        p.StainOrigin = FxMath.V2((local.x + 0.5f) * StainRes, (local.y + 0.5f) * StainRes);
+        p.Phase1 = FxMath.Range(0f, 6.3f);
+        p.Phase2 = FxMath.Range(0f, 6.3f);
+        p.Phase3 = FxMath.Range(0f, 6.3f);
         p.StainAge = 0f;
         p.StainFade = 1f;
         p.StainRedraw = 0f;
@@ -352,25 +354,25 @@ internal static class MiraPuddles
     {
         if (p.StainAge < 0f) return;
 
-        p.StainFade = p.Stained ? 1f : Mathf.MoveTowards(p.StainFade, 0f, dt / StainClearSeconds);
+        p.StainFade = p.Stained ? 1f : FxMath.MoveTowards(p.StainFade, 0f, dt / StainClearSeconds);
 
         if (p.StainFade <= 0f)
         {
             p.StainAge = -1f;
-            p.StainSr.color = Color.clear;
+            p.StainSr.color = default;
             return;
         }
 
         Color c = p.StainColor;
         // 広がるにつれて色が深まる。
-        float deepen = 0.6f + 0.4f * Mathf.Clamp01(p.StainAge / StainSpreadSeconds);
-        p.StainSr.color = new Color(c.r, c.g, c.b, StainAlpha * deepen * p.StainFade * fade);
+        float deepen = 0.6f + 0.4f * FxMath.Clamp01(p.StainAge / StainSpreadSeconds);
+        p.StainSr.color = FxMath.Rgba(c.r, c.g, c.b, StainAlpha * deepen * p.StainFade * fade);
 
         if (p.StainAge >= StainSpreadSeconds) return; // 広がりきったら描き直さない
         p.StainAge += dt;
         if ((p.StainRedraw -= dt) > 0f && p.StainAge < StainSpreadSeconds) return;
         p.StainRedraw = 1f / 20f;
-        DrawStain(p, Mathf.Clamp01(p.StainAge / StainSpreadSeconds));
+        DrawStain(p, FxMath.Clamp01(p.StainAge / StainSpreadSeconds));
     }
 
     // 死体の下の小さな溜まりから、縁が波打つ輪でじわじわ押し出す。縁の出っ張りは方向ごとに伸びる速さが違い、
@@ -379,7 +381,7 @@ internal static class MiraPuddles
     private static void DrawStain(Puddle p, float k)
     {
         byte[] water = WaterAlpha(p.Shape);
-        float radius = StainRes * 0.95f * (0.08f + 0.92f * Mathf.Pow(k, 0.8f));
+        float radius = StainRes * 0.95f * (0.08f + 0.92f * FxMath.Pow(k, 0.8f));
         float wobble = 0.12f + 0.18f * k; // 進むほど縁の凸凹が育つ
         float drift = p.StainAge * 0.15f; // 出っ張りの向きがゆっくり移ろう
         Il2CppStructArray<Color32> px = p.StainPixels;
@@ -394,19 +396,19 @@ internal static class MiraPuddles
 
                 if (a == 0)
                 {
-                    px[i] = new Color32(255, 255, 255, 0);
+                    px[i] = FxMath.Rgba32(255, 255, 255, 0);
                     continue;
                 }
 
                 float dx = x + 0.5f - p.StainOrigin.x;
-                float d = Mathf.Sqrt(dx * dx + dy * dy);
-                float th = Mathf.Atan2(dy, dx);
-                float shape = Mathf.Sin(3f * th + p.Phase1 + drift) + 0.55f * Mathf.Sin(5f * th + p.Phase2 - drift * 1.3f) + 0.3f * Mathf.Sin(9f * th + p.Phase3 + drift * 0.7f);
+                float d = FxMath.Sqrt(dx * dx + dy * dy);
+                float th = FxMath.Atan2(dy, dx);
+                float shape = FxMath.Sin(3f * th + p.Phase1 + drift) + 0.55f * FxMath.Sin(5f * th + p.Phase2 - drift * 1.3f) + 0.3f * FxMath.Sin(9f * th + p.Phase3 + drift * 0.7f);
                 float edge = radius * (1f + wobble * shape);
-                float m = Mathf.Clamp01((edge - d) / 5f);
-                float core = 0.65f + 0.35f * Mathf.Clamp01(1f - d / Mathf.Max(edge, 1f)); // 起点ほど濃い
-                float rim = 0.3f * Mathf.Clamp01(1f - Mathf.Abs(edge - d - 3f) / 3f); // 縁の盛り上がり
-                px[i] = new Color32(255, 255, 255, (byte)Mathf.Min(255f, a * m * (core + rim)));
+                float m = FxMath.Clamp01((edge - d) / 5f);
+                float core = 0.65f + 0.35f * FxMath.Clamp01(1f - d / FxMath.Max(edge, 1f)); // 起点ほど濃い
+                float rim = 0.3f * FxMath.Clamp01(1f - FxMath.Abs(edge - d - 3f) / 3f); // 縁の盛り上がり
+                px[i] = FxMath.Rgba32(255, 255, 255, (byte)FxMath.Min(255f, a * m * (core + rim)));
             }
         }
 
@@ -488,11 +490,11 @@ internal static class MiraPuddles
         if (slot < 0) return;
         p.Age[slot] = 0f;
         // 同じ大きさの輪が並ぶと機械的に見えるので、1つずつ大きさと寿命を散らす。
-        p.Life[slot] = kind.Life * Random.Range(0.85f, 1.15f);
-        p.Size[slot] = kind.Size * Random.Range(0.75f, 1.25f);
+        p.Life[slot] = kind.Life * FxMath.Range(0.85f, 1.15f);
+        p.Size[slot] = kind.Size * FxMath.Range(0.75f, 1.25f);
         p.Alpha[slot] = kind.Alpha;
-        p.RippleTf[slot].localPosition = new Vector3(pos.x, pos.y, p.Z - 0.02f);
-        p.RippleTf[slot].localScale = Vector3.zero;
+        p.RippleTf[slot].localPosition = FxMath.V3(pos.x, pos.y, p.Z - 0.02f);
+        p.RippleTf[slot].localScale = default;
     }
 
     // 生きている自分の足元 (船のローカル座標)。幽霊は浮いているので水を踏まない。
@@ -500,7 +502,9 @@ internal static class MiraPuddles
     {
         PlayerControl lp = PlayerControl.LocalPlayer;
         if (!lp || lp.Data == null || lp.Data.IsDead || lp.inVent) return null;
-        return _root.transform.InverseTransformPoint(lp.GetTruePosition());
+        Vector2 tp = lp.GetTruePosition();
+        Vector3 local = _root.transform.InverseTransformPoint(FxMath.V3(tp.x, tp.y));
+        return FxMath.V2(local.x, local.y);
     }
 
     private static bool Contains(Puddle p, Vector2 pos)

@@ -4,7 +4,6 @@ using AmongUs.Data;
 using EndKnot.Patches.CalamityMenu;
 using HarmonyLib;
 using UnityEngine;
-using Random = UnityEngine.Random;
 
 namespace EndKnot.Modules.MapAtmosphere;
 
@@ -116,7 +115,9 @@ public static class MiraStorm
                 return;
             }
 
+            var alloc = AllocProbe.Now();
             Animate(Time.deltaTime);
+            AllocProbe.Mark("atmo.mira", alloc);
         }
         catch (Exception e)
         {
@@ -142,10 +143,10 @@ public static class MiraStorm
         _boltSprites = new Sprite[4];
         for (int i = 0; i < _boltSprites.Length; i++) _boltSprites[i] = Utils.LoadSprite(Res + $"bolt{i}.png", 256f);
         _bolt = MakeLayer("Bolt", _boltSprites[0], BoltZ, false, out _boltTf);
-        _bolt.color = new Color(1f, 1f, 1f, 0f);
+        _bolt.color = FxMath.Rgba(1f, 1f, 1f, 0f);
         _rainFar = MakeLayer("RainFar", Utils.LoadSprite(Res + "rain_far.png", 128f), RainFarZ, true, out _rainFarTf);
         _rainNear = MakeLayer("RainNear", Utils.LoadSprite(Res + "rain_near.png", 96f), RainNearZ, true, out _rainNearTf);
-        _rainFarTf.localRotation = _rainNearTf.localRotation = Quaternion.Euler(0f, 0f, RainAngle);
+        _rainFarTf.localRotation = _rainNearTf.localRotation = FxMath.RotZ(RainAngle);
 
         // 入場のたびに作り直すと Texture2D が孤立して残るので、1枚を使い回す (破棄済みなら作り直す)。
         if (!_solidSprite)
@@ -159,7 +160,7 @@ public static class MiraStorm
         _tint = MakeLayer("Tint", solid, TintZ, false, out _);
         _tint.color = TintColor;
         _flash = MakeLayer("Flash", solid, FlashZ, false, out _);
-        _flash.color = new Color(FlashColor.r, FlashColor.g, FlashColor.b, 0f);
+        _flash.color = FxMath.Rgba(FlashColor.r, FlashColor.g, FlashColor.b, 0f);
 
         MiraPuddles.Build(ship.transform);
 
@@ -175,21 +176,21 @@ public static class MiraStorm
 
         _rainFarOffset = _rainNearOffset = _skyDrift = 0f;
         _strikeTimer = 0f;
-        _nextStrike = Random.Range(3f, 6f); // 入場直後に1回鳴らして嵐だと分からせる
+        _nextStrike = FxMath.Range(3f, 6f); // 入場直後に1回鳴らして嵐だと分からせる
         _strikeAge = -1f;
         _flickerAge = -1f;
         _flickerOnThunder = false;
 
         _lullPhase = Phase.None;
         _rain = 1f;
-        _lullTimer = Random.Range(40f, 75f);
+        _lullTimer = FxMath.Range(40f, 75f);
         _gustPhase = Phase.None;
         _gust = 0f;
-        _gustTimer = Random.Range(15f, 30f);
-        _swell = _swellTarget = Random.Range(0.7f, 1.1f);
-        _swellTimer = Random.Range(8f, 20f);
-        _windAngle = _windTarget = RainAngle + Random.Range(-4f, 4f);
-        _windTimer = Random.Range(10f, 25f);
+        _gustTimer = FxMath.Range(15f, 30f);
+        _swell = _swellTarget = FxMath.Range(0.7f, 1.1f);
+        _swellTimer = FxMath.Range(8f, 20f);
+        _windAngle = _windTarget = RainAngle + FxMath.Range(-4f, 4f);
+        _windTimer = FxMath.Range(10f, 25f);
 
         Animate(0f);
         Logger.Info("MiraStorm built", "MiraStorm");
@@ -200,7 +201,7 @@ public static class MiraStorm
         var go = new GameObject(name) { layer = 0 }; // Main Camera の cullingMask に Default(0) は含まれる
         tf = go.transform;
         tf.SetParent(_root.transform, false);
-        tf.localPosition = new Vector3(0f, 0f, z);
+        tf.localPosition = FxMath.V3(0f, 0f, z);
 
         SpriteRenderer sr = go.AddComponent<SpriteRenderer>();
         sr.sprite = sprite;
@@ -214,11 +215,11 @@ public static class MiraStorm
         if (!_cam) return;
 
         Vector3 camPos = _cam.transform.position;
-        _root.transform.position = new Vector3(camPos.x, camPos.y, camPos.z);
+        _root.transform.position = FxMath.V3(camPos.x, camPos.y, camPos.z);
 
         float h = _cam.orthographicSize * 2f;
         float w = h * _cam.aspect;
-        float cover = Mathf.Sqrt(w * w + h * h) * 1.15f; // 回転した雨層でも画面の四隅を覆う
+        float cover = FxMath.Sqrt(w * w + h * h) * 1.15f; // 回転した雨層でも画面の四隅を覆う
 
         UpdateLull(dt);
         UpdateGust(dt);
@@ -227,29 +228,30 @@ public static class MiraStorm
 
         // 空: カメラ位置の 15% だけ動く視差 + ゆっくりした横流れ (突風の間は速く流れる)。タイル1枚分で巻き戻す。
         _skyDrift += dt * (0.12f + 0.5f * _gust);
-        _sky.size = new Vector2(w + SkyTile * 2f, h + SkyTile * 2f);
-        float sx = -Mathf.Repeat(camPos.x * 0.15f + _skyDrift, SkyTile);
-        float sy = -Mathf.Repeat(camPos.y * 0.15f, SkyTile);
-        _skyTf.localPosition = new Vector3(sx + SkyTile * 0.5f, sy + SkyTile * 0.5f, SkyZ);
+        _sky.size = FxMath.V2(w + SkyTile * 2f, h + SkyTile * 2f);
+        float sx = -FxMath.Repeat(camPos.x * 0.15f + _skyDrift, SkyTile);
+        float sy = -FxMath.Repeat(camPos.y * 0.15f, SkyTile);
+        _skyTf.localPosition = FxMath.V3(sx + SkyTile * 0.5f, sy + SkyTile * 0.5f, SkyZ);
 
         // 雨: 層ごとに落下速度を変えて奥行きを出す。風が強いほど傾いて速くなり、雨脚が強いほど少し速く落ちる。
         float speed = (0.8f + 0.2f * _swell) * (1f + 0.35f * _gust);
-        _rainFarTf.localRotation = _rainNearTf.localRotation = Quaternion.Euler(0f, 0f, _windAngle + GustAngle * _gust);
-        _rainFarOffset = Mathf.Repeat(_rainFarOffset + dt * 7f * speed, RainFarTile);
-        _rainNearOffset = Mathf.Repeat(_rainNearOffset + dt * 12f * speed, RainNearTile);
-        _rainFar.size = new Vector2(cover + RainFarTile * 2f, cover + RainFarTile * 2f);
-        _rainNear.size = new Vector2(cover + RainNearTile * 2f, cover + RainNearTile * 2f);
-        _rainFarTf.localPosition = (Vector3)(_rainFarTf.localRotation * new Vector3(0f, -_rainFarOffset, 0f)) + new Vector3(0f, 0f, RainFarZ);
-        _rainNearTf.localPosition = (Vector3)(_rainNearTf.localRotation * new Vector3(0f, -_rainNearOffset, 0f)) + new Vector3(0f, 0f, RainNearZ);
+        float rainAngle = _windAngle + GustAngle * _gust;
+        _rainFarTf.localRotation = _rainNearTf.localRotation = FxMath.RotZ(rainAngle);
+        _rainFarOffset = FxMath.Repeat(_rainFarOffset + dt * 7f * speed, RainFarTile);
+        _rainNearOffset = FxMath.Repeat(_rainNearOffset + dt * 12f * speed, RainNearTile);
+        _rainFar.size = FxMath.V2(cover + RainFarTile * 2f, cover + RainFarTile * 2f);
+        _rainNear.size = FxMath.V2(cover + RainNearTile * 2f, cover + RainNearTile * 2f);
+        _rainFarTf.localPosition = FxMath.RotateZ(rainAngle, 0f, -_rainFarOffset, RainFarZ);
+        _rainNearTf.localPosition = FxMath.RotateZ(rainAngle, 0f, -_rainNearOffset, RainNearZ);
 
-        _tint.transform.localScale = _flash.transform.localScale = new Vector3(w * 1.3f, h * 1.3f, 1f);
+        _tint.transform.localScale = _flash.transform.localScale = FxMath.V3(w * 1.3f, h * 1.3f, 1f);
 
-        _outdoor = Mathf.MoveTowards(_outdoor, OutdoorTarget(), dt * 1.2f);
-        _fadeIn = Mathf.MoveTowards(_fadeIn, 1f, dt / FadeInSeconds);
-        float nearAlpha = NearRainAlpha * Mathf.Lerp(0.12f, 1f, _outdoor) * rain * (1f + 0.6f * _gust);
-        _rainNear.color = new Color(1f, 1f, 1f, Mathf.Min(1f, nearAlpha) * _fadeIn);
-        _rainFar.color = new Color(1f, 1f, 1f, Mathf.Clamp(rain, 0.12f, 1f) * _fadeIn); // 奥の層は霧雨程度に残す
-        _tint.color = new Color(TintColor.r, TintColor.g, TintColor.b, (TintColor.a + Flicker(dt)) * _fadeIn);
+        _outdoor = FxMath.MoveTowards(_outdoor, OutdoorTarget(), dt * 1.2f);
+        _fadeIn = FxMath.MoveTowards(_fadeIn, 1f, dt / FadeInSeconds);
+        float nearAlpha = NearRainAlpha * FxMath.Lerp(0.12f, 1f, _outdoor) * rain * (1f + 0.6f * _gust);
+        _rainNear.color = FxMath.Rgba(1f, 1f, 1f, FxMath.Min(1f, nearAlpha) * _fadeIn);
+        _rainFar.color = FxMath.Rgba(1f, 1f, 1f, FxMath.Clamp(rain, 0.12f, 1f) * _fadeIn); // 奥の層は霧雨程度に残す
+        _tint.color = FxMath.Rgba(TintColor.r, TintColor.g, TintColor.b, (TintColor.a + Flicker(dt)) * _fadeIn);
         UpdateAudio(dt, rain);
 
         UpdateLightning(dt, w, h);
@@ -264,32 +266,32 @@ public static class MiraStorm
             float t = _strikeAge;
 
             // 稲妻本体: 点く→一瞬消える→再点灯して減衰 (二段の明滅)。
-            float bolt = t < 0.07f ? 1f : t < 0.12f ? 0.15f : Mathf.Clamp01(1f - (t - 0.12f) / (_strikeLen - 0.12f));
-            if (_doubleStrike && t is > 0.3f and < 0.38f) bolt = Mathf.Max(bolt, 0.9f);
+            float bolt = t < 0.07f ? 1f : t < 0.12f ? 0.15f : FxMath.Clamp01(1f - (t - 0.12f) / (_strikeLen - 0.12f));
+            if (_doubleStrike && t is > 0.3f and < 0.38f) bolt = FxMath.Max(bolt, 0.9f);
 
             // 画面フラッシュは本体より短く鋭く。空も同じ包絡で明るくする。
-            float flash = t < 0.05f ? 1f : t < 0.1f ? 0.25f : Mathf.Clamp01(1f - (t - 0.1f) / 0.25f) * 0.6f;
-            if (_doubleStrike && t is > 0.3f and < 0.36f) flash = Mathf.Max(flash, 0.7f);
+            float flash = t < 0.05f ? 1f : t < 0.1f ? 0.25f : FxMath.Clamp01(1f - (t - 0.1f) / 0.25f) * 0.6f;
+            if (_doubleStrike && t is > 0.3f and < 0.36f) flash = FxMath.Max(flash, 0.7f);
             if (Main.MapAtmosphereFlash?.Value != true) flash = 0f;
-            flash *= Mathf.Lerp(0.6f, 1f, _outdoor); // 室内では窓越しの光くらいに抑える
+            flash *= FxMath.Lerp(0.6f, 1f, _outdoor); // 室内では窓越しの光くらいに抑える
 
-            _glow = Mathf.Max(flash, bolt * 0.35f);
-            _bolt.color = new Color(1f, 1f, 1f, bolt);
-            _flash.color = new Color(FlashColor.r, FlashColor.g, FlashColor.b, flash * 0.32f);
-            float lit = 1f + Mathf.Max(bolt * 0.6f, flash * 1.4f);
-            _sky.color = new Color(Mathf.Min(1f, lit * 0.55f), Mathf.Min(1f, lit * 0.55f), Mathf.Min(1f, lit * 0.62f), _fadeIn);
+            _glow = FxMath.Max(flash, bolt * 0.35f);
+            _bolt.color = FxMath.Rgba(1f, 1f, 1f, bolt);
+            _flash.color = FxMath.Rgba(FlashColor.r, FlashColor.g, FlashColor.b, flash * 0.32f);
+            float lit = 1f + FxMath.Max(bolt * 0.6f, flash * 1.4f);
+            _sky.color = FxMath.Rgba(FxMath.Min(1f, lit * 0.55f), FxMath.Min(1f, lit * 0.55f), FxMath.Min(1f, lit * 0.62f), _fadeIn);
 
             if (_strikeAge >= _strikeLen + (_doubleStrike ? 0.3f : 0f))
             {
                 _strikeAge = -1f;
-                _bolt.color = new Color(1f, 1f, 1f, 0f);
-                _flash.color = new Color(FlashColor.r, FlashColor.g, FlashColor.b, 0f);
+                _bolt.color = FxMath.Rgba(1f, 1f, 1f, 0f);
+                _flash.color = FxMath.Rgba(FlashColor.r, FlashColor.g, FlashColor.b, 0f);
                 _glow = 0f;
             }
             return;
         }
 
-        _sky.color = new Color(0.55f, 0.55f, 0.62f, _fadeIn);
+        _sky.color = FxMath.Rgba(0.55f, 0.55f, 0.62f, _fadeIn);
 
         if (_lullPhase is Phase.Falling or Phase.Holding) return; // 凪の間は凪を破る1発まで落とさない
 
@@ -304,33 +306,33 @@ public static class MiraStorm
     private static void StartStrike(bool lullBreak, float w, float h)
     {
         _strikeTimer = 0f;
-        _nextStrike = Random.Range(7f, 20f);
-        float roll = lullBreak ? 1f : Random.value;
+        _nextStrike = FxMath.Range(7f, 20f);
+        float roll = lullBreak ? 1f : FxMath.Value;
 
         if (roll < 0.15f)
         {
             // 見えないところで落ちた: 遠雷だけ
             _thunderNear = false;
-            _thunderDelay = Random.Range(0.1f, 0.6f);
+            _thunderDelay = FxMath.Range(0.1f, 0.6f);
             _flickerOnThunder = false;
             Logger.Info("MiraStorm rumble only", "MiraStorm");
             return;
         }
 
         _strikeAge = 0f;
-        _strikeLen = Random.Range(0.45f, 0.7f);
-        _doubleStrike = Random.value < (lullBreak ? 0.6f : 0.3f);
+        _strikeLen = FxMath.Range(0.45f, 0.7f);
+        _doubleStrike = FxMath.Value < (lullBreak ? 0.6f : 0.3f);
 
-        _bolt.sprite = _boltSprites[Random.Range(0, _boltSprites.Length)];
-        _bolt.flipX = Random.value < 0.5f;
+        _bolt.sprite = _boltSprites[FxMath.Range(0, _boltSprites.Length)];
+        _bolt.flipX = FxMath.Value < 0.5f;
         float scale = h * 1.15f / 3f; // bolt*.png は 768px / ppu256 = 3 unit の高さ
-        _boltTf.localScale = new Vector3(scale, scale, 1f);
-        _boltTf.localPosition = new Vector3(Random.Range(-w * 0.4f, w * 0.4f), h * 0.05f, BoltZ);
+        _boltTf.localScale = FxMath.V3(scale, scale, 1f);
+        _boltTf.localPosition = FxMath.V3(FxMath.Range(-w * 0.4f, w * 0.4f), h * 0.05f, BoltZ);
 
         // 近い雷ほど光ってから鳴るまでが短い。
-        _thunderNear = lullBreak || Random.value < 0.45f;
-        _thunderDelay = lullBreak ? Random.Range(0.08f, 0.2f) : _thunderNear ? Random.Range(0.15f, 0.5f) : Random.Range(1.2f, 2.8f);
-        _flickerOnThunder = _thunderNear && (lullBreak || Random.value < 0.5f);
+        _thunderNear = lullBreak || FxMath.Value < 0.45f;
+        _thunderDelay = lullBreak ? FxMath.Range(0.08f, 0.2f) : _thunderNear ? FxMath.Range(0.15f, 0.5f) : FxMath.Range(1.2f, 2.8f);
+        _flickerOnThunder = _thunderNear && (lullBreak || FxMath.Value < 0.5f);
 
         if (roll < 0.27f) // 光るだけで鳴らない
         {
@@ -349,14 +351,14 @@ public static class MiraStorm
                 if (_strikeAge >= 0f || _thunderDelay >= 0f || (_lullTimer -= dt) > 0f) break;
                 _lullPhase = Phase.Falling;
                 // 毎回無音まで落とさず、小降りで止まる浅い凪も混ぜる。
-                _lullFloor = Random.value < 0.6f ? Random.Range(0.03f, DeepLull) : Random.Range(0.18f, 0.35f);
+                _lullFloor = FxMath.Value < 0.6f ? FxMath.Range(0.03f, DeepLull) : FxMath.Range(0.18f, 0.35f);
                 Logger.Info($"MiraStorm lull begins floor={_lullFloor:0.00}", "MiraStorm");
                 break;
             case Phase.Falling:
-                _rain = Mathf.MoveTowards(_rain, _lullFloor, dt / 3.5f);
+                _rain = FxMath.MoveTowards(_rain, _lullFloor, dt / 3.5f);
                 if (_rain > _lullFloor) break;
                 _lullPhase = Phase.Holding;
-                _lullHold = Random.Range(5f, 9f);
+                _lullHold = FxMath.Range(5f, 9f);
                 if (_lullFloor < DeepLull) MiraPuddles.OnLull();
                 break;
             case Phase.Holding:
@@ -366,10 +368,10 @@ public static class MiraStorm
                 StartStrike(true, h * _cam.aspect, h);
                 break;
             case Phase.Rising:
-                _rain = Mathf.MoveTowards(_rain, 1f, dt / 0.8f);
+                _rain = FxMath.MoveTowards(_rain, 1f, dt / 0.8f);
                 if (_rain < 1f) break;
                 _lullPhase = Phase.None;
-                _lullTimer = Random.Range(45f, 90f);
+                _lullTimer = FxMath.Range(45f, 90f);
                 Logger.Info($"MiraStorm lull ends next={_lullTimer:0}s", "MiraStorm");
                 break;
         }
@@ -384,13 +386,13 @@ public static class MiraStorm
             case Phase.None:
                 if (calm || (_gustTimer -= dt) > 0f) break;
                 _gustPhase = Phase.Rising;
-                _gustHold = Random.Range(2f, 4f);
-                _gustPeak = Random.Range(0.45f, 1f);
+                _gustHold = FxMath.Range(2f, 4f);
+                _gustPeak = FxMath.Range(0.45f, 1f);
                 PlayWind();
                 Logger.Info($"MiraStorm gust peak={_gustPeak:0.00} wind={(_windSrc ? _windSrc.isPlaying : false)}", "MiraStorm");
                 break;
             case Phase.Rising:
-                _gust = Mathf.MoveTowards(_gust, _gustPeak, dt / 1.8f);
+                _gust = FxMath.MoveTowards(_gust, _gustPeak, dt / 1.8f);
                 if (calm) _gustPhase = Phase.Falling;
                 else if (_gust >= _gustPeak) _gustPhase = Phase.Holding;
                 break;
@@ -398,10 +400,10 @@ public static class MiraStorm
                 if (calm || (_gustHold -= dt) <= 0f) _gustPhase = Phase.Falling;
                 break;
             case Phase.Falling:
-                _gust = Mathf.MoveTowards(_gust, 0f, dt / 3f);
+                _gust = FxMath.MoveTowards(_gust, 0f, dt / 3f);
                 if (_gust > 0f) break;
                 _gustPhase = Phase.None;
-                _gustTimer = Random.Range(18f, 40f);
+                _gustTimer = FxMath.Range(18f, 40f);
                 break;
         }
     }
@@ -412,19 +414,19 @@ public static class MiraStorm
     {
         if (_lullPhase == Phase.None && (_swellTimer -= dt) <= 0f)
         {
-            _swellTimer = Random.Range(8f, 20f);
-            _swellTarget = Random.value < 0.2f ? Random.Range(1.1f, 1.3f) : Random.Range(0.5f, 1f); // ときどき一段強い本降り
+            _swellTimer = FxMath.Range(8f, 20f);
+            _swellTarget = FxMath.Value < 0.2f ? FxMath.Range(1.1f, 1.3f) : FxMath.Range(0.5f, 1f); // ときどき一段強い本降り
         }
 
-        _swell = Mathf.MoveTowards(_swell, _swellTarget, dt / 6f);
+        _swell = FxMath.MoveTowards(_swell, _swellTarget, dt / 6f);
 
         if ((_windTimer -= dt) <= 0f)
         {
-            _windTimer = Random.Range(10f, 25f);
-            _windTarget = RainAngle + Random.Range(-5f, 5f);
+            _windTimer = FxMath.Range(10f, 25f);
+            _windTarget = RainAngle + FxMath.Range(-5f, 5f);
         }
 
-        _windAngle = Mathf.MoveTowards(_windAngle, _windTarget, dt * 0.8f);
+        _windAngle = FxMath.MoveTowards(_windAngle, _windTarget, dt * 0.8f);
     }
 
     // 照明が落ちかけたような暗い瞬き。点滅なので画面フラッシュを切っている人には出さない。
@@ -441,7 +443,7 @@ public static class MiraStorm
         }
 
         float dim = t < 0.07f ? 0.55f : t < 0.13f ? 0.1f : t < 0.2f ? 0.45f : t < 0.34f ? 0.05f : 0.3f;
-        return dim * Mathf.Lerp(1f, 0.6f, _outdoor);
+        return dim * FxMath.Lerp(1f, 0.6f, _outdoor);
     }
 
     // RoomTracker は画面下の部屋名表示と同じ判定 (コライダー判定なので矩形近似より正確)。部屋外=廊下は null。
@@ -486,7 +488,7 @@ public static class MiraStorm
         AudioClip clip = GetClip("MiraWindGust");
         if (!clip) return;
         _windSrc.clip = clip;
-        _windSrc.pitch = Random.Range(0.92f, 1.06f);
+        _windSrc.pitch = FxMath.Range(0.92f, 1.06f);
         _windSrc.Play();
     }
 
@@ -508,10 +510,10 @@ public static class MiraStorm
                 }
             }
 
-            _rainSrc.volume = sfx * RainVolume * Mathf.Lerp(0.22f, 1f, _outdoor) * Mathf.Min(rainLevel, 1.15f) * (1f + 0.25f * _gust) * _fadeIn;
+            _rainSrc.volume = sfx * RainVolume * FxMath.Lerp(0.22f, 1f, _outdoor) * FxMath.Min(rainLevel, 1.15f) * (1f + 0.25f * _gust) * _fadeIn;
         }
 
-        if (_windSrc) _windSrc.volume = sfx * WindVolume * Mathf.Lerp(0.35f, 1f, _outdoor) * Mathf.Max(_rain, 0.1f) * _fadeIn;
+        if (_windSrc) _windSrc.volume = sfx * WindVolume * FxMath.Lerp(0.35f, 1f, _outdoor) * FxMath.Max(_rain, 0.1f) * _fadeIn;
 
         if (_thunderDelay < 0f) return;
         _thunderDelay -= dt;
@@ -525,8 +527,8 @@ public static class MiraStorm
         AudioClip clip = GetClip(_thunderNear ? "MiraThunderNear" : "MiraThunderFar");
         if (!clip) return;
 
-        float vol = (_thunderNear ? 0.9f : 0.6f) * Mathf.Lerp(0.55f, 1f, _outdoor);
-        _thunderSrc.pitch = Random.Range(0.9f, 1.08f);
+        float vol = (_thunderNear ? 0.9f : 0.6f) * FxMath.Lerp(0.55f, 1f, _outdoor);
+        _thunderSrc.pitch = FxMath.Range(0.9f, 1.08f);
         _thunderSrc.PlayOneShot(clip, sfx * vol);
     }
 
