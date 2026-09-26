@@ -1192,7 +1192,7 @@ internal static class ShapeshiftPatch
         }
     }
 
-    public static void Postfix(PlayerControl __instance)
+    public static void Postfix(PlayerControl __instance, [HarmonyArgument(0)] PlayerControl target)
     {
         // Set CNO name visible for modded clients after shapeshift
         // ⚠️ Hide() でホストから隠した CNO は対象外にする。スプライト適用の Shapeshift はこの Postfix を
@@ -1200,6 +1200,24 @@ internal static class ShapeshiftPatch
         // 保持者以外のホストにも見えてしまう
         if (__instance.PlayerId >= 200 && !CustomNetObject.IsHiddenFromHost(__instance.PlayerId))
             __instance.transform.FindChild("Names").FindChild("NameText_TMP").gameObject.SetActive(true);
+
+        // モッド客の画面では CNO の Visible が prefab 既定の false のまま残り、体が描画されない (2026-09-27 実測)。
+        // スプライト文字の CNO は名前だけ出せば足りるが、分身のように見た目がプレイヤーの CNO は体も起こす
+        // (ホスト側 CustomNetObject.EnsureHostVisible と同じ処理)。見た目用の Data 書き換え → Shapeshift → Data 復元は
+        // 1 パケットで順に処理されるので、ここで読む target の名前がその CNO に載せた見た目の名前になる。
+        if (__instance.PlayerId >= 200 && !AmongUsClient.Instance.AmHost && target && target.Data)
+        {
+            try
+            {
+                string shownName = target.Data.Outfits[PlayerOutfitType.Default].PlayerName;
+                if (shownName != null && shownName.StartsWith(CustomNetObject.SpriteNamePrefix, StringComparison.Ordinal)) return;
+
+                if (!__instance.Visible) __instance.Visible = true;
+                SpriteRenderer body = __instance.cosmetics.currentBodySprite.BodySprite;
+                if (body && !body.enabled) body.enabled = true;
+            }
+            catch (Exception e) { Utils.ThrowException(e); }
+        }
     }
 }
 

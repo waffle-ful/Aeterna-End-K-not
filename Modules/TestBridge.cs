@@ -464,6 +464,14 @@ public static class TestBridge
             return;
         }
 
+        // この端末から見た各 PlayerControl の描画状態 (客側で CNO の体が見えない等の切り分け用)。`pcprobe [minId]`
+        if (directive.StartsWith("pcprobe", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecutePcProbe(directive[7..].Trim()); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR pcprobe failed"); }
+            return;
+        }
+
         // Layer C: ホストの TP と HUD アクションボタン押下。
         if (directive.StartsWith("tp ", StringComparison.OrdinalIgnoreCase))
         {
@@ -2195,6 +2203,29 @@ public static class TestBridge
     }
 
     // ── Layer C: TP / HUD アクションボタン ─────────────────────────────
+
+    private static void ExecutePcProbe(string rest)
+    {
+        int minId = int.TryParse(rest, out int m) ? m : 0;
+        var n = 0;
+
+        foreach (PlayerControl pc in UnityEngine.Object.FindObjectsOfType<PlayerControl>())
+        {
+            if (!pc || pc.PlayerId < minId) continue;
+            n++;
+
+            try
+            {
+                SpriteRenderer body = pc.cosmetics ? pc.cosmetics.currentBodySprite?.BodySprite : null;
+                string bodyText = body ? $"enabled={body.enabled} active={body.gameObject.activeInHierarchy} a={body.color.a:F2} sprite={(body.sprite ? body.sprite.name : "null")}" : "body=null";
+                Vector3 p = pc.transform.position;
+                WriteOut($"PCPROBE id={pc.PlayerId} net={pc.NetId} data={(pc.Data ? "ok" : "null")} inList={PlayerControl.AllPlayerControls.Contains(pc)} visible={pc.Visible} goActive={pc.gameObject.activeInHierarchy} cosActive={(pc.cosmetics ? pc.cosmetics.gameObject.activeInHierarchy : false)} invAlpha={pc.invisibilityAlpha:F2} appearInv={pc.shouldAppearInvisible} {bodyText} pos=[{p.x:F2},{p.y:F2},{p.z:F2}]");
+            }
+            catch (Exception e) { WriteOut($"PCPROBE id={pc.PlayerId} ERR {e.GetType().Name}: {e.Message}"); }
+        }
+
+        WriteOut($"OK pcprobe {n} controls (all={PlayerControl.AllPlayerControls.Count})");
+    }
 
     private static void ExecuteFx(string rest)
     {

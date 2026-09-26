@@ -182,8 +182,8 @@ internal static class EndGamePatch
             byte killerId = value.GetRealKiller();
             bool gmIsFm = Options.CurrentGameMode is CustomGameMode.FFA or CustomGameMode.StopAndGo;
             bool gmIsFmhh = gmIsFm || Options.CurrentGameMode is CustomGameMode.HotPotato or CustomGameMode.HideAndSeek or CustomGameMode.Speedrun or CustomGameMode.CaptureTheFlag or CustomGameMode.NaturalDisasters or CustomGameMode.RoomRush or CustomGameMode.KingOfTheZones or CustomGameMode.Quiz or CustomGameMode.TheMindGame or CustomGameMode.BedWars or CustomGameMode.Deathrace or CustomGameMode.Mingle or CustomGameMode.Snowdown;
-            sb.Append($"\n{secondsIn / 60:00}:{secondsIn % 60:00} {Main.AllPlayerNames[key]} ({(gmIsFmhh ? string.Empty : Utils.GetDisplayRoleName(key, pure: true))}{(gmIsFm ? string.Empty : Utils.GetSubRolesText(key, summary: true))}) [{Utils.GetVitalText(key)}]");
-            if (killerId != byte.MaxValue && killerId != key) sb.Append($"\n\t⇐ {Main.AllPlayerNames[killerId]} ({(gmIsFmhh ? string.Empty : Utils.GetDisplayRoleName(killerId, pure: true))}{(gmIsFm ? string.Empty : Utils.GetSubRolesText(killerId, summary: true))})");
+            sb.Append($"\n{secondsIn / 60:00}:{secondsIn % 60:00} {Main.AllPlayerNames.GetValueOrDefault(key, Utils.GetPlayerById(key)?.Data?.PlayerName ?? string.Empty)} ({(gmIsFmhh ? string.Empty : Utils.GetDisplayRoleName(key, pure: true))}{(gmIsFm ? string.Empty : Utils.GetSubRolesText(key, summary: true))}) [{Utils.GetVitalText(key)}]");
+            if (killerId != byte.MaxValue && killerId != key) sb.Append($"\n\t⇐ {Main.AllPlayerNames.GetValueOrDefault(killerId, Utils.GetPlayerById(killerId)?.Data?.PlayerName ?? string.Empty)} ({(gmIsFmhh ? string.Empty : Utils.GetDisplayRoleName(killerId, pure: true))}{(gmIsFm ? string.Empty : Utils.GetSubRolesText(killerId, summary: true))})");
         }
 
         KillLog = sb.Append("</size>").ToString();
@@ -408,7 +408,7 @@ internal static class SetEverythingUpPatch
                 {
                     byte winnerId = CustomWinnerHolder.WinnerIds.FirstOrDefault();
                     __instance.BackgroundBar.material.color = new Color32(0, 255, 255, 255);
-                    winnerText.text = FreeForAll.FFATeamMode.GetBool() ? string.Empty : Main.AllPlayerNames[winnerId] + GetString("Win");
+                    winnerText.text = FreeForAll.FFATeamMode.GetBool() ? string.Empty : Main.AllPlayerNames.GetValueOrDefault(winnerId, Utils.GetPlayerById(winnerId)?.Data?.PlayerName ?? string.Empty) + GetString("Win");
                     winnerText.color = Main.PlayerColors[winnerId];
                     goto EndOfText;
                 }
@@ -416,7 +416,7 @@ internal static class SetEverythingUpPatch
                 {
                     byte winnerId = CustomWinnerHolder.WinnerIds.FirstOrDefault();
                     __instance.BackgroundBar.material.color = new Color32(0, 255, 165, 255);
-                    winnerText.text = Main.AllPlayerNames[winnerId] + GetString("Win");
+                    winnerText.text = Main.AllPlayerNames.GetValueOrDefault(winnerId, Utils.GetPlayerById(winnerId)?.Data?.PlayerName ?? string.Empty) + GetString("Win");
                     winnerText.color = Main.PlayerColors[winnerId];
                     goto EndOfText;
                 }
@@ -424,7 +424,7 @@ internal static class SetEverythingUpPatch
                 {
                     byte winnerId = CustomWinnerHolder.WinnerIds.FirstOrDefault();
                     __instance.BackgroundBar.material.color = new Color32(232, 205, 70, 255);
-                    winnerText.text = Main.AllPlayerNames[winnerId] + GetString("Win");
+                    winnerText.text = Main.AllPlayerNames.GetValueOrDefault(winnerId, Utils.GetPlayerById(winnerId)?.Data?.PlayerName ?? string.Empty) + GetString("Win");
                     winnerText.color = Main.PlayerColors[winnerId];
                     goto EndOfText;
                 }
@@ -432,7 +432,7 @@ internal static class SetEverythingUpPatch
                 {
                     byte winnerId = CustomWinnerHolder.WinnerIds.FirstOrDefault();
                     __instance.BackgroundBar.material.color = Utils.GetRoleColor(CustomRoles.Speedrunner);
-                    winnerText.text = Main.AllPlayerNames[winnerId] + GetString("Win");
+                    winnerText.text = Main.AllPlayerNames.GetValueOrDefault(winnerId, Utils.GetPlayerById(winnerId)?.Data?.PlayerName ?? string.Empty) + GetString("Win");
                     winnerText.color = Main.PlayerColors[winnerId];
                     goto EndOfText;
                 }
@@ -452,7 +452,7 @@ internal static class SetEverythingUpPatch
                     if (CustomWinnerHolder.WinnerIds.Count <= 1)
                     {
                         byte winnerId = CustomWinnerHolder.WinnerIds.FirstOrDefault();
-                        winnerText.text = Main.AllPlayerNames[winnerId] + GetString("Win");
+                        winnerText.text = Main.AllPlayerNames.GetValueOrDefault(winnerId, Utils.GetPlayerById(winnerId)?.Data?.PlayerName ?? string.Empty) + GetString("Win");
                         winnerText.color = Main.PlayerColors[winnerId];
                     }
                     else
@@ -467,7 +467,7 @@ internal static class SetEverythingUpPatch
                 {
                     byte winnerId = CustomWinnerHolder.WinnerIds.FirstOrDefault();
                     __instance.BackgroundBar.material.color = new Color32(255, 171, 27, 255);
-                    winnerText.text = Main.AllPlayerNames[winnerId] + GetString("Win");
+                    winnerText.text = Main.AllPlayerNames.GetValueOrDefault(winnerId, Utils.GetPlayerById(winnerId)?.Data?.PlayerName ?? string.Empty) + GetString("Win");
                     winnerText.color = Main.PlayerColors[winnerId];
                     goto EndOfText;
                 }
@@ -483,7 +483,7 @@ internal static class SetEverythingUpPatch
                 {
                     byte winnerId = CustomWinnerHolder.WinnerIds.FirstOrDefault();
                     __instance.BackgroundBar.material.color = Utils.GetRoleColor(CustomRoles.QuizMaster);
-                    winnerText.text = Main.AllPlayerNames[winnerId] + GetString("Win");
+                    winnerText.text = Main.AllPlayerNames.GetValueOrDefault(winnerId, Utils.GetPlayerById(winnerId)?.Data?.PlayerName ?? string.Empty) + GetString("Win");
                     winnerText.color = Main.PlayerColors[winnerId];
                     goto EndOfText;
                 }
@@ -506,7 +506,7 @@ internal static class SetEverythingUpPatch
                 {
                     byte winnerId = CustomWinnerHolder.WinnerIds.FirstOrDefault();
                     __instance.BackgroundBar.material.color = Utils.GetRoleColor(CustomRoles.Racer);
-                    winnerText.text = Main.AllPlayerNames[winnerId] + GetString("Win");
+                    winnerText.text = Main.AllPlayerNames.GetValueOrDefault(winnerId, Utils.GetPlayerById(winnerId)?.Data?.PlayerName ?? string.Empty) + GetString("Win");
                     winnerText.color = Main.PlayerColors[winnerId];
                     goto EndOfText;
                 }
@@ -516,7 +516,7 @@ internal static class SetEverythingUpPatch
                     {
                         byte winnerId = CustomWinnerHolder.WinnerIds.FirstOrDefault();
                         __instance.BackgroundBar.material.color = Utils.GetRoleColor(CustomRoles.MinglePlayer);
-                        winnerText.text = Main.AllPlayerNames[winnerId] + GetString("Win");
+                        winnerText.text = Main.AllPlayerNames.GetValueOrDefault(winnerId, Utils.GetPlayerById(winnerId)?.Data?.PlayerName ?? string.Empty) + GetString("Win");
                         winnerText.color = Main.PlayerColors[winnerId];
                     }
                     else
