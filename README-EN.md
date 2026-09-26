@@ -249,7 +249,7 @@ End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/End
 - **[Mini.RegionInstall](https://github.com/miniduikboot/Mini.RegionInstall)** (miniduikboot, GPL-3.0) — custom region installer
 - **[MiraAPI](https://github.com/All-Of-Us-Mods/MiraAPI)** (All-Of-Us-Mods, LGPL-2.1) — UI sprites (two next-page buttons, two checkmarks)
 - **[More Gamemodes](https://github.com/Rabek009/MoreGamemodes)** (Rabek009) — Custom Net Objects (CNO), chat control and clearing, player-control helper code
-- **[Nebula on the Ship (NoS)](https://github.com/Dolly1016/Nebula)** (Dolly1016 et al., GPL-3.0; NebulaAPI is LGPL-3.0) — disabling incremental GC and running GC ahead of time; a mod with many roles of its own and its own API
+- **[Nebula on the Ship (NoS)](https://github.com/Dolly1016/Nebula)** / [source code (Nebula-Public)](https://github.com/Dolly1016/Nebula-Public) (Dolly1016 et al., GPL-3.0; NebulaAPI is LGPL-3.0) — disabling incremental GC and running GC ahead of time; a mod with many roles of its own and its own API
 - **[Reactor](https://github.com/NuclearPowered/Reactor)** / [XtraCube fork](https://github.com/XtraCube/Reactor) — modded handshake, compiler-generated object and state machine wrappers, disabling the 5s timeout on custom servers
 - **[Revolutionary Host Roles](https://github.com/sansaaaaai/Revolutionary-host-roles)** (sansaaaaai) — a TOH-lineage mod adding its own roles and host-side features
 - **[Stellar Roles](https://github.com/Mr-Fluuff/StellarRolesAU)** (Mr-Fluuff) — an Among Us role mod with a large set of original roles
