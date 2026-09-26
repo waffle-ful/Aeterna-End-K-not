@@ -98,8 +98,8 @@ android {
         minSdk = 27
         targetSdk = 36
         applicationId = "dev.waffleful.endknot"
-        versionCode = 90900
-        versionName = "0.9.9-beta"
+        versionCode = 91000
+        versionName = "0.9.10-beta"
         ndk {
             abiFilters.add("arm64-v8a")
             // abiFilters.add("armeabi-v7a")
