@@ -217,6 +217,8 @@ public class EvilJumper : RoleBase
         float range = JumpRangeTable.TryGetValue(JumpRange.GetInt(), out float r) ? r : 0f;
         if (range <= 0f) return;
 
+        EndKnot.Modules.ExplosionFx.Play(EndKnot.Modules.ExplosionFx.Kind.Fire, pc.Pos(), range);
+
         foreach (PlayerControl tg in Main.AllAlivePlayerControlsToList)
         {
             if (tg.PlayerId == pc.PlayerId) continue;

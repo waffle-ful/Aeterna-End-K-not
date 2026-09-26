@@ -168,6 +168,9 @@ public class Fireworker : RoleBase
                 Logger.Info("Explode fireworks", "Fireworker");
                 var suicide = false;
 
+                foreach (Vector3 pos in fireworksPosition)
+                    ExplosionFx.Play(ExplosionFx.Kind.Fire, pos, FireworksRadius);
+
                 foreach (PlayerControl target in Main.EnumerateAlivePlayerControls())
                 {
                     foreach (Vector3 pos in fireworksPosition)

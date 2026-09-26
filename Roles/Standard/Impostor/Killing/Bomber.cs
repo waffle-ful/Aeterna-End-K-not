@@ -142,6 +142,7 @@ internal class Bomber : RoleBase
         CustomSoundsManager.RPCPlayCustomSoundAll("Boom");
 
         float radius = IsNuker ? NukeRadius.GetFloat() : BomberRadius.GetFloat();
+        ExplosionFx.Play(ExplosionFx.Kind.Fire, pc.Pos(), radius);
 
         var murderCount = 0;
 

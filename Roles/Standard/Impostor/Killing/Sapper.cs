@@ -137,6 +137,8 @@ public class Sapper : RoleBase
         CountdownTimer timer = null;
         timer = new CountdownTimer(Delay.GetInt(), () =>
         {
+            ExplosionFx.Play(ExplosionFx.Kind.Fire, pos, Radius.GetFloat());
+
             foreach (PlayerControl tg in FastVector2.GetPlayersInRange(pos, Radius.GetFloat()))
             {
                 if (tg.PlayerId == pc.PlayerId)

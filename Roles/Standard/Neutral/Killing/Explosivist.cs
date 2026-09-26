@@ -106,6 +106,7 @@ public class Explosivist : RoleBase
 
         if (Explosive != null && (ExplodeTS <= Utils.TimeStamp || !pc.IsAlive()))
         {
+            EndKnot.Modules.ExplosionFx.Play(EndKnot.Modules.ExplosionFx.Kind.Fire, Explosive.Position, ExplosionRadius.GetFloat());
             FastVector2.GetPlayersInRange(Explosive.Position, ExplosionRadius.GetFloat()).Without(pc).Do(x => x.Suicide(PlayerState.DeathReason.Bombed, pc));
 
             pc.RevertFreeze(RealPosition);
