@@ -86,11 +86,11 @@ public class Riptide : RoleBase
     private static Vector2 MapMax;
     private static Vector2 MapCenter;
 
-    // CNO 視覚オフセット (TMP bottom-center anchor 仕様):
-    //   FontSizeAbsolute=40 × 8 行 ≈ 53u 高さ → 半分 ~27u
-    private const float VisualVerticalOffset = 27f;
-    // スプライト視覚幅/高さ (size=40 で ~53u/CNO):
-    private const float VisualSpriteExtent = 53f;
+    // sub-CNO 1 枚の見た目の半幅/半高 (size=40 × 8 列 × 8 行、2026-09-26 実機でホスト画面から実測)。
+    // スプライトは sub-CNO の位置を中心に上下左右ほぼ対称に描かれる (縦のずれは無い)。
+    // 当たり判定はこの見た目の矩形を上限にする — 見た目より広い判定は「見えない波で即死」になる。
+    private const float SpriteHalfWidth = 11.8f;
+    private const float SpriteHalfHeight = 12.5f;
 
     public override bool IsEnable => On;
 
@@ -105,7 +105,6 @@ public class Riptide : RoleBase
         // AutoSetupOption は id+2 から開始
 
         setup
-            // 8×8 W グリッド size=20 で視覚 ~28u → 帯厚も 28u 相当 (半分 14)、波速度も少し速め
             .AutoSetupOption(ref BaseWaveSpeedOpt, 2.5f, new FloatValueRule(0.5f, 10f, 0.25f), OptionFormat.Multiplier)
             .AutoSetupOption(ref EnableAccelerationOpt, true)
             .AutoSetupOption(ref AccelerationRateOpt, 0.15f, new FloatValueRule(0f, 1f, 0.05f), OptionFormat.Multiplier, overrideParent: EnableAccelerationOpt)
@@ -114,8 +113,9 @@ public class Riptide : RoleBase
             .AutoSetupOption(ref MaxConcurrentDirectionsOpt, 3, new IntegerValueRule(1, 8, 1), OptionFormat.Times)
             .AutoSetupOption(ref CanKillManuallyOpt, true)
             .AutoSetupOption(ref KillCooldownOpt, 30, new IntegerValueRule(0, 120, 1), OptionFormat.Seconds, overrideParent: CanKillManuallyOpt)
-            .AutoSetupOption(ref WaveBandThicknessOpt, 60f, new FloatValueRule(0.5f, 120f, 0.5f), OptionFormat.Multiplier)
-            .AutoSetupOption(ref WaveLateralExtentOpt, 80f, new FloatValueRule(10f, 200f, 5f), OptionFormat.Multiplier)
+            // 帯厚・横幅は見た目の大きさ (進行方向 ±12u / 横 45u 前後) が上限で、それより狭める時だけ効く
+            .AutoSetupOption(ref WaveBandThicknessOpt, 12f, new FloatValueRule(0.5f, 120f, 0.5f), OptionFormat.Multiplier)
+            .AutoSetupOption(ref WaveLateralExtentOpt, 45f, new FloatValueRule(10f, 200f, 5f), OptionFormat.Multiplier)
             .AutoSetupOption(ref ShowPredictiveGhostOpt, false);
     }
 
@@ -469,18 +469,18 @@ public class Riptide : RoleBase
 
     private static bool IsPlayerInWave(PlayerControl target, RiptideWaveState wave)
     {
-        // TMP bottom-center anchor 仕様により、視覚スプライト中心は
-        // sub-CNO transform.position から +Y 方向に VisualVerticalOffset シフトする。
-        // wave.Position は sub-CNO 位置なので、ヒット判定は視覚中心を基準にすべき。
-        // この補正により「波に当たって見えるのに死なない」問題を解消 (2026-05-27)。
-        Vector2 visualCenter = wave.Position + new Vector2(0f, VisualVerticalOffset);
-        Vector2 delta = target.GetTruePosition() - visualCenter;
+        // 判定は見た目の矩形 (sub-CNO 群の外接矩形) を上限とし、オプションはそれより狭める時だけ効く。
+        bool horizontal = Mathf.Abs(wave.Direction.x) > 0.5f;
+        float visualHalfAlong = horizontal ? SpriteHalfWidth : SpriteHalfHeight;
+        float maxSubPerp = 0f;
+        foreach (Vector2 s in SubLayout) maxSubPerp = Mathf.Max(maxSubPerp, Mathf.Abs(s.x));
+        float visualHalfLateral = maxSubPerp + (horizontal ? SpriteHalfHeight : SpriteHalfWidth);
+
+        Vector2 delta = target.GetTruePosition() - wave.Position;
         float along = Vector2.Dot(delta, wave.Direction);
-        // 判定: 視覚中心 ±WaveBandThickness (motion 方向、前後対称)
-        if (Mathf.Abs(along) > WaveBandThickness) return false;
-        // perpendicular: 視覚中心からの距離が半マップ幅以内
+        if (Mathf.Abs(along) > Mathf.Min(WaveBandThickness, visualHalfAlong)) return false;
         float lateralSq = (delta - wave.Direction * along).sqrMagnitude;
-        float halfExtent = WaveLateralExtent / 2f;
+        float halfExtent = Mathf.Min(WaveLateralExtent / 2f, visualHalfLateral);
         return lateralSq <= halfExtent * halfExtent;
     }
 
