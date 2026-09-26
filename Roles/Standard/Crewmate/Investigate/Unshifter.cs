@@ -54,7 +54,8 @@ public class Unshifter : RoleBase
         if (!IsEnable || killer.GetAbilityUseLimit() <= 0)
             return false;
 
-        if (!target.IsShifted())
+        // マッドメイトの解除者はインポスターを解除できない。インポスター以外の変身のみ対象。
+        if (!target.IsShifted() || killer.Is(CustomRoles.Madmate) && target.Is(CustomRoleTypes.Impostor))
         {
             killer.Notify(GetString("UnshifterTargetNotShifted"));
             return false;

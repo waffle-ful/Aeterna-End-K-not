@@ -16,6 +16,11 @@ internal class Spiritualist : RoleBase
     private static OptionItem ShowGhostArrowForSeconds;
 
     public static byte SpiritualistTarget;
+
+    // マッドメイトの悪霊使いは、通常の直近死者でなく直近に死んだインポスターの幽霊に接続する。
+    // 投票追放は OnReportDeadBody を経由しないため、判定は会議明けの死亡インポスター総覧との差分で行う。
+    public static byte LastDeadImpostorId;
+    private static readonly HashSet<byte> KnownDeadImpostors = [];
     private long LastGhostArrowShowTime;
     private long ShowGhostArrowUntil;
     private byte SpiritualistId;
@@ -56,6 +61,8 @@ internal class Spiritualist : RoleBase
     {
         PlayerIdList = [];
         SpiritualistTarget = 0;
+        LastDeadImpostorId = byte.MaxValue;
+        KnownDeadImpostors.Clear();
         LastGhostArrowShowTime = 0;
         ShowGhostArrowUntil = 0;
     }
@@ -83,8 +90,31 @@ internal class Spiritualist : RoleBase
         SpiritualistTarget = target.PlayerId;
     }
 
+    // マッドメイト向けの「直近に死んだインポスター」は投票追放でも切り替わる必要があるため、
+    // OnReportDeadBody (通報時にしか発火しない) には乗せず、会議明けに死亡インポスターの
+    // 総覧と既知集合の差分を取って検出する。複数人が同時に新規死亡した場合は列挙順で最後の1人を採用する。
+    private static void UpdateLastDeadImpostor()
+    {
+        byte newest = byte.MaxValue;
+
+        foreach (PlayerControl imp in Main.EnumeratePlayerControls())
+        {
+            if (imp.IsAlive() || !imp.Is(CustomRoleTypes.Impostor)) continue;
+            if (!KnownDeadImpostors.Add(imp.PlayerId)) continue;
+
+            newest = imp.PlayerId;
+        }
+
+        if (newest == byte.MaxValue) return;
+
+        if (LastDeadImpostorId != byte.MaxValue) RemoveMadTarget();
+        LastDeadImpostorId = newest;
+    }
+
     public override void AfterMeetingTasks()
     {
+        UpdateLastDeadImpostor();
+
         foreach (byte spiritualist in PlayerIdList)
         {
             PlayerControl player = spiritualist.GetPlayer();
@@ -95,7 +125,10 @@ internal class Spiritualist : RoleBase
 
             if (!AmongUsClient.Instance.AmHost) continue;
 
-            PlayerControl target = Main.EnumeratePlayerControls().FirstOrDefault(a => a.PlayerId == SpiritualistTarget);
+            byte connectedId = player.Is(CustomRoles.Madmate) ? LastDeadImpostorId : SpiritualistTarget;
+            if (connectedId == byte.MaxValue) continue;
+
+            PlayerControl target = Main.EnumeratePlayerControls().FirstOrDefault(a => a.PlayerId == connectedId);
             if (target == null) continue;
 
             target.Notify(GetString("SpiritualistTargetMessage"));
@@ -137,7 +170,9 @@ internal class Spiritualist : RoleBase
     public override string GetSuffix(PlayerControl seer, PlayerControl target, bool hud = false, bool meeting = false)
     {
         if (!seer.IsAlive() || seer.PlayerId != SpiritualistId || target != null && seer.PlayerId != target.PlayerId || meeting || hud) return string.Empty;
-        return SpiritualistTarget != byte.MaxValue && ShowArrow ? Utils.ColorString(seer.GetRoleColor(), TargetArrow.GetArrows(seer, SpiritualistTarget)) : string.Empty;
+
+        byte connectedId = seer.Is(CustomRoles.Madmate) ? LastDeadImpostorId : SpiritualistTarget;
+        return connectedId != byte.MaxValue && ShowArrow ? Utils.ColorString(seer.GetRoleColor(), TargetArrow.GetArrows(seer, connectedId)) : string.Empty;
     }
 
     public static void RemoveTarget()
@@ -145,5 +180,15 @@ internal class Spiritualist : RoleBase
         foreach (byte spiritualist in PlayerIdList) TargetArrow.Remove(spiritualist, SpiritualistTarget);
 
         SpiritualistTarget = byte.MaxValue;
+    }
+
+    private static void RemoveMadTarget()
+    {
+        foreach (byte spiritualist in PlayerIdList)
+        {
+            PlayerControl player = spiritualist.GetPlayer();
+            if (player != null && player.Is(CustomRoles.Madmate))
+                TargetArrow.Remove(spiritualist, LastDeadImpostorId);
+        }
     }
 }

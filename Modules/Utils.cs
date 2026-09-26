@@ -1255,7 +1255,9 @@ public static class Utils
                    pc.Is(CustomRoles.Loyal) ||
                    pc.Is(CustomRoles.SuperStar) ||
                    pc.Is(CustomRoles.Egoist) ||
-                   pc.Is(CustomRoles.DoubleCount)
+                   pc.Is(CustomRoles.DoubleCount) ||
+                   pc.Is(CustomRoles.DoubleAgent) ||
+                   pc.Is(CustomRoles.Shiftguard)
                );
     }
 
@@ -4066,6 +4068,8 @@ public static class Utils
 
                                 targetPlayerName = $"{seerRole.ColoredTextByRole(id.ToString())} {targetPlayerName}";
                             }
+
+                            if (seer.Is(CustomRoleTypes.Impostor)) TargetMark.Append(Scout.GetTargetMark(seer, target));
 
                             switch (seerRole)
                             {

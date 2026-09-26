@@ -167,6 +167,20 @@ public class Whisperer : RoleBase
                 pc.RpcRemoveAbilityUse(notify: false);
                 Utils.SendRPC(CustomRPC.SyncRoleData, WhispererId, 4, info);
                 Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
+
+                // マッドメイトの囁く者は、聞き出した情報を生存インポスター全員へも横流しする。
+                if (pc.Is(CustomRoles.Madmate))
+                {
+                    string leakTitle = Utils.ColorString(Palette.ImpostorRed, Translator.GetString("WhispererMadLeakTitle"));
+                    List<Message> messages = [];
+                    foreach (PlayerControl imp in Main.EnumerateAlivePlayerControls())
+                    {
+                        if (imp.PlayerId == WhispererId || !imp.Is(CustomRoleTypes.Impostor)) continue;
+                        messages.Add(new Message(info, imp.PlayerId, leakTitle));
+                    }
+
+                    messages.SendMultipleMessages(MessageImportance.High);
+                }
             }
         }
         else

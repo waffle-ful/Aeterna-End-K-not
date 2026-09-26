@@ -2736,10 +2736,16 @@ internal static class ChatCommands
 
         if (args.Length < 3 || !GuessManager.MsgToPlayerAndRole(text[6..], out byte checkId, out CustomRoles checkRole, out _)) return;
 
-        bool hasRole = Utils.GetPlayerById(checkId).Is(checkRole);
+        PlayerControl checkedPlayer = Utils.GetPlayerById(checkId);
+        bool hasRole = checkedPlayer.Is(checkRole);
         if (IRandom.Instance.Next(100) < Inquirer.FailChance.GetInt()) hasRole = !hasRole;
 
         LateTask.New(() => Utils.SendMessage(GetString(hasRole ? "Inquirer.MessageTrue" : "Inquirer.MessageFalse"), player.PlayerId, importance: MessageImportance.High), 0.2f, log: false);
+
+        // マッドメイトの尋問官は、質問された本人へ匿名で疑いを植え付ける (誰が疑っているかは伏せる)。
+        if (player.Is(CustomRoles.Madmate) && checkedPlayer != null && checkedPlayer.IsAlive())
+            LateTask.New(() => Utils.SendMessage(string.Format(GetString("Inquirer.MadSuspicionNotify"), checkRole.ToColoredString()), checkedPlayer.PlayerId, GetString("Inquirer.MadSuspicionTitle"), importance: MessageImportance.High), 0.3f, log: false);
+
         player.RpcRemoveAbilityUse();
 
         MeetingManager.SendCommandUsedMessage(args[0]);

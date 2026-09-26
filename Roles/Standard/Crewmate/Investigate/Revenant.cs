@@ -90,8 +90,13 @@ internal class Revenant : RoleBase
 
         if (totalTaskCount - (completedTaskCount + 1) <= RemainingTasksToBeFound.GetInt() && !IsExposed)
         {
+            // マッドメイトの残留者は、露出矢印をクルー全員でなく生存インポスターにだけ出す。
+            bool madmate = pc.Is(CustomRoles.Madmate);
+
             foreach (PlayerControl target in Main.CachedAlivePlayerControls())
             {
+                if (madmate && !target.Is(CustomRoleTypes.Impostor)) continue;
+
                 TargetArrow.Add(target.PlayerId, pc.PlayerId);
                 NotifyRoles(SpecifySeer: target, SpecifyTarget: target);
             }

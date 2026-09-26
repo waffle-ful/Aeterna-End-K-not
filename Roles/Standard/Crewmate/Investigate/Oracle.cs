@@ -20,6 +20,9 @@ public class Oracle : RoleBase
 
     public static readonly List<byte> DidVote = [];
 
+    // マッドメイトの託宣者が最初に使った1回だけ、結果を全員へ公開する (以降は通常の非公開判定に戻る)。
+    private bool MadPublicRevealUsed;
+
     public override bool IsEnable => PlayerIdList.Count > 0;
 
     public override void SetupCustomOption()
@@ -57,6 +60,7 @@ public class Oracle : RoleBase
     {
         PlayerIdList.Add(playerId);
         playerId.SetAbilityUseLimit(CheckLimitOpt.GetFloat());
+        MadPublicRevealUsed = false;
     }
 
     public override void Remove(byte playerId)
@@ -88,6 +92,21 @@ public class Oracle : RoleBase
         }
 
         Team team = Modules.Ekm.EkrManager.GetApparentTeam(target);
+
+        // マッドメイトの託宣者は、初回の判定だけ結果を全員公開にする。インポ相手は必ず「クルー」と偽り、
+        // それ以外は FailChance を適用せず正直に答える (2回目以降は下の通常分岐に戻る)。
+        if (player.Is(CustomRoles.Madmate) && !MadPublicRevealUsed)
+        {
+            MadPublicRevealUsed = true;
+
+            Team publicTeam = team.HasFlag(Team.Impostor) ? Team.Crewmate : team;
+            string publicMsg = string.Format(GetString($"OracleCheck.{GetString($"ShortTeamName.{publicTeam}", SupportedLangs.English)}"), target.GetRealName());
+
+            Utils.SendMessage($"{GetString("OracleCheck")}\n{publicMsg}", title: CustomRoles.Oracle.ColoredTextByRole(GetString("OracleCheckMsgTitle")), importance: MessageImportance.High);
+
+            Main.DontCancelVoteList.Add(player.PlayerId);
+            return true;
+        }
 
         if (IRandom.Instance.Next(100) < FailChance.GetInt())
             team = Main.TeamValues[1..].Without(team).RandomElement();

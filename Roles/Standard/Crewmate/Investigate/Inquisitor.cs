@@ -42,7 +42,10 @@ public class Inquisitor : RoleBase
         if (!voter || !target || voter.PlayerId == target.PlayerId || Main.DontCancelVoteList.Contains(voter.PlayerId)) return false;
 
         var players = ExcludeDeadPlayers.GetBool() ? Main.EnumerateAlivePlayerControls() : Main.EnumeratePlayerControls();
-        List<(byte Id, CustomRoles Role)> knownRoles = [.. from pc in players where Utils.KnowsTargetRole(target, pc) select (pc.PlayerId, Modules.Ekm.EkrManager.GetApparentRole(pc))];
+
+        // マッドメイトの尋問官は逆尋問: 「対象が誰の役職を知っているか」ではなく「対象の役職を誰が知っているか」を調べる。
+        bool madReversed = voter.Is(CustomRoles.Madmate);
+        List<(byte Id, CustomRoles Role)> knownRoles = [.. from pc in players where madReversed ? Utils.KnowsTargetRole(pc, target) : Utils.KnowsTargetRole(target, pc) select (pc.PlayerId, Modules.Ekm.EkrManager.GetApparentRole(pc))];
 
         string result;
 
@@ -52,9 +55,10 @@ public class Inquisitor : RoleBase
             result = string.Join('\n', knownRoles.Select(x => $"{x.Id.ColoredPlayerName()}: {x.Role.ToColoredString()}"));
         else
             result = string.Join(", ", knownRoles.Select(x => x.Id.ColoredPlayerName()));
-        
-        Utils.SendMessage("\n", voter.PlayerId, string.Format(Translator.GetString("InquisitorVoteResult"), target.PlayerId.ColoredPlayerName(), result), importance: MessageImportance.High);
-        
+
+        string resultTemplateKey = madReversed ? "Inquisitor.MadVoteResult" : "InquisitorVoteResult";
+        Utils.SendMessage("\n", voter.PlayerId, string.Format(Translator.GetString(resultTemplateKey), target.PlayerId.ColoredPlayerName(), result), importance: MessageImportance.High);
+
         voter.RpcRemoveAbilityUse();
         Main.DontCancelVoteList.Add(voter.PlayerId);
         return true;

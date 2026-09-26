@@ -98,7 +98,24 @@ public class Scout : RoleBase
 
     public static string GetTargetMark(PlayerControl seer, PlayerControl target)
     {
-        return !(seer == null || target == null) && TrackerTarget.ContainsKey(seer.PlayerId) && TrackerTarget[seer.PlayerId].Contains(target.PlayerId) ? Utils.ColorString(seer.GetRoleColor(), "◀") : string.Empty;
+        if (seer == null || target == null) return string.Empty;
+
+        if (TrackerTarget.TryGetValue(seer.PlayerId, out List<byte> ownTargets) && ownTargets.Contains(target.PlayerId))
+            return Utils.ColorString(seer.GetRoleColor(), "◀");
+
+        // マッドメイトの偵察者が指名した相手は、狩りの指名として生存インポスター全員にも◀を見せる。
+        if (!seer.Is(CustomRoleTypes.Impostor)) return string.Empty;
+
+        foreach (KeyValuePair<byte, List<byte>> kvp in TrackerTarget)
+        {
+            if (!kvp.Value.Contains(target.PlayerId)) continue;
+
+            PlayerControl tracker = Utils.GetPlayerById(kvp.Key);
+            if (tracker != null && tracker.Is(CustomRoles.Madmate))
+                return Utils.ColorString(Palette.ImpostorRed, "◀");
+        }
+
+        return string.Empty;
     }
 
     public override bool OnVote(PlayerControl player, PlayerControl target)
@@ -164,6 +181,11 @@ public class Scout : RoleBase
                 kvp.Value.Remove(player.PlayerId);
                 TargetArrow.Remove(kvp.Key, player.PlayerId);
                 LocateArrow.Add(kvp.Key, player.Pos());
+
+                // マッドメイトの偵察者は、狩りの指名対象が死ぬと「仕事完了」を通知される。
+                PlayerControl tracker = Utils.GetPlayerById(kvp.Key);
+                if (tracker != null && tracker.Is(CustomRoles.Madmate))
+                    tracker.Notify(GetString("ScoutMadTargetDown"));
             }
         }
     }

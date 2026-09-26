@@ -10,6 +10,7 @@ using static Translator;
 public class Coroner : RoleBase
 {
     private const int Id = 6400;
+    private const float MadCoverUpKillCooldownReduction = 5f;
     private static List<byte> PlayerIdList = [];
 
     public static List<byte> UnreportablePlayers = [];
@@ -107,9 +108,22 @@ public class Coroner : RoleBase
                 pc.RpcRemoveAbilityUse(notify: false);
                 pc.Notify(GetString("CoronerTrackRecorded"));
 
-                if (LeaveDeadBodyUnreportable.GetBool()) UnreportablePlayers.Add(target.PlayerId);
+                bool madCoroner = pc.Is(CustomRoles.Madmate);
+
+                // マッドメイトの死体検分官は、証拠隠滅のため通報不能化を強制し、キラーのキルクールを少し短縮する。
+                if (LeaveDeadBodyUnreportable.GetBool() || madCoroner) UnreportablePlayers.Add(target.PlayerId);
 
                 if (NotifyKiller.GetBool()) killer.Notify(GetString("CoronerKillerNotify"));
+
+                if (madCoroner && killer.IsAlive() && Main.KillTimers.TryGetValue(killer.PlayerId, out float remainingCd) && remainingCd > 0f)
+                {
+                    float shortened = remainingCd - MadCoverUpKillCooldownReduction;
+                    if (shortened < 0f) shortened = 0f;
+
+                    killer.SetKillCooldown(shortened);
+                    Main.KillTimers[killer.PlayerId] = shortened;
+                    killer.Notify(string.Format(GetString("CoronerMadCoverUpNotify"), MadCoverUpKillCooldownReduction));
+                }
             }
             else
                 pc.Notify(GetString("OutOfAbilityUsesDoMoreTasks"));

@@ -1351,6 +1351,7 @@ internal static class MeetingHudStartPatch
             }
 
             if (seer.IsSnitchTarget()) sb.Append(Snitch.GetWarningMark(seer, target));
+            if (seer.Is(CustomRoleTypes.Impostor)) sb.Append(Scout.GetTargetMark(seer, target));
 
             switch (seerRole)
             {
