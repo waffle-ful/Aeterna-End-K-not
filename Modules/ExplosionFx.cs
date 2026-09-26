@@ -87,11 +87,14 @@ public static class ExplosionFx
     private const int MaxPendingPerFrame = 24;
     private const float SendInterval = 0.1f;
     private const int MaxActive = 1500;
+    private const int WarmPool = 400;
     private const int SortingOrder = 150;
     private const float RayAspect = 4f;
     private static float _lastSendTime = -1f;
     private static float _holdUntil = -1f;
 
+    private static bool _warm;
+    private static bool _jitted;
     private static Sprite _glow;
     private static Sprite _cloud;
     private static Sprite _flame;
@@ -107,7 +110,7 @@ public static class ExplosionFx
         if (!AmongUsClient.Instance || !AmongUsClient.Instance.AmHost || !GameStates.InGame) return;
         if (Pending.Count >= MaxPendingPerFrame) return;
 
-        Pending.Add(new Request(kind, pos, Mathf.Clamp(radius, 0.3f, 15f)));
+        Pending.Add(new Request(kind, pos, FxMath.Clamp(radius, 0.3f, 15f)));
     }
 
     // viewer 1 人の画面にだけ出す。周りに見えると能力の意味が崩れる演出 (ジェミニの分身設置) 用。
@@ -115,7 +118,7 @@ public static class ExplosionFx
     {
         if (!AmongUsClient.Instance || !AmongUsClient.Instance.AmHost || !GameStates.InGame || !viewer) return;
 
-        var r = new Request(kind, pos, Mathf.Clamp(radius, 0.3f, 15f), true);
+        var r = new Request(kind, pos, FxMath.Clamp(radius, 0.3f, 15f), true);
 
         if (viewer.AmOwner)
         {
@@ -151,7 +154,7 @@ public static class ExplosionFx
             float radius = reader.ReadSingle();
             if (!GameStates.InGame) continue;
 
-            SpawnLocal(new Request(kind, new Vector2(x, y), Mathf.Clamp(radius, 0.3f, 15f)));
+            SpawnLocal(new Request(kind, new Vector2(x, y), FxMath.Clamp(radius, 0.3f, 15f)));
         }
     }
 
@@ -161,16 +164,82 @@ public static class ExplosionFx
         {
             if (!GameStates.InGame)
             {
+                _warm = false;
                 if (Pending.Count > 0) Pending.Clear();
                 if (Unsent.Count > 0) Unsent.Clear();
                 if (Active.Count > 0) ClearAll();
                 return;
             }
 
-            if (Pending.Count > 0) Flush();
+            var alloc = AllocProbe.Now();
+
+            // 素材は試合が始まった時点 (イントロ中) に作っておき、最初の 1 発が引っかからないようにする
+            if (!_warm)
+            {
+                _warm = true;
+                EnsureSprites();
+
+                // 起動後最初の 1 発はコードのコンパイル待ちでも引っかかるので、演出の関数を先にコンパイルしておく (起動ごとに 1 回)
+                if (!_jitted)
+                {
+                    _jitted = true;
+
+                    const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.DeclaredOnly;
+
+                    foreach (System.Type type in new[] { typeof(ExplosionFx), typeof(FxMath) })
+                    foreach (System.Reflection.MethodInfo m in type.GetMethods(flags))
+                    {
+                        if (m.IsGenericMethodDefinition || m.IsAbstract) continue;
+                        try { System.Runtime.CompilerServices.RuntimeHelpers.PrepareMethod(m.MethodHandle); }
+                        catch { }
+                    }
+                }
+
+                // 粒子の入れ物も先に用意しておく (1 発目で数百個を一度に作ると引っかかる)。前の試合の残りは使い回すので足りない分だけ
+                if (Pool.Count > 0)
+                {
+                    var alive = new List<(GameObject Go, SpriteRenderer Sr)>(Pool.Count);
+                    foreach ((GameObject Go, SpriteRenderer Sr) e in Pool)
+                        if (e.Go && e.Sr) alive.Add(e);
+
+                    Pool.Clear();
+                    foreach ((GameObject Go, SpriteRenderer Sr) e in alive) Pool.Push(e);
+                }
+
+                while (Pool.Count < WarmPool)
+                {
+                    var go = new GameObject("ExplosionFx") { layer = 0 };
+                    SpriteRenderer sr = go.AddComponent<SpriteRenderer>();
+                    go.SetActive(false);
+                    Pool.Push((go, sr));
+                }
+
+                alloc = AllocProbe.Mark("fx.warm", alloc);
+            }
+
+            if (Pending.Count > 0)
+            {
+                Flush();
+                alloc = AllocProbe.Mark("fx.spawn", alloc);
+            }
+
             if (Unsent.Count > 0 && Time.unscaledTime - _lastSendTime >= SendInterval) Send();
+
             // 自分がこの爆発で死んだ時はキル演出が画面を覆うので、明けるまで演出を止めておいて後から見せる
-            if (Active.Count > 0 && Time.time >= _holdUntil && !KillOverlayOpen()) Animate(Time.deltaTime);
+            if (Active.Count > 0 && Time.time >= _holdUntil && !KillOverlayOpen())
+            {
+                alloc = AllocProbe.Now();
+
+                // 粒子の生存確認は毎フレームせず、外から壊されていて触れなくなった時だけ全部捨てて出直す
+                try { Animate(Time.deltaTime); }
+                catch (System.Exception e)
+                {
+                    Logger.Warn($"particles lost, clearing: {e}", "ExplosionFx");
+                    ClearAll();
+                }
+
+                AllocProbe.Mark("fx.anim", alloc);
+            }
         }
         catch (System.Exception e) { Utils.ThrowException(e); }
     }
@@ -272,8 +341,13 @@ public static class ExplosionFx
 
     // ── 演出の中身 ─────────────────────────────────────────────────────
 
-    private static float Rnd(float min, float max) => Random.Range(min, max);
-    private static Vector2 Dir() => Random.insideUnitCircle.normalized;
+    private static float Rnd(float min, float max) => FxMath.Range(min, max);
+
+    private static Vector2 Dir()
+    {
+        float ang = FxMath.Range(0f, 2f * FxMath.PI);
+        return FxMath.V2(FxMath.Cos(ang), FxMath.Sin(ang));
+    }
 
     // 近くで起きた爆発ほど強く、画面全体の閃光とカメラの揺れを返す (自分の画面だけ・送信なし)。
     private static void Impact(Vector2 c, float r, Color flash, float flashAlpha, float shake, float shakeDuration)
@@ -330,7 +404,7 @@ public static class ExplosionFx
         for (int i = 0; i < 18; i++)
         {
             Vector2 d = Dir();
-            Color col = nebula[Random.Range(0, nebula.Length)];
+            Color col = nebula[FxMath.Range(0, nebula.Length)];
             float s = r * Rnd(1.2f, 2f);
             Add(Shape.Cloud, c + d * Rnd(0f, r * 0.35f), d * Rnd(r * 0.25f, r * 0.7f), Rnd(3.4f, 4.6f), r * Rnd(0.3f, 0.5f), s,
                 col, Color.Lerp(col, deep, 0.35f), Rnd(0.28f, 0.42f), 0.07f, 0.4f, drag: 0.7f, delay: Rnd(0f, 0.18f), spin: Rnd(-35f, 35f));
@@ -364,7 +438,7 @@ public static class ExplosionFx
         for (int i = 0; i < 120; i++)
         {
             Vector2 d = Dir();
-            Color col = starTints[Random.Range(0, starTints.Length)];
+            Color col = starTints[FxMath.Range(0, starTints.Length)];
             Add(Shape.Star, c + d * r * 0.05f, d * r * Rnd(2.5f, 7f), Rnd(0.7f, 1.7f), Rnd(0.18f, 0.34f), Rnd(0.06f, 0.12f),
                 col, Color.Lerp(col, violet, 0.6f), 1f, 0.01f, 0.5f, drag: 2.6f, stretch: 0.1f, twinkle: 0.3f, twinkleSpeed: Rnd(15f, 25f));
         }
@@ -392,8 +466,8 @@ public static class ExplosionFx
         // 星屑の余韻
         for (int i = 0; i < 80; i++)
         {
-            Add(Shape.Star, c + Random.insideUnitCircle * r * 1.3f, Random.insideUnitCircle * r * 0.15f, Rnd(2.5f, 4.3f), Rnd(0.08f, 0.2f), Rnd(0.03f, 0.08f),
-                starTints[Random.Range(0, starTints.Length)], lavender, 1f, 0.15f, 0.55f,
+            Add(Shape.Star, c + FxMath.InsideUnitCircle() * r * 1.3f, FxMath.InsideUnitCircle() * r * 0.15f, Rnd(2.5f, 4.3f), Rnd(0.08f, 0.2f), Rnd(0.03f, 0.08f),
+                starTints[FxMath.Range(0, starTints.Length)], lavender, 1f, 0.15f, 0.55f,
                 delay: Rnd(0.3f, 1.3f), spin: Rnd(-60f, 60f), twinkle: 0.85f, twinkleSpeed: Rnd(8f, 18f));
         }
     }
@@ -415,7 +489,7 @@ public static class ExplosionFx
         // 黒煙 (最奥・遅れて立ちのぼる)
         for (int i = 0; i < 16; i++)
         {
-            Add(Shape.Cloud, c + Random.insideUnitCircle * r * 0.5f, Random.insideUnitCircle * r * 0.35f, Rnd(2.4f, 3.6f), r * Rnd(0.3f, 0.5f), r * Rnd(1f, 1.5f),
+            Add(Shape.Cloud, c + FxMath.InsideUnitCircle() * r * 0.5f, FxMath.InsideUnitCircle() * r * 0.35f, Rnd(2.4f, 3.6f), r * Rnd(0.3f, 0.5f), r * Rnd(1f, 1.5f),
                 smoke, soot, Rnd(0.45f, 0.65f), 0.2f, 0.4f, drag: 0.8f, delay: Rnd(0.5f, 0.9f), spin: Rnd(-40f, 40f), rise: Rnd(0.25f, 0.55f));
         }
 
@@ -433,8 +507,8 @@ public static class ExplosionFx
         for (int i = 0; i < 38; i++)
         {
             Vector2 d = Dir();
-            float out01 = Random.value;
-            Add(Shape.Flame, c + d * Rnd(0f, r * 0.25f), d * r * Mathf.Lerp(0.4f, 2f, out01), Mathf.Lerp(1.9f, 1.1f, out01), r * Rnd(0.3f, 0.45f), r * Rnd(0.8f, 1.25f),
+            float out01 = FxMath.Value;
+            Add(Shape.Flame, c + d * Rnd(0f, r * 0.25f), d * r * FxMath.Lerp(0.4f, 2f, out01), FxMath.Lerp(1.9f, 1.1f, out01), r * Rnd(0.3f, 0.45f), r * Rnd(0.8f, 1.25f),
                 Color.Lerp(white, yellow, out01), red, 1f, 0.02f, 0.55f, drag: 2.6f, delay: Rnd(0f, 0.06f), spin: Rnd(-120f, 120f),
                 colorMid: Color.Lerp(yellow, orange, 0.5f + 0.5f * out01));
         }
@@ -442,7 +516,7 @@ public static class ExplosionFx
         // 誘爆
         for (int b = 0; b < 4; b++)
         {
-            Vector2 at = c + Random.insideUnitCircle * r * 0.75f;
+            Vector2 at = c + FxMath.InsideUnitCircle() * r * 0.75f;
             float delay = Rnd(0.1f, 0.45f);
             float s = r * Rnd(0.25f, 0.4f);
             Add(Shape.Glow, at, Vector2.zero, 0.3f, s * 0.5f, s * 2.2f, white, yellow, 1f, 0.01f, 0.3f, delay: delay);
@@ -558,7 +632,7 @@ public static class ExplosionFx
             float life = Rnd(0.9f, 1.4f);
             float size = Rnd(0.26f, 0.4f);
             Vector2 at = new(cp.x - s * (halfW + Rnd(0.5f, 2.5f)), cp.y + Rnd(-halfH, halfH));
-            Color col = leaves[Random.Range(0, leaves.Length)];
+            Color col = leaves[FxMath.Range(0, leaves.Length)];
             Add(Shape.Chunk, at, d * span * Rnd(0.6f, 0.8f) / life + new Vector2(0f, Rnd(-1.5f, 1.5f)), life, size, size, col, Color.Lerp(col, DustDark, 0.3f), 1f, 0.05f, 0.75f,
                 delay: Rnd(0.1f, 0.7f), spin: Rnd(-900f, 900f), sy0: size * 0.55f, sy1: size * 0.55f);
         }
@@ -575,7 +649,7 @@ public static class ExplosionFx
         // 出発点の砂ぼこり (風下へ置いていかれる)
         for (int i = 0; i < 10; i++)
         {
-            Add(Shape.Cloud, a + feet + Random.insideUnitCircle * 0.3f, -d * Rnd(0.3f, 1.2f) + new Vector2(0f, Rnd(0f, 0.6f)), Rnd(0.8f, 1.2f), Rnd(0.3f, 0.45f), Rnd(0.9f, 1.4f),
+            Add(Shape.Cloud, a + feet + FxMath.InsideUnitCircle() * 0.3f, -d * Rnd(0.3f, 1.2f) + new Vector2(0f, Rnd(0f, 0.6f)), Rnd(0.8f, 1.2f), Rnd(0.3f, 0.45f), Rnd(0.9f, 1.4f),
                 Dust, DustDark, Rnd(0.55f, 0.7f), 0.05f, 0.35f, drag: 2f, spin: Rnd(-60f, 60f));
         }
 
@@ -642,7 +716,7 @@ public static class ExplosionFx
         for (int i = 0; i < 40; i++)
         {
             Color col = (i % 3) switch { 0 => GeminiCyan, 1 => GeminiMagenta, _ => white };
-            Add(Shape.Star, c + Random.insideUnitCircle * 1.1f, new Vector2(Rnd(-0.4f, 0.4f), Rnd(0.3f, 1f)), Rnd(1.1f, 1.8f), Rnd(0.18f, 0.34f), Rnd(0.06f, 0.1f),
+            Add(Shape.Star, c + FxMath.InsideUnitCircle() * 1.1f, new Vector2(Rnd(-0.4f, 0.4f), Rnd(0.3f, 1f)), Rnd(1.1f, 1.8f), Rnd(0.18f, 0.34f), Rnd(0.06f, 0.1f),
                 col, GeminiLavender, 1f, 0.1f, 0.55f, delay: Rnd(0.25f, 0.6f), spin: Rnd(-60f, 60f), twinkle: 0.8f, twinkleSpeed: Rnd(10f, 18f));
         }
     }
@@ -674,7 +748,7 @@ public static class ExplosionFx
 
         for (int i = 0; i < 8; i++)
         {
-            Add(Shape.Cloud, c + Random.insideUnitCircle * 0.4f, Random.insideUnitCircle * 0.6f, Rnd(1f, 1.5f), 0.5f, Rnd(1.3f, 1.8f), GeminiLavender, GeminiViolet,
+            Add(Shape.Cloud, c + FxMath.InsideUnitCircle() * 0.4f, FxMath.InsideUnitCircle() * 0.6f, Rnd(1f, 1.5f), 0.5f, Rnd(1.3f, 1.8f), GeminiLavender, GeminiViolet,
                 Rnd(0.35f, 0.5f), 0.05f, 0.35f, drag: 1.5f, delay: Rnd(0.05f, 0.15f), spin: Rnd(-40f, 40f), rise: 0.3f);
         }
     }
@@ -709,8 +783,8 @@ public static class ExplosionFx
         }
 
         Transform tf = go.transform;
-        tf.position = new Vector3(pos.x, pos.y, 0f);
-        tf.localScale = Vector3.zero;
+        tf.position = FxMath.V3(pos.x, pos.y);
+        tf.localScale = default;
 
         sr.sprite = shape switch
         {
@@ -725,7 +799,7 @@ public static class ExplosionFx
         };
         // 奥から (order=0 の背景) → 雲 → 衝撃波 → 光条 → 破片 → 星 → 光 → 画面の閃光 の順に重ねる
         sr.sortingOrder = SortingOrder + (order >= 0 ? order : shape == Shape.Solid ? 20 : (int)shape + 1);
-        sr.color = new Color(color0.r, color0.g, color0.b, 0f);
+        sr.color = FxMath.Rgba(color0.r, color0.g, color0.b, 0f);
         go.SetActive(true);
 
         // 光条のテクスチャは横長 (4:1) なので、縦の指定値がそのまま太さ (単位) になるよう補正する
@@ -735,9 +809,9 @@ public static class ExplosionFx
         {
             Go = go, Sr = sr, Tf = tf, Pos = pos, Vel = vel, Drag = drag, Rise = rise, Delay = delay, Life = life,
             Sx0 = sx0, Sx1 = sx1, Sy0 = (sy0 < 0f ? sx0 : sy0) * aspect, Sy1 = (sy1 < 0f ? sx1 : sy1) * aspect,
-            Rot = rot ?? Random.Range(0f, 360f), Spin = spin,
-            Color0 = color0, Color1 = color1, ColorMid = colorMid ?? color0, HasMid = colorMid.HasValue, Alpha = alpha, FadeIn = Mathf.Max(fadeIn, 0.001f), FadeOutFrom = fadeOutFrom,
-            Twinkle = twinkle, TwinkleSpeed = twinkleSpeed, Phase = Random.Range(0f, 6.28f), Stretch = stretch, FollowCamera = followCamera
+            Rot = rot ?? Rnd(0f, 360f), Spin = spin,
+            Color0 = color0, Color1 = color1, ColorMid = colorMid ?? color0, HasMid = colorMid.HasValue, Alpha = alpha, FadeIn = FxMath.Max(fadeIn, 0.001f), FadeOutFrom = fadeOutFrom,
+            Twinkle = twinkle, TwinkleSpeed = twinkleSpeed, Phase = Rnd(0f, 6.28f), Stretch = stretch, FollowCamera = followCamera
         });
     }
 
@@ -749,19 +823,16 @@ public static class ExplosionFx
         Pool.Push((p.Go, p.Sr));
     }
 
+    // 毎フレーム全粒子を回すので、Unity の Mathf / Vector / Color / Quaternion の関数・演算子・コンストラクタは使わず FxMath で計算する
+    // (理由は FxMath 冒頭)。ゲーム本体へ渡すのは色・位置・大きさ・向きの 4 つだけ。
     private static void Animate(float dt)
     {
-        Camera cam = null;
+        bool camRead = false;
+        float camX = 0f, camY = 0f, camW = 0f, camH = 0f;
 
         for (int i = Active.Count - 1; i >= 0; i--)
         {
             Particle p = Active[i];
-
-            if (!p.Go)
-            {
-                Active.RemoveAt(i);
-                continue;
-            }
 
             if (p.Delay > 0f)
             {
@@ -782,51 +853,80 @@ public static class ExplosionFx
                 continue;
             }
 
-            p.Vel *= Mathf.Exp(-p.Drag * dt);
-            p.Pos += (p.Vel + new Vector2(0f, p.Rise)) * dt;
+            float damp = p.Drag > 0f ? FxMath.Exp(-p.Drag * dt) : 1f;
+            float vx = p.Vel.x * damp, vy = p.Vel.y * damp;
+            p.Vel.x = vx;
+            p.Vel.y = vy;
+            p.Pos.x += vx * dt;
+            p.Pos.y += (vy + p.Rise) * dt;
             p.Rot += p.Spin * dt;
 
-            float ease = 1f - (1f - t) * (1f - t) * (1f - t);
-            float sx = Mathf.Lerp(p.Sx0, p.Sx1, ease);
-            float sy = Mathf.Lerp(p.Sy0, p.Sy1, ease);
+            float u = 1f - t;
+            float ease = 1f - u * u * u;
+            float sx = p.Sx0 + (p.Sx1 - p.Sx0) * ease;
+            float sy = p.Sy0 + (p.Sy1 - p.Sy0) * ease;
             float rot = p.Rot;
+            float px = p.Pos.x, py = p.Pos.y;
 
             if (p.Stretch > 0f)
             {
-                float speed = p.Vel.magnitude;
+                float speed = FxMath.Sqrt(vx * vx + vy * vy);
                 sx *= 1f + speed * p.Stretch;
-                if (speed > 0.01f) rot = Mathf.Atan2(p.Vel.y, p.Vel.x) * Mathf.Rad2Deg;
+                if (speed > 0.01f) rot = FxMath.Atan2(vy, vx) * FxMath.Rad2Deg;
             }
-
-            Vector3 at = new(p.Pos.x, p.Pos.y, 0f);
 
             if (p.FollowCamera)
             {
-                if (!cam) cam = Camera.main;
-
-                if (cam)
+                if (!camRead)
                 {
-                    Vector3 cp = cam.transform.position;
-                    at = new Vector3(cp.x, cp.y, 0f);
-                    float h = cam.orthographicSize * 2.4f;
-                    sx = h * cam.aspect;
-                    sy = h;
+                    camRead = true;
+                    Camera cam = Camera.main;
+
+                    if (cam)
+                    {
+                        Vector3 cp = cam.transform.position;
+                        camX = cp.x;
+                        camY = cp.y;
+                        camH = cam.orthographicSize * 2.4f;
+                        camW = camH * cam.aspect;
+                    }
+                }
+
+                if (camH > 0f)
+                {
+                    px = camX;
+                    py = camY;
+                    sx = camW;
+                    sy = camH;
                     rot = 0f;
                 }
             }
 
-            float a = p.Alpha * Mathf.Clamp01(t / p.FadeIn);
+            float a = p.Alpha * FxMath.Clamp01(t / p.FadeIn);
             if (t > p.FadeOutFrom) a *= 1f - (t - p.FadeOutFrom) / (1f - p.FadeOutFrom);
-            if (p.Twinkle > 0f) a *= Mathf.Lerp(1f - p.Twinkle, 1f, (Mathf.Sin(p.Age * p.TwinkleSpeed + p.Phase) + 1f) * 0.5f);
+            if (p.Twinkle > 0f) a *= 1f - p.Twinkle + p.Twinkle * ((FxMath.Sin(p.Age * p.TwinkleSpeed + p.Phase) + 1f) * 0.5f);
 
-            Color col = !p.HasMid ? Color.Lerp(p.Color0, p.Color1, t)
-                : t < 0.5f ? Color.Lerp(p.Color0, p.ColorMid, t * 2f)
-                : Color.Lerp(p.ColorMid, p.Color1, (t - 0.5f) * 2f);
-            p.Sr.color = new Color(col.r, col.g, col.b, a);
+            Color from = p.Color0, to = p.Color1;
+            float k = t;
 
-            p.Tf.position = at;
-            p.Tf.localScale = new Vector3(sx, sy, 1f);
-            p.Tf.localRotation = Quaternion.Euler(0f, 0f, rot);
+            if (p.HasMid)
+            {
+                if (t < 0.5f)
+                {
+                    to = p.ColorMid;
+                    k = t * 2f;
+                }
+                else
+                {
+                    from = p.ColorMid;
+                    k = (t - 0.5f) * 2f;
+                }
+            }
+
+            p.Sr.color = FxMath.Rgba(from.r + (to.r - from.r) * k, from.g + (to.g - from.g) * k, from.b + (to.b - from.b) * k, a);
+            p.Tf.position = FxMath.V3(px, py);
+            p.Tf.localScale = FxMath.V3(sx, sy, 1f);
+            p.Tf.localRotation = FxMath.RotZ(rot);
 
             Active[i] = p;
         }
@@ -842,9 +942,9 @@ public static class ExplosionFx
 
     private static void EnsureSprites()
     {
-        if (!_glow) _glow = MakeSprite(64, 64, (x, y) => Mathf.Pow(1f - Mathf.Clamp01(Mathf.Sqrt(x * x + y * y)), 2.4f));
+        if (!_glow) _glow = MakeSprite(64, 64, (x, y) => FxMath.Pow(1f - FxMath.Clamp01(FxMath.Sqrt(x * x + y * y)), 2.4f));
         if (!_cloud) _cloud = MakeSprite(96, 96, CloudAlpha);
-        if (!_flame) _flame = MakeSprite(96, 96, (x, y) => Mathf.Clamp01(Mathf.Pow(CloudAlpha(x, y), 0.45f) * 1.15f));
+        if (!_flame) _flame = MakeSprite(96, 96, (x, y) => FxMath.Clamp01(FxMath.Pow(CloudAlpha(x, y), 0.45f) * 1.15f));
         if (!_solid) _solid = MakeSprite(4, 4, (_, _) => 1f);
 
         if (!_ring)
@@ -852,10 +952,10 @@ public static class ExplosionFx
             _ring = MakeSprite(128, 128, (x, y) =>
             {
                 // 縁に細い光の輪、内側はうっすら満ちた膜
-                float d = Mathf.Sqrt(x * x + y * y);
-                float edge = Mathf.Exp(-Mathf.Pow((d - 0.93f) / 0.035f, 2f));
-                float fill = d < 0.93f ? Mathf.Pow(d / 0.93f, 3f) * 0.18f : 0f;
-                return Mathf.Clamp01(edge + fill);
+                float d = FxMath.Sqrt(x * x + y * y);
+                float edge = FxMath.Exp(-FxMath.Pow((d - 0.93f) / 0.035f, 2f));
+                float fill = d < 0.93f ? FxMath.Pow(d / 0.93f, 3f) * 0.18f : 0f;
+                return FxMath.Clamp01(edge + fill);
             });
         }
 
@@ -864,12 +964,12 @@ public static class ExplosionFx
             _star = MakeSprite(64, 64, (x, y) =>
             {
                 // 白熱した核 + 十字の光芒
-                float d = Mathf.Sqrt(x * x + y * y);
-                float core = Mathf.Pow(1f - Mathf.Clamp01(d / 0.35f), 2f);
-                float ax = Mathf.Abs(x), ay = Mathf.Abs(y);
-                float streakH = Mathf.Exp(-ay * 28f) * Mathf.Clamp01(1f - ax);
-                float streakV = Mathf.Exp(-ax * 28f) * Mathf.Clamp01(1f - ay);
-                return Mathf.Clamp01(Mathf.Max(core, Mathf.Pow(Mathf.Max(streakH, streakV), 1.5f)));
+                float d = FxMath.Sqrt(x * x + y * y);
+                float core = FxMath.Pow(1f - FxMath.Clamp01(d / 0.35f), 2f);
+                float ax = FxMath.Abs(x), ay = FxMath.Abs(y);
+                float streakH = FxMath.Exp(-ay * 28f) * FxMath.Clamp01(1f - ax);
+                float streakV = FxMath.Exp(-ax * 28f) * FxMath.Clamp01(1f - ay);
+                return FxMath.Clamp01(FxMath.Max(core, FxMath.Pow(FxMath.Max(streakH, streakV), 1.5f)));
             });
         }
 
@@ -879,9 +979,9 @@ public static class ExplosionFx
             _ray = MakeSprite(128, (int)(128 / RayAspect), (x, y) =>
             {
                 float u = (x + 1f) * 0.5f;
-                float width = Mathf.Lerp(0.9f, 0.1f, u);
-                float across = Mathf.Exp(-Mathf.Pow(y / width, 2f) * 3f);
-                return Mathf.Clamp01(across * Mathf.Pow(1f - u, 1.3f));
+                float width = FxMath.Lerp(0.9f, 0.1f, u);
+                float across = FxMath.Exp(-FxMath.Pow(y / width, 2f) * 3f);
+                return FxMath.Clamp01(across * FxMath.Pow(1f - u, 1.3f));
             }, new Vector2(0f, 0.5f));
         }
 
@@ -890,10 +990,10 @@ public static class ExplosionFx
             // 角ばった不定形の破片
             _chunk = MakeSprite(32, 32, (x, y) =>
             {
-                float ang = Mathf.Atan2(y, x);
-                float edge = 0.7f + 0.2f * Mathf.Sin(ang * 3f + 1.3f) + 0.1f * Mathf.Sin(ang * 7f);
-                float d = Mathf.Sqrt(x * x + y * y);
-                return d < edge ? 1f : Mathf.Clamp01(1f - (d - edge) * 12f);
+                float ang = FxMath.Atan2(y, x);
+                float edge = 0.7f + 0.2f * FxMath.Sin(ang * 3f + 1.3f) + 0.1f * FxMath.Sin(ang * 7f);
+                float d = FxMath.Sqrt(x * x + y * y);
+                return d < edge ? 1f : FxMath.Clamp01(1f - (d - edge) * 12f);
             });
         }
     }
@@ -901,12 +1001,12 @@ public static class ExplosionFx
     // 縁がふわっと崩れた柔らかい雲。完全な円だと「玉」に見えるので、角度方向に揺らぎを入れる。
     private static float CloudAlpha(float x, float y)
     {
-        float d = Mathf.Sqrt(x * x + y * y);
-        float ang = Mathf.Atan2(y, x);
-        float wobble = 0.82f + 0.1f * Mathf.Sin(ang * 3f + 0.7f) + 0.08f * Mathf.Sin(ang * 5f + 2.1f);
+        float d = FxMath.Sqrt(x * x + y * y);
+        float ang = FxMath.Atan2(y, x);
+        float wobble = 0.82f + 0.1f * FxMath.Sin(ang * 3f + 0.7f) + 0.08f * FxMath.Sin(ang * 5f + 2.1f);
         float n = Mathf.PerlinNoise(x * 2.3f + 5f, y * 2.3f + 5f);
-        float body = 1f - Mathf.Clamp01(d / wobble);
-        return Mathf.Clamp01(Mathf.Pow(body, 1.3f) * (0.65f + 0.35f * n));
+        float body = 1f - FxMath.Clamp01(d / wobble);
+        return FxMath.Clamp01(FxMath.Pow(body, 1.3f) * (0.65f + 0.35f * n));
     }
 
     // alpha は中心を (0,0)・縁を ±1 とした正規化座標で受け取る。スプライトの 1 単位 = テクスチャの幅。
@@ -919,7 +1019,7 @@ public static class ExplosionFx
         for (int py = 0; py < height; py++)
         {
             for (int px = 0; px < width; px++)
-                pixels[py * width + px] = new Color(1f, 1f, 1f, alpha((px - hx) / hx, (py - hy) / hy));
+                pixels[py * width + px] = FxMath.Rgba(1f, 1f, 1f, alpha((px - hx) / hx, (py - hy) / hy));
         }
 
         tex.SetPixels(pixels);

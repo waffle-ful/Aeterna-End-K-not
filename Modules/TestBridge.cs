@@ -448,6 +448,22 @@ public static class TestBridge
             return;
         }
 
+        // 視聴者参加の「偽死体」をコメント無しで置く (死体に反応する演出の確認用)
+        if (directive.Equals("fakebody", StringComparison.OrdinalIgnoreCase))
+        {
+            try { WriteOut(Audience.AudienceInterventions.DoFakeBody() ? "OK fakebody" : "ERR fakebody refused"); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR fakebody failed"); }
+            return;
+        }
+
+        // 見た目の演出だけをホストの足元で出す (判定・キルは起きない)。`fx <Kind> [radius] [count]`
+        if (directive.StartsWith("fx ", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecuteFx(directive[3..].Trim()); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR fx failed"); }
+            return;
+        }
+
         // Layer C: ホストの TP と HUD アクションボタン押下。
         if (directive.StartsWith("tp ", StringComparison.OrdinalIgnoreCase))
         {
@@ -2179,6 +2195,28 @@ public static class TestBridge
     }
 
     // ── Layer C: TP / HUD アクションボタン ─────────────────────────────
+
+    private static void ExecuteFx(string rest)
+    {
+        string[] parts = rest.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        if (parts.Length == 0 || !Enum.TryParse(parts[0], true, out ExplosionFx.Kind kind))
+        {
+            WriteOut($"ERR fx: kind must be one of {string.Join("/", Enum.GetNames(typeof(ExplosionFx.Kind)))}");
+            return;
+        }
+
+        float radius = parts.Length > 1 && float.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float r) ? r : 3f;
+        int count = parts.Length > 2 && int.TryParse(parts[2], out int c) ? Math.Clamp(c, 1, 24) : 1;
+
+        PlayerControl lp = PlayerControl.LocalPlayer;
+        if (!lp || !GameStates.InGame) { WriteOut("ERR fx: not in game"); return; }
+
+        Vector2 at = lp.GetTruePosition();
+        for (int i = 0; i < count; i++) ExplosionFx.Play(kind, at + new Vector2(i * 0.8f, 0f), radius);
+
+        WriteOut($"OK fx {kind} r={radius:F1} x{count}");
+    }
 
     private static void ExecuteTp(string rest)
     {
