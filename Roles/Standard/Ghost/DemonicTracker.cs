@@ -5,6 +5,7 @@ using EndKnot.Modules;
 
 namespace EndKnot.Roles;
 
+// Ported from TownOfHost-K/Roles/Ghost/Role/DemonicTracker.cs.
 internal class DemonicTracker : IGhostRole
 {
     private static OptionItem CD;

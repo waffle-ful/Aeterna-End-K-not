@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 namespace EndKnot.Modules;
 
 // incremental GC を実行時に無効化する (NoS = Nebula on the Ship の Nebula.Utilities.IncrementalGcInvalidator と同手法の移植)。
+// Based on https://github.com/Dolly1016/Nebula-Public/blob/master/NebulaPluginNova/Utilities/IncrementalGcInvalidator.cs (GPL-3.0)
 //
 // 背景 (2026-08-15 実測で確定): このビルドでは `Among Us_Data/boot.config` から `gc-max-time-slice` を
 // 除去しても incremental GC は切れない。行が無くても既定の 3ms スライスで走る

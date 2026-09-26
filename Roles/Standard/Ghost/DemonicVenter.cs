@@ -4,6 +4,7 @@ using UnityEngine;
 
 namespace EndKnot.Roles;
 
+// Ported from TownOfHost-K/Roles/Ghost/Role/DemonicVenter.cs.
 internal class DemonicVenter : IGhostRole
 {
     private static OptionItem CD;

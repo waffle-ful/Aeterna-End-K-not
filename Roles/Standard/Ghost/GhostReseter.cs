@@ -4,6 +4,7 @@ using EndKnot.Modules;
 
 namespace EndKnot.Roles;
 
+// Ported from TownOfHost-K/Roles/Ghost/Role/GhostReseter.cs.
 internal class GhostReseter : IGhostRole
 {
     private static readonly Dictionary<byte, int> Counts = [];

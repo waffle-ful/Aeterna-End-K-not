@@ -260,7 +260,7 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 - **[Mini.RegionInstall](https://github.com/miniduikboot/Mini.RegionInstall)** (miniduikboot、GPL-3.0) — カスタムリージョンの追加
 - **[MiraAPI](https://github.com/All-Of-Us-Mods/MiraAPI)** (All-Of-Us-Mods、LGPL-2.1) — UI スプライト（ページ送りボタン 2 点・チェックマーク 2 点）
 - **[More Gamemodes](https://github.com/Rabek009/MoreGamemodes)** (Rabek009) — カスタムネットオブジェクト (CNO)、チャット制御と消去、プレイヤー操作まわりの補助処理
-- **[Nebula on the Ship (NoS)](https://github.com/Dolly1016/Nebula)** (Dolly1016 他、GPL-3.0 / NebulaAPI は LGPL-3.0) — incremental GC の無効化と GC の先撃ち。独自役職と独自 API を多数持つ Mod
+- **[Nebula on the Ship (NoS)](https://github.com/Dolly1016/Nebula)** / [ソースコード (Nebula-Public)](https://github.com/Dolly1016/Nebula-Public) (Dolly1016 他、GPL-3.0 / NebulaAPI は LGPL-3.0) — incremental GC の無効化と GC の先撃ち。独自役職と独自 API を多数持つ Mod
 - **[Reactor](https://github.com/NuclearPowered/Reactor)** / [XtraCube fork](https://github.com/XtraCube/Reactor) — modded ハンドシェイク、コンパイラ生成オブジェクト・ステートマシンのラッパー、カスタムサーバーの 5 秒タイムアウト解除
 - **[Revolutionary Host Roles](https://github.com/sansaaaaai/Revolutionary-host-roles)** (sansaaaaai) — 独自役職とホスト向け機能を追加する TOH 系列の Mod
 - **[Stellar Roles](https://github.com/Mr-Fluuff/StellarRolesAU)** (Mr-Fluuff) — 独自役職を多数持つ Among Us の役職 Mod

@@ -5,6 +5,7 @@ using EndKnot.Modules;
 
 namespace EndKnot.Roles;
 
+// Ported from TownOfHost-K/Roles/Ghost/Role/GhostNoiseSender.cs.
 // Crewmate ghost. The protect button "bugs" a living player for a timed window.
 // If a bugged player is later murdered (a real kill that leaves a corpse), the victim is desync-converted
 // to a vanilla Noisemaker on every client right before the kill, so the vanilla Noisemaker death-ping
