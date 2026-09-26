@@ -2337,6 +2337,21 @@ public static class TestBridge
         if (parts.Length >= 3)
         {
             explicitTarget = ResolvePlayerToken(parts[2], out string targetErr);
+
+            // 客のローカルには CNO のダミーが残るので、客のキルボタンはダミーも狙える。
+            // それを再現するため、kill の相手に限り CNO の PlayerId (200 以上) も受け付ける。
+            if (!explicitTarget && parts[0].Equals("kill", StringComparison.OrdinalIgnoreCase) && byte.TryParse(parts[2], out byte cnoPid) && cnoPid >= 200)
+            {
+                foreach (CustomNetObject cno in CustomNetObject.AllObjects)
+                {
+                    if (cno?.playerControl && cno.playerControl.PlayerId == cnoPid)
+                    {
+                        explicitTarget = cno.playerControl;
+                        break;
+                    }
+                }
+            }
+
             if (!explicitTarget) { WriteOut($"ERR use {targetErr}"); return; }
         }
 
