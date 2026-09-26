@@ -1,0 +1,95 @@
+name: バグ報告 / Bug report
+description: 不具合・エラー・キック・表示崩れなど / Something is broken
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        報告ありがとうございます。Discord でも受け付けています（そちらのほうが早く返事できます）: https://discord.gg/sEYAFzD3a
+        Thanks for the report! Discord usually gets a faster reply: https://discord.gg/sEYAFzD3a
+
+        セキュリティ上の問題は Issue にせず [SECURITY.md](https://github.com/waffle-ful/Aeterna-End-K-not/blob/main/SECURITY.md) の手順でお知らせください。
+        For security issues, please follow [SECURITY.md](https://github.com/waffle-ful/Aeterna-End-K-not/blob/main/SECURITY.md) instead of filing a public issue.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 何が起きたか / What happened
+      description: 期待した動作と、実際に起きたこと / What you expected vs. what actually happened
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 再現手順 / Steps to reproduce
+      description: 役職・設定・人数・マップなど、分かる範囲で / Roles, settings, player count, map — whatever you know
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: false
+
+  - type: input
+    id: endknot-version
+    attributes:
+      label: End K not のバージョン / End K not version
+      description: ロビー右上のバージョン表示 / Shown in the lobby version display
+      placeholder: v0.9.10-beta
+    validations:
+      required: true
+
+  - type: input
+    id: au-version
+    attributes:
+      label: Among Us のバージョン / Among Us version
+      placeholder: "2026.8.18"
+    validations:
+      required: false
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: プラットフォーム / Platform
+      options:
+        - Steam
+        - Epic Games
+        - Microsoft Store / Xbox
+        - Android (ランチャー / Launcher)
+        - その他 / Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: server
+    attributes:
+      label: サーバー / Server
+      options:
+        - 公式サーバー / Official server
+        - カスタムサーバー / Custom server
+        - ローカル / Local
+        - 分からない / Not sure
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: ログ / Logs
+      description: |
+        ゲーム中に **Ctrl + F1** を押すと、デスクトップの `EndKnot_Logs` フォルダにログが書き出されます。中のファイルをここにドラッグして添付してください。
+        キックや切断の場合は `Among Us/BepInEx/LogOutput.log` もあると助かります。
+
+        Press **Ctrl + F1** in game to dump logs into the `EndKnot_Logs` folder on your desktop, then drag the files here.
+        For kicks or disconnects, please also attach `Among Us/BepInEx/LogOutput.log`.
+    validations:
+      required: false
+
+  - type: textarea
+    id: media
+    attributes:
+      label: スクリーンショット・動画 / Screenshots or video
+      description: 見た目の不具合なら特に / Especially helpful for visual bugs
+    validations:
+      required: false
