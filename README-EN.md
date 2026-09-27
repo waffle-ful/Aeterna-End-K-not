@@ -32,12 +32,19 @@ End K not reads each player's chat aloud in **its own voice**, so your audience 
 
 ### Roles like these are waiting.
 
+- **Wave Cannon** — Charges up inside a magic circle, then fires a beam that wipes out everyone in a straight line. Whoever it hits is vaporized without a trace.
 - **Riptide** — A giant wave sweeps the entire map. Caught in it, you're gone. It gets faster with every meeting.
 - **WordKiller** — Kills anyone who says the forbidden word. The conversation itself becomes a minefield.
 - **Gemini** — Stand still and a copy of you stays where you were. Same colour, same name, identical to you.
 - **Crosswind** — Vanishes, then blasts everyone sideways with a gust of wind.
 - **Dossun** — Places a giant block that moves with you. Crush them, or knock them flying.
 - **Supernova** — A star that detonates the moment you stand still. Take everyone nearby with you, and if you last until the end, you shove the real winner aside and take the win alone.
+
+<p align="center">
+  <img src=".github/roles/wavecannon.gif" alt="Wave Cannon" width="49%">
+  <img src=".github/roles/wavecannon_victim.gif" alt="Hit by the Wave Cannon" width="49%">
+  <br><sub>Wave Cannon — the shooter's view and the victim's. Players who install End K not too get the magic circles and the special-move cut-in in full.</sub>
+</p>
 
 <p align="center">
   <img src=".github/roles/gemini.gif" alt="Gemini" width="32%">
