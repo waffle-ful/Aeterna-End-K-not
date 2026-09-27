@@ -12730,6 +12730,7 @@
   "EnableAICommentary": "AI Commentary Events (Companion App)",
   "MapAtmosphere": "Map Atmosphere (Storm on MIRA HQ)",
   "MapAtmosphereFlash": "Lightning Flash",
+  "RainbowLobbyCode": "Rainbow Lobby Code",
   "LobbyShare.Title": "Lobby Share",
   "LobbyShare.AnnounceFailed": "Failed to announce lobby ({0}): {1}",
   "LobbyShare.ReportTitle": "Report",

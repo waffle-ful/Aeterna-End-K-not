@@ -15,6 +15,9 @@ namespace EndKnot.Modules;
 // 縁取り / underlay が無反応で、拡大で膨らませると文字どうしの間隔まで広がって二重像になるため、
 // 位置だけをずらして重ねる。文字の並びは動かないまま輪郭の外へ光がにじむ。
 //
+// 光と文字は同じ色相なので、そのままでは文字の縁が光に溶けて読みにくい。光の輪と文字のあいだに
+// 暗い縁取り (同じく位置だけずらした複製) を 1 層挟み、光の派手さは変えずに字形だけを浮かせる。
+//
 // 毎フレームの文字列生成を避けるため、色相の位相を Steps 段に量子化してタグ済みの文字列を 1 回だけ焼き、
 // 以降は添字で差し替えるだけにしてある。差し替えも 1 段ごと (= 20Hz) なので TMP のメッシュ再生成も間引かれる。
 public static class LobbyCodeRainbow
@@ -31,6 +34,12 @@ public static class LobbyCodeRainbow
     private static readonly byte[] RingAlpha = [0x3E, 0x24, 0x14];
     private const float PulseAmount = 0.12f; // 半径の息づかい幅
 
+    // 縁取りの層。光より内側・文字の直下に置き、息づかいはさせない (字形の輪郭は動かない方が読みやすい)。
+    private const int StrokeDirections = 8;
+    private const float StrokeRadius = 0.035f;
+    private const string StrokeColor = "0A0A14A0";
+    private const int StrokeRing = -1;
+
     private static GameStartManager Owner;
     private static TextMeshPro Face;
     private static TextMeshPro[] Auras;
@@ -42,6 +51,7 @@ public static class LobbyCodeRainbow
     private static float TextHeight;
     private static int FramesGameId;
     private static int LastStep = -1;
+    private static int LayersShown = -1; // SetLayersEnabled を状態が変わった時だけ呼ぶための控え (-1 = 未適用)
 
     private static bool Active => Owner && Face && Auras != null && FaceFrames != null;
 
@@ -63,6 +73,7 @@ public static class LobbyCodeRainbow
         TextHeight = 0f;
         FramesGameId = 0;
         LastStep = -1;
+        LayersShown = -1;
     }
 
     // GameRoomNameCode に子 (HideName) が付く前に呼ぶこと。付いた後だと Instantiate が子ごと複製する。
@@ -70,7 +81,8 @@ public static class LobbyCodeRainbow
     {
         Reset();
 
-        if (Main.RainbowLobbyCode == null || !Main.RainbowLobbyCode.Value) return;
+        // オン/オフはロビーの途中でも切り替えられるので、設定に関係なく層は常に用意しておき、表示は Apply 側で決める。
+        // (後から作り直そうとすると、その時点では HideName が子に付いていて一緒に複製されてしまう)
         if (!gsm) return;
 
         TextMeshPro code = gsm.GameRoomNameCode;
@@ -78,7 +90,7 @@ public static class LobbyCodeRainbow
 
         BaseLocalPos = code.transform.localPosition;
 
-        var total = 0;
+        var total = StrokeDirections;
         foreach (int dirs in RingDirections) total += dirs;
 
         var auras = new TextMeshPro[total];
@@ -105,7 +117,18 @@ public static class LobbyCodeRainbow
             }
         }
 
-        Face = CreateLayer(code, "LobbyCodeFace", -0.01f * (RingDirections.Length + 1));
+        // 縁取りは光の最内リングより手前・文字より奥。光の後ろに置くと半透明の光越しに濁って見える。
+        // 光と同じ配列に入れておけば、Reset / 表示切替の後始末をそのまま共有できる。
+        for (var d = 0; d < StrokeDirections; d++)
+        {
+            float angle = Mathf.PI * 2f * d / StrokeDirections;
+            auras[n] = CreateLayer(code, $"LobbyCodeStroke_{d}", StrokeZ);
+            rings[n] = StrokeRing;
+            dirVectors[n] = new(Mathf.Cos(angle), Mathf.Sin(angle));
+            n++;
+        }
+
+        Face = CreateLayer(code, "LobbyCodeFace", -0.01f * (RingDirections.Length + 2));
         Auras = auras;
         AuraRing = rings;
         AuraDirection = dirVectors;
@@ -113,6 +136,7 @@ public static class LobbyCodeRainbow
     }
 
     private static float RingZ(int ring) => -0.01f * (RingDirections.Length - ring);
+    private static float StrokeZ => -0.01f * (RingDirections.Length + 1);
 
     private static TextMeshPro CreateLayer(TextMeshPro code, string name, float zOffset)
     {
@@ -141,12 +165,22 @@ public static class LobbyCodeRainbow
         TextMeshPro code = gsm.GameRoomNameCode;
         if (!code) return;
 
+        // オフの間は層を消して return するだけで、バニラの白いコードに戻る (本体の色は呼び出し元が毎フレーム白に戻している)。
+        bool show = !hidden && Main.RainbowLobbyCode != null && Main.RainbowLobbyCode.Value;
+        int shown = show ? 1 : 0;
+
+        if (LayersShown != shown)
+        {
+            SetLayersEnabled(show);
+            LayersShown = shown;
+            LastStep = -1; // 再表示した時に止まった色のまま出ないよう、次のフレームで必ず差し替える
+        }
+
+        if (!show) return;
+
         // 本体は素のコード文字列を保ったまま透明にする (読み取り経路を壊さずに見た目だけ差し替える)。
         // 直前の既存ブロックが毎フレーム alpha を戻すので、こちらも毎フレーム上書きしないとちらつく。
         code.color = new(1f, 1f, 1f, 0f);
-
-        SetLayersEnabled(!hidden);
-        if (hidden) return;
 
         // 焼き直しの判定は int の GameId で行う。文字列で比べると IntToGameName が毎フレーム
         // 新しい managed string を確保してしまう (このファイルの他の表示更新と同じ作法)。
@@ -170,6 +204,19 @@ public static class LobbyCodeRainbow
             Face.ForceMeshUpdate();
             TextHeight = Face.textBounds.size.y;
             if (TextHeight <= 0f) TextHeight = Face.fontSize * 0.1f;
+
+            // 縁取りは色も位置も動かないので、文字が変わった時にだけ置き直す
+            string strokeText = $"<color=#{StrokeColor}>{source}</color>";
+            float strokeRadius = TextHeight * StrokeRadius;
+
+            for (var i = 0; i < Auras.Length; i++)
+            {
+                if (AuraRing[i] != StrokeRing || !Auras[i]) continue;
+
+                Vector2 dir = AuraDirection[i];
+                Auras[i].text = strokeText;
+                Auras[i].transform.localPosition = BaseLocalPos + new Vector3(dir.x * strokeRadius, dir.y * strokeRadius, StrokeZ);
+            }
         }
 
         if (!Active) return;
@@ -192,6 +239,8 @@ public static class LobbyCodeRainbow
             if (!aura) continue;
 
             int ring = AuraRing[i];
+            if (ring == StrokeRing) continue;
+
             aura.text = RingFrames[ring][step];
 
             float radius = TextHeight * RingRadius[ring] * pulse;

@@ -45,6 +45,7 @@ public static class OptionsMenuBehaviourStartPatch
     private static ClientOptionItem VoiceVoxReadHostOwnChat;
     private static ClientOptionItem EnableAICommentary;
     private static ClientOptionItem MapAtmosphere;
+    private static ClientOptionItem RainbowLobbyCode;
     private static ClientOptionItem MapAtmosphereFlash;
 #if DEBUG
     private static ClientOptionItem GodMode;
@@ -377,6 +378,9 @@ public static class OptionsMenuBehaviourStartPatch
 
         if (MapAtmosphereFlash == null || !MapAtmosphereFlash.ToggleButton)
             MapAtmosphereFlash = ClientOptionItem.Create("MapAtmosphereFlash", Main.MapAtmosphereFlash, __instance);
+
+        if (RainbowLobbyCode == null || !RainbowLobbyCode.ToggleButton)
+            RainbowLobbyCode = ClientOptionItem.Create("RainbowLobbyCode", Main.RainbowLobbyCode, __instance);
 
 #if DEBUG
         if ((GodMode == null || GodMode.ToggleButton == null) && DebugModeManager.AmDebugger)
