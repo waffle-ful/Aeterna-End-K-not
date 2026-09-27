@@ -32,7 +32,7 @@ End K not reads each player's chat aloud in **its own voice**, so your audience 
 
 ### Roles like these are waiting.
 
-- **Wave Cannon** — Charges up inside a magic circle, then fires a beam that wipes out everyone in a straight line. Whoever it hits is vaporized without a trace.
+- **Wave Cannon** — The Wave Cannon made famous by SuperNewRoles. Charges up inside a magic circle, then fires a beam that wipes out everyone in a straight line. Whoever it hits is vaporized without a trace.
 - **Riptide** — A giant wave sweeps the entire map. Caught in it, you're gone. It gets faster with every meeting.
 - **WordKiller** — Kills anyone who says the forbidden word. The conversation itself becomes a minefield.
 - **Gemini** — Stand still and a copy of you stays where you were. Same colour, same name, identical to you.
