@@ -17,6 +17,7 @@ public class Limiter : RoleBase
     private static OptionItem BlastRange;
 
     private bool Limit;
+    private bool Exploding;
     private float Timer;
     private int KillCount;
     private byte LimiterId;
@@ -63,6 +64,7 @@ public class Limiter : RoleBase
     {
         PlayerIdList.Add(playerId);
         Limit = false;
+        Exploding = false;
         Timer = 0f;
         KillCount = 0;
         LimiterId = playerId;
@@ -81,20 +83,34 @@ public class Limiter : RoleBase
     public override bool OnCheckMurder(PlayerControl killer, PlayerControl target)
     {
         if (!Limit) return true;
+        if (Exploding) return false;
 
-        // 自爆：キル不発、範囲内の全員を爆殺してから自分も死ぬ
+        // 自爆：キル不発、範囲内の全員を爆殺してから自分も死ぬ。
+        // 爆発が広がってから死ぬ (同時だとキル演出に覆われ、爆発が死んだ後に見える)
         float range = BlastRange.GetFloat();
-        foreach (PlayerControl pc in Main.AllAlivePlayerControlsToList)
+        Vector3 center = killer.transform.position;
+        EndKnot.Modules.ExplosionFx.Play(EndKnot.Modules.ExplosionFx.Kind.Blast, killer.Pos(), range);
+        Exploding = true;
+
+        LateTask.New(() =>
         {
-            if (pc.PlayerId == killer.PlayerId) continue;
-            if (Vector3.Distance(killer.transform.position, pc.transform.position) > range) continue;
+            Exploding = false;
+            if (GameStates.IsEnded || GameStates.IsMeeting) return;
 
-            pc.SetRealKiller(killer);
-            pc.Suicide(PlayerState.DeathReason.Bombed, killer);
-        }
+            foreach (PlayerControl pc in Main.AllAlivePlayerControlsToList)
+            {
+                if (pc.PlayerId == killer.PlayerId) continue;
+                if (Vector3.Distance(center, pc.transform.position) > range) continue;
 
-        Main.PlayerStates[killer.PlayerId].deathReason = PlayerState.DeathReason.Bombed;
-        killer.Suicide(PlayerState.DeathReason.Bombed);
+                pc.SetRealKiller(killer);
+                pc.Suicide(PlayerState.DeathReason.Bombed, killer);
+            }
+
+            if (!killer.IsAlive()) return;
+
+            Main.PlayerStates[killer.PlayerId].deathReason = PlayerState.DeathReason.Bombed;
+            killer.Suicide(PlayerState.DeathReason.Bombed);
+        }, 0.5f, "Limiter Blast");
 
         return false;
     }

@@ -62,11 +62,15 @@ public class Vortex : RoleBase
     {
         if (!CheckMurderPatch.PassesGate(killer, target)) return false;
 
+        var from = target.Pos();
+
         if (!target.TPToRandomVent())
         {
             killer.Notify(Translator.GetString("TargetCannotBeTeleported"));
             return IfTargetCannotBeTeleported.GetValue() == 1;
         }
+
+        ExplosionFx.Play(ExplosionFx.Kind.Swallow, from, 1f);
 
         RPC.PlaySoundRPC(killer.PlayerId, Sounds.KillSound);
         LateTask.New(() => target.Suicide(PlayerState.DeathReason.Kill, killer), 0.2f, log: false);

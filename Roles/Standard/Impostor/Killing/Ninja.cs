@@ -197,6 +197,8 @@ internal class Ninja : RoleBase
                 pc.RpcMakeInvisible(phantom: true);
 
                 Vector2 targetPosition = target.Pos();
+                ExplosionFx.Play(ExplosionFx.Kind.Smoke, pc.Pos(), 1f);
+                ExplosionFx.Play(ExplosionFx.Kind.Smoke, targetPosition, 1f);
                     
                 CheckInvalidMovementPatch.LastPosition[pc.PlayerId] = targetPosition;
                 CheckInvalidMovementPatch.ExemptedPlayers.Add(pc.PlayerId);
@@ -221,6 +223,7 @@ internal class Ninja : RoleBase
                 LateTask.New(() =>
                 {
                     if (!GameStates.IsInTask || ExileController.Instance || AntiBlackout.SkipTasks) return;
+                    if (pc.IsAlive()) ExplosionFx.Play(ExplosionFx.Kind.Smoke, pc.Pos(), 1f);
                     pc.RpcMakeVisible(phantom: true);
                 }, time, log: false);
 
@@ -237,7 +240,15 @@ internal class Ninja : RoleBase
         if (MarkedPlayer != byte.MaxValue)
         {
             PlayerControl target = Utils.GetPlayerById(MarkedPlayer);
+            Vector2 from = target ? (IsUndertaker ? target : pc).Pos() : default;
+            Vector2 to = target ? (IsUndertaker ? pc : target).Pos() : default;
             bool tpSuccess = IsUndertaker ? target.TP(pc) : pc.TP(target);
+
+            if (tpSuccess)
+            {
+                ExplosionFx.Play(ExplosionFx.Kind.Smoke, from, 1f);
+                ExplosionFx.Play(ExplosionFx.Kind.Smoke, to, 1f);
+            }
 
             if (!(target == null || !target.IsAlive() || Pelican.IsEaten(target.PlayerId) || target.inVent || !GameStates.IsInTask) && tpSuccess && pc.RpcCheckAndMurder(target))
             {

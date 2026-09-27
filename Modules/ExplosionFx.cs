@@ -45,7 +45,26 @@ public static class ExplosionFx
         Slam = 13,
 
         // 水しぶき: Radius = しぶきの大きさ (1.2 以上で溺れた時の泡も出す)
-        Splash = 14
+        Splash = 14,
+
+        // 人が火柱に包まれて燃え上がる: Pos = 燃えた人、Radius = 火の大きさ (1 前後)
+        Ignite = 15,
+
+        // 渦に吸い込まれて消える: Pos = 吸い込まれた人、Radius = 渦の大きさ (1 前後)
+        Swallow = 16,
+
+        // 虚空が破れて噴き出す: Pos = 破れた場所、Radius = 大きさ (1 前後)
+        VoidBurst = 17,
+
+        // 煙玉で消える / 現れる: Pos = 本人、Radius = 煙の大きさ (1 前後)
+        Smoke = 18,
+
+        // 地面に潜る / 地面から這い出る: Pos = 本人、Radius = 大きさ (1 前後)
+        BurrowIn = 19,
+        BurrowOut = 20,
+
+        // Fire と同じ爆発。巻き込まれた人は演出の後に死ぬので、範囲内の自分の画面でも待たずにすぐ見せる
+        Blast = 21
     }
 
     // LocalOnly はまとめ送信に載せない (PlayFor が宛先を絞って自前で送る)
@@ -112,6 +131,7 @@ public static class ExplosionFx
     private const float RayAspect = 4f;
     private static float _lastSendTime = -1f;
     private static float _holdUntil = -1f;
+    private static bool _pauseForKill;
 
     private static bool _warm;
     private static bool _jitted;
@@ -255,7 +275,10 @@ public static class ExplosionFx
             if (Unsent.Count > 0 && Time.unscaledTime - _lastSendTime >= SendInterval) Send();
 
             // 自分がこの爆発で死んだ時はキル演出が画面を覆うので、明けるまで演出を止めておいて後から見せる
-            if (Active.Count > 0 && Time.time >= _holdUntil && !KillOverlayOpen())
+            // 止めるのは即死する爆発に巻き込まれた時だけ。演出の後に死ぬもの (Blast・スーパーノヴァ・火柱) は裏で進めて、明けた時には終わっている方が自然
+            if (Active.Count == 0) _pauseForKill = false;
+
+            if (Active.Count > 0 && Time.time >= _holdUntil && !(_pauseForKill && KillOverlayOpen()))
             {
                 alloc = AllocProbe.Now();
 
@@ -314,7 +337,7 @@ public static class ExplosionFx
 
     private static bool KillOverlayOpen()
     {
-        return HudManager.InstanceExists && HudManager.Instance.KillOverlay && HudManager.Instance.KillOverlay.IsOpen;
+        return ExplosionKillOverlay.Showing || (HudManager.InstanceExists && HudManager.Instance.KillOverlay && HudManager.Instance.KillOverlay.IsOpen);
     }
 
     private static bool AnyOtherModdedClient()
@@ -334,10 +357,14 @@ public static class ExplosionFx
             EnsureSprites();
 
             // 爆発の範囲内にいる自分は直後にキル演出が出るので、それが開くまでの一瞬だけ待つ
-            // (スーパーノヴァは爆発を見せてから死なせるので待たない)
+            // (スーパーノヴァ・Blast・火柱は演出を見せてから死なせるので待たない)
             PlayerControl lp = PlayerControl.LocalPlayer;
             bool lethal = r.Kind is Kind.Fire;
-            if (lethal && lp && lp.IsAlive() && Vector2.Distance(lp.GetTruePosition(), r.Pos) <= r.Radius + 0.5f) _holdUntil = Time.time + 0.35f;
+            if (lethal && lp && lp.IsAlive() && Vector2.Distance(lp.GetTruePosition(), r.Pos) <= r.Radius + 0.5f)
+            {
+                _holdUntil = Time.time + 0.35f;
+                _pauseForKill = true;
+            }
 
             Logger.Info($"{r.Kind} at ({r.Pos.x:F2}, {r.Pos.y:F2}) r={r.Radius:F1}", "ExplosionFx");
 
@@ -345,6 +372,7 @@ public static class ExplosionFx
             switch (r.Kind)
             {
                 case Kind.Fire:
+                case Kind.Blast:
                     SpawnFire(r.Pos, r.Radius);
                     break;
                 case Kind.Supernova:
@@ -385,6 +413,24 @@ public static class ExplosionFx
                 case Kind.Splash:
                     SpawnSplash(r.Pos, r.Radius);
                     break;
+                case Kind.Ignite:
+                    SpawnIgnite(r.Pos, r.Radius);
+                    break;
+                case Kind.Swallow:
+                    SpawnSwallow(r.Pos, r.Radius);
+                    break;
+                case Kind.VoidBurst:
+                    SpawnVoidBurst(r.Pos, r.Radius);
+                    break;
+                case Kind.Smoke:
+                    SpawnSmoke(r.Pos, r.Radius);
+                    break;
+                case Kind.BurrowIn:
+                    SpawnBurrowIn(r.Pos, r.Radius);
+                    break;
+                case Kind.BurrowOut:
+                    SpawnBurrowOut(r.Pos, r.Radius);
+                    break;
             }
         }
         catch (System.Exception e) { Utils.ThrowException(e); }
@@ -401,7 +447,7 @@ public static class ExplosionFx
     }
 
     // 近くで起きた爆発ほど強く、画面全体の閃光とカメラの揺れを返す (自分の画面だけ・送信なし)。
-    private static void Impact(Vector2 c, float r, Color flash, float flashAlpha, float shake, float shakeDuration)
+    private static void Impact(Vector2 c, float r, Color flash, float flashAlpha, float shake, float shakeDuration, float delay = 0f)
     {
         Camera cam = Camera.main;
         if (!cam) return;
@@ -411,7 +457,7 @@ public static class ExplosionFx
         if (dist > reach) return;
 
         float k = 1f - dist / reach;
-        Add(Shape.Solid, c, Vector2.zero, 0.6f, 1f, 1f, flash, flash, flashAlpha * (0.35f + 0.65f * k), 0.004f, 0.08f, followCamera: true);
+        Add(Shape.Solid, c, Vector2.zero, 0.6f, 1f, 1f, flash, flash, flashAlpha * (0.35f + 0.65f * k), 0.004f, 0.08f, delay: delay, followCamera: true);
         // 揺れは閃光が実際に画面に出た瞬間に始める (キル演出の裏で揺れを使い切らない)
         if (Active.Count > 0 && Active[^1].FollowCamera)
         {
@@ -1254,6 +1300,423 @@ public static class ExplosionFx
             Add(Shape.Ring, c + new Vector2(Rnd(-0.6f, 0.6f), Rnd(-0.4f, 0.2f)), new Vector2(Rnd(-0.2f, 0.2f), Rnd(0.6f, 1.6f)), Rnd(0.8f, 1.4f), s, s, WaterFoam, WaterLight, 1f, 0.05f, 0.6f,
                 delay: Rnd(0f, 1.6f), twinkle: 0.3f, twinkleSpeed: 8f);
         }
+    }
+
+    private static readonly Color BlazeWhite = new(1f, 0.97f, 0.85f);
+    private static readonly Color BlazeYellow = new(1f, 0.8f, 0.22f);
+    private static readonly Color BlazeOrange = new(1f, 0.42f, 0.06f);
+    private static readonly Color BlazeRed = new(0.72f, 0.1f, 0.03f);
+    private static readonly Color Charred = new(0.09f, 0.06f, 0.05f);
+    private static readonly Color Ash = new(0.3f, 0.27f, 0.26f);
+
+    private static int _igniteFlashFrame = -1;
+
+    // 燃え上がる: 足元から噴き上がる火の筋と閃光 → 体を包んで揺らめきながら立ちのぼる炎の舌 → 舞い上がる火の粉と黒煙
+    // → 火が収まると床の焦げ跡と舞い落ちる灰が残る。一度に大勢が燃える (アーソニストの全焼) と粒の上限に届くので、
+    // 既に多く出ている時は数を半分にする
+    private static void SpawnIgnite(Vector2 c, float size)
+    {
+        float r = FxMath.Clamp(size, 0.5f, 2.5f);
+        Vector2 f = c + Feet;
+        float q = Active.Count > 1200 ? 0.5f : 1f;
+
+        // 大勢が同時に燃えても画面の閃光と揺れは 1 回分だけにする (重ねると画面が橙一色に潰れる)
+        if (_igniteFlashFrame != Time.frameCount)
+        {
+            _igniteFlashFrame = Time.frameCount;
+            Impact(c, 1.5f * r, new Color(1f, 0.7f, 0.35f), 0.3f, 0.1f, 0.25f);
+        }
+
+        // 着火: 足元で弾ける光と、床を這う熱の輪
+        Add(Shape.Glow, f, Vector2.zero, 0.5f, 0.5f * r, 3f * r, BlazeWhite, BlazeOrange, 1f, 0.02f, 0.3f, sy0: 0.3f * r, sy1: 1.4f * r);
+        Add(Shape.Ray, f, Vector2.zero, 0.7f, 2.5f * r, 5.5f * r, BlazeWhite, BlazeOrange, 1f, 0.01f, 0.35f, rot: 90f, sy0: 1.3f * r, sy1: 0.2f * r);
+
+        for (int k = 0; k < 3; k++)
+        {
+            float to = (2.6f + k * 0.8f) * r;
+            Add(Shape.Ring, f, Vector2.zero, 0.6f + k * 0.12f, 0.3f * r, to, k == 0 ? BlazeWhite : BlazeYellow, BlazeRed, 1f - k * 0.2f, 0.02f, 0.4f,
+                delay: k * 0.08f, rot: 0f, sy0: 0.1f * r, sy1: to * 0.35f);
+        }
+
+        // 体を包む火の芯 (燃えている間ずっと脈打つ)
+        Add(Shape.Glow, c, Vector2.zero, 1.9f, 1.2f * r, 1.8f * r, BlazeYellow, BlazeRed, 0.85f, 0.05f, 0.65f, twinkle: 0.3f, twinkleSpeed: 18f, sy0: 1.8f * r, sy1: 2.6f * r);
+        Add(Shape.Glow, f, Vector2.zero, 2f, 2.6f * r, 2.2f * r, BlazeOrange, BlazeRed, 0.55f, 0.05f, 0.6f, twinkle: 0.25f, twinkleSpeed: 11f, sy0: 1f * r, sy1: 0.8f * r, order: 0);
+
+        // 体にまとわりついて揺らめく大きな炎 (燃えている間ずっとその場で渦を巻き、膨らんでは縮む)
+        for (int i = 0; i < 9 * q; i++)
+        {
+            float s = Rnd(0.8f, 1.15f) * r;
+            Add(Shape.Flame, c + new Vector2(Rnd(-0.3f, 0.3f) * r, Rnd(-0.45f, 0.25f) * r), new Vector2(0f, Rnd(0.1f, 0.3f)), Rnd(0.9f, 1.3f), s * 0.6f, s,
+                BlazeYellow, BlazeRed, Rnd(0.75f, 0.95f), 0.1f, 0.55f, delay: Rnd(0f, 0.7f), spin: Rnd(-90f, 90f), twinkle: 0.35f, twinkleSpeed: Rnd(10f, 18f),
+                sy0: s * 0.8f, sy1: s * 1.4f, colorMid: BlazeOrange);
+        }
+
+        // 炎の舌: 足元から体の高さまで伸び、膨らみながら赤く冷えて消える。速さの向きへ引き伸ばして縦長の炎にする
+        // (速すぎると頭より上へ抜けて、体が燃えているように見えない)
+        int tongues = (int)(80 * q);
+
+        for (int i = 0; i < tongues; i++)
+        {
+            float x = Rnd(-0.45f, 0.45f) * r;
+            float s = Rnd(0.45f, 0.75f) * r * (1f - FxMath.Abs(x) / r * 0.6f);
+            Add(Shape.Flame, f + new Vector2(x, Rnd(0f, 0.55f) * r), new Vector2(-x * Rnd(0.5f, 1.2f), Rnd(1.3f, 2.4f) * r), Rnd(0.45f, 0.7f), s * 0.7f, s * 1.1f,
+                i % 3 == 0 ? BlazeWhite : BlazeYellow, BlazeRed, 1f, 0.06f, 0.45f, drag: 1.6f, delay: Rnd(0f, 1.5f), spin: Rnd(-60f, 60f), stretch: 0.3f,
+                colorMid: BlazeOrange);
+        }
+
+        // 炎の根元で白く燃える芯 (炎より手前に重ねて、外側の橙との濃淡を作る)
+        for (int i = 0; i < 12 * q; i++)
+        {
+            float s = Rnd(0.3f, 0.5f) * r;
+            Add(Shape.Glow, c + new Vector2(Rnd(-0.2f, 0.2f) * r, Rnd(-0.45f, -0.05f) * r), new Vector2(0f, Rnd(0.3f, 0.8f)), Rnd(0.35f, 0.55f), s, s * 1.3f,
+                BlazeWhite, BlazeYellow, Rnd(0.6f, 0.85f), 0.1f, 0.5f, delay: Rnd(0.05f, 1.4f), sy0: s * 1.5f, sy1: s * 2f);
+        }
+
+        // 炎の縁で上へ舐めるように伸びては消える細い火先
+        for (int i = 0; i < 30 * q; i++)
+        {
+            float x = Rnd(-0.4f, 0.4f) * r;
+            float l = Rnd(0.5f, 0.9f) * r;
+            Add(Shape.Ray, c + new Vector2(x, Rnd(0f, 0.35f) * r), new Vector2(0f, Rnd(0.6f, 1.2f)), Rnd(0.22f, 0.38f), l * 0.4f, l, BlazeWhite, BlazeOrange, 0.8f, 0.1f, 0.4f,
+                delay: Rnd(0.05f, 1.5f), rot: 90f + x * 40f + Rnd(-10f, 10f), sy0: 0.34f * r, sy1: 0.12f * r, colorMid: BlazeYellow);
+        }
+
+        // 最初の一瞬だけ高く噴き上がる火柱
+        for (int i = 0; i < 14 * q; i++)
+        {
+            float s = Rnd(0.6f, 1f) * r;
+            Add(Shape.Flame, f + new Vector2(Rnd(-0.2f, 0.2f) * r, 0f), new Vector2(Rnd(-0.4f, 0.4f), Rnd(6f, 9f) * r), Rnd(0.5f, 0.7f), s, s * 0.3f,
+                BlazeWhite, BlazeRed, 1f, 0.02f, 0.45f, drag: 2.2f, delay: Rnd(0f, 0.12f), stretch: 0.1f, colorMid: BlazeYellow);
+        }
+
+        // 火の粉: ゆらゆら横に揺れながら高く昇って瞬く
+        for (int i = 0; i < 40 * q; i++)
+        {
+            float s = Rnd(0.14f, 0.26f);
+            Add(Shape.Star, c + new Vector2(Rnd(-0.5f, 0.5f) * r, Rnd(-0.4f, 0.6f) * r), new Vector2(Rnd(-1.2f, 1.2f), Rnd(0.5f, 2f)), Rnd(1f, 1.9f), s, s * 0.4f,
+                BlazeWhite, BlazeOrange, 1f, 0.03f, 0.55f, drag: 1.2f, delay: Rnd(0f, 1.6f), rise: Rnd(0.8f, 1.8f), twinkle: 0.5f, twinkleSpeed: Rnd(12f, 22f));
+        }
+
+        // 黒煙: 炎の上から遅れて湧き、膨らみながら昇る (炎より奥に描く)
+        for (int i = 0; i < 14 * q; i++)
+        {
+            Add(Shape.Cloud, c + new Vector2(Rnd(-0.3f, 0.3f) * r, Rnd(0.5f, 1f) * r), new Vector2(Rnd(-0.4f, 0.4f), 0f), Rnd(1.6f, 2.4f), 0.5f * r, Rnd(1.4f, 2.2f) * r,
+                Ash, Charred, Rnd(0.4f, 0.6f), 0.15f, 0.45f, delay: Rnd(0.3f, 1.6f), spin: Rnd(-40f, 40f), rise: Rnd(0.9f, 1.5f), order: 0);
+        }
+
+        // 焦げ跡 (縁だけしばらく赤く燻る) と、火が収まった後に舞い落ちる灰
+        Add(Shape.Cloud, f, Vector2.zero, 3.6f, 1.4f * r, 2.2f * r, Charred, Charred, 0.9f, 0.06f, 0.7f, rot: 0f, sy0: 0.55f * r, sy1: 0.8f * r, order: 0);
+        Add(Shape.Ring, f, Vector2.zero, 2.4f, 1.6f * r, 2f * r, BlazeOrange, BlazeRed, 0.55f, 0.1f, 0.5f, delay: 0.3f, rot: 0f, twinkle: 0.4f, twinkleSpeed: 6f,
+            sy0: 0.6f * r, sy1: 0.72f * r, order: 0);
+
+        for (int i = 0; i < 16 * q; i++)
+        {
+            float s = Rnd(0.1f, 0.18f);
+            Add(Shape.Glow, c + new Vector2(Rnd(-0.7f, 0.7f) * r, Rnd(0.4f, 1.1f) * r), new Vector2(Rnd(-0.25f, 0.25f), 0f), Rnd(1.3f, 2f), s, s * 0.7f,
+                Ash, Charred, 0.8f, 0.1f, 0.6f, delay: Rnd(1.1f, 1.9f), rise: -0.6f);
+        }
+    }
+
+    private static readonly Color VoidBlack = new(0.03f, 0.01f, 0.08f);
+    private static readonly Color VoidDeep = new(0.16f, 0.04f, 0.32f);
+    private static readonly Color VoidPurple = new(0.5f, 0.18f, 0.95f);
+    private static readonly Color VoidMagenta = new(0.95f, 0.3f, 1f);
+    private static readonly Color VoidBlue = new(0.3f, 0.45f, 1f);
+    private static readonly Color VoidRim = new(0.9f, 0.85f, 1f);
+
+    private static Color VoidVivid(int i) => (i % 3) switch
+    {
+        0 => VoidMagenta,
+        1 => VoidBlue,
+        _ => VoidRim
+    };
+
+    // 吸い込まれる: 足元に暗い渦が口を開け、縁の輪が内へ縮みながら光の筋と塵を巻き込む → 一点に潰れて白く弾け、
+    // 小さな黒い点が残って消える。粒は寿命の終わりにちょうど中心へ届く向きと速さで放つ (少し回り込ませて渦に見せる)
+    private static void SpawnSwallow(Vector2 c, float size)
+    {
+        float r = FxMath.Clamp(size, 0.5f, 3f);
+        const float collapse = 0.95f;
+
+        Impact(c, 2f * r, VoidPurple, 0.3f, 0.12f, 0.35f);
+
+        // 渦の口: 膨らむ暗い円盤 → 潰れて閉じる (1 粒では膨らんで縮めないので 2 粒をつなぐ)
+        Add(Shape.Glow, c, Vector2.zero, collapse, 1f * r, 4f * r, VoidPurple, VoidDeep, 0.6f, 0.08f, 0.8f, order: 0);
+        Add(Shape.Cloud, c, Vector2.zero, collapse, 0.4f * r, 3f * r, VoidBlack, VoidBlack, 1f, 0.06f, 0.99f, spin: -220f, order: 1);
+        Add(Shape.Cloud, c, Vector2.zero, collapse, 0.3f * r, 2.2f * r, VoidBlack, VoidBlack, 1f, 0.06f, 0.99f, spin: 160f, order: 1);
+        Add(Shape.Cloud, c, Vector2.zero, 0.3f, 2.6f * r, 0.05f, VoidBlack, VoidDeep, 1f, 0.01f, 0.8f, delay: collapse - 0.02f, spin: -400f, order: 1);
+
+        // 渦の腕: 中心を軸に回りながら縮んでいく光条 (根元が中心なので、回すと風車のように渦を巻く)
+        for (int i = 0; i < 10; i++)
+        {
+            bool outer = i % 2 == 0;
+            float len = (outer ? 3.4f : 2.6f) * r;
+            Add(Shape.Ray, c, Vector2.zero, collapse, len, 0.2f * r, outer ? VoidMagenta : VoidBlue, VoidPurple, 0.85f, 0.15f, 0.85f,
+                rot: i * 36f + Rnd(-8f, 8f), spin: outer ? -320f : -420f, sy0: 0.26f * r, sy1: 0.06f * r, order: 2);
+        }
+
+        // 内へ縮んでいく縁の輪
+        for (int k = 0; k < 5; k++)
+        {
+            float from = (4.2f - k * 0.35f) * r;
+            Add(Shape.Ring, c, Vector2.zero, collapse - k * 0.12f, from, 0.2f * r, k % 2 == 0 ? VoidRim : VoidMagenta, VoidPurple, 0.9f - k * 0.1f, 0.15f, 0.85f,
+                delay: k * 0.12f);
+        }
+
+        // 巻き込まれる光の筋
+        for (int i = 0; i < 70; i++)
+        {
+            Vector2 d = Dir();
+            float R = Rnd(1.3f, 2.8f) * r;
+            float life = Rnd(0.35f, 0.6f);
+            float twist = Rnd(0.8f, 1.3f);
+            Vector2 end = FxMath.V2(d.x * FxMath.Cos(twist) - d.y * FxMath.Sin(twist), d.x * FxMath.Sin(twist) + d.y * FxMath.Cos(twist)) * 0.15f * r;
+            Vector2 start = d * R;
+            Add(Shape.Star, c + start, (end - start) / life, life, Rnd(0.4f, 0.6f), 0.14f, VoidVivid(i), VoidPurple, 1f, 0.15f, 0.8f,
+                delay: Rnd(0f, collapse - life), stretch: 0.09f);
+        }
+
+        // 引き寄せられる紫の塵
+        for (int i = 0; i < 18; i++)
+        {
+            Vector2 d = Dir();
+            Vector2 start = d * Rnd(1.5f, 2.6f) * r;
+            float life = Rnd(0.5f, 0.75f);
+            Add(Shape.Cloud, c + start, -start / life * 0.9f, life, 0.9f * r, 0.2f * r, VoidPurple, VoidDeep, 0.45f, 0.2f, 0.7f,
+                delay: Rnd(0f, collapse - life), spin: Rnd(-200f, -80f));
+        }
+
+        // 潰れて弾ける
+        Add(Shape.Glow, c, Vector2.zero, 0.35f, 0.3f * r, 2.4f * r, WindWhite, VoidMagenta, 1f, 0.01f, 0.3f, delay: collapse);
+        Add(Shape.Star, c, Vector2.zero, 0.45f, 0.4f * r, 3.2f * r, WindWhite, VoidBlue, 1f, 0.01f, 0.3f, delay: collapse, spin: 200f);
+        Add(Shape.Ring, c, Vector2.zero, 0.45f, 0.2f * r, 3f * r, VoidRim, VoidPurple, 0.9f, 0.01f, 0.35f, delay: collapse);
+
+        for (int i = 0; i < 24; i++)
+        {
+            Add(Shape.Star, c, Dir() * Rnd(3f, 7f) * r, Rnd(0.35f, 0.6f), Rnd(0.3f, 0.45f), 0.1f, VoidVivid(i), VoidPurple, 1f, 0.01f, 0.5f,
+                drag: 3f, delay: collapse, stretch: 0.1f);
+        }
+
+        Add(Shape.Glow, c, Vector2.zero, 0.9f, 0.35f * r, 0.1f, VoidBlack, VoidBlack, 0.9f, 0.05f, 0.5f, delay: collapse + 0.1f, order: 0);
+    }
+
+    // 虚空が破れる: 暗い球が渦を巻きながら膨らんで力を溜め、縁の輪が締まる → 紫の閃光と揺れとともに破れ、三重の輪と光条が走る
+    // → 尾を引く光の筋と星屑が噴き出す → 破れ目の周りに星の瞬く紫の霧がしばらく漂う
+    private static void SpawnVoidBurst(Vector2 c, float size)
+    {
+        float r = FxMath.Clamp(size, 0.5f, 3f);
+        const float pop = 0.28f;
+
+        // 溜め
+        Add(Shape.Glow, c, Vector2.zero, pop + 0.05f, 0.5f * r, 2.6f * r, VoidPurple, VoidMagenta, 0.7f, 0.1f, 0.9f, order: 0);
+        Add(Shape.Cloud, c, Vector2.zero, pop + 0.05f, 0.2f * r, 1.8f * r, VoidBlack, VoidBlack, 1f, 0.15f, 0.9f, spin: -300f, order: 1);
+        Add(Shape.Ring, c, Vector2.zero, pop, 3f * r, 1.7f * r, VoidRim, VoidMagenta, 0.9f, 0.2f, 0.9f);
+
+        for (int i = 0; i < 20; i++)
+        {
+            Vector2 d = Dir();
+            Vector2 start = d * Rnd(1.4f, 2.2f) * r;
+            Add(Shape.Star, c + start, -start / pop * 0.9f, pop, 0.4f, 0.15f, VoidVivid(i), VoidPurple, 1f, 0.2f, 0.9f, stretch: 0.06f);
+        }
+
+        // 破れる
+        Impact(c, 2.5f * r, VoidMagenta, 0.26f, 0.16f, 0.35f, pop);
+        Add(Shape.Cloud, c, Vector2.zero, 0.55f, 1.8f * r, 3.6f * r, VoidBlack, VoidDeep, 0.95f, 0.01f, 0.3f, delay: pop, spin: 120f, order: 1);
+        Add(Shape.Glow, c, Vector2.zero, 0.45f, 0.6f * r, 3.6f * r, VoidRim, VoidMagenta, 1f, 0.01f, 0.3f, delay: pop);
+        Add(Shape.Star, c, Vector2.zero, 0.55f, 0.4f * r, 4.4f * r, WindWhite, VoidPurple, 1f, 0.01f, 0.3f, delay: pop, spin: -150f);
+
+        for (int k = 0; k < 3; k++)
+        {
+            Add(Shape.Ring, c, Vector2.zero, 0.55f + k * 0.12f, 0.6f * r, (3.8f + k * 1.2f) * r, k == 1 ? VoidMagenta : VoidRim, VoidPurple, 1f - k * 0.2f, 0.01f, 0.35f,
+                delay: pop + k * 0.07f);
+        }
+
+        for (int i = 0; i < 12; i++)
+        {
+            float w = Rnd(0.14f, 0.24f) * r;
+            Add(Shape.Ray, c, Vector2.zero, Rnd(0.35f, 0.55f), 0.4f * r, Rnd(2.8f, 4.2f) * r, VoidRim, VoidPurple, 0.9f, 0.01f, 0.3f,
+                delay: pop, rot: i * 30f + Rnd(-12f, 12f), sy0: w, sy1: w * 0.2f);
+        }
+
+        // 尾を引いて噴き出す光の筋
+        for (int i = 0; i < 26; i++)
+        {
+            Vector2 d = Dir();
+            Add(Shape.Star, c + d * 0.3f * r, d * Rnd(6f, 11f) * r, Rnd(0.45f, 0.7f), Rnd(0.5f, 0.75f), 0.2f, VoidVivid(i), VoidPurple, 1f, 0.01f, 0.5f,
+                drag: 3.2f, delay: pop, stretch: 0.14f);
+        }
+
+        for (int i = 0; i < 40; i++)
+        {
+            Add(Shape.Star, c, Dir() * Rnd(3f, 8f) * r, Rnd(0.5f, 0.9f), Rnd(0.3f, 0.5f), 0.12f, VoidVivid(i), VoidPurple, 1f, 0.01f, 0.5f,
+                drag: 2.8f, delay: pop, stretch: 0.1f, twinkle: 0.3f, twinkleSpeed: Rnd(16f, 26f));
+        }
+
+        for (int i = 0; i < 10; i++)
+        {
+            Vector2 d = Dir();
+            Add(Shape.Cloud, c + d * Rnd(0.2f, 0.8f) * r, d * Rnd(0.4f, 1f), Rnd(1.3f, 1.9f), 0.8f * r, Rnd(1.6f, 2.3f) * r, VoidPurple, VoidDeep, 0.4f, 0.08f, 0.45f,
+                drag: 1f, delay: pop + Rnd(0.05f, 0.2f), spin: Rnd(-50f, 50f), order: 0);
+        }
+
+        for (int i = 0; i < 18; i++)
+        {
+            Add(Shape.Star, c + FxMath.InsideUnitCircle() * 1.6f * r, FxMath.InsideUnitCircle() * 0.3f, Rnd(1f, 1.7f), Rnd(0.24f, 0.36f), 0.14f, VoidVivid(i), VoidBlue, 1f, 0.1f, 0.55f,
+                delay: pop + Rnd(0.1f, 0.5f), twinkle: 0.8f, twinkleSpeed: Rnd(8f, 14f));
+        }
+    }
+
+    private static readonly Color SmokeWhite = new(0.93f, 0.93f, 0.96f);
+    private static readonly Color SmokeGrey = new(0.62f, 0.63f, 0.68f);
+    private static readonly Color SmokeShade = new(0.38f, 0.39f, 0.45f);
+
+    // 煙玉: 小さく弾ける閃光 → 一瞬で体を覆い隠すほど膨らむ白い煙 (奥に影の煙を重ねて立体に見せる) と床を這う煙の輪
+    // → ほどけながら昇って消える。煙の奥で消えた / 現れたように見えるよう、最初の 0.5 秒で体を覆い切る
+    private static void SpawnSmoke(Vector2 c, float size)
+    {
+        float r = FxMath.Clamp(size, 0.5f, 2.5f);
+        Vector2 f = c + Feet;
+
+        Add(Shape.Glow, c, Vector2.zero, 0.25f, 0.3f * r, 2f * r, WindWhite, SmokeWhite, 0.9f, 0.01f, 0.3f);
+        Add(Shape.Ring, c, Vector2.zero, 0.35f, 0.3f * r, 2.6f * r, WindWhite, SmokeGrey, 0.7f, 0.01f, 0.35f);
+        Add(Shape.Ring, f, Vector2.zero, 0.6f, 0.4f * r, 4f * r, SmokeWhite, SmokeGrey, 0.8f, 0.02f, 0.4f, rot: 0f, sy0: 0.14f * r, sy1: 1.4f * r);
+
+        // 影の煙 (奥)
+        for (int i = 0; i < 18; i++)
+        {
+            Vector2 d = Dir();
+            Add(Shape.Cloud, c + d * 0.2f * r + new Vector2(0f, -0.1f * r), d * Rnd(1.5f, 3f) * r, Rnd(1.3f, 1.8f), 0.7f * r, Rnd(2f, 2.6f) * r, SmokeGrey, SmokeShade,
+                1f, 0.03f, 0.5f, drag: 3.2f, spin: Rnd(-60f, 60f), rise: 0.15f, order: 0);
+        }
+
+        // 手前の白い煙
+        for (int i = 0; i < 32; i++)
+        {
+            Vector2 d = Dir();
+            Add(Shape.Cloud, c + d * 0.15f * r, d * Rnd(1.2f, 3.2f) * r, Rnd(1.1f, 1.6f), 0.6f * r, Rnd(1.5f, 2.1f) * r, SmokeWhite, SmokeGrey,
+                1f, 0.02f, 0.45f, drag: 3.6f, spin: Rnd(-80f, 80f), rise: Rnd(0.1f, 0.35f));
+        }
+
+        // 床を這って広がる煙
+        for (int i = 0; i < 12; i++)
+        {
+            float ang = Rnd(0f, 2f * FxMath.PI);
+            Vector2 dir = FxMath.V2(FxMath.Cos(ang), FxMath.Sin(ang) * 0.4f);
+            Add(Shape.Cloud, f + dir * 0.3f * r, dir * Rnd(3f, 5f) * r, Rnd(1f, 1.4f), 0.4f * r, Rnd(1f, 1.4f) * r, SmokeWhite, SmokeGrey, 0.7f, 0.03f, 0.4f,
+                drag: 2.6f, spin: Rnd(-50f, 50f));
+        }
+
+        // ほどけて昇る細い煙と、煙の中できらめく粒
+        for (int i = 0; i < 10; i++)
+        {
+            Add(Shape.Cloud, c + FxMath.InsideUnitCircle() * 0.7f * r, new Vector2(Rnd(-0.3f, 0.3f), Rnd(0.4f, 0.8f)), Rnd(1.2f, 1.8f), 0.4f * r, Rnd(0.9f, 1.3f) * r,
+                SmokeWhite, SmokeGrey, 0.5f, 0.1f, 0.4f, delay: Rnd(0.4f, 0.8f), spin: Rnd(-40f, 40f), sy0: 0.25f * r, sy1: 0.6f * r);
+        }
+
+        for (int i = 0; i < 10; i++)
+        {
+            Add(Shape.Star, c + FxMath.InsideUnitCircle() * 1f * r, Vector2.zero, Rnd(0.4f, 0.7f), 0.3f, 0.1f, WindWhite, SmokeWhite, 1f, 0.1f, 0.5f,
+                delay: Rnd(0.05f, 0.5f), twinkle: 0.6f, twinkleSpeed: Rnd(14f, 22f));
+        }
+    }
+
+    private static readonly Color Soil = new(0.46f, 0.33f, 0.21f);
+    private static readonly Color SoilDark = new(0.24f, 0.16f, 0.1f);
+    private static readonly Color Hole = new(0.07f, 0.05f, 0.04f);
+
+    // 地面に残る穴: 暗い穴と、掘り返した土の縁
+    private static void BurrowHole(Vector2 f, float r, float delay)
+    {
+        Add(Shape.Cloud, f, Vector2.zero, 2.2f, 0.4f * r, 1.3f * r, Hole, SoilDark, 0.95f, 0.05f, 0.65f, delay: delay, rot: 0f, sy0: 0.16f * r, sy1: 0.5f * r, order: 0);
+        Add(Shape.Ring, f, Vector2.zero, 2.2f, 0.6f * r, 1.6f * r, Soil, SoilDark, 0.9f, 0.05f, 0.65f, delay: delay, rot: 0f, sy0: 0.24f * r, sy1: 0.6f * r, order: 0);
+
+        for (int i = 0; i < 9; i++)
+        {
+            float ang = Rnd(0f, 2f * FxMath.PI);
+            float s = Rnd(0.14f, 0.26f) * r;
+            Add(Shape.Cloud, f + FxMath.V2(FxMath.Cos(ang) * 0.75f * r, FxMath.Sin(ang) * 0.3f * r), Vector2.zero, 2.2f, s * 1.6f, s * 1.6f, Soil, SoilDark, 1f, 0.05f, 0.65f,
+                delay: delay, rot: Rnd(0f, 360f), sy0: s, sy1: s, order: 0);
+        }
+    }
+
+    // 土を跳ね上げる (潜る時は外へ低く、出てくる時は真上へ高く)
+    private static void SoilSpray(Vector2 f, float r, int count, float up, float side, float delay)
+    {
+        for (int i = 0; i < count; i++)
+        {
+            float s = Rnd(0.22f, 0.4f) * r;
+            Add(Shape.Cloud, f + new Vector2(Rnd(-0.3f, 0.3f) * r, 0f), new Vector2(Rnd(-side, side) * r, Rnd(up * 0.5f, up) * r), Rnd(0.7f, 1.1f), s, s * 0.8f, Soil, SoilDark,
+                1f, 0.01f, 0.7f, drag: 0.8f, delay: delay + Rnd(0f, 0.25f), spin: Rnd(-540f, 540f), rise: -6f);
+        }
+    }
+
+    // 地面に潜る: 足元の地面が渦を巻いて削れ、土が外へ跳ね上がる → 体が土煙に呑まれる → 掘り返した穴がしばらく残る
+    private static void SpawnBurrowIn(Vector2 c, float size)
+    {
+        float r = FxMath.Clamp(size, 0.5f, 2.5f);
+        Vector2 f = c + Feet;
+
+        Impact(c, 1.2f * r, new Color(0.9f, 0.8f, 0.65f), 0.12f, 0.14f, 0.45f);
+
+        for (int k = 0; k < 3; k++)
+        {
+            float from = (3.2f - k * 0.6f) * r;
+            Add(Shape.Ring, f, Vector2.zero, 0.5f, from, 0.4f * r, Dust, SoilDark, 0.8f, 0.1f, 0.8f, delay: k * 0.1f, rot: 0f, sy0: from * 0.38f, sy1: 0.15f * r);
+        }
+
+        // 足元へ吸い込まれながら渦を巻く土煙
+        for (int i = 0; i < 16; i++)
+        {
+            float ang = Rnd(0f, 2f * FxMath.PI);
+            Vector2 at = FxMath.V2(FxMath.Cos(ang) * 1.6f * r, FxMath.Sin(ang) * 0.6f * r);
+            Vector2 tangent = FxMath.V2(-FxMath.Sin(ang) * 1.6f, FxMath.Cos(ang) * 0.6f);
+            Add(Shape.Cloud, f + at, -at * 1.4f + tangent * 1.2f * r, Rnd(0.5f, 0.8f), 1.2f * r, 0.3f * r, Dust, DustDark, 0.7f, 0.1f, 0.6f,
+                delay: Rnd(0f, 0.25f), spin: Rnd(-200f, -100f));
+        }
+
+        SoilSpray(f, r, 26, 5f, 4.5f, 0.05f);
+
+        // 体を呑む土煙
+        for (int i = 0; i < 22; i++)
+        {
+            Vector2 d = Dir();
+            Add(Shape.Cloud, c + d * 0.2f * r + new Vector2(0f, -0.2f * r), d * Rnd(1f, 2.4f) * r, Rnd(1f, 1.5f), 0.6f * r, Rnd(1.5f, 2f) * r, i % 3 == 0 ? Soil : Dust, DustDark, 1f, 0.03f, 0.45f,
+                drag: 2.8f, delay: Rnd(0.1f, 0.3f), spin: Rnd(-60f, 60f), rise: 0.2f);
+        }
+
+        BurrowHole(f, r, 0.2f);
+    }
+
+    // 地面から這い出る: 地面が盛り上がって割れ、閃光とともに土柱が真上へ噴き上がる → 降ってくる土と広がる土煙 → 穴が残る
+    private static void SpawnBurrowOut(Vector2 c, float size)
+    {
+        float r = FxMath.Clamp(size, 0.5f, 2.5f);
+        Vector2 f = c + Feet;
+
+        Impact(c, 1.5f * r, new Color(0.95f, 0.85f, 0.7f), 0.18f, 0.2f, 0.45f);
+
+        Add(Shape.Ray, f, Vector2.zero, 0.6f, 1.4f * r, 4f * r, Dust, DustDark, 0.9f, 0.02f, 0.4f, rot: 90f, sy0: 1.4f * r, sy1: 0.5f * r);
+        Add(Shape.Ring, f, Vector2.zero, 0.7f, 0.4f * r, 4.4f * r, Dust, DustDark, 1f, 0.02f, 0.4f, rot: 0f, sy0: 0.15f * r, sy1: 1.6f * r);
+        Add(Shape.Ring, f, Vector2.zero, 0.8f, 0.3f * r, 3f * r, WindWhite, Dust, 0.8f, 0.02f, 0.4f, delay: 0.06f, rot: 0f, sy0: 0.12f * r, sy1: 1.1f * r);
+
+        // 噴き上がる土柱
+        for (int i = 0; i < 24; i++)
+        {
+            Add(Shape.Cloud, f + new Vector2(Rnd(-0.3f, 0.3f) * r, 0f), new Vector2(Rnd(-0.6f, 0.6f), Rnd(3f, 7f) * r), Rnd(0.7f, 1.1f), 0.7f * r, Rnd(1.3f, 1.8f) * r,
+                i % 3 == 0 ? Soil : Dust, DustDark, 1f, 0.02f, 0.5f, drag: 3f, delay: Rnd(0f, 0.12f), spin: Rnd(-80f, 80f), stretch: 0.05f);
+        }
+
+        SoilSpray(f, r, 34, 8f, 3f, 0f);
+
+        for (int i = 0; i < 18; i++)
+        {
+            float ang = Rnd(0f, 2f * FxMath.PI);
+            Vector2 dir = FxMath.V2(FxMath.Cos(ang), FxMath.Sin(ang) * 0.4f);
+            Add(Shape.Cloud, f + dir * 0.3f * r, dir * Rnd(3.5f, 6f) * r, Rnd(1f, 1.6f), 0.5f * r, Rnd(1.3f, 2f) * r, Dust, DustDark, 0.65f, 0.05f, 0.35f,
+                drag: 2.4f, delay: Rnd(0.05f, 0.15f), spin: Rnd(-90f, 90f), rise: 0.3f);
+        }
+
+        BurrowHole(f, r, 0f);
     }
 
     // ── パーティクル ───────────────────────────────────────────────────

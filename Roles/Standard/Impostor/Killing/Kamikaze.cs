@@ -97,7 +97,10 @@ internal class Kamikaze : RoleBase
                     if (victim == null || !victim.IsAlive() || victim.Is(CustomRoles.Pestilence)) continue;
 
                     if (GameStates.IsInTask && !ExileController.Instance)
+                    {
+                        EndKnot.Modules.ExplosionFx.Play(EndKnot.Modules.ExplosionFx.Kind.Fire, victim.Pos(), 0.8f);
                         victim.Suicide(PlayerState.DeathReason.Kamikazed, kamikazePc);
+                    }
                     else if (CheckMurderPatch.PassesGate(kamikazePc, victim, kind: AttackKind.Execution))
                     {
                         victim.SetRealKiller(kamikazePc);

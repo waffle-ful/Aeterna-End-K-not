@@ -137,6 +137,7 @@ public class Agitator : RoleBase
 
                 if (pc && pc.IsAlive() && killer)
                 {
+                    ExplosionFx.Play(ExplosionFx.Kind.Fire, pc.Pos(), 1f);
                     pc.Suicide(PlayerState.DeathReason.Bombed, killer);
                     Logger.Info($"{killer.GetNameWithRole().RemoveHtmlTags()} bombed {pc.GetNameWithRole().RemoveHtmlTags()}, bomb cd complete", "Agitator");
                     ResetBomb();

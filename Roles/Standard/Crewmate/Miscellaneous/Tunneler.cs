@@ -38,7 +38,14 @@ internal class Tunneler : RoleBase
     {
         if (TunnelerPositions.TryGetValue(pc.PlayerId, out Vector2 ps))
         {
-            pc.TP(ps);
+            Vector2 from = pc.Pos();
+
+            if (pc.TP(ps))
+            {
+                EndKnot.Modules.ExplosionFx.Play(EndKnot.Modules.ExplosionFx.Kind.BurrowIn, from, 1f);
+                EndKnot.Modules.ExplosionFx.Play(EndKnot.Modules.ExplosionFx.Kind.BurrowOut, ps, 1f);
+            }
+
             TunnelerPositions.Remove(pc.PlayerId);
         }
         else
