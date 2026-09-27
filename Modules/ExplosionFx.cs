@@ -81,7 +81,21 @@ public static class ExplosionFx
 
         // 撃ち終わって消える / 途中で止められて魔法陣が砕ける: Pos = ゲートの中心 (近くの波動砲の演出だけを消す)
         CannonEnd = 27,
-        CannonBreak = 28
+        CannonBreak = 28,
+
+        // 撃った瞬間の必殺技カットイン (画面に出す): Radius = CannonPalette + 1、A = 撃ち手の PlayerId、B = CannonTitle
+        CannonCutIn = 29
+    }
+
+    // カットインに出す技名
+    public enum CannonTitle : byte
+    {
+        WaveCannon,
+        SuperCannon,
+        BlackHole,
+        Twin,
+        Dynamic,
+        CertainKill
     }
 
     public enum CannonPalette : byte
@@ -96,7 +110,7 @@ public static class ExplosionFx
     // LocalOnly はまとめ送信に載せない (PlayFor が宛先を絞って自前で送る)
     private readonly record struct Request(Kind Kind, Vector2 Pos, float Radius, bool LocalOnly = false, float A = 0f, float B = 0f);
 
-    private static bool HasExtra(Kind kind) => kind is >= Kind.CannonChargeRight and <= Kind.CannonBreak;
+    private static bool HasExtra(Kind kind) => kind is >= Kind.CannonChargeRight and <= Kind.CannonCutIn;
 
     private enum Shape : byte
     {
@@ -213,6 +227,14 @@ public static class ExplosionFx
     public static void CannonEnd(Vector2 gate, CannonPalette palette, bool broken)
     {
         PlayExtra(broken ? Kind.CannonBreak : Kind.CannonEnd, gate, 1f, 0f, (float)palette);
+    }
+
+    // カットインは発射のこの秒数前に出す (帯が閉じ切る頃にビームが出る)
+    public const float CannonCutInLead = 1.1f;
+
+    public static void CannonCutIn(byte shooterId, CannonTitle title, CannonPalette palette)
+    {
+        PlayExtra(Kind.CannonCutIn, Vector2.zero, (float)palette + 1f, shooterId, (float)title);
     }
 
     internal static void PlayExtra(Kind kind, Vector2 pos, float radius, float a, float b)
@@ -442,7 +464,7 @@ public static class ExplosionFx
 
     private static bool KillOverlayOpen()
     {
-        return ExplosionKillOverlay.Showing || (HudManager.InstanceExists && HudManager.Instance.KillOverlay && HudManager.Instance.KillOverlay.IsOpen);
+        return ExplosionKillOverlay.Showing || CannonKillOverlay.Showing || (HudManager.InstanceExists && HudManager.Instance.KillOverlay && HudManager.Instance.KillOverlay.IsOpen);
     }
 
     private static bool AnyOtherModdedClient()
@@ -551,6 +573,12 @@ public static class ExplosionFx
                 case Kind.CannonBreak:
                     SpawnCannonEnd(r.Pos, r.B, r.Kind == Kind.CannonBreak);
                     break;
+                case Kind.CannonCutIn:
+                {
+                    CannonColors k = CannonPal(r.Radius - 1f);
+                    Modules.CannonCutIn.Show((byte)r.A, (CannonTitle)(byte)r.B, k.Light, k.Main, k.Deep);
+                    break;
+                }
             }
         }
         catch (System.Exception e) { Utils.ThrowException(e); }
@@ -1854,12 +1882,40 @@ public static class ExplosionFx
     // ツインは 2 本同時に撃つので、画面の閃光と揺れはフレームごとに 1 回だけにする
     private static int _cannonFlashFrame = -1;
 
-    private static void CannonImpact(Vector2 c, float r, Color flash, float alpha, float shake, float duration)
+    // after > 0 はその秒数あとに一回り小さな余震を重ねる
+    // rumble > 0 はその秒数のあいだ弱い揺れを続ける (撃ち続けている間の地響き)
+    private static void CannonImpact(Vector2 c, float r, Color flash, float alpha, float shake, float duration, float after = 0f, float rumble = 0f)
     {
         if (_cannonFlashFrame == Time.frameCount) return;
 
         _cannonFlashFrame = Time.frameCount;
         Impact(c, r, flash, alpha, shake, duration);
+        if (after > 0f) Impact(c, r * 0.7f, CannonWhite, alpha * 0.45f, shake * 0.6f, duration * 0.6f, after);
+        if (rumble > 0f) Impact(c, r, flash, 0f, shake * 0.3f, rumble, after + duration * 0.6f);
+    }
+
+    // 発射の瞬間に砲口から弾ける光: 一瞬の白い膨らみ、放射状の光の筋、ビームに沿って走る衝撃の輪
+    private static void CannonMuzzleBurst(Vector2 o, float s, float length, float width, float grow, CannonColors k)
+    {
+        Add(Shape.Glow, o, Vector2.zero, 0.32f, width * 1.5f, width * 7f, CannonWhite, k.Light, 1f, 0.01f, 0.25f, order: 11);
+
+        for (int i = 0; i < 14; i++)
+        {
+            // 前方へ寄せた扇 (後ろへは短く)
+            float ang = (i / 14f) * 360f + Rnd(-8f, 8f);
+            float fwd = FxMath.Cos(ang * FxMath.PI / 180f) * s;
+            float reach = fwd > 0f ? width * Rnd(3.5f, 5.5f) : width * Rnd(1.6f, 2.6f);
+            Add(Shape.Ray, o, Vector2.zero, Rnd(0.22f, 0.36f), width * 0.4f, reach, CannonWhite, CannonAccent(k, i), Rnd(0.75f, 1f), 0.01f, 0.2f,
+                rot: ang, sy0: width * 0.35f, sy1: width * 0.06f, order: 10);
+        }
+
+        for (int j = 0; j < 3; j++)
+        {
+            float f = 0.22f + j * 0.28f;
+            var p = FxMath.V2(o.x + s * length * f, o.y);
+            Add(Shape.Ring, p, Vector2.zero, 0.4f, 0.1f, width * 1.4f, CannonWhite, k.Light, 0.95f, 0.01f, 0.25f,
+                delay: grow * f, rot: 0f, sy0: width * 0.6f, sy1: width * 3.6f, order: 7);
+        }
     }
 
     // WaveCannon / JackalHadouHo / SuperCannonShot の幾何と同じ値 (文字のビームと重ねるため)
@@ -2010,8 +2066,111 @@ public static class ExplosionFx
             }
         }
         else BeamLayer(o, vel, length, width, rot, grow, hold, k.Main, k.Main, 0.85f, 0.12f, 2);
+
+        // 外側で脈打つ光の圧
+        BeamLayer(o, vel, length, width * 3.4f, rot, grow, hold, k.Main, k.Deep, 0.15f, 0.55f, 0);
+
+        if (k.Void)
+        {
+            // ブラックホールは芯が光を呑む: 明るい縁の内側に闇の芯
+            BeamLayer(o, vel, length, width * 0.62f, rot, grow, hold, VoidMagenta, k.Light, 0.95f, 0.25f, 3);
+            BeamLayer(o, vel, length, width * 0.34f, rot, grow, hold, VoidBlack, VoidBlack, 1f, 0f, 4);
+            return;
+        }
+
         BeamLayer(o, vel, length, width * 0.55f, rot, grow, hold, k.Light, k.Light, 0.95f, 0f, 3);
         BeamLayer(o, vel, length, width * 0.22f, rot, grow, hold, CannonWhite, CannonWhite, 1f, 0.2f, 4);
+    }
+
+    // ビームに巻き付いて先へ流れる二重螺旋。止まった波形を撃ち出すので、並ぶと螺旋が流れて見える
+    private static void BeamHelix(Vector2 o, float s, float length, float width, float grow, float firing, CannonColors k)
+    {
+        const float speed = 12f;
+        const float step = 0.045f;
+        float amp = width * 1.2f;
+        float wave = width * 3.2f;
+        float phaseStep = 2f * FxMath.PI * step * speed / wave;
+        float life = length / speed;
+        // ツインや複数の砲が重なって粒が多い時は間引く (上限に届くと後から出す演出が欠ける)
+        float q = Active.Count > 1200 ? 0.5f : 1f;
+        int n = (int)(FxMath.Min(85, (int)((firing - grow) / step)) * q);
+
+        for (int i = 0; i < n; i++)
+        {
+            float delay = grow + i * step;
+
+            for (int strand = 0; strand < 2; strand++)
+            {
+                float ph = i * phaseStep + strand * FxMath.PI;
+                float y = FxMath.Sin(ph) * amp;
+                // 手前 (cos > 0) を大きく明るく、奥を小さく濃い色に沈めて奥行きを出す
+                float front = FxMath.Cos(ph);
+                float size = 0.4f + 0.25f * front;
+                Color col = front < -0.2f ? k.Deep : k.Void ? (strand == 0 ? VoidMagenta : k.Light) : strand == 0 ? CannonWhite : CannonAccent(k, i);
+                Add(Shape.Star, FxMath.V2(o.x, o.y + y), FxMath.V2(s * speed, 0f), life, size, size, col, k.Main, 0.7f + 0.3f * front, 0.02f, 0.85f,
+                    delay: delay, stretch: 0.05f, order: front > 0f ? 9 : 1);
+            }
+        }
+    }
+
+    // 1 本の線分を細い四角で描く (稲妻の折れ線の 1 画)
+    private static void Stroke(Vector2 a, Vector2 b, float thick, float life, float delay, Color col, Color glow)
+    {
+        float dx = b.x - a.x, dy = b.y - a.y;
+        float len = FxMath.Sqrt(dx * dx + dy * dy);
+        float ang = FxMath.Atan2(dy, dx) * 180f / FxMath.PI;
+        var mid = FxMath.V2((a.x + b.x) * 0.5f, (a.y + b.y) * 0.5f);
+        Add(Shape.Solid, mid, Vector2.zero, life, len, len, col, col, 1f, 0.005f, 0.45f, delay: delay, rot: ang, sy0: thick, sy1: thick, twinkle: 0.5f, twinkleSpeed: 45f, order: 9);
+        Add(Shape.Glow, mid, Vector2.zero, life, len * 1.2f, len * 1.2f, glow, glow, 0.55f, 0.005f, 0.45f, delay: delay, rot: ang, sy0: thick * 5f, sy1: thick * 5f, order: 8);
+    }
+
+    // ビームの縁から外へ走る稲妻 (折れ曲がる 3 画 + 枝)
+    private static void BeamArcs(Vector2 o, float s, float vy, float length, float width, float grow, float firing, CannonColors k)
+    {
+        // 同時に見えるのは数本なので、画面に入りやすい根元寄りに多めに散らす
+        int n = (int)(FxMath.Min(90, (int)(firing * 20f)) * (Active.Count > 1200 ? 0.5f : 1f));
+        Color col = k.Void ? VoidMagenta : CannonWhite;
+
+        for (int i = 0; i < n; i++)
+        {
+            float delay = Rnd(grow, firing);
+            float life = Rnd(0.14f, 0.22f);
+            float side = i % 2 == 0 ? 1f : -1f;
+            float along = Rnd(0f, 1f);
+            var p = FxMath.V2(o.x + s * (0.03f + 0.9f * along * along) * length, o.y + vy * delay + side * width * 0.3f);
+            float reach = width * Rnd(0.9f, 1.7f);
+            float seg = reach / 3f;
+
+            for (int j = 0; j < 3; j++)
+            {
+                var q = FxMath.V2(p.x + Rnd(-0.8f, 0.8f) * seg, p.y + side * seg);
+                Stroke(p, q, 0.055f - j * 0.012f, life, delay, col, k.Main);
+
+                // 2 画目の角から枝分かれ
+                if (j == 1) Stroke(q, FxMath.V2(q.x + Rnd(-1f, 1f) * seg, q.y + side * seg * 0.8f), 0.035f, life * 0.8f, delay, col, k.Main);
+
+                p = q;
+            }
+        }
+    }
+
+    // ブラックホール砲: 周りの光の粒がビームへ吸い込まれていく
+    private static void BeamInfall(Vector2 o, float s, float length, float width, float grow, float firing, CannonColors k)
+    {
+        int n = (int)(FxMath.Min(90, (int)(firing * 22f)) * (Active.Count > 1200 ? 0.5f : 1f));
+
+        for (int i = 0; i < n; i++)
+        {
+            float delay = Rnd(grow, firing);
+            float side = i % 2 == 0 ? 1f : -1f;
+            float dist = width * Rnd(1.6f, 3.2f);
+            float t = Rnd(0.35f, 0.6f);
+            var p = FxMath.V2(o.x + s * Rnd(0.02f, 0.98f) * length, o.y + side * dist);
+            // 軸へ向かいながら少し先へ流される
+            var v = FxMath.V2(s * Rnd(1f, 3f), -side * dist / t);
+            Color col = i % 3 == 0 ? CannonWhite : i % 3 == 1 ? VoidMagenta : k.Light;
+            Add(Shape.Glow, p, v, t, 0.26f, 0.08f, col, VoidPurple, 1f, 0.1f, 0.7f, delay: delay, stretch: 0.06f, order: 7);
+        }
     }
 
     // ビームの中を流れる光の筋と、先へ飛んでいく光の輪
@@ -2040,6 +2199,74 @@ public static class ExplosionFx
         }
     }
 
+    // 撃たれた本人のキル演出を、自分を撃ち抜いた光線の色と向きに合わせるため、最近の光線を覚えておく (送信なし)。
+    // 同時に何本も撃たれていても、本人の位置を通る光線を選べるよう 1 本ずつ残す
+    private struct CannonShot
+    {
+        public float Time, X, Y, S, Palette, Width, Duration, EndY;
+        public bool Sweep;
+    }
+
+    private static readonly CannonShot[] RecentShots = new CannonShot[8];
+    private static int _shotCursor;
+
+    private static void RememberShot(CannonShot shot)
+    {
+        RecentShots[_shotCursor] = shot;
+        _shotCursor = (_shotCursor + 1) % RecentShots.Length;
+    }
+
+    // 波動砲で死んだ本人の画面に出すキル演出 (死因が「蒸発」のとき)。victim = 本人の位置
+    internal static void ShowCannonKill(Vector2 victim)
+    {
+        float now = Time.time;
+        int best = -1, latest = -1;
+        float bestGap = float.MaxValue, latestTime = -1f;
+
+        for (int i = 0; i < RecentShots.Length; i++)
+        {
+            CannonShot shot = RecentShots[i];
+            if (shot.Time <= 0f || now - shot.Time > shot.Duration + 3f) continue;
+
+            if (shot.Time > latestTime)
+            {
+                latestTime = shot.Time;
+                latest = i;
+            }
+
+            float gap;
+
+            if (shot.Sweep)
+            {
+                // 縦に掃いた範囲に入っていれば当たり
+                float lo = FxMath.Min(shot.Y, shot.EndY) - shot.Width, hi = FxMath.Max(shot.Y, shot.EndY) + shot.Width;
+                if (victim.y < lo || victim.y > hi) continue;
+                gap = 0.5f;
+            }
+            else
+            {
+                // 魔法陣より前にいて、光線の高さに近いほど有力
+                if ((victim.x - shot.X) * shot.S < -1f) continue;
+                gap = FxMath.Abs(victim.y - shot.Y);
+                if (gap > shot.Width * 1.5f + 1f) continue;
+            }
+
+            if (gap < bestGap)
+            {
+                bestGap = gap;
+                best = i;
+            }
+        }
+
+        int pick = best >= 0 ? best : latest;
+        float palette = pick >= 0 ? RecentShots[pick].Palette : 0f;
+        // 全幅の掃射には左右がないので、画面の左から来たことにする
+        bool fromLeft = pick < 0 || RecentShots[pick].Sweep || RecentShots[pick].S > 0f;
+        Logger.Info($"cannon kill overlay: shot={pick} (matched={best >= 0}) palette={palette} fromLeft={fromLeft}", "CannonKillOverlay");
+        CannonColors k = CannonPal(palette);
+        CannonKillOverlay.Show(fromLeft, k.Light, k.Main, k.Deep);
+    }
+
     // 魔法陣から放たれるビーム: 発射の閃光 → 4 層の光線 → 流れる光と光の輪 → 先端の飛沫。撃ち終わりは CannonEnd が畳む
     private static void SpawnCannonBeam(Vector2 c, float firing, float thickness, float palette, float s)
     {
@@ -2058,9 +2285,12 @@ public static class ExplosionFx
         var o = FxMath.V2(c.x + s * CannonGateRadius, c.y);
         var tip = FxMath.V2(o.x + s * length, o.y);
 
+        RememberShot(new CannonShot { Time = Time.time, X = c.x, Y = c.y, S = s, Palette = palette, Width = width, Duration = dur });
+
         Tag(TagBeam, c);
 
-        CannonImpact(o, 2f, k.Light, 0.5f, 0.18f, 0.6f);
+        CannonImpact(o, 3f, k.Light, 0.8f, 0.34f, 1f, 0.2f, dur);
+        CannonMuzzleBurst(o, s, length, width, grow, k);
 
         // 発射中は魔法陣が速く回る
         if (k.Void) Add(Shape.Cloud, c, Vector2.zero, hold, size * 0.78f, size * 0.78f, VoidBlack, VoidDeep, 1f, 0.02f, 1f - 0.3f / hold, spin: 160f, order: 2);
@@ -2081,6 +2311,17 @@ public static class ExplosionFx
         Add(Shape.Star, o, Vector2.zero, hold, width * 2.8f, width * 2f, CannonWhite, k.Light, 1f, 0.01f, 1f - 0.3f / hold, spin: 40f, twinkle: 0.25f, twinkleSpeed: 16f, order: 10);
 
         BeamFlow(o, s, 0f, length, width, grow, dur, k);
+        BeamHelix(o, s, length, width, grow, dur, k);
+        BeamArcs(o, s, 0f, length, width, grow, dur, k);
+
+        if (k.Void)
+        {
+            BeamInfall(o, s, length, width, grow, dur, k);
+
+            // 魔法陣の周りを回る降着円盤 (傾いた楕円が 2 枚、逆向きに回る)
+            Add(Shape.Ring, c, Vector2.zero, hold, size * 1.2f, size * 1.9f, VoidMagenta, VoidPurple, 0.85f, 0.05f, 1f - 0.3f / hold, spin: 140f, sy0: size * 0.4f, sy1: size * 0.62f, order: 6);
+            Add(Shape.Ring, c, Vector2.zero, hold, size * 1.5f, size * 2.3f, k.Light, VoidDeep, 0.6f, 0.05f, 1f - 0.3f / hold, spin: -95f, sy0: size * 0.3f, sy1: size * 0.5f, order: 1);
+        }
 
         // 先端の光と飛沫
         Add(Shape.Glow, tip, Vector2.zero, hold - grow, width * 1.8f, width * 1.8f, k.Light, k.Main, 0.9f, 0.05f, 1f - 0.3f / hold, delay: grow * 0.9f, twinkle: 0.4f, twinkleSpeed: 22f, order: 8);
@@ -2113,6 +2354,8 @@ public static class ExplosionFx
         float length = CannonSweepLengthPerThickness * th;
         float width = CannonWidth(th);
         float dur = FxMath.Max(firing, 0.5f);
+
+        RememberShot(new CannonShot { Time = Time.time, X = c.x, Y = c.y, S = 1f, Palette = (float)CannonPalette.Crimson, Width = width, Duration = dur, EndY = endY, Sweep = true });
         float hold = dur + 0.8f;
         const float grow = 0.2f;
         float vy = (endY - c.y) / dur;
@@ -2121,10 +2364,11 @@ public static class ExplosionFx
 
         Tag(TagBeam, c);
 
-        CannonImpact(c, 4f, k.Light, 0.55f, 0.22f, 0.8f);
+        CannonImpact(c, 5f, k.Light, 0.8f, 0.34f, 1f, 0.2f, dur);
 
         BeamBody(o, vel, length, width, 0f, grow, hold, k);
         BeamFlow(o, 1f, vy, length, width, grow, dur, k);
+        BeamArcs(o, 1f, vy, length, width, grow, dur, k);
 
         // 両端の光
         for (int e = 0; e < 2; e++)

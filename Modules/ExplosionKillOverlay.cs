@@ -311,7 +311,7 @@ internal static class ExplosionKillOverlay
     }
 
     // バニラの死体 (骨の出た半身) を体の色で描く。DeadBody 本体は複製しない (通報・掃除の対象に数えられてしまう)。
-    private static SpriteRenderer SpawnDeadBody(Transform root, int colorId)
+    internal static SpriteRenderer SpawnDeadBody(Transform root, int colorId)
     {
         try
         {
@@ -424,7 +424,17 @@ internal static class ExplosionKillOverlayPatch
     {
         try
         {
-            if (!victim || !victim.Object || !victim.Object.AmOwner || !ExplosionKillOverlay.IsExplosionDeath(victim)) return true;
+            if (!victim || !victim.Object || !victim.Object.AmOwner) return true;
+
+            // 波動砲で蒸発した本人には、光線に焼かれて消える演出を出す
+            if (Main.PlayerStates.TryGetValue(victim.PlayerId, out PlayerState state) && state.deathReason == PlayerState.DeathReason.Vaporized)
+            {
+                Logger.Info($"cannon kill overlay for {victim.PlayerId}", "CannonKillOverlay");
+                ExplosionFx.ShowCannonKill(victim.Object.GetTruePosition());
+                return false;
+            }
+
+            if (!ExplosionKillOverlay.IsExplosionDeath(victim)) return true;
 
             Logger.Info($"explosion kill overlay for {victim.PlayerId}", "ExplosionKillOverlay");
             ExplosionKillOverlay.Show(victim);

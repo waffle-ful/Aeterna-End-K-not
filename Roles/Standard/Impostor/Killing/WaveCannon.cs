@@ -63,6 +63,7 @@ public class WaveCannon : RoleBase
     private NetworkedPlayerInfo.PlayerOutfit OriginalOutfit;
     private readonly HashSet<byte> AlreadyKilled = [];
     private bool PhaseEntryDone;
+    private bool CutInSent;
     private float ShakePhaseOffset;
     private WaveCannonWarning WarningCNO;
     private WaveCannonBeamSegment BeamCNO;
@@ -189,6 +190,7 @@ public class WaveCannon : RoleBase
     private void EnterCharging(PlayerControl pc)
     {
         CurrentPhase = Phase.Charging;
+        CutInSent = false;
         PhaseEndTS = Utils.TimeStamp + (IsSuperShot ? SuperChargeDuration.GetInt() : ChargeDuration.GetInt());
         PhaseEntryDone = false;
         ShotSeq++;
@@ -479,6 +481,7 @@ public class WaveCannon : RoleBase
         {
             case Phase.Charging:
                 Super?.UpdateCharging();
+                TryCutIn(pc, Utils.SecondsUntil(PhaseEndTS) + WarningDuration.GetInt());
                 if (Utils.TimeStamp >= PhaseEndTS)
                 {
                     CurrentPhase = Phase.Warning;
@@ -495,6 +498,7 @@ public class WaveCannon : RoleBase
                     PhaseEntryDone = true;
                 }
                 Super?.UpdateWarning();
+                TryCutIn(pc, Utils.SecondsUntil(PhaseEndTS));
                 if (Utils.TimeStamp >= PhaseEndTS)
                 {
                     CurrentPhase = Phase.Firing;
@@ -598,6 +602,16 @@ public class WaveCannon : RoleBase
         WarningCNO = null;
     }
 
+    // 帯が閉じ切るのと同時にビームが出るよう、発射の少し前にカットインを出す
+    private void TryCutIn(PlayerControl pc, double untilFire)
+    {
+        if (CutInSent || untilFire > ExplosionFx.CannonCutInLead) return;
+
+        CutInSent = true;
+        if (Super != null) ExplosionFx.CannonCutIn(pc.PlayerId, Super.CutInTitle, Super.CutInPalette);
+        else ExplosionFx.CannonCutIn(pc.PlayerId, IsSuperShot ? ExplosionFx.CannonTitle.SuperCannon : ExplosionFx.CannonTitle.WaveCannon, FxPal);
+    }
+
     private void SpawnBeam()
     {
         if ((DebugSkipMask & 4) != 0) return;
@@ -689,18 +703,21 @@ public class WaveCannon : RoleBase
             // 関所は弾くたびキラーへ通知を送るので、印を後回しにすると同じ相手への送信が毎フレーム繰り返される。
             AlreadyKilled.Add(target.PlayerId);
 
+            // 下の Kill() が弾く状況 (ロビー・試合外・イントロ中) では、死亡状態だけ同期されて死体が出ない半端な死に方になるので撃たない
+            if (GameStates.IsLobby || !GameStates.InGame || !Main.IntroDestroyed) continue;
+
             if (!CheckMurderPatch.PassesGate(shooter, target, kind: AttackKind.Execution)) continue;
 
             // CheckMurder バイパスで確定キル (Abyssbringer.cs:183-196 と同じパターン)
-            target.RpcExileV2();
             RPC.PlaySoundRPC(shooter.PlayerId, Sounds.KillSound);
 
+            // 死体の残る普通のキルにする (死後の処理はキルのパッチ側で走る)。死因の「蒸発」で、撃たれた本人の画面には専用のキル演出が出る
             PlayerState state = Main.PlayerStates[target.PlayerId];
-            state.deathReason = PlayerState.DeathReason.Kill;
-            state.RealKiller = (DateTime.Now, shooter.PlayerId);
+            state.deathReason = PlayerState.DeathReason.Vaporized;
+            target.SetRealKiller(shooter);
             state.SetDead();
-
-            Utils.AfterPlayerDeathTasks(target);
+            Medic.IsDead(target);
+            target.Kill(target);
         }
     }
 

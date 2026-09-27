@@ -89,6 +89,9 @@ public static class Utils
 
     public static long TimeStamp => EpochStartSeconds + (long)Stopwatch.Elapsed.TotalSeconds;
 
+    // TimeStamp が timeStamp に達するまでの残り秒数 (小数まで)
+    public static double SecondsUntil(long timeStamp) => timeStamp - EpochStartSeconds - Stopwatch.Elapsed.TotalSeconds;
+
     private static readonly StringBuilder SelfSuffix = new();
     private static readonly StringBuilder SelfMark = new(20);
     private static readonly StringBuilder TargetSuffix = new();

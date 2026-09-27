@@ -70,6 +70,9 @@ public class SuperCannonShot
 
     // ダイナミック: 全幅ビームの文字数とマップ境界の余白
     private const int DynamicCharCount = 40;
+
+    // ⚠ はビームの太さに合わせず通常の波動砲と同じ大きさにする (太さ 3 以上だと画面を覆っていた)
+    private const int WarningFontSize = 16;
     private const float DynamicBoundsExtend = 3f;
 
     public bool HasHit;
@@ -82,6 +85,16 @@ public class SuperCannonShot
     // 魔法陣とビームの演出を出したゲートの中心 (片付けの宛先)
     private readonly List<Vector2> FxGates = [];
     private ExplosionFx.CannonPalette FxPal = ExplosionFx.CannonPalette.Crimson;
+
+    public ExplosionFx.CannonPalette CutInPalette => FxPal;
+
+    public ExplosionFx.CannonTitle CutInTitle => Type switch
+    {
+        Variant.BlackHole => ExplosionFx.CannonTitle.BlackHole,
+        Variant.Twin => ExplosionFx.CannonTitle.Twin,
+        Variant.Dynamic => ExplosionFx.CannonTitle.Dynamic,
+        _ => ExplosionFx.CannonTitle.CertainKill
+    };
     private readonly HashSet<byte> AlreadyKilled = [];
 
     private Vector2 StartPosition;
@@ -479,18 +492,21 @@ public class SuperCannonShot
         AlreadyKilled.Add(target.PlayerId);
 
         // 抗えない (Lv3) の砲撃。陣営ルールと Lv3 防御だけが止められる。
+        // 下の Kill() が弾く状況 (ロビー・試合外・イントロ中) では、死亡状態だけ同期されて死体が出ない半端な死に方になるので撃たない
+        if (GameStates.IsLobby || !GameStates.InGame || !Main.IntroDestroyed) return;
+
         if (!CheckMurderPatch.PassesGate(Shooter, target, kind: AttackKind.Execution)) return;
 
         // CheckMurder バイパスで確定キル (WaveCannon.CheckBeamKills と同じパターン)
-        target.RpcExileV2();
         RPC.PlaySoundRPC(Shooter.PlayerId, Sounds.KillSound);
 
+        // 死体の残る普通のキルにする (死後の処理はキルのパッチ側で走る)。死因の「蒸発」で、撃たれた本人の画面には専用のキル演出が出る
         PlayerState state = Main.PlayerStates[target.PlayerId];
-        state.deathReason = PlayerState.DeathReason.Kill;
-        state.RealKiller = (DateTime.Now, Shooter.PlayerId);
+        state.deathReason = PlayerState.DeathReason.Vaporized;
+        target.SetRealKiller(Shooter);
         state.SetDead();
-
-        Utils.AfterPlayerDeathTasks(target);
+        Medic.IsDead(target);
+        target.Kill(target);
         HasHit = true;
     }
 
@@ -511,8 +527,8 @@ public class SuperCannonShot
         string chars = string.Join("   ", Enumerable.Repeat("⚠", WarningCharCount));
         bool firingRight = Direction.x > 0;
         return firingRight
-            ? $"<size={FontSize}><alpha=#00>{chars}<color=#FFFF00FF>{chars}</color></size>"
-            : $"<size={FontSize}><color=#FFFF00FF>{chars}</color><alpha=#00>{chars}</size>";
+            ? $"<size={WarningFontSize}><alpha=#00>{chars}<color=#FFFF00FF>{chars}</color></size>"
+            : $"<size={WarningFontSize}><color=#FFFF00FF>{chars}</color><alpha=#00>{chars}</size>";
     }
 
     private string DynamicWarningSprite()
@@ -520,7 +536,7 @@ public class SuperCannonShot
         // 全幅掃引の予告: padding なし中央寄せ (CNO 中心 = マップ中央 X)
         // 区切り 3 スペース: 5 だと ⚠×40 で 360B になり公式鯖の ~680B パケット制限を超えてキック
         string chars = string.Join("   ", Enumerable.Repeat("⚠", DynamicCharCount));
-        return $"<size={FontSize}><color=#FFFF00FF>{chars}</color></size>";
+        return $"<size={WarningFontSize}><color=#FFFF00FF>{chars}</color></size>";
     }
 
     private string LineBeamSprite(string color)

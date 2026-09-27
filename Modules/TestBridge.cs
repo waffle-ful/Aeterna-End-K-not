@@ -252,6 +252,14 @@ public static class TestBridge
             return;
         }
 
+        // 波動砲で蒸発した時のキル演出を自分の画面にだけ出す (見た目の確認用・誰も死なない)。直前に出した光線の色と向きを使う
+        if (directive.Equals("cktest", StringComparison.OrdinalIgnoreCase))
+        {
+            if (PlayerControl.LocalPlayer) ExplosionFx.ShowCannonKill(PlayerControl.LocalPlayer.GetTruePosition());
+            WriteOut("OK cktest");
+            return;
+        }
+
         // 爆発死のキル演出を自分の画面にだけ出す (見た目の確認用・誰も死なない)。
         if (directive.Equals("kotest", StringComparison.OrdinalIgnoreCase))
         {

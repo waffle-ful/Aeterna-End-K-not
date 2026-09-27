@@ -17,6 +17,9 @@ namespace EndKnot
 
     internal sealed class WaveCannonBeamSegment : CustomNetObject
     {
+        // ホスト画面では ExplosionFx の魔法陣/光線が同じ役を描く
+        protected override bool HideOnHost => true;
+
         // ビームは Firing 中ずっと毎フレ TP で揺らす→ ForceSnapSend 連射になるので base の opt-in 間引きで 10Hz 固定(揺れを滑らかに保ちつつ anti-cheat 安全)。
         protected override float ForceSnapMinInterval => 0.1f;
 
@@ -30,6 +33,9 @@ namespace EndKnot
 
     internal sealed class WaveCannonGate : CustomNetObject
     {
+        // ホスト画面では ExplosionFx の魔法陣/光線が同じ役を描く
+        protected override bool HideOnHost => true;
+
         // 確殺波動砲では対象へ毎フレ TP 追従する → base の opt-in 間引きで 10Hz に抑える (静的配置の従来用途は TP を呼ばず影響なし)
         protected override float ForceSnapMinInterval => 0.1f;
 
