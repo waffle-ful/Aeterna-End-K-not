@@ -52,7 +52,7 @@ internal class Supernova : RoleBase
 
         if (Exploded)
         {
-            // 自爆の LateTask (0.2s) 待ちの間の再発火防止。蘇生などで生き残った場合は一定時間後に再武装する
+            // 自爆の LateTask (0.7s) 待ちの間の再発火防止。蘇生などで生き残った場合は一定時間後に再武装する
             RearmTimer -= Time.fixedDeltaTime;
             if (RearmTimer > 0f) return;
 
@@ -109,26 +109,33 @@ internal class Supernova : RoleBase
     private static void Explode(PlayerControl pc)
     {
         float radius = ExplosionRadius.GetFloat();
-        ExplosionFx.Play(ExplosionFx.Kind.Supernova, pc.Pos(), radius);
+        Vector2 center = pc.Pos();
+        ExplosionFx.Play(ExplosionFx.Kind.Supernova, center, radius);
 
-        foreach (PlayerControl tg in Main.EnumeratePlayerControls())
+        // 閃光と衝撃波が広がってから死ぬ (同時だとキル演出に覆われ、爆発が死んだ後に見える)
+        LateTask.New(() =>
         {
-            try
-            {
-                if (tg.PlayerId == pc.PlayerId || !tg.IsAliveWithConditions() || Medic.ProtectList.Contains(tg.PlayerId) || tg.inVent || tg.Is(CustomRoles.Pestilence)) continue;
-                if (!FastVector2.DistanceWithinRange(pc.Pos(), tg.Pos(), radius)) continue;
+            if (GameStates.IsEnded || GameStates.IsMeeting) return;
 
-                if (!tg.IsModdedClient()) tg.KillFlash();
-                tg.Suicide(PlayerState.DeathReason.Bombed, pc);
+            foreach (PlayerControl tg in Main.EnumeratePlayerControls())
+            {
+                try
+                {
+                    if (tg.PlayerId == pc.PlayerId || !tg.IsAliveWithConditions() || Medic.ProtectList.Contains(tg.PlayerId) || tg.inVent || tg.Is(CustomRoles.Pestilence)) continue;
+                    if (!FastVector2.DistanceWithinRange(center, tg.Pos(), radius)) continue;
+
+                    if (!tg.IsModdedClient()) tg.KillFlash();
+                    tg.Suicide(PlayerState.DeathReason.Bombed, pc);
+                }
+                catch (Exception e) { Utils.ThrowException(e); }
             }
-            catch (Exception e) { Utils.ThrowException(e); }
-        }
+        }, 0.5f, "Supernova Blast");
 
         LateTask.New(() =>
         {
-            if (!GameStates.IsEnded && pc.IsAlive())
+            if (!GameStates.IsEnded && !GameStates.IsMeeting && pc.IsAlive())
                 pc.Suicide(PlayerState.DeathReason.Stopped);
-        }, 0.2f, "Supernova Suicide");
+        }, 0.7f, "Supernova Suicide");
     }
 
     public override void SetupCustomOption()

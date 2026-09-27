@@ -252,6 +252,22 @@ public static class TestBridge
             return;
         }
 
+        // 爆発死のキル演出を自分の画面にだけ出す (見た目の確認用・誰も死なない)。
+        if (directive.Equals("kotest", StringComparison.OrdinalIgnoreCase))
+        {
+            if (PlayerControl.LocalPlayer) ExplosionKillOverlay.Show(PlayerControl.LocalPlayer.Data);
+            WriteOut("OK kotest");
+            return;
+        }
+
+        // キル演出 (KillOverlay とキルアニメのプレハブ) と死体プレハブの構造を kodump.txt へ書き出す。
+        if (directive.Equals("kodump", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecuteKillOverlayDump(); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR kodump failed"); }
+            return;
+        }
+
         // シーン上の SpriteRenderer とカメラ設定を rdump.txt へ書き出す (背景の構造調査用)。
         if (directive.Equals("rdump", StringComparison.OrdinalIgnoreCase) || directive.StartsWith("rdump ", StringComparison.OrdinalIgnoreCase))
         {
@@ -803,6 +819,68 @@ public static class TestBridge
 
         _captureInFlight = false;
         WriteOut($"burst done {saved}/{count} -> Screens/{folder}/");
+    }
+
+    private static void ExecuteKillOverlayDump()
+    {
+        var sb = new StringBuilder();
+        KillOverlay ko = HudManager.Instance ? HudManager.Instance.KillOverlay : null;
+        if (!ko) { WriteOut("ERR kodump no KillOverlay"); return; }
+
+        sb.AppendLine("## KillOverlay (scene)");
+        DumpTree(ko.transform, 0);
+
+        void DumpSet(string label, Il2CppReferenceArray<OverlayKillAnimation> arr)
+        {
+            if (arr == null) return;
+            for (int i = 0; i < arr.Length; i++)
+            {
+                OverlayKillAnimation a = arr[i];
+                if (!a) continue;
+                sb.AppendLine($"## {label}[{i}] {a.name} type={a.KillType} classic={a.isClassicAnimation} stinger={(a.Stinger ? a.Stinger.name : "-")} sfx={(a.Sfx ? a.Sfx.name : "-")}");
+                DumpTree(a.transform, 0);
+            }
+        }
+
+        DumpSet("KillAnims", ko.KillAnims);
+        DumpSet("ClassicKillAnims", ko.ClassicKillAnims);
+        DumpSet("CustomKillAnimations", ko.CustomKillAnimations);
+
+        if (GameManager.Instance && GameManager.Instance.deadBodyPrefab != null && GameManager.Instance.deadBodyPrefab.Length > 0)
+        {
+            sb.AppendLine("## deadBodyPrefab[0]");
+            DumpTree(GameManager.Instance.deadBodyPrefab[0].transform, 0);
+        }
+
+        string outPath = Path.Combine(_dir, "kodump.txt");
+        File.WriteAllText(outPath, sb.ToString(), Encoding.UTF8);
+        WriteOut("OK kodump -> kodump.txt");
+
+        void DumpTree(Transform t, int depth)
+        {
+            var comps = new List<string>();
+            foreach (Component c in t.GetComponents<Component>())
+            {
+                if (!c) continue;
+                string n = c.GetIl2CppType().Name;
+                if (n == "Transform") continue;
+                SpriteRenderer sr = c.TryCast<SpriteRenderer>();
+                if (sr) n += $"(sprite={(sr.sprite ? sr.sprite.name : "-")} so={sr.sortingOrder} col={sr.color.r:0.##}/{sr.color.g:0.##}/{sr.color.b:0.##}/{sr.color.a:0.##} en={sr.enabled} flipX={sr.flipX} mat={(sr.sharedMaterial ? sr.sharedMaterial.name : "-")})";
+                Animator an = c.TryCast<Animator>();
+                if (an && an.runtimeAnimatorController)
+                {
+                    var clips = new List<string>();
+                    foreach (AnimationClip clip in an.runtimeAnimatorController.animationClips)
+                        if (clip) clips.Add($"{clip.name}:{clip.length:0.##}s");
+                    n += $"(ctrl={an.runtimeAnimatorController.name} clips={string.Join(",", clips)})";
+                }
+                comps.Add(n);
+            }
+
+            Vector3 lp = t.localPosition, ls = t.localScale;
+            sb.AppendLine($"{new string(' ', depth * 2)}{t.name} act={t.gameObject.activeSelf} lp=({lp.x:0.##},{lp.y:0.##},{lp.z:0.##}) ls=({ls.x:0.##},{ls.y:0.##}) layer={t.gameObject.layer} [{string.Join(", ", comps)}]");
+            for (int i = 0; i < t.childCount; i++) DumpTree(t.GetChild(i), depth + 1);
+        }
     }
 
     // rdump [名前フィルタ] — カメラ設定と全 SpriteRenderer (非アクティブ含む) を rdump.txt に書く。

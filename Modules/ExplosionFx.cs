@@ -334,8 +334,9 @@ public static class ExplosionFx
             EnsureSprites();
 
             // 爆発の範囲内にいる自分は直後にキル演出が出るので、それが開くまでの一瞬だけ待つ
+            // (スーパーノヴァは爆発を見せてから死なせるので待たない)
             PlayerControl lp = PlayerControl.LocalPlayer;
-            bool lethal = r.Kind is Kind.Fire or Kind.Supernova;
+            bool lethal = r.Kind is Kind.Fire;
             if (lethal && lp && lp.IsAlive() && Vector2.Distance(lp.GetTruePosition(), r.Pos) <= r.Radius + 0.5f) _holdUntil = Time.time + 0.35f;
 
             Logger.Info($"{r.Kind} at ({r.Pos.x:F2}, {r.Pos.y:F2}) r={r.Radius:F1}", "ExplosionFx");
