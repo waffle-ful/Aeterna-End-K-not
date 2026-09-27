@@ -253,6 +253,7 @@ public class Main : BasePlugin
     public static ConfigEntry<bool> GM { get; private set; }
     public static ConfigEntry<bool> UnlockFps { get; private set; }
     public static ConfigEntry<bool> ShowFps { get; private set; }
+    public static ConfigEntry<bool> GameDvrAutoRepair { get; private set; }
     public static ConfigEntry<bool> AutoStart { get; private set; }
     public static ConfigEntry<bool> ForceOwnLanguage { get; private set; }
     public static ConfigEntry<string> CpuSetsMode { get; private set; }
@@ -608,6 +609,7 @@ public class Main : BasePlugin
         GM = Config.Bind("Client Options", "GM", false);
         UnlockFps = Config.Bind("Client Options", "UnlockFPS", false);
         ShowFps = Config.Bind("Client Options", "ShowFPS", false);
+        GameDvrAutoRepair = Config.Bind("Client Options", "GameDvrAutoRepair", false, "Windows の GameDVR ユーザーサービス (BcastDVRUserService_*) が STOP_PENDING で固まって Game Bar の録画ボタンが灰色になったら、詰まったホストを終了して自動復旧させる (ホスト側のみ・既定 OFF)");
         AutoStart = Config.Bind("Client Options", "AutoStart", false);
         ForceOwnLanguage = Config.Bind("Client Options", "ForceOwnLanguage", false);
         ForceOwnLanguageRoleName = Config.Bind("Client Options", "ForceOwnLanguageRoleName", false);
@@ -765,6 +767,9 @@ public class Main : BasePlugin
         try { Config.Save(); }
         catch (Exception ex) { Log.LogError($"Config.Save after bind failed: {ex.Message}"); }
         finally { Config.SaveOnConfigSet = true; }
+
+        // Game Bar の録画ボタンを殺す GameDVR サービスの STOP_PENDING 固着を、opt-in で自動復旧する。
+        Log.LogInfo($"GameDvrGuard: {GameDvrGuard.Start(GameDvrAutoRepair.Value)}");
 
         BootTimeline.Mark("load.cfg");
 
