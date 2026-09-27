@@ -130,6 +130,7 @@ public class Abyssbringer : RoleBase
         PlainShipRoom room = shapeshifter.GetPlainShipRoom();
         string roomName = room == null ? string.Empty : Translator.GetString($"{room.RoomId}");
         BlackHoles.Add(new(new(pos), Utils.TimeStamp, pos, roomName, 0));
+        ExplosionFx.Play(ExplosionFx.Kind.VoidBurst, pos, 1.2f);
         Utils.SendRPC(CustomRPC.SyncRoleData, AbyssbringerId, 1, pos, roomName);
         shapeshifter.SetKillCooldown(KillCooldown.GetInt());
     }
@@ -203,6 +204,7 @@ public class Abyssbringer : RoleBase
 
                 if (GameStates.IsInTask && !ExileController.Instance && FastVector2.DistanceWithinRange(pos, blackHole.Position, BlackHoleRadius.GetFloat()) && !nearestPlayer.Is(CustomRoles.Pestilence) && CanConsume(pc, nearestPlayer))
                 {
+                    ExplosionFx.Play(ExplosionFx.Kind.Swallow, pos, 1f);
                     nearestPlayer.RpcExileV2();
                     RPC.PlaySoundRPC(pc.PlayerId, Sounds.KillSound);
                     blackHole.PlayersConsumed++;
@@ -227,6 +229,8 @@ public class Abyssbringer : RoleBase
                 BlackHoles.RemoveAt(i);
                 i--;
                 count--;
+                // 1 人喰って消える時は、喰った瞬間の渦がそのまま閉じる演出を兼ねる
+                if (GameStates.IsInTask && despawnMode != DespawnMode.After1PlayerEaten) ExplosionFx.Play(ExplosionFx.Kind.Swallow, blackHole.Position, 0.7f);
                 blackHole.NetObject.Despawn();
                 Utils.SendRPC(CustomRPC.SyncRoleData, AbyssbringerId, 3, i);
                 Notify();

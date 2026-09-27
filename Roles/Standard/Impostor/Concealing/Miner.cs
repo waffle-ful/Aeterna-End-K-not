@@ -74,7 +74,13 @@ internal class Miner : RoleBase
         if (Main.LastEnteredVent.ContainsKey(pc.PlayerId))
         {
             Vector2 position = Main.LastEnteredVentLocation[pc.PlayerId];
-            pc.TP(new Vector2(position.x, position.y));
+            Vector2 from = pc.Pos();
+
+            if (pc.TP(new Vector2(position.x, position.y)))
+            {
+                EndKnot.Modules.ExplosionFx.Play(EndKnot.Modules.ExplosionFx.Kind.BurrowIn, from, 1f);
+                EndKnot.Modules.ExplosionFx.Play(EndKnot.Modules.ExplosionFx.Kind.BurrowOut, new Vector2(position.x, position.y), 1f);
+            }
         }
     }
 }

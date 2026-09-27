@@ -179,6 +179,7 @@ public class Torpedo : RoleBase
         if (victims.Count > 0)
         {
             EndDash(pc);
+            ExplosionFx.Play(ExplosionFx.Kind.Fire, current, radius);
 
             foreach (PlayerControl victim in victims)
                 victim.Suicide(PlayerState.DeathReason.Bombed, pc);
@@ -218,6 +219,7 @@ public class Torpedo : RoleBase
             {
                 EndDash(pc);
                 pc.Notify(Translator.GetString("TorpedoCrashed"));
+                ExplosionFx.Play(ExplosionFx.Kind.Fire, current, 1f);
                 pc.Suicide(PlayerState.DeathReason.Bombed);
             }
 

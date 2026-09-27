@@ -167,6 +167,7 @@ public class Pelican : RoleBase
 
         OriginalSpeed[target.PlayerId] = Main.AllPlayerSpeed[target.PlayerId];
 
+        ExplosionFx.Play(ExplosionFx.Kind.Swallow, target.Pos(), 1f);
         target.TP(GetBlackRoomPS());
         Main.AllPlayerSpeed[target.PlayerId] = 0.5f;
         ReportDeadBodyPatch.CanReport[target.PlayerId] = false;
@@ -204,6 +205,9 @@ public class Pelican : RoleBase
     public static void OnPelicanDied(byte pc)
     {
         if (!EatenList.TryGetValue(pc, out List<byte> value)) return;
+
+        PlayerControl pelican = Utils.GetPlayerById(pc);
+        if (pelican && value.Count > 0 && GameStates.IsInTask) ExplosionFx.Play(ExplosionFx.Kind.VoidBurst, pelican.Pos(), 1f);
 
         foreach (byte tar in value)
         {

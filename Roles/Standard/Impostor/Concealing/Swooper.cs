@@ -173,9 +173,12 @@ public class Swooper : RoleBase
 
     private void StartInvisTimer(PlayerControl player, int ventId = 0)
     {
+        ExplosionFx.Play(ExplosionFx.Kind.Smoke, player.Pos(), 1f);
+
         InvisTimer = new CountdownTimer(Duration, () =>
         {
             InvisTimer = null;
+            ExplosionFx.Play(ExplosionFx.Kind.Smoke, player.Pos(), 1f);
 
             if (UsedRole == CustomRoles.Chameleon && !UsePets.GetBool())
             {
