@@ -10,6 +10,7 @@ public static class FxMath
 {
     public const float PI = System.MathF.PI;
     public const float Rad2Deg = 180f / System.MathF.PI;
+    public const float Deg2Rad = System.MathF.PI / 180f;
 
     private static readonly System.Random Rng = new();
 
@@ -22,6 +23,8 @@ public static class FxMath
     public static float Abs(float v) => v < 0f ? -v : v;
     public static float Min(float a, float b) => a < b ? a : b;
     public static float Max(float a, float b) => a > b ? a : b;
+    public static int Min(int a, int b) => a < b ? a : b;
+    public static int Clamp(int v, int min, int max) => v < min ? min : v > max ? max : v;
     public static float Clamp(float v, float min, float max) => v < min ? min : v > max ? max : v;
     public static float Clamp01(float v) => v < 0f ? 0f : v > 1f ? 1f : v;
     public static float Lerp(float a, float b, float t) => a + (b - a) * Clamp01(t);
