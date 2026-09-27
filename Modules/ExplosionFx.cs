@@ -26,7 +26,26 @@ public static class ExplosionFx
 
         // ジェミニ: 分身を置いた (本人の画面だけ) / 分身が切られて砕けた
         GeminiSplit = 6,
-        GeminiShatter = 7
+        GeminiShatter = 7,
+
+        // ワープ: Pos = 消えた場所 / 現れた場所
+        WarpOut = 8,
+        WarpIn = 9,
+
+        // 凍結: Pos = 凍った人、Radius = 凍っている秒数 (その間ずっと氷が残り、最後に砕ける)
+        Freeze = 10,
+
+        // 時間停止: Pos = 発動者、Radius = 止まっている秒数
+        TimeStop = 11,
+
+        // 落雷: Pos = 打たれた人
+        LightningStrike = 12,
+
+        // 重い物が叩きつけられた衝撃: Radius = 衝撃の大きさ (1 前後)
+        Slam = 13,
+
+        // 水しぶき: Radius = しぶきの大きさ (1.2 以上で溺れた時の泡も出す)
+        Splash = 14
     }
 
     // LocalOnly はまとめ送信に載せない (PlayFor が宛先を絞って自前で送る)
@@ -84,10 +103,11 @@ public static class ExplosionFx
     // 1 発で数百粒を出すので GameObject は使い回す (毎回 new/Destroy するとフレームが引っかかる)。
     private static readonly Stack<(GameObject Go, SpriteRenderer Sr)> Pool = [];
 
-    private const int MaxPendingPerFrame = 24;
+    // 1 件 13 バイトなので上限いっぱいでも 1 本 630 バイト前後に収まる (15 人全員をワープさせると出発と到着で 28 件)
+    private const int MaxPendingPerFrame = 48;
     private const float SendInterval = 0.1f;
-    private const int MaxActive = 1500;
-    private const int WarmPool = 400;
+    private const int MaxActive = 3000;
+    private const int WarmPool = 800;
     private const int SortingOrder = 150;
     private const float RayAspect = 4f;
     private static float _lastSendTime = -1f;
@@ -110,7 +130,7 @@ public static class ExplosionFx
         if (!AmongUsClient.Instance || !AmongUsClient.Instance.AmHost || !GameStates.InGame) return;
         if (Pending.Count >= MaxPendingPerFrame) return;
 
-        Pending.Add(new Request(kind, pos, FxMath.Clamp(radius, 0.3f, 15f)));
+        Pending.Add(new Request(kind, pos, ClampRadius(kind, radius)));
     }
 
     // viewer 1 人の画面にだけ出す。周りに見えると能力の意味が崩れる演出 (ジェミニの分身設置) 用。
@@ -118,7 +138,7 @@ public static class ExplosionFx
     {
         if (!AmongUsClient.Instance || !AmongUsClient.Instance.AmHost || !GameStates.InGame || !viewer) return;
 
-        var r = new Request(kind, pos, FxMath.Clamp(radius, 0.3f, 15f), true);
+        var r = new Request(kind, pos, ClampRadius(kind, radius), true);
 
         if (viewer.AmOwner)
         {
@@ -142,6 +162,12 @@ public static class ExplosionFx
         catch (System.Exception e) { Utils.ThrowException(e); }
     }
 
+    // 凍結系は Radius に効果秒数を載せるので、効果時間の設定の上限 (180 秒) まで通す
+    private static float ClampRadius(Kind kind, float radius)
+    {
+        return kind is Kind.Freeze or Kind.TimeStop ? FxMath.Clamp(radius, 0.3f, 180f) : FxMath.Clamp(radius, 0.3f, 15f);
+    }
+
     public static void ReceiveRPC(MessageReader reader)
     {
         int count = reader.ReadByte();
@@ -154,7 +180,7 @@ public static class ExplosionFx
             float radius = reader.ReadSingle();
             if (!GameStates.InGame) continue;
 
-            SpawnLocal(new Request(kind, new Vector2(x, y), FxMath.Clamp(radius, 0.3f, 15f)));
+            SpawnLocal(new Request(kind, new Vector2(x, y), ClampRadius(kind, radius)));
         }
     }
 
@@ -216,6 +242,9 @@ public static class ExplosionFx
 
                 alloc = AllocProbe.Mark("fx.warm", alloc);
             }
+
+            // 凍結の氷のように効果時間いっぱい残る演出があるので、会議が始まったら残りを消す
+            if (Active.Count > 0 && GameStates.IsMeeting) ClearAll();
 
             if (Pending.Count > 0)
             {
@@ -333,6 +362,27 @@ public static class ExplosionFx
                     break;
                 case Kind.GeminiShatter:
                     SpawnGeminiShatter(r.Pos);
+                    break;
+                case Kind.WarpOut:
+                    SpawnWarpOut(r.Pos);
+                    break;
+                case Kind.WarpIn:
+                    SpawnWarpIn(r.Pos);
+                    break;
+                case Kind.Freeze:
+                    SpawnFreeze(r.Pos, r.Radius);
+                    break;
+                case Kind.TimeStop:
+                    SpawnTimeStop(r.Pos, r.Radius);
+                    break;
+                case Kind.LightningStrike:
+                    SpawnLightningStrike(r.Pos);
+                    break;
+                case Kind.Slam:
+                    SpawnSlam(r.Pos, r.Radius);
+                    break;
+                case Kind.Splash:
+                    SpawnSplash(r.Pos, r.Radius);
                     break;
             }
         }
@@ -750,6 +800,458 @@ public static class ExplosionFx
         {
             Add(Shape.Cloud, c + FxMath.InsideUnitCircle() * 0.4f, FxMath.InsideUnitCircle() * 0.6f, Rnd(1f, 1.5f), 0.5f, Rnd(1.3f, 1.8f), GeminiLavender, GeminiViolet,
                 Rnd(0.35f, 0.5f), 0.05f, 0.35f, drag: 1.5f, delay: Rnd(0.05f, 0.15f), spin: Rnd(-40f, 40f), rise: 0.3f);
+        }
+    }
+
+    private static readonly Vector2 Feet = new(0f, -0.35f);
+
+    private static readonly Color WarpCyan = new(0.35f, 0.95f, 1f);
+    private static readonly Color WarpViolet = new(0.6f, 0.4f, 1f);
+    private static readonly Color WarpPink = new(1f, 0.5f, 0.95f);
+
+    private static Color WarpColor(int i) => (i % 4) switch { 0 => WindWhite, 1 => WarpCyan, 2 => WarpViolet, _ => WarpPink };
+
+    // 明るい床でも沈まないよう、飛び散る粒は白を混ぜず彩度の高い色だけで出す
+    private static Color WarpVivid(int i) => (i % 3) switch { 0 => WarpCyan, 1 => WarpViolet, _ => WarpPink };
+
+    // 消える: 閃光 → 体を包む縦長の光が細く絞られる → 天へ昇る二重の光の柱 → 足元で縮む三重の輪
+    // → 渦を巻いて吸い込まれる光の粒 → 最後に天へ打ち上がる光の粒
+    private static void SpawnWarpOut(Vector2 c)
+    {
+        Impact(c, 1.5f, WarpCyan, 0.35f, 0.1f, 0.25f);
+
+        Add(Shape.Glow, c, Vector2.zero, 0.8f, 2.2f, 0.15f, WindWhite, WarpCyan, 1f, 0.02f, 0.5f, sy0: 3.2f, sy1: 4.2f);
+        Add(Shape.Cloud, c, Vector2.zero, 0.7f, 1.6f, 0.2f, WarpCyan, WarpViolet, 0.8f, 0.03f, 0.5f, rot: 0f, sy0: 2.4f, sy1: 3.2f);
+
+        // 光条は根元が明るいので、根元を足元に置いて上へ向ける
+        Add(Shape.Ray, c + Feet, Vector2.zero, 0.9f, 7f, 12f, WindWhite, WarpCyan, 1f, 0.02f, 0.4f, rot: 90f, sy0: 1.1f, sy1: 0.1f);
+        Add(Shape.Ray, c + Feet, Vector2.zero, 1f, 5f, 10f, WarpViolet, WarpPink, 0.7f, 0.02f, 0.45f, delay: 0.05f, rot: 90f, sy0: 2f, sy1: 0.3f);
+
+        for (int k = 0; k < 3; k++)
+        {
+            float from = 3.6f - k * 0.7f;
+            Add(Shape.Ring, c + Feet, Vector2.zero, 0.55f + k * 0.1f, from, 0.2f, k == 1 ? WarpViolet : WarpCyan, WarpPink, 1f, 0.02f, 0.5f,
+                delay: k * 0.07f, rot: 0f, sy0: from * 0.35f, sy1: 0.07f);
+        }
+
+        // 接線方向の速さと中心へ向かう速さを混ぜると、減速しながら渦を巻いて吸い込まれる
+        for (int i = 0; i < 48; i++)
+        {
+            Vector2 d = Dir();
+            Vector2 tangent = FxMath.V2(-d.y, d.x);
+            float size = Rnd(0.3f, 0.46f);
+            Add(Shape.Star, c + d * Rnd(1.2f, 2.4f), -d * Rnd(3f, 5f) + tangent * Rnd(3f, 5f) + new Vector2(0f, Rnd(0.5f, 2f)), Rnd(0.5f, 0.8f), size * 1.5f, size * 0.7f, WarpVivid(i), WarpViolet, 1f,
+                0.05f, 0.5f, drag: 1.4f, stretch: 0.1f, twinkle: 0.4f, twinkleSpeed: Rnd(14f, 24f));
+        }
+
+        for (int i = 0; i < 30; i++)
+        {
+            Add(Shape.Star, c + new Vector2(Rnd(-0.35f, 0.35f), Rnd(-0.5f, 0.6f)), new Vector2(Rnd(-0.5f, 0.5f), Rnd(7f, 13f)), Rnd(0.6f, 1f), Rnd(0.5f, 0.75f), 0.26f,
+                WarpVivid(i), WarpCyan, 1f, 0.02f, 0.5f, delay: Rnd(0.2f, 0.4f), stretch: 0.07f);
+        }
+    }
+
+    // 現れる: 天から叩きつけるように降りる二重の光の柱 → 強い閃光と光の星 → 足元に広がる三重の輪と空へ広がる衝撃波
+    // → 四方へ飛び散る火花 → しばらく漂って瞬く光の粒
+    private static void SpawnWarpIn(Vector2 c)
+    {
+        Impact(c, 2f, WarpCyan, 0.5f, 0.16f, 0.3f);
+
+        Add(Shape.Ray, c + Feet, Vector2.zero, 0.9f, 12f, 7f, WindWhite, WarpCyan, 1f, 0.01f, 0.35f, rot: 90f, sy0: 1.8f, sy1: 0.15f);
+        Add(Shape.Ray, c + Feet, Vector2.zero, 1f, 10f, 6f, WarpViolet, WarpPink, 0.75f, 0.01f, 0.4f, rot: 90f, sy0: 3f, sy1: 0.3f);
+        Add(Shape.Glow, c, Vector2.zero, 0.6f, 0.4f, 3.4f, WindWhite, WarpCyan, 1f, 0.02f, 0.3f, sy0: 0.8f, sy1: 4.4f);
+        Add(Shape.Star, c, Vector2.zero, 0.7f, 0.4f, 4f, WindWhite, WarpViolet, 1f, 0.02f, 0.3f, spin: 120f);
+        Add(Shape.Star, c, Vector2.zero, 0.6f, 0.3f, 2.8f, WarpPink, WarpViolet, 0.8f, 0.02f, 0.3f, rot: 45f, spin: -90f);
+        Add(Shape.Ring, c, Vector2.zero, 0.6f, 0.4f, 5.5f, WindWhite, WarpCyan, 0.8f, 0.01f, 0.35f);
+
+        for (int k = 0; k < 3; k++)
+        {
+            float to = 3.6f + k * 1f;
+            Add(Shape.Ring, c + Feet, Vector2.zero, 0.8f + k * 0.12f, 0.3f, to, k == 1 ? WarpViolet : WarpCyan, WarpPink, 1f - k * 0.15f, 0.02f, 0.4f,
+                delay: k * 0.08f, rot: 0f, sy0: 0.1f, sy1: to * 0.35f);
+        }
+
+        for (int i = 0; i < 56; i++)
+        {
+            Add(Shape.Star, c, Dir() * Rnd(3f, 8f), Rnd(0.5f, 0.9f), Rnd(0.5f, 0.75f), 0.24f, WarpVivid(i), WarpViolet, 1f, 0.01f, 0.5f,
+                drag: 2.5f, stretch: 0.1f, twinkle: 0.3f, twinkleSpeed: Rnd(16f, 26f));
+        }
+
+        for (int i = 0; i < 24; i++)
+        {
+            Add(Shape.Star, c + FxMath.InsideUnitCircle() * 1.4f, new Vector2(Rnd(-0.2f, 0.2f), Rnd(0.3f, 0.9f)), Rnd(1.2f, 2f), Rnd(0.36f, 0.54f), 0.18f,
+                WarpVivid(i), WarpCyan, 1f, 0.1f, 0.55f, delay: Rnd(0.1f, 0.5f), twinkle: 0.8f, twinkleSpeed: Rnd(8f, 14f));
+        }
+    }
+
+    private static readonly Color IceWhite = new(0.9f, 0.97f, 1f);
+    private static readonly Color IceCyan = new(0.6f, 0.9f, 1f);
+    private static readonly Color IceBlue = new(0.3f, 0.65f, 1f);
+
+    // 凍りつく瞬間: 白い閃光と、床を這って広がる霜の輪と冷気 → 凍っている間ずっと残る氷の膜・生えた結晶・舞い落ちる雪・きらめき
+    // → 解ける瞬間に砕け散る。残る粒は寿命 = 凍結時間なので、フェードの割合は秒数から割り戻す (長い凍結でも出入りは一瞬にする)
+    private static void SpawnFreeze(Vector2 c, float duration)
+    {
+        float d = FxMath.Clamp(duration, 0.5f, 180f);
+        float fin = 0.12f / d;
+        float fout = 1f - 0.12f / d;
+
+        // 砕ける演出は氷が消えきる少し前から重ねる (間に何も無いコマを作らない)
+        float br = FxMath.Max(d - 0.1f, 0f);
+
+        Impact(c, 1.5f, IceWhite, 0.35f, 0.08f, 0.2f);
+
+        Add(Shape.Glow, c, Vector2.zero, 0.5f, 0.4f, 3.2f, WindWhite, IceBlue, 1f, 0.02f, 0.3f);
+        Add(Shape.Star, c, Vector2.zero, 0.5f, 0.4f, 3f, WindWhite, IceCyan, 1f, 0.02f, 0.3f, rot: 45f);
+        Add(Shape.Ring, c + Feet, Vector2.zero, 0.9f, 0.3f, 5f, IceWhite, IceBlue, 1f, 0.02f, 0.45f, rot: 0f, sy0: 0.1f, sy1: 1.75f);
+        Add(Shape.Ring, c + Feet, Vector2.zero, 1.1f, 0.3f, 3.4f, IceCyan, IceBlue, 0.8f, 0.02f, 0.45f, delay: 0.1f, rot: 0f, sy0: 0.1f, sy1: 1.2f);
+
+        for (int i = 0; i < 16; i++)
+        {
+            float ang = Rnd(0f, 2f * FxMath.PI);
+            Vector2 dir = FxMath.V2(FxMath.Cos(ang), FxMath.Sin(ang) * 0.4f);
+            Add(Shape.Cloud, c + Feet, dir * Rnd(3f, 5f), Rnd(1f, 1.5f), Rnd(0.4f, 0.6f), Rnd(1.2f, 1.8f), IceWhite, IceBlue, 0.6f, 0.05f, 0.35f,
+                drag: 2.2f, spin: Rnd(-60f, 60f));
+        }
+
+        // 霜の欠片が床を走る
+        for (int i = 0; i < 14; i++)
+        {
+            float ang = Rnd(0f, 2f * FxMath.PI);
+            Add(Shape.Star, c + Feet, FxMath.V2(FxMath.Cos(ang), FxMath.Sin(ang) * 0.4f) * Rnd(4f, 7f), Rnd(0.5f, 0.8f), Rnd(0.36f, 0.5f), 0.16f, WindWhite, IceCyan, 1f, 0.02f, 0.5f,
+                drag: 3f, stretch: 0.08f);
+        }
+
+        Add(Shape.Glow, c, Vector2.zero, d, 1.5f, 1.5f, IceCyan, IceBlue, 0.65f, fin, fout, sy0: 2.1f, sy1: 2.1f);
+        Add(Shape.Cloud, c, Vector2.zero, d, 1.3f, 1.3f, IceWhite, IceCyan, 0.35f, fin, fout, spin: 6f, sy0: 1.9f, sy1: 1.9f);
+        Add(Shape.Cloud, c + Feet, Vector2.zero, d, 2.4f, 2.4f, IceWhite, IceCyan, 0.35f, fin, fout, rot: 0f, sy0: 0.8f, sy1: 0.8f);
+        Add(Shape.Ring, c + Feet, Vector2.zero, d, 2.2f, 2.2f, IceWhite, IceCyan, 0.6f, fin, fout, rot: 0f, sy0: 0.75f, sy1: 0.75f);
+
+        // 体を囲んで床から突き出した細長い結晶
+        for (int i = 0; i < 12; i++)
+        {
+            float size = Rnd(0.35f, 0.7f);
+            float x = Rnd(-0.75f, 0.75f);
+            Add(Shape.Chunk, c + new Vector2(x, Rnd(-0.7f, 0.15f)), Vector2.zero, d, size * 0.6f, size * 0.6f, IceWhite, IceCyan, 0.9f, fin, fout,
+                rot: -x * 30f + Rnd(-12f, 12f), sy0: size * 0.9f, sy1: size * Rnd(1.6f, 2.4f));
+        }
+
+        for (int i = 0; i < 10; i++)
+        {
+            Add(Shape.Star, c + new Vector2(Rnd(-0.7f, 0.7f), Rnd(-0.7f, 0.9f)), Vector2.zero, d, 0.28f, 0.28f, WindWhite, IceCyan, 1f, fin, fout,
+                delay: Rnd(0f, 0.3f), twinkle: 0.9f, twinkleSpeed: Rnd(3f, 7f));
+        }
+
+        // 周りに舞い落ちる雪 (凍結中ずっと、上から落ちては消える)
+        for (int i = 0; i < 16; i++)
+        {
+            float t0 = Rnd(0f, FxMath.Max(d - 1.5f, 0.1f));
+            Add(Shape.Glow, c + new Vector2(Rnd(-1.4f, 1.4f), Rnd(1.2f, 2f)), new Vector2(Rnd(-0.2f, 0.2f), -Rnd(0.8f, 1.4f)), Rnd(1.5f, 2.2f), 0.14f, 0.1f, WindWhite, IceCyan, 0.9f,
+                0.1f, 0.6f, delay: t0);
+        }
+
+        Add(Shape.Ring, c, Vector2.zero, 0.6f, 0.2f, 4f, WindWhite, IceBlue, 1f, 0.01f, 0.35f, delay: br);
+        Add(Shape.Glow, c, Vector2.zero, 0.4f, 2.8f, 1.2f, WindWhite, IceCyan, 1f, 0.01f, 0.3f, delay: br);
+
+        for (int i = 0; i < 24; i++)
+        {
+            Vector2 dir = Dir();
+            float size = Rnd(0.18f, 0.4f);
+            Add(Shape.Chunk, c + dir * 0.2f, dir * Rnd(3f, 7f) + new Vector2(0f, 1.5f), Rnd(0.8f, 1.3f), size, size * 0.7f, IceWhite, IceBlue, 1f, 0.01f, 0.6f,
+                drag: 2.2f, delay: br, spin: Rnd(-720f, 720f), sy0: size * Rnd(0.35f, 0.7f), sy1: size * 0.3f, rise: -1.8f);
+        }
+
+        for (int i = 0; i < 12; i++)
+        {
+            Add(Shape.Star, c, Dir() * Rnd(3f, 7f), Rnd(0.4f, 0.8f), Rnd(0.4f, 0.55f), 0.18f, WindWhite, IceCyan, 1f, 0.01f, 0.5f,
+                drag: 3f, delay: br, stretch: 0.1f);
+        }
+
+        for (int i = 0; i < 6; i++)
+        {
+            Add(Shape.Cloud, c + FxMath.InsideUnitCircle() * 0.5f, FxMath.InsideUnitCircle() * 0.8f, Rnd(1f, 1.5f), 0.6f, Rnd(1.5f, 2f), IceWhite, IceCyan,
+                0.5f, 0.05f, 0.35f, drag: 1.5f, delay: br + Rnd(0.02f, 0.1f), spin: Rnd(-40f, 40f), rise: 0.3f);
+        }
+    }
+
+    private static readonly Color TimeGold = new(1f, 0.85f, 0.45f);
+    private static readonly Color TimePale = new(0.75f, 0.85f, 1f);
+    private static readonly Color TimeDeep = new(0.25f, 0.3f, 0.6f);
+
+    // 時間が止まる: 強い閃光と、世界を覆っていく五重の輪 → 止まっている間、画面全体の青い色味・頭上で針の止まった大時計・宙に止まった塵
+    // → 動き出す瞬間に時計が縮んで弾け、もう一度閃く
+    private static void SpawnTimeStop(Vector2 c, float duration)
+    {
+        float d = FxMath.Clamp(duration, 0.5f, 180f);
+        float fin = 0.2f / d;
+        float fout = 1f - 0.4f / d;
+
+        Impact(c, 4f, TimePale, 0.7f, 0.22f, 0.5f);
+
+        for (int k = 0; k < 5; k++)
+            Add(Shape.Ring, c, Vector2.zero, 1.1f + k * 0.2f, 0.5f, 24f + k * 5f, k % 2 == 1 ? TimeGold : WindWhite, TimeDeep, 1f - k * 0.15f, 0.02f, 0.4f, delay: k * 0.1f);
+
+        Add(Shape.Star, c, Vector2.zero, 0.8f, 0.5f, 5f, WindWhite, TimeGold, 1f, 0.02f, 0.3f, spin: 60f);
+        Add(Shape.Glow, c, Vector2.zero, 0.7f, 4f, 2f, WindWhite, TimeGold, 1f, 0.02f, 0.3f);
+        Add(Shape.Solid, c, Vector2.zero, d, 1f, 1f, TimeDeep, TimeDeep, 0.3f, FxMath.Min(fin * 1.5f, 0.5f), fout, followCamera: true);
+
+        // 発動者は止まった時間の中を動き回るので、頭上の時計は発動直後だけ見せて消す (置き去りにしない)。
+        // 頭上の名前に被らない高さに浮かべる
+        Vector2 clock = c + new Vector2(0f, 2.3f);
+        float cl = FxMath.Min(d, 1.8f);
+        float cfin = 0.08f / cl;
+        const float cfout = 0.65f;
+        Add(Shape.Glow, clock, Vector2.zero, cl, 2.8f, 2.8f, TimeGold, TimePale, 0.45f, cfin, cfout);
+        Add(Shape.Ring, clock, Vector2.zero, cl, 2f, 2f, TimeGold, TimeGold, 0.95f, cfin, cfout);
+        Add(Shape.Ring, clock, Vector2.zero, cl, 1.7f, 1.7f, WindWhite, TimeGold, 0.5f, cfin, cfout);
+        Add(Shape.Ring, clock, Vector2.zero, cl, 2.6f, 2.6f, TimePale, TimePale, 0.35f, cfin, cfout, spin: 20f);
+
+        for (int i = 0; i < 12; i++)
+        {
+            float ang = i * 30f;
+            float rad = ang / FxMath.Rad2Deg;
+            float len = i % 3 == 0 ? 0.24f : 0.13f;
+            Add(Shape.Solid, clock + new Vector2(FxMath.Cos(rad), FxMath.Sin(rad)) * 0.78f, Vector2.zero, cl, len, len, TimeGold, TimeGold, 1f, cfin, cfout,
+                rot: ang, sy0: 0.05f, sy1: 0.05f, order: 8);
+        }
+
+        // 針は根元が明るい光条を中心から伸ばす (止まったまま動かない)
+        Add(Shape.Ray, clock, Vector2.zero, cl, 0.72f, 0.72f, WindWhite, TimeGold, 1f, cfin, cfout, rot: 100f, sy0: 0.11f, sy1: 0.11f);
+        Add(Shape.Ray, clock, Vector2.zero, cl, 0.5f, 0.5f, WindWhite, TimeGold, 1f, cfin, cfout, rot: 20f, sy0: 0.14f, sy1: 0.14f);
+        Add(Shape.Star, clock, Vector2.zero, cl, 0.3f, 0.3f, WindWhite, TimeGold, 1f, cfin, cfout);
+
+        Camera cam = Camera.main;
+
+        if (cam)
+        {
+            Vector2 cp = cam.transform.position;
+            float halfH = cam.orthographicSize;
+            float halfW = halfH * cam.aspect;
+
+            for (int i = 0; i < 60; i++)
+            {
+                float size = Rnd(0.14f, 0.28f);
+                Add(Shape.Star, cp + new Vector2(Rnd(-halfW, halfW), Rnd(-halfH, halfH)), Vector2.zero, d, size, size, i % 4 == 0 ? TimeGold : TimePale, TimePale, 0.9f, fin, fout,
+                    delay: Rnd(0f, 0.4f), twinkle: 0.7f, twinkleSpeed: Rnd(1.5f, 3f));
+            }
+        }
+
+        // 動き出す瞬間: 画面全体がもう一度閃く (発動者はもう別の場所にいるので、位置に紐づく演出は出さない)
+        Add(Shape.Solid, c, Vector2.zero, 0.5f, 1f, 1f, TimePale, WindWhite, 0.45f, 0.004f, 0.1f, delay: d, followCamera: true);
+    }
+
+    private static readonly Color BoltWhite = new(0.95f, 0.97f, 1f);
+    private static readonly Color BoltBlue = new(0.45f, 0.65f, 1f);
+    private static readonly Color BoltViolet = new(0.6f, 0.45f, 1f);
+
+    // 稲妻 1 本分の線分: 白い芯と青い光のにじみを、a から b へ向けて置く (2 回瞬く)
+    private static void BoltSegment(Vector2 a, Vector2 b, float width, float delay)
+    {
+        float dx = b.x - a.x, dy = b.y - a.y;
+        float len = FxMath.Sqrt(dx * dx + dy * dy);
+        float rot = FxMath.Atan2(dy, dx) * FxMath.Rad2Deg;
+        Vector2 m = FxMath.V2((a.x + b.x) * 0.5f, (a.y + b.y) * 0.5f);
+
+        Add(Shape.Solid, m, Vector2.zero, 0.45f, len, len, BoltWhite, BoltBlue, 1f, 0.01f, 0.25f, delay: delay, rot: rot, sy0: width, sy1: width * 0.5f,
+            twinkle: 0.6f, twinkleSpeed: 40f, order: 8);
+        Add(Shape.Glow, m, Vector2.zero, 0.5f, len * 1.2f, len * 1.2f, BoltBlue, BoltViolet, 1f, 0.01f, 0.3f, delay: delay, rot: rot, sy0: width * 13f, sy1: width * 6f);
+        Add(Shape.Solid, m, Vector2.zero, 0.25f, len, len, BoltWhite, BoltBlue, 0.9f, 0.01f, 0.3f, delay: delay + 0.12f, rot: rot, sy0: width * 0.8f, sy1: width * 0.4f, order: 8);
+    }
+
+    // 空から着弾点まで、折れ曲がりながら落ちる稲妻を 1 本 (途中で 2 回枝分かれする)
+    private static void Bolt(Vector2 c, float width, float delay)
+    {
+        Vector2 top = c + new Vector2(Rnd(-1.5f, 1.5f), 9f);
+        Vector2 prev = top;
+        const int segments = 11;
+
+        for (int i = 1; i <= segments; i++)
+        {
+            Vector2 next = i == segments ? c : Vector2.Lerp(top, c, i / (float)segments) + new Vector2(Rnd(-0.6f, 0.6f), 0f);
+            BoltSegment(prev, next, width, delay);
+
+            if (i is 3 or 6 or 8)
+            {
+                // 枝は短い線分を細かく折りながら斜め下へ、先へ行くほど細くする
+                float ang = Rnd(0f, 1f) < 0.5f ? Rnd(-75f, -35f) : Rnd(-145f, -105f);
+                Vector2 from = next;
+
+                for (int j = 0; j < 5; j++)
+                {
+                    ang += Rnd(-35f, 35f);
+                    float a = ang / FxMath.Rad2Deg;
+                    float l = Rnd(0.25f, 0.45f);
+                    Vector2 to = from + FxMath.V2(FxMath.Cos(a) * l, FxMath.Sin(a) * l);
+                    BoltSegment(from, to, width * 0.45f * (1f - j * 0.15f), delay);
+                    from = to;
+                }
+            }
+
+            prev = next;
+        }
+    }
+
+    // 空が光る → 空から落ちる太い稲妻と、少し遅れてもう 1 本 → 着弾の閃光・星・輪・火花 → 焦げ跡と、しばらく走る放電と煙
+    private static void SpawnLightningStrike(Vector2 c)
+    {
+        Impact(c, 3f, new Color(0.8f, 0.88f, 1f), 0.85f, 0.35f, 0.6f);
+
+        Bolt(c, 0.17f, 0f);
+        Bolt(c + new Vector2(Rnd(-0.3f, 0.3f), 0f), 0.11f, 0.2f);
+
+        Add(Shape.Star, c, Vector2.zero, 0.6f, 0.5f, 5f, WindWhite, BoltBlue, 1f, 0.01f, 0.3f);
+        Add(Shape.Glow, c, Vector2.zero, 0.6f, 4.5f, 2f, BoltWhite, BoltBlue, 1f, 0.01f, 0.3f);
+        Add(Shape.Ring, c + Feet, Vector2.zero, 0.7f, 0.3f, 5f, BoltWhite, BoltBlue, 1f, 0.01f, 0.4f, rot: 0f, sy0: 0.1f, sy1: 1.75f);
+        Add(Shape.Ring, c, Vector2.zero, 0.55f, 0.2f, 4f, WindWhite, BoltViolet, 0.9f, 0.01f, 0.35f);
+        Add(Shape.Ring, c, Vector2.zero, 0.5f, 0.2f, 3f, WindWhite, BoltBlue, 0.8f, 0.01f, 0.35f, delay: 0.2f);
+
+        for (int i = 0; i < 50; i++)
+        {
+            Add(Shape.Star, c, Dir() * Rnd(3f, 9f), Rnd(0.4f, 0.9f), Rnd(0.4f, 0.55f), 0.16f, i % 2 == 0 ? WindWhite : BoltBlue, BoltViolet, 1f, 0.01f, 0.5f,
+                drag: 3f, stretch: 0.12f);
+        }
+
+        Add(Shape.Cloud, c + Feet, Vector2.zero, 2.6f, 2f, 2f, new Color(0.12f, 0.12f, 0.15f), new Color(0.2f, 0.2f, 0.22f), 0.7f, 0.02f, 0.5f,
+            rot: 0f, sy0: 0.7f, sy1: 0.7f, order: 0);
+
+        // 着弾点の周りで少し遅れてぱちぱちと走る放電
+        for (int i = 0; i < 18; i++)
+        {
+            Vector2 a = c + FxMath.InsideUnitCircle() * 1.1f;
+            float ang = Rnd(0f, 2f * FxMath.PI);
+            float l = Rnd(0.3f, 0.7f);
+            Vector2 b = a + FxMath.V2(FxMath.Cos(ang) * l, FxMath.Sin(ang) * l);
+            Add(Shape.Solid, FxMath.V2((a.x + b.x) * 0.5f, (a.y + b.y) * 0.5f), Vector2.zero, Rnd(0.12f, 0.2f), l, l, BoltWhite, BoltBlue, 1f, 0.01f, 0.4f,
+                delay: Rnd(0.1f, 1.5f), rot: ang * FxMath.Rad2Deg, sy0: 0.05f, sy1: 0.03f, order: 8);
+            Add(Shape.Glow, FxMath.V2((a.x + b.x) * 0.5f, (a.y + b.y) * 0.5f), Vector2.zero, 0.2f, l, l, BoltBlue, BoltViolet, 0.6f, 0.01f, 0.4f,
+                delay: Rnd(0.1f, 1.5f), rot: ang * FxMath.Rad2Deg, sy0: 0.3f, sy1: 0.2f);
+        }
+
+        for (int i = 0; i < 10; i++)
+        {
+            Add(Shape.Cloud, c + FxMath.InsideUnitCircle() * 0.5f, new Vector2(Rnd(-0.3f, 0.3f), 0f), Rnd(1.4f, 2.2f), 0.5f, Rnd(1.4f, 2f), new Color(0.35f, 0.35f, 0.4f),
+                new Color(0.2f, 0.2f, 0.24f), 0.45f, 0.05f, 0.4f, delay: Rnd(0.1f, 0.3f), spin: Rnd(-40f, 40f), rise: 0.6f);
+        }
+    }
+
+    private static readonly Color Stone = new(0.62f, 0.6f, 0.58f);
+    private static readonly Color StoneDark = new(0.32f, 0.3f, 0.3f);
+
+    // 重い物が叩きつけられる: 閃光と揺れ → 地面を走る平たい二重の衝撃の輪と空へ広がる輪 → 横へ噴き出す土煙
+    // → 跳ね上がって落ちる破片 → しばらく残る放射状のひび
+    private static void SpawnSlam(Vector2 c, float size)
+    {
+        float r = FxMath.Clamp(size, 0.3f, 3f);
+        Vector2 f = c + Feet;
+
+        Impact(c, r * 2f, new Color(1f, 0.93f, 0.8f), 0.12f + 0.12f * r, 0.12f + 0.16f * r, 0.4f);
+
+        Add(Shape.Ring, f, Vector2.zero, 0.7f, 0.4f * r, 4.4f * r, Dust, DustDark, 1f, 0.02f, 0.4f, rot: 0f, sy0: 0.15f * r, sy1: 1.6f * r);
+        Add(Shape.Ring, f, Vector2.zero, 0.8f, 0.3f * r, 3f * r, WindWhite, Dust, 0.85f, 0.02f, 0.4f, delay: 0.06f, rot: 0f, sy0: 0.12f * r, sy1: 1.1f * r);
+        Add(Shape.Ring, c, Vector2.zero, 0.5f, 0.3f * r, 3.6f * r, WindWhite, Dust, 0.7f, 0.01f, 0.35f);
+        Add(Shape.Glow, f, Vector2.zero, 0.4f, 2.4f * r, 1.2f * r, new Color(1f, 0.93f, 0.8f), Dust, 0.8f, 0.01f, 0.3f, sy0: 0.8f * r, sy1: 0.4f * r);
+
+        // 土煙は大きさに比例させすぎると画面を覆うので、数と広がりは緩やかに増やす
+        int dust = (int)(16 + 10 * r);
+        float spread = FxMath.Min(r, 1.4f);
+
+        for (int i = 0; i < dust; i++)
+        {
+            float ang = Rnd(0f, 2f * FxMath.PI);
+            Vector2 dir = FxMath.V2(FxMath.Cos(ang), FxMath.Sin(ang) * 0.4f);
+            Add(Shape.Cloud, f + dir * 0.3f * r, dir * Rnd(3.5f, 7f) * spread, Rnd(1f, 1.6f), 0.5f * spread, Rnd(1.3f, 2.1f) * spread, Dust, DustDark, 0.65f, 0.05f, 0.35f,
+                drag: 2.4f, spin: Rnd(-90f, 90f), rise: 0.3f);
+        }
+
+        int debris = (int)(16 * r);
+
+        for (int i = 0; i < debris; i++)
+        {
+            float s = Rnd(0.14f, 0.32f);
+            Add(Shape.Chunk, f, new Vector2(Rnd(-3.5f, 3.5f) * r, Rnd(2.5f, 6f) * r), Rnd(0.8f, 1.2f), s, s, Stone, StoneDark, 1f, 0.01f, 0.6f,
+                drag: 1.2f, spin: Rnd(-720f, 720f), rise: -4f);
+        }
+
+        // 床に走るひび: 短い線分を折り曲げながら放射状に伸ばす (床は斜めに見下ろしているので縦を潰す)。
+        // 演出は全部キャラより手前に描かれるので、足元の外側から始めて、体と重なる奥 (画面の上) へは伸ばさない
+        for (int i = 0; i < 8; i++)
+        {
+            float ang = -200f + i * 31f + Rnd(-10f, 10f);
+            float a0 = ang / FxMath.Rad2Deg;
+            Vector2 from = f + FxMath.V2(FxMath.Cos(a0) * 0.45f, FxMath.Sin(a0) * 0.22f);
+
+            for (int j = 0; j < 3; j++)
+            {
+                ang += Rnd(-35f, 35f);
+                float a = ang / FxMath.Rad2Deg;
+                float l = Rnd(0.22f, 0.4f) * FxMath.Min(r, 2f);
+                Vector2 to = from + FxMath.V2(FxMath.Cos(a) * l, FxMath.Sin(a) * l * 0.5f);
+                float dx = to.x - from.x, dy = to.y - from.y;
+                float w = 0.08f * (1f - j * 0.25f);
+                // 線分どうしの継ぎ目に隙間が出ないよう、太さの分だけ長めに描く
+                float seg = FxMath.Sqrt(dx * dx + dy * dy) + w;
+                Add(Shape.Solid, FxMath.V2((from.x + to.x) * 0.5f, (from.y + to.y) * 0.5f), Vector2.zero, 1.8f, seg, seg,
+                    StoneDark, StoneDark, 0.85f, 0.02f, 0.6f, delay: j * 0.03f, rot: FxMath.Atan2(dy, dx) * FxMath.Rad2Deg, sy0: w, sy1: w, order: 0);
+                from = to;
+            }
+        }
+    }
+
+    private static readonly Color WaterFoam = new(0.9f, 0.97f, 1f);
+    private static readonly Color WaterLight = new(0.55f, 0.85f, 1f);
+    private static readonly Color WaterBlue = new(0.2f, 0.5f, 0.95f);
+    private static readonly Color WaterDeep = new(0.1f, 0.3f, 0.7f);
+
+    // 水しぶき: 立ち上がる水柱 → 足元に広がる四重の波紋 → 王冠のように跳ね上がる水の筋 → 飛び散って落ちる水滴と泡。
+    // 大きいしぶき (溺れた時) は閃光と揺れ、水面から昇っては消える泡と、沈んだ跡の暗い水も出す
+    private static void SpawnSplash(Vector2 c, float size)
+    {
+        float r = FxMath.Clamp(size, 0.3f, 3f);
+        Vector2 f = c + Feet;
+        bool big = r >= 1.2f;
+
+        if (big) Impact(c, r * 2f, WaterLight, 0.3f, 0.18f, 0.35f);
+
+        // 水柱 (根元の明るい光条を上へ向け、太く短く立てて細く伸ばす)
+        Add(Shape.Ray, f, Vector2.zero, 0.6f, 1.2f * r, 3.2f * r, WaterFoam, WaterLight, 0.95f, 0.02f, 0.4f, rot: 90f, sy0: 1f * r, sy1: 0.2f * r);
+        Add(Shape.Glow, f + new Vector2(0f, 0.6f * r), Vector2.zero, 0.5f, 1.2f * r, 2f * r, WaterFoam, WaterBlue, 0.8f, 0.02f, 0.35f, sy0: 2f * r, sy1: 3.2f * r);
+
+        for (int k = 0; k < 4; k++)
+        {
+            float to = (3f + k * 0.9f) * r;
+            Add(Shape.Ring, f, Vector2.zero, 0.8f + k * 0.15f, 0.3f * r, to, k % 2 == 0 ? WaterFoam : WaterLight, WaterBlue, 1f - k * 0.2f, 0.02f, 0.4f,
+                delay: k * 0.12f, rot: 0f, sy0: 0.1f * r, sy1: to * 0.35f);
+        }
+
+        for (int i = 0; i < 20; i++)
+        {
+            Add(Shape.Ray, f, Vector2.zero, Rnd(0.45f, 0.75f), 0.6f * r, 1.8f * r, WaterFoam, WaterLight, 0.95f, 0.02f, 0.4f, rot: Rnd(45f, 135f), sy0: 0.2f, sy1: 0.06f);
+        }
+
+        int drops = (int)(36 * r);
+
+        for (int i = 0; i < drops; i++)
+        {
+            float s = Rnd(0.14f, 0.28f);
+            Add(Shape.Glow, f, new Vector2(Rnd(-3f, 3f) * r, Rnd(3f, 7f) * r), Rnd(0.7f, 1.1f), s, s * 0.7f, i % 3 == 0 ? WindWhite : WaterFoam, WaterBlue, 1f, 0.01f, 0.6f,
+                drag: 1f, rise: -4.5f, stretch: 0.06f);
+        }
+
+        for (int i = 0; i < 10; i++)
+        {
+            Add(Shape.Cloud, f + FxMath.InsideUnitCircle() * 0.3f * r, FxMath.InsideUnitCircle() * 1.6f * r, Rnd(0.8f, 1.2f), 0.5f * r, Rnd(1.1f, 1.6f) * r, WaterFoam, WaterLight,
+                0.65f, 0.03f, 0.4f, drag: 2f, spin: Rnd(-60f, 60f));
+        }
+
+        if (!big) return;
+
+        Add(Shape.Cloud, f, Vector2.zero, 2f, 1.4f * r, 2.8f * r, WaterDeep, WaterBlue, 0.55f, 0.03f, 0.5f, rot: 0f, sy0: 0.5f * r, sy1: 0.95f * r, order: 0);
+
+        for (int i = 0; i < 26; i++)
+        {
+            float s = Rnd(0.14f, 0.32f);
+            Add(Shape.Ring, c + new Vector2(Rnd(-0.6f, 0.6f), Rnd(-0.4f, 0.2f)), new Vector2(Rnd(-0.2f, 0.2f), Rnd(0.6f, 1.6f)), Rnd(0.8f, 1.4f), s, s, WaterFoam, WaterLight, 1f, 0.05f, 0.6f,
+                delay: Rnd(0f, 1.6f), twinkle: 0.3f, twinkleSpeed: 8f);
         }
     }
 

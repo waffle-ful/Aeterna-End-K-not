@@ -129,10 +129,15 @@ internal class Hookshot : RoleBase
             return;
         }
 
+        Vector2 hookFrom = ToTargetTP ? HookshotPC.Pos() : markedPlayer.Pos();
+        Vector2 hookTo = ToTargetTP ? markedPlayer.Pos() : HookshotPC.Pos();
         bool isTPsuccess = ToTargetTP ? HookshotPC.TP(markedPlayer) : markedPlayer.TP(HookshotPC);
 
         if (isTPsuccess)
         {
+            ExplosionFx.Play(ExplosionFx.Kind.WarpOut, hookFrom, 1f);
+            ExplosionFx.Play(ExplosionFx.Kind.WarpIn, hookTo, 1f);
+
             MarkedPlayerId = byte.MaxValue;
             SendRPC();
         }

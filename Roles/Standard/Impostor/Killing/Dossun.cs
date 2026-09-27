@@ -123,6 +123,7 @@ public class Dossun : RoleBase
                 {
                     BlockCNO = new DossunBlock(Anchor);
                 });
+                EndKnot.Modules.ExplosionFx.Play(EndKnot.Modules.ExplosionFx.Kind.Slam, Anchor, 1.5f);
                 CurrentPhase = Phase.Active;
 
                 // 起動地点とアンカーが離れているとブロックは永久にカメラ外 (ブロックとの距離は起動時の
@@ -222,6 +223,7 @@ public class Dossun : RoleBase
                 // 壁との間に挟まれた → CheckMurder バイパスで確定キル (WaveCannon/Abyssbringer と同じパターン)
                 target.RpcExileV2();
                 RPC.PlaySoundRPC(dossun.PlayerId, Sounds.KillSound);
+                EndKnot.Modules.ExplosionFx.Play(EndKnot.Modules.ExplosionFx.Kind.Slam, tpBase, 2f);
 
                 PlayerState state = Main.PlayerStates[target.PlayerId];
                 state.deathReason = PlayerState.DeathReason.Crushed;
@@ -243,7 +245,12 @@ public class Dossun : RoleBase
 
                 if (!PhysicsHelpers.AnyNonTriggersBetween(victimPos, dir, dist, Constants.ShipAndObjectsMask))
                 {
-                    target.TP(tpBase + dir * dist);
+                    if (target.TP(tpBase + dir * dist))
+                    {
+                        EndKnot.Modules.ExplosionFx.Play(EndKnot.Modules.ExplosionFx.Kind.Slam, tpBase, 0.8f);
+                        EndKnot.Modules.ExplosionFx.Play(EndKnot.Modules.ExplosionFx.Kind.Slam, tpBase + dir * dist, 0.5f);
+                    }
+
                     break;
                 }
             }

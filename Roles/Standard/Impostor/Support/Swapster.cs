@@ -50,8 +50,11 @@ internal class Swapster : RoleBase
         {
             PlayerControl firstTarget = Utils.GetPlayerById(firstTargetId);
             Vector2 pos = firstTarget.Pos();
-            firstTarget.TP(target);
-            target.TP(pos);
+            Vector2 targetPos = target.Pos();
+
+            // 入れ替わりは両地点で「消える」と「現れる」が重なって濁るので、現れる方だけ出す
+            if (firstTarget.TP(target)) EndKnot.Modules.ExplosionFx.Play(EndKnot.Modules.ExplosionFx.Kind.WarpIn, targetPos, 1f);
+            if (target.TP(pos)) EndKnot.Modules.ExplosionFx.Play(EndKnot.Modules.ExplosionFx.Kind.WarpIn, pos, 1f);
             FirstSwapTarget.Remove(swapster.PlayerId);
         }
         else

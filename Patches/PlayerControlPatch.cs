@@ -406,7 +406,14 @@ internal static class CheckMurderPatch
 
             if (killer.Is(CustomRoles.Magnet) && !target.Is(CustomRoles.Pestilence))
             {
-                target.TP(killer);
+                Vector2 pulledFrom = target.Pos();
+
+                if (target.TP(killer))
+                {
+                    ExplosionFx.Play(ExplosionFx.Kind.WarpOut, pulledFrom, 1f);
+                    ExplosionFx.Play(ExplosionFx.Kind.WarpIn, killer.Pos(), 1f);
+                }
+
                 LateTask.New(() => killer.RpcCheckAndMurder(target), 0.1f, log: false);
                 return false;
             }

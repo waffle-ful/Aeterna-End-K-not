@@ -102,7 +102,13 @@ internal class Enderman : RoleBase
         LateTask.New(() =>
         {
             if (!GameStates.IsInTask || ExileController.Instance || AntiBlackout.SkipTasks || pc == null || !pc.IsAlive()) return;
-            pc.TP(pos);
+            Vector2 from = pc.Pos();
+
+            if (pc.TP(pos))
+            {
+                EndKnot.Modules.ExplosionFx.Play(EndKnot.Modules.ExplosionFx.Kind.WarpOut, from, 1f);
+                EndKnot.Modules.ExplosionFx.Play(EndKnot.Modules.ExplosionFx.Kind.WarpIn, pos, 1f);
+            }
         }, time);
         pc.Notify(GetString("MarkDone"));
     }

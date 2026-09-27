@@ -120,6 +120,7 @@ public class Stasis : RoleBase
             }
             else
             {
+                EndKnot.Modules.ExplosionFx.Play(EndKnot.Modules.ExplosionFx.Kind.Freeze, player.Pos(), time);
                 if (Main.KillTimers[player.PlayerId] < time) player.SetKillCooldown(time);
                 player.RpcResetAbilityCooldown();
 
@@ -129,6 +130,7 @@ public class Stasis : RoleBase
         }
 
         Utils.MarkEveryoneDirtySettings();
+        EndKnot.Modules.ExplosionFx.Play(EndKnot.Modules.ExplosionFx.Kind.TimeStop, pc.Pos(), time);
         Main.Instance.StartCoroutine(Countdown());
         return;
 

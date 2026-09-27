@@ -107,7 +107,17 @@ public class Disperser : RoleBase
             }
 
             pc.RPCPlayCustomSound("Teleport");
-            pc.TPToRandomVent();
+            // 行き先に演出を出すため、ベントはここで選ぶ (TP 直後の Pos() はまだ移動前を返すことがある)
+            UnityEngine.Vector2 from = pc.Pos();
+            UnityEngine.Vector3 vent = ShipStatus.Instance.AllVents.RandomElement().transform.position;
+            UnityEngine.Vector2 to = new(vent.x, vent.y + 0.3636f);
+
+            if (pc.TP(to))
+            {
+                ExplosionFx.Play(ExplosionFx.Kind.WarpOut, from, 1f);
+                ExplosionFx.Play(ExplosionFx.Kind.WarpIn, to, 1f);
+            }
+
             pc.Notify(ColorString(GetRoleColor(CustomRoles.Disperser), string.Format(GetString("TeleportedInRndVentByDisperser"), pc.GetRealName())));
         }
     }
