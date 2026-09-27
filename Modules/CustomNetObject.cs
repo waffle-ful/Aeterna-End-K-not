@@ -208,6 +208,15 @@ namespace EndKnot
         // Hide() でホスト自身から明示的に隠された CNO は EnsureHostVisible の対象外にする
         private bool HiddenFromHost;
 
+        // ホストの画面にだけ出さない CNO (同じ見た目をホスト側の演出が描く場合)。送信は変えないので客には見える
+        protected virtual bool HideOnHost => false;
+
+        private void HideHostNameText()
+        {
+            try { playerControl.transform.FindChild("Names").FindChild("NameText_TMP").gameObject.SetActive(false); }
+            catch (Exception e) { Utils.ThrowException(e); }
+        }
+
         // 推測メニュー要素 (ShapeshiftMenuElement) 専用の targeted 配信状態。spawn を tag6 で本人だけに
         // 送った CNO は、server/他クライアントがこの netId の spawn を一度も見ていないため、netId を参照する
         // 後続の全ワイヤ送信 (SnapTo / despawn) も同じ宛先に揃える必要がある。-1 = 通常のブロードキャスト配信。
@@ -362,6 +371,8 @@ namespace EndKnot
 
                 try { playerControl.Shapeshift(PlayerControl.LocalPlayer, false); }
                 catch (Exception e) { Utils.ThrowException(e); }
+
+                if (HideOnHost) HideHostNameText();
 
                 sender.StartRpc(playerControl.NetId, (byte)RpcCalls.Shapeshift)
                     .WriteNetObject(PlayerControl.LocalPlayer)
@@ -652,6 +663,7 @@ namespace EndKnot
             Position = position;
             Sprite = sprite;
             _respawnOnlyVisibleTo = onlyVisibleTo;
+            if (HideOnHost) HiddenFromHost = true;
 
             Main.Instance.StartCoroutine(CoRoutine());
             return;
@@ -988,6 +1000,8 @@ namespace EndKnot
 
                         try { playerControl.Shapeshift(PlayerControl.LocalPlayer, false); }
                         catch (Exception e) { Utils.ThrowException(e); }
+
+                        if (HideOnHost) HideHostNameText();
 
                         sender.StartRpc(playerControl.NetId, (byte)RpcCalls.Shapeshift)
                             .WriteNetObject(PlayerControl.LocalPlayer)
