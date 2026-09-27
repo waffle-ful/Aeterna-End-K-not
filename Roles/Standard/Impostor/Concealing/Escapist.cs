@@ -82,7 +82,14 @@ internal class Escapist : RoleBase
     {
         if (EscapistLocation.HasValue)
         {
-            pc.TP(EscapistLocation.Value);
+            Vector2 from = pc.Pos();
+
+            if (pc.TP(EscapistLocation.Value))
+            {
+                ExplosionFx.Play(ExplosionFx.Kind.WarpOut, from, 1f);
+                ExplosionFx.Play(ExplosionFx.Kind.WarpIn, EscapistLocation.Value, 1f);
+            }
+
             pc.RPCPlayCustomSound("Teleport");
             if (!OneMarkPerRound.GetBool()) EscapistLocation = null;
         }

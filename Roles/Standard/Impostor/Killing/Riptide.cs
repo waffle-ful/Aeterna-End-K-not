@@ -414,6 +414,8 @@ public class Riptide : RoleBase
                 // 速度低下 (罠対策 #8: SlowedPlayers HashSet で追跡)
                 if (wave.SlowedPlayers.Add(target.PlayerId))
                 {
+                    EndKnot.Modules.ExplosionFx.Play(EndKnot.Modules.ExplosionFx.Kind.Splash, target.Pos(), 0.6f);
+
                     // この波への初入場 — グローバル refcount をインクリメント
                     byte pid = target.PlayerId;
                     if (GlobalSlowState.TryGetValue(pid, out var state))
@@ -525,6 +527,7 @@ public class Riptide : RoleBase
             target.MarkDirtySettings();
 
         // 確定キル (CheckMurder バイパス)
+        EndKnot.Modules.ExplosionFx.Play(EndKnot.Modules.ExplosionFx.Kind.Splash, target.Pos(), 1.6f);
         target.RpcExileV2();
         RPC.PlaySoundRPC(riptidePlayer.PlayerId, Sounds.KillSound);
 

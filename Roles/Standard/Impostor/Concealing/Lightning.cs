@@ -135,6 +135,9 @@ public class Lightning : RoleBase
 
                 Utils.NotifyRoles(SpecifySeer: killer, SpecifyTarget: target);
                 Utils.NotifyRoles(SpecifySeer: target, SpecifyTarget: killer);
+
+                // 打った瞬間ではなく変わる瞬間に落とす (打った時に見せると打った人の居場所が分かってしまう)
+                EndKnot.Modules.ExplosionFx.Play(EndKnot.Modules.ExplosionFx.Kind.LightningStrike, target.Pos(), 1f);
                 Logger.Info($"{target.GetNameWithRole().RemoveHtmlTags()} is now converted to a 'non-spherical lightning' XD", "Lightning");
             }
         }, ConvertTime.GetFloat(), "Lightning Convert Player To Ghost");

@@ -2243,7 +2243,8 @@ public static class TestBridge
         PlayerControl lp = PlayerControl.LocalPlayer;
         if (!lp || !GameStates.InGame) { WriteOut("ERR fx: not in game"); return; }
 
-        Vector2 at = lp.GetTruePosition();
+        // 役職側は Pos() (体の中心) を渡すので、撮影も同じ基準で出す
+        Vector2 at = lp.Pos();
         for (int i = 0; i < count; i++) ExplosionFx.Play(kind, at + new Vector2(i * 0.8f, 0f), radius);
 
         WriteOut($"OK fx {kind} r={radius:F1} x{count}");

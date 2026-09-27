@@ -64,6 +64,8 @@ internal class Freezer : RoleBase
                 target.MarkDirtySettings();
             }, FreezeDuration.GetFloat(), "FreezerFreezeDuration");
 
+            EndKnot.Modules.ExplosionFx.Play(EndKnot.Modules.ExplosionFx.Kind.Freeze, target.Pos(), FreezeDuration.GetFloat());
+
             if (target.AmOwner)
                 Achievements.Type.TooCold.CompleteAfterGameEnd();
         }
