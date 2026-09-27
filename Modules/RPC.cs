@@ -184,7 +184,7 @@ public enum CustomRPC
     ControllableSound, // sub-op byte: 0=offset付き再生 / 1=名前指定フェード停止 (モッドクライアント効果音同期)
 
     // モッドクライアント向けの見た目だけの演出 (爆発など)。先頭の件数 + 各演出の kind byte で多重化する。
-    // 新しい演出は ExplosionFx.Kind に値を足すだけで、この ID を増やさない。
+    // 新しい演出は ExplosionFx.Kind に値を足すだけで、この ID を増やさない (A・B の追加値が要る種類は ExplosionFx.HasExtra の範囲に入れる)。
     PlayVisualFx = 247,
 
     // EKM (custom map system) — reserved 2026-06-12.

@@ -78,6 +78,10 @@ public class SuperCannonShot
     private readonly Variant Type;
     private readonly int Thickness;
     private readonly Func<PlayerControl, bool> IsImmune;
+
+    // 魔法陣とビームの演出を出したゲートの中心 (片付けの宛先)
+    private readonly List<Vector2> FxGates = [];
+    private ExplosionFx.CannonPalette FxPal = ExplosionFx.CannonPalette.Crimson;
     private readonly HashSet<byte> AlreadyKilled = [];
 
     private Vector2 StartPosition;
@@ -122,7 +126,8 @@ public class SuperCannonShot
     private float DynamicHalfLength => BeamLengthUnit * FontSize * DynamicCharCount / 2f;
 
     // チャージ開始。変種ごとのゲートを出す。false を返したら発動不能 (役職側はクラシック超にフォールバック)。
-    public bool Begin(Vector2 startPosition, Vector2 direction)
+    // fxSeconds = 発射までの秒数 (魔法陣の演出の長さ)
+    public bool Begin(Vector2 startPosition, Vector2 direction, float fxSeconds = 0f)
     {
         StartPosition = startPosition;
         Direction = direction;
@@ -131,6 +136,8 @@ public class SuperCannonShot
         {
             case Variant.BlackHole:
                 Utils.CombineSendTimeLowering(() => { GateA = new WaveCannonGate(LineGatePos(0f), "#2a0033", "#4b0082", "#000000"); });
+                FxPal = ExplosionFx.CannonPalette.Void;
+                FxCharge(LineGatePos(0f), fxSeconds);
                 return true;
 
             case Variant.Twin:
@@ -139,6 +146,8 @@ public class SuperCannonShot
                     GateA = new WaveCannonGate(LineGatePos(TwinGap / 2f));
                     GateB = new WaveCannonGate(LineGatePos(-TwinGap / 2f));
                 });
+                FxCharge(LineGatePos(TwinGap / 2f), fxSeconds);
+                FxCharge(LineGatePos(-TwinGap / 2f), fxSeconds);
                 return true;
 
             case Variant.Dynamic:
@@ -156,6 +165,7 @@ public class SuperCannonShot
                 SweepEndY = topDown ? bottom : top;
 
                 Utils.CombineSendTimeLowering(() => { GateA = new WaveCannonGate(LineGatePos(0f)); });
+                FxCharge(LineGatePos(0f), fxSeconds);
                 return true;
             }
 
@@ -245,6 +255,7 @@ public class SuperCannonShot
         {
             case Variant.BlackHole:
                 Utils.CombineSendTimeLowering(() => { BeamA = new WaveCannonBeamSegment(LineBeamPos(0f), LineBeamSprite("#7f00ff")); });
+                FxBeam(LineGatePos(0f), firingDuration);
                 break;
 
             case Variant.Twin:
@@ -253,17 +264,25 @@ public class SuperCannonShot
                     BeamA = new WaveCannonBeamSegment(LineBeamPos(TwinGap / 2f), LineBeamSprite("#ff0000"));
                     BeamB = new WaveCannonBeamSegment(LineBeamPos(-TwinGap / 2f), LineBeamSprite("#ff0000"));
                 });
+                FxBeam(LineGatePos(TwinGap / 2f), firingDuration);
+                FxBeam(LineGatePos(-TwinGap / 2f), firingDuration);
                 break;
 
             case Variant.Dynamic:
                 FiringStartTime = Time.time;
                 FiringDuration = Mathf.Max(0.5f, firingDuration);
                 Utils.CombineSendTimeLowering(() => { BeamA = new WaveCannonBeamSegment(new Vector2(MapCenterX, SweepStartY), DynamicBeamSprite()); });
+                // ゲートの魔法陣は役目を終えて消え、全幅のビームが掃いていく
+                EndFx();
+                FxGates.Add(new Vector2(MapCenterX, SweepStartY));
+                ExplosionFx.CannonSweep(new Vector2(MapCenterX, SweepStartY), SweepEndY, FiringDuration, Thickness);
                 break;
 
             case Variant.CertainKill:
                 // 発射突入時点の追従位置で固定して撃つ (直前まで追従しているため回避不能)
                 Utils.CombineSendTimeLowering(() => { BeamA = new WaveCannonBeamSegment(CertainGatePos + Direction * GateRadius, LineBeamSprite("#ff0000")); });
+                // ゲートは標的を追い続けるので、魔法陣は撃つ瞬間の位置に出す
+                FxBeam(CertainGatePos, firingDuration);
                 break;
         }
     }
@@ -301,8 +320,31 @@ public class SuperCannonShot
         }
     }
 
+    // 撃ち終わった: 魔法陣とビームの演出を消す
+    public void EndFx()
+    {
+        foreach (Vector2 gate in FxGates) ExplosionFx.CannonEnd(gate, FxPal, false);
+        FxGates.Clear();
+    }
+
+    private void FxCharge(Vector2 gate, float seconds)
+    {
+        FxGates.Add(gate);
+        ExplosionFx.CannonCharge(gate, Direction.x > 0, seconds, Thickness, FxPal);
+    }
+
+    private void FxBeam(Vector2 gate, float seconds)
+    {
+        if (!FxGates.Contains(gate)) FxGates.Add(gate);
+        ExplosionFx.CannonBeam(gate, Direction.x > 0, seconds, Thickness, FxPal);
+    }
+
+    // 撃ち終わる前に止められた時は、残っている演出が砕けて消える
     public void Despawn()
     {
+        foreach (Vector2 gate in FxGates) ExplosionFx.CannonEnd(gate, FxPal, true);
+        FxGates.Clear();
+
         GateA?.Despawn();
         GateA = null;
         GateB?.Despawn();

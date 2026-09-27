@@ -472,7 +472,7 @@ public static class TestBridge
             return;
         }
 
-        // 見た目の演出だけをホストの足元で出す (判定・キルは起きない)。`fx <Kind> [radius] [count]`
+        // 見た目の演出だけをホストの足元で出す (判定・キルは起きない)。`fx <Kind> [radius] [count] [a] [b]` (a・b は波動砲の太さと色)
         if (directive.StartsWith("fx ", StringComparison.OrdinalIgnoreCase))
         {
             try { ExecuteFx(directive[3..].Trim()); }
@@ -2317,13 +2317,20 @@ public static class TestBridge
 
         float radius = parts.Length > 1 && float.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float r) ? r : 3f;
         int count = parts.Length > 2 && int.TryParse(parts[2], out int c) ? Math.Clamp(c, 1, 24) : 1;
+        // 波動砲は A (太さ) と B (色 / ダイナミックの終点の高さ) も渡せる
+        float a = parts.Length > 3 && float.TryParse(parts[3], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float pa) ? pa : 0f;
+        float b = parts.Length > 4 && float.TryParse(parts[4], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float pb) ? pb : 0f;
 
         PlayerControl lp = PlayerControl.LocalPlayer;
         if (!lp || !GameStates.InGame) { WriteOut("ERR fx: not in game"); return; }
 
         // 役職側は Pos() (体の中心) を渡すので、撮影も同じ基準で出す
         Vector2 at = lp.Pos();
-        for (int i = 0; i < count; i++) ExplosionFx.Play(kind, at + new Vector2(i * 0.8f, 0f), radius);
+        for (int i = 0; i < count; i++)
+        {
+            if (kind >= ExplosionFx.Kind.CannonChargeRight) ExplosionFx.PlayExtra(kind, at + new Vector2(i * 0.8f, 0f), radius, a, b);
+            else ExplosionFx.Play(kind, at + new Vector2(i * 0.8f, 0f), radius);
+        }
 
         WriteOut($"OK fx {kind} r={radius:F1} x{count}");
     }

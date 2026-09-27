@@ -87,6 +87,8 @@ public class JackalHadouHo : RoleBase
     private WaveCannonBeamSegment BeamCNO;
     private WaveCannonGate GateCNO;
     private SuperCannonShot Super;
+    private Vector2? FxGate;
+    private ExplosionFx.CannonPalette FxPal;
     private AudioSource ChargeAudio;
     private AudioClip ChargeAudioClip;
     private int ShotSeq; // 発射シーケンス世代。中断→再発射時に旧 LateTask のチャージ音を無効化する
@@ -304,7 +306,7 @@ public class JackalHadouHo : RoleBase
             {
                 Super = new SuperCannonShot(pc, variant.Value, SuperBeamThickness.GetInt(),
                     t => !KillJackalOpt.GetBool() && t.GetCountTypes() == CountTypes.Jackal);
-                if (!Super.Begin(StartPosition, Direction))
+                if (!Super.Begin(StartPosition, Direction, dur + WarningDuration.GetFloat()))
                 {
                     // 変種が発動不能 (確殺: 有効な対象が 1 人もいない 等) → 従来の発射で撃つ (WaveCannon 双子)
                     Super = null;
@@ -320,6 +322,11 @@ public class JackalHadouHo : RoleBase
             {
                 GateCNO = new WaveCannonGate(gatePos);
             });
+
+            FxGate = gatePos;
+            FxPal = IsSuperShot ? ExplosionFx.CannonPalette.Crimson
+                : BeamColorModeOpt.GetValue() == 0 ? ExplosionFx.CannonPalette.Rainbow : ExplosionFx.CannonPalette.Cyan;
+            ExplosionFx.CannonCharge(gatePos, Direction.x > 0, dur + WarningDuration.GetFloat(), CurrentThickness(), FxPal);
         }
 
         // 全プレイヤーにキルフラッシュ
@@ -503,6 +510,7 @@ public class JackalHadouHo : RoleBase
 
     private void DespawnAllCNOs()
     {
+        EndCannonFx(true);
         WarningCNO?.Despawn();
         WarningCNO = null;
         BeamCNO?.Despawn();
@@ -664,6 +672,8 @@ public class JackalHadouHo : RoleBase
 
                 if (Utils.TimeStamp >= PhaseEndTS)
                 {
+                    EndCannonFx(false);
+                    Super?.EndFx();
                     DespawnAllCNOs();
                     CustomSoundsManager.RpcStopControllableAll(FireSoundName, FireSoundFadeSeconds);
                     RestoreSkin(pc);
@@ -723,6 +733,20 @@ public class JackalHadouHo : RoleBase
         Vector2 pos = BeamCNOPosition();
         string sprite = BeamSprite();
         Utils.CombineSendTimeLowering(() => { BeamCNO = new WaveCannonBeamSegment(pos, sprite); });
+
+        if (FxGate is { } gate) ExplosionFx.CannonBeam(gate, Direction.x > 0, FiringDuration.GetFloat(), CurrentThickness(), FxPal);
+    }
+
+    private int CurrentThickness()
+    {
+        return IsSuperShot ? SuperBeamThickness.GetInt() : NormalBeamThickness.GetInt();
+    }
+
+    // 魔法陣とビームの演出 (ホストと End K not のクライアントだけに見える)。撃ち終わりは消え、途中で止まったら砕ける
+    private void EndCannonFx(bool broken)
+    {
+        if (FxGate is { } gate) ExplosionFx.CannonEnd(gate, FxPal, broken);
+        FxGate = null;
     }
 
     private string WarningSprite()

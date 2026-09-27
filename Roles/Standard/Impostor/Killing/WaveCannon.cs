@@ -70,6 +70,8 @@ public class WaveCannon : RoleBase
     private PlayerControl WaveCannonPC;
     private bool IsSuperShot;
     private SuperCannonShot Super;
+    private Vector2? FxGate;
+    private ExplosionFx.CannonPalette FxPal;
     private AudioSource ChargeAudio;
     private AudioClip ChargeAudioClip;
     private int ShotSeq; // 発射シーケンス世代。中断→再発射時に旧 LateTask のチャージ音を無効化する
@@ -128,6 +130,7 @@ public class WaveCannon : RoleBase
 
     private void DespawnAllCNOs()
     {
+        EndCannonFx(true);
         WarningCNO?.Despawn();
         WarningCNO = null;
         BeamCNO?.Despawn();
@@ -224,7 +227,7 @@ public class WaveCannon : RoleBase
             {
                 Super = new SuperCannonShot(pc, variant.Value, SuperBeamThickness.GetInt(),
                     t => !FriendlyFire.GetBool() && t.GetCustomRole().IsImpostor());
-                if (!Super.Begin(StartPosition, Direction))
+                if (!Super.Begin(StartPosition, Direction, ChargeSecondsWithWarning()))
                 {
                     // 変種が発動不能 (確殺: 有効な対象が 1 人もいない 等) → 従来の波動砲で撃つ。
                     // 無言で落ちると「自分の目の前にゲートが出た = 自分がターゲットにされた」と誤認されるため通知する。
@@ -241,6 +244,10 @@ public class WaveCannon : RoleBase
             {
                 GateCNO = new WaveCannonGate(gatePos);
             });
+
+            FxGate = gatePos;
+            FxPal = IsSuperShot ? ExplosionFx.CannonPalette.Crimson : ExplosionFx.CannonPalette.Orange;
+            ExplosionFx.CannonCharge(gatePos, Direction.x > 0, ChargeSecondsWithWarning(), CurrentThickness(), FxPal);
         }
 
         // 超チャージは全プレイヤーへ周期キルフラッシュで予告 (JackalHadouHo 双子)。
@@ -535,6 +542,8 @@ public class WaveCannon : RoleBase
 
                 if (Utils.TimeStamp >= PhaseEndTS)
                 {
+                    EndCannonFx(false);
+                    Super?.EndFx();
                     DespawnAllCNOs();
                     CustomSoundsManager.RpcStopControllableAll(FireSoundName, FireSoundFadeSeconds);
                     RestoreSkin(pc);
@@ -598,6 +607,20 @@ public class WaveCannon : RoleBase
         {
             BeamCNO = new WaveCannonBeamSegment(pos, sprite);
         });
+
+        if (FxGate is { } gate) ExplosionFx.CannonBeam(gate, Direction.x > 0, FiringDuration.GetFloat(), CurrentThickness(), FxPal);
+    }
+
+    private float ChargeSecondsWithWarning()
+    {
+        return (IsSuperShot ? SuperChargeDuration.GetInt() : ChargeDuration.GetInt()) + WarningDuration.GetInt();
+    }
+
+    // 魔法陣とビームの演出 (ホストと End K not のクライアントだけに見える)。撃ち終わりは消え、途中で止まったら砕ける
+    private void EndCannonFx(bool broken)
+    {
+        if (FxGate is { } gate) ExplosionFx.CannonEnd(gate, FxPal, broken);
+        FxGate = null;
     }
 
     // 超発射 (Classic) は太さとビーム色だけ差し替えて従来経路で撃つ
