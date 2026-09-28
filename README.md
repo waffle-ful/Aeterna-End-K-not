@@ -1,6 +1,26 @@
 <h1 align="center"><img src=".github/endknot-logo.png" alt="Aeterna-End-K-not" width="80%"></h1>
 
-[English](README-EN.md)
+<p align="center">
+  <b>ホストが入れるだけ。参加者は Mod なしのまま、682 の役職で遊べる。</b>
+</p>
+
+<p align="center">
+  <a href="README-EN.md"><img src="https://img.shields.io/badge/English-README-555555?style=for-the-badge" alt="English"></a>
+  <a href="../../releases/latest"><img src="https://img.shields.io/github/v/release/waffle-ful/Aeterna-End-K-not?include_prereleases&style=for-the-badge&label=%E6%9C%80%E6%96%B0%E7%89%88&color=C51111" alt="最新版"></a>
+  <img src="https://img.shields.io/badge/Among%20Us-2026.8.18-C51111?style=for-the-badge" alt="Among Us 2026.8.18">
+  <a href="./ROLES.md"><img src="https://img.shields.io/badge/%E5%BD%B9%E8%81%B7-682-7B2FBE?style=for-the-badge" alt="役職 682"></a>
+  <img src="https://img.shields.io/badge/%E5%B0%8E%E5%85%A5-%E3%83%9B%E3%82%B9%E3%83%88%E3%81%A0%E3%81%91-2EA043?style=for-the-badge" alt="導入 ホストだけ">
+  <br>
+  <a href="https://discord.gg/nnQMCEkHpC"><img src="https://img.shields.io/badge/Discord-%E5%8F%82%E5%8A%A0%E3%81%99%E3%82%8B-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord に参加する"></a>
+  <a href="https://github.com/sponsors/waffle-ful"><img src="https://img.shields.io/badge/Sponsor-%E5%BF%9C%E6%8F%B4%E3%81%99%E3%82%8B-EA4AAA?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Sponsor で応援する"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-blue?style=for-the-badge" alt="GPL-3.0"></a>
+</p>
+
+<p align="center">
+  <img src=".github/roles/wavecannon.gif" alt="波動砲" width="49%">
+  <img src=".github/roles/wavecannon_victim.gif" alt="波動砲に撃たれた側" width="49%">
+  <br><sub><b>波動砲</b> — SuperNewRoles で有名な、あの波動砲。撃つ側と、撃たれた側。<br>参加者も End K not を入れておけば、魔法陣も必殺技のカットインも、この迫力のまま届きます。</sub>
+</p>
 
 <p align="center">
   <a href="../../releases/latest/download/EndKnotInstaller.exe"><img src=".github/download-button.png" alt="最新版をダウンロード" width="70%"></a>
@@ -12,60 +32,68 @@
   初回起動時に Windows の青い警告が出ますが、<a href="#windows-の青い警告が出たときは">対処法はこちら</a>。</sub>
 </p>
 
-[![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/nnQMCEkHpC) [![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-EA4AAA?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/waffle-ful)
-
 ---
 
 ## Among Us の「いつものやつ」を、終わらせにきました。
 
-### 入れるのは、ホスト1人だけ。
-
-End K not は**ホストのクライアントにだけ**入れれば動きます。参加者は Mod なしのまま、**682 の役職**で遊べます。「入れてから来てね」と言わなくていいので、人を集めるのに手間がかかりません。公式サーバーでもカスタムサーバーでも、機能はそのまま全部動きます。
-
-### 部屋を、落とさせません。
-
-通信エラーで切断されても、同じリージョン・同じ設定で**自動的に部屋を立て直します。** Among Us 本体がクラッシュしたり固まったりしても、付属の外部ウォッチドッグ（番犬）が気づいて再起動をかけ、部屋を復旧。放置したまま丸一日でも回り続けます。「落ちたので今日は解散で」を、もう言わなくていい。
-
-### 視聴者を、退屈させません。
-
-プレイヤーのチャットを**一人ずつ別の声で読み上げる**から、視聴者は耳だけで誰が喋ったかを追えます。ライブチャットの `!` コマンドで**視聴者がゲームそのものに介入**でき、立ち絵と 3D アバターの **AI 実況相棒**がキルも会議も勝敗もリアルタイムで喋る。コメント欄が、観客席から操作卓になります。
+<table>
+<tr>
+<td width="33%" valign="top">
+<h3 align="center">🎮<br>入れるのは、<br>ホスト1人だけ。</h3>
+参加者は Mod なしのまま遊べます。「入れてから来てね」と言わなくていいので、人を集めるのに手間がかかりません。公式サーバーでもカスタムサーバーでも、機能は全部そのまま動きます。
+</td>
+<td width="33%" valign="top">
+<h3 align="center">🛡️<br>部屋を、<br>落とさせません。</h3>
+通信エラーで切断されても、同じ設定で<b>自動的に部屋を立て直します。</b>本体がクラッシュしても番犬が再起動をかけて復旧。放置したまま丸一日でも回り続けます。
+</td>
+<td width="33%" valign="top">
+<h3 align="center">📺<br>視聴者を、<br>退屈させません。</h3>
+チャットを<b>一人ずつ別の声で読み上げ</b>、視聴者はライブチャットの <code>!</code> コマンドで<b>ゲームに介入</b>できます。<b>AI 実況相棒</b>がキルも会議も勝敗もリアルタイムで喋ります。
+</td>
+</tr>
+</table>
 
 ### たとえば、こんな役職がいます。
 
-- **波動砲 (WaveCannon)** — SuperNewRoles で有名な、あの波動砲。魔法陣で力を溜め、直線上をまとめて消し飛ばすビームを撃つ。撃たれた者は跡形もなく蒸発する。
-- **リップタイド (Riptide)** — マップ全体を巨大な波が覆う。のまれたら即死。会議のたびに波が速くなる。
-- **ワードキラー (WordKiller)** — 禁じた言葉を口にした者を消す。会話そのものが地雷原になります。
-- **ジェミニ (Gemini)** — 立ち止まると、さっきまで居た場所に自分の分身が残る。色も名前も自分そっくり。
-- **横風 (Crosswind)** — 姿を消して突風を起こし、全員をまとめて横に吹き飛ばす。
-- **ドッスン (Dossun)** — 巨大ブロックを設置し、自分が動くと連動して動く。轢いたり、吹き飛ばしたり。
-- **スーパーノヴァ (Supernova)** — 立ち止まったら爆発する星。周りを巻き込んで吹き飛ばし、最後まで生き残れば本来の勝者を押しのけて単独勝利。
+<table>
+<tr>
+<td width="33%" valign="top" align="center">
+<img src=".github/roles/gemini.gif" alt="ジェミニ" width="100%">
+<h4>ジェミニ (Gemini)</h4>
+立ち止まると、さっきまで居た場所に自分の分身が残る。色も名前も自分そっくり。
+</td>
+<td width="33%" valign="top" align="center">
+<img src=".github/roles/crosswind.gif" alt="横風" width="100%">
+<h4>横風 (Crosswind)</h4>
+姿を消して突風を起こし、全員をまとめて横に吹き飛ばす。
+</td>
+<td width="33%" valign="top" align="center">
+<img src=".github/roles/supernova.gif" alt="スーパーノヴァ" width="100%">
+<h4>スーパーノヴァ (Supernova)</h4>
+立ち止まったら爆発する星。最後まで生き残れば、本来の勝者を押しのけて単独勝利。
+</td>
+</tr>
+</table>
 
-<p align="center">
-  <img src=".github/roles/wavecannon.gif" alt="波動砲" width="49%">
-  <img src=".github/roles/wavecannon_victim.gif" alt="波動砲に撃たれた側" width="49%">
-  <br><sub>波動砲 — 撃つ側と、撃たれた側。参加者も End K not を入れておけば、魔法陣も必殺技のカットインも、この迫力のまま届きます。</sub>
-</p>
+ほかにも、こんな役職がいます。
 
-<p align="center">
-  <img src=".github/roles/gemini.gif" alt="ジェミニ" width="32%">
-  <img src=".github/roles/crosswind.gif" alt="横風" width="32%">
-  <img src=".github/roles/supernova.gif" alt="スーパーノヴァ" width="32%">
-  <br><sub>左から ジェミニ ・ 横風 ・ スーパーノヴァ</sub>
-</p>
+- 🌊 **リップタイド (Riptide)** — マップ全体を巨大な波が覆う。のまれたら即死。会議のたびに波が速くなる。
+- 🤐 **ワードキラー (WordKiller)** — 禁じた言葉を口にした者を消す。会話そのものが地雷原になります。
+- 🧱 **ドッスン (Dossun)** — 巨大ブロックを設置し、自分が動くと連動して動く。轢いたり、吹き飛ばしたり。
+
+▶ **[全 682 役職の一覧を見る (`ROLES.md`)](./ROLES.md)**
 
 ### そして、試すのがこわくない。
 
 インストーラーを実行するだけ。Steam 版か Epic 版かは自動で判別して、導入まで全部やってくれます。合わなければ、フォルダの中の `winhttp.dll` の名前を変えるだけで**完全に素の Among Us へ戻ります。** 入れるのも、やめるのも一瞬です。
 
-> **役職 682 ・ チャットコマンド 110 種類以上 ・ ホストだけ導入 ・ 完全無料**
+<p align="center"><b>役職 682 ・ チャットコマンド 110 種類以上 ・ ホストだけ導入 ・ Android 対応 ・ 完全無料</b></p>
 
 ---
 
 ## このMod について
 
-**End K not** は、[Endless Host Roles (EHR)](https://github.com/Gurge44/EndlessHostRoles) と [TownOfHost-K (TOHK)](https://github.com/KYMario/TownOfHost-K) の両方から役職と仕組みを受け継いだ、Among Us の非公式個人フォークです。いま実装している役職は **682**。
-
-導入するのはホストのクライアントだけで、他のプレイヤーは Mod なしのまま追加役職を遊べます。公式サーバーとカスタムサーバー、どちらでも同じように動きます。
+**End K not** は、[Endless Host Roles (EHR)](https://github.com/Gurge44/EndlessHostRoles) と [TownOfHost-K (TOHK)](https://github.com/KYMario/TownOfHost-K) の両方から役職と仕組みを受け継いだ、Among Us の非公式個人フォークです。EHR の役職エンジンの上に、**配信・長時間運用・演出**まわりの機能を積み上げています。
 
 このMod は非公式のものであり、Among Us の開発元である Innersloth は一切関与していません。**このMod の問題に関して Innersloth へ問い合わせないでください。**
 
@@ -75,8 +103,6 @@ End K not は**ホストのクライアントにだけ**入れれば動きます
 対応 Among Us バージョン : **2026.8.18**
 
 ## End K not の特徴
-
-EHR の役職エンジンの上に、**配信・長時間運用・演出**まわりの機能を積み上げた個人フォークです。
 
 ### 🎥 配信・長時間運用サポート
 
@@ -101,9 +127,14 @@ EHR の役職エンジンの上に、**配信・長時間運用・演出**まわ
 
 ## パフォーマンス
 
-Mod を入れても、起動と常駐メモリはできるだけバニラに近づける方針です。同一 PC・同日に「バニラ / BepInEx のみ / 前公開版 v0.9.6 / 現行 v0.9.7 (開発版)」を交互に 5 回ずつコールド起動し、中央値で比べました。
+Mod を入れても、起動と常駐メモリはできるだけバニラに近づける方針です。計測条件と全指標は **[性能比較レポート](https://waffle-ful.github.io/Aeterna-End-K-not/perf.html)** にまとめています。
 
-| 指標 | バニラ | BepInEx のみ | 前公開版 v0.9.6 | 現行 v0.9.7 (開発版) |
+<details>
+<summary><b>計測結果を開く（起動時間・常駐メモリ）</b></summary>
+
+同一 PC・同日に「バニラ / BepInEx のみ / v0.9.6 / v0.9.7」を交互に 5 回ずつコールド起動し、中央値で比べました。
+
+| 指標 | バニラ | BepInEx のみ | v0.9.6 | v0.9.7 |
 |---|---:|---:|---:|---:|
 | 起動時間 (秒) | 5.9 | 8.1 | 16.4 | **11.1** (−33%) |
 | 操作可能まで (秒) | 10.5 | 12.9 | 21.6 | **16.4** (−24%) |
@@ -115,7 +146,9 @@ Mod を入れても、起動と常駐メモリはできるだけバニラに近�
 
 <p align="center"><img src=".github/perf-chart.png" alt="End K not 性能比較グラフ" width="90%"></p>
 
-計測条件と全指標は **[性能比較レポート](https://waffle-ful.github.io/Aeterna-End-K-not/perf.html)** にまとめています。括弧内は前公開版との差。ロビー作成はバニラをメニュー操作の自動化で、現行版を自動ホスト機能で測ったもので、差の大半は現行版の作成要求までの内部待ちです。バニラのロビー・試合中は自動計測の手段がないため未計測です。
+括弧内は v0.9.6 との差。ロビー作成はバニラをメニュー操作の自動化で、v0.9.7 を自動ホスト機能で測ったもので、差の大半は v0.9.7 の作成要求までの内部待ちです。バニラのロビー・試合中は自動計測の手段がないため未計測です。
+
+</details>
 
 ## 役職一覧
 
@@ -167,6 +200,9 @@ Get-FileHash "$env:USERPROFILE\Downloads\EndKnotInstaller.exe"
 > [!TIP]
 > それでも exe を実行したくない場合は、下の「zip を手動展開して導入」でも同じものが入ります。
 
+<details>
+<summary><b>zip を手動展開して導入 ・ DLL だけ差し替える</b></summary>
+
 ### zip を手動展開して導入
 
 1. [Releases](../../releases) から、お使いのストア版の zip をダウンロード
@@ -180,16 +216,18 @@ Get-FileHash "$env:USERPROFILE\Downloads\EndKnotInstaller.exe"
 
 zip には BepInEx 本体・設定ファイル・カスタムリージョン追加 Mod が入っているので、これだけで導入は終わりです。
 
+### DLL だけ差し替える（既に導入済みの方向け）
+
+すでに End K not を導入していて更新するだけなら、Releases の `EndKnot.dll` を `Among Us\BepInEx\plugins\` に上書きし、`Among Us\BepInEx\interop\` を削除してください。
+
+</details>
+
 > [!IMPORTANT]
 > **バージョンアップ時は `Among Us\BepInEx\interop\` フォルダを削除**してから上書きしてください。古い interop が残っていると起動に失敗することがあります。
 
 ### バニラ（Mod なし）に戻したいとき
 
 `Among Us` フォルダ直下の `winhttp.dll` を `winhttp.dll.disabled` にリネームすると、Mod が完全に無効化されて素の Among Us として起動します。戻すときは名前を元に戻すだけです。
-
-### DLL だけ差し替える（既に導入済みの方向け）
-
-すでに End K not を導入していて更新するだけなら、Releases の `EndKnot.dll` を `Among Us\BepInEx\plugins\` に上書きし、`Among Us\BepInEx\interop\` を削除してください。
 
 ### Android で遊ぶ（ランチャー）
 
@@ -217,7 +255,7 @@ zip には BepInEx 本体・設定ファイル・カスタムリージョン追�
 
 - **Discord** : https://discord.gg/nnQMCEkHpC — バグ報告・質問・雑談（推奨）
 - **Issues** : [GitHub Issues](../../issues) — 確認が遅れる場合があります
-- [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md) | [`CONTRIBUTING.md`](./CONTRIBUTING.md) | [`SECURITY.md`](./SECURITY.md) | [`SUPPORT.md`](./SUPPORT.md)
+- [`CODE_OF_CONDUCT.md`](.github/CODE_OF_CONDUCT.md) | [`CONTRIBUTING.md`](.github/CONTRIBUTING.md) | [`SECURITY.md`](.github/SECURITY.md) | [`SUPPORT.md`](.github/SUPPORT.md)
 
 ## 開発チーム
 
@@ -237,7 +275,7 @@ End K not は **GPL-3.0 の無料 Mod** です。全機能は今後も無料で�
 
 いただいた寄付は、開発ツールの利用料など、開発を続けるための費用に充てます。寄付の有無で機能やサポートに差はつけません。
 
-▶ **[寄付について (`FUNDING.md`)](./FUNDING.md)**
+▶ **[寄付について (`FUNDING.md`)](.github/FUNDING.md)**
 
 <p align="center">
   <a href="https://github.com/sponsors/waffle-ful"><img src="https://img.shields.io/badge/GitHub%20Sponsors-%E5%BF%9C%E6%8F%B4%E3%81%99%E3%82%8B-EA4AAA?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="GitHub Sponsors で応援する"></a>
@@ -258,6 +296,9 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 ## クレジット
 
 > **この Mod の役職・機能は、そのほとんどが先行 Mod に由来します。** 下記プロジェクトの開発者の皆さんに深く感謝します。
+
+<details>
+<summary><b>クレジット全文を開く（先行 Mod ・ 開発者と翻訳者 ・ 同梱ソフトウェア ・ BGM と素材）</b></summary>
 
 - **[astra1dev](https://github.com/astra1dev)** — IMGUI ウィンドウの表示設定まわりの助言
 - **[au.libhalt.net](https://au.libhalt.net/)** — Among Us の Mod 情報・配布サイト
@@ -352,6 +393,8 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 
 - [みりんの動画素材](https://miirriin.com/)
 
+</details>
+
 ### VOICEVOX（音声読み上げ）
 
 クルーごとの読み上げ機能は、無料のテキスト読み上げソフト **[VOICEVOX](https://voicevox.hiroshiba.jp/)** を使っています。End K not 側は音声データを持っておらず、ホストのパソコンに入っている VOICEVOX へ実行時に喋らせています。
@@ -361,9 +404,14 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 > 表記例 : `VOICEVOX:ずんだもん`
 > キャラクターごとに個別の利用規約があるため、[VOICEVOX 利用規約](https://voicevox.hiroshiba.jp/term/)と各キャラクターの規約を必ずご確認ください。
 
-読み上げに使われるキャラクターは、ホストが導入している VOICEVOX の音声によって変わります（インストール済みの声と ID の一覧は `BepInEx/config/EndKnot_VoiceVox_Speakers.txt` に出力されます）。以下に VOICEVOX の全キャラクターのクレジットを記載します：
+読み上げに使われるキャラクターは、ホストが導入している VOICEVOX の音声によって変わります（インストール済みの声と ID の一覧は `BepInEx/config/EndKnot_VoiceVox_Speakers.txt` に出力されます）。VOICEVOX の全キャラクターのクレジットは以下のとおりです。
+
+<details>
+<summary><b>VOICEVOX の全キャラクター</b></summary>
 
 四国めたん / ずんだもん / 春日部つむぎ / 雨晴はう / 波音リツ / 玄野武宏 / 白上虎太郎 / 青山龍星 / 冥鳴ひまり / 九州そら / もち子さん / 剣崎雌雄 / WhiteCUL / 後鬼 / No.7 / ちび式じい / 櫻歌ミコ / 小夜/SAYO / ナースロボ＿タイプＴ / †聖騎士 紅桜† / 雀松朱司 / 麒ヶ島宗麟 / 春歌ナナ / 猫使アル / 猫使ビィ / 中国うさぎ / 栗田まろん / あいえるたん / 満別花丸 / 琴詠ニア / Voidoll / ぞん子 / 中部つるぎ / 離途 / 黒沢冴白 / ユーレイちゃん / 東北ずん子 / 東北きりたん / 東北イタコ / あんこもん / 夜語トバリ / 暁記ミタマ / 里石ユカ
+
+</details>
 
 
 ---
