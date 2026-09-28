@@ -1015,3 +1015,18 @@ public class StreamSetupGUI : MonoBehaviour
         StreamSetupState.Dirty = true;
     }
 }
+
+// IMGUI のウィンドウは Unity 側のクリック判定 (Collider + PassiveButton) を遮らないため、
+// 開いている間は背後のメニューボタンまでクリックが抜ける。開いている間だけ PassiveButton の
+// クリックを捨てる (ウィンドウ自身のボタンは IMGUI なので影響しない)。
+[HarmonyLib.HarmonyPatch(typeof(PassiveButton))]
+internal static class StreamSetupGUIClickBlockPatch
+{
+    private static bool IsOpen => StreamSetupGUI.Instance != null && StreamSetupGUI.Instance.IsOpen;
+
+    [HarmonyLib.HarmonyPatch(nameof(PassiveButton.ReceiveClickDown)), HarmonyLib.HarmonyPrefix]
+    public static bool ReceiveClickDownPrefix() => !IsOpen;
+
+    [HarmonyLib.HarmonyPatch(nameof(PassiveButton.ReceiveClickUp)), HarmonyLib.HarmonyPrefix]
+    public static bool ReceiveClickUpPrefix() => !IsOpen;
+}
