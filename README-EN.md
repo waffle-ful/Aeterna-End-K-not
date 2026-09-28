@@ -73,13 +73,28 @@ Vanishes, then blasts everyone sideways with a gust of wind.
 A star that detonates the moment you stand still. Last until the end and you shove the real winner aside to win alone.
 </td>
 </tr>
+<tr>
+<td width="33%" valign="top" align="center">
+<img src=".github/roles/riptide.gif" alt="Riptide" width="100%">
+<h4>Riptide</h4>
+A giant wave sweeps the entire map. Caught in it, you're gone. It gets faster with every meeting.
+</td>
+<td width="33%" valign="top" align="center">
+<img src=".github/roles/riptide_victim.gif" alt="Caught by the Riptide wave" width="100%">
+<h4>Caught in the wave</h4>
+A wall of water rolls across the whole screen, with nowhere to run.
+</td>
+<td width="33%" valign="top" align="center">
+<img src=".github/roles/dossun.gif" alt="Dossun" width="100%">
+<h4>Dossun</h4>
+Drops a giant block that moves with you. Crush them, or knock them flying.
+</td>
+</tr>
 </table>
 
 And there's more:
 
-- 🌊 **Riptide** — A giant wave sweeps the entire map. Caught in it, you're gone. It gets faster with every meeting.
 - 🤐 **WordKiller** — Kills anyone who says the forbidden word. The conversation itself becomes a minefield.
-- 🧱 **Dossun** — Places a giant block that moves with you. Crush them, or knock them flying.
 
 ▶ **[See all 682 roles (`ROLES-EN.md`)](./ROLES-EN.md)**
 
