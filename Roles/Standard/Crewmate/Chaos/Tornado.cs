@@ -21,6 +21,7 @@ internal class Tornado : RoleBase
 
     private static RandomSpawn.SpawnMap Map;
     private static readonly Dictionary<(Vector2 Location, string RoomName), long> Tornados = [];
+    private static readonly Dictionary<byte, long> LiftFxTimes = [];
     private static bool CanUseMap;
     private PlayerControl TornadoPC;
     private static int Id => 64420;
@@ -52,6 +53,7 @@ internal class Tornado : RoleBase
     {
         PlayerIdList.Clear();
         Tornados.Clear();
+        LiftFxTimes.Clear();
 
         try
         {
@@ -119,6 +121,7 @@ internal class Tornado : RoleBase
         Tornados.TryAdd(info, now);
         SendRPCAddTornado(true, info.Location, info.RoomName, now);
         _ = new TornadoObject(info.Location);
+        ExplosionFx.Play(ExplosionFx.Kind.Tornado, info.Location, TornadoDuration.GetInt());
     }
 
     public override void OnCheckPlayerPosition(PlayerControl pc)
@@ -138,6 +141,22 @@ internal class Tornado : RoleBase
             {
                 if (FastVector2.DistanceWithinRange(tornado.Key.Location, pc.Pos(), tornadoRange))
                 {
+                    // 巻き上げられて消え、飛ばされた先に叩きつけられる (着地点は TP が反映されてから拾う)。
+                    // TP 直後の数フレームは位置が古いまま同じ判定に入り直すので、演出は 1 人 1 秒に 1 回まで
+                    if (!LiftFxTimes.TryGetValue(pc.PlayerId, out long last) || last != now)
+                    {
+                        LiftFxTimes[pc.PlayerId] = now;
+                        Vector2 from = pc.Pos();
+                        ExplosionFx.Play(ExplosionFx.Kind.TornadoLift, from, 1f);
+
+                        LateTask.New(() =>
+                        {
+                            if (!pc || !pc.IsAlive() || !GameStates.IsInTask) return;
+                            Vector2 to = pc.Pos();
+                            if (!FastVector2.DistanceWithinRange(from, to, 2f)) ExplosionFx.Play(ExplosionFx.Kind.Slam, to, 0.6f);
+                        }, 0.5f, "Tornado Landing Fx", log: false);
+                    }
+
                     if (!CanUseMap || random.Next(0, 100) < 50)
                         pc.TPToRandomVent();
                     else

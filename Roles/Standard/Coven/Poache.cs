@@ -72,8 +72,17 @@ public class Poache : CovenBase
             KillDelays.Add(target.PlayerId);
             _ = new CountdownTimer(KillDelay.GetInt(), () =>
             {
-                if (!KillDelays.Remove(target.PlayerId)) return;
-                target.Suicide(PlayerState.DeathReason.Poison, realKiller: killer);
+                if (!KillDelays.Contains(target.PlayerId)) return;
+
+                // 毒が回る演出が始まってから倒れる。待つ間に会議が始まったら OnReportDeadBody がその場で死なせるので、それまで記録は残す
+                ExplosionFx.Play(ExplosionFx.Kind.Poison, target.Pos(), 1f);
+
+                LateTask.New(() =>
+                {
+                    if (!KillDelays.Remove(target.PlayerId)) return;
+                    if (GameStates.IsEnded || target == null || target.Data.Disconnected || !target.IsAlive()) return;
+                    target.Suicide(PlayerState.DeathReason.Poison, realKiller: killer);
+                }, 0.45f, "Poache Delayed Poison Kill");
             }, onCanceled: () => KillDelays.Remove(target.PlayerId));
         }
 

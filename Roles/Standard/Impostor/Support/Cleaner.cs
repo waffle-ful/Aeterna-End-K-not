@@ -113,6 +113,13 @@ internal class Cleaner : RoleBase
             PlayerState tps = Main.PlayerStates[tpc.PlayerId];
             tps.deathReason = PlayerState.DeathReason.Stoned;
             RPC.SendDeathReason(tpc.PlayerId, tps.deathReason, tps.IsDead);
+
+            foreach (DeadBody body in UnityEngine.Object.FindObjectsOfType<DeadBody>())
+            {
+                if (!body || body.ParentId != target.PlayerId) continue;
+                EndKnot.Modules.ExplosionFx.Play(EndKnot.Modules.ExplosionFx.Kind.Petrify, body.transform.position, 1f);
+                break;
+            }
         }
 
         Logger.Info($"{cleaner.GetRealName()} cleans up the corpse of {target.Object.GetRealName()}", "Cleaner/Medusa");

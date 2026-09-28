@@ -244,11 +244,19 @@ internal class Warlock : RoleBase
                     {
                         ResetCooldowns(true, true, true, pc);
 
-                        targetw.SetRealKiller(pc);
-                        Logger.Info($"{targetw.GetNameWithRole().RemoveHtmlTags()} was killed", "Warlock");
-                        cp.Kill(targetw);
+                        // 呪いの糸が張って引き絞られてから殺させる
+                        ExplosionFx.Play(ExplosionFx.Kind.CurseStrings, cppos, targetw.PlayerId + 1);
+
+                        LateTask.New(() =>
+                        {
+                            if (GameStates.IsEnded || GameStates.IsMeeting || !cp || !targetw || cp.Data.Disconnected || targetw.Data.Disconnected || !cp.IsAlive() || !targetw.IsAlive()) return;
+
+                            targetw.SetRealKiller(pc);
+                            Logger.Info($"{targetw.GetNameWithRole().RemoveHtmlTags()} was killed", "Warlock");
+                            cp.Kill(targetw);
+                            RPC.PlaySoundRPC(pc.PlayerId, Sounds.KillSound);
+                        }, 0.4f, "Warlock Curse Kill");
                         pc.Notify(Translator.GetString("WarlockControlKill"));
-                        RPC.PlaySoundRPC(pc.PlayerId, Sounds.KillSound);
 
                         if (FreezeAfterCurseKill.GetBool())
                         {
