@@ -90,11 +90,14 @@
 巨大ブロックを落とし、自分が動くと連動して動く。轢いたり、吹き飛ばしたり。
 </td>
 </tr>
+<tr>
+<td colspan="3" valign="top" align="center">
+<img src=".github/roles/wordkiller.gif" alt="ワードキラー" width="60%">
+<h4>ワードキラー (WordKiller)</h4>
+会議で禁止ワードをこっそり仕掛ける。口にした者は、その場で消える。会話そのものが地雷原になります。
+</td>
+</tr>
 </table>
-
-ほかにも、こんな役職がいます。
-
-- 🤐 **ワードキラー (WordKiller)** — 禁じた言葉を口にした者を消す。会話そのものが地雷原になります。
 
 ▶ **[全 682 役職の一覧を見る (`ROLES.md`)](./ROLES.md)**
 

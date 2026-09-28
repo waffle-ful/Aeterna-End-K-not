@@ -90,11 +90,14 @@ A wall of water rolls across the whole screen, with nowhere to run.
 Drops a giant block that moves with you. Crush them, or knock them flying.
 </td>
 </tr>
+<tr>
+<td colspan="3" valign="top" align="center">
+<img src=".github/roles/wordkiller.gif" alt="WordKiller" width="60%">
+<h4>WordKiller</h4>
+Secretly sets a forbidden word during the meeting. Whoever says it dies on the spot. The conversation itself becomes a minefield.
+</td>
+</tr>
 </table>
-
-And there's more:
-
-- 🤐 **WordKiller** — Kills anyone who says the forbidden word. The conversation itself becomes a minefield.
 
 ▶ **[See all 682 roles (`ROLES-EN.md`)](./ROLES-EN.md)**
 
