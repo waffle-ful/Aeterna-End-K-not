@@ -276,7 +276,9 @@ public static class CalamityButtons
     private static void FitCollider(TextMeshPro tmp, string label)
     {
         const float PadX = 0.35f;
-        const float PadY = 0.30f;
+        // 高さは行の間隔ぴったり・中心は行の位置。文字の高さ基準だと上下の行と判定が重なり、
+        // 重なった所では z が同じなので上下どちらが反応するか決まらない。
+        const float RowPitch = 0.37f;
         tmp.ForceMeshUpdate();
         var b = tmp.textBounds;
 
@@ -285,13 +287,13 @@ public static class CalamityButtons
 
         if (b.size.x > 0.01f && b.size.y > 0.01f)
         {
-            col.size   = new Vector2(b.size.x + PadX, b.size.y + PadY);
-            col.offset = new Vector2(b.center.x, b.center.y);
+            col.size   = new Vector2(b.size.x + PadX, RowPitch);
+            col.offset = new Vector2(b.center.x, 0f);
         }
         else
         {
             // Fallback if the mesh hasn't been generated yet — approximate from font size.
-            col.size   = new Vector2(label.Length * FontSize * 0.5f, FontSize * 0.7f);
+            col.size   = new Vector2(label.Length * FontSize * 0.5f, RowPitch);
             col.offset = Vector2.zero;
         }
     }
