@@ -3266,7 +3266,7 @@ public static class Utils
     // 最終防波堤 (CustomRpcSenderExtensions.ClampNameForOfficialServer, NameBudget) はキックこそ防ぐが
     // 末尾から無差別に切るため、役職マーク/suffix 側が犠牲になる — 「何を削るか」は発生源で決める。
     // 公式鯖以外では名前長の制約が無いので素通し。切り詰め時は rune 境界 + 未終端タグ除去 + "..."。
-    private static string ClampFreeTextForVanillaServer(string text, int byteBudget)
+    public static string ClampFreeTextForVanillaServer(string text, int byteBudget)
     {
         if (GameStates.CurrentServerType != GameStates.ServerType.Vanilla || string.IsNullOrEmpty(text) || System.Text.Encoding.UTF8.GetByteCount(text) <= byteBudget) return text;
 
