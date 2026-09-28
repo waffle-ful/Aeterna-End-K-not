@@ -65,9 +65,15 @@ internal static class GhostRolesManager
         if (!first && pc.IsModdedClient()) return;
 
         CustomRoles role = ghostRole.Role;
-        (string Split, string Message) info = GetMessage(Translator.GetString($"{role}InfoLong").FixRoleName(role).Split("\n")[1..].Join(delimiter: "\n"));
+        string baseInfo = Translator.GetString($"{role}InfoLong").FixRoleName(role).Split("\n")[1..].Join(delimiter: "\n");
+        (string Split, string Message) info = GetMessage(baseInfo);
         var text = $"{Translator.GetString("GotGhostRoleNotify")}\n<size=80%>{info.Message}</size>";
-        var notifyText = $"{Translator.GetString("GotGhostRoleNotify")}\n<size=80%>{info.Split}</size>";
+        // Notify は名前ペイロードに載り、死亡直後は役職名 + 殺害通知 + 残りCD と同居する。説明全文 (ja で最大約500B) だと
+        // NameBudget (905B) を超えて末尾から切られるので、公式鯖では説明だけ上流で切る (全文は上のチャットで届く)。
+        // 320 = 905 − 同居する他行の実測最大 約475B − ラッパー 約35B − 余裕。
+        // 本文は <size>…</size> 等で包まれており途中で切ると閉じタグが落ちて後続行まで縮む・染まるので、タグを外してから切る。
+        string notifyInfo = GetMessage(Utils.ClampFreeTextForVanillaServer(baseInfo.RemoveHtmlTags(), 320)).Split;
+        var notifyText = $"{Translator.GetString("GotGhostRoleNotify")}\n<size=80%>{notifyInfo}</size>";
         Utils.SendMessage(title: text, sendTo: pc.PlayerId, text: "\n");
         pc.Notify(notifyText, 10 + (5 * text.Count(x => x == '\n')));
         return;
