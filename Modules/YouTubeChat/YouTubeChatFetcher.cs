@@ -26,6 +26,7 @@ internal sealed class YouTubeChatFetcher : IDisposable
     private static readonly Regex ContinuationRegex = new("\"continuation\":\"(.+?)\"", RegexOptions.Compiled);
     private static readonly Regex VisitorRegex = new("\"visitorData\":\"(.+?)\"", RegexOptions.Compiled);
     private static readonly Regex ClientVersionRegex = new("\"clientVersion\":\"(.+?)\"", RegexOptions.Compiled);
+    private static readonly Regex BroadcastDetailsRegex = new("\"liveBroadcastDetails\":\\{[^}]*\\}", RegexOptions.Compiled);
 
     private readonly string videoId;
     private readonly HttpClient client;
@@ -71,6 +72,31 @@ internal sealed class YouTubeChatFetcher : IDisposable
         {
             Logger.Warn($"FetchAsync failed: {ex.Message}", "YouTubeChatFetcher");
             return FetchResult.Failed(FetchError.Exception);
+        }
+    }
+
+    // 配信枠が今も配信中かを watch ページの liveBroadcastDetails で確かめる。
+    // 回線の一瞬の切断などで YouTube が枠を閉じると、同じ URL は終了済みのアーカイブになり、
+    // 取得は失敗ログも出さずに新着ゼロのまま止まる。終了時刻が付いていれば Ended と判定する。
+    public async Task<LiveState> CheckLiveStateAsync()
+    {
+        try
+        {
+            using var response = await client.GetAsync("https://www.youtube.com/watch?v=" + videoId);
+            if (!response.IsSuccessStatusCode) return LiveState.Unknown;
+
+            string html = await response.Content.ReadAsStringAsync();
+            Match m = BroadcastDetailsRegex.Match(html);
+            if (!m.Success) return LiveState.Unknown;
+
+            if (m.Value.Contains("\"isLiveNow\":true")) return LiveState.Live;
+            if (m.Value.Contains("\"endTimestamp\"")) return LiveState.Ended;
+            return LiveState.Unknown; // 開始前の待機枠など
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn($"CheckLiveStateAsync failed: {ex.Message}", "YouTubeChatFetcher");
+            return LiveState.Unknown;
         }
     }
 
@@ -156,6 +182,13 @@ internal sealed class YouTubeChatFetcher : IDisposable
 }
 
 internal readonly record struct ChatMessage(string Author, string Text);
+
+internal enum LiveState
+{
+    Unknown,
+    Live,
+    Ended
+}
 
 internal enum FetchError
 {
