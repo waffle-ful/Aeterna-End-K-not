@@ -1,6 +1,26 @@
 <h1 align="center"><img src=".github/endknot-logo.png" alt="Aeterna-End-K-not" width="80%"></h1>
 
-[日本語](README.md)
+<p align="center">
+  <b>Only the host installs it. Everyone else joins vanilla and plays 682 roles.</b>
+</p>
+
+<p align="center">
+  <a href="README.md"><img src="https://img.shields.io/badge/%E6%97%A5%E6%9C%AC%E8%AA%9E-README-555555?style=for-the-badge" alt="日本語"></a>
+  <a href="../../releases/latest"><img src="https://img.shields.io/github/v/release/waffle-ful/Aeterna-End-K-not?include_prereleases&style=for-the-badge&label=latest&color=C51111" alt="Latest release"></a>
+  <img src="https://img.shields.io/badge/Among%20Us-2026.8.18-C51111?style=for-the-badge" alt="Among Us 2026.8.18">
+  <a href="./ROLES-EN.md"><img src="https://img.shields.io/badge/roles-682-7B2FBE?style=for-the-badge" alt="682 roles"></a>
+  <img src="https://img.shields.io/badge/install-host%20only-2EA043?style=for-the-badge" alt="Install: host only">
+  <br>
+  <a href="https://discord.gg/nnQMCEkHpC"><img src="https://img.shields.io/badge/Discord-join-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Join the Discord"></a>
+  <a href="https://github.com/sponsors/waffle-ful"><img src="https://img.shields.io/badge/Sponsor-%E2%9D%A4-EA4AAA?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Sponsor"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-blue?style=for-the-badge" alt="GPL-3.0"></a>
+</p>
+
+<p align="center">
+  <img src=".github/roles/wavecannon.gif" alt="Wave Cannon" width="49%">
+  <img src=".github/roles/wavecannon_victim.gif" alt="Hit by the Wave Cannon" width="49%">
+  <br><sub><b>Wave Cannon</b> — the Wave Cannon made famous by SuperNewRoles. The shooter's view and the victim's.<br>Players who install End K not too get the magic circles and the special-move cut-in in full.</sub>
+</p>
 
 <p align="center">
   <a href="../../releases/latest/download/EndKnotInstaller.exe"><img src=".github/download-button-en.png" alt="Download the latest version" width="70%"></a>
@@ -12,60 +32,68 @@
   Windows will show a blue warning on first run; <a href="#if-windows-shows-a-blue-warning">getting past it takes two clicks</a>.</sub>
 </p>
 
-[![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/nnQMCEkHpC) [![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-EA4AAA?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/waffle-ful)
-
 ---
 
 ## Your usual Among Us night ends here.
 
-### Only the host installs anything.
-
-End K not runs off **the host's client alone.** Everyone else joins vanilla and still plays all **682 roles.** You never have to say "install this first, then come back," so nobody has to set anything up before they can join you. Official servers and custom servers both run the full feature set.
-
-### Your lobby doesn't die.
-
-Dropped by the server? End K not **re-creates the lobby automatically**, same region, same settings. If Among Us itself crashes or hangs, the bundled external watchdog notices, relaunches the game, and restores the lobby. Leave it running for a full day and it keeps going. You won't have to end a night early because the connection gave out.
-
-### Your viewers never get bored.
-
-End K not reads each player's chat aloud in **its own voice**, so your audience can tell who spoke without watching the screen. Viewers **reach into the game itself** with `!` commands from live chat. An **AI commentary companion**, a 2D portrait with a lip-synced 3D avatar, calls the kills, the meetings, and the wins in real time. Your chat gets a seat at the controls.
+<table>
+<tr>
+<td width="33%" valign="top">
+<h3 align="center">🎮<br>Only the host<br>installs anything.</h3>
+Everyone else joins vanilla. You never have to say "install this first, then come back," so gathering players takes no setup. Official and custom servers both run the full feature set.
+</td>
+<td width="33%" valign="top">
+<h3 align="center">🛡️<br>Your lobby<br>doesn't die.</h3>
+Dropped by the server? End K not <b>re-creates the lobby automatically</b> with the same settings. If the game crashes, the bundled watchdog relaunches it and restores the lobby. It keeps going for a full day unattended.
+</td>
+<td width="33%" valign="top">
+<h3 align="center">📺<br>Your viewers<br>never get bored.</h3>
+Each player's chat is read aloud <b>in its own voice</b>, viewers <b>reach into the game</b> with <code>!</code> commands from live chat, and an <b>AI commentary companion</b> calls the kills, meetings, and wins in real time.
+</td>
+</tr>
+</table>
 
 ### Roles like these are waiting.
 
-- **Wave Cannon** — The Wave Cannon made famous by SuperNewRoles. Charges up inside a magic circle, then fires a beam that wipes out everyone in a straight line. Whoever it hits is vaporized without a trace.
-- **Riptide** — A giant wave sweeps the entire map. Caught in it, you're gone. It gets faster with every meeting.
-- **WordKiller** — Kills anyone who says the forbidden word. The conversation itself becomes a minefield.
-- **Gemini** — Stand still and a copy of you stays where you were. Same colour, same name, identical to you.
-- **Crosswind** — Vanishes, then blasts everyone sideways with a gust of wind.
-- **Dossun** — Places a giant block that moves with you. Crush them, or knock them flying.
-- **Supernova** — A star that detonates the moment you stand still. Take everyone nearby with you, and if you last until the end, you shove the real winner aside and take the win alone.
+<table>
+<tr>
+<td width="33%" valign="top" align="center">
+<img src=".github/roles/gemini.gif" alt="Gemini" width="100%">
+<h4>Gemini</h4>
+Stand still and a copy of you stays where you were. Same colour, same name, identical to you.
+</td>
+<td width="33%" valign="top" align="center">
+<img src=".github/roles/crosswind.gif" alt="Crosswind" width="100%">
+<h4>Crosswind</h4>
+Vanishes, then blasts everyone sideways with a gust of wind.
+</td>
+<td width="33%" valign="top" align="center">
+<img src=".github/roles/supernova.gif" alt="Supernova" width="100%">
+<h4>Supernova</h4>
+A star that detonates the moment you stand still. Last until the end and you shove the real winner aside to win alone.
+</td>
+</tr>
+</table>
 
-<p align="center">
-  <img src=".github/roles/wavecannon.gif" alt="Wave Cannon" width="49%">
-  <img src=".github/roles/wavecannon_victim.gif" alt="Hit by the Wave Cannon" width="49%">
-  <br><sub>Wave Cannon — the shooter's view and the victim's. Players who install End K not too get the magic circles and the special-move cut-in in full.</sub>
-</p>
+And there's more:
 
-<p align="center">
-  <img src=".github/roles/gemini.gif" alt="Gemini" width="32%">
-  <img src=".github/roles/crosswind.gif" alt="Crosswind" width="32%">
-  <img src=".github/roles/supernova.gif" alt="Supernova" width="32%">
-  <br><sub>Left to right: Gemini · Crosswind · Supernova</sub>
-</p>
+- 🌊 **Riptide** — A giant wave sweeps the entire map. Caught in it, you're gone. It gets faster with every meeting.
+- 🤐 **WordKiller** — Kills anyone who says the forbidden word. The conversation itself becomes a minefield.
+- 🧱 **Dossun** — Places a giant block that moves with you. Crush them, or knock them flying.
+
+▶ **[See all 682 roles (`ROLES-EN.md`)](./ROLES-EN.md)**
 
 ### And trying it costs you nothing.
 
 Run the installer. It works out whether you're on Steam or Epic and handles the rest. If it isn't for you, rename one file (`winhttp.dll`) and you're back to **plain Among Us.** Getting in and getting out both take seconds.
 
-> **682 roles · 110+ chat commands · host-only install · completely free**
+<p align="center"><b>682 roles · 110+ chat commands · host-only install · Android support · completely free</b></p>
 
 ---
 
 ## About this mod
 
-**End K not** is an unofficial personal fork for Among Us that inherits roles and systems from both [Endless Host Roles (EHR)](https://github.com/Gurge44/EndlessHostRoles) and [TownOfHost-K (TOHK)](https://github.com/KYMario/TownOfHost-K). It ships **682 roles**.
-
-Only the lobby host installs the mod. Everyone else joins and plays the extra roles with nothing installed. Official servers and custom servers both run the full feature set.
+**End K not** is an unofficial personal fork for Among Us that inherits roles and systems from both [Endless Host Roles (EHR)](https://github.com/Gurge44/EndlessHostRoles) and [TownOfHost-K (TOHK)](https://github.com/KYMario/TownOfHost-K). On top of EHR's role engine, it adds features for **streaming, long-running hosting, and presentation.**
 
 This mod is unofficial and is **not affiliated with or endorsed by Innersloth**. **Please do not contact Innersloth regarding any issues with this mod.**
 
@@ -75,8 +103,6 @@ This mod is unofficial and is **not affiliated with or endorsed by Innersloth**.
 Supported Among Us version: **2026.8.18**
 
 ## Features
-
-On top of EHR's role engine, End K not adds features for **streaming, long-running hosting, and presentation.**
 
 ### 🎥 Streaming & long-running hosting
 
@@ -101,9 +127,14 @@ On top of EHR's role engine, End K not adds features for **streaming, long-runni
 
 ## Performance
 
-Even with the mod loaded, boot time and resident memory are kept as close to vanilla as possible. On the same PC and day, "vanilla / BepInEx only / previous release v0.9.6 / current v0.9.7 (dev)" were cold-started 5 times each in rotation; the table shows medians.
+Even with the mod loaded, boot time and resident memory are kept as close to vanilla as possible. Conditions and all metrics are in the **[performance report](https://waffle-ful.github.io/Aeterna-End-K-not/perf.html)** (Japanese).
 
-| Metric | Vanilla | BepInEx only | Previous v0.9.6 | Current v0.9.7 (dev) |
+<details>
+<summary><b>Show the measurements (boot time and resident memory)</b></summary>
+
+On the same PC and day, "vanilla / BepInEx only / v0.9.6 / v0.9.7" were cold-started 5 times each in rotation; the table shows medians.
+
+| Metric | Vanilla | BepInEx only | v0.9.6 | v0.9.7 |
 |---|---:|---:|---:|---:|
 | Boot time (s) | 5.9 | 8.1 | 16.4 | **11.1** (−33%) |
 | Time to interactive (s) | 10.5 | 12.9 | 21.6 | **16.4** (−24%) |
@@ -115,7 +146,9 @@ Even with the mod loaded, boot time and resident memory are kept as close to van
 
 <p align="center"><img src=".github/perf-chart.png" alt="End K not performance comparison chart" width="90%"></p>
 
-Conditions and all metrics are in the **[performance report](https://waffle-ful.github.io/Aeterna-End-K-not/perf.html)** (Japanese). Values in parentheses are deltas versus the previous release. Lobby time uses scripted menu clicks for vanilla and the auto-host feature for the current build; most of the gap is the current build's internal wait before it sends the create request. Vanilla lobby / in-game figures are not measured because there is no way to automate them.
+Values in parentheses are deltas versus v0.9.6. Lobby time uses scripted menu clicks for vanilla and the auto-host feature for v0.9.7; most of the gap is v0.9.7's internal wait before it sends the create request. Vanilla lobby / in-game figures are not measured because there is no way to automate them.
+
+</details>
 
 ## Role list
 
@@ -167,6 +200,9 @@ If the value matches the `sha256:` shown next to `EndKnotInstaller.exe` on the [
 > [!TIP]
 > If you'd still rather not run an exe, the manual zip install below gets you the same thing.
 
+<details>
+<summary><b>Manual zip install · DLL-only update</b></summary>
+
 ### Manual zip install
 
 1. Download the zip for your store from [Releases](../../releases)
@@ -180,6 +216,12 @@ If the value matches the `sha256:` shown next to `EndKnotInstaller.exe` on the [
 
 The zip bundles BepInEx, the config files, and the custom-region mod, so nothing else is required.
 
+### DLL-only update (for existing installs)
+
+If you already have End K not installed, just overwrite `Among Us\BepInEx\plugins\EndKnot.dll` with the one from Releases and delete `Among Us\BepInEx\interop\`.
+
+</details>
+
 > [!IMPORTANT]
 > **When updating, delete the `Among Us\BepInEx\interop\` folder** before extracting the new version. A stale interop folder can prevent the game from starting.
 
@@ -187,9 +229,16 @@ The zip bundles BepInEx, the config files, and the custom-region mod, so nothing
 
 Rename `winhttp.dll` in your `Among Us` folder to `winhttp.dll.disabled`. This disables the mod and the game launches as plain Among Us. Rename it back to re-enable.
 
-### DLL-only update (for existing installs)
+### Playing on Android (launcher)
 
-If you already have End K not installed, just overwrite `Among Us\BepInEx\plugins\EndKnot.dll` with the one from Releases and delete `Among Us\BepInEx\interop\`.
+You can host from your phone too. The game itself stays unmodified; the launcher starts it with the mod loaded.
+
+1. Install the official store version of Among Us on an Android 8.1+ arm64 device
+2. **[Download `EndKnot-<version>_Android.apk`](../../releases/latest)** and install it (you'll need to allow installs from unknown sources)
+3. Open the launcher and grant the "All files access" permission it asks for on first run
+4. The game launches automatically after a few seconds (tap the card to launch right away)
+
+To update, install the new APK over the old one. The launcher's "Get the update" button also takes you to Releases.
 
 ## BGM customization
 
@@ -206,7 +255,7 @@ Edit `bgm_titles.json` to control title / author display while a BGM plays. File
 
 - **Discord**: https://discord.gg/nnQMCEkHpC — bug reports, questions, general chat (preferred)
 - **Issues**: [GitHub Issues](../../issues) — may take a while to respond
-- [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md) | [`CONTRIBUTING.md`](./CONTRIBUTING.md) | [`SECURITY.md`](./SECURITY.md) | [`SUPPORT.md`](./SUPPORT.md)
+- [`CODE_OF_CONDUCT.md`](.github/CODE_OF_CONDUCT.md) | [`CONTRIBUTING.md`](.github/CONTRIBUTING.md) | [`SECURITY.md`](.github/SECURITY.md) | [`SUPPORT.md`](.github/SUPPORT.md)
 
 ## Team
 
@@ -226,7 +275,7 @@ End K not is a **free, GPL-3.0 mod**. All features are and will remain free, and
 
 Donations go toward the costs of keeping End K not in development, such as development tools. Donating does not unlock any features or priority support.
 
-▶ **[About donations (`FUNDING.md`, Japanese)](./FUNDING.md)**
+▶ **[About donations (`FUNDING.md`, Japanese)](.github/FUNDING.md)**
 
 <p align="center">
   <a href="https://github.com/sponsors/waffle-ful"><img src="https://img.shields.io/badge/GitHub%20Sponsors-Support%20us-EA4AAA?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Support us on GitHub Sponsors"></a>
@@ -247,6 +296,9 @@ End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/End
 ## Credits
 
 > **The vast majority of this mod's roles and features come from earlier mods.** Huge thanks to the developers of the projects below.
+
+<details>
+<summary><b>Show all credits (earlier mods · developers and translators · bundled software · music and assets)</b></summary>
 
 - **[astra1dev](https://github.com/astra1dev)** — advice on IMGUI window display settings
 - **[au.libhalt.net](https://au.libhalt.net/)** — an Among Us mod information and distribution site
@@ -342,6 +394,8 @@ Some sound effects use material from:
 
 - [みりんの動画素材 (Miirriin)](https://miirriin.com/)
 
+</details>
+
 ### VOICEVOX (text-to-speech)
 
 The per-crew read-aloud feature uses **[VOICEVOX](https://voicevox.hiroshiba.jp/)**, a free Japanese text-to-speech software. End K not bundles no voice data; it synthesizes at runtime through the VOICEVOX installed on the host's PC.
@@ -351,9 +405,14 @@ The per-crew read-aloud feature uses **[VOICEVOX](https://voicevox.hiroshiba.jp/
 > Example: `VOICEVOX:ずんだもん (Zundamon)`
 > Each character has its own individual terms of use, so please review the [VOICEVOX terms](https://voicevox.hiroshiba.jp/term/) and each character's terms.
 
-Which characters are used depends on the VOICEVOX voices the host has installed (the installed voices and their IDs are written to `BepInEx/config/EndKnot_VoiceVox_Speakers.txt`). Credits for all VOICEVOX characters are listed below:
+Which characters are used depends on the VOICEVOX voices the host has installed (the installed voices and their IDs are written to `BepInEx/config/EndKnot_VoiceVox_Speakers.txt`). Credits for all VOICEVOX characters:
+
+<details>
+<summary><b>All VOICEVOX characters</b></summary>
 
 四国めたん (Shikoku Metan) / ずんだもん (Zundamon) / 春日部つむぎ (Kasukabe Tsumugi) / 雨晴はう (Amehare Hau) / 波音リツ (Namine Ritsu) / 玄野武宏 (Kurono Takehiro) / 白上虎太郎 (Shirakami Kotaro) / 青山龍星 (Aoyama Ryusei) / 冥鳴ひまり (Meimei Himari) / 九州そら (Kyushu Sora) / もち子さん (Mochiko-san) / 剣崎雌雄 (Kenzaki Mesuo) / WhiteCUL / 後鬼 (Goki) / No.7 / ちび式じい (Chibishiki-jii) / 櫻歌ミコ (Ouka Miko) / 小夜/SAYO / ナースロボ＿タイプＴ (Nurserobo Type-T) / †聖騎士 紅桜† (Holy Knight Benizakura) / 雀松朱司 (Suzumatsu Akashi) / 麒ヶ島宗麟 (Kigashima Sorin) / 春歌ナナ (Haruka Nana) / 猫使アル (Nekotsuka Aru) / 猫使ビィ (Nekotsuka Bii) / 中国うさぎ (Chugoku Usagi) / 栗田まろん (Kurita Maron) / あいえるたん (Aierutan) / 満別花丸 (Manbetsu Hanamaru) / 琴詠ニア (Kotoyomi Nia) / Voidoll / ぞん子 (Zonko) / 中部つるぎ (Chubu Tsurugi) / 離途 (Rito) / 黒沢冴白 (Kurosawa Saehaku) / ユーレイちゃん (Yurei-chan) / 東北ずん子 (Tohoku Zunko) / 東北きりたん (Tohoku Kiritan) / 東北イタコ (Tohoku Itako) / あんこもん (Ankomon) / 夜語トバリ (Yogatari Tobari) / 暁記ミタマ (Akatsuki Mitama) / 里石ユカ (Satoishi Yuka)
+
+</details>
 
 For per-role porting credits, see [`CHANGELOG.md`](./CHANGELOG.md) and individual commit messages.
 
