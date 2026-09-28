@@ -1,7 +1,7 @@
 <h1 align="center"><img src=".github/endknot-logo.png" alt="Aeterna-End-K-not" width="80%"></h1>
 
 <p align="center">
-  <b>ホストが入れるだけ。参加者は Mod なしのまま、682 の役職で遊べる。</b>
+  <b>ホストが入れれば、参加者は Mod なしで 682 の役職を遊べます。</b>
 </p>
 
 <p align="center">
@@ -19,7 +19,7 @@
 <p align="center">
   <img src=".github/roles/wavecannon.gif" alt="波動砲" width="49%">
   <img src=".github/roles/wavecannon_victim.gif" alt="波動砲に撃たれた側" width="49%">
-  <br><sub><b>波動砲</b> — SuperNewRoles で有名な、あの波動砲。撃つ側と、撃たれた側。<br>参加者も End K not を入れておけば、魔法陣も必殺技のカットインも、この迫力のまま届きます。</sub>
+  <br><sub><b>波動砲</b>：SuperNewRoles で有名な役職です。左が撃つ側、右が撃たれた側の画面です。<br>参加者も End K not を入れていれば、魔法陣と必殺技のカットインもこの見た目で表示されます。</sub>
 </p>
 
 <p align="center">
@@ -27,40 +27,40 @@
 </p>
 
 <p align="center">
-  <b>↑ クリックするとインストーラーが落ちてきます。Among Us を終了して実行するだけで導入完了です。</b><br>
+  <b>↑ クリックでインストーラーをダウンロードできます。Among Us を終了してから実行すれば導入できます。</b><br>
   <sub>zip を自分で展開したい方・過去バージョンが欲しい方は <a href="../../releases/latest">リリースページ</a>から。<br>
-  初回起動時に Windows の青い警告が出ますが、<a href="#windows-の青い警告が出たときは">対処法はこちら</a>。</sub>
+  初回起動時に Windows の青い警告が出たら、<a href="#windows-の青い警告が出たときは">こちらの手順</a>で進めてください。</sub>
 </p>
 
 ---
 
-## Among Us の「いつものやつ」を、終わらせにきました。
+## End K not でできること
 
 <table>
 <tr>
 <td width="33%" valign="top">
-<h3 align="center">🎮<br>入れるのは、<br>ホスト1人だけ。</h3>
-参加者は Mod なしのまま遊べます。「入れてから来てね」と言わなくていいので、人を集めるのに手間がかかりません。公式サーバーでもカスタムサーバーでも、機能は全部そのまま動きます。
+<h3 align="center">🎮<br>導入は<br>ホスト1人だけ</h3>
+参加者は Mod なしで遊べます。「入れてから来てね」と頼まずに人を集められます。公式サーバーとカスタムサーバーのどちらでも全機能が動きます。
 </td>
 <td width="33%" valign="top">
-<h3 align="center">🛡️<br>部屋を、<br>落とさせません。</h3>
-通信エラーで切断されても、同じ設定で<b>自動的に部屋を立て直します。</b>本体がクラッシュしても番犬が再起動をかけて復旧。放置したまま丸一日でも回り続けます。
+<h3 align="center">🛡️<br>切断しても<br>部屋を立て直す</h3>
+通信エラーで切断したら、同じ設定で<b>部屋を立て直します。</b>本体がクラッシュしたら、番犬が再起動して部屋を復旧します。丸一日放置しても部屋が続きます。
 </td>
 <td width="33%" valign="top">
-<h3 align="center">📺<br>視聴者を、<br>退屈させません。</h3>
-チャットを<b>一人ずつ別の声で読み上げ</b>、視聴者はライブチャットの <code>!</code> コマンドで<b>ゲームに介入</b>できます。<b>AI 実況相棒</b>がキルも会議も勝敗もリアルタイムで喋ります。
+<h3 align="center">📺<br>配信向けの<br>機能</h3>
+チャットを<b>一人ずつ別の声で読み上げ</b>ます。視聴者はライブチャットの <code>!</code> コマンドで<b>ゲームに介入</b>できます。<b>AI 実況相棒</b>がキル・会議・勝敗をその場で実況します。
 </td>
 </tr>
 </table>
 
-### たとえば、こんな役職がいます。
+### 役職の例
 
 <table>
 <tr>
 <td width="33%" valign="top" align="center">
 <img src=".github/roles/gemini.gif" alt="ジェミニ" width="100%">
 <h4>ジェミニ (Gemini)</h4>
-立ち止まると、さっきまで居た場所に自分の分身が残る。色も名前も自分そっくり。
+立ち止まると、その場所に自分と同じ色・名前の分身を残す。
 </td>
 <td width="33%" valign="top" align="center">
 <img src=".github/roles/crosswind.gif" alt="横風" width="100%">
@@ -70,40 +70,40 @@
 <td width="33%" valign="top" align="center">
 <img src=".github/roles/supernova.gif" alt="スーパーノヴァ" width="100%">
 <h4>スーパーノヴァ (Supernova)</h4>
-立ち止まったら爆発する星。最後まで生き残れば、本来の勝者を押しのけて単独勝利。
+立ち止まると爆発する。最後まで生き残れば、本来の勝者に代わって単独勝利する。
 </td>
 </tr>
 <tr>
 <td width="33%" valign="top" align="center">
 <img src=".github/roles/riptide.gif" alt="リップタイド" width="100%">
 <h4>リップタイド (Riptide)</h4>
-マップ全体を巨大な波が覆う。のまれたら即死。会議のたびに波が速くなる。
+マップ全体に巨大な波を流す。のまれたプレイヤーは即死する。会議を挟むたびに波が速くなる。
 </td>
 <td width="33%" valign="top" align="center">
 <img src=".github/roles/riptide_victim.gif" alt="リップタイドの波にのまれた側" width="100%">
 <h4>のまれた側</h4>
-逃げ場のない壁のような波が、画面ごと押し寄せてくる。
+壁のような波が画面いっぱいに迫ってくる。
 </td>
 <td width="33%" valign="top" align="center">
 <img src=".github/roles/dossun.gif" alt="ドッスン" width="100%">
 <h4>ドッスン (Dossun)</h4>
-巨大ブロックを落とし、自分が動くと連動して動く。轢いたり、吹き飛ばしたり。
+巨大ブロックを落とし、自分の動きに合わせて動かす。ブロックで轢いたり吹き飛ばしたりできる。
 </td>
 </tr>
 <tr>
 <td colspan="3" valign="top" align="center">
 <img src=".github/roles/wordkiller.gif" alt="ワードキラー" width="60%">
 <h4>ワードキラー (WordKiller)</h4>
-会議で禁止ワードをこっそり仕掛ける。口にした者は、その場で消える。会話そのものが地雷原になります。
+会議に禁止ワードを仕掛ける。そのワードを発言したプレイヤーはその場で消える。
 </td>
 </tr>
 </table>
 
 ▶ **[全 682 役職の一覧を見る (`ROLES.md`)](./ROLES.md)**
 
-### そして、試すのがこわくない。
+### 導入も解除もすぐできる
 
-インストーラーを実行するだけ。Steam 版か Epic 版かは自動で判別して、導入まで全部やってくれます。合わなければ、フォルダの中の `winhttp.dll` の名前を変えるだけで**完全に素の Among Us へ戻ります。** 入れるのも、やめるのも一瞬です。
+インストーラーが Steam 版か Epic 版かを判別して導入します。やめたいときは、フォルダ内の `winhttp.dll` の名前を変えれば**素の Among Us に戻ります。**
 
 <p align="center"><b>役職 682 ・ チャットコマンド 110 種類以上 ・ ホストだけ導入 ・ Android 対応 ・ 完全無料</b></p>
 
@@ -113,7 +113,7 @@
 
 **End K not** は、[Endless Host Roles (EHR)](https://github.com/Gurge44/EndlessHostRoles) と [TownOfHost-K (TOHK)](https://github.com/KYMario/TownOfHost-K) の両方から役職と仕組みを受け継いだ、Among Us の非公式個人フォークです。EHR の役職エンジンの上に、**配信・長時間運用・演出**まわりの機能を積み上げています。
 
-このMod は非公式のものであり、Among Us の開発元である Innersloth は一切関与していません。**このMod の問題に関して Innersloth へ問い合わせないでください。**
+このMod は非公式で、Among Us の開発元である Innersloth は関与していません。**このMod の問題に関して Innersloth へ問い合わせないでください。**
 
 > [!WARNING]
 > End K not は **beta 段階**です。未テスト役職や WIP 機能を含みます。不具合報告や提案は [GitHub Issues](../../issues) または [Discord](https://discord.gg/nnQMCEkHpC) へお願いします。
@@ -124,28 +124,28 @@
 
 ### 🎥 配信・長時間運用サポート
 
-- **クルーごとの声で自動読み上げ (VOICEVOX 連携)** — プレイヤーのチャットを、一人ひとり違う声で読み上げます。喋らせるのはホストの PC に入れた [VOICEVOX](https://voicevox.hiroshiba.jp/)。音が出るのはホストの手元（配信画面）だけで、ゲームには送りません。プレイヤー名やフレンドコードで声を固定しておくこともできます。*（配信で使う際のクレジット表記については[クレジット](#クレジット)を参照）*
-- **自動部屋立て直し & クラッシュ自己復帰** — 公式サーバーの kick や通信エラーで切断されても、同じリージョン・同じ設定で新しい部屋を立て直します。Among Us 本体がクラッシュしたり固まったりした場合も、付属の外部ウォッチドッグ（番犬）が気づいて再起動をかけ、部屋を復旧。丸一日つけっぱなしの長時間配信でも、放置したまま回り続けます。
-- **BGM システム** — メニュー / ロビー / 任務中 / 会議 / 結果画面の BGM をホストが自由に差し替え可能。デフォルト BGM 同梱。
-- **YouTube ライブチャット表示 & 自動投稿** — 配信中の YouTube ライブチャットをゲーム画面の上に重ねて表示します。キル・会議・勝敗といったゲーム内の出来事はライブチャット側へ自動で投稿するので、画面から目を離している視聴者にも状況が伝わります。
-- **視聴者干渉システム** — 視聴者がライブチャットの `!` コマンドでゲームに介入できる仕組み。ポイント経済制で、`!大地震`（全ドア閉鎖＋停電＋プレイヤーをランダム TP）、`!天の声`（視聴者の一言を「天の声」名義で全員に送信）、`!偽死体`（生存者のそばに偽の死体を出現）などの干渉が可能です。
-- **AI 実況相棒** — 別プロセスで動く AI（Gemini Live）がゲームの進行を受け取って、立ち絵・3D アバター（口パク付き）でリアルタイムに実況します。話題は順ぐりに回していくので、長時間の配信でも同じ話ばかりにはなりません。
-- **配信用ロビーコードバブル** — ロビーコードを配信画面に出しっぱなしにできる小さな吹き出し。ドラッグで好きな位置へ動かせます。
+- **クルーごとの声で自動読み上げ (VOICEVOX 連携)** — プレイヤーのチャットを、一人ひとり違う声で読み上げます。声はホストの PC に入れた [VOICEVOX](https://voicevox.hiroshiba.jp/) が出します。音はホストの手元（配信画面）でだけ鳴り、ゲームには送りません。プレイヤー名やフレンドコードで声を固定しておくこともできます。*（配信で使う際のクレジット表記については[クレジット](#クレジット)を参照）*
+- **自動部屋立て直し & クラッシュ自己復帰** — 公式サーバーの kick や通信エラーで切断したら、同じリージョン・同じ設定で新しい部屋を立てます。Among Us 本体がクラッシュしたり固まったりしたら、付属の外部ウォッチドッグ（番犬）が再起動して部屋を復旧します。丸一日つけっぱなしの配信でも放置できます。
+- **BGM システム** — メニュー / ロビー / 任務中 / 会議 / 結果画面の BGM をホストが差し替えられます。デフォルト BGM も同梱しています。
+- **YouTube ライブチャット表示 & 自動投稿** — 配信中の YouTube ライブチャットをゲーム画面の上に重ねて表示します。キル・会議・勝敗はライブチャットへ自動で投稿するので、画面を見ていない視聴者も状況を追えます。
+- **視聴者干渉システム** — 視聴者がライブチャットの `!` コマンドでゲームに介入できます。ポイントを消費して、`!大地震`（全ドア閉鎖＋停電＋プレイヤーをランダム TP）、`!天の声`（視聴者の一言を「天の声」名義で全員に送信）、`!偽死体`（生存者のそばに偽の死体を出現）などを使えます。
+- **AI 実況相棒** — 別プロセスで動く AI（Gemini Live）がゲームの進行を受け取って、立ち絵・3D アバター（口パク付き）でリアルタイムに実況します。話題を順番に切り替えるので、長時間の配信でも話が偏りません。
+- **配信用ロビーコードバブル** — ロビーコードを配信画面に出しておく小さな吹き出しです。ドラッグで位置を動かせます。
 
 ### 🏚️ ロビー演出・ワールド
 
-- **Backrooms ロビー** — Backrooms をテーマにした特別なロビー演出。Mod を入れているホストと入れていない参加者とでは、見える景色が違います。
+- **Backrooms ロビー** — Backrooms をテーマにしたロビー演出です。Mod を入れたホストと入れていない参加者で、見える景色が変わります。
 - **EKM カスタムマップエディタ** — カスタムマップを作れる専用エディタを同梱（[`editor/`](./editor)）。作ったマップをゲーム内で読み込めます *(開発中)*。
 - **ロビー装飾** — ロビーに温泉やポータルなどの装飾を置けます。
 
 ### 🎨 UI・ポリシー
 
 - **Calamity (Terraria) テーマのメインメニュー** *(開発中)* — Calamity 風のカスタムメインメニュー UI を制作中（[CalamityModPublic](https://github.com/CalamityTeam/CalamityModPublic) を参考）。
-- **GPL-3.0 オープンソース** — ソースコード全公開、改変・再配布自由。
+- **GPL-3.0 オープンソース** — ソースコードを全公開しています。GPL-3.0 の範囲で改変・再配布できます。
 
 ## パフォーマンス
 
-Mod を入れても、起動と常駐メモリはできるだけバニラに近づける方針です。計測条件と全指標は **[性能比較レポート](https://waffle-ful.github.io/Aeterna-End-K-not/perf.html)** にまとめています。
+起動時間と常駐メモリをバニラに近づける方針で作っています。計測条件と全指標は **[性能比較レポート](https://waffle-ful.github.io/Aeterna-End-K-not/perf.html)** にまとめています。
 
 <details>
 <summary><b>計測結果を開く（起動時間・常駐メモリ）</b></summary>
@@ -164,7 +164,7 @@ Mod を入れても、起動と常駐メモリはできるだけバニラに近�
 
 <p align="center"><img src=".github/perf-chart.png" alt="End K not 性能比較グラフ" width="90%"></p>
 
-括弧内は v0.9.6 との差。ロビー作成はバニラをメニュー操作の自動化で、v0.9.7 を自動ホスト機能で測ったもので、差の大半は v0.9.7 の作成要求までの内部待ちです。バニラのロビー・試合中は自動計測の手段がないため未計測です。
+括弧内は v0.9.6 との差。ロビー作成はバニラをメニュー操作の自動化で、v0.9.7 を自動ホスト機能で測ったもので、差の大半は v0.9.7 の作成要求までの内部待ちです。バニラのロビー・試合中は自動で計測する手段がなく、測っていません。
 
 </details>
 
@@ -184,7 +184,7 @@ Mod を入れても、起動と常駐メモリはできるだけバニラに近�
 
 ▶ **[全 682 役職の名前一覧はこちら (`ROLES.md`)](./ROLES.md)**
 
-各役職の効果や設定は、ゲーム内で `/r <役職名>` または `/myrole` を実行すると読めます。派手さで選んだおすすめは[このページの冒頭](#たとえばこんな役職がいます)にも載せています。
+各役職の効果や設定は、ゲーム内で `/r <役職名>` または `/myrole` を実行すると読めます。見た目が派手な役職は[このページの冒頭](#役職の例)で紹介しています。
 
 ## コマンド一覧
 
@@ -198,16 +198,16 @@ Mod を入れても、起動と常駐メモリはできるだけバニラに近�
 
 1. **[`EndKnotInstaller.exe` をダウンロード](../../releases/latest/download/EndKnotInstaller.exe)**
 2. **Among Us を完全に終了して**から実行
-3. Steam / Epic を自動判別してインストールまで全部やってくれます（更新も同じ手順）
+3. インストーラーが Steam / Epic を判別して導入します（更新も同じ手順）
 
 #### Windows の青い警告が出たときは
 
-インストーラーはコード署名をしていないので、初回実行時に「**WindowsによってPCが保護されました**」という青い画面が出ます。署名のない個人配布の exe には必ず出る警告で、ウイルスが見つかったという意味ではありません。
+インストーラーはコード署名をしていないので、初回実行時に「**WindowsによってPCが保護されました**」という青い画面が出ます。署名のない個人配布の exe ではこの警告が出ます。ウイルスを検出したという通知とは別物です。
 
 1. 「**詳細情報**」をクリック
 2. 出てきた「**実行**」ボタンをクリック
 
-心配な方は、実行前にファイルが本物か確認できます。PowerShell で以下を実行し、
+実行前にファイルが本物か確認するなら、PowerShell で以下を実行し、
 
 ```powershell
 Get-FileHash "$env:USERPROFILE\Downloads\EndKnotInstaller.exe"
@@ -216,7 +216,7 @@ Get-FileHash "$env:USERPROFILE\Downloads\EndKnotInstaller.exe"
 表示された値が [リリースページ](../../releases/latest) の `EndKnotInstaller.exe` の横に載っている `sha256:` と一致すれば、改変されていない配布物です。
 
 > [!TIP]
-> それでも exe を実行したくない場合は、下の「zip を手動展開して導入」でも同じものが入ります。
+> exe を実行したくない場合は、下の「zip を手動展開して導入」でも同じものを入れられます。
 
 <details>
 <summary><b>zip を手動展開して導入 ・ DLL だけ差し替える</b></summary>
@@ -232,11 +232,11 @@ Get-FileHash "$env:USERPROFILE\Downloads\EndKnotInstaller.exe"
    - Epic : `C:\Program Files\Epic Games\AmongUs\`
 4. Among Us を起動
 
-zip には BepInEx 本体・設定ファイル・カスタムリージョン追加 Mod が入っているので、これだけで導入は終わりです。
+zip に BepInEx 本体・設定ファイル・カスタムリージョン追加 Mod が入っているので、導入はこれで終わりです。
 
 ### DLL だけ差し替える（既に導入済みの方向け）
 
-すでに End K not を導入していて更新するだけなら、Releases の `EndKnot.dll` を `Among Us\BepInEx\plugins\` に上書きし、`Among Us\BepInEx\interop\` を削除してください。
+導入済みの End K not を更新するだけなら、Releases の `EndKnot.dll` を `Among Us\BepInEx\plugins\` に上書きし、`Among Us\BepInEx\interop\` を削除してください。
 
 </details>
 
@@ -245,7 +245,7 @@ zip には BepInEx 本体・設定ファイル・カスタムリージョン追�
 
 ### バニラ（Mod なし）に戻したいとき
 
-`Among Us` フォルダ直下の `winhttp.dll` を `winhttp.dll.disabled` にリネームすると、Mod が完全に無効化されて素の Among Us として起動します。戻すときは名前を元に戻すだけです。
+`Among Us` フォルダ直下の `winhttp.dll` を `winhttp.dll.disabled` にリネームすると、Mod を無効にして素の Among Us として起動できます。戻すときは名前を元に戻すだけです。
 
 ### Android で遊ぶ（ランチャー）
 
@@ -260,14 +260,14 @@ zip には BepInEx 本体・設定ファイル・カスタムリージョン追�
 
 ## BGM のカスタマイズ
 
-ホストが自前の楽曲に差し替えられます:
+ホストは BGM を自前の楽曲に差し替えられます:
 
 - 場所 : `Among Us/BepInEx/resources/BGM/`
 - 対応形式 : `.ogg` / `.mp3` / `.wav`
 - 対応スロット : `menu` / `lobby` / `intask` / `climax` / `meeting` / `result`
 - ファイル名例 : `menu.ogg`、`lobby.mp3` など
 
-`bgm_titles.json` を編集すると、BGM 再生時のタイトル / 作者表示も変えられます。ディスクに該当ファイルがあればそちらが優先され、無ければ同梱 BGM が鳴ります。
+`bgm_titles.json` を編集すると、BGM 再生時のタイトル / 作者表示も変えられます。ディスクに該当ファイルがあればそれを、無ければ同梱 BGM を鳴らします。
 
 ## コミュニティ
 
@@ -289,7 +289,7 @@ End K not は以下のメンバーで運営しています。
 
 ## 寄付について
 
-End K not は **GPL-3.0 の無料 Mod** です。全機能は今後も無料で、寄付は一切必須ではありません。
+End K not は **GPL-3.0 の無料 Mod** です。全機能を今後も無料で提供し、寄付は任意です。
 
 いただいた寄付は、開発ツールの利用料など、開発を続けるための費用に充てます。寄付の有無で機能やサポートに差はつけません。
 
@@ -307,9 +307,9 @@ End K not を支えてくださっている皆さんです (掲載はご希望�
 
 ## ライセンス
 
-このプロジェクトは **GNU General Public License v3.0** の下で公開されています。詳細は [`LICENSE`](./LICENSE) を参照してください。
+このプロジェクトは **GNU General Public License v3.0** で公開しています。詳細は [`LICENSE`](./LICENSE) を参照してください。
 
-End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) と [TownOfHost-K](https://github.com/KYMario/TownOfHost-K) の派生プロジェクトです。**2026 年 4 月以降の改変**は waffle-ful により行われており、改変履歴は本リポジトリの git log および [`CHANGELOG.md`](./CHANGELOG.md) で追跡できます (GPL-3.0 §5 準拠)。
+End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) と [TownOfHost-K](https://github.com/KYMario/TownOfHost-K) の派生プロジェクトです。**2026 年 4 月以降の改変**は waffle-ful が行っており、改変履歴は本リポジトリの git log および [`CHANGELOG.md`](./CHANGELOG.md) で追跡できます (GPL-3.0 §5 準拠)。
 
 ## クレジット
 
@@ -394,10 +394,10 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 - Python と同梱パッケージ・three.js ほか — AI 実況相棒
 
 ### Music Credits
-自称芸術家みーさん様のBGMが使われています
+自称芸術家みーさん様の BGM を使っています
 - [HURT RECORD](https://www.hurtrecord.com/bgm/46/zero-no-heya.html)
 
-もっぴーさうんど様・こおろぎ様・蒲鉾さちこ様のBGMが使われています
+もっぴーさうんど様・こおろぎ様・蒲鉾さちこ様の BGM を使っています
 - [DOVA-SYNDROME](https://dova-s.jp/)
 
 ### 効果音クレジット
@@ -415,14 +415,14 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 
 ### VOICEVOX（音声読み上げ）
 
-クルーごとの読み上げ機能は、無料のテキスト読み上げソフト **[VOICEVOX](https://voicevox.hiroshiba.jp/)** を使っています。End K not 側は音声データを持っておらず、ホストのパソコンに入っている VOICEVOX へ実行時に喋らせています。
+クルーごとの読み上げ機能は、無料のテキスト読み上げソフト **[VOICEVOX](https://voicevox.hiroshiba.jp/)** を使っています。End K not は音声データを持たず、ホストのパソコンに入っている VOICEVOX に実行時に喋らせます。
 
 > [!IMPORTANT]
 > **配信・録画で読み上げ音声を公開する場合は、VOICEVOX と使用キャラクターのクレジット表記が必要です。**
 > 表記例 : `VOICEVOX:ずんだもん`
 > キャラクターごとに個別の利用規約があるため、[VOICEVOX 利用規約](https://voicevox.hiroshiba.jp/term/)と各キャラクターの規約を必ずご確認ください。
 
-読み上げに使われるキャラクターは、ホストが導入している VOICEVOX の音声によって変わります（インストール済みの声と ID の一覧は `BepInEx/config/EndKnot_VoiceVox_Speakers.txt` に出力されます）。VOICEVOX の全キャラクターのクレジットは以下のとおりです。
+読み上げのキャラクターは、ホストが導入している VOICEVOX の音声で決まります（インストール済みの声と ID の一覧は `BepInEx/config/EndKnot_VoiceVox_Speakers.txt` に書き出します）。VOICEVOX の全キャラクターのクレジットは以下のとおりです。
 
 <details>
 <summary><b>VOICEVOX の全キャラクター</b></summary>

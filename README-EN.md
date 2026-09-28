@@ -1,7 +1,7 @@
 <h1 align="center"><img src=".github/endknot-logo.png" alt="Aeterna-End-K-not" width="80%"></h1>
 
 <p align="center">
-  <b>Only the host installs it. Everyone else joins vanilla and plays 682 roles.</b>
+  <b>The host installs it, and everyone else plays 682 roles on vanilla Among Us.</b>
 </p>
 
 <p align="center">
@@ -19,7 +19,7 @@
 <p align="center">
   <img src=".github/roles/wavecannon.gif" alt="Wave Cannon" width="49%">
   <img src=".github/roles/wavecannon_victim.gif" alt="Hit by the Wave Cannon" width="49%">
-  <br><sub><b>Wave Cannon</b> — the Wave Cannon made famous by SuperNewRoles. The shooter's view and the victim's.<br>Players who install End K not too get the magic circles and the special-move cut-in in full.</sub>
+  <br><sub><b>Wave Cannon</b>: the role SuperNewRoles made famous. Left is the shooter's screen, right is the target's.<br>Players who also install End K not see the magic circles and the special-move cut-in as shown here.</sub>
 </p>
 
 <p align="center">
@@ -27,83 +27,83 @@
 </p>
 
 <p align="center">
-  <b>↑ Click to grab the installer. Close Among Us, run it, and you're done.</b><br>
+  <b>↑ Click to download the installer. Close Among Us, then run it to install.</b><br>
   <sub>Prefer to unzip it yourself, or want an older build? Head to the <a href="../../releases/latest">releases page</a>.<br>
-  Windows will show a blue warning on first run; <a href="#if-windows-shows-a-blue-warning">getting past it takes two clicks</a>.</sub>
+  If Windows shows a blue warning on first run, <a href="#if-windows-shows-a-blue-warning">follow these two steps</a>.</sub>
 </p>
 
 ---
 
-## Your usual Among Us night ends here.
+## What End K not does
 
 <table>
 <tr>
 <td width="33%" valign="top">
-<h3 align="center">🎮<br>Only the host<br>installs anything.</h3>
-Everyone else joins vanilla. You never have to say "install this first, then come back," so gathering players takes no setup. Official and custom servers both run the full feature set.
+<h3 align="center">🎮<br>Host-only<br>install</h3>
+Everyone else joins on vanilla. You can gather players without asking them to "install this first." Official and custom servers both run the full feature set.
 </td>
 <td width="33%" valign="top">
-<h3 align="center">🛡️<br>Your lobby<br>doesn't die.</h3>
-Dropped by the server? End K not <b>re-creates the lobby automatically</b> with the same settings. If the game crashes, the bundled watchdog relaunches it and restores the lobby. It keeps going for a full day unattended.
+<h3 align="center">🛡️<br>Lobby<br>recovery</h3>
+If the server drops you, End K not <b>re-creates the lobby</b> with the same settings. If the game crashes, the bundled watchdog relaunches it and restores the lobby. You can leave it running unattended for a full day.
 </td>
 <td width="33%" valign="top">
-<h3 align="center">📺<br>Your viewers<br>never get bored.</h3>
-Each player's chat is read aloud <b>in its own voice</b>, viewers <b>reach into the game</b> with <code>!</code> commands from live chat, and an <b>AI commentary companion</b> calls the kills, meetings, and wins in real time.
+<h3 align="center">📺<br>Streaming<br>tools</h3>
+End K not reads each player's chat aloud <b>in its own voice</b>. Viewers <b>affect the game</b> with <code>!</code> commands from live chat. An <b>AI commentary companion</b> calls kills, meetings, and wins as they happen.
 </td>
 </tr>
 </table>
 
-### Roles like these are waiting.
+### Example roles
 
 <table>
 <tr>
 <td width="33%" valign="top" align="center">
 <img src=".github/roles/gemini.gif" alt="Gemini" width="100%">
 <h4>Gemini</h4>
-Stand still and a copy of you stays where you were. Same colour, same name, identical to you.
+Stand still and you leave a copy of yourself there, with your colour and name.
 </td>
 <td width="33%" valign="top" align="center">
 <img src=".github/roles/crosswind.gif" alt="Crosswind" width="100%">
 <h4>Crosswind</h4>
-Vanishes, then blasts everyone sideways with a gust of wind.
+Turns invisible, then blows everyone sideways with a gust of wind.
 </td>
 <td width="33%" valign="top" align="center">
 <img src=".github/roles/supernova.gif" alt="Supernova" width="100%">
 <h4>Supernova</h4>
-A star that detonates the moment you stand still. Last until the end and you shove the real winner aside to win alone.
+Explodes if you stand still. Survive to the end and you win alone, in place of the team that would have won.
 </td>
 </tr>
 <tr>
 <td width="33%" valign="top" align="center">
 <img src=".github/roles/riptide.gif" alt="Riptide" width="100%">
 <h4>Riptide</h4>
-A giant wave sweeps the entire map. Caught in it, you're gone. It gets faster with every meeting.
+Sends a giant wave across the map. Anyone it catches dies. The wave speeds up after each meeting.
 </td>
 <td width="33%" valign="top" align="center">
 <img src=".github/roles/riptide_victim.gif" alt="Caught by the Riptide wave" width="100%">
 <h4>Caught in the wave</h4>
-A wall of water rolls across the whole screen, with nowhere to run.
+A wall of water fills the screen as it rolls toward you.
 </td>
 <td width="33%" valign="top" align="center">
 <img src=".github/roles/dossun.gif" alt="Dossun" width="100%">
 <h4>Dossun</h4>
-Drops a giant block that moves with you. Crush them, or knock them flying.
+Drops a giant block that follows your movement. Use it to crush players or knock them away.
 </td>
 </tr>
 <tr>
 <td colspan="3" valign="top" align="center">
 <img src=".github/roles/wordkiller.gif" alt="WordKiller" width="60%">
 <h4>WordKiller</h4>
-Secretly sets a forbidden word during the meeting. Whoever says it dies on the spot. The conversation itself becomes a minefield.
+Sets a hidden forbidden word during the meeting. Anyone who says it dies on the spot.
 </td>
 </tr>
 </table>
 
 ▶ **[See all 682 roles (`ROLES-EN.md`)](./ROLES-EN.md)**
 
-### And trying it costs you nothing.
+### Easy to install, easy to remove
 
-Run the installer. It works out whether you're on Steam or Epic and handles the rest. If it isn't for you, rename one file (`winhttp.dll`) and you're back to **plain Among Us.** Getting in and getting out both take seconds.
+The installer detects Steam or Epic and installs the mod. To remove it, rename `winhttp.dll` in the game folder and you're back to **plain Among Us.**
 
 <p align="center"><b>682 roles · 110+ chat commands · host-only install · Android support · completely free</b></p>
 
@@ -124,33 +124,33 @@ Supported Among Us version: **2026.8.18**
 
 ### 🎥 Streaming & long-running hosting
 
-- **Per-crew text-to-speech (VOICEVOX integration)** — Reads each player's chat aloud in its own voice. The host's own copy of [VOICEVOX](https://voicevox.hiroshiba.jp/) does the speaking, so the audio stays on the host's machine (your stream) and never reaches the game. You can pin a voice to a player name or a friend code. *(See [Credits](#credits) for the attribution required when streaming.)*
-- **Auto re-host & crash self-recovery** — When the official server kicks or drops the host, End K not builds a new lobby with the same region and the same settings. If Among Us crashes or hangs, the bundled external watchdog relaunches the game and restores the lobby, so a stream keeps running unattended for a full day.
-- **BGM system** — Replaceable background music for menu / lobby / in-task / climax / meeting / result. Default tracks bundled.
+- **Per-crew text-to-speech (VOICEVOX integration)** — Reads each player's chat aloud in its own voice. The host's own copy of [VOICEVOX](https://voicevox.hiroshiba.jp/) generates the voices. You hear the audio on the host's machine (your stream), and End K not doesn't send it into the game. You can pin a voice to a player name or a friend code. *(See [Credits](#credits) for the attribution required when streaming.)*
+- **Auto re-host & crash self-recovery** — When the official server kicks or drops the host, End K not builds a new lobby with the same region and the same settings. If Among Us crashes or hangs, the bundled external watchdog relaunches the game and restores the lobby. You can leave a stream running unattended for a full day.
+- **BGM system** — The host can replace the music for menu / lobby / in-task / climax / meeting / result. Default tracks ship with the mod.
 - **YouTube live chat overlay & auto-posting** — Draws your YouTube live chat over the game screen, and posts in-game events (kills, meetings, wins) back to that chat so viewers who look away still follow the round.
-- **Viewer intervention system** — Lets viewers interfere with the game via `!`-prefixed live chat commands, gated by a point economy. Includes `!大地震` (big earthquake — closes all doors, cuts power, and randomly teleports players), `!天の声` (voice of heaven — broadcasts a viewer's message to all players), and `!偽死体` (fake corpse — spawns a fake dead body near a living player).
-- **AI commentary companion** — A separate AI process (Gemini Live) takes live game events and commentates through a 2D portrait with a lip-synced 3D avatar. It rotates through topics, so a long stream doesn't circle back to the same three remarks.
+- **Viewer intervention system** — Viewers spend points on `!`-prefixed live chat commands to interfere with the game. Commands include `!大地震` (big earthquake — closes all doors, cuts power, and randomly teleports players), `!天の声` (voice of heaven — broadcasts a viewer's message to all players), and `!偽死体` (fake corpse — spawns a fake dead body near a living player).
+- **AI commentary companion** — A separate AI process (Gemini Live) takes live game events and commentates through a 2D portrait with a lip-synced 3D avatar. It rotates through topics, so it doesn't repeat itself over a long stream.
 - **On-screen lobby code bubble** — A small draggable bubble that keeps your lobby code on screen for the whole stream.
 
 ### 🏚️ Lobby presentation & worlds
 
-- **Backrooms lobby** — A Backrooms-themed lobby. The host and the players who joined without the mod see different things.
-- **EKM custom map editor** — A dedicated editor for building custom maps is bundled ([`editor/`](./editor)); maps you create can be loaded in-game *(work in progress)*.
+- **Backrooms lobby** — A Backrooms-themed lobby. The host with the mod and players without it see different scenery.
+- **EKM custom map editor** — End K not bundles an editor for building custom maps ([`editor/`](./editor)). You can load your maps in-game *(work in progress)*.
 - **Lobby decorations** — Place decorations such as hot springs and portals in the lobby.
 
 ### 🎨 UI & policy
 
 - **Calamity-themed main menu** *(work in progress)* — A custom Calamity-style title screen (referencing [CalamityModPublic](https://github.com/CalamityTeam/CalamityModPublic)).
-- **GPL-3.0 open source** — Full source available; you may study, modify, and redistribute under GPL-3.0.
+- **GPL-3.0 open source** — The full source is public. You can study, modify, and redistribute it under GPL-3.0.
 
 ## Performance
 
-Even with the mod loaded, boot time and resident memory are kept as close to vanilla as possible. Conditions and all metrics are in the **[performance report](https://waffle-ful.github.io/Aeterna-End-K-not/perf.html)** (Japanese).
+We aim to keep boot time and resident memory close to vanilla. You'll find the test conditions and every metric in the **[performance report](https://waffle-ful.github.io/Aeterna-End-K-not/perf.html)** (Japanese).
 
 <details>
 <summary><b>Show the measurements (boot time and resident memory)</b></summary>
 
-On the same PC and day, "vanilla / BepInEx only / v0.9.6 / v0.9.7" were cold-started 5 times each in rotation; the table shows medians.
+We cold-started "vanilla / BepInEx only / v0.9.6 / v0.9.7" 5 times each in rotation, on the same PC and the same day. The table shows medians.
 
 | Metric | Vanilla | BepInEx only | v0.9.6 | v0.9.7 |
 |---|---:|---:|---:|---:|
@@ -164,7 +164,7 @@ On the same PC and day, "vanilla / BepInEx only / v0.9.6 / v0.9.7" were cold-sta
 
 <p align="center"><img src=".github/perf-chart.png" alt="End K not performance comparison chart" width="90%"></p>
 
-Values in parentheses are deltas versus v0.9.6. Lobby time uses scripted menu clicks for vanilla and the auto-host feature for v0.9.7; most of the gap is v0.9.7's internal wait before it sends the create request. Vanilla lobby / in-game figures are not measured because there is no way to automate them.
+Values in parentheses are deltas versus v0.9.6. Lobby time uses scripted menu clicks for vanilla and the auto-host feature for v0.9.7; most of the gap is v0.9.7's internal wait before it sends the create request. We have no way to automate vanilla lobby / in-game measurements, so those cells are empty.
 
 </details>
 
@@ -184,7 +184,7 @@ Values in parentheses are deltas versus v0.9.6. Lobby time uses scripted menu cl
 
 ▶ **[See the full list of all 682 roles (`ROLES-EN.md`)](./ROLES-EN.md)**
 
-Use `/r <role name>` or `/myrole` in-game to read each role's effects and settings. A picked-for-spectacle shortlist sits [at the top of this page](#roles-like-these-are-waiting).
+Use `/r <role name>` or `/myrole` in-game to read each role's effects and settings. [The top of this page](#example-roles) shows a few of the flashiest roles.
 
 ## Commands
 
@@ -198,11 +198,11 @@ End K not adds over 110 chat commands across the host, moderator, and player tie
 
 1. **[Download `EndKnotInstaller.exe`](../../releases/latest/download/EndKnotInstaller.exe)**
 2. **Fully close Among Us**, then run it
-3. It auto-detects Steam / Epic and handles the whole install (updates work the same way)
+3. The installer detects Steam / Epic and installs the mod (updates work the same way)
 
 #### If Windows shows a blue warning
 
-The installer isn't code-signed, so the first run brings up a blue "**Windows protected your PC**" screen. Windows shows that screen for any unsigned exe an individual distributes. It does not mean a scanner found something in the file.
+The installer isn't code-signed, so the first run brings up a blue "**Windows protected your PC**" screen. Windows shows that screen for any unsigned exe from an individual developer. The screen is not a virus detection.
 
 1. Click "**More info**"
 2. Click the "**Run anyway**" button that appears
@@ -213,10 +213,10 @@ If you'd rather verify the file first, run this in PowerShell:
 Get-FileHash "$env:USERPROFILE\Downloads\EndKnotInstaller.exe"
 ```
 
-If the value matches the `sha256:` shown next to `EndKnotInstaller.exe` on the [releases page](../../releases/latest), the file is untampered.
+If the value matches the `sha256:` shown next to `EndKnotInstaller.exe` on the [releases page](../../releases/latest), nobody has tampered with the file.
 
 > [!TIP]
-> If you'd still rather not run an exe, the manual zip install below gets you the same thing.
+> If you'd rather not run an exe, the manual zip install below installs the same files.
 
 <details>
 <summary><b>Manual zip install · DLL-only update</b></summary>
@@ -232,11 +232,11 @@ If the value matches the `sha256:` shown next to `EndKnotInstaller.exe` on the [
    - Epic: `C:\Program Files\Epic Games\AmongUs\`
 4. Launch Among Us
 
-The zip bundles BepInEx, the config files, and the custom-region mod, so nothing else is required.
+The zip includes BepInEx, the config files, and the custom-region mod, so you need nothing else.
 
 ### DLL-only update (for existing installs)
 
-If you already have End K not installed, just overwrite `Among Us\BepInEx\plugins\EndKnot.dll` with the one from Releases and delete `Among Us\BepInEx\interop\`.
+If you already have End K not installed, overwrite `Among Us\BepInEx\plugins\EndKnot.dll` with the one from Releases and delete `Among Us\BepInEx\interop\`.
 
 </details>
 
@@ -245,7 +245,7 @@ If you already have End K not installed, just overwrite `Among Us\BepInEx\plugin
 
 ### Switching back to vanilla
 
-Rename `winhttp.dll` in your `Among Us` folder to `winhttp.dll.disabled`. This disables the mod and the game launches as plain Among Us. Rename it back to re-enable.
+Rename `winhttp.dll` in your `Among Us` folder to `winhttp.dll.disabled`. The game then launches as plain Among Us. Rename it back to re-enable.
 
 ### Playing on Android (launcher)
 
@@ -267,7 +267,7 @@ Hosts can replace the bundled music with their own:
 - Supported slots: `menu` / `lobby` / `intask` / `climax` / `meeting` / `result`
 - Example filenames: `menu.ogg`, `lobby.mp3`
 
-Edit `bgm_titles.json` to control title / author display while a BGM plays. Files in the disk folder take priority; if a slot has no disk file, the bundled track plays instead.
+Edit `bgm_titles.json` to control title / author display while a BGM plays. End K not plays your file for a slot if one exists, and the bundled track otherwise.
 
 ## Community
 
@@ -289,9 +289,9 @@ End K not is run by the following members.
 
 ## Funding & Donations
 
-End K not is a **free, GPL-3.0 mod**. All features are and will remain free, and donations are never required.
+End K not is a **free, GPL-3.0 mod**. All features stay free, and donations are optional.
 
-Donations go toward the costs of keeping End K not in development, such as development tools. Donating does not unlock any features or priority support.
+Donations go toward the costs of keeping End K not in development, such as development tools. Donors get the same features and support as everyone else.
 
 ▶ **[About donations (`FUNDING.md`, Japanese)](.github/FUNDING.md)**
 
@@ -307,9 +307,9 @@ No sponsors yet. We'd love for you to be the first!
 
 ## License
 
-This project is licensed under the **GNU General Public License v3.0**. See [`LICENSE`](./LICENSE) for details.
+End K not is released under the **GNU General Public License v3.0**. See [`LICENSE`](./LICENSE) for details.
 
-End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) and [TownOfHost-K](https://github.com/KYMario/TownOfHost-K). **Modifications since April 2026** were made by waffle-ful; the modification history is tracked in this repository's git log and [`CHANGELOG.md`](./CHANGELOG.md), in compliance with GPL-3.0 §5.
+End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) and [TownOfHost-K](https://github.com/KYMario/TownOfHost-K). waffle-ful has made the **modifications since April 2026**; you can trace the modification history in this repository's git log and [`CHANGELOG.md`](./CHANGELOG.md), in compliance with GPL-3.0 §5.
 
 ## Credits
 
@@ -416,14 +416,14 @@ Some sound effects use material from:
 
 ### VOICEVOX (text-to-speech)
 
-The per-crew read-aloud feature uses **[VOICEVOX](https://voicevox.hiroshiba.jp/)**, a free Japanese text-to-speech software. End K not bundles no voice data; it synthesizes at runtime through the VOICEVOX installed on the host's PC.
+The per-crew read-aloud feature uses **[VOICEVOX](https://voicevox.hiroshiba.jp/)**, free Japanese text-to-speech software. End K not bundles no voice data. It has the VOICEVOX installed on the host's PC generate speech at runtime.
 
 > [!IMPORTANT]
 > **If you publish the generated audio in a stream or recording, you must credit both VOICEVOX and the character(s) used.**
 > Example: `VOICEVOX:ずんだもん (Zundamon)`
 > Each character has its own individual terms of use, so please review the [VOICEVOX terms](https://voicevox.hiroshiba.jp/term/) and each character's terms.
 
-Which characters are used depends on the VOICEVOX voices the host has installed (the installed voices and their IDs are written to `BepInEx/config/EndKnot_VoiceVox_Speakers.txt`). Credits for all VOICEVOX characters:
+The available characters depend on the VOICEVOX voices the host has installed (End K not writes the installed voices and their IDs to `BepInEx/config/EndKnot_VoiceVox_Speakers.txt`). Credits for all VOICEVOX characters:
 
 <details>
 <summary><b>All VOICEVOX characters</b></summary>
