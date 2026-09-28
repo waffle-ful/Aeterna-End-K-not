@@ -73,13 +73,28 @@
 立ち止まったら爆発する星。最後まで生き残れば、本来の勝者を押しのけて単独勝利。
 </td>
 </tr>
+<tr>
+<td width="33%" valign="top" align="center">
+<img src=".github/roles/riptide.gif" alt="リップタイド" width="100%">
+<h4>リップタイド (Riptide)</h4>
+マップ全体を巨大な波が覆う。のまれたら即死。会議のたびに波が速くなる。
+</td>
+<td width="33%" valign="top" align="center">
+<img src=".github/roles/riptide_victim.gif" alt="リップタイドの波にのまれた側" width="100%">
+<h4>のまれた側</h4>
+逃げ場のない壁のような波が、画面ごと押し寄せてくる。
+</td>
+<td width="33%" valign="top" align="center">
+<img src=".github/roles/dossun.gif" alt="ドッスン" width="100%">
+<h4>ドッスン (Dossun)</h4>
+巨大ブロックを落とし、自分が動くと連動して動く。轢いたり、吹き飛ばしたり。
+</td>
+</tr>
 </table>
 
 ほかにも、こんな役職がいます。
 
-- 🌊 **リップタイド (Riptide)** — マップ全体を巨大な波が覆う。のまれたら即死。会議のたびに波が速くなる。
 - 🤐 **ワードキラー (WordKiller)** — 禁じた言葉を口にした者を消す。会話そのものが地雷原になります。
-- 🧱 **ドッスン (Dossun)** — 巨大ブロックを設置し、自分が動くと連動して動く。轢いたり、吹き飛ばしたり。
 
 ▶ **[全 682 役職の一覧を見る (`ROLES.md`)](./ROLES.md)**
 
