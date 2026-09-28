@@ -53,7 +53,7 @@ public static class YouTubeChatPoster
     private static int rotationCursor;
     private static int messageLineCursor;
 
-    private static bool IsConfigured =>
+    internal static bool IsConfigured =>
         !string.IsNullOrWhiteSpace(Main.YouTubePostClientId?.Value) &&
         !string.IsNullOrWhiteSpace(Main.YouTubePostClientSecret?.Value) &&
         !string.IsNullOrWhiteSpace(Main.YouTubePostRefreshToken?.Value);
@@ -80,7 +80,12 @@ public static class YouTubeChatPoster
         // 一番説明が要るタイミング）。config フラグで消費し再表示しない。
         MaybeShowSetupGuide();
 
-        if (!IsConfigured) return;
+        if (!IsConfigured)
+        {
+            MaybeShowNotConfiguredNotice();
+            return;
+        }
+
         if (postGate != 0) return;
 
         string videoId = ResolveVideoId();
@@ -205,7 +210,26 @@ public static class YouTubeChatPoster
         if (AmongUsClient.Instance == null || !AmongUsClient.Instance.AmHost || PlayerControl.LocalPlayer == null) return;
 
         Main.YouTubePostExplained.Value = true;
+        notConfiguredNoticeShown = true; // 初回説明が同じ内容を案内するので、未設定の警告は重ねて出さない
         Utils.SendMessage(Translator.GetString("YouTubePost.SetupGuide"), PlayerControl.LocalPlayer.PlayerId);
+    }
+
+    // オプションが ON なのに cfg の認証情報が欠けていると、投稿は無言でスキップされ続ける
+    // (配信が終わるまで誰も気付けない)。cfg の書き換えや作り直しで値だけが消えた場合に備え、
+    // チャットが使えるロビー到達時にホストへ 1 起動 1 回だけ知らせる。
+    private static bool notConfiguredNoticeShown;
+
+    private static void MaybeShowNotConfiguredNotice()
+    {
+        if (notConfiguredNoticeShown) return;
+        if (!GameStates.IsLobby) return;
+        if (AmongUsClient.Instance == null || !AmongUsClient.Instance.AmHost || PlayerControl.LocalPlayer == null) return;
+
+        notConfiguredNoticeShown = true;
+        Logger.Warn("Auto-post is ON but OAuth credentials are missing from the config", "YouTubeChatPoster");
+
+        try { Utils.SendMessage(Translator.GetString("YouTubePost.NotConfiguredNotice"), PlayerControl.LocalPlayer.PlayerId); }
+        catch (Exception e) { Logger.Warn($"NotConfiguredNotice failed: {e.Message}", "YouTubeChatPoster"); }
     }
 
     // 投稿先の videoId を解決する。/yt 実行中の読み取りセッションを優先し、次に自動検出した

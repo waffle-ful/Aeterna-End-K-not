@@ -715,6 +715,7 @@ internal static class ChatCommands
             case "off":
             case "stop":
                 YouTubeChatManager.Stop();
+                YouTubeChatManager.AutoDetectSuppressed = true;
                 YouTubeChatOverlay.Reset();
                 Main.YouTubeStreamUrl.Value = "";
                 Utils.SendMessage(GetString("YouTubeChat.Stopped"), player.PlayerId);
