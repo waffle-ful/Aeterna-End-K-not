@@ -260,6 +260,24 @@ public static class TestBridge
             return;
         }
 
+        // 吸血・毒・操り糸・呪いのキル演出を自分の画面にだけ出す (見た目の確認用・誰も死なない)。
+        // 操り糸と呪いは、自分以外で最初に見つかったプレイヤーを犯人として吊るす
+        if (directive.StartsWith("kotest ", StringComparison.OrdinalIgnoreCase))
+        {
+            string arg = directive[7..].Trim();
+
+            if (!Enum.TryParse(arg, true, out SpecialKillOverlay.Style style))
+            {
+                WriteOut("ERR kotest <bite|poison|puppet|curse>");
+                return;
+            }
+
+            PlayerControl lp = PlayerControl.LocalPlayer;
+            if (lp) SpecialKillOverlay.Show(lp.Data, Main.EnumeratePlayerControls().FirstOrDefault(x => x && x != lp)?.Data, style);
+            WriteOut($"OK kotest {style}");
+            return;
+        }
+
         // 爆発死のキル演出を自分の画面にだけ出す (見た目の確認用・誰も死なない)。
         if (directive.Equals("kotest", StringComparison.OrdinalIgnoreCase))
         {

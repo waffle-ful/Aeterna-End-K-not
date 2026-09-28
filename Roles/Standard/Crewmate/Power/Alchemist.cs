@@ -179,7 +179,17 @@ public class Alchemist : RoleBase
 
                 break;
             case 2: // Suicide
-                LateTask.New(() => player.Suicide(PlayerState.DeathReason.Poison), !isPet ? 2f : 0.1f, "Alchemist Suicide");
+                // 毒が回る演出が始まってから倒れる
+                LateTask.New(() =>
+                {
+                    if (!player || !player.IsAlive()) return;
+                    ExplosionFx.Play(ExplosionFx.Kind.Poison, player.Pos(), 1f);
+                    LateTask.New(() =>
+                    {
+                        if (!player || player.Data.Disconnected || !player.IsAlive()) return;
+                        player.Suicide(PlayerState.DeathReason.Poison);
+                    }, 0.45f, "Alchemist Suicide");
+                }, !isPet ? 1.55f : 0.1f, "Alchemist Poison");
                 break;
             case 3: // TP to random player
                 LateTask.New(() =>

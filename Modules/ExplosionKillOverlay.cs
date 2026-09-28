@@ -387,7 +387,7 @@ internal static class ExplosionKillOverlay
     }
 
     // radius(x, y) は中心からの向きごとの輪郭の半径 (縁 = 1)。outline はその内側に引く濃い縁の太さ。
-    private static Sprite MakeOutlined(int size, System.Func<float, float, float> radius, float outline)
+    internal static Sprite MakeOutlined(int size, System.Func<float, float, float> radius, float outline)
     {
         var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
         var pixels = new Color[size * size];
@@ -420,7 +420,7 @@ internal static class ExplosionKillOverlay
 [HarmonyPatch(typeof(KillOverlay), nameof(KillOverlay.ShowKillAnimation), typeof(NetworkedPlayerInfo), typeof(NetworkedPlayerInfo))]
 internal static class ExplosionKillOverlayPatch
 {
-    public static bool Prefix(NetworkedPlayerInfo victim)
+    public static bool Prefix(NetworkedPlayerInfo __0, NetworkedPlayerInfo victim)
     {
         try
         {
@@ -431,6 +431,14 @@ internal static class ExplosionKillOverlayPatch
             {
                 Logger.Info($"cannon kill overlay for {victim.PlayerId}", "CannonKillOverlay");
                 ExplosionFx.ShowCannonKill(victim.Object.GetTruePosition());
+                return false;
+            }
+
+            // 血を吸われた・毒が回った・操られた人に殺された本人には、それぞれの死に方の演出を出す
+            if (SpecialKillOverlay.TryGetStyle(victim, out SpecialKillOverlay.Style style))
+            {
+                Logger.Info($"special kill overlay ({style}) for {victim.PlayerId}", "SpecialKillOverlay");
+                SpecialKillOverlay.Show(victim, __0, style);
                 return false;
             }
 

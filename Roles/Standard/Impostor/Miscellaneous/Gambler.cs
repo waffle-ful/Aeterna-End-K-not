@@ -160,11 +160,25 @@ public class Gambler : RoleBase
             {
                 case 1: // Delayed kill
                     killer.Notify(string.Format(GetString("GamblerGet.DelayedKill"), KillDelay.GetInt()));
-                    WaitingDelayedKills.TryAdd(target.PlayerId, new CountdownTimer(KillDelay.GetInt(), () =>
+                    byte targetId = target.PlayerId;
+
+                    WaitingDelayedKills.TryAdd(targetId, new CountdownTimer(KillDelay.GetInt(), () =>
                     {
-                        WaitingDelayedKills.Remove(target.PlayerId);
-                        if (target == null || !target.IsAlive()) return;
-                        target.Suicide(PlayerState.DeathReason.Poison, killer);
+                        if (target == null || !target.IsAlive())
+                        {
+                            WaitingDelayedKills.Remove(targetId);
+                            return;
+                        }
+
+                        // 毒が回る演出が始まってから倒れる。待つ間に会議が始まったら OnReportDeadBody がその場で死なせるので、それまで記録は残す
+                        EndKnot.Modules.ExplosionFx.Play(EndKnot.Modules.ExplosionFx.Kind.Poison, target.Pos(), 1f);
+
+                        LateTask.New(() =>
+                        {
+                            if (!WaitingDelayedKills.Remove(targetId)) return;
+                            if (GameStates.IsEnded || target == null || target.Data.Disconnected || !target.IsAlive()) return;
+                            target.Suicide(PlayerState.DeathReason.Poison, killer);
+                        }, 0.45f, "Gambler Delayed Poison Kill");
                     }));
                     return false;
                 case 2: // Shield

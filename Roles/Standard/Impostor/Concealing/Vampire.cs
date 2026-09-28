@@ -23,6 +23,9 @@ public class Vampire : RoleBase
     private readonly Dictionary<byte, float> BittenPlayers = [];
     private readonly Dictionary<byte, float> OriginalSpeeds = [];
 
+    // 演出を出して倒れるのを待っている人。待つ間に会議が始まったら OnReportDeadBody がその場で死なせる
+    private readonly HashSet<byte> PendingKills = [];
+
     private bool CanKillNormally;
     private bool CanVent;
     private bool IsPoisoner;
@@ -198,9 +201,25 @@ public class Vampire : RoleBase
         OriginalSpeeds.Remove(targetId);
     }
 
-    private void KillBitten(PlayerControl vampire, PlayerControl target, bool meeting = false)
+    private void KillBitten(PlayerControl vampire, PlayerControl target, bool meeting = false, bool fxShown = false)
     {
         if (vampire == null || target == null || target.Data.Disconnected) return;
+
+        // 演出が始まってから倒れる (同時だと倒れた後に演出が出て見える)。
+        // 待つ間に会議が始まると Suicide は会議中なので効かない → PendingKills に残しておき、OnReportDeadBody がその場で死なせる
+        if (!meeting && !fxShown && target.IsAlive())
+        {
+            ExplosionFx.Play(IsPoisoner ? ExplosionFx.Kind.Poison : ExplosionFx.Kind.Drain, target.Pos(), 1f);
+            PendingKills.Add(target.PlayerId);
+
+            LateTask.New(() =>
+            {
+                if (!PendingKills.Remove(target.PlayerId)) return;
+                if (GameStates.IsEnded || target == null || target.Data.Disconnected || !target.IsAlive()) return;
+                KillBitten(vampire, target, meeting: GameStates.IsMeeting, fxShown: true);
+            }, 0.45f, "Vampire Delayed Bite Kill");
+            return;
+        }
 
         if (target.IsAlive())
         {
@@ -219,6 +238,14 @@ public class Vampire : RoleBase
     {
         try
         {
+            foreach (byte targetId in PendingKills.ToArray())
+            {
+                try { KillBitten(Utils.GetPlayerById(VampireId), Utils.GetPlayerById(targetId), meeting: true, fxShown: true); }
+                catch (Exception e) { Utils.ThrowException(e); }
+            }
+
+            PendingKills.Clear();
+
             foreach (byte targetId in BittenPlayers.Keys.ToArray())
             {
                 try

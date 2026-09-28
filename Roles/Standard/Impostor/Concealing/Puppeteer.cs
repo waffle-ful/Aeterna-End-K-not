@@ -226,21 +226,28 @@ internal class Puppeteer : RoleBase
         if (!CheckMurderPatch.PassesGate(player, closestTarget)) return;
 
         byte puppeteerId = PuppeteerList[playerId];
-        RPC.PlaySoundRPC(puppeteerId, Sounds.KillSound);
         PlayerControl puppeteer = Utils.GetPlayerById(puppeteerId);
 
-        closestTarget.SetRealKiller(puppeteer);
-        player.Kill(closestTarget);
-
-        if (PuppetDiesAlongWithVictim.GetBool())
-            player.Suicide(realKiller: puppeteer);
-
-        player.MarkDirtySettings();
-        closestTarget.MarkDirtySettings();
-
+        // 操り糸が張って引き絞られてから殺させる (先に操りを解いておき、待つ間に次のフレームで二重に殺させない)
         ClearPuppet();
+        ExplosionFx.Play(ExplosionFx.Kind.PuppetStrings, puppeteerPos, closestTarget.PlayerId + 1);
 
-        Utils.NotifyRoles(SpecifySeer: player, SpecifyTarget: player);
-        Utils.NotifyRoles(SpecifySeer: closestTarget, SpecifyTarget: closestTarget);
+        LateTask.New(() =>
+        {
+            if (GameStates.IsEnded || GameStates.IsMeeting || !player || !closestTarget || player.Data.Disconnected || closestTarget.Data.Disconnected || !player.IsAlive() || !closestTarget.IsAlive()) return;
+
+            RPC.PlaySoundRPC(puppeteerId, Sounds.KillSound);
+            closestTarget.SetRealKiller(puppeteer);
+            player.Kill(closestTarget);
+
+            if (PuppetDiesAlongWithVictim.GetBool())
+                player.Suicide(realKiller: puppeteer);
+
+            player.MarkDirtySettings();
+            closestTarget.MarkDirtySettings();
+
+            Utils.NotifyRoles(SpecifySeer: player, SpecifyTarget: player);
+            Utils.NotifyRoles(SpecifySeer: closestTarget, SpecifyTarget: closestTarget);
+        }, 0.4f, "Puppeteer Puppet Kill");
     }
 }
