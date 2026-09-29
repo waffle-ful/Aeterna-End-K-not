@@ -62,6 +62,9 @@ internal static class CheckProtectPatch
                 return false;
             }
 
+            // Forewarner only sends cards to the target: keep the cooldown, but give no shield.
+            if (ghostRole.Role == CustomRoles.Forewarner) return false;
+
             return true;
         }
 

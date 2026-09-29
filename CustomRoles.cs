@@ -787,5 +787,6 @@ public enum CustomRoles
     Focused,
 
     // Shibboleth (addon; sub-role only, so it belongs after NotAssigned like the rest of this block)
-    Shibboleth
+    Shibboleth,
+    Forewarner // Ghost role
 }

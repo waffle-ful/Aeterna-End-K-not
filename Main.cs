@@ -1131,6 +1131,7 @@ public class Main : BasePlugin
                 { CustomRoles.DemonicTracker, "#824880" },
                 { CustomRoles.GhostReseter, "#a87a71" },
                 { CustomRoles.GhostRumour, "#707cab" },
+                { CustomRoles.Forewarner, "#e6d38a" },
                 { CustomRoles.Ghostbuttoner, "#ef5350" },
                 { CustomRoles.GhostNoiseSender, "#5fd0e0" },
                 { CustomRoles.DemonicSupporter, "#b03a3a" },
