@@ -2035,6 +2035,9 @@ internal static class FixedUpdatePatch
 
             if (AmHostTick)
             {
+                if (GhostRolesManager.IsDeathGhostRoleDeferred(id))
+                    GhostRolesManager.FlushDeferredDeathRole(__instance);
+
                 if (GhostRolesManager.AssignedGhostRoles.TryGetValue(id, out (CustomRoles Role, IGhostRole Instance) ghostRole))
                 {
                     switch (ghostRole.Instance)
@@ -3134,7 +3137,12 @@ internal static class PlayerControlSetRolePatch
         if (!ShipStatus.Instance || !ShipStatus.Instance.enabled) return true;
 
         if (roleType is RoleTypes.CrewmateGhost or RoleTypes.ImpostorGhost)
+        {
+            // A kill hands out the ghost role before the death is recorded here; hold it back so the right one goes out first.
+            if (__instance.IsAlive() && GhostRolesManager.DeferDeathGhostRole(__instance)) return false;
+
             roleType = __instance.GetGhostRoleBasis(dying: __instance.IsAlive());
+        }
 
         return true;
     }

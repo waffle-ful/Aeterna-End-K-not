@@ -14,16 +14,93 @@ internal static class GhostRolesManager
     private static List<CustomRoles> GhostRoles = [];
     public static bool AnyGhostRoleLeft => AssignedGhostRoles.Count < GhostRoles.Count;
 
+    // Players killed during tasks whose ghost role is held back until the death is recorded here.
+    // A non-modded client only builds the ghost ability button for the FIRST ghost role it receives
+    // (a later one waits for the next meeting), so the right ghost role has to be the first one sent.
+    // The value counts deferrals per player so a fallback left over from an earlier death is ignored.
+    private static readonly Dictionary<byte, int> DeferredDeathRoles = [];
+    private static int DeferralSerial;
+
     public static void Initialize()
     {
         AssignedGhostRoles = [];
+        DeferredDeathRoles.Clear();
         GhostRoles = Main.CustomRoleValues.Where(x => x != CustomRoles.EvilSpirit && x.IsGhostRole() && IRandom.Instance.Next(100) < x.GetMode()).ToList();
 
         Logger.Msg($"Ghost roles: {GhostRoles.Join()}", "GhostRoles");
         Haunter.AllHauntedPlayers = [];
     }
 
-    public static void AssignGhostRole(PlayerControl pc)
+    // Called from the RpcSetRole prefix when the game hands out the ghost role on a kill. Returns true when
+    // the send was taken over (the caller then skips it) and the ghost role will go out from FlushDeferredDeathRole.
+    public static bool DeferDeathGhostRole(PlayerControl pc)
+    {
+        if (Options.CurrentGameMode != CustomGameMode.Standard || GameStates.IsEnded) return false;
+        if (!pc || pc.AmOwner || !pc.Data || !pc.Data.IsDead) return false;
+        if (!GameStates.IsInTask || GameStates.IsMeeting || ExileController.Instance) return false;
+
+        if (DeferredDeathRoles.ContainsKey(pc.PlayerId)) return true;
+
+        int serial = ++DeferralSerial;
+        DeferredDeathRoles[pc.PlayerId] = serial;
+        ScheduleDeferralFallback(pc.PlayerId, serial, 3);
+        return true;
+    }
+
+    // If the tick never got to it (the death is still not recorded after a while), send it anyway.
+    private static void ScheduleDeferralFallback(byte id, int serial, int triesLeft)
+    {
+        LateTask.New(() =>
+        {
+            if (!DeferredDeathRoles.TryGetValue(id, out int current) || current != serial) return;
+
+            PlayerControl pc = Utils.GetPlayerById(id);
+
+            if (!pc)
+            {
+                DeferredDeathRoles.Remove(id);
+                return;
+            }
+
+            if (pc.IsAlive() && triesLeft > 1)
+            {
+                ScheduleDeferralFallback(id, serial, triesLeft - 1);
+                return;
+            }
+
+            FlushDeferredDeathRole(pc, true);
+        }, 0.5f, "Deferred Ghost Role Fallback", log: false);
+    }
+
+    public static bool IsDeathGhostRoleDeferred(byte id) => DeferredDeathRoles.ContainsKey(id);
+
+    // Sends the held-back ghost role to everyone as the player's first one. Everyone may see a modded ghost
+    // role's basis: the meeting-time ghost role broadcast already shows it to all players.
+    public static void FlushDeferredDeathRole(PlayerControl pc, bool force = false)
+    {
+        if (!pc || !DeferredDeathRoles.ContainsKey(pc.PlayerId)) return;
+        if (!force && pc.IsAlive()) return;
+
+        DeferredDeathRoles.Remove(pc.PlayerId);
+        if (!pc.Data || pc.Data.Disconnected || !pc.Data.IsDead) return;
+
+        // The game end sets its own ghost roles, and a victim whose death is being hidden from them must not turn into a ghost.
+        if (GameStates.IsEnded || !GameStates.InGame || Akazukin.IsDeathConcealed(pc.PlayerId)) return;
+
+        // A meeting that started meanwhile sends every ghost role itself; a SetRole right next to the meeting start
+        // can black out non-modded clients, so leave it to the meeting.
+        if (!GameStates.IsInTask || GameStates.IsMeeting || MeetingHud.Instance || ExileController.Instance) return;
+
+        if (!pc.IsAlive() && ShouldHaveGhostRole(pc))
+        {
+            AssignGhostRole(pc, broadcastBasis: true);
+            return;
+        }
+
+        pc.RpcSetRoleGlobal(pc.GetPublicGhostRoleBasis(allowInfluencer: true));
+    }
+
+    public static void AssignGhostRole(PlayerControl pc, bool broadcastBasis = false)
     {
         if (GhostRoles.Count == 0) return;
 
@@ -32,7 +109,8 @@ internal static class GhostRolesManager
 
         IGhostRole instance = CreateGhostRoleInstance(suitableRole);
         pc.RpcSetCustomRole(suitableRole);
-        pc.RpcSetRoleDesync(instance.RoleTypes, pc.OwnerId);
+        if (broadcastBasis) pc.RpcSetRoleGlobal(instance.RoleTypes);
+        else pc.RpcSetRoleDesync(instance.RoleTypes, pc.OwnerId);
         pc.AddAbilityCD(instance.Cooldown);
         instance.OnAssign(pc);
         Main.ResetCamPlayerList.Add(pc.PlayerId);
