@@ -62,7 +62,7 @@ public static class PatchPhases
         "LogicOptions", "LogicRoleSelectionNormal", "MapBehaviour", "MapRoom",
         "MeetingHud", "MeetingIntroAnimation", "MovingPlatformBehaviour",
         "MushroomMixupSabotageSystem", "NetworkedPlayerInfo", "NormalGameManager",
-        "NormalGameOptionsV11", "NumberOption", "OneWayShadows", "OptionBehaviour",
+        "NormalGameOptionsV12", "NumberOption", "OneWayShadows", "OptionBehaviour",
         "PhantomRole", "PlayerControl", "PlayerPhysics", "PlayerVoteArea", "PolusShipStatus",
         "ReactorSystemType", "RoleManager", "SabotageButton", "SabotageSystemType",
         "SecurityCameraSystemType", "ShapeshifterMinigame", "ShipStatus",
