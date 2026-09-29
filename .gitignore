@@ -463,6 +463,8 @@ tools/AndroidIcallAudit/obj/
 !tools/build-bgm-bundle.ps1
 # ...and the frame pack builder (reproduces the embedded .ekfp videos played on Android).
 !tools/make-framepack.ps1
+# ...and the Android interop packer (reproduces the pre-generated interop asset the launcher APK ships).
+!tools/android-interop-pack.ps1
 # ...and the EKR addon catalog generator (reproduces editor/src/generated/ekr-addons.ts and Modules/Ekm/EkrAddonCatalog.cs).
 !tools/gen-ekr-addons.ps1
 # ...and the companion-app embedded Python build script (release.ps1 depends on its output).

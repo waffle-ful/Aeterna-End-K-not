@@ -5,6 +5,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.content.pm.ActivityInfo;
+import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.os.Bundle;
 import android.os.Environment;
@@ -16,6 +17,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.pm.PackageInfoCompat;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -31,6 +33,7 @@ import dev.allofus.fusioncore.tools.GameClassLoaderFactory;
 import dev.allofus.fusioncore.tools.BootTimeline;
 import dev.allofus.fusioncore.tools.LogBundle;
 import dev.allofus.fusioncore.tools.Utilities;
+import dev.allofus.fusioncore.tools.InteropInstaller;
 import dev.allofus.fusioncore.tools.ItchAuth;
 import dev.allofus.fusioncore.tools.PluginInstaller;
 import dev.allofus.fusioncore.tools.VersionLookup;
@@ -164,7 +167,9 @@ public class BootstrapActivity extends AppCompatActivity {
                     targetPackage
             );
         } catch (LauncherUpdateRequiredException e) {
-            failAndStay(getString(R.string.bootstrap_launcher_update_required, e.builtFor, e.installed));
+            failAndStay(e.userMessage != null
+                    ? e.userMessage
+                    : getString(R.string.bootstrap_launcher_update_required, e.builtFor, e.installed));
             return;
         } catch (Throwable t) {
             failAndFinish("Failed while preparing Fusion runtime.", t);
@@ -295,11 +300,21 @@ public class BootstrapActivity extends AppCompatActivity {
     private static final class LauncherUpdateRequiredException extends RuntimeException {
         final String builtFor;
         final String installed;
+        /** Already localized text shown as-is; null means the Unity-version wording applies. */
+        final String userMessage;
 
         LauncherUpdateRequiredException(String builtFor, String installed) {
             super("Launcher is built for Unity " + builtFor + " but the game uses " + installed);
             this.builtFor = builtFor;
             this.installed = installed;
+            this.userMessage = null;
+        }
+
+        LauncherUpdateRequiredException(String userMessage) {
+            super(userMessage);
+            this.builtFor = null;
+            this.installed = null;
+            this.userMessage = userMessage;
         }
     }
 
@@ -375,6 +390,10 @@ public class BootstrapActivity extends AppCompatActivity {
         Utilities.extractZipFromAssets(appContext, "dotnet-arm64.zip", dotnetDir);
 
         BootTimeline.mark("runtime");
+        setPhaseStatus(getString(R.string.bootstrap_status_installing_interop));
+        installBundledInterop(appContext, gameContext, targetPackage, bepInExDir);
+        BootTimeline.mark("interop");
+
         setPhaseStatus(getString(R.string.bootstrap_status_installing_plugin));
         if (!PluginInstaller.installBundledPlugins(appContext, bepInExDir)) {
             Log.w(TAG, "Bundled plugin install did not complete; continuing with whatever is in plugins/");
@@ -403,6 +422,47 @@ public class BootstrapActivity extends AppCompatActivity {
                 new String[]{},
                 new String[]{}
         );
+    }
+
+    /**
+     * Puts the pre-generated interop assemblies in place so BepInEx skips generating them on the
+     * device. The bundle matches one game build; a release build refuses to start against another
+     * (generating on the device is what runs phones out of memory), a debug build carries on and
+     * lets BepInEx regenerate.
+     */
+    private void installBundledInterop(Context appContext, Context gameContext, String targetPackage, File bepInExDir) {
+        long gameVersionCode = -1;
+        String gameVersionName = "?";
+        try {
+            PackageInfo info = gameContext.getPackageManager().getPackageInfo(targetPackage, 0);
+            gameVersionCode = PackageInfoCompat.getLongVersionCode(info);
+            gameVersionName = info.versionName == null ? "?" : info.versionName;
+        } catch (NameNotFoundException e) {
+            // A release build must not guess: the bundle is only known to fit one game build.
+            if (!BuildConfig.DEBUG) {
+                throw new LauncherUpdateRequiredException(
+                        getString(R.string.bootstrap_interop_update_required, InteropInstaller.bundledGameVersionName(appContext), gameVersionName));
+            }
+            Log.w(TAG, "Could not read the game's version; installing the bundled interop unchecked");
+        }
+
+        InteropInstaller.Result result = InteropInstaller.installBundledInterop(appContext, bepInExDir, gameVersionCode);
+        switch (result) {
+            case GAME_MISMATCH:
+                String bundledFor = InteropInstaller.bundledGameVersionName(appContext);
+                if (!BuildConfig.DEBUG) {
+                    throw new LauncherUpdateRequiredException(
+                            getString(R.string.bootstrap_interop_update_required, bundledFor, gameVersionName));
+                }
+                Log.w(TAG, "Bundled interop is for Among Us " + bundledFor + " but " + gameVersionName
+                        + " is installed; BepInEx will generate on the device");
+                break;
+            case FAILED:
+                Log.w(TAG, "Bundled interop install failed; BepInEx will generate on the device");
+                break;
+            default:
+                break;
+        }
     }
 
     private void applyGlobalMetadataOverride(File dataOnSdCard, File copiedData) {

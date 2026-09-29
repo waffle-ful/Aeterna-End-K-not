@@ -2,6 +2,7 @@
 
 #include <utilities/library.h>
 #include <bits/sysconf.h>
+#include <algorithm>
 #include <dlfcn.h>
 #include <fstream>
 #include <logger.h>
@@ -32,7 +33,10 @@ PaddedOpenResult padded_dlopen(const char *library_name,
                                const char *temp_path,
                                size_t pool_size)
 {
-    auto page_size = sysconf(_SC_PAGESIZE);
+    // The padded copy is hashed by BepInEx (interop cache key), so its bytes must not depend on
+    // the device: the segment end and the pool are rounded to a fixed 16 KiB, which is a page
+    // multiple on both 4 KiB and 16 KiB kernels.
+    auto page_size = std::max<long>(sysconf(_SC_PAGESIZE), 16 * 1024);
 
     auto align_up = [](Elf_Addr addr, Elf_Xword align)
     {

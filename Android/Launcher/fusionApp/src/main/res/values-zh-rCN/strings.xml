@@ -22,6 +22,7 @@
     <string name="bootstrap_status_detecting_version">正在检测 Unity 版本…</string>
     <string name="bootstrap_status_extracting_runtime">正在解压运行时文件…</string>
     <string name="bootstrap_status_installing_plugin">正在安装内置模组…</string>
+    <string name="bootstrap_status_installing_interop">正在安装内置 interop 程序集…</string>
     <string name="bootstrap_status_installing_hooks">正在安装钩子…</string>
     <string name="bootstrap_status_launching">正在启动游戏…</string>
     <string name="bootstrap_status_error">启动失败</string>
@@ -49,5 +50,6 @@
     <string name="logs_share_failed">无法准备日志：%1$s</string>
     <string name="logs_share_empty">暂时没有可分享的日志。</string>
     <string name="bootstrap_launcher_update_required">此版本的 End K not 面向 Unity %1$s，但已安装的 Among Us 使用 Unity %2$s。请更新 End K not。</string>
+    <string name="bootstrap_interop_update_required">此版本的 End K not 面向 Among Us %1$s，但已安装的是 %2$s。请更新 End K not。</string>
     <string name="bootstrap_game_layout_unsupported">此版本的 End K not 无法识别已安装的 Among Us 版本。请更新 End K not。</string>
 </resources>

@@ -22,6 +22,7 @@
     <string name="bootstrap_status_detecting_version">Unity のバージョンを確認しています…</string>
     <string name="bootstrap_status_extracting_runtime">ランタイムを展開しています…</string>
     <string name="bootstrap_status_installing_plugin">同梱モッドを配置しています…</string>
+    <string name="bootstrap_status_installing_interop">同梱の interop アセンブリを配置しています…</string>
     <string name="bootstrap_status_installing_hooks">フックを設定しています…</string>
     <string name="bootstrap_status_launching">ゲームを起動しています…</string>
     <string name="bootstrap_status_error">起動に失敗しました</string>
@@ -49,5 +50,6 @@
     <string name="logs_share_failed">ログを準備できませんでした: %1$s</string>
     <string name="logs_share_empty">共有できるログがまだありません。</string>
     <string name="bootstrap_launcher_update_required">この End K not は Unity %1$s 向けですが、インストール済みの Among Us は Unity %2$s です。End K not を更新してください。</string>
+    <string name="bootstrap_interop_update_required">この End K not は Among Us %1$s 向けですが、インストール済みの Among Us は %2$s です。End K not を更新してください。</string>
     <string name="bootstrap_game_layout_unsupported">この End K not はインストール済みの Among Us のビルドに対応していません。End K not を更新してください。</string>
 </resources>

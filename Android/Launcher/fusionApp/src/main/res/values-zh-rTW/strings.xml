@@ -22,6 +22,7 @@
     <string name="bootstrap_status_detecting_version">正在偵測 Unity 版本…</string>
     <string name="bootstrap_status_extracting_runtime">正在解壓縮執行時檔案…</string>
     <string name="bootstrap_status_installing_plugin">正在安裝內建模組…</string>
+    <string name="bootstrap_status_installing_interop">正在安裝內建 interop 組件…</string>
     <string name="bootstrap_status_installing_hooks">正在安裝鉤子…</string>
     <string name="bootstrap_status_launching">正在啟動遊戲…</string>
     <string name="bootstrap_status_error">啟動失敗</string>
@@ -49,5 +50,6 @@
     <string name="logs_share_failed">無法準備記錄：%1$s</string>
     <string name="logs_share_empty">目前沒有可分享的記錄。</string>
     <string name="bootstrap_launcher_update_required">此版本的 End K not 是為 Unity %1$s 建置的，但已安裝的 Among Us 使用 Unity %2$s。請更新 End K not。</string>
+    <string name="bootstrap_interop_update_required">此版本的 End K not 是為 Among Us %1$s 建置的，但已安裝的是 %2$s。請更新 End K not。</string>
     <string name="bootstrap_game_layout_unsupported">此版本的 End K not 無法識別已安裝的 Among Us 版本。請更新 End K not。</string>
 </resources>
