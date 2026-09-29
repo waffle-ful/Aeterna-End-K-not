@@ -1730,6 +1730,18 @@ internal static class ExtendedPlayerControl
             return roleType;
         }
 
+        // The ghost role for a dead player without a modded ghost role.
+        public RoleTypes GetPublicGhostRoleBasis(bool allowInfluencer)
+        {
+            if (!(player.Is(CustomRoleTypes.Impostor) && Options.DeadImpCantSabotage.GetBool()) && Main.PlayerStates.TryGetValue(player.PlayerId, out var state) && state.Role.CanUseSabotage(player))
+                return RoleTypes.ImpostorGhost;
+
+            if (allowInfluencer && player.ShouldBeVanillaInfluencer())
+                return RoleTypes.SpiritGuide;
+
+            return RoleTypes.CrewmateGhost;
+        }
+
         // A dead crewmate with no modded ghost role gets the vanilla Influencer (SpiritGuide) ghost role.
         // Its messages go straight from the ghost's client to the chosen player, so the host only decides who gets it.
         // dying: called while the game itself hands out the ghost role on death, before the death is recorded here.
