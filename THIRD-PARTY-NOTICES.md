@@ -402,8 +402,10 @@ and the tracked upstream commit is recorded in [`Android/Launcher/UPSTREAM.md`](
 ## BepInEx Fusion (LGPL-2.1)
 
 [BepInExFusion](https://github.com/All-Of-Us-Mods/BepInExFusion) (All-Of-Us-Mods) is bundled
-unmodified inside the Android launcher APK (`Android/Launcher/fusionApp/src/main/assets/BepInEx-arm64.zip`)
-and extracted on the device at first start. The full text of the GNU Lesser General Public License v2.1
+unmodified inside the Android launcher APK (`Android/Launcher/fusionApp/src/main/assets/BepInEx-arm64.zip`;
+only its `BepInEx.cfg` settings are adjusted for the launcher) and extracted on the device at first start.
+The Il2CppInterop assemblies BepInEx would otherwise generate on the device are pre-generated with the same
+bundled tools and shipped as `interop-arm64.zip`. The full text of the GNU Lesser General Public License v2.1
 is available at <https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html>, and the project's own
 repository carries its license file.
 
