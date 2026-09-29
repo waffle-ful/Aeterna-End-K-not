@@ -154,6 +154,23 @@ public static class CalamityButtons
         catch (Exception ex) { Logger.Exception(ex, "OpenMyAccount"); }
     }
 
+    // Vanilla asks for the date of birth when AccountManager wakes up, which never happens while
+    // VanillaSuppressor keeps it disabled. Without a date of birth the login stops short (no friend
+    // code) and the server refuses online play, so open My Account for the player instead.
+    public static void OpenAgeGateIfNeeded(MainMenuManager mm)
+    {
+        if (AmongUs.Data.DataManager.Player.Age.DateOfBirth != AmongUs.Data.Player.PlayerAgeData.DEFAULT_DATE_OF_BIRTH) return;
+
+        LateTask.New(() =>
+        {
+            if (mm == null || !mm.gameObject.activeInHierarchy) return;
+            if (AmongUs.Data.DataManager.Player.Age.DateOfBirth != AmongUs.Data.Player.PlayerAgeData.DEFAULT_DATE_OF_BIRTH) return;
+
+            Logger.Info("Date of birth not set; opening My Account for the age gate", "CalamityButtons");
+            OpenMyAccount(mm);
+        }, 1f, "CalamityButtons.AgeGate");
+    }
+
     // The vanilla cosmetics store (StoreMenu) lives in the MainMenu scene but VanillaSuppressor
     // keeps its root inactive so it doesn't bleed through the Calamity background. Wake the root
     // on demand, then fire the vanilla Shop button's OnClick (same pattern as Settings/Credits)

@@ -71,6 +71,7 @@ public static class CalamityMenuPatch
         // BACK ボタンはここで先に作って伏せておく (クリック時生成は固まる — 詳細は PrepareBackButton)
         SafeStep("BackButton",  () => CalamityVisibility.PrepareBackButton());
         SafeStep("FeatureBridge", () => EndKnotFeatureBridge.Init(__instance, MenuRoot.GetLayer("OverlayLayer")));
+        SafeStep("AgeGate",     () => CalamityButtons.OpenAgeGateIfNeeded(__instance));
 
         // RightPanel fallback init: if TitleLogoPatch.Postfix returned early (LeftPanel was
         // already suppressed by our Prefix), TitleLogoPatch.RightPanel/RightPanelOp stay
