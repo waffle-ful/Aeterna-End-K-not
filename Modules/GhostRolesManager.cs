@@ -12,6 +12,7 @@ internal static class GhostRolesManager
 {
     public static Dictionary<byte, (CustomRoles Role, IGhostRole Instance)> AssignedGhostRoles = [];
     private static List<CustomRoles> GhostRoles = [];
+    public static bool AnyGhostRoleLeft => AssignedGhostRoles.Count < GhostRoles.Count;
 
     public static void Initialize()
     {
