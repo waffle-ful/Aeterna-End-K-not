@@ -514,6 +514,15 @@ public static class TestBridge
             return;
         }
 
+        // インフルエンサーの絵札 (RPC 67) をホストから送る検証口。
+        // `sgmsg list` = 絵札の一覧 / `sgmsg local <i,j>` = ホスト画面に表示 / `sgmsg <player> <i,j>` = その客へ送信。
+        if (directive.StartsWith("sgmsg ", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecuteSpiritGuideMessage(directive[6..].Trim()); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR sgmsg failed"); }
+            return;
+        }
+
         // Layer C: ホストの TP と HUD アクションボタン押下。
         if (directive.StartsWith("tp ", StringComparison.OrdinalIgnoreCase))
         {
@@ -2606,6 +2615,18 @@ public static class TestBridge
         string who = SafeName(actor);
 
         if (actor.PlayerId >= 200) { WriteOut($"ERR use {actor.PlayerId} is a CNO dummy (not a real client)"); return; }
+
+        // 幽霊の護衛ボタン (GA basis) は CmdCheckProtect → ホストの CheckProtect へ届く。押すのは死者なので生存ガードより前。
+        if (button == "protect")
+        {
+            if (actor.IsAlive()) { WriteOut($"ERR use protect: {who} is alive (ghost only)"); return; }
+            if (!explicitTarget) { WriteOut("ERR use protect: pass a target"); return; }
+
+            bool vanilla = CheckProtectPatch.Prefix(actor, explicitTarget);
+            WriteOut($"OK use protect {who} -> {SafeName(explicitTarget)} (vanillaProtect={vanilla})");
+            return;
+        }
+
         if (!actor.IsAlive()) { WriteOut($"ERR use {button}: {who} is dead"); return; }
 
         string preventKillNote = button is "kill" or "pet" or "ability" && IntroCutsceneDestroyPatch.PreventKill
@@ -3779,6 +3800,43 @@ public static class TestBridge
             sb.Append(JStr(code.ToUpperInvariant()));
         }
         catch { sb.Append("null"); }
+    }
+
+    private static void ExecuteSpiritGuideMessage(string args)
+    {
+        ShipStatus ship = ShipStatus.Instance;
+        if (!ship) { WriteOut("ERR sgmsg needs a running game"); return; }
+
+        string[] parts = args.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0) { WriteOut("ERR usage: sgmsg list | sgmsg local <i,j> | sgmsg <player> <i,j>"); return; }
+
+        if (parts[0].Equals("list", StringComparison.OrdinalIgnoreCase))
+        {
+            var sprites = ship.GetSocialMediumSpriteList();
+            if (sprites == null) { WriteOut("ERR sgmsg no sprite list"); return; }
+            var sb = new StringBuilder($"OK sgmsg sprites={sprites.Count}");
+            for (var i = 0; i < sprites.Count; i++) sb.Append($" {i}:{(sprites[i] ? sprites[i].name : "null")}");
+            WriteOut(sb.ToString());
+            return;
+        }
+
+        if (parts.Length < 2) { WriteOut("ERR usage: sgmsg <player|local> <i,j>"); return; }
+        byte[] indices = parts[1].Split(',', StringSplitOptions.RemoveEmptyEntries).Select(s => byte.Parse(s, CultureInfo.InvariantCulture)).ToArray();
+
+        if (parts[0].Equals("local", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!ship.socialMediumFeedSystem) { WriteOut("ERR sgmsg no feed system"); return; }
+            ship.socialMediumFeedSystem.AddImageToFeed(indices);
+            WriteOut($"OK sgmsg local [{parts[1]}]");
+            return;
+        }
+
+        PlayerControl target = ResolvePlayerToken(parts[0], out string error);
+        if (!target) { WriteOut("ERR sgmsg " + error); return; }
+        int clientId = SafeClientId(target);
+        if (clientId < 0) { WriteOut("ERR sgmsg target has no client"); return; }
+        ship.SendSpiritGuideMessage(indices, clientId);
+        WriteOut($"OK sgmsg sent to {target.GetRealName()} client={clientId} [{parts[1]}]");
     }
 
     private static int SafeClientId(PlayerControl pc)
