@@ -37,7 +37,8 @@ int dotnet_execute_assembly(const DotNetConfig& config, AuxPluginFolderList *aux
             config.managedLibsDir.c_str()
     };
 
-    setenv("DOTNET_ReadyToRun", "0", 1);
+    // DOTNET_ReadyToRun is deliberately not set: the bundled runtime ships ReadyToRun images for
+    // the framework, and turning them off would JIT-compile the base library on every launch.
 
     log(LogLevel::INFO, TAG, "Attempting CoreCLR initialization with W^X disabled");
     // Attempt without W^X first
