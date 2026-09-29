@@ -3131,7 +3131,7 @@ internal static class PlayerControlSetRolePatch
         if (!ShipStatus.Instance || !ShipStatus.Instance.enabled) return true;
 
         if (roleType is RoleTypes.CrewmateGhost or RoleTypes.ImpostorGhost)
-            roleType = __instance.GetGhostRoleBasis();
+            roleType = __instance.GetGhostRoleBasis(dying: __instance.IsAlive());
 
         return true;
     }
