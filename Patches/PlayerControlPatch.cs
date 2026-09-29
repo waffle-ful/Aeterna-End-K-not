@@ -2049,6 +2049,9 @@ internal static class FixedUpdatePatch
                 }
                 else if (!Main.HasJustStarted && inTask && !exile && GhostRolesManager.ShouldHaveGhostRole(__instance))
                     GhostRolesManager.AssignGhostRole(__instance);
+                // A kill hands out the ghost role before the death is recorded, so the Influencer upgrade is applied here once the player counts as dead.
+                else if (!Main.HasJustStarted && inTask && !exile && __instance.Data && __instance.Data.RoleType == RoleTypes.CrewmateGhost && __instance.ShouldBeVanillaInfluencer())
+                    __instance.RpcSetRoleGlobal(RoleTypes.SpiritGuide);
             }
 
             if (GameStates.InGame && Options.DontUpdateDeadPlayers.GetBool() && !(self && __instance.IsHost()) && !__instance.IsAlive() && !__instance.GetCustomRole().NeedsUpdateAfterDeath() && !__instance.HasAbilityCD() && Options.CurrentGameMode is not CustomGameMode.RoomRush and not CustomGameMode.Quiz)

@@ -11231,6 +11231,8 @@
   "GanSheriffCanBeMadmate": "<color=#f8cd46>シェリフ</color>を 変換できる",
   "GanSnitchCanBeMadmate": "<color=#b8fb4f>スニッチ</color>を 変換できる",
   "GhostCanSeeDeathReason": "幽霊は死因を確認できる",
+  "DeadCrewBecomeInfluencer": "死んだクルーをインフルエンサーにする",
+  "InfluencerCooldown": "インフルエンサーの送信クールダウン",
   "GhostCanSeeOtherRoles": "幽霊は他人の役職を確認できる",
 
   /* ==============================

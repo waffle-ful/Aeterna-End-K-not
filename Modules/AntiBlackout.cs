@@ -151,7 +151,9 @@ public static class AntiBlackout
                               Main.PlayerStates.TryGetValue(targetId, out var state) &&
                               state.Role.CanUseSabotage(target)
                                 ? RoleTypes.ImpostorGhost
-                                : RoleTypes.CrewmateGhost;
+                                : target.ShouldBeVanillaInfluencer()
+                                    ? RoleTypes.SpiritGuide
+                                    : RoleTypes.CrewmateGhost;
 
                     rolesForSeers[seerId] = role;
                 }

@@ -460,6 +460,7 @@ public sealed class PlayerGameOptionsSender(PlayerControl player) : GameOptionsS
                     President.OnAnyoneApplyGameOptions(opt);
                     
                     AURoleOptions.ViperDissolveTime = ImpostorVanillaRoles.ViperDissolveTime.GetFloat(); // can't be desynced
+                    AURoleOptions.SpiritGuideCooldown = Options.InfluencerCooldown.GetFloat();
 
                     float playerSpeed = Main.AllPlayerSpeed.GetValueOrDefault(player.PlayerId);
                     bool frozen = Mathf.Approximately(playerSpeed, Main.MinSpeed);
@@ -787,6 +788,7 @@ public sealed class PlayerGameOptionsSender(PlayerControl player) : GameOptionsS
                         goto default;
                     case RoleTypes.CrewmateGhost:
                     case RoleTypes.ImpostorGhost:
+                    case RoleTypes.SpiritGuide:
                         break;
                     default:
                         energeticIncreaseSpeed = true;

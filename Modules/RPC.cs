@@ -255,7 +255,8 @@ internal static class RPCHandlerPatch
         [RpcCalls.CheckShapeshift] = 25,
         [RpcCalls.CheckVanish] = 25,
         [RpcCalls.CheckAppear] = 25,
-        [RpcCalls.QueueOverruleVotes] = 3
+        [RpcCalls.QueueOverruleVotes] = 3,
+        [RpcCalls.SpiritGuideMessage] = 5
     };
 
     public static void WhiteListFromRateLimitUntil(byte id, long timestamp)
