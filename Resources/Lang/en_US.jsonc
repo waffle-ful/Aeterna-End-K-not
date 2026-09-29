@@ -12010,6 +12010,8 @@
   "GanSheriffCanBeMadmate": "<color=#f8cd46>Sheriff</color> can be converted",
   "GanSnitchCanBeMadmate": "<color=#b8fb4f>Snitch</color> can be converted",
   "GhostCanSeeDeathReason": "Ghost Can See Cause Of Death",
+  "DeadCrewBecomeInfluencer": "Dead Crewmates Become Influencers",
+  "InfluencerCooldown": "Influencer Message Cooldown",
   "GhostCanSeeOtherRoles": "Ghosts Can See Other Roles",
 
   /* ==============================

@@ -1722,10 +1722,27 @@ internal static class ExtendedPlayerControl
                 roleType = RoleTypes.GuardianAngel;
             else if (!(player.Is(CustomRoleTypes.Impostor) && Options.DeadImpCantSabotage.GetBool()) && Main.PlayerStates.TryGetValue(player.PlayerId, out var state) && state.Role.CanUseSabotage(player))
                 roleType = RoleTypes.ImpostorGhost;
+            else if (player.ShouldBeVanillaInfluencer())
+                roleType = RoleTypes.SpiritGuide;
             else
                 roleType = RoleTypes.CrewmateGhost;
 
             return roleType;
+        }
+
+        // A dead crewmate with no modded ghost role gets the vanilla Influencer (SpiritGuide) ghost role.
+        // Its messages go straight from the ghost's client to the chosen player, so the host only decides who gets it.
+        public bool ShouldBeVanillaInfluencer()
+        {
+            if (Options.CurrentGameMode != CustomGameMode.Standard || !Options.DeadCrewBecomeInfluencer.GetBool()) return false;
+            if (player.IsAlive() || player.GetTeam() != Team.Crewmate) return false;
+            if (GhostRolesManager.AssignedGhostRoles.ContainsKey(player.PlayerId)) return false;
+
+            // Deaths that can still be undone keep the plain ghost role, so a revive never has to take a ghost ability back.
+            if (Akazukin.IsPseudoDead(player.PlayerId)) return false;
+            if (Main.PlayerStates.TryGetValue(player.PlayerId, out var state) && state.Role is Revenant { StillAlive: true }) return false;
+
+            return true;
         }
 
         public Vector2 Pos()
