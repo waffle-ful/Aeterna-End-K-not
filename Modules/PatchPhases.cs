@@ -38,9 +38,12 @@ namespace EndKnot.Modules;
 // signature instead.
 public static class PatchPhases
 {
-    // Android (別ローダーの Il2CppInterop) では、この最適化が再現する DetourTo の内部手順が本家と一致せず
-    // 一部のパッチ対象で元関数呼び出しが壊れる (ロビー作成不能を実機確認)。Android は素の PatchAll 経路に固定する。
-    internal static readonly bool PlainPatchAllForced = OperatingSystem.IsAndroid();
+    // Android (別ローダーの Il2CppInterop) では、バッチ化が reflection で再現する DetourTo の内部手順が
+    // 本家と一致しない (Unity 関数はトランポリンを作らずメソッドポインタを直接差し替える data hook 経路)
+    // ため、一部のパッチ対象で元関数呼び出しが壊れる (ロビー作成不能を実機確認)。バッチ化だけ Android で止める。
+    // 遅延パッチと DelegateTypeCache は DetourTo に触らない (前者は Patch() を呼ぶ時期、後者は HarmonyX の
+    // デリゲート型工場への prefix) ので cfg どおりに動かす。
+    internal static readonly bool BatchingForcedOff = OperatingSystem.IsAndroid();
     // Type.Name (not full name) of vanilla types that are only ever exercised once a lobby
     // exists. A class is only eligible for deferral if every Harmony target it declares is in
     // this set (see Classify) -- anything else (menu code, networking, unresolved targets) stays
@@ -178,7 +181,7 @@ public static class PatchPhases
         DelegateTypeCache.Install(harmony);
         InstallResolver();
 
-        if (!Main.DeferredPatching.Value || PlainPatchAllForced)
+        if (!Main.DeferredPatching.Value)
         {
             BeginCollect();
             harmony.PatchAll(asm);
@@ -390,7 +393,7 @@ public static class PatchPhases
         Complete(reason);
     }
 
-    private static bool Batching => _resolverInstalled && Main.BatchedPatching.Value && !PlainPatchAllForced;
+    private static bool Batching => _resolverInstalled && Main.BatchedPatching.Value && !BatchingForcedOff;
 
     private static void ProcessDeferredClasses()
     {
@@ -618,7 +621,7 @@ public static class PatchPhases
 
         public static void Install(Harmony harmony)
         {
-            if (_installed || !Main.DelegateTypeCache.Value || PlainPatchAllForced) return;
+            if (_installed || !Main.DelegateTypeCache.Value) return;
 
             try
             {
