@@ -34,10 +34,10 @@ public abstract class GameOptionsSender
         writer.StartMessage(0);
         writer.Write((byte)currentGameMode);
 
-        if (opt.TryCast(out NormalGameOptionsV11 normalOpt))
-            NormalGameOptionsV11.Serialize(writer, normalOpt);
-        else if (opt.TryCast(out HideNSeekGameOptionsV11 hnsOpt))
-            HideNSeekGameOptionsV11.Serialize(writer, hnsOpt);
+        if (opt.TryCast(out NormalGameOptionsV12 normalOpt))
+            NormalGameOptionsV12.Serialize(writer, normalOpt);
+        else if (opt.TryCast(out HideNSeekGameOptionsV12 hnsOpt))
+            HideNSeekGameOptionsV12.Serialize(writer, hnsOpt);
         else
             Logger.Error("Option cast failed", ToString());
 
@@ -110,7 +110,7 @@ public abstract class GameOptionsSender
 
     protected static IGameOptions SanitizeForOfficialServer(IGameOptions opt)
     {
-        if (CurrentServerType != ServerType.Vanilla || opt == null || !opt.TryCast(out NormalGameOptionsV11 normalOpt))
+        if (CurrentServerType != ServerType.Vanilla || opt == null || !opt.TryCast(out NormalGameOptionsV12 normalOpt))
             return opt;
 
         int originalMaxPlayers = normalOpt.MaxPlayers;

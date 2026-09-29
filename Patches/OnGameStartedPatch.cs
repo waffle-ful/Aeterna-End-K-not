@@ -537,7 +537,7 @@ internal static class StartGameHostPatch
     public static readonly Dictionary<CustomRoles, List<byte>> BasisChangingAddons = [];
     private static Dictionary<RoleTypes, int> RoleTypeNums = [];
 
-    private static RoleOptionsCollectionV11 RoleOpt => Main.NormalOptions.roleOptions;
+    private static RoleOptionsCollectionV12 RoleOpt => Main.NormalOptions.roleOptions;
 
     private static void UpdateRoleTypeNums()
     {
