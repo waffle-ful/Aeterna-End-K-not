@@ -1,13 +1,13 @@
 package dev.allofus.fusioncore.tools;
 
 import android.content.Context;
-import android.content.res.AssetManager;
 import android.os.Build;
 import android.util.Log;
 import android.view.View;
 import android.view.WindowInsets;
 
 import androidx.annotation.Nullable;
+import androidx.core.content.pm.PackageInfoCompat;
 
 import java.io.BufferedInputStream;
 import java.io.File;
@@ -15,11 +15,14 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.Properties;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 public class Utilities {
     private static final String TAG = "FusionCore";
+    private static final String EXTRACTED_MARKER_NAME = ".extracted.properties";
 
     /**
      * Root of the per-game data (BepInEx tree, Unity data copy, crash notes). It lives in the
@@ -85,7 +88,77 @@ public class Utilities {
         return "v" + versionName;
     }
 
-    public static void extractZipFromAssets(Context context, String assetName, File outputFolder) {
+    /**
+     * Extracts a bundled zip once per launcher build. The launcher's own install time and
+     * version code identify the bundle (assets only change with the APK), and {@code sentinel}
+     * is a file the extraction must have produced; when either the marker or the sentinel is
+     * missing the zip is extracted again on top of whatever is there.
+     */
+    public static boolean extractZipFromAssetsOnce(Context context, String assetName, File outputFolder, String sentinel) {
+        Properties expected = new Properties();
+        expected.setProperty("asset", assetName);
+        try {
+            android.content.pm.PackageInfo self = context.getPackageManager().getPackageInfo(context.getPackageName(), 0);
+            expected.setProperty("launcherLastUpdateTime", Long.toString(self.lastUpdateTime));
+            expected.setProperty("launcherVersionCode", Long.toString(PackageInfoCompat.getLongVersionCode(self)));
+        } catch (android.content.pm.PackageManager.NameNotFoundException e) {
+            Log.w(TAG, "Could not read the launcher's own package info; extracting " + assetName + " unconditionally");
+            expected = null;
+        }
+
+        File marker = new File(outputFolder, EXTRACTED_MARKER_NAME);
+        if (expected != null && new File(outputFolder, sentinel).isFile()) {
+            Properties recorded = readProperties(marker);
+            boolean same = recorded != null;
+            if (same) {
+                for (String key : expected.stringPropertyNames()) {
+                    if (!expected.getProperty(key).equals(recorded.getProperty(key))) {
+                        same = false;
+                        break;
+                    }
+                }
+            }
+            if (same) {
+                Log.i(TAG, assetName + " already extracted to " + outputFolder.getAbsolutePath());
+                return true;
+            }
+        }
+
+        // The marker promises a complete extraction, so it never survives into a rewrite.
+        if (marker.isFile() && !marker.delete()) {
+            Log.w(TAG, "Could not remove " + marker.getAbsolutePath());
+        }
+        if (!extractZipFromAssets(context, assetName, outputFolder)) {
+            return false;
+        }
+        if (!new File(outputFolder, sentinel).isFile()) {
+            Log.e(TAG, assetName + " extracted but " + sentinel + " is missing");
+            return false;
+        }
+        if (expected != null) {
+            try (OutputStream out = new FileOutputStream(marker)) {
+                expected.store(out, "bundle extracted by the launcher");
+            } catch (IOException e) {
+                Log.w(TAG, "Extracted " + assetName + " but failed to write " + marker.getName(), e);
+            }
+        }
+        return true;
+    }
+
+    private static Properties readProperties(File file) {
+        if (!file.isFile()) {
+            return null;
+        }
+        try (InputStream in = new java.io.FileInputStream(file)) {
+            Properties properties = new Properties();
+            properties.load(new java.io.InputStreamReader(in, StandardCharsets.UTF_8));
+            return properties;
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    public static boolean extractZipFromAssets(Context context, String assetName, File outputFolder) {
         try {
             if (!outputFolder.exists() && !outputFolder.mkdirs()) {
                 throw new IOException("Failed to create output directory: " + outputFolder.getAbsolutePath());
@@ -134,62 +207,8 @@ public class Utilities {
             }
         } catch (IOException e) {
             Log.e(TAG, "Failed to extract " + assetName + " from assets!", e);
-        }
-    }
-
-    public static boolean copyAssets(AssetManager gameAssets, String assetPath, File outputFolder) {
-        deleteRecursive(outputFolder);
-
-        try {
-            if (copyAssetEntry(gameAssets, assetPath, outputFolder)) {
-                Log.i(TAG, "Successfully copied Unity Data assets to: " + outputFolder.getAbsolutePath());
-            } else {
-                Log.e(TAG, "Could not find Unity Data assets!");
-                return false;
-            }
-        } catch (IOException e) {
-            Log.e(TAG, "Failed to copy Unity Data assets!", e);
             return false;
         }
-
-        return true;
-    }
-
-    public static boolean copyAssetEntry(AssetManager gameAssets, String assetPath, File outputTarget) throws IOException {
-        String[] children = gameAssets.list(assetPath);
-        if (children == null) {
-            return false;
-        }
-
-        if (children.length > 0) {
-            if (!outputTarget.exists() && !outputTarget.mkdirs()) {
-                return false;
-            }
-
-            for (String child : children) {
-                File childTarget = new File(outputTarget, child);
-                String childPath = assetPath + "/" + child;
-                if (!copyAssetEntry(gameAssets, childPath, childTarget)) {
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        File parent = outputTarget.getParentFile();
-        if (parent != null && !parent.exists() && !parent.mkdirs()) {
-            return false;
-        }
-
-        byte[] buffer = new byte[8192];
-        try (InputStream is = gameAssets.open(assetPath);
-             OutputStream os = new FileOutputStream(outputTarget)) {
-            int length;
-            while ((length = is.read(buffer)) > 0) {
-                os.write(buffer, 0, length);
-            }
-        }
-
         return true;
     }
 

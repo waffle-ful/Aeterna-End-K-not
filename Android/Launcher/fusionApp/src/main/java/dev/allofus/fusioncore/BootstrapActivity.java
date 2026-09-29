@@ -30,6 +30,7 @@ import dev.allofus.fusioncore.tools.CustomContextWrapper;
 import dev.allofus.fusioncore.tools.FallbackResources;
 import dev.allofus.fusioncore.tools.FusionConfig;
 import dev.allofus.fusioncore.tools.GameClassLoaderFactory;
+import dev.allofus.fusioncore.tools.GameDataStager;
 import dev.allofus.fusioncore.tools.BootTimeline;
 import dev.allofus.fusioncore.tools.LogBundle;
 import dev.allofus.fusioncore.tools.Utilities;
@@ -354,11 +355,18 @@ public class BootstrapActivity extends AppCompatActivity {
 
         setPhaseStatus(getString(R.string.bootstrap_status_copy_assets));
         File copiedData = new File(appDataDir, "Data_copy");
-        boolean copied = Utilities.copyAssets(gameContext.getAssets(), "bin/Data", copiedData);
+        PackageInfo gameInfo = null;
+        try {
+            gameInfo = gameContext.getPackageManager().getPackageInfo(targetPackage, 0);
+        } catch (NameNotFoundException e) {
+            Log.w(TAG, "Could not read the game's package info; Unity data is staged every launch");
+        }
+        File overrideMetadata = new File(dataOnSdCard, GLOBAL_METADATA_FILE);
+        boolean copied = GameDataStager.stage(gameContext.getAssets(), gameInfo, copiedData, overrideMetadata);
         if (!copied) {
-            Log.e(TAG, "Failed to copy Unity Data assets! BepInEx may not work correctly.");
+            Log.e(TAG, "Failed to stage Unity Data assets! BepInEx may not work correctly.");
         } else {
-            applyGlobalMetadataOverride(dataOnSdCard, copiedData);
+            applyGlobalMetadataOverride(overrideMetadata, copiedData);
         }
 
         BootTimeline.mark("assets");
@@ -386,8 +394,12 @@ public class BootstrapActivity extends AppCompatActivity {
         File dotnetDir = new File(appContext.getCodeCacheDir(), "dotnet");
         File bepInExDir = new File(dataOnSdCard, "BepInEx");
 
-        Utilities.extractZipFromAssets(appContext, "BepInEx-arm64.zip", bepInExDir);
-        Utilities.extractZipFromAssets(appContext, "dotnet-arm64.zip", dotnetDir);
+        if (!Utilities.extractZipFromAssetsOnce(appContext, "BepInEx-arm64.zip", bepInExDir, "core/BepInEx.Unity.IL2CPP.dll")) {
+            Log.e(TAG, "BepInEx runtime is incomplete; the game may start without the mod loader");
+        }
+        if (!Utilities.extractZipFromAssetsOnce(appContext, "dotnet-arm64.zip", dotnetDir, "System.Private.CoreLib.dll")) {
+            Log.e(TAG, ".NET runtime is incomplete; the game may start without the mod loader");
+        }
 
         BootTimeline.mark("runtime");
         setPhaseStatus(getString(R.string.bootstrap_status_installing_interop));
@@ -465,8 +477,7 @@ public class BootstrapActivity extends AppCompatActivity {
         }
     }
 
-    private void applyGlobalMetadataOverride(File dataOnSdCard, File copiedData) {
-        File overrideMetadata = new File(dataOnSdCard, GLOBAL_METADATA_FILE);
+    private void applyGlobalMetadataOverride(File overrideMetadata, File copiedData) {
         if (!overrideMetadata.isFile()) {
             Log.i(TAG, "No global-metadata override found at " + overrideMetadata.getAbsolutePath());
             return;
