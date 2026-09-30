@@ -5,6 +5,7 @@
 #include <logger.h>
 #include <libmain.h>
 #include <fusion_config.h>
+#include <crash_maps.h>
 #include <hooking/il2cpp.h>
 #include <hooking/safehook.h>
 #include <hooking/allocator.h>
@@ -50,6 +51,17 @@ int il2cpp_init_hook(char *domain_name)
 
     if (runtimeConfig.initialized)
     {
+        // The launcher saves crash reports in the parent of the game data directory; the symbol
+        // maps go to the same place so they are collected together.
+        std::string crashDirectory = fs::path(runtimeConfig.appDataDirectory).parent_path().string();
+        crash_maps_prune_perf_maps(crashDirectory, 3);
+        auto il2cppBase = il2cpp_get_library_base();
+        crash_maps_write_il2cpp_methods(
+                crashDirectory,
+                (fs::path(runtimeConfig.gameLibraryDirectory) / "libil2cpp.so").string(),
+                il2cppBase,
+                reinterpret_cast<uintptr_t>(get_injected_pool_base()) - il2cppBase);
+
         // setup environment variables
         setenv("BEPINEX_GAME_ASSEMBLY_PATH", libmain_get_override_il2cpp_path(), 1);
         setenv("FUSION_BEPINEX_PATH", runtimeConfig.bepInExDirectory.c_str(), 1);
@@ -77,6 +89,7 @@ int il2cpp_init_hook(char *domain_name)
         dotNetConfig.entryPointAssembly = "BepInEx.Unity.IL2CPP";
         dotNetConfig.entryPointType = "BepInEx.Unity.IL2CPP.FusionCoreEntrypoint";
         dotNetConfig.entryPointMethod = "Start";
+        dotNetConfig.perfMapDir = crashDirectory;
 
         // set TMPDIR for MonoMod lib drops
         setenv("TMPDIR", runtimeConfig.codeCacheDirectory.c_str(), 1);

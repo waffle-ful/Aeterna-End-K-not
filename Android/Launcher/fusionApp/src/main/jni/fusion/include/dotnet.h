@@ -21,6 +21,8 @@ struct DotNetConfig
     std::string entryPointAssembly;
     std::string entryPointType;
     std::string entryPointMethod;
+    // Where CoreCLR writes its perf map (names of JIT-compiled methods). Empty leaves it off.
+    std::string perfMapDir;
 };
 
 int dotnet_execute_assembly(const DotNetConfig& config, AuxPluginFolderList *folderList);

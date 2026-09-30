@@ -26,6 +26,10 @@ void write_log_level(int level, const char *text);
 
 int8_t get_low_memory_mode();
 
+// Crashes the process on purpose, to exercise crash reporting. kind 0 = invalid write (SIGSEGV),
+// 1 = abort().
+void fusion_debug_crash(int kind);
+
 #ifdef __cplusplus
 }
 #endif

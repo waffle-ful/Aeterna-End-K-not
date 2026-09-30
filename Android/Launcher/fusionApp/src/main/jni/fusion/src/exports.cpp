@@ -4,6 +4,8 @@
 #include <hooking/safehook.h>
 #include <logger.h>
 #include <utilities/java.h>
+#include <cstdint>
+#include <cstdlib>
 
 void init_bridge_helper(const char *libraryPath)
 {
@@ -50,4 +52,17 @@ int8_t get_low_memory_mode()
 {
     // TODO: add configuration
     return 1;
+}
+
+void fusion_debug_crash(int kind)
+{
+    if (kind == 1)
+    {
+        abort();
+    }
+
+    // The address is read from a volatile so the compiler cannot prove the store is invalid and
+    // replace it with a trap instruction, which would raise a different signal.
+    static volatile uintptr_t address = 0;
+    *reinterpret_cast<volatile int *>(address) = kind;
 }
