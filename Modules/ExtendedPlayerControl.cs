@@ -363,7 +363,7 @@ internal static class ExtendedPlayerControl
         /// </summary>
         public CustomRoles GetCustomRole()
         {
-            if (!player)
+            if (!Il2Direct.Alive(player))
             {
                 MethodBase callerMethod = new StackFrame(1, false).GetMethod();
                 string callerMethodName = callerMethod?.Name;
@@ -378,7 +378,7 @@ internal static class ExtendedPlayerControl
         {
             if (GameStates.IsLobby) return [];
 
-            if (!player)
+            if (!Il2Direct.Alive(player))
             {
                 Logger.Warn("The player is null", "GetCustomSubRoles");
                 return [];
@@ -2886,7 +2886,7 @@ internal static class ExtendedPlayerControl
 
         public bool IsAlive()
         {
-            if (!player) return false;
+            if (!Il2Direct.Alive(player)) return false;
 
             // GM 判定と死亡判定で PlayerStates を 1 回だけ引く (以前は Is(GM) 経由で interop null 判定 + 辞書引きが二重だった)
             bool known = Main.PlayerStates.TryGetValue(player.PlayerId, out PlayerState ps);

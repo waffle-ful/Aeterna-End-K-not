@@ -291,7 +291,7 @@ public static class FixedUpdateCaller
                         var pcCur = AllocProbe.Now();
                         PlayerControl pc = PlayerControl.AllPlayerControls[index];
 
-                        if (!pc || pc.PlayerId >= 200) continue;
+                        if (!Il2Direct.Alive(pc) || pc.PlayerId >= 200) continue;
 
                         pcCur = AllocProbe.Mark("pcloop.iter", pcCur);
                         FixedUpdatePatch.Postfix(pc, NonLowLoadPlayerIndex != index);

@@ -19,7 +19,7 @@ public class DevBuildBanner : MonoBehaviour
     // 例外が出たら以後描かない (毎フレーム呼ばれるのでログが洪水になる)
     private bool _faulted;
 
-    private static float Scale => Screen.width / 1080f * 0.5f;
+    private static float Scale => Il2Direct.ScreenWidth / 1080f * 0.5f;
 
     private bool ShouldShow()
     {

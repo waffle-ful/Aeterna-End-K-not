@@ -81,7 +81,8 @@ public static class TestBridge
 
     public static void Tick()
     {
-        if (!OperatingSystem.IsWindows()) return;
+        // Android でも設定で有効にすればディレクティブの受け付けだけは動く (OS 入力の注入や画面まわりは Windows 限定のまま)
+        if (!OperatingSystem.IsWindows() && !OperatingSystem.IsAndroid()) return;
         if (Main.EnableTestBridge is not { Value: true }) return;
 
         EnsureInit();
@@ -91,7 +92,7 @@ public static class TestBridge
         bool pollFile = nowMs - _lastCmdPollMs >= CmdPollIntervalMs;
         if (pollFile) _lastCmdPollMs = nowMs;
 
-        try { DrainCommandFile(pollFile); }
+        try { Il2Direct.ShadowPoll(); DrainCommandFile(pollFile); }
         catch (Exception e) { Utils.ThrowException(e); }
 
         if (nowMs - _lastSlowTickMs < 1000) return;
@@ -110,7 +111,7 @@ public static class TestBridge
     // Utils.SendLocally からの写し窓口。ホストローカル表示のチャット/通知を bridge-out.log にも記録する。
     public static void OnHostSystemMessage(string title, string text)
     {
-        if (!OperatingSystem.IsWindows()) return;
+        if (!OperatingSystem.IsWindows() && !OperatingSystem.IsAndroid()) return;
         if (Main.EnableTestBridge is not { Value: true }) return;
 
         EnsureInit();
@@ -503,6 +504,29 @@ public static class TestBridge
         {
             try { ExecuteFx(directive[3..].Trim()); }
             catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR fx failed"); }
+            return;
+        }
+
+        // ラッパー経由と関数アドレス直接呼びの 1 呼びあたりの確保量・時間を並べて出す。`il2direct [回数]` / `il2direct on|off` = 直接呼びの切り替え
+        if (directive.StartsWith("il2direct", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                string arg = directive[9..].Trim();
+                if (arg is "on" or "off") { Il2Direct.Enabled = arg == "on"; WriteOut($"OK il2direct enabled={Il2Direct.Enabled}"); }
+                else if (arg == "shadow") { Il2Direct.ShadowStart(200000); WriteOut("OK il2direct shadow started"); }
+                else if (arg == "shadowreport") WriteOut(Il2Direct.ShadowReport());
+                else WriteOut(Il2Direct.Bench(int.TryParse(arg, out int n) && n > 0 ? Math.Min(n, 1_000_000) : 20000));
+            }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR il2direct failed"); }
+            return;
+        }
+
+        // ラッパー経由の呼び出しをメソッド別・呼び出し元別に数える。`invcensus [秒]`
+        if (directive.StartsWith("invcensus", StringComparison.OrdinalIgnoreCase))
+        {
+            try { WriteOut(InvokeCensus.Start(float.TryParse(directive[9..].Trim(), out float sec) && sec > 0 ? Math.Min(sec, 60f) : 10f, WriteOut)); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR invcensus failed"); }
             return;
         }
 
@@ -3307,7 +3331,7 @@ public static class TestBridge
 
     public static void OnDisconnect(DisconnectReasons reason, string stringReason)
     {
-        if (!OperatingSystem.IsWindows()) return;
+        if (!OperatingSystem.IsWindows() && !OperatingSystem.IsAndroid()) return;
         if (Main.EnableTestBridge is not { Value: true }) return;
 
         EnsureInit();
@@ -3343,7 +3367,7 @@ public static class TestBridge
 
     public static void OnPlayerJoined(ClientData client)
     {
-        if (!OperatingSystem.IsWindows()) return;
+        if (!OperatingSystem.IsWindows() && !OperatingSystem.IsAndroid()) return;
         if (Main.EnableTestBridge is not { Value: true }) return;
 
         EnsureInit();
@@ -3360,7 +3384,7 @@ public static class TestBridge
 
     public static void OnPlayerLeft(ClientData data, DisconnectReasons reason)
     {
-        if (!OperatingSystem.IsWindows()) return;
+        if (!OperatingSystem.IsWindows() && !OperatingSystem.IsAndroid()) return;
         if (Main.EnableTestBridge is not { Value: true }) return;
 
         EnsureInit();
@@ -3433,7 +3457,7 @@ public static class TestBridge
     // Logger(Debugger.cs)の全レベル経路から呼ばれる。ファイル I/O 無し・超軽量必須。
     public static void RecordLog(BepInEx.Logging.LogLevel level, string tag, string text)
     {
-        if (Main.EnableTestBridge is not { Value: true } || !OperatingSystem.IsWindows()) return;
+        if (Main.EnableTestBridge is not { Value: true } || (!OperatingSystem.IsWindows() && !OperatingSystem.IsAndroid())) return;
 
         try
         {

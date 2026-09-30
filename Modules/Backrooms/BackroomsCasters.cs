@@ -192,10 +192,11 @@ public static class BackroomsCasters
     {
         foreach (RunCaster rc in _runs)
         {
-            if (rc.Lo == null || rc.Hi == null) continue;
             bool hiActive = (rc.Horizontal ? py : px) < rc.Gate;
             sbyte want = (sbyte)(hiActive ? 1 : -1);
             if (rc.State == want) continue; // 変化時のみ collider.enabled を叩く (interop 節約)
+            // 生存確認も変化時だけ: Unity の == null はゲーム側の比較メソッド呼び出しで、毎フレーム全本数ぶん回すと GC の燃料になる
+            if (!Il2Direct.Alive(rc.Lo) || !Il2Direct.Alive(rc.Hi)) continue;
             rc.State = want;
             rc.Hi.enabled = hiActive;
             rc.Lo.enabled = !hiActive;
