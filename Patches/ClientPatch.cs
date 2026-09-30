@@ -169,8 +169,9 @@ internal static class RunLoginPatch
 {
     public const int ClickCount = 0;
 
-    public static void Prefix(ref bool canOnline)
+    public static void Prefix(EOSManager __instance, ref bool canOnline)
     {
+        DebugModeManager.OnAccountResolved(__instance.FriendCode);
         if (DebugModeManager.AmDebugger) canOnline = true;
 
         try { ModUpdater.ShowAvailableUpdate(); }
