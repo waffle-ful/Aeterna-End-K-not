@@ -530,6 +530,22 @@ public static class TestBridge
             return;
         }
 
+        // ネイティブ層でプロセスを故意に落とす (クラッシュ記録の検証用・Android のみ)。`nativecrash [0|1]` 0=不正書き込み 1=abort
+        if (directive.StartsWith("nativecrash", StringComparison.OrdinalIgnoreCase))
+        {
+#if ANDROID
+            [System.Runtime.InteropServices.DllImport("fusion", EntryPoint = "fusion_debug_crash", ExactSpelling = true)]
+            static extern void FusionDebugCrash(int kind);
+
+            int kind = directive[11..].Trim() == "1" ? 1 : 0;
+            WriteOut($"OK nativecrash {kind}");
+            FusionDebugCrash(kind);
+#else
+            WriteOut("ERR nativecrash is Android only");
+#endif
+            return;
+        }
+
         // この端末から見た各 PlayerControl の描画状態 (客側で CNO の体が見えない等の切り分け用)。`pcprobe [minId]`
         if (directive.StartsWith("pcprobe", StringComparison.OrdinalIgnoreCase))
         {

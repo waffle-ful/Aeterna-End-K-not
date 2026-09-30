@@ -40,6 +40,16 @@ int dotnet_execute_assembly(const DotNetConfig& config, AuxPluginFolderList *aux
     // DOTNET_ReadyToRun is deliberately not set: the bundled runtime ships ReadyToRun images for
     // the framework, and turning them off would JIT-compile the base library on every launch.
 
+    if (!config.perfMapDir.empty())
+    {
+        // JIT-compiled code sits in anonymous memory, so a native crash report shows only raw
+        // addresses for managed frames. The perf map (perf-<pid>.map) records the address range
+        // and name of every method as it is compiled. Mode 3 writes that text map alone, without
+        // the much larger jitdump file.
+        setenv("DOTNET_PerfMapEnabled", "3", 1);
+        setenv("DOTNET_PerfMapJitDumpPath", config.perfMapDir.c_str(), 1);
+    }
+
     log(LogLevel::INFO, TAG, "Attempting CoreCLR initialization with W^X disabled");
     // Attempt without W^X first
     setenv("DOTNET_EnableWriteXorExecute", "0", 1);
