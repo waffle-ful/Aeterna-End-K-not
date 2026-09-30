@@ -108,9 +108,12 @@
         <Compile Remove="Modules/LobbyShareSecrets.Default.cs"/>
     </ItemGroup>
 
-    <!-- Published builds never carry the local developer list (it turns on debug-only features). -->
+    <!-- Published builds carry the developer list (dev tag and dev commands); debug-only features open only for a listed developer after login. -->
+    <PropertyGroup Condition="'$(EndKnotPublicRelease)' == 'true'">
+        <DefineConstants>$(DefineConstants);ENDKNOT_PUBLIC_RELEASE</DefineConstants>
+    </PropertyGroup>
     <ItemGroup Condition="'$(EndKnotPublicRelease)' == 'true'">
-        <Compile Remove="Modules/LocalDevOverride.Local.cs"/>
+        <AssemblyMetadata Include="EndKnotPublicRelease" Value="true"/>
     </ItemGroup>
 
     <!-- BGM audio files in Resources/Sounds/BGM/ are gitignored (kept out of the public
