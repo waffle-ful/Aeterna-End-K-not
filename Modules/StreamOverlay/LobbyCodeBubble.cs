@@ -25,7 +25,7 @@ public class LobbyCodeBubble : MonoBehaviour
     private Texture2D _bgTex, _borderTex;
     private float _builtScale = -1f;
 
-    private static float Scale => Screen.width / 1080f * 0.5f * UserScale;
+    private static float Scale => Il2Direct.ScreenWidth / 1080f * 0.5f * UserScale;
     private static float UserScale => (LobbyCodeBubbleOptions.Scale?.GetInt() ?? 150) / 100f;
 
     private void Awake()

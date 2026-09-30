@@ -43,7 +43,7 @@ public class YouTubeChatBubble : MonoBehaviour
     private readonly List<string> _lines = new();
     private readonly StringBuilder _sb = new();
 
-    private static float Scale => Screen.width / 1080f * 0.5f;
+    private static float Scale => Il2Direct.ScreenWidth / 1080f * 0.5f;
     private static float ScrollbarColumnWidth => (OperatingSystem.IsAndroid() ? 42f : 22f) * Scale;
 
     private void Awake()

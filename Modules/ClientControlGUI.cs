@@ -69,7 +69,7 @@ public class ClientControlGUI : MonoBehaviour
     // Scale helpers - everything is relative to a 1080px-wide reference screen
     // On PC the UI is scaled down to 50% but on Android we keep it slightly larger (60%) for better readability
     private static float PlatformScale  => OperatingSystem.IsAndroid() ? 0.6f : 0.5f;
-    private static float Scale   => Screen.width / 1080f * PlatformScale;
+    private static float Scale   => Il2Direct.ScreenWidth / 1080f * PlatformScale;
     private static int   FontSize  => Mathf.Max(12, Mathf.RoundToInt(21f * Scale));
     private static float ButtonHeight  => 66f * Scale;
     private static float ButtonWidth  => (OperatingSystem.IsAndroid() ? 360f : 340f) * Scale;

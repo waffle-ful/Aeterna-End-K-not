@@ -39,7 +39,7 @@ public class AudienceInfoBubble : MonoBehaviour
     private Texture2D _bgTex, _borderTex;
     private float _builtScale = -1f;
 
-    private static float Scale => Screen.width / 1080f * 0.5f * UserScale;
+    private static float Scale => Il2Direct.ScreenWidth / 1080f * 0.5f * UserScale;
     private static float UserScale => (AudienceOptions.InfoOverlayScale?.GetInt() ?? 150) / 100f;
 
     private void Awake()
@@ -178,13 +178,13 @@ public class AudienceInfoBubble : MonoBehaviour
 
         // 縁取り: マップ背景色に関わらず輪郭が潰れないよう、白い縁を一回り大きく敷いてから本体を重ねる。
         float border = 3f * Scale;
-        Rect outer = new(BubbleRect.x - border, BubbleRect.y - border, BubbleRect.width + border * 2f, BubbleRect.height + border * 2f);
+        Rect outer = new(_bubblePos.x - border, _bubblePos.y - border, BubbleWidth + border * 2f, BubbleHeight + border * 2f);
         GUI.Box(outer, GUIContent.none, _borderStyle);
         GUI.Box(BubbleRect, GUIContent.none, _bgStyle);
 
         // 上段に固定ヘッダ、下段に回転する1コマンド行。
-        Rect headerRect = new(BubbleRect.x, BubbleRect.y, BubbleWidth, HeaderHeight);
-        Rect lineRect = new(BubbleRect.x, BubbleRect.y + HeaderHeight, BubbleWidth, LineHeight);
+        Rect headerRect = new(_bubblePos.x, _bubblePos.y, BubbleWidth, HeaderHeight);
+        Rect lineRect = new(_bubblePos.x, _bubblePos.y + HeaderHeight, BubbleWidth, LineHeight);
         GUI.Label(headerRect, Translator.GetString("AudienceInfoOverlayHeader"), _headerStyle);
         GUI.Label(lineRect, _cachedLine, _lineStyle);
     }

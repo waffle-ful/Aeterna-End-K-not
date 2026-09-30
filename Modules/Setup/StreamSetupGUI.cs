@@ -26,7 +26,7 @@ public class StreamSetupGUI : MonoBehaviour
     private bool _windowInitialized;
 
     private static float PlatformScale => OperatingSystem.IsAndroid() ? 0.6f : 0.5f;
-    private static float Scale => Screen.width / 1080f * PlatformScale;
+    private static float Scale => Il2Direct.ScreenWidth / 1080f * PlatformScale;
 
     // 起動直後 (コンテンツ計測前) の初期高さ、および計測後もこれ以上には広げない上限。
     private static float MaxWindowHeightFraction => OperatingSystem.IsAndroid() ? 0.85f : 0.80f;

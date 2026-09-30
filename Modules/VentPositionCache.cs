@@ -32,7 +32,9 @@ public static class VentPositionCache
 
         for (int i = 0; i < positions.Length; i++)
         {
-            float d = (positions[i] - from).sqrMagnitude;
+            // 構造体の演算子と sqrMagnitude はゲーム側のメソッド呼び出しになるので、成分で直接計算する
+            float dx = positions[i].x - from.x, dy = positions[i].y - from.y;
+            float d = dx * dx + dy * dy;
 
             if (d < bestSqr)
             {
