@@ -4594,6 +4594,10 @@
   "ForewarnerNotifyDanger": "{0} に危険を知らせた（残り{1}回）",
   "ForewarnerNotifySafe": "{0} に安全を知らせた（残り{1}回）",
   "ForewarnerNoUses": "もう絵カードを送れない",
+  "Influencer": "インフルエンサー",
+  "Prefix.Influencer": "インフルエンサー",
+  "InfluencerInfo": "絵カードで生存者に知らせる",
+  "InfluencerInfoLong": "(<#8cffff>クルー幽霊</color>):\n<size=80%>バニラのインフルエンサーと同じ幽霊役職。能力ボタンで生存者を1人選び、絵カードを組み合わせて送れる。送ったカードは相手の画面にだけ表示される。</size>",
   "Ghostbuttoner": "ゴーストボタナー",
   "GhostbuttonerInfo": "霊界から緊急ボタン",
   "GhostbuttonerInfoLong": "(<#8cffff>クルー幽霊</color>):\n<size=80%>守るボタンを生存者に使うと、霊界から緊急会議を招集する（相手は誰でもよい）。サボタージュ作動中は使えず、発動できる回数には限りがあって、頭上に残数が表示される。</size>",
@@ -11240,8 +11244,7 @@
   "GanSheriffCanBeMadmate": "<color=#f8cd46>シェリフ</color>を 変換できる",
   "GanSnitchCanBeMadmate": "<color=#b8fb4f>スニッチ</color>を 変換できる",
   "GhostCanSeeDeathReason": "幽霊は死因を確認できる",
-  "DeadCrewBecomeInfluencer": "死んだクルーをインフルエンサーにする",
-  "InfluencerCooldown": "インフルエンサーの送信クールダウン",
+  "InfluencerCooldown": "送信クールダウン",
   "GhostCanSeeOtherRoles": "幽霊は他人の役職を確認できる",
 
   /* ==============================
