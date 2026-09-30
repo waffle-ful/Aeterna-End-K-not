@@ -108,6 +108,10 @@ public static class PatchPhases
     // Same-binary A/B lever for the boot work this phase moves.
     public static readonly bool LateSplashWork = Environment.GetEnvironmentVariable("ENDKNOT_BOOT_LATEWARM") != "0";
 
+    // opts.prelude.end 以降〜メニュー到達前の pump 予算 (ms/フレーム)。既定 30。起動計測で窓の空きを測るときだけ env で変える。
+    public static readonly float LateSplashPumpMs =
+        float.TryParse(Environment.GetEnvironmentVariable("ENDKNOT_BOOT_PUMP_MS"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float pumpMs) && pumpMs > 0f ? pumpMs : 30f;
+
     // _complete short-circuits Pump/EnsureComplete/EnsureMenuComplete (see Complete()), so a Defer
     // reaching here after that point would otherwise sit in the queue forever; run it in place.
     public static void Defer(string name, Action work)
@@ -870,6 +874,11 @@ public static class PatchPhases
     {
         [HarmonyPatch(typeof(MainMenuManager), nameof(MainMenuManager.Awake))]
         [HarmonyPrefix]
-        public static void Prefix() => EnsureMenuComplete("menu-awake");
+        public static void Prefix()
+        {
+            BootTimeline.MarkMenuFrame("awake.begin");
+            EnsureMenuComplete("menu-awake");
+            BootTimeline.MarkMenuFrame("awake.end");
+        }
     }
 }

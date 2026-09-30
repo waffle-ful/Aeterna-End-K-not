@@ -116,8 +116,23 @@ internal static class SplashLateWork
     private static bool _pumpErrored;
     private static float _firstTickRealtime = -1f;
 
+    private static bool _duskPrewarmed;
+
+    // 背景の bundle 読み込みは最初のフレームで投げておく (非同期ロードはメニューのシーン読み込みが
+    // 始まると、その完了まで順番待ちになる)。
+    private static void PrewarmDusk()
+    {
+        if (_duskPrewarmed) return;
+        _duskPrewarmed = true;
+        try { if (EndKnot.Patches.CalamityMenu.CalamityDusk.Enabled) EndKnot.Modules.DuskBundle.Prewarm(EndKnot.Patches.CalamityMenu.CalamityDusk.CurrentTheme); }
+        catch (Exception e) { Logger.Error(e.ToString(), "SplashLateWork.Dusk"); }
+    }
+
     public static void Tick()
     {
+        PrewarmDusk();
+        EndKnot.Modules.DuskBundle.Tick();
+        EndKnot.Modules.BootPreJit.MainTick();
         if (!EndKnot.Modules.PatchPhases.LateSplashWork) return;
         if (BootTimeline.MenuReached) return;
 
@@ -141,7 +156,7 @@ internal static class SplashLateWork
             if (!_fireErrored) { _fireErrored = true; Logger.Error(e.ToString(), "SplashLateWork.Fire"); }
         }
 
-        try { EndKnot.Modules.PatchPhases.Pump(30f); }
+        try { EndKnot.Modules.PatchPhases.Pump(EndKnot.Modules.PatchPhases.LateSplashPumpMs); }
         catch (Exception e)
         {
             if (!_pumpErrored) { _pumpErrored = true; Logger.Error(e.ToString(), "SplashLateWork.Pump"); }

@@ -20,7 +20,9 @@ public static class CalamityDusk
     // 配色違いの素材一式をテーマごとのフォルダに持ち、起動ごとに 1 つ選ぶ (同じ起動中はメニューに戻っても同じ空)。
     private static readonly string[] Themes = ["plum", "ember", "crimson"];
     private static string _theme;
-    private static string Prefix => "EndKnot.Resources.Images.MainMenu.Dusk." + (_theme ??= Themes[Rng.Next(Themes.Length)]) + ".";
+    private static string Prefix => "EndKnot.Resources.Images.MainMenu.Dusk." + CurrentTheme + ".";
+    // Prefix と同じ式でテーマを確定する (先に確定させても乱数列は変わらない)。
+    internal static string CurrentTheme => _theme ??= Themes[Rng.Next(Themes.Length)];
     private const float StepFps = 12f;          // 花火と窓のコマ送り
     private const float SwayPeriod = 48f;
     private const float SwayMaxPx = 12f;
@@ -151,11 +153,17 @@ public static class CalamityDusk
         _root.localPosition = Vector3.zero;
 
         int order = -110;
+        long spriteTicks = 0;
+        int bundleSprites = 0; // 初回メニューの費用内訳 (スプライト読込 / 窓明かり / 煙の先送り) を msteps= へ
         foreach (string[] f in layerLines)
         {
             string name = f[1];
             float x = F(f[2]), y = F(f[3]), w = F(f[4]), h = F(f[5]);
-            Sprite sp = Utils.LoadSprite(Prefix + "dusk_" + name + ".png", 100f);
+            long ts0 = System.Diagnostics.Stopwatch.GetTimestamp();
+            Sprite sp = DuskBundle.TryGetSprite(CurrentTheme, "dusk_" + name, 100f);
+            if (sp != null) bundleSprites++;
+            else sp = Utils.LoadSprite(Prefix + "dusk_" + name + ".png", 100f);
+            spriteTicks += System.Diagnostics.Stopwatch.GetTimestamp() - ts0;
             if (sp == null)
             {
                 if (name == "sky") return false;
@@ -181,8 +189,15 @@ public static class CalamityDusk
             if (name == "sun") _sunLayer = layer;
 
             if (name == "mid") _midOrder = sr.sortingOrder;
-            if (name == "mid") BuildWindows(go.transform.parent, x, y, w, h, wins, sr.sortingOrder + 1);
+            if (name == "mid")
+            {
+                long tw0 = System.Diagnostics.Stopwatch.GetTimestamp();
+                BuildWindows(go.transform.parent, x, y, w, h, wins, sr.sortingOrder + 1);
+                NoteStep("Dusk.windows", tw0);
+            }
         }
+        NoteStep("Dusk.sprites", System.Diagnostics.Stopwatch.GetTimestamp() - spriteTicks);
+        Logger.Info($"Dusk sprites from bundle: {bundleSprites}/{layerLines.Count}", "CalamityDusk");
 
         if (!_dotSprite) _dotSprite = MakeDotSprite(16);
         if (!_blobSprite) _blobSprite = MakeDotSprite(48);
@@ -192,7 +207,9 @@ public static class CalamityDusk
         _nextFirework = 3f;
         _nextPuff = 0f;
         // 煙は最初から立っているように見せるため、寿命ぶん先に進めておく
+        long tsm0 = System.Diagnostics.Stopwatch.GetTimestamp();
         for (int i = 0; i < 90; i++) UpdateSmoke(0.1f);
+        NoteStep("Dusk.smoke", tsm0);
 
         ApplyLayout(0f);
         Logger.Info($"Dusk backdrop built: theme={_theme} layers={Layers.Count} windows={wins.Count} upp={_upp:0.0000} sway={_swayAmp:0.0}", "CalamityDusk");
@@ -554,6 +571,14 @@ public static class CalamityDusk
 
     // ── helpers ──────────────────────────────────────────────────────────
     private static float RandRange(float a, float b) => a + (float)Rng.NextDouble() * (b - a);
+
+    // 起動計器: 開始タイムスタンプからの経過を初回メニューの msteps= に残す (JIT/GC は区間外なので 0 扱い)
+    private static void NoteStep(string name, long startTimestamp)
+    {
+        if (BootTimeline.MenuReached) return;
+        long ms = (System.Diagnostics.Stopwatch.GetTimestamp() - startTimestamp) * 1000 / System.Diagnostics.Stopwatch.Frequency;
+        BootTimeline.NoteMenuStep(name, ms, 0, 0, 0);
+    }
 
     private static float F(string s) => float.Parse(s, System.Globalization.CultureInfo.InvariantCulture);
 

@@ -41,7 +41,17 @@ public static class BootTimeline
     // splash 最初のフレーム〜メニュー到達までの区間を覆う計器。
     private static bool _bootStarted;
     private static bool _bootDone;
+    private static long _bootLastFrameNowMs;
     private static long _bootFirstFrameMs;
+
+    // メインメニュー到達フレーム (シーン活性化 → Awake → Start → 最初の LateUpdate) の内側だけを刻む計器。
+    // marks= と別建てなのは、フレーム開始前の時刻 (prev) を後から差し込むと deltas= の並びが崩れるため。
+    // JIT は主スレッド分のみ (currentThread:true) — 背景 tier-1 を含む jit= とは意味が違う。
+    private const int MaxMenuFrameEntries = 24;
+    private const int MaxMenuSteps = 24;
+    private static readonly List<string> MenuFrame = new();
+    private static readonly List<string> MenuSteps = new();
+    private static bool _menuFramePrevAdded;
     private static float _bootFirstFrameRealtime;
     private static float _lastBootFrameRealtime;
     private static long _lastBootFrameJitMs;
@@ -56,6 +66,7 @@ public static class BootTimeline
     }
 
     private static long NowMs => (long)(DateTime.Now - T0).TotalMilliseconds;
+    public static long ElapsedMs => NowMs;
 
     /// <summary>プロセス最初のメインメニュー到達 (menu.interactive) 済みか。起動中の作業配分 (スプラッシュ中は控えめ) の判定用。</summary>
     public static bool MenuReached => _menuStarted;
@@ -85,6 +96,56 @@ public static class BootTimeline
         catch { }
     }
 
+    private static long MainThreadJitMs
+    {
+        get { try { return (long)System.Runtime.JitInfo.GetCompilationTime(true).TotalMilliseconds; } catch { return 0; } }
+    }
+
+    private static long MainThreadJitCount
+    {
+        get { try { return System.Runtime.JitInfo.GetCompiledMethodCount(true); } catch { return 0; } }
+    }
+
+    private static int GcCountAll
+    {
+        get { try { return GC.CollectionCount(0) + GC.CollectionCount(1) + GC.CollectionCount(2); } catch { return 0; } }
+    }
+
+    /// <summary>
+    /// メニュー到達フレームの内側の節目を刻む。最初の呼び出しで直前ブートフレームの時刻を prev として先頭に置く
+    /// (prev→interactive がこのフレームの全長 = sgaps の該当 gap と一致するはず)。menu.interactive 後は何もしない。
+    /// </summary>
+    public static void MarkMenuFrame(string name)
+    {
+        try
+        {
+            if (_menuStarted || MenuFrame.Count >= MaxMenuFrameEntries) return;
+
+            if (!_menuFramePrevAdded)
+            {
+                _menuFramePrevAdded = true;
+                MenuFrame.Add($"prev:{_bootLastFrameNowMs}");
+            }
+
+            MenuFrame.Add($"{name}:{NowMs}/j{MainThreadJitMs}/n{MainThreadJitCount}/g{GcCountAll}");
+        }
+        catch { }
+    }
+
+    /// <summary>メニュー改装の 1 ステップ分の費用 (ms / 主スレッド JIT ms / JIT 本数 / GC 回数) を記録する。初回メニューのみ。</summary>
+    public static void NoteMenuStep(string name, long ms, long jitMs, long jitCount, int gcCount)
+    {
+        try
+        {
+            if (_menuStarted || MenuSteps.Count >= MaxMenuSteps) return;
+            MenuSteps.Add($"{name}:{ms}/j{jitMs}/n{jitCount}/g{gcCount}");
+        }
+        catch { }
+    }
+
+    /// <summary>NoteMenuStep 用のスナップショット (主スレッド JIT ms / JIT 本数 / GC 回数)。</summary>
+    public static (long JitMs, long JitCount, int GcCount) MenuStepSnapshot() => (MainThreadJitMs, MainThreadJitCount, GcCountAll);
+
     // 最初の FixedUpdate 到達を1回だけ記録する。ガードは呼び出し側の bool チェックで
     // 済ませ、2回目以降は Mark() の集合検索すら発生させない。
     public static void NoteFirstTick()
@@ -106,9 +167,11 @@ public static class BootTimeline
             {
                 if (!MarkNames.Contains("menu.start.end") && !MarkNames.Contains("menu.vanilla.start")) return;
 
+                MarkMenuFrame("interactive");
                 _menuStarted = true;
                 Mark("menu.interactive");
                 _menuInteractiveMs = NowMs;
+                BootPreJit.Stop();
                 _menuInteractiveRealtime = Time.realtimeSinceStartup;
                 _menuInteractiveFrame = Time.frameCount;
                 _lastMenuFrameRealtime = _menuInteractiveRealtime;
@@ -186,11 +249,12 @@ public static class BootTimeline
             }
 
             float now = Time.realtimeSinceStartup;
+            _bootLastFrameNowMs = NowMs;
 
             if (!_bootStarted)
             {
                 _bootStarted = true;
-                _bootFirstFrameMs = NowMs;
+                _bootFirstFrameMs = _bootLastFrameNowMs;
                 _bootFirstFrameRealtime = now;
                 _lastBootFrameRealtime = now;
                 try { _lastBootFrameJitMs = (long)System.Runtime.JitInfo.GetCompilationTime().TotalMilliseconds; } catch { }
@@ -261,9 +325,10 @@ public static class BootTimeline
             }
             catch { }
 
-            string line = $"BOOT total={_menuInteractiveMs}{launcher} marks={marksSb} deltas={deltasSb} frames10s={frames10s} fps10s={fps10s:0.0} gaps=[{string.Join(",", Gaps)}] jit={jitSb} patch2={PatchPhases.DeferredCount}/{PatchPhases.Phase2Ms}ms/{PatchPhases.Phase2Frames}f t={Utils.TimeStamp} sframes={_bootFrames} sexcess={_bootExcessMs:0} sgaps=[{string.Join(",", BootGaps)}]";
+            string line = $"BOOT total={_menuInteractiveMs}{launcher} marks={marksSb} deltas={deltasSb} frames10s={frames10s} fps10s={fps10s:0.0} gaps=[{string.Join(",", Gaps)}] jit={jitSb} patch2={PatchPhases.DeferredCount}/{PatchPhases.Phase2Ms}ms/{PatchPhases.Phase2Frames}f t={Utils.TimeStamp} sframes={_bootFrames} sexcess={_bootExcessMs:0} sgaps=[{string.Join(",", BootGaps)}] mframe=[{string.Join(",", MenuFrame)}] msteps=[{string.Join(",", MenuSteps)}] prejit={BootPreJit.Summary}";
 
             HealthLog.Note(line);
+            BootPreJit.FlushLog();
             Logger.Info(line, "BootTimeline");
         }
         catch { }

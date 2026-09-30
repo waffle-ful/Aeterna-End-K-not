@@ -545,6 +545,7 @@ relay/CONTRACT.md
 # BGM / SFX AssetBundle (tools/build-bgm-bundle.ps1 の生成物・素材と同じ扱い)
 Resources/Sounds/BGM/*.bundle
 Resources/Sounds/*.bundle
+Resources/Images/MainMenu/Dusk/*.bundle
 build-android/
 
 # Android の署名鍵 (どこに置かれても追跡しない)

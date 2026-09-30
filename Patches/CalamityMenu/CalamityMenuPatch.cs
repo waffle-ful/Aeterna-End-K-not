@@ -16,6 +16,7 @@ public static class CalamityMenuPatch
     [HarmonyPriority(800)]   // run before TitleLogoPatch so vanilla buttons are gone before its setup
     public static void Prefix(MainMenuManager __instance)
     {
+        BootTimeline.MarkMenuFrame("start.prefix");
         if (!CalamityMenuState.Active) return;
 
         try
@@ -46,6 +47,7 @@ public static class CalamityMenuPatch
 
         Logger.Info("Calamity menu setup begin", "CalamityMenuPatch");
         BootTimeline.Mark("menu.start.begin");
+        BootTimeline.MarkMenuFrame("start.begin");
 
         // Reset per-scene state so VanillaSuppressor re-runs on scene reload
         CalamityMenuState.VanillaSuppressed = false;
@@ -100,12 +102,26 @@ public static class CalamityMenuPatch
 
         Logger.Info("Calamity menu setup done", "CalamityMenuPatch");
         BootTimeline.Mark("menu.start.end");
+        BootTimeline.MarkMenuFrame("start.end");
     }
 
     private static void SafeStep(string name, Action action)
     {
+        // 初回メニューだけ 1 ステップごとの費用を BOOT 行 (msteps=) へ残す。2 回目以降は計測しない。
+        bool measure = !BootTimeline.MenuReached;
+        long t0 = measure ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+        var snap = measure ? BootTimeline.MenuStepSnapshot() : default;
         try { action(); }
         catch (Exception ex) { Logger.Exception(ex, $"CalamityMenuPatch.{name}"); }
+        finally
+        {
+            if (measure)
+            {
+                long ms = (System.Diagnostics.Stopwatch.GetTimestamp() - t0) * 1000 / System.Diagnostics.Stopwatch.Frequency;
+                var after = BootTimeline.MenuStepSnapshot();
+                BootTimeline.NoteMenuStep(name, ms, after.JitMs - snap.JitMs, after.JitCount - snap.JitCount, after.GcCount - snap.GcCount);
+            }
+        }
     }
 
     [HarmonyPatch(typeof(MainMenuManager), nameof(MainMenuManager.LateUpdate))]

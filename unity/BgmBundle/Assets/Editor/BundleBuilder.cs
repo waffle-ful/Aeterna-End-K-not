@@ -8,6 +8,8 @@ using UnityEngine;
 // FMOD にデコードさせるため、float PCM をマネージド側に持たない。
 // Assets/SFX 配下の長尺効果音 (WaveCannon 発射/チャージ・Backrooms 環境音) は別バンドル endknot_sfx。
 // 短いので音声データごと事前ロード (preloadAudioData=true) し、取り出したクリップをそのまま鳴らせる。
+// Assets/Dusk 配下のメインメニュー背景 PNG (テーマごとのサブフォルダ) は endknot_dusk。
+// PNG デコードをメニュー表示中のフレームから外すため、非圧縮 RGBA32 のまま焼く (Windows 版のみ)。
 public static class BundleBuilder
 {
     private const string SourceFolder = "Assets/BGM";
@@ -15,6 +17,8 @@ public static class BundleBuilder
     private const string SfxSourceFolder = "Assets/SFX";
     private const string SfxBundleName = "endknot_sfx";
     private const float VorbisQuality = 0.7f;
+    private const string DuskSourceFolder = "Assets/Dusk";
+    private const string DuskBundleName = "endknot_dusk";
 
     public static void Build() => BuildFor(BuildTarget.StandaloneWindows64, "Build");
 
@@ -26,6 +30,7 @@ public static class BundleBuilder
     {
         string[] names = Import(SourceFolder, BundleName, preload: false);
         string[] sfxNames = Import(SfxSourceFolder, SfxBundleName, preload: true);
+        int duskCount = ImportDusk(target == BuildTarget.StandaloneWindows64);
 
         string outDir = Path.Combine(Directory.GetCurrentDirectory(), outSubDir);
         Directory.CreateDirectory(outDir);
@@ -38,7 +43,7 @@ public static class BundleBuilder
             return;
         }
 
-        Debug.Log($"BundleBuilder: built [{string.Join(",", manifest.GetAllAssetBundles())}] target={target} clips=[{string.Join(",", names)}] sfx=[{string.Join(",", sfxNames)}]");
+        Debug.Log($"BundleBuilder: built [{string.Join(",", manifest.GetAllAssetBundles())}] target={target} clips=[{string.Join(",", names)}] sfx=[{string.Join(",", sfxNames)}] dusk={duskCount}");
     }
 
     private static string[] Import(string folder, string bundleName, bool preload)
@@ -69,5 +74,55 @@ public static class BundleBuilder
         }
 
         return names;
+    }
+
+    // Windows 版はテクスチャを endknot_dusk に入れる。それ以外のターゲットでは bundle 名を外し、
+    // 前回の Windows ビルドで .meta に残った割り当てが他ターゲットの出力へ混ざらないようにする。
+    private static int ImportDusk(bool include)
+    {
+        if (!AssetDatabase.IsValidFolder(DuskSourceFolder)) return 0;
+
+        string[] guids = AssetDatabase.FindAssets("t:Texture2D", new[] { DuskSourceFolder });
+
+        for (int i = 0; i < guids.Length; i++)
+        {
+            string path = AssetDatabase.GUIDToAssetPath(guids[i]);
+            var importer = (TextureImporter)AssetImporter.GetAtPath(path);
+
+            if (!include)
+            {
+                importer.assetBundleName = null;
+                importer.SaveAndReimport();
+                continue;
+            }
+
+            importer.textureType = TextureImporterType.Default;
+            importer.textureShape = TextureImporterShape.Texture2D;
+            importer.sRGBTexture = true;
+            importer.alphaSource = TextureImporterAlphaSource.FromInput;
+            importer.alphaIsTransparency = false;
+            importer.isReadable = false;
+            importer.npotScale = TextureImporterNPOTScale.None;
+            importer.mipmapEnabled = true;
+            importer.streamingMipmaps = false;
+            importer.filterMode = FilterMode.Bilinear;
+            importer.wrapMode = TextureWrapMode.Repeat;
+            importer.maxTextureSize = 8192;
+            importer.textureCompression = TextureImporterCompression.Uncompressed;
+
+            var standalone = new TextureImporterPlatformSettings
+            {
+                name = "Standalone",
+                overridden = true,
+                maxTextureSize = 8192,
+                format = TextureImporterFormat.RGBA32,
+                textureCompression = TextureImporterCompression.Uncompressed,
+            };
+            importer.SetPlatformTextureSettings(standalone);
+            importer.assetBundleName = DuskBundleName;
+            importer.SaveAndReimport();
+        }
+
+        return include ? guids.Length : 0;
     }
 }

@@ -124,6 +124,7 @@ public static class MainMenuManagerPatch
     [HarmonyPriority(Priority.Last)]
     public static void HideRightPanel()
     {
+        BootTimeline.MarkMenuFrame("vanilla.begin"); // Priority.Last の Prefix = vanilla Start 直前 (初回メニュー以外は no-op)
         ShowingPanel = false;
         AccountManager.Instance?.transform.FindChild("AccountTab/AccountWindow")?.gameObject.SetActive(false);
     }
@@ -147,6 +148,7 @@ public static class MainMenuManagerPatch
     [HarmonyPrefix]
     public static void Start_Prefix(MainMenuManager __instance)
     {
+        BootTimeline.MarkMenuFrame("mmmp.prefix");
         // 番犬による(再)起動なら前回設定で自動ホスト (Calamity 有無に関わらず走らせたいので Prefix で呼ぶ)。
         AutoRehost.OnMainMenuStart();
 
