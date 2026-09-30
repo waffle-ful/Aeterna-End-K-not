@@ -9,6 +9,7 @@
   ],
   "intask": [
     { "file": "intask_liminal", "weight": 1, "title": "Liminal Landscapes - Paisajes Liminales", "author": "Iuvenis", "map": "Fungle" },
+    { "file": "intask_airship", "weight": 1, "title": "誰もいない舞踏室", "author": "End K not", "map": "Airship" },
     { "file": "intask_terror", "weight": 1, "title": "terror heights (Dark ambience)", "author": "RibhavAgrawal" }
   ],
   "climax": [

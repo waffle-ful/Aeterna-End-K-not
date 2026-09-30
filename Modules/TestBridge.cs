@@ -303,6 +303,79 @@ public static class TestBridge
             return;
         }
 
+        // エアシップの破損演出をすぐに起こす (見た目の検収用)。引数 1=部屋名の文字化け・2=別の部屋名・省略=抽選。
+        if (directive.Equals("airshipglitch", StringComparison.OrdinalIgnoreCase) || directive.StartsWith("airshipglitch ", StringComparison.OrdinalIgnoreCase))
+        {
+            int mode = directive.Length > 14 && int.TryParse(directive[14..].Trim(), out int m) ? m : -1;
+            WriteOut(EndKnot.Modules.MapAtmosphere.AirshipLiminal.DebugTrigger(mode) ? "OK airshipglitch" : "ERR airshipglitch not active");
+            return;
+        }
+
+        // エアシップの朽ちた船を試合の長さを固定して見る (見た目の検収用)。0〜1・負の値で解除。
+        if (directive.StartsWith("airshipruin ", StringComparison.OrdinalIgnoreCase))
+        {
+            bool ok = float.TryParse(directive[12..].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out float decay) && EndKnot.Modules.MapAtmosphere.AirshipRuin.DebugDecay(decay);
+            WriteOut(ok ? "OK airshipruin" : "ERR airshipruin not active");
+            return;
+        }
+
+        // エアシップの朽ちた船が使う床の格子を画像に書き出す (置き場所の検収用)。
+        if (directive.Equals("airshipfloor", StringComparison.OrdinalIgnoreCase))
+        {
+            string outPath = Path.Combine(_dir, "airship-floor.pgm");
+            WriteOut(EndKnot.Modules.MapAtmosphere.AirshipRuinLayout.DebugDumpFloor(outPath) ? "OK airshipfloor -> airship-floor.pgm" : "ERR airshipfloor not active");
+            return;
+        }
+
+        // エアシップの視界の縁のぼかしの倍率を差し替える (見た目の検収用)。1=バニラ。
+        if (directive.StartsWith("airshipblur ", StringComparison.OrdinalIgnoreCase))
+        {
+            bool ok = float.TryParse(directive[12..].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out float scale) && EndKnot.Modules.MapAtmosphere.AirshipRuin.DebugBlur(scale);
+            WriteOut(ok ? "OK airshipblur" : "ERR airshipblur <scale> (not active?)");
+            return;
+        }
+
+        // エアシップの影の色を差し替える (見た目の検収用)。r g b は 0〜1。
+        if (directive.StartsWith("airshipshadow ", StringComparison.OrdinalIgnoreCase))
+        {
+            string[] c = directive[14..].Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            bool ok = c.Length == 3
+                      && float.TryParse(c[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float r)
+                      && float.TryParse(c[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float g)
+                      && float.TryParse(c[2], NumberStyles.Float, CultureInfo.InvariantCulture, out float b)
+                      && EndKnot.Modules.MapAtmosphere.AirshipRuin.DebugShadow(r, g, b);
+            WriteOut(ok ? "OK airshipshadow" : "ERR airshipshadow <r> <g> <b> (not active?)");
+            return;
+        }
+
+        // エアシップの影の中の霞を差し替える (見た目の検収用)。scale=縮める割合 (1=ぼかさない・0.5=半分)・veil=もやの濃さ 0〜1。
+        if (directive.StartsWith("airshiphaze ", StringComparison.OrdinalIgnoreCase))
+        {
+            string[] a = directive[12..].Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            bool ok = a.Length == 2
+                      && float.TryParse(a[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float scale)
+                      && float.TryParse(a[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float veil)
+                      && EndKnot.Modules.MapAtmosphere.AirshipRuin.DebugHaze(scale, veil);
+            WriteOut(ok ? "OK airshiphaze" : "ERR airshiphaze <scale> <veil> (not active?)");
+            return;
+        }
+
+        // エアシップの照明を落とす膜の濃さを差し替える (見た目の検収用)。0=暗くしない。
+        if (directive.StartsWith("airshipdim ", StringComparison.OrdinalIgnoreCase))
+        {
+            bool ok = float.TryParse(directive[11..].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out float dim) && EndKnot.Modules.MapAtmosphere.AirshipLiminal.DebugDim(dim);
+            WriteOut(ok ? "OK airshipdim" : "ERR airshipdim <alpha> (not active?)");
+            return;
+        }
+
+        // エアシップの BGM の揺れをすぐに起こす。引数 1=針飛び・2=音程の沈み・3=途切れ。
+        if (directive.StartsWith("airshipstutter ", StringComparison.OrdinalIgnoreCase))
+        {
+            bool ok = int.TryParse(directive[15..].Trim(), out int kind) && EndKnot.Modules.MapAtmosphere.AirshipLiminal.DebugStutter(kind);
+            WriteOut(ok ? "OK airshipstutter" : "ERR airshipstutter (not active or no BGM playing)");
+            return;
+        }
+
         // Layer 1: 構造化スナップショット。Menu 画面でも動く(host 非依存)。
         if (directive.Equals("state", StringComparison.OrdinalIgnoreCase))
         {
@@ -1004,14 +1077,14 @@ public static class TestBridge
             Bounds b = sr.bounds;
             Vector3 wp = sr.transform.position;
             string sprite = sr.sprite ? sr.sprite.name : "-";
-            string shader = sr.sharedMaterial && sr.sharedMaterial.shader ? sr.sharedMaterial.shader.name : "-";
+            string shader = sr.sharedMaterial && sr.sharedMaterial.shader ? sr.sharedMaterial.shader.name + "@" + sr.sharedMaterial.renderQueue : "-";
 
             var comps = new List<string>();
             foreach (MonoBehaviour mb in sr.GetComponents<MonoBehaviour>())
                 if (mb) comps.Add(mb.GetIl2CppType().Name);
 
             sb.AppendLine($"SR {path} act={sr.gameObject.activeInHierarchy} en={sr.enabled} layer={sr.gameObject.layer} sl={sr.sortingLayerID} so={sr.sortingOrder} z={wp.z:0.###} " +
-                          $"ctr=({b.center.x:0.##},{b.center.y:0.##}) size=({b.size.x:0.##},{b.size.y:0.##}) col={ColorStr(sr.color)} sprite={sprite} shader={shader} draw={sr.drawMode} comps=[{string.Join(",", comps)}]");
+                          $"ctr=({b.center.x:0.##},{b.center.y:0.##}) size=({b.size.x:0.##},{b.size.y:0.##}) col={ColorStr(sr.color)} sprite={sprite} shader={shader} draw={sr.drawMode} mask={sr.maskInteraction} comps=[{string.Join(",", comps)}]");
             n++;
         }
 

@@ -125,6 +125,10 @@ internal static class ControllerManagerUpdatePatch
             if (KeysDown(KeyCode.LeftAlt, KeyCode.C) && !Il2Direct.GetKey(KeyCode.LeftShift) && !GameStates.IsNotJoined)
                 Utils.CopyCurrentSettings();
 
+            // エアシップの破損演出を今すぐ起こす。自分の画面の描き分けだけなので、ホストでなくても使える。
+            if (KeysDown(KeyCode.LeftControl, KeyCode.LeftShift, KeyCode.G) && GameStates.IsInGame && HudManager.InstanceExists && !HudManager.Instance.Chat.IsOpenOrOpening)
+                EndKnot.Modules.MapAtmosphere.AirshipLiminal.DebugTrigger(-1);
+
             if (!AmongUsClient.Instance.AmHost) return;
 
             if (KeysDown(KeyCode.Return, KeyCode.C, KeyCode.LeftShift))

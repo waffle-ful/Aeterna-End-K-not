@@ -60,6 +60,14 @@ internal static class OnGameJoinedPatch
         {
         Logger.Info($"{__instance.GameId} joined lobby", "OnGameJoined");
 
+        // メインメニューの背景素材 (夕暮れの層など約 14MB) はシーンごと消えているので常駐から外す。メニューへ戻れば組み立て時に読み直す。
+        try
+        {
+            int released = Utils.ReleaseSprites("EndKnot.Resources.Images.MainMenu.");
+            if (released > 0) Logger.Info($"released {released} main menu sprites", "OnGameJoined");
+        }
+        catch (Exception e) { Logger.Warn($"main menu sprite release failed: {e.Message}", "OnGameJoined"); }
+
         // 自動部屋立て直し: 新しい部屋に join した = 成功シグナル (旧 GameId と比較。内部でガード)
         Modules.AutoRehost.NotifyJoinedNewLobby();
         Modules.AutoRejoin.OnGameJoined();
