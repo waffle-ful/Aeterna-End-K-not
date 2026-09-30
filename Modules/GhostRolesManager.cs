@@ -12,7 +12,6 @@ internal static class GhostRolesManager
 {
     public static Dictionary<byte, (CustomRoles Role, IGhostRole Instance)> AssignedGhostRoles = [];
     private static List<CustomRoles> GhostRoles = [];
-    public static bool AnyGhostRoleLeft => AssignedGhostRoles.Count < GhostRoles.Count;
 
     // Players killed during tasks whose ghost role is held back until the death is recorded here.
     // A non-modded client only builds the ghost ability button for the FIRST ghost role it receives
@@ -97,7 +96,7 @@ internal static class GhostRolesManager
             return;
         }
 
-        pc.RpcSetRoleGlobal(pc.GetPublicGhostRoleBasis(allowInfluencer: true));
+        pc.RpcSetRoleGlobal(pc.GetPublicGhostRoleBasis());
     }
 
     public static void AssignGhostRole(PlayerControl pc, bool broadcastBasis = false)
@@ -109,7 +108,8 @@ internal static class GhostRolesManager
 
         IGhostRole instance = CreateGhostRoleInstance(suitableRole);
         pc.RpcSetCustomRole(suitableRole);
-        if (broadcastBasis) pc.RpcSetRoleGlobal(instance.RoleTypes);
+        // The Influencer's cards go straight from the ghost's client to the target's, so every client is told it is one.
+        if (broadcastBasis || instance.RoleTypes == RoleTypes.SpiritGuide) pc.RpcSetRoleGlobal(instance.RoleTypes);
         else pc.RpcSetRoleDesync(instance.RoleTypes, pc.OwnerId);
         pc.AddAbilityCD(instance.Cooldown);
         instance.OnAssign(pc);
@@ -128,7 +128,11 @@ internal static class GhostRolesManager
 
         PlayerControl pc = Utils.GetPlayerById(id);
         IGhostRole instance = CreateGhostRoleInstance(role);
-        if (set) pc.RpcSetRoleDesync(instance.RoleTypes, pc.OwnerId);
+        if (set)
+        {
+            if (instance.RoleTypes == RoleTypes.SpiritGuide) pc.RpcSetRoleGlobal(instance.RoleTypes);
+            else pc.RpcSetRoleDesync(instance.RoleTypes, pc.OwnerId);
+        }
 
         // Match AssignGhostRole: seed the initial ability cooldown so this ghost isn't immediately usable.
         pc.AddAbilityCD(instance.Cooldown);

@@ -5197,6 +5197,10 @@
   "ForewarnerNotifyDanger": "Warned {0} of danger ({1} left)",
   "ForewarnerNotifySafe": "Told {0} that it looks safe ({1} left)",
   "ForewarnerNoUses": "You have no picture cards left to send",
+  "Influencer": "Influencer",
+  "Prefix.Influencer": "Influencer",
+  "InfluencerInfo": "Send Picture Cards to the Living",
+  "InfluencerInfoLong": "(<#8cffff>Crewmate Ghost</color>):\n<size=80%>The same ghost role as the vanilla Influencer. Use your ability button to pick a living player and send them a combination of picture cards. Only that player sees the cards.</size>",
   "Ghostbuttoner": "Ghost Buttoner",
   "GhostbuttonerInfo": "Call Meetings from the Dead",
   "GhostbuttonerInfoLong": "(<#8cffff>Crew Ghost</color>):\n<size=80%>Use your protect button on any living player to call an emergency meeting from the grave — the target is ignored. It won't work while a sabotage is active, and you have a limited number of uses, shown above your head.</size>",
@@ -12019,8 +12023,7 @@
   "GanSheriffCanBeMadmate": "<color=#f8cd46>Sheriff</color> can be converted",
   "GanSnitchCanBeMadmate": "<color=#b8fb4f>Snitch</color> can be converted",
   "GhostCanSeeDeathReason": "Ghost Can See Cause Of Death",
-  "DeadCrewBecomeInfluencer": "Dead Crewmates Become Influencers",
-  "InfluencerCooldown": "Influencer Message Cooldown",
+  "InfluencerCooldown": "Message Cooldown",
   "GhostCanSeeOtherRoles": "Ghosts Can See Other Roles",
 
   /* ==============================

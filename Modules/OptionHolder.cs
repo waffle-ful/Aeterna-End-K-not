@@ -784,8 +784,6 @@ public static class Options
     public static OptionItem GhostCanSeeOtherVotes;
 
     public static OptionItem GhostCanSeeDeathReason;
-    public static OptionItem DeadCrewBecomeInfluencer;
-    public static OptionItem InfluencerCooldown;
 
     public static OptionItem KPDCamouflageMode;
 
@@ -3630,15 +3628,6 @@ public static class Options
             .SetGameMode(CustomGameMode.Standard)
             .SetColor(new Color32(217, 218, 255, byte.MaxValue));
 
-        DeadCrewBecomeInfluencer = new BooleanOptionItem(24510, "DeadCrewBecomeInfluencer", false, TabGroup.GameSettings)
-            .SetGameMode(CustomGameMode.Standard)
-            .SetColor(new Color32(217, 218, 255, byte.MaxValue));
-
-        InfluencerCooldown = new FloatOptionItem(24511, "InfluencerCooldown", new(5f, 120f, 5f), 30f, TabGroup.GameSettings)
-            .SetParent(DeadCrewBecomeInfluencer)
-            .SetGameMode(CustomGameMode.Standard)
-            .SetValueFormat(OptionFormat.Seconds)
-            .SetColor(new Color32(217, 218, 255, byte.MaxValue));
 
         yield return null;
 

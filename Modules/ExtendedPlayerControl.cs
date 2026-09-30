@@ -1712,7 +1712,7 @@ internal static class ExtendedPlayerControl
             return Main.PlayerStates.TryGetValue(player.PlayerId, out PlayerState state) && state.Role.CanUseSabotage(player);
         }
 
-        public RoleTypes GetGhostRoleBasis(bool dying = false)
+        public RoleTypes GetGhostRoleBasis()
         {
             RoleTypes roleType;
 
@@ -1722,8 +1722,6 @@ internal static class ExtendedPlayerControl
                 roleType = RoleTypes.GuardianAngel;
             else if (!(player.Is(CustomRoleTypes.Impostor) && Options.DeadImpCantSabotage.GetBool()) && Main.PlayerStates.TryGetValue(player.PlayerId, out var state) && state.Role.CanUseSabotage(player))
                 roleType = RoleTypes.ImpostorGhost;
-            else if (player.ShouldBeVanillaInfluencer(dying))
-                roleType = RoleTypes.SpiritGuide;
             else
                 roleType = RoleTypes.CrewmateGhost;
 
@@ -1731,42 +1729,14 @@ internal static class ExtendedPlayerControl
         }
 
         // The ghost role for a dead player without a modded ghost role.
-        public RoleTypes GetPublicGhostRoleBasis(bool allowInfluencer)
+        public RoleTypes GetPublicGhostRoleBasis()
         {
             if (!(player.Is(CustomRoleTypes.Impostor) && Options.DeadImpCantSabotage.GetBool()) && Main.PlayerStates.TryGetValue(player.PlayerId, out var state) && state.Role.CanUseSabotage(player))
                 return RoleTypes.ImpostorGhost;
 
-            if (allowInfluencer && player.ShouldBeVanillaInfluencer())
-                return RoleTypes.SpiritGuide;
-
             return RoleTypes.CrewmateGhost;
         }
 
-        // A dead crewmate with no modded ghost role gets the vanilla Influencer (SpiritGuide) ghost role.
-        // Its messages go straight from the ghost's client to the chosen player, so the host only decides who gets it.
-        // dying: called while the game itself hands out the ghost role on death, before the death is recorded here.
-        // Giving the Influencer role in that first hand-out lets the dead player use it right away instead of after the next meeting.
-        public bool ShouldBeVanillaInfluencer(bool dying = false)
-        {
-            if (Options.CurrentGameMode != CustomGameMode.Standard || !Options.DeadCrewBecomeInfluencer.GetBool()) return false;
-
-            if (dying)
-            {
-                if (!player.Data || !player.Data.IsDead || !GameStates.IsInTask || GameStates.IsMeeting || ExileController.Instance) return false;
-                // A modded ghost role may still be handed out a moment later, so leave that case to the later upgrade.
-                if (GhostRolesManager.AnyGhostRoleLeft) return false;
-            }
-            else if (player.IsAlive()) return false;
-
-            if (player.GetTeam() != Team.Crewmate) return false;
-            if (GhostRolesManager.AssignedGhostRoles.ContainsKey(player.PlayerId)) return false;
-
-            // Deaths that can still be undone keep the plain ghost role, so a revive never has to take a ghost ability back.
-            if (Akazukin.IsPseudoDead(player.PlayerId)) return false;
-            if (Main.PlayerStates.TryGetValue(player.PlayerId, out var state) && state.Role is Revenant { StillAlive: true }) return false;
-
-            return true;
-        }
 
         public Vector2 Pos()
         {
