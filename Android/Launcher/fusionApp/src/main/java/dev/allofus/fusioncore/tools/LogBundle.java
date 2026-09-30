@@ -13,6 +13,7 @@ import androidx.core.content.FileProvider;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedReader;
+import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -20,6 +21,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -38,7 +41,8 @@ import dev.allofus.fusioncore.R;
  * destination app.
  *
  * Included: the BepInEx log of the game (tail only, capped), the crash notes the launcher
- * wrote next to it, and this process's own logcat. The itch.io token file, shared
+ * wrote next to it, the blackbox files of recent runs with the perf map of the same process,
+ * the il2cpp method map, and this process's own logcat. The itch.io token file, shared
  * preferences and the BepInEx config directory are never touched.
  */
 public final class LogBundle {
@@ -47,6 +51,7 @@ public final class LogBundle {
     private static final String AUTHORITY_SUFFIX = ".fileprovider";
     private static final long LOG_TAIL_BYTES = 4L * 1024 * 1024;
     private static final int MAX_CRASH_NOTES = 20;
+    private static final int BLACKBOX_FIXED_BYTES = 68;
     private static final long OLD_BUNDLE_AGE_MS = 30L * 60 * 1000;
     private static final AtomicBoolean IN_FLIGHT = new AtomicBoolean(false);
 
@@ -124,12 +129,19 @@ public final class LogBundle {
                 addWhole(out, "crash/" + note.getName(), note);
                 entries++;
             }
+            StringBuilder blackboxInfo = new StringBuilder();
+            entries += addBlackboxes(out, filesRoot, blackboxInfo);
+            File methodMap = new File(filesRoot, "il2cpp-methods.map");
+            if (addIfPresent(out, "crash/" + methodMap.getName(), methodMap)) {
+                entries++;
+            }
             byte[] logcat = readLogcat();
             if (logcat.length > 0) {
                 addBytes(out, "logcat.txt", logcat);
                 entries++;
             }
-            addBytes(out, "bundle-info.txt", describe(context, targetPackage).getBytes(StandardCharsets.UTF_8));
+            addBytes(out, "bundle-info.txt",
+                    (describe(context, targetPackage) + blackboxInfo).getBytes(StandardCharsets.UTF_8));
         }
         if (entries == 0) {
             //noinspection ResultOfMethodCallIgnored
@@ -171,6 +183,85 @@ public final class LogBundle {
             }
         }
         return notes;
+    }
+
+    /** The fixed leading part of a blackbox file header. */
+    private static final class BlackboxFile {
+        final File file;
+        final long pid;
+        final long startMs;
+        final boolean stamped;
+
+        BlackboxFile(File file, long pid, long startMs, boolean stamped) {
+            this.file = file;
+            this.pid = pid;
+            this.startMs = startMs;
+            this.stamped = stamped;
+        }
+    }
+
+    /** Returns null when the header is too short to read or does not carry the magic. */
+    private static BlackboxFile readBlackboxHeader(File file) {
+        byte[] head = new byte[BLACKBOX_FIXED_BYTES];
+        try (DataInputStream in = new DataInputStream(new FileInputStream(file))) {
+            in.readFully(head);
+        } catch (IOException e) {
+            return null;
+        }
+        // Magic is "EKBB" followed by four version digits; only the prefix is checked.
+        if (head[0] != 'E' || head[1] != 'K' || head[2] != 'B' || head[3] != 'B') {
+            return null;
+        }
+        ByteBuffer buf = ByteBuffer.wrap(head).order(ByteOrder.LITTLE_ENDIAN);
+        return new BlackboxFile(file, buf.getInt(16) & 0xFFFFFFFFL, buf.getLong(24), buf.getInt(64) != 0);
+    }
+
+    /**
+     * Adds every blackbox file, newest run first, each with the perf map of the same process
+     * when there is one, and appends one line per file to {@code info}. Returns the entry count.
+     */
+    private static int addBlackboxes(ZipOutputStream out, File filesRoot, StringBuilder info) throws IOException {
+        File[] all = filesRoot.listFiles((dir, name) -> name.startsWith("blackbox-") && name.endsWith(".bin"));
+        if (all == null) {
+            return 0;
+        }
+        List<BlackboxFile> boxes = new ArrayList<>();
+        for (File f : all) {
+            if (!f.isFile()) {
+                continue;
+            }
+            BlackboxFile box = readBlackboxHeader(f);
+            if (box == null) {
+                info.append("blackbox=").append(f.getName()).append(" skipped (unreadable header)\n");
+                continue;
+            }
+            boxes.add(box);
+        }
+        // The file is written through a memory mapping, so its modification time does not
+        // order the runs; the start time in the header does.
+        java.util.Collections.sort(boxes, (a, b) -> Long.compare(b.startMs, a.startMs));
+        SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss Z", Locale.US);
+        java.util.Set<Long> perfMapsAdded = new java.util.HashSet<>();
+        int entries = 0;
+        for (BlackboxFile box : boxes) {
+            if (!addIfPresent(out, "crash/" + box.file.getName(), box.file)) {
+                info.append("blackbox=").append(box.pid).append(" skipped (file is gone)\n");
+                continue;
+            }
+            entries++;
+            File perfMap = new File(filesRoot, "perf-" + box.pid + ".map");
+            boolean hasPerfMap = perfMapsAdded.contains(box.pid);
+            if (!hasPerfMap && addIfPresent(out, "crash/" + perfMap.getName(), perfMap)) {
+                perfMapsAdded.add(box.pid);
+                hasPerfMap = true;
+                entries++;
+            }
+            info.append("blackbox=").append(box.pid)
+                    .append(" start=").append(format.format(new Date(box.startMs)))
+                    .append(" stamped=").append(box.stamped ? 1 : 0)
+                    .append(" perfMap=").append(hasPerfMap ? "yes" : "no").append('\n');
+        }
+        return entries;
     }
 
     private static byte[] readLogcat() {
@@ -237,6 +328,25 @@ public final class LogBundle {
             copy(in, out);
         }
         out.closeEntry();
+    }
+
+    /**
+     * As addWhole, for a file that a starting game process may delete at any moment. Returns
+     * false, leaving the zip untouched, when the file cannot be opened.
+     */
+    private static boolean addIfPresent(ZipOutputStream out, String name, File file) throws IOException {
+        InputStream in;
+        try {
+            in = new BufferedInputStream(new FileInputStream(file));
+        } catch (IOException e) {
+            return false;
+        }
+        try (in) {
+            out.putNextEntry(new ZipEntry(name));
+            copy(in, out);
+            out.closeEntry();
+        }
+        return true;
     }
 
     /** Writes the last {@code maxBytes} of the file, starting at the first full line. */

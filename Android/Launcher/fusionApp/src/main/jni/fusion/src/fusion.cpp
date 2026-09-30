@@ -8,6 +8,7 @@
 #include <crash_maps.h>
 #include <blackbox.h>
 #include <crash_handler.h>
+#include <vitals.h>
 #include <hooking/il2cpp.h>
 #include <hooking/safehook.h>
 #include <hooking/allocator.h>
@@ -53,6 +54,9 @@ int il2cpp_init_hook(char *domain_name)
 
     if (runtimeConfig.initialized)
     {
+        // libil2cpp and libunity are loaded by now; a crash from here on finds them in the table.
+        blackbox_record_modules();
+
         // The launcher saves crash reports in the parent of the game data directory; the symbol
         // maps go to the same place so they are collected together.
         std::string crashDirectory = fs::path(runtimeConfig.appDataDirectory).parent_path().string();
@@ -144,6 +148,7 @@ extern "C" [[maybe_unused]] bool fusion_bootstrap_from_libmain(JNIEnv *env)
         std::string crashDirectory = fs::path(config.appDataDirectory).parent_path().string();
         blackbox_open(crashDirectory, 3);
         crash_handler_install();
+        vitals_start();
     }
 
     log(LogLevel::INFO, TAG, "Executing Fusion bootstrap from libmain namespace...");

@@ -34,53 +34,6 @@ namespace
         return process_vm_readv(getpid(), &local, 1, &remote, 1, 0) == static_cast<ssize_t>(size);
     }
 
-#if defined(__aarch64__)
-    // Follows the frame pointer chain of the interrupted thread and records the return addresses.
-    // Each frame record is {caller's frame pointer, return address}. JIT-compiled managed code
-    // keeps these records but has no unwind tables, so the system unwinder stops at it while
-    // this walk carries on through it.
-    void walk_frames(BlackboxCrash &crash)
-    {
-        uint32_t count = 0;
-        crash.frames[count++] = crash.pc;
-        crash.frames[count++] = crash.lr;
-
-        uint64_t fp = crash.fp;
-        bool first = true;
-        while (count < BLACKBOX_MAX_FRAMES)
-        {
-            uint64_t record[2];
-            if ((fp & 7) != 0 || !read_own_memory(fp, record, sizeof(record)))
-            {
-                break;
-            }
-
-            const uint64_t next_fp = record[0];
-            const uint64_t return_address = record[1];
-            if (return_address == 0)
-            {
-                break;
-            }
-
-            // The innermost record usually holds the link register's value again.
-            if (!first || return_address != crash.lr)
-            {
-                crash.frames[count++] = return_address;
-            }
-            first = false;
-
-            // The stack grows down, so a caller's record always sits at a higher address.
-            if (next_fp <= fp)
-            {
-                break;
-            }
-            fp = next_fp;
-        }
-
-        crash.frame_count = count;
-    }
-#endif
-
     void stamp(int signo, const siginfo_t *info, void *context)
     {
         BlackboxHeader *header = blackbox_header();
@@ -121,7 +74,8 @@ namespace
             crash.fp = registers.regs[29];
             if (can_walk_frames)
             {
-                walk_frames(crash);
+                crash_handler_walk_frames(crash.pc, crash.lr, crash.fp, crash.frames, BLACKBOX_MAX_FRAMES,
+                                          crash.frame_count, crash.walk_stop);
             }
         }
 #else
@@ -180,6 +134,82 @@ namespace
             syscall(SYS_tgkill, getpid(), syscall(SYS_gettid), signo);
         }
     }
+}
+
+bool crash_handler_can_walk_frames()
+{
+    return can_walk_frames;
+}
+
+// Each frame record is {caller's frame pointer, return address}. JIT-compiled managed code
+// keeps these records but has no unwind tables, so the system unwinder stops at it while
+// this walk carries on through it.
+void crash_handler_walk_frames(uint64_t pc, uint64_t lr, uint64_t fp, uint64_t *frames, uint32_t capacity,
+                               uint32_t &frame_count, uint32_t &walk_stop)
+{
+#if defined(__aarch64__)
+    uint32_t count = 0;
+    if (count < capacity)
+    {
+        frames[count++] = pc;
+    }
+    if (count < capacity)
+    {
+        frames[count++] = lr;
+    }
+
+    uint32_t stop = BLACKBOX_WALK_FULL;
+    bool first = true;
+    while (count < capacity)
+    {
+        if ((fp & 7) != 0)
+        {
+            stop = BLACKBOX_WALK_UNALIGNED_FP;
+            break;
+        }
+
+        uint64_t record[2];
+        if (!read_own_memory(fp, record, sizeof(record)))
+        {
+            stop = BLACKBOX_WALK_UNREADABLE;
+            break;
+        }
+
+        const uint64_t next_fp = record[0];
+        const uint64_t return_address = record[1];
+        if (return_address == 0)
+        {
+            stop = BLACKBOX_WALK_NULL_RETURN;
+            break;
+        }
+
+        // The innermost record usually holds the link register's value again.
+        if (!first || return_address != lr)
+        {
+            frames[count++] = return_address;
+        }
+        first = false;
+
+        // The stack grows down, so a caller's record always sits at a higher address.
+        if (next_fp <= fp)
+        {
+            stop = BLACKBOX_WALK_FP_NOT_ABOVE;
+            break;
+        }
+        fp = next_fp;
+    }
+
+    frame_count = count;
+    walk_stop = stop;
+#else
+    (void) pc;
+    (void) lr;
+    (void) fp;
+    (void) frames;
+    (void) capacity;
+    frame_count = 0;
+    walk_stop = BLACKBOX_WALK_NOT_WALKED;
+#endif
 }
 
 void crash_handler_install()

@@ -36,6 +36,10 @@ void fusion_breadcrumb(const char *utf8);
 // As fusion_breadcrumb, with the line stored as "<tag>: <utf8>".
 void fusion_breadcrumb_tagged(const char *tag, const char *utf8);
 
+// Reports that the calling thread is making progress. Meant to be called once a frame from the
+// game's main thread, which is then watched for stalls. Costs a thread id lookup and an atomic add.
+void fusion_heartbeat();
+
 #ifdef __cplusplus
 }
 #endif

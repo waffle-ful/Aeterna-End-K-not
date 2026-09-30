@@ -529,6 +529,9 @@ internal static class ModManagerLateUpdatePatch
     public static bool Prefix(ModManager __instance) { var alloc = EndKnot.Modules.AllocProbe.Now(); try { return PrefixCore(__instance); } finally { EndKnot.Modules.AllocProbe.Mark("modmgr", alloc); } }
     public static bool PrefixCore(ModManager __instance)
     {
+#if ANDROID
+        NativeHeartbeat.Beat();
+#endif
         __instance.ShowModStamp();
 
         ChatBubbleShower.Update();
