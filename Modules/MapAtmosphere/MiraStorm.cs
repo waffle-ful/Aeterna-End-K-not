@@ -566,6 +566,9 @@ public static class MiraStorm
         MiraPuddles.Teardown();
         if (_root) Object.Destroy(_root);
         _root = null;
+        // 嵐の素材 (空・稲妻・雨・水たまり) を常駐から外す。次に来た時に読み直す。
+        int released = Utils.ReleaseSprites(Res);
+        if (released > 0) Logger.Info($"released {released} map atmosphere sprites", "MiraStorm");
         _glow = 0f;
         _ship = null;
         _strikeAge = -1f;

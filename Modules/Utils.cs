@@ -5656,6 +5656,29 @@ public static class Utils
         return null;
     }
 
+    // 埋め込みリソース名が prefix で始まるキャッシュ済みスプライトを、テクスチャごと破棄して忘れる。
+    // マップ限定の大きな素材 (エアシップの朽ち跡 130 枚など) を、そのマップを離れた時に常駐から外すために使う。
+    // 破棄した後に同じ名前を LoadSprite すれば作り直される (fake-null もキャッシュミス扱い)。
+    public static int ReleaseSprites(string prefix)
+    {
+        int released = 0;
+        var keys = new List<string>();
+        foreach (KeyValuePair<string, Sprite> kv in CachedSprites)
+        {
+            if (!kv.Key.StartsWith(prefix, StringComparison.Ordinal)) continue;
+            keys.Add(kv.Key);
+            Sprite sprite = kv.Value;
+            if (!sprite) continue;
+            Texture2D texture = sprite.texture;
+            UnityEngine.Object.Destroy(sprite);
+            if (texture) UnityEngine.Object.Destroy(texture);
+            released++;
+        }
+
+        foreach (string key in keys) CachedSprites.Remove(key);
+        return released;
+    }
+
     private static unsafe Texture2D LoadTextureFromResources(string path)
     {
         try

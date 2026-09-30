@@ -28,6 +28,7 @@ public static class BGMManager
     private static BGMEntry pendingEntry;
 
     public static string CurrentBGMName => currentSlot;
+    public static AudioSource CurrentSource => currentSource;
     private static readonly Dictionary<string, AudioClip> BgmCache = [];
 
     public static bool RoleOverrideActive;
