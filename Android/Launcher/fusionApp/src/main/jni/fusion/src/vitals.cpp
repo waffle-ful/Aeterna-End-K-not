@@ -32,6 +32,9 @@ namespace
     constexpr uint64_t HANG_FIRST_MS = 5000;
     constexpr uint64_t HANG_SECOND_MS = 15000;
     constexpr uint64_t HANG_REPLY_WAIT_MS = 500;
+    // A pause report is dropped after beats have arrived in this many ticks in a row. A paused
+    // app may still run a frame or two, which must not count as the return.
+    constexpr int RESUMED_AFTER_TICKS = 3;
 
     std::atomic<bool> started{false};
 
@@ -41,6 +44,8 @@ namespace
     // record is complete. The handler leaves the header alone while this is not set.
     std::atomic<bool> hang_requested{false};
     std::atomic<uint64_t> hang_stalled_ms{0};
+    // What the app last reported through vitals_set_paused.
+    std::atomic<bool> app_paused{false};
 
     // The rest of the watch state belongs to the vitals thread.
     bool watching = false;
@@ -49,6 +54,8 @@ namespace
     uint64_t progress_monotonic_ms = 0;
     // Stacks taken in the current stall: 0, 1 or 2.
     int hang_stage = 0;
+    // Ticks in a row that saw beats while the app was reported paused.
+    int beating_ticks_while_paused = 0;
 
     uint64_t page_bytes = 4096;
     bool noted = false;
@@ -371,10 +378,13 @@ namespace
         }
         else if (beats == seen_beats)
         {
-            // Frames stop by design while the app is not in the foreground. The time spent
-            // there does not count: the stall is measured again from the return.
+            beating_ticks_while_paused = 0;
+
+            // Frames stop by design while the app is not in the foreground, and while it is in
+            // the foreground but paused, which the system's view of the process does not show.
+            // The time spent there does not count: the stall is measured again from the return.
             const int32_t oom_score_adj = read_oom_score_adj();
-            if (oom_score_adj != 0 && oom_score_adj != INT32_MIN)
+            if (app_paused.load(std::memory_order_relaxed) || (oom_score_adj != 0 && oom_score_adj != INT32_MIN))
             {
                 hangs.paused = 1;
                 progress_monotonic_ms = monotonic_ms;
@@ -391,6 +401,17 @@ namespace
                 take_hang_stack(header, stalled_ms);
             }
             return;
+        }
+
+        if (!app_paused.load(std::memory_order_relaxed))
+        {
+            beating_ticks_while_paused = 0;
+        }
+        else if (++beating_ticks_while_paused >= RESUMED_AFTER_TICKS)
+        {
+            beating_ticks_while_paused = 0;
+            app_paused.store(false, std::memory_order_relaxed);
+            blackbox_write_tagged("vitals", "frames are running again; the pause report is dropped");
         }
 
         seen_beats = beats;
@@ -486,4 +507,14 @@ void vitals_heartbeat()
         watched_tid.store(tid, std::memory_order_relaxed);
     }
     __atomic_fetch_add(&header->hangs.beat_count, 1, __ATOMIC_RELAXED);
+}
+
+void vitals_set_paused(bool paused)
+{
+    if (!blackbox_header() || app_paused.exchange(paused, std::memory_order_relaxed) == paused)
+    {
+        return;
+    }
+
+    blackbox_write_tagged("vitals", paused ? "app paused" : "app resumed");
 }

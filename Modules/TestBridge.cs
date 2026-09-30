@@ -603,14 +603,21 @@ public static class TestBridge
             return;
         }
 
-        // ネイティブ層でプロセスを故意に落とす (クラッシュ記録の検証用・Android のみ)。`nativecrash [0|1]` 0=不正書き込み 1=abort
+        // ネイティブ層でプロセスを故意に落とす (クラッシュ記録の検証用・Android のみ)。`nativecrash [0-9]`
+        // 0=不正書き込み 1=abort 2=SIGBUS 3=SIGILL 4=SIGFPE 5=SIGTRAP 6=SIGSYS 7=このスレッドでスタックを使い切る 8=別スレッドでスタックを使い切る 9=別スレッドで SIGTRAP
         if (directive.StartsWith("nativecrash", StringComparison.OrdinalIgnoreCase))
         {
 #if ANDROID
             [System.Runtime.InteropServices.DllImport("fusion", EntryPoint = "fusion_debug_crash", ExactSpelling = true)]
             static extern void FusionDebugCrash(int kind);
 
-            int kind = directive[11..].Trim() == "1" ? 1 : 0;
+            string kindText = directive[11..].Trim();
+            int kind = 0;
+            if (kindText.Length > 0 && (!int.TryParse(kindText, out kind) || kind is < 0 or > 9))
+            {
+                WriteOut("ERR nativecrash kind must be 0-9");
+                return;
+            }
             WriteOut($"OK nativecrash {kind}");
             Logger.Info($"nativecrash {kind}", "TestBridge");
             FusionDebugCrash(kind);
@@ -631,6 +638,18 @@ public static class TestBridge
 #else
             WriteOut("ERR nativehang is Android only");
 #endif
+            return;
+        }
+
+        // マネージドコードの再帰でスタックを使い切る (ランタイムが原因を書き出してから終了する経路の検証用)。`managedso`
+        if (directive.Equals("managedso", StringComparison.OrdinalIgnoreCase))
+        {
+            [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+            static int Recurse(int depth) => Recurse(depth + 1) + depth;
+
+            WriteOut("OK managedso");
+            Logger.Info("managedso", "TestBridge");
+            Recurse(0);
             return;
         }
 

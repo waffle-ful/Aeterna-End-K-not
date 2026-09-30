@@ -8,6 +8,8 @@
 #include <crash_maps.h>
 #include <blackbox.h>
 #include <crash_handler.h>
+#include <runtime_log_tap.h>
+#include <stderr_pump.h>
 #include <vitals.h>
 #include <hooking/il2cpp.h>
 #include <hooking/safehook.h>
@@ -148,6 +150,8 @@ extern "C" [[maybe_unused]] bool fusion_bootstrap_from_libmain(JNIEnv *env)
         std::string crashDirectory = fs::path(config.appDataDirectory).parent_path().string();
         blackbox_open(crashDirectory, 3);
         crash_handler_install();
+        stderr_pump_start();
+        runtime_log_tap_install();
         vitals_start();
     }
 

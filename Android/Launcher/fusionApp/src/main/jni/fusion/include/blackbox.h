@@ -28,7 +28,7 @@ constexpr uint32_t BLACKBOX_WALK_NOT_WALKED = 0;
 constexpr uint32_t BLACKBOX_WALK_UNALIGNED_FP = 1;      // the frame pointer is not a multiple of 8
 constexpr uint32_t BLACKBOX_WALK_UNREADABLE = 2;        // the frame record cannot be read
 constexpr uint32_t BLACKBOX_WALK_NULL_RETURN = 3;       // the return address is 0
-constexpr uint32_t BLACKBOX_WALK_FP_NOT_ABOVE = 4;      // the next frame pointer is not above this one
+constexpr uint32_t BLACKBOX_WALK_FP_NOT_ABOVE = 4;      // the next frame pointer is not above this one (beyond the allowed stack switches)
 constexpr uint32_t BLACKBOX_WALK_FULL = 5;              // the frame array is full
 
 struct BlackboxCrash
