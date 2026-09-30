@@ -3,7 +3,8 @@
 
 #include <cstdint>
 
-// Installs handlers for the fatal signals (SIGSEGV, SIGBUS, SIGABRT, SIGILL, SIGFPE) that record
+// Installs handlers for the fatal signals (SIGSEGV, SIGBUS, SIGABRT, SIGILL, SIGFPE, SIGTRAP,
+// SIGSYS) that record
 // the faulting state in the blackbox header and then pass the signal on to the handler that was
 // installed before, so the system crash report is produced as usual.
 //

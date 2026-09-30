@@ -1,6 +1,7 @@
 #include <crash_handler.h>
 #include <blackbox.h>
 #include <logger.h>
+#include <stderr_pump.h>
 #include <sys/syscall.h>
 #include <sys/uio.h>
 #include <ucontext.h>
@@ -13,11 +14,14 @@
 
 namespace
 {
-    constexpr int SIGNALS[] = {SIGSEGV, SIGBUS, SIGABRT, SIGILL, SIGFPE};
+    // SIGTRAP is what the breakpoint instruction raises that compilers emit for a trap
+    // (unreachable code, a failed check); SIGSYS is a system call refused by the sandbox.
+    constexpr int SIGNALS[] = {SIGSEGV, SIGBUS, SIGABRT, SIGILL, SIGFPE, SIGTRAP, SIGSYS};
     constexpr size_t SIGNAL_COUNT = sizeof(SIGNALS) / sizeof(SIGNALS[0]);
 
     struct sigaction previous[SIGNAL_COUNT];
     bool installed = false;
+    constexpr int MAX_STACK_SWITCHES = 2;
     // Set once, before the handlers go in, when reading this process's memory by system call works.
     bool can_walk_frames = false;
 
@@ -91,6 +95,7 @@ namespace
     {
         const int saved_errno = errno;
         stamp(signo, info, context);
+        stderr_pump_settle();
 
         const struct sigaction *before = nullptr;
         for (size_t i = 0; i < SIGNAL_COUNT; i++)
@@ -160,6 +165,7 @@ void crash_handler_walk_frames(uint64_t pc, uint64_t lr, uint64_t fp, uint64_t *
 
     uint32_t stop = BLACKBOX_WALK_FULL;
     bool first = true;
+    int stack_switches = 0;
     while (count < capacity)
     {
         if ((fp & 7) != 0)
@@ -190,8 +196,11 @@ void crash_handler_walk_frames(uint64_t pc, uint64_t lr, uint64_t fp, uint64_t *
         }
         first = false;
 
-        // The stack grows down, so a caller's record always sits at a higher address.
-        if (next_fp <= fp)
+        // The stack grows down, so a caller's record sits at a higher address, except where
+        // the chain leaves the alternate signal stack for the stack that was interrupted, which
+        // may lie anywhere. A few such steps are followed; the frame array bounds the walk in
+        // any case.
+        if (next_fp == fp || (next_fp < fp && ++stack_switches > MAX_STACK_SWITCHES))
         {
             stop = BLACKBOX_WALK_FP_NOT_ABOVE;
             break;

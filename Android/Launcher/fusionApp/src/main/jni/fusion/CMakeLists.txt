@@ -15,6 +15,8 @@ add_library(fusion SHARED
         src/dotnet.cpp
         src/exports.cpp
         src/logger.cpp
+        src/runtime_log_tap.cpp
+        src/stderr_pump.cpp
         src/vitals.cpp
         src/hooking/allocator.cpp
         src/hooking/il2cpp.cpp
