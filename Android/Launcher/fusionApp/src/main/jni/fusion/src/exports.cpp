@@ -5,6 +5,7 @@
 #include <logger.h>
 #include <utilities/java.h>
 #include <blackbox.h>
+#include <vitals.h>
 #include <cstdint>
 #include <cstdlib>
 
@@ -76,4 +77,9 @@ void fusion_breadcrumb(const char *utf8)
 void fusion_breadcrumb_tagged(const char *tag, const char *utf8)
 {
     blackbox_write_tagged(tag, utf8);
+}
+
+void fusion_heartbeat()
+{
+    vitals_heartbeat();
 }

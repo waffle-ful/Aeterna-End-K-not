@@ -6,12 +6,15 @@
 #include <algorithm>
 #include <atomic>
 #include <cerrno>
+#include <charconv>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
 #include <filesystem>
+#include <mutex>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -31,6 +34,7 @@ namespace
     std::atomic<BlackboxHeader *> header{nullptr};
     char *ring = nullptr;
     uint64_t start_monotonic_ms = 0;
+    std::mutex modules_mutex;
 
     uint64_t clock_ms(clockid_t clock)
     {
@@ -140,6 +144,104 @@ namespace
         const uint64_t position = __atomic_fetch_add(&mapped->write_pos, total, __ATOMIC_RELAXED);
         ring_copy(position, record, total);
     }
+
+    // Reads the whole of /proc/self/maps into `text`. The file reports no size, so it is read
+    // until it ends.
+    bool read_maps(std::vector<char> &text)
+    {
+        int fd = open("/proc/self/maps", O_RDONLY | O_CLOEXEC);
+        if (fd < 0)
+        {
+            return false;
+        }
+
+        text.resize(1 << 18);
+        size_t used = 0;
+        while (true)
+        {
+            if (used == text.size())
+            {
+                text.resize(text.size() * 2);
+            }
+
+            const ssize_t got = TEMP_FAILURE_RETRY(read(fd, text.data() + used, text.size() - used));
+            if (got <= 0)
+            {
+                close(fd);
+                text.resize(used);
+                return got == 0;
+            }
+            used += static_cast<size_t>(got);
+        }
+    }
+
+    struct Mapping
+    {
+        uint64_t begin;
+        uint64_t end;
+        uint64_t file_offset;
+        bool executable;
+        std::string_view path;
+    };
+
+    bool parse_hex(const char *&cursor, const char *end, uint64_t &out)
+    {
+        const auto parsed = std::from_chars(cursor, end, out, 16);
+        cursor = parsed.ptr;
+        return parsed.ec == std::errc();
+    }
+
+    // One line of /proc/self/maps: "begin-end perms offset dev inode   path". The path is absent
+    // for anonymous memory and may hold spaces, so it is everything after the inode.
+    bool parse_mapping(std::string_view line, Mapping &out)
+    {
+        const char *cursor = line.data();
+        const char *end = cursor + line.size();
+        if (!parse_hex(cursor, end, out.begin) || cursor == end || *cursor++ != '-' ||
+            !parse_hex(cursor, end, out.end) || end - cursor < 6 || cursor[0] != ' ' || cursor[5] != ' ')
+        {
+            return false;
+        }
+
+        out.executable = cursor[3] == 'x';
+        cursor += 6;
+        if (!parse_hex(cursor, end, out.file_offset))
+        {
+            return false;
+        }
+
+        // The device and the inode.
+        for (int field = 0; field < 2; field++)
+        {
+            while (cursor < end && *cursor == ' ')
+            {
+                cursor++;
+            }
+            while (cursor < end && *cursor != ' ')
+            {
+                cursor++;
+            }
+        }
+        while (cursor < end && *cursor == ' ')
+        {
+            cursor++;
+        }
+
+        out.path = std::string_view(cursor, static_cast<size_t>(end - cursor));
+        return true;
+    }
+
+    // The name of the mapped file without its directory. The kernel marks a file that has been
+    // unlinked by a suffix, which is not part of the name.
+    std::string_view file_name(std::string_view path)
+    {
+        constexpr std::string_view deleted = " (deleted)";
+        if (path.ends_with(deleted))
+        {
+            path.remove_suffix(deleted.size());
+        }
+        return path.substr(path.rfind('/') + 1);
+    }
 }
 
 void blackbox_open(const std::string &directory, size_t keep)
@@ -182,7 +284,7 @@ void blackbox_open(const std::string &directory, size_t keep)
 
     // The new file reads as zeros: no crash recorded, nothing written.
     auto *mapped = static_cast<BlackboxHeader *>(mapping);
-    memcpy(mapped->magic, "EKBB0001", sizeof(mapped->magic));
+    memcpy(mapped->magic, "EKBB0002", sizeof(mapped->magic));
     mapped->header_size = BLACKBOX_HEADER_SIZE;
     mapped->ring_size = BLACKBOX_RING_SIZE;
     mapped->pid = static_cast<uint32_t>(pid);
@@ -208,4 +310,111 @@ void blackbox_write_tagged(const char *tag, const char *message)
 BlackboxHeader *blackbox_header()
 {
     return header.load(std::memory_order_acquire);
+}
+
+void blackbox_record_modules()
+{
+    BlackboxHeader *mapped = header.load(std::memory_order_acquire);
+    if (!mapped)
+    {
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(modules_mutex);
+
+    // The paths below are views into this text.
+    std::vector<char> text;
+    if (!read_maps(text))
+    {
+        LOGW("Cannot read /proc/self/maps: %s", strerror(errno));
+        return;
+    }
+
+    struct Found
+    {
+        Mapping mapping;
+        uint64_t load_base;
+    };
+    std::vector<Found> found;
+    found.reserve(1024);
+    // Where offset 0 of each file was last seen mapped. The lines come in address order, so
+    // at any line this is the closest such mapping below it.
+    std::unordered_map<std::string_view, uint64_t> bases;
+
+    const std::string_view all(text.data(), text.size());
+    for (size_t line_start = 0; line_start < all.size();)
+    {
+        size_t line_end = all.find('\n', line_start);
+        if (line_end == std::string_view::npos)
+        {
+            line_end = all.size();
+        }
+        const std::string_view line = all.substr(line_start, line_end - line_start);
+        line_start = line_end + 1;
+
+        Mapping mapping{};
+        if (!parse_mapping(line, mapping) || !mapping.path.starts_with('/'))
+        {
+            continue;
+        }
+
+        if (mapping.file_offset == 0)
+        {
+            bases[mapping.path] = mapping.begin;
+        }
+        if (!mapping.executable)
+        {
+            continue;
+        }
+
+        // Changing the protection of single pages splits one mapping into many. Pieces that
+        // touch and map consecutive parts of the same file are put back together.
+        if (!found.empty())
+        {
+            Mapping &previous = found.back().mapping;
+            if (previous.end == mapping.begin && previous.path == mapping.path &&
+                previous.begin - previous.file_offset == mapping.begin - mapping.file_offset)
+            {
+                previous.end = mapping.end;
+                continue;
+            }
+        }
+
+        const auto base = bases.find(mapping.path);
+        found.push_back({mapping, base != bases.end() ? base->second : 0});
+    }
+
+    // The files that came with the app are the ones a report is most often about, so they
+    // are placed first and stay in the table when it overflows.
+    std::vector<BlackboxModule> entries(BLACKBOX_MAX_MODULES);
+    uint32_t count = 0;
+    for (const bool app_owned : {true, false})
+    {
+        for (const Found &item : found)
+        {
+            if (item.mapping.path.starts_with("/data/") != app_owned || count == BLACKBOX_MAX_MODULES)
+            {
+                continue;
+            }
+
+            BlackboxModule &entry = entries[count++];
+            entry.begin = item.mapping.begin;
+            entry.end = item.mapping.end;
+            entry.file_offset = item.mapping.file_offset;
+            entry.load_base = item.load_base;
+            // The name always ends with a zero byte.
+            const std::string_view name = file_name(item.mapping.path);
+            memcpy(entry.name, name.data(), std::min(name.size(), BLACKBOX_MODULE_NAME_SIZE - 1));
+        }
+    }
+
+    // The count goes in after the entries it covers, and the entries it no longer covers are
+    // cleared after it, so a reader of the file never counts an entry that is not there.
+    BlackboxModules &modules = mapped->modules;
+    memcpy(modules.entries, entries.data(), count * sizeof(BlackboxModule));
+    __atomic_store_n(&modules.truncated, found.size() > BLACKBOX_MAX_MODULES ? 1u : 0u, __ATOMIC_RELEASE);
+    __atomic_store_n(&modules.count, count, __ATOMIC_RELEASE);
+    memset(modules.entries + count, 0, (BLACKBOX_MAX_MODULES - count) * sizeof(BlackboxModule));
+
+    LOGI("Recorded %u of %zu executable file ranges", count, found.size());
 }

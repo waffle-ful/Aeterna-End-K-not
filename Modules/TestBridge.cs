@@ -620,6 +620,20 @@ public static class TestBridge
             return;
         }
 
+        // メインスレッドを故意に止める (停止検知の検証用・Android のみ)。`nativehang [秒]` 既定 8・上限 60
+        if (directive.StartsWith("nativehang", StringComparison.OrdinalIgnoreCase))
+        {
+#if ANDROID
+            int hangSeconds = int.TryParse(directive[10..].Trim(), out int parsedSeconds) && parsedSeconds > 0 ? Math.Min(parsedSeconds, 60) : 8;
+            WriteOut($"OK nativehang {hangSeconds}");
+            Logger.Info($"nativehang {hangSeconds}", "TestBridge");
+            System.Threading.Thread.Sleep(hangSeconds * 1000);
+#else
+            WriteOut("ERR nativehang is Android only");
+#endif
+            return;
+        }
+
         // マネージドコード内で null 参照を起こして捕まえる (ランタイムが例外へ変換する経路の検証用)。`managednre`
         if (directive.Equals("managednre", StringComparison.OrdinalIgnoreCase))
         {

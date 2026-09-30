@@ -15,6 +15,7 @@ add_library(fusion SHARED
         src/dotnet.cpp
         src/exports.cpp
         src/logger.cpp
+        src/vitals.cpp
         src/hooking/allocator.cpp
         src/hooking/il2cpp.cpp
         src/hooking/safehook.cpp
