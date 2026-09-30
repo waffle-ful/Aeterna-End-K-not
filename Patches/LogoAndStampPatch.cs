@@ -146,6 +146,7 @@ public static class CredentialsPatch
 
         public static void Postfix(MainMenuManager __instance)
         {
+            EndKnot.Modules.BootTimeline.MarkMenuFrame("cred.postfix");
             InitCredentialsData();
             AmongUsClient.Instance.StartCoroutine(ViewCredentialsCoro(__instance));
         }

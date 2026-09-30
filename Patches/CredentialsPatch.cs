@@ -391,6 +391,7 @@ internal static class TitleLogoPatch
 
     private static void Postfix(MainMenuManager __instance)
     {
+        EndKnot.Modules.BootTimeline.MarkMenuFrame("title.postfix");
         GameObject.Find("BackgroundTexture")?.SetActive(!MainMenuManagerPatch.ShowedBak);
 
         DateTime now = DateTime.Now;

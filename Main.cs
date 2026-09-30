@@ -1489,6 +1489,7 @@ public class Main : BasePlugin
         catch (Exception e) { Utils.ThrowException(e); }
 
         BootTimeline.Mark("load.end");
+        Modules.BootPreJit.Start();
     }
 
     private static void HandleRoleColorFiles()

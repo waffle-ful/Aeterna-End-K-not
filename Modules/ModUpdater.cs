@@ -40,6 +40,7 @@ public static class ModUpdater
     [HarmonyPriority(2)]
     public static void Start_Prefix()
     {
+        EndKnot.Modules.BootTimeline.MarkMenuFrame("upd.prefix");
         if (!OperatingSystem.IsAndroid())
         {
             // Version checks are not handled on Android
