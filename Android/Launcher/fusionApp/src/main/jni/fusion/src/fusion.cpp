@@ -6,6 +6,8 @@
 #include <libmain.h>
 #include <fusion_config.h>
 #include <crash_maps.h>
+#include <blackbox.h>
+#include <crash_handler.h>
 #include <hooking/il2cpp.h>
 #include <hooking/safehook.h>
 #include <hooking/allocator.h>
@@ -134,6 +136,15 @@ extern "C" [[maybe_unused]] bool fusion_bootstrap_from_libmain(JNIEnv *env)
     jobject javaConfig = get_fusion_config(env);
     FusionConfig config = fusion_parse_config(env, javaConfig);
     env->DeleteLocalRef(javaConfig);
+
+    if (config.initialized)
+    {
+        // Both go in before il2cpp and CoreCLR are started: the ring then holds the whole boot,
+        // and the runtimes' own signal handlers end up in front of this one.
+        std::string crashDirectory = fs::path(config.appDataDirectory).parent_path().string();
+        blackbox_open(crashDirectory, 3);
+        crash_handler_install();
+    }
 
     log(LogLevel::INFO, TAG, "Executing Fusion bootstrap from libmain namespace...");
     if (!execute_fusion_config(config)) {

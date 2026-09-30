@@ -9,6 +9,8 @@ set(LIB_FOLDER ${CMAKE_SOURCE_DIR}/../jniLibs/${CMAKE_ANDROID_ARCH_ABI})
 add_library(fusion SHARED
         src/fusion.cpp
         src/fusion_config.cpp
+        src/blackbox.cpp
+        src/crash_handler.cpp
         src/crash_maps.cpp
         src/dotnet.cpp
         src/exports.cpp

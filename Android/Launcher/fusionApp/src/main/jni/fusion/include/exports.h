@@ -30,6 +30,12 @@ int8_t get_low_memory_mode();
 // 1 = abort().
 void fusion_debug_crash(int kind);
 
+// Appends one UTF-8 line to the blackbox ring that is kept on disk for post-mortem reading.
+void fusion_breadcrumb(const char *utf8);
+
+// As fusion_breadcrumb, with the line stored as "<tag>: <utf8>".
+void fusion_breadcrumb_tagged(const char *tag, const char *utf8);
+
 #ifdef __cplusplus
 }
 #endif

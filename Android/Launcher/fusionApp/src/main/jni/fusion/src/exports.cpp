@@ -4,6 +4,7 @@
 #include <hooking/safehook.h>
 #include <logger.h>
 #include <utilities/java.h>
+#include <blackbox.h>
 #include <cstdint>
 #include <cstdlib>
 
@@ -65,4 +66,14 @@ void fusion_debug_crash(int kind)
     // replace it with a trap instruction, which would raise a different signal.
     static volatile uintptr_t address = 0;
     *reinterpret_cast<volatile int *>(address) = kind;
+}
+
+void fusion_breadcrumb(const char *utf8)
+{
+    blackbox_write(utf8);
+}
+
+void fusion_breadcrumb_tagged(const char *tag, const char *utf8)
+{
+    blackbox_write_tagged(tag, utf8);
 }

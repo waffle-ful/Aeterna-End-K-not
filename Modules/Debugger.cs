@@ -74,6 +74,28 @@ internal static class Logger
         }
     }
 
+#if ANDROID
+    private static bool _breadcrumbUnavailable;
+
+    [System.Runtime.InteropServices.DllImport("fusion", EntryPoint = "fusion_breadcrumb_tagged", ExactSpelling = true)]
+    private static extern void FusionBreadcrumbTagged(
+        [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPUTF8Str)] string tag,
+        [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPUTF8Str)] string utf8);
+
+    // ランチャーがディスク上に保つ直近ログのリングへ 1 行残す。プロセスがどう終わっても読めるので、落ちる直前の行が分かる。
+    private static void Breadcrumb(string tag, string text)
+    {
+        if (_breadcrumbUnavailable) return;
+
+        try { FusionBreadcrumbTagged(tag, text); }
+        catch (Exception e) when (e is EntryPointNotFoundException or DllNotFoundException)
+        {
+            // このエクスポートを持たないランチャーでは、以後の行で呼び出しを繰り返さない。
+            _breadcrumbUnavailable = true;
+        }
+    }
+#endif
+
     private static void SendToFile(string text, LogLevel level = LogLevel.Info, string tag = "", bool escapeCRLF = true, int lineNumber = 0, string fileName = "", bool multiLine = false)
     {
         if (!IsEnable || DisableList.Contains(tag) || (level == LogLevel.Debug && !DebugModeManager.AmDebugger)) return;
@@ -86,6 +108,9 @@ internal static class Logger
         DateTime now = DateTime.Now;
 
         TestBridge.RecordLog(level, tag, text); // 全レベルリング(grep/wait marker 用)。ブリッジ OFF 時は即 return する軽量フック
+#if ANDROID
+        Breadcrumb(tag, text);
+#endif
 
         if (level is LogLevel.Error or LogLevel.Fatal)
         {

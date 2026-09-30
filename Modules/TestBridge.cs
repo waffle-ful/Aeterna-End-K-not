@@ -539,10 +539,23 @@ public static class TestBridge
 
             int kind = directive[11..].Trim() == "1" ? 1 : 0;
             WriteOut($"OK nativecrash {kind}");
+            Logger.Info($"nativecrash {kind}", "TestBridge");
             FusionDebugCrash(kind);
 #else
             WriteOut("ERR nativecrash is Android only");
 #endif
+            return;
+        }
+
+        // マネージドコード内で null 参照を起こして捕まえる (ランタイムが例外へ変換する経路の検証用)。`managednre`
+        if (directive.Equals("managednre", StringComparison.OrdinalIgnoreCase))
+        {
+            // インライン展開されると JIT が null を見抜いて例外送出へ直接畳むので、別メソッドから受け取る。
+            [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+            static object NullSource() => null;
+
+            try { WriteOut($"ERR managednre did not throw ({NullSource().GetHashCode()})"); }
+            catch (NullReferenceException) { WriteOut("OK managednre caught"); }
             return;
         }
 
