@@ -916,9 +916,9 @@ internal static class GameEndChecker
                 CountTypes countTypes = role.GetCountTypes();
                 if (countTypes is CountTypes.Crew or CountTypes.Impostor or CountTypes.None or CountTypes.OutOfGame or CountTypes.CustomTeam or CountTypes.Coven) continue;
 
-                // Altair shares Vega's key so the two don't count as separate NK types alive.
-                CustomRoles? keyRole = role.IsRecruitingRole() ? null : role is CustomRoles.Altair ? CustomRoles.Vega : role;
-                var keyWinner = role is CustomRoles.Altair ? CustomWinner.Vega : (CustomWinner)role;
+                // Altair shares Vega's key and Tama shares its JackalHadouHo's key so each pair doesn't count as separate NK types alive.
+                CustomRoles? keyRole = role.IsRecruitingRole() ? null : role is CustomRoles.Altair ? CustomRoles.Vega : role is CustomRoles.Tama ? CustomRoles.JackalHadouHo : role;
+                var keyWinner = role is CustomRoles.Altair ? CustomWinner.Vega : role is CustomRoles.Tama ? (CustomWinner)CustomRoles.JackalHadouHo : (CustomWinner)role;
                 int value = 0;
 
                 for (int j = 0; j < aapc.Count; j++)
@@ -1085,7 +1085,7 @@ internal static class GameEndChecker
                 var allPlayers = Main.CachedAllPlayerControls();
                 foreach (var pc in allPlayers)
                 {
-                    if (pc.GetCustomRole() == rl.Value)
+                    if (pc.GetCustomRole() == rl.Value || (rl.Value == CustomRoles.JackalHadouHo && pc.Is(CustomRoles.Tama)))
                         WinnerIds.Add(pc.PlayerId);
                 }
             }
