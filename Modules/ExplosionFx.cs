@@ -86,7 +86,7 @@ public static class ExplosionFx
         // 撃った瞬間の必殺技カットイン (画面に出す): Radius = CannonPalette + 1、A = 撃ち手の PlayerId、B = CannonTitle
         CannonCutIn = 29,
 
-        // 血を吸い尽くされる: Pos = 吸われた人 (演出が始まってから倒れる)
+        // 血を吸い尽くされる: Pos = 吸われた人 (演出が始まってから倒れる)、Radius = 吸われた人の PlayerId + 1 (血はその人の体の色)
         Drain = 30,
 
         // 毒が回る: Pos = 毒で倒れる人
@@ -610,7 +610,7 @@ public static class ExplosionFx
                     break;
                 }
                 case Kind.Drain:
-                    SpawnDrain(r.Pos);
+                    SpawnDrain(r.Pos, (int)(r.Radius + 0.5f) - 1);
                     break;
                 case Kind.Poison:
                     SpawnPoison(r.Pos);
@@ -2005,16 +2005,40 @@ public static class ExplosionFx
 
     // ── 吸血・毒・石化・操り糸・竜巻 ─────────────────────────────────────
 
-    private static readonly Color BloodBright = new(1f, 0.24f, 0.3f);
-    private static readonly Color Blood = new(0.78f, 0.03f, 0.1f);
-    private static readonly Color BloodDark = new(0.3f, 0.01f, 0.05f);
     private static readonly Color BatBlack = new(0.08f, 0.02f, 0.07f);
+
+    // クルーの血はその人の体の色 (明るい飛沫・本体・影)。色が分からなければ赤
+    internal static void BloodColors(int colorId, out Color bright, out Color main, out Color dark)
+    {
+        if (colorId < 0 || colorId >= Palette.PlayerColors.Length)
+        {
+            bright = FxMath.Rgba(1f, 0.24f, 0.3f);
+            main = FxMath.Rgba(0.78f, 0.03f, 0.1f);
+            dark = FxMath.Rgba(0.3f, 0.01f, 0.05f);
+            return;
+        }
+
+        Color32 m = Palette.PlayerColors[colorId];
+        Color32 d = Palette.ShadowColors[colorId];
+        main = FxMath.Rgba(m.r / 255f, m.g / 255f, m.b / 255f);
+        bright = FxMath.Rgba(0.6f * main.r + 0.4f, 0.6f * main.g + 0.4f, 0.6f * main.b + 0.4f);
+        dark = FxMath.Rgba(d.r / 255f * 0.6f, d.g / 255f * 0.6f, d.b / 255f * 0.6f);
+    }
     private static readonly Color FangWhite = new(1f, 0.92f, 0.94f);
 
-    // 血を吸われる: 首筋の牙の跡が 2 つ光る → 体の周りから赤い粒が頭上の一点へ吸い上げられ、赤い霧が立ちのぼる
+    // 血を吸われる: 首筋の牙の跡が 2 つ光る → 体の周りから血の粒が頭上の一点へ吸い上げられ、血の霧が立ちのぼる
     // → 集まった血が弾けてコウモリの群れになって飛び去る → 倒れた足元に血だまりが残る
-    private static void SpawnDrain(Vector2 c)
+    private static void SpawnDrain(Vector2 c, int victimId)
     {
+        int colorId = -1;
+
+        try
+        {
+            if (victimId is >= 0 and <= 254 && GameData.Instance) colorId = GameData.Instance.GetPlayerById((byte)victimId)?.DefaultOutfit.ColorId ?? -1;
+        }
+        catch (System.Exception e) { Utils.ThrowException(e); }
+
+        BloodColors(colorId, out Color BloodBright, out Color Blood, out Color BloodDark);
         Vector2 f = c + Feet;
         Vector2 top = c + new Vector2(0f, 1.35f);
         const float gather = 0.8f;
@@ -2031,7 +2055,7 @@ public static class ExplosionFx
             Add(Shape.Glow, n, new Vector2(0f, -0.55f), 0.55f, 0.09f, 0.06f, BloodBright, Blood, 1f, 0.05f, 0.6f, delay: 0.1f, sy0: 0.16f, sy1: 0.1f);
         }
 
-        // 体を包む赤い脈動
+        // 体を包む血の色の脈動
         Add(Shape.Glow, c, Vector2.zero, 1.1f, 1.4f, 1.1f, Blood, BloodDark, 0.6f, 0.05f, 0.5f, twinkle: 0.5f, twinkleSpeed: 16f, sy0: 2f, sy1: 1.6f, order: 0);
 
         // 吸い上げられる血の粒 (寿命の終わりにちょうど頭上の一点へ届く速さで放つ)

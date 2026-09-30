@@ -209,7 +209,8 @@ public class Vampire : RoleBase
         // 待つ間に会議が始まると Suicide は会議中なので効かない → PendingKills に残しておき、OnReportDeadBody がその場で死なせる
         if (!meeting && !fxShown && target.IsAlive())
         {
-            ExplosionFx.Play(IsPoisoner ? ExplosionFx.Kind.Poison : ExplosionFx.Kind.Drain, target.Pos(), 1f);
+            if (IsPoisoner) ExplosionFx.Play(ExplosionFx.Kind.Poison, target.Pos(), 1f);
+            else ExplosionFx.Play(ExplosionFx.Kind.Drain, target.Pos(), target.PlayerId + 1f);
             PendingKills.Add(target.PlayerId);
 
             LateTask.New(() =>

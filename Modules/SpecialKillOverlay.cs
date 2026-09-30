@@ -166,6 +166,7 @@ internal static class SpecialKillOverlay
         SetLayer(root.transform);
 
         int colorId = victim.DefaultOutfit.ColorId;
+        ExplosionFx.BloodColors(colorId, out BloodLight, out BloodRed, out BloodDeep);
 
         try
         {
@@ -268,8 +269,9 @@ internal static class SpecialKillOverlay
 
     // ── 吸血 ──
     private static readonly Color Fang = new(1f, 0.95f, 0.95f);
-    private static readonly Color BloodRed = new(0.9f, 0.05f, 0.12f);
-    private static readonly Color BloodDeep = new(0.45f, 0.01f, 0.06f);
+
+    // 血はやられた人の体の色 (Show で決める)
+    private static Color BloodLight, BloodRed, BloodDeep;
 
     private static void StepBite(float t, float dt, ref float emit, ref float shake, PoolablePlayer crew, List<SpriteRenderer> tint, List<Part> parts, Transform root,
         bool dead, float deathAt)
@@ -305,7 +307,7 @@ internal static class SpecialKillOverlay
             {
                 emit -= 0.022f;
                 Vector2 v = FxMath.V2(FxMath.Range(-4.8f, -3.2f), FxMath.Range(1.8f, 3.2f));
-                AddPart(parts, root, _disc, FxMath.Value < 0.3f ? FxMath.Rgba(1f, 0.35f, 0.4f) : BloodRed, neck + FxMath.V2(FxMath.Range(-0.05f, 0.05f), FxMath.Range(-0.05f, 0.05f)), v,
+                AddPart(parts, root, _disc, FxMath.Value < 0.3f ? BloodLight : BloodRed, neck + FxMath.V2(FxMath.Range(-0.05f, 0.05f), FxMath.Range(-0.05f, 0.05f)), v,
                     FxMath.Range(0.1f, 0.16f), 0.05f, 0.7f, -0.5f, drag: 0.4f, fadeFrom: 0.6f);
             }
         }
@@ -514,7 +516,7 @@ internal static class SpecialKillOverlay
                 for (int i = 0; i < 20; i++)
                 {
                     float a = FxMath.Range(0f, 2f * FxMath.PI);
-                    AddPart(parts, root, _disc, i % 3 == 0 ? FxMath.Rgba(1f, 0.35f, 0.4f) : BloodRed, c, FxMath.V2(FxMath.Cos(a), FxMath.Sin(a)) * FxMath.Range(3f, 6.5f) + FxMath.V2(0f, 1.5f),
+                    AddPart(parts, root, _disc, i % 3 == 0 ? BloodLight : BloodRed, c, FxMath.V2(FxMath.Cos(a), FxMath.Sin(a)) * FxMath.Range(3f, 6.5f) + FxMath.V2(0f, 1.5f),
                         FxMath.Range(0.12f, 0.24f), 0.08f, FxMath.Range(0.7f, 1f), -0.55f, gravity: 7f, drag: 0.3f, fadeFrom: 0.7f);
                 }
 
