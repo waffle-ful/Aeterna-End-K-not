@@ -59,7 +59,7 @@ public class TimeThief : RoleBase
 
     public override void OnMurder(PlayerControl killer, PlayerControl target)
     {
-        EndKnot.Modules.ExplosionFx.Play(EndKnot.Modules.ExplosionFx.Kind.TimeSteal, target.Pos(), 1f);
+        EndKnot.Modules.ExplosionFx.Play(EndKnot.Modules.ExplosionFx.Kind.TimeSteal, target.Pos(), killer.PlayerId + 1);
     }
 
     private static int StolenTime(byte id)

@@ -385,7 +385,7 @@ public static class ExplosionFx
     // 凍結系・波動砲は Radius に秒数を載せるので、効果時間の設定の上限 (180 秒) まで通す
     private static float ClampRadius(Kind kind, float radius)
     {
-        if (kind is Kind.PuppetStrings or Kind.CurseStrings or Kind.RevengeAwaken or Kind.RevengeAura or Kind.VultureFeast) return FxMath.Clamp(radius, 0f, 256f);
+        if (kind is Kind.PuppetStrings or Kind.CurseStrings or Kind.RevengeAwaken or Kind.RevengeAura or Kind.VultureFeast or Kind.TimeSteal) return FxMath.Clamp(radius, 0f, 256f);
         return kind is Kind.Freeze or Kind.TimeStop or Kind.Tornado or Kind.TimeRewind or Kind.DemoFuse or Kind.WebSnare || HasExtra(kind) ? FxMath.Clamp(radius, 0.3f, 180f) : FxMath.Clamp(radius, 0.3f, 15f);
     }
 
@@ -746,7 +746,7 @@ public static class ExplosionFx
                     SpawnRewindRevive(r.Pos);
                     break;
                 case Kind.TimeSteal:
-                    SpawnTimeSteal(r.Pos);
+                    SpawnTimeSteal(r.Pos, (int)(r.Radius + 0.5f) - 1);
                     break;
                 case Kind.ChronoRampage:
                     SpawnChronoRampage(r.Pos);
@@ -4211,6 +4211,12 @@ public static class ExplosionFx
     private static readonly Color ChronoHot = new(1f, 0.78f, 0.72f);
     private static readonly Color ChronoEmber = new(1f, 0.4f, 0.3f);
 
+    // ベントの中や透明化で姿の見えない人
+    private static bool Unseen(PlayerControl pc)
+    {
+        return pc.inVent || !pc.Visible || Main.Invisible.Contains(pc.PlayerId) || pc.invisibilityAlpha < 0.9f;
+    }
+
     private static PlayerControl NearestPlayer(Vector2 c)
     {
         PlayerControl best = null;
@@ -4218,6 +4224,9 @@ public static class ExplosionFx
 
         foreach (PlayerControl pc in Main.AllAlivePlayerControls)
         {
+            // 切断で破棄された人が一覧に残っていることがある。姿の見えない人を拾うと演出がその居場所を指してしまう
+            if (!pc || Unseen(pc)) continue;
+
             Vector2 p = pc.Pos();
             float dx = p.x - c.x, dy = p.y - c.y;
             float d = dx * dx + dy * dy;
@@ -4579,12 +4588,26 @@ public static class ExplosionFx
         }
     }
 
+    // 砂の行き先。番号の人が被害者のそばにいればその人 (姿が見えない間は居場所を指さないよう行き先なし)。
+    // 番号を載せない版のホストからは 0 番が届くので、そばにいない時は最寄りの人で代える
+    private static PlayerControl SandThief(Vector2 c, int thiefId)
+    {
+        PlayerControl pc = thiefId is >= 0 and <= 254 ? Utils.GetPlayerById((byte)thiefId) : null;
+        if (!pc || !pc.IsAlive()) return NearestPlayer(c);
+
+        Vector2 p = pc.Pos();
+        float dx = p.x - c.x, dy = p.y - c.y;
+        if (dx * dx + dy * dy > 9f) return NearestPlayer(c);
+
+        return Unseen(pc) ? null : pc;
+    }
+
     // 時間を盗む (約 1.5 秒): 被害者の影がセピアに固まって砂へ崩れ、周りの 12 の刻みが 1 つずつ引き抜かれ、
     // 金の砂が弧を描いて盗んだ者の体へ流れ込む (行き先が見つからなければ上へ昇って散る)
-    private static void SpawnTimeSteal(Vector2 c)
+    private static void SpawnTimeSteal(Vector2 c, int thiefId)
     {
         float q = Active.Count > 1200 ? 0.5f : 1f;
-        PlayerControl thief = NearestPlayer(c);
+        PlayerControl thief = SandThief(c, thiefId);
         SandEmitters.Add(new SandEmitter { Pos = c, Until = Time.time + 1.1f, Next = Time.time + 0.25f, To = thief });
         if (SandEmitters.Count > 6) SandEmitters.RemoveAt(0);
 
