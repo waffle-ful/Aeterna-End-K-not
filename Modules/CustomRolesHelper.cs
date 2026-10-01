@@ -1102,6 +1102,18 @@ internal static class CustomRolesHelper
                 CustomRoles.Entranced;
         }
 
+        // Roles that are drawn from the Jackal faction pool and configured on its own tab.
+        public bool IsJackalFaction()
+        {
+            return role is CustomRoles.Jackal or CustomRoles.JackalHadouHo;
+        }
+
+        // Everyone who wins with the Jackal faction, including the roles players are converted into mid-game.
+        public bool IsJackalTeamMember()
+        {
+            return role is CustomRoles.Jackal or CustomRoles.Sidekick or CustomRoles.JackalHadouHo or CustomRoles.Tama;
+        }
+
         public bool IsRecruitingRole()
         {
             return role is
@@ -1900,6 +1912,7 @@ internal static class CustomRolesHelper
         {
             if (role.IsCombinationRole()) return RoleOptionType.Combination;
             if (role.IsCoven()) return RoleOptionType.Coven_Miscellaneous;
+            if (role.IsJackalFaction()) return RoleOptionType.Jackal_Miscellaneous;
             if (role.IsImpostor() || role.IsMadmate()) return role.GetImpostorRoleCategory();
             if (role.IsCrewmate()) return role.GetCrewmateRoleCategory();
             if (role.IsNeutral(true)) return role.GetNeutralRoleCategory();
@@ -2239,6 +2252,7 @@ internal static class CustomRolesHelper
                 RoleOptionType.Neutral_Pariah => HtmlColor.TryParse("#a10e49", out var c) ? c : Color.magenta,
                 RoleOptionType.Neutral_Killing => Palette.ImpostorRed,
                 RoleOptionType.Coven_Miscellaneous => Utils.GetRoleColor(CustomRoles.CovenLeader),
+                RoleOptionType.Jackal_Miscellaneous => Utils.GetRoleColor(CustomRoles.Jackal),
                 RoleOptionType.Combination => CombinationRoles.TabColor,
                 _ => Utils.GetRoleColor(CustomRoles.Vigilante)
             };
@@ -2264,6 +2278,7 @@ internal static class CustomRolesHelper
                 RoleOptionType.Neutral_Pariah => TabGroup.NeutralRoles,
                 RoleOptionType.Neutral_Killing => TabGroup.NeutralRoles,
                 RoleOptionType.Coven_Miscellaneous => TabGroup.CovenRoles,
+                RoleOptionType.Jackal_Miscellaneous => TabGroup.JackalRoles,
                 RoleOptionType.Combination => TabGroup.Combinations,
                 _ => TabGroup.OtherRoles
             };
@@ -2469,7 +2484,8 @@ public enum RoleOptionType
     Neutral_Pariah,
     Neutral_Killing,
     Coven_Miscellaneous,
-    Combination
+    Combination,
+    Jackal_Miscellaneous
 }
 
 public enum AddonTypes

@@ -386,6 +386,7 @@ public static class LobbyViewSettingsPanePatch
                     case TabGroup.CrewmateRoles:
                     case TabGroup.NeutralRoles:
                     case TabGroup.CovenRoles:
+                    case TabGroup.JackalRoles:
                     case TabGroup.Combinations:
                     case TabGroup.Addons:
                     case TabGroup.OtherRoles:
@@ -398,15 +399,16 @@ public static class LobbyViewSettingsPanePatch
                         if (indexRoles != 0)
                         {
                             newXPos = cloneRoleTabButton.transform.localPosition;
-                            // Combinations はカヴンの上段、Addons はその他の上段、LegacyRoles はニュートラルの上段に重ねる
+                            // JackalRoles はクルーメイトの上段、Combinations はカヴンの上段、Addons はその他の上段、LegacyRoles はニュートラルの上段に重ねる
                             newXPos.x += 2.45f * (tabGroup switch
                             {
+                                TabGroup.JackalRoles => indexRoles - 3,
                                 TabGroup.Combinations => indexRoles - 1,
                                 TabGroup.LegacyRoles => indexRoles - 3,
                                 _ => indexRoles
                             });
 
-                            if (tabGroup is TabGroup.Addons or TabGroup.Combinations or TabGroup.LegacyRoles)
+                            if (tabGroup is TabGroup.Addons or TabGroup.Combinations or TabGroup.LegacyRoles or TabGroup.JackalRoles)
                                 newXPos.y += 0.6f;
                             else
                                 indexRoles++;
@@ -582,7 +584,7 @@ public static class LobbyViewSettingsPanePatch
                     buttonTab.gameObject.SetActive(true);
                     break;
                 case CustomGameMode.HideAndSeek:
-                    if (tabName is TabGroup.CovenRoles or TabGroup.Combinations or TabGroup.Addons or TabGroup.OtherRoles or TabGroup.LegacyRoles)
+                    if (tabName is TabGroup.CovenRoles or TabGroup.JackalRoles or TabGroup.Combinations or TabGroup.Addons or TabGroup.OtherRoles or TabGroup.LegacyRoles)
                         buttonTab.gameObject.SetActive(false);
                     break;
                 default:
@@ -590,6 +592,7 @@ public static class LobbyViewSettingsPanePatch
                                    or TabGroup.CrewmateRoles
                                    or TabGroup.NeutralRoles
                                    or TabGroup.CovenRoles
+                                   or TabGroup.JackalRoles
                                    or TabGroup.Combinations
                                    or TabGroup.Addons
                                    or TabGroup.OtherRoles
@@ -643,6 +646,7 @@ public static class LobbyViewSettingsPanePatch
                 case TabGroup.CrewmateRoles:
                 case TabGroup.NeutralRoles:
                 case TabGroup.CovenRoles:
+                case TabGroup.JackalRoles:
                 case TabGroup.Combinations:
                 case TabGroup.Addons:
                 case TabGroup.OtherRoles:
@@ -755,6 +759,7 @@ public static class LobbyViewSettingsPanePatch
                                     TabGroup.CrewmateRoles => new Color32(140, 255, 255, 255),
                                     TabGroup.NeutralRoles => new Color32(255, 171, 27, 255),
                                     TabGroup.CovenRoles => new Color32(123, 63, 187, 255),
+                                    TabGroup.JackalRoles => new Color32(0, 180, 235, 255),
                                     TabGroup.Combinations => CombinationRoles.TabColor32,
                                     _ => new Color32(0, 165, 255, 255)
                                 } :
@@ -809,6 +814,7 @@ public static class LobbyViewSettingsPanePatch
             TabGroup.CrewmateRoles => new(0f, 0.7f, 1f),
             TabGroup.NeutralRoles => new(1f, 1f, 0f),
             TabGroup.CovenRoles => new(0.79f, 0.192f, 0.541f),
+            TabGroup.JackalRoles => new(0f, 0.706f, 0.922f),
             TabGroup.Combinations => (Color)CombinationRoles.TabColor32,
             TabGroup.Addons => new(1f, 0f, 1f),
             TabGroup.OtherRoles => new(0.4f, 0.4f, 0.4f),
@@ -1027,6 +1033,7 @@ public static class LobbyViewSettingsPanePatch
                                 TabGroup.CrewmateRoles => new Color32(140, 255, 255, 255),
                                 TabGroup.NeutralRoles => new Color32(255, 171, 27, 255),
                                 TabGroup.CovenRoles => new Color32(123, 63, 187, 255),
+                                TabGroup.JackalRoles => new Color32(0, 180, 235, 255),
                                 TabGroup.Combinations => CombinationRoles.TabColor32,
                                 _ => new Color32(0, 165, 255, 255)
                             } :
@@ -1210,6 +1217,7 @@ public static class LobbyViewSettingsPanePatch
                             TabGroup.CrewmateRoles => new Color32(140, 255, 255, 255),
                             TabGroup.NeutralRoles => new Color32(255, 171, 27, 255),
                             TabGroup.CovenRoles => new Color32(123, 63, 187, 255),
+                            TabGroup.JackalRoles => new Color32(0, 180, 235, 255),
                             TabGroup.Combinations => CombinationRoles.TabColor32,
                             _ => new Color32(0, 165, 255, 255)
                         } :

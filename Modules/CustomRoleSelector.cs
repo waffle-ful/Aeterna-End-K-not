@@ -74,6 +74,7 @@ internal static class CustomRoleSelector
         var readyNeutralKillingNum = 0;
         var readyMadmateNum = 0;
         var readyCovenNum = 0;
+        var readyJackalNum = 0;
         var readyCrewmateNum = 0;
 
         List<CustomRoles> finalRolesList = [];
@@ -134,6 +135,7 @@ internal static class CustomRoleSelector
             RoleAssignInfo info = new(role, chance, count);
 
             if (role.IsCoven()) roles[RoleAssignType.Coven].Add(info);
+            else if (role.IsJackalFaction()) roles[RoleAssignType.Jackal].Add(info);
             else if (role.IsMadmate()) roles[RoleAssignType.Madmate].Add(info);
             else if (role.IsImpostor() && role != CustomRoles.DoubleAgent) roles[RoleAssignType.Impostor].Add(info);
             else if (role.IsNK()) roles[RoleAssignType.NeutralKilling].Add(info);
@@ -177,19 +179,24 @@ internal static class CustomRoleSelector
             readyRoleNum++;
         }
 
+        int numJackals;
+
+        try { numJackals = rd.Next(Options.JackalFactionMin.GetInt(), Options.JackalFactionMax.GetInt() + 1); }
+        catch { numJackals = (int)(new[] { Options.JackalFactionMin.GetInt(), Options.JackalFactionMin.GetInt() + 1 }.Average()); }
+
         (OptionItem MinSetting, OptionItem MaxSetting) neutralLimits = Options.FactionMinMaxSettings[Team.Neutral];
         int numNeutrals;
 
         try { numNeutrals = rd.Next(neutralLimits.MinSetting.GetInt(), neutralLimits.MaxSetting.GetInt() + 1); }
         catch { numNeutrals = (int)(new[] { neutralLimits.MinSetting.GetInt(), neutralLimits.MinSetting.GetInt() + 1 }.Average()); }
 
-        if (roles[RoleAssignType.Impostor].Count == 0 && numNeutrals == 0 && !Main.SetRoles.Values.Any(x => x.IsImpostor() || x.IsNK()))
+        if (roles[RoleAssignType.Impostor].Count == 0 && numNeutrals == 0 && numJackals == 0 && !Main.SetRoles.Values.Any(x => x.IsImpostor() || x.IsNK()))
         {
             roles[RoleAssignType.Impostor].Add(new(CustomRoles.ImpostorEndKnot, 100, optImpNum));
             Logger.Warn("Adding Vanilla Impostor", "CustomRoleSelector");
         }
 
-        if (roles[RoleAssignType.Crewmate].Count == 0 && numNeutrals == 0 && !Main.SetRoles.Values.Any(x => x.IsCrewmate()))
+        if (roles[RoleAssignType.Crewmate].Count == 0 && numNeutrals == 0 && numJackals == 0 && !Main.SetRoles.Values.Any(x => x.IsCrewmate()))
         {
             roles[RoleAssignType.Crewmate].Add(new(CustomRoles.CrewmateEndKnot, 100, playerCount - optImpNum));
             Logger.Warn("Adding Vanilla Crewmates", "CustomRoleSelector");
@@ -198,6 +205,7 @@ internal static class CustomRoleSelector
         Logger.Info($"Number of Impostors: {optImpNum}", "FactionLimits");
         Logger.Info($"Number of Neutrals: {neutralLimits.MinSetting.GetInt()} - {neutralLimits.MaxSetting.GetInt()} => {numNeutrals}", "FactionLimits");
         Logger.Info($"Number of Coven members: {covenLimits.MinSetting.GetInt()} - {covenLimits.MaxSetting.GetInt()} => {numCovens}", "FactionLimits");
+        Logger.Info($"Number of Jackal faction roles: {Options.JackalFactionMin.GetInt()} - {Options.JackalFactionMax.GetInt()} => {numJackals}", "FactionLimits");
 
         Logger.Msg("=====================================================", "AllActiveRoles");
         Logger.Info(string.Join(", ", roles[RoleAssignType.Impostor].Select(x => $"{x.Role}: {x.SpawnChance}% - {x.MaxCount}")), "ImpRoles");
@@ -206,6 +214,7 @@ internal static class CustomRoleSelector
         Logger.Info(string.Join(", ", roles[RoleAssignType.Crewmate].Select(x => $"{x.Role}: {x.SpawnChance}% - {x.MaxCount}")), "CrewRoles");
         Logger.Info(string.Join(", ", roles[RoleAssignType.Madmate].Select(x => $"{x.Role}: {x.SpawnChance}% - {x.MaxCount}")), "MadmateRoles");
         Logger.Info(string.Join(", ", roles[RoleAssignType.Coven].Select(x => $"{x.Role}: {x.SpawnChance}% - {x.MaxCount}")), "CovenRoles");
+        Logger.Info(string.Join(", ", roles[RoleAssignType.Jackal].Select(x => $"{x.Role}: {x.SpawnChance}% - {x.MaxCount}")), "JackalRoles");
         Logger.Msg("=====================================================", "AllActiveRoles");
 
         Dictionary<RoleOptionType, int> subCategoryLimits;
@@ -289,6 +298,7 @@ internal static class CustomRoleSelector
         Logger.Info(string.Join(", ", roles[RoleAssignType.Crewmate].Select(x => x.Role.ToString())), "SelectedCrewRoles");
         Logger.Info(string.Join(", ", roles[RoleAssignType.Madmate].Select(x => x.Role.ToString())), "SelectedMadmateRoles");
         Logger.Info(string.Join(", ", roles[RoleAssignType.Coven].Select(x => x.Role.ToString())), "SelectedCovenRoles");
+        Logger.Info(string.Join(", ", roles[RoleAssignType.Jackal].Select(x => x.Role.ToString())), "SelectedJackalRoles");
         Logger.Msg("======================================================", "SelectedRoles");
 
         List<PlayerControl> allPlayers = Main.EnumerateAlivePlayerControls().ToList();
@@ -339,6 +349,11 @@ internal static class CustomRoleSelector
                 roles[RoleAssignType.Coven].DoIf(x => x.Role == role, x => x.AssignedCount++);
                 readyCovenNum++;
             }
+            else if (role.IsJackalFaction())
+            {
+                roles[RoleAssignType.Jackal].DoIf(x => x.Role == role, x => x.AssignedCount++);
+                readyJackalNum++;
+            }
             else if (role.IsMadmate())
             {
                 roles[RoleAssignType.Madmate].DoIf(x => x.Role == role, x => x.AssignedCount++);
@@ -374,6 +389,7 @@ internal static class CustomRoleSelector
         AssignRoles(RoleAssignType.NeutralKilling, nkLimit, ref readyNeutralKillingNum, ref readyRoleNum, playerCount, finalRolesList, roles);
         AssignRoles(RoleAssignType.Madmate, madmateNum, ref readyMadmateNum, ref readyRoleNum, playerCount, finalRolesList, roles);
         AssignRoles(RoleAssignType.Coven, numCovens, ref readyCovenNum, ref readyRoleNum, playerCount, finalRolesList, roles);
+        AssignRoles(RoleAssignType.Jackal, numJackals, ref readyJackalNum, ref readyRoleNum, playerCount, finalRolesList, roles);
         AssignRoles(RoleAssignType.Crewmate, playerCount - readyRoleNum, ref readyCrewmateNum, ref readyRoleNum, playerCount, finalRolesList, roles);
         
         if (readyRoleNum < playerCount && subCategoryLimits.Count > 0)
@@ -441,6 +457,7 @@ internal static class CustomRoleSelector
                     RoleAssignType.NeutralKilling => nkLimit,
                     RoleAssignType.NonKillingNeutral => nnkLimit,
                     RoleAssignType.Coven => numCovens,
+                    RoleAssignType.Jackal => numJackals,
                     RoleAssignType.Madmate => madmateNum,
                     RoleAssignType.Crewmate => playerCount,
                     _ => 0
@@ -601,7 +618,8 @@ internal static class CustomRoleSelector
         NonKillingNeutral,
         Crewmate,
         Madmate,
-        Coven
+        Coven,
+        Jackal
     }
 
     private class RoleAssignInfo(CustomRoles role, int spawnChance, int maxCount)

@@ -622,6 +622,7 @@ public static class Utils
             TabGroup.CrewmateRoles => new(0.2f, 0.4f, 0.5f),
             TabGroup.NeutralRoles => new(0.5f, 0.4f, 0.2f),
             TabGroup.CovenRoles => new(0.5f, 0.2f, 0.4f),
+            TabGroup.JackalRoles => new(0f, 0.35f, 0.46f),
             TabGroup.Combinations => new(0.5f, 0.42f, 0.1f),
             TabGroup.Addons => new(0.4f, 0.2f, 0.3f),
             TabGroup.OtherRoles => new(0.4f, 0.4f, 0.4f),
@@ -1284,6 +1285,7 @@ public static class Utils
         {
             case CustomRoles.Crewpostor when PlayerControl.LocalPlayer.Is(CustomRoleTypes.Impostor) && Options.CrewpostorKnowsAllies.GetBool():
             case CustomRoles.Hypocrite when PlayerControl.LocalPlayer.Is(CustomRoleTypes.Impostor) && Hypocrite.KnowsAllies.GetBool():
+            case var r when r.IsJackalTeamMember() && PlayerControl.LocalPlayer.GetCustomRole().IsJackalTeamMember():
             case CustomRoles.Jackal when PlayerControl.LocalPlayer.Is(CustomRoles.Jackal):
             case CustomRoles.Jackal when PlayerControl.LocalPlayer.Is(CustomRoles.Sidekick):
             case CustomRoles.Sidekick when PlayerControl.LocalPlayer.Is(CustomRoles.Jackal):
@@ -4276,7 +4278,7 @@ public static class Utils
                (seer.Is(CustomRoleTypes.Impostor) && target.Is(CustomRoles.Hypocrite) && Hypocrite.AlliesKnowHypocrite.GetBool()) ||
                (seer.Is(CustomRoleTypes.Impostor) && target.Is(CustomRoles.Crewpostor) && Options.AlliesKnowCrewpostor.GetBool()) ||
                (seer.IsMadmate() && target.IsMadmate() && Options.MadmateKnowWhosMadmate.GetBool()) ||
-               ((seer.Is(CustomRoles.Sidekick) || seer.Is(CustomRoles.Jackal)) && (target.Is(CustomRoles.Sidekick) || target.Is(CustomRoles.Jackal))) ||
+               (seer.GetCustomRole().IsJackalTeamMember() && target.GetCustomRole().IsJackalTeamMember()) ||
                ((!seer.IsAlive() || seer.Is(CustomRoles.Connecting)) && target.Is(CustomRoles.Connecting)) ||
                Twins.ArePartners(seer.PlayerId, target.PlayerId) ||
                Faction.AreAllies(seer, target) ||

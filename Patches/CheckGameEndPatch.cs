@@ -198,7 +198,7 @@ internal static class GameEndChecker
                     break;
                 case CustomWinner.Jackal:
                     WinnerIds.UnionWith(Main.EnumeratePlayerControls()
-                        .Where(pc => pc.Is(CustomRoles.Jackal) || pc.Is(CustomRoles.Sidekick))
+                        .Where(pc => pc.GetCustomRole().IsJackalTeamMember())
                         .Select(pc => pc.PlayerId));
 
                     break;
@@ -916,9 +916,10 @@ internal static class GameEndChecker
                 CountTypes countTypes = role.GetCountTypes();
                 if (countTypes is CountTypes.Crew or CountTypes.Impostor or CountTypes.None or CountTypes.OutOfGame or CountTypes.CustomTeam or CountTypes.Coven) continue;
 
-                // Altair shares Vega's key and Tama shares its JackalHadouHo's key so each pair doesn't count as separate NK types alive.
-                CustomRoles? keyRole = role.IsRecruitingRole() ? null : role is CustomRoles.Altair ? CustomRoles.Vega : role is CustomRoles.Tama ? CustomRoles.JackalHadouHo : role;
-                var keyWinner = role is CustomRoles.Altair ? CustomWinner.Vega : role is CustomRoles.Tama ? (CustomWinner)CustomRoles.JackalHadouHo : (CustomWinner)role;
+                // Altair shares Vega's key, and every Jackal faction role shares the Jackal key, so allies don't count as separate NK types alive.
+                bool jackalTeam = role.IsJackalTeamMember();
+                CustomRoles? keyRole = role.IsRecruitingRole() || jackalTeam ? null : role is CustomRoles.Altair ? CustomRoles.Vega : role;
+                var keyWinner = jackalTeam ? CustomWinner.Jackal : role is CustomRoles.Altair ? CustomWinner.Vega : (CustomWinner)role;
                 int value = 0;
 
                 for (int j = 0; j < aapc.Count; j++)

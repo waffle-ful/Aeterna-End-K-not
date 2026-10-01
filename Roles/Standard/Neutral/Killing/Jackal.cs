@@ -196,6 +196,8 @@ public class Jackal : RoleBase
     {
         if (!CanRecruitImpostors.GetBool() && pc.Is(CustomRoleTypes.Impostor)) return false;
         if (!CanRecruitMadmates.GetBool() && pc.IsMadmate()) return false;
+        // Allies are already on the Jackal's side; recruiting one would strip its role.
+        if (pc && pc.GetCustomRole().IsJackalTeamMember()) return false;
         return pc && !pc.Is(CustomRoles.Sidekick) && !pc.Is(CustomRoles.Curser) && !pc.Is(CustomRoles.Loyal) && !pc.Is(CustomRoles.Bloodlust) && !pc.IsConverted() && pc.GetCustomRole().IsAbleToBeSidekicked();
     }
 

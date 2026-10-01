@@ -137,8 +137,8 @@ public static class OnlinePresetsManager
                 row.PlusBtn.OnClick.AddListener((UnityAction)(() =>
                 {
                     bool b = plusText.text == "ⓘ";
-                    GameObject.Find("PlayerOptionsMenu(Clone)").transform.FindChild("What Is This?").gameObject.SetActive(b);
-                    GameSettingMenuPatch.GMButtons.ForEach(x => { if (x) x.gameObject.SetActive(!b); });
+                    GameSettingMenuPatch.SetGameModeListOpen(false);
+                    GameSettingMenuPatch.ResetDescriptionPaging(GameSettingMenu.Instance.MenuDescriptionText);
                     if (b) GameSettingMenu.Instance.MenuDescriptionText.text = preset.description;
                     plusText.text = b ? "∅" : "ⓘ";
                 }));
