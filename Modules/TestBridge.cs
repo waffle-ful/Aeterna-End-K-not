@@ -572,6 +572,14 @@ public static class TestBridge
             return;
         }
 
+        // 音の付いた演出を順に流す。`fxtour [間隔秒=4] [@dx,dy]` / `fxtour stop`
+        if (directive.StartsWith("fxtour", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecuteFxTour(directive[6..].Trim()); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR fxtour failed"); }
+            return;
+        }
+
         // 見た目の演出だけをホストの足元で出す (判定・キルは起きない)。`fx <Kind> [radius] [count] [a] [b] [@dx,dy]` (a・b は波動砲の太さと色)
         // 末尾の @dx,dy は足元からのずらし (離れた場所・壁の向こうで出して、音の聞こえ方を確かめる)
         if (directive.StartsWith("fx ", StringComparison.OrdinalIgnoreCase))
@@ -2498,6 +2506,35 @@ public static class TestBridge
         }
 
         WriteOut($"OK pcprobe {n} controls (all={PlayerControl.AllPlayerControls.Count})");
+    }
+
+    private static void ExecuteFxTour(string rest)
+    {
+        if (rest.Equals("stop", StringComparison.OrdinalIgnoreCase))
+        {
+            FxTour.Stop();
+            WriteOut("OK fxtour stop");
+            return;
+        }
+
+        Vector2 shift = Vector2.zero;
+        float gap = 4f;
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+
+        foreach (string part in rest.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (part.StartsWith('@'))
+            {
+                string[] xy = part[1..].Split(',');
+                if (xy.Length == 2 && float.TryParse(xy[0], System.Globalization.NumberStyles.Float, inv, out float sx) && float.TryParse(xy[1], System.Globalization.NumberStyles.Float, inv, out float sy)) shift = new Vector2(sx, sy);
+            }
+            else if (float.TryParse(part, System.Globalization.NumberStyles.Float, inv, out float g)) gap = Math.Clamp(g, 1f, 30f);
+        }
+
+        if (!GameStates.InGame) { WriteOut("ERR fxtour: not in game"); return; }
+
+        FxTour.Start(gap, shift, WriteOut);
+        WriteOut($"OK fxtour {FxTour.Count} kinds every {gap:F1}s");
     }
 
     private static void ExecuteFx(string rest)

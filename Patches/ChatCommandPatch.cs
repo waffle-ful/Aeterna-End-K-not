@@ -319,6 +319,7 @@ internal static class ChatCommands
             // Dev-only debug commands
             new("Inspect", "[id]", Command.UsageLevels.Host, Command.UsageTimes.InGame, InspectCommand, true, true, [GetString("CommandArgs.Inspect.Id")]),
             new("OptDump", "[tab]", Command.UsageLevels.Host, Command.UsageTimes.Always, OptDumpCommand, true, true, [GetString("CommandArgs.OptDump.Tab")]),
+            new("FxTour", "[seconds]", Command.UsageLevels.Host, Command.UsageTimes.InGame, FxTourCommand, true, true, [GetString("CommandArgs.FxTour.Seconds")]),
             new("Cd", "[id] {seconds}", Command.UsageLevels.Host, Command.UsageTimes.InGame, CdCommand, true, true, [GetString("CommandArgs.Cd.Id"), GetString("CommandArgs.Cd.Seconds")]),
             new("DevTp", "{x} {y} [id]", Command.UsageLevels.Host, Command.UsageTimes.InGame, DevTpCommand, true, true, [GetString("CommandArgs.DevTp.X"), GetString("CommandArgs.DevTp.Y"), GetString("CommandArgs.DevTp.Id")]),
             new("DevTpTo", "{srcId} {dstId}", Command.UsageLevels.Host, Command.UsageTimes.InGame, DevTpToCommand, true, true, [GetString("CommandArgs.DevTpTo.SrcId"), GetString("CommandArgs.DevTpTo.DstId")]),
@@ -2433,6 +2434,18 @@ internal static class ChatCommands
         if (TryRoleSearchSubCommand(player, args)) return;
 
         Utils.ShowHelp(player.PlayerId);
+    }
+
+    private static void FxTourCommand(PlayerControl player, string text, string[] args)
+    {
+        if (args.Length > 1 && args[1].Equals("stop", StringComparison.OrdinalIgnoreCase))
+        {
+            FxTour.Stop();
+            return;
+        }
+
+        float gap = args.Length > 1 && float.TryParse(args[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float g) ? Math.Clamp(g, 1f, 30f) : 4f;
+        FxTour.Start(gap, Vector2.zero);
     }
 
     private static void DumpCommand(PlayerControl player, string text, string[] args)
