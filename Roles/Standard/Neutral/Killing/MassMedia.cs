@@ -132,13 +132,20 @@ public class MassMedia : RoleBase
 
             if (CriminalProfile.GetBool())
             {
+                var suspectAdded = false;
+
                 foreach (var other in Main.AllAlivePlayerControlsToList)
                 {
                     if (other.PlayerId == TargetId || other.PlayerId == MassMediaId) continue;
                     if (Suspects.Contains(other.PlayerId)) continue;
                     if (Vector2.Distance(target.Pos(), other.Pos()) <= 4.5f)
+                    {
                         Suspects.Add(other.PlayerId);
+                        suspectAdded = true;
+                    }
                 }
+
+                if (suspectAdded) SendRPC();
             }
         }
         else if (IsBlackOut)
@@ -288,14 +295,23 @@ public class MassMedia : RoleBase
     private void SendRPC()
     {
         bool hasPos = TargetPosition != new Vector3(999f, 999f, 0f);
-        Utils.SendRPC(CustomRPC.SyncRoleData, MassMediaId,
+        // 会議中の〇印は各クライアントが自分で判定するので、容疑者の一覧も末尾に付けて送る
+        var data = new List<object>
+        {
+            MassMediaId,
             TargetId,
             GuessId,
             GuessMode ? 1 : 0,
             Win ? 1 : 0,
             hasPos ? 1 : 0,
             TargetPosition.x,
-            TargetPosition.y);
+            TargetPosition.y,
+            Suspects.Count
+        };
+
+        foreach (byte suspect in Suspects) data.Add(suspect);
+
+        Utils.SendRPC(CustomRPC.SyncRoleData, data.ToArray());
     }
 
     public void ReceiveRPC(MessageReader reader)
@@ -307,6 +323,9 @@ public class MassMedia : RoleBase
         bool hasPos = reader.ReadPackedInt32() == 1;
         float x = reader.ReadSingle();
         float y = reader.ReadSingle();
+        int suspectCount = reader.ReadPackedInt32();
+        Suspects = [];
+        for (var i = 0; i < suspectCount; i++) Suspects.Add(reader.ReadByte());
 
         TargetId = newTargetId;
         TargetPosition = hasPos ? new Vector3(x, y, 0f) : new Vector3(999f, 999f, 0f);

@@ -1,6 +1,8 @@
 ﻿using System.Collections.Generic;
 using AmongUs.GameOptions;
+using EndKnot.Modules;
 using EndKnot.Modules.Extensions;
+using Hazel;
 using static EndKnot.Options;
 
 namespace EndKnot.Roles;
@@ -10,6 +12,8 @@ internal class SecurityGuard : RoleBase
     public static HashSet<byte> BlockSabo = [];
 
     public static bool On;
+    private static readonly HashSet<byte> SyncedActive = [];
+    private byte SecurityGuardId;
     public override bool IsEnable => On;
 
     public override void SetupCustomOption()
@@ -40,12 +44,14 @@ internal class SecurityGuard : RoleBase
     public override void Add(byte playerId)
     {
         On = true;
+        SecurityGuardId = playerId;
         playerId.SetAbilityUseLimit(SecurityGuardSkillMaxOfUsage.GetFloat());
     }
 
     public override void Init()
     {
         On = false;
+        SyncedActive.Clear();
     }
 
     public override void ApplyGameOptions(IGameOptions opt, byte playerId)
@@ -54,6 +60,27 @@ internal class SecurityGuard : RoleBase
 
         AURoleOptions.EngineerInVentMaxTime = 1f;
         AURoleOptions.EngineerCooldown = SecurityGuardSkillCooldown.GetFloat();
+    }
+
+    // 使用中の色分けは各クライアントが自分で判定するので、使用中かどうかをモッド客へ送る
+    private static void SendBlockSync(byte id, bool active)
+    {
+        if (active) SyncedActive.Add(id);
+        else SyncedActive.Remove(id);
+
+        Utils.SendRPC(CustomRPC.SyncRoleData, id, active);
+    }
+
+    // 会議開始でホストは使用中の集合を空にするので、客側の保持も同時に解除させる
+    public override void OnReportDeadBody()
+    {
+        if (SyncedActive.Contains(SecurityGuardId)) SendBlockSync(SecurityGuardId, false);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        if (reader.ReadBoolean()) BlockSabo.Add(SecurityGuardId);
+        else BlockSabo.Remove(SecurityGuardId);
     }
 
     public override string GetProgressText(byte playerId, bool comms)
@@ -93,12 +120,18 @@ internal class SecurityGuard : RoleBase
         if (pc.GetAbilityUseLimit() >= 1)
         {
             BlockSabo.Add(pc.PlayerId);
+            SendBlockSync(pc.PlayerId, true);
             _ = new CountdownTimer(SecurityGuardSkillDuration.GetInt(), () =>
             {
                 BlockSabo.Remove(pc.PlayerId);
+                SendBlockSync(pc.PlayerId, false);
                 pc.RpcResetAbilityCooldown();
                 pc.Notify(Translator.GetString("SecurityGuardSkillStop"));
-            }, onCanceled: () => BlockSabo.Remove(pc.PlayerId));
+            }, onCanceled: () =>
+            {
+                BlockSabo.Remove(pc.PlayerId);
+                if (GameStates.InGame) SendBlockSync(pc.PlayerId, false);
+            });
             pc.Notify(Translator.GetString("SecurityGuardSkillInUse"), SecurityGuardSkillDuration.GetFloat());
             pc.RpcRemoveAbilityUse();
         }

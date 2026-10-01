@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using AmongUs.GameOptions;
 using EndKnot.Modules;
+using Hazel;
 using UnityEngine;
 
 namespace EndKnot.Roles;
@@ -123,7 +124,19 @@ public class Ballooner : RoleBase
         NowWalkCount = 0f;
         NowBoomDis = Mathf.Clamp(NowBoomDis + ChargeStep.GetFloat(), MinBoomDis.GetFloat(), MaxBoomDis.GetFloat());
         NowBoomDis = Mathf.Round(NowBoomDis * 100f) / 100f;
+        SendSync();
         Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
+    }
+
+    // 進捗表示と名前下の案内は各クライアントが自分で判定するので、溜まった爆発範囲をモッド客へ送る
+    private void SendSync()
+    {
+        Utils.SendRPC(CustomRPC.SyncRoleData, BalloonerId, NowBoomDis);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        NowBoomDis = reader.ReadSingle();
     }
 
     public override void SetButtonTexts(HudManager hud, byte id)
@@ -177,6 +190,7 @@ public class Ballooner : RoleBase
         if (!suicideEnabled)
         {
             ResetBalloon();
+            SendSync();
             Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
         }
 
@@ -193,6 +207,7 @@ public class Ballooner : RoleBase
         NowBoomDis = Mathf.Round(NowBoomDis * 100f) / 100f;
         NowWalkCount = 0f;
         OldPosition = new Vector2(50f, 50f);
+        SendSync();
 
         PlayerControl pc = Utils.GetPlayerById(BalloonerId);
         if (pc != null) Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);

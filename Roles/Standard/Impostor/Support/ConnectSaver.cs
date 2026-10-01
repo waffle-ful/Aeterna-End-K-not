@@ -1,6 +1,8 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
 using AmongUs.GameOptions;
+using EndKnot.Modules;
+using Hazel;
 using UnityEngine;
 using static EndKnot.Translator;
 
@@ -85,9 +87,28 @@ public class ConnectSaver : RoleBase
         Main.AllPlayerKillCooldown[id] = IsUsing ? OptionTageKillCoolDown.GetFloat() : OptionKillCoolDown.GetFloat();
     }
 
+    // 名前下の印と残り回数は各クライアントが自分で組み立てるので、接続状態をモッド客へ送る
+    private void SendSync()
+    {
+        Utils.SendRPC(CustomRPC.SyncRoleData, ConnectSaverId, target1, target2, usedcount, IsUsing, IsSelectingMode);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        target1 = reader.ReadByte();
+        target2 = reader.ReadByte();
+        usedcount = reader.ReadPackedInt32();
+        IsUsing = reader.ReadBoolean();
+        IsSelectingMode = reader.ReadBoolean();
+    }
+
     public override void AfterMeetingTasks()
     {
-        IsSelectingMode = false;
+        if (IsSelectingMode)
+        {
+            IsSelectingMode = false;
+            SendSync();
+        }
 
         PlayerControl pc = Utils.GetPlayerById(ConnectSaverId);
         if (pc == null || !pc.IsAlive()) return;
@@ -119,6 +140,7 @@ public class ConnectSaver : RoleBase
             if (target.PlayerId != ConnectSaverId) return false;
 
             IsSelectingMode = true;
+            SendSync();
             Utils.SendMessage(GetString("ConnectSaverActivate"), ConnectSaverId);
             return true;
         }
@@ -157,6 +179,8 @@ public class ConnectSaver : RoleBase
             IsUsing = true;
             IsSelectingMode = false;
         }
+
+        SendSync();
     }
 
     private static void ValidateTarget(ref byte targetId)
@@ -187,6 +211,7 @@ public class ConnectSaver : RoleBase
             target1 = byte.MaxValue;
             target2 = byte.MaxValue;
             IsUsing = false;
+            SendSync();
 
             Main.AllPlayerKillCooldown[ConnectSaverId] = OptionKillCoolDown.GetFloat();
             LateTask.New(() => killer.SyncSettings(), 0.1f, "ConnectSaver.CDReset");
@@ -200,10 +225,14 @@ public class ConnectSaver : RoleBase
 
     public override void OnReportDeadBody()
     {
+        bool changed = target1 != byte.MaxValue || target2 != byte.MaxValue || IsUsing || IsSelectingMode;
+
         target1 = byte.MaxValue;
         target2 = byte.MaxValue;
         IsUsing = false;
         IsSelectingMode = false;
+
+        if (changed) SendSync();
     }
 
     public override string GetProgressText(byte playerId, bool comms)

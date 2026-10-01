@@ -94,6 +94,7 @@ public class Librarian : RoleBase
         MessageWriter writer = AmongUsClient.Instance.StartRpcImmediately(PlayerControl.LocalPlayer.NetId, (byte)CustomRPC.SetLibrarianMode, SendOption.Reliable);
         writer.Write(playerId);
         writer.Write(isInSilenceMode);
+        writer.Write(Sssh.Contains(playerId));
         AmongUsClient.Instance.FinishRpcImmediately(writer);
     }
 
@@ -101,6 +102,10 @@ public class Librarian : RoleBase
     {
         byte playerId = reader.ReadByte();
         bool isInSilenceMode = reader.ReadBoolean();
+        bool sssh = reader.ReadBoolean();
+
+        Sssh.Remove(playerId);
+        if (sssh) Sssh.Add(playerId);
 
         if (Main.PlayerStates[playerId].Role is not Librarian lr) return;
 
@@ -135,16 +140,24 @@ public class Librarian : RoleBase
         {
             Logger.Info(" Counter kill (report during and in range of silence)", "Librarian");
             Sssh.Add(librarian.PlayerId);
+            SyncSssh(librarian.PlayerId);
             NotifyRoles(SpecifyTarget: librarian);
 
             LateTask.New(() =>
             {
                 Sssh.Remove(librarian.PlayerId);
+                SyncSssh(librarian.PlayerId);
                 NotifyRoles(SpecifyTarget: librarian);
             }, NameDuration.GetInt(), "Librarian sssh text");
         }
 
         return false;
+    }
+
+    // 名前の下の「静かに」表示はモッド客が自分の手元の値で判定するので、モードと合わせて送る
+    private static void SyncSssh(byte playerId)
+    {
+        if (Main.PlayerStates[playerId].Role is Librarian lr) SendRPC(playerId, lr.IsInSilencingMode.SILENCING);
     }
 
     public override bool OnShapeshift(PlayerControl pc, PlayerControl target, bool shapeshifting)
@@ -198,6 +211,11 @@ public class Librarian : RoleBase
 
         IsInSilencingMode = (false, TimeStamp);
         Sssh.Clear();
+
+        foreach (byte id in PlayerIdList)
+        {
+            if (ReferenceEquals(Main.PlayerStates[id].Role, this)) SendRPC(id, false);
+        }
     }
 
     public override string GetSuffix(PlayerControl seer, PlayerControl target, bool hud = false, bool meeting = false)

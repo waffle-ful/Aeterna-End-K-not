@@ -1,4 +1,6 @@
 ﻿using System.Collections.Generic;
+using EndKnot.Modules;
+using Hazel;
 using static EndKnot.Options;
 
 namespace EndKnot.Roles;
@@ -15,6 +17,7 @@ public class Gasp : RoleBase
     private bool CanSeeMark;
     private bool AfterAbility;
     private byte KillerPlayerId;
+    private byte GaspId;
 
     public override void SetupCustomOption()
     {
@@ -35,6 +38,7 @@ public class Gasp : RoleBase
     public override void Add(byte playerId)
     {
         On = true;
+        GaspId = playerId;
         CanSeeMark = false;
         AfterAbility = false;
         KillerPlayerId = byte.MaxValue;
@@ -61,6 +65,7 @@ public class Gasp : RoleBase
                 if (!GameStates.IsMeeting)
                 {
                     CanSeeMark = true;
+                    SendSync();
                     Utils.NotifyRoles(ForceLoop: true);
                 }
                 else
@@ -92,7 +97,20 @@ public class Gasp : RoleBase
         {
             CanSeeMark = false;
             AfterAbility = true;
+            SendSync();
         }
+    }
+
+    // ★は各クライアントが自分の手元の値で出すので、印を付ける相手と表示中かどうかをモッド客へ送る
+    private void SendSync()
+    {
+        Utils.SendRPC(CustomRPC.SyncRoleData, GaspId, KillerPlayerId, CanSeeMark);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        KillerPlayerId = reader.ReadByte();
+        CanSeeMark = reader.ReadBoolean();
     }
 
     // ★は全員可視が仕様 (死に際の告発)。ギャスプは★が出る時点で既に死亡しているので、

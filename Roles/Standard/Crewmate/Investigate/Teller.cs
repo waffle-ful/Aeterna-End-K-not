@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using EndKnot.Modules;
+using Hazel;
 using UnityEngine;
 using static EndKnot.Translator;
 
@@ -136,10 +138,15 @@ public class Teller : RoleBase
         meetingUseCount++;
 
         PlayerControl target = Utils.GetPlayerById(targetId);
-        if (target == null) return;
+        if (target == null)
+        {
+            SendSync(byte.MaxValue, CustomRoles.Crewmate);
+            return;
+        }
 
         CustomRoles role = target.GetCustomRole();
         Divination[targetId] = role;
+        SendSync(targetId, role);
 
         string roleText = OptionShowRole.GetBool()
             ? role.ToColoredString()
@@ -173,8 +180,24 @@ public class Teller : RoleBase
         if (completedTaskCount + 1 >= OptionAwakeningTaskCount.GetInt())
         {
             awakened = true;
+            SendSync(byte.MaxValue, CustomRoles.Crewmate);
             Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
         }
+    }
+
+    // 残り回数の表示と占い結果の表示は各クライアントが自分の手元の値で行うので、モッド客へ送る
+    private void SendSync(byte targetId, CustomRoles role)
+    {
+        Utils.SendRPC(CustomRPC.SyncRoleData, TellerId, usecount, awakened, targetId, (int)role);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        usecount = reader.ReadPackedInt32();
+        awakened = reader.ReadBoolean();
+        byte targetId = reader.ReadByte();
+        var role = (CustomRoles)reader.ReadPackedInt32();
+        if (targetId != byte.MaxValue) Divination[targetId] = role;
     }
 
     public override string GetProgressText(byte playerId, bool comms)

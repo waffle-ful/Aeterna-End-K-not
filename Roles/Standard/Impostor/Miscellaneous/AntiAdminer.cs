@@ -4,6 +4,7 @@ using System.Linq;
 using AmongUs.GameOptions;
 using EndKnot.Modules;
 using EndKnot.Modules.Extensions;
+using Hazel;
 
 namespace EndKnot.Roles;
 
@@ -102,11 +103,20 @@ internal class AntiAdminer : RoleBase
                 Utils.NotifyRoles(SpecifySeer: player, SpecifyTarget: player);
         }, onCanceled: () => ExtraAbilityTimer = null);
 
+        // 名前下の残り秒数は各クライアントが自分で組み立てるので、開始をモッド客へ送る (終了は客側のタイマーが自然に迎える)
+        Utils.SendRPC(CustomRPC.SyncRoleData, AntiAdminerId);
+
         pc.RpcResetAbilityCooldown();
         Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
 
         PlayersNearDevices.Keys.ToValidPlayers().Where(x => x.IsAlive()).NotifyPlayers(Translator.GetString("AAWarning"), Delay.GetFloat());
         return false;
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        ExtraAbilityTimer?.Dispose();
+        ExtraAbilityTimer = new CountdownTimer(Delay.GetInt(), () => ExtraAbilityTimer = null, onCanceled: () => ExtraAbilityTimer = null);
     }
 
     public override bool OnShapeshift(PlayerControl shapeshifter, PlayerControl target, bool shapeshifting)

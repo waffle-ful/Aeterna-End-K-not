@@ -139,7 +139,7 @@ public class Abyssbringer : RoleBase
     {
         if (ShouldDespawnCNOOnMeeting)
         {
-            Loop.Times(BlackHoles.Count, i => Utils.SendRPC(CustomRPC.SyncRoleData, AbyssbringerId, 3, i));
+            if (BlackHoles.Count > 0) Utils.SendRPC(CustomRPC.SyncRoleData, AbyssbringerId, 4);
 
             BlackHoles.ForEach(x => x.NetObject.Despawn());
             BlackHoles.Clear();
@@ -227,12 +227,13 @@ public class Abyssbringer : RoleBase
             void RemoveBlackHole()
             {
                 BlackHoles.RemoveAt(i);
+                int removedIndex = i;
                 i--;
                 count--;
                 // 1 人喰って消える時は、喰った瞬間の渦がそのまま閉じる演出を兼ねる
                 if (GameStates.IsInTask && despawnMode != DespawnMode.After1PlayerEaten) ExplosionFx.Play(ExplosionFx.Kind.Swallow, blackHole.Position, 0.7f);
                 blackHole.NetObject.Despawn();
-                Utils.SendRPC(CustomRPC.SyncRoleData, AbyssbringerId, 3, i);
+                Utils.SendRPC(CustomRPC.SyncRoleData, AbyssbringerId, 3, removedIndex);
                 Notify();
             }
 
@@ -255,6 +256,9 @@ public class Abyssbringer : RoleBase
                 break;
             case 3:
                 BlackHoles.RemoveAt(reader.ReadPackedInt32());
+                break;
+            case 4:
+                BlackHoles.Clear();
                 break;
         }
     }

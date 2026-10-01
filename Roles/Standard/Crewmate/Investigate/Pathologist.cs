@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using EndKnot.Modules;
+using Hazel;
 using UnityEngine;
 using static EndKnot.Translator;
 
@@ -158,6 +160,7 @@ public class Pathologist : RoleBase
             if (Main.PlayerStates.TryGetValue(tid, out PlayerState st) && st.deathReason == PlayerState.DeathReason.Disconnected)
             {
                 TrackedTarget[pc.PlayerId] = byte.MaxValue;
+                SendSync();
                 return;
             }
             IsTargetDead[pc.PlayerId] = true;
@@ -204,6 +207,7 @@ public class Pathologist : RoleBase
     {
         UseCount[id]--;
         TrackedTarget[id] = targetId;
+        SendSync();
         Utils.SendMessage(string.Format(GetString("PathologistTargetSet"), targetId.ColoredPlayerName()), id, importance: MessageImportance.High);
     }
 
@@ -334,6 +338,7 @@ public class Pathologist : RoleBase
         DeadTimer[PathologistId] = 0f;
         IsTargetDead[PathologistId] = false;
         IsSelecting[PathologistId] = false;
+        SendSync();
 
         if (sb.Length == 0) return;
         string message = sb.ToString();
@@ -365,6 +370,18 @@ public class Pathologist : RoleBase
         // IsSelecting だけは「会議中に self-vote モード入りしてキャンセルした場合に持ち越す」
         // のを防ぐためここで確実に false に戻す
         IsSelecting[PathologistId] = false;
+    }
+
+    // 残り回数と追跡中の相手は各クライアントが自分の手元の値で表示するので、モッド客へ送る
+    private void SendSync()
+    {
+        Utils.SendRPC(CustomRPC.SyncRoleData, PathologistId, UseCount.GetValueOrDefault(PathologistId), TrackedTarget.GetValueOrDefault(PathologistId, byte.MaxValue));
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        UseCount[PathologistId] = reader.ReadPackedInt32();
+        TrackedTarget[PathologistId] = reader.ReadByte();
     }
 
     public override string GetProgressText(byte playerId, bool comms)

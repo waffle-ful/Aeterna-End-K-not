@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using AmongUs.GameOptions;
 using EndKnot.Modules.Extensions;
+using EndKnot.Modules;
+using Hazel;
 
 namespace EndKnot.Roles;
 
@@ -64,6 +66,22 @@ public class Farmer : RoleBase
     public override void OnTaskComplete(PlayerControl pc, int completedTaskCount, int totalTaskCount)
     {
         Seeds.Add(AllSeed.RandomElement());
+        SendSeedsSync();
+    }
+
+    // 名前の下の種の表示はモッド客が自分で組むので、手持ちの種の並びを送る
+    private void SendSeedsSync()
+    {
+        var data = new List<object> { FarmerId, Seeds.Count };
+        foreach (Seed seed in Seeds) data.Add((int)seed);
+        Utils.SendRPC(CustomRPC.SyncRoleData, data.ToArray());
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        int count = reader.ReadPackedInt32();
+        Seeds = [];
+        for (var i = 0; i < count; i++) Seeds.Add((Seed)reader.ReadPackedInt32());
     }
 
     public override void OnPet(PlayerControl pc)
@@ -135,6 +153,7 @@ public class Farmer : RoleBase
         Seed seed = Seeds[0];
         SeedPositions.Add((seed, new(pos, GetHexColor(seed))));
         Seeds.RemoveAt(0);
+        SendSeedsSync();
         Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
     }
 

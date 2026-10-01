@@ -1,5 +1,7 @@
 ﻿using System.Collections.Generic;
 using AmongUs.GameOptions;
+using EndKnot.Modules;
+using Hazel;
 using UnityEngine;
 
 namespace EndKnot.Roles;
@@ -15,6 +17,8 @@ public class QuickKiller : RoleBase
 
     // null = not in quick kill window
     private float? timer;
+    private byte quickKillerId;
+    private long endTS;
 
     public override bool IsEnable => PlayerIdList.Count > 0;
 
@@ -43,7 +47,21 @@ public class QuickKiller : RoleBase
     public override void Add(byte playerId)
     {
         PlayerIdList.Add(playerId);
+        quickKillerId = playerId;
         timer = null;
+    }
+
+    // ボタン文字と進捗表示は各クライアントが自分で組み立てるので、窓の開始と終了をモッド客へ送る (客側は残り秒から終了時刻を復元する)
+    private void SendSync()
+    {
+        Utils.SendRPC(CustomRPC.SyncRoleData, quickKillerId, timer ?? -1f);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        float remaining = reader.ReadSingle();
+        timer = remaining < 0f ? null : remaining;
+        endTS = Utils.TimeStamp + (long)remaining + 1;
     }
 
     public override void Remove(byte playerId)
@@ -80,6 +98,7 @@ public class QuickKiller : RoleBase
         }
 
         timer = QuickKillTimer.GetFloat();
+        SendSync();
         killer.SyncSettings();
         killer.RpcResetAbilityCooldown();
     }
@@ -93,6 +112,7 @@ public class QuickKiller : RoleBase
         if (timer < 0)
         {
             timer = null;
+            SendSync();
             Main.AllPlayerKillCooldown[pc.PlayerId] = KillCooldown.GetFloat();
             pc.SetKillCooldown();
             pc.RpcResetAbilityCooldown();
@@ -101,7 +121,9 @@ public class QuickKiller : RoleBase
 
     public override void OnReportDeadBody()
     {
+        bool hadTimer = timer.HasValue;
         timer = null;
+        if (hadTimer) SendSync();
     }
 
     public override void SetButtonTexts(HudManager hud, byte id)
@@ -117,6 +139,7 @@ public class QuickKiller : RoleBase
     public override string GetProgressText(byte playerId, bool comms)
     {
         if (!timer.HasValue) return string.Empty;
-        return Utils.ColorString(Palette.ImpostorRed.ShadeColor(0.5f), $"⚡{(int)timer.Value + 1}s");
+        long remaining = AmongUsClient.Instance.AmHost ? (int)timer.Value + 1 : System.Math.Max(1, endTS - Utils.TimeStamp);
+        return Utils.ColorString(Palette.ImpostorRed.ShadeColor(0.5f), $"⚡{remaining}s");
     }
 }

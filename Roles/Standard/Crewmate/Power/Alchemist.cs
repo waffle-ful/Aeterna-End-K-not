@@ -118,7 +118,6 @@ public class Alchemist : RoleBase
     public override void OnTaskComplete(PlayerControl pc, int completedTaskCount, int totalTaskCount)
     {
         PotionID = (byte)IRandom.Instance.Next(1, 8);
-        SendRPCData();
 
         switch (PotionID)
         {
@@ -146,6 +145,9 @@ public class Alchemist : RoleBase
                 pc.Notify(GetString("AlchemistGotSightPotion"), 15f);
                 break;
         }
+
+        // 薬の種類と「次の妨害を直す」状態は客側の表示にも出るので、確定した後に送る
+        SendRPCData();
     }
 
     public override void OnPet(PlayerControl pc)
@@ -346,7 +348,9 @@ public class Alchemist : RoleBase
     {
         if (Main.PlayerStates[pc.PlayerId].Role is not Alchemist { IsEnable: true } am) return;
 
+        bool wasFixNextSabo = am.FixNextSabo;
         am.FixNextSabo = false;
+        if (wasFixNextSabo) am.SendRPCData();
 
         switch (systemType)
         {

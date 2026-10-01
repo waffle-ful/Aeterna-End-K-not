@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.Linq;
 using AmongUs.GameOptions;
+using EndKnot.Modules;
+using Hazel;
 using static EndKnot.Translator;
 
 namespace EndKnot.Roles;
@@ -91,6 +93,18 @@ public class EvilSatellite : RoleBase
         }
     }
 
+    // 会議中の案内文と残り回数は各クライアントが自分で組み立てるので、発動状態と残り回数をモッド客へ送る
+    private void SendSync()
+    {
+        Utils.SendRPC(CustomRPC.SyncRoleData, PlayerId, usecount, SatelliteActivated);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        usecount = reader.ReadPackedInt32();
+        SatelliteActivated = reader.ReadBoolean();
+    }
+
     public override bool OnVote(PlayerControl voter, PlayerControl target)
     {
         if (voter.PlayerId != PlayerId) return false;
@@ -100,6 +114,7 @@ public class EvilSatellite : RoleBase
             if (target != null && target.PlayerId == PlayerId && usecount > 0)
             {
                 SatelliteActivated = true;
+                SendSync();
                 Utils.SendMessage(GetString("EvilSatelliteActivate"), PlayerId, importance: MessageImportance.High);
                 return true;
             }
@@ -112,9 +127,11 @@ public class EvilSatellite : RoleBase
         if (target != null)
         {
             SendPlayerRoute(target.PlayerId);
+            SendSync();
             return true;
         }
 
+        SendSync();
         return false;
     }
 
@@ -122,7 +139,13 @@ public class EvilSatellite : RoleBase
     {
         AllAlivePlayerRoute.Clear();
         AllAlivePlayerLastRoom.Clear();
-        SatelliteActivated = false;
+
+        if (SatelliteActivated)
+        {
+            SatelliteActivated = false;
+            SendSync();
+        }
+
         SentPlayerId.Clear();
     }
 

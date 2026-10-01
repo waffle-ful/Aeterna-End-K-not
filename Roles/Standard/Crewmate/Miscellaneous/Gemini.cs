@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using AmongUs.GameOptions;
 using EndKnot.Modules;
+using Hazel;
 using UnityEngine;
 
 namespace EndKnot.Roles;
@@ -49,6 +50,9 @@ public class Gemini : RoleBase
     // 分身は「その人の分身」なので保持者ごとに持つ (共有ワールドオブジェクトではない)。
     // 追加順に並べ、上限に達したら先頭 (最古) から消す。
     private readonly List<GeminiDummy> Dummies = [];
+
+    // 分身は CNO でホストにしか実体がないので、モッド客は数だけをホストから受け取って表示する
+    private int SyncedAlive;
 
     // マグロと同一の静止クロック
     private float StillTimer;
@@ -181,6 +185,7 @@ public class Gemini : RoleBase
 
         Dummies.Add(new GeminiDummy(pos, pc));
         LastPlacedPos = pos;
+        SendSync(Dummies.Count);
 
         // 周りに見えると分身だと一目でばれるので、演出は本人の画面にだけ出す
         ExplosionFx.PlayFor(ExplosionFx.Kind.GeminiSplit, pos, 1f, pc);
@@ -211,6 +216,9 @@ public class Gemini : RoleBase
         // リストからの除去は要らない (PlaceDummy 側の掃除が Despawn 済みを弾く)。
         dummy.Despawn();
 
+        if (Main.PlayerStates.TryGetValue(dummy.OwnerId, out PlayerState ownerState) && ownerState.Role is Gemini gemini)
+            gemini.SendSync(gemini.Dummies.Count(d => d != null && d != dummy && d.playerControl));
+
         // 手応えは「目の前で分身が消える」+ キルクールが回ること。全体 KillFlash は撃たない —
         // 誰にも気づかせずジェミニが逃げ切るための能力なので、全員への合図は仕様に反する。
         killer.SetKillCooldown();
@@ -227,11 +235,23 @@ public class Gemini : RoleBase
         // 分身の CNO は GeminiDummy.OnMeeting で自分から消える。こちらは参照だけ捨てる
         // (基底の会議後 自動再生成は使わない — 会議のたびに分身が復活すると際限なく増える)。
         Dummies.Clear();
+        SendSync(0);
+    }
+
+    private void SendSync(int alive)
+    {
+        Utils.SendRPC(CustomRPC.SyncRoleData, GeminiId, alive);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        SyncedAlive = reader.ReadPackedInt32();
     }
 
     public override void AfterMeetingTasks()
     {
         Dummies.Clear();
+        SendSync(0);
         ResetStillClock();
     }
 
@@ -242,7 +262,7 @@ public class Gemini : RoleBase
         if (seer.PlayerId != GeminiId || seer.PlayerId != target.PlayerId) return string.Empty;
 
         // 表示経路では状態を書き換えない (掃除は PlaceDummy 側で行う)
-        int alive = Dummies.Count(d => d != null && d.playerControl);
+        int alive = AmongUsClient.Instance.AmHost ? Dummies.Count(d => d != null && d.playerControl) : SyncedAlive;
         return Utils.ColorString(Color.cyan, $" ({alive}/{MaxDummies.GetInt()})");
     }
 }

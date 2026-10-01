@@ -242,6 +242,8 @@ public class Rogue : RoleBase
             {
                 GotObjectives.Add(CurrentTask.Objective);
                 GotRewards.Add(CurrentTask.Reward);
+                // サボタージュの可否と名前の下の表示は獲得済みの報酬で決まるので、モッド客へ送る
+                Utils.SendRPC(CustomRPC.SyncRoleData, RoguePC.PlayerId, 3, (int)CurrentTask.Reward);
             }
 
             switch (CurrentTask.Reward)
@@ -318,7 +320,11 @@ public class Rogue : RoleBase
 
     public void ReceiveRPC(MessageReader reader)
     {
-        if (reader.ReadPackedInt32() == 1)
+        int kind = reader.ReadPackedInt32();
+
+        if (kind == 3)
+            GotRewards.Add((Reward)reader.ReadPackedInt32());
+        else if (kind == 1)
         {
             var objective = (Objective)reader.ReadPackedInt32();
             var reward = (Reward)reader.ReadPackedInt32();

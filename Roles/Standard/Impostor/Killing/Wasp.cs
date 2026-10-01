@@ -131,6 +131,7 @@ public class Wasp : RoleBase
         {
             SwarmModeEnd.Dispose();
             SwarmModeEnd = null;
+            Utils.SendRPC(CustomRPC.SyncRoleData, WaspPC.PlayerId, false, EvadedKillThisRound);
 
             if (WaspDiesAfterSwarmEnd.GetBool()) WaspPC.Suicide();
             else WaspPC.ResetKillCooldown();
@@ -167,7 +168,6 @@ public class Wasp : RoleBase
                     target.SetKillCooldown(StingCooldown.GetInt());
                 }
             }, onTick: () => Utils.NotifyRoles(SpecifySeer: target, SpecifyTarget: target), cancelOnMeeting: false, onCanceled: () => SwarmModeEnd = null);
-            Utils.SendRPC(CustomRPC.SyncRoleData, WaspPC.PlayerId);
             target.SyncSettings();
             target.SetKillCooldown(0.01f);
         }
@@ -188,6 +188,9 @@ public class Wasp : RoleBase
         }
 
         EvadedKillThisRound = true;
+
+        // キル・ベント・サボタージュの可否は各クライアントが自分で判定するので、群れ状態と回避済みをモッド客へ送る
+        Utils.SendRPC(CustomRPC.SyncRoleData, WaspPC.PlayerId, SwarmModeEnd != null, true);
         return false;
     }
 
@@ -208,6 +211,8 @@ public class Wasp : RoleBase
 
     public override void AfterMeetingTasks()
     {
+        if (EvadedKillThisRound) Utils.SendRPC(CustomRPC.SyncRoleData, WaspPC.PlayerId, false, false);
+
         EvadedKillThisRound = false;
         MeetingKills.Clear();
     }
@@ -238,7 +243,13 @@ public class Wasp : RoleBase
 
     public void ReceiveRPC(MessageReader reader)
     {
-        SwarmModeEnd = new CountdownTimer(SwarmModeDuration.GetInt(), () => SwarmModeEnd = null, onCanceled: () => SwarmModeEnd = null);
+        SwarmModeEnd?.Dispose();
+        SwarmModeEnd = null;
+
+        if (reader.ReadBoolean())
+            SwarmModeEnd = new CountdownTimer(SwarmModeDuration.GetInt(), () => SwarmModeEnd = null, onCanceled: () => SwarmModeEnd = null);
+
+        EvadedKillThisRound = reader.ReadBoolean();
     }
 
     public override string GetSuffix(PlayerControl seer, PlayerControl target, bool hud = false, bool meeting = false)

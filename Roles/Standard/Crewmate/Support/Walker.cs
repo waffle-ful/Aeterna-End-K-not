@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using EndKnot.Modules;
+using Hazel;
 using UnityEngine;
 using static EndKnot.Translator;
 
@@ -57,6 +58,9 @@ public class Walker : RoleBase
         int before = visited.Count;
         if (!visited.Add(room.RoomId)) return;
 
+        // 進捗表示と名前下の部屋名は各クライアントが自分で判定するので、訪れた部屋をモッド客へ送る
+        Utils.SendRPC(CustomRPC.SyncRoleData, pc.PlayerId, (int)room.RoomId);
+
         int required = OptionWalkTaskCount.GetInt();
         if (before < required && visited.Count >= required)
         {
@@ -89,6 +93,11 @@ public class Walker : RoleBase
             if (!task.IsComplete)
                 pc.RpcCompleteTask(task.Id);
         }
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        if (VisitedRooms.TryGetValue(WalkerId, out var set)) set.Add((SystemTypes)reader.ReadPackedInt32());
     }
 
     public static bool HasCompletedTour(byte playerId)

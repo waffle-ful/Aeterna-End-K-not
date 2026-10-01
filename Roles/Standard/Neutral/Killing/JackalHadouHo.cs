@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using AmongUs.GameOptions;
 using EndKnot.Modules;
+using Hazel;
 using UnityEngine;
 using static EndKnot.Options;
 using static EndKnot.Translator;
@@ -108,6 +109,7 @@ public class JackalHadouHo : RoleBase
     private string SkBlockedKey = "JackalHadouHoSkDisabled";
 
     private byte SkCandidateId = byte.MaxValue;
+    private (bool Busy, bool Super, bool Loaded, byte Candidate)? LastSent;
     private float SkNearTimer;
     private float SkCooldownTimer;
     private float SkSpawnWaitTimer = -1f;
@@ -202,6 +204,25 @@ public class JackalHadouHo : RoleBase
         SkNearTimer = 0f;
         SkCandidateId = byte.MaxValue;
         SkMode = false;
+        LastSent = null;
+    }
+
+    // ベントボタンと名前の下の表示は各クライアントが自分で判定するので、発射中か・装填済みか・候補を、変わった時だけモッド客へ送る
+    private void SyncToModdedClients()
+    {
+        (bool, bool, bool, byte) now = (CurrentPhase != Phase.Idle, IsSuperShot, IsLoaded, SkCandidateId);
+        if (LastSent == now) return;
+
+        LastSent = now;
+        Utils.SendRPC(CustomRPC.SyncRoleData, JhhId, now.Item1, now.Item2, now.Item3, now.Item4);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        CurrentPhase = reader.ReadBoolean() ? Phase.Charging : Phase.Idle;
+        IsSuperShot = reader.ReadBoolean();
+        IsLoaded = reader.ReadBoolean();
+        SkCandidateId = reader.ReadByte();
     }
 
     public override void Remove(byte playerId)
@@ -537,6 +558,8 @@ public class JackalHadouHo : RoleBase
     {
         if (!AmongUsClient.Instance.AmHost) return;
         if (!GameStates.IsInTask) return;
+
+        SyncToModdedClients();
 
         // SK タイマー
         if (pc.IsAlive() && CanSideKick)

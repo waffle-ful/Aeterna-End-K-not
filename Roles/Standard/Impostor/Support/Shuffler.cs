@@ -4,6 +4,7 @@ using System.Linq;
 using AmongUs.GameOptions;
 using EndKnot.Modules;
 using EndKnot.Patches;
+using Hazel;
 using UnityEngine;
 
 namespace EndKnot.Roles;
@@ -74,6 +75,7 @@ public class Shuffler : RoleBase
     // ため、設置直後に読むと (0,0) を返し、マップ原点付近に立っているだけの人が誤爆する。
     private static readonly List<(ShuffleMarker Marker, Vector2 Position)> Markers = [];
     private static long ShuffleEndTS;
+    private byte ShufflerId;
     private static int TpsThisRound;
     private static bool CapLoggedThisRound;
     private static bool MeetingTriggered;
@@ -139,6 +141,7 @@ public class Shuffler : RoleBase
     public override void Add(byte playerId)
     {
         On = true;
+        ShufflerId = playerId;
         playerId.SetAbilityUseLimit(AbilityUseLimit.GetFloat());
     }
 
@@ -157,6 +160,18 @@ public class Shuffler : RoleBase
 
         AURoleOptions.PhantomDuration = 0.1f;
         AURoleOptions.PhantomCooldown = cd;
+    }
+
+    // 名前下の残り秒数は各クライアントが自分で組み立てるので、発動と終了をモッド客へ送る (客側は残り秒から終了時刻を復元する)
+    private void SendSync(int remaining)
+    {
+        Utils.SendRPC(CustomRPC.SyncRoleData, ShufflerId, remaining);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        int remaining = reader.ReadPackedInt32();
+        ShuffleEndTS = remaining > 0 ? Utils.TimeStamp + remaining : 0;
     }
 
     public override bool OnVanish(PlayerControl pc)
@@ -210,6 +225,7 @@ public class Shuffler : RoleBase
         }
 
         ShuffleEndTS = Utils.TimeStamp + ShuffleDuration.GetInt();
+        SendSync(ShuffleDuration.GetInt());
 
         pc.Notify(string.Format(Translator.GetString("Shuffler.Activated"), ShuffleDuration.GetInt(), Math.Round(pc.GetAbilityUseLimit(), 2)));
     }
@@ -288,6 +304,7 @@ public class Shuffler : RoleBase
         if (Utils.TimeStamp > ShuffleEndTS)
         {
             EndShuffle();
+            SendSync(0);
             return;
         }
 
@@ -385,7 +402,9 @@ public class Shuffler : RoleBase
 
     public override void AfterMeetingTasks()
     {
+        bool wasActive = ShuffleEndTS != 0;
         ResetRoundState();
+        if (wasActive) SendSync(0);
 
         // void 組は会議後の通常配置でマップ内へ戻る (ExilePatch)。封じも会議1回ぶんで解ける。
         foreach (byte id in VoidPlayers) ChatCommands.MutedPlayers.Remove(id);

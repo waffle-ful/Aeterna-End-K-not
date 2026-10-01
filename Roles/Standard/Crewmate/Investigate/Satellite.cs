@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using EndKnot.Modules;
+using Hazel;
 using static EndKnot.Translator;
 
 namespace EndKnot.Roles;
@@ -159,6 +161,8 @@ public class Satellite : RoleBase
 
         SentPlayers[targetId] = room;
         usecount--;
+        // 名前横の残り回数はモッド客が自分の手元の値で出すので送る
+        Utils.SendRPC(CustomRPC.SyncRoleData, SatelliteId, usecount);
         meetingUseCount++;
 
         string body = room.HasValue
@@ -189,6 +193,11 @@ public class Satellite : RoleBase
         SentPlayers.Clear();
         meetingUseCount = 0;
         SatelliteActivated = false;
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        usecount = reader.ReadPackedInt32();
     }
 
     public override string GetProgressText(byte playerId, bool comms)

@@ -1,6 +1,7 @@
 using System;
 using AmongUs.GameOptions;
 using EndKnot.Modules;
+using Hazel;
 using UnityEngine;
 
 namespace EndKnot.Roles;
@@ -44,6 +45,9 @@ public class Mirage : RoleBase
     private Vector2? MarkPos;
     private MirageClone Clone;
     private bool CloneArrived;
+
+    // 分身は CNO でホストにしか実体がないので、モッド客は状態 (0=なし 1=行き先 2=移動中 3=到着) だけを受け取って表示する
+    private byte SyncedState;
 
     public override bool IsEnable => On;
 
@@ -117,6 +121,7 @@ public class Mirage : RoleBase
             // 入れ替えたら分身は「その場に留まる」— 行き先はもう消費済み
             MarkPos = null;
             CloneArrived = true;
+            SendSync(3);
 
             pc.Notify(Translator.GetString("MirageSwapped"));
             return false;
@@ -126,6 +131,7 @@ public class Mirage : RoleBase
         if (MarkPos == null)
         {
             MarkPos = pc.Pos();
+            SendSync(1);
             pc.Notify(Translator.GetString("MirageMarked"));
             return false;
         }
@@ -139,6 +145,7 @@ public class Mirage : RoleBase
 
         Clone = new MirageClone(pc.Pos(), AtlasVictimSnapshot.CaptureFrom(pc));
         CloneArrived = false;
+        SendSync(2);
 
         pc.Notify(Translator.GetString("MirageCloneSent"));
         return false;
@@ -153,6 +160,7 @@ public class Mirage : RoleBase
         {
             Clone = null;
             CloneArrived = false;
+            SendSync((byte)(MarkPos == null ? 0 : 1));
             return;
         }
 
@@ -167,6 +175,7 @@ public class Mirage : RoleBase
         {
             Clone.TP(target);
             CloneArrived = true;
+            SendSync(3);
             return;
         }
 
@@ -200,10 +209,24 @@ public class Mirage : RoleBase
 
     private void ClearAll()
     {
+        bool hadState = Clone != null || MarkPos != null;
+
         Clone?.Despawn();
         Clone = null;
         MarkPos = null;
         CloneArrived = false;
+
+        if (hadState) SendSync(0);
+    }
+
+    private void SendSync(byte state)
+    {
+        Utils.SendRPC(CustomRPC.SyncRoleData, MirageId, state);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        SyncedState = reader.ReadByte();
     }
 
     public override string GetSuffix(PlayerControl seer, PlayerControl target, bool hud = false, bool meeting = false)
@@ -211,6 +234,17 @@ public class Mirage : RoleBase
         // seer==target だけでは足りない — Utils.BuildSuffix は全役職インスタンスを舐めるので、
         // 「持ち主本人のインスタンスか」を MirageId で必ず確認する (Gemini/Safecracker と同じ形)。
         if (seer.PlayerId != MirageId || seer.PlayerId != target.PlayerId || meeting) return string.Empty;
+
+        if (!AmongUsClient.Instance.AmHost)
+        {
+            return SyncedState switch
+            {
+                3 => Translator.GetString("MirageSuffix.Arrived"),
+                2 => Translator.GetString("MirageSuffix.Walking"),
+                1 => Translator.GetString("MirageSuffix.Marked"),
+                _ => string.Empty
+            };
+        }
 
         if (Clone is { playerControl: not null })
             return Translator.GetString(CloneArrived ? "MirageSuffix.Arrived" : "MirageSuffix.Walking");

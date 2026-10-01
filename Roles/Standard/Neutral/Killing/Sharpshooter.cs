@@ -1,4 +1,6 @@
 ﻿using AmongUs.GameOptions;
+using EndKnot.Modules;
+using Hazel;
 
 namespace EndKnot.Roles;
 
@@ -98,6 +100,7 @@ public class Sharpshooter : RoleBase
 
         RealPosition = pc.Pos();
         AbilityEndTS = Utils.TimeStamp + AbilityDuration.GetInt();
+        SendSync();
         Main.AllPlayerSpeed[pc.PlayerId] += SpeedIncreasement.GetFloat();
         Main.PlayerStates[pc.PlayerId].IsBlackOut = true;
         pc.FreezeForOthers();
@@ -158,5 +161,17 @@ public class Sharpshooter : RoleBase
         Main.AllPlayerSpeed[SharpshooterId] = Main.RealOptionsData.GetFloat(FloatOptionNames.PlayerSpeedMod);
         Main.PlayerStates[SharpshooterId].IsBlackOut = false;
         AbilityEndTS = 0;
+        SendSync();
+    }
+
+    // キルボタンの表示は各クライアントが発動中かどうかで決めるので、発動の有無をモッド客へ送る
+    private void SendSync()
+    {
+        Utils.SendRPC(CustomRPC.SyncRoleData, SharpshooterId, AbilityEndTS != 0);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        AbilityEndTS = reader.ReadBoolean() ? 1 : 0;
     }
 }

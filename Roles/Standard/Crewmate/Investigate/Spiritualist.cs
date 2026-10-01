@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
+using EndKnot.Modules;
 using Hazel;
 using static EndKnot.Options;
 using static EndKnot.Translator;
@@ -21,6 +22,8 @@ internal class Spiritualist : RoleBase
     // 投票追放は OnReportDeadBody を経由しないため、判定は会議明けの死亡インポスター総覧との差分で行う。
     public static byte LastDeadImpostorId;
     private static readonly HashSet<byte> KnownDeadImpostors = [];
+    private static byte SyncedTarget = byte.MaxValue;
+    private static byte SyncedLastDeadImpostor = byte.MaxValue;
     private long LastGhostArrowShowTime;
     private long ShowGhostArrowUntil;
     private byte SpiritualistId;
@@ -63,6 +66,8 @@ internal class Spiritualist : RoleBase
         SpiritualistTarget = 0;
         LastDeadImpostorId = byte.MaxValue;
         KnownDeadImpostors.Clear();
+        SyncedTarget = byte.MaxValue;
+        SyncedLastDeadImpostor = byte.MaxValue;
         LastGhostArrowShowTime = 0;
         ShowGhostArrowUntil = 0;
     }
@@ -85,9 +90,25 @@ internal class Spiritualist : RoleBase
     {
         if (target == null) return;
 
-        if (SpiritualistTarget != byte.MaxValue) RemoveTarget();
+        if (SpiritualistTarget != byte.MaxValue) RemoveTarget(false);
 
         SpiritualistTarget = target.PlayerId;
+        SendSyncToAll();
+    }
+
+    // 矢印の接続先は各クライアントが自分の手元の値で決めるので、モッド客へ送る
+    private static void SendSyncToAll()
+    {
+        SyncedTarget = SpiritualistTarget;
+        SyncedLastDeadImpostor = LastDeadImpostorId;
+
+        foreach (byte id in PlayerIdList) Utils.SendRPC(CustomRPC.SyncRoleData, id, SpiritualistTarget, LastDeadImpostorId);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        SpiritualistTarget = reader.ReadByte();
+        LastDeadImpostorId = reader.ReadByte();
     }
 
     // マッドメイト向けの「直近に死んだインポスター」は投票追放でも切り替わる必要があるため、
@@ -114,6 +135,7 @@ internal class Spiritualist : RoleBase
     public override void AfterMeetingTasks()
     {
         UpdateLastDeadImpostor();
+        if (SyncedTarget != SpiritualistTarget || SyncedLastDeadImpostor != LastDeadImpostorId) SendSyncToAll();
 
         foreach (byte spiritualist in PlayerIdList)
         {
@@ -175,11 +197,12 @@ internal class Spiritualist : RoleBase
         return connectedId != byte.MaxValue && ShowArrow ? Utils.ColorString(seer.GetRoleColor(), TargetArrow.GetArrows(seer, connectedId)) : string.Empty;
     }
 
-    public static void RemoveTarget()
+    public static void RemoveTarget(bool sync = true)
     {
         foreach (byte spiritualist in PlayerIdList) TargetArrow.Remove(spiritualist, SpiritualistTarget);
 
         SpiritualistTarget = byte.MaxValue;
+        if (sync) SendSyncToAll();
     }
 
     private static void RemoveMadTarget()

@@ -1,5 +1,8 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
 using AmongUs.GameOptions;
+using EndKnot.Modules;
+using Hazel;
 using UnityEngine;
 using static EndKnot.Translator;
 
@@ -59,9 +62,11 @@ public class Comebacker : RoleBase
         if (Utils.GetPlayerById(ComebackerId)?.IsAlive() != true) ClearMadArrows();
     }
 
-    private void ClearMadArrows()
+    private void ClearMadArrows(bool sync = true)
     {
-        if (MadArrowPos.HasValue)
+        bool hadArrows = MadArrowPos.HasValue;
+
+        if (hadArrows)
         {
             foreach (byte impId in MadArrowImps)
                 LocateArrow.Remove(impId, MadArrowPos.Value);
@@ -69,6 +74,29 @@ public class Comebacker : RoleBase
 
         MadArrowImps.Clear();
         MadArrowPos = null;
+
+        if (sync && hadArrows) SendMadArrowSync();
+    }
+
+    // インポスター側の矢印表示は各クライアントが自分で判定するので、配った相手と地点をモッド客へ送る
+    private void SendMadArrowSync()
+    {
+        var data = new List<object> { ComebackerId, MadArrowPos.HasValue, MadArrowPos ?? Vector3.zero, MadArrowImps.Count };
+        data.AddRange(MadArrowImps.Select(x => (object)x));
+        data.Add(ComebackPosString ?? string.Empty);
+        Utils.SendRPC(CustomRPC.SyncRoleData, data.ToArray());
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        bool hasPos = reader.ReadBoolean();
+        Vector3 pos = reader.ReadVector3();
+        int count = reader.ReadPackedInt32();
+
+        MadArrowImps = [];
+        for (var i = 0; i < count; i++) MadArrowImps.Add(reader.ReadByte());
+        MadArrowPos = hasPos ? pos : null;
+        ComebackPosString = reader.ReadString();
     }
 
     public override void ApplyGameOptions(IGameOptions opt, byte playerId)
@@ -102,7 +130,9 @@ public class Comebacker : RoleBase
         PlainShipRoom room = pc.GetPlainShipRoom();
         ComebackPosString = room != null ? GetString(room.RoomId.ToString()) : string.Empty;
 
+        // 名前の下の「戻り先の部屋」表示はモッド客が自分で組むので、記録のたびに送る
         if (mad) ShareWaypointWithImpostors(vent.transform.position);
+        else SendMadArrowSync();
 
         Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
     }
@@ -121,7 +151,7 @@ public class Comebacker : RoleBase
     // 記録地点を生存インポスター全員へ矢印で共有する (集合場所)。
     private void ShareWaypointWithImpostors(Vector3 pos)
     {
-        ClearMadArrows();
+        ClearMadArrows(false);
         MadArrowPos = pos;
 
         foreach (PlayerControl imp in Main.EnumerateAlivePlayerControls())
@@ -131,6 +161,8 @@ public class Comebacker : RoleBase
             MadArrowImps.Add(imp.PlayerId);
             Utils.NotifyRoles(SpecifySeer: imp, SpecifyTarget: imp);
         }
+
+        SendMadArrowSync();
     }
 
     public override string GetSuffix(PlayerControl seer, PlayerControl target, bool hud = false, bool meeting = false)

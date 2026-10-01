@@ -1,5 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
+using EndKnot.Modules;
+using Hazel;
 using static EndKnot.Translator;
 
 namespace EndKnot.Roles;
@@ -135,6 +137,7 @@ public class Balancer : RoleBase
         SelectedTarget2[BalancerId] = votedId;
         IsSelecting[BalancerId] = false;
         HasUsed[BalancerId] = true;
+        SendSync();
         Utils.SendMessage(string.Format(GetString("BalancerTargetsSelected"), t1.ColoredPlayerName(), votedId.ColoredPlayerName()), BalancerId, importance: MessageImportance.High);
         return true;
     }
@@ -149,6 +152,7 @@ public class Balancer : RoleBase
             IsBalancerMeeting = false;
             MeetingTarget1 = byte.MaxValue;
             MeetingTarget2 = byte.MaxValue;
+            SendSync();
             Utils.NotifyRoles(ForceLoop: true, NoCache: true);
             return;
         }
@@ -182,10 +186,25 @@ public class Balancer : RoleBase
             IsBalancerMeeting = true;
             MeetingTarget1 = t1;
             MeetingTarget2 = t2;
+            SendSync();
 
             Utils.SendMessage(string.Format(GetString("BalancerMeetingStart"), t1.ColoredPlayerName(), t2.ColoredPlayerName()), importance: MessageImportance.High);
             balancerPc.NoCheckStartMeeting(null, true);
         }, 3f, "BalancerMeetingStart");
+    }
+
+    // 会議の対象を示す印と使用済み表示は各クライアントが自分の手元の値で出すので、モッド客へ送る
+    private void SendSync()
+    {
+        Utils.SendRPC(CustomRPC.SyncRoleData, BalancerId, HasUsed.GetValueOrDefault(BalancerId), IsBalancerMeeting, MeetingTarget1, MeetingTarget2);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        HasUsed[BalancerId] = reader.ReadBoolean();
+        IsBalancerMeeting = reader.ReadBoolean();
+        MeetingTarget1 = reader.ReadByte();
+        MeetingTarget2 = reader.ReadByte();
     }
 
     public override string GetSuffix(PlayerControl seer, PlayerControl target, bool hud = false, bool meeting = false)

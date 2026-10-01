@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using AmongUs.GameOptions;
 using EndKnot.Modules;
+using Hazel;
 
 namespace EndKnot.Roles;
 
@@ -121,11 +122,25 @@ public class EarnestWolf : RoleBase
         else if (maxCount > 0)
             OverKillMode = !OverKillMode;
 
+        SendSync();
+
         LateTask.New(() =>
         {
             Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
             pc.SyncSettings();
         }, 0.2f, "EarnestWolf.Toggle");
+    }
+
+    // キルボタンの文字と名前下の印は各クライアントが自分で判定するので、オーバーキル状態と実行済みの回数をモッド客へ送る
+    private void SendSync()
+    {
+        Utils.SendRPC(CustomRPC.SyncRoleData, EarnestWolfId, OverKillMode, KillsDoneInOverKill);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        OverKillMode = reader.ReadBoolean();
+        KillsDoneInOverKill = reader.ReadPackedInt32();
     }
 
     public override bool OnCheckMurder(PlayerControl killer, PlayerControl target)
@@ -139,6 +154,7 @@ public class EarnestWolf : RoleBase
         int maxCount = OverKillCount.GetInt();
         // キル成立でモード解除 (無限モード=0のみ維持、原典準拠)
         OverKillMode = maxCount == 0;
+        SendSync();
 
         LateTask.New(() =>
         {

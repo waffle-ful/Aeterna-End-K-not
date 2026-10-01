@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using AmongUs.GameOptions;
 using EndKnot.Modules;
+using Hazel;
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using UnityEngine;
 
@@ -281,6 +282,7 @@ public class PortalButton : RoleBase
         Holding = true;
         HoldStartTS = Utils.TimeStamp;
         CarrierId = pc.PlayerId;
+        SendSync();
         pc.Notify(string.Format(Translator.GetString("PortalButton.PickedUp"), HoldTimeLimit.GetInt()));
     }
 
@@ -289,6 +291,7 @@ public class PortalButton : RoleBase
         Holding = false;
         HoldStartTS = 0;
         CarrierId = null;
+        SendSync();
 
         DespawnMarker();
 
@@ -426,6 +429,8 @@ public class PortalButton : RoleBase
 
         if (added.Count == 0) return;
 
+        ownerRole.SendSync();
+
         LateTask.New(() =>
         {
             if (!GameStates.InGame || GameStates.IsEnded) return;
@@ -435,14 +440,43 @@ public class PortalButton : RoleBase
                 if (!ownerRole.HuntArrows.Remove((imp, victim))) continue;
                 TargetArrow.Remove(imp, victim);
             }
+
+            ownerRole.SendSync();
         }, MadFakeArrowDuration.GetInt(), "PortalButton Fake Arrow");
     }
 
     public override void OnReportDeadBody()
     {
+        if (HuntArrows.Count == 0) return;
+
         foreach ((byte imp, byte victim) in HuntArrows)
             TargetArrow.Remove(imp, victim);
         HuntArrows.Clear();
+        SendSync();
+    }
+
+    // 残り時間の表示と獲物への矢印は各クライアントが自分の手元の値で出すので、持ち歩き中か・矢印の組をモッド客へ送る
+    private void SendSync()
+    {
+        Utils.SendRPC(CustomRPC.SyncRoleData, OwnerId, Holding, string.Join(',', HuntArrows.Take(40).Select(x => $"{x.Imp}:{x.Victim}")));
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        bool holding = reader.ReadBoolean();
+        if (holding && !Holding) HoldStartTS = Utils.TimeStamp;
+        else if (!holding) HoldStartTS = 0;
+        Holding = holding;
+
+        HuntArrows.Clear();
+        string data = reader.ReadString();
+        if (data.Length == 0) return;
+
+        foreach (string entry in data.Split(','))
+        {
+            string[] parts = entry.Split(':');
+            HuntArrows.Add((byte.Parse(parts[0]), byte.Parse(parts[1])));
+        }
     }
 
     private static void CheckFakePrompt(PlayerControl pc)

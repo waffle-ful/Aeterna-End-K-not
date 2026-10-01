@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
+using EndKnot.Modules;
+using Hazel;
 using UnityEngine;
 using static EndKnot.Options;
 
@@ -149,6 +151,7 @@ public class Snitch : RoleBase
             }
 
             IsExposed[snitchId] = true;
+            SendSync();
         }
 
         if (IsComplete.GetValueOrDefault(snitchId) || completedTaskCount < totalTaskCount) return;
@@ -173,7 +176,35 @@ public class Snitch : RoleBase
             Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: target);
         }
 
-        pc.Notify(Translator.GetString("SnitchDoneTasks"));
         IsComplete[snitchId] = true;
+        SendSync();
+        pc.Notify(Translator.GetString("SnitchDoneTasks"));
+    }
+
+    // 矢印の色分けと警告マークは各クライアントが自分の手元の値で行うので、見つけた相手とその色・露出状態をモッド客へ送る
+    private void SendSync()
+    {
+        string data = string.Join(',', TargetList.Select(id => $"{id}:{(TargetColorlist.TryGetValue(id, out Color c) ? ColorUtility.ToHtmlStringRGB(c) : string.Empty)}"));
+        Utils.SendRPC(CustomRPC.SyncRoleData, SnitchId, data, IsExposed.GetValueOrDefault(SnitchId), IsComplete.GetValueOrDefault(SnitchId));
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        TargetList.Clear();
+        TargetColorlist.Clear();
+
+        string data = reader.ReadString();
+        IsExposed[SnitchId] = reader.ReadBoolean();
+        IsComplete[SnitchId] = reader.ReadBoolean();
+
+        if (data.Length == 0) return;
+
+        foreach (string entry in data.Split(','))
+        {
+            string[] parts = entry.Split(':');
+            byte id = byte.Parse(parts[0]);
+            TargetList.Add(id);
+            if (parts[1].Length > 0 && ColorUtility.TryParseHtmlString($"#{parts[1]}", out Color color)) TargetColorlist[id] = color;
+        }
     }
 }

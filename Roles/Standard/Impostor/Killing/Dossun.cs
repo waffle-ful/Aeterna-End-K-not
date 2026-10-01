@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using EndKnot.Modules;
+using Hazel;
 using UnityEngine;
 
 namespace EndKnot.Roles;
@@ -86,6 +87,18 @@ public class Dossun : RoleBase
         DespawnBlock();
     }
 
+    // 名前下の矢印は各クライアントが自分で判定するので、段階と矢印の行き先をモッド客へ送る
+    private void SendSync()
+    {
+        Utils.SendRPC(CustomRPC.SyncRoleData, DossunId, (int)CurrentPhase, ArrowTargetId);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        CurrentPhase = (Phase)reader.ReadPackedInt32();
+        ArrowTargetId = reader.ReadByte();
+    }
+
     private void DespawnBlock()
     {
         BlockCNO?.Despawn();
@@ -108,6 +121,7 @@ public class Dossun : RoleBase
                 // ブロックを設置する部屋の位置だけ記憶する。CNO はまだ出さない (完全不可視)
                 Anchor = pc.Pos();
                 CurrentPhase = Phase.Placed;
+                SendSync();
                 PlainShipRoom room = pc.GetPlainShipRoom();
                 AnchorRoomName = room == null ? Translator.GetString("Outside") : Translator.GetString($"{room.RoomId}");
                 pc.Notify(string.Format(Translator.GetString("Dossun.Placed"), AnchorRoomName));
@@ -125,6 +139,7 @@ public class Dossun : RoleBase
                 });
                 EndKnot.Modules.ExplosionFx.Play(EndKnot.Modules.ExplosionFx.Kind.Slam, Anchor, 1.5f);
                 CurrentPhase = Phase.Active;
+                SendSync();
 
                 // 起動地点とアンカーが離れているとブロックは永久にカメラ外 (ブロックとの距離は起動時の
                 // アンカー距離で固定される) なので、本人にだけ方向矢印を出して間接操作を補助する。
@@ -137,6 +152,7 @@ public class Dossun : RoleBase
             case Phase.Active:
                 DespawnBlock();
                 CurrentPhase = Phase.None;
+                SendSync();
                 pc.Notify(Translator.GetString("Dossun.Recalled"));
                 break;
         }
@@ -152,6 +168,7 @@ public class Dossun : RoleBase
             {
                 DespawnBlock();
                 CurrentPhase = Phase.None;
+                SendSync();
             }
             return;
         }
@@ -164,12 +181,14 @@ public class Dossun : RoleBase
         {
             ArrowTargetId = BlockCNO.playerControl.PlayerId;
             TargetArrow.Add(pc.PlayerId, ArrowTargetId);
+            SendSync();
         }
 
         if (Utils.TimeStamp - ActivatedTimeStamp >= BlockDuration.GetInt())
         {
             DespawnBlock();
             CurrentPhase = Phase.None;
+            SendSync();
             pc.Notify(Translator.GetString("Dossun.Expired"));
             return;
         }
@@ -270,5 +289,6 @@ public class Dossun : RoleBase
         if (CurrentPhase == Phase.None) return;
         DespawnBlock();
         CurrentPhase = Phase.None;
+        SendSync();
     }
 }

@@ -228,6 +228,9 @@ public class Evolver : RoleBase
         Stats.VentUseLimit = Math.Max(Stats.VentUseLimit, 0);
         Stats.SabotageUseLimit = Math.Max(Stats.SabotageUseLimit, 0);
 
+        // ベント・サボタージュのボタンと残り回数の表示は各クライアントが自分で判定するのでモッド客へ送る
+        Utils.SendRPC(CustomRPC.SyncRoleData, EvolverPC.PlayerId, 4, Stats.CanVent, Stats.VentUseLimit, Stats.CanSabotage, Stats.SabotageUseLimit);
+
         Utils.NotifyRoles(SpecifySeer: EvolverPC, SpecifyTarget: EvolverPC);
         Logger.Info($" KCD: {Stats.KillCooldown}, Vision: {Stats.Vision}, Speed: {Stats.Speed}, KDis: {Stats.KillDistance}", "Evolver Stats");
     }
@@ -258,8 +261,9 @@ public class Evolver : RoleBase
         switch (reader.ReadPackedInt32())
         {
             case 1:
+                int count = reader.ReadInt32();
                 Upgrades = [];
-                for (var i = 0; i < Upgrades.Count; i++) Upgrades.Add((Upgrade)reader.ReadPackedInt32());
+                for (var i = 0; i < count; i++) Upgrades.Add((Upgrade)reader.ReadPackedInt32());
 
                 break;
             case 2:
@@ -269,6 +273,12 @@ public class Evolver : RoleBase
                 break;
             case 3:
                 ChooseTimer = reader.ReadPackedInt32();
+                break;
+            case 4:
+                Stats.CanVent = reader.ReadBoolean();
+                Stats.VentUseLimit = reader.ReadPackedInt32();
+                Stats.CanSabotage = reader.ReadBoolean();
+                Stats.SabotageUseLimit = reader.ReadPackedInt32();
                 break;
         }
     }

@@ -141,6 +141,7 @@ public class Tama : RoleBase
         {
             HasLoaded = false;
             IsLoading = false;
+            SendSync();
             if (owner != null && Main.PlayerStates[owner.PlayerId].Role is JackalHadouHo jhh1)
                 jhh1.SetLoaded(false);
             return;

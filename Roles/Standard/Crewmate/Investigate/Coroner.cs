@@ -1,5 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
+using EndKnot.Modules;
+using Hazel;
 using UnityEngine;
 
 namespace EndKnot.Roles;
@@ -83,6 +85,19 @@ public class Coroner : RoleBase
         }
 
         CoronerTargets.Clear();
+        SendSync();
+    }
+
+    // 追跡する矢印の出し分けは各クライアントが自分の手元の値で判定するので、記録済みのキラーをモッド客へ送る
+    private void SendSync()
+    {
+        Utils.SendRPC(CustomRPC.SyncRoleData, CoronerId, string.Join(',', CoronerTargets));
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        string s = reader.ReadString();
+        CoronerTargets = s.Length == 0 ? [] : s.Split(',').Select(byte.Parse).ToList();
     }
 
     public override void AfterMeetingTasks()
@@ -104,6 +119,7 @@ public class Coroner : RoleBase
             {
                 CoronerTargets.Add(killer.PlayerId);
                 TargetArrow.Add(pc.PlayerId, killer.PlayerId);
+                SendSync();
 
                 pc.RpcRemoveAbilityUse(notify: false);
                 pc.Notify(GetString("CoronerTrackRecorded"));

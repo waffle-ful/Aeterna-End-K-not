@@ -460,7 +460,10 @@ public class VengefulRomantic : RoleBase
 
     public override void OnMurder(PlayerControl killer, PlayerControl target)
     {
-        if (target.PlayerId == Target) HasKilledKiller = true;
+        if (target.PlayerId != Target) return;
+
+        HasKilledKiller = true;
+        SendRPC();
     }
 
     public override string GetSuffix(PlayerControl seer, PlayerControl target, bool hud = false, bool meeting = false)
@@ -476,6 +479,7 @@ public class VengefulRomantic : RoleBase
 
         MessageWriter writer = AmongUsClient.Instance.StartRpcImmediately(PlayerControl.LocalPlayer.NetId, (byte)CustomRPC.SyncVengefulRomanticTarget, SendOption.Reliable);
         writer.Write(Target);
+        writer.Write(HasKilledKiller);
         AmongUsClient.Instance.FinishRpcImmediately(writer);
     }
 
@@ -483,6 +487,7 @@ public class VengefulRomantic : RoleBase
     {
         byte target = reader.ReadByte();
         Target = target;
+        HasKilledKiller = reader.ReadBoolean();
     }
 
     public override void SetButtonTexts(HudManager hud, byte id)

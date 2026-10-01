@@ -2,6 +2,7 @@
 using System.Linq;
 using AmongUs.GameOptions;
 using EndKnot.Modules;
+using Hazel;
 using UnityEngine;
 
 namespace EndKnot.Roles;
@@ -161,11 +162,18 @@ public class VentOpener : RoleBase
         if ((booted || fuhatu) && count > 0)
         {
             count--;
+            // 残り回数の表示はモッド客が自分の手元の値で出すので送る
+            Utils.SendRPC(CustomRPC.SyncRoleData, VentOpenerId, count);
             if (!CanUseAbility(pc))
                 pc.SyncSettings();
         }
 
         Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        count = reader.ReadPackedInt32();
     }
 
     private bool CanUseAbility(PlayerControl pc)

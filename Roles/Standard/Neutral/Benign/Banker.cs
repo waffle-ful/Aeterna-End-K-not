@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using AmongUs.GameOptions;
 using EndKnot.Modules;
+using Hazel;
 using static EndKnot.Options;
 using static EndKnot.Translator;
 
@@ -76,6 +77,19 @@ public class Banker : RoleBase
         Main.AllPlayerKillCooldown[id] = KillCooldown.GetFloat();
     }
 
+    // キルボタン・ボタン文字・コイン数の表示は各クライアントが自分で判定するので、コインとモードをモッド客へ送る
+    private void SendSync()
+    {
+        Utils.SendRPC(CustomRPC.SyncRoleData, BankerId, HaveCoin, TaskMode, IsDead);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        HaveCoin = reader.ReadPackedInt32();
+        TaskMode = reader.ReadBoolean();
+        IsDead = reader.ReadBoolean();
+    }
+
     public override bool CanUseKillButton(PlayerControl pc)
     {
         return !TaskMode && pc.IsAlive();
@@ -97,6 +111,7 @@ public class Banker : RoleBase
     {
         if (pc.PlayerId != BankerId || !TaskMode) return;
         HaveCoin += TaskAddCoin.GetInt();
+        SendSync();
         Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
     }
 
@@ -106,6 +121,7 @@ public class Banker : RoleBase
     {
         if (killer.PlayerId != BankerId || TaskMode) return;
         HaveCoin += KillAddCoin.GetInt();
+        SendSync();
         Utils.NotifyRoles(SpecifySeer: killer, SpecifyTarget: killer);
     }
 
@@ -115,6 +131,7 @@ public class Banker : RoleBase
         if (HaveCoin < SwitchCoinCost.GetInt()) return;
         HaveCoin -= SwitchCoinCost.GetInt();
         TaskMode = !TaskMode;
+        SendSync();
         pc.SetKillCooldown();
         pc.Notify(GetString(TaskMode ? "Banker.SwitchedToTask" : "Banker.SwitchedToKill"));
         Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
@@ -130,6 +147,8 @@ public class Banker : RoleBase
                 HaveCoin -= DieRemoveCoin.GetInt();
                 Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
             }
+
+            SendSync();
         }
     }
 
@@ -139,6 +158,7 @@ public class Banker : RoleBase
         PlayerControl pc = Utils.GetPlayerById(BankerId);
         if (pc == null) return;
         HaveCoin -= pc.IsAlive() ? TurnRemoveCoin.GetInt() : DieRemoveTurnCoin.GetInt();
+        SendSync();
         Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
     }
 

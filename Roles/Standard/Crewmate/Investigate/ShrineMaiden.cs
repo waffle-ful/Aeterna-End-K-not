@@ -1,4 +1,6 @@
 ﻿using System.Collections.Generic;
+using EndKnot.Modules;
+using Hazel;
 using UnityEngine;
 using static EndKnot.Translator;
 
@@ -118,6 +120,21 @@ public class ShrineMaiden : RoleBase
             IsReport[ShrineMaidenId] = false;
             OnikuId[ShrineMaidenId] = byte.MaxValue;
         }
+
+        SendSync();
+    }
+
+    // 会議中の表示と残り回数は各クライアントが自分の手元の値で出すので、通報の有無と対象をモッド客へ送る
+    private void SendSync()
+    {
+        Utils.SendRPC(CustomRPC.SyncRoleData, ShrineMaidenId, UseCount.GetValueOrDefault(ShrineMaidenId), IsReport.GetValueOrDefault(ShrineMaidenId), OnikuId.GetValueOrDefault(ShrineMaidenId, byte.MaxValue));
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        UseCount[ShrineMaidenId] = reader.ReadPackedInt32();
+        IsReport[ShrineMaidenId] = reader.ReadBoolean();
+        OnikuId[ShrineMaidenId] = reader.ReadByte();
     }
 
     public override bool OnVote(PlayerControl voter, PlayerControl target)
@@ -161,6 +178,7 @@ public class ShrineMaiden : RoleBase
     {
         UseCount[id]--;
         MeetingUseCount[id] = (MeetingUseCount.TryGetValue(id, out int mc) ? mc : 0) + 1;
+        SendSync();
 
         byte bodyId = OnikuId.TryGetValue(id, out byte oid) ? oid : byte.MaxValue;
         CustomRoleTypes bodyTeam = GetTeam(bodyId);
@@ -192,6 +210,7 @@ public class ShrineMaiden : RoleBase
         IsReport[ShrineMaidenId] = false;
         OnikuId[ShrineMaidenId] = byte.MaxValue;
         IsSelecting[ShrineMaidenId] = false;
+        SendSync();
     }
 
     public override string GetProgressText(byte playerId, bool comms)

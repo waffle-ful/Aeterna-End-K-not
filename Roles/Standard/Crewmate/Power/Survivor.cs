@@ -72,7 +72,10 @@ public class Survivor : RoleBase
             PlayerControl player = Utils.GetPlayerById(playerId);
             Killing = player.Is(CustomRoles.Bloodlust);
             if (Killing)
+            {
                 player.RpcChangeRoleBasis(CustomRoles.Scanner);
+                Utils.SendRPC(CustomRPC.SyncRoleData, playerId, Killing, 0f);
+            }
         }, 1f, log: false);
     }
 
@@ -86,6 +89,13 @@ public class Survivor : RoleBase
     public void ReceiveRPC(MessageReader reader)
     {
         Killing = reader.ReadBoolean();
+
+        float remaining = reader.ReadSingle();
+        ShieldTimer?.Dispose();
+        ShieldTimer = null;
+
+        if (remaining > 0f)
+            ShieldTimer = new CountdownTimer(remaining, () => ShieldTimer = null, onCanceled: () => ShieldTimer = null);
     }
 
     // First ability: Players alive count
@@ -107,6 +117,8 @@ public class Survivor : RoleBase
     // Second ability: Shield
     public override void AfterMeetingTasks()
     {
+        if (ShieldTimer != null) Utils.SendRPC(CustomRPC.SyncRoleData, SurvivorId, Killing, 0f);
+
         ShieldTimer?.Dispose();
         ShieldTimer = null;
     }
@@ -139,6 +151,8 @@ public class Survivor : RoleBase
                 ShieldTimer = null;
                 Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
             }, onCanceled: () => ShieldTimer = null);
+            // シールド表示は各クライアントが自分で判定するので、開始をモッド客へ送る
+            Utils.SendRPC(CustomRPC.SyncRoleData, SurvivorId, Killing, ShieldDuration.GetFloat());
             if (!shielded) Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
         }
         else pc.Notify(Translator.GetString("SurvivorCantShieldYet"));
@@ -194,7 +208,7 @@ public class Survivor : RoleBase
             Killing = true;
             pc.RpcChangeRoleBasis(CustomRoles.Scanner);
             LateTask.New(() => pc.SetKillCooldown(KillCooldown.GetFloat()), 0.2f);
-            Utils.SendRPC(CustomRPC.SyncRoleData, pc.PlayerId, Killing);
+            Utils.SendRPC(CustomRPC.SyncRoleData, pc.PlayerId, Killing, ShieldTimer != null ? (float)ShieldTimer.Remaining.TotalSeconds : 0f);
             Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
             pc.MarkDirtySettings();
         }

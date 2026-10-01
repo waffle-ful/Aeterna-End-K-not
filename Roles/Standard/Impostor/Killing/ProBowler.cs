@@ -1,5 +1,7 @@
 ﻿using System.Collections.Generic;
 using AmongUs.GameOptions;
+using EndKnot.Modules;
+using Hazel;
 using UnityEngine;
 
 namespace EndKnot.Roles;
@@ -77,6 +79,18 @@ public class ProBowler : RoleBase
         Main.AllPlayerKillCooldown[id] = KillCooldownOpt.GetFloat();
     }
 
+    // 名前下の案内と残り回数は各クライアントが自分の手元で組み立てるので、使用回数とボウル設置済みかをモッド客へ送る
+    private void SendSync()
+    {
+        Utils.SendRPC(CustomRPC.SyncRoleData, ProBowlerId, NowUseCount, Bowl != null);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        NowUseCount = reader.ReadPackedInt32();
+        Bowl = reader.ReadBoolean() ? Vector2.zero : null;
+    }
+
     public override void ApplyGameOptions(IGameOptions opt, byte playerId)
     {
         AURoleOptions.ShapeshifterCooldown = NowUseCount >= MaxUseCount.GetInt() ? 200f : AbilityCooldown.GetFloat();
@@ -96,6 +110,7 @@ public class ProBowler : RoleBase
 
         NowUseCount++;
         Bowl = shapeshifter.Pos();
+        SendSync();
         LateTask.New(() =>
         {
             shapeshifter.SyncSettings();
@@ -121,11 +136,13 @@ public class ProBowler : RoleBase
             BowlTp = new Vector2((Bowl.Value.x - targetPos.x) * 0.1f, (Bowl.Value.y - targetPos.y) * 0.1f);
             TargetPos = targetPos;
             Bowl = null;
+            SendSync();
         }
         else
         {
             Vector2 bowlPos = Bowl.Value;
             Bowl = null;
+            SendSync();
             target.TP(bowlPos, log: false);
 
             PlayerState.DeathReason reason = DeathReasonIsFall.GetBool()
@@ -187,8 +204,10 @@ public class ProBowler : RoleBase
         }
 
         NowKilling = false;
+        bool hadBowl = Bowl != null;
         Bowl = null;
         Bowltarget = null;
+        if (hadBowl) SendSync();
     }
 
     public override string GetProgressText(byte playerId, bool comms)

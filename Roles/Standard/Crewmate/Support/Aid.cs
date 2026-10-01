@@ -83,6 +83,8 @@ public class Aid : RoleBase
     public override bool OnCheckMurder(PlayerControl killer, PlayerControl target)
     {
         TargetId = target.PlayerId;
+        // ベントボタンの表示は各クライアントが自分で判定する (対象が決まると出る) ので、対象をモッド客へ送る
+        Utils.SendRPC(CustomRPC.SyncRoleData, killer.PlayerId, byte.MaxValue, TargetId);
         Utils.NotifyRoles(SpecifySeer: killer, SpecifyTarget: target);
         return false;
     }
@@ -103,7 +105,7 @@ public class Aid : RoleBase
                 Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc, SendOption: SendOption.None);
                 Utils.NotifyRoles(SpecifySeer: target, SpecifyTarget: target, SendOption: SendOption.None);
             }, onCanceled: () => ShieldedPlayers.Remove(TargetId));
-            Utils.SendRPC(CustomRPC.SyncRoleData, pc.PlayerId, TargetId);
+            Utils.SendRPC(CustomRPC.SyncRoleData, pc.PlayerId, TargetId, byte.MaxValue);
             Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: target);
             Utils.NotifyRoles(SpecifySeer: target, SpecifyTarget: target);
             TargetId = byte.MaxValue;
@@ -115,6 +117,8 @@ public class Aid : RoleBase
     public void ReceiveRPC(MessageReader reader)
     {
         byte id = reader.ReadByte();
+        TargetId = reader.ReadByte();
+        if (id == byte.MaxValue) return;
         ShieldedPlayers[id] = new CountdownTimer(AidDur.GetInt(), () => ShieldedPlayers.Remove(id), onCanceled: () => ShieldedPlayers.Remove(id));
     }
 

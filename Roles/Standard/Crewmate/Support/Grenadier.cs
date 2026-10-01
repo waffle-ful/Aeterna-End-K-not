@@ -3,6 +3,7 @@ using System.Linq;
 using AmongUs.GameOptions;
 using EndKnot.Modules;
 using EndKnot.Modules.Extensions;
+using Hazel;
 using static EndKnot.Options;
 
 namespace EndKnot.Roles;
@@ -13,6 +14,8 @@ internal class Grenadier : RoleBase
     public static HashSet<byte> MadGrenadierBlinding = [];
 
     public static bool On;
+    private static readonly HashSet<byte> SyncedActive = [];
+    private byte GrenadierId;
     public override bool IsEnable => On;
 
     public override void SetupCustomOption()
@@ -50,12 +53,14 @@ internal class Grenadier : RoleBase
     public override void Add(byte playerId)
     {
         On = true;
+        GrenadierId = playerId;
         playerId.SetAbilityUseLimit(GrenadierSkillMaxOfUsage.GetFloat());
     }
 
     public override void Init()
     {
         On = false;
+        SyncedActive.Clear();
     }
 
     public override void ApplyGameOptions(IGameOptions opt, byte playerId)
@@ -64,6 +69,27 @@ internal class Grenadier : RoleBase
 
         AURoleOptions.EngineerCooldown = GrenadierSkillCooldown.GetFloat();
         AURoleOptions.EngineerInVentMaxTime = 1f;
+    }
+
+    // 使用中の色分けは各クライアントが自分で判定するので、使用中かどうかをモッド客へ送る
+    private static void SendBlindingSync(byte id, bool active)
+    {
+        if (active) SyncedActive.Add(id);
+        else SyncedActive.Remove(id);
+
+        Utils.SendRPC(CustomRPC.SyncRoleData, id, active);
+    }
+
+    // 会議開始でホストは使用中の集合を空にするので、客側の保持も同時に解除させる
+    public override void OnReportDeadBody()
+    {
+        if (SyncedActive.Contains(GrenadierId)) SendBlindingSync(GrenadierId, false);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        if (reader.ReadBoolean()) GrenadierBlinding.Add(GrenadierId);
+        else GrenadierBlinding.Remove(GrenadierId);
     }
 
     public override string GetProgressText(byte playerId, bool comms)
@@ -116,13 +142,19 @@ internal class Grenadier : RoleBase
             else
             {
                 GrenadierBlinding.Add(pc.PlayerId);
+                SendBlindingSync(pc.PlayerId, true);
                 _ = new CountdownTimer(GrenadierSkillDuration.GetInt(), () =>
                 {
                     GrenadierBlinding.Remove(pc.PlayerId);
+                    SendBlindingSync(pc.PlayerId, false);
                     pc.RpcResetAbilityCooldown();
                     pc.Notify(string.Format(Translator.GetString("GrenadierSkillStop"), (int)pc.GetAbilityUseLimit()));
                     Utils.MarkEveryoneDirtySettingsV3();
-                }, onCanceled: () => GrenadierBlinding.Remove(pc.PlayerId));
+                }, onCanceled: () =>
+                {
+                    GrenadierBlinding.Remove(pc.PlayerId);
+                    if (GameStates.InGame) SendBlindingSync(pc.PlayerId, false);
+                });
                 Main.EnumeratePlayerControls().Where(x => x.IsModdedClient()).Where(x => x.IsImpostor() || (x.GetCustomRole().IsNeutral() && GrenadierCanAffectNeutral.GetBool())).Do(x => x.RPCPlayCustomSound("FlashBang"));
             }
 

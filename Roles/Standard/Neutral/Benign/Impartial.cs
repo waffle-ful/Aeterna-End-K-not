@@ -43,6 +43,7 @@ internal class Impartial : RoleBase
     private Dictionary<Team, (int Killed, int Limit)> Kills = [];
 
     private byte ImpartialId;
+    private bool LimitsSynced;
 
     public override bool IsEnable => On;
 
@@ -96,6 +97,7 @@ internal class Impartial : RoleBase
     {
         On = true;
         ImpartialId = playerId;
+        LimitsSynced = false;
         Instances.Add(this);
         var r = IRandom.Instance;
         Kills = new()
@@ -134,12 +136,39 @@ internal class Impartial : RoleBase
         opt.SetVision(HasImpVision.GetBool() && (!IsWon || HasImpVisionAfterWinning.GetBool()));
     }
 
+    // 必要キル数の上限は Add で乱数から決まり客ごとに別の値になるので、キル数と上限をまとめてモッド客へ送る
+    private void SendSync()
+    {
+        if (!Utils.DoRPC) return;
+
+        MessageWriter w = Utils.CreateRPC(CustomRPC.SyncRoleData);
+
+        try
+        {
+            w.Write(ImpartialId);
+
+            for (int index = 1; index < Main.TeamValues.Length; index++)
+            {
+                (int killed, int limit) = Kills[Main.TeamValues[index]];
+                w.WritePacked(killed);
+                w.WritePacked(limit);
+            }
+        }
+        finally { Utils.EndRPC(w); }
+    }
+
     public void ReceiveRPC(MessageReader reader)
     {
-        Team team = (Team)reader.ReadByte();
-        var tuple = Kills[team];
-        tuple.Killed++;
-        Kills[team] = tuple;
+        for (int index = 1; index < Main.TeamValues.Length; index++)
+            Kills[Main.TeamValues[index]] = (reader.ReadPackedInt32(), reader.ReadPackedInt32());
+    }
+
+    public override void OnFixedUpdate(PlayerControl pc)
+    {
+        if (LimitsSynced || !GameStates.InGame || !Main.IntroDestroyed || GameStates.IsMeeting) return;
+
+        LimitsSynced = true;
+        SendSync();
     }
 
     public override void OnMurder(PlayerControl killer, PlayerControl target)
@@ -149,7 +178,7 @@ internal class Impartial : RoleBase
         var tuple = Kills[team];
         tuple.Killed++;
         Kills[team] = tuple;
-        Utils.SendRPC(CustomRPC.SyncRoleData, killer.PlayerId, (byte)team);
+        SendSync();
     }
 
     public static void OnAnyoneDead()

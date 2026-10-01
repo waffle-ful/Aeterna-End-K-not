@@ -121,6 +121,7 @@ public class Sniper : RoleBase
         writer.Write(sniperId);
         writer.Write(shotNotify.Count);
         foreach (byte sn in shotNotify) writer.Write(sn);
+        writer.Write(bulletCount);
 
         AmongUsClient.Instance.FinishRpcImmediately(writer);
     }
@@ -135,6 +136,8 @@ public class Sniper : RoleBase
             shotNotify.Add(msg.ReadByte());
             count--;
         }
+
+        bulletCount = msg.ReadInt32();
     }
 
     public override bool CanUseKillButton(PlayerControl pc)
@@ -241,6 +244,9 @@ public class Sniper : RoleBase
         }
 
         bulletCount--;
+
+        // 残弾でキルボタンと文字が変わるので、撃った時点でモッド客へ送る
+        SendRPC(sniperId);
 
         if (!AmongUsClient.Instance.AmHost || Pelican.IsEaten(sniperId) || Medic.ProtectList.Contains(sniperId)) return false;
 

@@ -90,16 +90,18 @@ public class Archer : RoleBase
         return base.CanUseKillButton(pc) && (CanNormalKill.GetBool() || ArrowsLeft is 0);
     }
 
-    // キルボタンの表示は各クライアントが自分で判定する (矢を撃ち切ると出る) ので、残り本数をモッド客へ送る
+    // キルボタンの表示 (矢を撃ち切ると出る) と名前下の状態表示は各クライアントが自分で判定するので、残り本数と構え/飛行中をモッド客へ送る
     private void SendSync()
     {
-        Utils.SendRPC(CustomRPC.SyncRoleData, ArcherId, ArrowsLeft ?? -1);
+        Utils.SendRPC(CustomRPC.SyncRoleData, ArcherId, ArrowsLeft ?? -1, IsSetting, IsUsing);
     }
 
     public void ReceiveRPC(MessageReader reader)
     {
         int left = reader.ReadPackedInt32();
         ArrowsLeft = left < 0 ? null : left;
+        IsSetting = reader.ReadBoolean();
+        IsUsing = reader.ReadBoolean();
     }
 
     public override void ApplyGameOptions(IGameOptions opt, byte playerId)
@@ -157,11 +159,8 @@ public class Archer : RoleBase
         IsSetting = true;
         Timer = 0;
         PlayerPosition = pc.Pos();
-        if (ArrowsLeft.HasValue)
-        {
-            ArrowsLeft--;
-            SendSync();
-        }
+        if (ArrowsLeft.HasValue) ArrowsLeft--;
+        SendSync();
 
         Utils.NotifyRoles(SpecifySeer: pc);
     }
@@ -175,7 +174,11 @@ public class Archer : RoleBase
         {
             // IsSetting はここで即falseにせず、フレームワークのCD免除判定(Utils.ShouldNotApplyAbilityCooldownのArcher{IsSetting:true})が
             // 済んだ後に落とす。即時falseだと判定に引っかからずフルCDが課される。
-            LateTask.New(() => IsSetting = false, 0.05f, log: false);
+            LateTask.New(() =>
+            {
+                IsSetting = false;
+                SendSync();
+            }, 0.05f, log: false);
             if (ArrowsLeft.HasValue)
             {
                 ArrowsLeft++;
@@ -206,6 +209,7 @@ public class Archer : RoleBase
         Timer = 0;
         TeleportTimer = 0;
         FireStartTS = Utils.TimeStamp;
+        SendSync();
 
         if (MyArrow.GetBool())
         {
@@ -358,6 +362,7 @@ public class Archer : RoleBase
 
         Main.AllPlayerSpeed[pc.PlayerId] = PlayerSpeed;
         pc.SyncSettings();
+        SendSync();
     }
 
     private void Reset()
@@ -381,6 +386,7 @@ public class Archer : RoleBase
         }
 
         Reset();
+        SendSync();
     }
 
     public override string GetProgressText(byte playerId, bool comms)
