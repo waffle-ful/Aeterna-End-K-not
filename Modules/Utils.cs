@@ -3769,8 +3769,9 @@ public static class Utils
                     {
                         bool showLongInfo = LongRoleDescriptions.TryGetValue(seer.PlayerId, out (string Text, int Duration, bool Long) description) && IntroCutsceneDestroyPatch.IntroDestroyTS + description.Duration > now;
                         string mHelp = !showLongInfo || description.Long ? "\n" + GetString("MyRoleCommandHelp") : string.Empty;
-                        string color = seerTeam.GetTextColor();
-                        string teamStr = seerTeam == Team.Impostor && seer.IsMadmate() ? "Madmate" : seerTeam.ToString();
+                        bool seerJackalTeam = seer.GetCustomRole().IsJackalTeamMember();
+                        string color = seerJackalTeam ? GetRoleColorCode(CustomRoles.Jackal) : seerTeam.GetTextColor();
+                        string teamStr = seerJackalTeam ? "Jackal" : seerTeam == Team.Impostor && seer.IsMadmate() ? "Madmate" : seerTeam.ToString();
                         // Amnesia本人は自分の本当の能力説明を自覚できない — 陣営の総称ロールの説明文を代わりに見せる。
                         string info = (seerAmnesiaConcealed ? GetString($"{seerAmnesiaRole}Info") : (showLongInfo ? description.Text : seer.GetRoleInfo())) + mHelp;
                         seerRealName = $"<color={color}>{GetString($"YouAre{teamStr}")}</color>\n<size=90%>{info}</size>";
