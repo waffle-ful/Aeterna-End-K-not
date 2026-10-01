@@ -67,7 +67,7 @@ public class EvilBomber : RoleBase
         float cd = BombCount <= 0 ? 200f : AbilityCooldown.GetFloat();
 
         if (IntroCutsceneDestroyPatch.PreventKill)
-            cd = Mathf.Max(cd, 12f);
+            cd = Mathf.Max(cd, (Options.StartingKillCooldown?.GetFloat() ?? 10f) + 2f);
 
         if (Options.UsePhantomBasis.GetBool())
             AURoleOptions.PhantomCooldown = cd;

@@ -173,6 +173,9 @@ public class Rogue : RoleBase
 
     public override void OnFixedUpdate(PlayerControl pc)
     {
+        // 判定と時間の進行はホストだけが行う (モッド客は受け取った値を表示するだけ)
+        if (!AmongUsClient.Instance.AmHost) return;
+
         if (!pc.IsAlive() || !GameStates.IsInTask) return;
         if (++Count < 30) return;
         Count = 0;

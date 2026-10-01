@@ -123,7 +123,7 @@ public class Atlas : RoleBase
         opt.SetVision(ImpostorVision.GetBool());
 
         float cd = FixedAbilityCooldown;
-        if (IntroCutsceneDestroyPatch.PreventKill) cd = Mathf.Max(cd, 12f);
+        if (IntroCutsceneDestroyPatch.PreventKill) cd = Mathf.Max(cd, (Options.StartingKillCooldown?.GetFloat() ?? 10f) + 2f);
 
         if (Options.UsePhantomBasis.GetBool())
             AURoleOptions.PhantomCooldown = cd;

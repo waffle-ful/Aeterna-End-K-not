@@ -13,6 +13,8 @@ internal class Veteran : RoleBase
 
     public static bool On;
     private static readonly HashSet<byte> SyncedActive = [];
+    // 発動中のタイマー。満了まで会議を見ないので、会議開始と次の発動で止めないと次の発動分を消してしまう
+    private static readonly Dictionary<byte, CountdownTimer> ActiveTimers = [];
     private byte VeteranId;
     private CountdownTimer ClientTimer;
     public override bool IsEnable => On;
@@ -69,6 +71,7 @@ internal class Veteran : RoleBase
     {
         On = false;
         SyncedActive.Clear();
+        ActiveTimers.Clear();
     }
 
     public override void ApplyGameOptions(IGameOptions opt, byte playerId)
@@ -127,6 +130,7 @@ internal class Veteran : RoleBase
     // 会議開始でホストは発動中の集合を空にするので、客側の保持も同時に解除させる
     public override void OnReportDeadBody()
     {
+        if (ActiveTimers.Remove(VeteranId, out CountdownTimer timer)) timer.Dispose();
         if (SyncedActive.Remove(VeteranId))
             Utils.SendRPC(CustomRPC.SyncRoleData, VeteranId, VeteranId, 0f);
     }
@@ -138,7 +142,8 @@ internal class Veteran : RoleBase
         if (pc.GetAbilityUseLimit() >= 1)
         {
             VeteranInProtect.Add(pc.PlayerId);
-            _ = new CountdownTimer(VeteranSkillDuration.GetInt(), () =>
+            if (ActiveTimers.Remove(pc.PlayerId, out CountdownTimer old)) old.Dispose();
+            ActiveTimers[pc.PlayerId] = new CountdownTimer(VeteranSkillDuration.GetInt(), () =>
             {
                 VeteranInProtect.Remove(pc.PlayerId);
                 SyncedActive.Remove(pc.PlayerId);

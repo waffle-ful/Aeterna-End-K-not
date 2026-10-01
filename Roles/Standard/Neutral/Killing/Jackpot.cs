@@ -37,10 +37,12 @@ public class Jackpot : RoleBase
     private float SpinTimer;
     private float NearMissTimer;
     private float JackpotTimer;
+    // 大当たりの残りは毎フレーム減るので、モッド客は受け取った残り秒数から終了時刻を作って自分で数える
+    private float ClientJackpotEnd;
     private bool DomainActive;
     private bool LastNearMissState;
     private bool LastJackpotState;
-    private (int Money, int Chance, bool Domain, bool Near)? LastSent;
+    private (int Money, int Chance, bool Domain, bool Near, bool Jackpot)? LastSent;
 
     public override bool IsEnable => On;
 
@@ -94,11 +96,11 @@ public class Jackpot : RoleBase
     {
         if (!GameStates.IsInTask) return;
 
-        (int, int, bool, bool) now = (Money, CurrentJackpotChanceValue, DomainActive, IsNearMissActive);
+        (int, int, bool, bool, bool) now = (Money, CurrentJackpotChanceValue, DomainActive, IsNearMissActive, IsJackpotActive);
         if (LastSent == now) return;
 
         LastSent = now;
-        Utils.SendRPC(CustomRPC.SyncRoleData, JackpotId, now.Item1, now.Item2, now.Item3, now.Item4);
+        Utils.SendRPC(CustomRPC.SyncRoleData, JackpotId, now.Item1, now.Item2, now.Item3, now.Item4, JackpotTimer);
     }
 
     public void ReceiveRPC(MessageReader reader)
@@ -107,6 +109,8 @@ public class Jackpot : RoleBase
         CurrentJackpotChanceValue = reader.ReadPackedInt32();
         DomainActive = reader.ReadBoolean();
         NearMissTimer = reader.ReadBoolean() ? 1f : 0f;
+        JackpotTimer = reader.ReadSingle();
+        ClientJackpotEnd = Time.time + JackpotTimer;
     }
 
     public override void Remove(byte playerId)
@@ -177,6 +181,9 @@ public class Jackpot : RoleBase
 
     public override void OnFixedUpdate(PlayerControl pc)
     {
+        // 判定と時間の進行はホストだけが行う (モッド客は受け取った値を表示するだけ)
+        if (!AmongUsClient.Instance.AmHost) return;
+
         SyncToModdedClients();
 
         if (!GameStates.IsInTask || !pc.IsAlive())
@@ -230,7 +237,7 @@ public class Jackpot : RoleBase
         var resultText = new StringBuilder();
         resultText.Append(' ').Append(Utils.ColorPrefix(Utils.GetRoleColor(CustomRoles.Jackpot)));
 
-        if (IsJackpotActive) resultText.AppendFormat(GetString("Jackpot.Progress.Jackpot"), Money, Mathf.CeilToInt(JackpotTimer));
+        if (IsJackpotActive) resultText.AppendFormat(GetString("Jackpot.Progress.Jackpot"), Money, Mathf.CeilToInt(AmongUsClient.Instance.AmHost ? JackpotTimer : Mathf.Max(ClientJackpotEnd - Time.time, 0f)));
         else if (DomainActive) resultText.AppendFormat(GetString(IsNearMissActive ? "Jackpot.Progress.Near" : "Jackpot.Progress.Spin"), Money, CurrentJackpotChanceValue);
         else resultText.AppendFormat(GetString("Jackpot.Progress.Ready"), Money, CurrentJackpotChanceValue);
 

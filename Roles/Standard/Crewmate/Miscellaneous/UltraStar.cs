@@ -24,6 +24,8 @@ public class UltraStar : RoleBase
     private int OriginalColorId;
     private float ColorTimer;
     private float KillCoolRemaining;
+    // 轢きクールの残りは毎フレーム減るので、モッド客は受け取った残り秒数から終了時刻を作って自分で数える
+    private float ClientKillCoolEnd;
     private int LastColorId;
     internal bool StarActive;
 
@@ -77,6 +79,7 @@ public class UltraStar : RoleBase
     public override void OnPet(PlayerControl pc)
     {
         StarActive = !StarActive;
+        if (StarActive) KillCoolRemaining = KillCooldownOpt.GetFloat();
         SendSync();
 
         if (StarActive)
@@ -96,12 +99,13 @@ public class UltraStar : RoleBase
     // ボタンの文字と進捗表示は各クライアントが自分で判定するので、スター状態をモッド客へ送る
     private void SendSync()
     {
-        Utils.SendRPC(CustomRPC.SyncRoleData, UltraStarId, StarActive);
+        Utils.SendRPC(CustomRPC.SyncRoleData, UltraStarId, StarActive, KillCoolRemaining);
     }
 
     public void ReceiveRPC(MessageReader reader)
     {
         StarActive = reader.ReadBoolean();
+        ClientKillCoolEnd = Time.time + reader.ReadSingle();
     }
 
     public override void ApplyGameOptions(IGameOptions opt, byte playerId)
@@ -168,6 +172,7 @@ public class UltraStar : RoleBase
 
         if (target == null) return;
         KillCoolRemaining = KillCooldownOpt.GetFloat();
+        SendSync();
         // checkkill が有効な間は、対象役職の守り側フック (King 等) にひかせられる。無効時は原典既定どおり素通り。
         if (!CheckKillOpt.GetBool() || Main.PlayerStates[target.PlayerId].Role.OnCheckMurderAsTarget(pc, target))
             pc.Kill(target);
@@ -193,7 +198,7 @@ public class UltraStar : RoleBase
         var color = StarActive ? Utils.GetRoleColor(CustomRoles.UltraStar) : Color.gray;
         if (!StarActive) return Utils.ColorString(color, "☆");
         return CanKillOpt.GetBool()
-            ? Utils.ColorString(color, $"★({KillCoolRemaining:F1}s)")
+            ? Utils.ColorString(color, $"★({(AmongUsClient.Instance.AmHost ? KillCoolRemaining : Mathf.Max(ClientKillCoolEnd - Time.time, 0f)):F1}s)")
             : Utils.ColorString(color, "★");
     }
 

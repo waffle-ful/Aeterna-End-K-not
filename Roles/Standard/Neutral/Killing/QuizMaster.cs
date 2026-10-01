@@ -29,6 +29,7 @@ internal class QuizMaster : RoleBase
     public static List<QuizMaster> QuizMasters = [];
 
     private static List<string> AllColors = [];
+    private static int InitGeneration;
 
     public static readonly SystemTypes[] AllSabotages =
     [
@@ -91,8 +92,13 @@ internal class QuizMaster : RoleBase
 
         AllColors = [];
 
+        // Init は試合開始時の一括初期化と最初の配役時の 2 回走るので、後から来た Init の予約だけを生かす
+        int generation = ++InitGeneration;
+
         LateTask.New(() =>
         {
+            if (generation != InitGeneration) return;
+
             foreach (PlayerControl pc in Main.EnumeratePlayerControls())
             {
                 int colorId = pc.Data.DefaultOutfit.ColorId;

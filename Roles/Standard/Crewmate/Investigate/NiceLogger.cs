@@ -17,6 +17,7 @@ public class NiceLogger : RoleBase
     private Vector2? LogPos;
     private string SetRoom;
     private List<byte> Log = [];
+    private int ClientLogCount;
     private float Cooltime;
 
     public override bool IsEnable => PlayerIdList.Count > 0;
@@ -113,6 +114,7 @@ public class NiceLogger : RoleBase
 
             Log.Add(player.PlayerId);
             Cooltime = 0f;
+            SendSync();
             break;
         }
     }
@@ -184,13 +186,14 @@ public class NiceLogger : RoleBase
     // 名前の下の案内と進行表示は各クライアントが自分の手元の値で出すので、監視中かどうかをモッド客へ送る
     private void SendSync()
     {
-        Utils.SendRPC(CustomRPC.SyncRoleData, NiceLoggerId, Taskmode, LogPos.HasValue);
+        Utils.SendRPC(CustomRPC.SyncRoleData, NiceLoggerId, Taskmode, LogPos.HasValue, Log.Count);
     }
 
     public void ReceiveRPC(MessageReader reader)
     {
         Taskmode = reader.ReadBoolean();
         LogPos = reader.ReadBoolean() ? Vector2.zero : null;
+        ClientLogCount = reader.ReadPackedInt32();
     }
 
     public override void SetButtonTexts(HudManager hud, byte id)
@@ -208,6 +211,6 @@ public class NiceLogger : RoleBase
     {
         if (playerId != NiceLoggerId) return string.Empty;
         if (!Taskmode || !LogPos.HasValue) return string.Empty;
-        return Utils.ColorString(Utils.GetRoleColor(CustomRoles.NiceLogger), $"[{Log.Count}]");
+        return Utils.ColorString(Utils.GetRoleColor(CustomRoles.NiceLogger), $"[{(AmongUsClient.Instance.AmHost ? Log.Count : ClientLogCount)}]");
     }
 }

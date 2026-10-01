@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using AmongUs.GameOptions;
 using EndKnot.Modules;
+using Hazel;
 using UnityEngine;
 
 namespace EndKnot.Roles;
@@ -44,6 +45,8 @@ public class Torpedo : RoleBase
 
     private bool Dashing;
     private float DashTimer;
+    // 突進の残りは毎フレーム減るので、モッド客は受け取った残り秒数から終了時刻を作って自分で数える
+    private float ClientDashEnd;
     private float StuckTimer;
     private Vector2 LastPosition;
     private float OriginalSpeed;
@@ -132,6 +135,7 @@ public class Torpedo : RoleBase
         DashTimer = DashDuration.GetFloat();
         StuckTimer = 0f;
         LastPosition = pc.Pos();
+        SendSync();
 
         if (Main.AllPlayerSpeed.TryGetValue(pc.PlayerId, out float speed))
         {
@@ -147,6 +151,9 @@ public class Torpedo : RoleBase
 
     public override void OnFixedUpdate(PlayerControl pc)
     {
+        // 判定と時間の進行はホストだけが行う (モッド客は受け取った値を表示するだけ)
+        if (!AmongUsClient.Instance.AmHost) return;
+
         if (!Dashing) return;
 
         if (!pc || !pc.IsAlive() || !GameStates.IsInTask || ExileController.Instance || AntiBlackout.SkipTasks)
@@ -185,6 +192,7 @@ public class Torpedo : RoleBase
                 victim.Suicide(PlayerState.DeathReason.Bombed, pc);
 
             SuccessfulHits += victims.Count;
+            SendSync();
             pc.Notify(string.Format(Translator.GetString("TorpedoHit"), victims.Count));
 
             if (SuccessfulHits >= KillsNeededToWin.GetInt())
@@ -250,6 +258,21 @@ public class Torpedo : RoleBase
 
         SpeedCaptured = false;
         OriginalSpeed = 0f;
+        if (GameStates.InGame) SendSync();
+    }
+
+    // 突進中の表示と撃破数は各クライアントが自分の手元の値で出すので、変わった時にモッド客へ送る
+    private void SendSync()
+    {
+        Utils.SendRPC(CustomRPC.SyncRoleData, TorpedoId, Dashing ? DashTimer : 0f, SuccessfulHits);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        float remaining = reader.ReadSingle();
+        Dashing = remaining > 0f;
+        ClientDashEnd = Time.time + remaining;
+        SuccessfulHits = reader.ReadPackedInt32();
     }
 
     public override void OnReportDeadBody()
@@ -261,7 +284,7 @@ public class Torpedo : RoleBase
     {
         if (seer.PlayerId != TorpedoId || seer.PlayerId != target.PlayerId || meeting || !Dashing) return string.Empty;
 
-        return string.Format(Translator.GetString("TorpedoSuffix"), (int)System.Math.Ceiling(DashTimer));
+        return string.Format(Translator.GetString("TorpedoSuffix"), (int)System.Math.Ceiling(AmongUsClient.Instance.AmHost ? DashTimer : Mathf.Max(ClientDashEnd - Time.time, 0f)));
     }
 
     public override string GetProgressText(byte playerId, bool comms)

@@ -57,7 +57,7 @@ public class EvilMaker : RoleBase
     public override void ApplyGameOptions(IGameOptions opt, byte playerId)
     {
         float cd = Used ? 200f : AbilityCooldown.GetFloat();
-        if (!Used && IntroCutsceneDestroyPatch.PreventKill) cd = Mathf.Max(cd, 12f);
+        if (!Used && IntroCutsceneDestroyPatch.PreventKill) cd = Mathf.Max(cd, (Options.StartingKillCooldown?.GetFloat() ?? 10f) + 2f);
 
         if (Options.UsePhantomBasis.GetBool())
             AURoleOptions.PhantomCooldown = cd;

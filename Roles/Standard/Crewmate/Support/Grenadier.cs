@@ -15,6 +15,8 @@ internal class Grenadier : RoleBase
 
     public static bool On;
     private static readonly HashSet<byte> SyncedActive = [];
+    // 発動中のタイマー。満了まで会議を見ないので、会議開始と次の発動で止めないと次の発動分を消してしまう
+    private static readonly Dictionary<byte, CountdownTimer> ActiveTimers = [];
     private byte GrenadierId;
     public override bool IsEnable => On;
 
@@ -61,6 +63,7 @@ internal class Grenadier : RoleBase
     {
         On = false;
         SyncedActive.Clear();
+        ActiveTimers.Clear();
     }
 
     public override void ApplyGameOptions(IGameOptions opt, byte playerId)
@@ -83,6 +86,7 @@ internal class Grenadier : RoleBase
     // 会議開始でホストは使用中の集合を空にするので、客側の保持も同時に解除させる
     public override void OnReportDeadBody()
     {
+        if (ActiveTimers.Remove(GrenadierId, out CountdownTimer timer)) timer.Dispose();
         if (SyncedActive.Contains(GrenadierId)) SendBlindingSync(GrenadierId, false);
     }
 
@@ -130,7 +134,8 @@ internal class Grenadier : RoleBase
             if (pc.Is(CustomRoles.Madmate))
             {
                 MadGrenadierBlinding.Add(pc.PlayerId);
-                _ = new CountdownTimer(GrenadierSkillDuration.GetInt(), () =>
+                if (ActiveTimers.Remove(pc.PlayerId, out CountdownTimer old)) old.Dispose();
+                ActiveTimers[pc.PlayerId] = new CountdownTimer(GrenadierSkillDuration.GetInt(), () =>
                 {
                     MadGrenadierBlinding.Remove(pc.PlayerId);
                     pc.RpcResetAbilityCooldown();
@@ -143,7 +148,8 @@ internal class Grenadier : RoleBase
             {
                 GrenadierBlinding.Add(pc.PlayerId);
                 SendBlindingSync(pc.PlayerId, true);
-                _ = new CountdownTimer(GrenadierSkillDuration.GetInt(), () =>
+                if (ActiveTimers.Remove(pc.PlayerId, out CountdownTimer old)) old.Dispose();
+                ActiveTimers[pc.PlayerId] = new CountdownTimer(GrenadierSkillDuration.GetInt(), () =>
                 {
                     GrenadierBlinding.Remove(pc.PlayerId);
                     SendBlindingSync(pc.PlayerId, false);

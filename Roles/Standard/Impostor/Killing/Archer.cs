@@ -107,7 +107,7 @@ public class Archer : RoleBase
     public override void ApplyGameOptions(IGameOptions opt, byte playerId)
     {
         float cd = ArrowsLeft is 0 ? 200f : AbilityCooldown.GetFloat();
-        if (IntroCutsceneDestroyPatch.PreventKill) cd = Mathf.Max(cd, 12f);
+        if (IntroCutsceneDestroyPatch.PreventKill) cd = Mathf.Max(cd, (Options.StartingKillCooldown?.GetFloat() ?? 10f) + 2f);
 
         if (Options.UsePhantomBasis.GetBool())
             AURoleOptions.PhantomCooldown = cd;

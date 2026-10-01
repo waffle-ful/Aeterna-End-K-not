@@ -1,6 +1,8 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
 using AmongUs.GameOptions;
+using EndKnot.Modules;
+using Hazel;
 using EndKnot.Patches;
 using UnityEngine;
 
@@ -22,6 +24,8 @@ public class EvilBlender : RoleBase
     private bool IsUsed;
     private float limittimer;
     private float sendtimer;
+    // 制限時間の残りは毎フレーム進むので、モッド客は受け取った残り秒数から終了時刻を作って自分で数える
+    private float ClientLimitEnd;
 
     public override bool IsEnable => On;
 
@@ -75,7 +79,7 @@ public class EvilBlender : RoleBase
     public override void ApplyGameOptions(IGameOptions opt, byte playerId)
     {
         float cd = IsUsed ? 200f : AbilityCooldown.GetFloat();
-        if (IntroCutsceneDestroyPatch.PreventKill) cd = Mathf.Max(cd, 12f);
+        if (IntroCutsceneDestroyPatch.PreventKill) cd = Mathf.Max(cd, (Options.StartingKillCooldown?.GetFloat() ?? 10f) + 2f);
 
         if (Options.UsePhantomBasis.GetBool())
             AURoleOptions.PhantomCooldown = cd;
@@ -137,6 +141,7 @@ public class EvilBlender : RoleBase
             PlayerRooms[player.PlayerId] = assigned;
         }
 
+        SendSync();
         pc.SyncSettings();
         pc.RpcResetAbilityCooldown();
         Utils.NotifyRoles();
@@ -195,6 +200,8 @@ public class EvilBlender : RoleBase
             return;
         }
 
+        if (toRemove.Count > 0) SendSync();
+
         limittimer += Time.fixedDeltaTime;
         sendtimer += Time.fixedDeltaTime;
 
@@ -217,7 +224,37 @@ public class EvilBlender : RoleBase
         UseingId = byte.MaxValue;
         PlayerRooms.Clear();
         limittimer = 0f;
+        if (GameStates.InGame) SendSync();
         Utils.NotifyRoles();
+    }
+
+    // 指定部屋と残り時間の表示は各クライアントが自分の手元の値で出すので、開始・達成・終了のたびにモッド客へ送る
+    private void SendSync()
+    {
+        bool active = UseingId == EvilBlenderId;
+        string rooms = active ? string.Join(',', PlayerRooms.Where(x => x.Value.HasValue).Select(x => $"{x.Key}:{(int)x.Value.Value}")) : string.Empty;
+        Utils.SendRPC(CustomRPC.SyncRoleData, EvilBlenderId, active, active ? SabotageLimitTime.GetFloat() - limittimer : 0f, rooms);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        bool active = reader.ReadBoolean();
+        ClientLimitEnd = Time.time + reader.ReadSingle();
+        string rooms = reader.ReadString();
+
+        UseingId = active ? EvilBlenderId : byte.MaxValue;
+        PlayerRooms.Clear();
+
+        foreach (string entry in rooms.Split(',', System.StringSplitOptions.RemoveEmptyEntries))
+        {
+            string[] parts = entry.Split(':');
+            PlayerRooms[byte.Parse(parts[0])] = (SystemTypes)int.Parse(parts[1]);
+        }
+    }
+
+    private float RemainingForDisplay()
+    {
+        return AmongUsClient.Instance.AmHost ? SabotageLimitTime.GetFloat() - limittimer : Mathf.Max(ClientLimitEnd - Time.time, 0f);
     }
 
     public override bool OnSabotage(PlayerControl pc)
@@ -240,10 +277,10 @@ public class EvilBlender : RoleBase
 
         if (PlayerRooms.TryGetValue(seer.PlayerId, out SystemTypes? room) && room.HasValue)
             return string.Format(Translator.GetString("EvilBlender_SabotageLowerAlive"),
-                (int)(SabotageLimitTime.GetFloat() - limittimer),
+                (int)RemainingForDisplay(),
                 Translator.GetString(room.Value.ToString()));
 
         return string.Format(Translator.GetString("EvilBlender_SabotageLower"),
-            (int)(SabotageLimitTime.GetFloat() - limittimer));
+            (int)RemainingForDisplay());
     }
 }

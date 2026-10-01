@@ -89,7 +89,7 @@ public class EvilMagician : RoleBase
         float cd = max > 0 && MagicCount >= max ? 200f : CurrentCooldown;
 
         if (IntroCutsceneDestroyPatch.PreventKill)
-            cd = Mathf.Max(cd, 12f);
+            cd = Mathf.Max(cd, (Options.StartingKillCooldown?.GetFloat() ?? 10f) + 2f);
 
         if (Options.UsePhantomBasis.GetBool())
             AURoleOptions.PhantomCooldown = cd;

@@ -142,10 +142,11 @@ public class Survivor : RoleBase
 
     private void ShieldSelf(PlayerControl pc)
     {
-        ShieldTimer?.Dispose();
         if (Utils.AllAlivePlayersCount <= SecondAbility.GetInt())
         {
             bool shielded = ShieldTimer != null;
+            // 止めたタイマーは自分を null に戻さないので、張り直す時だけ止める (張れない時に止めると盾が残り続ける)
+            ShieldTimer?.Dispose();
             ShieldTimer = new CountdownTimer(ShieldDuration.GetFloat(), () =>
             {
                 ShieldTimer = null;
