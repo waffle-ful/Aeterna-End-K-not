@@ -4988,7 +4988,8 @@ public static class Utils
 
     public static void AfterPlayerDeathTasks(PlayerControl target, bool onMeeting = false, bool disconnect = false)
     {
-        PlayerControl targetRealKiller = target.GetRealKiller();
+        // GetRealKiller() は IsDead を要求するが、キル経路 (MurderPlayer の後処理) はここを SetDead() より前に呼ぶので直読みする。
+        PlayerControl targetRealKiller = Main.PlayerStates.TryGetValue(target.PlayerId, out PlayerState realKillerState) && realKillerState.RealKiller.TimeStamp != DateTime.MinValue ? GetPlayerById(realKillerState.RealKiller.ID) : null;
 
         try
         {
