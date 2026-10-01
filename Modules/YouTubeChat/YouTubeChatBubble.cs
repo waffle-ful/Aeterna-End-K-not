@@ -49,6 +49,7 @@ public class YouTubeChatBubble : MonoBehaviour
     private void Awake()
     {
         Instance = this;
+        ImguiNoLayout.Apply(this);
     }
 
     private static bool ShouldShow()

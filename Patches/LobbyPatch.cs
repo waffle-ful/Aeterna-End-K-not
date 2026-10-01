@@ -199,6 +199,14 @@ internal static class LobbyBehaviourStartPatch
                 return;
             }
 
+            // 素材づくりは 1 フレーム 1 段。済むまで入室を次フレームへ送る (試行回数には数えない)
+            if (!BackroomsLobby.WarmEntryAssetsStep())
+            {
+                _autoEnterAttempts--;
+                LateTask.New(TryAutoEnterBackrooms, 0f, log: false);
+                return;
+            }
+
             uint seed = AmongUsClient.Instance != null ? unchecked((uint)AmongUsClient.Instance.GameId) : 0u;
             if (seed == 0u) seed = (uint)UnityEngine.Random.Range(1, int.MaxValue);
             BackroomsLobby.EnterBackrooms(seed, byte.MaxValue, silent: true);
