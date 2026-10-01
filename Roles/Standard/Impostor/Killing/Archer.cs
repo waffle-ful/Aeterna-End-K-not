@@ -1,7 +1,9 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
 using AmongUs.GameOptions;
+using EndKnot.Modules;
 using EndKnot.Patches;
+using Hazel;
 using UnityEngine;
 
 namespace EndKnot.Roles;
@@ -88,6 +90,18 @@ public class Archer : RoleBase
         return base.CanUseKillButton(pc) && (CanNormalKill.GetBool() || ArrowsLeft is 0);
     }
 
+    // キルボタンの表示は各クライアントが自分で判定する (矢を撃ち切ると出る) ので、残り本数をモッド客へ送る
+    private void SendSync()
+    {
+        Utils.SendRPC(CustomRPC.SyncRoleData, ArcherId, ArrowsLeft ?? -1);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        int left = reader.ReadPackedInt32();
+        ArrowsLeft = left < 0 ? null : left;
+    }
+
     public override void ApplyGameOptions(IGameOptions opt, byte playerId)
     {
         float cd = ArrowsLeft is 0 ? 200f : AbilityCooldown.GetFloat();
@@ -146,6 +160,7 @@ public class Archer : RoleBase
         if (ArrowsLeft.HasValue)
         {
             ArrowsLeft--;
+            SendSync();
         }
 
         Utils.NotifyRoles(SpecifySeer: pc);
@@ -161,7 +176,11 @@ public class Archer : RoleBase
             // IsSetting はここで即falseにせず、フレームワークのCD免除判定(Utils.ShouldNotApplyAbilityCooldownのArcher{IsSetting:true})が
             // 済んだ後に落とす。即時falseだと判定に引っかからずフルCDが課される。
             LateTask.New(() => IsSetting = false, 0.05f, log: false);
-            if (ArrowsLeft.HasValue) ArrowsLeft++;
+            if (ArrowsLeft.HasValue)
+            {
+                ArrowsLeft++;
+                SendSync();
+            }
             if (MyArrow.GetBool())
             {
                 Main.AllPlayerSpeed[pc.PlayerId] = PlayerSpeed;

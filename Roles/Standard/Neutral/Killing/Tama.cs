@@ -1,5 +1,7 @@
 ﻿using System.Collections.Generic;
 using AmongUs.GameOptions;
+using EndKnot.Modules;
+using Hazel;
 using UnityEngine;
 using static EndKnot.Translator;
 
@@ -51,6 +53,19 @@ public class Tama : RoleBase
     public void SetOwner(byte ownerId)
     {
         OwnerId = ownerId;
+        SendSync();
+    }
+
+    // 装填ボタンの表示は各クライアントが自分で判定する (主が分からないと出ない) ので、主と装填済みかをモッド客へ送る
+    private void SendSync()
+    {
+        Utils.SendRPC(CustomRPC.SyncRoleData, TamaId, OwnerId, HasLoaded);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        OwnerId = reader.ReadByte();
+        HasLoaded = reader.ReadBoolean();
     }
 
     public override void SetKillCooldown(byte id)
@@ -104,6 +119,7 @@ public class Tama : RoleBase
 
         IsLoading = true;
         HasLoaded = true;
+        SendSync();
 
         if (Main.PlayerStates[target.PlayerId].Role is JackalHadouHo jhh)
             jhh.SetLoaded(true);
@@ -169,6 +185,7 @@ public class Tama : RoleBase
         {
             HasLoaded = false;
             IsLoading = false;
+            SendSync();
             PlayerControl owner = OwnerId.GetPlayer();
             if (owner != null && Main.PlayerStates[owner.PlayerId].Role is JackalHadouHo jhh)
                 jhh.SetLoaded(false);
