@@ -40,6 +40,8 @@ internal static class LateTask
                 // 送信前計装の 64KB 複製税 (2026-09-07 第35弾で修正) だったかを、修正後の値で判定するための計器。
                 double ms = (System.Diagnostics.Stopwatch.GetTimestamp() - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
                 if (ms >= 10 && name is not "" and not "No Name Task") Logger.Info($"\"{name}\" ms={ms:F1}", "LT");
+                // 無名タスクは数が多いので、フレームを落とす長さ (50ms 以上) のものだけ生成元つきで残す。
+                else if (ms >= 50) Logger.Info($"(unnamed) ms={ms:F1} at {path.Split('\\')[^1].Split('/')[^1]}:{line} {member}", "LT");
 
                 if (name is not "" and not "No Name Task" && log)
                     Logger.Info($"\"{name}\" is finished", "LateTask");

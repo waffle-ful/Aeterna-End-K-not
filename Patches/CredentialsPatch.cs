@@ -533,6 +533,7 @@ internal static class ModManagerLateUpdatePatch
         NativeHeartbeat.Beat();
 #endif
         __instance.ShowModStamp();
+        EndKnot.Modules.FrameStats.Frame();
 
         ChatBubbleShower.Update();
 

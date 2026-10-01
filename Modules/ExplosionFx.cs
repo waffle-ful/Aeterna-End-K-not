@@ -267,6 +267,24 @@ public static class ExplosionFx
 
     private static bool _warm;
     private static bool _jitted;
+
+    // 試合開始時の下ごしらえ (素材 30 枚超・コンパイル・粒子の入れ物 800 個) を 1 フレームでやると 0.6 秒止まるので、
+    // 毎フレーム数ミリ秒ずつに分けて払う。_warmSlice の間だけ MakeSprite / MakeHalo が時間切れで null を返し、次のフレームで続きから作る。
+    private const int WarmSliceMs = 4;
+    private static bool _warmSlice;
+    private static long _warmSliceEnd;
+    private static bool _warmSwept;
+    private static List<System.Reflection.MethodInfo> _warmMethods;
+    private static int _warmMethodIndex;
+
+    // 作りかけの 1 枚。大きい素材は 1 枚で 100ms を超えるので、行の途中で時間切れになったらここへ預けて次のフレームで続きから塗る。
+    // EnsureSprites は毎回同じ順で呼ぶので、続きの最初の呼び出しは必ず同じ素材になる (念のため関数と大きさで照合する)
+    private static System.Reflection.MethodInfo _sliceMethod;
+    private static Color[] _slicePixels;
+    private static float[] _sliceAlpha;
+    private static int _sliceRow;
+
+    private static bool WarmOverBudget() => _warmSlice && System.Diagnostics.Stopwatch.GetTimestamp() > _warmSliceEnd;
     private static Sprite _glow;
     private static Sprite _cloud;
     private static Sprite _flame;
@@ -412,6 +430,70 @@ public static class ExplosionFx
         }
     }
 
+    // 下ごしらえを 1 フレームぶんだけ進める。時間切れなら途中で戻り、次のフレームで続きから。全部済んだら _warm を立てる
+    private static void WarmStep()
+    {
+        EnsureSprites();
+        if (WarmOverBudget()) return;
+
+        // 起動後最初の 1 発はコードのコンパイル待ちでも引っかかるので、演出の関数を先にコンパイルしておく (起動ごとに 1 回)
+        if (!_jitted)
+        {
+            if (_warmMethods == null)
+            {
+                const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.DeclaredOnly;
+                _warmMethods = [];
+                _warmMethodIndex = 0;
+
+                foreach (System.Type type in new[] { typeof(ExplosionFx), typeof(FxMath) })
+                foreach (System.Reflection.MethodInfo m in type.GetMethods(flags))
+                {
+                    if (m.IsGenericMethodDefinition || m.IsAbstract) continue;
+                    _warmMethods.Add(m);
+                }
+            }
+
+            while (_warmMethodIndex < _warmMethods.Count)
+            {
+                try { System.Runtime.CompilerServices.RuntimeHelpers.PrepareMethod(_warmMethods[_warmMethodIndex].MethodHandle); }
+                catch { }
+
+                _warmMethodIndex++;
+                if (WarmOverBudget()) return;
+            }
+
+            _jitted = true;
+            _warmMethods = null;
+        }
+
+        // 粒子の入れ物も先に用意しておく (1 発目で数百個を一度に作ると引っかかる)。前の試合の残りは使い回すので足りない分だけ
+        if (!_warmSwept)
+        {
+            _warmSwept = true;
+
+            if (Pool.Count > 0)
+            {
+                var alive = new List<(GameObject Go, SpriteRenderer Sr)>(Pool.Count);
+                foreach ((GameObject Go, SpriteRenderer Sr) e in Pool)
+                    if (e.Go && e.Sr) alive.Add(e);
+
+                Pool.Clear();
+                foreach ((GameObject Go, SpriteRenderer Sr) e in alive) Pool.Push(e);
+            }
+        }
+
+        while (Pool.Count < WarmPool)
+        {
+            var go = new GameObject("ExplosionFx") { layer = 0 };
+            SpriteRenderer sr = go.AddComponent<SpriteRenderer>();
+            go.SetActive(false);
+            Pool.Push((go, sr));
+            if (WarmOverBudget()) return;
+        }
+
+        _warm = true;
+    }
+
     internal static void Tick()
     {
         try
@@ -419,6 +501,10 @@ public static class ExplosionFx
             if (!GameStates.InGame)
             {
                 _warm = false;
+                _warmSwept = false;
+                _slicePixels = null;
+                _sliceAlpha = null;
+                _sliceMethod = null;
                 if (Pending.Count > 0) Pending.Clear();
                 if (Unsent.Count > 0) Unsent.Clear();
                 if (Active.Count > 0) ClearAll();
@@ -440,43 +526,16 @@ public static class ExplosionFx
             // 素材は試合が始まった時点 (イントロ中) に作っておき、最初の 1 発が引っかからないようにする
             if (!_warm)
             {
-                _warm = true;
-                EnsureSprites();
-
-                // 起動後最初の 1 発はコードのコンパイル待ちでも引っかかるので、演出の関数を先にコンパイルしておく (起動ごとに 1 回)
-                if (!_jitted)
+                _warmSlice = true;
+                _warmSliceEnd = System.Diagnostics.Stopwatch.GetTimestamp() + System.Diagnostics.Stopwatch.Frequency * WarmSliceMs / 1000;
+                try { WarmStep(); }
+                catch (System.Exception e)
                 {
-                    _jitted = true;
-
-                    const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.DeclaredOnly;
-
-                    foreach (System.Type type in new[] { typeof(ExplosionFx), typeof(FxMath) })
-                    foreach (System.Reflection.MethodInfo m in type.GetMethods(flags))
-                    {
-                        if (m.IsGenericMethodDefinition || m.IsAbstract) continue;
-                        try { System.Runtime.CompilerServices.RuntimeHelpers.PrepareMethod(m.MethodHandle); }
-                        catch { }
-                    }
+                    // 同じ失敗を毎フレーム繰り返さない。足りない素材は最初の 1 発のときに作り直す
+                    _warm = true;
+                    Utils.ThrowException(e);
                 }
-
-                // 粒子の入れ物も先に用意しておく (1 発目で数百個を一度に作ると引っかかる)。前の試合の残りは使い回すので足りない分だけ
-                if (Pool.Count > 0)
-                {
-                    var alive = new List<(GameObject Go, SpriteRenderer Sr)>(Pool.Count);
-                    foreach ((GameObject Go, SpriteRenderer Sr) e in Pool)
-                        if (e.Go && e.Sr) alive.Add(e);
-
-                    Pool.Clear();
-                    foreach ((GameObject Go, SpriteRenderer Sr) e in alive) Pool.Push(e);
-                }
-
-                while (Pool.Count < WarmPool)
-                {
-                    var go = new GameObject("ExplosionFx") { layer = 0 };
-                    SpriteRenderer sr = go.AddComponent<SpriteRenderer>();
-                    go.SetActive(false);
-                    Pool.Push((go, sr));
-                }
+                finally { _warmSlice = false; }
 
                 alloc = AllocProbe.Mark("fx.warm", alloc);
             }
@@ -6187,18 +6246,31 @@ public static class ExplosionFx
     // 円盤の内側の薄い塗りまでぼかすと面が一様に光って模様が埋もれるので、薄い値は先に落としておく
     private static Sprite MakeHalo(System.Func<float, float, float> alpha)
     {
+        if (WarmOverBudget()) return null;
         const int n = 256;
         const int r = 5;
         const float gain = 2.4f;
         float h = (n - 1) * 0.5f;
-        var a = new float[n * n];
-        var b = new float[n * n];
+        bool resume = _warmSlice && _sliceAlpha != null && _sliceMethod == alpha.Method;
+        float[] a = resume ? _sliceAlpha : new float[n * n];
 
-        for (int py = 0; py < n; py++)
+        for (int py = resume ? _sliceRow : 0; py < n; py++)
         {
             for (int px = 0; px < n; px++)
                 a[py * n + px] = FxMath.Max(0f, alpha((px - h) / h, (py - h) / h) - 0.15f);
+
+            if (_warmSlice && py + 1 < n && WarmOverBudget())
+            {
+                _sliceMethod = alpha.Method;
+                _sliceAlpha = a;
+                _slicePixels = null;
+                _sliceRow = py + 1;
+                return null;
+            }
         }
+
+        _sliceAlpha = null;
+        var b = new float[n * n];
 
         for (int pass = 0; pass < 2; pass++)
         {
@@ -6239,16 +6311,28 @@ public static class ExplosionFx
 
     private static Sprite MakeSprite(int width, int height, System.Func<float, float, float> alpha, Vector2? pivot = null)
     {
-        var tex = new Texture2D(width, height, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
-        var pixels = new Color[width * height];
+        if (WarmOverBudget()) return null;
+        bool resume = _warmSlice && _slicePixels != null && _sliceMethod == alpha.Method && _slicePixels.Length == width * height;
+        Color[] pixels = resume ? _slicePixels : new Color[width * height];
         float hx = (width - 1) * 0.5f, hy = (height - 1) * 0.5f;
 
-        for (int py = 0; py < height; py++)
+        for (int py = resume ? _sliceRow : 0; py < height; py++)
         {
             for (int px = 0; px < width; px++)
                 pixels[py * width + px] = FxMath.Rgba(1f, 1f, 1f, alpha((px - hx) / hx, (py - hy) / hy));
+
+            if (_warmSlice && py + 1 < height && WarmOverBudget())
+            {
+                _sliceMethod = alpha.Method;
+                _slicePixels = pixels;
+                _sliceAlpha = null;
+                _sliceRow = py + 1;
+                return null;
+            }
         }
 
+        _slicePixels = null;
+        var tex = new Texture2D(width, height, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
         tex.SetPixels(pixels);
         tex.Apply(false, true);
         tex.hideFlags |= HideFlags.HideAndDontSave;
