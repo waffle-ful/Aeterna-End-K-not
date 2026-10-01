@@ -360,7 +360,7 @@ public static class BackroomsLobby
             if (_wallPngSprite != null) return _wallPngSprite;
             if (_wallPngTried) return null;
             _wallPngTried = true;
-            try { _wallPngSprite = Utils.LoadSprite("EndKnot.Resources.Images.Backrooms.wall.png", 1024f); }
+            try { _wallPngSprite = BackroomsBundle.TryGetSprite("wall", 1024f) ?? Utils.LoadSprite("EndKnot.Resources.Images.Backrooms.wall.png", 1024f); }
             catch { _wallPngSprite = null; }
             return _wallPngSprite;
         }
@@ -376,7 +376,7 @@ public static class BackroomsLobby
             if (_floorPngSprite != null) return _floorPngSprite;
             if (_floorPngTried) return null;
             _floorPngTried = true;
-            try { _floorPngSprite = Utils.LoadSprite("EndKnot.Resources.Images.Backrooms.floor.png", 1024f); }
+            try { _floorPngSprite = BackroomsBundle.TryGetSprite("floor", 1024f) ?? Utils.LoadSprite("EndKnot.Resources.Images.Backrooms.floor.png", 1024f); }
             catch { _floorPngSprite = null; }
             return _floorPngSprite;
         }
@@ -385,9 +385,17 @@ public static class BackroomsLobby
     // 入室前の素材づくりを 1 呼び 1 段ずつ進める (1024px PNG 2 枚の読み込みが各 30ms 級で、入室の
     // タイル生成と同じフレームに重なると 100ms 超の停止になる)。全部済んでいれば true。
     // スプライトは一度作ればプロセス内で使い回されるので、2 回目以降のロビーでは即 true。
+    // 床・壁は先に AssetBundle の非同期ロードを待ち、出来たテクスチャを使う (無ければ埋込 PNG)。
     private static int _entryWarmStep;
     public static bool WarmEntryAssetsStep()
     {
+        // 両方とも既に埋込 PNG から作ってあれば bundle は読まない (使われないテクスチャを常駐させない)。
+        if (_entryWarmStep == 0 && (_floorPngSprite == null || _wallPngSprite == null))
+        {
+            BackroomsBundle.Begin();
+            if (BackroomsBundle.Poll()) return false;
+        }
+
         switch (_entryWarmStep)
         {
             case 0:

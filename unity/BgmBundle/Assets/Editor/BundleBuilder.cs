@@ -10,6 +10,7 @@ using UnityEngine;
 // 短いので音声データごと事前ロード (preloadAudioData=true) し、取り出したクリップをそのまま鳴らせる。
 // Assets/Dusk 配下のメインメニュー背景 PNG (テーマごとのサブフォルダ) は endknot_dusk。
 // PNG デコードをメニュー表示中のフレームから外すため、非圧縮 RGBA32 のまま焼く (Windows 版のみ)。
+// Assets/Backrooms 配下のロビー床・壁 PNG は同じ設定で endknot_backrooms (Windows 版のみ)。
 public static class BundleBuilder
 {
     private const string SourceFolder = "Assets/BGM";
@@ -19,6 +20,8 @@ public static class BundleBuilder
     private const float VorbisQuality = 0.7f;
     private const string DuskSourceFolder = "Assets/Dusk";
     private const string DuskBundleName = "endknot_dusk";
+    private const string BackroomsSourceFolder = "Assets/Backrooms";
+    private const string BackroomsBundleName = "endknot_backrooms";
 
     public static void Build() => BuildFor(BuildTarget.StandaloneWindows64, "Build");
 
@@ -30,7 +33,8 @@ public static class BundleBuilder
     {
         string[] names = Import(SourceFolder, BundleName, preload: false);
         string[] sfxNames = Import(SfxSourceFolder, SfxBundleName, preload: true);
-        int duskCount = ImportDusk(target == BuildTarget.StandaloneWindows64);
+        int duskCount = ImportTextures(DuskSourceFolder, DuskBundleName, target == BuildTarget.StandaloneWindows64);
+        int backroomsCount = ImportTextures(BackroomsSourceFolder, BackroomsBundleName, target == BuildTarget.StandaloneWindows64);
 
         string outDir = Path.Combine(Directory.GetCurrentDirectory(), outSubDir);
         Directory.CreateDirectory(outDir);
@@ -43,7 +47,7 @@ public static class BundleBuilder
             return;
         }
 
-        Debug.Log($"BundleBuilder: built [{string.Join(",", manifest.GetAllAssetBundles())}] target={target} clips=[{string.Join(",", names)}] sfx=[{string.Join(",", sfxNames)}] dusk={duskCount}");
+        Debug.Log($"BundleBuilder: built [{string.Join(",", manifest.GetAllAssetBundles())}] target={target} clips=[{string.Join(",", names)}] sfx=[{string.Join(",", sfxNames)}] dusk={duskCount} backrooms={backroomsCount}");
     }
 
     private static string[] Import(string folder, string bundleName, bool preload)
@@ -76,13 +80,13 @@ public static class BundleBuilder
         return names;
     }
 
-    // Windows 版はテクスチャを endknot_dusk に入れる。それ以外のターゲットでは bundle 名を外し、
+    // Windows 版はテクスチャを指定のバンドルに入れる。それ以外のターゲットでは bundle 名を外し、
     // 前回の Windows ビルドで .meta に残った割り当てが他ターゲットの出力へ混ざらないようにする。
-    private static int ImportDusk(bool include)
+    private static int ImportTextures(string folder, string bundleName, bool include)
     {
-        if (!AssetDatabase.IsValidFolder(DuskSourceFolder)) return 0;
+        if (!AssetDatabase.IsValidFolder(folder)) return 0;
 
-        string[] guids = AssetDatabase.FindAssets("t:Texture2D", new[] { DuskSourceFolder });
+        string[] guids = AssetDatabase.FindAssets("t:Texture2D", new[] { folder });
 
         for (int i = 0; i < guids.Length; i++)
         {
@@ -119,7 +123,7 @@ public static class BundleBuilder
                 textureCompression = TextureImporterCompression.Uncompressed,
             };
             importer.SetPlatformTextureSettings(standalone);
-            importer.assetBundleName = DuskBundleName;
+            importer.assetBundleName = bundleName;
             importer.SaveAndReimport();
         }
 
