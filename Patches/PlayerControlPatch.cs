@@ -851,8 +851,6 @@ internal static class MurderPlayerPatch
 
             if (target.Is(CustomRoles.Beartrap) && killer != target) killer.BeartrapKilled(target);
 
-            if (target.Is(CustomRoles.Stained)) Stained.OnDeath(target, killer);
-
             {
                 Witness.AllKillers.Add(killer.PlayerId);
                 PlayerControl killer1 = killer;
@@ -958,11 +956,12 @@ internal static class MurderPlayerPatch
         }
         catch (Exception e) { ThrowException(e); }
 
+        target.SetRealKiller(killer, true);
+
         try { AfterPlayerDeathTasks(target); }
         catch (Exception e) { ThrowException(e); }
 
         Main.PlayerStates[target.PlayerId].SetDead();
-        target.SetRealKiller(killer, true);
         Akazukin.OnAnyMurder(killer, target);
         CountAlivePlayers(true);
 
