@@ -4995,6 +4995,8 @@ public static class Utils
         {
             if (!onMeeting) Main.DiedThisRound.Add(target.PlayerId);
 
+            if (!disconnect) LastImpostor.PlayAuraForGhost(target);
+
             // Record the first death
             if (Main.FirstDied == string.Empty) Main.FirstDied = target.FriendCode;
 

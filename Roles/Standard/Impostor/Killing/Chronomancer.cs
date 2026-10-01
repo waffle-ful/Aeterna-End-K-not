@@ -90,6 +90,7 @@ public class Chronomancer : RoleBase
         {
             RampageKills = 0;
             IsRampaging = true;
+            ExplosionFx.Play(ExplosionFx.Kind.ChronoRampage, killer.Pos(), 1f);
             SendRPC();
             RPC.PlaySoundRPC(killer.PlayerId, Sounds.ImpTransform);
             killer.ResetKillCooldown();

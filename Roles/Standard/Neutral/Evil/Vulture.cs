@@ -171,6 +171,7 @@ public class Vulture : RoleBase
         if (vultureBody != null)
         {
             Vector2 bodyPos = vultureBody.TruePosition;
+            EndKnot.Modules.ExplosionFx.Play(EndKnot.Modules.ExplosionFx.Kind.VultureFeast, bodyPos, target.PlayerId + 1);
             foreach (byte seerId in Main.PlayerStates.Keys) LocateArrow.Remove(seerId, bodyPos);
         }
 

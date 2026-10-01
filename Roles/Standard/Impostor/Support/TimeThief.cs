@@ -57,6 +57,11 @@ public class TimeThief : RoleBase
         Main.AllPlayerKillCooldown[id] = KillCooldown.GetFloat();
     }
 
+    public override void OnMurder(PlayerControl killer, PlayerControl target)
+    {
+        EndKnot.Modules.ExplosionFx.Play(EndKnot.Modules.ExplosionFx.Kind.TimeSteal, target.Pos(), 1f);
+    }
+
     private static int StolenTime(byte id)
     {
         return PlayerIdList.Contains(id) && (Utils.GetPlayerById(id).IsAlive() || !ReturnStolenTimeUponDeath.GetBool())

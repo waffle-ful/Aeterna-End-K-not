@@ -69,12 +69,20 @@ public class Camouflager : RoleBase
         if (IsActive) IsDead();
     }
 
+    private static void PlayMist()
+    {
+        foreach (PlayerControl p in Main.EnumerateAlivePlayerControls())
+            EndKnot.Modules.ExplosionFx.Play(EndKnot.Modules.ExplosionFx.Kind.CamoMist, p.Pos(), 1f);
+    }
+
     public override bool OnShapeshift(PlayerControl pc, PlayerControl target, bool shapeshifting)
     {
         if (!shapeshifting)
         {
+            bool wasActive = IsActive;
             IsActive = false;
             Camouflage.CheckCamouflage();
+            if (wasActive) PlayMist();
             return true;
         }
 
@@ -87,6 +95,7 @@ public class Camouflager : RoleBase
         pc.RpcRemoveAbilityUse(notify: false);
         IsActive = true;
         Camouflage.CheckCamouflage();
+        PlayMist();
 
         return true;
     }
@@ -98,13 +107,16 @@ public class Camouflager : RoleBase
 
         IsActive = true;
         Camouflage.CheckCamouflage();
+        PlayMist();
 
         LateTask.New(() =>
         {
             if (GameStates.IsInTask && !ExileController.Instance)
             {
+                bool wasActive = IsActive;
                 IsActive = false;
                 Camouflage.CheckCamouflage();
+                if (wasActive) PlayMist();
             }
         }, CamouflageDuration.GetFloat(), "Revert Camouflage");
 

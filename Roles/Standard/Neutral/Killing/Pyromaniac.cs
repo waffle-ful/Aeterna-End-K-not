@@ -68,6 +68,12 @@ public class Pyromaniac : RoleBase
         return CanVent.GetBool();
     }
 
+    public override void OnMurder(PlayerControl killer, PlayerControl target)
+    {
+        if (DousedList.Contains(target.PlayerId))
+            EndKnot.Modules.ExplosionFx.Play(EndKnot.Modules.ExplosionFx.Kind.Ignite, target.Pos(), 1f);
+    }
+
     public override bool OnCheckMurder(PlayerControl killer, PlayerControl target)
     {
         if (killer == null) return true;
@@ -83,6 +89,7 @@ public class Pyromaniac : RoleBase
         return killer.CheckDoubleTrigger(target, () =>
         {
             DousedList.Add(target.PlayerId);
+            EndKnot.Modules.ExplosionFx.PlayFor(EndKnot.Modules.ExplosionFx.Kind.OilDrip, target.Pos(), 1f, killer);
             killer.SetKillCooldown(DouseCooldown.GetFloat());
             Utils.NotifyRoles(SpecifySeer: killer, SpecifyTarget: target);
         });

@@ -30,6 +30,17 @@ public class LastImpostor : IAddon
         CurrentId = id;
     }
 
+    // 復讐のオーラを見せる相手は本人と幽霊だけ (全員に出すと最後のインポスターが分かってしまう)
+    public static void PlayAuraForGhost(PlayerControl ghost)
+    {
+        if (CurrentId == byte.MaxValue || ghost.PlayerId == CurrentId) return;
+
+        PlayerControl last = Utils.GetPlayerById(CurrentId);
+        if (!last || !last.IsAlive()) return;
+
+        EndKnot.Modules.ExplosionFx.PlayFor(EndKnot.Modules.ExplosionFx.Kind.RevengeAura, last.Pos(), CurrentId + 1, ghost);
+    }
+
     public static void SetKillCooldown()
     {
         if (CurrentId == byte.MaxValue) return;
@@ -63,6 +74,16 @@ public class LastImpostor : IAddon
             if (CanBeLastImpostor(pc))
             {
                 pc.RpcSetCustomRole(CustomRoles.LastImpostor);
+
+                EndKnot.Modules.ExplosionFx.PlayFor(EndKnot.Modules.ExplosionFx.Kind.RevengeAwaken, pc.Pos(), pc.PlayerId + 1, pc);
+
+                foreach (PlayerControl ghost in Main.EnumeratePlayerControls())
+                {
+                    if (ghost.IsAlive()) continue;
+
+                    EndKnot.Modules.ExplosionFx.PlayFor(EndKnot.Modules.ExplosionFx.Kind.RevengeAwaken, pc.Pos(), pc.PlayerId + 1, ghost);
+                }
+
                 Add(pc.PlayerId);
                 SetKillCooldown();
 
