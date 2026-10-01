@@ -38,6 +38,8 @@ public static class MemCensus
             // 自動発火は 200〜458ms (重いのは texOwners) ホスト画面を止める (2026-09-07 配信 7 人卓で ×7 実測)。
             // 客が居るロビーでは打たず、ソロ〜2 人 (自分+検証用 1 台) のときだけ自動で残す。手動 (/census・bridge) は常に可。
             if (src == "lobby" && PlayerControl.AllPlayerControls.Count > 2) return;
+            // 自動発火は帰属調査用の計器なので開発ビルドだけ。配布ビルドでは 1 人でロビーを作るたびに止まる理由が無い。
+            if (src == "lobby" && !DebugModeManager.AmDebugger) return;
             if (src == "lobby") _lastRunTs = now; // 手動発火(bridge/manual)は自動発火の30s抑制を消費しない
             HealthLog.NoteOp("MemCensus");
 

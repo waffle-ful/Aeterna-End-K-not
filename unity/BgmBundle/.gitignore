@@ -11,6 +11,7 @@ obj/
 Assets/BGM/
 Assets/SFX/
 Assets/Dusk/
+Assets/Backrooms/
 # ProjectSettings は ProjectVersion.txt (エディタ版固定) 以外は既定で良い
 ProjectSettings/*
 !ProjectSettings/ProjectVersion.txt

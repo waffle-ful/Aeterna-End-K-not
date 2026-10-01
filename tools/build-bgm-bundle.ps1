@@ -4,6 +4,8 @@
 # 素材を差し替えた時だけ手で実行する (dotnet build には組み込まない)。
 # メインメニュー背景の PNG (Resources/Images/MainMenu/Dusk/<theme>/dusk_*.png) は別バンドル endknot_dusk に
 #   非圧縮 RGBA32 で焼き、Resources/Images/MainMenu/Dusk/endknot_dusk.bundle に置く (Windows 版のみ)。
+# Backrooms ロビーの床・壁 PNG (Resources/Images/Backrooms/*.png) も同じ設定で別バンドル endknot_backrooms に
+#   焼き、Resources/Images/Backrooms/endknot_backrooms.bundle に置く (Windows 版のみ)。
 # -Android: BuildTarget=Android (arm64) で焼き、*.android.bundle として置く (csproj の Android 構成が
 #   Windows 版の代わりに埋め込む)。Editor に Android Build Support モジュールが要る。
 param(
@@ -36,6 +38,9 @@ $outSfx = Join-Path $proj "$buildDir\endknot_sfx"
 $duskSrc = Join-Path $repo 'Resources\Images\MainMenu\Dusk'
 $dstDusk = Join-Path $proj 'Assets\Dusk'
 $outDusk = Join-Path $proj "$buildDir\endknot_dusk"
+$backroomsSrc = Join-Path $repo 'Resources\Images\Backrooms'
+$dstBackrooms = Join-Path $proj 'Assets\Backrooms'
+$outBackrooms = Join-Path $proj "$buildDir\endknot_backrooms"
 $log  = Join-Path $proj 'Logs\build-bgm-bundle.log'
 
 if (-not (Test-Path $UnityExe)) { throw "Unity editor not found: $UnityExe" }
@@ -62,6 +67,14 @@ if (-not $Android) {
     }
     Write-Host ("copied {0} dusk textures -> {1}" -f $duskPngs.Count, $dstDusk)
 }
+if (Test-Path $dstBackrooms) { Remove-Item $dstBackrooms -Recurse -Force }
+if (-not $Android) {
+    $backroomsPngs = Get-ChildItem $backroomsSrc -Filter '*.png'
+    if ($backroomsPngs.Count -eq 0) { throw "no backrooms png under $backroomsSrc" }
+    New-Item -ItemType Directory -Force $dstBackrooms | Out-Null
+    foreach ($f in $backroomsPngs) { Copy-Item $f.FullName (Join-Path $dstBackrooms $f.Name) -Force }
+    Write-Host ("copied {0} backrooms textures -> {1}" -f $backroomsPngs.Count, $dstBackrooms)
+}
 
 $args = @('-batchmode', '-nographics', '-quit', '-projectPath', ('"' + $proj + '"'), '-executeMethod', $method, '-logFile', ('"' + $log + '"'))
 $p = Start-Process -FilePath $UnityExe -ArgumentList $args -PassThru -Wait
@@ -84,6 +97,10 @@ if (-not $Android) {
     $dstDuskBundle = Join-Path $duskSrc 'endknot_dusk.bundle'
     Copy-Item $outDusk $dstDuskBundle -Force
     Write-Host ("dusk bundle: {0} ({1:N0} bytes)" -f $dstDuskBundle, (Get-Item $dstDuskBundle).Length)
+    if (-not (Test-Path $outBackrooms)) { throw "backrooms bundle not produced: $outBackrooms" }
+    $dstBackroomsBundle = Join-Path $backroomsSrc 'endknot_backrooms.bundle'
+    Copy-Item $outBackrooms $dstBackroomsBundle -Force
+    Write-Host ("backrooms bundle: {0} ({1:N0} bytes)" -f $dstBackroomsBundle, (Get-Item $dstBackroomsBundle).Length)
 }
 Select-String -Path $log -Pattern 'BundleBuilder:' | Select-Object -First 1 | ForEach-Object { Write-Host $_.Line }
 if (-not $KeepLog) { Remove-Item $log -Force -ErrorAction SilentlyContinue }

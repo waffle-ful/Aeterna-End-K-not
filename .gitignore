@@ -546,6 +546,7 @@ relay/CONTRACT.md
 Resources/Sounds/BGM/*.bundle
 Resources/Sounds/*.bundle
 Resources/Images/MainMenu/Dusk/*.bundle
+Resources/Images/Backrooms/*.bundle
 build-android/
 
 # Android の署名鍵 (どこに置かれても追跡しない)

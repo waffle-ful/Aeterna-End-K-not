@@ -59,6 +59,7 @@
         <EmbeddedResource Remove="Resources\Sounds\BGM\endknot_bgm.bundle" />
         <EmbeddedResource Remove="Resources\Sounds\endknot_sfx.bundle" />
         <EmbeddedResource Remove="Resources\Images\MainMenu\Dusk\endknot_dusk.bundle" />
+        <EmbeddedResource Remove="Resources\Images\Backrooms\endknot_backrooms.bundle" />
         <EmbeddedResource Remove="Resources\Media\menu_fire.webm" />
         <EmbeddedResource Remove="Resources\Media\loading_default.mp4" />
     </ItemGroup>
