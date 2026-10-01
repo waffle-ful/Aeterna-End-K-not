@@ -259,7 +259,6 @@ public class Pelican : RoleBase
         {
             EatPlayer(killer, target);
             killer.SetKillCooldown();
-            killer.RPCPlayCustomSound("Eat");
             target.RPCPlayCustomSound("Eat");
         }
 

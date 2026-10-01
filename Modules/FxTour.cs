@@ -7,6 +7,13 @@ public static class FxTour
 {
     private static readonly ExplosionFx.Kind[] Kinds =
     [
+        ExplosionFx.Kind.Fire, ExplosionFx.Kind.Supernova, ExplosionFx.Kind.GustRight, ExplosionFx.Kind.WindTrailRight,
+        ExplosionFx.Kind.GeminiSplit, ExplosionFx.Kind.GeminiShatter, ExplosionFx.Kind.WarpOut, ExplosionFx.Kind.WarpIn,
+        ExplosionFx.Kind.Freeze, ExplosionFx.Kind.TimeStop, ExplosionFx.Kind.LightningStrike, ExplosionFx.Kind.Slam,
+        ExplosionFx.Kind.Splash, ExplosionFx.Kind.Ignite, ExplosionFx.Kind.Swallow, ExplosionFx.Kind.VoidBurst,
+        ExplosionFx.Kind.Smoke, ExplosionFx.Kind.BurrowIn, ExplosionFx.Kind.BurrowOut, ExplosionFx.Kind.Drain,
+        ExplosionFx.Kind.Poison, ExplosionFx.Kind.Petrify, ExplosionFx.Kind.PuppetStrings, ExplosionFx.Kind.Tornado,
+        ExplosionFx.Kind.TornadoLift,
         ExplosionFx.Kind.TimeRewind, ExplosionFx.Kind.RewindLand, ExplosionFx.Kind.RewindRevive, ExplosionFx.Kind.TimeSteal,
         ExplosionFx.Kind.ChronoRampage, ExplosionFx.Kind.CamoMist, ExplosionFx.Kind.OilDrip, ExplosionFx.Kind.DemoFuse,
         ExplosionFx.Kind.VultureFeast, ExplosionFx.Kind.HexMark, ExplosionFx.Kind.WebSpin, ExplosionFx.Kind.WebSnare,
@@ -76,11 +83,23 @@ public static class FxTour
             // 秒数を載せる演出
             case ExplosionFx.Kind.TimeRewind:
             case ExplosionFx.Kind.WebSnare:
+            case ExplosionFx.Kind.Freeze:
+            case ExplosionFx.Kind.TimeStop:
+            case ExplosionFx.Kind.Tornado:
                 ExplosionFx.Play(kind, at, 3f);
+                break;
+            // 大きさや距離を載せる演出
+            case ExplosionFx.Kind.Fire:
+            case ExplosionFx.Kind.Supernova:
+            case ExplosionFx.Kind.GustRight:
+            case ExplosionFx.Kind.WindTrailRight:
+                ExplosionFx.Play(kind, at, 2.5f);
                 break;
             // 誰の番号かを載せる演出 (砂の行き先・血の色)
             case ExplosionFx.Kind.TimeSteal:
             case ExplosionFx.Kind.VultureFeast:
+            case ExplosionFx.Kind.Drain:
+            case ExplosionFx.Kind.PuppetStrings:
                 ExplosionFx.Play(kind, at, self);
                 break;
             default:

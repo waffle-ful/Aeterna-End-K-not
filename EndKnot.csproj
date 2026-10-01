@@ -45,6 +45,12 @@
     <ItemGroup>
         <EmbeddedResource Include=".\Resources\**"/>
     </ItemGroup>
+
+    <!-- The wave cannon plays HadouCharge / HadouFire now; the earlier clips are no longer referenced by code. -->
+    <ItemGroup>
+        <EmbeddedResource Remove="Resources\Sounds\WaveCannonCharge.ogg" />
+        <EmbeddedResource Remove="Resources\Sounds\WaveCannonFire.ogg" />
+    </ItemGroup>
     <!-- Android: the desktop-only media stays out of the mobile DLL. The BGM AssetBundle is a
          Windows build (an arm64 bundle replaces it later), the raw .ogg tracks only back that
          bundle, and the menu fire / loading videos play from frame packs (.ekfp) on Android. -->

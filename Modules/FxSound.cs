@@ -39,7 +39,8 @@ public static class FxSound
     private static bool _shapingBroken;
 
     // everywhere = 画面全体に掛かる演出の音。距離で絞らず、左右にも振らない
-    public static void At(string name, Vector2 pos, float volume = 1f, bool everywhere = false)
+    // farGain = 遠くまで届く音 (爆発) の下限。FarDist より遠くても、この音量のこもった音で聞こえる
+    public static void At(string name, Vector2 pos, float volume = 1f, bool everywhere = false, float farGain = 0f)
     {
         try
         {
@@ -58,15 +59,20 @@ public static class FxSound
 
             float gain = 1f;
             float pan = 0f;
+            bool distant = false;
 
             if (!everywhere)
             {
-                if (dist >= FarDist) return;
-
-                if (dist > NearDist)
+                if (dist >= FarDist)
+                {
+                    if (farGain <= 0f) return;
+                    distant = true;
+                    gain = farGain;
+                }
+                else if (dist > NearDist)
                 {
                     float k = 1f - (dist - NearDist) / (FarDist - NearDist);
-                    gain = k * FxMath.Sqrt(k);
+                    gain = FxMath.Max(k * FxMath.Sqrt(k), farGain);
                 }
 
                 pan = FxMath.Clamp(dx / 7f, -0.7f, 0.7f);
@@ -75,7 +81,9 @@ public static class FxSound
             string suffix = "";
 
             // すぐそば (1u 以内) は壁を挟んでいても直接聞こえる扱いにする。短い区間の壁判定は当てにならない
-            if (lp.inVent || (!everywhere && lp.IsAlive() && dist > 1f && Blocked(lp, ear, pos)))
+            if (distant)
+                suffix = "_m";
+            else if (lp.inVent || (!everywhere && lp.IsAlive() && dist > 1f && Blocked(lp, ear, pos)))
             {
                 suffix = "_m";
                 gain *= 0.8f;

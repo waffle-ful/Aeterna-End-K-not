@@ -139,7 +139,6 @@ internal class Bomber : RoleBase
     {
         if (Pelican.IsEaten(pc.PlayerId)) return;
         Logger.Info("Bomber explosion", "Boom");
-        CustomSoundsManager.RPCPlayCustomSoundAll("Boom");
 
         float radius = IsNuker ? NukeRadius.GetFloat() : BomberRadius.GetFloat();
         ExplosionFx.Play(ExplosionFx.Kind.Fire, pc.Pos(), radius);

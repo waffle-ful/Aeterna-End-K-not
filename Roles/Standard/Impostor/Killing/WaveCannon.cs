@@ -42,9 +42,9 @@ public class WaveCannon : RoleBase
 
     private const float BeamBackwardReach = GateForwardOffset + GateRadius; // 1.5 unit、根本判定をプレイヤー位置まで伸ばす
 
-    // ホストローカル効果音 (Resources/Sounds/*.ogg)。チャージはクレッシェンド、発射は持続轟音 (26s > FiringDuration 最大)
-    private const string ChargeSoundName = "WaveCannonCharge";
-    private const string FireSoundName = "WaveCannonFire";
+    // ホストローカル効果音 (Resources/Sounds/*.wav)。チャージはクレッシェンド、発射は持続轟音 (16s > FiringDuration 最大)
+    private const string ChargeSoundName = "HadouCharge";
+    private const string FireSoundName = "HadouFire";
     private const float FireSoundFadeSeconds = 0.3f;
 
     private enum Phase { Idle, DirectionDetect, Charging, Warning, Firing }
@@ -288,7 +288,7 @@ public class WaveCannon : RoleBase
         }
         else
         {
-            // WarningDuration (最大5s) がクリップ長 4.76s を超えうるため、遅延着火は Warning 中にも落ちる。
+            // WarningDuration (最大5s) がクリップ長 5s を超えうるため、遅延着火は Warning 中にも落ちる。
             // 世代 (ShotSeq) で中断→再発射時の旧タスクだけを弾く (FlashAll の PhaseEndTS capture と同型)。
             int seq = ShotSeq;
             LateTask.New(() =>
@@ -356,7 +356,7 @@ public class WaveCannon : RoleBase
         }
     }
 
-    // 発射音は素材 26s > FiringDuration 最大 10s のため自然終了に頼らず、Firing を抜けた時点で短フェード停止する
+    // 発射音は素材 16s > FiringDuration 最大 10s のため自然終了に頼らず、Firing を抜けた時点で短フェード停止する
     private IEnumerator FireSoundWatch(AudioSource src, AudioClip ownClip)
     {
         while (src != null && src.clip == ownClip && src.isPlaying)

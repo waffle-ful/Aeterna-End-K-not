@@ -22,8 +22,6 @@ $method = if ($Android) { 'BundleBuilder.BuildAndroid' } else { 'BundleBuilder.B
 $out  = Join-Path $proj "$buildDir\endknot_bgm"
 # 長尺効果音 (別バンドル endknot_sfx): 発射/チャージ音と Backrooms ロビー環境音
 $sfxSources = @(
-    (Join-Path $repo 'Resources\Sounds\WaveCannonFire.ogg'),
-    (Join-Path $repo 'Resources\Sounds\WaveCannonCharge.ogg'),
     (Join-Path $repo 'Resources\Sounds\Backrooms\lobby-ambient.wav'),
     (Join-Path $repo 'Resources\Sounds\MapAtmosphere\MiraRainLoop.ogg'),
     (Join-Path $repo 'Resources\Sounds\MapAtmosphere\MiraThunderNear.ogg'),

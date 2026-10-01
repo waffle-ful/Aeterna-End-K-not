@@ -149,7 +149,6 @@ public class Vulture : RoleBase
 
         if (CooldownTimer != null) return true;
 
-        pc.RPCPlayCustomSound("Eat");
         TotalEaten++;
 
         if (TotalEaten >= NumberOfReportsToWin.GetInt() && GameStates.IsInTask)
