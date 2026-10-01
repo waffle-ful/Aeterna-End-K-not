@@ -64,15 +64,19 @@
         <EmbeddedResource Remove="Resources\Media\loading_default.mp4" />
     </ItemGroup>
     <!-- The arm64 AssetBundles (tools/build-bgm-bundle.ps1 -Android) take the Windows bundles' place
-         on Android under the same resource names, so BgmBundle / SfxBundle read them unchanged.
-         Missing files just leave the bundle path unavailable (BGM silent, SFX fall back to embedded). -->
+         on Android under the same resource names, so BgmBundle / SfxBundle / BackroomsBundle read them
+         unchanged. Missing files just leave the bundle path unavailable (BGM silent, SFX and the
+         Backrooms textures fall back to embedded). -->
     <ItemGroup Condition="'$(Configuration)' == 'Android'">
         <EmbeddedResource Remove="Resources\Sounds\BGM\endknot_bgm.android.bundle" />
         <EmbeddedResource Remove="Resources\Sounds\endknot_sfx.android.bundle" />
         <EmbeddedResource Include="Resources\Sounds\BGM\endknot_bgm.android.bundle" LogicalName="EndKnot.Resources.Sounds.BGM.endknot_bgm.bundle" Condition="Exists('Resources\Sounds\BGM\endknot_bgm.android.bundle')" />
         <EmbeddedResource Include="Resources\Sounds\endknot_sfx.android.bundle" LogicalName="EndKnot.Resources.Sounds.endknot_sfx.bundle" Condition="Exists('Resources\Sounds\endknot_sfx.android.bundle')" />
+        <EmbeddedResource Remove="Resources\Images\Backrooms\endknot_backrooms.android.bundle" />
+        <EmbeddedResource Include="Resources\Images\Backrooms\endknot_backrooms.android.bundle" LogicalName="EndKnot.Resources.Images.Backrooms.endknot_backrooms.bundle" Condition="Exists('Resources\Images\Backrooms\endknot_backrooms.android.bundle')" />
     </ItemGroup>
     <ItemGroup Condition="'$(Configuration)' != 'Android'">
+        <EmbeddedResource Remove="Resources\Images\Backrooms\endknot_backrooms.android.bundle" />
         <EmbeddedResource Remove="Resources\Sounds\BGM\endknot_bgm.android.bundle" />
         <EmbeddedResource Remove="Resources\Sounds\endknot_sfx.android.bundle" />
         <!-- Frame packs are the Android replacement for the videos; desktop plays the videos with

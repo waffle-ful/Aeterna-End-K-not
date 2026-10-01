@@ -204,7 +204,7 @@ public class Snitch : RoleBase
             string[] parts = entry.Split(':');
             byte id = byte.Parse(parts[0]);
             TargetList.Add(id);
-            if (parts[1].Length > 0 && ColorUtility.TryParseHtmlString($"#{parts[1]}", out Color color)) TargetColorlist[id] = color;
+            if (parts[1].Length > 0 && HtmlColor.TryParse($"#{parts[1]}", out Color color)) TargetColorlist[id] = color;
         }
     }
 }

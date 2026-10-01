@@ -11,6 +11,8 @@ namespace EndKnot.Modules;
 // Backrooms ロビーの床・壁テクスチャ (1024px PNG 2 枚) を AssetBundle (非圧縮 RGBA32) から読む経路。
 // 埋込 PNG の LoadImage デコードは 1 枚 30ms 級で主スレッドを止めるため、入室の直前に bundle を
 // 非同期ロードし、出来上がったテクスチャを受け取るだけにする。
+// Android 版のエンジンには LoadFromMemoryAsync と GetAllAssetNames が無いので、bundle を開くところだけ
+// 同期 (LoadFromMemory) にし、中身は名前を決め打ちして非同期で取り出す。
 // 埋込からメモリ直読み — ディスクへは書き出さない。バンドルは unity/BgmBundle/ で焼いて
 // Resources/Images/Backrooms/endknot_backrooms.bundle として埋め込む (tools/build-bgm-bundle.ps1)。
 // AsyncOperation の完了は Poll を呼ぶたびに isDone を見て拾う (コールバックは登録しない)。
@@ -18,6 +20,8 @@ namespace EndKnot.Modules;
 internal static class BackroomsBundle
 {
     private const string EmbeddedResourceName = "EndKnot.Resources.Images.Backrooms.endknot_backrooms.bundle";
+    private const string AssetRoot = "assets/backrooms/";
+    private static readonly string[] TextureNames = ["floor", "wall"];
 
     // 続けて待つのはここまで。超えたら呼び出し側は埋込 PNG で先へ進む (入室を待たせ続けない)。
     // 進行中のロードは止めず、bundle と元バイト列も持ったままにする (ロード中の解放はしない)。
@@ -47,7 +51,7 @@ internal static class BackroomsBundle
     internal static void Begin()
     {
         if (_stage != Stage.Idle) return;
-        if (!EnvEnabled || OperatingSystem.IsAndroid()) { _stage = Stage.Failed; return; }
+        if (!EnvEnabled) { _stage = Stage.Failed; return; }
 
         try
         {
@@ -55,6 +59,16 @@ internal static class BackroomsBundle
 
             _bytes = ReadEmbeddedBytes();
             if (_bytes == null) { Fail(); return; }
+
+            if (OperatingSystem.IsAndroid())
+            {
+                _bundle = AssetBundle.LoadFromMemory(_bytes);
+                if (_bundle == null) { Fail("bundle could not be created"); return; }
+
+                StartRequests();
+                _stage = Stage.Loading;
+                return;
+            }
 
             _createRequest = AssetBundle.LoadFromMemoryAsync(_bytes);
             if (_createRequest == null) { Fail("LoadFromMemoryAsync returned null"); return; }
@@ -82,14 +96,7 @@ internal static class BackroomsBundle
                 _createRequest = null;
                 if (_bundle == null) { Fail("bundle could not be created"); return false; }
 
-                foreach (string assetName in _bundle.GetAllAssetNames())
-                {
-                    if (!assetName.EndsWith(".png", StringComparison.Ordinal)) continue;
-                    Requests.Add((assetName, _bundle.LoadAssetAsync(assetName, Il2CppType.Of<Texture2D>())));
-                }
-
-                if (Requests.Count == 0) { Fail("no textures in bundle"); return false; }
-
+                StartRequests();
                 _stage = Stage.Loading;
                 return StillWaiting();
             }
@@ -97,13 +104,13 @@ internal static class BackroomsBundle
             foreach ((string _, AssetBundleRequest request) in Requests)
                 if (!request.isDone) return StillWaiting();
 
-            foreach ((string assetName, AssetBundleRequest request) in Requests)
+            foreach ((string name, AssetBundleRequest request) in Requests)
             {
                 Texture2D tex = request.asset != null ? request.asset.TryCast<Texture2D>() : null;
                 if (tex == null) continue;
 
                 tex.hideFlags |= HideFlags.HideAndDontSave | HideFlags.DontSaveInEditor | HideFlags.DontUnloadUnusedAsset;
-                Textures[Path.GetFileNameWithoutExtension(assetName)] = tex;
+                Textures[name] = tex;
             }
 
             Requests.Clear();
@@ -120,6 +127,12 @@ internal static class BackroomsBundle
         }
 
         return false;
+    }
+
+    private static void StartRequests()
+    {
+        foreach (string name in TextureNames)
+            Requests.Add((name, _bundle.LoadAssetAsync(AssetRoot + name + ".png", Il2CppType.Of<Texture2D>())));
     }
 
     // 未完了の時に呼ぶ。続けて待った時間が上限を超えたら、以後は待たせない。
@@ -184,7 +197,7 @@ internal static class BackroomsBundle
             }
 
             int length = (int)stream.Length;
-            var array = new Il2CppStructArray<byte>(length);
+            var array = new Il2CppStructArray<byte>((long)length);
             byte* dst = (byte*)IntPtr.Add(array.Pointer, IntPtr.Size * 4).ToPointer();
             int read = 0;
             while (read < length)

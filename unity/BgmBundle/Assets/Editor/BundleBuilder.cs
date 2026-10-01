@@ -10,7 +10,7 @@ using UnityEngine;
 // 短いので音声データごと事前ロード (preloadAudioData=true) し、取り出したクリップをそのまま鳴らせる。
 // Assets/Dusk 配下のメインメニュー背景 PNG (テーマごとのサブフォルダ) は endknot_dusk。
 // PNG デコードをメニュー表示中のフレームから外すため、非圧縮 RGBA32 のまま焼く (Windows 版のみ)。
-// Assets/Backrooms 配下のロビー床・壁 PNG は同じ設定で endknot_backrooms (Windows 版のみ)。
+// Assets/Backrooms 配下のロビー床・壁 PNG は同じ設定で endknot_backrooms (Windows / Android 両方)。
 public static class BundleBuilder
 {
     private const string SourceFolder = "Assets/BGM";
@@ -34,7 +34,7 @@ public static class BundleBuilder
         string[] names = Import(SourceFolder, BundleName, preload: false);
         string[] sfxNames = Import(SfxSourceFolder, SfxBundleName, preload: true);
         int duskCount = ImportTextures(DuskSourceFolder, DuskBundleName, target == BuildTarget.StandaloneWindows64);
-        int backroomsCount = ImportTextures(BackroomsSourceFolder, BackroomsBundleName, target == BuildTarget.StandaloneWindows64);
+        int backroomsCount = ImportTextures(BackroomsSourceFolder, BackroomsBundleName, true);
 
         string outDir = Path.Combine(Directory.GetCurrentDirectory(), outSubDir);
         Directory.CreateDirectory(outDir);
@@ -80,7 +80,7 @@ public static class BundleBuilder
         return names;
     }
 
-    // Windows 版はテクスチャを指定のバンドルに入れる。それ以外のターゲットでは bundle 名を外し、
+    // include のターゲットではテクスチャを指定のバンドルに入れる。それ以外のターゲットでは bundle 名を外し、
     // 前回の Windows ビルドで .meta に残った割り当てが他ターゲットの出力へ混ざらないようにする。
     private static int ImportTextures(string folder, string bundleName, bool include)
     {
@@ -123,6 +123,17 @@ public static class BundleBuilder
                 textureCompression = TextureImporterCompression.Uncompressed,
             };
             importer.SetPlatformTextureSettings(standalone);
+
+            // Android の既定 (ASTC 圧縮) に落とさず、Windows 版と同じ画素をそのまま持たせる。
+            var android = new TextureImporterPlatformSettings
+            {
+                name = "Android",
+                overridden = true,
+                maxTextureSize = 8192,
+                format = TextureImporterFormat.RGBA32,
+                textureCompression = TextureImporterCompression.Uncompressed,
+            };
+            importer.SetPlatformTextureSettings(android);
             importer.assetBundleName = bundleName;
             importer.SaveAndReimport();
         }

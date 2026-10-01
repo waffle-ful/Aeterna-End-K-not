@@ -23,3 +23,12 @@ UnityEngine.Profiling.Profiler::GetMonoHeapSizeLong | EndKnot.Modules.MemCensus
 UnityEngine.Profiling.Profiler::GetTotalReservedMemoryLong | EndKnot.Modules.MemCensus
 UnityEngine.Profiling.Profiler::GetTotalUnusedReservedMemoryLong | EndKnot.Modules.MemCensus
 Unity.Profiling.ProfilerRecorder::GetValid_Injected | EndKnot.Modules.MemCensus
+
+# Asset bundles opened with LoadFromMemoryAsync: Android takes the synchronous LoadFromMemory branch
+# (BackroomsBundle) or skips the bundle and reads the embedded PNG (DuskBundle).
+UnityEngine.AssetBundle::LoadFromMemoryAsync_Internal | EndKnot.Modules.BackroomsBundle
+UnityEngine.AssetBundle::LoadFromMemoryAsync_Internal | EndKnot.Modules.DuskBundle
+UnityEngine.AssetBundle::GetAllAssetNames | EndKnot.Modules.DuskBundle
+
+# Airship floor detection: Android uses a stored mask instead of reading the layer collision matrix.
+UnityEngine.Physics2D::GetLayerCollisionMask_Internal | EndKnot.Modules.MapAtmosphere.AirshipRuinLayout
