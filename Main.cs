@@ -645,7 +645,9 @@ public class Main : BasePlugin
         EndKnot.Modules.VoiceVox.VoiceVoxManager.Init();
         ButtonCooldownInDecimalUnder10s = Config.Bind("Client Options", "ButtonCooldownInDecimalUnder10s", false);
         CancelPetAnimation = Config.Bind("Client Options", "CancelPetAnimation", true);
-        TryFixStuttering = Config.Bind("Client Options", "TryFixStuttering", true);
+        // 全スレッドを論理 CPU 2・3 番へ寄せる。SMT のある CPU ではこの 2 つが同じ物理コアの表裏になり、
+        // 主スレッド・描画・GC・裏スレッドが 1 コアを奪い合うので既定は OFF。
+        TryFixStuttering = Config.Bind("Client Options", "PinProcessToTwoCores", false, "Restrict the game process to logical CPUs 2 and 3 (the 'Try to fix stuttering' client option). Default off: on CPUs with SMT those two are usually the same physical core, so every game thread ends up sharing one core. Turn on only if it measurably helps on your machine.");
         ShowClientControlGUI = Config.Bind("Client Options", "ShowClientControlGUI", true);
         ShareLobbyToDiscord = Config.Bind("Client Options", "ShareLobbyToDiscord", false);
         BackroomsEnabled = Config.Bind("Client Options", "BackroomsEnabled", true);
