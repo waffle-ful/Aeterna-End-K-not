@@ -190,13 +190,16 @@ internal static class CustomRoleSelector
         try { numNeutrals = rd.Next(neutralLimits.MinSetting.GetInt(), neutralLimits.MaxSetting.GetInt() + 1); }
         catch { numNeutrals = (int)(new[] { neutralLimits.MinSetting.GetInt(), neutralLimits.MinSetting.GetInt() + 1 }.Average()); }
 
-        if (roles[RoleAssignType.Impostor].Count == 0 && numNeutrals == 0 && numJackals == 0 && !Main.SetRoles.Values.Any(x => x.IsImpostor() || x.IsNK()))
+        // The Jackal faction only stands in for the killers when it can actually field someone.
+        bool jackalsCanSpawn = numJackals > 0 && roles[RoleAssignType.Jackal].Count > 0;
+
+        if (roles[RoleAssignType.Impostor].Count == 0 && numNeutrals == 0 && !jackalsCanSpawn && !Main.SetRoles.Values.Any(x => x.IsImpostor() || x.IsNK()))
         {
             roles[RoleAssignType.Impostor].Add(new(CustomRoles.ImpostorEndKnot, 100, optImpNum));
             Logger.Warn("Adding Vanilla Impostor", "CustomRoleSelector");
         }
 
-        if (roles[RoleAssignType.Crewmate].Count == 0 && numNeutrals == 0 && numJackals == 0 && !Main.SetRoles.Values.Any(x => x.IsCrewmate()))
+        if (roles[RoleAssignType.Crewmate].Count == 0 && numNeutrals == 0 && !jackalsCanSpawn && !Main.SetRoles.Values.Any(x => x.IsCrewmate()))
         {
             roles[RoleAssignType.Crewmate].Add(new(CustomRoles.CrewmateEndKnot, 100, playerCount - optImpNum));
             Logger.Warn("Adding Vanilla Crewmates", "CustomRoleSelector");

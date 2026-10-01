@@ -1455,7 +1455,7 @@ public static class Options
             .SetGameMode(CustomGameMode.Standard);
 
         // Fixed ids: these must not take part in the id++ sequence above, or every option after them would shift.
-        JackalFactionMin = new IntegerOptionItem(19996, "FactionLimits.Jackal.Min", new(0, 15, 1), 0, TabGroup.JackalRoles)
+        JackalFactionMin = new IntegerOptionItem(19996, "FactionLimits.Jackal.Min", new(0, 15, 1), 1, TabGroup.JackalRoles)
             .SetGameMode(CustomGameMode.Standard)
             .SetHeader(true)
             .SetColor(Utils.GetRoleColor(CustomRoles.Jackal));

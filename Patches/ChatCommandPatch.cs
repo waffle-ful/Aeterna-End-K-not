@@ -1566,8 +1566,8 @@ internal static class ChatCommands
             }
             else
             {
-                factionMin = Math.Max(0, Main.NormalOptions.MaxPlayers - Options.FactionMinMaxSettings[Team.Neutral].MaxSetting.GetInt() - Options.FactionMinMaxSettings[Team.Impostor].MaxSetting.GetInt() - Options.FactionMinMaxSettings[Team.Coven].MaxSetting.GetInt());
-                factionMax = Math.Max(0, Main.NormalOptions.MaxPlayers - Options.FactionMinMaxSettings[Team.Neutral].MinSetting.GetInt() - Options.FactionMinMaxSettings[Team.Impostor].MinSetting.GetInt() - Options.FactionMinMaxSettings[Team.Coven].MinSetting.GetInt());
+                factionMin = Math.Max(0, Main.NormalOptions.MaxPlayers - Options.FactionMinMaxSettings[Team.Neutral].MaxSetting.GetInt() - Options.FactionMinMaxSettings[Team.Impostor].MaxSetting.GetInt() - Options.FactionMinMaxSettings[Team.Coven].MaxSetting.GetInt() - Options.JackalFactionMax.GetInt());
+                factionMax = Math.Max(0, Main.NormalOptions.MaxPlayers - Options.FactionMinMaxSettings[Team.Neutral].MinSetting.GetInt() - Options.FactionMinMaxSettings[Team.Impostor].MinSetting.GetInt() - Options.FactionMinMaxSettings[Team.Coven].MinSetting.GetInt() - Options.JackalFactionMin.GetInt());
             }
 
             sb.Append(' ');
@@ -1622,6 +1622,14 @@ internal static class ChatCommands
                 sb.Append("\n\n");
             }
         }
+
+        // The Jackal faction has its own limits outside the Team list above.
+        sb.Append("<u>");
+        sb.Append(Utils.ColorString(Utils.GetRoleColor(CustomRoles.Jackal), GetString("TabGroup.Short.JackalRoles").ToUpper()));
+        sb.Append("</u> ");
+        sb.Append(Options.JackalFactionMin.GetInt());
+        sb.Append(" - ");
+        sb.Append(Options.JackalFactionMax.GetInt());
 
         Utils.SendMessage("\n", player.PlayerId, sb.ToString().Trim() + "</size>");
     }
@@ -2030,7 +2038,8 @@ internal static class ChatCommands
         int nkReserved = nkLimits[0].GetBool() ? nkLimits[2].GetInt() : 0;
 
         List<CustomRoles> impRoles = includeNonCrew ? allRoles.Where(x => x.IsImpostor()).Shuffle().Take(Options.FactionMinMaxSettings[Team.Impostor].MaxSetting.GetInt()).ToList() : [];
-        List<CustomRoles> nkRoles = includeNonCrew ? allRoles.Where(x => x.IsNK()).Shuffle().Take(Math.Min(neutralFactionMax, Options.GetNeutralKillingMaxLimit())).ToList() : [];
+        List<CustomRoles> jackalRoles = includeNonCrew ? allRoles.Where(x => x.IsJackalFaction()).Shuffle().Take(Options.JackalFactionMax.GetInt()).ToList() : [];
+        List<CustomRoles> nkRoles = includeNonCrew ? allRoles.Where(x => x.IsNK() && !x.IsJackalFaction()).Shuffle().Take(Math.Min(neutralFactionMax, Options.GetNeutralKillingMaxLimit())).ToList() : [];
         List<CustomRoles> nnkRoles = includeNonCrew ? allRoles.Where(x => x.IsNonNK()).Shuffle().Take(Math.Min(neutralFactionMax - nkReserved, Options.MaxNNKs.GetInt())).ToList() : [];
         List<CustomRoles> covenRoles = includeNonCrew ? allRoles.Where(x => x.IsCoven()).Shuffle().Take(Options.FactionMinMaxSettings[Team.Coven].MaxSetting.GetInt()).ToList() : [];
 
@@ -2039,10 +2048,10 @@ internal static class ChatCommands
         allRoles.RemoveAll(x => x.IsNonNK());
         allRoles.RemoveAll(x => x.IsCoven());
 
-        int factionCount = impRoles.Count + nkRoles.Count + nnkRoles.Count + covenRoles.Count;
+        int factionCount = impRoles.Count + nkRoles.Count + nnkRoles.Count + covenRoles.Count + jackalRoles.Count;
         DraftRoles = allRoles
             .Take(allPlayerIds.Length * maxRolesPerPlayer - factionCount)
-            .CombineWith(impRoles, nkRoles, nnkRoles, covenRoles)
+            .CombineWith(impRoles, nkRoles, nnkRoles, covenRoles, jackalRoles)
             .Shuffle()
             .Partition(allPlayerIds.Length)
             .Zip(allPlayerIds)
