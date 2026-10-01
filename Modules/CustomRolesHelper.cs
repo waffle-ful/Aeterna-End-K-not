@@ -23,6 +23,21 @@ internal static class CustomRolesHelper
     private static readonly Dictionary<RoleTypes, CustomRoles> DesyncEndKnotRoleCache = [];
     private static readonly Dictionary<CustomRoles, bool> EndKnotNamedCache = [];
 
+    // 役職クラスが OnPet / OnMeetingShapeshift を自前で宣言しているかは型だけで決まる。HUD が毎 tick 尋ねるので役職ごとに 1 回だけ調べる
+    // (GetRoleClass は全役職クラスを走査しながら要素ごとに enum 名を作るため 1 回 ≈10KB を確保する)。
+    private static readonly Dictionary<CustomRoles, bool> DeclaresOnPetCache = [];
+    private static readonly Dictionary<CustomRoles, bool> DeclaresOnMeetingShapeshiftCache = [];
+
+    private static bool DeclaresOwnMethod(CustomRoles role, string method, Dictionary<CustomRoles, bool> cache)
+    {
+        if (cache.TryGetValue(role, out bool declares)) return declares;
+        Type type = role.GetRoleClass().GetType();
+        declares = type.GetMethod(method)?.DeclaringType == type;
+        // 役職クラスの一覧を読み込む前は全役職が既定クラスに見えるので、その間の答えは覚えない
+        if (Main.AllRoleClasses is { Count: > 0 }) cache[role] = declares;
+        return declares;
+    }
+
     private static readonly List<CustomRoles> OnlySpawnsWithPetsRoleList =
     [
         CustomRoles.Tunneler,
@@ -1143,8 +1158,7 @@ internal static class CustomRolesHelper
         public bool UsesMeetingShapeshift()
         {
             if (!Options.UseMeetingShapeshift.GetBool()) return false;
-            Type type = role.GetRoleClass().GetType();
-            return type.GetMethod("OnMeetingShapeshift")?.DeclaringType == type;
+            return DeclaresOwnMethod(role, "OnMeetingShapeshift", DeclaresOnMeetingShapeshiftCache);
         }
 
         public bool PetActivatedAbility()
@@ -1165,8 +1179,7 @@ internal static class CustomRolesHelper
             // ボタン側に能力を出すため除外する。
             if (EkrManager.IsEkrRole(role)) return EkrManager.HasOnPetLogic(role) && !EkrManager.IsEkrShapeshiftBasis(role) && EkrManager.GetEffectiveBasis(role) != EkrBasis.Phantom;
 
-            Type type = role.GetRoleClass().GetType();
-            return type.GetMethod("OnPet")?.DeclaringType == type;
+            return DeclaresOwnMethod(role, "OnPet", DeclaresOnPetCache);
         }
 
         public bool UsesPetInsteadOfKill()

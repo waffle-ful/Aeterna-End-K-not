@@ -135,6 +135,7 @@ public static class AllocProbe
         if (now < nextDump) return;
 
         nextDump = now + 5f;
+        FrameStats.CloseWindow();
         int fc = Time.frameCount;
         int frames = windowFrameStart >= 0 ? fc - windowFrameStart : -1;
         windowFrameStart = fc;
@@ -182,6 +183,7 @@ public static class AllocProbe
         Sb.Append(" mainKB=").Append(mainDelta >= 0 ? (mainDelta - tickTotal) / 1024 : -1);
         Sb.Append(" thrKB=").Append(globalDelta >= 0 && mainDelta >= 0 ? (globalDelta - mainDelta) / 1024 : -1);
         Sb.Append(" gen0=").Append(gen0Delta);
+        Sb.Append(" fps1low=").Append(FrameStats.Low1Fps).Append(" frMaxMs=").Append(FrameStats.MaxFrameMs);
 
         if (TrackIl2)
         {
