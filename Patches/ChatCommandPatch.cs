@@ -1546,6 +1546,7 @@ internal static class ChatCommands
 
         Dictionary<Team, RoleOptionType[]> rot = Main.RoleOptionTypeValues
             .Without(RoleOptionType.Coven_Miscellaneous)
+            .Without(RoleOptionType.Jackal_Miscellaneous)
             .GroupBy(x => x.ToString().Split('_')[0])
             .ToDictionary(x => Enum.Parse<Team>(x.Key), x => x.ToArray());
 

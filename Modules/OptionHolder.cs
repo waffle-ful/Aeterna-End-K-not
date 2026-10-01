@@ -321,6 +321,9 @@ public static class Options
     public static OptionItem LowLoadMode;
     public static OptionItem DeepLowLoad;
 
+    public static OptionItem JackalFactionMin;
+    public static OptionItem JackalFactionMax;
+    public static OptionItem JackalFactionCanKillEachOther;
     public static OptionItem MinNNKs;
     public static OptionItem MaxNNKs;
 
@@ -1451,11 +1454,26 @@ public static class Options
         MaxNNKs = new IntegerOptionItem(id++, "MaxNNKs", new(0, 15, 1), 2, TabGroup.NeutralRoles)
             .SetGameMode(CustomGameMode.Standard);
 
+        // Fixed ids: these must not take part in the id++ sequence above, or every option after them would shift.
+        JackalFactionMin = new IntegerOptionItem(19996, "FactionLimits.Jackal.Min", new(0, 15, 1), 0, TabGroup.JackalRoles)
+            .SetGameMode(CustomGameMode.Standard)
+            .SetHeader(true)
+            .SetColor(Utils.GetRoleColor(CustomRoles.Jackal));
+
+        JackalFactionMax = new IntegerOptionItem(19997, "FactionLimits.Jackal.Max", new(0, 15, 1), 1, TabGroup.JackalRoles)
+            .SetGameMode(CustomGameMode.Standard)
+            .SetColor(Utils.GetRoleColor(CustomRoles.Jackal));
+
+        JackalFactionCanKillEachOther = new BooleanOptionItem(19998, "JackalFactionCanKillEachOther", false, TabGroup.JackalRoles)
+            .SetGameMode(CustomGameMode.Standard)
+            .SetHeader(true)
+            .SetColor(Utils.GetRoleColor(CustomRoles.Jackal));
+
         HashSet<TabGroup> doneTabs = [];
 
         foreach (RoleOptionType roleOptionType in Main.RoleOptionTypeValues)
         {
-            if (roleOptionType is RoleOptionType.Coven_Miscellaneous or RoleOptionType.Impostor_Madmate or RoleOptionType.Combination) continue;
+            if (roleOptionType is RoleOptionType.Coven_Miscellaneous or RoleOptionType.Jackal_Miscellaneous or RoleOptionType.Impostor_Madmate or RoleOptionType.Combination) continue;
 
             TabGroup tab = roleOptionType.GetTabFromOptionType();
             Color roleOptionTypeColor = roleOptionType.GetRoleOptionTypeColor();
@@ -1845,8 +1863,12 @@ public static class Options
                 index++;
                 RoleLoadingText = $"{index}/{allRoles} ({roleClass.GetType().Name})";
 
+                // Jackal faction roles declare the neutral tab themselves; they are rehomed to their own tab here.
+                if (roleClasses.Key == RoleOptionType.Jackal_Miscellaneous) OptionItem.TabOverride = TabGroup.JackalRoles;
+
                 try { roleClass.SetupCustomOption(); }
                 catch (Exception e) { Logger.Exception(e, $"{MainLoadingText} - {RoleLoadingText}"); }
+                finally { OptionItem.TabOverride = null; }
 
                 if (FrameBudgetSpent())
                 {

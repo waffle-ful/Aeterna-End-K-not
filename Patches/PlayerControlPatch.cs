@@ -475,7 +475,9 @@ internal static class CheckMurderPatch
 
         if ((killer.Is(CustomRoles.Jackal) && target.Is(CustomRoles.Sidekick) && !Options.JackalCanKillSidekick.GetBool()) ||
             (killer.Is(CustomRoles.Sidekick) && target.Is(CustomRoles.Jackal) && !Options.SidekickCanKillJackal.GetBool()) ||
-            (killer.Is(CustomRoles.Sidekick) && target.Is(CustomRoles.Sidekick) && !Options.SidekickCanKillSidekick.GetBool()))
+            (killer.Is(CustomRoles.Sidekick) && target.Is(CustomRoles.Sidekick) && !Options.SidekickCanKillSidekick.GetBool()) ||
+            (!Options.JackalFactionCanKillEachOther.GetBool() && killer.GetCustomRole().IsJackalTeamMember() && target.GetCustomRole().IsJackalTeamMember()
+             && (killer.GetCustomRole() is CustomRoles.JackalHadouHo or CustomRoles.Tama || target.GetCustomRole() is CustomRoles.JackalHadouHo or CustomRoles.Tama || (killer.Is(CustomRoles.Jackal) && target.Is(CustomRoles.Jackal)))))
         {
             Notify("JackalSidekick");
             return false;

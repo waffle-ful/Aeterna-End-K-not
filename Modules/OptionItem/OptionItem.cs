@@ -380,6 +380,7 @@ public enum TabGroup
     CrewmateRoles,
     NeutralRoles,
     CovenRoles,
+    JackalRoles,
     Combinations,
     Addons,
     OtherRoles,

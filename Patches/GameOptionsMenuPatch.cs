@@ -55,6 +55,7 @@ public static class ModGameOptionsMenu
             TabGroup.CrewmateRoles => new Color32(140, 255, 255, 255),
             TabGroup.NeutralRoles => new Color32(255, 171, 27, 255),
             TabGroup.CovenRoles => new Color32(123, 63, 187, 255),
+            TabGroup.JackalRoles => new Color32(0, 180, 235, 255),
             TabGroup.Combinations => CombinationRoles.TabColor32,
             _ => new Color32(0, 165, 255, 255)
         } : Main.GameModeColors.TryGetValue(gm, out var c) ? c : new Color32(0, 165, 255, 255);
@@ -307,6 +308,18 @@ public static class GameOptionsMenuPatch
             {
                 infoText.transform.localPosition = new(-3.5f, 0.83f, -2f);
                 infoText.transform.localScale = new(1f, 1f, 1f);
+
+                // The vanilla text rect is only ~5 lines tall while the frame around it has room for
+                // more above the page bar. Grow the rect downwards, keeping its top edge where it was.
+                var infoRect = infoText.GetComponent<RectTransform>();
+
+                if (infoRect)
+                {
+                    const float vanillaHeight = 0.6341f;
+                    const float frameHeight = 1.02f;
+                    infoRect.sizeDelta = new(infoRect.sizeDelta.x, frameHeight);
+                    infoText.transform.localPosition = new(-3.5f, 0.83f - ((1f - infoRect.pivot.y) * (frameHeight - vanillaHeight)), -2f);
+                }
             }
 
             Transform cubeObject = menuDescription.transform.FindChild("Cube");
@@ -1034,6 +1047,7 @@ public static class ToggleOptionPatch
                 TabGroup.CrewmateRoles => new Color32(140, 255, 255, 255),
                 TabGroup.NeutralRoles => new Color32(255, 171, 27, 255),
                 TabGroup.CovenRoles => new Color32(123, 63, 187, 255),
+                TabGroup.JackalRoles => new Color32(0, 180, 235, 255),
                 TabGroup.Combinations => CombinationRoles.TabColor32,
                 _ => new Color32(0, 165, 255, 255)
             } : Main.GameModeColors.TryGetValue(gm, out var c) ? c : new Color32(0, 165, 255, 255);
@@ -1311,11 +1325,6 @@ public static class NumberOptionPatch
 [HarmonyPatch(typeof(StringOption))]
 public static class StringOptionPatch
 {
-    private static long HelpShowEndTS;
-
-    // ツールチップの黒枠に収まる行数 (実測: 既存役職の InfoLong 567 件中 449 件が 3 行・4 行で枠外へ出る)
-    private const int TooltipMaxLines = 3;
-
     // Final styled title (role color band / pet indicator / size wrap) per row. Rows are reused across
     // preset switches and menu reopens without re-running Initialize, so anything that resets TitleText
     // in between leaves the plain unstyled name on screen. RefreshSettingValues restores from this cache
@@ -1425,53 +1434,7 @@ public static class StringOptionPatch
                 {
                     string roleName = value.IsVanilla() ? value + "EndKnot" : value.ToString();
                     string str = Translator.GetString($"{roleName}InfoLong").FixRoleName(value);
-                    string infoLong;
-
-                    try { infoLong = CustomHnS.AllHnSRoles.Contains(value) ? str : str[(str.IndexOf('\n') + 1)..str.Split("\n\n")[0].Length]; }
-                    catch
-                    {
-                        // 見出しと本文が空行で区切られていない自由記述 (作者が書く役職の説明文など) はここへ
-                        // 落ちて全文が流れ込み、ツールチップの黒枠からはみ出す。既存役職の InfoLong は
-                        // 567 件中 449 件が 3 行で、4 行あると枠外へ出る実測があるので 3 行で打ち切る。
-                        string[] descLines = str.Split('\n');
-
-                        infoLong = descLines.Length <= TooltipMaxLines
-                            ? str
-                            : CustomNetObject.DropUnterminatedTag(string.Join("\n", descLines.Take(TooltipMaxLines))) + " …";
-                    }
-
-                    GameObject.Find("PlayerOptionsMenu(Clone)").transform.FindChild("What Is This?").gameObject.SetActive(true);
-                    GameSettingMenuPatch.GMButtons.ForEach(x => { if (x) x.gameObject.SetActive(false); });
-
-                    var info = $"{value.ToColoredString()}: {infoLong}";
-                    GameSettingMenu.Instance.MenuDescriptionText.SetText(info);
-
-                    long now = Utils.TimeStamp;
-                    bool startCoRoutine = now > HelpShowEndTS;
-                    HelpShowEndTS = now + 15;
-                    if (startCoRoutine)
-                        Main.Instance.StartCoroutine(CoRoutine());
-
-                    IEnumerator CoRoutine()
-                    {
-                        while (HelpShowEndTS > Utils.TimeStamp)
-                            yield return new WaitForSecondsRealtime(1f);
-
-                        GameObject gameObject = GameObject.Find("PlayerOptionsMenu(Clone)");
-
-                        if (gameObject)
-                        {
-                            Transform findChild = gameObject.transform.FindChild("What Is This?");
-                            if (findChild) findChild.gameObject.SetActive(false);
-                        }
-
-                        // メニューが既に閉じている場合は再点灯しない: このコルーチンは Main.Instance 上で走るため
-                        // メニュー close 後も生存し、close 時に DontDestroyOnLoad の「EHR Settings UI Cache Root」
-                        // (world 原点) へ退避・消灯済みの GMButtons を無条件に SetActive(true) すると、モードボタン列が
-                        // ロビーのワールド空間や結果画面に浮遊するゴーストとして残留する (次のメニュー再オープンまで回収されない)。
-                        if (GameSettingMenu.Instance)
-                            GameSettingMenuPatch.GMButtons.ForEach(x => { if (x) x.gameObject.SetActive(true); });
-                    }
+                    GameSettingMenuPatch.ShowRoleDescription(value, $"{value.ToColoredString()}{str}");
                 }
             }
         }));
@@ -1658,13 +1621,105 @@ public static class GameSettingMenuPatch
 {
     public static readonly System.Collections.Generic.List<GameObject> GMButtons = [];
 
-    private static readonly Vector3 ButtonPositionLeft = new(-3.9f, -0.44f, 0f);
-    private static readonly Vector3 ButtonPositionRight = new(-2.4f, -0.44f, 0f);
-    // 13 buttons fill 7 rows; the preset selector takes the empty right slot of the last row, so the
-    // row pitch has to keep that row above the panel's bottom edge.
-    private const float ButtonRowStep = 0.27f;
+    private static readonly Vector3 ButtonPositionLeft = new(-3.9f, -0.34f, 0f);
+    private static readonly Vector3 ButtonPositionRight = new(-2.4f, -0.34f, 0f);
+    // 14 buttons fill 7 rows and the preset selector sits alone on an 8th, so the row pitch has to
+    // keep that row above the panel's bottom edge.
+    private const float ButtonRowStep = 0.2457f;
 
     private static readonly Vector3 ButtonSize = new(0.45f, 0.35f, 1f);
+
+    private const float GameModeRowStep = 0.19f;
+    private static bool GameModeListOpen;
+    private static GameObject GameModeToggleButton;
+    private static TextMeshPro GameModeToggleText;
+    private static CustomRoles DescriptionRole = CustomRoles.NotAssigned;
+    private static GameObject DescriptionPageButton;
+    private static TextMeshPro DescriptionPageText;
+    private static TextOverflowModes? DescriptionVanillaOverflow;
+
+    private static Transform FindDescriptionBox()
+    {
+        GameObject menu = GameObject.Find("PlayerOptionsMenu(Clone)");
+        return menu ? menu.transform.FindChild("What Is This?") : null;
+    }
+
+    public static void SetGameModeListOpen(bool open)
+    {
+        GameModeListOpen = open;
+        GMButtons.ForEach(x => { if (x) x.SetActive(open); });
+
+        Transform box = FindDescriptionBox();
+        if (box) box.gameObject.SetActive(!open);
+
+        if (GameModeToggleText)
+            GameModeToggleText.SetText(Translator.GetString(open ? "GameModeList.Close" : "GameModeList.Open"));
+
+        UpdateDescriptionPageButton();
+    }
+
+    // The bar at the bottom of the description box: only there while a role description spans several pages.
+    private static void UpdateDescriptionPageButton()
+    {
+        if (!DescriptionPageButton) return;
+
+        TextMeshPro tmp = GameSettingMenu.Instance ? GameSettingMenu.Instance.MenuDescriptionText : null;
+        int pages = tmp && tmp.textInfo != null ? tmp.textInfo.pageCount : 1;
+        bool show = !GameModeListOpen && DescriptionRole != CustomRoles.NotAssigned && pages > 1;
+        DescriptionPageButton.SetActive(show);
+
+        if (show && DescriptionPageText)
+            DescriptionPageText.SetText(string.Format(Translator.GetString(tmp.pageToDisplay >= pages ? "RoleDescription.FirstPage" : "RoleDescription.NextPage"), tmp.pageToDisplay, pages));
+    }
+
+    private static void TurnDescriptionPage()
+    {
+        TextMeshPro tmp = GameSettingMenu.Instance ? GameSettingMenu.Instance.MenuDescriptionText : null;
+        if (!tmp) return;
+
+        int pages = tmp.textInfo != null ? tmp.textInfo.pageCount : 1;
+        tmp.pageToDisplay = tmp.pageToDisplay >= pages ? 1 : tmp.pageToDisplay + 1;
+        tmp.ForceMeshUpdate();
+        UpdateDescriptionPageButton();
+    }
+
+    // Shows the whole role description in the box on the left panel. Text longer than the box is split
+    // into pages by TMP; the bar at the bottom of the box (or the same role's help button) turns the page.
+    public static void ShowRoleDescription(CustomRoles role, string text)
+    {
+        if (!GameSettingMenu.Instance) return;
+        TextMeshPro tmp = GameSettingMenu.Instance.MenuDescriptionText;
+        if (!tmp) return;
+
+        if (GameModeListOpen) SetGameModeListOpen(false);
+
+        if (DescriptionRole == role && tmp.overflowMode == TextOverflowModes.Page)
+        {
+            TurnDescriptionPage();
+            return;
+        }
+
+        DescriptionRole = role;
+        DescriptionVanillaOverflow ??= tmp.overflowMode;
+        tmp.enableAutoSizing = false;
+        tmp.fontSize = 1.1f;
+        tmp.overflowMode = TextOverflowModes.Page;
+        tmp.pageToDisplay = 1;
+        tmp.SetText(text);
+        tmp.ForceMeshUpdate();
+
+        UpdateDescriptionPageButton();
+    }
+
+    public static void ResetDescriptionPaging(TextMeshPro tmp)
+    {
+        DescriptionRole = CustomRoles.NotAssigned;
+        if (DescriptionPageButton) DescriptionPageButton.SetActive(false);
+        if (!tmp) return;
+        tmp.pageToDisplay = 1;
+        if (DescriptionVanillaOverflow.HasValue) tmp.overflowMode = DescriptionVanillaOverflow.Value;
+        tmp.enableAutoSizing = true;
+    }
 
     private static GameOptionsMenu TemplateGameOptionsMenu;
     private static PassiveButton TemplateGameSettingsButton;
@@ -2018,7 +2073,8 @@ public static class GameSettingMenuPatch
 
         XuiStage = "what-is-this";
         Transform whatIsThis = GameObject.Find("PlayerOptionsMenu(Clone)")?.transform.FindChild("What Is This?");
-        if (whatIsThis) whatIsThis.gameObject.SetActive(false);
+        if (whatIsThis) whatIsThis.gameObject.SetActive(true);
+        GameModeListOpen = false;
 
         XuiStage = "mode-label";
         Transform gslTf = __instance.GameSettingsButton.transform.parent.parent.FindChild("GameSettingsLabel");
@@ -2072,8 +2128,8 @@ public static class GameSettingMenuPatch
             var gmButton = cachedGM ? GMButtons[index] : ModGameOptionsMenu.Track(Object.Instantiate(gmTemplate, gameSettingsLabel.transform, true));
             if (cachedGM)
                 gmButton.transform.SetParent(gameSettingsLabel.transform, false);
-            gmButton.SetActive(true);
-            gmButton.transform.localPosition = new Vector3((((index / 8) - ((totalCols - 1) / 2f)) * 1.4f) + 0.86f, gameSettingsLabelPos.y - 1.9f - (0.22f * (index % 8)), -1f);
+            gmButton.SetActive(false);
+            gmButton.transform.localPosition = new Vector3((((index / 8) - ((totalCols - 1) / 2f)) * 1.4f) + 0.86f, gameSettingsLabelPos.y - 1.9f - (GameModeRowStep * ((index % 8) + 1)), -1f);
 
             gmButton.transform.localScale = new(0.4f, 0.3f, 1f);
             // ラベルの化粧は「取れなければ諦めてよい」処理。無ガードの Find(...).GetComponent で NRE を出すと
@@ -2118,6 +2174,73 @@ public static class GameSettingMenuPatch
             try { PurgeUnityEventListeners(GMButtons[^1]); } catch { /* Destroy 自体は必ず走らせる */ }
             Object.Destroy(GMButtons[^1]);
             GMButtons.RemoveAt(GMButtons.Count - 1);
+        }
+
+        // The mode list stays folded behind this one button so the description box can own the area
+        // below the mode label; opening the list swaps the two.
+        XuiStage = "gm-toggle";
+        {
+            GameObject toggleTemplate = gMinus ? gMinus : __instance.GamePresetsButton.gameObject;
+            bool cachedToggle = GameModeToggleButton;
+            GameObject toggle = cachedToggle ? GameModeToggleButton : ModGameOptionsMenu.Track(Object.Instantiate(toggleTemplate, gameSettingsLabel.transform, true));
+            if (cachedToggle) toggle.transform.SetParent(gameSettingsLabel.transform, false);
+            toggle.name = "GameModeToggle";
+            toggle.SetActive(true);
+            toggle.transform.localPosition = new Vector3(((0.5f - ((totalCols - 1) / 2f)) * 1.4f) + 1.2f, gameSettingsLabelPos.y - 1.9f, -1f);
+            toggle.transform.localScale = new(0.8f, 0.3f, 1f);
+
+            Transform toggleTextTf = toggle.transform.Find("FontPlacer/Text_TMP");
+            TextMeshPro toggleTmp = toggleTextTf ? toggleTextTf.GetComponent<TextMeshPro>() : null;
+            if (toggleTmp)
+            {
+                toggleTmp.alignment = TextAlignmentOptions.Center;
+                toggleTmp.DestroyTranslator();
+                toggleTmp.color = Color.white;
+                toggleTmp.transform.localPosition = new(gameSettingsLabelPos.x + 3.35f, gameSettingsLabelPos.y - 1.62f, gameSettingsLabelPos.z);
+                toggleTmp.transform.localScale = new(0.5f, 1f, 1f);
+            }
+
+            GameModeToggleText = toggleTmp;
+
+            var togglePassive = toggle.GetComponent<PassiveButton>();
+            togglePassive.OnClick.RemoveAllListeners();
+            togglePassive.OnClick.AddListener((Action)(() => SetGameModeListOpen(!GameModeListOpen)));
+            togglePassive.activeTextColor = togglePassive.inactiveTextColor = togglePassive.disabledTextColor = togglePassive.selectedTextColor = Color.white;
+
+            GameModeToggleButton = toggle;
+
+            bool cachedPager = DescriptionPageButton;
+            GameObject pager = cachedPager ? DescriptionPageButton : ModGameOptionsMenu.Track(Object.Instantiate(toggleTemplate, gameSettingsLabel.transform, true));
+            if (cachedPager) pager.transform.SetParent(gameSettingsLabel.transform, false);
+            pager.name = "DescriptionPager";
+            pager.transform.localPosition = new Vector3(toggle.transform.localPosition.x, gameSettingsLabelPos.y - 1.9f - 1.4f, -3f);
+            pager.transform.localScale = new(0.76f, 0.24f, 1f);
+
+            Transform pagerTextTf = pager.transform.Find("FontPlacer/Text_TMP");
+            TextMeshPro pagerTmp = pagerTextTf ? pagerTextTf.GetComponent<TextMeshPro>() : null;
+            if (pagerTmp)
+            {
+                pagerTmp.alignment = TextAlignmentOptions.Center;
+                pagerTmp.DestroyTranslator();
+                pagerTmp.color = Color.white;
+                pagerTmp.transform.localPosition = new(gameSettingsLabelPos.x + 3.35f, gameSettingsLabelPos.y - 1.62f, gameSettingsLabelPos.z);
+                pagerTmp.transform.localScale = new(0.5f, 1f, 1f);
+            }
+
+            var pagerPassive = pager.GetComponent<PassiveButton>();
+            pagerPassive.OnClick.RemoveAllListeners();
+            pagerPassive.OnClick.AddListener((Action)TurnDescriptionPage);
+            // The template's bright hover tint washes out the white label on a bar this thin.
+            SpriteRenderer pagerHover = pagerPassive.activeSprites ? pagerPassive.activeSprites.GetComponent<SpriteRenderer>() : null;
+            if (pagerHover) pagerHover.color = new Color32(0, 110, 160, 255);
+            pagerPassive.activeTextColor = pagerPassive.inactiveTextColor = pagerPassive.disabledTextColor = pagerPassive.selectedTextColor = Color.white;
+
+            DescriptionPageButton = pager;
+            DescriptionPageText = pagerTmp;
+            DescriptionRole = CustomRoles.NotAssigned;
+            pager.SetActive(false);
+
+            SetGameModeListOpen(false);
         }
 
 
@@ -2426,6 +2549,7 @@ public static class GameSettingMenuPatch
             {
                 settingsTab.gameObject.SetActive(true);
                 __instance.MenuDescriptionText.DestroyTranslator();
+                ResetDescriptionPaging(__instance.MenuDescriptionText);
                 __instance.MenuDescriptionText.SetText(Translator.GetString("TabInfoTip"));
             }
         }
@@ -2543,6 +2667,24 @@ public static class GameSettingMenuPatch
                 return x;
             }, "GMButtons");
         }
+        StashSafely(() =>
+        {
+            if (GameModeToggleButton)
+            {
+                var pb = GameModeToggleButton.GetComponent<PassiveButton>();
+                if (pb) pb.OnClick.RemoveAllListeners();
+            }
+            return GameModeToggleButton;
+        }, "GameModeToggle");
+        StashSafely(() =>
+        {
+            if (DescriptionPageButton)
+            {
+                var pb = DescriptionPageButton.GetComponent<PassiveButton>();
+                if (pb) pb.OnClick.RemoveAllListeners();
+            }
+            return DescriptionPageButton;
+        }, "DescriptionPager");
         StashSafely(() => InputField ? InputField.gameObject : null, "InputField");
         StashSafely(() => PresetSelector, "PresetSelector"); // preset selector trio — kept alive so it isn't re-created (and re-Tracked) each open
         StashSafely(() => TemplateGameOptionsMenu ? TemplateGameOptionsMenu.gameObject : null, "TemplateGameOptionsMenu");
@@ -2557,6 +2699,8 @@ public static class GameSettingMenuPatch
             foreach (var x in ModSettingsTabs.Values) if (x) keep.Add(x.gameObject.GetInstanceID());
             foreach (var x in ModSettingsButtons.Values) if (x) keep.Add(x.gameObject.GetInstanceID());
             foreach (var x in GMButtons) if (x) keep.Add(x.GetInstanceID());
+            if (GameModeToggleButton) keep.Add(GameModeToggleButton.GetInstanceID());
+            if (DescriptionPageButton) keep.Add(DescriptionPageButton.GetInstanceID());
             if (InputField) keep.Add(InputField.gameObject.GetInstanceID());
             if (PresetSelector) keep.Add(PresetSelector.GetInstanceID());
             if (TemplateGameOptionsMenu) keep.Add(TemplateGameOptionsMenu.gameObject.GetInstanceID());
@@ -2682,6 +2826,10 @@ public static class GameSettingMenuPatch
             ModSettingsTabs.Clear();
             ModSettingsButtons.Clear();
             GMButtons.Clear();
+            GameModeToggleButton = null;
+            GameModeToggleText = null;
+            DescriptionPageButton = null;
+            DescriptionPageText = null;
             InputField = null;
             PresetSelector = null;
             PresetMinusButton = null;
