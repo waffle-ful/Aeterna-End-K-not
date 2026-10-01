@@ -90,7 +90,6 @@ internal class Escapist : RoleBase
                 ExplosionFx.Play(ExplosionFx.Kind.WarpIn, EscapistLocation.Value, 1f);
             }
 
-            pc.RPCPlayCustomSound("Teleport");
             if (!OneMarkPerRound.GetBool()) EscapistLocation = null;
         }
         else

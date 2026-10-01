@@ -100,8 +100,6 @@ public class Twister : RoleBase
             changePositionPlayers.Add(target.PlayerId);
             changePositionPlayers.Add(pc.PlayerId);
 
-            pc.RPCPlayCustomSound("Teleport");
-
             Vector2 originPs = target.Pos();
             Vector2 pcPos = pc.Pos();
 

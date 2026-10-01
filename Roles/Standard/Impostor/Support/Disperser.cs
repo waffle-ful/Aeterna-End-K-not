@@ -106,7 +106,6 @@ public class Disperser : RoleBase
                 continue;
             }
 
-            pc.RPCPlayCustomSound("Teleport");
             // 行き先に演出を出すため、ベントはここで選ぶ (TP 直後の Pos() はまだ移動前を返すことがある)
             UnityEngine.Vector2 from = pc.Pos();
             UnityEngine.Vector3 vent = ShipStatus.Instance.AllVents.RandomElement().transform.position;

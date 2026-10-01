@@ -639,62 +639,81 @@ public static class ExplosionFx
                 case Kind.Fire:
                 case Kind.Blast:
                     SpawnFire(r.Pos, r.Radius);
+                    FxSound.At("FxFire", r.Pos, farGain: 0.3f);
                     break;
                 case Kind.Supernova:
                     SpawnSupernova(r.Pos, r.Radius);
+                    FxSound.At("FxSupernova", r.Pos, 1f, everywhere: true);
                     break;
                 case Kind.GustRight:
                 case Kind.GustLeft:
                     SpawnGust(r.Pos, r.Radius, r.Kind == Kind.GustRight ? 1f : -1f);
+                    FxSound.At("FxGust", r.Pos);
                     break;
                 case Kind.WindTrailRight:
                 case Kind.WindTrailLeft:
                     SpawnWindTrail(r.Pos, r.Radius, r.Kind == Kind.WindTrailRight ? 1f : -1f);
+                    FxSound.At("FxWindTrail", r.Pos);
                     break;
                 case Kind.GeminiSplit:
                     SpawnGeminiSplit(r.Pos);
+                    FxSound.At("FxGeminiSplit", r.Pos);
                     break;
                 case Kind.GeminiShatter:
                     SpawnGeminiShatter(r.Pos);
+                    FxSound.At("FxGeminiShatter", r.Pos);
                     break;
                 case Kind.WarpOut:
                     SpawnWarpOut(r.Pos);
+                    FxSound.At("FxWarpOut", r.Pos);
                     break;
                 case Kind.WarpIn:
                     SpawnWarpIn(r.Pos);
+                    FxSound.At("FxWarpIn", r.Pos);
                     break;
                 case Kind.Freeze:
                     SpawnFreeze(r.Pos, r.Radius);
+                    FxSound.At("FxFreeze", r.Pos);
                     break;
                 case Kind.TimeStop:
                     SpawnTimeStop(r.Pos, r.Radius);
+                    FxSound.At("FxTimeStop", r.Pos, 1f, everywhere: true);
                     break;
                 case Kind.LightningStrike:
                     SpawnLightningStrike(r.Pos);
+                    FxSound.At("FxLightning", r.Pos);
                     break;
                 case Kind.Slam:
                     SpawnSlam(r.Pos, r.Radius);
+                    FxSound.At("FxSlam", r.Pos);
                     break;
                 case Kind.Splash:
                     SpawnSplash(r.Pos, r.Radius);
+                    FxSound.At("FxSplash", r.Pos);
                     break;
                 case Kind.Ignite:
                     SpawnIgnite(r.Pos, r.Radius);
+                    FxSound.At("FxIgnite", r.Pos);
                     break;
                 case Kind.Swallow:
                     SpawnSwallow(r.Pos, r.Radius);
+                    FxSound.At("FxSwallow", r.Pos);
                     break;
                 case Kind.VoidBurst:
                     SpawnVoidBurst(r.Pos, r.Radius);
+                    FxSound.At("FxVoidBurst", r.Pos);
                     break;
                 case Kind.Smoke:
                     SpawnSmoke(r.Pos, r.Radius);
+                    FxSound.At("FxSmoke", r.Pos);
                     break;
                 case Kind.BurrowIn:
                     SpawnBurrowIn(r.Pos, r.Radius);
+                    FxSound.At("FxBurrowIn", r.Pos);
                     break;
                 case Kind.BurrowOut:
                     SpawnBurrowOut(r.Pos, r.Radius);
+                    FxSound.At("FxBurrowOut", r.Pos);
                     break;
                 case Kind.CannonChargeRight:
                 case Kind.CannonChargeLeft:
@@ -710,31 +729,39 @@ public static class ExplosionFx
                 case Kind.CannonEnd:
                 case Kind.CannonBreak:
                     SpawnCannonEnd(r.Pos, r.B, r.Kind == Kind.CannonBreak);
+                    if (r.Kind == Kind.CannonBreak) FxSound.At("FxCannonBreak", r.Pos);
                     break;
                 case Kind.CannonCutIn:
                 {
                     CannonColors k = CannonPal(r.Radius - 1f);
                     Modules.CannonCutIn.Show((byte)r.A, (CannonTitle)(byte)r.B, k.Light, k.Main, k.Deep);
+                    FxSound.At("FxCannonCutIn", r.Pos, 0.8f, everywhere: true);
                     break;
                 }
                 case Kind.Drain:
                     SpawnDrain(r.Pos, (int)(r.Radius + 0.5f) - 1);
+                    FxSound.At("FxDrain", r.Pos);
                     break;
                 case Kind.Poison:
                     SpawnPoison(r.Pos);
+                    FxSound.At("FxPoison", r.Pos);
                     break;
                 case Kind.Petrify:
                     SpawnPetrify(r.Pos);
+                    FxSound.At("FxPetrify", r.Pos);
                     break;
                 case Kind.PuppetStrings:
                 case Kind.CurseStrings:
                     SpawnStrings(r.Pos, (int)(r.Radius + 0.5f) - 1, r.Kind == Kind.CurseStrings);
+                    FxSound.At("FxStrings", r.Pos);
                     break;
                 case Kind.Tornado:
                     StartTornado(r.Pos, r.Radius);
+                    FxSound.At("FxTornado", r.Pos);
                     break;
                 case Kind.TornadoLift:
                     SpawnTornadoLift(r.Pos);
+                    FxSound.At("FxTornadoLift", r.Pos);
                     break;
                 case Kind.TimeRewind:
                     SpawnTimeRewind(r.Pos, r.Radius);
@@ -849,7 +876,6 @@ public static class ExplosionFx
         Color[] starTints = [white, new(0.72f, 0.88f, 1f), new(1f, 0.8f, 0.95f), new(0.85f, 0.78f, 1f), new(0.6f, 1f, 1f)];
 
         Impact(c, r, new Color(0.92f, 0.9f, 1f), 0.9f, 0.28f, 1.2f);
-        CustomSoundsManager.Play("Boom", 1f, 0.55f);
 
         // 爆心に口を開ける宇宙空間 (最奥)。明るい床の上でも星と星雲が映えるよう暗く沈める
         Color space = new(0.02f, 0.01f, 0.08f);

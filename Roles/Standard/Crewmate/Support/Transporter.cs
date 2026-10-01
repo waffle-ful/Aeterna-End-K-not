@@ -85,9 +85,6 @@ internal class Transporter : RoleBase
             if (firstTarget.TP(target)) EndKnot.Modules.ExplosionFx.Play(EndKnot.Modules.ExplosionFx.Kind.WarpIn, targetPos, 1f);
             if (target.TP(pos)) EndKnot.Modules.ExplosionFx.Play(EndKnot.Modules.ExplosionFx.Kind.WarpIn, pos, 1f);
 
-            firstTarget.RPCPlayCustomSound("Teleport");
-            target.RPCPlayCustomSound("Teleport");
-
             firstTarget.Notify(CustomRoles.Transporter.ColoredTextByRole(string.Format(Translator.GetString("TeleportedByTransporter"), target.GetRealName())));
             target.Notify(CustomRoles.Transporter.ColoredTextByRole(string.Format(Translator.GetString("TeleportedByTransporter"), firstTarget.GetRealName())));
 

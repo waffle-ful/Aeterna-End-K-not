@@ -157,8 +157,6 @@ internal class Replay : RoleBase
     {
         if (Pelican.IsEaten(pc.PlayerId)) return;
 
-        CustomSoundsManager.RPCPlayCustomSoundAll("Boom");
-
         // アンコールを重ねるほど爆破範囲が広がる (BlastsDone は加算前なので初回は素の半径)。
         float radius = ReplayBlastRadius.GetFloat() + BlastsDone * ReplayRadiusGrowthPerBlast.GetFloat();
         ExplosionFx.Play(ExplosionFx.Kind.Fire, pc.Pos(), radius);

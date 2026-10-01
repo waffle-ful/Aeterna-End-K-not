@@ -182,7 +182,6 @@ public class Witch : RoleBase
             ExplosionFx.PlayFor(ExplosionFx.Kind.HexMark, target.Pos(), 1f, killer);
             SendRPC(true, killer.PlayerId, target.PlayerId);
             killer.SetKillCooldown(SpellCooldown.GetFloat());
-            killer.RPCPlayCustomSound("Curse");
             killer.RpcRemoveAbilityUse(notify: false);
             Utils.NotifyRoles(SpecifySeer: killer, SpecifyTarget: target, ForceLoop: true);
         }

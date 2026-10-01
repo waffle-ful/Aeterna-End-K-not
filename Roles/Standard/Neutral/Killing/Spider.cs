@@ -109,7 +109,6 @@ public class Spider : RoleBase
         if (Webs.Keys.Any(x => FastVector2.DistanceWithinRange(x, pos, WebTrapRange.GetFloat() * 2f))) return;
         Webs[pos] = [];
         ExplosionFx.PlayFor(ExplosionFx.Kind.WebSpin, pos, WebTrapRange.GetFloat(), player);
-        player.RPCPlayCustomSound("Line");
         LocateArrow.Add(player.PlayerId, pos);
         player.Notify(Translator.GetString("MarkDone"));
     }
@@ -142,7 +141,6 @@ public class Spider : RoleBase
 
             ExplosionFx.Play(ExplosionFx.Kind.WebSnare, pos, trappedDuration);
             RPC.PlaySoundRPC(SpiderId, Sounds.TaskUpdateSound);
-            pc.RPCPlayCustomSound("FlashBang");
             pc.MarkDirtySettings();
 
             Utils.SendRPC(CustomRPC.SyncRoleData, SpiderId, 1, webPos, pc.PlayerId, expireTime);
