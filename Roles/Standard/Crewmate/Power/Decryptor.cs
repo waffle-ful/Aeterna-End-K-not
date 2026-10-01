@@ -23,6 +23,7 @@ public class Decryptor : RoleBase
     ];
 
     private static Dictionary<byte, List<char>> AllRoleNames = [];
+    private static int InitGeneration;
 
     private Dictionary<byte, List<char>> KnownCharacters = [];
     private byte DecryptorId;
@@ -54,7 +55,11 @@ public class Decryptor : RoleBase
         Instances = [];
         AllRoleNames = [];
         KnownCharacters = [];
-        LateTask.New(() => AllRoleNames = Main.PlayerStates.ToDictionary(x => x.Key, x => Translator.GetString($"{x.Value.MainRole}").ToUpper().Where(c => c is not '-' and not ' ' and not '\'').Shuffle()), 10f, log: false);
+
+        // Init は試合開始時の一括初期化と最初の配役時の 2 回走るので、後から来た Init の予約だけを生かす
+        int generation = ++InitGeneration;
+
+        LateTask.New(() => AllRoleNames = generation != InitGeneration ? AllRoleNames : Main.PlayerStates.ToDictionary(x => x.Key, x => Translator.GetString($"{x.Value.MainRole}").ToUpper().Where(c => c is not '-' and not ' ' and not '\'').Shuffle()), 10f, log: false);
     }
 
     public override void Add(byte playerId)

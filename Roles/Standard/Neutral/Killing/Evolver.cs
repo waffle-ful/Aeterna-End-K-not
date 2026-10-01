@@ -154,6 +154,9 @@ public class Evolver : RoleBase
 
     public override void OnFixedUpdate(PlayerControl pc)
     {
+        // 判定と時間の進行はホストだけが行う (モッド客は受け取った値を表示するだけ)
+        if (!AmongUsClient.Instance.AmHost) return;
+
         if (!GameStates.IsInTask || !pc.IsAlive() || ChooseTimer == 0 || SelectedUpgradeIndex == -1 || Upgrades.Count == 0) return;
         if (!PerSecondUpdateScheduler.ShouldRunUpdate(pc.PlayerId)) return;
 

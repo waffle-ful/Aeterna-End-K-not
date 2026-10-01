@@ -109,6 +109,9 @@ public class Sharpshooter : RoleBase
 
     public override void OnFixedUpdate(PlayerControl pc)
     {
+        // 判定と時間の進行はホストだけが行う (モッド客は受け取った値を表示するだけ)
+        if (!AmongUsClient.Instance.AmHost) return;
+
         if (!GameStates.IsInTask || ExileController.Instance || AntiBlackout.SkipTasks || AbilityEndTS == 0) return;
 
         if (!pc.IsAlive())

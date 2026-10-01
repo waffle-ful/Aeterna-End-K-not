@@ -504,6 +504,9 @@ public class PortalButton : RoleBase
 
     public override void OnFixedUpdate(PlayerControl pc)
     {
+        // 判定と時間の進行はホストだけが行う (モッド客は受け取った値を表示するだけ)
+        if (!AmongUsClient.Instance.AmHost) return;
+
         if (!Holding || !GameStates.IsInTask) return;
 
         // 持ったまま死ぬと誰も会議を起こせなくなるので、その場に落とす。

@@ -13,6 +13,8 @@ internal class SecurityGuard : RoleBase
 
     public static bool On;
     private static readonly HashSet<byte> SyncedActive = [];
+    // 発動中のタイマー。満了まで会議を見ないので、会議開始と次の発動で止めないと次の発動分を消してしまう
+    private static readonly Dictionary<byte, CountdownTimer> ActiveTimers = [];
     private byte SecurityGuardId;
     public override bool IsEnable => On;
 
@@ -52,6 +54,7 @@ internal class SecurityGuard : RoleBase
     {
         On = false;
         SyncedActive.Clear();
+        ActiveTimers.Clear();
     }
 
     public override void ApplyGameOptions(IGameOptions opt, byte playerId)
@@ -74,6 +77,7 @@ internal class SecurityGuard : RoleBase
     // 会議開始でホストは使用中の集合を空にするので、客側の保持も同時に解除させる
     public override void OnReportDeadBody()
     {
+        if (ActiveTimers.Remove(SecurityGuardId, out CountdownTimer timer)) timer.Dispose();
         if (SyncedActive.Contains(SecurityGuardId)) SendBlockSync(SecurityGuardId, false);
     }
 
@@ -121,7 +125,8 @@ internal class SecurityGuard : RoleBase
         {
             BlockSabo.Add(pc.PlayerId);
             SendBlockSync(pc.PlayerId, true);
-            _ = new CountdownTimer(SecurityGuardSkillDuration.GetInt(), () =>
+            if (ActiveTimers.Remove(pc.PlayerId, out CountdownTimer old)) old.Dispose();
+            ActiveTimers[pc.PlayerId] = new CountdownTimer(SecurityGuardSkillDuration.GetInt(), () =>
             {
                 BlockSabo.Remove(pc.PlayerId);
                 SendBlockSync(pc.PlayerId, false);

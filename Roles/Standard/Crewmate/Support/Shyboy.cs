@@ -1,4 +1,6 @@
 ﻿using System.Collections.Generic;
+using EndKnot.Modules;
+using Hazel;
 using UnityEngine;
 
 namespace EndKnot.Roles;
@@ -53,6 +55,8 @@ public class Shyboy : RoleBase
         Shydeath = 0f;
         AfterMeeting = 0f;
         Notify = true;
+        SyncedBar = 0;
+        ClientBar = 0;
     }
 
     public override void Remove(byte playerId)
@@ -65,6 +69,36 @@ public class Shyboy : RoleBase
         Shydeath = 0f;
         AfterMeeting = 0f;
         Notify = true;
+        SyncBar();
+    }
+
+    // 危険度のゲージは近くに人がいるかで増減し先が読めないので、表示の段階が変わった時だけモッド客へ送る
+    private byte SyncedBar;
+    private byte ClientBar;
+    private float LastBarSyncTime;
+
+    private byte BarLevel()
+    {
+        if (AfterMeeting < Notshy + 5f || Shydeath <= 0f) return 0;
+        float danger = Mathf.Clamp01(Shydeath / Shytime);
+        return danger < 0.33f ? (byte)1 : danger < 0.66f ? (byte)2 : (byte)3;
+    }
+
+    private void SyncBar()
+    {
+        if (!AmongUsClient.Instance.AmHost) return;
+        byte level = BarLevel();
+        if (level == SyncedBar) return;
+        // 段階の境目を行き来されても連続送信にならないよう、消える時以外は間隔を空ける
+        if (level != 0 && Time.time - LastBarSyncTime < 0.5f) return;
+        LastBarSyncTime = Time.time;
+        SyncedBar = level;
+        Utils.SendRPC(CustomRPC.SyncRoleData, ShyboyId, level);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        ClientBar = reader.ReadByte();
     }
 
     public override void OnFixedUpdate(PlayerControl pc)
@@ -122,17 +156,18 @@ public class Shyboy : RoleBase
             pc.Suicide(PlayerState.DeathReason.Suicide);
             Shydeath = -1f; // prevent immediate re-trigger
         }
+
+        SyncBar();
     }
 
     public override string GetProgressText(byte playerId, bool comms)
     {
         if (playerId != ShyboyId) return string.Empty;
-        if (AfterMeeting < Notshy + 5f) return string.Empty;
-        if (Shydeath <= 0f) return string.Empty;
+        byte level = AmongUsClient.Instance.AmHost ? BarLevel() : ClientBar;
+        if (level == 0) return string.Empty;
 
-        float danger = Mathf.Clamp01(Shydeath / Shytime);
-        string bar = danger < 0.33f ? Utils.ColorString(new UnityEngine.Color32(0x64, 0xd9, 0x52, 0xff), "♥")
-            : danger < 0.66f ? Utils.ColorString(new UnityEngine.Color32(0xff, 0xad, 0x00, 0xff), "♥♥")
+        string bar = level == 1 ? Utils.ColorString(new UnityEngine.Color32(0x64, 0xd9, 0x52, 0xff), "♥")
+            : level == 2 ? Utils.ColorString(new UnityEngine.Color32(0xff, 0xad, 0x00, 0xff), "♥♥")
             : Utils.ColorString(new UnityEngine.Color32(0xff, 0x30, 0x30, 0xff), "♥♥♥");
         return bar;
     }

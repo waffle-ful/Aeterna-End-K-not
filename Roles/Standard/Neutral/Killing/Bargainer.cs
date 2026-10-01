@@ -315,6 +315,9 @@ internal class Bargainer : RoleBase
 
     public override void OnFixedUpdate(PlayerControl pc)
     {
+        // 判定と時間の進行はホストだけが行う (モッド客は受け取った値を表示するだけ)
+        if (!AmongUsClient.Instance.AmHost) return;
+
         if (!GameStates.IsInTask || !pc.IsAlive())
         {
             if (InShop || ActiveItems.Count > 0 || Money != 0)

@@ -153,10 +153,10 @@ public class Shuffler : RoleBase
     public override void ApplyGameOptions(IGameOptions opt, byte playerId)
     {
         // Phantom basis 化に伴い、AU の vanish/phantom cooldown を発動クールタイムに使う (Crosswind/WaveCannon と同型)。
-        // AbilityCooldown の最小値 (10) は PreventKill の 10 秒ガードを僅かに下回りうるため、
-        // イントロ直後は 12 秒未満にならないようクランプする。
+        // イントロ直後の PreventKill 窓では OnVanish が呼ばれず CD だけリセットされる (初回押下が無音で不発)。
+        // 窓の長さは固定 10 秒ではなく Options.StartingKillCooldown なので、それに合わせてクランプする。
         float cd = AbilityCooldown.GetFloat();
-        if (IntroCutsceneDestroyPatch.PreventKill) cd = Mathf.Max(cd, 12f);
+        if (IntroCutsceneDestroyPatch.PreventKill) cd = Mathf.Max(cd, (Options.StartingKillCooldown?.GetFloat() ?? 10f) + 2f);
 
         AURoleOptions.PhantomDuration = 0.1f;
         AURoleOptions.PhantomCooldown = cd;

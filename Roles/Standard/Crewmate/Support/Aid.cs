@@ -94,18 +94,21 @@ public class Aid : RoleBase
         if (pc.GetAbilityUseLimit() >= 1 && TargetId != byte.MaxValue)
         {
             pc.RpcRemoveAbilityUse(notify: false);
-            PlayerControl target = Utils.GetPlayerById(TargetId);
-            ShieldedPlayers[TargetId] = new CountdownTimer(AidDur.GetInt(), () =>
+            // TargetId はこの直後に初期値へ戻すので、タイマーの後始末には発動時点の対象を持たせる
+            byte id = TargetId;
+            PlayerControl target = Utils.GetPlayerById(id);
+            if (ShieldedPlayers.TryGetValue(id, out CountdownTimer old)) old.Dispose();
+            ShieldedPlayers[id] = new CountdownTimer(AidDur.GetInt(), () =>
             {
-                ShieldedPlayers.Remove(TargetId);
+                ShieldedPlayers.Remove(id);
                 Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: target);
                 Utils.NotifyRoles(SpecifySeer: target, SpecifyTarget: target);
             }, onTick: () =>
             {
                 Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc, SendOption: SendOption.None);
                 Utils.NotifyRoles(SpecifySeer: target, SpecifyTarget: target, SendOption: SendOption.None);
-            }, onCanceled: () => ShieldedPlayers.Remove(TargetId));
-            Utils.SendRPC(CustomRPC.SyncRoleData, pc.PlayerId, TargetId, byte.MaxValue);
+            }, onCanceled: () => ShieldedPlayers.Remove(id));
+            Utils.SendRPC(CustomRPC.SyncRoleData, pc.PlayerId, id, byte.MaxValue);
             Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: target);
             Utils.NotifyRoles(SpecifySeer: target, SpecifyTarget: target);
             TargetId = byte.MaxValue;
@@ -119,6 +122,7 @@ public class Aid : RoleBase
         byte id = reader.ReadByte();
         TargetId = reader.ReadByte();
         if (id == byte.MaxValue) return;
+        if (ShieldedPlayers.TryGetValue(id, out CountdownTimer old)) old.Dispose();
         ShieldedPlayers[id] = new CountdownTimer(AidDur.GetInt(), () => ShieldedPlayers.Remove(id), onCanceled: () => ShieldedPlayers.Remove(id));
     }
 

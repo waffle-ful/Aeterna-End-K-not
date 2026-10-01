@@ -484,6 +484,13 @@ internal static class HudManagerPatch
                 }
                 else
                 {
+                    // 画面下の文字は生存中の分岐でしか書き換えないので、死んだ瞬間に出ていた文字が残らないよう消す
+                    if (LowerInfoText && LowerInfoText.enabled)
+                    {
+                        LowerInfoText.text = string.Empty;
+                        LowerInfoText.enabled = false;
+                    }
+
                     reportButton?.Hide();
                     ventButton?.Hide();
                     killButton?.Hide();

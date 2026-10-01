@@ -108,7 +108,7 @@ public class TeleportKiller : RoleBase
     public override void ApplyGameOptions(IGameOptions opt, byte playerId)
     {
         float cd = AbilityCooldown.GetFloat();
-        if (IntroCutsceneDestroyPatch.PreventKill) cd = Mathf.Max(cd, 12f);
+        if (IntroCutsceneDestroyPatch.PreventKill) cd = Mathf.Max(cd, (Options.StartingKillCooldown?.GetFloat() ?? 10f) + 2f);
 
         AURoleOptions.ShapeshifterCooldown = Maximum.GetInt() != 0 && usecount >= Maximum.GetInt() ? 200f : cd;
         AURoleOptions.ShapeshifterDuration = Duration.GetFloat();

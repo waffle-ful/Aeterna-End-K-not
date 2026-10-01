@@ -41,6 +41,8 @@ public class NoteKiller : RoleBase
     ];
 
     public static Dictionary<byte, string> RealNames = [];
+    private static bool NamesSent;
+    private static int InitGeneration;
     private static Dictionary<byte, string> ShownClues = [];
     private static CountdownTimer ShowClueTimer;
     public static int Kills;
@@ -71,12 +73,21 @@ public class NoteKiller : RoleBase
         On = false;
 
         RealNames = [];
+        NamesSent = false;
         ShownClues = [];
         ShowClueTimer = null;
         Kills = 0;
 
+        // Init は試合開始時の一括初期化と最初の配役時の 2 回走るので、後から来た Init の予約だけを生かす
+        int generation = ++InitGeneration;
+
         LateTask.New(() =>
         {
+            if (generation != InitGeneration) return;
+
+            // 本名はホストだけが決める (各クライアントが引くと人ごとに違う名前になる)
+            if (!AmongUsClient.Instance.AmHost) return;
+
             List<string> names = Names.ToList();
 
             foreach (PlayerControl pc in Main.EnumerateAlivePlayerControls())
@@ -183,6 +194,25 @@ public class NoteKiller : RoleBase
         return false;
     }
 
+    // モッド客が画面に出すのは自分の本名だけなので、試合が始まってから本人宛に 1 回だけ送る
+    public override void OnFixedUpdate(PlayerControl pc)
+    {
+        if (NamesSent || RealNames.Count == 0 || !AmongUsClient.Instance.AmHost) return;
+        NamesSent = true;
+
+        foreach (KeyValuePair<byte, string> kvp in RealNames)
+        {
+            PlayerControl player = kvp.Key.GetPlayer();
+            if (player == null || player.AmOwner || !player.IsModdedClient()) continue;
+
+            MessageWriter writer = AmongUsClient.Instance.StartRpcImmediately(PlayerControl.LocalPlayer.NetId, (byte)CustomRPC.SyncRoleData, SendOption.Reliable, player.OwnerId);
+            writer.Write(NoteKillerID);
+            writer.WritePacked(3);
+            writer.Write(kvp.Value);
+            AmongUsClient.Instance.FinishRpcImmediately(writer);
+        }
+    }
+
     public override void AfterMeetingTasks()
     {
         CanGuess = true;
@@ -205,6 +235,9 @@ public class NoteKiller : RoleBase
                     ShowClueTimer = null;
                     ShownClues.Clear();
                 });
+                break;
+            case 3:
+                RealNames[PlayerControl.LocalPlayer.PlayerId] = reader.ReadString();
                 break;
         }
     }

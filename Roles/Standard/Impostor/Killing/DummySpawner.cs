@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using EndKnot.Modules;
 using Hazel;
 using UnityEngine;
 
@@ -12,6 +13,8 @@ public class DummySpawner : RoleBase
 
     private static List<byte> PlayerIdList = [];
     private static Dictionary<byte, List<RandomDummy>> SpawnedDummies = [];
+    private static readonly Dictionary<byte, int> SyncedCounts = [];
+    private static readonly Dictionary<byte, int> ClientCounts = [];
 
     private static OptionItem KillCooldownOpt;
     private static OptionItem DummyCountOpt;
@@ -46,6 +49,8 @@ public class DummySpawner : RoleBase
     {
         PlayerIdList = [];
         SpawnedDummies = [];
+        SyncedCounts.Clear();
+        ClientCounts.Clear();
         LastSpawnedMeeting = -1;
     }
 
@@ -151,6 +156,7 @@ public class DummySpawner : RoleBase
 
             var dummies = new List<RandomDummy>();
             SpawnedDummies[id] = dummies;
+            SyncCount(id, 0);
             int count = DummyCountOpt.GetInt();
             byte capturedId = id;
             List<RandomDummy> capturedList = dummies;
@@ -185,6 +191,7 @@ public class DummySpawner : RoleBase
                     if (owner == null || !owner.IsAlive()) return;
                     if (!SpawnedDummies.TryGetValue(capturedId, out var current) || current != capturedList) return;
                     capturedList.Add(new RandomDummy(GetRandomMapPosition()));
+                    if (capturedList.Count == count) SyncCount(capturedId, count);
                 }, idx * spawnGap, "DummySpawner.Spawn", log: false);
             }
         }
@@ -193,8 +200,34 @@ public class DummySpawner : RoleBase
     /// <summary>撃破されたダミーを保持者の台帳から外す (進捗表示の体数を合わせるため)。</summary>
     internal static void ForgetDummy(RandomDummy dummy)
     {
-        foreach (List<RandomDummy> list in SpawnedDummies.Values)
-            list.Remove(dummy);
+        foreach ((byte id, List<RandomDummy> list) in SpawnedDummies)
+        {
+            if (!list.Remove(dummy)) continue;
+
+            // 同じ瞬間にまとめて撃破されても 1 本で済むよう、少し待ってからその時点の体数を送る
+            byte holderId = id;
+            LateTask.New(() => SyncCount(holderId, SpawnedDummies.TryGetValue(holderId, out List<RandomDummy> current) ? current.Count : 0), 0.2f, log: false);
+        }
+    }
+
+    // 体数の表示は各クライアントが自分の手元の値で出すので、出し終えた時・撃破された時・会議で消えた時にモッド客へ送る
+    private static void SyncCount(byte id, int count)
+    {
+        if (SyncedCounts.TryGetValue(id, out int last) && last == count) return;
+        SyncedCounts[id] = count;
+        Utils.SendRPC(CustomRPC.SyncRoleData, id, id, count);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        byte id = reader.ReadByte();
+        ClientCounts[id] = reader.ReadPackedInt32();
+    }
+
+    public override void OnReportDeadBody()
+    {
+        if (!AmongUsClient.Instance.AmHost) return;
+        foreach (byte id in PlayerIdList) SyncCount(id, 0);
     }
 
     /// <summary>ペットでの撃破範囲。ダミーを持たないモードでも 0 にはしない (Dev ダミー用の既定と共用)。</summary>
@@ -205,6 +238,9 @@ public class DummySpawner : RoleBase
 
     public override string GetProgressText(byte playerId, bool comms)
     {
+        if (!AmongUsClient.Instance.AmHost)
+            return ClientCounts.TryGetValue(playerId, out int synced) && synced > 0 ? Utils.ColorString(Palette.ImpostorRed, $"(dummy:{synced})") : string.Empty;
+
         if (!SpawnedDummies.TryGetValue(playerId, out var dummies) || dummies.Count == 0)
             return string.Empty;
         int active = dummies.Count(d => d?.playerControl != null);
