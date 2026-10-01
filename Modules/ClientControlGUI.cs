@@ -94,6 +94,7 @@ public class ClientControlGUI : MonoBehaviour
     {
         _cam = Camera.main;
         Instance = this;
+        ImguiNoLayout.Apply(this);
         SceneManager.add_sceneLoaded((Action<Scene, LoadSceneMode>)OnSceneLoaded);
         Logger.Info("ClientControlGUI initialised", "ClientControlGUI");
     }

@@ -85,6 +85,7 @@ public class StreamSetupGUI : MonoBehaviour
     private void Awake()
     {
         Instance = this;
+        ImguiNoLayout.Apply(this);
         SceneManager.add_sceneLoaded((Action<Scene, LoadSceneMode>)OnSceneLoaded);
         Logger.Info("StreamSetupGUI initialised", "StreamSetupGUI");
     }

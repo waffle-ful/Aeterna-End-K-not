@@ -382,6 +382,35 @@ public static class BackroomsLobby
         }
     }
 
+    // 入室前の素材づくりを 1 呼び 1 段ずつ進める (1024px PNG 2 枚の読み込みが各 30ms 級で、入室の
+    // タイル生成と同じフレームに重なると 100ms 超の停止になる)。全部済んでいれば true。
+    // スプライトは一度作ればプロセス内で使い回されるので、2 回目以降のロビーでは即 true。
+    private static int _entryWarmStep;
+    public static bool WarmEntryAssetsStep()
+    {
+        switch (_entryWarmStep)
+        {
+            case 0:
+                _ = FloorPngSprite;
+                break;
+            case 1:
+                _ = WallPngSprite;
+                break;
+            case 2:
+                _ = BaselineSprite;
+                _ = WallSpriteH;
+                _ = WallShadowGradientSprite;
+                _ = WallShadowGradientHSprite;
+                _ = StainSprite;
+                break;
+            default:
+                return true;
+        }
+
+        _entryWarmStep++;
+        return false;
+    }
+
     private static Color GetTileColor(string kind) => kind switch
     {
         "wall"    => new Color(0.85f, 0.65f, 0.25f),
@@ -1157,14 +1186,19 @@ public static class BackroomsLobby
         _spawnCullCenter = LocalPlayerFeet();
         _spawnCullCenterValid = true;
 
-        // 入室 freeze を 3×3 chunk (2304 tiles) に抑える: 中心 3×3 だけ即時、外周は queue 経由で
-        // 数秒かけて生成 (radius 2 既定化で 25 chunks=6400 tiles 一括は freeze ~2.8 倍だった)。
-        // 外周タイルは CullRadius 外で inactive 生成なので段階生成は見えない。
+        // 入室 freeze を抑える: procgen は全 chunk を queue に積み、表示圏 (CullRadius+余白) のタイルだけ
+        // この場で生成する (中心 3×3 chunk = 2304 tiles を一括生成すると入室フレームが伸びる)。圏外のタイルは
+        // inactive で生まれるので、queue 経由の段階生成は見えない。
+        // カスタムマップは入室直後の後続処理が中心 chunk の実体を前提にするので、中心 3×3 を即時生成のまま。
+        // 残りを生成する ProcessStreamingQueue は入室中しか回らないので、入室の外 (未入室での再生成) も従来どおり。
+        bool nearOnly = EkmapLoader.ActiveSource == null && (_inBackrooms || _enteringBackrooms);
         int r = ActiveChunkRadius;
         int ir = Math.Min(r, 1);
         for (int dx = -r; dx <= r; dx++)
         for (int dy = -r; dy <= r; dy++)
-            LoadChunk(centerCx + dx, centerCy + dy, seed, immediate: Math.Abs(dx) <= ir && Math.Abs(dy) <= ir);
+            LoadChunk(centerCx + dx, centerCy + dy, seed, immediate: !nearOnly && Math.Abs(dx) <= ir && Math.Abs(dy) <= ir);
+
+        if (nearOnly) SpawnQueuedNear(_spawnCullCenter, CullRadius + EntryNearMargin);
 
         _spawnCullCenterValid = false;
 
@@ -2252,6 +2286,53 @@ public static class BackroomsLobby
         }
     }
 
+    // 入室時用: queue に積んだ procgen descriptor のうち center から radius 内の物だけ今すぐ生成し、
+    // queue から抜く (残りは ProcessStreamingQueue が予算内で生成)。呼び出し側が _spawnCullCenter を設定済みのこと。
+    private static bool _enteringBackrooms;
+    private const float EntryNearMargin = 1f; // 残りは近い順に数フレームで追いつくので、表示圏の少し外まであれば足りる
+    private static void SpawnQueuedNear(Vector2 center, float radius)
+    {
+        float rSqr = radius * radius;
+        int write = _spawnHead;
+        for (int i = _spawnHead; i < _spawnQueue.Count; i++)
+        {
+            var d = _spawnQueue[i];
+            float ex = d.pos.x - center.x;
+            float ey = d.pos.y - center.y;
+            if (ex * ex + ey * ey > rSqr)
+            {
+                _spawnQueue[write++] = d;
+                continue;
+            }
+
+            long prevKey = _currentChunkKey;
+            _currentChunkKey = d.chunkKey;
+            try
+            {
+                if (d.kind == "void_barrier") SpawnVoidBarrier(d.pos);
+                else
+                {
+                    GameObject go = SpawnTile(d.kind, d.pos);
+                    if (d.connector == 1) AddWallHBottomConnector(go);
+                    else if (d.connector == 2) AddWallVBottomCap(go);
+                }
+            }
+            // 1 枚の失敗で止めない (途中で抜けると生成済みの descriptor が queue に残って二重生成になる)
+            catch (Exception e) { Utils.ThrowException(e); }
+            finally { _currentChunkKey = prevKey; }
+        }
+
+        _spawnQueue.RemoveRange(write, _spawnQueue.Count - write);
+
+        // 残りは近い順に生成する (chunk 順のままだと、歩いた先の縁が最後まで未生成で残ることがある)
+        float cx = center.x, cy = center.y;
+        _spawnQueue.Sort(_spawnHead, _spawnQueue.Count - _spawnHead, Comparer<(string kind, Vector2 pos, long chunkKey, byte connector)>.Create((a, b) =>
+        {
+            float ax = a.pos.x - cx, ay = a.pos.y - cy, bx = b.pos.x - cx, by = b.pos.y - cy;
+            return (ax * ax + ay * ay).CompareTo(bx * bx + by * by);
+        }));
+    }
+
     // reset (Exit / OnGameStart / OnLobbyReload / ClearTiles / GenerateLobby) で streaming queue を空に。
     // 退避中 destroy GO は SpawnedTiles から既に外れているので、ここで破棄しないと leak する
     // (`!= null` は Unity の destroyed-object semantics で scene unload 済 dangling ref を弾くので安全)。
@@ -2577,7 +2658,11 @@ public static class BackroomsLobby
 
         // 3. プレイヤー位置を中心に procgen (TP しない — player はそのまま)
         _lastSeed = seed;
-        GenerateLobby(seed, targetPid, silent);
+        long genStartMs = enterSw.ElapsedMilliseconds;
+        _enteringBackrooms = true;
+        try { GenerateLobby(seed, targetPid, silent); }
+        finally { _enteringBackrooms = false; }
+        long genMs = enterSw.ElapsedMilliseconds - genStartMs;
 
         // 4. custom mesh 視界システム起動 (vanilla hijack 路線は dead — reference 参照)
         CreateVision();
@@ -2598,7 +2683,7 @@ public static class BackroomsLobby
             BackroomsShadow.Arm(BackroomsConfig.DefaultShadowRadius);
         }
 
-        Logger.Info($"Entered Backrooms (no-TP) seed={seed} disabledCols={disabledCols} disabledRs={disabledRs} tiles={SpawnedTiles.Count} ms={enterSw.ElapsedMilliseconds}", "BackroomsGen");
+        Logger.Info($"Entered Backrooms (no-TP) seed={seed} disabledCols={disabledCols} disabledRs={disabledRs} tiles={SpawnedTiles.Count} queued={_spawnQueue.Count - _spawnHead} ms={enterSw.ElapsedMilliseconds} hideMs={genStartMs} genMs={genMs}", "BackroomsGen");
     }
 
     public static void ExitBackrooms(byte targetPid, bool silent = false, bool destroyTileset = true)

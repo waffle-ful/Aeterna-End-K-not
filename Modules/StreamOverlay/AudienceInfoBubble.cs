@@ -27,7 +27,7 @@ public class AudienceInfoBubble : MonoBehaviour
     private Vector2 _dragOffset;
 
     // ---- 回転スライドのキャッシュ (毎 OnGUI での List/文字列生成を避け GC churn を抑える) ----
-    // OnGUI は 1 フレームに複数回 (Layout/Repaint/入力イベント) 呼ばれるため、スライド一覧の再構築は
+    // OnGUI は 1 フレームに複数回 (Repaint/入力イベント) 呼ばれるため、スライド一覧の再構築は
     // 回転 tick が変わったときだけに限定する。
     private List<string> _cachedSlides;
     private int _lastTick = -1;
@@ -45,6 +45,7 @@ public class AudienceInfoBubble : MonoBehaviour
     private void Awake()
     {
         Instance = this;
+        ImguiNoLayout.Apply(this);
     }
 
     private static bool ShouldShow()

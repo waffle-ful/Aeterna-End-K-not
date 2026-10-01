@@ -31,6 +31,7 @@ public class LobbyCodeBubble : MonoBehaviour
     private void Awake()
     {
         Instance = this;
+        ImguiNoLayout.Apply(this);
     }
 
     private static bool ShouldShow()

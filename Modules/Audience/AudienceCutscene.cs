@@ -213,6 +213,11 @@ public class AudienceCutscene : MonoBehaviour
 
     public static void StopCameraShake() => _shakeStart = -1f;
 
+    private void Awake()
+    {
+        ImguiNoLayout.Apply(this);
+    }
+
     private void LateUpdate()
     {
         if (_shakeStart < 0f) return;

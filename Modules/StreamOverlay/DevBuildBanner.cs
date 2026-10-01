@@ -21,6 +21,11 @@ public class DevBuildBanner : MonoBehaviour
 
     private static float Scale => Il2Direct.ScreenWidth / 1080f * 0.5f;
 
+    private void Awake()
+    {
+        ImguiNoLayout.Apply(this);
+    }
+
     private bool ShouldShow()
     {
         if (_faulted || !Main.IsDevBuild) return false;

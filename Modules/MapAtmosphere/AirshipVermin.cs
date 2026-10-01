@@ -40,6 +40,9 @@ internal static class AirshipVermin
         public float X, Y, Z, Heading, Speed, Timer, Step, Phase, Radius, Angle, Dir, Scale;
         public int Frame;
         public bool Running;
+        // 最後に置いた位置と向き (止まっている虫を毎フレーム同じ場所へ置き直さないため)
+        public float PlacedX = float.NaN, PlacedY, PlacedHeading;
+        public bool PlacedLit;
     }
 
     private static Transform _root;
@@ -268,6 +271,11 @@ internal static class AirshipVermin
 
     private static void Place(Critter c, float x, float y, float heading, bool litOn)
     {
+        if (x == c.PlacedX && y == c.PlacedY && heading == c.PlacedHeading && (c.PlacedLit || !litOn)) return;
+        c.PlacedX = x;
+        c.PlacedY = y;
+        c.PlacedHeading = heading;
+        c.PlacedLit = litOn;
         Vector3 p = FxMath.V3(x, y, c.Z);
         Quaternion q = FxMath.RotZ(heading);
         c.TSh.position = p;
