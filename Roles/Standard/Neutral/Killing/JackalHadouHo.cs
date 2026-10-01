@@ -58,9 +58,14 @@ public class JackalHadouHo : RoleBase
     private const float GateRadius = 0.5f;
     private const float BeamBackwardReach = GateForwardOffset + GateRadius;
 
-    // ホストローカル効果音 (WaveCannon 双子)。チャージはクレッシェンド、発射は持続轟音 (16s > FiringDuration 最大)
-    private const string ChargeSoundName = "HadouCharge";
-    private const string FireSoundName = "HadouFire";
+    // ホストローカル効果音 (WaveCannon 双子)。チャージはクレッシェンド、発射は持続轟音 (素材は FiringDuration 最大より長い)
+    private const string NormalChargeSound = "HadouCharge";
+    private const string NormalFireSound = "HadouFire";
+
+    // いま撃っている一発の音名。超波動砲は種類ごとの専用音に切り替わる。
+    // 停止は音名で指すので、次の一発が始まるまで書き換えない。
+    private string ChargeSoundName = NormalChargeSound;
+    private string FireSoundName = NormalFireSound;
     private const float FireSoundFadeSeconds = 0.3f;
 
     private enum Phase { Idle, DirectionDetect, Charging, Warning, Firing }
@@ -279,7 +284,6 @@ public class JackalHadouHo : RoleBase
         PhaseEndTS = Utils.TimeStamp + (long)dur;
         PhaseEntryDone = false;
         ShotSeq++;
-        StartChargeSound(pc);
 
         byte id = pc.PlayerId;
 
@@ -316,6 +320,11 @@ public class JackalHadouHo : RoleBase
                 }
             }
         }
+
+        // 音は種類が確定してから選ぶ (発動不能でクラシックへ落ちた時はクラシックの音)
+        ChargeSoundName = IsSuperShot ? SuperCannonShot.ChargeSoundName(Super?.Kind) : NormalChargeSound;
+        FireSoundName = IsSuperShot ? SuperCannonShot.FireSoundName(Super?.Kind) : NormalFireSound;
+        StartChargeSound(pc);
 
         if (Super == null)
         {
@@ -370,7 +379,8 @@ public class JackalHadouHo : RoleBase
         float clipLen = CustomSoundsManager.GetClipLength(ChargeSoundName);
         if (clipLen <= 0f) return;
 
-        float preFire = (IsSuperShot ? SuperChargeDuration.GetFloat() : ChargeDuration.GetFloat()) + WarningDuration.GetFloat();
+        // フェーズの終端は秒の境目で切り替わるので、設定秒数でなく終端までの実時間から逆算する (設定秒数だと最大 1 秒ずれて頂点が切れる)
+        float preFire = Mathf.Max(0.05f, (float)Utils.SecondsUntil(PhaseEndTS) + WarningDuration.GetInt());
         if (clipLen >= preFire)
         {
             PlayChargeSound(clipLen - preFire);
