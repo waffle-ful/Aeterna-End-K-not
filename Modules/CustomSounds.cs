@@ -113,6 +113,26 @@ public static class CustomSoundsManager
         catch (Exception e) { Utils.ThrowException(e); return null; }
     }
 
+    // Play と同じ解決経路でクリップだけを返す。自前の AudioSource で鳴らす呼び出し側 (音程や左右の定位を変える音) が使う。
+    // 見つからない / 無効設定なら null。
+    internal static AudioClip GetClip(string sound)
+    {
+        try
+        {
+            if (!Constants.ShouldPlaySfx() || !Main.EnableCustomSoundEffect.Value || !AudioPlatformSupported) return null;
+
+            string key = ResolveSoundKey(sound);
+            if (key == null)
+            {
+                Logger.Warn($"Could not find sound: {sound}", "CustomSounds");
+                return null;
+            }
+
+            return LoadClip(key);
+        }
+        catch (Exception e) { Utils.ThrowException(e); return null; }
+    }
+
     // ── モッドクライアント効果音同期 (CustomRPC.ControllableSound) ──────────────────
     // 「offset 付き再生」「sound 名指定のフェード停止」を sub-op byte 1本の RPC で運ぶ。
     // 非モッド客は未知 RPC として無視。受信側は sound 名キーの registry で管理し (同名の再再生は

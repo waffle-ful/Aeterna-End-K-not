@@ -738,48 +738,63 @@ public static class ExplosionFx
                     break;
                 case Kind.TimeRewind:
                     SpawnTimeRewind(r.Pos, r.Radius);
+                    FxSound.At("FxTimeRewind", r.Pos, 0.8f, everywhere: true);
                     break;
                 case Kind.RewindLand:
                     SpawnRewindLand(r.Pos);
+                    FxSound.At("FxRewindLand", r.Pos, 0.7f);
                     break;
                 case Kind.RewindRevive:
                     SpawnRewindRevive(r.Pos);
+                    FxSound.At("FxRewindRevive", r.Pos, 0.85f);
                     break;
                 case Kind.TimeSteal:
                     SpawnTimeSteal(r.Pos, (int)(r.Radius + 0.5f) - 1);
+                    FxSound.At("FxTimeSteal", r.Pos, 0.85f);
                     break;
                 case Kind.ChronoRampage:
                     SpawnChronoRampage(r.Pos);
+                    FxSound.At("FxChronoRampage", r.Pos, 0.9f);
                     break;
                 case Kind.CamoMist:
                     SpawnCamoMist(r.Pos);
+                    FxSound.At("FxCamoMist", r.Pos, 0.5f, everywhere: true);
                     break;
                 case Kind.OilDrip:
                     SpawnOilDrip(r.Pos);
+                    FxSound.At("FxOilDrip", r.Pos, 0.8f);
                     break;
                 case Kind.DemoFuse:
                     StartFuse(r.Radius);
+                    FxSound.At("FxDemoFuse", r.Pos, 0.8f, everywhere: true);
                     break;
                 case Kind.VultureFeast:
                     SpawnVultureFeast(r.Pos, (int)(r.Radius + 0.5f) - 1);
+                    FxSound.At("FxVultureFeast", r.Pos, 0.9f);
                     break;
                 case Kind.HexMark:
                     SpawnHexMark(r.Pos);
+                    FxSound.At("FxHexMark", r.Pos, 0.8f);
                     break;
                 case Kind.WebSpin:
                     SpawnWebSpin(r.Pos, r.Radius);
+                    FxSound.At("FxWebSpin", r.Pos, 0.75f);
                     break;
                 case Kind.WebSnare:
                     StartSnare(r.Pos, r.Radius);
+                    FxSound.At("FxWebSnare", r.Pos, 0.85f);
                     break;
                 case Kind.WebDevour:
                     SpawnWebDevour(r.Pos);
+                    FxSound.At("FxWebDevour", r.Pos, 0.9f);
                     break;
                 case Kind.RevengeAwaken:
                     SpawnRevengeAwaken(r.Pos, (int)(r.Radius + 0.5f) - 1);
+                    FxSound.At("FxRevengeAwaken", r.Pos, 0.9f);
                     break;
                 case Kind.RevengeAura:
                     StartAura((int)(r.Radius + 0.5f) - 1);
+                    FxSound.At("FxRevengeAura", r.Pos, 0.5f);
                     break;
             }
         }

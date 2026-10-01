@@ -572,7 +572,8 @@ public static class TestBridge
             return;
         }
 
-        // 見た目の演出だけをホストの足元で出す (判定・キルは起きない)。`fx <Kind> [radius] [count] [a] [b]` (a・b は波動砲の太さと色)
+        // 見た目の演出だけをホストの足元で出す (判定・キルは起きない)。`fx <Kind> [radius] [count] [a] [b] [@dx,dy]` (a・b は波動砲の太さと色)
+        // 末尾の @dx,dy は足元からのずらし (離れた場所・壁の向こうで出して、音の聞こえ方を確かめる)
         if (directive.StartsWith("fx ", StringComparison.OrdinalIgnoreCase))
         {
             try { ExecuteFx(directive[3..].Trim()); }
@@ -2503,6 +2504,21 @@ public static class TestBridge
     {
         string[] parts = rest.Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
+        Vector2 shift = Vector2.zero;
+        if (parts.Length > 1 && parts[^1].StartsWith('@'))
+        {
+            string[] xy = parts[^1][1..].Split(',');
+            var inv = System.Globalization.CultureInfo.InvariantCulture;
+            if (xy.Length != 2 || !float.TryParse(xy[0], System.Globalization.NumberStyles.Float, inv, out float sx) || !float.TryParse(xy[1], System.Globalization.NumberStyles.Float, inv, out float sy))
+            {
+                WriteOut("ERR fx: offset must be @dx,dy");
+                return;
+            }
+
+            shift = new Vector2(sx, sy);
+            parts = parts[..^1];
+        }
+
         if (parts.Length > 0 && parts[0].Equals("RevengeStop", StringComparison.OrdinalIgnoreCase))
         {
             ExplosionFx.StopAuras();
@@ -2529,7 +2545,7 @@ public static class TestBridge
         if (!lp || !GameStates.InGame) { WriteOut("ERR fx: not in game"); return; }
 
         // 役職側は Pos() (体の中心) を渡すので、撮影も同じ基準で出す
-        Vector2 at = lp.Pos();
+        Vector2 at = lp.Pos() + shift;
 
         // ハゲタカは役職側と同じく死体の位置で出す (近くに死体があれば。fakebody で置いた死体を持ち去らせて確かめる)
         if (kind == ExplosionFx.Kind.VultureFeast)
