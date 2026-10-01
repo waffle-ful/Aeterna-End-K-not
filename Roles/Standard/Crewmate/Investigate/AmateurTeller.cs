@@ -1,4 +1,7 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
+using EndKnot.Modules;
+using Hazel;
 using UnityEngine;
 using static EndKnot.Translator;
 
@@ -104,8 +107,29 @@ public class AmateurTeller : RoleBase
             MadArrowImps.Clear();
             PastTargets.Add(UseTarget);
             UseTarget = byte.MaxValue;
+            SendSync();
         }
         IsSelecting = false;
+    }
+
+    // 名前の下の★や矢印は各クライアントが自分の手元の値で組み立てるので、監視対象などをモッド客へ送る
+    private void SendSync()
+    {
+        Utils.SendRPC(CustomRPC.SyncRoleData, AmateurTellerId, UseTarget, usecount, awakened, string.Join(',', PastTargets), string.Join(',', MadArrowImps));
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        UseTarget = reader.ReadByte();
+        usecount = reader.ReadPackedInt32();
+        awakened = reader.ReadBoolean();
+        PastTargets = ReadIds(reader.ReadString());
+        MadArrowImps = ReadIds(reader.ReadString());
+    }
+
+    private static List<byte> ReadIds(string s)
+    {
+        return s.Length == 0 ? [] : s.Split(',').Select(byte.Parse).ToList();
     }
 
     public override void AfterMeetingTasks()
@@ -195,7 +219,12 @@ public class AmateurTeller : RoleBase
 
         // マッドメイトの見習い占い師は、監視対象を生存インポスター全員の獲物として印付けする。
         PlayerControl teller = Utils.GetPlayerById(AmateurTellerId);
-        if (teller == null || !teller.Is(CustomRoles.Madmate)) return;
+
+        if (teller == null || !teller.Is(CustomRoles.Madmate))
+        {
+            SendSync();
+            return;
+        }
 
         string mark = string.Format(GetString("AmateurTellerMadMark"), AmateurTellerId.ColoredPlayerName(), targetId.ColoredPlayerName());
         foreach (PlayerControl imp in Main.EnumerateAlivePlayerControls())
@@ -205,6 +234,8 @@ public class AmateurTeller : RoleBase
             MadArrowImps.Add(imp.PlayerId);
             Utils.SendMessage(mark, imp.PlayerId, GetString("AmateurTellerMadMarkTitle"), importance: MessageImportance.High);
         }
+
+        SendSync();
     }
 
     public override void OnTaskComplete(PlayerControl pc, int completedTaskCount, int totalTaskCount)
@@ -213,6 +244,7 @@ public class AmateurTeller : RoleBase
         if (completedTaskCount + 1 >= OptionAwakeningTaskCount.GetInt())
         {
             awakened = true;
+            SendSync();
             Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
         }
     }

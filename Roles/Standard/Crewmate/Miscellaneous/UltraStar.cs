@@ -1,5 +1,6 @@
 ﻿using AmongUs.GameOptions;
 using EndKnot.Modules;
+using Hazel;
 using UnityEngine;
 using static EndKnot.Options;
 
@@ -76,6 +77,7 @@ public class UltraStar : RoleBase
     public override void OnPet(PlayerControl pc)
     {
         StarActive = !StarActive;
+        SendSync();
 
         if (StarActive)
         {
@@ -89,6 +91,17 @@ public class UltraStar : RoleBase
 
         pc.MarkDirtySettings();
         pc.AddAbilityCD();
+    }
+
+    // ボタンの文字と進捗表示は各クライアントが自分で判定するので、スター状態をモッド客へ送る
+    private void SendSync()
+    {
+        Utils.SendRPC(CustomRPC.SyncRoleData, UltraStarId, StarActive);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        StarActive = reader.ReadBoolean();
     }
 
     public override void ApplyGameOptions(IGameOptions opt, byte playerId)
@@ -164,6 +177,7 @@ public class UltraStar : RoleBase
     public override void OnReportDeadBody()
     {
         StarActive = false;
+        SendSync();
         if (UltraStarId.GetPlayer() is { } pc) pc.RpcChangeColor((byte)OriginalColorId); // 公式鯖では spoof RPC ではなく正規 serialize で色を同期 (anti-cheat 修正後)
         LastColorId = OriginalColorId;
     }

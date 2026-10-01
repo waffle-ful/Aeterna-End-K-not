@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using EndKnot.Modules;
 using EndKnot.Modules.Extensions;
+using Hazel;
 
 namespace EndKnot.Roles;
 
@@ -75,6 +76,11 @@ public class Occultist : RoleBase
         Utils.NotifyRoles(SpecifySeer: OccultistPC, SpecifyTarget: OccultistPC);
     }
 
+    public void ReceiveRPC(MessageReader reader)
+    {
+        if (reader.ReadPackedInt32() == 1) InRevivingMode = reader.ReadBoolean();
+    }
+
     public override void OnExitVent(PlayerControl pc, Vent vent)
     {
         if (ActionSwitchMode == ActionSwitchModes.Vent)
@@ -100,6 +106,7 @@ public class Occultist : RoleBase
         if (!InRevivingMode || reporter.GetAbilityUseLimit() < 1 || target.Disconnected || target.Object.IsAlive() || target.Object.Is(CustomRoles.Disregarded) || (target.Object.Is(Team.Impostor) && !CanReviveImpostorsAndMadmates.GetBool())) return true;
 
         InRevivingMode = false;
+        Utils.SendRPC(CustomRPC.SyncRoleData, OccultistPC.PlayerId, 1, InRevivingMode);
         Vector2 pos = reporter.Pos();
         Revives[target.PlayerId] = new CountdownTimer(ReviveTime.GetInt(), () =>
         {

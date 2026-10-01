@@ -1,6 +1,7 @@
 using System.Linq;
 using AmongUs.GameOptions;
 using EndKnot.Modules;
+using Hazel;
 using UnityEngine;
 using static EndKnot.Options;
 
@@ -135,6 +136,7 @@ public class Vega : RoleBase
     {
         RendezvousCount++;
         Rendezvoused = true;
+        SendSync();
 
         Logger.Info($"{vega.GetNameWithRole().RemoveHtmlTags()} rendezvoused with {altair.GetNameWithRole().RemoveHtmlTags()} ({RendezvousCount})", "Vega");
 
@@ -146,8 +148,21 @@ public class Vega : RoleBase
         if (RendezvousCount >= RKFThreshold.GetInt() && RevealKillableFactions.GetBool() && !CanSeeKiller)
         {
             CanSeeKiller = true;
+            SendSync();
             Utils.NotifyRoles(SpecifySeer: altair);
         }
+    }
+
+    // キルボタンの出し分けと★表示は各クライアントが自分の手元の値で判定するので、モッド客へ送る
+    private static void SendSync()
+    {
+        Utils.SendRPC(CustomRPC.SyncRoleData, VegaId, Rendezvoused, CanSeeKiller);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        Rendezvoused = reader.ReadBoolean();
+        CanSeeKiller = reader.ReadBoolean();
     }
 
     private static void GiveBuff(PlayerControl altair)
@@ -166,7 +181,11 @@ public class Vega : RoleBase
 
     public override void AfterMeetingTasks()
     {
-        Rendezvoused = false;
+        if (Rendezvoused)
+        {
+            Rendezvoused = false;
+            SendSync();
+        }
 
         if (AltairId == byte.MaxValue) return;
 

@@ -1,6 +1,8 @@
 ﻿using System.Collections.Generic;
 using AmongUs.GameOptions;
+using EndKnot.Modules;
 using EndKnot.Patches;
+using Hazel;
 using UnityEngine;
 
 namespace EndKnot.Roles;
@@ -151,6 +153,7 @@ public class EvilTeller : RoleBase
         CurrentTarget = new(nearestTarget.PlayerId, 0f);
         IsObserving = true;
         ObservationFailed = false;
+        SendSync();
         pc.SyncSettings();
         pc.RpcResetAbilityCooldown();
         Utils.NotifyRoles(SpecifySeer: pc);
@@ -171,6 +174,7 @@ public class EvilTeller : RoleBase
             IsObserving = false;
             ObservationFailed = true;
             CurrentTarget = null;
+            SendSync();
             pc.SyncSettings();
             Utils.NotifyRoles(SpecifySeer: pc);
             return;
@@ -181,6 +185,7 @@ public class EvilTeller : RoleBase
             IsObserving = false;
             ObservationFailed = true;
             CurrentTarget = null;
+            SendSync();
             pc.SyncSettings();
             Utils.NotifyRoles(SpecifySeer: pc);
             return;
@@ -194,6 +199,7 @@ public class EvilTeller : RoleBase
             ObservationFailed = false;
             SeenTargets.TryAdd(targetId, target.GetCustomRole());
             CurrentTarget = null;
+            SendSync();
             pc.SyncSettings();
 
             if (UseKillCooldownAfterTell.GetBool())
@@ -219,6 +225,32 @@ public class EvilTeller : RoleBase
         IsObserving = false;
         ObservationFailed = false;
         CurrentTarget = null;
+        SendSync();
+    }
+
+    // 名前下の印・画面下の案内・進捗表示は各クライアントが自分で判定するので、観察中の相手と占い済みの相手をモッド客へ送る
+    private void SendSync()
+    {
+        var data = new List<object> { EvilTellerId, IsObserving, CurrentTarget?.TargetId ?? byte.MaxValue, SeenTargets.Count };
+
+        foreach (KeyValuePair<byte, CustomRoles> kvp in SeenTargets)
+        {
+            data.Add(kvp.Key);
+            data.Add((int)kvp.Value);
+        }
+
+        Utils.SendRPC(CustomRPC.SyncRoleData, data.ToArray());
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        IsObserving = reader.ReadBoolean();
+        byte targetId = reader.ReadByte();
+        CurrentTarget = targetId == byte.MaxValue ? null : new TimerState(targetId, 0f);
+
+        int count = reader.ReadPackedInt32();
+        SeenTargets = new();
+        for (var i = 0; i < count; i++) SeenTargets[reader.ReadByte()] = (CustomRoles)reader.ReadPackedInt32();
     }
 
     public override bool KnowRole(PlayerControl seer, PlayerControl target)

@@ -1,5 +1,7 @@
 ﻿using System.Collections.Generic;
 using AmongUs.GameOptions;
+using EndKnot.Modules;
+using Hazel;
 using UnityEngine;
 using static EndKnot.Options;
 
@@ -88,7 +90,19 @@ internal class Samurai : RoleBase
         if (Target.Id != byte.MaxValue) return false;
 
         Target = (target.PlayerId, Utils.TimeStamp);
+        SendSync();
         return false;
+    }
+
+    // キルボタンの表示は各クライアントが標的の有無で決めるので、標的をモッド客へ送る
+    private void SendSync()
+    {
+        Utils.SendRPC(CustomRPC.SyncRoleData, SamuraiPC.PlayerId, Target.Id);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        Target = (reader.ReadByte(), 0);
     }
 
     public override void OnFixedUpdate(PlayerControl pc)
@@ -117,6 +131,7 @@ internal class Samurai : RoleBase
         if (!FastVector2.DistanceWithinRange(target.Pos(), pc.Pos(), GameManager.Instance.LogicOptions.GetKillDistance()))
         {
             Target = (byte.MaxValue, 0);
+            SendSync();
             pc.RpcCheckAndMurder(target);
             return;
         }
@@ -125,6 +140,7 @@ internal class Samurai : RoleBase
         {
             Delays[Target.Id] = now;
             Target = (byte.MaxValue, 0);
+            SendSync();
             pc.SetKillCooldown(SuccessKCD.GetFloat());
         }
     }
@@ -132,7 +148,8 @@ internal class Samurai : RoleBase
     public override void OnReportDeadBody()
     {
         Target = (byte.MaxValue, 0);
-        
+        SendSync();
+
         foreach (byte id in Delays.Keys)
         {
             PlayerControl player = Utils.GetPlayerById(id);

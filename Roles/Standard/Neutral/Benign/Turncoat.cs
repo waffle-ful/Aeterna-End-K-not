@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
 using EndKnot.Modules;
+using Hazel;
 using static EndKnot.Options;
 using static EndKnot.Translator;
 
@@ -23,6 +24,7 @@ public class Turncoat : RoleBase
     private byte TurncoatId = byte.MaxValue;
     public byte TargetId = byte.MaxValue;
     public bool IsTargetDied;
+    private bool TargetSynced;
 
     private bool IsDisguised;
     private long DisguiseEndTimeStamp;
@@ -59,6 +61,7 @@ public class Turncoat : RoleBase
         TurncoatId = playerId;
         TargetId = byte.MaxValue;
         IsTargetDied = false;
+        TargetSynced = false;
         IsDisguised = false;
         DisguiseEndTimeStamp = 0;
 
@@ -114,6 +117,18 @@ public class Turncoat : RoleBase
 
         PlayerControl turncoat = Utils.GetPlayerById(playerId);
         if (turncoat != null) Utils.NotifyRoles(SpecifySeer: turncoat, SpecifyTarget: turncoat);
+    }
+
+    // 画面下の対象表示は各クライアントが自分で組み立てるので、対象と死亡状態をモッド客へ送る
+    private void SendSync()
+    {
+        Utils.SendRPC(CustomRPC.SyncRoleData, TurncoatId, TargetId, IsTargetDied);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        TargetId = reader.ReadByte();
+        IsTargetDied = reader.ReadBoolean();
     }
 
     public override bool CanUseKillButton(PlayerControl pc) => false;
@@ -206,6 +221,13 @@ public class Turncoat : RoleBase
             if (alive) pc.Notify(GetString("TurncoatDisguiseEnded"));
         }
 
+        // 客側の役職が確定した後に届くよう、割り当て直後でなく試合中の tick から送る
+        if (!TargetSynced && TargetId != byte.MaxValue && GameStates.InGame)
+        {
+            TargetSynced = true;
+            SendSync();
+        }
+
         if (IsTargetDied || TargetId == byte.MaxValue) return;
         if (!pc.IsAlive()) return;
 
@@ -220,6 +242,7 @@ public class Turncoat : RoleBase
         if (!target.IsAlive())
         {
             IsTargetDied = true;
+            SendSync();
             Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
         }
     }

@@ -1,6 +1,8 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
 using AmongUs.GameOptions;
+using EndKnot.Modules;
+using Hazel;
 using static EndKnot.Options;
 using static EndKnot.Translator;
 
@@ -143,6 +145,7 @@ internal class Analyst : RoleBase
         if (CurrentTarget.ID != byte.MaxValue) return false;
 
         CurrentTarget = (target.PlayerId, Utils.TimeStamp);
+        SendSync();
         killer.SetKillCooldown(Duration.GetFloat());
         Utils.NotifyRoles(SpecifySeer: killer, SpecifyTarget: target);
 
@@ -179,6 +182,7 @@ internal class Analyst : RoleBase
         if (!FastVector2.DistanceWithinRange(target.Pos(), pc.Pos(), pc.Is(CustomRoles.Reach) ? 2.5f : 1.5f))
         {
             CurrentTarget.ID = byte.MaxValue;
+            SendSync();
             Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: target);
             return;
         }
@@ -186,6 +190,7 @@ internal class Analyst : RoleBase
         if (CurrentTarget.TIME + Duration.GetInt() <= Utils.TimeStamp)
         {
             CurrentTarget.ID = byte.MaxValue;
+            SendSync();
             pc.RpcRemoveAbilityUse(notify: false);
             pc.Notify(GetAnalyzeResult(target), 10f);
             pc.SetKillCooldown();
@@ -197,6 +202,20 @@ internal class Analyst : RoleBase
     public override void OnReportDeadBody()
     {
         if (!IsEnable) return;
+        if (CurrentTarget.ID == byte.MaxValue) return;
+
         CurrentTarget.ID = byte.MaxValue;
+        SendSync();
+    }
+
+    // 計測中はキルボタンを隠す判定を各クライアントが自分で行うので、計測中かどうかをモッド客へ送る
+    private void SendSync()
+    {
+        Utils.SendRPC(CustomRPC.SyncRoleData, PlayerId, CurrentTarget.ID);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        CurrentTarget = (reader.ReadByte(), Utils.TimeStamp);
     }
 }

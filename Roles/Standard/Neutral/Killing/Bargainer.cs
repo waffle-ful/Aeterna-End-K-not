@@ -488,7 +488,7 @@ internal class Bargainer : RoleBase
             result += string.Format(
                 Translator.GetString("Bargainer.Suffix.InShop"),
                 Translator.GetString($"Bargainer.{bg.SelectedItem}"),
-                Utils.ColorString(bg.Money >= Costs[bg.SelectedItem] ? Color.white : Color.red, $"{Costs[bg.SelectedItem]}"));
+                Utils.ColorString(bg.BargainerId.GetAbilityUseLimit() >= Costs[bg.SelectedItem] ? Color.white : Color.red, $"{Costs[bg.SelectedItem]}"));
 
             result += "\n";
         }

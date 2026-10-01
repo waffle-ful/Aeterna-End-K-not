@@ -1,7 +1,9 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
 using AmongUs.GameOptions;
+using EndKnot.Modules;
 using EndKnot.Patches;
+using Hazel;
 using UnityEngine;
 
 namespace EndKnot.Roles;
@@ -153,6 +155,7 @@ public class EvilMagician : RoleBase
 
         MagicCount++;
         MagicTargets.Add(nearestTarget.PlayerId);
+        SendSync();
 
         int maxNow = Maximum.GetInt();
         CurrentCooldown = maxNow > 0 && MagicCount >= maxNow ? 200f : MagicCooldown.GetFloat();
@@ -165,6 +168,24 @@ public class EvilMagician : RoleBase
     public override void OnMurder(PlayerControl killer, PlayerControl target)
     {
         HaveKillCount++;
+        SendSync();
+    }
+
+    // 進捗表示の撃破数と会議中の印は各クライアントが自分で判定するので、撃破数と魔法を掛けた相手をモッド客へ送る
+    private void SendSync()
+    {
+        var data = new List<object> { EvilMagicianId, HaveKillCount, MagicCount, MagicTargets.Count };
+        data.AddRange(MagicTargets.Select(x => (object)x));
+        Utils.SendRPC(CustomRPC.SyncRoleData, data.ToArray());
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        HaveKillCount = reader.ReadPackedInt32();
+        MagicCount = reader.ReadPackedInt32();
+        int count = reader.ReadPackedInt32();
+        MagicTargets = [];
+        for (var i = 0; i < count; i++) MagicTargets.Add(reader.ReadByte());
     }
 
     public override void OnFixedUpdate(PlayerControl pc)
@@ -197,6 +218,7 @@ public class EvilMagician : RoleBase
 
         MagicTargets.Clear();
         HaveKillCount -= MagicUseKillCount.GetInt();
+        SendSync();
 
         int max = Maximum.GetInt();
         CurrentCooldown = max > 0 && MagicCount >= max ? 200f : MagicCooldown.GetFloat();
@@ -209,6 +231,7 @@ public class EvilMagician : RoleBase
     {
         if (ResetKillCount.GetBool()) HaveKillCount = 0;
         if (ResetMagicTarget.GetBool()) MagicTargets.Clear();
+        SendSync();
 
         int max = Maximum.GetInt();
         CurrentCooldown = max > 0 && MagicCount >= max ? 200f : MagicCooldown.GetFloat();

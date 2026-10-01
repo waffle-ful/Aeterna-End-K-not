@@ -1,4 +1,7 @@
-﻿using AmongUs.GameOptions;
+﻿using System;
+using AmongUs.GameOptions;
+using EndKnot.Modules;
+using Hazel;
 
 namespace EndKnot.Roles;
 
@@ -96,6 +99,20 @@ public class Explosivist : RoleBase
         player.FreezeForOthers();
 
         ExplodeTS = Utils.TimeStamp + ExplosionDelay.GetInt();
+        SendSync();
+    }
+
+    // 画面下のカウントダウンは各クライアントが自分で出すので、時刻でなく残り秒数をモッド客へ送る
+    private void SendSync()
+    {
+        int remaining = ExplodeTS == 0 ? 0 : (int)Math.Max(1, ExplodeTS - Utils.TimeStamp);
+        Utils.SendRPC(CustomRPC.SyncRoleData, ExplosivistId, remaining);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        int remaining = reader.ReadPackedInt32();
+        ExplodeTS = remaining == 0 ? 0 : Utils.TimeStamp + remaining;
     }
 
     public override void OnFixedUpdate(PlayerControl pc)
@@ -118,6 +135,7 @@ public class Explosivist : RoleBase
             Explosive = null;
             RealPosition = Vector2.zero;
             ExplodeTS = 0;
+            SendSync();
         }
     }
 
@@ -131,6 +149,7 @@ public class Explosivist : RoleBase
             Explosive = null;
             RealPosition = Vector2.zero;
             ExplodeTS = 0;
+            SendSync();
         }
     }
 

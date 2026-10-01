@@ -180,6 +180,8 @@ public class EvilTracker : RoleBase
         if (!Utils.DoRPC) return;
 
         MessageWriter writer = AmongUsClient.Instance.StartRpcImmediately(PlayerControl.LocalPlayer.NetId, (byte)CustomRPC.SetEvilTrackerTarget, SendOption.Reliable);
+        // trackerId が 255 (次のターゲット設定を許可する合図) でも持ち主のインスタンスへ届くよう、持ち主の Id を先頭に付ける
+        writer.Write(EvilTrackerId);
         writer.Write(trackerId);
         writer.Write(targetId);
         AmongUsClient.Instance.FinishRpcImmediately(writer);
@@ -187,9 +189,10 @@ public class EvilTracker : RoleBase
 
     public static void ReceiveRPC(MessageReader reader)
     {
+        byte ownerId = reader.ReadByte();
         byte trackerId = reader.ReadByte();
         byte targetId = reader.ReadByte();
-        (Main.PlayerStates[trackerId].Role as EvilTracker)?.SetTarget(trackerId, targetId);
+        (Main.PlayerStates[ownerId].Role as EvilTracker)?.SetTarget(trackerId, targetId);
     }
 
     public override string GetProgressText(byte playerId, bool comms)

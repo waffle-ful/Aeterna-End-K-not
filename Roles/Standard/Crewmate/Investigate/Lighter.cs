@@ -1,5 +1,7 @@
 ﻿using AmongUs.GameOptions;
+using EndKnot.Modules;
 using EndKnot.Modules.Extensions;
+using Hazel;
 using static EndKnot.Options;
 
 namespace EndKnot.Roles;
@@ -120,12 +122,23 @@ internal class Lighter : RoleBase
                 pc.MarkDirtySettings();
             }, onCanceled: () => Timer = null);
 
+            Utils.SendRPC(CustomRPC.SyncRoleData, pc.PlayerId, skillDuration);
             pc.Notify(Translator.GetString("LighterSkillInUse"), skillDuration);
             pc.RpcRemoveAbilityUse(notify: false);
             pc.MarkDirtySettings();
         }
         else
             pc.Notify(Translator.GetString("OutOfAbilityUsesDoMoreTasks"));
+    }
+
+    // 進行表示の色は各クライアントが自分の Timer で決めるので、発動したことをモッド客へ送り同じ長さの Timer を持たせる
+    public void ReceiveRPC(MessageReader reader)
+    {
+        float duration = reader.ReadSingle();
+        if (duration <= 0f) return;
+
+        Timer?.Dispose();
+        Timer = new CountdownTimer(duration, () => Timer = null, onCanceled: () => Timer = null);
     }
 
     public override bool CanUseVent(PlayerControl pc, int ventId)

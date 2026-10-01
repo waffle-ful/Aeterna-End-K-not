@@ -1,5 +1,6 @@
 ﻿using AmongUs.GameOptions;
 using EndKnot.Modules;
+using Hazel;
 using UnityEngine;
 using static EndKnot.Options;
 
@@ -75,6 +76,7 @@ public class GuardMaster : RoleBase
         if (check) return false;
 
         Guard--;
+        SendSync();
         NameColorManager.Add(killer.PlayerId, target.PlayerId, "8FBC8B");
         if (CanSeeProtectOpt.GetBool() && Awakened)
             NameColorManager.Add(target.PlayerId, killer.PlayerId, "8FBC8B");
@@ -108,7 +110,21 @@ public class GuardMaster : RoleBase
         }
 
         if (pc.IsAlive())
+        {
             Guard += AddGuardCountOpt.GetInt();
+            SendSync();
+        }
+    }
+
+    // 進捗表示の残りガード数は各クライアントが自分で判定するので、モッド客へ送る
+    private void SendSync()
+    {
+        Utils.SendRPC(CustomRPC.SyncRoleData, GmId, Guard);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        Guard = reader.ReadPackedInt32();
     }
 
     public override string GetProgressText(byte playerId, bool comms)

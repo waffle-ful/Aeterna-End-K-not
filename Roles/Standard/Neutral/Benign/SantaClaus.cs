@@ -2,6 +2,7 @@
 using System.Linq;
 using AmongUs.GameOptions;
 using EndKnot.Modules;
+using Hazel;
 using UnityEngine;
 using static EndKnot.Options;
 using static EndKnot.Translator;
@@ -45,6 +46,7 @@ public class SantaClaus : RoleBase
     private string MeetingMemo = string.Empty;
     private readonly List<byte> GiftedPlayers = [];
     public bool IsWon;
+    private bool Synced;
 
     public override bool IsEnable => On;
 
@@ -87,7 +89,42 @@ public class SantaClaus : RoleBase
         MeetingMemo = string.Empty;
         GiftedPlayers.Clear();
         IsWon = false;
+        Synced = false;
         SetPresentVent();
+    }
+
+    // 所持数・配達数・配達先は各クライアントが自分で判定して表示するので、モッド客へ送る。
+    // 客側の役職が確定した後に届くよう、最初の送信は試合が始まってから行う
+    private void SendSync()
+    {
+        Utils.SendRPC(CustomRPC.SyncRoleData, SantaId, HavePresent, GiftPresent, EntotuVentPos.HasValue, EntotuVentPos ?? Vector3.zero);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        HavePresent = reader.ReadPackedInt32();
+        GiftPresent = reader.ReadPackedInt32();
+        bool hasVent = reader.ReadBoolean();
+        Vector3 pos = reader.ReadVector3();
+
+        if (!hasVent)
+        {
+            EntotuVentPos = null;
+            RoomName = string.Empty;
+            return;
+        }
+
+        EntotuVentPos = pos;
+        PlainShipRoom room = ((Vector2)pos).GetPlainShipRoom();
+        RoomName = room != null ? GetString(room.RoomId.ToString()) : "?";
+    }
+
+    public override void OnFixedUpdate(PlayerControl pc)
+    {
+        if (Synced || !AmongUsClient.Instance.AmHost || !GameStates.InGame || GameStates.IsMeeting) return;
+
+        Synced = true;
+        SendSync();
     }
 
     public override void Remove(byte playerId)
@@ -115,6 +152,7 @@ public class SantaClaus : RoleBase
 
         HavePresent++;
         Logger.Info($"SantaClaus task complete: HavePresent={HavePresent}/{MaxHavePresentOpt.GetInt()}", "SantaClaus");
+        SendSync();
         Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
 
         // OnTaskComplete は CompletedTasksCount を進める前に呼ばれる (Modules/GameState.cs:525 ↔ :564) ので
@@ -175,6 +213,7 @@ public class SantaClaus : RoleBase
         }
 
         SetPresentVent();
+        SendSync();
         Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
         // 配達した部屋の記録は会議メッセージ用に保持（MeetingNotifyRoom 相当）
         DeliveryRooms.Add(roomNameAtDelivery);

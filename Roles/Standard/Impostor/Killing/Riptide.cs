@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using AmongUs.GameOptions;
 using EndKnot.Modules;
+using Hazel;
 using UnityEngine;
 using static EndKnot.Options;
 using static EndKnot.Translator;
@@ -65,6 +66,21 @@ public class Riptide : RoleBase
     private bool Dead;                  // 役職死亡済フラグ (cleanup 二重発火防止)
     private int LastSpawnMeetingNum;    // AfterMeetingTasks 重複発火防止
     private readonly List<RiptideWaveState> ActiveWaves = [];
+    private int SyncedWaveCount;
+
+    // 名前下の波の数は各クライアントが自分の手元で組み立てるので、数が変わったときだけモッド客へ送る
+    private void SendWaveCount()
+    {
+        if (RiptidePC == null || SyncedWaveCount == ActiveWaves.Count) return;
+
+        SyncedWaveCount = ActiveWaves.Count;
+        Utils.SendRPC(CustomRPC.SyncRoleData, RiptidePC.PlayerId, SyncedWaveCount);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        SyncedWaveCount = reader.ReadPackedInt32();
+    }
 
     // ---- グローバル速度状態 (バグ修正 #fix: per-wave OriginalSpeeds は複数波重複で壊れるため統合) ----
     // 複数の波に同時に入っている場合、最初の波入場時の素の速度を保持し参照カウントで管理
@@ -182,6 +198,7 @@ public class Riptide : RoleBase
         Dead = false;
         LastSpawnMeetingNum = -1;
         ActiveWaves.Clear();
+        SyncedWaveCount = 0;
         GlobalSlowState = [];
     }
 
@@ -264,6 +281,7 @@ public class Riptide : RoleBase
                 // この時点で wave を登録しておく。
                 var wave = new RiptideWaveState(startPos, direction, capturedSpeed, capturedDir);
                 ActiveWaves.Add(wave);
+                SendWaveCount();
 
                 // 2 個の sub-CNO を SubSpawnInterval 間隔でずらして spawn (packet 分散)。
                 // CombineSendTimeLowering は send timer を巻き戻して即時送信を促す副作用があり、
@@ -343,6 +361,7 @@ public class Riptide : RoleBase
                 foreach (var sc in wave.SubCNOs) sc?.Despawn();
                 foreach (var gc in wave.GhostSubCNOs) gc?.Despawn();
                 ActiveWaves.RemoveAt(i);
+                SendWaveCount();
                 continue;
             }
 
@@ -388,6 +407,7 @@ public class Riptide : RoleBase
                 foreach (var sc in wave.SubCNOs) sc?.Despawn();
                 foreach (var gc in wave.GhostSubCNOs) gc?.Despawn();
                 ActiveWaves.RemoveAt(i);
+                SendWaveCount();
                 continue;
             }
 
@@ -565,6 +585,7 @@ public class Riptide : RoleBase
             foreach (var gc in wave.GhostSubCNOs) gc?.Despawn();
         }
         ActiveWaves.Clear();
+        SendWaveCount();
 
         // GlobalSlowState を参照して速度を復元 (refcount 問わず全員)
         foreach (byte pid in toRestore)
@@ -619,9 +640,10 @@ public class Riptide : RoleBase
         if (meeting) return string.Empty;
         if (seer.PlayerId != target.PlayerId) return string.Empty;
         if (!seer.Is(CustomRoles.Riptide)) return string.Empty;
-        if (ActiveWaves.Count == 0) return string.Empty;
+        int waveCount = AmongUsClient.Instance.AmHost ? ActiveWaves.Count : SyncedWaveCount;
+        if (waveCount == 0) return string.Empty;
 
-        return $"<size=70%><color=#0073ff>~</color> {ActiveWaves.Count}</size>";
+        return $"<size=70%><color=#0073ff>~</color> {waveCount}</size>";
     }
 
     // ============================================================

@@ -113,7 +113,7 @@ public class Druid : RoleBase
         {
             string roomName = reader.ReadString();
 
-            di.DelayTimer.Dispose();
+            di.DelayTimer?.Dispose();
             di.DelayTimer = null;
             di.Triggers.TryAdd(position, roomName);
         }

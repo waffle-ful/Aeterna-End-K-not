@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using EndKnot.Modules;
+using Hazel;
 using UnityEngine;
 
 namespace EndKnot.Roles;
@@ -78,6 +79,7 @@ public class NiceLogger : RoleBase
         SetRoom = Translator.GetString(nearestDoor.Room.ToString());
         Cooltime = 0f;
         Taskmode = true;
+        SendSync();
 
         pc.SyncSettings();
         Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
@@ -170,12 +172,25 @@ public class NiceLogger : RoleBase
 
         PlayerControl pc = NiceLoggerId.GetPlayer();
         Taskmode = pc == null || !pc.IsAlive();
+        SendSync();
 
         if (!Taskmode && pc != null)
         {
             pc.SyncSettings();
             Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
         }
+    }
+
+    // 名前の下の案内と進行表示は各クライアントが自分の手元の値で出すので、監視中かどうかをモッド客へ送る
+    private void SendSync()
+    {
+        Utils.SendRPC(CustomRPC.SyncRoleData, NiceLoggerId, Taskmode, LogPos.HasValue);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        Taskmode = reader.ReadBoolean();
+        LogPos = reader.ReadBoolean() ? Vector2.zero : null;
     }
 
     public override void SetButtonTexts(HudManager hud, byte id)

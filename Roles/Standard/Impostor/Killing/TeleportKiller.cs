@@ -1,6 +1,8 @@
 ﻿using System.Collections.Generic;
 using AmongUs.GameOptions;
+using EndKnot.Modules;
 using EndKnot.Patches;
+using Hazel;
 using UnityEngine;
 
 namespace EndKnot.Roles;
@@ -98,6 +100,11 @@ public class TeleportKiller : RoleBase
         Main.AllPlayerKillCooldown[id] = KillCooldown.GetFloat();
     }
 
+    public void ReceiveRPC(MessageReader reader)
+    {
+        usecount = reader.ReadPackedInt32();
+    }
+
     public override void ApplyGameOptions(IGameOptions opt, byte playerId)
     {
         float cd = AbilityCooldown.GetFloat();
@@ -122,6 +129,9 @@ public class TeleportKiller : RoleBase
         if (max != 0 && usecount >= max) return false;
 
         usecount++;
+
+        // 残り回数の表示は各クライアントが自分で組み立てるので、使用回数をモッド客へ送る
+        Utils.SendRPC(CustomRPC.SyncRoleData, TeleportKillerId, usecount);
 
         LateTask.New(() =>
         {

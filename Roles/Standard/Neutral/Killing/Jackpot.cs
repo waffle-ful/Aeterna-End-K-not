@@ -1,5 +1,7 @@
 ﻿using System.Collections.Generic;
 using AmongUs.GameOptions;
+using EndKnot.Modules;
+using Hazel;
 using UnityEngine;
 
 namespace EndKnot.Roles;
@@ -38,6 +40,7 @@ public class Jackpot : RoleBase
     private bool DomainActive;
     private bool LastNearMissState;
     private bool LastJackpotState;
+    private (int Money, int Chance, bool Domain, bool Near)? LastSent;
 
     public override bool IsEnable => On;
 
@@ -83,6 +86,27 @@ public class Jackpot : RoleBase
         DomainActive = false;
         LastNearMissState = false;
         LastJackpotState = false;
+        LastSent = null;
+    }
+
+    // 画面下の所持金・当選確率・スピン状態は各クライアントが自分で組み立てるので、変わった時だけモッド客へ送る
+    private void SyncToModdedClients()
+    {
+        if (!GameStates.IsInTask) return;
+
+        (int, int, bool, bool) now = (Money, CurrentJackpotChanceValue, DomainActive, IsNearMissActive);
+        if (LastSent == now) return;
+
+        LastSent = now;
+        Utils.SendRPC(CustomRPC.SyncRoleData, JackpotId, now.Item1, now.Item2, now.Item3, now.Item4);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        Money = reader.ReadPackedInt32();
+        CurrentJackpotChanceValue = reader.ReadPackedInt32();
+        DomainActive = reader.ReadBoolean();
+        NearMissTimer = reader.ReadBoolean() ? 1f : 0f;
     }
 
     public override void Remove(byte playerId)
@@ -153,6 +177,8 @@ public class Jackpot : RoleBase
 
     public override void OnFixedUpdate(PlayerControl pc)
     {
+        SyncToModdedClients();
+
         if (!GameStates.IsInTask || !pc.IsAlive())
         {
             if (DomainActive || IsNearMissActive || IsJackpotActive)

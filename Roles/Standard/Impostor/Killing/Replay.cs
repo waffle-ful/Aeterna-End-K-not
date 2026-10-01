@@ -2,6 +2,7 @@ using System;
 using AmongUs.GameOptions;
 using EndKnot.Modules;
 using EndKnot.Patches;
+using Hazel;
 using UnityEngine;
 using static EndKnot.Translator;
 
@@ -110,6 +111,13 @@ internal class Replay : RoleBase
         Main.AllPlayerKillCooldown[id] = KillCooldown.GetFloat();
     }
 
+    // 進捗表示は各クライアントが自分で組み立てるので、爆破回数と封印状態をモッド客へ送る
+    public void ReceiveRPC(MessageReader reader)
+    {
+        BlastsDone = reader.ReadPackedInt32();
+        Locked = reader.ReadBoolean();
+    }
+
     public override void ApplyGameOptions(IGameOptions opt, byte playerId)
     {
         try
@@ -210,6 +218,8 @@ internal class Replay : RoleBase
         // 短縮後のクールダウンを、PhantomRolePatch の RpcResetAbilityCooldown が走る前に届ける
         // (MarkDirtySettings だと 0.2 秒バッチ送信に載って間に合わないので即時送信を使う)。
         if (!Locked) pc.SyncSettings();
+
+        Utils.SendRPC(CustomRPC.SyncRoleData, pc.PlayerId, BlastsDone, Locked);
 
         // 進捗表示は本人向けなので seer 限定で更新する (target 指定は全員宛の fan-out になる)。
         Utils.NotifyRoles(SpecifySeer: pc);

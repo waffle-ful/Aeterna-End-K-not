@@ -415,7 +415,7 @@ internal class Adventurer : RoleBase
                 InCraftingMode = reader.ReadBoolean();
                 break;
             case 2:
-                ResourceCounts[(Resource)reader.ReadPackedInt32()] -= reader.ReadInt32();
+                ResourceCounts[(Resource)reader.ReadPackedInt32()] -= reader.ReadPackedInt32();
                 break;
             case 3:
                 ResourceCounts[(Resource)reader.ReadPackedInt32()]++;

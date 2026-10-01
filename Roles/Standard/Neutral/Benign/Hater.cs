@@ -1,5 +1,7 @@
 ﻿using System.Linq;
 using AmongUs.GameOptions;
+using EndKnot.Modules;
+using Hazel;
 using static EndKnot.Options;
 
 namespace EndKnot.Roles;
@@ -77,6 +79,12 @@ public class Hater : RoleBase
         return pc.IsAlive() && !IsWon;
     }
 
+    // キルボタンの可否は各クライアントが自分で判定するので、勝利済みかをモッド客へ送る
+    public void ReceiveRPC(MessageReader reader)
+    {
+        IsWon = reader.ReadBoolean();
+    }
+
     public override void ApplyGameOptions(IGameOptions opt, byte playerId)
     {
         opt.SetVision(true);
@@ -91,7 +99,11 @@ public class Hater : RoleBase
         {
             if (!ChooseConverted.GetBool())
             {
-                if (killer.RpcCheckAndMurder(target)) IsWon = true;
+                if (killer.RpcCheckAndMurder(target))
+                {
+                    IsWon = true;
+                    Utils.SendRPC(CustomRPC.SyncRoleData, killer.PlayerId, IsWon);
+                }
 
                 Logger.Info($"{killer.GetRealName()} killed right target case 1", "Hater");
                 return false;
@@ -109,7 +121,11 @@ public class Hater : RoleBase
                     || ((target.Is(CustomRoles.Contagious) || target.Is(CustomRoles.Virus)) && CanKillContagious.GetBool())
                 )
             {
-                if (killer.RpcCheckAndMurder(target)) IsWon = true;
+                if (killer.RpcCheckAndMurder(target))
+                {
+                    IsWon = true;
+                    Utils.SendRPC(CustomRPC.SyncRoleData, killer.PlayerId, IsWon);
+                }
 
                 Logger.Info($"{killer.GetRealName()} killed right target case 2", "Hater");
                 return false;

@@ -1,6 +1,9 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
 using AmongUs.GameOptions;
+using EndKnot.Modules;
 using EndKnot.Patches;
+using Hazel;
 using UnityEngine;
 
 namespace EndKnot.Roles;
@@ -120,6 +123,8 @@ public class CharismaStar : RoleBase
             GatherChoosePlayers.Add(pc.PlayerId);
         }
 
+        SendMarksSync();
+
         Vent nearestVent = pc.GetClosestVent();
         if (nearestVent == null) return;
 
@@ -147,6 +152,7 @@ public class CharismaStar : RoleBase
 
         GatherChoosePlayers.Clear();
         GatherLimitCount--;
+        SendMarksSync();
         pc.SyncSettings();
         pc.RpcResetAbilityCooldown();
         LateTask.New(() => { Main.AllPlayerKillCooldown[pc.PlayerId] = 0.1f; pc.SetKillCooldown(); }, 0.2f, "CharismaStar.GatherKCD");
@@ -158,6 +164,7 @@ public class CharismaStar : RoleBase
         if (GatherLimitCount <= 0) return true;
         if (GatherChoosePlayers.Contains(target.PlayerId)) return true;
         GatherChoosePlayers.Add(target.PlayerId);
+        SendMarksSync();
         LateTask.New(() => Utils.NotifyRoles(SpecifySeer: killer), 0.2f, "CharismaStar.MarkNotify");
         // マークは無料 (キルクールを消費しない)。直前の Prefix が積んだ debounce だけ外して即再クリックを許す。
         CheckMurderPatch.TimeSinceLastKill.Remove(killer.PlayerId);
@@ -173,6 +180,24 @@ public class CharismaStar : RoleBase
     public override void OnReportDeadBody()
     {
         GatherChoosePlayers?.Clear();
+        SendMarksSync();
+    }
+
+    // ◎ の印と残り回数は各クライアントが自分で判定するので、印の付いた相手と残り回数をモッド客へ送る
+    private void SendMarksSync()
+    {
+        var data = new List<object> { CharismaStarId, GatherChoosePlayers.Count };
+        data.AddRange(GatherChoosePlayers.Select(x => (object)x));
+        data.Add(GatherLimitCount);
+        Utils.SendRPC(CustomRPC.SyncRoleData, data.ToArray());
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        GatherChoosePlayers.Clear();
+        int count = reader.ReadPackedInt32();
+        for (var i = 0; i < count; i++) GatherChoosePlayers.Add(reader.ReadByte());
+        GatherLimitCount = reader.ReadPackedInt32();
     }
 
     public override string GetProgressText(byte playerId, bool comms)

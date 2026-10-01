@@ -1,6 +1,8 @@
 ﻿using System.Collections.Generic;
 using AmongUs.GameOptions;
+using EndKnot.Modules;
 using EndKnot.Patches;
+using Hazel;
 using UnityEngine;
 
 namespace EndKnot.Roles;
@@ -158,6 +160,7 @@ public class EvilJumper : RoleBase
         {
             JumpToPosition = pc.Pos();
             Logger.Info($"Set branch: saved JumpToPosition={JumpToPosition.Value}", "EvilJumper");
+            SendSync();
             pc.SyncSettings();
             pc.RpcResetAbilityCooldown();
             Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
@@ -168,6 +171,7 @@ public class EvilJumper : RoleBase
         Timer = 0f;
         NowJumpCount = 1;
         Jumping = true;
+        SendSync();
         Logger.Info($"Jump branch: UsePosition={UsePosition.Value}, JumpToPosition={JumpToPosition.Value}", "EvilJumper");
 
         int count = JumpCount.GetInt();
@@ -236,6 +240,7 @@ public class EvilJumper : RoleBase
         Jumping = false;
         JumpToPosition = null;
         UsePosition = null;
+        SendSync();
         Main.AllPlayerSpeed[pc.PlayerId] = SavedSpeed;
         pc.SyncSettings();
 
@@ -261,6 +266,19 @@ public class EvilJumper : RoleBase
         }
 
         ResetJump();
+        SendSync();
+    }
+
+    // ボタンの文字と進捗表示は各クライアントが自分で判定するので、ジャンプ地点の記録済みと跳躍中をモッド客へ送る
+    private void SendSync()
+    {
+        Utils.SendRPC(CustomRPC.SyncRoleData, EvilJumperId, JumpToPosition.HasValue, Jumping);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        JumpToPosition = reader.ReadBoolean() ? Vector2.zero : null;
+        Jumping = reader.ReadBoolean();
     }
 
     private void ResetJump()

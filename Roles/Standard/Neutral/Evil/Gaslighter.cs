@@ -150,6 +150,9 @@ public class Gaslighter : RoleBase
         }
         else if (!CycleFinished || CycleRepeats.GetBool()) CurrentRound++;
 
+        // ボタンの文字は各クライアントが現在の周回で決めるので、周回が変わるたびにモッド客へ送る
+        Utils.SendRPC(CustomRPC.SyncRoleData, GaslighterId, 3, (int)CurrentRound);
+
         float limit = CurrentRound switch
         {
             Round.Knight => Monarch.KnightMax.GetFloat(),
@@ -281,6 +284,9 @@ public class Gaslighter : RoleBase
                 break;
             case 2:
                 CursedPlayers.Clear();
+                break;
+            case 3:
+                CurrentRound = (Round)reader.ReadPackedInt32();
                 break;
         }
     }

@@ -279,6 +279,7 @@ public class Missioneer : RoleBase
         HasSetMission = false;
         ProximityTimer = 0f;
         VotesReceivedThisMeeting = 0;
+        SendRPC();
     }
 
     private Dictionary<byte, MissionKind> BuildMissionList(int count)
@@ -349,6 +350,7 @@ public class Missioneer : RoleBase
             if (CurrentMissionList.Count == 0)
                 CurrentMissionList = BuildMissionList(Math.Min(MeetingAssignmentCount.GetInt(), Main.AllAlivePlayerControlsToList.Count - 1));
             ShowMissionList();
+            SendRPC();
             return true;
         }
 
@@ -384,6 +386,7 @@ public class Missioneer : RoleBase
         {
             Utils.SendMessage(GetString("MissioneerInvalidTarget"), MissioneerId);
             IsSelectingMode = false;
+            SendRPC();
             return;
         }
 
@@ -510,16 +513,34 @@ public class Missioneer : RoleBase
             m.VotesReceivedThisMeeting++;
     }
 
+    // 会議中の案内文は各クライアントが自分で組み立てるので、選択状態とミッション候補も末尾に載せて送る
     private void SendRPC()
     {
-        Utils.SendRPC(CustomRPC.SyncRoleData, MissioneerId,
-            (int)NowMission,
-            NowPoint,
-            TargetPlayerId,
-            TargetRoom.HasValue ? (int)TargetRoom.Value : -1,
-            TargetVentId,
-            AddWin ? 1 : 0,
-            Gotovent ? 1 : 0);
+        if (!Utils.DoRPC) return;
+
+        MessageWriter w = Utils.CreateRPC(CustomRPC.SyncRoleData);
+
+        try
+        {
+            w.Write(MissioneerId);
+            w.WritePacked((int)NowMission);
+            w.WritePacked(NowPoint);
+            w.Write(TargetPlayerId);
+            w.WritePacked(TargetRoom.HasValue ? (int)TargetRoom.Value : -1);
+            w.WritePacked(TargetVentId);
+            w.WritePacked(AddWin ? 1 : 0);
+            w.WritePacked(Gotovent ? 1 : 0);
+            w.Write(HasSetMission);
+            w.Write(IsSelectingMode);
+            w.Write((byte)CurrentMissionList.Count);
+
+            foreach ((byte pid, MissionKind mission) in CurrentMissionList)
+            {
+                w.Write(pid);
+                w.WritePacked((int)mission);
+            }
+        }
+        finally { Utils.EndRPC(w); }
     }
 
     public void ReceiveRPC(MessageReader reader)
@@ -532,6 +553,13 @@ public class Missioneer : RoleBase
         TargetVentId = reader.ReadPackedInt32();
         AddWin = reader.ReadPackedInt32() == 1;
         Gotovent = reader.ReadPackedInt32() == 1;
+        HasSetMission = reader.ReadBoolean();
+        IsSelectingMode = reader.ReadBoolean();
+        CurrentMissionList = [];
+        int listCount = reader.ReadByte();
+
+        for (var i = 0; i < listCount; i++)
+            CurrentMissionList[reader.ReadByte()] = (MissionKind)reader.ReadPackedInt32();
 
         if (TargetVentId != -1 && ShipStatus.Instance != null)
         {

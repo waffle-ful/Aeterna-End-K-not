@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using AmongUs.GameOptions;
 using EndKnot.Modules;
+using Hazel;
 using UnityEngine;
 using static EndKnot.Translator;
 
@@ -164,6 +165,18 @@ public class Safecracker : RoleBase
         opt.SetVision(IsUnlocked(ImpostorVisionTaskRate));
     }
 
+    // 名前の下の解禁表示は残り回数で変わるので、使用回数をモッド客へ送る
+    private void SendSync()
+    {
+        Utils.SendRPC(CustomRPC.SyncRoleData, SafecrackerId, KillGuardUsed, ExiledGuardUsed);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        KillGuardUsed = reader.ReadPackedInt32();
+        ExiledGuardUsed = reader.ReadPackedInt32();
+    }
+
     public override bool CanUseKillButton(PlayerControl pc) => false;
 
     public override bool CanUseImpostorVentButton(PlayerControl pc) => pc.IsAlive() && IsUnlocked(UseVentTaskRate);
@@ -269,6 +282,7 @@ public class Safecracker : RoleBase
         if (check) return false;
 
         KillGuardUsed++;
+        SendSync();
         killer.SetKillCooldown();
         target.Notify(GetString("SafecrackerKillGuardActivated"));
         Logger.Info($"Kill blocked ({KillGuardUsed}/{MaxKillGuardCount.GetInt()})", "Safecracker");
@@ -292,6 +306,7 @@ public class Safecracker : RoleBase
 
         ExiledGuardUsedThisMeeting = true;
         ExiledGuardUsed++;
+        SendSync();
         PendingExiledGuardNotice = true;
         Logger.Info($"Ejection prohibited ({ExiledGuardUsed}/{MaxExiledGuardCount.GetInt()})", "Safecracker");
         return true;

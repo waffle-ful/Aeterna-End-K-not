@@ -1,4 +1,6 @@
 ﻿using System.Collections.Generic;
+using EndKnot.Modules;
+using Hazel;
 
 namespace EndKnot.Roles;
 
@@ -47,8 +49,21 @@ internal class Tunneler : RoleBase
             }
 
             TunnelerPositions.Remove(pc.PlayerId);
+            Utils.SendRPC(CustomRPC.SyncRoleData, pc.PlayerId, pc.PlayerId, false);
         }
         else
+        {
             TunnelerPositions[pc.PlayerId] = pc.Pos();
+            Utils.SendRPC(CustomRPC.SyncRoleData, pc.PlayerId, pc.PlayerId, true);
+        }
+    }
+
+    // 進行表示の ● は各クライアントが自分の TunnelerPositions で出すので、位置を刻んだかどうかをモッド客へ送る (座標は表示に使わない)
+    public void ReceiveRPC(MessageReader reader)
+    {
+        byte id = reader.ReadByte();
+
+        if (reader.ReadBoolean()) TunnelerPositions[id] = Vector2.zero;
+        else TunnelerPositions.Remove(id);
     }
 }

@@ -88,6 +88,48 @@ public class Deathpact : RoleBase
         Instances.Remove(this);
     }
 
+    // 契約の矢印と残り秒数は各クライアントが自分で組み立てるので、契約の成立と解除をモッド客へ送る
+    private void SendSync(bool active)
+    {
+        if (!DoRPC) return;
+
+        MessageWriter w = CreateRPC(CustomRPC.SyncRoleData);
+
+        try
+        {
+            w.Write(DeathPactId);
+            List<PlayerControl> members = active ? PlayersInDeathpact.Where(a => a).ToList() : new List<PlayerControl>();
+            w.Write((byte)members.Count);
+            foreach (PlayerControl member in members) w.Write(member.PlayerId);
+        }
+        finally { EndRPC(w); }
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        int count = reader.ReadByte();
+        PlayersInDeathpact = [];
+
+        for (var i = 0; i < count; i++)
+        {
+            PlayerControl member = reader.ReadByte().GetPlayer();
+            if (member) PlayersInDeathpact.Add(member);
+        }
+
+        DeathpactTime?.Dispose();
+
+        if (count > 0)
+        {
+            DeathpactTime = new CountdownTimer(DeathpactDuration.GetInt(), cancelOnMeeting: false);
+            if (!ActiveDeathpacts.Contains(DeathPactId)) ActiveDeathpacts.Add(DeathPactId);
+        }
+        else
+        {
+            DeathpactTime = null;
+            ActiveDeathpacts.Remove(DeathPactId);
+        }
+    }
+
     public override void ApplyGameOptions(IGameOptions opt, byte id)
     {
         AURoleOptions.ShapeshifterCooldown = ShapeshiftCooldown.GetFloat();
@@ -147,6 +189,7 @@ public class Deathpact : RoleBase
             PlayersInDeathpact.ForEach(x => NotifyRoles(SpecifySeer: x, SpecifyTarget: x, SendOption: SendOption.None));
         }, cancelOnMeeting: false, onCanceled: () => DeathpactTime = null);
         ActiveDeathpacts.Add(pc.PlayerId);
+        SendSync(true);
 
         if (ShowArrowsToOtherPlayersInPact.GetBool())
         {
@@ -312,6 +355,7 @@ public class Deathpact : RoleBase
 
         // 契約メンバーを空にしないと次の契約に前回のメンバーが混ざる (7900217f で移動し損ねた行)
         dp.PlayersInDeathpact.Clear();
+        dp.SendSync(false);
     }
 
     public override void OnReportDeadBody()

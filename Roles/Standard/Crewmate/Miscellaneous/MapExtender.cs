@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using EndKnot.Modules;
+using Hazel;
 using UnityEngine;
 
 namespace EndKnot.Roles;
@@ -70,6 +71,7 @@ public class MapExtender : RoleBase
     private MapExtenderPortal ExitPortal;
     private readonly HashSet<byte> TpLatched = [];
     private float ExitXOffset;
+    private byte HolderId;
 
     public override bool IsEnable => On;
 
@@ -135,6 +137,7 @@ public class MapExtender : RoleBase
     public override void Add(byte playerId)
     {
         On = true;
+        HolderId = playerId;
         DespawnPortals();
         TpLatched.Clear();
 
@@ -235,7 +238,7 @@ public class MapExtender : RoleBase
         // 一時的な追放なので、こちらの滞在計時に載せると抹消死してしまう。計時対象から外す。
         if (Shuffler.IsInVoid(pc.PlayerId))
         {
-            OutsideSince.Remove(pc.PlayerId);
+            ClearOutside(pc.PlayerId);
             return;
         }
 
@@ -246,14 +249,14 @@ public class MapExtender : RoleBase
         // 蘇生を検知したら 1 回だけマップ内へ引き戻す。
         if (ErasedOutside.Remove(pc.PlayerId))
         {
-            OutsideSince.Remove(pc.PlayerId);
+            ClearOutside(pc.PlayerId);
             if (outside) pc.TP(SafeReturnPosition);
             return;
         }
 
         if (!outside)
         {
-            OutsideSince.Remove(pc.PlayerId);
+            ClearOutside(pc.PlayerId);
             return;
         }
 
@@ -262,12 +265,13 @@ public class MapExtender : RoleBase
         if (!OutsideSince.TryGetValue(pc.PlayerId, out long since))
         {
             OutsideSince[pc.PlayerId] = now;
+            SendSync(pc.PlayerId, true);
             return;
         }
 
         if (now - since >= OutsideTimeLimit.GetInt())
         {
-            OutsideSince.Remove(pc.PlayerId);
+            ClearOutside(pc.PlayerId);
             pc.Suicide(PlayerState.DeathReason.Erased);
 
             // Suicide は Veteran の防御中や Pestilence では無条件 no-op になる。
@@ -283,9 +287,28 @@ public class MapExtender : RoleBase
         // 消えるのは会議のタイミングのみ (毎ラウンド張り直し)。
         DespawnPortals();
         TpLatched.Clear();
+        foreach (byte id in OutsideSince.Keys.ToArray()) ClearOutside(id);
         OutsideSince.Clear();
         PortalTpsThisRound = 0;
         CapLoggedThisRound = false;
+    }
+
+    private void ClearOutside(byte id)
+    {
+        if (OutsideSince.Remove(id)) SendSync(id, false);
+    }
+
+    // 滞在秒数の表示は各クライアントが自分の OutsideSince で出すので、マップ外へ出た/戻ったことをモッド客へ送る
+    private void SendSync(byte id, bool outside)
+    {
+        Utils.SendRPC(CustomRPC.SyncRoleData, HolderId, id, outside);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        byte id = reader.ReadByte();
+        if (reader.ReadBoolean()) OutsideSince[id] = Utils.TimeStamp;
+        else OutsideSince.Remove(id);
     }
 
     private void DespawnPortals()

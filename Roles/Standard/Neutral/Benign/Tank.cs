@@ -1,6 +1,8 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
 using AmongUs.GameOptions;
+using EndKnot.Modules;
+using Hazel;
 
 namespace EndKnot.Roles;
 
@@ -66,8 +68,15 @@ public class Tank : RoleBase
 
     public override void OnEnterVent(PlayerControl pc, Vent vent)
     {
-        EnteredVents.Add(vent.Id);
+        // 進捗表示は各クライアントが自分の手元で数えるので、新しく入ったベントだけモッド客へ送る
+        if (EnteredVents.Add(vent.Id)) Utils.SendRPC(CustomRPC.SyncRoleData, TankId, vent.Id);
+
         Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        EnteredVents.Add(reader.ReadPackedInt32());
     }
 
     public override string GetProgressText(byte playerId, bool comms)

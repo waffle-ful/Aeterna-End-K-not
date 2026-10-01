@@ -138,6 +138,8 @@ internal class Warlock : RoleBase
                 warlock.AddAbilityCD();
         }
 
+        if (killCooldown || curseCooldown) Utils.SendRPC(CustomRPC.SyncRoleData, WarlockId, 1, killCooldown, curseCooldown);
+
         if (killCooldown && curseCooldown) warlock.SetKillCooldown(Math.Min(kcd, ccd) - 1f);
 
         Utils.NotifyRoles(SpecifySeer: warlock, SpecifyTarget: warlock);
@@ -166,6 +168,7 @@ internal class Warlock : RoleBase
                 CursedPlayers[killer.PlayerId] = target;
                 WarlockTimer[killer.PlayerId] = 0f;
                 IsCurseAndKill[killer.PlayerId] = true;
+                SendCurseAndKillSync(killer.PlayerId, true);
 
                 ResetCooldowns(true, true, warlockPc: killer);
 
@@ -183,6 +186,36 @@ internal class Warlock : RoleBase
         }
 
         return false;
+    }
+
+    // ボタンの文字とクールダウン表示は各クライアントが自分で判定するので、呪い中かどうかと再開したクールダウンをモッド客へ送る
+    private static void SendCurseAndKillSync(byte id, bool value)
+    {
+        Utils.SendRPC(CustomRPC.SyncRoleData, id, 2, value);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        switch (reader.ReadPackedInt32())
+        {
+            case 1:
+                if (reader.ReadBoolean())
+                {
+                    KCD?.Dispose();
+                    KCD = new CountdownTimer(KillCooldown.GetFloat(), () => KCD = null, onCanceled: () => KCD = null);
+                }
+
+                if (reader.ReadBoolean())
+                {
+                    CurseCD?.Dispose();
+                    CurseCD = new CountdownTimer(CurseCooldown.GetFloat(), () => CurseCD = null, onCanceled: () => CurseCD = null);
+                }
+
+                break;
+            case 2:
+                IsCurseAndKill[WarlockId] = reader.ReadBoolean();
+                break;
+        }
     }
 
     public override void OnPet(PlayerControl pc)
@@ -278,6 +311,7 @@ internal class Warlock : RoleBase
                     pc.Notify(Translator.GetString("WarlockNoTarget"));
 
                 IsCurseAndKill[pc.PlayerId] = false;
+                SendCurseAndKillSync(pc.PlayerId, false);
             }
         }
 

@@ -2,6 +2,7 @@
 using AmongUs.GameOptions;
 using EndKnot.Modules;
 using EndKnot.Modules.Extensions;
+using Hazel;
 using static EndKnot.Options;
 
 namespace EndKnot.Roles;
@@ -11,8 +12,11 @@ internal class Veteran : RoleBase
     public static HashSet<byte> VeteranInProtect = [];
 
     public static bool On;
+    private static readonly HashSet<byte> SyncedActive = [];
+    private byte VeteranId;
+    private CountdownTimer ClientTimer;
     public override bool IsEnable => On;
-    
+
     public static OptionItem VeteranSkillCooldown;
     public static OptionItem VeteranSkillDuration;
     public static OptionItem VeteranSkillMaxOfUsage;
@@ -56,12 +60,15 @@ internal class Veteran : RoleBase
     public override void Add(byte playerId)
     {
         On = true;
+        VeteranId = playerId;
+        ClientTimer = null;
         playerId.SetAbilityUseLimit(VeteranSkillMaxOfUsage.GetFloat());
     }
 
     public override void Init()
     {
         On = false;
+        SyncedActive.Clear();
     }
 
     public override void ApplyGameOptions(IGameOptions opt, byte playerId)
@@ -101,6 +108,29 @@ internal class Veteran : RoleBase
         Alert(pc);
     }
 
+    // 進行表示の色は各クライアントが自分の VeteranInProtect で決めるので、発動したことをモッド客へ送り同じ長さで保持させる
+    public void ReceiveRPC(MessageReader reader)
+    {
+        byte id = reader.ReadByte();
+        float duration = reader.ReadSingle();
+
+        ClientTimer?.Dispose();
+        ClientTimer = null;
+        VeteranInProtect.Remove(id);
+
+        if (duration <= 0f) return;
+
+        VeteranInProtect.Add(id);
+        ClientTimer = new CountdownTimer(duration, () => VeteranInProtect.Remove(id), onCanceled: () => VeteranInProtect.Remove(id));
+    }
+
+    // 会議開始でホストは発動中の集合を空にするので、客側の保持も同時に解除させる
+    public override void OnReportDeadBody()
+    {
+        if (SyncedActive.Remove(VeteranId))
+            Utils.SendRPC(CustomRPC.SyncRoleData, VeteranId, VeteranId, 0f);
+    }
+
     private static void Alert(PlayerControl pc)
     {
         if (VeteranInProtect.Contains(pc.PlayerId)) return;
@@ -111,9 +141,16 @@ internal class Veteran : RoleBase
             _ = new CountdownTimer(VeteranSkillDuration.GetInt(), () =>
             {
                 VeteranInProtect.Remove(pc.PlayerId);
+                SyncedActive.Remove(pc.PlayerId);
                 pc.RpcResetAbilityCooldown();
                 pc.Notify(string.Format(Translator.GetString("VeteranOffGuard"), (int)pc.GetAbilityUseLimit()));
-            }, onCanceled: () => VeteranInProtect.Remove(pc.PlayerId));
+            }, onCanceled: () =>
+            {
+                VeteranInProtect.Remove(pc.PlayerId);
+                SyncedActive.Remove(pc.PlayerId);
+            });
+            SyncedActive.Add(pc.PlayerId);
+            Utils.SendRPC(CustomRPC.SyncRoleData, pc.PlayerId, pc.PlayerId, (float)VeteranSkillDuration.GetInt());
             pc.RpcRemoveAbilityUse(notify: false);
             pc.RPCPlayCustomSound("Gunload");
             pc.Notify(Translator.GetString("VeteranOnGuard"), VeteranSkillDuration.GetFloat());

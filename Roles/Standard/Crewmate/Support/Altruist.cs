@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using AmongUs.GameOptions;
 using EndKnot.Modules;
 using EndKnot.Modules.Extensions;
+using Hazel;
 
 // ReSharper disable ConvertIfStatementToReturnStatement
 
@@ -106,6 +107,8 @@ public class Altruist : RoleBase
             ReviveTargetPos = Vector2.zero;
         });
 
+        SendSync();
+
         PlayerState state = Main.PlayerStates[reporter.PlayerId];
         state.deathReason = PlayerState.DeathReason.Sacrifice;
         state.RealKiller = (DateTime.Now, target.PlayerId);
@@ -143,7 +146,22 @@ public class Altruist : RoleBase
     public override void OnPet(PlayerControl pc)
     {
         RevivingMode = !RevivingMode;
+        SendSync();
         Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
+    }
+
+    // 名前下の表示 (モードと蘇生までの残り) は各クライアントが自分で判定するので、モッド客へ送る
+    private void SendSync()
+    {
+        Utils.SendRPC(CustomRPC.SyncRoleData, AlturistId, RevivingMode, ReviveTimer != null);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        RevivingMode = reader.ReadBoolean();
+
+        if (reader.ReadBoolean() && ReviveTimer == null && ReviveTime.GetInt() > 0)
+            ReviveTimer = new CountdownTimer(ReviveTime.GetInt(), () => ReviveTimer = null, onCanceled: () => ReviveTimer = null);
     }
 
     public override void OnEnterVent(PlayerControl pc, Vent vent)

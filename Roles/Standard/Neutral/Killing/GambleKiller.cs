@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using AmongUs.GameOptions;
 using EndKnot.Modules;
+using Hazel;
 using UnityEngine;
 
 namespace EndKnot.Roles;
@@ -157,6 +158,7 @@ public class GambleKiller : RoleBase
 
         Ability granted = remaining[IRandom.Instance.Next(remaining.Length)];
         Acquired.Add(granted);
+        Utils.SendRPC(CustomRPC.SyncRoleData, GambleKillerId, (int)granted);
 
         switch (granted)
         {
@@ -261,6 +263,11 @@ public class GambleKiller : RoleBase
     {
         Dummies.ToArray().Do(d => d?.Despawn());
         Dummies.Clear();
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        Acquired.Add((Ability)reader.ReadPackedInt32());
     }
 
     public override string GetProgressText(byte playerId, bool comms)

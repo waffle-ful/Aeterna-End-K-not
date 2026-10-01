@@ -1,5 +1,7 @@
 ﻿using System;
+using EndKnot.Modules;
 using EndKnot.Modules.Extensions;
+using Hazel;
 
 namespace EndKnot.Roles;
 
@@ -52,13 +54,25 @@ public class Safeguard : RoleBase
         if (completedTaskCount + 1 >= MinTasks.GetInt())
         {
             bool shielded = Timer != null;
-            Timer = new CountdownTimer(ShieldDuration.GetFloat() + (shielded ? (float)Timer.Remaining.TotalSeconds : 0), () =>
+            float duration = ShieldDuration.GetFloat() + (shielded ? (float)Timer.Remaining.TotalSeconds : 0);
+            Utils.SendRPC(CustomRPC.SyncRoleData, SafeguardId, duration);
+            Timer = new CountdownTimer(duration, () =>
             {
                 Timer = null;
                 Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
             }, onCanceled: () => Timer = null);
             if (!shielded) Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
         }
+    }
+
+    // 名前の下の表示はシールドが続いている間だけ各クライアントが自分の Timer で出すので、残り秒数をモッド客へ送り同じ長さの Timer を持たせる
+    public void ReceiveRPC(MessageReader reader)
+    {
+        float duration = reader.ReadSingle();
+        if (duration <= 0f) return;
+
+        Timer?.Dispose();
+        Timer = new CountdownTimer(duration, () => Timer = null, onCanceled: () => Timer = null);
     }
 
     /// <summary>

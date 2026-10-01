@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using EndKnot.Modules;
+using Hazel;
 
 namespace EndKnot.Roles;
 
@@ -16,6 +18,7 @@ internal class Blackmailer : RoleBase
 
     public List<byte> BlackmailedPlayerIds;
     private int NumBlackmailedThisRound;
+    private byte BlackmailerId;
     public override bool IsEnable => On;
 
     public override void SetupCustomOption()
@@ -34,7 +37,31 @@ internal class Blackmailer : RoleBase
         On = true;
         BlackmailedPlayerIds = [];
         NumBlackmailedThisRound = 0;
+        BlackmailerId = playerId;
         playerId.SetAbilityUseLimit(AbilityUseLimit.GetFloat());
+    }
+
+    // 会議中の名前下の印は各クライアントが自分で組み立てるので、口封じ中のプレイヤーをモッド客へ送る
+    private void SendSync()
+    {
+        if (!Utils.DoRPC) return;
+
+        MessageWriter w = Utils.CreateRPC(CustomRPC.SyncRoleData);
+
+        try
+        {
+            w.Write(BlackmailerId);
+            w.Write((byte)BlackmailedPlayerIds.Count);
+            foreach (byte id in BlackmailedPlayerIds) w.Write(id);
+        }
+        finally { Utils.EndRPC(w); }
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        BlackmailedPlayerIds.Clear();
+        int count = reader.ReadByte();
+        for (var i = 0; i < count; i++) BlackmailedPlayerIds.Add(reader.ReadByte());
     }
 
     public override void Init()
@@ -54,6 +81,7 @@ internal class Blackmailer : RoleBase
         return killer.CheckDoubleTrigger(target, () =>
         {
             BlackmailedPlayerIds.Add(target.PlayerId);
+            SendSync();
             Utils.NotifyRoles(SpecifySeer: killer, SpecifyTarget: target);
             killer.SetKillCooldown(3f);
             killer.RpcRemoveAbilityUse();
@@ -63,7 +91,10 @@ internal class Blackmailer : RoleBase
 
     public override void AfterMeetingTasks()
     {
-        if (AbilityExpires.GetValue() == 0) BlackmailedPlayerIds.Clear();
+        if (AbilityExpires.GetValue() != 0 || BlackmailedPlayerIds.Count == 0) return;
+
+        BlackmailedPlayerIds.Clear();
+        SendSync();
     }
 
     public static void ManipulateVotingResult(Dictionary<byte, int> votingData, MeetingHud.VoterState[] states)

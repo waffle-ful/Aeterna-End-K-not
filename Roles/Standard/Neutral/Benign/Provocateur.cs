@@ -1,5 +1,7 @@
 ﻿using System.Collections.Generic;
 using AmongUs.GameOptions;
+using EndKnot.Modules;
+using Hazel;
 
 namespace EndKnot.Roles;
 
@@ -8,6 +10,7 @@ internal class Provocateur : RoleBase
     public static Dictionary<byte, byte> Provoked = [];
 
     public static bool On;
+    private byte ProvocateurId;
     public override bool IsEnable => On;
 
     public override void SetupCustomOption()
@@ -18,6 +21,7 @@ internal class Provocateur : RoleBase
     public override void Add(byte playerId)
     {
         On = true;
+        ProvocateurId = playerId;
     }
 
     public override void Init()
@@ -66,6 +70,14 @@ internal class Provocateur : RoleBase
         Main.PlayerStates[target.PlayerId].deathReason = PlayerState.DeathReason.PissedOff;
         killer.Kill(target);
         Provoked.TryAdd(killer.PlayerId, target.PlayerId);
+
+        // キルボタンの可否は各クライアントが自分で判定するので、挑発済みをモッド客へ送る
+        Utils.SendRPC(CustomRPC.SyncRoleData, killer.PlayerId, target.PlayerId);
         return false;
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        Provoked.TryAdd(ProvocateurId, reader.ReadByte());
     }
 }

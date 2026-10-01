@@ -80,6 +80,7 @@ public class Remotekiller : RoleBase
     {
         // Mark the target instead of killing
         MarkedTargetId = target.PlayerId;
+        SendSync();
         killer.SetKillCooldown(KillCooldown.GetFloat(), target: target);
         killer.Notify(string.Format(GetString("Remotekiller.Marked"), target.GetRealName()));
         Utils.NotifyRoles(SpecifySeer: killer, SpecifyTarget: killer);
@@ -97,6 +98,7 @@ public class Remotekiller : RoleBase
 
         // Execute the remote kill
         MarkedTargetId = byte.MaxValue;
+        SendSync();
 
         // 抗えない (Lv3) の処刑。Pestilence だけは従来どおり素通し (反撃もさせない)。
         if (target.Is(CustomRoles.Pestilence) || !CheckMurderPatch.PassesGate(pc, target, kind: AttackKind.Execution)) return;
@@ -167,6 +169,18 @@ public class Remotekiller : RoleBase
     public override void OnReportDeadBody()
     {
         MarkedTargetId = byte.MaxValue;
+        SendSync();
+    }
+
+    // ベントボタンの文字と画面下の対象表示は各クライアントが自分で決めるので、印を付けた対象をモッド客へ送る
+    private void SendSync()
+    {
+        Utils.SendRPC(CustomRPC.SyncRoleData, RemotekillerID, MarkedTargetId);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        MarkedTargetId = reader.ReadByte();
     }
 
     public override string GetProgressText(byte playerId, bool comms)
