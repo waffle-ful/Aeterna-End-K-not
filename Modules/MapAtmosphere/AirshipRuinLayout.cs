@@ -128,14 +128,19 @@ internal static class AirshipRuinLayout
 
     // 壁 = 人の足を止める当たり判定。どの層が足を止めるかは物理設定 (層どうしの衝突表) で決まるので、
     // プレイヤーの層と衝突する層をそこから取る (船の外周の境界もこれに入る)。他のプレイヤー自身は除く。
-    // 部屋の範囲などのトリガーは壁ではないので、呼ぶ側で Physics2D.queriesHitTriggers を切っておく。
+    // 部屋の範囲などのトリガーは壁ではないので、当たった物からトリガーを除いて判定する。
     private static int _wallMask;
+
+    // Android 版のエンジンには層どうしの衝突表を読む呼び出しが無い。表はゲームのデータで OS によらないので、
+    // Windows 版で読んだ値 (プレイヤーの層と衝突する層) をそのまま持つ。
+    private const int AndroidWallMask = unchecked((int)0xFFFC3ACF);
 
     private static int WallMask()
     {
         PlayerControl lp = PlayerControl.LocalPlayer;
         if (!lp) return Constants.ShipAndAllObjectsMask;
         int layer = lp.gameObject.layer;
+        if (System.OperatingSystem.IsAndroid()) return AndroidWallMask & ~(1 << layer);
         return Physics2D.GetLayerCollisionMask(layer) & ~(1 << layer);
     }
 
@@ -147,8 +152,28 @@ internal static class AirshipRuinLayout
     {
         float dx = bx - ax, dy = by - ay;
         float len = FxMath.Sqrt(dx * dx + dy * dy);
-        if (len < 0.0001f) return !Physics2D.OverlapCircle(FxMath.V2(ax, ay), FootRadius, _wallMask);
-        return !Physics2D.CircleCast(FxMath.V2(ax, ay), FootRadius, FxMath.V2(dx / len, dy / len), len, _wallMask).collider;
+        if (len < 0.0001f)
+        {
+            var overlaps = Physics2D.OverlapCircleAll(FxMath.V2(ax, ay), FootRadius, _wallMask);
+            if (overlaps == null) return true;
+            for (int i = 0; i < overlaps.Length; i++)
+            {
+                Collider2D c = overlaps[i];
+                if (c && !c.isTrigger) return false;
+            }
+
+            return true;
+        }
+
+        var hits = Physics2D.CircleCastAll(FxMath.V2(ax, ay), FootRadius, FxMath.V2(dx / len, dy / len), len, _wallMask);
+        if (hits == null) return true;
+        for (int i = 0; i < hits.Length; i++)
+        {
+            Collider2D c = hits[i].collider;
+            if (c && !c.isTrigger) return false;
+        }
+
+        return true;
     }
 
     private static void BuildFloor(ShipStatus ship)
@@ -366,10 +391,7 @@ internal static class AirshipRuinLayout
         int cellsTotal = 0;
 
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        bool hitTriggers = Physics2D.queriesHitTriggers;
-        Physics2D.queriesHitTriggers = false;
-        try { BuildFloor(ship); }
-        finally { Physics2D.queriesHitTriggers = hitTriggers; }
+        BuildFloor(ship);
         long floorMs = sw.ElapsedMilliseconds;
         CollectLowProps(ship);
         int floorCells = 0;

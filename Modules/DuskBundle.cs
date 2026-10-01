@@ -165,7 +165,7 @@ internal static class DuskBundle
             }
 
             int length = (int)stream.Length;
-            var array = new Il2CppStructArray<byte>(length);
+            var array = new Il2CppStructArray<byte>((long)length);
             byte* dst = (byte*)IntPtr.Add(array.Pointer, IntPtr.Size * 4).ToPointer();
             int read = 0;
             while (read < length)

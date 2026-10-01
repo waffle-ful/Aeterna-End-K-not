@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Experimental.Rendering;
 using Kind = EndKnot.Modules.MapAtmosphere.AirshipRuinLayout.Kind;
 using Placement = EndKnot.Modules.MapAtmosphere.AirshipRuinLayout.Placement;
 
@@ -532,24 +533,26 @@ internal static class AirshipRuin
         }
 
         if (_hazeScale < 0.999f) ratios.Add(_hazeScale);
+        // 形式は記述子から読む (RenderTexture.format の読み出しは Android 版のエンジンに無い)。
+        GraphicsFormat format = cur.descriptor.graphicsFormat;
         _hazeSteps = new RenderTexture[ratios.Count];
         for (int i = 0; i < _hazeSteps.Length; i++)
-            _hazeSteps[i] = NewHazeTexture(System.Math.Max(8, (int)(cur.width * ratios[i])), System.Math.Max(8, (int)(cur.height * ratios[i])), cur.format);
+            _hazeSteps[i] = NewHazeTexture(System.Math.Max(8, (int)(cur.width * ratios[i])), System.Math.Max(8, (int)(cur.height * ratios[i])), format);
 
-        _hazeOut = NewHazeTexture(cur.width, cur.height, cur.format);
+        _hazeOut = NewHazeTexture(cur.width, cur.height, format);
         m.mainTexture = _hazeSteps.Length > 0 ? HazeShown() : cur;
 
         // 視界の中の写しも同じ大きさ・同じ割合でぼかす (視界の縁で内と外のぼけ方が揃う)。
-        _invadeSrc = NewHazeTexture(cur.width, cur.height, cur.format);
+        _invadeSrc = NewHazeTexture(cur.width, cur.height, format);
         _invadeSteps = new RenderTexture[_hazeSteps.Length];
         for (int i = 0; i < _invadeSteps.Length; i++)
-            _invadeSteps[i] = NewHazeTexture(_hazeSteps[i].width, _hazeSteps[i].height, cur.format);
-        _invadeOut = NewHazeTexture(cur.width, cur.height, cur.format);
+            _invadeSteps[i] = NewHazeTexture(_hazeSteps[i].width, _hazeSteps[i].height, format);
+        _invadeOut = NewHazeTexture(cur.width, cur.height, format);
         _invadeWarm = false;
         Logger.Info($"ruin haze {cur.width}x{cur.height} scale={_hazeScale:0.##} steps={_hazeSteps.Length}", "AirshipLiminal");
     }
 
-    private static RenderTexture NewHazeTexture(int w, int h, RenderTextureFormat format)
+    private static RenderTexture NewHazeTexture(int w, int h, GraphicsFormat format)
     {
         var rt = new RenderTexture(w, h, 0, format)
         {
