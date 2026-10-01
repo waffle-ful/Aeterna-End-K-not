@@ -43,6 +43,13 @@ public class SuperCannonShot
         };
     }
 
+    // 超波動砲の効果音は種類ごとに 1 組 (Resources/Sounds/HadouSuper<種類>{Charge,Fire}.wav)。null = クラシック
+    public static string ChargeSoundName(Variant? variant) => $"HadouSuper{SoundKey(variant)}Charge";
+    public static string FireSoundName(Variant? variant) => $"HadouSuper{SoundKey(variant)}Fire";
+    private static string SoundKey(Variant? variant) => variant?.ToString() ?? "Classic";
+
+    public Variant Kind => Type;
+
     // 幾何定数は WaveCannon.cs / JackalHadouHo.cs の双子と同じ値 (視覚と判定の共通言語)
     private const int BeamCharCount = 20;
     private const int BeamSizeUnit = 30;
