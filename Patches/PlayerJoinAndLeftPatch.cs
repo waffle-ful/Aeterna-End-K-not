@@ -98,22 +98,32 @@ internal static class OnGameJoinedPatch
         {
             LateTask.New(() =>
             {
-                if (!HudManager.InstanceExists || AmongUsClient.Instance.IsGameStarted) return;
-
-                (int Files, int Folders) result = CleanOldItems();
-
-                if (result.Files > 0 || result.Folders > 0)
-                {
-                    // Nobody is watching the host screen during a stream / unattended auto-rehost, and this
-                    // prompt blocks DialogueBox.Hide until answered -> it would sit there forever. Time it out.
-                    Prompt.Show(string.Format(GetString("Promt.DeleteOldLogs"), result.Files, result.Folders), () =>
-                    {
-                        result = CleanOldItems(false);
-                        LateTask.New(() => HudManager.Instance.ShowPopUp(string.Format(GetString("LogDeletionResults"), result.Files, result.Folders)), 0.01f);
-                    }, () => { }, autoDismissSeconds: 15f);
-                }
+                if (ClearedLogs || !HudManager.InstanceExists || AmongUsClient.Instance.IsGameStarted) return;
 
                 ClearedLogs = true;
+
+                Main.Instance.StartCoroutine(CoCleanOldItems(true, result =>
+                {
+                    // The scan takes a while; the lobby may be gone by the time it reports back. Try again in the next lobby.
+                    if (!HudManager.InstanceExists || AmongUsClient.Instance.IsGameStarted)
+                    {
+                        ClearedLogs = false;
+                        return;
+                    }
+
+                    if (result.Files > 0 || result.Folders > 0)
+                    {
+                        // Nobody is watching the host screen during a stream / unattended auto-rehost, and this
+                        // prompt blocks DialogueBox.Hide until answered -> it would sit there forever. Time it out.
+                        Prompt.Show(string.Format(GetString("Promt.DeleteOldLogs"), result.Files, result.Folders), () =>
+                        {
+                            Main.Instance.StartCoroutine(CoCleanOldItems(false, deleted =>
+                            {
+                                if (HudManager.InstanceExists) HudManager.Instance.ShowPopUp(string.Format(GetString("LogDeletionResults"), deleted.Files, deleted.Folders));
+                            }));
+                        }, () => { }, autoDismissSeconds: 15f);
+                    }
+                }));
             }, 5f, log: false);
         }
 
@@ -348,12 +358,63 @@ internal static class OnGameJoinedPatch
         catch (Exception e) { Utils.ThrowException(e); }
     }
 
+    // CleanOldItems は裏スレッドで走る。Logger はメインスレッド専用なので、走査中は行を溜めるだけにする。
+    private sealed class CleanLog
+    {
+        public readonly List<(BepInEx.Logging.LogLevel Level, string Text)> Lines = [];
+
+        public void Msg(string text, string tag) => Lines.Add((BepInEx.Logging.LogLevel.Message, text));
+        public void Warn(string text, string tag) => Lines.Add((BepInEx.Logging.LogLevel.Warning, text));
+        public void Error(string text, string tag) => Lines.Add((BepInEx.Logging.LogLevel.Error, text));
+    }
+
+    // ログフォルダが育つと走査だけで数百 ms、対象 1 件ごとのログ行も数千行になる。
+    // 走査と削除は裏スレッドで行い、溜めた行はメインスレッドで数 ms ずつに分けて書き出す。
+    private static IEnumerator CoCleanOldItems(bool dryRun, Action<(int Files, int Folders)> onDone)
+    {
+        CleanLog log = new();
+        System.Threading.Tasks.Task<(int Files, int Folders)> task = System.Threading.Tasks.Task.Run(() => CleanOldItems(log, dryRun));
+        while (!task.IsCompleted) yield return null;
+
+        long sliceStart = System.Diagnostics.Stopwatch.GetTimestamp();
+
+        foreach ((BepInEx.Logging.LogLevel level, string text) in log.Lines)
+        {
+            switch (level)
+            {
+                case BepInEx.Logging.LogLevel.Error:
+                    Logger.Error(text, "CleanOldItems");
+                    break;
+                case BepInEx.Logging.LogLevel.Warning:
+                    Logger.Warn(text, "CleanOldItems");
+                    break;
+                default:
+                    Logger.Msg(text, "CleanOldItems");
+                    break;
+            }
+
+            if ((System.Diagnostics.Stopwatch.GetTimestamp() - sliceStart) * 1000.0 / System.Diagnostics.Stopwatch.Frequency < 2.0) continue;
+
+            yield return null;
+            sliceStart = System.Diagnostics.Stopwatch.GetTimestamp();
+        }
+
+        if (task.IsFaulted)
+        {
+            Logger.Error($"Cleaning failed: {task.Exception?.GetBaseException().Message}", "CleanOldItems");
+            yield break;
+        }
+
+        try { onDone(task.Result); }
+        catch (Exception e) { Utils.ThrowException(e); }
+    }
+
     // Written with AI because I don't want it to delete the wrong files
     /// <summary>
     ///     Cleans files and folders older than `days` in the EndKnot_Logs folder.
     ///     Default: dryRun = true (shows what would be deleted).
     /// </summary>
-    private static (int Files, int Folders) CleanOldItems(bool dryRun = true, int days = 7)
+    private static (int Files, int Folders) CleanOldItems(CleanLog log, bool dryRun = true, int days = 7)
     {
         if (OperatingSystem.IsAndroid()) return (0, 0); // Not supported on Android
         
@@ -367,13 +428,13 @@ internal static class OnGameJoinedPatch
         }
         catch (Exception ex)
         {
-            Logger.Error($"Could not determine path: {ex.Message}", "CleanOldItems");
+            log.Error($"Could not determine path: {ex.Message}", "CleanOldItems");
             return (0, 0);
         }
 
         if (!Path.IsPathRooted(path))
         {
-            Logger.Error("Target path is not rooted. Aborting for safety.", "CleanOldItems");
+            log.Error("Target path is not rooted. Aborting for safety.", "CleanOldItems");
             return (0, 0);
         }
 
@@ -382,19 +443,19 @@ internal static class OnGameJoinedPatch
 
         if (!string.Equals(folderName, "EndKnot_Logs", StringComparison.OrdinalIgnoreCase))
         {
-            Logger.Error($"[ERROR] Target folder name is '{folderName}' (expected 'EndKnot_Logs'). Aborting for safety.", "CleanOldItems");
+            log.Error($"[ERROR] Target folder name is '{folderName}' (expected 'EndKnot_Logs'). Aborting for safety.", "CleanOldItems");
             return (0, 0);
         }
 
         if (!Directory.Exists(path))
         {
-            Logger.Msg("[INFO] Target directory does not exist. Nothing to clean.", "CleanOldItems");
+            log.Msg("[INFO] Target directory does not exist. Nothing to clean.", "CleanOldItems");
             return (0, 0);
         }
 
         DateTime thresholdUtc = DateTime.UtcNow - TimeSpan.FromDays(days);
-        Logger.Msg($"Threshold (UTC): delete items last written before {thresholdUtc:O}", "CleanOldItems");
-        Logger.Msg(dryRun
+        log.Msg($"Threshold (UTC): delete items last written before {thresholdUtc:O}", "CleanOldItems");
+        log.Msg(dryRun
             ? "Running in dry run mode — no files or folders will be deleted."
             : "Running for real — files and folders will be deleted.", "CleanOldItems");
 
@@ -413,7 +474,7 @@ internal static class OnGameJoinedPatch
 
                     if (lastWriteUtc < thresholdUtc)
                     {
-                        Logger.Warn(dryRun
+                        log.Warn(dryRun
                             ? $"[DRY] Would delete file: {file} (LastWriteUtc: {lastWriteUtc:O})"
                             : $"[DEL] Deleting file: {file} (LastWriteUtc: {lastWriteUtc:O})", "CleanOldItems");
 
@@ -433,13 +494,13 @@ internal static class OnGameJoinedPatch
                 catch (Exception exFile)
                 {
                     var msg = $"Failed to delete file '{file}': {exFile.Message}";
-                    Logger.Error(msg, "CleanOldItems");
+                    log.Error(msg, "CleanOldItems");
                     failedDeletes.Add(msg);
                     // continue with other files
                 }
             }
         }
-        catch (Exception exEnum) { Logger.Error($"Failed enumerating files: {exEnum.Message}", "CleanOldItems"); }
+        catch (Exception exEnum) { log.Error($"Failed enumerating files: {exEnum.Message}", "CleanOldItems"); }
 
         // 2) Attempt to delete directories that are empty AND older than threshold.
         //    We process directories from deepest to shallowest so we can remove empty parent dirs.
@@ -464,9 +525,9 @@ internal static class OnGameJoinedPatch
                         try
                         {
                             List<string> entries = Directory.EnumerateFileSystemEntries(dir, "*", SearchOption.TopDirectoryOnly).Take(10).ToList();
-                            Logger.Msg($"Skipping non-empty dir: {dir}. Top-level entries (up to 10): {string.Join(", ", entries)}", "CleanOldItems");
+                            log.Msg($"Skipping non-empty dir: {dir}. Top-level entries (up to 10): {string.Join(", ", entries)}", "CleanOldItems");
                         }
-                        catch { Logger.Msg($"Skipping non-empty dir: {dir}. Failed to list entries (possible permission issue).", "CleanOldItems"); }
+                        catch { log.Msg($"Skipping non-empty dir: {dir}. Failed to list entries (possible permission issue).", "CleanOldItems"); }
 
                         continue;
                     }
@@ -477,7 +538,7 @@ internal static class OnGameJoinedPatch
                     // Only delete if the directory is older than threshold by last write OR creation time (safer)
                     if (lastWriteUtc < thresholdUtc || creationUtc < thresholdUtc)
                     {
-                        Logger.Warn(dryRun
+                        log.Warn(dryRun
                             ? $"[DRY] Would delete empty folder: {dir} (LastWriteUtc: {lastWriteUtc:O}, CreationUtc: {creationUtc:O})"
                             : $"[DEL] Deleting empty folder: {dir} (LastWriteUtc: {lastWriteUtc:O}, CreationUtc: {creationUtc:O})", "CleanOldItems");
 
@@ -491,14 +552,14 @@ internal static class OnGameJoinedPatch
                             catch (Exception exDel)
                             {
                                 var msg = $"Failed to delete directory '{dir}': {exDel.Message}";
-                                Logger.Error(msg, "CleanOldItems");
+                                log.Error(msg, "CleanOldItems");
                                 failedDeletes.Add(msg);
 
                                 // Diagnostic: if delete failed because directory not empty, log the top-level entries
                                 try
                                 {
                                     List<string> entries = Directory.EnumerateFileSystemEntries(dir, "*", SearchOption.TopDirectoryOnly).Take(10).ToList();
-                                    Logger.Msg($"Directory '{dir}' appears non-empty during deletion. Top-level entries (up to 10): {string.Join(", ", entries)}", "CleanOldItems");
+                                    log.Msg($"Directory '{dir}' appears non-empty during deletion. Top-level entries (up to 10): {string.Join(", ", entries)}", "CleanOldItems");
                                 }
                                 catch
                                 {
@@ -516,7 +577,7 @@ internal static class OnGameJoinedPatch
                 catch (Exception exDir)
                 {
                     var msg = $"Failed processing directory '{dir}': {exDir.Message}";
-                    Logger.Error(msg, "CleanOldItems");
+                    log.Error(msg, "CleanOldItems");
                     failedDeletes.Add(msg);
                 }
             }
@@ -524,23 +585,23 @@ internal static class OnGameJoinedPatch
             // Optionally, check the root target folder itself: if empty and old, you might want to delete it.
             // Here we will NOT delete the root EndKnot_Logs folder itself to be extra safe.
         }
-        catch (Exception exEnumDirs) { Logger.Error($"Failed enumerating directories: {exEnumDirs.Message}", "CleanOldItems"); }
+        catch (Exception exEnumDirs) { log.Error($"Failed enumerating directories: {exEnumDirs.Message}", "CleanOldItems"); }
 
         // Summary
-        Logger.Msg("=== Summary ===", "CleanOldItems");
-        Logger.Msg($"Files matched and processed: {filesDeleted}", "CleanOldItems");
-        Logger.Msg($"Folders matched and processed: {foldersDeleted}", "CleanOldItems");
+        log.Msg("=== Summary ===", "CleanOldItems");
+        log.Msg($"Files matched and processed: {filesDeleted}", "CleanOldItems");
+        log.Msg($"Folders matched and processed: {foldersDeleted}", "CleanOldItems");
 
         if (failedDeletes.Count > 0)
         {
-            Logger.Msg($"Failures ({failedDeletes.Count}):", "CleanOldItems");
-            foreach (string f in failedDeletes) Logger.Msg(f, "CleanOldItems");
+            log.Msg($"Failures ({failedDeletes.Count}):", "CleanOldItems");
+            foreach (string f in failedDeletes) log.Msg(f, "CleanOldItems");
         }
         else
-            Logger.Msg("No failures reported.", "CleanOldItems");
+            log.Msg("No failures reported.", "CleanOldItems");
 
         if (dryRun)
-            Logger.Msg("Dry run complete.", "CleanOldItems");
+            log.Msg("Dry run complete.", "CleanOldItems");
 
         return (filesDeleted, foldersDeleted);
     }
