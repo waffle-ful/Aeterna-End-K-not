@@ -108,6 +108,7 @@ public class Spider : RoleBase
         Vector2 pos = player.Pos();
         if (Webs.Keys.Any(x => FastVector2.DistanceWithinRange(x, pos, WebTrapRange.GetFloat() * 2f))) return;
         Webs[pos] = [];
+        ExplosionFx.PlayFor(ExplosionFx.Kind.WebSpin, pos, WebTrapRange.GetFloat(), player);
         player.RPCPlayCustomSound("Line");
         LocateArrow.Add(player.PlayerId, pos);
         player.Notify(Translator.GetString("MarkDone"));
@@ -120,6 +121,7 @@ public class Spider : RoleBase
 
     public override void OnMurder(PlayerControl killer, PlayerControl target)
     {
+        ExplosionFx.Play(ExplosionFx.Kind.WebDevour, target.Pos(), 1f);
         Main.PlayerStates[target.PlayerId].deathReason = PlayerState.DeathReason.Eaten;
         Webs.DoIf(x => x.Value.Remove(target.PlayerId), x => Utils.SendRPC(CustomRPC.SyncRoleData, SpiderId, 3, x.Key, target.PlayerId));
     }
@@ -138,6 +140,7 @@ public class Spider : RoleBase
             if (!FastVector2.DistanceWithinRange(webPos, pos, range)) continue;
             if (!trappedPlayers.TryAdd(pc.PlayerId, expireTime)) continue;
 
+            ExplosionFx.Play(ExplosionFx.Kind.WebSnare, pos, trappedDuration);
             RPC.PlaySoundRPC(SpiderId, Sounds.TaskUpdateSound);
             pc.RPCPlayCustomSound("FlashBang");
             pc.MarkDirtySettings();
@@ -157,7 +160,7 @@ public class Spider : RoleBase
         foreach ((Vector2 pos, Dictionary<byte, long> trapped) in Webs)
         {
             if (trapped.Count > 0) NameDirty = true;
-            if (trapped.Values.Min() <= now)
+            if (trapped.Count > 0 && trapped.Values.Min() <= now)
             {
                 ToRemove.Add(pos);
                 LateTask.New(() =>

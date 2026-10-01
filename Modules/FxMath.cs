@@ -21,9 +21,11 @@ public static class FxMath
     public static float Pow(float a, float b) => System.MathF.Pow(a, b);
     public static float Atan2(float y, float x) => System.MathF.Atan2(y, x);
     public static float Abs(float v) => v < 0f ? -v : v;
+    public static float Floor(float v) => System.MathF.Floor(v);
     public static float Min(float a, float b) => a < b ? a : b;
     public static float Max(float a, float b) => a > b ? a : b;
     public static int Min(int a, int b) => a < b ? a : b;
+    public static int Max(int a, int b) => a > b ? a : b;
     public static int Clamp(int v, int min, int max) => v < min ? min : v > max ? max : v;
     public static float Clamp(float v, float min, float max) => v < min ? min : v > max ? max : v;
     public static float Clamp01(float v) => v < 0f ? 0f : v > 1f ? 1f : v;

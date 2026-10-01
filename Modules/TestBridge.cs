@@ -2503,6 +2503,13 @@ public static class TestBridge
     {
         string[] parts = rest.Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
+        if (parts.Length > 0 && parts[0].Equals("RevengeStop", StringComparison.OrdinalIgnoreCase))
+        {
+            ExplosionFx.StopAuras();
+            WriteOut("OK fx RevengeStop");
+            return;
+        }
+
         if (parts.Length == 0 || !Enum.TryParse(parts[0], true, out ExplosionFx.Kind kind))
         {
             WriteOut($"ERR fx: kind must be one of {string.Join("/", Enum.GetNames(typeof(ExplosionFx.Kind)))}");
@@ -2510,6 +2517,9 @@ public static class TestBridge
         }
 
         float radius = parts.Length > 1 && float.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float r) ? r : 3f;
+        // PlayerId + 1 を載せる演出は、半径を省くと自分自身を指す (fx RevengeAwaken で自分にオーラを付けられる)
+        bool selfId = kind is ExplosionFx.Kind.RevengeAwaken or ExplosionFx.Kind.RevengeAura;
+        if (selfId && parts.Length <= 1 && PlayerControl.LocalPlayer) radius = PlayerControl.LocalPlayer.PlayerId + 1;
         int count = parts.Length > 2 && int.TryParse(parts[2], out int c) ? Math.Clamp(c, 1, 24) : 1;
         // 波動砲は A (太さ) と B (色 / ダイナミックの終点の高さ) も渡せる
         float a = parts.Length > 3 && float.TryParse(parts[3], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float pa) ? pa : 0f;
@@ -2520,9 +2530,30 @@ public static class TestBridge
 
         // 役職側は Pos() (体の中心) を渡すので、撮影も同じ基準で出す
         Vector2 at = lp.Pos();
+
+        // ハゲタカは役職側と同じく死体の位置で出す (近くに死体があれば。fakebody で置いた死体を持ち去らせて確かめる)
+        if (kind == ExplosionFx.Kind.VultureFeast)
+        {
+            float best = 9f;
+            Vector2 me = at;
+
+            foreach (DeadBody body in UnityEngine.Object.FindObjectsOfType<DeadBody>())
+            {
+                if (!body || !body.gameObject.activeInHierarchy) continue;
+                Vector2 bp = body.TruePosition;
+                float d = (bp - me).sqrMagnitude;
+                if (d >= best) continue;
+                best = d;
+                at = bp;
+            }
+        }
+
         for (int i = 0; i < count; i++)
         {
-            if (kind >= ExplosionFx.Kind.CannonChargeRight) ExplosionFx.PlayExtra(kind, at + new Vector2(i * 0.8f, 0f), radius, a, b);
+            Vector2 pos = at + new Vector2(i * 0.8f, 0f);
+            bool secret = kind is ExplosionFx.Kind.OilDrip or ExplosionFx.Kind.DemoFuse or ExplosionFx.Kind.HexMark or ExplosionFx.Kind.WebSpin or ExplosionFx.Kind.RevengeAwaken or ExplosionFx.Kind.RevengeAura;
+            if (secret) ExplosionFx.PlayFor(kind, pos, radius, lp);
+            else if (kind >= ExplosionFx.Kind.CannonChargeRight && kind < ExplosionFx.Kind.TimeRewind) ExplosionFx.PlayExtra(kind, at + new Vector2(i * 0.8f, 0f), radius, a, b);
             else ExplosionFx.Play(kind, at + new Vector2(i * 0.8f, 0f), radius);
         }
 

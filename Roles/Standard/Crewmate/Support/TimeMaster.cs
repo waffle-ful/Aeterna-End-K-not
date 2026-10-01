@@ -118,6 +118,7 @@ internal class TimeMaster : RoleBase
         if (Rewinding || pc.GetAbilityUseLimit() < 1) return;
         pc.RpcRemoveAbilityUse(notify: false);
 
+        PlayRewindFx(pc);
         Main.Instance.StartCoroutine(Rewind());
         
         if (pc.AmOwner)
@@ -130,10 +131,16 @@ internal class TimeMaster : RoleBase
         if (Rewinding || pc.GetAbilityUseLimit() < 1) return;
         pc.RpcRemoveAbilityUse(notify: false);
 
+        PlayRewindFx(pc);
         Main.Instance.StartCoroutine(Rewind());
         
         if (pc.AmOwner)
             Achievements.Type.APerfectTimeToRewindIt.Complete();
+    }
+
+    private static void PlayRewindFx(PlayerControl pc)
+    {
+        ExplosionFx.Play(ExplosionFx.Kind.TimeRewind, pc.Pos(), TimeMasterRewindTimeLength.GetInt() * 0.3f + 0.55f);
     }
 
     private static IEnumerator Rewind()
@@ -181,7 +188,9 @@ internal class TimeMaster : RoleBase
 
                     if (finalWave)
                     {
+                        bool moved = !FastVector2.DistanceWithinRange(player.Pos(), pos, RewindSkipDistance);
                         player.TP(pos);
+                        if (moved) ExplosionFx.Play(ExplosionFx.Kind.RewindLand, pos, 1f);
                         continue;
                     }
 
@@ -204,6 +213,7 @@ internal class TimeMaster : RoleBase
                     {
                         ps.Player.RpcRevive();
                         ps.Player.TP(deadBody.TruePosition);
+                        ExplosionFx.Play(ExplosionFx.Kind.RewindRevive, deadBody.TruePosition, 1f);
                         ps.Player.Notify(Translator.GetString("RevivedByTimeMaster"), 15f);
                         RevivedPlayers.Add(deadBody.ParentId);
                     }

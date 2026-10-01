@@ -31,6 +31,7 @@ internal class Demolitionist : RoleBase
         string warningMark = Utils.ColorString(Color.yellow, "\u26a0");
         killer.Notify($"{warningMark} {CustomRoles.Demolitionist.ColoredTextByRole(Translator.GetString("OnDemolitionistDead"))} {warningMark}");
         killer.KillFlash();
+        ExplosionFx.PlayFor(ExplosionFx.Kind.DemoFuse, killer.Pos(), DemolitionistVentTime.GetFloat() + 0.5f, killer);
 
         LateTask.New(() =>
         {
@@ -38,6 +39,7 @@ internal class Demolitionist : RoleBase
             {
                 if ((DemolitionistKillerDiesOnMeetingCall.GetBool() || GameStates.IsInTask) && killer.IsAlive())
                 {
+                    ExplosionFx.Play(ExplosionFx.Kind.Blast, killer.Pos(), 1.4f);
                     killer.Suicide(PlayerState.DeathReason.Demolished, target);
                     RPC.PlaySoundRPC(killer.PlayerId, Sounds.KillSound);
                 }
