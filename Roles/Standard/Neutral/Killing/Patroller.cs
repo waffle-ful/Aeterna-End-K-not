@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.Linq;
 using AmongUs.GameOptions;
+using EndKnot.Modules;
+using Hazel;
 
 namespace EndKnot.Roles;
 
@@ -17,6 +19,7 @@ public class Patroller : RoleBase
     private int Count;
     private PlainShipRoom LastRoom;
     private byte PatrollerId;
+    private bool BoostsSynced;
 
     private Dictionary<Boost, PlainShipRoom> RoomBoosts = [];
 
@@ -50,11 +53,14 @@ public class Patroller : RoleBase
         PatrollerId = playerId;
 
         LastRoom = null;
+        BoostsSynced = false;
 
         RoomBoosts = ShipStatus.Instance.AllRooms
             .Shuffle()
             .Zip(Enum.GetValues<Boost>())
             .ToDictionary(x => x.Second, x => x.First);
+
+        Logger.Info(string.Join(", ", RoomBoosts.Select(x => $"{x.Key}={x.Value.RoomId}")), "Patroller.RoomBoosts");
 
         playerId.SetAbilityUseLimit(1);
     }
@@ -89,6 +95,14 @@ public class Patroller : RoleBase
     public override void OnFixedUpdate(PlayerControl pc)
     {
         if (!pc.IsAlive() || !GameStates.IsInTask) return;
+
+        // 部屋の割り当ては各クライアントが別々に引くので、ホストの割り当てをモッド客へ送って揃える。
+        // 客側の役職が確定した後に届くよう、試合が始まってから送る
+        if (AmongUsClient.Instance.AmHost && !BoostsSynced)
+        {
+            BoostsSynced = true;
+            SendSync();
+        }
 
         if (++Count < 20) return;
         Count = 0;
@@ -144,6 +158,28 @@ public class Patroller : RoleBase
 
         OnPet(shapeshifter);
         return false;
+    }
+
+    private void SendSync()
+    {
+        if (!Utils.DoRPC) return;
+
+        MessageWriter w = Utils.CreateRPC(CustomRPC.SyncRoleData);
+        w.Write(PatrollerId);
+        foreach (Boost boost in Enum.GetValues<Boost>()) w.Write((byte)RoomBoosts[boost].RoomId);
+        Utils.EndRPC(w);
+    }
+
+    public void ReceiveRPC(MessageReader reader)
+    {
+        foreach (Boost boost in Enum.GetValues<Boost>())
+        {
+            var roomId = (SystemTypes)reader.ReadByte();
+            PlainShipRoom room = ShipStatus.Instance.AllRooms.FirstOrDefault(x => x.RoomId == roomId);
+            if (room != null) RoomBoosts[boost] = room;
+        }
+
+        Logger.Info(string.Join(", ", RoomBoosts.Select(x => $"{x.Key}={x.Value.RoomId}")), "Patroller.RoomBoosts");
     }
 
     private enum Boost
