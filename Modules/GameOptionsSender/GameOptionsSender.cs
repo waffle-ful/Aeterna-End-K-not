@@ -68,13 +68,12 @@ public abstract class GameOptionsSender
         // ロビー/セッション起動直後は GameManager.Instance / LogicComponents が未構築の瞬間がある (NRE 源)
         GameManager gm = GameManager.Instance;
         if (gm == null || gm.LogicComponents == null) return;
-        int count = gm.LogicComponents.Count;
 
-        for (byte i = 0; i < count; i++)
-        {
-            Il2CppSystem.Object logicComponent = gm.LogicComponents[i];
-            if (logicComponent != null && logicComponent.TryCast<LogicOptions>(out _)) SendOptionsArray(optionArray, i);
-        }
+        LogicOptions logicOptions = gm.LogicOptions;
+        if (logicOptions == null) return;
+
+        int index = gm.LogicComponents.IndexOf(logicOptions);
+        if (index >= 0) SendOptionsArray(optionArray, (byte)index);
     }
 
     private IEnumerator SendOptionsArrayAsync(Il2CppStructArray<byte> optionArray)
@@ -89,7 +88,8 @@ public abstract class GameOptionsSender
             gm = GameManager.Instance;
             if (gm == null || gm.LogicComponents == null || i >= gm.LogicComponents.Count) yield break;
             Il2CppSystem.Object logicComponent = gm.LogicComponents[i];
-            if (logicComponent != null && logicComponent.TryCast<LogicOptions>(out _)) SendOptionsArray(optionArray, i);
+            LogicOptions logicOptions = gm.LogicOptions;
+            if (logicComponent != null && logicOptions != null && logicComponent.Pointer == logicOptions.Pointer) SendOptionsArray(optionArray, i);
 
             if (ShouldYieldFrame())
             {

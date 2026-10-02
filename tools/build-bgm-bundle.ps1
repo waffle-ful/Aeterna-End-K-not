@@ -22,7 +22,7 @@ $buildDir = if ($Android) { 'Build\android' } else { 'Build' }
 $bundleSuffix = if ($Android) { '.android.bundle' } else { '.bundle' }
 $method = if ($Android) { 'BundleBuilder.BuildAndroid' } else { 'BundleBuilder.Build' }
 $out  = Join-Path $proj "$buildDir\endknot_bgm"
-# 長尺効果音 (別バンドル endknot_sfx): 発射/チャージ音と Backrooms ロビー環境音
+# 効果音 (別バンドル endknot_sfx): Backrooms ロビー環境音・マップ雰囲気音と Resources\Sounds 直下の音
 $sfxSources = @(
     (Join-Path $repo 'Resources\Sounds\Backrooms\lobby-ambient.wav'),
     (Join-Path $repo 'Resources\Sounds\MapAtmosphere\MiraRainLoop.ogg'),
@@ -33,6 +33,19 @@ $sfxSources = @(
     (Join-Path $repo 'Resources\Sounds\MapAtmosphere\AirshipFarDoor.ogg'),
     (Join-Path $repo 'Resources\Sounds\MapAtmosphere\AirshipGlitch.ogg')
 )
+# Resources\Sounds 直下 (サブフォルダ除く) の音も全部バンドルへ。import に失敗する音 (変則サンプルレート等) は
+# ここへ名前を足して外す (外した音は実行時に PCM デコード経路で鳴る)。
+$sfxExcludeNames = @('WaveCannonCharge.ogg', 'WaveCannonFire.ogg')
+$sfxTopLevel = Get-ChildItem (Join-Path $repo 'Resources\Sounds') -File |
+    Where-Object { @('.wav', '.ogg', '.mp3') -contains $_.Extension.ToLowerInvariant() -and $sfxExcludeNames -notcontains $_.Name } |
+    Sort-Object Name
+foreach ($f in $sfxTopLevel) { if ($sfxSources -notcontains $f.FullName) { $sfxSources += $f.FullName } }
+$sfxBaseNames = @{}
+foreach ($f in $sfxSources) {
+    $base = [System.IO.Path]::GetFileNameWithoutExtension($f).ToLowerInvariant()
+    if ($sfxBaseNames.ContainsKey($base)) { throw "sfx clip name collision: $f vs $($sfxBaseNames[$base])" }
+    $sfxBaseNames[$base] = $f
+}
 $dstSfx = Join-Path $proj 'Assets\SFX'
 $outSfx = Join-Path $proj "$buildDir\endknot_sfx"
 $duskSrc = Join-Path $repo 'Resources\Images\MainMenu\Dusk'
@@ -53,7 +66,7 @@ Get-ChildItem $dstAssets -Filter '*.ogg' | Remove-Item -Force
 foreach ($f in $oggs) { Copy-Item $f.FullName (Join-Path $dstAssets $f.Name) -Force }
 Write-Host ("copied {0} tracks -> {1}" -f $oggs.Count, $dstAssets)
 New-Item -ItemType Directory -Force $dstSfx | Out-Null
-Get-ChildItem $dstSfx -Include '*.ogg', '*.wav' -File | Remove-Item -Force
+Get-ChildItem (Join-Path $dstSfx '*') -Include '*.ogg', '*.wav', '*.mp3' -File | Remove-Item -Force
 foreach ($f in $sfxSources) { if (-not (Test-Path $f)) { throw "sfx source missing: $f" }; Copy-Item $f (Join-Path $dstSfx (Split-Path -Leaf $f)) -Force }
 Write-Host ("copied {0} sfx -> {1}" -f $sfxSources.Count, $dstSfx)
 if (Test-Path $dstDusk) { Remove-Item $dstDusk -Recurse -Force }

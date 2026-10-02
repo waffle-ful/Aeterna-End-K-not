@@ -24,6 +24,9 @@ public static class GcPrepass
     [DllImport("GameAssembly", CallingConvention = CallingConvention.Cdecl)]
     private static extern long il2cpp_gc_get_used_size();
 
+    [DllImport("GameAssembly", CallingConvention = CallingConvention.Cdecl)]
+    private static extern long il2cpp_gc_get_heap_size();
+
     // reason 別 debounce: 同一トリガーの連打 (開始→キャンセル→開始等) だけを抑止する。全 reason 共有の
     // 単一窓にすると、countdown→loading の間隔 (手動 5s / autostart 下限 10s) が将来 3s 未満に変更された時に
     // loading 側が無音でスキップされる暗黙依存が生まれる — 別窓なら両方必ず撃てる。
@@ -36,6 +39,15 @@ public static class GcPrepass
         if (_usedSizeUnavailable) return -1;
         try { return il2cpp_gc_get_used_size(); }
         catch { _usedSizeUnavailable = true; return -1; } // エクスポート欠落環境で毎回例外を投げ続けない
+    }
+
+    // Boehm (il2cpp 側) がOSから確保済みのヒープ総バイト数 (使用量ではなく器の大きさ)。エクスポート欠落時は -1。
+    private static bool _heapSizeUnavailable;
+    public static long BoehmHeapBytes()
+    {
+        if (_heapSizeUnavailable) return -1;
+        try { return il2cpp_gc_get_heap_size(); }
+        catch { _heapSizeUnavailable = true; return -1; }
     }
 
     // Boehm 側の GC 実行回数。used_size の増減だけでは「マークは走ったが解放が無かった」GC が

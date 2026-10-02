@@ -40,6 +40,8 @@ public static class ShipStatusSystem
     public static HqHudSystemType HqHudSystemType;
     public static HudOverrideSystemType HudOverrideSystemType;
     public static MushroomMixupSabotageSystem MushroomMixupSabotageSystem;
+    public static DoorsSystemType DoorsSystemType;
+    public static AutoDoorsSystemType AutoDoorsSystemType;
 }
 [HarmonyPatch(typeof(ShipStatus), nameof(ShipStatus.UpdateSystem), typeof(SystemTypes), typeof(PlayerControl), typeof(MessageReader))]
 public static class MessageReaderUpdateSystemPatch
@@ -408,6 +410,20 @@ internal static class ShipStatusOnEnablePatch
         int mapId = Main.NormalOptions.MapId;
         List<SystemTypes> SystemTypesList = ShipStatusSystem.AllSabotage.ToList();
         SystemTypesList.Add(SystemTypes.Ventilation);
+
+        ShipStatusSystem.DoorsSystemType = null;
+        ShipStatusSystem.AutoDoorsSystemType = null;
+
+        try
+        {
+            if (ShipStatus.Instance.Systems.TryGetValue(SystemTypes.Doors, out ISystemType doorsSystem))
+            {
+                ShipStatusSystem.DoorsSystemType = doorsSystem.TryCast<DoorsSystemType>();
+                ShipStatusSystem.AutoDoorsSystemType = doorsSystem.TryCast<AutoDoorsSystemType>();
+            }
+        }
+        catch (Exception e)
+        { Utils.ThrowException(e); }
 
         foreach (var systemType in SystemTypesList)
         {

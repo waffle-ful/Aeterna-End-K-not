@@ -749,14 +749,19 @@ public static class CustomSoundsManager
     // BGM/Backrooms サブフォルダは BGMManager
     // 管轄なので対象外 (SoundsPath 直下のみ列挙)。個別失敗は握りつぶし、その音は従来どおり
     // 初回再生時の同期デコードに任せる (プリロード自体が新たな障害点にならないこと優先)。
-    private const int PreloadStartDelayTicks = 500; // 起動直後の CPU 競合を避ける (fixed 50Hz × 500 ≒ 10 秒)
+    private const int PreloadStartDelayTicks = 250; // ロビー入室直後の CPU 競合を避ける (fixed 50Hz × 250 ≒ 5 秒)
 
     // これを超えるデコード結果は SFX でなく BGM 級とみなしてプリロードしない (≒90 秒ステレオ相当)。
     // ポンプの「1 tick 1 クリップ」はファイル数単位の分割であってサンプル数単位ではないため、
     // 巨大クリップ 1 本のクリップ化 (Il2Cpp 配列への逐次コピー) はそれ自体が framestall 源になる。
     private const int MaxPreloadSamples = 8_000_000;
     private static int preloadTicks;
+    private static bool preloadLobbySeen;
     private static bool preloadStarted;
+    // PreloadDecoded 内に滞留している SFX アイテム数 (Interlocked 専用)。ワーカーはメインの未消化が
+    // SfxQueueLimit 本以上の間は次をデコードしない (全音の PCM が同時に積まれる高水位を防ぐ)。
+    private const int SfxQueueLimit = 2;
+    private static int sfxDecodedInQueue;
     private static HashSet<string> preloadBundleNames = [];
     // BgmName != null なら BGMManager 管轄のトラック (BgmCache へ届ける)。null なら SFX (audioCache へ)。
     private static readonly ConcurrentQueue<(string Key, float[] Buffer, int Read, int Channels, int SampleRate, string BgmName)> PreloadDecoded = [];
@@ -933,12 +938,15 @@ public static class CustomSoundsManager
     {
         if (!AudioPlatformSupported) return;
 
-        // SFX の起動時一括プリロード (従来どおり、起動 ~10 秒後に 1 回だけ)。OFF の間は温めない
-        // (再生されない音のデコード分だけ純増になるため)。ON に切り替えられたら始動する。
+        // SFX の一括プリロード (初めてロビーに入って数秒後に 1 回だけ)。ロビーに入らないメニュー滞在中は
+        // 効果音が鳴らないので温めない。OFF の間も温めない (再生されない音のデコード分だけ純増になるため)。
+        // ON に切り替えられたら始動する。
         if (!preloadStarted)
         {
             bool sfxOn = Main.EnableCustomSoundEffect?.Value ?? false;
-            if (sfxOn && ++preloadTicks >= PreloadStartDelayTicks)
+            if (sfxOn && !preloadLobbySeen && AmongUsClient.Instance && GameStates.IsLobby) preloadLobbySeen = true;
+
+            if (sfxOn && preloadLobbySeen && ++preloadTicks >= PreloadStartDelayTicks)
             {
                 preloadStarted = true;
                 // バンドル収録分は PCM デコードしない (裏スレッドから Unity API は触れないので写しを渡す)
@@ -1037,12 +1045,18 @@ public static class CustomSoundsManager
 
                 bgmClipInProgress = (d.BgmName, d.Buffer, d.Read, d.Channels, clip, 0);
             }
-            else if (!audioCache.TryGetValue(d.Key, out AudioClip cached) || !cached)
+            else
             {
-                AudioClip clip = CreateClip(d.Key, d.Buffer, d.Read, d.Channels, d.SampleRate, out long copyMs);
-                if (clip) clip.hideFlags |= HideFlags.DontUnloadUnusedAsset;
-                audioCache[d.Key] = clip;
-                Logger.Info($"Preloaded {ClipNameOf(d.Key)} (copyMs={copyMs})", "CustomSounds");
+                System.Threading.Interlocked.Decrement(ref sfxDecodedInQueue);
+
+                if (!audioCache.TryGetValue(d.Key, out AudioClip cached) || !cached)
+                {
+                    AudioClip clip = CreateClipChunked(d.Key, d.Buffer, d.Read, d.Channels, d.SampleRate, out long copyMs);
+                    if (clip) clip.hideFlags |= HideFlags.DontUnloadUnusedAsset;
+                    audioCache[d.Key] = clip;
+                    Logger.Info($"Preloaded {ClipNameOf(d.Key)} (copyMs={copyMs})", "CustomSounds");
+                }
+                else ReturnDecodeBuffer(d.Buffer);
             }
 
             return;
@@ -1050,6 +1064,47 @@ public static class CustomSoundsManager
 
         // 完全に暇になったら 16MB のチャンク再利用バッファも手放す (次のロードで再確保される)
         if (bgmChunkBuffer != null && IsBgmPipelineIdle) bgmChunkBuffer = null;
+        if (sfxChunkBuffer != null && sfxPreloadWorkerDone) sfxChunkBuffer = null;
+    }
+
+    // 先読み経路専用のクリップ化。固定長チャンクで SetData を分割し、Il2Cpp 側の一時配列を
+    // クリップ長ぶん確保しない。SetData は配列長ぶん書き、クリップ長を超えると先頭へ回り込むので、
+    // 最後の端数は端数長ちょうどの配列で書く。
+    private const int SfxCopyChunkFloats = 65_536;
+    private static Il2CppStructArray<float> sfxChunkBuffer;
+    private static volatile bool sfxPreloadWorkerDone;
+
+    private static AudioClip CreateClipChunked(string key, float[] buffer, int read, int channels, int sampleRate, out long copyMs)
+    {
+        var sw = Stopwatch.StartNew();
+        AudioClip clip = AudioClip.Create(ClipNameOf(key), read / channels, channels, sampleRate, false);
+
+        int chunkFloats = SfxCopyChunkFloats - SfxCopyChunkFloats % channels;
+        int total = read / channels * channels; // フレーム境界に揃える
+        int copied = 0;
+
+        while (copied < total)
+        {
+            int n = Math.Min(chunkFloats, total - copied);
+
+            Il2CppStructArray<float> chunk;
+
+            if (n == chunkFloats)
+            {
+                if (sfxChunkBuffer == null || sfxChunkBuffer.Length != chunkFloats) sfxChunkBuffer = new Il2CppStructArray<float>((long)chunkFloats);
+                chunk = sfxChunkBuffer;
+            }
+            else chunk = new Il2CppStructArray<float>((long)n);
+
+            System.Runtime.InteropServices.Marshal.Copy(buffer, copied, IntPtr.Add(chunk.Pointer, IntPtr.Size * 4), n);
+            // SetData の第 2 引数はサンプルフレーム単位 (chunkFloats は channels の倍数なので割り切れる)。
+            clip.SetData(chunk, copied / channels);
+            copied += n;
+        }
+
+        copyMs = sw.ElapsedMilliseconds;
+        ReturnDecodeBuffer(buffer);
+        return clip;
     }
 
     private static void PreloadSfx()
@@ -1096,27 +1151,27 @@ public static class CustomSoundsManager
                     if (key == null) continue;
                     if (IsEmbeddedKey(key) && preloadBundleNames.Contains(name)) continue; // SFX バンドル収録分は LoadClip が圧縮クリップを返す
 
+                    // メインの未消化が溜まっている間は次をデコードしない (PCM の滞留 = メモリ山を防ぐ)
+                    while (System.Threading.Interlocked.CompareExchange(ref sfxDecodedInQueue, 0, 0) >= SfxQueueLimit) Thread.Sleep(50);
+
                     switch (Path.GetExtension(key).ToLowerInvariant())
                     {
                         case ".ogg":
                         {
                             (float[] buffer, int read, int channels, int sampleRate) = DecodeOgg(key);
-                            if (read <= MaxPreloadSamples) PreloadDecoded.Enqueue((key, buffer, read, channels, sampleRate, null));
-                            else ReturnDecodeBuffer(buffer);
+                            EnqueueSfxDecoded(key, buffer, read, channels, sampleRate);
                             break;
                         }
                         case ".mp3":
                         {
                             (float[] buffer, int read, int channels, int sampleRate) = DecodeMp3(key);
-                            if (read <= MaxPreloadSamples) PreloadDecoded.Enqueue((key, buffer, read, channels, sampleRate, null));
-                            else ReturnDecodeBuffer(buffer);
+                            EnqueueSfxDecoded(key, buffer, read, channels, sampleRate);
                             break;
                         }
                         default: // .wav
                         {
                             (float[] buffer, int read, int channels, int sampleRate) = DecodeWav(key);
-                            if (read <= MaxPreloadSamples) PreloadDecoded.Enqueue((key, buffer, read, channels, sampleRate, null));
-                            else ReturnDecodeBuffer(buffer);
+                            EnqueueSfxDecoded(key, buffer, read, channels, sampleRate);
                             break;
                         }
                     }
@@ -1131,6 +1186,22 @@ public static class CustomSoundsManager
         {
             // 列挙ごと失敗しても従来動作に戻るだけ
         }
+        finally
+        {
+            sfxPreloadWorkerDone = true;
+        }
+    }
+
+    private static void EnqueueSfxDecoded(string key, float[] buffer, int read, int channels, int sampleRate)
+    {
+        if (read > MaxPreloadSamples)
+        {
+            ReturnDecodeBuffer(buffer);
+            return;
+        }
+
+        System.Threading.Interlocked.Increment(ref sfxDecodedInQueue);
+        PreloadDecoded.Enqueue((key, buffer, read, channels, sampleRate, null));
     }
 
     internal class WAV

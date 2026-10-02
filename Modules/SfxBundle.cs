@@ -8,9 +8,9 @@ using UnityEngine;
 
 namespace EndKnot.Modules;
 
-// 長尺の効果音 (WaveCannon の発射/チャージ・Backrooms ロビー環境音) を AssetBundle (Vorbis 圧縮のまま
-// メモリ常駐) から読む経路。埋込 OGG/WAV → float PCM デコードだと 3 本で常駐 17MB になるが、
-// 圧縮のままなら 1MB 弱。BGM 用の BgmBundle と同じ「埋込からメモリ直読み・ディスクへ書かない」方式で、
+// 効果音 (Resources/Sounds 直下の音全般・Backrooms ロビー環境音・マップ雰囲気音) を AssetBundle (Vorbis 圧縮のまま
+// メモリ常駐) から読む経路。埋込 OGG/WAV → float PCM デコードだと全音で常駐が数百 MB 級になるが、
+// 圧縮のままなら 1/10 以下。BGM 用の BgmBundle と同じ「埋込からメモリ直読み・ディスクへ書かない」方式で、
 // バンドルは unity/BgmBundle/ の Assets/SFX から焼いて Resources/Sounds/endknot_sfx.bundle に埋め込む
 // (tools/build-bgm-bundle.ps1)。効果音は短いので preloadAudioData=true で焼いてあり、取り出した
 // クリップはそのまま鳴らせる (LoadAudioData 待ちは無い)。メインスレッド専用。
@@ -74,7 +74,10 @@ internal static class SfxBundle
             sw.Stop();
 
             if (_available)
+            {
                 Logger.Info($"SFX bundle: loaded {Clips.Count} clips [{string.Join(",", Clips.Keys)}] from embedded resource ({sw.ElapsedMilliseconds}ms)", "SfxBundle");
+                LogEmbeddedNotInBundle();
+            }
             else
                 Logger.Warn("SFX bundle: no AudioClip assets found in embedded resource", "SfxBundle");
         }
@@ -82,6 +85,41 @@ internal static class SfxBundle
         {
             Utils.ThrowException(e);
             _available = false;
+        }
+    }
+
+    // 埋込 Sounds 直下の音のうちバンドルに無い物 (= PCM デコード経路で鳴る音) を 1 行で出す。
+    private static void LogEmbeddedNotInBundle()
+    {
+        try
+        {
+            const string prefix = "EndKnot.Resources.Sounds.";
+            string[] extensions = [".wav", ".ogg", ".mp3"];
+            List<string> missing = [];
+
+            foreach (string res in Assembly.GetExecutingAssembly().GetManifestResourceNames())
+            {
+                if (!res.StartsWith(prefix, StringComparison.Ordinal)) continue;
+
+                string tail = res[prefix.Length..];
+                if (Array.IndexOf(extensions, Path.GetExtension(tail).ToLowerInvariant()) < 0) continue;
+
+                // サブフォルダ配下は '.' 区切りで平坦化されて名前に '.' が残る (BGM / Backrooms 等は対象外)
+                string name = Path.GetFileNameWithoutExtension(tail);
+                if (name.Contains('.')) continue;
+
+                if (!Clips.ContainsKey(name)) missing.Add(name);
+            }
+
+            if (missing.Count == 0) return;
+
+            missing.Sort(StringComparer.OrdinalIgnoreCase);
+            string shown = string.Join(",", missing.Count > 20 ? missing.GetRange(0, 20) : missing);
+            Logger.Info($"SFX bundle: {missing.Count} embedded sounds not in bundle (PCM path) [{shown}{(missing.Count > 20 ? ",..." : "")}]", "SfxBundle");
+        }
+        catch (Exception e)
+        {
+            Utils.ThrowException(e);
         }
     }
 

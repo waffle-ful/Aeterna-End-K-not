@@ -1169,11 +1169,9 @@ public static class CustomRpcSenderExtensions
 
             if (player.AmOwner)
             {
-                foreach (GameLogicComponent com in GameManager.Instance.LogicComponents)
-                {
-                    if (com.TryCast(out LogicOptions lo))
-                        lo.SetGameOptions(options);
-                }
+                LogicOptions ownerLogicOptions = GameManager.Instance.LogicOptions;
+                if (ownerLogicOptions != null && GameManager.Instance.LogicComponents.IndexOf(ownerLogicOptions) >= 0)
+                    ownerLogicOptions.SetGameOptions(options);
 
                 GameOptionsManager.Instance.CurrentGameOptions = options;
                 return false;

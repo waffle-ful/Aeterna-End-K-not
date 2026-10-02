@@ -1044,6 +1044,14 @@ internal static class MapRoomDoorsUpdatePatch
 {
     public static Dictionary<SystemTypes, TextMeshPro> DoorTimerTexts = [];
     private static readonly int Percent = Shader.PropertyToID("_Percent");
+    private static Dictionary<SystemTypes, AutoOpenDoor> AutoDoorByRoom;
+    private static ShipStatus AutoDoorOwner;
+
+    public static void ResetDoorCache()
+    {
+        AutoDoorByRoom = null;
+        AutoDoorOwner = null;
+    }
 
     public static bool Prefix(MapRoom __instance)
     {
@@ -1054,9 +1062,8 @@ internal static class MapRoomDoorsUpdatePatch
         float total;
         float timer;
 
-        ISystemType system = ShipStatus.Instance.Systems[SystemTypes.Doors];
-        var doorsSystemType = system.TryCast<DoorsSystemType>();
-        var autoDoorsSystemType = system.TryCast<AutoDoorsSystemType>();
+        DoorsSystemType doorsSystemType = ShipStatusSystem.DoorsSystemType;
+        AutoDoorsSystemType autoDoorsSystemType = ShipStatusSystem.AutoDoorsSystemType;
 
         if (doorsSystemType != null)
         {
@@ -1081,19 +1088,23 @@ internal static class MapRoomDoorsUpdatePatch
                 goto Skip;
             }
 
-            foreach (OpenableDoor door in ShipStatus.Instance.AllDoors)
+            if (AutoDoorOwner != ShipStatus.Instance || AutoDoorByRoom == null)
             {
-                if (door.Room == room)
-                {
-                    var autoOpenDoor = door.TryCast<AutoOpenDoor>();
+                AutoDoorOwner = ShipStatus.Instance;
+                AutoDoorByRoom = [];
 
-                    if (autoOpenDoor)
-                    {
-                        total = 30f;
-                        timer = autoOpenDoor.CooldownTimer;
-                        goto Skip;
-                    }
+                foreach (OpenableDoor door in ShipStatus.Instance.AllDoors)
+                {
+                    var cachedDoor = door.TryCast<AutoOpenDoor>();
+                    if (cachedDoor) AutoDoorByRoom.TryAdd(door.Room, cachedDoor);
                 }
+            }
+
+            if (AutoDoorByRoom.TryGetValue(room, out AutoOpenDoor autoOpenDoor) && autoOpenDoor)
+            {
+                total = 30f;
+                timer = autoOpenDoor.CooldownTimer;
+                goto Skip;
             }
         }
 
