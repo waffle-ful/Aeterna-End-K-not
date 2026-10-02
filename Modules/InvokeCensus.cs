@@ -51,6 +51,15 @@ public static unsafe class InvokeCensus
     private static readonly Dictionary<string, int> Sites = new(256);
     private static readonly System.Reflection.Assembly Self = typeof(InvokeCensus).Assembly;
 
+    // ラッパーがゲーム側ヒープに文字列・配列・オブジェクト・箱を作る入口の確保量。
+    // ゲーム本体の中からの確保はこの入口を通らないので、ここに出る量は mod 側のコードが作らせた分だけになる。
+    private const int AllocSampleMask = 15; // 平均 16 回に 1 回、確保量を重みにして呼び出し元を採る
+    private static readonly string[] AllocKindNames = ["str", "arr", "obj", "box"];
+    private static readonly long[] AllocBytes = new long[4];
+    private static readonly long[] AllocCalls = new long[4];
+    private static readonly Dictionary<string, long> AllocSites = new(256);
+    private static bool _inAllocSample;
+
     public static bool Running => _armed;
 
     /// <summary>seconds 秒間数えて、結果の各行を report へ渡す。</summary>
@@ -83,6 +92,7 @@ public static unsafe class InvokeCensus
             _original = (delegate* unmanaged[Cdecl]<IntPtr, IntPtr, IntPtr, IntPtr, IntPtr>)detour.TrampolinePtr;
             detour.Apply();
             _detour = detour;
+            InstallAllocHooks(lib);
 #endif
             _installed = true;
         }
@@ -90,6 +100,9 @@ public static unsafe class InvokeCensus
         Array.Clear(Keys, 0, TableSize);
         Array.Clear(Counts, 0, TableSize);
         Sites.Clear();
+        AllocSites.Clear();
+        Array.Clear(AllocBytes, 0, AllocBytes.Length);
+        Array.Clear(AllocCalls, 0, AllocCalls.Length);
         _used = 0;
         _overflow = 0;
         _offThread = 0;
@@ -199,6 +212,133 @@ public static unsafe class InvokeCensus
         finally { _inSample = false; }
     }
 
+#if !ANDROID
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate IntPtr StringNewUtf16Fn(IntPtr text, int length);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate IntPtr ArrayNewFn(IntPtr klass, ulong length);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate IntPtr ObjectNewFn(IntPtr klass);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate IntPtr ValueBoxFn(IntPtr klass, IntPtr data);
+
+    // GC に回収させないため保持
+    private static StringNewUtf16Fn _strHook;
+    private static ArrayNewFn _arrHook, _arrSpecHook;
+    private static ObjectNewFn _objHook;
+    private static ValueBoxFn _boxHook;
+    private static readonly List<INativeDetour> AllocDetours = [];
+
+    private static delegate* unmanaged[Cdecl]<IntPtr, int, IntPtr> _strOriginal;
+    private static delegate* unmanaged[Cdecl]<IntPtr, ulong, IntPtr> _arrOriginal, _arrSpecOriginal;
+    private static delegate* unmanaged[Cdecl]<IntPtr, IntPtr> _objOriginal;
+    private static delegate* unmanaged[Cdecl]<IntPtr, IntPtr, IntPtr> _boxOriginal;
+
+    private static IntPtr Detour<T>(IntPtr lib, string export, T hook) where T : Delegate
+    {
+        INativeDetour detour = INativeDetour.Create(NativeLibrary.GetExport(lib, export), hook);
+        detour.GenerateTrampoline<T>();
+        if (detour.TrampolinePtr == IntPtr.Zero) throw new InvalidOperationException($"no trampoline for {export}");
+        AllocDetours.Add(detour);
+        return detour.TrampolinePtr;
+    }
+
+    // 戻り口を全部確定させてから掛ける (掛けた瞬間から他の呼び出しが入り得る)
+    private static void InstallAllocHooks(IntPtr lib)
+    {
+        _strHook = StrHook;
+        _arrHook = ArrHook;
+        _arrSpecHook = ArrSpecHook;
+        _objHook = ObjHook;
+        _boxHook = BoxHook;
+        _strOriginal = (delegate* unmanaged[Cdecl]<IntPtr, int, IntPtr>)Detour(lib, "il2cpp_string_new_utf16", _strHook);
+        _arrOriginal = (delegate* unmanaged[Cdecl]<IntPtr, ulong, IntPtr>)Detour(lib, "il2cpp_array_new", _arrHook);
+        _arrSpecOriginal = (delegate* unmanaged[Cdecl]<IntPtr, ulong, IntPtr>)Detour(lib, "il2cpp_array_new_specific", _arrSpecHook);
+        _objOriginal = (delegate* unmanaged[Cdecl]<IntPtr, IntPtr>)Detour(lib, "il2cpp_object_new", _objHook);
+        _boxOriginal = (delegate* unmanaged[Cdecl]<IntPtr, IntPtr, IntPtr>)Detour(lib, "il2cpp_value_box", _boxHook);
+        foreach (INativeDetour d in AllocDetours) d.Apply();
+    }
+
+    private static IntPtr StrHook(IntPtr text, int length)
+    {
+        // 64bit の文字列 = 見出し 16B + 長さ 4B + UTF-16 の本体と終端
+        if (_armed) NoteAlloc(0, 20L + 2L * (length + 1), IntPtr.Zero);
+        return _strOriginal(text, length);
+    }
+
+    private static IntPtr ArrHook(IntPtr elementClass, ulong length)
+    {
+        // 64bit の配列 = 見出し 16B + 境界 8B + 長さ 8B + 要素
+        if (_armed) NoteAlloc(1, 32L + (long)length * IL2CPP.il2cpp_class_array_element_size(elementClass), elementClass);
+        return _arrOriginal(elementClass, length);
+    }
+
+    private static IntPtr ArrSpecHook(IntPtr arrayClass, ulong length)
+    {
+        if (_armed) NoteAlloc(1, 32L + (long)length * IL2CPP.il2cpp_array_element_size(arrayClass), arrayClass);
+        return _arrSpecOriginal(arrayClass, length);
+    }
+
+    private static IntPtr ObjHook(IntPtr klass)
+    {
+        if (_armed) NoteAlloc(2, IL2CPP.il2cpp_class_instance_size(klass), klass);
+        return _objOriginal(klass);
+    }
+
+    private static IntPtr BoxHook(IntPtr klass, IntPtr data)
+    {
+        if (_armed) NoteAlloc(3, IL2CPP.il2cpp_class_instance_size(klass), klass);
+        return _boxOriginal(klass, data);
+    }
+
+    private static void NoteAlloc(int kind, long bytes, IntPtr klass)
+    {
+        if (Environment.CurrentManagedThreadId != _mainThread)
+        {
+            _offThread++;
+            return;
+        }
+
+        AllocBytes[kind] += bytes;
+        AllocCalls[kind]++;
+
+        uint x = _rng;
+        x ^= x << 13;
+        x ^= x >> 17;
+        x ^= x << 5;
+        _rng = x;
+        if ((x & AllocSampleMask) != 0 || _inAllocSample) return;
+
+        _inAllocSample = true;
+
+        try
+        {
+            string site = "(outside)";
+            var st = new StackTrace(2, false);
+
+            for (int f = 0; f < st.FrameCount; f++)
+            {
+                System.Reflection.MethodBase mb = st.GetFrame(f)?.GetMethod();
+                Type dt = mb?.DeclaringType;
+                // ラッパー経由の確保はこの計器の runtime_invoke フックを挟むので、計器自身の枠は飛ばす
+                if (dt == null || dt.Assembly != Self || dt == typeof(InvokeCensus)) continue;
+                site = $"{dt.Name}.{mb.Name}";
+                break;
+            }
+
+            string type = klass == IntPtr.Zero ? "string" : Marshal.PtrToStringUTF8(IL2CPP.il2cpp_class_get_name(klass));
+            string key = $"{site} <- {AllocKindNames[kind]}:{type}";
+            AllocSites.TryGetValue(key, out long b);
+            AllocSites[key] = b + bytes;
+        }
+        catch { }
+        finally { _inAllocSample = false; }
+    }
+#endif
+
     private static string Describe(IntPtr method, out bool boxed)
     {
         boxed = false;
@@ -241,6 +381,12 @@ public static unsafe class InvokeCensus
 
         foreach (KeyValuePair<string, int> kv in Sites.OrderByDescending(k => k.Value).Take(40))
             report($"  S {kv.Value * (SampleMask + 1) / sec,7:F0}/s {kv.Key}");
+
+        long allocTotal = AllocBytes.Sum();
+        report($"OK alloc via exports {allocTotal / 1024.0 / sec:F0}KB/s " + string.Join(" ", AllocKindNames.Select((n, k) => $"{n}={AllocBytes[k] / 1024.0 / sec:F0}KB/s({AllocCalls[k] / sec:F0}/s)")));
+
+        foreach (KeyValuePair<string, long> kv in AllocSites.OrderByDescending(k => k.Value).Take(40))
+            report($"  A {kv.Value * (AllocSampleMask + 1) / 1024.0 / sec,7:F1}KB/s {kv.Key}");
 
         report("OK invcensus end");
     }

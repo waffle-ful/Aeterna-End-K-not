@@ -95,11 +95,12 @@ public static class BackroomsShadow
 
         try
         {
+            // 毎フレームの生存確認は Il2Direct.Alive で行う (`== null` はゲーム側の比較を呼び、1 回ごとに箱が出る)
             PlayerControl lp = PlayerControl.LocalPlayer;
-            if (lp == null) return;
+            if (!Il2Direct.Alive(lp)) return;
 
             LightSource ls = lp.lightSource;
-            if (ls == null) return;
+            if (!Il2Direct.Alive(ls)) return;
 
             // Arm 時に lightSource 未生成だった場合の遅延完了 (自己修復): 出現した今、フルセットアップを実行
             if (!float.IsNaN(_pendingArmRadius))
@@ -115,14 +116,14 @@ public static class BackroomsShadow
             // ShadowCamera framing: ShadowQuad が overlay する視点 (メインカメラ) に追従。
             //   追従が無いと lit cutaway が RT に映らず全画面が暗転する。
             Camera mainCam = Camera.main;
-            if (_shadowCam == null) _shadowCam = Object.FindObjectOfType<ShadowCamera>(true);
-            if (_shadowCam != null && mainCam != null)
+            if (!Il2Direct.Alive(_shadowCam)) _shadowCam = Object.FindObjectOfType<ShadowCamera>(true);
+            if (Il2Direct.Alive(_shadowCam) && Il2Direct.Alive(mainCam))
             {
-                if (_shadowCamCam == null) _shadowCamCam = _shadowCam.GetComponent<Camera>();
+                if (!Il2Direct.Alive(_shadowCamCam)) _shadowCamCam = _shadowCam.GetComponent<Camera>();
                 Vector3 mc = mainCam.transform.position;
                 Vector3 sc = _shadowCam.transform.position;
                 _shadowCam.transform.position = new Vector3(mc.x, mc.y, sc.z); // z は ShadowCamera 固有を維持
-                if (_shadowCamCam != null) _shadowCamCam.orthographicSize = mainCam.orthographicSize;
+                if (Il2Direct.Alive(_shadowCamCam)) _shadowCamCam.orthographicSize = mainCam.orthographicSize;
             }
 
             // light origin = body center (transform.position)。ShadowCamera も Camera.main(≒body center)に
@@ -250,15 +251,21 @@ public static class BackroomsShadow
 
     // ★Backrooms タイルにバニラ影を受けさせる鍵: ShadowQuad._Mask を 3→7 に広げる (LevelImposter 方式)。
     //   初回に元値を保存しておき、Disarm/Reset で戻す。
+    private static int _maskId;
+
     private static void ApplyShadowMask()
     {
         try
         {
-            if (!HudManager.InstanceExists || HudManager.Instance.ShadowQuad == null) return;
-            Material m = HudManager.Instance.ShadowQuad.material;
-            if (m == null || !m.HasProperty("_Mask")) return;
-            if (float.IsNaN(_origShadowMask)) _origShadowMask = m.GetFloat("_Mask"); // 初回に元値保存
-            m.SetFloat("_Mask", BackroomsConfig.ShadowReceiveMask);
+            if (!HudManager.InstanceExists) return;
+            MeshRenderer quad = HudManager.Instance.ShadowQuad;
+            if (!Il2Direct.Alive(quad)) return;
+            Material m = quad.material;
+            // 名前で渡すと毎フレーム文字列がゲーム側へ複製されるので、プロパティ ID を 1 回だけ引いて使う
+            if (_maskId == 0) _maskId = Shader.PropertyToID("_Mask");
+            if (!Il2Direct.Alive(m) || !m.HasProperty(_maskId)) return;
+            if (float.IsNaN(_origShadowMask)) _origShadowMask = m.GetFloat(_maskId); // 初回に元値保存
+            m.SetFloat(_maskId, BackroomsConfig.ShadowReceiveMask);
         }
         catch { /* マテリアル未準備 — 無視 */ }
     }

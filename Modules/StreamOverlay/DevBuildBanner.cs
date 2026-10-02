@@ -13,8 +13,10 @@ public class DevBuildBanner : MonoBehaviour
     private GUIStyle _titleStyle, _noteStyle;
     private float _builtScale = -1f;
 
-    // OnGUI は 1 フレームに複数回呼ばれるので、表示文字列は組み立て済みのものを読むだけにする
-    private string _note, _noteTemplate;
+    // OnGUI は 1 フレームに複数回呼ばれるので、表示文字列は組み立て済みのものを読むだけにする。
+    // GUI.Label に string を渡すと呼ぶたびにゲーム側へ文字列が複製されるので、GUIContent に 1 回だけ包んで使い回す。
+    private string _note, _noteTemplate, _title;
+    private GUIContent _titleContent, _noteContent;
 
     // 例外が出たら以後描かない (毎フレーム呼ばれるのでログが洪水になる)
     private bool _faulted;
@@ -54,46 +56,54 @@ public class DevBuildBanner : MonoBehaviour
     }
 
     // 言語切替でも追従できるよう、翻訳済みテンプレの実体が変わったときだけ組み直す
-    // (Translator.GetString はキャッシュ済み文字列を返すので参照比較で足りる)
+    // (Translator.GetString は呼ぶたびに別の文字列を返すことがあるので中身で比べる)
     private void EnsureNote()
     {
+        string title = Translator.GetString("DevBuildBannerTitle");
+
+        if (!string.Equals(title, _title, StringComparison.Ordinal) || _titleContent == null)
+        {
+            _title = title;
+            _titleContent = new GUIContent(title);
+        }
+
         string template = Translator.GetString("DevBuildBannerNote");
-        if (ReferenceEquals(template, _noteTemplate) && _note != null) return;
+        if (string.Equals(template, _noteTemplate, StringComparison.Ordinal) && _noteContent != null) return;
 
         _noteTemplate = template;
         _note = string.Format(template, Main.PluginVersion);
+        _noteContent = new GUIContent(_note);
     }
-
-    private float TitleHeight => 78f * Scale;
-    private float NoteHeight => 22f * Scale;
 
     private void Draw()
     {
-        // 箱を持たないので画面幅いっぱいのラベルを中央寄せで置く
-        var titleRect = new Rect(0f, 10f * Scale, Screen.width, TitleHeight);
-        var noteRect = new Rect(0f, titleRect.y + TitleHeight, Screen.width, NoteHeight);
+        // 箱を持たないので画面幅いっぱいのラベルを中央寄せで置く。
+        // 座標は手元の float で持つ (Rect の x/y/width/height を読むとゲーム側の読み取りを呼び、1 回ごとに箱が出る)
+        float scale = Scale;
+        float width = Il2Direct.ScreenWidth;
+        float titleY = 10f * scale;
+        float titleH = 78f * scale;
 
-        DrawOutlined(titleRect, Translator.GetString("DevBuildBannerTitle"), _titleStyle, new Color(1f, 0.16f, 0.16f));
-        DrawOutlined(noteRect, _note, _noteStyle, new Color(1f, 0.35f, 0.35f, 0.9f));
+        DrawOutlined(0f, titleY, width, titleH, _titleContent, _titleStyle, FxMath.Rgba(1f, 0.16f, 0.16f));
+        DrawOutlined(0f, titleY + titleH, width, 22f * scale, _noteContent, _noteStyle, FxMath.Rgba(1f, 0.35f, 0.35f, 0.9f));
     }
 
     // 明るいメニュー背景でも赤が沈まないよう、暗い縁取りを 4 方向に敷いてから本体を描く。
-    // GUI.color で色を変調する (style 側の textColor は白のまま)。
-    private static void DrawOutlined(Rect rect, string text, GUIStyle style, Color color)
+    // GUI.color で色を変調する (style 側の textColor は白のまま)。描き終えたら白へ戻す (このバナーの前後で色を変える描画は無い)。
+    private static void DrawOutlined(float x, float y, float w, float h, GUIContent content, GUIStyle style, Color color)
     {
-        float off = Mathf.Max(1f, rect.height * 0.06f);
-        Color old = GUI.color;
+        float off = FxMath.Max(1f, h * 0.06f);
 
-        GUI.color = new Color(0f, 0f, 0f, 0.65f * color.a);
-        GUI.Label(new Rect(rect.x - off, rect.y, rect.width, rect.height), text, style);
-        GUI.Label(new Rect(rect.x + off, rect.y, rect.width, rect.height), text, style);
-        GUI.Label(new Rect(rect.x, rect.y - off, rect.width, rect.height), text, style);
-        GUI.Label(new Rect(rect.x, rect.y + off, rect.width, rect.height), text, style);
+        GUI.color = FxMath.Rgba(0f, 0f, 0f, 0.65f * color.a);
+        GUI.Label(new Rect(x - off, y, w, h), content, style);
+        GUI.Label(new Rect(x + off, y, w, h), content, style);
+        GUI.Label(new Rect(x, y - off, w, h), content, style);
+        GUI.Label(new Rect(x, y + off, w, h), content, style);
 
         GUI.color = color;
-        GUI.Label(rect, text, style);
+        GUI.Label(new Rect(x, y, w, h), content, style);
 
-        GUI.color = old;
+        GUI.color = FxMath.Rgba(1f, 1f, 1f);
     }
 
     private void EnsureStyles()

@@ -21,6 +21,8 @@ namespace EndKnot.Modules;
 //
 // 毎フレームの文字列生成を避けるため、色相の位相を Steps 段に量子化してタグ済みの文字列を 1 回だけ焼き、
 // 以降は添字で差し替えるだけにしてある。差し替えも 1 段ごと (= 20Hz) なので TMP のメッシュ再生成も間引かれる。
+// 焼いた文字列はゲーム側にも 1 回だけ複製して握っておく (`.text =` は渡すたびにゲーム側へ文字列を複製し、
+// 25 層 × 20Hz ではロビーで最大のゴミの出どころになる)。
 public static class LobbyCodeRainbow
 {
     private const int Steps = 60;            // 1 周の段数 (= 更新頻度 Steps / CycleSeconds)
@@ -46,8 +48,8 @@ public static class LobbyCodeRainbow
     private static TextMeshPro[] Auras;
     private static int[] AuraRing;
     private static Vector2[] AuraDirection;
-    private static string[] FaceFrames;
-    private static string[][] RingFrames;
+    private static Il2Direct.PinnedString[] FaceFrames;
+    private static Il2Direct.PinnedString[][] RingFrames;
     private static Vector3 BaseLocalPos;
     private static float TextHeight;
     private static int FramesGameId;
@@ -57,7 +59,7 @@ public static class LobbyCodeRainbow
     private static int SlotCursor;
     private static int LayersShown = -1; // SetLayersEnabled を状態が変わった時だけ呼ぶための控え (-1 = 未適用)
 
-    private static bool Active => Owner && Face && Auras != null && FaceFrames != null;
+    private static bool Active => Il2Direct.Alive(Owner) && Il2Direct.Alive(Face) && Auras != null && FaceFrames != null;
 
     // GameStartManager はロビーごとに作り直される。破棄済みの native TMP を掴んだままだと
     // managed からは null に見えないので、ロビーが変わったら必ず参照ごと捨てる。
@@ -72,6 +74,7 @@ public static class LobbyCodeRainbow
         Auras = null;
         AuraRing = null;
         AuraDirection = null;
+        FreeFrames();
         FaceFrames = null;
         RingFrames = null;
         TextHeight = 0f;
@@ -168,18 +171,19 @@ public static class LobbyCodeRainbow
     // Update Prefix から毎フレーム呼ぶ。ストリーマーモード時は既存の本体 alpha 0 と同じく丸ごと隠す。
     public static void Apply(GameStartManager gsm, bool hidden)
     {
-        if (Auras == null || !gsm) return;
+        // 生存確認は Il2Direct.Alive で行う (`if (obj)` / `!=` はゲーム側の比較を呼び、1 回ごとに箱が出る)
+        if (Auras == null || !Il2Direct.Alive(gsm)) return;
 
         // Start Postfix が早期 return したロビーでは Setup が走らない。前ロビーの破棄済み TMP を
         // 掴んだまま触らないよう、持ち主が変わっていたらここで捨てる。
-        if (Owner != gsm || !Owner || !Face)
+        if (Owner is null || Owner.Pointer != gsm.Pointer || !Il2Direct.Alive(Owner) || !Il2Direct.Alive(Face))
         {
             Reset();
             return;
         }
 
         TextMeshPro code = gsm.GameRoomNameCode;
-        if (!code) return;
+        if (!Il2Direct.Alive(code)) return;
 
         // オフの間は層を消して return するだけで、バニラの白いコードに戻る (本体の色は呼び出し元が毎フレーム白に戻している)。
         bool show = !hidden && Main.RainbowLobbyCode != null && Main.RainbowLobbyCode.Value;
@@ -196,11 +200,12 @@ public static class LobbyCodeRainbow
 
         // 本体は素のコード文字列を保ったまま透明にする (読み取り経路を壊さずに見た目だけ差し替える)。
         // 直前の既存ブロックが毎フレーム alpha を戻すので、こちらも毎フレーム上書きしないとちらつく。
-        code.color = new(1f, 1f, 1f, 0f);
+        code.color = FxMath.Rgba(1f, 1f, 1f, 0f);
 
         // 焼き直しの判定は int の GameId で行う。文字列で比べると IntToGameName が毎フレーム
         // 新しい managed string を確保してしまう (このファイルの他の表示更新と同じ作法)。
-        int gameId = AmongUsClient.Instance ? AmongUsClient.Instance.GameId : 0;
+        AmongUsClient client = AmongUsClient.Instance;
+        int gameId = Il2Direct.Alive(client) ? client.GameId : 0;
         if (gameId == 0) return;
 
         if (FaceFrames == null || FramesGameId != gameId)
@@ -208,15 +213,31 @@ public static class LobbyCodeRainbow
             string source = GameCode.IntToGameName(gameId);
             if (string.IsNullOrEmpty(source)) return;
 
-            FaceFrames = BuildFrames(source, 0xFF);
-            RingFrames = new string[RingDirections.Length][];
-            for (var ring = 0; ring < RingDirections.Length; ring++) RingFrames[ring] = BuildFrames(source, RingAlpha[ring]);
+            FreeFrames();
+            // 組み終えてから差し替える (途中で失敗したら作りかけの分を手放してから投げ直す)
+            Il2Direct.PinnedString[] face = null;
+            var rings = new Il2Direct.PinnedString[RingDirections.Length][];
+
+            try
+            {
+                face = BuildFrames(source, 0xFF);
+                for (var ring = 0; ring < RingDirections.Length; ring++) rings[ring] = BuildFrames(source, RingAlpha[ring]);
+            }
+            catch
+            {
+                FreeAll(face);
+                foreach (Il2Direct.PinnedString[] r in rings) FreeAll(r);
+                throw;
+            }
+
+            FaceFrames = face;
+            RingFrames = rings;
 
             FramesGameId = gameId;
             InvalidateSteps();
 
             // 光の広がりは文字の高さを基準にする。文字が変わった時だけ測り直す。
-            Face.text = FaceFrames[0];
+            Face.text = FaceFrames[0].Managed;
             Face.ForceMeshUpdate();
             TextHeight = Face.textBounds.size.y;
             if (TextHeight <= 0f) TextHeight = Face.fontSize * 0.1f;
@@ -227,7 +248,7 @@ public static class LobbyCodeRainbow
 
             for (var i = 0; i < Auras.Length; i++)
             {
-                if (AuraRing[i] != StrokeRing || !Auras[i]) continue;
+                if (AuraRing[i] != StrokeRing || !Il2Direct.Alive(Auras[i])) continue;
 
                 Vector2 dir = AuraDirection[i];
                 Auras[i].text = strokeText;
@@ -253,7 +274,7 @@ public static class LobbyCodeRainbow
         var phase = step / (float)Steps;
 
         // 息づかい: 位相 1 周で 2 回、光だけがふくらむ
-        float pulse = 1f + (PulseAmount * Mathf.Sin(phase * Mathf.PI * 4f));
+        float pulse = 1f + (PulseAmount * FxMath.Sin(phase * Mathf.PI * 4f));
 
         int slots = SlotStep.Length; // 光と縁取りの各層 + 最後に本体
         var updated = false;
@@ -269,7 +290,7 @@ public static class LobbyCodeRainbow
 
             if (i == Auras.Length)
             {
-                Face.text = FaceFrames[step];
+                Il2Direct.SetText(Face, FaceFrames[step]);
                 budget--;
                 updated = true;
                 continue;
@@ -279,13 +300,14 @@ public static class LobbyCodeRainbow
             if (ring == StrokeRing) continue;
 
             TextMeshPro aura = Auras[i];
-            if (!aura) continue;
+            if (!Il2Direct.Alive(aura)) continue;
 
-            aura.text = RingFrames[ring][step];
+            Il2Direct.SetText(aura, RingFrames[ring][step]);
 
             float radius = TextHeight * RingRadius[ring] * pulse;
             Vector2 dir = AuraDirection[i];
-            aura.transform.localPosition = BaseLocalPos + new Vector3(dir.x * radius, dir.y * radius, RingZ(ring));
+            // Vector3 の + はゲーム側の演算子を呼んで箱が出るので成分ごとに足す
+            aura.transform.localPosition = FxMath.V3(BaseLocalPos.x + (dir.x * radius), BaseLocalPos.y + (dir.y * radius), BaseLocalPos.z + RingZ(ring));
             budget--;
             updated = true;
         }
@@ -315,9 +337,11 @@ public static class LobbyCodeRainbow
 
     // 不透明度は <color=#RRGGBBAA> に焼き込む。コンポーネントの color の alpha は
     // 色タグを張った文字には掛からないので、層ごとの濃さはタグ側で決める。
-    private static string[] BuildFrames(string source, byte alpha)
+    private static Il2Direct.PinnedString[] BuildFrames(string source, byte alpha)
     {
-        var frames = new string[Steps];
+        var frames = new Il2Direct.PinnedString[Steps];
+        var built = 0;
+
         var sb = new StringBuilder(source.Length * 26);
         string alphaHex = alpha.ToString("X2");
 
@@ -333,10 +357,35 @@ public static class LobbyCodeRainbow
                 phase = Frac(phase + HuePerChar);
             }
 
-            frames[s] = sb.ToString();
+            try { frames[s] = new Il2Direct.PinnedString(sb.ToString()); }
+            catch
+            {
+                for (var i = 0; i < built; i++) frames[i].Free();
+                throw;
+            }
+
+            built++;
         }
 
         return frames;
+    }
+
+    // 解放したら参照も捨てる (解放済みのハンドルを持ったまま残すと、次の解放で同じハンドルを二度渡す)
+    private static void FreeFrames()
+    {
+        FreeAll(FaceFrames);
+        FaceFrames = null;
+
+        if (RingFrames != null)
+            foreach (Il2Direct.PinnedString[] ring in RingFrames) FreeAll(ring);
+
+        RingFrames = null;
+    }
+
+    private static void FreeAll(Il2Direct.PinnedString[] frames)
+    {
+        if (frames == null) return;
+        foreach (Il2Direct.PinnedString f in frames) f.Free();
     }
 
     private static float Frac(float v)
