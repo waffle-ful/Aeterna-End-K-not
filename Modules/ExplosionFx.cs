@@ -6282,12 +6282,29 @@ public static class ExplosionFx
         for (int i = 0; i < pixels.Length; i++) pixels[i] = FxMath.Rgba(1f, 1f, 1f, FxMath.Clamp01(a[i] * gain));
 
         var tex = new Texture2D(n, n, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
-        tex.SetPixels(pixels);
+        UploadRgba32(tex, pixels);
         tex.Apply(false, true);
         tex.hideFlags |= HideFlags.HideAndDontSave;
         Sprite sprite = Sprite.Create(tex, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f), n, 0, SpriteMeshType.FullRect);
         sprite.hideFlags |= HideFlags.HideAndDontSave;
         return sprite;
+    }
+
+    // SetPixels(Color[]) は呼ぶたびに 16 バイト/画素の il2cpp 配列を作り (512px で 4MB)、広がった il2cpp ヒープは
+    // 試合が終わっても縮まない。RGBA32 の生バイトを手元で組んでポインタで渡せば il2cpp 側の配列は作られない
+    private static unsafe void UploadRgba32(Texture2D tex, Color[] pixels)
+    {
+        var raw = new byte[pixels.Length * 4];
+        for (int i = 0, j = 0; i < pixels.Length; i++, j += 4)
+        {
+            Color c = pixels[i];
+            raw[j] = (byte)(FxMath.Clamp01(c.r) * 255f + 0.5f);
+            raw[j + 1] = (byte)(FxMath.Clamp01(c.g) * 255f + 0.5f);
+            raw[j + 2] = (byte)(FxMath.Clamp01(c.b) * 255f + 0.5f);
+            raw[j + 3] = (byte)(FxMath.Clamp01(c.a) * 255f + 0.5f);
+        }
+
+        fixed (byte* p = raw) tex.LoadRawTextureData((System.IntPtr)p, raw.Length);
     }
 
     // step 方向 (1 = 横, n = 縦) に半径 r の箱ぼかし。line は並ぶ列の間隔
@@ -6333,7 +6350,7 @@ public static class ExplosionFx
 
         _slicePixels = null;
         var tex = new Texture2D(width, height, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
-        tex.SetPixels(pixels);
+        UploadRgba32(tex, pixels);
         tex.Apply(false, true);
         tex.hideFlags |= HideFlags.HideAndDontSave;
 
