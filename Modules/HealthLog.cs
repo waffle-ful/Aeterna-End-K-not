@@ -532,7 +532,9 @@ public static class HealthLog
             long gcMB = GC.GetTotalMemory(false) / (1024 * 1024);
             long wsMB = 0;
             int gen2 = 0;
-            try { if (Proc != null) { Proc.Refresh(); wsMB = Proc.WorkingSet64 / (1024 * 1024); } }
+            // Process.Refresh + WorkingSet64 は全プロセスの一覧を取り直すので 1 回 4〜10ms かかる (実測)。
+            // Environment.WorkingSet は自プロセスだけを問い合わせて数 µs で同じ値を返す。
+            try { wsMB = Environment.WorkingSet / (1024 * 1024); }
             catch { }
             try { gen2 = GC.CollectionCount(2); }
             catch { }
