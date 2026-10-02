@@ -529,6 +529,7 @@ public class Main : BasePlugin
     public override void Load()
     {
         BootTimeline.Mark("load.begin");
+        Modules.PoolTrace.InstallIfRequested();
 #if ANDROID
         // Android のゲーム本体は libil2cpp.so で、"GameAssembly" 名の P/Invoke はそのままでは解決できない。
         // 未解決だと呼び出しごとに DllNotFoundException → catch (1 回 ≈3ms) が毎フレームの計器で積み上がるため、

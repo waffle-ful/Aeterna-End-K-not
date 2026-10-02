@@ -64,10 +64,17 @@ internal static class BgmBundle
         try
         {
             Stopwatch sw = Stopwatch.StartNew();
-            byte[] bytes = ReadEmbeddedBytes();
-            if (bytes == null) { _available = false; return; }
+            _bundle = EmbeddedBundleFile.TryOpen(EmbeddedResourceName);
+            bool fromFile = _bundle != null;
 
-            _bundle = AssetBundle.LoadFromMemory(bytes);
+            if (!fromFile)
+            {
+                byte[] bytes = ReadEmbeddedBytes();
+                if (bytes == null) { _available = false; return; }
+
+                _bundle = AssetBundle.LoadFromMemory(bytes);
+            }
+
             if (_bundle == null)
             {
                 Logger.Warn("BGM bundle: AssetBundle.LoadFromMemory failed", "BgmBundle");
@@ -79,7 +86,7 @@ internal static class BgmBundle
             sw.Stop();
 
             if (_available)
-                Logger.Info($"BGM bundle: loaded {Clips.Count} clips [{string.Join(",", Clips.Keys)}] from embedded resource ({sw.ElapsedMilliseconds}ms)", "BgmBundle");
+                Logger.Info($"BGM bundle: loaded {Clips.Count} clips [{string.Join(",", Clips.Keys)}] from embedded resource ({(fromFile ? "file" : "memory")}, {sw.ElapsedMilliseconds}ms)", "BgmBundle");
             else
                 Logger.Warn("BGM bundle: no AudioClip assets found in embedded resource", "BgmBundle");
         }

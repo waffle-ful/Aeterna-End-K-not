@@ -178,6 +178,8 @@ public static class MemCensus
             if (boehmAllowed)
                 try { BoehmCensus.RunNow(src); } catch (Exception e) { Logger.Warn($"boehm census hook failed: {e.Message}", "MemCensus"); }
 
+            ManagedCensus.NoteGcInfo(now, src);
+
             // texOwners の帰属処理は 339〜409ms の単発停止になるので、自動発火では走らせない。
             if (src != "lobby")
             {

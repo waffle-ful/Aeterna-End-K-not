@@ -59,10 +59,17 @@ internal static class SfxBundle
         try
         {
             Stopwatch sw = Stopwatch.StartNew();
-            byte[] bytes = ReadEmbeddedBytes();
-            if (bytes == null) { _available = false; return; }
+            _bundle = EmbeddedBundleFile.TryOpen(EmbeddedResourceName);
+            bool fromFile = _bundle != null;
 
-            _bundle = AssetBundle.LoadFromMemory(bytes);
+            if (!fromFile)
+            {
+                byte[] bytes = ReadEmbeddedBytes();
+                if (bytes == null) { _available = false; return; }
+
+                _bundle = AssetBundle.LoadFromMemory(bytes);
+            }
+
             if (_bundle == null)
             {
                 Logger.Warn("SFX bundle: AssetBundle.LoadFromMemory failed", "SfxBundle");
@@ -75,7 +82,7 @@ internal static class SfxBundle
 
             if (_available)
             {
-                Logger.Info($"SFX bundle: loaded {Clips.Count} clips [{string.Join(",", Clips.Keys)}] from embedded resource ({sw.ElapsedMilliseconds}ms)", "SfxBundle");
+                Logger.Info($"SFX bundle: loaded {Clips.Count} clips [{string.Join(",", Clips.Keys)}] from embedded resource ({(fromFile ? "file" : "memory")}, {sw.ElapsedMilliseconds}ms)", "SfxBundle");
                 LogEmbeddedNotInBundle();
             }
             else
