@@ -98,6 +98,16 @@ internal static class MessageCapture
         private static void Postfix(DisconnectPopup __instance)
         {
             if (__instance == null) return;
+
+            // メインメニューの Start は毎回 DoShow を呼び、切断理由が無ければ同じ呼び出しの中で閉じる。
+            // 閉じたまま返ってきた時の本文は前の表示の残り (起動直後は既定文言) なので記録しない。
+            DisconnectReasons? reason = AmongUsClient.Instance ? AmongUsClient.Instance.LastDisconnectReason : null;
+            if (!__instance.gameObject.activeInHierarchy && reason == DisconnectReasons.ExitGame)
+            {
+                Logger.Info("DisconnectPopup.DoShow returned hidden (reason=ExitGame) - not captured", "MessageCapture");
+                return;
+            }
+
             MessageCapture.Capture("DisconnectPopup", ReadLongestText(__instance));
         }
     }
