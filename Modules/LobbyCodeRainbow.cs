@@ -1,3 +1,4 @@
+using System;
 using System.Text;
 using InnerNet;
 using TMPro;
@@ -51,6 +52,9 @@ public static class LobbyCodeRainbow
     private static float TextHeight;
     private static int FramesGameId;
     private static int LastStep = -1;
+    private static int SettledStep = -1;  // 全層を描き終えた段 (-1 = 未完)
+    private static int[] SlotStep;        // 層ごとに今出している段。光・縁取りの各層の後ろに本体を 1 枠
+    private static int SlotCursor;
     private static int LayersShown = -1; // SetLayersEnabled を状態が変わった時だけ呼ぶための控え (-1 = 未適用)
 
     private static bool Active => Owner && Face && Auras != null && FaceFrames != null;
@@ -73,6 +77,9 @@ public static class LobbyCodeRainbow
         TextHeight = 0f;
         FramesGameId = 0;
         LastStep = -1;
+        SettledStep = -1;
+        SlotStep = null;
+        SlotCursor = 0;
         LayersShown = -1;
     }
 
@@ -132,7 +139,16 @@ public static class LobbyCodeRainbow
         Auras = auras;
         AuraRing = rings;
         AuraDirection = dirVectors;
+        SlotStep = new int[total + 1];
+        Array.Fill(SlotStep, -1);
         Owner = gsm;
+    }
+
+    private static void InvalidateSteps()
+    {
+        LastStep = -1;
+        SettledStep = -1;
+        if (SlotStep != null) Array.Fill(SlotStep, -1);
     }
 
     private static float RingZ(int ring) => -0.01f * (RingDirections.Length - ring);
@@ -173,7 +189,7 @@ public static class LobbyCodeRainbow
         {
             SetLayersEnabled(show);
             LayersShown = shown;
-            LastStep = -1; // 再表示した時に止まった色のまま出ないよう、次のフレームで必ず差し替える
+            InvalidateSteps(); // 再表示した時に止まった色のまま出ないよう、次のフレームで必ず差し替える
         }
 
         if (!show) return;
@@ -197,7 +213,7 @@ public static class LobbyCodeRainbow
             for (var ring = 0; ring < RingDirections.Length; ring++) RingFrames[ring] = BuildFrames(source, RingAlpha[ring]);
 
             FramesGameId = gameId;
-            LastStep = -1;
+            InvalidateSteps();
 
             // 光の広がりは文字の高さを基準にする。文字が変わった時だけ測り直す。
             Face.text = FaceFrames[0];
@@ -219,34 +235,72 @@ public static class LobbyCodeRainbow
             }
         }
 
-        if (!Active) return;
+        if (!Active || SlotStep == null) return;
 
         var step = (int)(Time.time / CycleSeconds * Steps) % Steps;
         if (step < 0) step += Steps;
-        if (step == LastStep) return;
+        if (step == SettledStep) return;
 
+        // 表示を出し直した時・文字が変わった時は、古い色や古い文字が混ざらないよう全層を同じフレームで差し替える。
+        bool flush = LastStep < 0;
         LastStep = step;
 
+        // text の差し替えは描画直前の TMP メッシュ作り直しを呼ぶ。25 層を段が変わるフレームにまとめると
+        // 3 フレームに 1 回だけ約 1ms 重くなりフレーム間隔が揺れるので、1 段の時間 (fps によって 1〜数フレーム)
+        // に均等に振り分ける。層どうしの色のずれは最大で 1 段ぶん。
+        int budget = flush ? int.MaxValue : SlotBudget();
+
         var phase = step / (float)Steps;
-        Face.text = FaceFrames[step];
 
         // 息づかい: 位相 1 周で 2 回、光だけがふくらむ
         float pulse = 1f + (PulseAmount * Mathf.Sin(phase * Mathf.PI * 4f));
 
-        for (var i = 0; i < Auras.Length; i++)
+        int slots = SlotStep.Length; // 光と縁取りの各層 + 最後に本体
+        var updated = false;
+
+        for (var n = 0; n < slots && budget > 0; n++)
         {
-            TextMeshPro aura = Auras[i];
-            if (!aura) continue;
+            int i = SlotCursor;
+            SlotCursor = (SlotCursor + 1) % slots;
+
+            if (SlotStep[i] == step) continue;
+
+            SlotStep[i] = step;
+
+            if (i == Auras.Length)
+            {
+                Face.text = FaceFrames[step];
+                budget--;
+                updated = true;
+                continue;
+            }
 
             int ring = AuraRing[i];
             if (ring == StrokeRing) continue;
+
+            TextMeshPro aura = Auras[i];
+            if (!aura) continue;
 
             aura.text = RingFrames[ring][step];
 
             float radius = TextHeight * RingRadius[ring] * pulse;
             Vector2 dir = AuraDirection[i];
             aura.transform.localPosition = BaseLocalPos + new Vector3(dir.x * radius, dir.y * radius, RingZ(ring));
+            budget--;
+            updated = true;
         }
+
+        // 1 周回って差し替える層が無ければ、この段は描き終わり (次の段まで毎フレームの走査も省く)
+        if (!updated) SettledStep = step;
+    }
+
+    // このフレームで差し替える層の数。1 段の時間に収まる最小の数を、実際のフレーム時間から求める。
+    private static int SlotBudget()
+    {
+        const float stepSeconds = CycleSeconds / Steps;
+        int layers = Auras.Length - StrokeDirections + 1; // 光の層 + 本体 (縁取りは段で変わらない)
+        int budget = (int)Math.Ceiling(layers * Time.deltaTime / stepSeconds);
+        return Math.Clamp(budget, 1, layers);
     }
 
     private static void SetLayersEnabled(bool enabled)
