@@ -12,7 +12,8 @@ namespace EndKnot.Modules;
 // HudManager.ShadowQuad) をロビーで手動駆動する。experiment/backrooms-vanilla-shadow の
 // /bbrenderer 実証コードを clean port したもの。実機で確定済みの事実:
 //   ・ロビーで ShipStatus 不要。ls.renderer は素のロビーで既に非null (GPU)。
-//   ・バニラ LightSource.Update はロビーで gate され renderer を駆動しない → 手動 Render が要る。
+//   ・バニラ LightSource.Update はロビーでも ls.renderer を毎フレーム描く (2026-10-03 実機確認) →
+//     手動 Render は自前 renderer を作った時だけ。ここで要るのは ShadowCamera 追従と _Mask の維持。
 //   ・ShadowCamera を毎フレ Camera.main に追従させないと全画面が真っ黒になる。
 //   ・影 caster = layer 10 (Shadow) の Collider2D。光半径内を Physics2D で拾って遮蔽メッシュ化。
 //   ・per-cell 塗り BoxCollider2D は blocky な真っ黒影 / EdgeCollider2D 輪郭線は滑らか
@@ -88,7 +89,7 @@ public static class BackroomsShadow
         Logger.Info($"Armed radius={radius} renderer={(_ownRenderer != null ? "own:" + _ownRenderer.GetType().Name : "ls.renderer")}", Tag);
     }
 
-    // 毎フレ: ShadowCamera を Camera.main に追従 + renderer.Render(足元)。RunPerFrameUpdates から駆動。
+    // 毎フレ: ShadowCamera を Camera.main に追従 (+ 自前 renderer の時だけ Render)。RunPerFrameUpdates から駆動。
     public static void Drive()
     {
         if (!_driveActive) return;
@@ -132,9 +133,11 @@ public static class BackroomsShadow
             //   ※ロビーでは light origin はレバーにならない (AU が transform から駆動し Render の origin を無視)。
             //     影と壁の残ズレは caster の面位置 (BackroomsCasters.FaceScaleV/H) で詰める。
             //   no-clip trap は GetTruePosition(collider.offset=127) の話で transform.position は無関係 → 安全。
+            // ls.renderer はバニラ LightSource.Update がロビーでも毎フレーム描いている (2026-10-03 実機: 自前 Render の
+            // 有無で同じ絵)。手で描くのはバニラが持っていない自前 renderer の時だけ。
             Vector3 body = lp.transform.position;
             Vector2 origin = new(body.x, body.y);
-            r.Render(origin);
+            if (_ownRenderer != null) r.Render(origin);
 
             ApplyDarkOverride();
             ApplyShadowMask(); // 毎フレ維持 (バニラが _Mask を戻す場合に備え)
@@ -190,6 +193,7 @@ public static class BackroomsShadow
 
                 // 前ゲームの stale ls.renderer (シーン unload で内部 RT 破棄済みでも null 判定にならない) が
                 // 毎フレ throw し続けるケースの自己修復: 初回 throw 時に一度だけ自前 renderer へ切り替える。
+                // ls.renderer を手で Render しなくなったので、ここへ来るのは追従・診断側の throw だけ。
                 if (_ownRenderer == null)
                 {
                     try
