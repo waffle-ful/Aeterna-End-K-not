@@ -14,6 +14,11 @@ internal static class AccountDialogWake
     {
         try
         {
+            // AccountManager is only put to sleep on the main menu. Some of the patched methods share
+            // their compiled body with unrelated ones that run every frame in a lobby or a match
+            // (SignInScreen.Open fires ~90 times a second there), so leave before touching the engine.
+            if (EndKnot.Modules.HealthLog.InRoom) return;
+
             if (!AccountManager.InstanceExists) return;
 
             AccountManager am = AccountManager.Instance;
