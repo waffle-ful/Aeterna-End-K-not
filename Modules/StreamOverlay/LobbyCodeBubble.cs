@@ -25,6 +25,13 @@ public class LobbyCodeBubble : MonoBehaviour
     private Texture2D _bgTex, _borderTex;
     private float _builtScale = -1f;
 
+    // ---- 表示文字列 ----
+    // GUI.Label に string を渡すと呼ぶたびにゲーム側へ文字列が複製されるので、GUIContent に包んで変わった時だけ作り直す
+    private int _codeGameId;
+    private GUIContent _codeContent;
+    private string _label;
+    private GUIContent _labelContent;
+
     private static float Scale => Il2Direct.ScreenWidth / 1080f * 0.5f * UserScale;
     private static float UserScale => (LobbyCodeBubbleOptions.Scale?.GetInt() ?? 150) / 100f;
 
@@ -37,7 +44,8 @@ public class LobbyCodeBubble : MonoBehaviour
     private static bool ShouldShow()
     {
         if (!HudManager.InstanceExists) return false;
-        if (!AmongUsClient.Instance || !AmongUsClient.Instance.AmHost) return false;
+        AmongUsClient client = AmongUsClient.Instance;
+        if (!Il2Direct.Alive(client) || !client.AmHost) return false;
         if (LobbyCodeBubbleOptions.Enabled == null || !LobbyCodeBubbleOptions.Enabled.GetBool()) return false;
         if (!GameStates.IsLobby) return false;
         return true;
@@ -49,14 +57,13 @@ public class LobbyCodeBubble : MonoBehaviour
         {
             if (!ShouldShow()) return;
 
-            string code = GameCode.IntToGameName(AmongUsClient.Instance.GameId);
-            if (string.IsNullOrEmpty(code)) return;
+            if (!EnsureContent()) return;
 
             EnsureStyles();
             EnsureDefaultPos();
 
             HandleDrag();
-            DrawBubble(code);
+            DrawBubble();
         }
         catch (Exception e) { Utils.ThrowException(e); }
     }
@@ -101,19 +108,45 @@ public class LobbyCodeBubble : MonoBehaviour
         }
     }
 
-    private void DrawBubble(string code)
+    // コードは GameId が変わった時、見出しは翻訳の中身が変わった時だけ包み直す
+    private bool EnsureContent()
     {
+        int gameId = AmongUsClient.Instance.GameId;
+
+        if (gameId != _codeGameId || _codeContent == null)
+        {
+            string code = GameCode.IntToGameName(gameId);
+            if (string.IsNullOrEmpty(code)) return false;
+            _codeGameId = gameId;
+            _codeContent = new GUIContent(code);
+        }
+
+        string label = Translator.GetString("LobbyCodeBubbleLabel");
+
+        if (!string.Equals(label, _label, StringComparison.Ordinal) || _labelContent == null)
+        {
+            _label = label;
+            _labelContent = new GUIContent(label);
+        }
+
+        return true;
+    }
+
+    private void DrawBubble()
+    {
+        // 座標は手元の float で組む (Rect の x/y/width/height を読むとゲーム側の読み取りを呼び、1 回ごとに箱が出る)
+        float scale = Scale;
+        float x = _bubblePos.x, y = _bubblePos.y;
+        float w = 130f * scale, labelH = 18f * scale, codeH = 46f * scale;
+
         // 縁取り: マップ背景色に関わらず輪郭が潰れないよう、白い縁を一回り大きく敷いてから本体を重ねる
-        float border = 3f * Scale;
-        Rect outer = new(BubbleRect.x - border, BubbleRect.y - border, BubbleRect.width + border * 2f, BubbleRect.height + border * 2f);
-        GUI.Box(outer, GUIContent.none, _borderStyle);
-        GUI.Box(BubbleRect, GUIContent.none, _bgStyle);
+        float border = 3f * scale;
+        GUI.Box(new Rect(x - border, y - border, w + border * 2f, labelH + codeH + border * 2f), GUIContent.none, _borderStyle);
+        GUI.Box(new Rect(x, y, w, labelH + codeH), GUIContent.none, _bgStyle);
 
         // 横に伸ばさず縦積み: 上段に小さく「ルームコード」ラベル、下段に大きくコード本体。
-        Rect labelRect = new(BubbleRect.x, BubbleRect.y, BubbleWidth, LabelHeight);
-        Rect codeRect = new(BubbleRect.x, BubbleRect.y + LabelHeight, BubbleWidth, CodeHeight);
-        GUI.Label(labelRect, Translator.GetString("LobbyCodeBubbleLabel"), _labelStyle);
-        GUI.Label(codeRect, code, _bubbleStyle);
+        GUI.Label(new Rect(x, y, w, labelH), _labelContent, _labelStyle);
+        GUI.Label(new Rect(x, y + labelH, w, codeH), _codeContent, _bubbleStyle);
     }
 
     private void EnsureStyles()

@@ -123,6 +123,67 @@ public static unsafe class Il2Direct
         return alive;
     }
 
+    // ---- 作り置きのゲーム側文字列を TMP へ渡す ----
+    // ラッパーの `tmp.text = s` は呼ぶたびに s をゲーム側ヒープへ複製する (同じ managed 文字列でも毎回新しい)。
+    // 決まった文字列を繰り返し差し替える表示では、ゲーム側の文字列を 1 回だけ作って握り、その参照を渡す。
+    // 呼び出しは runtime_invoke 経由のまま (仮想呼び出しの解決と例外の捕捉はラッパーと同じ) で、引数の複製だけを省く。
+
+    public readonly struct PinnedString
+    {
+        public readonly IntPtr Ptr;
+        public readonly IntPtr Handle;
+        public readonly string Managed;
+
+        public PinnedString(string s)
+        {
+            Managed = s;
+            Ptr = IL2CPP.ManagedStringToIl2Cpp(s);
+            // ゲーム側の GC に回収させないため強参照のハンドルで握る (Boehm は動かさないのでポインタはそのまま使える)
+            Handle = Ptr == IntPtr.Zero ? IntPtr.Zero : IL2CPP.il2cpp_gchandle_new(Ptr, false);
+        }
+
+        public void Free()
+        {
+            if (Handle != IntPtr.Zero) IL2CPP.il2cpp_gchandle_free(Handle);
+        }
+    }
+
+    private static IntPtr _setTextInfo;
+    private static int _setTextState; // 0 = 未解決 / 1 = 使える / 2 = 使えない (ラッパー経路のまま)
+
+    /// <summary>tmp.text = s.Managed と同じ。作り置きの文字列を渡すのでゲーム側ヒープに新しい文字列を作らない。</summary>
+    public static void SetText(TMPro.TMP_Text tmp, in PinnedString s)
+    {
+        if (!Enabled || s.Handle == IntPtr.Zero || !SetTextReady())
+        {
+            tmp.text = s.Managed;
+            return;
+        }
+
+        IntPtr obj = tmp.Pointer;
+        IntPtr method = IL2CPP.il2cpp_object_get_virtual_method(obj, _setTextInfo);
+        void** args = stackalloc void*[1];
+        args[0] = (void*)s.Ptr;
+        IntPtr exc = IntPtr.Zero;
+        IL2CPP.il2cpp_runtime_invoke(method, obj, args, ref exc);
+        Il2CppInterop.Runtime.Il2CppException.RaiseExceptionIfNecessary(exc);
+    }
+
+    private static bool SetTextReady()
+    {
+        if (_setTextState != 0) return _setTextState == 1;
+
+        try
+        {
+            IntPtr klass = Il2CppClassPointerStore<TMPro.TMP_Text>.NativeClassPtr;
+            _setTextInfo = klass == IntPtr.Zero ? IntPtr.Zero : IL2CPP.il2cpp_class_get_method_from_name(klass, "set_text", 1);
+        }
+        catch (Exception e) { Logger.Warn($"resolve TMP_Text.set_text failed: {e.Message}", Tag); }
+
+        _setTextState = _setTextInfo != IntPtr.Zero ? 1 : 2;
+        return _setTextState == 1;
+    }
+
     // ---- 毎フレーム何十回も読まれる静的な読み取り ----
 
     private static Method _screenWidth, _screenHeight, _getKey, _getKeyDown;

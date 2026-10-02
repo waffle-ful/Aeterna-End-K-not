@@ -155,12 +155,24 @@ public static class GameStartManagerPatch
         // GameStartManager はロビーごとに作り直され、テキストはプレハブ既定文に戻る — 変化検出キャッシュを
         // 持ち越すと「値が同じだから書かない」で既定文が残るため、新インスタンス検出で必ず全リセットする。
         private static GameStartManager lastSeenInstance;
+        // スタートボタンの文言とカウントダウン文は状態が変わった時だけ書く (-1 = 未設定)。
+        // 毎フレーム書くと native GetString の結果と空文字列がそのたびゲーム側へ複製される。
+        private static int lastStartLabelState = -1;
+        // プリセット名は参照が変わった時と 1 秒ごとにだけ書き直す (毎フレームの代入はゲーム側に文字列を複製する)
+        private static string lastWrittenPresetText;
+        private static float nextPresetRewriteTime;
+        private static string lastWrittenSuffix;
+        private static IntPtr lastSuffixTarget;
 
         private static void ResetDisplayCachesIfNewInstance(GameStartManager instance)
         {
-            if (instance == lastSeenInstance) return; // UnityEngine.Object の == (native 同一性 + destroyed 判定)
+            // 同じ native オブジェクトでまだ生きていれば同一 (== はゲーム側の比較を呼び、1 回ごとに箱が出る)
+            if (lastSeenInstance is not null && instance.Pointer == lastSeenInstance.Pointer && Il2Direct.Alive(lastSeenInstance)) return;
 
             lastSeenInstance = instance;
+            lastStartLabelState = -1;
+            lastWrittenPresetText = null;
+            lastWrittenSuffix = null;
             lastShownGameId = int.MinValue;
             lastShownPreset = int.MinValue;
             cachedPresetText = string.Empty;
@@ -177,31 +189,36 @@ public static class GameStartManagerPatch
                 try { __instance.MinPlayers = 1; }
                 catch (Exception ex) { Logger.Error(ex.ToString(), "Surely this can't be causing an issue, right?"); }
                 
-                if (!AmongUsClient.Instance) return false;
+                if (!Il2Direct.Alive(AmongUsClient.Instance)) return false;
 
                 ResetDisplayCachesIfNewInstance(__instance);
                 VanillaUpdate(__instance);
 
-                if (AmongUsClient.Instance.IsGameStarted || GameStates.IsInGame || !__instance || __instance.startState == GameStartManager.StartingStates.Starting) return false;
+                if (AmongUsClient.Instance.IsGameStarted || GameStates.IsInGame || !Il2Direct.Alive(__instance) || __instance.startState == GameStartManager.StartingStates.Starting) return false;
 
                 // Lobby code
-                if (DataManager.Settings != null && DataManager.Settings.Gameplay != null)
+                var settings = DataManager.Settings;
+
+                if (settings != null && settings.Gameplay != null)
                 {
-                    if (DataManager.Settings.Gameplay.StreamerMode)
+                    TextMeshPro roomCode = __instance.GameRoomNameCode;
+                    TextMeshPro hideName = GameStartManagerStartPatch.HideName;
+
+                    if (settings.Gameplay.StreamerMode)
                     {
-                        if (__instance.GameRoomNameCode) __instance.GameRoomNameCode.color = new(255, 255, 255, 0);
-                        if (GameStartManagerStartPatch.HideName) GameStartManagerStartPatch.HideName.enabled = true;
+                        if (Il2Direct.Alive(roomCode)) roomCode.color = new(255, 255, 255, 0);
+                        if (Il2Direct.Alive(hideName)) hideName.enabled = true;
                         LobbyCodeRainbow.Apply(__instance, hidden: true);
                     }
                     else
                     {
-                        if (__instance.GameRoomNameCode) __instance.GameRoomNameCode.color = new(255, 255, 255, 255);
-                        if (GameStartManagerStartPatch.HideName) GameStartManagerStartPatch.HideName.enabled = false;
+                        if (Il2Direct.Alive(roomCode)) roomCode.color = new(255, 255, 255, 255);
+                        if (Il2Direct.Alive(hideName)) hideName.enabled = false;
                         LobbyCodeRainbow.Apply(__instance, hidden: false);
                     }
                 }
 
-                if (!AmongUsClient.Instance || !GameData.Instance) return true;
+                if (!Il2Direct.Alive(AmongUsClient.Instance) || !Il2Direct.Alive(GameData.Instance)) return true;
 
                 CheckAutoStart(__instance);
             }
@@ -297,7 +314,12 @@ public static class GameStartManagerPatch
 
         private static void VanillaUpdate(GameStartManager instance)
         {
-            if (!GameData.Instance || !GameManager.Instance) return;
+            if (!Il2Direct.Alive(GameData.Instance) || !Il2Direct.Alive(GameManager.Instance)) return;
+
+            // どちらもゲーム側の bool 読みで 1 回ごとに箱が出るので、このフレームの値を 1 回だけ読む
+            AmongUsClient client = AmongUsClient.Instance;
+            bool amHost = client.AmHost;
+            bool isPublic = client.IsGamePublic;
 
             try { instance.UpdateMapImage((MapNames)GameManager.Instance.LogicOptions.MapId); }
             catch (Exception e)
@@ -312,14 +334,13 @@ public static class GameStartManagerPatch
             }
 
             instance.CheckSettingsDiffs();
-            instance.StartButton.gameObject.SetActive(AmongUsClient.Instance.AmHost);
+            instance.StartButton.gameObject.SetActive(amHost);
             // RulesPresetText はこの後の Postfix が毎回 mod のプリセット名で上書きするので、ここでの
             // バニラ題の書き込み (native GetString = 毎フレーム新規 string) は無駄撃ちだった — 削除。
 
             // public/private 表示は状態が変わった時だけ更新する (IntToGameName / native GetString が
             // 毎フレーム新規 managed string を確保していた)。
-            int gameId = AmongUsClient.Instance.GameId;
-            bool isPublic = AmongUsClient.Instance.IsGamePublic;
+            int gameId = client.GameId;
 
             if (gameId != lastShownGameId || isPublic != lastShownIsPublic)
             {
@@ -331,8 +352,8 @@ public static class GameStartManagerPatch
                 else instance.privatePublicPanelText.text = TranslationController.Instance.GetString(StringNames.PrivateHeader);
             }
 
-            instance.HostPrivateButton.gameObject.SetActive(!AmongUsClient.Instance.IsGamePublic);
-            instance.HostPublicButton.gameObject.SetActive(AmongUsClient.Instance.IsGamePublic);
+            instance.HostPrivateButton.gameObject.SetActive(!isPublic);
+            instance.HostPublicButton.gameObject.SetActive(isPublic);
 
             if ((Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) && Input.GetKeyDown(KeyCode.C))
                 ClipboardHelper.PutClipboardString(GameCode.IntToGameName(AmongUsClient.Instance.GameId));
@@ -358,11 +379,15 @@ public static class GameStartManagerPatch
                 }
             }
 
-            if (AmongUsClient.Instance.AmHost)
+            if (amHost)
             {
-                if (instance.startState == GameStartManager.StartingStates.Countdown)
+                bool countdown = instance.startState == GameStartManager.StartingStates.Countdown;
+                bool labelChanged = lastStartLabelState != (countdown ? 1 : 0);
+                lastStartLabelState = countdown ? 1 : 0;
+
+                if (countdown)
                 {
-                    instance.StartButton.ChangeButtonText(GetString("Cancel"));
+                    if (labelChanged) instance.StartButton.ChangeButtonText(GetString("Cancel"));
                     if (UpdateSpriteStartButton)
                     {
                         instance.StartButton.inactiveSprites.GetComponent<SpriteRenderer>().color = new(0.8f, 0f, 0f, 1f);
@@ -383,7 +408,7 @@ public static class GameStartManagerPatch
                 }
                 else
                 {
-                    instance.StartButton.ChangeButtonText(TranslationController.Instance.GetString(StringNames.StartLabel));
+                    if (labelChanged) instance.StartButton.ChangeButtonText(TranslationController.Instance.GetString(StringNames.StartLabel));
                     if (UpdateSpriteStartButton)
                     {
                         instance.StartButton.inactiveSprites.GetComponent<SpriteRenderer>().color = new(0.1f, 0.1f, 0.1f, 1f);
@@ -392,7 +417,7 @@ public static class GameStartManagerPatch
                         instance.StartButton.activeTextColor = instance.StartButton.inactiveTextColor = Color.white;
                     }
                     instance.GameStartTextParent.SetActive(false);
-                    instance.GameStartText.text = string.Empty;
+                    if (labelChanged) instance.GameStartText.text = string.Empty;
                 }
                 UpdateSpriteStartButton = false;
             }
@@ -415,8 +440,10 @@ public static class GameStartManagerPatch
         {
             try
             {
-                if (!AmongUsClient.Instance || AmongUsClient.Instance.IsGameStarted || GameStates.IsInGame || !__instance || __instance.startState == GameStartManager.StartingStates.Starting) return;
+                if (!Il2Direct.Alive(AmongUsClient.Instance) || AmongUsClient.Instance.IsGameStarted || GameStates.IsInGame || !Il2Direct.Alive(__instance) || __instance.startState == GameStartManager.StartingStates.Starting) return;
 
+                // ゲーム側の float 読みは 1 回ごとに箱が出るので、このフレームの時刻を 1 回だけ読む
+                float now = Time.unscaledTime;
                 var canStartGame = true;
                 var mismatchedClientName = string.Empty;
 
@@ -426,9 +453,9 @@ public static class GameStartManagerPatch
                 {
                     // 照合結果は 0.25s ごとの再スキャンで十分 — 旧実装は毎フレーム ToArray (managed 配列
                     // + 全要素 proxy 解決) + クライアント数ぶんの GetComponent で、ロビー常駐のアロケ源だった。
-                    if (Time.unscaledTime >= nextVersionScanTime)
+                    if (now >= nextVersionScanTime)
                     {
-                        nextVersionScanTime = Time.unscaledTime + 0.25f;
+                        nextVersionScanTime = now + 0.25f;
                         var scanCanStart = true;
                         string scanMismatchedName = string.Empty;
 
@@ -495,11 +522,16 @@ public static class GameStartManagerPatch
                     cachedPresetText = GetString($"Preset_{OptionItem.CurrentPreset + 1}");
                 }
 
-                __instance.RulesPresetText.text = cachedPresetText;
-
-                if (Time.unscaledTime >= nextSuffixBuildTime || !canStartGame)
+                if (!ReferenceEquals(lastWrittenPresetText, cachedPresetText) || now >= nextPresetRewriteTime)
                 {
-                    nextSuffixBuildTime = Time.unscaledTime + 0.25f;
+                    lastWrittenPresetText = cachedPresetText;
+                    nextPresetRewriteTime = now + 1f;
+                    __instance.RulesPresetText.text = cachedPresetText;
+                }
+
+                if (now >= nextSuffixBuildTime || !canStartGame)
+                {
+                    nextSuffixBuildTime = now + 0.25f;
                     cachedLengthSuffix = BuildLengthSuffix(canStartGame, mismatchedClientName);
                 }
 
@@ -518,7 +550,13 @@ public static class GameStartManagerPatch
                     tmp.transform.localScale = new(0.6f, 0.6f, 1f);
                 }
 
-                if (!ReferenceEquals(tmp.text, cachedLengthSuffix)) tmp.text = cachedLengthSuffix;
+                // tmp.text は読むたび新しい managed 文字列が返るので参照比較が常に外れる。書いた側の控えと比べる
+                if (!ReferenceEquals(lastWrittenSuffix, cachedLengthSuffix) || tmp.Pointer != lastSuffixTarget)
+                {
+                    lastWrittenSuffix = cachedLengthSuffix;
+                    lastSuffixTarget = tmp.Pointer;
+                    tmp.text = cachedLengthSuffix;
+                }
                 tmp.gameObject.SetActive(true);
 
                 // Lobby timer
