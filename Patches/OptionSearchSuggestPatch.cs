@@ -64,6 +64,21 @@ public static class OptionSearchSuggestPatch
         catch { return false; }
     }
 
+    // A Backspace pressed on an already empty box reaches the field as a lone control character. It
+    // draws nothing, so the box looks empty while the query is not — and "empty box + Enter", the only
+    // way out of a search, stops working.
+    public static string CleanQuery(string raw)
+    {
+        if (string.IsNullOrEmpty(raw)) return "";
+
+        var sb = new System.Text.StringBuilder(raw.Length);
+
+        foreach (char c in raw)
+            if (!char.IsControl(c)) sb.Append(c);
+
+        return sb.ToString().Trim();
+    }
+
     private static bool IsSearchBox(TextBoxTMP textBox)
     {
         FreeChatInputField field = GameSettingMenuPatch.InputField;
@@ -83,7 +98,7 @@ public static class OptionSearchSuggestPatch
         {
             if (!IsSearchBox(__instance)) return;
 
-            string text = $"{input}{inputCompo}".Trim();
+            string text = CleanQuery($"{input}{inputCompo}");
             if (text == CurrentQueryText) return;
 
             CurrentQueryText = text;
