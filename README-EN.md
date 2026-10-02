@@ -148,23 +148,26 @@ Supported Among Us version: **2026.8.18**
 We aim to keep boot time and resident memory close to vanilla. You'll find the test conditions and every metric in the **[performance report](https://waffle-ful.github.io/Aeterna-End-K-not/perf.html)** (Japanese).
 
 <details>
-<summary><b>Show the measurements (boot time and resident memory)</b></summary>
+<summary><b>Show the measurements (boot time, resident memory and frame time)</b></summary>
 
-We cold-started "vanilla / BepInEx only / v0.9.6 / v0.9.7" 5 times each in rotation, on the same PC and the same day. The table shows medians.
+We measured "vanilla / BepInEx only / current 0.11.1 dev build" with the same procedure on the same PC (2026-10-02 to 03, Among Us 2026.9.29 on Steam). The table shows medians.
 
-| Metric | Vanilla | BepInEx only | v0.9.6 | v0.9.7 |
-|---|---:|---:|---:|---:|
-| Boot time (s) | 5.9 | 8.1 | 16.4 | **11.1** (−33%) |
-| Time to interactive (s) | 10.5 | 12.9 | 21.6 | **16.4** (−24%) |
-| Time to hosted lobby (s) | 19.6 | — | — | 25.1 |
-| Menu resident memory (MB) | 587 | 723 | 937 | **841** (−96MB) |
-| Lobby resident memory (MB) | — | — | 970 | **908** |
-| In-game managed allocation (KB / 5 s) | — | — | 1,228 | **324** (−74%) |
-| In-game managed heap (MB) | — | — | 79 | **32** |
+| Metric | Vanilla | BepInEx only | Current 0.11.1 dev |
+|---|---:|---:|---:|
+| Boot time (s) | 5.2 | 7.0 | **4.4** |
+| Time to login complete (s) | 9.9 | 11.6 | **10.4** |
+| Lobby resident memory (MB) | 532 | 658 | **779** |
+| Lobby 1% low (fps) | 57.4 | 56.7 | **54.6** |
+| Lobby frame time p95 (ms) | 17.01 | 17.01 | **17.16** |
+| In-game resident memory (MB) | 629 | 703 | **985** |
+| In-game 1% low (fps) | 56.7 | 56.5 | **54.4** |
+| In-game frame time p95 (ms) | 17.14 | 17.07 | **17.30** |
 
 <p align="center"><img src=".github/perf-chart.png" alt="End K not performance comparison chart" width="90%"></p>
 
-Values in parentheses are deltas versus v0.9.6. Lobby time uses scripted menu clicks for vanilla and the auto-host feature for v0.9.7; most of the gap is v0.9.7's internal wait before it sends the create request. We have no way to automate vanilla lobby / in-game measurements, so those cells are empty.
+Boot time runs until the main menu starts initializing. Lobby is a private lobby on the official servers with the host alone, in-game is The Skeld, both sampled while standing still (60 fps cap). In-game uses a one-player match for the current build and Freeplay for vanilla and BepInEx only.
+
+Earlier boot times were 16.4 s for v0.9.6 and 11.1 s for v0.9.7 (measured 2026-09-05 on the Epic build of 2026.8.18; vanilla was 5.9 s in that run).
 
 </details>
 

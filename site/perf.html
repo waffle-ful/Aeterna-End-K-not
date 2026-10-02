@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>End K not 性能比較</title>
-<meta name="description" content="End K not の起動時間・常駐メモリ・試合中負荷を、前公開版・BepInEx のみ・バニラと同一 PC で実測比較したレポート。">
+<meta name="description" content="End K not の起動時間・常駐メモリ・フレーム時間を、BepInEx のみ・バニラと同一 PC で実測比較したレポート。">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=IBM+Plex+Sans+JP:wght@400;500;600&display=swap">
 <style>
 img{max-width:100%}
@@ -100,21 +100,25 @@ img{max-width:100%}
 
 <div class="wrap">
   <header>
-    <div class="eyebrow">Performance report · 2026-09-05 · Among Us 2026.8.18 (Epic)</div>
-    <h1>End K not 性能比較<span class="en">v0.9.7 dev · v0.9.6 · vanilla</span></h1>
+    <div class="eyebrow">Performance report · 2026-10-03 · Among Us 2026.9.29 (Steam)</div>
+    <h1>End K not 性能比較<span class="en">0.11.1 dev · BepInEx · vanilla</span></h1>
     <p class="lede" id="lede"></p>
   </header>
 
   <section class="tiles" id="tiles" aria-label="主要指標"></section>
 
   <h2>指標別の比較</h2>
-  <p class="section-sub">横棒は短いほど良い指標です。数値は各条件の中央値。「—」は計測対象外で、バニラと BepInEx のみにはロビー・試合中を自動で回す手段がありません。</p>
+  <p class="section-sub">数値は各条件の中央値。横棒は 0 を起点に描いています。1% low は大きいほど、それ以外は小さいほど良い指標です。</p>
   <div class="legend" id="legend"></div>
   <section class="grid" id="charts"></section>
 
   <h2>数表</h2>
-  <p class="section-sub">中央値。行ごとの最良値を強調表示。右 2 列は現行版から見た差分 (前公開版比 / バニラ比)。</p>
+  <p class="section-sub">中央値。行ごとの最良値を強調表示。右 2 列は現行版から見た差分 (バニラ比 / BepInEx のみ比)。</p>
   <div class="tablewrap"><table id="table"></table></div>
+
+  <h2>これまでの推移</h2>
+  <p class="section-sub">過去の計測との並びです。2026-09-05 は Epic 版 2026.8.18・別の手順で測っており、上の表とは条件が違います。行ごとに、同じ回に測ったバニラの値を添えています。</p>
+  <div class="tablewrap"><table id="history"></table></div>
 
   <h2>計測条件</h2>
   <div class="foot" id="foot"></div>
@@ -123,59 +127,76 @@ img{max-width:100%}
 
 <script>
 const ARMS = [
-  { key: 'current', name: '現行 v0.9.7 (開発版)', color: 'var(--c-current)', hi: true },
+  { key: 'current', name: '現行 0.11.1 (開発版)', color: 'var(--c-current)', hi: true },
   { key: 'vanilla', name: 'バニラ',        color: 'var(--c-vanilla)' },
-  { key: 'old',     name: '前公開版 v0.9.6', color: 'var(--c-old)' },
-  { key: 'bepinex', name: 'BepInEx のみ',  color: 'var(--c-bepinex)' },
+  { key: 'bepinex', name: 'BepInEx のみ',  color: 'var(--c-old)' },
 ];
 
-// 中央値。null = 計測対象外。
+// 中央値。dp = 表示する小数桁。higher = 大きいほど良い指標。
 const METRICS = [
-  { key: 'boot',      group: '起動',   name: '起動時間',           unit: '秒',  fmt: v => v.toFixed(1), n: '5 回',
+  { key: 'boot',      name: '起動時間',           unit: '秒',  dp: 1, n: '各 3 回',
     desc: 'プロセス開始からメインメニューの初期化開始まで',
-    v: { vanilla: 5.86, bepinex: 8.13, old: 16.36, current: 11.07 } },
-  { key: 'tti',       group: '起動',   name: '操作可能まで',         unit: '秒',  fmt: v => v.toFixed(1), n: '5 回',
-    desc: '起動処理 (アカウント確認・お知らせ) の終了まで。終了時点で画面にモーダルが無いことを確認済み',
-    v: { vanilla: 10.5, bepinex: 12.9, old: 21.6, current: 16.4 } },
-  { key: 'lobby',     group: '起動',   name: '公式ロビー作成まで',   unit: '秒',  fmt: v => v.toFixed(1), n: '3 回',
-    desc: 'プロセス開始からロビー成立まで。バニラはメニュー操作を自動化 (クリック間の待ち 6.4 秒を含む)、現行版は自動ホスト機能の最短経路 (要求までの内部待ち約 9 秒を含む)',
-    v: { vanilla: 19.6, bepinex: null, old: null, current: 25.1 } },
-  { key: 'menu_ws',   group: 'メニュー', name: 'メニュー常駐メモリ', unit: 'MB', fmt: v => Math.round(v).toLocaleString(), n: '5 起動 × 8 標本',
-    desc: 'メインメニュー静止 75 秒後の Working Set',
-    v: { vanilla: 587, bepinex: 723, old: 937, current: 841 } },
-  { key: 'menu_priv', group: 'メニュー', name: 'メニュー プライベートバイト', unit: 'MB', fmt: v => Math.round(v).toLocaleString(), n: '5 起動 × 8 標本',
-    desc: '同上 (Private Bytes)',
-    v: { vanilla: 1022, bepinex: 1102, old: 1292, current: 1214 } },
-  { key: 'lobby_ws',  group: 'ロビー', name: 'ロビー常駐メモリ',   unit: 'MB', fmt: v => Math.round(v).toLocaleString(), n: '2 セッション × 8 標本',
-    desc: '公式ロビー入場 60 秒後の Working Set (ホスト単独)',
-    v: { vanilla: null, bepinex: null, old: 970, current: 908 } },
-  { key: 'game_ws',   group: '試合中', name: '試合中 常駐メモリ',   unit: 'MB', fmt: v => Math.round(v).toLocaleString(), n: '90 秒窓',
-    desc: 'ソロ試合放置 90 秒の Working Set 中央値',
-    v: { vanilla: null, bepinex: null, old: 1065, current: 1019 } },
-  { key: 'game_alloc', group: '試合中', name: '試合中 managed 確保量', unit: 'KB / 5 秒', fmt: v => Math.round(v).toLocaleString(), n: '90 秒窓',
-    desc: 'mod 側 (CLR) の 5 秒あたりメモリ確保量。少ないほど GC 停止が減る',
-    v: { vanilla: null, bepinex: null, old: 1228, current: 324 } },
-  { key: 'game_heap', group: '試合中', name: '試合中 managed ヒープ', unit: 'MB', fmt: v => Math.round(v).toLocaleString(), n: '90 秒窓',
-    desc: 'mod 側 (CLR) の生存ヒープ量の中央値',
-    v: { vanilla: null, bepinex: null, old: 79, current: 32 } },
+    v: { vanilla: 5.16, bepinex: 7.04, current: 4.38 } },
+  { key: 'login',     name: 'ログイン完了まで',     unit: '秒',  dp: 1, n: '各 3 回',
+    desc: 'プロセス開始から起動処理 (アカウント確認・お知らせ) の終了まで。サーバーの応答時間を含みます',
+    v: { vanilla: 9.95, bepinex: 11.56, current: 10.37 } },
+  { key: 'lobby_ws',  name: 'ロビー 常駐メモリ',   unit: 'MB', dp: 0, n: '現行 3 回・他 2 回',
+    desc: '公式サーバーの非公開ロビー (ホスト単独) で静止 30 秒後から 60 秒間の Working Set 平均',
+    v: { vanilla: 532, bepinex: 658, current: 779 } },
+  { key: 'lobby_low', name: 'ロビー 1% low',      unit: 'fps', dp: 1, higher: true, n: '現行 3 回・他 2 回',
+    desc: '同じ 60 秒間で、遅い方から 1% のフレームの平均を fps に直した値 (上限 60fps)',
+    v: { vanilla: 57.4, bepinex: 56.7, current: 54.6 } },
+  { key: 'lobby_p95', name: 'ロビー フレーム時間 p95', unit: 'ms', dp: 2, n: '現行 3 回・他 2 回',
+    desc: '同じ 60 秒間のフレーム時間の 95 パーセンタイル (60fps の 1 フレームは 16.67ms)',
+    v: { vanilla: 17.01, bepinex: 17.01, current: 17.16 } },
+  { key: 'game_ws',   name: '試合中 常駐メモリ',   unit: 'MB', dp: 0, n: '現行 3 回・他 2 回',
+    desc: 'The Skeld で静止 30 秒後から 180 秒間の Working Set 平均。現行版は 1 人で始めた試合、バニラと BepInEx のみはフリープレイ',
+    v: { vanilla: 629, bepinex: 703, current: 985 } },
+  { key: 'game_low',  name: '試合中 1% low',      unit: 'fps', dp: 1, higher: true, n: '現行 3 回・他 2 回',
+    desc: '同じ 180 秒間で、遅い方から 1% のフレームの平均を fps に直した値 (上限 60fps)',
+    v: { vanilla: 56.7, bepinex: 56.5, current: 54.4 } },
+  { key: 'game_p95',  name: '試合中 フレーム時間 p95', unit: 'ms', dp: 2, n: '現行 3 回・他 2 回',
+    desc: '同じ 180 秒間のフレーム時間の 95 パーセンタイル',
+    v: { vanilla: 17.14, bepinex: 17.07, current: 17.30 } },
+];
+METRICS.forEach(m => { m.fmt = v => m.dp ? v.toFixed(m.dp) : Math.round(v).toLocaleString(); });
+
+// 過去の計測との並び。[指標, [計測日, 版, 値, 同じ回のバニラ], ...]
+const HISTORY = [
+  ['起動時間 (秒)', [
+    ['2026-09-05', 'v0.9.6-beta', '16.4', '5.9'],
+    ['2026-09-05', 'v0.9.7 開発版', '11.1', '5.9'],
+    ['2026-10-03', '0.11.1 開発版', '4.4', '5.2'],
+  ]],
+  ['ロビー 常駐メモリ (MB)', [
+    ['2026-09-05', 'v0.9.6-beta', '970', '—'],
+    ['2026-09-05', 'v0.9.7 開発版', '908', '—'],
+    ['2026-10-03', '0.11.1 開発版', '779', '532'],
+  ]],
+  ['試合中 常駐メモリ (MB)', [
+    ['2026-09-05', 'v0.9.6-beta', '1,065', '—'],
+    ['2026-09-05', 'v0.9.7 開発版', '1,019', '—'],
+    ['2026-10-03', '0.11.1 開発版', '985', '629'],
+  ]],
 ];
 
 const CONDITIONS = [
-  ['機材', 'Ryzen 5 3600 / Windows 11 / Among Us 2026.8.18 Epic 版・同一 PC・同一日'],
-  ['起動', 'Epic ランチャー経由のコールドスタート。4 条件を交互に 5 周 (機械ドリフト相殺)'],
-  ['起動時間', 'プロセス開始時刻を原点に、ゲーム本体のログでメインメニューの初期化開始を検知した時刻 (全条件で同じ外部時計・mod 内部の計時と ±35ms で一致)'],
-  ['ロビー・試合中', '公式ロビーをホスト単独で作成し、入場 60 秒後に 8 標本。試合はソロで開始し 90 秒放置、5 秒ごとの集計行の中央値 (各 2 セッション)'],
-  ['メモリ', 'Process.WorkingSet64 / PrivateMemorySize64 を 2 秒間隔 8 標本、起動ごとに中央値 → 5 起動の中央値'],
-  ['現行版', 'v0.9.7 開発版 (2026-09-05 ビルド)。リリース版とは数値が前後する可能性があります'],
-  ['前公開版', 'v0.9.6-beta (2026-09-01 公開) を同一ソースからビルドし同じ手順で計測'],
+  ['機材', 'Ryzen 5 3600 / Windows 11 / Among Us 2026.9.29 Steam 版・同一 PC'],
+  ['計測日', 'バニラと BepInEx のみは 2026-10-02、現行版は 2026-10-03。同じ道具・同じ手順です'],
+  ['インストール', 'Steam 版を条件ごとに別フォルダへ複製して直接起動。条件どうしでファイルを共有しません'],
+  ['起動', 'プロセス開始時刻を原点に、ゲーム本体のログでメインメニューの初期化開始と起動処理の終了を検知した時刻 (全条件で同じ外部時計)。ファイルを入れ替えた直後の 1 回目は数えません'],
+  ['フレーム', 'PresentMon で提示間隔を記録。ゲームの窓を前面にし、キャラクターを動かさずに採取。フレームレートの上限は 60fps のまま'],
+  ['ロビー', '公式サーバーで非公開ロビーをホスト単独で作成し、静止 30 秒後から 60 秒'],
+  ['試合中', 'The Skeld で静止 30 秒後から 180 秒。現行版は 1 人で始めた試合、バニラと BepInEx のみは 1 人で試合を始められないのでフリープレイ'],
+  ['メモリ', '採取中の Working Set の平均。回ごとに出して、回の中央値を掲載'],
+  ['現行版', '0.11.1 開発版 (2026-10-02 夜のビルド)。機能は既定設定のまま。リリース版とは数値が前後する可能性があります'],
   ['BepInEx のみ', 'mod DLL を外した BepInEx + Il2CppInterop の土台だけ。mod の上乗せ分を切り分けるための基準'],
 ];
 const NOTES = [
   'Working Set は OS の裁量で ±15MB 程度揺れるため、この幅の差は有意ではありません。',
-  '前公開版と現行版は Backrooms ロビー・BGM・カスタムマップなど機能を同じ既定設定で有効にしたまま計測しています。',
-  'ロビー作成までの時間はバニラの方が短く、差の大半は現行版がロビー作成要求を出すまでの内部待ちです (ログ上のサーバー応答は 0.2 秒)。',
-  'バニラと BepInEx のみのロビー・試合中は、ホスト単独で自動再現する手段がないため計測対象外です。',
-  '試合中のかくつき回数と FPS は前公開版の記録形式が異なり比較できないため掲載していません。',
+  'バニラと BepInEx のみは 2 回の中央値です。BepInEx のみの試合中メモリは 2 回が 657MB / 748MB と開いており、目安として見てください。',
+  '起動時間はメニューの初期化が始まるまでで、ログインの完了を含みません。ログイン完了までで比べると 3 条件の差は 2 秒以内です。',
+  '1% low の差は、数十秒に 1 回のメモリ回収で 1 フレームが 28〜30ms かかる (バニラは最長でも 19〜20ms) ことによるものです。33ms を超えたフレームは、現行版 6 回の採取のうち 1 回で 1 フレームでした。',
 ];
 </script>
 <script id="fill"></script>
@@ -191,22 +212,22 @@ const NOTES = [
     const good = m.higher ? d > 0 : d < 0;
     const sign = d > 0 ? '+' : '−';
     const abs = Math.abs(d);
-    const num = m.key === 'boot' ? abs.toFixed(1) : Math.round(abs).toLocaleString();
+    const num = m.dp ? abs.toFixed(m.dp) : Math.round(abs).toLocaleString();
     return { text: `${sign}${num} ${m.unit.split(' ')[0]} (${sign}${Math.abs(p).toFixed(0)}%)`, good, zero: Math.abs(p) < 1 };
   };
 
   // ---- lede ----
-  const b = M.boot.v, w = M.menu_ws.v;
-  $('#lede').textContent = `同じ PC・同じ日に 4 条件を交互に起動して計測しました。現行版は前公開版と比べて起動が ${Math.abs(pct(b.current, b.old)).toFixed(0)}% 短く、メニューでの常駐メモリが ${Math.round(w.old - w.current)}MB 少なくなっています。バニラとの差は、mod を載せる土台 (BepInEx) の分を含めて残っています。`;
+  const b = M.boot.v, lw = M.lobby_ws.v, gw = M.game_ws.v, ll = M.lobby_low.v, gl = M.game_low.v;
+  $('#lede').textContent = `同じ PC で、バニラ・BepInEx のみ・現行版を同じ手順で計測しました。メニューが出るまでは現行版 ${b.current.toFixed(1)} 秒 (バニラ ${b.vanilla.toFixed(1)} 秒)。常駐メモリはバニラよりロビーで ${Math.round(lw.current - lw.vanilla)}MB、試合中で ${Math.round(gw.current - gw.vanilla)}MB 多く、1% low はロビーで ${(ll.vanilla - ll.current).toFixed(1)}fps、試合中で ${(gl.vanilla - gl.current).toFixed(1)}fps 低い値です。`;
 
   // ---- tiles ----
-  const tileKeys = ['boot', 'tti', 'menu_ws', 'game_alloc'].filter(k => M[k].v.current != null);
+  const tileKeys = ['boot', 'lobby_ws', 'game_ws', 'game_low'].filter(k => M[k].v.current != null);
   $('#tiles').innerHTML = tileKeys.map(k => {
     const m = M[k], cur = m.v.current;
-    const dOld = fmtDelta(m, cur, m.v.old), dVan = fmtDelta(m, cur, m.v.vanilla);
+    const dVan = fmtDelta(m, cur, m.v.vanilla), dBep = fmtDelta(m, cur, m.v.bepinex);
     const parts = [];
-    if (dOld) parts.push(`前公開版比 <b class="${dOld.good ? '' : 'worse'}">${dOld.text}</b>`);
     if (dVan) parts.push(`バニラ比 <b class="${dVan.good ? '' : 'worse'}">${dVan.text}</b>`);
+    if (dBep) parts.push(`BepInEx のみ比 <b class="${dBep.good ? '' : 'worse'}">${dBep.text}</b>`);
     return `<div class="tile"><div class="label">${m.name} · 現行版</div><div class="value">${m.fmt(cur)}<small>${m.unit}</small></div><div class="delta">${parts.join('<br>')}</div></div>`;
   }).join('');
 
@@ -228,9 +249,9 @@ const NOTES = [
         <div class="track" data-arm="${a.key}" data-metric="${m.key}" tabindex="0"><div class="bar" style="width:${wpct}%;background:${a.color}"></div></div>
         <div class="val ${a.hi ? 'hi' : ''}">${m.fmt(v)}</div>`;
     }).join('');
-    const d = fmtDelta(m, m.v.current, m.v.old);
-    const better = d ? `<div class="better">現行版は前公開版より <b class="${d.good ? '' : 'worse'}">${d.text}</b>${d.good ? ' 改善' : ''}</div>` : '';
-    return `<div class="card"><div class="title"><h3>${m.name}</h3><span class="unit">${m.unit} · ${m.higher ? '長いほど良い' : '短いほど良い'}</span></div>${better}<div class="bars">${rows}</div><div class="note">${m.desc} · n=${m.n}</div></div>`;
+    const d = fmtDelta(m, m.v.current, m.v.vanilla);
+    const better = d ? `<div class="better">現行版はバニラ比 <b class="${d.good ? '' : 'worse'}">${d.text}</b></div>` : '';
+    return `<div class="card"><div class="title"><h3>${m.name}</h3><span class="unit">${m.unit} · ${m.higher ? '大きいほど良い' : '小さいほど良い'}</span></div>${better}<div class="bars">${rows}</div><div class="note">${m.desc} · n=${m.n}</div></div>`;
   }).join('');
 
   const show = (el, x, y) => {
@@ -246,7 +267,7 @@ const NOTES = [
   });
 
   // ---- table ----
-  const head = `<thead><tr><th>指標</th>${ARMS.map(a => `<th class="${a.hi ? 'cur' : ''}">${a.name}</th>`).join('')}<th>vs 前公開版</th><th>vs バニラ</th></tr></thead>`;
+  const head = `<thead><tr><th>指標</th>${ARMS.map(a => `<th class="${a.hi ? 'cur' : ''}">${a.name}</th>`).join('')}<th>vs バニラ</th><th>vs BepInEx のみ</th></tr></thead>`;
   const body = METRICS.map(m => {
     const vals = ARMS.map(a => m.v[a.key]).filter(v => v != null);
     if (!vals.length) return '';
@@ -257,9 +278,12 @@ const NOTES = [
       return `<td class="${v === best ? 'best' : (a.hi ? '' : 'dim')}">${m.fmt(v)}<span class="u">${m.unit.split(' ')[0]}</span></td>`;
     }).join('');
     const dc = (d) => d ? `<td class="delta ${d.good ? '' : 'worse'}">${d.text}</td>` : `<td class="delta dash">—</td>`;
-    return `<tr><td>${m.name}</td>${cells}${dc(fmtDelta(m, m.v.current, m.v.old))}${dc(fmtDelta(m, m.v.current, m.v.vanilla))}</tr>`;
+    return `<tr><td>${m.name}</td>${cells}${dc(fmtDelta(m, m.v.current, m.v.vanilla))}${dc(fmtDelta(m, m.v.current, m.v.bepinex))}</tr>`;
   }).join('');
   $('#table').innerHTML = head + `<tbody>${body}</tbody>`;
+
+  // ---- history ----
+  $('#history').innerHTML = `<thead><tr><th>指標</th><th>計測日</th><th>版</th><th class="cur">End K not</th><th>バニラ</th></tr></thead><tbody>${HISTORY.map(([name, rows]) => rows.map(([day, ver, val, van], i) => `<tr><td>${i ? '' : name}</td><td class="dim">${day}</td><td class="dim">${ver}</td><td>${val}</td><td class="dim">${van}</td></tr>`).join('')).join('')}</tbody>`;
 
   // ---- foot ----
   $('#foot').innerHTML = `<dl class="cond">${CONDITIONS.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl><ol>${NOTES.map(n => `<li>${n}</li>`).join('')}</ol>`;
