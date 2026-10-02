@@ -622,8 +622,8 @@ public static class GameStates
     public static bool IsOnlineGame => AmongUsClient.Instance.NetworkMode == NetworkModes.OnlineGame;
     public static bool IsLocalGame => AmongUsClient.Instance.NetworkMode == NetworkModes.LocalGame;
     public static bool IsFreePlay => AmongUsClient.Instance.NetworkMode == NetworkModes.FreePlay;
-    public static bool IsInTask => InGame && !MeetingHud.Instance;
-    public static bool IsMeeting => InGame && MeetingHud.Instance;
+    public static bool IsInTask => InGame && !Il2Direct.Alive(MeetingHud.Instance);
+    public static bool IsMeeting => InGame && Il2Direct.Alive(MeetingHud.Instance);
     public static bool IsVoting => IsMeeting && MeetingHud.Instance.state is MeetingHud.MeetingStates.Voted or MeetingHud.MeetingStates.NotVoted;
 
     public static bool IsCountDown => GameStartManager.InstanceExists && GameStartManager.Instance.startState == GameStartManager.StartingStates.Countdown;

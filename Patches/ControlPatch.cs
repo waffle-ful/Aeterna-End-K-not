@@ -31,7 +31,7 @@ internal static class ControllerManagerUpdatePatch
     {
         try
         {
-            if (ClientControlGUI.Instance)
+            if (Il2Direct.Alive(ClientControlGUI.Instance))
             {
                 if (Il2Direct.GetKeyDown(KeyCode.Delete) ||
                     KeysDown(KeyCode.LeftControl, KeyCode.BackQuote) ||
@@ -43,7 +43,7 @@ internal static class ControllerManagerUpdatePatch
 
             if (HudManager.InstanceExists)
             {
-                if (PlayerControl.LocalPlayer && PlayerControl.LocalPlayer.Collider)
+                if (Il2Direct.Alive(PlayerControl.LocalPlayer) && Il2Direct.Alive(PlayerControl.LocalPlayer.Collider))
                 {
                     // No-clip 制限全撤廃: flag が立っているか LeftCtrl 押下中なら常に発動。
                     // CanMove / IsGameStarted / IsOnlineGame は気にしない (host-only mod なので)
@@ -51,7 +51,7 @@ internal static class ControllerManagerUpdatePatch
                     PlayerControl.LocalPlayer.Collider.offset = shouldNoclip ? new Vector2(0f, 127f) : new Vector2(0f, -0.3636f);
                 }
             
-                if (GameStates.IsLobby && (!HudManager.Instance.Chat || !HudManager.Instance.Chat.IsOpenOrOpening))
+                if (GameStates.IsLobby && (!Il2Direct.Alive(HudManager.Instance.Chat) || !HudManager.Instance.Chat.IsOpenOrOpening))
                 {
                     /*if (Il2Direct.GetKeyDown(KeyCode.Tab)) OptionShower.Next();
 

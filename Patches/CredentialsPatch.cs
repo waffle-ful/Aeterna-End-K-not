@@ -29,10 +29,10 @@ internal static class PingTrackerUpdatePatch
     public static bool PrefixCore(PingTracker __instance)
     {
         FpsSampler.TickFrame();
-        PingTracker instance = !Instance ? __instance : Instance;
+        PingTracker instance = !Il2Direct.Alive(Instance) ? __instance : Instance;
         
         var client = AmongUsClient.Instance;
-        if (!client) return false;
+        if (!Il2Direct.Alive(client)) return false;
 
         if (client.NetworkMode == NetworkModes.FreePlay)
         {
@@ -49,7 +49,7 @@ internal static class PingTrackerUpdatePatch
             TextDirty = false;
         }
 
-        if (!Instance) Instance = __instance;
+        if (!Il2Direct.Alive(Instance)) Instance = __instance;
 
         long now = Utils.TimeStamp;
         if (now == LastUpdate) return false;
