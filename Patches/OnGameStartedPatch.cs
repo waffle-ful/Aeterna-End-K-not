@@ -102,7 +102,10 @@ internal static class ChangeRoleSettings
             catch (Exception e) { Utils.ThrowException(e); }
 
             yield return HudManager.Instance.CoFadeFullScreen(Color.clear, Color.black);
-            ++DataManager.Player.Ban.BanPoints;
+            // バニラはここで途中抜けの罰点を 1 加算し、試合を最後まで終えた時に戻す。ホストの再起動や
+            // ゲームの強制終了でも加算分が残り、次の起動で参加制限 (BanMinutesLeft) が掛かるので、加算せずに 0 へ戻す
+            // (溜まっていた分もここで消える)。
+            DataManager.Player.Ban.BanPoints = 0f;
             DataManager.Player.Ban.PreviousGameStartDate = DateTime.UtcNow;
             DataManager.Player.Save();
 
