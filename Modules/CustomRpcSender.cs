@@ -1179,6 +1179,7 @@ public static class CustomRpcSenderExtensions
 
             var logicOptions = GameManager.Instance.LogicOptions;
             var id = GameManager.Instance.LogicComponents.IndexOf(logicOptions);
+            if (id < 0) return false;
 
             if (sender.CurrentState == CustomRpcSender.State.InRootMessage) sender.EndMessage();
 

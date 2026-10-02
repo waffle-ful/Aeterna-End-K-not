@@ -33,6 +33,7 @@ public static class MemCensus
     {
         try
         {
+            if (src == "lobby") TransitionTimeline.Mark("CENSUS:lobby");
             long now = Utils.TimeStamp;
             if (src == "lobby" && now - _lastRunTs < 30) return; // 遷移バタつきによる多重発火ガード
             // 自動発火は 200〜458ms (重いのは texOwners) ホスト画面を止める (2026-09-07 配信 7 人卓で ×7 実測)。
@@ -177,9 +178,13 @@ public static class MemCensus
             if (boehmAllowed)
                 try { BoehmCensus.RunNow(src); } catch (Exception e) { Logger.Warn($"boehm census hook failed: {e.Message}", "MemCensus"); }
 
-            HealthLog.NoteOp("MemCensus.texOwners");
-            AttributeTopTextureOwners(TopTexOwnerCount, now, src);
-            if (src != "lobby") TextureListCensus(now, src);
+            // texOwners の帰属処理は 339〜409ms の単発停止になるので、自動発火では走らせない。
+            if (src != "lobby")
+            {
+                HealthLog.NoteOp("MemCensus.texOwners");
+                AttributeTopTextureOwners(TopTexOwnerCount, now, src);
+                TextureListCensus(now, src);
+            }
             HealthLog.EndOp();
         }
         catch (Exception e) { Logger.Warn($"census failed: {e.Message}", "MemCensus"); }

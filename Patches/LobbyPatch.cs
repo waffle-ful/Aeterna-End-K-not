@@ -107,6 +107,7 @@ internal static class LobbyBehaviourStartPatch
     public static void Prefix()
     {
         _enterSw = System.Diagnostics.Stopwatch.StartNew();
+        EndKnot.Modules.TransitionTimeline.Mark("LOBBY:start");
     }
 
     public static void Postfix()
@@ -209,7 +210,9 @@ internal static class LobbyBehaviourStartPatch
 
             uint seed = AmongUsClient.Instance != null ? unchecked((uint)AmongUsClient.Instance.GameId) : 0u;
             if (seed == 0u) seed = (uint)UnityEngine.Random.Range(1, int.MaxValue);
+            EndKnot.Modules.TransitionTimeline.Mark("BR:enter");
             BackroomsLobby.EnterBackrooms(seed, byte.MaxValue, silent: true);
+            EndKnot.Modules.TransitionTimeline.Mark("BR:done");
         }
         catch (Exception ex) { Logger.Warn($"Auto-enter Backrooms failed: {ex.Message}", "BackroomsGen"); }
     }
