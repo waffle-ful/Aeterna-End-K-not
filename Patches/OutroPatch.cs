@@ -256,6 +256,7 @@ internal static class EndGamePatch
 
         SabotageMapPatch.TimerTexts = [];
         MapRoomDoorsUpdatePatch.DoorTimerTexts = [];
+        MapRoomDoorsUpdatePatch.ResetDoorCache();
         // キーは消さない — 次ゲーム開始時の再作成フローの前提。値はキーごとに新品を配る
         // (SetAllValues だと全キーが同一 List 実体を共有してしまう)。
         foreach (byte pid in ReportDeadBodyPatch.WaitReport.Keys.ToArray()) ReportDeadBodyPatch.WaitReport[pid] = [];

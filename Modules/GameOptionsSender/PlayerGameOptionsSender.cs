@@ -231,11 +231,9 @@ public sealed class PlayerGameOptionsSender(PlayerControl player) : GameOptionsS
 
             if (GameManager.Instance?.LogicComponents != null)
             {
-                foreach (GameLogicComponent com in GameManager.Instance.LogicComponents)
-                {
-                    if (com.TryCast(out LogicOptions lo))
-                        lo.SetGameOptions(opt);
-                }
+                LogicOptions lo = GameManager.Instance.LogicOptions;
+                if (lo != null && GameManager.Instance.LogicComponents.IndexOf(lo) >= 0)
+                    lo.SetGameOptions(opt);
             }
 
             GameOptionsManager.Instance.CurrentGameOptions = opt;
@@ -254,7 +252,8 @@ public sealed class PlayerGameOptionsSender(PlayerControl player) : GameOptionsS
             {
                 foreach (GameLogicComponent com in GameManager.Instance.LogicComponents)
                 {
-                    if (com.TryCast(out LogicOptions lo))
+                    LogicOptions lo = GameManager.Instance?.LogicOptions;
+                    if (com != null && lo != null && com.Pointer == lo.Pointer)
                         lo.SetGameOptions(opt);
 
                     if (ShouldYieldFrame())

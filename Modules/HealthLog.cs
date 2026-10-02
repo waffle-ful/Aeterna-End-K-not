@@ -45,6 +45,8 @@ public static class HealthLog
     private static long _hitchWindowStartTs;
     private static int _hitchLinesInWindow;
     private static int _hitchSuppressed;
+    private static long _hitchSuppressedMaxGapMs;
+    private const long HitchUnlimitedMs = 250; // この gapMs 以上はレート制限の対象外
 
     // --- ヒッチ帰属計器 (lastOp): 重い区間の入口で NoteOp("名前") を呼んでおくと、直後の HITCH 行に
     // その名前と経過 ms が載る (op がヒッチ窓の内側にある時だけ)。メインスレッド専用・呼び出し側は
@@ -422,17 +424,18 @@ public static class HealthLog
             {
                 if (now - _hitchWindowStartTs >= HitchWindowSeconds)
                 {
-                    if (_hitchSuppressed > 0) Write($"HITCH suppressed={_hitchSuppressed} t={now}");
+                    if (_hitchSuppressed > 0) Write($"HITCH suppressed={_hitchSuppressed} t={now} maxGapMs={_hitchSuppressedMaxGapMs}");
 
                     _hitchWindowStartTs = now;
                     _hitchLinesInWindow = 0;
                     _hitchSuppressed = 0;
+                    _hitchSuppressedMaxGapMs = 0;
                 }
 
-                // 500ms 以上の大ヒッチはレート制限の対象外 — suppressed に埋もれると
+                // 250ms 以上のヒッチはレート制限の対象外 — suppressed に埋もれると
                 // 「1.5s 級ストールが出たか」の 1-bit 判定が窓内の先着5行に阻まれる
                 // (framestall の 3s 閾値まで届かない帯が視界外になる)。
-                if (gapMs >= 500 || _hitchLinesInWindow < HitchMaxLinesPerWindow)
+                if (gapMs >= HitchUnlimitedMs || _hitchLinesInWindow < HitchMaxLinesPerWindow)
                 {
                     _hitchLinesInWindow++;
                     long boehmDeltaKb = _lastBoehmUsed > 0 && boehmNow > 0 ? (boehmNow - _lastBoehmUsed) / 1024 : 0;
@@ -444,7 +447,10 @@ public static class HealthLog
                     Write($"HITCH gapMs={gapMs} state={state} gc0d={GC.CollectionCount(0) - _lastGc0Count} gc2d={GC.CollectionCount(2) - _lastGc2Count} bgc={GcPrepass.BoehmCollectionCount()} boehmMB={(boehmNow > 0 ? boehmNow / 1048576 : -1)} boehmDeltaKB={boehmDeltaKb} fps={_fpsLast}{GetLastOpSuffix(nowMs, gapMs)}{AllocProbe.TickWindowSuffix()} t={now}");
                 }
                 else
+                {
                     _hitchSuppressed++;
+                    if (gapMs > _hitchSuppressedMaxGapMs) _hitchSuppressedMaxGapMs = gapMs;
+                }
             }
 
             AllocProbe.EndTickWindow(gapMs);
@@ -531,6 +537,11 @@ public static class HealthLog
             try { gen2 = GC.CollectionCount(2); }
             catch { }
 
+            // Boehm (il2cpp 側) のヒープ確保量と累積回収回数。回収回数は 2 本の HB の差で区間内の回数になる。
+            long bheap = GcPrepass.BoehmHeapBytes();
+            long bheapMB = bheap < 0 ? -1 : bheap / (1024 * 1024);
+            int bgc = GcPrepass.BoehmCollectionCount();
+
             // 直近送信リングから最新エントリを取得して HB に添付
             string lastSendSuffix = GetLastSendSuffix(now);
 
@@ -577,7 +588,7 @@ public static class HealthLog
                 unack = relSent - ackd;
             }
 
-            string hb = $"t={now} up={now - StartTs} state={state} host={(host ? 1 : 0)} server={server} players={players} wsMB={wsMB} gcMB={gcMB} gc2={gen2} nmSent={nmSent} nmSkip={nmSkip} eosTry={eosTry} eosFlow={eosFlow} idTok={idTok} ping={ping} rsndD={rsndD} unack={unack} pNoAck={pNoAck} inIdle={GetInputIdleSeconds()} fps={_fpsLast} fps1low={FrameStats.Low1Fps} frMaxMs={FrameStats.MaxFrameMs}{lastSendSuffix}";
+            string hb = $"t={now} up={now - StartTs} state={state} host={(host ? 1 : 0)} server={server} players={players} wsMB={wsMB} gcMB={gcMB} gc2={gen2} bheapMB={bheapMB} bgc={bgc} nmSent={nmSent} nmSkip={nmSkip} eosTry={eosTry} eosFlow={eosFlow} idTok={idTok} ping={ping} rsndD={rsndD} unack={unack} pNoAck={pNoAck} inIdle={GetInputIdleSeconds()} fps={_fpsLast} fps1low={FrameStats.Low1Fps} frMaxMs={FrameStats.MaxFrameMs}{lastSendSuffix}";
             Write($"HB {hb}");
 
             // オーバーレイ類は起動後に注入されるので、少し経ってから 1 度だけモジュール一覧を引く。
