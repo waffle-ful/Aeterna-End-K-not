@@ -165,7 +165,7 @@ We measured "vanilla / BepInEx only / current 0.11.1 dev build" with the same pr
 
 <p align="center"><img src=".github/perf-chart.png" alt="End K not performance comparison chart" width="90%"></p>
 
-Boot time runs until the main menu starts initializing. Lobby is a private lobby on the official servers with the host alone, in-game is The Skeld, both sampled while standing still (60 fps cap). In-game uses a one-player match for the current build and Freeplay for vanilla and BepInEx only.
+Boot time runs until the main menu starts initializing. Lobby is a private lobby on the official servers with the host alone, in-game is The Skeld, both sampled while standing still (60 fps cap). In-game uses a one-player match for the current build and Freeplay for vanilla and BepInEx only. The current-build numbers come from a development build. The published build leaves out the developer notice banner and diagnostics, so it runs lighter than this.
 
 Earlier boot times were 16.4 s for v0.9.6 and 11.1 s for v0.9.7 (measured 2026-09-05 on the Epic build of 2026.8.18; vanilla was 5.9 s in that run).
 
