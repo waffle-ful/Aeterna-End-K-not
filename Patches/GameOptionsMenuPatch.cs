@@ -777,6 +777,30 @@ public static class GameOptionsMenuPatch
         }
     }
 
+    // Whether any option row of this tab has been built. False for a tab that was only ever drawn as a
+    // search result list.
+    public static bool TabHasOwnRows(TabGroup tab)
+    {
+        foreach (var kv in ModGameOptionsMenu.BehaviourList)
+        {
+            if (!kv.Value || kv.Key < 0 || kv.Key >= OptionItem.AllOptions.Count) continue;
+            if (OptionItem.AllOptions[kv.Key].Tab == tab) return true;
+        }
+
+        return false;
+    }
+
+    // Starts the tab's build when it is on screen with none of its own rows and no build under way.
+    public static bool BuildOwnRowsIfMissing(GameOptionsMenu menu, TabGroup tab)
+    {
+        if (OptionSearch.Active || tab == TabGroup.PresetExplorer || !menu || !menu.gameObject.activeInHierarchy) return false;
+        if (BuildCoroutines.TryGetValue(menu, out Coroutine running) && running != null) return false;
+        if (TabHasOwnRows(tab)) return false;
+
+        menu.CreateSettings();
+        return true;
+    }
+
     public static void ReCreateSettings(GameOptionsMenu __instance, TabGroup? modTabOverride = null)
     {
         if (!modTabOverride.HasValue && ModGameOptionsMenu.TabIndex < 3) return;
@@ -802,6 +826,10 @@ public static class GameOptionsMenuPatch
             NewRoleMenuView.ReflowSettings(__instance);
             return;
         }
+
+        // Reflow only moves rows that exist. A tab first opened while a search was on spent its one
+        // build on the result list, so once the search is dropped it has none of its own rows yet.
+        if (BuildOwnRowsIfMissing(__instance, modTab)) return;
 
         var num = 2.0f;
 
@@ -2417,7 +2445,7 @@ public static class GameSettingMenuPatch
             // snapshot. Reading the field back gets only the committed half, so an Enter mid-composition
             // searched a different (often empty) string than the preview line was scoring.
             string text = OptionSearchSuggestPatch.CurrentQueryText;
-            if (text.Length == 0) text = TextBoxPatch.SafeChatText(textField.textArea).Trim();
+            if (text.Length == 0) text = OptionSearchSuggestPatch.CleanQuery(TextBoxPatch.SafeChatText(textField.textArea));
 
             // Empty box = leave the search. The result list borrowed rows from every tab it drew from,
             // so all tabs have to be rebuilt for those rows to go home.
@@ -2572,6 +2600,12 @@ public static class GameSettingMenuPatch
         {
             if (searchTab.scrollBar) searchTab.scrollBar.ScrollToTop();
             searchTab.CreateSettings();
+        }
+        else if (ModSettingsTabs.TryGetValue(tabGroup, out GameOptionsMenu ownTab))
+        {
+            // A tab first opened during a search never built its own rows, and a tab only builds
+            // itself once — so it has to be told to now.
+            GameOptionsMenuPatch.BuildOwnRowsIfMissing(ownTab, tabGroup);
         }
 
         if (ModSettingsButtons.TryGetValue(tabGroup, out button) && button) button.SelectButton(true);
