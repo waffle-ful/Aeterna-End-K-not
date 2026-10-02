@@ -604,6 +604,14 @@ public static class TestBridge
             return;
         }
 
+        // 描画フレームを Update 側と描画側に割って刻み CSV に書く。`frametrace [frames]` 既定 1800
+        if (directive.StartsWith("frametrace", StringComparison.OrdinalIgnoreCase))
+        {
+            try { WriteOut(FrameTrace.Start(int.TryParse(directive[10..].Trim(), out int n) && n > 0 ? n : 1800, WriteOut)); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR frametrace failed"); }
+            return;
+        }
+
         // ラッパー経由の呼び出しをメソッド別・呼び出し元別に数える。`invcensus [秒]`
         if (directive.StartsWith("invcensus", StringComparison.OrdinalIgnoreCase))
         {
