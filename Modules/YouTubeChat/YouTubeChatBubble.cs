@@ -55,7 +55,7 @@ public class YouTubeChatBubble : MonoBehaviour
     private static bool ShouldShow()
     {
         if (!HudManager.InstanceExists) return false;
-        if (!AmongUsClient.Instance || !AmongUsClient.Instance.AmHost) return false;
+        if (!Il2Direct.Alive(AmongUsClient.Instance) || !AmongUsClient.Instance.AmHost) return false;
         if (YouTubeChatOptions.Enabled == null || !YouTubeChatOptions.Enabled.GetBool()) return false;
         if (YouTubeChatOptions.HideDuringMeetings != null && YouTubeChatOptions.HideDuringMeetings.GetBool() && GameStates.IsMeeting) return false;
         return true;

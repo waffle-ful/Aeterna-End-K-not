@@ -56,7 +56,7 @@ internal static class HudManagerPatch
             LoadingScreen.Update();
 
             PlayerControl player = PlayerControl.LocalPlayer;
-            if (!player) return;
+            if (!Il2Direct.Alive(player)) return;
 
             var alloc = AllocProbe.Now(); // hud 系統の内訳 (hud.* は tickKB へ二重計上されない)
 
@@ -1552,7 +1552,7 @@ internal static class TaskPanelBehaviourPatch
         // RolePanel かどうかは name 文字列 (毎フレームの il2cpp 文字列化) でなく、生きている RoleTab 参照との一致で決める。
         // アドレスのキャッシュはシーン跨ぎの再利用で別パネルを誤判定するので使わない。
         TaskPanelBehaviour roleTab = HudManagerPatch.RoleTab;
-        bool isRolePanel = roleTab && roleTab.Pointer == __instance.Pointer;
+        bool isRolePanel = Il2Direct.Alive(roleTab) && roleTab.Pointer == __instance.Pointer;
 
         // taskpanel.tab / taskpanel.role は taskpanel の内訳 (親.子 は tickKB へ二重計上されない)。
         var sub = EndKnot.Modules.AllocProbe.Now();
@@ -1615,7 +1615,7 @@ internal static class TaskPanelBehaviourPatch
 
     private static void UpdateRolePanel(TaskPanelBehaviour __instance)
     {
-        if (RolePanelPartsPtr != __instance.Pointer || !RolePanelTf)
+        if (RolePanelPartsPtr != __instance.Pointer || !Il2Direct.Alive(RolePanelTf))
         {
             RolePanelTf = __instance.transform;
             RolePanelBg = __instance.background;
@@ -1632,26 +1632,36 @@ internal static class TaskPanelBehaviourPatch
         Vector3 vector2 = RolePanelTabSr.sprite.bounds.extents;
         Vector3 textSize = RolePanelTaskText.textBounds.size;
 
-        transform.localScale = textSize.x > 0f
-            ? new Vector3(
-                textSize.x + 0.4f,
-                textSize.y + 0.3f,
-                1f)
-            : Vector3.zero;
+        // 書いた値を手元に持ち、同じフレーム内の読み戻し (1 回ごとにゲーム側ヒープへ箱が出る) をしない
+        Vector3 bgScale = default;
+
+        if (textSize.x > 0f)
+        {
+            bgScale.x = textSize.x + 0.4f;
+            bgScale.y = textSize.y + 0.3f;
+            bgScale.z = 1f;
+        }
+
+        transform.localScale = bgScale;
 
         vector.y = -vector.y;
-        vector = vector.Mul(transform.localScale);
+        vector.x *= bgScale.x;
+        vector.y *= bgScale.y;
+        vector.z *= bgScale.z;
         transform.localPosition = vector;
 
-        vector2 = vector2.Mul(RolePanelTabTf.localScale);
+        Vector3 tabScale = RolePanelTabTf.localScale;
+        vector2.x *= tabScale.x;
+        vector2.y *= tabScale.y;
+        vector2.z *= tabScale.z;
         vector2.y = -vector2.y;
         vector2.x += vector.x * 2f;
         RolePanelTabTf.localPosition = vector2;
 
-        if (!GameManager.Instance) return;
+        if (!Il2Direct.Alive(GameManager.Instance)) return;
 
         var closePosition = new Vector3(
-            -bgBounds.size.x * transform.localScale.x,
+            -bgBounds.size.x * bgScale.x,
             __instance.closedPosition.y,
             __instance.closedPosition.z);
         __instance.closedPosition = closePosition;

@@ -71,25 +71,25 @@ internal static class LoadingScreen
             if (HintHideTimer <= 15f) HintHideTimer += Time.deltaTime;
 
             PlayerControl lp = PlayerControl.LocalPlayer;
-            if (!lp || !lp.MyPhysics || lp.MyPhysics.Animations == null) return;
+            if (!Il2Direct.Alive(lp) || !Il2Direct.Alive(lp.MyPhysics) || lp.MyPhysics.Animations == null) return;
             if (AmongUsClient.Instance == null) return;
-            if (!HudManager.InstanceExists || !HudManager.Instance.Chat) return;
+            if (!HudManager.InstanceExists || !Il2Direct.Alive(HudManager.Instance.Chat)) return;
 
             PlayerAnimations anims = lp.MyPhysics.Animations;
 
-            bool visible = (AmongUsClient.Instance.IsGameStarted && !GameStates.IsCanMove && (!GameStates.IsInTask || ExileController.Instance) && !GameStates.IsMeeting && !HudManager.Instance.Chat.IsOpenOrOpening && !lp.inVent && !anims.IsPlayingAnyLadderAnimation() && !VentButtonDoClickPatch.Animating && !lp.onLadder) || GameEndChecker.LoadingEndScreen;
+            bool visible = (AmongUsClient.Instance.IsGameStarted && !GameStates.IsCanMove && (!GameStates.IsInTask || Il2Direct.Alive(ExileController.Instance)) && !GameStates.IsMeeting && !HudManager.Instance.Chat.IsOpenOrOpening && !lp.inVent && !anims.IsPlayingAnyLadderAnimation() && !VentButtonDoClickPatch.Animating && !lp.onLadder) || GameEndChecker.LoadingEndScreen;
 
             switch (visible)
             {
-                case false when LoadingAnimation:
+                case false when Il2Direct.Alive(LoadingAnimation):
                     Object.Destroy(LoadingAnimation);
                     return;
-                case true when !LoadingAnimation:
+                case true when !Il2Direct.Alive(LoadingAnimation):
                     UpdateLoadingAnimation();
                     return;
             }
 
-            if (LoadingAnimation)
+            if (Il2Direct.Alive(LoadingAnimation))
             {
                 if (ModManager.Instance == null || !ModManager.Instance.ModStamp) return;
                 Vector3 basePos = ModManager.Instance.ModStamp.transform.position;

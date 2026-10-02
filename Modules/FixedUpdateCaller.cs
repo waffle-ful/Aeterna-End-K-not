@@ -96,7 +96,7 @@ public static class FixedUpdateCaller
             // 個別 try/catch で包み、join 窓のスパムを黙らせる(窓が抜ければ自然に正常化する)。
             try
             {
-                if (lobbyBehaviour)
+                if (Il2Direct.Alive(lobbyBehaviour))
                 {
                     LobbyFixedUpdatePatch.Postfix();
                     LobbyBehaviourUpdatePatch.Postfix(lobbyBehaviour);
@@ -203,7 +203,7 @@ public static class FixedUpdateCaller
 
             alloc = AllocProbe.Mark("svc", alloc);
 
-            if (!PlayerControl.LocalPlayer) return;
+            if (!Il2Direct.Alive(PlayerControl.LocalPlayer)) return;
 
             var killStart = alloc;
 
@@ -216,7 +216,7 @@ public static class FixedUpdateCaller
             {
                 PlayerControl lp = PlayerControl.LocalPlayer; // 1 tick 内で 1 回だけ wrapper を取る
 
-                if (HudManager.InstanceExists && GameStates.IsInTask && !ExileController.Instance && !AntiBlackout.SkipTasks && lp.CanUseKillButton())
+                if (HudManager.InstanceExists && GameStates.IsInTask && !Il2Direct.Alive(ExileController.Instance) && !AntiBlackout.SkipTasks && lp.CanUseKillButton())
                 {
                     Predicate<PlayerControl> predicate = amongUsClient.AmHost
                         ? Options.CurrentGameMode switch
@@ -270,7 +270,7 @@ public static class FixedUpdateCaller
             bool lobby = GameStates.IsLobby;
             FixedUpdatePatch.AmHostTick = amongUsClient.AmHost; // 個別 tick 経路の getter 呼びを 1 回に畳む (FixedUpdatePatch.AmHostTick 参照)
 
-            if (lobby || (Main.IntroDestroyed && GameStates.InGame && !GameStates.IsMeeting && !ExileController.Instance && !AntiBlackout.SkipTasks))
+            if (lobby || (Main.IntroDestroyed && GameStates.InGame && !GameStates.IsMeeting && !Il2Direct.Alive(ExileController.Instance) && !AntiBlackout.SkipTasks))
             {
                 NonLowLoadPlayerIndex++;
 

@@ -812,7 +812,8 @@ public static class HudSpritePatch
             // 配列 + foreach は毎 tick の managed 確保になるので直接 7 回呼ぶ。
             void SetButtonColors()
             {
-                var roleColor = Utils.GetRoleColor(player.GetCustomRole());
+                // Color → Color32 の変換は 1 回ごとにゲーム側ヒープへ箱が出るので、7 枚ぶんを 1 回で済ませる
+                Color32 roleColor = Utils.GetRoleColor(player.GetCustomRole());
 
                 Parts.Refresh(__instance);
                 Parts.KillLabel.SetOutlineColor(roleColor);
