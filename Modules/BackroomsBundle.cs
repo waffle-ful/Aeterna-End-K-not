@@ -199,13 +199,7 @@ internal static class BackroomsBundle
             int length = (int)stream.Length;
             var array = new Il2CppStructArray<byte>((long)length);
             byte* dst = (byte*)IntPtr.Add(array.Pointer, IntPtr.Size * 4).ToPointer();
-            int read = 0;
-            while (read < length)
-            {
-                int n = stream.Read(new Span<byte>(dst + read, length - read));
-                if (n <= 0) break;
-                read += n;
-            }
+            int read = Utils.ReadStreamChunked(stream, dst, length);
 
             if (read != length) { Logger.Warn("Backrooms bundle: embedded resource read was short", "BackroomsBundle"); return null; }
             return array;

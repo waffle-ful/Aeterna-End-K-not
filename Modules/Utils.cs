@@ -5685,6 +5685,22 @@ public static class Utils
         return released;
     }
 
+    // 埋め込みリソースの Stream は Read(Span) のたびに、渡した Span と同じ大きさの一時配列を共有 ArrayPool から借りる。
+    // 借りた配列は返却後もスレッドの控えに残り続けるので、一度に読む量を小さく保つ (14MB を一気に読むと 16MB が常駐する・実測)。
+    internal static unsafe int ReadStreamChunked(Stream stream, byte* dst, int length)
+    {
+        const int Chunk = 64 * 1024;
+        int read = 0;
+        while (read < length)
+        {
+            int n = stream.Read(new Span<byte>(dst + read, Math.Min(Chunk, length - read)));
+            if (n <= 0) break;
+            read += n;
+        }
+
+        return read;
+    }
+
     private static unsafe Texture2D LoadTextureFromResources(string path)
     {
         try
@@ -5703,8 +5719,7 @@ public static class Utils
 
             var length = stream.Length;
             var byteTexture = new Il2CppStructArray<byte>((long)(length));
-            // ReSharper disable once MustUseReturnValue - we know how many bytes we need to read, so we can skip the returned value check
-            stream.Read(new Span<byte>(IntPtr.Add(byteTexture.Pointer, IntPtr.Size * 4).ToPointer(), (int)length));
+            ReadStreamChunked(stream, (byte*)IntPtr.Add(byteTexture.Pointer, IntPtr.Size * 4).ToPointer(), (int)length);
             // markNonReadable=true: GPU アップロード後に CPU 側ピクセルコピーを解放 (常駐テクスチャメモリ半減)。
             // このテクスチャは以後 GetPixels/EncodeToPNG 等のピクセル読みが不可 (全 repo で消費者ゼロを確認済み)。
             texture.LoadImage(byteTexture, true);

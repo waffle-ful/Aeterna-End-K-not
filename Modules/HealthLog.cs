@@ -588,7 +588,7 @@ public static class HealthLog
                 unack = relSent - ackd;
             }
 
-            string hb = $"t={now} up={now - StartTs} state={state} host={(host ? 1 : 0)} server={server} players={players} wsMB={wsMB} gcMB={gcMB} gc2={gen2} bheapMB={bheapMB} bgc={bgc} nmSent={nmSent} nmSkip={nmSkip} eosTry={eosTry} eosFlow={eosFlow} idTok={idTok} ping={ping} rsndD={rsndD} unack={unack} pNoAck={pNoAck} inIdle={GetInputIdleSeconds()} fps={_fpsLast} fps1low={FrameStats.Low1Fps} frMaxMs={FrameStats.MaxFrameMs}{lastSendSuffix}";
+            string hb = $"t={now} up={now - StartTs} state={state} host={(host ? 1 : 0)} server={server} players={players} wsMB={wsMB} gcMB={gcMB} clrCmtMB={GC.GetGCMemoryInfo().TotalCommittedBytes / (1024 * 1024)} gc2={gen2} bheapMB={bheapMB} bgc={bgc} nmSent={nmSent} nmSkip={nmSkip} eosTry={eosTry} eosFlow={eosFlow} idTok={idTok} ping={ping} rsndD={rsndD} unack={unack} pNoAck={pNoAck} inIdle={GetInputIdleSeconds()} fps={_fpsLast} fps1low={FrameStats.Low1Fps} frMaxMs={FrameStats.MaxFrameMs}{lastSendSuffix}";
             Write($"HB {hb}");
 
             // オーバーレイ類は起動後に注入されるので、少し経ってから 1 度だけモジュール一覧を引く。

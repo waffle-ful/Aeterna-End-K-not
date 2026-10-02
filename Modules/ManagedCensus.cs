@@ -75,6 +75,30 @@ public static class ManagedCensus
         Run(reason, forceGc: true);
     }
 
+    // CLR の GC ヒープの確保量 (commit) と世代別の大きさ・断片化を 1 行で残す。
+    // gcMB (生存量) だけでは「確保したまま返していない分」が見えない。
+    public static void NoteGcInfo(long now, string src)
+    {
+        try
+        {
+            const double Mb = 1024.0 * 1024.0;
+            GCMemoryInfo info = GC.GetGCMemoryInfo();
+            var sb = new StringBuilder("MHEAPGC t=").Append(now).Append(" src=").Append(src);
+            sb.Append(" commitMB=").Append((info.TotalCommittedBytes / Mb).ToString("0"));
+            sb.Append(" heapMB=").Append((info.HeapSizeBytes / Mb).ToString("0"));
+            sb.Append(" fragMB=").Append((info.FragmentedBytes / Mb).ToString("0"));
+            sb.Append(" liveMB=").Append((GC.GetTotalMemory(false) / Mb).ToString("0"));
+            sb.Append(" pinned=").Append(info.PinnedObjectsCount);
+            sb.Append(" lastGen=").Append(info.Generation).Append(" compacted=").Append(info.Compacted ? 1 : 0);
+            sb.Append(" conc=").Append(info.Concurrent ? 1 : 0);
+            sb.Append(" server=").Append(System.Runtime.GCSettings.IsServerGC ? 1 : 0);
+            sb.Append(" latency=").Append(System.Runtime.GCSettings.LatencyMode);
+            sb.Append(" gc0=").Append(GC.CollectionCount(0)).Append(" gc1=").Append(GC.CollectionCount(1)).Append(" gc2=").Append(GC.CollectionCount(2));
+            HealthLog.Note(sb.ToString());
+        }
+        catch (Exception e) { HealthLog.Note($"MHEAPGC t={now} src={src} fail={e.GetType().Name}"); }
+    }
+
     private static void Run(string src, bool forceGc)
     {
         try
