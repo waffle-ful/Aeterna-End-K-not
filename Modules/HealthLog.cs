@@ -156,6 +156,9 @@ public static class HealthLog
     private static bool _focusProbeDead; // Application.isFocused が interop 未生成等で例外を吐いたら以後この計器だけ止める
     private static long LastNormalLogTs;
     private static string LastState = "?";
+
+    // ロビーか試合の中にいるか (毎 tick 更新される状態名から。エンジンを呼ばないので毎フレーム経路から読める)
+    internal static bool InRoom => LastState is "Lobby" or "InTask" or "Meeting";
     private static System.Diagnostics.Process Proc;
     private static bool _overlayNoted; // OVERLAY 行はプロセスにつき 1 回 (セッション再開では再記録しない)
 
