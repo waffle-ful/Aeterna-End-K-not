@@ -863,7 +863,11 @@ public static class PatchPhases
         [HarmonyPatch(typeof(InnerNetClient), nameof(InnerNetClient.HostGame))]
         [HarmonyPatch(typeof(InnerNetClient), nameof(InnerNetClient.JoinGame))]
         [HarmonyPrefix]
-        public static void Prefix() => EnsureComplete("host|join");
+        public static void Prefix()
+        {
+            if (!TransitionTimeline.Armed) TransitionTimeline.Arm("join", 60000, "Lobby", 12000);
+            EnsureComplete("host|join");
+        }
     }
 
     // Menu-phase gate: MainMenuManager.Awake is the first vanilla entry point of the main menu

@@ -33,7 +33,11 @@ public static class ManagedCensus
         public long Baseline; // セッション初観測時の count (-1 = 未観測)
     }
 
-    private static TrackedField[] _fields; // 初回 sweep で一度だけ構築
+    private static TrackedField[] _fields; // 構築完了後に主スレッドだけが代入する
+    private static System.Threading.Thread _buildThread;
+    private static volatile bool _buildDone;
+    private static volatile TrackedField[] _builtFields;
+    private static volatile string _buildError;
     private static readonly Dictionary<Type, PropertyInfo> CountProps = []; // 実行時型 → Count getter
 
     // HealthLog の HB (5秒 grid) から毎回呼ばれ、間隔を満たしたときだけ実走する。
@@ -50,11 +54,12 @@ public static class ManagedCensus
 
         if (now - _lastSweepTs < SweepIntervalSeconds) return;
 
-        // 初回の実走は _fields のリフレクション構築込みで重いので、試合中 (InTask/Meeting) の HB には乗せない。
+        // 初回は _fields の構築を裏スレッドへ出し、完成するまでの HB では棚卸しを飛ばす (_lastSweepTs は進めない)。
         if (_fields == null && state is not ("Lobby" or "Menu" or "Ended")) return;
         // 自動棚卸しは 73〜91ms ホスト画面を止める (2026-09-07 配信 7 人卓で実測)。MemCensus と同じく客が居る間は打たない
         // (次の HB で再判定するので _lastSweepTs は進めない)。手動 (/census) は常に可。
         if (PlayerControl.AllPlayerControls.Count > 2) return;
+        if (!TryAcquireFields(block: false)) return;
         _lastSweepTs = now;
 
         // 強制フル GC はメインスレッドを数十〜数百 ms 止めるので、ゲーム中 (InTask/Meeting) は踏まない。
@@ -76,7 +81,7 @@ public static class ManagedCensus
         {
             HealthLog.NoteOp("ManagedCensus");
             long now = Utils.TimeStamp;
-            _fields ??= BuildFieldList();
+            TryAcquireFields(block: true);
 
             var sb = new StringBuilder("MHEAP t=").Append(now).Append(" src=").Append(src);
             sb.Append(" fields=").Append(_fields.Length);
@@ -162,6 +167,52 @@ public static class ManagedCensus
         catch { return -1; } // 並行変更・未初期化 cctor 等はこの回スキップ (次回に取れれば十分)
     }
 
+    // 型走査のリフレクションは初回 ~100ms かかるので、タイマー起点では裏スレッドで構築し完成まで棚卸しを飛ばす。
+    // 裏では型/FieldInfo のメタデータだけを触る (GetValue・cctor 起動・il2cpp/Unity 型の操作はしない)。
+    private static bool TryAcquireFields(bool block)
+    {
+        if (_fields != null) return true;
+
+        if (block)
+        {
+            _fields = BuildFieldList();
+            if (_buildError != null) Logger.Warn($"field list build failed: {_buildError}", "ManagedCensus");
+            Logger.Info($"tracking {_fields.Length} static collection/delegate fields", "ManagedCensus");
+            return true;
+        }
+
+        if (_buildDone)
+        {
+            _fields = _builtFields ?? [];
+            _builtFields = null;
+            _buildThread = null;
+            if (_buildError != null) Logger.Warn($"field list build failed: {_buildError}", "ManagedCensus");
+            Logger.Info($"tracking {_fields.Length} static collection/delegate fields", "ManagedCensus");
+            return true;
+        }
+
+        if (_buildThread != null) return false;
+
+        try
+        {
+            var t = new System.Threading.Thread(() =>
+            {
+                try { _builtFields = BuildFieldList(); }
+                catch (Exception e) { _buildError = e.Message; }
+                finally { _buildDone = true; }
+            }) { IsBackground = true, Name = "EndKnot.ManagedCensusFields" };
+            _buildThread = t;
+            t.Start();
+        }
+        catch (Exception e)
+        {
+            _buildThread = null;
+            Logger.Warn($"field list thread failed: {e.Message}", "ManagedCensus");
+        }
+
+        return false;
+    }
+
     private static TrackedField[] BuildFieldList()
     {
         var list = new List<TrackedField>(1024);
@@ -198,9 +249,8 @@ public static class ManagedCensus
                 }
             }
         }
-        catch (Exception e) { Logger.Warn($"field list build failed: {e.Message}", "ManagedCensus"); }
+        catch (Exception e) { _buildError = e.Message; }
 
-        Logger.Info($"tracking {list.Count} static collection/delegate fields", "ManagedCensus");
         return list.ToArray();
     }
 

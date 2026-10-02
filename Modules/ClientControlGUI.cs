@@ -243,21 +243,36 @@ public class ClientControlGUI : MonoBehaviour
             filterMode = FilterMode.Bilinear
         };
 
+        // Filled into a managed buffer and uploaded once; a SetPixel call per pixel is a native call each
+        var pixels = new Color32[width * height];
+        Color32 clear = FxMath.Rgba32(0, 0, 0, 0);
+        Color32 solid = ToColor32(fill.r, fill.g, fill.b, fill.a);
+        float er = edge.r, eg = edge.g, eb = edge.b, ea = edge.a;
+        float fr = fill.r, fg = fill.g, fb = fill.b, fa = fill.a;
+
         for (int py = 0; py < height; py++)
         {
+            int row = py * width;
+
             for (int px = 0; px < width; px++)
             {
                 float a = CornerAlpha(px, py, width, height, radius);
-                Color c = a <= 0f ? Color.clear          // outside rounded corner = transparent
-                    : a >= 1f ? fill                 // solid interior
-                    : Color.Lerp(edge, fill, a);     // 1px anti-aliased border
-                tex.SetPixel(px, py, c);
+                pixels[row + px] = a <= 0f ? clear       // outside rounded corner = transparent
+                    : a >= 1f ? solid                // solid interior
+                    : ToColor32(er + (fr - er) * a, eg + (fg - eg) * a, eb + (fb - eb) * a, ea + (fa - ea) * a); // 1px anti-aliased border
             }
         }
+
+        tex.SetPixels32(pixels);
         tex.Apply(true, true);
         tex.hideFlags = HideFlags.HideAndDontSave;
         return tex;
     }
+
+    private static Color32 ToColor32(float r, float g, float b, float a) =>
+        FxMath.Rgba32(ToByte(r), ToByte(g), ToByte(b), ToByte(a));
+
+    private static byte ToByte(float v) => (byte)(v <= 0f ? 0 : v >= 1f ? 255 : (int)(v * 255f + 0.5f));
 
     /// <summary>
     /// Returns 0 if outside (transparent), 1 if inside, or a small blend value for the smooth edge
@@ -272,7 +287,7 @@ public class ClientControlGUI : MonoBehaviour
         else if (px >= w-r  && py >= h-r ) { cx = w - r; cy = h - r; }
         else return 1f; // not near any corner, always solid
 
-        float d = Mathf.Sqrt((px - cx) * (px - cx) + (py - cy) * (py - cy));
+        float d = MathF.Sqrt((px - cx) * (px - cx) + (py - cy) * (py - cy));
         if (d >= r + 1f) return 0f;  // outside arc
         if (d <= r - 1f) return 1f;  // inside arc
         return r + 0.5f - d;         // on the edge - fractional for smoothing

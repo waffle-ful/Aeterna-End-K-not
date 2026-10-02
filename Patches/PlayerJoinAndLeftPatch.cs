@@ -51,6 +51,7 @@ internal static class OnGameJoinedPatch
     public static void Postfix(AmongUsClient __instance)
     {
         JoiningGame = true;
+        TransitionTimeline.Mark("JOINED");
         InboundRing.OnGameJoined();
 
         // 自動再ホスト直後などシーン再構築中は AmongUsClient.Instance / Main.GameTimer / SoundManager 等が
