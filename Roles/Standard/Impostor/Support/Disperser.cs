@@ -113,8 +113,8 @@ public class Disperser : RoleBase
 
             if (pc.TP(to))
             {
-                ExplosionFx.Play(ExplosionFx.Kind.WarpOut, from, 1f);
-                ExplosionFx.Play(ExplosionFx.Kind.WarpIn, to, 1f);
+                ExplosionFx.Play(ExplosionFx.Kind.WarpOut, from, 1f, ExplosionFx.Seen.Event);
+                ExplosionFx.Play(ExplosionFx.Kind.WarpIn, to, 1f, ExplosionFx.Seen.Event);
             }
 
             pc.Notify(ColorString(GetRoleColor(CustomRoles.Disperser), string.Format(GetString("TeleportedInRndVentByDisperser"), pc.GetRealName())));

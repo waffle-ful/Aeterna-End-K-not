@@ -104,8 +104,8 @@ public class Twister : RoleBase
             Vector2 pcPos = pc.Pos();
 
             // 入れ替わりは両地点で「消える」と「現れる」が重なって濁るので、現れる方だけ出す
-            if (target.TP(pcPos)) ExplosionFx.Play(ExplosionFx.Kind.WarpIn, pcPos, 1f);
-            if (pc.TP(originPs)) ExplosionFx.Play(ExplosionFx.Kind.WarpIn, originPs, 1f);
+            if (target.TP(pcPos)) ExplosionFx.Play(ExplosionFx.Kind.WarpIn, pcPos, 1f, ExplosionFx.Seen.Event);
+            if (pc.TP(originPs)) ExplosionFx.Play(ExplosionFx.Kind.WarpIn, originPs, 1f, ExplosionFx.Seen.Event);
 
             target.Notify(ColorString(GetRoleColor(CustomRoles.Twister), string.Format(GetString("TeleportedByTwister"), pc.GetRealName())));
             pc.Notify(ColorString(GetRoleColor(CustomRoles.Twister), string.Format(GetString("TeleportedByTwister"), target.GetRealName())));

@@ -1024,6 +1024,7 @@ public static partial class ExplosionFx
 
     private struct PortalEmitter
     {
+        public bool Vision;
         public Vector2 Pos;
         public float NextBase;
         public float NextMote;
@@ -1058,7 +1059,7 @@ public static partial class ExplosionFx
         }
 
         FxSound.At("FxPortalOpen", c, 0.8f);
-        PortalEmitters.Add(new PortalEmitter { Pos = c, NextBase = Time.time + 0.25f, NextMote = Time.time + 0.25f, Machine = BuildMachine(Off(mark, MachineAt.x, MachineAt.y)) });
+        PortalEmitters.Add(new PortalEmitter { Vision = _vision, Pos = c, NextBase = Time.time + 0.25f, NextMote = Time.time + 0.25f, Machine = BuildMachine(Off(mark, MachineAt.x, MachineAt.y)) });
 
         // 機械のレンズから光が真上へ伸びて、その先で楕円が開く
         Vector2 lens = Off(mark, MachineAt.x, MachineAt.y + 0.06f);
@@ -1108,6 +1109,7 @@ public static partial class ExplosionFx
         for (int i = 0; i < PortalEmitters.Count; i++)
         {
             PortalEmitter e = PortalEmitters[i];
+            _vision = e.Vision;
 
             if (now >= e.NextBase)
             {
