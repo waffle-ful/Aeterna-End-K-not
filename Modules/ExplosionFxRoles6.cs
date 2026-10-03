@@ -297,14 +297,20 @@ public static partial class ExplosionFx
 
     // 撃つ人が target の方へ銃を向けて撃つ (撃つ人の色の手が銃を握る)。キルの直後 (撃つ人が死体の位置へ動く前) に呼ぶ。
     // 撃つ人はキルの瞬間に撃たれた人の位置へ移るので、演出はそこに出し、向きだけ元の位置から測る
-    public static void PlayGunShot(PlayerControl shooter, Vector2 target)
+    public static void PlayGunShot(PlayerControl shooter, PlayerControl victim)
     {
-        if (!shooter) return;
+        // 誤射の自滅 (Suicide → Kill(自分)) も OnMurder を通るので、撃った本人が倒れる時は出さない
+        if (!shooter || !victim || shooter.PlayerId == victim.PlayerId) return;
 
-        Vector2 from = shooter.Pos();
-        float ang = FxMath.Atan2(target.y - from.y, target.x - from.x) * FxMath.Rad2Deg;
-        int dir = ((int)System.MathF.Round((ang < 0f ? ang + 360f : ang) / 22.5f)) & 15;
-        Play(Kind.GunShot, target, shooter.PlayerId + 1 + 32 * dir);
+        try
+        {
+            Vector2 target = victim.Pos();
+            Vector2 from = shooter.Pos();
+            float ang = FxMath.Atan2(target.y - from.y, target.x - from.x) * FxMath.Rad2Deg;
+            int dir = ((int)System.MathF.Round((ang < 0f ? ang + 360f : ang) / 22.5f)) & 15;
+            Play(Kind.GunShot, target, shooter.PlayerId + 1 + 32 * dir);
+        }
+        catch (System.Exception e) { Utils.ThrowException(e); }
     }
 
     private static readonly Color GunFlash = new(1f, 0.93f, 0.62f);
