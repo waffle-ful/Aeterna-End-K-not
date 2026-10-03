@@ -91,6 +91,13 @@ public static partial class ExplosionFx
                 SpawnChainBind(r.Pos, id);
                 FxSound.At("FxChainBind", r.Pos);
                 break;
+            case Kind.GunShot:
+            {
+                int v = (int)(r.Radius + 0.5f);
+                SpawnGunShot(r.Pos, v % 32 - 1, (v / 32) * 22.5f);
+                FxSound.At("FxGunShot", r.Pos);
+                break;
+            }
         }
     }
 
@@ -288,6 +295,95 @@ public static partial class ExplosionFx
 
     public const float SnapTotal = 5f;
 
+    // 撃つ人が target の方へ銃を向けて撃つ (撃つ人の色の手が銃を握る)。キルの直後 (撃つ人が死体の位置へ動く前) に呼ぶ。
+    // 撃つ人はキルの瞬間に撃たれた人の位置へ移るので、演出はそこに出し、向きだけ元の位置から測る
+    public static void PlayGunShot(PlayerControl shooter, Vector2 target)
+    {
+        if (!shooter) return;
+
+        Vector2 from = shooter.Pos();
+        float ang = FxMath.Atan2(target.y - from.y, target.x - from.x) * FxMath.Rad2Deg;
+        int dir = ((int)System.MathF.Round((ang < 0f ? ang + 360f : ang) / 22.5f)) & 15;
+        Play(Kind.GunShot, target, shooter.PlayerId + 1 + 32 * dir);
+    }
+
+    private static readonly Color GunFlash = new(1f, 0.93f, 0.62f);
+    private static readonly Color GunFire = new(1f, 0.55f, 0.15f);
+    private static readonly Color GunSmoke = new(0.55f, 0.55f, 0.58f, 0.7f);
+    private static readonly Color Brass = new(0.95f, 0.75f, 0.3f);
+
+    // 手と銃の絵の中で、握りの中心から見た銃口の位置 (絵の単位・反転なし) と銃身の向き (度)
+    private const float MuzzleX = 0.23f, MuzzleY = 1.15f;
+    private const float BarrelDeg = 79f;
+    private const float GunSize = 0.3f;
+    private const float GunFireAt = 0.16f;
+
+    // 銃を抜いて構え → 撃つ (反動で跳ねる) → 少し構えたまま → 消える。銃口の光・弾の筋・硝煙・薬莢が飛ぶ
+    private static void SpawnGunShot(Vector2 c, int shooterId, float aimDeg)
+    {
+        float rad = aimDeg * FxMath.Deg2Rad;
+        float ux = FxMath.Cos(rad), uy = FxMath.Sin(rad);
+        bool flip = ux < 0f;
+        float sx = flip ? -1f : 1f;
+        // 手の絵は反転させると銃身の向きも左右反転する。キーの回転は反転側で符号が変わる (FxHands.Tick)
+        float barrel = flip ? 180f - BarrelDeg : BarrelDeg;
+        float aim = sx * (aimDeg - barrel);
+        float kick = 22f;  // 反動で銃口が上へ跳ねる
+        float up = sx * (ux >= 0f ? kick : -kick);
+
+        Vector2 hand = Off(c, ux * 0.42f, uy * 0.3f + 0.12f);
+        FxHands.Key[] keys =
+        [
+            new(0f, FxHands.Pose.GunGrip, scale: 0.8f, alpha: 0f, rot: aim + up * 1.6f, dx: -0.06f),
+            new(0.06f, FxHands.Pose.GunGrip, rot: aim + up * 0.5f),
+            new(0.12f, FxHands.Pose.GunGrip, rot: aim),
+            new(GunFireAt, FxHands.Pose.GunGrip, rot: aim, shake: 0.004f),
+            new(GunFireAt + 0.05f, FxHands.Pose.GunGrip, scale: 1.08f, rot: aim + up, dx: -0.08f),
+            new(GunFireAt + 0.25f, FxHands.Pose.GunGrip, rot: aim + up * 0.15f),
+            new(0.95f, FxHands.Pose.GunGrip, rot: aim),
+            new(1.2f, FxHands.Pose.GunGrip, scale: 0.9f, alpha: 0f, rot: aim + up * 0.4f)
+        ];
+        Hand(keys, hand, ColorIdOf(shooterId), GunSize, flip, order: 9, prop: FxHands.Pose.Gun);
+
+        // 撃つ瞬間の銃口 (握りの中心から、構えた角度で回した位置)
+        float ar = sx * aim * FxMath.Deg2Rad;
+        float mx = sx * MuzzleX * GunSize, my = MuzzleY * GunSize;
+        Vector2 muzzle = Off(hand, mx * FxMath.Cos(ar) - my * FxMath.Sin(ar), mx * FxMath.Sin(ar) + my * FxMath.Cos(ar));
+        float aimRot = aimDeg;
+
+        // 銃口の閃光: 前へ伸びる炎の舌 + 白い芯 + 周りを照らす光
+        Add(Shape.Glow, muzzle, Vector2.zero, 0.18f, 0.5f, 1.4f, GunFlash, GunFire, 0.8f, 0.01f, 0.2f, delay: GunFireAt, order: 10);
+        Add(Shape.Flame, Off(muzzle, ux * 0.18f, uy * 0.18f), Vector2.zero, 0.09f, 0.42f, 0.5f, GunFlash, GunFire, 1f, 0.01f, 0.3f, delay: GunFireAt, rot: aimRot - 90f, sy0: 0.16f, sy1: 0.2f, order: 11);
+        Add(Shape.Star, muzzle, Vector2.zero, 0.08f, 0.35f, 0.15f, WindWhite, GunFlash, 1f, 0.01f, 0.3f, delay: GunFireAt, rot: aimRot, order: 12);
+        Particles(FxParticles.Preset.Sparks, muzzle, 14, GunFlash, GunFire, size: 0.6f, delay: GunFireAt, order: 11, angle: aimDeg);
+
+        // 弾の筋: 銃口から撃った向きへ細く走る
+        Line2(muzzle, Off(muzzle, ux * 2.2f, uy * 2.2f), 0.025f, 0.12f, GunFire, GunFlash, 0.9f, 0.01f, 0.2f, delay: GunFireAt + 0.01f);
+
+        // 硝煙: 銃口から少し漂って上へ
+        Particles(FxParticles.Preset.Smoke, muzzle, 4, GunSmoke, GunSmoke, size: 0.35f, speed: 0.4f, spread: 0.3f, delay: GunFireAt + 0.03f, order: 8);
+
+        // 薬莢: 銃の横へ弾き出され、弧を描いて床へ落ちる
+        float ex = -uy * sx, ey = ux * sx;
+        if (ey < 0f) { ex = -ex; ey = -ey; }
+        Add(Shape.Solid, Off(muzzle, -ux * 0.12f, -uy * 0.12f), FxMath.V2(ex * 2.2f - ux * 0.4f, 3f), 0.45f, 0.05f, 0.05f, Brass, Brass, 1f, 0.01f, 0.8f,
+            drag: 3f, rise: -2.2f, delay: GunFireAt + 0.03f, spin: 900f, sy0: 0.022f, sy1: 0.022f, order: 10);
+    }
+
+    // 指パッチンの手: 構えて力を溜め (震え) → 弾く → 弾いた後に跳ねる → 手を開いて消える
+    private static readonly FxHands.Key[] SnapHandKeys =
+    [
+        new(0f, FxHands.Pose.SnapReady, scale: 0.8f, alpha: 0f, dy: -0.1f),
+        new(0.12f, FxHands.Pose.SnapReady),
+        new(0.5f, FxHands.Pose.SnapReady, scale: 0.96f, shake: 0.014f),
+        new(0.56f, FxHands.Pose.SnapFlick, rot: -6f),
+        new(0.62f, FxHands.Pose.SnapAfter, scale: 1.15f, rot: 8f),
+        new(0.8f, FxHands.Pose.SnapAfter),
+        new(1.6f, FxHands.Pose.SnapAfter),
+        new(1.75f, FxHands.Pose.Open, scale: 0.9f),
+        new(2.1f, FxHands.Pose.Open, scale: 0.95f, alpha: 0f, dy: 0.06f)
+    ];
+
     // 6 色の石の光がサノスの手元へ集まりパチンと弾ける (白い衝撃波) → 画面の周りの床にひびが走り、破片が虚空へ落ちていく
     // (揺れはだんだん強くなる) → サノス以外の生存者が自分の色の灰になって崩れ、風に流される → 白く飛ぶ
     private static void SpawnThanosSnap(Vector2 c, int thanosId)
@@ -296,6 +392,11 @@ public static partial class ExplosionFx
         const float white = 4.1f;
         float q = Active.Count > 1200 ? 0.5f : 1f;
         Vector2 hand = Off(c, 0.32f, 0.15f);
+
+        // 本人の色の手が指を鳴らす
+        PlayerControl thanos = Utils.GetPlayerById(thanosId);
+        int colorId = thanos && thanos.Data ? thanos.Data.DefaultOutfit.ColorId : 0;
+        Hand(SnapHandKeys, Off(hand, 0f, 0.08f), colorId, 0.32f, false, order: 9);
 
         // 溜め: 6 色の光が手元へ螺旋を描いて吸い込まれる
         Add(Shape.Glow, hand, Vector2.zero, snap + 0.1f, 0.4f, 1.2f, GauntletGold, GauntletGold, 0.8f, 0.3f, 0.8f, twinkle: 0.4f, twinkleSpeed: 16f, order: 6);
@@ -322,6 +423,7 @@ public static partial class ExplosionFx
         Add(Shape.Star, hand, Vector2.zero, 0.25f, 1.4f, 0.2f, WindWhite, GauntletGold, 1f, 0.01f, 0.3f, delay: snap, spin: 160f, order: 11);
         Add(Shape.Glow, hand, Vector2.zero, 0.3f, 0.5f, 3f, WindWhite, GauntletGold, 1f, 0.01f, 0.3f, delay: snap, order: 10);
         Add(Shape.Ring, c, Vector2.zero, 1.4f, 0.5f, 26f, WindWhite, GauntletGold, 0.85f, 0.01f, 0.4f, delay: snap, order: 9);
+        Particles(FxParticles.Preset.Sparks, hand, (int)(40 * q), WindWhite, GauntletGold, delay: snap, order: 10);
         Impact(c, 30f, WindWhite, 0.3f, 0.15f, 0.3f, delay: snap);
 
         // ここから先は自分の画面の周りで起きる (どこにいても崩壊が見える)
@@ -406,6 +508,16 @@ public static partial class ExplosionFx
                 Color c0 = i % 3 == 0 ? main : i % 3 == 1 ? AshGrey : bright;
                 Add(Shape.Cloud, at, FxMath.V2(Rnd(0.8f, 2.2f), Rnd(0.05f, 0.6f)), Rnd(1.1f, 1.8f), s, s * 0.35f, c0, AshDark, 1f, 0.05f, 0.5f, drag: 0.35f, delay: d0 + 0.2f + u * dur * 0.75f,
                     rise: 0.3f, wobble: 0.06f, wobbleHz: Rnd(2f, 4f), order: 6);
+            }
+
+            // 細かい灰の欠片: 頭から足元へ 8 段に分けて、風下へ渦を巻きながら舞い上がる
+            for (int k = 0; k < 8; k++)
+            {
+                float u = k / 8f;
+                Vector2 at = Off(pp, 0f, 0.5f - 0.95f * u);
+                float dl = d0 + 0.2f + u * dur * 0.75f;
+                Particles(FxParticles.Preset.Ash, at, (int)(22 * q), main, AshGrey, size: 1.4f, delay: dl, order: 6, angle: 15f);
+                Particles(FxParticles.Preset.Ash, at, (int)(10 * q), bright, AshDark, size: 0.6f, speed: 1.5f, delay: dl + 0.05f, order: 6, angle: 25f);
             }
         }
 
