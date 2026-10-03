@@ -60,6 +60,7 @@
         <EmbeddedResource Remove="Resources\Sounds\endknot_sfx.bundle" />
         <EmbeddedResource Remove="Resources\Images\MainMenu\Dusk\endknot_dusk.bundle" />
         <EmbeddedResource Remove="Resources\Images\Backrooms\endknot_backrooms.bundle" />
+        <EmbeddedResource Remove="Resources\Fx\endknot_fx.bundle" />
         <EmbeddedResource Remove="Resources\Media\menu_fire.webm" />
         <EmbeddedResource Remove="Resources\Media\loading_default.mp4" />
     </ItemGroup>
@@ -74,10 +75,13 @@
         <EmbeddedResource Include="Resources\Sounds\endknot_sfx.android.bundle" LogicalName="EndKnot.Resources.Sounds.endknot_sfx.bundle" Condition="Exists('Resources\Sounds\endknot_sfx.android.bundle')" />
         <EmbeddedResource Remove="Resources\Images\Backrooms\endknot_backrooms.android.bundle" />
         <EmbeddedResource Include="Resources\Images\Backrooms\endknot_backrooms.android.bundle" LogicalName="EndKnot.Resources.Images.Backrooms.endknot_backrooms.bundle" Condition="Exists('Resources\Images\Backrooms\endknot_backrooms.android.bundle')" />
+        <EmbeddedResource Remove="Resources\Fx\endknot_fx.android.bundle" />
+        <EmbeddedResource Include="Resources\Fx\endknot_fx.android.bundle" LogicalName="EndKnot.Resources.Fx.endknot_fx.bundle" Condition="Exists('Resources\Fx\endknot_fx.android.bundle')" />
     </ItemGroup>
     <ItemGroup Condition="'$(Configuration)' != 'Android'">
         <EmbeddedResource Remove="Resources\Images\Backrooms\endknot_backrooms.android.bundle" />
         <EmbeddedResource Remove="Resources\Sounds\BGM\endknot_bgm.android.bundle" />
+        <EmbeddedResource Remove="Resources\Fx\endknot_fx.android.bundle" />
         <EmbeddedResource Remove="Resources\Sounds\endknot_sfx.android.bundle" />
         <!-- Frame packs are the Android replacement for the videos; desktop plays the videos with
              VideoPlayer and only reads a pack dropped into plugins/EndKnot/Media. -->

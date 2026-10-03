@@ -588,7 +588,63 @@ public static class TestBridge
             return;
         }
 
-        // 見た目の演出だけをホストの足元で出す (判定・キルは起きない)。`fx <Kind> [radius] [count] [a] [b] [@dx,dy]` (a・b は波動砲の太さと色)
+        // 自作シェーダ (加算合成) と粒をバンドルから読んで、標準の半透明と並べて出す。`fxshader [秒=20] [vision|global] [@dx,dy] [z=奥行き] [tint]` (tint = 表示中だけ影を赤く塗る)
+        // vision = 視界の外では影に隠れる置き方 / global (既定) = 影より手前。@dx,dy は既定位置 (頭上) からのずらし
+        if (directive.StartsWith("fxshader", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                if (!PlayerControl.LocalPlayer) { WriteOut("ERR fxshader: no local player"); return; }
+
+                var inv = System.Globalization.CultureInfo.InvariantCulture;
+                float sec = 20f;
+                bool vision = false;
+                float z = 0f;
+                bool tint = false;
+                Vector2 shift = Vector2.zero;
+
+                foreach (string part in directive[8..].Split(' ', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    if (part.Equals("vision", StringComparison.OrdinalIgnoreCase)) vision = true;
+                    else if (part.Equals("global", StringComparison.OrdinalIgnoreCase)) vision = false;
+                    else if (part.Equals("tint", StringComparison.OrdinalIgnoreCase)) tint = true;
+                    else if (part.StartsWith("z=", StringComparison.OrdinalIgnoreCase) && float.TryParse(part[2..], System.Globalization.NumberStyles.Float, inv, out float zz)) z = zz;
+                    else if (part.StartsWith('@'))
+                    {
+                        string[] xy = part[1..].Split(',');
+                        if (xy.Length != 2 || !float.TryParse(xy[0], System.Globalization.NumberStyles.Float, inv, out float sx) || !float.TryParse(xy[1], System.Globalization.NumberStyles.Float, inv, out float sy))
+                        {
+                            WriteOut("ERR fxshader: offset must be @dx,dy");
+                            return;
+                        }
+
+                        shift = new Vector2(sx, sy);
+                    }
+                    else if (float.TryParse(part, System.Globalization.NumberStyles.Float, inv, out float s) && s > 0f) sec = Math.Min(s, 120f);
+                }
+
+                WriteOut(FxShaderBundle.ShowComparison(PlayerControl.LocalPlayer.GetTruePosition() + new Vector2(0f, 1.6f) + shift, sec, vision, z, tint));
+            }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR fxshader failed"); }
+            return;
+        }
+
+        // 自作シェーダの係数を実行中に変える。`fxmat <pool|beam|add> <_Prop> [値]` (値省略 = 今の値を表示)
+        if (directive.StartsWith("fxmat ", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                string[] parts = directive[6..].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length < 2) { WriteOut("ERR fxmat: fxmat <pool|beam|add> <_Prop> [value]"); return; }
+
+                float? value = parts.Length > 2 && float.TryParse(parts[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float v) ? v : null;
+                WriteOut(FxShaderBundle.Tune(parts[0].ToLowerInvariant(), parts[1], value));
+            }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR fxmat failed"); }
+            return;
+        }
+
+        // 見た目の演出だけをホストの足元で出す (判定・キルは起きない)。`fx <Kind> [radius] [count] [a] [b] [@dx,dy] [seen=vision|event|everyone]` (a・b は波動砲の太さと色)
         // 末尾の @dx,dy は足元からのずらし (離れた場所・壁の向こうで出して、音の聞こえ方を確かめる)
         if (directive.StartsWith("fx ", StringComparison.OrdinalIgnoreCase))
         {
@@ -2557,6 +2613,15 @@ public static class TestBridge
     {
         string[] parts = rest.Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
+        // seen=vision|event|everyone で見え方を上書きする (役職ごとの指定が客へ届くかの確認用)。どこに置いてもよい
+        ExplosionFx.Seen seen = ExplosionFx.Seen.Default;
+        int seenAt = Array.FindIndex(parts, p => p.StartsWith("seen=", StringComparison.OrdinalIgnoreCase));
+        if (seenAt >= 0)
+        {
+            if (!Enum.TryParse(parts[seenAt][5..], true, out seen)) { WriteOut("ERR fx: seen must be vision|event|everyone"); return; }
+            parts = parts.Where((_, i) => i != seenAt).ToArray();
+        }
+
         Vector2 shift = Vector2.zero;
         if (parts.Length > 1 && parts[^1].StartsWith('@'))
         {
@@ -2624,10 +2689,10 @@ public static class TestBridge
                 or ExplosionFx.Kind.StoneGain or ExplosionFx.Kind.GoddessGuard or ExplosionFx.Kind.WerewolfRampage or ExplosionFx.Kind.PestilenceRise or ExplosionFx.Kind.SporeCloud or ExplosionFx.Kind.RiftTear;
             if (secret) ExplosionFx.PlayFor(kind, pos, radius, lp);
             else if (kind >= ExplosionFx.Kind.CannonChargeRight && kind < ExplosionFx.Kind.TimeRewind) ExplosionFx.PlayExtra(kind, at + new Vector2(i * 0.8f, 0f), radius, a, b);
-            else ExplosionFx.Play(kind, at + new Vector2(i * 0.8f, 0f), radius);
+            else ExplosionFx.Play(kind, at + new Vector2(i * 0.8f, 0f), radius, seen);
         }
 
-        WriteOut($"OK fx {kind} r={radius:F1} x{count}");
+        WriteOut($"OK fx {kind} r={radius:F1} x{count}{(seen == ExplosionFx.Seen.Default ? "" : $" seen={seen}")}");
     }
 
     private static void ExecuteTp(string rest)

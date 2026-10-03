@@ -216,7 +216,40 @@ public static partial class ExplosionFx
     }
 
     // LocalOnly はまとめ送信に載せない (PlayFor が宛先を絞って自前で送る)
-    private readonly record struct Request(Kind Kind, Vector2 Pos, float Radius, bool LocalOnly = false, float A = 0f, float B = 0f);
+    private readonly record struct Request(Kind Kind, Vector2 Pos, float Radius, bool LocalOnly = false, float A = 0f, float B = 0f, Seen Seen = Seen.Default);
+
+    // 誰に見せるか。Default = 種類ごとの既定 (DefaultSeen)。役職ごとに変えたい時は Play の引数で上書きする
+    public enum Seen : byte
+    {
+        Default,
+        // 視界の外では影に隠す (人の居場所に出る演出)。画面の閃光も近くで起きた時だけ
+        Vision,
+        // 全員が巻き込まれる事件: 画面全体の部品と閃光は全員に、発動者の足元の部品は視界の中だけ
+        Event,
+        // 壁越しでも全員に見せる (爆発・波動砲・誰でも使う設置物)
+        Everyone
+    }
+
+    private static Seen DefaultSeen(Kind kind) => kind switch
+    {
+        Kind.Fire or Kind.Blast or Kind.Supernova or Kind.PortalIdle or Kind.PortalClose or Kind.Tornado => Seen.Everyone,
+        Kind.TimeStop or Kind.TimeRewind or Kind.ThanosSnap or Kind.GustRight or Kind.GustLeft => Seen.Event,
+        _ when HasExtra(kind) => Seen.Everyone,
+        _ => Seen.Vision
+    };
+
+    // 送る時は種類の最上位ビットで「見え方の上書きが続く」ことを示す (種類は 128 未満)
+    private const byte SeenFollows = 0x80;
+
+    private static void WriteKind(MessageWriter writer, Request r)
+    {
+        if (r.Seen == Seen.Default) writer.Write((byte)r.Kind);
+        else
+        {
+            writer.Write((byte)((byte)r.Kind | SeenFollows));
+            writer.Write((byte)r.Seen);
+        }
+    }
 
     private static bool HasExtra(Kind kind) => kind is >= Kind.CannonChargeRight and <= Kind.CannonCutIn;
 
@@ -251,7 +284,10 @@ public static partial class ExplosionFx
         ClawSlash,
         SpiderSil,
         SpiderHalo,
-        CrewSil
+        CrewSil,
+        // 自作シェーダで描く部品 (バンドルが開けない時は FloorPool = Glow・FlowBeam = Ray で代わりに描く)
+        FloorPool,
+        FlowBeam
     }
 
     private struct Particle
@@ -291,6 +327,8 @@ public static partial class ExplosionFx
         public float WobbleA, WobbleF;
         public bool Flat;
         public bool CamBand;
+        public bool Custom;
+        public bool Vision;
     }
 
     // 一度に大量に起爆する役職 (複数の爆弾を同じフレームで起爆するもの) でも RPC は 1 本にまとめ、
@@ -336,6 +374,13 @@ public static partial class ExplosionFx
 
     private static bool WarmOverBudget() => _warmSlice && System.Diagnostics.Stopwatch.GetTimestamp() > _warmSliceEnd;
     private static Sprite _glow;
+    private static Sprite _quad;
+    private static Sprite _beamQuad;
+    private static Material _defaultMaterial;
+
+    // 今描いている要求を視界の外では影に隠すか・画面の閃光を近くの時だけにするか (SpawnLocal が要求ごとに決める)
+    private static bool _vision;
+    private static bool _nearFlashOnly;
     private static Sprite _cloud;
     private static Sprite _flame;
     private static Sprite _ring;
@@ -368,12 +413,12 @@ public static partial class ExplosionFx
     private static Transform _flatRoot;
 
     // ホストが呼ぶ。描画とモッドクライアントへの送信は次の HudManager.Update 以降でまとめて行う。
-    public static void Play(Kind kind, Vector2 pos, float radius)
+    public static void Play(Kind kind, Vector2 pos, float radius, Seen seen = Seen.Default)
     {
         if (!AmongUsClient.Instance || !AmongUsClient.Instance.AmHost || !GameStates.InGame) return;
         if (Pending.Count >= MaxPendingPerFrame) return;
 
-        Pending.Add(new Request(kind, pos, ClampRadius(kind, radius)));
+        Pending.Add(new Request(kind, pos, ClampRadius(kind, radius), Seen: seen));
     }
 
     // 波動砲の演出。gate = ゲートの中心、right = 右へ撃つか
@@ -434,7 +479,7 @@ public static partial class ExplosionFx
         {
             MessageWriter writer = AmongUsClient.Instance.StartRpcImmediately(PlayerControl.LocalPlayer.NetId, (byte)CustomRPC.PlayVisualFx, SendOption.None, viewer.OwnerId);
             writer.Write((byte)1);
-            writer.Write((byte)r.Kind);
+            WriteKind(writer, r);
             writer.Write(r.Pos.x);
             writer.Write(r.Pos.y);
             writer.Write(r.Radius);
@@ -464,7 +509,9 @@ public static partial class ExplosionFx
 
         for (int i = 0; i < count; i++)
         {
-            var kind = (Kind)reader.ReadByte();
+            byte raw = reader.ReadByte();
+            var kind = (Kind)(raw & ~SeenFollows);
+            Seen seen = (raw & SeenFollows) != 0 ? (Seen)reader.ReadByte() : Seen.Default;
             float x = reader.ReadSingle();
             float y = reader.ReadSingle();
             float radius = reader.ReadSingle();
@@ -477,7 +524,7 @@ public static partial class ExplosionFx
 
             if (!GameStates.InGame) continue;
 
-            SpawnLocal(new Request(kind, new Vector2(x, y), ClampRadius(kind, radius), A: a, B: b));
+            SpawnLocal(new Request(kind, new Vector2(x, y), ClampRadius(kind, radius), A: a, B: b, Seen: seen));
         }
     }
 
@@ -608,6 +655,9 @@ public static partial class ExplosionFx
             // 竜巻は残っている間ずっと少しずつ粒を足す (効果時間ぶんを最初に全部作ると、見えない粒が何百も待機する)
             if (TornadoEmitters.Count > 0 && !GameStates.IsMeeting) PulseTornados();
 
+            // 続けて描くものは、始めた要求の見え方 (視界の外で隠すか) を引き継ぐ。終わったら戻す
+            _vision = false;
+
             // 巣の捕獲と導火線は会議で仕切り直しになる。復讐のオーラは会議を跨いで残す
             if (GameStates.IsMeeting)
             {
@@ -624,6 +674,7 @@ public static partial class ExplosionFx
                 if (SnareEmitters.Count > 0) PulseSnares();
                 if (FlowEmitters.Count > 0) PulseFlows();
                 if (SandEmitters.Count > 0) PulseSands();
+                _vision = false;
                 if (_fuseUntil > 0f) PulseFuse();
                 if (AuraEmitters.Count > 0) PulseAuras();
                 if (CarryJobs.Count > 0) PulseCarries();
@@ -631,6 +682,7 @@ public static partial class ExplosionFx
             }
             else HidePortalWindows();
 
+            _vision = false;
             if (StoneTints.Count > 0) TickStoneTints();
 
             // 自分がこの爆発で死んだ時はキル演出が画面を覆うので、明けるまで演出を止めておいて後から見せる
@@ -696,7 +748,7 @@ public static partial class ExplosionFx
                 for (int i = 0; i < n; i++)
                 {
                     Request r = Unsent[i];
-                    writer.Write((byte)r.Kind);
+                    WriteKind(writer, r);
                     writer.Write(r.Pos.x);
                     writer.Write(r.Pos.y);
                     writer.Write(r.Radius);
@@ -748,6 +800,9 @@ public static partial class ExplosionFx
             }
 
             Logger.Info($"{r.Kind} at ({r.Pos.x:F2}, {r.Pos.y:F2}) r={r.Radius:F1}", "ExplosionFx");
+            Seen seen = r.Seen != Seen.Default ? r.Seen : DefaultSeen(r.Kind);
+            _vision = seen is Seen.Vision or Seen.Event;
+            _nearFlashOnly = seen == Seen.Vision;
 
             // 知らない種類 (新しい版のホストが送ってきたもの) は描かない
             switch (r.Kind)
@@ -945,7 +1000,12 @@ public static partial class ExplosionFx
             }
         }
         catch (System.Exception e) { Utils.ThrowException(e); }
-        finally { _tag = 0; }
+        finally
+        {
+            _tag = 0;
+            _vision = false;
+            _nearFlashOnly = false;
+        }
     }
 
     // ── 演出の中身 ─────────────────────────────────────────────────────
@@ -967,6 +1027,9 @@ public static partial class ExplosionFx
         float reach = r + 9f;
         float dist = Vector2.Distance(cam.transform.position, c);
         if (dist > reach) return;
+
+        // 視界の外に隠す演出では、すぐ近くで起きた時だけ画面を光らせる (壁の向こうの出来事を閃光で知らせない)
+        if (_nearFlashOnly && dist > 4f) return;
 
         float k = 1f - dist / reach;
         Add(Shape.Solid, c, Vector2.zero, 0.6f, 1f, 1f, flash, flash, flashAlpha * (0.35f + 0.65f * k), 0.004f, 0.08f, delay: delay, followCamera: true);
@@ -1174,15 +1237,12 @@ public static partial class ExplosionFx
         float back = s > 0f ? 180f : 0f;
         Color[] leaves = [new(0.4f, 0.75f, 0.25f), new(0.65f, 0.82f, 0.2f), new(0.95f, 0.62f, 0.15f), new(0.85f, 0.35f, 0.15f)];
 
-        // 渦の芯 (回転する霞) と、潰した輪を交互に逆回転させた竜巻の断面
+        // 渦の芯 (回転する霞) と、足元で逆向きに回りながら広がる風の渦 (縁を持たない揺らめく光)
         Add(Shape.Cloud, c, Vector2.zero, 1.1f, 0.8f, 3.2f, WindSky, WindDeep, 0.45f, 0.04f, 0.4f, spin: -520f * s, sy0: 0.5f, sy1: 2f);
 
-        for (int k = 0; k < 4; k++)
-        {
-            float size = 1.3f + k * 0.8f;
-            Add(Shape.Ring, c, Vector2.zero, 0.9f + k * 0.15f, size * 0.4f, size, WindColor(k), WindDeep, 0.95f - k * 0.12f, 0.04f, 0.4f,
-                delay: k * 0.05f, spin: (k % 2 == 0 ? -460f : 320f) * s, sy0: size * 0.4f * 0.35f, sy1: size * 0.35f);
-        }
+        Vector2 gf = Off(c, 0f, Feet.y);
+        Add(Shape.FloorPool, gf, Vector2.zero, 1.1f, 1.2f, 4.2f, WindColor(1), WindDeep, 0.85f, 0.04f, 0.4f, rot: 0f, spin: -300f * s, flat: true, order: 0);
+        Add(Shape.FloorPool, gf, Vector2.zero, 0.9f, 0.8f, 2.6f, WindWhite, WindSky, 0.6f, 0.04f, 0.4f, delay: 0.05f, rot: 0f, spin: 220f * s, flat: true, order: 1);
 
         Add(Shape.Glow, c, Vector2.zero, 0.5f, 2.6f, 1.6f, WindWhite, WindSky, 0.7f, 0.02f, 0.3f);
 
@@ -1314,7 +1374,7 @@ public static partial class ExplosionFx
         Add(Shape.Glow, c, Vector2.zero, 0.8f, 2.4f, 1.6f, white, GeminiLavender, 1f, 0.02f, 0.3f, delay: 0.3f);
 
         FloorPool(c + new Vector2(0f, -0.4f), 2.6f, GeminiCyan, GeminiViolet, 0.6f, 1f, 0.3f);
-        Add(Shape.Ring, c, Vector2.zero, 0.6f, 0.3f, 3f, white, GeminiLavender, 0.8f, 0.01f, 0.3f, delay: 0.3f);
+        Add(Shape.FloorPool, Off(c, 0f, Feet.y), Vector2.zero, 0.8f, 0.6f, 3f, white, GeminiLavender, 0.7f, 0.01f, 0.35f, delay: 0.3f, rot: 0f, flat: true, order: 1);
 
         for (int i = 0; i < 40; i++)
         {
@@ -1365,7 +1425,7 @@ public static partial class ExplosionFx
     // 明るい床でも沈まないよう、飛び散る粒は白を混ぜず彩度の高い色だけで出す
     private static Color WarpVivid(int i) => (i % 3) switch { 0 => WarpCyan, 1 => WarpViolet, _ => WarpPink };
 
-    // 消える: 閃光 → 体を包む縦長の光が細く絞られる → 天へ昇る二重の光の柱 → 足元で縮む三重の輪
+    // 消える: 閃光 → 体を包む縦長の光が細く絞られる → 天へ昇る二重の光の柱 (筋が上へ流れる) → 足元で揺らめく光だまりが縮む
     // → 渦を巻いて吸い込まれる光の粒 → 最後に天へ打ち上がる光の粒
     private static void SpawnWarpOut(Vector2 c)
     {
@@ -1375,15 +1435,11 @@ public static partial class ExplosionFx
         Add(Shape.Cloud, c, Vector2.zero, 0.7f, 1.6f, 0.2f, WarpCyan, WarpViolet, 0.8f, 0.03f, 0.5f, rot: 0f, sy0: 2.4f, sy1: 3.2f);
 
         // 光条は根元が明るいので、根元を足元に置いて上へ向ける
-        Add(Shape.Ray, c + Feet, Vector2.zero, 0.9f, 7f, 12f, WindWhite, WarpCyan, 1f, 0.02f, 0.4f, rot: 90f, sy0: 1.1f, sy1: 0.1f);
-        Add(Shape.Ray, c + Feet, Vector2.zero, 1f, 5f, 10f, WarpViolet, WarpPink, 0.7f, 0.02f, 0.45f, delay: 0.05f, rot: 90f, sy0: 2f, sy1: 0.3f);
+        Add(Shape.FlowBeam, c + Feet, Vector2.zero, 0.9f, 7f, 12f, WindWhite, WarpCyan, 1f, 0.02f, 0.4f, rot: 90f, sy0: 1.1f, sy1: 0.1f, order: 5);
+        Add(Shape.FlowBeam, c + Feet, Vector2.zero, 1f, 5f, 10f, WarpViolet, WarpPink, 0.7f, 0.02f, 0.45f, delay: 0.05f, rot: 90f, sy0: 2f, sy1: 0.3f, order: 4);
 
-        for (int k = 0; k < 3; k++)
-        {
-            float from = 3.6f - k * 0.7f;
-            Add(Shape.Ring, c + Feet, Vector2.zero, 0.55f + k * 0.1f, from, 0.2f, k == 1 ? WarpViolet : WarpCyan, WarpPink, 1f, 0.02f, 0.5f,
-                delay: k * 0.07f, rot: 0f, sy0: from * 0.35f, sy1: 0.07f);
-        }
+        Add(Shape.FloorPool, c + Feet, Vector2.zero, 0.75f, 3.4f, 0.3f, WarpCyan, WarpViolet, 0.9f, 0.05f, 0.5f, rot: 0f, sy0: 3.4f * 0.35f, sy1: 0.3f * 0.35f, order: 0);
+        Add(Shape.FloorPool, c + Feet, Vector2.zero, 0.7f, 2.2f, 0.2f, WarpPink, WarpViolet, 0.7f, 0.05f, 0.5f, delay: 0.08f, rot: 0f, sy0: 2.2f * 0.35f, sy1: 0.2f * 0.35f, order: 0);
 
         // 接線方向の速さと中心へ向かう速さを混ぜると、減速しながら渦を巻いて吸い込まれる
         for (int i = 0; i < 48; i++)
@@ -1402,24 +1458,21 @@ public static partial class ExplosionFx
         }
     }
 
-    // 現れる: 天から叩きつけるように降りる二重の光の柱 → 強い閃光と光の星 → 足元に広がる三重の輪と空へ広がる衝撃波
+    // 現れる: 天から叩きつけるように降りる二重の光の柱 → 強い閃光と光の星 → 足元に揺らめく光だまりが広がる
     // → 四方へ飛び散る火花 → しばらく漂って瞬く光の粒
     private static void SpawnWarpIn(Vector2 c)
     {
         Impact(c, 2f, WarpCyan, 0.5f, 0.16f, 0.3f);
 
-        Add(Shape.Ray, c + Feet, Vector2.zero, 0.9f, 12f, 7f, WindWhite, WarpCyan, 1f, 0.01f, 0.35f, rot: 90f, sy0: 1.8f, sy1: 0.15f);
-        Add(Shape.Ray, c + Feet, Vector2.zero, 1f, 10f, 6f, WarpViolet, WarpPink, 0.75f, 0.01f, 0.4f, rot: 90f, sy0: 3f, sy1: 0.3f);
+        Add(Shape.FlowBeam, c + Feet, Vector2.zero, 0.9f, 12f, 7f, WindWhite, WarpCyan, 1f, 0.01f, 0.35f, rot: 90f, sy0: 1.8f, sy1: 0.15f, order: 5);
+        Add(Shape.FlowBeam, c + Feet, Vector2.zero, 1f, 10f, 6f, WarpViolet, WarpPink, 0.75f, 0.01f, 0.4f, rot: 90f, sy0: 3f, sy1: 0.3f, order: 4);
         Add(Shape.Glow, c, Vector2.zero, 0.6f, 0.4f, 3.4f, WindWhite, WarpCyan, 1f, 0.02f, 0.3f, sy0: 0.8f, sy1: 4.4f);
         Add(Shape.Star, c, Vector2.zero, 0.7f, 0.4f, 4f, WindWhite, WarpViolet, 1f, 0.02f, 0.3f, spin: 120f);
         Add(Shape.Star, c, Vector2.zero, 0.6f, 0.3f, 2.8f, WarpPink, WarpViolet, 0.8f, 0.02f, 0.3f, rot: 45f, spin: -90f);
 
-        for (int k = 0; k < 3; k++)
-        {
-            float to = 3.6f + k * 1f;
-            Add(Shape.Ring, c + Feet, Vector2.zero, 0.8f + k * 0.12f, 0.3f, to, k == 1 ? WarpViolet : WarpCyan, WarpPink, 1f - k * 0.15f, 0.02f, 0.4f,
-                delay: k * 0.08f, rot: 0f, sy0: 0.1f, sy1: to * 0.35f);
-        }
+        Add(Shape.FloorPool, c + Feet, Vector2.zero, 1.3f, 0.4f, 4.4f, WarpCyan, WarpViolet, 0.9f, 0.03f, 0.45f, rot: 0f, sy0: 0.4f * 0.35f, sy1: 4.4f * 0.35f, order: 0);
+        Add(Shape.FloorPool, c + Feet, Vector2.zero, 1.1f, 0.3f, 2.8f, WarpPink, WarpViolet, 0.75f, 0.03f, 0.45f, delay: 0.1f, rot: 0f, sy0: 0.3f * 0.35f, sy1: 2.8f * 0.35f, order: 0);
+        Add(Shape.FloorPool, c + Feet, Vector2.zero, 0.6f, 1.6f, 1f, WindWhite, WarpCyan, 0.8f, 0.01f, 0.3f, rot: 0f, sy0: 1.6f * 0.35f, sy1: 0.35f, order: 0);
 
         for (int i = 0; i < 56; i++)
         {
@@ -2012,11 +2065,9 @@ public static partial class ExplosionFx
         Add(Shape.Glow, c, Vector2.zero, 0.45f, 0.6f * r, 3.6f * r, VoidRim, VoidMagenta, 1f, 0.01f, 0.3f, delay: pop);
         Add(Shape.Star, c, Vector2.zero, 0.55f, 0.4f * r, 4.4f * r, WindWhite, VoidPurple, 1f, 0.01f, 0.3f, delay: pop, spin: -150f);
 
-        for (int k = 0; k < 3; k++)
-        {
-            Add(Shape.Ring, c, Vector2.zero, 0.55f + k * 0.12f, 0.6f * r, (3.8f + k * 1.2f) * r, k == 1 ? VoidMagenta : VoidRim, VoidPurple, 1f - k * 0.2f, 0.01f, 0.35f,
-                delay: pop + k * 0.07f);
-        }
+        // 破れた衝撃は 1 本だけ。あとは床に紫の光が揺らめきながら広がる
+        Add(Shape.Ring, c, Vector2.zero, 0.55f, 0.6f * r, 3.8f * r, VoidRim, VoidPurple, 1f, 0.01f, 0.35f, delay: pop);
+        Add(Shape.FloorPool, Off(c, 0f, -0.35f), Vector2.zero, 1.1f, 0.8f * r, 5f * r, VoidMagenta, VoidPurple, 0.9f, 0.02f, 0.45f, delay: pop, rot: 0f, flat: true, order: 0);
 
         for (int i = 0; i < 12; i++)
         {
@@ -2144,11 +2195,9 @@ public static partial class ExplosionFx
 
         Impact(c, 1.2f * r, new Color(0.9f, 0.8f, 0.65f), 0.12f, 0.14f, 0.45f);
 
-        for (int k = 0; k < 3; k++)
-        {
-            float from = (3.2f - k * 0.6f) * r;
-            Add(Shape.Ring, f, Vector2.zero, 0.5f, from, 0.4f * r, Dust, SoilDark, 0.8f, 0.1f, 0.8f, delay: k * 0.1f, rot: 0f, sy0: from * 0.38f, sy1: 0.15f * r);
-        }
+        // 足元の土が渦を巻いて一点へ削れていく (縁の無い土色のうねり)
+        Add(Shape.FloorPool, f, Vector2.zero, 0.6f, 3.2f * r, 0.4f * r, Dust, SoilDark, 0.85f, 0.1f, 0.8f, rot: 0f, spin: 260f, flat: true, order: 0);
+        Add(Shape.FloorPool, f, Vector2.zero, 0.5f, 2.2f * r, 0.3f * r, SoilDark, SoilDark, 0.8f, 0.1f, 0.8f, delay: 0.1f, rot: 0f, spin: -200f, flat: true, order: 1);
 
         // 足元へ吸い込まれながら渦を巻く土煙
         for (int i = 0; i < 16; i++)
@@ -2705,6 +2754,7 @@ public static partial class ExplosionFx
     // 竜巻: 残っている間 0.1 秒ごとに少しずつ粒を足す
     private struct TornadoEmitter
     {
+        public bool Vision;
         public Vector2 Pos;
         public float Until;
         public float Next;
@@ -2733,7 +2783,7 @@ public static partial class ExplosionFx
         }
 
         if (TornadoEmitters.Count >= 8) TornadoEmitters.RemoveAt(0);
-        TornadoEmitters.Add(new TornadoEmitter { Pos = c, Until = Time.time + seconds });
+        TornadoEmitters.Add(new TornadoEmitter { Vision = _vision, Pos = c, Until = Time.time + seconds });
 
         Vector2 f = c + Feet;
         Impact(c, 2f, Dust, 0.16f, 0.12f, 0.35f);
@@ -2755,6 +2805,7 @@ public static partial class ExplosionFx
         for (int i = TornadoEmitters.Count - 1; i >= 0; i--)
         {
             TornadoEmitter e = TornadoEmitters[i];
+            _vision = e.Vision;
 
             if (now >= e.Until)
             {
@@ -3007,6 +3058,7 @@ public static partial class ExplosionFx
 
     private struct SnareEmitter
     {
+        public bool Vision;
         public Vector2 Pos;
         public float Until;
         public float Next;
@@ -3030,7 +3082,7 @@ public static partial class ExplosionFx
         }
 
         if (SnareEmitters.Count >= 8) SnareEmitters.RemoveAt(0);
-        SnareEmitters.Add(new SnareEmitter { Pos = c, Until = Time.time + seconds });
+        SnareEmitters.Add(new SnareEmitter { Vision = _vision, Pos = c, Until = Time.time + seconds });
     }
 
     private static void PulseSnares()
@@ -3040,6 +3092,7 @@ public static partial class ExplosionFx
         for (int i = SnareEmitters.Count - 1; i >= 0; i--)
         {
             SnareEmitter e = SnareEmitters[i];
+            _vision = e.Vision;
 
             if (now >= e.Until)
             {
@@ -3485,6 +3538,7 @@ public static partial class ExplosionFx
     // 復讐のオーラ (最後のインポスターに付く炎): 残っている間 0.06 秒ごとに、そのときの本人の位置へ粒を足す
     private struct AuraEmitter
     {
+        public bool Vision;
         public byte Id;
         public PlayerControl Pc;
         public float Next;
@@ -3521,7 +3575,7 @@ public static partial class ExplosionFx
         }
 
         if (AuraEmitters.Count >= 2) AuraEmitters.RemoveAt(0);
-        AuraEmitters.Add(new AuraEmitter { Id = (byte)id, Pc = pc, BodyOrder = ReadBodyOrder(pc), Next = now + delay, NextBeat = now + delay + 0.5f, NextBolt = now + delay + 0.6f });
+        AuraEmitters.Add(new AuraEmitter { Vision = _vision, Id = (byte)id, Pc = pc, BodyOrder = ReadBodyOrder(pc), Next = now + delay, NextBeat = now + delay + 0.5f, NextBolt = now + delay + 0.6f });
     }
 
     // 覚醒: 深紅の粒が体へ吸い込まれる → 閃光・二重の衝撃波・集中線・炎の噴出 → 火の粉が漂う余韻 → オーラが始まる
@@ -3567,7 +3621,8 @@ public static partial class ExplosionFx
 
         Impact(c, 6f, AwakenRed, 0.35f, 0.3f, 0.5f, delay: charge);
         Add(Shape.Glow, c, Vector2.zero, 0.4f, 1f, 4.5f, WindWhite, AuraRed2, 1f, 0.01f, 0.3f, delay: charge);
-        Add(Shape.Ring, c, Vector2.zero, 0.7f, 0.5f, 10f, AuraRed2, AuraBlack2, 0.9f, 0.02f, 0.4f, delay: charge);
+        // 足元から床へ赤黒い気が一気に広がる
+        Add(Shape.FloorPool, Off(c, 0f, -0.35f), Vector2.zero, 1f, 1f, 8f, AuraRed2, AuraBlack2, 0.95f, 0.02f, 0.45f, delay: charge, rot: 0f, flat: true, order: 0);
 
         for (int i = 0; i < 32 * q; i++)
         {
@@ -3604,6 +3659,7 @@ public static partial class ExplosionFx
         for (int i = AuraEmitters.Count - 1; i >= 0; i--)
         {
             AuraEmitter e = AuraEmitters[i];
+            _vision = e.Vision;
             if (now < e.Next) continue;
 
             e.Next = now + 0.06f;
@@ -4036,6 +4092,7 @@ public static partial class ExplosionFx
     // 流れる粒の emitter: 輪の円周を走る光点・中心へ吸い込まれる粒・輪の上の放電を、演出の尺いっぱい足し続ける
     private struct FlowEmitter
     {
+        public bool Vision;
         public Vector2 Pos;
         public float Until;
         public float Next;
@@ -4056,7 +4113,7 @@ public static partial class ExplosionFx
     private static void StartFlow(Vector2 c, float seconds, float radius, float dir, Color light, Color main, bool motes, bool inward, bool zap, bool flat = false)
     {
         if (FlowEmitters.Count >= 6) FlowEmitters.RemoveAt(0);
-        FlowEmitters.Add(new FlowEmitter { Pos = c, Until = Time.time + seconds, Radius = radius, Dir = dir, Light = light, Main = main, Motes = motes, Inward = inward, Zap = zap, Flat = flat });
+        FlowEmitters.Add(new FlowEmitter { Vision = _vision, Pos = c, Until = Time.time + seconds, Radius = radius, Dir = dir, Light = light, Main = main, Motes = motes, Inward = inward, Zap = zap, Flat = flat });
     }
 
     private static void PulseFlows()
@@ -4066,6 +4123,7 @@ public static partial class ExplosionFx
         for (int i = FlowEmitters.Count - 1; i >= 0; i--)
         {
             FlowEmitter e = FlowEmitters[i];
+            _vision = e.Vision;
 
             if (now >= e.Until)
             {
@@ -4139,6 +4197,7 @@ public static partial class ExplosionFx
     // 砂の帯: 被害者の胸から頭上の砂時計へ 0.9 秒のあいだ砂粒を流し続ける
     private struct SandEmitter
     {
+        public bool Vision;
         public Vector2 Pos;
         public float Until;
         public float Next;
@@ -4155,6 +4214,7 @@ public static partial class ExplosionFx
         for (int i = SandEmitters.Count - 1; i >= 0; i--)
         {
             SandEmitter e = SandEmitters[i];
+            _vision = e.Vision;
 
             Vector2 to = e.To ? Off(e.To.Pos(), 0f, 0.05f) : Off(e.Pos, 0f, 1.1f);
 
@@ -4303,14 +4363,12 @@ public static partial class ExplosionFx
 
         StartFlow(clock, d - close, 1.45f, -1f, TimeGold, Sepia, true, true, false);
 
-        // 時間の柱: 足元から時計へ細い光と、昇りながら縮む楕円の輪
+        // 時間の柱: 足元から時計へ、金の筋が流れ昇る光の帯 (太い帯と白い芯)
         Vector2 f = Off(c, 0f, Feet.y);
         Add(Shape.Glow, Off(c, 0f, 1f), Vector2.zero, d - close, 0.6f, 0.9f, TimeGold, Sepia, 0.2f, 0.1f, 0.85f, rot: 0f, sy0: 3.2f, sy1: 3.4f, twinkle: 0.3f, twinkleSpeed: 8f, order: 0);
-        int rings = FxMath.Min(20, (int)((d - draw - close) / 0.22f));
-        for (int i = 0; i < rings; i++)
-        {
-            Add(Shape.Ring, f, FxMath.V2(0f, 2.65f), 1f, 1.3f, 0.8f, TimeGold, WindWhite, 0.7f, 0.15f, 0.6f, delay: draw + i * 0.22f, rot: 0f, sy0: 0.45f, sy1: 0.28f, order: 2);
-        }
+        float column = clock.y - f.y;
+        Add(Shape.FlowBeam, f, Vector2.zero, d - draw, column, column, TimeGold, Sepia, 0.85f, 0.1f, 0.85f, delay: draw, rot: 90f, sy0: 0.9f, sy1: 0.9f, order: 2);
+        Add(Shape.FlowBeam, f, Vector2.zero, d - draw, column, column, WindWhite, TimeGold, 0.7f, 0.1f, 0.85f, delay: draw, rot: 90f, sy0: 0.3f, sy1: 0.3f, order: 3);
 
         // 逆さの雨: 床から上へ抜けていく金の細い筋
         int rain = (int)(FxMath.Min(70f, d * 20f) * q);
@@ -4518,9 +4576,9 @@ public static partial class ExplosionFx
         Lit(Shape.ClockFine, Shape.ClockFineHalo, f, grow, 1.5f, 1.8f, TimeGold, WindWhite, ClockPale, 0.95f, 0.3f, 1.1f, rot: rot0, spin: 500f, flat: true);
         Lit(Shape.ClockFine, Shape.ClockFineHalo, f, life - grow, 1.8f, 1.8f, TimeGold, ClockPale, TimeGold, 0.9f, 0.01f, 0.5f, delay: grow, rot: rot0 + 500f * grow, spin: 40f, twinkle: 0.2f, flat: true);
 
-        // 床から昇りながら縮む楕円の輪
-        for (int i = 0; i < 5; i++)
-            Add(Shape.Ring, f, FxMath.V2(0f, 2.4f), 1f, 1.1f, 0.5f, TimeGold, WindWhite, 0.65f, 0.15f, 0.6f, delay: grow + i * 0.2f, rot: 0f, sy0: 0.38f, sy1: 0.17f, order: 2);
+        // 床から昇る金の光の帯
+        Add(Shape.FlowBeam, f, Vector2.zero, life - grow, 2.8f, 2.8f, TimeGold, WindWhite, 0.85f, 0.15f, 0.7f, delay: grow, rot: 90f, sy0: 0.8f, sy1: 0.6f, order: 2);
+        Add(Shape.FlowBeam, f, Vector2.zero, life - grow, 2.8f, 2.8f, WindWhite, TimeGold, 0.7f, 0.15f, 0.7f, delay: grow, rot: 90f, sy0: 0.25f, sy1: 0.2f, order: 3);
 
         StartFlow(f, life, 0.75f, 1f, TimeGold, SandDark, true, true, false, true);
 
@@ -4734,7 +4792,7 @@ public static partial class ExplosionFx
     {
         float q = Active.Count > 1200 ? 0.5f : 1f;
         PlayerControl thief = SandThief(c, thiefId);
-        SandEmitters.Add(new SandEmitter { Pos = c, Until = Time.time + 1.1f, Next = Time.time + 0.25f, To = thief });
+        SandEmitters.Add(new SandEmitter { Vision = _vision, Pos = c, Until = Time.time + 1.1f, Next = Time.time + 0.25f, To = thief });
         if (SandEmitters.Count > 6) SandEmitters.RemoveAt(0);
 
         Vector2 tp = thief ? Off(thief.Pos(), 0f, 0.05f) : Off(c, 0f, 1.1f);
@@ -5321,7 +5379,7 @@ public static partial class ExplosionFx
     private static void Add(Shape shape, Vector2 pos, Vector2 vel, float life, float sx0, float sx1, Color color0, Color color1,
                             float alpha, float fadeIn, float fadeOutFrom, float drag = 0f, float delay = 0f, float spin = 0f, float? rot = null,
                             float sy0 = -1f, float sy1 = -1f, float twinkle = 0f, float twinkleSpeed = 0f, float rise = 0f,
-                            float stretch = 0f, bool followCamera = false, int order = -1, Color? colorMid = null, float flap = 0f, float z = 0f, int absOrder = int.MinValue, float wobble = 0f, float wobbleHz = 5f, bool flat = false, bool camBand = false)
+                            float stretch = 0f, bool followCamera = false, int order = -1, Color? colorMid = null, float flap = 0f, float z = 0f, int absOrder = int.MinValue, float wobble = 0f, float wobbleHz = 5f, bool flat = false, bool camBand = false, bool additive = false)
     {
         if (Active.Count >= MaxActive) return;
 
@@ -5344,6 +5402,18 @@ public static partial class ExplosionFx
             sr = go.AddComponent<SpriteRenderer>();
         }
 
+        // 標準のマテリアルを覚えておき、自作シェーダに差し替えた物はプールへ戻す時にこれへ戻す
+        // (プールは前もって作り置くので、最初に手にした描き手から覚える。差し替えより前なので必ず標準の物)
+        if (!_defaultMaterial) _defaultMaterial = sr.sharedMaterial;
+
+        // 自作シェーダの部品は、マテリアルが無ければ標準の絵で代わりに描く
+        Material custom = shape switch
+        {
+            Shape.FloorPool => FxShaderBundle.FloorPool,
+            Shape.FlowBeam => FxShaderBundle.FlowBeam,
+            _ => additive ? FxShaderBundle.Additive : null
+        };
+
         Transform tf = go.transform;
 
         // 床に寝かせる陣は、回転したあとに縦を潰す親の下に置く (回る模様が楕円の中に収まる)
@@ -5364,6 +5434,8 @@ public static partial class ExplosionFx
 
         sr.sprite = shape switch
         {
+            Shape.FloorPool => custom ? _quad : _glow,
+            Shape.FlowBeam => custom ? _beamQuad : _ray,
             Shape.Cloud => _cloud,
             Shape.Flame => _flame,
             Shape.Ring => _ring,
@@ -5396,12 +5468,28 @@ public static partial class ExplosionFx
             _ => _glow
         };
         // 奥から (order=0 の背景) → 雲 → 衝撃波 → 光条 → 破片 → 星 → 光 → 画面の閃光 の順に重ねる
-        sr.sortingOrder = absOrder != int.MinValue ? absOrder : SortingOrder + (order >= 0 ? order : shape == Shape.Solid ? 20 : (int)shape + 1);
+        int rel = order >= 0 ? order : shape == Shape.Solid ? 20 : (int)shape + 1;
+        sr.sortingOrder = absOrder != int.MinValue ? absOrder : SortingOrder + rel;
+        if (custom) sr.sharedMaterial = custom;
+
+        // 視界の外では影に隠す: 影の板 (ShadowQuad) と同じ層・順序に置き、重なりは z で決める。
+        // 床の物は足元の人より奥 (人の z ≒ y/1000)、それ以外は人より手前の帯 (-1 から手前へ order 順)
+        bool vision = false;
+        MeshRenderer shadow = _vision && !followCamera && !camBand && HudManager.InstanceExists ? HudManager.Instance.ShadowQuad : null;
+        if (shadow)
+        {
+            vision = true;
+            sr.sortingLayerID = shadow.sortingLayerID;
+            sr.sortingOrder = shadow.sortingOrder;
+            z = flat || shape == Shape.FloorPool || rel == 0 ? pos.y / 1000f + 0.01f : -1f - rel * 0.01f;
+            tf.position = FxMath.V3(pos.x, pos.y, z);
+        }
+
         sr.color = FxMath.Rgba(color0.r, color0.g, color0.b, 0f);
         go.SetActive(true);
 
         // 光条のテクスチャは横長 (4:1) なので、縦の指定値がそのまま太さ (単位) になるよう補正する
-        float aspect = shape switch { Shape.Ray => RayAspect, Shape.Beam => BeamAspect, Shape.Feather or Shape.ClawSlash => 4f, _ => 1f };
+        float aspect = shape switch { Shape.Ray or Shape.FlowBeam => RayAspect, Shape.Beam => BeamAspect, Shape.Feather or Shape.ClawSlash => 4f, _ => 1f };
 
         Active.Add(new Particle
         {
@@ -5412,7 +5500,7 @@ public static partial class ExplosionFx
             Twinkle = twinkle, TwinkleSpeed = twinkleSpeed, Phase = Rnd(0f, 6.28f), Stretch = stretch, FollowCamera = followCamera,
             // 画面全体の閃光は片付けの対象にしない (消すと揺れが最初からやり直しになる)
             Tag = followCamera || camBand ? (byte)0 : _tag, IsBeam = shape == Shape.Beam, AnchorX = _anchorX, AnchorY = _anchorY, Flap = flap, Z = z, WobbleA = wobble, WobbleF = wobbleHz, Flat = flat,
-            CamBand = camBand
+            CamBand = camBand, Custom = (bool)custom, Vision = vision
         });
     }
 
@@ -5421,6 +5509,8 @@ public static partial class ExplosionFx
         if (!p.Go) return;
 
         if (p.Flat) p.Go.transform.SetParent(null, false);
+        if (p.Custom && _defaultMaterial) p.Sr.sharedMaterial = _defaultMaterial;
+        if (p.Vision) p.Sr.sortingLayerID = 0;
         p.Go.SetActive(false);
         Pool.Push((p.Go, p.Sr));
     }
@@ -5581,6 +5671,10 @@ public static partial class ExplosionFx
         if (!_crewSil) _crewSil = MakeSprite(128, 128, CrewAlpha);
         if (!_clockFine) _clockFine = MakeSprite(512, 512, (x, y) => ClockFineAlpha(x, y, 1f));
         if (!_clockFineHalo) _clockFineHalo = MakeSprite(256, 256, (x, y) => ClockFineAlpha(x, y, 5f));
+        // 自作シェーダは形を UV から計算するので、絵は白い板でよい (光の帯は根元が pivot)
+        if (!_quad) _quad = MakeSprite(4, 4, (_, _) => 1f);
+        if (!_beamQuad) _beamQuad = MakeSprite(16, 4, (_, _) => 1f, new Vector2(0f, 0.5f));
+        if (!WarmOverBudget()) FxShaderBundle.Warm();
 
         if (!_beam)
         {
