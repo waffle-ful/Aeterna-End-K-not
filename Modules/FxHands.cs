@@ -63,20 +63,25 @@ internal static class FxHands
     private static readonly Stack<Hand> Pool = [];
     private static readonly Dictionary<string, Sprite> Vanilla = [];
     private static Material _playerMaterial;
-    private static bool _scanned;
+    private static int _scans;
+    private const int MaxScans = 3;
+    private const float RescanGap = 20f;
+    private static float _lastScan;
 
     // keys の通りに手を動かす。pos はワールド座標、size は絵の倍率 (自作の絵は 1 = 1.4u 幅)、flip で左右反転。
     // prop を渡すと同じ原点に重ねて持たせる (プレイヤー色に塗らない)。vision / order / z は ExplosionFx の置き方に合わせる
     internal static void Play(Key[] keys, Vector2 pos, int colorId, float size, bool flip, float delay, bool vision, int order, float z, Pose prop = Pose.None)
     {
         if (keys == null || keys.Length == 0 || Live.Count >= MaxLive) return;
+        if (colorId < 0 || colorId >= Palette.PlayerColors.Length) colorId = 0;
 
+        Hand h = null;
         try
         {
             Material mat = PlayerMat();
             if (!mat) return;
 
-            Hand h = Pool.Count > 0 ? Pool.Pop() : null;
+            h = Pool.Count > 0 ? Pool.Pop() : null;
             if (h == null || !h.Go)
             {
                 var go = new GameObject("FxHand") { layer = 0 };
@@ -121,8 +126,18 @@ internal static class FxHands
             h.Tf.localScale = Vector3.zero;
             h.Go.SetActive(true);
             Live.Add(h);
+            h = null;
         }
-        catch (System.Exception e) { Utils.ThrowException(e); }
+        catch (System.Exception e)
+        {
+            Utils.ThrowException(e);
+            // 準備の途中で落ちた手は Live にも Pool にも居ない → 隠して Pool へ戻す (残すと画面に居座る)
+            if (h != null && h.Go)
+            {
+                h.Go.SetActive(false);
+                Pool.Push(h);
+            }
+        }
     }
 
     internal static void Tick()
@@ -219,9 +234,11 @@ internal static class FxHands
     private static Sprite VanillaSprite(string name)
     {
         if (Vanilla.TryGetValue(name, out Sprite s) && s) return s;
-        if (_scanned) return null;
+        // 欠けていたら試合ごとに MaxScans 回まで、RescanGap 秒あけて探し直す (後から読み込まれる絵がある・走査は 1 回 15〜70ms)
+        if (_scans >= MaxScans || (_scans > 0 && Time.time - _lastScan < RescanGap)) return null;
 
-        _scanned = true;
+        _scans++;
+        _lastScan = Time.time;
         var sw = System.Diagnostics.Stopwatch.StartNew();
         int n = 0;
         foreach (Object o in Resources.FindObjectsOfTypeAll(Il2CppInterop.Runtime.Il2CppType.Of<Sprite>()))
@@ -241,7 +258,7 @@ internal static class FxHands
     // 試合が始まる度に呼ぶ (マップの絵は読み直されるので探し直しを許す)
     internal static void ResetScan()
     {
-        _scanned = false;
+        _scans = 0;
         Vanilla.Clear();
     }
 

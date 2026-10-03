@@ -107,7 +107,7 @@ public class Vigilante : RoleBase
 
     public override void OnMurder(PlayerControl killer, PlayerControl target)
     {
-        ExplosionFx.PlayGunShot(killer, target.Pos());
+        ExplosionFx.PlayGunShot(killer, target);
         LateTask.New(() =>
         {
             SendRPC(killer.PlayerId);

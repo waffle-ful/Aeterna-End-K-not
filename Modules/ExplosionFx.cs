@@ -502,6 +502,7 @@ public static partial class ExplosionFx
     // 凍結系・波動砲は Radius に秒数を載せるので、効果時間の設定の上限 (180 秒) まで通す
     private static float ClampRadius(Kind kind, float radius)
     {
+        if (!float.IsFinite(radius)) radius = 0f;
         if (kind is Kind.PuppetStrings or Kind.CurseStrings or Kind.RevengeAwaken or Kind.RevengeAura or Kind.VultureFeast or Kind.TimeSteal
             or Kind.StoneGain or Kind.IaiSlash or Kind.ChainBind or Kind.WerewolfMaul or Kind.ThanosSnap) return FxMath.Clamp(radius, 0f, 256f);
         if (kind == Kind.GunShot) return FxMath.Clamp(radius, 0f, 512f);
