@@ -137,6 +137,7 @@ public class Sheriff : RoleBase
 
     public override void OnMurder(PlayerControl killer, PlayerControl target)
     {
+        ExplosionFx.PlayGunShot(killer, target.Pos());
         killer.RpcRemoveAbilityUse();
         Logger.Info($"{killer.GetNameWithRole().RemoveHtmlTags()} : Number of kills left: {killer.GetAbilityUseLimit()}", "Sheriff");
 

@@ -96,6 +96,11 @@ public class Hitman : RoleBase
         return true;
     }
 
+    public override void OnMurder(PlayerControl killer, PlayerControl target)
+    {
+        ExplosionFx.PlayGunShot(killer, target.Pos());
+    }
+
     public static void CheckAndResetTargets()
     {
         foreach (byte id in PlayerIdList)

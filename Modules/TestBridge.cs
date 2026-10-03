@@ -629,6 +629,85 @@ public static class TestBridge
             return;
         }
 
+        // 粒の部品を自分の頭上に撒く。`fxp <embers|smoke|ash|sparks|motes> [数=40] [vision] [@dx,dy] [for=秒]` (for = その秒数のあいだ 0.25 秒ごとに撒き続ける)
+        if (directive.StartsWith("fxp ", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                if (!PlayerControl.LocalPlayer) { WriteOut("ERR fxp: no local player"); return; }
+
+                string[] parts = directive[4..].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length == 0 || !Enum.TryParse(parts[0], true, out FxParticles.Preset preset)) { WriteOut("ERR fxp: preset = embers|smoke|ash|sparks|motes"); return; }
+
+                var inv = System.Globalization.CultureInfo.InvariantCulture;
+                int count = 40;
+                bool vision = false;
+                float span = 0f;
+                Vector2 shift = Vector2.zero;
+
+                foreach (string part in parts[1..])
+                {
+                    if (part.Equals("vision", StringComparison.OrdinalIgnoreCase)) vision = true;
+                    else if (part.StartsWith("for=", StringComparison.OrdinalIgnoreCase) && float.TryParse(part[4..], System.Globalization.NumberStyles.Float, inv, out float sp)) span = Math.Clamp(sp, 0f, 30f);
+                    else if (part.StartsWith('@'))
+                    {
+                        string[] xy = part[1..].Split(',');
+                        if (xy.Length == 2 && float.TryParse(xy[0], System.Globalization.NumberStyles.Float, inv, out float sx) && float.TryParse(xy[1], System.Globalization.NumberStyles.Float, inv, out float sy))
+                            shift = new Vector2(sx, sy);
+                    }
+                    else if (int.TryParse(part, out int n) && n > 0) count = Math.Min(n, 1000);
+                }
+
+                if (!FxParticles.Available) { WriteOut("ERR fxp: bundle unavailable"); return; }
+
+                Color c0 = preset switch { FxParticles.Preset.Smoke => new Color(0.25f, 0.24f, 0.26f, 0.8f), FxParticles.Preset.Ash => new Color(0.32f, 0.28f, 0.26f), _ => new Color(1f, 0.55f, 0.2f) };
+                Color c1 = preset switch { FxParticles.Preset.Smoke => new Color(0.5f, 0.48f, 0.5f, 0.6f), FxParticles.Preset.Ash => new Color(0.75f, 0.2f, 0.2f), _ => new Color(1f, 0.9f, 0.5f) };
+                Vector2 at = PlayerControl.LocalPlayer.GetTruePosition() + new Vector2(0f, 0.6f) + shift;
+                for (float t = 0f; t <= span; t += 0.25f)
+                    FxParticles.Emit(preset, at, count, c0, c1, delay: t, vision: vision, z: vision ? -1.05f : 0f, angle: 15f);
+                WriteOut($"OK fxp {preset} count={count} vision={vision} at={at.x:0.00},{at.y:0.00}");
+                LateTask.New(() => WriteOut($"OK fxp after0.3s {preset} {FxParticles.Describe(preset, vision)}"), 0.3f, "FxpProbe");
+            }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR fxp failed"); }
+            return;
+        }
+
+        // 手の部品を自分の頭上に 3 秒出す。`fxhand <pose|gun|info> [大きさ=0.32] [@dx,dy]` (pose = snapready|snapflick|snapafter|open|grab|gungrip / gun = 銃を握った手)
+        if (directive.StartsWith("fxhand", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                string[] parts = directive[6..].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length == 0 || parts[0].Equals("info", StringComparison.OrdinalIgnoreCase)) { WriteOut("OK fxhand " + FxHands.Describe()); return; }
+                if (!PlayerControl.LocalPlayer) { WriteOut("ERR fxhand: no local player"); return; }
+
+                bool gun = parts[0].Equals("gun", StringComparison.OrdinalIgnoreCase);
+                FxHands.Pose pose = FxHands.Pose.GunGrip;
+                if (!gun && !Enum.TryParse(parts[0], true, out pose)) { WriteOut("ERR fxhand: pose = snapready|snapflick|snapafter|open|grab|gungrip|gun|info"); return; }
+
+                var inv = System.Globalization.CultureInfo.InvariantCulture;
+                float size = 0.32f;
+                Vector2 shift = Vector2.zero;
+                foreach (string part in parts[1..])
+                {
+                    if (part.StartsWith('@'))
+                    {
+                        string[] xy = part[1..].Split(',');
+                        if (xy.Length == 2 && float.TryParse(xy[0], System.Globalization.NumberStyles.Float, inv, out float sx) && float.TryParse(xy[1], System.Globalization.NumberStyles.Float, inv, out float sy))
+                            shift = new Vector2(sx, sy);
+                    }
+                    else if (float.TryParse(part, System.Globalization.NumberStyles.Float, inv, out float sz) && sz > 0f) size = Math.Min(sz, 5f);
+                }
+
+                FxHands.Key[] keys = [new(0f, pose, alpha: 0f), new(0.15f, pose), new(2.8f, pose), new(3f, pose, alpha: 0f)];
+                Vector2 at = PlayerControl.LocalPlayer.GetTruePosition() + new Vector2(0.4f, 0.6f) + shift;
+                FxHands.Play(keys, at, PlayerControl.LocalPlayer.Data.DefaultOutfit.ColorId, size, false, 0f, false, 160, 0f, gun ? FxHands.Pose.Gun : FxHands.Pose.None);
+                WriteOut($"OK fxhand {pose}{(gun ? "+gun" : "")} size={size} at={at.x:0.00},{at.y:0.00} {FxHands.Describe()}");
+            }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR fxhand failed"); }
+            return;
+        }
+
         // 自作シェーダの係数を実行中に変える。`fxmat <pool|beam|add> <_Prop> [値]` (値省略 = 今の値を表示)
         if (directive.StartsWith("fxmat ", StringComparison.OrdinalIgnoreCase))
         {
@@ -2652,7 +2731,7 @@ public static class TestBridge
 
         float radius = parts.Length > 1 && float.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float r) ? r : 3f;
         // PlayerId + 1 を載せる演出は、半径を省くと自分自身を指す (fx RevengeAwaken で自分にオーラを付けられる)
-        bool selfId = kind is ExplosionFx.Kind.RevengeAwaken or ExplosionFx.Kind.RevengeAura or ExplosionFx.Kind.IaiSlash or ExplosionFx.Kind.WerewolfMaul or ExplosionFx.Kind.ThanosSnap;
+        bool selfId = kind is ExplosionFx.Kind.RevengeAwaken or ExplosionFx.Kind.RevengeAura or ExplosionFx.Kind.IaiSlash or ExplosionFx.Kind.WerewolfMaul or ExplosionFx.Kind.ThanosSnap or ExplosionFx.Kind.GunShot;
         if (selfId && parts.Length <= 1 && PlayerControl.LocalPlayer) radius = PlayerControl.LocalPlayer.PlayerId + 1;
         int count = parts.Length > 2 && int.TryParse(parts[2], out int c) ? Math.Clamp(c, 1, 24) : 1;
         // 波動砲は A (太さ) と B (色 / ダイナミックの終点の高さ) も渡せる

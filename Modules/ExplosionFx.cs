@@ -192,7 +192,10 @@ public static partial class ExplosionFx
 
         // ポータルが開いている間ずっと渦を巻く / 閉じる: Pos = ポータルの位置
         PortalIdle = 70,
-        PortalClose = 71
+        PortalClose = 71,
+
+        // 銃で撃つ: Pos = 撃たれた人 (撃った人はキルの瞬間にここへ移る)、Radius = 撃つ人の PlayerId + 1 + 32 × 撃つ向き (0〜15・右から反時計回りに 22.5° 刻み)
+        GunShot = 72
     }
 
     // カットインに出す技名
@@ -380,6 +383,7 @@ public static partial class ExplosionFx
 
     // 今描いている要求を視界の外では影に隠すか・画面の閃光を近くの時だけにするか (SpawnLocal が要求ごとに決める)
     private static bool _vision;
+    private static bool _particlesInGame;
     private static bool _nearFlashOnly;
     private static Sprite _cloud;
     private static Sprite _flame;
@@ -500,6 +504,7 @@ public static partial class ExplosionFx
     {
         if (kind is Kind.PuppetStrings or Kind.CurseStrings or Kind.RevengeAwaken or Kind.RevengeAura or Kind.VultureFeast or Kind.TimeSteal
             or Kind.StoneGain or Kind.IaiSlash or Kind.ChainBind or Kind.WerewolfMaul or Kind.ThanosSnap) return FxMath.Clamp(radius, 0f, 256f);
+        if (kind == Kind.GunShot) return FxMath.Clamp(radius, 0f, 512f);
         return kind is Kind.Freeze or Kind.TimeStop or Kind.Tornado or Kind.TimeRewind or Kind.DemoFuse or Kind.WebSnare or Kind.GoddessGuard or Kind.WerewolfRampage || HasExtra(kind) ? FxMath.Clamp(radius, 0.3f, 180f) : FxMath.Clamp(radius, 0.3f, 15f);
     }
 
@@ -598,6 +603,19 @@ public static partial class ExplosionFx
         {
             if (!GameStates.InGame)
             {
+                // 粒は試合が終わった時に 1 回だけ消す (ロビーで撒いた確認用の粒まで毎フレーム消さない)
+                if (_particlesInGame)
+                {
+                    FxParticles.ClearAll();
+                    FxHands.ClearAll();
+                    FxHands.ResetScan();
+                }
+                else
+                {
+                    FxParticles.Tick();
+                    FxHands.Tick();
+                }
+                _particlesInGame = false;
                 _warm = false;
                 _warmSwept = false;
                 _slicePixels = null;
@@ -622,6 +640,9 @@ public static partial class ExplosionFx
                 return;
             }
 
+            // ロビーで探した本編の絵の一覧にはマップの絵が無いので、試合が始まったら探し直す
+            if (!_particlesInGame) FxHands.ResetScan();
+            _particlesInGame = true;
             var alloc = AllocProbe.Now();
 
             // 素材は試合が始まった時点 (イントロ中) に作っておき、最初の 1 発が引っかからないようにする
@@ -643,6 +664,16 @@ public static partial class ExplosionFx
 
             // 凍結の氷のように効果時間いっぱい残る演出があるので、会議が始まったら残りを消す
             if (Active.Count > 0 && GameStates.IsMeeting) ClearAll();
+            if (GameStates.IsMeeting)
+            {
+                FxParticles.ClearAll();
+                FxHands.ClearAll();
+            }
+            else
+            {
+                FxParticles.Tick();
+                FxHands.Tick();
+            }
 
             if (Pending.Count > 0)
             {
@@ -1217,6 +1248,14 @@ public static partial class ExplosionFx
         // 灼熱の核
         Add(Shape.Glow, c, Vector2.zero, 0.35f, r * 1.8f, r * 0.5f, flash, yellow, 1f, 0.004f, 0.25f);
         Add(Shape.Glow, c, Vector2.zero, 1.3f, r * 1.1f, r * 0.4f, white, red, 1f, 0.02f, 0.4f, colorMid: yellow);
+
+        // 細かい粒の層: 弾ける火花 → 揺らぎながら舞い上がる火の粉 → 奥で巻き込みながら広がる煙
+        Particles(FxParticles.Preset.Sparks, c, 60, white, orange, size: 1.3f, speed: FxMath.Max(1f, r * 0.6f), spread: r * 2f, order: 10);
+        for (int k = 0; k < 6; k++)
+            Particles(FxParticles.Preset.Embers, c, 14, yellow, orange, size: 1.2f, speed: FxMath.Max(0.6f, r * 0.5f), spread: r * 2f, delay: 0.15f + k * 0.25f, order: 9);
+        for (int k = 0; k < 4; k++)
+            Particles(FxParticles.Preset.Smoke, c, 5, new Color(0.25f, 0.22f, 0.22f, 0.7f), new Color(0.12f, 0.08f, 0.07f, 0.6f), size: r * 0.9f, speed: r * 0.5f, spread: r * 1.4f,
+                delay: 0.4f + k * 0.3f, order: 0);
     }
 
     // 風の色 (横風の突風と軌跡で共用)。明るい床の上でも筋が見えるよう、白ではなく澄んだ水色を主にする
@@ -4883,6 +4922,22 @@ public static partial class ExplosionFx
         _tag = tag;
         _anchorX = anchor.x;
         _anchorY = anchor.y;
+    }
+
+    // 粒の部品で撒く (バンドルが無ければ何もしない)。見え方は Add と同じ決まりで、今の要求が視界の中だけなら影に隠れる置き方にする
+    private static void Particles(FxParticles.Preset preset, Vector2 pos, int count, Color c0, Color c1, float size = 1f, float speed = 1f, float spread = 1f, float delay = 0f, int order = 8, float angle = 0f)
+    {
+        if (!FxParticles.Available) return;
+
+        bool vision = _vision && HudManager.InstanceExists && HudManager.Instance.ShadowQuad;
+        FxParticles.Emit(preset, pos, count, c0, c1, size, speed, spread, delay, vision, SortingOrder + order, vision ? -1f - order * 0.01f : 0f, angle);
+    }
+
+    // 本人の色の手 (FxHands) を、粒と同じ見え方の規則で出す
+    private static void Hand(FxHands.Key[] keys, Vector2 pos, int colorId, float size, bool flip, float delay = 0f, int order = 9, FxHands.Pose prop = FxHands.Pose.None)
+    {
+        bool vision = _vision && HudManager.InstanceExists && HudManager.Instance.ShadowQuad;
+        FxHands.Play(keys, pos, colorId, size, flip, delay, vision, SortingOrder + order, vision ? -1f - order * 0.01f : 0f, prop);
     }
 
     // 砲身: 発射方向へ段々小さくなる魔法陣を 3 枚、横から見た向き (縦長の楕円) で並べる
