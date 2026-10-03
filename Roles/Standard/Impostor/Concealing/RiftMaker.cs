@@ -106,6 +106,8 @@ public class RiftMaker : RoleBase
         if (!near0 && !near1) return;
 
         Vector2 target = near0 ? mark1 : mark0;
+        ExplosionFx.PlayFor(ExplosionFx.Kind.RiftTear, pos, 1f, player);
+        ExplosionFx.PlayFor(ExplosionFx.Kind.RiftTear, target, 1f, player);
         player.TP(target);
         LastTP = now;
     }
@@ -144,6 +146,7 @@ public class RiftMaker : RoleBase
         {
             Vector2 pos = player.Pos();
             Marks.Add(pos);
+            ExplosionFx.PlayFor(ExplosionFx.Kind.RiftTear, pos, 1f, player);
             SendRPC(CustomRPC.SyncRoleData, player.PlayerId, 1, pos);
             if (Marks.Count == 2) LastTP = TimeStamp;
             player.Notify(GetString("MarkDone"));

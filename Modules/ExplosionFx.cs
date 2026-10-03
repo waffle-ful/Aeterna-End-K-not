@@ -9,7 +9,7 @@ namespace EndKnot.Modules;
 // 爆発や突風など、役職の能力に添える見た目だけの演出。ホストと End K not を入れているクライアントにだけ見える
 // (バニラのクライアントは CustomRPC.PlayVisualFx を解釈しないので何も起きない)。
 // 当たり判定やゲーム進行には一切関与しない。
-public static class ExplosionFx
+public static partial class ExplosionFx
 {
     public enum Kind : byte
     {
@@ -142,7 +142,57 @@ public static class ExplosionFx
 
         // 復讐のオーラ: Pos = 本人、Radius = 本人の PlayerId + 1 (覚醒の演出つき / オーラだけ)
         RevengeAwaken = 50,
-        RevengeAura = 51
+        RevengeAura = 51,
+
+        // サノスが石を得る / 使う (本人の画面だけ): Pos = 死体 / 本人、Radius = 石の番号 + 1 (使う時は + 11)
+        StoneGain = 52,
+
+        // 居合で遅れて斬られる: Pos = 斬られた人、Radius = その人の PlayerId + 1
+        IaiSlash = 53,
+
+        // アルトルイストが命を差し出す / 死者が蘇る: Pos = 本人 / 蘇った位置
+        AltruistGift = 54,
+        AltruistRevive = 55,
+
+        // 力場を張る: Pos = 本人、Radius = 力場の半径 / 弾き出された人: Pos = 着地点
+        ForceFieldUp = 56,
+        ForceRepel = 57,
+
+        // 女神の反撃の構え (本人の画面だけ): Radius = 秒数 / 襲った人が石になる: Pos = 襲った人
+        GoddessGuard = 58,
+        GoddessPetrify = 59,
+
+        // 鎖で 2 人を繋ぐ: Pos = 1 人目、Radius = 2 人目の PlayerId + 1
+        ChainBind = 60,
+
+        // 人狼の暴走 (本人の画面だけ): Radius = 秒数 / 暴走中のキル: Pos = 被害者、Radius = 被害者の PlayerId + 1
+        WerewolfRampage = 61,
+        WerewolfMaul = 62,
+
+        // 疫病持ちがペスティレンスに変わる (本人の画面だけ)
+        PestilenceRise = 63,
+
+        // 胞子を撒く (本人の画面だけ): Radius = 感染の半径
+        SporeCloud = 64,
+
+        // 裂け目 (リフトメイカー本人の画面だけ): Pos = 印 / ワープの出発点・到着点
+        RiftTear = 65,
+
+        // ポータルを通る: Pos = 出発点 / 到着点
+        PortalPass = 66,
+
+        // ボウリングの玉が当たる: Pos = 当たった人
+        BowlStrike = 67,
+
+        // ペンギンが獲物を捕まえる: Pos = 捕まった人
+        PenguinGrab = 68,
+
+        // サノスの指パッチン: Pos = サノス、Radius = サノスの PlayerId + 1 (他の生存者が灰になって崩れる)
+        ThanosSnap = 69,
+
+        // ポータルが開いている間ずっと渦を巻く / 閉じる: Pos = ポータルの位置
+        PortalIdle = 70,
+        PortalClose = 71
     }
 
     // カットインに出す技名
@@ -403,8 +453,9 @@ public static class ExplosionFx
     // 凍結系・波動砲は Radius に秒数を載せるので、効果時間の設定の上限 (180 秒) まで通す
     private static float ClampRadius(Kind kind, float radius)
     {
-        if (kind is Kind.PuppetStrings or Kind.CurseStrings or Kind.RevengeAwaken or Kind.RevengeAura or Kind.VultureFeast or Kind.TimeSteal) return FxMath.Clamp(radius, 0f, 256f);
-        return kind is Kind.Freeze or Kind.TimeStop or Kind.Tornado or Kind.TimeRewind or Kind.DemoFuse or Kind.WebSnare || HasExtra(kind) ? FxMath.Clamp(radius, 0.3f, 180f) : FxMath.Clamp(radius, 0.3f, 15f);
+        if (kind is Kind.PuppetStrings or Kind.CurseStrings or Kind.RevengeAwaken or Kind.RevengeAura or Kind.VultureFeast or Kind.TimeSteal
+            or Kind.StoneGain or Kind.IaiSlash or Kind.ChainBind or Kind.WerewolfMaul or Kind.ThanosSnap) return FxMath.Clamp(radius, 0f, 256f);
+        return kind is Kind.Freeze or Kind.TimeStop or Kind.Tornado or Kind.TimeRewind or Kind.DemoFuse or Kind.WebSnare or Kind.GoddessGuard or Kind.WerewolfRampage || HasExtra(kind) ? FxMath.Clamp(radius, 0.3f, 180f) : FxMath.Clamp(radius, 0.3f, 15f);
     }
 
     public static void ReceiveRPC(MessageReader reader)
@@ -513,6 +564,9 @@ public static class ExplosionFx
                 FlowEmitters.Clear();
                 SandEmitters.Clear();
                 AuraEmitters.Clear();
+                ReleasePortalMachines();
+                PortalEmitters.Clear();
+                ReleasePortalWindows();
                 _awakenId = -1;
                 _fuseUntil = 0f;
                 RecentStrings.Clear();
@@ -562,6 +616,7 @@ public static class ExplosionFx
                 SandEmitters.Clear();
                 CarryJobs.Clear();
                 _fuseUntil = 0f;
+                HidePortalWindows();
             }
             else if (!ExileController.Instance)
             {
@@ -572,7 +627,9 @@ public static class ExplosionFx
                 if (_fuseUntil > 0f) PulseFuse();
                 if (AuraEmitters.Count > 0) PulseAuras();
                 if (CarryJobs.Count > 0) PulseCarries();
+                if (PortalEmitters.Count > 0) PulsePortals();
             }
+            else HidePortalWindows();
 
             if (StoneTints.Count > 0) TickStoneTints();
 
@@ -882,6 +939,9 @@ public static class ExplosionFx
                     StartAura((int)(r.Radius + 0.5f) - 1);
                     FxSound.At("FxRevengeAura", r.Pos, 0.6f);
                     break;
+                default:
+                    SpawnRoles6(r);
+                    break;
             }
         }
         catch (System.Exception e) { Utils.ThrowException(e); }
@@ -961,8 +1021,6 @@ public static class ExplosionFx
         // 衝撃波 4 重 (2 本目の縁 = 実際の爆発半径)
         Add(Shape.Ring, c, Vector2.zero, 0.35f, r * 0.1f, r * 2.2f, white, cyan, 1f, 0.01f, 0.35f);
         Add(Shape.Ring, c, Vector2.zero, 0.6f, r * 0.05f, r * 2f, cyan, violet, 0.95f, 0.02f, 0.4f, delay: 0.05f);
-        Add(Shape.Ring, c, Vector2.zero, 0.95f, r * 0.05f, r * 1.8f, magenta, violet, 0.75f, 0.03f, 0.35f, delay: 0.12f);
-        Add(Shape.Ring, c, Vector2.zero, 1.6f, r * 0.2f, r * 3f, lavender, violet, 0.35f, 0.1f, 0.3f, delay: 0.25f);
 
         // 光条 (放射状に伸びる光の筋)
         const int rays = 20;
@@ -1042,7 +1100,6 @@ public static class ExplosionFx
         }
 
         Add(Shape.Ring, c, Vector2.zero, 0.3f, r * 0.1f, r * 2.1f, white, yellow, 1f, 0.01f, 0.3f);
-        Add(Shape.Ring, c, Vector2.zero, 0.55f, r * 0.05f, r * 2f, yellow, red, 0.8f, 0.02f, 0.35f, delay: 0.05f);
 
         for (int i = 0; i < 12; i++)
         {
@@ -1068,7 +1125,6 @@ public static class ExplosionFx
             float delay = Rnd(0.1f, 0.45f);
             float s = r * Rnd(0.25f, 0.4f);
             Add(Shape.Glow, at, Vector2.zero, 0.3f, s * 0.5f, s * 2.2f, white, yellow, 1f, 0.01f, 0.3f, delay: delay);
-            Add(Shape.Ring, at, Vector2.zero, 0.35f, s * 0.2f, s * 2.4f, white, orange, 0.7f, 0.02f, 0.3f, delay: delay);
 
             for (int i = 0; i < 6; i++)
             {
@@ -1218,8 +1274,8 @@ public static class ExplosionFx
                 drag: 1.5f, delay: Rnd(0f, 0.1f), rot: back, sy0: Rnd(0.1f, 0.18f), sy1: 0.05f);
         }
 
-        // 着地: 地面に広がる輪と、横へ流れる土煙
-        Add(Shape.Ring, b + feet, Vector2.zero, 0.6f, 0.3f, 2f, WindWhite, WindSky, 0.9f, 0.02f, 0.35f, delay: 0.08f, rot: 0f, sy0: 0.1f, sy1: 0.7f);
+        // 着地: 舞い上がる土煙と、横へ流れる土煙
+        FloorKick(b + feet, 0.7f, Dust, DustDark, 0.6f, 0.08f, 10);
 
         for (int i = 0; i < 10; i++)
         {
@@ -1257,8 +1313,7 @@ public static class ExplosionFx
         Add(Shape.Star, c, Vector2.zero, 0.9f, 0.5f, 2.6f, white, GeminiLavender, 1f, 0.02f, 0.3f, delay: 0.3f, spin: 90f);
         Add(Shape.Glow, c, Vector2.zero, 0.8f, 2.4f, 1.6f, white, GeminiLavender, 1f, 0.02f, 0.3f, delay: 0.3f);
 
-        Add(Shape.Ring, c + new Vector2(0f, -0.4f), Vector2.zero, 1f, 0.2f, 2.8f, GeminiCyan, GeminiViolet, 1f, 0.02f, 0.4f, delay: 0.3f, rot: 0f, sy0: 0.07f, sy1: 1f);
-        Add(Shape.Ring, c + new Vector2(0f, -0.4f), Vector2.zero, 1.1f, 0.2f, 2.2f, GeminiMagenta, GeminiViolet, 0.9f, 0.02f, 0.4f, delay: 0.4f, rot: 0f, sy0: 0.07f, sy1: 0.8f);
+        FloorPool(c + new Vector2(0f, -0.4f), 2.6f, GeminiCyan, GeminiViolet, 0.6f, 1f, 0.3f);
         Add(Shape.Ring, c, Vector2.zero, 0.6f, 0.3f, 3f, white, GeminiLavender, 0.8f, 0.01f, 0.3f, delay: 0.3f);
 
         for (int i = 0; i < 40; i++)
@@ -1275,8 +1330,6 @@ public static class ExplosionFx
         Color white = new(1f, 1f, 1f);
 
         Add(Shape.Glow, c, Vector2.zero, 0.45f, 2.4f, 1.6f, white, GeminiLavender, 1f, 0.01f, 0.3f);
-        Add(Shape.Ring, c, Vector2.zero, 0.5f, 0.2f, 3f, white, GeminiCyan, 1f, 0.01f, 0.35f);
-        Add(Shape.Ring, c, Vector2.zero, 0.7f, 0.2f, 2.4f, GeminiMagenta, GeminiViolet, 0.8f, 0.02f, 0.35f, delay: 0.06f);
 
         for (int i = 0; i < 34; i++)
         {
@@ -1360,7 +1413,6 @@ public static class ExplosionFx
         Add(Shape.Glow, c, Vector2.zero, 0.6f, 0.4f, 3.4f, WindWhite, WarpCyan, 1f, 0.02f, 0.3f, sy0: 0.8f, sy1: 4.4f);
         Add(Shape.Star, c, Vector2.zero, 0.7f, 0.4f, 4f, WindWhite, WarpViolet, 1f, 0.02f, 0.3f, spin: 120f);
         Add(Shape.Star, c, Vector2.zero, 0.6f, 0.3f, 2.8f, WarpPink, WarpViolet, 0.8f, 0.02f, 0.3f, rot: 45f, spin: -90f);
-        Add(Shape.Ring, c, Vector2.zero, 0.6f, 0.4f, 5.5f, WindWhite, WarpCyan, 0.8f, 0.01f, 0.35f);
 
         for (int k = 0; k < 3; k++)
         {
@@ -1401,8 +1453,7 @@ public static class ExplosionFx
 
         Add(Shape.Glow, c, Vector2.zero, 0.5f, 0.4f, 3.2f, WindWhite, IceBlue, 1f, 0.02f, 0.3f);
         Add(Shape.Star, c, Vector2.zero, 0.5f, 0.4f, 3f, WindWhite, IceCyan, 1f, 0.02f, 0.3f, rot: 45f);
-        Add(Shape.Ring, c + Feet, Vector2.zero, 0.9f, 0.3f, 5f, IceWhite, IceBlue, 1f, 0.02f, 0.45f, rot: 0f, sy0: 0.1f, sy1: 1.75f);
-        Add(Shape.Ring, c + Feet, Vector2.zero, 1.1f, 0.3f, 3.4f, IceCyan, IceBlue, 0.8f, 0.02f, 0.45f, delay: 0.1f, rot: 0f, sy0: 0.1f, sy1: 1.2f);
+        FloorPool(c + Feet, 3.4f, IceWhite, IceBlue, 0.6f, 1f);
 
         for (int i = 0; i < 16; i++)
         {
@@ -1448,7 +1499,6 @@ public static class ExplosionFx
                 0.1f, 0.6f, delay: t0);
         }
 
-        Add(Shape.Ring, c, Vector2.zero, 0.6f, 0.2f, 4f, WindWhite, IceBlue, 1f, 0.01f, 0.35f, delay: br);
         Add(Shape.Glow, c, Vector2.zero, 0.4f, 2.8f, 1.2f, WindWhite, IceCyan, 1f, 0.01f, 0.3f, delay: br);
 
         for (int i = 0; i < 24; i++)
@@ -1599,9 +1649,7 @@ public static class ExplosionFx
 
         Add(Shape.Star, c, Vector2.zero, 0.6f, 0.5f, 5f, WindWhite, BoltBlue, 1f, 0.01f, 0.3f);
         Add(Shape.Glow, c, Vector2.zero, 0.6f, 4.5f, 2f, BoltWhite, BoltBlue, 1f, 0.01f, 0.3f);
-        Add(Shape.Ring, c + Feet, Vector2.zero, 0.7f, 0.3f, 5f, BoltWhite, BoltBlue, 1f, 0.01f, 0.4f, rot: 0f, sy0: 0.1f, sy1: 1.75f);
-        Add(Shape.Ring, c, Vector2.zero, 0.55f, 0.2f, 4f, WindWhite, BoltViolet, 0.9f, 0.01f, 0.35f);
-        Add(Shape.Ring, c, Vector2.zero, 0.5f, 0.2f, 3f, WindWhite, BoltBlue, 0.8f, 0.01f, 0.35f, delay: 0.2f);
+        Scorch(c + Feet, 1.4f, 1.6f);
 
         for (int i = 0; i < 50; i++)
         {
@@ -1644,9 +1692,7 @@ public static class ExplosionFx
 
         Impact(c, r * 2f, new Color(1f, 0.93f, 0.8f), 0.12f + 0.12f * r, 0.12f + 0.16f * r, 0.4f);
 
-        Add(Shape.Ring, f, Vector2.zero, 0.7f, 0.4f * r, 4.4f * r, Dust, DustDark, 1f, 0.02f, 0.4f, rot: 0f, sy0: 0.15f * r, sy1: 1.6f * r);
-        Add(Shape.Ring, f, Vector2.zero, 0.8f, 0.3f * r, 3f * r, WindWhite, Dust, 0.85f, 0.02f, 0.4f, delay: 0.06f, rot: 0f, sy0: 0.12f * r, sy1: 1.1f * r);
-        Add(Shape.Ring, c, Vector2.zero, 0.5f, 0.3f * r, 3.6f * r, WindWhite, Dust, 0.7f, 0.01f, 0.35f);
+        FloorKick(f, r, Dust, DustDark, 0.75f, 0f, 16);
         Add(Shape.Glow, f, Vector2.zero, 0.4f, 2.4f * r, 1.2f * r, new Color(1f, 0.93f, 0.8f), Dust, 0.8f, 0.01f, 0.3f, sy0: 0.8f * r, sy1: 0.4f * r);
 
         // 土煙は大きさに比例させすぎると画面を覆うので、数と広がりは緩やかに増やす
@@ -1778,16 +1824,9 @@ public static class ExplosionFx
             Impact(c, 1.5f * r, new Color(1f, 0.7f, 0.35f), 0.3f, 0.1f, 0.25f);
         }
 
-        // 着火: 足元で弾ける光と、床を這う熱の輪
+        // 着火: 足元で弾ける光
         Add(Shape.Glow, f, Vector2.zero, 0.5f, 0.5f * r, 3f * r, BlazeWhite, BlazeOrange, 1f, 0.02f, 0.3f, sy0: 0.3f * r, sy1: 1.4f * r);
         Add(Shape.Ray, f, Vector2.zero, 0.7f, 2.5f * r, 5.5f * r, BlazeWhite, BlazeOrange, 1f, 0.01f, 0.35f, rot: 90f, sy0: 1.3f * r, sy1: 0.2f * r);
-
-        for (int k = 0; k < 3; k++)
-        {
-            float to = (2.6f + k * 0.8f) * r;
-            Add(Shape.Ring, f, Vector2.zero, 0.6f + k * 0.12f, 0.3f * r, to, k == 0 ? BlazeWhite : BlazeYellow, BlazeRed, 1f - k * 0.2f, 0.02f, 0.4f,
-                delay: k * 0.08f, rot: 0f, sy0: 0.1f * r, sy1: to * 0.35f);
-        }
 
         // 体を包む火の芯 (燃えている間ずっと脈打つ)
         Add(Shape.Glow, c, Vector2.zero, 1.9f, 1.2f * r, 1.8f * r, BlazeYellow, BlazeRed, 0.85f, 0.05f, 0.65f, twinkle: 0.3f, twinkleSpeed: 18f, sy0: 1.8f * r, sy1: 2.6f * r);
@@ -1857,8 +1896,6 @@ public static class ExplosionFx
 
         // 焦げ跡 (縁だけしばらく赤く燻る) と、火が収まった後に舞い落ちる灰
         Add(Shape.Cloud, f, Vector2.zero, 3.6f, 1.4f * r, 2.2f * r, Charred, Charred, 0.9f, 0.06f, 0.7f, rot: 0f, sy0: 0.55f * r, sy1: 0.8f * r, order: 0);
-        Add(Shape.Ring, f, Vector2.zero, 2.4f, 1.6f * r, 2f * r, BlazeOrange, BlazeRed, 0.55f, 0.1f, 0.5f, delay: 0.3f, rot: 0f, twinkle: 0.4f, twinkleSpeed: 6f,
-            sy0: 0.6f * r, sy1: 0.72f * r, order: 0);
 
         for (int i = 0; i < 16 * q; i++)
         {
@@ -1940,7 +1977,6 @@ public static class ExplosionFx
         // 潰れて弾ける
         Add(Shape.Glow, c, Vector2.zero, 0.35f, 0.3f * r, 2.4f * r, WindWhite, VoidMagenta, 1f, 0.01f, 0.3f, delay: collapse);
         Add(Shape.Star, c, Vector2.zero, 0.45f, 0.4f * r, 3.2f * r, WindWhite, VoidBlue, 1f, 0.01f, 0.3f, delay: collapse, spin: 200f);
-        Add(Shape.Ring, c, Vector2.zero, 0.45f, 0.2f * r, 3f * r, VoidRim, VoidPurple, 0.9f, 0.01f, 0.35f, delay: collapse);
 
         for (int i = 0; i < 24; i++)
         {
@@ -2029,8 +2065,7 @@ public static class ExplosionFx
         Vector2 f = c + Feet;
 
         Add(Shape.Glow, c, Vector2.zero, 0.25f, 0.3f * r, 2f * r, WindWhite, SmokeWhite, 0.9f, 0.01f, 0.3f);
-        Add(Shape.Ring, c, Vector2.zero, 0.35f, 0.3f * r, 2.6f * r, WindWhite, SmokeGrey, 0.7f, 0.01f, 0.35f);
-        Add(Shape.Ring, f, Vector2.zero, 0.6f, 0.4f * r, 4f * r, SmokeWhite, SmokeGrey, 0.8f, 0.02f, 0.4f, rot: 0f, sy0: 0.14f * r, sy1: 1.4f * r);
+        FloorKick(f, r, SmokeWhite, SmokeGrey, 0.65f, 0f, 14);
 
         // 影の煙 (奥)
         for (int i = 0; i < 18; i++)
@@ -2147,8 +2182,7 @@ public static class ExplosionFx
         Impact(c, 1.5f * r, new Color(0.95f, 0.85f, 0.7f), 0.18f, 0.2f, 0.45f);
 
         Add(Shape.Ray, f, Vector2.zero, 0.6f, 1.4f * r, 4f * r, Dust, DustDark, 0.9f, 0.02f, 0.4f, rot: 90f, sy0: 1.4f * r, sy1: 0.5f * r);
-        Add(Shape.Ring, f, Vector2.zero, 0.7f, 0.4f * r, 4.4f * r, Dust, DustDark, 1f, 0.02f, 0.4f, rot: 0f, sy0: 0.15f * r, sy1: 1.6f * r);
-        Add(Shape.Ring, f, Vector2.zero, 0.8f, 0.3f * r, 3f * r, WindWhite, Dust, 0.8f, 0.02f, 0.4f, delay: 0.06f, rot: 0f, sy0: 0.12f * r, sy1: 1.1f * r);
+        FloorKick(f, r, Dust, DustDark, 0.75f, 0f, 16);
 
         // 噴き上がる土柱
         for (int i = 0; i < 24; i++)
@@ -2331,7 +2365,6 @@ public static class ExplosionFx
         Add(Shape.Glow, top, Vector2.zero, gather, 0.15f, 0.85f, BloodBright, Blood, 0.95f, 0.1f, 0.95f);
         Add(Shape.Star, top, Vector2.zero, gather, 0.1f, 0.6f, FangWhite, BloodBright, 0.8f, 0.2f, 0.95f, spin: 240f);
         Add(Shape.Glow, top, Vector2.zero, 0.3f, 0.8f, 2.2f, FangWhite, BloodBright, 1f, 0.01f, 0.2f, delay: gather);
-        Add(Shape.Ring, top, Vector2.zero, 0.45f, 0.2f, 2.6f, BloodBright, BloodDark, 0.9f, 0.01f, 0.3f, delay: gather);
 
         for (int i = 0; i < 16 * q; i++)
         {
@@ -2368,8 +2401,7 @@ public static class ExplosionFx
         Impact(c, 1.5f, ToxGreen, 0.22f, 0.05f, 0.2f);
 
         Add(Shape.Glow, c, Vector2.zero, 1.2f, 1.3f, 1.5f, ToxGreen, ToxPurple, 0.85f, 0.05f, 0.55f, twinkle: 0.5f, twinkleSpeed: 14f, sy0: 1.9f, sy1: 2.2f, order: 0);
-        Add(Shape.Ring, f, Vector2.zero, 0.9f, 0.3f, 2.6f, ToxLime, ToxPurple, 0.9f, 0.02f, 0.4f, rot: 0f, sy0: 0.1f, sy1: 0.9f);
-        Add(Shape.Ring, f, Vector2.zero, 1f, 0.3f, 1.8f, ToxGreen, ToxDeep, 0.8f, 0.02f, 0.4f, delay: 0.12f, rot: 0f, sy0: 0.1f, sy1: 0.65f);
+        FloorKick(f, 0.6f, ToxGreen, ToxDeep, 0.55f, 0f, 12);
 
         // 泡: 等速で昇らせ、弾ける位置は寿命から出す
         for (int i = 0; i < 34 * q; i++)
@@ -2398,7 +2430,6 @@ public static class ExplosionFx
 
         // 毒の水たまり と、その上でしばらく弾ける小さな泡
         Add(Shape.Cloud, f, Vector2.zero, 2.8f, 0.3f, 1.6f, ToxGreen, ToxDeep, 0.95f, 0.05f, 0.7f, delay: 0.3f, rot: 0f, sy0: 0.12f, sy1: 0.55f, order: 0);
-        Add(Shape.Ring, f, Vector2.zero, 2.4f, 1.1f, 1.4f, ToxLime, ToxPurple, 0.5f, 0.1f, 0.6f, delay: 0.5f, rot: 0f, twinkle: 0.4f, twinkleSpeed: 5f, sy0: 0.42f, sy1: 0.5f, order: 0);
 
         for (int i = 0; i < 10 * q; i++)
         {
@@ -2420,8 +2451,7 @@ public static class ExplosionFx
 
         Add(Shape.Glow, c, Vector2.zero, 0.45f, 0.4f, 2.4f, WindWhite, GazeGreen, 1f, 0.02f, 0.3f);
         Add(Shape.Star, c, Vector2.zero, 0.5f, 0.4f, 2.2f, WindWhite, GazeGreen, 1f, 0.02f, 0.3f, rot: 0f);
-        Add(Shape.Ring, c, Vector2.zero, 0.8f, 0.3f, 3.6f, StonePale, StoneDark, 1f, 0.02f, 0.4f, rot: 0f, sy0: 0.12f, sy1: 1.3f);
-        Add(Shape.Ring, c, Vector2.zero, 0.9f, 0.3f, 2.4f, Stone, StoneDark, 0.8f, 0.02f, 0.4f, delay: 0.1f, rot: 0f, sy0: 0.1f, sy1: 0.9f);
+        FloorKick(c + Feet, 0.8f, StonePale, StoneDark, 0.6f, 0f, 12);
 
         // 石の殻が張り付いていく
         for (int i = 0; i < 10; i++)
@@ -2707,8 +2737,7 @@ public static class ExplosionFx
 
         Vector2 f = c + Feet;
         Impact(c, 2f, Dust, 0.16f, 0.12f, 0.35f);
-        Add(Shape.Ring, f, Vector2.zero, 0.8f, 0.4f, 4.4f, Dust, DustDark, 1f, 0.02f, 0.4f, rot: 0f, sy0: 0.15f, sy1: 1.6f);
-        Add(Shape.Ring, f, Vector2.zero, 0.9f, 0.3f, 3f, SmokeWhite, SmokeGrey, 0.85f, 0.02f, 0.4f, delay: 0.08f, rot: 0f, sy0: 0.12f, sy1: 1.1f);
+        FloorKick(f, 1.1f, Dust, DustDark, 0.75f, 0f, 18);
 
         for (int i = 0; i < 16; i++)
         {
@@ -2837,7 +2866,7 @@ public static class ExplosionFx
                 drag: 1.8f, spin: Rnd(-90f, 90f), rise: 0.3f);
         }
 
-        Add(Shape.Ring, b, Vector2.zero, 0.8f, 0.5f, 3.4f, Dust, DustDark, 0.8f, 0.02f, 0.4f, rot: 0f, sy0: 0.18f, sy1: 1.2f);
+        FloorKick(b, 0.8f, Dust, DustDark, 0.6f, 0f, 12);
     }
 
     // 竜巻に巻き上げられる: 足元の砂煙 → 体の周りを筋が回りながら昇り、塵と小石が舞い上がる → 頭上へ抜けて消える
@@ -2846,7 +2875,7 @@ public static class ExplosionFx
         Vector2 f = c + Feet;
 
         Impact(c, 1.4f, SmokeWhite, 0.15f, 0.08f, 0.25f);
-        Add(Shape.Ring, f, Vector2.zero, 0.6f, 0.3f, 2.8f, Dust, DustDark, 0.9f, 0.02f, 0.4f, rot: 0f, sy0: 0.1f, sy1: 1f);
+        FloorKick(f, 0.7f, Dust, DustDark, 0.6f, 0f, 10);
 
         for (int i = 0; i < 40; i++)
         {
@@ -3539,7 +3568,6 @@ public static class ExplosionFx
         Impact(c, 6f, AwakenRed, 0.35f, 0.3f, 0.5f, delay: charge);
         Add(Shape.Glow, c, Vector2.zero, 0.4f, 1f, 4.5f, WindWhite, AuraRed2, 1f, 0.01f, 0.3f, delay: charge);
         Add(Shape.Ring, c, Vector2.zero, 0.7f, 0.5f, 10f, AuraRed2, AuraBlack2, 0.9f, 0.02f, 0.4f, delay: charge);
-        Add(Shape.Ring, c, Vector2.zero, 0.7f, 0.4f, 7f, FlameCore, AuraRed2, 0.8f, 0.02f, 0.4f, delay: charge + 0.08f);
 
         for (int i = 0; i < 32 * q; i++)
         {
@@ -4184,7 +4212,6 @@ public static class ExplosionFx
         Add(Shape.Glow, p, Vector2.zero, 0.3f, 0.25f, 1f, WindWhite, SandLight, 0.9f, 0.03f, 0.3f, order: 7);
         Add(Shape.Glow, p, Vector2.zero, 0.3f, 0.5f, 2.2f, WindWhite, SandCore, 0.9f, 0.03f, 0.3f, rot: 0f, sy0: 0.06f, sy1: 0.025f, order: 8);
         Add(Shape.Star, p, Vector2.zero, 0.3f, 0.6f, 0.15f, WindWhite, SandLight, 1f, 0.02f, 0.3f, spin: 120f, order: 9);
-        if (to) Add(Shape.Ring, Off(p, 0f, Feet.y - 0.05f), Vector2.zero, 0.4f, 0.3f, 1.1f, SandLight, SandDark, 0.7f, 0.03f, 0.4f, rot: 0f, sy0: 0.1f, sy1: 0.38f);
 
         for (int i = 0; i < 14; i++)
             Add(Shape.Star, p, Dir() * Rnd(0.8f, 2.2f), Rnd(0.3f, 0.5f), Rnd(0.04f, 0.08f), 0.02f, i % 3 == 0 ? WindWhite : SandCore, SandDark, 1f, 0.02f, 0.5f, drag: 3f, twinkle: 0.5f, twinkleSpeed: 18f, order: 8);
@@ -4399,7 +4426,6 @@ public static class ExplosionFx
         Add(Shape.Glow, c, Vector2.zero, 0.35f, 0.6f, 3.4f, WindWhite, ChronoHot, 0.95f, 0.03f, 0.3f, delay: charge, rot: 0f, sy0: 0.07f, sy1: 0.03f, order: 8);
         Add(Shape.Glow, c, Vector2.zero, 0.25f, 0.08f, 0.05f, WindWhite, ChronoHot, 0.8f, 0.03f, 0.3f, delay: charge, rot: 0f, sy0: 0.8f, sy1: 1.9f, order: 8);
         Add(Shape.Star, c, Vector2.zero, 0.3f, 0.9f, 0.25f, WindWhite, ChronoHot, 1f, 0.02f, 0.3f, delay: charge, spin: 120f, order: 9);
-        Add(Shape.Ring, f, Vector2.zero, 0.45f, 0.4f, 1.8f, ClockCrimson, ClockDeep, 0.75f, 0.03f, 0.4f, delay: charge, rot: 0f, sy0: 0.14f, sy1: 0.63f, z: zb + 0.003f, absOrder: bk);
 
         // 時間のひび: 体の縁から外へ走る細い亀裂 (奇数本目は枝付き)
         for (int k = 0; k < 7; k++)
@@ -4789,8 +4815,6 @@ public static class ExplosionFx
                 delay: Rnd(0.2f, 1.0f), twinkle: 0.7f, twinkleSpeed: Rnd(10f, 18f));
         }
 
-        // 最後は内側へ縮みながら吸い込まれて消える
-        Add(Shape.Ring, f, Vector2.zero, 0.5f, 1.6f, 0.3f, SmokeGrey, MistViolet, 0.7f, 0.1f, 0.5f, delay: 1.3f, rot: 0f, sy0: 0.56f, sy1: 0.105f);
     }
 
     private static byte _tag;

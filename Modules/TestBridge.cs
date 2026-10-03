@@ -572,6 +572,14 @@ public static class TestBridge
             return;
         }
 
+        // サノスに石を 6 個持たせる (指パッチンの流れを 1 人卓で試す)。`thanosstones`
+        if (directive.Equals("thanosstones", StringComparison.OrdinalIgnoreCase))
+        {
+            try { WriteOut(EndKnot.Roles.Thanos.DebugFillStones() ? "OK thanosstones" : "ERR thanosstones: no Thanos"); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR thanosstones failed"); }
+            return;
+        }
+
         // 音の付いた演出を順に流す。`fxtour [間隔秒=4] [@dx,dy]` / `fxtour stop`
         if (directive.StartsWith("fxtour", StringComparison.OrdinalIgnoreCase))
         {
@@ -2579,7 +2587,7 @@ public static class TestBridge
 
         float radius = parts.Length > 1 && float.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float r) ? r : 3f;
         // PlayerId + 1 を載せる演出は、半径を省くと自分自身を指す (fx RevengeAwaken で自分にオーラを付けられる)
-        bool selfId = kind is ExplosionFx.Kind.RevengeAwaken or ExplosionFx.Kind.RevengeAura;
+        bool selfId = kind is ExplosionFx.Kind.RevengeAwaken or ExplosionFx.Kind.RevengeAura or ExplosionFx.Kind.IaiSlash or ExplosionFx.Kind.WerewolfMaul or ExplosionFx.Kind.ThanosSnap;
         if (selfId && parts.Length <= 1 && PlayerControl.LocalPlayer) radius = PlayerControl.LocalPlayer.PlayerId + 1;
         int count = parts.Length > 2 && int.TryParse(parts[2], out int c) ? Math.Clamp(c, 1, 24) : 1;
         // 波動砲は A (太さ) と B (色 / ダイナミックの終点の高さ) も渡せる
@@ -2612,7 +2620,8 @@ public static class TestBridge
         for (int i = 0; i < count; i++)
         {
             Vector2 pos = at + new Vector2(i * 0.8f, 0f);
-            bool secret = kind is ExplosionFx.Kind.OilDrip or ExplosionFx.Kind.DemoFuse or ExplosionFx.Kind.HexMark or ExplosionFx.Kind.WebSpin or ExplosionFx.Kind.RevengeAwaken or ExplosionFx.Kind.RevengeAura;
+            bool secret = kind is ExplosionFx.Kind.OilDrip or ExplosionFx.Kind.DemoFuse or ExplosionFx.Kind.HexMark or ExplosionFx.Kind.WebSpin or ExplosionFx.Kind.RevengeAwaken or ExplosionFx.Kind.RevengeAura
+                or ExplosionFx.Kind.StoneGain or ExplosionFx.Kind.GoddessGuard or ExplosionFx.Kind.WerewolfRampage or ExplosionFx.Kind.PestilenceRise or ExplosionFx.Kind.SporeCloud or ExplosionFx.Kind.RiftTear;
             if (secret) ExplosionFx.PlayFor(kind, pos, radius, lp);
             else if (kind >= ExplosionFx.Kind.CannonChargeRight && kind < ExplosionFx.Kind.TimeRewind) ExplosionFx.PlayExtra(kind, at + new Vector2(i * 0.8f, 0f), radius, a, b);
             else ExplosionFx.Play(kind, at + new Vector2(i * 0.8f, 0f), radius);

@@ -183,6 +183,7 @@ public class Penguin : RoleBase
         LogSpeed();
         Utils.NotifyRoles(SpecifySeer: Penguin_, SpecifyTarget: Penguin_);
         SendRPC();
+        if (!IsGoose) ExplosionFx.Play(ExplosionFx.Kind.PenguinGrab, target.Pos(), 1f);
 
         if (PlayerControl.LocalPlayer.PlayerId != PenguinId) return;
 

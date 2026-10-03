@@ -198,6 +198,7 @@ public class Chainbinder : RoleBase
         PullTimer = 0f;
 
         SyncState();
+        ExplosionFx.Play(ExplosionFx.Kind.ChainBind, first.Pos(), second.PlayerId + 1);
 
         binder.Notify(string.Format(GetString("Chainbinder.PairBound"), FirstTarget.ColoredPlayerName(), SecondTarget.ColoredPlayerName()));
         Utils.NotifyRoles(SpecifySeer: binder, SpecifyTarget: binder);

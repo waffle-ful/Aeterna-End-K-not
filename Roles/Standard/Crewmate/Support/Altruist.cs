@@ -82,6 +82,7 @@ public class Altruist : RoleBase
 
             rtg?.RpcRevive();
             rtg?.TP(ReviveTargetPos);
+            if (rtg) ExplosionFx.Play(ExplosionFx.Kind.AltruistRevive, ReviveTargetPos, 1f);
             rtg?.Notify(Translator.GetString("RevivedByAltruist"), 15f);
 
             RevivedPlayers.Add(ReviveTarget);

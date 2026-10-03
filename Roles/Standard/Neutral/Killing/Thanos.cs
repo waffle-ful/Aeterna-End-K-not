@@ -25,6 +25,11 @@ public class Thanos : RoleBase
 
     public override bool IsEnable => On;
 
+    // 指パッチンから試合終了までの間 (勝者は確定済み)。この間は通報・会議・キルと他陣営の勝利判定を止める
+    public static bool Snapping;
+    private static int SnapGen;
+    private const float SnapSeconds = 5f;
+
     private List<Stone> StonesWaitingForUse;
     private HashSet<Stone> CollectedStones;
     private Stone? ActiveStone;
@@ -49,6 +54,8 @@ public class Thanos : RoleBase
     {
         On = false;
         Instances = [];
+        Snapping = false;
+        SnapGen++;
     }
 
     public override void Add(byte playerId)
@@ -145,6 +152,7 @@ public class Thanos : RoleBase
             CollectedStones.Add(stone);
             StonesWaitingForUse.Add(stone);
             Utils.SendRPC(CustomRPC.SyncRoleData, ThanosId, 1, (int)stone);
+            ExplosionFx.PlayFor(ExplosionFx.Kind.StoneGain, target.Pos(), (int)stone + 1, killer);
             
             if (killer.AmOwner && CollectedStones.Count == StoneEnum.Length)
                 Achievements.Type.MasterOfTheStones.Complete();
@@ -172,8 +180,23 @@ public class Thanos : RoleBase
     {
         if (CollectedStones.Count == StoneEnum.Length && CanWinAfterCollectingAllStones.GetBool())
         {
+            if (Snapping) return;
+
             CustomWinnerHolder.ShiftWinnerAndSetWinner(CustomWinner.Thanos);
             CustomWinnerHolder.WinnerIds.Add(pc.PlayerId);
+
+            Snapping = true;
+            GameEndChecker.ShouldNotCheck = true;
+            ExplosionFx.Play(ExplosionFx.Kind.ThanosSnap, pc.Pos(), pc.PlayerId + 1);
+
+            int gen = ++SnapGen;
+            LateTask.New(() =>
+            {
+                if (gen != SnapGen) return;
+                Snapping = false;
+                GameEndChecker.ShouldNotCheck = false;
+                GameEndChecker.ForceCheckEnd();
+            }, SnapSeconds, "ThanosSnap");
             return;
         }
         
@@ -226,6 +249,7 @@ public class Thanos : RoleBase
         }
         
         Utils.SendRPC(CustomRPC.SyncRoleData, ThanosId, 3);
+        ExplosionFx.PlayFor(ExplosionFx.Kind.StoneGain, pc.Pos(), (int)stone + 11, pc);
         Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
     }
 
@@ -238,6 +262,24 @@ public class Thanos : RoleBase
             if (!instance.PlayersWithStones.Remove(target.PlayerId)) continue;
             instance.PlayersWithStones.Add(noKiller ? Main.EnumerateAlivePlayerControls().RandomElement().PlayerId : killer.PlayerId);
         }
+    }
+
+    internal static bool DebugFillStones()
+    {
+        if (Instances.Count == 0) return false;
+
+        foreach (Thanos t in Instances)
+        {
+            foreach (Stone st in StoneEnum) t.CollectedStones.Add(st);
+        }
+
+        return true;
+    }
+
+    // 待ちの間に他の処理が終了判定の停止を解いても、確定した勝利の演出を最後まで見せる
+    public override void OnFixedUpdate(PlayerControl pc)
+    {
+        if (Snapping && AmongUsClient.Instance.AmHost) GameEndChecker.ShouldNotCheck = true;
     }
 
     public static bool IsImmune(PlayerControl pc) => On && pc != null && Instances.Exists(x => x.ThanosId == pc.PlayerId && x.MindStoneUsed);
