@@ -193,6 +193,7 @@ public class Werewolf : RoleBase
                 StartRampageTimer(pc);
                 Utils.SendRPC(CustomRPC.SyncRoleData, pc.PlayerId, true);
                 pc.Notify(GetString("WWRampaging"), RampageDur.GetFloat());
+                ExplosionFx.PlayFor(ExplosionFx.Kind.WerewolfRampage, pc.Pos(), RampageDur.GetFloat(), pc);
                 if (!pc.IsModdedClient()) pc.RpcChangeRoleBasis(CustomRoles.Werewolf);
             }
         }, 0.5f, "Werewolf Vent");
@@ -252,7 +253,10 @@ public class Werewolf : RoleBase
         if (Medic.ProtectList.Contains(target.PlayerId) || !IsRampaging) return false;
 
         if (killer.RpcCheckAndMurder(target, true))
+        {
             Main.PlayerStates[target.PlayerId].deathReason = PlayerState.DeathReason.Mauled;
+            ExplosionFx.Play(ExplosionFx.Kind.WerewolfMaul, target.Pos(), target.PlayerId + 1);
+        }
 
         return true;
     }

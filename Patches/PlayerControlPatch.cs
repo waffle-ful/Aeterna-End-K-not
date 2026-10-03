@@ -136,6 +136,8 @@ internal static class CheckMurderPatch
 
             PlayerControl killer = __instance;
 
+            if (Thanos.Snapping) return false;
+
             // CNO (PlayerId >= 200) は host の AllPlayerControls からは外してあるが、非モッド客のローカルには
             // 残るため client のキルボタンの対象になりうる。Main.PlayerStates に登録が無いので以降の参照が
             // KeyNotFoundException になる — キルごと無効化する
@@ -1324,6 +1326,7 @@ internal static class ReportDeadBodyPatch
         if (!GameStates.InGame || GameStates.IsLobby) return false;
 
         if (Options.DisableMeeting.GetBool()) return false;
+        if (Thanos.Snapping) return false;
         if (Options.CurrentGameMode != CustomGameMode.Standard) return false;
         if (Options.DisableReportWhenCC.GetBool() && Camouflage.IsCamouflage) return false;
         if (target && AlreadyReportedBodies.Contains(target.PlayerId)) return false;
@@ -2231,6 +2234,7 @@ internal static class FixedUpdatePatch
                     player.RpcSetCustomRole(CustomRoles.Pestilence);
                     player.Notify(GetString("PlagueBearerToPestilence"));
                     player.RpcGuardAndKill(player);
+                    ExplosionFx.PlayFor(ExplosionFx.Kind.PestilenceRise, player.Pos(), 1f, player);
 
                     var state = Main.PlayerStates[playerId];
                     state.SubRoles

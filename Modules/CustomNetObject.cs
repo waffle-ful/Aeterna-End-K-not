@@ -1623,9 +1623,20 @@ namespace EndKnot
 
     internal sealed class Portal : CustomNetObject
     {
+        // 上 4 行 = 浮かぶ渦 (角を抜いた青緑の縁・暗い芯に明るい筋が斜めに 2 つ)、下 2 行 = 床に置いた紫の機械と青いレンズ。
+        // 塗りは <mark> だけ・透明セルは <#0000>W</color> (MapExtenderPortal と同じ書き方)。4 列 × 6 行は据え置き
+        private const string SwirlSprite =
+            "<size=70%><line-height=97%><cspace=0.16em>" +
+            "<#0000>W</color><mark=#2ee6d6>WW</mark><#0000>W</color>\n" +
+            "<mark=#2ee6d6>W</mark><mark=#0a0420>W</mark><mark=#9f7bff>W</mark><mark=#2ee6d6>W</mark>\n" +
+            "<mark=#2ee6d6>W</mark><mark=#9f7bff>W</mark><mark=#0a0420>W</mark><mark=#2ee6d6>W</mark>\n" +
+            "<#0000>W</color><mark=#2ee6d6>WW</mark><#0000>W</color>\n" +
+            "<mark=#6b3fa0>W</mark><mark=#9fd0ff>WW</mark><mark=#6b3fa0>W</mark>\n" +
+            "<#0000>W</color><mark=#6b3fa0>WW</mark><#0000>W</color>";
+
         public Portal(Vector2 position)
         {
-            CreateNetObject("<size=70%><line-height=97%><cspace=0.16em><mark=#2b006b>WWWW</mark>\n<mark=#2b006b>W</mark><mark=#fa69ff>WW</mark><mark=#2b006b>W</mark>\n<mark=#2b006b>W</mark><mark=#fa69ff>WW</mark><mark=#2b006b>W</mark>\n<mark=#2b006b>W</mark><mark=#fa69ff>WW</mark><mark=#2b006b>W</mark>\n<mark=#2b006b>W</mark><mark=#fa69ff>WW</mark><mark=#2b006b>W</mark>\n<mark=#2b006b>WWWW", position);
+            CreateNetObject(SwirlSprite, position);
         }
     }
 

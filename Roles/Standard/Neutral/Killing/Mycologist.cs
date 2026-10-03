@@ -158,6 +158,7 @@ internal class Mycologist : RoleBase
         }, InfectTime.GetFloat(), "Mycologist Infect Time");
 
         MycologistPC.Notify(GetString("MycologistNotify"));
+        ExplosionFx.PlayFor(ExplosionFx.Kind.SporeCloud, MycologistPC.Pos(), InfectRadius.GetFloat(), MycologistPC);
     }
 
     public override bool OnCheckMurder(PlayerControl killer, PlayerControl target)

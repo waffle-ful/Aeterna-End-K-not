@@ -44,6 +44,7 @@ public class PortalMaker : RoleBase
         if (Marks.Count == 2)
         {
             if (!PetToRemovePortals.GetBool()) return;
+            Marks.ForEach(x => ExplosionFx.Play(ExplosionFx.Kind.PortalClose, x, 1f));
             Marks.Clear();
             CustomNetObject.AllObjects.ToArray().OfType<Portal>().Do(x => x.Despawn());
             pc.Notify(Translator.GetString("MarksCleared"));
@@ -59,6 +60,7 @@ public class PortalMaker : RoleBase
         {
             LastTP[pc.PlayerId] = Utils.TimeStamp;
             Marks.ForEach(x => _ = new Portal(x));
+            Marks.ForEach(x => ExplosionFx.Play(ExplosionFx.Kind.PortalIdle, x, 1f));
         }
     }
 
@@ -82,6 +84,8 @@ public class PortalMaker : RoleBase
         if (nearIndex == -1) return;
 
         Vector2 target = Marks[1 - nearIndex];
+        ExplosionFx.Play(ExplosionFx.Kind.PortalPass, pos, 1f);
+        ExplosionFx.Play(ExplosionFx.Kind.PortalPass, target, 1f);
         pc.TP(target);
         LastTP[pc.PlayerId] = now;
         

@@ -153,6 +153,7 @@ public class ProBowler : RoleBase
             {
                 NowKilling = false;
                 if (!target.IsAlive()) return;
+                ExplosionFx.Play(ExplosionFx.Kind.BowlStrike, target.Pos(), 1f);
                 target.SetRealKiller(killer);
                 target.Suicide(reason, killer);
             }, 0.3f, "ProBowler.Kill");
@@ -183,6 +184,7 @@ public class ProBowler : RoleBase
             ? PlayerState.DeathReason.Fall
             : PlayerState.DeathReason.Kill;
 
+        ExplosionFx.Play(ExplosionFx.Kind.BowlStrike, Bowltarget.Pos(), 1f);
         Bowltarget.SetRealKiller(pc);
         Bowltarget.Suicide(reason, pc);
         Bowltarget = null;

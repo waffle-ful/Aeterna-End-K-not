@@ -122,7 +122,10 @@ internal class Samurai : RoleBase
             if (kvp.Value + KillDelay.GetInt() <= now)
             {
                 if (CheckMurderPatch.PassesGate(pc, player))
+                {
+                    ExplosionFx.Play(ExplosionFx.Kind.IaiSlash, player.Pos(), player.PlayerId + 1);
                     player.Suicide(realKiller: pc);
+                }
             }
         }
 

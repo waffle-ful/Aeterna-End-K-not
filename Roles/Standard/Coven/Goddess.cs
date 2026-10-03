@@ -62,6 +62,7 @@ public class Goddess : CovenBase
             Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
         }, onTick: () => Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc), onCanceled: () => Timer = null);
         Utils.SendRPC(CustomRPC.SyncRoleData, GoddessId);
+        ExplosionFx.PlayFor(ExplosionFx.Kind.GoddessGuard, pc.Pos(), AbilityDuration.GetInt(), pc);
         return false;
     }
 
@@ -89,6 +90,7 @@ public class Goddess : CovenBase
 
         killer.SetRealKiller(target);
         Main.PlayerStates[killer.PlayerId].deathReason = PlayerState.DeathReason.Stoned;
+        ExplosionFx.Play(ExplosionFx.Kind.GoddessPetrify, killer.Pos(), 1f);
         target.Kill(killer);
         return false;
     }

@@ -112,6 +112,7 @@ public class ForceFielder : RoleBase
             Main.AllPlayerSpeed[pc.PlayerId] = Math.Max(Main.MinSpeed, OriginalSpeed * SpeedMultiplier.GetFloat());
             pc.MarkDirtySettings();
             FieldCNO = new ForceFieldCNO(pc.Pos(), FieldRadius.GetFloat());
+            ExplosionFx.Play(ExplosionFx.Kind.ForceFieldUp, pc.Pos(), FieldRadius.GetFloat());
 
             // EjectOnActivation=OFF (default): 展開時に既にフィールド内に居たプレイヤーを
             //   ActivationTrapped に登録 → そのプレイヤーは脱出するまで一切 eject されない（トラップ）。
@@ -160,6 +161,7 @@ public class ForceFielder : RoleBase
             // ネットワークラグ中の Pos() 古い値による重複 SnapTo 抑制）
             if (LastEjectTime.TryGetValue(tid, out float lastT) && now - lastT < EjectCooldownSec) continue;
 
+            ExplosionFx.Play(ExplosionFx.Kind.ForceRepel, target.Pos(), 1f);
             EjectFromField(target, center, ejectDist);
             LastEjectTime[tid] = now;
         }

@@ -19,6 +19,8 @@ public static class FxSound
     private const int Voices = 6;
 
     private static readonly Dictionary<string, float> LastPlayed = [];
+    // 同じ音が 2 か所で同時に鳴らされた時 (ワープの出発点と到着点など) は、近い方 (大きい方) を残す
+    private static readonly Dictionary<string, (float Gain, AudioSource Src)> LastVoice = [];
 
     // 壁の本数で広さを測ると、家具の多い広い部屋と狭い部屋が同じ値になる (エアシップの実測で 貨物室 9/16・警備室 11/16)。
     // 部屋の種類で決めれば、同じ部屋の中を歩いても聞こえ方が変わらない
@@ -48,7 +50,7 @@ public static class FxSound
             if (GameStates.IsMeeting || ExileController.Instance) return;
 
             float now = Time.unscaledTime;
-            if (LastPlayed.TryGetValue(name, out float last) && now - last < MinGap) return;
+            bool recent = LastPlayed.TryGetValue(name, out float last) && now - last < MinGap;
 
             PlayerControl lp = PlayerControl.LocalPlayer;
             if (!lp) return;
@@ -91,10 +93,16 @@ public static class FxSound
             else if (InHall(everywhere ? ear : pos))
                 suffix = "_r";
 
+            (float Gain, AudioSource Src) prev = default;
+            if (recent && (!LastVoice.TryGetValue(name, out prev) || gain <= prev.Gain)) return;
+
             LastPlayed[name] = now;
 
             AudioClip clip = CustomSoundsManager.GetClip(name + suffix);
             if (!clip) return;
+
+            // 先に鳴った同じ音 (遠い方) を止める。声の箱は使い回すので、まだ同じ音を鳴らしている時だけ
+            if (recent && prev.Src && prev.Src.isPlaying && prev.Src.clip && prev.Src.clip.name.StartsWith(name)) prev.Src.Stop();
 
             AudioSource src = NextVoice();
             if (!src) return;
@@ -118,6 +126,7 @@ public static class FxSound
             }
 
             src.Play();
+            LastVoice[name] = (gain, src);
             Logger.Info($"{name}{suffix} dist={dist:F1} gain={gain:F2} pan={pan:F2}", "FxSound");
         }
         catch (System.Exception e) { Utils.ThrowException(e); }
