@@ -384,6 +384,11 @@ public static partial class ExplosionFx
         new(2.1f, FxHands.Pose.Open, scale: 0.95f, alpha: 0f, dy: 0.06f)
     ];
 
+    private static readonly Vector2[] CrackBuf = new Vector2[FxLines.MaxPoints];
+    private static readonly Vector2[] Nodes = new Vector2[8];
+    private static readonly float[] NodeLen = new float[8];
+    private static readonly float[] NodeAng = new float[8];
+
     // 6 色の石の光がサノスの手元へ集まりパチンと弾ける (白い衝撃波) → 画面の周りの床にひびが走り、破片が虚空へ落ちていく
     // (揺れはだんだん強くなる) → サノス以外の生存者が自分の色の灰になって崩れ、風に流される → 白く飛ぶ
     private static void SpawnThanosSnap(Vector2 c, int thanosId)
@@ -440,20 +445,53 @@ public static partial class ExplosionFx
             float d0 = snap + 0.3f + k * 0.28f;
             Vector2 p = Off(cc, Rnd(-6.5f, 6.5f), Rnd(-3.6f, 3.6f));
             float ang = Rnd(0f, 2f * FxMath.PI);
+            float life = white - d0 + 0.4f;
+
+            // 幹: 7 歩の折れ線の骨組みを、歩ごとに中点変位で細かく折る (57 点)。1 歩 0.05 秒で伸びる
+            int cn = 0;
+            CrackBuf[cn++] = p;
+            Vector2 walk = p;
 
             for (int j = 0; j < 7; j++)
             {
                 ang += Rnd(-0.7f, 0.7f);
                 float len = Rnd(0.35f, 0.7f);
-                Vector2 n = Off(p, FxMath.Cos(ang) * len, FxMath.Sin(ang) * len);
+                Vector2 n = Off(walk, FxMath.Cos(ang) * len, FxMath.Sin(ang) * len);
+                int m = FxLines.Fractal(walk, n, 3, len * 0.14f, 0.55f, LineBuf2);
+                for (int i = 1; i < m && cn < CrackBuf.Length; i++) CrackBuf[cn++] = LineBuf2[i];
+                walk = n;
+                Nodes[j] = n;
+                NodeLen[j] = len;
+                NodeAng[j] = ang;
+            }
+
+            // 黒い裂け目 (柔らかい暗い縁つき) と、その中で光る紫の芯
+            Lines(CrackBuf, cn, new FxLines.Spec
+            {
+                Width = 0.09f, Taper = FxLines.Taper.Trunk, Core = VoidBlack, Under = VoidBlack, CoreAlpha = 0.95f, UnderAlpha = 0.4f, UnderMul = 3f,
+                Delay = d0, Grow = 0.35f, Life = life, FadeOutFrom = 0.92f
+            }, 0);
+            Lines(CrackBuf, cn, new FxLines.Spec
+            {
+                Width = 0.011f, Taper = FxLines.Taper.Even, Core = VoidMagenta, Under = VoidDeep, CoreAlpha = 1f, UnderAlpha = 0.5f, UnderMul = 5f,
+                UnderGlow = true, CoreGlow = true, Delay = d0, Grow = 0.35f, Life = life, FadeOutFrom = 0.92f
+            }, 1);
+
+            for (int j = 0; j < 7; j++)
+            {
+                Vector2 n = Nodes[j];
+                float len = NodeLen[j];
                 float dl = d0 + j * 0.05f;
-                Line2(p, n, 0.06f, white - dl + 0.4f, VoidBlack, VoidBlack, 0.95f, 0.03f, 0.92f, delay: dl);
-                Line2(p, n, 0.014f, white - dl + 0.4f, VoidDeep, VoidMagenta, 1f, 0.03f, 0.92f, delay: dl, coreFadeFrom: 0.3f);
 
                 if (j % 3 == 1)
                 {
-                    float ba = ang + (FxMath.Value < 0.5f ? -1f : 1f);
-                    Line2(n, Off(n, FxMath.Cos(ba) * len * 0.6f, FxMath.Sin(ba) * len * 0.6f), 0.012f, white - dl + 0.3f, VoidBlack, VoidDeep, 0.9f, 0.03f, 0.92f, delay: dl + 0.06f);
+                    float ba = NodeAng[j] + (FxMath.Value < 0.5f ? -1f : 1f) * Rnd(0.45f, 0.7f);
+                    int m = FxLines.Fractal(n, Off(n, FxMath.Cos(ba) * len * 0.9f, FxMath.Sin(ba) * len * 0.9f), 3, len * 0.1f, 0.6f, LineBuf2);
+                    Lines(LineBuf2, m, new FxLines.Spec
+                    {
+                        Width = 0.06f, Taper = FxLines.Taper.Branch, Core = VoidDeep, Under = VoidBlack, CoreAlpha = 0.9f, UnderAlpha = 0.4f, UnderMul = 3f,
+                        Delay = dl + 0.06f, Grow = 0.15f, Decel = true, Life = white - dl + 0.3f, FadeOutFrom = 0.92f
+                    }, 0);
                 }
 
                 // ひびの節から虚空の穴が広がり、床の破片が回りながら縮んで落ちていく
@@ -473,8 +511,6 @@ public static partial class ExplosionFx
                             delay: dl + 0.2f + m * 0.15f, rot: 15f * m, spin: 60f, sy0: s * 0.62f, sy1: 0.02f, order: 4);
                     }
                 }
-
-                p = n;
             }
         }
 
@@ -738,13 +774,15 @@ public static partial class ExplosionFx
         // ひびが足元から上へ這い上がる
         for (int k = 0; k < 7; k++)
         {
-            Vector2 p = Off(c, Rnd(-0.32f, 0.32f), -0.5f);
-            for (int j = 0; j < 5; j++)
+            Skel[0] = Off(c, Rnd(-0.32f, 0.32f), -0.5f);
+            for (int j = 1; j <= 5; j++) Skel[j] = Off(Skel[j - 1], Rnd(-0.12f, 0.12f), Rnd(0.16f, 0.24f));
+
+            // 暗い裂け目の中に、石の明るい断面 (芯) が同じ道筋で見える
+            int n = Crack(Skel, 6, 0.036f, StoneDark, 1f, gaze + k * 0.02f, climb, 1.6f, 0.7f, false, 20);
+            Lines(LineBuf, n, new FxLines.Spec
             {
-                Vector2 n = Off(p, Rnd(-0.12f, 0.12f), Rnd(0.16f, 0.24f));
-                Line2(p, n, 0.012f, 1.6f - j * 0.1f, StoneDark, StonePale, 1f, 0.03f, 0.7f, delay: gaze + j * (climb / 5f) + k * 0.02f, coreFadeFrom: 0.5f);
-                p = n;
-            }
+                Width = 0.012f, Taper = FxLines.Taper.Trunk, Core = StonePale, CoreAlpha = 1f, Delay = gaze + k * 0.02f, Grow = climb, Decel = true, Life = 1.6f, FadeOutFrom = 0.5f
+            }, 21);
         }
 
         // 大理石色が下から塗り込められる (重ねるほど濃くなる)

@@ -594,6 +594,10 @@ public static partial class ExplosionFx
             if (WarmOverBudget()) return;
         }
 
+        // 線の部品の入れ物も同じく先に作っておく
+        while (FxLines.WarmOne())
+            if (WarmOverBudget()) return;
+
         _warm = true;
     }
 
@@ -608,12 +612,14 @@ public static partial class ExplosionFx
                 {
                     FxParticles.ClearAll();
                     FxHands.ClearAll();
+                    FxLines.ClearAll();
                     FxHands.ResetScan();
                 }
                 else
                 {
                     FxParticles.Tick();
                     FxHands.Tick();
+                    FxLines.Tick();
                 }
                 _particlesInGame = false;
                 _warm = false;
@@ -668,11 +674,13 @@ public static partial class ExplosionFx
             {
                 FxParticles.ClearAll();
                 FxHands.ClearAll();
+                FxLines.ClearAll();
             }
             else
             {
                 FxParticles.Tick();
                 FxHands.Tick();
+                FxLines.Tick();
             }
 
             if (Pending.Count > 0)
@@ -1684,57 +1692,46 @@ public static partial class ExplosionFx
     private static readonly Color BoltBlue = new(0.45f, 0.65f, 1f);
     private static readonly Color BoltViolet = new(0.6f, 0.45f, 1f);
 
-    // 稲妻 1 本分の線分: 白い芯と青い光のにじみを、a から b へ向けて置く (2 回瞬く)
-    private static void BoltSegment(Vector2 a, Vector2 b, float width, float delay)
+    // 稲妻の見た目: 不透明な白い芯 + 幅 6 倍の青いにじみ (芯まで光る重ね方にすると明るい床で輪郭が溶ける)。光り直すたびに太く明るくなり、最後は紫の残光になって消える
+    private static FxLines.Spec BoltSpec(float width, float delay, FxLines.Taper taper, int strikes, float gap, float afterglow = 0.4f)
     {
-        float dx = b.x - a.x, dy = b.y - a.y;
-        float len = FxMath.Sqrt(dx * dx + dy * dy);
-        float rot = FxMath.Atan2(dy, dx) * FxMath.Rad2Deg;
-        Vector2 m = FxMath.V2((a.x + b.x) * 0.5f, (a.y + b.y) * 0.5f);
-
-        Add(Shape.Solid, m, Vector2.zero, 0.45f, len, len, BoltWhite, BoltBlue, 1f, 0.01f, 0.25f, delay: delay, rot: rot, sy0: width, sy1: width * 0.5f,
-            twinkle: 0.6f, twinkleSpeed: 40f, order: 8);
-        Add(Shape.Glow, m, Vector2.zero, 0.5f, len * 1.2f, len * 1.2f, BoltBlue, BoltViolet, 1f, 0.01f, 0.3f, delay: delay, rot: rot, sy0: width * 13f, sy1: width * 6f);
-        Add(Shape.Solid, m, Vector2.zero, 0.25f, len, len, BoltWhite, BoltBlue, 0.9f, 0.01f, 0.3f, delay: delay + 0.12f, rot: rot, sy0: width * 0.8f, sy1: width * 0.4f, order: 8);
+        float life = strikes * gap + 0.15f + afterglow;
+        return new FxLines.Spec
+        {
+            Width = width, Taper = taper, Core = BoltWhite, Under = BoltBlue, After = BoltViolet, CoreAlpha = 1f, UnderAlpha = 0.35f, UnderMul = 6f,
+            UnderGlow = true, Delay = delay, Grow = 0.05f, Life = life, FadeOutFrom = (life - afterglow) / life,
+            Strikes = strikes, StrikeGap = gap, Jitter = width * 0.35f
+        };
     }
 
-    // 空から着弾点まで、折れ曲がりながら落ちる稲妻を 1 本 (途中で 2 回枝分かれする)
+    // 空から着弾点まで落ちる稲妻を 1 本 (幹は中点変位で 33 点・枝 3 本)。同じ道筋に 2〜3 回光り直す
     private static void Bolt(Vector2 c, float width, float delay)
     {
         Vector2 top = c + new Vector2(Rnd(-1.5f, 1.5f), 9f);
-        Vector2 prev = top;
-        const int segments = 11;
+        int strikes = FxMath.Value < 0.5f ? 2 : 3;
+        float gap = Rnd(0.08f, 0.12f);
+        int n = FxLines.Fractal(top, c, 5, 0.6f, 0.5f, LineBuf);
+        Lines(LineBuf, n, BoltSpec(width, delay, FxLines.Taper.Even, strikes, gap), 8);
 
-        for (int i = 1; i <= segments; i++)
+        // 枝: 幹の途中から斜め下へ。長さは着弾点までの残りの 3〜5 割で、幹の先がそこを通る時に伸び始める
+        for (int b = 0; b < 3; b++)
         {
-            Vector2 next = i == segments ? c : Vector2.Lerp(top, c, i / (float)segments) + new Vector2(Rnd(-0.6f, 0.6f), 0f);
-            BoltSegment(prev, next, width, delay);
-
-            if (i is 3 or 6 or 8)
-            {
-                // 枝は短い線分を細かく折りながら斜め下へ、先へ行くほど細くする
-                float ang = Rnd(0f, 1f) < 0.5f ? Rnd(-75f, -35f) : Rnd(-145f, -105f);
-                Vector2 from = next;
-
-                for (int j = 0; j < 5; j++)
-                {
-                    ang += Rnd(-35f, 35f);
-                    float a = ang / FxMath.Rad2Deg;
-                    float l = Rnd(0.25f, 0.45f);
-                    Vector2 to = from + FxMath.V2(FxMath.Cos(a) * l, FxMath.Sin(a) * l);
-                    BoltSegment(from, to, width * 0.45f * (1f - j * 0.15f), delay);
-                    from = to;
-                }
-            }
-
-            prev = next;
+            int at = (int)(n * Rnd(0.2f, 0.75f));
+            Vector2 from = LineBuf[at];
+            float ang = (FxMath.Value < 0.5f ? Rnd(-75f, -35f) : Rnd(-145f, -105f)) / FxMath.Rad2Deg;
+            float rem = from.y - c.y;
+            float l = FxMath.Max(rem, 1f) * Rnd(0.3f, 0.5f);
+            Vector2 to = Off(from, FxMath.Cos(ang) * l, FxMath.Sin(ang) * l);
+            int m = FxLines.Fractal(from, to, 4, l * 0.15f, 0.5f, LineBuf2);
+            Lines(LineBuf2, m, BoltSpec(width, delay + 0.05f * at / (n - 1), FxLines.Taper.Branch, strikes - 1, gap, 0.25f), 8);
         }
     }
 
     // 空が光る → 空から落ちる太い稲妻と、少し遅れてもう 1 本 → 着弾の閃光・星・輪・火花 → 焦げ跡と、しばらく走る放電と煙
     private static void SpawnLightningStrike(Vector2 c)
     {
-        Impact(c, 3f, new Color(0.8f, 0.88f, 1f), 0.85f, 0.35f, 0.6f);
+        // 空の閃光は控えめにする (白い稲妻が白く飛んだ画面に埋もれる)
+        Impact(c, 3f, new Color(0.8f, 0.88f, 1f), 0.55f, 0.35f, 0.6f);
 
         Bolt(c, 0.17f, 0f);
         Bolt(c + new Vector2(Rnd(-0.3f, 0.3f), 0f), 0.11f, 0.2f);
@@ -1752,17 +1749,16 @@ public static partial class ExplosionFx
         Add(Shape.Cloud, c + Feet, Vector2.zero, 2.6f, 2f, 2f, new Color(0.12f, 0.12f, 0.15f), new Color(0.2f, 0.2f, 0.22f), 0.7f, 0.02f, 0.5f,
             rot: 0f, sy0: 0.7f, sy1: 0.7f, order: 0);
 
-        // 着弾点の周りで少し遅れてぱちぱちと走る放電
+        // 着弾点の周りで少し遅れてぱちぱちと走る放電 (細かく折れた短い線が 1 回瞬く)
         for (int i = 0; i < 18; i++)
         {
             Vector2 a = c + FxMath.InsideUnitCircle() * 1.1f;
             float ang = Rnd(0f, 2f * FxMath.PI);
             float l = Rnd(0.3f, 0.7f);
-            Vector2 b = a + FxMath.V2(FxMath.Cos(ang) * l, FxMath.Sin(ang) * l);
-            Add(Shape.Solid, FxMath.V2((a.x + b.x) * 0.5f, (a.y + b.y) * 0.5f), Vector2.zero, Rnd(0.12f, 0.2f), l, l, BoltWhite, BoltBlue, 1f, 0.01f, 0.4f,
-                delay: Rnd(0.1f, 1.5f), rot: ang * FxMath.Rad2Deg, sy0: 0.05f, sy1: 0.03f, order: 8);
-            Add(Shape.Glow, FxMath.V2((a.x + b.x) * 0.5f, (a.y + b.y) * 0.5f), Vector2.zero, 0.2f, l, l, BoltBlue, BoltViolet, 0.6f, 0.01f, 0.4f,
-                delay: Rnd(0.1f, 1.5f), rot: ang * FxMath.Rad2Deg, sy0: 0.3f, sy1: 0.2f);
+            int m = FxLines.Fractal(a, Off(a, FxMath.Cos(ang) * l, FxMath.Sin(ang) * l), 3, l * 0.2f, 0.5f, LineBuf2);
+            FxLines.Spec sp = BoltSpec(0.045f, Rnd(0.1f, 1.5f), FxLines.Taper.Branch, 0, 0.1f, 0.12f);
+            sp.UnderMul = 5f;
+            Lines(LineBuf2, m, sp, 8);
         }
 
         for (int i = 0; i < 10; i++)
@@ -1808,28 +1804,23 @@ public static partial class ExplosionFx
                 drag: 1.2f, spin: Rnd(-720f, 720f), rise: -4f);
         }
 
-        // 床に走るひび: 短い線分を折り曲げながら放射状に伸ばす (床は斜めに見下ろしているので縦を潰す)。
-        // 演出は全部キャラより手前に描かれるので、足元の外側から始めて、体と重なる奥 (画面の上) へは伸ばさない
+        // 床に走るひび: 折れ線を放射状に伸ばす (床は斜めに見下ろしているので縦を潰す)。
+        // 足元の外側から始めて、体と重なる奥 (画面の上) へは伸ばさない
         for (int i = 0; i < 8; i++)
         {
             float ang = -200f + i * 31f + Rnd(-10f, 10f);
             float a0 = ang / FxMath.Rad2Deg;
-            Vector2 from = f + FxMath.V2(FxMath.Cos(a0) * 0.45f, FxMath.Sin(a0) * 0.22f);
+            Skel[0] = f + FxMath.V2(FxMath.Cos(a0) * 0.45f, FxMath.Sin(a0) * 0.22f);
 
-            for (int j = 0; j < 3; j++)
+            for (int j = 1; j <= 3; j++)
             {
                 ang += Rnd(-35f, 35f);
                 float a = ang / FxMath.Rad2Deg;
                 float l = Rnd(0.22f, 0.4f) * FxMath.Min(r, 2f);
-                Vector2 to = from + FxMath.V2(FxMath.Cos(a) * l, FxMath.Sin(a) * l * 0.5f);
-                float dx = to.x - from.x, dy = to.y - from.y;
-                float w = 0.08f * (1f - j * 0.25f);
-                // 線分どうしの継ぎ目に隙間が出ないよう、太さの分だけ長めに描く
-                float seg = FxMath.Sqrt(dx * dx + dy * dy) + w;
-                Add(Shape.Solid, FxMath.V2((from.x + to.x) * 0.5f, (from.y + to.y) * 0.5f), Vector2.zero, 1.8f, seg, seg,
-                    StoneDark, StoneDark, 0.85f, 0.02f, 0.6f, delay: j * 0.03f, rot: FxMath.Atan2(dy, dx) * FxMath.Rad2Deg, sy0: w, sy1: w, order: 0);
-                from = to;
+                Skel[j] = Skel[j - 1] + FxMath.V2(FxMath.Cos(a) * l, FxMath.Sin(a) * l * 0.5f);
             }
+
+            Crack(Skel, 4, 0.08f, StoneDark, 0.85f, 0f, 0.09f, 1.8f, 0.6f, true);
         }
     }
 
@@ -2553,21 +2544,17 @@ public static partial class ExplosionFx
         for (int i = 0; i < 4; i++)
         {
             float ang = Rnd(0f, 360f);
-            Vector2 from = c + new Vector2(Rnd(-0.25f, 0.25f), Rnd(-0.05f, 0.2f));
+            Skel[0] = c + new Vector2(Rnd(-0.25f, 0.25f), Rnd(-0.05f, 0.2f));
 
-            for (int j = 0; j < 3; j++)
+            for (int j = 1; j <= 3; j++)
             {
                 ang += Rnd(-40f, 40f);
                 float a = ang / FxMath.Rad2Deg;
                 float l = Rnd(0.12f, 0.22f);
-                Vector2 to = from + FxMath.V2(FxMath.Cos(a) * l, FxMath.Sin(a) * l * 0.6f);
-                float dx = to.x - from.x, dy = to.y - from.y;
-                float w = 0.05f * (1f - j * 0.25f);
-                float seg = FxMath.Sqrt(dx * dx + dy * dy) + w;
-                Add(Shape.Solid, FxMath.V2((from.x + to.x) * 0.5f, (from.y + to.y) * 0.5f), Vector2.zero, 1.8f, seg, seg, StoneDark, StoneDark, 0.85f, 0.02f, 0.7f,
-                    delay: 0.55f + j * 0.04f, rot: FxMath.Atan2(dy, dx) * FxMath.Rad2Deg, sy0: w, sy1: w);
-                from = to;
+                Skel[j] = Skel[j - 1] + FxMath.V2(FxMath.Cos(a) * l, FxMath.Sin(a) * l * 0.6f);
             }
+
+            Crack(Skel, 4, 0.05f, StoneDark, 0.85f, 0.55f, 0.12f, 1.8f, 0.7f, false, 20);
         }
 
         for (int i = 0; i < 12; i++)
@@ -3801,35 +3788,22 @@ public static partial class ExplosionFx
                     float ba = now / 1.4f * 2f * FxMath.PI;
                     float bx = FxMath.Cos(ba) * 0.55f, by = FxMath.Sin(ba) * 0.55f;
                     float sgn = FxMath.Value < 0.5f ? -1f : 1f;
-                    Vector2 p = Off(c, bx, by - 0.05f);
+                    Skel[0] = Off(c, bx, by - 0.05f);
 
                     for (int k = 1; k <= 7; k++)
                     {
                         float t = k / 7f;
                         float bow = FxMath.Sin(t * FxMath.PI) * 0.5f * sgn;
                         float jx = k == 7 ? 0f : Rnd(-0.04f, 0.04f), jy = k == 7 ? 0f : Rnd(-0.04f, 0.04f);
-                        Vector2 n = Off(c, bx * (1f - 2f * t) - by * bow + jx, by * (1f - 2f * t) + bx * bow - 0.05f + jy);
-                        Line2(p, n, 0.012f, 0.14f, AuraOuter, AuraBolt, 1f, 0.1f, 0.5f, delay: k * 0.008f);
-                        p = n;
+                        Skel[k] = Off(c, bx * (1f - 2f * t) - by * bow + jx, by * (1f - 2f * t) + bx * bow - 0.05f + jy);
                     }
+
+                    GlowCrack(Skel, 8, 1, 0.014f, AuraOuter, AuraBolt, 1f, 0f, 0.06f, 0.2f, 0.5f);
                 }
                 else
                 {
                     float bs = FxMath.Value < 0.5f ? -1f : 1f;
-                    Vector2 p = Off(c, bs * Rnd(0.4f, 0.5f), Rnd(-0.35f, 0.1f));
-                    int segs = FxMath.Range(5, 7);
-
-                    for (int k = 0; k < segs; k++)
-                    {
-                        Vector2 n = Off(p, (k % 2 == 0 ? 1f : -0.6f) * bs * Rnd(0.04f, 0.08f), Rnd(0.05f, 0.08f));
-                        Line2(p, n, 0.012f, 0.12f, AuraOuter, AuraBolt, 1f, 0.1f, 0.5f, delay: k * 0.01f);
-
-                        // 途中から 1 本だけ短い枝
-                        if (k == 2) Line2(n, Off(n, bs * Rnd(0.06f, 0.1f), Rnd(-0.02f, 0.04f)), 0.009f, 0.1f, AuraOuter, AuraBolt, 0.8f, 0.1f, 0.5f, delay: 0.03f);
-                        p = n;
-                    }
-
-                    Add(Shape.Star, p, Vector2.zero, 0.14f, 0.14f, 0.04f, WindWhite, AuraBolt, 1f, 0.05f, 0.4f, delay: segs * 0.01f);
+                    MicroBolt(Off(c, bs * Rnd(0.4f, 0.5f), Rnd(-0.35f, 0.1f)), bs, AuraOuter, AuraBolt, 0f);
                 }
             }
 
@@ -4467,16 +4441,20 @@ public static partial class ExplosionFx
     private static void MicroBolt(Vector2 p, float side, Color outer, Color core, float delay)
     {
         int segs = FxMath.Range(5, 7);
+        Skel[0] = p;
 
-        for (int k = 0; k < segs; k++)
-        {
-            Vector2 n = Off(p, (k % 2 == 0 ? 1f : -0.6f) * side * Rnd(0.04f, 0.08f), Rnd(0.05f, 0.08f));
-            Line2(p, n, 0.012f, 0.12f, outer, core, 1f, 0.1f, 0.5f, delay: delay + k * 0.01f);
-            if (k == 2) Line2(n, Off(n, side * Rnd(0.06f, 0.1f), Rnd(-0.02f, 0.04f)), 0.009f, 0.1f, outer, core, 0.8f, 0.1f, 0.5f, delay: delay + 0.03f);
-            p = n;
-        }
+        for (int k = 1; k <= segs; k++)
+            Skel[k] = Off(Skel[k - 1], (k % 2 == 1 ? 1f : -0.6f) * side * Rnd(0.04f, 0.08f), Rnd(0.05f, 0.08f));
 
-        Add(Shape.Star, p, Vector2.zero, 0.14f, 0.14f, 0.04f, WindWhite, core, 1f, 0.05f, 0.4f, delay: delay + segs * 0.01f);
+        Vector2 tip = Skel[segs];
+        GlowCrack(Skel, segs + 1, 1, 0.014f, outer, core, 1f, delay, segs * 0.01f, 0.18f, 0.5f);
+
+        // 途中から 1 本だけ短い枝
+        Skel2[0] = Skel[3];
+        Skel2[1] = Off(Skel[3], side * Rnd(0.06f, 0.1f), Rnd(-0.02f, 0.04f));
+        GlowCrack(Skel2, 2, 2, 0.01f, outer, core, 0.8f, delay + 0.03f, 0.02f, 0.14f, 0.5f);
+
+        Add(Shape.Star, tip, Vector2.zero, 0.14f, 0.14f, 0.04f, WindWhite, core, 1f, 0.05f, 0.4f, delay: delay + segs * 0.01f);
     }
 
     // 暴走の始まり: 体の奥で闇が脈打ち、深紅の粒と早回しの針が体へ集まる → 白い核と横一文字の光条が走って時間がひび割れ、
@@ -4531,21 +4509,23 @@ public static partial class ExplosionFx
             float len = Rnd(0.4f, 0.75f);
             float life = Rnd(0.45f, 0.75f);
             float dl = charge + k * 0.015f;
-            Vector2 p = Off(c, FxMath.Cos(ang) * 0.3f, FxMath.Sin(ang) * 0.35f);
+            Skel[0] = Off(c, FxMath.Cos(ang) * 0.3f, FxMath.Sin(ang) * 0.35f);
 
             for (int j = 1; j <= 3; j++)
             {
                 float bend = ang + Rnd(-0.5f, 0.5f);
-                Vector2 n = Off(p, FxMath.Cos(bend) * len / 3f, FxMath.Sin(bend) * len / 3f);
-                Line2(p, n, 0.012f, life, ClockDeep, ChronoHot, 1f, 0.03f, 0.5f, delay: dl + j * 0.02f, coreFadeFrom: 0.3f);
+                Skel[j] = Off(Skel[j - 1], FxMath.Cos(bend) * len / 3f, FxMath.Sin(bend) * len / 3f);
+            }
 
-                if (j == 2 && k % 2 == 1)
-                {
-                    float ba = ang + (FxMath.Value < 0.5f ? -0.9f : 0.9f);
-                    Line2(n, Off(n, FxMath.Cos(ba) * len * 0.3f, FxMath.Sin(ba) * len * 0.3f), 0.009f, life, ClockDeep, ChronoHot, 0.8f, 0.03f, 0.5f, delay: dl + 0.06f, coreFadeFrom: 0.3f);
-                }
+            Vector2 fork = Skel[2];
+            GlowCrack(Skel, 4, 2, 0.016f, ClockDeep, ChronoHot, 1f, dl, 0.06f, life, 0.4f, taper: FxLines.Taper.Trunk);
 
-                p = n;
+            if (k % 2 == 1)
+            {
+                float ba = ang + (FxMath.Value < 0.5f ? -0.9f : 0.9f);
+                Skel2[0] = fork;
+                Skel2[1] = Off(fork, FxMath.Cos(ba) * len * 0.3f, FxMath.Sin(ba) * len * 0.3f);
+                GlowCrack(Skel2, 2, 2, 0.016f, ClockDeep, ChronoHot, 0.8f, dl + 0.06f, 0.04f, life - 0.06f, 0.4f, taper: FxLines.Taper.Branch);
             }
         }
 
@@ -4932,6 +4912,62 @@ public static partial class ExplosionFx
         bool vision = _vision && HudManager.InstanceExists && HudManager.Instance.ShadowQuad;
         FxParticles.Emit(preset, pos, count, c0, c1, size, speed, spread, delay, vision, SortingOrder + order, vision ? -1f - order * 0.01f : 0f, angle);
     }
+
+    private static readonly Vector2[] LineBuf = new Vector2[FxLines.MaxPoints];
+    private static readonly Vector2[] LineBuf2 = new Vector2[FxLines.MaxPoints];
+
+    // 線の部品 (FxLines) で折れ線を 1 本出す。見え方は Add と同じ決まり (床の物は人より奥・他は人より手前の帯)
+    private static void Lines(Vector2[] pts, int n, FxLines.Spec s, int order, bool floor = false)
+    {
+        s.Vision = _vision && HudManager.InstanceExists && HudManager.Instance.ShadowQuad;
+        s.Floor = floor;
+        s.Order = SortingOrder + order;
+        s.Z = -1f - order * 0.01f;
+        FxLines.Play(pts, n, s);
+    }
+
+    // 骨組みの折れ線 (k 点) の各辺を中点変位で細かく折り、1 本の点列にして LineBuf へ入れる。戻り値は点の数
+    private static int Refine(Vector2[] skel, int k, int levels, float rough)
+    {
+        int n = 0;
+        LineBuf[n++] = skel[0];
+
+        for (int i = 1; i < k && n < LineBuf.Length; i++)
+        {
+            float dx = skel[i].x - skel[i - 1].x, dy = skel[i].y - skel[i - 1].y;
+            int m = FxLines.Fractal(skel[i - 1], skel[i], levels, FxMath.Sqrt(dx * dx + dy * dy) * rough, 0.55f, LineBuf2);
+            for (int j = 1; j < m && n < LineBuf.Length; j++) LineBuf[n++] = LineBuf2[j];
+        }
+
+        return n;
+    }
+
+    // ひび 1 本: 暗い線 + 柔らかい暗い縁。床の物は縦を潰した骨組みを渡し、人より奥へ置く。
+    // 戻り値は LineBuf に残っている点の数 (同じ道筋に芯を重ねる時に使う)
+    private static int Crack(Vector2[] skel, int k, float width, Color dark, float alpha, float delay, float grow, float life, float fadeOutFrom, bool floor, int order = 0)
+    {
+        int n = Refine(skel, k, 2, 0.14f);
+        Lines(LineBuf, n, new FxLines.Spec
+        {
+            Width = width, Taper = FxLines.Taper.Trunk, Core = dark, Under = dark, CoreAlpha = alpha, UnderAlpha = alpha * 0.35f, UnderMul = 2.5f,
+            Delay = delay, Grow = grow, Decel = true, Life = life, FadeOutFrom = fadeOutFrom
+        }, order, floor);
+        return n;
+    }
+
+    // 光る細い亀裂・放電 1 本: 柔らかい暗い縁の上に光る芯
+    private static void GlowCrack(Vector2[] skel, int k, int levels, float width, Color outer, Color core, float alpha, float delay, float grow, float life, float fadeOutFrom, int order = 8,
+                                  FxLines.Taper taper = FxLines.Taper.Even)
+    {
+        Lines(LineBuf, Refine(skel, k, levels, 0.12f), new FxLines.Spec
+        {
+            Width = width, Taper = taper, Core = core, Under = outer, CoreAlpha = alpha, UnderAlpha = alpha * 0.45f, UnderMul = 3.5f, CoreGlow = true,
+            Delay = delay, Grow = grow, Life = life, FadeOutFrom = fadeOutFrom
+        }, order);
+    }
+
+    private static readonly Vector2[] Skel = new Vector2[12];
+    private static readonly Vector2[] Skel2 = new Vector2[4];
 
     // 本人の色の手 (FxHands) を、粒と同じ見え方の規則で出す
     private static void Hand(FxHands.Key[] keys, Vector2 pos, int colorId, float size, bool flip, float delay = 0f, int order = 9, FxHands.Pose prop = FxHands.Pose.None)
