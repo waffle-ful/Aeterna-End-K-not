@@ -15,7 +15,8 @@ internal static class FxLines
     {
         Trunk,   // 根元 1.0 → 中 0.7 → 先 0.25 (これより細いと画素より細くなって点線に見える)
         Branch,  // 根元 0.5 → 先 0.15 (枝。幅の指定は幹と同じ基準のまま渡す)
-        Even
+        Even,
+        Spindle  // 両端 0.25 → 中 1.0 (爪痕・刃筋。点が 2 つだと中が太らないので途中の点を渡す)
     }
 
     // 線 1 本の見た目と時間。Under は芯の下に敷く太い線 (幅 = Width × UnderMul)
@@ -28,6 +29,9 @@ internal static class FxLines
         public bool UnderGlow;  // true = にじみ (柔らかい縁・光る重ね方) / false = 暗いにじみ (柔らかい縁・普通の重ね方)
         public bool CoreGlow;   // true = 芯も光る重ね方
         public float Delay, Grow, Life, FadeOutFrom;
+        public float FadeIn;          // 現れる時間 (秒。0 = 0.02 秒)
+        public float CoreFadeOutFrom; // 芯だけ先に消え始める (0 = FadeOutFrom と同じ)。消えた後は下の線が残像になる
+        public bool Loop;             // 終点を始点へつなぐ (六角形など)。伸び切ってからつなぐ
         public bool Decel;      // 伸びが減速して止まる (ひび)
         public int Strikes;     // 再撃の回数 (0 = 光り直さない)
         public float StrikeGap; // 再撃の間隔 (秒)
@@ -54,11 +58,14 @@ internal static class FxLines
         public int Shown;
         public int StrikeDone;
         public float LastStrike;
-        public float LastAlpha = -1f, LastFlash = -1f, LastAfter = -1f;
+        public float LastAlpha = -1f, LastUnder = -1f, LastFlash = -1f, LastAfter = -1f;
+        public int Id;          // 出し続ける線の番号 (0 = 寿命で消える普通の線)
+        public float Mul = 1f;  // 後から変える濃さの倍率
+        public Vector2 Shift;   // 線ごと動かした量
     }
 
     internal const int MaxPoints = 64;
-    private const int PoolSize = 160;
+    private const int PoolSize = 256;
     private const float FlashDecay = 0.07f;
     private const float UnderBehind = 0.0005f;
 
@@ -69,9 +76,13 @@ internal static class FxLines
     private static Material _solid, _soft, _glow, _coreGlow;
     private static bool _prepared, _prepareFailed;
     private static Texture2D _softTex, _hardTex;
-    private static AnimationCurve _trunk, _branch, _even;
+    private static AnimationCurve _trunk, _branch, _even, _spindle;
 
     internal static int LiveCount => Live.Count;
+    private static int _nextId;
+
+    // 描ける状態か (素材を作れない環境では出し続ける演出の代わりに元の見た目を残す判断に使う)
+    internal static bool Ready => Prepare();
 
     // 作り置きを 1 本だけ足す。足りていれば false (試合開始時の下ごしらえで少しずつ呼ぶ)
     internal static bool WarmOne()
@@ -86,13 +97,67 @@ internal static class FxLines
     }
 
     // 線を 1 本出す。pts は世界座標の折れ線 (n 点・入れ物は原点に置くので局所座標 = 世界座標)。点の配列は呼び出し後に使い回してよい
-    internal static void Play(Vector2[] pts, int n, Spec s)
+    internal static void Play(Vector2[] pts, int n, Spec s) => Start(pts, n, s, 0);
+
+    // 消えるまで出し続ける線。戻り値の番号で Move / SetMul / Stop する (0 = 出せなかった)。Life と FadeOutFrom は無視する
+    internal static int PlayHeld(Vector2[] pts, int n, Spec s)
     {
-        if (n < 2) return;
+        s.Life = 1e6f;
+        s.FadeOutFrom = 1f;
+        s.CoreFadeOutFrom = 0f;
+        int id = ++_nextId;
+        if (_nextId >= int.MaxValue - 1) _nextId = 0;
+        return Start(pts, n, s, id) ? id : 0;
+    }
+
+    // 出し続ける線を、出した時の位置から offset だけずらした所へ動かす
+    internal static void Move(int id, Vector2 offset)
+    {
+        Line l = Find(id);
+        if (l == null || (l.Shift.x == offset.x && l.Shift.y == offset.y)) return;
+
+        l.Shift = offset;
+        Place(l.Core, offset, false);
+        if (l.Under != null) Place(l.Under, offset, true);
+    }
+
+    // 出し続ける線の濃さの倍率 (0 で見えなくなる)
+    internal static void SetMul(int id, float mul)
+    {
+        Line l = Find(id);
+        if (l != null) l.Mul = mul;
+    }
+
+    // 出し続ける線を fade 秒で消す
+    internal static void Stop(int id, float fade)
+    {
+        Line l = Find(id);
+        if (l == null) return;
+
+        float t = FxMath.Max(Time.time - l.Start, 0f);
+        float life = t + FxMath.Max(fade, 0.01f);
+        l.S.Life = life;
+        l.S.FadeOutFrom = t / life;
+        l.Id = 0;
+    }
+
+    private static Line Find(int id)
+    {
+        if (id <= 0) return null;
+        for (int i = 0; i < Live.Count; i++)
+            if (Live[i].Id == id) return Live[i];
+        return null;
+    }
+
+    private static void Place(Lr lr, Vector2 offset, bool under) => lr.Go.transform.position = FxMath.V3(offset.x, offset.y, under ? UnderBehind : 0f);
+
+    private static bool Start(Vector2[] pts, int n, Spec s, int id)
+    {
+        if (n < 2) return false;
         if (n > MaxPoints) n = MaxPoints;
 
         Lr core = Take();
-        if (core == null) return;
+        if (core == null) return false;
 
         Lr under = null;
         if (s.UnderMul > 0f && s.UnderAlpha > 0f)
@@ -101,7 +166,7 @@ internal static class FxLines
             if (under == null)
             {
                 Give(core);
-                return;
+                return false;
             }
         }
 
@@ -109,7 +174,7 @@ internal static class FxLines
         for (int i = 0; i < n; i++)
             p[i] = new Vector3(pts[i].x, pts[i].y, s.Vision && s.Floor ? pts[i].y / 1000f + 0.01f : s.Vision ? s.Z : 0f);
 
-        var line = new Line { Core = core, Under = under, S = s, Pts = p, N = n, Start = Time.time + s.Delay, Shown = -1, LastStrike = -1f };
+        var line = new Line { Core = core, Under = under, S = s, Pts = p, N = n, Start = Time.time + s.Delay, Shown = -1, LastStrike = -1f, Id = id };
 
         try
         {
@@ -120,10 +185,11 @@ internal static class FxLines
         {
             Release(line);
             Logger.Warn($"FxLines: {e.Message}", "FxLines");
-            return;
+            return false;
         }
 
         Live.Add(line);
+        return true;
     }
 
     internal static void Tick()
@@ -192,7 +258,7 @@ internal static class FxLines
         }
 
         // 明るさ: 現れて (0.02 秒) → 再撃のたびに跳ね上がって落ちる → 終わりに向けて消える
-        float a0 = FxMath.Clamp01(t / 0.02f);
+        float a0 = FxMath.Clamp01(t / FxMath.Max(s.FadeIn, 0.02f));
         float flash = 0f;
 
         if (s.Strikes > 0)
@@ -209,9 +275,9 @@ internal static class FxLines
             flash = FxMath.Exp(-since / FlashDecay);
         }
 
-        float fade = 1f;
         float u = t / s.Life;
-        if (u > s.FadeOutFrom) fade = 1f - (u - s.FadeOutFrom) / FxMath.Max(1f - s.FadeOutFrom, 0.001f);
+        float fade = Fade(u, s.FadeOutFrom);
+        float coreFade = s.CoreFadeOutFrom > 0f ? Fade(u, s.CoreFadeOutFrom) : fade;
 
         // 再撃が終わったら残光の色へ移る
         float afterK = 0f;
@@ -222,11 +288,13 @@ internal static class FxLines
         }
 
         float bright = s.Strikes > 0 ? 0.35f + 0.65f * flash : 1f;
-        float alpha = a0 * fade * bright;
+        float alpha = a0 * coreFade * bright * l.Mul;
+        float ua = a0 * fade * (s.Strikes > 0 ? 0.5f + 0.5f * flash : 1f) * s.UnderAlpha * l.Mul;
 
         // 伸び切って消え始めるまでの間は色も太さも変わらないので書き直さない
-        if (alpha == l.LastAlpha && flash == l.LastFlash && afterK == l.LastAfter) return;
+        if (alpha == l.LastAlpha && ua == l.LastUnder && flash == l.LastFlash && afterK == l.LastAfter) return;
         l.LastAlpha = alpha;
+        l.LastUnder = ua;
         l.LastFlash = flash;
         l.LastAfter = afterK;
 
@@ -238,12 +306,13 @@ internal static class FxLines
         if (l.Under != null)
         {
             Color uc = Mix(s.Under, s.After, afterK);
-            float ua = a0 * fade * (s.Strikes > 0 ? 0.5f + 0.5f * flash : 1f) * s.UnderAlpha;
             l.Under.R.startColor = FxMath.Rgba(uc.r, uc.g, uc.b, ua);
             l.Under.R.endColor = FxMath.Rgba(uc.r, uc.g, uc.b, ua * 0.6f);
             l.Under.R.widthMultiplier = s.Width * s.UnderMul * (1f + 0.3f * flash);
         }
     }
+
+    private static float Fade(float u, float from) => u > from ? 1f - (u - from) / FxMath.Max(1f - from, 0.001f) : 1f;
 
     private static Color Mix(Color a, Color b, float k) => k <= 0f ? a : FxMath.Rgba(a.r + (b.r - a.r) * k, a.g + (b.g - a.g) * k, a.b + (b.b - a.b) * k);
 
@@ -265,13 +334,15 @@ internal static class FxLines
         for (int i = 0; i < count; i++) lr.Buf[i] = l.Pts[i];
         lr.R.positionCount = count;
         lr.R.SetPositions(lr.Buf);
+        lr.R.loop = l.S.Loop && count == l.N;
     }
 
     private static void Setup(Lr lr, Spec s, bool under)
     {
         LineRenderer r = lr.R;
         r.positionCount = 0;
-        r.widthCurve = s.Taper switch { Taper.Trunk => _trunk, Taper.Branch => _branch, _ => _even };
+        r.widthCurve = s.Taper switch { Taper.Trunk => _trunk, Taper.Branch => _branch, Taper.Spindle => _spindle, _ => _even };
+        r.loop = false;
         r.widthMultiplier = s.Width * (under ? s.UnderMul : 1f);
         r.sharedMaterial = under ? s.UnderGlow ? _glow : _soft : s.CoreGlow ? _coreGlow : _solid;
         r.startColor = FxMath.Rgba(1f, 1f, 1f, 0f);
@@ -356,6 +427,7 @@ internal static class FxLines
             _trunk = new AnimationCurve(new Keyframe[] { new(0f, 1f), new(0.5f, 0.7f), new(1f, 0.25f) });
             _branch = new AnimationCurve(new Keyframe[] { new(0f, 0.5f), new(1f, 0.15f) });
             _even = new AnimationCurve(new Keyframe[] { new(0f, 1f), new(1f, 1f) });
+            _spindle = new AnimationCurve(new Keyframe[] { new(0f, 0.25f), new(0.5f, 1f), new(1f, 0.25f) });
 
             // 幅方向の明るさ: 柔らかい縁 (にじみ用のガウス) と、芯用のほぼ平らな帯 (縁 1 画素だけ落とす)
             _softTex = Keep(ProfileTexture(v => FxMath.Exp(-v * v * 5f)));

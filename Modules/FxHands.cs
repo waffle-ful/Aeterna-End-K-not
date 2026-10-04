@@ -142,6 +142,7 @@ internal static class FxHands
 
     internal static void Tick()
     {
+        if (HeldLive.Count > 0) TickHeld();
         if (Live.Count == 0) return;
 
         float now = Time.time;
@@ -202,6 +203,162 @@ internal static class FxHands
     {
         foreach (Hand h in Live) Release(h);
         Live.Clear();
+        foreach (Held h in HeldLive) ReleaseHeld(h);
+        HeldLive.Clear();
+    }
+
+    // ── 人に付いていく手 (出し続けて、呼び出し側が毎フレーム置き直す) ──────────
+
+    private sealed class Held
+    {
+        public int Id;
+        public GameObject Go;
+        public Transform Tf;
+        public SpriteRenderer Sr;
+        public float FadeStart = -1f, Fade;
+    }
+
+    private static readonly List<Held> HeldLive = [];
+    private static readonly Stack<Held> HeldPool = new();
+    private static int _heldId;
+
+    // 本人の色の手を出す。戻り値は番号 (0 = 出せなかった)。z は影の板の層で前後を付ける時の z
+    internal static int HoldStart(Sprite sprite, int colorId, bool vision, int order, float z)
+    {
+        Material mat = PlayerMat();
+        if (!mat || !sprite || HeldLive.Count >= MaxLive) return 0;
+        if (colorId < 0 || colorId >= Palette.PlayerColors.Length) colorId = 0;
+
+        Held h = null;
+        try
+        {
+            h = HeldPool.Count > 0 ? HeldPool.Pop() : null;
+            if (h == null || !h.Go)
+            {
+                var go = new GameObject("FxHeldHand") { layer = 0 };
+                Object.DontDestroyOnLoad(go);
+                h = new Held { Go = go, Tf = go.transform, Sr = go.AddComponent<SpriteRenderer>() };
+            }
+
+            h.Sr.sharedMaterial = mat;
+            h.Sr.sprite = sprite;
+            PlayerMaterial.SetColors(colorId, h.Sr);
+            h.Sr.color = FxMath.Rgba(1f, 1f, 1f, 1f);
+            h.Id = ++_heldId;
+            h.FadeStart = -1f;
+
+            MeshRenderer shadow = vision && HudManager.InstanceExists ? HudManager.Instance.ShadowQuad : null;
+            if (shadow)
+            {
+                h.Sr.sortingLayerID = shadow.sortingLayerID;
+                h.Sr.sortingOrder = shadow.sortingOrder;
+            }
+            else
+            {
+                h.Sr.sortingLayerID = 0;
+                h.Sr.sortingOrder = order;
+            }
+
+            h.Tf.position = FxMath.V3(0f, 0f, shadow ? z : 0f);
+            h.Tf.localScale = FxMath.V3(0f, 0f, 1f);
+            h.Go.SetActive(true);
+            HeldLive.Add(h);
+            int id = h.Id;
+            h = null;
+            return id;
+        }
+        catch (System.Exception e)
+        {
+            Utils.ThrowException(e);
+            if (h != null && h.Go)
+            {
+                h.Go.SetActive(false);
+                HeldPool.Push(h);
+            }
+
+            return 0;
+        }
+    }
+
+    // 手を置き直す。ang = 拳の向き (度)。左向きの時は上下を返して親指を上に保つ
+    internal static void HoldPlace(int id, float x, float y, float ang, float size, bool hidden)
+    {
+        Held h = FindHeld(id);
+        if (h == null) return;
+
+        if (hidden)
+        {
+            if (h.Go.activeSelf) h.Go.SetActive(false);
+            return;
+        }
+
+        if (!h.Go.activeSelf) h.Go.SetActive(true);
+        float a = FxMath.Repeat(ang + 180f, 360f) - 180f;
+        bool left = a > 90f || a < -90f;
+        h.Tf.position = FxMath.V3(x, y, h.Tf.position.z);
+        h.Tf.rotation = FxMath.RotZ(ang);
+        h.Tf.localScale = FxMath.V3(size, left ? -size : size, 1f);
+    }
+
+    // 手を fade 秒で消す
+    internal static void HoldStop(int id, float fade)
+    {
+        Held h = FindHeld(id);
+        if (h == null) return;
+
+        if (fade <= 0f)
+        {
+            HeldLive.Remove(h);
+            ReleaseHeld(h);
+            return;
+        }
+
+        h.FadeStart = Time.time;
+        h.Fade = fade;
+        h.Id = 0;
+    }
+
+    private static Held FindHeld(int id)
+    {
+        if (id <= 0) return null;
+        for (int i = 0; i < HeldLive.Count; i++)
+            if (HeldLive[i].Id == id) return HeldLive[i];
+        return null;
+    }
+
+    private static void TickHeld()
+    {
+        float now = Time.time;
+        for (int i = HeldLive.Count - 1; i >= 0; i--)
+        {
+            Held h = HeldLive[i];
+            if (!h.Go)
+            {
+                HeldLive.RemoveAt(i);
+                continue;
+            }
+
+            if (h.FadeStart < 0f) continue;
+
+            float u = (now - h.FadeStart) / h.Fade;
+            if (u >= 1f)
+            {
+                HeldLive.RemoveAt(i);
+                ReleaseHeld(h);
+                continue;
+            }
+
+            h.Sr.color = FxMath.Rgba(1f, 1f, 1f, 1f - u);
+        }
+    }
+
+    private static void ReleaseHeld(Held h)
+    {
+        if (!h.Go) return;
+
+        h.Go.SetActive(false);
+        if (HeldPool.Count < MaxLive) HeldPool.Push(h);
+        else Object.Destroy(h.Go);
     }
 
     private static void Release(Hand h)
@@ -219,7 +376,7 @@ internal static class FxHands
         Pose.SnapFlick => Utils.LoadSprite("EndKnot.Resources.Images.Fx.SnapHand_1.png", SelfPpu),
         Pose.SnapAfter => Utils.LoadSprite("EndKnot.Resources.Images.Fx.SnapHand_2.png", SelfPpu),
         Pose.Open => VanillaSprite("hand_open"),
-        Pose.Grab => VanillaSprite("hand_grab"),
+        Pose.Grab => VanillaSprite("hand_grab") ?? GripSprite(),
         Pose.GunGrip => VanillaSprite("killGun_hand0017"),
         Pose.Gun => VanillaSprite("killGun_gun0017"),
         _ => null
@@ -251,6 +408,8 @@ internal static class FxHands
             if (System.Array.IndexOf(Wanted, nm) >= 0) Vanilla[nm] = sp;
         }
 
+        // マップが載った後の走査で欠けていた絵は、タスク画面の部品ごと別のマップにしか無い (この試合では探し直しても見つからない)
+        if (ShipStatus.Instance) _scans = MaxScans;
         Logger.Info($"vanilla hand sprites: found={Vanilla.Count}/{Wanted.Length} scanned={n} in {sw.ElapsedMilliseconds}ms", "FxHands");
         return Vanilla.TryGetValue(name, out s) && s ? s : null;
     }
@@ -262,7 +421,10 @@ internal static class FxHands
         Vanilla.Clear();
     }
 
-    private static Material PlayerMat()
+    // 自作の握った手 (拳)。本編の握った手はポーラス・エアシップ・ファングルのタスク画面にしか無く、スケルドとミラでは読み込まれないので代わりに使う
+    internal static Sprite GripSprite() => Utils.LoadSprite("EndKnot.Resources.Images.Fx.ChainGrip.png", SelfPpu);
+
+    internal static Material PlayerMat()
     {
         if (_playerMaterial) return _playerMaterial;
         if (!GameManager.Instance || GameManager.Instance.deadBodyPrefab == null || GameManager.Instance.deadBodyPrefab.Length == 0) return null;

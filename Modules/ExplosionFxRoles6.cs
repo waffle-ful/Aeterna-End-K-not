@@ -33,6 +33,7 @@ public static partial class ExplosionFx
                 break;
             case Kind.WerewolfRampage:
                 SpawnWerewolfRampage(r.Pos);
+                StartSelf(SelfStyle.Rampage, r.Pos, r.Radius);
                 FxSound.At("FxWerewolfRampage", r.Pos);
                 break;
             case Kind.PestilenceRise:
@@ -79,8 +80,27 @@ public static partial class ExplosionFx
                 SpawnForceRepel(r.Pos);
                 FxSound.At("FxForceRepel", r.Pos, 0.7f);
                 break;
+            case Kind.ForceFieldHold:
+                StartField(r.Radius);
+                break;
+            case Kind.ForceFieldDown:
+                EndField(r.Pos, id);
+                break;
+            case Kind.ChainHold:
+                StartChain(r.Radius);
+                break;
+            case Kind.ChainRelease:
+                EndChain(id);
+                break;
+            case Kind.DragHold:
+                StartDrag(r.Radius);
+                break;
+            case Kind.DragRelease:
+                EndDrag(id);
+                break;
             case Kind.GoddessGuard:
                 SpawnGoddessGuard(r.Pos);
+                StartSelf(SelfStyle.Guard, r.Pos, r.Radius);
                 FxSound.At("FxGoddessGuard", r.Pos);
                 break;
             case Kind.GoddessPetrify:
@@ -131,7 +151,7 @@ public static partial class ExplosionFx
         Add(Shape.Glow, cc, Vector2.zero, 1.1f, 2.4f, 2.6f, SteelDeep, SteelDeep, 0.55f, 0.05f, 0.5f, rot: ang, sy0: 0.9f, sy1: 0.7f, order: 0);
 
         // 静寂: 刃筋だけが細く光って走る
-        Line2(Off(cc, -ux * 1.6f, -uy * 1.6f), Off(cc, ux * 1.6f, uy * 1.6f), 0.006f, cut + 0.05f, SteelBlue, SteelPale, 0.7f, cut * 0.8f, 0.9f);
+        Line2(Off(cc, -ux * 1.6f, -uy * 1.6f), Off(cc, ux * 1.6f, uy * 1.6f), 0.007f, cut + 0.05f, SteelBlue, SteelPale, 0.7f, 0.1f, 0.9f, taper: FxLines.Taper.Spindle, grow: cut * 0.8f);
 
         // 一閃: 三日月の刃の弧 (暗い縁 → 鋼の青 → 白い刃先) が斜めに抜ける
         Impact(c, 3f, SteelPale, 0.14f, 0.12f, 0.2f, delay: cut);
@@ -181,7 +201,7 @@ public static partial class ExplosionFx
             float o = (k - 1) * 0.06f;
             Vector2 a = Off(cc, -ux * 1.8f - uy * o, -uy * 1.8f + ux * o);
             Vector2 b = Off(cc, ux * 1.8f - uy * o, uy * 1.8f + ux * o);
-            Line2(a, b, 0.005f, 0.35f, SteelBlue, SteelPale, 0.8f - k * 0.2f, 0.02f, 0.4f, delay: cut + 0.04f + k * 0.03f, coreFadeFrom: 0.2f);
+            Line2(a, b, 0.006f, 0.35f, SteelBlue, SteelPale, 0.8f - k * 0.2f, 0.02f, 0.4f, delay: cut + 0.04f + k * 0.03f, coreFadeFrom: 0.2f, taper: FxLines.Taper.Spindle);
         }
 
         // 血: 斬られた線の両側へ、刃の進む向きに流れながら散る
@@ -273,7 +293,7 @@ public static partial class ExplosionFx
         {
             Vector2 a = Off(f, -0.45f + k * 0.13f, 0.12f);
             Vector2 b = Off(f, 0.2f + k * 0.13f, -0.14f);
-            Line2(a, b, 0.012f, 1.3f, ClockVoid, main, 0.85f, 0.05f, 0.6f, delay: 0.3f + k * 0.04f, coreFadeFrom: 0.5f);
+            Line2(a, b, 0.026f, 1.3f, ClockVoid, main, 0.85f, 0.03f, 0.6f, delay: 0.3f + k * 0.04f, coreFadeFrom: 0.5f, taper: FxLines.Taper.Spindle, grow: 0.06f, floor: true, order: 2);
         }
     }
 
@@ -364,7 +384,7 @@ public static partial class ExplosionFx
         Particles(FxParticles.Preset.Sparks, muzzle, 14, GunFlash, GunFire, size: 0.6f, delay: GunFireAt, order: 11, angle: aimDeg);
 
         // 弾の筋: 銃口から撃った向きへ細く走る
-        Line2(muzzle, Off(muzzle, ux * 2.2f, uy * 2.2f), 0.025f, 0.12f, GunFire, GunFlash, 0.9f, 0.01f, 0.2f, delay: GunFireAt + 0.01f);
+        Line2(muzzle, Off(muzzle, ux * 2.2f, uy * 2.2f), 0.025f, 0.12f, GunFire, GunFlash, 0.9f, 0.01f, 0.2f, delay: GunFireAt + 0.01f, taper: FxLines.Taper.Trunk, grow: 0.03f);
 
         // 硝煙: 銃口から少し漂って上へ
         Particles(FxParticles.Preset.Smoke, muzzle, 4, GunSmoke, GunSmoke, size: 0.35f, speed: 0.4f, spread: 0.3f, delay: GunFireAt + 0.03f, order: 8);
@@ -663,20 +683,22 @@ public static partial class ExplosionFx
     private static readonly Color FieldBlue = new(0.2f, 0.4f, 1f);
     private static readonly Color FieldDeep = new(0.02f, 0.06f, 0.2f);
 
-    // 六角形 1 枚の縁を描く
+    // 六角形 1 枚の縁を、角の丸くつながった閉じた線 1 本で描く
     private static void HexCell(Vector2 c, float r, float w, float life, float delay, Color outer, Color core, float alpha)
     {
         for (int k = 0; k < 6; k++)
         {
-            float a0 = (k * 60f + 30f) * FxMath.Deg2Rad, a1 = ((k + 1) * 60f + 30f) * FxMath.Deg2Rad;
-            Line2(Off(c, FxMath.Cos(a0) * r, FxMath.Sin(a0) * r), Off(c, FxMath.Cos(a1) * r, FxMath.Sin(a1) * r), w, life, outer, core, alpha, 0.1f, 0.5f, delay: delay);
+            float a = (k * 60f + 30f) * FxMath.Deg2Rad;
+            LineBuf[k] = Off(c, FxMath.Cos(a) * r, FxMath.Sin(a) * r);
         }
+
+        Strand(LineBuf, 6, w, life, outer, core, alpha, 0.1f, 0.5f, delay, loop: true);
     }
 
     // 力場を張る: 縁の輪が少し行き過ぎてから戻って止まり、内側に六角形の格子が中心から外へ波のように点いて消える
     private static void SpawnForceFieldUp(Vector2 c, float radius)
     {
-        float r = FxMath.Clamp(radius, 0.8f, 6f);
+        float r = FxMath.Clamp(radius, 0.8f, 15f);
         const float life = 1.2f;
 
         Add(Shape.Glow, c, Vector2.zero, life, r * 1.6f, r * 2.2f, FieldDeep, FieldDeep, 0.5f, 0.1f, 0.6f, order: 0);
@@ -706,6 +728,548 @@ public static partial class ExplosionFx
             Vector2 p = Off(c, FxMath.Cos(a) * r, FxMath.Sin(a) * r);
             Add(Shape.Star, p, FxMath.V2(-FxMath.Sin(a) * 1.5f, FxMath.Cos(a) * 1.5f), Rnd(0.2f, 0.35f), Rnd(0.08f, 0.14f), 0.02f, FieldWhite, FieldCyan, 1f, 0.02f, 0.5f, delay: Rnd(0.2f, 0.8f), stretch: 0.1f, order: 7);
         }
+    }
+
+    // ── 本人の画面だけに出る、効果が続いている間の演出 (自分に付いていく) ─────────────
+
+    private enum SelfStyle : byte
+    {
+        Rampage,  // 人狼の暴走: 赤黒い気が立ち昇り、心臓の鼓動のように脈打つ
+        Guard     // 女神の構え: 金の光の粒が降り、頭上の光輪が明滅する
+    }
+
+    private struct SelfEmitter
+    {
+        public SelfStyle Style;
+        public float Start, Until;
+        public float Next, NextFloor, NextBeat;
+    }
+
+    private static readonly List<SelfEmitter> SelfEmitters = [];
+
+    // 本人だけに送られた演出なので、付いていく相手はこの画面の自分。始まった所から離れていたら (別人宛ての取り違え) 出さない
+    private static void StartSelf(SelfStyle style, Vector2 at, float seconds)
+    {
+        PlayerControl lp = PlayerControl.LocalPlayer;
+        if (!lp || seconds < 1f) return;
+
+        Vector2 p = lp.Pos();
+        float dx = p.x - at.x, dy = p.y - at.y;
+        if (dx * dx + dy * dy > 4f) return;
+
+        for (int i = SelfEmitters.Count - 1; i >= 0; i--)
+            if (SelfEmitters[i].Style == style) SelfEmitters.RemoveAt(i);
+
+        float now = Time.time;
+        // 始まりの一発の演出 (約 1.5 秒) が終わる頃から続ける
+        SelfEmitters.Add(new SelfEmitter { Style = style, Start = now, Until = now + seconds, Next = now + 1.2f, NextFloor = now + 1.2f, NextBeat = now + 1.5f });
+    }
+
+    private static void PulseSelves()
+    {
+        PlayerControl lp = PlayerControl.LocalPlayer;
+        float now = Time.time;
+
+        for (int i = SelfEmitters.Count - 1; i >= 0; i--)
+        {
+            SelfEmitter e = SelfEmitters[i];
+            if (!lp || !lp.IsAlive() || now >= e.Until)
+            {
+                SelfEmitters.RemoveAt(i);
+                continue;
+            }
+
+            if (now < e.Next || lp.inVent || Active.Count >= 2000) continue;
+
+            Vector2 c = lp.Pos();
+            Vector2 f = Off(c, 0f, Feet.y);
+            float k = FxMath.Clamp01((e.Until - now) / 1.5f);  // 最後の 1.5 秒で弱まる
+
+            if (e.Style == SelfStyle.Rampage)
+            {
+                e.Next = now + 0.06f;
+                float side = FxMath.Value < 0.5f ? -1f : 1f;
+                Add(Shape.Glow, Off(c, side * Rnd(0.22f, 0.38f), Rnd(-0.35f, 0.1f)), FxMath.V2(side * Rnd(0f, 0.15f), Rnd(0.6f, 1.1f)), Rnd(0.5f, 0.7f), 0.4f, 0.12f, WolfRed, ClockVoid, 0.85f * k, 0.15f, 0.5f,
+                    drag: 1.2f, stretch: 0.3f, order: 3);
+                Add(Shape.Glow, c, Vector2.zero, 0.2f, 1.3f, 1.4f, ClockVoid, ClockVoid, 0.12f * k, 0.3f, 0.6f, order: 1);
+                Add(Shape.Star, Off(c, Rnd(-0.4f, 0.4f), Rnd(-0.4f, 0.2f)), FxMath.V2(Rnd(-0.2f, 0.2f), Rnd(0.5f, 1f)), Rnd(0.5f, 0.8f), Rnd(0.05f, 0.08f), 0.02f, AuraSpark, WolfRed, k, 0.1f, 0.6f, order: 8);
+
+                if (now >= e.NextFloor)
+                {
+                    e.NextFloor = now + 0.5f;
+                    Add(Shape.FloorPool, f, Vector2.zero, 1f, 1.6f, 1.6f, WolfRed, ClockVoid, 0.5f * k, 0.3f, 0.6f, rot: 0f, flat: true, order: 0);
+                }
+
+                if (now >= e.NextBeat)
+                {
+                    e.NextBeat = now + 0.8f;
+                    Add(Shape.Glow, c, Vector2.zero, 0.3f, 1.4f, 2f, WolfRed, ClockVoid, 0.4f * k, 0.1f, 0.3f, order: 2);
+                }
+            }
+            else
+            {
+                e.Next = now + 0.12f;
+                Add(Shape.Star, Off(c, Rnd(-0.6f, 0.6f), Rnd(0.6f, 1.6f)), FxMath.V2(Rnd(-0.08f, 0.08f), Rnd(-0.5f, -0.25f)), Rnd(0.9f, 1.2f), Rnd(0.1f, 0.14f), 0.04f, GauntletGold, DivineDeep, k, 0.2f, 0.7f,
+                    twinkle: 0.6f, twinkleSpeed: Rnd(10f, 18f), wobble: 0.05f, wobbleHz: 2f, order: 6);
+
+                if (now >= e.NextFloor)
+                {
+                    e.NextFloor = now + 0.5f;
+                    Add(Shape.FloorPool, f, Vector2.zero, 1f, 1.8f, 1.8f, GauntletGold, DivineDeep, 0.6f * k, 0.3f, 0.6f, rot: 0f, flat: true, order: 0);
+                }
+
+                // 体を包む金の光: 0.5 秒おきに 1 秒の寿命で重ねて、ゆっくり脈打たせる (頭上は名前の文字と重なるので使わない)
+                if (now >= e.NextBeat)
+                {
+                    e.NextBeat = now + 0.5f;
+                    float tw = 0.75f + 0.25f * FxMath.Sin((now - e.Start) * 2.4f);
+                    Add(Shape.Glow, Off(c, 0f, 1.5f), Vector2.zero, 1f, 0.5f, 0.5f, GauntletGold, DivineWhite, 0.3f * k, 0.3f, 0.6f, rot: 0f, sy0: 4f, sy1: 4f, order: 0);
+                    Add(Shape.Glow, c, Vector2.zero, 1f, 1.3f, 1.5f, GauntletGold, DivineDeep, 0.35f * tw * k, 0.3f, 0.6f, order: 1);
+                }
+            }
+
+            SelfEmitters[i] = e;
+        }
+    }
+
+    // ── ペンギンが獲物を引きずっている間 (2 人に付いていく) ───────────────────
+
+    // ペンギンの拳が獲物の襟元 (ペンギン側の肩) を掴み、獲物の足元には氷が張り続け、引きずった跡に霜の筋が残る
+    private struct DragEmitter
+    {
+        public bool Vision;
+        public byte IdP, IdV;
+        public PlayerControl P, V;
+        public int Hand;
+        public float Ang;
+        public float Until;
+        public float NextIce, NextMote;
+        public Vector2 LastMark;
+    }
+
+    private static readonly List<DragEmitter> DragEmitters = [];
+
+    private static void StartDrag(float packed)
+    {
+        int v = (int)(packed + 0.5f);
+        int idP = v % 32 - 1;
+        int idV = v / 32 % 32;
+        PlayerControl p = idP is >= 0 and <= 30 ? Utils.GetPlayerById((byte)idP) : null;
+        PlayerControl victim = idV is >= 0 and <= 30 ? Utils.GetPlayerById((byte)idV) : null;
+        if (!p || !victim) return;
+
+        EndDrag(idP, false);
+        if (DragEmitters.Count >= 2) StopDragAt(0, 0f);
+
+        bool vision = _vision && HudManager.InstanceExists && HudManager.Instance.ShadowQuad;
+        int color = p.Data ? p.Data.DefaultOutfit.ColorId : 0;
+        int hand = FxHands.HoldStart(FxHands.GripSprite(), color, vision, SortingOrder + 9, -1f - 9 * 0.01f);
+        Vector2 vp = victim.Pos();
+        // 引きずれるのは最長 20 秒 (放す合図が届かなかった時はここで止める)
+        DragEmitters.Add(new DragEmitter { Vision = _vision, IdP = (byte)idP, IdV = (byte)idV, P = p, V = victim, Hand = hand, Ang = 0f, LastMark = vp, Until = Time.time + 25f });
+    }
+
+    // 放す: 拳が薄れて消え、獲物の足元で霜が小さく弾ける
+    private static void EndDrag(int idP, bool burst = true)
+    {
+        for (int i = DragEmitters.Count - 1; i >= 0; i--)
+        {
+            if (DragEmitters[i].IdP != idP) continue;
+
+            DragEmitter e = DragEmitters[i];
+            if (burst && e.V && GameStates.IsInTask)
+            {
+                _vision = e.Vision;
+                Vector2 f = Off(e.V.Pos(), 0f, Feet.y);
+                for (int k = 0; k < 10; k++)
+                    Add(Shape.Star, f, FxMath.V2(Rnd(-1.4f, 1.4f), Rnd(0.2f, 1.2f)), Rnd(0.3f, 0.5f), Rnd(0.06f, 0.1f), 0.02f, IceWhite, IceCyan, 1f, 0.02f, 0.5f, drag: 3f, order: 8);
+                _vision = false;
+            }
+
+            StopDragAt(i, burst ? 0.3f : 0f);
+        }
+    }
+
+    private static void StopDragAt(int i, float fade)
+    {
+        FxHands.HoldStop(DragEmitters[i].Hand, fade);
+        DragEmitters.RemoveAt(i);
+    }
+
+    private static void StopAllDrags()
+    {
+        for (int i = DragEmitters.Count - 1; i >= 0; i--) StopDragAt(i, 0f);
+    }
+
+    private static void PulseDrags()
+    {
+        float now = Time.time;
+
+        for (int i = DragEmitters.Count - 1; i >= 0; i--)
+        {
+            DragEmitter e = DragEmitters[i];
+
+            if (!e.P || !e.V || !e.P.IsAlive() || !e.V.IsAlive() || now >= e.Until)
+            {
+                StopDragAt(i, 0.3f);
+                continue;
+            }
+
+            _vision = e.Vision;
+            Vector2 pp = e.P.Pos(), vp = e.V.Pos();
+            bool hidden = Unseen(e.P, e.IdP) || Unseen(e.V, e.IdV);
+
+            // 拳はペンギンから獲物へ向く。重なっている間は前の向きを保つ
+            float dx = vp.x - pp.x, dy = vp.y - pp.y;
+            if (dx * dx + dy * dy > 0.04f) e.Ang = FxMath.Atan2(dy, dx) * FxMath.Rad2Deg;
+            float r = e.Ang * FxMath.Deg2Rad;
+            FxHands.HoldPlace(e.Hand, vp.x - FxMath.Cos(r) * 0.22f, vp.y - FxMath.Sin(r) * 0.22f + 0.02f, e.Ang, 0.22f, hidden);
+
+            if (!hidden && Active.Count < 2000)
+            {
+                Vector2 f = Off(vp, 0f, Feet.y);
+
+                // 足元の氷: 0.25 秒おきに 0.5 秒の寿命で出し直す
+                if (now >= e.NextIce)
+                {
+                    e.NextIce = now + 0.25f;
+                    Add(Shape.FloorPool, f, Vector2.zero, 0.5f, 1f, 1f, IceCyan, IceBlue, 0.45f, 0.3f, 0.6f, rot: 0f, flat: true, order: 0);
+                }
+
+                // 引きずった跡: 0.15u 動くごとに、動いた向きの霜の筋を床に残す
+                float mx = vp.x - e.LastMark.x, my = vp.y - e.LastMark.y;
+                float md = FxMath.Sqrt(mx * mx + my * my);
+                if (md > 0.15f)
+                {
+                    Vector2 mid = Off(e.LastMark, mx * 0.5f, my * 0.5f + Feet.y);
+                    float rot = FxMath.Atan2(my, mx) * FxMath.Rad2Deg;
+                    float len = FxMath.Min(md, 1.5f);
+                    Add(Shape.Glow, mid, Vector2.zero, 1.6f, len, len, IceBlue, IceCyan, 0.5f, 0.05f, 0.5f, rot: rot, sy0: 0.12f, sy1: 0.12f, order: 0);
+                    Add(Shape.Glow, mid, Vector2.zero, 1.4f, len * 0.9f, len * 0.9f, IceWhite, IceBlue, 0.55f, 0.05f, 0.5f, rot: rot, sy0: 0.03f, sy1: 0.03f, order: 1);
+                    if (FxMath.Value < 0.6f)
+                        Add(Shape.Star, mid, Vector2.zero, 0.5f, 0.09f, 0.09f, WindWhite, IceCyan, 1f, 0.1f, 0.5f, twinkle: 0.6f, twinkleSpeed: 14f, order: 8);
+                    e.LastMark = vp;
+                }
+
+                // 獲物の周りを冷気の粒が昇る
+                if (now >= e.NextMote)
+                {
+                    e.NextMote = now + 0.2f;
+                    Add(Shape.Star, Off(vp, Rnd(-0.35f, 0.35f), Rnd(-0.4f, 0.2f)), FxMath.V2(Rnd(-0.1f, 0.1f), Rnd(0.3f, 0.6f)), Rnd(0.5f, 0.8f), Rnd(0.05f, 0.08f), 0.02f, IceWhite, IceCyan, 0.9f, 0.1f, 0.6f, order: 8);
+                }
+            }
+
+            DragEmitters[i] = e;
+        }
+
+        _vision = false;
+    }
+
+    // ── 鎖で繋がっている間 (2 人に付いていく) ─────────────────────────────
+
+    private struct ChainEmitter
+    {
+        public float Until;
+        public int Chain;
+        public byte IdA, IdB;
+        public PlayerControl A, B;
+    }
+
+    private static readonly List<ChainEmitter> ChainEmitters = [];
+
+    private static void StartChain(float packed)
+    {
+        int v = (int)(packed + 0.5f);
+        int idA = v % 32 - 1;
+        int idB = v / 32 % 32;
+        float length = 0.5f + v / 1024 * 0.5f;
+        PlayerControl a = idA is >= 0 and <= 30 ? Utils.GetPlayerById((byte)idA) : null;
+        PlayerControl b = idB is >= 0 and <= 30 ? Utils.GetPlayerById((byte)idB) : null;
+        if (!a || !b) return;
+
+        EndChain(idA, false);
+        if (ChainEmitters.Count >= 2)
+        {
+            FxChain.Stop(ChainEmitters[0].Chain, false);
+            ChainEmitters.RemoveAt(0);
+        }
+
+        // 手と手の間の長さ = 体と体の最大距離から両手の伸び (0.36u × 2) を引いた分
+        int colorA = a.Data ? a.Data.DefaultOutfit.ColorId : 0;
+        int colorB = b.Data ? b.Data.DefaultOutfit.ColorId : 0;
+        bool vision = _vision && HudManager.InstanceExists && HudManager.Instance.ShadowQuad;
+        int chain = FxChain.Start(FxMath.Max(length - 0.72f, 0.3f), colorA, colorB, vision, SortingOrder + 6, -1f - 6 * 0.01f);
+        if (chain == 0)
+        {
+            Logger.Warn("chain could not be drawn (FxChain not ready or full)", "ExplosionFx");
+            return;
+        }
+
+        // 繋がる時間は最長 60 秒 (外れる合図が届かなかった時はここで止める)
+        ChainEmitters.Add(new ChainEmitter { Until = Time.time + 65f, Chain = chain, IdA = (byte)idA, IdB = (byte)idB, A = a, B = b });
+    }
+
+    // 外れる: 真ん中で切れて輪がばらけて落ちる
+    private static void EndChain(int idA, bool snap = true)
+    {
+        for (int i = ChainEmitters.Count - 1; i >= 0; i--)
+        {
+            if (ChainEmitters[i].IdA != idA) continue;
+
+            FxChain.Stop(ChainEmitters[i].Chain, snap);
+            ChainEmitters.RemoveAt(i);
+        }
+    }
+
+    private static void StopAllChains()
+    {
+        for (int i = ChainEmitters.Count - 1; i >= 0; i--) FxChain.Stop(ChainEmitters[i].Chain, false);
+        ChainEmitters.Clear();
+    }
+
+    private static void PulseChains()
+    {
+        for (int i = ChainEmitters.Count - 1; i >= 0; i--)
+        {
+            ChainEmitter e = ChainEmitters[i];
+
+            if (!e.A || !e.B || !e.A.IsAlive() || !e.B.IsAlive() || Time.time >= e.Until)
+            {
+                FxChain.Stop(e.Chain, e.A && e.B);
+                ChainEmitters.RemoveAt(i);
+                continue;
+            }
+
+            // ベント・透明・梯子などで片方が見えない間は、鎖が居場所を明かさないよう鎖ごと隠す
+            bool hidden = Unseen(e.A, e.IdA) || Unseen(e.B, e.IdB);
+            FxChain.Place(e.Chain, e.A.Pos(), e.B.Pos(), hidden);
+        }
+    }
+
+    private static bool Unseen(PlayerControl pc, byte id) => pc.inVent || Main.Invisible.Contains(id) || pc.invisibilityAlpha < 0.9f || !pc.Visible;
+
+    // ── 力場を張っている間 (本人に付いていく) ─────────────────────────────
+
+    // 縁の円 1 本 + 六角格子 (最大 19 枚) を出し続け、本人が動いた分だけ線ごと動かす。床の光は出し直し、縁を火花が這う。
+    // 2.5 秒おきに中心から外へ格子を光が渡る。本人が死ぬ・居なくなると自分で消える。ベント・透明の間は見えなくする
+    private struct FieldEmitter
+    {
+        public bool Vision;
+        public byte Id;
+        public PlayerControl Pc;
+        public Vector2 Origin;
+        public float Rho;
+        public float Start;
+        public int Edge;
+        public int[] Cells;
+        public float[] CellDist;
+        public float NextPool, NextSpark, NextWave, WaveAt;
+        public bool Hidden;
+        public CnoCover Cover;
+    }
+
+    private static readonly List<FieldEmitter> FieldEmitters = [];
+    private const int FieldCellMax = 19;
+
+    // 張る: Radius = 本人の PlayerId + 1 + 32 × 半径の段 (1〜8 を 0.5 刻みで 0〜14)。見た目の半径は CNO と当たり判定に合わせて ×1.9
+    private static void StartField(float packed)
+    {
+        int v = (int)(packed + 0.5f);
+        int id = v % 32 - 1;
+        PlayerControl pc = id is >= 0 and <= 30 ? Utils.GetPlayerById((byte)id) : null;
+        if (!pc) return;
+
+        StopField(id, 0f);
+        if (FieldEmitters.Count >= 2) StopFieldAt(0, 0f);
+
+        float radius = 1f + (v / 32) * 0.5f;
+        float rho = radius * Roles.ForceFielder.HitRadiusScale;
+        Vector2 c = pc.Pos();
+
+        var e = new FieldEmitter { Vision = _vision, Id = (byte)id, Pc = pc, Origin = c, Rho = rho, Start = Time.time, Cells = new int[FieldCellMax], CellDist = new float[FieldCellMax] };
+
+        // 縁: 48 点の閉じた円
+        const int n = 48;
+        for (int k = 0; k < n; k++)
+        {
+            float a = k * 2f * FxMath.PI / n;
+            LineBuf[k] = Off(c, FxMath.Cos(a) * rho, FxMath.Sin(a) * rho);
+        }
+
+        e.Edge = LinesHeld(LineBuf, n, new FxLines.Spec
+        {
+            Width = 0.03f, Taper = FxLines.Taper.Even, Core = FieldCyan, Under = FieldBlue, CoreAlpha = 0.85f, UnderAlpha = 0.5f, UnderMul = 4f, UnderGlow = true, CoreGlow = true,
+            FadeIn = 0.25f, Loop = true
+        }, 6);
+
+        // 格子: 中心に近い順に最大 19 枚 (1 辺 = ρ×0.24)
+        float h = rho * 0.24f;
+        float dx = h * 1.5f, dy = h * 1.732f;
+        int count = 0;
+        for (int ring = 0; ring <= 3 && count < FieldCellMax; ring++)
+        {
+            for (int i = -ring; i <= ring && count < FieldCellMax; i++)
+            {
+                for (int j = -ring; j <= ring && count < FieldCellMax; j++)
+                {
+                    if (FxMath.Max(FxMath.Abs(i), FxMath.Abs(j)) != ring) continue;
+                    float x = i * dx, y = j * dy + (i % 2 == 0 ? 0f : dy * 0.5f);
+                    float dist = FxMath.Sqrt(x * x + y * y);
+                    if (dist > rho - h * 0.9f) continue;
+
+                    for (int k = 0; k < 6; k++)
+                    {
+                        float a = (k * 60f + 30f) * FxMath.Deg2Rad;
+                        LineBuf[k] = Off(c, x + FxMath.Cos(a) * h * 0.92f, y + FxMath.Sin(a) * h * 0.92f);
+                    }
+
+                    int cell = LinesHeld(LineBuf, 6, new FxLines.Spec
+                    {
+                        Width = 0.012f, Taper = FxLines.Taper.Even, Core = FieldWhite, Under = FieldBlue, CoreAlpha = 1f, UnderAlpha = 0.6f, UnderMul = 3f,
+                        FadeIn = 0.4f, Loop = true
+                    }, 5);
+                    if (cell == 0) continue;
+
+                    e.Cells[count] = cell;
+                    e.CellDist[count] = dist / rho;
+                    FxLines.SetMul(cell, FieldCellBase);
+                    count++;
+                }
+            }
+        }
+
+        e.NextWave = Time.time + 1.2f;
+        e.WaveAt = -1f;
+        FieldEmitters.Add(e);
+    }
+
+    private const float FieldCellBase = 0.3f;
+
+    // 解く: 格子が一度だけ光り、縁ごと 0.35 秒で消える
+    private static void EndField(Vector2 c, int id)
+    {
+        for (int i = FieldEmitters.Count - 1; i >= 0; i--)
+        {
+            if (FieldEmitters[i].Id != id) continue;
+
+            FieldEmitter e = FieldEmitters[i];
+            Vector2 at = e.Pc ? e.Pc.Pos() : c;
+            if (e.Hidden) StopFieldAt(i, 0f, uncover: false);
+            else
+            {
+                for (int k = 0; k < e.Cells.Length; k++) FxLines.SetMul(e.Cells[k], 0.7f);
+                // CNO は役職側が同時に片付けるので戻さない (戻すと消えるまでの数フレーム円が現れる)
+                StopFieldAt(i, 0.35f, uncover: false);
+                Add(Shape.Glow, at, Vector2.zero, 0.3f, e.Rho * 1.6f, e.Rho * 2.1f, FieldCyan, FieldBlue, 0.35f, 0.02f, 0.3f, order: 5);
+                Impact(at, e.Rho + 1f, FieldCyan, 0.05f, 0.04f, 0.1f);
+            }
+        }
+    }
+
+    private static void StopField(int id, float fade)
+    {
+        for (int i = FieldEmitters.Count - 1; i >= 0; i--)
+            if (FieldEmitters[i].Id == id) StopFieldAt(i, fade);
+    }
+
+    // uncover = 隠していた CNO を戻す。本人が死んで止まる時は戻さない (死んでも役職側は CNO を消さないので、戻すと死体の周りに円が現れる)
+    private static void StopFieldAt(int i, float fade, bool uncover = true)
+    {
+        FieldEmitter e = FieldEmitters[i];
+        FxLines.Stop(e.Edge, fade);
+        for (int k = 0; k < e.Cells.Length; k++) FxLines.Stop(e.Cells[k], fade);
+        if (uncover) UncoverCno(e.Cover);
+        FieldEmitters.RemoveAt(i);
+    }
+
+    private static void StopAllFields()
+    {
+        for (int i = FieldEmitters.Count - 1; i >= 0; i--) StopFieldAt(i, 0f);
+    }
+
+    private static void PulseFields()
+    {
+        float now = Time.time;
+
+        for (int i = FieldEmitters.Count - 1; i >= 0; i--)
+        {
+            FieldEmitter e = FieldEmitters[i];
+            PlayerControl pc = e.Pc;
+
+            if (!pc || !pc.IsAlive())
+            {
+                StopFieldAt(i, pc ? 0.35f : 0f, uncover: !pc);
+                continue;
+            }
+
+            _vision = e.Vision;
+            Vector2 c = pc.Pos();
+            var shift = FxMath.V2(c.x - e.Origin.x, c.y - e.Origin.y);
+            FxLines.Move(e.Edge, shift);
+            for (int k = 0; k < e.Cells.Length; k++) FxLines.Move(e.Cells[k], shift);
+
+            // 縁が描けている間は、同じ所の CNO (全員に見える青い円の文字) を手元で隠す。CNO が片付けられたら力場も解けている
+            if (CoverCno(ref e.Cover, c, 1.2f, "#4488ff>○", e.Edge != 0))
+            {
+                FieldEmitters[i] = e;
+                StopFieldAt(i, 0.35f, uncover: false);
+                continue;
+            }
+
+            bool hide = Unseen(pc, e.Id);
+            float t = now - e.Start;
+
+            // 縁はゆっくり脈打つ (0.6Hz)
+            FxLines.SetMul(e.Edge, hide ? 0f : 0.65f + 0.2f * FxMath.Sin(t * 0.6f * 2f * FxMath.PI));
+
+            // 格子を中心から外へ光が渡る (0.3 秒で外縁まで・1 枚ごとに 0.3 秒光る)
+            if (now >= e.NextWave)
+            {
+                e.NextWave = now + 2.5f;
+                e.WaveAt = now;
+            }
+
+            float w = e.WaveAt < 0f ? -1f : now - e.WaveAt;
+            for (int k = 0; k < e.Cells.Length; k++)
+            {
+                if (e.Cells[k] == 0) continue;
+                float bump = 0f;
+                if (w >= 0f && w < 0.7f)
+                {
+                    float u = (w - e.CellDist[k] * 0.3f) / 0.3f;
+                    if (u is > 0f and < 1f) bump = FxMath.Sin(u * FxMath.PI);
+                }
+
+                FxLines.SetMul(e.Cells[k], hide ? 0f : FieldCellBase + 0.6f * bump);
+            }
+
+            if (w >= 0.7f) e.WaveAt = -1f;
+            e.Hidden = hide;
+
+            if (!hide && Active.Count < 2000)
+            {
+                // 床の光: 0.5 秒おきに 1 秒の寿命で出し直す
+                if (now >= e.NextPool)
+                {
+                    e.NextPool = now + 0.5f;
+                    Add(Shape.FloorPool, c, Vector2.zero, 1f, e.Rho * 2f, e.Rho * 2f, FieldDeep, FieldBlue, 0.25f, 0.4f, 0.6f, rot: 0f, flat: true, order: 0);
+                }
+
+                // 縁を這う火花
+                if (now >= e.NextSpark)
+                {
+                    e.NextSpark = now + 0.15f;
+                    float a = Rnd(0f, 2f * FxMath.PI);
+                    float dir = FxMath.Value < 0.5f ? -1f : 1f;
+                    Add(Shape.Star, Off(c, FxMath.Cos(a) * e.Rho, FxMath.Sin(a) * e.Rho), FxMath.V2(-FxMath.Sin(a) * 1.5f * dir, FxMath.Cos(a) * 1.5f * dir), 0.3f, Rnd(0.08f, 0.12f), 0.02f,
+                        FieldWhite, FieldCyan, 1f, 0.05f, 0.5f, stretch: 0.1f, order: 7);
+                }
+            }
+
+            FieldEmitters[i] = e;
+        }
+
+        _vision = false;
     }
 
     // 弾き出された: 当たった所の六角形が数枚光って波紋が広がり、火花が外へ散る
@@ -839,20 +1403,7 @@ public static partial class ExplosionFx
             Impact(end, 2f, IronHot, 0.05f, 0.08f, 0.15f, delay: 0.05f);
         }
 
-        // 鎖の下地: 明るい床でも鎖の線が読めるよう、暗い太線を先に敷く
-        Line2(a, b, 0.07f, grow + hold, IronDark, IronMid, 0.75f, 0.3f, 0.8f, coreFadeFrom: 0.2f);
-
-        // 鎖の輪: 寝た輪と立った輪を交互に。両端から真ん中へ順に現れる
-        for (int i = 0; i <= count; i++)
-        {
-            float t = (float)i / count;
-            Vector2 p = Off(a, ux * len * t, uy * len * t);
-            float d = grow * (1f - FxMath.Min(t, 1f - t) * 2f);
-            bool lying = i % 2 == 0;
-            float sx = lying ? 0.36f : 0.3f, sy = lying ? 0.18f : 0.07f;
-            Add(Shape.Ring, p, Vector2.zero, hold + grow - d, sx * 1.15f, sx * 1.15f, IronDark, IronDark, 1f, 0.03f, 0.8f, delay: d, rot: rot, sy0: sy * 1.3f, sy1: sy * 1.3f, order: 5);
-            Add(Shape.Ring, p, Vector2.zero, hold + grow - d, sx, sx, IronMid, IronHot, 1f, 0.03f, 0.8f, delay: d, rot: rot, sy0: sy, sy1: sy, colorMid: IronMid, order: 6);
-        }
+        // 鎖そのものは繋がっている間ずっと出す演出 (ChainHold) が両端から伸ばす。ここは繋いだ瞬間の枷と火花だけ
 
         // 噛み合った瞬間の火花と、赤熱して冷えていく芯
         Vector2 mid = Off(a, dx * 0.5f, dy * 0.5f);
@@ -899,7 +1450,7 @@ public static partial class ExplosionFx
                 float o = (j - 1) * 0.08f;
                 Vector2 p0 = Off(f, FxMath.Cos(a) * 0.45f - FxMath.Sin(a) * o, (FxMath.Sin(a) * 0.45f + FxMath.Cos(a) * o) * 0.4f);
                 Vector2 p1 = Off(f, FxMath.Cos(a) * 0.85f - FxMath.Sin(a) * o, (FxMath.Sin(a) * 0.85f + FxMath.Cos(a) * o) * 0.4f);
-                Line2(p0, p1, 0.012f, life - 0.2f, ClockVoid, WolfRed, 0.9f, 0.05f, 0.6f, delay: 0.15f + k * 0.05f + j * 0.02f, coreFadeFrom: 0.4f);
+                Line2(p0, p1, 0.026f, life - 0.2f, ClockVoid, WolfRed, 0.9f, 0.03f, 0.6f, delay: 0.15f + k * 0.05f + j * 0.02f, coreFadeFrom: 0.4f, taper: FxLines.Taper.Spindle, grow: 0.05f, floor: true, order: 2);
             }
         }
 
@@ -968,24 +1519,29 @@ public static partial class ExplosionFx
         Add(Shape.Glow, f, Vector2.zero, life, r * 1.4f, r * 2.2f, SporeDeep, SporeDeep, 0.45f, 0.2f, 0.7f, flat: true, order: 0);
 
         // 菌糸
+        const int steps = 6;
+        float seg = r / steps;
         for (int k = 0; k < 10; k++)
         {
             float a = k * 36f * FxMath.Deg2Rad + Rnd(-0.2f, 0.2f);
-            Vector2 p = f;
-            int steps = 6;
+            Vector2 p = f, fork = f;
+            float forkA = 0f;
+            Strands[0] = f;
             for (int j = 0; j < steps; j++)
             {
                 a += Rnd(-0.4f, 0.4f);
-                float seg = r / steps;
-                Vector2 n = Off(p, FxMath.Cos(a) * seg, FxMath.Sin(a) * seg * 0.4f);
-                Line2(p, n, 0.008f, life - j * 0.1f, SporeViolet, Mycelium, 0.85f, 0.05f, 0.7f, delay: j * 0.06f, coreFadeFrom: 0.5f);
+                p = Off(p, FxMath.Cos(a) * seg, FxMath.Sin(a) * seg * 0.4f);
+                Strands[j + 1] = p;
                 if (j == 3)
                 {
-                    float b = a + (k % 2 == 0 ? 0.7f : -0.7f);
-                    Line2(n, Off(n, FxMath.Cos(b) * seg, FxMath.Sin(b) * seg * 0.4f), 0.006f, life - 0.4f, SporeViolet, Mycelium, 0.7f, 0.05f, 0.7f, delay: 0.25f);
+                    fork = p;
+                    forkA = a + (k % 2 == 0 ? 0.7f : -0.7f);
                 }
-                p = n;
             }
+
+            Strand(Strands, steps + 1, 0.016f, life, SporeViolet, Mycelium, 0.85f, 0.02f, 0.7f, coreFadeFrom: 0.5f, taper: FxLines.Taper.Trunk, grow: 0.36f, floor: true, order: 2);
+            Line2(fork, Off(fork, FxMath.Cos(forkA) * seg, FxMath.Sin(forkA) * seg * 0.4f), 0.02f, life - 0.4f, SporeViolet, Mycelium, 0.7f, 0.02f, 0.7f, delay: 0.25f,
+                taper: FxLines.Taper.Branch, grow: 0.1f, floor: true, order: 2);
         }
 
 
@@ -1156,12 +1712,19 @@ public static partial class ExplosionFx
         {
             float a = (k * 45f + Rnd(-10f, 10f)) * FxMath.Deg2Rad;
             Vector2 p = f;
+            Strands[0] = f;
             for (int j = 0; j < 3; j++)
             {
-                Vector2 n = Off(p, FxMath.Cos(a) * 0.22f, FxMath.Sin(a) * 0.22f * 0.4f);
-                Line2(p, n, 0.008f, life - 0.1f, IceBlue, IceWhite, 0.9f, 0.03f, 0.6f, delay: j * 0.04f);
-                Line2(n, Off(n, FxMath.Cos(a + 0.6f) * 0.1f, FxMath.Sin(a + 0.6f) * 0.04f), 0.006f, life - 0.2f, IceBlue, IceWhite, 0.8f, 0.03f, 0.6f, delay: j * 0.04f + 0.03f);
-                p = n;
+                p = Off(p, FxMath.Cos(a) * 0.22f, FxMath.Sin(a) * 0.22f * 0.4f);
+                Strands[j + 1] = p;
+            }
+
+            Strand(Strands, 4, 0.016f, life - 0.1f, IceBlue, IceWhite, 0.9f, 0.02f, 0.6f, taper: FxLines.Taper.Trunk, grow: 0.12f, floor: true, order: 2);
+            for (int j = 1; j <= 3; j++)
+            {
+                Vector2 n = Strands[j];
+                Line2(n, Off(n, FxMath.Cos(a + 0.6f) * 0.1f, FxMath.Sin(a + 0.6f) * 0.04f), 0.02f, life - 0.2f, IceBlue, IceWhite, 0.8f, 0.02f, 0.6f, delay: (j - 1) * 0.04f + 0.03f,
+                    taper: FxLines.Taper.Branch, grow: 0.04f, floor: true, order: 2);
             }
         }
 
@@ -1185,6 +1748,7 @@ public static partial class ExplosionFx
         public float NextBase;
         public float NextMote;
         public GameObject Machine;
+        public CnoCover Cover;
     }
 
     private static readonly List<PortalEmitter> PortalEmitters = [];
@@ -1219,7 +1783,7 @@ public static partial class ExplosionFx
 
         // 機械のレンズから光が真上へ伸びて、その先で楕円が開く
         Vector2 lens = Off(mark, MachineAt.x, MachineAt.y + 0.06f);
-        Line2(lens, c, 0.02f, 0.35f, PortalBlue, PortalWhite, 1f, 0.2f, 0.6f);
+        Line2(lens, c, 0.02f, 0.35f, PortalBlue, PortalWhite, 1f, 0.05f, 0.6f, grow: 0.07f);
 
         Line2(Off(c, 0f, -PortalH), Off(c, 0f, PortalH), 0.01f, 0.3f, PortalBlue, PortalWhite, 1f, 0.3f, 0.6f);
         Add(Shape.Glow, c, Vector2.zero, 0.35f, 0.1f, PortalW * 3f, PortalWhite, PortalTeal, 0.9f, 0.05f, 0.4f, delay: 0.15f, rot: 0f, sy0: 2.6f, sy1: 1.1f, order: 7);
@@ -1266,6 +1830,16 @@ public static partial class ExplosionFx
         {
             PortalEmitter e = PortalEmitters[i];
             _vision = e.Vision;
+
+            // 渦と機械を描いている間は、同じ所のポータルの CNO (文字で描いた渦と機械) を手元で隠す。CNO が片付けられたら渦も畳む
+            if (CoverCno(ref e.Cover, FxMath.V2(e.Pos.x - PortalLift.x, e.Pos.y - PortalLift.y), 1f, "#9f7bff", e.Machine))
+            {
+                DestroyMachine(e);
+                PortalEmitters.RemoveAt(i);
+                ReleasePortalWindows();
+                i--;
+                continue;
+            }
 
             if (now >= e.NextBase)
             {
@@ -1439,6 +2013,7 @@ public static partial class ExplosionFx
     private static void DestroyMachine(PortalEmitter e)
     {
         if (e.Machine) Object.Destroy(e.Machine);
+        UncoverCno(e.Cover);
     }
 
     private static void ReleasePortalMachines()

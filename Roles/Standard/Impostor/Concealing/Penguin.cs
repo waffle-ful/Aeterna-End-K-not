@@ -183,7 +183,11 @@ public class Penguin : RoleBase
         LogSpeed();
         Utils.NotifyRoles(SpecifySeer: Penguin_, SpecifyTarget: Penguin_);
         SendRPC();
-        if (!IsGoose) ExplosionFx.Play(ExplosionFx.Kind.PenguinGrab, target.Pos(), 1f);
+        if (!IsGoose)
+        {
+            ExplosionFx.Play(ExplosionFx.Kind.PenguinGrab, target.Pos(), 1f);
+            ExplosionFx.Play(ExplosionFx.Kind.DragHold, target.Pos(), PenguinId + 1 + 32 * target.PlayerId);
+        }
 
         if (PlayerControl.LocalPlayer.PlayerId != PenguinId) return;
 
@@ -204,6 +208,9 @@ public class Penguin : RoleBase
     private void RemoveVictim(bool allowDelay = true)
     {
         if (!IsEnable) return;
+
+        // 引きずりの演出を止める (会議中は演出側が自分で畳む)
+        if (!IsGoose && AbductVictim && GameStates.IsInTask) ExplosionFx.Play(ExplosionFx.Kind.DragRelease, AbductVictim.Pos(), PenguinId + 1);
 
         if (!allowDelay)
         {

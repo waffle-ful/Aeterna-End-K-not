@@ -199,6 +199,8 @@ public class Chainbinder : RoleBase
 
         SyncState();
         ExplosionFx.Play(ExplosionFx.Kind.ChainBind, first.Pos(), second.PlayerId + 1);
+        int lengthStep = System.Math.Clamp((int)System.Math.Round((MaxDistance.GetFloat() - 0.5f) / 0.5f), 0, 19);
+        ExplosionFx.Play(ExplosionFx.Kind.ChainHold, first.Pos(), first.PlayerId + 1 + 32 * second.PlayerId + 1024 * lengthStep);
 
         binder.Notify(string.Format(GetString("Chainbinder.PairBound"), FirstTarget.ColoredPlayerName(), SecondTarget.ColoredPlayerName()));
         Utils.NotifyRoles(SpecifySeer: binder, SpecifyTarget: binder);
@@ -270,7 +272,15 @@ public class Chainbinder : RoleBase
     private void ClearLink(bool notifyBinder = false, bool sync = true, bool refresh = true)
     {
         bool hadLink = HasLink;
+        byte first = FirstTarget;
         ClearLocalState();
+
+        // 鎖が真ん中で切れて落ちる (会議では演出側が自分で畳む)
+        if (hadLink && first != byte.MaxValue && GameStates.IsInTask)
+        {
+            PlayerControl fp = Utils.GetPlayerById(first);
+            ExplosionFx.Play(ExplosionFx.Kind.ChainRelease, fp ? fp.Pos() : Vector2.zero, first + 1);
+        }
 
         if (sync) SyncState();
         if (!hadLink) return;
