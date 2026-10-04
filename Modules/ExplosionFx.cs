@@ -195,7 +195,20 @@ public static partial class ExplosionFx
         PortalClose = 71,
 
         // 銃で撃つ: Pos = 撃たれた人 (撃った人はキルの瞬間にここへ移る)、Radius = 撃つ人の PlayerId + 1 + 32 × 撃つ向き (0〜15・右から反時計回りに 22.5° 刻み)
-        GunShot = 72
+        GunShot = 72,
+
+        // 力場を張っている間ずっと (本人に付いていく) / 解く: Radius = 本人の PlayerId + 1 (+ 張る時は 32 × 半径の段 0〜14)
+        ForceFieldHold = 73,
+        ForceFieldDown = 74,
+
+        // 鎖で繋がっている間ずっと (2 人に付いていく) / 外れる: Radius = 1 人目の PlayerId + 1 + 32 × 2 人目の PlayerId + 1024 × 鎖の長さの段 (0.5〜10 を 0.5 刻みで 0〜19)
+        // 外れる時は Radius = 1 人目の PlayerId + 1
+        ChainHold = 75,
+        ChainRelease = 76,
+
+        // ペンギンが獲物を引きずっている間ずっと / 放す: Radius = ペンギンの PlayerId + 1 (+ 引きずる時は 32 × 獲物の PlayerId)
+        DragHold = 77,
+        DragRelease = 78
     }
 
     // カットインに出す技名
@@ -505,7 +518,8 @@ public static partial class ExplosionFx
         if (!float.IsFinite(radius)) radius = 0f;
         if (kind is Kind.PuppetStrings or Kind.CurseStrings or Kind.RevengeAwaken or Kind.RevengeAura or Kind.VultureFeast or Kind.TimeSteal
             or Kind.StoneGain or Kind.IaiSlash or Kind.ChainBind or Kind.WerewolfMaul or Kind.ThanosSnap) return FxMath.Clamp(radius, 0f, 256f);
-        if (kind == Kind.GunShot) return FxMath.Clamp(radius, 0f, 512f);
+        if (kind is Kind.GunShot or Kind.ForceFieldHold or Kind.ForceFieldDown or Kind.ChainRelease or Kind.DragHold or Kind.DragRelease) return FxMath.Clamp(radius, 0f, 1024f);
+        if (kind == Kind.ChainHold) return FxMath.Clamp(radius, 0f, 32768f);
         return kind is Kind.Freeze or Kind.TimeStop or Kind.Tornado or Kind.TimeRewind or Kind.DemoFuse or Kind.WebSnare or Kind.GoddessGuard or Kind.WerewolfRampage || HasExtra(kind) ? FxMath.Clamp(radius, 0.3f, 180f) : FxMath.Clamp(radius, 0.3f, 15f);
     }
 
@@ -614,6 +628,7 @@ public static partial class ExplosionFx
                     FxParticles.ClearAll();
                     FxHands.ClearAll();
                     FxLines.ClearAll();
+                    FxChain.ClearAll();
                     FxHands.ResetScan();
                 }
                 else
@@ -621,6 +636,7 @@ public static partial class ExplosionFx
                     FxParticles.Tick();
                     FxHands.Tick();
                     FxLines.Tick();
+                    FxChain.Tick();
                 }
                 _particlesInGame = false;
                 _warm = false;
@@ -636,6 +652,10 @@ public static partial class ExplosionFx
                 FlowEmitters.Clear();
                 SandEmitters.Clear();
                 AuraEmitters.Clear();
+                StopAllFields();
+                StopAllChains();
+                StopAllDrags();
+                SelfEmitters.Clear();
                 ReleasePortalMachines();
                 PortalEmitters.Clear();
                 ReleasePortalWindows();
@@ -676,12 +696,14 @@ public static partial class ExplosionFx
                 FxParticles.ClearAll();
                 FxHands.ClearAll();
                 FxLines.ClearAll();
+                FxChain.ClearAll();
             }
             else
             {
                 FxParticles.Tick();
                 FxHands.Tick();
                 FxLines.Tick();
+                FxChain.Tick();
             }
 
             if (Pending.Count > 0)
@@ -701,6 +723,10 @@ public static partial class ExplosionFx
             // 巣の捕獲と導火線は会議で仕切り直しになる。復讐のオーラは会議を跨いで残す
             if (GameStates.IsMeeting)
             {
+                if (FieldEmitters.Count > 0) StopAllFields();
+                if (ChainEmitters.Count > 0) StopAllChains();
+                if (DragEmitters.Count > 0) StopAllDrags();
+                SelfEmitters.Clear();
                 if (SnareEmitters.Count > 0) SnareEmitters.Clear();
                 FlowEmitters.Clear();
                 SandEmitters.Clear();
@@ -717,6 +743,10 @@ public static partial class ExplosionFx
                 _vision = false;
                 if (_fuseUntil > 0f) PulseFuse();
                 if (AuraEmitters.Count > 0) PulseAuras();
+                if (FieldEmitters.Count > 0) PulseFields();
+                if (ChainEmitters.Count > 0) PulseChains();
+                if (DragEmitters.Count > 0) PulseDrags();
+                if (SelfEmitters.Count > 0) PulseSelves();
                 if (CarryJobs.Count > 0) PulseCarries();
                 if (PortalEmitters.Count > 0) PulsePortals();
             }
@@ -2786,6 +2816,7 @@ public static partial class ExplosionFx
         public float Until;
         public float Next;
         public int Beat;
+        public CnoCover Cover;
     }
 
     private static readonly List<TornadoEmitter> TornadoEmitters = [];
@@ -2809,7 +2840,11 @@ public static partial class ExplosionFx
             return;
         }
 
-        if (TornadoEmitters.Count >= 8) TornadoEmitters.RemoveAt(0);
+        if (TornadoEmitters.Count >= 8)
+        {
+            UncoverCno(TornadoEmitters[0].Cover);
+            TornadoEmitters.RemoveAt(0);
+        }
         TornadoEmitters.Add(new TornadoEmitter { Vision = _vision, Pos = c, Until = Time.time + seconds });
 
         Vector2 f = c + Feet;
@@ -2836,10 +2871,15 @@ public static partial class ExplosionFx
 
             if (now >= e.Until)
             {
+                UncoverCno(e.Cover);
                 TornadoEmitters.RemoveAt(i);
                 SpawnTornadoEnd(e.Pos);
                 continue;
             }
+
+            // 渦を描いている間は、同じ所の竜巻の CNO (灰色の文字の渦) を手元で隠す
+            CoverCno(ref e.Cover, e.Pos, 1f, "#636363>WW", true);
+            TornadoEmitters[i] = e;
 
             if (now < e.Next) continue;
 
@@ -3144,26 +3184,45 @@ public static partial class ExplosionFx
     private static readonly Color AuraGlow = new(0.45f, 0f, 0.05f);
     private static readonly Color AuraSpark = new(1f, 0.35f, 0.2f);
 
-    // 2 重線: 外に太い暗色のにじみ、内に細い明色の芯 (芯だけ先に消したい時は coreFadeFrom を早める)
-    private static void Line2(Vector2 a, Vector2 b, float w, float life, Color outer, Color core, float alpha, float fadeIn, float fadeOutFrom, float delay = 0f, float vy = 0f, float coreFadeFrom = -1f)
+    // 2 重線 (FxLines): 外に柔らかい暗色のにじみ (幅 3 倍)、内に明色の芯 (芯だけ先に消したい時は coreFadeFrom を早める)。
+    // fadeIn / fadeOutFrom / coreFadeFrom は寿命に対する割合。grow 秒かけて a から b へ伸びる。太さの曲線が効くよう、細る線は途中に点を置く
+    private static void Line2(Vector2 a, Vector2 b, float w, float life, Color outer, Color core, float alpha, float fadeIn, float fadeOutFrom, float delay = 0f, float coreFadeFrom = -1f,
+                              FxLines.Taper taper = FxLines.Taper.Even, float grow = 0f, bool floor = false, int order = 9)
     {
-        Seg(a, b, w * 3f, life, outer, outer, alpha * 0.4f, fadeIn, fadeOutFrom, delay, vy, 0);
-        Seg(a, b, w, life, core, core, alpha, fadeIn, coreFadeFrom < 0f ? fadeOutFrom : coreFadeFrom, delay, vy);
+        int n = taper == FxLines.Taper.Even && grow <= 0f ? 2 : 9;
+        for (int i = 0; i < n; i++)
+        {
+            float t = (float)i / (n - 1);
+            LineBuf[i] = FxMath.V2(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t);
+        }
+
+        Strand(LineBuf, n, w, life, outer, core, alpha, fadeIn, fadeOutFrom, delay, coreFadeFrom, taper, grow, floor, order);
     }
 
-    // a→b を弧 (bow = 中央でずらす量) にして segs 本の 2 重線で描く
-    private static void Arc(Vector2 a, Vector2 b, Vector2 bow, int segs, float w, float life, Color outer, Color core, float alpha, float fadeIn, float fadeOutFrom, float delay = 0f, float coreFadeFrom = -1f)
+    // 折れ線 1 本を 2 重線で描く (Line2 の本体)。点の配列は呼び出し後に使い回してよい
+    private static void Strand(Vector2[] pts, int n, float w, float life, Color outer, Color core, float alpha, float fadeIn, float fadeOutFrom, float delay = 0f, float coreFadeFrom = -1f,
+                               FxLines.Taper taper = FxLines.Taper.Even, float grow = 0f, bool floor = false, int order = 9, bool loop = false)
     {
-        Vector2 prev = a;
-
-        for (int i = 1; i <= segs; i++)
+        Lines(pts, n, new FxLines.Spec
         {
-            float t = (float)i / segs;
+            Width = w * 1.25f, Taper = taper, Core = core, Under = outer, CoreAlpha = alpha, UnderAlpha = FxMath.Min(1f, alpha * 0.6f), UnderMul = 3f,
+            Delay = delay, FadeIn = fadeIn * life, Grow = grow, Life = life, FadeOutFrom = fadeOutFrom, CoreFadeOutFrom = coreFadeFrom < 0f ? 0f : coreFadeFrom, Loop = loop
+        }, order, floor);
+    }
+
+    // a→b を弧 (bow = 中央でずらす量) にした 1 本の 2 重線。segs は昔の継ぎ目の数で、滑らかさは 4 倍の点で出す
+    private static void Arc(Vector2 a, Vector2 b, Vector2 bow, int segs, float w, float life, Color outer, Color core, float alpha, float fadeIn, float fadeOutFrom, float delay = 0f, float coreFadeFrom = -1f,
+                            float grow = 0f, FxLines.Taper taper = FxLines.Taper.Even)
+    {
+        int n = FxMath.Min(segs * 4, 24) + 1;
+        for (int i = 0; i < n; i++)
+        {
+            float t = (float)i / (n - 1);
             float s = FxMath.Sin(t * FxMath.PI);
-            Vector2 p = i == segs ? b : FxMath.V2(a.x + (b.x - a.x) * t + bow.x * s, a.y + (b.y - a.y) * t + bow.y * s);
-            Line2(prev, p, w, life, outer, core, alpha, fadeIn, fadeOutFrom, delay, 0f, coreFadeFrom);
-            prev = p;
+            LineBuf[i] = i == n - 1 ? b : FxMath.V2(a.x + (b.x - a.x) * t + bow.x * s, a.y + (b.y - a.y) * t + bow.y * s);
         }
+
+        Strand(LineBuf, n, w, life, outer, core, alpha, fadeIn, fadeOutFrom, delay, coreFadeFrom, taper, grow);
     }
 
     // 輪が描かれて残る: 描く 2 粒 (広がる → 残る) をつないで、描き終わりで止める
@@ -4190,22 +4249,21 @@ public static partial class ExplosionFx
         }
     }
 
-    // 放電: 輪の上の 2 点を結ぶ短いジグザグ (芯は白、主色のにじみ)
+    // 放電: 輪の上の 2 点を結ぶ短い稲妻 (中点変位・芯は白、主色のにじみ)
     private static void Zap(Vector2 c, float r, float k, Color light, Color main)
     {
         float a1 = Rnd(0f, 2f * FxMath.PI);
         float a2 = a1 + Rnd(1f, 2.6f) * (FxMath.Value < 0.5f ? -1f : 1f);
         Vector2 p1 = FxMath.V2(c.x + FxMath.Cos(a1) * r, c.y + FxMath.Sin(a1) * r * k);
         Vector2 p2 = FxMath.V2(c.x + FxMath.Cos(a2) * r, c.y + FxMath.Sin(a2) * r * k);
-        Vector2 q1 = FxMath.V2(p1.x + (p2.x - p1.x) / 3f + Rnd(-0.15f, 0.15f) * r, p1.y + (p2.y - p1.y) / 3f + Rnd(-0.15f, 0.15f) * r);
-        Vector2 q2 = FxMath.V2(p1.x + (p2.x - p1.x) * 2f / 3f + Rnd(-0.15f, 0.15f) * r, p1.y + (p2.y - p1.y) * 2f / 3f + Rnd(-0.15f, 0.15f) * r);
+        float dx = p2.x - p1.x, dy = p2.y - p1.y;
+        int n = FxLines.Fractal(p1, p2, 3, FxMath.Sqrt(dx * dx + dy * dy) * 0.22f, 0.55f, LineBuf);
 
-        Seg(p1, q1, 0.04f, 0.1f, main, main, 0.5f, 0.05f, 0.5f, 0f, 0f, 8);
-        Seg(q1, q2, 0.04f, 0.1f, main, main, 0.5f, 0.05f, 0.5f, 0f, 0f, 8);
-        Seg(q2, p2, 0.04f, 0.1f, main, main, 0.5f, 0.05f, 0.5f, 0f, 0f, 8);
-        Seg(p1, q1, 0.012f, 0.1f, WindWhite, light, 1f, 0.05f, 0.5f, 0f, 0f, 9);
-        Seg(q1, q2, 0.012f, 0.1f, WindWhite, light, 1f, 0.05f, 0.5f, 0f, 0f, 9);
-        Seg(q2, p2, 0.012f, 0.1f, WindWhite, light, 1f, 0.05f, 0.5f, 0f, 0f, 9);
+        Lines(LineBuf, n, new FxLines.Spec
+        {
+            Width = 0.015f, Taper = FxLines.Taper.Even, Core = WindWhite, Under = main, CoreAlpha = 1f, UnderAlpha = 0.5f, UnderMul = 3.5f, UnderGlow = true,
+            FadeIn = 0.005f, Grow = 0.03f, Life = 0.1f, FadeOutFrom = 0.5f
+        }, 8);
     }
 
     // 砂の帯: 被害者の胸から頭上の砂時計へ 0.9 秒のあいだ砂粒を流し続ける
@@ -4657,14 +4715,14 @@ public static partial class ExplosionFx
             float dl = 0.15f + i * 0.06f;
             float life = crack - dl;
             Vector2 a = Off(c, -half, y), b = Off(c, half, y + tilt);
-            Arc(a, b, FxMath.V2(0f, back ? 0.07f : -0.07f), 4, 0.016f, life, HexDeep, back ? HexPurple : HexLight, back ? 0.5f : 1f, 0.15f, 0.9f, dl);
+            Arc(a, b, FxMath.V2(0f, back ? 0.07f : -0.07f), 4, 0.016f, life, HexDeep, back ? HexPurple : HexLight, back ? 0.5f : 1f, 0.05f, 0.9f, dl, grow: 0.12f);
 
             // 棘: 鎖の両端と中ほどから外へ
             if (!back)
             {
-                Line2(a, Off(a, -0.09f, 0.05f), 0.012f, life, HexDeep, HexLight, 1f, 0.2f, 0.9f, dl + 0.05f);
-                Line2(b, Off(b, 0.09f, 0.05f), 0.012f, life, HexDeep, HexLight, 1f, 0.2f, 0.9f, dl + 0.05f);
-                Line2(Off(c, 0f, y + tilt * 0.5f - 0.07f), Off(c, Rnd(-0.03f, 0.03f), y + tilt * 0.5f - 0.15f), 0.012f, life, HexDeep, HexLight, 0.9f, 0.2f, 0.9f, dl + 0.05f);
+                Line2(a, Off(a, -0.09f, 0.05f), 0.024f, life, HexDeep, HexLight, 1f, 0.2f, 0.9f, dl + 0.05f, taper: FxLines.Taper.Branch);
+                Line2(b, Off(b, 0.09f, 0.05f), 0.024f, life, HexDeep, HexLight, 1f, 0.2f, 0.9f, dl + 0.05f, taper: FxLines.Taper.Branch);
+                Line2(Off(c, 0f, y + tilt * 0.5f - 0.07f), Off(c, Rnd(-0.03f, 0.03f), y + tilt * 0.5f - 0.15f), 0.024f, life, HexDeep, HexLight, 0.9f, 0.2f, 0.9f, dl + 0.05f, taper: FxLines.Taper.Branch);
             }
 
             // 鎖を描く先端の光
@@ -4916,6 +4974,7 @@ public static partial class ExplosionFx
 
     private static readonly Vector2[] LineBuf = new Vector2[FxLines.MaxPoints];
     private static readonly Vector2[] LineBuf2 = new Vector2[FxLines.MaxPoints];
+    private static readonly Vector2[] Strands = new Vector2[16];
 
     // 線の部品 (FxLines) で折れ線を 1 本出す。見え方は Add と同じ決まり (床の物は人より奥・他は人より手前の帯)
     private static void Lines(Vector2[] pts, int n, FxLines.Spec s, int order, bool floor = false)
@@ -4925,6 +4984,93 @@ public static partial class ExplosionFx
         s.Order = SortingOrder + order;
         s.Z = -1f - order * 0.01f;
         FxLines.Play(pts, n, s);
+    }
+
+    // Lines の出し続ける版。戻り値は FxLines の線の番号 (0 = 出せなかった)
+    private static int LinesHeld(Vector2[] pts, int n, FxLines.Spec s, int order, bool floor = false)
+    {
+        s.Vision = _vision && HudManager.InstanceExists && HudManager.Instance.ShadowQuad;
+        s.Floor = floor;
+        s.Order = SortingOrder + order;
+        s.Z = -1f - order * 0.01f;
+        return FxLines.PlayHeld(pts, n, s);
+    }
+
+    // ── 続けて描く演出が覆う CNO を、手元の画面だけ隠す ──
+    // CNO の見た目は番号 200 以上の PlayerControl の名前の文字。演出が同じ物を描いている間はそれを隠し、終わったら戻す
+    // (バニラの人には CNO だけが見える)。ホストでは変身の後始末が名前を出し直すことがあるので、毎フレーム隠し直す。
+    // 止めるのは文字の描画 (TextMeshPro) だけ。GameObject ごと非表示にすると、隠したまま会議が始まった時にゲームが固まる (2026-10-04 実測)
+    private struct CnoCover
+    {
+        public TMPro.TextMeshPro Name;
+        public byte Id;
+        public float NextSearch;
+        public bool Lost;
+        public int Tries;
+    }
+
+    // at から within 以内にある、名前に marker を含む CNO を探して隠す。drawable = 演出が描けている (描けないなら隠さない)。
+    // 戻り値 true = 一度見つけた CNO が消えたまま戻らない (役職側が片付けた)。演出の解除の合図は届かないことがあるので、こちらを確かな合図として使う。
+    // CNO は会議明けから 10 秒以上たってから作り直されるので、消えたらまず探し直し、30 秒見つからなければ片付けられたと見なす
+    private static bool CoverCno(ref CnoCover cover, Vector2 at, float within, string marker, bool drawable)
+    {
+        if (cover.Name)
+        {
+            if (cover.Name.enabled) cover.Name.enabled = false;
+            return false;
+        }
+
+        if (cover.Id != 0 && !cover.Lost)
+        {
+            cover.Lost = true;
+            cover.Tries = 0;
+        }
+
+        if (!drawable) return false;
+        if (cover.Tries >= 150) return cover.Lost;  // 0.2 秒おきに 30 秒探して見つからなければ諦める
+
+        float now = Time.time;
+        if (now < cover.NextSearch) return false;
+        cover.NextSearch = now + 0.2f;
+        cover.Tries++;
+
+        try
+        {
+            // CNO は AllPlayerControls に入らない (この端末に居る PlayerControl を直に探す・見つかるまでの間だけ 0.2 秒おき)
+            var all = Object.FindObjectsOfType<PlayerControl>();
+            for (int i = 0; i < all.Length; i++)
+            {
+                PlayerControl pc = all[i];
+                if (!pc || pc.PlayerId < 200) continue;
+
+                Vector3 p = pc.transform.position;
+                float dx = p.x - at.x, dy = p.y - at.y;
+                if (dx * dx + dy * dy > within * within) continue;
+
+                Transform names = pc.transform.FindChild("Names");
+                Transform t = names ? names.FindChild("NameText_TMP") : null;
+                TMPro.TextMeshPro tmp = t ? t.GetComponent<TMPro.TextMeshPro>() : null;
+                string text = tmp ? tmp.text : null;
+                if (text == null || !text.Contains(marker, System.StringComparison.Ordinal)) continue;
+
+                cover.Name = tmp;
+                cover.Id = pc.PlayerId;
+                cover.Lost = false;
+                cover.Name.enabled = false;
+                return false;
+            }
+        }
+        catch (System.Exception e) { Logger.Warn($"CoverCno: {e.Message}", "ExplosionFx"); }
+
+        return false;
+    }
+
+    // 隠していた CNO を戻す (ホストから隠すと決まっている CNO は戻さない)
+    private static void UncoverCno(CnoCover cover)
+    {
+        if (!cover.Name) return;
+        if (AmongUsClient.Instance && AmongUsClient.Instance.AmHost && CustomNetObject.IsHiddenFromHost(cover.Id)) return;
+        cover.Name.enabled = true;
     }
 
     // 骨組みの折れ線 (k 点) の各辺を中点変位で細かく折り、1 本の点列にして LineBuf へ入れる。戻り値は点の数

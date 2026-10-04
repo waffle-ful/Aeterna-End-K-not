@@ -112,7 +112,10 @@ public class ForceFielder : RoleBase
             Main.AllPlayerSpeed[pc.PlayerId] = Math.Max(Main.MinSpeed, OriginalSpeed * SpeedMultiplier.GetFloat());
             pc.MarkDirtySettings();
             FieldCNO = new ForceFieldCNO(pc.Pos(), FieldRadius.GetFloat());
-            ExplosionFx.Play(ExplosionFx.Kind.ForceFieldUp, pc.Pos(), FieldRadius.GetFloat());
+            ExplosionFx.Play(ExplosionFx.Kind.ForceFieldUp, pc.Pos(), FieldRadius.GetFloat() * HitRadiusScale);
+            int step = Math.Clamp((int)Math.Round((FieldRadius.GetFloat() - 1f) / 0.5f), 0, 14);
+            // 全員に見える CNO の円の代わりに描くので、見え方も CNO と同じ (影の上にも描く)
+            ExplosionFx.Play(ExplosionFx.Kind.ForceFieldHold, pc.Pos(), pc.PlayerId + 1 + 32 * step, ExplosionFx.Seen.Everyone);
 
             // EjectOnActivation=OFF (default): 展開時に既にフィールド内に居たプレイヤーを
             //   ActivationTrapped に登録 → そのプレイヤーは脱出するまで一切 eject されない（トラップ）。
@@ -243,6 +246,7 @@ public class ForceFielder : RoleBase
         pc.MarkDirtySettings();
         FieldCNO?.Despawn();
         FieldCNO = null;
+        ExplosionFx.Play(ExplosionFx.Kind.ForceFieldDown, pc.Pos(), pc.PlayerId + 1);
         ActivationTrapped.Clear();
         LastEjectTime.Clear();
     }
