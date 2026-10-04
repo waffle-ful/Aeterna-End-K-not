@@ -123,7 +123,7 @@ public static class NumericOptionInputPatch
         button.ClickMask = null;
     }
 
-    // 行のマスク張り替え (タブ切替・検索での行の借用) で # にマスクが付かないよう追随させる
+    // 行のマスク張り替え (タブ切替・検索結果一覧のタブ移動) で # にマスクが付かないよう追随させる
     [HarmonyPatch(typeof(OptionBehaviour), nameof(OptionBehaviour.SetClickMask))]
     private static class FollowClickMaskPatch
     {

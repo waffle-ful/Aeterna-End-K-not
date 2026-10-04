@@ -8,23 +8,22 @@ namespace EndKnot;
 
 // Cross-tab option search for the settings menu.
 //
-// A search hides nothing and moves nobody between tabs: it swaps what the settings renderer draws for
-// a flat result list — every option whose name matches the query, collected from every relevant tab,
-// with each hit's parent chain kept so a matched sub-option is shown under the role/section it belongs
-// to. While a search is active every mod tab renders that same list; searching with an empty box (or
-// reopening the menu) clears it and the normal per-tab view comes back.
+// This class only decides WHAT a search shows: a flat result list — every option whose name matches the
+// query, collected from every relevant tab, with each hit's parent chain kept so a matched sub-option is
+// shown under the role/section it belongs to. Drawing it is OptionSearchView's job, which shows the list
+// in place of whichever mod tab is open; searching with an empty box (or reopening the menu) clears it
+// and the normal per-tab view comes back.
 public static class OptionSearch
 {
     private static readonly HashSet<int> ResultIndices = [];
-
-    // Option index -> the container the result list pulled that option's row out of. The search returns
-    // every borrowed row when it ends: leaving that to "whichever tab rebuilds next" only works for the
-    // classic renderer — the new role menu's reflow never re-parents anything, so a borrowed row would
-    // stay orphaned under the borrower and leak on that tab's next build. Keyed by index, not by the
-    // row object, because an IL2CPP wrapper fetched twice is not necessarily the same managed instance.
-    private static readonly Dictionary<int, Transform> BorrowedRows = [];
+    private static readonly List<int> ResultOrder = []; // ResultIndices in menu order
 
     public static bool Active { get; private set; }
+
+    // The option indices of the current result list (hits + their parent chains), in menu order.
+    public static IReadOnlyList<int> Results => ResultOrder;
+
+    public static bool IsResult(int index) => ResultIndices.Contains(index);
 
     // ---- fuzzy matching ----------------------------------------------------------------------------
 
@@ -257,22 +256,6 @@ public static class OptionSearch
         return new(hits, bestIndex >= 0 ? Translator.GetString(OptionItem.AllOptions[bestIndex].Name) : "");
     }
 
-    public static void RememberBorrowedRow(int index, Transform home)
-    {
-        if (Active && home) BorrowedRows.TryAdd(index, home);
-    }
-
-    // The single question the renderer asks: does this option belong in what is currently being drawn?
-    public static bool IsInView(OptionItem option, int index, TabGroup modTab)
-    {
-        return Active ? ResultIndices.Contains(index) : option.Tab == modTab;
-    }
-
-    public static bool IsInView(int index, TabGroup modTab)
-    {
-        return index >= 0 && index < OptionItem.AllOptions.Count && IsInView(OptionItem.AllOptions[index], index, modTab);
-    }
-
     // How many matched options a single search may put on screen. Every admitted option becomes a live
     // row GameObject under one container — a one-character query admits thousands, and building those in
     // one go is a multi-second main-thread stall plus hundreds of MB of native UI that never comes back.
@@ -331,42 +314,21 @@ public static class OptionSearch
 
         ResultIndices.Clear();
         ResultIndices.UnionWith(matches);
+        ResultOrder.Clear();
+        ResultOrder.AddRange(matches);
+        ResultOrder.Sort();
         Active = true;
         return new(counts, counts.Values.Sum(), shown);
     }
 
-    // True when a search was actually dropped, so the caller knows a full rebuild is owed — the returned
-    // rows are back under their own tab but still sit at the positions the result list gave them.
+    // True when a search was actually dropped.
     public static bool Clear()
     {
-        if (!Active)
-        {
-            BorrowedRows.Clear();
-            return false;
-        }
+        if (!Active) return false;
 
         Active = false;
         ResultIndices.Clear();
-
-        foreach (KeyValuePair<int, Transform> borrowed in BorrowedRows)
-        {
-            Transform home = borrowed.Value;
-            if (!home || !ModGameOptionsMenu.BehaviourList.TryGetValue(borrowed.Key, out OptionBehaviour row)) continue;
-            if (!row || row.transform.parent == home) continue;
-
-            row.transform.SetParent(home, false);
-
-            // The click mask belongs to the tab, so the row needs its home tab's mask back.
-            foreach (var (_, menu) in GameSettingMenuPatch.GetModSettingsTabs())
-            {
-                if (!menu || menu.settingsContainer != home) continue;
-
-                row.SetClickMask(menu.ButtonClickMask);
-                break;
-            }
-        }
-
-        BorrowedRows.Clear();
+        ResultOrder.Clear();
         return true;
     }
 }

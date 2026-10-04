@@ -145,7 +145,7 @@ public static class GameOptionsMenuPatch
         if (go.activeSelf != active) go.SetActive(active);
     }
 
-    private static bool RowInBand(Transform container, float layoutY)
+    internal static bool RowInBand(Transform container, float layoutY)
     {
         if (!container) return true;
 
@@ -155,16 +155,6 @@ public static class GameOptionsMenuPatch
         float rel = container.position.y - cam.transform.position.y + layoutY * container.lossyScale.y;
         float half = cam.orthographicSize + CullMargin;
         return rel > -half && rel < half;
-    }
-
-    // A row hidden because it left the current view (search filter / tab takeover) must also drop its
-    // logical flag, or the next cull pass would switch it back on the moment its Y enters the band.
-    private static void MarkRowCullHidden(int index)
-    {
-        if (!CullMap.TryGetValue(index, out CullEntry e)) return;
-
-        e.Logical = false;
-        CullMap[index] = e;
     }
 
     // Runs every frame from the Update patch while a mod tab is open. Cheap early-outs: only
@@ -177,7 +167,7 @@ public static class GameOptionsMenuPatch
         var modTab = (TabGroup)(ModGameOptionsMenu.TabIndex - 3);
 
         // Mirror of the CreateSettings dispatch: tabs the two-pane view renders own their row states.
-        if (NewRoleMenuState.Active && !OptionSearch.Active &&
+        if (NewRoleMenuState.Active &&
             (modTab is >= TabGroup.ImpostorRoles and <= TabGroup.LegacyRoles || NewRoleMenuView.IsConsolidatedSettingsTab(modTab)))
             return;
 
@@ -352,14 +342,13 @@ public static class GameOptionsMenuPatch
         // New menu (kill-switch: NewRoleMenuState.Active). Role tabs -> two-pane master/detail.
         // The three setting TabGroups (System/Mod/Task) -> one consolidated, sectioned column.
         // PresetExplorer (handled above) is the only tab that still uses the original renderer.
-        // A search result list spans every tab, so it always goes through the original renderer.
-        if (NewRoleMenuState.Active && !OptionSearch.Active && modTab is >= TabGroup.ImpostorRoles and <= TabGroup.LegacyRoles)
+        if (NewRoleMenuState.Active && modTab is >= TabGroup.ImpostorRoles and <= TabGroup.LegacyRoles)
         {
             NewRoleMenuView.Build(__instance, modTab);
             return false;
         }
 
-        if (NewRoleMenuState.Active && !OptionSearch.Active && NewRoleMenuView.IsConsolidatedSettingsTab(modTab))
+        if (NewRoleMenuState.Active && NewRoleMenuView.IsConsolidatedSettingsTab(modTab))
         {
             NewRoleMenuView.BuildSettings(__instance);
             return false;
@@ -368,6 +357,7 @@ public static class GameOptionsMenuPatch
         if (!__instance.gameObject.activeInHierarchy) return false;
 
         __instance.scrollBar.SetYBoundsMax(CalculateScrollBarYBoundsMax());
+        OptionSearchView.AfterTabLayout(__instance);
 
         if (BuildCoroutines.TryGetValue(__instance, out Coroutine existing) && existing != null)
         {
@@ -390,14 +380,12 @@ public static class GameOptionsMenuPatch
 
             TextOptionItem header = null;
 
-            HideRowsNotInView(__instance, modTab);
-
             for (var index = 0; index < OptionItem.AllOptions.Count; index++)
             {
                 try
                 {
                     OptionItem option = OptionItem.AllOptions[index];
-                    if (!OptionSearch.IsInView(option, index, modTab)) continue;
+                    if (option.Tab != modTab) continue;
 
                     bool enabledOrNotCollapsed = RowVisibleInView(option);
                     bool enabled = !option.IsCurrentlyHidden(checkCollapsedSection: false) && AllParentsEnabledAndVisible(option.Parent, checkCollapsedSection: false);
@@ -455,9 +443,7 @@ public static class GameOptionsMenuPatch
                         continue;
                     }
 
-                    // A search result list carries no category headers, so it must not overwrite the
-                    // header each option was filed under in its own tab.
-                    if (!OptionSearch.Active) option.Header = header;
+                    option.Header = header;
 
                     if (option.IsHeader && enabledOrNotCollapsed)
                         num -= 0.18f;
@@ -491,10 +477,7 @@ public static class GameOptionsMenuPatch
                         OptionBehaviourSetSizeAndPosition(optionBehaviour, option, baseGameSetting.Type);
                     }
                     else
-                    {
-                        AdoptRow(optionBehaviour, __instance, index);
                         optionBehaviour.transform.localPosition = new(posX, num, posZ);
-                    }
 
                     if (!ModGameOptionsMenu.OptionList.ContainsValue(index) && option.Name == "Preset")
                         GameSettingMenuPatch.PresetBehaviour = (NumberOption)optionBehaviour;
@@ -547,6 +530,7 @@ public static class GameOptionsMenuPatch
             // theme colors here (a game-mode change while the menu was closed would otherwise leave them stale).
             RefreshCheckMarkColors();
             BuildCoroutines.Remove(__instance);
+            OptionSearchView.AfterTabLayout(__instance);
         }
 
         float CalculateScrollBarYBoundsMax()
@@ -556,7 +540,7 @@ public static class GameOptionsMenuPatch
             for (var index = 0; index < OptionItem.AllOptions.Count; index++)
             {
                 OptionItem option = OptionItem.AllOptions[index];
-                if (!OptionSearch.IsInView(option, index, modTab)) continue;
+                if (option.Tab != modTab) continue;
 
                 bool enabledOrNotCollapsed = RowVisibleInView(option);
 
@@ -573,55 +557,12 @@ public static class GameOptionsMenuPatch
         }
     }
 
-    // Whether a row that belongs in the current view is actually drawn. In a search result list the
-    // ancestor and collapse gates do not apply: the list is exactly what the search admitted, so a hit
-    // under a disabled role — or inside a collapsed section, whose header is not drawn here — still
-    // shows. The same predicate has to decide the layout height, or the scrollbar range desyncs.
+    // Whether a row of the tab is actually drawn: its own visibility rules, every ancestor enabled, and
+    // not inside a collapsed section. The same predicate has to decide the layout height, or the
+    // scrollbar range desyncs.
     private static bool RowVisibleInView(OptionItem option)
     {
-        return OptionSearch.Active
-            ? !option.IsCurrentlyHidden(checkCollapsedSection: false)
-            : !option.IsCurrentlyHidden() && AllParentsEnabledAndVisible(option.Parent);
-    }
-
-    // A search result list is drawn from options that live in other tabs, and their rows were built
-    // under those tabs' containers. Whichever menu draws a row takes it over; a later build of the
-    // tab the option really belongs to takes it back the same way.
-    private static void AdoptRow(OptionBehaviour row, GameOptionsMenu menu, int index)
-    {
-        if (!row || !menu || !menu.settingsContainer || row.transform.parent == menu.settingsContainer) return;
-
-        OptionSearch.RememberBorrowedRow(index, row.transform.parent);
-        row.transform.SetParent(menu.settingsContainer, false);
-        row.SetClickMask(menu.ButtonClickMask); // the click mask is per tab, so it has to follow the row
-    }
-
-    // The build loop only touches the rows it draws. Rows this menu drew for an earlier view (its own
-    // options before a search, or a previous search's results) have to be switched off here, or they
-    // stay on screen at their old positions underneath the new list.
-    private static void HideRowsNotInView(GameOptionsMenu menu, TabGroup modTab)
-    {
-        if (!menu || !menu.settingsContainer) return;
-
-        foreach (var kv in ModGameOptionsMenu.BehaviourList)
-        {
-            OptionBehaviour ob = kv.Value;
-            if (ob && ob.transform.parent == menu.settingsContainer && !OptionSearch.IsInView(kv.Key, modTab))
-            {
-                ob.gameObject.SetActive(false);
-                MarkRowCullHidden(kv.Key);
-            }
-        }
-
-        foreach (var kv in ModGameOptionsMenu.CategoryHeaderList)
-        {
-            CategoryHeaderMasked chm = kv.Value;
-            if (chm && chm.transform.parent == menu.settingsContainer && !OptionSearch.IsInView(kv.Key, modTab))
-            {
-                chm.gameObject.SetActive(false);
-                MarkRowCullHidden(kv.Key);
-            }
-        }
+        return !option.IsCurrentlyHidden() && AllParentsEnabledAndVisible(option.Parent);
     }
 
     public static bool AllParentsEnabledAndVisible(OptionItem o, bool checkCollapsedSection = true)
@@ -720,7 +661,11 @@ public static class GameOptionsMenuPatch
 
         __instance.scrollBar.enabled = !HudManager.Instance.Chat.IsOpenOrOpening;
 
-        if (ModGameOptionsMenu.TabIndex >= 3) ViewportCullPass(__instance);
+        if (ModGameOptionsMenu.TabIndex >= 3)
+        {
+            ViewportCullPass(__instance);
+            OptionSearchView.CullPass(__instance);
+        }
     }
     [HarmonyPatch(nameof(GameOptionsMenu.ValueChanged))]
     [HarmonyPrefix]
@@ -731,7 +676,14 @@ public static class GameOptionsMenuPatch
         if (ModGameOptionsMenu.OptionList.TryGetValue(option, out int index))
         {
             OptionItem item = OptionItem.AllOptions[index];
-            if (item != null && item.Children.Count > 0) ReCreateSettings(__instance);
+
+            if (item != null && item.Children.Count > 0)
+            {
+                // A result row re-lays-out the result list; the option's own tab is re-laid-out when the
+                // search ends.
+                if (OptionSearchView.IsSearchRow(option)) OptionSearchView.Relayout();
+                else ReCreateSettings(__instance);
+            }
         }
 
         return false;
@@ -777,30 +729,6 @@ public static class GameOptionsMenuPatch
         }
     }
 
-    // Whether any option row of this tab has been built. False for a tab that was only ever drawn as a
-    // search result list.
-    public static bool TabHasOwnRows(TabGroup tab)
-    {
-        foreach (var kv in ModGameOptionsMenu.BehaviourList)
-        {
-            if (!kv.Value || kv.Key < 0 || kv.Key >= OptionItem.AllOptions.Count) continue;
-            if (OptionItem.AllOptions[kv.Key].Tab == tab) return true;
-        }
-
-        return false;
-    }
-
-    // Starts the tab's build when it is on screen with none of its own rows and no build under way.
-    public static bool BuildOwnRowsIfMissing(GameOptionsMenu menu, TabGroup tab)
-    {
-        if (OptionSearch.Active || tab == TabGroup.PresetExplorer || !menu || !menu.gameObject.activeInHierarchy) return false;
-        if (BuildCoroutines.TryGetValue(menu, out Coroutine running) && running != null) return false;
-        if (TabHasOwnRows(tab)) return false;
-
-        menu.CreateSettings();
-        return true;
-    }
-
     public static void ReCreateSettings(GameOptionsMenu __instance, TabGroup? modTabOverride = null)
     {
         if (!modTabOverride.HasValue && ModGameOptionsMenu.TabIndex < 3) return;
@@ -808,39 +736,28 @@ public static class GameOptionsMenuPatch
 
         TabGroup modTab = modTabOverride ?? (TabGroup)(ModGameOptionsMenu.TabIndex - 3);
 
-        // Only the tab on screen redraws the search result list. A background tab redrawing it would pull
-        // the shared rows into its own container and leave the visible tab empty (preset switches and
-        // game-mode changes call this for every tab at once).
-        if (OptionSearch.Active && modTab != (TabGroup)(ModGameOptionsMenu.TabIndex - 3)) return;
-
         // Mirror of the CreateSettings dispatch: ValueChanged/collapse re-layouts route through
         // here too, so the new view must own reflow for its tabs or build/reflow desync.
-        if (NewRoleMenuState.Active && !OptionSearch.Active && modTab is >= TabGroup.ImpostorRoles and <= TabGroup.LegacyRoles)
+        if (NewRoleMenuState.Active && modTab is >= TabGroup.ImpostorRoles and <= TabGroup.LegacyRoles)
         {
             NewRoleMenuView.Reflow(__instance, modTab);
             return;
         }
 
-        if (NewRoleMenuState.Active && !OptionSearch.Active && NewRoleMenuView.IsConsolidatedSettingsTab(modTab))
+        if (NewRoleMenuState.Active && NewRoleMenuView.IsConsolidatedSettingsTab(modTab))
         {
             NewRoleMenuView.ReflowSettings(__instance);
             return;
         }
 
-        // Reflow only moves rows that exist. A tab first opened while a search was on spent its one
-        // build on the result list, so once the search is dropped it has none of its own rows yet.
-        if (BuildOwnRowsIfMissing(__instance, modTab)) return;
-
         var num = 2.0f;
 
         long reflowT0 = MenuPerfProbe.Stamp();
 
-        HideRowsNotInView(__instance, modTab);
-
         for (var index = 0; index < OptionItem.AllOptions.Count; index++)
         {
             OptionItem option = OptionItem.AllOptions[index];
-            if (!OptionSearch.IsInView(option, index, modTab)) continue;
+            if (option.Tab != modTab) continue;
 
             bool enabledOrNotCollapsed = RowVisibleInView(option);
             bool enabled = !option.IsCurrentlyHidden(checkCollapsedSection: false) && AllParentsEnabledAndVisible(option.Parent, checkCollapsedSection: false);
@@ -855,7 +772,6 @@ public static class GameOptionsMenuPatch
 
             if (ModGameOptionsMenu.BehaviourList.TryGetValue(index, out OptionBehaviour optionBehaviour) && optionBehaviour)
             {
-                AdoptRow(optionBehaviour, __instance, index);
                 optionBehaviour.transform.localPosition = new(0.952f, num, -2f);
                 SetRowActive(optionBehaviour.gameObject, index, enabledOrNotCollapsed, num);
                 if (enabledOrNotCollapsed) num -= 0.45f;
@@ -875,6 +791,7 @@ public static class GameOptionsMenuPatch
 
         __instance.scrollBar.SetYBoundsMax(-num - 1.65f);
         MenuPerfProbe.Reflow(reflowT0);
+        OptionSearchView.AfterTabLayout(__instance);
     }
     public static BaseGameSetting GetSetting(OptionItem item)
     {
@@ -982,13 +899,11 @@ public static class GameOptionsMenuPatch
             if (!ob) continue;
             OptionItem item = OptionItem.AllOptions[kv.Value];
             if (item == null) continue;
-            // This loop spans every tab, so a search view has to be respected here as well — otherwise a
-            // preset / game-mode / streamer-mode refresh switches the whole tab back on underneath the
-            // result list (ReloadUI runs this right after the rebuild that filtered it).
-            // (Outside a search this must stay tab-blind: rows of the other tabs are refreshed here too,
-            // and their tab is shown again without a rebuild.)
-            bool inView = !OptionSearch.Active || OptionSearch.IsInView(item, kv.Value, activeModTab);
-            bool logical = inView && RowVisibleInView(item);
+            // Search result rows are laid out (and their values re-asserted) by the result list itself below.
+            if (OptionSearchView.IsSearchRow(ob)) continue;
+            // Tab-blind on purpose: rows of the other tabs are refreshed here too, and their tab is shown
+            // again without a rebuild.
+            bool logical = RowVisibleInView(item);
 
             // Rows the classic renderer has laid out carry a stored layout Y — keep their viewport
             // band applied. A row without one (never laid out / built by the two-pane view) gets the
@@ -1003,6 +918,8 @@ public static class GameOptionsMenuPatch
             // previous preset's values.
             ReassertRowValue(ob, item);
         }
+
+        OptionSearchView.Relayout();
 
         // Do NOT touch activeTab.scrollBar here: ReloadUI already ran ReCreateSettings on every tab, which sets
         // each scrollbar's bound from its real content height. A fixed bound here would clamp the active tab's
@@ -1437,7 +1354,21 @@ public static class StringOptionPatch
 
         // Reuse a cached "?" icon; only instantiate a fresh one when none exists or it was destroyed (scene reload /
         // rehost). Instantiating unconditionally stacked another icon onto the reused option row on every rebuild.
-        if (!(ModGameOptionsMenu.HelpIconList.TryGetValue(role, out Transform icon) && icon))
+        // The cache holds the tab rows' icons; a search result row is a second row for the same role, so it
+        // keeps its own icon under itself instead of taking the tab row's.
+        Transform icon;
+
+        if (OptionSearchView.IsSearchRow(option))
+        {
+            icon = template.parent.FindChild($"{role}HelpIcon");
+
+            if (!icon)
+            {
+                icon = Object.Instantiate(template, template.parent, true);
+                icon.name = $"{role}HelpIcon";
+            }
+        }
+        else if (!(ModGameOptionsMenu.HelpIconList.TryGetValue(role, out icon) && icon))
         {
             icon = ModGameOptionsMenu.Track(Object.Instantiate(template, template.parent, true));
             icon.name = $"{role}HelpIcon";
@@ -1898,9 +1829,8 @@ public static class GameSettingMenuPatch
                 __instance.ControllerSelectable.Add(button);
         }
 
-        // A search does not survive the menu being closed. Its result list borrowed rows from the tabs
-        // it drew from, so dropping it owes every tab a rebuild that puts those rows back.
-        if (OptionSearch.Clear()) GameOptionsMenuPatch.ReCreateAllSettings();
+        // A search does not survive the menu being closed.
+        OptionSearchView.End();
 
         // Isolated: an exception inside the extended UI (e.g. a template NRE) must not
         // abort the rest of the menu build. XuiStage pinpoints the failing section — the native get_name
@@ -2447,11 +2377,10 @@ public static class GameSettingMenuPatch
             string text = OptionSearchSuggestPatch.CurrentQueryText;
             if (text.Length == 0) text = OptionSearchSuggestPatch.CleanQuery(TextBoxPatch.SafeChatText(textField.textArea));
 
-            // Empty box = leave the search. The result list borrowed rows from every tab it drew from,
-            // so all tabs have to be rebuilt for those rows to go home.
+            // Empty box = leave the search.
             if (text.Length == 0)
             {
-                if (OptionSearch.Clear()) GameOptionsMenuPatch.ReCreateAllSettings();
+                OptionSearchView.End();
                 return;
             }
 
@@ -2470,10 +2399,7 @@ public static class GameSettingMenuPatch
             var openTab = (TabGroup)(ModGameOptionsMenu.TabIndex - 3);
 
             if (openTab != TabGroup.PresetExplorer && ModSettingsTabs.TryGetValue(openTab, out GameOptionsMenu gameSettings) && gameSettings)
-            {
-                if (gameSettings.scrollBar) gameSettings.scrollBar.ScrollToTop();
-                gameSettings.CreateSettings();
-            }
+                OptionSearchView.ShowIn(gameSettings);
 
             string tabs = string.Join(", ", result.Counts.Select(kvp => $"{Translator.GetString($"TabGroup.{kvp.Key}")} ({kvp.Value})"));
 
@@ -2592,20 +2518,14 @@ public static class GameSettingMenuPatch
         __instance.ToggleLeftSideDarkener(true);
         __instance.ToggleRightSideDarkener(false);
 
-        // While a search is on, every tab draws the same cross-tab result list. A tab only builds itself
-        // once, and the rows the list needs may be parented under the tab the search was run from, so
-        // the tab being shown has to redraw instead of putting up its old contents.
+        // While a search is on, every tab shows the same cross-tab result list in place of its options.
         // PresetExplorer draws an online preset browser instead of options — it never shows results.
-        if (OptionSearch.Active && tabGroup != TabGroup.PresetExplorer && ModSettingsTabs.TryGetValue(tabGroup, out GameOptionsMenu searchTab) && searchTab)
+        if (OptionSearch.Active)
         {
-            if (searchTab.scrollBar) searchTab.scrollBar.ScrollToTop();
-            searchTab.CreateSettings();
-        }
-        else if (ModSettingsTabs.TryGetValue(tabGroup, out GameOptionsMenu ownTab))
-        {
-            // A tab first opened during a search never built its own rows, and a tab only builds
-            // itself once — so it has to be told to now.
-            GameOptionsMenuPatch.BuildOwnRowsIfMissing(ownTab, tabGroup);
+            if (tabGroup != TabGroup.PresetExplorer && ModSettingsTabs.TryGetValue(tabGroup, out GameOptionsMenu searchTab) && searchTab)
+                OptionSearchView.ShowIn(searchTab);
+            else
+                OptionSearchView.Detach();
         }
 
         if (ModSettingsButtons.TryGetValue(tabGroup, out button) && button) button.SelectButton(true);
@@ -2887,6 +2807,7 @@ public static class GameSettingMenuPatch
 
             GameOptionsMenuPatch.OnUiCachePurged();
             OptionSearch.Clear();
+            OptionSearchView.OnUiCachePurged();
             NewRoleMenuState.DetailObjects.Clear();
             NewRoleMenuState.SelBars.Clear();
             NewRoleMenuState.LastBuiltSelectedIndex = -2;
