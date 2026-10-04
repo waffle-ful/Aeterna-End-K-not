@@ -9,12 +9,12 @@ obj/
 *.sln
 # 光の素材とマテリアル・パーティクルはビルド入口が毎回作り直す
 Assets/Fx/
-Assets/Fx.meta
 # ProjectSettings は ProjectVersion.txt (エディタ版固定) 以外は既定で良い
 ProjectSettings/*
 !ProjectSettings/ProjectVersion.txt
 # ルートの .gitignore (*.meta / Packages/*) を上書き: Unity プロジェクトとして必要な分は追跡する
 !Assets/**/*.meta
+Assets/Fx.meta
 !Packages/
 !Packages/manifest.json
 Packages/packages-lock.json
