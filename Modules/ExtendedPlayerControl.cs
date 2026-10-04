@@ -1168,21 +1168,29 @@ internal static class ExtendedPlayerControl
                 return;
 
             state.deathReason = deathReason;
-            state.SetDead();
 
-            Medic.IsDead(player);
-
-            if (realKiller)
+            // SetDead() は終了判定を呼ぶが、死んだら勝つ役職 (テロリスト等) が勝者を決めるのは
+            // Kill() の先の死亡後処理。そこまで判定を止めないと、先に生存者数の勝敗が確定してしまう。
+            GameEndChecker.HoldCheckWhile(() =>
             {
-                player.SetRealKiller(realKiller);
+                state.SetDead();
 
-                if (realKiller.Is(CustomRoles.Damocles))
-                    Damocles.OnMurder(realKiller.PlayerId);
+                Medic.IsDead(player);
 
-                IncreaseAbilityUseLimitOnKill(realKiller);
-            }
+                if (realKiller)
+                {
+                    player.SetRealKiller(realKiller);
 
-            player.Kill(player);
+                    if (realKiller.Is(CustomRoles.Damocles))
+                        Damocles.OnMurder(realKiller.PlayerId);
+
+                    IncreaseAbilityUseLimitOnKill(realKiller);
+                }
+
+                player.Kill(player);
+            });
+
+            GameEndChecker.ForceCheckEnd();
 
             if (Options.CurrentGameMode == CustomGameMode.NaturalDisasters)
                 NaturalDisasters.RecordDeath(player, deathReason);
