@@ -224,6 +224,7 @@ public static class NewRoleMenuView
         NewRoleMenuState.SelBars.Clear();
         EnsureSelection(modTab);
         menu.scrollBar.SetYBoundsMax(CalculateScrollBarYBoundsMax(modTab));
+        OptionSearchView.AfterTabLayout(menu);
         menu.StartCoroutine(CoRoutine().WrapToIl2Cpp());
         return;
 
@@ -529,6 +530,7 @@ public static class NewRoleMenuView
             menu.ControllerSelectable.Add(x);
 
         menu.scrollBar.SetYBoundsMax(-Math.Min(numL, numR) - NewRoleMenuLayout.ScrollBottomPad);
+        OptionSearchView.AfterTabLayout(menu);
     }
 
     private static float CalculateScrollBarYBoundsMax(TabGroup modTab)
@@ -665,6 +667,7 @@ public static class NewRoleMenuView
     public static void BuildSettings(GameOptionsMenu menu)
     {
         menu.scrollBar.SetYBoundsMax(CalcSettingsBounds());
+        OptionSearchView.AfterTabLayout(menu);
         menu.StartCoroutine(CoRoutine().WrapToIl2Cpp());
         return;
 
@@ -806,6 +809,7 @@ public static class NewRoleMenuView
             menu.ControllerSelectable.Add(x);
 
         menu.scrollBar.SetYBoundsMax(-num - NewRoleMenuLayout.ScrollBottomPad);
+        OptionSearchView.AfterTabLayout(menu);
     }
 
     private static float CalcSettingsBounds()
