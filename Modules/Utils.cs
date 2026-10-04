@@ -2020,15 +2020,19 @@ public static class Utils
 
         if (taskState.IsTaskFinished && (!Main.PlayerStates[terrorist.PlayerId].IsSuicide || Terrorist.CanTerroristSuicideWin.GetBool()))
         {
-            foreach (PlayerControl pc in Main.EnumeratePlayerControls())
+            GameEndChecker.HoldCheckWhile(() =>
             {
-                if (pc.Is(CustomRoles.Terrorist))
-                    Main.PlayerStates[pc.PlayerId].deathReason = Main.PlayerStates[pc.PlayerId].deathReason == PlayerState.DeathReason.Vote ? PlayerState.DeathReason.etc : PlayerState.DeathReason.Suicide;
-                else if (pc.IsAlive()) pc.Suicide(PlayerState.DeathReason.Bombed, terrorist.Object);
-            }
+                foreach (PlayerControl pc in Main.EnumeratePlayerControls())
+                {
+                    if (pc.Is(CustomRoles.Terrorist))
+                        Main.PlayerStates[pc.PlayerId].deathReason = Main.PlayerStates[pc.PlayerId].deathReason == PlayerState.DeathReason.Vote ? PlayerState.DeathReason.etc : PlayerState.DeathReason.Suicide;
+                    else if (pc.IsAlive()) pc.Suicide(PlayerState.DeathReason.Bombed, terrorist.Object);
+                }
+            });
 
             CustomWinnerHolder.ShiftWinnerAndSetWinner(CustomWinner.Terrorist);
             CustomWinnerHolder.WinnerIds.Add(terrorist.PlayerId);
+            GameEndChecker.ForceCheckEnd();
         }
     }
 

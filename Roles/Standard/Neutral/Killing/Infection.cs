@@ -349,13 +349,16 @@ public class Infection : RoleBase
             }
         }
 
-        for (int aliveIndex = 0; aliveIndex < aapc.Count; aliveIndex++)
+        GameEndChecker.HoldCheckWhile(() =>
         {
-            PlayerControl player = aapc[aliveIndex];
-            if (player.Is(CustomRoles.Infection)) continue;
+            for (int aliveIndex = 0; aliveIndex < aapc.Count; aliveIndex++)
+            {
+                PlayerControl player = aapc[aliveIndex];
+                if (player.Is(CustomRoles.Infection)) continue;
 
-            player.Suicide(PlayerState.DeathReason.Curse, infectionSource);
-        }
+                player.Suicide(PlayerState.DeathReason.Curse, infectionSource);
+            }
+        });
 
         CustomWinnerHolder.ResetAndSetWinner(CustomWinner.Infection);
         for (int index = 0; index < apc.Count; index++)
@@ -365,6 +368,8 @@ public class Infection : RoleBase
             if (pc.Is(CustomRoles.Infection))
                 CustomWinnerHolder.WinnerIds.Add(pc.PlayerId);
         }
+
+        GameEndChecker.ForceCheckEnd();
     }
 
     public override void SetButtonTexts(HudManager hud, byte id)

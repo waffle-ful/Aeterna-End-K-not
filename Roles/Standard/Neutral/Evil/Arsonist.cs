@@ -161,22 +161,23 @@ internal class Arsonist : RoleBase
                     Igniting.Remove(arsonist.PlayerId);
                     if (GameStates.IsEnded || GameStates.IsMeeting) return;
 
-                    foreach (PlayerControl pc in targets)
-                    {
-                        if (pc && pc.IsAlive())
-                            pc.Suicide(PlayerState.DeathReason.Torched, arsonist);
-                    }
+                    BurnAll(targets, arsonist);
 
                     foreach (PlayerControl pc in Main.EnumeratePlayerControls())
                         pc.KillFlash();
 
-                    if (!arsonist.IsAlive()) return;
+                    if (!arsonist.IsAlive())
+                    {
+                        GameEndChecker.ForceCheckEnd();
+                        return;
+                    }
 
                     if (CustomWinnerHolder.WinnerTeam is CustomWinner.Crewmate or CustomWinner.Impostor)
                         CustomWinnerHolder.Reset();
 
                     CustomWinnerHolder.ShiftWinnerAndSetWinner(CustomWinner.Arsonist);
                     CustomWinnerHolder.WinnerIds.Add(arsonist.PlayerId);
+                    GameEndChecker.ForceCheckEnd();
                 }, BurnDelay, "Arsonist Ignite");
 
                 return;
@@ -199,14 +200,15 @@ internal class Arsonist : RoleBase
                         Igniting.Remove(arsonist.PlayerId);
                         if (GameStates.IsEnded || GameStates.IsMeeting) return;
 
-                        foreach (PlayerControl pc in targets)
-                        {
-                            if (pc && pc.IsAlive())
-                                pc.Suicide(PlayerState.DeathReason.Torched, arsonist);
-                        }
+                        BurnAll(targets, arsonist);
 
                         arsonist.KillFlash();
-                        if (!arsonist.IsAlive()) return;
+
+                        if (!arsonist.IsAlive())
+                        {
+                            GameEndChecker.ForceCheckEnd();
+                            return;
+                        }
 
                         int apc = Main.AllAlivePlayerControlsCount;
 
@@ -225,12 +227,26 @@ internal class Arsonist : RoleBase
 
                                 break;
                         }
+
+                        GameEndChecker.ForceCheckEnd();
                     }, BurnDelay, "Arsonist Ignite");
                 }
 
                 break;
             }
         }
+    }
+
+    private static void BurnAll(List<PlayerControl> targets, PlayerControl arsonist)
+    {
+        GameEndChecker.HoldCheckWhile(() =>
+        {
+            foreach (PlayerControl pc in targets)
+            {
+                if (pc && pc.IsAlive())
+                    pc.Suicide(PlayerState.DeathReason.Torched, arsonist);
+            }
+        });
     }
 
     public override void OnGlobalFixedUpdate(PlayerControl player, bool lowLoad)

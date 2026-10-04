@@ -59,12 +59,16 @@ internal class Butcher : RoleBase
 
                 if (target.Is(CustomRoles.Avenger))
                 {
-                    target.Suicide(PlayerState.DeathReason.Dismembered, killer);
+                    GameEndChecker.HoldCheckWhile(() =>
+                    {
+                        target.Suicide(PlayerState.DeathReason.Dismembered, killer);
 
-                    foreach (PlayerControl pc in Main.EnumerateAlivePlayerControls())
-                        pc.Suicide(PlayerState.DeathReason.Revenge, target);
+                        foreach (PlayerControl pc in Main.EnumerateAlivePlayerControls())
+                            pc.Suicide(PlayerState.DeathReason.Revenge, target);
+                    });
 
                     CustomWinnerHolder.ResetAndSetWinner(CustomWinner.None);
+                    GameEndChecker.ForceCheckEnd();
                     return;
                 }
 

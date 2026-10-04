@@ -36,6 +36,8 @@ internal static class GameEndChecker
     private const float EndGameDelay = 0.2f;
     public static GameEndPredicate Predicate;
     public static bool ShouldNotCheck = false;
+    // 生存者数の判定で決まった勝者 (終了理由の文言を選ぶため)。後から横取りされたら一致しなくなる。
+    private static CustomWinner EliminationWinner = CustomWinner.Default;
     public static bool Ended;
     public static bool LoadingEndScreen;
     private static long LastGameEndCheckUpdated = -1;
@@ -52,6 +54,17 @@ internal static class GameEndChecker
     {
         SetDirtyCheckEnd();
         CheckCustomEndCriteria();
+    }
+
+    // 一斉に何人も倒す処理 (爆殺・全焼など) の途中で終了判定が走ると、先に倒れた側の分だけで
+    // 勝敗が確定し、後から書いた勝者で上書きされて終了理由が食い違う。倒し終えてから判定する。
+    public static void HoldCheckWhile(Action action)
+    {
+        bool prev = ShouldNotCheck;
+        ShouldNotCheck = true;
+
+        try { action(); }
+        finally { ShouldNotCheck = prev; }
     }
     public static void CheckCustomEndCriteria()
     {
@@ -510,9 +523,58 @@ internal static class GameEndChecker
         try { LobbySharingAPI.NotifyLobbyStatusChanged(LobbyStatus.Ended); }
         catch (Exception e) { ThrowException(e); }
 
-        SetEverythingUpPatch.LastWinsReason = WinnerTeam is CustomWinner.Crewmate or CustomWinner.Impostor ? GetString($"GameOverReason.{reason}") : string.Empty;
+        SetEverythingUpPatch.LastWinsReason = GetEndReasonText(reason);
+        EliminationWinner = CustomWinner.Default;
         var self = AmongUsClient.Instance;
         self.StartCoroutine(CoEndGame(self, reason).WrapToIl2Cpp());
+    }
+
+    // 生存者数の判定で決まった勝利は共通文言、それ以外は個別の文言 (WinReason.<勝者>)、無ければ汎用文言を使う。
+    // 役職が増えても文言が空にならないように、最後は必ず汎用文言へ落とす。
+    private static string GetEndReasonText(GameOverReason reason)
+    {
+        try
+        {
+            switch (WinnerTeam)
+            {
+                // 役職の能力でクルー/インポスター勝利が決まった時は reason が既定値のまま食い違うので汎用文言へ
+                case CustomWinner.Crewmate when reason is GameOverReason.CrewmatesByTask or GameOverReason.CrewmatesByVote:
+                case CustomWinner.Impostor when reason is GameOverReason.ImpostorsByKill or GameOverReason.ImpostorsBySabotage:
+                    return GetString($"GameOverReason.{reason}");
+                case CustomWinner.Draw:
+                    return GetString("WinReason.Draw");
+                case CustomWinner.None:
+                    return GetString(Main.GameEndDueToTimer ? "WinReason.Timer" : "WinReason.None");
+                case CustomWinner.Error:
+                    return GetString("WinReason.Error");
+                case CustomWinner.Neutrals:
+                    return GetString("WinReason.Neutrals");
+                case CustomWinner.Coven:
+                    return string.Format(GetString("WinReason.Coven"), ColorString(Team.Coven.GetColor(), GetString("TeamCoven")));
+                case CustomWinner.CustomTeam:
+                    return CustomTeamManager.WinnerTeam == null ? string.Empty : string.Format(GetString("WinReason.Fallback"), CustomTeamManager.WinnerTeam.TeamName);
+                case CustomWinner.Default:
+                    return string.Empty;
+            }
+
+            var role = (CustomRoles)WinnerTeam;
+            if (role < 0) return string.Empty;
+
+            string name = ColorString(GetRoleColor(role), GetString($"{role}"));
+            string key = $"WinReason.{WinnerTeam}";
+
+            if (EliminationWinner == WinnerTeam)
+                key = "WinReason.NeutralKiller";
+            else if (!Translator.HasTranslation(key, SupportedLangs.English))
+                key = "WinReason.Fallback";
+
+            return string.Format(GetString(key), name);
+        }
+        catch (Exception e)
+        {
+            ThrowException(e);
+            return string.Empty;
+        }
     }
 
     private static IEnumerator CoEndGame(InnerNetClient self, GameOverReason reason)
@@ -732,9 +794,14 @@ internal static class GameEndChecker
         public override bool CheckForGameEnd(out GameOverReason reason)
         {
             reason = GameOverReason.ImpostorsByKill;
+            EliminationWinner = CustomWinner.Default;
             if (WinnerTeam != CustomWinner.Default) return false;
 
-            return CheckGameEndBySabotage(out reason) || CheckGameEndByTask(out reason) || CheckGameEndByLivingPlayers(out reason);
+            if (CheckGameEndBySabotage(out reason) || CheckGameEndByTask(out reason)) return true;
+            if (!CheckGameEndByLivingPlayers(out reason)) return false;
+
+            EliminationWinner = WinnerTeam;
+            return true;
         }
 
         // avoiding reallocations and too much resizing

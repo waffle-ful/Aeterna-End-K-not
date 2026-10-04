@@ -188,8 +188,11 @@ public class Torpedo : RoleBase
             EndDash(pc);
             ExplosionFx.Play(ExplosionFx.Kind.Fire, current, radius);
 
-            foreach (PlayerControl victim in victims)
-                victim.Suicide(PlayerState.DeathReason.Bombed, pc);
+            GameEndChecker.HoldCheckWhile(() =>
+            {
+                foreach (PlayerControl victim in victims)
+                    victim.Suicide(PlayerState.DeathReason.Bombed, pc);
+            });
 
             SuccessfulHits += victims.Count;
             SendSync();
@@ -201,6 +204,7 @@ public class Torpedo : RoleBase
                 CustomWinnerHolder.WinnerIds.Add(pc.PlayerId);
             }
 
+            GameEndChecker.ForceCheckEnd();
             return;
         }
 

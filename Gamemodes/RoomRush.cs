@@ -593,8 +593,9 @@ public static class RoomRush
             }
             else
             {
-                playersOutsideRoom.Do(x => x.Suicide());
+                GameEndChecker.HoldCheckWhile(() => playersOutsideRoom.Do(x => x.Suicide()));
                 if (everyoneDies) CustomWinnerHolder.ResetAndSetWinner(CustomWinner.None);
+                GameEndChecker.ForceCheckEnd();
             }
 
             StartNewRound();
