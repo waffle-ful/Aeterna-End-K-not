@@ -469,12 +469,22 @@ internal static class GameEndChecker
                     }
                 }
 
-                if ((WinnerTeam == CustomWinner.Lovers || WinnerIds.Any(x => Main.PlayerStates[x].SubRoles.Contains(CustomRoles.Lovers))) && Main.LoversPlayers.TrueForAll(x => x.IsAlive()) && reason != GameOverReason.CrewmatesByTask)
+                // 組ごとに判定: 勝者を含む組が2人とも生きていれば相手も勝ち (別の組は巻き込まない)
+                if (reason != GameOverReason.CrewmatesByTask && Main.LoversPlayers.Count > 0)
                 {
-                    if (WinnerTeam != CustomWinner.Lovers)
-                        AdditionalWinnerTeams.Add(AdditionalWinners.Lovers);
+                    Lovers.EnsurePairs();
 
-                    WinnerIds.UnionWith(Main.LoversPlayers.Select(x => x.PlayerId));
+                    foreach (int pair in Lovers.PairOf.Values.Distinct().ToArray())
+                    {
+                        List<PlayerControl> pairMembers = Lovers.GetPair(pair);
+                        if (!pairMembers.Exists(x => WinnerIds.Contains(x.PlayerId))) continue;
+                        if (!pairMembers.TrueForAll(x => x.IsAlive())) continue;
+
+                        if (WinnerTeam != CustomWinner.Lovers && !AdditionalWinnerTeams.Contains(AdditionalWinners.Lovers))
+                            AdditionalWinnerTeams.Add(AdditionalWinners.Lovers);
+
+                        WinnerIds.UnionWith(pairMembers.Select(x => x.PlayerId));
+                    }
                 }
 
                 if (Options.NeutralWinTogether.GetBool() && (WinnerRoles.Any(x => x.IsNeutral()) || WinnerIds.Select(x => GetPlayerById(x)).Any(x => x && x.GetCustomRole().IsNeutral() && !x.IsMadmate())))
@@ -879,22 +889,60 @@ internal static class GameEndChecker
                 }
                 if (allAliveAreLovers)
                 {
-                    bool allCrew = true;
-                    for (int loverIndex = 0; loverIndex < Main.LoversPlayers.Count; loverIndex++)
-                    {
-                        if (!Main.LoversPlayers[loverIndex].Is(Team.Crewmate))
-                        {
-                            allCrew = false;
-                            break;
-                        }
-                    }
-                    if (!allCrew || !Lovers.CrewLoversWinWithCrew.GetBool())
-                    {
-                        ResetAndSetWinner(CustomWinner.Lovers);
-                        for (int i = 0; i < Main.LoversPlayers.Count; i++)
-                            WinnerIds.Add(Main.LoversPlayers[i].PlayerId);
+                    // 組同士は敵: 生き残りが1組だけになった時にその組が勝つ。
+                    // 複数の組が残っても誰もキルできなければ決着が付かないので、残った組でまとめて勝ちにする。
+                    int firstPair = aapc.Count > 0 ? Lovers.PairIndexOf(aapc[0].PlayerId) : -1;
+                    bool singlePair = true;
+                    bool anyCanKill = false;
 
-                        return true;
+                    for (int aliveIndex = 0; aliveIndex < aapc.Count; aliveIndex++)
+                    {
+                        if (Lovers.PairIndexOf(aapc[aliveIndex].PlayerId) != firstPair) singlePair = false;
+                        // クルー陣営のキル役 (シェリフ等) は恋人を撃てない設定がありうるので決着役に数えない
+                        if (aapc[aliveIndex].CanUseKillButton() && !aapc[aliveIndex].IsCrewmate()) anyCanKill = true;
+                    }
+
+                    if (singlePair || !anyCanKill)
+                    {
+                        List<PlayerControl> winningLovers = [];
+
+                        for (int loverIndex = 0; loverIndex < Main.LoversPlayers.Count; loverIndex++)
+                        {
+                            PlayerControl lover = Main.LoversPlayers[loverIndex];
+                            int pair = Lovers.PairIndexOf(lover.PlayerId);
+
+                            // 全滅時は従来どおり恋人全員
+                            if (aapc.Count == 0)
+                            {
+                                winningLovers.Add(lover);
+                                continue;
+                            }
+
+                            for (int aliveIndex = 0; aliveIndex < aapc.Count; aliveIndex++)
+                            {
+                                if (Lovers.PairIndexOf(aapc[aliveIndex].PlayerId) != pair) continue;
+                                winningLovers.Add(lover);
+                                break;
+                            }
+                        }
+
+                        bool allCrew = true;
+                        for (int loverIndex = 0; loverIndex < winningLovers.Count; loverIndex++)
+                        {
+                            if (!winningLovers[loverIndex].Is(Team.Crewmate))
+                            {
+                                allCrew = false;
+                                break;
+                            }
+                        }
+                        if (!allCrew || !Lovers.CrewLoversWinWithCrew.GetBool())
+                        {
+                            ResetAndSetWinner(CustomWinner.Lovers);
+                            for (int i = 0; i < winningLovers.Count; i++)
+                                WinnerIds.Add(winningLovers[i].PlayerId);
+
+                            return true;
+                        }
                     }
                 }
             }

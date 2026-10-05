@@ -154,7 +154,7 @@ public class Amnesiac : RoleBase
 
         var amneNotifyString = string.Empty;
         CustomRoles targetRole = target.GetCustomRole();
-        int loversAlive = Main.LoversPlayers.Count(x => x.IsAlive());
+        int loversAlive = Lovers.GetPair(Lovers.PairIndexOf(target.PlayerId)).Count(x => x.IsAlive());
 
         switch (targetRole)
         {
@@ -169,15 +169,13 @@ public class Amnesiac : RoleBase
             case CustomRoles.LovingCrewmate when loversAlive > 0:
                 target.RpcSetCustomRole(CustomRoles.CrewmateEndKnot);
                 RememberedRole = CustomRoles.LovingCrewmate;
-                Main.LoversPlayers.RemoveAll(x => x.PlayerId == target.PlayerId);
-                Main.LoversPlayers.Add(amnesiac);
+                Lovers.ReplaceMember(target.PlayerId, amnesiac);
                 amneNotifyString = CustomRoles.Amnesiac.ColoredTextByRole(GetString("RememberedLover"));
                 break;
             case CustomRoles.LovingImpostor when loversAlive > 0:
                 target.RpcSetCustomRole(CustomRoles.ImpostorEndKnot);
                 RememberedRole = CustomRoles.LovingImpostor;
-                Main.LoversPlayers.RemoveAll(x => x.PlayerId == target.PlayerId);
-                Main.LoversPlayers.Add(amnesiac);
+                Lovers.ReplaceMember(target.PlayerId, amnesiac);
                 amneNotifyString = CustomRoles.Amnesiac.ColoredTextByRole(GetString("RememberedLover"));
                 break;
             case CustomRoles.LovingCrewmate:

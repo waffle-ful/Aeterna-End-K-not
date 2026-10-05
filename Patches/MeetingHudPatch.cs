@@ -605,7 +605,7 @@ internal static class CheckForEndVotingPatch
                 {
                     byte id = playerId;
 
-                    if (CustomRoles.Lovers.IsEnable() && !Main.IsLoversDead && Main.LoversPlayers.Exists(lp => lp.PlayerId == id))
+                    if (CustomRoles.Lovers.IsEnable() && Main.LoversPlayers.Exists(lp => lp.PlayerId == id) && !Lovers.IsPairDead(id))
                         FixedUpdatePatch.LoversSuicide(playerId, true, true);
 
                     if (Main.PlayerStates.TryGetValue(id, out PlayerState state) && state.SubRoles.Contains(CustomRoles.Avenger))
@@ -1132,7 +1132,7 @@ internal static class MeetingHudStartPatch
                 (Main.VisibleTasksCount && !seer.IsAlive() && Options.GhostCanSeeOtherRoles.GetBool()) ||
                 (seer.Is(CustomRoles.Mimic) && Main.VisibleTasksCount && !target.IsAlive() && Options.MimicCanSeeDeadRoles.GetBool()) ||
                 (target.Is(CustomRoles.Gravestone) && Main.VisibleTasksCount && !target.IsAlive()) ||
-                (Main.LoversPlayers.TrueForAll(x => x.PlayerId == target.PlayerId || x.PlayerId == seer.PlayerId) && Main.LoversPlayers.Count == 2 && Lovers.LoverKnowRoles.GetBool()) ||
+                (Lovers.ArePartners(target.PlayerId, seer.PlayerId) && Lovers.LoverKnowRoles.GetBool()) ||
                 (seer.Is(CustomRoleTypes.Coven) && target.Is(CustomRoleTypes.Coven)) ||
                 // Braid はコンビネーション相方の Driver とも互いに正体を認識しない (☆マークの専用オプションのみが唯一の可視化手段)。
                 (target.Is(CustomRoleTypes.Impostor) && seer.Is(CustomRoleTypes.Impostor) && Options.ImpKnowAlliesRole.GetBool() && CustomTeamManager.ArentInCustomTeam(seer.PlayerId, target.PlayerId) && !seer.Is(CustomRoles.OneWolf) && !target.Is(CustomRoles.OneWolf) && !seer.Is(CustomRoles.Braid) && !target.Is(CustomRoles.Braid) && !EkrManager.IsDisguisedAwayFrom(target.GetCustomRole(), EkrTeam.Impostor)) ||
@@ -1379,7 +1379,7 @@ internal static class MeetingHudStartPatch
             if (Silencer.ForSilencer.Contains(target.PlayerId))
                 sb.Append(Utils.ColorString(Utils.GetRoleColor(CustomRoles.Silencer), "╳"));
 
-            if (Main.LoversPlayers.Exists(x => x.PlayerId == target.PlayerId) && (Main.LoversPlayers.Exists(x => x.PlayerId == seer.PlayerId) || !seer.IsAlive()))
+            if (Main.LoversPlayers.Exists(x => x.PlayerId == target.PlayerId) && (Lovers.IsSamePairOrSelf(target.PlayerId, seer.PlayerId) || !seer.IsAlive()))
                 sb.Append(Utils.ColorString(Utils.GetRoleColor(CustomRoles.Lovers), "♥"));
 
             sb.Append(Executioner.TargetMark(seer, target));

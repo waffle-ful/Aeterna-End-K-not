@@ -558,7 +558,7 @@ public sealed class PlayerGameOptionsSender(PlayerControl player) : GameOptionsS
                                 opt.SetVision(Options.MadmateHasImpostorVision.GetBool());
                                 break;
                             }
-                            case CustomRoles.Lovers when Main.LoversPlayers.Count(x => x.IsAlive()) == 1 && Lovers.LoverDieConsequence.GetValue() == 2:
+                            case CustomRoles.Lovers when Lovers.GetPair(Lovers.PairIndexOf(player.PlayerId)).Count(x => x.IsAlive()) == 1 && Lovers.LoverDieConsequence.GetValue() == 2:
                             {
                                 opt.SetFloat(FloatOptionNames.CrewLightMod, Main.DefaultCrewmateVision / 2f);
                                 opt.SetFloat(FloatOptionNames.ImpostorFlashlightSize, Main.DefaultImpostorVision / 2f);

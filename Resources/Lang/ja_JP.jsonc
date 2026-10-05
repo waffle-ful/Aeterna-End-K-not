@@ -12719,6 +12719,8 @@
   "PotionInStore": "店内のポーション",
   "PressTabToNextPage": "<color=#ff1919>Tab</color> または <color=#ff1919>数字</color> キーを押して 次のページへ...",
   "PrivateChat": "<color=#ff9ace>ラバーズ</color>の プライベートチャットを有効にする",
+  "LoversSharedChatNotice": "<color=#ff9ace>ラバーズ</color>が 複数組いるため、試合中のチャットは 他の組の恋人にも見えています",
+  "LoversSharedChatNotice.Lc": "どうしても隠したい時は、会議中に「/cmd lc メッセージ」で 相手にだけ送れます",
   "Promt.ContinueWithQuickSetupAddons": "<size=80%><b><#00ffa5>すべての役職の設定が完了しました！</color></b>\\n続けて 属性のクイックセットアップに進みますか？</size>",
   "Promt.CopyPreset": "<size=80%>すべての設定の値を プリセット {0} から プリセット {1}まで コピーしてもよろしいですか？</size>",
   "Promt.DeleteOldLogs": "'EndKnot_Logs' ディレクトリに この MOD の 1 週間以上前のログが {0} 件のファイルと {1} 件のフォルダ ある。容量を空けるために削除しますか？",

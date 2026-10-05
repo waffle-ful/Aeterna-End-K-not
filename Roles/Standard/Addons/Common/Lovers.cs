@@ -1,4 +1,5 @@
-﻿using System.Linq;
+﻿using System.Collections.Generic;
+using System.Linq;
 using EndKnot.Gamemodes;
 using static EndKnot.Options;
 
@@ -50,6 +51,14 @@ internal class Lovers : IAddon
     ];
 
     public static CustomRoles LovingImpostorRole;
+
+    // 何組目のラバーズか (Main.LoversPlayers の並びとは独立 — 抜けや入れ替わりで相手が組み替わらないように)
+    public static readonly Dictionary<byte, int> PairOf = [];
+
+    // 後追い/視界半減が既に発動した組
+    public static readonly HashSet<int> DeadPairs = [];
+
+    private static bool SharedChatNoticeSent;
 
     public AddonTypes Type => AddonTypes.Mixed;
 
@@ -132,9 +141,8 @@ internal class Lovers : IAddon
             .SetGameMode(customGameMode);
 
 
-        OptionItem countOption = new IntegerOptionItem(id + 1, "NumberOfLovers", new(2, 2, 1), 2, TabGroup.Addons)
+        OptionItem countOption = new IntegerOptionItem(id + 1, "NumberOfLovers", new(1, 7, 1), 1, TabGroup.Addons)
             .SetParent(spawnOption)
-            .SetHidden(true)
             .SetGameMode(customGameMode);
 
         CustomRoleSpawnChances.Add(role, spawnOption);
@@ -147,5 +155,160 @@ internal class Lovers : IAddon
     {
         try { LovingImpostorRole = Main.CustomRoleValues.Where(x => x.IsEnable() && x.IsImpostor() && x != CustomRoles.LovingImpostor && !x.RoleExist(true) && !CustomHnS.AllHnSRoles.Contains(x)).RandomElement(); }
         catch { LovingImpostorRole = CustomRoles.LovingImpostor; }
+    }
+
+    public static void ResetPairs()
+    {
+        PairOf.Clear();
+        DeadPairs.Clear();
+        SharedChatNoticeSent = false;
+    }
+
+    // 試合中のチャットは開いている全員に届くので組ごとには分けられない — 複数組の時は最初の解禁で一度だけ知らせる
+    public static void SendSharedChatNotice()
+    {
+        if (SharedChatNoticeSent || !AmongUsClient.Instance.AmHost || !PrivateChat.GetBool() || ChatDuringGame.GetBool()) return;
+
+        EnsurePairs();
+        if (PairOf.Values.Distinct().Count() < 2) return;
+
+        SharedChatNoticeSent = true;
+        string title = Utils.ColorString(Utils.GetRoleColor(CustomRoles.Lovers), Translator.GetString("Lovers"));
+
+        string text = Translator.GetString("LoversSharedChatNotice");
+        if (EnableLoversChat.GetBool()) text += "\n" + Translator.GetString("LoversSharedChatNotice.Lc");
+
+        foreach (PlayerControl lover in Main.LoversPlayers)
+        {
+            if (lover && lover.IsAlive())
+                Utils.SendMessage(text, lover.PlayerId, title);
+        }
+    }
+
+    // 組番号が付いていない者 (旧式ラバーズ・ホスト指定・後からの再構築) を並び順で2人ずつ組にする
+    public static void EnsurePairs()
+    {
+        List<PlayerControl> lovers = Main.LoversPlayers;
+        if (lovers.Count == 0) return;
+
+        PlayerControl waiting = null;
+
+        for (int i = 0; i < lovers.Count; i++)
+        {
+            PlayerControl pc = lovers[i];
+            if (!pc || PairOf.ContainsKey(pc.PlayerId)) continue;
+
+            if (!waiting)
+            {
+                waiting = pc;
+                continue;
+            }
+
+            // 外れた組の番号 (DeadPairs に残る) を使い回さない
+            int pair = 0;
+            foreach (int used in PairOf.Values) pair = System.Math.Max(pair, used + 1);
+            foreach (int used in DeadPairs) pair = System.Math.Max(pair, used + 1);
+            PairOf[waiting.PlayerId] = pair;
+            PairOf[pc.PlayerId] = pair;
+            waiting = null;
+        }
+    }
+
+    public static int PairIndexOf(byte id)
+    {
+        EnsurePairs();
+        if (!PairOf.TryGetValue(id, out int pair)) return -1;
+
+        List<PlayerControl> lovers = Main.LoversPlayers;
+
+        for (int i = 0; i < lovers.Count; i++)
+        {
+            PlayerControl pc = lovers[i];
+            if (pc && pc.PlayerId == id) return pair;
+        }
+
+        return -1;
+    }
+
+    public static List<PlayerControl> GetPair(int pair)
+    {
+        List<PlayerControl> result = [];
+        if (pair < 0) return result;
+
+        List<PlayerControl> lovers = Main.LoversPlayers;
+
+        for (int i = 0; i < lovers.Count; i++)
+        {
+            PlayerControl pc = lovers[i];
+            if (pc && PairOf.TryGetValue(pc.PlayerId, out int p) && p == pair) result.Add(pc);
+        }
+
+        return result;
+    }
+
+    public static int CountAlive(int pair)
+    {
+        var count = 0;
+        List<PlayerControl> lovers = Main.LoversPlayers;
+
+        for (int i = 0; i < lovers.Count; i++)
+        {
+            PlayerControl pc = lovers[i];
+            if (pc && pc.IsAlive() && PairOf.TryGetValue(pc.PlayerId, out int p) && p == pair) count++;
+        }
+
+        return count;
+    }
+
+    public static PlayerControl GetPartner(byte id)
+    {
+        int pair = PairIndexOf(id);
+        if (pair < 0) return null;
+
+        List<PlayerControl> lovers = Main.LoversPlayers;
+
+        for (int i = 0; i < lovers.Count; i++)
+        {
+            PlayerControl pc = lovers[i];
+            if (pc && pc.PlayerId != id && PairOf.TryGetValue(pc.PlayerId, out int p) && p == pair) return pc;
+        }
+
+        return null;
+    }
+
+    public static bool ArePartners(byte a, byte b)
+    {
+        if (a == b) return false;
+        int pair = PairIndexOf(a);
+        return pair >= 0 && pair == PairIndexOf(b);
+    }
+
+    public static bool IsSamePairOrSelf(byte a, byte b)
+    {
+        int pair = PairIndexOf(a);
+        return pair >= 0 && pair == PairIndexOf(b);
+    }
+
+    public static bool IsPairDead(byte id)
+    {
+        return DeadPairs.Contains(PairIndexOf(id));
+    }
+
+    // Amnesiac などで恋人の座が別人へ移る時に、組番号ごと引き継ぐ
+    public static void ReplaceMember(byte oldId, PlayerControl newPc)
+    {
+        int pair = PairIndexOf(oldId);
+        Main.LoversPlayers.RemoveAll(x => x.PlayerId == oldId);
+        PairOf.Remove(oldId);
+        Main.LoversPlayers.Add(newPc);
+        if (pair >= 0) PairOf[newPc.PlayerId] = pair;
+        Modules.RPC.SyncLoversPlayers();
+    }
+
+    public static void RemoveMember(byte id)
+    {
+        Main.LoversPlayers.RemoveAll(x => x.PlayerId == id);
+        PairOf.Remove(id);
+        Modules.RPC.SyncLoversPlayers();
     }
 }

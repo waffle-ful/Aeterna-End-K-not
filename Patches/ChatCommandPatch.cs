@@ -7110,7 +7110,7 @@ internal static class ChatCommands
     private static void LoversChatCommand(PlayerControl player, string text, string[] args)
         => SendFactionChat(
             player, args,
-            pc => pc.Is(CustomRoles.Lovers),
+            pc => pc.Is(CustomRoles.Lovers) && Lovers.IsSamePairOrSelf(pc.PlayerId, player.PlayerId),
             Options.EnableLoversChat,
             Utils.GetRoleColor(CustomRoles.Lovers),
             '♥',
