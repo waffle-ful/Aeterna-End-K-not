@@ -13185,9 +13185,11 @@
   "WaveCannon.SuperCannonType": "超波動砲の種類",
   "WaveCannon.SuperChargeDuration": "超波動砲のチャージ時間",
   "WaveCannon.SuperBeamThickness": "超波動砲ビームの太さ",
+  "WaveCannon.SuperCannonMaxUses": "超波動砲の使用回数",
   "WaveCannon.ButtonText": "発射",
   "WaveCannon.DirectionDetect": "発射方向に少し動いて。直後にチャージ開始するから",
   "WaveCannon.SuperFallback": "超発射を発動できなかったから 通常の発射に切り替えたよ",
+  "WaveCannon.SuperUsedUp": "超波動砲を撃ち尽くした ここからは通常の波動砲だよ",
 
   /* --- Riptide --- */
   "Riptide": "リップタイド",
