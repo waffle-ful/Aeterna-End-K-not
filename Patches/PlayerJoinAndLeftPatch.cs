@@ -849,13 +849,13 @@ internal static class OnPlayerLeftPatch
 
                 if (data.Character.Is(CustomRoles.Lovers) && data.Character.IsAlive())
                 {
-                    foreach (PlayerControl lovers in Main.LoversPlayers)
-                    {
-                        Main.IsLoversDead = true;
-                        Main.PlayerStates[lovers.PlayerId].RemoveSubRole(CustomRoles.Lovers);
-                    }
+                    int pair = Lovers.PairIndexOf(id);
 
-                    Main.LoversPlayers.RemoveAll(x => x.PlayerId == id);
+                    foreach (PlayerControl lovers in Lovers.GetPair(pair))
+                        Main.PlayerStates[lovers.PlayerId].RemoveSubRole(CustomRoles.Lovers);
+
+                    if (pair >= 0) Lovers.DeadPairs.Add(pair);
+                    Lovers.RemoveMember(id);
                 }
 
                 switch (data.Character.GetCustomRole())

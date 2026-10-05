@@ -1784,9 +1784,9 @@ internal static class ReportDeadBodyPatch
                 QuizMaster.Data.NumMeetings++;
             }
 
-            if (Main.IsLoversDead && Lovers.LoverDieConsequence.GetValue() == 1 && Main.LoversPlayers.Exists(x => x && x.IsAlive()))
+            foreach (PlayerControl aliveLover in Main.LoversPlayers.FindAll(x => x && x.IsAlive() && Lovers.IsPairDead(x.PlayerId)))
             {
-                PlayerControl aliveLover = Main.LoversPlayers.First(x => x && x.IsAlive());
+                if (Lovers.LoverDieConsequence.GetValue() != 1) break;
 
                 switch (Lovers.LoverSuicideTime.GetValue())
                 {
@@ -2620,7 +2620,7 @@ internal static class FixedUpdatePatch
             Main.LoversPlayers.RemoveAll(x => !x);
             if (!Main.HasJustStarted) Main.LoversPlayers.DoIf(x => !x.Is(CustomRoles.Lovers), x => x.RpcSetCustomRole(CustomRoles.Lovers));
 
-            if (Main.LoversPlayers.Exists(x => x.PlayerId == target.PlayerId) && (Main.LoversPlayers.Exists(x => x.PlayerId == lpId) || !seer.IsAlive()))
+            if (Main.LoversPlayers.Exists(x => x.PlayerId == target.PlayerId) && (Lovers.IsSamePairOrSelf(target.PlayerId, lpId) || !seer.IsAlive()))
                 Mark.Append($"<color={GetRoleColorCode(CustomRoles.Lovers)}> ♥</color>");
 
             if (self)
@@ -2754,12 +2754,39 @@ internal static class FixedUpdatePatch
     public static void LoversSuicide(byte deathId = 0x7f, bool exile = false, bool force = false, bool guess = false)
     {
         if (Main.LoversPlayers.Count == 0 || Options.CurrentGameMode != CustomGameMode.Standard) return;
-        if (Lovers.LoverDieConsequence.GetValue() == 0 || Main.IsLoversDead || (Main.LoversPlayers.FindAll(x => x.IsAlive()).Count != 1 && !force)) return;
+        if (Lovers.LoverDieConsequence.GetValue() == 0) return;
 
-        PlayerControl partnerPlayer = Main.LoversPlayers.FirstOrDefault(player => player.PlayerId != deathId && player.IsAlive());
+        int deathPair = Lovers.PairIndexOf(deathId);
+
+        if (deathPair >= 0)
+        {
+            LoversSuicideForPair(deathPair, deathId, exile, force, guess);
+            return;
+        }
+
+        // 死者の指定が無い定期呼び出しは全組を見る (同じ組を2回見ても2回目は DeadPairs か生存数で弾かれる)
+        List<PlayerControl> lovers = Main.LoversPlayers;
+
+        for (int i = 0; i < lovers.Count; i++)
+        {
+            PlayerControl lover = lovers[i];
+            if (!lover) continue;
+
+            int pair = Lovers.PairIndexOf(lover.PlayerId);
+            if (pair >= 0) LoversSuicideForPair(pair, deathId, exile, force, guess);
+        }
+    }
+
+    private static void LoversSuicideForPair(int pair, byte deathId, bool exile, bool force, bool guess)
+    {
+        if (Lovers.DeadPairs.Contains(pair) || (Lovers.CountAlive(pair) != 1 && !force)) return;
+
+        List<PlayerControl> pairMembers = Lovers.GetPair(pair);
+
+        PlayerControl partnerPlayer = pairMembers.FirstOrDefault(player => player.PlayerId != deathId && player.IsAlive());
         if (!partnerPlayer) return;
 
-        Main.IsLoversDead = true;
+        Lovers.DeadPairs.Add(pair);
         
         // periodic 呼び出し (FixedUpdateCaller.cs) は deathId を渡さず 0x7f のセンチネルで来るため、
         // Main.PlayerStates[0x7f] は必ず引けず、下の「切断なら後追いさせない」ガードが素通りしていた。
@@ -2769,7 +2796,7 @@ internal static class FixedUpdatePatch
 
         if (!Main.PlayerStates.ContainsKey(deadLoverId))
         {
-            PlayerControl deadLover = Main.LoversPlayers.FirstOrDefault(x => x && x.PlayerId != partnerPlayer.PlayerId);
+            PlayerControl deadLover = pairMembers.FirstOrDefault(x => x && x.PlayerId != partnerPlayer.PlayerId);
             if (!deadLover || !deadLover.Data || deadLover.Data.Disconnected) return;
 
             deadLoverId = deadLover.PlayerId;

@@ -1306,7 +1306,7 @@ public static class Utils
                // Braid はコンビネーション相方の Driver とも互いに正体を認識しない (☆マークの専用オプションのみが唯一の可視化手段)。
                __instance.Is(CustomRoleTypes.Impostor) && PlayerControl.LocalPlayer.Is(CustomRoleTypes.Impostor) && Options.ImpKnowAlliesRole.GetBool() && CustomTeamManager.ArentInCustomTeam(PlayerControl.LocalPlayer.PlayerId, __instance.PlayerId) && !PlayerControl.LocalPlayer.Is(CustomRoles.OneWolf) && !__instance.Is(CustomRoles.OneWolf) && !PlayerControl.LocalPlayer.Is(CustomRoles.Braid) && !__instance.Is(CustomRoles.Braid) ||
                (__instance.Is(CustomRoleTypes.Coven) && PlayerControl.LocalPlayer.Is(CustomRoleTypes.Coven)) ||
-               (Main.LoversPlayers.TrueForAll(x => x.PlayerId == __instance.PlayerId || x.AmOwner) && Main.LoversPlayers.Count == 2 && Lovers.LoverKnowRoles.GetBool()) ||
+               (Lovers.ArePartners(__instance.PlayerId, PlayerControl.LocalPlayer.PlayerId) && Lovers.LoverKnowRoles.GetBool()) ||
                (CustomTeamManager.AreInSameCustomTeam(__instance.PlayerId, PlayerControl.LocalPlayer.PlayerId) && CustomTeamManager.IsSettingEnabledForPlayerTeam(__instance.PlayerId, CTAOption.KnowRoles)) ||
                Main.PlayerStates.Values.Any(x => x.Role.KnowRole(PlayerControl.LocalPlayer, __instance)) ||
                PlayerControl.LocalPlayer.IsRevealedPlayer(__instance) ||
@@ -3552,15 +3552,8 @@ public static class Utils
                 seerIsLover = false;
                 targetIsLover = false;
 
-                if (lovers.Count == 2)
-                {
-                    byte loverIdFirst = lovers[0].PlayerId;
-                    byte loverIdSecond = lovers[1].PlayerId;
-
-                    byte seerId = seer.PlayerId;
-
-                    seerIsLover = (loverIdFirst == seerId) || (loverIdSecond == seerId);
-                }
+                if (lovers.Count >= 2)
+                    seerIsLover = Lovers.GetPartner(seer.PlayerId);
 
                 if (seerIsLover)
                     SelfMark.Append(CustomRoles.Lovers.ColoredTextByRole(" ♥"));
@@ -3934,15 +3927,8 @@ public static class Utils
 
                             TargetMark.Append(Snitch.GetWarningMark(seer, target));
 
-                            targetIsLover = false;
-                            if (lovers.Count == 2)
-                            {
-                                byte loverIdFirst = lovers[0].PlayerId;
-                                byte loverIdSecond = lovers[1].PlayerId;
-                                byte targetId = target.PlayerId;
-                                targetIsLover = (loverIdFirst == targetId) || (loverIdSecond == targetId);
-                            }
-                            if ((!seer.IsAlive() || seerIsLover) && targetIsLover)
+                            targetIsLover = lovers.Count >= 2 && Lovers.PairIndexOf(target.PlayerId) >= 0;
+                            if (targetIsLover && (!seer.IsAlive() || (seerIsLover && Lovers.ArePartners(seer.PlayerId, target.PlayerId))))
                                 TargetMark.Append(CustomRoles.Lovers.ColoredTextByRole(" ♥"));
 
                             if ((!seer.IsAlive() || seer.Is(CustomRoles.Connecting)) && target.Is(CustomRoles.Connecting))
@@ -4272,7 +4258,7 @@ public static class Utils
         return (!seer.IsAlive() && Options.GhostCanSeeOtherRoles.GetBool() && (!IsRevivingRoleAlive() || !Main.DiedThisRound.Contains(seer.PlayerId))) ||
                (seer.Is(CustomRoles.Mimic) && !target.IsAlive() && Options.MimicCanSeeDeadRoles.GetBool()) ||
                (target.Is(CustomRoles.Gravestone) && !target.IsAlive()) ||
-               (Main.LoversPlayers.TrueForAll(x => x.PlayerId == seer.PlayerId || x.PlayerId == target.PlayerId) && Main.LoversPlayers.Count == 2 && Lovers.LoverKnowRoles.GetBool()) ||
+               (Lovers.ArePartners(seer.PlayerId, target.PlayerId) && Lovers.LoverKnowRoles.GetBool()) ||
                (seer.Is(CustomRoleTypes.Coven) && target.Is(CustomRoleTypes.Coven)) ||
                // Braid はコンビネーション相方の Driver とも互いに正体を認識しない (☆マークの専用オプションのみが唯一の可視化手段)。
                (seer.Is(CustomRoleTypes.Impostor) && target.Is(CustomRoleTypes.Impostor) && Options.ImpKnowAlliesRole.GetBool() && CustomTeamManager.ArentInCustomTeam(seer.PlayerId, target.PlayerId) && !seer.Is(CustomRoles.OneWolf) && !target.Is(CustomRoles.OneWolf) && !seer.Is(CustomRoles.Braid) && !target.Is(CustomRoles.Braid) && !Modules.Ekm.EkrManager.IsDisguisedAwayFrom(target.GetCustomRole(), Modules.Ekm.EkrTeam.Impostor)) ||
@@ -4844,8 +4830,16 @@ public static class Utils
 
         try
         {
-            if (Lovers.PrivateChat.GetBool() && Main.LoversPlayers.TrueForAll(x => x.IsAlive()))
-                Main.LoversPlayers.ForEach(x => x.SetChatVisible(true));
+            if (Lovers.PrivateChat.GetBool())
+            {
+                foreach (PlayerControl lover in Main.LoversPlayers)
+                {
+                    PlayerControl partner = Lovers.GetPartner(lover.PlayerId);
+                    if (lover.IsAlive() && partner && partner.IsAlive()) lover.SetChatVisible(true);
+                }
+
+                Lovers.SendSharedChatNotice();
+            }
         }
         catch (Exception e) { ThrowException(e); }
 

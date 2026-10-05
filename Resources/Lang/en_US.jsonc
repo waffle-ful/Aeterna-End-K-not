@@ -13501,6 +13501,8 @@
   "PotionInStore": "Potion in store",
   "PressTabToNextPage": "Press <color=#ff1919>Tab</color> or <color=#ff1919>Number</color> for Next Page...",
   "PrivateChat": "Enable Private Chat for <color=#ff9ace>Lovers</color>",
+  "LoversSharedChatNotice": "There are multiple <color=#ff9ace>Lover</color> pairs, so your in-game chat is also visible to the lovers of the other pairs",
+  "LoversSharedChatNotice.Lc": "If you really want to keep it secret, use \"/cmd lc message\" during a meeting to send it only to your partner",
   "Promt.ContinueWithQuickSetupAddons": "<b><#00ffa5>You've finished setting up every role!</color></b> Would you like to continue with the quick setup dialog of add-ons?",
   "Promt.CopyPreset": "Are you sure you want to copy all settings' values from preset {0} to preset {1}?",
   "Promt.DeleteOldLogs": "You have {0} files and {1} folders in the 'EndKnot_Logs' directory containing logs from this mod that are older than a week. Do you want to delete them to free up space?",

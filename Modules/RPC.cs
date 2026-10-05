@@ -905,8 +905,18 @@ internal static class RPCHandlerPatch
                 case CustomRPC.SetLoversPlayers:
                 {
                     Main.LoversPlayers.Clear();
+                    Lovers.PairOf.Clear();
                     int count = reader.ReadInt32();
-                    for (var i = 0; i < count; i++) Main.LoversPlayers.Add(Utils.GetPlayerById(reader.ReadByte()));
+
+                    for (var i = 0; i < count; i++)
+                    {
+                        byte loverId = reader.ReadByte();
+                        int pair = reader.ReadByte();
+                        PlayerControl lover = Utils.GetPlayerById(loverId);
+                        if (!lover) continue;
+                        Main.LoversPlayers.Add(lover);
+                        Lovers.PairOf[loverId] = pair;
+                    }
                 }
 
                     break;
@@ -1767,9 +1777,18 @@ internal static class RPC
     {
         if (!AmongUsClient.Instance.AmHost) return;
 
+        // 相手のいない者 (奇数の余り) は送らない — 受け手側で別の組に紛れ込ませない
+        Lovers.EnsurePairs();
+        List<PlayerControl> paired = Main.LoversPlayers.FindAll(x => x && Lovers.PairIndexOf(x.PlayerId) >= 0);
+
         MessageWriter writer = AmongUsClient.Instance.StartRpcImmediately(PlayerControl.LocalPlayer.NetId, (byte)CustomRPC.SetLoversPlayers, SendOption.Reliable);
-        writer.Write(Main.LoversPlayers.Count);
-        foreach (PlayerControl lp in Main.LoversPlayers) writer.Write(lp.PlayerId);
+        writer.Write(paired.Count);
+
+        foreach (PlayerControl lp in paired)
+        {
+            writer.Write(lp.PlayerId);
+            writer.Write((byte)Lovers.PairIndexOf(lp.PlayerId));
+        }
 
         AmongUsClient.Instance.FinishRpcImmediately(writer);
     }

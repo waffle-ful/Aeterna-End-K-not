@@ -3884,7 +3884,7 @@ public static class EkrManager
         else if (removed == CustomRoles.Lovers)
         {
             // 相方の Lovers はそのまま残す (剥がさない) — 対象の1人分だけ台帳から外す。
-            Main.LoversPlayers.RemoveAll(x => x.PlayerId == targetId);
+            EndKnot.Roles.Lovers.RemoveMember(targetId);
         }
     }
 

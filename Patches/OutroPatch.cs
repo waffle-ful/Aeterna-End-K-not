@@ -268,6 +268,7 @@ internal static class EndGamePatch
         // 外見15個分で見合わない。従来どおり次ゲーム開始時の Init() に任せる。
 
         Main.LoversPlayers.Clear();
+        Lovers.ResetPairs();
         Bloodmoon.OnMeetingStart();
         AFKDetector.ExemptedPlayers.Clear();
         PerSecondUpdateScheduler.Reset();

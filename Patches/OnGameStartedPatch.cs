@@ -243,6 +243,7 @@ internal static class ChangeRoleSettings
             Main.ShapeshiftTarget = [];
             Main.ShapeshiftIsAnimated = [];
             Main.LoversPlayers = [];
+            Lovers.ResetPairs();
             Main.DiedThisRound = [];
             Main.GuesserGuessed = [];
             Main.GuesserGuessedMeeting = [];
@@ -1072,10 +1073,12 @@ internal static class StartGameHostPatch
 
             var overrideLovers = false;
 
-            if (Main.SetAddOns.Count(x => x.Value.Contains(CustomRoles.Lovers)) == 2)
+            int presetLovers = Main.SetAddOns.Count(x => x.Value.Contains(CustomRoles.Lovers));
+
+            if (presetLovers >= 2 && presetLovers % 2 == 0)
             {
                 Main.LoversPlayers.Clear();
-                Main.IsLoversDead = false;
+                Lovers.ResetPairs();
                 overrideLovers = true;
                 Logger.Warn("Lovers overridden by host's pre-set add-ons", "CustomRoleSelector");
             }
@@ -1205,7 +1208,11 @@ internal static class StartGameHostPatch
 
             LateTask.New(CustomTeamManager.InitializeCustomTeamPlayers, 4f, log: false);
 
-            if (overrideLovers) Logger.Msg(Main.LoversPlayers.Join(x => x?.GetRealName()), "Lovers");
+            if (overrideLovers)
+            {
+                Logger.Msg(Main.LoversPlayers.Join(x => x?.GetRealName()), "Lovers");
+                RPC.SyncLoversPlayers();
+            }
 
             EndOfSelectRolePatch:
 
@@ -1328,7 +1335,12 @@ internal static class StartGameHostPatch
                 ChatCommands.DraftResult = [];
                 ChatCommands.DraftRoles = [];
 
-                if (Main.LoversPlayers.Count == 0) Main.LoversPlayers = Main.EnumeratePlayerControls().Where(x => x.Is(CustomRoles.Lovers) || x.GetCustomRole() is CustomRoles.LovingCrewmate or CustomRoles.LovingImpostor).ToList();
+                if (Main.LoversPlayers.Count == 0)
+                {
+                    Lovers.ResetPairs();
+                    Main.LoversPlayers = Main.EnumeratePlayerControls().Where(x => x.Is(CustomRoles.Lovers) || x.GetCustomRole() is CustomRoles.LovingCrewmate or CustomRoles.LovingImpostor).ToList();
+                    RPC.SyncLoversPlayers();
+                }
             }, 7f, log: false);
 
             if (Main.CurrentMap == MapNames.Airship && AmongUsClient.Instance.AmHost && Main.GM.Value) LateTask.New(() => PlayerControl.LocalPlayer.NetTransform.SnapTo(new(15.5f, 0.0f), (ushort)(PlayerControl.LocalPlayer.NetTransform.lastSequenceId + 8)), 15f, "GM Auto-TP Failsafe"); // TP to Main Hall
@@ -1798,7 +1810,7 @@ internal static class StartGameHostPatch
             if (CustomRoles.Lovers.IsEnable() && !RoleResult.ContainsValue(CustomRoles.Romantic))
             {
                 Main.LoversPlayers.Clear();
-                Main.IsLoversDead = false;
+                Lovers.ResetPairs();
                 AssignLoversRoles();
             }
         }
@@ -1812,13 +1824,16 @@ internal static class StartGameHostPatch
             if (Lovers.LegacyLovers.GetBool())
             {
                 Main.LoversPlayers = Main.EnumeratePlayerControls().Where(x => x.GetCustomRole() is CustomRoles.LovingCrewmate or CustomRoles.LovingImpostor).Take(2).ToList();
+                RPC.SyncLoversPlayers();
                 return;
             }
 
             List<PlayerControl> allPlayers = Main.EnumeratePlayerControls().Where(pc => (!Main.NeverSpawnTogetherCombos.TryGetValue(OptionItem.CurrentPreset, out Dictionary<CustomRoles, List<CustomRoles>> bannedCombos) || bannedCombos.All(x => !pc.Is(x.Key) || !x.Value.Contains(CustomRoles.Lovers))) && !pc.Is(CustomRoles.GM) && (!pc.HasSubRole() || pc.GetCustomSubRoles().Count < Options.NoLimitAddonsNumMax.GetInt()) && pc.GetCustomRole() is not (CustomRoles.Altruist or CustomRoles.Provocateur or CustomRoles.Dictator or CustomRoles.DoubleAgent or CustomRoles.Nuker or CustomRoles.Bomber or CustomRoles.Curser or CustomRoles.Hater or CustomRoles.God or CustomRoles.Revenant) && (!pc.IsCrewmate() || Lovers.CrewCanBeInLove.GetBool()) && (!pc.GetCustomRole().IsNeutral() || Lovers.NeutralCanBeInLove.GetBool()) && (!pc.Is(CustomRoleTypes.Coven) || Lovers.CovenCanBeInLove.GetBool()) && (!pc.IsImpostor() || Lovers.ImpCanBeInLove.GetBool())).ToList();
             const CustomRoles role = CustomRoles.Lovers;
+            // 人数オプションは組の数 — 2人ずつ組にし、候補が奇数なら余りの1人は恋人にしない
             int count = Math.Clamp(rawCount, 0, allPlayers.Count);
-            if (rawCount == -1) count = Math.Clamp(role.GetCount(), 0, allPlayers.Count);
+            if (rawCount == -1) count = Math.Clamp(role.GetCount() * 2, 0, allPlayers.Count);
+            count -= count % 2;
 
             if (count <= 0) return;
 
@@ -1826,6 +1841,7 @@ internal static class StartGameHostPatch
             {
                 PlayerControl player = allPlayers.RandomElement();
                 Main.LoversPlayers.Add(player);
+                Lovers.PairOf[player.PlayerId] = i / 2;
                 allPlayers.Remove(player);
                 Main.PlayerStates[player.PlayerId].SetSubRole(role);
                 Logger.Info($"Add-on assigned: {player.Data?.PlayerName} = {player.GetCustomRole()} + {role}", "Assign Lovers");

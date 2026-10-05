@@ -195,7 +195,6 @@ public class Main : BasePlugin
     public static readonly Dictionary<CustomGameMode, Dictionary<string, int>> NumWinsPerGM = [];
     public static HashSet<byte> DiedThisRound = [];
     public static List<PlayerControl> LoversPlayers = [];
-    public static bool IsLoversDead = true;
     public static List<byte> SuperStarDead = [];
     public static List<byte> BaitAlive = [];
     public static Dictionary<byte, int> KilledDiseased = [];

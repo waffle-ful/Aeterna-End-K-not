@@ -530,9 +530,9 @@ internal static class BeginCrewmatePatch
         {
             teamToDisplay = new();
             teamToDisplay.Add(PlayerControl.LocalPlayer);
-            teamToDisplay.Add(Main.LoversPlayers.FirstOrDefault(x => x.PlayerId != PlayerControl.LocalPlayer.PlayerId));
+            teamToDisplay.Add(Lovers.GetPartner(PlayerControl.LocalPlayer.PlayerId));
         }
-        else if (role == CustomRoles.LovingImpostor) teamToDisplay.Add(Main.LoversPlayers.FirstOrDefault(x => x.PlayerId != PlayerControl.LocalPlayer.PlayerId));
+        else if (role == CustomRoles.LovingImpostor) teamToDisplay.Add(Lovers.GetPartner(PlayerControl.LocalPlayer.PlayerId));
 
         if (CustomTeamManager.EnabledCustomTeams.Count > 0)
         {
@@ -586,7 +586,7 @@ internal static class BeginCrewmatePatch
                 {
                     __instance.TeamTitle.color = __instance.BackgroundBar.material.color = Utils.GetRoleColor(role);
                     PlayerControl.LocalPlayer.Data.Role.IntroSound = GetIntroSound(role.GetRoleTypes());
-                    byte otherLoverId = Main.LoversPlayers.First(x => x.PlayerId != PlayerControl.LocalPlayer.PlayerId).PlayerId;
+                    byte otherLoverId = Lovers.GetPartner(PlayerControl.LocalPlayer.PlayerId).PlayerId;
                     __instance.ImpostorText.gameObject.SetActive(true);
                     __instance.ImpostorText.text = string.Format(GetString($"SubText.{role}"), otherLoverId.ColoredPlayerName());
                     break;
@@ -655,10 +655,10 @@ internal static class BeginCrewmatePatch
                         }
                     }
 
-                    if (Main.LoversPlayers.Count == 2 && Main.LoversPlayers.Exists(x => x.AmOwner))
+                    if (Lovers.GetPartner(PlayerControl.LocalPlayer.PlayerId) is { } otherLover && otherLover)
                     {
                         __instance.TeamTitle.color = __instance.BackgroundBar.material.color = Utils.GetRoleColor(CustomRoles.Lovers);
-                        byte otherLoverId = Main.LoversPlayers.First(x => x.PlayerId != PlayerControl.LocalPlayer.PlayerId).PlayerId;
+                        byte otherLoverId = otherLover.PlayerId;
                         __instance.ImpostorText.gameObject.SetActive(true);
                         __instance.ImpostorText.DestroyTranslator();
                         __instance.ImpostorText.text = string.Format(GetString("SubText.LovingCrewmate"), otherLoverId.ColoredPlayerName());
@@ -1550,6 +1550,7 @@ internal static class IntroCutsceneDestroyPatch
             if (Options.CurrentGameMode == CustomGameMode.Standard && Options.FirstTurnMeeting.GetBool()) return;
 
             Main.LoversPlayers.ForEach(x => x.SetChatVisible(true));
+            Lovers.SendSharedChatNotice();
         }, 1f, log: false);
 
         LateTask.New(() =>
