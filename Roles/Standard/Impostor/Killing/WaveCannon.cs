@@ -27,6 +27,7 @@ public class WaveCannon : RoleBase
     private static OptionItem SuperCannonType;
     private static OptionItem SuperChargeDuration;
     private static OptionItem SuperBeamThickness;
+    private static OptionItem SuperCannonMaxUses;
 
     private const int BeamCharCount = 20;
     private const int BeamSizeUnit = 30; // 1 thickness 単位あたりのフォントサイズ
@@ -76,6 +77,7 @@ public class WaveCannon : RoleBase
     private PlayerControl WaveCannonPC;
     private bool IsSuperShot;
     private SuperCannonShot Super;
+    private int SuperShotsFired; // 撃ち切った超波動砲の数 (発射に入った時点で数える)
     private Vector2? FxGate;
     private ExplosionFx.CannonPalette FxPal;
     private AudioSource ChargeAudio;
@@ -97,7 +99,8 @@ public class WaveCannon : RoleBase
             .AutoSetupOption(ref LastImpostorSuperCannon, true, overrideName: "WaveCannon.LastImpostorSuperCannon")
             .AutoSetupOption(ref SuperCannonType, 0, SuperCannonShot.TypeOptionNames, overrideName: "WaveCannon.SuperCannonType", overrideParent: LastImpostorSuperCannon)
             .AutoSetupOption(ref SuperChargeDuration, 5, new IntegerValueRule(1, 15, 1), OptionFormat.Seconds, overrideName: "WaveCannon.SuperChargeDuration", overrideParent: LastImpostorSuperCannon)
-            .AutoSetupOption(ref SuperBeamThickness, 4, new IntegerValueRule(1, 8, 1), OptionFormat.Times, overrideName: "WaveCannon.SuperBeamThickness", overrideParent: LastImpostorSuperCannon);
+            .AutoSetupOption(ref SuperBeamThickness, 4, new IntegerValueRule(1, 8, 1), OptionFormat.Times, overrideName: "WaveCannon.SuperBeamThickness", overrideParent: LastImpostorSuperCannon)
+            .AutoSetupOption(ref SuperCannonMaxUses, 1, new IntegerValueRule(1, 10, 1), OptionFormat.Times, overrideName: "WaveCannon.SuperCannonMaxUses", overrideParent: LastImpostorSuperCannon);
     }
 
     public override void Init()
@@ -111,6 +114,7 @@ public class WaveCannon : RoleBase
         On = true;
         Instances.Add(this);
         WaveCannonPC = playerId.GetPlayer();
+        SuperShotsFired = 0;
         ResetState();
     }
 
@@ -172,8 +176,8 @@ public class WaveCannon : RoleBase
         if ((DebugSkipMask & 1) != 0) return;
         if (!pc.IsAlive() || CurrentPhase != Phase.Idle || !GameStates.IsInTask) return;
 
-        // ラストインポスター (Last- prefix 付与中) は超波動砲を放てる
-        IsSuperShot = LastImpostorSuperCannon.GetBool() && LastImpostor.CurrentId == pc.PlayerId;
+        // ラストインポスター (Last- prefix 付与中) は超波動砲を放てる。回数を使い切った後は通常の波動砲
+        IsSuperShot = LastImpostorSuperCannon.GetBool() && LastImpostor.CurrentId == pc.PlayerId && SuperShotsFired < SuperCannonMaxUses.GetInt();
 
         // Sniper 風方向確定 phase に入る。この秒数だけ自由に動けて発射方向を
         // 微調整できる。cosmetics.flipX はホスト側で同期されない仕様のため、
@@ -533,6 +537,7 @@ public class WaveCannon : RoleBase
                     AlreadyKilled.Clear();
                     PhaseEntryDone = true;
                     StartFireSound();
+                    if (IsSuperShot) SuperShotsFired++;
                 }
 
                 if (Super != null)
@@ -565,6 +570,7 @@ public class WaveCannon : RoleBase
                     pc.SetKillCooldown();
                     // Phantom cooldown が AU 側で自動でかかるので AddAbilityCD 不要
                     CurrentPhase = Phase.Idle;
+                    if (IsSuperShot && SuperShotsFired >= SuperCannonMaxUses.GetInt()) pc.Notify(GetString("WaveCannon.SuperUsedUp"));
                     IsSuperShot = false;
                 }
                 break;

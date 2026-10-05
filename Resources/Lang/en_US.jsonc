@@ -3304,9 +3304,11 @@
   "WaveCannon.SuperCannonType": "Super Cannon Type",
   "WaveCannon.SuperChargeDuration": "Super Cannon Charge Duration",
   "WaveCannon.SuperBeamThickness": "Super Beam Thickness",
+  "WaveCannon.SuperCannonMaxUses": "Super Cannon Uses",
   "WaveCannon.ButtonText": "FIRE",
   "WaveCannon.DirectionDetect": "Move briefly in your firing direction. Beam charges right after.",
   "WaveCannon.SuperFallback": "Couldn't activate the super shot - firing a normal shot instead.",
+  "WaveCannon.SuperUsedUp": "Super Cannon used up - normal shots from now on.",
 
   /* --- Riptide --- */
   "Riptide": "Riptide",
