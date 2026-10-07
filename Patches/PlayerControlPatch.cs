@@ -3204,6 +3204,35 @@ internal static class PlayerControlLocalSetRolePatch
     }
 }
 
+// デシンク役職のホストは、イントロ明けに全員の RoleBehaviour を CanBeKilled=true・名前色白にしてキル対象にし、自分の役職は停電の視界変化を受けないようにしている。
+// 会議明けの役職戻しや蘇生などで SetRole が走ると RoleBehaviour が新しく作られて既定値 (インポスター系は CanBeKilled=false) に戻り、
+// インポスターにキルボタンが反応しなくなるため、作り直された役職にも同じ設定を当て直す。
+[HarmonyPatch(typeof(RoleManager), nameof(RoleManager.SetRole))]
+internal static class HostDesyncKeepTargetsKillablePatch
+{
+    public static void Postfix([HarmonyArgument(0)] PlayerControl targetPlayer)
+    {
+        try
+        {
+            if (!AmongUsClient.Instance.AmHost || !Main.IntroDestroyed || !GameStates.IsInGame || !targetPlayer) return;
+
+            PlayerControl lp = PlayerControl.LocalPlayer;
+            if (!lp || !lp.HasDesyncRole()) return;
+
+            RoleBehaviour role = targetPlayer.Data ? targetPlayer.Data.Role : null;
+            if (!role) return;
+
+            role.CanBeKilled = true;
+            targetPlayer.cosmetics.SetNameColor(Color.white);
+            role.NameColor = Color.white;
+
+            // 自分の役職が作り直された時は、イントロ明けと同じく停電の視界変化を受けない設定に戻す
+            if (targetPlayer.AmOwner) role.AffectedByLightAffectors = false;
+        }
+        catch (Exception e) { ThrowException(e); }
+    }
+}
+
 [HarmonyPatch(typeof(PlayerControl), nameof(PlayerControl.AssertWithTimeout))]
 internal static class AssertWithTimeoutPatch
 {
