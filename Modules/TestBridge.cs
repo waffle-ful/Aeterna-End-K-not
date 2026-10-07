@@ -1694,6 +1694,22 @@ public static class TestBridge
         AppendHudButton(sb, "sabotage", hud.SabotageButton); sb.Append(',');
         // kill/pet/ability の false がイントロ明けの PreventKill 窓によるものかを添える (偽陰性の判定材料)
         sb.Append("\"preventKill\":").Append(IntroCutsceneDestroyPatch.PreventKill ? "true" : "false");
+        // キルボタンが今狙っている相手 (-1 = 無し) と、手元で見えている各プレイヤーの基底役職 / CanBeKilled (キル対象判定の入力)
+        int killTarget = -1;
+        try { if (hud.KillButton && hud.KillButton.currentTarget) killTarget = hud.KillButton.currentTarget.PlayerId; } catch { }
+        sb.Append(",\"killTarget\":").Append(killTarget.ToString(CultureInfo.InvariantCulture));
+        sb.Append(",\"localRoles\":\"");
+        try
+        {
+            foreach (PlayerControl pc in Main.EnumeratePlayerControls())
+            {
+                RoleBehaviour r = pc.Data ? pc.Data.Role : null;
+                if (!r) continue;
+                sb.Append(pc.PlayerId.ToString(CultureInfo.InvariantCulture)).Append(':').Append(r.Role.ToString()).Append(r.CanBeKilled ? "+k" : "-k").Append(' ');
+            }
+        }
+        catch { }
+        sb.Append('"');
         sb.Append('}');
     }
 
