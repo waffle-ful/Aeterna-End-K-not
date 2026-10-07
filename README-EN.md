@@ -205,7 +205,7 @@ End K not adds over 110 chat commands across the host, moderator, and player tie
 
 #### If Windows shows a blue warning
 
-The installer isn't code-signed, so the first run brings up a blue "**Windows protected your PC**" screen. Windows shows that screen for any unsigned exe from an individual developer. The screen is not a virus detection.
+The installer isn't code-signed, so the first run brings up a blue "**Windows protected your PC**" screen. Windows shows that screen for any unsigned exe from an individual developer. It does not mean a virus was detected.
 
 1. Click "**More info**"
 2. Click the "**Run anyway**" button that appears
