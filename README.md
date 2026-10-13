@@ -329,6 +329,7 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 - **[CrowdedMod](https://github.com/CrowdedMods/CrowdedMod)** (andry08 / CrowdedMods、MIT) — 大人数ロビー対応
 - **[Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles)** (Gurge44 他、GPL-3.0) — ベース Mod。役職エンジンと大多数の役職、継続的なバグ修正の取り込み元
 - **[ExtremeRoles](https://github.com/yukieiji/ExtremeRoles)** (yukieiji) — エアシップ関連のパッチ
+- **[FusionCore](https://github.com/All-Of-Us-Mods/FusionCore)** (All-Of-Us-Mods、GPL-3.0) — Android ランチャーの土台、翻訳実行するホスト (x86_64 エミュレータ) 向けのフックの扱い
 - **[Game Optimizer (CPUs / Threads Optimizer)](https://github.com/charlie754/Game-Optimizer-CPUs-Threads-Optimizer)** (charlie754、MIT) — CPU Sets によるキャッシュドメイン隔離の発想 (`CpuSetsMode` 設定)。コードは Win32 API から独自実装
 - **ImaMapleTree / 단풍잎 / Tealeaf** — ペットボタンによる能力発動の処理
 - **[Lotus (LotusContinued)](https://github.com/Lotus-AU/LotusContinued)** / [NikoCat233 fork](https://github.com/NikoCat233/LotusContinued) (GPL-3.0) — 設定矛盾の検出とホスト警告、ホワイトリスト入室制限

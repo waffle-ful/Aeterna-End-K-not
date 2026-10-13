@@ -4,6 +4,7 @@ using HarmonyLib;
 using Il2CppInterop.Runtime.InteropTypes;
 using InnerNet;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using TMPro;
@@ -169,10 +170,45 @@ internal static class RunLoginPatch
 {
     public const int ClickCount = 0;
 
+    // The Android build of IsAllowedOnline never reads `this`, so its callers pass whatever is left in the register
+    // (0x1 after the guest login's Debug.Log). The detour turns that into an EOSManager before the prefix runs and
+    // crashes; on Android the same work runs at the end of the login flow instead (RunLoginFlowEndPatch).
+    public static bool Prepare() => !OperatingSystem.IsAndroid();
+
     public static void Prefix(EOSManager __instance, ref bool canOnline)
     {
         DebugModeManager.OnAccountResolved(__instance.FriendCode);
         if (DebugModeManager.AmDebugger) canOnline = true;
+
+        try { ModUpdater.ShowAvailableUpdate(); }
+        catch (Exception error) { Logger.Error(error.ToString(), "ModUpdater.ShowAvailableUpdate"); }
+    }
+}
+
+// Android counterpart of RunLoginPatch: each login flow (full account, guest, offline) ends here with a real
+// EOSManager, right after it has called IsAllowedOnline.
+[HarmonyPatch]
+internal static class RunLoginFlowEndPatch
+{
+    public static bool Prepare() => OperatingSystem.IsAndroid();
+
+    // ReSharper disable once UnusedMember.Local
+    private static IEnumerable<MethodBase> TargetMethods() =>
+    [
+        AccessTools.Method(typeof(EOSManager), nameof(EOSManager.EndFinalPartsOfLoginFlowFullAccount)),
+        AccessTools.Method(typeof(EOSManager), nameof(EOSManager.EndFinalPartsOfLoginFlowTempAccount)),
+        AccessTools.Method(typeof(EOSManager), nameof(EOSManager.EndFinalPartsOfLoginFlowOffline))
+    ];
+
+    public static void Postfix(EOSManager __instance)
+    {
+        // These run inside the login coroutine; an exception here would end the login flow.
+        try
+        {
+            DebugModeManager.OnAccountResolved(__instance.FriendCode);
+            if (DebugModeManager.AmDebugger) __instance.IsAllowedOnline(true);
+        }
+        catch (Exception error) { Logger.Error(error.ToString(), "RunLoginFlowEndPatch"); }
 
         try { ModUpdater.ShowAvailableUpdate(); }
         catch (Exception error) { Logger.Error(error.ToString(), "ModUpdater.ShowAvailableUpdate"); }
