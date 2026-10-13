@@ -26,6 +26,15 @@ public static class Prompt
             if (!HudManager.InstanceExists) return;
             HudManager hud = HudManager.Instance;
 
+            // A prompt still open when its HUD was destroyed (leaving the lobby) never got closed, so its state would
+            // keep every later prompt stuck in the queue.
+            if (CurrentQuestion != string.Empty && (YesButton == null || !YesButton.Button))
+            {
+                YesButton = null;
+                NoButton = null;
+                CurrentQuestion = string.Empty;
+            }
+
             if (CurrentQuestion != string.Empty || !hud)
             {
                 if (Queue.All(x => x.Question != question) && CurrentQuestion != question)
@@ -45,8 +54,12 @@ public static class Prompt
                 HidePromt();
                 CurrentQuestion = string.Empty;
 
-                if (!ShowBackButton) hud.Dialogue.BackButton.gameObject.SetActive(true);
-                hud.Dialogue.Hide();
+                // The auto-dismiss timer can outlive the HUD (left the lobby); only the queue hand-off is still meaningful then.
+                if (hud)
+                {
+                    if (!ShowBackButton) hud.Dialogue.BackButton.gameObject.SetActive(true);
+                    hud.Dialogue.Hide();
+                }
 
                 if (Queue.Count > 0)
                 {
@@ -96,8 +109,8 @@ public static class Prompt
 
     private static void HidePromt()
     {
-        Object.Destroy(YesButton?.Button.gameObject);
-        Object.Destroy(NoButton?.Button.gameObject);
+        if (YesButton != null && YesButton.Button) Object.Destroy(YesButton.Button.gameObject);
+        if (NoButton != null && NoButton.Button) Object.Destroy(NoButton.Button.gameObject);
 
         YesButton = null;
         NoButton = null;
