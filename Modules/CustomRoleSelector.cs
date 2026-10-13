@@ -125,6 +125,7 @@ internal static class CustomRoleSelector
                 case CustomRoles.CovenMember:
                 case CustomRoles.CovenLeader:
                 case CustomRoles.Death:
+                case CustomRoles.Nuker or CustomRoles.Bard or CustomRoles.Sunnyboy: // 親役職からの置換でだけ出る。GetMode は表示用に出現率を返すが抽選の候補には入れない
                 case CustomRoles.GM:
                 case CustomRoles.NotAssigned:
                     continue;

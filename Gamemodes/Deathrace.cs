@@ -257,14 +257,6 @@ public static class Deathrace
                 yield return new WaitForSecondsRealtime(4f);
                 NameNotifyManager.Reset();
             }
-            
-            if (Main.CurrentMap == MapNames.Airship)
-                players.MassTP(new RandomSpawn.AirshipSpawnMap().Positions[Clockwise ? Track[^1] : Track[0]]);
-        }
-        else if (Main.CurrentMap == MapNames.Airship)
-        {
-            yield return new WaitForSecondsRealtime(3f);
-            players.MassTP(new RandomSpawn.AirshipSpawnMap().Positions[Clockwise ? Track[^1] : Track[0]]);
         }
 
         for (var i = 5; i > 0; i--)
@@ -273,6 +265,10 @@ public static class Deathrace
             players.NotifyPlayers("<#ffffff>" + string.Format(Translator.GetString("RR_ReadyQM"), i));
             yield return new WaitForSecondsRealtime(1f);
         }
+        
+        // Submerged のように始点が擬似部屋 (CoordinateChecks) のマップはスポーン表に座標が無いので TP しない
+        if (RandomSpawn.SpawnMap.GetSpawnMap().Positions.TryGetValue(Clockwise ? Track[^1] : Track[0], out Vector2 startPos))
+            players.MassTP(startPos);
         
         NameNotifyManager.Reset();
         Utils.NotifyRoles();
@@ -626,7 +622,8 @@ public static class Deathrace
         {
             string suffix = GetSuffix(data.Player, data.Player, false);
 
-            if (data.LastSuffix != suffix)
+            // 部屋の境目で表示が毎フレーム揺れても 1 人あたり毎秒 1 回までに抑える。送れなかった変化は LastSuffix を据え置いて次の枠で送る
+            if (data.LastSuffix != suffix && PerSecondUpdateScheduler.ShouldRunUpdate(data.Player.PlayerId))
             {
                 Utils.NotifyRoles(SpecifySeer: data.Player, SpecifyTarget: data.Player);
                 data.LastSuffix = suffix;

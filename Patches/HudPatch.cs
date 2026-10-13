@@ -1012,7 +1012,7 @@ internal static class SabotageMapPatch
 
         foreach (MapRoom mr in __instance.rooms)
         {
-            if (!mr.special || !mr.special.transform) continue;
+            if (!mr || !mr.special || !mr.special.transform) continue;
 
             SystemTypes room = mr.room;
 

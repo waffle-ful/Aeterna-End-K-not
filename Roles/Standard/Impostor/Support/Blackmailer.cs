@@ -91,6 +91,7 @@ internal class Blackmailer : RoleBase
 
     public override void AfterMeetingTasks()
     {
+        NumBlackmailedThisRound = 0;
         if (AbilityExpires.GetValue() != 0 || BlackmailedPlayerIds.Count == 0) return;
 
         BlackmailedPlayerIds.Clear();

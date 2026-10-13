@@ -1011,6 +1011,7 @@
   "Helper": "Helper",
   "HelperInfo": "Complete Tasks For Others",
   "HelperInfoLong": "(<#8cffff>Crewmates</color>):\n<size=80%>Your task completions also complete tasks for others.\n_____________________________________\nDifficulty: ★☆☆☆☆\n\n[Skills]\n・<b><color=#8cffff>Task Share</color></b>\nEach time you complete a task, a random crewmate also has one of their tasks marked complete.\n\n<i>One for all, all for one.</i></size>",
+  "Helper.AbilityWorksAfterDeath": "Ability Works After Death",
   "HelperCompletedTaskForYou": "The {0} completed a task for you!",
   "Ignitor": "Ignitor",
   "IgnitorInfo": "Light Candles for High Vision",
