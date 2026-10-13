@@ -402,6 +402,15 @@ internal static class AirshipStatusOnEnablePatch
         ShipStatusOnEnablePatch.Postfix();
     }
 }
+// The Fungle も OnEnable を自前で持つので、基底のパッチだけでは原子炉などの参照が埋まらない (時間切れで試合が終わらない)
+[HarmonyPatch(typeof(FungleShipStatus), nameof(FungleShipStatus.OnEnable))]
+internal static class FungleShipStatusOnEnablePatch
+{
+    public static void Postfix()
+    {
+        ShipStatusOnEnablePatch.Postfix();
+    }
+}
 [HarmonyPatch(typeof(ShipStatus), nameof(ShipStatus.OnEnable))]
 internal static class ShipStatusOnEnablePatch
 {

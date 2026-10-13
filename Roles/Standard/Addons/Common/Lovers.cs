@@ -16,6 +16,7 @@ internal class Lovers : IAddon
     public static OptionItem NeutralCanBeInLove;
     public static OptionItem CovenCanBeInLove;
     public static OptionItem CrewLoversWinWithCrew;
+    public static OptionItem MultiPairsWinTogether;
     public static OptionItem LegacyLovers;
     public static OptionItem LovingImpostorSpawnChance;
     public static OptionItem LovingImpostorRoleForOtherImps;
@@ -98,6 +99,11 @@ internal class Lovers : IAddon
             .SetGameMode(customGameMode);
 
         CrewLoversWinWithCrew = new BooleanOptionItem(id + 8, "CrewLoversWinWithCrew", true, TabGroup.Addons)
+            .SetParent(spawnOption)
+            .SetGameMode(customGameMode);
+
+        // 複数組が残って誰もキルできない時の扱い — オフなら追放で 1 組に減るまで試合を続ける
+        MultiPairsWinTogether = new BooleanOptionItem(id + 17, "LoversMultiPairsWinTogether", false, TabGroup.Addons)
             .SetParent(spawnOption)
             .SetGameMode(customGameMode);
 
