@@ -37,6 +37,14 @@ internal static class VoiceVoxManager
     private static readonly Dictionary<byte, VoiceProfile> Assigned = new();
     private static int _poolCursor;
 
+    // Game-start ColorId -> real owner. Colors are unique in a lobby, so the color a speaker currently shows
+    // tells whose look they are wearing. Voices follow the look, not the person: a disguised player must
+    // not be given away by their own voice. Built in Reset (game start, before any disguise).
+    private static readonly Dictionary<int, byte> ColorOwner = new();
+    // Voice for a look nobody owns (comms camouflage etc.) — everyone wearing it sounds the same.
+    private static VoiceProfile _anonymous;
+    private static readonly HashSet<int> SharedColors = new();
+
     // Style ids discovered from GET /speakers. Written by the worker, read on the main thread -> lock.
     private static List<int> _availableStyleIds = new();
     private static readonly object PoolLock = new();
@@ -123,7 +131,27 @@ internal static class VoiceVoxManager
         lock (TextLock) TextQueue.Clear();
         lock (AudioLock) AudioQueue.Clear();
         Assigned.Clear();
+        _anonymous = null;
         _poolCursor = 0;
+
+        ColorOwner.Clear();
+        try
+        {
+            // A color worn by two people at start owns nobody: those players keep their own voice
+            // (TryGetApparentOwner falls back to the speaker) rather than borrowing each other's.
+            var shared = new HashSet<int>();
+            foreach (PlayerControl pc in Main.EnumeratePlayerControls())
+            {
+                if (!pc || pc.Data == null) continue;
+                int color = pc.Data.DefaultOutfit.ColorId;
+                if (!ColorOwner.TryAdd(color, pc.PlayerId)) shared.Add(color);
+            }
+
+            foreach (int color in shared) ColorOwner.Remove(color);
+            SharedColors.Clear();
+            SharedColors.UnionWith(shared);
+        }
+        catch (Exception e) { Utils.ThrowException(e); }
         _nextPlayTime = 0f;
         try { if (_currentSource != null) _currentSource.Stop(); }
         catch { /* pooled source may be gone */ }
@@ -212,14 +240,32 @@ internal static class VoiceVoxManager
         _currentClip = null;
     }
 
+    // MAIN THREAD. Whose look the speaker is showing right now. false = a look nobody owns (camouflage).
+    // Outside a game (lobby colors can change freely) the speaker is always themselves.
+    internal static bool TryGetApparentOwner(PlayerControl player, out byte ownerId)
+    {
+        ownerId = player.PlayerId;
+        if (!GameStates.InGame || ColorOwner.Count == 0) return true;
+
+        int color;
+        try { color = player.CurrentOutfit.ColorId; }
+        catch { return true; }
+
+        if (SharedColors.Contains(color)) return true;
+        return ColorOwner.TryGetValue(color, out ownerId);
+    }
+
     // MAIN THREAD. Priority: config override (friendCode first, then name) -> pool auto-assign.
     private static VoiceProfile ResolveProfile(PlayerControl player)
     {
-        byte id = player.PlayerId;
+        if (!TryGetApparentOwner(player, out byte id))
+            return _anonymous ??= new VoiceProfile { StyleId = NextPoolStyle() };
+
         if (Assigned.TryGetValue(id, out VoiceProfile existing)) return existing;
 
-        string fc = player.FriendCode ?? string.Empty;
-        string nm = player.GetRealName() ?? string.Empty;
+        PlayerControl owner = id == player.PlayerId ? player : Utils.GetPlayerById(id);
+        string fc = owner?.FriendCode ?? string.Empty;
+        string nm = (owner ? owner.GetRealName() : Main.AllPlayerNames.GetValueOrDefault(id)) ?? string.Empty;
         VoiceProfile profile = null;
 
         foreach ((string friendCode, string name, VoiceProfile p) o in VoiceVoxVoiceConfig.Overrides)
@@ -239,16 +285,18 @@ internal static class VoiceVoxManager
             }
         }
 
-        if (profile == null)
-        {
-            int[] pool = GetPool();
-            int styleId = pool.Length > 0 ? pool[_poolCursor % pool.Length] : 3;
-            _poolCursor++;
-            profile = new VoiceProfile { StyleId = styleId };
-        }
+        profile ??= new VoiceProfile { StyleId = NextPoolStyle() };
 
         Assigned[id] = profile;
         return profile;
+    }
+
+    private static int NextPoolStyle()
+    {
+        int[] pool = GetPool();
+        int styleId = pool.Length > 0 ? pool[_poolCursor % pool.Length] : 3;
+        _poolCursor++;
+        return styleId;
     }
 
     // config explicit pool > /speakers-derived > hardcoded fallback

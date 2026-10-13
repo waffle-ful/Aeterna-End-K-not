@@ -2500,6 +2500,7 @@ public static class BackroomsLobby
     private const int ShadowLayer = 10;
 
     private static bool _inBackrooms;
+    internal static bool IsActive => _inBackrooms;
     // 最後に EnterCustomMap で入場したカスタムマップ。テクスチャ解放で「実際に表示中のマップ」を
     // 確実に指すために保持する (ActiveSource は load 中に新マップへ差し替わるため当てにできない)。
     private static CustomMapSource _lastEnteredSource;
@@ -4909,6 +4910,27 @@ internal static class BackroomsVisionUpdateHook
         // UpdateStreaming (chunk 境界跨ぎで Load/Unload 差分・早期 return が普通) → UpdateCulling → UpdateVision を
         // まとめて呼ぶ。/bbperf ON 時はこの 3 つの CPU 時間を計測して 1 秒ごとにログ出力する
         BackroomsLobby.RunPerFrameUpdates();
+    }
+}
+
+// 本編のロビー (飛行中のドロップシップ) は設定「画面シェイク」が ON だと常にカメラを揺らす。
+// Backrooms には似合わないので、入室中だけ Update の間 shakeAmount を 0 にして直後に戻す
+// (フィールドを書き換えたままにすると退出後の本編ロビーまで揺れなくなる)。
+// 視聴者干渉の地震 (AudienceCutscene.ShakeCamera) は自前のジッターなので影響しない。
+[HarmonyPatch(typeof(FollowerCamera), nameof(FollowerCamera.Update))]
+internal static class BackroomsCameraShakeSuppressPatch
+{
+    public static void Prefix(FollowerCamera __instance, out float __state)
+    {
+        __state = -1f;
+        if (!BackroomsLobby.IsActive) return;
+        __state = __instance.shakeAmount;
+        __instance.shakeAmount = 0f;
+    }
+
+    public static void Postfix(FollowerCamera __instance, float __state)
+    {
+        if (__state >= 0f) __instance.shakeAmount = __state;
     }
 }
 

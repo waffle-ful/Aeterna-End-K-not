@@ -1,12 +1,14 @@
 using System;
 using System.Collections;
+using Hazel;
 using UnityEngine;
 
 namespace EndKnot.Modules.Audience;
 
 // 干渉発動時にホスト(配信者)画面へオリジナルのフルスクリーン演出をローカル再生する。
 // バニラ会議演出の流用ではなく専用デザイン (ストロボフラッシュ+警告帯+タイトルスラム) で、
-// 本物の会議招集と見分けが付くようにしてある。IMGUI 描画のみ・ネットワーク送信ゼロ。
+// 本物の会議招集と見分けが付くようにしてある。IMGUI 描画のみ。全員に見えている干渉だけは
+// モッド客にも同じ演出を送る (RpcShareWithModdedClients)。
 // LobbyCodeBubble / AudienceInfoBubble と同じく Main.cs で AddComponent 登録される。
 //
 // 共通の骨格 (ストロボ→暗幕→ハザード帯→タイトルスラム→干渉名→視聴者名) は全種別で共有しつつ、
@@ -98,6 +100,58 @@ public class AudienceCutscene : MonoBehaviour
             PlayFadingSound(sound, EarthquakeSoundDuration, EarthquakeSoundFade);
         else
             CustomSoundsManager.Play(sound);
+    }
+
+    // ---- モッド客への共有 ----
+    // 全員の画面で起きていることが分かる干渉だけをモッド客にも見せる。呪い/祝福 (対象が割れる)・
+    // 偽死体 (偽物だと分かったら成立しない)・1人の変身 (誰かが化けたと分かる) はホスト画面だけ。
+    // RPC 番号は使い切っているので、モッド客向け効果音同期 (ControllableSound) の sub-op 2 に載せる。
+    private const int SharedAuthorMaxLength = 40;
+
+    private static bool IsSharedWithModdedClients(string kindKey) => kindKey is
+        "Blackout" or "Reactor" or "Comms" or "Doors" or "Meteor" or "Earthquake" or "Voice" or "ShuffleAll";
+
+    public static void RpcShareWithModdedClients(string kindKey, string author, string message)
+    {
+        try
+        {
+            if (!AmongUsClient.Instance.AmHost || !IsSharedWithModdedClients(kindKey)) return;
+            if (AudienceOptions.InterventionCutscene == null || !AudienceOptions.InterventionCutscene.GetBool()) return;
+            if (!AnyOtherModdedClient()) return;
+
+            author ??= string.Empty;
+            if (author.Length > SharedAuthorMaxLength)
+                author = author[..(char.IsHighSurrogate(author[SharedAuthorMaxLength - 1]) ? SharedAuthorMaxLength - 1 : SharedAuthorMaxLength)];
+
+            MessageWriter writer = AmongUsClient.Instance.StartRpcImmediately(PlayerControl.LocalPlayer.NetId, (byte)CustomRPC.ControllableSound, SendOption.Reliable);
+            writer.Write((byte)2);
+            writer.Write(kindKey);
+            writer.Write(author);
+            writer.Write(message ?? string.Empty);
+            AmongUsClient.Instance.FinishRpcImmediately(writer);
+        }
+        catch (Exception e) { Utils.ThrowException(e); }
+    }
+
+    public static void ReceiveFromHost(string kindKey, MessageReader reader)
+    {
+        string author = reader.ReadString();
+        string message = reader.ReadString();
+        if (AmongUsClient.Instance.AmHost || !IsSharedWithModdedClients(kindKey)) return;
+
+        Play(kindKey, author, byte.MaxValue, message.Length == 0 ? null : message);
+
+        // ホストでは大地震の揺れを DoEarthquake が仕掛けるが、客ではそこを通らないのでここで揺らす。
+        if (kindKey == "Earthquake")
+            ShakeCamera(AudienceInterventions.QuakeCameraShakeDuration, AudienceInterventions.QuakeCameraShakeSeverity);
+    }
+
+    private static bool AnyOtherModdedClient()
+    {
+        foreach (PlayerControl pc in Main.EnumeratePlayerControls())
+            if (pc && !pc.AmOwner && pc.IsModdedClient()) return true;
+
+        return false;
     }
 
     // 干渉種別ごとの演出パラメータ。実機スクショを見ながらの微調整はこの表だけを触れば済む。

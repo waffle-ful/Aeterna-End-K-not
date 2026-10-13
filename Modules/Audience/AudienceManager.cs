@@ -329,6 +329,7 @@ public static class AudienceManager
 
         // Text は天の声のみ非 null。演出側で本文を画面にも出す (読み上げと同時に見せる)。
         AudienceCutscene.Play(item.Kind.ToString(), item.Author, item.TargetId, item.Text);
+        AudienceCutscene.RpcShareWithModdedClients(item.Kind.ToString(), item.Author, item.Text);
 
         Logger.Info($"Audience intervention executed: {item.Kind} (author={item.Author}, price={price})", "Audience");
         // 投稿層の例外が intervention の bookkeeping (return true 到達) を壊さないよう隔離する。

@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using EndKnot.Modules.Audience;
 using EndKnot.Modules.YouTubeChat;
+using EndKnot.Roles;
 
 namespace EndKnot.Modules.Companion;
 
@@ -175,7 +177,13 @@ public static class CompanionEventEmitter
         // ロビー/終了後は IsAlive() が観戦ホスト等で false になるため判定しない。
         if (!GameStates.IsLobby && !GameStates.IsEnded && !player.IsAlive()) return;
 
-        string name = player.GetRealName(true).RemoveHtmlTags();
+        // ラバーズの秘密チャット (会議外) は相方にしか見えない。載せると誰がラバーズか配信に出てしまう。
+        if (Lovers.PrivateChat.GetBool() && !GameStates.IsMeeting && player.Is(CustomRoles.Lovers)) return;
+
+        // 変装中は画面に出ている見た目の持ち主の名前で載せる (本名を載せると正体が配信に出る)。
+        string name = !EndKnot.Modules.VoiceVox.VoiceVoxManager.TryGetApparentOwner(player, out byte ownerId) ? "???"
+            : ownerId == player.PlayerId ? player.GetRealName(true).RemoveHtmlTags()
+            : Main.AllPlayerNames.GetValueOrDefault(ownerId, "???").RemoveHtmlTags();
         string phase = GameStates.IsMeeting ? "meeting" : GameStates.InGame ? "ingame" : "lobby";
 
         Emit("playerChat", w =>

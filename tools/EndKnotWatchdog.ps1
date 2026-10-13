@@ -27,7 +27,8 @@
 #>
 
 param(
-    [int]$RunSeconds = 0   # 0 = 無限 (通常運用)。>0 でその秒数後に自動終了 (テスト/ドライラン用)。
+    [int]$RunSeconds = 0,  # 0 = 無限 (通常運用)。>0 でその秒数後に自動終了 (テスト/ドライラン用)。
+    [string]$Platform = '' # 'Steam' / 'Epic'。ゲーム内から起動した時は End K not が自分の版を渡す。空なら捕捉した exe のパスで判断する。
 )
 
 # =========================== 設定 (必要なら書き換え) ===========================
@@ -382,6 +383,33 @@ function Save-HangDump {
     }
 }
 
+# Steam 版の AU を見張っているか。ゲームから渡された版を優先し、無ければ捕捉した exe が steamapps 配下かで決める。
+function Test-SteamInstall {
+    if ($Platform -eq 'Steam') { return $true }
+    if ($Platform -eq 'Epic') { return $false }
+    return [bool]($script:CapturedExe -and $script:CapturedExe -like '*\steamapps\*')
+}
+
+# Steam 版は Steam 本体が先に立っていないと SteamAPI の初期化に失敗し、日付確認の画面で真っ黒のまま止まる。
+# steam:// URL は Steam 本体も起こすが、起動直後のログイン中に AU が立つと同じ症状になるので先に起こして待つ。
+function Start-SteamClientIfNeeded {
+    if (Get-Process -Name 'steam' -ErrorAction SilentlyContinue) { return }
+    $exe = $null
+    try { $exe = (Get-ItemProperty -Path 'HKCU:\Software\Valve\Steam' -ErrorAction Stop).SteamExe } catch { }
+    try {
+        if ($exe -and (Test-Path $exe)) {
+            Write-WatchLog "Steam 本体が起動していないため -silent で起動し、ログインを待ちます (30s)..." 'Yellow'
+            Start-Process -FilePath $exe -ArgumentList '-silent'
+        } else {
+            Write-WatchLog "Steam 本体が起動していないため steam:// で起動し、ログインを待ちます (30s)..." 'Yellow'
+            Start-Process 'steam://open/main'
+        }
+        Start-Sleep -Seconds 30
+    } catch {
+        Write-WatchLog "Steam 本体の起動に失敗: $($_.Exception.Message)" 'Red'
+    }
+}
+
 # Epic マニフェストから Among Us の起動URLを自動検出する。
 function Find-EpicLaunchUrl {
     try {
@@ -409,6 +437,7 @@ function Find-EpicLaunchUrl {
 # 起動手段を決める。戻り値: @{ Kind = 'url'|'exe'; Value = ... } または $null
 function Resolve-LaunchTarget {
     if ($EpicLaunchUrl)      { return @{ Kind = 'url'; Value = $EpicLaunchUrl } }
+    if (Test-SteamInstall)   { return @{ Kind = 'steam'; Value = 'steam://rungameid/945360' } }
     $auto = Find-EpicLaunchUrl
     if ($auto)               { return @{ Kind = 'url'; Value = $auto } }
     if ($AuExePathOverride -and (Test-Path $AuExePathOverride)) { return @{ Kind = 'exe'; Value = $AuExePathOverride } }
@@ -506,7 +535,11 @@ function Start-Au {
         if ($AutoHostOnRelaunch) {
             try { Set-Content -Path $MarkerFile -Value ([DateTime]::Now.ToString('o')) -Encoding utf8; Write-WatchLog "自動ホスト依頼マーカー作成: $MarkerFile" 'DarkGray' } catch { }
         }
-        if ($target.Kind -eq 'url') {
+        if ($target.Kind -eq 'steam') {
+            Start-SteamClientIfNeeded
+            Write-WatchLog "AU を起動します (Steam): $($target.Value)" 'Yellow'
+            Start-Process $target.Value
+        } elseif ($target.Kind -eq 'url') {
             Write-WatchLog "AU を起動します (Epic): $($target.Value)" 'Yellow'
             Start-Process $target.Value
         } else {
@@ -547,6 +580,8 @@ function Test-InternetAlive {
 # EGL 本体の再起動でリフレッシュトークンから静かに再認証されるかは未検証 — 効けば bootdeath-hold
 # からの復帰が全自動になる。効かなくても現状 (手動サインイン待ち) より悪くはならない。
 function Restart-EpicLauncher {
+    # Steam 版の認証は EOS でなく Steam 側なので、EGL を再起動しても何も変わらない。
+    if (Test-SteamInstall) { return }
     try {
         $exe = $null
         $egl = Get-Process -Name 'EpicGamesLauncher' -ErrorAction SilentlyContinue
@@ -961,7 +996,11 @@ while ($true) {
         $sinceLaunch = ($now - $script:LastRelaunch).TotalSeconds
         if ($sinceLaunch -lt $BootDeathRetrySec) {
             $leftSec = [int]($BootDeathRetrySec - $sinceLaunch)
-            $holdMsg = "ブート死ループ検知 [bootdeath-hold]: 回線は生きているのにブート死が続く = EOS/Epic 認証切れの疑い。再起動では直りません。Epic Games Launcher をサインアウト→サインインし、AU を手動起動してメインメニュー到達を確認してください。自動再試行まで残り ${leftSec}s。"
+            $holdMsg = if (Test-SteamInstall) {
+                "ブート死ループ検知 [bootdeath-hold]: 回線は生きているのにブート死が続く = 認証切れの疑い。再起動では直りません。Steam のログイン状態を確認し、AU を手動起動してメインメニュー到達を確認してください。自動再試行まで残り ${leftSec}s。"
+            } else {
+                "ブート死ループ検知 [bootdeath-hold]: 回線は生きているのにブート死が続く = EOS/Epic 認証切れの疑い。再起動では直りません。Epic Games Launcher をサインアウト→サインインし、AU を手動起動してメインメニュー到達を確認してください。自動再試行まで残り ${leftSec}s。"
+            }
             if (((Get-Date) - $script:LastHoldLog).TotalSeconds -ge 300) {
                 $script:LastHoldLog = Get-Date
                 Write-WatchLog $holdMsg 'Magenta'

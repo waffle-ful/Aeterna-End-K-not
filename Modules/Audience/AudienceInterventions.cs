@@ -35,8 +35,8 @@ public static class AudienceInterventions
     private const float QuakeOffsetMin = 0.5f;
     private const float QuakeOffsetMax = 0.8f;
     private const int QuakeSnapToBudgetFloor = 60; // ラウンド消費がここを超えていたら TP 部分ごと諦める (他役職の分を残す)
-    private const float QuakeCameraShakeDuration = 6f; // TP ドレイン (最大 12人×0.3s≈3.6s) を包み込み、余韻まで揺らす
-    private const float QuakeCameraShakeSeverity = 0.35f; // ワールド座標の振幅 (カメラ orthoSize≈3 に対して十分派手)
+    internal const float QuakeCameraShakeDuration = 6f; // TP ドレイン (最大 12人×0.3s≈3.6s) を包み込み、余韻まで揺らす
+    internal const float QuakeCameraShakeSeverity = 0.35f; // ワールド座標の振幅 (カメラ orthoSize≈3 に対して十分派手)
 
     // ---- !偽死体 の状態 (通報インターセプト用) ----
     private static readonly HashSet<byte> FakeBodyIds = [];

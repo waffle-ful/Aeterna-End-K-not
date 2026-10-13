@@ -126,7 +126,7 @@ public static class OptionsMenuBehaviourStartPatch
                     // (SetLobbyBGM はロビー再入場時にしか呼ばれない)。状態に合わせて復帰する。
                     if (GameStates.IsLobby) Modules.BGMManager.SetLobbyBGM();
                     else if (GameStates.InGame && !GameStates.IsEnded && GameStates.IsMeeting) Modules.BGMManager.SetMeetingBGM();
-                    else if (GameStates.InGame && !GameStates.IsEnded) Modules.BGMManager.SetTaskBGM();
+                    else if (GameStates.InGame && !GameStates.IsEnded) Modules.BGMManager.SetTaskBGM(newRound: false);
                     else Modules.BGMManager.SetMenuBGM();
                 }
                 else

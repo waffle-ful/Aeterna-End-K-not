@@ -4,7 +4,8 @@ using UnityEngine;
 
 namespace EndKnot.Modules;
 
-// 演出に付ける効果音。鳴らすのは演出を描くクライアント自身で、送信は無い (演出が見えない人には音も届かない)。
+// 演出に付ける効果音。鳴らすのは演出を描くクライアント自身で、送信は無い。
+// 視界の中に隠す演出の音は、聞き手から見えている時だけ鳴る (NeedSight)。
 // 聞こえ方は聞き手と音源の位置関係で変える:
 //   距離      … NearDist までは元の音量、そこから FarDist へ向けて絞り、FarDist より遠ければ鳴らさない
 //   左右      … 音源が画面の右にあれば右から聞こえる
@@ -40,6 +41,36 @@ public static class FxSound
     // AudioSource の pitch / panStereo が実行時に使えない環境では、一度失敗したら以後触らない
     private static bool _shapingBroken;
 
+    // 視界の中に隠す演出 (ExplosionFx の Seen.Vision) を描いている間だけ立つ。このときは聞き手から
+    // 見えない所 (視界の半径の外・壁の向こう) では音を鳴らさない。こもった音でも、キルの瞬間と方向が伝わってしまう
+    internal static bool NeedSight;
+
+    // 聞き手 (自分) から pos が見えているか。幽霊は壁も暗闇も関係なく見えるので常に true
+    internal static bool LocalSees(Vector2 pos)
+    {
+        PlayerControl lp = PlayerControl.LocalPlayer;
+        if (!lp || !lp.IsAlive()) return true;
+
+        Vector2 ear = lp.Pos();
+        float dx = pos.x - ear.x, dy = pos.y - ear.y;
+        return SeesFrom(lp, ear, pos, FxMath.Sqrt(dx * dx + dy * dy));
+    }
+
+    private static bool SeesFrom(PlayerControl lp, Vector2 ear, Vector2 pos, float dist)
+    {
+        float sight = FarDist;
+        try
+        {
+            LightSource ls = lp.lightSource;
+            if (ls) sight = ls.viewDistance;
+        }
+        catch { }
+
+        // 演出の絵は点でなく少し広がるので、視界の縁ぎりぎりの出来事は見えている扱いにする
+        if (dist > sight + 0.5f) return false;
+        return dist <= 1f || !Blocked(lp, ear, pos);
+    }
+
     // everywhere = 画面全体に掛かる演出の音。距離で絞らず、左右にも振らない
     // farGain = 遠くまで届く音 (爆発) の下限。FarDist より遠くても、この音量のこもった音で聞こえる
     public static void At(string name, Vector2 pos, float volume = 1f, bool everywhere = false, float farGain = 0f)
@@ -58,6 +89,8 @@ public static class FxSound
             Vector2 ear = lp.Pos();
             float dx = pos.x - ear.x, dy = pos.y - ear.y;
             float dist = FxMath.Sqrt(dx * dx + dy * dy);
+
+            if (NeedSight && !everywhere && lp.IsAlive() && !SeesFrom(lp, ear, pos, dist)) return;
 
             float gain = 1f;
             float pan = 0f;

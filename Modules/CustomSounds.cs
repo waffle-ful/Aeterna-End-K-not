@@ -141,7 +141,9 @@ public static class CustomSoundsManager
 
     private static readonly Dictionary<string, (AudioSource Source, AudioClip Clip)> ControllableSessions = [];
 
-    public static void RpcPlayControllableAll(string sound, float volume, float startOffset)
+    // 音源の位置を渡すと、各クライアントが自分との距離で音量を決める (遠ければ鳴らさない)。
+    // 位置は sub-op 0 の末尾に足すので、位置を読まない古い版の客はこれまで通り全音量で鳴らす。
+    public static void RpcPlayControllableAll(string sound, float volume, float startOffset, Vector2? from = null, Vector2? to = null)
     {
         try
         {
@@ -152,9 +154,41 @@ public static class CustomSoundsManager
             writer.Write(sound);
             writer.Write(volume);
             writer.Write(startOffset);
+
+            if (from is { } a)
+            {
+                Vector2 b = to ?? a;
+                writer.Write(a.x);
+                writer.Write(a.y);
+                writer.Write(b.x);
+                writer.Write(b.y);
+            }
+
             AmongUsClient.Instance.FinishRpcImmediately(writer);
         }
         catch (Exception e) { Utils.ThrowException(e); }
+    }
+
+    // a〜b の線分 (点なら a == b) から自分までの距離で決める音量の倍率。0 なら聞こえない距離
+    private const float PositionalNearDist = 6f;
+    private const float PositionalFarDist = 18f;
+
+    public static float PositionalVolume(Vector2 a, Vector2 b)
+    {
+        PlayerControl lp = PlayerControl.LocalPlayer;
+        if (!lp) return 1f;
+
+        Vector2 p = lp.Pos();
+        Vector2 ab = b - a;
+        float lenSq = ab.sqrMagnitude;
+        float t = lenSq > 0.0001f ? Mathf.Clamp01(Vector2.Dot(p - a, ab) / lenSq) : 0f;
+        float dist = Vector2.Distance(p, a + ab * t);
+
+        if (dist <= PositionalNearDist) return 1f;
+        if (dist >= PositionalFarDist) return 0f;
+
+        float k = 1f - (dist - PositionalNearDist) / (PositionalFarDist - PositionalNearDist);
+        return k * k;
     }
 
     public static void RpcStopControllableAll(string sound, float fadeSeconds)
@@ -182,7 +216,12 @@ public static class CustomSoundsManager
             {
                 float volume = reader.ReadSingle();
                 float offset = reader.ReadSingle();
-                PlayControllableSession(sound, volume, offset);
+
+                (Vector2 A, Vector2 B)? span = null;
+                if (reader.BytesRemaining >= 16)
+                    span = (new Vector2(reader.ReadSingle(), reader.ReadSingle()), new Vector2(reader.ReadSingle(), reader.ReadSingle()));
+
+                PlayControllableSession(sound, volume, offset, span);
                 break;
             }
             case 1:
@@ -191,15 +230,29 @@ public static class CustomSoundsManager
                 StopControllableSession(sound, fade);
                 break;
             }
+            case 2:
+            {
+                // 視聴者干渉のカットイン。sound の位置には干渉の種別名が入っている。
+                Audience.AudienceCutscene.ReceiveFromHost(sound, reader);
+                break;
+            }
         }
     }
 
-    private static void PlayControllableSession(string sound, float volume, float startOffset)
+    // 位置付きのセッションの元の音量と音源。鳴っている間、聞き手の移動に合わせて音量を付け直す
+    private static readonly Dictionary<string, (float Base, Vector2 A, Vector2 B)> SessionSpans = [];
+
+    private static void PlayControllableSession(string sound, float volume, float startOffset, (Vector2 A, Vector2 B)? span = null)
     {
         StopControllableSession(sound, 0f);
 
-        AudioSource src = PlayControllable(sound, volume);
+        // 聞こえない距離でも音量 0 で鳴らしておく (途中で近づいた人に、鳴っている途中から聞こえるように)
+        float startVolume = span is { } sp ? volume * PositionalVolume(sp.A, sp.B) : volume;
+        AudioSource src = PlayControllable(sound, startVolume);
         if (src == null) return;
+
+        if (span is { } s2) SessionSpans[sound] = (volume, s2.A, s2.B);
+        else SessionSpans.Remove(sound);
 
         if (startOffset > 0f && startOffset < src.clip.length) src.time = startOffset;
         ControllableSessions[sound] = (src, src.clip);
@@ -237,6 +290,9 @@ public static class CustomSoundsManager
                 src.Stop();
                 yield break;
             }
+
+            if (Time.frameCount % 6 == 0 && SessionSpans.TryGetValue(sound, out var sp))
+                src.volume = sp.Base * PositionalVolume(sp.A, sp.B);
 
             yield return null;
         }
