@@ -454,6 +454,10 @@ tools/*
 !tools/AndroidIcallAudit/
 tools/AndroidIcallAudit/bin/
 tools/AndroidIcallAudit/obj/
+# ...and the Android runtime patcher (reproduces the patched assemblies inside the launcher's dotnet / BepInEx assets).
+!tools/AndroidDotnetPatch/
+tools/AndroidDotnetPatch/bin/
+tools/AndroidDotnetPatch/obj/
 # ...and the crash-recovery watchdog, which is embedded into the DLL & shipped as a feature.
 !tools/EndKnotWatchdog.ps1
 !tools/番犬スタート.cmd

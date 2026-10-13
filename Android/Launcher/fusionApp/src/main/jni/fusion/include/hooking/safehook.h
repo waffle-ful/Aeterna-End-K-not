@@ -22,6 +22,10 @@ bool safehook_setup_bridge_helper(const char *bridge_library_path);
 // Returns a pointer to the original function, which can be used to call the original implementation from the hook.
 void *safehook_create_hook(void *target_function, void *hook_function, bool use_bridge);
 
+// True when the arm64 code runs under binary translation on an x86 host (emulators). Every hook then goes
+// through a trampoline in the pool next to libil2cpp.so.
+bool safehook_is_translated_host();
+
 // Destroys the hook created by safehook_create_hook, restoring the original function.
 void safehook_destroy_hook(void *target);
 

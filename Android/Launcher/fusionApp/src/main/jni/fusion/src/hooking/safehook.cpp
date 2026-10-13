@@ -5,6 +5,7 @@
 #include <logger.h>
 #include <dlfcn.h>
 #include <sys/mman.h>
+#include <sys/system_properties.h>
 #include <bits/sysconf.h>
 #include <mutex>
 #include <cstdio>
@@ -269,6 +270,22 @@ void *bridge_hook(void *target_function, void *hook_function)
     return trampoline;
 }
 
+// True when this arm64 code runs under binary translation on an x86 host (emulators).
+// Dobby's own far branch lands 4 GiB off there, so every hook goes through a pool trampoline.
+// uname() is no help: the translator reports an arm machine to translated code. The primary ABI
+// property still names the host.
+bool safehook_is_translated_host()
+{
+    static const bool translated = [] {
+        char abi[PROP_VALUE_MAX] = {};
+        __system_property_get("ro.product.cpu.abi", abi);
+        bool result = strncmp(abi, "x86", 3) == 0;
+        log_format(LogLevel::INFO, TAG, "Primary ABI: {} (translated: {})", static_cast<const char *>(abi), result);
+        return result;
+    }();
+    return translated;
+}
+
 void *safehook_create_hook(void *target_function, void *hook_function, bool use_bridge)
 {
     std::lock_guard<std::mutex> guard(hook_mutex);
@@ -307,8 +324,10 @@ void *safehook_create_hook(void *target_function, void *hook_function, bool use_
         }
     }
 
+    bool translated = safehook_is_translated_host();
+
     // check if target function is inside libil2cpp.so
-    if (rva >= library_size)
+    if (rva >= library_size && !translated)
     {
         log_format(LogLevel::WARN, TAG,
                    "Target function at offset 0x{:X} is outside of library bounds (base 0x{:X}, size 0x{:X}), using Dobby directly.",
@@ -316,7 +335,7 @@ void *safehook_create_hook(void *target_function, void *hook_function, bool use_
         return dobby_hook(target_function, actual_hook);
     }
 
-    if (withinLimits)
+    if (withinLimits && !translated)
     {
             log_format(LogLevel::DEBUG, TAG,
                             "Target at offset 0x{:X} is within near branch limits, using Dobby with near branch.",
@@ -325,7 +344,7 @@ void *safehook_create_hook(void *target_function, void *hook_function, bool use_
         return dobby_hook(target_function, actual_hook, true);
     }
 
-    if (!is_small_function(target_function))
+    if (!translated && !is_small_function(target_function))
     {
         log_format(LogLevel::DEBUG, TAG,
                           "Target at offset 0x{:X} is long enough, using Dobby directly.", rva);
@@ -339,20 +358,20 @@ void *safehook_create_hook(void *target_function, void *hook_function, bool use_
         if (!allocator)
         {
             log(LogLevel::DEBUG, TAG, "Allocator is null, using Dobby with auto near branch.");
-            return dobby_hook(target_function, actual_hook, true);
+            return translated ? nullptr : dobby_hook(target_function, actual_hook, true);
         }
 
         void *trampoline = allocator(target_function, reinterpret_cast<void *>(library_base), trampoline_size);
         if (!trampoline)
         {
             log(LogLevel::ERROR, TAG, "Failed to allocate trampoline. Using Dobby as a fallback.");
-            return dobby_hook(target_function, actual_hook, true);
+            return translated ? nullptr : dobby_hook(target_function, actual_hook, true);
         }
 
         if (!protect_trampoline(trampoline, trampoline_size, PROT_READ | PROT_WRITE))
         {
             log(LogLevel::ERROR, TAG, "Failed to set memory protection for trampoline! Using Dobby as a fallback.");
-            return dobby_hook(target_function, actual_hook, true);
+            return translated ? nullptr : dobby_hook(target_function, actual_hook, true);
         }
 
         log_format(LogLevel::DEBUG, TAG,
@@ -367,7 +386,7 @@ void *safehook_create_hook(void *target_function, void *hook_function, bool use_
         if (!success)
         {
             log(LogLevel::ERROR, TAG, "Failed to write trampoline! Using Dobby as a fallback.");
-            return dobby_hook(target_function, actual_hook, true);
+            return translated ? nullptr : dobby_hook(target_function, actual_hook, true);
         }
 
         // we need to clear instruction cache to make sure our hook works.
@@ -378,7 +397,7 @@ void *safehook_create_hook(void *target_function, void *hook_function, bool use_
         if (!protect_trampoline(trampoline, trampoline_size, PROT_READ | PROT_EXEC))
         {
             log(LogLevel::ERROR, TAG, "Failed to set memory protection for trampoline! Using Dobby as a fallback.");
-            return dobby_hook(target_function, actual_hook, true);
+            return translated ? nullptr : dobby_hook(target_function, actual_hook, true);
         }
 
         // Hook the target

@@ -77,6 +77,12 @@ int il2cpp_init_hook(char *domain_name)
         setenv("FUSION_GAME_DATA_DIR", runtimeConfig.unityDataDirectory.c_str(), 1);
         setenv("FUSION_APP_DATA_DIR", runtimeConfig.appDataDirectory.c_str(), 1);
         setenv("FUSION_UNITY_VERSION", runtimeConfig.unityVersion.c_str(), 1);
+        if (safehook_is_translated_host()) {
+            // The bundled System.Diagnostics.Process and MonoMod.Core count read-only library mappings as
+            // modules when this is set; under translation no arm64 library is mapped executable
+            // (see tools/AndroidDotnetPatch).
+            setenv("FUSION_TRANSLATED", "1", 1);
+        }
 
         const char *ssl_cert_path = "/apex/com.android.conscrypt/cacerts";
         const char *backup_cert_path = "/system/etc/security/cacerts";
@@ -98,6 +104,14 @@ int il2cpp_init_hook(char *domain_name)
         dotNetConfig.entryPointType = "BepInEx.Unity.IL2CPP.FusionCoreEntrypoint";
         dotNetConfig.entryPointMethod = "Start";
         dotNetConfig.perfMapDir = crashDirectory;
+
+        // MonoMod keeps its helper library under LocalApplicationData, which .NET derives from HOME. An app
+        // process has no usable HOME (it resolves to /data), so point it at the launcher's private files.
+        const char *home = getenv("HOME");
+        if (!home || !*home || access(home, W_OK) != 0) {
+            setenv("HOME", fs::path(runtimeConfig.appDataDirectory).parent_path().c_str(), 1);
+            log_format(LogLevel::INFO, TAG, "HOME set to {}", getenv("HOME"));
+        }
 
         // set TMPDIR for MonoMod lib drops
         setenv("TMPDIR", runtimeConfig.codeCacheDirectory.c_str(), 1);

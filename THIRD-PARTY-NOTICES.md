@@ -49,9 +49,11 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles)�
 | FusionCore | All-Of-Us-Mods — [FusionCore](https://github.com/All-Of-Us-Mods/FusionCore) | GPL-3.0 | source, `Android/Launcher/` (git subtree, rebranded Android launcher) |
 | BepInEx Fusion | All-Of-Us-Mods — [BepInExFusion](https://github.com/All-Of-Us-Mods/BepInExFusion) | LGPL-2.1 | bundled in the launcher APK (`Android/Launcher/fusionApp/src/main/assets/BepInEx-arm64.zip`) |
 | Il2CppInterop Fusion | All-Of-Us-Mods — [Il2CppInteropFusion](https://github.com/All-Of-Us-Mods/Il2CppInteropFusion) | LGPL-3.0 | bundled in the launcher APK (`Android/Launcher/fusionApp/src/main/assets/BepInEx-arm64.zip`) |
-| .NET runtime | Microsoft & .NET Foundation — [dotnet/runtime](https://github.com/dotnet/runtime) | MIT | bundled in the launcher APK (`Android/Launcher/fusionApp/src/main/assets/dotnet-arm64.zip`, `jniLibs/arm64-v8a/`) |
+| .NET runtime | Microsoft & .NET Foundation — [dotnet/runtime](https://github.com/dotnet/runtime) | MIT | bundled in the launcher APK (`Android/Launcher/fusionApp/src/main/assets/dotnet-arm64.zip`, `jniLibs/arm64-v8a/`; `System.Diagnostics.Process.dll` patched) |
+| MonoMod (`MonoMod.Core`, `MonoMod.Utils`, `MonoMod.RuntimeDetour`, `MonoMod.Iced`) | 0x0ade — [MonoMod](https://github.com/MonoMod/MonoMod) | MIT | bundled in the launcher APK (`BepInEx-arm64.zip`; builds shipped with FusionCore, `MonoMod.Core` patched) |
 | Dobby (modified) | jmpews — [Dobby](https://github.com/jmpews/Dobby) | Apache-2.0 | bundled in the launcher APK (`jniLibs/arm64-v8a/libdobby.so`); changes in [`Android/Launcher/third_party/dobby/`](./Android/Launcher/third_party/dobby/) |
 | OpenSSL | The OpenSSL Project Authors — [OpenSSL](https://github.com/openssl/openssl) | Apache-2.0 | bundled in the launcher APK (`jniLibs/arm64-v8a/libcrypto.so`, `libssl.so`) |
+| LLVM libunwind | The LLVM Project — [llvm-project](https://github.com/llvm/llvm-project) | Apache-2.0 WITH LLVM-exception | bundled in the launcher APK (`libfusionunwind.so`, built from the Android NDK's `libunwind.a`) |
 | AndroidX (annotation, appcompat, browser, coordinatorlayout, core) / Material Components | The Android Open Source Project / Google — [AndroidX](https://github.com/androidx/androidx), [material-components-android](https://github.com/material-components/material-components-android) | Apache-2.0 | bundled in the launcher APK |
 | Kotlin standard library / kotlinx.serialization | JetBrains — [Kotlin](https://github.com/JetBrains/kotlin), [kotlinx.serialization](https://github.com/Kotlin/kotlinx.serialization) | Apache-2.0 | bundled in the launcher APK |
 | Protocol Buffers (protobuf-javalite) | Google — [protobuf](https://github.com/protocolbuffers/protobuf) | BSD-3-Clause | bundled in the launcher APK |
@@ -315,7 +317,7 @@ BepInEx・Unity Doorstop・MiraAPI のスプライトは LGPL-2.1 で、無改�
 
 ## Apache-2.0 components (Dobby, OpenSSL, Android launcher libraries)
 
-`dobby.dll` (release packages), and `libdobby.so`, `libcrypto.so`, `libssl.so`, AndroidX,
+`dobby.dll` (release packages), and `libdobby.so`, `libcrypto.so`, `libssl.so`, `libfusionunwind.so`, AndroidX,
 Material Components, the Kotlin standard library and kotlinx.serialization (Android launcher APK)
 are licensed under the Apache License 2.0. The full text is in [`licenses/Apache-2.0.txt`](./licenses/Apache-2.0.txt).
 
@@ -324,6 +326,9 @@ are licensed under the Apache License 2.0. The full text is in [`licenses/Apache
   build steps are in [`Android/Launcher/third_party/dobby/README.md`](./Android/Launcher/third_party/dobby/README.md).
   `dobby.dll` is redistributed unmodified.
 - OpenSSL — Copyright (c) 1998-2025 The OpenSSL Project Authors.
+- LLVM libunwind (`libfusionunwind.so`) — Copyright (c) LLVM Project contributors, Apache-2.0 with LLVM
+  Exceptions. Built from the unwinder archive in the Android NDK (r28) with its `_Unwind_*` symbols exported
+  (`Android/Launcher/fusionApp/src/main/jni/unwind/`).
 - AndroidX / Material Components — Copyright The Android Open Source Project / Google LLC.
 - Kotlin / kotlinx.serialization — Copyright JetBrains s.r.o. and Kotlin Programming Language contributors.
 
@@ -402,14 +407,17 @@ and the tracked upstream commit is recorded in [`Android/Launcher/UPSTREAM.md`](
 ## BepInEx Fusion (LGPL-2.1)
 
 [BepInExFusion](https://github.com/All-Of-Us-Mods/BepInExFusion) (All-Of-Us-Mods) is bundled
-unmodified inside the Android launcher APK (`Android/Launcher/fusionApp/src/main/assets/BepInEx-arm64.zip`;
-only its `BepInEx.cfg` settings are adjusted for the launcher) and extracted on the device at first start.
+inside the Android launcher APK (`Android/Launcher/fusionApp/src/main/assets/BepInEx-arm64.zip`) and extracted
+on the device at first start. Its `BepInEx.cfg` settings are adjusted for the launcher, and the MonoMod
+libraries in it (`MonoMod.Core`, `MonoMod.Utils`, `MonoMod.RuntimeDetour`, `MonoMod.Iced`, MIT) are replaced
+with the builds shipped in FusionCore, with `MonoMod.Core` patched (see
+[`Android/Launcher/UPSTREAM.md`](./Android/Launcher/UPSTREAM.md)). The BepInEx assemblies themselves are unmodified.
 The Il2CppInterop assemblies BepInEx would otherwise generate on the device are pre-generated with the same
 bundled tools and shipped as `interop-arm64.zip`. The full text of the GNU Lesser General Public License v2.1
 is available at <https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html>, and the project's own
 repository carries its license file.
 
-Android ランチャーの APK に無改変で同梱し、初回起動時に端末へ展開しています。LGPL-2.1 の全文は
+Android ランチャーの APK に同梱し、初回起動時に端末へ展開しています。BepInEx 本体は無改変で、`BepInEx.cfg` の設定と、同梱の MonoMod (MIT) を FusionCore 同梱のビルドに差し替えて `MonoMod.Core` に手を入れた点だけが異なります。LGPL-2.1 の全文は
 <https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html> を参照してください。
 
 ## Il2CppInterop Fusion (LGPL-3.0)
@@ -424,8 +432,9 @@ project's own repository carries its license file.
 ## .NET runtime
 
 The .NET runtime (Microsoft & .NET Foundation, [dotnet/runtime](https://github.com/dotnet/runtime)) is
-bundled unmodified inside the Android launcher APK (`Android/Launcher/fusionApp/src/main/assets/dotnet-arm64.zip`)
-under the MIT License. The full text is available at <https://github.com/dotnet/runtime/blob/main/LICENSE.TXT>.
+bundled inside the Android launcher APK (`Android/Launcher/fusionApp/src/main/assets/dotnet-arm64.zip`)
+under the MIT License. `System.Diagnostics.Process.dll` is patched (see
+[`Android/Launcher/UPSTREAM.md`](./Android/Launcher/UPSTREAM.md)); the rest is unmodified. The full text is available at <https://github.com/dotnet/runtime/blob/main/LICENSE.TXT>.
 
 ## AndroidUtilities / AuthFix
 

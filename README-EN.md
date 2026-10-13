@@ -329,6 +329,7 @@ End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/End
 - **[CrowdedMod](https://github.com/CrowdedMods/CrowdedMod)** (andry08 / CrowdedMods, MIT) — large-lobby support
 - **[Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles)** (Gurge44 et al., GPL-3.0) — base mod: the role engine, the large majority of roles, and an ongoing source of bug fixes
 - **[ExtremeRoles](https://github.com/yukieiji/ExtremeRoles)** (yukieiji) — Airship patches
+- **[FusionCore](https://github.com/All-Of-Us-Mods/FusionCore)** (All-Of-Us-Mods, GPL-3.0) — base of the Android launcher; hook handling for hosts that run it under translation (x86_64 emulators)
 - **[Game Optimizer (CPUs / Threads Optimizer)](https://github.com/charlie754/Game-Optimizer-CPUs-Threads-Optimizer)** (charlie754, MIT) — the idea of isolating cache domains with CPU Sets (the `CpuSetsMode` setting); our code is written directly against the Win32 API
 - **ImaMapleTree / 단풍잎 / Tealeaf** — ability activation via the pet button
 - **[Lotus (LotusContinued)](https://github.com/Lotus-AU/LotusContinued)** / [NikoCat233 fork](https://github.com/NikoCat233/LotusContinued) (GPL-3.0) — settings-conflict detection with host warnings, whitelist join restriction
