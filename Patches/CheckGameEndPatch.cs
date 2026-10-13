@@ -126,8 +126,18 @@ internal static class GameEndChecker
             CustomSabotage.Reset();
 
             int saboWinner = Options.WhoWinsBySabotageIfNoImpAlive.GetValue();
+            bool saboWinnerDecided = false;
 
-            if (reason == GameOverReason.ImpostorsBySabotage && saboWinner != 0 && !Main.EnumerateAlivePlayerControls().Any(x => x.Is(Team.Impostor)))
+            if (reason == GameOverReason.ImpostorsBySabotage && SabotageSystemTypeUpdateSystemPatch.CriticalSabotageByAudience)
+            {
+                Logger.Info("Sabotage started by the audience timed out: no winner", "CheckGameEnd");
+                ResetAndSetWinner(CustomWinner.None);
+                saboWinnerDecided = true;
+            }
+            else if (reason == GameOverReason.ImpostorsBySabotage)
+                saboWinnerDecided = SetSaboteurFactionWinner();
+
+            if (!saboWinnerDecided && reason == GameOverReason.ImpostorsBySabotage && saboWinner != 0 && !Main.EnumerateAlivePlayerControls().Any(x => x.Is(Team.Impostor)))
             {
                 bool anyNKAlive = Main.EnumerateAlivePlayerControls().Any(x => x.IsNeutralKiller());
                 bool anyCovenAlive = Main.EnumeratePlayerControls().Any(x => x.Is(Team.Coven));
@@ -528,6 +538,56 @@ internal static class GameEndChecker
         }
     }
 
+    // サボの時間切れは既定でインポスター勝利 — インポスター陣営以外のキル陣営が鳴らしていたら、その陣営の勝ちに差し替える。
+    // 鳴らした本人の生死は問わない。キルで勝たない役職 (第三陣営の非キル役・クルーの破壊工作員) は従来の判定に任せる。
+    private static bool SetSaboteurFactionWinner()
+    {
+        byte saboteurId = SabotageSystemTypeUpdateSystemPatch.CriticalSaboteurId;
+        if (!Main.PlayerStates.TryGetValue(saboteurId, out PlayerState saboteurState)) return false;
+
+        // 抜けた人の PlayerControl は無いので、陣営は試合中の記録から引く
+        PlayerControl saboteur = GetPlayerById(saboteurId);
+        bool isImpostorSide = saboteur ? saboteur.Is(Team.Impostor) : saboteurState.MainRole.IsImpostorTeamV2() || saboteurState.SubRoles.Contains(CustomRoles.Madmate);
+        bool isCoven = saboteur ? saboteur.Is(Team.Coven) : saboteurState.MainRole.IsCoven() || saboteurState.SubRoles.Contains(CustomRoles.Entranced);
+        if (isImpostorSide) return false;
+
+        if (isCoven)
+        {
+            // 勝者の顔ぶれは後段の CustomWinner.Coven の振り分けに任せる (マッド・引き込まれた人を除く条件があちらにある)
+            ResetAndSetWinner(CustomWinner.Coven);
+            Logger.Info($"Sabotage win goes to the saboteur's faction: Coven (id {saboteurId})", "CheckGameEnd");
+            return true;
+        }
+
+        CountTypes countTypes = saboteur ? saboteur.GetCountTypes() : saboteurState.countTypes;
+        if (countTypes is CountTypes.Crew or CountTypes.Impostor or CountTypes.None or CountTypes.OutOfGame or CountTypes.CustomTeam or CountTypes.Coven) return false;
+
+        // 引き込まれた人は自分の役職では陣営が分からないので、同じ陣営に居る本来のキル役から勝者を決める
+        CustomRoles? leaderRole = null;
+        List<PlayerControl> faction = Main.EnumeratePlayerControls().Where(x => x.GetCountTypes() == countTypes).ToList();
+
+        foreach (PlayerControl pc in faction.OrderBy(x => x.PlayerId != saboteurId))
+        {
+            CustomRoles role = pc.Is(CustomRoles.Bloodlust) ? CustomRoles.Bloodlust : pc.GetCustomRole();
+            if ((!role.IsNK() && role is not CustomRoles.Bloodlust and not CustomRoles.Gaslighter) || role.IsMadmate()) continue;
+
+            leaderRole = role;
+            break;
+        }
+
+        if (!leaderRole.HasValue && !saboteur && saboteurState.MainRole.IsNK() && !saboteurState.MainRole.IsMadmate()) leaderRole = saboteurState.MainRole;
+        if (!leaderRole.HasValue) return false;
+
+        CustomRoles leader = leaderRole.Value;
+        bool jackalTeam = leader.IsJackalTeamMember();
+        ResetAndSetWinner(jackalTeam ? CustomWinner.Jackal : leader is CustomRoles.Altair ? CustomWinner.Vega : (CustomWinner)leader);
+        if (!jackalTeam && !leader.IsRecruitingRole()) WinnerRoles.Add(leader is CustomRoles.Altair ? CustomRoles.Vega : leader);
+        WinnerIds.UnionWith(faction.Select(x => x.PlayerId));
+        WinnerIds.Add(saboteurId);
+        Logger.Info($"Sabotage win goes to the saboteur's faction: {WinnerTeam} (id {saboteurId})", "CheckGameEnd");
+        return true;
+    }
+
     private static void StartEndGame(GameOverReason reason)
     {
         try { LobbySharingAPI.NotifyLobbyStatusChanged(LobbyStatus.Ended); }
@@ -900,6 +960,17 @@ internal static class GameEndChecker
                         if (Lovers.PairIndexOf(aapc[aliveIndex].PlayerId) != firstPair) singlePair = false;
                         // クルー陣営のキル役 (シェリフ等) は恋人を撃てない設定がありうるので決着役に数えない
                         if (aapc[aliveIndex].CanUseKillButton() && !aapc[aliveIndex].IsCrewmate()) anyCanKill = true;
+                    }
+
+                    // 共存勝利がオフなら、2 人揃った組が複数ある間は決着を付けずに追放で 1 組へ減るのを待つ
+                    // (後追いしない設定で片割れだけが残った場合まで止めると、誰も勝てずに終わらなくなる)
+                    if (!singlePair && !anyCanKill && !Lovers.MultiPairsWinTogether.GetBool())
+                    {
+                        int intactPairs = 0;
+                        foreach (int pair in Lovers.PairOf.Values.Distinct())
+                            if (Lovers.CountAlive(pair) >= 2) intactPairs++;
+
+                        if (intactPairs >= 2) return false;
                     }
 
                     if (singlePair || !anyCanKill)

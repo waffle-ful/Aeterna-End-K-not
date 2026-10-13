@@ -572,6 +572,39 @@ public static class TestBridge
             return;
         }
 
+        // 視聴者参加の「リアクター」をコメント無しで起こす (時間切れの勝者なし判定の確認用)
+        if (directive.Equals("audreactor", StringComparison.OrdinalIgnoreCase))
+        {
+            try { WriteOut(Audience.AudienceInterventions.DoReactor() ? "OK audreactor" : "ERR audreactor refused"); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR audreactor failed"); }
+            return;
+        }
+
+        // 重大サボの実体とキャッシュの食い違いを見る (時間切れで試合が終わらない時の切り分け)
+        if (directive.Equals("critsabo", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                var sb = new StringBuilder();
+                sb.Append($"OK critsabo map={Main.NormalOptions.MapId} ship={(ShipStatus.Instance ? ShipStatus.Instance.GetIl2CppType().Name : "null")}");
+
+                foreach (SystemTypes t in new[] { SystemTypes.Reactor, SystemTypes.Laboratory, SystemTypes.LifeSupp, SystemTypes.HeliSabotage })
+                {
+                    if (!ShipStatus.Instance || !ShipStatus.Instance.Systems.TryGetValue(t, out ISystemType sys)) continue;
+                    var crit = sys.TryCast<ICriticalSabotage>();
+                    sb.Append($" | {t}:{sys.Cast<Il2CppSystem.Object>().GetIl2CppType().Name}");
+                    if (crit != null) sb.Append($" active={crit.IsActive} cd={crit.Countdown:0.0}");
+                }
+
+                var cached = ShipStatusSystem.ICriticalSabotage;
+                sb.Append($" | cachedCrit={(cached == null ? "null" : $"active={cached.IsActive} cd={cached.Countdown:0.0}")}");
+                sb.Append($" cachedReactor={(ShipStatusSystem.ReactorSystemType == null ? "null" : "set")} utilsActive={Utils.IsActive(SystemTypes.Reactor)}");
+                WriteOut(sb.ToString());
+            }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR critsabo failed"); }
+            return;
+        }
+
         // サノスに石を 6 個持たせる (指パッチンの流れを 1 人卓で試す)。`thanosstones`
         if (directive.Equals("thanosstones", StringComparison.OrdinalIgnoreCase))
         {

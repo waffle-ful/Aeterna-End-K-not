@@ -391,10 +391,29 @@ public static class SabotageSystemTypeUpdateSystemPatch
 
     public static SabotageSystemType Instance;
 
+    // 時間切れの勝者を鳴らした陣営にするため、最後に原子炉・酸素を起こした人を覚えておく (持ち主のない起動は byte.MaxValue)
+    public static byte CriticalSaboteurId = byte.MaxValue;
+    // 視聴者が起こした原子炉・酸素は誰の手柄でもないので、時間切れは勝者なしにする
+    public static bool CriticalSabotageByAudience;
+
     public static void Initialize()
     {
         IsCooldownModificationEnabled = Options.SabotageCooldownControl.GetBool();
         ModifiedCooldownSec = Options.SabotageCooldown.GetFloat();
+        CriticalSaboteurId = byte.MaxValue;
+        CriticalSabotageByAudience = false;
+    }
+
+    public static void NoteCriticalSaboteur(SabotageSystemType sabotage, PlayerControl player, SystemTypes systemTypes)
+    {
+        // 別のサボが進行中ならバニラ側で弾かれる — 押しただけの人を記録すると進行中の爆発の手柄を奪う
+        if (sabotage != null && sabotage.AnyActive) return;
+
+        if (systemTypes is SystemTypes.Reactor or SystemTypes.Laboratory or SystemTypes.LifeSupp or SystemTypes.HeliSabotage)
+        {
+            CriticalSaboteurId = player ? player.PlayerId : byte.MaxValue;
+            CriticalSabotageByAudience = false;
+        }
     }
 
     public static class SabotageDoubleTrigger
@@ -551,11 +570,19 @@ public static class SabotageSystemTypeUpdateSystemPatch
 
         if (!Rhapsode.CheckAbilityUse(player) || Stasis.IsTimeFrozen || TimeMaster.Rewinding) return false;
 
-        if (player.Is(CustomRoles.Mischievous)) return true;
+        if (player.Is(CustomRoles.Mischievous))
+        {
+            NoteCriticalSaboteur(__instance, player, systemTypes);
+            return true;
+        }
 
         // DemonicSupporter (dead Mad ghost) keeps the impostor sabotage button — allow it past the
         // dead/non-impostor cancel checks below.
-        if (DemonicSupporter.IsAssigned(player.PlayerId)) return true;
+        if (DemonicSupporter.IsAssigned(player.PlayerId))
+        {
+            NoteCriticalSaboteur(__instance, player, systemTypes);
+            return true;
+        }
 
         if (player.Is(Team.Impostor) && !player.IsAlive() && Options.DeadImpCantSabotage.GetBool()) return false;
         if (!player.Is(Team.Impostor) && !player.IsAlive()) return false;
@@ -577,6 +604,8 @@ public static class SabotageSystemTypeUpdateSystemPatch
 
         if (allow)
         {
+            NoteCriticalSaboteur(__instance, player, systemTypes);
+
             try { EndKnot.Modules.Companion.CompanionEventEmitter.OnSabotageStart(systemTypes); } catch { } // AI実況相棒アプリ向けイベント (OFF 時は即 return)
 
             // EKR logic: on_sabotage はサボ成立のこの一点関門で発火する

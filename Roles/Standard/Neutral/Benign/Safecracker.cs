@@ -242,6 +242,8 @@ public class Safecracker : RoleBase
 
         SystemTypes picked = available[IRandom.Instance.Next(available.Count)];
         ShipStatus.Instance.RpcUpdateSystem(picked, 128);
+        // 金庫破りの勝ち筋はタスクだけなので、時間切れの勝者は鳴らした人に寄せない
+        SabotageSystemTypeUpdateSystemPatch.NoteCriticalSaboteur(null, null, picked);
         Logger.Info($"Sabotage triggered: {picked}", "Safecracker");
         return true;
     }

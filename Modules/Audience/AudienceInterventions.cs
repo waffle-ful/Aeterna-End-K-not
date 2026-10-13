@@ -111,6 +111,9 @@ public static class AudienceInterventions
         if (Utils.IsActive(sabo)) return false;
 
         ShipStatus.Instance.RpcUpdateSystem(sabo, 128);
+        SabotageSystemTypeUpdateSystemPatch.NoteCriticalSaboteur(null, null, sabo);
+        if (sabo is SystemTypes.Reactor or SystemTypes.Laboratory or SystemTypes.LifeSupp or SystemTypes.HeliSabotage)
+            SabotageSystemTypeUpdateSystemPatch.CriticalSabotageByAudience = true;
         return true;
     }
 
