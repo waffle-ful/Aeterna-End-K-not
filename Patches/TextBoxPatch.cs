@@ -46,7 +46,8 @@ public static class TextBoxPatch
     private static bool IsChatOrSearchTextBox(TextBoxTMP textBox) =>
         textBox.gameObject.HasParentInHierarchy("ChatScreenRoot/ChatScreenContainer")
         || (GameSettingMenuPatch.InputField && GameSettingMenuPatch.InputField.textArea == textBox)
-        || (NumericOptionInputPatch.ActiveField && NumericOptionInputPatch.ActiveField.textArea == textBox); // 数値入力欄も検索欄と同じ入力経路で受ける
+        || (NumericOptionInputPatch.ActiveField && NumericOptionInputPatch.ActiveField.textArea == textBox) // 数値入力欄も検索欄と同じ入力経路で受ける
+        || (YouTubePostTextEditPatch.ActiveField && YouTubePostTextEditPatch.ActiveField.textArea == textBox);
 
     // Set by Main when this class is actually registered with Harmony. Where it is not (Android runs the
     // vanilla TextBoxTMP untouched), nothing ever writes LastText, so the mirror must not be trusted.

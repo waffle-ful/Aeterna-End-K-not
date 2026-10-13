@@ -280,6 +280,9 @@ public class Main : BasePlugin
     public static ConfigEntry<string> YouTubePostClientSecret { get; private set; }
     public static ConfigEntry<string> YouTubePostRefreshToken { get; private set; }
     public static ConfigEntry<string> YouTubePostMessages { get; private set; }
+    public static ConfigEntry<string> YouTubePostWelcomeText { get; private set; }
+    public static ConfigEntry<string> YouTubePostCountdownText { get; private set; }
+    public static ConfigEntry<string> YouTubePostPromoText { get; private set; }
     public static ConfigEntry<bool> YouTubePostExplained { get; private set; }
     public static ConfigEntry<bool> EnableVoiceVox { get; private set; }
     public static ConfigEntry<string> VoiceVoxEngineUrl { get; private set; }
@@ -635,7 +638,10 @@ public class Main : BasePlugin
         YouTubePostClientId = Config.Bind("Client Options", "YouTubePostClientId", "", "OAuth client ID for the YouTube Data API, used only to auto-post chat messages (join code / player count / rotation) to your own live chat. Obtained via an external setup helper; leave empty (with the secret/refresh token) to disable posting entirely.");
         YouTubePostClientSecret = Config.Bind("Client Options", "YouTubePostClientSecret", "", "OAuth client secret paired with YouTubePostClientId. Leave empty to disable posting.");
         YouTubePostRefreshToken = Config.Bind("Client Options", "YouTubePostRefreshToken", "", "OAuth refresh token used to mint short-lived access tokens for posting to YouTube live chat. Leave empty to disable posting.");
-        YouTubePostMessages = Config.Bind("Client Options", "YouTubePostMessages", "", "Newline-separated rotation of promotional messages that the stream-rotation post option cycles through.");
+        YouTubePostMessages = Config.Bind("Client Options", "YouTubePostMessages", "", "Newline-separated rotation of promotional messages that the stream-rotation post option cycles through. Each line may use {code} (lobby code), {current} (players in the lobby) and {needed} (players needed to start). Editable in-game from the # button on the rotation option row.");
+        YouTubePostWelcomeText = Config.Bind("Client Options", "YouTubePostWelcomeText", "", "Custom text for the how-to-join post. {code} is replaced with the lobby code (appended at the end when missing). Empty = the built-in text. Editable in-game from the # button on the option row.");
+        YouTubePostCountdownText = Config.Bind("Client Options", "YouTubePostCountdownText", "", "Custom text for the players-needed post. {current} = players in the lobby, {needed} = players needed to start, {code} = lobby code. Empty = the built-in text. Editable in-game from the # button on the option row.");
+        YouTubePostPromoText = Config.Bind("Client Options", "YouTubePostPromoText", "", "Custom text for the mod link post. {code}, {current} and {needed} can be used. Empty = the built-in text. Editable in-game from the # button on the option row.");
         YouTubePostExplained = Config.Bind("Client Options", "YouTubePostExplained", false, "Internal: whether the one-time in-game setup explanation for YouTube auto-post has been shown.");
         EnableVoiceVox = Config.Bind("Client Options", "EnableVoiceVox", false);
         VoiceVoxEngineUrl = Config.Bind("Client Options", "VoiceVoxEngineUrl", "http://127.0.0.1:50021");
