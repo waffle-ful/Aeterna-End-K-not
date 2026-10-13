@@ -254,6 +254,9 @@ internal static class UpdateSystemPatch
                     if (petcd) pc.AddAbilityCD();
                     else pc.RpcResetAbilityCooldown();
                 }
+
+                if (pc.Is(CustomRoles.Evader) && !Evader.IsVanillaSabotageActive())
+                    pc.RpcMakeVisible();
             }
         }
     }

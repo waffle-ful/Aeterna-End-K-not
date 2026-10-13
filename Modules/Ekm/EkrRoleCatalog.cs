@@ -64,6 +64,7 @@ internal static class EkrRoleCatalog
         ["Engineer"] = "crewmate",
         ["Enigma"] = "crewmate",
         ["Escort"] = "crewmate",
+        ["Evader"] = "crewmate",
         ["Express"] = "crewmate",
         ["Farmer"] = "crewmate",
         ["ForceFielder"] = "crewmate",
