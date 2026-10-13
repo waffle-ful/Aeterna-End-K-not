@@ -53,7 +53,9 @@ internal class Changeling : RoleBase
                 _ => allRoles
             };
 
-            if (!CanPickPartnerRole.GetBool() && !check) result = result.Where(x => !CustomRoleSelector.RoleResult.ContainsValue(x));
+            // The bulk Init at game start runs before the role selection result exists (null in the first game of a session).
+            Dictionary<byte, CustomRoles> taken = CustomRoleSelector.RoleResult;
+            if (!CanPickPartnerRole.GetBool() && !check && taken != null) result = result.Where(x => !taken.ContainsValue(x));
 
             List<CustomRoles> rolesList = result.ToList();
             rolesList.Remove(CustomRoles.Changeling);
