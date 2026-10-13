@@ -200,6 +200,9 @@ namespace EndKnot
 
         // スプライト文字 CNO が見た目用の Shapeshift で名前の先頭に付ける印。客側はこれの有無でプレイヤー型 CNO と見分ける
         internal const string SpriteNamePrefix = "<size=14><br></size>";
+        // HideOnHost の CNO が付ける印。見た目は SpriteNamePrefix と同じ (空の <i></i> は何も描かない)。
+        // その見た目はホストの演出が描き、演出はモッド客にも届くので、モッド客はこの印の CNO の名前を出さない
+        internal const string HostFxNamePrefix = SpriteNamePrefix + "<i></i>";
 
         // CreateNetObject 完了後に呼ばれる派生クラス用 hook。
         // player-like CNO はここで Utils.RpcChangeSkin 等で個別 outfit を適用する。
@@ -353,7 +356,7 @@ namespace EndKnot
                 sender.checkLength = false; // ⚠️ 下の writer キャッシュを壊さないため必須 — 理由は CreateNetObject 側の同コメント参照
                 MessageWriter writer = sender.stream;
                 sender.StartMessage();
-                PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].PlayerName = SpriteNamePrefix + sprite;
+                PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].PlayerName = (HideOnHost ? HostFxNamePrefix : SpriteNamePrefix) + sprite;
                 PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].ColorId = 0;
                 PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].HatId = "";
                 PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].SkinId = "";
@@ -982,7 +985,7 @@ namespace EndKnot
 
                         MessageWriter writer = sender.stream;
                         sender.StartMessage(onlyVisibleTo && !onlyVisibleTo.AmOwner ? onlyVisibleTo.OwnerId : -1);
-                        PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].PlayerName = SpriteNamePrefix + sprite;
+                        PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].PlayerName = (HideOnHost ? HostFxNamePrefix : SpriteNamePrefix) + sprite;
                         PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].ColorId = 0;
                         PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].HatId = "";
                         PlayerControl.LocalPlayer.Data.Outfits[PlayerOutfitType.Default].SkinId = "";

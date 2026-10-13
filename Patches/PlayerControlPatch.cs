@@ -1207,6 +1207,25 @@ internal static class ShapeshiftPatch
 
     public static void Postfix(PlayerControl __instance, [HarmonyArgument(0)] PlayerControl target)
     {
+        // ホストの演出 (ExplosionFx) が同じ見た目を描く CNO は、演出を受け取るモッド客でも出さない (出すと二重に描かれる)。
+        // 変身先の名前の印で見分ける。可視化の MurderPlayer で客自身の見た目の体が出るので、名前だけでなく体ごと隠す (2026-10-14 実機)
+        if (!AmongUsClient.Instance.AmHost && target && target.Data && __instance.Pointer != target.Pointer)
+        {
+            try
+            {
+                string shownName = target.Data.Outfits[PlayerOutfitType.Default].PlayerName;
+                if (shownName != null && shownName.StartsWith(CustomNetObject.HostFxNamePrefix, StringComparison.Ordinal))
+                {
+                    __instance.transform.FindChild("Names").FindChild("NameText_TMP").gameObject.SetActive(false);
+                    __instance.Visible = false;
+                    SpriteRenderer hostFxBody = __instance.cosmetics.currentBodySprite.BodySprite;
+                    if (hostFxBody) hostFxBody.enabled = false;
+                    return;
+                }
+            }
+            catch (Exception e) { Utils.ThrowException(e); }
+        }
+
         // Set CNO name visible for modded clients after shapeshift
         // ⚠️ Hide() でホストから隠した CNO は対象外にする。スプライト適用の Shapeshift はこの Postfix を
         // 必ず通るため、無条件に出すと onlyVisibleTo 指定の CNO (Druid の探知機 / Whisperer の魂) が
