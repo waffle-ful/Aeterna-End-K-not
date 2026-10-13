@@ -65,9 +65,10 @@ public static class TextBoxPatch
 
     // Wholesale replacement that parks the caret at the end. Use this instead of bare SetText() for any
     // history/tab/paste path where the caret position from the previous content is meaningless.
-    public static void SetChatFieldText(TextBoxTMP area, string text) { if (!area) return; text ??= ""; if (text.Length > 4096) text = text[..4096]; area.SetText(text); area.compoText = ""; LastCompoText = "";
+    // A non-negative caret parks it there instead (paste inserts at the caret).
+    public static void SetChatFieldText(TextBoxTMP area, string text, int caret = -1) { if (!area) return; text ??= ""; if (text.Length > 4096) text = text[..4096]; area.SetText(text); area.compoText = ""; LastCompoText = "";
 #if !ANDROID
-        int cap = area.characterLimit > 0 ? area.characterLimit : text.Length; area.caretPos = Math.Clamp(text.Length, 0, cap); try { area.MoveCaret(); } catch { }
+        int cap = area.characterLimit > 0 ? area.characterLimit : text.Length; area.caretPos = Math.Clamp(caret < 0 ? text.Length : Math.Min(caret, text.Length), 0, cap); try { area.MoveCaret(); } catch { }
 #endif
         area.SetPipePosition(); }
 

@@ -130,6 +130,7 @@ internal static class EkrAddonCatalog
         "Stack",
         "Stained",
         "Tiebreaker",
+        "Transfer",
         "Twins",
         "Urgent",
         "Youtuber",

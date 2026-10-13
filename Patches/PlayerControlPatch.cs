@@ -2252,7 +2252,11 @@ internal static class FixedUpdatePatch
                 alloc = Modules.AllocProbe.Mark("pc.core.role", roleStart);
 
                 bool checkPos = inTask && !exile && !AntiBlackout.SkipTasks && alive && !Pelican.IsEaten(playerId) && Main.IntroDestroyed;
-                if (checkPos) Asthmatic.OnCheckPlayerPosition(player);
+                if (checkPos)
+                {
+                    Asthmatic.OnCheckPlayerPosition(player);
+                    Transfer.OnCheckPlayerPosition(player);
+                }
 
                 foreach (PlayerState state in Main.PlayerStates.Values)
                 {

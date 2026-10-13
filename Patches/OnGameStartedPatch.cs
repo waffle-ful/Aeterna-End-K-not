@@ -451,6 +451,7 @@ internal static class ChangeRoleSettings
                 Shibboleth.Init();
                 Stressed.Init();
                 Asthmatic.Init();
+                Transfer.Init();
                 DoubleShot.Init();
                 Circumvent.Init();
                 Commited.Init();

@@ -135,6 +135,7 @@ export const ADDON_META: readonly AddonMeta[] = [
   { id: "Stack", group: "Mixed", ja: "スタック", en: "Stack", info: "選択した属性を束ねて付与する", infoEn: "Bundles selected add-ons", midGameForbidden: false, basisChanging: false, clientOnly: false },
   { id: "Stained", group: "Mixed", ja: "汚染", en: "Stained", info: "キラーの名前が3秒間紫色になる", infoEn: "Your killer gets a violet name for 3s", midGameForbidden: false, basisChanging: false, clientOnly: false },
   { id: "Tiebreaker", group: "Mixed", ja: "タイブレイカー", en: "Tiebreaker", info: "同数投票をぶち壊す", infoEn: "Break tied votes", midGameForbidden: false, basisChanging: false, clientOnly: false },
+  { id: "Transfer", group: "Mixed", ja: "乗り換え", en: "Transfer", info: "ベントを踏むとランダムなベントへ飛ばされる", infoEn: "Stepping on a vent sends you to a random vent", midGameForbidden: false, basisChanging: false, clientOnly: false },
   { id: "Twins", group: "Mixed", ja: "双子", en: "Twins", info: "もう一人の双子と組まれる", infoEn: "Paired with another Twin", midGameForbidden: false, basisChanging: false, clientOnly: false },
   { id: "Urgent", group: "Mixed", ja: "緊急", en: "Urgent", info: "緊急会議が+1回増える", infoEn: "You Have +1 Emergency Meeting", midGameForbidden: false, basisChanging: false, clientOnly: false },
   { id: "Youtuber", group: "Mixed", ja: "ユーチューバー", en: "YouTuber", info: "最初に殺害されると 勝利する", infoEn: "Get killed first to win", midGameForbidden: false, basisChanging: false, clientOnly: false },

@@ -571,6 +571,7 @@ public enum CustomRoles
     PortalButton,
     WordKiller,
     Gemini,
+    Evader,
     Convict,
     Survivor,
 
@@ -789,5 +790,8 @@ public enum CustomRoles
     // Shibboleth (addon; sub-role only, so it belongs after NotAssigned like the rest of this block)
     Shibboleth,
     Forewarner, // Ghost role
-    Influencer // Ghost role
+    Influencer, // Ghost role
+
+    // Upstream EHR catchup (add-ons)
+    Transfer
 }

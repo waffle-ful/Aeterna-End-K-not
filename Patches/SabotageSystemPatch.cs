@@ -617,6 +617,19 @@ public static class SabotageSystemTypeUpdateSystemPatch
             if (Main.CurrentMap == MapNames.Skeld)
                 LateTask.New(DoorsReset.OpenAllDoors, 1f, "Opening All Doors On Sabotage (Skeld)");
 
+            if (Evader.On)
+            {
+                foreach (PlayerControl pc in Main.CachedAlivePlayerControls())
+                {
+                    try
+                    {
+                        if (pc.Is(CustomRoles.Evader))
+                            pc.RpcMakeInvisible();
+                    }
+                    catch (Exception e) { Utils.ThrowException(e); }
+                }
+            }
+
             // マッドメイトのセンサーが生存中は、他の(非マッドの)センサーの矢印を実際の妨害者でなく
             // マッド本人へ向ける囮になる。マッド自身の矢印は従来どおり実際の妨害者を指す。
             PlayerControl madSensor = null;

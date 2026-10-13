@@ -37,12 +37,19 @@ internal static class ChatControllerUpdatePatch
 
         // 生の get_text は禁止 (TextBoxPatch.SafeChatText 参照): 解放後に再利用されたスロットからは
         // GameObject 名などのゴミ文字列が返り、それがそのまま下の SetChatFieldText で入力欄へ書き戻される。
-        string combined = TextBoxPatch.SafeChatText(area) + clip;
+        string current = TextBoxPatch.SafeChatText(area);
+        int insertAt = current.Length;
+#if !ANDROID
+        // 貼り付けはキャレット位置へ差し込む (末尾固定だと文の途中へ貼れない)
+        try { insertAt = Math.Clamp(area.caretPos, 0, current.Length); }
+        catch { insertAt = current.Length; }
+#endif
+        string combined = current.Insert(insertAt, clip);
 
         // 安全バイト数以内: 従来どおりフィールドへ (1 メッセージで送っても anti-cheat に引っかからない)
         if (Utf8ByteCount(combined) <= ChatChunkByteBudget)
         {
-            TextBoxPatch.SetChatFieldText(area, combined);
+            TextBoxPatch.SetChatFieldText(area, combined, insertAt + clip.Length);
             return;
         }
 
