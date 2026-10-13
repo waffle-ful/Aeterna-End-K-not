@@ -184,7 +184,7 @@ public static class DataFlagRateLimiter
         QueuedAction qa)
     {
         // Try immediate execution if no backlog
-        if (queue.Count == 0 && (Used(ch) + qa.Cost <= limit || StartWindowBypass))
+        if (queue.Count == 0 && (Used(ch) + FitCost(qa, limit) <= limit || StartWindowBypass))
         {
             Execute(qa);
             NoteSent(ch, qa.Cost);
@@ -205,7 +205,7 @@ public static class DataFlagRateLimiter
         {
             var next = queue.Peek();
 
-            if (used + next.Cost > limit)
+            if (used + FitCost(next, limit) > limit)
                 break;
 
             queue.Dequeue();
@@ -215,6 +215,10 @@ public static class DataFlagRateLimiter
             used += next.Cost;
         }
     }
+
+    // A single action costing more than the whole budget can never fit; let it go once the window is empty instead of
+    // blocking the queue forever. Its full cost is still recorded, so whatever follows waits for the next window.
+    private static int FitCost(QueuedAction qa, int limit) => Math.Min(qa.Cost, limit);
 
     private static void Execute(QueuedAction qa)
     {

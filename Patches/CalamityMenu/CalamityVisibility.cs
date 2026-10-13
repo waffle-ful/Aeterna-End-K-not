@@ -659,6 +659,19 @@ public static class CalamityVisibility
         // ログイン系のダイアログ (サインイン・年齢確認・ログイン失敗など)。
         if (_accountDialogManager != null && AccountDialogWake.IsAnyOpen(_accountDialogManager)) return true;
 
+        // ゲストアカウントを本編のアカウントへ統合するかの確認 (ゲストでログインした後に出る)。EOSManager は
+        // 常駐する容れ物なので、ダイアログ本体 (askToMergeAccount) の active を見る。
+        if (EOSManager.InstanceExists && EOSManager.Instance.askToMergeAccount is { } merge && merge.gameObject.activeInHierarchy)
+        {
+            if (_lastModalLogged != merge.name)
+            {
+                _lastModalLogged = merge.name;
+                Logger.Info($"vanilla dialog open: {merge.name}", "CalamityVisibility");
+            }
+
+            return true;
+        }
+
         if (Object.FindObjectOfType<DisconnectPopup>(true) is { } dp && dp.gameObject.activeInHierarchy) return true;
         if (Object.FindObjectOfType<AnnouncementPopUp>(true) is { } ap && ap.gameObject.activeInHierarchy) return true;
 
