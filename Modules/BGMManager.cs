@@ -278,8 +278,43 @@ public static class BGMManager
         catch { /* vanilla sound not present, ignore */ }
     }
 
-    public static void SetTaskBGM()
+    // intask / climax はラウンドの切れ目 (イントロ明け・会議明け) でだけ決める。生存数を毎秒見て
+    // 切り替えると、曲が変わった瞬間に「今キルがあった」と全員に分かってしまう。
+    // roundTaskSlotStale は会議・追放の間に立ち、明けて最初の番犬 tick で取り直す (客側の会議明け
+    // SetTaskBGM は追放カットシーンより前に走り、追放者がまだ生存扱いのため)。
+    private static string roundTaskSlot;
+    private static bool roundTaskSlotStale = true;
+
+    private static string ComputeRoundTaskSlot()
     {
+        int alive = Main.AllAlivePlayerControlsToList?.Count ?? 15;
+        int threshold = ClimaxCount?.GetInt() ?? 6;
+        return alive <= threshold ? "climax" : "intask";
+    }
+
+    private static void UpdateRoundTaskSlot()
+    {
+        if (GameStates.IsMeeting || ExileController.Instance)
+        {
+            roundTaskSlotStale = true;
+            return;
+        }
+
+        if (!roundTaskSlotStale || !Main.IntroDestroyed || !GameStates.InGame || GameStates.IsEnded || AntiBlackout.SkipTasks) return;
+
+        roundTaskSlot = ComputeRoundTaskSlot();
+        roundTaskSlotStale = false;
+    }
+
+    // newRound=false は試合中に BGM 設定を ON に戻した時用。ここで取り直すと切り替えでキルが分かる。
+    public static void SetTaskBGM(bool newRound = true)
+    {
+        if (newRound || roundTaskSlot == null)
+        {
+            roundTaskSlot = ComputeRoundTaskSlot();
+            roundTaskSlotStale = false;
+        }
+
         if (!IsEnabled()) return;
         Play(GetTaskSlot());
     }
@@ -294,9 +329,7 @@ public static class BGMManager
         // 直したかった無音がユーザーの設定ミス経由で復活してしまう。
         if (IsLocalPlayerDead() && HasTracks("dead") && !WatchdogFailedSlots.Contains("dead")) return "dead";
 
-        int alive = Main.AllAlivePlayerControlsToList?.Count ?? 15;
-        int threshold = ClimaxCount?.GetInt() ?? 6;
-        return alive <= threshold ? "climax" : "intask";
+        return roundTaskSlot ?? ComputeRoundTaskSlot();
     }
 
     // 「曲がある」= 現在のマップで実際に鳴らせる曲があること。マップ指定付きの曲しか無いスロットは
@@ -328,10 +361,15 @@ public static class BGMManager
         WatchdogFailedSlots.Clear();
         stoppedTicks = 0;
         climaxArmed = false;
+        roundTaskSlot = null;
+        roundTaskSlotStale = true;
     }
 
     public static void Tick()
     {
+        // BGM が OFF でも切れ目の記録は続ける。途中で ON にした時に会議前の判定を使い回さないため。
+        UpdateRoundTaskSlot();
+
         if (!IsEnabled() || !CustomSoundsManager.AudioPlatformSupported) return;
 
         // 状態別遅延プリロード。watchdog より先に毎秒無条件で回す (メニュー/ロビー/リザルトでも

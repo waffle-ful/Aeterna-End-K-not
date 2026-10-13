@@ -803,7 +803,7 @@ public static partial class ExplosionFx
 
                 foreach (Request r in Unsent)
                 {
-                    int size = HasExtra(r.Kind) ? 21 : 13;
+                    int size = (HasExtra(r.Kind) ? 21 : 13) + (r.Seen != Seen.Default ? 1 : 0);
                     if (n > 0 && bytes + size > MaxSendBytes) break;
 
                     bytes += size;
@@ -873,6 +873,7 @@ public static partial class ExplosionFx
             Seen seen = r.Seen != Seen.Default ? r.Seen : DefaultSeen(r.Kind);
             _vision = seen is Seen.Vision or Seen.Event;
             _nearFlashOnly = seen == Seen.Vision;
+            FxSound.NeedSight = _nearFlashOnly;
 
             // 知らない種類 (新しい版のホストが送ってきたもの) は描かない
             switch (r.Kind)
@@ -976,7 +977,9 @@ public static partial class ExplosionFx
                 {
                     CannonColors k = CannonPal(r.Radius - 1f);
                     Modules.CannonCutIn.Show((byte)r.A, (CannonTitle)(byte)r.B, k.Light, k.Main, k.Deep);
-                    FxSound.At("FxCannonCutIn", r.Pos, 0.8f, everywhere: true);
+                    // 音は撃った人の位置から鳴らす (遠くの人には届かない)
+                    PlayerControl cutInShooter = Utils.GetPlayerById((byte)r.A);
+                    if (cutInShooter) FxSound.At("FxCannonCutIn", cutInShooter.Pos(), 0.8f);
                     break;
                 }
                 case Kind.Drain:
@@ -1075,6 +1078,7 @@ public static partial class ExplosionFx
             _tag = 0;
             _vision = false;
             _nearFlashOnly = false;
+            FxSound.NeedSight = false;
         }
     }
 
@@ -1098,8 +1102,8 @@ public static partial class ExplosionFx
         float dist = Vector2.Distance(cam.transform.position, c);
         if (dist > reach) return;
 
-        // 視界の外に隠す演出では、すぐ近くで起きた時だけ画面を光らせる (壁の向こうの出来事を閃光で知らせない)
-        if (_nearFlashOnly && dist > 4f) return;
+        // 視界の外に隠す演出では、すぐ近くで見えている時だけ画面を光らせる (壁の向こうの出来事を閃光で知らせない)
+        if (_nearFlashOnly && (dist > 4f || !FxSound.LocalSees(c))) return;
 
         float k = 1f - dist / reach;
         Add(Shape.Solid, c, Vector2.zero, 0.6f, 1f, 1f, flash, flash, flashAlpha * (0.35f + 0.65f * k), 0.004f, 0.08f, delay: delay, followCamera: true);

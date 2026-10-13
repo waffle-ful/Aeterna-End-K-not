@@ -422,9 +422,12 @@ public class JackalHadouHo : RoleBase
     private void PlayChargeSound(float startOffset)
     {
         // モッドクライアントにも同じ offset で同期 (ホストローカルの成否とは独立に送る)
-        CustomSoundsManager.RpcPlayControllableAll(ChargeSoundName, 1f, startOffset);
+        // 音はゲートの位置から聞こえる。遠くの人には届かない
+        Vector2 gate = GatePosition();
+        CustomSoundsManager.RpcPlayControllableAll(ChargeSoundName, 1f, startOffset, gate);
 
-        AudioSource src = CustomSoundsManager.PlayControllable(ChargeSoundName);
+        // 聞こえない距離でも音量 0 で鳴らしておき、ChargeSoundWatch が距離に合わせて付け直す
+        AudioSource src = CustomSoundsManager.PlayControllable(ChargeSoundName, CustomSoundsManager.PositionalVolume(gate, gate));
         if (src == null) return;
 
         ChargeAudio = src;
@@ -441,12 +444,21 @@ public class JackalHadouHo : RoleBase
         ChargeAudioClip = null;
     }
 
+    // 発射音の音源 = ビームの通り道 (ゲート前端から射程の端まで)
+    private (Vector2 Start, Vector2 End) FireSoundSpan()
+    {
+        Vector2 start = BeamStartPoint();
+        return (start, start + Direction * (BeamLengthUnit * CurrentThickness() * BeamSizeUnit * BeamCharCount));
+    }
+
     private void StartFireSound()
     {
         StopChargeSound();
-        CustomSoundsManager.RpcPlayControllableAll(FireSoundName, 1f, 0f);
+        // 発射音はビームの通り道 (ゲート前端から射程の端まで) に近いほど大きい
+        (Vector2 beamStart, Vector2 beamEnd) = FireSoundSpan();
+        CustomSoundsManager.RpcPlayControllableAll(FireSoundName, 1f, 0f, beamStart, beamEnd);
 
-        AudioSource src = CustomSoundsManager.PlayControllable(FireSoundName);
+        AudioSource src = CustomSoundsManager.PlayControllable(FireSoundName, CustomSoundsManager.PositionalVolume(beamStart, beamEnd));
         if (src == null) return;
 
         if (Main.Instance != null) Main.Instance.StartCoroutine(FireSoundWatch(src, src.clip));
@@ -472,6 +484,12 @@ public class JackalHadouHo : RoleBase
                 yield break;
             }
 
+            if (Time.frameCount % 6 == 0)
+            {
+                Vector2 gate = GatePosition();
+                src.volume = CustomSoundsManager.PositionalVolume(gate, gate);
+            }
+
             yield return null;
         }
     }
@@ -482,6 +500,13 @@ public class JackalHadouHo : RoleBase
         while (src != null && src.clip == ownClip && src.isPlaying)
         {
             if (!GameStates.IsInTask || CurrentPhase != Phase.Firing) break;
+
+            if (Time.frameCount % 6 == 0)
+            {
+                (Vector2 beamStart, Vector2 beamEnd) = FireSoundSpan();
+                src.volume = CustomSoundsManager.PositionalVolume(beamStart, beamEnd);
+            }
+
             yield return null;
         }
 

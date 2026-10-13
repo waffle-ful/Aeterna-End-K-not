@@ -181,7 +181,7 @@ public enum CustomRPC
     SyncAkazukinPseudoDeath,
     LobbyDecorSpawn,
     LobbyDecorClear,
-    ControllableSound, // sub-op byte: 0=offset付き再生 / 1=名前指定フェード停止 (モッドクライアント効果音同期)
+    ControllableSound, // sub-op byte: 0=offset付き再生 / 1=名前指定フェード停止 (モッドクライアント効果音同期) / 2=視聴者干渉のカットイン
 
     // モッドクライアント向けの見た目だけの演出 (爆発など)。先頭の件数 + 各演出の kind byte で多重化する。
     // 新しい演出は ExplosionFx.Kind に値を足すだけで、この ID を増やさない (A・B の追加値が要る種類は ExplosionFx.HasExtra の範囲に入れる)。

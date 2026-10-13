@@ -33,6 +33,27 @@ public static class WatchdogLauncher
     private static string RestartRequestPath => Path.Combine(BaseDir, "restart_request.flag");
     private static string EglRefreshRequestPath => Path.Combine(BaseDir, "egl_refresh_request.flag");
 
+    // 番犬が AU を立て直す手段は版で違う (Steam は steam://、Epic は Epic の起動 URL)。
+    // 番犬は起動前の AU を自力で見分けられないので、ここで自分の版を引数で渡す。
+    private static string PlatformArg
+    {
+        get
+        {
+            try
+            {
+                string exe = Process.GetCurrentProcess().MainModule?.FileName ?? string.Empty;
+                return exe.Contains(@"\steamapps\", StringComparison.OrdinalIgnoreCase) ? "Steam" : "Epic";
+            }
+            catch { return string.Empty; }
+        }
+    }
+
+    private static string ScriptArgs()
+    {
+        string platform = PlatformArg;
+        return $"-NoProfile -ExecutionPolicy Bypass -WindowStyle Minimized -File \"{ScriptPath}\"" + (platform.Length > 0 ? $" -Platform {platform}" : string.Empty);
+    }
+
     // 番犬は Windows の PowerShell + タスクスケジューラ前提。Android ホストには存在しない。
     public static bool IsSupported => OperatingSystem.IsWindows();
 
@@ -159,7 +180,7 @@ public static class WatchdogLauncher
             var psi = new ProcessStartInfo
             {
                 FileName = "powershell.exe",
-                Arguments = $"-NoProfile -ExecutionPolicy Bypass -WindowStyle Minimized -File \"{ScriptPath}\"",
+                Arguments = ScriptArgs(),
                 UseShellExecute = true,
                 WindowStyle = ProcessWindowStyle.Minimized,
                 WorkingDirectory = BaseDir
@@ -267,7 +288,6 @@ public static class WatchdogLauncher
     // スペースや日本語が含まれてもシェルのクオートに悩まされない(schtasks /TR の直書きはここで詰む)。
     private static void WriteTaskXml()
     {
-        string escaped = SecurityElement.Escape(ScriptPath);
         string xml =
             "<?xml version=\"1.0\" encoding=\"UTF-16\"?>\r\n" +
             "<Task version=\"1.2\" xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\">\r\n" +
@@ -284,7 +304,7 @@ public static class WatchdogLauncher
             "    <Enabled>true</Enabled><Hidden>false</Hidden>\r\n" +
             "  </Settings>\r\n" +
             "  <Actions Context=\"Author\"><Exec><Command>powershell.exe</Command>" +
-            $"<Arguments>-NoProfile -ExecutionPolicy Bypass -WindowStyle Minimized -File \"{escaped}\"</Arguments></Exec></Actions>\r\n" +
+            $"<Arguments>{SecurityElement.Escape(ScriptArgs())}</Arguments></Exec></Actions>\r\n" +
             "</Task>";
 
         File.WriteAllText(TaskXmlPath, xml, System.Text.Encoding.Unicode);
