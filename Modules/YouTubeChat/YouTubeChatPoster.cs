@@ -449,40 +449,33 @@ public static class YouTubeChatPoster
 
     private static string BuildWelcomeMessage()
     {
-        string code = GameCode.IntToGameName(AmongUsClient.Instance.GameId);
-        if (string.IsNullOrEmpty(code)) return null;
-        return string.Format(Translator.GetString("YouTubePost.Welcome"), code);
+        return YouTubePostTexts.Render(YouTubePostTextKind.Welcome);
     }
 
     private static string BuildCountdownMessage()
     {
         if (!GameStartManager.InstanceExists) return null;
         if (Options.PlayerAutoStart == null) return null;
-        int current = GameData.Instance != null ? GameData.Instance.PlayerCount : 0;
-        // しきい値は EHR 側の自動開始オプションを見る。バニラの GameStartManager.MinPlayers は
+        // しきい値 ({needed}) は EHR 側の自動開始オプションを見る。バニラの GameStartManager.MinPlayers は
         // GameStartManagerPatch が毎フレーム 1 に固定している (ホストが常に開始できるように) ため、
         // 募集文言のしきい値としては使えず「現在5/1人」のような無意味な表示になる。
-        int needed = Options.PlayerAutoStart.GetInt();
-        return string.Format(Translator.GetString("YouTubePost.Countdown"), current, needed);
+        return YouTubePostTexts.Render(YouTubePostTextKind.Countdown);
     }
 
     private static string BuildRotationTextMessage()
     {
-        string raw = Main.YouTubePostMessages?.Value;
-        if (string.IsNullOrWhiteSpace(raw)) return null;
-
-        string[] lines = raw.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        string[] lines = YouTubePostTexts.RotationLines();
         if (lines.Length == 0) return null;
 
         string line = lines[messageLineCursor % lines.Length];
         messageLineCursor++;
-        return line;
+        return YouTubePostTexts.Render(YouTubePostTextKind.Rotation, line);
     }
 
-    // GitHub リポジトリの宣伝。URL は lang キーに含める (ローカライズ可能・DLL 埋込)。
+    // GitHub リポジトリの宣伝。既定文の URL は lang キーに含める (ローカライズ可能・DLL 埋込)。
     private static string BuildPromoMessage()
     {
-        return Translator.GetString("YouTubePost.Promo");
+        return YouTubePostTexts.Render(YouTubePostTextKind.Promo);
     }
 
     // 戻り値: 実際に投稿へ送り出せたか (連投下限や in-flight で捨てた場合は false)。

@@ -3118,7 +3118,8 @@ public static class FixInputChatField
         // ここが毎フレーム NRE になり、しかも return false 済みでバニラの UpdateCharCount まで止まる。
         bool isSearchField = GameSettingMenuPatch.InputField && __instance == GameSettingMenuPatch.InputField;
         bool isNumericField = NumericOptionInputPatch.ActiveField && __instance == NumericOptionInputPatch.ActiveField;
-        if ((isSearchField || isNumericField) && __instance.gameObject.activeSelf && __instance.Background && __instance.textArea)
+        bool isPostTextField = YouTubePostTextEditPatch.ActiveField && __instance == YouTubePostTextEditPatch.ActiveField;
+        if ((isSearchField || isNumericField || isPostTextField) && __instance.gameObject.activeSelf && __instance.Background && __instance.textArea)
         {
             Vector2 size = __instance.Background.size;
             size.y = Math.Max(0.62f, __instance.textArea.TextHeight + 0.2f);
