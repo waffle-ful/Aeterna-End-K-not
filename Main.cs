@@ -580,6 +580,7 @@ public class Main : BasePlugin
 
         EmbeddedDeps.Install();
         Instance = this;
+        FirstChanceNreLog.Install();
 
         // ホスト専用 mod として、ウィンドウが非フォーカス/最小化でもゲームループを止めない。
         // これを怠ると配信者が OBS 等へ alt-tab した瞬間 FixedUpdate が停止し、

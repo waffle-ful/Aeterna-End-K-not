@@ -13,6 +13,7 @@ internal static class DoubleTrigger
     public static void Init()
     {
         FirstTriggerTimer = [];
+        FirstTriggerTarget = [];
         FirstTriggerAction = [];
     }
 
@@ -56,7 +57,7 @@ internal static class DoubleTrigger
 
     public static void OnFixedUpdate(PlayerControl player)
     {
-        if (!GameStates.IsInTask)
+        if (!GameStates.IsInTask || ReportDeadBodyPatch.MeetingStarted || ExileController.Instance || AntiBlackout.SkipTasks)
         {
             FirstTriggerTimer.Clear();
             FirstTriggerTarget.Clear();
@@ -72,11 +73,12 @@ internal static class DoubleTrigger
         if (FirstTriggerTimer[playerId] <= 0)
         {
             Logger.Info($"{player.name} - Do Single Action", "DoubleTrigger");
-            if (FirstTriggerAction.ContainsKey(playerId)) FirstTriggerAction[playerId]();
-
+            FirstTriggerAction.Remove(playerId, out Action action);
             FirstTriggerTimer.Remove(playerId);
             FirstTriggerTarget.Remove(playerId);
-            FirstTriggerAction.Remove(playerId);
+
+            // Entries are cleared before running so a throwing action cannot re-fire every tick.
+            action?.Invoke();
         }
     }
 }

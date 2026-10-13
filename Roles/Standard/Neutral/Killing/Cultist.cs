@@ -20,6 +20,8 @@ public class Cultist : RoleBase
     private static OptionItem CanCharmNeutral;
     public static OptionItem CharmedCountMode;
     private static OptionItem CharmedDiesOnCultistDeath;
+    private static OptionItem CanKill;
+    private static OptionItem KillCooldown;
 
     private static readonly string[] CharmedCountModeStrings =
     [
@@ -60,6 +62,13 @@ public class Cultist : RoleBase
 
         CharmedDiesOnCultistDeath = new BooleanOptionItem(Id + 17, "CharmedDiesOnCultistDeath", false, TabGroup.NeutralRoles)
             .SetParent(CustomRoleSpawnChances[CustomRoles.Cultist]);
+
+        CanKill = new BooleanOptionItem(Id + 18, "CultistCanKill", false, TabGroup.NeutralRoles)
+            .SetParent(CustomRoleSpawnChances[CustomRoles.Cultist]);
+
+        KillCooldown = new FloatOptionItem(Id + 19, "KillCooldown", new(0f, 180f, 0.5f), 30f, TabGroup.NeutralRoles)
+            .SetParent(CanKill)
+            .SetValueFormat(OptionFormat.Seconds);
     }
 
     public override void Init()
@@ -80,12 +89,17 @@ public class Cultist : RoleBase
 
     public override void SetKillCooldown(byte id)
     {
-        Main.AllPlayerKillCooldown[id] = CharmCooldown.GetFloat() + ((CharmMax.GetInt() - id.GetAbilityUseLimit()) * CharmCooldownIncrese.GetFloat());
+        Main.AllPlayerKillCooldown[id] = CanKill.GetBool() ? KillCooldown.GetFloat() : GetCharmCooldown(id);
+    }
+
+    private static float GetCharmCooldown(byte id)
+    {
+        return CharmCooldown.GetFloat() + ((CharmMax.GetInt() - id.GetAbilityUseLimit()) * CharmCooldownIncrese.GetFloat());
     }
 
     public override bool CanUseKillButton(PlayerControl player)
     {
-        return player.IsAlive() && player.GetAbilityUseLimit() >= 1;
+        return player.IsAlive() && (CanKill.GetBool() || player.GetAbilityUseLimit() >= 1);
     }
 
     public override bool CanUseImpostorVentButton(PlayerControl pc)
@@ -100,7 +114,26 @@ public class Cultist : RoleBase
 
     public override bool OnCheckMurder(PlayerControl killer, PlayerControl target)
     {
-        if (killer.GetAbilityUseLimit() < 1) return false;
+        if (!CanKill.GetBool())
+        {
+            Charm(killer, target);
+            return false;
+        }
+
+        if (target.Is(CustomRoles.Charmed))
+        {
+            Charm(killer, target);
+            return false;
+        }
+
+        if (killer.GetAbilityUseLimit() < 1) return true;
+        return killer.CheckDoubleTrigger(target, () => Charm(killer, target));
+    }
+
+    private static void Charm(PlayerControl killer, PlayerControl target)
+    {
+        if (killer.GetAbilityUseLimit() < 1) return;
+        if (!killer.IsAlive() || !target.IsAlive() || target.Data.Disconnected || GameStates.IsMeeting || ReportDeadBodyPatch.MeetingStarted) return;
 
         if (CanBeCharmed(target))
         {
@@ -112,7 +145,7 @@ public class Cultist : RoleBase
             var hasValue = false;
 
             hasValue |= sender.Notify(killer, CustomRoles.Cultist.ColoredTextByRole(GetString("CultistCharmedPlayer")), out sender);
-            hasValue |= sender.SetKillCooldown(killer);
+            hasValue |= sender.SetKillCooldown(killer, CanKill.GetBool() ? GetCharmCooldown(killer.PlayerId) : -1f);
             hasValue |= sender.NotifyRolesSpecific(killer, target, out sender, out bool cleared);
             if (cleared) hasValue = false;
 
@@ -129,12 +162,10 @@ public class Cultist : RoleBase
             if (killer.AmOwner)
                 Achievements.Type.YoureMyFriendNow.Complete();
 
-            return false;
+            return;
         }
 
         killer.Notify(CustomRoles.Cultist.ColoredTextByRole(GetString("CultistInvalidTarget")));
-
-        return false;
     }
 
     public override bool KnowRole(PlayerControl player, PlayerControl target)
