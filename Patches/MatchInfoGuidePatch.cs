@@ -31,6 +31,7 @@ public static class MatchInfoGuidePatch
         __instance.matchInfoSettingsMaskArea.material.SetInt(PlayerMaterial.MaskLayer, 50);
         __instance.CreatePlayerEntries();
         ReColorTabButtons(__instance);
+        SetAlternativeText(__instance);
         return false;
     }
 
@@ -151,5 +152,36 @@ public static class MatchInfoGuidePatch
                 if (child.childCount > 0) child.DestroyChildren();
             }
         }
+    }
+
+    private static void SetAlternativeText(MatchInfoGuide __instance)
+    {
+        var tmp = __instance.rolesEnabledMessage.GetComponent<TextMeshPro>();
+        tmp.DestroyTranslator();
+        tmp.text = GetGameModeDescription();
+    }
+
+    private static string GetGameModeDescription()
+    {
+        CustomGameMode currentGameMode = Options.CurrentGameMode;
+        
+        if (currentGameMode == CustomGameMode.Standard)
+            return TranslationController.Instance.GetString(StringNames.MatchInfoGuideNoRolesMessage);
+        
+        if (Main.HasPlayedGM.ContainsKey(currentGameMode))
+            return Translator.GetString($"GameModeTutorial.{currentGameMode}");
+
+        string description = "<size=80%>";
+        description += Translator.GetString($"ModeDescribe.{currentGameMode}").Replace('\n', ' ').Replace("  ", " ");
+        
+        for (int i = 80; i < description.Length; i += 80)
+        {
+            int index = description.LastIndexOf(' ', i);
+            if (index == -1) continue;
+            description = description.Remove(index, 1).Insert(index, "\n");
+        }
+
+        description += "</size>";
+        return description;
     }
 }

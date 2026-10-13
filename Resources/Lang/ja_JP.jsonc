@@ -1011,6 +1011,7 @@
   "Helper": "助っ人",
   "HelperInfo": "他人のタスクを完了しよう",
   "HelperInfoLong": "(<#8cffff>クルーメイト</color>):\n<size=80%>自分のタスクが、仲間のタスクも進める。\n_____________________________________\n難易度：★☆☆☆☆\n\n[スキル]\n・<b><color=#8cffff>タスク連鎖</color></b>\nタスクを1つ完了するごとに、ランダムなクルーメイト1人のタスクも同時に1つ完了する。\n\n<i>一人の努力が、仲間の助けになる。</i></size>",
+  "Helper.AbilityWorksAfterDeath": "死亡後も能力が有効",
   "HelperCompletedTaskForYou": "{0}が 1つのタスクを完了した！",
   "Ignitor": "イグナイター",
   "IgnitorInfo": "広い視界のための ライトキャンドルがある",

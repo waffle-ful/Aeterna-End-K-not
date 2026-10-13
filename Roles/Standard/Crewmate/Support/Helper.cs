@@ -8,12 +8,18 @@ public class Helper : RoleBase
 {
     public static bool On;
 
+    private static OptionItem AbilityWorksAfterDeath;
+
     public override bool IsEnable => On;
 
     public override void SetupCustomOption()
     {
         StartSetup(651300)
             .CreateOverrideTasksData();
+
+        // 651302〜651305 はタスク上書きが使うので、後から足した設定は既存 Id を動かさないようその後ろに置く
+        AbilityWorksAfterDeath = new BooleanOptionItem(651306, "Helper.AbilityWorksAfterDeath", true, TabGroup.CrewmateRoles)
+            .SetParent(Options.CustomRoleSpawnChances[CustomRoles.Helper]);
     }
 
     public override void Init()
@@ -28,6 +34,7 @@ public class Helper : RoleBase
 
     public override void OnTaskComplete(PlayerControl pc, int completedTaskCount, int totalTaskCount)
     {
+        if (!AbilityWorksAfterDeath.GetBool() && !pc.IsAlive()) return;
         var randomPlayer = Main.EnumeratePlayerControls().Without(pc).Where(x => x.Is(Team.Crewmate)).Select(x => (pc: x, ts: x.GetTaskState())).Where(x => !x.ts.IsTaskFinished && x.ts.HasTasks).Select(x => x.pc).RandomElement();
         var incompleteTasks = randomPlayer.myTasks.FindAll((Predicate<PlayerTask>)(x => !x.IsComplete));
         // 非モッド客の myTasks には Id 0 の説明タスクが並ぶことがあり、CompleteTask の Id 検索が

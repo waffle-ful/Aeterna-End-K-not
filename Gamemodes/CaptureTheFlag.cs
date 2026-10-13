@@ -841,6 +841,9 @@ public static class CaptureTheFlag
                     .SendMessage();
             }
 
+            bool notify = false;
+            bool stateChanged = false;
+
             if (TemporarilyOutPlayers.TryGetValue(__instance.PlayerId, out long endTS))
             {
                 if (now >= endTS)
@@ -851,19 +854,26 @@ public static class CaptureTheFlag
                     __instance.TP(team.GetFlagBase().Position);
                     RPC.PlaySoundRPC(__instance.PlayerId, Sounds.SpawnSound);
                     SpawnProtectionTimes[__instance.PlayerId] = Utils.TimeStamp + SpawnProtectionTime.GetInt();
+                    stateChanged = true;
                 }
                 
-                if (!notified) Utils.NotifyRoles(SpecifySeer: __instance, SpecifyTarget: __instance, SendOption: SendOption.None);
+                notify = true;
             }
 
             if (SpawnProtectionTimes.TryGetValue(__instance.PlayerId, out long protectionEndTS))
             {
                 if (now >= protectionEndTS)
+                {
                     SpawnProtectionTimes.Remove(__instance.PlayerId);
+                    stateChanged = true;
+                }
                 
-                if (!notified)
-                    Utils.NotifyRoles(SpecifySeer: __instance, SpecifyTarget: __instance, SendOption: SendOption.None);
+                notify = true;
             }
+            
+            // 表示は秒単位なので毎秒 1 回に間引く。ただし離脱/保護が終わったフレームは間引くと古い表示が残るので必ず送る
+            if (!notified && notify && (stateChanged || PerSecondUpdateScheduler.ShouldRunUpdate(__instance.PlayerId)))
+                Utils.NotifyRoles(SpecifySeer: __instance, SpecifyTarget: __instance, SendOption: SendOption.None);
         }
     }
 }
