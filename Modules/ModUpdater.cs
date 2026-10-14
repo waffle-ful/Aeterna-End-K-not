@@ -32,6 +32,7 @@ public static class ModUpdater
     private static string LatestTitle;
     public static string DownloadUrl;
     private static GenericPopup InfoPopup;
+    internal static bool CanShowPopup => InfoPopup;
     private static GenericPopup InfoPopupV2;
     private static readonly HttpClient HttpClient = new();
 
@@ -46,6 +47,8 @@ public static class ModUpdater
             // Version checks are not handled on Android
             NewVersionCheck();
             DeleteOldFiles();
+            // DLL だけ差し替わった環境なら、同じ版の配布物から基盤ファイルを揃える
+            EndKnot.Modules.PackageSync.OnMenuStart();
         }
         
         InfoPopup = Object.Instantiate(TwitchManager.Instance.TwitchPopup);
@@ -54,6 +57,9 @@ public static class ModUpdater
 
         InfoPopupV2 = Object.Instantiate(TwitchManager.Instance.TwitchPopup);
         InfoPopupV2.name = "InfoPopupV2";
+
+        // 前のメニューを離れた後に基盤ファイルの入れ替えが終わっていたら、ここで再起動を促す
+        if (!OperatingSystem.IsAndroid()) EndKnot.Modules.PackageSync.ShowPendingNotice();
 
         if (!OperatingSystem.IsAndroid() && !IsChecked && _checkTask == null)
         {
@@ -269,7 +275,10 @@ public static class ModUpdater
     {
         if (OperatingSystem.IsAndroid()) return;
         ShowPopup(GetString("updatePleaseWait"), StringNames.Cancel, true, false);
-        _ = !github ? DownloadDLL(url) : DownloadDLLGithub(url);
+        // GitHub のリリースは配布 zip 一式 (Doorstop・BepInEx 本体・ランタイム・patcher・設定) を適用する。
+        // 目録の無い旧形式の zip と、入れ替えに入る前の失敗だけ DLL 単体の差し替えに落ちる
+        if (!github) _ = DownloadDLL(url);
+        else EndKnot.Modules.PackageSync.StartUpdate(url, () => _ = DownloadDLLGithub(url));
     }
 
     public static bool NewVersionCheck()

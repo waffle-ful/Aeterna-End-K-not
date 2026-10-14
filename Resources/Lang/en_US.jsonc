@@ -13706,6 +13706,7 @@
   "updateManually": "Update failed.\\nPlease Update Manually.",
   "updatePleaseWait": "Please Wait...",
   "updateRestart": "Update Finished!\\nPlease restart the game.",
+  "packageSyncRestart": "Updated the files the mod needs to run.\\nPlease restart the game.",
   "BribedByMerchant2": "You cannot guess the Merchant after he bribed you.",
   "GSRomanticState.0": "<#ff1493>Romantic</color> pair state: <#888888>Doesn't exist</color>",
   "GSRomanticState.1": "<#ff1493>Romantic</color> pair state: <#888888>Doesn't exist</color>",
