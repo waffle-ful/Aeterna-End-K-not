@@ -8,6 +8,8 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using BepInEx;
+using BepInEx.Configuration;
+using BepInEx.Unity.IL2CPP;
 
 namespace EndKnot.Modules;
 
@@ -31,6 +33,7 @@ public static class PackageSync
     private const string OldSuffix = ".endknot-old";
     private const string ReleaseDownloadBase = "https://github.com/waffle-ful/Aeterna-End-K-not/releases/download";
     private const string TestZipVariable = "ENDKNOT_PACKAGE_ZIP";
+    private const string TestSaveVariable = "ENDKNOT_PACKAGE_TEST_SAVE";
     private const int MaxAttempts = 3;
 
     private static readonly BepInEx.Logging.ManualLogSource Log = BepInEx.Logging.Logger.CreateLogSource("EndKnot.PackageSync");
@@ -341,6 +344,8 @@ public static class PackageSync
     {
         if (!Directory.Exists(PendingDir)) return;
 
+        // 失敗した物は保留に残し、次の起動で取り込み直す
+        var failed = false;
         foreach (string pendingPath in Directory.GetFiles(PendingDir, "*", SearchOption.AllDirectories))
         {
             try
@@ -349,17 +354,70 @@ public static class PackageSync
                 if (!IsConfig(rel) || !IsSafe(rel)) continue;
 
                 string shipped = File.ReadAllText(pendingPath);
-                if (File.Exists(FullPath(rel))) MergeConfig(rel, shipped);
+                if (File.Exists(FullPath(rel)) && MergeConfig(rel, shipped) && !ReloadLoadedConfigs(FullPath(rel)))
+                {
+                    failed = true;
+                    continue;
+                }
 
                 string basePath = BasePath(rel);
                 Directory.CreateDirectory(Path.GetDirectoryName(basePath)!);
                 File.Move(pendingPath, basePath, true);
             }
-            catch (Exception e) { Log.LogWarning($"PKGSYNC: pending config {pendingPath} failed ({e.GetType().Name}: {e.Message})"); }
+            catch (Exception e)
+            {
+                failed = true;
+                Log.LogWarning($"PKGSYNC: pending config {pendingPath} failed ({e.GetType().Name}: {e.Message})");
+            }
         }
 
-        try { Directory.Delete(PendingDir, true); }
-        catch (Exception) { }
+        if (!failed)
+        {
+            try { Directory.Delete(PendingDir, true); }
+            catch (Exception) { }
+        }
+
+#if !ENDKNOT_PUBLIC_RELEASE
+        // 検証用: 取り込み直しの後に BepInEx が設定を保存し直しても、取り込んだ値が残ることを確かめる
+        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable(TestSaveVariable)))
+        {
+            ConfigFile.CoreConfig.Save();
+            Log.LogInfo("PKGSYNC: test save of the core config");
+        }
+#endif
+    }
+
+    // 読み込み済みの設定 (BepInEx 本体と各プラグイン) は、どこかで Save() が走るとメモリの値でファイルを書き直す。
+    // ファイルへ取り込んだ値が起動時に読んだ古い値で戻らないよう、メモリ側も読み直させる。
+    // 読み直しは値が変わるたびに自動保存を呼ぶが、その時点では未登録キーの読み込みが途中なので、後ろの未登録キーがファイルから落ちる。
+    // 読み直しの間だけ自動保存を止める。主スレッドから呼ぶ (値の変更通知を受けるプラグインがある)。失敗が 1 つでもあれば false。
+    private static bool ReloadLoadedConfigs(string full)
+    {
+        var ok = true;
+        var configs = new List<ConfigFile> { ConfigFile.CoreConfig };
+        foreach (PluginInfo info in IL2CPPChainloader.Instance.Plugins.Values)
+            if (info.Instance is BasePlugin { Config: not null } plugin) configs.Add(plugin.Config);
+
+        foreach (ConfigFile config in configs.Distinct())
+        {
+            if (!string.Equals(Path.GetFullPath(config.ConfigFilePath), Path.GetFullPath(full), StringComparison.OrdinalIgnoreCase)) continue;
+
+            bool saveOnSet = config.SaveOnConfigSet;
+            config.SaveOnConfigSet = false;
+            try
+            {
+                config.Reload();
+                Log.LogInfo($"PKGSYNC: reloaded loaded config {Path.GetFileName(full)}");
+            }
+            catch (Exception e)
+            {
+                ok = false;
+                Log.LogWarning($"PKGSYNC: reloading loaded config {Path.GetFileName(full)} failed ({e.GetType().Name}: {e.Message})");
+            }
+            finally { config.SaveOnConfigSet = saveOnSet; }
+        }
+
+        return ok;
     }
 
     // 手元の設定ファイルへ、配布側で変わった値だけを取り込む。BepInEx は起動のたびに設定ファイルを自分の書式で
