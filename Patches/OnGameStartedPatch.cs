@@ -27,6 +27,29 @@ internal static class ChangeRoleSettings
 {
     public static bool BlockPopulateSkins;
 
+    // 前の試合の GameData は破棄されても DisconnectHandlers から外されず、試合ごとに 1 個ずつ残って
+    // その先の il2cpp オブジェクトを握り続ける (2026-10-14 実測: 同じロビーで 8 試合回すと 9 個)。
+    // 試合開始の時点の GameData.Instance はロビーから持ち越す今の物なので、それ以外を外す。
+    // 破棄済みの殻は TryCast<GameData> が通らないので型名で見る。
+    private static void PruneStaleGameDataHandlers(AmongUsClient client)
+    {
+        try
+        {
+            if (!GameData.Instance) return;
+
+            var handlers = client.DisconnectHandlers;
+            IntPtr current = GameData.Instance.Pointer;
+
+            for (int i = handlers.Count - 1; i >= 0; i--)
+            {
+                var handler = handlers[i];
+                if (handler == null || handler.Pointer == current) continue;
+                if (handler.TryCast<Il2CppSystem.Object>()?.GetIl2CppType().Name == nameof(GameData)) handlers.RemoveAt(i);
+            }
+        }
+        catch (Exception e) { Utils.ThrowException(e); }
+    }
+
     public static bool Prefix(AmongUsClient __instance, ref IEnumerator __result)
     {
         // オンラインでは下のガードで vanilla CoStartGame に流れるため、ローディング動画の
@@ -41,6 +64,7 @@ internal static class ChangeRoleSettings
         Modules.HealthLog.NoteOp("GameStartVideoShow");
         Modules.HealthLog.Note($"GSMARK videoShow t={Utils.TimeStamp} rt={Time.realtimeSinceStartup:F3}");
         EndKnot.Modules.Media.LoadingScreenVideo.Show();
+        PruneStaleGameDataHandlers(__instance);
 
         if (!GameStates.IsLocalGame || !HudManager.InstanceExists) return true;
 

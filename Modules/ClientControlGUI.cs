@@ -311,7 +311,12 @@ public class ClientControlGUI : MonoBehaviour
         if (!_windowInitialized) InitWindowRect();
 
         // Rebuild styles only when screen scale changes; HideAndDontSave keeps textures alive across scene transitions
-        if (Math.Abs(_lastScale - Scale) > 0.01f) RebuildStyles();
+        if (Math.Abs(_lastScale - Scale) > 0.01f)
+        {
+            HealthLog.NoteOp("ClientControlGUI.RebuildStyles");
+            RebuildStyles();
+            HealthLog.EndOp();
+        }
 
         HandleDrag();
         DrawToggle();
