@@ -40,12 +40,21 @@ internal static class ChangeRoleSettings
             var handlers = client.DisconnectHandlers;
             IntPtr current = GameData.Instance.Pointer;
 
+            int removed = 0;
+
             for (int i = handlers.Count - 1; i >= 0; i--)
             {
                 var handler = handlers[i];
                 if (handler == null || handler.Pointer == current) continue;
-                if (handler.TryCast<Il2CppSystem.Object>()?.GetIl2CppType().Name == nameof(GameData)) handlers.RemoveAt(i);
+
+                if (handler.TryCast<Il2CppSystem.Object>()?.GetIl2CppType().Name == nameof(GameData))
+                {
+                    handlers.RemoveAt(i);
+                    removed++;
+                }
             }
+
+            Modules.HealthLog.Note($"GDPRUNE removed={removed} left={handlers.Count} host={(client.AmHost ? 1 : 0)}");
         }
         catch (Exception e) { Utils.ThrowException(e); }
     }
