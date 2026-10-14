@@ -61,7 +61,7 @@ public static class AirshipLiminal
     // 部屋名を化けさせる文字。日本語フォントに確実にある全角カタカナと ASCII だけを使う。
     private const string GarbleChars = "ヲァィゥェォャュョッーヰヱヴ#%&?01";
 
-    private static GameObject _root;
+    [KeepDestroyedReference] private static GameObject _root;
     private static ShipStatus _ship;
     private static ShipStatus _failedShip;
     private static Camera _cam;

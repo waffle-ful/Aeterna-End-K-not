@@ -904,6 +904,31 @@ public static class BoehmCensus
 
                 if (hRank <= 5) ReportRootFieldExpansion(hRank, rootObj);
             }
+
+            // 破棄済み Unity オブジェクト (m_CachedPtr == 0) を指す GCHandle を型別に。mod 側の参照が殻を
+            // 握り続けて il2cpp 側のグラフごと残っている量 (KB は先着の根の帰属なので上限の目安)
+            IntPtr uoKlass = Il2CppInterop.Runtime.Il2CppClassPointerStore<UnityEngine.Object>.NativeClassPtr;
+            IntPtr fld = IL2CPP.il2cpp_class_get_field_from_name(uoKlass, "m_CachedPtr");
+            int off = (int)IL2CPP.il2cpp_field_get_offset(fld);
+            var dead = new Dictionary<string, (int n, long objs, long bytes)>();
+            int deadTotal = 0; long deadBytes = 0;
+            for (int h = 0; h < handleDelta.Length; h++)
+            {
+                IntPtr t = GetHandleTarget(h);
+                if (t == IntPtr.Zero) continue;
+                IntPtr k = IL2CPP.il2cpp_object_get_class(t);
+                if (k == IntPtr.Zero || !IL2CPP.il2cpp_class_is_subclass_of(k, uoKlass, false)) continue;
+                unsafe { if (*(IntPtr*)((byte*)t + off) != IntPtr.Zero) continue; }
+                long b = handleDelta[h] > 0 ? SumBytesInRange(handleStarts[h], handleStarts[h] + handleDelta[h]) : 0;
+                string tn = SafeObjTypeName(t);
+                dead.TryGetValue(tn, out var d);
+                dead[tn] = (d.n + 1, d.objs + handleDelta[h], d.bytes + b);
+                deadTotal++; deadBytes += b;
+            }
+            var dsb = new StringBuilder($"BCENSUSDEAD t={now} src={src} handles={deadTotal} KB={deadBytes / 1024} ");
+            foreach (var kv in dead.OrderByDescending(x => x.Value.bytes).Take(40))
+                dsb.Append(kv.Key).Append('x').Append(kv.Value.n).Append('=').Append(kv.Value.bytes / 1024).Append("KB/").Append(kv.Value.objs).Append(' ');
+            HealthLog.Note(dsb.ToString().TrimEnd());
         }
         catch (Exception e) { Logger.Warn($"boehm hroot report failed: {e.Message}", "BoehmCensus"); }
     }
