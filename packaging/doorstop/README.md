@@ -7,5 +7,7 @@
   `packaging-steam/` / `packaging-epic/` から無改変で取り込み (winhttp.dll / .doorstop_version とも同一ハッシュ)
 - ゲームとビット数が一致している必要がある。Among Us 2026.9.29 から Steam 版も x64 になったため、
   `steam/` `epic/` とも x64 (27,136 bytes・同一ファイル)。それ以前の Steam 版 (x86) 向けは 22,528 bytes の x86 ビルド
-- `doorstop_config.ini` のみ当 fork 向けに調整済み (target_assembly / coreclr パス)。
+- `doorstop_config.ini` のみ当 fork 向けに調整済み (target_assembly / coreclr パス / `boot_config_override`)。
+  `boot_config_override` は mod が起動時に書き出す `BepInEx\config\EndKnot.boot.config` (ゲームの boot.config の写し +
+  Unity のアロケータ設定) を指す。ファイルが無い間はゲームの boot.config がそのまま使われる
   `[Environment] GC_DISABLE_INCREMENTAL=1` は上流由来の設定をそのまま維持
