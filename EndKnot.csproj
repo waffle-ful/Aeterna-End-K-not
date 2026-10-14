@@ -68,7 +68,7 @@
     </ItemGroup>
     <!-- Android: the desktop-only media stays out of the mobile DLL. The BGM AssetBundle is a
          Windows build (an arm64 bundle replaces it later), the raw .ogg tracks only back that
-         bundle, and the menu fire / loading videos play from frame packs (.ekfp) on Android. -->
+         bundle, and the menu fire video plays from its frame pack (.ekfp) on Android. -->
     <ItemGroup Condition="'$(Configuration)' == 'Android'">
         <EmbeddedResource Remove="Resources\Sounds\BGM\*.ogg" />
         <EmbeddedResource Remove="Resources\Sounds\BGM\endknot_bgm.bundle" />
@@ -77,7 +77,6 @@
         <EmbeddedResource Remove="Resources\Images\Backrooms\endknot_backrooms.bundle" />
         <EmbeddedResource Remove="Resources\Fx\endknot_fx.bundle" />
         <EmbeddedResource Remove="Resources\Media\menu_fire.webm" />
-        <EmbeddedResource Remove="Resources\Media\loading_default.mp4" />
     </ItemGroup>
     <!-- The arm64 AssetBundles (tools/build-bgm-bundle.ps1 -Android) take the Windows bundles' place
          on Android under the same resource names, so BgmBundle / SfxBundle / BackroomsBundle read them
@@ -98,9 +97,15 @@
         <EmbeddedResource Remove="Resources\Sounds\BGM\endknot_bgm.android.bundle" />
         <EmbeddedResource Remove="Resources\Fx\endknot_fx.android.bundle" />
         <EmbeddedResource Remove="Resources\Sounds\endknot_sfx.android.bundle" />
-        <!-- Frame packs are the Android replacement for the videos; desktop plays the videos with
-             VideoPlayer and only reads a pack dropped into plugins/EndKnot/Media. -->
-        <EmbeddedResource Remove="Resources\Media\*.ekfp" />
+        <!-- The menu fire frame pack is the Android replacement for the webm; desktop plays the webm
+             with VideoPlayer and only reads that pack when it is dropped into plugins/EndKnot/Media. -->
+        <EmbeddedResource Remove="Resources\Media\menu_fire.ekfp" />
+    </ItemGroup>
+    <!-- The loading screen plays its frame pack on every platform: VideoPlayer's H.264 decode keeps about
+         50MB of GPU driver memory resident after the player is destroyed. A custom video can still be
+         set through LoadingVideoFile. -->
+    <ItemGroup>
+        <EmbeddedResource Remove="Resources\Media\loading_default.mp4" />
     </ItemGroup>
 
     <ItemGroup>

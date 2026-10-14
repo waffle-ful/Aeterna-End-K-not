@@ -1,19 +1,17 @@
 using System;
 using System.IO;
-using System.Reflection;
 using UnityEngine;
 
 namespace EndKnot.Modules.Media;
 
 // シーン遷移中 (ゲーム開始/次ゲームへ) に流すローディング画面動画。ネットワーク送信ゼロ・
-// ホストローカル描画のみ。VideoPlayer が無い環境ではフレームパック (loading_default.ekfp、または
-// LoadingVideoFile に指定した .ekfp) を FrameSequencePlayer で流す。マウント先は HudManager (DDOL) 配下なのでシーン遷移を生き延びる。
+// ホストローカル描画のみ。既定はフレームパック (loading_default.ekfp、または LoadingVideoFile に指定した .ekfp) を
+// FrameSequencePlayer で流し、LoadingVideoFile に動画ファイルを指定した時だけ VideoPlayer で流す。
+// マウント先は HudManager (DDOL) 配下なのでシーン遷移を生き延びる。
 // Show()/Hide() は host-only 機能ではない (非ホストクライアントでも呼ばれる想定)。
 public static class LoadingScreenVideo
 {
     private const string MediaSubDir = "EndKnot/Media";
-    private const string DefaultVideoFileName = "loading_default.mp4";
-    private const string EmbeddedDefaultResourceName = "EndKnot.Resources.Media.loading_default.mp4";
     private const string DefaultFramePackFileName = "loading_default.ekfp";
     private const float AutoHideSeconds = 40f;
 
@@ -31,6 +29,8 @@ public static class LoadingScreenVideo
         // Show() はゲーム開始/終了時にしか呼ばれないため毎回素直にファイルを見る (barrier の 30 秒キャッシュは不要)。
         if (File.Exists($"{Main.DataPath}/EndKnot_DATA/disable_star_video.txt")) { Logger.Warn("Show skipped: kill switch ENGAGED (disable_star_video.txt)", "LoadingScreenVideo"); return; }
         if (IsShowing) return; // 二重呼びは no-op
+        // 再生が途中で止まった面 (IsActive=false) は Tick から片付けられないので、作り直す前に破棄する。
+        if (_surface != null) Hide();
 
         try
         {
@@ -151,26 +151,18 @@ public static class LoadingScreenVideo
         _surface.Renderer.transform.localScale = new Vector3(scale, scale, 1f);
     }
 
-    // ① BepInEx/plugins/EndKnot/Media 内のユーザー指定/既定ファイル → ② DLL 埋込の既定動画抽出、の順で解決する。
-    // mp4 が一切見当たらない場合は null を返し、呼び出し側で機能を静かに無効化する。
+    // LoadingVideoFile に動画ファイルが指定されていて実在する時だけそのパスを返す。null なら既定のフレームパックで流す。
+    // VideoPlayer で H.264 を再生すると、破棄した後も GPU ドライバの転送用メモリが約 50MB 残り続ける (2026-10-14 実測) ので、
+    // 既定はフレームパックにしてある。
     private static string ResolveVideoPath()
     {
         try
         {
-            string mediaDir = Path.Combine(BepInEx.Paths.PluginPath, MediaSubDir);
-            if (!Directory.Exists(mediaDir)) Directory.CreateDirectory(mediaDir);
-
             string configuredFile = Main.LoadingVideoFile?.Value;
-            if (!string.IsNullOrWhiteSpace(configuredFile) && !configuredFile.EndsWith(".ekfp", StringComparison.OrdinalIgnoreCase))
-            {
-                string candidate = Path.IsPathRooted(configuredFile) ? configuredFile : Path.Combine(mediaDir, configuredFile);
-                if (File.Exists(candidate)) return candidate;
-            }
+            if (string.IsNullOrWhiteSpace(configuredFile) || configuredFile.EndsWith(".ekfp", StringComparison.OrdinalIgnoreCase)) return null;
 
-            string defaultPath = Path.Combine(mediaDir, DefaultVideoFileName);
-            if (File.Exists(defaultPath)) return defaultPath;
-
-            return ExtractEmbeddedDefault(mediaDir, defaultPath);
+            string candidate = Path.IsPathRooted(configuredFile) ? configuredFile : Path.Combine(BepInEx.Paths.PluginPath, MediaSubDir, configuredFile);
+            return File.Exists(candidate) ? candidate : null;
         }
         catch (Exception e)
         {
@@ -186,26 +178,5 @@ public static class LoadingScreenVideo
         if (!string.IsNullOrWhiteSpace(configuredFile) && configuredFile.EndsWith(".ekfp", StringComparison.OrdinalIgnoreCase))
             return configuredFile;
         return DefaultFramePackFileName;
-    }
-
-    // 既定動画は生成プロセスがまだ mp4 を用意していない可能性があるため、リソースが
-    // 見当たらなければ黙って抽出をスキップする (ビルドは常に通る)。
-    private static string ExtractEmbeddedDefault(string mediaDir, string destinationPath)
-    {
-        try
-        {
-            using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(EmbeddedDefaultResourceName);
-            if (stream == null) return null;
-
-            using (FileStream fileStream = File.Create(destinationPath))
-                stream.CopyTo(fileStream);
-
-            return destinationPath;
-        }
-        catch (Exception e)
-        {
-            Utils.ThrowException(e);
-            return null;
-        }
     }
 }
