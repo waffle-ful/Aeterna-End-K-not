@@ -208,7 +208,21 @@ public static partial class ExplosionFx
 
         // ペンギンが獲物を引きずっている間ずっと / 放す: Radius = ペンギンの PlayerId + 1 (+ 引きずる時は 32 × 獲物の PlayerId)
         DragHold = 77,
-        DragRelease = 78
+        DragRelease = 78,
+
+        // 配信の視聴者の干渉。停電 / 原子炉 / 通信: Pos = 壊された部屋 / ドア: Pos = 閉じたドア 1 枚
+        AudSurge = 79,
+        AudAlarm = 80,
+        AudStatic = 81,
+        AudDoorSlam = 82,
+
+        // 呪い / 祝福: Pos = 対象の人
+        AudCurse = 83,
+        AudBless = 84,
+
+        // 天の声 / 大地震: 受け取った各自の画面いっぱいに出す (Pos は使わない)
+        AudVoice = 85,
+        AudQuake = 86
     }
 
     // カットインに出す技名
@@ -249,6 +263,7 @@ public static partial class ExplosionFx
     private static Seen DefaultSeen(Kind kind) => kind switch
     {
         Kind.Fire or Kind.Blast or Kind.Supernova or Kind.PortalIdle or Kind.PortalClose or Kind.Tornado => Seen.Everyone,
+        Kind.AudSurge or Kind.AudAlarm or Kind.AudStatic or Kind.AudVoice or Kind.AudQuake => Seen.Everyone,
         Kind.TimeStop or Kind.TimeRewind or Kind.ThanosSnap or Kind.GustRight or Kind.GustLeft => Seen.Event,
         _ when HasExtra(kind) => Seen.Everyone,
         _ => Seen.Vision
@@ -389,6 +404,15 @@ public static partial class ExplosionFx
     private static int _sliceRow;
 
     private static bool WarmOverBudget() => _warmSlice && System.Diagnostics.Stopwatch.GetTimestamp() > _warmSliceEnd;
+
+    // 画面のカットインが光の部品を借りる。下ごしらえが済む前は全部 null (一度に作ると 1 フレームが長く止まる)
+    internal static (Sprite Glow, Sprite Ray, Sprite Star, Sprite Ring, Sprite Sigil, Sprite Cloud) BorrowLightSprites()
+    {
+        if (!_warm) return default;
+        EnsureSprites();
+        return (_glow, _ray, _star, _ring, _sigil, _cloud);
+    }
+
     private static Sprite _glow;
     private static Sprite _quad;
     private static Sprite _beamQuad;
@@ -1066,6 +1090,9 @@ public static partial class ExplosionFx
                 case Kind.RevengeAura:
                     StartAura((int)(r.Radius + 0.5f) - 1);
                     FxSound.At("FxRevengeAura", r.Pos, 0.6f);
+                    break;
+                case >= Kind.AudSurge and <= Kind.AudQuake:
+                    SpawnAudience(r);
                     break;
                 default:
                     SpawnRoles6(r);

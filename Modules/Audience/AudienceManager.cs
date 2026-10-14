@@ -94,6 +94,26 @@ public static class AudienceManager
         YouTubeChatManager.OnMessage += OnChatMessage;
     }
 
+    // コメントが干渉コマンドか (観客席の吹き出しの色分け用)。kindKey は AudienceCutscene のテーマ色のキー
+    internal static bool TryGetCommandKind(string text, out string kindKey)
+    {
+        kindKey = null;
+        if (string.IsNullOrEmpty(text)) return false;
+
+        text = text.Trim().Replace('！', '!').Replace('　', ' ');
+        if (text.Length < 2 || text[0] != '!') return false;
+
+        int sp = text.IndexOf(' ');
+        string head = sp < 0 ? text[1..] : text[1..sp];
+        if (!CommandAliases.TryGetValue(head, out InterventionKind kind)) return false;
+
+        kindKey = kind.ToString();
+        return true;
+    }
+
+    // 配信に繋がずに干渉の流れを通しで確かめる入口 (チャットの受信と同じ所へ積む)
+    internal static void InjectForTest(string author, string text) => OnChatMessage(author, text);
+
     // worker thread から呼ばれる。ここでは queue に積むだけ。
     private static void OnChatMessage(string author, string text)
     {
@@ -330,6 +350,7 @@ public static class AudienceManager
         // Text は天の声のみ非 null。演出側で本文を画面にも出す (読み上げと同時に見せる)。
         AudienceCutscene.Play(item.Kind.ToString(), item.Author, item.TargetId, item.Text);
         AudienceCutscene.RpcShareWithModdedClients(item.Kind.ToString(), item.Author, item.Text);
+        YouTubeChat.AudienceSeats.OnExecuted(item.Author, item.Kind.ToString());
 
         Logger.Info($"Audience intervention executed: {item.Kind} (author={item.Author}, price={price})", "Audience");
         // 投稿層の例外が intervention の bookkeeping (return true 到達) を壊さないよう隔離する。

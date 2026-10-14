@@ -84,6 +84,7 @@ public static class AudienceInterventions
     public static bool DoBlackout()
     {
         if (!TrySabotage(SystemTypes.Electrical)) return false;
+        PlayAtRoom(ExplosionFx.Kind.AudSurge, SystemTypes.Electrical);
         return true;
     }
 
@@ -97,12 +98,28 @@ public static class AudienceInterventions
             _ => SystemTypes.Reactor
         };
 
-        return TrySabotage(sabo);
+        if (!TrySabotage(sabo)) return false;
+        PlayAtRoom(ExplosionFx.Kind.AudAlarm, sabo);
+        return true;
     }
 
     public static bool DoComms()
     {
-        return TrySabotage(SystemTypes.Comms);
+        if (!TrySabotage(SystemTypes.Comms)) return false;
+        PlayAtRoom(ExplosionFx.Kind.AudStatic, SystemTypes.Comms);
+        return true;
+    }
+
+    // 部屋が見つからないマップ (壊す装置が部屋の外にある等) では演出だけ出さない
+    private static void PlayAtRoom(ExplosionFx.Kind kind, SystemTypes room)
+    {
+        try
+        {
+            PlainShipRoom plain = room.GetRoomClass();
+            if (!plain || !plain.roomArea) return;
+            ExplosionFx.Play(kind, plain.roomArea.bounds.center, 1f);
+        }
+        catch (Exception e) { Utils.ThrowException(e); }
     }
 
     private static bool TrySabotage(SystemTypes sabo)
@@ -129,8 +146,13 @@ public static class AudienceInterventions
         List<OpenableDoor> roomDoors = doors.Where(d => d.Room == room).ToList();
         if (roomDoors.Count == 0) roomDoors = doors;
 
+        // 部屋が見つからず全ドアに回った時も、演出は数枚分だけ
+        int slams = 0;
         foreach (OpenableDoor door in roomDoors)
+        {
             ShipStatus.Instance.RpcUpdateSystem(SystemTypes.Doors, (byte)door.Id);
+            if (slams++ < 6) ExplosionFx.Play(ExplosionFx.Kind.AudDoorSlam, door.transform.position, 1f);
+        }
 
         return true;
     }
@@ -152,6 +174,7 @@ public static class AudienceInterventions
         }
 
         target.Notify(Translator.GetString("Audience.Notify.Cursed"));
+        ExplosionFx.Play(ExplosionFx.Kind.AudCurse, target.Pos(), 1f);
         return true;
     }
 
@@ -179,6 +202,7 @@ public static class AudienceInterventions
         }, duration, log: false);
 
         target.Notify(Translator.GetString("Audience.Notify.Blessed"));
+        ExplosionFx.Play(ExplosionFx.Kind.AudBless, target.Pos(), 1f);
         return true;
     }
 
@@ -210,6 +234,7 @@ public static class AudienceInterventions
         if (!ShipStatus.Instance) return false;
 
         DoorsReset.CloseAllDoors();
+        ExplosionFx.Play(ExplosionFx.Kind.AudQuake, Vector2.zero, 1f);
 
         // 停電は既に発生中なら黙ってスキップ (ドア+揺れだけでも地震としては成立する)。
         if (!Utils.IsActive(SystemTypes.Electrical)) TrySabotage(SystemTypes.Electrical);
@@ -353,6 +378,7 @@ public static class AudienceInterventions
             pc.Notify(notifyText, 8f, log: false);
 
         Utils.SendMessage("\n" + message, byte.MaxValue, title);
+        ExplosionFx.Play(ExplosionFx.Kind.AudVoice, Vector2.zero, 1f);
         return true;
     }
 

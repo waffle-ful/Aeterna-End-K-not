@@ -756,6 +756,29 @@ public static class TestBridge
             return;
         }
 
+        // 干渉のカットインだけを出す (干渉そのものは起きない)。`audcutin <Kind> [名前]`
+        if (directive.StartsWith("audcutin ", StringComparison.OrdinalIgnoreCase))
+        {
+            string[] ap = directive[9..].Trim().Split(' ', 2);
+            if (ap[0].Length == 0) { WriteOut("ERR audcutin: audcutin <Kind> [name]"); return; }
+            string author = ap.Length > 1 ? ap[1].Trim() : "tester";
+            Audience.AudienceCutscene.Play(ap[0], author, byte.MaxValue, ap[0] == "Voice" ? "みんな、うしろを見て！" : null);
+            WriteOut($"OK audcutin {ap[0]} by {author}");
+            return;
+        }
+
+        // 視聴者のコメントを 1 件受け取ったことにする。`viewer <名前>|<本文>`
+        if (directive.StartsWith("viewer ", StringComparison.OrdinalIgnoreCase))
+        {
+            string[] vp = directive[7..].Split('|', 2);
+            if (vp.Length < 2) { WriteOut("ERR viewer: viewer <name>|<text>"); return; }
+            Audience.AudienceManager.EnsureSubscribed();
+            Audience.AudienceManager.InjectForTest(vp[0].Trim(), vp[1].Trim());
+            YouTubeChat.AudienceSeats.InjectForTest(vp[0].Trim(), vp[1].Trim());
+            WriteOut($"OK viewer {vp[0].Trim()}: {vp[1].Trim()}");
+            return;
+        }
+
         // 見た目の演出だけをホストの足元で出す (判定・キルは起きない)。`fx <Kind> [radius] [count] [a] [b] [@dx,dy] [seen=vision|event|everyone]` (a・b は波動砲の太さと色)
         // 末尾の @dx,dy は足元からのずらし (離れた場所・壁の向こうで出して、音の聞こえ方を確かめる)
         if (directive.StartsWith("fx ", StringComparison.OrdinalIgnoreCase))
