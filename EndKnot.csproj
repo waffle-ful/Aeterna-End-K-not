@@ -51,6 +51,21 @@
         <EmbeddedResource Remove="Resources\Sounds\WaveCannonCharge.ogg" />
         <EmbeddedResource Remove="Resources\Sounds\WaveCannonFire.ogg" />
     </ItemGroup>
+    <!-- Sounds baked into the SFX AssetBundle play from the bundle, so their raw files stay out of the DLL.
+         tools/build-bgm-bundle.ps1 writes the baked top-level sounds next to each bundle; a sound added after
+         the last bake is not on that list and stays embedded (it plays through the PCM decode path).
+         Builds without a bundle (fresh clone / CI) keep every sound embedded. -->
+    <ItemGroup>
+        <EmbeddedResource Remove="Resources\Sounds\*.bundle.txt" />
+    </ItemGroup>
+    <PropertyGroup>
+        <SfxBundleName Condition="'$(Configuration)' != 'Android'">endknot_sfx.bundle</SfxBundleName>
+        <SfxBundleName Condition="'$(Configuration)' == 'Android'">endknot_sfx.android.bundle</SfxBundleName>
+        <SfxBundledSounds Condition="Exists('Resources\Sounds\$(SfxBundleName)') And Exists('Resources\Sounds\$(SfxBundleName).txt')">$([MSBuild]::Unescape($([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)\Resources\Sounds\$(SfxBundleName).txt'))))</SfxBundledSounds>
+    </PropertyGroup>
+    <ItemGroup Condition="'$(SfxBundledSounds)' != ''">
+        <EmbeddedResource Remove="$(SfxBundledSounds)" />
+    </ItemGroup>
     <!-- Android: the desktop-only media stays out of the mobile DLL. The BGM AssetBundle is a
          Windows build (an arm64 bundle replaces it later), the raw .ogg tracks only back that
          bundle, and the menu fire / loading videos play from frame packs (.ekfp) on Android. -->

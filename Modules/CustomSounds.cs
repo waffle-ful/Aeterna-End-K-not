@@ -350,6 +350,7 @@ public static class CustomSoundsManager
     // ⚠️ このキーは audioCache のキーそのものなので、LoadClip / StartPlay / GetClipLength /
     //    プリロード経路で必ず同じ文字列を使うこと (ズレると二重デコードか無音になる)。
     internal const string EmbeddedKeyPrefix = "embedded:";
+    private const string BundleKeyPrefix = "bundle:";
     private const string SoundResourcePrefix = "EndKnot.Resources.Sounds.";
 
     internal static bool IsEmbeddedKey(string key) => key != null && key.StartsWith(EmbeddedKeyPrefix, StringComparison.Ordinal);
@@ -416,7 +417,8 @@ public static class CustomSoundsManager
     }
 
     // BepInEx/resources 内の実ファイル → 埋込リソース の順で音源キーを解決する (無ければ null)。
-    private static string ResolveSoundKey(string sound)
+    // allowBundle=false は裏スレッド用 (SfxBundle はメインスレッド専用なのでバンドル段へ入らない)。
+    private static string ResolveSoundKey(string sound, bool allowBundle = true)
     {
         if (!Directory.Exists(SoundsPath)) Directory.CreateDirectory(SoundsPath);
 
@@ -434,6 +436,10 @@ public static class CustomSoundsManager
             string key = TryEmbeddedKey(SoundResourcePrefix + sound + ext);
             if (key != null) return key;
         }
+
+        // SFX バンドルに焼いた音は DLL に埋め込まれないので、バンドルだけが音源になる。
+        // 設定 SfxUseAssetBundle に関係なく引く (切ると音もクリップ長も失われ、長さからの逆算がずれる)。
+        if (allowBundle && SfxBundle.TryGetClip(sound, out _)) return BundleKeyPrefix + sound;
 
         return null;
     }
@@ -454,6 +460,10 @@ public static class CustomSoundsManager
     // 以後は DontUnloadUnusedAsset で保護する。
     private static AudioClip LoadClip(string key)
     {
+        // バンドルにしか無い音。fake-null の再取得は TryGetClip が行うのでここではキャッシュしない。
+        if (key.StartsWith(BundleKeyPrefix, StringComparison.Ordinal))
+            return SfxBundle.TryGetClip(key[BundleKeyPrefix.Length..], out AudioClip only) ? only : null;
+
         if (!audioCache.TryGetValue(key, out var clip) || !clip)
         {
             // 埋込 (= ユーザー差し替え無し) で SFX バンドルに入っている音は圧縮クリップをそのまま使う。
@@ -1203,7 +1213,7 @@ public static class CustomSoundsManager
             {
                 try
                 {
-                    string key = ResolveSoundKey(name); // ディスクの差し替え優先、無ければ埋込リソース
+                    string key = ResolveSoundKey(name, allowBundle: false); // ディスクの差し替え優先、無ければ埋込リソース
                     if (key == null) continue;
                     if (IsEmbeddedKey(key) && preloadBundleNames.Contains(name)) continue; // SFX バンドル収録分は LoadClip が圧縮クリップを返す
 

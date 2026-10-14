@@ -81,6 +81,7 @@ public static class ModUpdater
         }
 
         var done = false;
+        long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
         if (_checkTask.IsCompletedSuccessfully)
             done = ParseReleases(_checkTask.Result, Main.BetaBuildUrl.Value != ""); // 解析と静的フィールド書込は主スレッドで
         else
@@ -97,7 +98,11 @@ public static class ModUpdater
         Logger.Info("downloadUrl: " + DownloadUrl, "CheckRelease");
         Logger.Info("latestVersionl: " + LatestVersion, "CheckRelease");
 
+        long t1 = System.Diagnostics.Stopwatch.GetTimestamp();
         if (!HasUpdate) OnUpdatePopupClosed(true); // 待たせていた告知があれば流す
+        long t2 = System.Diagnostics.Stopwatch.GetTimestamp();
+        double f = 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+        Logger.Info($"result handled: json={(_checkTask.IsCompletedSuccessfully ? _checkTask.Result.Length : 0)} parseMs={(t1 - t0) * f:0.0} newsMs={(t2 - t1) * f:0.0}", "CheckRelease");
     }
 
     private static bool IsCheckInFlight => _checkTask is { IsCompleted: false };
@@ -171,7 +176,9 @@ public static class ModUpdater
         // End K not's releases are all marked pre-release, and GitHub's /releases/latest
         // endpoint excludes pre-releases (returns 404 when there are only pre-releases).
         // Use the list endpoint and take the most recent entry (sorted by created_at desc).
-        const string url = URLGithub + "/releases";
+        // Only the newest entry is read; the full list (with every release body) is ~135KB and its
+        // JObject parse runs on the main thread (≈16ms on PC).
+        const string url = URLGithub + "/releases?per_page=1";
 
         using HttpClient client = new();
         client.DefaultRequestHeaders.Add("User-Agent", "EndKnot Updater");

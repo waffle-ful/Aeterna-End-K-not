@@ -103,6 +103,16 @@ if (-not (Test-Path $outSfx)) { throw "sfx bundle not produced: $outSfx" }
 $dstSfxBundle = Join-Path $repo "Resources\Sounds\endknot_sfx$bundleSuffix"
 Copy-Item $outSfx $dstSfxBundle -Force
 Write-Host ("sfx bundle: {0} ({1:N0} bytes)" -f $dstSfxBundle, (Get-Item $dstSfxBundle).Length)
+# バンドルに実際に入った Resources\Sounds 直下の音の一覧 (Unity の manifest から)。csproj はここにある音だけを
+# 埋込から外す — 焼き忘れた新しい音は埋込に残り、実行時に PCM デコード経路で鳴る。
+$sfxManifest = "$outSfx.manifest"
+if (-not (Test-Path $sfxManifest)) { throw "sfx manifest not produced: $sfxManifest" }
+$sfxInBundle = @(Select-String -Path $sfxManifest -Pattern '^- Assets/SFX/(.+)$' | ForEach-Object { $_.Matches[0].Groups[1].Value.Trim() } |
+    Where-Object { Test-Path (Join-Path $repo "Resources\Sounds\$_") } | Sort-Object)
+if ($sfxInBundle.Count -eq 0) { throw "no top-level sounds found in $sfxManifest" }
+$sfxList = Join-Path $repo "Resources\Sounds\endknot_sfx$bundleSuffix.txt"
+[System.IO.File]::WriteAllText($sfxList, (($sfxInBundle | ForEach-Object { "Resources\Sounds\$_" }) -join ';'))
+Write-Host ("sfx list: {0} ({1} top-level sounds)" -f $sfxList, @($sfxInBundle).Count)
 if (-not $Android) {
     if (-not (Test-Path $outDusk)) { throw "dusk bundle not produced: $outDusk" }
     $dstDuskBundle = Join-Path $duskSrc 'endknot_dusk.bundle'

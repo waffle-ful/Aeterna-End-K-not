@@ -549,6 +549,7 @@ relay/CONTRACT.md
 # BGM / SFX AssetBundle (tools/build-bgm-bundle.ps1 の生成物・素材と同じ扱い)
 Resources/Sounds/BGM/*.bundle
 Resources/Sounds/*.bundle
+Resources/Sounds/*.bundle.txt
 Resources/Images/MainMenu/Dusk/*.bundle
 Resources/Images/Backrooms/*.bundle
 build-android/
