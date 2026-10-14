@@ -22,7 +22,9 @@ public static class FxTour
         ExplosionFx.Kind.AltruistRevive, ExplosionFx.Kind.ForceFieldUp, ExplosionFx.Kind.ForceRepel, ExplosionFx.Kind.GoddessGuard,
         ExplosionFx.Kind.GoddessPetrify, ExplosionFx.Kind.ChainBind, ExplosionFx.Kind.PestilenceRise, ExplosionFx.Kind.SporeCloud,
         ExplosionFx.Kind.StoneGain, ExplosionFx.Kind.RiftTear, ExplosionFx.Kind.PortalPass, ExplosionFx.Kind.BowlStrike,
-        ExplosionFx.Kind.PenguinGrab, ExplosionFx.Kind.GunShot
+        ExplosionFx.Kind.PenguinGrab, ExplosionFx.Kind.GunShot,
+        ExplosionFx.Kind.AudSurge, ExplosionFx.Kind.AudAlarm, ExplosionFx.Kind.AudStatic, ExplosionFx.Kind.AudDoorSlam,
+        ExplosionFx.Kind.AudCurse, ExplosionFx.Kind.AudBless, ExplosionFx.Kind.AudVoice, ExplosionFx.Kind.AudQuake
     ];
 
     // 流している途中で止めたり流し直したりした時に、前の回の残りを捨てるための通し番号

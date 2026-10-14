@@ -1,6 +1,6 @@
 namespace EndKnot.Modules.YouTubeChat;
 
-// オプション一式。SystemSettings タブ配下、ID 範囲 44600〜44606。
+// オプション一式。SystemSettings タブ配下、ID 範囲 44600〜44608。
 // Enabled は default OFF。BGMShowInfo 隣接に並べる想定。
 public static class YouTubeChatOptions
 {
@@ -13,6 +13,8 @@ public static class YouTubeChatOptions
     public static OptionItem ShowAuthor;
     public static OptionItem PanelWidth;
     public static OptionItem PanelHeight;
+    public static OptionItem SeatsEnabled;
+    public static OptionItem SeatsScale;
 
     public static void SetupCustomOption()
     {
@@ -38,6 +40,13 @@ public static class YouTubeChatOptions
 
         PanelHeight = new IntegerOptionItem(OptionIdBase + 6, "YouTubeChatPanelHeight", new(50, 1000, 10), 100, TabGroup.SystemSettings)
             .SetParent(Enabled)
+            .SetValueFormat(OptionFormat.Percent);
+
+        SeatsEnabled = new BooleanOptionItem(OptionIdBase + 7, "YouTubeChatSeatsEnable", true, TabGroup.SystemSettings)
+            .SetParent(Enabled);
+
+        SeatsScale = new IntegerOptionItem(OptionIdBase + 8, "YouTubeChatSeatsScale", new(50, 300, 10), 100, TabGroup.SystemSettings)
+            .SetParent(SeatsEnabled)
             .SetValueFormat(OptionFormat.Percent);
     }
 }
