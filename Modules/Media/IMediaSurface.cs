@@ -45,27 +45,18 @@ public static class MediaSurfaces
 
     /// <summary>
     /// 再生面を作る。フレームパック再生なら <paramref name="framePackFile"/> を、VideoPlayer 再生なら
-    /// <paramref name="resolveVideoPath"/> が返す動画ファイルを使う。素材が無い・生成に失敗した時は null。
+    /// <paramref name="resolveVideoPath"/> が返す動画ファイルを使う。動画ファイルが無い時はフレームパックで再生する。
+    /// 素材が無い・生成に失敗した時は null。
     /// </summary>
     public static IMediaSurface Create(string framePackFile, Func<string> resolveVideoPath, Transform parent, string logTag)
     {
-        if (UseFramePack)
-        {
-            FramePack pack = FramePack.Get(framePackFile);
-            if (pack == null) { Logger.Info($"no frame pack: {framePackFile}", logTag); return null; }
-
-            var player = new FrameSequencePlayer();
-            if (player.TryCreate(pack, parent)) return player;
-
-            player.Dispose();
-            return null;
-        }
+        if (UseFramePack) return CreateFramePackSurface(framePackFile, parent, logTag);
 
 #if ANDROID
         return null;
 #else
         string path = resolveVideoPath?.Invoke();
-        if (string.IsNullOrWhiteSpace(path)) { Logger.Info("no video file", logTag); return null; }
+        if (string.IsNullOrWhiteSpace(path)) return CreateFramePackSurface(framePackFile, parent, logTag);
 
         var surface = new VideoSurface();
         if (surface.TryCreate(path, parent)) return surface;
@@ -73,5 +64,17 @@ public static class MediaSurfaces
         surface.Dispose();
         return null;
 #endif
+    }
+
+    private static IMediaSurface CreateFramePackSurface(string framePackFile, Transform parent, string logTag)
+    {
+        FramePack pack = FramePack.Get(framePackFile);
+        if (pack == null) { Logger.Info($"no frame pack: {framePackFile}", logTag); return null; }
+
+        var player = new FrameSequencePlayer();
+        if (player.TryCreate(pack, parent)) return player;
+
+        player.Dispose();
+        return null;
     }
 }
