@@ -1,4 +1,3 @@
-using System;
 using System.Collections;
 using BepInEx.Unity.IL2CPP.Utils.Collections;
 using HarmonyLib;
@@ -17,8 +16,7 @@ internal static class FinishedCoroutineReleasePatch
 {
     private static bool _logged;
 
-    // Android は別ローダーの Il2CppInterop で、包みの扱いを実機で確かめていない
-    internal static bool Prepare() => !OperatingSystem.IsAndroid() && Main.ReleaseFinishedCoroutines.Value;
+    internal static bool Prepare() => Main.ReleaseFinishedCoroutines.Value;
 
     public static void Prefix(ref IEnumerator __0)
     {
