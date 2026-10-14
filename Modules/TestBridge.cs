@@ -1013,6 +1013,14 @@ public static class TestBridge
             return;
         }
 
+        // mod の static から辿れる破棄済み Unity オブジェクトのラッパーを持ち主の static ごとに数える
+        if (directive.Equals("deadrefs", StringComparison.OrdinalIgnoreCase))
+        {
+            try { DeadRefWalker.Run(); WriteOut("OK deadrefs"); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR deadrefs failed"); }
+            return;
+        }
+
         // Layer D3: il2cpp (Boehm) 側の型別生存オブジェクト census を手動発火する。
         if (directive.Equals("bcensus", StringComparison.OrdinalIgnoreCase))
         {

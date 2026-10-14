@@ -41,7 +41,7 @@ public static class MiraStorm
     private static readonly Color TintColor = new(0.04f, 0.06f, 0.11f, 0.2f);
     private static readonly Color FlashColor = new(0.9f, 0.93f, 1f, 1f);
 
-    private static GameObject _root;
+    [KeepDestroyedReference] private static GameObject _root;
     private static ShipStatus _ship;
     private static ShipStatus _failedShip;
     private static Camera _cam;

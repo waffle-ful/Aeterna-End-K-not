@@ -368,10 +368,17 @@ public static class HealthLog
         // 状態遷移(ロビー入った / ゲーム開始 / メニュー戻り)は heartbeat の grid を待たず即記録。
         string state = GetState();
 
+        DeadWrapperSweep.Tick(now);
+
         if (state != LastState)
         {
             Write($"STATE {LastState}->{state} t={now}");
             TransitionTimeline.OnStateChange(LastState, state);
+            try { DeadWrapperSweep.OnStateChange(LastState, state); }
+            catch (Exception e) { Utils.ThrowException(e); }
+
+            if (state == "Menu") RewiredMapTrim.RunOnce();
+
             LastState = state;
 
             // ロビー復帰毎に 1 回、型別オブジェクト census を残す (per-game 破棄漏れの犯人型特定計器)

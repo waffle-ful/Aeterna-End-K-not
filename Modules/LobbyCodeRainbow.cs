@@ -61,6 +61,13 @@ public static class LobbyCodeRainbow
 
     private static bool Active => Il2Direct.Alive(Owner) && Il2Direct.Alive(Face) && Auras != null && FaceFrames != null;
 
+    // ロビーごと破棄された後も層の配列を持ち続けると、ラッパー経由で 33 枚ぶんの TMP (文字情報の配列込み)
+    // がゲーム側のメモリに残る。持ち主が消えていたら手放す。
+    internal static void ReleaseIfOrphaned()
+    {
+        if (Auras != null && !Il2Direct.Alive(Owner)) Reset();
+    }
+
     // GameStartManager はロビーごとに作り直される。破棄済みの native TMP を掴んだままだと
     // managed からは null に見えないので、ロビーが変わったら必ず参照ごと捨てる。
     public static void Reset()
@@ -243,7 +250,7 @@ public static class LobbyCodeRainbow
             if (TextHeight <= 0f) TextHeight = Face.fontSize * 0.1f;
 
             // 縁取りは色も位置も動かないので、文字が変わった時にだけ置き直す
-            string strokeText = $"<color=#{StrokeColor}>{source}</color>";
+            string strokeText = $"<#{StrokeColor}>{source}";
             float strokeRadius = TextHeight * StrokeRadius;
 
             for (var i = 0; i < Auras.Length; i++)
@@ -335,14 +342,17 @@ public static class LobbyCodeRainbow
         }
     }
 
-    // 不透明度は <color=#RRGGBBAA> に焼き込む。コンポーネントの color の alpha は
+    // 不透明度は <#RRGGBBAA> に焼き込む。コンポーネントの color の alpha は
     // 色タグを張った文字には掛からないので、層ごとの濃さはタグ側で決める。
+    // タグは短縮形で閉じない (次の文字のタグが上書きする)。TMP は文字情報の配列をタグ込みの文字数で
+    // 確保して縮めないので、<color=…>X</color> だと 1 層 156 件 × 25 層がロビーのあいだ常駐し、
+    // 参照を含む配列として GC の停止を伸ばす。
     private static Il2Direct.PinnedString[] BuildFrames(string source, byte alpha)
     {
         var frames = new Il2Direct.PinnedString[Steps];
         var built = 0;
 
-        var sb = new StringBuilder(source.Length * 26);
+        var sb = new StringBuilder(source.Length * 12);
         string alphaHex = alpha.ToString("X2");
 
         for (var s = 0; s < Steps; s++)
@@ -353,7 +363,7 @@ public static class LobbyCodeRainbow
             foreach (char ch in source)
             {
                 Color c = Color.HSVToRGB(Frac(phase), Saturation, 1f);
-                sb.Append("<color=#").Append(ColorUtility.ToHtmlStringRGB(c)).Append(alphaHex).Append('>').Append(ch).Append("</color>");
+                sb.Append("<#").Append(ColorUtility.ToHtmlStringRGB(c)).Append(alphaHex).Append('>').Append(ch);
                 phase = Frac(phase + HuePerChar);
             }
 

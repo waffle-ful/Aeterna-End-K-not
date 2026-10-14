@@ -68,23 +68,30 @@ public static class GameOptionsMapPickerPatch
                 {
                     var dleksButton_MapButton = __instance.mapButtons[dleksPos];
                     dleksButton_MapButton.Button.OnClick.RemoveAllListeners();
+                    // ボタンの押下イベントは il2cpp 側に残るので、ラッパーを捕まえるとそこから輪になって
+                    // ピッカーとメニュー一式が破棄後も回収されない。ポインタだけ持って押下時に包み直す。
+                    IntPtr pickerPtr = __instance.Pointer;
+                    IntPtr buttonPtr = dleksButton_MapButton.Pointer;
                     dleksButton_MapButton.Button.OnClick.AddListener((Action)(() =>
                     {
-                        __instance.SelectMap(__instance.AllMapIcons[0]);
+                        var picker = new CreateGameMapPicker(pickerPtr);
+                        var button = new MapSelectButton(buttonPtr);
 
-                        if (__instance.selectedButton)
-                            __instance.selectedButton.Button.SelectButton(false);
+                        picker.SelectMap(picker.AllMapIcons[0]);
 
-                        __instance.selectedButton = dleksButton_MapButton;
-                        __instance.selectedButton.Button.SelectButton(true);
-                        __instance.selectedMapId = dleksPos;
+                        if (picker.selectedButton)
+                            picker.selectedButton.Button.SelectButton(false);
+
+                        picker.selectedButton = button;
+                        picker.selectedButton.Button.SelectButton(true);
+                        picker.selectedMapId = dleksPos;
 
                         SetDleks = true;
 
                         Main.NormalOptions.MapId = 0;
 
-                        __instance.MapImage.sprite = Utils.LoadSprite("EndKnot.Resources.Images.DleksBanner.png", 100f);
-                        __instance.MapName.sprite = Utils.LoadSprite("EndKnot.Resources.Images.DleksBanner-Wordart.png", 100f);
+                        picker.MapImage.sprite = Utils.LoadSprite("EndKnot.Resources.Images.DleksBanner.png", 100f);
+                        picker.MapName.sprite = Utils.LoadSprite("EndKnot.Resources.Images.DleksBanner-Wordart.png", 100f);
                     }));
 
                     if (dleksButton_MapButton != null)
@@ -111,14 +118,19 @@ public static class GameOptionsMapPickerPatch
                 {
                     var submergedButton_MapButton = __instance.mapButtons[submergedPos];
                     submergedButton_MapButton.Button.OnClick.RemoveAllListeners();
+                    IntPtr pickerPtr = __instance.Pointer;
+                    IntPtr buttonPtr = submergedButton_MapButton.Pointer;
                     submergedButton_MapButton.Button.OnClick.AddListener((Action)(() =>
                     {
-                        __instance.SelectMap(__instance.AllMapIcons[submergedPos]);
+                        var picker = new CreateGameMapPicker(pickerPtr);
+                        var button = new MapSelectButton(buttonPtr);
 
-                        if (__instance.selectedButton) __instance.selectedButton.Button.SelectButton(false);
+                        picker.SelectMap(picker.AllMapIcons[submergedPos]);
 
-                        __instance.selectedButton = submergedButton_MapButton;
-                        __instance.selectedMapId = submergedPos;
+                        if (picker.selectedButton) picker.selectedButton.Button.SelectButton(false);
+
+                        picker.selectedButton = button;
+                        picker.selectedMapId = submergedPos;
 
                         Main.NormalOptions.MapId = submergedPos;
 
