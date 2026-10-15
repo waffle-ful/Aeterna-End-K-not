@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
@@ -48,7 +49,7 @@ public static class OnlinePresetsManager
 
             if (freshH0) header.SetHeader(StringNames.RolesCategory, 20);
             header.Title.DestroyTranslator();
-            header.Title.text = Translator.GetString("UploadPresetHeader");
+            header.Title.text = Translator.GetString("ExportPresetHeader");
             header.transform.localScale = Vector3.one * 0.63f;
             header.transform.localPosition = new(-0.903f, y, -2f);
 
@@ -56,7 +57,7 @@ public static class OnlinePresetsManager
 
             bool freshUpload = !(OptionBehaviourCache.TryGetValue(-1, out StringOption uploadCache) && uploadCache);
             StringOption upload = !freshUpload ? uploadCache : ModGameOptionsMenu.Track(Object.Instantiate(menu.stringOptionOrigin, Vector3.zero, Quaternion.identity, menu.settingsContainer));
-            upload.name = nameof(OnlinePresetsManager) + ";" + Translator.GetString("UploadPreset");
+            upload.name = nameof(OnlinePresetsManager) + ";" + Translator.GetString("ExportPreset");
             upload.transform.localPosition = new Vector3(0.952f, y, -2f);
             upload.SetClickMask(menu.ButtonClickMask);
             if (freshUpload) upload.SetUpFromData(null, 20);
@@ -69,7 +70,7 @@ public static class OnlinePresetsManager
 
                 upload.OnValueChanged = new Action<OptionBehaviour>(menu.ValueChanged);
                 upload.MinusBtn.OnClick = new();
-                upload.MinusBtn.OnClick.AddListener((UnityAction)(() => Main.Instance.StartCoroutine(UploadCurrentPreset())));
+                upload.MinusBtn.OnClick.AddListener((UnityAction)(() => ExportCurrentPreset(menu)));
                 TextMeshPro text = upload.MinusBtn.GetComponentInChildren<TextMeshPro>();
                 text.DestroyTranslator();
                 text.text = "↸";
@@ -77,7 +78,7 @@ public static class OnlinePresetsManager
             }
             upload.gameObject.SetActive(true);
 
-            menu.Children.Add(upload);
+            if (!menu.Children.Contains(upload)) menu.Children.Add(upload);
             OptionBehaviourCache[-1] = upload;
 
             y -= 0.6f;
@@ -95,7 +96,7 @@ public static class OnlinePresetsManager
 
             if (freshH1) header.SetHeader(StringNames.RolesCategory, 20);
             header.Title.DestroyTranslator();
-            header.Title.text = Translator.GetString("TabGroup.PresetExplorer");
+            header.Title.text = Translator.GetString("LocalPresetsHeader");
             header.transform.localScale = Vector3.one * 0.63f;
             header.transform.localPosition = new(-0.903f, y, -2f);
 
@@ -105,9 +106,10 @@ public static class OnlinePresetsManager
         for (var index = 0; index < CachedPresets.Count; index++)
         {
             PresetMeta preset = CachedPresets[index];
+            int rowIndex = index;
             bool freshRow = !(OptionBehaviourCache.TryGetValue(index, out StringOption cacheRow) && cacheRow);
             StringOption row = !freshRow ? cacheRow : ModGameOptionsMenu.Track(Object.Instantiate(menu.stringOptionOrigin, Vector3.zero, Quaternion.identity, menu.settingsContainer));
-            row.name = $"{nameof(OnlinePresetsManager)};{string.Format(Translator.GetString("OnlinePresetInfo"), preset.name, preset.author, (Utils.TimeStamp - (long)preset.created_at) / 86400, preset.downloads)}";
+            row.name = $"{nameof(OnlinePresetsManager)};{string.Format(Translator.GetString("LocalPresetInfo"), preset.name, DateTimeOffset.FromUnixTimeSeconds((long)preset.created_at).ToLocalTime().ToString("yyyy/MM/dd HH:mm"), preset.downloads)}";
             row.transform.localPosition = new Vector3(0.952f, y, -2f);
             row.SetClickMask(menu.ButtonClickMask);
             if (freshRow) row.SetUpFromData(null, 20);
@@ -139,7 +141,8 @@ public static class OnlinePresetsManager
                     bool b = plusText.text == "ⓘ";
                     GameSettingMenuPatch.SetGameModeListOpen(false);
                     GameSettingMenuPatch.ResetDescriptionPaging(GameSettingMenu.Instance.MenuDescriptionText);
-                    if (b) GameSettingMenu.Instance.MenuDescriptionText.text = preset.description;
+                    // 行は index でキャッシュされ、一覧は開くたびに読み直すので、押した時点の中身を引く
+                    if (b && rowIndex < CachedPresets.Count) GameSettingMenu.Instance.MenuDescriptionText.text = CachedPresets[rowIndex].description;
                     plusText.text = b ? "∅" : "ⓘ";
                 }));
 
@@ -147,28 +150,22 @@ public static class OnlinePresetsManager
                 row.MinusBtn.OnClick = new();
                 row.MinusBtn.OnClick.AddListener((UnityAction)(() =>
                 {
+                    if (rowIndex >= CachedPresets.Count) return;
+                    string presetPath = CachedPresets[rowIndex].id;
                     GameSettingMenu.Instance.Close();
 
                     Prompt.Show(Translator.GetString("Promt.ApplyPreset"), () =>
                     {
-                        Logger.SendInGame(Translator.GetString("DownloadingPreset"));
+                        if (!GameStates.IsLobby || !AmongUsClient.Instance.AmHost) return;
+                        Dictionary<int, int> loaded = ReadLocalPreset(presetPath);
 
-                        Main.Instance.StartCoroutine(
-                            DownloadPreset(preset.id, downloadedPreset =>
-                            {
-                                foreach ((int id, OptionItem optionItem) in OptionItem.FastOptions)
-                                {
-                                    if (optionItem.IsSingleValue) continue;
-                                    if (!downloadedPreset.TryGetValue(id, out int newValue)) continue;
-                                    optionItem.SetValue(newValue, doSave: false, doSync: false);
-                                }
+                        if (loaded == null)
+                        {
+                            Logger.SendInGame(Translator.GetString("PresetImportFailed"), Color.red);
+                            return;
+                        }
 
-                                OptionItem.SyncAllOptions();
-                                OptionSaver.Save();
-
-                                Logger.SendInGame(Translator.GetString("PresetApplied"), Color.green);
-                            })
-                        );
+                        ApplyPreset(loaded);
                     }, () =>
                     {
                         LateTask.New(() =>
@@ -200,10 +197,21 @@ public static class OnlinePresetsManager
             }
             row.gameObject.SetActive(true);
 
-            menu.Children.Add(row);
+            if (!menu.Children.Contains(row)) menu.Children.Add(row);
             OptionBehaviourCache[index] = row;
 
             y -= 0.6f;
+        }
+
+        // ファイルが減った時に、前回作った余りの行を隠す
+        foreach ((int cachedIndex, StringOption cachedRow) in OptionBehaviourCache)
+        {
+            if (cachedIndex >= CachedPresets.Count && cachedRow)
+            {
+                cachedRow.gameObject.SetActive(false);
+                TextMeshPro plusText = cachedRow.PlusBtn ? cachedRow.PlusBtn.GetComponentInChildren<TextMeshPro>() : null;
+                if (plusText) plusText.text = "ⓘ";
+            }
         }
 
         menu.scrollBar.SetYBoundsMax(-y - 1.65f);
@@ -213,6 +221,115 @@ public static class OnlinePresetsManager
         foreach (UiElement x in menu.scrollBar.GetComponentsInChildren<UiElement>())
             menu.ControllerSelectable.Add(x);
     }
+
+    private const string LocalPresetFormat = "EndKnotPreset";
+    private const int LocalPresetVersion = 1;
+    private static string LocalPresetDirectory => $"{Main.DataPath}/EndKnot_DATA/Presets/";
+
+    // 書き出しファイルを新しい順に一覧へ読み込む。読めないファイルは一覧に出さない。
+    public static void LoadLocalPresets()
+    {
+        List<PresetMeta> list = [];
+
+        try
+        {
+            var dir = new DirectoryInfo(LocalPresetDirectory);
+
+            if (dir.Exists)
+            {
+                foreach (FileInfo file in dir.GetFiles("*.json").OrderByDescending(x => x.LastWriteTimeUtc))
+                {
+                    Dictionary<int, int> preset = ReadLocalPreset(file.FullName);
+                    if (preset == null) continue;
+
+                    list.Add(new PresetMeta
+                    {
+                        id = file.FullName,
+                        // 行タイトルは name の ';' 区切りで取り出すので、ファイル名の ';' と TMP タグを無害化する
+                        name = Path.GetFileNameWithoutExtension(file.Name).Replace(';', '；').Replace("<", "<noparse><</noparse>"),
+                        description = file.FullName,
+                        created_at = new DateTimeOffset(file.LastWriteTimeUtc).ToUnixTimeSeconds(),
+                        downloads = preset.Count
+                    });
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            Logger.Warn($"local preset scan failed: {e.Message}", "OnlinePresets");
+        }
+
+        CachedPresets = list;
+        PresetsLoaded = true;
+    }
+
+    private static Dictionary<int, int> ReadLocalPreset(string path)
+    {
+        try
+        {
+            var file = JsonSerializer.Deserialize<LocalPresetFile>(File.ReadAllText(path));
+            if (file?.format != LocalPresetFormat || file.version > LocalPresetVersion || file.preset == null) return null;
+            return file.preset;
+        }
+        catch (Exception e)
+        {
+            Logger.Warn($"local preset read failed ({Path.GetFileName(path)}): {e.Message}", "OnlinePresets");
+            return null;
+        }
+    }
+
+    // 既定値と同じ値も全部書く (後の版で既定値が変わっても、取り込んだ時に書き出した時の値になる)。
+    // 取り込み側は書かれていない設定を既定値に戻すので、後から増えた設定があっても読み込める。
+    private static void ExportCurrentPreset(GameOptionsMenu menu)
+    {
+        try
+        {
+            Dictionary<int, int> preset = OptionItem.AllOptions
+                .Where(x => !x.IsSingleValue)
+                .ToDictionary(x => x.Id, x => x.CurrentValue);
+
+            Directory.CreateDirectory(LocalPresetDirectory);
+            string path = Path.Combine(LocalPresetDirectory, $"{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.json");
+            var file = new LocalPresetFile { format = LocalPresetFormat, version = LocalPresetVersion, preset = preset };
+            File.WriteAllText(path, JsonSerializer.Serialize(file, new JsonSerializerOptions { WriteIndented = true }));
+
+            Logger.SendInGame(string.Format(Translator.GetString("PresetExported"), Path.GetFileName(path)), Color.green);
+        }
+        catch (Exception e)
+        {
+            Logger.Error($"preset export failed: {e}", "OnlinePresets");
+            Logger.SendInGame(Translator.GetString("PresetExportFailed"), Color.red);
+            return;
+        }
+
+        LoadLocalPresets();
+        if (menu) CreatePresetExplorerUI(menu);
+    }
+
+    private static void ApplyPreset(Dictionary<int, int> preset)
+    {
+        foreach ((int id, OptionItem optionItem) in OptionItem.FastOptions)
+        {
+            if (optionItem.IsSingleValue) continue;
+            int value = preset.TryGetValue(id, out int v) ? NormalizeValue(optionItem, v) : optionItem.DefaultValue;
+            optionItem.SetValue(value, doSave: false, doSync: false);
+        }
+
+        OptionItem.SyncAllOptions();
+        OptionSaver.Save();
+
+        Logger.SendInGame(Translator.GetString("PresetApplied"), Color.green);
+    }
+
+    // 手で書き換えたファイルや別の版のファイルでも、範囲外の値を入れない (各型の SetValue(int, bool) と同じ丸め方)
+    private static int NormalizeValue(OptionItem optionItem, int value) => optionItem switch
+    {
+        BooleanOptionItem => value % 2 == 0 ? 0 : 1,
+        IntegerOptionItem x => x.Rule.RepeatIndex(value),
+        FloatOptionItem x => x.Rule.RepeatIndex(value),
+        StringOptionItem x => x.Rule.RepeatIndex(value),
+        _ => value
+    };
 
     private static IEnumerator UploadCurrentPreset()
     {
@@ -408,6 +525,13 @@ public static class OnlinePresetsManager
         public string hash { get; set; }
         public double created_at { get; set; }
         public int downloads { get; set; }
+    }
+
+    public class LocalPresetFile
+    {
+        public string format { get; set; }
+        public int version { get; set; }
+        public Dictionary<int, int> preset { get; set; }
     }
 
     public class PresetListResponse
