@@ -170,6 +170,9 @@ public static class CalamityDusk
                 continue;
             }
 
+            // 層の絵は端で繰り返さない。Repeat のままだと上端の透明な行が反対側 (fg なら不透明な地面) を拾い、全幅に薄い線が出る
+            sp.texture.wrapMode = TextureWrapMode.Clamp;
+
             var go = new GameObject("Dusk_" + name);
             go.transform.SetParent(_root, false);
             var sr = go.AddComponent<SpriteRenderer>();
