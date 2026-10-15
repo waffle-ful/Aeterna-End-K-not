@@ -335,6 +335,7 @@ public static class GameOptionsMenuPatch
         
         if (modTab == TabGroup.PresetExplorer)
         {
+            OnlinePresetsManager.LoadLocalPresets();
             OnlinePresetsManager.CreatePresetExplorerUI(__instance);
             return false;
         }
@@ -2477,17 +2478,13 @@ public static class GameSettingMenuPatch
 
         var tabGroup = (TabGroup)(tabNum - 3);
         
-        if (!OnlinePresetsManager.PresetsLoaded && tabGroup == TabGroup.PresetExplorer)
+        // 書き出しファイルは外から足したり消したりできるので、タブを開くたびに読み直す
+        if (tabGroup == TabGroup.PresetExplorer)
         {
-            __instance.StartCoroutine(
-                OnlinePresetsManager.FetchPresetList(list =>
-                {
-                    OnlinePresetsManager.CachedPresets = list;
-                    OnlinePresetsManager.PresetsLoaded = true;
-                    if (ModSettingsTabs.TryGetValue(TabGroup.PresetExplorer, out GameOptionsMenu presetTab) && presetTab)
-                        OnlinePresetsManager.CreatePresetExplorerUI(presetTab);
-                }).WrapToIl2Cpp()
-            );
+            // 一度も開いていないタブは Children が null — 表示時の Initialize → CreateSettings が組み立てるのでここでは触らない
+            OnlinePresetsManager.LoadLocalPresets();
+            if (ModSettingsTabs.TryGetValue(TabGroup.PresetExplorer, out GameOptionsMenu presetTab) && presetTab && presetTab.Children != null)
+                OnlinePresetsManager.CreatePresetExplorerUI(presetTab);
         }
 
         if ((previewOnly && Controller.currentTouchType == Controller.TouchType.Joystick) || !previewOnly)
