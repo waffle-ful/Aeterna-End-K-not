@@ -726,7 +726,6 @@ public class Main : BasePlugin
         Modules.PatchPhases.Defer("StreamSetupGUI", () => AddComponent<EndKnot.Modules.Setup.StreamSetupGUI>());
         Modules.PatchPhases.Defer("YouTubeChatBubble", () => AddComponent<EndKnot.Modules.YouTubeChat.YouTubeChatBubble>());
         Modules.PatchPhases.Defer("AudienceSeats", () => AddComponent<EndKnot.Modules.YouTubeChat.AudienceSeats>());
-        Modules.PatchPhases.Defer("LobbyCodeBubble", () => AddComponent<EndKnot.Modules.StreamOverlay.LobbyCodeBubble>());
         Modules.PatchPhases.Defer("LobbyCodeTicker", () => AddComponent<EndKnot.Modules.StreamOverlay.LobbyCodeTicker>());
         Modules.PatchPhases.Defer("AudienceInfoBubble", () => AddComponent<EndKnot.Modules.StreamOverlay.AudienceInfoBubble>());
         Modules.PatchPhases.Defer("AudienceCutscene", () => AddComponent<EndKnot.Modules.Audience.AudienceCutscene>());

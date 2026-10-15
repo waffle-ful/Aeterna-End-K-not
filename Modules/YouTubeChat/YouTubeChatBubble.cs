@@ -5,30 +5,44 @@ using UnityEngine;
 
 namespace EndKnot.Modules.YouTubeChat;
 
-// YouTube ライブチャットの「ビュー」層 (IMGUI)。
-// 画面上をドラッグで自由に動かせる小さな YouTube 風バブル（赤い ▶ ボタン）。
-// クリック、または Ctrl+Y でコメント欄をトグル表示する。ClientControlGUI と同じ
-// IMGUI + HandleDrag 方式。位置・開閉状態は永続 GameObject 上のフィールドなので
-// 会議跨ぎ・ラウンド跨ぎで維持される（毎回開き直し不要）。
+// YouTube ライブチャットの「ビュー」層 (IMGUI)。過去のコメントを並べるログの板。
+// 最初から開いていて、右上の × で閉じる。閉じている間は同じ場所に「開く」ボタンを出す (観客席の札のクリックと Ctrl+Y でも開閉できる)。観客席の右隣に下端をそろえて貼り付き
+// (観客席を動かすと一緒に動き、大きさも観客席に合わせる)、観客席を出していない時は画面の左端に出す。
+// 開閉状態は永続 GameObject 上のフィールドなので会議跨ぎ・ラウンド跨ぎで維持される。
 // 100% host 画面ローカル（RPC / NetObject 不使用）。
 public class YouTubeChatBubble : MonoBehaviour
 {
     public static YouTubeChatBubble Instance;
 
     // ---- 永続する状態 (シーンを跨いで保持) ----
-    private bool _isOpen;
-    private Vector2 _bubblePos;      // バブル左上 (screen px)
-    private bool _posInitialized;
+    private bool _isOpen = true;
 
-    // ---- ドラッグ ----
-    private bool _dragging;
-    private bool _didDrag;
-    private bool _dragFromBubble;    // ドラッグの起点。バブル起点のみ MouseUp でトグル判定
-    private Vector2 _dragOffset;
+    public static bool IsOpen => Instance && Instance._isOpen;
 
-    // ---- パネル geometry (ComputePanelGeometry が毎フレーム確定させ、HandleBubbleInput / DrawPanel で共有) ----
+    public static void Toggle()
+    {
+        if (Instance) Instance._isOpen = !Instance._isOpen;
+    }
+
+    // 今描いている板の範囲 (IMGUI 座標)。出ていなければ false
+    public static bool TryGetPanelRect(out Rect rect)
+    {
+        rect = Instance ? Instance._panelRect : default;
+        return rect.width > 0f;
+    }
+
+    // マウスが板の上にある (ホイールを板のスクロールに使い、カメラのズームへ渡さない)
+    public static bool IsPointerOver()
+    {
+        if (!TryGetPanelRect(out Rect rect)) return false;
+        Vector3 mp = Input.mousePosition;
+        return rect.Contains(new Vector2(mp.x, Screen.height - mp.y));
+    }
+
+    // ---- パネル geometry (ComputePanelGeometry が毎フレーム確定させ、HandlePanelInput / DrawPanel で共有) ----
     private Rect _panelRect;
-    private Rect _panelDragZone;     // _panelRect からスクロールバー列を除いた、ドラッグ対象領域
+    private Rect _panelHitZone;      // _panelRect からスクロールバー列を除いた、クリックを吸う領域
+    private Rect _closeRect;         // 板の右上の角に載せる × のつまみ
 
     // ---- スクロール ----
     private Vector2 _scroll;
@@ -36,14 +50,20 @@ public class YouTubeChatBubble : MonoBehaviour
     private bool _stickToBottom = true; // 最下部にいる間は新着に自動追従
 
     // ---- スタイル ----
-    private GUIStyle _bubbleStyle, _panelBg, _textStyle, _hintStyle;
-    private Texture2D _redTex, _redHoverTex, _panelTex;
+    private GUIStyle _panelBg, _textStyle, _closeStyle, _openStyle;
+    private Texture2D _openTex, _openHoverTex;
+    private GUIContent _openContent;
+    private readonly GUIContent _closeContent = new("×");
+    private Texture2D _panelTex;
     private float _builtScale = -1f;
 
     private readonly List<string> _lines = new();
     private readonly StringBuilder _sb = new();
 
-    private static float Scale => Il2Direct.ScreenWidth / 1080f * 0.5f;
+    private static float Scale => Il2Direct.ScreenWidth / 1080f * 0.5f * SeatsUserScale;
+
+    // 観客席を出している時は観客席の大きさ設定に合わせる
+    private static float SeatsUserScale => YouTubeChatOptions.SeatsEnabled?.GetBool() == true ? (YouTubeChatOptions.SeatsScale?.GetInt() ?? 100) / 100f : 1f;
     private static float ScrollbarColumnWidth => (OperatingSystem.IsAndroid() ? 42f : 22f) * Scale;
 
     private void Awake()
@@ -82,108 +102,106 @@ public class YouTubeChatBubble : MonoBehaviour
     {
         try
         {
-            if (!ShouldShow()) return;
+            if (!ShouldShow())
+            {
+                _panelRect = default;
+                return;
+            }
 
             EnsureStyles();
-            EnsureDefaultPos();
             ComputePanelGeometry();
 
-            HandleBubbleInput();
-            DrawBubble();
-            if (_isOpen) DrawPanel();
+            if (!_isOpen)
+            {
+                Rect panel = _panelRect;
+                _panelRect = default;
+                OpenButton(panel);
+                return;
+            }
+
+            HandlePanelInput();
+            DrawPanel();
         }
         catch (Exception e) { Utils.ThrowException(e); }
     }
 
-    private float BubbleSize => 46f * Scale;
-
-    private Rect BubbleRect => new(_bubblePos.x, _bubblePos.y, BubbleSize, BubbleSize);
-
-    private void EnsureDefaultPos()
-    {
-        if (_posInitialized) return;
-        _posInitialized = true;
-        // 左端の中ほど。ClientControlGUI トグル (画面下・左 30%) や左上設定表示と被らない位置。
-        _bubblePos = new Vector2(14f * Scale, Screen.height * 0.34f);
-    }
-
-    // バブルをドラッグで移動 / クリックでトグル。パネルが開いていればパネル本体
-    // (スクロールバー列を除く) を掴んでも同じくバブル位置を動かせる。
-    // gameplay へイベントが漏れないよう e.Use()。
-    private void HandleBubbleInput()
+    // × で閉じる。板の上でのクリックは gameplay へ漏れないよう吸う。スクロールバー列は ScrollView に任せる。
+    private void HandlePanelInput()
     {
         Event e = Event.current;
-        switch (e.type)
+        if (e.type == EventType.MouseDown && _closeRect.Contains(e.mousePosition))
         {
-            case EventType.MouseDown when BubbleRect.Contains(e.mousePosition):
-                _dragging = true;
-                _didDrag = false;
-                _dragFromBubble = true;
-                _dragOffset = e.mousePosition - _bubblePos;
-                e.Use();
-                break;
-            case EventType.MouseDown when _isOpen && _panelDragZone.Contains(e.mousePosition):
-                _dragging = true;
-                _didDrag = false;
-                _dragFromBubble = false;
-                _dragOffset = e.mousePosition - _bubblePos;
-                e.Use();
-                break;
-            case EventType.MouseDrag when _dragging:
-                Vector2 np = e.mousePosition - _dragOffset;
-                if ((np - _bubblePos).sqrMagnitude > 36f) _didDrag = true; // 6px 以上動いたらドラッグ扱い
-                _bubblePos = new Vector2(
-                    Mathf.Clamp(np.x, 0f, Screen.width - BubbleSize),
-                    Mathf.Clamp(np.y, 0f, Screen.height - BubbleSize));
-                e.Use();
-                break;
-            case EventType.MouseUp when _dragging:
-                _dragging = false;
-                if (_dragFromBubble && !_didDrag) _isOpen = !_isOpen; // バブルを動かさず離した = クリック
-                e.Use();
-                break;
+            _isOpen = false;
+            _panelRect = default;
+            e.Use();
+            return;
+        }
+
+        if (e.type is EventType.MouseDown or EventType.MouseUp && (_panelHitZone.Contains(e.mousePosition) || _closeRect.Contains(e.mousePosition))) e.Use();
+    }
+
+    // 閉じている間、板の左下の角に「開く」ボタンを出す
+    private void OpenButton(Rect panel)
+    {
+        Vector2 size = _openStyle.CalcSize(_openContent) + new Vector2(20f * Scale, 10f * Scale);
+        var rect = new Rect(panel.x, panel.yMax - size.y, size.x, size.y);
+
+        Event e = Event.current;
+        if (e.type == EventType.MouseDown && rect.Contains(e.mousePosition))
+        {
+            _isOpen = true;
+            _stickToBottom = true;
+            e.Use();
+            return;
+        }
+
+        if (e.type == EventType.MouseUp && rect.Contains(e.mousePosition)) e.Use();
+        if (e.type == EventType.Repaint)
+        {
+            _openStyle.normal.background = rect.Contains(e.mousePosition) ? _openHoverTex : _openTex;
+            GUI.Box(rect, _openContent, _openStyle);
         }
     }
 
-    private void DrawBubble()
-    {
-        // 赤い丸 ▶ ボタン。押下トグルは HandleBubbleInput が担うのでここは見た目だけ。
-        _bubbleStyle.normal.background = BubbleRect.Contains(Event.current.mousePosition) ? _redHoverTex : _redTex;
-        _bubbleStyle.hover.background = _redHoverTex;
-        GUI.Box(BubbleRect, _isOpen ? "▲" : "▶", _bubbleStyle);
-    }
-
-    // パネルの数フレーム前から一定の rect と、本体ドラッグ用ゾーン (スクロールバー列を除く)
-    // を確定させる。HandleBubbleInput と DrawPanel の両方がこの結果を参照する。
     private const int BaseVisibleLines = 5; // PanelHeight=100% のときの可視行数
     private const float BasePanelWidth = 240f;
 
     private void ComputePanelGeometry()
     {
-        if (!_isOpen)
-        {
-            _panelRect = default;
-            _panelDragZone = default;
-            return;
-        }
-
         float pad = 8f * Scale;
         float lineH = 20f * Scale;
         float widthPct = (YouTubeChatOptions.PanelWidth?.GetInt() ?? 100) / 100f;
         float heightPct = (YouTubeChatOptions.PanelHeight?.GetInt() ?? 100) / 100f;
 
-        float pw = BasePanelWidth * Scale * widthPct;
         int visibleLines = Mathf.Max(1, Mathf.RoundToInt(BaseVisibleLines * heightPct));
         float ph = visibleLines * lineH + pad * 2f;
 
-        // バブルの右側に出す。画面外へはみ出すなら左へ回す。下端も画面内へクランプ。
-        float px = _bubblePos.x + BubbleSize + 6f * Scale;
-        if (px + pw > Screen.width) px = _bubblePos.x - pw - 6f * Scale;
-        if (px < 0f) px = 0f;
-        float py = Mathf.Clamp(_bubblePos.y, 0f, Screen.height - ph);
+        float px, py, pw;
+        if (AudienceSeats.TryGetHistoryAnchor(out float benchLeft, out float benchRight, out float bottom, out float width))
+        {
+            // 観客席の右隣で下端をそろえる。右に入らなければ左隣。幅は観客席と同じ (幅の設定は観客席を出していない時だけ効く)
+            float gap = 10f * Scale;
+            pw = width;
+            px = benchRight + gap + pw <= Screen.width ? benchRight + gap : benchLeft - gap - pw;
+            py = bottom - ph;
+        }
+        else
+        {
+            // 観客席が出ていない時は左端の中ほど
+            pw = BasePanelWidth * Scale * widthPct;
+            px = 14f * Scale;
+            py = Screen.height * 0.34f;
+        }
+
+        px = Mathf.Clamp(px, 0f, Mathf.Max(0f, Screen.width - pw));
+        py = Mathf.Clamp(py, 0f, Mathf.Max(0f, Screen.height - ph));
 
         _panelRect = new Rect(px, py, pw, ph);
-        _panelDragZone = new Rect(px, py, Mathf.Max(0f, pw - ScrollbarColumnWidth), ph);
+        _panelHitZone = new Rect(px, py, Mathf.Max(0f, pw - ScrollbarColumnWidth), ph);
+
+        // スクロールバーと重ならないよう、板の上辺の外に載せる
+        float cs = 24f * Scale;
+        _closeRect = new Rect(px + pw - cs, py - cs, cs, cs);
     }
 
     private void DrawPanel()
@@ -192,6 +210,7 @@ public class YouTubeChatBubble : MonoBehaviour
 
         float pad = 8f * Scale;
         GUI.Box(_panelRect, GUIContent.none, _panelBg);
+        GUI.Box(_closeRect, _closeContent, _closeStyle);
 
         var outerRect = new Rect(_panelRect.x + pad, _panelRect.y + pad, _panelRect.width - pad * 2f, _panelRect.height - pad * 2f);
         float contentW = Mathf.Max(1f, outerRect.width - ScrollbarColumnWidth - 1f);
@@ -219,12 +238,14 @@ public class YouTubeChatBubble : MonoBehaviour
 
     private string BuildBody()
     {
-        if (!YouTubeChatManager.IsActive)
-            return "<color=#AAAAAA>▶ /yt ＜配信URL＞ で開始</color>";
-
+        // 取得が切れていても、それまでに届いたコメントは読み返せるように出す
         YouTubeChatOverlay.CopyLinesInto(_lines);
         if (_lines.Count == 0)
-            return $"<color=#AAAAAA>● 取得中... ({YouTubeChatManager.CurrentVideoId})</color>";
+        {
+            return YouTubeChatManager.IsActive
+                ? $"<color=#AAAAAA>● 取得中... ({YouTubeChatManager.CurrentVideoId})</color>"
+                : "<color=#AAAAAA>▶ /yt ＜配信URL＞ で開始</color>";
+        }
 
         _sb.Clear();
         for (int i = 0; i < _lines.Count; i++)
@@ -238,28 +259,37 @@ public class YouTubeChatBubble : MonoBehaviour
 
     private void EnsureStyles()
     {
-        if (_bubbleStyle != null && Math.Abs(_builtScale - Scale) < 0.01f) return;
+        if (_panelBg != null && Math.Abs(_builtScale - Scale) < 0.01f) return;
         _builtScale = Scale;
 
-        _redTex = SolidTex(new Color(0.79f, 0.10f, 0.10f, 0.96f));       // YouTube 赤
-        _redHoverTex = SolidTex(new Color(1f, 0.27f, 0.27f, 0.98f));
         _panelTex = SolidTex(new Color(0f, 0f, 0f, 0.66f));               // 半透明黒
 
-        int bubbleFont = Mathf.Max(14, Mathf.RoundToInt(26f * Scale));
         int textFont = Mathf.Max(11, Mathf.RoundToInt(20f * Scale));
-
-        _bubbleStyle = new GUIStyle
-        {
-            alignment = TextAnchor.MiddleCenter,
-            fontSize = bubbleFont,
-            fontStyle = FontStyle.Bold,
-            richText = false
-        };
-        _bubbleStyle.normal.textColor = Color.white;
-        _bubbleStyle.hover.textColor = Color.white;
 
         _panelBg = new GUIStyle();
         _panelBg.normal.background = _panelTex;
+
+        _closeStyle = new GUIStyle
+        {
+            alignment = TextAnchor.MiddleCenter,
+            fontSize = Mathf.Max(11, Mathf.RoundToInt(20f * Scale)),
+            fontStyle = FontStyle.Bold
+        };
+        _closeStyle.normal.background = _panelTex;
+        _closeStyle.normal.textColor = Color.white;
+
+        // 見落とされないよう YouTube の赤で目立たせる
+        if (!_openTex) _openTex = SolidTex(new Color(0.79f, 0.10f, 0.10f, 0.96f));
+        if (!_openHoverTex) _openHoverTex = SolidTex(new Color(1f, 0.27f, 0.27f, 0.98f));
+        _openStyle = new GUIStyle
+        {
+            alignment = TextAnchor.MiddleCenter,
+            fontSize = Mathf.Max(11, Mathf.RoundToInt(20f * Scale)),
+            fontStyle = FontStyle.Bold
+        };
+        _openStyle.normal.background = _openTex;
+        _openStyle.normal.textColor = Color.white;
+        _openContent = new GUIContent(Translator.GetString("YouTubeChatHistoryOpen"));
 
         _textStyle = new GUIStyle
         {
@@ -270,8 +300,6 @@ public class YouTubeChatBubble : MonoBehaviour
             clipping = TextClipping.Clip
         };
         _textStyle.normal.textColor = Color.white;
-
-        _hintStyle = _textStyle; // 予備
     }
 
     private static Texture2D SolidTex(Color c)
