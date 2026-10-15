@@ -716,6 +716,11 @@ public class Main : BasePlugin
         // ホストローカルの GUI 部品は最初の描画フレームより前には要らないので、スプラッシュ中の
         // フレームで順に足す (Modules.PatchPhases.Defer)。Load を短くするほど EOS ログインの開始が早まる。
         Modules.PatchPhases.Defer("ClientControlGUI", () => AddComponent<ClientControlGUI>());
+        Modules.PatchPhases.Defer("SpawnEditor", () =>
+        {
+            Modules.SpawnEditor.EkSpawnEditor.Init();
+            AddComponent<SpawnEditorKit.SpawnEditorUi>();
+        });
         // 配信向けのオーバーレイは Android 版では出さない (配信は PC ホストの用途)。
 #if !ANDROID
         Modules.PatchPhases.Defer("StreamSetupGUI", () => AddComponent<EndKnot.Modules.Setup.StreamSetupGUI>());

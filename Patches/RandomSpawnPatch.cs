@@ -97,6 +97,13 @@ internal abstract class RandomSpawn
 
         public void RandomTeleport(PlayerControl player)
         {
+            if (Modules.SpawnEditor.EkSpawnEditor.TryPick(this, out Vector2 customPos, out string customName))
+            {
+                Logger.Info($"{player.Data.PlayerName} => {customName} {customPos}", "RandomSpawn");
+                player.TP(customPos, true, false);
+                return;
+            }
+
             KeyValuePair<SystemTypes, Vector2> spawn = GetLocation();
             Logger.Info($"{player.Data.PlayerName} => {Translator.GetString(spawn.Key.ToString())} {spawn.Value}", "RandomSpawn");
             player.TP(spawn.Value, true, false);

@@ -644,6 +644,8 @@ public static class Options
     public static OptionItem RandomMapsMode;
     public static OptionItem RandomSpawn;
     public static OptionItem AirshipAdditionalSpawn;
+    public static OptionItem CustomSpawnPoints;
+    public static OptionItem CustomSpawnPointsMode;
     public static OptionItem AirshipVariableElectrical;
     public static OptionItem DisableAirshipMovingPlatform;
     public static OptionItem DisableSporeTriggerOnFungle;
@@ -2390,6 +2392,12 @@ public static class Options
 
         AirshipAdditionalSpawn = new BooleanOptionItem(22010, "AirshipAdditionalSpawn", false, TabGroup.GameSettings)
             .SetParent(RandomSpawn);
+
+        CustomSpawnPoints = new BooleanOptionItem(22011, "CustomSpawnPoints", false, TabGroup.GameSettings)
+            .SetParent(RandomSpawn);
+
+        CustomSpawnPointsMode = new StringOptionItem(22012, "CustomSpawnPointsMode", ["CustomSpawnPointsMode.Mix", "CustomSpawnPointsMode.Only"], 0, TabGroup.GameSettings)
+            .SetParent(CustomSpawnPoints);
 
         // Airship Variable Electrical
         AirshipVariableElectrical = new BooleanOptionItem(22100, "AirshipVariableElectrical", false, TabGroup.GameSettings)
