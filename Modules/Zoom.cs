@@ -12,7 +12,8 @@ public static class Zoom
     private static bool ResetButtons;
     private static Camera Main;
 
-    public static bool CanZoom => ((GameStates.IsShip && !GameStates.IsMeeting && GameStates.IsCanMove && !PlayerControl.LocalPlayer.IsAlive()) || (GameStates.IsLobby && GameStates.IsCanMove)) && !InGameRoleInfoMenu.Showing;
+    // Freeplay zooms while alive too, so the whole ship can be seen when placing spawn points.
+    public static bool CanZoom => ((GameStates.IsShip && !GameStates.IsMeeting && GameStates.IsCanMove && (!PlayerControl.LocalPlayer.IsAlive() || GameStates.IsFreePlay)) || (GameStates.IsLobby && GameStates.IsCanMove)) && !InGameRoleInfoMenu.Showing;
 
     public static void Postfix()
     {
