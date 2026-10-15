@@ -17,6 +17,7 @@ public static class EndKnotFeatureBridge
     private const string DiscordUrl = "https://discord.gg/s5J8c23Dms";
     private const string GitHubUrl  = "https://github.com/waffle-ful/Aeterna-End-K-not";
     private const string YouTubeUrl = "https://www.youtube.com/@wafflewafflewafflewafflewaffle";
+    private const string OfuseUrl   = "https://ofuse.me/endknot";
 
     // BGM state (mirrors MainMenuManagerPatch private fields)
     private static bool _bgmInitPending;
@@ -185,6 +186,8 @@ public static class EndKnotFeatureBridge
         x = AddLink(parent, "GitHub", x, y, fontSize, () => OpenUrlIfSet(GitHubUrl));
         x = AddSeparator(parent, x, y, fontSize);
         x = AddLink(parent, "YouTube", x, y, fontSize, () => OpenUrlIfSet(YouTubeUrl));
+        x = AddSeparator(parent, x, y, fontSize);
+        x = AddLink(parent, "OFUSE", x, y, fontSize, () => OpenUrlIfSet(OfuseUrl));
 
 #if !ANDROID
         // 配信セットアップは右下に同じ文字サイズで置き、左下のリンク列と釣り合わせる。
@@ -256,12 +259,14 @@ public static class EndKnotFeatureBridge
         var size = new Vector2(1.6f, 0.5f);
         const float step = 1.9f;
 
-        CreateVanillaButton(template, parent, "DiscordButton", new Vector3(-step, y, 0f),
+        CreateVanillaButton(template, parent, "DiscordButton", new Vector3(-1.5f * step, y, 0f),
             new Color32(110, 126, 255, 255), new Color32(160, 172, 255, 255), size, "Discord", () => OpenUrlIfSet(DiscordUrl));
-        CreateVanillaButton(template, parent, "GitHubButton", new Vector3(0f, y, 0f),
+        CreateVanillaButton(template, parent, "GitHubButton", new Vector3(-0.5f * step, y, 0f),
             new Color32(188, 188, 188, 255), new Color32(224, 224, 224, 255), size, "GitHub", () => OpenUrlIfSet(GitHubUrl));
-        CreateVanillaButton(template, parent, "YouTubeButton", new Vector3(step, y, 0f),
+        CreateVanillaButton(template, parent, "YouTubeButton", new Vector3(0.5f * step, y, 0f),
             new Color32(236, 58, 52, 255), new Color32(255, 90, 82, 255), size, "YouTube", () => OpenUrlIfSet(YouTubeUrl));
+        CreateVanillaButton(template, parent, "OfuseButton", new Vector3(1.5f * step, y, 0f),
+            new Color32(43, 139, 173, 255), new Color32(84, 178, 210, 255), size, "OFUSE", () => OpenUrlIfSet(OfuseUrl));
     }
 
     /// <summary>
