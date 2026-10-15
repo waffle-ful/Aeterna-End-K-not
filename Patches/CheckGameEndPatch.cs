@@ -1292,7 +1292,9 @@ internal static class GameEndChecker
         {
             reason = GameOverReason.ImpostorsByKill;
 
-            if (SoloPVP.RoundTimer.IsRunning && SoloPVP.RoundTimer.Elapsed.TotalSeconds < SoloPVP.GameTime) return false;
+            // The round timer is also stopped while everyone but one player is waiting for revival, which is a pause, not the end of the round
+            bool contested = SoloPVP.RoundTimer.IsRunning || Main.AllAlivePlayerControlsCount > 1 || SoloPVP.BackCountdown.Keys.ToValidPlayers().Any(x => x.Data && !x.Data.Disconnected);
+            if (contested && SoloPVP.RoundTimer.Elapsed.TotalSeconds < SoloPVP.GameTime) return false;
 
             byte? winnerId = Main.EnumeratePlayerControls().FirstOrDefault(x => !x.Is(CustomRoles.GM) && SoloPVP.GetRankFromScore(x.PlayerId) == 1)?.PlayerId ?? Main.EnumerateAlivePlayerControls().FirstOrDefault()?.PlayerId;
             if (winnerId == null) return false;
