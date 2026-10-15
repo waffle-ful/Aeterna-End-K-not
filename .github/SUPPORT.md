@@ -6,8 +6,8 @@ End K not is a small personal fork of [Endless Host Roles (EHR)](https://github.
 
 | Topic | Where |
 |---|---|
-| Bug reports / technical issues | Discord (preferred) — https://discord.gg/nnQMCEkHpC |
-| Discussion, gameplay questions, suggestions | Discord — https://discord.gg/nnQMCEkHpC |
+| Bug reports / technical issues | Discord (preferred) — https://discord.gg/s5J8c23Dms |
+| Discussion, gameplay questions, suggestions | Discord — https://discord.gg/s5J8c23Dms |
 | GitHub Issues | Accepted, but responses may be slow |
 | Security vulnerabilities | See [SECURITY.md](SECURITY.md) — do not file a public issue |
 

@@ -11,7 +11,7 @@
   <a href="./ROLES-EN.md"><img src="https://img.shields.io/badge/roles-682-7B2FBE?style=for-the-badge" alt="682 roles"></a>
   <img src="https://img.shields.io/badge/install-host%20only-2EA043?style=for-the-badge" alt="Install: host only">
   <br>
-  <a href="https://discord.gg/nnQMCEkHpC"><img src="https://img.shields.io/badge/Discord-join-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Join the Discord"></a>
+  <a href="https://discord.gg/s5J8c23Dms"><img src="https://img.shields.io/badge/Discord-join-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Join the Discord"></a>
   <a href="https://github.com/sponsors/waffle-ful"><img src="https://img.shields.io/badge/Sponsor-%E2%9D%A4-EA4AAA?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Sponsor"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-blue?style=for-the-badge" alt="GPL-3.0"></a>
 </p>
@@ -116,7 +116,7 @@ The installer detects Steam or Epic and installs the mod. To remove it, rename `
 This mod is unofficial and is **not affiliated with or endorsed by Innersloth**. **Please do not contact Innersloth regarding any issues with this mod.**
 
 > [!WARNING]
-> End K not is in **beta**. Some roles are untested and several features are works-in-progress. Please report bugs and suggestions on [GitHub Issues](../../issues) or our [Discord](https://discord.gg/nnQMCEkHpC).
+> End K not is in **beta**. Some roles are untested and several features are works-in-progress. Please report bugs and suggestions on [GitHub Issues](../../issues) or our [Discord](https://discord.gg/s5J8c23Dms).
 
 Supported Among Us version: **2026.8.18**
 
@@ -274,7 +274,7 @@ Edit `bgm_titles.json` to control title / author display while a BGM plays. End 
 
 ## Community
 
-- **Discord**: https://discord.gg/nnQMCEkHpC — bug reports, questions, general chat (preferred)
+- **Discord**: https://discord.gg/s5J8c23Dms — bug reports, questions, general chat (preferred)
 - **Issues**: [GitHub Issues](../../issues) — may take a while to respond
 - [`CODE_OF_CONDUCT.md`](.github/CODE_OF_CONDUCT.md) | [`CONTRIBUTING.md`](.github/CONTRIBUTING.md) | [`SECURITY.md`](.github/SECURITY.md) | [`SUPPORT.md`](.github/SUPPORT.md)
 
