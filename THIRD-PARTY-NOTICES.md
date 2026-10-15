@@ -307,12 +307,18 @@ unmodified (except `doorstop_config.ini`, which is a plain configuration file).
 Il2CppInterop is licensed under LGPL-3.0. The release packages ship a patched build of
 Il2CppInterop 1.5.3 (`Il2CppInterop.Runtime.dll` / `Il2CppInterop.Common.dll`) taken from the packaging of
 [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles/commit/c2e0b297e).
+On top of that build, End K not modifies `Il2CppInterop.Runtime.dll` so that three reference stores go through the game's
+GC write barrier (`IL2CPP.FieldWriteWbarrierStub`, `Il2CppReferenceArray<T>.StoreValue` and the
+`Il2CppStringArray` indexer setter; adds `IL2CPP.WbStore`). The modification is reproduced from the
+unmodified build by [`tools/InteropWbPatch`](./tools/InteropWbPatch/).
 The full license texts are included in the release packages as `licenses/LGPL-2.1.txt` and
 `licenses/LGPL-3.0.txt` (and in this repository under [`licenses/`](./licenses/)).
 
 BepInEx・Unity Doorstop・MiraAPI のスプライトは LGPL-2.1 で、無改変で再配布しています
 （`doorstop_config.ini` は設定ファイルのため当 fork 向けに調整）。Il2CppInterop は LGPL-3.0 で、
-配布物には Endless Host Roles の配布構成に含まれる修正版ビルドを同梱しています。ライセンス全文は配布物の
+配布物には Endless Host Roles の配布構成に含まれる修正版ビルドを同梱しています。さらに当 fork で
+`Il2CppInterop.Runtime.dll` の参照の書き込み 3 か所をゲームの GC 書き込みバリア経由に改変しています
+（改変は [`tools/InteropWbPatch`](./tools/InteropWbPatch/) で元のビルドから再現できます）。ライセンス全文は配布物の
 `licenses/` フォルダ（本リポジトリでは [`licenses/`](./licenses/)）にあります。
 
 ## Apache-2.0 components (Dobby, OpenSSL, Android launcher libraries)

@@ -10,4 +10,5 @@
 - `doorstop_config.ini` のみ当 fork 向けに調整済み (target_assembly / coreclr パス / `boot_config_override`)。
   `boot_config_override` は mod が起動時に書き出す `BepInEx\config\EndKnot.boot.config` (ゲームの boot.config の写し +
   Unity のアロケータ設定) を指す。ファイルが無い間はゲームの boot.config がそのまま使われる
-  `[Environment] GC_DISABLE_INCREMENTAL=1` は上流由来の設定をそのまま維持
+  上流の `[Environment] GC_DISABLE_INCREMENTAL=1` は外している (incremental GC の ON/OFF は mod が起動時に決める。
+  この行が残っていると Unity の起動時点で OFF になり、mod からは ON に戻せない)

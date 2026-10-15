@@ -46,12 +46,12 @@ public static class GcUafProbe
         _done = true;
 
         // incremental GC が切れていると probe は判別能力を失う (フルマークでは barrier 欠落が無害なので
-        // stub interop でも SAFE が返る)。DisableIncrementalGc の既定 ON 化 (2026-08-15) 以降は素の設定が
-        // この状態なので、「barrier 退行の見張り」として使う意図で立てたフラグが黙って偽陰性を返さないよう、
-        // 走らせずに理由を出す。barrier を実際に確かめたいときは DisableIncrementalGc=false にしてから。
+        // stub interop でも SAFE が返る)。IncrementalGcInvalidator が incremental を切った環境 (元の Runtime・32bit・
+        // ForceDisableIncrementalGc=true) では、「barrier 退行の見張り」として使う意図で立てたフラグが黙って
+        // 偽陰性を返さないよう、走らせずに理由を出す。
         if (!IsIncrementalGc())
         {
-            Logger.Warn("GCUAF-PROBE: skipped — incremental GC is off, so a SAFE verdict would be a false negative (set Client Options.DisableIncrementalGc=false to actually test the write barriers)", "GcUafProbe");
+            Logger.Warn("GCUAF-PROBE: skipped — incremental GC is off, so a SAFE verdict would be a false negative (it stays on only with the write-barrier Il2CppInterop.Runtime on 64-bit and Client Options.ForceDisableIncrementalGc=false)", "GcUafProbe");
             return;
         }
 
