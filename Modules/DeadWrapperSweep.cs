@@ -37,8 +37,7 @@ internal static class DeadWrapperSweep
     private static int _skippedTypes;
     private static List<string> _skippedNames;
 
-    // Android では null 参照がフリーズになりうる (エミュの翻訳層で例外にならない) ので、実機で確かめるまで PC だけ
-    internal static bool Enabled => !OperatingSystem.IsAndroid() && (Main.SweepDestroyedReferences?.Value ?? false);
+    internal static bool Enabled => Main.SweepDestroyedReferences?.Value ?? false;
 
     internal static void OnStateChange(string from, string to)
     {
