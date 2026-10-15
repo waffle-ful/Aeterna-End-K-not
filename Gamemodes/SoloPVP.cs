@@ -22,6 +22,9 @@ internal static class SoloPVP
     public static Stopwatch RoundTimer;
     public static int GameTime = 180;
 
+    // Elapsed seconds received from the host; modded clients count on from here because the host pauses its timer
+    private static double SyncedElapsed;
+
     private static readonly Dictionary<byte, (string Text, long RemoveTimeStamp)> NameNotify = [];
 
     public static Dictionary<byte, int> BackCountdown = [];
@@ -102,6 +105,7 @@ internal static class SoloPVP
         BackCountdown = [];
         PlayerScore = [];
         GameTime = SoloPVP_GameTime.GetInt();
+        SyncedElapsed = 0;
         RoundTimer = Stopwatch.StartNew();
         LateTask.New(() =>
         {
@@ -208,7 +212,7 @@ internal static class SoloPVP
 
     public static string GetHudText()
     {
-        int roundTime = GameTime - (int)RoundTimer.Elapsed.TotalSeconds;
+        int roundTime = GameTime - (int)(SyncedElapsed + RoundTimer.Elapsed.TotalSeconds);
         return $"{roundTime / 60:00}:{roundTime % 60:00}";
     }
 
@@ -235,6 +239,18 @@ internal static class SoloPVP
 
         RPC.PlaySoundRPC(killer.PlayerId, Sounds.KillSound);
         RPC.PlaySoundRPC(target.PlayerId, Sounds.KillSound);
+    }
+
+    private static void SendTimerSync()
+    {
+        Utils.SendRPC(CustomRPC.SoloPVPSync, 3, RoundTimer.IsRunning, (float)RoundTimer.Elapsed.TotalSeconds);
+    }
+
+    public static void ApplyTimerSync(bool running, float elapsed)
+    {
+        SyncedElapsed = elapsed;
+        RoundTimer = new Stopwatch();
+        if (running) RoundTimer.Start();
     }
 
     private static void OnPlayerBack(PlayerControl pc)
@@ -351,12 +367,17 @@ internal static class SoloPVP
                 }
                 
                 // apart from 1 player, everyone is waiting for revival.... stop the timer temporarily
-                RoundTimer.Stop();
+                if (RoundTimer.IsRunning)
+                {
+                    RoundTimer.Stop();
+                    SendTimerSync();
+                }
             }
             else if (!RoundTimer.IsRunning)
             {
                 // resume the timer
                 RoundTimer.Start();
+                SendTimerSync();
             }
             
             if (!RoundTimer.IsRunning) return;

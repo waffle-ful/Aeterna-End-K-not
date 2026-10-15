@@ -1301,10 +1301,13 @@ internal static class RPCHandlerPatch
                     switch (reader.ReadPackedInt32())
                     {
                         case 1:
-                            SoloPVP.RoundTimer = Stopwatch.StartNew();
+                            SoloPVP.ApplyTimerSync(true, 0f);
                             break;
                         case 2:
                             SoloPVP.PlayerScore[reader.ReadByte()] = reader.ReadPackedInt32();
+                            break;
+                        case 3:
+                            SoloPVP.ApplyTimerSync(reader.ReadBoolean(), reader.ReadSingle());
                             break;
                     }
                     
