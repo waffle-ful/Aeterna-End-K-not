@@ -1021,6 +1021,15 @@ public static class TestBridge
             return;
         }
 
+        // 接続中のゲームパッドを Rewired がどの定義で認識したか (hardwareTypeGuid が空 = 定義表に無い扱い) と、
+        // 押されているボタン・本編の入力切替 (Joystick になればパッド操作中) を出す。
+        if (directive.Equals("pads", StringComparison.OrdinalIgnoreCase))
+        {
+            try { ExecutePads(); }
+            catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR pads failed"); }
+            return;
+        }
+
         // Layer D3: il2cpp (Boehm) 側の型別生存オブジェクト census を手動発火する。
         if (directive.Equals("bcensus", StringComparison.OrdinalIgnoreCase))
         {
@@ -3938,6 +3947,29 @@ public static class TestBridge
     }
 
     // ── Layer D3: Boehm census 手動発火 ──────────────────
+    private static void ExecutePads()
+    {
+        var ctl = Rewired.ReInput.controllers;
+        int n = ctl.joystickCount;
+        string input = ActiveInputManager.currentControlType.ToString();
+        WriteOut($"PADS count={n} input={input} trim={(Main.TrimForeignControllerMaps?.Value ?? false ? 1 : 0)}");
+
+        for (int i = 0; i < n; i++)
+        {
+            var j = ctl.Joysticks[i];
+            if (j == null) continue;
+
+            var pressed = new List<int>();
+
+            for (int b = 0; b < j.buttonCount; b++)
+                if (j.GetButton(b)) pressed.Add(b);
+
+            WriteOut($"PAD id={j.id} name=\"{j.name}\" hw=\"{j.hardwareName}\" type={j.hardwareTypeGuid} connected={j.isConnected} buttons={j.buttonCount} axes={j.axisCount} pressed=[{string.Join(",", pressed)}]");
+        }
+
+        WriteOut("OK pads");
+    }
+
     private static void ExecuteBcensus()
     {
         MemCensus.RunNow("bridge");
