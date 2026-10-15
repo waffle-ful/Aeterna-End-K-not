@@ -11,7 +11,7 @@
   <a href="./ROLES.md"><img src="https://img.shields.io/badge/%E5%BD%B9%E8%81%B7-682-7B2FBE?style=for-the-badge" alt="役職 682"></a>
   <img src="https://img.shields.io/badge/%E5%B0%8E%E5%85%A5-%E3%83%9B%E3%82%B9%E3%83%88%E3%81%A0%E3%81%91-2EA043?style=for-the-badge" alt="導入 ホストだけ">
   <br>
-  <a href="https://discord.gg/nnQMCEkHpC"><img src="https://img.shields.io/badge/Discord-%E5%8F%82%E5%8A%A0%E3%81%99%E3%82%8B-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord に参加する"></a>
+  <a href="https://discord.gg/s5J8c23Dms"><img src="https://img.shields.io/badge/Discord-%E5%8F%82%E5%8A%A0%E3%81%99%E3%82%8B-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord に参加する"></a>
   <a href="https://github.com/sponsors/waffle-ful"><img src="https://img.shields.io/badge/Sponsor-%E5%BF%9C%E6%8F%B4%E3%81%99%E3%82%8B-EA4AAA?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Sponsor で応援する"></a>
   <a href="https://ofuse.me/endknot"><img src="https://img.shields.io/badge/OFUSE-%E5%BF%9C%E6%8F%B4%E3%81%99%E3%82%8B-2B8BAD?style=for-the-badge" alt="OFUSE で応援する"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-blue?style=for-the-badge" alt="GPL-3.0"></a>
@@ -117,7 +117,7 @@
 このMod は非公式で、Among Us の開発元である Innersloth は関与していません。**このMod の問題に関して Innersloth へ問い合わせないでください。**
 
 > [!WARNING]
-> End K not は **beta 段階**です。未テスト役職や WIP 機能を含みます。不具合報告や提案は [GitHub Issues](../../issues) または [Discord](https://discord.gg/nnQMCEkHpC) へお願いします。
+> End K not は **beta 段階**です。未テスト役職や WIP 機能を含みます。不具合報告や提案は [GitHub Issues](../../issues) または [Discord](https://discord.gg/s5J8c23Dms) へお願いします。
 
 対応 Among Us バージョン : **2026.8.18**
 
@@ -275,7 +275,7 @@ zip に BepInEx 本体・設定ファイル・カスタムリージョン追加 
 
 ## コミュニティ
 
-- **Discord** : https://discord.gg/nnQMCEkHpC — バグ報告・質問・雑談（推奨）
+- **Discord** : https://discord.gg/s5J8c23Dms — バグ報告・質問・雑談（推奨）
 - **Issues** : [GitHub Issues](../../issues) — 確認が遅れる場合があります
 - [`CODE_OF_CONDUCT.md`](.github/CODE_OF_CONDUCT.md) | [`CONTRIBUTING.md`](.github/CONTRIBUTING.md) | [`SECURITY.md`](.github/SECURITY.md) | [`SUPPORT.md`](.github/SUPPORT.md)
 
