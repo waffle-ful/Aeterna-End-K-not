@@ -13,6 +13,7 @@
   <br>
   <a href="https://discord.gg/nnQMCEkHpC"><img src="https://img.shields.io/badge/Discord-%E5%8F%82%E5%8A%A0%E3%81%99%E3%82%8B-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord に参加する"></a>
   <a href="https://github.com/sponsors/waffle-ful"><img src="https://img.shields.io/badge/Sponsor-%E5%BF%9C%E6%8F%B4%E3%81%99%E3%82%8B-EA4AAA?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Sponsor で応援する"></a>
+  <a href="https://ofuse.me/endknot"><img src="https://img.shields.io/badge/OFUSE-%E5%BF%9C%E6%8F%B4%E3%81%99%E3%82%8B-2B8BAD?style=for-the-badge" alt="OFUSE で応援する"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-blue?style=for-the-badge" alt="GPL-3.0"></a>
 </p>
 
@@ -300,6 +301,7 @@ End K not は **GPL-3.0 の無料 Mod** です。全機能を今後も無料で�
 
 <p align="center">
   <a href="https://github.com/sponsors/waffle-ful"><img src="https://img.shields.io/badge/GitHub%20Sponsors-%E5%BF%9C%E6%8F%B4%E3%81%99%E3%82%8B-EA4AAA?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="GitHub Sponsors で応援する"></a>
+  <a href="https://ofuse.me/endknot"><img src="https://img.shields.io/badge/OFUSE-%E5%BF%9C%E6%8F%B4%E3%81%99%E3%82%8B-2B8BAD?style=for-the-badge" alt="OFUSE で応援する"></a>
 </p>
 
 ### 💖 スポンサー
