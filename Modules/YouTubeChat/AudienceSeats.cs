@@ -8,6 +8,7 @@ namespace EndKnot.Modules.YouTubeChat;
 // 配信画面の左下に「観客席」を出す。2 段のひな壇に、コメントした視聴者がゲームのクルー (色と帽子は名前から決まる) として座り、
 // コメントするとその子が跳ねて頭の上に吹き出しが出る。吹き出しは新しいものほど頭のすぐ上に積み、古いものは上へ押し上げて消す。
 // !コマンドの吹き出しは干渉の色で縁取り、実際に発動するとその子が大きく跳ねて光る。
+// 前の札をクリックすると過去のコメントの板 (YouTubeChatBubble) を開閉する。板は席の右隣に下端をそろえて貼り付く。
 // 席とクルーは HUD のカメラに置く絵、吹き出しは IMGUI (絵の上に重なる)。100% host 画面ローカル (RPC / NetObject 不使用)。
 public class AudienceSeats : MonoBehaviour
 {
@@ -100,6 +101,8 @@ public class AudienceSeats : MonoBehaviour
     private Vector2 _pos;
     private bool _posInitialized;
     private bool _dragging;
+    private bool _didDrag;
+    private bool _pressOnSign;
     private Vector2 _dragOffset;
     private bool _shown;
     private float _lastPico = -10f;
@@ -110,6 +113,9 @@ public class AudienceSeats : MonoBehaviour
     private float _nextRebuild;
     private float _builtWorldScale = -1f;
     private float _halfH = 3f, _halfW = 5.33f;
+
+    // 絵を置いているカメラ。ズームで写す広さが変わっても、台全体を逆に拡縮して画面上の大きさと位置を保つ
+    private Camera _cam;
     private static Sprite _white, _round, _glow;
 
     private Texture2D _whiteTex;
@@ -426,8 +432,16 @@ public class AudienceSeats : MonoBehaviour
 
     // ── HUD のカメラに置く絵 ───────────────────────────────────
 
-    private Vector3 ToLocal(float px, float py, float z) =>
-        FxMath.V3((px / Screen.width - 0.5f) * 2f * _halfW, (0.5f - py / Screen.height) * 2f * _halfH, z);
+    private Vector3 ToLocal(float px, float py, float z, float zoom) =>
+        FxMath.V3((px / Screen.width - 0.5f) * 2f * _halfW * zoom, (0.5f - py / Screen.height) * 2f * _halfH * zoom, z);
+
+    // 台を作った時からカメラの写す広さが何倍になったか
+    private float CameraZoom()
+    {
+        if (!_cam || _halfH <= 0f) return 1f;
+        float zoom = _cam.orthographicSize / _halfH;
+        return zoom > 0f ? zoom : 1f;
+    }
 
     private float PxToUnits => 2f * _halfH / Screen.height;
 
@@ -461,7 +475,9 @@ public class AudienceSeats : MonoBehaviour
             if (!BuildStand(s)) return;
         }
 
-        _root.transform.localPosition = ToLocal(_pos.x, _pos.y, -800f);
+        float zoom = CameraZoom();
+        _root.transform.localPosition = ToLocal(_pos.x, _pos.y, -800f, zoom);
+        _root.transform.localScale = FxMath.V3(zoom, zoom, 1f);
         TickLeavers(s, now);
 
         float u = PxToUnits;
@@ -515,7 +531,7 @@ public class AudienceSeats : MonoBehaviour
             Transform cam = HudManager.Instance.transform.parent;
             if (!cam) return false;
 
-            Camera c = cam.GetComponent<Camera>();
+            Camera c = _cam = cam.GetComponent<Camera>();
             if (c)
             {
                 _halfH = c.orthographicSize;
@@ -755,29 +771,57 @@ public class AudienceSeats : MonoBehaviour
     }
 
     // ひな壇を掴んで動かす。gameplay へイベントが漏れないよう e.Use()
+    // 札を動かさずに離す = クリックで、過去のコメントの板を開閉する
     private void HandleDrag(float s)
     {
         Event e = Event.current;
         float w = BenchWidth(s);
         Rect stand = new(_pos.x, _pos.y - (RowLift + 20f) * s, w, (RowLift + 50f) * s);
+        Rect sign = SignRect(s);
 
         switch (e.type)
         {
-            case EventType.MouseDown when stand.Contains(e.mousePosition):
+            case EventType.MouseDown when stand.Contains(e.mousePosition) || sign.Contains(e.mousePosition):
                 _dragging = true;
+                _didDrag = false;
+                _pressOnSign = sign.Contains(e.mousePosition);
                 _dragOffset = e.mousePosition - _pos;
                 e.Use();
                 break;
             case EventType.MouseDrag when _dragging:
                 Vector2 np = e.mousePosition - _dragOffset;
+                if ((np - _pos).sqrMagnitude > 36f) _didDrag = true;
                 _pos = FxMath.V2(FxMath.Clamp(np.x, 0f, FxMath.Max(0f, Screen.width - w)), FxMath.Clamp(np.y, FxMath.Min(200f * s, Screen.height), FxMath.Max(0f, Screen.height - 40f * s)));
                 e.Use();
                 break;
             case EventType.MouseUp when _dragging:
                 _dragging = false;
+                if (_pressOnSign && !_didDrag) YouTubeChatBubble.Toggle();
                 e.Use();
                 break;
         }
+    }
+
+    // 前の札 (MakeSign) の画面上の範囲。手すりの下に吊ってある
+    private Rect SignRect(float s)
+    {
+        float cx = _pos.x + BenchWidth(s) * 0.5f, cy = _pos.y + 36f * s;
+        return new Rect(cx - 62f * s, cy - 15f * s, 124f * s, 30f * s);
+    }
+
+    // 過去のコメントの板を置く場所: 台の左右の端 (px) と、下端 (札の下端) と、台の幅
+    public static bool TryGetHistoryAnchor(out float benchLeft, out float benchRight, out float bottom, out float width)
+    {
+        benchLeft = benchRight = bottom = width = 0f;
+        AudienceSeats seats = Instance;
+        if (!seats || !seats._shown || !seats._posInitialized) return false;
+
+        float s = Scale;
+        width = seats.BenchWidth(s);
+        benchLeft = seats._pos.x;
+        benchRight = seats._pos.x + width;
+        bottom = seats.SignRect(s).yMax;
+        return true;
     }
 
     private void DrawBubbles(float s, float now)

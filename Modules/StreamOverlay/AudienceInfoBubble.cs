@@ -8,7 +8,7 @@ using UnityEngine;
 namespace EndKnot.Modules.StreamOverlay;
 
 // 視聴者に「!コマンドで参加できる」ことを配信画面へ周知するコンパクトな回転バナー。
-// LobbyCodeBubble を踏襲した IMGUI + ドラッグ移動パターン。100% host 画面ローカル（RPC / NetObject 不使用）。
+// IMGUI + ドラッグ移動。100% host 画面ローカル（RPC / NetObject 不使用）。
 // ホスト専用 MOD なので描画されるのはホスト = 配信画面。Translator.GetString がホストの言語設定を見るため、
 // 表示言語は自動でゲーム内言語に一致する（英語クライアントなら英語、日本語なら日本語）。
 // 有効な干渉コマンドと価格を数秒ごとに1件ずつ切り替えて表示する。
@@ -86,7 +86,7 @@ public class AudienceInfoBubble : MonoBehaviour
     {
         if (_posInitialized) return;
         _posInitialized = true;
-        // 右上寄り。LobbyCodeBubble(右端 34%) や YouTubeChatBubble(左端 34%) と被らない位置。
+        // 右上寄り。YouTubeChatBubble(左端 34%) と被らない位置。
         _bubblePos = new Vector2(Screen.width - BubbleWidth - 14f * Scale, Screen.height * 0.12f);
     }
 
@@ -195,7 +195,7 @@ public class AudienceInfoBubble : MonoBehaviour
         if (_headerStyle != null && Math.Abs(_builtScale - Scale) < 0.01f) return;
         _builtScale = Scale;
 
-        // 鮮やかな赤紫。LobbyCodeBubble(青紫)と色で区別しつつ、黄土色/茶系マップ背景でも埋もれない高彩度・高不透明度で。
+        // 鮮やかな赤紫。黄土色/茶系マップ背景でも埋もれない高彩度・高不透明度で。
         _bgTex = SolidTex(new Color(0.72f, 0.12f, 0.42f, 0.97f));
         _borderTex = SolidTex(Color.white);
 

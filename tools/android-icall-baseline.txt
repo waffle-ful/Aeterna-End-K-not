@@ -12,7 +12,6 @@ UnityEngine.GUIStyleState::get_background | EndKnot.Modules.Setup.StreamSetupGUI
 UnityEngine.GUIStyle::set_richText | EndKnot.Modules.Audience.AudienceCutscene
 UnityEngine.GUIStyle::set_richText | EndKnot.Modules.StreamOverlay.AudienceInfoBubble
 UnityEngine.GUIStyle::set_richText | EndKnot.Modules.StreamOverlay.DevBuildBanner
-UnityEngine.GUIStyle::set_richText | EndKnot.Modules.StreamOverlay.LobbyCodeBubble
 UnityEngine.GUIStyle::Internal_CalcSize_Injected | EndKnot.Modules.StreamOverlay.LobbyCodeTicker
 UnityEngine.GUIStyle::set_clipping | EndKnot.Modules.StreamOverlay.LobbyCodeTicker
 UnityEngine.GUIStyle::set_richText | EndKnot.Modules.StreamOverlay.LobbyCodeTicker

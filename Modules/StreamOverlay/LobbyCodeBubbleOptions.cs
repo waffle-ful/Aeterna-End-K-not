@@ -1,13 +1,10 @@
 namespace EndKnot.Modules.StreamOverlay;
 
-// オプション一式。SystemSettings タブ配下、ID 44700〜44705 (44702〜 は参加コードの看板)。
-// Enabled は default OFF（host が設定から手動で ON にする運用）。
+// 参加コードの看板のオプション。SystemSettings タブ配下、ID 44702〜44705 (44700・44701 は欠番)。
+// default OFF（host が設定から手動で ON にする運用）。
 public static class LobbyCodeBubbleOptions
 {
     public const int OptionIdBase = 44700;
-
-    public static OptionItem Enabled;
-    public static OptionItem Scale;
 
     public static OptionItem TickerEnabled;
     public static OptionItem TickerInterval;
@@ -16,13 +13,6 @@ public static class LobbyCodeBubbleOptions
 
     public static void SetupCustomOption()
     {
-        Enabled = new BooleanOptionItem(OptionIdBase + 0, "LobbyCodeBubbleEnable", false, TabGroup.SystemSettings)
-            .SetHeader(true);
-
-        Scale = new IntegerOptionItem(OptionIdBase + 1, "LobbyCodeBubbleScale", new(50, 400, 10), 150, TabGroup.SystemSettings)
-            .SetParent(Enabled)
-            .SetValueFormat(OptionFormat.Percent);
-
         TickerEnabled = new BooleanOptionItem(OptionIdBase + 2, "LobbyCodeTickerEnable", false, TabGroup.SystemSettings)
             .SetHeader(true);
 

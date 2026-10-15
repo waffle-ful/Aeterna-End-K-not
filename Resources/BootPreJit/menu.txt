@@ -330,7 +330,6 @@ EndKnot.Modules.YouTubeChat.YouTubeChatBubble::HandleBubbleInput
 EndKnot.SetColorPatch::Postfix
 EndKnot.ExtendedPlayerControl::Pos
 EndKnot.GameStartManagerPatch+GameStartManagerUpdatePatch::Prefix
-EndKnot.Modules.StreamOverlay.LobbyCodeBubble::EnsureStyles
 EndKnot.Modules.StreamOverlay.AudienceInfoBubble::EnsureStyles
 EndKnot.AllMapIconsPatch::GameStartManagerStart_Prefix
 EndKnot.Modules.BackroomsShadow::Arm
@@ -339,7 +338,6 @@ EndKnot.Modules.GameOptionsSender::SanitizeForOfficialServer
 EndKnot.LobbyFixedUpdatePatch::Postfix
 EndKnot.Modules.MapAtmosphere.AirshipLiminal::Tick
 EndKnot.ClientControlGUI::MakeBtn
-EndKnot.Modules.StreamOverlay.LobbyCodeBubble::DrawBubble
 EndKnot.GameManagerSerializeFix::Prefix
 EndKnot.Modules.TransitionTimeline::EnsureSceneHooks
 EndKnot.Modules.EkmapLoader::TickAutoReload
@@ -357,7 +355,6 @@ EndKnot.ChatControllerUpdatePatch::PostfixCore
 EndKnot.Modules.YouTubeChat.YouTubeChatManager::add_OnStatusChanged
 EndKnot.Modules.LobbyCodeRainbow::SetLayersEnabled
 EndKnot.ClientControlGUI::InitWindowRect
-EndKnot.Modules.StreamOverlay.LobbyCodeBubble::HandleDrag
 EndKnot.Modules.StreamOverlay.AudienceInfoBubble::DrawBubble
 EndKnot.CustomNetObject::FixedUpdate
 EndKnot.HandleHUDPatch::Postfix
@@ -430,4 +427,3 @@ EndKnot.Modules.LobbyCodeRainbow::get_Active
 EndKnot.Modules.ServerInviteOverlay::HideAll
 EndKnot.Modules.YouTubeChat.YouTubeChatBubble::SolidTex
 EndKnot.Modules.YouTubeChat.YouTubeChatBubble::get_BubbleRect
-EndKnot.Modules.StreamOverlay.LobbyCodeBubble::SolidTex

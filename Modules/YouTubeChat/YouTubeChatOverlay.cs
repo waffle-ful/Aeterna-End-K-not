@@ -41,6 +41,9 @@ public static class YouTubeChatOverlay
         }
     }
 
+    // 配信に繋がずに確かめる入口
+    internal static void InjectForTest(string author, string text) => HandleMessage(author, text);
+
     private static void HandleMessage(string author, string text)
     {
         if (string.IsNullOrEmpty(text)) return;

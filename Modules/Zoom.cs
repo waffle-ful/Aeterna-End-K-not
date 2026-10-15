@@ -67,7 +67,8 @@ public static class Zoom
                         }
                     }
 
-                    switch (Input.mouseScrollDelta.y)
+                    // 配信のコメント板の上でのホイールは板のスクロールなので、ズームには使わない
+                    switch (EndKnot.Modules.YouTubeChat.YouTubeChatBubble.IsPointerOver() ? 0f : Input.mouseScrollDelta.y)
                     {
                         case > 0:
                         {

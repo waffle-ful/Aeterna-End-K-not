@@ -775,6 +775,7 @@ public static class TestBridge
             Audience.AudienceManager.EnsureSubscribed();
             Audience.AudienceManager.InjectForTest(vp[0].Trim(), vp[1].Trim());
             YouTubeChat.AudienceSeats.InjectForTest(vp[0].Trim(), vp[1].Trim());
+            YouTubeChat.YouTubeChatOverlay.InjectForTest(vp[0].Trim(), vp[1].Trim());
             WriteOut($"OK viewer {vp[0].Trim()}: {vp[1].Trim()}");
             return;
         }
