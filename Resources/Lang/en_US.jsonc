@@ -9717,7 +9717,7 @@
   "YouTubeChat.NotEnabled": "YouTube chat overlay is disabled. Turn on \"Show YouTube live chat in HUD\" in System Settings first.",
   "YouTubeChat.Usage": "Usage: /yt <stream-url>  |  /yt off  |  /yt status  |  /yt clear",
   "LobbyCodeTickerEnable": "Show a join code sign on the stream",
-  "LobbyCodeTickerEnable.Description": "In the lobby and during games, a join code sign appears at the top of the screen at a set interval. It slides in from the right, stops in the middle while each letter of the code flips into place, then slides out to the left. When audience interventions are on, a line about the !commands is added below it. Host-only, never sent to other players. Hidden during meetings.",
+  "LobbyCodeTickerEnable.Description": "While in the lobby, a join code sign appears at the top of the screen at a set interval. It slides in from the right, stops in the middle while each letter of the code flips into place, then slides out to the left. When audience interventions are on, a line about the !commands is added below it. Host-only, never sent to other players. Hidden during games.",
   "LobbyCodeTickerInterval": "Join code sign interval",
   "LobbyCodeTickerRunSeconds": "Seconds the join code sign stays",
   "LobbyCodeTickerScale": "Join code sign size",

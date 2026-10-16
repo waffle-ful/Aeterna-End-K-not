@@ -54,9 +54,7 @@ public class LobbyCodeTicker : MonoBehaviour
         AmongUsClient client = AmongUsClient.Instance;
         if (!Il2Direct.Alive(client) || !client.AmHost) return false;
         if (LobbyCodeBubbleOptions.TickerEnabled == null || !LobbyCodeBubbleOptions.TickerEnabled.GetBool()) return false;
-        if (!GameStates.IsLobby && !GameStates.InGame) return false;
-        if (GameStates.IsMeeting || Il2Direct.Alive(ExileController.Instance)) return false;
-        return true;
+        return GameStates.IsLobby;
     }
 
     private void OnGUI()
