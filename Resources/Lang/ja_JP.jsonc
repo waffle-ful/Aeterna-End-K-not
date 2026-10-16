@@ -9029,7 +9029,7 @@
   "YouTubeChat.NotEnabled": "YouTubeチャット表示が無効になっています。先にシステム設定で「YouTubeライブチャットをHUDに表示」をONにしてください。",
   "YouTubeChat.Usage": "使い方: /yt <配信URL>  |  /yt off  |  /yt status  |  /yt clear",
   "LobbyCodeTickerEnable": "配信画面に参加コードの看板を出す",
-  "LobbyCodeTickerEnable.Description": "ロビー中と試合中、参加コードの看板を一定間隔で画面上部に出します。右から入って中央で止まり、コードが1文字ずつパタパタとめくれて現れたあと、左へ抜けていきます。視聴者干渉が有効なら、看板の下に「!コマンド」の案内も添えます。ホスト本人の画面にだけ表示し、他のプレイヤーには送られません。会議中は出しません。",
+  "LobbyCodeTickerEnable.Description": "ロビーにいる間、参加コードの看板を一定間隔で画面上部に出します。右から入って中央で止まり、コードが1文字ずつパタパタとめくれて現れたあと、左へ抜けていきます。視聴者干渉が有効なら、看板の下に「!コマンド」の案内も添えます。ホスト本人の画面にだけ表示し、他のプレイヤーには送られません。試合中は出しません。",
   "LobbyCodeTickerInterval": "参加コードの看板を出す間隔",
   "LobbyCodeTickerRunSeconds": "参加コードの看板を表示する秒数",
   "LobbyCodeTickerScale": "参加コードの看板の大きさ",
