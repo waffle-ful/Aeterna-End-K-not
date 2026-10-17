@@ -3410,16 +3410,16 @@ internal static class ChatCommands
             settings.Append("<size=70%>");
             titleSb.Append($"{role.ToColoredString()} {Utils.GetRoleMode(role)}");
 
+            // 起源の行は役職名の置換が全部終わってから差し込む (置換が起源の Mod 名に当たって色タグが混ざらないように)。
+            List<string> origins = [];
+            if (RoleOrigins.Has(role)) sb.Append(OriginMark(role) + "\n");
+
             sb.Append(player.GetRoleInfo(true).TrimStart());
-            
+
             if (Options.CustomRoleSpawnChances.TryGetValue(role, out StringOptionItem opt))
                 Utils.ShowChildrenSettings(opt, settings, disableColor: false);
 
             settings.Append("</size>");
-
-            // 起源の行は役職名の置換が全部終わってから差し込む (置換が起源の Mod 名に当たって色タグが混ざらないように)。
-            List<string> origins = [];
-            sb.Append(OriginMark(role));
 
             if (role.PetActivatedAbility())
                 sb.Append($"<size=1>{GetString("SupportsPetMessage")}</size>");
@@ -3435,11 +3435,11 @@ internal static class ChatCommands
             {
                 if (hideAmnesia && subRole == CustomRoles.Amnesia) continue;
 
-                sb.Append($"\n\n{subRole.ToColoredString()} {Utils.GetRoleMode(subRole)} {GetString($"{subRole}InfoLong").FixRoleName(subRole)}");
+                string subOrigin = RoleOrigins.Has(subRole) ? $"\n{OriginMark(subRole)}\n" : " ";
+                sb.Append($"\n\n{subRole.ToColoredString()} {Utils.GetRoleMode(subRole)}{subOrigin}{GetString($"{subRole}InfoLong").FixRoleName(subRole)}");
                 string searchSubStr = GetString(subRole.ToString());
                 sb.Replace(searchSubStr, subRole.ToColoredString());
                 sb.Replace(searchSubStr.ToLower(), subRole.ToColoredString());
-                sb.Append(OriginMark(subRole));
             }
 
             for (var i = 0; i < origins.Count; i++) sb.Replace($"\u0001{i}\u0001", origins[i]);
@@ -3457,7 +3457,7 @@ internal static class ChatCommands
 
             string OriginMark(CustomRoles r)
             {
-                origins.Add(RoleOrigins.Suffix(r));
+                origins.Add(RoleOrigins.Line(r));
                 return $"\u0001{origins.Count - 1}\u0001";
             }
         }
@@ -6829,7 +6829,8 @@ internal static class ChatCommands
 
                 string txt = sb.ToString().Replace(roleName, coloredString, StringComparison.OrdinalIgnoreCase);
                 sb.Clear().Append(txt);
-                sb.Append(RoleOrigins.Suffix(rl));
+                // 起源は役職名の置換が済んでから先頭へ差し込む (置換が起源の Mod 名に当たらないように)。
+                if (RoleOrigins.Has(rl)) sb.Insert(0, RoleOrigins.Line(rl) + "\n");
 
                 if (rl.PetActivatedAbility()) sb.Append($"<size=1>{GetString("SupportsPetMessage")}</size>");
 

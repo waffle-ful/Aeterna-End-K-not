@@ -2,7 +2,7 @@ using System.Collections.Generic;
 
 namespace EndKnot;
 
-// 役職ごとの起源 (その役職を最初に実装した Among Us の Mod)。/r ・ /myrole の役職説明の末尾に出す。
+// 役職ごとの起源 (その役職を最初に実装した Among Us の Mod)。/r ・ /myrole の役職名のすぐ下に出す。
 // 値が空の役職は End K not で作った役職なので何も出さない。役職を足したらここにも 1 行足す。
 public static class RoleOrigins
 {
@@ -682,6 +682,57 @@ public static class RoleOrigins
         [CustomRoles.Influencer] = "",
     };
 
-    public static string Suffix(CustomRoles role) =>
-        Origins.TryGetValue(role, out string origin) && origin.Length > 0 ? $"\n\n<size=70%>from {origin}</size>" : string.Empty;
+    // 表示名と色は TOHK の From 表記 (UtilsOption.GetFrom) に揃える。TOHK に無い Mod は各 Mod の色。
+    private static readonly Dictionary<string, string> Display = new()
+    {
+        ["EHR"] = "<#00ffff>EndlessHostRoles</color>",
+        ["TOH"] = "<#00bfff>TownOfHost</color>",
+        ["TOHE"] = "<#ffc0cb>TownOfHost E</color>",
+        ["TOHK"] = "<#00c1ff>TownOfHost-K</color>",
+        ["TOHY"] = "<#dddd00>TownOfHost_Y</color>",
+        ["ForE"] = "<#18e744>TownOfHost for E</color>",
+        ["Pko"] = "<#ff9631>TownOfHost-Pko</color>",
+        ["Shell"] = "<#00bfff>TownOfHost-Shell</color>",
+        ["hamo"] = "<#00bfff>TownOfHost-hamo</color>",
+        ["TOHRE"] = "<#ff8c00>TownOfHost Re-Edited</color>",
+        ["TOH:TOR"] = "<#ff4500>TownOfHost-TheOtherRoles</color>",
+        ["TOH+"] = "<#3cb371>TownOfHostPlus</color>",
+        ["TOHO"] = "<#9370db>TownofHost-Optimized</color>",
+        ["TOR"] = "<#ff0000>TheOtherRoles</color>",
+        ["TOR-GM"] = "<#ff0000>TOR GM Edition</color>",
+        ["TOR-GM Haoming"] = "<#ff0000>TOR GM Haoming</color>",
+        ["TOU"] = "<#daa520>TownOfUs</color>",
+        ["SNR"] = "<#ffa500>Super</color><#ff0000>New</color><#00ff00>Roles</color>",
+        ["NoS"] = "<#191970>NebulaontheShip</color>",
+        ["ExR"] = "<#d3d3d3>ExtremeRoles</color>",
+        ["Project Lotus"] = "<#4ff918>Project Lotus</color>",
+        ["Stellar Roles"] = "<#9b59b6>StellarRoles</color>",
+        ["MG"] = "<#ff6347>MoreGamemodes</color>",
+        ["RHR"] = "<#3cb371>RevolutionaryHostRoles</color>",
+        ["UchuAddon"] = "<#4169e1>UchuAddon</color>",
+        ["au.libhalt.net"] = "<#ffc0cb>au libhalt net</color>",
+        ["ExtraRoles"] = "<#20b2aa>ExtraRoles</color>",
+        ["TooManyRoles"] = "<#8a2be2>TooManyRoles</color>",
+        ["Jester Mod"] = "<#ec62a5>Jester</color>",
+        ["Sheriff Mod"] = "<#f8cd46>SheriffMod</color>",
+        ["Love Couple Mod"] = "<#ff6be4>Love Couple Mod</color>",
+        ["Foolers Mod"] = "<#006400>FoolersMod</color>",
+    };
+
+    public static bool Has(CustomRoles role) => Origins.TryGetValue(role, out string origin) && origin.Length > 0;
+
+    // 役職名のすぐ下に置く 1 行 (改行は含まない)。起源が無い役職は空文字。
+    public static string Line(CustomRoles role)
+    {
+        if (!Origins.TryGetValue(role, out string origin) || origin.Length == 0) return string.Empty;
+
+        List<string> names = [];
+        foreach (string o in origin.Split(','))
+        {
+            string key = o.Trim();
+            names.Add(Display.TryGetValue(key, out string shown) ? shown : key);
+        }
+
+        return $"<size=70%><#000000>From:</color>{string.Join(", ", names)}</size>";
+    }
 }
