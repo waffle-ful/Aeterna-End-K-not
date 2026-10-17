@@ -343,7 +343,7 @@ End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/End
 - **[Revolutionary Host Roles](https://github.com/sansaaaaai/Revolutionary-host-roles)** (sansaaaaai) — a TOH-lineage mod adding its own roles and host-side features
 - **[Stellar Roles](https://github.com/Mr-Fluuff/StellarRolesAU)** (Mr-Fluuff) — an Among Us role mod with a large set of original roles
 - **[Submerged](https://github.com/SubmergedAmongUs/Submerged)** (SubmergedAmongUs) — map select button handling for Submerged
-- **[SuperNewRoles](https://github.com/SuperNewRoles/SuperNewRoles)** / [ykundesu repo](https://github.com/ykundesu/SuperNewRoles) (SuperNewRoles team, GPL-3.0) — WaveCannon, search mod game, logo and stamp display, device usage restriction, video display handling, some roles
+- **[SuperNewRoles](https://github.com/SuperNewRoles/SuperNewRoles)** / [ykundesu repo](https://github.com/ykundesu/SuperNewRoles) (SuperNewRoles team, GPL-3.0) — WaveCannon, Nova, search mod game, logo and stamp display, device usage restriction, video display handling, some roles
 - **[template-unity](https://github.com/vpmedia/template-unity)** (vpmedia, MIT) — reference for the Mersenne Twister implementation
 - **[TheOtherRoles](https://github.com/TheOtherRolesAU/TheOtherRoles)** — Submerged detection handling
 - **[TheOtherRoles-GM](https://github.com/yukinogatari/TheOtherRoles-GM)** (yukinogatari) — a TheOtherRoles derivative
@@ -364,10 +364,12 @@ End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/End
 - **Town of Us Rewritten** (Det) — Discord activity (rich presence) display
 - **[TownOfHost-Optimized](https://github.com/Limeau/TownofHost-Optimized)** (Limeau) — a Town Of Host derivative focused on optimization
 - **[TownOfHost-Pko](https://github.com/satokazoku/TownOfHost-Pko)** (satokazoku et al., GPL-3.0) — source of many ported roles, WaveCannon design reference, direct numeric input for settings, consecutive-join kick, auto abort
+- **[TownOfHost-Shell](https://github.com/sijimi2222/TownOfHost-Shell)** (TORAKUNNOIE, GPL-3.0) — source of the Nova role
 - **[TownOfHost-TheOtherRoles](https://github.com/music-discussion/TownOfHost-TheOtherRoles)** / [discus-sions repo](https://github.com/discus-sions/TownOfHost-TheOtherRoles) (music-discussion) — split RPC packs, meeting screen handling
 - **[TownOfHost-hamo](https://github.com/rar006/TownOfHost-hamo)** (rar006, GPL-3.0) — coming-out feature (`/co`, `/aco`, `/colist`)
 - **[TownOfHostPlus](https://github.com/SkullCreeper/TownOfHostPlus)** (SkullCreeper) — a Town Of Host derivative adding its own roles
 - **[TownOfPlus](https://github.com/tugaru1975/TownOfPlus)** (tugaru1975) — zoom
+- **[UchuAddon](https://github.com/TeamUchuaddon/UchuAddon)** (TeamUchuaddon, GPL-3.0) — the Nova role
 - **[UnityDoorstop](https://github.com/NeighTools/UnityDoorstop)** (NeighTools, LGPL-2.1) — `winhttp.dll` / `doorstop_config.ini` used for packaging
 - **[Vanilla Enhancements](https://github.com/xChipseq/VanillaEnhancements)** (xChipseq, GPL-3.0) — a client mod that improves vanilla quality of life
 

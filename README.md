@@ -345,7 +345,7 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 - **[Revolutionary Host Roles](https://github.com/sansaaaaai/Revolutionary-host-roles)** (sansaaaaai) — 独自役職とホスト向け機能を追加する TOH 系列の Mod
 - **[Stellar Roles](https://github.com/Mr-Fluuff/StellarRolesAU)** (Mr-Fluuff) — 独自役職を多数持つ Among Us の役職 Mod
 - **[Submerged](https://github.com/SubmergedAmongUs/Submerged)** (SubmergedAmongUs) — マップ選択ボタンの扱い（Submerged 対応）
-- **[SuperNewRoles](https://github.com/SuperNewRoles/SuperNewRoles)** / [ykundesu 版](https://github.com/ykundesu/SuperNewRoles) (SuperNewRoles 開発チーム、GPL-3.0) — 波動砲 (WaveCannon)、Mod 部屋検索、ロゴ・スタンプの表示、デバイス使用の制限、動画表示まわり、一部の役職
+- **[SuperNewRoles](https://github.com/SuperNewRoles/SuperNewRoles)** / [ykundesu 版](https://github.com/ykundesu/SuperNewRoles) (SuperNewRoles 開発チーム、GPL-3.0) — 波動砲 (WaveCannon)、ノヴァ、Mod 部屋検索、ロゴ・スタンプの表示、デバイス使用の制限、動画表示まわり、一部の役職
 - **[template-unity](https://github.com/vpmedia/template-unity)** (vpmedia、MIT) — メルセンヌ・ツイスタ実装の参照元
 - **[TheOtherRoles](https://github.com/TheOtherRolesAU/TheOtherRoles)** — Submerged 判定まわりの処理
 - **[TheOtherRoles-GM](https://github.com/yukinogatari/TheOtherRoles-GM)** (yukinogatari) — TheOtherRoles の派生 Mod
@@ -366,10 +366,12 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 - **Town of Us Rewritten** (Det) — Discord のアクティビティ表示
 - **[TownOfHost-Optimized](https://github.com/Limeau/TownofHost-Optimized)** (Limeau) — Town Of Host の最適化を進めた派生 Mod
 - **[TownOfHost-Pko](https://github.com/satokazoku/TownOfHost-Pko)** (satokazoku 他、GPL-3.0) — 多くの役職の移植元、波動砲の設計参考、設定数値の直接入力、連続参加キック、自動廃村
+- **[TownOfHost-Shell](https://github.com/sijimi2222/TownOfHost-Shell)** (TORAKUNNOIE、GPL-3.0) — 役職「ノヴァ」の移植元
 - **[TownOfHost-TheOtherRoles](https://github.com/music-discussion/TownOfHost-TheOtherRoles)** / [discus-sions 版](https://github.com/discus-sions/TownOfHost-TheOtherRoles) (music-discussion) — RPC パケットの分割送信、会議画面まわりの処理
 - **[TownOfHost-hamo](https://github.com/rar006/TownOfHost-hamo)** (rar006、GPL-3.0) — カミングアウト機能 (`/co` `/aco` `/colist`)
 - **[TownOfHostPlus](https://github.com/SkullCreeper/TownOfHostPlus)** (SkullCreeper) — Town Of Host に独自役職を追加した Mod
 - **[TownOfPlus](https://github.com/tugaru1975/TownOfPlus)** (tugaru1975) — ズーム
+- **[UchuAddon](https://github.com/TeamUchuaddon/UchuAddon)** (TeamUchuaddon、GPL-3.0) — 役職「ノヴァ」
 - **[UnityDoorstop](https://github.com/NeighTools/UnityDoorstop)** (NeighTools、LGPL-2.1) — 配布パッケージの `winhttp.dll` / `doorstop_config.ini`
 - **[Vanilla Enhancements](https://github.com/xChipseq/VanillaEnhancements)** (xChipseq、GPL-3.0) — バニラの使い勝手を改善するクライアント Mod
 
