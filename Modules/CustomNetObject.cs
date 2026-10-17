@@ -155,6 +155,12 @@ namespace EndKnot
         protected virtual float ForceSnapMinInterval => 0f;
         private float LastForcedSendTime;
 
+        // TP の無い間も位置を送り直す周期送信 (下の count throttle) は、位置が変わっていなくても CNO 1 個あたり最大 5 回/秒出る。
+        // 1 役職で何個も出す CNO はこれだけで SnapTo の持続レートを押し上げるので、>0 を返すとこの間隔(秒)より密には送らない。
+        // 既定 0 = 従来どおり。完全には止めない — TP の強制送信は SendOption.None なので、取りこぼした位置を拾い直す役が要る。
+        protected virtual float PeriodicSnapMinInterval => 0f;
+        private float LastPeriodicSendTime;
+
         // 壁レイの座標系合わせ (2026-08-29 Wave6 実機で発覚 → 全 CNO 共通化)。CNO の Position は生成側が
         // 渡す `pc.Pos()` = `transform.position` = **見た目の中心**。一方 Among Us の船コライダーは
         // `GetTruePosition()` (足元) 基準で敷かれているため、Position をそのまま
@@ -630,6 +636,11 @@ namespace EndKnot
                 // ForceSnapMinInterval>0 を返す CNO は、毎フレ TP の強制送信をその間隔に間引く(保留して次の gap で最新 Position を送る)。
                 if (ForceSnapSend && ForceSnapMinInterval > 0f && Time.time - LastForcedSendTime < ForceSnapMinInterval) return;
                 if (!ForceSnapSend && ++SnapToSendFrameCount < Math.Max(10, AllObjects.Count)) return;
+                if (!ForceSnapSend && PeriodicSnapMinInterval > 0f)
+                {
+                    if (Time.time - LastPeriodicSendTime < PeriodicSnapMinInterval) return;
+                    LastPeriodicSendTime = Time.time;
+                }
                 if (ForceSnapSend && ForceSnapMinInterval > 0f) LastForcedSendTime = Time.time;
                 ForceSnapSend = false;
                 SnapToSendFrameCount = 0;
