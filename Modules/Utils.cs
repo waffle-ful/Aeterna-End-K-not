@@ -4657,6 +4657,7 @@ public static class Utils
             Archer { IsSetting: true } => true,
             Centralizer { MarkedPosition: not null } => true,
             Dossun { CurrentPhase: Dossun.Phase.Placed } => true,
+            Nova { CurrentPhase: Nova.Phase.Steering or Nova.Phase.Flying } => true,
             Escapist { EscapistLocation: null } => true,
             Silencer when Silencer.ForSilencer.Count == 0 => true,
             _ => false
@@ -4791,6 +4792,7 @@ public static class Utils
             CustomRoles.UltraStar => (int)UltraStar.PetCooldownOpt.GetFloat(),
             CustomRoles.Sandbox => (int)Sandbox.PlaceCooldown.GetFloat(),
             CustomRoles.Dossun => Dossun.AbilityCooldown.GetInt(),
+            CustomRoles.Nova => Nova.AbilityCooldown.GetInt(),
             _ => -1
         };
 

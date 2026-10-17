@@ -292,6 +292,7 @@ export const ROLE_META: readonly RoleMeta[] = [
   { id: "Nemesis", team: "impostor", ja: "ネメシス", en: "Nemesis" },
   { id: "Ninja", team: "impostor", ja: "ニンジャ", en: "Ninja" },
   { id: "Notifier", team: "impostor", ja: "ノティファイアー", en: "Notifier" },
+  { id: "Nova", team: "impostor", ja: "ノヴァ", en: "Nova" },
   { id: "Nullifier", team: "impostor", ja: "封殺者", en: "Nullifier" },
   { id: "Obstructer", team: "impostor", ja: "オブストラクター", en: "Obstructer" },
   { id: "Occultist", team: "impostor", ja: "オカルティスト", en: "Occultist" },

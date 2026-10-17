@@ -368,6 +368,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Astral => UsePets ? CustomRoles.Crewmate : CustomRoles.Engineer,
                 CustomRoles.EvilBusker => UsePets ? CustomRoles.Impostor : CustomRoles.Shapeshifter,
                 CustomRoles.Atlas => UsePets ? CustomRoles.Impostor : CustomRoles.Shapeshifter,
+                CustomRoles.Nova => UsePets ? CustomRoles.Impostor : CustomRoles.Shapeshifter,
                 CustomRoles.Helper => CustomRoles.Crewmate,
                 CustomRoles.Ankylosaurus => CustomRoles.Crewmate,
                 CustomRoles.Leery => CustomRoles.Crewmate,
@@ -1093,7 +1094,8 @@ internal static class CustomRolesHelper
                 CustomRoles.EvilBusker or
                 CustomRoles.Atlas or
                 CustomRoles.Dominion or
-                CustomRoles.Driver;
+                CustomRoles.Driver or
+                CustomRoles.Nova;
         }
 
         public bool IsNeutral(bool check = false)
@@ -1295,7 +1297,8 @@ internal static class CustomRolesHelper
                 CustomRoles.Revenant or
                 CustomRoles.Akazukin or // 捕食中は死んでいるが OnFixedUpdate で復活予約と猶予切れを回している
                 CustomRoles.Weatherman or
-                CustomRoles.AntiReporter // 死んでも通報妨害のタイマーを回し続けないと相手のロックが解けない
+                CustomRoles.AntiReporter or // 死んでも通報妨害のタイマーを回し続けないと相手のロックが解けない
+                CustomRoles.Nova // 操縦中に死んだら☆をすぐ畳み、撃った矢は持ち主が死んでも飛ばし続ける (間引かれると 1〜3 秒止まる)
                 // EKR logic: on_death 起点の fiber は死後も実行を続ける契約
                 // (「死んだら爆発」演出)。EkrManager.Pump() が毎 tick 呼ばれ続けないと wait() の解決が
                 // DontUpdateDeadPlayers (既定 ON) の間引き間隔 (60〜150 tick ≈ 1〜3秒) ぶん遅延する。
@@ -1470,6 +1473,7 @@ internal static class CustomRolesHelper
                              or CustomRoles.Strawdoll
                              or CustomRoles.EvilBusker
                              or CustomRoles.Atlas
+                             or CustomRoles.Nova
             };
         }
 
@@ -1643,6 +1647,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Occultist => RoleOptionType.Impostor_Support,
                 CustomRoles.Perplexer => RoleOptionType.Impostor_Support,
                 CustomRoles.Crosswind => RoleOptionType.Impostor_Support,
+                CustomRoles.Nova => RoleOptionType.Impostor_Support,
                 CustomRoles.Shuffler => RoleOptionType.Impostor_Support,
                 CustomRoles.Silencer => RoleOptionType.Impostor_Support,
                 CustomRoles.Skinwalker => RoleOptionType.Impostor_Support,
