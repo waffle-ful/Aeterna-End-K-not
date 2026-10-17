@@ -222,7 +222,19 @@ public static partial class ExplosionFx
 
         // 天の声 / 大地震: 受け取った各自の画面いっぱいに出す (Pos は使わない)
         AudVoice = 85,
-        AudQuake = 86
+        AudQuake = 86,
+
+        // ノヴァ: 操縦を始める (本人に付いていき、☆を描き直す): Pos = 本人、Radius = PackNovaRise
+        NovaRise = 87,
+
+        // ノヴァ: ☆から矢を撃つ (手元で飛ばす): Pos = ☆の位置、Radius = PackNovaShot
+        NovaShot = 88,
+
+        // ノヴァ: 矢が人に当たる: Pos = 当たった人、Radius = 撃った人の PlayerId + 1 + 32 × 倒したか + 64 × 矢がそこで止まるか
+        NovaHit = 89,
+
+        // ノヴァ: 操縦が終わる (☆が消える): Radius = 本人の PlayerId + 1
+        NovaDown = 90
     }
 
     // カットインに出す技名
@@ -233,7 +245,8 @@ public static partial class ExplosionFx
         BlackHole,
         Twin,
         Dynamic,
-        CertainKill
+        CertainKill,
+        Nova
     }
 
     public enum CannonPalette : byte
@@ -242,7 +255,8 @@ public static partial class ExplosionFx
         Cyan,
         Rainbow,
         Crimson,
-        Void
+        Void,
+        Nova
     }
 
     // LocalOnly はまとめ送信に載せない (PlayFor が宛先を絞って自前で送る)
@@ -318,7 +332,10 @@ public static partial class ExplosionFx
         CrewSil,
         // 自作シェーダで描く部品 (バンドルが開けない時は FloorPool = Glow・FlowBeam = Ray で代わりに描く)
         FloorPool,
-        FlowBeam
+        FlowBeam,
+        // 五芒の星 (ノヴァ) と、そのにじみ
+        StarFive,
+        StarFiveHalo
     }
 
     private struct Particle
@@ -544,6 +561,8 @@ public static partial class ExplosionFx
             or Kind.StoneGain or Kind.IaiSlash or Kind.ChainBind or Kind.WerewolfMaul or Kind.ThanosSnap) return FxMath.Clamp(radius, 0f, 256f);
         if (kind is Kind.GunShot or Kind.ForceFieldHold or Kind.ForceFieldDown or Kind.ChainRelease or Kind.DragHold or Kind.DragRelease) return FxMath.Clamp(radius, 0f, 1024f);
         if (kind == Kind.ChainHold) return FxMath.Clamp(radius, 0f, 32768f);
+        if (kind is Kind.NovaRise or Kind.NovaShot) return FxMath.Clamp(radius, 0f, NovaPackMax);
+        if (kind is Kind.NovaHit or Kind.NovaDown) return FxMath.Clamp(radius, 0f, 256f);
         return kind is Kind.Freeze or Kind.TimeStop or Kind.Tornado or Kind.TimeRewind or Kind.DemoFuse or Kind.WebSnare or Kind.GoddessGuard or Kind.WerewolfRampage || HasExtra(kind) ? FxMath.Clamp(radius, 0.3f, 180f) : FxMath.Clamp(radius, 0.3f, 15f);
     }
 
@@ -679,6 +698,7 @@ public static partial class ExplosionFx
                 StopAllFields();
                 StopAllChains();
                 StopAllDrags();
+                StopAllNova();
                 SelfEmitters.Clear();
                 ReleasePortalMachines();
                 PortalEmitters.Clear();
@@ -750,6 +770,7 @@ public static partial class ExplosionFx
                 if (FieldEmitters.Count > 0) StopAllFields();
                 if (ChainEmitters.Count > 0) StopAllChains();
                 if (DragEmitters.Count > 0) StopAllDrags();
+                if (NovaBusy) StopAllNova();
                 SelfEmitters.Clear();
                 if (SnareEmitters.Count > 0) SnareEmitters.Clear();
                 FlowEmitters.Clear();
@@ -770,6 +791,7 @@ public static partial class ExplosionFx
                 if (FieldEmitters.Count > 0) PulseFields();
                 if (ChainEmitters.Count > 0) PulseChains();
                 if (DragEmitters.Count > 0) PulseDrags();
+                if (NovaBusy) PulseNova();
                 if (SelfEmitters.Count > 0) PulseSelves();
                 if (CarryJobs.Count > 0) PulseCarries();
                 if (PortalEmitters.Count > 0) PulsePortals();
@@ -1093,6 +1115,9 @@ public static partial class ExplosionFx
                     break;
                 case >= Kind.AudSurge and <= Kind.AudQuake:
                     SpawnAudience(r);
+                    break;
+                case >= Kind.NovaRise and <= Kind.NovaDown:
+                    SpawnNova(r);
                     break;
                 default:
                     SpawnRoles6(r);
@@ -2413,7 +2438,8 @@ public static partial class ExplosionFx
         new(new Color(0.65f, 0.96f, 1f), new Color(0f, 0.7f, 0.92f), new Color(0.05f, 0.25f, 0.72f), new Color(0.5f, 0.9f, 1f), false, false),
         new(new Color(0.9f, 0.95f, 1f), new Color(0.6f, 0.78f, 1f), new Color(0.45f, 0.2f, 0.85f), new Color(1f, 0.9f, 0.6f), true, false),
         new(new Color(1f, 0.5f, 0.42f), new Color(1f, 0.08f, 0.1f), new Color(0.45f, 0f, 0.06f), new Color(1f, 0.28f, 0.22f), false, false),
-        new(new Color(0.86f, 0.62f, 1f), new Color(0.58f, 0.12f, 1f), new Color(0.1f, 0f, 0.2f), new Color(0.72f, 0.38f, 1f), false, true)
+        new(new Color(0.86f, 0.62f, 1f), new Color(0.58f, 0.12f, 1f), new Color(0.1f, 0f, 0.2f), new Color(0.72f, 0.38f, 1f), false, true),
+        new(new Color(1f, 0.93f, 0.6f), new Color(1f, 0.76f, 0.18f), new Color(0.36f, 0.08f, 0.62f), new Color(0.8f, 0.5f, 1f), false, false)
     ];
 
     private static readonly Color[] RainbowCols =
@@ -5031,6 +5057,9 @@ public static partial class ExplosionFx
     // CNO の見た目は番号 200 以上の PlayerControl の名前の文字。演出が同じ物を描いている間はそれを隠し、終わったら戻す
     // (バニラの人には CNO だけが見える)。ホストでは変身の後始末が名前を出し直すことがあるので、毎フレーム隠し直す。
     // 止めるのは文字の描画 (TextMeshPro) だけ。GameObject ごと非表示にすると、隠したまま会議が始まった時にゲームが固まる (2026-10-04 実測)
+    // 探す間だけ、ほかの演出がもう隠している CNO の番号を入れておく (同じ印の CNO が近くに 2 つある時に取り違えない)
+    private static readonly HashSet<byte> CoverTaken = [];
+
     private struct CnoCover
     {
         public TMPro.TextMeshPro Name;
@@ -5072,7 +5101,7 @@ public static partial class ExplosionFx
             for (int i = 0; i < all.Length; i++)
             {
                 PlayerControl pc = all[i];
-                if (!pc || pc.PlayerId < 200) continue;
+                if (!pc || pc.PlayerId < 200 || CoverTaken.Contains(pc.PlayerId)) continue;
 
                 Vector3 p = pc.transform.position;
                 float dx = p.x - at.x, dy = p.y - at.y;
@@ -5734,6 +5763,8 @@ public static partial class ExplosionFx
             Shape.SpiderSil => _spiderSil,
             Shape.SpiderHalo => _spiderHalo,
             Shape.CrewSil => _crewSil,
+            Shape.StarFive => _starFive,
+            Shape.StarFiveHalo => _starFiveHalo,
             _ => _glow
         };
         // 奥から (order=0 の背景) → 雲 → 衝撃波 → 光条 → 破片 → 星 → 光 → 画面の閃光 の順に重ねる
@@ -5940,6 +5971,8 @@ public static partial class ExplosionFx
         if (!_crewSil) _crewSil = MakeSprite(128, 128, CrewAlpha);
         if (!_clockFine) _clockFine = MakeSprite(512, 512, (x, y) => ClockFineAlpha(x, y, 1f));
         if (!_clockFineHalo) _clockFineHalo = MakeSprite(256, 256, (x, y) => ClockFineAlpha(x, y, 5f));
+        if (!_starFive) _starFive = MakeSprite(128, 128, StarFiveAlpha);
+        if (!_starFiveHalo) _starFiveHalo = MakeHalo(StarFiveAlpha);
         // 自作シェーダは形を UV から計算するので、絵は白い板でよい (光の帯は根元が pivot)
         if (!_quad) _quad = MakeSprite(4, 4, (_, _) => 1f);
         if (!_beamQuad) _beamQuad = MakeSprite(16, 4, (_, _) => 1f, new Vector2(0f, 0.5f));

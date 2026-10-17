@@ -38,6 +38,7 @@ internal static class CannonCutIn
             ExplosionFx.CannonTitle.Twin => GetString("SuperCannonTypeTwin"),
             ExplosionFx.CannonTitle.Dynamic => GetString("SuperCannonTypeDynamic"),
             ExplosionFx.CannonTitle.CertainKill => GetString("SuperCannonTypeCertainKill"),
+            ExplosionFx.CannonTitle.Nova => GetString("CannonCutIn.Nova"),
             _ => GetString("WaveCannon")
         };
     }
