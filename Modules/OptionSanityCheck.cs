@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using EndKnot.Roles;
 using UnityEngine;
 using static EndKnot.Translator;
 
@@ -50,8 +51,20 @@ public static class OptionSanityCheck
         new("TooManyImpostors",
             () => Main.EnumeratePlayerControls().Count() >= 5 && Main.NormalOptions.NumImpostors * 2 >= Main.EnumeratePlayerControls().Count(),
             null,
-            () => string.Format(GetString("OptionSanity.TooManyImpostors"), Main.NormalOptions.NumImpostors, Main.EnumeratePlayerControls().Count()))
+            () => string.Format(GetString("OptionSanity.TooManyImpostors"), Main.NormalOptions.NumImpostors, Main.EnumeratePlayerControls().Count())),
+
+        // ノヴァが何人も出て、矢が長く飛ぶ設定で全員が同時に撃ち続けると、矢の位置の送信が公式鯖の上限を超えて切られる。
+        // 送信の上限は公式鯖だけの話なので、それ以外の鯖では判定しない
+        new("NovaSnapToBudget",
+            () => Utils.IsOfficialServer() && Nova.ExceedsSnapToBudget(NovaSpawnCount()),
+            null,
+            () => string.Format(GetString("OptionSanity.NovaSnapToBudget"), CustomRoles.Nova.ToColoredString(), NovaSpawnCount()))
     ];
+
+    private static int NovaSpawnCount()
+    {
+        return Options.GetRoleSpawnMode(CustomRoles.Nova) > 0 ? Math.Min(Options.GetRoleCount(CustomRoles.Nova), Main.NormalOptions.NumImpostors) : 0;
+    }
 
     public static void SetupCustomOption()
     {

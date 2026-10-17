@@ -24,7 +24,8 @@ public static class FxTour
         ExplosionFx.Kind.StoneGain, ExplosionFx.Kind.RiftTear, ExplosionFx.Kind.PortalPass, ExplosionFx.Kind.BowlStrike,
         ExplosionFx.Kind.PenguinGrab, ExplosionFx.Kind.GunShot,
         ExplosionFx.Kind.AudSurge, ExplosionFx.Kind.AudAlarm, ExplosionFx.Kind.AudStatic, ExplosionFx.Kind.AudDoorSlam,
-        ExplosionFx.Kind.AudCurse, ExplosionFx.Kind.AudBless, ExplosionFx.Kind.AudVoice, ExplosionFx.Kind.AudQuake
+        ExplosionFx.Kind.AudCurse, ExplosionFx.Kind.AudBless, ExplosionFx.Kind.AudVoice, ExplosionFx.Kind.AudQuake,
+        ExplosionFx.Kind.NovaRise, ExplosionFx.Kind.NovaShot, ExplosionFx.Kind.NovaHit
     ];
 
     // 流している途中で止めたり流し直したりした時に、前の回の残りを捨てるための通し番号
@@ -132,6 +133,16 @@ public static class FxTour
             case ExplosionFx.Kind.IaiSlash:
             case ExplosionFx.Kind.WerewolfMaul:
                 ExplosionFx.Play(kind, at, self);
+                break;
+            // ノヴァは誰の番号と向き・速さ・射程を詰めて載せる (☆の CNO が無いので足元の陣だけ出る)
+            case ExplosionFx.Kind.NovaRise:
+                ExplosionFx.Play(kind, at, ExplosionFx.PackNovaRise(lp.PlayerId, 3f, 1.5f));
+                break;
+            case ExplosionFx.Kind.NovaShot:
+                ExplosionFx.Play(kind, at, ExplosionFx.PackNovaShot(lp.PlayerId, 0f, 10f, 8f), ExplosionFx.Seen.Everyone);
+                break;
+            case ExplosionFx.Kind.NovaHit:
+                ExplosionFx.Play(kind, at, self + 32f + 64f);
                 break;
             default:
                 ExplosionFx.Play(kind, at, 1f);
