@@ -2,23 +2,24 @@
 
 [English](ROLES-EN.md) ・ [← README に戻る](README.md)
 
-実装済みは合計 **682 役職**（陣営別役職536 + サブ役職・アドオン146）。陣営ごとに整理しています。
+実装済みは合計 **694 役職**（陣営別役職544 + サブ役職・アドオン150）。陣営ごとに整理しています。
 
 ここに並ぶ役職の大半は、ベースである [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) や TownOfHost 系列といった先行 Mod から来ています。実装をそのまま引き継いだものと、参考にして書き直したものが混ざっています。役職名の下の「from ○○」は、その役職を最初に実装した Mod です。各 Mod への謝辞は [README のクレジット](README.md#クレジット)にまとめています。
 
 | 陣営 | 役職数 |
 |------|-------|
-| インポスター | 170 (ヴァニラ4 + リメイク4 + カスタム162) |
-| クルーメイト | 178 (ヴァニラ6 + リメイク7 + カスタム165) |
+| インポスター | 173 (ヴァニラ4 + リメイク4 + カスタム165) |
+| クルーメイト | 179 (ヴァニラ6 + リメイク7 + カスタム166) |
 | ニュートラル | 137 |
 | カヴン (Coven) | 21 |
+| コンビネーション役職 | 4 (2人1組) |
 | ゲームモード専用 | 28 |
 | その他 | 2 (GM / Convict) |
-| サブ役職（アドオン） | 146 |
+| サブ役職（アドオン） | 150 |
 
 各役職の効果や設定はゲーム内で `/r <役職名>` または `/myrole` で確認できます。
 
-### インポスター系 (170)
+### インポスター系 (173)
 
 |   |   |   |   |
 |---|---|---|---|
@@ -61,12 +62,13 @@
 | 評議員 (Councillor)<br><sub>From:TownOfHost Re-Edited</sub> | 腹話術師 (Ventriloquist)<br><sub>From:EndlessHostRoles</sub> | 法医 (Pathologist)<br><sub>From:TownOfHost-K</sub> | 魔女 (Witch)<br><sub>From:TheOtherRoles</sub> |
 | 無効主義者 (Nullifier)<br><sub>From:EndlessHostRoles</sub> | 誘拐犯 (Kidnapper)<br><sub>From:TownofHost-Optimized</sub> | 傭兵 (Mercenary)<br><sub>From:EndlessHostRoles</sub> | 落雷 (Lightning)<br><sub>From:EndlessHostRoles</sub> |
 | 巫女 (ShrineMaiden)<br><sub>From:TownOfHost-K</sub> | 貪食者 (Devourer)<br><sub>From:TownOfHost Re-Edited</sub> | ブッチャー (Butcher)<br><sub>From:SuperNewRoles</sub> | チェインバインダー (Chainbinder)<br><sub>From:EndlessHostRoles</sub> |
-| エクソシスト (Exorcist)<br><sub>From:EndlessHostRoles</sub> | フライトナー (Frightener)<br><sub>From:EndlessHostRoles</sub> | オブストラクター (Obstructer)<br><sub>From:EndlessHostRoles</sub> | スキンウォーカー (Skinwalker) |
-| リップタイド (Riptide) | 横風 (Crosswind) | ドッスン (Dossun) | ゲートキーパー (Gatekeeper)<br><sub>From:EndlessHostRoles</sub> |
-| シャッフラー (Shuffler) | ワードキラー (WordKiller) | オートスコピー (Autoscopy)<br><sub>From:SuperNewRoles</sub> | イビルバスカー (EvilBusker)<br><sub>From:SuperNewRoles</sub> |
-| アトラス (Atlas) | ドミニオン (Dominion) |  |  |
+| エクソシスト (Exorcist)<br><sub>From:EndlessHostRoles</sub> | フライトナー (Frightener)<br><sub>From:EndlessHostRoles</sub> | オブストラクター (Obstructer)<br><sub>From:EndlessHostRoles</sub> | スキンウォーカー (Skinwalker)<br><sub>From:SuperNewRoles</sub> |
+| リップタイド (Riptide) | 横風 (Crosswind)<br><sub>From:NebulaontheShip</sub> | ドッスン (Dossun) | ゲートキーパー (Gatekeeper)<br><sub>From:EndlessHostRoles</sub> |
+| シャッフラー (Shuffler) | ワードキラー (WordKiller)<br><sub>From:TownOfHost for E</sub> | オートスコピー (Autoscopy)<br><sub>From:SuperNewRoles</sub> | イビルバスカー (EvilBusker)<br><sub>From:SuperNewRoles</sub> |
+| アトラス (Atlas)<br><sub>From:ExtremeRoles</sub> | ドミニオン (Dominion)<br><sub>From:TownOfUs, ExtremeRoles</sub> | バベル (Babel)<br><sub>From:TownOfHost for E</sub> | リプレイ (Replay) |
+| ノヴァ (Nova)<br><sub>From:UchuAddon</sub> |  |  |  |
 
-### クルーメイト系 (178)
+### クルーメイト系 (179)
 
 |   |   |   |   |
 |---|---|---|---|
@@ -112,9 +114,9 @@
 | 法医学者 (Forensic)<br><sub>From:EndlessHostRoles</sub> | 冒険者 (Adventurer)<br><sub>From:EndlessHostRoles</sub> | 模倣者 (Imitator)<br><sub>From:TownOfUs</sub> | 木 (Tree)<br><sub>From:EndlessHostRoles</sub> |
 | 預言者 (Soothsayer)<br><sub>From:EndlessHostRoles</sub> | 霊能者 (Psychic)<br><sub>From:TownOfHost E</sub> | 恋人 (LovingCrewmate)<br><sub>From:Love Couple Mod</sub> | 錬金術師 (Alchemist)<br><sub>From:Project Lotus</sub> |
 | 狼少年 (WolfBoy)<br><sub>From:TownOfHost-K</sub> | フォースフィールダー (ForceFielder) | あかづきん (Akazukin)<br><sub>From:SuperNewRoles</sub> | サンドボックス (Sandbox) |
-| オペレーティブ (Operative)<br><sub>From:EndlessHostRoles</sub> | サバイバー (Survivor)<br><sub>From:EndlessHostRoles</sub> | バウンサー (Bouncer)<br><sub>From:EndlessHostRoles</sub> | ジェミニ (Gemini) |
+| オペレーティブ (Operative)<br><sub>From:EndlessHostRoles</sub> | サバイバー (Survivor)<br><sub>From:EndlessHostRoles</sub> | バウンサー (Bouncer)<br><sub>From:EndlessHostRoles</sub> | ジェミニ (Gemini)<br><sub>From:Project Lotus</sub> |
 | マップエクステンダー (MapExtender)<br><sub>From:TheOtherRoles</sub> | ポータルボタン (PortalButton) | レヴナント (Revenant)<br><sub>From:EndlessHostRoles</sub> | クルーメイト (Crewmate) |
-| ニュースキャスター (Newscaster) | ミラージュ (Mirage) |  |  |
+| ニュースキャスター (Newscaster) | ミラージュ (Mirage)<br><sub>From:NebulaontheShip</sub> | イベイダー (Evader)<br><sub>From:EndlessHostRoles</sub> |  |
 
 ### ニュートラル系 (137)
 
@@ -154,7 +156,7 @@
 | 裏切り者 (Traitor)<br><sub>From:TownOfHost Re-Edited</sub> | 略奪者 (Predator)<br><sub>From:EndlessHostRoles</sub> | 狼男 (Werewolf)<br><sub>From:TownOfUs</sub> | 藁人形 (Strawdoll)<br><sub>From:TownOfHost-K</sub> |
 | 冤罪師 (Innocent)<br><sub>From:TownOfHost E</sub> | ブロケード (Blockade)<br><sub>From:EndlessHostRoles</sub> | ジャックポット (Jackpot)<br><sub>From:EndlessHostRoles</sub> | マグロ (Maguro)<br><sub>From:SuperNewRoles</sub> |
 | 金庫破り (Safecracker)<br><sub>From:SuperNewRoles</sub> | スーパーノヴァ (Supernova)<br><sub>From:SuperNewRoles</sub> | 確率王 (ProbabilityKing) | ギャンブルキラー (GambleKiller) |
-| 魚雷 (Torpedo) |  |  |  |
+| 魚雷 (Torpedo)<br><sub>From:NebulaontheShip</sub> |  |  |  |
 
 ### カヴン (Coven) (21)
 
@@ -166,6 +168,12 @@
 | バンシー (Banshee)<br><sub>From:EndlessHostRoles</sub> | ブードゥーマスター (VoodooMaster)<br><sub>From:TownOfHost E</sub> | ポウチ (Poache)<br><sub>From:EndlessHostRoles</sub> | ポーションマスター (PotionMaster)<br><sub>From:TownOfHost-TheOtherRoles</sub> |
 | リーパー (Reaper)<br><sub>From:EndlessHostRoles</sub> | 死神 (Death)<br><sub>From:EndlessHostRoles</sub> | 女神 (Goddess)<br><sub>From:EndlessHostRoles</sub> | 夢織師 (Dreamweaver)<br><sub>From:EndlessHostRoles</sub> |
 | シャドウ (Shadow)<br><sub>From:EndlessHostRoles</sub> |  |  |  |
+
+### コンビネーション役職 (4)
+
+|   |   |   |   |
+|---|---|---|---|
+| ドライバー (Driver)<br><sub>From:TownOfHost-K</sub> | ブレイド (Braid)<br><sub>From:TownOfHost-K</sub> | 織姫 (Vega)<br><sub>From:TownOfHost-K</sub> | 彦星 (Altair)<br><sub>From:TownOfHost-K</sub> |
 
 ### ゲームモード専用 (28)
 
@@ -185,7 +193,7 @@
 |---|---|---|---|
 | ゲームマスター (GM)<br><sub>From:TOR GM Edition</sub> | 犯罪者 (Convict)<br><sub>From:TownOfHost E</sub> |  |  |
 
-### サブ役職・アドオン (146)
+### サブ役職・アドオン (150)
 
 |   |   |   |   |
 |---|---|---|---|
@@ -225,7 +233,8 @@
 | ミーティングエンジェル (MeetingAngel)<br><sub>From:EndlessHostRoles</sub> | 月光 (Moon)<br><sub>From:TownOfHost-K</sub> | 情報屋 (News)<br><sub>From:TownOfHost-K</sub> | ノンレポート (NonReport)<br><sub>From:TownOfHost_Y</sub> |
 | ノットヴォウター (Notvoter)<br><sub>From:TownOfHost-K</sub> | 一匹狼 (OneWolf)<br><sub>From:TownOfHost-K</sub> | オープナー (Opener)<br><sub>From:TownOfHost-K</sub> | リロール (Reroll)<br><sub>From:EndlessHostRoles</sub> |
 | シリアル (Serial)<br><sub>From:TownOfHost-K</sub> | スロースターター (SlowStarter)<br><sub>From:TownOfHost-K</sub> | スタック (Stack)<br><sub>From:TownOfHost-K</sub> | 透明人間 (Transparent)<br><sub>From:TownOfHost-K</sub> |
-| 双子 (Twins)<br><sub>From:TownOfHost-K</sub> | 水浸し (Water)<br><sub>From:TownOfHost-K</sub> |  |  |
+| 双子 (Twins)<br><sub>From:TownOfHost-K</sub> | 水浸し (Water)<br><sub>From:TownOfHost-K</sub> | 集中 (Focused)<br><sub>From:EndlessHostRoles</sub> | 合言葉 (Shibboleth)<br><sub>From:TownOfHost for E</sub> |
+| 守護霊 (Forewarner) | インフルエンサー (Influencer) |  |  |
 
 ---
 

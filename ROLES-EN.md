@@ -2,23 +2,24 @@
 
 [日本語](ROLES.md) ・ [← Back to README](README-EN.md)
 
-**682 roles in total** (536 faction roles + 146 sub-roles/add-ons), organized by faction.
+**694 roles in total** (544 faction roles + 150 sub-roles/add-ons), organized by faction.
 
 Most of the roles listed here come from the base mod [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) and earlier mods in the scene such as the TownOfHost lineage. Some carry over the original implementation; others were rewritten with reference to it. The "from …" under each role names the mod that first implemented it. Credits for each project are collected in the [README](README-EN.md#credits).
 
 | Faction | Count |
 |---------|-------|
-| Impostor | 170 (vanilla 4 + remake 4 + custom 162) |
-| Crewmate | 178 (vanilla 6 + remake 7 + custom 165) |
+| Impostor | 173 (vanilla 4 + remake 4 + custom 165) |
+| Crewmate | 179 (vanilla 6 + remake 7 + custom 166) |
 | Neutral | 137 |
 | Coven | 21 |
+| Combination roles | 4 (dealt in pairs) |
 | Game mode exclusive | 28 |
 | Other | 2 (GM / Convict) |
-| Sub-roles (add-ons) | 146 |
+| Sub-roles (add-ons) | 150 |
 
 Use `/r <role name>` or `/myrole` in-game to check each role's effects and settings.
 
-### Impostor (170)
+### Impostor (173)
 
 |   |   |   |   |
 |---|---|---|---|
@@ -61,12 +62,13 @@ Use `/r <role name>` or `/myrole` in-game to check each role's effects and setti
 | Councillor<br><sub>From:TownOfHost Re-Edited</sub> | Ventriloquist<br><sub>From:EndlessHostRoles</sub> | Pathologist<br><sub>From:TownOfHost-K</sub> | Witch<br><sub>From:TheOtherRoles</sub> |
 | Nullifier<br><sub>From:EndlessHostRoles</sub> | Kidnapper<br><sub>From:TownofHost-Optimized</sub> | Mercenary<br><sub>From:EndlessHostRoles</sub> | Lightning<br><sub>From:EndlessHostRoles</sub> |
 | ShrineMaiden<br><sub>From:TownOfHost-K</sub> | Devourer<br><sub>From:TownOfHost Re-Edited</sub> | Butcher<br><sub>From:SuperNewRoles</sub> | Chainbinder<br><sub>From:EndlessHostRoles</sub> |
-| Exorcist<br><sub>From:EndlessHostRoles</sub> | Frightener<br><sub>From:EndlessHostRoles</sub> | Obstructer<br><sub>From:EndlessHostRoles</sub> | Skinwalker |
-| Riptide | Crosswind | Dossun | Gatekeeper<br><sub>From:EndlessHostRoles</sub> |
-| Shuffler | WordKiller | Autoscopy<br><sub>From:SuperNewRoles</sub> | EvilBusker<br><sub>From:SuperNewRoles</sub> |
-| Atlas | Dominion |  |  |
+| Exorcist<br><sub>From:EndlessHostRoles</sub> | Frightener<br><sub>From:EndlessHostRoles</sub> | Obstructer<br><sub>From:EndlessHostRoles</sub> | Skinwalker<br><sub>From:SuperNewRoles</sub> |
+| Riptide | Crosswind<br><sub>From:NebulaontheShip</sub> | Dossun | Gatekeeper<br><sub>From:EndlessHostRoles</sub> |
+| Shuffler | WordKiller<br><sub>From:TownOfHost for E</sub> | Autoscopy<br><sub>From:SuperNewRoles</sub> | EvilBusker<br><sub>From:SuperNewRoles</sub> |
+| Atlas<br><sub>From:ExtremeRoles</sub> | Dominion<br><sub>From:TownOfUs, ExtremeRoles</sub> | Babel<br><sub>From:TownOfHost for E</sub> | Replay |
+| Nova<br><sub>From:UchuAddon</sub> |  |  |  |
 
-### Crewmate (178)
+### Crewmate (179)
 
 |   |   |   |   |
 |---|---|---|---|
@@ -112,9 +114,9 @@ Use `/r <role name>` or `/myrole` in-game to check each role's effects and setti
 | Forensic<br><sub>From:EndlessHostRoles</sub> | Adventurer<br><sub>From:EndlessHostRoles</sub> | Imitator<br><sub>From:TownOfUs</sub> | Tree<br><sub>From:EndlessHostRoles</sub> |
 | Soothsayer<br><sub>From:EndlessHostRoles</sub> | Psychic<br><sub>From:TownOfHost E</sub> | LovingCrewmate<br><sub>From:Love Couple Mod</sub> | Alchemist<br><sub>From:Project Lotus</sub> |
 | WolfBoy<br><sub>From:TownOfHost-K</sub> | ForceFielder | Akazukin<br><sub>From:SuperNewRoles</sub> | Sandbox |
-| Operative<br><sub>From:EndlessHostRoles</sub> | Survivor<br><sub>From:EndlessHostRoles</sub> | Bouncer<br><sub>From:EndlessHostRoles</sub> | Gemini |
+| Operative<br><sub>From:EndlessHostRoles</sub> | Survivor<br><sub>From:EndlessHostRoles</sub> | Bouncer<br><sub>From:EndlessHostRoles</sub> | Gemini<br><sub>From:Project Lotus</sub> |
 | MapExtender<br><sub>From:TheOtherRoles</sub> | PortalButton | Revenant<br><sub>From:EndlessHostRoles</sub> | Crewmate |
-| Newscaster | Mirage |  |  |
+| Newscaster | Mirage<br><sub>From:NebulaontheShip</sub> | Evader<br><sub>From:EndlessHostRoles</sub> |  |
 
 ### Neutral (137)
 
@@ -154,7 +156,7 @@ Use `/r <role name>` or `/myrole` in-game to check each role's effects and setti
 | Traitor<br><sub>From:TownOfHost Re-Edited</sub> | Predator<br><sub>From:EndlessHostRoles</sub> | Werewolf<br><sub>From:TownOfUs</sub> | Strawdoll<br><sub>From:TownOfHost-K</sub> |
 | Innocent<br><sub>From:TownOfHost E</sub> | Blockade<br><sub>From:EndlessHostRoles</sub> | Jackpot<br><sub>From:EndlessHostRoles</sub> | Maguro<br><sub>From:SuperNewRoles</sub> |
 | Safecracker<br><sub>From:SuperNewRoles</sub> | Supernova<br><sub>From:SuperNewRoles</sub> | ProbabilityKing | GambleKiller |
-| Torpedo |  |  |  |
+| Torpedo<br><sub>From:NebulaontheShip</sub> |  |  |  |
 
 ### Coven (21)
 
@@ -166,6 +168,12 @@ Use `/r <role name>` or `/myrole` in-game to check each role's effects and setti
 | Banshee<br><sub>From:EndlessHostRoles</sub> | VoodooMaster<br><sub>From:TownOfHost E</sub> | Poache<br><sub>From:EndlessHostRoles</sub> | PotionMaster<br><sub>From:TownOfHost-TheOtherRoles</sub> |
 | Reaper<br><sub>From:EndlessHostRoles</sub> | Death<br><sub>From:EndlessHostRoles</sub> | Goddess<br><sub>From:EndlessHostRoles</sub> | Dreamweaver<br><sub>From:EndlessHostRoles</sub> |
 | Shadow<br><sub>From:EndlessHostRoles</sub> |  |  |  |
+
+### Combination roles (4)
+
+|   |   |   |   |
+|---|---|---|---|
+| Driver<br><sub>From:TownOfHost-K</sub> | Braid<br><sub>From:TownOfHost-K</sub> | Vega<br><sub>From:TownOfHost-K</sub> | Altair<br><sub>From:TownOfHost-K</sub> |
 
 ### Game mode exclusive (28)
 
@@ -185,7 +193,7 @@ Use `/r <role name>` or `/myrole` in-game to check each role's effects and setti
 |---|---|---|---|
 | GM<br><sub>From:TOR GM Edition</sub> | Convict<br><sub>From:TownOfHost E</sub> |  |  |
 
-### Sub-roles / Add-ons (146)
+### Sub-roles / Add-ons (150)
 
 |   |   |   |   |
 |---|---|---|---|
@@ -225,7 +233,8 @@ Use `/r <role name>` or `/myrole` in-game to check each role's effects and setti
 | MeetingAngel<br><sub>From:EndlessHostRoles</sub> | Moon<br><sub>From:TownOfHost-K</sub> | News<br><sub>From:TownOfHost-K</sub> | NonReport<br><sub>From:TownOfHost_Y</sub> |
 | Notvoter<br><sub>From:TownOfHost-K</sub> | OneWolf<br><sub>From:TownOfHost-K</sub> | Opener<br><sub>From:TownOfHost-K</sub> | Reroll<br><sub>From:EndlessHostRoles</sub> |
 | Serial<br><sub>From:TownOfHost-K</sub> | SlowStarter<br><sub>From:TownOfHost-K</sub> | Stack<br><sub>From:TownOfHost-K</sub> | Transparent<br><sub>From:TownOfHost-K</sub> |
-| Twins<br><sub>From:TownOfHost-K</sub> | Water<br><sub>From:TownOfHost-K</sub> |  |  |
+| Twins<br><sub>From:TownOfHost-K</sub> | Water<br><sub>From:TownOfHost-K</sub> | Focused<br><sub>From:EndlessHostRoles</sub> | Shibboleth<br><sub>From:TownOfHost for E</sub> |
+| Forewarner | Influencer |  |  |
 
 ---
 
