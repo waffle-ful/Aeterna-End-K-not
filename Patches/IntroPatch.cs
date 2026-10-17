@@ -1627,6 +1627,15 @@ internal static class IntroCutsceneDestroyPatch
                     pc.AddAbilityCD(10);
                 else
                     pc.AddAbilityCD(false);
+
+                // 開始直後のキル禁止の窓 (PreventKill) の間は PetActionsPatch.OnPetUse がペット押下を無音で捨てるので、
+                // 表示上のクールダウンが窓より先に明けると「押せるのに何も起きない」になる。窓の残りまで延ばす
+                if (IntroCutsceneDestroyPatch.PreventKill && Main.AbilityCD.TryGetValue(pc.PlayerId, out var abilityCD))
+                {
+                    long now = Utils.TimeStamp;
+                    var windowLeft = (int)Math.Ceiling((Options.StartingKillCooldown?.GetFloat() ?? 10f) - (now - IntroCutsceneDestroyPatch.IntroDestroyTS));
+                    if (abilityCD.TotalCooldown - (now - abilityCD.StartTimeStamp) < windowLeft) pc.AddAbilityCD(windowLeft);
+                }
             }
         }, 0.8f, log: false);
 
