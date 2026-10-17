@@ -107,6 +107,9 @@ public static class CompanionEventEmitter
     {
         if (!GameStates.IsLobby) return;
 
+        // 視聴者干渉 (またはカットシーン) がオフだと Play は何も出さないが、地震の ShakeCamera だけ残ってしまう。
+        if (AudienceOptions.InterventionCutscene == null || !AudienceOptions.InterventionCutscene.GetBool()) return;
+
         long now = Utils.TimeStamp;
         if (NextDemoTime == 0)
         {
