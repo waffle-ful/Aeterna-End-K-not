@@ -445,7 +445,7 @@ export const ROLE_META: readonly RoleMeta[] = [
   { id: "SantaClaus", team: "neutral", ja: "サンタクロース", en: "SantaClaus" },
   { id: "SchrodingersCat", team: "neutral", ja: "シュレディンガーの猫", en: "Schrödinger's Cat" },
   { id: "Seamstress", team: "neutral", ja: "裁縫師", en: "Seamstress" },
-  { id: "SerialKiller", team: "neutral", ja: "<size=75%>シリアルキラー</size>", en: "Serial Killer" },
+  { id: "SerialKiller", team: "neutral", ja: "シリアルキラー", en: "Serial Killer" },
   { id: "Sharpshooter", team: "neutral", ja: "シャープシューター", en: "Sharpshooter" },
   { id: "Shifter", team: "neutral", ja: "シフター", en: "Shifter" },
   { id: "Sidekick", team: "neutral", ja: "サイドキック", en: "Sidekick" },
