@@ -261,6 +261,7 @@ public static class OptionSearch
     // one go is a multi-second main-thread stall plus hundreds of MB of native UI that never comes back.
     // The cap keeps the list to what a person would actually scan; the toast tells them it was cut.
     public const int MaxResults = 200;
+    private const int MaxExpandedRoots = 3;
 
     public readonly record struct SearchResult(Dictionary<TabGroup, int> Counts, int Total, int Shown);
 
@@ -310,6 +311,25 @@ public static class OptionSearch
             // role/section it belongs to.
             for (OptionItem parent = OptionItem.AllOptions[index].Parent; parent != null; parent = parent.Parent)
                 if (indexOf.TryGetValue(parent, out int parentIndex)) matches.Add(parentIndex);
+        }
+
+        // 役職の行 (親を持たない行) が合ったら、その配下のオプションも (数えずに) 並べる — 役職名で検索した時に
+        // その役職の設定を一度に見られるように。広い語で多数の役職が合った時に行が膨れないよう、少数の時だけ
+        var matchedRoots = new HashSet<OptionItem>();
+        foreach ((int index, _) in hits)
+        {
+            OptionItem option = OptionItem.AllOptions[index];
+            if (option.Parent == null && option is not TextOptionItem) matchedRoots.Add(option);
+        }
+
+        if (matchedRoots.Count is > 0 and <= MaxExpandedRoots)
+        {
+            for (var index = 0; index < OptionItem.AllOptions.Count; index++)
+            {
+                OptionItem root = OptionItem.AllOptions[index];
+                while (root.Parent != null) root = root.Parent;
+                if (root != OptionItem.AllOptions[index] && matchedRoots.Contains(root)) matches.Add(index);
+            }
         }
 
         ResultIndices.Clear();
