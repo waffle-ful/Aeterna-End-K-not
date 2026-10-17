@@ -234,7 +234,46 @@ public static partial class ExplosionFx
         NovaHit = 89,
 
         // ノヴァ: 操縦が終わる (☆が消える): Radius = 本人の PlayerId + 1
-        NovaDown = 90
+        NovaDown = 90,
+
+        // スナイパー: 構える (手に狙撃銃が現れ、撃つ向きへ向け続ける): Pos = 構えた場所、Radius = 本人の PlayerId + 1 + 32 × 秒数
+        SniperAim = 91,
+
+        // スナイパー: 撃つ: Pos = 撃った人、Radius = PackSniperFire
+        SniperFire = 92,
+
+        // スナイパー: 撃たずに構えを解く: Radius = 本人の PlayerId + 1
+        SniperDown = 93,
+
+        // ベテラン: 警戒中 (本人の画面だけ・狙撃銃を斜めに構えて待つ): Radius = 本人の PlayerId + 1 + 32 × 秒数
+        VeteranGuard = 94,
+
+        // アーチャー: 弓を据える (離れるほど弦が引かれる): Pos = 据えた場所、Radius = 本人の PlayerId + 1 + 32 × 上限秒数
+        ArcherSet = 95,
+
+        // アーチャー: 矢を放つ (手元で飛ばす): Pos = 矢の出る所、Radius = 本人の PlayerId + 1 + 32 × 向き + 11520 × 秒速 (2 刻み) + 737280 × 飛べる秒数 (0.5 刻み)
+        ArcherShot = 96,
+
+        // アーチャー: 矢が止まる: Pos = 止まった所、Radius = 本人の PlayerId + 1 + 32 × 倒したか + 64 × 壁か + 128 × 放てずに畳んだか
+        ArcherStop = 97,
+
+        // ハングマン: 縄で吊られて消える: Pos = 吊られた人、Radius = 吊られた人の PlayerId + 1
+        HangNoose = 98,
+
+        // ワスプ: 刺す (刺した本人の画面だけ): Pos = 刺された人、Radius = 刺した人の PlayerId + 1 + 32 × 刺された人の PlayerId
+        WaspSting = 99,
+
+        // ワスプ: 毒が回って倒れる: Pos = 倒れる人、Radius = 倒れる人の PlayerId + 1
+        WaspVenom = 100,
+
+        // ワスプ: 群れ (本人の周りを蜂が飛ぶ): Radius = 本人の PlayerId + 1 + 32 × 秒数
+        WaspSwarm = 101,
+
+        // トレマー: 破滅 (倒される範囲の地面が割れて揺れる): Radius = 本人の PlayerId + 1 + 32 × 残り秒数
+        TremorDoom = 102,
+
+        // トレマー: 巻き込まれた人の足元から岩が突き上がる: Pos = 倒れる人、Radius = 倒れる人の PlayerId + 1
+        TremorCrush = 103
     }
 
     // カットインに出す技名
@@ -563,6 +602,9 @@ public static partial class ExplosionFx
         if (kind == Kind.ChainHold) return FxMath.Clamp(radius, 0f, 32768f);
         if (kind is Kind.NovaRise or Kind.NovaShot) return FxMath.Clamp(radius, 0f, NovaPackMax);
         if (kind is Kind.NovaHit or Kind.NovaDown) return FxMath.Clamp(radius, 0f, 256f);
+        if (kind is Kind.SniperAim or Kind.SniperDown or Kind.VeteranGuard) return FxMath.Clamp(radius, 0f, 4096f);
+        if (kind is Kind.SniperFire or Kind.ArcherShot) return FxMath.Clamp(radius, 0f, NovaPackMax);
+        if (kind is Kind.ArcherSet or Kind.ArcherStop or Kind.HangNoose or Kind.WaspSting or Kind.WaspVenom or Kind.WaspSwarm or Kind.TremorDoom or Kind.TremorCrush) return FxMath.Clamp(radius, 0f, 8192f);
         return kind is Kind.Freeze or Kind.TimeStop or Kind.Tornado or Kind.TimeRewind or Kind.DemoFuse or Kind.WebSnare or Kind.GoddessGuard or Kind.WerewolfRampage || HasExtra(kind) ? FxMath.Clamp(radius, 0.3f, 180f) : FxMath.Clamp(radius, 0.3f, 15f);
     }
 
@@ -699,6 +741,8 @@ public static partial class ExplosionFx
                 StopAllChains();
                 StopAllDrags();
                 StopAllNova();
+                StopAllSnipers();
+                StopAllRoles7();
                 SelfEmitters.Clear();
                 ReleasePortalMachines();
                 PortalEmitters.Clear();
@@ -771,6 +815,8 @@ public static partial class ExplosionFx
                 if (ChainEmitters.Count > 0) StopAllChains();
                 if (DragEmitters.Count > 0) StopAllDrags();
                 if (NovaBusy) StopAllNova();
+                if (SniperBusy) StopAllSnipers();
+                if (Roles7Busy) StopAllRoles7();
                 SelfEmitters.Clear();
                 if (SnareEmitters.Count > 0) SnareEmitters.Clear();
                 FlowEmitters.Clear();
@@ -792,6 +838,8 @@ public static partial class ExplosionFx
                 if (ChainEmitters.Count > 0) PulseChains();
                 if (DragEmitters.Count > 0) PulseDrags();
                 if (NovaBusy) PulseNova();
+                if (SniperBusy) PulseSnipers();
+                if (Roles7Busy) PulseRoles7();
                 if (SelfEmitters.Count > 0) PulseSelves();
                 if (CarryJobs.Count > 0) PulseCarries();
                 if (PortalEmitters.Count > 0) PulsePortals();
@@ -1118,6 +1166,12 @@ public static partial class ExplosionFx
                     break;
                 case >= Kind.NovaRise and <= Kind.NovaDown:
                     SpawnNova(r);
+                    break;
+                case >= Kind.SniperAim and <= Kind.VeteranGuard:
+                    SpawnSniper(r);
+                    break;
+                case >= Kind.ArcherSet and <= Kind.TremorCrush:
+                    SpawnRoles7(r);
                     break;
                 default:
                     SpawnRoles6(r);

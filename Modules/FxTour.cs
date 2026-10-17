@@ -25,7 +25,10 @@ public static class FxTour
         ExplosionFx.Kind.PenguinGrab, ExplosionFx.Kind.GunShot,
         ExplosionFx.Kind.AudSurge, ExplosionFx.Kind.AudAlarm, ExplosionFx.Kind.AudStatic, ExplosionFx.Kind.AudDoorSlam,
         ExplosionFx.Kind.AudCurse, ExplosionFx.Kind.AudBless, ExplosionFx.Kind.AudVoice, ExplosionFx.Kind.AudQuake,
-        ExplosionFx.Kind.NovaRise, ExplosionFx.Kind.NovaShot, ExplosionFx.Kind.NovaHit
+        ExplosionFx.Kind.NovaRise, ExplosionFx.Kind.NovaShot, ExplosionFx.Kind.NovaHit,
+        ExplosionFx.Kind.SniperAim, ExplosionFx.Kind.SniperFire, ExplosionFx.Kind.VeteranGuard,
+        ExplosionFx.Kind.ArcherSet, ExplosionFx.Kind.ArcherShot, ExplosionFx.Kind.HangNoose, ExplosionFx.Kind.WaspSting,
+        ExplosionFx.Kind.WaspVenom, ExplosionFx.Kind.WaspSwarm, ExplosionFx.Kind.TremorDoom, ExplosionFx.Kind.TremorCrush
     ];
 
     // 流している途中で止めたり流し直したりした時に、前の回の残りを捨てるための通し番号
@@ -143,6 +146,31 @@ public static class FxTour
                 break;
             case ExplosionFx.Kind.NovaHit:
                 ExplosionFx.Play(kind, at, self + 32f + 64f);
+                break;
+            // スナイパーは構えた場所を足元の左に置いて右を狙わせ、撃つ時は 10 先まで弾を飛ばす
+            case ExplosionFx.Kind.SniperAim:
+                ExplosionFx.Play(kind, new Vector2(at.x - 1f, at.y), self + 32f * 3f);
+                break;
+            case ExplosionFx.Kind.SniperFire:
+                ExplosionFx.Play(kind, at, self + 11520f * 40f);
+                break;
+            case ExplosionFx.Kind.VeteranGuard:
+                ExplosionFx.PlayFor(kind, at, self + 32f * 3f, lp);
+                break;
+            // 弓は足元の右に据えて左へ引いた形にし、矢は右へ秒速 10 で 2 秒飛ばす
+            case ExplosionFx.Kind.ArcherSet:
+                ExplosionFx.Play(kind, new Vector2(at.x + 1.2f, at.y), self + 32f * 3f);
+                break;
+            case ExplosionFx.Kind.ArcherShot:
+                ExplosionFx.Play(kind, new Vector2(at.x, at.y + 0.3f), self + 11520f * 10f + 737280f * 4f);
+                break;
+            case ExplosionFx.Kind.HangNoose:
+            case ExplosionFx.Kind.WaspSting:
+                ExplosionFx.PlayFor(kind, at, self, lp);
+                break;
+            case ExplosionFx.Kind.WaspSwarm:
+            case ExplosionFx.Kind.TremorDoom:
+                ExplosionFx.Play(kind, at, self + 32f * 3f);
                 break;
             default:
                 ExplosionFx.Play(kind, at, 1f);

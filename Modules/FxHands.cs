@@ -300,6 +300,23 @@ internal static class FxHands
         h.Tf.localScale = FxMath.V3(size, left ? -size : size, 1f);
     }
 
+    // 握っている人の姿の色が変わった時 (変身) に塗り直す
+    internal static void HoldColor(int id, int colorId)
+    {
+        Held h = FindHeld(id);
+        if (h == null) return;
+        if (colorId < 0 || colorId >= Palette.PlayerColors.Length) colorId = 0;
+        PlayerMaterial.SetColors(colorId, h.Sr);
+    }
+
+    // 呼び出し側が出し入れの濃さを決める時用 (消えている途中の手には効かない)
+    internal static void HoldAlpha(int id, float alpha)
+    {
+        Held h = FindHeld(id);
+        if (h == null || h.FadeStart >= 0f) return;
+        h.Sr.color = FxMath.Rgba(1f, 1f, 1f, alpha);
+    }
+
     // 手を fade 秒で消す
     internal static void HoldStop(int id, float fade)
     {
