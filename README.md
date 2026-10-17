@@ -323,6 +323,8 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 <details>
 <summary><b>クレジット全文を開く（先行 Mod ・ 開発者と翻訳者 ・ 同梱ソフトウェア ・ BGM と素材）</b></summary>
 
+- **Among-Us-Love-Couple-Mod** (Woodi-dev) — 「ラバーズ」の元になった Mod
+- **[Among-Us-Sheriff-Mod](https://github.com/Woodi-dev/Among-Us-Sheriff-Mod)** (Woodi-dev、GPL-3.0) — 「シェリフ」の元になった Mod
 - **[astra1dev](https://github.com/astra1dev)** — IMGUI ウィンドウの表示設定まわりの助言
 - **[au.libhalt.net](https://au.libhalt.net/)** — Among Us の Mod 情報・配布サイト
 - **[AutoRejoin](https://github.com/Maxi0fc/AutoRejoin)** (Maxi0fc) — 切断後の自動再入室を追加するクライアント Mod
@@ -330,10 +332,13 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 - **[Calamity Mod (Terraria)](https://github.com/CalamityTeam/CalamityModPublic)** (Calamity Team) — メインメニューのテーマ・デザインの参考
 - **[CrowdedMod](https://github.com/CrowdedMods/CrowdedMod)** (andry08 / CrowdedMods、MIT) — 大人数ロビー対応
 - **[Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles)** (Gurge44 他、GPL-3.0) — ベース Mod。役職エンジンと大多数の役職、継続的なバグ修正の取り込み元
+- **[ExtraRolesAmongUs](https://github.com/NotHunter101/ExtraRolesAmongUs)** (NotHunter101、GPL-3.0) — 「メディック」の元になった Mod
 - **[ExtremeRoles](https://github.com/yukieiji/ExtremeRoles)** (yukieiji) — エアシップ関連のパッチ
+- **[Foolers Mod](https://github.com/MengTube/Foolers-Mod)** (MengTube、GPL-3.0) — 「テロリスト」の元になった Mod
 - **[FusionCore](https://github.com/All-Of-Us-Mods/FusionCore)** (All-Of-Us-Mods、GPL-3.0) — Android ランチャーの土台、翻訳実行するホスト (x86_64 エミュレータ) 向けのフックの扱い
 - **[Game Optimizer (CPUs / Threads Optimizer)](https://github.com/charlie754/Game-Optimizer-CPUs-Threads-Optimizer)** (charlie754、MIT) — CPU Sets によるキャッシュドメイン隔離の発想 (`CpuSetsMode` 設定)。コードは Win32 API から独自実装
 - **ImaMapleTree / 단풍잎 / Tealeaf** — ペットボタンによる能力発動の処理
+- **[Jester](https://github.com/Maartii/Jester)** (Maartii) — 「ジェスター」の元になった Mod
 - **[Lotus (LotusContinued)](https://github.com/Lotus-AU/LotusContinued)** / [NikoCat233 fork](https://github.com/NikoCat233/LotusContinued) (GPL-3.0) — 設定矛盾の検出とホスト警告、ホワイトリスト入室制限
 - **[MalumMenu](https://github.com/scp222thj/MalumMenu)** (scp222thj、GPL-3.0) — ミニマップ上のプレイヤー位置表示
 - **[Mini.RegionInstall](https://github.com/miniduikboot/Mini.RegionInstall)** (miniduikboot、GPL-3.0) — カスタムリージョンの追加
@@ -347,10 +352,13 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 - **[Submerged](https://github.com/SubmergedAmongUs/Submerged)** (SubmergedAmongUs) — マップ選択ボタンの扱い（Submerged 対応）
 - **[SuperNewRoles](https://github.com/SuperNewRoles/SuperNewRoles)** / [ykundesu 版](https://github.com/ykundesu/SuperNewRoles) (SuperNewRoles 開発チーム、GPL-3.0) — 波動砲 (WaveCannon)、ノヴァ、Mod 部屋検索、ロゴ・スタンプの表示、デバイス使用の制限、動画表示まわり、一部の役職
 - **[template-unity](https://github.com/vpmedia/template-unity)** (vpmedia、MIT) — メルセンヌ・ツイスタ実装の参照元
-- **[TheOtherRoles](https://github.com/TheOtherRolesAU/TheOtherRoles)** — Submerged 判定まわりの処理
-- **[TheOtherRoles-GM](https://github.com/yukinogatari/TheOtherRoles-GM)** (yukinogatari) — TheOtherRoles の派生 Mod
-- **TOR_GM_Haoming_Edition** — TheOtherRoles-GM の派生 Mod
+- **[TheEpicRoles](https://github.com/LaicosVK/TheEpicRoles)** (LaicosVK 他、GPL-3.0) — 最初の犠牲者を守るシールドの発想
+- **[TheOtherRoles](https://github.com/TheOtherRolesAU/TheOtherRoles)** — ヴァンパイア・ジャッカル・ゲッサー・ベイティングなど多くの役職の元になった Mod。Submerged 判定まわりの処理
+- **[TheOtherRoles (tomarai 版)](https://github.com/tomarai/TheOtherRoles)** (tomarai、GPL-3.0) — TheOtherRoles の派生 Mod
+- **[TheOtherRoles-GM](https://github.com/yukinogatari/TheOtherRoles-GM)** (yukinogatari) — TheOtherRoles の派生 Mod。「オポチュニスト」の元になった Mod
+- **TOR_GM_Haoming_Edition** (haoming37) — TheOtherRoles-GM の派生 Mod。「シュレディンガーの猫」「イビルトラッカー」の元になった Mod
 - **[TOHEX / TONEX](https://github.com/TOHEX-Official/TownOfHostEdited-Xi)** — Town Of Host Edited 系列のホスト Mod
+- **[TooManyRolesMods](https://github.com/Hardel-DW/TooManyRolesMods)** (Hardel-DW、GPL-3.0) — 「タイムマスター」の元になった Mod
 - **[TOU-Mira](https://github.com/AU-Avengers/TOU-Mira)** (AU-Avengers、GPL-3.0) — dleks マップ選択、キルボタンのクールダウン表示
 - **[Town Of Host](https://github.com/tukasa0001/TownOfHost)** (tukasa0001 他) — TOH 系列の祖。サボタージュ系システムまわりの処理
 - **[Town Of Host-H](https://github.com/Hyz-sui/TownOfHost-H)** (Hyz-sui) — Town Of Host の派生ホスト Mod
@@ -362,6 +370,7 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 - **[Town Of Host Edited / Town Of Next](https://github.com/KARPED1EM/TownOfNext)** / [TownOfHostEdited](https://github.com/KARPED1EM/TownOfHostEdited) / [TownOfNext](https://github.com/TownOfNext/TownOfNext) (KARPED1EM、GPL-3.0) — EHR の系譜上の前身。ゲーム中の役職情報メニュー
 - **[Town Of Next: Edited (TONE)](https://github.com/qin-qwq/TownofNext-Edited)** (qin-qwq、GPL-3.0) — ベント接続網の地図表示（[TownOfNext](https://github.com/TownOfNext/TownOfNext)・[TOU-Mira](https://github.com/AU-Avengers/TOU-Mira)・[MalumMenu](https://github.com/scp222thj/MalumMenu) 由来）
 - **[Town-Of-Moss](https://github.com/Koke1024/Town-Of-Moss)** (Koke1024) — 原子炉メルトダウンの加速処理
+- **[Town Of Us](https://github.com/slushiegoose/Town-Of-Us)** (slushiegoose、GPL-3.0) — スワッパー・アーソニスト・処刑人など多くの役職の元になった Mod
 - **[Town Of Us - Reactivated](https://github.com/eDonnes124/Town-Of-Us-R)** (eDonnes124、GPL-3.0) — ホストの会議表示
 - **Town of Us Rewritten** (Det) — Discord のアクティビティ表示
 - **[TownOfHost-Optimized](https://github.com/Limeau/TownofHost-Optimized)** (Limeau) — Town Of Host の最適化を進めた派生 Mod

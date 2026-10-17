@@ -321,6 +321,8 @@ End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/End
 <details>
 <summary><b>Show all credits (earlier mods · developers and translators · bundled software · music and assets)</b></summary>
 
+- **Among-Us-Love-Couple-Mod** (Woodi-dev) — the mod the Lovers came from
+- **[Among-Us-Sheriff-Mod](https://github.com/Woodi-dev/Among-Us-Sheriff-Mod)** (Woodi-dev, GPL-3.0) — the mod the Sheriff came from
 - **[astra1dev](https://github.com/astra1dev)** — advice on IMGUI window display settings
 - **[au.libhalt.net](https://au.libhalt.net/)** — an Among Us mod information and distribution site
 - **[AutoRejoin](https://github.com/Maxi0fc/AutoRejoin)** (Maxi0fc) — a client mod that adds automatic rejoining after a disconnect
@@ -328,10 +330,13 @@ End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/End
 - **[Calamity Mod (Terraria)](https://github.com/CalamityTeam/CalamityModPublic)** (Calamity Team) — reference for the main menu theme and visual design
 - **[CrowdedMod](https://github.com/CrowdedMods/CrowdedMod)** (andry08 / CrowdedMods, MIT) — large-lobby support
 - **[Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles)** (Gurge44 et al., GPL-3.0) — base mod: the role engine, the large majority of roles, and an ongoing source of bug fixes
+- **[ExtraRolesAmongUs](https://github.com/NotHunter101/ExtraRolesAmongUs)** (NotHunter101, GPL-3.0) — the mod the Medic came from
 - **[ExtremeRoles](https://github.com/yukieiji/ExtremeRoles)** (yukieiji) — Airship patches
+- **[Foolers Mod](https://github.com/MengTube/Foolers-Mod)** (MengTube, GPL-3.0) — the mod the Terrorist came from
 - **[FusionCore](https://github.com/All-Of-Us-Mods/FusionCore)** (All-Of-Us-Mods, GPL-3.0) — base of the Android launcher; hook handling for hosts that run it under translation (x86_64 emulators)
 - **[Game Optimizer (CPUs / Threads Optimizer)](https://github.com/charlie754/Game-Optimizer-CPUs-Threads-Optimizer)** (charlie754, MIT) — the idea of isolating cache domains with CPU Sets (the `CpuSetsMode` setting); our code is written directly against the Win32 API
 - **ImaMapleTree / 단풍잎 / Tealeaf** — ability activation via the pet button
+- **[Jester](https://github.com/Maartii/Jester)** (Maartii) — the mod the Jester came from
 - **[Lotus (LotusContinued)](https://github.com/Lotus-AU/LotusContinued)** / [NikoCat233 fork](https://github.com/NikoCat233/LotusContinued) (GPL-3.0) — settings-conflict detection with host warnings, whitelist join restriction
 - **[MalumMenu](https://github.com/scp222thj/MalumMenu)** (scp222thj, GPL-3.0) — player position dots on the minimap
 - **[Mini.RegionInstall](https://github.com/miniduikboot/Mini.RegionInstall)** (miniduikboot, GPL-3.0) — custom region installer
@@ -345,10 +350,13 @@ End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/End
 - **[Submerged](https://github.com/SubmergedAmongUs/Submerged)** (SubmergedAmongUs) — map select button handling for Submerged
 - **[SuperNewRoles](https://github.com/SuperNewRoles/SuperNewRoles)** / [ykundesu repo](https://github.com/ykundesu/SuperNewRoles) (SuperNewRoles team, GPL-3.0) — WaveCannon, Nova, search mod game, logo and stamp display, device usage restriction, video display handling, some roles
 - **[template-unity](https://github.com/vpmedia/template-unity)** (vpmedia, MIT) — reference for the Mersenne Twister implementation
-- **[TheOtherRoles](https://github.com/TheOtherRolesAU/TheOtherRoles)** — Submerged detection handling
-- **[TheOtherRoles-GM](https://github.com/yukinogatari/TheOtherRoles-GM)** (yukinogatari) — a TheOtherRoles derivative
-- **TOR_GM_Haoming_Edition** — a TheOtherRoles-GM derivative
+- **[TheEpicRoles](https://github.com/LaicosVK/TheEpicRoles)** (LaicosVK et al., GPL-3.0) — the idea of a shield for the first victim
+- **[TheOtherRoles](https://github.com/TheOtherRolesAU/TheOtherRoles)** — the mod many roles came from, such as the Vampire, Jackal, Guesser, and Bait; Submerged detection handling
+- **[TheOtherRoles (tomarai fork)](https://github.com/tomarai/TheOtherRoles)** (tomarai, GPL-3.0) — a TheOtherRoles derivative
+- **[TheOtherRoles-GM](https://github.com/yukinogatari/TheOtherRoles-GM)** (yukinogatari) — a TheOtherRoles derivative; the mod the Opportunist came from
+- **TOR_GM_Haoming_Edition** (haoming37) — a TheOtherRoles-GM derivative; the mod the Schrodinger's Cat and Evil Tracker came from
 - **[TOHEX / TONEX](https://github.com/TOHEX-Official/TownOfHostEdited-Xi)** — a host mod in the Town Of Host Edited lineage
+- **[TooManyRolesMods](https://github.com/Hardel-DW/TooManyRolesMods)** (Hardel-DW, GPL-3.0) — the mod the Time Master came from
 - **[TOU-Mira](https://github.com/AU-Avengers/TOU-Mira)** (AU-Avengers, GPL-3.0) — dleks map selection, kill button cooldown display
 - **[Town Of Host](https://github.com/tukasa0001/TownOfHost)** (tukasa0001 et al.) — the root of the whole lineage; sabotage system handling
 - **[Town Of Host-H](https://github.com/Hyz-sui/TownOfHost-H)** (Hyz-sui) — a Town Of Host derivative host mod
@@ -360,6 +368,7 @@ End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/End
 - **[Town Of Host Edited / Town Of Next](https://github.com/KARPED1EM/TownOfNext)** / [TownOfHostEdited](https://github.com/KARPED1EM/TownOfHostEdited) / [TownOfNext](https://github.com/TownOfNext/TownOfNext) (KARPED1EM, GPL-3.0) — EHR's predecessor in the lineage; the in-game role info menu
 - **[Town Of Next: Edited (TONE)](https://github.com/qin-qwq/TownofNext-Edited)** (qin-qwq, GPL-3.0) — vent network map display (via [TownOfNext](https://github.com/TownOfNext/TownOfNext), [TOU-Mira](https://github.com/AU-Avengers/TOU-Mira) and [MalumMenu](https://github.com/scp222thj/MalumMenu))
 - **[Town-Of-Moss](https://github.com/Koke1024/Town-Of-Moss)** (Koke1024) — reactor meltdown boost
+- **[Town Of Us](https://github.com/slushiegoose/Town-Of-Us)** (slushiegoose, GPL-3.0) — the mod many roles came from, such as the Swapper, Arsonist, and Executioner
 - **[Town Of Us - Reactivated](https://github.com/eDonnes124/Town-Of-Us-R)** (eDonnes124, GPL-3.0) — host meeting display
 - **Town of Us Rewritten** (Det) — Discord activity (rich presence) display
 - **[TownOfHost-Optimized](https://github.com/Limeau/TownofHost-Optimized)** (Limeau) — a Town Of Host derivative focused on optimization
