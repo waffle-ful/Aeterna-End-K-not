@@ -3416,7 +3416,11 @@ internal static class ChatCommands
                 Utils.ShowChildrenSettings(opt, settings, disableColor: false);
 
             settings.Append("</size>");
-            
+
+            // 起源の行は役職名の置換が全部終わってから差し込む (置換が起源の Mod 名に当たって色タグが混ざらないように)。
+            List<string> origins = [];
+            sb.Append(OriginMark(role));
+
             if (role.PetActivatedAbility())
                 sb.Append($"<size=1>{GetString("SupportsPetMessage")}</size>");
 
@@ -3435,7 +3439,10 @@ internal static class ChatCommands
                 string searchSubStr = GetString(subRole.ToString());
                 sb.Replace(searchSubStr, subRole.ToColoredString());
                 sb.Replace(searchSubStr.ToLower(), subRole.ToColoredString());
+                sb.Append(OriginMark(subRole));
             }
+
+            for (var i = 0; i < origins.Count; i++) sb.Replace($"\u0001{i}\u0001", origins[i]);
 
             // 同一フレームで最大4通発射するとタイトル付き SetName の連続送信になるため、間隔送出に乗せる
             // (会議版の役職説明と同型)。
@@ -3447,6 +3454,12 @@ internal static class ChatCommands
             if (player.UsesMeetingShapeshift() && !MeetingTargetPicker.WouldGetButton(player)) myRoleMsgs.Add(new("\n", player.PlayerId, GetString("UsesMeetingShapeshiftNotice")));
 
             myRoleMsgs.SendMultipleMessages(MessageImportance.High);
+
+            string OriginMark(CustomRoles r)
+            {
+                origins.Add(RoleOrigins.Suffix(r));
+                return $"\u0001{origins.Count - 1}\u0001";
+            }
         }
         else
             Utils.SendMessage((player.FriendCode.GetDevUser().HasTag() ? "\n" : string.Empty) + GetString("Message.CanNotUseInLobby"), player.PlayerId);
@@ -6816,6 +6829,7 @@ internal static class ChatCommands
 
                 string txt = sb.ToString().Replace(roleName, coloredString, StringComparison.OrdinalIgnoreCase);
                 sb.Clear().Append(txt);
+                sb.Append(RoleOrigins.Suffix(rl));
 
                 if (rl.PetActivatedAbility()) sb.Append($"<size=1>{GetString("SupportsPetMessage")}</size>");
 
