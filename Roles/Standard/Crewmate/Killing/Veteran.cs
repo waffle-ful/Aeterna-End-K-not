@@ -158,6 +158,7 @@ internal class Veteran : RoleBase
             Utils.SendRPC(CustomRPC.SyncRoleData, pc.PlayerId, pc.PlayerId, (float)VeteranSkillDuration.GetInt());
             pc.RpcRemoveAbilityUse(notify: false);
             pc.RPCPlayCustomSound("Gunload");
+            ExplosionFx.VeteranGuard(pc, VeteranSkillDuration.GetFloat());
             pc.Notify(Translator.GetString("VeteranOnGuard"), VeteranSkillDuration.GetFloat());
             pc.MarkDirtySettings();
         }
@@ -188,6 +189,7 @@ internal class Veteran : RoleBase
 
                 killer.SetRealKiller(target);
                 Main.PlayerStates[killer.PlayerId].deathReason = PlayerState.DeathReason.Shot;
+                ExplosionFx.VeteranCounter(target, killer);
                 target.Kill(killer);
                 Logger.Info($"{target.GetRealName()} reverse killed: {killer.GetRealName()}", "Veteran Kill");
                 return false;

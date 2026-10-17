@@ -97,6 +97,7 @@ public class Hangman : RoleBase
             killer.RpcRemoveAbilityUse();
             target.SetRealKiller(killer);
             Main.PlayerStates[target.PlayerId].deathReason = PlayerState.DeathReason.LossOfHead;
+            ExplosionFx.HangmanNoose(target);
             target.RpcExileV2();
             target.Data.IsDead = true;
             Main.PlayerStates[target.PlayerId].SetDead();

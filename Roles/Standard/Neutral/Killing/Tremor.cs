@@ -116,6 +116,7 @@ public class Tremor : RoleBase
         {
             Main.CachedAlivePlayerControls().NotifyPlayers(Translator.GetString("Tremor.DoomNotify"));
             DoomTimer = DoomTime.GetInt();
+            ExplosionFx.TremorDoom(pc, DoomTimer);
             Main.AllPlayerSpeed[pc.PlayerId] = SpeedDuringDoom.GetFloat();
             pc.MarkDirtySettings();
         }
@@ -138,6 +139,7 @@ public class Tremor : RoleBase
                 if (pc.PlayerId == target.PlayerId) continue;
                 if (!FastVector2.DistanceWithinRange(target.Pos(), pc.Pos(), 2.5f)) continue;
 
+                ExplosionFx.TremorCrush(target);
                 pc.Kill(target);
             }
 
@@ -145,6 +147,8 @@ public class Tremor : RoleBase
 
             DoomTimer--;
             Utils.SendRPC(CustomRPC.SyncRoleData, pc.PlayerId, DoomTimer);
+            // 会議を挟むと演出は畳まれるので、毎秒の残り時間で出し直す (続いている間は延ばすだけ)
+            if (DoomTimer > 0) ExplosionFx.TremorDoom(pc, DoomTimer);
             Utils.NotifyRoles(SpecifySeer: pc, SpecifyTarget: pc);
 
             if (DoomTimer <= 0)

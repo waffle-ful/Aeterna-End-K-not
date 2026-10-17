@@ -230,6 +230,9 @@ public class Sniper : RoleBase
             AimTime = 0f;
             LastAimMarkVisible = false;
 
+            // ペット/消える版は次に押すまで構え続ける (演出は上限の 60 秒で畳み、撃つ時に出し直す)
+            ExplosionFx.SniperAim(sniper, snipeBasePosition, isPet ? 60f : ShapeshiftDuration.GetFloat() + 0.5f);
+
             return false;
         }
 
@@ -248,11 +251,18 @@ public class Sniper : RoleBase
         // 残弾でキルボタンと文字が変わるので、撃った時点でモッド客へ送る
         SendRPC(sniperId);
 
-        if (!AmongUsClient.Instance.AmHost || Pelican.IsEaten(sniperId) || Medic.ProtectList.Contains(sniperId)) return false;
+        if (!AmongUsClient.Instance.AmHost) return false;
+
+        if (Pelican.IsEaten(sniperId) || Medic.ProtectList.Contains(sniperId))
+        {
+            ExplosionFx.SniperDown(sniperId);
+            return false;
+        }
 
         sniper.RPCPlayCustomSound("SniperShot");
 
         Dictionary<PlayerControl, float> targets = GetSnipeTargets(sniper);
+        ExplosionFx.SniperFire(sniper, snipeBasePosition, targets.Count > 0 ? targets.MinBy(c => c.Value).Key : null);
 
         if (targets.Count > 0)
         {

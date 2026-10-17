@@ -86,9 +86,12 @@ public class Wasp : RoleBase
     {
         if (DelayedKills.ContainsKey(target.PlayerId)) return false;
 
+        ExplosionFx.WaspSting(killer, target);
+
         if (target.HasKillButton())
             DelayedKills[target.PlayerId] = new CountdownTimer(KillDelay.GetInt(), () =>
             {
+                if (target.IsAlive()) ExplosionFx.WaspVenom(target);
                 target.Suicide(PlayerState.DeathReason.Stung, killer);
                 DelayedKills.Remove(target.PlayerId);
             }, cancelOnMeeting: false, onCanceled: DelayedKills.Clear);
@@ -170,6 +173,7 @@ public class Wasp : RoleBase
             }, onTick: () => Utils.NotifyRoles(SpecifySeer: target, SpecifyTarget: target), cancelOnMeeting: false, onCanceled: () => SwarmModeEnd = null);
             target.SyncSettings();
             target.SetKillCooldown(0.01f);
+            ExplosionFx.WaspSwarm(target, SwarmModeDuration.GetInt());
         }
         else
         {

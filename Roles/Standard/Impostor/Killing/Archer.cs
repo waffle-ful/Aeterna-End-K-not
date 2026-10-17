@@ -31,6 +31,9 @@ public class Archer : RoleBase
     public bool IsSetting;
     private float Timer;
     private float TeleportTimer;
+
+    // 矢が止まった理由 (演出の知らせに載せる)
+    private bool FxStopKilled, FxStopWall;
     private int? ArrowsLeft;
     private long FireStartTS;
 
@@ -159,6 +162,7 @@ public class Archer : RoleBase
         IsSetting = true;
         Timer = 0;
         PlayerPosition = pc.Pos();
+        ExplosionFx.ArcherSet(pc, PlayerPosition, 6f, MyArrow.GetBool());
         if (ArrowsLeft.HasValue) ArrowsLeft--;
         SendSync();
 
@@ -189,6 +193,7 @@ public class Archer : RoleBase
                 Main.AllPlayerSpeed[pc.PlayerId] = PlayerSpeed;
                 pc.SyncSettings();
             }
+            ExplosionFx.ArcherStop(pc.PlayerId, PlayerPosition, false, false, true);
             pc.Notify(Utils.ColorString(Palette.ImpostorRed, Translator.GetString("ArcherNeedsMovement")));
             Utils.NotifyRoles(SpecifySeer: pc);
             return;
@@ -210,6 +215,10 @@ public class Archer : RoleBase
         TeleportTimer = 0;
         FireStartTS = Utils.TimeStamp;
         SendSync();
+
+        // 矢は FixedUpdate ごとに ArrowPosition × 0.25 を (速さの段 + 1) 回進む
+        float arrowSpeed = ArrowPosition.magnitude * 0.25f * ((int)(ArrowSpeed.GetFloat() / 0.25f) + 2) / Time.fixedDeltaTime;
+        ExplosionFx.ArcherShot(pc.PlayerId, ArrowLastPos, ArrowPosition, arrowSpeed, LostArrowTimer.GetFloat());
 
         if (MyArrow.GetBool())
         {
@@ -303,6 +312,7 @@ public class Archer : RoleBase
 
         if (!IsPathClear())
         {
+            FxStopWall = true;
             if (MyArrow.GetBool() && Timer > 0.15f)
             {
                 pc.TP(prevPos + new Vector2(0, 0.1f), log: false);
@@ -338,6 +348,7 @@ public class Archer : RoleBase
         if (nearest != null && nearest.IsAlive() && !Pelican.IsEaten(nearest.PlayerId) && !Medic.ProtectList.Contains(nearest.PlayerId))
         {
             nearest.SetRealKiller(pc);
+            FxStopKilled = true;
             nearest.Suicide(PlayerState.DeathReason.Sniped, pc);
             pc.RpcResetAbilityCooldown();
         }
@@ -353,6 +364,9 @@ public class Archer : RoleBase
     private void ResetAfterFlight(PlayerControl pc)
     {
         Logger.Info($"ResetAfterFlight (Timer={Timer:F2}s, wall-clock elapsed={(IsUsing ? Utils.TimeStamp - FireStartTS : 0)}s)", "Archer");
+        if (IsUsing) ExplosionFx.ArcherStop(pc.PlayerId, ArrowLastPos, FxStopKilled, FxStopWall);
+        FxStopKilled = false;
+        FxStopWall = false;
         ArrowPosition = Vector2.zero;
         PlayerPosition = Vector2.zero;
         IsUsing = false;
