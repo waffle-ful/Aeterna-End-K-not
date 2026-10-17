@@ -1,14 +1,14 @@
 <h1 align="center"><img src=".github/endknot-logo.png" alt="Aeterna-End-K-not" width="80%"></h1>
 
 <p align="center">
-  <b>The host installs it, and everyone else plays 682 roles on vanilla Among Us.</b>
+  <b>The host installs it, and everyone else plays 694 roles on vanilla Among Us.</b>
 </p>
 
 <p align="center">
   <a href="README.md"><img src="https://img.shields.io/badge/%E6%97%A5%E6%9C%AC%E8%AA%9E-README-555555?style=for-the-badge" alt="日本語"></a>
   <a href="../../releases/latest"><img src="https://img.shields.io/github/v/release/waffle-ful/Aeterna-End-K-not?include_prereleases&style=for-the-badge&label=latest&color=C51111" alt="Latest release"></a>
   <img src="https://img.shields.io/badge/Among%20Us-2026.8.18-C51111?style=for-the-badge" alt="Among Us 2026.8.18">
-  <a href="./ROLES-EN.md"><img src="https://img.shields.io/badge/roles-682-7B2FBE?style=for-the-badge" alt="682 roles"></a>
+  <a href="./ROLES-EN.md"><img src="https://img.shields.io/badge/roles-694-7B2FBE?style=for-the-badge" alt="694 roles"></a>
   <img src="https://img.shields.io/badge/install-host%20only-2EA043?style=for-the-badge" alt="Install: host only">
   <br>
   <a href="https://discord.gg/s5J8c23Dms"><img src="https://img.shields.io/badge/Discord-join-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Join the Discord"></a>
@@ -99,13 +99,13 @@ Sets a hidden forbidden word during the meeting. Anyone who says it dies on the 
 </tr>
 </table>
 
-▶ **[See all 682 roles (`ROLES-EN.md`)](./ROLES-EN.md)**
+▶ **[See all 694 roles (`ROLES-EN.md`)](./ROLES-EN.md)**
 
 ### Easy to install, easy to remove
 
 The installer detects Steam or Epic and installs the mod. To remove it, rename `winhttp.dll` in the game folder and you're back to **plain Among Us.**
 
-<p align="center"><b>682 roles · 110+ chat commands · host-only install · Android support · completely free</b></p>
+<p align="center"><b>694 roles · 110+ chat commands · host-only install · Android support · completely free</b></p>
 
 ---
 
@@ -173,19 +173,20 @@ Earlier boot times were 16.4 s for v0.9.6, 11.1 s for v0.9.7 and 4.4 s for the 0
 
 ## Role list
 
-**682 roles in total.** Breakdown by faction:
+**694 roles in total.** Breakdown by faction:
 
 | Faction | Count |
 |---------|-------|
-| Impostor | 170 (vanilla 4 + remake 4 + custom 162) |
-| Crewmate | 178 (vanilla 6 + remake 7 + custom 165) |
+| Impostor | 173 (vanilla 4 + remake 4 + custom 165) |
+| Crewmate | 179 (vanilla 6 + remake 7 + custom 166) |
 | Neutral | 137 |
 | Coven | 21 |
+| Combination roles | 4 (dealt in pairs) |
 | Game mode exclusive | 28 |
 | Other | 2 (GM / Convict) |
-| Sub-roles (add-ons) | 146 |
+| Sub-roles (add-ons) | 150 |
 
-▶ **[See the full list of all 682 roles (`ROLES-EN.md`)](./ROLES-EN.md)**
+▶ **[See the full list of all 694 roles (`ROLES-EN.md`)](./ROLES-EN.md)**
 
 Use `/r <role name>` or `/myrole` in-game to read each role's effects and settings. [The top of this page](#example-roles) shows a few of the flashiest roles.
 
