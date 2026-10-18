@@ -10,7 +10,7 @@ namespace EndKnot.Modules;
 internal static class FxChain
 {
     internal const int MaxLinks = 64;
-    private const int MaxChains = 3;
+    private const int MaxChains = 8;
     private const float Pitch = 0.125f;
     private const float HandOut = 0.36f;    // 体の中心から手までの距離
     private const float HandDown = 0.08f;
@@ -27,6 +27,7 @@ internal static class FxChain
         public Transform[] LinkTf, ShadowTf;
         public Transform HandATf, HandBTf, CuffATf, CuffBTf;
         public int Id;
+        public float Hand;
         public float Length;
         public float Start;
         public bool Vision;
@@ -57,6 +58,7 @@ internal static class FxChain
             if (c == null) return 0;
 
             c.Id = ++_nextId;
+            c.Hand = HandSize;
             c.Length = FxMath.Max(length, 0.3f);
             c.Start = Time.time;
             c.Vision = vision;
@@ -129,8 +131,8 @@ internal static class FxChain
         // 手: 体から相手の方へ伸ばした所。拳の向きは鎖の出る向き、左向きの時は上下を返して親指を上に保つ
         float hax = a.x + ux * HandOut, hay = a.y + uy * HandOut - HandDown;
         float hbx = b.x - ux * HandOut, hby = b.y - uy * HandOut - HandDown;
-        PlaceHand(c.HandATf, c.HandA, c.CuffATf, hax, hay, ang, ux);
-        PlaceHand(c.HandBTf, c.HandB, c.CuffBTf, hbx, hby, ang + 180f, -ux);
+        PlaceHand(c.HandATf, c.HandA, c.CuffATf, hax, hay, ang, ux, c.Hand);
+        PlaceHand(c.HandBTf, c.HandB, c.CuffBTf, hbx, hby, ang + 180f, -ux, c.Hand);
 
         // 鎖は拳の中から出る
         float ax = hax + ux * 0.05f, ay = hay + uy * 0.05f;
@@ -294,17 +296,25 @@ internal static class FxChain
 
     // ── 中身 ───────────────────────────────────────────
 
-    private static void PlaceHand(Transform hand, SpriteRenderer sr, Transform cuff, float x, float y, float ang, float facingX)
+    private static void PlaceHand(Transform hand, SpriteRenderer sr, Transform cuff, float x, float y, float ang, float facingX, float size)
     {
         bool left = facingX < 0f;
         hand.localPosition = FxMath.V3(x, y, hand.localPosition.z);
         hand.localRotation = FxMath.RotZ(ang);
-        hand.localScale = FxMath.V3(HandSize, left ? -HandSize : HandSize, 1f);
+        hand.localScale = FxMath.V3(size, left ? -size : size, 1f);
 
-        // 手首の鉄の輪は拳の後ろ (鎖と反対側)
+        // 手首の鉄の輪は拳の後ろ (鎖と反対側)。拳を小さくしたら輪も手首へ寄せる
         float r = ang * FxMath.Deg2Rad;
-        cuff.localPosition = FxMath.V3(x - FxMath.Cos(r) * 0.17f, y - FxMath.Sin(r) * 0.17f, cuff.localPosition.z);
+        float back = 0.17f * size / HandSize;
+        cuff.localPosition = FxMath.V3(x - FxMath.Cos(r) * back, y - FxMath.Sin(r) * back, cuff.localPosition.z);
         cuff.localRotation = FxMath.RotZ(ang);
+    }
+
+    // 拳の大きさを変える (既定 HandSize)。1 人の手首に掛ける手錠のように、体に対して手を小さく見せたい時
+    internal static void SetHandSize(int id, float size)
+    {
+        Chain c = Find(id);
+        if (c != null) c.Hand = size;
     }
 
     private static float LinkZ(Chain c, int i) => c.Vision ? _z + (i & 1) * 0.0002f : 0f;

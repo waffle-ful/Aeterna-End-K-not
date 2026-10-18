@@ -637,6 +637,12 @@ public enum CustomRoles
 
     Nova,
 
+    // Jackal faction variants
+    NecroJackal,
+    JackalBusker,
+    SandboxJackal,
+    JackalPolice,
+
     // Sub-role after 1000 (buffer reserved for ~500 future main roles)
     NotAssigned = 1000,
     Absorber,

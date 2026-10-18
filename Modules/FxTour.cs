@@ -28,7 +28,8 @@ public static class FxTour
         ExplosionFx.Kind.NovaRise, ExplosionFx.Kind.NovaShot, ExplosionFx.Kind.NovaHit,
         ExplosionFx.Kind.SniperAim, ExplosionFx.Kind.SniperFire, ExplosionFx.Kind.VeteranGuard,
         ExplosionFx.Kind.ArcherSet, ExplosionFx.Kind.ArcherShot, ExplosionFx.Kind.HangNoose, ExplosionFx.Kind.WaspSting,
-        ExplosionFx.Kind.WaspVenom, ExplosionFx.Kind.WaspSwarm, ExplosionFx.Kind.TremorDoom, ExplosionFx.Kind.TremorCrush
+        ExplosionFx.Kind.WaspVenom, ExplosionFx.Kind.WaspSwarm, ExplosionFx.Kind.TremorDoom, ExplosionFx.Kind.TremorCrush,
+        ExplosionFx.Kind.Handcuffed
     ];
 
     // 流している途中で止めたり流し直したりした時に、前の回の残りを捨てるための通し番号
@@ -155,6 +156,7 @@ public static class FxTour
                 ExplosionFx.Play(kind, at, self + 11520f * 40f);
                 break;
             case ExplosionFx.Kind.VeteranGuard:
+            case ExplosionFx.Kind.Handcuffed:
                 ExplosionFx.PlayFor(kind, at, self + 32f * 3f, lp);
                 break;
             // 弓は足元の右に据えて左へ引いた形にし、矢は右へ秒速 10 で 2 秒飛ばす

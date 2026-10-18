@@ -92,9 +92,10 @@ public static partial class ExplosionFx
         Swarms.Clear();
         foreach (Doom d in Dooms) ReleaseDoom(d);
         Dooms.Clear();
+        StopAllCuffs();
     }
 
-    private static bool Roles7Busy => BowRigs.Count > 0 || Arrows.Count > 0 || Nooses.Count > 0 || Swarms.Count > 0 || Dooms.Count > 0;
+    private static bool Roles7Busy => BowRigs.Count > 0 || Arrows.Count > 0 || Nooses.Count > 0 || Swarms.Count > 0 || Dooms.Count > 0 || Cuffs.Count > 0;
 
     private static void ReleaseBow(BowRig b)
     {
@@ -156,6 +157,9 @@ public static partial class ExplosionFx
                 if (HiddenNow(id) || CrushRepeated(r.Pos)) break;
                 SpawnTremorCrush(r.Pos);
                 FxSound.At("FxTremorCrush", r.Pos);
+                break;
+            case Kind.Handcuffed:
+                StartCuffs(id, (v / 32) % 256);
                 break;
         }
     }
@@ -1071,6 +1075,8 @@ public static partial class ExplosionFx
             ReleaseDoom(Dooms[i]);
             Dooms.RemoveAt(i);
         }
+
+        if (Cuffs.Count > 0) PulseCuffs(now);
 
         _vision = false;
     }

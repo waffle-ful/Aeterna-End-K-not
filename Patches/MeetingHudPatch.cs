@@ -592,6 +592,7 @@ internal static class CheckForEndVotingPatch
             if (deathReason == PlayerState.DeathReason.Vote)
             {
                 if (Witch.PlayerIdList.Count > 0) Witch.OnCheckForEndVoting(playerIds);
+                if (NecroJackal.On) NecroJackal.OnCheckForEndVoting(playerIds);
                 if (Virus.PlayerIdList.Count > 0) Virus.OnCheckForEndVoting(playerIds);
                 Gaslighter.OnExile(playerIds);
                 if (Wasp.On) Wasp.OnExile(playerIds);
@@ -1384,6 +1385,7 @@ internal static class MeetingHudStartPatch
 
             sb.Append(Executioner.TargetMark(seer, target));
             sb.Append(Witch.GetSpelledMark(target.PlayerId, true));
+            sb.Append(NecroJackal.GetCurseMark(target.PlayerId, true));
             sb.Append(Wasp.GetStungMark(target.PlayerId));
             sb.Append(SpellCaster.HasSpelledMark(seer.PlayerId) ? Utils.ColorString(Team.Coven.GetColor(), "\u25c0") : string.Empty);
             sb.Append(Commited.GetMark(seer, target));

@@ -507,6 +507,12 @@ public static class HudSpritePatch
                     newKillButton = CustomButton.Get("Handcuff");
                     break;
                 }
+                case CustomRoles.JackalPolice:
+                {
+                    if (Options.UsePets.GetBool() && !(Options.UsePhantomBasis.GetBool() && Options.UsePhantomBasisForNKs.GetBool())) newPetButton = CustomButton.Get("Handcuff");
+                    else if (!shapeshifting) newAbilityButton = CustomButton.Get("Handcuff");
+                    break;
+                }
                 case CustomRoles.Pursuer:
                 {
                     newKillButton = CustomButton.Get("Pursuer");

@@ -1052,6 +1052,10 @@ public static class Utils
             case CustomRoles.Sharpshooter:
             case CustomRoles.Explosivist:
             case CustomRoles.Thanos:
+            case CustomRoles.NecroJackal:
+            case CustomRoles.JackalBusker:
+            case CustomRoles.SandboxJackal:
+            case CustomRoles.JackalPolice:
             case CustomRoles.Slenderman:
             case CustomRoles.Amogus:
             case CustomRoles.Weatherman:
@@ -3650,6 +3654,7 @@ public static class Utils
                 else
                 {
                     SelfMark.Append(Witch.GetSpelledMark(seer.PlayerId, true));
+                    SelfMark.Append(NecroJackal.GetCurseMark(seer.PlayerId, true));
                     SelfMark.Append(Wasp.GetStungMark(seer.PlayerId));
                     SelfMark.Append(SpellCaster.HasSpelledMark(seer.PlayerId) ? ColorString(Team.Coven.GetColor(), "\u25c0") : string.Empty);
                 }
@@ -3916,6 +3921,7 @@ public static class Utils
                             if (Options.CurrentGameMode != CustomGameMode.Standard || GameStates.IsLobby) goto BeforeEnd2;
 
                             TargetMark.Append(Witch.GetSpelledMark(target.PlayerId, forMeeting));
+                            TargetMark.Append(NecroJackal.GetCurseMark(target.PlayerId, forMeeting));
                             if (forMeeting) TargetMark.Append(Wasp.GetStungMark(target.PlayerId));
                             if (forMeeting) TargetMark.Append(SpellCaster.HasSpelledMark(seer.PlayerId) ? ColorString(Team.Coven.GetColor(), "\u25c0") : string.Empty);
                             if (forMeeting) TargetMark.Append(Commited.GetMark(seer, target));
@@ -4729,6 +4735,7 @@ public static class Utils
             CustomRoles.Whisperer => Whisperer.Cooldown.GetInt() + (includeDuration ? Whisperer.Duration.GetInt() : 0),
             CustomRoles.Astral => Astral.AbilityCooldown.GetInt() + (includeDuration ? Astral.AbilityDuration.GetInt() : 0),
             CustomRoles.EvilBusker => EvilBusker.AbilityCooldown.GetInt() + (includeDuration ? EvilBusker.AbilityDuration.GetInt() : 0),
+            CustomRoles.JackalBusker => JackalBusker.AbilityCooldown.GetInt() + (includeDuration ? JackalBusker.AbilityDuration.GetInt() : 0),
             // Atlas はダミー設置ペースをホスト設定オプションにしない (仕様上 5 個のオプションで確定済み)。
             // ペット経路の唯一の間引きがここなので、Atlas.FixedAbilityCooldown (5秒、cd<=3 ガードを
             // 確実に超える固定値) を直接充てる — Thanos/Blockade の固定 5 と同じ扱い。
@@ -4791,6 +4798,8 @@ public static class Utils
             CustomRoles.ToiletFan => (int)ToiletFan.Cooldown.GetFloat(),
             CustomRoles.UltraStar => (int)UltraStar.PetCooldownOpt.GetFloat(),
             CustomRoles.Sandbox => (int)Sandbox.PlaceCooldown.GetFloat(),
+            CustomRoles.SandboxJackal => (int)SandboxJackal.PlaceCooldown.GetFloat(),
+            CustomRoles.JackalPolice => (int)JackalPolice.HandcuffCooldown.GetFloat(),
             CustomRoles.Dossun => Dossun.AbilityCooldown.GetInt(),
             CustomRoles.Nova => Nova.AbilityCooldown.GetInt(),
             _ => -1
@@ -4955,6 +4964,7 @@ public static class Utils
             Entombed.AfterMeeting();
             Amnesia.AfterMeetingTasks();
             Sandbox.OnAfterMeetingTasks();
+            SandboxJackal.OnAfterMeetingTasks();
             Tired.Reset();
             Reroll.ResolveAfterMeeting(ExileControllerWrapUpPatch.LastExiled);
         }

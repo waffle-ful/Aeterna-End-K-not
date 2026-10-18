@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using AmongUs.GameOptions;
+using EndKnot.Modules;
 using Hazel;
 using static EndKnot.Options;
 using static EndKnot.Translator;
@@ -97,6 +98,8 @@ public class Deputy : RoleBase
                     else hasValue |= sender.RpcGuardAndKill(target, target);
 
                     sender.SendMessage(!hasValue);
+
+                    if (target.IsAlive()) ExplosionFx.Handcuffed(target, DeputyHandcuffCDForTarget.GetFloat(), killer);
                 }
             }, DeputyHandcuffDelay.GetInt(), "DeputyHandcuffDelay");
 
