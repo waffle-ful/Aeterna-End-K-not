@@ -18,16 +18,21 @@ internal static class FxChain
     private const float FeetDown = 0.45f;   // 体の中心から床までの高さ (影を落とす所)
     private const float GrowTime = 0.35f;
     private const float SnapTime = 0.45f;
+    private const float CuffSwivel = 31f / 320f;   // 手錠の輪の中心から鎖の付け根 (回り金) まで (輪の倍率 1 の時)
 
     private sealed class Chain
     {
         public GameObject Root;
         public SpriteRenderer[] Links, Shadows;
-        public SpriteRenderer HandA, HandB, CuffA, CuffB;
+        public SpriteRenderer HandA, HandB, CuffA, CuffB, RingBackA, RingBackB;
         public Transform[] LinkTf, ShadowTf;
-        public Transform HandATf, HandBTf, CuffATf, CuffBTf;
+        public Transform HandATf, HandBTf, CuffATf, CuffBTf, RingBackATf, RingBackBTf;
         public int Id;
         public float Hand;
+        public float Z;
+        public bool Cuffs;
+        public float RingSize, LinkSize, HandDrop, HandTilt;
+        public Vector2 RingA, RingB;
         public float Length;
         public float Start;
         public bool Vision;
@@ -41,7 +46,7 @@ internal static class FxChain
     private static readonly List<Chain> Live = [];
     private static readonly Stack<Chain> Pool = new();
     private static int _nextId;
-    private static Sprite _face, _edge, _cuff, _shadow, _grip;
+    private static Sprite _face, _edge, _cuff, _shadow, _grip, _ringBack, _ringFront;
     private static bool _prepared, _prepareFailed;
 
     internal static bool Ready => Prepare();
@@ -59,6 +64,8 @@ internal static class FxChain
 
             c.Id = ++_nextId;
             c.Hand = HandSize;
+            c.Cuffs = false;
+            c.LinkSize = 1f;
             c.Length = FxMath.Max(length, 0.3f);
             c.Start = Time.time;
             c.Vision = vision;
@@ -86,7 +93,11 @@ internal static class FxChain
             {
                 c.Links[i].color = FxMath.Rgba(1f, 1f, 1f, 1f);
                 c.Links[i].enabled = false;
+                c.LinkTf[i].localScale = FxMath.V3(1f, 1f, 1f);
             }
+
+            c.RingBackA.enabled = c.RingBackB.enabled = false;
+            c.CuffATf.localScale = c.CuffBTf.localScale = FxMath.V3(1f, 1f, 1f);
 
             for (int i = 0; i < c.Shadows.Length; i++) c.Shadows[i].enabled = false;
 
@@ -128,15 +139,32 @@ internal static class FxChain
         float ux = dist > 0.001f ? dx / dist : 1f, uy = dist > 0.001f ? dy / dist : 0f;
         float ang = FxMath.Atan2(uy, ux) * FxMath.Rad2Deg;
 
-        // 手: 体から相手の方へ伸ばした所。拳の向きは鎖の出る向き、左向きの時は上下を返して親指を上に保つ
-        float hax = a.x + ux * HandOut, hay = a.y + uy * HandOut - HandDown;
-        float hbx = b.x - ux * HandOut, hby = b.y - uy * HandOut - HandDown;
-        PlaceHand(c.HandATf, c.HandA, c.CuffATf, hax, hay, ang, ux, c.Hand);
-        PlaceHand(c.HandBTf, c.HandB, c.CuffBTf, hbx, hby, ang + 180f, -ux, c.Hand);
+        float ax, ay, bx, by;
+        if (c.Cuffs)
+        {
+            // 手錠: a・b は輪の中心。鎖は輪の内側の回り金から出る
+            PlaceCuffs(c, a, b, ang, now);
+            float sw = CuffSwivel * c.RingSize;
+            ax = a.x + ux * sw;
+            ay = a.y + uy * sw;
+            bx = b.x - ux * sw;
+            by = b.y - uy * sw;
+        }
+        else
+        {
+            // 手: 体から相手の方へ伸ばした所。拳の向きは鎖の出る向き、左向きの時は上下を返して親指を上に保つ
+            float hax = a.x + ux * HandOut, hay = a.y + uy * HandOut - HandDown;
+            float hbx = b.x - ux * HandOut, hby = b.y - uy * HandOut - HandDown;
+            PlaceHand(c.HandATf, c.HandA, c.CuffATf, hax, hay, ang, ux, c.Hand);
+            PlaceHand(c.HandBTf, c.HandB, c.CuffBTf, hbx, hby, ang + 180f, -ux, c.Hand);
 
-        // 鎖は拳の中から出る
-        float ax = hax + ux * 0.05f, ay = hay + uy * 0.05f;
-        float bx = hbx - ux * 0.05f, by = hby - uy * 0.05f;
+            // 鎖は拳の中から出る
+            ax = hax + ux * 0.05f;
+            ay = hay + uy * 0.05f;
+            bx = hbx - ux * 0.05f;
+            by = hby - uy * 0.05f;
+        }
+
         float ex = bx - ax, ey = by - ay;
         float d = FxMath.Sqrt(ex * ex + ey * ey);
 
@@ -145,7 +173,7 @@ internal static class FxChain
         float sag = d < L ? FxMath.Min(FxMath.Sqrt(0.375f * d * (L - d)), 1.2f) : 0f;
         float shake = d >= L * 0.98f ? 0.01f : 0f;
         float arc = FxMath.Max(d, FxMath.Min(L, d + 2.7f * sag * sag / FxMath.Max(d, 0.1f)));
-        int n = FxMath.Clamp((int)(arc / Pitch + 0.5f), 2, MaxLinks);
+        int n = FxMath.Clamp((int)(arc / (Pitch * c.LinkSize) + 0.5f), 2, MaxLinks);
 
         // 出始め: 両端から真ん中へ伸びる
         float grow = FxMath.Clamp01((now - c.Start) / GrowTime);
@@ -187,8 +215,8 @@ internal static class FxChain
             float k = 0.8f + 0.2f * g;
             sr.color = FxMath.Rgba(k, k, k * 1.02f, 1f);
 
-            // 影は輪 2 つに 1 つ・床 (両者の足元を結んだ線) に落とす
-            if ((i & 1) == 0)
+            // 影は輪 2 つに 1 つ・床 (両者の足元を結んだ線) に落とす。手錠は体の前なので落とさない
+            if (!c.Cuffs && (i & 1) == 0)
             {
                 int si = i >> 1;
                 if (si < c.Shadows.Length)
@@ -200,8 +228,10 @@ internal static class FxChain
             }
         }
 
-        for (int si = (n + 1) >> 1; si < c.Shadows.Length; si++)
-            if (c.Shadows[si].enabled) c.Shadows[si].enabled = false;
+        // 手錠は影を一度も出さない (Start で全部消してある) ので見に行かない
+        if (!c.Cuffs)
+            for (int si = (n + 1) >> 1; si < c.Shadows.Length; si++)
+                if (c.Shadows[si].enabled) c.Shadows[si].enabled = false;
 
         c.Shown = n;
     }
@@ -276,6 +306,22 @@ internal static class FxChain
 
             Color ha = FxMath.Rgba(1f, 1f, 1f, a);
             c.HandA.color = c.HandB.color = c.CuffA.color = c.CuffB.color = ha;
+
+            // 手錠は外れた輪が外へ傾きながら落ちる
+            if (c.Cuffs)
+            {
+                c.RingBackA.color = c.RingBackB.color = ha;
+                float el = now - c.SnapStart;
+                float fall = 3.5f * el * el, spread = 0.1f * u;
+                Vector2 ra = c.RingA, rb = c.RingB;
+                float fz = CuffFrontZ(c), bz = CuffBackZ(c);
+                c.CuffATf.localPosition = FxMath.V3(ra.x - spread, ra.y - fall, fz);
+                c.RingBackATf.localPosition = FxMath.V3(ra.x - spread, ra.y - fall, bz);
+                c.CuffBTf.localPosition = FxMath.V3(rb.x + spread, rb.y - fall, fz);
+                c.RingBackBTf.localPosition = FxMath.V3(rb.x + spread, rb.y - fall, bz);
+                c.CuffATf.localRotation = c.RingBackATf.localRotation = FxMath.RotZ(70f * u);
+                c.CuffBTf.localRotation = c.RingBackBTf.localRotation = FxMath.RotZ(-70f * u);
+            }
         }
     }
 
@@ -317,15 +363,79 @@ internal static class FxChain
         if (c != null) c.Hand = size;
     }
 
-    private static float LinkZ(Chain c, int i) => c.Vision ? _z + (i & 1) * 0.0002f : 0f;
-    private static float ShadowZ(Chain c) => c.Vision ? _z + 0.002f : 0f;
-    private static float _z;
+    // 手錠にする: 拳で鎖を握らず、両端に輪 (正面向き・錠前箱付き) を置いて小さな鎖で輪と輪を繋ぎ、拳は輪の下に垂らす。
+    // 以後 Place の a・b は輪の中心。ring / link = 輪と鎖の輪の倍率、drop = 輪から拳の中心まで、tilt = 拳を外へ傾ける角度
+    internal static void SetCuffs(int id, float ring, float link, float drop, float tilt)
+    {
+        Chain c = Find(id);
+        if (c == null) return;
+
+        c.Cuffs = true;
+        c.RingSize = ring;
+        c.LinkSize = link;
+        c.HandDrop = drop;
+        c.HandTilt = tilt;
+        c.CuffA.sprite = c.CuffB.sprite = _ringFront;
+        c.RingBackA.enabled = c.RingBackB.enabled = true;
+        c.RingBackA.color = c.RingBackB.color = FxMath.Rgba(1f, 1f, 1f, 1f);
+        for (int i = 0; i < MaxLinks; i++) c.LinkTf[i].localScale = FxMath.V3(link, link, 1f);
+
+        // 輪の奥半分 → 拳 → 輪の手前半分 の順に手前へ (手首が輪を通って見える)。視界の外で隠す時は z だけで決まる
+        if (c.Vision)
+        {
+            c.RingBackA.sortingLayerID = c.RingBackB.sortingLayerID = c.CuffA.sortingLayerID;
+            c.RingBackA.sortingOrder = c.RingBackB.sortingOrder = c.CuffA.sortingOrder;
+        }
+        else
+        {
+            int order = c.HandA.sortingOrder - 2;
+            c.RingBackA.sortingLayerID = c.RingBackB.sortingLayerID = 0;
+            c.RingBackA.sortingOrder = c.RingBackB.sortingOrder = order + 1;
+            c.CuffA.sortingOrder = c.CuffB.sortingOrder = order + 3;
+        }
+    }
+
+    private static void PlaceCuffs(Chain c, Vector2 a, Vector2 b, float ang, float now)
+    {
+        c.RingA = a;
+        c.RingB = b;
+
+        // かけた瞬間に輪が締まる
+        float pop = 1f - FxMath.Clamp01((now - c.Start) / 0.15f);
+        float s = c.RingSize * (1f + 0.3f * pop * pop);
+        Quaternion rot = FxMath.RotZ(ang);
+        float fz = CuffFrontZ(c), bz = CuffBackZ(c);
+
+        c.CuffATf.localPosition = FxMath.V3(a.x, a.y, fz);
+        c.RingBackATf.localPosition = FxMath.V3(a.x, a.y, bz);
+        c.CuffBTf.localPosition = FxMath.V3(b.x, b.y, fz);
+        c.RingBackBTf.localPosition = FxMath.V3(b.x, b.y, bz);
+        c.CuffATf.localRotation = c.RingBackATf.localRotation = rot;
+        c.CuffBTf.localRotation = c.RingBackBTf.localRotation = rot;
+        c.CuffATf.localScale = c.RingBackATf.localScale = FxMath.V3(s, s, 1f);
+        c.CuffBTf.localScale = c.RingBackBTf.localScale = FxMath.V3(-s, s, 1f);
+
+        // 拳は手首を上にして輪から垂らし、少し外へ傾ける (左右は鏡写し)
+        float hz = c.Vision ? c.Z - 0.002f : 0f;
+        float ha = (-90f - c.HandTilt) * FxMath.Deg2Rad, hb = (-90f + c.HandTilt) * FxMath.Deg2Rad;
+        c.HandATf.localPosition = FxMath.V3(a.x + FxMath.Cos(ha) * c.HandDrop, a.y + FxMath.Sin(ha) * c.HandDrop, hz);
+        c.HandBTf.localPosition = FxMath.V3(b.x + FxMath.Cos(hb) * c.HandDrop, b.y + FxMath.Sin(hb) * c.HandDrop, hz);
+        c.HandATf.localRotation = FxMath.RotZ(-90f - c.HandTilt);
+        c.HandBTf.localRotation = FxMath.RotZ(-90f + c.HandTilt);
+        c.HandATf.localScale = FxMath.V3(c.Hand, c.Hand, 1f);
+        c.HandBTf.localScale = FxMath.V3(c.Hand, -c.Hand, 1f);
+    }
+
+    private static float LinkZ(Chain c, int i) => c.Vision ? c.Z + (i & 1) * 0.0002f : 0f;
+    private static float ShadowZ(Chain c) => c.Vision ? c.Z + 0.002f : 0f;
+    private static float CuffFrontZ(Chain c) => c.Vision ? c.Z - 0.003f : 0f;
+    private static float CuffBackZ(Chain c) => c.Vision ? c.Z - 0.001f : 0f;
 
     // 視界の外で隠す時は全部が影の板と同じ描画順になり、前後は z だけで決まる。影 → 輪 → 手首の輪 → 手 の順に手前へ
     private static void Sort(Chain c, bool vision, int order, float z)
     {
         MeshRenderer shadow = vision && HudManager.InstanceExists ? HudManager.Instance.ShadowQuad : null;
-        _z = z;
+        c.Z = z;
 
         if (shadow)
         {
@@ -398,6 +508,10 @@ internal static class FxChain
             c.ShadowTf[i] = sr.transform;
         }
 
+        c.RingBackA = Child(root, "RingBackA", _ringBack);
+        c.RingBackB = Child(root, "RingBackB", _ringBack);
+        c.RingBackATf = c.RingBackA.transform;
+        c.RingBackBTf = c.RingBackB.transform;
         c.CuffA = Child(root, "CuffA", _cuff);
         c.CuffB = Child(root, "CuffB", _cuff);
         c.HandA = Child(root, "HandA", _grip);
@@ -421,7 +535,7 @@ internal static class FxChain
     private static bool Prepare()
     {
         // シーンの切り替えで絵が破棄されていたら読み直す
-        if (_prepared && _face && _edge && _cuff && _shadow && _grip) return true;
+        if (_prepared && _face && _edge && _cuff && _shadow && _grip && _ringBack && _ringFront) return true;
         if (_prepareFailed) return false;
 
         try
@@ -432,8 +546,10 @@ internal static class FxChain
             _cuff = Utils.LoadSprite("EndKnot.Resources.Images.Fx.ChainCuff.png", 320f);
             _shadow = Utils.LoadSprite("EndKnot.Resources.Images.Fx.ChainShadow.png", 200f);
             _grip = FxHands.GripSprite();
+            _ringBack = Utils.LoadSprite("EndKnot.Resources.Images.Fx.CuffRingBack.png", 320f);
+            _ringFront = Utils.LoadSprite("EndKnot.Resources.Images.Fx.CuffRingFront.png", 320f);
 
-            if (!_face || !_edge || !_cuff || !_shadow || !_grip || !FxHands.PlayerMat())
+            if (!_face || !_edge || !_cuff || !_shadow || !_grip || !_ringBack || !_ringFront || !FxHands.PlayerMat())
             {
                 _prepareFailed = true;
                 return false;
