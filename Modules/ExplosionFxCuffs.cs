@@ -3,17 +3,21 @@ using UnityEngine;
 
 namespace EndKnot.Modules;
 
-// 手錠: かけられた人の体の前で、本人の色の両拳を短い鎖で繋ぎ、手首に鉄の輪を付ける (部品は FxChain)。
-// 鎖は両端から伸びて現れ、時間切れ・死亡で真ん中から切れて落ちる。会議で消える。
+// 手錠: かけられた人の体の前に鉄の輪を 2 つ並べて小さな鎖で繋ぎ、輪から本人の色の拳を垂らす (部品は FxChain の手錠モード)。
+// 輪は締まる動きで現れ、鎖は両端から伸びる。時間切れ・死亡で鎖が真ん中から切れ、輪は外れて落ちる。会議で消える。
 // ベント・透明・梯子などで本人が見えない間は隠す (手錠が居場所を明かさないように)。
 // 見せるのはかけられた本人とかけた人だけ (周りに見えると、手錠をかけた役職と相手がキラーかどうかが割れる)。
 public static partial class ExplosionFx
 {
     private const int MaxCuffs = 4;
-    private const float CuffSpread = 0.58f;  // FxChain は体の中心から HandOut (0.36) 内側に拳を置く → 拳は中心から ±0.22
-    private const float CuffDown = 0.16f;    // 拳はお腹の前
-    private const float CuffHand = 0.16f;    // 2 人を繋ぐ鎖の拳 (0.24) のままだと体の下半分が隠れる
-    private const float CuffChainLength = 0.4f;
+    private const float CuffSpread = 0.18f;  // 輪の中心は体の中心から左右 ±0.18 (錠前箱が体の幅に収まる)
+    private const float CuffDown = 0.12f;    // 輪はお腹の前
+    private const float CuffRing = 1.1f;     // 輪の絵 (帯の外径 0.16u) の倍率
+    private const float CuffLink = 0.5f;     // 鎖の輪は 2 人を繋ぐ鎖の半分の大きさ
+    private const float CuffHand = 0.14f;
+    private const float CuffHandDrop = 0.075f;
+    private const float CuffHandTilt = 12f;
+    private const float CuffChainLength = 0.3f;
 
     private sealed class Cuff
     {
@@ -58,6 +62,7 @@ public static partial class ExplosionFx
         }
 
         FxChain.SetHandSize(chain, CuffHand);
+        FxChain.SetCuffs(chain, CuffRing, CuffLink, CuffHandDrop, CuffHandTilt);
         Cuffs.Add(new Cuff { Id = (byte)id, Pc = pc, Chain = chain, Until = Time.time + FxMath.Max(seconds, 1) });
         if (!Unseen(pc, (byte)id)) FxSound.At("FxChainBind", pc.Pos(), 0.6f);
     }
