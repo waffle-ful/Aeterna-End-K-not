@@ -761,6 +761,10 @@ internal static class CustomRolesHelper
                 CustomRoles.Strawdoll => RoleTypes.Impostor,
                 CustomRoles.CurseMaker => RoleTypes.Impostor,
                 CustomRoles.JackalHadouHo => RoleTypes.Phantom,
+                CustomRoles.NecroJackal => RoleTypes.Impostor,
+                CustomRoles.JackalBusker => UsePets ? RoleTypes.Impostor : RoleTypes.Shapeshifter,
+                CustomRoles.SandboxJackal => UsePets ? RoleTypes.Impostor : RoleTypes.Shapeshifter,
+                CustomRoles.JackalPolice => UsePets ? RoleTypes.Impostor : RoleTypes.Shapeshifter,
                 // 装填できない設定の弾はキルボタンを使わないので、ベントの CD と滞在上限が効く Engineer 基底にする
                 CustomRoles.Tama => JackalHadouHo.TamaCanLoad == null || JackalHadouHo.TamaCanLoad.GetBool() ? RoleTypes.Impostor : RoleTypes.Engineer,
                 CustomRoles.MassMedia => RoleTypes.Impostor,
@@ -917,6 +921,10 @@ internal static class CustomRolesHelper
                 CustomRoles.CurseMaker or
                 CustomRoles.JackalHadouHo or
                 CustomRoles.Tama or
+                CustomRoles.NecroJackal or
+                CustomRoles.JackalBusker or
+                CustomRoles.SandboxJackal or
+                CustomRoles.JackalPolice or
                 CustomRoles.MassMedia or
                 CustomRoles.Blockade or
                 CustomRoles.Jackpot or
@@ -1123,13 +1131,14 @@ internal static class CustomRolesHelper
         // Roles that are drawn from the Jackal faction pool and configured on its own tab.
         public bool IsJackalFaction()
         {
-            return role is CustomRoles.Jackal or CustomRoles.JackalHadouHo;
+            return role is CustomRoles.Jackal or CustomRoles.JackalHadouHo or CustomRoles.NecroJackal or CustomRoles.JackalBusker or CustomRoles.SandboxJackal or CustomRoles.JackalPolice;
         }
 
         // Everyone who wins with the Jackal faction, including the roles players are converted into mid-game.
         public bool IsJackalTeamMember()
         {
-            return role is CustomRoles.Jackal or CustomRoles.Sidekick or CustomRoles.JackalHadouHo or CustomRoles.Tama;
+            return role is CustomRoles.Jackal or CustomRoles.Sidekick or CustomRoles.JackalHadouHo or CustomRoles.Tama
+                or CustomRoles.NecroJackal or CustomRoles.JackalBusker or CustomRoles.SandboxJackal or CustomRoles.JackalPolice;
         }
 
         public bool IsRecruitingRole()
@@ -1459,6 +1468,9 @@ internal static class CustomRolesHelper
                              or CustomRoles.Werewolf
                              or CustomRoles.WeaponMaster
                              or CustomRoles.Thanos
+                             or CustomRoles.JackalBusker
+                             or CustomRoles.SandboxJackal
+                             or CustomRoles.JackalPolice
                              or CustomRoles.Tiger
                              or CustomRoles.Bargainer
                              or CustomRoles.Chemist
@@ -1540,6 +1552,10 @@ internal static class CustomRolesHelper
                 CustomRoles.CurseMaker => RoleOptionType.Neutral_Killing,
                 CustomRoles.Missioneer => RoleOptionType.Neutral_Benign,
                 CustomRoles.JackalHadouHo => RoleOptionType.Neutral_Killing,
+                CustomRoles.NecroJackal => RoleOptionType.Neutral_Killing,
+                CustomRoles.JackalBusker => RoleOptionType.Neutral_Killing,
+                CustomRoles.SandboxJackal => RoleOptionType.Neutral_Killing,
+                CustomRoles.JackalPolice => RoleOptionType.Neutral_Killing,
                 CustomRoles.Tama => RoleOptionType.Neutral_Killing,
                 CustomRoles.SantaClaus => RoleOptionType.Neutral_Benign,
                 CustomRoles.MassMedia => RoleOptionType.Neutral_Killing,
@@ -2198,6 +2214,10 @@ internal static class CustomRolesHelper
                 CustomRoles.Missioneer => CountTypes.Crew,
                 CustomRoles.JackalHadouHo => CountTypes.Jackal,
                 CustomRoles.Tama => CountTypes.Jackal,
+                CustomRoles.NecroJackal => CountTypes.Jackal,
+                CustomRoles.JackalBusker => CountTypes.Jackal,
+                CustomRoles.SandboxJackal => CountTypes.Jackal,
+                CustomRoles.JackalPolice => CountTypes.Jackal,
                 CustomRoles.SantaClaus => CountTypes.Crew,
                 CustomRoles.MassMedia => CountTypes.Crew,
                 CustomRoles.Shifter => CountTypes.OutOfGame,

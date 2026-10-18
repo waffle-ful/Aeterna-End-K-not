@@ -2,7 +2,7 @@
 
 [日本語](ROLES.md) ・ [← Back to README](README-EN.md)
 
-**694 roles in total** (544 faction roles + 150 sub-roles/add-ons), organized by faction.
+**698 roles in total** (548 faction roles + 150 sub-roles/add-ons), organized by faction.
 
 Most of the roles listed here come from the base mod [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) and earlier mods in the scene such as the TownOfHost lineage. Some carry over the original implementation; others were rewritten with reference to it. The "from …" under each role names the mod that first implemented it. Credits for each project are collected in the [README](README-EN.md#credits).
 
@@ -10,7 +10,7 @@ Most of the roles listed here come from the base mod [Endless Host Roles](https:
 |---------|-------|
 | Impostor | 173 (vanilla 4 + remake 4 + custom 165) |
 | Crewmate | 179 (vanilla 6 + remake 7 + custom 166) |
-| Neutral | 137 |
+| Neutral | 141 |
 | Coven | 21 |
 | Combination roles | 4 (dealt in pairs) |
 | Game mode exclusive | 28 |
@@ -118,7 +118,7 @@ Use `/r <role name>` or `/myrole` in-game to check each role's effects and setti
 | MapExtender<br><sub>From:TheOtherRoles</sub> | PortalButton | Revenant<br><sub>From:EndlessHostRoles</sub> | Crewmate |
 | Newscaster | Mirage<br><sub>From:NebulaontheShip</sub> | Evader<br><sub>From:EndlessHostRoles</sub> |  |
 
-### Neutral (137)
+### Neutral (141)
 
 |   |   |   |   |
 |---|---|---|---|
@@ -156,7 +156,8 @@ Use `/r <role name>` or `/myrole` in-game to check each role's effects and setti
 | Traitor<br><sub>From:TownOfHost Re-Edited</sub> | Predator<br><sub>From:EndlessHostRoles</sub> | Werewolf<br><sub>From:TownOfUs</sub> | Strawdoll<br><sub>From:TownOfHost-K</sub> |
 | Innocent<br><sub>From:TownOfHost E</sub> | Blockade<br><sub>From:EndlessHostRoles</sub> | Jackpot<br><sub>From:EndlessHostRoles</sub> | Maguro<br><sub>From:SuperNewRoles</sub> |
 | Safecracker<br><sub>From:SuperNewRoles</sub> | Supernova<br><sub>From:SuperNewRoles</sub> | ProbabilityKing | GambleKiller |
-| Torpedo<br><sub>From:NebulaontheShip</sub> |  |  |  |
+| Torpedo<br><sub>From:NebulaontheShip</sub> | NecroJackal<br><sub>From:TheOtherRoles</sub> | JackalBusker<br><sub>From:SuperNewRoles</sub> | SandboxJackal |
+| JackalPolice<br><sub>From:TheOtherRoles</sub> |  |  |  |
 
 ### Coven (21)
 

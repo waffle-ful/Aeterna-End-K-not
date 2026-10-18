@@ -214,7 +214,8 @@ public class Sandbox : RoleBase
     // ブロック中心からプレイヤーへの向きへ「半径+極小バッファ」までスナップする。
     // 弾き出しではなく毎フレームのエッジスナップなので、プレイヤーは壁に張り付いた挙動になる。
     // 壁が邪魔して TP できない場合のみ 12 方向の代替角を試す。
-    private static void PushToEdge(PlayerControl target, Vector2 center, float radius)
+    // minInterval > 0 なら同じ人への TP を間引く (毎フレームの SnapTo が 1 試合の上限を食い尽くさないように)。
+    internal static void PushToEdge(PlayerControl target, Vector2 center, float radius, float minInterval = 0f)
     {
         Vector2 outward = target.Pos() - center;
         if (outward.sqrMagnitude < 0.0001f) outward = Vector2.up;
@@ -235,7 +236,7 @@ public class Sandbox : RoleBase
             if (PhysicsHelpers.AnythingBetween(collider, rayStart, candidate, Constants.ShipOnlyMask, false))
                 continue;
 
-            target.TP(candidate, log: false);
+            target.TP(candidate, log: false, minInterval: minInterval);
             return;
         }
     }

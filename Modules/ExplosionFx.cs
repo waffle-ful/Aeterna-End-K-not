@@ -273,7 +273,10 @@ public static partial class ExplosionFx
         TremorDoom = 102,
 
         // トレマー: 巻き込まれた人の足元から岩が突き上がる: Pos = 倒れる人、Radius = 倒れる人の PlayerId + 1
-        TremorCrush = 103
+        TremorCrush = 103,
+
+        // 手錠 (かけられた本人とかけた人の画面だけ・本人に付いていく): Radius = かけられた人の PlayerId + 1 + 32 × 秒数
+        Handcuffed = 104
     }
 
     // カットインに出す技名
@@ -604,7 +607,7 @@ public static partial class ExplosionFx
         if (kind is Kind.NovaHit or Kind.NovaDown) return FxMath.Clamp(radius, 0f, 256f);
         if (kind is Kind.SniperAim or Kind.SniperDown or Kind.VeteranGuard) return FxMath.Clamp(radius, 0f, 4096f);
         if (kind is Kind.SniperFire or Kind.ArcherShot) return FxMath.Clamp(radius, 0f, NovaPackMax);
-        if (kind is Kind.ArcherSet or Kind.ArcherStop or Kind.HangNoose or Kind.WaspSting or Kind.WaspVenom or Kind.WaspSwarm or Kind.TremorDoom or Kind.TremorCrush) return FxMath.Clamp(radius, 0f, 8192f);
+        if (kind is Kind.ArcherSet or Kind.ArcherStop or Kind.HangNoose or Kind.WaspSting or Kind.WaspVenom or Kind.WaspSwarm or Kind.TremorDoom or Kind.TremorCrush or Kind.Handcuffed) return FxMath.Clamp(radius, 0f, 8192f);
         return kind is Kind.Freeze or Kind.TimeStop or Kind.Tornado or Kind.TimeRewind or Kind.DemoFuse or Kind.WebSnare or Kind.GoddessGuard or Kind.WerewolfRampage || HasExtra(kind) ? FxMath.Clamp(radius, 0.3f, 180f) : FxMath.Clamp(radius, 0.3f, 15f);
     }
 
@@ -1170,7 +1173,7 @@ public static partial class ExplosionFx
                 case >= Kind.SniperAim and <= Kind.VeteranGuard:
                     SpawnSniper(r);
                     break;
-                case >= Kind.ArcherSet and <= Kind.TremorCrush:
+                case >= Kind.ArcherSet and <= Kind.Handcuffed:
                     SpawnRoles7(r);
                     break;
                 default:

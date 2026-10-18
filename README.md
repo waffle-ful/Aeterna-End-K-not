@@ -1,14 +1,14 @@
 <h1 align="center"><img src=".github/endknot-logo.png" alt="Aeterna-End-K-not" width="80%"></h1>
 
 <p align="center">
-  <b>ホストが入れれば、参加者は Mod なしで 694 の役職を遊べます。</b>
+  <b>ホストが入れれば、参加者は Mod なしで 698 の役職を遊べます。</b>
 </p>
 
 <p align="center">
   <a href="README-EN.md"><img src="https://img.shields.io/badge/English-README-555555?style=for-the-badge" alt="English"></a>
   <a href="../../releases/latest"><img src="https://img.shields.io/github/v/release/waffle-ful/Aeterna-End-K-not?include_prereleases&style=for-the-badge&label=%E6%9C%80%E6%96%B0%E7%89%88&color=C51111" alt="最新版"></a>
   <img src="https://img.shields.io/badge/Among%20Us-2026.8.18-C51111?style=for-the-badge" alt="Among Us 2026.8.18">
-  <a href="./ROLES.md"><img src="https://img.shields.io/badge/%E5%BD%B9%E8%81%B7-694-7B2FBE?style=for-the-badge" alt="役職 694"></a>
+  <a href="./ROLES.md"><img src="https://img.shields.io/badge/%E5%BD%B9%E8%81%B7-698-7B2FBE?style=for-the-badge" alt="役職 698"></a>
   <img src="https://img.shields.io/badge/%E5%B0%8E%E5%85%A5-%E3%83%9B%E3%82%B9%E3%83%88%E3%81%A0%E3%81%91-2EA043?style=for-the-badge" alt="導入 ホストだけ">
   <br>
   <a href="https://discord.gg/s5J8c23Dms"><img src="https://img.shields.io/badge/Discord-%E5%8F%82%E5%8A%A0%E3%81%99%E3%82%8B-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord に参加する"></a>
@@ -100,13 +100,13 @@
 </tr>
 </table>
 
-▶ **[全 694 役職の一覧を見る (`ROLES.md`)](./ROLES.md)**
+▶ **[全 698 役職の一覧を見る (`ROLES.md`)](./ROLES.md)**
 
 ### 導入も解除もすぐできる
 
 インストーラーが Steam 版か Epic 版かを判別して導入します。やめたいときは、フォルダ内の `winhttp.dll` の名前を変えれば**素の Among Us に戻ります**。
 
-<p align="center"><b>役職 694 ・ チャットコマンド 110 種類以上 ・ ホストだけ導入 ・ Android 対応 ・ 完全無料</b></p>
+<p align="center"><b>役職 698 ・ チャットコマンド 110 種類以上 ・ ホストだけ導入 ・ Android 対応 ・ 完全無料</b></p>
 
 ---
 
@@ -174,20 +174,20 @@
 
 ## 役職一覧
 
-実装済みは合計 **694 役職**です。陣営ごとの内訳は以下のとおりです。
+実装済みは合計 **698 役職**です。陣営ごとの内訳は以下のとおりです。
 
 | 陣営 | 役職数 |
 |------|-------|
 | インポスター | 173 (ヴァニラ4 + リメイク4 + カスタム165) |
 | クルーメイト | 179 (ヴァニラ6 + リメイク7 + カスタム166) |
-| ニュートラル | 137 |
+| ニュートラル | 141 |
 | カヴン (Coven) | 21 |
 | コンビネーション役職 | 4 (2人1組) |
 | ゲームモード専用 | 28 |
 | その他 | 2 (GM / Convict) |
 | サブ役職（アドオン） | 150 |
 
-▶ **[全 694 役職の名前一覧はこちら (`ROLES.md`)](./ROLES.md)**
+▶ **[全 698 役職の名前一覧はこちら (`ROLES.md`)](./ROLES.md)**
 
 各役職の効果や設定は、ゲーム内で `/r <役職名>` または `/myrole` を実行すると読めます。見た目が派手な役職は[このページの冒頭](#役職の例)で紹介しています。
 

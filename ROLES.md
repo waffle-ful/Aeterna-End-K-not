@@ -2,7 +2,7 @@
 
 [English](ROLES-EN.md) ・ [← README に戻る](README.md)
 
-実装済みは合計 **694 役職**（陣営別役職544 + サブ役職・アドオン150）。陣営ごとに整理しています。
+実装済みは合計 **698 役職**（陣営別役職548 + サブ役職・アドオン150）。陣営ごとに整理しています。
 
 ここに並ぶ役職の大半は、ベースである [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) や TownOfHost 系列といった先行 Mod から来ています。実装をそのまま引き継いだものと、参考にして書き直したものが混ざっています。役職名の下の「from ○○」は、その役職を最初に実装した Mod です。各 Mod への謝辞は [README のクレジット](README.md#クレジット)にまとめています。
 
@@ -10,7 +10,7 @@
 |------|-------|
 | インポスター | 173 (ヴァニラ4 + リメイク4 + カスタム165) |
 | クルーメイト | 179 (ヴァニラ6 + リメイク7 + カスタム166) |
-| ニュートラル | 137 |
+| ニュートラル | 141 |
 | カヴン (Coven) | 21 |
 | コンビネーション役職 | 4 (2人1組) |
 | ゲームモード専用 | 28 |
@@ -118,7 +118,7 @@
 | マップエクステンダー (MapExtender)<br><sub>From:TheOtherRoles</sub> | ポータルボタン (PortalButton) | レヴナント (Revenant)<br><sub>From:EndlessHostRoles</sub> | クルーメイト (Crewmate) |
 | ニュースキャスター (Newscaster) | ミラージュ (Mirage)<br><sub>From:NebulaontheShip</sub> | イベイダー (Evader)<br><sub>From:EndlessHostRoles</sub> |  |
 
-### ニュートラル系 (137)
+### ニュートラル系 (141)
 
 |   |   |   |   |
 |---|---|---|---|
@@ -156,7 +156,8 @@
 | 裏切り者 (Traitor)<br><sub>From:TownOfHost Re-Edited</sub> | 略奪者 (Predator)<br><sub>From:EndlessHostRoles</sub> | 狼男 (Werewolf)<br><sub>From:TownOfUs</sub> | 藁人形 (Strawdoll)<br><sub>From:TownOfHost-K</sub> |
 | 冤罪師 (Innocent)<br><sub>From:TownOfHost E</sub> | ブロケード (Blockade)<br><sub>From:EndlessHostRoles</sub> | ジャックポット (Jackpot)<br><sub>From:EndlessHostRoles</sub> | マグロ (Maguro)<br><sub>From:SuperNewRoles</sub> |
 | 金庫破り (Safecracker)<br><sub>From:SuperNewRoles</sub> | スーパーノヴァ (Supernova)<br><sub>From:SuperNewRoles</sub> | 確率王 (ProbabilityKing) | ギャンブルキラー (GambleKiller) |
-| 魚雷 (Torpedo)<br><sub>From:NebulaontheShip</sub> |  |  |  |
+| 魚雷 (Torpedo)<br><sub>From:NebulaontheShip</sub> | ネクロジャッカル (NecroJackal)<br><sub>From:TheOtherRoles</sub> | ジャッカルバスカー (JackalBusker)<br><sub>From:SuperNewRoles</sub> | サンドボックスジャッカル (SandboxJackal) |
+| ジャッカルポリス (JackalPolice)<br><sub>From:TheOtherRoles</sub> |  |  |  |
 
 ### カヴン (Coven) (21)
 

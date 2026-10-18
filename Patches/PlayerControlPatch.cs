@@ -479,7 +479,9 @@ internal static class CheckMurderPatch
             (killer.Is(CustomRoles.Sidekick) && target.Is(CustomRoles.Jackal) && !Options.SidekickCanKillJackal.GetBool()) ||
             (killer.Is(CustomRoles.Sidekick) && target.Is(CustomRoles.Sidekick) && !Options.SidekickCanKillSidekick.GetBool()) ||
             (!Options.JackalFactionCanKillEachOther.GetBool() && killer.GetCustomRole().IsJackalTeamMember() && target.GetCustomRole().IsJackalTeamMember()
-             && (killer.GetCustomRole() is CustomRoles.JackalHadouHo or CustomRoles.Tama || target.GetCustomRole() is CustomRoles.JackalHadouHo or CustomRoles.Tama || (killer.Is(CustomRoles.Jackal) && target.Is(CustomRoles.Jackal)))))
+             && (killer.GetCustomRole() is CustomRoles.JackalHadouHo or CustomRoles.Tama or CustomRoles.NecroJackal or CustomRoles.JackalBusker or CustomRoles.SandboxJackal or CustomRoles.JackalPolice
+                 || target.GetCustomRole() is CustomRoles.JackalHadouHo or CustomRoles.Tama or CustomRoles.NecroJackal or CustomRoles.JackalBusker or CustomRoles.SandboxJackal or CustomRoles.JackalPolice
+                 || (killer.Is(CustomRoles.Jackal) && target.Is(CustomRoles.Jackal)))))
         {
             Notify("JackalSidekick");
             return false;
@@ -1890,6 +1892,13 @@ internal static class ReportDeadBodyPatch
         Imitator.ImitatingRole.SetAllValues(CustomRoles.Imitator);
 
         ShrineMaiden.CurrentReportTarget = target;
+
+        // 呪いは各役職の OnReportDeadBody (告知を組む) より先に付ける
+        if (target && !synthetic)
+        {
+            try { NecroJackal.OnAnyoneReport(player, target); }
+            catch (Exception e) { ThrowException(e); }
+        }
 
         foreach (PlayerState state in Main.PlayerStates.Values)
         {
