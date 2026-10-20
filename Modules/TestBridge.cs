@@ -95,6 +95,12 @@ public static class TestBridge
         try { Il2Direct.ShadowPoll(); DrainCommandFile(pollFile); }
         catch (Exception e) { Utils.ThrowException(e); }
 
+        if (CnoWatchOn)
+        {
+            try { CnoWatchTick(); }
+            catch (Exception e) { Utils.ThrowException(e); }
+        }
+
         if (nowMs - _lastSlowTickMs < 1000) return;
         _lastSlowTickMs = nowMs;
 
@@ -879,6 +885,15 @@ public static class TestBridge
 
             try { WriteOut($"ERR managednre did not throw ({NullSource().GetHashCode()})"); }
             catch (NullReferenceException) { WriteOut("OK managednre caught"); }
+            return;
+        }
+
+        // CNO の名前/体の表示状態が変わったフレームをログへ出す (演出と CNO が重なる件の切り分け用)。`cnowatch on|off`
+        if (directive.StartsWith("cnowatch", StringComparison.OrdinalIgnoreCase))
+        {
+            CnoWatchOn = !directive.EndsWith("off", StringComparison.OrdinalIgnoreCase);
+            CnoWatchLast.Clear();
+            WriteOut($"OK cnowatch {(CnoWatchOn ? "on" : "off")}");
             return;
         }
 
@@ -2725,6 +2740,34 @@ public static class TestBridge
     }
 
     // ── Layer C: TP / HUD アクションボタン ─────────────────────────────
+
+    private static bool CnoWatchOn;
+    private static readonly Dictionary<uint, string> CnoWatchLast = [];
+
+    private static void CnoWatchTick()
+    {
+        foreach (PlayerControl pc in UnityEngine.Object.FindObjectsOfType<PlayerControl>())
+        {
+            if (!pc || pc.PlayerId < 200) continue;
+
+            Transform names = pc.transform.FindChild("Names");
+            Transform nt = names ? names.FindChild("NameText_TMP") : null;
+            TextMeshPro tmp = nt ? nt.GetComponent<TextMeshPro>() : null;
+            string text = tmp ? tmp.text ?? "" : "-";
+            if (text.Length > 40) text = text[..40];
+            text = text.Replace("\n", "\\n").Replace("\r", "");
+            SpriteRenderer body = pc.cosmetics ? pc.cosmetics.currentBodySprite?.BodySprite : null;
+            TextMeshPro cb = pc.cosmetics ? pc.cosmetics.colorBlindText : null;
+
+            Vector3 at = pc.transform.position;
+            bool onMap = Math.Abs(at.x) < 40f && Math.Abs(at.y) < 40f;
+            string state = $"id={pc.PlayerId} onMap={onMap} vis={pc.Visible} nameGo={(nt ? nt.gameObject.activeSelf : false)} tmpOn={(tmp ? tmp.enabled : false)} body={(body ? body.enabled : false)} cb={(cb ? cb.gameObject.activeInHierarchy + ":" + cb.text : "-")} text={text}";
+            if (CnoWatchLast.TryGetValue(pc.NetId, out string last) && last == state) continue;
+            CnoWatchLast[pc.NetId] = state;
+            Vector3 p = pc.transform.position;
+            Logger.Info($"CNOW f={Time.frameCount} net={pc.NetId} {state} pos=[{p.x:F1},{p.y:F1}]", "TestBridge");
+        }
+    }
 
     private static void ExecutePcProbe(string rest)
     {

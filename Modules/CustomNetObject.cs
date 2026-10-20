@@ -210,6 +210,11 @@ namespace EndKnot
         // その見た目はホストの演出が描き、演出はモッド客にも届くので、モッド客はこの印の CNO の名前を出さない
         internal const string HostFxNamePrefix = SpriteNamePrefix + "<i></i>";
 
+        // この端末で隠したままにする CNO の NetId (ホストは HiddenFromHost の物・客は HostFxNamePrefix の物)。
+        // 本編はこの端末の本人が死んだ後、約 2 フレームごとに全 PlayerControl の Visible を true に書き戻し、名前表示も
+        // 一緒に戻すので、生成時に 1 回隠すだけでは戻ってしまう。PlayerControlVisiblePatch がこれを見て弾く
+        internal static readonly HashSet<uint> HiddenCnoNetIds = [];
+
         // CreateNetObject 完了後に呼ばれる派生クラス用 hook。
         // player-like CNO はここで Utils.RpcChangeSkin 等で個別 outfit を適用する。
         protected virtual void OnAfterCreate() { }
@@ -233,6 +238,12 @@ namespace EndKnot
         // キック (/nest 計器で実証済み) なので、その場合はワイヤ送信を一切しない (ローカル生成のみ)。
         private int _singleClientId = -1;
         private bool _localOnly;
+
+        // 見た目を入れる前の CNO は、可視化の手順 (PlayerId を受け手本人に差し替えて戻す) のせいで受け手の画面に
+        // 受け手自身の姿で出る。定期 SnapTo が先に届くとそれが CNO の位置に見えるので、見た目を入れた送信
+        // (スプライト適用 / player-like の OnAfterCreate) が SnapTo を運ぶまで、ワイヤへの SnapTo を出さず
+        // spawn 時の画面外 (50,50) に置いておく (2026-10-20 実機)。会議明けの作り直しでも CoRoutine 冒頭で下ろす
+        private bool _wireSnapReady = true;
 
         // onlyVisibleTo 限定 CNO の視聴者。基底 OnMeeting() の会議明け再生成が可視性を引き継ぐために保持する
         // (未保持だと再生成がブロードキャスト可視に退化し、Druid の探知機 /
@@ -595,6 +606,7 @@ namespace EndKnot
             {
                 LateTask.New(() => playerControl.transform.FindChild("Names").FindChild("NameText_TMP").gameObject.SetActive(false), 0.1f);
                 HiddenFromHost = true;
+                HiddenCnoNetIds.Add(playerControl.NetId);
                 playerControl.Visible = false;
                 return false;
             }
@@ -652,7 +664,7 @@ namespace EndKnot
                 }
 
                 // _localOnly は wire-only guard — 上のホストローカル SnapTo (自画面反映) は止めない
-                if (_localOnly || SuppressSnapToWire) return;
+                if (_localOnly || SuppressSnapToWire || !_wireSnapReady) return;
 
                 ushort num = (ushort)(playerControl.NetTransform.lastSequenceId + 2U);
                 // targeted 配信 CNO (_singleClientId != -1) は SnapTo も同じ宛先へ。-1 は従来どおりブロードキャスト
@@ -688,6 +700,8 @@ namespace EndKnot
                 // 前回 spawn の targeted 状態が残らないよう毎回リセットする。
                 _singleClientId = -1;
                 _localOnly = false;
+                // 推測メニュー要素は見た目を入れる送信が無いので止めない
+                _wireSnapReady = this is ShapeshiftMenuElement;
 
                 // 推測メニュー要素 (ShapeshiftMenuElement) は本人にしか意味がない CNO なので、
                 // 「全員へ spawn → 全員へ可視化 fan-out → 0.3s 後に本人以外へ Hide fan-out」の往復をやめ、
@@ -844,6 +858,7 @@ namespace EndKnot
                 if (MaxId == int.MaxValue) MaxId = int.MinValue;
 
                 AllObjects.Add(this);
+                if (HiddenFromHost) HiddenCnoNetIds.Add(playerControl.NetId);
 
                 yield return new WaitForSecondsRealtime(0.1f);
 
@@ -1059,6 +1074,12 @@ namespace EndKnot
                         sender.SendMessage();
                     });
                     while (!spriteQa.Done) yield return null;
+
+                    // 見た目適用 (Reliable) は送信キューに積まれうるが、定期 SnapTo (Unreliable) はキューを素通りして
+                    // 先に届くので、キューが捌けてから解く
+                    float drainDeadline = Time.realtimeSinceStartup + 2f;
+                    while (PacketRateGate.PendingCount > 0 && Time.realtimeSinceStartup < drainDeadline) yield return null;
+                    _wireSnapReady = true;
                 }
 
                 if (IsPlayerLike)
@@ -1067,7 +1088,9 @@ namespace EndKnot
                     // spawn 完了 + CachedPlayerData セット完了を待つため少し遅延させて呼ぶ
                     LateTask.New(() =>
                     {
-                        OnAfterCreate();
+                        // 例外で抜けると下の SnapTo とゲート解除が飛び、CNO が画面外に残る
+                        try { OnAfterCreate(); }
+                        catch (Exception e) { Utils.ThrowException(e); }
                         // SnapTo は player-like CNO では明示的に呼ぶ必要がある。
                         // 既存 CNO は Shapeshift-text LateTask 内で SnapTo するが、
                         // IsPlayerLike はその LateTask をスキップするため SnapTo も飛ばされる。
@@ -1086,6 +1109,8 @@ namespace EndKnot
                             snapSender.EndMessage();
                             snapSender.SendMessage();
                         }
+
+                        _wireSnapReady = true;
 
                         // outfit 適用 (Shapeshift) の後に置く — SetOutfit が renderer を触りうるため
                         EnsureHostVisible();
@@ -1288,6 +1313,7 @@ namespace EndKnot
             {
                 AllObjects.ToArray().Do(x => x.Despawn(canPool: false));
                 AllObjects.Clear();
+                HiddenCnoNetIds.Clear();
                 RespawnSlot = 0;
                 StartSpawnSlot = 0;
                 DeferredSpawnSlot = 0;

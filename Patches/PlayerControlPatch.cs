@@ -1218,6 +1218,7 @@ internal static class ShapeshiftPatch
                 string shownName = target.Data.Outfits[PlayerOutfitType.Default].PlayerName;
                 if (shownName != null && shownName.StartsWith(CustomNetObject.HostFxNamePrefix, StringComparison.Ordinal))
                 {
+                    if (__instance.PlayerId >= 200) CustomNetObject.HiddenCnoNetIds.Add(__instance.NetId);
                     __instance.transform.FindChild("Names").FindChild("NameText_TMP").gameObject.SetActive(false);
                     __instance.Visible = false;
                     SpriteRenderer hostFxBody = __instance.cosmetics.currentBodySprite.BodySprite;
@@ -1252,6 +1253,18 @@ internal static class ShapeshiftPatch
             }
             catch (Exception e) { Utils.ThrowException(e); }
         }
+    }
+}
+
+// 隠した CNO を本編が Visible=true に書き戻すのを止める。この端末の本人が死んだ後、本編は約 2 フレームごとに全 PlayerControl の
+// Visible を true にし直す (名前表示も戻る) ので、生成時に 1 回隠すだけだと演出と CNO が二重に見える (2026-10-20 実機・ホストも客も)
+[HarmonyPatch(typeof(PlayerControl), nameof(PlayerControl.Visible), MethodType.Setter)]
+internal static class PlayerControlVisiblePatch
+{
+    public static void Prefix(PlayerControl __instance, ref bool value)
+    {
+        if (!value || CustomNetObject.HiddenCnoNetIds.Count == 0) return;
+        if (CustomNetObject.HiddenCnoNetIds.Contains(__instance.NetId) && __instance.PlayerId >= 200) value = false;
     }
 }
 
