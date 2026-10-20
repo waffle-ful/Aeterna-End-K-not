@@ -1,7 +1,7 @@
 <Window x:Class="EndKnotInstaller.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="End K not インストーラー" Height="520" Width="680"
+        Title="End K not インストーラー" Height="520" Width="800"
         WindowStartupLocation="CenterScreen" ResizeMode="CanMinimize">
     <Grid Margin="14">
         <Grid.RowDefinitions>
@@ -38,6 +38,8 @@
             <Button x:Name="ToggleButton" Content="モッド無効化⇔有効化" Padding="14,6" Margin="8,0,0,0" Click="ClickToggle"/>
             <Button x:Name="UninstallButton" Content="アンインストール" Padding="14,6" Margin="8,0,0,0" Click="ClickUninstall"/>
             <Button x:Name="LaunchButton" Content="ゲーム起動" Padding="14,6" Margin="8,0,0,0" Click="ClickLaunch"/>
+            <Button x:Name="DiagnosticsButton" Content="診断情報を保存" Padding="14,6" Margin="8,0,0,0" Click="ClickDiagnostics"
+                    ToolTip="起動しない時に、ログと導入状態を 1 つの zip にまとめてデスクトップへ保存します"/>
         </StackPanel>
 
         <ProgressBar x:Name="Progress" Grid.Row="4" Height="16" Margin="0,0,0,8" Minimum="0" Maximum="1"/>

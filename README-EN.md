@@ -247,6 +247,10 @@ If you already have End K not installed, overwrite `Among Us\BepInEx\plugins\End
 > [!IMPORTANT]
 > **When updating, delete the `Among Us\BepInEx\interop\` folder** before extracting the new version. A stale interop folder can prevent the game from starting.
 
+### If the game won't start
+
+Before deleting and reinstalling the game folder, press **診断情報を保存** (Save diagnostics) in the installer. It saves a zip with the logs and the install state to your desktop. Send it on [Discord](https://discord.gg/s5J8c23Dms) or [GitHub Issues](../../issues) so we can find the cause. The logs may include player names and chat.
+
 ### Switching back to vanilla
 
 Rename `winhttp.dll` in your `Among Us` folder to `winhttp.dll.disabled`. The game then launches as plain Among Us. Rename it back to re-enable.

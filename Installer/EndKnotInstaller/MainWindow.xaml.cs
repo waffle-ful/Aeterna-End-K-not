@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using Microsoft.Win32;
@@ -68,7 +69,7 @@ public partial class MainWindow : Window
         if (install == null)
         {
             StatusText.Text = "Among Us が選択されていません";
-            InstallButton.IsEnabled = ToggleButton.IsEnabled = UninstallButton.IsEnabled = LaunchButton.IsEnabled = false;
+            InstallButton.IsEnabled = ToggleButton.IsEnabled = UninstallButton.IsEnabled = LaunchButton.IsEnabled = DiagnosticsButton.IsEnabled = false;
             return;
         }
 
@@ -92,6 +93,7 @@ public partial class MainWindow : Window
         ToggleButton.IsEnabled = !busy && install.IsModded;
         UninstallButton.IsEnabled = !busy && install.IsModded;
         LaunchButton.IsEnabled = !busy;
+        DiagnosticsButton.IsEnabled = !busy;
     }
 
     private void InstallCombo_SelectionChanged(object sender, RoutedEventArgs e) => RefreshStatus();
@@ -227,6 +229,32 @@ public partial class MainWindow : Window
         try { ModInstaller.Uninstall(install, Log); }
         catch (Exception ex) { Log($"アンインストール失敗: {ex.Message}"); }
         RefreshStatus();
+    }
+
+    // ゲームが起動中でも集められる (ログは共有で読む)
+    private async void ClickDiagnostics(object sender, RoutedEventArgs e)
+    {
+        var install = Selected;
+        if (install == null || busy) return;
+
+        busy = true;
+        RefreshStatus();
+        try
+        {
+            var zipPath = await Task.Run(() => DiagnosticsCollector.Collect(install, Log));
+            Log($"診断情報を保存しました: {zipPath}");
+            Log("この zip を Discord 等で開発者へ送ってください。ログにはプレイヤー名やチャットが含まれることがあります。");
+            Process.Start("explorer.exe", $"/select,\"{zipPath}\"");
+        }
+        catch (Exception ex)
+        {
+            Log($"診断情報の保存に失敗しました: {ex.Message}");
+        }
+        finally
+        {
+            busy = false;
+            RefreshStatus();
+        }
     }
 
     private void ClickLaunch(object sender, RoutedEventArgs e)
