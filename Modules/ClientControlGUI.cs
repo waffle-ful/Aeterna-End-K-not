@@ -306,7 +306,7 @@ public class ClientControlGUI : MonoBehaviour
     // OnGUI is called by Unity every frame (and sometimes multiple times per frame)
     private void OnGUI()
     {
-        if (!HudManager.InstanceExists) return;
+        if (!HudManager.InstanceExists || Modules.CleanShot.On) return;
 
         if (!_windowInitialized) InitWindowRect();
 

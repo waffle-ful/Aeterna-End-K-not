@@ -63,6 +63,7 @@ public class AudienceInfoBubble : MonoBehaviour
     {
         try
         {
+            if (CleanShot.On) return;
             if (!ShouldShow()) return;
 
             EnsureStyles();

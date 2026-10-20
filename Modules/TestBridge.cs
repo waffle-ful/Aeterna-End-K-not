@@ -95,6 +95,9 @@ public static class TestBridge
         try { Il2Direct.ShadowPoll(); DrainCommandFile(pollFile); }
         catch (Exception e) { Utils.ThrowException(e); }
 
+        try { CleanShot.Tick(); }
+        catch (Exception e) { Utils.ThrowException(e); }
+
         if (CnoWatchOn)
         {
             try { CnoWatchTick(); }
@@ -616,6 +619,33 @@ public static class TestBridge
         {
             try { WriteOut(EndKnot.Roles.Thanos.DebugFillStones() ? "OK thanosstones" : "ERR thanosstones: no Thanos"); }
             catch (Exception e) { Utils.ThrowException(e); WriteOut("ERR thanosstones failed"); }
+            return;
+        }
+
+        // 撮影用に HUD・開始パネル・名前・ペット・配信用の重ね表示を隠す。`cleanshot on|off` / `cleanshot ui` (HUD は残す) /
+        // `cleanshot zoom <orthographicSize|reset>` (本編は 3) / `cleanshot noplayer on|off` (人の姿を手元だけ消す)
+        if (directive.StartsWith("cleanshot", StringComparison.OrdinalIgnoreCase))
+        {
+            string[] cs = directive[9..].Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (cs.Length >= 1 && cs[0].Equals("zoom", StringComparison.OrdinalIgnoreCase))
+            {
+                float z = cs.Length >= 2 && float.TryParse(cs[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float zv) ? zv : 0f;
+                CleanShot.SetZoom(z);
+                WriteOut($"OK cleanshot zoom {(z > 0f ? z.ToString(System.Globalization.CultureInfo.InvariantCulture) : "reset")}");
+                return;
+            }
+
+            if (cs.Length >= 1 && cs[0].Equals("noplayer", StringComparison.OrdinalIgnoreCase))
+            {
+                bool hide = !(cs.Length >= 2 && cs[1].Equals("off", StringComparison.OrdinalIgnoreCase));
+                CleanShot.SetNoPlayers(hide);
+                WriteOut($"OK cleanshot noplayer {(hide ? "on" : "off")}");
+                return;
+            }
+
+            string mode = cs.Length >= 1 ? cs[0].ToLowerInvariant() : "on";
+            CleanShot.Set(mode != "off", mode != "ui");
+            WriteOut($"OK cleanshot {mode}");
             return;
         }
 
