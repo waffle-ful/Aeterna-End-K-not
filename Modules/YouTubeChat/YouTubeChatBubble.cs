@@ -102,6 +102,7 @@ public class YouTubeChatBubble : MonoBehaviour
     {
         try
         {
+            if (CleanShot.On) return;
             if (!ShouldShow())
             {
                 _panelRect = default;

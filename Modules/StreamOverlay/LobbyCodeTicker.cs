@@ -61,6 +61,7 @@ public class LobbyCodeTicker : MonoBehaviour
     {
         try
         {
+            if (CleanShot.On) return;
             if (Event.current.type != EventType.Repaint) return;
 
             if (!ShouldShow())

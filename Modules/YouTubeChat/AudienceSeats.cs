@@ -748,6 +748,7 @@ public class AudienceSeats : MonoBehaviour
     {
         try
         {
+            if (CleanShot.On) return;
             if (!_shown) return;
 
             float s = Scale;

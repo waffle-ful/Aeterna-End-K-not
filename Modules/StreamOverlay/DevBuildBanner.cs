@@ -42,6 +42,7 @@ public class DevBuildBanner : MonoBehaviour
     {
         try
         {
+            if (CleanShot.On) return;
             if (!ShouldShow()) return;
 
             EnsureStyles();
