@@ -2501,6 +2501,9 @@ public static class BackroomsLobby
 
     private static bool _inBackrooms;
     internal static bool IsActive => _inBackrooms;
+
+    // 歩行の経路探索用。procgen ではセル (wx, wy) がワールド座標 (wx, wy) を中心に置かれる
+    internal static bool IsProcgenFloor(int wx, int wy) => ClassifyCell(wx, wy, _lastSeed) == CellKind.Floor;
     // 最後に EnterCustomMap で入場したカスタムマップ。テクスチャ解放で「実際に表示中のマップ」を
     // 確実に指すために保持する (ActiveSource は load 中に新マップへ差し替わるため当てにできない)。
     private static CustomMapSource _lastEnteredSource;
