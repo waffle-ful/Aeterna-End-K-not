@@ -1129,7 +1129,7 @@ public static class TestBridge
 
         if (directive.Equals("help", StringComparison.OrdinalIgnoreCase))
         {
-            WriteOut("HELP directives: state | screenshot | delayshot <ms> | burst <count> [everyNFrames] | rdump [filter] | click <h|label:x> | press <h|x y> | scroll <x> <y> <notches> | type <text> | key <enter|escape|tab|backspace> | getopt <pattern> | setopt <name|#id> <idx|on|off|~real> | forcerole <id|name|host|clear> [EnumName] | start | hostlobby | joinlobby <code> | leavelobby | kickself | fakehacking | eosstall | autostart <on|off> | tp <x> <y> | tp <playerId> | tp <playerId|name> <x> <y> | switch <0-4> [playerId|name] | walk <x> <y> | walk <playerId> | walk stop | vote <playerId|skip> | vote <voterId> <playerId|skip> | overrule <targetId> [judgeId] | chat <text> | chatui <text> | sabotage <comms|reactor|o2|lights|lab|heli|mushroom|cd0> | fixsabotage <type> | use <kill|vent|pet|ability|report|sabotage> | vent enter <id> | vent exit | errors [n] | grep <pattern> [n] | bcensus | gc <clr|clr2|boehm|both> | sleep <sec> | wait <phase=X|players=N|marker:text|join|arrived> [timeoutSec] | wait cancel | /<chatcommand>");
+            WriteOut("HELP directives: state | screenshot | delayshot <ms> | burst <count> [everyNFrames] | rdump [filter] | click <h|label:x> | press <h|x y> | scroll <x> <y> <notches> | type <text> | key <enter|escape|tab|backspace> | getopt <pattern> | setopt <name|#id> <idx|on|off|~real> | forcerole <id|name|host|clear> [EnumName] | start | hostlobby | joinlobby <code> | leavelobby | kickself | fakehacking | eosstall | autostart <on|off> | tp <x> <y> | tp <playerId> | tp <playerId|name> <x> <y> | switch <0-4> [playerId|name] | walk <x> <y> | walk <playerId> | walk route <x> <y> | walk wander [seed] | walk stop | vote <playerId|skip> | vote <voterId> <playerId|skip> | overrule <targetId> [judgeId] | chat <text> | chatui <text> | sabotage <comms|reactor|o2|lights|lab|heli|mushroom|cd0> | fixsabotage <type> | use <kill|vent|pet|ability|report|sabotage> | vent enter <id> | vent exit | errors [n] | grep <pattern> [n] | bcensus | gc <clr|clr2|boehm|both> | sleep <sec> | wait <phase=X|players=N|marker:text|join|arrived> [timeoutSec] | wait cancel | /<chatcommand>");
             return;
         }
 
@@ -3395,9 +3395,13 @@ public static class TestBridge
     // tp(ホスト権限ワープ)と違い、PlayerPhysics.FixedUpdate の Postfix から毎物理 tick
     // SetNormalizedVelocity で速度を上書きする = vanilla の歩行と同じ client-authoritative な
     // 移動パケットが出る。anticheat テスト(公式サーバーでキックされないか)はこちらを使う。
-    // 経路探索はしない(壁に当たったら stuck 検知で自動停止して報告する)。
+    // 直線の walk は経路探索しない(壁に当たったら stuck 検知で自動停止して報告する)。
+    // Backrooms (procgen) だけは床セルが計算で分かるので、walk route / walk wander が床をたどる経路を作る。
 
     private static Vector2? _walkTarget;
+    private static readonly Queue<Vector2> WalkRoute = new();
+    private static bool _walkWander;
+    private static System.Random _wanderRng;
     private static float _walkBestDist;
     private static float _walkNoProgressTime;
     private static float _walkTotalTime;
@@ -3422,6 +3426,12 @@ public static class TestBridge
         string[] parts = rest.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         Vector2 dest;
 
+        if (parts.Length > 0 && (parts[0].Equals("route", StringComparison.OrdinalIgnoreCase) || parts[0].Equals("wander", StringComparison.OrdinalIgnoreCase)))
+        {
+            ExecuteWalkRoute(lp, parts);
+            return;
+        }
+
         if (parts.Length == 1 && byte.TryParse(parts[0], out byte pid))
         {
             PlayerControl target = Utils.GetPlayerById(pid);
@@ -3434,10 +3444,12 @@ public static class TestBridge
             dest = new(x, y);
         else
         {
-            WriteOut("ERR walk usage: walk <x> <y> | walk <playerId> | walk stop");
+            WriteOut("ERR walk usage: walk <x> <y> | walk <playerId> | walk route <x> <y> | walk wander [seed] | walk stop");
             return;
         }
 
+        WalkRoute.Clear();
+        _walkWander = false;
         _walkTarget = dest;
         _walkBestDist = float.MaxValue;
         _walkNoProgressTime = 0f;
@@ -3445,9 +3457,207 @@ public static class TestBridge
         WriteOut($"OK walk -> [{F(dest.x)}, {F(dest.y)}] (dist {F(Vector2.Distance(lp.GetTruePosition(), dest))})");
     }
 
+    private const float WalkWaypointDist = 0.15f;    // 中間点の到着判定 (角で壁を擦らないよう小さめ)
+    private const int RouteSearchRadius = 64;        // 迷路は無限なので探索は始点の周り ±64 セルに限る
+    private const int RouteTurnCost = 4;             // 曲がり 1 回 = 4 歩分。広間で階段状のジグザグにせず直線を伸ばす
+    private const float RouteClearance = 0.3f;       // 近道の線が壁からこれだけ離れているか
+
+    private static readonly (int dx, int dy)[] RouteDirs = [(1, 0), (0, 1), (-1, 0), (0, -1)];
+
+    private static void ExecuteWalkRoute(PlayerControl lp, string[] parts)
+    {
+        if (!BackroomsLobby.IsActive || EkmapLoader.ActiveSource != null)
+        {
+            WriteOut("ERR walk route needs the procgen Backrooms (custom maps are not supported)");
+            return;
+        }
+
+        Vector2 pos = lp.GetTruePosition();
+        bool wander = parts[0].Equals("wander", StringComparison.OrdinalIgnoreCase);
+
+        if (wander)
+        {
+            int seed = parts.Length >= 2 && int.TryParse(parts[1], out int s) ? s : Environment.TickCount;
+            _wanderRng = new System.Random(seed);
+            _wanderHeading = (float)(_wanderRng.NextDouble() * Math.PI * 2);
+            if (!PlanWanderRoute(pos)) { WriteOut("ERR walk wander found no reachable floor"); return; }
+            _walkWander = true;
+            WriteOut($"OK walk wander seed={seed} (stop with: walk stop)");
+            return;
+        }
+
+        if (parts.Length != 3 ||
+            !float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float x) ||
+            !float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out float y))
+        {
+            WriteOut("ERR walk usage: walk route <x> <y>");
+            return;
+        }
+
+        List<(int x, int y)> path = FindRoute(pos, ((int)Math.Round(x), (int)Math.Round(y)), out string err);
+        if (path == null) { WriteOut($"ERR walk route {err}"); return; }
+
+        _walkWander = false;
+        StartRoute(pos, path);
+        WriteOut($"OK walk route -> [{F(x)}, {F(y)}] cells={path.Count} legs={WalkRoute.Count + 1}");
+    }
+
+    private static float _wanderHeading;
+
+    // 今の向きから ±80° の方角に 10〜30 セル先の床を選び、たどり着ける物を採る
+    private static bool PlanWanderRoute(Vector2 pos)
+    {
+        for (var attempt = 0; attempt < 24; attempt++)
+        {
+            double ang = _wanderHeading + (_wanderRng.NextDouble() * 2 - 1) * (attempt < 16 ? 1.4 : Math.PI);
+            double len = 10 + _wanderRng.NextDouble() * 20;
+            (int x, int y) goal = ((int)Math.Round(pos.x + Math.Cos(ang) * len), (int)Math.Round(pos.y + Math.Sin(ang) * len));
+            if (!IsFloor(goal.x, goal.y)) continue;
+
+            List<(int x, int y)> path = FindRoute(pos, goal, out _, 40);
+            if (path == null || path.Count < 6) continue;
+
+            _wanderHeading = (float)Math.Atan2(goal.y - pos.y, goal.x - pos.x);
+            StartRoute(pos, path);
+            return true;
+        }
+
+        return false;
+    }
+
+    private static void StartRoute(Vector2 pos, List<(int x, int y)> path)
+    {
+        WalkRoute.Clear();
+        foreach ((int x, int y) c in SimplifyRoute(pos, path)) WalkRoute.Enqueue(new(c.x, c.y));
+        _walkTarget = WalkRoute.Dequeue();
+        _walkBestDist = float.MaxValue;
+        _walkNoProgressTime = 0f;
+        _walkTotalTime = 0f;
+    }
+
+    // 4 近傍・曲がりにコストを乗せた最短路 (状態 = セル+向き)。始点はいま立っているセル (床でなければ隣の床)
+    private static List<(int x, int y)> FindRoute(Vector2 from, (int x, int y) goal, out string err, int radius = RouteSearchRadius)
+    {
+        RouteFloorCache.Clear();
+        (int x, int y) start = ((int)Math.Round(from.x), (int)Math.Round(from.y));
+        if (!IsFloor(start.x, start.y))
+        {
+            var found = false;
+            foreach ((int dx, int dy) in RouteDirs)
+                if (IsFloor(start.x + dx, start.y + dy)) { start = (start.x + dx, start.y + dy); found = true; break; }
+
+            if (!found) { err = $"start cell ({start.x},{start.y}) is not floor"; return null; }
+        }
+
+        if (!IsFloor(goal.x, goal.y)) { err = $"goal cell ({goal.x},{goal.y}) is not floor"; return null; }
+        if (Math.Abs(goal.x - start.x) > radius || Math.Abs(goal.y - start.y) > radius)
+        {
+            err = $"goal is farther than {radius} cells";
+            return null;
+        }
+
+        var cost = new Dictionary<(int, int, int), int>();
+        var prev = new Dictionary<(int, int, int), (int, int, int)>();
+        var open = new PriorityQueue<(int x, int y, int d), int>();
+
+        for (var d = 0; d < 4; d++)
+        {
+            cost[(start.x, start.y, d)] = 0;
+            open.Enqueue((start.x, start.y, d), 0);
+        }
+
+        (int, int, int)? end = null;
+
+        while (open.TryDequeue(out (int x, int y, int d) cur, out int c))
+        {
+            if (c > cost[cur]) continue;
+            if (cur.x == goal.x && cur.y == goal.y) { end = cur; break; }
+
+            for (var nd = 0; nd < 4; nd++)
+            {
+                int nx = cur.x + RouteDirs[nd].dx, ny = cur.y + RouteDirs[nd].dy;
+                if (Math.Abs(nx - start.x) > radius || Math.Abs(ny - start.y) > radius) continue;
+                if (!IsFloor(nx, ny)) continue;
+
+                int ncost = c + 1 + (nd == cur.d ? 0 : RouteTurnCost);
+                (int, int, int) next = (nx, ny, nd);
+                if (cost.TryGetValue(next, out int old) && old <= ncost) continue;
+
+                cost[next] = ncost;
+                prev[next] = cur;
+                open.Enqueue(next, ncost);
+            }
+        }
+
+        if (end == null) { err = "no path within the search box"; return null; }
+
+        var path = new List<(int x, int y)>();
+        for ((int, int, int) s = end.Value; ; s = prev[s])
+        {
+            if (path.Count == 0 || path[^1] != (s.Item1, s.Item2)) path.Add((s.Item1, s.Item2));
+            if (!prev.ContainsKey(s)) break;
+        }
+
+        path.Reverse();
+        err = null;
+        return path;
+    }
+
+    // セル列を、壁から RouteClearance 以上離れて真っすぐ歩ける区間ごとの折れ点だけに減らす (広間では斜めに抜ける)
+    private static List<(int x, int y)> SimplifyRoute(Vector2 from, List<(int x, int y)> path)
+    {
+        var result = new List<(int x, int y)>();
+        double ax = from.x, ay = from.y;
+        var i = -1;
+
+        while (i < path.Count - 1)
+        {
+            int j = i + 1;
+            while (j + 1 < path.Count && j + 1 - i <= 30 && IsClearLine(ax, ay, path[j + 1].x, path[j + 1].y)) j++;
+
+            result.Add(path[j]);
+            ax = path[j].x;
+            ay = path[j].y;
+            i = j;
+        }
+
+        return result;
+    }
+
+    private static bool IsClearLine(double ax, double ay, double bx, double by)
+    {
+        double len = Math.Sqrt((bx - ax) * (bx - ax) + (by - ay) * (by - ay));
+        int steps = Math.Max(1, (int)Math.Ceiling(len / 0.1));
+        const double r = RouteClearance, rd = RouteClearance * 0.7071;
+
+        for (var k = 0; k <= steps; k++)
+        {
+            double t = (double)k / steps;
+            double px = ax + (bx - ax) * t, py = ay + (by - ay) * t;
+
+            if (!FloorAt(px, py) || !FloorAt(px + r, py) || !FloorAt(px - r, py) || !FloorAt(px, py + r) || !FloorAt(px, py - r) ||
+                !FloorAt(px + rd, py + rd) || !FloorAt(px - rd, py + rd) || !FloorAt(px + rd, py - rd) || !FloorAt(px - rd, py - rd))
+                return false;
+        }
+
+        return true;
+
+        static bool FloorAt(double x, double y) => IsFloor((int)Math.Round(x), (int)Math.Round(y));
+    }
+
+    private static readonly Dictionary<(int, int), bool> RouteFloorCache = new();
+
+    private static bool IsFloor(int x, int y)
+    {
+        if (!RouteFloorCache.TryGetValue((x, y), out bool f)) RouteFloorCache[(x, y)] = f = BackroomsLobby.IsProcgenFloor(x, y);
+        return f;
+    }
+
     private static void StopWalk(bool zeroVelocity)
     {
         _walkTarget = null;
+        _walkWander = false;
+        WalkRoute.Clear();
         if (!zeroVelocity) return;
 
         try
@@ -3481,8 +3691,19 @@ public static class TestBridge
             Vector2 dest = _walkTarget.Value;
             float dist = Vector2.Distance(pos, dest);
 
-            if (dist <= WalkArriveDist)
+            if (dist <= (WalkRoute.Count > 0 ? WalkWaypointDist : WalkArriveDist))
             {
+                if (WalkRoute.Count > 0)
+                {
+                    _walkTarget = WalkRoute.Dequeue();
+                    _walkBestDist = float.MaxValue;
+                    _walkNoProgressTime = 0f;
+                    _walkTotalTime = 0f;
+                    return;
+                }
+
+                if (_walkWander && PlanWanderRoute(pos)) return;
+
                 StopWalk(true);
                 WriteOut($"OK walk arrived [{F(pos.x)}, {F(pos.y)}]");
                 return;
