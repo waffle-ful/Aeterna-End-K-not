@@ -274,7 +274,8 @@ internal static class GameEndChecker
                             WinnerIds.Add(Romantic.PartnerId);
                             AdditionalWinnerTeams.Add((AdditionalWinners)role);
                             break;
-                        case CustomRoles.SchrodingersCat when !pc.IsConverted():
+                        // 攻撃されなかった猫がクルーと勝つ設定の時は下の追加勝利の分岐へ通す
+                        case CustomRoles.SchrodingersCat when !pc.IsConverted() && !(WinnerTeam == CustomWinner.Crewmate && SchrodingersCat.WinsWithCrewIfNotAttacked.GetBool()):
                             WinnerIds.Remove(pc.PlayerId);
                             break;
                         case CustomRoles.WolfBoy when (WinnerTeam == CustomWinner.Crewmate || (WinnerTeam == CustomWinner.Impostor && pc.Is(CustomRoles.Madmate))) && roleBase is WolfBoy wb && WolfBoy.OptionWinKillCount != null && WolfBoy.OptionWinKillCount.GetInt() > 0 && (!pc.IsAlive() || wb.GetKillCount() < WolfBoy.OptionWinKillCount.GetInt()):
@@ -309,7 +310,7 @@ internal static class GameEndChecker
                         case CustomRoles.Predator when (roleBase as Predator).IsWon:
                         case CustomRoles.Gaslighter when (roleBase as Gaslighter).AddAsAdditionalWinner():
                         case CustomRoles.SoulHunter when (roleBase as SoulHunter).Souls >= SoulHunter.NumOfSoulsToWin.GetInt():
-                        case CustomRoles.SchrodingersCat when WinnerTeam == CustomWinner.Crewmate && SchrodingersCat.WinsWithCrewIfNotAttacked.GetBool():
+                        case CustomRoles.SchrodingersCat when !pc.IsConverted() && WinnerTeam == CustomWinner.Crewmate && SchrodingersCat.WinsWithCrewIfNotAttacked.GetBool():
                         case CustomRoles.Curser when WinnerTeam != CustomWinner.Crewmate:
                         case CustomRoles.NoteKiller when !NoteKiller.CountsAsNeutralKiller && NoteKiller.Kills >= NoteKiller.NumKillsNeededToWin:
                         case CustomRoles.NecroGuesser when (roleBase as NecroGuesser).GuessedPlayers >= NecroGuesser.NumGuessesToWin.GetInt():
@@ -735,7 +736,6 @@ internal static class GameEndChecker
             {
                 case CustomRoles.Specter when state.TaskState.RemainingTasksCount <= 0 && state.IsDead:
                 case CustomRoles.VengefulRomantic when VengefulRomantic.HasKilledKiller:
-                case CustomRoles.SchrodingersCat when !state.SubRoles.Any(x => x.IsConverted()):
                 case CustomRoles.Opportunist when !state.IsDead:
                 case CustomRoles.Maguro when !state.IsDead:
                 case CustomRoles.Supernova when !state.IsDead:
