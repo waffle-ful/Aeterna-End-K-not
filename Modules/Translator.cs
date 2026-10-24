@@ -14,7 +14,8 @@ namespace EndKnot;
 public static class Translator
 {
     private const string LanguageFolderName = "Language";
-    private static Dictionary<string, Dictionary<int, string>> TranslateMaps;
+    // 言語 ID → (キー → 訳文)。キーごとに言語の小辞書を持つと 1.3 万個の辞書で約 3MB になるので、言語ごとに 1 個にまとめる
+    private static Dictionary<int, Dictionary<string, string>> TranslateMaps;
 
     // Init() より前に GetString を引く経路 (起動直後に走る OnGUI オーバーレイなど) があるので、
     // 「翻訳テーブルがまだ無い」を呼び出し側から見えるようにしておく。
@@ -52,13 +53,6 @@ public static class Translator
         LoadLangs();
         Logger.Info("Loaded Custom Translations", "Translator");
     }
-
-    // jsonc load options so that comments and trailing commas are allowed
-    private static readonly JsonSerializerOptions JsoncOptions = new()
-    {
-        ReadCommentHandling = JsonCommentHandling.Skip,
-        AllowTrailingCommas = true
-    };
 
     public static void LoadLangs()
     {
@@ -191,23 +185,17 @@ public static class Translator
                     return;
                 }
 
-                var jsonDictionary = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(
-                    resourceStream,
-                    JsoncOptions);
-
-                if (jsonDictionary == null)
+                // ちょうどの大きさの配列に読んで Utf8JsonReader で直接たどる。Stream から逆シリアル化すると
+                // ArrayPool の作業バッファ (ファイル全体が入る大きさ) がスレッドに残り続け、JsonElement も値ごとに文書を作る
+                byte[] data = ReadAllBytes(resourceStream);
+                int keyCount = MergeJsonIntoTranslationMap(langId, data);
+                if (keyCount < 0)
                 {
                     Logger.Warn($"Failed to deserialize JSON file: {resourceName}. Is it a vaild jsonc?", "Translator");
                     LoadedLangs.Add(langId);
                     return;
                 }
 
-                jsonDictionary.Remove("LanguageID");
-
-                // We expect every element in the jsonc file is a string value.
-                // But just in case someone added a number or other stuff in it,
-                // we put a check in the MergeJsonIntoTranslationMap function.
-                MergeJsonIntoTranslationMap(TranslateMaps, langId, jsonDictionary);
                 LoadedLangs.Add(langId);
 
                 SupportedLangs lang = (SupportedLangs)langId;
@@ -221,7 +209,7 @@ public static class Translator
                 if (File.Exists($"{Main.DataPath}/{LanguageFolderName}/{datFile}"))
                     LoadCustomTranslation(datFile, lang);
 
-                try { Logger.Info($"Translator: loaded {resourceName} lang={langId} keys={jsonDictionary.Count} ({sw.ElapsedMilliseconds}ms)", "Translator"); }
+                try { Logger.Info($"Translator: loaded {resourceName} lang={langId} keys={keyCount} ({sw.ElapsedMilliseconds}ms)", "Translator"); }
                 catch { }
             }
             catch (Exception ex)
@@ -240,28 +228,75 @@ public static class Translator
         LoadLangResource((int)langId);
     }
 
-    private static void MergeJsonIntoTranslationMap(Dictionary<string, Dictionary<int, string>> translationMaps, int languageId, Dictionary<string, JsonElement> jsonDictionary)
+    // 言語表を足す時は外側の辞書を作り直して差し替える。別スレッドの GetString が IsKnownKey で列挙していても壊れない
+    private static void PublishLangMap(int languageId, Dictionary<string, string> langMap)
     {
-        foreach ((string key, JsonElement value) in jsonDictionary)
+        TranslateMaps = new Dictionary<int, Dictionary<string, string>>(TranslateMaps) { [languageId] = langMap };
+    }
+
+    private static byte[] ReadAllBytes(Stream stream)
+    {
+        if (stream.CanSeek)
         {
-            if (value.ValueKind != JsonValueKind.String)
+            var data = new byte[stream.Length - stream.Position];
+            int read = 0;
+            while (read < data.Length)
+            {
+                int n = stream.Read(data, read, data.Length - read);
+                if (n <= 0) break;
+                read += n;
+            }
+
+            return read == data.Length ? data : data[..read];
+        }
+
+        using var ms = new MemoryStream();
+        stream.CopyTo(ms);
+        return ms.ToArray();
+    }
+
+    // jsonc の最上位オブジェクトの文字列値を言語表へ入れ、入れたキー数を返す (読めなければ -1)。
+    // 文字列以外の値は警告して飛ばす。LanguageID は索引用なので入れない
+    private static int MergeJsonIntoTranslationMap(int languageId, byte[] utf8)
+    {
+        bool isNew = !TranslateMaps.TryGetValue(languageId, out var langMap);
+        if (isNew)
+        {
+            int capacity = TranslateMaps.TryGetValue((int)SupportedLangs.English, out var english) ? english.Count : 0;
+            langMap = new Dictionary<string, string>(capacity);
+        }
+
+        ReadOnlySpan<byte> json = utf8;
+        if (json.Length >= 3 && json[0] == 0xEF && json[1] == 0xBB && json[2] == 0xBF) json = json[3..]; // Utf8JsonReader は BOM を読み飛ばさない
+
+        var reader = new Utf8JsonReader(json, new JsonReaderOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
+        if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject) return -1;
+
+        int count = 0;
+        while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
+        {
+            string key = reader.GetString();
+            if (!reader.Read()) break;
+
+            if (reader.TokenType != JsonTokenType.String)
             {
                 Logger.Warn($"Invalid value type for key '{key}' in language ID {languageId}. Expected a string.", "Translator");
+                reader.Skip();
                 continue;
             }
 
-            string translation = value.GetString();
+            if (key == "LanguageID") continue;
+
+            string translation = reader.GetString();
             if (string.IsNullOrEmpty(translation))
                 continue;
 
-            if (!translationMaps.TryGetValue(key, out var langMap))
-            {
-                langMap = [];
-                translationMaps[key] = langMap;
-            }
-
-            langMap[languageId] = translation.Replace("\\n", "\n").Replace("\\r", "\r");
+            langMap[key] = translation.Replace("\\n", "\n").Replace("\\r", "\r");
+            count++;
         }
+
+        if (isNew) PublishLangMap(languageId, langMap);
+        return count;
     }
 
     // Function to get a list of JSON file names in a directory
@@ -327,11 +362,11 @@ public static class Translator
 
             if (!LoadedLangs.Contains((int)langId)) EnsureLangLoaded(langId);
 
-            if (TranslateMaps.TryGetValue(str, out var dic))
-            {
-                if (dic.TryGetValue((int)langId, out var res) && !string.IsNullOrEmpty(res))
-                    return res;
+            if (TranslateMaps.TryGetValue((int)langId, out var langMap) && langMap.TryGetValue(str, out var res) && !string.IsNullOrEmpty(res))
+                return res;
 
+            if (IsKnownKey(str))
+            {
                 if (langId != SupportedLangs.English)
                     return GetString(str, SupportedLangs.English);
             }
@@ -344,6 +379,34 @@ public static class Translator
         }
 
         return $"*{str}";
+    }
+
+    // 読み込み済みのどれかの言語にあるキーか
+    private static bool IsKnownKey(string key)
+    {
+        foreach (Dictionary<string, string> langMap in TranslateMaps.Values)
+            if (langMap.ContainsKey(key)) return true;
+        return false;
+    }
+
+    // 読み込み済みの全キー。英語のキーを先に、他の言語にだけあるキーを後ろに並べる
+    private static IEnumerable<string> AllKeys()
+    {
+        TranslateMaps.TryGetValue((int)SupportedLangs.English, out var english);
+        if (english != null)
+            foreach (string key in english.Keys) yield return key;
+
+        HashSet<string> seen = null;
+        foreach ((int langId, Dictionary<string, string> langMap) in TranslateMaps)
+        {
+            if (langId == (int)SupportedLangs.English) continue;
+            foreach (string key in langMap.Keys)
+            {
+                if (english != null && english.ContainsKey(key)) continue;
+                seen ??= [];
+                if (seen.Add(key)) yield return key;
+            }
+        }
     }
 
     // GetString が実際に描画に使う言語。ModLanguage 設定 → ForceOwnLanguage → ゲーム本体の言語、の順で
@@ -372,7 +435,7 @@ public static class Translator
         {
             if (TranslateMaps == null) return false;
             if (!LoadedLangs.Contains((int)langId)) EnsureLangLoaded(langId);
-            return TranslateMaps.TryGetValue(key, out var dic) && dic.TryGetValue((int)langId, out var res) && !string.IsNullOrEmpty(res);
+            return TranslateMaps.TryGetValue((int)langId, out var langMap) && langMap.TryGetValue(key, out var res) && !string.IsNullOrEmpty(res);
         }
         catch (Exception ex)
         {
@@ -461,7 +524,7 @@ public static class Translator
 
                 var sb = new StringBuilder();
 
-                foreach (string templateString in TranslateMaps.Keys)
+                foreach (string templateString in AllKeys())
                 {
                     if (!textStrings.Contains(templateString))
                         sb.Append($"{templateString}:\n");
@@ -496,8 +559,12 @@ public static class Translator
 
                     if (tmp.Length > 1 && tmp[1] != "")
                     {
-                        try { TranslateMaps[tmp[0]][(int)lang] = string.Join(':', tmp[1..]).Replace("\\n", "\n").Replace("\\r", "\r"); }
-                        catch (KeyNotFoundException) { Logger.Warn($"Invalid Key: {tmp[0]}", "LoadCustomTranslation"); }
+                        if (IsKnownKey(tmp[0]))
+                        {
+                            if (!TranslateMaps.TryGetValue((int)lang, out var langMap)) PublishLangMap((int)lang, langMap = []);
+                            langMap[tmp[0]] = string.Join(':', tmp[1..]).Replace("\\n", "\n").Replace("\\r", "\r");
+                        }
+                        else Logger.Warn($"Invalid Key: {tmp[0]}", "LoadCustomTranslation");
                     }
                 }
             }
@@ -510,7 +577,7 @@ public static class Translator
 
     private static void CreateTemplateFile()
     {
-        File.WriteAllText($"{Main.DataPath}/{LanguageFolderName}/template.dat", string.Join('\n', TranslateMaps.Keys.Select(x => $"{x}:")));
+        File.WriteAllText($"{Main.DataPath}/{LanguageFolderName}/template.dat", string.Join('\n', AllKeys().Select(x => $"{x}:")));
     }
 
     public static void ExportCustomTranslation()
@@ -520,10 +587,12 @@ public static class Translator
         SupportedLangs lang = TranslationController.Instance.currentLanguage.languageID;
         EnsureLangLoaded(lang);
 
-        foreach (KeyValuePair<string, Dictionary<int, string>> title in TranslateMaps)
+        TranslateMaps.TryGetValue((int)lang, out var langMap);
+
+        foreach (string key in AllKeys())
         {
-            string text = title.Value.GetValueOrDefault((int)lang, "");
-            sb.Append($"{title.Key}:{text.Replace("\n", "\\n").Replace("\r", "\\r")}\n");
+            string text = langMap?.GetValueOrDefault(key, "") ?? "";
+            sb.Append($"{key}:{text.Replace("\n", "\\n").Replace("\r", "\\r")}\n");
         }
 
         File.WriteAllText($"{Main.DataPath}/{LanguageFolderName}/export_{lang}.dat", sb.ToString());
