@@ -21,6 +21,7 @@ internal static class FxShaderBundle
     private static GameObject _burst;
     private static Material _floorPool;
     private static Material _flowBeam;
+    private static Material _backroomsChunk;
     private static Sprite _glowSprite;
     private static readonly string[] ParticleNames = ["embers", "smoke", "ash", "sparks", "motes"];
     private static readonly GameObject[] Particles = new GameObject[5];
@@ -38,6 +39,7 @@ internal static class FxShaderBundle
     internal static Material Additive => Available ? _additive : null;
     internal static Material FloorPool => Available ? _floorPool : null;
     internal static Material FlowBeam => Available ? _flowBeam : null;
+    internal static Material BackroomsChunk => Available ? _backroomsChunk : null;
 
 
     // 粒のひな形 (FxParticles.Preset の順)。古いバンドルでは null
@@ -77,12 +79,13 @@ internal static class FxShaderBundle
             _burst = Keep(Load(bundle, "burst.prefab", Il2CppType.Of<GameObject>())?.TryCast<GameObject>());
             _floorPool = Keep(Load(bundle, "floorpool.mat", Il2CppType.Of<Material>())?.TryCast<Material>());
             _flowBeam = Keep(Load(bundle, "flowbeam.mat", Il2CppType.Of<Material>())?.TryCast<Material>());
+            _backroomsChunk = Keep(Load(bundle, "backroomschunk.mat", Il2CppType.Of<Material>())?.TryCast<Material>());
             for (int i = 0; i < ParticleNames.Length; i++)
                 Particles[i] = Keep(Load(bundle, "p_" + ParticleNames[i] + ".prefab", Il2CppType.Of<GameObject>())?.TryCast<GameObject>());
             bundle.Unload(false);
 
             Shader shader = _additive ? _additive.shader : null;
-            Logger.Info($"FX bundle: material={(bool)_additive} glow={(bool)_glow} burst={(bool)_burst} pool={(bool)_floorPool} beam={(bool)_flowBeam} particles={(bool)Particles[0]} shader={(shader ? shader.name : "null")} supported={(shader && shader.isSupported)} in {sw.ElapsedMilliseconds}ms", "FxShaderBundle");
+            Logger.Info($"FX bundle: material={(bool)_additive} glow={(bool)_glow} burst={(bool)_burst} pool={(bool)_floorPool} beam={(bool)_flowBeam} chunk={(bool)_backroomsChunk} particles={(bool)Particles[0]} shader={(shader ? shader.name : "null")} supported={(shader && shader.isSupported)} in {sw.ElapsedMilliseconds}ms", "FxShaderBundle");
         }
         catch (Exception e)
         {
