@@ -298,6 +298,7 @@ public class Main : BasePlugin
     public static ConfigEntry<bool> BackroomsReduceRays { get; private set; }
     public static ConfigEntry<bool> BackroomsThrottleVision { get; private set; }
     public static ConfigEntry<bool> BackroomsReduceProcgen { get; private set; }
+    public static ConfigEntry<bool> BackroomsChunkMesh { get; private set; }
     public static ConfigEntry<float> UIScaleFactor { get; private set; }
     public static ConfigEntry<bool> EnableEarlyWarningNotify { get; private set; }
     public static ConfigEntry<bool> EnableUiAnomalyWatch { get; private set; }
@@ -665,6 +666,7 @@ public class Main : BasePlugin
         BackroomsReduceRays = Config.Bind("Client Options", "BackroomsReduceRays", false);
         BackroomsThrottleVision = Config.Bind("Client Options", "BackroomsThrottleVision", false);
         BackroomsReduceProcgen = Config.Bind("Client Options", "BackroomsReduceProcgen", false);
+        BackroomsChunkMesh = Config.Bind("Client Options", "BackroomsChunkMesh", true, "Draw the Backrooms lobby as one mesh per 16x16 chunk instead of thousands of tile objects. Turn off to go back to per-tile objects.");
         UIScaleFactor = Config.Bind("Client Options", "UIScaleFactor", 1f);
         EnableEarlyWarningNotify = Config.Bind("Client Options", "EnableEarlyWarningNotify", true, "Show an in-game host notification when early-warning telemetry detects a critical anomaly (packet near kick threshold, SnapTo exhaustion, exception flood). Logging to EndKnot-Health.log always happens regardless of this setting.");
         EnableUiAnomalyWatch = Config.Bind("Client Options", "EnableUiAnomalyWatch", false, "Enable the per-second UI-anomaly scan (UiAnomalyWatch): FindObjectsOfType<TMP_Text> to detect menu-truncation / stale / duplicated auxiliary TMP objects. Default OFF because the scene-wide scan steadily grows the native working set (IL2CPP proxy churn) over a long session. Turn on only when diagnosing a UI-corruption bug.");
