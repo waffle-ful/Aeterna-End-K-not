@@ -443,17 +443,13 @@ skills-lock.json
 docs/
 
 # Local ops scripts
+# Developer test hooks (the public build compiles Modules/TestBridgeStub.cs instead)
+Modules/TestBridge.cs
 tools/*
 # ...except the option-Id collision checker, which the build & CI depend on.
 !tools/check-option-ids.ps1
 # ...and the lang-key sync checker, which the build & CI depend on.
 !tools/check-lang-keys.ps1
-# ...and the Android engine-call checker (the Android build runs on the game's stripped libunity).
-!tools/check-android-icalls.ps1
-!tools/android-icall-baseline.txt
-!tools/AndroidIcallAudit/
-tools/AndroidIcallAudit/bin/
-tools/AndroidIcallAudit/obj/
 # ...and the Android runtime patcher (reproduces the patched assemblies inside the launcher's dotnet / BepInEx assets).
 !tools/AndroidDotnetPatch/
 tools/AndroidDotnetPatch/bin/
@@ -467,16 +463,6 @@ tools/InteropWbPatch/obj/
 !tools/番犬スタート.cmd
 # ...and the log diagnosis tool (log-doctor), which users run to self-diagnose issues.
 !tools/log-doctor.ps1
-# ...and the BGM AssetBundle build script (reproduces the embedded bundle from the source tracks).
-!tools/build-bgm-bundle.ps1
-# ...and the frame pack builder (reproduces the embedded .ekfp videos played on Android).
-!tools/make-framepack.ps1
-# ...and the Android interop packer (reproduces the pre-generated interop asset the launcher APK ships).
-!tools/android-interop-pack.ps1
-# ...and the EKR addon catalog generator (reproduces editor/src/generated/ekr-addons.ts and Modules/Ekm/EkrAddonCatalog.cs).
-!tools/gen-ekr-addons.ps1
-# ...and the companion-app embedded Python build script (release.ps1 depends on its output).
-!tools/build-companion-python.ps1
 # ...and the post-stream retrospective report tool (stream-report).
 !tools/stream-report.ps1
 # ...and the AI commentary companion app, which streamers run alongside the mod (API key stays in each user's env).
