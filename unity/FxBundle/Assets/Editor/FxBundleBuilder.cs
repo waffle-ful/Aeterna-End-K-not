@@ -11,6 +11,7 @@ using UnityEngine;
 //   floorpool.mat … EndKnot/FloorPool (縁のない揺らめく床の光だまり)
 //   flowbeam.mat  … EndKnot/FlowBeam (根元から先へ筋が流れる光の帯)
 //   puff.png / flake.png … 煙のかたまり (ノイズで縁が崩れた円) / 灰の欠片 (いびつな多角形)
+//   backroomschunk.mat … EndKnot/BackroomsChunk (Backrooms の床と壁をセル表から 1 枚で描く)
 //   p_*.prefab    … EndKnot/Particle で描く粒のひな形 5 種 (embers 火の粉 / smoke 煙 / ash 灰 / sparks 火花 / motes 漂う光)。
 //                   自分では撒かず (放出 0)、使う側が位置・色・大きさ・速さの倍率を決めてから Emit で撒く。
 //                   揺らぎや大きさ・色の変化はゲーム側から設定できない部分なので、ここで焼き込む
@@ -70,6 +71,16 @@ public static class FxBundleBuilder
         Material pSmoke = MakeParticleMaterial(particle, MakeAlphaTexture("puff.png", 128, PuffAlpha), "p_smoke.mat", 1f);
         Material pAsh = MakeParticleMaterial(particle, MakeAlphaTexture("flake.png", 64, FlakeAlpha), "p_ash.mat", 1f);
         MakeParticlePresets(pGlow, pSmoke, pAsh);
+
+        Shader chunk = AssetDatabase.LoadAssetAtPath<Shader>("Assets/Shaders/EKBackroomsChunk.shader");
+        if (chunk == null)
+        {
+            Debug.LogError("FxBundleBuilder: BackroomsChunk shader not found");
+            EditorApplication.Exit(2);
+            return;
+        }
+
+        MakePlainMaterial(chunk, "backroomschunk.mat");
 
         string outDir = Path.Combine(Directory.GetCurrentDirectory(), outSubDir);
         Directory.CreateDirectory(outDir);
@@ -185,6 +196,15 @@ public static class FxBundleBuilder
         var mat = new Material(shader);
         mat.SetTexture("_Noise", noise);
         AssetDatabase.CreateAsset(mat, path);
+        Tag(path);
+    }
+
+    // テクスチャや係数はゲーム側で差すので、シェーダを運ぶためだけのマテリアル
+    private static void MakePlainMaterial(Shader shader, string name)
+    {
+        string path = Folder + "/" + name;
+        AssetDatabase.DeleteAsset(path);
+        AssetDatabase.CreateAsset(new Material(shader), path);
         Tag(path);
     }
 

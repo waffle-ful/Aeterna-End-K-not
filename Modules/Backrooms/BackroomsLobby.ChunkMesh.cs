@@ -89,8 +89,8 @@ public static partial class BackroomsLobby
         return true;
     }
 
-    // SpriteRenderer の既定マテリアル (タイルが使っていた物) を写す。バニラ影の受信は ShadowQuad 側の
-    // _Mask とこのマテリアルの組み合わせで決まるので、シェーダだけ同じ別物にしない。
+    // SpriteRenderer の既定マテリアル (タイルが使っていた物) を写す。バニラ影は ShadowQuad 側のステンシル
+    // 比較 (Ref 1・Comp [_Mask]) だけで受ける場所が決まるので、受け手のシェーダは何でもよい。
     private static Material _spriteDefaultTemplate;
     private static Material SpriteDefaultMaterialTemplate()
     {
@@ -262,6 +262,31 @@ public static partial class BackroomsLobby
     // チャンク (cx, cy) を 1 枚のメッシュ群 + 当たり判定に組む。既にあれば作り直す。
     private static int BuildChunkMesh(int cx, int cy, uint seed)
     {
+        long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
+        try { return BuildChunkMeshCore(cx, cy, seed); }
+        finally
+        {
+            _chunkBuildTicks += System.Diagnostics.Stopwatch.GetTimestamp() - t0;
+            _chunkBuildCount++;
+        }
+    }
+
+    // チャンク生成の所要 (/bbshadow chunk stat で見る・方式の比較用)
+    private static long _chunkBuildTicks, _canvasUploadTicks;
+    private static int _chunkBuildCount, _canvasUploadCount;
+
+    private static string ChunkBuildStat()
+    {
+        double ms = _chunkBuildTicks * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+        double up = _canvasUploadTicks * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+        string r = $"chunk build: {_chunkBuildCount} 回 計 {ms:F1}ms 平均 {(_chunkBuildCount > 0 ? ms / _chunkBuildCount : 0):F2}ms / セル表送信 {_canvasUploadCount} 回 平均 {(_canvasUploadCount > 0 ? up / _canvasUploadCount : 0):F2}ms";
+        _chunkBuildTicks = _canvasUploadTicks = 0;
+        _chunkBuildCount = _canvasUploadCount = 0;
+        return r;
+    }
+
+    private static int BuildChunkMeshCore(int cx, int cy, uint seed)
+    {
         long key = PackChunkKey(cx, cy);
         DestroyChunkRender(key, removeAabbs: true);
 
@@ -290,6 +315,7 @@ public static partial class BackroomsLobby
 
         _batchUsed = 0;
         int cells = 0;
+        bool emit = !_chunkShaderMode; // シェーダ方式はセル表へ書くだけで、四角形は溜めない
         for (int lx = 0; lx < ChunkSize; lx++)
         for (int ly = 0; ly < ChunkSize; ly++)
         {
@@ -299,14 +325,14 @@ public static partial class BackroomsLobby
             switch (cell)
             {
                 case CellKind.Floor:
-                    EmitFloorCell(wx, wy, true);
+                    if (emit) EmitFloorCell(wx, wy, true);
                     break;
                 case CellKind.WallH:
-                    EmitWallHCell(wx, wy, south == CellKind.WallV);
+                    if (emit) EmitWallHCell(wx, wy, south == CellKind.WallV);
                     AddWallAabb(wx, wy, 0.5f, key);
                     break;
                 case CellKind.WallV:
-                    EmitWallVCell(wx, wy, south == CellKind.Floor);
+                    if (emit) EmitWallVCell(wx, wy, south == CellKind.Floor);
                     AddWallAabb(wx, wy, 0.225f, key);
                     break;
                 default:
@@ -355,6 +381,12 @@ public static partial class BackroomsLobby
             mr.sharedMaterial = _chunkSlotMats[b.Slot];
             mr.sortingLayerID = 0;
             mr.sortingOrder = b.Order;
+        }
+
+        if (_chunkShaderMode)
+        {
+            WriteCanvasChunk(baseX, baseY);
+            ApplyCanvasLook();
         }
 
         AddChunkColliders(root, baseX, baseY);
@@ -410,6 +442,7 @@ public static partial class BackroomsLobby
         {
             _chunkRenders.Remove(key);
             DisposeChunkRender(cr);
+            if (_chunkShaderMode) ClearCanvasChunk(key);
         }
 
         if (!removeAabbs) return;
@@ -438,6 +471,7 @@ public static partial class BackroomsLobby
     {
         foreach (ChunkRender cr in _chunkRenders.Values) DisposeChunkRender(cr);
         _chunkRenders.Clear();
+        ResetCanvas();
     }
 
     // 入室時の近傍判定用: 点からチャンクの矩形までの距離²

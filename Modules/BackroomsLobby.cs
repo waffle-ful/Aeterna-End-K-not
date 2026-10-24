@@ -1186,6 +1186,7 @@ public static partial class BackroomsLobby
         ResetStreamingQueues();
         DestroyAllChunkRenders();
         _chunkMeshMode = WantChunkMesh;
+        _chunkShaderMode = _chunkMeshMode && CanUseChunkShader;
 
         _lastSeed = seed;
 
@@ -1237,6 +1238,8 @@ public static partial class BackroomsLobby
         if (!silent)
             Utils.SendMessage($"Gen seed={seed}: wiped {wiped}, generated {SpawnedTiles.Count} tiles ({activeAfterSpawn} active) in {chunkCount} chunks around ({centerCx},{centerCy})", targetPid);
         Logger.Info($"GenerateLobby seed={seed} chunks={chunkCount} tiles={SpawnedTiles.Count} active={activeAfterSpawn} meshChunks={_chunkRenders.Count} center=({centerCx},{centerCy})", "BackroomsGen");
+        // セル表は GPU 側に前回の中身が残っているので、同じフレームのうちに送って位置も合わせる
+        FlushCanvas();
     }
 
     public static void DumpCullInfo(byte targetPid)
@@ -2225,6 +2228,7 @@ public static partial class BackroomsLobby
     public static void ProcessStreamingQueue()
     {
         if (!_inBackrooms) return;
+        FlushCanvas(); // 前のフレームまでに書いたセル表を送る
 
         // 1. Destroy budget — UnloadChunk が退避した GO を予算内で実破棄。
         //    これらは既にアクティブリストから除外済なので vision/cull には無影響。
@@ -3237,10 +3241,22 @@ public static partial class BackroomsLobby
             case "chunk":
             {
                 // チャンク描画 (1 チャンク = メッシュ数枚) とタイル GO 方式を同じ seed のまま切り替える。/bbshadow chunk on|off
+                // shader = セル表をシェーダで描く / mesh = チャンクごとのメッシュ / off = タイル GO
                 if (Main.BackroomsChunkMesh != null && args is { Length: >= 3 })
-                    Main.BackroomsChunkMesh.Value = !args[2].Equals("off", StringComparison.OrdinalIgnoreCase);
+                {
+                    string m = args[2].ToLowerInvariant();
+                    if (m == "stat")
+                    {
+                        Utils.SendMessage(ChunkBuildStat(), pid);
+                        break;
+                    }
+
+                    Main.BackroomsChunkMesh.Value = m != "off";
+                    if (m == "shader") _preferChunkShader = true;
+                    else if (m == "mesh") _preferChunkShader = false;
+                }
                 if (_inBackrooms && EkmapLoader.ActiveSource == null) GenerateLobby(_lastSeed, pid, silent: true);
-                Utils.SendMessage($"チャンク描画 = {(_chunkMeshMode ? "ON" : "OFF")} (cfg {Main.BackroomsChunkMesh?.Value}) meshChunks={_chunkRenders.Count} tiles={SpawnedTiles.Count}", pid);
+                Utils.SendMessage($"チャンク描画 = {(_chunkShaderMode ? "シェーダ" : _chunkMeshMode ? "メッシュ" : "OFF")} (cfg {Main.BackroomsChunkMesh?.Value}) meshChunks={_chunkRenders.Count} tiles={SpawnedTiles.Count}", pid);
                 break;
             }
             case "radius":
