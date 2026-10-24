@@ -155,6 +155,9 @@ public class PlayerState(byte playerId)
 
         countTypes = role.GetCountTypes();
 
+        if (role == CustomRoles.Sidekick && Jackal.SidekickCountMode.GetValue() == 2 && RoleHistory.Count > 0)
+            countTypes = RoleHistory[^1].GetCountTypes();
+
         if (CustomTeamManager.GetCustomTeam(PlayerId) != null && !CustomTeamManager.IsSettingEnabledForPlayerTeam(PlayerId, CTAOption.WinWithOriginalTeam))
             countTypes = CountTypes.CustomTeam;
 
