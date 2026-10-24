@@ -109,6 +109,21 @@ public static class GcPrepass
         return line;
     }
 
+    private static bool _firstLobbyTrimmed;
+
+    // 起動後はじめてロビーへ入るシーン切り替えで 1 回だけ。プラグイン読み込み用に BepInEx が持ち続けるアセンブリの
+    // メタデータ (Mono.Cecil) を手放し、起動中のゴミで広がった CoreCLR の確保を圧縮つき GC で詰める
+    public static void FirstLobbyTrim()
+    {
+        if (_firstLobbyTrimmed) return;
+        _firstLobbyTrimmed = true;
+
+        try { BepInEx.Bootstrap.TypeLoader.CecilResolver.Dispose(); }
+        catch (Exception e) { Logger.Warn($"CecilResolver dispose failed: {e.Message}", "GcPrepass"); }
+
+        Collect("lobbyfirst");
+    }
+
     public static void Collect(string reason)
     {
         if (Main.EnablePreemptiveGc == null || !Main.EnablePreemptiveGc.Value) return;
@@ -126,7 +141,7 @@ public static class GcPrepass
 
             // 読み込み画面・イントロ明けの暗転・結果画面の裏では圧縮つきで回す。圧縮なしのフル GC は生きている物の隙間を残すので、
             // ロビーや試合開始のゴミで一度広がった確保がそのまま試合中も常駐する (実測: 試合中 73→49MB、30ms)
-            if (reason is "loading" or "introend" or "outro")
+            if (reason is "loading" or "introend" or "outro" or "lobbyfirst")
             {
                 System.Runtime.GCSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
                 GC.Collect(2, GCCollectionMode.Forced, true, true);

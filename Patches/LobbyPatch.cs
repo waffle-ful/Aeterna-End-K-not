@@ -136,6 +136,10 @@ internal static class LobbyBehaviourStartPatch
         }
 
         long hideShipMs = postSw.ElapsedMilliseconds - reloadMs;
+
+        // シーンが切り替わったこのフレームはもともと止まっているので、起動後 1 回だけの片付けをここに置く
+        try { EndKnot.Modules.GcPrepass.FirstLobbyTrim(); }
+        catch (Exception ex) { Logger.Warn($"FirstLobbyTrim failed: {ex.Message}", "GcPrepass"); }
         EndKnot.Modules.HealthLog.Note($"TRANSIT phase=lobbyenter vanillaMs={vanillaMs} reloadMs={reloadMs} hideShipMs={hideShipMs} t={Utils.TimeStamp}");
         EndKnot.Modules.TransitionTimeline.Mark($"TRANSIT:lobbyenter(v{vanillaMs}+reload{reloadMs}+hide{hideShipMs}ms)");
 
