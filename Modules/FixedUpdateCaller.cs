@@ -186,6 +186,9 @@ public static class FixedUpdateCaller
                 else Utils.ThrowException(e);
             }
 
+            try { VentilationSystemDeterioratePatch.TickVentSync(); }
+            catch (Exception e) { Utils.ThrowException(e); }
+
             try { DataFlagRateLimiter.OnFixedUpdate(); }
             catch (Exception e) { Utils.ThrowException(e); }
 

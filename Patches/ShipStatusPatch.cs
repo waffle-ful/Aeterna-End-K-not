@@ -756,84 +756,138 @@ internal static class VentilationSystemDeterioratePatch
         }
     }
 
+    // 換気口の状態は客ごとに個別の Reliable で送る。変化のたびに全員へ送ると 1 回で客の人数ぶんになり、
+    // ベントの出入りが続くと同種の Reliable が公式サーバーの切断線 (15 本/秒が 2 秒続く) を超える。
+    // ここでは送り直しが要る客に印を付けるだけにして、TickVentSync が 1 秒に VentSyncPerSecond 本まで順に送る。
+    // 中身は送る瞬間の状態で組むので、待っている間に起きた変化は 1 本にまとまる。
+    private const int VentSyncPerSecond = 6;
+    private static readonly List<byte> VentSyncPending = [];
+    private static readonly Stopwatch VentSyncClock = Stopwatch.StartNew();
+    private static long VentSyncLastMs = -1000;
+    private static bool VentSyncOldestTurn;
+
     public static void SerializeV2(VentilationSystem __instance, PlayerControl player = null)
     {
         foreach (PlayerControl pc in PlayerControl.AllPlayerControls)
         {
             if (pc.AmOwner) continue;
             if (player && pc != player) continue;
-
-            DataFlagRateLimiter.Enqueue(() =>
-            {
-                if (__instance == null || __instance.Pointer == IntPtr.Zero || !pc || pc.Pointer == IntPtr.Zero) return;
-
-                MessageWriter writer = MessageWriter.Get(SendOption.Reliable);
-
-                if (BlockVentInteraction(pc))
-                {
-                    writer.StartMessage(6);
-                    writer.Write(AmongUsClient.Instance.GameId);
-                    writer.WritePacked(pc.OwnerId);
-                    writer.StartMessage(1);
-                    writer.WritePacked(ShipStatus.Instance.NetId);
-                    writer.StartMessage((byte)SystemTypes.Ventilation);
-                    int vents = ShipStatus.Instance.AllVents.Count(vent => !pc.CanUseVent(vent.Id));
-                    List<NetworkedPlayerInfo> allPlayers = [];
-
-                    foreach (NetworkedPlayerInfo playerInfo in GameData.Instance.AllPlayers)
-                    {
-                        if (playerInfo && !playerInfo.Disconnected)
-                            allPlayers.Add(playerInfo);
-                    }
-
-                    int maxVents = Math.Min(vents, allPlayers.Count);
-                    var blockedVents = 0;
-                    writer.WritePacked(maxVents);
-
-                    foreach (Vent vent in pc.GetVentsFromClosest())
-                    {
-                        if (blockedVents >= maxVents)
-                            break;
-
-                        if (!pc.CanUseVent(vent.Id))
-                        {
-                            writer.Write(allPlayers[blockedVents].PlayerId);
-                            writer.Write((byte)vent.Id);
-                            ++blockedVents;
-                        }
-                    }
-
-                    writer.WritePacked(__instance.PlayersInsideVents.Count);
-
-                    foreach (Il2CppSystem.Collections.Generic.KeyValuePair<byte, byte> keyValuePair2 in __instance.PlayersInsideVents)
-                    {
-                        writer.Write(keyValuePair2.Key);
-                        writer.Write(keyValuePair2.Value);
-                    }
-
-                    writer.EndMessage();
-                    writer.EndMessage();
-                    writer.EndMessage();
-                }
-                else
-                {
-                    writer.StartMessage(6);
-                    writer.Write(AmongUsClient.Instance.GameId);
-                    writer.WritePacked(pc.OwnerId);
-                    writer.StartMessage(1);
-                    writer.WritePacked(ShipStatus.Instance.NetId);
-                    writer.StartMessage((byte)SystemTypes.Ventilation);
-                    __instance.Serialize(writer, false);
-                    writer.EndMessage();
-                    writer.EndMessage();
-                    writer.EndMessage();
-                }
-
-                HealthLog.RecordHostAction("ShipStatus.SyncVentilation", writer.Length, "Reliable");
-                AmongUsClient.Instance.SendOrDisconnect(writer);
-                writer.Recycle();
-            });
+            if (!VentSyncPending.Contains(pc.PlayerId)) VentSyncPending.Add(pc.PlayerId);
         }
+    }
+
+    // FixedUpdateCaller から毎フレーム。ベントを止める客 (届く中身が操作に効く方) を先に送る
+    public static void TickVentSync()
+    {
+        if (VentSyncPending.Count == 0) return;
+
+        if (!AmongUsClient.Instance || !AmongUsClient.Instance.AmHost || !GameStates.InGame || !ShipStatus.Instance)
+        {
+            VentSyncPending.Clear();
+            return;
+        }
+
+        if (VentSyncClock.ElapsedMilliseconds - VentSyncLastMs < 1000 / VentSyncPerSecond) return;
+
+        VentilationSystem ventilationSystem = ShipStatusSystem.VentilationSystem;
+        if (ventilationSystem == null)
+        {
+            VentSyncPending.Clear();
+            return;
+        }
+
+        // ベントを止める客が次々と印を付け直されても他の客が待たされ続けないよう、2 本に 1 本は一番長く待っている客へ送る
+        var pick = 0;
+        VentSyncOldestTurn = !VentSyncOldestTurn;
+
+        for (var i = 0; i < VentSyncPending.Count && !VentSyncOldestTurn; i++)
+        {
+            PlayerControl candidate = Utils.GetPlayerById(VentSyncPending[i]);
+            if (!candidate || !BlockVentInteraction(candidate)) continue;
+            pick = i;
+            break;
+        }
+
+        PlayerControl pc = Utils.GetPlayerById(VentSyncPending[pick]);
+        VentSyncPending.RemoveAt(pick);
+        if (!pc || pc.AmOwner) return;
+
+        VentSyncLastMs = VentSyncClock.ElapsedMilliseconds;
+        SendVentSync(ventilationSystem, pc);
+    }
+
+    private static void SendVentSync(VentilationSystem __instance, PlayerControl pc)
+    {
+        DataFlagRateLimiter.Enqueue(() =>
+        {
+            if (__instance == null || __instance.Pointer == IntPtr.Zero || !pc || pc.Pointer == IntPtr.Zero) return;
+
+            MessageWriter writer = MessageWriter.Get(SendOption.Reliable);
+
+            if (BlockVentInteraction(pc))
+            {
+                writer.StartMessage(6);
+                writer.Write(AmongUsClient.Instance.GameId);
+                writer.WritePacked(pc.OwnerId);
+                writer.StartMessage(1);
+                writer.WritePacked(ShipStatus.Instance.NetId);
+                writer.StartMessage((byte)SystemTypes.Ventilation);
+                int vents = ShipStatus.Instance.AllVents.Count(vent => !pc.CanUseVent(vent.Id));
+                List<NetworkedPlayerInfo> allPlayers = [];
+
+                foreach (NetworkedPlayerInfo playerInfo in GameData.Instance.AllPlayers)
+                {
+                    if (playerInfo && !playerInfo.Disconnected)
+                        allPlayers.Add(playerInfo);
+                }
+
+                int maxVents = Math.Min(vents, allPlayers.Count);
+                var blockedVents = 0;
+                writer.WritePacked(maxVents);
+
+                foreach (Vent vent in pc.GetVentsFromClosest())
+                {
+                    if (blockedVents >= maxVents)
+                        break;
+
+                    if (!pc.CanUseVent(vent.Id))
+                    {
+                        writer.Write(allPlayers[blockedVents].PlayerId);
+                        writer.Write((byte)vent.Id);
+                        ++blockedVents;
+                    }
+                }
+
+                writer.WritePacked(__instance.PlayersInsideVents.Count);
+
+                foreach (Il2CppSystem.Collections.Generic.KeyValuePair<byte, byte> keyValuePair2 in __instance.PlayersInsideVents)
+                {
+                    writer.Write(keyValuePair2.Key);
+                    writer.Write(keyValuePair2.Value);
+                }
+
+                writer.EndMessage();
+                writer.EndMessage();
+                writer.EndMessage();
+            }
+            else
+            {
+                writer.StartMessage(6);
+                writer.Write(AmongUsClient.Instance.GameId);
+                writer.WritePacked(pc.OwnerId);
+                writer.StartMessage(1);
+                writer.WritePacked(ShipStatus.Instance.NetId);
+                writer.StartMessage((byte)SystemTypes.Ventilation);
+                __instance.Serialize(writer, false);
+                writer.EndMessage();
+                writer.EndMessage();
+                writer.EndMessage();
+            }
+
+            HealthLog.RecordHostAction("ShipStatus.SyncVentilation", writer.Length, "Reliable");
+            AmongUsClient.Instance.SendOrDisconnect(writer);
+            writer.Recycle();
+        });
     }
 }
 
