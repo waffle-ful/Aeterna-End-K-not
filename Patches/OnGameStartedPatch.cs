@@ -2270,3 +2270,15 @@ internal static class StartGameHostPatch
         }
     }
 }
+
+// 途中抜けの罰点は Epic/Steam/他の mod と同じ保存データに残る。罰点を足す側 (バニラや他の mod) が試合の途中で閉じられた分が
+// 残っていると、試合開始で 0 に戻す前のロビー作成で「故意に接続を切ると…」が出て部屋を作れない。保存値を書き換えても
+// 起動中の読み込みで戻ることがあるので、参加制限の判定そのものを外す
+[HarmonyPatch(typeof(AmongUs.Data.Player.PlayerBanData), nameof(AmongUs.Data.Player.PlayerBanData.IsBanned), MethodType.Getter)]
+internal static class PlayerBanDataIsBannedPatch
+{
+    public static void Postfix(ref bool __result)
+    {
+        __result = false;
+    }
+}
