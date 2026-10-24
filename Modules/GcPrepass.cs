@@ -122,7 +122,19 @@ public static class GcPrepass
             var sw = Stopwatch.StartNew();
             long boehmBefore = BoehmUsedBytes();
             long clrBefore = GC.GetTotalMemory(false);
-            GC.Collect();
+            long clrCommitBefore = GC.GetGCMemoryInfo().TotalCommittedBytes;
+
+            // 読み込み画面・イントロ明けの暗転・結果画面の裏では圧縮つきで回す。圧縮なしのフル GC は生きている物の隙間を残すので、
+            // ロビーや試合開始のゴミで一度広がった確保がそのまま試合中も常駐する (実測: 試合中 73→49MB、30ms)
+            if (reason is "loading" or "introend" or "outro")
+            {
+                System.Runtime.GCSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
+                GC.Collect(2, GCCollectionMode.Forced, true, true);
+            }
+            else
+                GC.Collect();
+
+            long clrCommitAfter = GC.GetGCMemoryInfo().TotalCommittedBytes;
             long clrMs = sw.ElapsedMilliseconds;
             // ここは il2cpp_gc_collect で必ず Boehm GC が1回走る「既知陽性」。bgc の前後が動かなければ
             // BoehmCollectionCount() が (例外ではなく) 定数を返す死んだ計器だと判別できる — HITCH 行の
@@ -132,7 +144,7 @@ public static class GcPrepass
             catch { /* エクスポート欠落環境では CoreCLR 側のみで縮退 */ }
             int bgcAfter = BoehmCollectionCount();
             long boehmAfter = BoehmUsedBytes();
-            HealthLog.Note($"GCPRE reason={reason} clrMs={clrMs} totalMs={sw.ElapsedMilliseconds} clrMB={clrBefore / 1048576}->{GC.GetTotalMemory(false) / 1048576} boehmMB={(boehmBefore < 0 ? -1 : boehmBefore / 1048576)}->{(boehmAfter < 0 ? -1 : boehmAfter / 1048576)} bgc={bgcBefore}->{bgcAfter} t={now}");
+            HealthLog.Note($"GCPRE reason={reason} clrMs={clrMs} totalMs={sw.ElapsedMilliseconds} clrMB={clrBefore / 1048576}->{GC.GetTotalMemory(false) / 1048576} clrCmtMB={clrCommitBefore / 1048576}->{clrCommitAfter / 1048576} boehmMB={(boehmBefore < 0 ? -1 : boehmBefore / 1048576)}->{(boehmAfter < 0 ? -1 : boehmAfter / 1048576)} bgc={bgcBefore}->{bgcAfter} t={now}");
             TransitionTimeline.Mark($"GCPRE:{reason}({sw.ElapsedMilliseconds}ms,boehm{(boehmBefore < 0 ? -1 : boehmBefore / 1048576)}->{(boehmAfter < 0 ? -1 : boehmAfter / 1048576)}MB)");
         }
         catch (Exception e) { Utils.ThrowException(e); }
