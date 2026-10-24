@@ -3687,7 +3687,7 @@
   "SprayerNotify": "トラップを設置した",
   "Stalker": "ストーカー",
   "StalkerInfo": "キル時に停電を発動する",
-  "StalkerInfoLong": "(<#ff1919>殺害する</color> <#ffab1b>ニュートラル</color>):\n<size=80%>停電で闇を作り、その陰で狩る。\n_____________________________________\n難易度：★★☆☆☆\n勝利条件：インポスターかクルーメイトが勝利した時点で生存していれば単独勝利\n\n[スキル]\n・<b><color=#ff1919>停電サボタージュ</color></b>\nキルするたびに停電サボタージュを引き起こす。ベントは使えない。\n\n<i>暗闇は俺のもの。敵は見えない。</i></size>",
+  "StalkerInfoLong": "(<#ff1919>殺害する</color> <#ffab1b>ニュートラル</color>):\n<size=80%>停電で闇を作り、その陰で狩る。\n_____________________________________\n難易度：★★☆☆☆\n勝利条件：生存したまま次のどれかが勝利すると、その勝利を奪って単独勝利\n・インポスター (サボタージュでの勝利を除く)\n・クルーメイト (「勝利を奪う」がオンで、インポスター (設定によってはニュートラルキラーも) をキルしていた時。タスク勝利を除く)\n・ニュートラルキラー (「ニュートラルキラーの勝利も奪う」がオンの時)\n\n[スキル]\n・<b><color=#ff1919>停電サボタージュ</color></b>\nキルするたびに停電サボタージュを引き起こす。ベントを使えるかは設定による。\n\n[補足]\n「勝利を奪う」がオンの間は、勝敗の人数計算でクルーメイトとして数えられる。\n\n<i>暗闇は俺のもの。敵は見えない。</i></size>",
   "Starspawn": "スタースポーン",
   "StarspawnInfo": "プレイヤーを隔離して 夜明けを呼び起こす",
   "StarspawnInfoLong": "(<#A10E49>拒絶された</color> <#ffab1b>ニュートラル</color>):\n<size=75%>隔離と夜明けで、会議の秩序を壊す。\n_____________________________________\n難易度：★★★☆☆\n勝利条件：クルーメイトが敗北すれば勝利\n\n[スキル]\n・<b><color=#ffab1b>隔離</color></b>\nキルボタンで対象を隔離。隔離されたプレイヤーには邪悪なプレイヤーのみが干渉できる。\n・<b><color=#ffab1b>夜明け（1回限り）</color></b>\n会議中に <b>/daybreak</b> でその会議の全ての会議能力（推測・判断・その他役職固有の能力）を封じる。\n\n<i>夜明けは来ない。星だけが残る。</i></size>",
@@ -9903,7 +9903,7 @@
   "CanBeInLove": "<color=#ff9ace>恋が</color>できる",
   "CanBeSoldByMerchant": "<color=#D27D2D>行商人</color>によって販売できる",
   "CanCheckCamera": "カメラの使用を追跡できる",
-  "CanCountNeutralKiller": "<color=#8cffff>クルーメイト</color> が <color=#ffab1b>ニュートラル</color> プレイヤーの殺害によって勝利したとき、その勝利を奪取できる",
+  "CanCountNeutralKiller": "<color=#ffab1b>ニュートラルキラー</color> のキルも <color=#8cffff>クルーメイト</color> の勝利を奪う条件に数える",
   "CanGetImpostorOnlyAddons": "<#ff1919>インポスター限定</color> 属性を取得できる",
 
   /* ==============================
@@ -12852,6 +12852,7 @@
   "Skip": "スキップ",
   "SnatchWin": "勝利を奪う (off の場合は勝利チームと共に勝利)",
   "SnatchesWin": "勝利を奪う",
+  "StalkerSnatchesNeutralKillerWin": "ニュートラルキラーの勝利も奪う",
   "SomeSortOfProtection": "このプレイヤーは役職固有のアクションのため 保護されています。",
   "SpawnAdditionalRenegadeOnImpsDead": "すべての<#ff1919>インポスター</color>が死んだとき ランダムな<#8cffff>クルーメイト</color>が <#ff1919>反逆者</color>に変化する",
   "SpawnAdditionalRenegadeWhenNKAlive": "<#ffab1b>ニュートラル キラー</color>が生きている場合でも 出現する",
