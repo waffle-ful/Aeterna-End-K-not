@@ -928,7 +928,8 @@ public static class BGMManager
         if (gcWanted && CustomSoundsManager.IsBgmPipelineIdle && CanRunGcNow())
         {
             gcWanted = false;
-            GC.Collect();
+            // 裏 GC で打つ。blocking のフル GC は会議開始の直後に毎回 40〜70ms ホスト画面を止めていた (2026-10-24 配信)。
+            GC.Collect(2, GCCollectionMode.Forced, blocking: false);
             Logger.Info("BGM preload GC sweep", "BGMManager");
         }
     }

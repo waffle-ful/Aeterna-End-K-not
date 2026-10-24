@@ -56,14 +56,16 @@ public static class ManagedCensus
 
         // 初回は _fields の構築を裏スレッドへ出し、完成するまでの HB では棚卸しを飛ばす (_lastSweepTs は進めない)。
         if (_fields == null && state is not ("Lobby" or "Menu" or "Ended")) return;
-        // 自動棚卸しは 73〜91ms ホスト画面を止める (2026-09-07 配信 7 人卓で実測)。MemCensus と同じく客が居る間は打たない
-        // (次の HB で再判定するので _lastSweepTs は進めない)。手動 (/census) は常に可。
-        if (PlayerControl.AllPlayerControls.Count > 2) return;
         if (!TryAcquireFields(block: false)) return;
         _lastSweepTs = now;
 
         // 強制フル GC はメインスレッドを数十〜数百 ms 止めるので、ゲーム中 (InTask/Meeting) は踏まない。
-        bool forceGc = now - _lastForcedGcTs >= ForcedGcIntervalSeconds && state is "Lobby" or "Menu" or "Ended";
+        // 客が居る間も打たない (2026-10-24 配信で結果画面ごとに 55〜118ms)。棚卸し自体は数 ms なので続ける。
+        // 客数は AllPlayerControls でなく allClients で数える — 結果画面では AllPlayerControls が空になり関所が素通りしていた。
+        // 打てなかった分は _lastForcedGcTs を進めず、客が抜けた後の棚卸しで打つ。手動 (/census) は常に可。
+        AmongUsClient client = AmongUsClient.Instance;
+        bool guestsPresent = client != null && client.allClients.Count > 2;
+        bool forceGc = now - _lastForcedGcTs >= ForcedGcIntervalSeconds && state is "Lobby" or "Menu" or "Ended" && !guestsPresent;
         if (forceGc) _lastForcedGcTs = now;
 
         Run("timer", forceGc);
