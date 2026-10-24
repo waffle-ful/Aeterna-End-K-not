@@ -135,6 +135,10 @@
         <EmbeddedResource Remove="unity\**"/>
         <None Remove="unity\**"/>
     </ItemGroup>
+    <!-- 開発用のテストの口: 本物 (Modules/TestBridge.cs) がある時は空の版を外す -->
+    <ItemGroup Condition="Exists('Modules\TestBridge.cs')">
+        <Compile Remove="Modules\TestBridgeStub.cs"/>
+    </ItemGroup>
 
     <!-- LobbyShare secrets: if the operator has filled in Modules/LobbyShareSecrets.cs
          (which is gitignored), it gets compiled and the empty Default.cs is excluded.
