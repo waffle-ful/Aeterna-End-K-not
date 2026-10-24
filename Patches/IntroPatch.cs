@@ -1182,6 +1182,10 @@ internal static class IntroCutsceneDestroyPatch
     {
         if (!GameStates.IsInGame) return;
 
+        // 役職配り〜イントロで出たゴミが片付いた所で、暗転明けの見えない瞬間に圧縮つき GC を回す
+        // (読み込み画面の GC はこのゴミより前なので、試合中の CoreCLR の確保が広がったまま残る)
+        GcPrepass.Collect("introend");
+
         IntroDestroyTS = Utils.TimeStamp;
 
         Main.IntroDestroyed = true;
