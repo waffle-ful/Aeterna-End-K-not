@@ -8,7 +8,7 @@ namespace EndKnot.Modules;
 
 // Phase 0: ロビーシーンの ShipOnly collider を診断 / トグル
 // 後続 Phase で生成/配置/TP も同モジュールに統合予定
-public static class BackroomsLobby
+public static partial class BackroomsLobby
 {
     private static readonly List<Collider2D> DisabledColliders = [];
 
@@ -584,7 +584,8 @@ public static class BackroomsLobby
     // EnableWallGhost=false 時は早期 return して GO 生成自体しない (WallGhostRenderers は null 詰めで index 同期維持)。
     private static void AddWallGhost(GameObject parent, bool isH)
     {
-        if (!EnableWallGhost) return;
+        // バニラ影モードではゴーストを書き換える自前視界が止まっていて、α0 のまま描画対象に残るだけなので作らない
+        if (!EnableWallGhost || BackroomsConfig.UseVanillaShadow) return;
 
         GameObject ghost = new("WallGhost");
         ghost.transform.SetParent(parent.transform, false);
@@ -957,6 +958,7 @@ public static class BackroomsLobby
         _customMapLoadAllMode = false;
         DestroyCustomMapBoundaryWalls(); // カスタムマップ外周壁を破棄
         ResetStreamingQueues();
+        DestroyAllChunkRenders();
         Utils.SendMessage($"Cleared {cleared} tiles.", targetPid);
         Logger.Info($"Cleared {cleared} tiles", "BackroomsDiag");
     }
@@ -1182,8 +1184,13 @@ public static class BackroomsLobby
         _customMapAllActive = false;
         DestroyCustomMapBoundaryWalls(); // 外周壁を破棄 (procgen には残さない。custom は後で再生成)
         ResetStreamingQueues();
+        DestroyAllChunkRenders();
+        _chunkMeshMode = WantChunkMesh;
 
         _lastSeed = seed;
+
+        // 入室位置の床は生成より前に決めておく (生成後に差し替えると隣セルの継ぎ目や経路探索と食い違う)
+        FillForcedSpawnFloor(LocalPlayerFeet());
 
         Vector2 origin = PlayerControl.LocalPlayer.Pos();
         int centerCx = Mathf.FloorToInt(origin.x / ChunkSize);
@@ -1220,6 +1227,7 @@ public static class BackroomsLobby
         // 詰まる事故が起きる (TP 廃止に伴い顕在化)。player + 4 cardinal cell を強制 floor 化。
         // origin は body center (Pos) で 0.36u 高い → cell が 1 ズレるので足元 (GetTruePosition)
         // で再取得。collision/vision と同じ cell に揃える。
+        // 新しい生成では FillForcedSpawnFloor で生成前に床になっているので、ここは何もしない。
         EnsureSpawnFloor(LocalPlayerFeet());
 
         int chunkCount = _loadedChunks.Count;
@@ -1228,7 +1236,7 @@ public static class BackroomsLobby
             if (SpawnedTiles[i] != null && SpawnedTiles[i].activeSelf) activeAfterSpawn++;
         if (!silent)
             Utils.SendMessage($"Gen seed={seed}: wiped {wiped}, generated {SpawnedTiles.Count} tiles ({activeAfterSpawn} active) in {chunkCount} chunks around ({centerCx},{centerCy})", targetPid);
-        Logger.Info($"GenerateLobby seed={seed} chunks={chunkCount} tiles={SpawnedTiles.Count} active={activeAfterSpawn} center=({centerCx},{centerCy})", "BackroomsGen");
+        Logger.Info($"GenerateLobby seed={seed} chunks={chunkCount} tiles={SpawnedTiles.Count} active={activeAfterSpawn} meshChunks={_chunkRenders.Count} center=({centerCx},{centerCy})", "BackroomsGen");
     }
 
     public static void DumpCullInfo(byte targetPid)
@@ -1690,6 +1698,7 @@ public static class BackroomsLobby
             return GenerateChunkV2(cx, cy, v2src);
         if (v2src != null && v2src.IsV3)
             return GenerateChunkV3(cx, cy, v2src);
+        if (_chunkMeshMode) return BuildChunkMesh(cx, cy, seed);
 
         int count = 0;
         int baseX = cx * ChunkSize;
@@ -1893,6 +1902,12 @@ public static class BackroomsLobby
             return;
         }
 
+        if (_chunkMeshMode)
+        {
+            _spawnQueue.Add(("chunk_mesh", FxMath.V2(cx * ChunkSize + ChunkSize * 0.5f, cy * ChunkSize + ChunkSize * 0.5f), key, 0));
+            return;
+        }
+
         int baseX = cx * ChunkSize;
         int baseY = cy * ChunkSize;
         for (int lx = 0; lx < ChunkSize; lx++)
@@ -2003,6 +2018,8 @@ public static class BackroomsLobby
             var d = _spawnQueue[i];
             _spawnQueue[i] = (d.kind, d.pos, NoChunkKey, d.connector);
         }
+
+        DestroyChunkRender(key, removeAabbs: false); // WallAabbs は下のループで消す
 
         int destroyed = 0;
         for (int i = SpawnedTiles.Count - 1; i >= 0; i--)
@@ -2247,6 +2264,13 @@ public static class BackroomsLobby
                         CustomMapSource vbsrc = EkmapLoader.ActiveSource;
                         SpawnVoidBarrier(d.pos, vbsrc != null && vbsrc.IsV3 ? vbsrc.CellSize : 1f);
                     }
+                    else if (d.kind == "chunk_mesh")
+                    {
+                        // 1 チャンク丸ごと (タイル数百枚ぶん) なのでこのフレームの予算を使い切る
+                        UnpackChunkKey(d.chunkKey, out int kcx, out int kcy);
+                        BuildChunkMesh(kcx, kcy, _lastSeed);
+                        sBudget = 0;
+                    }
                     else if (d.kind == "v2_cell")
                     {
                         // v2 streaming drain: pos → gx/gy 逆算して SpawnV2Cell
@@ -2307,7 +2331,8 @@ public static class BackroomsLobby
             var d = _spawnQueue[i];
             float ex = d.pos.x - center.x;
             float ey = d.pos.y - center.y;
-            if (ex * ex + ey * ey > rSqr)
+            float distSqr = d.kind == "chunk_mesh" ? ChunkDistSqr(d.chunkKey, center.x, center.y) : ex * ex + ey * ey;
+            if (distSqr > rSqr)
             {
                 _spawnQueue[write++] = d;
                 continue;
@@ -2318,6 +2343,11 @@ public static class BackroomsLobby
             try
             {
                 if (d.kind == "void_barrier") SpawnVoidBarrier(d.pos);
+                else if (d.kind == "chunk_mesh")
+                {
+                    UnpackChunkKey(d.chunkKey, out int kcx, out int kcy);
+                    BuildChunkMesh(kcx, kcy, _lastSeed);
+                }
                 else
                 {
                     GameObject go = SpawnTile(d.kind, d.pos);
@@ -2368,6 +2398,8 @@ public static class BackroomsLobby
                 _                            => CellKind.Void,
             };
         }
+
+        if (_forcedFloorCells.Count > 0 && _forcedFloorCells.Contains(PackChunkKey(wx, wy))) return CellKind.Floor;
 
         int inRoomX = Mod(wx, RoomSize);
         int inRoomY = Mod(wy, RoomSize);
@@ -2747,6 +2779,8 @@ public static class BackroomsLobby
         _customMapLoadAllMode = false;
         DestroyCustomMapBoundaryWalls(); // カスタムマップ外周壁を破棄
         ResetStreamingQueues();
+        DestroyAllChunkRenders();
+        _forcedFloorCells.Clear();
 
         // 2. ロビー collider 復元
         int restoredC = 0;
@@ -2817,7 +2851,7 @@ public static class BackroomsLobby
     // SR/Collider 参照は scene unload で自動的に消えるので list クリアだけ
     public static void OnGameStart()
     {
-        if (!_inBackrooms && SpawnedTiles.Count == 0 && _visionGO == null) return;
+        if (!_inBackrooms && SpawnedTiles.Count == 0 && _chunkRenders.Count == 0 && _visionGO == null) return;
 
         // 開始直後の体感ヒッチ (HITCH gapMs=450 state=Started) の帰属計器。タイル数千の Destroy が
         // 疑わしいので破棄区間を分離して測る。
@@ -2857,6 +2891,7 @@ public static class BackroomsLobby
         _customMapLoadAllMode = false;
         DestroyCustomMapBoundaryWalls(); // カスタムマップ外周壁を破棄
         ResetStreamingQueues();
+        DestroyAllChunkRenders();
         DisabledColliders.Clear();
         DisabledRenderers.Clear();
 
@@ -2873,7 +2908,7 @@ public static class BackroomsLobby
     // 新 LobbyBehaviour Start 時に呼び、_inBackrooms / 死 ref を全クリア
     public static void OnLobbyReload()
     {
-        bool wasActive = _inBackrooms || SpawnedTiles.Count > 0 || _visionGO != null || DisabledRenderers.Count > 0;
+        bool wasActive = _inBackrooms || SpawnedTiles.Count > 0 || _chunkRenders.Count > 0 || _visionGO != null || DisabledRenderers.Count > 0;
         if (!wasActive) return;
 
         _inBackrooms = false;
@@ -2908,6 +2943,7 @@ public static class BackroomsLobby
         _customMapLoadAllMode = false;
         DestroyCustomMapBoundaryWalls(); // カスタムマップ外周壁を破棄
         ResetStreamingQueues();
+        DestroyAllChunkRenders();
         // scene unload で entity 参照は dangling になるので cache だけクリア (SR 復元は不要)
         _entityBodies.Clear();
         _entityBodyRenderers.Clear();
@@ -3188,14 +3224,25 @@ public static class BackroomsLobby
                 BackroomsConfig.UseVanillaShadow = true;
                 SuppressCustomVision(true);
                 BackroomsShadow.Arm(BackroomsConfig.DefaultShadowRadius, diag: true);
+                RegenerateForRenderModeChange(pid);
                 Utils.SendMessage("vanilla 影 ON (custom 視界抑制 + driver arm)。歩いて目視。OFF=/bbshadow off", pid);
                 break;
             case "off":
                 BackroomsShadow.Disarm();
                 SuppressCustomVision(false);
                 BackroomsConfig.UseVanillaShadow = false;
+                RegenerateForRenderModeChange(pid);
                 Utils.SendMessage("vanilla 影 OFF (custom 視界復元)", pid);
                 break;
+            case "chunk":
+            {
+                // チャンク描画 (1 チャンク = メッシュ数枚) とタイル GO 方式を同じ seed のまま切り替える。/bbshadow chunk on|off
+                if (Main.BackroomsChunkMesh != null && args is { Length: >= 3 })
+                    Main.BackroomsChunkMesh.Value = !args[2].Equals("off", StringComparison.OrdinalIgnoreCase);
+                if (_inBackrooms && EkmapLoader.ActiveSource == null) GenerateLobby(_lastSeed, pid, silent: true);
+                Utils.SendMessage($"チャンク描画 = {(_chunkMeshMode ? "ON" : "OFF")} (cfg {Main.BackroomsChunkMesh?.Value}) meshChunks={_chunkRenders.Count} tiles={SpawnedTiles.Count}", pid);
+                break;
+            }
             case "radius":
                 float r = args is { Length: >= 3 } && float.TryParse(args[2], out float rv) ? rv : BackroomsConfig.DefaultShadowRadius;
                 BackroomsConfig.UseVanillaShadow = true;
@@ -3258,6 +3305,7 @@ public static class BackroomsLobby
                     Transform bandV = go.transform.Find("WallVBottomCapBand");
                     if (bandV != null && bandV.GetComponent<SpriteRenderer>() is { } vsr) { vsr.enabled = on; nv++; }
                 }
+                RegenerateForRenderModeChange(pid); // チャンク描画は帯を焼き込んでいるので組み直す
 
                 Utils.SendMessage($"上端 dark band = {(on ? "ON" : "OFF")} (WallH {nh} / WallV終点 {nv})。OFF で壁V終点の浮きが消えれば band が原因確定です", pid);
                 break;
