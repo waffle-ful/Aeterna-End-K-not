@@ -29,6 +29,12 @@ namespace EndKnot.Modules;
 //
 // 全体はスプラッシュの最初の 1 秒ほど (ログイン待ちで主スレッドがほぼ何もしていない間) に終わる。
 // メニュー構築やオプション構築と同時には走らせない。
+//
+// 起動時の分が終わった後は、試合で初めて通るメソッドを同じ検査で先にコンパイルする仕事を足す。
+// 初めてロビーに入ってしばらくしたら Resources/BootPreJit/match.txt を、試合中はその試合で初めて出た
+// 役職のクラスを、裏スレッドで処理する。この時点ではゲーム側の物が揃っているので、主スレッドで先に
+// 初期化してよい自前の型を EarlyInit に限らず「il2cpp の参照型を直接呼ばない初期化子」へ広げる。
+// ただし時刻を読む初期化子 (その瞬間の値で固まる) と Regex を作る初期化子 (1 つで数十 ms かかり得る) は除く。
 public static class BootPreJit
 {
     // ENDKNOT_BOOT_PREJIT=0 で無効 (比較計測用)。
@@ -57,7 +63,15 @@ public static class BootPreJit
     // 初期化子が必ず済んでいる自前の型 (プラグインの読み込み自体がこの型の上で走っている)。
     private const string MainType = "EndKnot.Main";
 
+    // ロビー以降なら初期化子が必ず済んでいる自前の型 (設定メニューの構築が使っている)。
+    private const string OptionsType = "EndKnot.Options";
+
     private const string ListResource = "EndKnot.Resources.BootPreJit.menu.txt";
+
+    // 試合で初めて通るメソッド (役職の割り当て・会議・投票の締めなど)。ロビーで待っている間に同じ検査で先行コンパイルする。
+    private const string MatchListResource = "EndKnot.Resources.BootPreJit.match.txt";
+    private const long MatchListDelayMs = 5000;
+    private const int JobPollFrames = 30;
     private const int InlineIlLimit = 100;
     private const int MaxInlineDepth = 12;
     private const int MaxRounds = 16;
@@ -84,6 +98,16 @@ public static class BootPreJit
     private static int _prepared, _missing, _failed, _round, _inited;
     private static long _ticks;
 
+    // 起動時の分が終わった後に足す仕事 (試合リスト / その試合の役職)。リストの組み立ては裏スレッドで行う。
+    private static readonly Queue<(string Label, Func<Assembly, List<(MethodBase Method, string Line)>> Build)> PendingJobs = new();
+    private static readonly HashSet<CustomRoles> RolesQueued = [];
+    private static Func<Assembly, List<(MethodBase Method, string Line)>> _build;
+    private static Dictionary<string, Type> _roleTypes;
+    private static string _jobLabel;
+    private static bool _matchQueued;
+    private static long _lobbySince = -1;
+    private static int _poll;
+
     // BOOT 行に載せる要約 (コンパイル済み / 見送り / リストに無い / 失敗 / 裏スレッド ms / 主スレッドで初期化した型 / 周回)。
     public static string Summary => _summary;
 
@@ -101,6 +125,12 @@ public static class BootPreJit
     // 主スレッドから毎フレーム呼ぶ。裏スレッドが止まった原因の型を、1 フレームあたり数 ms ずつ初期化する。
     public static void MainTick()
     {
+        if (_phase == Finished)
+        {
+            PollJobs();
+            return;
+        }
+
         if (_phase != WaitingMain) return;
         if (_stop) { Finish(); return; }
 
@@ -123,6 +153,106 @@ public static class BootPreJit
 
         BootTimeline.Mark("prejit.round");
         StartThread();
+    }
+
+    // 起動時の分が終わった後: ロビーに MatchListDelayMs いたら試合リストを、試合中は今回のプロセスで
+    // 初めて出た役職 (途中で付いたアドオンや変わった役職も) のクラスを積み、手が空いていれば次の仕事を裏スレッドで始める。
+    private static void PollJobs()
+    {
+        if (_jobLabel != null) FlushLog();
+        if (++_poll % JobPollFrames != 0) return;
+
+        try
+        {
+            if (!AmongUsClient.Instance)
+            {
+                _lobbySince = -1;
+            }
+            else if (GameStates.IsLobby)
+            {
+                long now = Environment.TickCount64;
+
+                if (!_matchQueued)
+                {
+                    if (_lobbySince < 0) _lobbySince = now;
+                    else if (now - _lobbySince >= MatchListDelayMs)
+                    {
+                        _matchQueued = true;
+                        PendingJobs.Enqueue(("match", asm => ReadList(asm, MatchListResource)));
+                    }
+                }
+            }
+            else
+            {
+                _lobbySince = -1;
+
+                if (GameStates.InGame && Main.PlayerStates.Count > 0)
+                {
+                    List<string> names = null;
+
+                    foreach (PlayerState state in Main.PlayerStates.Values)
+                    {
+                        if (RolesQueued.Add(state.MainRole)) (names ??= []).Add(state.MainRole.ToString());
+
+                        foreach (CustomRoles sub in state.SubRoles)
+                            if (RolesQueued.Add(sub)) (names ??= []).Add(sub.ToString());
+                    }
+
+                    if (names != null) PendingJobs.Enqueue(("roles", asm => RoleMethods(asm, names)));
+                }
+            }
+        }
+        catch { }
+
+        if (PendingJobs.Count == 0) return;
+
+        (string label, Func<Assembly, List<(MethodBase Method, string Line)>> build) = PendingJobs.Dequeue();
+        _jobLabel = label;
+        _build = build;
+        _todo = null;
+        _stop = false;
+        _prepared = _missing = _failed = _round = _inited = 0;
+        _ticks = 0;
+        StartThread();
+    }
+
+    // 役職のクラス (役職名と同じ名前の型) と、その中のラムダ・イテレーターの型が持つメソッド。
+    private static List<(MethodBase Method, string Line)> RoleMethods(Assembly asm, List<string> names)
+    {
+        if (_roleTypes == null)
+        {
+            var map = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (Type type in asm.GetTypes())
+            {
+                if (type.IsNested || type.Namespace == null || !type.Namespace.StartsWith("EndKnot.Roles", StringComparison.Ordinal)) continue;
+                map.TryAdd(type.Name, type);
+            }
+
+            _roleTypes = map;
+        }
+
+        var result = new List<(MethodBase Method, string Line)>();
+        var stack = new Stack<Type>();
+
+        foreach (string name in names)
+        {
+            if (!_roleTypes.TryGetValue(name, out Type root)) continue;
+            stack.Push(root);
+
+            while (stack.Count > 0)
+            {
+                Type type = stack.Pop();
+                if (type.ContainsGenericParameters) continue;
+
+                foreach (MethodBase method in type.GetMethods(Declared).Cast<MethodBase>().Concat(type.GetConstructors(Declared)))
+                    result.Add((method, type.FullName + "::" + method.Name));
+
+                foreach (Type nested in type.GetNestedTypes(BindingFlags.Public | BindingFlags.NonPublic)) stack.Push(nested);
+            }
+        }
+
+        return result;
     }
 
     // 主スレッドから呼ぶ: 裏スレッドが残した内訳を 1 回だけログへ。
@@ -175,7 +305,7 @@ public static class BootPreJit
     {
         long t0 = Stopwatch.GetTimestamp();
         Assembly asm = typeof(BootPreJit).Assembly;
-        _todo ??= ReadList(asm);
+        _todo ??= _build != null ? _build(asm) : ReadList(asm, ListResource);
         if (_todo == null) { _summary = "nolist"; _phase = Finished; return; }
 
         _round++;
@@ -205,7 +335,9 @@ public static class BootPreJit
 
                     if (blockerType != null && !MainInited.Contains(blockerType) && !InitFailed.Contains(blockerType))
                     {
-                        if (blockerType.FullName == MainType || scan.MayInitOnMain(blockerType, EarlyInit)) wanted.Add(blockerType);
+                        // 起動時の分はシングルトンがまだ無いので EarlyInit に挙げた型だけ。ロビー以降に足す仕事では
+                        // ゲーム側の物が揃っているので、il2cpp の参照型を直接呼ばない初期化子なら許す。
+                        if (blockerType.FullName == MainType || (_jobLabel != null && blockerType.FullName == OptionsType) || scan.MayInitOnMain(blockerType, _jobLabel != null ? null : EarlyInit)) wanted.Add(blockerType);
                     }
 
                     continue;
@@ -236,7 +368,7 @@ public static class BootPreJit
         int skipped = _todo?.Count ?? 0;
         _summary = $"{_prepared}/s{skipped}/m{_missing}/f{_failed}/{ms}ms/i{_inited}/r{_round}/@{BootTimeline.ElapsedMs}{(_stop ? "/cut" : "")}";
         string top = string.Join(", ", Blockers.OrderByDescending(kv => kv.Value).Take(24).Select(kv => $"{kv.Key}={kv.Value}"));
-        Interlocked.Exchange(ref _detailBox, $"prepared={_prepared} skipped={skipped} missing={_missing} failed={_failed} ms={ms} inited={_inited} rounds={_round} blockers=[{top}]{(InitFailed.Count > 0 ? " initFailed=[" + string.Join(", ", InitFailed.Select(t => t.FullName)) + "]" : "")}{(Verbose ? " skippedList=[" + string.Join(" | ", SkippedList) + "]" : "")}");
+        Interlocked.Exchange(ref _detailBox, $"{(_jobLabel != null ? _jobLabel + " " : "")}prepared={_prepared} skipped={skipped} missing={_missing} failed={_failed} ms={ms} inited={_inited} rounds={_round} blockers=[{top}]{(InitFailed.Count > 0 ? " initFailed=[" + string.Join(", ", InitFailed.Select(t => t.FullName)) + "]" : "")}{(Verbose ? " skippedList=[" + string.Join(" | ", SkippedList) + "]" : "")}");
         _phase = Finished;
     }
 
@@ -258,11 +390,11 @@ public static class BootPreJit
         catch { return true; }
     }
 
-    private static List<(MethodBase Method, string Line)> ReadList(Assembly asm)
+    private static List<(MethodBase Method, string Line)> ReadList(Assembly asm, string resource)
     {
         string[] lines;
 
-        using (Stream stream = asm.GetManifestResourceStream(ListResource))
+        using (Stream stream = asm.GetManifestResourceStream(resource))
         {
             if (stream == null) return null;
             using var reader = new StreamReader(stream);
@@ -341,16 +473,26 @@ public static class BootPreJit
             return result;
         }
 
-        // 主スレッドで先に初期化してよい型か。自前の型は allow に挙がっていて、かつ初期化子が
-        // il2cpp 側の参照型 (シーン上のオブジェクトやシングルトン) を直接呼んでいないこと。
+        // 主スレッドで先に初期化してよい型か。自前の型は allow に挙がっていて (allow が null なら問わない)、
+        // かつ初期化子が il2cpp 側の参照型 (シーン上のオブジェクトやシングルトン) を直接呼んでいないこと。
         public bool MayInitOnMain(Type type, HashSet<string> allow)
         {
             if (type.ContainsGenericParameters) return false;
             if (type.Assembly != _self) return true;
-            if (type.IsGenericType || type.FullName == null || !allow.Contains(type.FullName)) return false;
+            if (type.IsGenericType || type.FullName == null || (allow != null && !allow.Contains(type.FullName))) return false;
 
             ConstructorInfo cctor = type.TypeInitializer;
-            return cctor == null || InitializerCallsOnly(cctor, earlyOnMain: true);
+            return cctor == null || InitializerCallsOnly(cctor, earlyOnMain: true, laterJob: allow == null);
+        }
+
+        // 後から足す仕事で主スレッドに先回りさせない初期化子の呼び出し: 時刻を読む (初期化した瞬間の値で固まる) と
+        // Regex を作る (1 つで数十 ms かかり得る)。
+        private static bool DeniedInLaterJob(MethodBase callee)
+        {
+            Type owner = callee.DeclaringType;
+            if (owner == typeof(DateTime) || owner == typeof(Stopwatch) || owner == typeof(System.Text.RegularExpressions.Regex)) return true;
+            if (owner == typeof(Environment) && callee.Name.StartsWith("get_TickCount", StringComparison.Ordinal)) return true;
+            return owner?.FullName == "EndKnot.Utils" && callee.Name == "get_TimeStamp";
         }
 
         private string RootBlockerCore(MethodBase method)
@@ -544,7 +686,7 @@ public static class BootPreJit
         //   同じ条件を満たす自前の型の静的フィールドしか触らないこと。
         // earlyOnMain=true: 主スレッドで前倒しに走らせてよい初期化子か。il2cpp 側は値型 (Color / Vector など)
         //   のメンバーしか呼ばないこと。自前のメソッド呼び出しは許す。
-        private bool InitializerCallsOnly(ConstructorInfo cctor, bool earlyOnMain)
+        private bool InitializerCallsOnly(ConstructorInfo cctor, bool earlyOnMain, bool laterJob = false)
         {
             byte[] il;
             try { il = cctor.GetMethodBody()?.GetILAsByteArray(); }
@@ -605,6 +747,7 @@ public static class BootPreJit
 
                             if (earlyOnMain)
                             {
+                                if (laterJob && DeniedInLaterJob(callee)) return false;
                                 if (!IsBcl(owner.Assembly) && owner.Assembly != _self && !owner.IsValueType) return false;
                             }
                             else if (IsBcl(owner.Assembly))
