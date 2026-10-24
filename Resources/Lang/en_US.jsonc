@@ -4277,7 +4277,7 @@
   "SprayerNotify": "Trap placed",
   "Stalker": "Stalker",
   "StalkerInfo": "Your kills cause power outages",
-  "StalkerInfoLong": "(<#ffab1b>Neutrals</color>):\n<size=80%>Every kill plunges the ship into darkness.\n_____________________________________\nDifficulty: ★★☆☆☆\n\n[Skills]\n・<b><color=#ffab1b>Blackout Kill</color></b>\nEach kill triggers the electricity sabotage. Cannot vent. Depending on host settings, may win alone if alive when the Crewmate or Impostor team wins.\n\n<i>The lights go out, and the screaming begins.</i></size>",
+  "StalkerInfoLong": "(<#ffab1b>Neutrals</color>):\n<size=80%>Every kill plunges the ship into darkness.\n_____________________________________\nDifficulty: ★★☆☆☆\nWin condition: If alive when one of these wins, snatches the victory and wins alone\n・Impostors (except a sabotage win)\n・Crewmates (when \"Snatches victory\" is on and you killed an Impostor (or a Neutral Killer, depending on settings); except a task win)\n・Neutral Killers (when \"Also snatches Neutral Killer victories\" is on)\n\n[Skills]\n・<b><color=#ffab1b>Blackout Kill</color></b>\nEach kill triggers the electricity sabotage. Whether you can vent depends on settings.\n\n[Note]\nWhile \"Snatches victory\" is on, you count as a Crewmate when deciding the game's end.\n\n<i>The lights go out, and the screaming begins.</i></size>",
   "Starspawn": "Starspawn",
   "StarspawnInfo": "Isolate Players & Call Daybreak",
   "StarspawnInfoLong": "(<#ffab1b>Neutrals</color>):\n<size=80%>Isolate the crew from help, then call daybreak to silence all resistance.\n_____________________________________\nDifficulty: ★★★☆☆\n\n[Win Condition]\n・<b><color=#ffab1b>Isolate</color></b>\nUse your kill button to isolate a player. Only evil players can interact with isolated players.\n\n・<b><color=#ffab1b>Daybreak</color></b>\nOnce per game, type <b>/cmd daybreak</b> in chat during a meeting to prevent ALL meeting abilities — guessing, judging, and other role-specific abilities — for that meeting.\n\nWin if crewmates lose.\n\n<i>When daybreak comes, there is nowhere left to hide.</i></size>",
@@ -10591,7 +10591,7 @@
   "CanBeInLove": "Can be <color=#ff9ace>in love</color>",
   "CanBeSoldByMerchant": "Can be sold by <color=#D27D2D>Merchant</color>",
   "CanCheckCamera": "Can track camera usage",
-  "CanCountNeutralKiller": "When <color=#8cffff>Crewmates</color> win by killing a <color=#ffab1b>Neutral</color> player, they can snatch the victory",
+  "CanCountNeutralKiller": "Killing a <color=#ffab1b>Neutral Killer</color> also counts toward snatching a <color=#8cffff>Crewmate</color> victory",
   "CanGetImpostorOnlyAddons": "Can get <#ff1919>Impostor-only</color> add-ons",
 
   /* ==============================
@@ -13635,6 +13635,7 @@
   "Skip": "Skip",
   "SnatchWin": "Snatches Win (Win With Winning Team if Off)",
   "SnatchesWin": "Snatches victory",
+  "StalkerSnatchesNeutralKillerWin": "Also snatches Neutral Killer victories",
   "SomeSortOfProtection": "This player is shielded due to a role-specific action",
   "SpawnAdditionalRenegadeOnImpsDead": "Random <#8cffff>Crewmate</color> Turns To <#ff1919>Renegade</color> When All <#ff1919>Impostors</color> Die",
   "SpawnAdditionalRenegadeWhenNKAlive": "Spawn Even If a <#ffab1b>Neutral Killer</color> is Alive",

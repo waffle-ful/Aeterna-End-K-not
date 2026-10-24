@@ -16,6 +16,7 @@ public class Stalker : RoleBase
     private static OptionItem CanCountNeutralKiller;
     private static OptionItem CanVent;
     public static OptionItem SnatchesWin;
+    public static OptionItem SnatchesNeutralKillerWin;
 
     private float CurrentKillCooldown = Options.AdjustedDefaultKillCooldown;
     public bool IsWinKill;
@@ -40,6 +41,9 @@ public class Stalker : RoleBase
             .SetParent(Options.CustomRoleSpawnChances[CustomRoles.Stalker]);
 
         SnatchesWin = new BooleanOptionItem(Id + 13, "SnatchesWin", false, TabGroup.NeutralRoles)
+            .SetParent(Options.CustomRoleSpawnChances[CustomRoles.Stalker]);
+
+        SnatchesNeutralKillerWin = new BooleanOptionItem(Id + 15, "StalkerSnatchesNeutralKillerWin", false, TabGroup.NeutralRoles)
             .SetParent(Options.CustomRoleSpawnChances[CustomRoles.Stalker]);
     }
 
