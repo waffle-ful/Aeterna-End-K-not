@@ -40,6 +40,28 @@ internal static class EmbeddedBundleFile
 #endif
     }
 
+    // TryOpen の非同期版。バイト列を il2cpp 側へ写さないので、ゲーム側 GC ヒープが一時的な大きな配列の分だけ広がることもない
+    internal static AssetBundleCreateRequest TryOpenAsync(string resourceName)
+    {
+#if ANDROID
+        return null;
+#else
+        try
+        {
+            if (!_scanned) Scan();
+            if (_offsets == null || !_offsets.TryGetValue(resourceName, out long offset)) return null;
+            if (!HasSignature(offset)) return null;
+
+            return AssetBundle.LoadFromFileAsync(_path, 0u, (ulong)offset);
+        }
+        catch (Exception e)
+        {
+            Logger.Warn($"{resourceName}: async open from file failed ({e.GetType().Name}: {e.Message})", "EmbeddedBundleFile");
+            return null;
+        }
+#endif
+    }
+
 #if !ANDROID
     // 埋め込みリソースは DLL の中に無圧縮で並んでいる。名前ごとの開始位置を 1 回だけ引いておく。
     private static void Scan()

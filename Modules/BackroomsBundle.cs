@@ -57,6 +57,13 @@ internal static class BackroomsBundle
         {
             _startTicks = System.Diagnostics.Stopwatch.GetTimestamp();
 
+            _createRequest = EmbeddedBundleFile.TryOpenAsync(EmbeddedResourceName);
+            if (_createRequest != null)
+            {
+                _stage = Stage.Creating;
+                return;
+            }
+
             _bytes = ReadEmbeddedBytes();
             if (_bytes == null) { Fail(); return; }
 
