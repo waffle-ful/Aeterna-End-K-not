@@ -25,7 +25,7 @@ public class DevBuildBanner : MonoBehaviour
 
     private void Awake()
     {
-        ImguiNoLayout.Apply(this);
+        ImguiHost.Add(this, DrawGui, WantsGui);
     }
 
     private bool ShouldShow()
@@ -38,7 +38,10 @@ public class DevBuildBanner : MonoBehaviour
         return !GameStates.InGame;
     }
 
-    private void OnGUI()
+    // ImguiHost が描くかを聞く (偽の間は IMGUI ごと止まる)
+    private bool WantsGui() => !CleanShot.On && ShouldShow();
+
+    private void DrawGui()
     {
         try
         {

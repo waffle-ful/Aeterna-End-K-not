@@ -1,5 +1,5 @@
 // Il2CppInterop.Runtime 1.5.3 の barrier 無しの参照書き込み 3 か所を il2cpp_gc_wbarrier_set_field 経由に書き換える。
-// packaging/il2cppinterop/Il2CppInterop.Runtime.dll はこのツールの出力 (LGPL-3.0 の改変版)。
+// packaging/il2cppinterop/Il2CppInterop.Runtime.dll はこのツールの出力に tools/InteropPtrCachePatch を掛けた物 (LGPL-3.0 の改変版)。
 //   1) IL2CPP.FieldWriteWbarrierStub(obj, target, value) の本体 = il2cpp_gc_wbarrier_set_field(obj, target, value)
 //      (ScanMethodRefs=false で生成した interop の参照型フィールド setter はここを呼ぶ)
 //   2) Il2CppReferenceArray<T>.StoreValue の参照型分岐の stind.i

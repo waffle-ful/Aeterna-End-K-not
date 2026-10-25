@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using Il2CppInterop.Runtime.Injection;
 using TMPro;
 using UnityEngine;
 
@@ -64,8 +65,6 @@ public class SpawnEditorUi : MonoBehaviour
     private void Awake()
     {
         Instance = this;
-        try { useGUILayout = false; }
-        catch { }
     }
 
     private List<SpawnPoint> Points => SpawnStore.Library.Current.GetPoints(_mapId, true);
@@ -90,6 +89,8 @@ public class SpawnEditorUi : MonoBehaviour
         int map;
         try { map = Host?.EditMapId ?? -1; }
         catch { map = -1; }
+
+        SetPainter(map >= 0 && !_failed);
 
         if (map < 0)
         {
@@ -153,6 +154,24 @@ public class SpawnEditorUi : MonoBehaviour
             _failed = true;
             Shutdown();
         }
+    }
+
+    // OnGUI を持つ有効な MonoBehaviour は描く物が無くても毎フレーム呼ばれるので、描画役はエディタを使っている間だけ有効にする。
+    private SpawnEditorUiPainter _painter;
+    private bool _painterOn;
+
+    private void SetPainter(bool on)
+    {
+        if (on == _painterOn) return;
+        _painterOn = on;
+
+        if (on && !_painter)
+        {
+            if (!ClassInjector.IsTypeRegisteredInIl2Cpp<SpawnEditorUiPainter>()) ClassInjector.RegisterTypeInIl2Cpp<SpawnEditorUiPainter>();
+            _painter = gameObject.AddComponent<SpawnEditorUiPainter>();
+        }
+
+        if (_painter) _painter.enabled = on;
     }
 
     private void Shutdown()
@@ -383,7 +402,7 @@ public class SpawnEditorUi : MonoBehaviour
 
     // ==== IMGUI: only the settings window; the editor itself lives on the ability buttons ====
 
-    private void OnGUI()
+    internal void DrawGui()
     {
         if (_failed || _mapId < 0 || !_details || _cTitle == null) return;
 
@@ -943,5 +962,20 @@ public class SpawnEditorUi : MonoBehaviour
     {
         int id = pc.Data?.DefaultOutfit?.ColorId ?? -1;
         return id >= 0 && id < Palette.PlayerColors.Length ? Palette.PlayerColors[id] : Color.white;
+    }
+}
+
+public class SpawnEditorUiPainter : MonoBehaviour
+{
+    private void Awake()
+    {
+        try { useGUILayout = false; }
+        catch { }
+    }
+
+    private void OnGUI()
+    {
+        SpawnEditorUi ui = SpawnEditorUi.Instance;
+        if (ui) ui.DrawGui();
     }
 }

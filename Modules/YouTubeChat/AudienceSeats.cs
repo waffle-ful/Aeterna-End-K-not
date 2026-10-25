@@ -128,7 +128,7 @@ public class AudienceSeats : MonoBehaviour
     private void Awake()
     {
         Instance = this;
-        ImguiNoLayout.Apply(this);
+        ImguiHost.Add(this, DrawGui, WantsGui);
     }
 
     // 視聴者コメントの受け口 (worker thread から呼ばれる)。ここでは積むだけ
@@ -744,7 +744,10 @@ public class AudienceSeats : MonoBehaviour
 
     // ── 吹き出し (IMGUI) ───────────────────────────────────────
 
-    private void OnGUI()
+    // ImguiHost が描くかを聞く (偽の間は IMGUI ごと止まる)
+    private bool WantsGui() => !CleanShot.On && _shown;
+
+    private void DrawGui()
     {
         try
         {

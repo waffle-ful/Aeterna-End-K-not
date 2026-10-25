@@ -94,7 +94,7 @@ public class ClientControlGUI : MonoBehaviour
     {
         _cam = Camera.main;
         Instance = this;
-        ImguiNoLayout.Apply(this);
+        ImguiHost.Add(this, DrawGui, WantsGui);
         SceneManager.add_sceneLoaded((Action<Scene, LoadSceneMode>)OnSceneLoaded);
         Logger.Info("ClientControlGUI initialised", "ClientControlGUI");
     }
@@ -102,6 +102,7 @@ public class ClientControlGUI : MonoBehaviour
     private void OnDestroy()
     {
         SceneManager.remove_sceneLoaded((Action<Scene, LoadSceneMode>)OnSceneLoaded);
+        if (Il2Direct.Alive(_toggleGo)) Destroy(_toggleGo);
     }
 
     // 終了時の番犬/相棒アプリの後始末は Modules/ExitHook.cs が持つ。
@@ -303,8 +304,8 @@ public class ClientControlGUI : MonoBehaviour
         _windowInitialized = true;
     }
 
-    // OnGUI is called by Unity every frame (and sometimes multiple times per frame)
-    private void OnGUI()
+    // Called from ImguiHost's OnGUI once per IMGUI event (Repaint every frame, plus input events)
+    private void DrawGui()
     {
         if (!HudManager.InstanceExists || Modules.CleanShot.On) return;
 
@@ -318,9 +319,197 @@ public class ClientControlGUI : MonoBehaviour
             HealthLog.EndOp();
         }
 
+        // While closed, the "=" button is the HUD sprite (TickToggle) and IMGUI is not running at all
+        if (!IsOpen) return;
+
         HandleDrag();
         DrawToggle();
         if (IsOpen) DrawWindow();
+    }
+
+    // ImguiHost asks this a few times a second; IMGUI only needs to run while the window is open
+    private bool WantsGui() => IsOpen && HudManager.InstanceExists && !Modules.CleanShot.On;
+
+    // ==== the closed "=" button as a HUD sprite ====
+    // An enabled OnGUI component makes the engine run its IMGUI pass every frame (about 0.06ms) even for one small
+    // button, so the closed button is a sprite with the same look, place and size, and clicks are read here.
+    private static GameObject _toggleGo;
+    private static SpriteRenderer _toggleSr;
+    private static Sprite _spNormal, _spHover, _spActive, _spShown;
+    private static Texture2D _texNormal, _texHover, _texActive;
+    private static int _toggleTexSize = -1;
+    private static Rect _toggleRect; // screen pixels, bottom-left origin (Input.mousePosition space)
+    private static int _placedW, _placedH;
+    private static float _placedOrtho = -1f;
+    private static float _toggleAlpha = -1f;
+    private static bool _pressedInside;
+
+    // ModManager.LateUpdate (every frame, every scene)
+    internal void TickToggle()
+    {
+        bool show = !IsOpen && HudManager.InstanceExists && !Modules.CleanShot.On;
+
+        if (!show)
+        {
+            _pressedInside = false;
+            if (Il2Direct.Alive(_toggleGo) && _toggleGo.activeSelf) _toggleGo.SetActive(false);
+            return;
+        }
+
+        EnsureToggle();
+
+        // Without the HUD camera the button cannot be placed or hit-tested
+        if (!PlaceToggle())
+        {
+            _pressedInside = false;
+            if (_toggleGo.activeSelf) _toggleGo.SetActive(false);
+            return;
+        }
+
+        if (!_toggleGo.activeSelf) _toggleGo.SetActive(true);
+
+        // 90% transparent during gameplay or while the settings menu is open, same as the IMGUI button was
+        float alpha = GameStates.IsInGame || GameSettingMenu.Instance ? 0.10f : 1f;
+
+        if (alpha != _toggleAlpha)
+        {
+            _toggleAlpha = alpha;
+            _toggleSr.color = new Color(1f, 1f, 1f, alpha);
+        }
+
+        Vector3 mouse = Input.mousePosition;
+        bool inside = _toggleRect.Contains(new Vector2(mouse.x, mouse.y));
+        if (Input.GetMouseButtonDown(0)) _pressedInside = inside;
+
+        Sprite sprite = !inside ? _spNormal : _pressedInside && Input.GetMouseButton(0) ? _spActive : _spHover;
+
+        if (!ReferenceEquals(sprite, _spShown))
+        {
+            _spShown = sprite;
+            _toggleSr.sprite = sprite;
+        }
+
+        // A click is a press and a release both on the button, like GUI.Button
+        if (Input.GetMouseButtonUp(0))
+        {
+            bool clicked = inside && _pressedInside;
+            _pressedInside = false;
+
+            if (clicked)
+            {
+                IsOpen = true;
+                _toggleGo.SetActive(false);
+                ImguiHost.Refresh();
+            }
+        }
+    }
+
+    private static void EnsureToggle()
+    {
+        int size = Mathf.Max(1, Mathf.RoundToInt(48f * Scale));
+        if (size != _toggleTexSize || !Il2Direct.Alive(_spNormal)) BuildToggleSprites(size);
+        if (Il2Direct.Alive(_toggleGo)) return;
+
+        // The HUD is rebuilt with each scene, and the button goes with it
+        _toggleGo = new GameObject("EndKnotControlToggle") { layer = 5 };
+        _toggleGo.transform.SetParent(HudManager.Instance.transform, false);
+        _toggleSr = _toggleGo.AddComponent<SpriteRenderer>();
+        _toggleSr.sortingOrder = 1000;
+        _spShown = null;
+        _toggleAlpha = -1f;
+        _placedW = 0;
+    }
+
+    private static bool PlaceToggle()
+    {
+        Camera cam = HudManager.Instance.UICamera;
+        if (!cam) return false;
+
+        int sw = Screen.width, sh = Screen.height;
+        float ortho = cam.orthographicSize;
+        if (sw == _placedW && sh == _placedH && ortho == _placedOrtho) return true;
+        _placedW = sw;
+        _placedH = sh;
+        _placedOrtho = ortho;
+
+        // Bottom-left: horizontally at 30% of the screen, 10 px (scaled) above the bottom edge
+        float size = 48f * Scale;
+        float left = sw * 0.3f - size * 0.5f;
+        float bottom = 10f * Scale;
+        _toggleRect = new Rect(left, bottom, size, size);
+
+        Transform t = _toggleGo.transform;
+        Vector3 world = cam.ScreenToWorldPoint(new Vector3(left + size * 0.5f, bottom + size * 0.5f, cam.nearClipPlane + 0.1f));
+        t.localPosition = t.parent.InverseTransformPoint(world);
+
+        // The sprite is 1 world unit; scale it to the button's size in pixels
+        float worldSize = size * 2f * ortho / sh;
+        Vector3 parentScale = t.parent.lossyScale;
+        t.localScale = new Vector3(worldSize / parentScale.x, worldSize / parentScale.y, 1f);
+        return true;
+    }
+
+    private static void BuildToggleSprites(int size)
+    {
+        foreach (Sprite s in new[] { _spNormal, _spHover, _spActive })
+            if (Il2Direct.Alive(s)) Destroy(s);
+        foreach (Texture2D tex in new[] { _texNormal, _texHover, _texActive })
+            if (Il2Direct.Alive(tex)) Destroy(tex);
+
+        _toggleTexSize = size;
+        _placedW = 0; // the button's size follows the texture size, so place it again
+        int radius = size / 4;
+        _texNormal = ToggleTexture(size, radius, new Color(0.10f, 0.10f, 0.28f, 1f), new Color(0.20f, 0.36f, 0.60f, 1f));
+        _texHover = ToggleTexture(size, radius, new Color(0.18f, 0.18f, 0.40f, 1f), new Color(0.30f, 0.48f, 0.72f, 1f));
+        _texActive = ToggleTexture(size, radius, new Color(0.07f, 0.07f, 0.18f, 1f), new Color(0.12f, 0.26f, 0.46f, 1f));
+        _spNormal = MakeSprite(_texNormal, size);
+        _spHover = MakeSprite(_texHover, size);
+        _spActive = MakeSprite(_texActive, size);
+        _spShown = null;
+    }
+
+    private static Sprite MakeSprite(Texture2D tex, int size)
+    {
+        Sprite s = Sprite.Create(tex, new Rect(0f, 0f, size, size), new Vector2(0.5f, 0.5f), size);
+        s.hideFlags = HideFlags.HideAndDontSave;
+        return s;
+    }
+
+    // The IMGUI toggle's rounded square with the "=" glyph drawn into it (two white bars)
+    private static Texture2D ToggleTexture(int size, int radius, Color fill, Color edge)
+    {
+        var tex = new Texture2D(size, size, TextureFormat.ARGB32, false) { filterMode = FilterMode.Bilinear };
+        var pixels = new Color32[size * size];
+        Color32 clear = FxMath.Rgba32(0, 0, 0, 0);
+        Color32 solid = ToColor32(fill.r, fill.g, fill.b, fill.a);
+        Color32 white = FxMath.Rgba32(255, 255, 255, 255);
+
+        int barW = Mathf.Max(2, Mathf.RoundToInt(size * 0.40f));
+        int barH = Mathf.Max(1, Mathf.RoundToInt(size * 0.085f));
+        int gap = Mathf.Max(1, Mathf.RoundToInt(size * 0.12f));
+        int barX = (size - barW) / 2;
+        int lowY = (size - gap) / 2 - barH;
+        int highY = (size + gap) / 2;
+
+        for (int py = 0; py < size; py++)
+        {
+            int row = py * size;
+            bool barRow = (py >= lowY && py < lowY + barH) || (py >= highY && py < highY + barH);
+
+            for (int px = 0; px < size; px++)
+            {
+                float a = CornerAlpha(px, py, size, size, radius);
+                pixels[row + px] = a <= 0f ? clear
+                    : barRow && px >= barX && px < barX + barW ? white
+                    : a >= 1f ? solid
+                    : ToColor32(edge.r + (fill.r - edge.r) * a, edge.g + (fill.g - edge.g) * a, edge.b + (fill.b - edge.b) * a, edge.a + (fill.a - edge.a) * a);
+            }
+        }
+
+        tex.SetPixels32(pixels);
+        tex.Apply(false, true);
+        tex.hideFlags = HideFlags.HideAndDontSave;
+        return tex;
     }
 
     // Draws the small toggle button for the panel; fades to 10% opacity during gameplay

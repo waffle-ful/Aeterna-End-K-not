@@ -45,7 +45,7 @@ public class LobbyCodeTicker : MonoBehaviour
 
     private void Awake()
     {
-        ImguiNoLayout.Apply(this);
+        ImguiHost.Add(this, DrawGui, WantsGui);
     }
 
     private static bool ShouldShow()
@@ -57,7 +57,18 @@ public class LobbyCodeTicker : MonoBehaviour
         return GameStates.IsLobby;
     }
 
-    private void OnGUI()
+    // ImguiHost が描くかを聞く (偽の間は IMGUI ごと止まる)。隠れている間に出ていた 1 枚は捨て、戻ったら少し待ってから出し直す
+    private bool WantsGui()
+    {
+        if (CleanShot.On) return false;
+        if (ShouldShow()) return true;
+
+        _runStart = -1f;
+        _nextStart = -1f;
+        return false;
+    }
+
+    private void DrawGui()
     {
         try
         {
