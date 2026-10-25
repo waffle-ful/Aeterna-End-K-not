@@ -85,7 +85,7 @@ public class StreamSetupGUI : MonoBehaviour
     private void Awake()
     {
         Instance = this;
-        ImguiNoLayout.Apply(this);
+        ImguiHost.Add(this, DrawGui, WantsGui);
         SceneManager.add_sceneLoaded((Action<Scene, LoadSceneMode>)OnSceneLoaded);
         Logger.Info("StreamSetupGUI initialised", "StreamSetupGUI");
     }
@@ -240,7 +240,10 @@ public class StreamSetupGUI : MonoBehaviour
         else Open();
     }
 
-    private void OnGUI()
+    // ImguiHost が描くかを聞く (偽の間は IMGUI ごと止まる)
+    private bool WantsGui() => IsOpen && Translator.IsInitialized;
+
+    private void DrawGui()
     {
         if (!IsOpen) return;
         // 起動直後は Translator.Init() より前に OnGUI が回りうる。GetString の NRE を避ける。

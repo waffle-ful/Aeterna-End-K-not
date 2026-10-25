@@ -719,7 +719,11 @@ public class Main : BasePlugin
         coroutines = AddComponent<Coroutines>();
         // ホストローカルの GUI 部品は最初の描画フレームより前には要らないので、スプラッシュ中の
         // フレームで順に足す (Modules.PatchPhases.Defer)。Load を短くするほど EOS ログインの開始が早まる。
-        Modules.PatchPhases.Defer("ClientControlGUI", () => AddComponent<ClientControlGUI>());
+        Modules.PatchPhases.Defer("ClientControlGUI", () =>
+        {
+            AddComponent<Modules.ImguiHost>();
+            AddComponent<ClientControlGUI>();
+        });
         Modules.PatchPhases.Defer("SpawnEditor", () =>
         {
             Modules.SpawnEditor.EkSpawnEditor.Init();

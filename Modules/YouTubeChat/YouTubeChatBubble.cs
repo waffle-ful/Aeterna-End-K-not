@@ -69,7 +69,7 @@ public class YouTubeChatBubble : MonoBehaviour
     private void Awake()
     {
         Instance = this;
-        ImguiNoLayout.Apply(this);
+        ImguiHost.Add(this, DrawGui, WantsGui);
     }
 
     private static bool ShouldShow()
@@ -98,7 +98,17 @@ public class YouTubeChatBubble : MonoBehaviour
         catch (Exception e) { Utils.ThrowException(e); }
     }
 
-    private void OnGUI()
+    // ImguiHost が描くかを聞く (偽の間は IMGUI ごと止まる)
+    private bool WantsGui()
+    {
+        if (CleanShot.On) return false;
+        if (ShouldShow()) return true;
+
+        _panelRect = default;
+        return false;
+    }
+
+    private void DrawGui()
     {
         try
         {

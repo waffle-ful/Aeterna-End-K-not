@@ -559,6 +559,14 @@ internal static class ModManagerLateUpdatePatch
                 ? Camera.main
                 : HudManager.Instance.GetComponentInChildren<Camera>();
         }
+
+        try
+        {
+            EndKnot.Modules.ImguiHost.Tick();
+            ClientControlGUI gui = ClientControlGUI.Instance;
+            if (EndKnot.Modules.Il2Direct.Alive(gui)) gui.TickToggle();
+        }
+        catch (Exception e) { Utils.ThrowException(e); }
     }
 }
 

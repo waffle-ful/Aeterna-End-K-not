@@ -45,7 +45,7 @@ public class AudienceInfoBubble : MonoBehaviour
     private void Awake()
     {
         Instance = this;
-        ImguiNoLayout.Apply(this);
+        ImguiHost.Add(this, DrawGui, WantsGui);
     }
 
     private static bool ShouldShow()
@@ -59,7 +59,10 @@ public class AudienceInfoBubble : MonoBehaviour
         return true;
     }
 
-    private void OnGUI()
+    // ImguiHost が描くかを聞く (偽の間は IMGUI ごと止まる)
+    private bool WantsGui() => !CleanShot.On && ShouldShow();
+
+    private void DrawGui()
     {
         try
         {

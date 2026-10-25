@@ -66,6 +66,13 @@ public static class HostInfoPanelSetUpPatch
 {
     private static TextMeshPro HostText;
 
+    // 本編は SetUp を毎フレーム呼ぶ。表示する文は色が変わった時と 0.25 秒ごとにだけ組み立て直し、
+    // 間は組み立て済みの文を書く (ホスト名の取得・分割・翻訳・色付けを毎フレームしない)。
+    private static string CachedText;
+    private static int CachedColorId = -1;
+    private static float NextBuildTime;
+    private static IntPtr CachedPanel; // a new lobby's panel must not show the previous host's name
+
     public static bool Prefix(HostInfoPanel __instance)
     {
         return GameStates.IsLobby && __instance.player.ColorId != byte.MaxValue;
@@ -77,14 +84,32 @@ public static class HostInfoPanelSetUpPatch
         {
             if (!HostText) HostText = __instance.content.transform.FindChild("Name").GetComponent<TextMeshPro>();
 
-            string name = AmongUsClient.Instance.GetHost().PlayerName.Split('\n')[^1];
-            if (name == string.Empty) return;
+            int colorId = __instance.player.ColorId;
+            float now = Time.unscaledTime;
 
-            string text = AmongUsClient.Instance.AmHost
-                ? Translator.GetString("YouAreHostSuffix")
-                : name;
+            IntPtr panel = __instance.Pointer;
 
-            HostText.text = Utils.ColorString(Palette.PlayerColors[__instance.player.ColorId], text);
+            if (CachedText == null || colorId != CachedColorId || now >= NextBuildTime || panel != CachedPanel)
+            {
+                CachedColorId = colorId;
+                CachedPanel = panel;
+                NextBuildTime = now + 0.25f;
+
+                string name = AmongUsClient.Instance.GetHost().PlayerName.Split('\n')[^1];
+                if (name == string.Empty)
+                {
+                    CachedText = null;
+                    return;
+                }
+
+                string text = AmongUsClient.Instance.AmHost
+                    ? Translator.GetString("YouAreHostSuffix")
+                    : name;
+
+                CachedText = Utils.ColorString(Palette.PlayerColors[colorId], text);
+            }
+
+            HostText.text = CachedText;
         }
         catch { }
     }

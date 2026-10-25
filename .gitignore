@@ -458,6 +458,10 @@ tools/AndroidDotnetPatch/obj/
 !tools/InteropWbPatch/
 tools/InteropWbPatch/bin/
 tools/InteropWbPatch/obj/
+# ...and the Il2CppInterop pointer-cache patcher, applied after the write-barrier patcher.
+!tools/InteropPtrCachePatch/
+tools/InteropPtrCachePatch/bin/
+tools/InteropPtrCachePatch/obj/
 # ...and the crash-recovery watchdog, which is embedded into the DLL & shipped as a feature.
 !tools/EndKnotWatchdog.ps1
 !tools/番犬スタート.cmd
