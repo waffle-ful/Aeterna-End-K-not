@@ -85,7 +85,9 @@ public static class CalamityFonts
         }
 
         var font = new Font(path);
-        TMP_FontAsset fa = TMP_FontAsset.CreateFontAsset(font, 90, 9, GlyphRenderMode.SDFAA, 2048, 2048, AtlasPopulationMode.Dynamic, true);
+        // 動的アトラスは字を足すたびにアトラス全体ぶんの一時バッファが数秒残る (2048 四方で起動直後に約 210MB の山・実測)。
+        // メニューの字数なら 1024 四方で足り、溢れても 2 枚目のアトラスが作られる
+        TMP_FontAsset fa = TMP_FontAsset.CreateFontAsset(font, 90, 9, GlyphRenderMode.SDFAA, 1024, 1024, AtlasPopulationMode.Dynamic, true);
         if (fa == null) return null;
         fa.name = "DuskMenuFont";
 
