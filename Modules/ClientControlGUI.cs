@@ -337,6 +337,7 @@ public class ClientControlGUI : MonoBehaviour
     private static SpriteRenderer _toggleSr;
     private static Sprite _spNormal, _spHover, _spActive, _spShown;
     private static Texture2D _texNormal, _texHover, _texActive;
+    private static Material _toggleMat;
     private static int _toggleTexSize = -1;
     private static Rect _toggleRect; // screen pixels, bottom-left origin (Input.mousePosition space)
     private static int _placedW, _placedH;
@@ -414,7 +415,18 @@ public class ClientControlGUI : MonoBehaviour
         _toggleGo = new GameObject("EndKnotControlToggle") { layer = 5 };
         _toggleGo.transform.SetParent(HudManager.Instance.transform, false);
         _toggleSr = _toggleGo.AddComponent<SpriteRenderer>();
-        _toggleSr.sortingOrder = 1000;
+
+        // The IMGUI button was drawn over everything (the meeting screen's frame included), so sort it last and
+        // draw it in the overlay queue. Do not read SortingLayer.layers here: in this game's player it crashes the
+        // process (AccessViolation). One material is shared by every toggle and kept for the whole session.
+        _toggleSr.sortingOrder = short.MaxValue;
+
+        if (!Il2Direct.Alive(_toggleMat))
+        {
+            _toggleMat = new Material(_toggleSr.sharedMaterial) { renderQueue = 4000, hideFlags = HideFlags.HideAndDontSave };
+        }
+
+        _toggleSr.sharedMaterial = _toggleMat;
         _spShown = null;
         _toggleAlpha = -1f;
         _placedW = 0;
