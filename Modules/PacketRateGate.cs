@@ -53,6 +53,7 @@ public static class PacketRateGate
     private static readonly Stopwatch Clock = Stopwatch.StartNew();
     private static readonly Stopwatch WindowTimer = Stopwatch.StartNew();
     private static readonly Queue<long> SentHistory = new();
+    private const long SentHistoryKeepMs = 10000;
     private static int SentThisWindow;
     private static long LastHealthSampleMs = -1;
     private static int LastPingMs;
@@ -373,7 +374,14 @@ public static class PacketRateGate
     // どちらの数え方に切り替えても破綻しないよう、両方の計数を常に進める。
     private static void NoteSent()
     {
-        SentHistory.Enqueue(Clock.ElapsedMilliseconds);
+        long now = Clock.ElapsedMilliseconds;
+
+        // 固定窓の間は UsedThisWindow が SentHistory を読まず、窓から出た記録が捨てられないまま溜まり続ける。
+        // 窓 (1 秒 + ping の改善分) より十分長い 10 秒を超えた記録だけ捨てるので、スライド窓の会計は変わらない
+        while (SentHistory.Count > 0 && SentHistory.Peek() <= now - SentHistoryKeepMs)
+            SentHistory.Dequeue();
+
+        SentHistory.Enqueue(now);
         SentThisWindow++;
     }
 
