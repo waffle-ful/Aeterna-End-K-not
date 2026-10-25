@@ -220,6 +220,37 @@ internal static class ChatControllerForceClosedPatch
 internal static class ChatControllerSetVisiblePatch
 {
     public static bool Prefix([HarmonyArgument(0)] bool visible) => visible || !Utils.TempReviveHostRunning || GameStates.IsEnded || !GameStates.InGame;
+
+    // 右上の「?」は毎フレーム静的な「普段の位置」か「チャットをよけた位置」(会議中) のどちらかへ自分を置く。
+    // 試合中にチャットを出すと普段の位置のままチャットのボタンに半分被るので、出している間だけ普段の位置をよけた位置にする。
+    // チャットの後ろの板は右隣のボタンへつながる形なので、チャット側は動かさない
+    private static Vector3? _vanillaMatchInfoPos;
+
+    public static void Postfix([HarmonyArgument(0)] bool visible, bool __runOriginal)
+    {
+        if (!__runOriginal) return;
+
+        if (visible && GameStates.InGame && !GameStates.IsEnded)
+        {
+            _vanillaMatchInfoPos ??= MatchInfoHudButton.defaultDistanceFromEdge;
+            MatchInfoHudButton.defaultDistanceFromEdge = MatchInfoHudButton.adjustedDistanceFromEdge;
+        }
+        else RestoreMatchInfoPos();
+    }
+
+    // チャットを出したまま試合が終わると隠す呼び出しが来ないので、終了時にも戻す
+    internal static void RestoreMatchInfoPos()
+    {
+        if (_vanillaMatchInfoPos is not { } v) return;
+        MatchInfoHudButton.defaultDistanceFromEdge = v;
+        _vanillaMatchInfoPos = null;
+    }
+}
+
+[HarmonyPatch(typeof(AmongUsClient), nameof(AmongUsClient.OnGameEnd))]
+internal static class ChatControllerMatchInfoRestorePatch
+{
+    public static void Postfix() => ChatControllerSetVisiblePatch.RestoreMatchInfoPos();
 }
 
 public static class ChatManager

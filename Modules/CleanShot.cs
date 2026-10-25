@@ -8,8 +8,11 @@ namespace EndKnot.Modules;
 // カットイン類は HudManager の親 (カメラ) の下に作られるので、隠しても残る。
 public static class CleanShot
 {
-    // 重ね表示 (OnGUI) を隠すかどうか。HUD を残すモードでも立つ
-    public static bool On { get; private set; }
+    // 重ね表示 (OnGUI) を隠すかどうか。HUD を残すモードでも立つ。
+    // バグ報告の窓を開いている間も立てる: OnGUI の表示はワールドの窓より必ず手前に描かれ、窓の上に被さるため
+    public static bool On => _on || BugReport.IsOpen;
+
+    private static bool _on;
 
     private static bool _hud;
     private static bool _noPlayers;
@@ -27,8 +30,8 @@ public static class CleanShot
 
     public static void Set(bool on, bool hud = true)
     {
-        if (On && (!on || _hud != hud)) RestoreHidden();
-        On = on;
+        if (_on && (!on || _hud != hud)) RestoreHidden();
+        _on = on;
         _hud = on && hud;
         if (on) return;
 
@@ -146,7 +149,7 @@ public static class CleanShot
                 if (pc && pc.Visible) pc.Visible = false;
         }
 
-        if (!On) return;
+        if (!_on) return;
 
         if (_hud)
         {
