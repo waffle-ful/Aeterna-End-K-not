@@ -482,11 +482,12 @@ public static class Translator
     {
         try
         {
+            // 画面描画の毎フレームから GetString 経由で呼ばれるので、カルチャ依存比較 (遅い) でなく序数で
             string name = CultureInfo.CurrentUICulture.Name;
-            if (name.StartsWith("en")) return SupportedLangs.English;
-            if (name.StartsWith("zh_CHT")) return SupportedLangs.TChinese;
-            if (name.StartsWith("zh")) return SupportedLangs.SChinese;
-            if (name.StartsWith("ru")) return SupportedLangs.Russian;
+            if (name.StartsWith("en", StringComparison.Ordinal)) return SupportedLangs.English;
+            if (name.StartsWith("zh_CHT", StringComparison.Ordinal)) return SupportedLangs.TChinese;
+            if (name.StartsWith("zh", StringComparison.Ordinal)) return SupportedLangs.SChinese;
+            if (name.StartsWith("ru", StringComparison.Ordinal)) return SupportedLangs.Russian;
             return TranslationController.Instance.currentLanguage.languageID;
         }
         catch { return SupportedLangs.English; }
