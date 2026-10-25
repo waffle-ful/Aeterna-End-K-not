@@ -328,6 +328,7 @@ public class Main : BasePlugin
     public static ConfigEntry<bool> SweepDestroyedReferences { get; private set; }
     public static ConfigEntry<bool> TrimForeignControllerMaps { get; private set; }
     public static ConfigEntry<bool> UnityAllocatorTuning { get; private set; }
+    public static ConfigEntry<bool> CompactIl2CppHeap { get; private set; }
     public static ConfigEntry<bool> ForceDisableIncrementalGc { get; private set; }
     public static ConfigEntry<bool> LoadingVideoEnabled { get; private set; }
     public static ConfigEntry<string> LoadingVideoFile { get; private set; }
@@ -699,6 +700,7 @@ public class Main : BasePlugin
         SweepDestroyedReferences = Config.Bind("Client Options", "SweepDestroyedReferences", true, "Right after the screen changes (main menu, lobby, game start), clear mod-held references to objects the game has already destroyed. Such leftovers keep the old lobby's and menu's text and buttons alive inside the game's memory, which makes every garbage collection pause a little longer. Set false to compare.");
         TrimForeignControllerMaps = Config.Bind("Client Options", "TrimForeignControllerMaps", false, "After the main menu is reached, drop the parts of the game's built-in controller definitions that only other platforms read (Linux, macOS, consoles, mobile, web). They stay in the game's memory for the whole session and make every garbage collection pause longer. Windows only. Gamepads go through the Windows input paths, which are kept.");
         UnityAllocatorTuning = Config.Bind("Client Options", "UnityAllocatorTuning", true, "Give Unity's native allocators more room for small allocations and use smaller heap blocks (written to BepInEx/config/EndKnot.boot.config, which the bundled doorstop_config.ini hands to Unity instead of the game's boot.config). Memory grows less as games are played in the same lobby. Takes effect from the next launch; set false and restart to use the game's own settings. Windows only.");
+        CompactIl2CppHeap = Config.Bind("Client Options", "CompactIl2CppHeap", true, "Keep less spare room in the game's own (il2cpp) garbage-collected heap by adding GC_FREE_SPACE_DIVISOR to [Environment] in doorstop_config.ini. The heap stays about 10MB smaller during games, at the cost of a few more short collections. Takes effect from the next launch; set false and restart to remove the line. Windows only.");
         ForceDisableIncrementalGc = Config.Bind("Client Options", "ForceDisableIncrementalGc", false, "Force Unity's incremental GC off. By default incremental GC is left ON only when the bundled BepInEx/core/Il2CppInterop.Runtime.dll is the write-barrier patched build (IL2CPP.WbStore exists) on a 64-bit Windows process; otherwise it is turned off at startup by zeroing the Boehm flag that il2cpp_gc_is_incremental() reads (see Modules/IncrementalGcInvalidator.cs). Off removes the GC use-after-free hazard of barrier-less interop writes (coreclr AV 0xc0000005, a fail-fast process death that try/catch cannot stop) whatever the interop build is; with the patched runtime the barriers are in place, so incremental GC is safe and splits the periodic collection into 3ms slices (measured: longest frame in a match ~30ms -> ~24ms, 1% low +1.5fps). Set true to force it off anyway (e.g. to A/B). Windows-only. Result is logged as INCGC:.");
         LoadingVideoEnabled = Config.Bind("Client Options", "LoadingVideoEnabled", true, "Play a short loading-screen video (host-local, no network traffic) over the fade-to-black during scene transitions (game start / next game). Falls back silently to no video if no file is available.");
         LoadingVideoFile = Config.Bind("Client Options", "LoadingVideoFile", "", "Optional file name (relative to BepInEx/plugins/EndKnot/Media/) or absolute path of a custom loading-screen video (.mp4) or frame pack (.ekfp) to use instead of the bundled frame pack. A video keeps about 50MB of GPU driver memory in use after it has played.");
@@ -765,6 +767,7 @@ public class Main : BasePlugin
 #if !ANDROID
         // Unity のアロケータ設定を次回起動用に用意する (Doorstop の boot_config_override 経由)。
         UnityAllocatorSetup.Run();
+        Il2CppHeapSetup.Run();
 #endif
 
         Preset1 = Config.Bind("Preset Name Options", "Preset1", "Preset_1");
