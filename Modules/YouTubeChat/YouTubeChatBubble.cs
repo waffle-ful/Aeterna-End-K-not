@@ -50,12 +50,17 @@ public class YouTubeChatBubble : MonoBehaviour
     private bool _stickToBottom = true; // 最下部にいる間は新着に自動追従
 
     // ---- スタイル ----
-    private GUIStyle _panelBg, _textStyle, _closeStyle, _openStyle;
+    // 板・ボタンはロビー右の板と同じ作り (黒い輪郭・灰の縁・内側の溝・暗い灰の中身) を自前のテクスチャに描き、9 分割で伸ばす
+    private GUIStyle _panelBg, _textStyle, _closeStyle, _openStyle, _titleStyle, _lineStyle;
     private Texture2D _openTex, _openHoverTex;
-    private GUIContent _openContent;
+    private GUIContent _openContent, _titleContent;
     private readonly GUIContent _closeContent = new("×");
-    private Texture2D _panelTex;
+    private Texture2D _panelTex, _closeTex, _closeHoverTex, _lineTex, _thumbTex, _clearTex;
     private float _builtScale = -1f;
+    private Rect _titleRect, _lineRect;
+    private GUIStyleState _closeState, _barState, _thumbState;
+    private GUIStyle _barStyle, _thumbStyle;
+    private Texture2D _barBg, _thumbBg;
 
     private readonly List<string> _lines = new();
     private readonly StringBuilder _sb = new();
@@ -64,7 +69,8 @@ public class YouTubeChatBubble : MonoBehaviour
 
     // 観客席を出している時は観客席の大きさ設定に合わせる
     private static float SeatsUserScale => YouTubeChatOptions.SeatsEnabled?.GetBool() == true ? (YouTubeChatOptions.SeatsScale?.GetInt() ?? 100) / 100f : 1f;
-    private static float ScrollbarColumnWidth => (OperatingSystem.IsAndroid() ? 42f : 22f) * Scale;
+    private static float ScrollbarColumnWidth => (OperatingSystem.IsAndroid() ? 30f : 10f) * Scale;
+    private static float HeaderHeight => 26f * Scale;
 
     private void Awake()
     {
@@ -88,6 +94,7 @@ public class YouTubeChatBubble : MonoBehaviour
         {
             if (!ShouldShow()) return;
             YouTubeChatOverlay.EnsureSubscribed();
+            if ((Time.frameCount % 30) == 0) MeasureStartButton();
 
             bool typing = HudManager.Instance.Chat != null && HudManager.Instance.Chat.IsOpenOrOpening;
             if (typing) return;
@@ -179,13 +186,13 @@ public class YouTubeChatBubble : MonoBehaviour
 
     private void ComputePanelGeometry()
     {
-        float pad = 8f * Scale;
-        float lineH = 20f * Scale;
+        float pad = PanelPad;
+        float lineH = _textStyle.lineHeight > 0f ? _textStyle.lineHeight : 20f * Scale;
         float widthPct = (YouTubeChatOptions.PanelWidth?.GetInt() ?? 100) / 100f;
         float heightPct = (YouTubeChatOptions.PanelHeight?.GetInt() ?? 100) / 100f;
 
         int visibleLines = Mathf.Max(1, Mathf.RoundToInt(BaseVisibleLines * heightPct));
-        float ph = visibleLines * lineH + pad * 2f;
+        float ph = visibleLines * lineH + pad * 2f + HeaderHeight;
 
         float px, py, pw;
         if (AudienceSeats.TryGetHistoryAnchor(out float benchLeft, out float benchRight, out float bottom, out float width))
@@ -204,27 +211,55 @@ public class YouTubeChatBubble : MonoBehaviour
             py = Screen.height * 0.34f;
         }
 
+        // ロビーでは下の中央の「開始」ボタンに掛からないよう、右端をその手前で止める
+        float startLeft = _startLeft;
+        if (startLeft > 0f && px < startLeft && px + pw > startLeft - 8f * Scale)
+            pw = Mathf.Max(120f * Scale, startLeft - 8f * Scale - px);
+
         px = Mathf.Clamp(px, 0f, Mathf.Max(0f, Screen.width - pw));
         py = Mathf.Clamp(py, 0f, Mathf.Max(0f, Screen.height - ph));
 
         _panelRect = new Rect(px, py, pw, ph);
-        _panelHitZone = new Rect(px, py, Mathf.Max(0f, pw - ScrollbarColumnWidth), ph);
+        _panelHitZone = new Rect(px, py, Mathf.Max(0f, pw - ScrollbarColumnWidth - pad), ph);
 
-        // スクロールバーと重ならないよう、板の上辺の外に載せる
-        float cs = 24f * Scale;
-        _closeRect = new Rect(px + pw - cs, py - cs, cs, cs);
+        // 見出しの段: 左に題、右端に ×、その下に区切り線
+        float cs = 20f * Scale;
+        float headerMid = py + pad + HeaderHeight / 2f - 2f * Scale;
+        _closeRect = new Rect(px + pw - pad - cs, headerMid - cs / 2f, cs, cs);
+        _titleRect = new Rect(px + pad + 2f * Scale, headerMid - cs / 2f, pw - pad * 2f - cs, cs);
+        _lineRect = new Rect(px + pad, py + pad + HeaderHeight - 3f * Scale, pw - pad * 2f, Mathf.Max(1f, Mathf.Round(1f * Scale)));
+    }
+
+    // 「開始」ボタンの左端 (IMGUI 座標・無ければ 0)。OnGUI は 1 フレームに何度も呼ばれるので、Update でときどき測っておく
+    private float _startLeft;
+
+    private void MeasureStartButton()
+    {
+        _startLeft = 0f;
+        if (!GameStates.IsLobby || !GameStartManager.InstanceExists) return;
+        PassiveButton start = GameStartManager.Instance.StartButton;
+        Camera cam = HudManager.Instance.UICamera;
+        if (!start || !start.gameObject.activeInHierarchy || !cam) return;
+        SpriteRenderer sr = start.GetComponentInChildren<SpriteRenderer>();
+        if (!sr) return;
+        float left = cam.WorldToScreenPoint(sr.bounds.min).x;
+        if (left > 0f) _startLeft = left;
     }
 
     private void DrawPanel()
     {
         if (_panelRect.width <= 0f) return;
 
-        float pad = 8f * Scale;
+        float pad = PanelPad;
         GUI.Box(_panelRect, GUIContent.none, _panelBg);
+        GUI.Label(_titleRect, _titleContent, _titleStyle);
+        if (Event.current.type == EventType.Repaint) _closeState.background = _closeRect.Contains(Event.current.mousePosition) ? _closeHoverTex : _closeTex;
         GUI.Box(_closeRect, _closeContent, _closeStyle);
+        GUI.Box(_lineRect, GUIContent.none, _lineStyle);
 
-        var outerRect = new Rect(_panelRect.x + pad, _panelRect.y + pad, _panelRect.width - pad * 2f, _panelRect.height - pad * 2f);
-        float contentW = Mathf.Max(1f, outerRect.width - ScrollbarColumnWidth - 1f);
+        float top = _panelRect.y + pad + HeaderHeight;
+        var outerRect = new Rect(_panelRect.x + pad, top, _panelRect.width - pad * 2f, _panelRect.yMax - pad - top);
+        float contentW = Mathf.Max(1f, outerRect.width - ScrollbarColumnWidth - 4f * Scale);
 
         string body = BuildBody();
         float measuredH = _textStyle.CalcHeight(new GUIContent(body), contentW);
@@ -233,15 +268,30 @@ public class YouTubeChatBubble : MonoBehaviour
         var innerRect = new Rect(0, 0, contentW, _contentH);
         float maxScroll = Mathf.Max(0f, _contentH - outerRect.height);
 
-        GUI.skin.verticalScrollbar.fixedWidth = ScrollbarColumnWidth;
-        GUI.skin.verticalScrollbarThumb.fixedWidth = ScrollbarColumnWidth;
+        // スクロールバーは本編の板の縁と同じ灰の細いつまみだけにする (溝は透明)。skin は他の画面と共有なので描き終えたら戻す
+        // 参照と元の絵は EnsureStyles で 1 回だけ取る (取るたびに包みができ、OnGUI は 1 フレームに何度も呼ばれる)
+        GUIStyle bar = _barStyle, thumb = _thumbStyle;
+        float barW = bar.fixedWidth, thumbW = thumb.fixedWidth;
+        bar.fixedWidth = thumb.fixedWidth = ScrollbarColumnWidth;
+        _barState.background = _clearTex;
+        _thumbState.background = _thumbTex;
 
         if (_stickToBottom) _scroll.y = maxScroll;
 
         // 横スクロールは無効。縦は内容が溢れたときだけ自動的に出る (alwaysShow=false)
-        _scroll = GUI.BeginScrollView(outerRect, _scroll, innerRect, false, false);
-        GUI.Label(innerRect, body, _textStyle);
-        GUI.EndScrollView();
+        try
+        {
+            _scroll = GUI.BeginScrollView(outerRect, _scroll, innerRect, false, false);
+            GUI.Label(innerRect, body, _textStyle);
+            GUI.EndScrollView();
+        }
+        finally
+        {
+            _barState.background = _barBg;
+            _thumbState.background = _thumbBg;
+            bar.fixedWidth = barW;
+            thumb.fixedWidth = thumbW;
+        }
 
         // 最下部付近にいれば追従継続、上へスクロール中なら追従停止
         _stickToBottom = _scroll.y >= maxScroll - 2f;
@@ -273,34 +323,70 @@ public class YouTubeChatBubble : MonoBehaviour
         if (_panelBg != null && Math.Abs(_builtScale - Scale) < 0.01f) return;
         _builtScale = Scale;
 
-        _panelTex = SolidTex(new Color(0f, 0f, 0f, 0.66f));               // 半透明黒
+        // 縁の太さは画面の大きさに合わせて描き直す (9 分割の縁はテクスチャの画素のまま画面に出るため)。前の物は捨てる
+        foreach (Texture2D old in new[] { _panelTex, _closeTex, _closeHoverTex, _openTex, _openHoverTex })
+            if (old) Destroy(old);
+
+        float k = Mathf.Max(0.6f, Scale / 0.89f); // 1080p で 1
+        // 外から: 黒い輪郭 → 明るい縁 → 灰の縁 → 暗い縁 → 黒い溝 → 中身 (ロビー右の板の実測を細くしたもの)
+        _panelTex = FrameTex(k, 9f, PanelBorder(k),
+            (0f, new Color32(16, 12, 16, 255)),
+            (2f, new Color32(140, 150, 155, 255)),
+            (3f, new Color32(108, 112, 116, 255)),
+            (7f, new Color32(70, 73, 78, 255)),
+            (8f, new Color32(8, 8, 8, 255)),
+            (9.5f, new Color32(41, 41, 41, 240)));
+        // 本編のメニューの閉じるボタン: 白い枠の黒い角丸に白い ×。乗ると枠が本編の緑になる
+        _closeTex = FrameTex(k, 5f, Mathf.RoundToInt(6f * k), (0f, new Color32(236, 236, 236, 255)), (2f, new Color32(18, 18, 18, 255)));
+        _closeHoverTex = FrameTex(k, 5f, Mathf.RoundToInt(6f * k), (0f, new Color32(44, 232, 200, 255)), (2f, new Color32(18, 18, 18, 255)));
+        // 閉じている間の「開く」ボタン: 見落とされないよう YouTube の赤。本編のボタンと同じく濃い縁取り
+        _openTex = FrameTex(k, 6f, Mathf.RoundToInt(8f * k), (0f, new Color32(40, 8, 8, 255)), (2f, new Color32(201, 26, 26, 255)), (3f, new Color32(220, 40, 40, 255)));
+        _openHoverTex = FrameTex(k, 6f, Mathf.RoundToInt(8f * k), (0f, new Color32(40, 8, 8, 255)), (2f, new Color32(240, 70, 70, 255)), (3f, new Color32(255, 85, 85, 255)));
+
+        if (!_lineTex) _lineTex = SolidTex(new Color32(70, 73, 78, 255));
+        if (!_thumbTex) _thumbTex = SolidTex(new Color32(108, 112, 116, 230));
+        if (!_clearTex) _clearTex = SolidTex(new Color(0f, 0f, 0f, 0f));
 
         int textFont = Mathf.Max(11, Mathf.RoundToInt(20f * Scale));
 
-        _panelBg = new GUIStyle();
-        _panelBg.normal.background = _panelTex;
+        _panelBg = SlicedStyle(_panelTex, PanelBorder(k));
 
-        _closeStyle = new GUIStyle
-        {
-            alignment = TextAnchor.MiddleCenter,
-            fontSize = Mathf.Max(11, Mathf.RoundToInt(20f * Scale)),
-            fontStyle = FontStyle.Bold
-        };
-        _closeStyle.normal.background = _panelTex;
+        _closeStyle = SlicedStyle(_closeTex, Mathf.RoundToInt(6f * k));
+        _closeStyle.alignment = TextAnchor.MiddleCenter;
+        _closeStyle.fontSize = Mathf.Max(10, Mathf.RoundToInt(17f * Scale));
+        _closeStyle.fontStyle = FontStyle.Bold;
         _closeStyle.normal.textColor = Color.white;
 
-        // 見落とされないよう YouTube の赤で目立たせる
-        if (!_openTex) _openTex = SolidTex(new Color(0.79f, 0.10f, 0.10f, 0.96f));
-        if (!_openHoverTex) _openHoverTex = SolidTex(new Color(1f, 0.27f, 0.27f, 0.98f));
-        _openStyle = new GUIStyle
-        {
-            alignment = TextAnchor.MiddleCenter,
-            fontSize = Mathf.Max(11, Mathf.RoundToInt(20f * Scale)),
-            fontStyle = FontStyle.Bold
-        };
-        _openStyle.normal.background = _openTex;
+        _openStyle = SlicedStyle(_openTex, Mathf.RoundToInt(8f * k));
+        _openStyle.alignment = TextAnchor.MiddleCenter;
+        _openStyle.fontSize = Mathf.Max(11, Mathf.RoundToInt(20f * Scale));
+        _openStyle.fontStyle = FontStyle.Bold;
         _openStyle.normal.textColor = Color.white;
         _openContent = new GUIContent(Translator.GetString("YouTubeChatHistoryOpen"));
+
+        _titleStyle = new GUIStyle
+        {
+            alignment = TextAnchor.MiddleLeft,
+            fontSize = Mathf.Max(10, Mathf.RoundToInt(16f * Scale)),
+            fontStyle = FontStyle.Bold,
+            clipping = TextClipping.Clip
+        };
+        _titleStyle.normal.textColor = new Color32(178, 178, 178, 255);
+        _titleContent = new GUIContent(Translator.GetString("YouTubeChatHistoryTitle"));
+
+        _lineStyle = new GUIStyle();
+        _lineStyle.normal.background = _lineTex;
+
+        _closeState = _closeStyle.normal;
+        if (_barStyle == null)
+        {
+            _barStyle = GUI.skin.verticalScrollbar;
+            _thumbStyle = GUI.skin.verticalScrollbarThumb;
+            _barState = _barStyle.normal;
+            _thumbState = _thumbStyle.normal;
+            _barBg = _barState.background;
+            _thumbBg = _thumbState.background;
+        }
 
         _textStyle = new GUIStyle
         {
@@ -311,6 +397,69 @@ public class YouTubeChatBubble : MonoBehaviour
             clipping = TextClipping.Clip
         };
         _textStyle.normal.textColor = Color.white;
+    }
+
+    private static float PanelPad => 15f * Scale;
+    private static int PanelBorder(float k) => Mathf.RoundToInt(13f * k);
+
+    // 背景を 9 分割で伸ばす GUIStyle。縁を設定できなければ (古い環境) 全体を引き伸ばして描く
+    private static bool _borderUnsupported;
+
+    private static GUIStyle SlicedStyle(Texture2D tex, int border)
+    {
+        var style = new GUIStyle();
+        style.normal.background = tex;
+        if (_borderUnsupported) return style;
+
+        try
+        {
+            // RectOffset の 4 引数コンストラクタは interop に無いので、style が持つ物の各辺を書く
+            RectOffset b = style.border;
+            b.left = b.right = b.top = b.bottom = border;
+        }
+        catch (Exception e)
+        {
+            _borderUnsupported = true;
+            Logger.Warn($"GUIStyle.border unavailable: {e.Message}", "YouTubeChatBubble");
+        }
+
+        return style;
+    }
+
+    // 角の丸い四角を外側から順に塗り重ねたテクスチャ。layers は (外側からの距離 px @1080p, 色)。縁は 1px ぼかす
+    private static Texture2D FrameTex(float k, float radius, int border, params (float inset, Color32 color)[] layers)
+    {
+        int size = border * 2 + 2;
+        var px = new Color32[size * size];
+        for (int y = 0; y < size; y++)
+        for (int x = 0; x < size; x++)
+        {
+            Color c = new(0f, 0f, 0f, 0f);
+            foreach ((float inset, Color32 color) in layers)
+            {
+                float d = RoundedRectDistance(x, y, size, Math.Max(1.5f, (radius - inset) * k), inset * k);
+                float cov = Math.Clamp(0.5f - d, 0f, 1f);
+                if (cov > 0f) c = Color.Lerp(c, color, cov);
+            }
+
+            px[y * size + x] = c;
+        }
+
+        var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
+        tex.SetPixels32(px);
+        tex.Apply(false, true);
+        tex.hideFlags |= HideFlags.HideAndDontSave;
+        return tex;
+    }
+
+    // 四角の内側で負・外側で正の距離 (px)。inset だけ縁から内側へ寄せた角丸の四角に対して測る
+    private static float RoundedRectDistance(int x, int y, int size, float radius, float inset)
+    {
+        float half = size / 2f - inset;
+        float qx = Math.Abs(x + 0.5f - size / 2f) - (half - radius);
+        float qy = Math.Abs(y + 0.5f - size / 2f) - (half - radius);
+        float ox = Math.Max(qx, 0f), oy = Math.Max(qy, 0f);
+        return (float)Math.Sqrt(ox * ox + oy * oy) + Math.Min(Math.Max(qx, qy), 0f) - radius;
     }
 
     private static Texture2D SolidTex(Color c)
