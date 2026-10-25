@@ -71,11 +71,24 @@ public static class HostInfoPanelSetUpPatch
     private static string CachedText;
     private static int CachedColorId = -1;
     private static float NextBuildTime;
-    private static IntPtr CachedPanel; // a new lobby's panel must not show the previous host's name
+    private static IntPtr CachedPanel; // 新しいロビーのパネルに前のホスト名を出さない
+
+    // 本編の SetUp 本体 (名札と着せ替えの作り直し) は同じパネルなら 0.25 秒に 1 回だけ通す。
+    // ホストの色や着せ替えの変更は最大 0.25 秒遅れて映る。
+    private static IntPtr SetUpPanel;
+    private static float NextSetUpTime;
 
     public static bool Prefix(HostInfoPanel __instance)
     {
-        return GameStates.IsLobby && __instance.player.ColorId != byte.MaxValue;
+        if (!GameStates.IsLobby || __instance.player.ColorId == byte.MaxValue) return false;
+
+        IntPtr panel = __instance.Pointer;
+        float now = Time.unscaledTime;
+        if (panel == SetUpPanel && now < NextSetUpTime) return false;
+
+        SetUpPanel = panel;
+        NextSetUpTime = now + 0.25f;
+        return true;
     }
 
     public static void Postfix(HostInfoPanel __instance)
