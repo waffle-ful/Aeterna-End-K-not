@@ -1,4 +1,6 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Buffers;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 
@@ -12,6 +14,11 @@ public static class OptionSaver
     private static readonly LogHandler Logger = EndKnot.Logger.Handler(nameof(OptionSaver));
     private static readonly FileInfo DefaultPresetFileInfo = new($"{SaveDataDirectoryInfo.FullName}/DefaultPreset.txt");
     private static int DefaultPresetNumber;
+
+    // 設定は 6 千項目超で 1.5MB 前後の JSON になり、項目を 1 つ変えるたびに書き直す。文字列を経由すると
+    // その倍の大きさの文字列と、UTF-8 への変換で ArrayPool から借りた MB 級の作業配列 (スレッドに残り続ける) が出るので、
+    // UTF-8 のまま組み立てて書く。オプションの型情報は使い回す
+    private static readonly JsonSerializerOptions SerializerOptions = new() { WriteIndented = true };
 
     public static readonly int Version;
 
@@ -93,23 +100,30 @@ public static class OptionSaver
     {
         if (AmongUsClient.Instance && !AmongUsClient.Instance.AmHost) return;
 
-        string jsonString = JsonSerializer.Serialize(GenerateOptionsData(), new JsonSerializerOptions { WriteIndented = true });
-        File.WriteAllText(OptionSaverFileInfo.FullName, jsonString);
+        // 全部組み立て終えてから書く (途中で失敗しても前の保存を壊さない)
+        var buffer = new ArrayBufferWriter<byte>(256 * 1024);
+        using (var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions { Indented = true }))
+            JsonSerializer.Serialize(writer, GenerateOptionsData(), SerializerOptions);
+
+        using (var fs = new FileStream(OptionSaverFileInfo.FullName, FileMode.Create, FileAccess.Write, FileShare.Read))
+            fs.Write(buffer.WrittenSpan);
         File.WriteAllText(DefaultPresetFileInfo.FullName, DefaultPresetNumber.ToString());
     }
 
     public static void Load()
     {
-        string jsonString = File.ReadAllText(OptionSaverFileInfo.FullName);
+        byte[] data = File.ReadAllBytes(OptionSaverFileInfo.FullName);
+        ReadOnlySpan<byte> json = data;
+        if (json.Length >= 3 && json[0] == 0xEF && json[1] == 0xBB && json[2] == 0xBF) json = json[3..]; // バイト列からの逆シリアル化は BOM を読み飛ばさない
 
-        if (jsonString.Length <= 0)
+        if (json.Length <= 0)
         {
             Logger.Info("Save default value as option data is empty");
             Save();
             return;
         }
 
-        LoadOptionsData(JsonSerializer.Deserialize<SerializableOptionsData>(jsonString));
+        LoadOptionsData(JsonSerializer.Deserialize<SerializableOptionsData>(json, SerializerOptions));
     }
 
     public class SerializableOptionsData

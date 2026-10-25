@@ -577,7 +577,17 @@ public static class Translator
 
     private static void CreateTemplateFile()
     {
-        File.WriteAllText($"{Main.DataPath}/{LanguageFolderName}/template.dat", string.Join('\n', AllKeys().Select(x => $"{x}:")));
+        // 1 行ずつ書く。全キーを 1 本の文字列にまとめると 50 万文字級になり、その組み立てと書き出しで
+        // ArrayPool から借りた MB 級の作業配列がスレッドに残り続ける
+        using var writer = new StreamWriter($"{Main.DataPath}/{LanguageFolderName}/template.dat", false, new UTF8Encoding(false));
+        bool first = true;
+        foreach (string key in AllKeys())
+        {
+            if (!first) writer.Write('\n');
+            first = false;
+            writer.Write(key);
+            writer.Write(':');
+        }
     }
 
     public static void ExportCustomTranslation()
