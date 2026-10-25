@@ -34,42 +34,52 @@ public static class BugReport
     private const float BoxBorder = 0.01f;
 
     private const float Pad = 0.4f;
-    private const float BoxTop = 0.77f;
-    private const float FooterHeight = 0.9f;
-    private const float FooterTop = -2.075f + FooterHeight; // 窓の下端から帯の高さだけ上
-    private const float FooterRow = -FooterHeight / 2f;    // FooterTop から見た帯の中心
+    private const float BoxTop = 0.825f;
+    private const float FooterHeight = 1.3f;
+    private const float FooterTop = -1.975f + FooterHeight; // 窓の下端から下の段の高さだけ上
+    private const float FooterRow = -FooterHeight / 2f;  // FooterTop から見た下の段の中心 (枠の内側に 0.2 ほど空く)
 
-    // 角の丸みは控えめに。窓だけ少し大きく、中の部品はそろえて小さく
-    private const float CardRadius = 0.08f;
+    // 絵が見つからなかった時の代わりの角丸
+    private const float CardRadius = 0.12f;
     private const float PartRadius = 0.05f;
-    private const float CheckSize = 0.24f;
+    private const float CheckSize = 0.3f;
 
-    private static readonly Vector2 CardSize = new(6.0f, 4.15f);
+    private static readonly Vector2 CardSize = new(6.0f, 3.95f);
+
+    // 窓・入力欄・ボタンは、ゲームが読み込んでいる本編の絵を借りて 9 分割で伸ばす (右のロビーの板と同じ枠になる)。
+    // ppu は画面上の縁の太さを本編の板とそろえる値 (HUD は 1 単位 ≒ 176px @1080p)
+    private const string PaneSpriteName = "IMAGE-LobbyInfoPane";      // 438×648・縁 40px
+    private const string FieldSpriteName = "IMAGE-FieldCube";         // 116×116・縁 45px
+    private const string ButtonSpriteName = "buttonbase_kickBan";     // 59×26・白地なので色を掛けて使う
+    private const string CheckSpriteName = "BUTTON-CheckboxInactive"; // 118×118
+    private const string CheckHoverSpriteName = "BUTTON-CheckboxHighlight";
+    private const string CheckMarkSpriteName = "IMAGE-CheckMark";     // 60×48
+    private const string ExitSpriteName = "BUTTON-ExitStandard";      // 98×98
+    private const string ExitHoverSpriteName = "BUTTON-ExitHover";
+    private static readonly string[] VanillaNames = [PaneSpriteName, FieldSpriteName, ButtonSpriteName, CheckSpriteName, CheckHoverSpriteName, CheckMarkSpriteName, ExitSpriteName, ExitHoverSpriteName];
+    private const float PanePpu = 176f;
+    private const float FieldPpu = 352f;
+    private const float ButtonPpu = 100f;
+    private const float PaneBorderPx = 40f;
     private static readonly Vector3 FieldWorldScale = new(1.05f, 0.59f, 1f);
     // 欄の倍率は横 1.05・縦 0.59 なので、字の縦横を揃えるには縦を 1.05/0.59 倍する。0.8 で本文と同じくらいの字の大きさ
     private const float FieldTextSize = 0.8f;
     private static readonly Vector3 FieldTextScale = new(FieldTextSize, FieldTextSize * 1.05f / 0.59f, 1f);
 
-    // 色は End K not の意匠 (夜の湯宿) から。地は青みの墨、差し色は行灯の橙、罫は檜
-    private static readonly Color32 BackdropColor = new(15, 20, 23, 165);     // 墨
-    private static readonly Color32 CardColor = new(21, 28, 33, 255);         // 宵
-    private static readonly Color32 CardBorderColor = new(201, 168, 124, 46); // 檜
-    private static readonly Color32 DividerColor = new(201, 168, 124, 30);    // 檜
-    private static readonly Color32 BoxColor = new(15, 20, 23, 255);          // 墨
-    private static readonly Color32 AccentColor = new(233, 166, 72, 255);     // 行灯
-    private static readonly Color32 AccentHover = new(242, 186, 104, 255);
-    private static readonly Color32 BoxBorderColor = new(52, 66, 73, 255);
-    private static readonly Color32 FooterColor = new(17, 23, 27, 255);
-    private static readonly Color32 CheckOffBorder = new(74, 90, 96, 255);
-    private static readonly Color32 AccentGlow = new(233, 166, 72, 22);
-    private static readonly Color32 OnAccentColor = new(15, 20, 23, 255);     // 行灯の上の字は墨
-    private static readonly Color32 TextColor = new(232, 239, 240, 255);      // 湯気
-    private static readonly Color32 MutedColor = new(143, 163, 168, 255);     // 霞
-    private static readonly Color32 FaintColor = new(104, 121, 127, 255);
-    private static readonly Color32 HinokiColor = new(201, 168, 124, 255);    // 檜
-    private static readonly Color32 GhostColor = new(30, 39, 44, 255);        // 岩
-    private static readonly Color32 GhostHover = new(42, 53, 59, 255);
-    private static readonly Color32 ToggleOff = new(42, 53, 59, 255);
+    // 色はロビーの板と「編集」ボタンの実測から。地は青みの無い灰、字は白、押す物は本編の青
+    private static readonly Color32 BackdropColor = new(10, 10, 10, 165);
+    private static readonly Color32 CardColor = new(41, 41, 41, 255);         // 板の中身
+    private static readonly Color32 CardEdgeColor = new(82, 85, 90, 255);     // 板の縁 (絵が無い時の代わり)
+    private static readonly Color32 BoxColor = new(18, 18, 18, 255);          // 入力欄の中身
+    private static readonly Color32 BoxEdgeColor = new(76, 76, 76, 255);
+    private static readonly Color32 AccentColor = new(0, 150, 200, 255);      // 「編集」の青
+    private static readonly Color32 AccentHover = new(40, 185, 235, 255);
+    private static readonly Color32 CheckMarkColor = new(44, 232, 200, 255);  // 本編のチェックの色
+    private static readonly Color32 TextColor = new(236, 236, 236, 255);
+    private static readonly Color32 MutedColor = new(178, 178, 178, 255);
+    private static readonly Color32 FaintColor = new(118, 118, 118, 255);
+    private static readonly Color32 GhostColor = new(96, 100, 106, 255);
+    private static readonly Color32 GhostHover = new(128, 133, 140, 255);
 
     private static GameObject _hudButton;
     private static float _spacing = ButtonSpacingFallback;
@@ -77,25 +87,22 @@ public static class BugReport
     private static GameObject _panel;
     private static SpriteRenderer _card;
     private static SpriteRenderer _cardBorder;
-    private static SpriteRenderer _shadow;
     private static Transform _footer;
     private static SpriteRenderer _box;
     private static SpriteRenderer _boxInner;
     private static TextMeshPro _placeholder;
     private static TextMeshPro _counter;
-    private static TextMeshPro _eyebrow;
     private static Transform _fieldAnchor;
     private static TextMeshPro _status;
     private static SpriteRenderer _checkBorder;
     private static SpriteRenderer _checkFill;
     private static GameObject _checkMark;
-    private static SpriteRenderer _glow;
     private static FreeChatInputField _field;
+    // 本編の絵から作った 9 分割のスプライト (名前@ppu ごと)。元の絵のテクスチャを参照するので、元が捨てられても残る
+    private static readonly System.Collections.Generic.Dictionary<string, Sprite> VanillaSprites = [];
     private static Sprite _solid;
     private static Texture2D _roundTex;
-    private static Texture2D _shadowTex;
     private static readonly System.Collections.Generic.Dictionary<int, Sprite> RoundSprites = [];
-    private static Sprite _shadowSprite;
     private static TextMeshPro _textTemplate;
     private static string _counterText;
     private static Sprite _icon;
@@ -264,9 +271,6 @@ public static class BugReport
         _panel.SetActive(true);
         _field.gameObject.SetActive(true);
 
-        string where = GetString(GameStates.IsLobby ? "BugReport.WhereLobby" : GameStates.IsMeeting ? "BugReport.WhereMeeting" : "BugReport.WhereGame");
-        if (_eyebrow) _eyebrow.text = $"END K NOT {Main.PluginVersion}  ·  {where}";
-
         PlaceField();
         _field.textArea.characterLimit = TextMax;
         _field.Focus();
@@ -308,16 +312,24 @@ public static class BugReport
 
         _panel = new GameObject("EndKnotBugReportPanel") { layer = 5 };
         _panel.transform.SetParent(hud.transform, false);
-        // 右のロビー設定の板は幕より手前に描かれるので、窓はそれに掛からないよう少し左へ寄せる
-        _panel.transform.localPosition = new Vector3(-0.12f, -0.05f, -30f); // これよりカメラ側へ寄せると、手前の部品がカメラの手前側の面で切れる
+        // 幕は右のロビーの板も含めて全部覆うので、窓は画面の真ん中に置く
+        _panel.transform.localPosition = new Vector3(0f, -0.05f, -30f); // これよりカメラ側へ寄せると、手前の部品がカメラの手前側の面で切れる
+
+        LoadVanillaSprites();
 
         // 画面全体を暗くする幕。後ろの本編のボタンや床へのクリックをここで受け止め、押されたら閉じる
         SpriteRenderer backdrop = MakeSolid("Backdrop", BackdropColor, new Vector3(0f, 0f, 0.9f), new Vector2(40f, 25f));
         MakeClickable(backdrop.gameObject, new Vector2(40f, 25f), Close, null, null);
 
-        _shadow = MakeShadow(new Vector3(0f, -0.08f, 0.8f));
-        _cardBorder = MakeRound("CardBorder", CardBorderColor, new Vector3(0f, 0f, 0.7f), CardSize + Vector2.one * 0.025f, CardRadius + 0.01f);
-        _card = MakeRound("Card", CardColor, new Vector3(0f, 0f, 0.6f), CardSize, CardRadius);
+        // 窓の枠はロビーの板の絵 (縁・影込み)。読み込まれていなければ同じ色の角丸で代わりに描く
+        _card = MakeVanilla("Card", PaneSpriteName, new Vector3(0f, 0f, 0.6f), CardSize);
+        _cardBorder = null;
+        if (!_card)
+        {
+            _cardBorder = MakeRound("CardBorder", CardEdgeColor, new Vector3(0f, 0f, 0.7f), CardSize, CardRadius);
+            _card = MakeRound("Card", CardColor, new Vector3(0f, 0f, 0.6f), CardSize - Vector2.one * 0.2f, CardRadius - 0.05f);
+        }
+
         // 窓の上のクリックは幕まで抜けないよう、窓の地でも受け止める
         MakeClickable(_card.gameObject, Vector2.one, null, null, null);
 
@@ -326,21 +338,20 @@ public static class BugReport
         float top = CardSize.y / 2f - 0.34f;
         float width = CardSize.x - Pad * 2f;
 
-        // 窓の左上から滲む行灯の灯。窓の縁より内側で消えるので、角からはみ出さない
-        _glow = MakeShadowLike("Glow", AccentGlow, new Vector3(left + 1.3f, top - 0.55f, 0.55f), new Vector2(3.0f, 1.3f));
-
-        // 報告に一緒に付く「版・どこで」を見出しの上に出す
-        _eyebrow = MakeText(template, _panel.transform, "Eyebrow", new Vector3(left, top, 0f), 0.85f, string.Empty, FontStyles.Normal, HinokiColor, width - 0.6f);
-        _eyebrow.characterSpacing = 6f;
-        TextMeshPro title = MakeText(template, _panel.transform, "Title", new Vector3(left, top - 0.2f, 0f), 2.0f, GetString("BugReport.Title"), FontStyles.Bold, TextColor, width - 0.6f);
+        TextMeshPro title = MakeText(template, _panel.transform, "Title", new Vector3(left, top - 0.02f, 0f), 2.0f, GetString("BugReport.Title"), FontStyles.Bold, TextColor, width - 0.6f);
         title.characterSpacing = 2f;
-        MakeText(template, _panel.transform, "Hint", new Vector3(left, top - 0.64f, 0f), 1.1f, GetString("BugReport.Hint"), FontStyles.Normal, MutedColor, width);
+        MakeText(template, _panel.transform, "Hint", new Vector3(left, top - 0.5f, 0f), 1.1f, GetString("BugReport.Hint"), FontStyles.Normal, MutedColor, width);
 
-        MakeCloseButton(new Vector3(right - 0.08f, top - 0.34f, -0.2f));
+        MakeCloseButton(new Vector3(right - 0.06f, top - 0.2f, -0.2f));
 
-        // 入力の箱は細い中間色の線だけ。差し色は送るボタンとチェックにだけ使う
-        _box = MakeRound("Box", BoxBorderColor, new Vector3(0f, 0f, 0.3f), Vector2.one, PartRadius);
-        _boxInner = MakeRound("BoxInner", BoxColor, new Vector3(0f, 0f, 0.2f), Vector2.one, PartRadius - BoxBorder);
+        // 入力の箱は本編の入力欄の絵 (灰の縁の黒い箱)
+        _box = MakeVanilla("Box", FieldSpriteName, new Vector3(0f, 0f, 0.3f), Vector2.one);
+        _boxInner = null;
+        if (!_box)
+        {
+            _box = MakeRound("Box", BoxEdgeColor, new Vector3(0f, 0f, 0.3f), Vector2.one, PartRadius);
+            _boxInner = MakeRound("BoxInner", BoxColor, new Vector3(0f, 0f, 0.2f), Vector2.one, PartRadius - BoxBorder);
+        }
 
         _fieldAnchor = new GameObject("FieldAnchor").transform;
         _fieldAnchor.SetParent(_panel.transform, false);
@@ -393,47 +404,59 @@ public static class BugReport
         _footer.SetParent(_panel.transform, false);
         _footer.localPosition = new Vector3(0f, FooterTop, 0f);
 
-        // 帯は下の角だけ丸い。角丸の板の上半分を四角い板で覆って上の角を消す
-        SpriteRenderer band = MakeRound("Band", FooterColor, new Vector3(0f, FooterRow, 0.5f), new Vector2(CardSize.x, FooterHeight), CardRadius, _footer);
-        SpriteRenderer bandTop = MakeSolid("BandTop", FooterColor, new Vector3(0f, -CardRadius, 0.5f), new Vector2(CardSize.x, CardRadius * 2f));
-        bandTop.transform.SetParent(_footer, false);
-        SpriteRenderer divider = MakeSolid("Divider", DividerColor, new Vector3(0f, 0f, 0.45f), new Vector2(CardSize.x, 0.01f));
-        divider.transform.SetParent(_footer, false);
+        _status = MakeText(template, _footer, "Status", new Vector3(left, -0.03f, 0f), 1.0f, string.Empty, FontStyles.Normal, MutedColor, width);
 
-        _status = MakeText(template, _footer, "Status", new Vector3(left, 0.4f, 0f), 1.0f, string.Empty, FontStyles.Normal, MutedColor, width);
-
-        // ログを添付するかのチェック。左端は見出し・入力の箱と同じ線にそろえ、文字の部分を押しても切り替わる
+        // ログを添付するかのチェック。本編の設定画面と同じ白い枠と緑のチェック。左端は見出し・入力の箱と同じ線にそろえ、文字の部分を押しても切り替わる
         var check = new GameObject("LogCheck") { layer = 5 }.transform;
         check.SetParent(_footer, false);
         check.localPosition = new Vector3(left + CheckSize / 2f, FooterRow + 0.1f, -0.2f);
-        _checkBorder = MakeRound("Border", CheckOffBorder, Vector3.zero, Vector2.one * CheckSize, 0.04f, check);
-        _checkFill = MakeRound("Fill", BoxColor, new Vector3(0f, 0f, -0.02f), Vector2.one * (CheckSize - 0.03f), 0.03f, check);
-        _checkMark = MakeCheckMark(check);
+        _checkBorder = MakeVanilla("Border", CheckSpriteName, Vector3.zero, Vector2.one * CheckSize, check);
+        _checkFill = null;
+        SpriteRenderer mark = MakeVanilla("Mark", CheckMarkSpriteName, new Vector3(0f, 0.01f, -0.04f), new Vector2(0.22f, 0.176f), check);
+        if (_checkBorder && mark)
+        {
+            _checkMark = mark.gameObject;
+        }
+        else
+        {
+            if (_checkBorder) Object.Destroy(_checkBorder.gameObject);
+            if (mark) Object.Destroy(mark.gameObject);
+            _checkBorder = MakeRound("Border", TextColor, Vector3.zero, Vector2.one * CheckSize, 0.05f, check);
+            _checkFill = MakeRound("Fill", BoxColor, new Vector3(0f, 0f, -0.02f), Vector2.one * (CheckSize - 0.06f), 0.03f, check);
+            _checkMark = MakeCheckMark(check);
+        }
+
+        Sprite checkIdle = _checkBorder.sprite;
+        Sprite checkHover = _checkFill ? null : VanillaSprites.TryGetValue(CheckHoverSpriteName, out Sprite ch) ? ch : null;
+        SpriteRenderer checkBox = _checkBorder;
         var hit = new GameObject("Hit") { layer = 5 };
         hit.transform.SetParent(check, false);
         hit.transform.localPosition = new Vector3(1.1f, -0.1f, 0f);
         MakeClickable(hit, new Vector2(2.6f, 0.6f), () =>
-        {
-            _attachLog = !_attachLog;
-            RefreshLogToggle();
-        }, null, null);
+            {
+                _attachLog = !_attachLog;
+                RefreshLogToggle();
+            },
+            () => { if (checkHover) checkBox.sprite = checkHover; },
+            () => checkBox.sprite = checkIdle);
 
         // 文字の段: 見出し (チェックと同じ高さ) とその下の注記
         float textLeft = left + CheckSize + 0.16f;
         MakeText(template, _footer, "LogLabel", new Vector3(textLeft, FooterRow + 0.22f, 0f), 1.1f, GetString("BugReport.AttachLog"), FontStyles.Normal, TextColor, 2.5f);
         MakeText(template, _footer, "LogNote", new Vector3(textLeft, FooterRow - 0.02f, 0f), 0.82f, GetString("BugReport.LogNote"), FontStyles.Normal, FaintColor, 2.5f);
 
-        var sendSize = new Vector2(1.3f, 0.4f);
-        var cancelSize = new Vector2(0.9f, 0.4f);
-        MakeButton("Send", new Vector3(right - sendSize.x / 2f, FooterRow, -0.2f), sendSize, AccentColor, AccentHover, null, GetString("BugReport.Send"), OnAccentColor, FontStyles.Bold, Send);
-        MakeButton("Cancel", new Vector3(right - sendSize.x - 0.12f - cancelSize.x / 2f, FooterRow, -0.2f), cancelSize, GhostColor, GhostHover, null, GetString("BugReport.Close"), TextColor, FontStyles.Normal, Close);
+        var sendSize = new Vector2(1.4f, 0.5f);
+        var cancelSize = new Vector2(1.0f, 0.5f);
+        MakeButton("Send", new Vector3(right - sendSize.x / 2f, FooterRow, -0.2f), sendSize, AccentColor, AccentHover, GetString("BugReport.Send"), Send);
+        MakeButton("Cancel", new Vector3(right - sendSize.x - 0.12f - cancelSize.x / 2f, FooterRow, -0.2f), cancelSize, GhostColor, GhostHover, GetString("BugReport.Close"), Close);
 
         // ロビーの表示物や本編のボタンは描画順が高いものがあり、z だけでは窓の上に出てくる。
         // 地の部品は決まった順に、それ以外 (文字・入力欄・ボタン) はその上の段へまとめて持ち上げる
         // il2cpp の物は包みが毎回別なので、同じ物かは InstanceID で見る
-        SpriteRenderer[] layered = [backdrop, _shadow, _cardBorder, _card, _glow, band, bandTop, divider, _box, _boxInner];
+        SpriteRenderer[] layered = [backdrop, _cardBorder, _card, _box, _boxInner];
         var layerOf = new System.Collections.Generic.Dictionary<int, int>();
-        for (var i = 0; i < layered.Length; i++) layerOf[layered[i].GetInstanceID()] = i;
+        for (var i = 0; i < layered.Length; i++)
+            if (layered[i]) layerOf[layered[i].GetInstanceID()] = i;
         foreach (Renderer r in _panel.GetComponentsInChildren<Renderer>(true))
             r.sortingOrder = layerOf.TryGetValue(r.GetInstanceID(), out int at) ? PanelSortingOrder + at : PanelSortingOrder + 20 + Math.Clamp(r.sortingOrder, 0, 50);
 
@@ -459,11 +482,11 @@ public static class BugReport
     private static Material OverlayCopy(Material src, bool flatText = false)
     {
         if (!src) return src;
-        int key = src.GetInstanceID();
+        int key = src.GetInstanceID() * 2 + (flatText ? 1 : 0);
         if (OverlayMaterials.TryGetValue(key, out Material m) && m) return m;
         m = new Material(src) { renderQueue = 4000, hideFlags = HideFlags.HideAndDontSave };
 
-        // 型紙の文字 (キルの残り秒) は太い縁取りと影付き。窓の文字は縁取り無しの平らな字にする
+        // 型紙の文字 (キルの残り秒) は太い縁取りと影付き。窓の文字は縁取り無しの平らな字にする (ボタンの字だけは本編のボタンと同じく縁取りを残す)
         if (flatText)
         {
             m.DisableKeyword("OUTLINE_ON");
@@ -481,7 +504,7 @@ public static class BugReport
     private static void LiftToOverlayQueue(Material plainSprite)
     {
         foreach (TextMeshPro t in _panel.GetComponentsInChildren<TextMeshPro>(true))
-            t.fontSharedMaterial = OverlayCopy(t.fontSharedMaterial, true);
+            t.fontSharedMaterial = OverlayCopy(t.fontSharedMaterial, t.name != ButtonLabelName);
 
         foreach (SpriteRenderer sr in _panel.GetComponentsInChildren<SpriteRenderer>(true))
             sr.sharedMaterial = OverlayCopy(plainSprite);
@@ -513,26 +536,58 @@ public static class BugReport
         return sr;
     }
 
-    private static SpriteRenderer MakeShadow(Vector3 pos)
+    // 本編の絵の 9 分割で板を作る。絵が読み込まれていなければ null (呼び出し側が角丸で代わりに描く)
+    private static SpriteRenderer MakeVanilla(string name, string spriteName, Vector3 pos, Vector2 size, Transform parent = null)
     {
-        var go = new GameObject("Shadow") { layer = 5 };
-        go.transform.SetParent(_panel.transform, false);
+        if (!VanillaSprites.TryGetValue(spriteName, out Sprite s) || !s) return null;
+        var go = new GameObject(name) { layer = 5 };
+        go.transform.SetParent(parent ? parent : _panel.transform, false);
         go.transform.localPosition = pos;
         var sr = go.AddComponent<SpriteRenderer>();
-        sr.sprite = ShadowSprite();
+        sr.sprite = s;
         sr.drawMode = SpriteDrawMode.Sliced;
-        sr.size = CardSize + Vector2.one * 0.7f;
-        sr.color = new Color(0f, 0f, 0f, 0.55f);
+        sr.size = size;
         return sr;
     }
 
-    private static SpriteRenderer MakeShadowLike(string name, Color32 color, Vector3 pos, Vector2 size)
+    // 使う本編の絵を名前で探し、縁を指定した 9 分割のスプライトに作り直して持っておく。
+    // 全部の絵をなめる走査は重い (15〜70ms) ので、欠けがある時に窓を作る時だけ行う。元の絵そのものは持たない
+    private static void LoadVanillaSprites()
     {
-        SpriteRenderer sr = MakeShadow(pos);
-        sr.name = name;
-        sr.size = size;
-        sr.color = color;
-        return sr;
+        if (Array.TrueForAll(VanillaNames, n => VanillaSprites.TryGetValue(n, out Sprite have) && have)) return;
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        foreach (Object o in Resources.FindObjectsOfTypeAll(Il2CppInterop.Runtime.Il2CppType.Of<Sprite>()))
+        {
+            Sprite src = o != null ? o.TryCast<Sprite>() : null;
+            if (!src) continue;
+
+            string nm = src.name;
+            if (Array.IndexOf(VanillaNames, nm) < 0 || (VanillaSprites.TryGetValue(nm, out Sprite have) && have)) continue;
+
+            try
+            {
+                // ロビーの板の絵は 9 分割の縁が設定されていないので、縁と角の丸みが収まる幅を自分で与える
+                Vector4 border = nm == PaneSpriteName ? Vector4.one * PaneBorderPx : src.border;
+                float ppu = nm switch
+                {
+                    PaneSpriteName => PanePpu,
+                    FieldSpriteName => FieldPpu,
+                    ButtonSpriteName => ButtonPpu,
+                    _ => 100f
+                };
+                Sprite s = Sprite.Create(src.texture, src.textureRect, new Vector2(0.5f, 0.5f), ppu, 0, SpriteMeshType.FullRect, border);
+                s.name = "EndKnot_" + nm;
+                s.hideFlags |= HideFlags.HideAndDontSave;
+                VanillaSprites[nm] = s;
+            }
+            catch (Exception e)
+            {
+                Logger.Warn($"vanilla sprite {nm} unusable: {e.Message}", "BugReport");
+            }
+        }
+
+        Logger.Info($"vanilla sprites: {VanillaSprites.Count}/{VanillaNames.Length} in {sw.ElapsedMilliseconds}ms", "BugReport");
     }
 
     // 押せる物にする。PassiveButton の 3 つのイベントは new しないと実マウスで NRE になる
@@ -552,16 +607,20 @@ public static class BugReport
         return btn;
     }
 
-    private static void MakeButton(string name, Vector3 pos, Vector2 size, Color32 fill, Color32 hover, Color32? border, string label, Color32 labelColor, FontStyles style, Action onClick)
+    private const string ButtonLabelName = "Label";
+
+    // 本編のボタンの絵 (濃い縁・上の照り・下の影) に色を掛け、縁取りの太字を載せる
+    private static void MakeButton(string name, Vector3 pos, Vector2 size, Color32 fill, Color32 hover, string label, Action onClick)
     {
         var root = new GameObject(name) { layer = 5 }.transform;
         root.SetParent(_footer, false);
         root.localPosition = pos;
 
-        if (border is { } b) MakeRound("Border", b, new Vector3(0f, 0f, 0.02f), size, PartRadius, root);
-        SpriteRenderer bg = MakeRound("Fill", fill, Vector3.zero, border.HasValue ? size - Vector2.one * 0.02f : size, PartRadius, root);
+        SpriteRenderer bg = MakeVanilla("Fill", ButtonSpriteName, Vector3.zero, size, root);
+        if (bg) bg.color = fill;
+        else bg = MakeRound("Fill", fill, Vector3.zero, size, PartRadius, root);
 
-        TextMeshPro text = MakeText(_textTemplate, root, "Label", new Vector3(0f, 0f, -0.05f), 1.05f, label, style, labelColor, size.x);
+        TextMeshPro text = MakeText(_textTemplate, root, ButtonLabelName, new Vector3(0f, 0.02f, -0.05f), 1.4f, label, FontStyles.Bold, TextColor, size.x);
         text.alignment = TextAlignmentOptions.Center;
         RectTransform rt = text.GetComponent<RectTransform>();
         if (rt)
@@ -573,14 +632,25 @@ public static class BugReport
         MakeClickable(root.gameObject, size, onClick, () => bg.color = hover, () => bg.color = fill);
     }
 
-    // 右上の「×」。字形はフォントに頼らず細い棒 2 本で描く
+    // 右上の「×」。本編のメニューの閉じるボタンの絵 (乗ると緑)。無ければ細い棒 2 本で描く
     private static void MakeCloseButton(Vector3 pos)
     {
         var root = new GameObject("Close") { layer = 5 }.transform;
         root.SetParent(_panel.transform, false);
         root.localPosition = pos;
 
-        SpriteRenderer bg = MakeRound("Hover", new Color32(0, 0, 0, 0), new Vector3(0f, 0f, 0.05f), new Vector2(0.42f, 0.42f), PartRadius, root);
+        var size = new Vector2(0.36f, 0.36f);
+        SpriteRenderer exit = MakeVanilla("Exit", ExitSpriteName, Vector3.zero, size, root);
+        Sprite exitHover = VanillaSprites.TryGetValue(ExitHoverSpriteName, out Sprite eh) ? eh : null;
+        if (exit && exitHover)
+        {
+            Sprite exitIdle = exit.sprite;
+            MakeClickable(root.gameObject, size, Close, () => exit.sprite = exitHover, () => exit.sprite = exitIdle);
+            return;
+        }
+
+        if (exit) Object.Destroy(exit.gameObject);
+        SpriteRenderer bg = MakeRound("Hover", new Color32(0, 0, 0, 0), new Vector3(0f, 0f, 0.05f), size, PartRadius, root);
         var bars = new SpriteRenderer[2];
         for (var i = 0; i < 2; i++)
         {
@@ -593,7 +663,7 @@ public static class BugReport
             bars[i].color = MutedColor;
         }
 
-        MakeClickable(root.gameObject, new Vector2(0.42f, 0.42f), Close,
+        MakeClickable(root.gameObject, size, Close,
             () => { bg.color = GhostHover; bars[0].color = bars[1].color = TextColor; },
             () => { bg.color = new Color32(0, 0, 0, 0); bars[0].color = bars[1].color = MutedColor; });
     }
@@ -601,15 +671,18 @@ public static class BugReport
     // 箱の高さを文の量に合わせる (最低 BoxMinHeight)。上端は固定して下へ伸ばし、窓と下の段も同じだけ伸ばす
     private static void LayoutBox(float textHeight)
     {
-        if (!_box || !_boxInner) return;
+        if (!_box) return;
         float h = Math.Max(BoxMinHeight, textHeight + 0.3f);
         float w = CardSize.x - Pad * 2f;
         float cy = BoxTop - h / 2f;
 
         _box.transform.localPosition = new Vector3(0f, cy, 0.3f);
         _box.size = new Vector2(w, h);
-        _boxInner.transform.localPosition = new Vector3(0f, cy, 0.2f);
-        _boxInner.size = new Vector2(w - BoxBorder * 2f, h - BoxBorder * 2f);
+        if (_boxInner)
+        {
+            _boxInner.transform.localPosition = new Vector3(0f, cy, 0.2f);
+            _boxInner.size = new Vector2(w - BoxBorder * 2f, h - BoxBorder * 2f);
+        }
 
         if (_counter) _counter.transform.localPosition = new Vector3(w / 2f - 0.14f, BoxTop - h + 0.08f, -0.5f);
 
@@ -618,11 +691,14 @@ public static class BugReport
 
         var cardSize = new Vector2(CardSize.x, CardSize.y + extra);
         _card.transform.localPosition = new Vector3(0f, -extra / 2f, 0.6f);
-        _card.size = cardSize;
-        _cardBorder.transform.localPosition = new Vector3(0f, -extra / 2f, 0.7f);
-        _cardBorder.size = cardSize + Vector2.one * 0.03f;
-        _shadow.transform.localPosition = new Vector3(0f, -extra / 2f - 0.08f, 0.8f);
-        _shadow.size = cardSize + Vector2.one * 0.7f;
+        if (_cardBorder)
+        {
+            _card.size = cardSize - Vector2.one * 0.2f;
+            _cardBorder.transform.localPosition = new Vector3(0f, -extra / 2f, 0.7f);
+            _cardBorder.size = cardSize;
+        }
+        else _card.size = cardSize;
+
         BoxCollider2D cardCol = _card.GetComponent<BoxCollider2D>();
         if (cardCol) cardCol.size = cardSize;
     }
@@ -696,26 +772,6 @@ public static class BugReport
         return s;
     }
 
-    // 窓の落ち影。角丸の外側へなだらかに薄れる
-    private static Sprite ShadowSprite()
-    {
-        if (_shadowSprite) return _shadowSprite;
-
-        const int size = 96;
-        const float blur = 30f;
-        _shadowTex = BuildTexture(size, (x, y) =>
-        {
-            float d = RoundedRectDistance(x, y, size, 18f, blur + 2f);
-            float t = Math.Clamp(1f - (d + blur) / (blur * 2f), 0f, 1f);
-            return t * t * (3f - 2f * t);
-        });
-
-        const float b = 47f;
-        _shadowSprite = Sprite.Create(_shadowTex, new Rect(0f, 0f, size, size), new Vector2(0.5f, 0.5f), (blur * 2f) / 0.7f, 0, SpriteMeshType.FullRect, new Vector4(b, b, b, b));
-        _shadowSprite.hideFlags |= HideFlags.HideAndDontSave;
-        return _shadowSprite;
-    }
-
     // 四角の内側で負・外側で正の距離 (px)。inset だけ縁から内側へ寄せた角丸の四角に対して測る
     private static float RoundedRectDistance(int x, int y, int size, float radius, float inset = 0f)
     {
@@ -741,8 +797,6 @@ public static class BugReport
 
     private static void RefreshLogToggle()
     {
-        if (_checkBorder) _checkBorder.color = _attachLog ? AccentColor : CheckOffBorder;
-        if (_checkFill) _checkFill.color = _attachLog ? AccentColor : BoxColor;
         if (_checkMark && _checkMark.activeSelf != _attachLog) _checkMark.SetActive(_attachLog);
     }
 
@@ -764,7 +818,7 @@ public static class BugReport
             bar.transform.localScale = new Vector3(d.magnitude + thick, thick, 1f);
             var sr = bar.AddComponent<SpriteRenderer>();
             sr.sprite = Solid();
-            sr.color = OnAccentColor;
+            sr.color = CheckMarkColor;
         }
 
         return root;
