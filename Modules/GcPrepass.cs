@@ -167,7 +167,31 @@ public static class GcPrepass
             long boehmAfter = BoehmUsedBytes();
             HealthLog.Note($"GCPRE reason={reason} clrMs={clrMs} totalMs={sw.ElapsedMilliseconds} clrMB={clrBefore / 1048576}->{GC.GetTotalMemory(false) / 1048576} clrCmtMB={clrCommitBefore / 1048576}->{clrCommitAfter / 1048576} boehmMB={(boehmBefore < 0 ? -1 : boehmBefore / 1048576)}->{(boehmAfter < 0 ? -1 : boehmAfter / 1048576)} bgc={bgcBefore}->{bgcAfter} resTrimKB={trimmedKB} t={now}");
             TransitionTimeline.Mark($"GCPRE:{reason}({sw.ElapsedMilliseconds}ms,boehm{(boehmBefore < 0 ? -1 : boehmBefore / 1048576)}->{(boehmAfter < 0 ? -1 : boehmAfter / 1048576)}MB)");
+#if !ANDROID
+            if (reason == "outro") MaybeAutoCensus(boehmAfter);
+#endif
         }
         catch (Exception e) { Utils.ThrowException(e); }
+    }
+
+    // 長時間の実戦で il2cpp 側の生存量が数倍 (約 50MB → 200MB) に膨らむことがあり、その内訳を Health.log に残す。
+    // 120MB を超えた最初の結果画面で 1 回、そこから 80MB 増えたらもう 1 回だけ (2 回の差で伸びた型が分かる)。
+    // 内訳取りは生存量に比例して止まる (39MB で約 460ms) ので、もともと止まりを隠している結果画面の GC の直後だけで走らせる
+    private const long AutoCensusFirstMB = 120;
+    private const long AutoCensusStepMB = 80;
+    private const int AutoCensusMaxRuns = 2;
+    private static int _autoCensusRuns;
+    private static long _autoCensusNextMB = AutoCensusFirstMB;
+
+    private static void MaybeAutoCensus(long boehmUsedBytes)
+    {
+        if (boehmUsedBytes < 0 || _autoCensusRuns >= AutoCensusMaxRuns) return;
+
+        long mb = boehmUsedBytes / 1048576;
+        if (mb < _autoCensusNextMB) return;
+
+        _autoCensusRuns++;
+        _autoCensusNextMB = mb + AutoCensusStepMB;
+        BoehmCensus.RunNow($"auto{mb}");
     }
 }
