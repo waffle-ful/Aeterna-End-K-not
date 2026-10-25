@@ -259,7 +259,13 @@ public static class BootPreJit
     public static void FlushLog()
     {
         string detail = Interlocked.Exchange(ref _detailBox, null);
-        if (detail != null) Logger.Info(detail, "BootPreJit");
+        if (detail == null) return;
+        Logger.Info(detail, "BootPreJit");
+
+        // 最初のロビーは入場後の生成とこの仕事で広がった確保を抱えたままになるので、終わった所で 1 回だけ詰める
+        // (待っているだけのロビーで 20ms 前後・常駐 −15MB 前後の実測)
+        if (detail.StartsWith("match ", StringComparison.Ordinal) && GameStates.IsLobby)
+            GcPrepass.Collect("lobbysettled");
     }
 
     private static void StartThread()

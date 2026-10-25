@@ -141,7 +141,7 @@ public static class GcPrepass
 
             // 読み込み画面・イントロ明けの暗転・結果画面の裏では圧縮つきで回す。圧縮なしのフル GC は生きている物の隙間を残すので、
             // ロビーや試合開始のゴミで一度広がった確保がそのまま試合中も常駐する (実測: 試合中 73→49MB、30ms)
-            if (reason is "loading" or "introend" or "outro" or "lobbyfirst")
+            if (reason is "loading" or "introend" or "outro" or "lobbyfirst" or "lobbysettled")
             {
                 System.Runtime.GCSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
                 GC.Collect(2, GCCollectionMode.Forced, true, true);
@@ -151,7 +151,7 @@ public static class GcPrepass
 
             long trimmedKB = 0;
 #if !ANDROID
-            if (reason is "loading" or "introend" or "outro" or "lobbyfirst")
+            if (reason is "loading" or "introend" or "outro" or "lobbyfirst" or "lobbysettled")
                 trimmedKB = EmbeddedBundleFile.TrimResourcePages() / 1024;
 #endif
 
