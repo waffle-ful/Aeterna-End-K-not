@@ -149,6 +149,12 @@ public static class GcPrepass
             else
                 GC.Collect();
 
+            long trimmedKB = 0;
+#if !ANDROID
+            if (reason is "loading" or "introend" or "outro" or "lobbyfirst")
+                trimmedKB = EmbeddedBundleFile.TrimResourcePages() / 1024;
+#endif
+
             long clrCommitAfter = GC.GetGCMemoryInfo().TotalCommittedBytes;
             long clrMs = sw.ElapsedMilliseconds;
             // ここは il2cpp_gc_collect で必ず Boehm GC が1回走る「既知陽性」。bgc の前後が動かなければ
@@ -159,7 +165,7 @@ public static class GcPrepass
             catch { /* エクスポート欠落環境では CoreCLR 側のみで縮退 */ }
             int bgcAfter = BoehmCollectionCount();
             long boehmAfter = BoehmUsedBytes();
-            HealthLog.Note($"GCPRE reason={reason} clrMs={clrMs} totalMs={sw.ElapsedMilliseconds} clrMB={clrBefore / 1048576}->{GC.GetTotalMemory(false) / 1048576} clrCmtMB={clrCommitBefore / 1048576}->{clrCommitAfter / 1048576} boehmMB={(boehmBefore < 0 ? -1 : boehmBefore / 1048576)}->{(boehmAfter < 0 ? -1 : boehmAfter / 1048576)} bgc={bgcBefore}->{bgcAfter} t={now}");
+            HealthLog.Note($"GCPRE reason={reason} clrMs={clrMs} totalMs={sw.ElapsedMilliseconds} clrMB={clrBefore / 1048576}->{GC.GetTotalMemory(false) / 1048576} clrCmtMB={clrCommitBefore / 1048576}->{clrCommitAfter / 1048576} boehmMB={(boehmBefore < 0 ? -1 : boehmBefore / 1048576)}->{(boehmAfter < 0 ? -1 : boehmAfter / 1048576)} bgc={bgcBefore}->{bgcAfter} resTrimKB={trimmedKB} t={now}");
             TransitionTimeline.Mark($"GCPRE:{reason}({sw.ElapsedMilliseconds}ms,boehm{(boehmBefore < 0 ? -1 : boehmBefore / 1048576)}->{(boehmAfter < 0 ? -1 : boehmAfter / 1048576)}MB)");
         }
         catch (Exception e) { Utils.ThrowException(e); }
