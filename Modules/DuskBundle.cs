@@ -47,11 +47,15 @@ internal static class DuskBundle
             BootTimeline.Mark("dusk.bundle.begin");
             _startTicks = System.Diagnostics.Stopwatch.GetTimestamp();
 
-            _bytes = ReadEmbeddedBytes();
-            if (_bytes == null) { Fail(); return; }
+            _createRequest = EmbeddedBundleFile.TryOpenAsync(EmbeddedResourceName);
+            if (_createRequest == null)
+            {
+                _bytes = ReadEmbeddedBytes();
+                if (_bytes == null) { Fail(); return; }
 
-            _createRequest = AssetBundle.LoadFromMemoryAsync(_bytes);
-            if (_createRequest == null) { Fail("LoadFromMemoryAsync returned null"); return; }
+                _createRequest = AssetBundle.LoadFromMemoryAsync(_bytes);
+                if (_createRequest == null) { Fail("LoadFromMemoryAsync returned null"); return; }
+            }
 
             _stage = Stage.Creating;
         }
