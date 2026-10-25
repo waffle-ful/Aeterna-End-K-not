@@ -178,6 +178,8 @@ public class Thanos : RoleBase
 
     void UseStone(PlayerControl pc)
     {
+        Logger.Info($"UseStone id={ThanosId} collected={CollectedStones.Count} waiting={StonesWaitingForUse.Count} canWin={CanWinAfterCollectingAllStones.GetBool()} snapping={Snapping}", "Thanos");
+
         if (CollectedStones.Count == StoneEnum.Length && CanWinAfterCollectingAllStones.GetBool())
         {
             if (Snapping) return;
