@@ -100,8 +100,8 @@ img{max-width:100%}
 
 <div class="wrap">
   <header>
-    <div class="eyebrow">Performance report · 2026-10-16 · Among Us 2026.9.29 (Steam)</div>
-    <h1>End K not 性能比較<span class="en">0.13.2 dev · BepInEx · vanilla</span></h1>
+    <div class="eyebrow">Performance report · 2026-10-26 · Among Us 2026.9.29 (Steam)</div>
+    <h1>End K not 性能比較<span class="en">0.15.1 dev · BepInEx · vanilla</span></h1>
     <p class="lede" id="lede"></p>
   </header>
 
@@ -127,37 +127,37 @@ img{max-width:100%}
 
 <script>
 const ARMS = [
-  { key: 'current', name: '現行 0.13.2 (開発版)', color: 'var(--c-current)', hi: true },
+  { key: 'current', name: '現行 0.15.1 (開発版)', color: 'var(--c-current)', hi: true },
   { key: 'vanilla', name: 'バニラ',        color: 'var(--c-vanilla)' },
   { key: 'bepinex', name: 'BepInEx のみ',  color: 'var(--c-old)' },
 ];
 
 // 中央値。dp = 表示する小数桁。higher = 大きいほど良い指標。
 const METRICS = [
-  { key: 'boot',      name: '起動時間',           unit: '秒',  dp: 1, n: '現行 6 回・他 3 回',
+  { key: 'boot',      name: '起動時間',           unit: '秒',  dp: 1, n: '現行と BepInEx のみ 6 回・バニラ 3 回',
     desc: 'プロセス開始からメインメニューの初期化開始まで',
-    v: { vanilla: 5.33, bepinex: 6.96, current: 4.74 } },
-  { key: 'login',     name: 'ログイン完了まで',     unit: '秒',  dp: 1, n: '現行 6 回・他 3 回',
+    v: { vanilla: 5.19, bepinex: 7.01, current: 4.58 } },
+  { key: 'login',     name: 'ログイン完了まで',     unit: '秒',  dp: 1, n: '現行と BepInEx のみ 6 回・バニラ 3 回',
     desc: 'プロセス開始から起動処理 (アカウント確認・お知らせ) の終了まで。サーバーの応答時間を含みます',
-    v: { vanilla: 10.00, bepinex: 11.42, current: 10.87 } },
-  { key: 'lobby_ws',  name: 'ロビー 常駐メモリ',   unit: 'MB', dp: 0, n: '現行 6 回・他 3 回',
+    v: { vanilla: 9.97, bepinex: 11.91, current: 9.86 } },
+  { key: 'lobby_ws',  name: 'ロビー 常駐メモリ',   unit: 'MB', dp: 0, n: '現行と BepInEx のみ 6 回・バニラ 3 回',
     desc: '公式サーバーの非公開ロビー (ホスト単独) で静止 30 秒後から 60 秒間の Working Set 平均',
-    v: { vanilla: 549, bepinex: 673, current: 800 } },
-  { key: 'lobby_low', name: 'ロビー 1% low',      unit: 'fps', dp: 1, higher: true, n: '現行 6 回・他 3 回',
+    v: { vanilla: 566, bepinex: 697, current: 749 } },
+  { key: 'lobby_low', name: 'ロビー 1% low',      unit: 'fps', dp: 1, higher: true, n: '現行と BepInEx のみ 6 回・バニラ 3 回',
     desc: '同じ 60 秒間で、遅い方から 1% のフレームの平均を fps に直した値 (上限 60fps)',
-    v: { vanilla: 57.3, bepinex: 56.7, current: 55.2 } },
-  { key: 'lobby_p95', name: 'ロビー フレーム時間 p95', unit: 'ms', dp: 2, n: '現行 6 回・他 3 回',
+    v: { vanilla: 57.3, bepinex: 56.5, current: 55.9 } },
+  { key: 'lobby_p95', name: 'ロビー フレーム時間 p95', unit: 'ms', dp: 2, n: '現行と BepInEx のみ 6 回・バニラ 3 回',
     desc: '同じ 60 秒間のフレーム時間の 95 パーセンタイル (60fps の 1 フレームは 16.67ms)',
-    v: { vanilla: 17.05, bepinex: 17.04, current: 17.25 } },
-  { key: 'game_ws',   name: '試合中 常駐メモリ',   unit: 'MB', dp: 0, n: '現行 6 回・他 3 回',
+    v: { vanilla: 17.04, bepinex: 17.06, current: 17.25 } },
+  { key: 'game_ws',   name: '試合中 常駐メモリ',   unit: 'MB', dp: 0, n: '現行と BepInEx のみ 6 回・バニラ 3 回',
     desc: 'The Skeld で静止 30 秒後から 180 秒間の Working Set 平均。現行版は 1 人で始めた試合、バニラと BepInEx のみはフリープレイ',
-    v: { vanilla: 645, bepinex: 767, current: 891 } },
-  { key: 'game_low',  name: '試合中 1% low',      unit: 'fps', dp: 1, higher: true, n: '現行 6 回・他 3 回',
+    v: { vanilla: 665, bepinex: 791, current: 827 } },
+  { key: 'game_low',  name: '試合中 1% low',      unit: 'fps', dp: 1, higher: true, n: '現行と BepInEx のみ 6 回・バニラ 3 回',
     desc: '同じ 180 秒間で、遅い方から 1% のフレームの平均を fps に直した値 (上限 60fps)',
-    v: { vanilla: 56.6, bepinex: 55.9, current: 54.6 } },
-  { key: 'game_p95',  name: '試合中 フレーム時間 p95', unit: 'ms', dp: 2, n: '現行 6 回・他 3 回',
+    v: { vanilla: 56.9, bepinex: 55.6, current: 55.0 } },
+  { key: 'game_p95',  name: '試合中 フレーム時間 p95', unit: 'ms', dp: 2, n: '現行と BepInEx のみ 6 回・バニラ 3 回',
     desc: '同じ 180 秒間のフレーム時間の 95 パーセンタイル',
-    v: { vanilla: 17.22, bepinex: 17.22, current: 17.51 } },
+    v: { vanilla: 17.19, bepinex: 17.22, current: 17.47 } },
 ];
 METRICS.forEach(m => { m.fmt = v => m.dp ? v.toFixed(m.dp) : Math.round(v).toLocaleString(); });
 
@@ -168,38 +168,41 @@ const HISTORY = [
     ['2026-09-05', 'v0.9.7 開発版', '11.1', '5.9'],
     ['2026-10-03', '0.11.1 開発版', '4.4', '5.2'],
     ['2026-10-16', '0.13.2 開発版', '4.7', '5.3'],
+    ['2026-10-26', '0.15.1 開発版', '4.6', '5.2'],
   ]],
   ['ロビー 常駐メモリ (MB)', [
     ['2026-09-05', 'v0.9.6-beta', '970', '—'],
     ['2026-09-05', 'v0.9.7 開発版', '908', '—'],
     ['2026-10-03', '0.11.1 開発版', '779', '532'],
     ['2026-10-16', '0.13.2 開発版', '800', '549'],
+    ['2026-10-26', '0.15.1 開発版', '749', '566'],
   ]],
   ['試合中 常駐メモリ (MB)', [
     ['2026-09-05', 'v0.9.6-beta', '1,065', '—'],
     ['2026-09-05', 'v0.9.7 開発版', '1,019', '—'],
     ['2026-10-03', '0.11.1 開発版', '985', '629'],
     ['2026-10-16', '0.13.2 開発版', '891', '645'],
+    ['2026-10-26', '0.15.1 開発版', '827', '665'],
   ]],
 ];
 
 const CONDITIONS = [
   ['機材', 'Ryzen 5 3600 / Windows 11 / Among Us 2026.9.29 Steam 版・同一 PC'],
-  ['計測日', '2026-10-16。3 条件とも同じ日に、同じ道具・同じ手順で測っています'],
+  ['計測日', '2026-10-26。3 条件とも同じ日に、同じ道具・同じ手順で測っています'],
   ['インストール', 'Steam 版を条件ごとに別フォルダへ複製して直接起動。条件どうしでファイルを共有しません'],
   ['起動', 'プロセス開始時刻を原点に、ゲーム本体のログでメインメニューの初期化開始と起動処理の終了を検知した時刻 (全条件で同じ外部時計)。ファイルを入れ替えた直後の 1 回目は数えません'],
   ['フレーム', 'PresentMon で提示間隔を記録。ゲームの窓を前面にし、キャラクターを動かさずに採取。フレームレートの上限は 60fps のまま'],
   ['ロビー', '公式サーバーで非公開ロビーをホスト単独で作成し、静止 30 秒後から 60 秒'],
   ['試合中', 'The Skeld で静止 30 秒後から 180 秒。現行版は 1 人で始めた試合、バニラと BepInEx のみは 1 人で試合を始められないのでフリープレイ'],
   ['メモリ', '採取中の Working Set の平均。回ごとに出して、回の中央値を掲載'],
-  ['現行版', '0.13.2 開発版 (2026-10-16 のビルド)。機能は既定設定のまま。配布版は開発用の告知バナーや診断機能を含まないぶん、これより軽く動きます'],
+  ['現行版', '0.15.1 開発版 (2026-10-26 のビルド)。配布版と同じ構成でビルドし、機能は既定設定のまま。配布版には無い開発用の告知バナーと計測用の機能を含みます'],
   ['BepInEx のみ', 'mod DLL を外した BepInEx + Il2CppInterop の土台だけ。mod の上乗せ分を切り分けるための基準'],
 ];
 const NOTES = [
   'Working Set は OS の裁量で ±15MB 程度揺れるため、この幅の差は有意ではありません。',
-  'バニラと BepInEx のみは 3 回、現行版は 6 回の中央値です。',
-  '起動時間はメニューの初期化が始まるまでで、ログインの完了を含みません。ログイン完了までで比べると 3 条件の差は 1.5 秒以内です。',
-  '1% low の差は、数十秒に 1 回のメモリ回収で 1 フレームが長くなることによるものです。最長のフレームは、現行版が多くの回で 20〜27ms、バニラが 18〜19ms でした。33ms を超えたフレームは、現行版 12 回の採取のうち 2 回で出ました (ロビーの 1 回で 13 フレーム、試合中の 1 回で 3 フレーム)。',
+  'バニラは 3 回、BepInEx のみと現行版は 6 回の中央値です。',
+  '起動時間はメニューの初期化が始まるまでで、ログインの完了を含みません。ログイン完了までで比べると、現行版 9.9 秒・バニラ 10.0 秒・BepInEx のみ 11.9 秒です。',
+  '1% low の差は、数十秒に 1 回のメモリ回収で 1 フレームが長くなることによるものです。最長のフレームは、現行版がロビーで 19ms 前後・試合中で 21〜26ms、バニラが 18〜19ms、BepInEx のみが 27〜31ms でした。33ms を超えたフレームは、どの条件の採取にもありませんでした。',
 ];
 </script>
 <script id="fill"></script>

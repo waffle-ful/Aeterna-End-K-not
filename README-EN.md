@@ -150,24 +150,24 @@ We aim to keep boot time and resident memory close to vanilla. You'll find the t
 <details>
 <summary><b>Show the measurements (boot time, resident memory and frame time)</b></summary>
 
-We measured "vanilla / BepInEx only / current 0.13.2 dev build" on the same day with the same procedure on the same PC (2026-10-16, Among Us 2026.9.29 on Steam). The table shows medians.
+We measured "vanilla / BepInEx only / current 0.15.1 dev build" on the same day with the same procedure on the same PC (2026-10-26, Among Us 2026.9.29 on Steam). The table shows medians.
 
-| Metric | Vanilla | BepInEx only | Current 0.13.2 dev |
+| Metric | Vanilla | BepInEx only | Current 0.15.1 dev |
 |---|---:|---:|---:|
-| Boot time (s) | 5.3 | 7.0 | **4.7** |
-| Time to login complete (s) | 10.0 | 11.4 | **10.9** |
-| Lobby resident memory (MB) | 549 | 673 | **800** |
-| Lobby 1% low (fps) | 57.3 | 56.7 | **55.2** |
-| Lobby frame time p95 (ms) | 17.05 | 17.04 | **17.25** |
-| In-game resident memory (MB) | 645 | 767 | **891** |
-| In-game 1% low (fps) | 56.6 | 55.9 | **54.6** |
-| In-game frame time p95 (ms) | 17.22 | 17.22 | **17.51** |
+| Boot time (s) | 5.2 | 7.0 | **4.6** |
+| Time to login complete (s) | 10.0 | 11.9 | **9.9** |
+| Lobby resident memory (MB) | 566 | 697 | **749** |
+| Lobby 1% low (fps) | 57.3 | 56.5 | **55.9** |
+| Lobby frame time p95 (ms) | 17.04 | 17.06 | **17.25** |
+| In-game resident memory (MB) | 665 | 791 | **827** |
+| In-game 1% low (fps) | 56.9 | 55.6 | **55.0** |
+| In-game frame time p95 (ms) | 17.19 | 17.22 | **17.47** |
 
 <p align="center"><img src=".github/perf-chart.png" alt="End K not performance comparison chart" width="90%"></p>
 
-Boot time runs until the main menu starts initializing. Lobby is a private lobby on the official servers with the host alone, in-game is The Skeld, both sampled while standing still (60 fps cap). In-game uses a one-player match for the current build and Freeplay for vanilla and BepInEx only. The current-build numbers come from a development build. The published build leaves out the developer notice banner and diagnostics, so it runs lighter than this.
+Boot time runs until the main menu starts initializing. Lobby is a private lobby on the official servers with the host alone, in-game is The Skeld, both sampled while standing still (60 fps cap). In-game uses a one-player match for the current build and Freeplay for vanilla and BepInEx only. The current build is a development build compiled with the same configuration as the published one. It still includes the developer notice banner and measurement hooks that the published build leaves out.
 
-Earlier boot times were 16.4 s for v0.9.6, 11.1 s for v0.9.7 and 4.4 s for the 0.11.1 dev build (v0.9.6 and v0.9.7 measured 2026-09-05 on the Epic build of 2026.8.18, with vanilla at 5.9 s in that run; 0.11.1 measured 2026-10-03, with vanilla at 5.2 s). In-game resident memory went down from 985 MB on the 0.11.1 dev build to 891 MB.
+Earlier boot times were 16.4 s for v0.9.6, 11.1 s for v0.9.7, 4.4 s for the 0.11.1 dev build and 4.7 s for the 0.13.2 dev build (v0.9.6 and v0.9.7 measured 2026-09-05 on the Epic build of 2026.8.18, with vanilla at 5.9 s in that run; 0.11.1 measured 2026-10-03 and 0.13.2 measured 2026-10-16, with vanilla at 5.2 s and 5.3 s). In-game resident memory went down from 985 MB on the 0.11.1 dev build and 891 MB on the 0.13.2 dev build to 827 MB.
 
 </details>
 
